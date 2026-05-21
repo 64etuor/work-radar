@@ -21,6 +21,17 @@
 
 ---
 
+## Git / PR 컨벤션
+
+- **커밋 = Conventional Commits.** `{type}({scope}): {message}` (`feat`/`fix`/`docs`/`refactor`/`test`/`chore`/`build`/`ci`). 제목은 명령형 한 줄.
+- **이슈 참조는 PR 제목/본문에만.** 커밋 메시지에는 이슈 번호를 넣지 않는다.
+- **한 PR = 한 관심사.** feature와 광범위 refactor를 섞지 않는다(AGENTS.md 금지 규칙).
+- **PR은 `.github/PULL_REQUEST_TEMPLATE.md`를 채운다** — INVARIANTS 체크 + 실행한 검증 명령 출력 포함.
+- **`main` 직접 커밋/푸시 금지.** 브랜치에서 작업 후 PR로 머지. (현재 remote 없음 → 연결 시 적용.)
+- **Phase 종료 시 INVARIANTS reviewer 패스**(self-approve 금지) 후 머지.
+
+---
+
 ## Claude-specific 메모
 
 - **self-approve 금지.** Phase 종료 시 INVARIANTS 위반 여부는 별도 reviewer 패스로 확인한다.
