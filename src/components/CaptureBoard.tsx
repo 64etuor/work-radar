@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { Kind, PromotionTarget, Weekday } from "@/bindings";
+import type { AreaTag, Kind, PromotionTarget, Weekday } from "@/bindings";
 import {
   type CardMenuAction,
   type CardMenuState,
@@ -16,6 +16,7 @@ import {
   localWeekday,
   openExternal,
   useClassifySignal,
+  useCodexStatus,
   useCreatePromotionDraft,
   useCreateRoutine,
   useCreateSignal,
@@ -24,6 +25,7 @@ import {
   usePromoteToday,
   usePromoteToNotion,
   useReorderToday,
+  useSetSignalArea,
   useSetSignalStatus,
   useSignals,
   useSnoozeSignal,
@@ -31,9 +33,11 @@ import {
   useTodayRoutines,
   useToggleRoutineCheck,
   useToggleTodayDone,
+  useTriggerEnrich,
   useUnpromoteToday,
   tomorrow,
 } from "@/lib/query";
+import { useUIStore } from "@/store";
 
 const PROMOTION_TARGET: Record<"backlog" | "agenda" | "calendar", PromotionTarget> = {
   backlog: "notion_backlog",
@@ -74,6 +78,11 @@ export function CaptureBoard() {
   const flushPromotions = useFlushPromotions();
   const createRoutine = useCreateRoutine();
   const toggleRoutine = useToggleRoutineCheck();
+  const codex = useCodexStatus();
+  const triggerEnrich = useTriggerEnrich();
+  const setSignalArea = useSetSignalArea();
+  const { goTo } = useUIStore();
+  const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
   const signals = signalsQ.data ?? [];
   const todayItems = todayQ.data ?? [];
@@ -173,10 +182,30 @@ export function CaptureBoard() {
     );
   };
 
+  // AI 제안 영역(suggestedArea)을 사람이 확정 (별개 축 — quadrant 결정 레일과 무관, INVARIANT #1).
+  const handleConfirmArea = (id: string, area: AreaTag) => {
+    setSignalArea.mutate({ id, area });
+    toast("영역 확정");
+  };
+
   const handleMenuAction = (action: CardMenuAction, signalId: string) => {
     switch (action) {
       case "today":
         handlePromoteToday(signalId);
+        break;
+      case "enrich":
+        // 제안 레일: codex로 영역/사분면 제안(Acceptance 게이트 — Jobs에서 검토·accept).
+        if (!codexReady) {
+          toast("codex 미가용 — 설치·로그인 후 사용");
+          break;
+        }
+        triggerEnrich.mutate(
+          { signalId, timeoutSec: 90, maxTurns: 6, costCapUsd: 0.5 },
+          {
+            onSuccess: () => goTo("jobs"),
+            onError: (e) => toast(`AI 제안 실패: ${String(e)}`),
+          },
+        );
         break;
       case "done":
         setStatus.mutate({ id: signalId, status: "done" });
@@ -319,6 +348,7 @@ export function CaptureBoard() {
             setSelectedId(id);
             setMenu({ signalId: id, anchor });
           }}
+          onConfirmArea={handleConfirmArea}
           todayPanelRef={todayPanelRef}
         />
 
@@ -346,7 +376,12 @@ export function CaptureBoard() {
         inputRef={captureInputRef}
       />
 
-      <CardMenu state={menu} onAct={handleMenuAction} onClose={() => setMenu(null)} />
+      <CardMenu
+        state={menu}
+        onAct={handleMenuAction}
+        onClose={() => setMenu(null)}
+        codexReady={codexReady}
+      />
       <div className={`cb-toast${toastMsg ? " show" : ""}`}>
         {toastMsg}
         {toastUrl && (

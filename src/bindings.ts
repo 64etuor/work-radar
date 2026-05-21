@@ -101,6 +101,49 @@ export const commands = {
 	acceptProposal: (runId: string, accepted: PrSelfCheckProposal) => typedError<null, string>(__TAURI_INVOKE("accept_proposal", { runId, accepted })),
 	/**  Proposal reject(폐기). awaiting_approval 잡을 cancelled로 마감한다(acceptances 기록 없음, 외부 무변경). */
 	rejectProposal: (runId: string) => typedError<null, string>(__TAURI_INVOKE("reject_proposal", { runId })),
+	/**
+	 *  braindump enrich 잡 트리거(미분류 카드 ⋯ 메뉴). 카드 텍스트를 읽어 suggestedQuadrant/suggestedArea를
+	 *  **제안**한다(비-레포 잡·read_only). 산출 Proposal은 awaiting_approval로 멈추고, accept해도 quadrant는
+	 *  자동 확정되지 않는다(INVARIANT #1). 미설치/미인증이면 Err(graceful degrade).
+	 */
+	triggerEnrich: (input: TriggerEnrichInput) => typedError<string, string>(__TAURI_INVOKE("trigger_enrich", { input })),
+	/**  enrich Proposal(타입 파싱). raw/세트 밖 값이면 Err(조용한 빈 proposal 금지 + 닫힌 세트 강제). */
+	enrichProposal: (runId: string) => typedError<EnrichProposal, string>(__TAURI_INVOKE("enrich_proposal", { runId })),
+	/**
+	 *  enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 제안을 accept하면 신호에 힌트로 반영하고
+	 *  잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+	 */
+	acceptEnrich: (runId: string, accepted: EnrichProposal) => typedError<WorkSignal, string>(__TAURI_INVOKE("accept_enrich", { runId, accepted })),
+	/**
+	 *  라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관). enrich 제안을 사람이
+	 *  확정하거나 직접 고른다. None이면 미설정으로 되돌린다.
+	 */
+	setSignalArea: (id: string, area: "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other" | null) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_area", { id, area })),
+	/**
+	 *  CI triage 잡 트리거(PR Radar CI Blocked 카드). diff를 GitHub에서 받아 worktree 격리 codex 잡(read_only).
+	 *  **재트리거 캡**(INVARIANT #5): 같은 PR(retry_key=triage:{repo}:{pr})의 기존 triage가 캡 이상이면 잡을
+	 *  만들지 않고 매트릭스 Q1으로 escalate한다. 산출 Proposal은 awaiting_approval(Acceptance 게이트).
+	 */
+	triggerCiTriage: (input: TriggerCiTriageInput) => typedError<TriageOutcome, string>(__TAURI_INVOKE("trigger_ci_triage", { input })),
+	/**  CI triage Proposal(타입 파싱). raw면 Err. */
+	triageProposal: (runId: string) => typedError<CiTriageProposal, string>(__TAURI_INVOKE("triage_proposal", { runId })),
+	/**
+	 *  CI triage Proposal accept(INVARIANT #2 게이트). 로컬 기록만(acceptances + 잡 succeeded) — 외부 무변경.
+	 *  실제 수정은 사람이 수동(또는 실행 레일 Phase 10).
+	 */
+	acceptTriage: (runId: string, accepted: CiTriageProposal) => typedError<null, string>(__TAURI_INVOKE("accept_triage", { runId, accepted })),
+	/**
+	 *  mismatch 해소 초안 잡 트리거(Mismatch 카드). Notion 상태 업데이트를 제안하는 비-레포 잡(read_only).
+	 *  accept는 로컬 기록만(실제 Notion write는 사람 수동 — 사용자 결정). 미설치/미인증이면 Err.
+	 */
+	triggerMismatchDraft: (input: TriggerMismatchDraftInput) => typedError<string, string>(__TAURI_INVOKE("trigger_mismatch_draft", { input })),
+	/**  mismatch 해소 Proposal(타입 파싱). raw면 Err. */
+	mismatchDraftProposal: (runId: string) => typedError<NotionUpdateProposal, string>(__TAURI_INVOKE("mismatch_draft_proposal", { runId })),
+	/**
+	 *  mismatch 해소 Proposal accept(INVARIANT #2 게이트). 로컬에 기록하고 로컬 mismatch 신호를 resolve한다.
+	 *  **실제 Notion 상태 변경은 사람이 수동으로** — 여기서 외부를 mutate하지 않는다(사용자 결정).
+	 */
+	acceptMismatchDraft: (runId: string, accepted: NotionUpdateProposal) => typedError<null, string>(__TAURI_INVOKE("accept_mismatch_draft", { runId, accepted })),
 };
 
 /* Types */
@@ -150,6 +193,16 @@ export type AreaTag = "health" | "work" | "studies" | "environment" | "recreatio
 
 /**  PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음. */
 export type CiStatus = "passing" | "failing" | "pending" | "none";
+
+/**  CI triage 산출 Proposal (codex draft). 원인 가설 + 수정안. accept는 로컬 기록만(외부 무변경). */
+export type CiTriageProposal = {
+	/**  CI 실패 원인 가설. */
+	cause?: string,
+	/**  제안 수정안(체크리스트). */
+	suggestedFixes?: string[],
+	/**  사람이 읽을 요약. */
+	summary?: string,
+};
 
 /**  codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성). */
 export type CodexAvailability = {
@@ -229,6 +282,20 @@ export type DiffMode =
 /**  잡 실행 엔진. agent_runs.engine CHECK과 동일. */
 export type Engine = "codex" | "hermes" | "claude";
 
+/**
+ *  enrich 산출 Proposal (codex draft). quadrant/area는 **힌트일 뿐** — accept해도 카드는
+ *  unclassified로 남고(INVARIANT #1), area는 사람이 별도로 확정한다. Quadrant/AreaTag로 타입해
+ *  **닫힌 세트를 구조적으로 강제**한다(세트 밖 값이면 파싱이 거부 → INVARIANT #1). serde default로 누락 관용.
+ */
+export type EnrichProposal = {
+	/**  제안 사분면 힌트(닫힌 enum). 자동 분류 아님. */
+	suggestedQuadrant?: Quadrant | null,
+	/**  제안 라이프 도메인 힌트(닫힌 taxonomy). AI는 세트 밖을 만들지 못한다. */
+	suggestedArea?: AreaTag | null,
+	/**  제안 근거(짧은 설명). */
+	reason?: string | null,
+};
+
 /**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
 export type FileChange = "M" | "A" | "D" | "R";
 
@@ -255,6 +322,18 @@ export type MismatchItem = {
 	notionStatus: string | null,
 	/**  이 drift가 매트릭스로 escalate된 active 신호를 갖는지 (항상 true — drift면 upsert). */
 	escalated: boolean,
+};
+
+/**
+ *  mismatch 해소 산출 Proposal (codex draft = Notion 상태 업데이트 제안). accept는 로컬 기록만 +
+ *  로컬 mismatch 신호 resolve — **실제 Notion write는 사람이 수동**(사용자 결정, INVARIANT #2).
+ */
+export type NotionUpdateProposal = {
+	ticket?: string,
+	/**  제안하는 변경 후 상태 이름(프로젝트 done 목록 중). */
+	suggestedStatus?: string,
+	/**  사람이 읽을 메모/근거. */
+	note?: string,
 };
 
 /**  외부 API ping 결과 (read-only). 토큰 본문은 포함하지 않는다. */
@@ -419,6 +498,27 @@ export type TokenStatus = {
 	hasGithub: boolean,
 };
 
+/**  CI triage 트리거 결과. 재트리거 캡 초과면 잡을 만들지 않고(run_id=None) 매트릭스 Q1으로 escalate한다. */
+export type TriageOutcome = {
+	/**  새 triage 잡 id (escalate된 경우 None). */
+	runId: string | null,
+	/**  캡 초과로 Q1 escalate됐는지. */
+	escalated: boolean,
+	/**  사람이 읽을 상세. */
+	detail: string,
+};
+
+/**  CI triage 잡 입력 (PR Radar CI Blocked 카드에서 트리거). 재트리거는 retry_key로 캡된다. */
+export type TriggerCiTriageInput = {
+	projectId: string | null,
+	repoFullName: string,
+	prNumber: number,
+	prUrl: string,
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
+};
+
 /**  codex 잡 입력. Phase 7은 read_only 샌드박스 고정 (실행 레일=Phase 10). bounds는 강제(INVARIANT #5). */
 export type TriggerCodexInput = {
 	projectId: string | null,
@@ -441,6 +541,27 @@ export type TriggerEchoInput = {
 	timeoutSec: number,
 	/**  첫 줄로 출력할 메시지 (로그 캡처 확인). */
 	message: string,
+};
+
+/**  braindump enrich 잡 입력 (미분류 카드 ⋯ 메뉴에서 트리거). 비-레포 잡(worktree 불요). */
+export type TriggerEnrichInput = {
+	signalId: string,
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
+};
+
+/**  mismatch 해소 초안 잡 입력 (Mismatch 카드에서 트리거). 비-레포 잡(Notion 상태 추론). project별. */
+export type TriggerMismatchDraftInput = {
+	projectId: string,
+	ticket: string,
+	prUrl: string,
+	notionUrl: string,
+	/**  현재 관측된 Notion 상태(없으면 None). */
+	currentStatus: string | null,
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
 };
 
 /**  PR self-check 초안 잡 입력 (PR Radar 카드에서 트리거). repo는 worktree용 local_path가 있어야 한다. */

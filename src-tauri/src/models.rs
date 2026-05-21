@@ -694,3 +694,107 @@ pub struct PrSelfCheckProposal {
     #[serde(default)]
     pub migration_notes: Vec<String>,
 }
+
+// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안) ──────────────
+//
+// 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴). codex 출력은 Proposal(draft)일 뿐,
+// 사람이 accept해야 (로컬) 반영된다 — 외부(Notion/GitHub) 직접 mutate 없음(INVARIANT #2).
+// INVARIANT #1: enrich는 quadrant를 자동 확정하지 않는다 — suggested_quadrant/suggested_area는 힌트.
+// INVARIANT #5: CI triage 재트리거는 retry_key/retry_count로 캡되고 초과 시 Q1 escalate(사람).
+
+/// braindump enrich 잡 입력 (미분류 카드 ⋯ 메뉴에서 트리거). 비-레포 잡(worktree 불요).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerEnrichInput {
+    pub signal_id: String,
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+}
+
+/// enrich 산출 Proposal (codex draft). quadrant/area는 **힌트일 뿐** — accept해도 카드는
+/// unclassified로 남고(INVARIANT #1), area는 사람이 별도로 확정한다. Quadrant/AreaTag로 타입해
+/// **닫힌 세트를 구조적으로 강제**한다(세트 밖 값이면 파싱이 거부 → INVARIANT #1). serde default로 누락 관용.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct EnrichProposal {
+    /// 제안 사분면 힌트(닫힌 enum). 자동 분류 아님.
+    #[serde(default)]
+    pub suggested_quadrant: Option<Quadrant>,
+    /// 제안 라이프 도메인 힌트(닫힌 taxonomy). AI는 세트 밖을 만들지 못한다.
+    #[serde(default)]
+    pub suggested_area: Option<AreaTag>,
+    /// 제안 근거(짧은 설명).
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// CI triage 잡 입력 (PR Radar CI Blocked 카드에서 트리거). 재트리거는 retry_key로 캡된다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerCiTriageInput {
+    pub project_id: Option<String>,
+    pub repo_full_name: String,
+    pub pr_number: u32,
+    pub pr_url: String,
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+}
+
+/// CI triage 산출 Proposal (codex draft). 원인 가설 + 수정안. accept는 로컬 기록만(외부 무변경).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CiTriageProposal {
+    /// CI 실패 원인 가설.
+    #[serde(default)]
+    pub cause: String,
+    /// 제안 수정안(체크리스트).
+    #[serde(default)]
+    pub suggested_fixes: Vec<String>,
+    /// 사람이 읽을 요약.
+    #[serde(default)]
+    pub summary: String,
+}
+
+/// CI triage 트리거 결과. 재트리거 캡 초과면 잡을 만들지 않고(run_id=None) 매트릭스 Q1으로 escalate한다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriageOutcome {
+    /// 새 triage 잡 id (escalate된 경우 None).
+    pub run_id: Option<String>,
+    /// 캡 초과로 Q1 escalate됐는지.
+    pub escalated: bool,
+    /// 사람이 읽을 상세.
+    pub detail: String,
+}
+
+/// mismatch 해소 초안 잡 입력 (Mismatch 카드에서 트리거). 비-레포 잡(Notion 상태 추론). project별.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerMismatchDraftInput {
+    pub project_id: String,
+    pub ticket: String,
+    pub pr_url: String,
+    pub notion_url: String,
+    /// 현재 관측된 Notion 상태(없으면 None).
+    pub current_status: Option<String>,
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+}
+
+/// mismatch 해소 산출 Proposal (codex draft = Notion 상태 업데이트 제안). accept는 로컬 기록만 +
+/// 로컬 mismatch 신호 resolve — **실제 Notion write는 사람이 수동**(사용자 결정, INVARIANT #2).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct NotionUpdateProposal {
+    #[serde(default)]
+    pub ticket: String,
+    /// 제안하는 변경 후 상태 이름(프로젝트 done 목록 중).
+    #[serde(default)]
+    pub suggested_status: String,
+    /// 사람이 읽을 메모/근거.
+    #[serde(default)]
+    pub note: String,
+}

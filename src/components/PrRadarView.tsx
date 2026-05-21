@@ -9,6 +9,7 @@ import {
   useCodexStatus,
   useProjects,
   useSetPrSelfCheck,
+  useTriggerCiTriage,
   useTriggerPrSelfcheck,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
@@ -42,6 +43,7 @@ export function PrRadarView() {
   const setSelfCheck = useSetPrSelfCheck();
   const codex = useCodexStatus();
   const selfcheckDraft = useTriggerPrSelfcheck();
+  const ciTriage = useTriggerCiTriage();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
   // 프로젝트별 주기 폴링(고정 cadence) + bounded retry(지수 backoff). 성공 시 매트릭스 invalidate.
@@ -105,6 +107,11 @@ export function PrRadarView() {
             self-check 초안 실패: {(selfcheckDraft.error as Error).message}
           </div>
         )}
+        {ciTriage.error && (
+          <div className="pr-err">
+            CI triage 실패: {(ciTriage.error as Error).message}
+          </div>
+        )}
         {empty && !noProjects && (
           <div className="pr-empty">
             표시할 PR이 없습니다 — enabled GitHub 레포의 열린 PR이 여기 모입니다.
@@ -150,6 +157,22 @@ export function PrRadarView() {
                           { onSuccess: () => goTo("jobs") },
                         )
                       }
+                      triaging={ciTriage.isPending}
+                      onCiTriage={() =>
+                        ciTriage.mutate(
+                          {
+                            projectId: it.projectId,
+                            repoFullName: it.repoFullName,
+                            prNumber: it.number,
+                            prUrl: it.url,
+                            timeoutSec: 120,
+                            maxTurns: 8,
+                            costCapUsd: 1.0,
+                          },
+                          // 캡 초과면 매트릭스(Q1)로, 아니면 Jobs로 이동.
+                          { onSuccess: (out) => goTo(out.escalated ? "board" : "jobs") },
+                        )
+                      }
                     />
                   ))}
                 </div>
@@ -165,17 +188,23 @@ function PrCard({
   item,
   codexReady,
   drafting,
+  triaging,
   onToggleSelfCheck,
   onSelfcheckDraft,
+  onCiTriage,
 }: {
   item: PrRadarItem;
   codexReady: boolean;
   drafting: boolean;
+  triaging: boolean;
   onToggleSelfCheck: (checked: boolean) => void;
   onSelfcheckDraft: () => void;
+  onCiTriage: () => void;
 }) {
   // 머지된 PR은 self-check 초안 대상 아님(정리 버킷).
   const canDraft = item.bucket !== "merged_cleanup";
+  // CI triage는 CI Blocked 버킷만(원인/수정안 제안 + 재트리거 캡).
+  const canTriage = item.bucket === "ci_blocked";
   return (
     <div className="pr-card">
       <div className="pr-card-top">
@@ -215,6 +244,22 @@ function PrCard({
           >
             <Bot className="size-3.5" />
             self-check 초안
+          </button>
+        )}
+        {canTriage && (
+          <button
+            type="button"
+            className="pr-draft"
+            disabled={!codexReady || triaging}
+            title={
+              codexReady
+                ? "codex로 CI 실패 원인/수정안 triage (제안 — 재트리거는 캡됨, 초과 시 Q1 escalate)"
+                : "codex 미가용 — 설치·로그인 후 사용"
+            }
+            onClick={onCiTriage}
+          >
+            <Bot className="size-3.5" />
+            CI triage
           </button>
         )}
         <button

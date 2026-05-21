@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
-import type { WorkSignal } from "@/bindings";
+import type { AreaTag, WorkSignal } from "@/bindings";
 import {
+  areaLabel,
   kindChipClass,
   kindLabel,
   quadrantToZone,
   shortDate,
+  suggestedQuadrantBadge,
   ZONES,
   type ZoneKey,
 } from "@/components/board/board-utils";
@@ -28,6 +30,8 @@ type Props = {
   onPromoteToday: (id: string) => void;
   /** ⋯ 메뉴 열기. */
   onOpenMenu: (id: string, anchor: HTMLElement) => void;
+  /** AI 제안 영역(suggestedArea)을 사람이 확정 (별개 축 — 결정 레일 아님). */
+  onConfirmArea: (id: string, area: AreaTag) => void;
   /** Today 패널 DOM (드롭 히트 테스트용). */
   todayPanelRef: React.RefObject<HTMLDivElement | null>;
 };
@@ -45,6 +49,7 @@ export function MatrixCanvas({
   onClassify,
   onPromoteToday,
   onOpenMenu,
+  onConfirmArea,
   todayPanelRef,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -324,6 +329,8 @@ export function MatrixCanvas({
         const qClass = zone === "unclassified" ? "" : ` ${zone}`;
         const selCls = s.id === selectedId ? " sel" : "";
         const popCls = poppedIds.has(s.id) ? " pop" : "";
+        const sugArea = s.suggestedArea; // AI 제안 영역(힌트, 미확정일 때만 노출).
+        const sugQ = s.quadrant === "unclassified" ? suggestedQuadrantBadge(s.suggestedQuadrant) : "";
         return (
           <div
             key={s.id}
@@ -337,6 +344,27 @@ export function MatrixCanvas({
           >
             {s.kind && (
               <span className={`chip ${kindChipClass(s.kind)}`}>{kindLabel(s.kind)}</span>
+            )}
+            {s.area ? (
+              <span className="chip chip-area">{areaLabel(s.area)}</span>
+            ) : sugArea ? (
+              <button
+                type="button"
+                className="chip chip-area-sug"
+                title="AI 제안 영역 — 클릭해 확정"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConfirmArea(s.id, sugArea);
+                }}
+              >
+                {areaLabel(sugArea)}?
+              </button>
+            ) : null}
+            {sugQ && (
+              <span className="chip chip-q-sug" title="AI 제안 사분면(힌트 — 자동 분류 아님)">
+                {sugQ}
+              </span>
             )}
             <div className="body">{s.title}</div>
             <div className="pdate">{shortDate(s.createdAt)}</div>

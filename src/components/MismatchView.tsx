@@ -1,12 +1,14 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, RefreshCw, Unlink } from "lucide-react";
+import { ArrowLeft, Bot, ExternalLink, RefreshCw, Unlink } from "lucide-react";
 
 import type { MismatchItem } from "@/bindings";
 import {
   MISMATCH_POLL_MS,
   fetchMismatch,
   openExternal,
+  useCodexStatus,
   useProjects,
+  useTriggerMismatchDraft,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
 
@@ -21,6 +23,9 @@ export function MismatchView() {
   const qc = useQueryClient();
   const projects = useProjects();
   const projectList = projects.data ?? [];
+  const codex = useCodexStatus();
+  const mismatchDraft = useTriggerMismatchDraft();
+  const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
   // 프로젝트별 주기 폴링(고정 cadence) + bounded retry. 성공 시 매트릭스 invalidate.
   const results = useQueries({
@@ -70,6 +75,11 @@ export function MismatchView() {
             일부 폴링 실패: {errors.map((e) => e.message).join(" · ")}
           </div>
         )}
+        {mismatchDraft.error && (
+          <div className="pr-err">
+            해소 초안 실패: {(mismatchDraft.error as Error).message}
+          </div>
+        )}
         {empty && !noProjects && (
           <div className="pr-empty">
             drift가 없습니다 — PR이 머지됐는데 Notion 백로그 상태가 완료가 아닌 티켓이 여기 모입니다.
@@ -86,7 +96,27 @@ export function MismatchView() {
             </div>
             <div className="pr-cards">
               {items.map((it) => (
-                <MismatchCard key={`${it.projectId}:${it.ticket}`} item={it} />
+                <MismatchCard
+                  key={`${it.projectId}:${it.ticket}`}
+                  item={it}
+                  codexReady={codexReady}
+                  drafting={mismatchDraft.isPending}
+                  onDraft={() =>
+                    mismatchDraft.mutate(
+                      {
+                        projectId: it.projectId,
+                        ticket: it.ticket,
+                        prUrl: it.prUrl,
+                        notionUrl: it.notionUrl,
+                        currentStatus: it.notionStatus,
+                        timeoutSec: 90,
+                        maxTurns: 6,
+                        costCapUsd: 0.5,
+                      },
+                      { onSuccess: () => goTo("jobs") },
+                    )
+                  }
+                />
               ))}
             </div>
           </section>
@@ -96,7 +126,17 @@ export function MismatchView() {
   );
 }
 
-function MismatchCard({ item }: { item: MismatchItem }) {
+function MismatchCard({
+  item,
+  codexReady,
+  drafting,
+  onDraft,
+}: {
+  item: MismatchItem;
+  codexReady: boolean;
+  drafting: boolean;
+  onDraft: () => void;
+}) {
   return (
     <div className="pr-card">
       <div className="pr-card-top">
@@ -114,6 +154,20 @@ function MismatchCard({ item }: { item: MismatchItem }) {
         <span className="pr-flag pr-ticket">{item.ticket}</span>
       </div>
       <div className="pr-card-actions">
+        <button
+          type="button"
+          className="pr-draft"
+          disabled={!codexReady || drafting}
+          title={
+            codexReady
+              ? "codex로 Notion 상태 업데이트 초안 (제안 — Jobs에서 검토·accept, 실제 변경은 수동)"
+              : "codex 미가용 — 설치·로그인 후 사용"
+          }
+          onClick={onDraft}
+        >
+          <Bot className="size-3.5" />
+          해소 초안
+        </button>
         <button
           type="button"
           className="pr-open"

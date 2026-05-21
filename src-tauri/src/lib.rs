@@ -82,6 +82,17 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::pr_proposal,
         commands::accept_proposal,
         commands::reject_proposal,
+        // 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안, Phase 9).
+        commands::trigger_enrich,
+        commands::enrich_proposal,
+        commands::accept_enrich,
+        commands::set_signal_area,
+        commands::trigger_ci_triage,
+        commands::triage_proposal,
+        commands::accept_triage,
+        commands::trigger_mismatch_draft,
+        commands::mismatch_draft_proposal,
+        commands::accept_mismatch_draft,
     ])
 }
 

@@ -11,12 +11,14 @@ use crate::git::{summarize_status, CliGitProvider, GitProvider};
 use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
 use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
 use crate::models::{
-    AgentRail, AgentRunView, CiStatus, CodexAvailability, CreateProjectInput, CreateRepoInput,
-    CreateRoutineInput, CreateSignalInput, DiffFileSummary, DiffMode, Engine, FlushSummary, Kind,
-    MismatchItem, PingResult, PrRadarItem, Project, Promotion, PromotionOutcome, PromotionStatus,
+    AgentRail, AgentRunView, AreaTag, CiStatus, CiTriageProposal, CodexAvailability,
+    CreateProjectInput, CreateRepoInput, CreateRoutineInput, CreateSignalInput, DiffFileSummary,
+    DiffMode, Engine, EnrichProposal, FlushSummary, Kind, MismatchItem, NotionUpdateProposal,
+    PingResult, PrRadarItem, Project, Promotion, PromotionOutcome, PromotionStatus,
     PromotionTarget, Quadrant, ReadinessBucket, Repo, RoutineToday, Sandbox, SignalStatus,
-    TokenKind, TokenStatus, TriggerCodexInput, TriggerEchoInput, TriggerPrSelfCheckInput, Weekday,
-    WorkSignal, Worktree,
+    TokenKind, TokenStatus, TriageOutcome, TriggerCiTriageInput, TriggerCodexInput,
+    TriggerEchoInput, TriggerEnrichInput, TriggerMismatchDraftInput, TriggerPrSelfCheckInput,
+    Weekday, WorkSignal, Worktree,
 };
 use crate::notion::{
     HttpNotionReader, HttpNotionWriter, NotionError, NotionPageState, NotionReader, NotionWriter,
@@ -1883,6 +1885,8 @@ pub async fn trigger_echo_job(
             repo_id: None,
             workdir: None,
             trigger: None,
+            retry_key: None,
+            retry_count: 0,
             bounds,
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
@@ -1963,6 +1967,8 @@ pub async fn trigger_codex_job(
             repo_id: input.repo_id.clone(),
             workdir,
             trigger: None,
+            retry_key: None,
+            retry_count: 0,
             bounds,
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
@@ -2147,6 +2153,8 @@ pub async fn trigger_pr_selfcheck(
             repo_id: Some(repo_id),
             workdir: Some(workdir),
             trigger: Some(trigger),
+            retry_key: None,
+            retry_count: 0,
             bounds,
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
@@ -2299,6 +2307,615 @@ pub async fn reject_proposal(db: State<'_, Db>, run_id: String) -> Result<(), St
         return Err("reject 가능한 상태가 아닙니다(awaiting_approval 아님).".into());
     }
     Ok(())
+}
+
+// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안) ──────────────
+//
+// 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴 재사용). codex 출력은 Proposal(draft)일
+// 뿐이고 사람이 accept해야 (로컬) 반영된다 — 외부(Notion/GitHub) 직접 mutate 없음(INVARIANT #2).
+// INVARIANT #1: enrich는 quadrant를 자동 확정하지 않는다(suggested_*는 힌트, accept해도 카드는 unclassified).
+// INVARIANT #5: CI triage 재트리거는 retry_key 체인 수를 캡하고 초과 시 Q1 escalate(사람).
+
+/// codex 미설치/미인증이면 Err(graceful degrade 게이트). Phase 9 트리거들이 공유한다.
+async fn require_codex(jm: &JobManager) -> Result<std::path::PathBuf, String> {
+    let Some(codex_bin) = jm.codex_bin.clone() else {
+        return Err("codex CLI를 찾을 수 없습니다 — 설치 후 재시작하세요.".into());
+    };
+    let avail = codex_availability(Some(&codex_bin)).await;
+    if !avail.authed {
+        return Err(avail.detail);
+    }
+    Ok(codex_bin)
+}
+
+/// awaiting_approval 잡의 (status, trigger). accept 상태 가드 공유.
+async fn run_status_trigger(db: &Db, run_id: &str) -> Result<(String, Option<String>), String> {
+    let row: Option<(String, Option<String>)> =
+        sqlx::query_as("SELECT status, trigger FROM agent_runs WHERE id = ?1")
+            .bind(run_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    row.ok_or_else(|| "잡을 찾을 수 없음".to_string())
+}
+
+/// 잡의 proposal JSON 원문. 없으면 Err(아직 산출물 없음).
+async fn run_proposal_raw(db: &Db, run_id: &str) -> Result<String, String> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT proposal FROM agent_runs WHERE id = ?1")
+            .bind(run_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    row.ok_or("잡을 찾을 수 없음")?
+        .0
+        .ok_or_else(|| "아직 proposal이 없습니다(잡이 끝나지 않았거나 산출물 없음).".to_string())
+}
+
+/// raw fallback(`{"raw":...}`) 가드 후 타입 파싱(Phase 8 parse_pr_proposal 일반화). codex가 형식 밖
+/// 출력(또는 닫힌 세트 밖 값)을 내면 Err로 노출한다(조용한 빈 proposal 금지 — INVARIANT #2 정신).
+fn parse_proposal<T: serde::de::DeserializeOwned>(raw: &str) -> Result<T, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("proposal JSON 파싱 실패: {e}"))?;
+    if let Some(raw_msg) = v.get("raw").and_then(|x| x.as_str()) {
+        return Err(format!(
+            "codex가 형식에 맞는 JSON을 내지 않았습니다. 원문:\n{raw_msg}"
+        ));
+    }
+    serde_json::from_value(v).map_err(|e| format!("proposal 구조 불일치: {e}"))
+}
+
+/// 공통 accept 마감: append-only acceptances 행 + 잡 succeeded(awaiting_approval에서만 전이).
+/// **외부(Notion/GitHub)는 어떤 호출도 없다** — 로컬 기록일 뿐(INVARIANT #2). 특수 로컬 효과는 호출자가.
+async fn record_acceptance(
+    db: &Db,
+    run_id: &str,
+    target: &str,
+    accepted_json: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO acceptances (id, agent_run_id, accepted_fields, target) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3)",
+    )
+    .bind(run_id)
+    .bind(accepted_json)
+    .bind(target)
+    .execute(db)
+    .await?;
+    sqlx::query(
+        "UPDATE agent_runs SET status = 'succeeded', finished_at = COALESCE(finished_at, datetime('now')) \
+         WHERE id = ?1 AND status = 'awaiting_approval'",
+    )
+    .bind(run_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// trigger JSON에서 문자열 필드 추출(없으면 None).
+fn trigger_field(trigger: Option<&str>, key: &str) -> Option<String> {
+    let t = trigger?;
+    let v: serde_json::Value = serde_json::from_str(t).ok()?;
+    v.get(key).and_then(|x| x.as_str()).map(String::from)
+}
+
+// ── enrich (braindump suggestedQuadrant + suggestedArea, #2) ──────────────────────
+
+/// enrich 프롬프트(상수 — 카드 텍스트는 cwd `card.txt`로 전달, 인젝션 없음). 닫힌 세트만 허용을 명시한다.
+const ENRICH_PROMPT: &str = "\
+당신은 개인 업무 카드 분류 **제안** 도우미다. 작업 디렉터리의 `card.txt`에 한 줄짜리 업무 메모(브레인덤프)가 있다. \
+이 메모를 read-only로 읽고, 아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(코드펜스·설명 없이 순수 JSON):\n\
+{\
+\"suggestedQuadrant\": \"q1_do_now|q2_schedule|q3_quick_contain|q4_drop|unclassified 중 하나\", \
+\"suggestedArea\": \"health|work|studies|environment|recreation|romance|family|friends|finances|other 중 하나\", \
+\"reason\": \"한국어 한 문장 근거\"\
+}\n\
+규칙: suggestedArea는 위 10개 라이프 도메인 **세트 안에서만** 고른다(세트 밖 카테고리 생성 금지). \
+이건 **제안(힌트)일 뿐**이고 실제 분류/확정은 사람이 한다 — 너는 절대 단정하지 마라. \
+애매하면 suggestedQuadrant는 \"unclassified\"로 둔다.";
+
+/// braindump enrich 잡 트리거(미분류 카드 ⋯ 메뉴). 카드 텍스트를 읽어 suggestedQuadrant/suggestedArea를
+/// **제안**한다(비-레포 잡·read_only). 산출 Proposal은 awaiting_approval로 멈추고, accept해도 quadrant는
+/// 자동 확정되지 않는다(INVARIANT #1). 미설치/미인증이면 Err(graceful degrade).
+#[tauri::command]
+#[specta::specta]
+pub async fn trigger_enrich(
+    db: State<'_, Db>,
+    jm: State<'_, JobManager>,
+    input: TriggerEnrichInput,
+) -> Result<String, String> {
+    let codex_bin = require_codex(&jm).await?;
+
+    // 카드 본문 로드(제목+본문). codex 입력 파일로 넘긴다(인젝션 없음).
+    let row: Option<(String, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT title, body, project_id FROM signals WHERE id = ?1")
+            .bind(&input.signal_id)
+            .fetch_optional(db.inner())
+            .await
+            .map_err(|e| e.to_string())?;
+    let (title, body, project_id) = row.ok_or("신호를 찾을 수 없음")?;
+    let card_text = match body.filter(|b| !b.trim().is_empty()) {
+        Some(b) => format!("{title}\n\n{b}"),
+        None => title,
+    };
+
+    let id = new_run_id(db.inner()).await?;
+    let bounds = Bounds {
+        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
+        max_turns: input.max_turns.max(1),
+        cost_cap_usd: input.cost_cap_usd.max(0.0),
+    };
+    let trigger = serde_json::json!({ "signalId": input.signal_id }).to_string();
+    insert_agent_run(
+        db.inner(),
+        &NewAgentRun {
+            id: id.clone(),
+            project_id,
+            engine: Engine::Codex,
+            kind: "enrich_braindump".into(),
+            rail: AgentRail::Suggestion,
+            sandbox: Sandbox::ReadOnly,
+            repo_id: None,
+            workdir: None,
+            trigger: Some(trigger),
+            retry_key: None,
+            retry_count: 0,
+            bounds,
+            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    jm.spawn(
+        db.inner().clone(),
+        id.clone(),
+        bounds,
+        CodexRunner {
+            codex_bin,
+            run_id: id.clone(),
+            prompt: ENRICH_PROMPT.to_string(),
+            sandbox: Sandbox::ReadOnly,
+            rail: AgentRail::Suggestion,
+            repo_path: None,
+            worktree_root: jm.worktree_root.clone(),
+            scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
+            input_files: vec![("card.txt".to_string(), card_text)],
+        },
+        true, // 게이트 잡: 성공+proposal이면 awaiting_approval(Acceptance 게이트).
+    );
+    Ok(id)
+}
+
+/// enrich Proposal(타입 파싱). raw/세트 밖 값이면 Err(조용한 빈 proposal 금지 + 닫힌 세트 강제).
+#[tauri::command]
+#[specta::specta]
+pub async fn enrich_proposal(db: State<'_, Db>, run_id: String) -> Result<EnrichProposal, String> {
+    let raw = run_proposal_raw(db.inner(), &run_id).await?;
+    parse_proposal::<EnrichProposal>(&raw)
+}
+
+/// enrich accept 코어(테스트 가능). 신호에 suggested_quadrant/suggested_area/suggestion_reason을
+/// **힌트로만** 쓴다 — quadrant/area(확정값)는 절대 건드리지 않는다(INVARIANT #1). 사분면 확정은
+/// classify_signal, area 확정은 set_signal_area로만(사람 결정).
+async fn execute_accept_enrich(
+    db: &Db,
+    run_id: &str,
+    signal_id: &str,
+    accepted: &EnrichProposal,
+    accepted_json: &str,
+) -> Result<WorkSignal, sqlx::Error> {
+    let sig = sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
+            updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(signal_id)
+    .bind(accepted.suggested_quadrant)
+    .bind(accepted.suggested_area)
+    .bind(&accepted.reason)
+    .fetch_one(db)
+    .await?;
+    record_acceptance(db, run_id, "enrich_braindump", accepted_json).await?;
+    Ok(sig)
+}
+
+/// enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 제안을 accept하면 신호에 힌트로 반영하고
+/// 잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+#[tauri::command]
+#[specta::specta]
+pub async fn accept_enrich(
+    db: State<'_, Db>,
+    run_id: String,
+    accepted: EnrichProposal,
+) -> Result<WorkSignal, String> {
+    let (status, trigger) = run_status_trigger(db.inner(), &run_id).await?;
+    if status != "awaiting_approval" {
+        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
+    }
+    let signal_id =
+        trigger_field(trigger.as_deref(), "signalId").ok_or("잡 트리거에 signalId가 없음")?;
+    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
+    execute_accept_enrich(db.inner(), &run_id, &signal_id, &accepted, &accepted_json)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관). enrich 제안을 사람이
+/// 확정하거나 직접 고른다. None이면 미설정으로 되돌린다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_signal_area(
+    db: State<'_, Db>,
+    id: String,
+    area: Option<AreaTag>,
+) -> Result<WorkSignal, String> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET area = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(&id)
+    .bind(area)
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| e.to_string())
+}
+
+// ── CI triage (#3, 재트리거 캡 + Q1 escalate) ───────────────────────────────────────
+
+/// 같은 PR CI 실패를 재triage할 수 있는 최대 횟수(INVARIANT #5). 초과 시 사람에게 Q1 escalate.
+const TRIAGE_RETRY_CAP: i64 = 3;
+
+/// CI triage 프롬프트(상수 — PR diff는 cwd `pr.diff`로 전달, 인젝션 없음).
+const CI_TRIAGE_PROMPT: &str = "\
+당신은 CI 실패 triage **제안** 도우미다. 작업 디렉터리의 `pr.diff`에 CI가 실패한 PR의 unified diff가 있다. \
+이 diff를 read-only로 분석하라(필요하면 현재 레포 코드도 참고). 어떤 파일도 수정하지 말고 외부 명령도 쓰지 마라. \
+실패 원인 가설과 수정안을 아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(순수 JSON):\n\
+{\
+\"cause\": \"CI 실패의 가장 그럴듯한 원인 가설(한국어)\", \
+\"suggestedFixes\": [\"구체적 수정안 항목\"], \
+\"summary\": \"한국어 2~3문장 요약\"\
+}\n\
+이건 제안일 뿐이다 — 실제 수정/적용은 사람이 결정한다.";
+
+/// retry_key 체인의 기존 triage 잡 수(캡 판정 입력).
+async fn count_triage_runs(db: &Db, retry_key: &str) -> Result<i64, sqlx::Error> {
+    let row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM agent_runs WHERE retry_key = ?1 AND kind = 'triage_ci'",
+    )
+    .bind(retry_key)
+    .fetch_one(db)
+    .await?;
+    Ok(row.0)
+}
+
+/// 재트리거 캡 초과 시 매트릭스로 Q1 escalate(사람 개입). dedup upsert(중복 0) + 항상 unclassified 진입 +
+/// suggested q1 힌트만(INVARIANT #1 — 자동 분류 아님). type=agent_alert(시스템 신호).
+async fn escalate_triage_to_q1(
+    db: &Db,
+    project_id: Option<&str>,
+    repo_full_name: &str,
+    pr_number: u32,
+    pr_url: &str,
+    retry_key: &str,
+) -> Result<(), sqlx::Error> {
+    let title = format!(
+        "[{repo_full_name}] PR #{pr_number} CI triage {TRIAGE_RETRY_CAP}회 초과 — 사람 개입 필요"
+    );
+    let body = format!(
+        "{pr_url} · 자동 CI triage가 캡({TRIAGE_RETRY_CAP})에 도달했습니다. 직접 확인하세요."
+    );
+    let dedup = format!("{retry_key}:escalated");
+    let links = serde_json::json!({ "githubPrUrl": pr_url }).to_string();
+    sqlx::query(
+        "INSERT INTO signals \
+            (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'system', 'agent_alert', \
+                 'unclassified', 'q1_do_now', ?4, 'new', ?5) \
+         ON CONFLICT(dedup_key) WHERE dedup_key IS NOT NULL DO UPDATE SET \
+            title = excluded.title, body = excluded.body, links = excluded.links, \
+            suggested_quadrant = excluded.suggested_quadrant, updated_at = datetime('now')",
+    )
+    .bind(project_id)
+    .bind(&title)
+    .bind(&body)
+    .bind(&dedup)
+    .bind(&links)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// CI triage 잡 트리거(PR Radar CI Blocked 카드). diff를 GitHub에서 받아 worktree 격리 codex 잡(read_only).
+/// **재트리거 캡**(INVARIANT #5): 같은 PR(retry_key=triage:{repo}:{pr})의 기존 triage가 캡 이상이면 잡을
+/// 만들지 않고 매트릭스 Q1으로 escalate한다. 산출 Proposal은 awaiting_approval(Acceptance 게이트).
+#[tauri::command]
+#[specta::specta]
+pub async fn trigger_ci_triage(
+    db: State<'_, Db>,
+    jm: State<'_, JobManager>,
+    input: TriggerCiTriageInput,
+) -> Result<TriageOutcome, String> {
+    let codex_bin = require_codex(&jm).await?;
+
+    let retry_key = format!("triage:{}:{}", input.repo_full_name, input.pr_number);
+    // 재트리거 캡: 초과면 잡 대신 Q1 escalate(사람).
+    let prior = count_triage_runs(db.inner(), &retry_key)
+        .await
+        .map_err(|e| e.to_string())?;
+    if prior >= TRIAGE_RETRY_CAP {
+        escalate_triage_to_q1(
+            db.inner(),
+            input.project_id.as_deref(),
+            &input.repo_full_name,
+            input.pr_number,
+            &input.pr_url,
+            &retry_key,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        return Ok(TriageOutcome {
+            run_id: None,
+            escalated: true,
+            detail: format!(
+                "CI triage가 캡({TRIAGE_RETRY_CAP})에 도달 — 매트릭스 Q1으로 escalate(사람 개입)."
+            ),
+        });
+    }
+
+    let (repo_id, local_path, project_id, gh_token) = resolve_selfcheck_repo(
+        db.inner(),
+        input.project_id.as_deref(),
+        &input.repo_full_name,
+    )
+    .await?;
+
+    // PR diff fetch(read 레일, bounded retry). 트리거 시점에 받아 실패를 즉시 노출한다.
+    let provider = HttpPrProvider::new(&gh_token).map_err(|e| e.to_string())?;
+    let diff = provider
+        .fetch_pr_diff(&input.repo_full_name, input.pr_number as u64)
+        .await
+        .map_err(|e| format!("PR diff 가져오기 실패: {e}"))?;
+
+    let id = new_run_id(db.inner()).await?;
+    let bounds = Bounds {
+        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
+        max_turns: input.max_turns.max(1),
+        cost_cap_usd: input.cost_cap_usd.max(0.0),
+    };
+    let trigger = serde_json::json!({
+        "prUrl": input.pr_url,
+        "repoFullName": input.repo_full_name,
+        "prNumber": input.pr_number,
+    })
+    .to_string();
+    let workdir = jm.worktree_root.join(&id).to_string_lossy().into_owned();
+    insert_agent_run(
+        db.inner(),
+        &NewAgentRun {
+            id: id.clone(),
+            project_id: Some(project_id),
+            engine: Engine::Codex,
+            kind: "triage_ci".into(),
+            rail: AgentRail::Suggestion,
+            sandbox: Sandbox::ReadOnly,
+            repo_id: Some(repo_id),
+            workdir: Some(workdir),
+            trigger: Some(trigger),
+            retry_key: Some(retry_key),
+            retry_count: prior as u32,
+            bounds,
+            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    jm.spawn(
+        db.inner().clone(),
+        id.clone(),
+        bounds,
+        CodexRunner {
+            codex_bin,
+            run_id: id.clone(),
+            prompt: CI_TRIAGE_PROMPT.to_string(),
+            sandbox: Sandbox::ReadOnly,
+            rail: AgentRail::Suggestion,
+            repo_path: Some(std::path::PathBuf::from(local_path)),
+            worktree_root: jm.worktree_root.clone(),
+            scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
+            input_files: vec![("pr.diff".to_string(), diff)],
+        },
+        true,
+    );
+    Ok(TriageOutcome {
+        run_id: Some(id),
+        escalated: false,
+        detail: format!("CI triage 잡 시작({}/{TRIAGE_RETRY_CAP}회).", prior + 1),
+    })
+}
+
+/// CI triage Proposal(타입 파싱). raw면 Err.
+#[tauri::command]
+#[specta::specta]
+pub async fn triage_proposal(
+    db: State<'_, Db>,
+    run_id: String,
+) -> Result<CiTriageProposal, String> {
+    let raw = run_proposal_raw(db.inner(), &run_id).await?;
+    parse_proposal::<CiTriageProposal>(&raw)
+}
+
+/// CI triage Proposal accept(INVARIANT #2 게이트). 로컬 기록만(acceptances + 잡 succeeded) — 외부 무변경.
+/// 실제 수정은 사람이 수동(또는 실행 레일 Phase 10).
+#[tauri::command]
+#[specta::specta]
+pub async fn accept_triage(
+    db: State<'_, Db>,
+    run_id: String,
+    accepted: CiTriageProposal,
+) -> Result<(), String> {
+    let (status, _trigger) = run_status_trigger(db.inner(), &run_id).await?;
+    if status != "awaiting_approval" {
+        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
+    }
+    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
+    record_acceptance(db.inner(), &run_id, "triage_ci", &accepted_json)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ── mismatch 해소 초안 (#4, Notion 업데이트 draft — accept는 로컬 기록만) ──────────────
+
+/// mismatch 해소 초안 프롬프트(상수 — 컨텍스트는 cwd `mismatch.json`으로 전달, 인젝션 없음).
+const MISMATCH_DRAFT_PROMPT: &str = "\
+당신은 Notion 상태 동기화 **제안** 도우미다. 작업 디렉터리의 `mismatch.json`에 \
+{ticket, prUrl, notionUrl, currentStatus, candidateDoneStatuses} 가 있다. \
+PR이 머지됐는데 Notion 백로그 상태가 완료가 아니다. candidateDoneStatuses 중 적절한 완료 상태를 골라 \
+아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(순수 JSON):\n\
+{\
+\"ticket\": \"티켓 키\", \
+\"suggestedStatus\": \"candidateDoneStatuses 중 하나(권장 완료 상태)\", \
+\"note\": \"한국어 한두 문장 메모(왜 이 상태인지)\"\
+}\n\
+suggestedStatus는 candidateDoneStatuses 안에서만 고른다. 이건 제안일 뿐, 실제 Notion 변경은 사람이 한다.";
+
+/// mismatch 해소 초안 잡 트리거(Mismatch 카드). Notion 상태 업데이트를 제안하는 비-레포 잡(read_only).
+/// accept는 로컬 기록만(실제 Notion write는 사람 수동 — 사용자 결정). 미설치/미인증이면 Err.
+#[tauri::command]
+#[specta::specta]
+pub async fn trigger_mismatch_draft(
+    db: State<'_, Db>,
+    jm: State<'_, JobManager>,
+    input: TriggerMismatchDraftInput,
+) -> Result<String, String> {
+    let codex_bin = require_codex(&jm).await?;
+
+    // 프로젝트 done 상태 목록(후보)을 컨텍스트로.
+    let done_raw: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT notion_done_statuses FROM projects WHERE id = ?1")
+            .bind(&input.project_id)
+            .fetch_optional(db.inner())
+            .await
+            .map_err(|e| e.to_string())?;
+    let candidates = parse_done_statuses(done_raw.and_then(|r| r.0).as_deref());
+
+    let context = serde_json::json!({
+        "ticket": input.ticket,
+        "prUrl": input.pr_url,
+        "notionUrl": input.notion_url,
+        "currentStatus": input.current_status,
+        "candidateDoneStatuses": candidates,
+    })
+    .to_string();
+
+    let id = new_run_id(db.inner()).await?;
+    let bounds = Bounds {
+        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
+        max_turns: input.max_turns.max(1),
+        cost_cap_usd: input.cost_cap_usd.max(0.0),
+    };
+    let dedup = mismatch_dedup_key(&input.project_id, &input.ticket);
+    let trigger = serde_json::json!({
+        "ticket": input.ticket,
+        "projectId": input.project_id,
+        "dedupKey": dedup,
+        "notionUrl": input.notion_url,
+    })
+    .to_string();
+    insert_agent_run(
+        db.inner(),
+        &NewAgentRun {
+            id: id.clone(),
+            project_id: Some(input.project_id.clone()),
+            engine: Engine::Codex,
+            kind: "draft_notion_update".into(),
+            rail: AgentRail::Suggestion,
+            sandbox: Sandbox::ReadOnly,
+            repo_id: None,
+            workdir: None,
+            trigger: Some(trigger),
+            retry_key: None,
+            retry_count: 0,
+            bounds,
+            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    jm.spawn(
+        db.inner().clone(),
+        id.clone(),
+        bounds,
+        CodexRunner {
+            codex_bin,
+            run_id: id.clone(),
+            prompt: MISMATCH_DRAFT_PROMPT.to_string(),
+            sandbox: Sandbox::ReadOnly,
+            rail: AgentRail::Suggestion,
+            repo_path: None,
+            worktree_root: jm.worktree_root.clone(),
+            scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
+            input_files: vec![("mismatch.json".to_string(), context)],
+        },
+        true,
+    );
+    Ok(id)
+}
+
+/// mismatch 해소 Proposal(타입 파싱). raw면 Err.
+#[tauri::command]
+#[specta::specta]
+pub async fn mismatch_draft_proposal(
+    db: State<'_, Db>,
+    run_id: String,
+) -> Result<NotionUpdateProposal, String> {
+    let raw = run_proposal_raw(db.inner(), &run_id).await?;
+    parse_proposal::<NotionUpdateProposal>(&raw)
+}
+
+/// mismatch 해소 accept 코어(테스트 가능). 로컬 기록만 + 로컬 mismatch 신호 resolve(status=done).
+/// **Notion은 어떤 호출도 없다** — 실제 상태 변경은 사람 수동(사용자 결정, INVARIANT #2).
+async fn execute_accept_mismatch_draft(
+    db: &Db,
+    run_id: &str,
+    dedup_key: Option<&str>,
+    accepted_json: &str,
+) -> Result<(), sqlx::Error> {
+    record_acceptance(db, run_id, "notion_update", accepted_json).await?;
+    // 로컬 mismatch 신호 resolve(매트릭스에서 소멸). 실제 Notion이 안 바뀌어도 다음 cycle의 ON CONFLICT가
+    // status를 덮지 않아 done으로 유지된다(accept = 사람이 처리하기로 약속). 실제 write는 사람 수동.
+    if let Some(key) = dedup_key {
+        sqlx::query(
+            "UPDATE signals SET status = 'done', updated_at = datetime('now') \
+             WHERE dedup_key = ?1 AND type = 'mismatch' AND status NOT IN ('done','archived')",
+        )
+        .bind(key)
+        .execute(db)
+        .await?;
+    }
+    Ok(())
+}
+
+/// mismatch 해소 Proposal accept(INVARIANT #2 게이트). 로컬에 기록하고 로컬 mismatch 신호를 resolve한다.
+/// **실제 Notion 상태 변경은 사람이 수동으로** — 여기서 외부를 mutate하지 않는다(사용자 결정).
+#[tauri::command]
+#[specta::specta]
+pub async fn accept_mismatch_draft(
+    db: State<'_, Db>,
+    run_id: String,
+    accepted: NotionUpdateProposal,
+) -> Result<(), String> {
+    let (status, trigger) = run_status_trigger(db.inner(), &run_id).await?;
+    if status != "awaiting_approval" {
+        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
+    }
+    let dedup = trigger_field(trigger.as_deref(), "dedupKey");
+    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
+    execute_accept_mismatch_draft(db.inner(), &run_id, dedup.as_deref(), &accepted_json)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -4111,5 +4728,209 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(acc.0, 0);
+    }
+
+    // ── Phase 9: enrich / CI triage / mismatch 초안 ──────────────────────────────────
+
+    /// enrich proposal: raw fallback과 닫힌 세트 밖 area는 Err(INVARIANT #1 구조적 강제), 누락은 관용.
+    #[test]
+    fn enrich_proposal_rejects_raw_and_out_of_set_area() {
+        // codex가 형식 밖 출력 → raw fallback → Err.
+        assert!(parse_proposal::<EnrichProposal>(r#"{"raw":"엉뚱한 출력"}"#).is_err());
+        // 닫힌 세트 밖 area → Err (AI는 세트 밖 카테고리를 만들 수 없다).
+        assert!(parse_proposal::<EnrichProposal>(r#"{"suggestedArea":"productivity"}"#).is_err());
+        // 세트 안 + 일부 누락 관용.
+        let ok = parse_proposal::<EnrichProposal>(r#"{"suggestedArea":"health"}"#).unwrap();
+        assert!(matches!(ok.suggested_area, Some(AreaTag::Health)));
+        assert!(ok.suggested_quadrant.is_none());
+    }
+
+    /// CI triage / mismatch proposal: raw fallback은 Err, 정상 JSON은 파싱.
+    #[test]
+    fn triage_and_mismatch_proposals_parse() {
+        assert!(parse_proposal::<CiTriageProposal>(r#"{"raw":"x"}"#).is_err());
+        let t = parse_proposal::<CiTriageProposal>(
+            r#"{"cause":"타입 오류","suggestedFixes":["고치기"]}"#,
+        )
+        .unwrap();
+        assert_eq!(t.cause, "타입 오류");
+        assert_eq!(t.suggested_fixes.len(), 1);
+        let m = parse_proposal::<NotionUpdateProposal>(
+            r#"{"ticket":"MIR-DEV-7","suggestedStatus":"Done","note":"머지됨"}"#,
+        )
+        .unwrap();
+        assert_eq!(m.suggested_status, "Done");
+    }
+
+    /// INVARIANT #1: enrich accept는 suggested_* 힌트만 쓰고 quadrant(결정 레일)/area(확정값)는 안 건드린다.
+    #[tokio::test]
+    async fn enrich_accept_sets_hints_not_quadrant() {
+        let db = fresh_db().await;
+        let sig = insert_signal(&db, &input("히어로 카피 다시", Some(Kind::Work)))
+            .await
+            .unwrap();
+        assert!(matches!(sig.quadrant, Quadrant::Unclassified));
+        let trigger = serde_json::json!({ "signalId": sig.id }).to_string();
+        let proposal =
+            r#"{"suggestedQuadrant":"q1_do_now","suggestedArea":"work","reason":"마감 임박"}"#;
+        insert_awaiting_run(&db, "e1", proposal, &trigger).await;
+
+        let parsed = parse_proposal::<EnrichProposal>(proposal).unwrap();
+        let accepted_json = serde_json::to_string(&parsed).unwrap();
+        let updated = execute_accept_enrich(&db, "e1", &sig.id, &parsed, &accepted_json)
+            .await
+            .unwrap();
+
+        // 힌트는 들어가고 quadrant는 unclassified로 남는다(자동 분류 0).
+        assert!(
+            matches!(updated.quadrant, Quadrant::Unclassified),
+            "INVARIANT #1: quadrant 자동 확정 0"
+        );
+        assert_eq!(updated.suggested_quadrant.as_deref(), Some("q1_do_now"));
+        assert!(matches!(updated.suggested_area, Some(AreaTag::Work)));
+        // area(확정값)는 accept로 바뀌지 않는다(사람 set_signal_area로만).
+        assert!(updated.area.is_none());
+
+        // 잡 succeeded + acceptances 1행.
+        let st: (String,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='e1'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(st.0, "succeeded");
+        let cnt: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM acceptances WHERE agent_run_id='e1' AND target='enrich_braindump'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(cnt.0, 1);
+    }
+
+    /// INVARIANT #5: 같은 PR CI triage가 캡(3)에 도달하면 멈추고 Q1으로 escalate(unclassified + 힌트, dedup).
+    #[tokio::test]
+    async fn triage_cap_escalates_to_q1_unclassified() {
+        let db = fresh_db().await;
+        let retry_key = "triage:owner/repo:42";
+        // 캡-1까지는 escalate 아님.
+        sqlx::query(
+            "INSERT INTO agent_runs (id, engine, kind, rail, sandbox, status, timeout_sec, max_turns, cost_cap_usd, retry_key, retry_count) \
+             VALUES ('t0', 'codex', 'triage_ci', 'suggestion', 'read_only', 'succeeded', 60, 8, 1.0, ?1, 0)",
+        )
+        .bind(retry_key)
+        .execute(&db)
+        .await
+        .unwrap();
+        assert!(count_triage_runs(&db, retry_key).await.unwrap() < TRIAGE_RETRY_CAP);
+
+        // 캡만큼 채운다.
+        for i in 1..TRIAGE_RETRY_CAP {
+            sqlx::query(
+                "INSERT INTO agent_runs (id, engine, kind, rail, sandbox, status, timeout_sec, max_turns, cost_cap_usd, retry_key, retry_count) \
+                 VALUES (?1, 'codex', 'triage_ci', 'suggestion', 'read_only', 'succeeded', 60, 8, 1.0, ?2, ?3)",
+            )
+            .bind(format!("t{i}"))
+            .bind(retry_key)
+            .bind(i)
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+        assert_eq!(
+            count_triage_runs(&db, retry_key).await.unwrap(),
+            TRIAGE_RETRY_CAP
+        );
+
+        // 캡 도달 → escalate. unclassified 진입 + suggested q1 힌트(자동 분류 0).
+        escalate_triage_to_q1(
+            &db,
+            None,
+            "owner/repo",
+            42,
+            "https://github.com/owner/repo/pull/42",
+            retry_key,
+        )
+        .await
+        .unwrap();
+        let dedup = format!("{retry_key}:escalated");
+        let row: (String, Option<String>, String) = sqlx::query_as(
+            "SELECT quadrant, suggested_quadrant, type FROM signals WHERE dedup_key = ?1",
+        )
+        .bind(&dedup)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(row.0, "unclassified", "INVARIANT #1: 자동 분류 0");
+        assert_eq!(row.1.as_deref(), Some("q1_do_now"), "Q1 힌트만");
+        assert_eq!(row.2, "agent_alert");
+
+        // 재escalate(중복 트리거)는 dedup으로 1행 유지(INVARIANT #3).
+        escalate_triage_to_q1(
+            &db,
+            None,
+            "owner/repo",
+            42,
+            "https://github.com/owner/repo/pull/42",
+            retry_key,
+        )
+        .await
+        .unwrap();
+        let n: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM signals WHERE dedup_key = ?1")
+            .bind(&dedup)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n.0, 1, "dedup — 중복 0");
+    }
+
+    /// mismatch 해소 accept = acceptances 1행(외부 무변경) + 로컬 mismatch 신호 resolve(done).
+    #[tokio::test]
+    async fn mismatch_draft_accept_records_and_resolves_signal() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let dedup = format!("mismatch:{}:MIR-DEV-7", proj.id);
+        sqlx::query(
+            "INSERT INTO signals (id, project_id, title, source, type, quadrant, dedup_key, status) \
+             VALUES ('m1', ?1, '[MIR-DEV-7] 미동기화', 'system', 'mismatch', 'unclassified', ?2, 'new')",
+        )
+        .bind(&proj.id)
+        .bind(&dedup)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let trigger = serde_json::json!({
+            "ticket": "MIR-DEV-7", "projectId": proj.id, "dedupKey": dedup,
+        })
+        .to_string();
+        let proposal = r#"{"ticket":"MIR-DEV-7","suggestedStatus":"Done","note":"머지됨"}"#;
+        insert_awaiting_run(&db, "md1", proposal, &trigger).await;
+
+        let parsed = parse_proposal::<NotionUpdateProposal>(proposal).unwrap();
+        let accepted_json = serde_json::to_string(&parsed).unwrap();
+        execute_accept_mismatch_draft(&db, "md1", Some(&dedup), &accepted_json)
+            .await
+            .unwrap();
+
+        // 외부 무변경 — acceptances(notion_update) 1행 + 잡 succeeded.
+        let cnt: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM acceptances WHERE agent_run_id='md1' AND target='notion_update'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(cnt.0, 1);
+        let st: (String,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='md1'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(st.0, "succeeded");
+        // 로컬 mismatch 신호 resolve(done).
+        let sigst: (String,) = sqlx::query_as("SELECT status FROM signals WHERE id='m1'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(sigst.0, "done");
     }
 }

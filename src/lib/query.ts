@@ -8,20 +8,28 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 import {
   commands,
+  type AreaTag,
+  type CiTriageProposal,
   type CreateProjectInput,
   type CreateRepoInput,
   type CreateRoutineInput,
   type CreateSignalInput,
   type DiffMode,
+  type EnrichProposal,
   type MismatchItem,
+  type NotionUpdateProposal,
   type PrRadarItem,
   type PromotionTarget,
   type PrSelfCheckProposal,
   type Quadrant,
   type SignalStatus,
   type TokenKind,
+  type TriageOutcome,
+  type TriggerCiTriageInput,
   type TriggerCodexInput,
   type TriggerEchoInput,
+  type TriggerEnrichInput,
+  type TriggerMismatchDraftInput,
   type TriggerPrSelfCheckInput,
   type Weekday,
   type WorkSignal,
@@ -617,5 +625,123 @@ export function useRejectProposal() {
   return useMutation({
     mutationFn: (runId: string) => unwrap(commands.rejectProposal(runId)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안) ───────────────
+//
+// 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴). codex 잡(awaiting_approval)→Proposal→
+// 사람 accept(로컬 반영). accept 전·후 외부(Notion/GitHub) 무변경(INVARIANT #2). enrich는 quadrant를
+// 자동 확정하지 않는다(INVARIANT #1 — suggested 힌트만).
+
+/** braindump enrich 잡 트리거(미분류 카드 ⋯). 성공 시 잡 목록 갱신. */
+export function useTriggerEnrich() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerEnrichInput) => unwrap(commands.triggerEnrich(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** awaiting_approval enrich 잡의 Proposal(타입 파싱). 펼친 잡에 대해서만 enabled. */
+export function useEnrichProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["enrichProposal", runId],
+    queryFn: () => unwrap(commands.enrichProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false, // 파싱 실패(raw/세트 밖)는 즉시 노출.
+  });
+}
+
+/** enrich accept(INVARIANT #1/#2 게이트) — 신호에 suggested 힌트 반영(quadrant 자동 확정 없음). */
+export function useAcceptEnrich() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: EnrichProposal }) =>
+      unwrap(commands.acceptEnrich(runId, accepted)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // suggested 힌트 칩 반영.
+    },
+  });
+}
+
+/** 라이프 도메인 area 확정/수정(사람 결정, 별개 축 — quadrant 결정 레일과 무관). */
+export function useSetSignalArea() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, area }: { id: string; area: AreaTag | null }) =>
+      unwrap(commands.setSignalArea(id, area)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+    },
+  });
+}
+
+/** CI triage 잡 트리거(PR Radar CI Blocked 카드). 캡 초과면 Q1 escalate(escalated=true, run_id 없음). */
+export function useTriggerCiTriage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerCiTriageInput): Promise<TriageOutcome> =>
+      unwrap(commands.triggerCiTriage(input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // escalate 시 Q1 신호 반영.
+    },
+  });
+}
+
+/** awaiting_approval CI triage 잡의 Proposal(타입 파싱). */
+export function useTriageProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["triageProposal", runId],
+    queryFn: () => unwrap(commands.triageProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false,
+  });
+}
+
+/** CI triage accept(INVARIANT #2 게이트) — 로컬 기록만(외부 무변경). */
+export function useAcceptTriage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: CiTriageProposal }) =>
+      unwrap(commands.acceptTriage(runId, accepted)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** mismatch 해소 초안 잡 트리거(Mismatch 카드). 성공 시 잡 목록 갱신. */
+export function useTriggerMismatchDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerMismatchDraftInput) =>
+      unwrap(commands.triggerMismatchDraft(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** awaiting_approval mismatch 초안 잡의 Proposal(타입 파싱). */
+export function useMismatchDraftProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["mismatchDraftProposal", runId],
+    queryFn: () => unwrap(commands.mismatchDraftProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false,
+  });
+}
+
+/** mismatch 해소 accept(INVARIANT #2 게이트) — 로컬 기록만 + 로컬 mismatch 신호 resolve(외부 무변경). */
+export function useAcceptMismatchDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: NotionUpdateProposal }) =>
+      unwrap(commands.acceptMismatchDraft(runId, accepted)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // 로컬 resolve 반영.
+      void qc.invalidateQueries({ queryKey: ["mismatch"] });
+    },
   });
 }

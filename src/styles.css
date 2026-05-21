@@ -305,6 +305,29 @@
   background: var(--cb-pale-green);
   color: var(--color-wr-green);
 }
+/* Phase 9 enrich — 확정 영역(area) chip. */
+.cb .chip-area {
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
+}
+/* Phase 9 enrich — AI 제안 영역(suggestedArea) chip(클릭해 확정). dashed = 미확정 힌트. */
+.cb .postit button.chip-area-sug {
+  border: 1px dashed var(--color-wr-border);
+  background: transparent;
+  color: var(--color-wr-subtle);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.cb .postit button.chip-area-sug:hover {
+  border-color: var(--color-wr-accent);
+  color: var(--color-wr-accent);
+}
+/* Phase 9 enrich — AI 제안 사분면(suggestedQuadrant) 힌트 배지(자동 분류 아님). */
+.cb .chip-q-sug {
+  background: transparent;
+  color: var(--color-wr-subtle);
+  border: 1px dashed var(--color-wr-border);
+}
 .cb .postit .pdate {
   position: absolute;
   left: 11px;
@@ -2146,6 +2169,15 @@
   font: 400 12px var(--font-sans);
   color: var(--color-wr-fg);
   line-height: 1.4;
+}
+/* Phase 9 — enrich/mismatch Proposal의 select/input(드롭다운·텍스트 입력). */
+.jobs .jobs-prop-select {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-xs);
+  background: var(--color-wr-bg);
+  padding: 6px 9px;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-fg);
 }
 .jobs .jobs-prop-checks {
   display: flex;

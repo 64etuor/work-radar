@@ -13,18 +13,29 @@ import {
 import type {
   AgentRunView,
   AgentStatus,
+  AreaTag,
+  CiTriageProposal,
+  EnrichProposal,
+  NotionUpdateProposal,
   PrSelfCheckProposal,
+  Quadrant,
   SelfCheckItem,
 } from "@/bindings";
 import {
   openExternal,
+  useAcceptEnrich,
+  useAcceptMismatchDraft,
   useAcceptProposal,
+  useAcceptTriage,
   useAgentLog,
   useAgentRuns,
   useCodexStatus,
+  useEnrichProposal,
   useKillAgentRun,
+  useMismatchDraftProposal,
   usePrProposal,
   useRejectProposal,
+  useTriageProposal,
   useTriggerCodexJob,
   useTriggerEchoJob,
 } from "@/lib/query";
@@ -256,10 +267,27 @@ function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void }) {
 }
 
 /**
- * Proposal 검토 패널 (awaiting_approval 잡). codex가 낸 self-check/설명/스크린샷/마이그레이션 초안을
- * 사람이 편집하고 accept하면 로컬에 반영된다. **GitHub 제출은 사람이 수동으로** 한다(INVARIANT #2).
+ * Acceptance 게이트 패널 디스패처 — 잡 kind별로 알맞은 Proposal 패널을 고른다(Phase 8 self-check +
+ * Phase 9 enrich/triage/mismatch). accept는 모두 로컬 반영일 뿐, 외부(Notion/GitHub) 무변경(INVARIANT #2).
  */
 function ProposalPanel({ run }: { run: AgentRunView }) {
+  switch (run.kind) {
+    case "enrich_braindump":
+      return <EnrichPanel run={run} />;
+    case "triage_ci":
+      return <TriagePanel run={run} />;
+    case "draft_notion_update":
+      return <MismatchDraftPanel run={run} />;
+    default:
+      return <SelfCheckPanel run={run} />;
+  }
+}
+
+/**
+ * PR self-check Proposal 패널 (Phase 8). codex가 낸 self-check/설명/스크린샷/마이그레이션 초안을
+ * 사람이 편집하고 accept하면 로컬에 반영된다. **GitHub 제출은 사람이 수동으로** 한다(INVARIANT #2).
+ */
+function SelfCheckPanel({ run }: { run: AgentRunView }) {
   const proposal = usePrProposal(run.id, true);
   const accept = useAcceptProposal();
   const reject = useRejectProposal();
@@ -405,4 +433,339 @@ function normalizeProposal(p: PrSelfCheckProposal): PrSelfCheckProposal {
     screenshotsNeeded: p.screenshotsNeeded ?? [],
     migrationNotes: p.migrationNotes ?? [],
   };
+}
+
+// ── Phase 9 패널 (enrich / CI triage / mismatch 초안) ────────────────────────────────
+
+/** 제안 사분면 옵션(힌트 — INVARIANT #1: 자동 분류 아님). */
+const QUADRANT_OPTS: { value: Quadrant; label: string }[] = [
+  { value: "unclassified", label: "미분류" },
+  { value: "q1_do_now", label: "Q1 지금" },
+  { value: "q2_schedule", label: "Q2 일정" },
+  { value: "q3_quick_contain", label: "Q3 빠르게" },
+  { value: "q4_drop", label: "Q4 버림" },
+];
+/** 라이프 도메인 옵션(닫힌 taxonomy). */
+const AREA_OPTS: { value: AreaTag; label: string }[] = [
+  { value: "health", label: "건강" },
+  { value: "work", label: "업무" },
+  { value: "studies", label: "학습" },
+  { value: "environment", label: "환경" },
+  { value: "recreation", label: "휴식" },
+  { value: "romance", label: "연애" },
+  { value: "family", label: "가족" },
+  { value: "finances", label: "재정" },
+  { value: "friends", label: "친구" },
+  { value: "other", label: "기타" },
+];
+
+/** 파싱 실패(codex 형식 밖/세트 밖) → raw 노출 + 폐기만(accept 차단). Phase 9 패널 공유. */
+function ProposalError({
+  runId,
+  message,
+  reject,
+}: {
+  runId: string;
+  message: string;
+  reject: ReturnType<typeof useRejectProposal>;
+}) {
+  return (
+    <div className="jobs-prop">
+      <div className="jobs-prop-err">{message}</div>
+      <div className="jobs-prop-actions">
+        <button
+          type="button"
+          className="jobs-btn jobs-reject"
+          disabled={reject.isPending}
+          onClick={() => reject.mutate(runId)}
+        >
+          <X className="size-3.5" />
+          폐기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * enrich Proposal 패널 (Phase 9 #2). 제안 사분면/영역/근거를 편집·accept한다. accept해도 **카드는
+ * 자동 분류되지 않고**(INVARIANT #1) 힌트로만 표시된다 — 사분면 분류·영역 확정은 보드에서 사람이.
+ */
+function EnrichPanel({ run }: { run: AgentRunView }) {
+  const proposal = useEnrichProposal(run.id, true);
+  const accept = useAcceptEnrich();
+  const reject = useRejectProposal();
+  const [draft, setDraft] = useState<EnrichProposal | null>(null);
+  useEffect(() => {
+    if (proposal.data) setDraft(proposal.data);
+  }, [proposal.data]);
+
+  if (proposal.isLoading) {
+    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+  }
+  if (proposal.error) {
+    return (
+      <ProposalError
+        runId={run.id}
+        message={(proposal.error as Error).message}
+        reject={reject}
+      />
+    );
+  }
+  const d: EnrichProposal = draft ??
+    proposal.data ?? { suggestedQuadrant: null, suggestedArea: null, reason: null };
+
+  return (
+    <div className="jobs-prop">
+      <label className="jobs-prop-label">제안 사분면 (힌트 — 자동 분류 아님)</label>
+      <select
+        className="jobs-prop-select"
+        value={d.suggestedQuadrant ?? "unclassified"}
+        onChange={(e) =>
+          setDraft({ ...d, suggestedQuadrant: e.target.value as Quadrant })
+        }
+      >
+        {QUADRANT_OPTS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      <label className="jobs-prop-label">제안 영역 (라이프 도메인)</label>
+      <select
+        className="jobs-prop-select"
+        value={d.suggestedArea ?? ""}
+        onChange={(e) =>
+          setDraft({
+            ...d,
+            suggestedArea: (e.target.value || null) as AreaTag | null,
+          })
+        }
+      >
+        <option value="">(미설정)</option>
+        {AREA_OPTS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      <label className="jobs-prop-label">근거</label>
+      <textarea
+        className="jobs-prop-summary"
+        rows={2}
+        value={d.reason ?? ""}
+        onChange={(e) => setDraft({ ...d, reason: e.target.value })}
+      />
+
+      <div className="jobs-prop-hint">
+        accept하면 카드에 <b>제안 힌트</b>로만 표시됩니다 — 사분면 분류·영역 확정은
+        보드에서 직접(자동 분류 없음).
+      </div>
+      {(accept.error || reject.error) && (
+        <div className="jobs-prop-err">
+          {((accept.error ?? reject.error) as Error).message}
+        </div>
+      )}
+      <div className="jobs-prop-actions">
+        <button
+          type="button"
+          className="jobs-btn jobs-btn-primary"
+          disabled={accept.isPending}
+          onClick={() => accept.mutate({ runId: run.id, accepted: d })}
+        >
+          <Check className="size-3.5" />
+          accept (힌트 반영)
+        </button>
+        <button
+          type="button"
+          className="jobs-btn jobs-reject"
+          disabled={reject.isPending}
+          onClick={() => reject.mutate(run.id)}
+        >
+          <X className="size-3.5" />
+          폐기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * CI triage Proposal 패널 (Phase 9 #3). 원인 가설/수정안/요약을 편집·accept한다. accept는 **로컬 기록**일
+ * 뿐 외부 무변경(INVARIANT #2) — 실제 수정은 사람이. (재트리거 캡 초과는 백엔드가 Q1 escalate.)
+ */
+function TriagePanel({ run }: { run: AgentRunView }) {
+  const proposal = useTriageProposal(run.id, true);
+  const accept = useAcceptTriage();
+  const reject = useRejectProposal();
+  const pr = prTrigger(run.trigger);
+  const [draft, setDraft] = useState<CiTriageProposal | null>(null);
+  useEffect(() => {
+    if (proposal.data) setDraft(proposal.data);
+  }, [proposal.data]);
+
+  if (proposal.isLoading) {
+    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+  }
+  if (proposal.error) {
+    return (
+      <ProposalError
+        runId={run.id}
+        message={(proposal.error as Error).message}
+        reject={reject}
+      />
+    );
+  }
+  const d: CiTriageProposal = draft ??
+    proposal.data ?? { cause: "", suggestedFixes: [], summary: "" };
+
+  return (
+    <div className="jobs-prop">
+      {pr && (
+        <button
+          type="button"
+          className="jobs-prop-pr"
+          onClick={() => void openExternal(pr.prUrl)}
+        >
+          <ExternalLink className="size-3" />
+          {pr.repoFullName} #{pr.prNumber}
+        </button>
+      )}
+      <label className="jobs-prop-label">CI 실패 원인 가설</label>
+      <textarea
+        className="jobs-prop-summary"
+        rows={2}
+        value={d.cause ?? ""}
+        onChange={(e) => setDraft({ ...d, cause: e.target.value })}
+      />
+      <label className="jobs-prop-label">수정안</label>
+      {(d.suggestedFixes ?? []).length === 0 && (
+        <div className="jobs-prop-empty">(항목 없음)</div>
+      )}
+      <ul className="jobs-prop-ul">
+        {(d.suggestedFixes ?? []).map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ul>
+      <label className="jobs-prop-label">요약</label>
+      <textarea
+        className="jobs-prop-summary"
+        rows={2}
+        value={d.summary ?? ""}
+        onChange={(e) => setDraft({ ...d, summary: e.target.value })}
+      />
+      <div className="jobs-prop-hint">
+        accept는 <b>로컬 기록</b>일 뿐입니다(외부 무변경) — 실제 수정은 직접.
+      </div>
+      {(accept.error || reject.error) && (
+        <div className="jobs-prop-err">
+          {((accept.error ?? reject.error) as Error).message}
+        </div>
+      )}
+      <div className="jobs-prop-actions">
+        <button
+          type="button"
+          className="jobs-btn jobs-btn-primary"
+          disabled={accept.isPending}
+          onClick={() => accept.mutate({ runId: run.id, accepted: d })}
+        >
+          <Check className="size-3.5" />
+          accept (로컬 기록)
+        </button>
+        <button
+          type="button"
+          className="jobs-btn jobs-reject"
+          disabled={reject.isPending}
+          onClick={() => reject.mutate(run.id)}
+        >
+          <X className="size-3.5" />
+          폐기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * mismatch 해소 초안 패널 (Phase 9 #4). 제안 Notion 상태/메모를 편집·accept한다. accept하면 로컬
+ * mismatch 신호가 해소 표시되지만 **실제 Notion 변경은 사람이 직접** — 외부 무변경(INVARIANT #2).
+ */
+function MismatchDraftPanel({ run }: { run: AgentRunView }) {
+  const proposal = useMismatchDraftProposal(run.id, true);
+  const accept = useAcceptMismatchDraft();
+  const reject = useRejectProposal();
+  const [draft, setDraft] = useState<NotionUpdateProposal | null>(null);
+  useEffect(() => {
+    if (proposal.data) setDraft(proposal.data);
+  }, [proposal.data]);
+
+  if (proposal.isLoading) {
+    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+  }
+  if (proposal.error) {
+    return (
+      <ProposalError
+        runId={run.id}
+        message={(proposal.error as Error).message}
+        reject={reject}
+      />
+    );
+  }
+  const d: NotionUpdateProposal = draft ??
+    proposal.data ?? { ticket: "", suggestedStatus: "", note: "" };
+
+  return (
+    <div className="jobs-prop">
+      <label className="jobs-prop-label">티켓</label>
+      <input
+        className="jobs-prop-select"
+        value={d.ticket ?? ""}
+        onChange={(e) => setDraft({ ...d, ticket: e.target.value })}
+      />
+      <label className="jobs-prop-label">제안 Notion 상태</label>
+      <input
+        className="jobs-prop-select"
+        value={d.suggestedStatus ?? ""}
+        onChange={(e) => setDraft({ ...d, suggestedStatus: e.target.value })}
+      />
+      <label className="jobs-prop-label">메모</label>
+      <textarea
+        className="jobs-prop-summary"
+        rows={2}
+        value={d.note ?? ""}
+        onChange={(e) => setDraft({ ...d, note: e.target.value })}
+      />
+      <div className="jobs-prop-hint">
+        accept하면 로컬 mismatch가 <b>해소 표시</b>됩니다 — 실제{" "}
+        <b>Notion 변경은 직접</b>(외부 무변경).
+      </div>
+      {(accept.error || reject.error) && (
+        <div className="jobs-prop-err">
+          {((accept.error ?? reject.error) as Error).message}
+        </div>
+      )}
+      <div className="jobs-prop-actions">
+        <button
+          type="button"
+          className="jobs-btn jobs-btn-primary"
+          disabled={accept.isPending}
+          onClick={() => accept.mutate({ runId: run.id, accepted: d })}
+        >
+          <Check className="size-3.5" />
+          accept (로컬 해소)
+        </button>
+        <button
+          type="button"
+          className="jobs-btn jobs-reject"
+          disabled={reject.isPending}
+          onClick={() => reject.mutate(run.id)}
+        >
+          <X className="size-3.5" />
+          폐기
+        </button>
+      </div>
+    </div>
+  );
 }

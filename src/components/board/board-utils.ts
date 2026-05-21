@@ -1,4 +1,4 @@
-import type { Kind, Quadrant } from "@/bindings";
+import type { AreaTag, Kind, Quadrant } from "@/bindings";
 
 /** 캔버스 존 키 (프로토타입 단축형). */
 export type ZoneKey = "unclassified" | "q1" | "q2" | "q3" | "q4";
@@ -68,4 +68,37 @@ export function kindLabel(kind: Kind): string {
 }
 export function kindChipClass(kind: Kind): string {
   return kind === "work" ? "chip-work" : "chip-personal";
+}
+
+/** 라이프 도메인(area) 한국어 라벨 (닫힌 taxonomy, Phase 9 enrich). */
+const AREA_LABELS: Record<AreaTag, string> = {
+  health: "건강",
+  work: "업무",
+  studies: "학습",
+  environment: "환경",
+  recreation: "휴식",
+  romance: "연애",
+  family: "가족",
+  friends: "친구",
+  finances: "재정",
+  other: "기타",
+};
+export function areaLabel(area: AreaTag): string {
+  return AREA_LABELS[area];
+}
+
+/** suggested_quadrant(문자열 힌트) → 짧은 배지(Q1~Q4). 미분류/미상은 빈 문자열. */
+export function suggestedQuadrantBadge(q: string | null): string {
+  switch (q) {
+    case "q1_do_now":
+      return "Q1?";
+    case "q2_schedule":
+      return "Q2?";
+    case "q3_quick_contain":
+      return "Q3?";
+    case "q4_drop":
+      return "Q4?";
+    default:
+      return "";
+  }
 }

@@ -30,6 +30,10 @@ pub struct NewAgentRun {
     pub workdir: Option<String>,
     /// trigger JSON ({ signalId, prUrl, ... }) — 없으면 None.
     pub trigger: Option<String>,
+    /// 재트리거 체인 캡 키 (CI triage 등 — 같은 키 잡 수를 세어 캡, INVARIANT #5). 없으면 None.
+    pub retry_key: Option<String>,
+    /// 이 잡이 같은 retry_key 체인에서 몇 번째인지(0-base, 정보용).
+    pub retry_count: u32,
     pub bounds: Bounds,
     pub log_path: String,
 }
@@ -104,8 +108,8 @@ pub async fn insert_agent_run(db: &Db, r: &NewAgentRun) -> Result<(), sqlx::Erro
     sqlx::query(
         "INSERT INTO agent_runs \
          (id, project_id, engine, kind, rail, trigger, repo_id, workdir, sandbox, status, \
-          timeout_sec, max_turns, cost_cap_usd, log_path) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?, ?)",
+          timeout_sec, max_turns, cost_cap_usd, retry_key, retry_count, log_path) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?)",
     )
     .bind(&r.id)
     .bind(&r.project_id)
@@ -119,6 +123,8 @@ pub async fn insert_agent_run(db: &Db, r: &NewAgentRun) -> Result<(), sqlx::Erro
     .bind(r.bounds.timeout.as_secs() as i64)
     .bind(r.bounds.max_turns as i64)
     .bind(r.bounds.cost_cap_usd)
+    .bind(&r.retry_key)
+    .bind(r.retry_count as i64)
     .bind(&r.log_path)
     .execute(db)
     .await?;
@@ -384,6 +390,8 @@ mod tests {
                 repo_id: None,
                 workdir: None,
                 trigger: None,
+                retry_key: None,
+                retry_count: 0,
                 bounds: Bounds {
                     timeout: Duration::from_secs(10),
                     max_turns: 1,
