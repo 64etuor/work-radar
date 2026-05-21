@@ -115,6 +115,8 @@ DiffFileSummary { path; status: "M" | "A" | "D" | "R"; adds: number; dels: numbe
   **매트릭스에서 제외**되고 Today 레일에만 표시(이동); 분류돼 있던 `quadrant`(Q1~Q4)는 태그/배지로 유지.
   Today 항목은 완료(`done`) 체크 + 재정렬, **미완료는 다음날로 이월(rollover)·완료는 제외**. 우측 고정 레일 기본 표시.
   (구현: signal에 today 멤버십 상태 + `done` + `forDate`; 매트릭스 뷰는 today 항목을 제외해 렌더.)
+  **경과일 카운터**: `forDate`=Today로 옮긴 날(이월돼도 불변). 배지 `+N = (오늘 − forDate) + 1` (옮긴 날 +1).
+  미완료로 잔류할수록 증가, 완료(`done`) 시 종료. Work Debt 지표(Phase 11)의 입력.
 - system/PR/Hermes 신호는 `dedupKey`로 **upsert**. 원인 해소 시 `status` auto-resolve.
 - mismatch는 `snapshot`으로 drift 비교. join key는 `ticketKeyPattern`.
 
