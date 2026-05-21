@@ -1,0 +1,15 @@
+# pre-push: main 직접 push 금지 — 작업/푸시는 dev, main은 PR로만 머지.
+# git이 stdin으로 "<local ref> <local sha> <remote ref> <remote sha>" 라인을 넘긴다.
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      echo "" >&2
+      echo "  ✋ main 으로 직접 push가 막혀 있습니다." >&2
+      echo "     dev 에 push하고 PR(dev → main)로 머지하세요." >&2
+      echo "     정말 필요하면: git push --no-verify origin main" >&2
+      echo "" >&2
+      exit 1
+      ;;
+  esac
+done
+exit 0
