@@ -126,6 +126,10 @@
   .b-age.old{background:rgba(255,119,89,.12); color:#c4502f; border-color:transparent}
   .b-sched{background:var(--stone); color:var(--slate)}
   .b-tag{font:600 9px var(--font-body); padding:1px 6px; border-radius:999px}
+  .item .ret{flex:0 0 auto; align-self:center; opacity:0; border:none; background:transparent; cursor:pointer;
+    color:var(--muted); font:600 14px var(--font-mono); padding:2px 7px; border-radius:6px}
+  .item:hover .ret{opacity:1}
+  .item .ret:hover{background:var(--stone); color:var(--ink)}
   .empty{padding:18px 12px; text-align:center; font:400 12px var(--font-body); color:var(--muted)}
 
   /* 루틴 추가 폼 */
@@ -185,9 +189,9 @@
   @media (max-width:900px){
     .matrix{min-width:0}
     .board{flex-direction:column; overflow-y:auto}
-    .canvas{flex-direction:column; min-height:520px}
-    .inbox{flex:0 0 150px}
-    .matrix{flex:0 0 360px}
+    .canvas{flex-direction:column; min-height:0}
+    .inbox{flex:0 0 132px}
+    .matrix{flex:0 0 auto; height:62vh; min-height:440px}  /* 세로형: 뷰포트 비례로 확장 */
     .execute{flex:0 0 auto; flex-direction:row}
     .head .hint{display:none}
   }
@@ -380,8 +384,17 @@
       const age=document.createElement('span'); age.className='badge b-age'+(it.age>=3?' old':''); age.textContent='+'+it.age; meta.appendChild(age);
       if(it.kind){ const k=document.createElement('span'); k.className='b-tag '+(it.kind==='work'?'chip-work':'chip-personal');
         k.textContent=it.kind==='work'?'업무':'개인'; meta.appendChild(k); }
-      body.appendChild(t); body.appendChild(meta); row.appendChild(cb); row.appendChild(body); list.appendChild(row);
+      body.appendChild(t); body.appendChild(meta); row.appendChild(cb); row.appendChild(body);
+      const ret=document.createElement('button'); ret.className='ret'; ret.title='매트릭스로 되돌리기'; ret.textContent='↩';
+      ret.addEventListener('click', ()=>returnToMatrix(it)); row.appendChild(ret);
+      list.appendChild(row);
     });
+  }
+  function returnToMatrix(it){
+    const i=todayItems.indexOf(it); if(i>=0) todayItems.splice(i,1);
+    const zone=it.quadrant||'unclassified';
+    makeCard(it.text, it.kind, zone, it.quadrant||null, true);
+    layout(zone); counts(); renderToday(); toast('매트릭스로 되돌림');
   }
   function promoteToday(card, silent){
     const q=zones.includes(card.zone)&&card.zone!=='unclassified'?card.zone:null;
