@@ -25,6 +25,7 @@ import {
   type Quadrant,
   type SelectedCalendar,
   type SignalStatus,
+  type TodayOverview,
   type TokenKind,
   type TriageOutcome,
   type TriggerCiTriageInput,
@@ -125,6 +126,27 @@ export function useToday(today: string) {
   });
 }
 
+/**
+ * Today 운영 뷰 집계 (Phase 11a): Work Debt 4지표 + Q1/PR attention 섹션.
+ * 호출 시 Rust가 오늘 부채 스냅샷을 멱등 기록한다(Weekly review 추세용). 캘린더는 별도 합성.
+ */
+export function useTodayOverview(date: string) {
+  return useQuery<TodayOverview>({
+    queryKey: ["todayOverview", date],
+    queryFn: () => unwrap(commands.todayOverview(date)),
+  });
+}
+
+/** Today 콕핏용 캘린더 이벤트 쿼리 래퍼(ambient — 짧은 staleTime). projectId=null → 전 프로젝트 병합. */
+export function useCalendarEvents(date: string) {
+  return useQuery<CalendarEvent[]>({
+    queryKey: ["calendarEvents", date],
+    queryFn: () => fetchCalendarEvents(null, date),
+    staleTime: 60_000,
+    retry: 1,
+  });
+}
+
 /** 오늘 해당하는 루틴 + 날짜별 완료 상태. */
 export function useTodayRoutines(date: string, weekday: Weekday) {
   return useQuery({
@@ -137,9 +159,18 @@ export function useTodayRoutines(date: string, weekday: Weekday) {
 
 function useInvalidate() {
   const qc = useQueryClient();
+  // todayOverview는 signals/today의 파생 집계라, 그 둘이 바뀌면 함께 무효화한다
+  // (모든 mutation 콜사이트가 signals()/today()를 부르므로 누락 없이 콕핏이 최신화됨).
+  const overview = () => qc.invalidateQueries({ queryKey: ["todayOverview"] });
   return {
-    signals: () => qc.invalidateQueries({ queryKey: ["signals"] }),
-    today: () => qc.invalidateQueries({ queryKey: ["today"] }),
+    signals: () => {
+      void overview();
+      return qc.invalidateQueries({ queryKey: ["signals"] });
+    },
+    today: () => {
+      void overview();
+      return qc.invalidateQueries({ queryKey: ["today"] });
+    },
     routines: () => qc.invalidateQueries({ queryKey: ["routines"] }),
   };
 }

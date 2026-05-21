@@ -36,6 +36,11 @@ export const commands = {
 	/**  Today 레일 재정렬. ordered_ids 순서대로 today_rank 부여. */
 	reorderToday: (orderedIds: string[]) => typedError<null, string>(__TAURI_INVOKE("reorder_today", { orderedIds })),
 	listToday: (today: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_today", { today })),
+	/**
+	 *  Today 운영 뷰 집계 + 오늘 부채 스냅샷 기록. `date`는 프런트가 보내는 로컬 오늘.
+	 *  TodayView만 호출(항상 오늘) — 과거 날짜로 스냅샷이 오염되지 않는다.
+	 */
+	todayOverview: (date: string) => typedError<TodayOverview, string>(__TAURI_INVOKE("today_overview", { date })),
 	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, string>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
 	/**  카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2). */
 	promoteToNotion: (signalId: string, target: PromotionTarget) => typedError<PromotionOutcome, string>(__TAURI_INVOKE("promote_to_notion", { signalId, target })),
@@ -570,6 +575,15 @@ export type SignalStatus = "new" | "classified" | "promoted" | "linked" | "done"
 /**  신호 종류. */
 export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "mismatch" | "cleanup";
 
+/**  Today 운영 뷰 집계. 캘린더 오늘 이벤트·Today 레일·루틴은 프런트가 기존 헬퍼로 합성한다. */
+export type TodayOverview = {
+	workDebt: WorkDebt,
+	/**  사람이 q1으로 분류했고 아직 Today 레일에 없는 활성 신호(콕핏에서 끌어올릴 대상). */
+	q1Items: WorkSignal[],
+	/**  매트릭스로 escalate된 PR 신호(source=github_pr, type=pr_attention) — ambient PR이 임계치 넘은 것. */
+	prAttention: WorkSignal[],
+};
+
 /**  project별 분리되는 토큰 종류. keychain account 접미사로 쓰인다. */
 export type TokenKind = "notion" | "github" | 
 /**  Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a. */
@@ -662,6 +676,21 @@ export type TriggerPrSelfCheckInput = {
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+/**
+ *  Work Debt 지표 (Today 콕핏 상단 스트립 + 일별 스냅샷 입력).
+ *  임계치: q1_overdue = q1 생성 ≥ 1일, stale_backlog = 생성 ≥ 14일(today 레일 밖).
+ */
+export type WorkDebt = {
+	/**  quadrant=unclassified active (today 레일 밖) — "미분류 수". */
+	unclassified: number,
+	/**  q1_do_now active & 생성 ≥ 1일 경과 (당일 처리 못 한 긴급). */
+	q1Overdue: number,
+	/**  active & 생성 ≥ 14일 경과 (today 레일 밖) — 오래 멈춘 것. */
+	staleBacklog: number,
+	/**  type=cleanup active — 정리 필요(머지 후 등). */
+	cleanupNeeded: number,
+};
 
 /**  매트릭스 카드/Today 항목. 로컬 SQLite가 SSOT (INVARIANT #7). */
 export type WorkSignal = {

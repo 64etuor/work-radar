@@ -363,6 +363,37 @@ pub struct CreateRoutineInput {
     pub kind: Option<Kind>,
 }
 
+// ── Today 운영 뷰 + Work Debt (Phase 11a) ─────────────────────────────────────
+//
+// 전부 로컬 SQLite 집계 — 네트워크 없음(캘린더는 프런트가 fetchCalendarEvents로 별도 합성).
+// INVARIANT #1: read 집계일 뿐 — 자동 분류/승격 없음. specta i64/u64 export 금지 → 카운트는 u32.
+
+/// Work Debt 지표 (Today 콕핏 상단 스트립 + 일별 스냅샷 입력).
+/// 임계치: q1_overdue = q1 생성 ≥ 1일, stale_backlog = 생성 ≥ 14일(today 레일 밖).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkDebt {
+    /// quadrant=unclassified active (today 레일 밖) — "미분류 수".
+    pub unclassified: u32,
+    /// q1_do_now active & 생성 ≥ 1일 경과 (당일 처리 못 한 긴급).
+    pub q1_overdue: u32,
+    /// active & 생성 ≥ 14일 경과 (today 레일 밖) — 오래 멈춘 것.
+    pub stale_backlog: u32,
+    /// type=cleanup active — 정리 필요(머지 후 등).
+    pub cleanup_needed: u32,
+}
+
+/// Today 운영 뷰 집계. 캘린더 오늘 이벤트·Today 레일·루틴은 프런트가 기존 헬퍼로 합성한다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TodayOverview {
+    pub work_debt: WorkDebt,
+    /// 사람이 q1으로 분류했고 아직 Today 레일에 없는 활성 신호(콕핏에서 끌어올릴 대상).
+    pub q1_items: Vec<WorkSignal>,
+    /// 매트릭스로 escalate된 PR 신호(source=github_pr, type=pr_attention) — ambient PR이 임계치 넘은 것.
+    pub pr_attention: Vec<WorkSignal>,
+}
+
 // ── PR Radar (Phase 4, read 레일) ─────────────────────────────────────────────
 
 /// PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음.

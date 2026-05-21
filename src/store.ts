@@ -3,6 +3,7 @@ import { create } from "zustand";
 /** 어느 표면을 보여줄지 (단일 창 내 토글). */
 export type View =
   | "board"
+  | "today"
   | "settings"
   | "radar"
   | "worktree"

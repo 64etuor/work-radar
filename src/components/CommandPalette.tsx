@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Bot,
+  CalendarCheck,
   FolderPlus,
   GitBranchPlus,
   GitCompare,
@@ -49,6 +50,13 @@ export function CommandPalette() {
               <CommandItem value="board matrix 보드 매트릭스" onSelect={() => goTo("board")}>
                 <LayoutGrid className="size-4 text-wr-subtle" />
                 <span>캡처 보드로</span>
+              </CommandItem>
+              <CommandItem
+                value="today 오늘 운영 일정 work debt 부채"
+                onSelect={() => goTo("today")}
+              >
+                <CalendarCheck className="size-4 text-wr-subtle" />
+                <span>Today (운영)로</span>
               </CommandItem>
               <CommandItem
                 value="pr radar github 레이더 풀리퀘스트"

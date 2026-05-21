@@ -7,6 +7,7 @@ import { JobsView } from "@/components/JobsView";
 import { MismatchView } from "@/components/MismatchView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { SettingsView } from "@/components/SettingsView";
+import { TodayView } from "@/components/TodayView";
 import { WorktreeView } from "@/components/WorktreeView";
 import { useUIStore } from "@/store";
 
@@ -41,6 +42,7 @@ export default function App() {
         if (document.querySelector(".cb-card-menu")) return;
         if (
           view === "settings" ||
+          view === "today" ||
           view === "radar" ||
           view === "worktree" ||
           view === "mismatch" ||
@@ -60,6 +62,8 @@ export default function App() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-wr-bg">
       {view === "settings" ? (
         <SettingsView />
+      ) : view === "today" ? (
+        <TodayView />
       ) : view === "radar" ? (
         <PrRadarView />
       ) : view === "worktree" ? (

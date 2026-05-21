@@ -2273,3 +2273,260 @@
 .jobs .jobs-reject:hover:not(:disabled) {
   background: #ffd9cf;
 }
+
+/* ── Today 운영 뷰 (Phase 11a) ─────────────────────────────────────────────── */
+.today {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+.today .today-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.today .today-title {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.today .today-date {
+  margin-left: auto;
+  font: 500 12px var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--color-wr-subtle);
+}
+.today .today-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.today .today-back:hover {
+  background: var(--color-wr-surface);
+}
+.today .today-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+}
+
+/* Work Debt 스트립 */
+.today .today-debt {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.today .today-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 12px;
+  background: var(--color-wr-surface);
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.today .today-tile:hover {
+  background: var(--color-wr-hover);
+}
+.today .today-tile-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-wr-subtle);
+}
+.today .today-tile-label {
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.today .today-tile-val {
+  font: 600 24px var(--font-sans);
+  line-height: 1;
+}
+.today .today-tile-urgent .today-tile-val {
+  color: var(--color-q1);
+}
+.today .today-tile-warn .today-tile-val {
+  color: var(--color-wr-coral);
+}
+.today .today-tile-muted .today-tile-val {
+  color: var(--color-wr-muted);
+}
+
+/* 섹션 */
+.today .today-sec {
+  margin-bottom: 22px;
+}
+.today .today-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.today .today-sec-name {
+  font: 600 12px var(--font-sans);
+}
+.today .today-sec-count {
+  margin-left: auto;
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.today .today-hint {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
+  padding: 6px 2px;
+}
+
+/* 행 (Q1 / 레일 / PR / 루틴 공용) */
+.today .today-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.today .today-row-btn {
+  width: 100%;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
+  text-align: left;
+}
+.today .today-row-btn:hover {
+  background: var(--color-wr-hover);
+}
+.today .today-row-title {
+  flex: 1;
+  min-width: 0;
+  font: 400 13px var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today .today-done .today-row-title {
+  color: var(--color-wr-muted);
+  text-decoration: line-through;
+}
+.today .today-check {
+  display: inline-flex;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.today .today-age {
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-coral);
+}
+.today .today-act {
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.today .today-act:hover:not(:disabled) {
+  background: var(--color-wr-surface);
+}
+.today .today-act:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.today .today-badge {
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.today .today-q1 {
+  background: var(--color-wr-coral-soft);
+  color: var(--color-q1);
+}
+.today .today-pr {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-wr-action-blue);
+}
+
+/* 캘린더 이벤트 */
+.today .today-allday {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.today .today-allday-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-surface);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.today .today-allday-tag {
+  font: 600 9px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.today .today-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 4px;
+  border: none;
+  border-bottom: 1px solid var(--color-wr-border-light);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.today .today-event:hover {
+  background: var(--color-wr-hover);
+}
+.today .today-event-time {
+  font: 600 12px var(--font-mono);
+  color: var(--color-wr-fg);
+  flex: 0 0 auto;
+  width: 44px;
+}
+.today .today-event-title {
+  flex: 1;
+  min-width: 0;
+  font: 400 13px var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today .today-event-cal {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  flex: 0 0 auto;
+}

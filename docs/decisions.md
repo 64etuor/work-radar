@@ -163,3 +163,18 @@
 - **`set_selected_calendars` 입력 = `Vec<SelectedCalendar>{id,summary}`(spec §6 `Vec<String>`에서 조정).** spec §5 저장 형식 `[{id,summary}]`을 따르려면 summary가 필요 → 프런트가 이미 가진 calendarList에서 id+summary를 보내 저장. 이벤트 fetch 시 calendar_summary를 재조회 없이 채운다(추가 API 호출 0, 단 rename은 다음 저장까지 stale — 허용).
 - **검증(헤드리스).** `cargo test` **105 passed**(+7: migration_0006·parse_calendar_list·parse_calendar_event·today_window·encode_path_segment·fetch_events_core merge/격리·empty) · clippy -D warnings clean · cargo fmt --check green · pnpm typecheck/build green(1759 modules). INVARIANTS reviewer(critic) **7개 PASS, BLOCKER·MAJOR 0**. **실 Google calendarList/이벤트 fetch·다중 캘린더 병합·keychain은 사용자 관찰**: `pnpm tauri dev`로 연결됨 프로젝트 → '포함할 캘린더' 다중 체크 → 저장 → (Phase 11 Today가 `fetchCalendarEvents` 소비).
 - **reviewer MINOR 2건(문서화된 트레이드오프).** ① `set_selected_calendars`가 `rows_affected()` 미확인 — 없는 project_id면 조용히 Ok(UI상 도달 불가, cosmetic). ② `today_window`가 `now()` 오프셋으로 date를 찍음(오늘은 정확; Phase 11이 날짜 네비게이션 추가 시 대상 날짜 오프셋 재계산 — DST 경계). 둘 다 정확성 결함 아님.
+
+## Phase 11 — Today / Timeline / Weekly review / Work Debt (2026-05-22)
+
+> 정본 설계: `docs/specs/phase-11-today-timeline-weekly.md`. brainstorming(AskUserQuestion)으로 4종 확정:
+> Timeline=오늘 시간축 아젠다 / Weekly=처리량·PR·루틴·부채추세 4종 / Work Debt=Today 상단 스트립+PLAN 4지표 / 3 PR 분할.
+
+- **Today는 새 전용 뷰(`view:"today"`), 보드 Today 레일과 분리(사용자 결정 반영).** 보드 우측 레일=curate/decide,
+  새 뷰=execute/overview 콕핏(PLAN.md:97 "전체 Today 운영 뷰는 Phase 11"). `list_today`/`toggle_today_done` 데이터 공유(로직 중복 0).
+- **부채 추세 = 신규 테이블(migration 0007 `debt_snapshots`, AI 판단).** 현재 상태만 보관하는 DB에선 일별 부채를
+  사후 재구성 불가(`updated_at` 덮임) → date PK 멱등 upsert(INVARIANT #3)로 Today 뷰 진입 시 하루 1회 기록.
+  전진 누적(백필 없음). 11a에서 도입(Work Debt 카운트는 어차피 계산) → 11c가 읽음. 대안(flow 유도/현재값만)은 기각.
+- **Phase 11a 구현(Today 운영 뷰 + Work Debt, 2026-05-22).** `models.rs` `WorkDebt{unclassified,q1Overdue,staleBacklog,cleanupNeeded}`(u32, specta i64 금지)·`TodayOverview{workDebt,q1Items,prAttention}`. `commands.rs` `fetch_today_overview`(순수 read 집계)+`upsert_debt_snapshot`(멱등)+`today_overview` 커맨드. 임계치 상수 `Q1_OVERDUE_DAYS=1`/`STALE_BACKLOG_DAYS=14`(PR Radar `STALE_DAYS`와 축 분리). 프런트 `TodayView`(Work Debt 스트립 4타일 → 캘린더 오늘 이벤트 → Q1 → Today 레일 focus → PR attention → 루틴)+`useTodayOverview`/`useCalendarEvents`. 캘린더는 `fetchCalendarEvents` ambient(미연결 graceful degrade). 전부 read+기존 사람 액션 재사용(자동 분류 0, INVARIANT #1).
+- **AI 판단/조정.** ① `today_overview`가 호출 시 오늘 부채 스냅샷을 함께 기록(TodayView=오늘만 호출 → 과거 날짜 오염 없음). ② PR attention=escalate된 `github_pr`/`pr_attention` 신호(ambient PR이 임계치 넘은 것). ③ Q1 콕핏 리스트=off-rail q1만(끌어올릴 대상), q1_overdue 부채는 rail 무관(쌓인 긴급). ④ cleanup은 today 레일 무관 카운트(정리 부채는 어디 있든 부채 — 의도, 코드 주석).
+- **reviewer(critic) 패스 — REVISE→ACCEPT(self-approve 금지, 별도 패스).** MAJOR 2건 수정 후 ACCEPT, INVARIANTS 1/2/3/7 PASS: ① Today 콕핏 staleness — `useInvalidate`가 `["todayOverview"]`를 signals()/today()에 번들(모든 mutation 콜사이트 커버). ② 부채 날짜 비교 TZ 오프바이원 — `created_at`(UTC)을 `date(created_at,'localtime')`로 호스트 로컬 캘린더에 맞춤(아침 false-overdue 제거). 회귀 테스트 `q1_overdue_uses_local_calendar_not_utc`(같은 `now` 양쪽 사용 → TZ 무관 결정적). 잔여 비차단: TZ 회귀 테스트는 UTC CI에선 가드 약함(SQLite 'localtime' 제약 — 'localtime' load-bearing 주석 표시), midnight-rollover·overlapping-lens UI는 11c로 이연.
+- **검증(헤드리스).** `cargo test` **108 passed**(+3: today_overview_aggregates_debt_and_sections·debt_snapshot_upsert_is_idempotent·q1_overdue_uses_local_calendar_not_utc) · clippy -D warnings 0 · cargo fmt --check green · pnpm typecheck/build green. bindings 재생성(todayOverview/TodayOverview/WorkDebt). **실 GUI 렌더·실 캘린더 fetch·다일 누적 추세는 사용자 관찰**(`pnpm tauri dev` → 팔레트 "Today (운영)로").

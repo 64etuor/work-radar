@@ -17,9 +17,9 @@ use crate::models::{
     DiffFileSummary, DiffMode, Engine, EnrichProposal, FlushSummary, GoogleCalendarStatus, Kind,
     MismatchItem, NotionUpdateProposal, PingResult, PrRadarItem, Project, Promotion,
     PromotionOutcome, PromotionStatus, PromotionTarget, Quadrant, ReadinessBucket, Repo,
-    RoutineToday, Sandbox, SelectedCalendar, SignalStatus, TokenKind, TokenStatus, TriageOutcome,
-    TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput, TriggerEnrichInput,
-    TriggerMismatchDraftInput, TriggerPrSelfCheckInput, Weekday, WorkSignal, Worktree,
+    RoutineToday, Sandbox, SelectedCalendar, SignalStatus, TodayOverview, TokenKind, TokenStatus,
+    TriageOutcome, TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput, TriggerEnrichInput,
+    TriggerMismatchDraftInput, TriggerPrSelfCheckInput, Weekday, WorkDebt, WorkSignal, Worktree,
 };
 use crate::notion::{
     HttpNotionReader, HttpNotionWriter, NotionError, NotionPageState, NotionReader, NotionWriter,
@@ -833,6 +833,141 @@ pub async fn list_today(db: State<'_, Db>, today: String) -> Result<Vec<WorkSign
     fetch_today(db.inner(), &today)
         .await
         .map_err(|e| e.to_string())
+}
+
+// ── Today 운영 뷰 + Work Debt (Phase 11a, read 집계) ───────────────────────────
+// 전부 로컬 SQLite read — 네트워크 없음(캘린더는 프런트가 fetchCalendarEvents로 합성).
+// INVARIANT #1: 집계만 — 자동 분류/승격 없음. INVARIANT #7: 로컬 상태 SSOT(부채 스냅샷).
+
+/// Q1 overdue 임계치(일): q1_do_now가 생성 후 이 일수 이상 지나면 overdue(당일 처리 못 함).
+const Q1_OVERDUE_DAYS: i64 = 1;
+/// stale backlog 임계치(일): active 신호가 생성 후 이 일수 이상 멈춰 있으면 stale.
+/// PR Radar의 `STALE_DAYS`(PR 나이)와 다른 축이라 이름을 분리한다.
+const STALE_BACKLOG_DAYS: i64 = 14;
+
+/// Work Debt 집계 + Today 콕핏 섹션(Q1·PR attention)을 한 번에 도출. 순수 read(테스트 가능).
+/// `date`는 로컬 오늘(YYYY-MM-DD) — 경과일 비교 기준.
+pub async fn fetch_today_overview(db: &Db, date: &str) -> Result<TodayOverview, sqlx::Error> {
+    // 미분류: quadrant=unclassified active, today 레일 밖(미분류는 보통 레일에 없음 — 일관성 위해 명시).
+    let (unclassified,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
+           AND status NOT IN ('done','archived','snoozed')",
+    )
+    .fetch_one(db)
+    .await?;
+
+    // Q1 overdue: q1_do_now active 중 생성 ≥ Q1_OVERDUE_DAYS일(레일 여부 무관 — 쌓인 긴급 부채).
+    // created_at은 UTC 저장, ?1(date)은 호스트 로컬 날짜 → date(created_at,'localtime')로 맞춰
+    // *로컬 캘린더 일수* 차이를 비교한다(아침 시간대 false-overdue 방지).
+    // ⚠️ 'localtime'은 제거 금지(load-bearing) — 회귀 테스트 q1_overdue_uses_local_calendar_not_utc.
+    let (q1_overdue,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE quadrant = 'q1_do_now' AND status NOT IN ('done','archived','snoozed') \
+           AND julianday(?1) - julianday(date(created_at, 'localtime')) >= ?2",
+    )
+    .bind(date)
+    .bind(Q1_OVERDUE_DAYS)
+    .fetch_one(db)
+    .await?;
+
+    // stale backlog: active 신호가 생성 ≥ STALE_DAYS일 멈춤(today 레일 밖). quadrant 무관(나이 렌즈).
+    let (stale_backlog,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE today_for_date IS NULL AND status NOT IN ('done','archived','snoozed') \
+           AND julianday(?1) - julianday(date(created_at, 'localtime')) >= ?2",
+    )
+    .bind(date)
+    .bind(STALE_BACKLOG_DAYS)
+    .fetch_one(db)
+    .await?;
+
+    // cleanup needed: type=cleanup active(머지 후 정리 등). today 레일 무관(정리 부채는 어디 있든 부채 —
+    // 다른 타일과 달리 today_for_date 미필터, 의도적). 현재 로컬 신호만(PR merged-cleanup 버킷은 ambient).
+    let (cleanup_needed,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE type = 'cleanup' AND status NOT IN ('done','archived','snoozed')",
+    )
+    .fetch_one(db)
+    .await?;
+
+    // Q1 콕핏 리스트: 사람이 q1 분류했고 아직 today 레일에 없는 것(끌어올릴 대상).
+    let q1_items = sqlx::query_as::<_, WorkSignal>(&format!(
+        "SELECT {SIGNAL_COLS} FROM signals \
+         WHERE quadrant = 'q1_do_now' AND today_for_date IS NULL \
+           AND status NOT IN ('done','archived','snoozed') \
+         ORDER BY created_at"
+    ))
+    .fetch_all(db)
+    .await?;
+
+    // PR attention: 매트릭스로 escalate된 PR 신호(unclassified로 진입하지만 source/type로 식별).
+    let pr_attention = sqlx::query_as::<_, WorkSignal>(&format!(
+        "SELECT {SIGNAL_COLS} FROM signals \
+         WHERE source = 'github_pr' AND type = 'pr_attention' \
+           AND status NOT IN ('done','archived','snoozed') \
+         ORDER BY updated_at DESC"
+    ))
+    .fetch_all(db)
+    .await?;
+
+    Ok(TodayOverview {
+        work_debt: WorkDebt {
+            unclassified: unclassified as u32,
+            q1_overdue: q1_overdue as u32,
+            stale_backlog: stale_backlog as u32,
+            cleanup_needed: cleanup_needed as u32,
+        },
+        q1_items,
+        pr_attention,
+    })
+}
+
+/// 일별 부채 스냅샷 멱등 upsert(INVARIANT #3). 같은 날 재방문은 최신값으로 갱신(중복 0).
+/// Weekly review(#11c)의 "부채 추세"가 이 누적분을 읽는다(백필 없음 — 전진 누적).
+pub async fn upsert_debt_snapshot(
+    db: &Db,
+    date: &str,
+    debt: &WorkDebt,
+    pr_attention: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO debt_snapshots \
+            (date, unclassified, q1_overdue, stale_backlog, cleanup_needed, pr_attention) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+         ON CONFLICT(date) DO UPDATE SET \
+            unclassified = excluded.unclassified, q1_overdue = excluded.q1_overdue, \
+            stale_backlog = excluded.stale_backlog, cleanup_needed = excluded.cleanup_needed, \
+            pr_attention = excluded.pr_attention, updated_at = datetime('now')",
+    )
+    .bind(date)
+    .bind(debt.unclassified as i64)
+    .bind(debt.q1_overdue as i64)
+    .bind(debt.stale_backlog as i64)
+    .bind(debt.cleanup_needed as i64)
+    .bind(pr_attention)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// Today 운영 뷰 집계 + 오늘 부채 스냅샷 기록. `date`는 프런트가 보내는 로컬 오늘.
+/// TodayView만 호출(항상 오늘) — 과거 날짜로 스냅샷이 오염되지 않는다.
+#[tauri::command]
+#[specta::specta]
+pub async fn today_overview(db: State<'_, Db>, date: String) -> Result<TodayOverview, String> {
+    let overview = fetch_today_overview(db.inner(), &date)
+        .await
+        .map_err(|e| e.to_string())?;
+    upsert_debt_snapshot(
+        db.inner(),
+        &date,
+        &overview.work_debt,
+        overview.pr_attention.len() as i64,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(overview)
 }
 
 // ── 승격 draft (외부 = Acceptance 게이트, INVARIANT #2) ────────────────────────
@@ -3318,6 +3453,33 @@ mod tests {
         }
     }
 
+    /// Work Debt 집계 테스트용 raw seed — created_at/quadrant/today 레일을 직접 제어한다.
+    #[allow(clippy::too_many_arguments)]
+    async fn seed_signal(
+        db: &Db,
+        source: &str,
+        sig_type: &str,
+        quadrant: &str,
+        status: &str,
+        today_for_date: Option<&str>,
+        created_at: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO signals \
+                (id, title, source, type, quadrant, status, today_for_date, created_at, updated_at) \
+             VALUES (lower(hex(randomblob(16))), 'seed', ?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        )
+        .bind(source)
+        .bind(sig_type)
+        .bind(quadrant)
+        .bind(status)
+        .bind(today_for_date)
+        .bind(created_at)
+        .execute(db)
+        .await
+        .expect("seed signal");
+    }
+
     /// 개인 1 + 업무 1 프로젝트 생성, credential_ref가 채워지고 서로 다르다(분리 키).
     #[tokio::test]
     async fn create_personal_and_work_projects() {
@@ -3336,6 +3498,184 @@ mod tests {
             "project별 keychain 키는 분리"
         );
         assert_eq!(fetch_projects(&db).await.unwrap().len(), 2);
+    }
+
+    /// Work Debt 4지표 + Q1/PR attention 섹션이 quadrant·나이·레일 멤버십으로 정확히 갈린다.
+    #[tokio::test]
+    async fn today_overview_aggregates_debt_and_sections() {
+        let db = fresh_db().await;
+        let date = "2026-05-22";
+        let fresh = format!("{date} 12:00:00");
+        let old = "2020-01-01 00:00:00";
+        // A: 미분류 fresh (unclassified).
+        seed_signal(
+            &db,
+            "braindump",
+            "thought",
+            "unclassified",
+            "new",
+            None,
+            &fresh,
+        )
+        .await;
+        // B: q1 old off-rail → overdue + stale + q1_items.
+        seed_signal(
+            &db,
+            "braindump",
+            "task_candidate",
+            "q1_do_now",
+            "classified",
+            None,
+            old,
+        )
+        .await;
+        // C: q1 fresh off-rail → q1_items only.
+        seed_signal(
+            &db,
+            "braindump",
+            "task_candidate",
+            "q1_do_now",
+            "classified",
+            None,
+            &fresh,
+        )
+        .await;
+        // D: q1 old on-rail → overdue(레일 무관) but not stale/not q1_items(레일).
+        seed_signal(
+            &db,
+            "braindump",
+            "task_candidate",
+            "q1_do_now",
+            "promoted",
+            Some(date),
+            old,
+        )
+        .await;
+        // E: cleanup fresh (q3라 미분류 아님).
+        seed_signal(
+            &db,
+            "system",
+            "cleanup",
+            "q3_quick_contain",
+            "new",
+            None,
+            &fresh,
+        )
+        .await;
+        // F: PR attention fresh (github_pr, unclassified로 진입).
+        seed_signal(
+            &db,
+            "github_pr",
+            "pr_attention",
+            "unclassified",
+            "new",
+            None,
+            &fresh,
+        )
+        .await;
+        // done/archived는 어떤 지표에도 안 잡힌다.
+        seed_signal(
+            &db,
+            "braindump",
+            "thought",
+            "unclassified",
+            "done",
+            None,
+            old,
+        )
+        .await;
+
+        let ov = fetch_today_overview(&db, date).await.unwrap();
+        assert_eq!(
+            ov.work_debt.unclassified, 2,
+            "A + F (미분류 off-rail active)"
+        );
+        assert_eq!(ov.work_debt.q1_overdue, 2, "B + D (q1 old, 레일 무관)");
+        assert_eq!(ov.work_debt.stale_backlog, 1, "B만 (old off-rail)");
+        assert_eq!(ov.work_debt.cleanup_needed, 1, "E");
+        assert_eq!(ov.q1_items.len(), 2, "B + C (off-rail q1)");
+        assert_eq!(ov.pr_attention.len(), 1, "F");
+    }
+
+    /// 같은 날 today_overview 재방문은 스냅샷을 append 아닌 upsert(중복 0) + 최신값 갱신(INVARIANT #3).
+    #[tokio::test]
+    async fn debt_snapshot_upsert_is_idempotent() {
+        let db = fresh_db().await;
+        let date = "2026-05-22";
+        seed_signal(
+            &db,
+            "braindump",
+            "thought",
+            "unclassified",
+            "new",
+            None,
+            &format!("{date} 09:00:00"),
+        )
+        .await;
+
+        let ov = fetch_today_overview(&db, date).await.unwrap();
+        upsert_debt_snapshot(&db, date, &ov.work_debt, 3)
+            .await
+            .unwrap();
+        // 재방문(같은 날) — pr_attention만 다른 값으로.
+        upsert_debt_snapshot(&db, date, &ov.work_debt, 0)
+            .await
+            .unwrap();
+
+        let (rows,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM debt_snapshots")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(rows, 1, "같은 날은 한 행(upsert)");
+        let (pr, uncl): (i64, i64) =
+            sqlx::query_as("SELECT pr_attention, unclassified FROM debt_snapshots WHERE date = ?1")
+                .bind(date)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(pr, 0, "재방문 시 최신값으로 갱신");
+        assert_eq!(uncl, 1, "미분류 1건 반영");
+    }
+
+    /// overdue 비교는 로컬 캘린더 일수 기준 — created_at(UTC)을 'localtime'으로 맞춘다.
+    /// 호스트 TZ 무관하게 결정적이도록 같은 'now'를 양쪽에 쓴다(CI=UTC / 로컬=KST 모두 통과).
+    #[tokio::test]
+    async fn q1_overdue_uses_local_calendar_not_utc() {
+        let db = fresh_db().await;
+        let (local_today,): (String,) = sqlx::query_as("SELECT date('now','localtime')")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        let (utc_now,): (String,) = sqlx::query_as("SELECT datetime('now')")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        // 방금 만든 q1 → 어느 TZ에서도 overdue 아님(이전 버그: UTC date 기준이라 아침엔 false-overdue).
+        seed_signal(
+            &db,
+            "braindump",
+            "task_candidate",
+            "q1_do_now",
+            "classified",
+            None,
+            &utc_now,
+        )
+        .await;
+        let ov = fetch_today_overview(&db, &local_today).await.unwrap();
+        assert_eq!(ov.work_debt.q1_overdue, 0, "방금 만든 q1은 overdue 아님");
+        // 2020년 q1 → overdue.
+        seed_signal(
+            &db,
+            "braindump",
+            "task_candidate",
+            "q1_do_now",
+            "classified",
+            None,
+            "2020-01-01 00:00:00",
+        )
+        .await;
+        let ov2 = fetch_today_overview(&db, &local_today).await.unwrap();
+        assert_eq!(ov2.work_debt.q1_overdue, 1, "오래된 q1은 overdue");
     }
 
     /// repo 추가 후 project별 목록에 표시되고 default_branch 기본값이 채워진다.
