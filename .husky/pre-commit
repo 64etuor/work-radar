@@ -1,0 +1,5 @@
+# pre-commit: 빠른 검증만 실행 (cargo fmt + pnpm typecheck)
+# clippy와 cargo test는 시간이 오래 걸리므로 CI에 위임한다.
+
+cargo fmt --check --manifest-path src-tauri/Cargo.toml
+pnpm typecheck

@@ -1,0 +1,13 @@
+# work-radar — Codex 안전 기본값
+#
+# INVARIANT 6: 코드 작업은 git worktree에 격리.
+#   샌드박스 기본 read-only.
+#   쓰기는 명시 승인 시 workspace-write만 허용.
+#   danger-full-access 모드 금지(절대 활성화하지 말 것).
+#
+# codex는 루트 AGENTS.md를 자동으로 읽는다.
+# 런타임 규칙 중복 금지 — 이 파일엔 샌드박스 정책만 둔다.
+
+# 기본 샌드박스: read-only
+# 파일 시스템 쓰기는 명시적 승인(approval) 후 workspace-write로만 허용
+sandbox_policy = "read-only"

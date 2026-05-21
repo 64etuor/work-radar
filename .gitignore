@@ -1,0 +1,30 @@
+# dependencies
+node_modules
+
+# frontend build output
+dist
+dist-ssr
+*.local
+
+# Rust / Tauri build
+src-tauri/target
+
+# generated Tauri schemas
+src-tauri/gen/schemas
+
+# OMC / Ralph session state
+.omc
+
+# logs
+*.log
+logs
+
+# Claude Code machine-local settings (permissions allowlist, not shared)
+.claude/settings.local.json
+
+# editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+.gstack/
