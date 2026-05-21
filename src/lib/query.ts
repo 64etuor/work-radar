@@ -16,11 +16,13 @@ import {
   type MismatchItem,
   type PrRadarItem,
   type PromotionTarget,
+  type PrSelfCheckProposal,
   type Quadrant,
   type SignalStatus,
   type TokenKind,
   type TriggerCodexInput,
   type TriggerEchoInput,
+  type TriggerPrSelfCheckInput,
   type Weekday,
   type WorkSignal,
 } from "@/bindings";
@@ -568,5 +570,52 @@ export function useAgentLog(runId: string | null, ready: boolean) {
     queryFn: () => unwrap(commands.readAgentLog(runId as string)),
     enabled: !!runId && ready,
     refetchInterval: ready ? JOBS_POLL_MS : false,
+  });
+}
+
+// ── Phase 8: PR self-check 자동 초안 (제안 레일 + Acceptance 게이트) ──────────────────
+//
+// 트리거(PR Radar 카드)→codex 잡(read_only·worktree)→Proposal(awaiting_approval)→사람 accept(로컬 반영).
+// accept 전 GitHub 무변경(INVARIANT #2). 제출은 사람 수동.
+
+/** PR self-check 초안 잡 트리거(PR Radar 카드). 성공 시 잡 목록 갱신. */
+export function useTriggerPrSelfcheck() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerPrSelfCheckInput) =>
+      unwrap(commands.triggerPrSelfcheck(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** awaiting_approval 잡의 Proposal(타입 파싱). 펼친 잡에 대해서만 enabled. */
+export function usePrProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["prProposal", runId],
+    queryFn: () => unwrap(commands.prProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false, // 파싱 실패(raw)는 즉시 노출(재시도 무의미).
+  });
+}
+
+/** Proposal accept(INVARIANT #2 게이트) — 편집한 self-check/설명을 로컬에 반영하고 잡 succeeded. */
+export function useAcceptProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: PrSelfCheckProposal }) =>
+      unwrap(commands.acceptProposal(runId, accepted)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["prRadar"] }); // 로컬 self-check 표시 반영.
+    },
+  });
+}
+
+/** Proposal reject(폐기) — 잡 cancelled. */
+export function useRejectProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => unwrap(commands.rejectProposal(runId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
   });
 }

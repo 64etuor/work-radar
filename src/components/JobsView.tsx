@@ -1,16 +1,48 @@
-import { useState } from "react";
-import { ArrowLeft, Bot, FileText, RefreshCw, Square } from "lucide-react";
-
-import type { AgentRunView, AgentStatus } from "@/bindings";
+import { useEffect, useState } from "react";
 import {
+  ArrowLeft,
+  Bot,
+  Check,
+  ExternalLink,
+  FileText,
+  RefreshCw,
+  Square,
+  X,
+} from "lucide-react";
+
+import type {
+  AgentRunView,
+  AgentStatus,
+  PrSelfCheckProposal,
+  SelfCheckItem,
+} from "@/bindings";
+import {
+  openExternal,
+  useAcceptProposal,
   useAgentLog,
   useAgentRuns,
   useCodexStatus,
   useKillAgentRun,
+  usePrProposal,
+  useRejectProposal,
   useTriggerCodexJob,
   useTriggerEchoJob,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
+
+/** run.trigger(JSON)에서 PR 링크 정보 추출 (없으면 null). */
+function prTrigger(
+  trigger: string | null,
+): { prUrl: string; repoFullName: string; prNumber: number } | null {
+  if (!trigger) return null;
+  try {
+    const v = JSON.parse(trigger);
+    if (typeof v?.prUrl === "string") return v;
+  } catch {
+    /* 무시 — 트리거 없는 잡. */
+  }
+  return null;
+}
 
 /** 잡 상태 → 라벨/색 클래스 (PR Radar 버킷 톤 재사용). */
 const STATUS: Record<AgentStatus, { label: string; cls: string }> = {
@@ -168,6 +200,8 @@ function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void }) {
   const [open, setOpen] = useState(false);
   const log = useAgentLog(run.id, open);
   const st = STATUS[run.status];
+  // 실행/대기 중에만 kill (awaiting_approval은 프로세스 종료 → accept/reject로 처리).
+  const killable = run.status === "running" || run.status === "proposed";
 
   return (
     <div className="jobs-card">
@@ -176,7 +210,7 @@ function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void }) {
         <span className="jobs-kind">{run.kind}</span>
         <span className="jobs-engine">{run.engine}</span>
         <span className="jobs-sandbox">{run.sandbox}</span>
-        {isActive(run.status) && (
+        {killable && (
           <button type="button" className="jobs-kill" onClick={onKill}>
             <Square className="size-3" />
             kill
@@ -193,6 +227,9 @@ function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void }) {
         {run.costTokens != null && <span>· {run.costTokens} tok</span>}
         {run.costUsd != null && <span>· ${run.costUsd.toFixed(4)}</span>}
       </div>
+
+      {/* Acceptance 게이트: 산출 Proposal을 사람이 검토·편집·accept (제출은 수동, INVARIANT #2). */}
+      {run.status === "awaiting_approval" && <ProposalPanel run={run} />}
 
       <div className="jobs-card-actions">
         <button
@@ -216,4 +253,156 @@ function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void }) {
       )}
     </div>
   );
+}
+
+/**
+ * Proposal 검토 패널 (awaiting_approval 잡). codex가 낸 self-check/설명/스크린샷/마이그레이션 초안을
+ * 사람이 편집하고 accept하면 로컬에 반영된다. **GitHub 제출은 사람이 수동으로** 한다(INVARIANT #2).
+ */
+function ProposalPanel({ run }: { run: AgentRunView }) {
+  const proposal = usePrProposal(run.id, true);
+  const accept = useAcceptProposal();
+  const reject = useRejectProposal();
+  const pr = prTrigger(run.trigger);
+
+  // 편집 가능한 로컬 사본 (proposal 로드 시 시드).
+  const [draft, setDraft] = useState<PrSelfCheckProposal | null>(null);
+  useEffect(() => {
+    if (proposal.data) setDraft(normalizeProposal(proposal.data));
+  }, [proposal.data]);
+
+  if (proposal.isLoading) {
+    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+  }
+  if (proposal.error) {
+    // 파싱 실패(codex가 형식 밖 출력) — raw를 노출하고 accept는 막는다(reject만).
+    return (
+      <div className="jobs-prop">
+        <div className="jobs-prop-err">
+          {(proposal.error as Error).message}
+        </div>
+        <div className="jobs-prop-actions">
+          <button
+            type="button"
+            className="jobs-btn jobs-reject"
+            disabled={reject.isPending}
+            onClick={() => reject.mutate(run.id)}
+          >
+            <X className="size-3.5" />
+            폐기
+          </button>
+        </div>
+      </div>
+    );
+  }
+  const d = draft ?? normalizeProposal(proposal.data ?? {});
+
+  const setChecks = (checks: SelfCheckItem[]) =>
+    setDraft({ ...d, selfChecks: checks });
+
+  return (
+    <div className="jobs-prop">
+      {pr && (
+        <button
+          type="button"
+          className="jobs-prop-pr"
+          onClick={() => void openExternal(pr.prUrl)}
+        >
+          <ExternalLink className="size-3" />
+          {pr.repoFullName} #{pr.prNumber}
+        </button>
+      )}
+
+      <label className="jobs-prop-label">PR 설명 초안</label>
+      <textarea
+        className="jobs-prop-summary"
+        value={d.summary ?? ""}
+        rows={3}
+        onChange={(e) => setDraft({ ...d, summary: e.target.value })}
+      />
+
+      <label className="jobs-prop-label">self-check 체크리스트</label>
+      <div className="jobs-prop-checks">
+        {(d.selfChecks ?? []).length === 0 && (
+          <div className="jobs-prop-empty">(항목 없음)</div>
+        )}
+        {(d.selfChecks ?? []).map((c, i) => (
+          <label key={i} className="jobs-prop-check">
+            <input
+              type="checkbox"
+              checked={c.checked ?? false}
+              onChange={(e) => {
+                const next = [...(d.selfChecks ?? [])];
+                next[i] = { ...c, checked: e.target.checked };
+                setChecks(next);
+              }}
+            />
+            <span>{c.item}</span>
+            {c.note && <span className="jobs-prop-note">{c.note}</span>}
+          </label>
+        ))}
+      </div>
+
+      {(d.screenshotsNeeded ?? []).length > 0 && (
+        <>
+          <label className="jobs-prop-label">스크린샷 필요</label>
+          <ul className="jobs-prop-ul">
+            {(d.screenshotsNeeded ?? []).map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {(d.migrationNotes ?? []).length > 0 && (
+        <>
+          <label className="jobs-prop-label">마이그레이션/배포 노트</label>
+          <ul className="jobs-prop-ul">
+            {(d.migrationNotes ?? []).map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <div className="jobs-prop-hint">
+        accept하면 로컬 self-check가 표시됩니다. <b>GitHub 제출은 직접</b> 하세요(외부 무변경).
+      </div>
+      {(accept.error || reject.error) && (
+        <div className="jobs-prop-err">
+          {((accept.error ?? reject.error) as Error).message}
+        </div>
+      )}
+      <div className="jobs-prop-actions">
+        <button
+          type="button"
+          className="jobs-btn jobs-btn-primary"
+          disabled={accept.isPending}
+          onClick={() => accept.mutate({ runId: run.id, accepted: d })}
+        >
+          <Check className="size-3.5" />
+          accept (로컬 반영)
+        </button>
+        <button
+          type="button"
+          className="jobs-btn jobs-reject"
+          disabled={reject.isPending}
+          onClick={() => reject.mutate(run.id)}
+        >
+          <X className="size-3.5" />
+          폐기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Proposal 옵셔널 필드를 안전한 기본값으로 정규화. */
+function normalizeProposal(p: PrSelfCheckProposal): PrSelfCheckProposal {
+  return {
+    summary: p.summary ?? "",
+    selfChecks: p.selfChecks ?? [],
+    screenshotsNeeded: p.screenshotsNeeded ?? [],
+    migrationNotes: p.migrationNotes ?? [],
+  };
 }

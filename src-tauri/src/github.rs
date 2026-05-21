@@ -27,6 +27,8 @@ const MAX_OPEN_PAGES: u32 = 5;
 const PER_PAGE: u8 = 50;
 /// "Merged Cleanup" 후보로 볼 최근 머지 기간(일). 최근 1페이지만 본다(per-PR CI 호출 없음).
 const MERGED_RECENT_DAYS: i64 = 14;
+/// PR diff 텍스트 상한(바이트). codex 컨텍스트 bound — 초과분은 잘라 표시(INVARIANT #5 정신).
+pub const MAX_PR_DIFF_BYTES: usize = 256 * 1024;
 
 /// 외부 fetch 실패 분류. Transient = 재시도 대상(네트워크·429·5xx),
 /// Terminal = 재시도 무의미(인증/권한/검증 등 4xx, 디코드 실패).
@@ -79,6 +81,30 @@ pub trait PrProvider {
         &self,
         repo_full_name: &str,
     ) -> impl std::future::Future<Output = Result<Vec<RawPr>, GithubError>> + Send;
+
+    /// PR의 unified diff 텍스트를 가져온다(Phase 8 self-check 초안 입력). bounded retry + 크기 상한.
+    fn fetch_pr_diff(
+        &self,
+        repo_full_name: &str,
+        number: u64,
+    ) -> impl std::future::Future<Output = Result<String, GithubError>> + Send;
+}
+
+/// diff 텍스트를 상한까지 자른다(초과 시 안내 줄 추가). 순수 — 테스트 가능.
+pub fn cap_diff(diff: String) -> String {
+    if diff.len() <= MAX_PR_DIFF_BYTES {
+        return diff;
+    }
+    // char 경계에서 자른다(UTF-8 안전).
+    let mut end = MAX_PR_DIFF_BYTES;
+    while end > 0 && !diff.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!(
+        "{}\n\n[... diff가 {}바이트 상한을 넘어 잘렸습니다. 전체는 PR에서 확인 ...]",
+        &diff[..end],
+        MAX_PR_DIFF_BYTES
+    )
 }
 
 /// octocrab 에러 → 분류. 429/5xx/네트워크는 일시적, 그 외 4xx/디코드는 영구.
@@ -328,6 +354,25 @@ impl PrProvider for HttpPrProvider {
 
         Ok(out)
     }
+
+    async fn fetch_pr_diff(
+        &self,
+        repo_full_name: &str,
+        number: u64,
+    ) -> Result<String, GithubError> {
+        let (owner, repo) = parse_owner_repo(repo_full_name).ok_or_else(|| {
+            GithubError::Terminal(format!("레포 형식 파싱 실패: {repo_full_name}"))
+        })?;
+        let diff = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| async {
+            self.octo
+                .pulls(&owner, &repo)
+                .get_diff(number)
+                .await
+                .map_err(|e| classify_octocrab(&e))
+        })
+        .await?;
+        Ok(cap_diff(diff))
+    }
 }
 
 #[cfg(test)]
@@ -402,6 +447,17 @@ mod tests {
         // 실패는 보류보다 우선.
         assert_eq!(aggregate_ci(&[None, s("failure")]), CiStatus::Failing);
         assert_eq!(aggregate_ci(&[s("timed_out")]), CiStatus::Failing);
+    }
+
+    /// diff 크기 상한: 짧으면 그대로, 길면 잘리고 안내가 붙는다(bounded).
+    #[test]
+    fn cap_diff_truncates_when_over_limit() {
+        let small = "diff --git a/x b/x\n".to_string();
+        assert_eq!(cap_diff(small.clone()), small);
+        let big = "x".repeat(MAX_PR_DIFF_BYTES + 100);
+        let capped = cap_diff(big);
+        assert!(capped.len() < MAX_PR_DIFF_BYTES + 200);
+        assert!(capped.contains("잘렸습니다"));
     }
 
     /// owner/repo 파싱: URL / plain / .git 접미사.

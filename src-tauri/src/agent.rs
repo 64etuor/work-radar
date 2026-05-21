@@ -356,6 +356,26 @@ impl BoundsTracker {
     }
 }
 
+/// codex 최종 메시지 → proposal JSON 문자열(항상 유효한 JSON 객체). 메시지가 JSON 객체(또는
+/// ```json 펜스로 감싼 객체)면 그대로 보존하고, 아니면 `{"raw": <message>}`로 감싼다(스키마-관용 fallback).
+/// Acceptance 전 draft일 뿐이라 검증은 소비 측(commands `pr_proposal`)에서 한다(INVARIANT #2).
+pub fn proposal_from_message(message: &str) -> String {
+    let trimmed = message.trim();
+    // ```json … ``` 또는 ``` … ``` 펜스 제거.
+    let unfenced = trimmed
+        .strip_prefix("```json")
+        .or_else(|| trimmed.strip_prefix("```"))
+        .map(|s| s.trim_start())
+        .and_then(|s| s.strip_suffix("```"))
+        .map(str::trim)
+        .unwrap_or(trimmed);
+    if let Ok(serde_json::Value::Object(obj)) = serde_json::from_str::<serde_json::Value>(unfenced)
+    {
+        return serde_json::Value::Object(obj).to_string();
+    }
+    serde_json::json!({ "raw": message }).to_string()
+}
+
 // ── CodexRunner (codex exec --json, read_only 샌드박스, worktree 격리) ──────────────
 
 /// 코드 잡 실행 시 자동 정리되는 worktree. 제안 레일은 종료 시 폐기(keep=false),
@@ -395,6 +415,9 @@ pub struct CodexRunner {
     pub worktree_root: PathBuf,
     /// 비-레포 잡의 작업 디렉터리(scratch).
     pub scratch_dir: PathBuf,
+    /// 잡 시작 전 cwd에 써둘 입력 파일들 (상대 이름, 내용). codex가 read_only로 읽는다.
+    /// Phase 8 = PR diff(`pr.diff`). Rust가 쓰므로 read_only 샌드박스와 무관(샌드박스는 codex 쓰기만 제한).
+    pub input_files: Vec<(String, String)>,
 }
 
 impl CodexRunner {
@@ -458,6 +481,13 @@ impl AgentRunner for CodexRunner {
         // worktree 격리(코드 잡) — 가드는 run 스코프 동안 살아있다가 종료/드롭 시 정리(제안 레일).
         let (cwd, _guard) = self.prepare_cwd().await?;
 
+        // 입력 파일(예: PR diff)을 cwd에 써둔다 — codex가 read_only로 읽는다.
+        for (name, content) in &self.input_files {
+            tokio::fs::write(cwd.join(name), content)
+                .await
+                .map_err(|e| AgentError::Spawn(format!("입력 파일 쓰기 실패({name}): {e}")))?;
+        }
+
         let cwd_str = cwd
             .to_str()
             .ok_or_else(|| AgentError::Spawn("작업 디렉터리 인코딩 실패".into()))?;
@@ -510,10 +540,7 @@ impl AgentRunner for CodexRunner {
             )));
         }
 
-        let proposal = tracker
-            .last_message
-            .as_ref()
-            .map(|m| serde_json::json!({ "message": m }).to_string());
+        let proposal = tracker.last_message.as_deref().map(proposal_from_message);
         Ok(AgentOutcome {
             detail: tracker.summary(),
             cost_tokens: tracker.tokens,
@@ -657,6 +684,26 @@ mod tests {
             other => panic!("expected MaxTurnsExceeded, got {other:?}"),
         }
         assert_eq!(t.last_message.as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn proposal_from_message_handles_json_fences_and_raw() {
+        // 순수 JSON 객체는 보존(키 유지).
+        let p = proposal_from_message(r#"{"summary":"hi","selfChecks":[]}"#);
+        let v: serde_json::Value = serde_json::from_str(&p).unwrap();
+        assert_eq!(v["summary"], "hi");
+        // ```json 펜스로 감싼 객체도 추출.
+        let fenced = "```json\n{\"summary\":\"x\"}\n```";
+        let v2: serde_json::Value = serde_json::from_str(&proposal_from_message(fenced)).unwrap();
+        assert_eq!(v2["summary"], "x");
+        // 비-JSON은 raw로 감싸 항상 유효한 객체를 보장.
+        let v3: serde_json::Value =
+            serde_json::from_str(&proposal_from_message("not json at all")).unwrap();
+        assert_eq!(v3["raw"], "not json at all");
+        // JSON 배열(객체 아님)도 raw fallback.
+        let v4: serde_json::Value =
+            serde_json::from_str(&proposal_from_message("[1,2,3]")).unwrap();
+        assert_eq!(v4["raw"], "[1,2,3]");
     }
 
     #[tokio::test]

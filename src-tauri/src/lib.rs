@@ -77,6 +77,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_agent_runs,
         commands::kill_agent_run,
         commands::read_agent_log,
+        // PR self-check 자동 초안 (suggestion 레일 + Acceptance 게이트, Phase 8).
+        commands::trigger_pr_selfcheck,
+        commands::pr_proposal,
+        commands::accept_proposal,
+        commands::reject_proposal,
     ])
 }
 

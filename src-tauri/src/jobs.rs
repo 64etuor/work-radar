@@ -53,6 +53,8 @@ struct AgentRunRecord {
     workdir: Option<String>,
     log_path: Option<String>,
     result: Option<String>,
+    trigger: Option<String>,
+    proposal: Option<String>,
     created_at: String,
     started_at: Option<String>,
     finished_at: Option<String>,
@@ -88,6 +90,8 @@ impl From<AgentRunRecord> for AgentRunView {
             workdir: r.workdir,
             log_path: r.log_path,
             detail,
+            trigger: r.trigger,
+            has_proposal: r.proposal.is_some(),
             created_at: r.created_at,
             started_at: r.started_at,
             finished_at: r.finished_at,
@@ -125,7 +129,7 @@ pub async fn insert_agent_run(db: &Db, r: &NewAgentRun) -> Result<(), sqlx::Erro
 pub async fn fetch_agent_runs(db: &Db) -> Result<Vec<AgentRunView>, sqlx::Error> {
     let rows: Vec<AgentRunRecord> = sqlx::query_as(
         "SELECT id, project_id, engine, kind, rail, sandbox, status, timeout_sec, max_turns, \
-         cost_cap_usd, cost_tokens, cost_usd, repo_id, workdir, log_path, result, \
+         cost_cap_usd, cost_tokens, cost_usd, repo_id, workdir, log_path, result, trigger, proposal, \
          created_at, started_at, finished_at \
          FROM agent_runs ORDER BY created_at DESC, id DESC LIMIT 100",
     )
@@ -162,8 +166,10 @@ async fn mark_running(db: &Db, run_id: &str) {
     .await;
 }
 
-/// 종료 전이(succeeded/failed/cancelled) + result/cost 영속.
-async fn finalize(db: &Db, run_id: &str, res: Result<AgentOutcome, AgentError>) {
+/// 종료 전이(succeeded/awaiting_approval/failed/cancelled) + result/cost 영속.
+/// `gated`=true(제안 레일 게이트 잡)이고 성공+proposal이 있으면 `succeeded`가 아니라
+/// `awaiting_approval`로 멈춘다 — 사람 accept 전엔 어떤 외부 변경도 없다(INVARIANT #2).
+async fn finalize(db: &Db, run_id: &str, res: Result<AgentOutcome, AgentError>, gated: bool) {
     let (status, result_json, cost_tokens, cost_usd, proposal): (
         &str,
         String,
@@ -172,7 +178,11 @@ async fn finalize(db: &Db, run_id: &str, res: Result<AgentOutcome, AgentError>) 
         Option<String>,
     ) = match res {
         Ok(o) => (
-            "succeeded",
+            if gated && o.proposal.is_some() {
+                "awaiting_approval"
+            } else {
+                "succeeded"
+            },
             json!({ "detail": o.detail }).to_string(),
             o.cost_tokens.map(|t| t as i64),
             o.cost_usd,
@@ -258,7 +268,8 @@ impl JobManager {
 
     /// 잡을 큐에 올리고 백그라운드 태스크로 구동한다(논블로킹). 호출 전 INSERT(proposed) 완료 가정.
     /// 동시성 게이트 → running 전이 → timeout/kill로 감싼 실행 → 종료 전이.
-    pub fn spawn<R>(&self, db: Db, run_id: String, bounds: Bounds, runner: R)
+    /// `gated`=true면 성공+proposal 잡이 `awaiting_approval`로 멈춘다(Acceptance 게이트, INVARIANT #2).
+    pub fn spawn<R>(&self, db: Db, run_id: String, bounds: Bounds, runner: R, gated: bool)
     where
         R: AgentRunner + 'static,
     {
@@ -295,7 +306,7 @@ impl JobManager {
                 _ = cancel.cancelled() => Err(AgentError::Cancelled),
             };
 
-            finalize(&db, &run_id, outcome).await;
+            finalize(&db, &run_id, outcome, gated).await;
             registry.lock().unwrap().remove(&run_id);
         });
     }
@@ -316,6 +327,30 @@ mod tests {
     use super::*;
     use crate::agent::EchoRunner;
     use std::time::Duration;
+
+    /// proposal을 돌려주는 가짜 러너(게이트 검증용 — 실 codex 없이 awaiting_approval 전이 확인).
+    struct ProposalRunner {
+        proposal: String,
+    }
+    impl AgentRunner for ProposalRunner {
+        fn engine(&self) -> Engine {
+            Engine::Codex
+        }
+        async fn run(
+            &self,
+            _bounds: Bounds,
+            _cancel: CancellationToken,
+            log_path: PathBuf,
+        ) -> Result<AgentOutcome, AgentError> {
+            // 로그 파일은 만들어 둔다(read_agent_log 일관성).
+            let _ = tokio::fs::write(&log_path, b"proposal job\n").await;
+            Ok(AgentOutcome {
+                detail: "proposal ready".into(),
+                proposal: Some(self.proposal.clone()),
+                ..Default::default()
+            })
+        }
+    }
 
     fn temp_dir(tag: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now()
@@ -370,7 +405,10 @@ mod tests {
                 .fetch_one(db)
                 .await
                 .unwrap();
-            if matches!(row.0.as_str(), "succeeded" | "failed" | "cancelled") {
+            if matches!(
+                row.0.as_str(),
+                "succeeded" | "failed" | "cancelled" | "awaiting_approval"
+            ) {
                 return row.0;
             }
             if start.elapsed() > max {
@@ -398,6 +436,7 @@ mod tests {
                 seconds: 0,
                 message: "spine-ok".into(),
             },
+            false,
         );
         let status = wait_terminal(&db, "j1", Duration::from_secs(8)).await;
         assert_eq!(status, "succeeded");
@@ -428,12 +467,47 @@ mod tests {
                 seconds: 30,
                 message: "long".into(),
             },
+            false,
         );
         let status = wait_terminal(&db, "j2", Duration::from_secs(8)).await;
         assert_eq!(status, "failed");
         let runs = fetch_agent_runs(&db).await.unwrap();
         let detail = runs[0].detail.clone().unwrap_or_default();
         assert!(detail.contains("timeout"), "detail: {detail}");
+    }
+
+    #[tokio::test]
+    async fn gated_job_with_proposal_awaits_approval() {
+        let dir = temp_dir("gate");
+        let db = fresh_db().await;
+        let jm = manager(&dir);
+        // 게이트 잡으로 INSERT(echo 입력 헬퍼 재사용 — bounds만 동일하면 됨).
+        insert_echo(&db, &jm, "g1").await;
+        jm.spawn(
+            db.clone(),
+            "g1".into(),
+            Bounds {
+                timeout: Duration::from_secs(10),
+                max_turns: 8,
+                cost_cap_usd: 1.0,
+            },
+            ProposalRunner {
+                proposal: r#"{"summary":"draft"}"#.into(),
+            },
+            true, // gated → 성공+proposal이면 awaiting_approval로 멈춘다.
+        );
+        let status = wait_terminal(&db, "g1", Duration::from_secs(8)).await;
+        assert_eq!(status, "awaiting_approval");
+        // proposal이 영속되고 뷰가 has_proposal로 노출한다.
+        let runs = fetch_agent_runs(&db).await.unwrap();
+        assert_eq!(runs[0].status, AgentStatus::AwaitingApproval);
+        assert!(runs[0].has_proposal);
+        let stored: (Option<String>,) =
+            sqlx::query_as("SELECT proposal FROM agent_runs WHERE id = 'g1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert!(stored.0.unwrap().contains("draft"));
     }
 
     #[tokio::test]
@@ -454,6 +528,7 @@ mod tests {
                 seconds: 30,
                 message: "killme".into(),
             },
+            false,
         );
         // 실행 진입까지 잠깐 양보 후 kill.
         tokio::time::sleep(Duration::from_millis(300)).await;

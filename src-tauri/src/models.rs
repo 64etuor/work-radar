@@ -598,6 +598,10 @@ pub struct AgentRunView {
     pub log_path: Option<String>,
     /// 사람이 읽을 상세 (성공 요약 또는 실패/취소 사유 — result JSON에서 도출).
     pub detail: Option<String>,
+    /// 잡 트리거 JSON ({ prUrl, repoFullName, prNumber, ... }). Phase 8 PR self-check 연결용.
+    pub trigger: Option<String>,
+    /// suggestion 산출물 존재 여부 (awaiting_approval 게이트 — 상세는 `pr_proposal`로 조회).
+    pub has_proposal: bool,
     pub created_at: String,
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
@@ -640,4 +644,53 @@ pub struct TriggerCodexInput {
     pub timeout_sec: u32,
     pub max_turns: u32,
     pub cost_cap_usd: f64,
+}
+
+// ── PR self-check 자동 초안 (Phase 8, 제안 레일 첫 자동화) ──────────────────────────
+//
+// INVARIANT #2: codex 출력은 Proposal(draft)일 뿐 — 사람이 accept해야 (로컬) 반영, GitHub는 무변경.
+// INVARIANT #6: read_only 샌드박스 + worktree 격리. INVARIANT #5: bounds 강제.
+
+/// PR self-check 초안 잡 입력 (PR Radar 카드에서 트리거). repo는 worktree용 local_path가 있어야 한다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerPrSelfCheckInput {
+    pub project_id: Option<String>,
+    /// PR이 속한 repo full name ('owner/repo'). diff fetch + repo 해석에 사용.
+    pub repo_full_name: String,
+    pub pr_number: u32,
+    pub pr_url: String,
+    /// bounds (강제). 비면 백엔드 기본값.
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+}
+
+/// self-check 한 항목 (codex 제안 → 사람이 체크/수정). checked 기본 false (사람이 확인하기 전).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfCheckItem {
+    pub item: String,
+    #[serde(default)]
+    pub checked: bool,
+    pub note: Option<String>,
+}
+
+/// PR self-check 초안 Proposal (codex 산출물, draft). 사람이 accept하면 로컬에 반영(제출은 수동).
+/// serde default로 codex가 일부 필드를 누락해도 관용한다(스키마-관용 — Phase 7 선례).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PrSelfCheckProposal {
+    /// PR 설명 초안 (사람이 수동 제출).
+    #[serde(default)]
+    pub summary: String,
+    /// self-check 체크리스트 항목.
+    #[serde(default)]
+    pub self_checks: Vec<SelfCheckItem>,
+    /// 스크린샷이 필요한 변경 (UI 등).
+    #[serde(default)]
+    pub screenshots_needed: Vec<String>,
+    /// 마이그레이션/배포 주의 노트.
+    #[serde(default)]
+    pub migration_notes: Vec<String>,
 }

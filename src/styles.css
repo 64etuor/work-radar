@@ -1446,6 +1446,25 @@
 .pr .pr-open:hover {
   background: var(--color-wr-surface);
 }
+.pr .pr-draft {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-action-blue, #2d6cdf);
+}
+.pr .pr-draft:hover:not(:disabled) {
+  background: var(--color-wr-surface);
+}
+.pr .pr-draft:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* ──────────────────────────────────────────────────────────────────────────────
  * Worktree & Branch Diff (Phase 5) — read-only diff 뷰어. white editorial, .wt 스코프.
@@ -2084,4 +2103,99 @@
   color: var(--color-wr-muted);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Proposal 검토 패널 (Phase 8 Acceptance 게이트). */
+.jobs .jobs-prop {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 4px 0 2px;
+  padding: 11px 12px;
+  background: var(--color-wr-surface);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-xs);
+}
+.jobs .jobs-prop-loading {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.jobs .jobs-prop-pr {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-action-blue, #2d6cdf);
+}
+.jobs .jobs-prop-label {
+  font: 600 10px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-wr-subtle);
+}
+.jobs .jobs-prop-summary {
+  resize: vertical;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-xs);
+  background: var(--color-wr-bg);
+  padding: 7px 9px;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-fg);
+  line-height: 1.4;
+}
+.jobs .jobs-prop-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.jobs .jobs-prop-check {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-fg);
+  cursor: pointer;
+}
+.jobs .jobs-prop-note {
+  color: var(--color-wr-subtle);
+  font-size: 11px;
+}
+.jobs .jobs-prop-empty {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.jobs .jobs-prop-ul {
+  margin: 0;
+  padding-left: 18px;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
+  line-height: 1.4;
+}
+.jobs .jobs-prop-hint {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+  line-height: 1.4;
+}
+.jobs .jobs-prop-err {
+  font: 400 12px var(--font-mono);
+  color: #b23a1f;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.jobs .jobs-prop-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.jobs .jobs-reject {
+  border: 1px solid #f0c4b8;
+  background: #ffe7e0;
+  color: #b23a1f;
+}
+.jobs .jobs-reject:hover:not(:disabled) {
+  background: #ffd9cf;
 }

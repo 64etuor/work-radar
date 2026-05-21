@@ -1,11 +1,11 @@
-# Work Radar — 세션 핸드오프 (현재: Phase 8 시작 직전)
+# Work Radar — 세션 핸드오프 (현재: Phase 9 시작 직전)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
 ## 지금 상태
 
-- **Phase 0~7 완료·검증됨.** 레포 `64etuor/work-radar`(Private), `dev`.
-  - Phase 1 `6fecaff` · Phase 2 `d57f300` · Phase 3 `2e9f293` · Phase 4 `78ce36b` · Phase 5 `aed1b72` · Phase 6 `0276259` · Phase 7 = 이 세션(아직 커밋 전이면 dev에 커밋 필요).
+- **Phase 0~8 완료·검증됨.** 레포 `64etuor/work-radar`(Private), `dev`.
+  - Phase 1 `6fecaff` · Phase 2 `d57f300` · Phase 3 `2e9f293` · Phase 4 `78ce36b` · Phase 5 `aed1b72` · Phase 6 `0276259` · Phase 7 `6294e22` · Phase 8 = 이 세션(아직 커밋 전이면 dev에 커밋 필요).
 - **Phase 7 산출물(Agent 스파인 — Codex 기능 전 뼈대; 구현·검증됨):**
   - **`agent.rs`(신설):** `AgentRunner` 트레잇(RPITIT, GitProvider 패턴) + `EchoRunner`(codex 없이 bound/kill/로그 검증용 셸아웃 — 고정 스크립트+위치인자, 인젝션 없음) + `CodexRunner`(`codex exec --json --sandbox read-only --color never -C <cwd> --skip-git-repo-check -- <prompt>`) + `Bounds`/`AgentError`/`AgentOutcome` + 순수 `parse_codex_event`/`BoundsTracker`(max_turns·cost_cap 트립) + codex 감지(`resolve_codex_bin`/`codex_availability`).
   - **`jobs.rs`(신설):** `JobManager`(managed state) — tokio `Semaphore(1)` 동시성 + `Mutex<HashMap<run_id, CancellationToken>>` kill 레지스트리 + codex_bin/worktree_root/logs_dir. `spawn`(INSERT proposed → permit → running → `tokio::select!`(run, sleep(timeout), cancel) → succeeded/failed/cancelled 영속 + 로그) + `kill`(큐 대기 중에도 가능). agent_runs INSERT/UPDATE/fetch/log-tail 헬퍼.
@@ -14,7 +14,22 @@
   - **프런트:** `query.ts` `useCodexStatus`/`useAgentRuns`(active면 2s 폴링)/`useTriggerEchoJob`/`useTriggerCodexJob`/`useKillAgentRun`/`useAgentLog` + `JOBS_POLL_MS`. `store.ts` View+=`jobs`. `App.tsx` 6-way 렌더+Esc. `CommandPalette` "Jobs (Agent)로". `JobsView`(codex 가용성 배너로 graceful degrade · 테스트 잡 버튼 echo/timeout · codex 프롬프트 폼 · 잡 카드 상태배지/bounds/cost · kill · 로그 패널). `styles.css` `.jobs-*`(.pr-* 토큰 재사용).
   - **사용자 결정(AskUserQuestion):** 잡 큐=agent_runs 영속 / 동시=1 / echo 검증=EchoRunner+Jobs 버튼. 상세 `docs/decisions.md` Phase 7.
   - **검증:** `cargo test` **74 passed**(agent 4 + jobs 3 신규) · `cargo clippy -D warnings` clean · `pnpm typecheck`/`build` green · `cargo fmt` 적용 · INVARIANTS reviewer(critic) **7개 PASS / done-criteria 3개 PASS, BLOCKER·MAJOR 0**(reviewer 트레이드오프: 동기 Drop worktree 정리·best-effort cost cap은 decisions.md에 문서화).
-- **다음 = Phase 8 (첫 자동화: PR self-check 자동 초안 — suggestion 레일)** — `dev` 브랜치에서.
+- **Phase 8 산출물(첫 자동화: PR self-check 자동 초안 — suggestion 레일 + Acceptance 게이트; 구현·검증됨):**
+  - **`github.rs`:** `PrProvider::fetch_pr_diff`(octocrab `get_diff` + bounded `with_retry`) + `cap_diff`(256KB 상한).
+  - **`agent.rs`:** `CodexRunner.input_files`(잡 시작 전 cwd에 `pr.diff` 기록) + `proposal_from_message`(JSON 객체/```json 펜스 보존, 아니면 `{"raw":…}` fallback).
+  - **`jobs.rs`:** `spawn(gated)` + `finalize(gated)` — 게이트 잡 성공+proposal이면 `awaiting_approval`로 마감(아니면 succeeded). `AgentRunView`에 `trigger`/`has_proposal` 노출(SELECT+레코드 확장).
+  - **`commands.rs`:** `trigger_pr_selfcheck`(diff fetch→worktree codex 잡, gated) · `pr_proposal`(타입 파싱, raw면 Err) · `accept_proposal`(acceptances 행 + 로컬 pr_self_checks + status succeeded — **외부 무변경**) · `reject_proposal`(cancelled). `resolve_selfcheck_repo`(repo_full_name→local_path+GitHub 토큰). **`lib.rs`** 4커맨드 등록. **`models.rs`** `PrSelfCheckProposal`/`SelfCheckItem`/`TriggerPrSelfCheckInput`.
+  - **프런트:** `query.ts` `useTriggerPrSelfcheck`/`usePrProposal`/`useAcceptProposal`/`useRejectProposal`. `PrRadarView` 카드 'self-check 초안' 버튼(codex 게이트, 머지 PR 제외 → 트리거 후 Jobs로). `JobsView` `ProposalPanel`(awaiting_approval 잡 — 편집 가능 self-check/설명 + accept/reject + "제출은 수동" 안내 + PR 링크). `styles.css` `.pr-draft`/`.jobs-prop-*`.
+  - **사용자 결정(AskUserQuestion):** diff=GitHub fetch / 스키마=프롬프트 지시 JSON / Acceptance=awaiting_approval 게이트 / 트리거=PR Radar 카드(review는 Jobs). 상세 `docs/decisions.md` Phase 8.
+  - **검증:** `cargo test` **80 passed**(+6) · clippy -D warnings clean · pnpm typecheck/build green · cargo fmt · 신규 마이그레이션 없음(acceptances/pr_self_checks/agent_runs 재사용).
+- **다음 = Phase 9 (추가 suggestion 자동화: enrich / CI triage / mismatch 초안)** — `dev` 브랜치에서.
+
+### Phase 8 미해결/관찰 항목 (Phase 9+에서 고려)
+
+- **실 codex 실행 미관찰(헤드리스 한계):** gated finalize·proposal 파싱·accept/reject는 cargo test로 검증했으나, 실제 `codex exec`로 PR diff를 읽어 형식 JSON을 내는지·worktree 생성/정리·cost/turns는 사용자가 `pnpm tauri dev`+로그인 codex+GitHub 토큰 보유 프로젝트에서 확인(PR Radar 카드 'self-check 초안' → Jobs awaiting_approval → accept).
+- **codex 출력 형식 의존:** proposal은 codex가 프롬프트대로 JSON 객체를 *마지막 메시지*로 내야 파싱된다. 형식 밖이면 `pr_proposal`이 Err로 raw를 노출하고 accept를 막는다(reject만). 실 codex 출력 관찰 후 프롬프트/파싱 정밀화 여지(스키마-관용 현 상태).
+- **worktree HEAD vs PR base 불일치:** diff는 GitHub(authoritative)지만 codex worktree는 로컬 repo HEAD detach라 base가 PR과 다를 수 있다. self-check 초안엔 허용(레포 컨텍스트용). 정밀 base 체크아웃은 추후.
+- **self-check 잡은 local_path 필수:** worktree 격리(INVARIANT #6) 때문에 PR repo에 local_path가 있어야 트리거됨(없으면 Err). remote-only repo 지원은 추후(scratch 디렉터리 격리 검토).
 
 ### Phase 7 미해결/관찰 항목 (Phase 8+에서 고려)
 
@@ -26,25 +41,22 @@
 
 ## 먼저 읽을 정본
 
-1. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 8** Deliverables/Done-criteria
-2. `docs/architecture.md` — §2 3-Rail(제안 레일=Codex→Proposal→Acceptance), §4 data model(`AgentRun`·`Acceptance`·`WorkSignal.links`), §5 AgentRunner, §8 Worktree/Diff(검수)
-3. `docs/decisions.md` — Phase 7(Agent 스파인)·Phase 4(PR Radar, octocrab)·Phase 5(worktree diff) 결정
+1. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 9** Deliverables/Done-criteria
+2. `docs/architecture.md` — §2 3-Rail, §4 data model(`WorkSignal.suggestedQuadrant`/`suggestedArea`·`AgentRun`·`Acceptance`), §5 AgentRunner, §7 dedup/auto-resolve/재트리거 캡
+3. `docs/decisions.md` — Phase 8(PR self-check 초안)·Phase 7(Agent 스파인)·Phase 4(PR Radar)·Phase 6(mismatch) 결정
 4. `.claude/skills/{codex-worktree-runner,octocrab-keyring,sqlx-sqlite,tauri-specta-ipc}` · `DESIGN.md` · `AGENTS.md` · `docs/reference/commands.md`(검증 명령)
-5. **Phase 7 코드(직접 선례):** `src-tauri/src/agent.rs`(CodexRunner — Phase 8이 확장) · `src-tauri/src/jobs.rs`(JobManager) · `src-tauri/src/github.rs`(PR diff fetch 후보)
+5. **Phase 8 코드(직접 선례):** `src-tauri/src/commands.rs`(`trigger_pr_selfcheck`/`accept_proposal` — Phase 9 enrich/triage/mismatch-draft가 같은 패턴) · `agent.rs`(CodexRunner `input_files`/`proposal_from_message`) · `jobs.rs`(gated finalize)
 
-## Phase 8 스코프 (한 번에 한 Phase, PLAN.md Phase 8 done-criteria만)
+## Phase 9 스코프 (한 번에 한 Phase, PLAN.md Phase 9 done-criteria만)
 
-PLAN.md Phase 8 핵심 — **첫 자동화: PR self-check 자동 초안(suggestion 레일):**
-- `CodexRunner`가 PR diff를 읽고 **self-check / 설명 / 스크린샷 필요 / 마이그레이션 노트**를 `Proposal`(draft)로 생성.
-- 사람이 **accept** → 로컬 self-check 체크리스트/PR 설명 초안을 채움(제출은 수동). = **Acceptance 게이트**(INVARIANT #2).
+PLAN.md Phase 9 핵심 — **추가 suggestion 자동화(모두 제안 레일 + Acceptance 게이트):**
+- **braindump enrich(#2):** `suggestedQuadrant` + **`suggestedArea`(닫힌 taxonomy)** 추론. suggested만 — 카드는 unclassified 유지(자동 분류 0, INVARIANT #1), area는 사람이 확정/수정. AI는 세트 밖 카테고리 금지.
+- **CI triage(#3):** 원인/수정안 Proposal + **재트리거 횟수 캡(`retry_key`/`retry_count`) + 초과 시 Q1 escalate**(사람).
+- **mismatch 해소 초안(#4):** Notion 업데이트 draft(Acceptance 게이트, 실제 write는 사람 accept 후).
 
-**Done-criteria(요약):** 실제 PR에 잡 실행 → Proposal 표시 / accept 전 GitHub 무변경(Acceptance 검증) / worktree 격리·잡 종료 후 정리.
+**Done-criteria(요약):** 각 잡이 Acceptance 게이트 뒤 Proposal 생성 / 동일 CI 실패 재triage가 캡에서 멈추고 Q1 escalate / enrich가 quadrant 자동 확정 0 / `suggestedArea`는 닫힌 세트에서만.
 
-**설계 선결 과제(시작 전 결정 권장 — AskUserQuestion):**
-- **Proposal 산출 형식:** codex에 어떤 프롬프트로 PR diff를 넘기고(Phase 5 diff 텍스트 재사용 vs github fetch), 어떤 구조(self-check 항목/설명/스크린샷/마이그레이션)로 받을지. `--output-schema`(codex가 JSON Schema 지원) 사용 여부.
-- **Acceptance 흐름:** `agent_runs.status` `proposed→awaiting_approval→succeeded` + `acceptances`(append-only, agent_run_id FK) 첫 사용. accept 시 `WorkSignal.links`/로컬 체크리스트(`pr_self_checks`?) 반영 위치.
-- **트리거 진입점:** PR Radar 카드의 "self-check 초안" 액션 vs Jobs 뷰. 잡↔PR 연결(`agent_runs.trigger` JSON `{prUrl}`).
-- **INVARIANT #2/#6:** accept 전 GitHub 절대 무변경(제출은 사람 수동), worktree 격리+종료 정리.
+**설계 선결 과제(시작 전 결정 권장 — AskUserQuestion):** enrich 트리거(자동 vs 카드 액션)·재트리거 캡 위치·mismatch draft accept 시 Notion write 경로(Phase 3 `confirmed` 예약 상태 활용 여부).
 
 ## 운영 노트 (환경 함정)
 
@@ -65,9 +77,9 @@ PLAN.md Phase 8 핵심 — **첫 자동화: PR self-check 자동 초안(suggesti
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
-work-radar Phase 8 (첫 자동화: PR self-check 자동 초안 — suggestion 레일) 구현.
-docs/HANDOFF.md → PLAN.md(§1 INVARIANTS + Phase 8) → docs/architecture.md(§2 3-Rail, §4 AgentRun/Acceptance, §5 AgentRunner)
-→ docs/decisions.md(Phase 7) → src-tauri/src/{agent,jobs}.rs(직접 선례) 순으로 읽고 따른다. 한 번에 한 Phase, Phase 8 done-criteria로 자가검증.
-INVARIANTS 준수(특히 #2 accept 전 GitHub 무변경=Acceptance 게이트, #6 worktree 격리+정리, #1 결정 레일 침범 금지). 작업/푸시는 dev에만.
-시작 전 Proposal 산출 형식(codex 프롬프트/스키마) + Acceptance 흐름(acceptances 첫 사용) + 트리거 진입점만 확인하고 진행.
+work-radar Phase 9 (추가 suggestion 자동화: enrich / CI triage / mismatch 초안) 구현.
+docs/HANDOFF.md → PLAN.md(§1 INVARIANTS + Phase 9) → docs/architecture.md(§2 3-Rail, §4 data model, §7 dedup/재트리거 캡)
+→ docs/decisions.md(Phase 8 PR self-check, Phase 7 Agent 스파인) → src-tauri/src/commands.rs(trigger_pr_selfcheck/accept_proposal 패턴) 순으로 읽고 따른다. 한 번에 한 Phase, Phase 9 done-criteria로 자가검증.
+INVARIANTS 준수(특히 #1 enrich가 quadrant 자동 확정 금지=suggested만, #2 Acceptance 게이트, #5 CI triage 재트리거 캡+Q1 escalate). 작업/푸시는 dev에만.
+시작 전 enrich 트리거 + 재트리거 캡 위치 + mismatch draft→Notion write 경로만 확인하고 진행.
 ```

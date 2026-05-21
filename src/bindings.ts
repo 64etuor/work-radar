@@ -84,6 +84,23 @@ export const commands = {
 	killAgentRun: (runId: string) => typedError<boolean, string>(__TAURI_INVOKE("kill_agent_run", { runId })),
 	/**  잡 로그 tail(최대 16KB) — Jobs 뷰 로그 패널. */
 	readAgentLog: (runId: string) => typedError<string, string>(__TAURI_INVOKE("read_agent_log", { runId })),
+	/**
+	 *  PR self-check 초안 잡 트리거(PR Radar 카드에서). diff를 GitHub에서 받아(read) worktree 격리 codex
+	 *  잡(read_only)을 띄운다. 산출 Proposal은 awaiting_approval로 멈추고 사람 accept 전엔 외부 무변경(INVARIANT #2).
+	 */
+	triggerPrSelfcheck: (input: TriggerPrSelfCheckInput) => typedError<string, string>(__TAURI_INVOKE("trigger_pr_selfcheck", { input })),
+	/**
+	 *  잡의 proposal(JSON)을 타입 구조로 파싱해 돌려준다. codex 출력이 형식과 다르면(raw fallback) Err로
+	 *  노출(조용한 빈 proposal 금지). awaiting_approval 잡의 Proposal 패널이 소비한다.
+	 */
+	prProposal: (runId: string) => typedError<PrSelfCheckProposal, string>(__TAURI_INVOKE("pr_proposal", { runId })),
+	/**
+	 *  Proposal accept(INVARIANT #2 게이트). 사람이 (편집한) self-check/설명 초안을 accept하면 로컬에 반영하고
+	 *  잡을 succeeded로 마감한다. 외부 제출(GitHub)은 사람이 수동으로 — 여기서 mutate하지 않는다.
+	 */
+	acceptProposal: (runId: string, accepted: PrSelfCheckProposal) => typedError<null, string>(__TAURI_INVOKE("accept_proposal", { runId, accepted })),
+	/**  Proposal reject(폐기). awaiting_approval 잡을 cancelled로 마감한다(acceptances 기록 없음, 외부 무변경). */
+	rejectProposal: (runId: string) => typedError<null, string>(__TAURI_INVOKE("reject_proposal", { runId })),
 };
 
 /* Types */
@@ -113,6 +130,10 @@ export type AgentRunView = {
 	logPath: string | null,
 	/**  사람이 읽을 상세 (성공 요약 또는 실패/취소 사유 — result JSON에서 도출). */
 	detail: string | null,
+	/**  잡 트리거 JSON ({ prUrl, repoFullName, prNumber, ... }). Phase 8 PR self-check 연결용. */
+	trigger: string | null,
+	/**  suggestion 산출물 존재 여부 (awaiting_approval 게이트 — 상세는 `pr_proposal`로 조회). */
+	hasProposal: boolean,
 	createdAt: string,
 	startedAt: string | null,
 	finishedAt: string | null,
@@ -268,6 +289,21 @@ export type PrRadarItem = {
 	projectId: string,
 };
 
+/**
+ *  PR self-check 초안 Proposal (codex 산출물, draft). 사람이 accept하면 로컬에 반영(제출은 수동).
+ *  serde default로 codex가 일부 필드를 누락해도 관용한다(스키마-관용 — Phase 7 선례).
+ */
+export type PrSelfCheckProposal = {
+	/**  PR 설명 초안 (사람이 수동 제출). */
+	summary?: string,
+	/**  self-check 체크리스트 항목. */
+	selfChecks?: SelfCheckItem[],
+	/**  스크린샷이 필요한 변경 (UI 등). */
+	screenshotsNeeded?: string[],
+	/**  마이그레이션/배포 주의 노트. */
+	migrationNotes?: string[],
+};
+
 /**  최상위 그룹. `credential_ref`는 keychain 키일 뿐, 토큰 평문이 아니다. */
 export type Project = {
 	id: string,
@@ -358,6 +394,13 @@ export type RoutineToday = {
 /**  샌드박스 권한. 기본 read_only, 쓰기는 명시 승인 시에만. danger_full은 타입에 없음 (INVARIANT #6). */
 export type Sandbox = "read_only" | "workspace_write";
 
+/**  self-check 한 항목 (codex 제안 → 사람이 체크/수정). checked 기본 false (사람이 확인하기 전). */
+export type SelfCheckItem = {
+	item: string,
+	checked?: boolean,
+	note: string | null,
+};
+
 /**  신호 출처. */
 export type SignalSource = "braindump" | "notion_backlog" | "notion_agenda" | "github_pr" | "calendar" | "hermes" | "system";
 
@@ -398,6 +441,19 @@ export type TriggerEchoInput = {
 	timeoutSec: number,
 	/**  첫 줄로 출력할 메시지 (로그 캡처 확인). */
 	message: string,
+};
+
+/**  PR self-check 초안 잡 입력 (PR Radar 카드에서 트리거). repo는 worktree용 local_path가 있어야 한다. */
+export type TriggerPrSelfCheckInput = {
+	projectId: string | null,
+	/**  PR이 속한 repo full name ('owner/repo'). diff fetch + repo 해석에 사용. */
+	repoFullName: string,
+	prNumber: number,
+	prUrl: string,
+	/**  bounds (강제). 비면 백엔드 기본값. */
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
 };
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */
