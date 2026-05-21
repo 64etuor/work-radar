@@ -394,6 +394,65 @@ pub struct TodayOverview {
     pub pr_attention: Vec<WorkSignal>,
 }
 
+// ── Weekly review (Phase 11c, read 집계) ──────────────────────────────────────
+//
+// 지난 7일 집계. throughput/PR/루틴은 기존 타임스탬프에서 live 유도, debt_trend는
+// debt_snapshots(11a부터 전진 누적)에서 읽는다. 전부 read — 외부 변경 없음. specta i64 금지 → u32.
+
+/// 주간 처리량(지난 7일).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyThroughput {
+    /// 캡처된 braindump 신호 수(created_at 로컬 기준).
+    pub captured: u32,
+    /// 완료한 Today 레일 항목 수(today_done_at 로컬 날짜 기준).
+    pub completed: u32,
+    /// accept된 외부 승격(Notion 등 status=created) 수.
+    pub promoted: u32,
+}
+
+/// 주간 PR 활동. PR Radar는 ambient(머지 히스토리 미영속) → 근사:
+/// `attention_new`=범위 내 새 PR-attention 신호, `resolved`=done 전이된 PR 신호(머지/CI해소 근사).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyPrActivity {
+    pub attention_new: u32,
+    pub resolved: u32,
+}
+
+/// 주간 루틴 이행률. due=스케줄상 해당 occurrence 수, done=실제 체크 수, rate_pct=done*100/due(0..100).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyRoutineAdherence {
+    pub due: u32,
+    pub done: u32,
+    pub rate_pct: u32,
+}
+
+/// 부채 추세 한 점(일별 스냅샷). 11a부터 전진 누적 — 7일 미만이면 있는 만큼만.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DebtPoint {
+    pub date: String,
+    pub unclassified: u32,
+    pub q1_overdue: u32,
+    pub stale_backlog: u32,
+    pub cleanup_needed: u32,
+    pub pr_attention: u32,
+}
+
+/// Weekly review 집계(지난 7일, [start, end] 로컬 날짜 inclusive).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyReview {
+    pub start: String,
+    pub end: String,
+    pub throughput: WeeklyThroughput,
+    pub pr_activity: WeeklyPrActivity,
+    pub routine_adherence: WeeklyRoutineAdherence,
+    pub debt_trend: Vec<DebtPoint>,
+}
+
 // ── PR Radar (Phase 4, read 레일) ─────────────────────────────────────────────
 
 /// PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음.

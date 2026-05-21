@@ -9,6 +9,7 @@ import { PrRadarView } from "@/components/PrRadarView";
 import { SettingsView } from "@/components/SettingsView";
 import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
+import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
 import { useUIStore } from "@/store";
 
@@ -45,6 +46,7 @@ export default function App() {
           view === "settings" ||
           view === "today" ||
           view === "timeline" ||
+          view === "weekly" ||
           view === "radar" ||
           view === "worktree" ||
           view === "mismatch" ||
@@ -68,6 +70,8 @@ export default function App() {
         <TodayView />
       ) : view === "timeline" ? (
         <TimelineView />
+      ) : view === "weekly" ? (
+        <WeeklyView />
       ) : view === "radar" ? (
         <PrRadarView />
       ) : view === "worktree" ? (

@@ -14,12 +14,14 @@ use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager
 use crate::models::{
     AgentRail, AgentRunView, AreaTag, CalendarEvent, CalendarListItem, CiStatus, CiTriageProposal,
     CodexAvailability, CreateProjectInput, CreateRepoInput, CreateRoutineInput, CreateSignalInput,
-    DiffFileSummary, DiffMode, Engine, EnrichProposal, FlushSummary, GoogleCalendarStatus, Kind,
-    MismatchItem, NotionUpdateProposal, PingResult, PrRadarItem, Project, Promotion,
-    PromotionOutcome, PromotionStatus, PromotionTarget, Quadrant, ReadinessBucket, Repo,
-    RoutineToday, Sandbox, SelectedCalendar, SignalStatus, TodayOverview, TokenKind, TokenStatus,
-    TriageOutcome, TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput, TriggerEnrichInput,
-    TriggerMismatchDraftInput, TriggerPrSelfCheckInput, Weekday, WorkDebt, WorkSignal, Worktree,
+    DebtPoint, DiffFileSummary, DiffMode, Engine, EnrichProposal, FlushSummary,
+    GoogleCalendarStatus, Kind, MismatchItem, NotionUpdateProposal, PingResult, PrRadarItem,
+    Project, Promotion, PromotionOutcome, PromotionStatus, PromotionTarget, Quadrant,
+    ReadinessBucket, Repo, RoutineToday, Sandbox, SelectedCalendar, SignalStatus, TodayOverview,
+    TokenKind, TokenStatus, TriageOutcome, TriggerCiTriageInput, TriggerCodexInput,
+    TriggerEchoInput, TriggerEnrichInput, TriggerMismatchDraftInput, TriggerPrSelfCheckInput,
+    Weekday, WeeklyPrActivity, WeeklyReview, WeeklyRoutineAdherence, WeeklyThroughput, WorkDebt,
+    WorkSignal, Worktree,
 };
 use crate::notion::{
     HttpNotionReader, HttpNotionWriter, NotionError, NotionPageState, NotionReader, NotionWriter,
@@ -968,6 +970,188 @@ pub async fn today_overview(db: State<'_, Db>, date: String) -> Result<TodayOver
     .await
     .map_err(|e| e.to_string())?;
     Ok(overview)
+}
+
+// ── Weekly review (Phase 11c, read 집계) ──────────────────────────────────────
+// 지난 7일([start,end] 로컬 inclusive). throughput/PR/루틴은 기존 타임스탬프 live 유도,
+// debt_trend는 debt_snapshots(11a부터 누적)에서 read. 전부 read — 외부 변경 0.
+
+/// chrono Weekday → 루틴 weekdays JSON에 쓰는 소문자 3글자.
+fn weekday_key(d: chrono::Weekday) -> &'static str {
+    use chrono::Weekday::*;
+    match d {
+        Mon => "mon",
+        Tue => "tue",
+        Wed => "wed",
+        Thu => "thu",
+        Fri => "fri",
+        Sat => "sat",
+        Sun => "sun",
+    }
+}
+
+/// 주간 집계(순수 read, 테스트 가능). `end_date`=로컬 오늘(YYYY-MM-DD), 범위=[end-6, end].
+pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview, sqlx::Error> {
+    use chrono::Datelike;
+    let end = chrono::NaiveDate::parse_from_str(end_date, "%Y-%m-%d")
+        .map_err(|_| sqlx::Error::Protocol("bad end_date (YYYY-MM-DD)".into()))?;
+    let start = end - chrono::Duration::days(6);
+    let start_s = start.format("%Y-%m-%d").to_string();
+    let end_s = end.format("%Y-%m-%d").to_string();
+
+    // throughput — created_at/updated_at은 UTC라 'localtime'으로 로컬 날짜 정렬, today_done_at은 이미 로컬.
+    let (captured,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE source = 'braindump' AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
+    )
+    .bind(&start_s)
+    .bind(&end_s)
+    .fetch_one(db)
+    .await?;
+    let (completed,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM signals WHERE today_done_at BETWEEN ?1 AND ?2")
+            .bind(&start_s)
+            .bind(&end_s)
+            .fetch_one(db)
+            .await?;
+    let (promoted,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM promotions \
+         WHERE status = 'created' AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
+    )
+    .bind(&start_s)
+    .bind(&end_s)
+    .fetch_one(db)
+    .await?;
+
+    // PR 활동 — attention_new=범위 내 새 PR 신호, resolved=done 전이(머지/CI해소 근사, updated_at).
+    let (attention_new,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE source = 'github_pr' AND type = 'pr_attention' \
+           AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
+    )
+    .bind(&start_s)
+    .bind(&end_s)
+    .fetch_one(db)
+    .await?;
+    let (resolved,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE source = 'github_pr' AND status = 'done' \
+           AND date(updated_at, 'localtime') BETWEEN ?1 AND ?2",
+    )
+    .bind(&start_s)
+    .bind(&end_s)
+    .fetch_one(db)
+    .await?;
+
+    // 루틴 이행률 — done=스케줄 해당 날의 체크만(due와 동일 기준), due=스케줄 occurrence 합산.
+    // 비스케줄 날 체크(예: 월요일 루틴을 화요일에 체크)는 done에서 제외 → done ⊆ due, 이행률 왜곡 방지.
+    let checks: Vec<(String, Option<String>, String)> = sqlx::query_as(
+        "SELECT r.freq, r.weekdays, rc.date FROM routine_checks rc \
+         JOIN routines r ON r.id = rc.routine_id \
+         WHERE r.active = 1 AND rc.date BETWEEN ?1 AND ?2",
+    )
+    .bind(&start_s)
+    .bind(&end_s)
+    .fetch_all(db)
+    .await?;
+    let mut done: u32 = 0;
+    for (freq, weekdays, date) in &checks {
+        let scheduled = match freq.as_str() {
+            "daily" => true,
+            "weekly" => chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                .ok()
+                .map(|d| {
+                    let wk = weekday_key(d.weekday());
+                    weekdays
+                        .as_deref()
+                        .and_then(|j| serde_json::from_str::<Vec<String>>(j).ok())
+                        .map(|days| days.iter().any(|x| x == wk))
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false),
+            _ => false,
+        };
+        if scheduled {
+            done += 1;
+        }
+    }
+    let routines: Vec<(String, Option<String>)> =
+        sqlx::query_as("SELECT freq, weekdays FROM routines WHERE active = 1")
+            .fetch_all(db)
+            .await?;
+    let mut due: u32 = 0;
+    let mut d = start;
+    while d <= end {
+        let wk = weekday_key(d.weekday());
+        for (freq, weekdays) in &routines {
+            match freq.as_str() {
+                "daily" => due += 1,
+                "weekly" => {
+                    if let Some(json) = weekdays {
+                        if let Ok(days) = serde_json::from_str::<Vec<String>>(json) {
+                            if days.iter().any(|x| x == wk) {
+                                due += 1;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        d += chrono::Duration::days(1);
+    }
+    // due=0이면 0% (checked_div None → unwrap_or). done ⊆ due지만 안전하게 100% 캡.
+    let rate_pct = (done * 100).checked_div(due).unwrap_or(0).min(100);
+
+    // debt_trend — 11a 스냅샷 누적분(7일 미만이면 있는 만큼). i64 fetch 후 u32 변환.
+    let rows: Vec<(String, i64, i64, i64, i64, i64)> = sqlx::query_as(
+        "SELECT date, unclassified, q1_overdue, stale_backlog, cleanup_needed, pr_attention \
+         FROM debt_snapshots WHERE date BETWEEN ?1 AND ?2 ORDER BY date",
+    )
+    .bind(&start_s)
+    .bind(&end_s)
+    .fetch_all(db)
+    .await?;
+    let debt_trend = rows
+        .into_iter()
+        .map(|(date, u, q, s, c, p)| DebtPoint {
+            date,
+            unclassified: u as u32,
+            q1_overdue: q as u32,
+            stale_backlog: s as u32,
+            cleanup_needed: c as u32,
+            pr_attention: p as u32,
+        })
+        .collect();
+
+    Ok(WeeklyReview {
+        start: start_s,
+        end: end_s,
+        throughput: WeeklyThroughput {
+            captured: captured as u32,
+            completed: completed as u32,
+            promoted: promoted as u32,
+        },
+        pr_activity: WeeklyPrActivity {
+            attention_new: attention_new as u32,
+            resolved: resolved as u32,
+        },
+        routine_adherence: WeeklyRoutineAdherence {
+            due,
+            done,
+            rate_pct,
+        },
+        debt_trend,
+    })
+}
+
+/// 지난 7일 주간 회고 집계. `end_date`=프런트가 보내는 로컬 오늘.
+#[tauri::command]
+#[specta::specta]
+pub async fn weekly_review(db: State<'_, Db>, end_date: String) -> Result<WeeklyReview, String> {
+    fetch_weekly_review(db.inner(), &end_date)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ── 승격 draft (외부 = Acceptance 게이트, INVARIANT #2) ────────────────────────
@@ -3676,6 +3860,231 @@ mod tests {
         .await;
         let ov2 = fetch_today_overview(&db, &local_today).await.unwrap();
         assert_eq!(ov2.work_debt.q1_overdue, 1, "오래된 q1은 overdue");
+    }
+
+    /// Weekly review가 지난 7일을 throughput/PR/루틴/부채추세로 정확히 집계(범위 안팎 분리).
+    /// TZ 안전: created_at/updated_at은 mid-range 정오(±14h여도 같은 날), today_done_at은 로컬 날짜.
+    #[tokio::test]
+    async fn weekly_review_aggregates_last_7_days() {
+        let db = fresh_db().await;
+        let end = "2026-05-22"; // 범위 [2026-05-16 .. 2026-05-22]
+        let inrange = "2026-05-19 12:00:00";
+        let outrange = "2026-05-01 12:00:00";
+
+        // throughput.captured: braindump 2 in / 1 out.
+        seed_signal(
+            &db,
+            "braindump",
+            "thought",
+            "unclassified",
+            "new",
+            None,
+            inrange,
+        )
+        .await;
+        seed_signal(
+            &db,
+            "braindump",
+            "thought",
+            "unclassified",
+            "new",
+            None,
+            "2026-05-20 12:00:00",
+        )
+        .await;
+        seed_signal(
+            &db,
+            "braindump",
+            "thought",
+            "unclassified",
+            "new",
+            None,
+            outrange,
+        )
+        .await;
+
+        // completed: today_done_at 1 in / 1 out. source는 braindump 아님(captured 오염 방지).
+        for (done_at, ca) in [("2026-05-18", inrange), ("2026-05-10", outrange)] {
+            sqlx::query(
+                "INSERT INTO signals (id, title, source, type, quadrant, status, today_for_date, today_done_at, created_at, updated_at) \
+                 VALUES (lower(hex(randomblob(16))), 'c', 'notion_backlog', 'task_candidate', 'q1_do_now', 'promoted', ?2, ?1, ?2, ?2)",
+            )
+            .bind(done_at)
+            .bind(ca)
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+
+        // promoted: 외부 승격 created 1 in / draft 1 (미집계). FK용 signal은 비-braindump·범위 밖.
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, quadrant, status, created_at, updated_at) \
+             VALUES ('promosrc', 'p', 'system', 'thought', 'unclassified', 'new', ?1, ?1)",
+        )
+        .bind(outrange)
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO promotions (id, signal_id, target, status, draft_payload, created_at) \
+             VALUES (lower(hex(randomblob(16))), 'promosrc', 'notion_backlog', 'created', '{}', ?1)",
+        )
+        .bind(inrange)
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO promotions (id, signal_id, target, status, draft_payload, created_at) \
+             VALUES (lower(hex(randomblob(16))), 'promosrc', 'notion_backlog', 'draft', '{}', ?1)",
+        )
+        .bind(inrange)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // PR: attention_new 1 in / 1 out; resolved 1 (created out, updated in).
+        seed_signal(
+            &db,
+            "github_pr",
+            "pr_attention",
+            "unclassified",
+            "new",
+            None,
+            inrange,
+        )
+        .await;
+        seed_signal(
+            &db,
+            "github_pr",
+            "pr_attention",
+            "unclassified",
+            "new",
+            None,
+            outrange,
+        )
+        .await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, quadrant, status, created_at, updated_at) \
+             VALUES (lower(hex(randomblob(16))), 'r', 'github_pr', 'pr_attention', 'unclassified', 'done', ?1, ?2)",
+        )
+        .bind(outrange) // created out → attention_new 미집계
+        .bind(inrange) // updated in → resolved 집계
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 루틴: daily 1개 → due=7. 체크 3 in / 1 out → done=3.
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, active) VALUES ('rt1', '물 마시기', 'daily', 1)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        for d in ["2026-05-17", "2026-05-19", "2026-05-21", "2026-05-02"] {
+            sqlx::query(
+                "INSERT INTO routine_checks (id, routine_id, date) VALUES (lower(hex(randomblob(16))), 'rt1', ?1)",
+            )
+            .bind(d)
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+
+        // debt_trend: 2 in / 1 out, 정렬.
+        for d in ["2026-05-21", "2026-05-20", "2026-05-01"] {
+            upsert_debt_snapshot(
+                &db,
+                d,
+                &WorkDebt {
+                    unclassified: 1,
+                    q1_overdue: 0,
+                    stale_backlog: 0,
+                    cleanup_needed: 0,
+                },
+                0,
+            )
+            .await
+            .unwrap();
+        }
+
+        let wr = fetch_weekly_review(&db, end).await.unwrap();
+        assert_eq!(wr.start, "2026-05-16");
+        assert_eq!(wr.end, "2026-05-22");
+        assert_eq!(wr.throughput.captured, 2, "braindump in-range");
+        assert_eq!(wr.throughput.completed, 1, "today_done_at in-range");
+        assert_eq!(wr.throughput.promoted, 1, "created 승격만(draft 제외)");
+        assert_eq!(wr.pr_activity.attention_new, 1, "범위 내 새 PR 신호");
+        assert_eq!(wr.pr_activity.resolved, 1, "done 전이(updated in-range)");
+        assert_eq!(wr.routine_adherence.due, 7, "daily × 7일");
+        assert_eq!(wr.routine_adherence.done, 3, "in-range 체크");
+        assert_eq!(wr.routine_adherence.rate_pct, 42, "3/7=42%");
+        assert_eq!(wr.debt_trend.len(), 2, "in-range 스냅샷만");
+        assert_eq!(wr.debt_trend[0].date, "2026-05-20", "date 오름차순");
+    }
+
+    /// 주간 루틴 이행률은 스케줄 해당 날의 체크만 done으로 친다(비스케줄 제외 → done ≤ due).
+    /// + weekly_review가 어떤 write도 하지 않음을 확인(INVARIANT #2 가드: debt_snapshots 불변).
+    #[tokio::test]
+    async fn weekly_routine_adherence_counts_scheduled_only() {
+        use chrono::{Datelike, Duration, NaiveDate, Weekday};
+        let db = fresh_db().await;
+        let end_s = "2026-05-22";
+        let end = NaiveDate::parse_from_str(end_s, "%Y-%m-%d").unwrap();
+        let start = end - Duration::days(6);
+        // 7일 창엔 각 요일이 정확히 하나 → 월요일 하나, 비월요일 하나 고른다.
+        let mut monday = None;
+        let mut other = None;
+        let mut d = start;
+        while d <= end {
+            if d.weekday() == Weekday::Mon {
+                monday = Some(d);
+            } else if other.is_none() {
+                other = Some(d);
+            }
+            d += Duration::days(1);
+        }
+        let monday = monday.unwrap().format("%Y-%m-%d").to_string();
+        let other = other.unwrap().format("%Y-%m-%d").to_string();
+
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, weekdays, active) \
+             VALUES ('rtw', '월요 회고', 'weekly', '[\"mon\"]', 1)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // 스케줄(월) 체크 1 + 비스케줄(타 요일) 체크 1.
+        for date in [&monday, &other] {
+            sqlx::query(
+                "INSERT INTO routine_checks (id, routine_id, date) VALUES (lower(hex(randomblob(16))), 'rtw', ?1)",
+            )
+            .bind(date)
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+
+        let (before,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM debt_snapshots")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+
+        let wr = fetch_weekly_review(&db, end_s).await.unwrap();
+        assert_eq!(wr.routine_adherence.due, 1, "7일 창에 월요일 1개");
+        assert_eq!(
+            wr.routine_adherence.done, 1,
+            "월요일 체크만 done(비스케줄 제외)"
+        );
+        assert_eq!(wr.routine_adherence.rate_pct, 100);
+
+        let (after,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM debt_snapshots")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(
+            before, after,
+            "weekly_review는 write하지 않음(INVARIANT #2)"
+        );
     }
 
     /// repo 추가 후 project별 목록에 표시되고 default_branch 기본값이 채워진다.

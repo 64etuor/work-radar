@@ -3,6 +3,7 @@ import {
   Bot,
   CalendarCheck,
   CalendarClock,
+  CalendarRange,
   FolderPlus,
   GitBranchPlus,
   GitCompare,
@@ -65,6 +66,13 @@ export function CommandPalette() {
               >
                 <CalendarClock className="size-4 text-wr-subtle" />
                 <span>Timeline으로</span>
+              </CommandItem>
+              <CommandItem
+                value="weekly review 주간 회고 집계 처리량 추세"
+                onSelect={() => goTo("weekly")}
+              >
+                <CalendarRange className="size-4 text-wr-subtle" />
+                <span>Weekly Review로</span>
               </CommandItem>
               <CommandItem
                 value="pr radar github 레이더 풀리퀘스트"

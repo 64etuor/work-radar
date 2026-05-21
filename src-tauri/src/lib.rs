@@ -53,6 +53,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_today,
         // Today 운영 뷰 + Work Debt (Phase 11a).
         commands::today_overview,
+        // Weekly review (Phase 11c).
+        commands::weekly_review,
         // 외부 승격 draft (Acceptance 게이트) + Notion write 레일 (Phase 3).
         commands::create_promotion_draft,
         commands::promote_to_notion,

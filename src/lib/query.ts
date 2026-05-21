@@ -27,6 +27,7 @@ import {
   type SignalStatus,
   type TodayOverview,
   type TokenKind,
+  type WeeklyReview,
   type TriageOutcome,
   type TriggerCiTriageInput,
   type TriggerCodexInput,
@@ -134,6 +135,17 @@ export function useTodayOverview(date: string) {
   return useQuery<TodayOverview>({
     queryKey: ["todayOverview", date],
     queryFn: () => unwrap(commands.todayOverview(date)),
+  });
+}
+
+/**
+ * Weekly review (Phase 11c): 지난 7일 처리량·PR·루틴·부채추세 집계. endDate=로컬 오늘.
+ * 전부 read(기존 타임스탬프 + debt_snapshots). 외부 변경 없음.
+ */
+export function useWeeklyReview(endDate: string) {
+  return useQuery<WeeklyReview>({
+    queryKey: ["weeklyReview", endDate],
+    queryFn: () => unwrap(commands.weeklyReview(endDate)),
   });
 }
 

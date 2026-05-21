@@ -41,6 +41,8 @@ export const commands = {
 	 *  TodayView만 호출(항상 오늘) — 과거 날짜로 스냅샷이 오염되지 않는다.
 	 */
 	todayOverview: (date: string) => typedError<TodayOverview, string>(__TAURI_INVOKE("today_overview", { date })),
+	/**  지난 7일 주간 회고 집계. `end_date`=프런트가 보내는 로컬 오늘. */
+	weeklyReview: (endDate: string) => typedError<WeeklyReview, string>(__TAURI_INVOKE("weekly_review", { endDate })),
 	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, string>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
 	/**  카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2). */
 	promoteToNotion: (signalId: string, target: PromotionTarget) => typedError<PromotionOutcome, string>(__TAURI_INVOKE("promote_to_notion", { signalId, target })),
@@ -316,6 +318,16 @@ export type CreateSignalInput = {
 	kind: Kind | null,
 	/**  소속 프로젝트(없으면 NULL → 나중에 reconcile). 메타데이터(결정 레일 아님). */
 	projectId: string | null,
+};
+
+/**  부채 추세 한 점(일별 스냅샷). 11a부터 전진 누적 — 7일 미만이면 있는 만큼만. */
+export type DebtPoint = {
+	date: string,
+	unclassified: number,
+	q1Overdue: number,
+	staleBacklog: number,
+	cleanupNeeded: number,
+	prAttention: number,
 };
 
 /**  diff 파일 목록 한 항목 (통계만 — 파일별 hunk는 지연 로드). specta i64/u64 금지 → adds/dels u32. */
@@ -676,6 +688,42 @@ export type TriggerPrSelfCheckInput = {
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+/**
+ *  주간 PR 활동. PR Radar는 ambient(머지 히스토리 미영속) → 근사:
+ *  `attention_new`=범위 내 새 PR-attention 신호, `resolved`=done 전이된 PR 신호(머지/CI해소 근사).
+ */
+export type WeeklyPrActivity = {
+	attentionNew: number,
+	resolved: number,
+};
+
+/**  Weekly review 집계(지난 7일, [start, end] 로컬 날짜 inclusive). */
+export type WeeklyReview = {
+	start: string,
+	end: string,
+	throughput: WeeklyThroughput,
+	prActivity: WeeklyPrActivity,
+	routineAdherence: WeeklyRoutineAdherence,
+	debtTrend: DebtPoint[],
+};
+
+/**  주간 루틴 이행률. due=스케줄상 해당 occurrence 수, done=실제 체크 수, rate_pct=done*100/due(0..100). */
+export type WeeklyRoutineAdherence = {
+	due: number,
+	done: number,
+	ratePct: number,
+};
+
+/**  주간 처리량(지난 7일). */
+export type WeeklyThroughput = {
+	/**  캡처된 braindump 신호 수(created_at 로컬 기준). */
+	captured: number,
+	/**  완료한 Today 레일 항목 수(today_done_at 로컬 날짜 기준). */
+	completed: number,
+	/**  accept된 외부 승격(Notion 등 status=created) 수. */
+	promoted: number,
+};
 
 /**
  *  Work Debt 지표 (Today 콕핏 상단 스트립 + 일별 스냅샷 입력).

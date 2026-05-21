@@ -5,6 +5,7 @@ export type View =
   | "board"
   | "today"
   | "timeline"
+  | "weekly"
   | "settings"
   | "radar"
   | "worktree"
