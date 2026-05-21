@@ -769,6 +769,9 @@
   left: 50%;
   bottom: 96px;
   transform: translateX(-50%) translateY(8px);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   background: var(--color-wr-near-black);
   color: #fff;
   padding: 9px 16px;
@@ -783,6 +786,19 @@
 .cb-toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.cb-toast-link {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font: 600 12px var(--font-sans);
+  cursor: pointer;
+}
+.cb-toast-link:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* ── 반응형 ── */

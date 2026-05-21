@@ -37,6 +37,11 @@ export const commands = {
 	reorderToday: (orderedIds: string[]) => typedError<null, string>(__TAURI_INVOKE("reorder_today", { orderedIds })),
 	listToday: (today: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_today", { today })),
 	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, string>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
+	/**  카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2). */
+	promoteToNotion: (signalId: string, target: PromotionTarget) => typedError<PromotionOutcome, string>(__TAURI_INVOKE("promote_to_notion", { signalId, target })),
+	flushPromotions: () => typedError<FlushSummary, string>(__TAURI_INVOKE("flush_promotions")),
+	/**  승격 이력(undo/audit). signal_id가 있으면 그 신호만, 없으면 전체(최신순). */
+	listPromotions: (signalId: string | null) => typedError<Promotion[], string>(__TAURI_INVOKE("list_promotions", { signalId })),
 	createRoutine: (input: CreateRoutineInput) => typedError<RoutineToday, string>(__TAURI_INVOKE("create_routine", { input })),
 	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], string>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
 	/**  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋. */
@@ -86,6 +91,13 @@ export type CreateSignalInput = {
 	projectId: string | null,
 };
 
+/**  오프라인 복구 시 큐(draft) 재시도 집계. specta는 i64/u64 export 금지 → u32. */
+export type FlushSummary = {
+	created: number,
+	queued: number,
+	failed: number,
+};
+
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
 
@@ -121,6 +133,18 @@ export type Promotion = {
 	draftPayload: string,
 	createdExternalId: string | null,
 	createdAt: string,
+};
+
+/**
+ *  승격(write) 시도 결과. status로 created / draft(오프라인 큐잉) / failed를 구분한다.
+ *  `page_url`은 성공 시 "Notion에서 열기" 딥링크용. 토큰 본문은 절대 담기지 않는다(INVARIANT).
+ */
+export type PromotionOutcome = {
+	promotionId: string,
+	status: PromotionStatus,
+	pageUrl: string | null,
+	/**  사람이 읽을 상세(성공 식별 또는 실패 사유). */
+	detail: string,
 };
 
 /**  승격 상태. 외부 승격은 draft에서 멈춘다 (실제 write는 Phase 3/11, INVARIANT #2). */

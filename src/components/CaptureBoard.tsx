@@ -14,12 +14,15 @@ import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
 import {
   localToday,
   localWeekday,
+  openExternal,
   useClassifySignal,
   useCreatePromotionDraft,
   useCreateRoutine,
   useCreateSignal,
+  useFlushPromotions,
   useProjects,
   usePromoteToday,
+  usePromoteToNotion,
   useReorderToday,
   useSetSignalStatus,
   useSignals,
@@ -67,6 +70,8 @@ export function CaptureBoard() {
   const setStatus = useSetSignalStatus();
   const snoozeSignal = useSnoozeSignal();
   const createDraft = useCreatePromotionDraft();
+  const promoteToNotion = usePromoteToNotion();
+  const flushPromotions = useFlushPromotions();
   const createRoutine = useCreateRoutine();
   const toggleRoutine = useToggleRoutineCheck();
 
@@ -98,13 +103,22 @@ export function CaptureBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signals]);
 
-  // ── Toast ──
+  // ── Toast (선택적 '열기' 액션 = 생성된 Notion 페이지 딥링크) ──
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastUrl, setToastUrl] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
-  const toast = useCallback((m: string) => {
+  const toast = useCallback((m: string, url?: string) => {
     setToastMsg(m);
+    setToastUrl(url ?? null);
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToastMsg(null), 1700);
+    // 열기 링크가 있으면 충분히 누를 시간을 준다.
+    toastTimer.current = window.setTimeout(
+      () => {
+        setToastMsg(null);
+        setToastUrl(null);
+      },
+      url ? 6000 : 1700,
+    );
   }, []);
 
   // ── 액션 ──
@@ -140,6 +154,25 @@ export function CaptureBoard() {
     toast("매트릭스로 되돌림");
   };
 
+  // 카드 → Notion 백로그/안건 즉시 승격(write). 사람 클릭이 곧 결정/accept (INVARIANT #2).
+  const handleNotionPromote = (signalId: string, action: "backlog" | "agenda") => {
+    promoteToNotion.mutate(
+      { signalId, target: PROMOTION_TARGET[action] },
+      {
+        onSuccess: (outcome) => {
+          if (outcome.status === "created") {
+            toast(`${PROMOTION_LABEL[action]}됨`, outcome.pageUrl ?? undefined);
+          } else if (outcome.status === "draft") {
+            toast(`${PROMOTION_LABEL[action]} — 오프라인, 큐에 저장됨(복구 시 등록)`);
+          } else {
+            toast(`${PROMOTION_LABEL[action]} 실패: ${outcome.detail}`);
+          }
+        },
+        onError: (e) => toast(`${PROMOTION_LABEL[action]} 실패: ${String(e)}`),
+      },
+    );
+  };
+
   const handleMenuAction = (action: CardMenuAction, signalId: string) => {
     switch (action) {
       case "today":
@@ -162,9 +195,13 @@ export function CaptureBoard() {
         break;
       case "backlog":
       case "agenda":
+        // write 레일: 즉시 Notion에 페이지 생성 (Phase 3).
+        handleNotionPromote(signalId, action);
+        break;
       case "calendar":
-        createDraft.mutate({ signalId, target: PROMOTION_TARGET[action] });
-        toast(`${PROMOTION_LABEL[action]} — Acceptance 대기`);
+        // 캘린더는 아직 draft만 (Acceptance 대기, 실제 write는 Phase 11).
+        createDraft.mutate({ signalId, target: PROMOTION_TARGET.calendar });
+        toast(`${PROMOTION_LABEL.calendar} — Acceptance 대기`);
         break;
     }
   };
@@ -235,6 +272,19 @@ export function CaptureBoard() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedId, handleClassify, handlePromoteToday, setStatus, snoozeSignal, toast]);
 
+  // 네트워크 복구 시 오프라인 큐(draft) flush (INVARIANT #5: bounded, 무한 poll 아님).
+  useEffect(() => {
+    const onOnline = () => {
+      flushPromotions.mutate(undefined, {
+        onSuccess: (s) => {
+          if (s.created > 0) toast(`복구 — Notion에 ${s.created}건 등록됨`);
+        },
+      });
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [flushPromotions, toast]);
+
   const loadError = signalsQ.isError || todayQ.isError || routinesQ.isError;
 
   return (
@@ -297,7 +347,18 @@ export function CaptureBoard() {
       />
 
       <CardMenu state={menu} onAct={handleMenuAction} onClose={() => setMenu(null)} />
-      <div className={`cb-toast${toastMsg ? " show" : ""}`}>{toastMsg}</div>
+      <div className={`cb-toast${toastMsg ? " show" : ""}`}>
+        {toastMsg}
+        {toastUrl && (
+          <button
+            type="button"
+            className="cb-toast-link"
+            onClick={() => void openExternal(toastUrl)}
+          >
+            Notion에서 열기
+          </button>
+        )}
+      </div>
     </div>
   );
 }

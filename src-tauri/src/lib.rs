@@ -12,6 +12,7 @@ mod commands;
 mod db;
 mod keychain;
 mod models;
+mod notion;
 mod shortcut;
 
 use tauri::Manager;
@@ -45,8 +46,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::toggle_today_done,
         commands::reorder_today,
         commands::list_today,
-        // 외부 승격 draft (Acceptance 게이트).
+        // 외부 승격 draft (Acceptance 게이트) + Notion write 레일 (Phase 3).
         commands::create_promotion_draft,
+        commands::promote_to_notion,
+        commands::flush_promotions,
+        commands::list_promotions,
         // Routines.
         commands::create_routine,
         commands::list_today_routines,
@@ -76,6 +80,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // "Notion에서 열기" 딥링크 — 생성된 페이지 URL을 외부(브라우저/Notion 앱)에서 연다.
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);

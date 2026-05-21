@@ -279,6 +279,27 @@ pub struct Promotion {
     pub created_at: String,
 }
 
+/// 승격(write) 시도 결과. status로 created / draft(오프라인 큐잉) / failed를 구분한다.
+/// `page_url`은 성공 시 "Notion에서 열기" 딥링크용. 토큰 본문은 절대 담기지 않는다(INVARIANT).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PromotionOutcome {
+    pub promotion_id: String,
+    pub status: PromotionStatus,
+    pub page_url: Option<String>,
+    /// 사람이 읽을 상세(성공 식별 또는 실패 사유).
+    pub detail: String,
+}
+
+/// 오프라인 복구 시 큐(draft) 재시도 집계. specta는 i64/u64 export 금지 → u32.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FlushSummary {
+    pub created: u32,
+    pub queued: u32,
+    pub failed: u32,
+}
+
 // ── 루틴(Routine) ─────────────────────────────────────────────────────────────
 
 /// 루틴 반복 주기.
