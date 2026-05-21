@@ -10,6 +10,7 @@
 mod api;
 mod commands;
 mod db;
+mod github;
 mod keychain;
 mod models;
 mod notion;
@@ -55,6 +56,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::create_routine,
         commands::list_today_routines,
         commands::toggle_routine_check,
+        // PR Radar (read 레일, Phase 4).
+        commands::refresh_pr_radar,
+        commands::set_pr_self_check,
     ])
 }
 

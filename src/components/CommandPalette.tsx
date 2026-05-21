@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderPlus, GitBranchPlus, LayoutGrid, Settings } from "lucide-react";
+import { FolderPlus, GitBranchPlus, GitPullRequest, LayoutGrid, Settings } from "lucide-react";
 
 import {
   Command,
@@ -40,6 +40,13 @@ export function CommandPalette() {
               <CommandItem value="board matrix 보드 매트릭스" onSelect={() => goTo("board")}>
                 <LayoutGrid className="size-4 text-wr-subtle" />
                 <span>캡처 보드로</span>
+              </CommandItem>
+              <CommandItem
+                value="pr radar github 레이더 풀리퀘스트"
+                onSelect={() => goTo("radar")}
+              >
+                <GitPullRequest className="size-4 text-wr-subtle" />
+                <span>PR Radar로</span>
               </CommandItem>
               <CommandItem
                 value="settings 설정 open"

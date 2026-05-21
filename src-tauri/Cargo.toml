@@ -34,6 +34,11 @@ keyring = { version = "3", features = ["apple-native"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 octocrab = "0.42"
 
+# PR Radar(Phase 4): ticketKeyPattern 매칭 + age/stale 날짜연산.
+#   chrono는 octocrab가 이미 transitive로 쓰므로 빌드 비용 추가 없음(clock = Utc::now()).
+regex = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
 # IPC 타입 계약: Rust 타입 → TS 생성 (수기 타입 중복 금지).
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"

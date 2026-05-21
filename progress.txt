@@ -64,3 +64,32 @@ PRD: .omc/state/sessions/357afcbf-b4e0-4aac-905d-637e923359a7/prd.json
 ### NEXT RUN (Phase 1) — 별도 Ralph
 - Capture & Matrix 루프: braindump 캡처 + WorkSignal CRUD + dedup, Eisenhower 2×2 + 키보드 분류,
   cmdk 액션(snooze/done/archive/move), FTS5 전역 검색 UI.
+
+## Run scope: Phase 4 (GitHub PR Radar — read 레일)
+PRD: .omc/prd.json (Phase 4)
+
+### 시작 전 확정한 사용자 결정 (AskUserQuestion)
+- escalate 임계치 = CI 실패 + 링크 백로그 티켓(ticketKeyPattern로 PR에서 추출). 마감일 기반은 Notion 미러(Phase 6)로 연기.
+- 매트릭스 진입 = unclassified + suggestedQuadrant=q1_do_now 힌트 (INVARIANT #1 엄수; done-criteria "Q1에 1건"은 "Q1 제안 1건"으로 해석).
+- dedup 키 = pr:{owner}/{repo}:{number}:{reason}, CI green/merged 시 auto-resolve(status=done).
+- 폴링 = 주기 폴링 + backoff (프런트 refetchInterval ~3분 + bounded retry; cycle 내 github.rs with_retry).
+
+### Implemented (Phase 4)
+- 마이그레이션 0004: pr_self_checks(repo_full_name, pr_number UNIQUE) — 수동 self-check 로컬 상태(routine_checks 패턴).
+- models.rs: CiStatus(passing/failing/pending/none), ReadinessBucket(5), PrRadarItem(number/ageDays u32 — specta i64/u64 export 금지 가드).
+- github.rs(신규): GithubError{Transient,Terminal}+with_retry(시도캡+지수backoff+jitter, terminal 재시도 안 함), classify_octocrab(429/5xx/hyper=Transient, 4xx/디코드=Terminal), aggregate_ci(check-runs conclusion 집계), parse_owner_repo(URL/plain/.git), PrProvider 트레잇(RPITIT) + HttpPrProvider(octocrab: open PR bounded 페이지네이션 + per-PR check-runs + closed 1페이지 최근 merged). RawPr/RawPrState 내부 전용.
+- commands.rs: classify_bucket(우선순위 Merged>CiBlocked>Stale>NeedsSelfCheck>Ready), extract_ticket(regex graceful), escalation_reason(open&&CI Failing&&ticket), upsert_pr_signal(ON CONFLICT(dedup_key) — quadrant/status 미덮음, suggested q1 힌트), auto_resolve(active set 밖 + fetched repo 범위 → done), sync_pr_radar<P:PrProvider>(코어, fake provider 테스트), refresh_pr_radar/set_pr_self_check 커맨드, fetch_github_repo_refs(enabled github repo + ticketKeyPattern repo>project).
+- lib.rs: mod github + 커맨드 2종 등록. Cargo.toml += regex, chrono(clock). bindings 재생성(refreshPrRadar/setPrSelfCheck + PrRadarItem/ReadinessBucket/CiStatus).
+- 프런트: query.ts fetchPrRadar/useSetPrSelfCheck + PR_RADAR_POLL_MS. store.ts View+='radar'. App.tsx 3-way 렌더 + Esc. CommandPalette 'PR Radar로'. PrRadarView(useQueries 프로젝트별 주기 폴링+bounded retry, 5버킷 그룹, PrCard: CI/conflict/draft/ticket/age/escalated 배지 + self-check 토글 + 열기). styles.css .pr-* (white editorial).
+
+### Verification evidence (fresh runs)
+- cargo test → 44 passed (github.rs 5 + commands PR 8 + db 0004 + 기존). exit 0.
+- cargo clippy --all-targets -- -D warnings → Finished, 0 warning (raw 로그 Read 확인; dead-code 2건 잡아 RawPrState::Closed·RawPr.created_at 제거).
+- cargo fmt --check → exit 0.
+- PR Radar 코어 테스트: 5버킷 분류 / CI실패+티켓→unclassified+suggested q1 1건 / 폴링 N회 중복 0 / CI green·merged auto-resolve / 티켓없으면 escalate 0 / 사람 classify 보존(upsert가 quadrant 미덮음) / 전부 fetch 실패 시 Err 노출.
+
+### Learnings / gotchas (Phase 4)
+- rtk가 clippy exit code를 0으로 가림 → raw 로그를 Read로 확인해야 dead-code 발견(메모리와 일치).
+- octocrab 0.42: pulls(o,r).list().state/sort/direction/per_page/page.send → Page; checks(o,r).list_check_runs_for_git_ref(params::repos::Commitish(sha)); MergeableState::Dirty=conflict; Pull.head.ref_field/sha; merged_at; CheckRun.conclusion: Option<String>(status 필드 없음 → conclusion None=미완료).
+- ON CONFLICT 부분 인덱스: WHERE dedup_key IS NOT NULL 명시 필요(idx_signals_dedup 매칭).
+- auto-resolve는 LIKE 와일드카드(_) 회피 위해 project-scoped fetch 후 Rust prefix(starts_with)로 매칭.

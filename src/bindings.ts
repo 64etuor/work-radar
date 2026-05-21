@@ -46,11 +46,21 @@ export const commands = {
 	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], string>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
 	/**  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋. */
 	toggleRoutineCheck: (routineId: string, date: string, done: boolean) => typedError<null, string>(__TAURI_INVOKE("toggle_routine_check", { routineId, date, done })),
+	/**
+	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출하고
+	 *  임계치 넘는 것만 매트릭스로 escalate(dedup)·원인 해소분 auto-resolve. 토큰은 keychain에서만.
+	 */
+	refreshPrRadar: (projectId: string) => typedError<PrRadarItem[], string>(__TAURI_INVOKE("refresh_pr_radar", { projectId })),
+	/**  수동 self-check 토글(로컬 상태). checked면 행 추가, 아니면 삭제(다음 도출이 반영). */
+	setPrSelfCheck: (repoFullName: string, prNumber: number, checked: boolean) => typedError<null, string>(__TAURI_INVOKE("set_pr_self_check", { repoFullName, prNumber, checked })),
 };
 
 /* Types */
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
+
+/**  PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음. */
+export type CiStatus = "passing" | "failing" | "pending" | "none";
 
 /**  프로젝트 생성 입력. credential_ref는 백엔드가 생성한다(프런트가 정하지 않음). */
 export type CreateProjectInput = {
@@ -108,6 +118,31 @@ export type PingResult = {
 	detail: string,
 };
 
+/**
+ *  PR Radar 한 항목 (프런트 표시용). ambient 상태라 매 폴링마다 GitHub에서 새로 도출된다.
+ *  토큰 본문은 절대 담기지 않는다(INVARIANT). specta i64/u64 export 금지 → number/ageDays는 u32.
+ */
+export type PrRadarItem = {
+	repoFullName: string,
+	number: number,
+	title: string,
+	url: string,
+	authorLogin: string,
+	bucket: ReadinessBucket,
+	ci: CiStatus,
+	hasConflict: boolean,
+	isDraft: boolean,
+	/**  ticketKeyPattern으로 PR title/branch에서 추출한 링크 백로그 티켓 (없으면 None). */
+	linkedTicket: string | null,
+	/**  수동 self-check 로컬 상태 (GitHub 아님). */
+	selfChecked: boolean,
+	/**  경과일 (updated_at 기준, 0 = 오늘 갱신). */
+	ageDays: number,
+	/**  이 PR이 매트릭스로 escalate된 active 신호를 갖는지 (임계치 초과 — INVARIANT #4). */
+	escalated: boolean,
+	projectId: string,
+};
+
 /**  최상위 그룹. `credential_ref`는 keychain 키일 뿐, 토큰 평문이 아니다. */
 export type Project = {
 	id: string,
@@ -158,6 +193,9 @@ export type Provider = "github" | "local";
 
 /**  아이젠하워 사분면 (사람 결정값). 카드는 항상 `Unclassified`로 진입한다 (INVARIANT #1). */
 export type Quadrant = "q1_do_now" | "q2_schedule" | "q3_quick_contain" | "q4_drop" | "unclassified";
+
+/**  readiness 버킷 (PR Radar 자기 뷰의 분류 — 매트릭스 결정 레일과 별개, INVARIANT #4). */
+export type ReadinessBucket = "needs_self_check" | "ci_blocked" | "ready" | "merged_cleanup" | "stale";
 
 /**  project별 레포. PR Radar(Phase 4)·worktree(Phase 5)의 단위. */
 export type Repo = {

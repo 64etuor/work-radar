@@ -349,3 +349,51 @@ pub struct CreateRoutineInput {
     pub area: Option<AreaTag>,
     pub kind: Option<Kind>,
 }
+
+// ── PR Radar (Phase 4, read 레일) ─────────────────────────────────────────────
+
+/// PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CiStatus {
+    Passing,
+    Failing,
+    Pending,
+    None,
+}
+
+/// readiness 버킷 (PR Radar 자기 뷰의 분류 — 매트릭스 결정 레일과 별개, INVARIANT #4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadinessBucket {
+    NeedsSelfCheck,
+    CiBlocked,
+    Ready,
+    MergedCleanup,
+    Stale,
+}
+
+/// PR Radar 한 항목 (프런트 표시용). ambient 상태라 매 폴링마다 GitHub에서 새로 도출된다.
+/// 토큰 본문은 절대 담기지 않는다(INVARIANT). specta i64/u64 export 금지 → number/ageDays는 u32.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PrRadarItem {
+    pub repo_full_name: String,
+    pub number: u32,
+    pub title: String,
+    pub url: String,
+    pub author_login: String,
+    pub bucket: ReadinessBucket,
+    pub ci: CiStatus,
+    pub has_conflict: bool,
+    pub is_draft: bool,
+    /// ticketKeyPattern으로 PR title/branch에서 추출한 링크 백로그 티켓 (없으면 None).
+    pub linked_ticket: Option<String>,
+    /// 수동 self-check 로컬 상태 (GitHub 아님).
+    pub self_checked: bool,
+    /// 경과일 (updated_at 기준, 0 = 오늘 갱신).
+    pub age_days: u32,
+    /// 이 PR이 매트릭스로 escalate된 active 신호를 갖는지 (임계치 초과 — INVARIANT #4).
+    pub escalated: bool,
+    pub project_id: String,
+}

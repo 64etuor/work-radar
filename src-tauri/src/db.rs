@@ -164,6 +164,40 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    /// Phase 4 마이그레이션(0004): pr_self_checks 테이블 + UNIQUE(repo_full_name, pr_number).
+    #[tokio::test]
+    async fn migration_0004_adds_pr_self_checks() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = 'pr_self_checks'",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query pr_self_checks failed");
+        assert_eq!(tables.len(), 1, "expected pr_self_checks table from 0004");
+
+        sqlx::query(
+            "INSERT INTO pr_self_checks (id, repo_full_name, pr_number) VALUES ('p1','o/r',42)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert self-check failed");
+        let dup = sqlx::query(
+            "INSERT INTO pr_self_checks (id, repo_full_name, pr_number) VALUES ('p2','o/r',42)",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            dup.is_err(),
+            "UNIQUE(repo_full_name,pr_number) should reject duplicate"
+        );
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
     #[tokio::test]
     async fn list_projects_returns_empty_on_fresh_db() {
         let path = temp_db_path();
