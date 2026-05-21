@@ -6,6 +6,7 @@ import {
   GitPullRequest,
   LayoutGrid,
   Settings,
+  Unlink,
 } from "lucide-react";
 
 import {
@@ -61,6 +62,13 @@ export function CommandPalette() {
               >
                 <GitCompare className="size-4 text-wr-subtle" />
                 <span>Worktree Diff로</span>
+              </CommandItem>
+              <CommandItem
+                value="mismatch drift notion pr 미스매치 드리프트 노션 동기화"
+                onSelect={() => goTo("mismatch")}
+              >
+                <Unlink className="size-4 text-wr-subtle" />
+                <span>Status Mismatch로</span>
               </CommandItem>
               <CommandItem
                 value="settings 설정 open"

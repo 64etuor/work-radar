@@ -276,6 +276,198 @@ impl NotionWriter for HttpNotionWriter {
     }
 }
 
+// ── Notion read (백로그 상태 미러, Phase 6 mismatch) ──────────────────────────────
+//
+// Phase 3는 write만 했고 read 미러가 없었다 → mismatch 비교용으로 백로그 DB의 페이지 상태를 read한다.
+// 스키마 가정 최소화: 페이지마다 title 타입 속성을 제목으로(ticket 추출), status(없으면 select) 타입을
+// 상태로 본다. bounded 페이지네이션(무한 poll 금지 — INVARIANT #5). 토큰은 인자로만, 반환하지 않는다.
+
+/// 한 backlog 페이지의 관측 상태 (drift 비교용). 내부 타입 — TS export 아님.
+#[derive(Debug, Clone)]
+pub struct NotionPageState {
+    pub page_id: String,
+    pub url: String,
+    /// 제목(title 타입 속성의 plain_text 연결). ticket 추출 입력.
+    pub title: String,
+    /// status(우선) 또는 select 타입 속성값 이름. 미설정이면 None.
+    pub status: Option<String>,
+}
+
+/// mismatch 코어가 의존하는 유일한 외부 read 계약. 테스트는 fake로 대체한다.
+/// (RPITIT — async fn in trait. async_trait 의존성 없이 제네릭으로만 소비한다.)
+pub trait NotionReader {
+    /// `db_id` 백로그의 페이지 상태들을 가져온다(bounded 페이지네이션 내부 처리). token은 호출자가 keychain에서.
+    fn fetch_pages(
+        &self,
+        token: &str,
+        db_id: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<NotionPageState>, NotionError>> + Send;
+}
+
+/// 페이지 query 페이지네이션 상한 (bounded — 무한 poll 금지). page_size 100 × 10 = 최대 1000건.
+const MAX_QUERY_PAGES: u32 = 10;
+const QUERY_PAGE_SIZE: u32 = 100;
+
+/// 페이지 properties에서 title 타입 속성의 plain_text를 연결한다(스키마 가정 최소화). 없으면 None.
+pub(crate) fn extract_page_title(props: &serde_json::Value) -> Option<String> {
+    let obj = props.as_object()?;
+    for v in obj.values() {
+        if v.get("type").and_then(|t| t.as_str()) == Some("title") {
+            let joined: String = v
+                .get("title")
+                .and_then(|t| t.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|t| t.get("plain_text").and_then(|p| p.as_str()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            return Some(joined);
+        }
+    }
+    None
+}
+
+/// 페이지 properties에서 상태 이름을 찾는다: status 타입 우선, 없으면 select. 둘 다 없거나 null이면 None.
+pub(crate) fn extract_page_status(props: &serde_json::Value) -> Option<String> {
+    let obj = props.as_object()?;
+    let pick = |kind: &str, inner: &str| -> Option<String> {
+        for v in obj.values() {
+            if v.get("type").and_then(|t| t.as_str()) == Some(kind) {
+                return v
+                    .get(inner)
+                    .and_then(|s| s.get("name"))
+                    .and_then(|n| n.as_str())
+                    .map(String::from);
+            }
+        }
+        None
+    };
+    pick("status", "status").or_else(|| pick("select", "select"))
+}
+
+/// query 응답(JSON) → (페이지 상태들, next_cursor, has_more). 순수 — 테스트 가능.
+pub(crate) fn parse_query_response(
+    body: &serde_json::Value,
+) -> (Vec<NotionPageState>, Option<String>, bool) {
+    let mut states = Vec::new();
+    if let Some(results) = body.get("results").and_then(|r| r.as_array()) {
+        for page in results {
+            let Some(page_id) = page.get("id").and_then(|i| i.as_str()) else {
+                continue;
+            };
+            let url = page
+                .get("url")
+                .and_then(|u| u.as_str())
+                .unwrap_or("")
+                .to_string();
+            let props = page
+                .get("properties")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            states.push(NotionPageState {
+                page_id: page_id.to_string(),
+                url,
+                title: extract_page_title(&props).unwrap_or_default(),
+                status: extract_page_status(&props),
+            });
+        }
+    }
+    let next = body
+        .get("next_cursor")
+        .and_then(|c| c.as_str())
+        .map(String::from);
+    let has_more = body
+        .get("has_more")
+        .and_then(|h| h.as_bool())
+        .unwrap_or(false);
+    (states, next, has_more)
+}
+
+/// 실제 Notion REST reader. reqwest(rustls) + rate limiter. writer와 client는 분리(read 관심사).
+pub struct HttpNotionReader {
+    http: reqwest::Client,
+    limiter: RateLimiter,
+}
+
+impl HttpNotionReader {
+    pub fn new() -> Result<Self, NotionError> {
+        let http = reqwest::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .map_err(|e| NotionError::Terminal(format!("client build: {e}")))?;
+        Ok(Self {
+            http,
+            limiter: RateLimiter::new(MIN_REQUEST_INTERVAL),
+        })
+    }
+
+    /// 한 query 호출(rate-limit paced). cursor가 있으면 start_cursor로 이어 받는다.
+    async fn query_once(
+        &self,
+        token: &str,
+        db_id: &str,
+        cursor: Option<&str>,
+    ) -> Result<serde_json::Value, NotionError> {
+        self.limiter.acquire().await;
+        let mut payload = serde_json::json!({ "page_size": QUERY_PAGE_SIZE });
+        if let Some(c) = cursor {
+            payload["start_cursor"] = serde_json::Value::String(c.to_string());
+        }
+        let resp = self
+            .http
+            .post(format!("{NOTION_BASE}/databases/{db_id}/query"))
+            .bearer_auth(token)
+            .header("Notion-Version", NOTION_VERSION)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| classify_reqwest(&e))?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        if !(200..300).contains(&status) {
+            return Err(classify_http(status, &body));
+        }
+        serde_json::from_str(&body).map_err(|e| NotionError::Terminal(format!("query parse: {e}")))
+    }
+}
+
+impl NotionReader for HttpNotionReader {
+    async fn fetch_pages(
+        &self,
+        token: &str,
+        db_id: &str,
+    ) -> Result<Vec<NotionPageState>, NotionError> {
+        let mut out = Vec::new();
+        let mut cursor: Option<String> = None;
+        let mut completed = false;
+        for _ in 0..MAX_QUERY_PAGES {
+            let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+                self.query_once(token, db_id, cursor.as_deref())
+            })
+            .await?;
+            let (mut states, next, has_more) = parse_query_response(&json);
+            out.append(&mut states);
+            if !has_more {
+                completed = true;
+                break;
+            }
+            match next {
+                Some(c) => cursor = Some(c),
+                None => break, // has_more인데 cursor 없음 → 불완전(아래에서 Err).
+            }
+        }
+        // 상한 초과/cursor 누락으로 전체를 못 받았으면 anchor로 신뢰 불가 → terminal failure 노출.
+        // (조용히 잘리면 mismatch 코어가 "ticket이 Notion에서 사라짐"으로 오인해 false auto-resolve 가능.)
+        if !completed {
+            return Err(NotionError::Terminal(format!(
+                "백로그 페이지네이션 상한 초과(>{MAX_QUERY_PAGES}페이지) — mismatch 감지 불완전"
+            )));
+        }
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,5 +561,86 @@ mod tests {
 
         let no_title = serde_json::json!({ "properties": { "x": { "type": "select" } } });
         assert!(find_title_prop(&no_title).is_none());
+    }
+
+    /// 페이지 properties에서 title 타입 plain_text 연결 (이름/언어 무관).
+    #[test]
+    fn extract_page_title_joins_plain_text() {
+        let props = serde_json::json!({
+            "상태": { "type": "status", "status": { "name": "In progress" } },
+            "이름": { "type": "title", "title": [
+                { "plain_text": "MIR-DEV-7 " }, { "plain_text": "로그인 버그" }
+            ] }
+        });
+        assert_eq!(
+            extract_page_title(&props).as_deref(),
+            Some("MIR-DEV-7 로그인 버그")
+        );
+        let no_title = serde_json::json!({ "x": { "type": "select", "select": { "name": "A" } } });
+        assert!(extract_page_title(&no_title).is_none());
+    }
+
+    /// 상태 추출: status 타입 우선 > select, null/미설정은 None.
+    #[test]
+    fn extract_page_status_prefers_status_then_select() {
+        let with_status = serde_json::json!({
+            "Status": { "type": "status", "status": { "name": "Done" } },
+            "Tag": { "type": "select", "select": { "name": "blue" } }
+        });
+        assert_eq!(extract_page_status(&with_status).as_deref(), Some("Done"));
+
+        let only_select = serde_json::json!({
+            "상태": { "type": "select", "select": { "name": "완료" } }
+        });
+        assert_eq!(extract_page_status(&only_select).as_deref(), Some("완료"));
+
+        // status가 null(미설정)이면 None.
+        let null_status = serde_json::json!({
+            "Status": { "type": "status", "status": serde_json::Value::Null }
+        });
+        assert!(extract_page_status(&null_status).is_none());
+
+        let no_status = serde_json::json!({ "이름": { "type": "title", "title": [] } });
+        assert!(extract_page_status(&no_status).is_none());
+    }
+
+    /// query 응답 파싱: 페이지 목록 + 페이지네이션(next_cursor/has_more).
+    #[test]
+    fn parse_query_response_extracts_pages_and_cursor() {
+        let body = serde_json::json!({
+            "results": [
+                {
+                    "id": "page-1",
+                    "url": "https://notion.so/page-1",
+                    "properties": {
+                        "Name": { "type": "title", "title": [ { "plain_text": "MIR-DEV-7 버그" } ] },
+                        "Status": { "type": "status", "status": { "name": "In progress" } }
+                    }
+                },
+                {
+                    "id": "page-2",
+                    "url": "https://notion.so/page-2",
+                    "properties": {
+                        "Name": { "type": "title", "title": [ { "plain_text": "잡일" } ] },
+                        "Status": { "type": "status", "status": { "name": "Done" } }
+                    }
+                }
+            ],
+            "next_cursor": "cur-xyz",
+            "has_more": true
+        });
+        let (states, next, has_more) = parse_query_response(&body);
+        assert_eq!(states.len(), 2);
+        assert_eq!(states[0].page_id, "page-1");
+        assert_eq!(states[0].title, "MIR-DEV-7 버그");
+        assert_eq!(states[0].status.as_deref(), Some("In progress"));
+        assert_eq!(states[1].status.as_deref(), Some("Done"));
+        assert_eq!(next.as_deref(), Some("cur-xyz"));
+        assert!(has_more);
+
+        // 빈 응답.
+        let empty = serde_json::json!({ "results": [], "has_more": false });
+        let (s, n, h) = parse_query_response(&empty);
+        assert!(s.is_empty() && n.is_none() && !h);
     }
 }

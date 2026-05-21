@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
+import { MismatchView } from "@/components/MismatchView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { SettingsView } from "@/components/SettingsView";
 import { WorktreeView } from "@/components/WorktreeView";
@@ -37,7 +38,12 @@ export default function App() {
         }
         // 카드 메뉴가 열려 있으면 그 닫힘을 CaptureBoard에 맡기고 창은 유지한다.
         if (document.querySelector(".cb-card-menu")) return;
-        if (view === "settings" || view === "radar" || view === "worktree") {
+        if (
+          view === "settings" ||
+          view === "radar" ||
+          view === "worktree" ||
+          view === "mismatch"
+        ) {
           goTo("board");
           return;
         }
@@ -56,6 +62,8 @@ export default function App() {
         <PrRadarView />
       ) : view === "worktree" ? (
         <WorktreeView />
+      ) : view === "mismatch" ? (
+        <MismatchView />
       ) : (
         <CaptureBoard />
       )}

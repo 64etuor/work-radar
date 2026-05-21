@@ -13,6 +13,7 @@ import {
   type CreateRoutineInput,
   type CreateSignalInput,
   type DiffMode,
+  type MismatchItem,
   type PrRadarItem,
   type PromotionTarget,
   type Quadrant,
@@ -403,6 +404,29 @@ export function useSetPrSelfCheck() {
       checked: boolean;
     }) => unwrap(commands.setPrSelfCheck(repoFullName, prNumber, checked)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["prRadar"] }),
+  });
+}
+
+// ── Phase 6: Status mismatch (Notion↔PR drift) ──────────────────────────────────
+
+/** mismatch 주기 폴링 간격. PR + Notion 둘 다 fetch라 PR Radar보다 느슨하게(INVARIANT #5: bounded). */
+export const MISMATCH_POLL_MS = 5 * 60_000;
+
+/**
+ * mismatch 한 cycle 실행(언랩만). drift 감지/dedup/auto-resolve는 Rust가 수행한다.
+ * 매트릭스(signals) invalidate는 호출부(useQueries queryFn)가 한다. 토큰은 keychain에서만(렌더러 미노출).
+ */
+export function fetchMismatch(projectId: string): Promise<MismatchItem[]> {
+  return unwrap(commands.refreshMismatch(projectId));
+}
+
+/** done으로 볼 Notion 상태 이름 목록 설정(프로젝트별). 성공 시 프로젝트 갱신. */
+export function useSetNotionDoneStatuses() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, statuses }: { projectId: string; statuses: string[] }) =>
+      unwrap(commands.setNotionDoneStatuses(projectId, statuses)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   });
 }
 

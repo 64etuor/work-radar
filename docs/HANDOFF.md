@@ -1,46 +1,50 @@
-# Work Radar — 세션 핸드오프 (현재: Phase 6 시작 직전)
+# Work Radar — 세션 핸드오프 (현재: Phase 7 시작 직전)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
 ## 지금 상태
 
-- **Phase 0~5 완료·검증됨.** 레포 `64etuor/work-radar`(Private), `dev`.
-  - Phase 1 `6fecaff` · Phase 2 `d57f300` · Phase 3 `2e9f293` · Phase 4 `78ce36b` · Phase 5 = 이 세션(아직 커밋 전이면 dev에 커밋 필요).
-- **Phase 5 산출물(Worktree & Branch Diff Viewer — read-only, 구현·검증됨):**
-  - **신규 마이그레이션 없음(ambient).** worktree/diff는 PR Radar처럼 매 호출 git에서 fresh 도출 — DTO만 정의, DB 영속 없음.
-  - **백엔드 `git.rs`(신규):** `GitError`(terminal only — 로컬 git은 재시도 무의미), `GitProvider` 트레잇(RPITIT, PrProvider 패턴) + `CliGitProvider`(`git` CLI 셸아웃, 각 호출 `timeout`(20s) bound, `-c color.ui=false`). **read 서브커맨드만**(worktree list / status / for-each-ref / diff) — checkout/reset/commit 등 mutating 0건(INVARIANT #6). 순수 파서: `parse_worktree_list`(porcelain 블록), `parse_status_v2`(ahead/behind/dirty), `parse_numstat`/`parse_name_status`(rename old_path 포함) + `merge_diff_summary`, `parse_branches`(`*/HEAD` 제외), `diff_range_args`(4모드, `-`-prefix ref 거부=arg injection 가드), `summarize_status`(Diverged>Dirty>Ahead>Behind>Clean).
-  - **`commands.rs`:** `fetch_local_repo_refs`(enabled + local_path 보유 레포, projectId 필터 또는 전체, 라벨=remote owner/repo 또는 basename), `collect_worktrees<G:GitProvider>` 코어(repo별 실패 격리·전부 실패면 Err·bare/status실패 worktree 제외·fake provider 테스트), 커맨드 4종: `list_worktrees(projectId?)` / `list_worktree_branches(path)` / `worktree_diff_files(path,mode,base?,head?)` / `worktree_file_diff(...,path)`.
-  - **`models.rs`:** `Worktree`(id=`{repoId}:{path}`·branch?·head·baseBranch·isPrimary·status·dirty·ahead/behind(u32)·lastFetchedAt), `WorktreeStatus`(clean/dirty/ahead/behind/diverged), `DiffMode`(working/staged/vs_base/branch_branch), `FileChange`(serde rename → `"M"/"A"/"D"/"R"`), `DiffFileSummary`(path·status·adds/dels(u32)·oldPath?·binary). **`lib.rs`:** `mod git` + 커맨드 4종 등록. bindings 재생성. **신규 의존성/권한 없음**(git=CLI, opener 재사용 안 함 — 외부 열기 없음).
-  - **프런트:** `query.ts` `useWorktrees`/`useWorktreeBranches`/`useWorktreeDiffFiles`/`useWorktreeFileDiff`(폴링 없음 — 로컬·on-demand, 파일별 diff는 `enabled` 지연 로드). `store.ts` View+=`worktree`. `App.tsx` 4-way 렌더 + Esc. `CommandPalette` "Worktree Diff로". `WorktreeView`(프로젝트 필터·repo별 그룹·worktree 상태배지(dirty/↑ahead/↓behind/clean)·4모드 탭·vs_base/branch↔branch ref picker·파일목록 먼저+파일별 diff·diff-line 색칠 + content-visibility 블록 가상화 + `MAX_DIFF_LINES=6000` 잘라 비차단). `styles.css` `.wt-*`(white editorial).
-  - **사용자 결정(세션 시작 전 AskUserQuestion):** git 접근=`git` CLI 셸아웃(git2 아님) / 영속=없음(ambient 도출). 상세는 `docs/decisions.md` Phase 5.
-  - **검증:** `cargo test` 53 passed(신규 git 파서 6 + collect/refs 3) · `cargo clippy -D warnings` clean · `pnpm typecheck`/`build` green · INVARIANTS reviewer 패스 = **7개 위반 0**(read-only #6 엄수 확인).
-- **다음 = Phase 6 (status mismatch 감지)** — `dev` 브랜치에서.
+- **Phase 0~6 완료·검증됨.** 레포 `64etuor/work-radar`(Private), `dev`.
+  - Phase 1 `6fecaff` · Phase 2 `d57f300` · Phase 3 `2e9f293` · Phase 4 `78ce36b` · Phase 5 `aed1b72` · Phase 6 = 이 세션(아직 커밋 전이면 dev에 커밋 필요).
+- **Phase 5 완료(Worktree & Branch Diff Viewer — read-only):** `git.rs`(GitProvider/CliGitProvider, read 서브커맨드만, timeout bound) + 커맨드 4종 + WorktreeView. 상세 `docs/decisions.md` Phase 5. (커밋 `aed1b72`)
+- **Phase 6 산출물(Notion↔PR status mismatch 감지 — 구현·검증됨):**
+  - **마이그레이션 0005:** `projects.notion_done_statuses TEXT`(JSON 배열 — done으로 볼 Notion 상태 이름 목록). 스냅샷은 **신규 테이블 없음** — 기존 `signals.snapshot`(0001) 재사용.
+  - **백엔드 `notion.rs`(read 신설):** `NotionReader` 트레잇(RPITIT, NotionWriter 패턴) + `HttpNotionReader`(`POST /databases/{id}/query`=read, bounded 페이지네이션 `MAX_QUERY_PAGES=10`×100, **상한 초과/cursor 누락 시 terminal Err** — 조용한 truncation 금지). 순수 파서 `extract_page_title`/`extract_page_status`(status 타입 우선→select)/`parse_query_response`.
+  - **`commands.rs`:** `sync_mismatch<P:PrProvider,R:NotionReader>` 코어(Notion anchor 전체 fetch + PR 머지 조인 → drift= `PR merged & Notion≠done`만 → dedup upsert + auto-resolve), `upsert_mismatch_signal`(unclassified 진입+suggested `q3_quick_contain` 힌트, ON CONFLICT가 quadrant/status 보존), `auto_resolve_mismatch`(false-resolve 가드: Notion 사라짐/done은 신뢰, "PR 미머지"는 `all_repos_ok`일 때만), `is_done_status`/`parse_done_statuses`/`mismatch_dedup_key`. 커맨드 `refresh_mismatch(projectId)` + `set_notion_done_statuses(projectId, statuses)`.
+  - **`models.rs`:** `Project.notionDoneStatuses`·`CreateProjectInput.notionDoneStatuses`·`WorkSignal.snapshot` 노출 + `MismatchItem`(projectId·ticket·prUrl·notionUrl·notionStatus?·escalated) DTO. **`lib.rs`** 커맨드 2종 등록. bindings 재생성.
+  - **프런트:** `query.ts` `fetchMismatch`/`useSetNotionDoneStatuses`/`MISMATCH_POLL_MS`(5분). `store.ts` View+=`mismatch`. `App.tsx` 5-way 렌더+Esc. `CommandPalette` "Status Mismatch로". `MismatchView`(프로젝트별 폴링·drift 카드·PR/백로그 열기 — `.pr-*` CSS 재사용). `ProjectCard` done 상태 편집기(`.st-done`).
+  - **사용자 결정(AskUserQuestion):** done 판정=프로젝트별 상태 이름 목록 / read 범위=backlog DB 전체 query / drift 방향=정본 케이스(PR merged + Notion≠done)만. 상세 `docs/decisions.md` Phase 6.
+  - **검증:** `cargo test` **67 passed**(mismatch 9 + notion 파서 3 + is_done/parse 2) · `cargo clippy -D warnings` clean · `pnpm typecheck`/`build` green · `cargo fmt` 적용 · INVARIANTS reviewer(critic) 패스 = **7개 PASS**(MAJOR #1 truncation→Err·MAJOR #3 부분실패 가드 테스트 수정 반영, MAJOR #2 멀티패턴 제약은 문서화).
+- **다음 = Phase 7 (Agent 스파인 — Codex 기능 전 뼈대만)** — `dev` 브랜치에서.
 
-### Phase 5 미해결/관찰 항목 (Phase 6+에서 고려)
+### Phase 6 미해결/관찰 항목 (Phase 7+에서 고려)
 
-- **실 git 실행 미관찰(헤드리스 한계):** 실제 worktree 나열·status 배지·4모드 diff·구문강조 렌더는 사용자가 `pnpm tauri dev` + 실 local 레포로 확인(PR Radar 실네트워크와 동일). cargo test는 fake `GitProvider` + 순수 파서로 검증(git이 테스트 PATH에 없을 수 있어 실 git은 제외).
-- **deferred(reviewer LOW/NIT, 미적용):** (1) `worktree_path`가 `list_worktrees` 반환 집합에 속하는지 미검증(렌더러 신뢰 경계 — 방어심화, read-only라 무해). (2) branch↔branch ref가 `..`/`HEAD@{0}` 등이어도 통과(picker 출처라 위험 낮음, `-`-prefix·`--`는 거부됨). (3) `useWorktreeBranches`가 repo 아닌 worktree 경로로 캐싱(동일 repo 중복 fetch). 필요 시 추후.
-- **외부 에디터/PR 연결:** PR Radar PR 브랜치·실행 레일(Phase 10) Codex worktree를 같은 Diff 뷰로 검수하는 연결은 데이터/뷰 준비됨 — 실제 wiring은 해당 Phase에서.
+- **실 Notion/GitHub 호출 미관찰(헤드리스 한계):** 실제 백로그 query·상태 추출·drift 카드 렌더는 사용자가 `pnpm tauri dev` + 실 토큰/백로그로 확인(PR Radar 실네트워크와 동일). cargo test는 fake `NotionReader`/`PrProvider` + 순수 파서로 검증(실 네트워크 없음).
+- **알려진 제약(reviewer MAJOR #2, 문서화):** repo가 project와 다른 `ticketKeyPattern`을 쓰면 Notion(project 패턴)↔PR(repo 패턴) 조인 키가 어긋나 drift를 놓칠 수 있음(noise는 안 늚 — INVARIANT 위반 아님). 단일 패턴/프로젝트가 현재 전제. 같은 ticket의 중복 백로그 페이지는 첫 페이지만 본다.
+- **mismatch 해소 초안(Phase 9):** Notion 업데이트 draft 자동 제안(suggestion 레일)은 Phase 9. Phase 6은 감지/escalate까지(해소는 사람이 수동, INVARIANT #2).
+- **PR 재fetch 비효율:** MismatchView가 PR Radar와 별도로 PR을 fetch(bounded라 허용). 공통화는 추후.
 
 ## 먼저 읽을 정본
 
-1. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 6** Deliverables/Done-criteria
-2. `docs/architecture.md` — §4 data model(`WorkSignal.snapshot` drift 비교), §6 SSOT, §7 dedup/auto-resolve, §3 멀티 레포(join key=`ticketKeyPattern`)
-3. `docs/decisions.md` — Phase 3(Notion)·Phase 4(PR Radar)·Phase 5(worktree) 결정
-4. `.claude/skills/{octocrab-keyring,sqlx-sqlite,tauri-specta-ipc}` · `DESIGN.md` · `AGENTS.md` · `docs/reference/commands.md`(검증 명령)
+1. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 7** Deliverables/Done-criteria
+2. `docs/architecture.md` — §4 data model(`AgentRun` 모델), §5 AgentRunner(Rust trait + CodexRunner 골격), §2 3-Rail(제안/실행 레일)
+3. `docs/decisions.md` — Phase 3(Notion)·Phase 4(PR Radar)·Phase 5(worktree)·Phase 6(mismatch) 결정
+4. `.claude/skills/{octocrab-keyring,sqlx-sqlite,tauri-specta-ipc,codex-worktree-runner}` · `DESIGN.md` · `AGENTS.md` · `docs/reference/commands.md`(검증 명령)
 
-## Phase 6 스코프 (한 번에 한 Phase, PLAN.md Phase 6 done-criteria만)
+## Phase 7 스코프 (한 번에 한 Phase, PLAN.md Phase 7 done-criteria만)
 
-PLAN.md Phase 6 핵심 — **Notion↔PR drift 감지(차별점):**
-- 티켓별 마지막 PR/Notion 스냅샷 저장 → drift 감지 → mismatch 신호(dedup + auto-resolve).
-- join key = `ticketKeyPattern`(Phase 4 `extract_ticket` 재사용). 매칭 실패는 **신호를 만들지 않는다**(noise 0).
+PLAN.md Phase 7 핵심 — **Agent 스파인(Codex 기능 전, 뼈대만):**
+- `AgentRun` 모델 + 잡 큐(동시 1~2) + bounds(timeout/turns/cost cap) + **kill switch** + Jobs 뷰.
+- `AgentRunner` trait + `CodexRunner`(=`codex exec --json`, read-only 샌드박스, worktree).
+- codex 미설치/미인증 시 **graceful degrade**(앱 핵심 100% 동작).
 
-**Done-criteria(요약):** "Notion Doing + PR Merged" 시뮬 → mismatch 정확히 1건 / Notion 갱신 시 mismatch auto-resolve / join key 매칭 실패가 noise를 만들지 않음.
+**Done-criteria(요약):** echo 잡이 bound 내 실행·Jobs 뷰 표시·kill 동작·로그 캡처 / timeout·cost cap 초과 시 kill+failed / codex 없을 때 자동화 UI 비활성·나머지 정상.
 
-**설계 선결 과제(시작 전 결정 권장):**
-- **스냅샷 저장 위치:** `WorkSignal.snapshot`(architecture §4 `prState?`/`notionState?`) 컬럼 신설 vs 별도 스냅샷 테이블 — 마이그레이션 필요 여부.
-- **Notion 상태 read:** Phase 3는 write만 했고 read 미러가 없음 → mismatch 비교용 Notion 상태(예: Status 속성) read를 어디까지 도입할지(백로그 항목별 status 폴링 범위·rate limit).
-- **mismatch 임계/방향:** 어떤 (PR상태, Notion상태) 조합을 drift로 볼지(예: PR merged + Notion≠Done) — INVARIANT #1(자동 분류 금지) 준수, escalate는 suggested 힌트만.
+**설계 선결 과제(시작 전 결정 권장 — AskUserQuestion):**
+- **Codex CLI 플래그 확인:** `exec`/`--json`/`--sandbox`/`--cd`/`-a` 실제 설치본 검증(architecture §5 주의). 미설치 감지 방식(PATH/`which`).
+- **잡 큐 영속:** `agent_runs` 테이블(0001에 이미 존재)에 영속 vs 인메모리. kill switch/동시성 제어 위치(tokio task + CancellationToken).
+- **`AgentRun` 스키마 정합:** 0001 `agent_runs` 컬럼(engine/kind/rail/sandbox/bounds/retry/status)과 architecture §4 모델 매핑 — 신규 마이그레이션 필요 여부.
+- **INVARIANT #5/#6:** 모든 잡 bound(timeout+turns+cost cap+kill) 강제, 코드 잡은 worktree 격리·기본 read-only(danger 금지).
 
 ## 운영 노트 (환경 함정)
 
@@ -60,9 +64,9 @@ PLAN.md Phase 6 핵심 — **Notion↔PR drift 감지(차별점):**
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
-work-radar Phase 6 (Notion↔PR status mismatch 감지) 구현.
-docs/HANDOFF.md → PLAN.md(§1 INVARIANTS + Phase 6) → docs/architecture.md(§4 snapshot, §6 SSOT, §7 dedup/auto-resolve)
-→ docs/decisions.md 순으로 읽고 따른다. 한 번에 한 Phase, Phase 6 done-criteria로 자가검증.
-INVARIANTS 준수(특히 #3 dedup+auto-resolve, #1 자동 분류 금지=suggested 힌트만, #7 SSOT). 작업/푸시는 dev에만.
-시작 전 스냅샷 저장 위치(WorkSignal.snapshot 컬럼 vs 별도 테이블) + Notion 상태 read 범위만 확인하고 진행.
+work-radar Phase 7 (Agent 스파인 — Codex 기능 전 뼈대만) 구현.
+docs/HANDOFF.md → PLAN.md(§1 INVARIANTS + Phase 7) → docs/architecture.md(§4 AgentRun, §5 AgentRunner, §2 3-Rail)
+→ docs/decisions.md 순으로 읽고 따른다. 한 번에 한 Phase, Phase 7 done-criteria로 자가검증.
+INVARIANTS 준수(특히 #5 모든 잡 bound=timeout/turns/cost cap/kill, #6 worktree 격리+read-only, #2 Acceptance 게이트). 작업/푸시는 dev에만.
+시작 전 Codex CLI 플래그(실 설치본) + 잡 큐 영속(agent_runs 테이블) + kill/동시성 방식만 확인하고 진행.
 ```

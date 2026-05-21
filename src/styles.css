@@ -1199,6 +1199,17 @@
   flex: 1;
 }
 
+/* Phase 6: mismatch 판정용 완료 상태 편집기 (input + 저장 버튼 한 줄). */
+.settings .st-done {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.settings .st-done .st-input {
+  flex: 1;
+}
+
 /* ──────────────────────────────────────────────────────────────────────────────
  * PR Radar (Phase 4) — readiness 버킷 뷰. white editorial(DESIGN.md), .pr 스코프.
  * ────────────────────────────────────────────────────────────────────────────── */
