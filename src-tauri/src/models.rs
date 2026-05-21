@@ -27,6 +27,9 @@ pub struct Project {
     /// "완료(done)"로 볼 Notion 상태 이름 목록 (JSON 배열 문자열). mismatch 판정 기준 (Phase 6).
     /// NULL/빈 목록이면 mismatch 감지 비활성(noise 0).
     pub notion_done_statuses: Option<String>,
+    /// 포함할 Google Calendar 선택 목록 (JSON `[{id,summary}]`). Phase 10b. NULL/빈 목록이면 fetch 없음.
+    /// INVARIANT #7: 선택 목록만 로컬 SSOT — 이벤트는 ambient(영속 없음), 토큰은 keychain.
+    pub google_calendar_ids: Option<String>,
     pub credential_ref: String,
     pub created_at: String,
     pub updated_at: String,
@@ -818,4 +821,43 @@ pub struct GoogleCalendarStatus {
     pub connected: bool,
     /// 사람이 읽을 상태 상세.
     pub detail: String,
+}
+
+/// calendarList 한 항목 (다중 선택 picker용). selected = 저장된 선택 목록에 포함됨. Phase 10b.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarListItem {
+    pub id: String,
+    pub summary: String,
+    pub primary: bool,
+    pub selected: bool,
+}
+
+/// 선택 캘린더 저장 입력 (id+summary). google_calendar_ids에 JSON `[{id,summary}]`로 영속.
+/// summary를 함께 저장해 이벤트 fetch 시 calendarList 재조회 없이 calendar_summary를 채운다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectedCalendar {
+    pub id: String,
+    pub summary: String,
+}
+
+/// 오늘 캘린더 이벤트 한 건 (ambient — DB 영속 없이 매 호출 fresh fetch, PR Radar 선례). Phase 10b.
+/// 토큰 본문 미포함(INVARIANT). start/end는 RFC3339(timed) 또는 YYYY-MM-DD(all-day). specta i64/u64 금지.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEvent {
+    pub id: String,
+    pub calendar_id: String,
+    /// 캘린더 표시 이름 (저장된 선택 목록 summary). 이벤트 제목과 별개.
+    pub calendar_summary: String,
+    pub title: String,
+    /// timed = `start.dateTime`(RFC3339), all-day = `start.date`(YYYY-MM-DD).
+    pub start: String,
+    pub end: String,
+    pub all_day: bool,
+    pub location: Option<String>,
+    /// 이벤트 딥링크 (`htmlLink`).
+    pub url: Option<String>,
+    pub project_id: String,
 }

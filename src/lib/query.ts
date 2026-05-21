@@ -9,6 +9,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   commands,
   type AreaTag,
+  type CalendarEvent,
   type CiTriageProposal,
   type CreateProjectInput,
   type CreateRepoInput,
@@ -22,6 +23,7 @@ import {
   type PromotionTarget,
   type PrSelfCheckProposal,
   type Quadrant,
+  type SelectedCalendar,
   type SignalStatus,
   type TokenKind,
   type TriageOutcome,
@@ -449,6 +451,47 @@ export function usePingGoogleCalendar() {
     mutationFn: (projectId: string) =>
       unwrap(commands.pingGoogleCalendar(projectId)),
   });
+}
+
+// ── Phase 10b: 캘린더 선택 + 이벤트 ────────────────────────────────────────────────
+
+/** calendarList(다중 선택 picker용). 연결됨일 때만 조회(enabled). */
+export function useGoogleCalendars(projectId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["googleCalendars", projectId],
+    queryFn: () => unwrap(commands.listGoogleCalendars(projectId)),
+    enabled: !!projectId && enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** 선택 캘린더 목록 저장([{id,summary}]). */
+export function useSetSelectedCalendars() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      calendars,
+    }: {
+      projectId: string;
+      calendars: SelectedCalendar[];
+    }) => unwrap(commands.setSelectedCalendars(projectId, calendars)),
+    onSuccess: (_data, v) => {
+      void qc.invalidateQueries({ queryKey: ["googleCalendars", v.projectId] });
+      void qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+}
+
+/**
+ * 오늘 캘린더 이벤트 fetch 헬퍼 (Phase 11 Today/Timeline이 소비). projectId=null이면 전체 병합.
+ * ambient read — 캐시하지 않고 호출부가 필요 시 직접 부른다(영속 없음).
+ */
+export function fetchCalendarEvents(
+  projectId: string | null,
+  date: string,
+): Promise<CalendarEvent[]> {
+  return unwrap(commands.fetchCalendarEvents(projectId, date));
 }
 
 // ── Phase 4: PR Radar (read 레일) ───────────────────────────────────────────────

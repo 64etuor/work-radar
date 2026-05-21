@@ -164,6 +164,15 @@ export const commands = {
 	 *  "Test ping" 선례). 회전된 refresh_token은 merge로 보존 저장. 실 네트워크라 cargo test 아님(사용자 관찰).
 	 */
 	pingGoogleCalendar: (projectId: string) => typedError<PingResult, string>(__TAURI_INVOKE("ping_google_calendar", { projectId })),
+	/**  calendarList 조회 + 저장된 선택 반영(selected 플래그). 미연결이면 Err(graceful degrade). */
+	listGoogleCalendars: (projectId: string) => typedError<CalendarListItem[], string>(__TAURI_INVOKE("list_google_calendars", { projectId })),
+	/**  선택 캘린더 목록을 저장(JSON [{id,summary}]). 빈 목록이면 fetch 결과 없음. */
+	setSelectedCalendars: (projectId: string, calendars: SelectedCalendar[]) => typedError<null, string>(__TAURI_INVOKE("set_selected_calendars", { projectId, calendars })),
+	/**
+	 *  선택 캘린더의 오늘 이벤트를 시간순 병합 반환(ambient). `project_id=None`이면 모든 프로젝트 병합(Today용).
+	 *  미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
+	 */
+	fetchCalendarEvents: (projectId: string | null, date: string) => typedError<CalendarEvent[], string>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date })),
 };
 
 /* Types */
@@ -210,6 +219,34 @@ export type AgentStatus = "proposed" | "awaiting_approval" | "running" | "succee
 
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
+
+/**
+ *  오늘 캘린더 이벤트 한 건 (ambient — DB 영속 없이 매 호출 fresh fetch, PR Radar 선례). Phase 10b.
+ *  토큰 본문 미포함(INVARIANT). start/end는 RFC3339(timed) 또는 YYYY-MM-DD(all-day). specta i64/u64 금지.
+ */
+export type CalendarEvent = {
+	id: string,
+	calendarId: string,
+	/**  캘린더 표시 이름 (저장된 선택 목록 summary). 이벤트 제목과 별개. */
+	calendarSummary: string,
+	title: string,
+	/**  timed = `start.dateTime`(RFC3339), all-day = `start.date`(YYYY-MM-DD). */
+	start: string,
+	end: string,
+	allDay: boolean,
+	location: string | null,
+	/**  이벤트 딥링크 (`htmlLink`). */
+	url: string | null,
+	projectId: string,
+};
+
+/**  calendarList 한 항목 (다중 선택 picker용). selected = 저장된 선택 목록에 포함됨. Phase 10b. */
+export type CalendarListItem = {
+	id: string,
+	summary: string,
+	primary: boolean,
+	selected: boolean,
+};
 
 /**  PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음. */
 export type CiStatus = "passing" | "failing" | "pending" | "none";
@@ -426,6 +463,11 @@ export type Project = {
 	 *  NULL/빈 목록이면 mismatch 감지 비활성(noise 0).
 	 */
 	notionDoneStatuses: string | null,
+	/**
+	 *  포함할 Google Calendar 선택 목록 (JSON `[{id,summary}]`). Phase 10b. NULL/빈 목록이면 fetch 없음.
+	 *  INVARIANT #7: 선택 목록만 로컬 SSOT — 이벤트는 ambient(영속 없음), 토큰은 keychain.
+	 */
+	googleCalendarIds: string | null,
 	credentialRef: string,
 	createdAt: string,
 	updatedAt: string,
@@ -502,6 +544,15 @@ export type RoutineToday = {
 
 /**  샌드박스 권한. 기본 read_only, 쓰기는 명시 승인 시에만. danger_full은 타입에 없음 (INVARIANT #6). */
 export type Sandbox = "read_only" | "workspace_write";
+
+/**
+ *  선택 캘린더 저장 입력 (id+summary). google_calendar_ids에 JSON `[{id,summary}]`로 영속.
+ *  summary를 함께 저장해 이벤트 fetch 시 calendarList 재조회 없이 calendar_summary를 채운다.
+ */
+export type SelectedCalendar = {
+	id: string,
+	summary: string,
+};
 
 /**  self-check 한 항목 (codex 제안 → 사람이 체크/수정). checked 기본 false (사람이 확인하기 전). */
 export type SelfCheckItem = {

@@ -6,20 +6,20 @@
 use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner, EchoRunner};
-use crate::calendar::{self, CalendarCreds};
+use crate::calendar::{self, CalendarCreds, CalendarProvider};
 use crate::db::Db;
 use crate::git::{summarize_status, CliGitProvider, GitProvider};
 use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
 use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
 use crate::models::{
-    AgentRail, AgentRunView, AreaTag, CiStatus, CiTriageProposal, CodexAvailability,
-    CreateProjectInput, CreateRepoInput, CreateRoutineInput, CreateSignalInput, DiffFileSummary,
-    DiffMode, Engine, EnrichProposal, FlushSummary, GoogleCalendarStatus, Kind, MismatchItem,
-    NotionUpdateProposal, PingResult, PrRadarItem, Project, Promotion, PromotionOutcome,
-    PromotionStatus, PromotionTarget, Quadrant, ReadinessBucket, Repo, RoutineToday, Sandbox,
-    SignalStatus, TokenKind, TokenStatus, TriageOutcome, TriggerCiTriageInput, TriggerCodexInput,
-    TriggerEchoInput, TriggerEnrichInput, TriggerMismatchDraftInput, TriggerPrSelfCheckInput,
-    Weekday, WorkSignal, Worktree,
+    AgentRail, AgentRunView, AreaTag, CalendarEvent, CalendarListItem, CiStatus, CiTriageProposal,
+    CodexAvailability, CreateProjectInput, CreateRepoInput, CreateRoutineInput, CreateSignalInput,
+    DiffFileSummary, DiffMode, Engine, EnrichProposal, FlushSummary, GoogleCalendarStatus, Kind,
+    MismatchItem, NotionUpdateProposal, PingResult, PrRadarItem, Project, Promotion,
+    PromotionOutcome, PromotionStatus, PromotionTarget, Quadrant, ReadinessBucket, Repo,
+    RoutineToday, Sandbox, SelectedCalendar, SignalStatus, TokenKind, TokenStatus, TriageOutcome,
+    TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput, TriggerEnrichInput,
+    TriggerMismatchDraftInput, TriggerPrSelfCheckInput, Weekday, WorkSignal, Worktree,
 };
 use crate::notion::{
     HttpNotionReader, HttpNotionWriter, NotionError, NotionPageState, NotionReader, NotionWriter,
@@ -52,7 +52,8 @@ pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, String> {
 
 /// Project SELECT/RETURNING 공통 컬럼.
 const PROJECT_COLS: &str = "id, name, kind, notion_backlog_db_id, notion_agenda_db_id, \
-     ticket_key_pattern, notion_done_statuses, credential_ref, created_at, updated_at";
+     ticket_key_pattern, notion_done_statuses, google_calendar_ids, credential_ref, \
+     created_at, updated_at";
 /// Repo SELECT/RETURNING 공통 컬럼.
 const REPO_COLS: &str = "id, project_id, provider, remote_url, local_path, default_branch, \
      ticket_key_pattern, enabled, created_at";
@@ -389,6 +390,147 @@ pub async fn ping_google_calendar(
             detail: e.to_string(),
         }),
     }
+}
+
+// ── Google Calendar 캘린더 선택 + 이벤트 (Phase 10b, read 레일) ─────────────────────
+//
+// INVARIANT #7: 선택 목록만 로컬 SQLite SSOT(projects.google_calendar_ids). 이벤트는 ambient —
+// 영속 없이 매 호출 fresh fetch(PR Radar 선례). read-only → Acceptance 불요. 토큰은 keychain.
+
+/// 프로젝트의 저장된 선택 캘린더([{id,summary}]). 미설정/빈 문자열은 빈 목록.
+async fn load_selected_calendars(
+    db: &Db,
+    project_id: &str,
+) -> Result<Vec<SelectedCalendar>, String> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT google_calendar_ids FROM projects WHERE id = ?1")
+            .bind(project_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    match row.and_then(|r| r.0) {
+        Some(s) if !s.trim().is_empty() => serde_json::from_str(&s).map_err(|e| e.to_string()),
+        _ => Ok(Vec::new()),
+    }
+}
+
+/// 프로젝트의 access token 확보(refresh로 재발급, bounded). 미연결/client 미입력이면 None.
+/// refresh_token이 회전된 경우에만 keychain을 갱신(고빈도 fetch에서 churn 최소화). 토큰 본문 미반환.
+async fn access_token_for(db: &Db, project_id: &str) -> Result<Option<String>, String> {
+    let cref = project_credential_ref(db, project_id).await?;
+    let Some(creds) = load_calendar_creds(db, project_id).await? else {
+        return Ok(None);
+    };
+    if !creds.has_refresh() {
+        return Ok(None);
+    }
+    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    let before = creds.refresh_token.clone();
+    let (access, updated) = calendar::refresh_core(&provider, creds)
+        .await
+        .map_err(|e| e.to_string())?;
+    if updated.refresh_token != before {
+        keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(Some(access))
+}
+
+/// calendarList 조회 + 저장된 선택 반영(selected 플래그). 미연결이면 Err(graceful degrade).
+#[tauri::command]
+#[specta::specta]
+pub async fn list_google_calendars(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<Vec<CalendarListItem>, String> {
+    let access = access_token_for(db.inner(), &project_id)
+        .await?
+        .ok_or_else(|| "미연결 — 먼저 연결하세요".to_string())?;
+    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    let cals = provider
+        .list_calendars(&access)
+        .await
+        .map_err(|e| e.to_string())?;
+    let selected: std::collections::HashSet<String> =
+        load_selected_calendars(db.inner(), &project_id)
+            .await?
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+    Ok(cals
+        .into_iter()
+        .map(|c| CalendarListItem {
+            selected: selected.contains(&c.id),
+            id: c.id,
+            summary: c.summary,
+            primary: c.primary,
+        })
+        .collect())
+}
+
+/// 선택 캘린더 목록을 저장(JSON [{id,summary}]). 빈 목록이면 fetch 결과 없음.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_selected_calendars(
+    db: State<'_, Db>,
+    project_id: String,
+    calendars: Vec<SelectedCalendar>,
+) -> Result<(), String> {
+    let json = serde_json::to_string(&calendars).map_err(|e| e.to_string())?;
+    sqlx::query(
+        "UPDATE projects SET google_calendar_ids = ?2, updated_at = datetime('now') WHERE id = ?1",
+    )
+    .bind(&project_id)
+    .bind(json)
+    .execute(db.inner())
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 선택 캘린더의 오늘 이벤트를 시간순 병합 반환(ambient). `project_id=None`이면 모든 프로젝트 병합(Today용).
+/// 미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
+#[tauri::command]
+#[specta::specta]
+pub async fn fetch_calendar_events(
+    db: State<'_, Db>,
+    project_id: Option<String>,
+    date: String,
+) -> Result<Vec<CalendarEvent>, String> {
+    let offset = calendar::local_offset();
+    let (time_min, time_max) = calendar::today_window(&date, &offset);
+
+    let project_ids: Vec<String> = match project_id {
+        Some(p) => vec![p],
+        None => fetch_projects(db.inner())
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|p| p.id)
+            .collect(),
+    };
+
+    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    let mut ctxs = Vec::new();
+    for pid in project_ids {
+        // 프로젝트별 부분 실패 격리: 미연결/refresh 실패/선택 없음은 건너뛴다.
+        let Ok(Some(access)) = access_token_for(db.inner(), &pid).await else {
+            continue;
+        };
+        let calendars = load_selected_calendars(db.inner(), &pid)
+            .await
+            .unwrap_or_default();
+        if calendars.is_empty() {
+            continue;
+        }
+        ctxs.push(calendar::ProjectCalendars {
+            project_id: pid,
+            access_token: access,
+            calendars: calendars.into_iter().map(|c| (c.id, c.summary)).collect(),
+        });
+    }
+
+    Ok(calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await)
 }
 
 // ── projectId 태깅 / reconcile (Phase 1 kind 힌트 → projectId) ─────────────────

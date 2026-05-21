@@ -100,6 +100,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::google_calendar_status,
         commands::disconnect_google,
         commands::ping_google_calendar,
+        // Google Calendar 캘린더 선택 + 이벤트 (read 레일, Phase 10b).
+        commands::list_google_calendars,
+        commands::set_selected_calendars,
+        commands::fetch_calendar_events,
     ])
 }
 

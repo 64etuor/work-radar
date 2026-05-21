@@ -198,6 +198,46 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    /// Phase 10b 마이그레이션(0006): projects.google_calendar_ids 컬럼 + JSON write/read.
+    #[tokio::test]
+    async fn migration_0006_adds_google_calendar_ids() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let cols: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('projects') WHERE name = 'google_calendar_ids'",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query projects columns failed");
+        assert_eq!(
+            cols.len(),
+            1,
+            "expected google_calendar_ids column from 0006"
+        );
+
+        // 선택 목록 JSON write/read 라운드트립 (선택 목록은 로컬 SQLite SSOT — INVARIANT #7).
+        sqlx::query(
+            "INSERT INTO projects (id, name, kind, credential_ref, google_calendar_ids) \
+             VALUES ('p-cal', '업무', 'work', 'cref-cal', '[{\"id\":\"primary\",\"summary\":\"내 캘린더\"}]')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project with calendars failed");
+        let ids: (Option<String>,) =
+            sqlx::query_as("SELECT google_calendar_ids FROM projects WHERE id='p-cal'")
+                .fetch_one(&pool)
+                .await
+                .expect("read google_calendar_ids failed");
+        assert_eq!(
+            ids.0.as_deref(),
+            Some("[{\"id\":\"primary\",\"summary\":\"내 캘린더\"}]")
+        );
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
     #[tokio::test]
     async fn list_projects_returns_empty_on_fresh_db() {
         let path = temp_db_path();

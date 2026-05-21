@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useDisconnectGoogle,
   useGoogleCalendarStatus,
+  useGoogleCalendars,
   usePingGoogleCalendar,
   useSetGoogleOauthClient,
+  useSetSelectedCalendars,
   useStartGoogleOauth,
 } from "@/lib/query";
 
@@ -157,6 +159,94 @@ export function GoogleCalendarBlock({
           {pingResult.ok ? "✓ " : "✗ "}
           {pingResult.detail}
         </div>
+      )}
+
+      {connected && <CalendarPicker projectId={projectId} onToast={onToast} />}
+    </div>
+  );
+}
+
+/**
+ * 연결된 프로젝트의 calendarList 다중 선택 (Phase 10b). 포함할 캘린더를 체크해 저장하면
+ * fetch_calendar_events가 그 캘린더들의 오늘 이벤트만 병합한다. 선택 목록만 로컬 SQLite SSOT.
+ */
+function CalendarPicker({
+  projectId,
+  onToast,
+}: {
+  projectId: string;
+  onToast: (msg: string) => void;
+}) {
+  const calendars = useGoogleCalendars(projectId, true);
+  const save = useSetSelectedCalendars();
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+
+  // 로드된 selected 플래그로 체크 상태를 시드(한 번).
+  useEffect(() => {
+    if (calendars.data) {
+      setChecked(
+        new Set(calendars.data.filter((c) => c.selected).map((c) => c.id)),
+      );
+    }
+  }, [calendars.data]);
+
+  const toggle = (id: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const submit = () => {
+    if (save.isPending || !calendars.data) return;
+    const selected = calendars.data
+      .filter((c) => checked.has(c.id))
+      .map((c) => ({ id: c.id, summary: c.summary }));
+    save.mutate(
+      { projectId, calendars: selected },
+      {
+        onSuccess: () =>
+          onToast(
+            selected.length > 0
+              ? `캘린더 ${selected.length}개 선택 저장`
+              : "캘린더 선택 비움",
+          ),
+      },
+    );
+  };
+
+  return (
+    <div className="st-cal">
+      <div className="st-subhead">포함할 캘린더</div>
+      {calendars.isLoading && <div className="st-empty">불러오는 중…</div>}
+      {calendars.isError && (
+        <div className="st-err">{String(calendars.error)}</div>
+      )}
+      {calendars.data && calendars.data.length === 0 && (
+        <div className="st-empty">캘린더가 없습니다.</div>
+      )}
+      {calendars.data?.map((c) => (
+        <label key={c.id} className="st-cal-item">
+          <input
+            type="checkbox"
+            checked={checked.has(c.id)}
+            onChange={() => toggle(c.id)}
+          />
+          <span className="st-cal-name">{c.summary}</span>
+          {c.primary && <span className="st-cal-tag">기본</span>}
+        </label>
+      ))}
+      {calendars.data && calendars.data.length > 0 && (
+        <button
+          type="button"
+          className="st-btn sm"
+          onClick={submit}
+          disabled={save.isPending}
+        >
+          {save.isPending ? "저장 중…" : "선택 저장"}
+        </button>
       )}
     </div>
   );

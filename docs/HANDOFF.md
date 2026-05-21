@@ -1,4 +1,4 @@
-# Work Radar — 세션 핸드오프 (현재: Phase 10a 완료 · 다음 = Phase 10b 캘린더 선택+이벤트)
+# Work Radar — 세션 핸드오프 (현재: Phase 10 Google Calendar 완료 · 다음 = Phase 11 Today/Timeline/Work Debt)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
@@ -36,7 +36,14 @@
   - **프런트:** `query.ts` `useGoogleCalendarStatus`/`useSetGoogleOauthClient`/`useStartGoogleOauth`/`useDisconnectGoogle`/`usePingGoogleCalendar`(토큰 본문 캐시 미저장). `settings/GoogleCalendarBlock.tsx`(신설) — client_id/secret 입력(password, 저장 직후 비움) → 연결 → 상태 배지/graceful degrade 안내 → Test 연결 → 연결 해제. `ProjectCard`에 블록 + `styles.css` `.st-hint`.
   - **검증:** `cargo test` **98 passed**(+13) · clippy -D warnings clean · cargo fmt --check green · pnpm typecheck/build green(1759 modules) · INVARIANTS reviewer(critic) **7개 PASS, BLOCKER·MAJOR 0**(MINOR 2: loopback bind 실패=Terminal 분류 / 단발 read 4096B — 둘 다 폴리시, 정확성 결함 아님). **실 OAuth/브라우저/Google 토큰 교환·refresh/keychain 영속/재부팅/macOS loopback 방화벽은 사용자 관찰**(`pnpm tauri dev`).
 - **옛 Phase 10 (실행 레일) = 폐기(2026-05-21, 사용자 결정).** 앱 내 Codex 백로그 구현(`workspace-write`+push+draft PR)은 외부 코딩 에이전트와 중복·고위험이라 들어냄. 근거: `docs/decisions.md`("(폐기) 옛 Phase 10") / `PLAN.md` 부록.
-- **다음 = Phase 10b (캘린더 선택 + 이벤트)** — `dev` 브랜치에서. 정본: **`docs/specs/phase-10-google-calendar.md`** §11 PR2. migration 0006(`projects.google_calendar_ids`) · `CalendarProvider`에 `list_calendars`/`fetch_events` 확장 + 순수 파싱(`parse_calendar_list`/`parse_calendar_event`/`today_window`/`merge_sort_events`) · `list_google_calendars`/`set_selected_calendars`/`fetch_calendar_events`(코어는 트레잇 fake로 병합·부분실패 격리 테스트) · Settings 다중 캘린더 picker. 선례: 이번 `calendar.rs`(트레잇 seam·순수함수·bounded) + 0005 ALTER 마이그레이션. 그다음 **Phase 11**(Today/Timeline/Weekly/Work Debt)이 캘린더를 소비.
+- **Phase 10b 산출물(캘린더 선택 + 이벤트 — read 레일; 구현·검증됨):**
+  - **`migrations/0006_google_calendar_ids.sql`(신설):** `projects.google_calendar_ids TEXT`(선택 캘린더 JSON `[{id,summary}]`). Project struct + PROJECT_COLS + db.rs 마이그레이션 테스트.
+  - **`calendar.rs`:** `RawCalendar`/`RawEvent`(내부) + 순수 `parse_calendar_list`/`parse_calendar_event`(timed `dateTime` vs all-day `date`·관용)/`today_window(date,offset)`/`local_offset()`(chrono Local)/`encode_path_segment`(cal_id @·# 등 %XX)/`merge_sort_events`(all-day 먼저, instant 정렬). `CalendarProvider`에 `list_calendars`/`fetch_events` 확장 + Http 구현(`get_json` Bearer GET, bounded retry, `maxResults=50`). 제네릭 `fetch_events_core`(캘린더별 부분 실패 격리 + 병합) — fake로 cargo test.
+  - **`models.rs`:** `CalendarListItem{id,summary,primary,selected}` · `CalendarEvent{id,calendarId,calendarSummary,title,start,end,allDay,location?,url?,projectId}`(ambient — 영속 없음) · `SelectedCalendar{id,summary}`(저장 입력).
+  - **`commands.rs`:** `list_google_calendars`(저장 선택 반영) · `set_selected_calendars`(로컬 SQLite UPDATE — 외부 무변경) · `fetch_calendar_events(projectId|null, date)`(None=전 프로젝트 병합, 미연결/refresh 실패/선택 없음 프로젝트 격리). 헬퍼 `access_token_for`(매 fetch refresh, 회전 시에만 keychain 갱신 — 캐시는 보류). **`lib.rs`** 3커맨드 등록.
+  - **프런트:** `query.ts` `useGoogleCalendars`/`useSetSelectedCalendars` + `fetchCalendarEvents` 헬퍼(Phase 11 소비용). `GoogleCalendarBlock`에 `CalendarPicker`(연결 시 calendarList 다중 체크박스 + 저장) + `styles.css` `.st-cal-*`.
+  - **검증:** `cargo test` **105 passed**(+7) · clippy -D warnings clean · cargo fmt --check green · pnpm typecheck/build green(1759 modules) · INVARIANTS reviewer 패스. **실 Google calendarList/이벤트 fetch·다중 캘린더 병합·keychain은 사용자 관찰**(`pnpm tauri dev`).
+- **다음 = Phase 11 (Today / Timeline / Weekly review / Work Debt)** — `dev`. PLAN.md Phase 11. Today가 **Phase 10 `fetchCalendarEvents(projectId|null, date)`** 헬퍼로 오늘 이벤트를 소비(Q1 + focus + PR attention + 미분류 수 + Today 레일 + 오늘 루틴과 함께 집계). Timeline/Weekly review 정의는 착수 시 brainstorming으로 확정(decisions.md "Phase 11 재정의": 현재 미정). 캘린더 access token 캐시(in-memory CalendarManager)는 Phase 11 폴링 빈도 보고 재검토(현재 매 fetch refresh, bounded).
 
 ### Phase 9 미해결/관찰 항목 (Phase 10+에서 고려)
 

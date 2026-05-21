@@ -19,6 +19,8 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::models::CalendarEvent;
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 /// 한 토큰 교환/갱신 시도 내 재시도 횟수 캡 (INVARIANT #5: 무한 retry 금지).
 const MAX_ATTEMPTS: u32 = 3;
@@ -31,6 +33,10 @@ const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 /// read-only 스코프 — 외부 mutate 불가(INVARIANT #2: Acceptance 불요).
 const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
+const CALENDAR_LIST_URL: &str = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
+const CALENDAR_API_BASE: &str = "https://www.googleapis.com/calendar/v3/calendars";
+/// events 조회 상한(bounded — 무한 페이지네이션 금지). 오늘 윈도우라 단발로 충분.
+const EVENTS_MAX_RESULTS: &str = "50";
 
 /// loopback에 redirect 도착 시 사용자 브라우저에 보여줄 최소 HTML(200).
 const SUCCESS_HTML: &str = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\nContent-Length: 96\r\n\r\n<html><body style=\"font-family:sans-serif\"><h3>연결되었습니다.</h3><p>이 창을 닫아도 됩니다.</p></body></html>";
@@ -250,8 +256,8 @@ pub fn parse_token_response(body: &serde_json::Value) -> Result<TokenResponse, C
 
 // ── 트레잇 seam (RPITIT, PrProvider/NotionReader 패턴) ────────────────────────────
 
-/// OAuth 토큰 교환/갱신 계약. connect/refresh 오케스트레이션은 이 트레잇에만 의존 → fake로 cargo test.
-/// (이번 PR=10a는 교환/갱신만. calendarList/events fetch는 10b에서 트레잇 확장.)
+/// OAuth 토큰 교환/갱신 + 캘린더/이벤트 read 계약. 오케스트레이션(connect/refresh/fetch)은 이
+/// 트레잇에만 의존 → fake로 cargo test(병합·부분실패 격리). 실 HTTP는 HttpCalendarProvider.
 pub trait CalendarProvider {
     /// authorization code → 토큰(첫 동의: refresh_token 포함). PKCE verifier·redirect_uri 동봉.
     fn exchange_code(
@@ -267,6 +273,21 @@ pub trait CalendarProvider {
         &self,
         creds: &CalendarCreds,
     ) -> impl std::future::Future<Output = Result<TokenResponse, CalendarError>> + Send;
+
+    /// 사용자 calendarList(포함 캘린더 다중 선택용). bounded retry.
+    fn list_calendars(
+        &self,
+        access_token: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<RawCalendar>, CalendarError>> + Send;
+
+    /// 한 캘린더의 [time_min, time_max] 이벤트(singleEvents 전개·시작순). bounded.
+    fn fetch_events(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        time_min: &str,
+        time_max: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<RawEvent>, CalendarError>> + Send;
 }
 
 /// 코드 교환 후 자격증명 갱신(refresh_token 병합). 첫 동의면 refresh_token 필수 — 없으면 Terminal.
@@ -307,6 +328,186 @@ pub async fn refresh_core<P: CalendarProvider>(
     let access = resp.access_token.clone();
     let updated = merge_refresh(creds, &resp);
     Ok((access, updated))
+}
+
+// ── 캘린더/이벤트 read (Phase 10b) — Raw 타입 + 순수 파싱 + 윈도잉 + 병합 + 코어 ──────────
+
+/// provider가 반환하는 raw 캘린더(선택 플래그는 commands가 입힌다 — github.rs RawPr 선례).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawCalendar {
+    pub id: String,
+    pub summary: String,
+    pub primary: bool,
+}
+
+/// provider가 반환하는 raw 이벤트(project_id/calendar_summary는 fetch_events_core가 입힌다).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawEvent {
+    pub id: String,
+    pub title: String,
+    /// timed = RFC3339(`start.dateTime`), all-day = YYYY-MM-DD(`start.date`).
+    pub start: String,
+    pub end: String,
+    pub all_day: bool,
+    pub location: Option<String>,
+    pub url: Option<String>,
+}
+
+/// calendarList 응답(JSON) → RawCalendar 목록. id 없는 항목은 건너뛴다(관용). 순수.
+pub fn parse_calendar_list(body: &serde_json::Value) -> Vec<RawCalendar> {
+    let mut out = Vec::new();
+    if let Some(items) = body.get("items").and_then(|i| i.as_array()) {
+        for it in items {
+            let Some(id) = it.get("id").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            // summary 없으면 id로 폴백.
+            let summary = it
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or(id)
+                .to_string();
+            let primary = it.get("primary").and_then(|v| v.as_bool()).unwrap_or(false);
+            out.push(RawCalendar {
+                id: id.to_string(),
+                summary,
+                primary,
+            });
+        }
+    }
+    out
+}
+
+/// events 응답의 한 item(JSON) → RawEvent. id/start 없으면 None(관용). 순수.
+/// timed = `start.dateTime`(RFC3339), all-day = `start.date`(YYYY-MM-DD).
+pub fn parse_calendar_event(item: &serde_json::Value) -> Option<RawEvent> {
+    let id = item.get("id").and_then(|v| v.as_str())?.to_string();
+    let start_obj = item.get("start")?;
+    let (start, all_day) = match start_obj.get("dateTime").and_then(|v| v.as_str()) {
+        Some(dt) => (dt.to_string(), false),
+        None => (
+            start_obj.get("date").and_then(|v| v.as_str())?.to_string(),
+            true,
+        ),
+    };
+    // end는 누락 관용(없으면 start로). all-day는 end.date(exclusive)일 수 있으나 표시용이라 그대로.
+    let end = item
+        .get("end")
+        .and_then(|e| {
+            e.get("dateTime")
+                .or_else(|| e.get("date"))
+                .and_then(|v| v.as_str())
+        })
+        .unwrap_or(&start)
+        .to_string();
+    let title = item
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .unwrap_or("(제목 없음)")
+        .to_string();
+    let location = item
+        .get("location")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let url = item
+        .get("htmlLink")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    Some(RawEvent {
+        id,
+        title,
+        start,
+        end,
+        all_day,
+        location,
+        url,
+    })
+}
+
+/// 오늘 윈도우 [00:00:00, 23:59:59] (RFC3339, 주어진 로컬 오프셋). 순수.
+pub fn today_window(date: &str, offset: &str) -> (String, String) {
+    (
+        format!("{date}T00:00:00{offset}"),
+        format!("{date}T23:59:59{offset}"),
+    )
+}
+
+/// 시스템 로컬 UTC 오프셋 문자열("+09:00" 등). chrono Local (시스템 시계 — 순수 아님).
+pub fn local_offset() -> String {
+    chrono::Local::now().offset().to_string()
+}
+
+/// path segment percent-encoding(unreserved 외 %XX). cal_id의 @·# 등 안전 처리. 순수.
+pub fn encode_path_segment(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// 다중 캘린더 이벤트를 시작시각 순으로 정렬(병합). all-day(date-only)는 앞. 순수.
+pub fn merge_sort_events(mut events: Vec<CalendarEvent>) -> Vec<CalendarEvent> {
+    events.sort_by_key(event_sort_key);
+    events
+}
+
+/// 정렬 키: timed는 instant(초), all-day(date-only=파싱 실패)는 맨 앞. 보조키=start 문자열.
+/// (오늘 윈도우라 같은 날짜 — 오프셋이 섞여도 instant 비교로 안정 정렬.)
+fn event_sort_key(e: &CalendarEvent) -> (i64, String) {
+    let ts = chrono::DateTime::parse_from_rfc3339(&e.start)
+        .map(|dt| dt.timestamp())
+        .unwrap_or(i64::MIN);
+    (ts, e.start.clone())
+}
+
+/// 한 프로젝트의 fetch 컨텍스트(access token + 선택 캘린더 [(id, summary)]).
+pub struct ProjectCalendars {
+    pub project_id: String,
+    pub access_token: String,
+    pub calendars: Vec<(String, String)>,
+}
+
+/// 여러 프로젝트의 선택 캘린더 오늘 이벤트를 시간순 병합. 캘린더별 실패는 격리(건너뜀 — 부분 실패).
+/// 프로젝트별 실패(토큰/refresh)는 호출자가 ctx를 만들 때 격리한다. 트레잇 의존 → fake로 cargo test.
+pub async fn fetch_events_core<P: CalendarProvider>(
+    provider: &P,
+    projects: Vec<ProjectCalendars>,
+    time_min: &str,
+    time_max: &str,
+) -> Vec<CalendarEvent> {
+    let mut out: Vec<CalendarEvent> = Vec::new();
+    for proj in projects {
+        for (cal_id, cal_summary) in &proj.calendars {
+            // 부분 실패 격리: 한 캘린더 fetch 실패는 건너뛰고 나머지는 계속.
+            let Ok(raws) = provider
+                .fetch_events(&proj.access_token, cal_id, time_min, time_max)
+                .await
+            else {
+                continue;
+            };
+            for r in raws {
+                out.push(CalendarEvent {
+                    id: r.id,
+                    calendar_id: cal_id.clone(),
+                    calendar_summary: cal_summary.clone(),
+                    title: r.title,
+                    start: r.start,
+                    end: r.end,
+                    all_day: r.all_day,
+                    location: r.location,
+                    url: r.url,
+                    project_id: proj.project_id.clone(),
+                });
+            }
+        }
+    }
+    merge_sort_events(out)
 }
 
 // ── loopback 서버 (실 OAuth 흐름 — cargo test 아님, 사용자 관찰) ────────────────────
@@ -407,6 +608,30 @@ impl HttpCalendarProvider {
             .map_err(|e| CalendarError::Terminal(format!("token parse: {e}")))?;
         parse_token_response(&json)
     }
+
+    /// Bearer GET → JSON 1회(read). 200대가 아니면 분류된 에러.
+    async fn get_json(
+        &self,
+        url: &str,
+        access_token: &str,
+        query: &[(&str, &str)],
+    ) -> Result<serde_json::Value, CalendarError> {
+        let resp = self
+            .http
+            .get(url)
+            .bearer_auth(access_token)
+            .query(query)
+            .send()
+            .await
+            .map_err(|e| classify_reqwest(&e))?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        if !(200..300).contains(&status) {
+            return Err(classify_http(status, &body));
+        }
+        serde_json::from_str(&body)
+            .map_err(|e| CalendarError::Terminal(format!("calendar parse: {e}")))
+    }
 }
 
 impl CalendarProvider for HttpCalendarProvider {
@@ -441,6 +666,46 @@ impl CalendarProvider for HttpCalendarProvider {
             ("grant_type", "refresh_token"),
         ];
         with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| self.post_token(&form)).await
+    }
+
+    async fn list_calendars(&self, access_token: &str) -> Result<Vec<RawCalendar>, CalendarError> {
+        let no_query: [(&str, &str); 0] = [];
+        let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.get_json(CALENDAR_LIST_URL, access_token, &no_query)
+        })
+        .await?;
+        Ok(parse_calendar_list(&json))
+    }
+
+    async fn fetch_events(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        time_min: &str,
+        time_max: &str,
+    ) -> Result<Vec<RawEvent>, CalendarError> {
+        // cal_id는 path segment라 percent-encode(이메일/그룹 id의 @·# 등).
+        let url = format!(
+            "{CALENDAR_API_BASE}/{}/events",
+            encode_path_segment(calendar_id)
+        );
+        let query = [
+            ("timeMin", time_min),
+            ("timeMax", time_max),
+            ("singleEvents", "true"),
+            ("orderBy", "startTime"),
+            ("maxResults", EVENTS_MAX_RESULTS),
+        ];
+        let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.get_json(&url, access_token, &query)
+        })
+        .await?;
+        let items = json
+            .get("items")
+            .and_then(|i| i.as_array())
+            .map(|a| a.as_slice())
+            .unwrap_or(&[]);
+        Ok(items.iter().filter_map(parse_calendar_event).collect())
     }
 }
 
@@ -634,11 +899,27 @@ mod tests {
         ));
     }
 
-    // ── 트레잇 seam: connect_core / refresh_core 오케스트레이션 (fake provider) ──────
+    // ── 트레잇 seam: connect_core / refresh_core / fetch_events_core (fake provider) ──────
+
+    use std::collections::HashMap;
 
     struct FakeProvider {
         exchange: Result<TokenResponse, CalendarError>,
         refresh: Result<TokenResponse, CalendarError>,
+        calendars: Vec<RawCalendar>,
+        /// calendar_id → 결과(없으면 빈 목록). Err로 부분 실패 격리 검증.
+        events: HashMap<String, Result<Vec<RawEvent>, CalendarError>>,
+    }
+
+    impl Default for FakeProvider {
+        fn default() -> Self {
+            FakeProvider {
+                exchange: Err(CalendarError::Terminal("unset".into())),
+                refresh: Err(CalendarError::Terminal("unset".into())),
+                calendars: Vec::new(),
+                events: HashMap::new(),
+            }
+        }
     }
 
     impl CalendarProvider for FakeProvider {
@@ -656,6 +937,24 @@ mod tests {
             _creds: &CalendarCreds,
         ) -> Result<TokenResponse, CalendarError> {
             self.refresh.clone()
+        }
+        async fn list_calendars(
+            &self,
+            _access_token: &str,
+        ) -> Result<Vec<RawCalendar>, CalendarError> {
+            Ok(self.calendars.clone())
+        }
+        async fn fetch_events(
+            &self,
+            _access_token: &str,
+            calendar_id: &str,
+            _time_min: &str,
+            _time_max: &str,
+        ) -> Result<Vec<RawEvent>, CalendarError> {
+            self.events
+                .get(calendar_id)
+                .cloned()
+                .unwrap_or_else(|| Ok(Vec::new()))
         }
     }
 
@@ -676,7 +975,7 @@ mod tests {
                 refresh_token: Some("RT".into()),
                 expires_in: 3600,
             }),
-            refresh: Err(CalendarError::Terminal("unused".into())),
+            ..Default::default()
         };
         let out = connect_core(
             &provider,
@@ -700,7 +999,7 @@ mod tests {
                 refresh_token: None,
                 expires_in: 3600,
             }),
-            refresh: Err(CalendarError::Terminal("unused".into())),
+            ..Default::default()
         };
         let r = connect_core(
             &provider,
@@ -722,12 +1021,12 @@ mod tests {
             refresh_token: Some("OLD".into()),
         };
         let provider = FakeProvider {
-            exchange: Err(CalendarError::Terminal("unused".into())),
             refresh: Ok(TokenResponse {
                 access_token: "fresh".into(),
                 refresh_token: None,
                 expires_in: 3600,
             }),
+            ..Default::default()
         };
         let (access, updated) = refresh_core(&provider, connected).await.unwrap();
         assert_eq!(access, "fresh");
@@ -741,11 +1040,170 @@ mod tests {
     /// refresh_core: refresh_token 없으면(미연결) Terminal — provider 호출 없이 막힌다.
     #[tokio::test]
     async fn refresh_core_errors_when_not_connected() {
-        let provider = FakeProvider {
-            exchange: Err(CalendarError::Terminal("unused".into())),
-            refresh: Err(CalendarError::Terminal("unused".into())),
-        };
+        let provider = FakeProvider::default();
         let r = refresh_core(&provider, client_only()).await;
         assert!(matches!(r, Err(CalendarError::Terminal(_))));
+    }
+
+    // ── Phase 10b: 캘린더/이벤트 read 순수 함수 + fetch_events_core ──────────────────
+
+    /// calendarList 파싱: id/summary/primary, summary 누락은 id 폴백, id 없는 항목 스킵.
+    #[test]
+    fn parse_calendar_list_extracts_items() {
+        let body = serde_json::json!({
+            "items": [
+                { "id": "primary", "summary": "내 캘린더", "primary": true },
+                { "id": "team@group.calendar.google.com", "summary": "팀" },
+                { "summary": "id 없음 — 스킵" }
+            ]
+        });
+        let cals = parse_calendar_list(&body);
+        assert_eq!(cals.len(), 2);
+        assert_eq!(cals[0].id, "primary");
+        assert!(cals[0].primary);
+        assert_eq!(cals[1].id, "team@group.calendar.google.com");
+        assert!(!cals[1].primary);
+        // summary 폴백.
+        let no_summary = serde_json::json!({ "items": [ { "id": "x" } ] });
+        assert_eq!(parse_calendar_list(&no_summary)[0].summary, "x");
+    }
+
+    /// 이벤트 파싱: timed(dateTime) vs all-day(date), end 누락 관용, id/start 없으면 None.
+    #[test]
+    fn parse_calendar_event_timed_and_all_day() {
+        let timed = serde_json::json!({
+            "id": "e1", "summary": "스탠드업",
+            "start": { "dateTime": "2026-05-21T09:00:00+09:00" },
+            "end": { "dateTime": "2026-05-21T09:30:00+09:00" },
+            "location": "Zoom", "htmlLink": "https://cal/e1"
+        });
+        let r = parse_calendar_event(&timed).unwrap();
+        assert!(!r.all_day);
+        assert_eq!(r.start, "2026-05-21T09:00:00+09:00");
+        assert_eq!(r.location.as_deref(), Some("Zoom"));
+        assert_eq!(r.url.as_deref(), Some("https://cal/e1"));
+
+        let all_day = serde_json::json!({
+            "id": "e2", "summary": "휴가", "start": { "date": "2026-05-21" }
+        });
+        let r2 = parse_calendar_event(&all_day).unwrap();
+        assert!(r2.all_day);
+        assert_eq!(r2.start, "2026-05-21");
+        assert_eq!(r2.end, "2026-05-21", "end 누락 시 start 폴백");
+
+        // 제목 누락 관용.
+        let no_title = serde_json::json!({ "id": "e3", "start": { "date": "2026-05-21" } });
+        assert_eq!(
+            parse_calendar_event(&no_title).unwrap().title,
+            "(제목 없음)"
+        );
+        // id/start 없으면 None.
+        assert!(parse_calendar_event(&serde_json::json!({ "summary": "x" })).is_none());
+        assert!(parse_calendar_event(&serde_json::json!({ "id": "x" })).is_none());
+    }
+
+    /// today_window: 주어진 오프셋으로 [00:00:00, 23:59:59] RFC3339.
+    #[test]
+    fn today_window_builds_rfc3339_bounds() {
+        assert_eq!(
+            today_window("2026-05-21", "+09:00"),
+            (
+                "2026-05-21T00:00:00+09:00".into(),
+                "2026-05-21T23:59:59+09:00".into()
+            )
+        );
+        assert_eq!(
+            today_window("2026-05-21", "-05:00"),
+            (
+                "2026-05-21T00:00:00-05:00".into(),
+                "2026-05-21T23:59:59-05:00".into()
+            )
+        );
+    }
+
+    /// path segment 인코딩: unreserved 보존, @·# 등은 %XX.
+    #[test]
+    fn encode_path_segment_escapes_reserved() {
+        assert_eq!(encode_path_segment("primary"), "primary");
+        assert_eq!(
+            encode_path_segment("a@b.com"),
+            "a%40b.com",
+            "@→%40, .은 보존"
+        );
+        assert_eq!(encode_path_segment("#contacts"), "%23contacts");
+    }
+
+    fn ev(id: &str, start: &str, all_day: bool) -> RawEvent {
+        RawEvent {
+            id: id.into(),
+            title: id.into(),
+            start: start.into(),
+            end: start.into(),
+            all_day,
+            location: None,
+            url: None,
+        }
+    }
+
+    /// fetch_events_core: 다중 캘린더 병합·시간순 정렬(all-day 먼저)·캘린더별 실패 격리.
+    #[tokio::test]
+    async fn fetch_events_core_merges_sorts_isolates() {
+        let mut events = HashMap::new();
+        events.insert(
+            "calA".into(),
+            Ok(vec![
+                ev("noon", "2026-05-21T12:00:00+09:00", false),
+                ev("morning", "2026-05-21T09:00:00+09:00", false),
+            ]),
+        );
+        events.insert("calAllDay".into(), Ok(vec![ev("vac", "2026-05-21", true)]));
+        events.insert(
+            "calBoom".into(),
+            Err(CalendarError::Terminal("boom".into())),
+        );
+        let provider = FakeProvider {
+            events,
+            ..Default::default()
+        };
+        let projects = vec![
+            ProjectCalendars {
+                project_id: "pA".into(),
+                access_token: "a".into(),
+                calendars: vec![
+                    ("calA".into(), "업무".into()),
+                    ("calAllDay".into(), "개인".into()),
+                ],
+            },
+            ProjectCalendars {
+                project_id: "pB".into(),
+                access_token: "b".into(),
+                calendars: vec![("calBoom".into(), "깨짐".into())], // 실패 → 격리
+            },
+        ];
+        let out = fetch_events_core(&provider, projects, "min", "max").await;
+        // calBoom은 격리, 나머지 3건. all-day 먼저 → 09:00 → 12:00.
+        let ids: Vec<&str> = out.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, vec!["vac", "morning", "noon"]);
+        assert_eq!(out[0].calendar_summary, "개인");
+        assert_eq!(out[0].project_id, "pA");
+        assert!(out[0].all_day);
+    }
+
+    /// fetch_events_core: 빈 선택은 빈 결과(미연결/선택 없음 graceful).
+    #[tokio::test]
+    async fn fetch_events_core_empty_selection_is_empty() {
+        let provider = FakeProvider::default();
+        let out = fetch_events_core(
+            &provider,
+            vec![ProjectCalendars {
+                project_id: "p".into(),
+                access_token: "a".into(),
+                calendars: vec![],
+            }],
+            "min",
+            "max",
+        )
+        .await;
+        assert!(out.is_empty());
     }
 }
