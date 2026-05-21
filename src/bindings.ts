@@ -144,6 +144,26 @@ export const commands = {
 	 *  **실제 Notion 상태 변경은 사람이 수동으로** — 여기서 외부를 mutate하지 않는다(사용자 결정).
 	 */
 	acceptMismatchDraft: (runId: string, accepted: NotionUpdateProposal) => typedError<null, string>(__TAURI_INVOKE("accept_mismatch_draft", { runId, accepted })),
+	/**
+	 *  OAuth client(client_id/secret)을 keychain blob에 저장(반환 없음). 같은 client면 refresh_token 보존,
+	 *  client가 바뀌면 refresh_token은 버린다(다른 client엔 무효 — 재연결 필요).
+	 */
+	setGoogleOauthClient: (projectId: string, clientId: string, clientSecret: string) => typedError<null, string>(__TAURI_INVOKE("set_google_oauth_client", { projectId, clientId, clientSecret })),
+	/**
+	 *  loopback + PKCE(S256) OAuth 실행 → refresh_token을 keychain blob에 저장. bounded(loopback timeout).
+	 *  client 미입력이면 Err(graceful degrade). 실 네트워크/브라우저라 cargo test 아님(사용자 관찰).
+	 */
+	startGoogleOauth: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("start_google_oauth", { projectId })),
+	/**  연결 상태(client 입력됨 / refresh_token 보유). 토큰 본문 미노출(graceful degrade 판정용). */
+	googleCalendarStatus: (projectId: string) => typedError<GoogleCalendarStatus, string>(__TAURI_INVOKE("google_calendar_status", { projectId })),
+	/**  연결 해제: keychain blob 전체(client + refresh_token) 삭제. */
+	disconnectGoogle: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("disconnect_google", { projectId })),
+	/**
+	 *  연결 검증(read-only): refresh_token으로 access token 재발급을 시도해 본다(bounded). 토큰 본문 미노출.
+	 *  done-criteria 10a: access token 만료 시 refresh 자동 재발급 경로의 사용자 실측 진입점(Notion/GitHub
+	 *  "Test ping" 선례). 회전된 refresh_token은 merge로 보존 저장. 실 네트워크라 cargo test 아님(사용자 관찰).
+	 */
+	pingGoogleCalendar: (projectId: string) => typedError<PingResult, string>(__TAURI_INVOKE("ping_google_calendar", { projectId })),
 };
 
 /* Types */
@@ -304,6 +324,16 @@ export type FlushSummary = {
 	created: number,
 	queued: number,
 	failed: number,
+};
+
+/**  프로젝트별 Google Calendar 연결 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
+export type GoogleCalendarStatus = {
+	/**  OAuth client(client_id/secret)이 입력됨 (연결 시도 가능). */
+	hasClient: boolean,
+	/**  refresh_token 보유 (OAuth 연결 완료 — 이벤트 fetch 가능). */
+	connected: boolean,
+	/**  사람이 읽을 상태 상세. */
+	detail: string,
 };
 
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
@@ -490,7 +520,9 @@ export type SignalStatus = "new" | "classified" | "promoted" | "linked" | "done"
 export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "mismatch" | "cleanup";
 
 /**  project별 분리되는 토큰 종류. keychain account 접미사로 쓰인다. */
-export type TokenKind = "notion" | "github";
+export type TokenKind = "notion" | "github" | 
+/**  Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a. */
+"google_calendar";
 
 /**  토큰 존재 여부만 노출 (본문 미노출 — INVARIANT: 토큰 렌더러 노출 금지). */
 export type TokenStatus = {

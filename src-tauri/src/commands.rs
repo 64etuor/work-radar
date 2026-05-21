@@ -6,6 +6,7 @@
 use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner, EchoRunner};
+use crate::calendar::{self, CalendarCreds};
 use crate::db::Db;
 use crate::git::{summarize_status, CliGitProvider, GitProvider};
 use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
@@ -13,10 +14,10 @@ use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager
 use crate::models::{
     AgentRail, AgentRunView, AreaTag, CiStatus, CiTriageProposal, CodexAvailability,
     CreateProjectInput, CreateRepoInput, CreateRoutineInput, CreateSignalInput, DiffFileSummary,
-    DiffMode, Engine, EnrichProposal, FlushSummary, Kind, MismatchItem, NotionUpdateProposal,
-    PingResult, PrRadarItem, Project, Promotion, PromotionOutcome, PromotionStatus,
-    PromotionTarget, Quadrant, ReadinessBucket, Repo, RoutineToday, Sandbox, SignalStatus,
-    TokenKind, TokenStatus, TriageOutcome, TriggerCiTriageInput, TriggerCodexInput,
+    DiffMode, Engine, EnrichProposal, FlushSummary, GoogleCalendarStatus, Kind, MismatchItem,
+    NotionUpdateProposal, PingResult, PrRadarItem, Project, Promotion, PromotionOutcome,
+    PromotionStatus, PromotionTarget, Quadrant, ReadinessBucket, Repo, RoutineToday, Sandbox,
+    SignalStatus, TokenKind, TokenStatus, TriageOutcome, TriggerCiTriageInput, TriggerCodexInput,
     TriggerEchoInput, TriggerEnrichInput, TriggerMismatchDraftInput, TriggerPrSelfCheckInput,
     Weekday, WorkSignal, Worktree,
 };
@@ -216,7 +217,178 @@ pub async fn ping_project_token(
     Ok(match kind {
         TokenKind::Notion => api::ping_notion(&token).await,
         TokenKind::Github => api::ping_github(&token).await,
+        // GoogleCalendar는 OAuth blob이라 단순 ping 대상이 아님 — 연결은 google_calendar_status로.
+        TokenKind::GoogleCalendar => PingResult {
+            ok: false,
+            detail: "Google Calendar는 '연결' 흐름을 사용하세요".into(),
+        },
     })
+}
+
+// ── Google Calendar OAuth (Phase 10a, read 레일) ───────────────────────────────────
+//
+// INVARIANT: client_id/secret/refresh_token은 keychain blob({credential_ref}:google_calendar)에만 —
+// 인자로만 들어오고 절대 반환되지 않는다. 외부 호출은 Rust(reqwest). read-only(`calendar.readonly`) →
+// 외부 mutate 0 → Acceptance 불요(PR Radar read 선례). 실 OAuth/네트워크는 사용자 관찰(헤드리스 제외).
+
+/// 저장된 creds blob을 읽는다(없으면 None). 토큰 본문은 호출 내부에서만 쓰인다(반환 안 함).
+async fn load_calendar_creds(db: &Db, project_id: &str) -> Result<Option<CalendarCreds>, String> {
+    let cref = project_credential_ref(db, project_id).await?;
+    match keychain::get_token(&cref, TokenKind::GoogleCalendar).map_err(|e| e.to_string())? {
+        Some(s) => Ok(Some(
+            CalendarCreds::from_blob(&s).map_err(|e| e.to_string())?,
+        )),
+        None => Ok(None),
+    }
+}
+
+/// OAuth client(client_id/secret)을 keychain blob에 저장(반환 없음). 같은 client면 refresh_token 보존,
+/// client가 바뀌면 refresh_token은 버린다(다른 client엔 무효 — 재연결 필요).
+#[tauri::command]
+#[specta::specta]
+pub async fn set_google_oauth_client(
+    db: State<'_, Db>,
+    project_id: String,
+    client_id: String,
+    client_secret: String,
+) -> Result<(), String> {
+    let client_id = client_id.trim();
+    let client_secret = client_secret.trim();
+    if client_id.is_empty() || client_secret.is_empty() {
+        return Err("client_id/secret이 비었습니다".into());
+    }
+    let cref = project_credential_ref(db.inner(), &project_id).await?;
+    let refresh_token = keychain::get_token(&cref, TokenKind::GoogleCalendar)
+        .map_err(|e| e.to_string())?
+        .and_then(|s| CalendarCreds::from_blob(&s).ok())
+        .filter(|c| c.client_id == client_id) // 같은 client일 때만 기존 연결 유지.
+        .and_then(|c| c.refresh_token);
+    let creds = CalendarCreds {
+        client_id: client_id.to_string(),
+        client_secret: client_secret.to_string(),
+        refresh_token,
+    };
+    keychain::set_token(&cref, TokenKind::GoogleCalendar, &creds.to_blob())
+        .map_err(|e| e.to_string())
+}
+
+/// loopback + PKCE(S256) OAuth 실행 → refresh_token을 keychain blob에 저장. bounded(loopback timeout).
+/// client 미입력이면 Err(graceful degrade). 실 네트워크/브라우저라 cargo test 아님(사용자 관찰).
+#[tauri::command]
+#[specta::specta]
+pub async fn start_google_oauth(db: State<'_, Db>, project_id: String) -> Result<(), String> {
+    let cref = project_credential_ref(db.inner(), &project_id).await?;
+    let creds = load_calendar_creds(db.inner(), &project_id)
+        .await?
+        .filter(|c| !c.client_id.is_empty() && !c.client_secret.is_empty())
+        .ok_or_else(|| "먼저 OAuth client(client_id/secret)를 입력하세요".to_string())?;
+
+    // PKCE + state + loopback bind(redirect_uri 확정) → 브라우저 열기 → redirect 수신(bounded).
+    let verifier = calendar::gen_code_verifier();
+    let challenge = calendar::pkce_challenge(&verifier);
+    let state = calendar::gen_state();
+    let loopback = calendar::Loopback::bind()
+        .await
+        .map_err(|e| e.to_string())?;
+    let redirect_uri = loopback.redirect_uri.clone();
+    let url = calendar::auth_url(&creds.client_id, &redirect_uri, &challenge, &state);
+    tauri_plugin_opener::open_url(&url, None::<&str>)
+        .map_err(|e| format!("브라우저 열기 실패: {e}"))?;
+
+    let (code, recv_state) = loopback
+        .wait_for_redirect(calendar::LOOPBACK_TIMEOUT)
+        .await
+        .map_err(|e| e.to_string())?;
+    if recv_state != state {
+        return Err("OAuth state 불일치 (CSRF 의심) — 다시 시도하세요".into());
+    }
+
+    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    let updated = calendar::connect_core(&provider, creds, &code, &verifier, &redirect_uri)
+        .await
+        .map_err(|e| e.to_string())?;
+    keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())
+        .map_err(|e| e.to_string())
+}
+
+/// 연결 상태(client 입력됨 / refresh_token 보유). 토큰 본문 미노출(graceful degrade 판정용).
+#[tauri::command]
+#[specta::specta]
+pub async fn google_calendar_status(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<GoogleCalendarStatus, String> {
+    Ok(match load_calendar_creds(db.inner(), &project_id).await? {
+        None => GoogleCalendarStatus {
+            has_client: false,
+            connected: false,
+            detail: "OAuth client 미입력".into(),
+        },
+        Some(c) => {
+            let has_client = !c.client_id.is_empty() && !c.client_secret.is_empty();
+            let connected = c.has_refresh();
+            let detail = if connected {
+                "연결됨".into()
+            } else if has_client {
+                "client 입력됨 — '연결'로 Google 동의 진행".into()
+            } else {
+                "OAuth client 미입력".into()
+            };
+            GoogleCalendarStatus {
+                has_client,
+                connected,
+                detail,
+            }
+        }
+    })
+}
+
+/// 연결 해제: keychain blob 전체(client + refresh_token) 삭제.
+#[tauri::command]
+#[specta::specta]
+pub async fn disconnect_google(db: State<'_, Db>, project_id: String) -> Result<(), String> {
+    let cref = project_credential_ref(db.inner(), &project_id).await?;
+    keychain::delete_token(&cref, TokenKind::GoogleCalendar).map_err(|e| e.to_string())
+}
+
+/// 연결 검증(read-only): refresh_token으로 access token 재발급을 시도해 본다(bounded). 토큰 본문 미노출.
+/// done-criteria 10a: access token 만료 시 refresh 자동 재발급 경로의 사용자 실측 진입점(Notion/GitHub
+/// "Test ping" 선례). 회전된 refresh_token은 merge로 보존 저장. 실 네트워크라 cargo test 아님(사용자 관찰).
+#[tauri::command]
+#[specta::specta]
+pub async fn ping_google_calendar(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<PingResult, String> {
+    let cref = project_credential_ref(db.inner(), &project_id).await?;
+    let Some(creds) = load_calendar_creds(db.inner(), &project_id).await? else {
+        return Ok(PingResult {
+            ok: false,
+            detail: "OAuth client 미입력".into(),
+        });
+    };
+    if !creds.has_refresh() {
+        return Ok(PingResult {
+            ok: false,
+            detail: "미연결 — '연결'을 먼저 진행하세요".into(),
+        });
+    }
+    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    match calendar::refresh_core(&provider, creds).await {
+        Ok((_access, updated)) => {
+            // refresh_token이 회전됐을 수 있으니 갱신 저장(merge_refresh로 기존 보존).
+            keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())
+                .map_err(|e| e.to_string())?;
+            Ok(PingResult {
+                ok: true,
+                detail: "연결 정상 (access token 재발급됨)".into(),
+            })
+        }
+        Err(e) => Ok(PingResult {
+            ok: false,
+            detail: e.to_string(),
+        }),
+    }
 }
 
 // ── projectId 태깅 / reconcile (Phase 1 kind 힌트 → projectId) ─────────────────

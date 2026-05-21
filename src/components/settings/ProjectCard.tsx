@@ -8,6 +8,7 @@ import {
 } from "@/lib/query";
 
 import { AddRepoForm } from "./AddRepoForm";
+import { GoogleCalendarBlock } from "./GoogleCalendarBlock";
 import { TokenRow } from "./TokenRow";
 
 /** notionDoneStatuses(JSON 배열 문자열)를 쉼표 구분 문자열로. 깨진 JSON이면 빈 문자열. */
@@ -119,6 +120,9 @@ export function ProjectCard({
 
         <div className="st-subhead">Notion 완료 상태 (mismatch 기준)</div>
         <DoneStatusEditor project={project} onToast={onToast} />
+
+        <div className="st-subhead">Google Calendar (keychain · read-only)</div>
+        <GoogleCalendarBlock projectId={project.id} onToast={onToast} />
 
         <div className="st-subhead">레포</div>
         {repos.isError && <div className="st-err">{String(repos.error)}</div>}

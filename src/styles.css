@@ -1172,6 +1172,18 @@
 .settings .st-ping.fail {
   color: #b30000;
 }
+.settings .st-hint {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.settings .st-hint code {
+  font: 400 10px var(--font-mono);
+  background: var(--color-wr-hover, rgba(0, 0, 0, 0.05));
+  padding: 1px 4px;
+  border-radius: 3px;
+}
 
 /* repo row + add-repo form */
 .settings .st-repo {

@@ -1,4 +1,4 @@
-# Work Radar — 세션 핸드오프 (현재: Phase 10 시작 직전)
+# Work Radar — 세션 핸드오프 (현재: Phase 10a 완료 · 다음 = Phase 10b 캘린더 선택+이벤트)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
@@ -29,7 +29,14 @@
   - **프런트:** `query.ts` 10훅(useTriggerEnrich/useEnrichProposal/useAcceptEnrich/useSetSignalArea/useTriggerCiTriage/useTriageProposal/useAcceptTriage/useTriggerMismatchDraft/useMismatchDraftProposal/useAcceptMismatchDraft). `JobsView`는 `ProposalPanel` 디스패처(kind별 SelfCheck/Enrich/Triage/MismatchDraft 패널). `CardMenu` 'AI 제안' 액션(codex 게이트). `MatrixCanvas` 카드에 제안 영역(dashed, 클릭해 확정)·제안 사분면(Q? dashed) 칩. `PrRadarView` CI Blocked 카드 'CI triage' 버튼. `MismatchView` '해소 초안' 버튼. `board-utils` areaLabel/suggestedQuadrantBadge. `styles.css` `.chip-area`/`.chip-area-sug`/`.chip-q-sug`/`.jobs-prop-select`.
   - **사용자 결정(AskUserQuestion):** enrich 트리거=카드 ⋯ 메뉴 / CI triage 캡=PR 단위 3회 / mismatch accept=로컬 기록만. 상세 `docs/decisions.md` Phase 9.
   - **검증:** `cargo test` **85 passed**(+5: enrich 파싱/accept, triage 파싱/캡 escalate, mismatch accept resolve) · clippy -D warnings clean · cargo fmt(--check green) · pnpm typecheck/build green(1758 modules) · INVARIANTS reviewer(critic) **7개 PASS / done-criteria 4개 PASS, BLOCKER·MAJOR 0**(MINOR 2: triage 캡이 실패 잡도 카운트=fail-toward-human 의도·문서화 / mismatch 로컬 resolve가 실 Notion 미수정 시 drift 가림=문서화된 트레이드오프).
-- **다음 = Phase 10 (실행 레일 — 승격 백로그를 Codex가 격리 worktree에서 구현 → draft PR; 최고 위험, 마지막 자동화)** — `dev` 브랜치에서.
+- **Phase 10a 산출물(Google Calendar OAuth 연결 — read 레일; 구현·검증됨):**
+  - **`calendar.rs`(신설):** 자체 `CalendarError{Transient,Terminal}`+`with_retry`(github/notion 패턴, 비공유). 순수 OAuth 헬퍼(`gen_code_verifier`/`pkce_challenge`(S256)/`gen_state`/`auth_url`(reqwest::Url 인코딩)/`parse_redirect_query`/`parse_token_response`/`merge_refresh`). `Loopback`(tokio `TcpListener` 127.0.0.1:0 임의포트, 단발 redirect 수신, bounded 180s `LOOPBACK_TIMEOUT`, 웹 프레임워크 없음). `CalendarProvider` 트레잇(RPITIT — `exchange_code`/`refresh_access`만; calendarList/events는 10b 확장) + `HttpCalendarProvider`(reqwest, rustls, 12s). 제네릭 `connect_core`(첫 동의 refresh_token 필수)/`refresh_core`(refresh로 access 재발급·refresh_token 회전 보존) — 트레잇 의존 → fake로 cargo test.
+  - **`models.rs`:** `TokenKind::GoogleCalendar`(as_str `google_calendar`) + `GoogleCalendarStatus{hasClient,connected,detail}` DTO. 자격증명 blob `CalendarCreds{clientId,clientSecret,refreshToken?}`는 calendar.rs(keychain 전용, DTO/렌더러/캐시 미노출).
+  - **`commands.rs`:** `set_google_oauth_client`(같은 client면 refresh 보존·바뀌면 폐기) · `start_google_oauth`(loopback bind→`tauri_plugin_opener::open_url`로 브라우저→state CSRF 검증→`connect_core`→keychain) · `google_calendar_status` · `disconnect_google`(blob 전체 삭제) · `ping_google_calendar`(refresh로 연결 검증 — Notion/GitHub Test ping 선례, refresh_core 실사용처). **`lib.rs`** 5커맨드 등록 + `mod calendar`. bindings 재생성. **`Cargo.toml`** `sha2`/`base64`/`getrandom`(모두 기존 transitive).
+  - **프런트:** `query.ts` `useGoogleCalendarStatus`/`useSetGoogleOauthClient`/`useStartGoogleOauth`/`useDisconnectGoogle`/`usePingGoogleCalendar`(토큰 본문 캐시 미저장). `settings/GoogleCalendarBlock.tsx`(신설) — client_id/secret 입력(password, 저장 직후 비움) → 연결 → 상태 배지/graceful degrade 안내 → Test 연결 → 연결 해제. `ProjectCard`에 블록 + `styles.css` `.st-hint`.
+  - **검증:** `cargo test` **98 passed**(+13) · clippy -D warnings clean · cargo fmt --check green · pnpm typecheck/build green(1759 modules) · INVARIANTS reviewer(critic) **7개 PASS, BLOCKER·MAJOR 0**(MINOR 2: loopback bind 실패=Terminal 분류 / 단발 read 4096B — 둘 다 폴리시, 정확성 결함 아님). **실 OAuth/브라우저/Google 토큰 교환·refresh/keychain 영속/재부팅/macOS loopback 방화벽은 사용자 관찰**(`pnpm tauri dev`).
+- **옛 Phase 10 (실행 레일) = 폐기(2026-05-21, 사용자 결정).** 앱 내 Codex 백로그 구현(`workspace-write`+push+draft PR)은 외부 코딩 에이전트와 중복·고위험이라 들어냄. 근거: `docs/decisions.md`("(폐기) 옛 Phase 10") / `PLAN.md` 부록.
+- **다음 = Phase 10b (캘린더 선택 + 이벤트)** — `dev` 브랜치에서. 정본: **`docs/specs/phase-10-google-calendar.md`** §11 PR2. migration 0006(`projects.google_calendar_ids`) · `CalendarProvider`에 `list_calendars`/`fetch_events` 확장 + 순수 파싱(`parse_calendar_list`/`parse_calendar_event`/`today_window`/`merge_sort_events`) · `list_google_calendars`/`set_selected_calendars`/`fetch_calendar_events`(코어는 트레잇 fake로 병합·부분실패 격리 테스트) · Settings 다중 캘린더 picker. 선례: 이번 `calendar.rs`(트레잇 seam·순수함수·bounded) + 0005 ALTER 마이그레이션. 그다음 **Phase 11**(Today/Timeline/Weekly/Work Debt)이 캘린더를 소비.
 
 ### Phase 9 미해결/관찰 항목 (Phase 10+에서 고려)
 
@@ -55,22 +62,20 @@
 
 ## 먼저 읽을 정본
 
-1. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 10** Deliverables/Done-criteria
-2. `docs/architecture.md` — §2 3-Rail, §4 data model(`AgentRun`·`Acceptance`·`Worktree`), §5 AgentRunner, §8 Worktree & Branch Diff(Phase 5 — 실행 레일 diff 검수에 재사용)
-3. `docs/decisions.md` — Phase 9(enrich/triage/mismatch 초안)·Phase 8(PR self-check 초안)·Phase 7(Agent 스파인)·Phase 5(worktree diff viewer) 결정
-4. `.claude/skills/{codex-worktree-runner,octocrab-keyring,sqlx-sqlite,tauri-specta-ipc}` · `DESIGN.md` · `AGENTS.md` · `docs/reference/commands.md`(검증 명령)
-5. **Phase 8/9 코드(직접 선례):** `src-tauri/src/commands.rs`(`trigger_pr_selfcheck`/`trigger_ci_triage`/`accept_*` — gated 잡 + Acceptance 패턴) · `agent.rs`(CodexRunner `prepare_cwd` worktree·`WorktreeGuard` keep=Execution이면 보존) · `jobs.rs`(gated finalize). **실행 레일은 sandbox=`WorkspaceWrite` + `rail=Execution`(worktree 보존) + draft PR 생성이 신규.**
+1. **`docs/specs/phase-10-google-calendar.md` — Phase 10(Google Calendar) 정본 설계·구현 계획(진입점).**
+2. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 10**(Google Calendar) Deliverables/Done-criteria
+3. `docs/decisions.md` — **Phase 10 — Google Calendar 연동(설계)** + (참고) Phase 2 keychain·Phase 3 Notion·Phase 4 PR Radar 결정
+4. `.claude/skills/{octocrab-keyring,sqlx-sqlite,tauri-specta-ipc}` · `DESIGN.md` · `AGENTS.md` · `docs/reference/commands.md`(검증 명령)
+5. **직접 선례 코드:** `src-tauri/src/notion.rs`(reqwest + bounded retry + `NotionReader`/`NotionWriter` 트레잇 seam) · `github.rs`(`with_retry`/`PrProvider` + octocrab) · `keychain.rs`(set/get/has/delete + `TokenKind`) · `commands.rs`(`set_project_token`/`project_token_status`/`ping_project_token`/`refresh_pr_radar` — 토큰 keychain·렌더러 미노출·ambient read 패턴).
 
-## Phase 10 스코프 (한 번에 한 Phase, PLAN.md Phase 10 done-criteria만)
+## Phase 10 스코프 (한 번에 한 PR — 상세는 `docs/specs/phase-10-google-calendar.md`)
 
-PLAN.md Phase 10 핵심 — **실행 레일(사람→Codex, 최고 위험·마지막 자동화):**
-- 승격된 백로그 1건을 **"지금 실행"만** 트리거(자동 실행 금지), 동시 1, **`workspace-write` 샌드박스**(danger-full 절대 금지), full bounds(timeout/turns/cost cap/kill).
-- Codex가 **격리 worktree**(Phase 7 인프라, `rail=Execution`이라 Drop이 보존)에서 구현 → diff 생성.
-- push 전 **Phase 5 Worktree Diff Viewer로 사람이 diff 검수** → 검수 후에만 **draft PR 생성**(octocrab). 사람 검수 없이 push 금지.
+PLAN.md Phase 10 핵심 — **Google Calendar 연동(read 레일):** 프로젝트별 OAuth → 다중 캘린더 선택 → 오늘 이벤트 read. Today/Timeline(Phase 11)이 소비. 설계 선결은 확정됨(아래) — 추가 AskUserQuestion 불요.
 
-**Done-criteria(요약):** 백로그 1건 → worktree 브랜치 + draft PR / 생성 worktree diff가 Diff Viewer에 표시 / 사용자 워킹트리 무손상 / kill·cost cap 동작 / 사람 검수 없이 push 안 됨.
+- **10a — OAuth 연결:** `TokenKind::GoogleCalendar`(keychain blob: clientId/secret/refreshToken), 사용자 제공 client(Settings 입력), loopback + PKCE(S256) OAuth(`calendar.readonly`), 토큰 refresh, connect/disconnect/status 커맨드 + Settings 연결 UI. graceful degrade.
+- **10b — 캘린더 선택 + 이벤트:** migration 0006(`projects.google_calendar_ids`), calendarList 다중 선택, `fetch_calendar_events(projectId|null, date)`(선택 캘린더 오늘 이벤트 시간순 병합·all-day·프로젝트별 부분 실패 격리), `CalendarProvider` 트레잇 + Http 구현, Settings picker.
 
-**설계 선결 과제(시작 전 결정 권장 — AskUserQuestion):** workspace-write 잡 트리거 위치(승격 백로그 카드 vs 전용 뷰)·draft PR 생성 경로(octocrab create-PR + 브랜치 push 게이트)·worktree 보존/정리 정책(`keep=true` 후 수동 정리)·Phase 7 동기 Drop 정리를 `spawn_blocking`/async로 승격할지(Phase 7 미해결 항목).
+**확정된 설계 결정(`docs/decisions.md` Phase 10):** 풀 Google OAuth(PKCE+loopback) / OAuth client 사용자 제공 / 계정 분리=프로젝트별 / 캘린더 다중 선택 / 이벤트 ambient read-only(Acceptance 불요 — PR Radar 선례). 토큰 keychain·렌더러 미노출, bounded·graceful degrade(#5), 선택목록 SQLite SSOT(#7), specta i64 금지. 순수 함수(PKCE·윈도잉·파싱·병합)+`CalendarProvider` fake로 cargo test; 실 OAuth/Google fetch/keychain은 사용자 관찰.
 
 ## 운영 노트 (환경 함정)
 
@@ -91,9 +96,8 @@ PLAN.md Phase 10 핵심 — **실행 레일(사람→Codex, 최고 위험·마�
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
-work-radar Phase 10 (실행 레일: 승격 백로그 → Codex 격리 worktree 구현 → 사람 diff 검수 → draft PR) 구현.
-docs/HANDOFF.md → PLAN.md(§1 INVARIANTS + Phase 10) → docs/architecture.md(§2 3-Rail, §5 AgentRunner, §8 Worktree Diff)
-→ docs/decisions.md(Phase 9 suggestion 자동화, Phase 8 PR self-check, Phase 7 Agent 스파인, Phase 5 diff viewer) → src-tauri/src/{commands.rs(trigger_ci_triage/accept_* 패턴),agent.rs(prepare_cwd/WorktreeGuard),jobs.rs(gated finalize)} 순으로 읽고 따른다. 한 번에 한 Phase, Phase 10 done-criteria로 자가검증.
-INVARIANTS 준수(특히 #2 Acceptance 게이트=사람 검수 없이 push 금지, #5 full bounds+kill, #6 worktree 격리·workspace-write·danger-full 금지). 작업/푸시는 dev에만.
-시작 전 workspace-write 트리거 위치 + draft PR 생성 경로 + worktree 보존/정리 정책만 확인(AskUserQuestion)하고 진행.
+work-radar Phase 10 (Google Calendar 연동 — read 레일) 구현. 한 번에 한 PR: PR1(10a OAuth 연결) → PR2(10b 캘린더 선택+이벤트).
+docs/HANDOFF.md → docs/specs/phase-10-google-calendar.md(정본 설계·구현 계획·구현 순서) → PLAN.md(§1 INVARIANTS + Phase 10) → docs/decisions.md(Phase 10 — Google Calendar) 순으로 읽고 따른다.
+선례 코드: src-tauri/src/{notion.rs(reqwest+bounded retry+트레잇 seam), github.rs(with_retry/PrProvider+octocrab), keychain.rs(set/get/has/delete+TokenKind), commands.rs(set_project_token/project_token_status/ping_project_token/refresh_pr_radar)}.
+INVARIANTS 준수(토큰 keychain·렌더러 미노출, 외부호출 Rust, bounded·graceful degrade, read-only=Acceptance 불요). 작업/푸시는 dev에만. 각 PR done-criteria 자가검증 → INVARIANTS reviewer 패스(self-approve 금지) → docs/decisions.md 한 줄.
 ```

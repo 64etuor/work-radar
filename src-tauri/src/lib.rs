@@ -9,6 +9,7 @@
 
 mod agent;
 mod api;
+mod calendar;
 mod commands;
 mod db;
 mod git;
@@ -93,6 +94,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::trigger_mismatch_draft,
         commands::mismatch_draft_proposal,
         commands::accept_mismatch_draft,
+        // Google Calendar OAuth 연결 (read 레일, Phase 10a).
+        commands::set_google_oauth_client,
+        commands::start_google_oauth,
+        commands::google_calendar_status,
+        commands::disconnect_google,
+        commands::ping_google_calendar,
     ])
 }
 

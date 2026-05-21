@@ -41,6 +41,12 @@ octocrab = "0.42"
 regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
+# Google Calendar OAuth(Phase 10a): PKCE(S256) code_challenge + base64url 인코딩 + CSPRNG.
+#   모두 reqwest/rustls가 이미 transitive로 끌어오는 크레이트라 빌드 비용 최소.
+sha2 = "0.10"
+base64 = "0.22"
+getrandom = "0.2"
+
 # IPC 타입 계약: Rust 타입 → TS 생성 (수기 타입 중복 금지).
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"

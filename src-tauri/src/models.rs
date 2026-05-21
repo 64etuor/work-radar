@@ -92,6 +92,8 @@ pub struct CreateRepoInput {
 pub enum TokenKind {
     Notion,
     Github,
+    /// Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a.
+    GoogleCalendar,
 }
 
 impl TokenKind {
@@ -99,6 +101,7 @@ impl TokenKind {
         match self {
             TokenKind::Notion => "notion",
             TokenKind::Github => "github",
+            TokenKind::GoogleCalendar => "google_calendar",
         }
     }
 }
@@ -797,4 +800,22 @@ pub struct NotionUpdateProposal {
     /// 사람이 읽을 메모/근거.
     #[serde(default)]
     pub note: String,
+}
+
+// ── Phase 10: Google Calendar 연동 (read 레일) ────────────────────────────────────
+//
+// INVARIANT: 자격증명(clientId/clientSecret/refreshToken)은 keychain blob에만 — DTO/렌더러/반환에
+// 절대 담기지 않는다. 외부 호출은 Rust(reqwest), read-only(`calendar.readonly`) → 외부 mutate 0 →
+// Acceptance 불요(PR Radar/mismatch read 선례). bounded·graceful degrade(#5). specta i64/u64 금지.
+
+/// 프로젝트별 Google Calendar 연결 상태 (graceful degrade 판정용). 토큰 본문 미포함.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleCalendarStatus {
+    /// OAuth client(client_id/secret)이 입력됨 (연결 시도 가능).
+    pub has_client: bool,
+    /// refresh_token 보유 (OAuth 연결 완료 — 이벤트 fetch 가능).
+    pub connected: bool,
+    /// 사람이 읽을 상태 상세.
+    pub detail: String,
 }

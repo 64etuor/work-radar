@@ -388,6 +388,69 @@ export function useReconcileSignalProjects() {
   });
 }
 
+// ── Phase 10a: Google Calendar OAuth 연결 ──────────────────────────────────────────
+//
+// INVARIANT: client_id/secret/refresh_token은 keychain에만 — 캐시/렌더러에 본문을 두지 않는다.
+// 상태는 boolean(hasClient/connected)만. read-only 스코프라 Acceptance 불요(PR Radar 선례).
+
+/** 프로젝트별 Google Calendar 연결 상태(hasClient/connected). 토큰 본문 미노출. */
+export function useGoogleCalendarStatus(projectId: string) {
+  return useQuery({
+    queryKey: ["googleCalendarStatus", projectId],
+    queryFn: () => unwrap(commands.googleCalendarStatus(projectId)),
+    enabled: !!projectId,
+  });
+}
+
+/** OAuth client(client_id/secret) 저장. 본문은 IPC 인자로만 전달, 캐시 미저장. */
+export function useSetGoogleOauthClient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      clientId,
+      clientSecret,
+    }: {
+      projectId: string;
+      clientId: string;
+      clientSecret: string;
+    }) =>
+      unwrap(commands.setGoogleOauthClient(projectId, clientId, clientSecret)),
+    onSuccess: (_data, v) =>
+      qc.invalidateQueries({ queryKey: ["googleCalendarStatus", v.projectId] }),
+  });
+}
+
+/** loopback + PKCE OAuth 실행(브라우저 동의 → refresh_token keychain 저장). bounded timeout. */
+export function useStartGoogleOauth() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      unwrap(commands.startGoogleOauth(projectId)),
+    onSuccess: (_data, projectId) =>
+      qc.invalidateQueries({ queryKey: ["googleCalendarStatus", projectId] }),
+  });
+}
+
+/** 연결 해제(keychain blob 삭제). */
+export function useDisconnectGoogle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      unwrap(commands.disconnectGoogle(projectId)),
+    onSuccess: (_data, projectId) =>
+      qc.invalidateQueries({ queryKey: ["googleCalendarStatus", projectId] }),
+  });
+}
+
+/** 연결 검증(read-only refresh). 결과(PingResult)를 호출부가 표시. */
+export function usePingGoogleCalendar() {
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      unwrap(commands.pingGoogleCalendar(projectId)),
+  });
+}
+
 // ── Phase 4: PR Radar (read 레일) ───────────────────────────────────────────────
 
 /** PR Radar 주기 폴링 간격. INVARIANT #5: bounded(무한 tight loop 아님 — 고정 cadence). */
