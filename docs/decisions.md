@@ -29,3 +29,4 @@
 - **카드 액션 메뉴는 기존 계획과 일치.** `⋯`/`Cmd+K`/우클릭 → 백로그 등록·안건 승격·캘린더 등록 = `Promotion` draft만(외부 무변경, **Acceptance 게이트**, 실제 write는 Phase 3/11) + 미루기/완료/보관(`S/D/E`). 새 모델에선 리스트가 아니라 **포스트잇에서 파생**되는 점만 변경.
 - **배치:** 사분면 내 자동정렬(pack), 미분류는 가로=레일 카스케이드/세로=상단 트레이 그리드. 반응형(orientation) 자동 전환.
 - **그림자 예외:** Cohere는 무거운 그림자 금지지만, over-desktop 오버레이 가독성 위해 포스트잇에 절제된 Media Lift 그림자만 허용.
+- **영역(area) AI 자동 태그 = 제안 레일(2026-05-21).** 각 braindump 포스트잇에 라이프 도메인을 AI가 추론해 `suggestedArea`로 부여(닫힌 taxonomy 9 + other: health/work/studies/environment/recreation/romance/family/friends/finances/other = Wheel of Life). 사람이 `area`로 확정/수정. INVARIANT #1 준수 — area는 아이젠하워 quadrant(결정 레일)와 **별개 축**이고 AI는 제안만(자동 확정 아님). AI는 세트 밖 카테고리 생성 금지(닫힘); 사용자 커스텀 영역은 추후. personal/work `kind`와도 별개 축. 데이터 모델(architecture.md)은 Phase 1부터 필드 보유, **AI 추론·칩 표시는 Phase 9 enrich**.

@@ -86,7 +86,8 @@
 - **카드 액션 메뉴**(⋯ 버튼 / `Cmd+K` / 우클릭): 백로그 등록·안건 승격·캘린더 등록은 **`Promotion` draft만**
   생성(=**Acceptance 게이트**, 실제 외부 write는 Phase 3/11) + 미루기/완료/보관(`S/D/E`).
 - **반응형:** 세로 모니터=미분류 상단 트레이 / 가로 모니터=좌측 레일 자동 전환.
-- `WorkSignal` CRUD + dedup 키, FTS5 전역 검색.
+- `WorkSignal` CRUD + dedup 키, FTS5 전역 검색. (스키마에 `area`/`suggestedArea` 필드 포함 —
+  데이터만; **AI 영역 추론과 칩 표시는 Phase 9 enrich**.)
 
 **Done-criteria:**
 - [ ] 전역 핫키로 보드 창 토글(show/hide), Esc로 닫힘
@@ -181,13 +182,15 @@
 ### Phase 9 — 추가 suggestion 자동화
 **Goal:** enrich / CI triage / mismatch 초안.
 **Deliverables:**
-- braindump enrich(#2): suggested만, 카드는 unclassified 유지
+- braindump enrich(#2): `suggestedQuadrant` + **`suggestedArea`(라이프 도메인, 닫힌 taxonomy)** 추론.
+  suggested만 — 카드는 unclassified 유지, area는 사람이 확정/수정. AI는 세트 밖 카테고리 생성 금지.
 - CI triage(#3): 원인/수정안 Proposal + **재트리거 횟수 캡 + 초과 시 Q1 escalate**
 - mismatch 해소 초안(#4): Notion 업데이트 draft
 **Done-criteria:**
 - [ ] 각 잡이 Acceptance 게이트 뒤 Proposal 생성
 - [ ] 동일 CI 실패 재triage가 캡에서 멈추고 Q1으로 escalate
-- [ ] enrich가 카드를 자동 분류하지 않음
+- [ ] enrich가 카드를 자동 분류하지 않음 (quadrant 자동 확정 0)
+- [ ] enrich가 `suggestedArea`를 닫힌 세트(health…finances|other)에서만 부여, 사람이 수정 가능
 
 ### Phase 10 — 실행 레일 (최고 위험, 마지막)
 **Goal:** 승격된 백로그를 Codex가 격리 worktree에서 구현 → draft PR.

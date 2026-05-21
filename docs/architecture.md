@@ -54,6 +54,8 @@ WorkSignal {
   quadrant: "q1_do_now" | "q2_schedule" | "q3_quick_contain" | "q4_drop" | "unclassified"  // 사람 결정, 저장
   suggestedQuadrant?: string     // 파생, truth 아님, 언제든 재계산. 힌트 표시용
   suggestionReason?: string
+  area?: AreaTag                 // 라이프 도메인 (사람 확정값). suggestedArea를 수락/수정한 결과
+  suggestedArea?: AreaTag        // AI 추론 힌트 (제안 레일, truth 아님) — 닫힌 taxonomy에서만
   dedupKey?: string              // system/PR/Hermes 신호의 안정적 키 (upsert), e.g. "pr:42:ci_failed"
   status: "new" | "classified" | "promoted" | "linked" | "done" | "snoozed" | "archived"
   snoozeUntil?: string           // 복귀 시점
@@ -103,6 +105,10 @@ DiffFileSummary { path; status: "M" | "A" | "D" | "R"; adds: number; dels: numbe
 
 설계 노트:
 - `quadrant`(사람 결정) vs `suggestedQuadrant`(파생) 분리 — 점수 이중저장 안 함.
+- **`area`(라이프 도메인)는 닫힌 taxonomy**: `AreaTag = "health" | "work" | "studies" |
+  "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other"`
+  (Wheel of Life + other). AI(enrich, Phase 9)가 `suggestedArea`로 추론하고, 사람이 `area`로 확정/수정한다.
+  AI는 세트 밖 카테고리를 만들지 않는다(닫힘). 사용자 커스텀 영역은 추후. `area`는 personal/work `kind`와 **별개 축**.
 - system/PR/Hermes 신호는 `dedupKey`로 **upsert**. 원인 해소 시 `status` auto-resolve.
 - mismatch는 `snapshot`으로 drift 비교. join key는 `ticketKeyPattern`.
 
