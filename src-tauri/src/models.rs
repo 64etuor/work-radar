@@ -515,3 +515,129 @@ pub struct MismatchItem {
     /// 이 drift가 매트릭스로 escalate된 active 신호를 갖는지 (항상 true — drift면 upsert).
     pub escalated: bool,
 }
+
+// ── Agent 스파인 (Phase 7, 잡 큐 + bounds + kill) ──────────────────────────────────
+//
+// INVARIANT #5: 모든 잡은 bound된다 (timeout + max_turns + cost_cap + kill switch).
+// INVARIANT #6: 코드 잡은 worktree 격리, 샌드박스 기본 read_only (danger_full 금지).
+// INVARIANT #2: Codex 출력은 외부를 직접 mutate 못함 — Proposal일 뿐, Acceptance 게이트 통과 후에만 반영.
+// 잡은 agent_runs(0001)에 영속된다(INVARIANT #7: SQLite = 잡의 SSOT). 토큰 본문은 절대 미포함.
+
+/// 잡 실행 엔진. agent_runs.engine CHECK과 동일.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum Engine {
+    Codex,
+    Hermes,
+    Claude,
+}
+
+/// 잡이 속한 레일. 결정 레일은 사람만 — 자동화는 제안/실행 레일에만 (INVARIANT #1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum AgentRail {
+    Suggestion,
+    Execution,
+}
+
+/// 샌드박스 권한. 기본 read_only, 쓰기는 명시 승인 시에만. danger_full은 타입에 없음 (INVARIANT #6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum Sandbox {
+    ReadOnly,
+    WorkspaceWrite,
+}
+
+impl Sandbox {
+    /// `codex exec --sandbox <flag>` 값 (하이픈 표기 — 실 설치본 0.125 검증).
+    pub fn as_codex_flag(self) -> &'static str {
+        match self {
+            Sandbox::ReadOnly => "read-only",
+            Sandbox::WorkspaceWrite => "workspace-write",
+        }
+    }
+}
+
+/// 잡 상태 (agent_runs.status CHECK과 동일). 잡 생애주기:
+/// proposed(큐 대기) → running → succeeded | failed | cancelled. (awaiting_approval은 Phase 8.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum AgentStatus {
+    Proposed,
+    AwaitingApproval,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
+/// Jobs 뷰 표시용 잡 한 항목. agent_runs에서 도출 (i64 컬럼은 specta 금지 → u32/f64로 변환).
+/// 토큰 본문은 절대 담기지 않는다(INVARIANT).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRunView {
+    pub id: String,
+    pub project_id: Option<String>,
+    pub engine: Engine,
+    /// 잡 종류 (자유 텍스트 — e.g. "echo", "draft_pr_selfcheck").
+    pub kind: String,
+    pub rail: AgentRail,
+    pub sandbox: Sandbox,
+    pub status: AgentStatus,
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+    pub cost_tokens: Option<u32>,
+    pub cost_usd: Option<f64>,
+    pub repo_id: Option<String>,
+    pub workdir: Option<String>,
+    pub log_path: Option<String>,
+    /// 사람이 읽을 상세 (성공 요약 또는 실패/취소 사유 — result JSON에서 도출).
+    pub detail: Option<String>,
+    pub created_at: String,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+}
+
+/// codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexAvailability {
+    /// PATH(또는 알려진 경로)에서 codex 바이너리가 발견됨.
+    pub installed: bool,
+    /// `codex login status`가 성공 (로그인됨). installed=false면 항상 false.
+    pub authed: bool,
+    pub version: Option<String>,
+    /// 사람이 읽을 상태 상세.
+    pub detail: String,
+}
+
+/// echo 테스트 잡 입력 (codex 없이 bound/kill/로그 캡처 검증). seconds 동안 틱을 출력하는
+/// 셸아웃 잡 — happy(짧은 seconds) / timeout 테스트(긴 seconds + 짧은 timeout_sec).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerEchoInput {
+    /// 잡 프로세스가 1초 간격 틱을 출력할 횟수 (0 = 즉시 종료).
+    pub seconds: u32,
+    /// timeout bound (초). seconds보다 작으면 timeout→kill→failed.
+    pub timeout_sec: u32,
+    /// 첫 줄로 출력할 메시지 (로그 캡처 확인).
+    pub message: String,
+}
+
+/// codex 잡 입력. Phase 7은 read_only 샌드박스 고정 (실행 레일=Phase 10). bounds는 강제(INVARIANT #5).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerCodexInput {
+    pub project_id: Option<String>,
+    /// 코드 잡이면 worktree 베이스 레포 (없으면 비-레포 prompt 잡).
+    pub repo_id: Option<String>,
+    pub prompt: String,
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+}

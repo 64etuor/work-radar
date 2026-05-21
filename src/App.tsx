@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
+import { JobsView } from "@/components/JobsView";
 import { MismatchView } from "@/components/MismatchView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { SettingsView } from "@/components/SettingsView";
@@ -42,7 +43,8 @@ export default function App() {
           view === "settings" ||
           view === "radar" ||
           view === "worktree" ||
-          view === "mismatch"
+          view === "mismatch" ||
+          view === "jobs"
         ) {
           goTo("board");
           return;
@@ -64,6 +66,8 @@ export default function App() {
         <WorktreeView />
       ) : view === "mismatch" ? (
         <MismatchView />
+      ) : view === "jobs" ? (
+        <JobsView />
       ) : (
         <CaptureBoard />
       )}

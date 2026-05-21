@@ -72,14 +72,74 @@ export const commands = {
 	worktreeDiffFiles: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null) => typedError<DiffFileSummary[], string>(__TAURI_INVOKE("worktree_diff_files", { worktreePath, mode, baseRef, headRef })),
 	/**  한 파일의 unified diff 텍스트(프런트 구문강조용). 선택한 파일만 지연 로드(비차단 2단계). */
 	worktreeFileDiff: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null, path: string) => typedError<string, string>(__TAURI_INVOKE("worktree_file_diff", { worktreePath, mode, baseRef, headRef, path })),
+	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
+	codexStatus: () => typedError<CodexAvailability, string>(__TAURI_INVOKE("codex_status")),
+	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */
+	triggerEchoJob: (input: TriggerEchoInput) => typedError<string, string>(__TAURI_INVOKE("trigger_echo_job", { input })),
+	/**  codex 잡 트리거 (read_only 샌드박스 고정 — 실행 레일=Phase 10). 미설치/미인증이면 Err(graceful degrade). */
+	triggerCodexJob: (input: TriggerCodexInput) => typedError<string, string>(__TAURI_INVOKE("trigger_codex_job", { input })),
+	/**  Jobs 뷰 — 최근 잡 목록(영속된 agent_runs에서). */
+	listAgentRuns: () => typedError<AgentRunView[], string>(__TAURI_INVOKE("list_agent_runs")),
+	/**  잡 kill switch. 실행/대기 중이면 취소(true), 이미 끝났으면 false. */
+	killAgentRun: (runId: string) => typedError<boolean, string>(__TAURI_INVOKE("kill_agent_run", { runId })),
+	/**  잡 로그 tail(최대 16KB) — Jobs 뷰 로그 패널. */
+	readAgentLog: (runId: string) => typedError<string, string>(__TAURI_INVOKE("read_agent_log", { runId })),
 };
 
 /* Types */
+/**  잡이 속한 레일. 결정 레일은 사람만 — 자동화는 제안/실행 레일에만 (INVARIANT #1). */
+export type AgentRail = "suggestion" | "execution";
+
+/**
+ *  Jobs 뷰 표시용 잡 한 항목. agent_runs에서 도출 (i64 컬럼은 specta 금지 → u32/f64로 변환).
+ *  토큰 본문은 절대 담기지 않는다(INVARIANT).
+ */
+export type AgentRunView = {
+	id: string,
+	projectId: string | null,
+	engine: Engine,
+	/**  잡 종류 (자유 텍스트 — e.g. "echo", "draft_pr_selfcheck"). */
+	kind: string,
+	rail: AgentRail,
+	sandbox: Sandbox,
+	status: AgentStatus,
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
+	costTokens: number | null,
+	costUsd: number | null,
+	repoId: string | null,
+	workdir: string | null,
+	logPath: string | null,
+	/**  사람이 읽을 상세 (성공 요약 또는 실패/취소 사유 — result JSON에서 도출). */
+	detail: string | null,
+	createdAt: string,
+	startedAt: string | null,
+	finishedAt: string | null,
+};
+
+/**
+ *  잡 상태 (agent_runs.status CHECK과 동일). 잡 생애주기:
+ *  proposed(큐 대기) → running → succeeded | failed | cancelled. (awaiting_approval은 Phase 8.)
+ */
+export type AgentStatus = "proposed" | "awaiting_approval" | "running" | "succeeded" | "failed" | "cancelled";
+
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
 
 /**  PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음. */
 export type CiStatus = "passing" | "failing" | "pending" | "none";
+
+/**  codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성). */
+export type CodexAvailability = {
+	/**  PATH(또는 알려진 경로)에서 codex 바이너리가 발견됨. */
+	installed: boolean,
+	/**  `codex login status`가 성공 (로그인됨). installed=false면 항상 false. */
+	authed: boolean,
+	version: string | null,
+	/**  사람이 읽을 상태 상세. */
+	detail: string,
+};
 
 /**  프로젝트 생성 입력. credential_ref는 백엔드가 생성한다(프런트가 정하지 않음). */
 export type CreateProjectInput = {
@@ -144,6 +204,9 @@ export type DiffMode =
 "vs_base" | 
 /**  임의 두 ref 직접 비교 (`git diff <base> <head>`). */
 "branch_branch";
+
+/**  잡 실행 엔진. agent_runs.engine CHECK과 동일. */
+export type Engine = "codex" | "hermes" | "claude";
 
 /**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
 export type FileChange = "M" | "A" | "D" | "R";
@@ -292,6 +355,9 @@ export type RoutineToday = {
 	done: boolean,
 };
 
+/**  샌드박스 권한. 기본 read_only, 쓰기는 명시 승인 시에만. danger_full은 타입에 없음 (INVARIANT #6). */
+export type Sandbox = "read_only" | "workspace_write";
+
 /**  신호 출처. */
 export type SignalSource = "braindump" | "notion_backlog" | "notion_agenda" | "github_pr" | "calendar" | "hermes" | "system";
 
@@ -308,6 +374,30 @@ export type TokenKind = "notion" | "github";
 export type TokenStatus = {
 	hasNotion: boolean,
 	hasGithub: boolean,
+};
+
+/**  codex 잡 입력. Phase 7은 read_only 샌드박스 고정 (실행 레일=Phase 10). bounds는 강제(INVARIANT #5). */
+export type TriggerCodexInput = {
+	projectId: string | null,
+	/**  코드 잡이면 worktree 베이스 레포 (없으면 비-레포 prompt 잡). */
+	repoId: string | null,
+	prompt: string,
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
+};
+
+/**
+ *  echo 테스트 잡 입력 (codex 없이 bound/kill/로그 캡처 검증). seconds 동안 틱을 출력하는
+ *  셸아웃 잡 — happy(짧은 seconds) / timeout 테스트(긴 seconds + 짧은 timeout_sec).
+ */
+export type TriggerEchoInput = {
+	/**  잡 프로세스가 1초 간격 틱을 출력할 횟수 (0 = 즉시 종료). */
+	seconds: number,
+	/**  timeout bound (초). seconds보다 작으면 timeout→kill→failed. */
+	timeoutSec: number,
+	/**  첫 줄로 출력할 메시지 (로그 캡처 확인). */
+	message: string,
 };
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */

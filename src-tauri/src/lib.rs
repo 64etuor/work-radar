@@ -7,11 +7,13 @@
 //!
 //! 모든 외부 변경(Notion/GitHub)은 Acceptance 게이트를 거친다. 토큰은 keychain에만.
 
+mod agent;
 mod api;
 mod commands;
 mod db;
 mod git;
 mod github;
+mod jobs;
 mod keychain;
 mod models;
 mod notion;
@@ -68,6 +70,13 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_worktree_branches,
         commands::worktree_diff_files,
         commands::worktree_file_diff,
+        // Agent 스파인 (잡 큐 + bounds + kill, Phase 7).
+        commands::codex_status,
+        commands::trigger_echo_job,
+        commands::trigger_codex_job,
+        commands::list_agent_runs,
+        commands::kill_agent_run,
+        commands::read_agent_log,
     ])
 }
 
@@ -100,14 +109,20 @@ pub fn run() {
             specta_builder.mount_events(app);
 
             // DB는 OS app-data 경로에 둔다. setup에서 동기적으로 초기화.
-            let db_path = app
-                .path()
-                .app_data_dir()
-                .expect("resolve app data dir")
-                .join("work-radar.db");
-            let pool = tauri::async_runtime::block_on(db::init_db(&db_path))
+            let app_data = app.path().app_data_dir().expect("resolve app data dir");
+            let pool = tauri::async_runtime::block_on(db::init_db(&app_data.join("work-radar.db")))
                 .expect("failed to initialize database");
             app.manage(pool);
+
+            // 잡 큐 매니저(Phase 7): codex 경로 해석(graceful degrade) + worktree/로그 디렉터리 +
+            // 동시성 1. INVARIANT #5/#6은 jobs.rs/agent.rs에서 강제.
+            let codex_bin = tauri::async_runtime::block_on(agent::resolve_codex_bin());
+            app.manage(jobs::JobManager::new(
+                codex_bin,
+                app_data.join("worktrees"),
+                app_data.join("logs"),
+                1,
+            ));
 
             // 전역 핫키(Alt+Space)로 캡처/루트 창 토글.
             shortcut::register(app.handle())?;

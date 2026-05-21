@@ -5,14 +5,17 @@
 
 use tauri::State;
 
+use crate::agent::{codex_availability, Bounds, CodexRunner, EchoRunner};
 use crate::db::Db;
 use crate::git::{summarize_status, CliGitProvider, GitProvider};
 use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
+use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
 use crate::models::{
-    CiStatus, CreateProjectInput, CreateRepoInput, CreateRoutineInput, CreateSignalInput,
-    DiffFileSummary, DiffMode, FlushSummary, Kind, MismatchItem, PingResult, PrRadarItem, Project,
-    Promotion, PromotionOutcome, PromotionStatus, PromotionTarget, Quadrant, ReadinessBucket, Repo,
-    RoutineToday, SignalStatus, TokenKind, TokenStatus, Weekday, WorkSignal, Worktree,
+    AgentRail, AgentRunView, CiStatus, CodexAvailability, CreateProjectInput, CreateRepoInput,
+    CreateRoutineInput, CreateSignalInput, DiffFileSummary, DiffMode, Engine, FlushSummary, Kind,
+    MismatchItem, PingResult, PrRadarItem, Project, Promotion, PromotionOutcome, PromotionStatus,
+    PromotionTarget, Quadrant, ReadinessBucket, Repo, RoutineToday, Sandbox, SignalStatus,
+    TokenKind, TokenStatus, TriggerCodexInput, TriggerEchoInput, Weekday, WorkSignal, Worktree,
 };
 use crate::notion::{
     HttpNotionReader, HttpNotionWriter, NotionError, NotionPageState, NotionReader, NotionWriter,
@@ -1827,6 +1830,183 @@ pub async fn worktree_file_diff(
             head_ref.as_deref(),
             &path,
         )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ── Agent 스파인 (Phase 7, 잡 큐 + bounds + kill) ──────────────────────────────────
+//
+// INVARIANT #5: 모든 잡 bound(timeout+max_turns+cost_cap+kill). #6: 코드 잡 worktree·기본 read_only.
+// #2: codex 출력은 proposal(draft)일 뿐 — 외부 직접 mutate 없음(Acceptance 게이트는 Phase 8+).
+
+/// 새 잡 id (기존 엔티티와 동일한 hex 형식). agent_runs는 id를 미리 알아야 한다
+/// (log_path/worktree 경로 산정 + kill 레지스트리 등록 + 반환).
+async fn new_run_id(db: &Db) -> Result<String, String> {
+    let id: (String,) = sqlx::query_as("SELECT lower(hex(randomblob(16)))")
+        .fetch_one(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(id.0)
+}
+
+/// codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정).
+#[tauri::command]
+#[specta::specta]
+pub async fn codex_status(jm: State<'_, JobManager>) -> Result<CodexAvailability, String> {
+    Ok(codex_availability(jm.codex_bin.as_deref()).await)
+}
+
+/// echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속.
+#[tauri::command]
+#[specta::specta]
+pub async fn trigger_echo_job(
+    db: State<'_, Db>,
+    jm: State<'_, JobManager>,
+    input: TriggerEchoInput,
+) -> Result<String, String> {
+    let id = new_run_id(db.inner()).await?;
+    let bounds = Bounds {
+        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
+        max_turns: 1,
+        cost_cap_usd: 0.0,
+    };
+    insert_agent_run(
+        db.inner(),
+        &NewAgentRun {
+            id: id.clone(),
+            project_id: None,
+            engine: Engine::Codex,
+            kind: "echo".into(),
+            rail: AgentRail::Suggestion,
+            sandbox: Sandbox::ReadOnly,
+            repo_id: None,
+            workdir: None,
+            trigger: None,
+            bounds,
+            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    jm.spawn(
+        db.inner().clone(),
+        id.clone(),
+        bounds,
+        EchoRunner {
+            seconds: input.seconds,
+            message: input.message,
+        },
+    );
+    Ok(id)
+}
+
+/// codex 잡 트리거 (read_only 샌드박스 고정 — 실행 레일=Phase 10). 미설치/미인증이면 Err(graceful degrade).
+#[tauri::command]
+#[specta::specta]
+pub async fn trigger_codex_job(
+    db: State<'_, Db>,
+    jm: State<'_, JobManager>,
+    input: TriggerCodexInput,
+) -> Result<String, String> {
+    let prompt = input.prompt.trim();
+    if prompt.is_empty() {
+        return Err("프롬프트가 비었습니다.".into());
+    }
+    // graceful degrade: codex 미설치/미인증이면 잡을 만들지 않는다.
+    let Some(codex_bin) = jm.codex_bin.clone() else {
+        return Err("codex CLI를 찾을 수 없습니다 — 설치 후 재시작하세요.".into());
+    };
+    let avail = codex_availability(Some(&codex_bin)).await;
+    if !avail.authed {
+        return Err(avail.detail);
+    }
+
+    // 코드 잡이면 repo.local_path 해석(worktree 베이스).
+    let mut repo_path: Option<std::path::PathBuf> = None;
+    if let Some(repo_id) = &input.repo_id {
+        let row: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT local_path FROM repos WHERE id = ? AND enabled = 1")
+                .bind(repo_id)
+                .fetch_optional(db.inner())
+                .await
+                .map_err(|e| e.to_string())?;
+        match row {
+            Some((Some(p),)) if !p.trim().is_empty() => {
+                repo_path = Some(std::path::PathBuf::from(p))
+            }
+            _ => return Err("레포의 local_path가 없습니다(코드 잡은 로컬 경로 필요).".into()),
+        }
+    }
+
+    let id = new_run_id(db.inner()).await?;
+    let bounds = Bounds {
+        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
+        max_turns: input.max_turns.max(1),
+        cost_cap_usd: input.cost_cap_usd.max(0.0),
+    };
+    // 코드 잡 worktree 경로(예측 가능 — workdir로 기록). 비-레포면 None.
+    let workdir = repo_path
+        .as_ref()
+        .map(|_| jm.worktree_root.join(&id).to_string_lossy().into_owned());
+    insert_agent_run(
+        db.inner(),
+        &NewAgentRun {
+            id: id.clone(),
+            project_id: input.project_id.clone(),
+            engine: Engine::Codex,
+            kind: "codex_exec".into(),
+            rail: AgentRail::Suggestion,
+            sandbox: Sandbox::ReadOnly,
+            repo_id: input.repo_id.clone(),
+            workdir,
+            trigger: None,
+            bounds,
+            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    jm.spawn(
+        db.inner().clone(),
+        id.clone(),
+        bounds,
+        CodexRunner {
+            codex_bin,
+            run_id: id.clone(),
+            prompt: prompt.to_string(),
+            sandbox: Sandbox::ReadOnly,
+            rail: AgentRail::Suggestion,
+            repo_path,
+            worktree_root: jm.worktree_root.clone(),
+            scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
+        },
+    );
+    Ok(id)
+}
+
+/// Jobs 뷰 — 최근 잡 목록(영속된 agent_runs에서).
+#[tauri::command]
+#[specta::specta]
+pub async fn list_agent_runs(db: State<'_, Db>) -> Result<Vec<AgentRunView>, String> {
+    fetch_agent_runs(db.inner())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 잡 kill switch. 실행/대기 중이면 취소(true), 이미 끝났으면 false.
+#[tauri::command]
+#[specta::specta]
+pub async fn kill_agent_run(jm: State<'_, JobManager>, run_id: String) -> Result<bool, String> {
+    Ok(jm.kill(&run_id))
+}
+
+/// 잡 로그 tail(최대 16KB) — Jobs 뷰 로그 패널.
+#[tauri::command]
+#[specta::specta]
+pub async fn read_agent_log(db: State<'_, Db>, run_id: String) -> Result<String, String> {
+    fetch_log_tail(db.inner(), &run_id)
         .await
         .map_err(|e| e.to_string())
 }

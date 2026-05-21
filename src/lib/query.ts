@@ -19,6 +19,8 @@ import {
   type Quadrant,
   type SignalStatus,
   type TokenKind,
+  type TriggerCodexInput,
+  type TriggerEchoInput,
   type Weekday,
   type WorkSignal,
 } from "@/bindings";
@@ -495,5 +497,76 @@ export function useWorktreeFileDiff(args: {
         ),
       ),
     enabled: !!worktreePath && !!path && ready,
+  });
+}
+
+// ── Agent 잡 큐 (Phase 7) ──────────────────────────────────────────────────────
+//
+// 잡은 agent_runs에 영속(INVARIANT #7). Jobs 뷰가 주기 폴링으로 상태 전이를 따라간다.
+// codex 미설치/미인증이면 자동화 트리거 UI 비활성(graceful degrade).
+
+/** Jobs 뷰 폴링 주기 — 실행 중 잡 상태 전이를 따라잡되 과한 부하 없이. */
+export const JOBS_POLL_MS = 2_000;
+
+/** codex 설치/인증 상태 (자동화 UI 활성/비활성 판정). */
+export function useCodexStatus() {
+  return useQuery({
+    queryKey: ["codexStatus"],
+    queryFn: () => unwrap(commands.codexStatus()),
+    staleTime: 60_000,
+  });
+}
+
+/** 최근 잡 목록. 실행 중인 잡이 있으면 짧은 주기로 폴링해 상태/cost를 갱신한다. */
+export function useAgentRuns() {
+  return useQuery({
+    queryKey: ["agentRuns"],
+    queryFn: () => unwrap(commands.listAgentRuns()),
+    refetchInterval: (q) => {
+      const runs = q.state.data ?? [];
+      const active = runs.some(
+        (r) => r.status === "running" || r.status === "proposed",
+      );
+      return active ? JOBS_POLL_MS : false;
+    },
+  });
+}
+
+/** echo 테스트 잡 트리거(codex 없이 bound/kill/로그 검증). */
+export function useTriggerEchoJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerEchoInput) =>
+      unwrap(commands.triggerEchoJob(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** codex 잡 트리거(read_only 샌드박스). 미설치/미인증이면 백엔드가 Err로 막는다. */
+export function useTriggerCodexJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerCodexInput) =>
+      unwrap(commands.triggerCodexJob(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** 잡 kill switch. */
+export function useKillAgentRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => unwrap(commands.killAgentRun(runId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** 잡 로그 tail(최대 16KB). 펼친 잡에 대해서만 enabled. */
+export function useAgentLog(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["agentLog", runId],
+    queryFn: () => unwrap(commands.readAgentLog(runId as string)),
+    enabled: !!runId && ready,
+    refetchInterval: ready ? JOBS_POLL_MS : false,
   });
 }

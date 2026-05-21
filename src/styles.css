@@ -1825,3 +1825,263 @@
     border-bottom: 1px solid var(--color-wr-border-light);
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * Jobs · Agent (Phase 7) — 잡 큐 뷰. white editorial(DESIGN.md), .jobs 스코프.
+ * 모든 잡은 bound·영속(INVARIANT #5/#7), codex 미가용 시 트리거 비활성(graceful degrade).
+ * ────────────────────────────────────────────────────────────────────────────── */
+.jobs {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+.jobs .jobs-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.jobs .jobs-title {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.jobs .jobs-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.jobs .jobs-back:hover {
+  background: var(--color-wr-surface);
+}
+.jobs .jobs-poll {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--color-wr-subtle);
+}
+.jobs .jobs-spin {
+  animation: pr-spin 1s linear infinite;
+}
+.jobs .jobs-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+}
+.jobs .jobs-codex {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 12px var(--font-sans);
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+}
+.jobs .jobs-codex-ok {
+  background: #e3f1ec;
+  color: var(--color-q2);
+}
+.jobs .jobs-codex-off {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.jobs .jobs-codex-ver {
+  margin-left: auto;
+  font: 500 10px var(--font-mono);
+  opacity: 0.7;
+}
+.jobs .jobs-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.jobs .jobs-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.jobs .jobs-btn {
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.jobs .jobs-btn:hover:not(:disabled) {
+  background: var(--color-wr-surface);
+}
+.jobs .jobs-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.jobs .jobs-btn-primary {
+  background: var(--color-wr-coral);
+  border-color: var(--color-wr-coral);
+  color: #fff;
+  align-self: flex-start;
+}
+.jobs .jobs-codex-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.jobs .jobs-prompt {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  padding: 9px 11px;
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.jobs .jobs-prompt:disabled {
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-subtle);
+}
+.jobs .jobs-err {
+  font: 400 12px var(--font-sans);
+  color: var(--color-q1);
+}
+.jobs .jobs-empty {
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-muted);
+  padding: 18px 2px;
+}
+.jobs .jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.jobs .jobs-card {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.jobs .jobs-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.jobs .jobs-badge {
+  font: 600 10px var(--font-mono);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.jobs .jobs-st-proposed {
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-muted);
+}
+.jobs .jobs-st-running {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.jobs .jobs-st-succeeded {
+  background: #e3f1ec;
+  color: var(--color-q2);
+}
+.jobs .jobs-st-failed {
+  background: #ffe7e0;
+  color: #b23a1f;
+}
+.jobs .jobs-st-cancelled {
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-subtle);
+}
+.jobs .jobs-kind {
+  font: 600 12px var(--font-mono);
+  color: var(--color-wr-fg);
+}
+.jobs .jobs-engine,
+.jobs .jobs-sandbox {
+  font: 500 10px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-muted);
+}
+.jobs .jobs-kill {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #f0c4b8;
+  background: #ffe7e0;
+  color: #b23a1f;
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font: 600 10px var(--font-mono);
+}
+.jobs .jobs-detail {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
+  line-height: 1.35;
+}
+.jobs .jobs-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.jobs .jobs-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.jobs .jobs-log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.jobs .jobs-log-toggle:hover {
+  color: var(--color-wr-fg);
+}
+.jobs .jobs-log {
+  margin: 2px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--color-wr-elevated);
+  border-radius: var(--radius-xs);
+  padding: 9px 11px;
+  font: 400 11px var(--font-mono);
+  line-height: 1.45;
+  color: var(--color-wr-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

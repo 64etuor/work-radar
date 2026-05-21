@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Bot,
   FolderPlus,
   GitBranchPlus,
   GitCompare,
@@ -69,6 +70,13 @@ export function CommandPalette() {
               >
                 <Unlink className="size-4 text-wr-subtle" />
                 <span>Status Mismatch로</span>
+              </CommandItem>
+              <CommandItem
+                value="jobs agent codex 잡 에이전트 코덱스 자동화"
+                onSelect={() => goTo("jobs")}
+              >
+                <Bot className="size-4 text-wr-subtle" />
+                <span>Jobs (Agent)로</span>
               </CommandItem>
               <CommandItem
                 value="settings 설정 open"
