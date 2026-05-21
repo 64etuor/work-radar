@@ -35,7 +35,7 @@
   .head .hint b{color:var(--ink); font-weight:700}
 
   /* 보드 = 3컬럼 (inbox | matrix | execute) */
-  .board{flex:1; min-height:0; display:flex; gap:16px; padding:8px 22px 14px}
+  .board{flex:1; min-height:0; display:flex; gap:14px; padding:8px 16px 14px}
   .canvas{flex:1; min-width:0; position:relative; display:flex; gap:16px}
 
   .col-label{position:absolute; top:12px; left:14px; z-index:2; pointer-events:none;
@@ -46,7 +46,7 @@
     background:var(--stone); color:var(--slate)}
 
   /* INBOX(미분류) */
-  .inbox{flex:0 0 232px; position:relative; border:1px dashed var(--hair);
+  .inbox{flex:0 0 178px; position:relative; border:1px dashed var(--hair);
     border-radius:var(--r-lg); background:var(--elevated)}
 
   /* 2×2 */
@@ -90,7 +90,7 @@
   @keyframes pop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.07)}100%{transform:scale(1)}}
 
   /* 우측 실행 컬럼 */
-  .execute{flex:0 0 296px; display:flex; flex-direction:column; gap:16px; min-height:0}
+  .execute{flex:0 0 250px; display:flex; flex-direction:column; gap:14px; min-height:0}
   .panelbox{flex:1; min-height:0; display:flex; flex-direction:column;
     border:1px solid var(--border); border-radius:var(--r-lg); background:var(--white); overflow:hidden}
   .panelbox.drop{background:var(--pale-blue); border-color:var(--blue)}
@@ -145,7 +145,7 @@
 
   /* 하단 캡처 패널 */
   .capture{flex:0 0 auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-    margin:0 22px 18px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--r-lg);
+    margin:0 16px 16px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--r-lg);
     background:var(--white); box-shadow:0 10px 30px rgba(10,14,30,.08)}
   .capture .bd{font:700 10px var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--coral)}
   .seg{display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; flex:0 0 auto}
@@ -177,11 +177,13 @@
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 
   /* ── 반응형 ── */
-  @media (max-width:1040px){
-    .execute{flex-basis:240px}
-    .inbox{flex-basis:190px}
+  .matrix{min-width:440px}
+  @media (max-width:1180px){
+    .inbox{flex-basis:152px}
+    .execute{flex-basis:224px}
   }
   @media (max-width:820px){
+    .matrix{min-width:0}
     .board{flex-direction:column; overflow-y:auto}
     .canvas{flex-direction:column; min-height:520px}
     .inbox{flex:0 0 150px}
