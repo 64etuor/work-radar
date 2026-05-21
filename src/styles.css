@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/*
+ * Work Radar 디자인 토큰 — Cohere 스타일(white editorial). 정본: 루트 DESIGN.md.
+ * 원칙: white canvas 기본, flat(그림자 없음), thin hairline 보더, 큰 라운드 미디어,
+ * 색은 절제(coral/blue 악센트). 이전 Raycast 다크 방향은 docs/archive/design-raycast.md.
+ */
+@theme {
+  /* Surface & Background */
+  --color-wr-bg: #ffffff; /* Canvas White — 기본 페이지/카드 surface */
+  --color-wr-surface: #eeece7; /* Soft Stone — 카드/선택 행/중립 블록 */
+  --color-wr-elevated: #f6f5f2; /* 옅은 stone — kbd/segmented 디테일 */
+  --color-wr-card-border: #f2f2f2; /* 가장 옅은 카드 보더 */
+
+  /* Text & Rules */
+  --color-wr-fg: #212121; /* Ink — 본문/링크 기본 */
+  --color-wr-muted: #75758a; /* Slate — 보조 텍스트 */
+  --color-wr-subtle: #93939f; /* Muted Slate — 메타데이터/날짜/비활성 라벨 */
+  --color-wr-border: #d9d9dd; /* Hairline — 표준 리스트 룰/구분선 */
+  --color-wr-border-light: #e5e7eb; /* 보조 구분선 */
+
+  /* Brand & Accent */
+  --color-wr-black: #000000; /* 최고 대비/브랜드 앵커 */
+  --color-wr-near-black: #17171c; /* Near-Black — primary pill CTA/딥 카드 */
+  --color-wr-accent: #1863dc; /* Action Blue — 에디토리얼 링크/보조 강조 */
+  --color-wr-accent-soft: #f1f5ff; /* Pale Blue Wash */
+  --color-wr-coral: #ff7759; /* Coral — 분류 chip/따뜻한 마커 */
+  --color-wr-coral-soft: #ffad9b; /* Soft Coral — chip 보더 */
+  --color-wr-green: #003c33; /* Deep Enterprise Green — 다크 product band */
+  --color-wr-navy: #071829; /* Dark Navy — security/financial band */
+
+  /* Semantic */
+  --color-wr-focus: #4c6ee6; /* 키보드 포커스 ring */
+
+  /*
+   * 사분면 색 (결정 큐). 색만으로 의미 전달 금지 — 항상 라벨 병기.
+   * Cohere 팔레트에 맞춘 light-theme 변형.
+   */
+  --color-q1: #ff7759; /* Coral — 긴급·중요 */
+  --color-q2: #1863dc; /* Action Blue — 중요 */
+  --color-q3: #75758a; /* Slate — 긴급 */
+  --color-q4: #93939f; /* Muted Slate — 그 외 */
+
+  /* Typography — DESIGN.md 폰트 스택(프로프라이어터리 미번들 → 폴백 사용) */
+  --font-display: "CohereText", "Space Grotesk", "Inter", ui-sans-serif, system-ui,
+    sans-serif;
+  --font-sans: "Unica77 Cohere Web", "Inter", Arial, ui-sans-serif, system-ui,
+    sans-serif;
+  --font-mono: "CohereMono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+
+  /* Radius scale — DESIGN.md Shapes */
+  --radius: 8px; /* 기본(=sm) */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 22px; /* signature 미디어 카드 */
+  --radius-xl: 30px; /* 필터 pill */
+  --radius-pill: 32px; /* primary CTA */
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-wr-bg);
+    color: var(--color-wr-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  ::selection {
+    background: var(--color-wr-accent-soft);
+  }
+
+  /* 얇은 스크롤바 (flat) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-wr-border);
+    border-radius: 9999px;
+  }
+}

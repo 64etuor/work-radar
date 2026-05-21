@@ -1,0 +1,36 @@
+[package]
+name = "work-radar"
+version = "0.1.0"
+description = "Work Radar — Eisenhower 매트릭스 기반 업무 관제 데스크톱 앱"
+authors = ["Work Radar"]
+edition = "2021"
+
+[lib]
+# The `_lib` suffix keeps the lib name unique from the bin name (Windows linker issue).
+name = "work_radar_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-global-shortcut = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
+
+# 토큰은 OS keychain에만 (INVARIANT: SQLite 평문/렌더러 노출 금지).
+keyring = { version = "3", features = ["apple-native"] }
+
+# IPC 타입 계약: Rust 타입 → TS 생성 (수기 타입 중복 금지).
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "0.0.12"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+
+[features]
+# default Tauri custom-protocol toggle used by `tauri build`.
+custom-protocol = ["tauri/custom-protocol"]

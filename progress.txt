@@ -1,0 +1,66 @@
+# Work Radar — Ralph Progress Log
+
+## Run scope: Phase 0 (스켈레톤 & 스파인), Raycast 디자인
+Session: 357afcbf-b4e0-4aac-905d-637e923359a7
+PRD: .omc/state/sessions/357afcbf-b4e0-4aac-905d-637e923359a7/prd.json
+
+## Environment / Decisions
+- Rust/cargo 미설치 상태였음 → 사용자 승인 후 rustup으로 stable 설치 (run-in-background).
+- Scope: Phase 0만. Phase 1+ 는 별도 런 (PLAN.md "한 번에 한 Phase" 원칙).
+- GUI 의존 criteria(창 렌더/핫키 토글)는 빌드+와이어로 검증, 시각 확인은 사용자 관찰 항목으로 명시.
+
+## Stack (PLAN.md §2 확정)
+- Tauri 2.x / Rust(tokio, sqlx+SQLite, keyring) / tauri-specta
+- Vite + React + TS + Tailwind + shadcn/ui + cmdk + TanStack Query + Zustand
+- Next.js 금지. Notion/GitHub 호출은 Rust. 토큰은 keychain.
+
+## Iteration log
+
+### Implemented (Phase 0 build)
+- Baseline: create-tauri-app(react-ts)로 /tmp 스캐폴드 후 아이콘만 harvest, 나머지는 in-place 작성.
+- Frontend: package.json(React19/Vite7/Tailwind4/cmdk/TanStack/Zustand), vite.config(@alias+tailwind plugin),
+  tsconfig(+@/* paths), index.html(dark), src/styles.css(Raycast 토큰 @theme),
+  src/lib/utils.ts(cn), src/lib/query.ts(queryClient+useProjects), src/store.ts(zustand),
+  src/components/ui/command.tsx(shadcn식 cmdk 래퍼), src/components/RootPalette.tsx, src/App.tsx, src/main.tsx.
+- Rust: Cargo.toml(tauri2/tokio/sqlx/keyring3/specta-rc25/tauri-specta-rc25),
+  src/{main,lib,db,keychain,models,commands,shortcut}.rs, migrations/0001_init.sql(6테이블+FTS5),
+  capabilities/default.json(window+global-shortcut perms), tauri.conf.json(decorationless single window).
+- bindings.ts: cargo test의 export 테스트가 생성, 저장소에 커밋.
+
+### Verification evidence (fresh runs)
+- cargo build → exit 0 (288 crates)
+- cargo test → 3 passed: migrations_create_six_tables_and_fts (6 tables + FTS5 MATCH 동작),
+  list_projects_returns_empty_on_fresh_db, export_typescript_bindings
+- cargo clippy --all-targets → exit 0, clean
+- pnpm build (tsc + vite) → exit 0, dist/ 생성 (CSS 9.85kB = Tailwind 동작, JS 325kB)
+- pnpm tauri dev → (검증 진행 중: 부팅 마커 확인)
+
+### Learnings / gotchas
+- keyring 4.x는 feature 없음(재패키징) → keyring 3.x + apple-native 사용.
+- tauri-specta는 Tauri2용으로 2.0.0-rc.25만 가능 (specta/specta-typescript 동일).
+- global-shortcut on_shortcut의 에러는 tauri::Error로 변환 안 됨 → register는 plugin Error 반환,
+  setup의 ? 가 Box<dyn Error>로 변환.
+- rtk 훅이 `curl|sh`, `tail`, `cat`의 출력을 잘라 깨뜨림 → 파일로 받아 Read/python으로 파싱.
+- Tailwind v4: tailwind.config 불필요, @theme 토큰이 유틸 생성(bg-rc-bg 등).
+
+### Story status — ALL 7 PASS (Phase 0 DONE)
+- US-001..US-007: passes:true. 모든 acceptance criteria 검증 완료.
+- 창 표시/핫키 실제 동작은 사용자 관찰 항목(앱은 부팅·실행 확인됨, panic 0).
+
+### Reviewer (architect/opus) — APPROVED
+- 7개 스토리 criteria 전부 충족, 7개 INVARIANT 위반 0건.
+- FTS5 트리거 정확성 독립 검증(insert/update/delete + integrity-check).
+- enum 정렬(serde/sqlx/DB CHECK/TS) 일치 확인. 가짜 테스트 아님 확인.
+- non-blocking follow-ups(Phase 1+): Tailwind config 문구, enum decode 테스트, 타임스탬프 타입,
+  updated_at 트리거, bindings 재생성 churn.
+
+### Deslop pass (standard)
+- bindings export 중복(lib.rs 2곳: run() + test) → export_bindings() 헬퍼 + BINDINGS_PATH const로 통합.
+- 그 외: TODO/디버그/주석코드/any/@ts-ignore 0건. gate가 dead/unused 보장(tsc strict, clippy).
+
+### Post-deslop regression — GREEN
+- cargo test 3 passed, cargo clippy exit 0, pnpm build exit 0.
+
+### NEXT RUN (Phase 1) — 별도 Ralph
+- Capture & Matrix 루프: braindump 캡처 + WorkSignal CRUD + dedup, Eisenhower 2×2 + 키보드 분류,
+  cmdk 액션(snooze/done/archive/move), FTS5 전역 검색 UI.
