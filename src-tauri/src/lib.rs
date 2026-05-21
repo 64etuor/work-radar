@@ -18,7 +18,28 @@ use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 
 /// specta + tauri command 레지스트리. run()과 바인딩 export 테스트가 공유한다.
 pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
-    SpectaBuilder::<tauri::Wry>::new().commands(collect_commands![commands::list_projects])
+    SpectaBuilder::<tauri::Wry>::new().commands(collect_commands![
+        commands::list_projects,
+        // Signals — 캡처/조회/분류(사람 결정 레일).
+        commands::create_signal,
+        commands::list_signals,
+        commands::classify_signal,
+        commands::set_signal_status,
+        commands::snooze_signal,
+        commands::search_signals,
+        // Today 레일 (로컬 승격).
+        commands::promote_today,
+        commands::unpromote_today,
+        commands::toggle_today_done,
+        commands::reorder_today,
+        commands::list_today,
+        // 외부 승격 draft (Acceptance 게이트).
+        commands::create_promotion_draft,
+        // Routines.
+        commands::create_routine,
+        commands::list_today_routines,
+        commands::toggle_routine_check,
+    ])
 }
 
 /// 생성된 TS 바인딩이 쓰이는 프런트 소스 경로. (수기 타입 중복 금지 — INVARIANT)

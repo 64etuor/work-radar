@@ -6,9 +6,53 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	/**  모든 프로젝트 목록. Phase 0에서는 빈 DB라 빈 배열을 반환한다. */
 	listProjects: () => typedError<Project[], string>(__TAURI_INVOKE("list_projects")),
+	createSignal: (input: CreateSignalInput) => typedError<WorkSignal, string>(__TAURI_INVOKE("create_signal", { input })),
+	listSignals: () => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_signals")),
+	classifySignal: (id: string, quadrant: Quadrant) => typedError<WorkSignal, string>(__TAURI_INVOKE("classify_signal", { id, quadrant })),
+	/**  상태 변경 (완료/보관 등). done/archive 카드 메뉴. */
+	setSignalStatus: (id: string, status: SignalStatus) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_status", { id, status })),
+	/**  미루기 (snooze). 매트릭스에서 숨고 snooze_until에 복귀 시점 기록. */
+	snoozeSignal: (id: string, until: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("snooze_signal", { id, until })),
+	/**  본문/제목 전역 검색 (FTS5). 빈 쿼리는 빈 결과. */
+	searchSignals: (query: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("search_signals", { query })),
+	promoteToday: (id: string, date: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("promote_today", { id, date })),
+	unpromoteToday: (id: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("unpromote_today", { id })),
+	/**  Today 항목 완료 토글. 완료(done)=해당 날짜 기록 → 다음날 이월 안 됨. */
+	toggleTodayDone: (id: string, date: string, done: boolean) => typedError<WorkSignal, string>(__TAURI_INVOKE("toggle_today_done", { id, date, done })),
+	/**  Today 레일 재정렬. ordered_ids 순서대로 today_rank 부여. */
+	reorderToday: (orderedIds: string[]) => typedError<null, string>(__TAURI_INVOKE("reorder_today", { orderedIds })),
+	listToday: (today: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_today", { today })),
+	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, string>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
+	createRoutine: (input: CreateRoutineInput) => typedError<RoutineToday, string>(__TAURI_INVOKE("create_routine", { input })),
+	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], string>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
+	/**  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋. */
+	toggleRoutineCheck: (routineId: string, date: string, done: boolean) => typedError<null, string>(__TAURI_INVOKE("toggle_routine_check", { routineId, date, done })),
 };
 
 /* Types */
+/**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
+export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
+
+/**  루틴 생성 입력. */
+export type CreateRoutineInput = {
+	title: string,
+	freq: RoutineFreq,
+	/**  weekly일 때 해당 요일들. daily면 무시. */
+	weekdays: Weekday[],
+	area: AreaTag | null,
+	kind: Kind | null,
+};
+
+/**  신호 생성 입력. 카드는 항상 unclassified로 만들어진다. */
+export type CreateSignalInput = {
+	title: string,
+	/**  개인/업무 힌트 (없으면 NULL). 결정 레일 아님. */
+	kind: Kind | null,
+};
+
+/**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
+export type Kind = "personal" | "work";
+
 /**  최상위 그룹. `credential_ref`는 keychain 키일 뿐, 토큰 평문이 아니다. */
 export type Project = {
 	id: string,
@@ -24,6 +68,81 @@ export type Project = {
 
 /**  프로젝트 종류. 개인/업무는 별도 토큰·Notion 워크스페이스로 분리된다. */
 export type ProjectKind = "personal" | "work";
+
+/**  append-only 승격 이력 (undo/audit). 외부 변경은 Acceptance 전엔 일어나지 않는다. */
+export type Promotion = {
+	id: string,
+	signalId: string,
+	target: PromotionTarget,
+	status: PromotionStatus,
+	draftPayload: string,
+	createdExternalId: string | null,
+	createdAt: string,
+};
+
+/**  승격 상태. 외부 승격은 draft에서 멈춘다 (실제 write는 Phase 3/11, INVARIANT #2). */
+export type PromotionStatus = "draft" | "confirmed" | "created" | "failed";
+
+/**  승격 대상. notion_*\/calendar = 외부(Acceptance 게이트), today = 로컬(즉시). */
+export type PromotionTarget = "notion_backlog" | "notion_agenda" | "today" | "calendar";
+
+/**  아이젠하워 사분면 (사람 결정값). 카드는 항상 `Unclassified`로 진입한다 (INVARIANT #1). */
+export type Quadrant = "q1_do_now" | "q2_schedule" | "q3_quick_contain" | "q4_drop" | "unclassified";
+
+/**  루틴 반복 주기. */
+export type RoutineFreq = "daily" | "weekly";
+
+/**  오늘 표시할 루틴 항목 (스케줄 매칭 + 날짜별 완료 상태 포함). */
+export type RoutineToday = {
+	id: string,
+	title: string,
+	freq: RoutineFreq,
+	weekdays: Weekday[],
+	area: AreaTag | null,
+	kind: Kind | null,
+	/**  주어진 날짜에 완료 체크됐는지 (RoutineCheck 존재 여부). */
+	done: boolean,
+};
+
+/**  신호 출처. */
+export type SignalSource = "braindump" | "notion_backlog" | "notion_agenda" | "github_pr" | "calendar" | "hermes" | "system";
+
+/**  신호 상태. */
+export type SignalStatus = "new" | "classified" | "promoted" | "linked" | "done" | "snoozed" | "archived";
+
+/**  신호 종류. */
+export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "mismatch" | "cleanup";
+
+/**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+/**  매트릭스 카드/Today 항목. 로컬 SQLite가 SSOT (INVARIANT #7). */
+export type WorkSignal = {
+	id: string,
+	projectId: string | null,
+	title: string,
+	body: string | null,
+	source: SignalSource,
+	type: SignalType,
+	/**  사람 결정값. 자동 분류 없음 (INVARIANT #1). */
+	quadrant: Quadrant,
+	/**  파생 힌트 (truth 아님). Phase 1은 항상 NULL. */
+	suggestedQuadrant: string | null,
+	kind: Kind | null,
+	/**  사람 확정 라이프 도메인. Phase 1은 데이터 필드만. */
+	area: AreaTag | null,
+	/**  AI 추론 힌트. Phase 9 enrich에서 채워짐. */
+	suggestedArea: AreaTag | null,
+	status: SignalStatus,
+	snoozeUntil: string | null,
+	/**  Today로 옮긴 날(YYYY-MM-DD). NULL = Today 아님(매트릭스/미분류). */
+	todayForDate: string | null,
+	/**  Today 완료 체크한 날(YYYY-MM-DD). */
+	todayDoneAt: string | null,
+	todayRank: number | null,
+	createdAt: string,
+	updatedAt: string,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
