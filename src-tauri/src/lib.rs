@@ -7,6 +7,7 @@
 //!
 //! 모든 외부 변경(Notion/GitHub)은 Acceptance 게이트를 거친다. 토큰은 keychain에만.
 
+mod api;
 mod commands;
 mod db;
 mod keychain;
@@ -20,6 +21,17 @@ use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
     SpectaBuilder::<tauri::Wry>::new().commands(collect_commands![
         commands::list_projects,
+        // Projects / Repos / 토큰 (Phase 2).
+        commands::create_project,
+        commands::list_repos,
+        commands::create_repo,
+        commands::set_project_token,
+        commands::delete_project_token,
+        commands::project_token_status,
+        commands::ping_project_token,
+        // projectId 태깅 / reconcile.
+        commands::reconcile_signal_projects,
+        commands::set_signal_project,
         // Signals — 캡처/조회/분류(사람 결정 레일).
         commands::create_signal,
         commands::list_signals,

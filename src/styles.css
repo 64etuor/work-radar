@@ -832,3 +832,353 @@
     display: none;
   }
 }
+
+/*
+ * ── 명령 팔레트 (cmdk 오버레이, Phase 2) ──
+ * Cohere white editorial: 흰 패널 + thin border, 절제된 그림자. 단일 창 네비게이션.
+ */
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 20, 40, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.cmdk-panel {
+  width: min(560px, 92vw);
+  max-height: 60vh;
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 60px rgba(10, 14, 30, 0.28);
+  overflow: hidden;
+}
+
+/*
+ * ── 설정 / 프로젝트 뷰 (Phase 2) ──
+ * contact-form-card 톤: 흰 카드 · thin gray 보더 · near-black pill CTA. DESIGN.md 정본.
+ */
+.settings {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+.settings .st-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.settings .st-title {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.settings .st-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.settings .st-back:hover {
+  background: var(--color-wr-surface);
+}
+.settings .st-head .st-btn-ghost {
+  margin-left: auto;
+}
+.settings .st-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+}
+.settings .st-section-lbl {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+  margin: 22px 2px 10px;
+}
+
+/* contact-form-card */
+.settings .st-card {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-bg);
+  padding: 18px;
+}
+.settings .st-card-lbl {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+  margin-bottom: 12px;
+}
+.settings .st-field {
+  margin-bottom: 12px;
+}
+.settings .st-label {
+  display: block;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-muted);
+  margin-bottom: 5px;
+}
+.settings .st-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font: 400 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+}
+.settings .st-input:focus {
+  border-color: var(--color-wr-accent);
+}
+.settings .st-input::placeholder {
+  color: var(--color-wr-subtle);
+}
+
+/* segmented (개인/업무, github/local) */
+.settings .st-seg {
+  display: inline-flex;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.settings .st-seg button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 7px 16px;
+  font: 600 12px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.settings .st-seg.sm button {
+  padding: 5px 12px;
+  font-size: 11px;
+}
+.settings .st-seg button.on[data-kind="personal"] {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-wr-accent);
+}
+.settings .st-seg button.on[data-kind="work"] {
+  background: #edfce9;
+  color: var(--color-wr-green);
+}
+.settings .st-seg button.on:not([data-kind]) {
+  background: var(--color-wr-near-black);
+  color: #fff;
+}
+
+.settings .st-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+/* buttons (button-primary near-black pill / secondary ghost) */
+.settings .st-btn {
+  border: none;
+  cursor: pointer;
+  background: var(--color-wr-near-black);
+  color: #fff;
+  font: 500 14px var(--font-sans);
+  padding: 9px 22px;
+  border-radius: 999px;
+}
+.settings .st-btn:hover {
+  background: var(--color-wr-black);
+}
+.settings .st-btn.sm {
+  padding: 7px 14px;
+  font-size: 12px;
+}
+.settings .st-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.settings .st-btn-ghost {
+  border: 1px solid var(--color-wr-border-light);
+  cursor: pointer;
+  background: var(--color-wr-bg);
+  font: 500 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  padding: 8px 16px;
+  border-radius: 999px;
+}
+.settings .st-btn-ghost:hover {
+  background: var(--color-wr-surface);
+}
+.settings .st-btn-ghost.sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.settings .st-btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.settings .st-err {
+  color: #b30000;
+  font: 400 12px var(--font-sans);
+  margin-top: 6px;
+}
+.settings .st-empty {
+  color: var(--color-wr-subtle);
+  font: 400 13px var(--font-sans);
+  padding: 12px 2px;
+}
+
+/* project card */
+.settings .st-proj {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-bg);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.settings .st-proj-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.settings .st-proj-name {
+  font: 500 16px var(--font-sans);
+}
+.settings .st-proj-meta {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.settings .st-chip {
+  font: 600 10px var(--font-sans);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.settings .st-chip.personal {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-wr-accent);
+}
+.settings .st-chip.work {
+  background: #edfce9;
+  color: var(--color-wr-green);
+}
+.settings .st-proj-body {
+  padding: 14px 18px 18px;
+}
+.settings .st-subhead {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+  margin: 16px 0 8px;
+}
+
+/* token row */
+.settings .st-token {
+  margin-bottom: 12px;
+}
+.settings .st-token-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.settings .st-token-lbl {
+  font: 500 13px var(--font-sans);
+}
+.settings .st-status {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.settings .st-status.on {
+  color: var(--color-wr-green);
+}
+.settings .st-token-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.settings .st-token-row .st-input {
+  flex: 1;
+}
+.settings .st-ping {
+  font: 400 12px var(--font-mono);
+  margin-top: 6px;
+}
+.settings .st-ping.ok {
+  color: var(--color-wr-green);
+}
+.settings .st-ping.fail {
+  color: #b30000;
+}
+
+/* repo row + add-repo form */
+.settings .st-repo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+.settings .st-repo-prov {
+  font: 700 9px var(--font-mono);
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
+}
+.settings .st-repo-prov.github {
+  background: #edfce9;
+  color: var(--color-wr-green);
+}
+.settings .st-repo-loc {
+  flex: 1;
+  min-width: 0;
+  font: 400 13px var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings .st-repo-branch {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.settings .st-repoform {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings .st-repoform-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.settings .st-repoform-row .st-input {
+  flex: 1;
+}

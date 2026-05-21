@@ -2,28 +2,54 @@ import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { CaptureBoard } from "@/components/CaptureBoard";
+import { CommandPalette } from "@/components/CommandPalette";
+import { SettingsView } from "@/components/SettingsView";
+import { useUIStore } from "@/store";
 
 /**
- * Raycast 모델: 하나의 창 = 하나의 팔레트.
- * 전역 핫키(Alt+Space, Rust 측 처리)로 토글되고, Esc로 숨긴다.
+ * 단일 창 셸. 전역 핫키(Alt+Space, Rust)로 토글되고 Esc로 숨긴다.
+ * 보드↔설정 네비게이션은 cmdk 팔레트(Cmd+K) / Cmd+, 로 한다 (단일 창 유지).
  */
 export default function App() {
+  const { view, paletteOpen, setPaletteOpen, goTo } = useUIStore();
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      // Cmd/Ctrl+K → 명령 팔레트 토글.
+      if (meta && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen(!paletteOpen);
+        return;
+      }
+      // Cmd/Ctrl+, → 설정 바로 열기.
+      if (meta && e.key === ",") {
+        e.preventDefault();
+        goTo("settings", "open");
+        return;
+      }
       if (e.key === "Escape") {
+        if (paletteOpen) {
+          setPaletteOpen(false);
+          return;
+        }
         // 카드 메뉴가 열려 있으면 그 닫힘을 CaptureBoard에 맡기고 창은 유지한다.
-        // (둘 다 window에서 Esc를 듣기 때문에 중복 동작 방지.)
         if (document.querySelector(".cb-card-menu")) return;
+        if (view === "settings") {
+          goTo("board");
+          return;
+        }
         void getCurrentWindow().hide();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [view, paletteOpen, setPaletteOpen, goTo]);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-wr-bg">
-      <CaptureBoard />
+      {view === "settings" ? <SettingsView /> : <CaptureBoard />}
+      {paletteOpen && <CommandPalette />}
     </div>
   );
 }

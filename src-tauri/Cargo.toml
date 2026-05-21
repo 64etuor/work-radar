@@ -26,6 +26,12 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
 # 토큰은 OS keychain에만 (INVARIANT: SQLite 평문/렌더러 노출 금지).
 keyring = { version = "3", features = ["apple-native"] }
 
+# 외부 호출은 Rust에 둔다 (토큰 렌더러 노출 금지 — INVARIANT).
+#   Notion = reqwest REST(GET /v1/users/me ping), GitHub = octocrab(current user ping).
+#   rustls-tls로 통일 (openssl 시스템 의존 회피). octocrab 기본 features도 rustls.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+octocrab = "0.42"
+
 # IPC 타입 계약: Rust 타입 → TS 생성 (수기 타입 중복 금지).
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"

@@ -29,6 +29,92 @@ pub struct Project {
     pub updated_at: String,
 }
 
+/// 프로젝트 생성 입력. credential_ref는 백엔드가 생성한다(프런트가 정하지 않음).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateProjectInput {
+    pub name: String,
+    pub kind: ProjectKind,
+    pub notion_backlog_db_id: Option<String>,
+    pub notion_agenda_db_id: Option<String>,
+    pub ticket_key_pattern: Option<String>,
+}
+
+// ── 레포(Repo) ────────────────────────────────────────────────────────────────
+
+/// 레포 제공자. github = remote_url, local = local_path(Codex worktree 베이스).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum Provider {
+    Github,
+    Local,
+}
+
+/// project별 레포. PR Radar(Phase 4)·worktree(Phase 5)의 단위.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Repo {
+    pub id: String,
+    pub project_id: String,
+    pub provider: Provider,
+    pub remote_url: Option<String>,
+    pub local_path: Option<String>,
+    pub default_branch: String,
+    pub ticket_key_pattern: Option<String>,
+    pub enabled: bool,
+    pub created_at: String,
+}
+
+/// 레포 추가 입력.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRepoInput {
+    pub project_id: String,
+    pub provider: Provider,
+    pub remote_url: Option<String>,
+    pub local_path: Option<String>,
+    /// 기본 브랜치. 비면 'main'.
+    pub default_branch: Option<String>,
+    pub ticket_key_pattern: Option<String>,
+}
+
+// ── 토큰 / 외부 ping (토큰 본문은 절대 이 타입들에 담기지 않는다) ────────────────
+
+/// project별 분리되는 토큰 종류. keychain account 접미사로 쓰인다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TokenKind {
+    Notion,
+    Github,
+}
+
+impl TokenKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TokenKind::Notion => "notion",
+            TokenKind::Github => "github",
+        }
+    }
+}
+
+/// 토큰 존재 여부만 노출 (본문 미노출 — INVARIANT: 토큰 렌더러 노출 금지).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenStatus {
+    pub has_notion: bool,
+    pub has_github: bool,
+}
+
+/// 외부 API ping 결과 (read-only). 토큰 본문은 포함하지 않는다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PingResult {
+    pub ok: bool,
+    /// 성공 시 식별 정보(예: GitHub login, Notion bot 이름), 실패 시 에러 메시지.
+    pub detail: String,
+}
+
 // ── 신호(WorkSignal) ──────────────────────────────────────────────────────────
 
 /// 개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무.
@@ -152,6 +238,8 @@ pub struct CreateSignalInput {
     pub title: String,
     /// 개인/업무 힌트 (없으면 NULL). 결정 레일 아님.
     pub kind: Option<Kind>,
+    /// 소속 프로젝트(없으면 NULL → 나중에 reconcile). 메타데이터(결정 레일 아님).
+    pub project_id: Option<String>,
 }
 
 // ── 승격(Promotion) ───────────────────────────────────────────────────────────

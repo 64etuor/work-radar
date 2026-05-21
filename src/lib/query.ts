@@ -7,11 +7,14 @@ import {
 
 import {
   commands,
+  type CreateProjectInput,
+  type CreateRepoInput,
   type CreateRoutineInput,
   type CreateSignalInput,
   type PromotionTarget,
   type Quadrant,
   type SignalStatus,
+  type TokenKind,
   type Weekday,
   type WorkSignal,
 } from "@/bindings";
@@ -243,5 +246,96 @@ export function useToggleRoutineCheck() {
       done: boolean;
     }) => unwrap(commands.toggleRoutineCheck(routineId, date, done)),
     onSuccess: () => inv.routines(),
+  });
+}
+
+// ── Phase 2: Projects / Repos / 토큰 ────────────────────────────────────────────
+
+/** project별 레포 목록. */
+export function useRepos(projectId: string) {
+  return useQuery({
+    queryKey: ["repos", projectId],
+    queryFn: () => unwrap(commands.listRepos(projectId)),
+    enabled: !!projectId,
+  });
+}
+
+/** 토큰 존재 여부만(본문 미노출 — INVARIANT). 마스킹 표시용. */
+export function useProjectTokenStatus(projectId: string) {
+  return useQuery({
+    queryKey: ["tokenStatus", projectId],
+    queryFn: () => unwrap(commands.projectTokenStatus(projectId)),
+    enabled: !!projectId,
+  });
+}
+
+/** 프로젝트 생성 (개인/업무). */
+export function useCreateProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProjectInput) => unwrap(commands.createProject(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  });
+}
+
+/** 레포 추가. */
+export function useCreateRepo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateRepoInput) => unwrap(commands.createRepo(input)),
+    onSuccess: (repo) =>
+      qc.invalidateQueries({ queryKey: ["repos", repo.projectId] }),
+  });
+}
+
+/**
+ * 토큰 저장. 토큰은 IPC 인자로만 전달되고 캐시에 저장하지 않는다(INVARIANT: 렌더러 미노출).
+ * 성공 후 token status만 무효화한다(본문 아님).
+ */
+export function useSetProjectToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      kind,
+      token,
+    }: {
+      projectId: string;
+      kind: TokenKind;
+      token: string;
+    }) => unwrap(commands.setProjectToken(projectId, kind, token)),
+    onSuccess: (_data, v) =>
+      qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
+  });
+}
+
+/** 토큰 삭제(클리어). */
+export function useDeleteProjectToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, kind }: { projectId: string; kind: TokenKind }) =>
+      unwrap(commands.deleteProjectToken(projectId, kind)),
+    onSuccess: (_data, v) =>
+      qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
+  });
+}
+
+/** 토큰으로 외부 API ping(read-only). 결과(PingResult)를 호출부가 표시. */
+export function usePingProjectToken() {
+  return useMutation({
+    mutationFn: ({ projectId, kind }: { projectId: string; kind: TokenKind }) =>
+      unwrap(commands.pingProjectToken(projectId, kind)),
+  });
+}
+
+/** 미태깅 신호를 kind→매칭 프로젝트로 reconcile. 태깅된 건수 반환. */
+export function useReconcileSignalProjects() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.reconcileSignalProjects()),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+    },
   });
 }

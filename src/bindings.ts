@@ -6,6 +6,20 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	/**  모든 프로젝트 목록. Phase 0에서는 빈 DB라 빈 배열을 반환한다. */
 	listProjects: () => typedError<Project[], string>(__TAURI_INVOKE("list_projects")),
+	createProject: (input: CreateProjectInput) => typedError<Project, string>(__TAURI_INVOKE("create_project", { input })),
+	listRepos: (projectId: string) => typedError<Repo[], string>(__TAURI_INVOKE("list_repos", { projectId })),
+	createRepo: (input: CreateRepoInput) => typedError<Repo, string>(__TAURI_INVOKE("create_repo", { input })),
+	/**  토큰 저장. 토큰은 IPC 인자로만 들어와 즉시 keychain으로 가고, 반환되지 않는다. */
+	setProjectToken: (projectId: string, kind: TokenKind, token: string) => typedError<null, string>(__TAURI_INVOKE("set_project_token", { projectId, kind, token })),
+	/**  토큰 삭제(클리어). */
+	deleteProjectToken: (projectId: string, kind: TokenKind) => typedError<null, string>(__TAURI_INVOKE("delete_project_token", { projectId, kind })),
+	/**  토큰 존재 여부만 (본문 미노출). UI 마스킹 표시용. */
+	projectTokenStatus: (projectId: string) => typedError<TokenStatus, string>(__TAURI_INVOKE("project_token_status", { projectId })),
+	/**  토큰으로 외부 API ping(read-only). 토큰은 keychain에서 읽어 Rust 안에서만 쓰인다. */
+	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, string>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
+	reconcileSignalProjects: () => typedError<number, string>(__TAURI_INVOKE("reconcile_signal_projects")),
+	/**  신호의 소속 프로젝트를 명시 지정(또는 해제). 메타데이터. */
+	setSignalProject: (id: string, projectId: string | null) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_project", { id, projectId })),
 	createSignal: (input: CreateSignalInput) => typedError<WorkSignal, string>(__TAURI_INVOKE("create_signal", { input })),
 	listSignals: () => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_signals")),
 	classifySignal: (id: string, quadrant: Quadrant) => typedError<WorkSignal, string>(__TAURI_INVOKE("classify_signal", { id, quadrant })),
@@ -33,6 +47,26 @@ export const commands = {
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
 
+/**  프로젝트 생성 입력. credential_ref는 백엔드가 생성한다(프런트가 정하지 않음). */
+export type CreateProjectInput = {
+	name: string,
+	kind: ProjectKind,
+	notionBacklogDbId: string | null,
+	notionAgendaDbId: string | null,
+	ticketKeyPattern: string | null,
+};
+
+/**  레포 추가 입력. */
+export type CreateRepoInput = {
+	projectId: string,
+	provider: Provider,
+	remoteUrl: string | null,
+	localPath: string | null,
+	/**  기본 브랜치. 비면 'main'. */
+	defaultBranch: string | null,
+	ticketKeyPattern: string | null,
+};
+
 /**  루틴 생성 입력. */
 export type CreateRoutineInput = {
 	title: string,
@@ -48,10 +82,19 @@ export type CreateSignalInput = {
 	title: string,
 	/**  개인/업무 힌트 (없으면 NULL). 결정 레일 아님. */
 	kind: Kind | null,
+	/**  소속 프로젝트(없으면 NULL → 나중에 reconcile). 메타데이터(결정 레일 아님). */
+	projectId: string | null,
 };
 
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
+
+/**  외부 API ping 결과 (read-only). 토큰 본문은 포함하지 않는다. */
+export type PingResult = {
+	ok: boolean,
+	/**  성공 시 식별 정보(예: GitHub login, Notion bot 이름), 실패 시 에러 메시지. */
+	detail: string,
+};
 
 /**  최상위 그룹. `credential_ref`는 keychain 키일 뿐, 토큰 평문이 아니다. */
 export type Project = {
@@ -86,8 +129,24 @@ export type PromotionStatus = "draft" | "confirmed" | "created" | "failed";
 /**  승격 대상. notion_*\/calendar = 외부(Acceptance 게이트), today = 로컬(즉시). */
 export type PromotionTarget = "notion_backlog" | "notion_agenda" | "today" | "calendar";
 
+/**  레포 제공자. github = remote_url, local = local_path(Codex worktree 베이스). */
+export type Provider = "github" | "local";
+
 /**  아이젠하워 사분면 (사람 결정값). 카드는 항상 `Unclassified`로 진입한다 (INVARIANT #1). */
 export type Quadrant = "q1_do_now" | "q2_schedule" | "q3_quick_contain" | "q4_drop" | "unclassified";
+
+/**  project별 레포. PR Radar(Phase 4)·worktree(Phase 5)의 단위. */
+export type Repo = {
+	id: string,
+	projectId: string,
+	provider: Provider,
+	remoteUrl: string | null,
+	localPath: string | null,
+	defaultBranch: string,
+	ticketKeyPattern: string | null,
+	enabled: boolean,
+	createdAt: string,
+};
 
 /**  루틴 반복 주기. */
 export type RoutineFreq = "daily" | "weekly";
@@ -112,6 +171,15 @@ export type SignalStatus = "new" | "classified" | "promoted" | "linked" | "done"
 
 /**  신호 종류. */
 export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "mismatch" | "cleanup";
+
+/**  project별 분리되는 토큰 종류. keychain account 접미사로 쓰인다. */
+export type TokenKind = "notion" | "github";
+
+/**  토큰 존재 여부만 노출 (본문 미노출 — INVARIANT: 토큰 렌더러 노출 금지). */
+export type TokenStatus = {
+	hasNotion: boolean,
+	hasGithub: boolean,
+};
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";

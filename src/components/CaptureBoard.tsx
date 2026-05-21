@@ -18,6 +18,7 @@ import {
   useCreatePromotionDraft,
   useCreateRoutine,
   useCreateSignal,
+  useProjects,
   usePromoteToday,
   useReorderToday,
   useSetSignalStatus,
@@ -55,6 +56,7 @@ export function CaptureBoard() {
   const signalsQ = useSignals();
   const todayQ = useToday(today);
   const routinesQ = useTodayRoutines(today, weekday);
+  const projectsQ = useProjects();
 
   const createSignal = useCreateSignal();
   const classifySignal = useClassifySignal();
@@ -106,9 +108,14 @@ export function CaptureBoard() {
   }, []);
 
   // ── 액션 ──
+  // 새 신호는 kind에 맞는 프로젝트로 태깅(있으면). 없으면 NULL → 나중에 reconcile.
+  const projects = projectsQ.data ?? [];
+  const projectIdForKind = (kind: Kind): string | null =>
+    projects.find((p) => p.kind === kind)?.id ?? null;
+
   const handleCapture = (title: string, kind: Kind) => {
     expectPopRef.current = true;
-    createSignal.mutate({ title, kind });
+    createSignal.mutate({ title, kind, projectId: projectIdForKind(kind) });
   };
 
   const handleClassify = useCallback(
@@ -235,8 +242,8 @@ export function CaptureBoard() {
       <div className="cb-head">
         <span className="mark">◎ Work Radar / Capture</span>
         <span className="hint">
-          드래그로 분류 · <b>1 2 3 4</b> 사분면 · <b>T</b> Today · 카드 ⋯ 메뉴 · 우측
-          패널로 드래그=Today
+          드래그로 분류 · <b>1 2 3 4</b> 사분면 · <b>T</b> Today · 카드 ⋯ 메뉴 ·{" "}
+          <b>⌘K</b> 설정/프로젝트
         </span>
       </div>
 

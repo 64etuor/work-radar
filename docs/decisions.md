@@ -46,3 +46,12 @@
 - **Esc 중복 동작 방지.** App 셸과 CaptureBoard가 둘 다 window Esc를 듣기 때문에, App은 `.cb-card-menu`가 열려 있으면 창 hide를 보류(메뉴 닫힘 우선) → 다음 Esc에 창 hide.
 - **FTS는 `search_signals` 커맨드+단위테스트로 검증(본문/제목 매칭).** 프로토타입 보드 표면엔 검색 박스가 없어 UI 노출은 추후(cmdk 전역 검색 통합) — Phase 1은 데이터/커맨드 레벨로 충족.
 - **`RootPalette.tsx`는 미사용으로 보존.** Phase 0 cmdk 루트 팔레트; 보드로 교체됐으나 추후 전역 검색 재사용 여지로 남김(무관 파일 정리 금지 규칙).
+
+## Phase 2 — Project & 멀티 레포 설정 (2026-05-21)
+
+- **네비게이션 = cmdk 팔레트 재사용(사용자 결정).** 단일 창 유지. `Cmd/Ctrl+K`로 명령 팔레트 오버레이(`CommandPalette.tsx`)를 띄워 "캡처 보드로 / 설정 열기 / 프로젝트 추가 / 레포 추가 / 프로젝트 바로가기"를 제공, 선택 시 `store.view`를 board↔settings로 토글. `Cmd/Ctrl+,`는 설정 직행, Esc는 팔레트>설정>창hide 순으로 닫힘. (RootPalette는 그대로 보존, 새 오버레이는 같은 `command.tsx` 프리미티브 재사용.)
+- **신규 마이그레이션 없음.** `projects`/`repos` 테이블과 `signals.project_id`는 0001에 이미 존재 → Phase 2는 호출부(커맨드/UI)만 연결. 임의 ALTER 금지 규칙과 부합(추가 스키마 불필요).
+- **토큰 keychain = project별 + 종류별 분리.** `credential_ref`는 프로젝트 생성 시 백엔드가 만드는 opaque 키(`lower(hex(randomblob(16)))`, project.id와 별개), keychain account = `{credential_ref}:{kind}`(kind=notion|github). 같은 프로젝트가 Notion·GitHub 토큰을 각각 가질 수 있고 개인/업무는 완전히 분리된다. keychain 모듈은 Phase 0 `#[allow(dead_code)]`에서 호출부 연결로 전환.
+- **토큰 렌더러 미노출 강제(INVARIANT).** 토큰은 `set_project_token(token: String)` IPC 인자로만 들어가 즉시 keychain 저장되고 **반환되지 않는다**. `project_token_status`는 boolean(hasNotion/hasGithub)만, `ping_project_token`은 `PingResult{ok,detail}`만 노출. 프런트 `TokenRow`는 토큰을 로컬 `useState`에만 잠시 두고 저장 직후 비움(query/zustand 캐시 미저장, `type=password`).
+- **외부 ping = reqwest(Notion) + octocrab(GitHub), read-only·bounded.** Notion `GET /v1/users/me`(Notion-Version 헤더) + reqwest 12s timeout, GitHub `octocrab current().user()`. 단일 시도(무한 retry/poll 금지 — INVARIANT #5), 실패는 메시지로 노출. octocrab 0.42 + reqwest 0.12은 **rustls-tls로 통일**(openssl 시스템 의존 회피). 실 keychain 저장·재부팅 영속·실네트워크 ping은 헤드리스 CI 불가 → 사용자 관찰 항목(Phase 1 GUI 항목과 동일), `cargo test`엔 실 keychain/network 호출 없음.
+- **projectId 태깅/reconcile = 메타데이터(결정 레일 아님).** `create_signal`이 `projectId`를 받아 태깅(보드는 kind→매칭 프로젝트로 자동 주입, 없으면 NULL). `reconcile_signal_projects`가 미태깅·kind 보유 신호를 같은 kind의 가장 오래된 프로젝트로 일괄 태깅. quadrant/승격은 절대 건드리지 않음(INVARIANT #1 무관 축). `agent_runs.project_id`는 스키마에 이미 있고 잡 도입(Phase 7+) 시 태깅된다.
