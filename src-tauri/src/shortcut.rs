@@ -3,9 +3,9 @@
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-/// 기본 토글 핫키: Alt(Option) + Space.
+/// 기본 토글 핫키: Ctrl + Space.
 fn toggle_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::ALT), Code::Space)
+    Shortcut::new(Some(Modifiers::CONTROL), Code::Space)
 }
 
 /// 메인 창을 보이거나 숨긴다 (토글).
