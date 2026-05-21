@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Bot,
   CalendarCheck,
+  CalendarClock,
   FolderPlus,
   GitBranchPlus,
   GitCompare,
@@ -57,6 +58,13 @@ export function CommandPalette() {
               >
                 <CalendarCheck className="size-4 text-wr-subtle" />
                 <span>Today (운영)로</span>
+              </CommandItem>
+              <CommandItem
+                value="timeline 타임라인 시간축 아젠다 일정"
+                onSelect={() => goTo("timeline")}
+              >
+                <CalendarClock className="size-4 text-wr-subtle" />
+                <span>Timeline으로</span>
               </CommandItem>
               <CommandItem
                 value="pr radar github 레이더 풀리퀘스트"

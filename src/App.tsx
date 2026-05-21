@@ -7,6 +7,7 @@ import { JobsView } from "@/components/JobsView";
 import { MismatchView } from "@/components/MismatchView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { SettingsView } from "@/components/SettingsView";
+import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
 import { WorktreeView } from "@/components/WorktreeView";
 import { useUIStore } from "@/store";
@@ -43,6 +44,7 @@ export default function App() {
         if (
           view === "settings" ||
           view === "today" ||
+          view === "timeline" ||
           view === "radar" ||
           view === "worktree" ||
           view === "mismatch" ||
@@ -64,6 +66,8 @@ export default function App() {
         <SettingsView />
       ) : view === "today" ? (
         <TodayView />
+      ) : view === "timeline" ? (
+        <TimelineView />
       ) : view === "radar" ? (
         <PrRadarView />
       ) : view === "worktree" ? (
