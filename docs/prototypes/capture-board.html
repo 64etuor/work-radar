@@ -76,6 +76,7 @@
     letter-spacing:.06em; text-transform:uppercase; padding:1px 7px; border-radius:999px}
   .chip-personal{background:var(--pale-blue); color:var(--blue)}
   .chip-work{background:var(--pale-green); color:var(--green)}
+  .postit .pdate{position:absolute; left:11px; bottom:6px; font:400 10px var(--font-mono); color:var(--muted)}
   .postit .menu-btn{position:absolute; top:4px; right:5px; width:20px;height:20px; border:none;
     background:transparent; color:var(--muted); cursor:pointer; border-radius:5px;
     font:700 14px/1 var(--font-mono); opacity:0; transition:opacity .15s,background .15s}
@@ -189,8 +190,8 @@
   @media (max-width:900px){
     .matrix{min-width:0}
     .board{flex-direction:column; overflow-y:auto}
-    .canvas{flex-direction:column; min-height:0}
-    .inbox{flex:0 0 132px}
+    .canvas{flex:0 0 auto; flex-direction:column; min-height:0}  /* 콘텐츠 높이로 고정(겹침 방지) */
+    .inbox{flex:0 0 auto; min-height:120px}  /* 카드 수에 맞춰 JS가 높이 설정 */
     .matrix{flex:0 0 auto; height:62vh; min-height:440px}  /* 세로형: 뷰포트 비례로 확장 */
     .execute{flex:0 0 auto; flex-direction:row}
     .head .hint{display:none}
@@ -297,15 +298,18 @@
   }
 
   // ── 포스트잇 ──
-  function makeCard(text, kind, zone='unclassified', quadrant=null, pop=false){
+  function todayMD(){ const d=new Date(); return (d.getMonth()+1)+'/'+d.getDate(); }
+  function makeCard(text, kind, zone='unclassified', quadrant=null, pop=false, created=null){
     const el=document.createElement('div');
     el.className='postit'+(quadrant?' '+quadrant:'');
     if(kind){ const c=document.createElement('span'); c.className='chip '+(kind==='work'?'chip-work':'chip-personal');
       c.textContent=kind==='work'?'업무':'개인'; el.appendChild(c); }
     const b=document.createElement('div'); b.className='body'; b.textContent=text; el.appendChild(b);
+    const cr=created||todayMD();
+    const dt=document.createElement('div'); dt.className='pdate'; dt.textContent=cr; el.appendChild(dt);
     const mb=document.createElement('button'); mb.className='menu-btn'; mb.type='button'; mb.textContent='⋯'; el.appendChild(mb);
     canvas.appendChild(el);
-    const card={el, zone:quadrant||zone, text, kind:kind||null};
+    const card={el, zone:quadrant||zone, text, kind:kind||null, created:cr};
     cards.push(card); bindDrag(card);
     mb.addEventListener('pointerdown', e=>e.stopPropagation());
     mb.addEventListener('click', e=>{ e.stopPropagation(); openMenu(card, mb); });
@@ -313,7 +317,15 @@
     if(pop){ el.classList.add('pop'); el.addEventListener('animationend',()=>el.classList.remove('pop'),{once:true}); }
     return card;
   }
+  function fitInbox(){
+    const n=cards.filter(c=>c.zone==='unclassified').length;
+    const w=zoneEl.unclassified.getBoundingClientRect().width;
+    const cols=Math.max(1, Math.floor((w-24)/(CW+GAP)));
+    const rows=Math.max(1, Math.ceil((n||1)/cols));
+    zoneEl.unclassified.style.height=(40+rows*(CH+GAP)+8)+'px';
+  }
   function layout(zone, anim){
+    if(zone==='unclassified'){ if(window.innerWidth<=900) fitInbox(); else zoneEl.unclassified.style.height=''; }
     const list=cards.filter(c=>c.zone===zone); const z=rectIn(zoneEl[zone]);
     if(zone==='unclassified'){
       const cols=Math.max(1, Math.floor((z.w-24)/(CW+GAP)));
@@ -393,12 +405,12 @@
   function returnToMatrix(it){
     const i=todayItems.indexOf(it); if(i>=0) todayItems.splice(i,1);
     const zone=it.quadrant||'unclassified';
-    makeCard(it.text, it.kind, zone, it.quadrant||null, true);
+    makeCard(it.text, it.kind, zone, it.quadrant||null, true, it.created);
     layout(zone); counts(); renderToday(); toast('매트릭스로 되돌림');
   }
   function promoteToday(card, silent){
     const q=zones.includes(card.zone)&&card.zone!=='unclassified'?card.zone:null;
-    todayItems.unshift({text:card.text, quadrant:q, kind:card.kind, age:1, done:false});
+    todayItems.unshift({text:card.text, quadrant:q, kind:card.kind, created:card.created, age:1, done:false});
     const i=cards.indexOf(card); if(i>=0) cards.splice(i,1);
     const z=card.zone; card.el.style.transition='transform .2s,opacity .2s';
     card.el.style.transform='scale(.6)'; card.el.style.opacity='0'; setTimeout(()=>card.el.remove(),200);
@@ -486,15 +498,15 @@
   // ── 시드 / 부트 ──
   function boot(){
     // 미분류
-    [['히어로 카피 톤 다시 잡기','work'],['readme 스크린샷 교체','work'],['커피 원두 주문','personal']]
-      .forEach(([t,k])=>makeCard(t,k,'unclassified'));
+    [['히어로 카피 톤 다시 잡기','work','5/21'],['readme 스크린샷 교체','work','5/20'],['커피 원두 주문','personal','5/21']]
+      .forEach(([t,k,d])=>makeCard(t,k,'unclassified',null,false,d));
     // 분류된 카드
-    makeCard('PR #128 CI 빨강 추적','work','q1','q1'); makeCard('결제 플로우 결정','work','q1','q1');
-    makeCard('온보딩 문구 다듬기','work','q2','q2'); makeCard('세금계산서 확인','personal','q3','q3');
+    makeCard('PR #128 CI 빨강 추적','work','q1','q1',false,'5/19'); makeCard('결제 플로우 결정','work','q1','q1',false,'5/20');
+    makeCard('온보딩 문구 다듬기','work','q2','q2',false,'5/18'); makeCard('세금계산서 확인','personal','q3','q3',false,'5/21');
     layout('unclassified', true); ['q1','q2','q3','q4'].forEach(z=>layout(z)); counts();
     // Today 시드 (경과일 데모)
-    todayItems.push({text:'금요일 데모 리허설', quadrant:'q1', kind:'work', age:1, done:false});
-    todayItems.push({text:'Notion 백로그 stale 정리', quadrant:'q2', kind:'work', age:3, done:false});
+    todayItems.push({text:'금요일 데모 리허설', quadrant:'q1', kind:'work', created:'5/21', age:1, done:false});
+    todayItems.push({text:'Notion 백로그 stale 정리', quadrant:'q2', kind:'work', created:'5/19', age:3, done:false});
     renderToday();
     const d=new Date(); $('today-date').textContent=`${d.getMonth()+1}/${d.getDate()} 오늘`;
     buildDayBtns(); renderRoutines();

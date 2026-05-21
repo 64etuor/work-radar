@@ -249,7 +249,7 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 - **`postit-card`** — 흰색 카드(`#fff`), 1px `border-light` 보더, 좌측 4px 사분면 악센트 바,
   radius `sm`(8–10px). 흰 캔버스 위 카드 분리를 위해 **절제된 Media Lift 그림자**만 허용
   (`0 8px 22px rgba(15,20,40,.12)`; Cohere "무거운 그림자 금지"의 한정 예외).
-  본문은 Body(14px), 메타/키힌트는 Mono Micro. 우상단 `⋯` 액션 버튼(hover/선택 시 노출).
+  본문은 Body(14px), **하단에 생성일**(Mono Micro). 우상단 `⋯` 액션 버튼(hover/선택 시 노출).
 - **`quadrant-guide`** — 2×2 셀. 얇은 hairline 룰(`--hair`/`border-light`, 흰 캔버스 기준),
   코너 라운드 `lg`(22px). 라벨 = Mono(EN, 예 `Q1 · DO NOW`) + Body(KO, `긴급 · 중요`) +
   사분면 도트. **색만으로 의미 전달 금지 — 항상 라벨 병기.**
