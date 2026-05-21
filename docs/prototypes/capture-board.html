@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Work Radar — Capture Board (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  /* ── Cohere(white editorial) 토큰 — DESIGN.md ── */
+  :root{
+    --black:#000; --near:#17171c; --green:#003c33; --navy:#071829;
+    --blue:#1863dc; --coral:#ff7759; --soft-coral:#ffad9b;
+    --white:#fff; --stone:#eeece7; --pale-green:#edfce9; --pale-blue:#f1f5ff;
+    --ink:#212121; --muted:#93939f; --slate:#75758a; --hair:#d9d9dd; --border:#e5e7eb;
+    --font-display:"Space Grotesk","Inter",ui-sans-serif,system-ui;
+    --font-body:"Inter",ui-sans-serif,system-ui;
+    --font-mono:"Space Mono",ui-monospace,monospace;
+    /* quadrant accents (색만으로 의미 전달 금지 — 라벨 병기) */
+    --q1:#ff7759; --q2:#003c33; --q3:#1863dc; --q4:#93939f; --q0:#c9c7c0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--font-body); color:var(--ink); overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── 가짜 바탕화면(오버레이가 그 위에 떠 있음을 표현) ── */
+  .desktop{
+    position:fixed; inset:0; z-index:0;
+    background:
+      radial-gradient(120% 90% at 18% 8%, #5b6b8a 0%, transparent 60%),
+      radial-gradient(140% 120% at 82% 92%, #2b3a4f 0%, transparent 55%),
+      linear-gradient(160deg,#404d6b 0%,#2c3650 45%,#202a3f 100%);
+    filter:saturate(1.05);
+  }
+  .desktop::after{ /* 가짜 메뉴바 */
+    content:"🛰  Work Radar      파일  편집  보기                                    ◑  ⏏  🔋  ⌘  화 5월 21  14:22";
+    position:absolute; top:0; left:0; right:0; height:26px; line-height:26px;
+    font:500 12px/26px var(--font-body); color:rgba(255,255,255,.82);
+    padding:0 14px; background:rgba(20,24,38,.34); backdrop-filter:blur(8px);
+    white-space:nowrap; overflow:hidden; letter-spacing:.2px;
+  }
+  .desktop .dock{
+    position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    display:flex; gap:10px; padding:8px 12px; border-radius:18px;
+    background:rgba(255,255,255,.16); backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.18);
+  }
+  .desktop .dock i{width:38px;height:38px;border-radius:10px;display:block;
+    background:linear-gradient(160deg,rgba(255,255,255,.85),rgba(255,255,255,.5));}
+  .desktop .dock i:nth-child(2){background:linear-gradient(160deg,#ff7759,#ffad9b)}
+  .desktop .dock i:nth-child(3){background:linear-gradient(160deg,#1863dc,#5b9dff)}
+  .desktop .dock i:nth-child(4){background:linear-gradient(160deg,#003c33,#0a6e5c)}
+
+  /* ── 오버레이(투명) — 데스크톱이 비쳐 보임 ── */
+  .overlay{
+    position:fixed; inset:0; z-index:10; padding:50px 40px 150px;
+    display:flex; gap:26px;
+  }
+  .overlay-head{
+    position:absolute; top:36px; left:40px; right:40px;
+    display:flex; align-items:baseline; justify-content:space-between;
+    pointer-events:none;
+  }
+  .overlay-head .mark{
+    font:600 13px var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+    color:#fff; mix-blend-mode:difference;
+  }
+  .overlay-head .hint{font:400 12px var(--font-mono); color:rgba(255,255,255,.7)}
+  .overlay-head .hint b{color:#fff; font-weight:700}
+
+  /* ── 미분류 스캐터 존 ── */
+  .zone{position:relative; border-radius:22px;}
+  .unclassified{
+    flex:0 0 282px; border:1px dashed rgba(255,255,255,.42);
+    background:rgba(255,255,255,.05); backdrop-filter:blur(2px);
+  }
+  .zone-label{
+    position:absolute; top:14px; left:16px; z-index:2; pointer-events:none;
+    display:flex; align-items:center; gap:8px;
+  }
+  .zone-label .tag{
+    font:700 11px var(--font-mono); letter-spacing:.14em; text-transform:uppercase;
+  }
+  .zone-label .ko{font:500 12px var(--font-body)}
+  .unclassified .zone-label .tag,.unclassified .zone-label .ko{color:#fff}
+  .zone-label .count{
+    font:700 11px var(--font-mono); padding:1px 7px; border-radius:999px;
+    background:rgba(255,255,255,.16); color:#fff;
+  }
+
+  /* ── 아이젠하워 2×2 ── */
+  .matrix{flex:1; position:relative;}
+  .grid{position:absolute; inset:0; display:grid;
+    grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:0;}
+  .cell{
+    position:relative; border:1px solid rgba(255,255,255,.16);
+    transition:background .18s ease;
+  }
+  .cell.q1{border-top-left-radius:22px}
+  .cell.q2{border-top-right-radius:22px}
+  .cell.q3{border-bottom-left-radius:22px}
+  .cell.q4{border-bottom-right-radius:22px}
+  .cell .clabel{position:absolute; top:14px; left:16px; pointer-events:none;
+    display:flex; align-items:center; gap:8px;}
+  .cell .dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .cell .en{font:700 11px var(--font-mono); letter-spacing:.13em; text-transform:uppercase; color:#fff}
+  .cell .ko{font:500 12px var(--font-body); color:rgba(255,255,255,.78)}
+  .cell.drop{background:rgba(255,255,255,.12)}
+  .cell.q1.drop{background:rgba(255,119,89,.18)}
+  .cell.q2.drop{background:rgba(0,60,51,.22)}
+  .cell.q3.drop{background:rgba(24,99,220,.18)}
+  .cell.q4.drop{background:rgba(147,147,159,.20)}
+
+  /* 축 라벨 */
+  .axis-x{position:absolute; top:-30px; left:50%; transform:translateX(-50%);
+    font:700 10px var(--font-mono); letter-spacing:.2em; color:rgba(255,255,255,.62)}
+  .axis-y{position:absolute; left:-30px; top:50%; transform:translateY(-50%) rotate(-90deg);
+    font:700 10px var(--font-mono); letter-spacing:.2em; color:rgba(255,255,255,.62)}
+
+  /* ── 포스트잇 ── */
+  .postit{
+    position:absolute; width:158px; min-height:92px; z-index:5;
+    background:var(--white); border:1px solid var(--border);
+    border-left:4px solid var(--q0); border-radius:10px;
+    padding:12px 13px 28px; cursor:grab;
+    box-shadow:0 8px 22px rgba(15,20,40,.18);
+    font:400 13.5px/1.42 var(--font-body); color:var(--ink);
+    transition:left .5s cubic-bezier(.18,.9,.2,1.05),
+               top .5s cubic-bezier(.18,.9,.2,1.05),
+               transform .32s cubic-bezier(.2,.8,.2,1),
+               box-shadow .2s ease, opacity .3s ease, border-color .2s;
+    will-change:left,top,transform; touch-action:none;
+    overflow:hidden;
+  }
+  .postit .meta{position:absolute; left:13px; bottom:8px; right:10px;
+    display:flex; align-items:center; justify-content:space-between;
+    font:400 10px var(--font-mono); color:var(--muted)}
+  .postit .key{font:700 10px var(--font-mono); color:var(--muted);
+    border:1px solid var(--hair); border-radius:4px; padding:0 4px}
+  /* 개인/업무 태그 칩 (색만으로 의미 전달 금지 — 라벨 병기) */
+  .postit .tag-chip{display:inline-block; margin-bottom:6px;
+    font:700 9px var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    padding:2px 8px; border-radius:999px;}
+  .postit .tag-personal{background:var(--pale-blue); color:var(--blue)}
+  .postit .tag-work{background:var(--pale-green); color:var(--green)}
+  .postit.dragging{cursor:grabbing; box-shadow:0 18px 40px rgba(15,20,40,.34);
+    transition:transform .12s ease, box-shadow .2s ease; z-index:50}
+  .postit.sel{outline:2px solid var(--blue); outline-offset:2px}
+  .postit.q1{border-left-color:var(--q1)} .postit.q2{border-left-color:var(--q2)}
+  .postit.q3{border-left-color:var(--q3)} .postit.q4{border-left-color:var(--q4)}
+  .postit.pop{animation:pop .34s cubic-bezier(.2,.9,.25,1.2)}
+  @keyframes pop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.07)}100%{transform:scale(1)}}
+
+  /* ── 조작 패널(따로 떠있는 박스) ── */
+  .panel{
+    position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:60;
+    width:min(640px,calc(100% - 80px));
+    background:var(--white); border:1px solid var(--border); border-radius:22px;
+    box-shadow:0 20px 60px rgba(10,14,30,.3);
+    padding:14px 16px; display:flex; flex-direction:column; gap:10px;
+  }
+  .panel .top{display:flex; align-items:center; gap:10px}
+  .panel .bd{font:700 10px var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--coral); white-space:nowrap}
+  .panel input{
+    flex:1; border:none; outline:none; background:transparent;
+    font:400 16px var(--font-body); color:var(--ink); padding:6px 2px;
+  }
+  .panel input::placeholder{color:var(--muted)}
+  .panel .send{
+    border:none; cursor:pointer; background:var(--near); color:#fff;
+    font:500 14px var(--font-body); padding:9px 20px; border-radius:32px;
+    transition:transform .12s ease, background .2s;
+  }
+  .panel .send:hover{transform:translateY(-1px); background:#000}
+  .panel .send:active{transform:translateY(0)}
+  .panel .stats{display:flex; gap:16px; border-top:1px solid var(--border);
+    padding-top:9px; flex-wrap:wrap; align-items:center}
+  .panel .stat{display:flex; align-items:center; gap:6px;
+    font:400 12px var(--font-body); color:var(--slate)}
+  .panel .stat b{font:700 12px var(--font-mono); color:var(--ink)}
+  .panel .sw{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .panel .debt{margin-left:auto; font:700 11px var(--font-mono); color:var(--coral)}
+  .panel .taghint{font:400 11px var(--font-body); color:var(--muted); padding-left:2px}
+  .panel .taghint b{color:var(--ink); font-weight:600}
+
+  /* 개인/업무 세그먼트 토글 */
+  .seg{display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; flex:0 0 auto}
+  .seg button{border:none; background:transparent; cursor:pointer; padding:6px 13px;
+    font:600 12px var(--font-body); color:var(--muted); transition:background .15s,color .15s}
+  .seg button.on[data-kind="personal"]{background:var(--pale-blue); color:var(--blue)}
+  .seg button.on[data-kind="work"]{background:var(--pale-green); color:var(--green)}
+
+  /* 카드 액션 메뉴 */
+  .postit .menu-btn{position:absolute; top:5px; right:6px; width:22px; height:22px;
+    border:none; background:transparent; color:var(--muted); cursor:pointer;
+    border-radius:6px; font:700 15px/1 var(--font-mono); opacity:0;
+    transition:opacity .15s, background .15s}
+  .postit:hover .menu-btn,.postit.sel .menu-btn{opacity:1}
+  .postit .menu-btn:hover{background:var(--stone); color:var(--ink)}
+  .card-menu{position:absolute; z-index:80; min-width:184px; background:#fff;
+    border:1px solid var(--border); border-radius:12px; box-shadow:0 16px 40px rgba(10,14,30,.24);
+    padding:6px; display:none}
+  .card-menu.open{display:block}
+  .card-menu .em{display:block; font:700 9px var(--font-mono); letter-spacing:.08em;
+    text-transform:uppercase; color:var(--coral); padding:6px 10px 3px}
+  .card-menu button{display:flex; width:100%; align-items:center; justify-content:space-between;
+    gap:10px; border:none; background:transparent; cursor:pointer; text-align:left;
+    padding:8px 10px; border-radius:8px; font:400 13px var(--font-body); color:var(--ink)}
+  .card-menu button:hover{background:var(--stone)}
+  .card-menu button small{color:var(--muted); font:400 11px var(--font-mono)}
+  .card-menu .sep{height:1px; background:var(--border); margin:5px 4px}
+
+  /* 토스트(Acceptance 대기 등) */
+  .toast{position:fixed; left:50%; bottom:124px; transform:translateX(-50%) translateY(10px);
+    background:var(--near); color:#fff; padding:10px 18px; border-radius:999px;
+    font:500 13px var(--font-body); opacity:0; pointer-events:none; z-index:95;
+    transition:opacity .25s, transform .25s; white-space:nowrap}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  .cell .clabel{flex-wrap:wrap}
+
+  /* ── 반응형: 세로(portrait) 모니터 ── */
+  @media (orientation:portrait){
+    .overlay{flex-direction:column; padding:46px 20px 156px; gap:16px}
+    .unclassified{flex:0 0 28vh; min-height:150px; width:auto}
+    .overlay-head{left:20px; right:20px}
+    .overlay-head .hint{display:none}      /* 좁을 땐 힌트 숨김 */
+    .axis-y{display:none}
+    .axis-x{top:-26px}
+  }
+
+  /* ── 반응형: 좁은 폭 (가로/세로 공통) ── */
+  @media (max-width:820px){
+    .overlay{padding:46px 16px 160px; gap:14px}
+    .overlay-head .hint{display:none}
+    .unclassified{flex-basis:24vh}
+    .panel{bottom:16px; border-radius:18px}
+    .panel .top{flex-wrap:wrap}
+  }
+  /* 아주 좁을 때(모바일/세로폰): 카드·간격 축소는 JS가 폭 기준으로 처리 */
+  @media (max-width:480px){
+    .overlay-head .mark{font-size:11px}
+    .cell .ko{display:none}
+  }
+</style>
+</head>
+<body>
+  <!-- 가짜 바탕화면 -->
+  <div class="desktop"><div class="dock"><i></i><i></i><i></i><i></i></div></div>
+
+  <!-- 투명 오버레이 보드 -->
+  <div class="overlay" id="overlay">
+    <div class="overlay-head">
+      <span class="mark">◎ Work Radar / Capture</span>
+      <span class="hint">드래그로 분류 · 포커스 후 <b>1 2 3 4</b> · 새 메모는 아래 패널에 <b>Enter</b> · <b>Esc</b> 닫기</span>
+    </div>
+
+    <!-- 미분류 -->
+    <div class="zone unclassified" id="z-unclassified" data-zone="unclassified">
+      <div class="zone-label">
+        <span class="tag">UNCLASSIFIED</span><span class="ko">미분류</span>
+        <span class="count" id="c-unclassified">0</span>
+      </div>
+    </div>
+
+    <!-- 2×2 -->
+    <div class="matrix">
+      <span class="axis-x">중요도 ▸ IMPORTANT</span>
+      <span class="axis-y">긴급도 ▸ URGENT</span>
+      <div class="grid">
+        <div class="cell q1" id="z-q1" data-zone="q1">
+          <div class="clabel"><span class="dot" style="background:var(--q1)"></span>
+            <span class="en">Q1 · DO NOW</span><span class="ko">긴급 · 중요</span></div>
+        </div>
+        <div class="cell q2" id="z-q2" data-zone="q2">
+          <div class="clabel"><span class="dot" style="background:var(--q2)"></span>
+            <span class="en">Q2 · SCHEDULE</span><span class="ko">안급함 · 중요</span></div>
+        </div>
+        <div class="cell q3" id="z-q3" data-zone="q3">
+          <div class="clabel"><span class="dot" style="background:var(--q3)"></span>
+            <span class="en">Q3 · QUICK</span><span class="ko">긴급 · 안중요</span></div>
+        </div>
+        <div class="cell q4" id="z-q4" data-zone="q4">
+          <div class="clabel"><span class="dot" style="background:var(--q4)"></span>
+            <span class="en">Q4 · DROP</span><span class="ko">안급 · 안중요</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 조작 패널 -->
+  <div class="panel">
+    <div class="top">
+      <span class="bd">Brain&nbsp;Dump</span>
+      <div class="seg" id="seg">
+        <button type="button" data-kind="personal">개인</button>
+        <button type="button" data-kind="work" class="on">업무</button>
+      </div>
+      <input id="dump" type="text" placeholder="예) '일, 데모 준비'  ·  '개인, 원두 주문'  — Enter로 톡" autocomplete="off" />
+      <button class="send" id="send">붙이기</button>
+    </div>
+    <div class="taghint">
+      맨 앞에 <b>개인 / 내 / 나</b> → 개인 태그, <b>업무 / 일 / 회사</b> → 업무 태그 (쉼표·띄어쓰기로 구분)
+    </div>
+    <div class="stats">
+      <span class="stat"><span class="sw" style="background:var(--q1)"></span>Q1 <b id="s-q1">0</b></span>
+      <span class="stat"><span class="sw" style="background:var(--q2)"></span>Q2 <b id="s-q2">0</b></span>
+      <span class="stat"><span class="sw" style="background:var(--q3)"></span>Q3 <b id="s-q3">0</b></span>
+      <span class="stat"><span class="sw" style="background:var(--q4)"></span>Q4 <b id="s-q4">0</b></span>
+      <span class="debt" id="debt">미분류 0 · 처리 필요</span>
+    </div>
+  </div>
+
+  <!-- 카드 액션 메뉴 (공유) -->
+  <div class="card-menu" id="cardMenu">
+    <span class="em">승격 · Acceptance 게이트</span>
+    <button data-act="backlog">백로그 등록<small>Notion</small></button>
+    <button data-act="agenda">안건 승격<small>Notion</small></button>
+    <button data-act="calendar">캘린더 등록<small>일정</small></button>
+    <div class="sep"></div>
+    <button data-act="snooze">미루기<small>S</small></button>
+    <button data-act="done">완료<small>D</small></button>
+    <button data-act="archive">보관<small>E</small></button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const overlay = document.getElementById('overlay');
+  const dump = document.getElementById('dump');
+  const zones = ['unclassified','q1','q2','q3','q4'];
+  const zoneEl = Object.fromEntries(zones.map(z => [z, document.getElementById('z-'+z)]));
+  const cards = [];
+  let selected = null;
+  const CARD_W = 158, CARD_H = 100, GAP = 14, PAD = 44;
+
+  const seed = [
+    {t:'히어로 카피 톤 다시 잡기', k:'work'},
+    {t:'PR #128 CI 빨강 — 원인 추적', k:'work'},
+    {t:'금요일 데모 리허설', k:'work'},
+    {t:'Notion 백로그 stale 정리', k:'work'},
+    {t:'회의록: 결제 플로우 결정', k:'work'},
+    {t:'readme 스크린샷 교체', k:'work'},
+    {t:'specta 바인딩 churn 줄이기', k:'work'},
+    {t:'커피 원두 주문', k:'personal'},
+    {t:'세금계산서 확인', k:'personal'},
+    {t:'온보딩 문구 다듬기', k:'work'},
+  ];
+
+  // 맨 앞 토큰이 마커일 때만 개인/업무 태그 부여 (오탐 방지)
+  const PERSONAL = ['개인','내','나','사적','personal','p'];
+  const WORK     = ['업무','일','회사','직장','work','w'];
+  function parseDump(raw){
+    const m = raw.match(/^\s*([^\s,]+)\s*[,\s]\s*(.+)$/);
+    if(m){
+      const head = m[1], low = head.toLowerCase();
+      if(PERSONAL.includes(head) || PERSONAL.includes(low)) return {kind:'personal', text:m[2].trim()};
+      if(WORK.includes(head)     || WORK.includes(low))     return {kind:'work',     text:m[2].trim()};
+    }
+    return {kind:null, text:raw.trim()};
+  }
+
+  const rectIn = (el) => {
+    const o = overlay.getBoundingClientRect(), r = el.getBoundingClientRect();
+    return { x:r.left-o.left, y:r.top-o.top, w:r.width, h:r.height };
+  };
+
+  function makeCard(text, kind=null, zone='unclassified', pop=false){
+    const el = document.createElement('div');
+    el.className = 'postit' + (zone!=='unclassified' ? ' '+zone : '');
+    if(kind){
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip ' + (kind==='work' ? 'tag-work' : 'tag-personal');
+      chip.textContent = kind==='work' ? '업무' : '개인';
+      el.appendChild(chip);
+    }
+    const body = document.createElement('div'); body.className='body'; body.textContent = text;
+    const meta = document.createElement('div'); meta.className='meta';
+    const when = document.createElement('span'); when.textContent='방금';
+    const key = document.createElement('span'); key.className='key'; key.setAttribute('data-key',''); key.textContent='↕ 드래그';
+    meta.append(when, key); el.append(body, meta);
+    const mbtn = document.createElement('button');
+    mbtn.className='menu-btn'; mbtn.type='button'; mbtn.textContent='⋯'; mbtn.title='액션';
+    el.appendChild(mbtn);
+    overlay.appendChild(el);
+    const card = { el, zone, text, kind:kind||null, scatter:null };
+    cards.push(card);
+    bindDrag(card);
+    mbtn.addEventListener('pointerdown', e=> e.stopPropagation());
+    mbtn.addEventListener('click', e=>{ e.stopPropagation(); openMenu(card, mbtn); });
+    el.addEventListener('mousedown', ()=> select(card));
+    if (pop){ el.classList.add('pop'); el.addEventListener('animationend',()=>el.classList.remove('pop'),{once:true}); }
+    return card;
+  }
+
+  function layout(zone, animateOrigin){
+    const list = cards.filter(c => c.zone===zone);
+    const z = rectIn(zoneEl[zone]);
+    if(zone==='unclassified'){
+      const cols = Math.max(1, Math.floor((z.w - 28) / (CARD_W+GAP)));
+      if(cols <= 1){
+        // 좁은 레일(가로 모니터): 살짝 겹치는 세로 카스케이드.
+        const top = z.y + 48, bottom = z.y + z.h - CARD_H - 8;
+        const step = list.length>1 ? Math.min(62, (bottom-top)/(list.length-1)) : 0;
+        list.forEach((c,i)=> place(c, z.x+22+(i%2)*14, top+i*step, (i%2?2.4:-2.4), animateOrigin, i));
+      } else {
+        // 와이드 트레이(세로 모니터): 래핑 그리드 + 회전 지터.
+        list.forEach((c,i)=>{
+          const col = i % cols, row = Math.floor(i/cols);
+          const x = z.x + 18 + col*(CARD_W+GAP);
+          const y = z.y + 46 + row*(CARD_H+GAP);
+          place(c, x, y, (i%2?2:-2), animateOrigin, i);
+        });
+      }
+      return;
+    }
+    const cols = Math.max(1, Math.floor((z.w - PAD) / (CARD_W+GAP)));
+    list.forEach((c,i)=>{
+      const col = i % cols, row = Math.floor(i/cols);
+      const x = z.x + 18 + col*(CARD_W+GAP);
+      const y = z.y + PAD + row*(CARD_H+GAP);
+      place(c, x, y, 0, false, i);
+    });
+  }
+
+  function place(card, x, y, rot, fromOrigin, i){
+    const el = card.el;
+    if(fromOrigin){
+      const ox = overlay.getBoundingClientRect();
+      const startX = ox.width/2 - CARD_W/2, startY = ox.height - 150;
+      el.style.transition='none';
+      el.style.left=startX+'px'; el.style.top=startY+'px';
+      el.style.transform='scale(.34) rotate(0deg)'; el.style.opacity='0';
+      el.getBoundingClientRect(); // reflow
+      setTimeout(()=>{
+        el.style.transition='';
+        el.style.left=x+'px'; el.style.top=y+'px';
+        el.style.transform=`rotate(${rot||0}deg)`; el.style.opacity='1';
+      }, 80 + i*85);
+    } else {
+      el.style.left=x+'px'; el.style.top=y+'px';
+      el.style.transform=`rotate(${rot||0}deg)`; el.style.opacity='1';
+    }
+  }
+
+  function assign(card, zone){
+    const old = card.zone;
+    card.zone = zone;
+    card.el.classList.remove('q1','q2','q3','q4');
+    if(zone!=='unclassified') card.el.classList.add(zone);
+    layout(old); layout(zone);
+    updateCounts();
+  }
+
+  function select(card){
+    if(selected) selected.el.classList.remove('sel');
+    selected = card; card.el.classList.add('sel');
+  }
+
+  function updateCounts(){
+    const n = {}; zones.forEach(z=> n[z]=cards.filter(c=>c.zone===z).length);
+    document.getElementById('c-unclassified').textContent = n.unclassified;
+    ['q1','q2','q3','q4'].forEach(z=> document.getElementById('s-'+z).textContent = n[z]);
+    document.getElementById('debt').textContent = `미분류 ${n.unclassified} · 처리 필요`;
+  }
+
+  // ── 토스트 ──
+  let toastT;
+  function toast(msg){
+    const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastT); toastT=setTimeout(()=> t.classList.remove('show'), 1900);
+  }
+
+  // ── 카드 제거 ──
+  function removeCard(card){
+    const z=card.zone; const i=cards.indexOf(card); if(i>=0) cards.splice(i,1);
+    card.el.style.transition='transform .2s ease, opacity .2s ease';
+    card.el.style.transform='scale(.6)'; card.el.style.opacity='0';
+    setTimeout(()=> card.el.remove(), 200);
+    if(selected===card) selected=null;
+    layout(z); updateCounts();
+  }
+
+  // ── 카드 액션 메뉴 (백로그/안건/캘린더 승격 = Acceptance 게이트 / snooze·done·archive) ──
+  const cardMenu=document.getElementById('cardMenu');
+  let menuCard=null;
+  const ACT_LABEL={backlog:'백로그 등록',agenda:'안건 승격',calendar:'캘린더 등록'};
+  function openMenu(card, anchor){
+    menuCard=card; select(card); cardMenu.classList.add('open');
+    const o=overlay.getBoundingClientRect(), r=anchor.getBoundingClientRect();
+    const mw=cardMenu.offsetWidth||186, mh=cardMenu.offsetHeight||236;
+    let x=Math.max(8, Math.min(r.right-o.left-mw, o.width-mw-8));
+    let y=Math.min(r.bottom-o.top+6, o.height-mh-8);
+    cardMenu.style.left=x+'px'; cardMenu.style.top=y+'px';
+  }
+  function closeMenu(){ cardMenu.classList.remove('open'); menuCard=null; }
+  function doAction(act){
+    if(!menuCard) return; const c=menuCard;
+    if(act==='done'){ toast('완료'); removeCard(c); }
+    else if(act==='archive'){ toast('보관'); removeCard(c); }
+    else if(act==='snooze'){ toast('미루기 — 내일 다시'); }
+    else { toast(`${ACT_LABEL[act]} — Acceptance 대기`); } // 외부 변경은 사람이 accept해야 실제 발생
+    closeMenu();
+  }
+  cardMenu.addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) doAction(b.dataset.act); });
+  cardMenu.addEventListener('pointerdown', e=> e.stopPropagation());
+  window.addEventListener('pointerdown', e=>{
+    if(!e.target.closest('.card-menu') && !e.target.closest('.menu-btn')) closeMenu();
+  });
+
+  // ── 개인/업무 토글 (기본 업무) ──
+  let pendingKind='work';
+  const seg=document.getElementById('seg');
+  seg.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      pendingKind=b.dataset.kind;
+      seg.querySelectorAll('button').forEach(x=> x.classList.toggle('on', x===b));
+    });
+  });
+
+  // ── 드래그 ──
+  function bindDrag(card){
+    const el = card.el;
+    let ox, oy, moved;
+    el.addEventListener('pointerdown', e=>{
+      if(e.target.closest('.menu-btn')) return;
+      moved=false; select(card);
+      const r = el.getBoundingClientRect(), o = overlay.getBoundingClientRect();
+      ox = e.clientX - r.left; oy = e.clientY - r.top;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add('dragging'); el.style.transition='none'; el.style.transform='rotate(0deg)';
+      const move = ev=>{
+        moved=true;
+        const x = ev.clientX - o.left - ox, y = ev.clientY - o.top - oy;
+        el.style.left=x+'px'; el.style.top=y+'px';
+        highlight(ev.clientX, ev.clientY);
+      };
+      const up = ev=>{
+        el.releasePointerCapture(e.pointerId);
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', up);
+        el.classList.remove('dragging'); el.style.transition='';
+        clearHi();
+        const z = zoneAt(ev.clientX, ev.clientY);
+        if(moved) assign(card, z || card.zone); else layout(card.zone);
+      };
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up);
+    });
+  }
+  function zoneAt(cx,cy){
+    for(const z of zones){
+      const r = zoneEl[z].getBoundingClientRect();
+      if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom) return z;
+    }
+    return null;
+  }
+  let hiEl=null;
+  function highlight(cx,cy){
+    const z = zoneAt(cx,cy); clearHi();
+    if(z && z!=='unclassified'){ hiEl=zoneEl[z]; hiEl.classList.add('drop'); }
+  }
+  function clearHi(){ if(hiEl){hiEl.classList.remove('drop'); hiEl=null;} }
+
+  // ── 키보드 분류 ──
+  window.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ closeMenu(); return; }
+    if(document.activeElement===dump) return;
+    if(!selected) return;
+    const map={'1':'q1','2':'q2','3':'q3','4':'q4','0':'unclassified','u':'unclassified'};
+    if(map[e.key]){ assign(selected, map[e.key]); e.preventDefault(); return; }
+    const akeys={s:'snooze',d:'done',e:'archive'};
+    const k=e.key.toLowerCase();
+    if(akeys[k]){ menuCard=selected; doAction(akeys[k]); e.preventDefault(); }
+  });
+
+  // ── 캡처 입력 ──
+  function dumpSubmit(){
+    const raw = dump.value; if(!raw.trim()) return;
+    const { kind, text } = parseDump(raw);
+    if(!text) return;
+    const c = makeCard(text, kind || pendingKind, 'unclassified', true); // 마커 우선, 없으면 토글값
+    dump.value='';
+    layout('unclassified'); updateCounts();
+    select(c);
+  }
+  dump.addEventListener('keydown', e=>{ if(e.key==='Enter') dumpSubmit(); });
+  document.getElementById('send').addEventListener('click', dumpSubmit);
+
+  // ── 초기 촤라락 ──
+  function boot(){
+    seed.forEach(s => makeCard(s.t, s.k, 'unclassified', false));
+    layout('unclassified', true);
+    updateCounts();
+  }
+  window.addEventListener('load', ()=> setTimeout(boot, 120));
+  let rt; const relayout = ()=>{ clearTimeout(rt); rt=setTimeout(()=> zones.forEach(z=>layout(z)), 90); };
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', ()=> setTimeout(()=> zones.forEach(z=>layout(z)), 250));
+})();
+</script>
+</body>
+</html>
