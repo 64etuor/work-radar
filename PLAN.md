@@ -160,7 +160,7 @@
 - `Worktree` 모델: path · branch · head · baseBranch · ahead/behind · dirty 상태
 - Diff 뷰 비교 모드 4종: `working`(미커밋) / `staged` / `vs_base`(예: origin/dev) / `branch↔branch`
 - 파일 목록(+adds/-dels, status M/A/D/R) + 파일별 diff(구문 강조)
-- PR Radar 및 실행 레일과 연결: PR 브랜치·Codex worktree의 diff를 같은 뷰로 검수
+- PR Radar와 연결: PR 브랜치·(제안 레일 코드 잡 등) worktree의 diff를 같은 뷰로 검수 (실행 레일은 폐기)
 **Done-criteria:**
 - [ ] 한 repo의 모든 worktree가 상태 배지(ahead/behind/dirty)와 함께 표시
 - [ ] worktree 선택 → 파일 목록 + 파일별 diff 렌더
@@ -211,7 +211,62 @@
 - [ ] enrich가 카드를 자동 분류하지 않음 (quadrant 자동 확정 0)
 - [ ] enrich가 `suggestedArea`를 닫힌 세트(health…finances|other)에서만 부여, 사람이 수정 가능
 
-### Phase 10 — 실행 레일 (최고 위험, 마지막)
+### Phase 10 — Google Calendar 연동 (read 레일)
+
+> 옛 Phase 10(실행 레일)은 **폐기**됨 — 맨 아래 "폐기된 계획" 부록 참조. 새 Phase 10은
+> Today(Phase 11)가 소비할 **캘린더 read 레일**이다.
+> **상세 설계·구현 계획(새 세션 진입점) = `docs/specs/phase-10-google-calendar.md`.**
+
+**Goal:** 프로젝트별 Google Calendar OAuth → 다중 캘린더 선택 → 오늘 이벤트 read.
+개인/업무 프로젝트가 각자 Google 계정·OAuth 자격증명을 분리해서 가진다(기존 keychain
+패턴). PR Radar처럼 ambient(이벤트 영속 없음). Today/Timeline(Phase 11)이 소비.
+
+**스코프 = 2개 PR (Today 표시는 Phase 11):**
+- **10a — OAuth 연결:** `TokenKind::GoogleCalendar`(keychain blob: clientId/secret/refreshToken),
+  사용자 제공 client(Settings 입력), loopback + PKCE(S256) OAuth(`calendar.readonly`),
+  토큰 refresh, connect/disconnect/status 커맨드 + Settings 연결 UI. graceful degrade.
+- **10b — 캘린더 선택 + 이벤트:** migration 0006 `projects.google_calendar_ids`, calendarList
+  조회 + 다중 선택 저장, `fetch_calendar_events(projectId|null, date)`(선택 캘린더 오늘 이벤트
+  시간순 병합·all-day 포함·프로젝트별 부분 실패 격리), `CalendarProvider` 트레잇 + Http 구현,
+  Settings 다중 캘린더 picker.
+
+**Deliverables:** 위 2 PR. 자격증명/토큰 keychain·렌더러 미노출, 외부호출 Rust(reqwest),
+bounded·graceful degrade(#5), read-only 스코프(외부 mutate 0 → Acceptance 불요),
+선택목록 SQLite SSOT(#7), specta i64 금지.
+
+**Done-criteria:**
+- [ ] (10a) Settings 프로젝트별 client 입력 → "연결" → 브라우저 동의 → refresh token keychain 저장(재부팅 유지); 미연결/client 미입력 graceful degrade; 토큰 렌더러 미노출
+- [ ] (10a) access token 만료 시 refresh로 자동 재발급(bounded, 무한 retry 아님)
+- [ ] (10b) 연결 후 calendarList 표시 + 다중 캘린더 선택 저장(개인/업무 계정 분리)
+- [ ] (10b) `fetch_calendar_events(date)`가 개인+업무 선택 캘린더 오늘 이벤트를 시간순 병합 반환(all-day 포함)
+- [ ] (10b) 미연결/네트워크 실패 프로젝트는 격리(나머지 정상)
+- [ ] 파싱·오늘 윈도잉·PKCE(S256)·병합/정렬은 cargo test; 실 OAuth loopback·실 Google fetch·keychain 영속은 사용자 관찰 항목
+
+### Phase 11 — Today / Timeline / Weekly review / 마감(Work Debt)
+**Goal:** 하루 운영 뷰 + 부채 지표. (Phase 10 Google Calendar를 "일정"으로 소비.)
+**Deliverables:**
+- Today(Google Calendar 오늘 이벤트[Phase 10] + Q1 + focus + PR attention + unprocessed count + Today 레일 + 오늘 루틴)
+- Timeline(신호/승격/이벤트 시간축) + Weekly review(주간 집계) + Work Debt 지표
+**Done-criteria:**
+- [ ] Today가 Q1/캘린더 오늘 이벤트/PR attention/미분류 수를 정확히 집계
+- [ ] Work Debt 지표(미분류, Q1 overdue, stale backlog, cleanup needed 등) 표시
+- [ ] Timeline + Weekly review 동작 (정의는 Phase 11 착수 시 brainstorming으로 확정)
+
+---
+
+## 폐기된 계획 (이력)
+
+### (폐기) 실행 레일 — 옛 Phase 10 (구현 안 함, 2026-05-21)
+
+> 사용자 결정으로 **폐기**. 앱 안에서 Codex가 백로그를 `workspace-write`로 구현 → diff 검수
+> → 브랜치 push → draft PR 하던 실행 레일. 사용자가 이미 직접 쓰는 외부 코딩 에이전트
+> (Claude Code / Codex / OMC)와 정면 중복이고 더 약한 one-shot 형태라, 가치 대비 위험
+> (workspace-write + 토큰 push)이 3-Rail 중 가장 큰 조각이라 통째로 들어냄. 제안 레일
+> (Phase 8/9)이 "Codex가 돕고 사람이 결정한다"는 가치를 위험 없이 이미 제공한다.
+> 근거: `docs/decisions.md` "Phase 10 — 실행 레일 (폐기)" 항목.
+
+<details><summary>원안 (이력 — 구현 안 함)</summary>
+
 **Goal:** 승격된 백로그를 Codex가 격리 worktree에서 구현 → draft PR.
 **Deliverables:**
 - "지금 실행"만 트리거, 동시 1, workspace-write 샌드박스, full bounds
@@ -223,14 +278,7 @@
 - [ ] kill 가능, cost cap 동작
 - [ ] 사람 검수 없이 push 안 됨
 
-### Phase 11 — Today / Timeline / 마감
-**Goal:** 하루 운영 뷰 + 부채 지표.
-**Deliverables:**
-- Today(일정 + Q1 + focus + PR attention + unprocessed count)
-- Timeline + Weekly review + Work Debt
-**Done-criteria:**
-- [ ] Today가 Q1/일정/PR attention/미분류 수를 정확히 집계
-- [ ] Work Debt 지표(미분류, Q1 overdue, stale backlog, cleanup needed 등) 표시
+</details>
 
 ---
 

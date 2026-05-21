@@ -15,8 +15,13 @@
 ```
 결정 레일 (사람만)      : Eisenhower 분류 / 승격 여부      ← Codex 접근 금지
 제안 레일 (Codex→사람)  : enrich / self-check draft / triage → Proposal → Acceptance
-실행 레일 (사람→Codex)  : worktree 구현 → draft PR → 사람 검수 → Acceptance
+실행 레일 (사람→Codex)  : worktree 구현 → draft PR → 사람 검수 → Acceptance   ← 폐기(2026-05-21)
 ```
+
+> **실행 레일은 폐기됨(2026-05-21, 사용자 결정).** 앱 내 Codex 백로그 구현(workspace-write
+> + 브랜치 push + draft PR)은 외부 코딩 에이전트와 중복·고위험이라 들어냄 — 자동화는 **제안
+> 레일까지만**. 근거: `PLAN.md` 부록 / `docs/decisions.md` "(폐기) 옛 Phase 10". (worktree
+> 격리·Acceptance 게이트·bounded는 제안 레일 코드 잡과 Diff Viewer에 그대로 유효.)
 
 모든 외부 변경(Notion/GitHub)은 **Acceptance**를 거친다. Codex 출력은 직접 mutate 불가.
 
@@ -197,5 +202,5 @@ impl AgentRunner for CodexRunner {
   - `branch↔branch` = 임의 두 ref 비교
 - **read-only.** Diff Viewer는 절대 워킹트리/브랜치를 변경하지 않는다(체크아웃·리셋 없음).
 - **성능:** 파일 목록(통계)을 먼저, 파일별 hunk는 지연 로드. 대용량 diff는 가상 스크롤.
-- **연결:** PR Radar의 PR 브랜치, 실행 레일(Phase 10)의 Codex worktree를 같은 뷰로 검수.
+- **연결:** PR Radar의 PR 브랜치, 제안 레일 코드 잡(Phase 8/9)의 Codex worktree를 같은 뷰로 검수. (실행 레일은 폐기.)
 - **멀티 repo:** 개인/업무 모든 enabled repo의 worktree를 `projectId`로 필터해 동시 표시.
