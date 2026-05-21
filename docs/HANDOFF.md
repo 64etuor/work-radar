@@ -50,6 +50,14 @@
   `cargo build/test/clippy` + `pnpm build`(tsc) + 필요시 `pnpm tauri dev` 부팅 로그로 검증.
 - **커밋:** Phase 0 및 현재까지 변경 미커밋. 커밋/PR은 사용자 요청 시에만.
 
+## Git 워크플로우 (중요)
+
+- **항상 `dev`에서 작업/커밋/push.** `main`은 PR(dev → main)로만 머지(안정 스테이지).
+- `git push origin main` 은 `.husky/pre-push` 훅이 **차단**(긴급 우회: `--no-verify`).
+  서버측 보호는 private+free라 불가(Pro/public 필요) → 현재 로컬 훅으로만 강제.
+- gh 활성 계정이 가끔 `yanghapark`로 바뀜 → `gh auth switch --user 64etuor`로 고정 후 작업.
+- 레포: `64etuor/work-radar` (Private). CI(main·dev): rust fmt/clippy/test + frontend typecheck/build.
+
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
