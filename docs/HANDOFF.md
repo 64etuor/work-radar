@@ -1,72 +1,75 @@
-# Work Radar — 세션 핸드오프 (현재: Phase 2 시작 직전)
+# Work Radar — 세션 핸드오프 (현재: Phase 3 시작 직전)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
 ## 지금 상태
 
-- **Phase 0(스켈레톤) + Phase 1(Capture Board) 완료·검증·커밋·푸시됨.** 레포 `64etuor/work-radar`(Private), dev 푸시, **CI 그린**.
+- **Phase 0(스켈레톤) + Phase 1(Capture Board) + Phase 2(Project & 멀티 레포 설정) 완료·검증·커밋·푸시됨.** 레포 `64etuor/work-radar`(Private), dev 푸시.
   - Phase 1 커밋: `6fecaff feat(capture-board): Phase 1 — 5-region 캡처 보드`.
-- **Phase 1 산출물(코드 구현됨):**
-  - **스키마 v2**(`migrations/0002_capture_board.sql`): `signals`에 `kind`(개인/업무)·`area`/`suggested_area`(Phase 9용 데이터 필드)·`today_for_date`/`today_done_at`/`today_rank`(Today 멤버십) 추가. `routines` + `routine_checks`(날짜별 완료) 신규.
-  - **IPC 커맨드 16개**(`src-tauri/src/commands.rs`, specta 생성 `src/bindings.ts`): create/list/classify signal, set_status/snooze, promote/unpromote/toggle_done/reorder today, list_today, create_promotion_draft, search_signals(FTS), create/list_today routines, toggle_routine_check.
-  - **프런트**(`src/components/CaptureBoard.tsx` + `src/components/board/*` + `.cb` CSS in `src/styles.css`): 5영역 보드, 촤라락/톡, 드래그+`1/2/3/4` 분류, Today 레일(+N 경과일·rollover·되돌리기·재정렬), Routines, 카드 메뉴(백로그/안건/캘린더=draft만, Today/snooze/done/archive), 반응형 3단계. 데이터는 `src/lib/query.ts` 훅(TanStack Query).
-  - INVARIANTS 준수 reviewer(architect) **APPROVED**: #1 카드 항상 unclassified 진입(자동분류 0), #2 외부승격=draft only(외부 무변경), #3 dedup upsert, #7 SQLite SSOT.
-- **다음 = Phase 2 (Project & 멀티 레포 설정)** — `dev` 브랜치에서.
+  - Phase 2 커밋: `d57f300 feat(settings): Phase 2 — Project/Repo 설정 + project별 토큰 keychain + Notion/GitHub ping`.
+- **Phase 2 산출물(코드 구현됨):**
+  - **신규 마이그레이션 없음** — `projects`/`repos` 테이블과 `signals.project_id`는 0001에 이미 존재 → 호출부(커맨드/UI)만 연결.
+  - **백엔드:** `src-tauri/src/keychain.rs`(Phase 0 `#[allow(dead_code)]` → 호출부 연결; `TokenKind`(Notion/GitHub)별 set/get/has/delete, account=`{credential_ref}:{kind}`), `src-tauri/src/api.rs`(신규: `ping_notion`=reqwest GET `/v1/users/me`, `ping_github`=octocrab `current().user()`; read-only·단일 시도·timeout), 커맨드 9종(`create_project`, `list_repos`, `create_repo`, `set/delete/status/ping_project_token`, `reconcile_signal_projects`, `set_signal_project`) + `create_signal`에 `projectId`. `Cargo.toml`에 reqwest+octocrab(rustls-tls 통일).
+  - **프런트:** cmdk 팔레트 네비게이션(`src/components/CommandPalette.tsx`, `⌘K`/`⌘,`) + `src/components/SettingsView.tsx` + `src/components/settings/*`(AddProjectForm·ProjectCard·TokenRow·AddRepoForm) + `.settings`/`.cmdk` CSS. 토큰은 로컬 state에만 잠시 두고 저장 즉시 비움(렌더러/캐시 미보관). store에 view/palette 상태.
+  - INVARIANTS reviewer(architect, opus) **APPROVED**: 7개 PASS — 토큰 keychain 전용·렌더러 미노출(end-to-end), ping read-only·bounded, projectId는 메타데이터(quadrant/승격 불변).
+- **다음 = Phase 3 (Notion 승격 write 레일)** — `dev` 브랜치에서.
 
-### Phase 1 미해결/관찰 항목 (Phase 2에서 고려)
+### Phase 2 미해결/관찰 항목 (Phase 3에서 고려)
 
-- **GUI 관찰 미실시(헤드리스 한계):** 실제 창 렌더·핫키 show/hide·드래그 감각·재시작 영속은 사용자가 `pnpm tauri dev`로 확인 필요. (cargo는 `export PATH="$HOME/.cargo/bin:$PATH"` 후 실행.)
-- **FTS UI 없음:** `search_signals` 커맨드+단위테스트만 존재(보드에 검색 박스 없음 — 프로토타입에 없어서 보류). cmdk 전역 검색 통합 시 노출 예정.
-- **`RootPalette.tsx` 미사용 보존:** Phase 0 cmdk 루트 팔레트. 보드로 교체됐으나 추후 전역 검색/네비게이션에 재사용 여지. **Phase 2 네비게이션(설정/프로젝트 뷰 진입)을 어떻게 둘지 결정 필요** — 현재 앱 = 보드 전체 화면이라 "Add Project"로 갈 경로가 없음.
-- **signals.kind ↔ projectId reconcile:** Phase 1 신호는 `kind`(personal/work) 힌트만 보유, `project_id`는 NULL(프로젝트 없음). Phase 2에서 프로젝트 생성 후 reconcile 경로 설계.
+- **GUI/keychain/network 관찰 미실시(헤드리스 한계):** 실제 창·`⌘K` 팔레트 렌더, **토큰 keychain 저장·재부팅 영속**, **실 Notion/GitHub ping 성공/실패**는 사용자가 `pnpm tauri dev`로 확인. (cargo는 `export PATH="$HOME/.cargo/bin:$PATH"` 후.)
+- **Acceptance 게이트 흐름 미정(Phase 3 선결):** Phase 2는 `create_promotion_draft`로 **draft만** 만든다(외부 무변경). Phase 3는 draft를 실제 Notion write로 잇는데, **즉시 write vs draft→accept(확인)→write 2단계** 중 택해야 함. 권장 = **2단계**(architecture Acceptance 모델 일치, undo 안전).
+- **reconcile 휴리스틱:** `reconcile_signal_projects`는 미태깅·kind 보유 신호를 같은 kind의 **가장 오래된 프로젝트**로 태깅(audit 로그 없음). 1개인+1업무 표준 셋업엔 충분, 멀티 프로젝트/kind면 Phase 3+에서 surfacing 고려.
+- **agent_runs.projectId 태깅:** 스키마(0001)에 `project_id` 보유. 잡 도입(Phase 7+) 시 태깅됨 — Phase 2엔 잡이 없어 대상 없음.
+- **credential_ref:** project 생성 시 백엔드가 만드는 opaque 키(`lower(hex(randomblob(16)))`, project.id와 별개). keychain account=`{credential_ref}:{kind}`.
 
 ## 먼저 읽을 정본
 
-1. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 2** Deliverables/Done-criteria
-2. `docs/architecture.md` — §3 멀티 프로젝트/레포(Project/Repo 모델), §4 데이터 모델, §6 SSOT
-3. `DESIGN.md` — 토큰/컴포넌트 정본(Cohere white editorial). 설정/폼 표면은 `contact-form-card`·`button-primary`·토큰 사용
-4. `docs/decisions.md` — Phase 0/1 결정(특히 keychain 3.x, 단일 창 모델, Today 멤버십 설계)
-5. `AGENTS.md` — working agreement, `docs/reference/commands.md` — 검증 명령 인덱스
+1. `PLAN.md` — §1 INVARIANTS(절대규칙 7개) + **Phase 3** Deliverables/Done-criteria
+2. `docs/architecture.md` — §2 3-Rail(Acceptance), §4 Promotion 모델, §6 SSOT & Sync(rate limit 3 req/s·오프라인 큐잉), §7 dedup/auto-resolve
+3. `docs/decisions.md` — Phase 2 결정(토큰 keychain·credential_ref·ping·reconcile)
+4. `.claude/skills/octocrab-keyring`(Notion=reqwest REST·rate-limit·bounded retry) · `.claude/skills/sqlx-sqlite`(promotions append-only·dedup upsert) · `.claude/skills/tauri-specta-ipc`
+5. `DESIGN.md` — 토큰/컴포넌트 정본(Cohere). `AGENTS.md` — working agreement, `docs/reference/commands.md` — 검증 명령 인덱스
 
-## Phase 2 스코프 (한 번에 한 Phase, PLAN.md Phase 2 done-criteria만)
+## Phase 3 스코프 (한 번에 한 Phase, PLAN.md Phase 3 done-criteria만)
 
-PLAN.md Phase 2 핵심:
-- **Add Project**(`personal`/`work`) / **Add Repo**(github remote · local path). `projects`/`repos` 테이블은 0001에 이미 존재.
-- **project별 토큰 keychain 저장**(평문 DB/프런트 금지 — INVARIANT). **keychain 모듈은 Phase 0에 계약/모듈만 존재**(`src-tauri/src/keychain.rs`, `#[allow(dead_code)]`) → **여기서 호출부 연결**.
-- **Notion DB(backlog/agenda) 바인딩** + `ticketKeyPattern`(예: `MIR-DEV-\d+`) 설정.
-- **모든 signal/run에 projectId 태깅** — Phase 1 `kind` 힌트를 reconcile.
+PLAN.md Phase 3 핵심:
+- **Notion read(미러 캐시) + 카드→백로그/안건 write-through** + `Promotion` append-only 로그(undo/audit).
+- **rate-limit(3 req/s) 인지 클라이언트** + **bounded retry/backoff/jitter** + terminal failure 노출(무한 retry 금지 — INVARIANT #5).
+- 토대: Phase 2의 project Notion 토큰(keychain) + `notionBacklogDbId`/`notionAgendaDbId` 바인딩 + `create_promotion_draft`(draft).
 
 **Done-criteria:**
-- [ ] 개인 1 + 업무 1 프로젝트 생성, repo 목록 표시
-- [ ] 토큰이 keychain에 저장됨(평문 DB 아님), 재부팅 후 유지
-- [ ] 각 project 토큰으로 테스트 API ping 성공/실패 표시 (Notion/GitHub 호출은 **Rust**에, reqwest/octocrab — Cargo.toml에 아직 없음 → 추가 필요)
-- [ ] 모든 signal/run이 `projectId` 태깅
+- [ ] 카드 승격 → 해당 project Notion DB에 페이지 생성
+- [ ] Promotion 로그에 기록(undo 가능 데이터)
+- [ ] 오프라인 시 승격이 큐잉되고 복구 시 flush
+- [ ] rate limit 초과해도 무한 retry 없이 backoff 후 실패 노출
 
 **설계 선결 과제(시작 전 결정):**
-- 보드 ↔ 설정/프로젝트 뷰 **네비게이션**(예: 헤더 버튼/cmdk/단축키로 Settings 뷰 토글). 단일 창 유지.
-- 토큰 입력 UI는 **렌더러에 토큰 평문을 들고 있지 않도록** 즉시 keychain 커맨드로 넘긴다(IPC 인자로만 전달, 상태 저장 금지).
+- **Acceptance 흐름:** draft→accept(확인)→write 2단계 vs 즉시 write (권장 2단계).
+- **Notion 페이지 매핑:** 카드 title/body → Notion DB 속성(제목 + 상태/날짜 등) 매핑 규칙. DB 스키마 가정 최소화(제목 속성만 필수, 나머지 선택).
+- **오프라인 큐:** `promotions` draft 행을 큐로 재사용할지(status draft→created 전이) 별도 큐 둘지.
 
 ## 운영 노트 (환경 함정)
 
-- **Rust 툴체인:** cargo는 `$HOME/.cargo/bin`에 있으나 **기본 PATH에 없음**. cargo/`git commit`(husky pre-commit가 `cargo fmt --check` 실행) 전 매번 `export PATH="$HOME/.cargo/bin:$PATH"`. cargo 명령은 `src-tauri/`에서. (`--no-verify` 대신 PATH export로 훅을 정상 통과시킬 것.)
-- **rtk 훅 주의:** `cargo` 출력 요약/exit code를 신뢰하지 말 것(예: clippy "1 errors" 오탐). 진짜 결과는 `rtk proxy cargo …`로 raw 확인, 또는 출력 파일을 **Read 도구**로 읽기. 백그라운드 exit code도 못 믿음 → 실제 출력 확인.
-- **bindings.ts:** `cargo test`의 export 테스트가 생성(프런트 빌드 전 필요). 수기 IPC 타입 금지(specta). **specta는 i64 export 금지** → 작은 정수는 `i32`.
-- **GUI 검증:** 실제 창/핫키/keychain 영속은 **사용자 관찰 항목**. 헤드리스에선 `cargo build/test/clippy` + `pnpm build`(tsc) + 필요시 `pnpm tauri dev` 부팅 로그.
-- **테스트 임시 DB:** 병렬+coarse 클록 충돌 방지로 `temp_db_path`에 원자 카운터 사용(이미 적용). 새 DB 테스트도 동일 패턴.
+- **Rust 툴체인:** cargo는 `$HOME/.cargo/bin`에 있으나 **기본 PATH에 없음**. cargo/`git commit`(husky pre-commit가 `cargo fmt --check`+`pnpm typecheck` 실행) 전 매번 `export PATH="$HOME/.cargo/bin:$PATH"`. cargo 명령은 `src-tauri/`에서.
+- **rtk 훅 주의:** `cargo clippy --all-targets -- -D warnings`는 rtk가 `-- -D warnings`를 망가뜨려(빌드 `-D`를 파일명으로 전달) **가짜 실패** + 요약("1 errors")도 오탐. → `rtk proxy cargo clippy --all-targets -- -D warnings > /tmp/x.log 2>&1; echo EXIT=$?` 후 **Read 도구**로 raw 로그의 `Finished`/`test result: ok` 확인. 백그라운드 exit code도 못 믿음.
+- **bindings.ts:** `cargo test`의 export 테스트가 생성(프런트 빌드 전 필요). 수기 IPC 타입 금지(specta). **specta는 i64/u64 export 금지** → 작은 정수는 `i32`/`u32`.
+- **GUI 검증:** 실제 창/핫키/keychain 영속/네트워크 ping은 **사용자 관찰 항목**. 헤드리스에선 `cargo build/test/clippy` + `pnpm build`(tsc) + 필요시 `pnpm tauri dev` 부팅 로그.
+- **테스트 임시 DB:** 병렬+coarse 클록 충돌 방지로 `temp_db_path`에 원자 카운터(이미 적용). **keychain/실네트워크는 cargo test에 넣지 말 것**(헤드리스 CI 불가) — 사용자 관찰로.
 
 ## Git 워크플로우 (중요)
 
 - **항상 `dev`에서 작업/커밋/push.** `main`은 PR(dev → main)로만 머지. `git push origin main`은 `.husky/pre-push`가 차단.
 - 커밋 = Conventional Commits. 이슈 번호는 PR에만(커밋 메시지 금지). 한 PR = 한 관심사.
 - gh 활성 계정이 가끔 `yanghapark`로 바뀜 → `gh auth switch --user 64etuor`로 고정.
-- 레포: `64etuor/work-radar` (Private). CI(main·dev): rust fmt/clippy/test + frontend typecheck/build. **현재 dev CI 그린.**
+- 레포: `64etuor/work-radar` (Private). CI(main·dev): rust fmt/clippy/test + frontend typecheck/build.
 
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
-/oh-my-claudecode:ralph work-radar Phase 2 (Project & 멀티 레포 설정) 구현.
-먼저 docs/HANDOFF.md → PLAN.md(§1 INVARIANTS + Phase 2) → docs/architecture.md(§3 Project/Repo, §6 SSOT)
-→ DESIGN.md(폼/설정 토큰) → docs/decisions.md(keychain 3.x) 순으로 읽고 그대로 따른다.
-한 번에 한 Phase, PLAN.md Phase 2 done-criteria로 자가검증. INVARIANTS 7개 준수(특히 토큰 keychain·렌더러 노출 금지).
-작업/푸시는 dev 브랜치에만(main 직접 push 금지). 시작 전 보드↔설정 네비게이션 방식만 확인하고 바로 진행해.
+/oh-my-claudecode:ralph work-radar Phase 3 (Notion 승격 write 레일) 구현.
+docs/HANDOFF.md → PLAN.md(§1 INVARIANTS + Phase 3) → docs/architecture.md(§6 SSOT, §7 dedup)
+→ docs/decisions.md(Phase 2 토큰/credential_ref) 순으로 읽고 따른다. 한 번에 한 Phase,
+Phase 3 done-criteria로 자가검증. INVARIANTS 준수(특히 #2 Acceptance 게이트·#3 dedup·
+#5 bounded retry/backoff/jitter·#7 SSOT, 토큰 keychain). 작업/푸시는 dev에만.
+시작 전 Acceptance 흐름(2단계 vs 즉시)만 확인하고 진행.
 ```
