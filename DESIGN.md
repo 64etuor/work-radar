@@ -262,8 +262,12 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 - **`tag-chip`(개인/업무)** — 카드 상단 작은 pill. 개인 = Pale Blue/Action Blue, 업무 = Pale Green/Deep Green.
   **라벨 병기**(개인/업무 텍스트). 입력 맨 앞 토큰 마커가 토글값보다 우선.
 - **`card-action-menu`** — `⋯`/`Cmd+K`/우클릭으로 카드에서 파생. 흰색 드롭다운(radius `sm`–`md`).
-  상단 Mono em-라벨 `승격 · Acceptance 게이트` 아래: 백로그 등록 · 안건 승격 · 캘린더 등록(= `Promotion` draft),
-  구분선, 미루기/완료/보관(`S/D/E`). **승격 항목은 외부를 직접 바꾸지 않는다(Acceptance 대기).**
+  상단 Mono em-라벨 `승격` 아래: 백로그 등록 · 안건 승격 · 캘린더 등록(= `Promotion` draft, Acceptance 대기) ·
+  **Today 추가**(로컬 승격, Acceptance 불요), 구분선, 미루기/완료/보관(`S/D/E`).
+  **외부 승격(notion/calendar)은 외부를 직접 바꾸지 않는다(Acceptance 대기); Today는 로컬 즉시.**
+- **`today-rail`(Today's Todo)** — 보드 **우측 고정 세로 레일(기본 표시)**; 세로 모니터에선 하단 시트/접기.
+  오늘 집중 항목 큐레이션. 매트릭스 카드를 레일로 드래그하거나 액션 "Today 추가"로 채움. 항목 체크(완료)·재정렬,
+  날짜 헤더(오늘). 흰 캔버스 카드 + 얇은 hairline 보더, Mono 라벨 `TODAY`. 카드는 사분면에 유지(`today` 플래그).
 - **`toast`** — near-black pill, 하단 중앙. "··· — Acceptance 대기" 등 비차단 피드백.
 
 ### 모션
