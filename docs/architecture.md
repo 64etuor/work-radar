@@ -111,8 +111,10 @@ DiffFileSummary { path; status: "M" | "A" | "D" | "R"; adds: number; dels: numbe
   (Wheel of Life + other). AI(enrich, Phase 9)가 `suggestedArea`로 추론하고, 사람이 `area`로 확정/수정한다.
   AI는 세트 밖 카테고리를 만들지 않는다(닫힘). 사용자 커스텀 영역은 추후. `area`는 personal/work `kind`와 **별개 축**.
 - **Today's Todo = 로컬 승격**: `Promotion(target:"today", forDate)`는 SQLite 로컬 액션이라 **Acceptance 게이트 불요**
-  (외부 변경 아님). `notion_backlog/notion_agenda/calendar`만 외부 → Acceptance 필수. Today 승격해도 카드는
-  사분면에 유지되고 `today` 플래그로 매트릭스·Today 레일 양쪽에 노출(이동 아님). 우측 고정 레일이 기본 표시.
+  (외부 변경 아님). `notion_backlog/notion_agenda/calendar`만 외부 → Acceptance 필수. Today 승격 시 카드는
+  **매트릭스에서 제외**되고 Today 레일에만 표시(이동); 분류돼 있던 `quadrant`(Q1~Q4)는 태그/배지로 유지.
+  Today 항목은 완료(`done`) 체크 + 재정렬, **미완료는 다음날로 이월(rollover)·완료는 제외**. 우측 고정 레일 기본 표시.
+  (구현: signal에 today 멤버십 상태 + `done` + `forDate`; 매트릭스 뷰는 today 항목을 제외해 렌더.)
 - system/PR/Hermes 신호는 `dedupKey`로 **upsert**. 원인 해소 시 `status` auto-resolve.
 - mismatch는 `snapshot`으로 drift 비교. join key는 `ticketKeyPattern`.
 
