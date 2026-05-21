@@ -1,4 +1,4 @@
-# Work Radar — 세션 핸드오프 (현재: Phase 10 Google Calendar 완료 · 다음 = Phase 11 Today/Timeline/Work Debt)
+# Work Radar — 세션 핸드오프 (현재: Phase 11 Today/Timeline/Weekly/Work Debt 완료 · PLAN Phase 0~11 전부 완료)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
@@ -43,7 +43,19 @@
   - **`commands.rs`:** `list_google_calendars`(저장 선택 반영) · `set_selected_calendars`(로컬 SQLite UPDATE — 외부 무변경) · `fetch_calendar_events(projectId|null, date)`(None=전 프로젝트 병합, 미연결/refresh 실패/선택 없음 프로젝트 격리). 헬퍼 `access_token_for`(매 fetch refresh, 회전 시에만 keychain 갱신 — 캐시는 보류). **`lib.rs`** 3커맨드 등록.
   - **프런트:** `query.ts` `useGoogleCalendars`/`useSetSelectedCalendars` + `fetchCalendarEvents` 헬퍼(Phase 11 소비용). `GoogleCalendarBlock`에 `CalendarPicker`(연결 시 calendarList 다중 체크박스 + 저장) + `styles.css` `.st-cal-*`.
   - **검증:** `cargo test` **105 passed**(+7) · clippy -D warnings clean · cargo fmt --check green · pnpm typecheck/build green(1759 modules) · INVARIANTS reviewer 패스. **실 Google calendarList/이벤트 fetch·다중 캘린더 병합·keychain은 사용자 관찰**(`pnpm tauri dev`).
-- **다음 = Phase 11 (Today / Timeline / Weekly review / Work Debt)** — `dev`. PLAN.md Phase 11. Today가 **Phase 10 `fetchCalendarEvents(projectId|null, date)`** 헬퍼로 오늘 이벤트를 소비(Q1 + focus + PR attention + 미분류 수 + Today 레일 + 오늘 루틴과 함께 집계). Timeline/Weekly review 정의는 착수 시 brainstorming으로 확정(decisions.md "Phase 11 재정의": 현재 미정). 캘린더 access token 캐시(in-memory CalendarManager)는 Phase 11 폴링 빈도 보고 재검토(현재 매 fetch refresh, bounded).
+- **Phase 11 산출물(Today / Timeline / Weekly review / Work Debt — 전부 read 집계 + 기존 사람 액션 재사용; 구현·검증됨):** 정본 설계 `docs/specs/phase-11-today-timeline-weekly.md`. brainstorming(AskUserQuestion)으로 4종 확정(Timeline=오늘 시간축 아젠다 / Weekly=처리량·PR·루틴·부채추세 / Work Debt=Today 상단 스트립+PLAN 4지표 / 3 PR 분할).
+  - **11a — Today 운영 뷰 + Work Debt (`9b64985`):** migration `0007_debt_snapshots`(date PK 멱등 upsert — 부채 추세용 전진 누적). `today_overview(date)` 커맨드(`fetch_today_overview` 순수 집계 + 일별 스냅샷 write). `WorkDebt{unclassified,q1Overdue,staleBacklog,cleanupNeeded}`/`TodayOverview{workDebt,q1Items,prAttention}`(u32). 임계치 `Q1_OVERDUE_DAYS=1`/`STALE_BACKLOG_DAYS=14`(PR Radar `STALE_DAYS`와 축 분리). 날짜 비교 `date(created_at,'localtime')`(아침 false-overdue 방지, load-bearing). `TodayView`(view:"today"): Work Debt 스트립 → 캘린더 → Q1 → Today 레일 → PR attention → 루틴. `useTodayOverview`/`useCalendarEvents`. reviewer REVISE→ACCEPT(staleness invalidate 번들 + TZ 수정).
+  - **11b — Timeline 오늘 시간축 아젠다 (`22f6900`):** 순수 프런트(`TimelineView`, view:"timeline"). `useCalendarEvents(date)`+`useToday`+Q1 합성, 시(hour)별 세로 그리드 + all-day/포커스 untimed 밴드, 날짜 피커. `@theme`에 누락 토큰 정의(`--color-wr-hover`/`--color-wr-action-blue`). reviewer ACCEPT.
+  - **11c — Weekly review 지난 7일 (`d2656e7`):** `weekly_review(end_date)` 커맨드(`fetch_weekly_review`, [end-6,end] 로컬 inclusive). throughput(캡처/완료/승격)·PR(attention_new/resolved≈머지·CI해소)·루틴 이행률(done=스케줄 해당 체크만, done⊆due)·debt_trend(debt_snapshots). `WeeklyReview` 등 u32. `WeeklyView`(view:"weekly"). reviewer ACCEPT(루틴 done/due 비대칭 MAJOR 수정).
+  - **검증:** `cargo test` **110 passed**(11a +3, 11c +2) · clippy -D warnings 0 · cargo fmt --check green · pnpm typecheck/build green · 각 PR INVARIANTS reviewer(critic) 패스(self-approve 금지, 1/2/3/7 PASS). **실 GUI 렌더·실 캘린더 fetch·다일 추세 누적은 사용자 관찰**(`pnpm tauri dev` → 팔레트 "Today (운영)로"/"Timeline으로"/"Weekly Review로").
+- **다음 = PLAN.md Phase 0~11 전부 완료.** 새 Phase 정의 또는 문서화된 후속(아래) 중 사용자 지시 대기. 캘린더 access token 캐시(in-memory)는 Phase 11 폴링 빈도 보고 재검토 보류(현재 매 fetch refresh, bounded).
+
+### Phase 11 미해결/관찰 항목 (후속에서 고려)
+- **PR `resolved` 근사(문서화):** PR Radar ambient(머지 히스토리 미영속) → Weekly의 `resolved`는 done 전이 PR 신호의 `updated_at` 기준(≈머지/CI해소). 실 머지 로그는 Phase 4 변경 필요라 범위 밖.
+- **Phase 4 후속:** auto-resolve된 PR 신호가 재실패 시 `upsert_pr_signal` ON CONFLICT가 status=done을 둔 채 updated_at만 갱신 → 매트릭스 재등장 안 함 + Weekly resolved 주 귀속이 밀릴 수 있음(Phase 4 auto-resolve/upsert 설계에서 추적).
+- **debt_trend 미사용 필드:** DebtPoint는 stale_backlog/cleanup_needed/pr_attention도 싣지만 스파크라인은 미분류·Q1 overdue만 그림(섹션 라벨 명시, 의도 — 추후 확장 여지).
+- **midnight-rollover:** TodayView `localToday()`는 렌더 시 1회 캡처 — 창을 자정 넘겨 열어두면 어제 날짜로 스냅샷(멱등이라 무해, 추세 정확도엔 미미).
+- **NotionWriter 실 write 경로:** Phase 9 mismatch 로컬 resolve가 실 Notion drift를 가릴 수 있음(기존 항목) — 실 write(`NotionWriter.update_page`+confirmed)는 여전히 후속.
 
 ### Phase 9 미해결/관찰 항목 (Phase 10+에서 고려)
 
@@ -103,8 +115,8 @@ PLAN.md Phase 10 핵심 — **Google Calendar 연동(read 레일):** 프로젝�
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
-work-radar Phase 10 (Google Calendar 연동 — read 레일) 구현. 한 번에 한 PR: PR1(10a OAuth 연결) → PR2(10b 캘린더 선택+이벤트).
-docs/HANDOFF.md → docs/specs/phase-10-google-calendar.md(정본 설계·구현 계획·구현 순서) → PLAN.md(§1 INVARIANTS + Phase 10) → docs/decisions.md(Phase 10 — Google Calendar) 순으로 읽고 따른다.
-선례 코드: src-tauri/src/{notion.rs(reqwest+bounded retry+트레잇 seam), github.rs(with_retry/PrProvider+octocrab), keychain.rs(set/get/has/delete+TokenKind), commands.rs(set_project_token/project_token_status/ping_project_token/refresh_pr_radar)}.
-INVARIANTS 준수(토큰 keychain·렌더러 미노출, 외부호출 Rust, bounded·graceful degrade, read-only=Acceptance 불요). 작업/푸시는 dev에만. 각 PR done-criteria 자가검증 → INVARIANTS reviewer 패스(self-approve 금지) → docs/decisions.md 한 줄.
+work-radar — PLAN.md Phase 0~11 전부 완료(dev). 새 작업은 사용자 지시 대기.
+먼저 docs/HANDOFF.md(상태) → PLAN.md §1 INVARIANTS → docs/decisions.md(Phase별 결정) → AGENTS.md를 읽는다.
+후속 후보(문서화됨): NotionWriter 실 write 경로(mismatch 실 Notion 수정), PR 머지 히스토리 영속(Weekly resolved 정확화 + Phase 4 auto-resolve 재실패 처리), 캘린더 access token in-memory 캐시(폴링 빈도 보고).
+규칙: 토큰 keychain·렌더러 미노출, 외부호출 Rust, bounded·graceful degrade, 결정 레일에 자동화 미침투, read=Acceptance 불요/외부 mutate=Acceptance 게이트. 작업/푸시는 dev에만. 각 PR done-criteria 자가검증 → INVARIANTS reviewer 패스(self-approve 금지) → docs/decisions.md 한 줄.
 ```
