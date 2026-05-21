@@ -91,6 +91,17 @@ Acceptance {                     // 외부 변경의 유일한 관문, append-on
   id; agentRunId; acceptedFields: object; target; createdAt
 }
 
+Routine {                        // 반복 작업(루틴). 보드 우측 하단 영역 (Phase 1)
+  id; projectId?; title
+  schedule: { freq: "daily" | "weekly"; weekdays?: Weekday[] }  // weekly면 weekdays 필수, e.g. ["wed","fri"]
+  area?: AreaTag; kind?: "personal" | "work"
+  active: bool; createdAt
+}
+RoutineCheck {                   // 날짜별 완료 (append-only). 다음날 새 date로 리셋
+  id; routineId; date; doneAt
+}
+Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun"
+
 Worktree {                       // repo별 git worktree (Phase 5)
   id; repoId
   path: string                   // worktree 파일시스템 경로
@@ -117,6 +128,9 @@ DiffFileSummary { path; status: "M" | "A" | "D" | "R"; adds: number; dels: numbe
   (구현: signal에 today 멤버십 상태 + `done` + `forDate`; 매트릭스 뷰는 today 항목을 제외해 렌더.)
   **경과일 카운터**: `forDate`=Today로 옮긴 날(이월돼도 불변). 배지 `+N = (오늘 − forDate) + 1` (옮긴 날 +1).
   미완료로 잔류할수록 증가, 완료(`done`) 시 종료. Work Debt 지표(Phase 11)의 입력.
+- **Routines = 반복 스케줄**: "오늘의 루틴" = `active` Routine 중 `schedule`이 오늘과 매칭(daily, 또는 weekly && 오늘 요일 ∈ weekdays).
+  완료는 `RoutineCheck(routineId, date)`로 **날짜별** 기록 → 다음날 새 `date`라 자동 리셋(재등장). 보드 우측 하단 영역.
+  WorkSignal/매트릭스와는 별개 엔티티(반복은 결정 큐에 안 쌓임).
 - system/PR/Hermes 신호는 `dedupKey`로 **upsert**. 원인 해소 시 `status` auto-resolve.
 - mismatch는 `snapshot`으로 drift 비교. join key는 `ticketKeyPattern`.
 
