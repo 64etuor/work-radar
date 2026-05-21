@@ -1435,3 +1435,382 @@
 .pr .pr-open:hover {
   background: var(--color-wr-surface);
 }
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * Worktree & Branch Diff (Phase 5) — read-only diff 뷰어. white editorial, .wt 스코프.
+ * ────────────────────────────────────────────────────────────────────────────── */
+.wt {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+.wt .wt-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.wt .wt-title {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.wt .wt-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.wt .wt-back:hover {
+  background: var(--color-wr-surface);
+}
+.wt .wt-project {
+  margin-left: auto;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: var(--radius-xs);
+  padding: 5px 10px;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.wt .wt-refresh {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--color-wr-muted);
+}
+.wt .wt-refresh:hover {
+  background: var(--color-wr-surface);
+}
+.wt .wt-spin {
+  animation: pr-spin 1s linear infinite;
+}
+.wt .wt-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* 좌측 worktree 목록 */
+.wt .wt-side {
+  flex: 0 0 268px;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-wr-border-light);
+  padding: 14px 12px 40px;
+}
+.wt .wt-group {
+  margin-bottom: 16px;
+}
+.wt .wt-group-name {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+  padding: 0 6px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt .wt-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+.wt .wt-item:hover {
+  background: var(--color-wr-surface);
+}
+.wt .wt-item-on {
+  background: var(--color-wr-surface);
+  border-color: var(--color-wr-border-light);
+}
+.wt .wt-item-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.wt .wt-branch {
+  font: 500 12px var(--font-mono);
+  color: var(--color-wr-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt .wt-primary {
+  font: 600 9px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.wt .wt-item-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.wt .wt-badge {
+  font: 600 10px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+}
+.wt .wt-dirty {
+  background: #ffe7e0;
+  color: #b23a1f;
+}
+.wt .wt-ahead {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.wt .wt-behind {
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-muted);
+}
+.wt .wt-clean {
+  background: #e3f1ec;
+  color: var(--color-q2);
+}
+/* 우측 main */
+.wt .wt-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wt .wt-placeholder {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-wr-muted);
+  font: 400 13px var(--font-sans);
+}
+.wt .wt-modes {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.wt .wt-mode {
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 5px 13px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.wt .wt-mode:hover {
+  background: var(--color-wr-surface);
+}
+.wt .wt-mode-on {
+  background: var(--color-wr-fg);
+  color: var(--color-wr-bg);
+  border-color: var(--color-wr-fg);
+}
+.wt .wt-refs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.wt .wt-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.wt .wt-ref select {
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: var(--radius-xs);
+  padding: 4px 8px;
+  font: 500 12px var(--font-mono);
+  color: var(--color-wr-fg);
+}
+.wt .wt-ref-hint {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+/* 파일목록 + diff 분할 */
+.wt .wt-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.wt .wt-files {
+  flex: 0 0 300px;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-wr-border-light);
+  padding: 8px;
+}
+.wt .wt-file {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius-xs);
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.wt .wt-file:hover {
+  background: var(--color-wr-surface);
+}
+.wt .wt-file-on {
+  background: var(--color-wr-surface);
+  border-color: var(--color-wr-border-light);
+}
+.wt .wt-fstatus {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  font: 700 10px var(--font-mono);
+  border-radius: var(--radius-xs);
+}
+.wt .wt-fs-A {
+  color: var(--color-q2);
+}
+.wt .wt-fs-D {
+  color: #b23a1f;
+}
+.wt .wt-fs-M {
+  color: var(--color-q3);
+}
+.wt .wt-fs-R {
+  color: var(--color-wr-muted);
+}
+.wt .wt-fpath {
+  flex: 1;
+  min-width: 0;
+  font: 400 12px var(--font-mono);
+  color: var(--color-wr-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl; /* 긴 경로는 앞을 자르고 파일명을 보이게 */
+  text-align: left;
+}
+.wt .wt-fstat {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 5px;
+  font: 600 10px var(--font-mono);
+}
+.wt .wt-adds {
+  color: var(--color-q2);
+}
+.wt .wt-dels {
+  color: #b23a1f;
+}
+.wt .wt-fbin {
+  font: 500 10px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+/* diff 본문 */
+.wt .wt-diff {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-wr-bg);
+}
+.wt .wt-diff-text {
+  font: 400 12px var(--font-mono);
+  line-height: 1.5;
+}
+.wt .wt-diff-block {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 4320px; /* 240줄 × ~18px — 오프스크린 가상화 힌트 */
+}
+.wt .wt-line {
+  white-space: pre;
+  padding: 0 14px;
+  min-height: 18px;
+}
+.wt .wt-l-add {
+  background: #e6f4ec;
+  color: #1d7a4d;
+}
+.wt .wt-l-del {
+  background: #fdeae4;
+  color: #b23a1f;
+}
+.wt .wt-l-hunk {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.wt .wt-l-meta {
+  color: var(--color-wr-subtle);
+}
+.wt .wt-l-ctx {
+  color: var(--color-wr-fg);
+}
+.wt .wt-trunc {
+  padding: 10px 14px;
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-muted);
+  border-top: 1px solid var(--color-wr-border-light);
+}
+.wt .wt-empty,
+.wt .wt-err {
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-muted);
+  padding: 16px;
+}
+.wt .wt-err {
+  color: var(--color-q1);
+}
+/* 좁은 화면: 좌 worktree 목록을 상단으로 스택 */
+@media (max-width: 900px) {
+  .wt .wt-body {
+    flex-direction: column;
+  }
+  .wt .wt-side {
+    flex: 0 0 auto;
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid var(--color-wr-border-light);
+  }
+  .wt .wt-split {
+    flex-direction: column;
+  }
+  .wt .wt-files {
+    flex: 0 0 auto;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--color-wr-border-light);
+  }
+}

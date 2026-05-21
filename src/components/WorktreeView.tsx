@@ -1,0 +1,406 @@
+import { useMemo, useState } from "react";
+import { ArrowLeft, GitCompare, RefreshCw } from "lucide-react";
+
+import type { DiffFileSummary, DiffMode, FileChange, Worktree } from "@/bindings";
+import {
+  useProjects,
+  useWorktreeBranches,
+  useWorktreeDiffFiles,
+  useWorktreeFileDiff,
+  useWorktrees,
+} from "@/lib/query";
+import { useUIStore } from "@/store";
+
+/** 4종 비교 모드 라벨 (PLAN.md Phase 5). */
+const MODES: { key: DiffMode; label: string }[] = [
+  { key: "working", label: "Working" },
+  { key: "staged", label: "Staged" },
+  { key: "vs_base", label: "vs Base" },
+  { key: "branch_branch", label: "Branch↔Branch" },
+];
+
+const FILE_STATUS_LABEL: Record<FileChange, string> = {
+  M: "수정",
+  A: "추가",
+  D: "삭제",
+  R: "이름변경",
+};
+
+/**
+ * Worktree & Branch Diff Viewer (Phase 5, read-only — INVARIANT #6).
+ * 멀티 repo worktree를 상태 배지(ahead/behind/dirty)와 함께 나열하고, 4종 비교 모드로 파일 목록 +
+ * 파일별 diff를 본다. 대용량 비차단 = 파일목록 먼저 + 선택 파일만 지연 로드. git 접근은 Rust(셸아웃).
+ */
+export function WorktreeView() {
+  const { goTo } = useUIStore();
+  const projects = useProjects();
+  const [projectFilter, setProjectFilter] = useState<string | null>(null);
+  const worktrees = useWorktrees(projectFilter);
+
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [mode, setMode] = useState<DiffMode>("working");
+  const [baseRef, setBaseRef] = useState<string | null>(null);
+  const [headRef, setHeadRef] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+
+  const list = worktrees.data ?? [];
+  const selected = list.find((w) => w.path === selectedPath) ?? null;
+
+  // 모드별 ref 준비 상태: working/staged는 항상, vs_base는 base, branch↔branch는 base+head.
+  const ready =
+    mode === "working" ||
+    mode === "staged" ||
+    (mode === "vs_base" && !!baseRef) ||
+    (mode === "branch_branch" && !!baseRef && !!headRef);
+
+  const branches = useWorktreeBranches(
+    selected && (mode === "vs_base" || mode === "branch_branch")
+      ? selected.path
+      : null,
+  );
+
+  const diffFiles = useWorktreeDiffFiles({
+    worktreePath: selected?.path ?? null,
+    mode,
+    baseRef,
+    headRef,
+    ready,
+  });
+
+  const fileDiff = useWorktreeFileDiff({
+    worktreePath: selected?.path ?? null,
+    mode,
+    baseRef,
+    headRef,
+    path: selectedFile,
+    ready: ready && !!selectedFile,
+  });
+
+  // worktree 선택 시 모드/ref/파일 초기화 + vs_base 기본 base = baseBranch.
+  function selectWorktree(w: Worktree) {
+    setSelectedPath(w.path);
+    setMode("working");
+    setBaseRef(w.baseBranch);
+    setHeadRef(null);
+    setSelectedFile(null);
+  }
+
+  function changeMode(m: DiffMode) {
+    setMode(m);
+    setSelectedFile(null);
+    if (m === "vs_base" && selected && !baseRef) setBaseRef(selected.baseBranch);
+  }
+
+  // repo_label로 그룹핑(멀티 repo 동시 표시).
+  const grouped = useMemo(() => {
+    const g = new Map<string, Worktree[]>();
+    for (const w of list) {
+      const arr = g.get(w.repoLabel) ?? [];
+      arr.push(w);
+      g.set(w.repoLabel, arr);
+    }
+    return [...g.entries()];
+  }, [list]);
+
+  const branchList = branches.data ?? [];
+
+  return (
+    <div className="wt">
+      <header className="wt-head" data-tauri-drag-region>
+        <button type="button" className="wt-back" onClick={() => goTo("board")}>
+          <ArrowLeft className="size-4" />
+          보드
+        </button>
+        <span className="wt-title">Worktree Diff</span>
+        <select
+          className="wt-project"
+          value={projectFilter ?? ""}
+          onChange={(e) => {
+            setProjectFilter(e.target.value || null);
+            setSelectedPath(null);
+            setSelectedFile(null);
+          }}
+        >
+          <option value="">전체 프로젝트</option>
+          {(projects.data ?? []).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} ({p.kind === "personal" ? "개인" : "업무"})
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="wt-refresh"
+          onClick={() => void worktrees.refetch()}
+          title="새로고침"
+        >
+          <RefreshCw
+            className={`size-3.5${worktrees.isFetching ? " wt-spin" : ""}`}
+          />
+        </button>
+      </header>
+
+      <div className="wt-body">
+        {/* 좌: worktree 목록 */}
+        <aside className="wt-side">
+          {worktrees.error && (
+            <div className="wt-err">{(worktrees.error as Error).message}</div>
+          )}
+          {!worktrees.isLoading && list.length === 0 && !worktrees.error && (
+            <div className="wt-empty">
+              표시할 worktree가 없습니다 — 설정에서 local 경로가 있는 레포를 추가하세요.
+            </div>
+          )}
+          {grouped.map(([label, wts]) => (
+            <section key={label} className="wt-group">
+              <div className="wt-group-name">{label}</div>
+              {wts.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  className={`wt-item${w.path === selectedPath ? " wt-item-on" : ""}`}
+                  onClick={() => selectWorktree(w)}
+                >
+                  <div className="wt-item-top">
+                    <span className="wt-branch">{w.branch ?? "(detached)"}</span>
+                    {w.isPrimary && <span className="wt-primary">main</span>}
+                  </div>
+                  <div className="wt-item-badges">
+                    <StatusBadges w={w} />
+                  </div>
+                </button>
+              ))}
+            </section>
+          ))}
+        </aside>
+
+        {/* 우: 비교 모드 + 파일 목록 + 파일 diff */}
+        <main className="wt-main">
+          {!selected ? (
+            <div className="wt-placeholder">
+              <GitCompare className="size-5" />
+              <span>worktree를 선택하면 변경 파일과 diff를 봅니다.</span>
+            </div>
+          ) : (
+            <>
+              <div className="wt-modes">
+                {MODES.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    className={`wt-mode${mode === m.key ? " wt-mode-on" : ""}`}
+                    onClick={() => changeMode(m.key)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ref picker (vs_base = base, branch↔branch = base + head) */}
+              {(mode === "vs_base" || mode === "branch_branch") && (
+                <div className="wt-refs">
+                  <label className="wt-ref">
+                    <span>base</span>
+                    <select
+                      value={baseRef ?? ""}
+                      onChange={(e) => {
+                        setBaseRef(e.target.value || null);
+                        setSelectedFile(null);
+                      }}
+                    >
+                      <option value="">선택…</option>
+                      {branchList.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {mode === "branch_branch" && (
+                    <label className="wt-ref">
+                      <span>head</span>
+                      <select
+                        value={headRef ?? ""}
+                        onChange={(e) => {
+                          setHeadRef(e.target.value || null);
+                          setSelectedFile(null);
+                        }}
+                      >
+                        <option value="">선택…</option>
+                        {branchList.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {mode === "vs_base" && (
+                    <span className="wt-ref-hint">base...HEAD (3-dot)</span>
+                  )}
+                </div>
+              )}
+
+              <div className="wt-split">
+                {/* 파일 목록(통계 먼저) */}
+                <div className="wt-files">
+                  {!ready && (
+                    <div className="wt-empty">비교할 ref를 선택하세요.</div>
+                  )}
+                  {ready && diffFiles.isFetching && (
+                    <div className="wt-empty">불러오는 중…</div>
+                  )}
+                  {ready && diffFiles.error && (
+                    <div className="wt-err">
+                      {(diffFiles.error as Error).message}
+                    </div>
+                  )}
+                  {ready &&
+                    !diffFiles.isFetching &&
+                    (diffFiles.data?.length ?? 0) === 0 &&
+                    !diffFiles.error && (
+                      <div className="wt-empty">변경 파일이 없습니다.</div>
+                    )}
+                  {(diffFiles.data ?? []).map((f) => (
+                    <FileRow
+                      key={f.path}
+                      file={f}
+                      active={f.path === selectedFile}
+                      onSelect={() => setSelectedFile(f.path)}
+                    />
+                  ))}
+                </div>
+
+                {/* 파일별 diff(지연 로드) */}
+                <div className="wt-diff">
+                  {!selectedFile ? (
+                    <div className="wt-empty">파일을 선택하면 diff를 봅니다.</div>
+                  ) : fileDiff.isFetching ? (
+                    <div className="wt-empty">diff 로드 중…</div>
+                  ) : fileDiff.error ? (
+                    <div className="wt-err">
+                      {(fileDiff.error as Error).message}
+                    </div>
+                  ) : (
+                    <DiffText text={fileDiff.data ?? ""} />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/** worktree 상태 배지: dirty / +ahead / -behind / clean. */
+function StatusBadges({ w }: { w: Worktree }) {
+  return (
+    <>
+      {w.dirty && <span className="wt-badge wt-dirty">dirty</span>}
+      {w.ahead > 0 && <span className="wt-badge wt-ahead">↑{w.ahead}</span>}
+      {w.behind > 0 && <span className="wt-badge wt-behind">↓{w.behind}</span>}
+      {!w.dirty && w.ahead === 0 && w.behind === 0 && (
+        <span className="wt-badge wt-clean">clean</span>
+      )}
+    </>
+  );
+}
+
+function FileRow({
+  file,
+  active,
+  onSelect,
+}: {
+  file: DiffFileSummary;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`wt-file${active ? " wt-file-on" : ""}`}
+      onClick={onSelect}
+    >
+      <span className={`wt-fstatus wt-fs-${file.status}`} title={FILE_STATUS_LABEL[file.status]}>
+        {file.status}
+      </span>
+      <span className="wt-fpath">
+        {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+      </span>
+      {file.binary ? (
+        <span className="wt-fbin">bin</span>
+      ) : (
+        <span className="wt-fstat">
+          <span className="wt-adds">+{file.adds}</span>
+          <span className="wt-dels">−{file.dels}</span>
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** 표시 줄 상한 — 초과분은 비차단 위해 잘라 표시(전체는 외부 도구로). */
+const MAX_DIFF_LINES = 6000;
+/** 줄 묶음 단위 — content-visibility로 오프스크린 블록을 저렴하게 가상화. */
+const BLOCK = 240;
+
+/**
+ * unified diff 텍스트를 줄 단위로 색칠해 렌더(diff-line 구문강조). 큰 diff는 줄을 블록으로 묶고
+ * content-visibility:auto로 오프스크린을 건너뛰며, 상한 초과 시 잘라 비차단을 보장한다.
+ */
+function DiffText({ text }: { text: string }) {
+  const allLines = text.length === 0 ? [] : text.split("\n");
+  const truncated = allLines.length > MAX_DIFF_LINES;
+  const lines = truncated ? allLines.slice(0, MAX_DIFF_LINES) : allLines;
+
+  const blocks: string[][] = [];
+  for (let i = 0; i < lines.length; i += BLOCK) {
+    blocks.push(lines.slice(i, i + BLOCK));
+  }
+
+  if (lines.length === 0) {
+    return <div className="wt-empty">변경 내용이 없습니다.</div>;
+  }
+
+  return (
+    <div className="wt-diff-text">
+      {blocks.map((block, bi) => (
+        <div key={bi} className="wt-diff-block">
+          {block.map((line, li) => (
+            <div key={li} className={`wt-line ${diffLineClass(line)}`}>
+              {line || " "}
+            </div>
+          ))}
+        </div>
+      ))}
+      {truncated && (
+        <div className="wt-trunc">
+          큰 diff — {MAX_DIFF_LINES.toLocaleString()}/{allLines.length.toLocaleString()}줄만 표시.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 한 diff 줄 → CSS 클래스(추가/삭제/hunk/메타/컨텍스트). */
+function diffLineClass(line: string): string {
+  if (line.startsWith("@@")) return "wt-l-hunk";
+  if (
+    line.startsWith("diff ") ||
+    line.startsWith("index ") ||
+    line.startsWith("--- ") ||
+    line.startsWith("+++ ") ||
+    line.startsWith("new file") ||
+    line.startsWith("deleted file") ||
+    line.startsWith("rename ") ||
+    line.startsWith("similarity ") ||
+    line.startsWith("Binary files")
+  ) {
+    return "wt-l-meta";
+  }
+  if (line.startsWith("+")) return "wt-l-add";
+  if (line.startsWith("-")) return "wt-l-del";
+  return "wt-l-ctx";
+}

@@ -397,3 +397,91 @@ pub struct PrRadarItem {
     pub escalated: bool,
     pub project_id: String,
 }
+
+// ── Worktree & Branch Diff (Phase 5, read-only) ──────────────────────────────────
+//
+// 모두 ambient DTO다 — DB 영속 없이 매 호출마다 git에서 fresh 도출(PR Radar 선례).
+// INVARIANT #6: read 서브커맨드만 — Diff Viewer는 워킹트리/브랜치를 절대 변경하지 않는다.
+// specta는 i64/u64 export 금지 → 카운트는 u32.
+
+/// worktree 동기화 상태 요약 (architecture §4). 우선순위:
+/// Diverged(ahead&behind) > Dirty > Ahead > Behind > Clean. 수치는 ahead/behind로 별도 노출.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum WorktreeStatus {
+    Clean,
+    Dirty,
+    Ahead,
+    Behind,
+    Diverged,
+}
+
+/// repo별 git worktree (ambient — `git worktree list`로 매번 도출). 토큰 등 비밀 미포함.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Worktree {
+    /// 안정 식별자 = `{repoId}:{path}` (ambient라 DB id 없음).
+    pub id: String,
+    pub repo_id: String,
+    pub project_id: String,
+    /// 표시 라벨 (remote owner/repo 또는 local_path basename).
+    pub repo_label: String,
+    /// worktree 파일시스템 경로.
+    pub path: String,
+    /// 현재 브랜치 (detached HEAD면 None).
+    pub branch: Option<String>,
+    /// HEAD sha.
+    pub head: String,
+    /// diff 비교 기본 기준 (repo.default_branch). vs_base 모드 기본값.
+    pub base_branch: String,
+    /// 메인 워킹카피 여부 (`git worktree list` 첫 항목).
+    pub is_primary: bool,
+    pub status: WorktreeStatus,
+    /// 미커밋 변경(추적 변경 + untracked) 존재 여부.
+    pub dirty: bool,
+    pub ahead: u32,
+    pub behind: u32,
+    /// 이 도출 시각(RFC3339) — ambient라 항상 now.
+    pub last_fetched_at: String,
+}
+
+/// diff 비교 모드 4종 (PLAN.md Phase 5). IPC 파라미터.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffMode {
+    /// 미커밋 워킹트리 diff (워킹트리 vs index, unstaged).
+    Working,
+    /// index diff (staged, index vs HEAD).
+    Staged,
+    /// `git diff <base>...<head>` (3-dot, merge-base 기준).
+    VsBase,
+    /// 임의 두 ref 직접 비교 (`git diff <base> <head>`).
+    BranchBranch,
+}
+
+/// diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum FileChange {
+    #[serde(rename = "M")]
+    Modified,
+    #[serde(rename = "A")]
+    Added,
+    #[serde(rename = "D")]
+    Deleted,
+    #[serde(rename = "R")]
+    Renamed,
+}
+
+/// diff 파일 목록 한 항목 (통계만 — 파일별 hunk는 지연 로드). specta i64/u64 금지 → adds/dels u32.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffFileSummary {
+    pub path: String,
+    pub status: FileChange,
+    pub adds: u32,
+    pub dels: u32,
+    /// rename일 때 이전 경로 (표시용 "old → new").
+    pub old_path: Option<String>,
+    /// 바이너리 파일 (numstat이 '-'). adds/dels는 0.
+    pub binary: bool,
+}

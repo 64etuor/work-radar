@@ -10,6 +10,7 @@
 mod api;
 mod commands;
 mod db;
+mod git;
 mod github;
 mod keychain;
 mod models;
@@ -59,6 +60,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // PR Radar (read 레일, Phase 4).
         commands::refresh_pr_radar,
         commands::set_pr_self_check,
+        // Worktree & Branch Diff (read-only, Phase 5).
+        commands::list_worktrees,
+        commands::list_worktree_branches,
+        commands::worktree_diff_files,
+        commands::worktree_file_diff,
     ])
 }
 

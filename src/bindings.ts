@@ -53,6 +53,17 @@ export const commands = {
 	refreshPrRadar: (projectId: string) => typedError<PrRadarItem[], string>(__TAURI_INVOKE("refresh_pr_radar", { projectId })),
 	/**  수동 self-check 토글(로컬 상태). checked면 행 추가, 아니면 삭제(다음 도출이 반영). */
 	setPrSelfCheck: (repoFullName: string, prNumber: number, checked: boolean) => typedError<null, string>(__TAURI_INVOKE("set_pr_self_check", { repoFullName, prNumber, checked })),
+	/**
+	 *  repo별 worktree를 상태 배지(ahead/behind/dirty)와 함께 나열한다. project_id=None이면 멀티 repo 전체.
+	 *  ambient — 매 호출 git에서 fresh 도출(영속 없음). read-only(INVARIANT #6).
+	 */
+	listWorktrees: (projectId: string | null) => typedError<Worktree[], string>(__TAURI_INVOKE("list_worktrees", { projectId })),
+	/**  worktree의 로컬+원격추적 브랜치 (branch↔branch 비교 picker용). */
+	listWorktreeBranches: (worktreePath: string) => typedError<string[], string>(__TAURI_INVOKE("list_worktree_branches", { worktreePath })),
+	/**  비교 모드의 파일 목록(통계만 — hunk는 지연 로드). 대용량 diff 비차단의 1단계. */
+	worktreeDiffFiles: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null) => typedError<DiffFileSummary[], string>(__TAURI_INVOKE("worktree_diff_files", { worktreePath, mode, baseRef, headRef })),
+	/**  한 파일의 unified diff 텍스트(프런트 구문강조용). 선택한 파일만 지연 로드(비차단 2단계). */
+	worktreeFileDiff: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null, path: string) => typedError<string, string>(__TAURI_INVOKE("worktree_file_diff", { worktreePath, mode, baseRef, headRef, path })),
 };
 
 /* Types */
@@ -100,6 +111,32 @@ export type CreateSignalInput = {
 	/**  소속 프로젝트(없으면 NULL → 나중에 reconcile). 메타데이터(결정 레일 아님). */
 	projectId: string | null,
 };
+
+/**  diff 파일 목록 한 항목 (통계만 — 파일별 hunk는 지연 로드). specta i64/u64 금지 → adds/dels u32. */
+export type DiffFileSummary = {
+	path: string,
+	status: FileChange,
+	adds: number,
+	dels: number,
+	/**  rename일 때 이전 경로 (표시용 "old → new"). */
+	oldPath: string | null,
+	/**  바이너리 파일 (numstat이 '-'). adds/dels는 0. */
+	binary: boolean,
+};
+
+/**  diff 비교 모드 4종 (PLAN.md Phase 5). IPC 파라미터. */
+export type DiffMode = 
+/**  미커밋 워킹트리 diff (워킹트리 vs index, unstaged). */
+"working" | 
+/**  index diff (staged, index vs HEAD). */
+"staged" | 
+/**  `git diff <base>...<head>` (3-dot, merge-base 기준). */
+"vs_base" | 
+/**  임의 두 ref 직접 비교 (`git diff <base> <head>`). */
+"branch_branch";
+
+/**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
+export type FileChange = "M" | "A" | "D" | "R";
 
 /**  오프라인 복구 시 큐(draft) 재시도 집계. specta는 i64/u64 export 금지 → u32. */
 export type FlushSummary = {
@@ -273,6 +310,39 @@ export type WorkSignal = {
 	createdAt: string,
 	updatedAt: string,
 };
+
+/**  repo별 git worktree (ambient — `git worktree list`로 매번 도출). 토큰 등 비밀 미포함. */
+export type Worktree = {
+	/**  안정 식별자 = `{repoId}:{path}` (ambient라 DB id 없음). */
+	id: string,
+	repoId: string,
+	projectId: string,
+	/**  표시 라벨 (remote owner/repo 또는 local_path basename). */
+	repoLabel: string,
+	/**  worktree 파일시스템 경로. */
+	path: string,
+	/**  현재 브랜치 (detached HEAD면 None). */
+	branch: string | null,
+	/**  HEAD sha. */
+	head: string,
+	/**  diff 비교 기본 기준 (repo.default_branch). vs_base 모드 기본값. */
+	baseBranch: string,
+	/**  메인 워킹카피 여부 (`git worktree list` 첫 항목). */
+	isPrimary: boolean,
+	status: WorktreeStatus,
+	/**  미커밋 변경(추적 변경 + untracked) 존재 여부. */
+	dirty: boolean,
+	ahead: number,
+	behind: number,
+	/**  이 도출 시각(RFC3339) — ambient라 항상 now. */
+	lastFetchedAt: string,
+};
+
+/**
+ *  worktree 동기화 상태 요약 (architecture §4). 우선순위:
+ *  Diverged(ahead&behind) > Dirty > Ahead > Behind > Clean. 수치는 ahead/behind로 별도 노출.
+ */
+export type WorktreeStatus = "clean" | "dirty" | "ahead" | "behind" | "diverged";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

@@ -5,6 +5,7 @@ import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
 import { PrRadarView } from "@/components/PrRadarView";
 import { SettingsView } from "@/components/SettingsView";
+import { WorktreeView } from "@/components/WorktreeView";
 import { useUIStore } from "@/store";
 
 /**
@@ -36,7 +37,7 @@ export default function App() {
         }
         // 카드 메뉴가 열려 있으면 그 닫힘을 CaptureBoard에 맡기고 창은 유지한다.
         if (document.querySelector(".cb-card-menu")) return;
-        if (view === "settings" || view === "radar") {
+        if (view === "settings" || view === "radar" || view === "worktree") {
           goTo("board");
           return;
         }
@@ -53,6 +54,8 @@ export default function App() {
         <SettingsView />
       ) : view === "radar" ? (
         <PrRadarView />
+      ) : view === "worktree" ? (
+        <WorktreeView />
       ) : (
         <CaptureBoard />
       )}

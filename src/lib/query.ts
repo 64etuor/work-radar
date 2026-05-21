@@ -12,6 +12,7 @@ import {
   type CreateRepoInput,
   type CreateRoutineInput,
   type CreateSignalInput,
+  type DiffMode,
   type PrRadarItem,
   type PromotionTarget,
   type Quadrant,
@@ -402,5 +403,73 @@ export function useSetPrSelfCheck() {
       checked: boolean;
     }) => unwrap(commands.setPrSelfCheck(repoFullName, prNumber, checked)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["prRadar"] }),
+  });
+}
+
+// ── Phase 5: Worktree & Branch Diff (read-only) ─────────────────────────────────
+//
+// ambient — 매 호출 git에서 fresh 도출(영속 없음). 로컬·on-demand라 폴링 없음(뷰 진입+수동 새로고침).
+// 토큰 무관(로컬 git). 대용량 비차단 = 파일목록 먼저 + 파일별 diff 지연 로드(enabled).
+
+/** repo별 worktree 목록 (projectId=null이면 멀티 repo 전체). */
+export function useWorktrees(projectId: string | null) {
+  return useQuery({
+    queryKey: ["worktrees", projectId],
+    queryFn: () => unwrap(commands.listWorktrees(projectId)),
+    staleTime: 10_000,
+  });
+}
+
+/** worktree의 로컬+원격추적 브랜치 (branch↔branch picker용). 경로 있을 때만. */
+export function useWorktreeBranches(worktreePath: string | null) {
+  return useQuery({
+    queryKey: ["worktreeBranches", worktreePath],
+    queryFn: () => unwrap(commands.listWorktreeBranches(worktreePath as string)),
+    enabled: !!worktreePath,
+  });
+}
+
+/** 비교 모드의 변경 파일 목록(통계). ready=false면 비활성(ref 미선택 모드 대기). */
+export function useWorktreeDiffFiles(args: {
+  worktreePath: string | null;
+  mode: DiffMode;
+  baseRef: string | null;
+  headRef: string | null;
+  ready: boolean;
+}) {
+  const { worktreePath, mode, baseRef, headRef, ready } = args;
+  return useQuery({
+    queryKey: ["worktreeDiffFiles", worktreePath, mode, baseRef, headRef],
+    queryFn: () =>
+      unwrap(
+        commands.worktreeDiffFiles(worktreePath as string, mode, baseRef, headRef),
+      ),
+    enabled: !!worktreePath && ready,
+  });
+}
+
+/** 선택한 한 파일의 unified diff 텍스트 (지연 로드 — 파일 선택 시에만). */
+export function useWorktreeFileDiff(args: {
+  worktreePath: string | null;
+  mode: DiffMode;
+  baseRef: string | null;
+  headRef: string | null;
+  path: string | null;
+  ready: boolean;
+}) {
+  const { worktreePath, mode, baseRef, headRef, path, ready } = args;
+  return useQuery({
+    queryKey: ["worktreeFileDiff", worktreePath, mode, baseRef, headRef, path],
+    queryFn: () =>
+      unwrap(
+        commands.worktreeFileDiff(
+          worktreePath as string,
+          mode,
+          baseRef,
+          headRef,
+          path as string,
+        ),
+      ),
+    enabled: !!worktreePath && !!path && ready,
   });
 }

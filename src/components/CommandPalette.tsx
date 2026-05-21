@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { FolderPlus, GitBranchPlus, GitPullRequest, LayoutGrid, Settings } from "lucide-react";
+import {
+  FolderPlus,
+  GitBranchPlus,
+  GitCompare,
+  GitPullRequest,
+  LayoutGrid,
+  Settings,
+} from "lucide-react";
 
 import {
   Command,
@@ -47,6 +54,13 @@ export function CommandPalette() {
               >
                 <GitPullRequest className="size-4 text-wr-subtle" />
                 <span>PR Radar로</span>
+              </CommandItem>
+              <CommandItem
+                value="worktree diff branch 워크트리 브랜치 디프 차이"
+                onSelect={() => goTo("worktree")}
+              >
+                <GitCompare className="size-4 text-wr-subtle" />
+                <span>Worktree Diff로</span>
               </CommandItem>
               <CommandItem
                 value="settings 설정 open"
