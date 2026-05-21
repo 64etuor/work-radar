@@ -51,6 +51,21 @@ Tauri CLI는 `pnpm tauri` 래퍼로 실행한다 (`package.json` `"tauri": "taur
 
 ---
 
+## Harness 게이트 (CI `guards` 잡)
+
+prose 체크박스가 아니라 CI에서 강제하는 구조 게이트. 로컬에서도 그대로 실행 가능.
+
+| 명령 | 설명 |
+|------|------|
+| `bash scripts/check-invariants.sh` | 기계 검증 가능한 INVARIANT(토큰 렌더러 노출·SQLite 시크릿 컬럼·Codex danger 모드) 정적 검사 |
+| `bash scripts/check-doc-budgets.sh` | thin-entry 문서 라인 버짓(`CLAUDE.md`/`AGENTS.md`) 검사 |
+
+> **bindings.ts drift**는 별도 명령이 아니라 `cargo test` 후 `git diff --exit-code -- src/bindings.ts`로 확인한다.
+> CI rust 잡이 `cargo test`로 재생성한 뒤 diff가 비어 있어야 한다(수기 IPC 타입 중복 금지).
+> 정적으로 검증 못 하는 INVARIANT(1·2·3·4·5)는 여전히 reviewer 패스로 확인한다.
+
+---
+
 ## Phase 검증 번들
 
 `AGENTS.md` 검증 절의 각 규칙을 구체적인 명령으로 대응시킨다.
@@ -96,7 +111,12 @@ cargo test --manifest-path src-tauri/Cargo.toml
 pnpm typecheck
 pnpm build
 
-# 3. Tauri 통합
+# 3. Harness 게이트
+bash scripts/check-invariants.sh
+bash scripts/check-doc-budgets.sh
+git diff --exit-code -- src/bindings.ts   # cargo test 후 drift 없어야 함
+
+# 4. Tauri 통합
 pnpm tauri dev
 ```
 

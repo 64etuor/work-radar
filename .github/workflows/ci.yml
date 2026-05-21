@@ -53,6 +53,29 @@ jobs:
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      # INVARIANT: IPC 타입은 tauri-specta 자동 생성 — 수기 중복/drift 금지.
+      # cargo test 가 src/bindings.ts 를 재생성하므로, 커밋된 생성물이 최신인지 확인.
+      - name: bindings.ts drift 체크
+        run: |
+          if ! git diff --exit-code -- src/bindings.ts; then
+            echo "✋ src/bindings.ts 가 Rust 소스와 어긋났습니다 (stale)."
+            echo "   'cargo test --manifest-path src-tauri/Cargo.toml' 후 src/bindings.ts 를 커밋하세요."
+            exit 1
+          fi
+
+  guards:
+    name: Guards (INVARIANTS / doc budgets)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: INVARIANT 구조 게이트
+        run: bash scripts/check-invariants.sh
+
+      - name: 문서 라인 버짓
+        run: bash scripts/check-doc-budgets.sh
+
   frontend:
     name: Frontend (typecheck / build)
     runs-on: ubuntu-latest

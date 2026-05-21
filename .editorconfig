@@ -1,0 +1,21 @@
+# EditorConfig — 에디터/에이전트(Claude·Codex) 간 공백·EOL churn 방지.
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.rs]
+indent_size = 4
+
+[*.md]
+# Markdown 은 줄 끝 두 칸이 의미(hard break)를 가지므로 trailing whitespace 유지.
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab
