@@ -6,6 +6,7 @@ use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
 use crate::keychain;
 use crate::models::{CiStatus, PrRadarItem, ReadinessBucket, TokenKind};
+use crate::retry::Retryable;
 
 // ── PR Radar (Phase 4, read 레일) ──────────────────────────────────────────────
 // INVARIANT #1: escalate 신호는 항상 quadrant=unclassified로 진입(자동 분류 0); suggested_quadrant=q1는
@@ -211,15 +212,21 @@ async fn auto_resolve(
 /// PR Radar 동기화 코어(테스트 가능 — provider를 fake로 대체). keychain/네트워크는 호출자(command)가 담당.
 /// 각 repo의 PR을 fetch → 버킷 분류 + escalate(dedup upsert) → 마지막에 auto-resolve.
 /// 일부 repo fetch 실패는 그 repo만 건너뛰고(해당 신호 auto-resolve 제외), 전부 실패면 Err로 노출(삼키지 않음).
+// AppError는 리치 에러 envelope이라 의도적으로 크다(커맨드는 매크로로 면제됨). 이 코어는 command와
+// 동일한 AppError를 그대로 전파해 transient 분류를 보존하므로 large-err 린트를 국소 허용한다(agents/mod.rs와 동일 패턴).
+#[allow(clippy::result_large_err)]
 async fn sync_pr_radar<P: PrProvider>(
     db: &Db,
     provider: &P,
     project_id: &str,
     repos: &[RepoRef],
     now: chrono::DateTime<chrono::Utc>,
-) -> Result<Vec<PrRadarItem>, String> {
+) -> Result<Vec<PrRadarItem>, AppError> {
     let mut items: Vec<PrRadarItem> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
+    // 전부 실패 시 분류 보존(INVARIANT #5): 모든 실패가 transient면 transient(재시도 가능),
+    // 하나라도 terminal이면 terminal(재시도로 못 고침). GithubError가 스스로 분류(Retryable).
+    let mut all_transient = true;
     let mut fetched_full_names: Vec<String> = Vec::new();
     let mut active_keys: Vec<String> = Vec::new();
 
@@ -227,6 +234,7 @@ async fn sync_pr_radar<P: PrProvider>(
         let prs = match provider.fetch_prs(&repo.full_name).await {
             Ok(p) => p,
             Err(e) => {
+                all_transient &= e.is_retryable();
                 errors.push(format!("{}: {e}", repo.full_name));
                 continue;
             }
@@ -235,24 +243,18 @@ async fn sync_pr_radar<P: PrProvider>(
 
         for pr in &prs {
             let ticket = extract_ticket(repo.ticket_pattern.as_deref(), &pr.title, &pr.head_ref);
-            let self_checked = pr_self_checked(db, &repo.full_name, pr.number)
-                .await
-                .map_err(|e| e.to_string())?;
+            let self_checked = pr_self_checked(db, &repo.full_name, pr.number).await?;
             let elapsed = elapsed_days(&pr.updated_at, now);
             let bucket = classify_bucket(pr, self_checked, elapsed);
 
             let mut escalated = false;
             if let Some(reason) = escalation_reason(pr, &ticket) {
                 let dedup = format!("pr:{}:{}:{}", repo.full_name, pr.number, reason);
-                upsert_pr_signal(db, project_id, &repo.full_name, pr, &ticket, &dedup)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                upsert_pr_signal(db, project_id, &repo.full_name, pr, &ticket, &dedup).await?;
                 active_keys.push(dedup);
                 escalated = true;
                 // CI 실패 → 네이티브 알림 큐잉(자동 triage 없음, PR+SHA dedup — Phase 20 #17).
-                enqueue_ci_failure_notification(db, &repo.full_name, pr, now)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                enqueue_ci_failure_notification(db, &repo.full_name, pr, now).await?;
             }
 
             items.push(PrRadarItem {
@@ -276,13 +278,17 @@ async fn sync_pr_radar<P: PrProvider>(
         }
     }
 
-    auto_resolve(db, project_id, &fetched_full_names, &active_keys)
-        .await
-        .map_err(|e| e.to_string())?;
+    auto_resolve(db, project_id, &fetched_full_names, &active_keys).await?;
 
-    // 전부 실패(레포는 있는데 하나도 못 가져옴)면 terminal failure 노출(INVARIANT: 삼키지 않음).
+    // 전부 실패(레포는 있는데 하나도 못 가져옴)면 failure 노출(INVARIANT #5: 삼키지 않음).
+    // 전부 transient면 transient로 보존해 프런트 bounded retry가 동작하게 한다(retryable=true).
     if fetched_full_names.is_empty() && !repos.is_empty() {
-        return Err(format!("모든 레포 fetch 실패 — {}", errors.join("; ")));
+        let msg = format!("모든 레포 fetch 실패 — {}", errors.join("; "));
+        return Err(if all_transient {
+            AppError::transient("pr_radar.sync_transient", msg)
+        } else {
+            AppError::terminal("pr_radar.sync", msg)
+        });
     }
     Ok(items)
 }
@@ -346,7 +352,6 @@ pub async fn refresh_pr_radar(
         chrono::Utc::now(),
     )
     .await
-    .map_err(|e| AppError::terminal("pr_radar.sync", e))
 }
 
 // DEPRECATED: UI의 수동 체크박스는 제거됨(PR B4). 커맨드·바인딩·pr_self_checks 테이블은 보존 —
@@ -385,6 +390,7 @@ mod tests {
     use crate::commands::projects::insert_project;
     use crate::commands::shared::test_support::*;
     use crate::commands::signals::set_quadrant;
+    use crate::error::ErrorKind;
     use crate::github::GithubError;
     use crate::models::ProjectKind;
     use crate::models::Quadrant;
@@ -393,18 +399,28 @@ mod tests {
     struct FakeProvider {
         prs: std::sync::Mutex<Vec<RawPr>>,
         fail: bool,
+        fail_terminal: bool,
     }
     impl FakeProvider {
         fn new(prs: Vec<RawPr>) -> Self {
             Self {
                 prs: std::sync::Mutex::new(prs),
                 fail: false,
+                fail_terminal: false,
             }
         }
         fn failing() -> Self {
             Self {
                 prs: std::sync::Mutex::new(Vec::new()),
                 fail: true,
+                fail_terminal: false,
+            }
+        }
+        fn failing_terminal() -> Self {
+            Self {
+                prs: std::sync::Mutex::new(Vec::new()),
+                fail: false,
+                fail_terminal: true,
             }
         }
         fn set(&self, prs: Vec<RawPr>) {
@@ -413,6 +429,9 @@ mod tests {
     }
     impl PrProvider for FakeProvider {
         async fn fetch_prs(&self, _repo_full_name: &str) -> Result<Vec<RawPr>, GithubError> {
+            if self.fail_terminal {
+                return Err(GithubError::Terminal("forbidden".into()));
+            }
             if self.fail {
                 return Err(GithubError::Transient("net down".into()));
             }
@@ -724,16 +743,39 @@ mod tests {
         assert_eq!(sigs[0].2, "classified", "사람 status 보존");
     }
 
-    /// 일부 repo fetch 실패는 그 repo만 건너뛰고, 전부 실패면 Err로 노출(삼키지 않음).
+    /// 전부 transient(429/5xx) 실패는 transient로 노출 → 프런트 bounded retry 동작(INVARIANT #5).
+    /// (회귀 가드: 이전엔 String으로 납작화돼 command가 terminal로 접어 retryable이 false였음.)
     #[tokio::test]
-    async fn all_repos_failing_surfaces_error() {
+    async fn all_repos_transient_failure_is_retryable() {
         let db = fresh_db().await;
         let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
             .await
             .unwrap();
         let provider = FakeProvider::failing();
-        let r = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now()).await;
-        assert!(r.is_err(), "모든 레포 실패 → terminal failure 노출");
+        let err = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.kind,
+            ErrorKind::Transient,
+            "전부 transient 실패 → 분류 보존"
+        );
+        assert!(err.retryable, "transient은 재시도 가능");
+    }
+
+    /// 전부 terminal(4xx 등) 실패는 terminal로 노출(재시도 무의미 — 거짓 retryable 금지).
+    #[tokio::test]
+    async fn all_repos_terminal_failure_not_retryable() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
+            .await
+            .unwrap();
+        let provider = FakeProvider::failing_terminal();
+        let err = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::Terminal, "terminal 분류 보존");
+        assert!(!err.retryable, "terminal은 재시도 불가");
     }
 
     /// 큐잉된 CI 알림 행 (source='ci'): (source_id, title, body).
