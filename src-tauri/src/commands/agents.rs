@@ -493,12 +493,7 @@ pub async fn accept_proposal(
             .await?;
     let (status, trigger) =
         row.ok_or_else(|| AppError::not_found("agents.job_not_found", "잡을 찾을 수 없음"))?;
-    if status != "awaiting_approval" {
-        return Err(AppError::validation(
-            "agents.accept_wrong_status",
-            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
-        ));
-    }
+    require_awaiting(&status, "agents.accept_wrong_status")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     execute_accept(db.inner(), &run_id, &accepted_json, trigger.as_deref()).await?;
@@ -555,6 +550,21 @@ async fn run_status_trigger(db: &Db, run_id: &str) -> Result<(String, Option<Str
             .await
             .map_err(|e| e.to_string())?;
     row.ok_or_else(|| "잡을 찾을 수 없음".to_string())
+}
+
+/// accept 류 작업의 상태 가드: awaiting_approval만 허용(이미 처리/실행 중이면 거부 — INVARIANT #2).
+/// code는 호출 경로별 머신 식별자(기존 코드 보존).
+// AppError는 리치 에러 envelope이라 의도적으로 크다(커맨드는 매크로로 면제됨). 가드 헬퍼는
+// 커맨드와 동일한 AppError를 그대로 전파해야 하므로 large-err 린트를 국소 허용한다.
+#[allow(clippy::result_large_err)]
+fn require_awaiting(status: &str, code: &'static str) -> Result<(), AppError> {
+    if status != "awaiting_approval" {
+        return Err(AppError::validation(
+            code,
+            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
+        ));
+    }
+    Ok(())
 }
 
 /// 잡의 proposal JSON 원문. 없으면 Err(아직 산출물 없음).
@@ -766,12 +776,7 @@ pub async fn accept_enrich(
     let (status, trigger) = run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::not_found("agents.job_not_found", e))?;
-    if status != "awaiting_approval" {
-        return Err(AppError::validation(
-            "agents.accept_wrong_status",
-            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
-        ));
-    }
+    require_awaiting(&status, "agents.accept_wrong_status")?;
     let signal_id = trigger_field(trigger.as_deref(), "signalId").ok_or_else(|| {
         AppError::terminal(
             "agents.trigger_missing_signal_id",
@@ -1051,12 +1056,7 @@ pub async fn accept_enrich_all(
     let (status, _trigger) = run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.run_status", e))?;
-    if status != "awaiting_approval" {
-        return Err(AppError::validation(
-            "agents.not_acceptable",
-            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
-        ));
-    }
+    require_awaiting(&status, "agents.not_acceptable")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     Ok(execute_accept_enrich_all(db.inner(), &run_id, &accepted, &accepted_json).await?)
@@ -1270,12 +1270,7 @@ pub async fn accept_triage(
     let (status, _trigger) = run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.run_status", e))?;
-    if status != "awaiting_approval" {
-        return Err(AppError::validation(
-            "agents.not_acceptable",
-            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
-        ));
-    }
+    require_awaiting(&status, "agents.not_acceptable")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     Ok(record_acceptance(db.inner(), &run_id, "triage_ci", &accepted_json).await?)
