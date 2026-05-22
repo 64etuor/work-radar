@@ -176,8 +176,9 @@ export function CaptureBoard() {
         {
           onSuccess: (outcome) => {
             if (outcome.status === "created") {
-              // 자동 지정된 경우 라벨 표시 (INVARIANT #1: 사람이 볼 수 있게).
-              if (outcome.resolvedProjectId && !sig?.projectId) {
+              // 자동 지정(projectId=null로 호출 → 백엔드가 단일 후보 해석)된 경우에만 라벨 표시
+              // (INVARIANT #1: 사람이 볼 수 있게). picker로 직접 고른 경우(projectId!=null)는 제외.
+              if (projectId === null && outcome.resolvedProjectId && !sig?.projectId) {
                 const autoProj = projects.find((p) => p.id === outcome.resolvedProjectId);
                 const projName = autoProj?.name ?? outcome.resolvedProjectId;
                 pushSuccess(
