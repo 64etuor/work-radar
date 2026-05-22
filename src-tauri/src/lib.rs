@@ -134,6 +134,13 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Google Calendar 이벤트 생성 (write 레일, Phase 19).
         commands::list_selected_calendars,
         commands::create_calendar_event,
+        // 네비게이션 설정 (Phase 18 #7) — 글로벌 창 핫키 + 메뉴별 단축키 keymap.
+        commands::get_global_hotkey,
+        commands::set_global_hotkey,
+        commands::reset_global_hotkey,
+        commands::get_nav_keymap,
+        commands::set_nav_keymap,
+        commands::reset_nav_keymap,
         // 트레이 상주 스파인 + 알림 스케줄러 (Phase 13).
         commands::notification_permission,
         commands::request_notification_permission,
@@ -236,8 +243,17 @@ pub fn run() {
                 1,
             ));
 
-            // 전역 핫키(Ctrl+Space)로 캡처/루트 창 토글.
-            shortcut::register(app.handle())?;
+            // 전역 핫키로 캡처/루트 창 토글. 저장된 핫키(app_config)가 있으면 그것으로, 없으면
+            // 기본 Ctrl+Space로 등록(Phase 18 #7). 등록 실패는 graceful — 앱 코어는 동작.
+            {
+                let hk_db: db::Db = app.state::<db::Db>().inner().clone();
+                let spec =
+                    tauri::async_runtime::block_on(commands::nav::current_global_hotkey(&hk_db));
+                if let Err(e) = shortcut::register(app.handle(), &spec) {
+                    eprintln!("global hotkey 등록 실패('{spec}'), 기본값으로 폴백: {e}");
+                    let _ = shortcut::register(app.handle(), shortcut::DEFAULT_GLOBAL_HOTKEY);
+                }
+            }
 
             // 트레이 상주 셸(Phase 13): 메뉴바 아이콘 + 메뉴(보기/숨기기/종료) + 좌클릭 토글.
             tray::create(app.handle())?;

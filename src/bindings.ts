@@ -244,6 +244,24 @@ export const commands = {
 	 *  실 Google write는 사용자 관찰(헤드리스 불가) — 페이로드 빌드/응답 파싱은 calendar.rs cargo test.
 	 */
 	createCalendarEvent: (projectId: string, calendarId: string, event: CreateCalendarEventInput) => typedError<CreatedCalendarEvent, string>(__TAURI_INVOKE("create_calendar_event", { projectId, calendarId, event })),
+	/**  현재 글로벌 창 핫키 문자열 조회(Settings 표시용). 미설정 시 기본값. */
+	getGlobalHotkey: () => typedError<string, string>(__TAURI_INVOKE("get_global_hotkey")),
+	/**
+	 *  글로벌 창 핫키 변경: 검증 → 런타임 재등록(옛 unregister → 새 register) → 성공 시 영속.
+	 *  등록 실패(충돌/무효) 시 옛 핫키를 유지하고 Err를 노출한다(저장 안 함 — graceful, #5 정신).
+	 */
+	setGlobalHotkey: (spec: string) => typedError<null, string>(__TAURI_INVOKE("set_global_hotkey", { spec })),
+	/**  글로벌 핫키를 기본값(Ctrl+Space)으로 리셋 + 재등록. */
+	resetGlobalHotkey: () => typedError<string, string>(__TAURI_INVOKE("reset_global_hotkey")),
+	/**  저장된 per-view keymap(JSON 문자열) 조회. 미설정 시 None — 프런트가 기본 keymap을 쓴다. */
+	getNavKeymap: () => typedError<string | null, string>(__TAURI_INVOKE("get_nav_keymap")),
+	/**
+	 *  per-view keymap(JSON 문자열) 저장. 렌더러가 view→shortcut 의미를 소유 — Rust는 blob 영속만.
+	 *  비어 있지 않은 JSON 객체 문자열만 받는다(가벼운 검증).
+	 */
+	setNavKeymap: (keymapJson: string) => typedError<null, string>(__TAURI_INVOKE("set_nav_keymap", { keymapJson })),
+	/**  keymap을 기본값으로 리셋(저장 행 삭제 → 프런트가 코드 상수 기본 keymap 사용). */
+	resetNavKeymap: () => typedError<null, string>(__TAURI_INVOKE("reset_nav_keymap")),
 	/**  현재 알림 권한 상태 조회. 미지원/오류면 unknown으로 graceful degrade(앱 코어 무영향). */
 	notificationPermission: () => typedError<NotificationPermission, string>(__TAURI_INVOKE("notification_permission")),
 	/**  알림 권한 요청(미결정일 때 OS 프롬프트). 결과 상태를 돌려준다. 거부돼도 앱은 계속 동작. */

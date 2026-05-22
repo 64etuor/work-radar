@@ -15,14 +15,21 @@ import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
 import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
+import { useNavKeymap } from "@/lib/query";
+import { useViewShortcuts } from "@/lib/useViewShortcuts";
 import { useUIStore } from "@/store";
 
 /**
- * 단일 창 셸. 전역 핫키(Alt+Space, Rust)로 토글되고 Esc로 숨긴다.
- * 보드↔설정 네비게이션은 cmdk 팔레트(Cmd+K) / Cmd+, 로 한다 (단일 창 유지).
+ * 단일 창 셸. 전역 핫키(기본 Ctrl+Space, Rust·사용자 설정 가능)로 토글되고 Esc로 숨긴다.
+ * 네비게이션 = cmdk 팔레트(Cmd+K) / Cmd+, / per-view 단축키(keymap, 입력 비포커스 시).
+ * 뷰 전환은 view 키 기반 subtle CSS 트랜지션(styles.css .view-shell).
  */
 export default function App() {
   const { view, paletteOpen, setPaletteOpen, goTo } = useUIStore();
+
+  // per-view 단축키 (Phase 18 #7) — 입력 비포커스 + 팔레트 닫힘일 때만 활성.
+  const keymap = useNavKeymap();
+  useViewShortcuts(keymap.data, !paletteOpen, (v) => goTo(v));
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -46,19 +53,8 @@ export default function App() {
         }
         // 카드 메뉴가 열려 있으면 그 닫힘을 CaptureBoard에 맡기고 창은 유지한다.
         if (document.querySelector(".cb-card-menu")) return;
-        if (
-          view === "settings" ||
-          view === "today" ||
-          view === "timeline" ||
-          view === "weekly" ||
-          view === "retro" ||
-          view === "routines" ||
-          view === "radar" ||
-          view === "worktree" ||
-          view === "jobs" ||
-          view === "hermes" ||
-          view === "skills"
-        ) {
+        // board 외 뷰는 Esc로 보드 복귀, board에서 Esc는 창 숨김.
+        if (view !== "board") {
           goTo("board");
           return;
         }
@@ -73,31 +69,34 @@ export default function App() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-wr-bg">
       {/* 글로벌 에이전트 상태 바 (Phase 20 #16) — 모든 뷰 위에 상주, 클릭 → Jobs. */}
       <AgentStatusBar />
-      {view === "settings" ? (
-        <SettingsView />
-      ) : view === "today" ? (
-        <TodayView />
-      ) : view === "timeline" ? (
-        <TimelineView />
-      ) : view === "weekly" ? (
-        <WeeklyView />
-      ) : view === "retro" ? (
-        <RetroView />
-      ) : view === "routines" ? (
-        <RoutineTrackingView />
-      ) : view === "radar" ? (
-        <PrRadarView />
-      ) : view === "worktree" ? (
-        <WorktreeView />
-      ) : view === "jobs" ? (
-        <JobsView />
-      ) : view === "hermes" ? (
-        <HermesView />
-      ) : view === "skills" ? (
-        <SkillsView />
-      ) : (
-        <CaptureBoard />
-      )}
+      {/* view 키로 remount → subtle enter 트랜지션(styles.css .view-shell). 과한 모션 금지(상주 유틸). */}
+      <div key={view} className="view-shell">
+        {view === "settings" ? (
+          <SettingsView />
+        ) : view === "today" ? (
+          <TodayView />
+        ) : view === "timeline" ? (
+          <TimelineView />
+        ) : view === "weekly" ? (
+          <WeeklyView />
+        ) : view === "retro" ? (
+          <RetroView />
+        ) : view === "routines" ? (
+          <RoutineTrackingView />
+        ) : view === "radar" ? (
+          <PrRadarView />
+        ) : view === "worktree" ? (
+          <WorktreeView />
+        ) : view === "jobs" ? (
+          <JobsView />
+        ) : view === "hermes" ? (
+          <HermesView />
+        ) : view === "skills" ? (
+          <SkillsView />
+        ) : (
+          <CaptureBoard />
+        )}
+      </div>
       {paletteOpen && <CommandPalette />}
     </div>
   );

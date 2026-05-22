@@ -12,5 +12,6 @@ export * from "./prRadar";
 export * from "./worktree";
 export * from "./agents";
 export * from "./scheduler";
+export * from "./nav";
 export * from "./hermes";
 export * from "./skills";

@@ -33,6 +33,15 @@
 
   /* Semantic */
   --color-wr-focus: #4c6ee6; /* 키보드 포커스 ring */
+  /*
+   * 상태 의미 토큰 (Phase 18 UI/UX conformance). DESIGN.md "Error Red"를 위험/오류
+   * 텍스트의 단일 토큰으로 통일 — 이전에 3종의 빨강이 같은 역할로 흩어져 있던 것을 합쳤다.
+   * pale wash 계열은 값 보존(시각 무변경)하되 토큰으로 참조해 일관성 확보.
+   */
+  --color-wr-danger: #b30000; /* 위험/오류 텍스트 (DESIGN.md Error Red) */
+  --color-wr-danger-soft: #ffe7e0; /* 위험/경고 pale wash 배경 */
+  --color-wr-danger-border: #e0b4a8; /* 위험 카드 보더 */
+  --color-wr-success-soft: #e3f1ec; /* 긍정/정상 pale wash 배경 */
 
   /*
    * 사분면 색 (결정 큐). 색만으로 의미 전달 금지 — 항상 라벨 병기.
@@ -93,6 +102,34 @@
   ::-webkit-scrollbar-thumb {
     background: var(--color-wr-border);
     border-radius: 9999px;
+  }
+}
+
+/*
+ * ── View shell 전환 (Phase 18 #7) ──
+ * 뷰 전환 시 subtle fade+rise. 상주 유틸이라 빠르고 절제된 모션(DESIGN.md "과한 모션 금지").
+ * view 키 remount(App.tsx)로 매 전환마다 enter 애니메이션이 한 번 재생된다.
+ * AgentStatusBar 아래 남은 공간을 채우고 자식(height:100vh 뷰)을 clip한다(레이아웃 무변경).
+ */
+.view-shell {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  animation: view-enter 0.16s ease-out both;
+}
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-shell {
+    animation: none;
   }
 }
 
@@ -528,7 +565,7 @@
 }
 .cb .b-q1 {
   background: rgba(255, 119, 89, 0.14);
-  color: #c4502f;
+  color: var(--color-wr-danger);
 }
 .cb .b-q2 {
   background: var(--cb-pale-green);
@@ -549,7 +586,7 @@
 }
 .cb .b-age.old {
   background: rgba(255, 119, 89, 0.12);
-  color: #c4502f;
+  color: var(--color-wr-danger);
   border-color: transparent;
 }
 .cb .b-sched {
@@ -850,10 +887,10 @@
 }
 /* Phase 15 — 하드 삭제(영구) 메뉴 항목. */
 .cb-card-menu button.danger {
-  color: #b23a1f;
+  color: var(--color-wr-danger);
 }
 .cb-card-menu button.danger:hover {
-  background: #ffe7e0;
+  background: var(--color-wr-danger-soft);
 }
 
 /* Phase 15 — 미분류 영역 "전체 제안 실행"(배치 enrich) 버튼. */
@@ -1294,7 +1331,7 @@
 }
 
 .settings .st-err {
-  color: #b30000;
+  color: var(--color-wr-danger);
   font: 400 12px var(--font-sans);
   margin-top: 6px;
 }
@@ -1386,7 +1423,7 @@
   color: var(--color-wr-green);
 }
 .settings .st-ping.fail {
-  color: #b30000;
+  color: var(--color-wr-danger);
 }
 .settings .st-hint {
   font: 400 11px var(--font-sans);
@@ -1398,7 +1435,32 @@
   font: 400 10px var(--font-mono);
   background: var(--color-wr-hover, rgba(0, 0, 0, 0.05));
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
+}
+/* 메뉴별 단축키 keymap 에디터 (Phase 18 #7) — 2열 그리드, view 라벨 + 단축키 입력. */
+.settings .nav-keymap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 6px 0 8px;
+}
+.settings .nav-keymap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.settings .nav-keymap-label {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .settings .nav-keymap-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 /* CLI 토큰 import (Phase 14): gh/ntn 가져오기 = 1차 어포던스 묶음. */
 .settings .st-import {
@@ -1669,11 +1731,11 @@
   border-radius: var(--radius-xs);
 }
 .pr .pr-ci-failing {
-  background: #ffe7e0;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .pr .pr-ci-passing {
-  background: #e3f1ec;
+  background: var(--color-wr-success-soft);
   color: var(--color-q2);
 }
 .pr .pr-ci-pending {
@@ -1692,8 +1754,8 @@
   color: var(--color-wr-muted);
 }
 .pr .pr-conflict {
-  background: #ffe7e0;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .pr .pr-ticket {
   background: var(--color-wr-accent-soft);
@@ -1899,8 +1961,8 @@
   border-radius: var(--radius-xs);
 }
 .wt .wt-dirty {
-  background: #ffe7e0;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .wt .wt-ahead {
   background: var(--color-wr-accent-soft);
@@ -1911,7 +1973,7 @@
   color: var(--color-wr-muted);
 }
 .wt .wt-clean {
-  background: #e3f1ec;
+  background: var(--color-wr-success-soft);
   color: var(--color-q2);
 }
 /* 12c: 활성 변경 활동(최근 파일 변경 = "지금 작업 중") */
@@ -2119,12 +2181,12 @@
   color: var(--color-wr-muted);
 }
 .wt .wt-ck-merged_branch {
-  background: #e3f1ec;
+  background: var(--color-wr-success-soft);
   color: var(--color-q2);
 }
 .wt .wt-ck-stale_branch {
-  background: #ffe7e0;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .wt .wt-ck-prunable_worktree {
   background: var(--color-wr-accent-soft);
@@ -2157,9 +2219,9 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid #e0b4a8;
-  background: #fdeae4;
-  color: #b23a1f;
+  border: 1px solid var(--color-wr-danger-border);
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
   border-radius: 999px;
   padding: 5px 14px;
   cursor: pointer;
@@ -2243,7 +2305,7 @@
   color: var(--color-q2);
 }
 .wt .wt-fs-D {
-  color: #b23a1f;
+  color: var(--color-wr-danger);
 }
 .wt .wt-fs-M {
   color: var(--color-q3);
@@ -2272,7 +2334,7 @@
   color: var(--color-q2);
 }
 .wt .wt-dels {
-  color: #b23a1f;
+  color: var(--color-wr-danger);
 }
 .wt .wt-fbin {
   font: 500 10px var(--font-mono);
@@ -2304,8 +2366,8 @@
   color: #1d7a4d;
 }
 .wt .wt-l-del {
-  background: #fdeae4;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .wt .wt-l-hunk {
   background: var(--color-wr-accent-soft);
@@ -2425,7 +2487,7 @@
   margin-bottom: 14px;
 }
 .jobs .jobs-codex-ok {
-  background: #e3f1ec;
+  background: var(--color-wr-success-soft);
   color: var(--color-q2);
 }
 .jobs .jobs-codex-off {
@@ -2533,12 +2595,12 @@
   color: var(--color-q3);
 }
 .jobs .jobs-st-succeeded {
-  background: #e3f1ec;
+  background: var(--color-wr-success-soft);
   color: var(--color-q2);
 }
 .jobs .jobs-st-failed {
-  background: #ffe7e0;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .jobs .jobs-st-cancelled {
   background: var(--color-wr-elevated);
@@ -2562,8 +2624,8 @@
   align-items: center;
   gap: 4px;
   border: 1px solid #f0c4b8;
-  background: #ffe7e0;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
   border-radius: 999px;
   padding: 3px 10px;
   cursor: pointer;
@@ -2726,7 +2788,7 @@
 }
 .jobs .jobs-prop-err {
   font: 400 12px var(--font-mono);
-  color: #b23a1f;
+  color: var(--color-wr-danger);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2737,8 +2799,8 @@
 }
 .jobs .jobs-reject {
   border: 1px solid #f0c4b8;
-  background: #ffe7e0;
-  color: #b23a1f;
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .jobs .jobs-reject:hover:not(:disabled) {
   background: #ffd9cf;
@@ -3701,7 +3763,7 @@
   align-items: center;
   gap: 3px;
   font: 700 12px var(--font-mono);
-  color: #c4502f;
+  color: var(--color-wr-danger);
 }
 .rt .trk-rate {
   display: flex;
@@ -3828,7 +3890,7 @@
   background: var(--color-q2);
 }
 .asb .asb-seg-failed {
-  background: #b23a1f;
+  background: var(--color-wr-danger);
 }
 .asb .asb-seg-cancelled {
   background: var(--color-wr-subtle);
@@ -3987,7 +4049,7 @@
   padding: 6px 18px;
 }
 .hermes .hm-note.err {
-  color: #b30000;
+  color: var(--color-wr-danger);
 }
 .hermes .hm-compose {
   display: flex;
@@ -4312,5 +4374,5 @@
   color: var(--color-wr-subtle);
 }
 .skl-note.err {
-  color: #b30000;
+  color: var(--color-wr-danger);
 }

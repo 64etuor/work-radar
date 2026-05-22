@@ -484,6 +484,42 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    /// Phase 18 마이그레이션(0014): app_config key-value 테이블 + upsert(ON CONFLICT) 라운드트립.
+    #[tokio::test]
+    async fn migration_0014_adds_app_config() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = 'app_config'",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query app_config table failed");
+        assert_eq!(tables.len(), 1, "expected app_config table from 0014");
+
+        // upsert: 같은 key 두 번 → 마지막 값으로 갱신(중복 행 아님).
+        for v in ["Ctrl+Space", "Cmd+Shift+K"] {
+            sqlx::query(
+                "INSERT INTO app_config (key, value) VALUES ('nav.global_hotkey', ?1) \
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            )
+            .bind(v)
+            .execute(&pool)
+            .await
+            .unwrap_or_else(|e| panic!("upsert app_config {v}: {e}"));
+        }
+        let (val,): (String,) =
+            sqlx::query_as("SELECT value FROM app_config WHERE key='nav.global_hotkey'")
+                .fetch_one(&pool)
+                .await
+                .expect("read app_config failed");
+        assert_eq!(val, "Cmd+Shift+K", "upsert가 마지막 값으로 갱신해야 한다");
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
     /// Phase 17 마이그레이션(0010): signals.impact_high/regret 컬럼 + bool(0/1) write/read.
     #[tokio::test]
     async fn migration_0010_adds_retro_tags() {

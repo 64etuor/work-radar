@@ -6,6 +6,7 @@ import { useUIStore } from "@/store";
 
 import { AddProjectForm } from "./settings/AddProjectForm";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
+import { NavigationSettings } from "./settings/NavigationSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 
@@ -75,6 +76,9 @@ export function SettingsView() {
         {list.map((p) => (
           <ProjectCard key={p.id} project={p} onToast={toast} />
         ))}
+
+        <div className="st-section-lbl">네비게이션 / 단축키</div>
+        <NavigationSettings onToast={toast} />
 
         <div className="st-section-lbl">알림 / 트레이</div>
         <NotificationSettings onToast={toast} />
