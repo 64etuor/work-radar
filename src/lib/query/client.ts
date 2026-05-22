@@ -85,6 +85,9 @@ export function useInvalidate() {
       void overview();
       return qc.invalidateQueries({ queryKey: ["today"] });
     },
-    routines: () => qc.invalidateQueries({ queryKey: ["routines"] }),
+    routines: () => {
+      void qc.invalidateQueries({ queryKey: ["routine-tracking"] });
+      return qc.invalidateQueries({ queryKey: ["routines"] });
+    },
   };
 }

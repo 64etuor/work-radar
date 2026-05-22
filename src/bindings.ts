@@ -86,8 +86,14 @@ export const commands = {
 	listPromotions: (signalId: string | null) => typedError<Promotion[], string>(__TAURI_INVOKE("list_promotions", { signalId })),
 	createRoutine: (input: CreateRoutineInput) => typedError<RoutineToday, string>(__TAURI_INVOKE("create_routine", { input })),
 	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], string>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
-	/**  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋. */
+	/**
+	 *  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋.
+	 *  완료(done=true) 시 그 루틴의 오늘 알림을 fired 처리해 더는 발사되지 않게 한다(완료=알림 불필요).
+	 */
 	toggleRoutineCheck: (routineId: string, date: string, done: boolean) => typedError<null, string>(__TAURI_INVOKE("toggle_routine_check", { routineId, date, done })),
+	/**  루틴 재정렬 (드래그, 공용 useListReorder). ordered_ids 순서대로 rank 부여. */
+	reorderRoutines: (orderedIds: string[]) => typedError<null, string>(__TAURI_INVOKE("reorder_routines", { orderedIds })),
+	routineTracking: (endDate: string, days: number) => typedError<RoutineTrackingItem[], string>(__TAURI_INVOKE("routine_tracking", { endDate, days })),
 	/**
 	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출하고
 	 *  임계치 넘는 것만 매트릭스로 escalate(dedup)·원인 해소분 auto-resolve. 토큰은 keychain에서만.
@@ -451,8 +457,14 @@ export type CreateRepoInput = {
 export type CreateRoutineInput = {
 	title: string,
 	freq: RoutineFreq,
-	/**  weekly일 때 해당 요일들. daily면 무시. */
+	/**  weekly/biweekly일 때 해당 요일들. daily/monthly면 무시. */
 	weekdays: Weekday[],
+	/**  biweekly/monthly일 때 기준일(YYYY-MM-DD). 비면 백엔드가 오늘로 채운다. daily/weekly는 무시. */
+	anchorDate: string | null,
+	/**  알림 시각 'HH:MM'(로컬). None=알림 없음. */
+	timeOfDay: string | null,
+	/**  알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32. */
+	reminderOffsetMin: number | null,
 	area: AreaTag | null,
 	kind: Kind | null,
 };
@@ -687,8 +699,20 @@ export type Repo = {
 	createdAt: string,
 };
 
-/**  루틴 반복 주기. */
-export type RoutineFreq = "daily" | "weekly";
+/**
+ *  루틴 반복 주기.
+ *  - Daily: 매일.
+ *  - Weekly: 매주 선택 요일(weekdays).
+ *  - Biweekly: 격주 — 선택 요일 + anchor 기준 14일 parity(`(days_since_anchor / 7) % 2 == 0`).
+ *  - Monthly: 매월 같은 day-of-month(anchor의 일), 월말 클램프(31 → 그달 말일).
+ */
+export type RoutineFreq = "daily" | "weekly" | "biweekly" | "monthly";
+
+/**  루틴 히스토리 한 날 (due occurrence + 체크 여부). 히트맵/바 한 칸. */
+export type RoutineHistoryDay = {
+	date: string,
+	done: boolean,
+};
 
 /**  오늘 표시할 루틴 항목 (스케줄 매칭 + 날짜별 완료 상태 포함). */
 export type RoutineToday = {
@@ -696,10 +720,36 @@ export type RoutineToday = {
 	title: string,
 	freq: RoutineFreq,
 	weekdays: Weekday[],
+	/**  biweekly 2주 주기·monthly day-of-month 기준일 (YYYY-MM-DD). daily/weekly는 None. */
+	anchorDate: string | null,
+	/**  알림 발사 기준 시각 'HH:MM'(로컬). None=알림 없음. */
+	timeOfDay: string | null,
+	/**  발사를 시각보다 N분 앞당김(예: 30=30분 전). None/0=정시. specta i64/u64 금지 → u32. */
+	reminderOffsetMin: number | null,
 	area: AreaTag | null,
 	kind: Kind | null,
 	/**  주어진 날짜에 완료 체크됐는지 (RoutineCheck 존재 여부). */
 	done: boolean,
+};
+
+/**
+ *  루틴 트래킹 한 항목 (Phase 16 #12). 루틴별 이행률(%)·연속(streak)·히스토리.
+ *  `routine_checks` + 스케줄 occurrence 집계 — 전부 로컬 read(자동화 아님). specta i64/u64 금지 → u32.
+ */
+export type RoutineTrackingItem = {
+	id: string,
+	title: string,
+	freq: RoutineFreq,
+	/**  집계 기간 내 스케줄상 due occurrence 수. */
+	due: number,
+	/**  due 날에 실제 체크된 수(done ⊆ due). */
+	done: number,
+	/**  이행률 = done*100/due (0..100). due=0이면 0. */
+	ratePct: number,
+	/**  현재 연속(streak): 가장 최근 due 날짜부터 거꾸로 연속 체크된 occurrence 수. */
+	streak: number,
+	/**  히스토리 한 점들(오래된→최신). 히트맵/바 렌더용. 기간 내 due 날만. */
+	history: RoutineHistoryDay[],
 };
 
 /**  샌드박스 권한. 기본 read_only, 쓰기는 명시 승인 시에만. danger_full은 타입에 없음 (INVARIANT #6). */

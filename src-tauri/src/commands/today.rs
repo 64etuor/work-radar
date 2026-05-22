@@ -256,23 +256,8 @@ pub async fn today_overview(db: State<'_, Db>, date: String) -> Result<TodayOver
 // 지난 7일([start,end] 로컬 inclusive). throughput/PR/루틴은 기존 타임스탬프 live 유도,
 // debt_trend는 debt_snapshots(11a부터 누적)에서 read. 전부 read — 외부 변경 0.
 
-/// chrono Weekday → 루틴 weekdays JSON에 쓰는 소문자 3글자.
-fn weekday_key(d: chrono::Weekday) -> &'static str {
-    use chrono::Weekday::*;
-    match d {
-        Mon => "mon",
-        Tue => "tue",
-        Wed => "wed",
-        Thu => "thu",
-        Fri => "fri",
-        Sat => "sat",
-        Sun => "sun",
-    }
-}
-
 /// 주간 집계(순수 read, 테스트 가능). `end_date`=로컬 오늘(YYYY-MM-DD), 범위=[end-6, end].
 pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview, sqlx::Error> {
-    use chrono::Datelike;
     let end = chrono::NaiveDate::parse_from_str(end_date, "%Y-%m-%d")
         .map_err(|_| sqlx::Error::Protocol("bad end_date (YYYY-MM-DD)".into()))?;
     let start = end - chrono::Duration::days(6);
@@ -323,59 +308,48 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     .fetch_one(db)
     .await?;
 
-    // 루틴 이행률 — done=스케줄 해당 날의 체크만(due와 동일 기준), due=스케줄 occurrence 합산.
+    // 루틴 이행률 — 공용 due-calc(routine_due_on)로 daily/weekly/biweekly/monthly 모두 일관 집계.
+    // done=스케줄 해당 날의 체크만(due와 동일 기준), due=스케줄 occurrence 합산.
     // 비스케줄 날 체크(예: 월요일 루틴을 화요일에 체크)는 done에서 제외 → done ⊆ due, 이행률 왜곡 방지.
-    let checks: Vec<(String, Option<String>, String)> = sqlx::query_as(
-        "SELECT r.freq, r.weekdays, rc.date FROM routine_checks rc \
-         JOIN routines r ON r.id = rc.routine_id \
-         WHERE r.active = 1 AND rc.date BETWEEN ?1 AND ?2",
+    use crate::commands::routines::{parse_weekdays, routine_due_on};
+    use crate::models::RoutineFreq;
+
+    let checks: Vec<(
+        crate::models::RoutineFreq,
+        Option<String>,
+        Option<String>,
+        String,
+    )> = sqlx::query_as(
+        "SELECT r.freq, r.weekdays, r.anchor_date, rc.date FROM routine_checks rc \
+             JOIN routines r ON r.id = rc.routine_id \
+             WHERE r.active = 1 AND rc.date BETWEEN ?1 AND ?2",
     )
     .bind(&start_s)
     .bind(&end_s)
     .fetch_all(db)
     .await?;
     let mut done: u32 = 0;
-    for (freq, weekdays, date) in &checks {
-        let scheduled = match freq.as_str() {
-            "daily" => true,
-            "weekly" => chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
-                .ok()
-                .map(|d| {
-                    let wk = weekday_key(d.weekday());
-                    weekdays
-                        .as_deref()
-                        .and_then(|j| serde_json::from_str::<Vec<String>>(j).ok())
-                        .map(|days| days.iter().any(|x| x == wk))
-                        .unwrap_or(false)
-                })
-                .unwrap_or(false),
-            _ => false,
+    for (freq, weekdays, anchor, date) in &checks {
+        let parsed = match chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+            Ok(d) => d,
+            Err(_) => continue,
         };
-        if scheduled {
+        let wkdays = parse_weekdays(weekdays.as_deref());
+        if routine_due_on(*freq, &wkdays, anchor.as_deref(), parsed) {
             done += 1;
         }
     }
-    let routines: Vec<(String, Option<String>)> =
-        sqlx::query_as("SELECT freq, weekdays FROM routines WHERE active = 1")
+    let routines: Vec<(RoutineFreq, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT freq, weekdays, anchor_date FROM routines WHERE active = 1")
             .fetch_all(db)
             .await?;
     let mut due: u32 = 0;
     let mut d = start;
     while d <= end {
-        let wk = weekday_key(d.weekday());
-        for (freq, weekdays) in &routines {
-            match freq.as_str() {
-                "daily" => due += 1,
-                "weekly" => {
-                    if let Some(json) = weekdays {
-                        if let Ok(days) = serde_json::from_str::<Vec<String>>(json) {
-                            if days.iter().any(|x| x == wk) {
-                                due += 1;
-                            }
-                        }
-                    }
-                }
-                _ => {}
+        for (freq, weekdays, anchor) in &routines {
+            let wkdays = parse_weekdays(weekdays.as_deref());
+            if routine_due_on(*freq, &wkdays, anchor.as_deref(), d) {
+                due += 1;
             }
         }
         d += chrono::Duration::days(1);

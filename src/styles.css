@@ -657,15 +657,76 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
 }
-.cb .rform .daily {
-  font: 400 12px var(--font-sans);
+/* 빈도 선택 (매일/매주/격주/매월) */
+.cb .rfreqs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.cb .rfreq {
+  flex: 1;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 7px;
+  font: 600 11px var(--font-sans);
+  color: var(--color-wr-muted);
+  padding: 5px 0;
+  cursor: pointer;
+}
+.cb .rfreq.on {
+  background: var(--color-wr-near-black);
+  color: #fff;
+  border-color: var(--color-wr-near-black);
+}
+.cb .rhint {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+  margin-bottom: 6px;
+}
+/* 시간 + 알림 오프셋 */
+.cb .rtime {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.cb .rtime label {
+  font: 400 11px var(--font-sans);
   color: var(--color-wr-muted);
   display: flex;
-  gap: 5px;
+  flex-direction: column;
+  gap: 3px;
+}
+.cb .rtime input[type="time"] {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--cb-r-sm);
+  padding: 4px 6px;
+  font: 400 12px var(--font-sans);
+  outline: none;
+}
+.cb .rtime .roff {
+  display: flex;
   align-items: center;
-  cursor: pointer;
+  gap: 4px;
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.cb .rtime .roff input[type="number"] {
+  width: 48px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--cb-r-sm);
+  padding: 4px 6px;
+  font: 400 12px var(--font-sans);
+  outline: none;
+}
+.cb .rtime .roff input:disabled {
+  background: var(--color-wr-surface);
+  opacity: 0.6;
+}
+.cb .b-time {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-wr-accent);
 }
 .cb .rform .save {
   border: none;
@@ -3600,4 +3661,97 @@
 .rt .rt-restore:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* ── 루틴 트래킹 뷰 (Phase 16 #12) — .rt 셸 재사용 ───────────────────────────── */
+.rt .trk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rt .trk-card {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--color-wr-bg);
+}
+.rt .trk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.rt .trk-ttl {
+  font: 500 14px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.rt .trk-card .b-sched {
+  font: 700 9px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
+}
+.rt .trk-spacer {
+  flex: 1;
+}
+.rt .trk-streak {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font: 700 12px var(--font-mono);
+  color: #c4502f;
+}
+.rt .trk-rate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.rt .trk-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-wr-surface);
+  overflow: hidden;
+}
+.rt .trk-bar-fill {
+  height: 100%;
+  background: var(--color-wr-green);
+  border-radius: 999px;
+  transition: width 0.2s;
+}
+.rt .trk-rate-num {
+  font: 700 13px var(--font-mono);
+  color: var(--color-wr-fg);
+  min-width: 36px;
+  text-align: right;
+}
+.rt .trk-rate-sub {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.rt .trk-heat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.rt .trk-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--color-wr-surface);
+  border: 1px solid var(--color-wr-border-light);
+}
+.rt .trk-cell.on {
+  background: var(--color-wr-green);
+  border-color: var(--color-wr-green);
+}
+.rt .trk-empty {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
 }

@@ -10,6 +10,7 @@ import {
   GitCompare,
   GitPullRequest,
   LayoutGrid,
+  Repeat,
   Settings,
 } from "lucide-react";
 
@@ -80,6 +81,13 @@ export function CommandPalette() {
               >
                 <History className="size-4 text-wr-subtle" />
                 <span>회고 / 보관함으로</span>
+              </CommandItem>
+              <CommandItem
+                value="routine tracking 루틴 트래킹 이행률 streak 연속 히스토리 반복"
+                onSelect={() => goTo("routines")}
+              >
+                <Repeat className="size-4 text-wr-subtle" />
+                <span>루틴 트래킹으로</span>
               </CommandItem>
               <CommandItem
                 value="pr radar github 레이더 풀리퀘스트"

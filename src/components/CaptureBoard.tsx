@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AreaTag, Kind, PromotionTarget, Weekday } from "@/bindings";
+import type { AreaTag, Kind, PromotionTarget } from "@/bindings";
 import {
   type CardMenuAction,
   type CardMenuState,
@@ -12,7 +12,7 @@ import {
 } from "@/components/board/CalendarEventModal";
 import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas } from "@/components/board/MatrixCanvas";
-import { RoutinesPanel } from "@/components/board/RoutinesPanel";
+import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
 import {
@@ -28,6 +28,7 @@ import {
   useProjects,
   usePromoteToday,
   usePromoteToNotion,
+  useReorderRoutines,
   useReorderToday,
   useSetSignalArea,
   useSetSignalStatus,
@@ -81,6 +82,7 @@ export function CaptureBoard() {
   const promoteToNotion = usePromoteToNotion();
   const flushPromotions = useFlushPromotions();
   const createRoutine = useCreateRoutine();
+  const reorderRoutines = useReorderRoutines();
   const toggleRoutine = useToggleRoutineCheck();
   const codex = useCodexStatus();
   const triggerEnrich = useTriggerEnrich();
@@ -294,11 +296,14 @@ export function CaptureBoard() {
     }
   };
 
-  const handleCreateRoutine = (title: string, daily: boolean, weekdays: Weekday[]) => {
+  const handleCreateRoutine = (draft: RoutineDraft) => {
     createRoutine.mutate({
-      title,
-      freq: daily ? "daily" : "weekly",
-      weekdays,
+      title: draft.title,
+      freq: draft.freq,
+      weekdays: draft.weekdays,
+      anchorDate: draft.anchorDate,
+      timeOfDay: draft.timeOfDay,
+      reminderOffsetMin: draft.reminderOffsetMin,
       area: null,
       kind: null,
     });
@@ -429,6 +434,8 @@ export function CaptureBoard() {
               toggleRoutine.mutate({ routineId, date: today, done })
             }
             onCreate={handleCreateRoutine}
+            onReorder={(ids) => reorderRoutines.mutate(ids)}
+            onOpenTracking={() => goTo("routines")}
           />
         </div>
       </div>

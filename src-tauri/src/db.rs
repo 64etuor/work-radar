@@ -49,6 +49,89 @@ mod tests {
         std::env::temp_dir().join(format!("work-radar-test-{nanos}-{seq}.db"))
     }
 
+    /// Phase 16(0011) routines rebuild가 routine_checks 완료 이력을 **보존**하는지 — 데이터 손실 가드.
+    /// 충실 재현: 0001~0010 적용 → routine + check seed → 0011을 **트랜잭션 안에서** 실행
+    /// (sqlx 마이그레이터와 동일 — `PRAGMA foreign_keys=OFF`가 no-op이라 FK가 켜진 채 rebuild된다).
+    /// FK-안전 순서가 아니면 `DROP TABLE routines`의 cascade가 routine_checks를 지운다.
+    #[tokio::test]
+    async fn migration_0011_preserves_routine_checks_under_transaction() {
+        let path = temp_db_path();
+        let opts = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(opts)
+            .await
+            .expect("connect failed");
+
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
+        for f in [
+            "0001_init.sql",
+            "0002_capture_board.sql",
+            "0003_promotion_unique.sql",
+            "0004_pr_self_check.sql",
+            "0005_notion_done_statuses.sql",
+            "0006_google_calendar_ids.sql",
+            "0007_debt_snapshots.sql",
+            "0008_remove_mismatch.sql",
+            "0009_scheduled_notifications.sql",
+            "0010_retro_tags.sql",
+        ] {
+            let sql = std::fs::read_to_string(format!("{base}/{f}")).unwrap();
+            sqlx::raw_sql(&sql)
+                .execute(&pool)
+                .await
+                .unwrap_or_else(|e| panic!("apply {f}: {e}"));
+        }
+
+        // 완료 이력을 가진 루틴 seed.
+        sqlx::query("INSERT INTO routines (id, title, freq, active, created_at) VALUES ('r1','run','daily',1,datetime('now'))")
+            .execute(&pool).await.expect("seed routine");
+        sqlx::query(
+            "INSERT INTO routine_checks (id, routine_id, date) VALUES ('rc1','r1','2026-05-20')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed routine_check");
+
+        // 0011을 트랜잭션 안에서 실행(마이그레이터 충실 재현 — PRAGMA OFF no-op).
+        let sql11 = std::fs::read_to_string(format!("{base}/0011_routines_phase16.sql")).unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::raw_sql(&sql11)
+            .execute(&mut *tx)
+            .await
+            .expect("apply 0011 in tx");
+        tx.commit().await.unwrap();
+
+        // routine_checks 완료 이력이 cascade로 지워지지 않고 보존되어야 한다.
+        let (checks,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM routine_checks")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            checks, 1,
+            "0011 rebuild가 routine_checks 완료 이력을 보존해야 한다 (cascade 금지)"
+        );
+        let (routines,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM routines")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(routines, 1, "routines 행 보존");
+
+        // 확장된 freq CHECK + 신규 컬럼이 동작.
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, anchor_date, rank, time_of_day, reminder_offset_min, active, created_at) \
+             VALUES ('r2','m','monthly','2026-05-01',0,'09:00',30,1,datetime('now'))",
+        )
+        .execute(&pool)
+        .await
+        .expect("biweekly/monthly freq + 신규 컬럼 insert 가능해야 함");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[tokio::test]
     async fn migrations_create_six_tables_and_fts() {
         let path = temp_db_path();

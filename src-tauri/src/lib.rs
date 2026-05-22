@@ -78,10 +78,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::promote_to_notion,
         commands::flush_promotions,
         commands::list_promotions,
-        // Routines.
+        // Routines (Phase 16: biweekly/monthly · 드래그 정렬 · 시간/알림 · 트래킹).
         commands::create_routine,
         commands::list_today_routines,
         commands::toggle_routine_check,
+        commands::reorder_routines,
+        commands::routine_tracking,
         // PR Radar (read 레일, Phase 4).
         commands::refresh_pr_radar,
         commands::set_pr_self_check,

@@ -17,6 +17,14 @@ export function useTodayRoutines(date: string, weekday: Weekday) {
   });
 }
 
+/** 루틴 트래킹(이행률/streak/히스토리) — endDate 기준 지난 days일. */
+export function useRoutineTracking(endDate: string, days: number) {
+  return useQuery({
+    queryKey: ["routine-tracking", endDate, days],
+    queryFn: () => unwrap(commands.routineTracking(endDate, days)),
+  });
+}
+
 // ── Mutations (관련 쿼리 invalidate) ───────────────────────────────────────────
 
 /** 루틴 추가. */
@@ -24,6 +32,15 @@ export function useCreateRoutine() {
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (input: CreateRoutineInput) => unwrap(commands.createRoutine(input)),
+    onSuccess: () => inv.routines(),
+  });
+}
+
+/** 루틴 재정렬 (드래그, rank 영속). */
+export function useReorderRoutines() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => unwrap(commands.reorderRoutines(orderedIds)),
     onSuccess: () => inv.routines(),
   });
 }

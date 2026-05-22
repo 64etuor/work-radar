@@ -6,6 +6,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { JobsView } from "@/components/JobsView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { RetroView } from "@/components/RetroView";
+import { RoutineTrackingView } from "@/components/RoutineTrackingView";
 import { SettingsView } from "@/components/SettingsView";
 import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
@@ -48,6 +49,7 @@ export default function App() {
           view === "timeline" ||
           view === "weekly" ||
           view === "retro" ||
+          view === "routines" ||
           view === "radar" ||
           view === "worktree" ||
           view === "jobs"
@@ -74,6 +76,8 @@ export default function App() {
         <WeeklyView />
       ) : view === "retro" ? (
         <RetroView />
+      ) : view === "routines" ? (
+        <RoutineTrackingView />
       ) : view === "radar" ? (
         <PrRadarView />
       ) : view === "worktree" ? (
