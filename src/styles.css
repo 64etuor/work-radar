@@ -1308,6 +1308,27 @@
   padding: 1px 4px;
   border-radius: 3px;
 }
+/* CLI 토큰 import (Phase 14): gh/ntn 가져오기 = 1차 어포던스 묶음. */
+.settings .st-import {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* 붙여넣기(advanced fallback) 디스클로저 토글. */
+.settings .st-disclosure {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.settings .st-disclosure:hover {
+  color: var(--color-wr-ink, inherit);
+}
 .settings .st-cal {
   margin-top: 8px;
   display: flex;

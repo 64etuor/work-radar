@@ -37,6 +37,13 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::delete_project_token,
         commands::project_token_status,
         commands::ping_project_token,
+        // CLI 토큰 import (auth 통일, Phase 14) — 토큰은 keychain으로만, IPC 미반환.
+        commands::gh_cli_status,
+        commands::import_github_token,
+        commands::gh_auth_login_web,
+        commands::ntn_cli_status,
+        commands::import_notion_token,
+        commands::ntn_login,
         // projectId 태깅 / reconcile.
         commands::reconcile_signal_projects,
         commands::set_signal_project,
@@ -157,6 +164,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // 백그라운드 스케줄러가 발사하는 네이티브 알림 (Phase 13).
         .plugin(tauri_plugin_notification::init())
+        // 폴더 picker (Phase 14): repo local_path 등 경로 입력을 OS 다이얼로그로.
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(specta_builder.invoke_handler())
         // 닫기 = 트레이로 hide(quit 아님). 실제 종료는 트레이 "종료"의 app.exit(0)에서만.
         .on_window_event(|window, event| {
