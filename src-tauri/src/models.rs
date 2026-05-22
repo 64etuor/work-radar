@@ -121,6 +121,19 @@ pub struct PingResult {
     pub detail: String,
 }
 
+/// CLI 토큰 import 도구(gh/ntn) 가용성 (graceful degrade 판정용, Phase 14).
+/// 토큰 본문은 절대 담기지 않는다(INVARIANT) — 설치/로그인 여부와 import 가능성만.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CliToolStatus {
+    /// CLI 바이너리가 PATH(또는 알려진 경로)에서 발견됨.
+    pub installed: bool,
+    /// 로그인/토큰 import 가능 (gh=`gh auth status`, ntn=auth 파일 존재). false면 로그인 필요.
+    pub logged_in: bool,
+    /// 사람이 읽을 상태 상세 (토큰 본문 미포함).
+    pub detail: String,
+}
+
 // ── 신호(WorkSignal) ──────────────────────────────────────────────────────────
 
 /// 개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무.

@@ -17,6 +17,31 @@ export const commands = {
 	projectTokenStatus: (projectId: string) => typedError<TokenStatus, string>(__TAURI_INVOKE("project_token_status", { projectId })),
 	/**  토큰으로 외부 API ping(read-only). 토큰은 keychain에서 읽어 Rust 안에서만 쓰인다. */
 	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, string>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
+	/**  gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
+	ghCliStatus: () => typedError<CliToolStatus, string>(__TAURI_INVOKE("gh_cli_status")),
+	/**
+	 *  `gh auth token` → keychain(TokenKind::Github). 토큰 본문은 stdout→keychain으로만 흐르고
+	 *  IPC로 반환되지 않는다(INVARIANT). 미설치/미로그인/빈 토큰은 Err로 graceful 노출.
+	 */
+	importGithubToken: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("import_github_token", { projectId })),
+	/**
+	 *  `gh auth login --web` 런처(미로그인 시 인앱 버튼). 브라우저 동의 후 사용자가 '가져오기'를
+	 *  다시 누른다. 대화식 흐름이라 완료를 기다리지 않고 spawn만 한다(bounded: 즉시 반환).
+	 */
+	ghAuthLoginWeb: () => typedError<null, string>(__TAURI_INVOKE("gh_auth_login_web")),
+	/**
+	 *  ntn CLI 가용성 + 로그인(토큰 import 가능) 상태. ntn은 토큰을 file-auth 위치
+	 *  (`~/.config/notion/api_key`)에 저장하므로 그 파일 존재로 import 가능 여부를 판정한다.
+	 *  (OS keychain 모드면 파일이 없을 수 있음 → 그 경우 붙여넣기 fallback.) 토큰 본문 미포함.
+	 */
+	ntnCliStatus: () => typedError<CliToolStatus, string>(__TAURI_INVOKE("ntn_cli_status")),
+	/**
+	 *  ntn file-auth 토큰 → 라이브 검증(ping) → keychain(TokenKind::Notion). 토큰 본문은 절대
+	 *  IPC로 반환되지 않는다(INVARIANT). 파일 없음/검증 실패는 Err로 graceful 노출(붙여넣기 fallback 안내).
+	 */
+	importNotionToken: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("import_notion_token", { projectId })),
+	/**  `ntn login` 런처(미로그인 시 인앱 버튼). 대화식이라 완료를 기다리지 않고 spawn만 한다. */
+	ntnLogin: () => typedError<null, string>(__TAURI_INVOKE("ntn_login")),
 	reconcileSignalProjects: () => typedError<number, string>(__TAURI_INVOKE("reconcile_signal_projects")),
 	/**  신호의 소속 프로젝트를 명시 지정(또는 해제). 메타데이터. */
 	setSignalProject: (id: string, projectId: string | null) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_project", { id, projectId })),
@@ -256,6 +281,19 @@ export type CiTriageProposal = {
 	suggestedFixes?: string[],
 	/**  사람이 읽을 요약. */
 	summary?: string,
+};
+
+/**
+ *  CLI 토큰 import 도구(gh/ntn) 가용성 (graceful degrade 판정용, Phase 14).
+ *  토큰 본문은 절대 담기지 않는다(INVARIANT) — 설치/로그인 여부와 import 가능성만.
+ */
+export type CliToolStatus = {
+	/**  CLI 바이너리가 PATH(또는 알려진 경로)에서 발견됨. */
+	installed: boolean,
+	/**  로그인/토큰 import 가능 (gh=`gh auth status`, ntn=auth 파일 존재). false면 로그인 필요. */
+	loggedIn: boolean,
+	/**  사람이 읽을 상태 상세 (토큰 본문 미포함). */
+	detail: string,
 };
 
 /**  codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성). */

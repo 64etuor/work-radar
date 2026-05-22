@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import type { Provider } from "@/bindings";
 import { useCreateRepo } from "@/lib/query";
@@ -17,6 +18,12 @@ export function AddRepoForm({
   const [location, setLocation] = useState("");
   const [branch, setBranch] = useState("");
   const [ticketPattern, setTicketPattern] = useState("");
+
+  // 폴더 picker (Phase 14): local 경로는 붙여넣기 대신 OS 다이얼로그로 선택한다.
+  const pickFolder = async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected === "string") setLocation(selected);
+  };
 
   const submit = () => {
     if (!location.trim() || create.isPending) return;
@@ -58,17 +65,28 @@ export function AddRepoForm({
           Local
         </button>
       </div>
-      <input
-        className="st-input"
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
-        placeholder={
-          provider === "github"
-            ? "https://github.com/org/repo"
-            : "/Users/me/code/repo"
-        }
-      />
+      {provider === "github" ? (
+        <input
+          className="st-input"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="https://github.com/org/repo"
+        />
+      ) : (
+        <div className="st-token-row">
+          <input
+            className="st-input"
+            value={location}
+            readOnly
+            placeholder="폴더를 선택하세요…"
+            title={location || "선택된 폴더 없음"}
+          />
+          <button type="button" className="st-btn sm" onClick={pickFolder}>
+            폴더 선택
+          </button>
+        </div>
+      )}
       <div className="st-repoform-row">
         <input
           className="st-input"
