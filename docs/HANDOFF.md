@@ -1,4 +1,4 @@
-# Work Radar — 세션 핸드오프 (현재: Phase 11 Today/Timeline/Weekly/Work Debt 완료 · PLAN Phase 0~11 전부 완료)
+# Work Radar — 세션 핸드오프 (현재: PLAN Phase 0~11 완료 · Phase 12~20 통합 계획 수립, 병렬 파견 대기)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
@@ -48,7 +48,10 @@
   - **11b — Timeline 오늘 시간축 아젠다 (`22f6900`):** 순수 프런트(`TimelineView`, view:"timeline"). `useCalendarEvents(date)`+`useToday`+Q1 합성, 시(hour)별 세로 그리드 + all-day/포커스 untimed 밴드, 날짜 피커. `@theme`에 누락 토큰 정의(`--color-wr-hover`/`--color-wr-action-blue`). reviewer ACCEPT.
   - **11c — Weekly review 지난 7일 (`d2656e7`):** `weekly_review(end_date)` 커맨드(`fetch_weekly_review`, [end-6,end] 로컬 inclusive). throughput(캡처/완료/승격)·PR(attention_new/resolved≈머지·CI해소)·루틴 이행률(done=스케줄 해당 체크만, done⊆due)·debt_trend(debt_snapshots). `WeeklyReview` 등 u32. `WeeklyView`(view:"weekly"). reviewer ACCEPT(루틴 done/due 비대칭 MAJOR 수정).
   - **검증:** `cargo test` **110 passed**(11a +3, 11c +2) · clippy -D warnings 0 · cargo fmt --check green · pnpm typecheck/build green · 각 PR INVARIANTS reviewer(critic) 패스(self-approve 금지, 1/2/3/7 PASS). **실 GUI 렌더·실 캘린더 fetch·다일 추세 누적은 사용자 관찰**(`pnpm tauri dev` → 팔레트 "Today (운영)로"/"Timeline으로"/"Weekly Review로").
-- **다음 = PLAN.md Phase 0~11 전부 완료.** 새 Phase 정의 또는 문서화된 후속(아래) 중 사용자 지시 대기. 캘린더 access token 캐시(in-memory)는 Phase 11 폴링 빈도 보고 재검토 보류(현재 매 fetch refresh, bounded).
+- **다음 = Phase 12~20 (Dogfooding 정교화, 통합 ralplan).** 사용자 dogfooding 백로그(~24개)를 brainstorming으로 9 Phase 분할 — **정본 설계 `docs/specs/phase-12-20-dogfood-refinement.md`** + PLAN.md §3b + decisions.md "Phase 12–20". 사용자가 phase별 에이전트 **병렬 파견** 예정.
+  - **병렬 wave: (0) 12a MISMATCH 제거 → 12b commands/query 모듈 분리 [게이트, 순차] → (1) 13·14·15·17·19·12c·12d → (2) 16·20(13 의존) → (3) 18 단독.** Wave 0(prep refactor)를 dev에 머지하기 전엔 병렬 금지(`commands.rs` 충돌).
+  - 주의: **Phase 12a가 MISMATCH 기능을 전부 제거**(Phase 6 폐기) — 아래 옛 후속 중 "mismatch 실 Notion 수정"은 무효.
+- 옛 후속(문서화됨, 일부 유효): PR 머지 히스토리 영속(Weekly resolved 정확화 + Phase 4 auto-resolve 재실패 처리), 캘린더 access token in-memory 캐시(폴링 빈도 보고). 캘린더 access token 캐시는 Phase 11 폴링 빈도 보고 재검토 보류(현재 매 fetch refresh, bounded).
 
 ### Phase 11 미해결/관찰 항목 (후속에서 고려)
 - **PR `resolved` 근사(문서화):** PR Radar ambient(머지 히스토리 미영속) → Weekly의 `resolved`는 done 전이 PR 신호의 `updated_at` 기준(≈머지/CI해소). 실 머지 로그는 Phase 4 변경 필요라 범위 밖.
@@ -115,8 +118,9 @@ PLAN.md Phase 10 핵심 — **Google Calendar 연동(read 레일):** 프로젝�
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
-work-radar — PLAN.md Phase 0~11 전부 완료(dev). 새 작업은 사용자 지시 대기.
-먼저 docs/HANDOFF.md(상태) → PLAN.md §1 INVARIANTS → docs/decisions.md(Phase별 결정) → AGENTS.md를 읽는다.
-후속 후보(문서화됨): NotionWriter 실 write 경로(mismatch 실 Notion 수정), PR 머지 히스토리 영속(Weekly resolved 정확화 + Phase 4 auto-resolve 재실패 처리), 캘린더 access token in-memory 캐시(폴링 빈도 보고).
+work-radar — PLAN Phase 0~11 완료. 다음 = Phase 12~20(Dogfooding 정교화 통합 ralplan), 병렬 파견.
+먼저 docs/specs/phase-12-20-dogfood-refinement.md(정본) → docs/HANDOFF.md(상태) → PLAN.md §1 INVARIANTS + §3b → docs/decisions.md(Phase별 결정) → AGENTS.md를 읽는다.
+병렬 wave: (0) 12a MISMATCH 제거 → 12b 모듈 분리 [게이트, dev 머지 후 병렬] → (1) 13·14·15·17·19·12c·12d → (2) 16·20 → (3) 18.
+phase 착수 시: brainstorm→implement→verify→critic ACCEPT(self-approve 금지)→commit/push dev, 한 PR=한 관심사.
 규칙: 토큰 keychain·렌더러 미노출, 외부호출 Rust, bounded·graceful degrade, 결정 레일에 자동화 미침투, read=Acceptance 불요/외부 mutate=Acceptance 게이트. 작업/푸시는 dev에만. 각 PR done-criteria 자가검증 → INVARIANTS reviewer 패스(self-approve 금지) → docs/decisions.md 한 줄.
 ```

@@ -254,6 +254,94 @@ bounded·graceful degrade(#5), read-only 스코프(외부 mutate 0 → Acceptanc
 
 ---
 
+## 3b. Phase 12–20 — Dogfooding 정교화 (통합 ralplan)
+
+> 사용자 dogfooding 백로그(~24개)를 brainstorming으로 9 Phase로 분할. **정본 설계·병렬 파견 전략·
+> 의존 그래프·INVARIANT 적합성 = `docs/specs/phase-12-20-dogfood-refinement.md`.** 아래는 요약.
+> 병렬 파견 wave: **(0) 12a→12b 게이트 → (1) 13·14·15·17·19·12c·12d → (2) 16·20 → (3) 18.**
+
+### Phase 12 — Prep/Cleanup + Git 운영
+**Goal:** 병렬 기반(표면 축소+모듈 분리) + worktree/브랜치 운영.
+**Deliverables:** (12a) MISMATCH 전체 제거(코드/UI/신호/컬럼 마이그레이션) · (12b) `commands.rs`/`query.ts`
+도메인 모듈 분리(행위 무변경) · (12c) worktree live dirty+활성 변경 표시 + 안전 dev rebase(fetch→dirty 거부→
+백업 ref→충돌 abort+복구→diff 검수) · (12d) merged/stale 브랜치·워크트리 정리(다중선택·확인·current/dirty 보호).
+**Done-criteria:**
+- [ ] mismatch 코드 0(grep), 신호+컬럼 마이그레이션 제거, test/clippy/typecheck/build green
+- [ ] commands/query 모듈 분리, 커맨드 등록·bindings 동일
+- [ ] worktree live dirty 자동 갱신 + 활성 변경 표시
+- [ ] 안전 dev rebase(가드 5단계), 브랜치/워크트리 정리(보호 가드)
+
+### Phase 13 — 트레이 상주 스파인 + 알림 + 스케줄러 (foundational)
+**Goal:** 메뉴바 상주 + 알림 + bounded 백그라운드 스케줄러(16·20 소비).
+**Deliverables:** tray icon/menu(show/hide/quit), 닫기=트레이 hide, `tauri-plugin-notification`+권한,
+`Scheduler` managed state(bounded tick·등록형 due-check·다음 발사 SQLite 영속).
+**Done-criteria:**
+- [ ] 트레이 상주, 창 닫아도 백그라운드 유지, 트레이 show/hide/quit
+- [ ] 알림 권한 + 테스트 알림(사용자 관찰)
+- [ ] 스케줄러 bounded tick(busy-loop 아님), 등록 due-check 호출, 재부팅 후 복구
+
+### Phase 14 — 온보딩 & Auth
+**Goal:** 토큰 어포던스 통일(CLI import) + 키체인 프롬프트 + 폴더 picker.
+**Deliverables:** (8) 안정 코드서명으로 keychain 매번-프롬프트 제거 · (9) `tauri-plugin-dialog` 폴더 picker
+(붙여넣기 제거) · (18/19) `gh auth token`/ntn 토큰 import→keychain, 미로그인 시 앱 버튼 `gh auth login --web`,
+paste는 fallback.
+**Done-criteria:**
+- [ ] 안정 서명 → keychain 암호 프롬프트 안 뜸(리빌드 후, 사용자 관찰)
+- [ ] repo local_path 폴더 picker, 경로 입력 통일
+- [ ] GitHub/Notion 토큰 CLI import(불가 시 paste fallback), 토큰 keychain만·평문 0
+
+### Phase 15 — Capture / Inbox UX
+**Goal:** 미분류 전체 일괄 enrich + 브레인덤프 편집/삭제.
+**Deliverables:** (4) `trigger_enrich_all` 단일 codex 배치 잡(suggested-only, 부분 실패 격리, Acceptance 게이트) +
+"전체 제안 실행" 버튼 · (5) `update_signal_title`(dedup 갱신)+`delete_signal`(하드, archive와 구분).
+**Done-criteria:**
+- [ ] "전체 제안 실행" 1버튼=단일 배치 잡(bounded), 결과 suggested 표시(자동 분류 0)
+- [ ] 브레인덤프 편집+하드 삭제, accept 전 외부 무변경
+
+### Phase 16 — Routines 강화
+**Goal:** 격주/월간 + 드래그 정렬 + 시간/알림 + 트래킹. **Depends:** 13(알림), 공용 dnd.
+**Deliverables:** (1) `RoutineFreq`+=Biweekly/Monthly+`anchor_date`(월간=같은 날짜·월말 클램프, 격주=앵커 2주) ·
+(2) `routines.rank`+`reorder_routines`(드래그) · (6) `time_of_day?`/`reminder_offset_min?`+스케줄러 알림 ·
+(12) 루틴 트래킹 뷰(이행률/streak/히스토리).
+**Done-criteria:**
+- [ ] 격주·월간 스케줄, 오늘 해당만 표시
+- [ ] 드래그 정렬(rank), 시간+알림(트레이 상주 발송), 트래킹 차트
+
+### Phase 17 — Today / Todo & 회고
+**Goal:** Today 드래그 + 전용 회고 뷰 + 보관함. **Depends:** 공용 dnd.
+**Deliverables:** (3) TodayRail 드래그(±1 버튼 제거) · (13) `view:"retro"` 기간 피커+완료 todo 타임라인+
+impact/regret 태깅(`signals.impact_high`/`regret` 마이그레이션)+랭킹 · (14) 보관함 뷰(archived+snoozed 열람+복원).
+**Done-criteria:**
+- [ ] Today 드래그 정렬
+- [ ] 회고 뷰(타임라인+impact/regret+랭킹), 보관함(열람+복원), 모든 액션 로컬·자동 분류 0
+
+### Phase 18 — Navigation & UI/UX 폴리시 (fleet 마지막)
+**Goal:** 단축키/창키/전환/중복 제거 + UI/UX 밸런스 audit.
+**Deliverables:** (7) Settings keymap(view→shortcut)+글로벌 창 핫키 변경(재등록)+전환 효과+중복 뷰/기능 정리 ·
+(24) DESIGN.md 기준 audit→punch-list 수정(`/design-review` 권장).
+**Done-criteria:**
+- [ ] 메뉴별 단축키 편집·창 핫키 변경, 전환 효과, 중복 정리
+- [ ] UI/UX 밸런스 audit + 수정(DESIGN.md 기준)
+
+### Phase 19 — Calendar 쓰기 (이벤트 생성)
+**Goal:** 카드→직접 모달→Google Calendar 이벤트 생성. **Depends:** Phase 10 OAuth.
+**Deliverables:** scope events 업그레이드(재동의) · `CalendarProvider.create_event`+`create_calendar_event` 커맨드 ·
+카드 "캘린더 등록"→직접 모달(제목/시간/캘린더/설명)→write, **acceptance 대기 제거**(사용자 폼=사람 결정).
+**Done-criteria:**
+- [ ] scope events 재동의, 토큰 keychain 유지
+- [ ] 직접 모달→이벤트 생성(write), Rust·bounded·graceful, 읽기 레일 무영향
+
+### Phase 20 — Agents & AI surface
+**Goal:** Hermes 브리지 + 글로벌 에이전트 바 + CI 봇 알림 + 스킬 레지스트리. **Depends:** 13(16/17 알림).
+**Deliverables:** (15) Telegram류 메신저 브리지(봇 토큰/chat keychain, send + bounded getUpdates, 제어 surface) ·
+(16) 모든 뷰 상단 에이전트 바(stacked·경과 비례 진행·클릭→Jobs·모든 AI 집계) · (17) Actions `if:failure()` 훅→
+네이티브 알림+Q1 escalate(자동 triage 없음·notify 캡) · (21) 인앱 프롬프트+외부 Claude/Codex 스킬 공유 레지스트리.
+**Done-criteria:**
+- [ ] Hermes 송수신 제어(bounded), 글로벌 에이전트 바, CI 봇 알림(자동 triage 없음)
+- [ ] 스킬 레지스트리(인앱+외부, 잡 바인딩), 자동화는 제안 레일+Acceptance(#1/#2)·bounds(#5)
+
+---
+
 ## 폐기된 계획 (이력)
 
 ### (폐기) 실행 레일 — 옛 Phase 10 (구현 안 함, 2026-05-21)

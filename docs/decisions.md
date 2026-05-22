@@ -187,3 +187,19 @@
 - **reviewer(critic) 패스 — ACCEPT-WITH-RESERVATIONS→수정 후 확인(self-approve 금지).** INVARIANTS #1/#2/#7 PASS, done-criterion PASS. MAJOR(루틴 done/due 비대칭)=스케줄 필터로 수정 + 회귀 테스트(weekly 루틴 스케줄-only + no-write 가드). MINOR(resolved updated_at 재터치=플랩 PR에서만, 문서화 유지 / 경계 TZ 테스트 부재=q1 테스트가 원리 커버)는 비차단. **Phase 4 후속 메모:** auto-resolve된 PR 신호가 재실패 시 `upsert_pr_signal` ON CONFLICT가 status를 done으로 둔 채 updated_at만 갱신 → 매트릭스 재등장 안 함 + resolved 주(week) 귀속이 밀릴 수 있음(Phase 4 auto-resolve/upsert 설계에서 추적).
 - **검증(헤드리스).** `cargo test` **110 passed**(+2: weekly_review_aggregates_last_7_days·weekly_routine_adherence_counts_scheduled_only) · clippy -D warnings 0 · cargo fmt --check green · pnpm typecheck/build green. bindings 재생성(weeklyReview/WeeklyReview/DebtPoint 등). **실 GUI·다일 추세 누적은 사용자 관찰**(`pnpm tauri dev` → 팔레트 "Weekly Review로").
 - **Phase 11 완료.** Today 운영 뷰 + Work Debt(11a) / Timeline 시간축 아젠다(11b) / Weekly review(11c) 3 PR. 전부 read 집계 + 기존 사람 액션 재사용 — 결정 레일 무침투, 외부 mutate 0, 로컬 상태 SSOT(debt_snapshots 신규). 정본 설계: `docs/specs/phase-11-today-timeline-weekly.md`.
+
+## Phase 12–20 — Dogfooding 정교화 (통합 ralplan, 2026-05-22, brainstorming)
+
+> 정본 설계 = `docs/specs/phase-12-20-dogfood-refinement.md`. 사용자 dogfooding 백로그(~24개)를 AskUserQuestion으로 9 Phase 분할. 아래는 핵심 결정/트레이드오프.
+
+- **통합 ralplan·병렬 파견 전제.** 9 Phase(12~20) 전부 설계(순서 무관), 사용자가 phase별 에이전트 병렬 파견 → 계획이 병렬-안전이어야 함. 핫 공유 파일(`commands.rs` 3500줄·`query.ts`·`lib.rs`·`store.ts`·`App.tsx`·`styles.css`) 충돌 회피가 최대 제약.
+- **prep refactor 먼저(확정).** Phase 12a MISMATCH 전체 제거(표면 축소) → 12b `commands.rs`/`query.ts` 도메인 모듈 분리(행위 무변경 리팩터, feature와 안 섞음 = AGENTS.md 준수)를 dev에 머지한 뒤에야 13~20 병렬 안전. wave: 0(12a→12b) → 1(13·14·15·17·19·12c·12d) → 2(16·20, 13 의존) → 3(18 단독).
+- **MISMATCH 폐기(사용자 결정).** Phase 6 mismatch 감지 기능 전체 삭제(코드/UI/신호/`notion_done_statuses`·`snapshot` 컬럼 마이그레이션). `notion_backlog_db_id`는 Phase 3 승격에서 쓰므로 유지. 트레이드오프: Phase 6 차별점 포기 — 사용자가 dogfooding에서 가치 대비 노이즈로 판단.
+- **트레이 상주 스파인(신규 foundational Phase 13).** 루틴 알림 "트레이 상주" 선택 → 단일창 토글 앱을 메뉴바 상주+백그라운드 스케줄러로 전환. 이 스파인이 루틴 알림(6)·CI 알림(17)·에이전트 바 라이브(16)를 함께 받침. 스케줄러는 bounded tick(busy-loop 금지 #5), 다음 발사 SQLite 영속.
+- **Auth = CLI 토큰 import(확정).** `gh auth token`/ntn 토큰을 keychain에 import, 기존 octocrab/reqwest+keychain invariant 유지. 미로그인 시 앱 버튼 `gh auth login --web`. 미확정: ntn 비대화식 토큰 추출 가능 여부(불가 시 paste fallback). 키체인 매번-프롬프트는 안정 코드서명으로 해결(ACL 영속). 폴더 picker=`tauri-plugin-dialog`.
+- **inbox 제안 전체실행 = 단일 배치 잡.** 모든 미분류를 한 codex 호출로 enrich(JSON 배열·부분 실패 격리), suggested-only(자동 분류 0 #1), Acceptance 게이트 유지. 트레이드오프: 비용↓속도↑ vs 카드별 독립 격리 포기.
+- **회고 = 전용 뷰 + impact/regret 컬럼.** `view:"retro"`, `signals.impact_high`/`regret` 마이그레이션. 보류=snooze 재사용(새 status 없음). 루틴 격주/월간=날짜 기준(월말 클램프).
+- **worktree 변경중=둘 다(live dirty+활성 변경), dev rebase=안전 모드**(fetch→dirty 거부→백업 ref→충돌 abort+복구→diff 검수). 사용자 worktree 대상이나 명시 버튼+가드 = INVARIANT #6(에이전트 격리)와 별개.
+- **Calendar=쓰기(생성)+읽기, 직접 모달.** scope events 업그레이드(재동의), 카드→직접 Google 폼 모달→write. acceptance 대기 제거 — **사용자 폼=사람 결정**이므로 #2(자동화 게이트)와 정합(게이트는 Codex 출력용이지 사람 액션용이 아님).
+- **CI 봇=Actions 훅→앱 알림, 자동 triage 없음.** 1차=기존 GitHub 폴링 감지→네이티브 알림+Q1 escalate(결정은 사람 #1). 보강 채널 ntfy.sh(무계정) 권장은 리뷰에서 확정. notify 캡(#5).
+- **Hermes=실제 메신저 브리지.** Telegram Bot API류로 외부 Hermes 송수신 제어(봇 토큰/chat keychain, bounded getUpdates). 글로벌 에이전트 바=모든 뷰 상단 stacked·경과 비례 진행. 스킬 관리=인앱 프롬프트+외부 Claude/Codex 스킬 공유 레지스트리. 자동화는 여전히 제안 레일+Acceptance(#1/#2).
