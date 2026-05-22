@@ -21,6 +21,8 @@ logs
 
 # Claude Code machine-local settings (permissions allowlist, not shared)
 .claude/settings.local.json
+# OMC agent worktrees (machine-local, not shared)
+.claude/worktrees/
 
 # editor / OS
 .DS_Store
