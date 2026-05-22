@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   CalendarClock,
   CalendarRange,
+  History,
   FolderPlus,
   GitBranchPlus,
   GitCompare,
@@ -72,6 +73,13 @@ export function CommandPalette() {
               >
                 <CalendarRange className="size-4 text-wr-subtle" />
                 <span>Weekly Review로</span>
+              </CommandItem>
+              <CommandItem
+                value="retro 회고 완료 임팩트 보관함 archive 복원 regret"
+                onSelect={() => goTo("retro")}
+              >
+                <History className="size-4 text-wr-subtle" />
+                <span>회고 / 보관함으로</span>
               </CommandItem>
               <CommandItem
                 value="pr radar github 레이더 풀리퀘스트"

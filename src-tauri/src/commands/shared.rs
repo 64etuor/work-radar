@@ -4,7 +4,7 @@
 pub(crate) const SIGNAL_COLS: &str =
     "id, project_id, title, body, source, type, quadrant, suggested_quadrant, \
      kind, area, suggested_area, status, snooze_until, today_for_date, today_done_at, today_rank, \
-     created_at, updated_at";
+     impact_high, regret, created_at, updated_at";
 
 #[cfg(test)]
 pub(crate) mod test_support {

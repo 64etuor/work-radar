@@ -6,6 +6,7 @@ export type View =
   | "today"
   | "timeline"
   | "weekly"
+  | "retro"
   | "settings"
   | "radar"
   | "worktree"

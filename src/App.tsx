@@ -5,6 +5,7 @@ import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
 import { JobsView } from "@/components/JobsView";
 import { PrRadarView } from "@/components/PrRadarView";
+import { RetroView } from "@/components/RetroView";
 import { SettingsView } from "@/components/SettingsView";
 import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
@@ -46,6 +47,7 @@ export default function App() {
           view === "today" ||
           view === "timeline" ||
           view === "weekly" ||
+          view === "retro" ||
           view === "radar" ||
           view === "worktree" ||
           view === "jobs"
@@ -70,6 +72,8 @@ export default function App() {
         <TimelineView />
       ) : view === "weekly" ? (
         <WeeklyView />
+      ) : view === "retro" ? (
+        <RetroView />
       ) : view === "radar" ? (
         <PrRadarView />
       ) : view === "worktree" ? (

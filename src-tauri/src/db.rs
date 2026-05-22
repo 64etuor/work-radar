@@ -275,6 +275,44 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    /// Phase 17 마이그레이션(0010): signals.impact_high/regret 컬럼 + bool(0/1) write/read.
+    #[tokio::test]
+    async fn migration_0010_adds_retro_tags() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let cols: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('signals') WHERE name IN ('impact_high','regret') ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query signals columns failed");
+        assert_eq!(
+            cols.len(),
+            2,
+            "expected impact_high + regret from 0010, got {cols:?}"
+        );
+
+        // 기존 행은 NULL(미태깅)로 진입, 사람이 1/0으로 태깅한다(INVARIANT #1).
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, today_done_at, impact_high) \
+             VALUES ('rt1', '회고 항목', 'braindump', 'thought', '2026-05-22', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert with retro tag failed");
+        let (impact, regret): (Option<i64>, Option<i64>) =
+            sqlx::query_as("SELECT impact_high, regret FROM signals WHERE id='rt1'")
+                .fetch_one(&pool)
+                .await
+                .expect("read retro tags failed");
+        assert_eq!(impact, Some(1), "고임팩트 태그 1");
+        assert_eq!(regret, None, "미태깅은 NULL");
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
     #[tokio::test]
     async fn list_projects_returns_empty_on_fresh_db() {
         let path = temp_db_path();

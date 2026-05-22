@@ -245,6 +245,10 @@ pub struct WorkSignal {
     /// Today 완료 체크한 날(YYYY-MM-DD).
     pub today_done_at: Option<String>,
     pub today_rank: Option<i32>,
+    /// 회고 태그: 고임팩트(사람 태깅, Phase 17). NULL/false=미태깅, true=고임팩트 ⭐. INVARIANT #1.
+    pub impact_high: Option<bool>,
+    /// 회고 태그: 하지말걸(사람 태깅, Phase 17). NULL/false=미태깅, true=후회 ⚠️. INVARIANT #1.
+    pub regret: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
 }

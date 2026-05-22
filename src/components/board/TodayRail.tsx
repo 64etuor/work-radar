@@ -7,6 +7,7 @@ import {
   type ZoneKey,
 } from "@/components/board/board-utils";
 import { ageFromForDate, isTodayDone, localToday } from "@/lib/query";
+import { useListReorder } from "@/lib/useListReorder";
 
 type Props = {
   items: WorkSignal[];
@@ -23,19 +24,15 @@ const Q_BADGE: Record<Exclude<ZoneKey, "unclassified">, string> = {
   q4: "Q4",
 };
 
-/** 우측 상단 Today 레일 — 오늘 집중 항목 큐레이션. */
+/** 우측 상단 Today 레일 — 오늘 집중 항목 큐레이션. 드래그 핸들(⠿)로 재정렬(공용 dnd, spec §1.C). */
 export function TodayRail({ items, panelRef, onToggleDone, onUnpromote, onReorder }: Props) {
   const today = localToday();
   const d = new Date();
   const dateLabel = `${d.getMonth() + 1}/${d.getDate()} 오늘`;
-
-  const move = (index: number, dir: -1 | 1) => {
-    const next = index + dir;
-    if (next < 0 || next >= items.length) return;
-    const ids = items.map((s) => s.id);
-    [ids[index], ids[next]] = [ids[next], ids[index]];
-    onReorder(ids);
-  };
+  const dnd = useListReorder(
+    items.map((s) => s.id),
+    onReorder,
+  );
 
   return (
     <div className="panelbox" data-drop="today" ref={panelRef}>
@@ -47,12 +44,15 @@ export function TodayRail({ items, panelRef, onToggleDone, onUnpromote, onReorde
         {items.length === 0 ? (
           <div className="empty">매트릭스 카드를 여기로 드래그하거나 ⋯ → Today 추가</div>
         ) : (
-          items.map((s, i) => {
+          items.map((s) => {
             const done = isTodayDone(s, today);
             const zone = quadrantToZone(s.quadrant);
             const age = s.todayForDate ? ageFromForDate(s.todayForDate) : 1;
             return (
-              <div key={s.id} className={`item${done ? " done" : ""}`}>
+              <div key={s.id} className={`item${done ? " done" : ""}`} {...dnd.itemProps(s.id)}>
+                <span className="grip" title="드래그로 정렬" {...dnd.handleProps(s.id)}>
+                  ⠿
+                </span>
                 <div
                   className="cb-check"
                   role="checkbox"
@@ -72,24 +72,6 @@ export function TodayRail({ items, panelRef, onToggleDone, onUnpromote, onReorde
                       <span className={`b-tag ${kindChipClass(s.kind)}`}>{kindLabel(s.kind)}</span>
                     )}
                   </div>
-                </div>
-                <div className="reorder">
-                  <button
-                    type="button"
-                    title="위로"
-                    disabled={i === 0}
-                    onClick={() => move(i, -1)}
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    title="아래로"
-                    disabled={i === items.length - 1}
-                    onClick={() => move(i, 1)}
-                  >
-                    ▼
-                  </button>
                 </div>
                 <button
                   type="button"

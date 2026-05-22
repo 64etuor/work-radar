@@ -68,6 +68,12 @@ export const commands = {
 	todayOverview: (date: string) => typedError<TodayOverview, string>(__TAURI_INVOKE("today_overview", { date })),
 	/**  지난 7일 주간 회고 집계. `end_date`=프런트가 보내는 로컬 오늘. */
 	weeklyReview: (endDate: string) => typedError<WeeklyReview, string>(__TAURI_INVOKE("weekly_review", { endDate })),
+	/**  완료 todo 타임라인. `start`/`end`는 프런트가 보내는 로컬 날짜(YYYY-MM-DD) inclusive. */
+	listCompleted: (start: string, end: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_completed", { start, end })),
+	setSignalImpact: (id: string, value: boolean) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_impact", { id, value })),
+	setSignalRegret: (id: string, value: boolean) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_regret", { id, value })),
+	listArchivedSnoozed: () => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_archived_snoozed")),
+	restoreSignal: (id: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("restore_signal", { id })),
 	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, string>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
 	/**  카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2). */
 	promoteToNotion: (signalId: string, target: PromotionTarget) => typedError<PromotionOutcome, string>(__TAURI_INVOKE("promote_to_notion", { signalId, target })),
@@ -838,6 +844,10 @@ export type WorkSignal = {
 	/**  Today 완료 체크한 날(YYYY-MM-DD). */
 	todayDoneAt: string | null,
 	todayRank: number | null,
+	/**  회고 태그: 고임팩트(사람 태깅, Phase 17). NULL/false=미태깅, true=고임팩트 ⭐. INVARIANT #1. */
+	impactHigh: boolean | null,
+	/**  회고 태그: 하지말걸(사람 태깅, Phase 17). NULL/false=미태깅, true=후회 ⚠️. INVARIANT #1. */
+	regret: boolean | null,
 	createdAt: string,
 	updatedAt: string,
 };

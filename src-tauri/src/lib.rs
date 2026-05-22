@@ -64,6 +64,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::today_overview,
         // Weekly review (Phase 11c).
         commands::weekly_review,
+        // 회고 + 보관함 (Phase 17, 로컬 read + 사람 태깅).
+        commands::list_completed,
+        commands::set_signal_impact,
+        commands::set_signal_regret,
+        commands::list_archived_snoozed,
+        commands::restore_signal,
         // 외부 승격 draft (Acceptance 게이트) + Notion write 레일 (Phase 3).
         commands::create_promotion_draft,
         commands::promote_to_notion,
