@@ -11,12 +11,13 @@
 //! github.rs는 자체 `GithubError`를 소유한다(notion.rs와 비공유) — GitHub은 rate limit(~5000/h +
 //! secondary)·Retry-After·X-RateLimit-Reset 등 Notion과 다른 재시도 관심사를 가지므로 모듈별로 분리.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use octocrab::params::repos::Commitish;
 use octocrab::Octocrab;
 
 use crate::models::CiStatus;
+use crate::retry::{with_retry, Retryable};
 
 /// 한 fetch 시도 내 재시도 횟수 캡 (INVARIANT #5: 무한 retry 금지).
 const MAX_ATTEMPTS: u32 = 3;
@@ -38,6 +39,12 @@ pub enum GithubError {
     Transient(String),
     #[error("{0}")]
     Terminal(String),
+}
+
+impl Retryable for GithubError {
+    fn is_retryable(&self) -> bool {
+        matches!(self, GithubError::Transient(_))
+    }
 }
 
 /// PR의 머지 상태 (provider 출력, 내부 전용 — export 아님). unmerged-closed는 provider가 거른다.
@@ -121,43 +128,6 @@ fn classify_octocrab(e: &octocrab::Error) -> GithubError {
         }
         // 디코드/URL/인코딩 등은 재시도해도 동일 → terminal.
         _ => GithubError::Terminal(e.to_string()),
-    }
-}
-
-/// base_delay 기반 소량 jitter(0..base). rand 의존성 없이 시스템 클록 nanos에서 파생한다.
-fn jitter(base: Duration) -> Duration {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0);
-    base.mul_f64((nanos % 997) as f64 / 997.0)
-}
-
-/// bounded retry (INVARIANT #5): Terminal은 즉시 반환(재시도 0), Transient만 backoff+jitter 후
-/// 재시도하며 max_attempts 소진 시 마지막 Transient를 노출한다. base_delay는 테스트 고속화용 인자.
-pub async fn with_retry<T, F, Fut>(
-    max_attempts: u32,
-    base_delay: Duration,
-    mut op: F,
-) -> Result<T, GithubError>
-where
-    F: FnMut(u32) -> Fut,
-    Fut: std::future::Future<Output = Result<T, GithubError>>,
-{
-    let mut attempt = 0u32;
-    loop {
-        match op(attempt).await {
-            Ok(v) => return Ok(v),
-            Err(GithubError::Terminal(m)) => return Err(GithubError::Terminal(m)),
-            Err(GithubError::Transient(m)) => {
-                attempt += 1;
-                if attempt >= max_attempts {
-                    return Err(GithubError::Transient(m));
-                }
-                let backoff = base_delay.saturating_mul(2u32.saturating_pow(attempt - 1));
-                tokio::time::sleep(backoff + jitter(base_delay)).await;
-            }
-        }
     }
 }
 

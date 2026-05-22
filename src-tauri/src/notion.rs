@@ -11,9 +11,11 @@
 //! fake writer로 lifecycle을, `with_retry`/분류/속성발견은 순수 로직으로 검증한다(실 네트워크 없음).
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
+
+use crate::retry::{with_retry, Retryable};
 
 const NOTION_BASE: &str = "https://api.notion.com/v1";
 const NOTION_VERSION: &str = "2022-06-28";
@@ -43,6 +45,12 @@ pub enum NotionError {
     /// 403: 통합 권한 부족.
     #[error("{0}")]
     Forbidden(String),
+}
+
+impl Retryable for NotionError {
+    fn is_retryable(&self) -> bool {
+        matches!(self, NotionError::Transient(_))
+    }
 }
 
 /// 생성된 Notion 페이지. url은 "Notion에서 열기" 딥링크에 쓰인다.
@@ -95,46 +103,6 @@ fn classify_reqwest(e: &reqwest::Error) -> NotionError {
     } else {
         // connect/timeout/request 등 네트워크 계열 → 재시도/큐잉.
         NotionError::Transient(e.to_string())
-    }
-}
-
-/// base_delay 기반 소량 jitter(0..base). rand 의존성 없이 시스템 클록 nanos에서 파생한다.
-fn jitter(base: Duration) -> Duration {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0);
-    base.mul_f64((nanos % 997) as f64 / 997.0)
-}
-
-/// bounded retry (INVARIANT #5): Terminal은 즉시 반환(재시도 0), Transient만 backoff+jitter 후
-/// 재시도하며 max_attempts 소진 시 마지막 Transient를 노출한다. base_delay는 테스트 고속화용 인자.
-pub async fn with_retry<T, F, Fut>(
-    max_attempts: u32,
-    base_delay: Duration,
-    mut op: F,
-) -> Result<T, NotionError>
-where
-    F: FnMut(u32) -> Fut,
-    Fut: std::future::Future<Output = Result<T, NotionError>>,
-{
-    let mut attempt = 0u32;
-    loop {
-        match op(attempt).await {
-            Ok(v) => return Ok(v),
-            // Non-retryable: 즉시 반환.
-            Err(NotionError::Terminal(m)) => return Err(NotionError::Terminal(m)),
-            Err(NotionError::NotFound(m)) => return Err(NotionError::NotFound(m)),
-            Err(NotionError::Forbidden(m)) => return Err(NotionError::Forbidden(m)),
-            Err(NotionError::Transient(m)) => {
-                attempt += 1;
-                if attempt >= max_attempts {
-                    return Err(NotionError::Transient(m));
-                }
-                let backoff = base_delay.saturating_mul(2u32.saturating_pow(attempt - 1));
-                tokio::time::sleep(backoff + jitter(base_delay)).await;
-            }
-        }
     }
 }
 

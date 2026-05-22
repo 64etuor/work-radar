@@ -25,6 +25,7 @@ mod logging;
 mod messenger;
 mod models;
 mod notion;
+mod retry;
 mod scheduler;
 mod shortcut;
 mod tray;

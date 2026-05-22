@@ -18,13 +18,14 @@
 //! calendar.rs는 자체 `CalendarError`를 소유한다(notion/github와 비공유) — Google OAuth/Calendar는
 //! 자체 토큰 엔드포인트·refresh 흐름·재시도 관심사를 가지므로 모듈별로 분리(선례: github≠notion).
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::models::CalendarEvent;
+use crate::retry::{with_retry, Retryable};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 /// 한 토큰 교환/갱신 시도 내 재시도 횟수 캡 (INVARIANT #5: 무한 retry 금지).
@@ -66,6 +67,12 @@ pub enum CalendarError {
     ReconnectRequired(String),
 }
 
+impl Retryable for CalendarError {
+    fn is_retryable(&self) -> bool {
+        matches!(self, CalendarError::Transient(_))
+    }
+}
+
 /// HTTP 상태코드 → 분류. 429/5xx는 일시적, 그 외 4xx는 영구.
 fn classify_http(status: u16, body: &str) -> CalendarError {
     let snippet: String = body.chars().take(300).collect();
@@ -82,46 +89,6 @@ fn classify_reqwest(e: &reqwest::Error) -> CalendarError {
         CalendarError::Terminal(format!("decode error: {e}"))
     } else {
         CalendarError::Transient(e.to_string())
-    }
-}
-
-/// base_delay 기반 소량 jitter(0..base). rand 의존성 없이 시스템 클록 nanos에서 파생한다.
-fn jitter(base: Duration) -> Duration {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0);
-    base.mul_f64((nanos % 997) as f64 / 997.0)
-}
-
-/// bounded retry (INVARIANT #5): Terminal은 즉시 반환(재시도 0), Transient만 backoff+jitter 후
-/// 재시도하며 max_attempts 소진 시 마지막 Transient를 노출한다. base_delay는 테스트 고속화용 인자.
-pub async fn with_retry<T, F, Fut>(
-    max_attempts: u32,
-    base_delay: Duration,
-    mut op: F,
-) -> Result<T, CalendarError>
-where
-    F: FnMut(u32) -> Fut,
-    Fut: std::future::Future<Output = Result<T, CalendarError>>,
-{
-    let mut attempt = 0u32;
-    loop {
-        match op(attempt).await {
-            Ok(v) => return Ok(v),
-            Err(CalendarError::Terminal(m)) => return Err(CalendarError::Terminal(m)),
-            Err(CalendarError::ReconnectRequired(m)) => {
-                return Err(CalendarError::ReconnectRequired(m))
-            }
-            Err(CalendarError::Transient(m)) => {
-                attempt += 1;
-                if attempt >= max_attempts {
-                    return Err(CalendarError::Transient(m));
-                }
-                let backoff = base_delay.saturating_mul(2u32.saturating_pow(attempt - 1));
-                tokio::time::sleep(backoff + jitter(base_delay)).await;
-            }
-        }
     }
 }
 
