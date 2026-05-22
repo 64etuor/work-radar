@@ -3992,6 +3992,58 @@
   min-width: 14px;
   text-align: right;
 }
+/* B1: kind 라벨 + engine 아이콘 (가장 최근 active 잡). */
+.asb .asb-kind-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 500 10px var(--font-sans);
+  color: var(--color-wr-muted);
+  flex: 0 0 auto;
+  max-width: 140px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* B1: engine 아이콘 오버레이 — 세그먼트 위 중앙. */
+.asb .asb-seg-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  z-index: 1;
+}
+/* B1: asb-row — agent 버튼 + cmux 칩을 나란히 놓는 flex 래퍼. */
+.asb-row {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 100%;
+}
+/* B1: .asb 가 asb-row 안에 있으면 flex:1로 남은 공간 채움. */
+.asb-row .asb {
+  flex: 1 1 auto;
+  width: auto;
+}
+/* B1: cmux 워크스페이스 칩 — 표시 전용(INVARIANT #1). 오른쪽 끝, 작고 절제됨. */
+.asb-cmux-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  height: 100%;
+  font: 500 10px var(--font-mono);
+  color: var(--color-wr-subtle);
+  border-left: 1px solid var(--color-wr-border);
+  background: var(--color-wr-elevated);
+  white-space: nowrap;
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
 
 /* ── Hermes 메신저 브리지 제어 surface (Phase 20 #15) ───────────────────────────── */
 .hermes {

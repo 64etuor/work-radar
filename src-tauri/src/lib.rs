@@ -172,6 +172,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_path,
+        // cmux 워크스페이스 상태 (B1, best-effort 표시 전용 — INVARIANT #1: 결정 레일 미사용).
+        commands::cmux_status,
     ])
 }
 

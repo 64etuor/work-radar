@@ -1,28 +1,33 @@
 import { useEffect, useState } from "react";
+import {
+  LayoutGrid,
+  MessageCircle,
+  Send,
+  Sparkles,
+  SquareTerminal,
+} from "lucide-react";
 
-import type { AgentRunView, AgentStatus } from "@/bindings";
+import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
 import { useAgentRuns } from "@/lib/query";
+import { useCmuxStatus } from "@/lib/query/cmux";
 import { useUIStore } from "@/store";
 
 /**
- * 글로벌 에이전트 상태 바 (Phase 20 #16) — 모든 뷰 상단에 상주하는 얇은 스트립.
+ * 글로벌 에이전트 상태 바 (Phase 20 #16 / B1 redesign) — 모든 뷰 상단에 상주하는 얇은 스트립.
  *
- * 모든 AI 작업(codex 잡·배치 enrich·CI triage·향후 Hermes)을 한 곳에 stacked 세그먼트로 집계한다.
- * 상태별 색(running/awaiting_approval/failed/succeeded)으로 구분하고, 실행 중 세그먼트는
- * **경과/timeout 비율**로 진행을 표시한다(codex는 실 % 없음 → started_at + timeout_sec 프록시).
- * 클릭 → Jobs 뷰. 활성 잡이 없으면 최소 스트립으로 축소(DESIGN.md: UI를 지배하지 않음).
+ * - 활성 잡: engine 아이콘 + kind 라벨 + elapsed 진행 fill + growing min-width.
+ * - 유휴: "idle" 텍스트.
+ * - cmux 칩: SEPARATE, best-effort, 표시 전용(INVARIANT #1 — 결정 레일 미사용).
  *
- * 폴링은 기존 `useAgentRuns`만 재사용한다(활성 잡이 있을 때만 2s 폴링 — 새 폴 도입 없음).
+ * 폴링: `useAgentRuns`(활성 잡 시 2s), `useCmuxStatus`(15s 느린 별도 폴).
  */
 
-/** 세그먼트로 표시할 최근 잡 최대 개수(바가 과밀해지지 않게 bound). */
 const MAX_SEGMENTS = 12;
 
 function isActive(s: AgentStatus): boolean {
   return s === "running" || s === "proposed" || s === "awaiting_approval";
 }
 
-/** 상태 → 세그먼트 색 클래스 + 사람이 읽을 라벨(tooltip). */
 const SEG: Record<AgentStatus, { cls: string; label: string }> = {
   proposed: { cls: "asb-seg-proposed", label: "큐 대기" },
   running: { cls: "asb-seg-running", label: "실행 중" },
@@ -32,19 +37,43 @@ const SEG: Record<AgentStatus, { cls: string; label: string }> = {
   cancelled: { cls: "asb-seg-cancelled", label: "취소됨" },
 };
 
-/** SQLite UTC datetime('YYYY-MM-DD HH:MM:SS')을 epoch ms로(타임존 마커 없음 → UTC로 해석). */
+/** engine → lucide 아이콘 컴포넌트. hermes: icon mapped but hermes 잡은 현재 agent_runs에 없음. */
+function EngineIcon({ engine, size = 10 }: { engine: Engine; size?: number }) {
+  switch (engine) {
+    case "codex":
+      return <SquareTerminal size={size} />;
+    case "hermes":
+      return <Send size={size} />;
+    case "claude":
+      return <Sparkles size={size} />;
+    default:
+      return <MessageCircle size={size} />;
+  }
+}
+
+/** SQLite UTC datetime('YYYY-MM-DD HH:MM:SS') → epoch ms. */
 function parseUtcMs(s: string | null): number | null {
   if (!s) return null;
   const ms = Date.parse(`${s.replace(" ", "T")}Z`);
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** 실행 중 잡의 경과/timeout 진행률(0~1). started_at 없거나 파싱 실패면 0. */
+/** 실행 중 잡의 경과/timeout 진행률(0~1). */
 function elapsedRatio(run: AgentRunView, nowMs: number): number {
   const started = parseUtcMs(run.startedAt);
   if (started == null || run.timeoutSec <= 0) return 0;
   const elapsedSec = (nowMs - started) / 1000;
   return Math.max(0, Math.min(1, elapsedSec / run.timeoutSec));
+}
+
+/**
+ * running 세그먼트의 성장 min-width: elapsedRatio가 올라갈수록 6px → 28px.
+ * 세그먼트가 시각적으로 커지며 진행을 암시. MAX_SEGMENTS bound 내에서만.
+ */
+function growingMinWidth(ratio: number): number {
+  const MIN_PX = 6;
+  const MAX_PX = 28;
+  return Math.round(MIN_PX + ratio * (MAX_PX - MIN_PX));
 }
 
 export function AgentStatusBar() {
@@ -55,7 +84,7 @@ export function AgentStatusBar() {
   const active = list.filter((r) => isActive(r.status));
   const hasActive = active.length > 0;
 
-  // 활성 잡이 있는 동안만 진행률 애니메이션용 시계를 1s 간격으로 틱(폴링과 별개의 UI 시계).
+  // 진행률 애니메이션용 1s UI 시계 (활성 잡이 있을 때만).
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (!hasActive) return;
@@ -63,57 +92,109 @@ export function AgentStatusBar() {
     return () => clearInterval(id);
   }, [hasActive]);
 
-  // 표시 세그먼트: 활성 + 최근 잡(최신순, bound). list는 created_at DESC 정렬.
+  // 표시 세그먼트: 최근 잡 bound (list는 created_at DESC 정렬).
   const segments = list.slice(0, MAX_SEGMENTS);
 
+  // 가장 최근 active 잡 — kind 라벨 표시 대상.
+  const latestActive = active[0] ?? null;
+
+  // cmux best-effort 상태 (INVARIANT #1: 표시 전용, 결정 레일 미사용).
+  const cmux = useCmuxStatus();
+  const cmuxData = cmux.data;
+  const showCmux =
+    cmuxData?.available === true && cmuxData.workspaces.length > 0;
+  const cmuxTooltip = showCmux
+    ? cmuxData!.workspaces
+        .map((w) => `${w.selected ? "▶ " : "  "}${w.title} (${w.reference})`)
+        .join("\n")
+    : undefined;
+
   if (segments.length === 0) {
-    // 잡이 전혀 없으면 최소 스트립(UI 비지배).
     return (
-      <button
-        type="button"
-        className="asb asb-idle"
-        onClick={() => goTo("jobs")}
-        title="Agent Jobs 열기"
-      >
-        <span className="asb-label">Agent</span>
-        <span className="asb-idle-text">유휴</span>
-      </button>
+      <div className="asb-row">
+        <button
+          type="button"
+          className="asb asb-idle"
+          onClick={() => goTo("jobs")}
+          title="Agent Jobs 열기"
+        >
+          <span className="asb-label">Agent</span>
+          <span className="asb-idle-text">idle</span>
+        </button>
+        {showCmux && (
+          <CmuxChip count={cmuxData!.workspaces.length} tooltip={cmuxTooltip!} />
+        )}
+      </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      className={`asb${hasActive ? " asb-busy" : ""}`}
-      onClick={() => goTo("jobs")}
-      title={
-        hasActive
-          ? `${active.length}개 실행/대기 중 — Jobs 열기`
-          : "Agent Jobs 열기"
-      }
-    >
-      <span className="asb-label">Agent</span>
-      <span className="asb-track">
-        {segments.map((run) => {
-          const seg = SEG[run.status];
-          const ratio = run.status === "running" ? elapsedRatio(run, nowMs) : 0;
-          return (
-            <span
-              key={run.id}
-              className={`asb-seg ${seg.cls}`}
-              title={`${run.kind} · ${seg.label}`}
-            >
-              {run.status === "running" && (
-                <span
-                  className="asb-seg-fill"
-                  style={{ width: `${Math.round(ratio * 100)}%` }}
-                />
-              )}
-            </span>
-          );
-        })}
-      </span>
-      {hasActive && <span className="asb-count">{active.length}</span>}
-    </button>
+    <div className="asb-row">
+      <button
+        type="button"
+        className={`asb${hasActive ? " asb-busy" : ""}`}
+        onClick={() => goTo("jobs")}
+        title={
+          hasActive
+            ? `${active.length}개 실행/대기 중 — Jobs 열기`
+            : "Agent Jobs 열기"
+        }
+      >
+        <span className="asb-label">Agent</span>
+
+        {/* 가장 최근 active 잡의 kind 라벨 + engine 아이콘 */}
+        {latestActive && (
+          <span className="asb-kind-label">
+            <EngineIcon engine={latestActive.engine} size={10} />
+            <span>{latestActive.kind} 실행 중</span>
+          </span>
+        )}
+
+        <span className="asb-track">
+          {segments.map((run) => {
+            const seg = SEG[run.status];
+            const ratio =
+              run.status === "running" ? elapsedRatio(run, nowMs) : 0;
+            const minW =
+              run.status === "running" ? growingMinWidth(ratio) : undefined;
+            return (
+              <span
+                key={run.id}
+                className={`asb-seg ${seg.cls}`}
+                style={minW !== undefined ? { minWidth: minW } : undefined}
+                title={`${run.engine} · ${run.kind} · ${seg.label}`}
+              >
+                {/* engine icon overlay on each segment */}
+                <span className="asb-seg-icon">
+                  <EngineIcon engine={run.engine} size={8} />
+                </span>
+                {run.status === "running" && (
+                  <span
+                    className="asb-seg-fill"
+                    style={{ width: `${Math.round(ratio * 100)}%` }}
+                  />
+                )}
+              </span>
+            );
+          })}
+        </span>
+        {hasActive && <span className="asb-count">{active.length}</span>}
+      </button>
+
+      {/* cmux 칩: 별도 컴포넌트, 표시 전용 (INVARIANT #1). */}
+      {showCmux && (
+        <CmuxChip count={cmuxData!.workspaces.length} tooltip={cmuxTooltip!} />
+      )}
+    </div>
+  );
+}
+
+/** cmux 워크스페이스 표시 칩. 표시 전용 — 어떤 결정 입력에도 사용하지 않음(INVARIANT #1). */
+function CmuxChip({ count, tooltip }: { count: number; tooltip: string }) {
+  return (
+    <span className="asb-cmux-chip" title={tooltip}>
+      <LayoutGrid size={10} />
+      <span>cmux {count}</span>
+    </span>
   );
 }

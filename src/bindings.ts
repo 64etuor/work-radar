@@ -364,6 +364,11 @@ export const commands = {
 	logAppError: (scope: string, message: string, traceId: string) => typedError<null, string>(__TAURI_INVOKE("log_app_error", { scope, message, traceId })),
 	/**  errors.log 파일 경로를 반환한다 (설정 화면 표시용). */
 	appLogPath: () => typedError<string, string>(__TAURI_INVOKE("app_log_path")),
+	/**
+	 *  cmux 워크스페이스 상태 조회 (best-effort, 표시 전용).
+	 *  바이너리 부재·타임아웃·비-0 종료 → Ok(available:false, []) — 절대 Err 아님.
+	 */
+	cmuxStatus: () => typedError<CmuxStatus, string>(__TAURI_INVOKE("cmux_status")),
 };
 
 /* Types */
@@ -516,6 +521,17 @@ export type CliToolStatus = {
 	loggedIn: boolean,
 	/**  사람이 읽을 상태 상세 (토큰 본문 미포함). */
 	detail: string,
+};
+
+export type CmuxStatus = {
+	available: boolean,
+	workspaces: CmuxWorkspace[],
+};
+
+export type CmuxWorkspace = {
+	reference: string,
+	title: string,
+	selected: boolean,
 };
 
 /**  codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성). */
