@@ -15,6 +15,18 @@
 - **FTS5**: signals 본문/제목 대상 external-content 가상 테이블 + insert/delete/update 동기화 트리거. libsqlite3-sys bundled가 FTS5 포함.
 - **keychain 모듈은 Phase 0에서 `#[allow(dead_code)]`**: 계약/모듈만 세우고 호출부는 Phase 2(Add Project)에서 연결.
 
+## 품질 후속 (cross-cutting, 2026-05-22)
+
+리뷰(아키텍처/코드/문서 3축) ROI 우선순위 액션을 dev에 순차 반영. 각 항목 feature 브랜치 → clippy/test/build 검증 → ff-merge로, dev는 항상 green만 수령(병렬 worktree 오염 회피).
+
+- **SQLite WAL + busy_timeout(5s) + synchronous=Normal** (`db.rs`): 풀(max 5) + 30초 스케줄러 백그라운드 writer 동시 쓰기에서 기본 rollback 저널의 즉시 `SQLITE_BUSY`를 제거. 트레이드오프: WAL는 `-wal`/`-shm` 파일 생성, synchronous=Normal은 크래시 시 마지막 트랜잭션만 손실 가능(로컬 상태 DB라 수용). PRAGMA 적용 검증 테스트 추가.
+- **도메인 에러 6종 thiserror derive 전환**: 수동 `Display`/`Error` impl 12블록 제거(−52 LOC). `AppError` From은 variant 구조만 의존 → 무영향, Display 문자열 보존(동작 동일).
+- **`with_retry`/`jitter` 4벌 → 공용 `retry` 모듈 + `Retryable` 트레이트**: 재시도 가능 여부를 에러가 자기분류(INVARIANT #5 호출자 임의설정 불가 유지). 호출부·상수·테스트 무변경 + generic 단위테스트 추가.
+- **`require_awaiting()` 가드 추출**(agents accept 4경로): 경로별 에러 code는 파라미터로 보존(동작 무변경). `AppError`가 큰 envelope이라 헬퍼에 `result_large_err` 국소 allow(커맨드는 매크로로 면제됨).
+- **프런트 Vitest 도입**(node 환경, 빌드용 `vite.config.ts`와 분리한 `vitest.config.ts`): 순수 헬퍼 테스트 10개 + CI `test` 스텝. jsdom/RTL은 컴포넌트 테스트 도입 시 별도.
+- **`commands/agents.rs`(1641)·`today.rs`(908) 서브모듈 분리**: 도메인별 디렉터리 모듈(agents=spine/selfcheck/enrich/triage, today=rail/overview/weekly). `pub use`로 `commands::*` 경로·`bindings.ts` 무변경(IPC 표면 동일 = 행위 보존 증명). 공유 게이트 헬퍼는 `mod.rs`(submodule이 `super::`로 접근). critic ACCEPT(INVARIANT #1/#2/#5 보존 확인).
+- **문서 정합성**: README 전면 재작성(Phase 0-20·코드·remote 반영), 위 "하네스 보강" 항목의 미적용 게이트 정정, `architecture.md` 모듈 맵 §9 + RPITIT 노트.
+
 ## 하네스 / 디자인 (cross-cutting, 2026-05-21)
 
 - **디자인 시스템 피봇: Raycast → Cohere(white editorial).** 시각 디자인 정본을 루트 `DESIGN.md`로 이전(Cohere 스타일: white canvas, monumental type, pill CTA, 8/22px 라운드, coral/blue 악센트). 이전 Raycast 다크 방향은 `docs/archive/design-raycast.md`로 보존. 단, 토큰/컴포넌트만 정본이고 웹/마케팅 전용 컴포넌트(announcement-bar·trust-logo-strip·blog-filter-chip·research-table·footer-newsletter)는 데스크톱 셸 비대상.
