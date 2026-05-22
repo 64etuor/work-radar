@@ -83,6 +83,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::test_notion_connection,
         // Routines (Phase 16: biweekly/monthly · 드래그 정렬 · 시간/알림 · 트래킹).
         commands::create_routine,
+        commands::update_routine,
+        commands::delete_routine,
         commands::list_today_routines,
         commands::toggle_routine_check,
         commands::reorder_routines,

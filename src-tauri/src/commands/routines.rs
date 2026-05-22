@@ -4,7 +4,7 @@ use tauri::State;
 use crate::db::Db;
 use crate::models::{
     CreateRoutineInput, Kind, RoutineFreq, RoutineHistoryDay, RoutineToday, RoutineTrackingItem,
-    Weekday,
+    UpdateRoutineInput, Weekday,
 };
 use crate::scheduler::utc_now_string;
 
@@ -198,6 +198,122 @@ pub async fn create_routine(
     insert_routine(db.inner(), &input)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 루틴 수정. 필드 업데이트 후 미발사 루틴 알림을 삭제(다음 list_today_routines에서 재enqueue).
+#[tauri::command]
+#[specta::specta]
+pub async fn update_routine(
+    db: State<'_, Db>,
+    input: UpdateRoutineInput,
+) -> Result<(), String> {
+    update_routine_inner(db.inner(), input).await.map_err(|e| e.to_string())
+}
+
+pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<(), sqlx::Error> {
+    let title = input.title.trim().to_string();
+    if title.is_empty() {
+        return Err(sqlx::Error::Protocol("title must not be empty".into()));
+    }
+    let weekdays_json = serde_json::to_string(&input.weekdays).unwrap_or_else(|_| "[]".into());
+
+    // biweekly/monthly는 anchor 필요 — 입력이 비면 기존 anchor 유지, 없으면 오늘로.
+    let anchor = match input.freq {
+        RoutineFreq::Biweekly | RoutineFreq::Monthly => {
+            if let Some(a) = input.anchor_date.as_ref().filter(|s| !s.trim().is_empty()) {
+                Some(a.clone())
+            } else {
+                // 기존 anchor 조회.
+                let row: Option<(Option<String>,)> =
+                    sqlx::query_as("SELECT anchor_date FROM routines WHERE id = ?1")
+                        .bind(&input.id)
+                        .fetch_optional(db)
+                        .await?;
+                match row {
+                    None => return Err(sqlx::Error::RowNotFound),
+                    Some((existing,)) => Some(existing.unwrap_or_else(local_today)),
+                }
+            }
+        }
+        RoutineFreq::Daily | RoutineFreq::Weekly => None,
+    };
+
+    let time_of_day = input.time_of_day.clone().filter(|s| !s.trim().is_empty());
+    let offset = input.reminder_offset_min.map(|v| v as i64);
+
+    let result = sqlx::query(
+        "UPDATE routines SET title=?2, freq=?3, weekdays=?4, anchor_date=?5, \
+         time_of_day=?6, reminder_offset_min=?7, area=?8, kind=?9 WHERE id=?1",
+    )
+    .bind(&input.id)
+    .bind(&title)
+    .bind(input.freq)
+    .bind(&weekdays_json)
+    .bind(&anchor)
+    .bind(&time_of_day)
+    .bind(offset)
+    .bind(input.area)
+    .bind(input.kind)
+    .execute(db)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // 미발사 루틴 알림 삭제 — 다음 list_today_routines 호출 시 새 시간으로 재enqueue됨.
+    // LIKE 패턴: 'routine:{id}:%' (발사된 rows는 보존 — 히스토리).
+    let pattern = format!("routine:{}:%", input.id);
+    sqlx::query(
+        "DELETE FROM scheduled_notifications \
+         WHERE source='routine' AND source_id LIKE ?1 AND fired_at IS NULL",
+    )
+    .bind(&pattern)
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
+/// 루틴 삭제. 트랜잭션: 미발사 알림 + routine_checks + routines 행 삭제.
+/// 발사된 알림 행(히스토리)은 보존. 루틴 없으면 오류 반환.
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_routine(db: State<'_, Db>, id: String) -> Result<(), String> {
+    delete_routine_inner(db.inner(), id).await.map_err(|e| e.to_string())
+}
+
+pub async fn delete_routine_inner(db: &Db, id: String) -> Result<(), sqlx::Error> {
+    let mut tx = db.begin().await?;
+
+    // 미발사 루틴 알림 삭제 (발사된 rows는 보존).
+    let pattern = format!("routine:{id}:%");
+    sqlx::query(
+        "DELETE FROM scheduled_notifications \
+         WHERE source='routine' AND source_id LIKE ?1 AND fired_at IS NULL",
+    )
+    .bind(&pattern)
+    .execute(&mut *tx)
+    .await?;
+
+    // routine_checks 삭제 (FK ON DELETE CASCADE로도 처리되지만 명시적으로).
+    sqlx::query("DELETE FROM routine_checks WHERE routine_id = ?1")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+
+    // 루틴 본체 삭제.
+    let result = sqlx::query("DELETE FROM routines WHERE id = ?1")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    tx.commit().await?;
+    Ok(())
 }
 
 /// 오늘 해당하는 루틴 + 날짜별 완료 상태. 신규 freq는 routine_due_on으로 계산한다.
@@ -823,6 +939,201 @@ mod tests {
             .unwrap();
         let titles: Vec<&str> = list.iter().map(|r| r.title.as_str()).collect();
         assert_eq!(titles, vec!["C", "A", "B"]);
+    }
+
+    /// update_routine: 필드 변경 후 미발사 알림 삭제, 발사된 알림은 보존.
+    #[tokio::test]
+    async fn update_routine_clears_unfired_keeps_fired() {
+        let db = fresh_db().await;
+        let r = insert_routine(
+            &db,
+            &CreateRoutineInput {
+                title: "기존 루틴".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: Some("08:00".into()),
+                reminder_offset_min: None,
+                area: None,
+                kind: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 미발사 알림 enqueue.
+        let routines = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        sync_reminders(&db, "2026-05-22", &routines).await.unwrap();
+
+        // 발사된 알림 행을 수동 삽입 (fired_at 있음).
+        let fired_source_id = format!("routine:{}:2026-05-21", r.id);
+        sqlx::query(
+            "INSERT INTO scheduled_notifications (id, fire_at, title, body, source, source_id, fired_at) \
+             VALUES (lower(hex(randomblob(16))), '2026-05-21 08:00:00', '루틴: 기존 루틴', 'test', \
+             'routine', ?1, '2026-05-21 08:00:01')",
+        )
+        .bind(&fired_source_id)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 미발사 1개, 발사 1개.
+        let (unfired,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM scheduled_notifications WHERE source='routine' AND fired_at IS NULL",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(unfired, 1);
+
+        // 루틴 수정 (제목 + 시간 변경).
+        update_routine_inner(
+            &db,
+            UpdateRoutineInput {
+                id: r.id.clone(),
+                title: "수정된 루틴".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: Some("09:00".into()),
+                reminder_offset_min: None,
+                area: None,
+                kind: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 미발사 알림 삭제됨.
+        let (unfired_after,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM scheduled_notifications WHERE source='routine' AND fired_at IS NULL",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(unfired_after, 0, "미발사 알림은 삭제됨");
+
+        // 발사된 알림은 보존됨.
+        let (fired_after,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM scheduled_notifications WHERE source='routine' AND fired_at IS NOT NULL",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(fired_after, 1, "발사된 알림은 보존됨");
+
+        // 제목 변경 확인.
+        let updated = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        assert_eq!(updated[0].title, "수정된 루틴");
+    }
+
+    /// delete_routine: 루틴 + routine_checks + 미발사 알림 삭제, 발사된 알림 보존, 다른 루틴 무손상.
+    #[tokio::test]
+    async fn delete_routine_removes_checks_and_unfired_keeps_fired_and_others() {
+        let db = fresh_db().await;
+        let r1 = insert_routine(
+            &db,
+            &CreateRoutineInput {
+                title: "삭제 대상".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: Some("07:00".into()),
+                reminder_offset_min: None,
+                area: None,
+                kind: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let r2 = insert_routine(
+            &db,
+            &CreateRoutineInput {
+                title: "다른 루틴".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: None,
+                reminder_offset_min: None,
+                area: None,
+                kind: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // r1 체크 추가.
+        toggle_check(&db, &r1.id, "2026-05-22", true).await;
+
+        // r1 미발사 알림 enqueue.
+        let routines = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        sync_reminders(&db, "2026-05-22", &routines).await.unwrap();
+
+        // r1의 발사된 알림 행 수동 삽입.
+        let fired_source_id = format!("routine:{}:2026-05-21", r1.id);
+        sqlx::query(
+            "INSERT INTO scheduled_notifications (id, fire_at, title, body, source, source_id, fired_at) \
+             VALUES (lower(hex(randomblob(16))), '2026-05-21 07:00:00', '루틴: 삭제 대상', 'test', \
+             'routine', ?1, '2026-05-21 07:00:01')",
+        )
+        .bind(&fired_source_id)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 삭제 전: r1 체크 1개, r1 미발사 1개, r1 발사 1개.
+        let (checks,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM routine_checks WHERE routine_id = ?1")
+                .bind(&r1.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(checks, 1);
+
+        // r1 삭제.
+        delete_routine_inner(&db, r1.id.clone()).await.unwrap();
+
+        // 루틴 행 삭제 확인.
+        let (r1_exists,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM routines WHERE id = ?1")
+                .bind(&r1.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(r1_exists, 0, "루틴 행 삭제됨");
+
+        // routine_checks 삭제 확인.
+        let (checks_after,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM routine_checks WHERE routine_id = ?1")
+                .bind(&r1.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(checks_after, 0, "routine_checks 삭제됨");
+
+        // 미발사 알림 삭제 확인.
+        let (unfired,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM scheduled_notifications WHERE source='routine' AND fired_at IS NULL",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(unfired, 0, "미발사 알림 삭제됨");
+
+        // 발사된 알림 보존 확인.
+        let (fired,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM scheduled_notifications WHERE source='routine' AND fired_at IS NOT NULL",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(fired, 1, "발사된 알림은 보존됨");
+
+        // 다른 루틴(r2) 무손상 확인.
+        let remaining = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, r2.id, "다른 루틴은 무손상");
     }
 
     // ── 테스트 헬퍼 (command 본문과 동일 로직, State 없이) ──────────────────────

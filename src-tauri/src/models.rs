@@ -395,6 +395,25 @@ pub struct CreateRoutineInput {
     pub kind: Option<Kind>,
 }
 
+/// 루틴 수정 입력.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateRoutineInput {
+    pub id: String,
+    pub title: String,
+    pub freq: RoutineFreq,
+    /// weekly/biweekly일 때 해당 요일들. daily/monthly면 무시.
+    pub weekdays: Vec<Weekday>,
+    /// biweekly/monthly일 때 기준일(YYYY-MM-DD). 비면 기존 anchor 유지(없으면 오늘). daily/weekly는 무시.
+    pub anchor_date: Option<String>,
+    /// 알림 시각 'HH:MM'(로컬). None=알림 없음.
+    pub time_of_day: Option<String>,
+    /// 알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32.
+    pub reminder_offset_min: Option<u32>,
+    pub area: Option<AreaTag>,
+    pub kind: Option<Kind>,
+}
+
 /// 루틴 트래킹 한 항목 (Phase 16 #12). 루틴별 이행률(%)·연속(streak)·히스토리.
 /// `routine_checks` + 스케줄 occurrence 집계 — 전부 로컬 read(자동화 아님). specta i64/u64 금지 → u32.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

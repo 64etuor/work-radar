@@ -94,6 +94,13 @@ export const commands = {
 	 */
 	testNotionConnection: (projectId: string, target: PromotionTarget) => typedError<string, string>(__TAURI_INVOKE("test_notion_connection", { projectId, target })),
 	createRoutine: (input: CreateRoutineInput) => typedError<RoutineToday, string>(__TAURI_INVOKE("create_routine", { input })),
+	/**  루틴 수정. 필드 업데이트 후 미발사 루틴 알림을 삭제(다음 list_today_routines에서 재enqueue). */
+	updateRoutine: (input: UpdateRoutineInput) => typedError<null, string>(__TAURI_INVOKE("update_routine", { input })),
+	/**
+	 *  루틴 삭제. 트랜잭션: 미발사 알림 + routine_checks + routines 행 삭제.
+	 *  발사된 알림 행(히스토리)은 보존. 루틴 없으면 오류 반환.
+	 */
+	deleteRoutine: (id: string) => typedError<null, string>(__TAURI_INVOKE("delete_routine", { id })),
 	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], string>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
 	/**
 	 *  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋.
@@ -1057,6 +1064,23 @@ export type TriggerPrSelfCheckInput = {
 	timeoutSec: number,
 	maxTurns: number,
 	costCapUsd: number | null,
+};
+
+/**  루틴 수정 입력. */
+export type UpdateRoutineInput = {
+	id: string,
+	title: string,
+	freq: RoutineFreq,
+	/**  weekly/biweekly일 때 해당 요일들. daily/monthly면 무시. */
+	weekdays: Weekday[],
+	/**  biweekly/monthly일 때 기준일(YYYY-MM-DD). 비면 기존 anchor 유지(없으면 오늘). daily/weekly는 무시. */
+	anchorDate: string | null,
+	/**  알림 시각 'HH:MM'(로컬). None=알림 없음. */
+	timeOfDay: string | null,
+	/**  알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32. */
+	reminderOffsetMin: number | null,
+	area: AreaTag | null,
+	kind: Kind | null,
 };
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */

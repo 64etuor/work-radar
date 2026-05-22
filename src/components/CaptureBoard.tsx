@@ -22,6 +22,8 @@ import {
   useClassifySignal,
   useCodexStatus,
   useCreateRoutine,
+  useUpdateRoutine,
+  useDeleteRoutine,
   useCreateSignal,
   useDeleteSignal,
   useFlushPromotions,
@@ -82,6 +84,8 @@ export function CaptureBoard() {
   const promoteToNotion = usePromoteToNotion();
   const flushPromotions = useFlushPromotions();
   const createRoutine = useCreateRoutine();
+  const updateRoutine = useUpdateRoutine();
+  const deleteRoutine = useDeleteRoutine();
   const reorderRoutines = useReorderRoutines();
   const toggleRoutine = useToggleRoutineCheck();
   const codex = useCodexStatus();
@@ -358,6 +362,26 @@ export function CaptureBoard() {
     toast("루틴 추가");
   };
 
+  const handleUpdateRoutine = (id: string, draft: RoutineDraft) => {
+    updateRoutine.mutate({
+      id,
+      title: draft.title,
+      freq: draft.freq,
+      weekdays: draft.weekdays,
+      anchorDate: draft.anchorDate,
+      timeOfDay: draft.timeOfDay,
+      reminderOffsetMin: draft.reminderOffsetMin,
+      area: null,
+      kind: null,
+    });
+    toast("루틴 수정");
+  };
+
+  const handleDeleteRoutine = (id: string) => {
+    deleteRoutine.mutate(id);
+    toast("루틴 삭제");
+  };
+
   // ── 키보드 (1/2/3/4 분류, 0/u 미분류, T Today, D/E 완료/보관) ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -482,6 +506,8 @@ export function CaptureBoard() {
               toggleRoutine.mutate({ routineId, date: today, done })
             }
             onCreate={handleCreateRoutine}
+            onUpdate={handleUpdateRoutine}
+            onDelete={handleDeleteRoutine}
             onReorder={(ids) => reorderRoutines.mutate(ids)}
             onOpenTracking={() => goTo("routines")}
           />

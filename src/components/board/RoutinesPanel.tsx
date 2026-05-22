@@ -18,6 +18,8 @@ type Props = {
   routines: RoutineToday[];
   onToggle: (routineId: string, done: boolean) => void;
   onCreate: (draft: RoutineDraft) => void;
+  onUpdate: (id: string, draft: RoutineDraft) => void;
+  onDelete: (id: string) => void;
   onReorder: (orderedIds: string[]) => void;
   onOpenTracking: () => void;
 };
@@ -59,10 +61,14 @@ export function RoutinesPanel({
   routines,
   onToggle,
   onCreate,
+  onUpdate,
+  onDelete,
   onReorder,
   onOpenTracking,
 }: Props) {
+  // open=false: 폼 닫힘. open=true + editId=null: 새 루틴 추가. open=true + editId: 수정 모드.
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [freq, setFreq] = useState<RoutineFreq>("daily");
   const [days, setDays] = useState<Set<Weekday>>(new Set());
@@ -92,6 +98,22 @@ export function RoutinesPanel({
     setDays(new Set());
     setTime("");
     setOffset("");
+    setEditId(null);
+  };
+
+  const openCreate = () => {
+    reset();
+    setOpen(true);
+  };
+
+  const openEdit = (r: RoutineToday) => {
+    setEditId(r.id);
+    setTitle(r.title);
+    setFreq(r.freq);
+    setDays(new Set(r.weekdays));
+    setTime(r.timeOfDay ?? "");
+    setOffset(r.reminderOffsetMin != null ? String(r.reminderOffsetMin) : "");
+    setOpen(true);
   };
 
   const submit = (e: React.FormEvent) => {
@@ -101,17 +123,27 @@ export function RoutinesPanel({
     if (needsWeekdays && days.size === 0) return; // weekly/biweekly는 요일 필수.
     const weekdays = needsWeekdays ? DAYS.filter((d) => days.has(d.key)).map((d) => d.key) : [];
     const offNum = offset.trim() === "" ? null : Math.max(0, Number(offset));
-    onCreate({
+    const draft: RoutineDraft = {
       title: t,
       freq,
       weekdays,
-      // biweekly/monthly anchor는 백엔드가 오늘로 채운다(폼은 비워 보낸다).
+      // biweekly/monthly anchor는 백엔드가 기존 값 또는 오늘로 채운다(폼은 비워 보낸다).
       anchorDate: null,
       timeOfDay: time.trim() === "" ? null : time,
       reminderOffsetMin: Number.isFinite(offNum as number) ? offNum : null,
-    });
+    };
+    if (editId) {
+      onUpdate(editId, draft);
+    } else {
+      onCreate(draft);
+    }
     reset();
     setOpen(false);
+  };
+
+  const handleDelete = (r: RoutineToday) => {
+    if (!window.confirm(`"${r.title}" 루틴을 삭제할까요?`)) return;
+    onDelete(r.id);
   };
 
   return (
@@ -121,7 +153,7 @@ export function RoutinesPanel({
         <button type="button" className="add" onClick={onOpenTracking} title="루틴 트래킹">
           트래킹
         </button>
-        <button type="button" className="add" onClick={() => setOpen((o) => !o)}>
+        <button type="button" className="add" onClick={openCreate}>
           + 루틴
         </button>
       </div>
@@ -191,7 +223,14 @@ export function RoutinesPanel({
           </div>
           <div className="row">
             <button type="submit" className="save">
-              추가
+              {editId ? "저장" : "추가"}
+            </button>
+            <button
+              type="button"
+              className="save"
+              onClick={() => { reset(); setOpen(false); }}
+            >
+              취소
             </button>
           </div>
         </form>
@@ -220,6 +259,24 @@ export function RoutinesPanel({
                   <span className="badge b-sched">{schedLabel(r)}</span>
                   {r.timeOfDay && <span className="badge b-time">{r.timeOfDay}</span>}
                 </div>
+              </div>
+              <div className="ractions">
+                <button
+                  type="button"
+                  className="ract"
+                  title="수정"
+                  onClick={() => openEdit(r)}
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  className="ract"
+                  title="삭제"
+                  onClick={() => handleDelete(r)}
+                >
+                  ✕
+                </button>
               </div>
             </div>
           ))

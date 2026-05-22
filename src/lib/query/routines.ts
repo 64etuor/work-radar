@@ -6,6 +6,7 @@ import { unwrap, useInvalidate } from "./client";
 import {
   commands,
   type CreateRoutineInput,
+  type UpdateRoutineInput,
   type Weekday,
 } from "@/bindings";
 
@@ -32,6 +33,24 @@ export function useCreateRoutine() {
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (input: CreateRoutineInput) => unwrap(commands.createRoutine(input)),
+    onSuccess: () => inv.routines(),
+  });
+}
+
+/** 루틴 수정. */
+export function useUpdateRoutine() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (input: UpdateRoutineInput) => unwrap(commands.updateRoutine(input)),
+    onSuccess: () => inv.routines(),
+  });
+}
+
+/** 루틴 삭제. */
+export function useDeleteRoutine() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.deleteRoutine(id)),
     onSuccess: () => inv.routines(),
   });
 }
