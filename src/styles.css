@@ -1763,38 +1763,79 @@
   font: 600 11px var(--font-mono);
   color: var(--color-wr-subtle);
 }
-.pr .pr-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-}
-.pr .pr-card {
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-wr-bg);
-  padding: 11px 13px;
+/* PR 행 목록 레이아웃 (GitHub-style rows). */
+.pr .pr-rows {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
-.pr .pr-card-top {
+.pr .prr-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--color-wr-bg);
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.pr .prr-row:last-child {
+  border-bottom: none;
+}
+.pr .prr-row:hover {
+  background: var(--color-wr-elevated);
+}
+.pr .prr-id {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
+  flex: 0 0 auto;
 }
-.pr .pr-repo {
+.pr .prr-repo {
   font: 500 11px var(--font-mono);
   color: var(--color-wr-muted);
+  white-space: nowrap;
+}
+.pr .prr-num {
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  white-space: nowrap;
+}
+.pr .prr-title {
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
-.pr .pr-num {
-  font: 600 11px var(--font-mono);
+.pr .prr-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  flex-wrap: nowrap;
+}
+.pr .prr-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: 400 11px var(--font-mono);
   color: var(--color-wr-subtle);
+  white-space: nowrap;
+}
+.pr .prr-comments.prr-suspicious {
+  color: var(--color-wr-danger);
+}
+.pr .prr-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 .pr .pr-badge {
-  margin-left: auto;
   font: 600 10px var(--font-mono);
   padding: 2px 7px;
   border-radius: 999px;
@@ -1803,11 +1844,7 @@
   background: var(--color-wr-coral);
   color: #fff;
 }
-.pr .pr-card-title {
-  font: 500 13px var(--font-sans);
-  line-height: 1.35;
-  color: var(--color-wr-fg);
-}
+/* Legacy card meta token reuse for row meta */
 .pr .pr-card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1864,14 +1901,6 @@
   align-items: center;
   gap: 10px;
   margin-top: 1px;
-}
-.pr .pr-selfcheck {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font: 400 12px var(--font-sans);
-  color: var(--color-wr-muted);
-  cursor: pointer;
 }
 .pr .pr-open {
   margin-left: auto;

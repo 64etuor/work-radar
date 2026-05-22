@@ -215,17 +215,22 @@ pub async fn read_agent_log(db: State<'_, Db>, run_id: String) -> Result<String,
 /// 엄격 JSON 하나만 마지막 메시지로 요구한다(프롬프트 지시 JSON — 사용자 결정).
 /// pub(crate): 스킬 레지스트리(skills.rs) 시드 + 잡 lookup 폴백의 단일 출처(SSOT).
 pub(crate) const PR_SELFCHECK_PROMPT: &str = "\
-당신은 PR self-check 초안 도우미다. 작업 디렉터리의 `pr.diff` 파일에 GitHub PR의 unified diff가 있다. \
+당신은 코드 리뷰 도우미다. 작업 디렉터리의 `pr.diff` 파일에 GitHub PR의 unified diff가 있다. \
 이 diff를 read-only로 분석하라(필요하면 현재 레포 코드도 참고). \
 어떤 파일도 수정하지 말고 외부 네트워크/명령도 쓰지 마라(read-only). \
+스타일 지적이나 사소한 코드 취향 차이는 배제하라. \
+핵심 질문: 이 변경이 **이 레포의 기존 패턴·모듈 경계·설계 규칙에 부합하는가?** \
+구체적으로 — 모듈 경계 침범, INVARIANT 위반 위험(결정 레일 침범·토큰 렌더러 노출·무한 retry·migration 없는 스키마 변경 등), \
+설계 일관성 문제, 하네스 적합성(Tauri 2/specta/octocrab 패턴 준수)을 중점 확인하라. \
 분석 결과를 아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(코드펜스·설명 없이 순수 JSON):\n\
 {\
-\"summary\": \"PR 변경 요약/설명 초안(한국어 2~4문장)\", \
-\"selfChecks\": [{\"item\": \"리뷰어가 확인할 self-check 항목\", \"checked\": false, \"note\": \"선택 메모\"}], \
+\"summary\": \"PR 변경 요약(한국어 2~4문장)\", \
+\"selfChecks\": [{\"item\": \"구조적·설계적 리뷰 항목\", \"checked\": false, \"note\": \"선택 메모\"}], \
 \"screenshotsNeeded\": [\"스크린샷이 필요한 UI 변경 설명\"], \
 \"migrationNotes\": [\"DB 마이그레이션/배포 시 주의할 점\"]\
 }\n\
-확신할 수 없는 항목은 빈 배열로 두라. checked는 항상 false로 두라(사람이 확인한다).";
+확신할 수 없는 항목은 빈 배열로 두라. checked는 항상 false로 두라(사람이 확인한다). \
+이건 제안일 뿐이다 — 실제 반영은 사람이 결정한다(INVARIANT #1/#2).";
 
 /// repo_full_name + (선택)project_id로 self-check 잡 대상 레포를 해석한다.
 /// worktree 격리(INVARIANT #6)를 위해 local_path가 필수고, diff fetch용 GitHub 토큰(keychain)도 함께 돌려준다.

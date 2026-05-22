@@ -74,6 +74,9 @@ pub struct RawPr {
     /// head 커밋 SHA. CI 실패 알림 dedup 키(같은 커밋 = 같은 실패, 재알림 0). open/merged 모두 채움
     /// (단 escalation은 open PR만 → merged head_sha는 알림 경로에 도달하지 않음).
     pub head_sha: String,
+    /// 댓글 수 (comments + review_comments). open PR만 채움(bounded per-PR get). merged는 0.
+    /// 가져오기 실패 시 0으로 degrade(레이더 전체 실패 방지).
+    pub comment_count: u32,
 }
 
 /// radar 코어가 의존하는 유일한 외부 read 계약. 테스트는 fake로 대체한다.
@@ -284,6 +287,18 @@ impl PrProvider for HttpPrProvider {
                     pr.mergeable_state,
                     Some(octocrab::models::pulls::MergeableState::Dirty)
                 );
+                // LIST endpoint에 댓글 수가 없어 건당 get 1회(ci_for_sha와 동일 패턴, bounded retry).
+                // 실패 시 0으로 degrade — 레이더 전체 실패 방지(INVARIANT #5).
+                let comment_count = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| async {
+                    self.octo
+                        .pulls(&owner, &repo)
+                        .get(pr.number)
+                        .await
+                        .map_err(|e| classify_octocrab(&e))
+                })
+                .await
+                .map(|full| (full.comments.unwrap_or(0) + full.review_comments.unwrap_or(0)) as u32)
+                .unwrap_or(0);
                 out.push(RawPr {
                     number: pr.number,
                     title: pr.title.clone().unwrap_or_default(),
@@ -304,6 +319,7 @@ impl PrProvider for HttpPrProvider {
                     has_conflict,
                     updated_at: pr.updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
                     head_sha,
+                    comment_count,
                 });
             }
             if count < PER_PAGE as usize {
@@ -354,6 +370,7 @@ impl PrProvider for HttpPrProvider {
                 has_conflict: false,
                 updated_at: pr.updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
                 head_sha: pr.head.sha.clone(),
+                comment_count: 0, // merged PR은 extra get 없음(bounded).
             });
         }
 

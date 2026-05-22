@@ -1,5 +1,5 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bot, ExternalLink, RefreshCw } from "lucide-react";
+import { ArrowLeft, Bot, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
 
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";
 import {
@@ -8,7 +8,6 @@ import {
   openExternal,
   useCodexStatus,
   useProjects,
-  useSetPrSelfCheck,
   useTriggerCiTriage,
   useTriggerPrSelfcheck,
 } from "@/lib/query";
@@ -17,7 +16,7 @@ import { useUIStore } from "@/store";
 /** 5개 readiness 버킷 표시 순서 + 라벨 (PLAN.md Phase 4). */
 const BUCKETS: { key: ReadinessBucket; label: string; hint: string }[] = [
   { key: "ci_blocked", label: "CI Blocked", hint: "CI 실패·충돌 — 머지 막힘" },
-  { key: "needs_self_check", label: "Needs Self Check", hint: "self-check 필요 / draft" },
+  { key: "needs_self_check", label: "Needs Review", hint: "코드 리뷰 필요 / draft" },
   { key: "ready", label: "Ready", hint: "머지 준비됨" },
   { key: "stale", label: "Stale", hint: "오래 멈춤" },
   { key: "merged_cleanup", label: "Merged Cleanup", hint: "머지됨 — 정리" },
@@ -40,7 +39,6 @@ export function PrRadarView() {
   const qc = useQueryClient();
   const projects = useProjects();
   const projectList = projects.data ?? [];
-  const setSelfCheck = useSetPrSelfCheck();
   const codex = useCodexStatus();
   const selfcheckDraft = useTriggerPrSelfcheck();
   const ciTriage = useTriggerCiTriage();
@@ -104,7 +102,7 @@ export function PrRadarView() {
         )}
         {selfcheckDraft.error && (
           <div className="pr-err">
-            self-check 초안 실패: {(selfcheckDraft.error as Error).message}
+            코드 리뷰 실패: {(selfcheckDraft.error as Error).message}
           </div>
         )}
         {ciTriage.error && (
@@ -129,20 +127,13 @@ export function PrRadarView() {
                   <span className="pr-bucket-hint">{b.hint}</span>
                   <span className="pr-bucket-count">{list.length}</span>
                 </div>
-                <div className="pr-cards">
+                <div className="pr-rows">
                   {list.map((it) => (
-                    <PrCard
+                    <PrRow
                       key={`${it.repoFullName}#${it.number}`}
                       item={it}
                       codexReady={codexReady}
                       drafting={selfcheckDraft.isPending}
-                      onToggleSelfCheck={(checked) =>
-                        setSelfCheck.mutate({
-                          repoFullName: it.repoFullName,
-                          prNumber: it.number,
-                          checked,
-                        })
-                      }
                       onSelfcheckDraft={() =>
                         selfcheckDraft.mutate(
                           {
@@ -169,7 +160,6 @@ export function PrRadarView() {
                             maxTurns: 8,
                             costCapUsd: 1.0,
                           },
-                          // 캡 초과면 매트릭스(Q1)로, 아니면 Jobs로 이동.
                           { onSuccess: (out) => goTo(out.escalated ? "board" : "jobs") },
                         )
                       }
@@ -184,12 +174,11 @@ export function PrRadarView() {
   );
 }
 
-function PrCard({
+function PrRow({
   item,
   codexReady,
   drafting,
   triaging,
-  onToggleSelfCheck,
   onSelfcheckDraft,
   onCiTriage,
 }: {
@@ -197,39 +186,34 @@ function PrCard({
   codexReady: boolean;
   drafting: boolean;
   triaging: boolean;
-  onToggleSelfCheck: (checked: boolean) => void;
   onSelfcheckDraft: () => void;
   onCiTriage: () => void;
 }) {
-  // 머지된 PR은 self-check 초안 대상 아님(정리 버킷).
+  // 머지된 PR은 코드 리뷰 대상 아님(정리 버킷).
   const canDraft = item.bucket !== "merged_cleanup";
   // CI triage는 CI Blocked 버킷만(원인/수정안 제안 + 재트리거 캡).
   const canTriage = item.bucket === "ci_blocked";
   return (
-    <div className="pr-card">
-      <div className="pr-card-top">
-        <span className="pr-repo">{item.repoFullName}</span>
-        <span className="pr-num">#{item.number}</span>
-        {item.escalated && <span className="pr-badge pr-esc">매트릭스 ↑</span>}
+    <div className="prr-row">
+      <div className="prr-id">
+        <span className="prr-repo">{item.repoFullName}</span>
+        <span className="prr-num">#{item.number}</span>
       </div>
-      <div className="pr-card-title">{item.title}</div>
-      <div className="pr-card-meta">
+      <div className="prr-title">{item.title}</div>
+      <div className="prr-meta">
         <span className={`pr-ci pr-ci-${item.ci}`}>{CI_LABEL[item.ci]}</span>
         {item.hasConflict && <span className="pr-flag pr-conflict">충돌</span>}
         {item.isDraft && <span className="pr-flag">draft</span>}
         {item.linkedTicket && <span className="pr-flag pr-ticket">{item.linkedTicket}</span>}
+        {item.escalated && <span className="pr-badge pr-esc">매트릭스 ↑</span>}
+        <span className={`prr-comments${item.isSuspicious ? " prr-suspicious" : ""}`}>
+          {item.isSuspicious && <TriangleAlert className="size-3" />}
+          {item.commentCount}
+        </span>
         <span className="pr-age">{item.ageDays}d</span>
         <span className="pr-author">@{item.authorLogin}</span>
       </div>
-      <div className="pr-card-actions">
-        <label className="pr-selfcheck">
-          <input
-            type="checkbox"
-            checked={item.selfChecked}
-            onChange={(e) => onToggleSelfCheck(e.target.checked)}
-          />
-          self-check
-        </label>
+      <div className="prr-actions">
         {canDraft && (
           <button
             type="button"
@@ -237,13 +221,13 @@ function PrCard({
             disabled={!codexReady || drafting}
             title={
               codexReady
-                ? "codex로 self-check/설명 초안 생성 (제안 — Jobs에서 검토·accept)"
+                ? "codex로 코드 리뷰 초안 생성 (제안 — Jobs에서 검토·accept)"
                 : "codex 미가용 — 설치·로그인 후 사용"
             }
             onClick={onSelfcheckDraft}
           >
             <Bot className="size-3.5" />
-            self-check 초안
+            코드 리뷰
           </button>
         )}
         {canTriage && (

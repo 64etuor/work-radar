@@ -38,11 +38,7 @@ pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 4] {
             BATCH_ENRICH_PROMPT,
         ),
         (BINDING_CI_TRIAGE, "CI 실패 triage", CI_TRIAGE_PROMPT),
-        (
-            BINDING_PR_SELFCHECK,
-            "PR self-check 초안",
-            PR_SELFCHECK_PROMPT,
-        ),
+        (BINDING_PR_SELFCHECK, "코드 리뷰", PR_SELFCHECK_PROMPT),
     ]
 }
 

@@ -578,6 +578,10 @@ pub struct PrRadarItem {
     /// 이 PR이 매트릭스로 escalate된 active 신호를 갖는지 (임계치 초과 — INVARIANT #4).
     pub escalated: bool,
     pub project_id: String,
+    /// 댓글 수 (comments + review_comments). open PR만 채움, merged는 0.
+    pub comment_count: u32,
+    /// 댓글이 SUSPICIOUS_COMMENT_THRESHOLD 초과인지(시각 경고 힌트).
+    pub is_suspicious: bool,
 }
 
 // ── Worktree & Branch Diff (Phase 5, read-only) ──────────────────────────────────

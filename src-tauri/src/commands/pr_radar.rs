@@ -16,6 +16,8 @@ use crate::models::{CiStatus, PrRadarItem, ReadinessBucket, TokenKind};
 
 /// open PR이 이 일수 이상 미갱신이면 Stale 버킷.
 const STALE_DAYS: i64 = 14;
+/// 댓글이 이 수를 초과하면 is_suspicious = true (시각 경고 힌트, 결정 레일 미침범).
+const SUSPICIOUS_COMMENT_THRESHOLD: u32 = 10;
 /// escalate 사유 (dedup_key의 reason 세그먼트). Phase 4는 CI 실패만.
 const ESCALATE_REASON_CI: &str = "ci_failed";
 
@@ -267,6 +269,8 @@ async fn sync_pr_radar<P: PrProvider>(
                 age_days: elapsed.max(0) as u32,
                 escalated,
                 project_id: project_id.to_string(),
+                comment_count: pr.comment_count,
+                is_suspicious: pr.comment_count > SUSPICIOUS_COMMENT_THRESHOLD,
             });
         }
     }
@@ -336,6 +340,8 @@ pub async fn refresh_pr_radar(
     .await
 }
 
+// DEPRECATED: UI의 수동 체크박스는 제거됨(PR B4). 커맨드·바인딩·pr_self_checks 테이블은 보존 —
+// classify_bucket이 self_checked를 여전히 사용하고, 외부 클라이언트가 이 커맨드에 의존할 수 있음.
 /// 수동 self-check 토글(로컬 상태). checked면 행 추가, 아니면 삭제(다음 도출이 반영).
 #[tauri::command]
 #[specta::specta]
@@ -428,6 +434,7 @@ mod tests {
             has_conflict: false,
             updated_at: "2026-05-21T00:00:00Z".into(),
             head_sha: format!("sha-{number}"),
+            comment_count: 0,
         }
     }
 
@@ -461,6 +468,30 @@ mod tests {
         .fetch_all(db)
         .await
         .unwrap()
+    }
+
+    /// (0) is_suspicious: comment_count > 10이면 true, 10 이하면 false.
+    #[test]
+    fn suspicious_comment_threshold() {
+        let mut pr = raw_pr(1, CiStatus::Passing, RawPrState::Open, "x");
+        // 경계: 10은 초과 아님 → false.
+        pr.comment_count = 10;
+        assert!(
+            pr.comment_count <= SUSPICIOUS_COMMENT_THRESHOLD,
+            "10개는 suspicious 아님"
+        );
+        // 경계+1: 11은 초과 → true.
+        pr.comment_count = 11;
+        assert!(
+            pr.comment_count > SUSPICIOUS_COMMENT_THRESHOLD,
+            "11개는 suspicious"
+        );
+        // 0개는 false.
+        pr.comment_count = 0;
+        assert!(
+            pr.comment_count <= SUSPICIOUS_COMMENT_THRESHOLD,
+            "0개는 suspicious 아님"
+        );
     }
 
     /// (1) 버킷 분류가 5개 버킷을 입력별로 정확히 도출.
