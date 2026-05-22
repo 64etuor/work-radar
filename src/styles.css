@@ -1437,6 +1437,96 @@
   padding: 1px 4px;
   border-radius: var(--radius-xs);
 }
+
+/* ── macOS-style sidebar split (B2) ───────────────────────────────────── */
+/* .settings-split: flex row replacing .st-scroll when sidebar layout active */
+.settings-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* Left category sidebar */
+.set-sidebar {
+  flex: 0 0 168px;
+  border-right: 1px solid var(--color-wr-border-light);
+  overflow-y: auto;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.set-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: 500 13px var(--font-sans);
+  color: var(--color-wr-fg);
+  text-align: left;
+  width: 100%;
+}
+.set-sidebar-item:hover {
+  background: var(--color-wr-hover);
+}
+.set-sidebar-item.active {
+  background: var(--color-wr-surface);
+  color: var(--color-wr-fg);
+  font-weight: 600;
+}
+.set-sidebar-icon {
+  flex: 0 0 16px;
+  color: var(--color-wr-muted);
+}
+.set-sidebar-item.active .set-sidebar-icon {
+  color: var(--color-wr-accent);
+}
+
+/* Right content pane */
+.set-pane {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 18px 22px 40px;
+}
+
+/* Key-capture widget (B2 part C) */
+.set-keycap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.set-keycap-btn {
+  min-width: 130px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  font: 400 13px var(--font-mono);
+  color: var(--color-wr-fg);
+  cursor: pointer;
+  text-align: left;
+}
+.set-keycap-btn.recording {
+  border-color: var(--color-wr-accent);
+  background: var(--color-wr-accent-soft);
+  color: var(--color-wr-accent);
+}
+.set-keycap-btn:focus {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 1px;
+}
+.set-keycap-err {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-danger);
+  margin-top: 4px;
+}
 /* 메뉴별 단축키 keymap 에디터 (Phase 18 #7) — 2열 그리드, view 라벨 + 단축키 입력. */
 .settings .nav-keymap-grid {
   display: grid;

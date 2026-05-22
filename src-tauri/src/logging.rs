@@ -49,7 +49,10 @@ impl AppLogger {
         let now = Utc::now().to_rfc3339();
         let line = format!("{now} [{trace_id}] {scope}: {message}\n");
 
-        let mut file = OpenOptions::new().create(true).append(true).open(&log_path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
         file.write_all(line.as_bytes())?;
         Ok(())
     }
@@ -139,11 +142,26 @@ mod tests {
     fn rotation_renames_plan_is_correct() {
         let plan = rotation_renames(5);
         // 순서: 4→5, 3→4, 2→3, 1→2, errors.log→1
-        assert_eq!(plan[0], ("errors.4.log".to_string(), "errors.5.log".to_string()));
-        assert_eq!(plan[1], ("errors.3.log".to_string(), "errors.4.log".to_string()));
-        assert_eq!(plan[2], ("errors.2.log".to_string(), "errors.3.log".to_string()));
-        assert_eq!(plan[3], ("errors.1.log".to_string(), "errors.2.log".to_string()));
-        assert_eq!(plan[4], ("errors.log".to_string(), "errors.1.log".to_string()));
+        assert_eq!(
+            plan[0],
+            ("errors.4.log".to_string(), "errors.5.log".to_string())
+        );
+        assert_eq!(
+            plan[1],
+            ("errors.3.log".to_string(), "errors.4.log".to_string())
+        );
+        assert_eq!(
+            plan[2],
+            ("errors.2.log".to_string(), "errors.3.log".to_string())
+        );
+        assert_eq!(
+            plan[3],
+            ("errors.1.log".to_string(), "errors.2.log".to_string())
+        );
+        assert_eq!(
+            plan[4],
+            ("errors.log".to_string(), "errors.1.log".to_string())
+        );
         assert_eq!(plan.len(), 5);
     }
 

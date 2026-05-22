@@ -14,7 +14,9 @@ use tauri::State;
 use crate::db::Db;
 use crate::keychain;
 use crate::messenger;
-use crate::models::{DetectedChat, HermesBridgeStatus, HermesFetchResult, HermesMessage, TokenKind};
+use crate::models::{
+    DetectedChat, HermesBridgeStatus, HermesFetchResult, HermesMessage, TokenKind,
+};
 
 /// 앱 레벨 단일 브리지의 keychain 분리 키(project별 토큰과 충돌 안 나는 고정 ref). Hermes는 외부
 /// 에이전트 하나라 project 단위가 아니다. account = `{this}:hermes_bridge`.
@@ -216,10 +218,13 @@ pub async fn detect_hermes_chat_id(
     bot_token: Option<String>,
 ) -> Result<DetectedChat, String> {
     // 토큰 결정: 인자(trimmed, non-empty) → keychain → Err.
-    let token = match bot_token.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    let token = match bot_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         Some(t) => t.to_string(),
-        None => load_bot_token()?
-            .ok_or_else(|| "먼저 봇 토큰을 입력하세요".to_string())?,
+        None => load_bot_token()?.ok_or_else(|| "먼저 봇 토큰을 입력하세요".to_string())?,
     };
 
     // offset=0 단발 조회 — 저장된 오프셋을 읽거나 전진하지 않는다(fetch_hermes_messages 불간섭).

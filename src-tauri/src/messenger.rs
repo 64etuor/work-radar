@@ -228,7 +228,14 @@ pub fn parse_chat_candidates(body: &serde_json::Value) -> Vec<ChatCandidate> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        candidates.push((update_id, ChatCandidate { chat_id, label, from_is_bot }));
+        candidates.push((
+            update_id,
+            ChatCandidate {
+                chat_id,
+                label,
+                from_is_bot,
+            },
+        ));
     }
 
     // update_id 오름차순 정렬(서버가 정렬해 주지만 방어적).
@@ -262,7 +269,10 @@ pub async fn fetch_chat_candidates(bot_token: &str) -> Result<Vec<ChatCandidate>
         "limit": GET_UPDATES_LIMIT,
         "timeout": GET_UPDATES_TIMEOUT_SEC,
     });
-    let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| provider.post_json(&url, &payload)).await?;
+    let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+        provider.post_json(&url, &payload)
+    })
+    .await?;
     Ok(parse_chat_candidates(&json))
 }
 
