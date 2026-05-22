@@ -890,3 +890,25 @@ pub struct CalendarEvent {
     pub url: Option<String>,
     pub project_id: String,
 }
+
+/// 카드 → 캘린더 이벤트 생성 입력 (직접 모달, Phase 19). 사용자 폼 = 사람 결정이라 Acceptance 게이트
+/// 불요(#2 — 게이트는 자동화의 외부 mutate 차단용). 토큰/외부 ID 미포함. start/end는 RFC3339(timed)
+/// 또는 YYYY-MM-DD(all-day). description은 선택. specta i64/u64 금지.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCalendarEventInput {
+    pub title: String,
+    /// timed = RFC3339, all-day = YYYY-MM-DD.
+    pub start: String,
+    pub end: String,
+    pub all_day: bool,
+    pub description: Option<String>,
+}
+
+/// 생성된 캘린더 이벤트 결과 (write 응답, Phase 19). id + 딥링크(htmlLink). 토큰 미포함.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedCalendarEvent {
+    pub id: String,
+    pub url: Option<String>,
+}

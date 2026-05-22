@@ -1,6 +1,10 @@
-//! Google Calendar 연동 클라이언트 (read 레일, Phase 10). INVARIANT: 외부 호출은 Rust(reqwest)에,
-//! 자격증명(client_id/secret/refresh_token)은 keychain blob에서만 읽혀 Rust 안에서만 쓰인다(렌더러 미노출).
-//! read-only 스코프(`calendar.readonly`) → 외부 mutate 0 → Acceptance 불요(PR Radar read 선례).
+//! Google Calendar 연동 클라이언트 (read 레일 Phase 10 + write/이벤트 생성 Phase 19).
+//! INVARIANT: 외부 호출은 Rust(reqwest)에, 자격증명(client_id/secret/refresh_token)은 keychain blob에서만
+//! 읽혀 Rust 안에서만 쓰인다(렌더러 미노출).
+//! 스코프는 `calendar.events`(read+write) — Phase 19에서 이벤트 생성(write)을 추가하며 readonly에서 승격.
+//! 기존 readonly 토큰은 events 스코프 동의가 없어 write 시 거부됨 → 재동의(다시 연결)로 갱신.
+//! write는 **사용자 폼 제출 = 사람 결정**이라 Acceptance 게이트 불요(게이트는 자동화/Codex의 외부 mutate
+//! 차단용 — INVARIANT #2). 외부 호출은 bounded retry + graceful terminal failure.
 //!
 //! 핵심 규칙:
 //!  - bounded retry only (INVARIANT #5): `with_retry`(github.rs/notion.rs와 동일 패턴) + reqwest timeout +
@@ -31,8 +35,10 @@ pub const LOOPBACK_TIMEOUT: Duration = Duration::from_secs(180);
 
 const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
-/// read-only 스코프 — 외부 mutate 불가(INVARIANT #2: Acceptance 불요).
-const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
+/// read+write 스코프 (Phase 19). 이벤트 생성(POST)을 포함하므로 readonly에서 events로 승격.
+/// 기존 readonly 토큰은 이 스코프 동의가 없어 write 거부됨 → 재동의(다시 연결) 필요.
+/// write는 사용자 폼 제출(사람 결정)이라 Acceptance 게이트 불요 — 게이트는 자동화의 외부 mutate 차단용(#2).
+const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
 const CALENDAR_LIST_URL: &str = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
 const CALENDAR_API_BASE: &str = "https://www.googleapis.com/calendar/v3/calendars";
 /// events 조회 상한(bounded — 무한 페이지네이션 금지). 오늘 윈도우라 단발로 충분.
@@ -254,10 +260,60 @@ pub fn parse_token_response(body: &serde_json::Value) -> Result<TokenResponse, C
     })
 }
 
+// ── 이벤트 생성(write, Phase 19) — 입력 + 순수 페이로드 빌더 ────────────────────────
+
+/// 카드 → 캘린더 이벤트 생성 입력(사용자 폼). title은 카드에서 prefill, start/end는 RFC3339(timed)
+/// 또는 YYYY-MM-DD(all-day). description은 선택. 토큰/외부 ID 미포함(write 입력만). 순수 페이로드로 변환된다.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateEventInput {
+    pub title: String,
+    /// timed = RFC3339(`2026-05-22T09:00:00+09:00`), all-day = YYYY-MM-DD.
+    pub start: String,
+    pub end: String,
+    pub all_day: bool,
+    pub description: Option<String>,
+}
+
+/// Google Calendar `events.insert` 요청 본문(JSON). all-day는 `start.date`/`end.date`,
+/// timed는 `start.dateTime`/`end.dateTime`. description은 비었으면 생략. 순수 — 단위 테스트 대상.
+pub fn build_event_payload(input: &CreateEventInput) -> serde_json::Value {
+    let key = if input.all_day { "date" } else { "dateTime" };
+    let mut body = serde_json::json!({
+        "summary": input.title,
+        "start": { key: input.start },
+        "end": { key: input.end },
+    });
+    if let Some(desc) = input.description.as_deref() {
+        if !desc.is_empty() {
+            body["description"] = serde_json::Value::String(desc.to_string());
+        }
+    }
+    body
+}
+
+/// events.insert 응답(JSON) → 생성된 이벤트 id/htmlLink. id 누락은 Terminal(write 검증 실패). 순수.
+pub fn parse_created_event(
+    body: &serde_json::Value,
+) -> Result<(String, Option<String>), CalendarError> {
+    let id = body
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            let snippet: String = body.to_string().chars().take(200).collect();
+            CalendarError::Terminal(format!("이벤트 생성 응답에 id 없음: {snippet}"))
+        })?
+        .to_string();
+    let url = body
+        .get("htmlLink")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    Ok((id, url))
+}
+
 // ── 트레잇 seam (RPITIT, PrProvider/NotionReader 패턴) ────────────────────────────
 
-/// OAuth 토큰 교환/갱신 + 캘린더/이벤트 read 계약. 오케스트레이션(connect/refresh/fetch)은 이
-/// 트레잇에만 의존 → fake로 cargo test(병합·부분실패 격리). 실 HTTP는 HttpCalendarProvider.
+/// OAuth 토큰 교환/갱신 + 캘린더/이벤트 read 계약 + 이벤트 생성(write, Phase 19). 오케스트레이션
+/// (connect/refresh/fetch/create)은 이 트레잇에만 의존 → fake로 cargo test. 실 HTTP는 HttpCalendarProvider.
 pub trait CalendarProvider {
     /// authorization code → 토큰(첫 동의: refresh_token 포함). PKCE verifier·redirect_uri 동봉.
     fn exchange_code(
@@ -288,6 +344,15 @@ pub trait CalendarProvider {
         time_min: &str,
         time_max: &str,
     ) -> impl std::future::Future<Output = Result<Vec<RawEvent>, CalendarError>> + Send;
+
+    /// 한 캘린더에 이벤트 생성(write, Phase 19). 반환: (생성된 이벤트 id, htmlLink). bounded retry.
+    /// 사용자 폼 제출 = 사람 결정이라 Acceptance 게이트 불요(#2). 실패는 graceful terminal로 노출.
+    fn create_event(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        input: &CreateEventInput,
+    ) -> impl std::future::Future<Output = Result<(String, Option<String>), CalendarError>> + Send;
 }
 
 /// 코드 교환 후 자격증명 갱신(refresh_token 병합). 첫 동의면 refresh_token 필수 — 없으면 Terminal.
@@ -632,6 +697,31 @@ impl HttpCalendarProvider {
         serde_json::from_str(&body)
             .map_err(|e| CalendarError::Terminal(format!("calendar parse: {e}")))
     }
+
+    /// Bearer POST(JSON body) → JSON 1회(write, Phase 19). 200대가 아니면 분류된 에러.
+    /// 401(만료)·403(스코프 부족: readonly 토큰)·404 등은 Terminal로 노출(graceful).
+    async fn post_json(
+        &self,
+        url: &str,
+        access_token: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, CalendarError> {
+        let resp = self
+            .http
+            .post(url)
+            .bearer_auth(access_token)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| classify_reqwest(&e))?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        if !(200..300).contains(&status) {
+            return Err(classify_http(status, &text));
+        }
+        serde_json::from_str(&text)
+            .map_err(|e| CalendarError::Terminal(format!("event create parse: {e}")))
+    }
 }
 
 impl CalendarProvider for HttpCalendarProvider {
@@ -707,6 +797,25 @@ impl CalendarProvider for HttpCalendarProvider {
             .unwrap_or(&[]);
         Ok(items.iter().filter_map(parse_calendar_event).collect())
     }
+
+    async fn create_event(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        input: &CreateEventInput,
+    ) -> Result<(String, Option<String>), CalendarError> {
+        // cal_id는 path segment라 percent-encode(이메일/그룹 id의 @·# 등).
+        let url = format!(
+            "{CALENDAR_API_BASE}/{}/events",
+            encode_path_segment(calendar_id)
+        );
+        let payload = build_event_payload(input);
+        let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.post_json(&url, access_token, &payload)
+        })
+        .await?;
+        parse_created_event(&json)
+    }
 }
 
 #[cfg(test)]
@@ -746,7 +855,7 @@ mod tests {
         assert_ne!(a, gen_state());
     }
 
-    /// auth_url: 모든 필수 파라미터 + S256 + read-only scope를 담는다(percent-encoding 라운드트립).
+    /// auth_url: 모든 필수 파라미터 + S256 + events scope(read+write)를 담는다(percent-encoding 라운드트립).
     #[test]
     fn auth_url_contains_required_params() {
         let url = auth_url("cid.apps", "http://127.0.0.1:54321", "CHAL", "STATE");
@@ -899,6 +1008,78 @@ mod tests {
         ));
     }
 
+    // ── 이벤트 생성(write, Phase 19): 페이로드 빌더 + 응답 파싱 ────────────────────────
+
+    /// timed 이벤트 페이로드: summary + start/end.dateTime + description(있으면).
+    #[test]
+    fn build_event_payload_timed_with_description() {
+        let input = CreateEventInput {
+            title: "디자인 리뷰".into(),
+            start: "2026-05-22T14:00:00+09:00".into(),
+            end: "2026-05-22T15:00:00+09:00".into(),
+            all_day: false,
+            description: Some("Q2 폴리시".into()),
+        };
+        let body = build_event_payload(&input);
+        assert_eq!(body["summary"], "디자인 리뷰");
+        assert_eq!(body["start"]["dateTime"], "2026-05-22T14:00:00+09:00");
+        assert_eq!(body["end"]["dateTime"], "2026-05-22T15:00:00+09:00");
+        assert_eq!(body["description"], "Q2 폴리시");
+        // all-day 키는 없어야 한다.
+        assert!(body["start"].get("date").is_none());
+    }
+
+    /// all-day 이벤트: start/end.date(YYYY-MM-DD), description 비었으면 생략.
+    #[test]
+    fn build_event_payload_all_day_omits_empty_description() {
+        let input = CreateEventInput {
+            title: "휴가".into(),
+            start: "2026-05-22".into(),
+            end: "2026-05-23".into(),
+            all_day: true,
+            description: None,
+        };
+        let body = build_event_payload(&input);
+        assert_eq!(body["start"]["date"], "2026-05-22");
+        assert_eq!(body["end"]["date"], "2026-05-23");
+        assert!(body["start"].get("dateTime").is_none());
+        assert!(
+            body.get("description").is_none(),
+            "None이면 description 생략"
+        );
+
+        // 빈 문자열도 생략.
+        let empty_desc = CreateEventInput {
+            description: Some("".into()),
+            ..input
+        };
+        assert!(build_event_payload(&empty_desc)
+            .get("description")
+            .is_none());
+    }
+
+    /// 생성 응답 파싱: id + htmlLink, htmlLink 누락 관용, id 누락=Terminal.
+    #[test]
+    fn parse_created_event_cases() {
+        let ok = serde_json::json!({ "id": "evt1", "htmlLink": "https://cal/evt1" });
+        assert_eq!(
+            parse_created_event(&ok).unwrap(),
+            ("evt1".into(), Some("https://cal/evt1".into()))
+        );
+        // htmlLink 누락 관용.
+        let no_link = serde_json::json!({ "id": "evt2" });
+        assert_eq!(
+            parse_created_event(&no_link).unwrap(),
+            ("evt2".into(), None)
+        );
+        // id 누락 → Terminal(write 검증 실패).
+        let bad = serde_json::json!({ "error": "insufficientPermissions" });
+        assert!(matches!(
+            parse_created_event(&bad),
+            Err(CalendarError::Terminal(_))
+        ));
+    }
+
     // ── 트레잇 seam: connect_core / refresh_core / fetch_events_core (fake provider) ──────
 
     use std::collections::HashMap;
@@ -909,6 +1090,8 @@ mod tests {
         calendars: Vec<RawCalendar>,
         /// calendar_id → 결과(없으면 빈 목록). Err로 부분 실패 격리 검증.
         events: HashMap<String, Result<Vec<RawEvent>, CalendarError>>,
+        /// create_event 결과(write 트레잇 만족용). 기본은 성공 id.
+        create: Result<(String, Option<String>), CalendarError>,
     }
 
     impl Default for FakeProvider {
@@ -918,6 +1101,7 @@ mod tests {
                 refresh: Err(CalendarError::Terminal("unset".into())),
                 calendars: Vec::new(),
                 events: HashMap::new(),
+                create: Ok(("evt_new".into(), Some("https://cal/evt_new".into()))),
             }
         }
     }
@@ -955,6 +1139,14 @@ mod tests {
                 .get(calendar_id)
                 .cloned()
                 .unwrap_or_else(|| Ok(Vec::new()))
+        }
+        async fn create_event(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _input: &CreateEventInput,
+        ) -> Result<(String, Option<String>), CalendarError> {
+            self.create.clone()
         }
     }
 

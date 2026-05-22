@@ -160,6 +160,17 @@ export const commands = {
 	 *  미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
 	 */
 	fetchCalendarEvents: (projectId: string | null, date: string) => typedError<CalendarEvent[], string>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date })),
+	/**
+	 *  직접 모달의 캘린더 picker가 쓸 프로젝트의 저장된 선택 캘린더([{id,summary}]). 네트워크 없음(로컬 DB).
+	 *  모달이 어느 캘린더에 쓸지 고르게 한다(연결된 프로젝트의 선택 목록 = 사용자가 이미 고른 캘린더).
+	 */
+	listSelectedCalendars: (projectId: string) => typedError<SelectedCalendar[], string>(__TAURI_INVOKE("list_selected_calendars", { projectId })),
+	/**
+	 *  카드 → 직접 모달 → Google Calendar 이벤트 생성(write). 사용자 폼 = 사람 결정이라 Acceptance 게이트
+	 *  불요(#2). 미연결/스코프 부족(readonly 토큰)/네트워크 실패는 graceful Err로 노출. bounded retry.
+	 *  실 Google write는 사용자 관찰(헤드리스 불가) — 페이로드 빌드/응답 파싱은 calendar.rs cargo test.
+	 */
+	createCalendarEvent: (projectId: string, calendarId: string, event: CreateCalendarEventInput) => typedError<CreatedCalendarEvent, string>(__TAURI_INVOKE("create_calendar_event", { projectId, calendarId, event })),
 	/**  현재 알림 권한 상태 조회. 미지원/오류면 unknown으로 graceful degrade(앱 코어 무영향). */
 	notificationPermission: () => typedError<NotificationPermission, string>(__TAURI_INVOKE("notification_permission")),
 	/**  알림 권한 요청(미결정일 때 OS 프롬프트). 결과 상태를 돌려준다. 거부돼도 앱은 계속 동작. */
@@ -269,6 +280,20 @@ export type CodexAvailability = {
 	detail: string,
 };
 
+/**
+ *  카드 → 캘린더 이벤트 생성 입력 (직접 모달, Phase 19). 사용자 폼 = 사람 결정이라 Acceptance 게이트
+ *  불요(#2 — 게이트는 자동화의 외부 mutate 차단용). 토큰/외부 ID 미포함. start/end는 RFC3339(timed)
+ *  또는 YYYY-MM-DD(all-day). description은 선택. specta i64/u64 금지.
+ */
+export type CreateCalendarEventInput = {
+	title: string,
+	/**  timed = RFC3339, all-day = YYYY-MM-DD. */
+	start: string,
+	end: string,
+	allDay: boolean,
+	description: string | null,
+};
+
 /**  프로젝트 생성 입력. credential_ref는 백엔드가 생성한다(프런트가 정하지 않음). */
 export type CreateProjectInput = {
 	name: string,
@@ -306,6 +331,12 @@ export type CreateSignalInput = {
 	kind: Kind | null,
 	/**  소속 프로젝트(없으면 NULL → 나중에 reconcile). 메타데이터(결정 레일 아님). */
 	projectId: string | null,
+};
+
+/**  생성된 캘린더 이벤트 결과 (write 응답, Phase 19). id + 딥링크(htmlLink). 토큰 미포함. */
+export type CreatedCalendarEvent = {
+	id: string,
+	url: string | null,
 };
 
 /**  부채 추세 한 점(일별 스냅샷). 11a부터 전진 누적 — 7일 미만이면 있는 만큼만. */

@@ -6,6 +6,10 @@ import {
   type CardMenuState,
   CardMenu,
 } from "@/components/board/CardMenu";
+import {
+  type CalendarModalState,
+  CalendarEventModal,
+} from "@/components/board/CalendarEventModal";
 import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas } from "@/components/board/MatrixCanvas";
 import { RoutinesPanel } from "@/components/board/RoutinesPanel";
@@ -17,7 +21,6 @@ import {
   openExternal,
   useClassifySignal,
   useCodexStatus,
-  useCreatePromotionDraft,
   useCreateRoutine,
   useCreateSignal,
   useFlushPromotions,
@@ -39,22 +42,21 @@ import {
 } from "@/lib/query";
 import { useUIStore } from "@/store";
 
-const PROMOTION_TARGET: Record<"backlog" | "agenda" | "calendar", PromotionTarget> = {
+const PROMOTION_TARGET: Record<"backlog" | "agenda", PromotionTarget> = {
   backlog: "notion_backlog",
   agenda: "notion_agenda",
-  calendar: "calendar",
 };
-const PROMOTION_LABEL: Record<"backlog" | "agenda" | "calendar", string> = {
+const PROMOTION_LABEL: Record<"backlog" | "agenda", string> = {
   backlog: "백로그 등록",
   agenda: "안건 승격",
-  calendar: "캘린더 등록",
 };
 
 /**
  * Capture Board — 5영역(미분류·2×2·Today·Routines·캡처) 결정 보드.
  * 서버 상태(useSignals/useToday/useTodayRoutines)에서 렌더, 뮤테이션은 refetch로 재동기화.
  * INVARIANT #1: 카드는 항상 unclassified 생성, 사분면 변경은 명시적 사람 제스처(드래그/키보드)뿐.
- * INVARIANT #2: 백로그/안건/캘린더는 promotion draft만 (외부 무변경, Acceptance 대기).
+ * INVARIANT #2: 백로그/안건은 Notion 즉시 승격(사람 클릭=결정). 캘린더는 직접 모달 → 즉시 write(Phase 19,
+ * 사용자 폼=사람 결정 — Acceptance 게이트는 자동화/Codex의 외부 mutate 차단용이라 사람 폼 제출엔 불요).
  */
 export function CaptureBoard() {
   const today = localToday();
@@ -73,7 +75,6 @@ export function CaptureBoard() {
   const reorderToday = useReorderToday();
   const setStatus = useSetSignalStatus();
   const snoozeSignal = useSnoozeSignal();
-  const createDraft = useCreatePromotionDraft();
   const promoteToNotion = usePromoteToNotion();
   const flushPromotions = useFlushPromotions();
   const createRoutine = useCreateRoutine();
@@ -90,6 +91,7 @@ export function CaptureBoard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<CardMenuState | null>(null);
+  const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
@@ -227,11 +229,17 @@ export function CaptureBoard() {
         // write 레일: 즉시 Notion에 페이지 생성 (Phase 3).
         handleNotionPromote(signalId, action);
         break;
-      case "calendar":
-        // 캘린더는 아직 draft만 (Acceptance 대기, 실제 write는 Phase 11).
-        createDraft.mutate({ signalId, target: PROMOTION_TARGET.calendar });
-        toast(`${PROMOTION_LABEL.calendar} — Acceptance 대기`);
+      case "calendar": {
+        // write 레일: 직접 모달 → Google Calendar 이벤트 생성 (Phase 19).
+        // 사용자 폼 제출 = 사람 결정이라 Acceptance 대기 없음 (게이트는 자동화의 외부 mutate 차단용, #2).
+        const sig = signals.find((s) => s.id === signalId);
+        setCalendarModal({
+          signalId,
+          title: sig?.title ?? "",
+          projectId: sig?.projectId ?? null,
+        });
         break;
+      }
     }
   };
 
@@ -382,6 +390,11 @@ export function CaptureBoard() {
         onClose={() => setMenu(null)}
         codexReady={codexReady}
       />
+      <CalendarEventModal
+        state={calendarModal}
+        onClose={() => setCalendarModal(null)}
+        onToast={toast}
+      />
       <div className={`cb-toast${toastMsg ? " show" : ""}`}>
         {toastMsg}
         {toastUrl && (
@@ -390,7 +403,7 @@ export function CaptureBoard() {
             className="cb-toast-link"
             onClick={() => void openExternal(toastUrl)}
           >
-            Notion에서 열기
+            열기
           </button>
         )}
       </div>

@@ -6,7 +6,8 @@ use crate::commands::tokens::project_credential_ref;
 use crate::db::Db;
 use crate::keychain;
 use crate::models::{
-    CalendarEvent, CalendarListItem, GoogleCalendarStatus, PingResult, SelectedCalendar, TokenKind,
+    CalendarEvent, CalendarListItem, CreateCalendarEventInput, CreatedCalendarEvent,
+    GoogleCalendarStatus, PingResult, SelectedCalendar, TokenKind,
 };
 
 // ── Google Calendar OAuth (Phase 10a, read 레일) ───────────────────────────────────
@@ -314,4 +315,61 @@ pub async fn fetch_calendar_events(
     }
 
     Ok(calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await)
+}
+
+// ── Google Calendar 이벤트 생성 (Phase 19, write 레일) ──────────────────────────────
+//
+// INVARIANT #2: 사용자 폼 제출 = 사람 결정 → 직접 write 정합(Acceptance 게이트는 자동화/Codex의
+// 외부 mutate 차단용). 외부 호출은 Rust(reqwest)·bounded retry·graceful terminal failure. 토큰은 keychain.
+// scope `calendar.events`(read+write) — 기존 readonly 토큰은 재동의(다시 연결) 필요(403 → graceful 노출).
+
+/// 직접 모달의 캘린더 picker가 쓸 프로젝트의 저장된 선택 캘린더([{id,summary}]). 네트워크 없음(로컬 DB).
+/// 모달이 어느 캘린더에 쓸지 고르게 한다(연결된 프로젝트의 선택 목록 = 사용자가 이미 고른 캘린더).
+#[tauri::command]
+#[specta::specta]
+pub async fn list_selected_calendars(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<Vec<SelectedCalendar>, String> {
+    load_selected_calendars(db.inner(), &project_id).await
+}
+
+/// 카드 → 직접 모달 → Google Calendar 이벤트 생성(write). 사용자 폼 = 사람 결정이라 Acceptance 게이트
+/// 불요(#2). 미연결/스코프 부족(readonly 토큰)/네트워크 실패는 graceful Err로 노출. bounded retry.
+/// 실 Google write는 사용자 관찰(헤드리스 불가) — 페이로드 빌드/응답 파싱은 calendar.rs cargo test.
+#[tauri::command]
+#[specta::specta]
+pub async fn create_calendar_event(
+    db: State<'_, Db>,
+    project_id: String,
+    calendar_id: String,
+    event: CreateCalendarEventInput,
+) -> Result<CreatedCalendarEvent, String> {
+    let title = event.title.trim();
+    if title.is_empty() {
+        return Err("이벤트 제목이 비었습니다".into());
+    }
+    if calendar_id.trim().is_empty() {
+        return Err("캘린더를 선택하세요".into());
+    }
+    let access = access_token_for(db.inner(), &project_id)
+        .await?
+        .ok_or_else(|| "미연결 — 먼저 Google Calendar를 연결하세요".to_string())?;
+
+    let input = calendar::CreateEventInput {
+        title: title.to_string(),
+        start: event.start,
+        end: event.end,
+        all_day: event.all_day,
+        description: event
+            .description
+            .map(|d| d.trim().to_string())
+            .filter(|d| !d.is_empty()),
+    };
+    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    let (id, url) = provider
+        .create_event(&access, &calendar_id, &input)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(CreatedCalendarEvent { id, url })
 }

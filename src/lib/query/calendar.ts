@@ -7,6 +7,8 @@ import { unwrap } from "./client";
 import {
   commands,
   type CalendarEvent,
+  type CreateCalendarEventInput,
+  type CreatedCalendarEvent,
   type SelectedCalendar,
 } from "@/bindings";
 
@@ -117,6 +119,33 @@ export function fetchCalendarEvents(
   date: string,
 ): Promise<CalendarEvent[]> {
   return unwrap(commands.fetchCalendarEvents(projectId, date));
+}
+
+// ── Phase 19: 이벤트 생성 (write 레일, 직접 모달) ────────────────────────────────────
+//
+// INVARIANT #2: 사용자 폼 제출 = 사람 결정 → 직접 write 정합(Acceptance 게이트는 자동화용).
+// 토큰은 keychain(Rust) — 본문 미노출. 실패는 graceful로 호출부가 표시.
+
+/** 직접 모달 picker용 — 프로젝트의 저장된 선택 캘린더(로컬 DB, 네트워크 없음). 연결됨일 때만 조회. */
+export function useSelectedCalendars(projectId: string | null, enabled: boolean) {
+  return useQuery<SelectedCalendar[]>({
+    queryKey: ["selectedCalendars", projectId],
+    queryFn: () => unwrap(commands.listSelectedCalendars(projectId as string)),
+    enabled: !!projectId && enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** 카드 → 캘린더 이벤트 생성(write). 사람 폼 제출이 곧 결정/accept(Acceptance 대기 없음, #2). */
+export function useCreateCalendarEvent() {
+  return useMutation<
+    CreatedCalendarEvent,
+    Error,
+    { projectId: string; calendarId: string; event: CreateCalendarEventInput }
+  >({
+    mutationFn: ({ projectId, calendarId, event }) =>
+      unwrap(commands.createCalendarEvent(projectId, calendarId, event)),
+  });
 }
 
 // ── Phase 4: PR Radar (read 레일) ───────────────────────────────────────────────

@@ -143,8 +143,9 @@ export function GoogleCalendarBlock({
 
       <div className="st-hint">
         Google Cloud Console에서 <b>Desktop</b> OAuth client를 만들어 client_id/secret을
-        입력하세요. <code>calendar.readonly</code> 범위는 보통 "테스트 사용자"로 동의 가능
-        (앱 게시/검증 불요).
+        입력하세요. 이벤트 생성을 위해 <code>calendar.events</code>(읽기+쓰기) 범위를 씁니다 —
+        기존에 읽기 전용으로 연결했다면 <b>"다시 연결"</b>로 쓰기 권한을 재동의하세요. 보통
+        "테스트 사용자"로 동의 가능(앱 게시/검증 불요).
       </div>
 
       {startOauth.isPending && (

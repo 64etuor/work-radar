@@ -8,7 +8,6 @@ import {
   commands,
   type AreaTag,
   type CreateSignalInput,
-  type PromotionTarget,
   type Quadrant,
   type SignalStatus,
 } from "@/bindings";
@@ -60,17 +59,6 @@ export function useSnoozeSignal() {
     mutationFn: ({ id, until }: { id: string; until: string }) =>
       unwrap(commands.snoozeSignal(id, until)),
     onSuccess: () => inv.signals(),
-  });
-}
-
-/**
- * 캘린더 승격 = Promotion draft만 (외부 무변경, Acceptance 대기 — INVARIANT #2, 실제 write는 Phase 11).
- * 외부 상태를 바꾸지 않으므로 매트릭스/Today를 invalidate하지 않는다.
- */
-export function useCreatePromotionDraft() {
-  return useMutation({
-    mutationFn: ({ signalId, target }: { signalId: string; target: PromotionTarget }) =>
-      unwrap(commands.createPromotionDraft(signalId, target)),
   });
 }
 

@@ -104,6 +104,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_google_calendars,
         commands::set_selected_calendars,
         commands::fetch_calendar_events,
+        // Google Calendar 이벤트 생성 (write 레일, Phase 19).
+        commands::list_selected_calendars,
+        commands::create_calendar_event,
         // 트레이 상주 스파인 + 알림 스케줄러 (Phase 13).
         commands::notification_permission,
         commands::request_notification_permission,
