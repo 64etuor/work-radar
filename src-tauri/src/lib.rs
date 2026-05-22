@@ -67,9 +67,6 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // PR Radar (read 레일, Phase 4).
         commands::refresh_pr_radar,
         commands::set_pr_self_check,
-        // Status mismatch (Notion↔PR drift, Phase 6).
-        commands::refresh_mismatch,
-        commands::set_notion_done_statuses,
         // Worktree & Branch Diff (read-only, Phase 5).
         commands::list_worktrees,
         commands::list_worktree_branches,
@@ -87,7 +84,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::pr_proposal,
         commands::accept_proposal,
         commands::reject_proposal,
-        // 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안, Phase 9).
+        // 추가 suggestion 자동화 (enrich / CI triage, Phase 9).
         commands::trigger_enrich,
         commands::enrich_proposal,
         commands::accept_enrich,
@@ -95,9 +92,6 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::trigger_ci_triage,
         commands::triage_proposal,
         commands::accept_triage,
-        commands::trigger_mismatch_draft,
-        commands::mismatch_draft_proposal,
-        commands::accept_mismatch_draft,
         // Google Calendar OAuth 연결 (read 레일, Phase 10a).
         commands::set_google_oauth_client,
         commands::start_google_oauth,

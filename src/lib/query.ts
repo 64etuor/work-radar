@@ -17,8 +17,6 @@ import {
   type CreateSignalInput,
   type DiffMode,
   type EnrichProposal,
-  type MismatchItem,
-  type NotionUpdateProposal,
   type PrRadarItem,
   type PromotionTarget,
   type PrSelfCheckProposal,
@@ -33,7 +31,6 @@ import {
   type TriggerCodexInput,
   type TriggerEchoInput,
   type TriggerEnrichInput,
-  type TriggerMismatchDraftInput,
   type TriggerPrSelfCheckInput,
   type Weekday,
   type WorkSignal,
@@ -568,29 +565,6 @@ export function useSetPrSelfCheck() {
   });
 }
 
-// ── Phase 6: Status mismatch (Notion↔PR drift) ──────────────────────────────────
-
-/** mismatch 주기 폴링 간격. PR + Notion 둘 다 fetch라 PR Radar보다 느슨하게(INVARIANT #5: bounded). */
-export const MISMATCH_POLL_MS = 5 * 60_000;
-
-/**
- * mismatch 한 cycle 실행(언랩만). drift 감지/dedup/auto-resolve는 Rust가 수행한다.
- * 매트릭스(signals) invalidate는 호출부(useQueries queryFn)가 한다. 토큰은 keychain에서만(렌더러 미노출).
- */
-export function fetchMismatch(projectId: string): Promise<MismatchItem[]> {
-  return unwrap(commands.refreshMismatch(projectId));
-}
-
-/** done으로 볼 Notion 상태 이름 목록 설정(프로젝트별). 성공 시 프로젝트 갱신. */
-export function useSetNotionDoneStatuses() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ projectId, statuses }: { projectId: string; statuses: string[] }) =>
-      unwrap(commands.setNotionDoneStatuses(projectId, statuses)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
-  });
-}
-
 // ── Phase 5: Worktree & Branch Diff (read-only) ─────────────────────────────────
 //
 // ambient — 매 호출 git에서 fresh 도출(영속 없음). 로컬·on-demand라 폴링 없음(뷰 진입+수동 새로고침).
@@ -777,7 +751,7 @@ export function useRejectProposal() {
   });
 }
 
-// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안) ───────────────
+// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage) ───────────────
 //
 // 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴). codex 잡(awaiting_approval)→Proposal→
 // 사람 accept(로컬 반영). accept 전·후 외부(Notion/GitHub) 무변경(INVARIANT #2). enrich는 quadrant를
@@ -858,39 +832,5 @@ export function useAcceptTriage() {
     mutationFn: ({ runId, accepted }: { runId: string; accepted: CiTriageProposal }) =>
       unwrap(commands.acceptTriage(runId, accepted)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
-  });
-}
-
-/** mismatch 해소 초안 잡 트리거(Mismatch 카드). 성공 시 잡 목록 갱신. */
-export function useTriggerMismatchDraft() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: TriggerMismatchDraftInput) =>
-      unwrap(commands.triggerMismatchDraft(input)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
-  });
-}
-
-/** awaiting_approval mismatch 초안 잡의 Proposal(타입 파싱). */
-export function useMismatchDraftProposal(runId: string | null, ready: boolean) {
-  return useQuery({
-    queryKey: ["mismatchDraftProposal", runId],
-    queryFn: () => unwrap(commands.mismatchDraftProposal(runId as string)),
-    enabled: !!runId && ready,
-    retry: false,
-  });
-}
-
-/** mismatch 해소 accept(INVARIANT #2 게이트) — 로컬 기록만 + 로컬 mismatch 신호 resolve(외부 무변경). */
-export function useAcceptMismatchDraft() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ runId, accepted }: { runId: string; accepted: NotionUpdateProposal }) =>
-      unwrap(commands.acceptMismatchDraft(runId, accepted)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
-      void qc.invalidateQueries({ queryKey: ["signals"] }); // 로컬 resolve 반영.
-      void qc.invalidateQueries({ queryKey: ["mismatch"] });
-    },
   });
 }

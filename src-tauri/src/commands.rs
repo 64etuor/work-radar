@@ -15,24 +15,21 @@ use crate::models::{
     AgentRail, AgentRunView, AreaTag, CalendarEvent, CalendarListItem, CiStatus, CiTriageProposal,
     CodexAvailability, CreateProjectInput, CreateRepoInput, CreateRoutineInput, CreateSignalInput,
     DebtPoint, DiffFileSummary, DiffMode, Engine, EnrichProposal, FlushSummary,
-    GoogleCalendarStatus, Kind, MismatchItem, NotionUpdateProposal, PingResult, PrRadarItem,
-    Project, Promotion, PromotionOutcome, PromotionStatus, PromotionTarget, Quadrant,
-    ReadinessBucket, Repo, RoutineToday, Sandbox, SelectedCalendar, SignalStatus, TodayOverview,
-    TokenKind, TokenStatus, TriageOutcome, TriggerCiTriageInput, TriggerCodexInput,
-    TriggerEchoInput, TriggerEnrichInput, TriggerMismatchDraftInput, TriggerPrSelfCheckInput,
-    Weekday, WeeklyPrActivity, WeeklyReview, WeeklyRoutineAdherence, WeeklyThroughput, WorkDebt,
-    WorkSignal, Worktree,
+    GoogleCalendarStatus, Kind, PingResult, PrRadarItem, Project, Promotion, PromotionOutcome,
+    PromotionStatus, PromotionTarget, Quadrant, ReadinessBucket, Repo, RoutineToday, Sandbox,
+    SelectedCalendar, SignalStatus, TodayOverview, TokenKind, TokenStatus, TriageOutcome,
+    TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput, TriggerEnrichInput,
+    TriggerPrSelfCheckInput, Weekday, WeeklyPrActivity, WeeklyReview, WeeklyRoutineAdherence,
+    WeeklyThroughput, WorkDebt, WorkSignal, Worktree,
 };
-use crate::notion::{
-    HttpNotionReader, HttpNotionWriter, NotionError, NotionPageState, NotionReader, NotionWriter,
-};
+use crate::notion::{HttpNotionWriter, NotionError, NotionWriter};
 use crate::{api, keychain};
 
 /// WorkSignal SELECT/RETURNING 공통 컬럼 목록 (FromRow는 이름으로 매핑 → 순서 무관).
 const SIGNAL_COLS: &str =
     "id, project_id, title, body, source, type, quadrant, suggested_quadrant, \
      kind, area, suggested_area, status, snooze_until, today_for_date, today_done_at, today_rank, \
-     snapshot, created_at, updated_at";
+     created_at, updated_at";
 
 // ── Projects (Phase 0) ────────────────────────────────────────────────────────
 
@@ -54,7 +51,7 @@ pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, String> {
 
 /// Project SELECT/RETURNING 공통 컬럼.
 const PROJECT_COLS: &str = "id, name, kind, notion_backlog_db_id, notion_agenda_db_id, \
-     ticket_key_pattern, notion_done_statuses, google_calendar_ids, credential_ref, \
+     ticket_key_pattern, google_calendar_ids, credential_ref, \
      created_at, updated_at";
 /// Repo SELECT/RETURNING 공통 컬럼.
 const REPO_COLS: &str = "id, project_id, provider, remote_url, local_path, default_branch, \
@@ -69,8 +66,8 @@ pub async fn insert_project(db: &Db, input: &CreateProjectInput) -> Result<Proje
     sqlx::query_as::<_, Project>(&format!(
         "INSERT INTO projects \
             (id, name, kind, notion_backlog_db_id, notion_agenda_db_id, ticket_key_pattern, \
-             notion_done_statuses, credential_ref) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, lower(hex(randomblob(16)))) \
+             credential_ref) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, lower(hex(randomblob(16)))) \
          RETURNING {PROJECT_COLS}"
     ))
     .bind(name)
@@ -78,7 +75,6 @@ pub async fn insert_project(db: &Db, input: &CreateProjectInput) -> Result<Proje
     .bind(&input.notion_backlog_db_id)
     .bind(&input.notion_agenda_db_id)
     .bind(&input.ticket_key_pattern)
-    .bind(&input.notion_done_statuses)
     .fetch_one(db)
     .await
 }
@@ -1973,308 +1969,6 @@ pub async fn set_pr_self_check(
     Ok(())
 }
 
-// ── Status mismatch 감지 (Phase 6, Notion↔PR drift) ──────────────────────────────
-// INVARIANT #1: mismatch 신호도 항상 unclassified 진입 + suggested 힌트만(자동 분류 0).
-// INVARIANT #3: mismatch:{project}:{ticket} 안정 키로 upsert(중복 0) + 해소 시 auto-resolve.
-// INVARIANT #7: Notion=내용 SSOT(상태는 read만), 신호 상태는 로컬 SQLite SSOT. 토큰은 keychain에서만.
-// join key = ticketKeyPattern(Phase 4 extract_ticket 재사용). 매칭 실패는 신호를 만들지 않는다(noise 0).
-// 사용자 결정(drift 방향): 정본 케이스 = PR merged + Notion 상태가 done 목록에 없음.
-
-/// done 판정(사용자 결정: 프로젝트별 상태 이름 목록). 대소문자/공백 무시. 상태 미설정은 done 아님.
-fn is_done_status(status: Option<&str>, done_statuses: &[String]) -> bool {
-    match status {
-        Some(s) => {
-            let s = s.trim();
-            done_statuses
-                .iter()
-                .any(|d| d.trim().eq_ignore_ascii_case(s))
-        }
-        None => false,
-    }
-}
-
-/// notion_done_statuses(JSON 배열) 파싱. 깨진 JSON/NULL이면 빈 목록(detection 비활성 — graceful).
-fn parse_done_statuses(raw: Option<&str>) -> Vec<String> {
-    raw.and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
-        .unwrap_or_default()
-}
-
-/// mismatch dedup 키: 프로젝트 스코프 + 티켓(join key). 멀티 프로젝트 충돌 방지.
-fn mismatch_dedup_key(project_id: &str, ticket: &str) -> String {
-    format!("mismatch:{project_id}:{ticket}")
-}
-
-/// mismatch 신호 dedup upsert(INVARIANT #3). 항상 unclassified 진입 + suggested q3 힌트(INVARIANT #1).
-/// 충돌 시 quadrant/status는 보존하고 title/body/links/snapshot/suggested_quadrant/updated_at만 갱신한다.
-/// snapshot = {prState, notionState} (architecture §4 drift 비교용 마지막 관측치).
-async fn upsert_mismatch_signal(
-    db: &Db,
-    project_id: &str,
-    ticket: &str,
-    pr: &RawPr,
-    page: &NotionPageState,
-    dedup_key: &str,
-) -> Result<(), sqlx::Error> {
-    let status_label = page.status.as_deref().unwrap_or("(상태 없음)");
-    let title = format!("[{ticket}] Notion 미동기화: PR 머지됨 · Notion '{status_label}'");
-    let body = format!("{} · 백로그 {} · 상태 '{status_label}'", pr.url, page.url);
-    let links =
-        serde_json::json!({ "githubPrUrl": pr.url, "notionBacklogId": page.page_id }).to_string();
-    let snapshot =
-        serde_json::json!({ "prState": "merged", "notionState": page.status }).to_string();
-    sqlx::query(
-        "INSERT INTO signals \
-            (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links, snapshot) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'system', 'mismatch', \
-                 'unclassified', 'q3_quick_contain', ?4, 'new', ?5, ?6) \
-         ON CONFLICT(dedup_key) WHERE dedup_key IS NOT NULL DO UPDATE SET \
-            title = excluded.title, body = excluded.body, links = excluded.links, \
-            snapshot = excluded.snapshot, suggested_quadrant = excluded.suggested_quadrant, \
-            updated_at = datetime('now')",
-    )
-    .bind(project_id)
-    .bind(&title)
-    .bind(&body)
-    .bind(dedup_key)
-    .bind(&links)
-    .bind(&snapshot)
-    .execute(db)
-    .await?;
-    Ok(())
-}
-
-/// auto-resolve(INVARIANT #3): 해소된 mismatch 신호를 status=done으로(매트릭스에서 소멸).
-/// 해소 판정: (a) Notion에서 티켓 사라짐(join 끊김) 또는 (b) Notion done 갱신 — 둘 다 Notion 전체 fetch라
-/// 신뢰 가능. (c) PR이 더 이상 merged 아님은 모든 repo fetch 성공일 때만 신뢰(부분 실패 false-resolve 가드).
-async fn auto_resolve_mismatch(
-    db: &Db,
-    project_id: &str,
-    active_keys: &[String],
-    notion_tickets: &std::collections::HashSet<String>,
-    done_tickets: &std::collections::HashSet<String>,
-    all_repos_ok: bool,
-) -> Result<(), sqlx::Error> {
-    let prefix = mismatch_dedup_key(project_id, "");
-    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
-        "SELECT id, dedup_key FROM signals \
-         WHERE type = 'mismatch' AND project_id = ?1 AND status NOT IN ('done','archived')",
-    )
-    .bind(project_id)
-    .fetch_all(db)
-    .await?;
-    for (id, key) in rows {
-        let Some(key) = key else { continue };
-        if active_keys.iter().any(|k| k == &key) {
-            continue; // 여전히 drift.
-        }
-        let ticket = key.strip_prefix(&prefix).unwrap_or("");
-        let resolve = !notion_tickets.contains(ticket) // Notion에서 사라짐(join 끊김)
-            || done_tickets.contains(ticket)            // Notion done 갱신
-            || all_repos_ok; // PR 데이터 신뢰 가능 → 더 이상 merged 아님
-        if resolve {
-            sqlx::query(
-                "UPDATE signals SET status = 'done', updated_at = datetime('now') WHERE id = ?1",
-            )
-            .bind(&id)
-            .execute(db)
-            .await?;
-        }
-    }
-    Ok(())
-}
-
-/// mismatch 도출 코어(테스트 가능 — provider/reader를 fake로). Notion 백로그 상태(anchor, 전체 fetch) +
-/// PR 머지 여부를 ticketKeyPattern으로 조인해 drift(PR merged + Notion≠done)를 mismatch 신호로 upsert(dedup),
-/// 해소분은 auto-resolve. 양쪽 매칭된 티켓만 신호를 만든다(join 실패 = noise 0). done_statuses 비면 비활성.
-#[allow(clippy::too_many_arguments)]
-async fn sync_mismatch<P: PrProvider, R: NotionReader>(
-    db: &Db,
-    pr_provider: &P,
-    notion_reader: &R,
-    notion_token: &str,
-    project_id: &str,
-    backlog_db_id: &str,
-    project_pattern: Option<&str>,
-    repos: &[RepoRef],
-    done_statuses: &[String],
-) -> Result<Vec<MismatchItem>, String> {
-    use std::collections::{HashMap, HashSet};
-
-    // done 판정 불가(미설정)면 detection 비활성 — 기존 mismatch도 건드리지 않음(noise 0).
-    if done_statuses.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // 1) Notion 백로그 상태 (anchor — 전체 fetch). 실패면 drift 판정 불가 → Err(삼키지 않음).
-    let pages = notion_reader
-        .fetch_pages(notion_token, backlog_db_id)
-        .await
-        .map_err(|e| format!("Notion 백로그 read 실패: {e}"))?;
-    // ticket → 첫 매칭 페이지 (Notion 제목에서 project 패턴으로 추출).
-    let mut notion_by_ticket: HashMap<String, NotionPageState> = HashMap::new();
-    for page in pages {
-        if let Some(t) = extract_ticket(project_pattern, &page.title, "") {
-            notion_by_ticket.entry(t).or_insert(page);
-        }
-    }
-    let notion_tickets: HashSet<String> = notion_by_ticket.keys().cloned().collect();
-    let done_tickets: HashSet<String> = notion_by_ticket
-        .iter()
-        .filter(|(_, p)| is_done_status(p.status.as_deref(), done_statuses))
-        .map(|(t, _)| t.clone())
-        .collect();
-
-    // 2) PR 머지 여부 (ticket → 첫 매칭 merged PR). repo별 실패는 격리, 전부 실패면 Err.
-    let mut merged: HashMap<String, RawPr> = HashMap::new();
-    let mut ok_any = false;
-    let mut errors: Vec<String> = Vec::new();
-    for repo in repos {
-        let prs = match pr_provider.fetch_prs(&repo.full_name).await {
-            Ok(p) => p,
-            Err(e) => {
-                errors.push(format!("{}: {e}", repo.full_name));
-                continue;
-            }
-        };
-        ok_any = true;
-        for pr in prs {
-            if matches!(pr.state, RawPrState::Merged) {
-                if let Some(t) =
-                    extract_ticket(repo.ticket_pattern.as_deref(), &pr.title, &pr.head_ref)
-                {
-                    merged.entry(t).or_insert(pr);
-                }
-            }
-        }
-    }
-    let all_repos_ok = errors.is_empty();
-    if !ok_any && !repos.is_empty() {
-        return Err(format!("모든 레포 PR fetch 실패 — {}", errors.join("; ")));
-    }
-
-    // 3) join + drift: PR merged & Notion≠done인 ticket만 mismatch (양쪽 매칭만 — noise 0).
-    let mut items: Vec<MismatchItem> = Vec::new();
-    let mut active_keys: Vec<String> = Vec::new();
-    for (ticket, pr) in &merged {
-        let Some(page) = notion_by_ticket.get(ticket) else {
-            continue; // join 실패(PR엔 있으나 Notion에 없음) → 신호 없음.
-        };
-        if is_done_status(page.status.as_deref(), done_statuses) {
-            continue; // 동기화됨 — drift 아님.
-        }
-        let dedup = mismatch_dedup_key(project_id, ticket);
-        upsert_mismatch_signal(db, project_id, ticket, pr, page, &dedup)
-            .await
-            .map_err(|e| e.to_string())?;
-        active_keys.push(dedup);
-        items.push(MismatchItem {
-            project_id: project_id.to_string(),
-            ticket: ticket.clone(),
-            pr_url: pr.url.clone(),
-            notion_url: page.url.clone(),
-            notion_status: page.status.clone(),
-            escalated: true,
-        });
-    }
-
-    // 4) auto-resolve 해소된 mismatch.
-    auto_resolve_mismatch(
-        db,
-        project_id,
-        &active_keys,
-        &notion_tickets,
-        &done_tickets,
-        all_repos_ok,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    Ok(items)
-}
-
-/// done으로 볼 Notion 상태 이름 목록 설정(프로젝트별). 빈 목록이면 mismatch 감지 비활성(NULL 저장).
-#[tauri::command]
-#[specta::specta]
-pub async fn set_notion_done_statuses(
-    db: State<'_, Db>,
-    project_id: String,
-    statuses: Vec<String>,
-) -> Result<(), String> {
-    let cleaned: Vec<String> = statuses
-        .into_iter()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    let json = if cleaned.is_empty() {
-        None
-    } else {
-        Some(serde_json::to_string(&cleaned).map_err(|e| e.to_string())?)
-    };
-    sqlx::query(
-        "UPDATE projects SET notion_done_statuses = ?2, updated_at = datetime('now') WHERE id = ?1",
-    )
-    .bind(&project_id)
-    .bind(&json)
-    .execute(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// mismatch 새로고침(주기 폴링의 한 cycle). project의 백로그 상태 + PR 머지를 ticketKeyPattern으로 조인해
-/// drift를 매트릭스로 escalate(dedup)·해소분 auto-resolve. 토큰(GitHub+Notion)은 keychain에서만 읽는다.
-/// 설정 미비(백로그 DB 미바인딩 / done 목록 미설정 / 레포 없음)면 빈 결과(detection 비활성 — noise 0).
-#[tauri::command]
-#[specta::specta]
-pub async fn refresh_mismatch(
-    db: State<'_, Db>,
-    project_id: String,
-) -> Result<Vec<MismatchItem>, String> {
-    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT notion_backlog_db_id, ticket_key_pattern, notion_done_statuses \
-         FROM projects WHERE id = ?1",
-    )
-    .bind(&project_id)
-    .fetch_optional(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
-    let Some((backlog, pattern, done_raw)) = row else {
-        return Err("project not found".into());
-    };
-    let Some(backlog_db_id) = backlog.filter(|s| !s.trim().is_empty()) else {
-        return Ok(Vec::new()); // 백로그 DB 미바인딩 → 비활성.
-    };
-    let done_statuses = parse_done_statuses(done_raw.as_deref());
-    if done_statuses.is_empty() {
-        return Ok(Vec::new()); // done 기준 미설정 → 비활성(noise 0).
-    }
-    let repos = fetch_github_repo_refs(db.inner(), &project_id).await?;
-    if repos.is_empty() {
-        return Ok(Vec::new());
-    }
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    let gh_token = keychain::get_token(&cref, TokenKind::Github)
-        .map_err(|e| e.to_string())?
-        .ok_or("GitHub 토큰이 없음(설정에서 토큰 저장 필요)")?;
-    let notion_token = keychain::get_token(&cref, TokenKind::Notion)
-        .map_err(|e| e.to_string())?
-        .ok_or("Notion 토큰이 없음(설정에서 토큰 저장 필요)")?;
-    let pr_provider = HttpPrProvider::new(&gh_token).map_err(|e| e.to_string())?;
-    let notion_reader = HttpNotionReader::new().map_err(|e| e.to_string())?;
-    sync_mismatch(
-        db.inner(),
-        &pr_provider,
-        &notion_reader,
-        &notion_token,
-        &project_id,
-        &backlog_db_id,
-        pattern.as_deref(),
-        &repos,
-        &done_statuses,
-    )
-    .await
-}
-
 // ── Worktree & Branch Diff (Phase 5, read-only) ──────────────────────────────────
 // INVARIANT #6: Diff Viewer는 워킹트리/브랜치를 변경하지 않는다(git.rs는 read 서브커맨드만).
 // ambient — DB 영속 없이 매 호출마다 git에서 fresh 도출(PR Radar 선례). git 접근은 Rust에.
@@ -2942,7 +2636,7 @@ pub async fn reject_proposal(db: State<'_, Db>, run_id: String) -> Result<(), St
     Ok(())
 }
 
-// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안) ──────────────
+// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage) ──────────────
 //
 // 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴 재사용). codex 출력은 Proposal(draft)일
 // 뿐이고 사람이 accept해야 (로컬) 반영된다 — 외부(Notion/GitHub) 직접 mutate 없음(INVARIANT #2).
@@ -3398,159 +3092,6 @@ pub async fn accept_triage(
         .map_err(|e| e.to_string())
 }
 
-// ── mismatch 해소 초안 (#4, Notion 업데이트 draft — accept는 로컬 기록만) ──────────────
-
-/// mismatch 해소 초안 프롬프트(상수 — 컨텍스트는 cwd `mismatch.json`으로 전달, 인젝션 없음).
-const MISMATCH_DRAFT_PROMPT: &str = "\
-당신은 Notion 상태 동기화 **제안** 도우미다. 작업 디렉터리의 `mismatch.json`에 \
-{ticket, prUrl, notionUrl, currentStatus, candidateDoneStatuses} 가 있다. \
-PR이 머지됐는데 Notion 백로그 상태가 완료가 아니다. candidateDoneStatuses 중 적절한 완료 상태를 골라 \
-아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(순수 JSON):\n\
-{\
-\"ticket\": \"티켓 키\", \
-\"suggestedStatus\": \"candidateDoneStatuses 중 하나(권장 완료 상태)\", \
-\"note\": \"한국어 한두 문장 메모(왜 이 상태인지)\"\
-}\n\
-suggestedStatus는 candidateDoneStatuses 안에서만 고른다. 이건 제안일 뿐, 실제 Notion 변경은 사람이 한다.";
-
-/// mismatch 해소 초안 잡 트리거(Mismatch 카드). Notion 상태 업데이트를 제안하는 비-레포 잡(read_only).
-/// accept는 로컬 기록만(실제 Notion write는 사람 수동 — 사용자 결정). 미설치/미인증이면 Err.
-#[tauri::command]
-#[specta::specta]
-pub async fn trigger_mismatch_draft(
-    db: State<'_, Db>,
-    jm: State<'_, JobManager>,
-    input: TriggerMismatchDraftInput,
-) -> Result<String, String> {
-    let codex_bin = require_codex(&jm).await?;
-
-    // 프로젝트 done 상태 목록(후보)을 컨텍스트로.
-    let done_raw: Option<(Option<String>,)> =
-        sqlx::query_as("SELECT notion_done_statuses FROM projects WHERE id = ?1")
-            .bind(&input.project_id)
-            .fetch_optional(db.inner())
-            .await
-            .map_err(|e| e.to_string())?;
-    let candidates = parse_done_statuses(done_raw.and_then(|r| r.0).as_deref());
-
-    let context = serde_json::json!({
-        "ticket": input.ticket,
-        "prUrl": input.pr_url,
-        "notionUrl": input.notion_url,
-        "currentStatus": input.current_status,
-        "candidateDoneStatuses": candidates,
-    })
-    .to_string();
-
-    let id = new_run_id(db.inner()).await?;
-    let bounds = Bounds {
-        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
-        max_turns: input.max_turns.max(1),
-        cost_cap_usd: input.cost_cap_usd.max(0.0),
-    };
-    let dedup = mismatch_dedup_key(&input.project_id, &input.ticket);
-    let trigger = serde_json::json!({
-        "ticket": input.ticket,
-        "projectId": input.project_id,
-        "dedupKey": dedup,
-        "notionUrl": input.notion_url,
-    })
-    .to_string();
-    insert_agent_run(
-        db.inner(),
-        &NewAgentRun {
-            id: id.clone(),
-            project_id: Some(input.project_id.clone()),
-            engine: Engine::Codex,
-            kind: "draft_notion_update".into(),
-            rail: AgentRail::Suggestion,
-            sandbox: Sandbox::ReadOnly,
-            repo_id: None,
-            workdir: None,
-            trigger: Some(trigger),
-            retry_key: None,
-            retry_count: 0,
-            bounds,
-            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
-        },
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    jm.spawn(
-        db.inner().clone(),
-        id.clone(),
-        bounds,
-        CodexRunner {
-            codex_bin,
-            run_id: id.clone(),
-            prompt: MISMATCH_DRAFT_PROMPT.to_string(),
-            sandbox: Sandbox::ReadOnly,
-            rail: AgentRail::Suggestion,
-            repo_path: None,
-            worktree_root: jm.worktree_root.clone(),
-            scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
-            input_files: vec![("mismatch.json".to_string(), context)],
-        },
-        true,
-    );
-    Ok(id)
-}
-
-/// mismatch 해소 Proposal(타입 파싱). raw면 Err.
-#[tauri::command]
-#[specta::specta]
-pub async fn mismatch_draft_proposal(
-    db: State<'_, Db>,
-    run_id: String,
-) -> Result<NotionUpdateProposal, String> {
-    let raw = run_proposal_raw(db.inner(), &run_id).await?;
-    parse_proposal::<NotionUpdateProposal>(&raw)
-}
-
-/// mismatch 해소 accept 코어(테스트 가능). 로컬 기록만 + 로컬 mismatch 신호 resolve(status=done).
-/// **Notion은 어떤 호출도 없다** — 실제 상태 변경은 사람 수동(사용자 결정, INVARIANT #2).
-async fn execute_accept_mismatch_draft(
-    db: &Db,
-    run_id: &str,
-    dedup_key: Option<&str>,
-    accepted_json: &str,
-) -> Result<(), sqlx::Error> {
-    record_acceptance(db, run_id, "notion_update", accepted_json).await?;
-    // 로컬 mismatch 신호 resolve(매트릭스에서 소멸). 실제 Notion이 안 바뀌어도 다음 cycle의 ON CONFLICT가
-    // status를 덮지 않아 done으로 유지된다(accept = 사람이 처리하기로 약속). 실제 write는 사람 수동.
-    if let Some(key) = dedup_key {
-        sqlx::query(
-            "UPDATE signals SET status = 'done', updated_at = datetime('now') \
-             WHERE dedup_key = ?1 AND type = 'mismatch' AND status NOT IN ('done','archived')",
-        )
-        .bind(key)
-        .execute(db)
-        .await?;
-    }
-    Ok(())
-}
-
-/// mismatch 해소 Proposal accept(INVARIANT #2 게이트). 로컬에 기록하고 로컬 mismatch 신호를 resolve한다.
-/// **실제 Notion 상태 변경은 사람이 수동으로** — 여기서 외부를 mutate하지 않는다(사용자 결정).
-#[tauri::command]
-#[specta::specta]
-pub async fn accept_mismatch_draft(
-    db: State<'_, Db>,
-    run_id: String,
-    accepted: NotionUpdateProposal,
-) -> Result<(), String> {
-    let (status, trigger) = run_status_trigger(db.inner(), &run_id).await?;
-    if status != "awaiting_approval" {
-        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
-    }
-    let dedup = trigger_field(trigger.as_deref(), "dedupKey");
-    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
-    execute_accept_mismatch_draft(db.inner(), &run_id, dedup.as_deref(), &accepted_json)
-        .await
-        .map_err(|e| e.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3633,7 +3174,6 @@ mod tests {
             notion_backlog_db_id: None,
             notion_agenda_db_id: None,
             ticket_key_pattern: None,
-            notion_done_statuses: None,
         }
     }
 
@@ -4984,489 +4524,6 @@ mod tests {
         assert!(r.is_err(), "모든 레포 실패 → terminal failure 노출");
     }
 
-    // ── Phase 6: Status mismatch (Notion↔PR drift) ──────────────────────────────
-
-    /// fake Notion reader — 정해둔 백로그 페이지를 돌려준다(cycle 간 set으로 교체). 실 네트워크 없음.
-    struct FakeNotion {
-        pages: std::sync::Mutex<Vec<NotionPageState>>,
-        fail: bool,
-    }
-    impl FakeNotion {
-        fn new(pages: Vec<NotionPageState>) -> Self {
-            Self {
-                pages: std::sync::Mutex::new(pages),
-                fail: false,
-            }
-        }
-        fn failing() -> Self {
-            Self {
-                pages: std::sync::Mutex::new(Vec::new()),
-                fail: true,
-            }
-        }
-        fn set(&self, pages: Vec<NotionPageState>) {
-            *self.pages.lock().unwrap() = pages;
-        }
-    }
-    impl NotionReader for FakeNotion {
-        async fn fetch_pages(
-            &self,
-            _token: &str,
-            _db_id: &str,
-        ) -> Result<Vec<NotionPageState>, NotionError> {
-            if self.fail {
-                return Err(NotionError::Transient("notion down".into()));
-            }
-            Ok(self.pages.lock().unwrap().clone())
-        }
-    }
-
-    fn page(id: &str, title: &str, status: Option<&str>) -> NotionPageState {
-        NotionPageState {
-            page_id: id.into(),
-            url: format!("https://notion.so/{id}"),
-            title: title.into(),
-            status: status.map(String::from),
-        }
-    }
-
-    fn merged_pr(number: u64, title: &str) -> RawPr {
-        raw_pr(number, CiStatus::None, RawPrState::Merged, title)
-    }
-
-    /// repo full_name별로 결과를 다르게 주는 fake PR provider — 부분 실패(한 repo만 fetch 실패) 재현용.
-    struct PerRepoProvider {
-        by_repo: std::collections::HashMap<String, Result<Vec<RawPr>, ()>>,
-    }
-    impl PrProvider for PerRepoProvider {
-        async fn fetch_prs(&self, repo_full_name: &str) -> Result<Vec<RawPr>, GithubError> {
-            match self.by_repo.get(repo_full_name) {
-                Some(Ok(prs)) => Ok(prs.clone()),
-                Some(Err(())) => Err(GithubError::Transient("repo down".into())),
-                None => Ok(vec![]),
-            }
-        }
-        async fn fetch_pr_diff(
-            &self,
-            _repo_full_name: &str,
-            _number: u64,
-        ) -> Result<String, GithubError> {
-            Ok("diff --git a/x b/x".into())
-        }
-    }
-
-    const TICKET_PAT: &str = r"MIR-DEV-\d+";
-    fn done_list() -> Vec<String> {
-        vec!["Done".into(), "완료".into()]
-    }
-
-    /// type='mismatch' 신호: (quadrant, suggested_quadrant, status, dedup_key, snapshot, links).
-    async fn mismatch_signals(
-        db: &Db,
-    ) -> Vec<(
-        String,
-        Option<String>,
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-    )> {
-        sqlx::query_as(
-            "SELECT quadrant, suggested_quadrant, status, dedup_key, snapshot, links \
-             FROM signals WHERE type = 'mismatch' ORDER BY created_at",
-        )
-        .fetch_all(db)
-        .await
-        .unwrap()
-    }
-
-    async fn mismatch_count(db: &Db) -> i64 {
-        let n: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM signals WHERE type = 'mismatch'")
-            .fetch_one(db)
-            .await
-            .unwrap();
-        n.0
-    }
-
-    /// done 판정: 대소문자/공백 무시, 미설정(None)은 done 아님.
-    #[test]
-    fn is_done_status_case_insensitive() {
-        let done = done_list();
-        assert!(is_done_status(Some("done"), &done));
-        assert!(is_done_status(Some(" 완료 "), &done));
-        assert!(!is_done_status(Some("In progress"), &done));
-        assert!(!is_done_status(None, &done));
-        assert!(!is_done_status(Some("Done"), &[]), "빈 목록이면 항상 false");
-    }
-
-    /// done_statuses JSON 파싱: 정상/NULL/깨진 JSON.
-    #[test]
-    fn parse_done_statuses_graceful() {
-        assert_eq!(
-            parse_done_statuses(Some(r#"["Done","완료"]"#)),
-            vec!["Done", "완료"]
-        );
-        assert!(parse_done_statuses(None).is_empty());
-        assert!(parse_done_statuses(Some("not json")).is_empty());
-    }
-
-    /// (1) done-criteria: "Notion Doing + PR Merged" → mismatch 정확히 1건(unclassified + dedup + snapshot).
-    #[tokio::test]
-    async fn mismatch_merged_pr_notion_not_done() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let pr = FakeProvider::new(vec![merged_pr(7, "MIR-DEV-7 로그인")]);
-        let notion = FakeNotion::new(vec![page("pg-7", "MIR-DEV-7 로그인 백로그", Some("Doing"))]);
-
-        let items = sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(items.len(), 1, "drift 정확히 1건");
-        assert_eq!(items[0].ticket, "MIR-DEV-7");
-        assert!(items[0].escalated);
-        assert_eq!(items[0].notion_status.as_deref(), Some("Doing"));
-
-        let sigs = mismatch_signals(&db).await;
-        assert_eq!(sigs.len(), 1, "정확히 1 신호");
-        assert_eq!(sigs[0].0, "unclassified", "항상 미분류 진입 (INVARIANT #1)");
-        assert_eq!(
-            sigs[0].1.as_deref(),
-            Some("q3_quick_contain"),
-            "suggested 힌트만"
-        );
-        assert_eq!(sigs[0].2, "new");
-        assert_eq!(
-            sigs[0].3.as_deref(),
-            Some(mismatch_dedup_key(&proj.id, "MIR-DEV-7").as_str())
-        );
-        let snap = sigs[0].4.as_deref().unwrap();
-        assert!(snap.contains("\"prState\":\"merged\""), "snapshot prState");
-        assert!(snap.contains("Doing"), "snapshot notionState");
-        assert!(sigs[0].5.as_deref().unwrap().contains("notionBacklogId"));
-    }
-
-    /// (2) done-criteria: Notion 상태가 done으로 갱신되면 mismatch auto-resolve.
-    #[tokio::test]
-    async fn mismatch_auto_resolves_when_notion_done() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let pr = FakeProvider::new(vec![merged_pr(7, "MIR-DEV-7 로그인")]);
-        let notion = FakeNotion::new(vec![page("pg-7", "MIR-DEV-7 로그인", Some("Doing"))]);
-
-        sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(mismatch_signals(&db).await[0].2, "new", "처음엔 active");
-
-        // Notion 상태 Done으로 갱신 → drift 해소.
-        notion.set(vec![page("pg-7", "MIR-DEV-7 로그인", Some("Done"))]);
-        sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            mismatch_signals(&db).await[0].2,
-            "done",
-            "Notion done → auto-resolve"
-        );
-    }
-
-    /// (3) done-criteria: join key 매칭 실패는 noise를 만들지 않는다(양쪽 매칭만 신호).
-    #[tokio::test]
-    async fn mismatch_join_failure_no_noise() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        // PR엔 MIR-DEV-9, Notion엔 MIR-DEV-1 → 조인 안 됨. 또 패턴 없는 PR/페이지도 섞음.
-        let pr = FakeProvider::new(vec![
-            merged_pr(9, "MIR-DEV-9 결제"),
-            merged_pr(10, "리팩터 (티켓 없음)"),
-        ]);
-        let notion = FakeNotion::new(vec![
-            page("pg-1", "MIR-DEV-1 다른건 Doing", Some("Doing")),
-            page("pg-x", "잡일 (티켓 없음)", Some("Doing")),
-        ]);
-        let items = sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await
-        .unwrap();
-        assert!(items.is_empty(), "조인 실패 → drift 없음");
-        assert_eq!(mismatch_count(&db).await, 0, "join 실패 → 신호 0");
-    }
-
-    /// (4) 폴링 N회 반복해도 mismatch 신호 1행 유지(dedup upsert — INVARIANT #3).
-    #[tokio::test]
-    async fn mismatch_polling_no_duplicate() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let pr = FakeProvider::new(vec![merged_pr(7, "MIR-DEV-7 버그")]);
-        let notion = FakeNotion::new(vec![page("pg-7", "MIR-DEV-7 버그", Some("Doing"))]);
-        for _ in 0..4 {
-            sync_mismatch(
-                &db,
-                &pr,
-                &notion,
-                "tok",
-                &proj.id,
-                "db",
-                Some(TICKET_PAT),
-                &repo_refs(),
-                &done_list(),
-            )
-            .await
-            .unwrap();
-        }
-        assert_eq!(mismatch_count(&db).await, 1, "폴링 N회에도 중복 0");
-    }
-
-    /// (5) 사람이 classify한 mismatch 신호는 재sync upsert가 quadrant/status를 덮지 않는다(INVARIANT #1).
-    #[tokio::test]
-    async fn mismatch_human_classification_preserved() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let pr = FakeProvider::new(vec![merged_pr(7, "MIR-DEV-7 버그")]);
-        let notion = FakeNotion::new(vec![page("pg-7", "MIR-DEV-7 버그", Some("Doing"))]);
-        sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await
-        .unwrap();
-
-        let id: (String,) =
-            sqlx::query_as("SELECT id FROM signals WHERE type = 'mismatch' LIMIT 1")
-                .fetch_one(&db)
-                .await
-                .unwrap();
-        set_quadrant(&db, &id.0, Quadrant::Q3QuickContain)
-            .await
-            .unwrap();
-
-        sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await
-        .unwrap();
-        let sigs = mismatch_signals(&db).await;
-        assert_eq!(sigs.len(), 1, "여전히 1행");
-        assert_eq!(sigs[0].0, "q3_quick_contain", "사람 분류 보존");
-        assert_eq!(sigs[0].2, "classified", "사람 status 보존");
-    }
-
-    /// (6) open PR(머지 아님)은 drift가 아니다(사용자 결정: 정본 케이스 = merged만).
-    #[tokio::test]
-    async fn mismatch_open_pr_not_drift() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let pr = FakeProvider::new(vec![raw_pr(
-            7,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "MIR-DEV-7 진행중",
-        )]);
-        let notion = FakeNotion::new(vec![page("pg-7", "MIR-DEV-7 진행중", Some("Doing"))]);
-        let items = sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await
-        .unwrap();
-        assert!(items.is_empty(), "open PR은 drift 아님");
-        assert_eq!(mismatch_count(&db).await, 0);
-    }
-
-    /// (7) done_statuses 미설정이면 detection 비활성(noise 0, 기존 신호도 안 건드림).
-    #[tokio::test]
-    async fn mismatch_disabled_without_done_statuses() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let pr = FakeProvider::new(vec![merged_pr(7, "MIR-DEV-7 버그")]);
-        let notion = FakeNotion::new(vec![page("pg-7", "MIR-DEV-7 버그", Some("Doing"))]);
-        let items = sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &[],
-        )
-        .await
-        .unwrap();
-        assert!(items.is_empty());
-        assert_eq!(mismatch_count(&db).await, 0, "done 미설정 → 비활성");
-    }
-
-    /// (8) Notion fetch 실패는 drift 판정 불가 → Err(삼키지 않음, auto-resolve도 안 함).
-    #[tokio::test]
-    async fn mismatch_notion_failure_surfaces_error() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let pr = FakeProvider::new(vec![merged_pr(7, "MIR-DEV-7 버그")]);
-        let notion = FakeNotion::failing();
-        let r = sync_mismatch(
-            &db,
-            &pr,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repo_refs(),
-            &done_list(),
-        )
-        .await;
-        assert!(r.is_err(), "Notion 실패 → terminal failure 노출");
-    }
-
-    /// (9) 부분 PR fetch 실패는 false auto-resolve를 일으키지 않는다(all_repos_ok 가드).
-    /// 멀티 repo: ticket의 merged PR이 repo B에 있는데 cycle 2에서 B fetch가 실패해도 mismatch는 유지된다.
-    #[tokio::test]
-    async fn mismatch_partial_pr_failure_keeps_signal() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let repos = vec![
-            RepoRef {
-                full_name: "o/a".into(),
-                ticket_pattern: Some(TICKET_PAT.into()),
-            },
-            RepoRef {
-                full_name: "o/b".into(),
-                ticket_pattern: Some(TICKET_PAT.into()),
-            },
-        ];
-        let notion = FakeNotion::new(vec![page("pg-7", "MIR-DEV-7 버그", Some("Doing"))]);
-
-        // cycle 1: 둘 다 OK, MIR-DEV-7의 merged PR은 repo B에.
-        let provider1 = PerRepoProvider {
-            by_repo: std::collections::HashMap::from([
-                ("o/a".to_string(), Ok(vec![])),
-                ("o/b".to_string(), Ok(vec![merged_pr(7, "MIR-DEV-7 버그")])),
-            ]),
-        };
-        sync_mismatch(
-            &db,
-            &provider1,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repos,
-            &done_list(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(mismatch_signals(&db).await[0].2, "new", "cycle 1: drift");
-
-        // cycle 2: repo B fetch 실패(A만 성공). merged set에서 MIR-DEV-7이 빠지지만
-        // Notion은 여전히 Doing(미done) → all_repos_ok=false라 PR-소실 기반 resolve를 막아야 함.
-        let provider2 = PerRepoProvider {
-            by_repo: std::collections::HashMap::from([
-                ("o/a".to_string(), Ok(vec![])),
-                ("o/b".to_string(), Err(())),
-            ]),
-        };
-        sync_mismatch(
-            &db,
-            &provider2,
-            &notion,
-            "tok",
-            &proj.id,
-            "db",
-            Some(TICKET_PAT),
-            &repos,
-            &done_list(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            mismatch_signals(&db).await[0].2,
-            "new",
-            "부분 PR 실패 → false-resolve 금지(여전히 active)"
-        );
-    }
-
     // ── Phase 5: Worktree & Branch Diff ─────────────────────────────────────────
 
     use crate::git::{GitError, RawStatus, RawWorktree};
@@ -5793,7 +4850,7 @@ mod tests {
         assert_eq!(acc.0, 0);
     }
 
-    // ── Phase 9: enrich / CI triage / mismatch 초안 ──────────────────────────────────
+    // ── Phase 9: enrich / CI triage ──────────────────────────────────
 
     /// enrich proposal: raw fallback과 닫힌 세트 밖 area는 Err(INVARIANT #1 구조적 강제), 누락은 관용.
     #[test]
@@ -5808,9 +4865,9 @@ mod tests {
         assert!(ok.suggested_quadrant.is_none());
     }
 
-    /// CI triage / mismatch proposal: raw fallback은 Err, 정상 JSON은 파싱.
+    /// CI triage proposal: raw fallback은 Err, 정상 JSON은 파싱.
     #[test]
-    fn triage_and_mismatch_proposals_parse() {
+    fn triage_proposal_parses() {
         assert!(parse_proposal::<CiTriageProposal>(r#"{"raw":"x"}"#).is_err());
         let t = parse_proposal::<CiTriageProposal>(
             r#"{"cause":"타입 오류","suggestedFixes":["고치기"]}"#,
@@ -5818,11 +4875,6 @@ mod tests {
         .unwrap();
         assert_eq!(t.cause, "타입 오류");
         assert_eq!(t.suggested_fixes.len(), 1);
-        let m = parse_proposal::<NotionUpdateProposal>(
-            r#"{"ticket":"MIR-DEV-7","suggestedStatus":"Done","note":"머지됨"}"#,
-        )
-        .unwrap();
-        assert_eq!(m.suggested_status, "Done");
     }
 
     /// INVARIANT #1: enrich accept는 suggested_* 힌트만 쓰고 quadrant(결정 레일)/area(확정값)는 안 건드린다.
@@ -5943,57 +4995,5 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(n.0, 1, "dedup — 중복 0");
-    }
-
-    /// mismatch 해소 accept = acceptances 1행(외부 무변경) + 로컬 mismatch 신호 resolve(done).
-    #[tokio::test]
-    async fn mismatch_draft_accept_records_and_resolves_signal() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
-            .await
-            .unwrap();
-        let dedup = format!("mismatch:{}:MIR-DEV-7", proj.id);
-        sqlx::query(
-            "INSERT INTO signals (id, project_id, title, source, type, quadrant, dedup_key, status) \
-             VALUES ('m1', ?1, '[MIR-DEV-7] 미동기화', 'system', 'mismatch', 'unclassified', ?2, 'new')",
-        )
-        .bind(&proj.id)
-        .bind(&dedup)
-        .execute(&db)
-        .await
-        .unwrap();
-
-        let trigger = serde_json::json!({
-            "ticket": "MIR-DEV-7", "projectId": proj.id, "dedupKey": dedup,
-        })
-        .to_string();
-        let proposal = r#"{"ticket":"MIR-DEV-7","suggestedStatus":"Done","note":"머지됨"}"#;
-        insert_awaiting_run(&db, "md1", proposal, &trigger).await;
-
-        let parsed = parse_proposal::<NotionUpdateProposal>(proposal).unwrap();
-        let accepted_json = serde_json::to_string(&parsed).unwrap();
-        execute_accept_mismatch_draft(&db, "md1", Some(&dedup), &accepted_json)
-            .await
-            .unwrap();
-
-        // 외부 무변경 — acceptances(notion_update) 1행 + 잡 succeeded.
-        let cnt: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM acceptances WHERE agent_run_id='md1' AND target='notion_update'",
-        )
-        .fetch_one(&db)
-        .await
-        .unwrap();
-        assert_eq!(cnt.0, 1);
-        let st: (String,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='md1'")
-            .fetch_one(&db)
-            .await
-            .unwrap();
-        assert_eq!(st.0, "succeeded");
-        // 로컬 mismatch 신호 resolve(done).
-        let sigst: (String,) = sqlx::query_as("SELECT status FROM signals WHERE id='m1'")
-            .fetch_one(&db)
-            .await
-            .unwrap();
-        assert_eq!(sigst.0, "done");
     }
 }

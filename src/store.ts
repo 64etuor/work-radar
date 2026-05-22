@@ -9,7 +9,6 @@ export type View =
   | "settings"
   | "radar"
   | "worktree"
-  | "mismatch"
   | "jobs";
 /** 설정 진입 의도 (cmdk 팔레트 항목 → Settings 뷰 포커스). */
 export type SettingsIntent = "open" | "add_project" | "add_repo";

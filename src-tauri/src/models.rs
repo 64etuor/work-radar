@@ -24,9 +24,6 @@ pub struct Project {
     pub notion_backlog_db_id: Option<String>,
     pub notion_agenda_db_id: Option<String>,
     pub ticket_key_pattern: Option<String>,
-    /// "완료(done)"로 볼 Notion 상태 이름 목록 (JSON 배열 문자열). mismatch 판정 기준 (Phase 6).
-    /// NULL/빈 목록이면 mismatch 감지 비활성(noise 0).
-    pub notion_done_statuses: Option<String>,
     /// 포함할 Google Calendar 선택 목록 (JSON `[{id,summary}]`). Phase 10b. NULL/빈 목록이면 fetch 없음.
     /// INVARIANT #7: 선택 목록만 로컬 SSOT — 이벤트는 ambient(영속 없음), 토큰은 keychain.
     pub google_calendar_ids: Option<String>,
@@ -44,8 +41,6 @@ pub struct CreateProjectInput {
     pub notion_backlog_db_id: Option<String>,
     pub notion_agenda_db_id: Option<String>,
     pub ticket_key_pattern: Option<String>,
-    /// done으로 볼 Notion 상태 이름 목록 (JSON 배열 문자열, 선택). Phase 6 mismatch 기준.
-    pub notion_done_statuses: Option<String>,
 }
 
 // ── 레포(Repo) ────────────────────────────────────────────────────────────────
@@ -180,7 +175,6 @@ pub enum SignalType {
     AgentAlert,
     MeetingPrep,
     Stale,
-    Mismatch,
     Cleanup,
 }
 
@@ -238,8 +232,6 @@ pub struct WorkSignal {
     /// Today 완료 체크한 날(YYYY-MM-DD).
     pub today_done_at: Option<String>,
     pub today_rank: Option<i32>,
-    /// mismatch drift 비교용 마지막 관측치 (JSON: { prState, notionState }). Phase 6. 그 외 신호는 NULL.
-    pub snapshot: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -589,29 +581,6 @@ pub struct DiffFileSummary {
     pub binary: bool,
 }
 
-// ── Status mismatch (Phase 6, Notion↔PR drift) ───────────────────────────────────
-//
-// ambient — 매 호출 GitHub(PR)+Notion(backlog status)에서 fresh 도출. drift면 mismatch 신호 upsert
-// (dedup + auto-resolve, INVARIANT #3). join key = ticketKeyPattern. 매칭 실패는 신호를 만들지 않는다(noise 0).
-// INVARIANT #1: mismatch 신호도 항상 unclassified 진입 + suggested 힌트만(자동 분류 금지).
-
-/// drift 감지 한 항목 (Mismatch 뷰 표시용). 토큰 본문은 절대 담기지 않는다(INVARIANT).
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct MismatchItem {
-    pub project_id: String,
-    /// join key (ticketKeyPattern 매칭 결과). PR·Notion 양쪽에서 추출돼 매칭된 티켓.
-    pub ticket: String,
-    /// 머지된 PR URL (drift의 GitHub 측 근거).
-    pub pr_url: String,
-    /// 백로그 페이지 URL ("Notion에서 열기").
-    pub notion_url: String,
-    /// 관측된 Notion 상태 이름 (done이 아니라 drift). 상태 미설정이면 None.
-    pub notion_status: Option<String>,
-    /// 이 drift가 매트릭스로 escalate된 active 신호를 갖는지 (항상 true — drift면 upsert).
-    pub escalated: bool,
-}
-
 // ── Agent 스파인 (Phase 7, 잡 큐 + bounds + kill) ──────────────────────────────────
 //
 // INVARIANT #5: 모든 잡은 bound된다 (timeout + max_turns + cost_cap + kill switch).
@@ -791,7 +760,7 @@ pub struct PrSelfCheckProposal {
     pub migration_notes: Vec<String>,
 }
 
-// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage / mismatch 초안) ──────────────
+// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage) ──────────────
 //
 // 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴). codex 출력은 Proposal(draft)일 뿐,
 // 사람이 accept해야 (로컬) 반영된다 — 외부(Notion/GitHub) 직접 mutate 없음(INVARIANT #2).
@@ -865,41 +834,11 @@ pub struct TriageOutcome {
     pub detail: String,
 }
 
-/// mismatch 해소 초안 잡 입력 (Mismatch 카드에서 트리거). 비-레포 잡(Notion 상태 추론). project별.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct TriggerMismatchDraftInput {
-    pub project_id: String,
-    pub ticket: String,
-    pub pr_url: String,
-    pub notion_url: String,
-    /// 현재 관측된 Notion 상태(없으면 None).
-    pub current_status: Option<String>,
-    pub timeout_sec: u32,
-    pub max_turns: u32,
-    pub cost_cap_usd: f64,
-}
-
-/// mismatch 해소 산출 Proposal (codex draft = Notion 상태 업데이트 제안). accept는 로컬 기록만 +
-/// 로컬 mismatch 신호 resolve — **실제 Notion write는 사람이 수동**(사용자 결정, INVARIANT #2).
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct NotionUpdateProposal {
-    #[serde(default)]
-    pub ticket: String,
-    /// 제안하는 변경 후 상태 이름(프로젝트 done 목록 중).
-    #[serde(default)]
-    pub suggested_status: String,
-    /// 사람이 읽을 메모/근거.
-    #[serde(default)]
-    pub note: String,
-}
-
 // ── Phase 10: Google Calendar 연동 (read 레일) ────────────────────────────────────
 //
 // INVARIANT: 자격증명(clientId/clientSecret/refreshToken)은 keychain blob에만 — DTO/렌더러/반환에
 // 절대 담기지 않는다. 외부 호출은 Rust(reqwest), read-only(`calendar.readonly`) → 외부 mutate 0 →
-// Acceptance 불요(PR Radar/mismatch read 선례). bounded·graceful degrade(#5). specta i64/u64 금지.
+// Acceptance 불요(PR Radar read 선례). bounded·graceful degrade(#5). specta i64/u64 금지.
 
 /// 프로젝트별 Google Calendar 연결 상태 (graceful degrade 판정용). 토큰 본문 미포함.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

@@ -37,8 +37,6 @@ export function AddProjectForm({
         notionBacklogDbId: trimOrNull(backlogDb),
         notionAgendaDbId: trimOrNull(agendaDb),
         ticketKeyPattern: trimOrNull(ticketPattern),
-        // done 상태 목록은 생성 후 프로젝트 카드에서 설정(Phase 6 mismatch 기준).
-        notionDoneStatuses: null,
       },
       {
         onSuccess: (p) => {

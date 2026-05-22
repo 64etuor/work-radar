@@ -16,7 +16,6 @@ import type {
   AreaTag,
   CiTriageProposal,
   EnrichProposal,
-  NotionUpdateProposal,
   PrSelfCheckProposal,
   Quadrant,
   SelfCheckItem,
@@ -24,7 +23,6 @@ import type {
 import {
   openExternal,
   useAcceptEnrich,
-  useAcceptMismatchDraft,
   useAcceptProposal,
   useAcceptTriage,
   useAgentLog,
@@ -32,7 +30,6 @@ import {
   useCodexStatus,
   useEnrichProposal,
   useKillAgentRun,
-  useMismatchDraftProposal,
   usePrProposal,
   useRejectProposal,
   useTriageProposal,
@@ -268,7 +265,7 @@ function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void }) {
 
 /**
  * Acceptance 게이트 패널 디스패처 — 잡 kind별로 알맞은 Proposal 패널을 고른다(Phase 8 self-check +
- * Phase 9 enrich/triage/mismatch). accept는 모두 로컬 반영일 뿐, 외부(Notion/GitHub) 무변경(INVARIANT #2).
+ * Phase 9 enrich/triage). accept는 모두 로컬 반영일 뿐, 외부(Notion/GitHub) 무변경(INVARIANT #2).
  */
 function ProposalPanel({ run }: { run: AgentRunView }) {
   switch (run.kind) {
@@ -276,8 +273,6 @@ function ProposalPanel({ run }: { run: AgentRunView }) {
       return <EnrichPanel run={run} />;
     case "triage_ci":
       return <TriagePanel run={run} />;
-    case "draft_notion_update":
-      return <MismatchDraftPanel run={run} />;
     default:
       return <SelfCheckPanel run={run} />;
   }
@@ -435,7 +430,7 @@ function normalizeProposal(p: PrSelfCheckProposal): PrSelfCheckProposal {
   };
 }
 
-// ── Phase 9 패널 (enrich / CI triage / mismatch 초안) ────────────────────────────────
+// ── Phase 9 패널 (enrich / CI triage) ────────────────────────────────
 
 /** 제안 사분면 옵션(힌트 — INVARIANT #1: 자동 분류 아님). */
 const QUADRANT_OPTS: { value: Quadrant; label: string }[] = [
@@ -673,88 +668,6 @@ function TriagePanel({ run }: { run: AgentRunView }) {
         >
           <Check className="size-3.5" />
           accept (로컬 기록)
-        </button>
-        <button
-          type="button"
-          className="jobs-btn jobs-reject"
-          disabled={reject.isPending}
-          onClick={() => reject.mutate(run.id)}
-        >
-          <X className="size-3.5" />
-          폐기
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * mismatch 해소 초안 패널 (Phase 9 #4). 제안 Notion 상태/메모를 편집·accept한다. accept하면 로컬
- * mismatch 신호가 해소 표시되지만 **실제 Notion 변경은 사람이 직접** — 외부 무변경(INVARIANT #2).
- */
-function MismatchDraftPanel({ run }: { run: AgentRunView }) {
-  const proposal = useMismatchDraftProposal(run.id, true);
-  const accept = useAcceptMismatchDraft();
-  const reject = useRejectProposal();
-  const [draft, setDraft] = useState<NotionUpdateProposal | null>(null);
-  useEffect(() => {
-    if (proposal.data) setDraft(proposal.data);
-  }, [proposal.data]);
-
-  if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
-  }
-  if (proposal.error) {
-    return (
-      <ProposalError
-        runId={run.id}
-        message={(proposal.error as Error).message}
-        reject={reject}
-      />
-    );
-  }
-  const d: NotionUpdateProposal = draft ??
-    proposal.data ?? { ticket: "", suggestedStatus: "", note: "" };
-
-  return (
-    <div className="jobs-prop">
-      <label className="jobs-prop-label">티켓</label>
-      <input
-        className="jobs-prop-select"
-        value={d.ticket ?? ""}
-        onChange={(e) => setDraft({ ...d, ticket: e.target.value })}
-      />
-      <label className="jobs-prop-label">제안 Notion 상태</label>
-      <input
-        className="jobs-prop-select"
-        value={d.suggestedStatus ?? ""}
-        onChange={(e) => setDraft({ ...d, suggestedStatus: e.target.value })}
-      />
-      <label className="jobs-prop-label">메모</label>
-      <textarea
-        className="jobs-prop-summary"
-        rows={2}
-        value={d.note ?? ""}
-        onChange={(e) => setDraft({ ...d, note: e.target.value })}
-      />
-      <div className="jobs-prop-hint">
-        accept하면 로컬 mismatch가 <b>해소 표시</b>됩니다 — 실제{" "}
-        <b>Notion 변경은 직접</b>(외부 무변경).
-      </div>
-      {(accept.error || reject.error) && (
-        <div className="jobs-prop-err">
-          {((accept.error ?? reject.error) as Error).message}
-        </div>
-      )}
-      <div className="jobs-prop-actions">
-        <button
-          type="button"
-          className="jobs-btn jobs-btn-primary"
-          disabled={accept.isPending}
-          onClick={() => accept.mutate({ runId: run.id, accepted: d })}
-        >
-          <Check className="size-3.5" />
-          accept (로컬 해소)
         </button>
         <button
           type="button"

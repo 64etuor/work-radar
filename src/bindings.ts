@@ -61,14 +61,6 @@ export const commands = {
 	/**  수동 self-check 토글(로컬 상태). checked면 행 추가, 아니면 삭제(다음 도출이 반영). */
 	setPrSelfCheck: (repoFullName: string, prNumber: number, checked: boolean) => typedError<null, string>(__TAURI_INVOKE("set_pr_self_check", { repoFullName, prNumber, checked })),
 	/**
-	 *  mismatch 새로고침(주기 폴링의 한 cycle). project의 백로그 상태 + PR 머지를 ticketKeyPattern으로 조인해
-	 *  drift를 매트릭스로 escalate(dedup)·해소분 auto-resolve. 토큰(GitHub+Notion)은 keychain에서만 읽는다.
-	 *  설정 미비(백로그 DB 미바인딩 / done 목록 미설정 / 레포 없음)면 빈 결과(detection 비활성 — noise 0).
-	 */
-	refreshMismatch: (projectId: string) => typedError<MismatchItem[], string>(__TAURI_INVOKE("refresh_mismatch", { projectId })),
-	/**  done으로 볼 Notion 상태 이름 목록 설정(프로젝트별). 빈 목록이면 mismatch 감지 비활성(NULL 저장). */
-	setNotionDoneStatuses: (projectId: string, statuses: string[]) => typedError<null, string>(__TAURI_INVOKE("set_notion_done_statuses", { projectId, statuses })),
-	/**
 	 *  repo별 worktree를 상태 배지(ahead/behind/dirty)와 함께 나열한다. project_id=None이면 멀티 repo 전체.
 	 *  ambient — 매 호출 git에서 fresh 도출(영속 없음). read-only(INVARIANT #6).
 	 */
@@ -139,18 +131,6 @@ export const commands = {
 	 *  실제 수정은 사람이 수동(또는 실행 레일 Phase 10).
 	 */
 	acceptTriage: (runId: string, accepted: CiTriageProposal) => typedError<null, string>(__TAURI_INVOKE("accept_triage", { runId, accepted })),
-	/**
-	 *  mismatch 해소 초안 잡 트리거(Mismatch 카드). Notion 상태 업데이트를 제안하는 비-레포 잡(read_only).
-	 *  accept는 로컬 기록만(실제 Notion write는 사람 수동 — 사용자 결정). 미설치/미인증이면 Err.
-	 */
-	triggerMismatchDraft: (input: TriggerMismatchDraftInput) => typedError<string, string>(__TAURI_INVOKE("trigger_mismatch_draft", { input })),
-	/**  mismatch 해소 Proposal(타입 파싱). raw면 Err. */
-	mismatchDraftProposal: (runId: string) => typedError<NotionUpdateProposal, string>(__TAURI_INVOKE("mismatch_draft_proposal", { runId })),
-	/**
-	 *  mismatch 해소 Proposal accept(INVARIANT #2 게이트). 로컬에 기록하고 로컬 mismatch 신호를 resolve한다.
-	 *  **실제 Notion 상태 변경은 사람이 수동으로** — 여기서 외부를 mutate하지 않는다(사용자 결정).
-	 */
-	acceptMismatchDraft: (runId: string, accepted: NotionUpdateProposal) => typedError<null, string>(__TAURI_INVOKE("accept_mismatch_draft", { runId, accepted })),
 	/**
 	 *  OAuth client(client_id/secret)을 keychain blob에 저장(반환 없음). 같은 client면 refresh_token 보존,
 	 *  client가 바뀌면 refresh_token은 버린다(다른 client엔 무효 — 재연결 필요).
@@ -286,8 +266,6 @@ export type CreateProjectInput = {
 	notionBacklogDbId: string | null,
 	notionAgendaDbId: string | null,
 	ticketKeyPattern: string | null,
-	/**  done으로 볼 Notion 상태 이름 목록 (JSON 배열 문자열, 선택). Phase 6 mismatch 기준. */
-	notionDoneStatuses: string | null,
 };
 
 /**  레포 추가 입력. */
@@ -393,33 +371,6 @@ export type GoogleCalendarStatus = {
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
 
-/**  drift 감지 한 항목 (Mismatch 뷰 표시용). 토큰 본문은 절대 담기지 않는다(INVARIANT). */
-export type MismatchItem = {
-	projectId: string,
-	/**  join key (ticketKeyPattern 매칭 결과). PR·Notion 양쪽에서 추출돼 매칭된 티켓. */
-	ticket: string,
-	/**  머지된 PR URL (drift의 GitHub 측 근거). */
-	prUrl: string,
-	/**  백로그 페이지 URL ("Notion에서 열기"). */
-	notionUrl: string,
-	/**  관측된 Notion 상태 이름 (done이 아니라 drift). 상태 미설정이면 None. */
-	notionStatus: string | null,
-	/**  이 drift가 매트릭스로 escalate된 active 신호를 갖는지 (항상 true — drift면 upsert). */
-	escalated: boolean,
-};
-
-/**
- *  mismatch 해소 산출 Proposal (codex draft = Notion 상태 업데이트 제안). accept는 로컬 기록만 +
- *  로컬 mismatch 신호 resolve — **실제 Notion write는 사람이 수동**(사용자 결정, INVARIANT #2).
- */
-export type NotionUpdateProposal = {
-	ticket?: string,
-	/**  제안하는 변경 후 상태 이름(프로젝트 done 목록 중). */
-	suggestedStatus?: string,
-	/**  사람이 읽을 메모/근거. */
-	note?: string,
-};
-
 /**  외부 API ping 결과 (read-only). 토큰 본문은 포함하지 않는다. */
 export type PingResult = {
 	ok: boolean,
@@ -475,11 +426,6 @@ export type Project = {
 	notionBacklogDbId: string | null,
 	notionAgendaDbId: string | null,
 	ticketKeyPattern: string | null,
-	/**
-	 *  "완료(done)"로 볼 Notion 상태 이름 목록 (JSON 배열 문자열). mismatch 판정 기준 (Phase 6).
-	 *  NULL/빈 목록이면 mismatch 감지 비활성(noise 0).
-	 */
-	notionDoneStatuses: string | null,
 	/**
 	 *  포함할 Google Calendar 선택 목록 (JSON `[{id,summary}]`). Phase 10b. NULL/빈 목록이면 fetch 없음.
 	 *  INVARIANT #7: 선택 목록만 로컬 SSOT — 이벤트는 ambient(영속 없음), 토큰은 keychain.
@@ -585,7 +531,7 @@ export type SignalSource = "braindump" | "notion_backlog" | "notion_agenda" | "g
 export type SignalStatus = "new" | "classified" | "promoted" | "linked" | "done" | "snoozed" | "archived";
 
 /**  신호 종류. */
-export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "mismatch" | "cleanup";
+export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "cleanup";
 
 /**  Today 운영 뷰 집계. 캘린더 오늘 이벤트·Today 레일·루틴은 프런트가 기존 헬퍼로 합성한다. */
 export type TodayOverview = {
@@ -655,19 +601,6 @@ export type TriggerEchoInput = {
 /**  braindump enrich 잡 입력 (미분류 카드 ⋯ 메뉴에서 트리거). 비-레포 잡(worktree 불요). */
 export type TriggerEnrichInput = {
 	signalId: string,
-	timeoutSec: number,
-	maxTurns: number,
-	costCapUsd: number | null,
-};
-
-/**  mismatch 해소 초안 잡 입력 (Mismatch 카드에서 트리거). 비-레포 잡(Notion 상태 추론). project별. */
-export type TriggerMismatchDraftInput = {
-	projectId: string,
-	ticket: string,
-	prUrl: string,
-	notionUrl: string,
-	/**  현재 관측된 Notion 상태(없으면 None). */
-	currentStatus: string | null,
 	timeoutSec: number,
 	maxTurns: number,
 	costCapUsd: number | null,
@@ -764,8 +697,6 @@ export type WorkSignal = {
 	/**  Today 완료 체크한 날(YYYY-MM-DD). */
 	todayDoneAt: string | null,
 	todayRank: number | null,
-	/**  mismatch drift 비교용 마지막 관측치 (JSON: { prState, notionState }). Phase 6. 그 외 신호는 NULL. */
-	snapshot: string | null,
 	createdAt: string,
 	updatedAt: string,
 };
