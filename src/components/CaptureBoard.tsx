@@ -174,22 +174,70 @@ export function CaptureBoard() {
   };
 
   // 카드 → Notion 백로그/안건 즉시 승격(write). 사람 클릭이 곧 결정/accept (INVARIANT #2).
+  // project_id 라우팅: 신호에 이미 project_id가 있으면 그대로, 없으면 kind 매칭 프로젝트로:
+  //   - 1개 → 백엔드가 자동 지정(projectId=null 전달), outcome.resolvedProjectId로 라벨 표시.
+  //   - 여러 개 → 프런트 picker에서 사람이 선택(INVARIANT #1 — 자동 확정 없음).
+  //   - 0개 → 설정 안내 toast.
   const handleNotionPromote = (signalId: string, action: "backlog" | "agenda") => {
-    promoteToNotion.mutate(
-      { signalId, target: PROMOTION_TARGET[action] },
-      {
-        onSuccess: (outcome) => {
-          if (outcome.status === "created") {
-            toast(`${PROMOTION_LABEL[action]}됨`, outcome.pageUrl ?? undefined);
-          } else if (outcome.status === "draft") {
-            toast(`${PROMOTION_LABEL[action]} — 오프라인, 큐에 저장됨(복구 시 등록)`);
-          } else {
-            toast(`${PROMOTION_LABEL[action]} 실패: ${outcome.detail}`);
-          }
+    const sig = signals.find((s) => s.id === signalId);
+    const label = PROMOTION_LABEL[action];
+    const target = PROMOTION_TARGET[action];
+
+    const doPromote = (projectId: string | null) => {
+      promoteToNotion.mutate(
+        { signalId, target, projectId },
+        {
+          onSuccess: (outcome) => {
+            if (outcome.status === "created") {
+              // 자동 지정된 경우 라벨 표시 (INVARIANT #1: 사람이 볼 수 있게).
+              if (outcome.resolvedProjectId && !sig?.projectId) {
+                const autoProj = projects.find((p) => p.id === outcome.resolvedProjectId);
+                const projName = autoProj?.name ?? outcome.resolvedProjectId;
+                toast(
+                  `${label}됨 — 프로젝트 자동 지정: ${projName} (설정에서 변경 가능)`,
+                  outcome.pageUrl ?? undefined,
+                );
+              } else {
+                toast(`${label}됨`, outcome.pageUrl ?? undefined);
+              }
+            } else if (outcome.status === "draft") {
+              toast(`${label} — 오프라인, 큐에 저장됨(복구 시 등록)`);
+            } else {
+              toast(`${label} 실패: ${outcome.detail}`);
+            }
+          },
+          onError: (e) => {
+            const msg = String(e);
+            if (msg.includes("프로젝트 선택 필요")) {
+              // 여러 프로젝트: picker — 사람이 직접 선택 (INVARIANT #1).
+              const kind = sig?.kind ?? null;
+              const candidates = kind ? projects.filter((p) => p.kind === kind) : projects;
+              if (candidates.length === 0) {
+                toast(`${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
+                return;
+              }
+              // window.prompt을 picker 대용으로 사용 (기존 코드 패턴 — 인라인 편집과 동일).
+              const names = candidates.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
+              const answer = window.prompt(
+                `승격할 프로젝트를 선택하세요:\n${names}\n\n번호를 입력하세요:`,
+              );
+              const idx = answer ? parseInt(answer, 10) - 1 : -1;
+              if (idx >= 0 && idx < candidates.length) {
+                doPromote(candidates[idx].id);
+              } else if (answer !== null) {
+                toast(`${label} 취소 — 올바른 번호를 입력하세요`);
+              }
+            } else if (msg.includes("해당 kind의 프로젝트가 없음")) {
+              toast(`${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
+            } else {
+              toast(`${label} 실패: ${msg}`);
+            }
+          },
         },
-        onError: (e) => toast(`${PROMOTION_LABEL[action]} 실패: ${String(e)}`),
-      },
-    );
+      );
+    };
+
+    doPromote(sig?.projectId ?? null);
   };
 
   // AI 제안 영역(suggestedArea)을 사람이 확정 (별개 축 — quadrant 결정 레일과 무관, INVARIANT #1).

@@ -139,6 +139,7 @@ async fn execute_promotion<W: NotionWriter>(
             promotion_id: done.id,
             status: PromotionStatus::Created,
             detail: "이미 등록됨".into(),
+            resolved_project_id: None,
         });
     }
     // 큐 행(draft) 재사용 또는 생성. title 스냅샷은 payload에 보존된다.
@@ -156,6 +157,7 @@ async fn execute_promotion<W: NotionWriter>(
                 status: PromotionStatus::Created,
                 page_url: Some(page.url),
                 detail: "Notion 페이지 생성됨".into(),
+                resolved_project_id: None,
             })
         }
         // 일시 실패: draft 유지(큐). 복구 시 flush가 재시도(INVARIANT #5: 무한 retry 아님).
@@ -164,6 +166,7 @@ async fn execute_promotion<W: NotionWriter>(
             status: PromotionStatus::Draft,
             page_url: None,
             detail: format!("오프라인/일시 오류 — 큐에 저장됨(복구 시 등록): {msg}"),
+            resolved_project_id: None,
         }),
         // 영구 실패(인증/권한/검증 등): failed로 표시하고 사유 노출.
         Err(NotionError::Terminal(msg)) => {
@@ -176,30 +179,87 @@ async fn execute_promotion<W: NotionWriter>(
                 status: PromotionStatus::Failed,
                 page_url: None,
                 detail: msg,
+                resolved_project_id: None,
             })
         }
     }
 }
 
-/// signal → project → (Notion 토큰, 대상 DB ID) 해석. notion 타깃 아님/미설정이면 명확한 Err.
+/// signal → project → (Notion 토큰, 대상 DB ID, 실제 project_id) 해석.
+/// `explicit_project_id`가 Some이면 그 프로젝트를 쓰고 signal.project_id에 persist한다.
+/// None이면 signal.project_id를 조회하고, NULL이면 kind 매칭 프로젝트를 자동 해석한다:
+///
+/// - 1개 → persist + 사용 (자동 지정, 사람이 나중에 설정에서 변경 가능)
+/// - >1개 → Err("프로젝트 선택 필요(여러 프로젝트)") — 프런트가 picker를 표시
+/// - 0개 → Err("해당 kind의 프로젝트가 없음") — 프런트가 설정 안내
+///
+/// notion 타깃 아님이면 즉시 Err.
 async fn resolve_notion_target(
     db: &Db,
     signal_id: &str,
     target: PromotionTarget,
-) -> Result<(String, String), String> {
+    explicit_project_id: Option<&str>,
+) -> Result<(String, String, String), String> {
     if notion_link_key(target).is_none() {
         return Err("Notion 타깃이 아님(calendar/today는 이 경로로 승격하지 않음)".into());
     }
-    let sig: Option<(Option<String>,)> =
-        sqlx::query_as("SELECT project_id FROM signals WHERE id = ?1")
+
+    // 신호 조회 (project_id + kind).
+    let sig: Option<(Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT project_id, kind FROM signals WHERE id = ?1")
             .bind(signal_id)
             .fetch_optional(db)
             .await
             .map_err(|e| e.to_string())?;
-    let project_id = sig
-        .ok_or("신호를 찾을 수 없음")?
-        .0
-        .ok_or("신호에 프로젝트가 지정되지 않음(설정에서 reconcile 필요)")?;
+    let (existing_project_id, signal_kind) = sig.ok_or("신호를 찾을 수 없음")?;
+
+    // 사용할 project_id 결정 + 필요 시 signal에 persist.
+    let project_id: String = if let Some(pid) = explicit_project_id {
+        // 명시 전달: persist onto signal (사람이 picker에서 고른 것 — INVARIANT #1).
+        sqlx::query(
+            "UPDATE signals SET project_id = ?2, updated_at = datetime('now') WHERE id = ?1",
+        )
+        .bind(signal_id)
+        .bind(pid)
+        .execute(db)
+        .await
+        .map_err(|e| e.to_string())?;
+        pid.to_string()
+    } else if let Some(pid) = existing_project_id {
+        // 이미 태깅된 경우 → 기존 동작.
+        pid
+    } else {
+        // signal.project_id NULL → kind 매칭 프로젝트 자동 해석.
+        let kind_str = signal_kind.as_deref().unwrap_or("");
+        let candidates: Vec<(String,)> =
+            sqlx::query_as("SELECT id FROM projects WHERE kind = ?1 ORDER BY created_at")
+                .bind(kind_str)
+                .fetch_all(db)
+                .await
+                .map_err(|e| e.to_string())?;
+        match candidates.len() {
+            0 => return Err("해당 kind의 프로젝트가 없음(설정에서 프로젝트 생성 필요)".into()),
+            1 => {
+                let pid = candidates.into_iter().next().unwrap().0;
+                // 자동 지정: persist onto signal (INVARIANT #1 — 자동 확정이 아닌 메타데이터 태깅).
+                sqlx::query(
+                    "UPDATE signals SET project_id = ?2, updated_at = datetime('now') WHERE id = ?1",
+                )
+                .bind(signal_id)
+                .bind(&pid)
+                .execute(db)
+                .await
+                .map_err(|e| e.to_string())?;
+                pid
+            }
+            _ => {
+                // 여러 프로젝트 — 사람이 선택해야 함 (INVARIANT #1).
+                return Err(
+                    "프로젝트 선택 필요(여러 프로젝트) — 프런트에서 picker를 표시할 것".into(),
+                );
+            }
+        }
+    };
 
     let proj: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT credential_ref, notion_backlog_db_id, notion_agenda_db_id FROM projects WHERE id = ?1",
@@ -221,22 +281,29 @@ async fn resolve_notion_target(
         .map_err(|e| e.to_string())?
         .ok_or("Notion 토큰이 없음(설정에서 토큰 저장 필요)")?;
 
-    Ok((token, db_id))
+    Ok((token, db_id, project_id))
 }
 
 /// 카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2).
+/// `project_id`: 프런트 picker에서 사람이 고른 프로젝트(Some) 또는 자동 해석 위임(None).
+/// 자동 해석 결과는 outcome.resolved_project_id로 반환 — 프런트가 라벨을 표시한다(INVARIANT #1).
 #[tauri::command]
 #[specta::specta]
 pub async fn promote_to_notion(
     db: State<'_, Db>,
     signal_id: String,
     target: PromotionTarget,
+    project_id: Option<String>,
 ) -> Result<PromotionOutcome, String> {
-    let (token, db_id) = resolve_notion_target(db.inner(), &signal_id, target).await?;
+    let (token, db_id, resolved_pid) =
+        resolve_notion_target(db.inner(), &signal_id, target, project_id.as_deref()).await?;
     let writer = HttpNotionWriter::new().map_err(|e| e.to_string())?;
-    execute_promotion(db.inner(), &signal_id, target, &writer, &token, &db_id)
+    let mut outcome = execute_promotion(db.inner(), &signal_id, target, &writer, &token, &db_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // 자동 지정(또는 명시 전달)된 project_id를 outcome에 노출해 프런트 라벨용으로 돌려준다.
+    outcome.resolved_project_id = Some(resolved_pid);
+    Ok(outcome)
 }
 
 /// 오프라인 큐 flush: 토큰/DB가 갖춰진 draft notion 승격을 모두 재시도한다. 복구 시 호출.
@@ -256,7 +323,9 @@ async fn flush_inner<W: NotionWriter>(db: &Db, writer: &W) -> Result<FlushSummar
     };
     for promo in drafts {
         // 토큰/DB 미설정이면 큐 유지(복구 대상). 네트워크/일시 오류도 draft로 남는다.
-        let Ok((token, db_id)) = resolve_notion_target(db, &promo.signal_id, promo.target).await
+        // flush 경로: explicit_project_id 없음(자동 해석). 여전히 미설정이면 큐 유지.
+        let Ok((token, db_id, _pid)) =
+            resolve_notion_target(db, &promo.signal_id, promo.target, None).await
         else {
             summary.queued += 1;
             continue;
@@ -550,24 +619,127 @@ mod tests {
         let db = fresh_db().await;
         let sig = insert_signal(&db, &input("일정 후보", None)).await.unwrap();
         assert!(
-            resolve_notion_target(&db, &sig.id, PromotionTarget::Calendar)
+            resolve_notion_target(&db, &sig.id, PromotionTarget::Calendar, None)
                 .await
                 .is_err()
         );
-        assert!(resolve_notion_target(&db, &sig.id, PromotionTarget::Today)
-            .await
-            .is_err());
+        assert!(
+            resolve_notion_target(&db, &sig.id, PromotionTarget::Today, None)
+                .await
+                .is_err()
+        );
     }
 
-    /// 프로젝트 미지정 신호는 명확한 Err(자동 추정 금지).
+    /// 프로젝트 미지정 신호: kind가 없고 프로젝트도 없으면 Err.
     #[tokio::test]
     async fn resolve_errors_without_project() {
         let db = fresh_db().await;
+        // kind=None → kind 매칭 프로젝트 0개 → "해당 kind의 프로젝트가 없음".
         let sig = insert_signal(&db, &input("미태깅 후보", None))
             .await
             .unwrap();
-        let r = resolve_notion_target(&db, &sig.id, PromotionTarget::NotionBacklog).await;
+        let r = resolve_notion_target(&db, &sig.id, PromotionTarget::NotionBacklog, None).await;
         assert!(r.is_err(), "프로젝트 없으면 승격 불가");
+    }
+
+    /// NULL-project 신호 + 정확히 1개 kind 매칭 프로젝트 → 자동 지정.
+    /// resolved_project_id = 그 프로젝트, signal.project_id도 persist(INVARIANT #1).
+    #[tokio::test]
+    async fn promote_null_project_signal_auto_assigns_single_project() {
+        use crate::commands::projects::insert_project;
+        use crate::models::{CreateProjectInput, ProjectKind};
+
+        let db = fresh_db().await;
+        // kind=Work 프로젝트 1개 생성 (Notion DB ID + credential_ref 포함).
+        let proj = insert_project(
+            &db,
+            &CreateProjectInput {
+                name: "테스트워크".into(),
+                kind: ProjectKind::Work,
+                notion_backlog_db_id: Some("db-123".into()),
+                notion_agenda_db_id: None,
+                ticket_key_pattern: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 신호: kind=Work, project_id=NULL.
+        let sig = insert_signal(&db, &input("자동 지정 후보", Some(Kind::Work)))
+            .await
+            .unwrap();
+        assert!(sig.project_id.is_none(), "신호 생성 시 project_id=NULL");
+
+        // fake writer로 승격 실행.
+        let writer = CountingWriter::ok("auto-page-1", "https://www.notion.so/auto-page-1");
+
+        // resolve_notion_target: keychain에 토큰 없어 Err가 날 수 있으므로
+        // execute_promotion 직전 단계(resolve)와 persist만 검증한다.
+        // project_id 자동 persist 확인: resolve를 직접 호출.
+        let resolve_result =
+            resolve_notion_target(&db, &sig.id, PromotionTarget::NotionBacklog, None).await;
+
+        // keychain 없으면 "Notion 토큰이 없음" Err → 그 직전까지 project_id가 persist됐는지 확인.
+        // (테스트 환경에서 keychain이 없으므로 토큰 조회 전까지의 동작만 검증)
+        // project_id가 persist됐는지는 두 경우 모두 확인 가능.
+        let persisted: (Option<String>,) =
+            sqlx::query_as("SELECT project_id FROM signals WHERE id = ?1")
+                .bind(&sig.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+
+        // resolve가 성공했든 keychain Err로 실패했든, project_id는 persist돼야 한다.
+        // (project_id persist는 keychain 조회 전에 일어남)
+        assert_eq!(
+            persisted.0.as_deref(),
+            Some(proj.id.as_str()),
+            "자동 지정: signal.project_id가 matching project로 persist돼야 함"
+        );
+
+        // resolve가 keychain 없이 성공한 경우(unlikely in test), outcome도 확인.
+        if let Ok((_token, _db_id, resolved_pid)) = resolve_result {
+            assert_eq!(resolved_pid, proj.id, "resolved_project_id = matching project");
+            // execute_promotion으로 end-to-end 검증.
+            let outcome =
+                execute_promotion(&db, &sig.id, PromotionTarget::NotionBacklog, &writer, "tok", "db-123")
+                    .await
+                    .unwrap();
+            assert!(matches!(outcome.status, PromotionStatus::Created));
+        }
+    }
+
+    /// NULL-project 신호 + 같은 kind의 프로젝트 2개 → Err("프로젝트 선택 필요").
+    #[tokio::test]
+    async fn resolve_errors_with_multiple_projects() {
+        use crate::commands::projects::insert_project;
+        use crate::models::{CreateProjectInput, ProjectKind};
+
+        let db = fresh_db().await;
+        for name in ["워크A", "워크B"] {
+            insert_project(
+                &db,
+                &CreateProjectInput {
+                    name: name.into(),
+                    kind: ProjectKind::Work,
+                    notion_backlog_db_id: Some("db-x".into()),
+                    notion_agenda_db_id: None,
+                    ticket_key_pattern: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let sig = insert_signal(&db, &input("다중 프로젝트 후보", Some(Kind::Work)))
+            .await
+            .unwrap();
+        let r = resolve_notion_target(&db, &sig.id, PromotionTarget::NotionBacklog, None).await;
+        assert!(r.is_err());
+        let msg = r.unwrap_err();
+        assert!(
+            msg.contains("프로젝트 선택 필요"),
+            "다중 프로젝트 Err 메시지: {msg}"
+        );
     }
 
     /// INVARIANT #3(동시성): 같은 카드를 동시에 두 번 승격해도 write는 1회·created 행은 1개.

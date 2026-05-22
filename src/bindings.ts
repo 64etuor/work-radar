@@ -79,8 +79,12 @@ export const commands = {
 	listArchivedSnoozed: () => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_archived_snoozed")),
 	restoreSignal: (id: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("restore_signal", { id })),
 	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, string>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
-	/**  카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2). */
-	promoteToNotion: (signalId: string, target: PromotionTarget) => typedError<PromotionOutcome, string>(__TAURI_INVOKE("promote_to_notion", { signalId, target })),
+	/**
+	 *  카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2).
+	 *  `project_id`: 프런트 picker에서 사람이 고른 프로젝트(Some) 또는 자동 해석 위임(None).
+	 *  자동 해석 결과는 outcome.resolved_project_id로 반환 — 프런트가 라벨을 표시한다(INVARIANT #1).
+	 */
+	promoteToNotion: (signalId: string, target: PromotionTarget, projectId: string | null) => typedError<PromotionOutcome, string>(__TAURI_INVOKE("promote_to_notion", { signalId, target, projectId })),
 	flushPromotions: () => typedError<FlushSummary, string>(__TAURI_INVOKE("flush_promotions")),
 	/**  승격 이력(undo/audit). signal_id가 있으면 그 신호만, 없으면 전체(최신순). */
 	listPromotions: (signalId: string | null) => typedError<Promotion[], string>(__TAURI_INVOKE("list_promotions", { signalId })),
@@ -783,6 +787,8 @@ export type PromotionOutcome = {
 	pageUrl: string | null,
 	/**  사람이 읽을 상세(성공 식별 또는 실패 사유). */
 	detail: string,
+	/**  실제 사용된 project_id (프런트의 자동 지정 라벨 표시용). 미변경이면 None. */
+	resolvedProjectId: string | null,
 };
 
 /**  승격 상태. 외부 승격은 draft에서 멈춘다 (실제 write는 Phase 3/11, INVARIANT #2). */

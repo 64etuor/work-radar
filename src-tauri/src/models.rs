@@ -314,6 +314,8 @@ pub struct PromotionOutcome {
     pub page_url: Option<String>,
     /// 사람이 읽을 상세(성공 식별 또는 실패 사유).
     pub detail: String,
+    /// 실제 사용된 project_id (프런트의 자동 지정 라벨 표시용). 미변경이면 None.
+    pub resolved_project_id: Option<String>,
 }
 
 /// 오프라인 복구 시 큐(draft) 재시도 집계. specta는 i64/u64 export 금지 → u32.
