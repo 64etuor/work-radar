@@ -10,14 +10,32 @@ import {
 } from "@/bindings";
 import { useToastStore } from "@/lib/toast";
 
+/**
+ * IPC 정본 에러 래퍼. unwrap이 backend `AppError`를 throw할 때 쓰는 Error 서브클래스.
+ * `message`는 표면용으로 super에 넘기고, 분류/traceId/action 일체는 `app`에 보존한다
+ * (스펙 §6 — string 대신 AppError surfacing). 토스트/ErrorBoundary가 `instanceof`로 구분.
+ */
+export class IpcError extends Error {
+  readonly app: AppError;
+  constructor(app: AppError) {
+    super(app.message);
+    this.name = "IpcError";
+    this.app = app;
+  }
+}
+
 /** 전역 쿼리 클라이언트. 읽기는 로컬 SQLite라 빠르므로 짧은 staleTime + bounded retry. */
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (err) => {
       // 핸들되지 않은 query 에러를 전역 토스트로 — getState()로 React 외부에서 접근.
-      useToastStore
-        .getState()
-        .pushError("query", err instanceof Error ? err.message : String(err));
+      // IpcError면 backend AppError 그대로(traceId/retryable/action 보존, 재로그 금지).
+      const store = useToastStore.getState();
+      if (err instanceof IpcError) {
+        store.pushError("query", err.app);
+      } else {
+        store.pushError("query", err instanceof Error ? err.message : String(err));
+      }
     },
   }),
   // mutation은 전역 onError를 두지 않는다: RQ v5에서 per-call mutate(vars,{onError})는
@@ -33,13 +51,13 @@ export const queryClient = new QueryClient({
 });
 
 // ── IPC 결과 언랩 (terminal failure를 그대로 노출 — INVARIANT, 삼키지 않음) ──────
-// IPC 에러는 이제 정본 AppError(분류/traceId/action 보유). Stage 2에서는 message만 surfacing하고
-// (기존 동작 유지), traceId/retryable/action 기반 풍부한 surfacing + ErrorBoundary는 Stage 3.
+// IPC 에러는 정본 AppError(분류/traceId/action 보유)를 IpcError로 throw — 분류/traceId가
+// 호출부·전역 핸들러까지 보존된다(스펙 §6).
 type IpcResult<T> = { status: "ok"; data: T } | { status: "error"; error: AppError };
 
 export async function unwrap<T>(p: Promise<IpcResult<T>>): Promise<T> {
   const res = await p;
-  if (res.status === "error") throw new Error(res.error.message);
+  if (res.status === "error") throw new IpcError(res.error);
   return res.data;
 }
 

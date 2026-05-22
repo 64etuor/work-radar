@@ -6,7 +6,7 @@
  * - 로깅은 fire-and-forget — 실패해도 UI에 영향 없음.
  */
 import { create } from "zustand";
-import { commands } from "@/bindings";
+import { commands, type AppError } from "@/bindings";
 
 // ── trace id 생성 ─────────────────────────────────────────────────────────────
 
@@ -25,6 +25,16 @@ export function genTraceId(): string {
 
 export type ToastKind = "error" | "success" | "info";
 
+/** AppError.kind 미러(프런트 surfacing 분류). 백엔드 AppError에서만 채워진다. */
+export type ToastErrorKind = AppError["kind"];
+
+/** 토스트 액션 힌트 — url(외부 딥링크) 또는 nav(앱 내부 뷰 키) 중 하나. */
+export interface ToastAction {
+  label: string;
+  url?: string;
+  nav?: string;
+}
+
 export interface ToastItem {
   id: string;
   kind: ToastKind;
@@ -32,14 +42,36 @@ export interface ToastItem {
   traceId?: string;
   actionUrl?: string;
   actionLabel?: string;
+  /** 백엔드 AppError 분류(있으면). transient면 retryable 힌트의 근거. */
+  errorKind?: ToastErrorKind;
+  /** 재시도 가능 여부(AppError.retryable). 표시 힌트만 — 실제 refetch 배선은 범위 밖. */
+  retryable?: boolean;
+  /** 액션 버튼(외부 url 또는 내부 nav). */
+  action?: ToastAction;
+}
+
+/** AppError 판별(IpcError.app 또는 backend 결과). traceId + kind로 식별. */
+function isAppError(v: unknown): v is AppError {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    "traceId" in v &&
+    "kind" in v &&
+    "message" in v
+  );
 }
 
 interface ToastState {
   toasts: ToastItem[];
-  /** 에러 토스트 push. trace id 자동 생성, 로그 fire-and-forget, PERSISTENT. */
+  /**
+   * 에러 토스트 push (PERSISTENT).
+   * - `string`(프런트-originated): trace id 생성 + logAppError fire-and-forget(기존 동작).
+   * - `AppError`(백엔드-originated): backend traceId 그대로 사용, **재로그 금지**(스펙 §5.3),
+   *   kind/retryable/action 보존.
+   */
   pushError: (
     scope: string,
-    message: string,
+    error: string | AppError,
     opts?: { actionUrl?: string; actionLabel?: string },
   ) => void;
   /** 성공 토스트 push (2500ms 자동 dismiss). */
@@ -61,12 +93,45 @@ interface ToastState {
 export const useToastStore = create<ToastState>((set, get) => ({
   toasts: [],
 
-  pushError(scope, message, opts) {
+  pushError(scope, error, opts) {
+    if (isAppError(error)) {
+      // 백엔드-originated: traceId 그대로, 재로그 금지(백엔드가 이미 로그함 — 스펙 §5.3 중복 금지).
+      const traceId = error.traceId;
+      const action: ToastAction | undefined = error.action
+        ? {
+            label: error.action.label,
+            url: error.action.url ?? undefined,
+            nav: error.action.nav ?? undefined,
+          }
+        : undefined;
+
+      set((s) => {
+        // 동일 traceId 재유입(중복 토스트/키 충돌) 방지 — append-only 가드.
+        if (s.toasts.some((t) => t.id === traceId)) return s;
+        return {
+          toasts: [
+            ...s.toasts,
+            {
+              id: traceId,
+              kind: "error" as ToastKind,
+              message: error.message,
+              traceId,
+              errorKind: error.kind,
+              retryable: error.retryable,
+              action,
+            },
+          ],
+        };
+      });
+      return; // PERSISTENT — 자동 dismiss 없음.
+    }
+
+    // 프런트-originated(문자열/일반 Error 메시지): trace id 생성 + 로그(기존 동작).
     const traceId = genTraceId();
     const id = traceId; // trace id를 토스트 id로 재사용 (충돌 가능성 극소).
 
     // fire-and-forget 로그 — 실패는 조용히 삼킨다 (UI 흐름 보호).
-    void commands.logAppError(scope, message, traceId).catch(() => undefined);
+    void commands.logAppError(scope, error, traceId).catch(() => undefined);
 
     set((s) => ({
       toasts: [
@@ -74,7 +139,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
         {
           id,
           kind: "error" as ToastKind,
-          message,
+          message: error,
           traceId,
           ...opts,
         },
