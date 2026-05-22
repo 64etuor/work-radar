@@ -31,7 +31,7 @@
 - ✅ 외부 호출은 `transient`/`terminal` 분류 → bounded retry(INVARIANT #5). terminal은 반드시 노출(삼키지 않음).
 - ✅ `traceId`로 토스트와 로그를 잇는다.
 - ❌ `Result<_, String>` 반환.
-- ❌ 비테스트 코드 `.unwrap()/.expect()/panic!`(불변식 보장 + `expect("이유")`만 예외).
+- ❌ 비테스트 코드 bare `.unwrap()` — **CI 강제**(`lib.rs`의 `#![cfg_attr(not(test), deny(clippy::unwrap_used))]`, clippy `-D warnings`). 불변식이면 `.expect("이유")`(사유 명시 = 허용된 탈출구), 아니면 `?`+`AppError`. 테스트는 unwrap 허용.
 - ❌ 에러 삼키기(`let _ = ...`로 외부 실패 무시).
 - ❌ 토큰/시크릿/PII를 message/로그에.
 

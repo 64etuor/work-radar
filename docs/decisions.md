@@ -267,3 +267,9 @@
 - **103개 `#[tauri::command]` 반환 `Result<_,String>` → `Result<_,AppError>` 전면 전환.** 17개 commands/*.rs. 도메인/sqlx/keyring/reqwest/io 에러는 `?`(From, 분류 보존), ad-hoc 문자열은 validation/not_found/terminal로 분류(`code="<모듈>.<사유>"`). 내부 헬퍼(fetch_*/insert_* 등)는 도메인/sqlx 에러 유지(스펙 §4). 4개 파일그룹을 같은 워크트리·편집전용 병렬 에이전트로 처리(worktree isolation 미사용 — 오염 회피), 통합/검증/커밋은 직렬. 검증: cargo test 196 green, clippy clean, typecheck clean, critic ACCEPT-with-nits(분류손실 0, 토큰/PII 누출 0).
 - **프런트 shim(최소).** `client.ts` `unwrap`이 `AppError`를 받아 `throw new Error(res.error.message)` — 기존 동작 보존. traceId/retryable/action 기반 풍부한 surfacing + React ErrorBoundary는 Stage 3. `bindings.ts`는 cargo test가 재생성(AppError/ErrorKind 타입 등장).
 - **백로그 follow-up(INVARIANT #5 갭, Stage 2 비-회귀).** `pr_radar.rs::sync_pr_radar`는 레포별 `GithubError`를 String으로 합쳐 반환 → command가 `terminal`로 접음. 단일 레포 transient(429/5xx) 분류가 helper 단계에서 손실(Stage 1 이전부터 존재, 이 diff 미변경). 프런트 react-query `retry:2`로 일부 완화되나, sync_pr_radar를 typed 에러로 바꿔 transient 보존 권장. owner: 에러처리 후속.
+
+## 에러 처리 Stage 4 — unwrap 게이트 (2026-05-22, dev)
+
+- **프로덕션 bare `.unwrap()` 금지를 CI로 강제.** `lib.rs`에 `#![cfg_attr(not(test), deny(clippy::unwrap_used))]` — 비-test 컴파일에서만 deny(테스트는 `#[cfg(test)]`라 not(test)=false → unwrap 허용). clippy `-D warnings`(CI)와 결합해 신규 프로덕션 unwrap은 머지 차단.
+- **스펙 §7의 "~442개" 정정.** 그 수치는 거의 전부 `#[cfg(test)]` 코드였음. 실제 **프로덕션 bare unwrap은 6개**(jobs.rs 5 `mutex.lock().unwrap()`, commands/notion.rs 1 `iter.next().unwrap()`) → 전부 `.expect("이유")`(불변식)로 전환. 정당한 `.expect()`(CSPRNG·부팅 불변식·상수 URL 파싱 등)는 정책상 허용(escape hatch)이라 `expect_used`는 deny하지 않음. 일괄 deny 비현실적이라던 스펙 가정은 오판이었고, 현실은 즉시 hard-deny 가능했음.
+- **basename 충돌 교훈.** `src/notion.rs`(도메인)와 `src/commands/notion.rs`(커맨드) 동명 → 수동 스캔이 후자의 unwrap을 놓침. clippy 게이트가 잡아냄(정적 강제의 가치).
