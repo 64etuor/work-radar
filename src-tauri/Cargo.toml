@@ -57,6 +57,10 @@ specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 
+[dev-dependencies]
+# 로테이션 단위 테스트용 임시 디렉터리.
+tempfile = "3"
+
 [features]
 # default Tauri custom-protocol toggle used by `tauri build`.
 custom-protocol = ["tauri/custom-protocol"]

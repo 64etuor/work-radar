@@ -16,6 +16,7 @@ mod git;
 mod github;
 mod jobs;
 mod keychain;
+mod logging;
 mod messenger;
 mod models;
 mod notion;
@@ -165,6 +166,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::scan_external_skills,
         commands::read_external_skill,
         commands::write_external_skill,
+        // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
+        logging::log_app_error,
+        logging::app_log_path,
     ])
 }
 
@@ -247,6 +251,9 @@ pub fn run() {
                 app_data.join("logs"),
                 1,
             ));
+
+            // 에러 로그 (A7): 로테이팅 파일 로그. 로그 디렉터리는 logs/ (JobManager와 공유).
+            app.manage(logging::AppLogger::new(app_data.join("logs")));
 
             // 전역 핫키로 캡처/루트 창 토글. 저장된 핫키(app_config)가 있으면 그것으로, 없으면
             // 기본 Ctrl+Space로 등록(Phase 18 #7). 등록 실패는 graceful — 앱 코어는 동작.

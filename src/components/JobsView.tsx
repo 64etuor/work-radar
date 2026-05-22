@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Spinner } from "@/components/Spinner";
 import {
   ArrowLeft,
   Bot,
@@ -300,7 +301,7 @@ function SelfCheckPanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
   }
   if (proposal.error) {
     // 파싱 실패(codex가 형식 밖 출력) — raw를 노출하고 accept는 막는다(reject만).
@@ -501,7 +502,7 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
   }
   if (proposal.error) {
     return (
@@ -607,7 +608,7 @@ function BatchEnrichPanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
   }
   if (proposal.error) {
     return (
@@ -725,7 +726,7 @@ function TriagePanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
   }
   if (proposal.error) {
     return (

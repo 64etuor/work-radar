@@ -18,7 +18,6 @@ import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
 import {
   localToday,
   localWeekday,
-  openExternal,
   useClassifySignal,
   useCodexStatus,
   useCreateRoutine,
@@ -47,6 +46,7 @@ import {
   tomorrow,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
+import { useToastStore } from "@/lib/toast";
 
 const PROMOTION_TARGET: Record<"backlog" | "agenda", PromotionTarget> = {
   backlog: "notion_backlog",
@@ -95,6 +95,7 @@ export function CaptureBoard() {
   const deleteSignal = useDeleteSignal();
   const setSignalArea = useSetSignalArea();
   const { goTo } = useUIStore();
+  const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
   const signals = signalsQ.data ?? [];
@@ -126,24 +127,6 @@ export function CaptureBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signals]);
 
-  // ── Toast (선택적 '열기' 액션 = 생성된 Notion 페이지 딥링크) ──
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [toastUrl, setToastUrl] = useState<string | null>(null);
-  const toastTimer = useRef<number | undefined>(undefined);
-  const toast = useCallback((m: string, url?: string) => {
-    setToastMsg(m);
-    setToastUrl(url ?? null);
-    window.clearTimeout(toastTimer.current);
-    // 열기 링크가 있으면 충분히 누를 시간을 준다.
-    toastTimer.current = window.setTimeout(
-      () => {
-        setToastMsg(null);
-        setToastUrl(null);
-      },
-      url ? 6000 : 1700,
-    );
-  }, []);
-
   // ── 액션 ──
   // 새 신호는 kind에 맞는 프로젝트로 태깅(있으면). 없으면 NULL → 나중에 reconcile.
   const projects = projectsQ.data ?? [];
@@ -166,15 +149,15 @@ export function CaptureBoard() {
     (id: string) => {
       promoteToday.mutate({ id, date: today });
       if (selectedId === id) setSelectedId(null);
-      toast("Today 추가");
+      pushSuccess("Today 추가");
     },
-    [promoteToday, today, selectedId, toast],
+    [promoteToday, today, selectedId, pushSuccess],
   );
 
   const handleUnpromote = (id: string) => {
     expectPopRef.current = true;
     unpromoteToday.mutate(id);
-    toast("매트릭스로 되돌림");
+    pushSuccess("매트릭스로 되돌림");
   };
 
   // 카드 → Notion 백로그/안건 즉시 승격(write). 사람 클릭이 곧 결정/accept (INVARIANT #2).
@@ -197,17 +180,24 @@ export function CaptureBoard() {
               if (outcome.resolvedProjectId && !sig?.projectId) {
                 const autoProj = projects.find((p) => p.id === outcome.resolvedProjectId);
                 const projName = autoProj?.name ?? outcome.resolvedProjectId;
-                toast(
+                pushSuccess(
                   `${label}됨 — 프로젝트 자동 지정: ${projName} (설정에서 변경 가능)`,
-                  outcome.pageUrl ?? undefined,
+                  outcome.pageUrl
+                    ? { actionUrl: outcome.pageUrl, actionLabel: "열기" }
+                    : undefined,
                 );
               } else {
-                toast(`${label}됨`, outcome.pageUrl ?? undefined);
+                pushSuccess(
+                  `${label}됨`,
+                  outcome.pageUrl
+                    ? { actionUrl: outcome.pageUrl, actionLabel: "열기" }
+                    : undefined,
+                );
               }
             } else if (outcome.status === "draft") {
-              toast(`${label} — 오프라인, 큐에 저장됨(복구 시 등록)`);
+              pushSuccess(`${label} — 오프라인, 큐에 저장됨(복구 시 등록)`);
             } else {
-              toast(`${label} 실패: ${outcome.detail}`);
+              pushError("notion", `${label} 실패: ${outcome.detail}`);
             }
           },
           onError: (e) => {
@@ -217,7 +207,7 @@ export function CaptureBoard() {
               const kind = sig?.kind ?? null;
               const candidates = kind ? projects.filter((p) => p.kind === kind) : projects;
               if (candidates.length === 0) {
-                toast(`${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
+                pushError("notion", `${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
                 return;
               }
               // window.prompt을 picker 대용으로 사용 (기존 코드 패턴 — 인라인 편집과 동일).
@@ -229,12 +219,12 @@ export function CaptureBoard() {
               if (idx >= 0 && idx < candidates.length) {
                 doPromote(candidates[idx].id);
               } else if (answer !== null) {
-                toast(`${label} 취소 — 올바른 번호를 입력하세요`);
+                pushError("notion", `${label} 취소 — 올바른 번호를 입력하세요`);
               }
             } else if (msg.includes("해당 kind의 프로젝트가 없음")) {
-              toast(`${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
+              pushError("notion", `${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
             } else {
-              toast(`${label} 실패: ${msg}`);
+              pushError("notion", `${label} 실패: ${msg}`);
             }
           },
         },
@@ -247,25 +237,25 @@ export function CaptureBoard() {
   // AI 제안 영역(suggestedArea)을 사람이 확정 (별개 축 — quadrant 결정 레일과 무관, INVARIANT #1).
   const handleConfirmArea = (id: string, area: AreaTag) => {
     setSignalArea.mutate({ id, area });
-    toast("영역 확정");
+    pushSuccess("영역 확정");
   };
 
   // 미분류 전체 배치 enrich(Phase 15 #4): 단일 codex 잡 → Jobs에서 카드별 제안 검토·accept(자동 분류 0).
   const unclassifiedCount = signals.filter((s) => s.quadrant === "unclassified").length;
   const handleEnrichAll = () => {
     if (!codexReady) {
-      toast("codex 미가용 — 설치·로그인 후 사용");
+      pushError("codex", "codex 미가용 — 설치·로그인 후 사용");
       return;
     }
     if (unclassifiedCount === 0) {
-      toast("미분류 카드가 없습니다");
+      pushSuccess("미분류 카드가 없습니다");
       return;
     }
     triggerEnrichAll.mutate(
       { projectId: null, timeoutSec: 180, maxTurns: 12, costCapUsd: 1.0 },
       {
         onSuccess: () => goTo("jobs"),
-        onError: (e) => toast(`전체 제안 실패: ${String(e)}`),
+        onError: (e) => pushError("codex", `전체 제안 실패: ${String(e)}`),
       },
     );
   };
@@ -278,14 +268,14 @@ export function CaptureBoard() {
       case "enrich":
         // 제안 레일: codex로 영역/사분면 제안(Acceptance 게이트 — Jobs에서 검토·accept).
         if (!codexReady) {
-          toast("codex 미가용 — 설치·로그인 후 사용");
+          pushError("codex", "codex 미가용 — 설치·로그인 후 사용");
           break;
         }
         triggerEnrich.mutate(
           { signalId, timeoutSec: 90, maxTurns: 6, costCapUsd: 0.5 },
           {
             onSuccess: () => goTo("jobs"),
-            onError: (e) => toast(`AI 제안 실패: ${String(e)}`),
+            onError: (e) => pushError("codex", `AI 제안 실패: ${String(e)}`),
           },
         );
         break;
@@ -297,8 +287,8 @@ export function CaptureBoard() {
           updateTitle.mutate(
             { id: signalId, title: next.trim() },
             {
-              onSuccess: () => toast("제목 수정"),
-              onError: (e) => toast(`수정 실패: ${String(e)}`),
+              onSuccess: () => pushSuccess("제목 수정"),
+              onError: (e) => pushError("signal", `수정 실패: ${String(e)}`),
             },
           );
         }
@@ -308,8 +298,8 @@ export function CaptureBoard() {
         // 하드 삭제(영구 — archive와 구분, Phase 15 #5). 확인 후 삭제.
         if (window.confirm("이 카드를 영구 삭제합니다(복원 불가). 계속할까요?")) {
           deleteSignal.mutate(signalId, {
-            onSuccess: () => toast("삭제됨"),
-            onError: (e) => toast(`삭제 실패: ${String(e)}`),
+            onSuccess: () => pushSuccess("삭제됨"),
+            onError: (e) => pushError("signal", `삭제 실패: ${String(e)}`),
           });
           if (selectedId === signalId) setSelectedId(null);
         }
@@ -317,17 +307,17 @@ export function CaptureBoard() {
       case "done":
         setStatus.mutate({ id: signalId, status: "done" });
         if (selectedId === signalId) setSelectedId(null);
-        toast("완료");
+        pushSuccess("완료");
         break;
       case "archive":
         setStatus.mutate({ id: signalId, status: "archived" });
         if (selectedId === signalId) setSelectedId(null);
-        toast("보관");
+        pushSuccess("보관");
         break;
       case "snooze":
         snoozeSignal.mutate({ id: signalId, until: tomorrow() });
         if (selectedId === signalId) setSelectedId(null);
-        toast("내일로 미룸");
+        pushSuccess("내일로 미룸");
         break;
       case "backlog":
       case "agenda":
@@ -359,7 +349,7 @@ export function CaptureBoard() {
       area: null,
       kind: null,
     });
-    toast("루틴 추가");
+    pushSuccess("루틴 추가");
   };
 
   const handleUpdateRoutine = (id: string, draft: RoutineDraft) => {
@@ -374,12 +364,12 @@ export function CaptureBoard() {
       area: null,
       kind: null,
     });
-    toast("루틴 수정");
+    pushSuccess("루틴 수정");
   };
 
   const handleDeleteRoutine = (id: string) => {
     deleteRoutine.mutate(id);
-    toast("루틴 삭제");
+    pushSuccess("루틴 삭제");
   };
 
   // ── 키보드 (1/2/3/4 분류, 0/u 미분류, T Today, D/E 완료/보관) ──
@@ -419,36 +409,36 @@ export function CaptureBoard() {
       } else if (k === "s") {
         snoozeSignal.mutate({ id: selectedId, until: tomorrow() });
         setSelectedId(null);
-        toast("내일로 미룸");
+        pushSuccess("내일로 미룸");
         e.preventDefault();
       } else if (k === "d") {
         setStatus.mutate({ id: selectedId, status: "done" });
         setSelectedId(null);
-        toast("완료");
+        pushSuccess("완료");
         e.preventDefault();
       } else if (k === "e") {
         setStatus.mutate({ id: selectedId, status: "archived" });
         setSelectedId(null);
-        toast("보관");
+        pushSuccess("보관");
         e.preventDefault();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, handleClassify, handlePromoteToday, setStatus, snoozeSignal, toast]);
+  }, [selectedId, handleClassify, handlePromoteToday, setStatus, snoozeSignal, pushSuccess]);
 
   // 네트워크 복구 시 오프라인 큐(draft) flush (INVARIANT #5: bounded, 무한 poll 아님).
   useEffect(() => {
     const onOnline = () => {
       flushPromotions.mutate(undefined, {
         onSuccess: (s) => {
-          if (s.created > 0) toast(`복구 — Notion에 ${s.created}건 등록됨`);
+          if (s.created > 0) pushSuccess(`복구 — Notion에 ${s.created}건 등록됨`);
         },
       });
     };
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [flushPromotions, toast]);
+  }, [flushPromotions, pushSuccess]);
 
   const loadError = signalsQ.isError || todayQ.isError || routinesQ.isError;
 
@@ -529,20 +519,7 @@ export function CaptureBoard() {
       <CalendarEventModal
         state={calendarModal}
         onClose={() => setCalendarModal(null)}
-        onToast={toast}
       />
-      <div className={`cb-toast${toastMsg ? " show" : ""}`}>
-        {toastMsg}
-        {toastUrl && (
-          <button
-            type="button"
-            className="cb-toast-link"
-            onClick={() => void openExternal(toastUrl)}
-          >
-            열기
-          </button>
-        )}
-      </div>
     </div>
   );
 }

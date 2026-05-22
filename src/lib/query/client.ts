@@ -1,4 +1,5 @@
 import {
+  QueryCache,
   QueryClient,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -6,9 +7,21 @@ import {
   type Weekday,
   type WorkSignal,
 } from "@/bindings";
+import { useToastStore } from "@/lib/toast";
 
 /** 전역 쿼리 클라이언트. 읽기는 로컬 SQLite라 빠르므로 짧은 staleTime + bounded retry. */
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (err) => {
+      // 핸들되지 않은 query 에러를 전역 토스트로 — getState()로 React 외부에서 접근.
+      useToastStore
+        .getState()
+        .pushError("query", err instanceof Error ? err.message : String(err));
+    },
+  }),
+  // mutation은 전역 onError를 두지 않는다: RQ v5에서 per-call mutate(vars,{onError})는
+  // MutationCache에 안 보여(private #mutateOptions) 전역 폴백을 두면 컴포넌트 onError와 중복 토스트가 된다.
+  // 컴포넌트가 컨텍스트별 메시지로 직접 처리(pushError) → trace id+로그+영속 토스트 일원화.
   defaultOptions: {
     queries: {
       staleTime: 30_000,

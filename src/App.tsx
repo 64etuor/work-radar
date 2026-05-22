@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { CaptureBoard } from "@/components/CaptureBoard";
+import { ToastHost } from "@/components/ToastHost";
 import { CommandPalette } from "@/components/CommandPalette";
 import { HermesView } from "@/components/HermesView";
 import { JobsView } from "@/components/JobsView";
@@ -98,6 +99,8 @@ export default function App() {
         )}
       </div>
       {paletteOpen && <CommandPalette />}
+      {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
+      <ToastHost />
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { useProjects, useReconcileSignalProjects } from "@/lib/query";
 import { useUIStore } from "@/store";
+import { useToastStore } from "@/lib/toast";
 
 import { AddProjectForm } from "./settings/AddProjectForm";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
@@ -18,21 +18,14 @@ export function SettingsView() {
   const { goTo, settingsIntent } = useUIStore();
   const projects = useProjects();
   const reconcile = useReconcileSignalProjects();
-
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const toastTimer = useRef<number | undefined>(undefined);
-  const toast = useCallback((m: string) => {
-    setToastMsg(m);
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToastMsg(null), 1800);
-  }, []);
+  const { pushSuccess } = useToastStore();
 
   const list = projects.data ?? [];
 
   const runReconcile = () => {
     reconcile.mutate(undefined, {
       onSuccess: (n) =>
-        toast(n > 0 ? `${n}건 신호를 projectId로 태깅` : "태깅할 신호 없음"),
+        pushSuccess(n > 0 ? `${n}건 신호를 projectId로 태깅` : "태깅할 신호 없음"),
     });
   };
 
@@ -58,7 +51,7 @@ export function SettingsView() {
       <div className="st-scroll">
         <AddProjectForm
           autoFocus={settingsIntent === "add_project"}
-          onCreated={toast}
+          onCreated={pushSuccess}
         />
 
         <div className="st-section-lbl">프로젝트 ({list.length})</div>
@@ -74,20 +67,18 @@ export function SettingsView() {
         )}
 
         {list.map((p) => (
-          <ProjectCard key={p.id} project={p} onToast={toast} />
+          <ProjectCard key={p.id} project={p} onToast={pushSuccess} />
         ))}
 
         <div className="st-section-lbl">네비게이션 / 단축키</div>
-        <NavigationSettings onToast={toast} />
+        <NavigationSettings onToast={pushSuccess} />
 
         <div className="st-section-lbl">알림 / 트레이</div>
-        <NotificationSettings onToast={toast} />
+        <NotificationSettings onToast={pushSuccess} />
 
         <div className="st-section-lbl">Hermes 브리지</div>
-        <HermesBridgeBlock onToast={toast} />
+        <HermesBridgeBlock onToast={pushSuccess} />
       </div>
-
-      <div className={`cb-toast${toastMsg ? " show" : ""}`}>{toastMsg}</div>
     </div>
   );
 }

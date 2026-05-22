@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Spinner } from "@/components/Spinner";
 import {
   ArrowLeft,
   GitCompare,
@@ -294,7 +295,9 @@ export function WorktreeView() {
                     <div className="wt-empty">비교할 ref를 선택하세요.</div>
                   )}
                   {ready && diffFiles.isFetching && (
-                    <div className="wt-empty">불러오는 중…</div>
+                    <div className="wt-empty">
+                      <Spinner />
+                    </div>
                   )}
                   {ready && diffFiles.error && (
                     <div className="wt-err">
@@ -531,7 +534,11 @@ function CleanupPanel({
         </button>
       </div>
 
-      {candidates.isLoading && <div className="wt-empty">불러오는 중…</div>}
+      {candidates.isLoading && (
+        <div className="wt-empty">
+          <Spinner />
+        </div>
+      )}
       {candidates.error && (
         <div className="wt-err">{(candidates.error as Error).message}</div>
       )}

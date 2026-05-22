@@ -5,6 +5,7 @@ import {
   useCreateCalendarEvent,
   useSelectedCalendars,
 } from "@/lib/query";
+import { useToastStore } from "@/lib/toast";
 
 /** 모달이 다룰 카드 컨텍스트(제목 prefill + 어느 프로젝트의 캘린더를 쓸지). */
 export type CalendarModalState = {
@@ -16,7 +17,6 @@ export type CalendarModalState = {
 type Props = {
   state: CalendarModalState | null;
   onClose: () => void;
-  onToast: (msg: string, url?: string) => void;
 };
 
 /** "HH:00" 한 시간 뒤를 더한 RFC3339 보정 없이 datetime-local 값(YYYY-MM-DDTHH:mm) 두 개를 만든다. */
@@ -55,10 +55,11 @@ function addDays(dateStr: string, n: number): string {
  * INVARIANT #2: 사용자 폼 제출 = 사람 결정 → 직접 write 정합(Acceptance 대기 없음 — 게이트는 자동화용).
  * 토큰은 keychain(Rust) — 본문 미노출. 실패는 graceful로 표시. DESIGN.md(Cohere white editorial) 톤.
  */
-export function CalendarEventModal({ state, onClose, onToast }: Props) {
+export function CalendarEventModal({ state, onClose }: Props) {
   const projectId = state?.projectId ?? null;
   const calendarsQ = useSelectedCalendars(projectId, !!state);
   const create = useCreateCalendarEvent();
+  const { pushSuccess } = useToastStore();
 
   const [title, setTitle] = useState("");
   const [allDay, setAllDay] = useState(false);
@@ -153,7 +154,10 @@ export function CalendarEventModal({ state, onClose, onToast }: Props) {
       },
       {
         onSuccess: (out) => {
-          onToast("캘린더에 등록됨", out.url ?? undefined);
+          pushSuccess(
+            "캘린더에 등록됨",
+            out.url ? { actionUrl: out.url, actionLabel: "열기" } : undefined,
+          );
           onClose();
         },
       },

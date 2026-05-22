@@ -4376,3 +4376,143 @@
 .skl-note.err {
   color: var(--color-wr-danger);
 }
+
+/* ── ToastHost (A7) ────────────────────────────────────────────────────────── */
+
+.toast-host {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 200;
+  max-width: 420px;
+  pointer-events: none;
+}
+
+.toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font: 500 13px var(--font-sans);
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: toast-in 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-error {
+  background: var(--color-wr-near-black);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toast-success {
+  background: var(--color-wr-near-black);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toast-info {
+  background: var(--color-wr-surface);
+  color: var(--color-wr-fg);
+  border: 1px solid var(--color-wr-border);
+}
+
+.toast-msg {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.toast-trace {
+  opacity: 0.6;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.toast-btn {
+  border: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font: 600 12px var(--font-sans);
+  line-height: 1.4;
+  transition: background 0.15s;
+}
+
+.toast-error .toast-btn,
+.toast-success .toast-btn {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.toast-error .toast-btn:hover,
+.toast-success .toast-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.toast-info .toast-btn {
+  background: var(--color-wr-hover);
+  color: var(--color-wr-fg);
+}
+.toast-info .toast-btn:hover {
+  background: var(--color-wr-border);
+}
+
+.toast-dismiss {
+  font-size: 15px;
+  padding: 2px 8px;
+  opacity: 0.7;
+}
+.toast-dismiss:hover {
+  opacity: 1;
+}
+
+/* ── Spinner (A7) ────────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid var(--color-wr-border);
+  border-top-color: var(--color-wr-muted);
+  animation: spinner-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner-sm {
+  width: 14px;
+  height: 14px;
+}
+
+.spinner-md {
+  width: 20px;
+  height: 20px;
+  border-width: 2.5px;
+}
+
+@keyframes spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

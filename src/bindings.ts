@@ -353,6 +353,10 @@ export const commands = {
 	 *  실행하지 않는다(쓰기만). 외부 스킬을 work-radar가 자동 적용/실행하는 경로는 없다.
 	 */
 	writeExternalSkill: (path: string, content: string) => typedError<null, string>(__TAURI_INVOKE("write_external_skill", { path, content })),
+	/**  에러를 로그에 기록한다. 로깅 자체 실패는 Ok(())로 삼킨다 (UI 흐름 보호). */
+	logAppError: (scope: string, message: string, traceId: string) => typedError<null, string>(__TAURI_INVOKE("log_app_error", { scope, message, traceId })),
+	/**  errors.log 파일 경로를 반환한다 (설정 화면 표시용). */
+	appLogPath: () => typedError<string, string>(__TAURI_INVOKE("app_log_path")),
 };
 
 /* Types */
