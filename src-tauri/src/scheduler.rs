@@ -99,8 +99,12 @@ pub async fn run_tick<N: Notifier>(db: &Db, notifier: &N, now: &str) -> Result<u
 /// 백그라운드 틱 루프를 spawn한다(논블로킹). 트레이 상주 동안 계속 살아 있다.
 /// `tokio::time::interval`로 고정 간격을 보장(INVARIANT #5: busy-loop/무한 즉시반복 아님).
 /// DB 에러는 한 틱을 건너뛰고 다음 틱에서 재시도(앱은 계속 동작 — graceful degrade).
+///
+/// **`tauri::async_runtime::spawn` 사용(필수):** setup()은 macOS main 스레드(app_delegate
+/// did_finish_launching)에서 돌아 진입된 Tokio 런타임이 없다 → `tokio::spawn`은 "no reactor running"
+/// 패닉으로 부팅 즉시 abort. Tauri 관리 런타임(멀티스레드 Tokio, timer 포함)에 올린다.
 pub fn spawn_loop<N: Notifier>(db: Db, notifier: N) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let mut ticker = tokio::time::interval(TICK_INTERVAL);
         loop {
             ticker.tick().await;
