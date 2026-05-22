@@ -169,6 +169,10 @@ pub async fn trigger_codex_job(
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: Vec::new(),
+            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
+                .await
+                .ok()
+                .flatten(),
         },
         false, // 자유형 codex 잡은 게이트 아님 — 산출물 표시는 Phase 8 PR self-check 잡만.
     );
@@ -359,6 +363,10 @@ pub async fn trigger_pr_selfcheck(
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("pr.diff".to_string(), diff)],
+            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
+                .await
+                .ok()
+                .flatten(),
         },
         true, // 게이트 잡: 성공+proposal이면 awaiting_approval로 멈춘다(Acceptance 게이트).
     );
@@ -667,6 +675,10 @@ pub async fn trigger_enrich(
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("card.txt".to_string(), card_text)],
+            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
+                .await
+                .ok()
+                .flatten(),
         },
         true, // 게이트 잡: 성공+proposal이면 awaiting_approval(Acceptance 게이트).
     );
@@ -871,6 +883,10 @@ pub async fn trigger_enrich_all(
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("cards.json".to_string(), cards_json)],
+            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
+                .await
+                .ok()
+                .flatten(),
         },
         true, // 게이트 잡: 성공+proposal이면 awaiting_approval(Acceptance 게이트).
     );
@@ -1162,6 +1178,10 @@ pub async fn trigger_ci_triage(
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("pr.diff".to_string(), diff)],
+            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
+                .await
+                .ok()
+                .flatten(),
         },
         true,
     );

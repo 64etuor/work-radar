@@ -431,8 +431,8 @@ pub async fn test_notion_connection(
         let err = crate::notion::classify_http_pub(status, &body);
         return Err(err.to_string());
     }
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| format!("응답 파싱 실패: {e}"))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&body).map_err(|e| format!("응답 파싱 실패: {e}"))?;
     let title_prop = find_title_prop(&json).unwrap_or_else(|| "(title 속성 없음)".into());
     Ok(format!("연결됨 — DB title 속성: {title_prop}"))
 }
@@ -784,12 +784,21 @@ mod tests {
 
         // resolve가 keychain 없이 성공한 경우(unlikely in test), outcome도 확인.
         if let Ok((_token, _db_id, resolved_pid)) = resolve_result {
-            assert_eq!(resolved_pid, proj.id, "resolved_project_id = matching project");
+            assert_eq!(
+                resolved_pid, proj.id,
+                "resolved_project_id = matching project"
+            );
             // execute_promotion으로 end-to-end 검증.
-            let outcome =
-                execute_promotion(&db, &sig.id, PromotionTarget::NotionBacklog, &writer, "tok", "1234567890abcdef1234567890abcdef")
-                    .await
-                    .unwrap();
+            let outcome = execute_promotion(
+                &db,
+                &sig.id,
+                PromotionTarget::NotionBacklog,
+                &writer,
+                "tok",
+                "1234567890abcdef1234567890abcdef",
+            )
+            .await
+            .unwrap();
             assert!(matches!(outcome.status, PromotionStatus::Created));
         }
     }

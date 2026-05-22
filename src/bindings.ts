@@ -143,6 +143,13 @@ export const commands = {
 	 *  id는 `branch:<name>` 또는 `worktree:<path>`. 항목별 결과를 요약 문자열로 노출(부분 실패 격리).
 	 */
 	deleteCleanupCandidates: (repoPath: string, base: string | null, ids: string[], force: boolean) => typedError<string, string>(__TAURI_INVOKE("delete_cleanup_candidates", { repoPath, base, ids, force })),
+	/**  저장된 Codex 모델 문자열(없으면 None → 기본 동작 유지). */
+	getCodexModel: () => typedError<string | null, string>(__TAURI_INVOKE("get_codex_model")),
+	/**
+	 *  Codex 모델 설정(또는 None으로 삭제 → 기본 동작 복원).
+	 *  None 또는 빈 문자열이면 저장 행을 삭제한다.
+	 */
+	setCodexModel: (model: string | null) => typedError<null, string>(__TAURI_INVOKE("set_codex_model", { model })),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, string>(__TAURI_INVOKE("codex_status")),
 	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */

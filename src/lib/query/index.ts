@@ -11,6 +11,7 @@ export * from "./routines";
 export * from "./prRadar";
 export * from "./worktree";
 export * from "./agents";
+export * from "./agentsConfig";
 export * from "./scheduler";
 export * from "./nav";
 export * from "./hermes";

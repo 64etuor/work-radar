@@ -102,6 +102,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::rebase_worktree_onto,
         commands::list_cleanup_candidates,
         commands::delete_cleanup_candidates,
+        // Codex 에이전트 설정 (B2: 모델 선택).
+        commands::get_codex_model,
+        commands::set_codex_model,
         // Agent 스파인 (잡 큐 + bounds + kill, Phase 7).
         commands::codex_status,
         commands::trigger_echo_job,

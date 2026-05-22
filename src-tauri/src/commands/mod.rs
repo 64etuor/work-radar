@@ -9,6 +9,7 @@
 pub mod shared;
 
 pub mod agents;
+pub mod agents_config;
 pub mod calendar;
 pub mod hermes;
 pub mod nav;
@@ -25,6 +26,7 @@ pub mod tokens;
 pub mod worktree;
 
 pub use agents::*;
+pub use agents_config::*;
 pub use calendar::*;
 pub use hermes::*;
 pub use nav::*;

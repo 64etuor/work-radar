@@ -203,11 +203,10 @@ pub async fn create_routine(
 /// 루틴 수정. 필드 업데이트 후 미발사 루틴 알림을 삭제(다음 list_today_routines에서 재enqueue).
 #[tauri::command]
 #[specta::specta]
-pub async fn update_routine(
-    db: State<'_, Db>,
-    input: UpdateRoutineInput,
-) -> Result<(), String> {
-    update_routine_inner(db.inner(), input).await.map_err(|e| e.to_string())
+pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Result<(), String> {
+    update_routine_inner(db.inner(), input)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<(), sqlx::Error> {
@@ -280,7 +279,9 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_routine(db: State<'_, Db>, id: String) -> Result<(), String> {
-    delete_routine_inner(db.inner(), id).await.map_err(|e| e.to_string())
+    delete_routine_inner(db.inner(), id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 pub async fn delete_routine_inner(db: &Db, id: String) -> Result<(), sqlx::Error> {
@@ -962,7 +963,9 @@ mod tests {
         .unwrap();
 
         // 미발사 알림 enqueue.
-        let routines = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        let routines = fetch_today_routines(&db, "2026-05-22", Weekday::Fri)
+            .await
+            .unwrap();
         sync_reminders(&db, "2026-05-22", &routines).await.unwrap();
 
         // 발사된 알림 행을 수동 삽입 (fired_at 있음).
@@ -1023,7 +1026,9 @@ mod tests {
         assert_eq!(fired_after, 1, "발사된 알림은 보존됨");
 
         // 제목 변경 확인.
-        let updated = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        let updated = fetch_today_routines(&db, "2026-05-22", Weekday::Fri)
+            .await
+            .unwrap();
         assert_eq!(updated[0].title, "수정된 루틴");
     }
 
@@ -1067,7 +1072,9 @@ mod tests {
         toggle_check(&db, &r1.id, "2026-05-22", true).await;
 
         // r1 미발사 알림 enqueue.
-        let routines = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        let routines = fetch_today_routines(&db, "2026-05-22", Weekday::Fri)
+            .await
+            .unwrap();
         sync_reminders(&db, "2026-05-22", &routines).await.unwrap();
 
         // r1의 발사된 알림 행 수동 삽입.
@@ -1095,12 +1102,11 @@ mod tests {
         delete_routine_inner(&db, r1.id.clone()).await.unwrap();
 
         // 루틴 행 삭제 확인.
-        let (r1_exists,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM routines WHERE id = ?1")
-                .bind(&r1.id)
-                .fetch_one(&db)
-                .await
-                .unwrap();
+        let (r1_exists,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM routines WHERE id = ?1")
+            .bind(&r1.id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
         assert_eq!(r1_exists, 0, "루틴 행 삭제됨");
 
         // routine_checks 삭제 확인.
@@ -1131,7 +1137,9 @@ mod tests {
         assert_eq!(fired, 1, "발사된 알림은 보존됨");
 
         // 다른 루틴(r2) 무손상 확인.
-        let remaining = fetch_today_routines(&db, "2026-05-22", Weekday::Fri).await.unwrap();
+        let remaining = fetch_today_routines(&db, "2026-05-22", Weekday::Fri)
+            .await
+            .unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].id, r2.id, "다른 루틴은 무손상");
     }

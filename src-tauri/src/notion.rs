@@ -326,7 +326,10 @@ pub fn normalize_notion_db_id(input: &str) -> Result<String, String> {
 
     // 마지막 32-hex 런 추출. 대시 제거 후 연속 hex 문자를 구간으로 모은다.
     // Notion ID = 32 hex chars(대시 포함 시 36자 UUID, 미포함 시 32자 raw).
-    let hex_only: String = path_part.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    let hex_only: String = path_part
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .collect();
     // 경로에 여러 hex 런이 있을 수 있다 — 마지막 32-hex 연속 블록을 찾는다.
     // 전략: hex_only의 마지막 32글자를 취한다(ID가 경로 끝에 옴).
     if hex_only.len() < 32 {

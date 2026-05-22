@@ -418,6 +418,8 @@ pub struct CodexRunner {
     /// 잡 시작 전 cwd에 써둘 입력 파일들 (상대 이름, 내용). codex가 read_only로 읽는다.
     /// Phase 8 = PR diff(`pr.diff`). Rust가 쓰므로 read_only 샌드박스와 무관(샌드박스는 codex 쓰기만 제한).
     pub input_files: Vec<(String, String)>,
+    /// 선택적 모델 override (`--model <model>`). None이면 codex 기본 동작.
+    pub model: Option<String>,
 }
 
 impl CodexRunner {
@@ -491,23 +493,30 @@ impl AgentRunner for CodexRunner {
         let cwd_str = cwd
             .to_str()
             .ok_or_else(|| AgentError::Spawn("작업 디렉터리 인코딩 실패".into()))?;
-        // codex exec --json --sandbox <flag> --color never -C <cwd> --skip-git-repo-check -- <prompt>
+        // codex exec --json --sandbox <flag> --color never [-M <model>] -C <cwd> --skip-git-repo-check -- <prompt>
         // (실 설치본 0.125 플래그 검증.) `--`로 prompt가 플래그로 오인되지 않게 한다.
-        let mut child = Command::new(&self.codex_bin)
-            .arg("exec")
+        let mut cmd = Command::new(&self.codex_bin);
+        cmd.arg("exec")
             .arg("--json")
             .arg("--sandbox")
             .arg(self.sandbox.as_codex_flag())
             .arg("--color")
-            .arg("never")
-            .arg("-C")
+            .arg("never");
+        // 모델 override(설정 시에만 플래그 추가 — 없으면 codex 기본 동작 유지).
+        if let Some(ref m) = self.model {
+            if !m.trim().is_empty() {
+                cmd.arg("--model").arg(m.trim());
+            }
+        }
+        cmd.arg("-C")
             .arg(cwd_str)
             .arg("--skip-git-repo-check")
             .arg("--")
             .arg(&self.prompt)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
+            .kill_on_drop(true);
+        let mut child = cmd
             .spawn()
             .map_err(|e| AgentError::Spawn(format!("codex 시작 실패(설치/PATH 확인): {e}")))?;
 

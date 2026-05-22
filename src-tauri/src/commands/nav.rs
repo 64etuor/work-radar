@@ -20,7 +20,7 @@ pub(crate) async fn get_config(db: &Db, key: &str) -> Result<Option<String>, sql
 }
 
 /// app_config 단일 값 upsert.
-async fn set_config(db: &Db, key: &str, value: &str) -> Result<(), sqlx::Error> {
+pub(crate) async fn set_config(db: &Db, key: &str, value: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO app_config (key, value) VALUES (?1, ?2) \
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
