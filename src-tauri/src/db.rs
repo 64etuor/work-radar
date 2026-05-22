@@ -2,8 +2,9 @@
 //! 스키마 변경은 `migrations/`의 새 파일로만 (임의 ALTER 금지 — INVARIANT).
 
 use std::path::Path;
+use std::time::Duration;
 
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
 
 /// 앱 전역에서 공유되는 DB 핸들 (Tauri managed state).
@@ -15,10 +16,17 @@ pub async fn init_db(db_path: &Path) -> Result<Db, sqlx::Error> {
         std::fs::create_dir_all(parent).ok();
     }
 
+    // WAL + busy_timeout: 풀(max 5)과 30초 스케줄러 백그라운드 writer가 동시에 쓰므로
+    // 기본 rollback 저널이면 writer 경합 시 즉시 SQLITE_BUSY가 난다. WAL로 reader/writer를
+    // 분리하고, busy_timeout으로 짧은 writer 경합은 대기로 흡수한다. synchronous=Normal은
+    // WAL에서 안전하며(크래시 시 마지막 트랜잭션만 손실 가능) fsync 비용을 줄인다.
     let opts = SqliteConnectOptions::new()
         .filename(db_path)
         .create_if_missing(true)
-        .foreign_keys(true);
+        .foreign_keys(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .busy_timeout(Duration::from_secs(5));
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
@@ -47,6 +55,22 @@ mod tests {
             .as_nanos();
         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!("work-radar-test-{nanos}-{seq}.db"))
+    }
+
+    /// init_db가 WAL + busy_timeout을 실제로 적용하는지 — 동시 writer SQLITE_BUSY 가드(아키텍처 권고).
+    #[tokio::test]
+    async fn init_db_enables_wal_and_busy_timeout() {
+        let pool = init_db(&temp_db_path()).await.expect("init_db failed");
+        let (journal_mode,): (String,) = sqlx::query_as("PRAGMA journal_mode")
+            .fetch_one(&pool)
+            .await
+            .expect("journal_mode query failed");
+        assert_eq!(journal_mode.to_lowercase(), "wal");
+        let (busy_timeout,): (i64,) = sqlx::query_as("PRAGMA busy_timeout")
+            .fetch_one(&pool)
+            .await
+            .expect("busy_timeout query failed");
+        assert_eq!(busy_timeout, 5000);
     }
 
     /// Phase 16(0011) routines rebuild가 routine_checks 완료 이력을 **보존**하는지 — 데이터 손실 가드.
