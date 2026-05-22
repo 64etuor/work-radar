@@ -56,24 +56,15 @@ const WAIT_HTML: &str =
 /// 외부 호출 실패 분류. Transient = 재시도 대상(네트워크·429·5xx),
 /// Terminal = 재시도 무의미(인증/권한/검증 등 4xx, 디코드 실패).
 /// ReconnectRequired = 스코프 불일치로 재연결이 필요한 경우(calendarList 403).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum CalendarError {
+    #[error("{0}")]
     Transient(String),
+    #[error("{0}")]
     Terminal(String),
+    #[error("{0}")]
     ReconnectRequired(String),
 }
-
-impl std::fmt::Display for CalendarError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CalendarError::Transient(m) => write!(f, "{m}"),
-            CalendarError::Terminal(m) => write!(f, "{m}"),
-            CalendarError::ReconnectRequired(m) => write!(f, "{m}"),
-        }
-    }
-}
-
-impl std::error::Error for CalendarError {}
 
 /// HTTP 상태코드 → 분류. 429/5xx는 일시적, 그 외 4xx는 영구.
 fn classify_http(status: u16, body: &str) -> CalendarError {

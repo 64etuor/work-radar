@@ -32,22 +32,13 @@ pub const MAX_PR_DIFF_BYTES: usize = 256 * 1024;
 
 /// 외부 fetch 실패 분류. Transient = 재시도 대상(네트워크·429·5xx),
 /// Terminal = 재시도 무의미(인증/권한/검증 등 4xx, 디코드 실패).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum GithubError {
+    #[error("{0}")]
     Transient(String),
+    #[error("{0}")]
     Terminal(String),
 }
-
-impl std::fmt::Display for GithubError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GithubError::Transient(m) => write!(f, "{m}"),
-            GithubError::Terminal(m) => write!(f, "{m}"),
-        }
-    }
-}
-
-impl std::error::Error for GithubError {}
 
 /// PR의 머지 상태 (provider 출력, 내부 전용 — export 아님). unmerged-closed는 provider가 거른다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

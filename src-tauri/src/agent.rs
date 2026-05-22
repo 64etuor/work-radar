@@ -44,36 +44,27 @@ pub struct AgentOutcome {
 }
 
 /// 잡 실패/종료 사유. 모두 terminal로 노출(삼키지 않음).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum AgentError {
     /// JobManager timeout 초과 → kill.
+    #[error("timeout 초과로 kill됨")]
     Timeout,
     /// kill switch(사용자 취소 또는 큐 대기 중 취소).
+    #[error("사용자가 취소(kill)함")]
     Cancelled,
     /// max_turns 초과 → kill (codex).
+    #[error("max_turns({0}) 초과로 kill됨")]
     MaxTurnsExceeded(u32),
     /// cost cap(USD) 초과 → kill (codex).
+    #[error("cost cap(${0:.4}) 초과로 kill됨")]
     CostCapExceeded(f64),
     /// 프로세스 시작 실패(미설치/권한/worktree 준비 실패 등).
+    #[error("잡 시작 실패: {0}")]
     Spawn(String),
     /// 비0 종료 또는 런타임 오류.
+    #[error("잡 실패: {0}")]
     Failed(String),
 }
-
-impl std::fmt::Display for AgentError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AgentError::Timeout => write!(f, "timeout 초과로 kill됨"),
-            AgentError::Cancelled => write!(f, "사용자가 취소(kill)함"),
-            AgentError::MaxTurnsExceeded(n) => write!(f, "max_turns({n}) 초과로 kill됨"),
-            AgentError::CostCapExceeded(c) => write!(f, "cost cap(${c:.4}) 초과로 kill됨"),
-            AgentError::Spawn(m) => write!(f, "잡 시작 실패: {m}"),
-            AgentError::Failed(m) => write!(f, "잡 실패: {m}"),
-        }
-    }
-}
-
-impl std::error::Error for AgentError {}
 
 /// JobManager가 의존하는 유일한 실행 계약. 러너는 자기 설정을 보유하고 run()은 bounds/취소/로그경로만 받는다.
 /// (RPITIT — async fn in trait. async_trait 의존성 없이 제네릭으로만 소비, GitProvider/PrProvider 패턴.)

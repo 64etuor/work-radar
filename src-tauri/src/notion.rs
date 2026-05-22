@@ -31,28 +31,19 @@ const MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 /// NotFound(404) = DB ID 오류 또는 통합 미공유 — 액션 가능 메시지 포함.
 /// Forbidden(403) = 통합 권한 부족 — 액션 가능 메시지 포함.
 /// 큐 전이는 commands.rs가 결정한다.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum NotionError {
+    #[error("{0}")]
     Transient(String),
+    #[error("{0}")]
     Terminal(String),
     /// 404: DB ID가 잘못됐거나 통합이 해당 DB에 공유되지 않음.
+    #[error("{0}")]
     NotFound(String),
     /// 403: 통합 권한 부족.
+    #[error("{0}")]
     Forbidden(String),
 }
-
-impl std::fmt::Display for NotionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NotionError::Transient(m) => write!(f, "{m}"),
-            NotionError::Terminal(m) => write!(f, "{m}"),
-            NotionError::NotFound(m) => write!(f, "{m}"),
-            NotionError::Forbidden(m) => write!(f, "{m}"),
-        }
-    }
-}
-
-impl std::error::Error for NotionError {}
 
 /// 생성된 Notion 페이지. url은 "Notion에서 열기" 딥링크에 쓰인다.
 #[derive(Debug, Clone)]

@@ -20,16 +20,9 @@ use crate::models::{DiffFileSummary, DiffMode, FileChange, WorktreeStatus};
 const CMD_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// git 접근 실패. 로컬·결정적이라 재시도 구분 없이 terminal로 노출한다(삼키지 않음).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{0}")]
 pub struct GitError(pub String);
-
-impl std::fmt::Display for GitError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for GitError {}
 
 /// `git worktree list --porcelain`이 주는 raw worktree (status는 별도 호출로 채운다).
 #[derive(Debug, Clone, PartialEq, Eq)]
