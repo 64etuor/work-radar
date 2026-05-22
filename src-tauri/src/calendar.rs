@@ -75,11 +75,12 @@ impl Retryable for CalendarError {
 
 /// HTTP 상태코드 → 분류. 429/5xx는 일시적, 그 외 4xx는 영구.
 fn classify_http(status: u16, body: &str) -> CalendarError {
-    let snippet: String = body.chars().take(300).collect();
+    // 외부 응답 본문은 사용자 콘텐츠/PII 가능 → 메시지·로그에 내용을 넣지 않는다(스펙 §5.5). 크기만 노출.
+    let body_len = body.len();
     if status == 429 || status >= 500 {
-        CalendarError::Transient(format!("HTTP {status}: {snippet}"))
+        CalendarError::Transient(format!("HTTP {status} (응답 {body_len}B)"))
     } else {
-        CalendarError::Terminal(format!("HTTP {status}: {snippet}"))
+        CalendarError::Terminal(format!("HTTP {status} (응답 {body_len}B)"))
     }
 }
 
@@ -204,10 +205,8 @@ pub fn parse_token_response(body: &serde_json::Value) -> Result<TokenResponse, C
     let access_token = body
         .get("access_token")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            let snippet: String = body.to_string().chars().take(200).collect();
-            CalendarError::Terminal(format!("토큰 응답에 access_token 없음: {snippet}"))
-        })?
+        // 응답 본문(OAuth 토큰 응답)은 메시지/로그에 넣지 않는다(스펙 §5.5).
+        .ok_or_else(|| CalendarError::Terminal("토큰 응답에 access_token 없음".into()))?
         .to_string();
     let refresh_token = body
         .get("refresh_token")
@@ -263,10 +262,8 @@ pub fn parse_created_event(
     let id = body
         .get("id")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            let snippet: String = body.to_string().chars().take(200).collect();
-            CalendarError::Terminal(format!("이벤트 생성 응답에 id 없음: {snippet}"))
-        })?
+        // 응답 본문(이벤트 상세)은 메시지/로그에 넣지 않는다(스펙 §5.5).
+        .ok_or_else(|| CalendarError::Terminal("이벤트 생성 응답에 id 없음".into()))?
         .to_string();
     let url = body
         .get("htmlLink")
@@ -901,12 +898,15 @@ mod tests {
         assert_eq!(r.access_token, "at2");
         assert!(r.refresh_token.is_none());
         assert_eq!(r.expires_in, 3600, "expires_in 누락 시 기본 3600");
-        // access_token 누락 → Terminal.
-        let bad = serde_json::json!({ "error": "invalid_grant" });
-        assert!(matches!(
-            parse_token_response(&bad),
-            Err(CalendarError::Terminal(_))
-        ));
+        // access_token 누락 → Terminal. 응답 본문은 메시지에 노출되지 않는다(스펙 §5.5).
+        let bad = serde_json::json!({ "error": "invalid_grant", "leak": "SECRET_xyz" });
+        let Err(CalendarError::Terminal(m)) = parse_token_response(&bad) else {
+            panic!("access_token 누락 → Terminal");
+        };
+        assert!(
+            !m.contains("SECRET_xyz") && !m.contains("invalid_grant"),
+            "본문 내용이 메시지에 노출되면 안 됨"
+        );
     }
 
     /// merge_refresh: 응답에 refresh 있으면 교체, 없으면(빈 문자열 포함) 기존 유지.
@@ -981,6 +981,11 @@ mod tests {
             classify_http(400, "invalid_grant"),
             CalendarError::Terminal(_)
         ));
+        // 본문 스크럽(스펙 §5.5): 응답 본문 내용은 메시지에 노출되지 않는다.
+        let CalendarError::Terminal(m) = classify_http(400, "SECRET_BODY_xyz") else {
+            panic!("400 → Terminal");
+        };
+        assert!(!m.contains("SECRET_BODY_xyz"), "본문이 메시지에 새면 안 됨");
     }
 
     // ── 이벤트 생성(write, Phase 19): 페이로드 빌더 + 응답 파싱 ────────────────────────
@@ -1047,12 +1052,15 @@ mod tests {
             parse_created_event(&no_link).unwrap(),
             ("evt2".into(), None)
         );
-        // id 누락 → Terminal(write 검증 실패).
-        let bad = serde_json::json!({ "error": "insufficientPermissions" });
-        assert!(matches!(
-            parse_created_event(&bad),
-            Err(CalendarError::Terminal(_))
-        ));
+        // id 누락 → Terminal(write 검증 실패). 응답 본문은 메시지에 노출되지 않는다(스펙 §5.5).
+        let bad = serde_json::json!({ "error": "insufficientPermissions", "leak": "SECRET_xyz" });
+        let Err(CalendarError::Terminal(m)) = parse_created_event(&bad) else {
+            panic!("id 누락 → Terminal");
+        };
+        assert!(
+            !m.contains("SECRET_xyz") && !m.contains("insufficientPermissions"),
+            "본문 내용이 메시지에 노출되면 안 됨"
+        );
     }
 
     // ── 트레잇 seam: connect_core / refresh_core / fetch_events_core (fake provider) ──────

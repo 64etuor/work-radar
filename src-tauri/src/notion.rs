@@ -78,16 +78,15 @@ pub trait NotionWriter {
 /// - 429/5xx → Transient (재시도 대상).
 /// - 그 외 4xx → Terminal (영구 실패).
 fn classify_http(status: u16, body: &str) -> NotionError {
-    let snippet: String = body.chars().take(300).collect();
+    // 외부 응답 본문은 사용자 콘텐츠/PII 가능 → 메시지·로그에 내용을 넣지 않는다(스펙 §5.5). 크기만 노출.
+    let body_len = body.len();
     match status {
-        404 => NotionError::NotFound(format!(
-            "DB를 찾을 수 없음 — ID가 맞는지, 그리고 통합(integration)이 이 DB에 공유됐는지 확인 (HTTP 404: {snippet})"
-        )),
-        403 => NotionError::Forbidden(format!(
-            "권한 없음 — 통합 권한 확인 (HTTP 403: {snippet})"
-        )),
-        429 | 500..=599 => NotionError::Transient(format!("HTTP {status}: {snippet}")),
-        _ => NotionError::Terminal(format!("HTTP {status}: {snippet}")),
+        404 => NotionError::NotFound(
+            "DB를 찾을 수 없음 — ID가 맞는지, 그리고 통합(integration)이 이 DB에 공유됐는지 확인 (HTTP 404)".into(),
+        ),
+        403 => NotionError::Forbidden("권한 없음 — 통합 권한 확인 (HTTP 403)".into()),
+        429 | 500..=599 => NotionError::Transient(format!("HTTP {status} (응답 {body_len}B)")),
+        _ => NotionError::Terminal(format!("HTTP {status} (응답 {body_len}B)")),
     }
 }
 
@@ -398,6 +397,11 @@ mod tests {
             classify_http(403, "forbidden"),
             NotionError::Forbidden(_)
         ));
+        // 본문 스크럽(스펙 §5.5): 응답 본문 내용은 메시지에 노출되지 않는다.
+        let NotionError::Terminal(m) = classify_http(400, "SECRET_BODY_xyz") else {
+            panic!("400 → Terminal");
+        };
+        assert!(!m.contains("SECRET_BODY_xyz"), "본문이 메시지에 새면 안 됨");
     }
 
     /// normalize_notion_db_id: 순수 32-hex raw ID.

@@ -51,11 +51,12 @@ impl Retryable for MessengerError {
 
 /// HTTP 상태코드 → 분류. 429/5xx는 일시적, 그 외 4xx는 영구.
 fn classify_http(status: u16, body: &str) -> MessengerError {
-    let snippet: String = body.chars().take(300).collect();
+    // 외부 응답 본문은 사용자 콘텐츠/PII 가능 → 메시지·로그에 내용을 넣지 않는다(스펙 §5.5). 크기만 노출.
+    let body_len = body.len();
     if status == 429 || status >= 500 {
-        MessengerError::Transient(format!("HTTP {status}: {snippet}"))
+        MessengerError::Transient(format!("HTTP {status} (응답 {body_len}B)"))
     } else {
-        MessengerError::Terminal(format!("HTTP {status}: {snippet}"))
+        MessengerError::Terminal(format!("HTTP {status} (응답 {body_len}B)"))
     }
 }
 
@@ -636,6 +637,11 @@ mod tests {
             classify_http(400, "bad request"),
             MessengerError::Terminal(_)
         ));
+        // 본문 스크럽(스펙 §5.5): 응답 본문 내용은 메시지에 노출되지 않는다.
+        let MessengerError::Terminal(m) = classify_http(400, "SECRET_BODY_xyz") else {
+            panic!("400 → Terminal");
+        };
+        assert!(!m.contains("SECRET_BODY_xyz"), "본문이 메시지에 새면 안 됨");
     }
 
     // ── 트레잇 seam: send_core / fetch_core (fake provider) ──────────────────────────
