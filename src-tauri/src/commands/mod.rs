@@ -10,6 +10,7 @@ pub mod shared;
 
 pub mod agents;
 pub mod calendar;
+pub mod hermes;
 pub mod notion;
 pub mod pr_radar;
 pub mod projects;
@@ -23,6 +24,7 @@ pub mod worktree;
 
 pub use agents::*;
 pub use calendar::*;
+pub use hermes::*;
 pub use notion::*;
 pub use pr_radar::*;
 pub use projects::*;

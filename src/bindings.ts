@@ -254,6 +254,29 @@ export const commands = {
 	 *  source='test'로 태깅(Phase 16/20과 동일한 제네릭 경로).
 	 */
 	scheduleTestNotification: (secondsFromNow: number) => typedError<null, string>(__TAURI_INVOKE("schedule_test_notification", { secondsFromNow })),
+	/**
+	 *  브리지 설정: 봇 토큰 → keychain(반환 없음), chat_id → hermes_bridge 단일 행. 토큰 본문은 IPC
+	 *  인자로만 들어와 즉시 keychain으로 가고 절대 반환되지 않는다(INVARIANT). offset은 보존(재설정 시
+	 *  같은 봇이면 이미 소비한 update를 다시 받지 않게 — 새 행이면 0).
+	 */
+	setHermesBridge: (botToken: string, chatId: string) => typedError<null, string>(__TAURI_INVOKE("set_hermes_bridge", { botToken, chatId })),
+	/**  브리지 연결 상태(토큰 keychain 보유 + chat_id 설정). 봇 토큰 본문은 절대 미노출(INVARIANT). */
+	hermesBridgeStatus: () => typedError<HermesBridgeStatus, string>(__TAURI_INVOKE("hermes_bridge_status")),
+	/**  연결 해제: keychain 봇 토큰 삭제 + hermes_bridge 행 삭제(메시지 로그는 보존 — 열람 가치). 멱등. */
+	disconnectHermes: () => typedError<null, string>(__TAURI_INVOKE("disconnect_hermes")),
+	/**
+	 *  Hermes에게 메시지 전송(Telegram sendMessage). bounded retry·graceful terminal failure. 송신
+	 *  로그를 hermes_messages에 기록한다(제어 surface). 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
+	 */
+	sendHermesMessage: (text: string) => typedError<null, string>(__TAURI_INVOKE("send_hermes_message", { text })),
+	/**
+	 *  Hermes로부터 새 메시지를 **bounded 단발**로 수신(Telegram getUpdates). 무한 long-poll 아님 —
+	 *  한 호출 = 한 왕복(#5). 저장된 offset 이후 update를 받아 새 메시지를 hermes_messages에 기록하고
+	 *  (update_id UNIQUE로 멱등) offset을 전진 영속한다. 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
+	 */
+	fetchHermesMessages: () => typedError<HermesFetchResult, string>(__TAURI_INVOKE("fetch_hermes_messages")),
+	/**  제어 surface용 메시지 로그(최신순, bounded). 송·수신 합쳐 최근 `limit`건. 봇 토큰 미포함. */
+	listHermesMessages: (limit: number) => typedError<HermesMessage[], string>(__TAURI_INVOKE("list_hermes_messages", { limit })),
 };
 
 /* Types */
@@ -554,6 +577,37 @@ export type GoogleCalendarStatus = {
 	detail: string,
 };
 
+/**  Hermes 브리지 연결 상태(graceful degrade 판정용). 봇 토큰 본문은 절대 미포함(INVARIANT). */
+export type HermesBridgeStatus = {
+	/**  봇 토큰이 keychain에 있고 chat_id가 설정됨(송수신 가능). */
+	configured: boolean,
+	/**  설정된 chat_id(비밀 아님 — 라우팅 대상 표시용). 미설정이면 None. */
+	chatId: string | null,
+	/**  사람이 읽을 상태 상세(토큰 본문 미포함). */
+	detail: string,
+};
+
+/**
+ *  fetch_hermes_messages 결과(bounded 단발 getUpdates). 이번 호출에서 새로 받은 메시지 수.
+ *  메시지 본문은 별도 list_hermes_messages로 조회(제어 surface). specta i64/u64 금지 → u32.
+ */
+export type HermesFetchResult = {
+	/**  이번 bounded 호출에서 새로 수신·기록한 메시지 수. */
+	received: number,
+};
+
+/**
+ *  제어 surface(채팅형 뷰)에 표시할 메시지 한 건. 송신/수신 로그(hermes_messages)에서 도출.
+ *  토큰 미포함. direction = "sent"|"received".
+ */
+export type HermesMessage = {
+	id: string,
+	/**  "sent"(work-radar→Hermes) | "received"(Hermes→work-radar). */
+	direction: string,
+	text: string,
+	createdAt: string,
+};
+
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
 
@@ -792,7 +846,9 @@ export type TodayOverview = {
 /**  project별 분리되는 토큰 종류. keychain account 접미사로 쓰인다. */
 export type TokenKind = "notion" | "github" | 
 /**  Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a. */
-"google_calendar";
+"google_calendar" | 
+/**  Hermes 메신저 브리지 봇 토큰(Telegram Bot API류). 앱 레벨 단일 브리지(외부 Hermes 하나). Phase 20. */
+"hermes_bridge";
 
 /**  토큰 존재 여부만 노출 (본문 미노출 — INVARIANT: 토큰 렌더러 노출 금지). */
 export type TokenStatus = {

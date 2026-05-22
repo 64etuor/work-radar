@@ -92,6 +92,11 @@ pub async fn ping_project_token(
             ok: false,
             detail: "Google Calendar는 '연결' 흐름을 사용하세요".into(),
         },
+        // HermesBridge는 앱 레벨 단일 브리지(project별 ping 대상 아님) — 상태는 hermes_bridge_status로.
+        TokenKind::HermesBridge => PingResult {
+            ok: false,
+            detail: "Hermes 브리지는 별도 상태/연결 흐름을 사용하세요".into(),
+        },
     })
 }
 

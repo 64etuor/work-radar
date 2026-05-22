@@ -10,6 +10,7 @@ import {
   GitCompare,
   GitPullRequest,
   LayoutGrid,
+  MessageCircle,
   Repeat,
   Settings,
 } from "lucide-react";
@@ -109,6 +110,13 @@ export function CommandPalette() {
               >
                 <Bot className="size-4 text-wr-subtle" />
                 <span>Jobs (Agent)로</span>
+              </CommandItem>
+              <CommandItem
+                value="hermes 헤르메스 메신저 브리지 텔레그램 telegram bot 외부 에이전트 채팅"
+                onSelect={() => goTo("hermes")}
+              >
+                <MessageCircle className="size-4 text-wr-subtle" />
+                <span>Hermes (메신저 브리지)로</span>
               </CommandItem>
               <CommandItem
                 value="settings 설정 open"

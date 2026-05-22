@@ -5,6 +5,7 @@ import { useProjects, useReconcileSignalProjects } from "@/lib/query";
 import { useUIStore } from "@/store";
 
 import { AddProjectForm } from "./settings/AddProjectForm";
+import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 
@@ -77,6 +78,9 @@ export function SettingsView() {
 
         <div className="st-section-lbl">알림 / 트레이</div>
         <NotificationSettings onToast={toast} />
+
+        <div className="st-section-lbl">Hermes 브리지</div>
+        <HermesBridgeBlock onToast={toast} />
       </div>
 
       <div className={`cb-toast${toastMsg ? " show" : ""}`}>{toastMsg}</div>

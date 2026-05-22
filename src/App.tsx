@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
+import { HermesView } from "@/components/HermesView";
 import { JobsView } from "@/components/JobsView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { RetroView } from "@/components/RetroView";
@@ -53,7 +54,8 @@ export default function App() {
           view === "routines" ||
           view === "radar" ||
           view === "worktree" ||
-          view === "jobs"
+          view === "jobs" ||
+          view === "hermes"
         ) {
           goTo("board");
           return;
@@ -87,6 +89,8 @@ export default function App() {
         <WorktreeView />
       ) : view === "jobs" ? (
         <JobsView />
+      ) : view === "hermes" ? (
+        <HermesView />
       ) : (
         <CaptureBoard />
       )}

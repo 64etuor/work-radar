@@ -16,6 +16,7 @@ mod git;
 mod github;
 mod jobs;
 mod keychain;
+mod messenger;
 mod models;
 mod notion;
 mod scheduler;
@@ -137,6 +138,13 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::notification_permission,
         commands::request_notification_permission,
         commands::schedule_test_notification,
+        // Hermes 메신저 브리지 (Phase 20 #15) — 봇 토큰 keychain, 수신은 bounded 단발.
+        commands::set_hermes_bridge,
+        commands::hermes_bridge_status,
+        commands::disconnect_hermes,
+        commands::send_hermes_message,
+        commands::fetch_hermes_messages,
+        commands::list_hermes_messages,
     ])
 }
 
