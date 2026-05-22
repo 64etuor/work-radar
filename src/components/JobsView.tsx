@@ -14,6 +14,7 @@ import type {
   AgentRunView,
   AgentStatus,
   AreaTag,
+  BatchEnrichItem,
   CiTriageProposal,
   EnrichProposal,
   PrSelfCheckProposal,
@@ -23,10 +24,12 @@ import type {
 import {
   openExternal,
   useAcceptEnrich,
+  useAcceptEnrichAll,
   useAcceptProposal,
   useAcceptTriage,
   useAgentLog,
   useAgentRuns,
+  useBatchEnrichProposal,
   useCodexStatus,
   useEnrichProposal,
   useKillAgentRun,
@@ -271,6 +274,8 @@ function ProposalPanel({ run }: { run: AgentRunView }) {
   switch (run.kind) {
     case "enrich_braindump":
       return <EnrichPanel run={run} />;
+    case "enrich_batch":
+      return <BatchEnrichPanel run={run} />;
     case "triage_ci":
       return <TriagePanel run={run} />;
     default:
@@ -572,6 +577,124 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
         >
           <Check className="size-3.5" />
           accept (힌트 반영)
+        </button>
+        <button
+          type="button"
+          className="jobs-btn jobs-reject"
+          disabled={reject.isPending}
+          onClick={() => reject.mutate(run.id)}
+        >
+          <X className="size-3.5" />
+          폐기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 배치 enrich Proposal 패널 (Phase 15 #4). 미분류 전체를 한 잡으로 enrich한 결과를 **카드별로** 나열하고
+ * 사분면/영역을 편집한 뒤 일괄 accept한다. accept해도 **카드는 자동 분류되지 않고**(INVARIANT #1) 힌트로만
+ * 표시된다 — 사분면 분류·영역 확정은 보드에서 사람이. 부분 실패(skipped) 카운트를 함께 노출한다.
+ */
+function BatchEnrichPanel({ run }: { run: AgentRunView }) {
+  const proposal = useBatchEnrichProposal(run.id, true);
+  const accept = useAcceptEnrichAll();
+  const reject = useRejectProposal();
+  const [draft, setDraft] = useState<BatchEnrichItem[] | null>(null);
+  useEffect(() => {
+    if (proposal.data) setDraft(proposal.data.items);
+  }, [proposal.data]);
+
+  if (proposal.isLoading) {
+    return <div className="jobs-prop jobs-prop-loading">Proposal 불러오는 중…</div>;
+  }
+  if (proposal.error) {
+    return (
+      <ProposalError
+        runId={run.id}
+        message={(proposal.error as Error).message}
+        reject={reject}
+      />
+    );
+  }
+  const items = draft ?? proposal.data?.items ?? [];
+  const skipped = proposal.data?.skipped ?? 0;
+
+  const setItem = (i: number, patch: Partial<BatchEnrichItem>) => {
+    const next = [...items];
+    next[i] = { ...next[i], ...patch };
+    setDraft(next);
+  };
+
+  return (
+    <div className="jobs-prop">
+      <div className="jobs-prop-hint">
+        미분류 <b>{items.length}</b>개 카드 제안{skipped > 0 && <> · 격리(skip) {skipped}개</>}.
+        accept하면 카드에 <b>제안 힌트</b>로만 표시됩니다 — 사분면 분류는 보드에서 직접(자동 분류 없음).
+      </div>
+
+      {items.length === 0 && (
+        <div className="jobs-prop-empty">(적용 가능한 카드 제안이 없습니다)</div>
+      )}
+
+      {items.map((it, i) => (
+        <div key={it.id} className="jobs-prop-batch-item">
+          <div className="jobs-prop-batch-title">{it.title ?? it.id}</div>
+          <div className="jobs-prop-batch-row">
+            <select
+              className="jobs-prop-select"
+              value={it.suggestedQuadrant ?? "unclassified"}
+              onChange={(e) =>
+                setItem(i, { suggestedQuadrant: e.target.value as Quadrant })
+              }
+            >
+              {QUADRANT_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="jobs-prop-select"
+              value={it.suggestedArea ?? ""}
+              onChange={(e) =>
+                setItem(i, {
+                  suggestedArea: (e.target.value || null) as AreaTag | null,
+                })
+              }
+            >
+              <option value="">(미설정)</option>
+              {AREA_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {it.reason && <div className="jobs-prop-batch-reason">{it.reason}</div>}
+        </div>
+      ))}
+
+      {(accept.error || reject.error) && (
+        <div className="jobs-prop-err">
+          {((accept.error ?? reject.error) as Error).message}
+        </div>
+      )}
+      <div className="jobs-prop-actions">
+        <button
+          type="button"
+          className="jobs-btn jobs-btn-primary"
+          disabled={accept.isPending || items.length === 0}
+          onClick={() =>
+            accept.mutate({
+              runId: run.id,
+              accepted: { items, skipped },
+            })
+          }
+        >
+          <Check className="size-3.5" />
+          전체 accept (힌트 반영)
         </button>
         <button
           type="button"

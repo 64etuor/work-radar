@@ -32,6 +32,10 @@ type Props = {
   onOpenMenu: (id: string, anchor: HTMLElement) => void;
   /** AI 제안 영역(suggestedArea)을 사람이 확정 (별개 축 — 결정 레일 아님). */
   onConfirmArea: (id: string, area: AreaTag) => void;
+  /** 미분류 전체 배치 enrich 실행 (단일 codex 잡 — Phase 15 #4). */
+  onEnrichAll: () => void;
+  /** codex 미가용 또는 미분류 0개면 배치 enrich 버튼 비활성. */
+  enrichAllDisabled: boolean;
   /** Today 패널 DOM (드롭 히트 테스트용). */
   todayPanelRef: React.RefObject<HTMLDivElement | null>;
 };
@@ -50,6 +54,8 @@ export function MatrixCanvas({
   onPromoteToday,
   onOpenMenu,
   onConfirmArea,
+  onEnrichAll,
+  enrichAllDisabled,
   todayPanelRef,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -301,6 +307,19 @@ export function MatrixCanvas({
           <span className="ko">미분류</span>
           <span className="count">{inboxCount}</span>
         </div>
+        <button
+          type="button"
+          className="inbox-enrich-all"
+          disabled={enrichAllDisabled}
+          title="미분류 전체를 AI로 일괄 제안 (Jobs에서 검토·accept — 자동 분류 없음)"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEnrichAll();
+          }}
+        >
+          전체 제안 실행
+        </button>
       </div>
 
       <div className="matrix">

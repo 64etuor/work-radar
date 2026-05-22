@@ -62,6 +62,25 @@ export function useSnoozeSignal() {
   });
 }
 
+/** 브레인덤프 카드 제목 인라인 편집 (dedup 키 갱신, Phase 15 #5). */
+export function useUpdateSignalTitle() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      unwrap(commands.updateSignalTitle(id, title)),
+    onSuccess: () => inv.signals(),
+  });
+}
+
+/** 카드 하드 삭제 (영구 — archive와 구분, Phase 15 #5). */
+export function useDeleteSignal() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.deleteSignal(id)),
+    onSuccess: () => inv.signals(),
+  });
+}
+
 /** 라이프 도메인 area 확정/수정(사람 결정, 별개 축 — quadrant 결정 레일과 무관). */
 export function useSetSignalArea() {
   const qc = useQueryClient();

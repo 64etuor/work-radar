@@ -23,6 +23,7 @@ import {
   useCodexStatus,
   useCreateRoutine,
   useCreateSignal,
+  useDeleteSignal,
   useFlushPromotions,
   useProjects,
   usePromoteToday,
@@ -37,7 +38,9 @@ import {
   useToggleRoutineCheck,
   useToggleTodayDone,
   useTriggerEnrich,
+  useTriggerEnrichAll,
   useUnpromoteToday,
+  useUpdateSignalTitle,
   tomorrow,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
@@ -81,6 +84,9 @@ export function CaptureBoard() {
   const toggleRoutine = useToggleRoutineCheck();
   const codex = useCodexStatus();
   const triggerEnrich = useTriggerEnrich();
+  const triggerEnrichAll = useTriggerEnrichAll();
+  const updateTitle = useUpdateSignalTitle();
+  const deleteSignal = useDeleteSignal();
   const setSignalArea = useSetSignalArea();
   const { goTo } = useUIStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
@@ -190,6 +196,26 @@ export function CaptureBoard() {
     toast("영역 확정");
   };
 
+  // 미분류 전체 배치 enrich(Phase 15 #4): 단일 codex 잡 → Jobs에서 카드별 제안 검토·accept(자동 분류 0).
+  const unclassifiedCount = signals.filter((s) => s.quadrant === "unclassified").length;
+  const handleEnrichAll = () => {
+    if (!codexReady) {
+      toast("codex 미가용 — 설치·로그인 후 사용");
+      return;
+    }
+    if (unclassifiedCount === 0) {
+      toast("미분류 카드가 없습니다");
+      return;
+    }
+    triggerEnrichAll.mutate(
+      { projectId: null, timeoutSec: 180, maxTurns: 12, costCapUsd: 1.0 },
+      {
+        onSuccess: () => goTo("jobs"),
+        onError: (e) => toast(`전체 제안 실패: ${String(e)}`),
+      },
+    );
+  };
+
   const handleMenuAction = (action: CardMenuAction, signalId: string) => {
     switch (action) {
       case "today":
@@ -208,6 +234,31 @@ export function CaptureBoard() {
             onError: (e) => toast(`AI 제안 실패: ${String(e)}`),
           },
         );
+        break;
+      case "edit": {
+        // 인라인 제목 편집(Phase 15 #5). dedup 키는 백엔드가 새 제목으로 갱신.
+        const sig = signals.find((s) => s.id === signalId);
+        const next = window.prompt("카드 제목 편집", sig?.title ?? "");
+        if (next != null && next.trim() && next.trim() !== sig?.title) {
+          updateTitle.mutate(
+            { id: signalId, title: next.trim() },
+            {
+              onSuccess: () => toast("제목 수정"),
+              onError: (e) => toast(`수정 실패: ${String(e)}`),
+            },
+          );
+        }
+        break;
+      }
+      case "delete":
+        // 하드 삭제(영구 — archive와 구분, Phase 15 #5). 확인 후 삭제.
+        if (window.confirm("이 카드를 영구 삭제합니다(복원 불가). 계속할까요?")) {
+          deleteSignal.mutate(signalId, {
+            onSuccess: () => toast("삭제됨"),
+            onError: (e) => toast(`삭제 실패: ${String(e)}`),
+          });
+          if (selectedId === signalId) setSelectedId(null);
+        }
         break;
       case "done":
         setStatus.mutate({ id: signalId, status: "done" });
@@ -357,6 +408,10 @@ export function CaptureBoard() {
             setMenu({ signalId: id, anchor });
           }}
           onConfirmArea={handleConfirmArea}
+          onEnrichAll={handleEnrichAll}
+          enrichAllDisabled={
+            !codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending
+          }
           todayPanelRef={todayPanelRef}
         />
 

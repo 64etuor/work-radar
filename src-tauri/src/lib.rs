@@ -54,6 +54,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_signal_status,
         commands::snooze_signal,
         commands::search_signals,
+        // 브레인덤프 편집/하드 삭제 (Phase 15 #5).
+        commands::update_signal_title,
+        commands::delete_signal,
         // Today 레일 (로컬 승격).
         commands::promote_today,
         commands::unpromote_today,
@@ -108,6 +111,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::enrich_proposal,
         commands::accept_enrich,
         commands::set_signal_area,
+        // 미분류 전체 배치 enrich (단일 잡, 부분 실패 격리, Phase 15 #4).
+        commands::trigger_enrich_all,
+        commands::batch_enrich_proposal,
+        commands::accept_enrich_all,
         commands::trigger_ci_triage,
         commands::triage_proposal,
         commands::accept_triage,

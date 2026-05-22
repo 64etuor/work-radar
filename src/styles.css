@@ -787,6 +787,38 @@
   background: var(--color-wr-border-light);
   margin: 5px 4px;
 }
+/* Phase 15 — 하드 삭제(영구) 메뉴 항목. */
+.cb-card-menu button.danger {
+  color: #b23a1f;
+}
+.cb-card-menu button.danger:hover {
+  background: #ffe7e0;
+}
+
+/* Phase 15 — 미분류 영역 "전체 제안 실행"(배치 enrich) 버튼. */
+.cb .inbox-enrich-all {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  z-index: 3;
+  pointer-events: auto;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
+  padding: 3px 9px;
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.cb .inbox-enrich-all:hover:not(:disabled) {
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-fg);
+}
+.cb .inbox-enrich-all:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .cb-toast {
   position: fixed;
@@ -2601,6 +2633,32 @@
   line-height: 1.4;
 }
 .jobs .jobs-prop-hint {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+  line-height: 1.4;
+}
+/* Phase 15 — 배치 enrich Proposal의 카드별 항목 행. */
+.jobs .jobs-prop-batch-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-xs);
+  background: var(--color-wr-bg);
+}
+.jobs .jobs-prop-batch-title {
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.jobs .jobs-prop-batch-row {
+  display: flex;
+  gap: 8px;
+}
+.jobs .jobs-prop-batch-row .jobs-prop-select {
+  flex: 1;
+}
+.jobs .jobs-prop-batch-reason {
   font: 400 11px var(--font-sans);
   color: var(--color-wr-subtle);
   line-height: 1.4;

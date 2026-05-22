@@ -3,12 +3,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 export type CardMenuAction =
   | "today"
   | "enrich"
+  | "edit"
   | "backlog"
   | "agenda"
   | "calendar"
   | "snooze"
   | "done"
-  | "archive";
+  | "archive"
+  | "delete";
 
 export type CardMenuState = {
   signalId: string;
@@ -68,6 +70,9 @@ export function CardMenu({ state, onAct, onClose, codexReady }: Props) {
       <button type="button" onClick={() => act("today")}>
         Today 추가<small>T</small>
       </button>
+      <button type="button" onClick={() => act("edit")}>
+        제목 편집<small>수정</small>
+      </button>
       <button
         type="button"
         disabled={!codexReady}
@@ -95,6 +100,9 @@ export function CardMenu({ state, onAct, onClose, codexReady }: Props) {
       </button>
       <button type="button" onClick={() => act("archive")}>
         보관<small>E</small>
+      </button>
+      <button type="button" className="danger" onClick={() => act("delete")}>
+        삭제<small>영구</small>
       </button>
     </div>
   );

@@ -858,6 +858,50 @@ pub struct EnrichProposal {
     pub reason: Option<String>,
 }
 
+/// 미분류 전체 배치 enrich 잡 입력 (Phase 15 #4). 모든 미분류 카드를 한 codex 호출로 enrich한다.
+/// project_id가 있으면 해당 프로젝트로 한정, 없으면 전체. bounds는 강제(INVARIANT #5).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerEnrichAllInput {
+    pub project_id: Option<String>,
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+}
+
+/// 배치 enrich 한 카드 제안 (Phase 15 #4). codex가 카드별로 낸 suggested 힌트.
+/// Quadrant/AreaTag로 타입해 닫힌 세트를 구조적으로 강제한다(세트 밖이면 카드 단위로 skip). serde
+/// default로 누락 관용. **suggested_*는 힌트일 뿐** — accept해도 quadrant 자동 확정 0(INVARIANT #1).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchEnrichItem {
+    /// 대상 신호 id (입력 cards.json과 매칭).
+    pub id: String,
+    /// 표시용 카드 제목 (UI 패널 — 입력 신호에서 채워 돌려준다).
+    #[serde(default)]
+    pub title: Option<String>,
+    /// 제안 사분면 힌트(닫힌 enum). 자동 분류 아님.
+    #[serde(default)]
+    pub suggested_quadrant: Option<Quadrant>,
+    /// 제안 라이프 도메인 힌트(닫힌 taxonomy).
+    #[serde(default)]
+    pub suggested_area: Option<AreaTag>,
+    /// 제안 근거(짧은 설명).
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// 배치 enrich 산출 Proposal (Phase 15 #4, codex draft). 카드별 제안 목록 + 부분 실패 격리 카운트.
+/// codex가 형식 밖/세트 밖/미존재 카드를 낸 항목은 `items`에서 빠지고 `skipped`로 집계된다(부분 실패
+/// 격리). accept는 items의 suggested_*만 반영 — quadrant 자동 확정 0(INVARIANT #1). specta i64/u64 금지.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchEnrichProposal {
+    pub items: Vec<BatchEnrichItem>,
+    /// 형식/세트/존재 검증에서 제외된 카드 수(부분 실패 격리).
+    pub skipped: u32,
+}
+
 /// CI triage 잡 입력 (PR Radar CI Blocked 카드에서 트리거). 재트리거는 retry_key로 캡된다.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

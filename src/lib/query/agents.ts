@@ -6,6 +6,7 @@ import {
 import { unwrap } from "./client";
 import {
   commands,
+  type BatchEnrichProposal,
   type CiTriageProposal,
   type EnrichProposal,
   type PrSelfCheckProposal,
@@ -13,6 +14,7 @@ import {
   type TriggerCiTriageInput,
   type TriggerCodexInput,
   type TriggerEchoInput,
+  type TriggerEnrichAllInput,
   type TriggerEnrichInput,
   type TriggerPrSelfCheckInput,
 } from "@/bindings";
@@ -161,6 +163,49 @@ export function useAcceptEnrich() {
   return useMutation({
     mutationFn: ({ runId, accepted }: { runId: string; accepted: EnrichProposal }) =>
       unwrap(commands.acceptEnrich(runId, accepted)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // suggested 힌트 칩 반영.
+    },
+  });
+}
+
+// ── Phase 15: 미분류 전체 배치 enrich (단일 잡, 부분 실패 격리) ─────────────────────
+//
+// 미분류 영역 "전체 제안 실행" → 모든 미분류 카드를 한 codex 호출로 enrich(awaiting_approval) →
+// 사람이 카드별 제안을 검토·accept(로컬 반영). accept해도 quadrant 자동 확정 0(INVARIANT #1).
+
+/** 미분류 전체 배치 enrich 잡 트리거(단일 잡). 대상 없으면 백엔드가 Err로 막는다. */
+export function useTriggerEnrichAll() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerEnrichAllInput) =>
+      unwrap(commands.triggerEnrichAll(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** awaiting_approval 배치 enrich 잡의 Proposal(카드별 검증 + skipped 집계). 펼친 잡에 대해서만 enabled. */
+export function useBatchEnrichProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["batchEnrichProposal", runId],
+    queryFn: () => unwrap(commands.batchEnrichProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false, // 파싱 실패(raw/형식 밖)는 즉시 노출.
+  });
+}
+
+/** 배치 enrich accept(INVARIANT #1/#2 게이트) — 카드별 suggested 힌트만 반영(quadrant 자동 확정 0). */
+export function useAcceptEnrichAll() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      runId,
+      accepted,
+    }: {
+      runId: string;
+      accepted: BatchEnrichProposal;
+    }) => unwrap(commands.acceptEnrichAll(runId, accepted)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agentRuns"] });
       void qc.invalidateQueries({ queryKey: ["signals"] }); // suggested 힌트 칩 반영.

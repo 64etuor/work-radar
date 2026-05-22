@@ -156,6 +156,59 @@ pub async fn snooze_signal(
     .map_err(|e| e.to_string())
 }
 
+// ── 브레인덤프 편집 / 하드 삭제 (Phase 15 #5) ──────────────────────────────────
+//
+// 둘 다 로컬 액션(외부 무변경) + 결정 레일 무침범(quadrant 안 건드림 — INVARIANT #1).
+// 편집은 제목 변경 시 dedup 키를 새 제목 normalize로 갱신한다(INVARIANT #3: dedup 키 일관).
+
+/// 신호 제목 편집 코어(테스트 가능). 새 제목으로 title + dedup_key(braindump:normalize) 갱신.
+/// 빈 제목은 거부. quadrant/status는 건드리지 않는다(결정 레일 무침범).
+pub(crate) async fn update_title(
+    db: &Db,
+    id: &str,
+    title: &str,
+) -> Result<WorkSignal, sqlx::Error> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err(sqlx::Error::Protocol("empty signal title".into()));
+    }
+    let dedup_key = format!("braindump:{}", normalize(title));
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET title = ?2, dedup_key = ?3, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(title)
+    .bind(&dedup_key)
+    .fetch_one(db)
+    .await
+}
+
+/// 브레인덤프 카드 제목 인라인 편집. dedup 키를 새 제목으로 갱신한다(INVARIANT #3).
+#[tauri::command]
+#[specta::specta]
+pub async fn update_signal_title(
+    db: State<'_, Db>,
+    id: String,
+    title: String,
+) -> Result<WorkSignal, String> {
+    update_title(db.inner(), &id, &title)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 신호 하드 삭제(영구 — archive와 구분). 카드 행 자체를 DELETE한다(보관/스누즈와 달리 복원 불가).
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_signal(db: State<'_, Db>, id: String) -> Result<(), String> {
+    sqlx::query("DELETE FROM signals WHERE id = ?1")
+        .bind(&id)
+        .execute(db.inner())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ── 승격 draft (외부 = Acceptance 게이트, INVARIANT #2) ────────────────────────
 
 /// 백로그/안건/캘린더 승격 = `Promotion` draft만 생성. 외부(Notion/Calendar)는 변경하지 않는다.
@@ -291,6 +344,53 @@ mod tests {
             promo.created_external_id.is_none(),
             "외부 ID 없음(외부 무변경)"
         );
+    }
+
+    /// Phase 15 #5: 제목 편집은 title + dedup 키를 새 제목 normalize로 갱신한다(INVARIANT #3).
+    #[tokio::test]
+    async fn update_title_recomputes_dedup_key() {
+        let db = fresh_db().await;
+        let sig = insert_signal(&db, &input("원두 주문", Some(Kind::Personal)))
+            .await
+            .unwrap();
+        let updated = update_title(&db, &sig.id, "  데모 슬라이드 준비  ")
+            .await
+            .unwrap();
+        assert_eq!(updated.title, "데모 슬라이드 준비"); // trim 반영.
+        assert!(matches!(updated.quadrant, Quadrant::Unclassified)); // 결정 레일 무침범.
+
+        // dedup 키가 새 제목으로 갱신됨 → 새 제목 재캡처는 같은 행으로 합쳐진다(append 아님).
+        let dup = insert_signal(&db, &input("데모 슬라이드 준비", None))
+            .await
+            .unwrap();
+        assert_eq!(dup.id, sig.id, "새 제목 dedup 키로 합쳐져야 함");
+        // 옛 제목은 더 이상 이 행과 충돌하지 않으므로 새 행이 생긴다.
+        let old = insert_signal(&db, &input("원두 주문", None)).await.unwrap();
+        assert_ne!(old.id, sig.id);
+
+        // 빈 제목은 거부.
+        assert!(update_title(&db, &sig.id, "   ").await.is_err());
+    }
+
+    /// Phase 15 #5: 하드 삭제는 행을 영구 제거한다(archive와 구분 — 복원 불가).
+    #[tokio::test]
+    async fn delete_signal_hard_removes_row() {
+        let db = fresh_db().await;
+        let sig = insert_signal(&db, &input("지울 카드", None)).await.unwrap();
+        sqlx::query("DELETE FROM signals WHERE id = ?1")
+            .bind(&sig.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        let cnt: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM signals WHERE id = ?1")
+            .bind(&sig.id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(cnt.0, 0, "하드 삭제 = 행 영구 제거");
+        // FTS도 트리거로 동기 삭제(삭제 후 검색 0건).
+        let hits = fetch_signals(&db).await.unwrap();
+        assert!(hits.is_empty());
     }
 
     /// FTS: 본문/제목 매칭.

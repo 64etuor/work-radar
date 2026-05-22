@@ -7,8 +7,9 @@ use crate::github::{HttpPrProvider, PrProvider};
 use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
 use crate::keychain;
 use crate::models::{
-    AgentRail, AgentRunView, AreaTag, CiTriageProposal, CodexAvailability, Engine, EnrichProposal,
-    Sandbox, TokenKind, TriageOutcome, TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput,
+    AgentRail, AgentRunView, AreaTag, BatchEnrichItem, BatchEnrichProposal, CiTriageProposal,
+    CodexAvailability, Engine, EnrichProposal, Sandbox, TokenKind, TriageOutcome,
+    TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput, TriggerEnrichAllInput,
     TriggerEnrichInput, TriggerPrSelfCheckInput, WorkSignal,
 };
 
@@ -736,6 +737,251 @@ pub async fn set_signal_area(
     .map_err(|e| e.to_string())
 }
 
+// ── 배치 enrich (#4, 미분류 전체 일괄 제안 — 단일 codex 잡, 부분 실패 격리) ──────────────
+//
+// INVARIANT #1: 배치 enrich도 suggested_*만 — quadrant 자동 확정 0(accept해도 카드는 unclassified).
+// INVARIANT #2: Acceptance 게이트(awaiting_approval) 통과 후에만 (로컬) 반영, 외부 무변경.
+// INVARIANT #5: 단일 잡 bound(timeout/max_turns/cost_cap). 카드 N개를 한 호출로 묶어 잡 폭주 방지.
+
+/// 배치 enrich 프롬프트(상수 — 카드 목록은 cwd `cards.json`으로 전달, 인젝션 없음). 닫힌 세트만 허용 +
+/// **JSON 배열이 아니라 객체**로 감싸 출력하게 한다(러너의 proposal_from_message는 객체만 보존).
+const BATCH_ENRICH_PROMPT: &str = "\
+당신은 개인 업무 카드 분류 **제안** 도우미다. 작업 디렉터리의 `cards.json`에 미분류 업무 카드 배열이 \
+있다(각 항목 `{\"id\": \"...\", \"title\": \"...\"}`). 각 카드를 read-only로 읽고, 아래 형식의 JSON 객체 \
+**하나만** 마지막 메시지로 출력하라(코드펜스·설명 없이 순수 JSON):\n\
+{\"items\": [{\
+\"id\": \"입력의 카드 id 그대로\", \
+\"suggestedQuadrant\": \"q1_do_now|q2_schedule|q3_quick_contain|q4_drop|unclassified 중 하나\", \
+\"suggestedArea\": \"health|work|studies|environment|recreation|romance|family|friends|finances|other 중 하나\", \
+\"reason\": \"한국어 한 문장 근거\"\
+}]}\n\
+규칙: items의 id는 입력 cards.json의 id를 **정확히 그대로** 쓴다(새로 만들지 마라). suggestedArea는 위 \
+10개 라이프 도메인 **세트 안에서만** 고른다(세트 밖 카테고리 생성 금지). 이건 **제안(힌트)일 뿐**이고 \
+실제 분류/확정은 사람이 한다 — 너는 절대 단정하지 마라. 애매하면 suggestedQuadrant는 \"unclassified\"로 둔다. \
+모든 카드를 빠짐없이 items에 포함하라.";
+
+/// project_id로 한정(또는 전체)된 미분류 active 신호 (배치 enrich 대상). today 레일·done/archived/snoozed 제외.
+async fn fetch_unclassified_for_enrich(
+    db: &Db,
+    project_id: Option<&str>,
+) -> Result<Vec<(String, String)>, sqlx::Error> {
+    if let Some(pid) = project_id {
+        sqlx::query_as(
+            "SELECT id, title FROM signals \
+             WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
+               AND status NOT IN ('done','archived','snoozed') AND project_id = ?1 \
+             ORDER BY created_at",
+        )
+        .bind(pid)
+        .fetch_all(db)
+        .await
+    } else {
+        sqlx::query_as(
+            "SELECT id, title FROM signals \
+             WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
+               AND status NOT IN ('done','archived','snoozed') \
+             ORDER BY created_at",
+        )
+        .fetch_all(db)
+        .await
+    }
+}
+
+/// 미분류 전체 배치 enrich 잡 트리거(미분류 영역 "전체 제안 실행"). 모든 미분류 카드를 `cards.json`
+/// 배열로 모아 **한** codex 호출(비-레포·read_only)로 카드별 suggested 힌트를 제안한다. 산출 Proposal은
+/// awaiting_approval로 멈추고(Acceptance 게이트), accept해도 quadrant는 자동 확정되지 않는다(INVARIANT #1).
+/// 대상이 없으면 잡을 만들지 않고 Err. 미설치/미인증이면 Err(graceful degrade).
+#[tauri::command]
+#[specta::specta]
+pub async fn trigger_enrich_all(
+    db: State<'_, Db>,
+    jm: State<'_, JobManager>,
+    input: TriggerEnrichAllInput,
+) -> Result<String, String> {
+    let codex_bin = require_codex(&jm).await?;
+
+    let cards = fetch_unclassified_for_enrich(db.inner(), input.project_id.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+    if cards.is_empty() {
+        return Err("미분류 카드가 없습니다.".into());
+    }
+
+    // codex 입력 파일(인젝션 없음 — 카드는 데이터 파일로만 전달).
+    let cards_json = serde_json::Value::Array(
+        cards
+            .iter()
+            .map(|(id, title)| serde_json::json!({ "id": id, "title": title }))
+            .collect(),
+    )
+    .to_string();
+
+    let id = new_run_id(db.inner()).await?;
+    let bounds = Bounds {
+        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
+        max_turns: input.max_turns.max(1),
+        cost_cap_usd: input.cost_cap_usd.max(0.0),
+    };
+    let trigger = serde_json::json!({ "batchCount": cards.len() as u32 }).to_string();
+    insert_agent_run(
+        db.inner(),
+        &NewAgentRun {
+            id: id.clone(),
+            project_id: input.project_id.clone(),
+            engine: Engine::Codex,
+            kind: "enrich_batch".into(),
+            rail: AgentRail::Suggestion,
+            sandbox: Sandbox::ReadOnly,
+            repo_id: None,
+            workdir: None,
+            trigger: Some(trigger),
+            retry_key: None,
+            retry_count: 0,
+            bounds,
+            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    jm.spawn(
+        db.inner().clone(),
+        id.clone(),
+        bounds,
+        CodexRunner {
+            codex_bin,
+            run_id: id.clone(),
+            prompt: BATCH_ENRICH_PROMPT.to_string(),
+            sandbox: Sandbox::ReadOnly,
+            rail: AgentRail::Suggestion,
+            repo_path: None,
+            worktree_root: jm.worktree_root.clone(),
+            scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
+            input_files: vec![("cards.json".to_string(), cards_json)],
+        },
+        true, // 게이트 잡: 성공+proposal이면 awaiting_approval(Acceptance 게이트).
+    );
+    Ok(id)
+}
+
+/// 배치 proposal 원문(JSON 객체 `{"items":[...]}`)을 카드별로 검증해 BatchEnrichProposal로 만든다.
+/// 부분 실패 격리: id 비거나 현재 미분류 active 신호에 없거나 닫힌 세트 밖이면 그 항목만 skip + skipped++.
+/// (제목은 현재 신호에서 채운다 — codex 출력의 제목은 신뢰하지 않는다.) raw fallback이면 Err(조용한 빈 X).
+fn build_batch_proposal(
+    raw: &str,
+    valid: &std::collections::HashMap<String, String>,
+) -> Result<BatchEnrichProposal, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("proposal JSON 파싱 실패: {e}"))?;
+    if let Some(raw_msg) = v.get("raw").and_then(|x| x.as_str()) {
+        return Err(format!(
+            "codex가 형식에 맞는 JSON을 내지 않았습니다. 원문:\n{raw_msg}"
+        ));
+    }
+    let arr = v
+        .get("items")
+        .and_then(|x| x.as_array())
+        .ok_or_else(|| "proposal에 items 배열이 없습니다.".to_string())?;
+
+    let mut items: Vec<BatchEnrichItem> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut skipped: u32 = 0;
+    for entry in arr {
+        // 닫힌 세트(Quadrant/AreaTag) 밖이거나 형식 밖이면 카드 단위로 skip(부분 실패 격리).
+        let Ok(item) = serde_json::from_value::<BatchEnrichItem>(entry.clone()) else {
+            skipped = skipped.saturating_add(1);
+            continue;
+        };
+        // 미존재/중복 id는 skip(현재 미분류 active 신호에만 적용).
+        match valid.get(&item.id) {
+            Some(title) if seen.insert(item.id.clone()) => {
+                items.push(BatchEnrichItem {
+                    id: item.id,
+                    title: Some(title.clone()),
+                    suggested_quadrant: item.suggested_quadrant,
+                    suggested_area: item.suggested_area,
+                    reason: item.reason,
+                });
+            }
+            _ => skipped = skipped.saturating_add(1),
+        }
+    }
+    Ok(BatchEnrichProposal { items, skipped })
+}
+
+/// 배치 enrich Proposal(타입 파싱 + 카드별 검증). 현재 미분류 active 신호와 교차검증해 유효 항목만 남기고
+/// 나머지는 skipped로 격리한다(부분 실패 격리). raw/형식 밖이면 Err.
+#[tauri::command]
+#[specta::specta]
+pub async fn batch_enrich_proposal(
+    db: State<'_, Db>,
+    run_id: String,
+) -> Result<BatchEnrichProposal, String> {
+    let raw = run_proposal_raw(db.inner(), &run_id).await?;
+    // 잡의 project_id 한정으로 현재 미분류 신호를 다시 모아 검증 기준으로 쓴다(잡 이후 변화 반영).
+    let pid: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT project_id FROM agent_runs WHERE id = ?1")
+            .bind(&run_id)
+            .fetch_optional(db.inner())
+            .await
+            .map_err(|e| e.to_string())?;
+    let project_id = pid.and_then(|r| r.0);
+    let valid: std::collections::HashMap<String, String> =
+        fetch_unclassified_for_enrich(db.inner(), project_id.as_deref())
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .collect();
+    build_batch_proposal(&raw, &valid)
+}
+
+/// 배치 enrich accept 코어(테스트 가능). items의 카드마다 suggested_* 힌트만 쓴다 — quadrant/area(확정값)는
+/// 절대 건드리지 않는다(INVARIANT #1). 적용한 카드 수를 돌려준다. 외부 호출 없음(로컬 기록만).
+async fn execute_accept_enrich_all(
+    db: &Db,
+    run_id: &str,
+    accepted: &BatchEnrichProposal,
+    accepted_json: &str,
+) -> Result<u32, sqlx::Error> {
+    let mut applied: u32 = 0;
+    for item in &accepted.items {
+        // 힌트만 반영. quadrant/area 확정값은 건드리지 않는다(set_quadrant/set_signal_area = 사람 결정).
+        let res = sqlx::query(
+            "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
+                updated_at = datetime('now') \
+             WHERE id = ?1 AND quadrant = 'unclassified'",
+        )
+        .bind(&item.id)
+        .bind(item.suggested_quadrant)
+        .bind(item.suggested_area)
+        .bind(&item.reason)
+        .execute(db)
+        .await?;
+        applied = applied.saturating_add(res.rows_affected() as u32);
+    }
+    record_acceptance(db, run_id, "enrich_batch", accepted_json).await?;
+    Ok(applied)
+}
+
+/// 배치 enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 카드별 제안을 accept하면 각 신호에
+/// 힌트로만 반영하고 잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+#[tauri::command]
+#[specta::specta]
+pub async fn accept_enrich_all(
+    db: State<'_, Db>,
+    run_id: String,
+    accepted: BatchEnrichProposal,
+) -> Result<u32, String> {
+    let (status, _trigger) = run_status_trigger(db.inner(), &run_id).await?;
+    if status != "awaiting_approval" {
+        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
+    }
+    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
+    execute_accept_enrich_all(db.inner(), &run_id, &accepted, &accepted_json)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ── CI triage (#3, 재트리거 캡 + Q1 escalate) ───────────────────────────────────────
 
 /// 같은 PR CI 실패를 재triage할 수 있는 최대 횟수(INVARIANT #5). 초과 시 사람에게 Q1 escalate.
@@ -1111,6 +1357,105 @@ mod tests {
         assert_eq!(st.0, "succeeded");
         let cnt: (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM acceptances WHERE agent_run_id='e1' AND target='enrich_braindump'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(cnt.0, 1);
+    }
+
+    /// 배치 proposal: items 객체 파싱 + 카드별 검증(미존재/세트 밖/중복 skip), 제목은 신호에서 채움.
+    #[test]
+    fn batch_proposal_validates_and_isolates_partial_failure() {
+        let mut valid = std::collections::HashMap::new();
+        valid.insert("a".to_string(), "원두 주문".to_string());
+        valid.insert("b".to_string(), "데모 준비".to_string());
+
+        let raw = r#"{"items":[
+            {"id":"a","suggestedQuadrant":"q1_do_now","suggestedArea":"work","reason":"마감"},
+            {"id":"b","suggestedArea":"productivity"},
+            {"id":"zzz","suggestedQuadrant":"q2_schedule"},
+            {"id":"a","suggestedQuadrant":"q3_quick_contain"}
+        ]}"#;
+        let p = build_batch_proposal(raw, &valid).unwrap();
+        // a만 유효: b=세트 밖 area, zzz=미존재, 둘째 a=중복 → 3건 skip.
+        assert_eq!(p.items.len(), 1);
+        assert_eq!(p.skipped, 3);
+        assert_eq!(p.items[0].id, "a");
+        assert_eq!(p.items[0].title.as_deref(), Some("원두 주문")); // 제목은 신호에서.
+        assert!(matches!(
+            p.items[0].suggested_quadrant,
+            Some(Quadrant::Q1DoNow)
+        ));
+        assert!(matches!(p.items[0].suggested_area, Some(AreaTag::Work)));
+
+        // raw fallback / items 누락은 Err(조용한 빈 proposal 금지).
+        assert!(build_batch_proposal(r#"{"raw":"엉뚱"}"#, &valid).is_err());
+        assert!(build_batch_proposal(r#"{"foo":1}"#, &valid).is_err());
+    }
+
+    /// INVARIANT #1: 배치 accept는 카드별 suggested_* 힌트만 쓰고 quadrant(결정 레일)는 안 건드린다.
+    #[tokio::test]
+    async fn batch_accept_sets_hints_not_quadrant() {
+        let db = fresh_db().await;
+        let s1 = insert_signal(&db, &input("원두 주문", Some(Kind::Personal)))
+            .await
+            .unwrap();
+        let s2 = insert_signal(&db, &input("데모 준비", Some(Kind::Work)))
+            .await
+            .unwrap();
+        insert_awaiting_run(&db, "ba1", r#"{"items":[]}"#, "{}").await;
+
+        let accepted = BatchEnrichProposal {
+            items: vec![
+                BatchEnrichItem {
+                    id: s1.id.clone(),
+                    title: Some("원두 주문".into()),
+                    suggested_quadrant: Some(Quadrant::Q3QuickContain),
+                    suggested_area: Some(AreaTag::Finances),
+                    reason: Some("간단".into()),
+                },
+                BatchEnrichItem {
+                    id: s2.id.clone(),
+                    title: Some("데모 준비".into()),
+                    suggested_quadrant: Some(Quadrant::Q1DoNow),
+                    suggested_area: Some(AreaTag::Work),
+                    reason: None,
+                },
+            ],
+            skipped: 0,
+        };
+        let accepted_json = serde_json::to_string(&accepted).unwrap();
+        let applied = execute_accept_enrich_all(&db, "ba1", &accepted, &accepted_json)
+            .await
+            .unwrap();
+        assert_eq!(applied, 2);
+
+        // 두 카드 모두 힌트만 들어가고 quadrant는 unclassified로 남는다(자동 분류 0).
+        for (id, q, area) in [
+            (&s1.id, "q3_quick_contain", AreaTag::Finances),
+            (&s2.id, "q1_do_now", AreaTag::Work),
+        ] {
+            let row: (String, Option<String>, Option<AreaTag>) = sqlx::query_as(
+                "SELECT quadrant, suggested_quadrant, suggested_area FROM signals WHERE id = ?1",
+            )
+            .bind(id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+            assert_eq!(row.0, "unclassified", "INVARIANT #1: quadrant 자동 확정 0");
+            assert_eq!(row.1.as_deref(), Some(q));
+            assert!(matches!(row.2, Some(a) if a as u8 == area as u8));
+        }
+
+        // 잡 succeeded + acceptances 1행(target=enrich_batch).
+        let st: (String,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='ba1'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(st.0, "succeeded");
+        let cnt: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM acceptances WHERE agent_run_id='ba1' AND target='enrich_batch'",
         )
         .fetch_one(&db)
         .await

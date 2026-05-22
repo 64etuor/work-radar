@@ -54,6 +54,10 @@ export const commands = {
 	snoozeSignal: (id: string, until: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("snooze_signal", { id, until })),
 	/**  본문/제목 전역 검색 (FTS5). 빈 쿼리는 빈 결과. */
 	searchSignals: (query: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("search_signals", { query })),
+	/**  브레인덤프 카드 제목 인라인 편집. dedup 키를 새 제목으로 갱신한다(INVARIANT #3). */
+	updateSignalTitle: (id: string, title: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("update_signal_title", { id, title })),
+	/**  신호 하드 삭제(영구 — archive와 구분). 카드 행 자체를 DELETE한다(보관/스누즈와 달리 복원 불가). */
+	deleteSignal: (id: string) => typedError<null, string>(__TAURI_INVOKE("delete_signal", { id })),
 	promoteToday: (id: string, date: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("promote_today", { id, date })),
 	unpromoteToday: (id: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("unpromote_today", { id })),
 	/**  Today 항목 완료 토글. 완료(done)=해당 날짜 기록 → 다음날 이월 안 됨. */
@@ -165,6 +169,23 @@ export const commands = {
 	 */
 	setSignalArea: (id: string, area: "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other" | null) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_area", { id, area })),
 	/**
+	 *  미분류 전체 배치 enrich 잡 트리거(미분류 영역 "전체 제안 실행"). 모든 미분류 카드를 `cards.json`
+	 *  배열로 모아 **한** codex 호출(비-레포·read_only)로 카드별 suggested 힌트를 제안한다. 산출 Proposal은
+	 *  awaiting_approval로 멈추고(Acceptance 게이트), accept해도 quadrant는 자동 확정되지 않는다(INVARIANT #1).
+	 *  대상이 없으면 잡을 만들지 않고 Err. 미설치/미인증이면 Err(graceful degrade).
+	 */
+	triggerEnrichAll: (input: TriggerEnrichAllInput) => typedError<string, string>(__TAURI_INVOKE("trigger_enrich_all", { input })),
+	/**
+	 *  배치 enrich Proposal(타입 파싱 + 카드별 검증). 현재 미분류 active 신호와 교차검증해 유효 항목만 남기고
+	 *  나머지는 skipped로 격리한다(부분 실패 격리). raw/형식 밖이면 Err.
+	 */
+	batchEnrichProposal: (runId: string) => typedError<BatchEnrichProposal, string>(__TAURI_INVOKE("batch_enrich_proposal", { runId })),
+	/**
+	 *  배치 enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 카드별 제안을 accept하면 각 신호에
+	 *  힌트로만 반영하고 잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+	 */
+	acceptEnrichAll: (runId: string, accepted: BatchEnrichProposal) => typedError<number, string>(__TAURI_INVOKE("accept_enrich_all", { runId, accepted })),
+	/**
 	 *  CI triage 잡 트리거(PR Radar CI Blocked 카드). diff를 GitHub에서 받아 worktree 격리 codex 잡(read_only).
 	 *  **재트리거 캡**(INVARIANT #5): 같은 PR(retry_key=triage:{repo}:{pr})의 기존 triage가 캡 이상이면 잡을
 	 *  만들지 않고 매트릭스 Q1으로 escalate한다. 산출 Proposal은 awaiting_approval(Acceptance 게이트).
@@ -273,6 +294,35 @@ export type AgentStatus = "proposed" | "awaiting_approval" | "running" | "succee
 
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
+
+/**
+ *  배치 enrich 한 카드 제안 (Phase 15 #4). codex가 카드별로 낸 suggested 힌트.
+ *  Quadrant/AreaTag로 타입해 닫힌 세트를 구조적으로 강제한다(세트 밖이면 카드 단위로 skip). serde
+ *  default로 누락 관용. **suggested_*는 힌트일 뿐** — accept해도 quadrant 자동 확정 0(INVARIANT #1).
+ */
+export type BatchEnrichItem = {
+	/**  대상 신호 id (입력 cards.json과 매칭). */
+	id: string,
+	/**  표시용 카드 제목 (UI 패널 — 입력 신호에서 채워 돌려준다). */
+	title?: string | null,
+	/**  제안 사분면 힌트(닫힌 enum). 자동 분류 아님. */
+	suggestedQuadrant?: Quadrant | null,
+	/**  제안 라이프 도메인 힌트(닫힌 taxonomy). */
+	suggestedArea?: AreaTag | null,
+	/**  제안 근거(짧은 설명). */
+	reason?: string | null,
+};
+
+/**
+ *  배치 enrich 산출 Proposal (Phase 15 #4, codex draft). 카드별 제안 목록 + 부분 실패 격리 카운트.
+ *  codex가 형식 밖/세트 밖/미존재 카드를 낸 항목은 `items`에서 빠지고 `skipped`로 집계된다(부분 실패
+ *  격리). accept는 items의 suggested_*만 반영 — quadrant 자동 확정 0(INVARIANT #1). specta i64/u64 금지.
+ */
+export type BatchEnrichProposal = {
+	items: BatchEnrichItem[],
+	/**  형식/세트/존재 검증에서 제외된 카드 수(부분 실패 격리). */
+	skipped: number,
+};
 
 /**
  *  오늘 캘린더 이벤트 한 건 (ambient — DB 영속 없이 매 호출 fresh fetch, PR Radar 선례). Phase 10b.
@@ -743,6 +793,17 @@ export type TriggerEchoInput = {
 	timeoutSec: number,
 	/**  첫 줄로 출력할 메시지 (로그 캡처 확인). */
 	message: string,
+};
+
+/**
+ *  미분류 전체 배치 enrich 잡 입력 (Phase 15 #4). 모든 미분류 카드를 한 codex 호출로 enrich한다.
+ *  project_id가 있으면 해당 프로젝트로 한정, 없으면 전체. bounds는 강제(INVARIANT #5).
+ */
+export type TriggerEnrichAllInput = {
+	projectId: string | null,
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
 };
 
 /**  braindump enrich 잡 입력 (미분류 카드 ⋯ 메뉴에서 트리거). 비-레포 잡(worktree 불요). */
