@@ -382,7 +382,7 @@ pub(crate) fn parse_branch_dates(
 // ── 12c: 활성 변경 활동 (파일 mtime 윈도) ────────────────────────────────────────
 
 /// "지금 작업 중"으로 볼 최근 변경 윈도 (이 안에 변경된 파일이 있으면 active_change=true).
-pub(crate) const ACTIVE_CHANGE_WINDOW: chrono::Duration = chrono::Duration::minutes(5);
+pub(crate) const ACTIVE_CHANGE_WINDOW: chrono::Duration = chrono::Duration::seconds(90);
 
 /// mtime 스캔 시 건너뛸 디렉터리명(빌드 산출물/메타라 "작업 활동"이 아님).
 const SKIP_DIRS: &[&str] = &[".git", "target", "node_modules", "dist", ".next"];
@@ -894,14 +894,14 @@ bare
     #[test]
     fn is_active_change_within_window() {
         let now = chrono::Utc::now();
-        // 윈도 안(2분 전) → active.
+        // 윈도 안(60초 전) → active.
         assert!(is_active_change(
-            Some(now - chrono::Duration::minutes(2)),
+            Some(now - chrono::Duration::seconds(60)),
             now
         ));
-        // 윈도 밖(10분 전) → 비active.
+        // 윈도 밖(3분 전) → 비active.
         assert!(!is_active_change(
-            Some(now - chrono::Duration::minutes(10)),
+            Some(now - chrono::Duration::minutes(3)),
             now
         ));
         // mtime 없음 → false.
@@ -911,7 +911,7 @@ bare
             Some(now + chrono::Duration::minutes(1)),
             now
         ));
-        // 정확히 경계(5분)는 포함.
+        // 정확히 경계(90초)는 포함.
         assert!(is_active_change(Some(now - ACTIVE_CHANGE_WINDOW), now));
     }
 

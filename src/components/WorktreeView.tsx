@@ -93,13 +93,20 @@ export function WorktreeView() {
     ready: ready && !!selectedFile,
   });
 
-  // worktree 선택 시 모드/ref/파일 초기화 + vs_base 기본 base = baseBranch.
+  // worktree 선택 시 모드/ref/파일 초기화.
+  // 스마트 기본: dirty(미커밋 변경 있음) → working 모드(즉시 표시).
+  // 아닌 경우(에이전트가 커밋 완료한 브랜치) → vs_base 모드 + baseRef=baseBranch
+  //   (브랜치의 커밋된 divergence를 기본으로 표시 — 수동 ref 선택 불필요).
   function selectWorktree(w: Worktree) {
     setSelectedPath(w.path);
-    setMode("working");
     setBaseRef(w.baseBranch);
     setHeadRef(null);
     setSelectedFile(null);
+    if (w.dirty) {
+      setMode("working");
+    } else {
+      setMode("vs_base");
+    }
   }
 
   function changeMode(m: DiffMode) {
@@ -333,14 +340,39 @@ export function WorktreeView() {
   );
 }
 
-/** worktree 상태 배지: 활성 / dirty / +ahead / -behind / clean. (활성 = 최근 파일 변경) */
+/**
+ * newestMtime(ISO 문자열 또는 null) → 한국어 상대시간 레이블.
+ * activeChange=true(90초 이내)면 "작업중" 펄스를 별도 배지로 표시.
+ * 그 외 최근 변경이 있으면 "N분 전 변경" / "N시간 전 변경" 등 정직한 상대시간.
+ * newestMtime 없으면 빈 문자열(배지 미표시).
+ */
+function relativeActivity(newestMtime: string | null): string {
+  if (!newestMtime) return "";
+  const diffMs = Date.now() - new Date(newestMtime).getTime();
+  if (diffMs < 0) return ""; // 미래 mtime — 시계 왜곡, 표시 안 함
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return "방금 변경";
+  if (diffMin < 60) return `${diffMin}분 전 변경`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}시간 전 변경`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}일 전 변경`;
+}
+
+/** worktree 상태 배지: 활성 펄스(90초 이내) / 상대시간 / dirty / +ahead / -behind / clean. */
 function StatusBadges({ w }: { w: Worktree }) {
+  const activityLabel = relativeActivity(w.newestMtime);
   return (
     <>
       {w.activeChange && (
-        <span className="wt-badge wt-active" title="최근 파일 변경 — 지금 작업 중">
+        <span className="wt-badge wt-active" title="90초 이내 파일 변경 — 방금 작업함">
           <span className="wt-active-dot" />
           작업중
+        </span>
+      )}
+      {!w.activeChange && activityLabel && (
+        <span className="wt-badge wt-idle" title={`마지막 파일 변경: ${w.newestMtime ?? ""}`}>
+          {activityLabel}
         </span>
       )}
       {w.dirty && <span className="wt-badge wt-dirty">dirty</span>}
