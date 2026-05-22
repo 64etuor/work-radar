@@ -195,6 +195,35 @@ pub(crate) fn parse_worktree_list(out: &str) -> Vec<RawWorktree> {
     result
 }
 
+/// `git worktree list --porcelain`에서 "prunable" 표시된 worktree 경로만 추출(Phase 12d).
+/// 한 블록은 `worktree <path>` ... `prunable <reason>` 라인을 가질 수 있다.
+pub(crate) fn parse_prunable_worktrees(out: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut path: Option<String> = None;
+    let mut prunable = false;
+    let flush = |path: &mut Option<String>, prunable: &mut bool, result: &mut Vec<String>| {
+        if let Some(p) = path.take() {
+            if *prunable {
+                result.push(p);
+            }
+        }
+        *prunable = false;
+    };
+    for line in out.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            flush(&mut path, &mut prunable, &mut result);
+        } else if let Some(p) = line.strip_prefix("worktree ") {
+            flush(&mut path, &mut prunable, &mut result);
+            path = Some(p.to_string());
+        } else if line == "prunable" || line.starts_with("prunable ") {
+            prunable = true;
+        }
+    }
+    flush(&mut path, &mut prunable, &mut result);
+    result
+}
+
 /// `git status --porcelain=v2 --branch` 파싱 → 더티/ahead/behind.
 /// 더티 = '#' 외 라인(추적 변경 1/2/u, untracked ?) 존재. ahead/behind = `# branch.ab +A -B`.
 pub(crate) fn parse_status_v2(out: &str) -> RawStatus {
@@ -329,6 +358,176 @@ pub(crate) fn parse_branches(out: &str) -> Vec<String> {
         .collect()
 }
 
+/// `for-each-ref` `%(refname:short)\t%(committerdate:iso-strict)` 파싱 → 브랜치명 → 커밋 시각.
+/// 파싱 불가 날짜 행은 건너뛴다(stale 판정에서 그 브랜치는 stale=false로 보수적 처리).
+pub(crate) fn parse_branch_dates(
+    out: &str,
+) -> std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> {
+    let mut map = std::collections::HashMap::new();
+    for line in out.lines() {
+        let Some((name, date)) = line.split_once('\t') else {
+            continue;
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(date.trim()) {
+            map.insert(name.to_string(), dt.with_timezone(&chrono::Utc));
+        }
+    }
+    map
+}
+
+// ── 12c: 활성 변경 활동 (파일 mtime 윈도) ────────────────────────────────────────
+
+/// "지금 작업 중"으로 볼 최근 변경 윈도 (이 안에 변경된 파일이 있으면 active_change=true).
+pub(crate) const ACTIVE_CHANGE_WINDOW: chrono::Duration = chrono::Duration::minutes(5);
+
+/// mtime 스캔 시 건너뛸 디렉터리명(빌드 산출물/메타라 "작업 활동"이 아님).
+const SKIP_DIRS: &[&str] = &[".git", "target", "node_modules", "dist", ".next"];
+
+/// worktree 디렉터리 트리에서 가장 최근 파일 mtime을 찾는다(SKIP_DIRS 제외, 깊이 상한).
+/// 비-git·순수 fs 조회라 GitProvider 밖. 에러(권한/미존재)는 None으로 degrade(표시는 부가정보).
+pub(crate) fn newest_mtime_under(root: &std::path::Path) -> Option<std::time::SystemTime> {
+    /// 무한/과도 walk 방지(INVARIANT #5 정신) — worktree 표층만 본다.
+    const MAX_DEPTH: usize = 8;
+    fn walk(dir: &std::path::Path, depth: usize, best: &mut Option<std::time::SystemTime>) {
+        if depth > MAX_DEPTH {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let Ok(ft) = entry.file_type() else { continue };
+            if ft.is_dir() {
+                if SKIP_DIRS.contains(&name.as_ref()) {
+                    continue;
+                }
+                walk(&entry.path(), depth + 1, best);
+            } else if ft.is_file() {
+                if let Ok(mt) = entry.metadata().and_then(|m| m.modified()) {
+                    if best.is_none_or(|b| mt > b) {
+                        *best = Some(mt);
+                    }
+                }
+            }
+        }
+    }
+    let mut best = None;
+    walk(root, 0, &mut best);
+    best
+}
+
+/// 최근 변경 윈도 안에서 변경됐는지(active_change). newest 없으면 false.
+pub(crate) fn is_active_change(
+    newest: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    match newest {
+        Some(t) => now.signed_duration_since(t) <= ACTIVE_CHANGE_WINDOW && t <= now,
+        None => false,
+    }
+}
+
+// ── 12c: 안전 rebase 가드 (순수 로직, 단위 테스트 대상) ────────────────────────────
+
+/// rebase 기준 ref 검증 (arg injection 가드 — `-`로 시작 못함, 비어있지 못함).
+pub(crate) fn validate_base_ref(base: &str) -> Result<String, GitError> {
+    let b = base.trim();
+    if b.is_empty() || b.starts_with('-') {
+        return Err(GitError(format!("잘못된 base ref: {b:?}")));
+    }
+    Ok(b.to_string())
+}
+
+/// 백업 ref 이름 생성: `refs/wr-backup/<branch>-<ts>`. branch 없으면(detached) "detached".
+/// ts는 호출자가 주입(테스트 결정성). branch의 '/'는 '-'로 치환(중첩 ref 충돌 방지).
+pub(crate) fn backup_ref_name(branch: Option<&str>, ts: &str) -> String {
+    let b = branch.unwrap_or("detached").replace('/', "-");
+    format!("refs/wr-backup/{b}-{ts}")
+}
+
+// ── 12d: 정리 후보 분류 가드 (순수 로직, 단위 테스트 대상) ──────────────────────────
+
+/// 한 로컬 브랜치의 정리 분류 입력 (실 git 조회 결과를 순수 함수로 넘긴다 — 테스트 가능).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchCleanupInput {
+    pub name: String,
+    /// base(예: dev)에 머지됐는지(`git branch --merged`).
+    pub merged: bool,
+    /// 현재 체크아웃된(또는 다른 worktree가 점유한) 브랜치 = 보호.
+    pub checked_out: bool,
+    /// stale 판정(마지막 커밋이 오래됨). merged가 아니어도 후보로 노출.
+    pub stale: bool,
+    /// base 브랜치 자신(예: dev/main) = 보호.
+    pub is_base: bool,
+}
+
+/// 브랜치 입력 → 정리 후보(보호/force 분류). 머지됨 + 비보호 = 안전 삭제. 미머지 = needs_force.
+/// current/base는 protected. merged도 stale도 아니면 후보 아님(None).
+pub(crate) fn classify_branch(
+    input: &BranchCleanupInput,
+) -> Option<crate::models::CleanupCandidate> {
+    use crate::models::{CleanupCandidate, CleanupKind};
+    if !input.merged && !input.stale {
+        return None; // 머지되지도 stale도 아니면 정리 대상 아님.
+    }
+    let protected = input.checked_out || input.is_base;
+    let (kind, needs_force, detail) = if input.merged {
+        (
+            CleanupKind::MergedBranch,
+            false,
+            if input.is_base {
+                "기준 브랜치 — 보호됨".to_string()
+            } else if input.checked_out {
+                "현재 체크아웃됨 — 보호됨".to_string()
+            } else {
+                "기준 브랜치에 머지됨".to_string()
+            },
+        )
+    } else {
+        (
+            CleanupKind::StaleBranch,
+            true, // 미머지 → force 필요.
+            if input.checked_out {
+                "현재 체크아웃됨 — 보호됨".to_string()
+            } else {
+                "오래된 미머지 브랜치 — 강제 삭제 필요".to_string()
+            },
+        )
+    };
+    Some(CleanupCandidate {
+        id: format!("branch:{}", input.name),
+        kind,
+        name: input.name.clone(),
+        detail,
+        protected,
+        needs_force,
+    })
+}
+
+/// 정리 액션의 보호 가드: protected는 절대 삭제 불가, needs_force는 force일 때만 허용.
+/// Ok면 삭제 진행, Err면 거부 사유. 코어가 삭제 직전 마지막 방어선으로 호출(UI 우회 방지).
+pub(crate) fn guard_delete(
+    protected: bool,
+    needs_force: bool,
+    force: bool,
+) -> Result<(), GitError> {
+    if protected {
+        return Err(GitError("보호된 항목은 삭제할 수 없습니다.".into()));
+    }
+    if needs_force && !force {
+        return Err(GitError(
+            "미머지/dirty 항목은 강제(force) 옵션이 필요합니다.".into(),
+        ));
+    }
+    Ok(())
+}
+
 // ── 실제 git CLI provider ───────────────────────────────────────────────────────
 
 /// `git` 셸아웃 provider. read-only 서브커맨드만 호출한다(INVARIANT #6).
@@ -358,6 +557,142 @@ impl CliGitProvider {
             )));
         }
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
+    // ── 12c/12d: mutating 오퍼레이션 (사용자의 자기 worktree 대상, 명시 버튼 = 사람 액션) ──
+    // INVARIANT #6은 *에이전트 코드 격리*를 다룬다 — 이 메서드들은 사용자가 버튼으로 직접
+    // 호출하는 자기 트리 운영이라 별개. read-only인 GitProvider 트레잇 밖(인헌트 impl)에 두어
+    // Diff Viewer의 read-only 계약을 깨지 않는다. 각 호출은 run()의 timeout으로 bound된다(#5).
+
+    /// 현재 브랜치명(detached면 None). `git rev-parse --abbrev-ref HEAD` → "HEAD"는 detached.
+    async fn current_branch(dir: &str) -> Result<Option<String>, GitError> {
+        let out = Self::run(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).await?;
+        let b = out.trim();
+        Ok(if b == "HEAD" || b.is_empty() {
+            None
+        } else {
+            Some(b.to_string())
+        })
+    }
+
+    /// 안전 dev rebase (Phase 12c). fetch → dirty 거부 → 백업 ref → rebase → 충돌 시 abort+복구.
+    /// 성공/충돌 둘 다 RebaseResult로 terminal 노출(무한 retry 없음 — bounded, 한 번만 시도).
+    pub async fn rebase_onto(
+        worktree_path: &str,
+        base: &str,
+        ts: &str,
+    ) -> Result<crate::models::RebaseResult, GitError> {
+        use crate::models::RebaseResult;
+        let base = validate_base_ref(base)?;
+
+        // 1) fetch — 원격 최신을 가져온다(원격 미설정이면 fetch 실패는 무시하고 로컬 base로 진행).
+        let _ = Self::run(worktree_path, &["fetch", "--all", "--prune"]).await;
+
+        // 2) dirty면 거부 (rebase가 미커밋 변경을 위험에 빠뜨림).
+        let st = parse_status_v2(
+            &Self::run(worktree_path, &["status", "--porcelain=v2", "--branch"]).await?,
+        );
+        if st.dirty {
+            return Err(GitError(
+                "미커밋 변경(dirty)이 있어 rebase를 거부합니다 — 커밋/스태시 후 다시 시도하세요."
+                    .into(),
+            ));
+        }
+
+        // 3) 백업 ref 생성 (충돌 복구용). 현재 브랜치명으로 이름 짓는다.
+        let branch = Self::current_branch(worktree_path).await?;
+        let backup = backup_ref_name(branch.as_deref(), ts);
+        Self::run(worktree_path, &["update-ref", &backup, "HEAD"]).await?;
+
+        // 4) rebase 한 번 시도.
+        match Self::run(worktree_path, &["rebase", &base]).await {
+            Ok(out) => {
+                let summary = out.trim();
+                let message = if summary.is_empty() {
+                    format!("rebase 성공 — 백업 ref: {backup}")
+                } else {
+                    format!("{summary}\n백업 ref: {backup}")
+                };
+                Ok(RebaseResult {
+                    success: true,
+                    base,
+                    backup_ref: Some(backup),
+                    message,
+                })
+            }
+            Err(rebase_err) => {
+                // 5) 충돌 → abort + 백업으로 hard reset 복구. 복구 자체 실패도 노출.
+                let _ = Self::run(worktree_path, &["rebase", "--abort"]).await;
+                let restore = Self::run(worktree_path, &["reset", "--hard", &backup]).await;
+                let restore_note = match restore {
+                    Ok(_) => "원래 상태로 복구됨".to_string(),
+                    Err(e) => format!("⚠️ 복구 실패(수동 확인 필요): {e} — 백업 ref: {backup}"),
+                };
+                let message = format!("rebase 충돌로 중단됨 — {restore_note}\n사유: {rebase_err}");
+                Ok(RebaseResult {
+                    success: false,
+                    base,
+                    backup_ref: Some(backup),
+                    message,
+                })
+            }
+        }
+    }
+
+    /// 로컬 브랜치 삭제 (force면 `-D`, 아니면 `-d` = 미머지 거부). guard_delete 통과 후에만 호출.
+    pub async fn delete_branch(repo_path: &str, branch: &str, force: bool) -> Result<(), GitError> {
+        let flag = if force { "-D" } else { "-d" };
+        Self::run(repo_path, &["branch", flag, branch]).await?;
+        Ok(())
+    }
+
+    /// prunable worktree 등록 정리 (`git worktree prune`). 디스크에서 사라진 worktree 메타 제거.
+    pub async fn prune_worktrees(repo_path: &str) -> Result<(), GitError> {
+        Self::run(repo_path, &["worktree", "prune"]).await?;
+        Ok(())
+    }
+
+    /// 로컬 브랜치명만 (`refs/heads` short). 정리 후보의 전체 모집단.
+    pub async fn local_branches(repo_path: &str) -> Result<Vec<String>, GitError> {
+        let out = Self::run(
+            repo_path,
+            &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+        )
+        .await?;
+        Ok(parse_branches(&out))
+    }
+
+    /// base에 머지된 로컬 브랜치 set. 코어가 classify_branch에 넘긴다(순수 분류는 테스트 가능).
+    pub async fn merged_branches(repo_path: &str, base: &str) -> Result<Vec<String>, GitError> {
+        let base = validate_base_ref(base)?;
+        let out = Self::run(
+            repo_path,
+            &["branch", "--merged", &base, "--format=%(refname:short)"],
+        )
+        .await?;
+        Ok(parse_branches(&out))
+    }
+
+    /// 로컬 브랜치별 마지막 커밋 시각(stale 판정용). `for-each-ref ... %(committerdate:iso-strict)`.
+    pub async fn branch_commit_dates(
+        repo_path: &str,
+    ) -> Result<std::collections::HashMap<String, chrono::DateTime<chrono::Utc>>, GitError> {
+        let out = Self::run(
+            repo_path,
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)\t%(committerdate:iso-strict)",
+                "refs/heads",
+            ],
+        )
+        .await?;
+        Ok(parse_branch_dates(&out))
+    }
+
+    /// prunable worktree 경로 목록 (`git worktree list --porcelain`의 "prunable" 표시).
+    pub async fn prunable_worktrees(repo_path: &str) -> Result<Vec<String>, GitError> {
+        let out = Self::run(repo_path, &["worktree", "list", "--porcelain"]).await?;
+        Ok(parse_prunable_worktrees(&out))
     }
 }
 
@@ -552,5 +887,155 @@ bare
         let out = "dev\nmain\norigin/dev\norigin/HEAD\norigin/main\n";
         let b = parse_branches(out);
         assert_eq!(b, vec!["dev", "main", "origin/dev", "origin/main"]);
+    }
+
+    // ── Phase 12c: 활성 변경 + rebase 가드 ───────────────────────────────────────
+
+    #[test]
+    fn is_active_change_within_window() {
+        let now = chrono::Utc::now();
+        // 윈도 안(2분 전) → active.
+        assert!(is_active_change(
+            Some(now - chrono::Duration::minutes(2)),
+            now
+        ));
+        // 윈도 밖(10분 전) → 비active.
+        assert!(!is_active_change(
+            Some(now - chrono::Duration::minutes(10)),
+            now
+        ));
+        // mtime 없음 → false.
+        assert!(!is_active_change(None, now));
+        // 미래 mtime(시계 왜곡)은 active로 치지 않음.
+        assert!(!is_active_change(
+            Some(now + chrono::Duration::minutes(1)),
+            now
+        ));
+        // 정확히 경계(5분)는 포함.
+        assert!(is_active_change(Some(now - ACTIVE_CHANGE_WINDOW), now));
+    }
+
+    #[test]
+    fn newest_mtime_skips_meta_dirs() {
+        let uniq = |tag: &str| {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            std::env::temp_dir().join(format!("wr-mtime-{tag}-{nanos}"))
+        };
+        let dir = uniq("a");
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::create_dir_all(dir.join("node_modules/pkg")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        // 빈 트리(추적 파일 없음) → None.
+        assert!(newest_mtime_under(&dir).is_none());
+        // 실제 파일 → Some.
+        std::fs::write(dir.join("src/main.rs"), "fn main(){}").unwrap();
+        assert!(newest_mtime_under(&dir).is_some());
+        // .git/node_modules에만 파일이 있고 추적 파일이 없으면 None이어야(스킵 확인).
+        let dir2 = uniq("b");
+        std::fs::create_dir_all(dir2.join(".git")).unwrap();
+        std::fs::create_dir_all(dir2.join("node_modules")).unwrap();
+        std::fs::write(dir2.join(".git/HEAD"), "ref: x").unwrap();
+        std::fs::write(dir2.join("node_modules/a.js"), "x").unwrap();
+        assert!(
+            newest_mtime_under(&dir2).is_none(),
+            ".git/node_modules는 활동으로 치지 않음"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir2);
+    }
+
+    #[test]
+    fn validate_base_ref_guards_injection() {
+        assert_eq!(validate_base_ref("origin/dev").unwrap(), "origin/dev");
+        assert_eq!(validate_base_ref("  main  ").unwrap(), "main");
+        assert!(validate_base_ref("").is_err());
+        assert!(validate_base_ref("--upload-pack=x").is_err());
+    }
+
+    #[test]
+    fn backup_ref_name_format() {
+        assert_eq!(
+            backup_ref_name(Some("feature/x"), "20260522T120000"),
+            "refs/wr-backup/feature-x-20260522T120000"
+        );
+        assert_eq!(backup_ref_name(None, "ts"), "refs/wr-backup/detached-ts");
+    }
+
+    // ── Phase 12d: 정리 후보 분류 + 보호 가드 ──────────────────────────────────────
+
+    #[test]
+    fn classify_branch_merged_stale_protected() {
+        use crate::models::CleanupKind;
+        let mk = |name: &str, merged, checked_out, stale, is_base| BranchCleanupInput {
+            name: name.to_string(),
+            merged,
+            checked_out,
+            stale,
+            is_base,
+        };
+        // 머지됨 + 비보호 → MergedBranch, force 불필요, 비보호.
+        let c = classify_branch(&mk("feat-done", true, false, false, false)).unwrap();
+        assert!(matches!(c.kind, CleanupKind::MergedBranch));
+        assert!(!c.needs_force);
+        assert!(!c.protected);
+        assert_eq!(c.id, "branch:feat-done");
+        // 머지됐지만 현재 체크아웃 → 보호.
+        let cur = classify_branch(&mk("dev", true, true, false, false)).unwrap();
+        assert!(cur.protected);
+        // base 브랜치 → 보호.
+        let base = classify_branch(&mk("dev", true, false, false, true)).unwrap();
+        assert!(base.protected);
+        // 미머지 + stale → StaleBranch, force 필요.
+        let stale = classify_branch(&mk("old-feat", false, false, true, false)).unwrap();
+        assert!(matches!(stale.kind, CleanupKind::StaleBranch));
+        assert!(stale.needs_force);
+        // 머지도 stale도 아님 → 후보 아님.
+        assert!(classify_branch(&mk("active", false, false, false, false)).is_none());
+    }
+
+    #[test]
+    fn guard_delete_protection() {
+        // 보호 → 항상 거부(force여도).
+        assert!(guard_delete(true, false, false).is_err());
+        assert!(guard_delete(true, true, true).is_err());
+        // 비보호 + force 불필요 → 허용.
+        assert!(guard_delete(false, false, false).is_ok());
+        // needs_force인데 force 없음 → 거부.
+        assert!(guard_delete(false, true, false).is_err());
+        // needs_force + force → 허용.
+        assert!(guard_delete(false, true, true).is_ok());
+    }
+
+    #[test]
+    fn parse_branch_dates_skips_bad() {
+        let out =
+            "dev\t2026-05-01T10:00:00+00:00\nfeat\t2025-01-01T00:00:00+09:00\nbad\tnot-a-date\n";
+        let m = parse_branch_dates(out);
+        assert_eq!(m.len(), 2, "bad date 행은 건너뜀");
+        assert!(m.contains_key("dev"));
+        assert!(m.contains_key("feat"));
+        assert!(!m.contains_key("bad"));
+    }
+
+    #[test]
+    fn parse_prunable_only() {
+        let out = "\
+worktree /repo/main
+HEAD aaaa
+branch refs/heads/dev
+
+worktree /repo/gone
+HEAD bbbb
+prunable gitdir file points to non-existent location
+
+worktree /repo/live
+HEAD cccc
+branch refs/heads/feat
+";
+        let p = parse_prunable_worktrees(out);
+        assert_eq!(p, vec!["/repo/gone"]);
     }
 }

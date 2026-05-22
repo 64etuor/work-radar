@@ -71,6 +71,21 @@ export const commands = {
 	worktreeDiffFiles: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null) => typedError<DiffFileSummary[], string>(__TAURI_INVOKE("worktree_diff_files", { worktreePath, mode, baseRef, headRef })),
 	/**  한 파일의 unified diff 텍스트(프런트 구문강조용). 선택한 파일만 지연 로드(비차단 2단계). */
 	worktreeFileDiff: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null, path: string) => typedError<string, string>(__TAURI_INVOKE("worktree_file_diff", { worktreePath, mode, baseRef, headRef, path })),
+	/**
+	 *  worktree를 base(기본 origin/dev) 위로 안전 rebase한다. dirty면 거부, 충돌이면 자동 복구.
+	 *  성공 시 RebaseResult.success=true — 사용자는 기존 Diff Viewer(vs Base)로 결과를 검수한다.
+	 */
+	rebaseWorktreeOnto: (worktreePath: string, base: string | null) => typedError<RebaseResult, string>(__TAURI_INVOKE("rebase_worktree_onto", { worktreePath, base })),
+	/**
+	 *  정리 후보 나열 (Phase 12d). merged/stale 로컬 브랜치 + prunable worktree.
+	 *  repo_path = primary worktree(또는 임의 worktree) 경로. base = 머지 기준(예: dev).
+	 */
+	listCleanupCandidates: (repoPath: string, base: string | null) => typedError<CleanupCandidate[], string>(__TAURI_INVOKE("list_cleanup_candidates", { repoPath, base })),
+	/**
+	 *  선택 정리 후보를 삭제한다 (Phase 12d). protected는 거부, needs_force는 force일 때만.
+	 *  id는 `branch:<name>` 또는 `worktree:<path>`. 항목별 결과를 요약 문자열로 노출(부분 실패 격리).
+	 */
+	deleteCleanupCandidates: (repoPath: string, base: string | null, ids: string[], force: boolean) => typedError<string, string>(__TAURI_INVOKE("delete_cleanup_candidates", { repoPath, base, ids, force })),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, string>(__TAURI_INVOKE("codex_status")),
 	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */
@@ -257,6 +272,30 @@ export type CiTriageProposal = {
 	/**  사람이 읽을 요약. */
 	summary?: string,
 };
+
+/**  정리 후보 (Phase 12d). UI 다중 선택 + 보호 가드의 입력. 비밀 미포함. */
+export type CleanupCandidate = {
+	/**  안정 식별자 = `{kind}:{name}` (branch명 또는 worktree 경로). */
+	id: string,
+	kind: CleanupKind,
+	/**  브랜치명 또는 worktree 경로. */
+	name: string,
+	/**  사람이 읽을 보조 설명(예: "dev에 머지됨", "현재 브랜치 — 보호됨"). */
+	detail: string,
+	/**  보호 대상(현재 브랜치/dirty worktree/미머지)이라 기본 삭제 불가. force여도 일부는 불가. */
+	protected: boolean,
+	/**  삭제 시 force 플래그 필요 여부(미머지 브랜치 = true). */
+	needsForce: boolean,
+};
+
+/**  정리 후보 한 항목 (Phase 12d). merged 브랜치 / stale 브랜치 / prunable worktree. */
+export type CleanupKind = 
+/**  기준 브랜치(base)에 이미 머지된 로컬 브랜치. */
+"merged_branch" | 
+/**  base에 미머지지만 오래된(stale) 로컬 브랜치 — 삭제는 force 필요. */
+"stale_branch" | 
+/**  디스크에서 사라졌거나 prune 대상인 worktree 등록. */
+"prunable_worktree";
 
 /**  codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성). */
 export type CodexAvailability = {
@@ -497,6 +536,18 @@ export type Quadrant = "q1_do_now" | "q2_schedule" | "q3_quick_contain" | "q4_dr
 
 /**  readiness 버킷 (PR Radar 자기 뷰의 분류 — 매트릭스 결정 레일과 별개, INVARIANT #4). */
 export type ReadinessBucket = "needs_self_check" | "ci_blocked" | "ready" | "merged_cleanup" | "stale";
+
+/**  안전 dev rebase 결과 (Phase 12c). 성공/충돌(abort+복구) 둘 다 terminal로 노출한다. */
+export type RebaseResult = {
+	/**  rebase 성공 여부. false면 충돌로 abort + 백업 복구된 상태. */
+	success: boolean,
+	/**  rebase 기준 ref (예: "origin/dev"). */
+	base: string,
+	/**  복구를 위해 만든 백업 ref (`refs/wr-backup/<branch>-<ts>`). dirty 거부 시엔 미생성(None). */
+	backupRef: string | null,
+	/**  사람이 읽을 결과/실패 요약(성공 통계 또는 충돌 사유). */
+	message: string,
+};
 
 /**  project별 레포. PR Radar(Phase 4)·worktree(Phase 5)의 단위. */
 export type Repo = {
@@ -745,6 +796,10 @@ export type Worktree = {
 	dirty: boolean,
 	ahead: number,
 	behind: number,
+	/**  worktree 안 가장 최근 파일 mtime(RFC3339). .git/target/node_modules 등은 제외. 없으면 None. */
+	newestMtime: string | null,
+	/**  최근(ACTIVE_CHANGE_WINDOW 이내) 파일 변경 = "지금 작업 중" 표시. 라이브 폴링으로 갱신. */
+	activeChange: boolean,
 	/**  이 도출 시각(RFC3339) — ambient라 항상 now. */
 	lastFetchedAt: string,
 };

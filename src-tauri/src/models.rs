@@ -536,8 +536,55 @@ pub struct Worktree {
     pub dirty: bool,
     pub ahead: u32,
     pub behind: u32,
+    /// worktree 안 가장 최근 파일 mtime(RFC3339). .git/target/node_modules 등은 제외. 없으면 None.
+    pub newest_mtime: Option<String>,
+    /// 최근(ACTIVE_CHANGE_WINDOW 이내) 파일 변경 = "지금 작업 중" 표시. 라이브 폴링으로 갱신.
+    pub active_change: bool,
     /// 이 도출 시각(RFC3339) — ambient라 항상 now.
     pub last_fetched_at: String,
+}
+
+/// 안전 dev rebase 결과 (Phase 12c). 성공/충돌(abort+복구) 둘 다 terminal로 노출한다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RebaseResult {
+    /// rebase 성공 여부. false면 충돌로 abort + 백업 복구된 상태.
+    pub success: bool,
+    /// rebase 기준 ref (예: "origin/dev").
+    pub base: String,
+    /// 복구를 위해 만든 백업 ref (`refs/wr-backup/<branch>-<ts>`). dirty 거부 시엔 미생성(None).
+    pub backup_ref: Option<String>,
+    /// 사람이 읽을 결과/실패 요약(성공 통계 또는 충돌 사유).
+    pub message: String,
+}
+
+/// 정리 후보 한 항목 (Phase 12d). merged 브랜치 / stale 브랜치 / prunable worktree.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CleanupKind {
+    /// 기준 브랜치(base)에 이미 머지된 로컬 브랜치.
+    MergedBranch,
+    /// base에 미머지지만 오래된(stale) 로컬 브랜치 — 삭제는 force 필요.
+    StaleBranch,
+    /// 디스크에서 사라졌거나 prune 대상인 worktree 등록.
+    PrunableWorktree,
+}
+
+/// 정리 후보 (Phase 12d). UI 다중 선택 + 보호 가드의 입력. 비밀 미포함.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupCandidate {
+    /// 안정 식별자 = `{kind}:{name}` (branch명 또는 worktree 경로).
+    pub id: String,
+    pub kind: CleanupKind,
+    /// 브랜치명 또는 worktree 경로.
+    pub name: String,
+    /// 사람이 읽을 보조 설명(예: "dev에 머지됨", "현재 브랜치 — 보호됨").
+    pub detail: String,
+    /// 보호 대상(현재 브랜치/dirty worktree/미머지)이라 기본 삭제 불가. force여도 일부는 불가.
+    pub protected: bool,
+    /// 삭제 시 force 플래그 필요 여부(미머지 브랜치 = true).
+    pub needs_force: bool,
 }
 
 /// diff 비교 모드 4종 (PLAN.md Phase 5). IPC 파라미터.
