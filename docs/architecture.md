@@ -175,8 +175,12 @@ impl AgentRunner for CodexRunner {
 }
 ```
 
+> **구현 노트(현행):** 위는 설계 스케치다. 실제 `agent.rs`의 `AgentRunner`는 `async_trait`
+> 의존 없이 **RPITIT**(trait 내 `async fn`)로 구현되며, 러너(`EchoRunner`/`CodexRunner`)가
+> 자기 설정을 보유한다. 실 시그니처·CLI 플래그는 `agent.rs`가 정본.
+>
 > Codex CLI 플래그명(`exec`, `--json`, `--sandbox`, `--cd`, `-a`)은 버전마다 다를 수 있으니
-> Phase 6에서 실제 설치본으로 확인할 것. graceful degrade(미설치 시 자동화 비활성) 필수.
+> 실제 설치본으로 확인할 것. graceful degrade(미설치 시 자동화 비활성) 필수.
 
 ## 6. SSOT & Sync 규칙
 
@@ -204,3 +208,19 @@ impl AgentRunner for CodexRunner {
 - **성능:** 파일 목록(통계)을 먼저, 파일별 hunk는 지연 로드. 대용량 diff는 가상 스크롤.
 - **연결:** PR Radar의 PR 브랜치, 제안 레일 코드 잡(Phase 8/9)의 Codex worktree를 같은 뷰로 검수. (실행 레일은 폐기.)
 - **멀티 repo:** 개인/업무 모든 enabled repo의 worktree를 `projectId`로 필터해 동시 표시.
+
+## 9. 모듈 맵 (구현 구조, src-tauri/src)
+
+> 코드가 실제로 어떻게 나뉘는지의 정본은 소스 트리다. 아래는 경계 요약(파일 단위 상세는 생략).
+
+**레이어드 구조 — 도메인 모듈 + IPC 커맨드 레이어:**
+
+- **도메인 모듈(`src-tauri/src/*.rs`):** 네트워크·프로세스·DB 등 로직 보유.
+  - 외부 연동: `notion.rs` · `github.rs` · `calendar.rs` · `messenger.rs`(Hermes/Telegram)
+  - 실행 스파인: `agent.rs`(AgentRunner) · `jobs.rs`(JobManager) · `git.rs`
+  - 인프라: `db.rs`(sqlx 풀, WAL) · `keychain.rs`(keyring) · `logging.rs`(tracing) · `scheduler.rs` · `tray.rs` · `shortcut.rs`
+  - 횡단: `error.rs`(정본 `AppError` + 도메인→AppError `From`) · `retry.rs`(공용 `Retryable`/`with_retry`) · `models.rs`(데이터 타입) · `api.rs`
+- **IPC 커맨드 레이어(`src-tauri/src/commands/*.rs`):** `#[tauri::command]` 핸들러를 도메인별 모듈로 분리하고 `mod.rs`로 묶는다 — `signals` · `agents` · `agents_config` · `pr_radar` · `notion` · `calendar` · `today` · `routines` · `retro` · `projects` · `tokens` · `worktree` · `skills` · `scheduler` · `nav` · `hermes` · `cmux` · `shared`. (단일 `commands.rs`가 아니라 디렉터리 분할 — 옛 문서 명명은 폐기.)
+- **타입 안전 IPC:** 커맨드/이벤트는 tauri-specta로 `src/bindings.ts`를 생성한다. 수기 TS IPC 타입 금지.
+
+**경계 규칙:** 도메인 모듈은 서로 거의 의존하지 않고 `models`를 통해 하향 의존한다. 커맨드는 도메인 모듈을 오케스트레이션하며 `Result<_, AppError>`로 반환한다(내부 헬퍼는 도메인/`String` 에러를 쓰고 경계에서 `AppError`로 접힌다).
