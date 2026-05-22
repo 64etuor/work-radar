@@ -67,6 +67,17 @@
   --radius-lg: 22px; /* signature 미디어 카드 */
   --radius-xl: 30px; /* 필터 pill */
   --radius-pill: 32px; /* primary CTA */
+
+  /*
+   * Motion tokens — DESIGN.md "과한 모션 금지" (white editorial, subtle).
+   * 모든 transition/animation은 이 토큰을 참조한다.
+   * 예외: MatrixCanvas 카드 drag(물리 튜닝값)와 cb-pop 스프링 애니메이션은 의도적 bespoke.
+   */
+  --wr-motion-fast: 0.12s; /* 빠른 상호작용 피드백 (hover, toggle) */
+  --wr-motion-base: 0.16s; /* 뷰 전환 + 표준 요소 전환 */
+  --wr-motion-slow: 0.3s; /* 슬라이드/팝오버 등 느린 전환 */
+  --wr-ease-out: ease-out; /* 표준 ease-out */
+  --wr-ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1); /* 표준 스프링 커브 */
 }
 
 @layer base {
@@ -115,7 +126,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  animation: view-enter 0.16s ease-out both;
+  animation: view-enter var(--wr-motion-base) var(--wr-ease-out) both;
 }
 @keyframes view-enter {
   from {
@@ -127,8 +138,18 @@
     transform: translateY(0);
   }
 }
+/* 공유 스핀 키프레임 — pr-spin/hm-spin/spinner-spin 통합 */
+@keyframes wr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .view-shell {
+    animation: none;
+  }
+  /* 무한 pulse는 로딩 신호이므로 유지; 장식성 pulse는 감소 */
+  .wt .wt-active-dot {
     animation: none;
   }
 }
@@ -246,7 +267,7 @@
 .cb .cell {
   position: relative;
   border: 1px solid var(--color-wr-border-light);
-  transition: background 0.16s;
+  transition: background var(--wr-motion-base);
 }
 .cb .cell.q1 {
   border-top-left-radius: var(--cb-r-lg);
@@ -318,12 +339,13 @@
   font: 400 13px/1.4 var(--font-sans);
   color: var(--color-wr-fg);
   overflow: hidden;
+  /* Bespoke: 물리 기반 드래그 스냅 애니메이션 — 토큰으로 대체하면 물리감 손실 */
   transition:
     left 0.45s cubic-bezier(0.18, 0.9, 0.2, 1.05),
     top 0.45s cubic-bezier(0.18, 0.9, 0.2, 1.05),
     transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.2s,
-    opacity 0.3s;
+    box-shadow var(--wr-motion-base),
+    opacity var(--wr-motion-slow);
   will-change: left, top, transform;
   touch-action: none;
 }
@@ -388,8 +410,8 @@
   font: 700 14px/1 var(--font-mono);
   opacity: 0;
   transition:
-    opacity 0.15s,
-    background 0.15s;
+    opacity var(--wr-motion-fast),
+    background var(--wr-motion-fast);
 }
 .cb .postit:hover .menu-btn,
 .cb .postit.sel .menu-btn {
@@ -403,8 +425,8 @@
   cursor: grabbing;
   box-shadow: 0 16px 34px rgba(15, 20, 40, 0.26);
   transition:
-    transform 0.1s,
-    box-shadow 0.2s;
+    transform var(--wr-motion-fast),
+    box-shadow var(--wr-motion-base);
   z-index: 50;
 }
 .cb .postit.sel {
@@ -424,6 +446,7 @@
   border-left-color: var(--color-q4);
 }
 .cb .postit.pop {
+  /* Bespoke: overshoot 스프링 — 토큰 스냅 시 팝 감각 손실 */
   animation: cb-pop 0.34s cubic-bezier(0.2, 0.9, 0.25, 1.2);
 }
 @keyframes cb-pop {
@@ -503,7 +526,7 @@
   gap: 9px;
   padding: 9px 10px;
   border-radius: var(--cb-r-sm);
-  transition: background 0.15s;
+  transition: background var(--wr-motion-fast);
 }
 .cb .item:hover {
   background: var(--color-wr-elevated);
@@ -518,7 +541,7 @@
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: 0.15s;
+  transition: var(--wr-motion-fast);
 }
 .cb .item .cb-check:hover {
   border-color: var(--color-wr-muted);
@@ -627,7 +650,7 @@
   line-height: 1;
   padding: 2px 1px;
   user-select: none;
-  transition: opacity 0.15s;
+  transition: opacity var(--wr-motion-fast);
 }
 .cb .item:hover .grip {
   opacity: 1;
@@ -934,7 +957,7 @@
   opacity: 0;
   pointer-events: none;
   z-index: 95;
-  transition: 0.25s;
+  transition: var(--wr-motion-slow);
   white-space: nowrap;
 }
 .cb-toast.show {
@@ -1824,12 +1847,7 @@
   color: var(--color-wr-subtle);
 }
 .pr .pr-spin {
-  animation: pr-spin 1s linear infinite;
-}
-@keyframes pr-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: wr-spin 1s linear infinite;
 }
 .pr .pr-scroll {
   flex: 1;
@@ -2122,7 +2140,7 @@
   background: var(--color-wr-surface);
 }
 .wt .wt-spin {
-  animation: pr-spin 1s linear infinite;
+  animation: wr-spin 1s linear infinite;
 }
 .wt .wt-body {
   flex: 1;
@@ -2707,7 +2725,7 @@
   color: var(--color-wr-subtle);
 }
 .jobs .jobs-spin {
-  animation: pr-spin 1s linear infinite;
+  animation: wr-spin 1s linear infinite;
 }
 .jobs .jobs-scroll {
   flex: 1;
@@ -3889,7 +3907,7 @@
   color: var(--color-wr-subtle);
   border-radius: 7px;
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--wr-motion-fast);
 }
 .rt .rt-tag-btn:hover:not(:disabled) {
   background: var(--color-wr-surface);
@@ -4023,7 +4041,7 @@
   height: 100%;
   background: var(--color-wr-green);
   border-radius: 999px;
-  transition: width 0.2s;
+  transition: width var(--wr-motion-base);
 }
 .rt .trk-rate-num {
   font: 700 13px var(--font-mono);
@@ -4115,6 +4133,7 @@
   height: 100%;
   background: var(--color-q3);
   border-radius: 999px;
+  /* Bespoke: 상태바 진행 애니메이션 — 느린 선형 채움이 의도된 물리감 */
   transition: width 0.9s linear;
 }
 /* 상태별 세그먼트 색 (Jobs 뷰 톤 재사용 — 색만으로 의미 전달 금지: title 라벨 병기). */
@@ -4257,12 +4276,7 @@
   cursor: default;
 }
 .hermes .hm-refresh .spin {
-  animation: hm-spin 1s linear infinite;
-}
-@keyframes hm-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: wr-spin 1s linear infinite;
 }
 .hermes .hm-scroll {
   flex: 1;
@@ -4693,7 +4707,7 @@
   font: 500 13px var(--font-sans);
   line-height: 1.45;
   pointer-events: auto;
-  animation: toast-in 0.2s ease;
+  animation: toast-in var(--wr-motion-base) var(--wr-ease-out);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
@@ -4752,7 +4766,7 @@
   padding: 3px 10px;
   font: 600 12px var(--font-sans);
   line-height: 1.4;
-  transition: background 0.15s;
+  transition: background var(--wr-motion-fast);
 }
 
 .toast-error .toast-btn,
@@ -4789,7 +4803,7 @@
   border-radius: 50%;
   border: 2px solid var(--color-wr-border);
   border-top-color: var(--color-wr-muted);
-  animation: spinner-spin 0.65s linear infinite;
+  animation: wr-spin 0.65s linear infinite;
   flex-shrink: 0;
 }
 
@@ -4802,10 +4816,4 @@
   width: 20px;
   height: 20px;
   border-width: 2.5px;
-}
-
-@keyframes spinner-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
