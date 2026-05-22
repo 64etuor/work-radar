@@ -71,6 +71,9 @@ pub struct RawPr {
     pub has_conflict: bool,
     /// 마지막 갱신 시각(RFC3339). age/stale 계산 기준.
     pub updated_at: String,
+    /// head 커밋 SHA. CI 실패 알림 dedup 키(같은 커밋 = 같은 실패, 재알림 0). open/merged 모두 채움
+    /// (단 escalation은 open PR만 → merged head_sha는 알림 경로에 도달하지 않음).
+    pub head_sha: String,
 }
 
 /// radar 코어가 의존하는 유일한 외부 read 계약. 테스트는 fake로 대체한다.
@@ -300,6 +303,7 @@ impl PrProvider for HttpPrProvider {
                     ci,
                     has_conflict,
                     updated_at: pr.updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                    head_sha,
                 });
             }
             if count < PER_PAGE as usize {
@@ -349,6 +353,7 @@ impl PrProvider for HttpPrProvider {
                 ci: CiStatus::None,
                 has_conflict: false,
                 updated_at: pr.updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                head_sha: pr.head.sha.clone(),
             });
         }
 

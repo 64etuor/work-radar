@@ -3755,3 +3755,88 @@
   font: 400 11px var(--font-sans);
   color: var(--color-wr-subtle);
 }
+
+/* ── 글로벌 에이전트 상태 바 (Phase 20 #16) ──────────────────────────────
+ * 모든 뷰 위에 상주하는 얇은 스트립. 활성 잡이 있을 때만 강조되고(asb-busy),
+ * 잡이 없으면 최소 스트립으로 축소(DESIGN.md: UI 비지배). 클릭 → Jobs. */
+.asb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: none;
+  border-bottom: 1px solid var(--color-wr-border);
+  background: var(--color-wr-elevated);
+  cursor: pointer;
+  text-align: left;
+  -webkit-app-region: no-drag;
+}
+.asb:hover {
+  background: var(--color-wr-hover);
+}
+.asb.asb-idle {
+  opacity: 0.78;
+}
+.asb .asb-label {
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+  flex: 0 0 auto;
+}
+.asb .asb-idle-text {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.asb .asb-track {
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  flex: 1 1 auto;
+  height: 8px;
+  min-width: 0;
+}
+.asb .asb-seg {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-wr-border);
+}
+.asb .asb-seg-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--color-q3);
+  border-radius: 999px;
+  transition: width 0.9s linear;
+}
+/* 상태별 세그먼트 색 (Jobs 뷰 톤 재사용 — 색만으로 의미 전달 금지: title 라벨 병기). */
+.asb .asb-seg-proposed {
+  background: var(--color-wr-border);
+}
+.asb .asb-seg-running {
+  background: var(--color-wr-accent-soft);
+}
+.asb .asb-seg-awaiting {
+  background: var(--color-wr-coral-soft);
+}
+.asb .asb-seg-succeeded {
+  background: var(--color-q2);
+}
+.asb .asb-seg-failed {
+  background: #b23a1f;
+}
+.asb .asb-seg-cancelled {
+  background: var(--color-wr-subtle);
+}
+.asb .asb-count {
+  font: 600 10px var(--font-mono);
+  color: var(--color-wr-fg);
+  flex: 0 0 auto;
+  min-width: 14px;
+  text-align: right;
+}

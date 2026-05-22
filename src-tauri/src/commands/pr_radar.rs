@@ -126,6 +126,52 @@ async fn upsert_pr_signal(
     Ok(())
 }
 
+/// CI 실패 알림을 큐에 넣는다(Phase 20 #17). 자동 triage 없음 — 네이티브 알림 + Q1 escalate(상위
+/// upsert_pr_signal)까지만, 실제 결정은 사람이 한다(INVARIANT #1). dedup은 PR+head_sha 기준
+/// `source_id`로 멱등(같은 커밋 = 같은 실패, 재알림 0; 새 커밋이 또 실패하면 1회 알림 — INVARIANT #5).
+/// fire_at=now라 백그라운드 스케줄러(scheduler.rs)가 다음 틱에 발사한다(창 닫혀도 트레이 상주로 발사).
+/// 발사 마커는 `scheduled_notifications`(로컬 SQLite SSOT — INVARIANT #7).
+async fn enqueue_ci_failure_notification(
+    db: &Db,
+    repo_full_name: &str,
+    pr: &RawPr,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), sqlx::Error> {
+    // head_sha가 비면(예: 비정상 응답) PR 번호로만 dedup해 폭주는 막되 알림은 보낸다.
+    let sha = if pr.head_sha.is_empty() {
+        "nosha".to_string()
+    } else {
+        pr.head_sha.clone()
+    };
+    let source_id = format!("pr:{repo_full_name}:{}:{sha}", pr.number);
+
+    // 멱등: 같은 source_id 행이 (미발사든 발사든) 이미 있으면 다시 만들지 않는다(중복 알림 0).
+    let exists: Option<(i64,)> = sqlx::query_as(
+        "SELECT 1 FROM scheduled_notifications WHERE source = 'ci' AND source_id = ?1 LIMIT 1",
+    )
+    .bind(&source_id)
+    .fetch_optional(db)
+    .await?;
+    if exists.is_some() {
+        return Ok(());
+    }
+
+    let title = format!("CI 실패: {repo_full_name} #{}", pr.number);
+    let body = format!("{} — {} · Q1 결정 큐로 올렸습니다.", pr.title, pr.url);
+    let fire_at = now.format("%Y-%m-%d %H:%M:%S").to_string();
+    sqlx::query(
+        "INSERT INTO scheduled_notifications (id, fire_at, title, body, source, source_id) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'ci', ?4)",
+    )
+    .bind(&fire_at)
+    .bind(&title)
+    .bind(&body)
+    .bind(&source_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 /// auto-resolve(INVARIANT #3): 성공 fetch된 repo 범위에서, 이번 cycle active set 밖의 github_pr
 /// 신호를 status=done으로 전이(매트릭스에서 소멸). fetch 실패 repo는 fresh 데이터가 없어 제외된다.
 async fn auto_resolve(
@@ -200,6 +246,10 @@ async fn sync_pr_radar<P: PrProvider>(
                     .map_err(|e| e.to_string())?;
                 active_keys.push(dedup);
                 escalated = true;
+                // CI 실패 → 네이티브 알림 큐잉(자동 triage 없음, PR+SHA dedup — Phase 20 #17).
+                enqueue_ci_failure_notification(db, &repo.full_name, pr, now)
+                    .await
+                    .map_err(|e| e.to_string())?;
             }
 
             items.push(PrRadarItem {
@@ -377,6 +427,7 @@ mod tests {
             ci,
             has_conflict: false,
             updated_at: "2026-05-21T00:00:00Z".into(),
+            head_sha: format!("sha-{number}"),
         }
     }
 
@@ -645,5 +696,117 @@ mod tests {
         let provider = FakeProvider::failing();
         let r = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now()).await;
         assert!(r.is_err(), "모든 레포 실패 → terminal failure 노출");
+    }
+
+    /// 큐잉된 CI 알림 행 (source='ci'): (source_id, title, body).
+    async fn ci_notifications(db: &Db) -> Vec<(Option<String>, String, String)> {
+        sqlx::query_as(
+            "SELECT source_id, title, body FROM scheduled_notifications \
+             WHERE source = 'ci' ORDER BY id",
+        )
+        .fetch_all(db)
+        .await
+        .unwrap()
+    }
+
+    /// (CI 알림 1) CI 실패 + 링크 티켓 escalate → 정확히 1개 CI 알림 큐잉(PR+SHA source_id).
+    #[tokio::test]
+    async fn ci_failure_enqueues_notification() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
+            .await
+            .unwrap();
+        let provider = FakeProvider::new(vec![raw_pr(
+            42,
+            CiStatus::Failing,
+            RawPrState::Open,
+            "MIR-DEV-7 버그",
+        )]);
+        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+            .await
+            .unwrap();
+        let notes = ci_notifications(&db).await;
+        assert_eq!(notes.len(), 1, "CI 실패 → 알림 1개 큐잉");
+        assert_eq!(
+            notes[0].0.as_deref(),
+            Some("pr:o/r:42:sha-42"),
+            "dedup source_id = PR+head_sha"
+        );
+        assert!(notes[0].1.contains("CI 실패"), "제목에 CI 실패 표기");
+    }
+
+    /// (CI 알림 2) 같은 실패(같은 SHA)로 폴링 N회 → 알림 1개 유지(중복 알림 0, INVARIANT #5).
+    #[tokio::test]
+    async fn same_failure_does_not_double_notify() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
+            .await
+            .unwrap();
+        let provider = FakeProvider::new(vec![raw_pr(
+            42,
+            CiStatus::Failing,
+            RawPrState::Open,
+            "MIR-DEV-7 버그",
+        )]);
+        for _ in 0..4 {
+            sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            ci_notifications(&db).await.len(),
+            1,
+            "같은 SHA 반복 폴링 → 알림 중복 0"
+        );
+    }
+
+    /// (CI 알림 3) 새 커밋(다른 SHA)이 또 실패하면 새 알림 1개(총 2개). 같은 PR이라도 별개 실패.
+    #[tokio::test]
+    async fn new_commit_failure_notifies_again() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
+            .await
+            .unwrap();
+        let mut pr = raw_pr(42, CiStatus::Failing, RawPrState::Open, "MIR-DEV-7 버그");
+        let provider = FakeProvider::new(vec![pr.clone()]);
+        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+            .await
+            .unwrap();
+        assert_eq!(ci_notifications(&db).await.len(), 1);
+
+        // 새 커밋으로 push했지만 여전히 CI 실패 → 새 SHA → 새 알림.
+        pr.head_sha = "sha-42-v2".into();
+        provider.set(vec![pr]);
+        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+            .await
+            .unwrap();
+        assert_eq!(
+            ci_notifications(&db).await.len(),
+            2,
+            "새 커밋 실패 → 새 알림 1개 추가(총 2)"
+        );
+    }
+
+    /// (CI 알림 4) 링크 티켓 없는 CI 실패는 escalate 안 함 → 알림도 0(noise 0, INVARIANT #4).
+    #[tokio::test]
+    async fn no_ticket_no_ci_notification() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
+            .await
+            .unwrap();
+        let provider = FakeProvider::new(vec![raw_pr(
+            42,
+            CiStatus::Failing,
+            RawPrState::Open,
+            "리팩터 (티켓 없음)",
+        )]);
+        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+            .await
+            .unwrap();
+        assert_eq!(
+            ci_notifications(&db).await.len(),
+            0,
+            "escalate 0 → CI 알림 0"
+        );
     }
 }

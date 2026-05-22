@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
 import { JobsView } from "@/components/JobsView";
@@ -66,6 +67,8 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-wr-bg">
+      {/* 글로벌 에이전트 상태 바 (Phase 20 #16) — 모든 뷰 위에 상주, 클릭 → Jobs. */}
+      <AgentStatusBar />
       {view === "settings" ? (
         <SettingsView />
       ) : view === "today" ? (
