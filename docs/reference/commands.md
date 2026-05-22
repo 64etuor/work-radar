@@ -102,3 +102,9 @@ pnpm tauri dev
 
 > INVARIANTS 7개 위반 여부는 별도 reviewer 패스로 확인한다 (self-approve 금지).
 > 위 명령이 모두 통과해도 reviewer 패스 전에는 done이 아니다.
+
+---
+
+## 관련 문서
+
+- [error-handling.md](./error-handling.md) — 에러 처리·로깅 지침(AppError, tracing 레벨, Do/Don't).
