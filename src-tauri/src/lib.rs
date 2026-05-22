@@ -12,6 +12,7 @@ mod api;
 mod calendar;
 mod commands;
 mod db;
+mod error;
 mod git;
 mod github;
 mod jobs;
@@ -173,7 +174,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::write_external_skill,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
-        logging::app_log_path,
+        logging::app_log_dir,
         // cmux 워크스페이스 상태 (B1, best-effort 표시 전용 — INVARIANT #1: 결정 레일 미사용).
         commands::cmux_status,
     ])
@@ -239,6 +240,13 @@ pub fn run() {
 
             // DB는 OS app-data 경로에 둔다. setup에서 동기적으로 초기화.
             let app_data = app.path().app_data_dir().expect("resolve app data dir");
+
+            // tracing 로깅 초기화(가장 이른 시점). guard는 manage로 보관(flush 보장).
+            let log_dir = app_data.join("logs");
+            let log_guards = logging::init_tracing(&log_dir);
+            app.manage(log_guards);
+            app.manage(logging::LogDir(log_dir));
+
             let pool = tauri::async_runtime::block_on(db::init_db(&app_data.join("work-radar.db")))
                 .expect("failed to initialize database");
 
@@ -259,9 +267,6 @@ pub fn run() {
                 1,
             ));
 
-            // 에러 로그 (A7): 로테이팅 파일 로그. 로그 디렉터리는 logs/ (JobManager와 공유).
-            app.manage(logging::AppLogger::new(app_data.join("logs")));
-
             // 전역 핫키로 캡처/루트 창 토글. 저장된 핫키(app_config)가 있으면 그것으로, 없으면
             // 기본 Ctrl+Space로 등록(Phase 18 #7). 등록 실패는 graceful — 앱 코어는 동작.
             {
@@ -269,7 +274,10 @@ pub fn run() {
                 let spec =
                     tauri::async_runtime::block_on(commands::nav::current_global_hotkey(&hk_db));
                 if let Err(e) = shortcut::register(app.handle(), &spec) {
-                    eprintln!("global hotkey 등록 실패('{spec}'), 기본값으로 폴백: {e}");
+                    tracing::warn!(
+                        code = "hotkey.register",
+                        "global hotkey 등록 실패('{spec}'), 기본값으로 폴백: {e}"
+                    );
                     let _ = shortcut::register(app.handle(), shortcut::DEFAULT_GLOBAL_HOTKEY);
                 }
             }

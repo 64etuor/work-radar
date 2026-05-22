@@ -365,10 +365,16 @@ export const commands = {
 	 *  실행하지 않는다(쓰기만). 외부 스킬을 work-radar가 자동 적용/실행하는 경로는 없다.
 	 */
 	writeExternalSkill: (path: string, content: string) => typedError<null, string>(__TAURI_INVOKE("write_external_skill", { path, content })),
-	/**  에러를 로그에 기록한다. 로깅 자체 실패는 Ok(())로 삼킨다 (UI 흐름 보호). */
-	logAppError: (scope: string, message: string, traceId: string) => typedError<null, string>(__TAURI_INVOKE("log_app_error", { scope, message, traceId })),
-	/**  errors.log 파일 경로를 반환한다 (설정 화면 표시용). */
-	appLogPath: () => typedError<string, string>(__TAURI_INVOKE("app_log_path")),
+	/**
+	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
+	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.
+	 */
+	logAppError: (scope: string, message: string, traceId: string) => __TAURI_INVOKE<void>("log_app_error", { scope, message, traceId }),
+	/**
+	 *  로그 디렉터리 경로를 반환한다(설정 화면 "로그 폴더 열기"용).
+	 *  일별 회전으로 단일 파일명이 없으므로 디렉터리를 노출한다.
+	 */
+	appLogDir: () => __TAURI_INVOKE<string>("app_log_dir"),
 	/**
 	 *  cmux 워크스페이스 상태 조회 (best-effort, 표시 전용).
 	 *  바이너리 부재·타임아웃·비-0 종료 → Ok(available:false, []) — 절대 Err 아님.
