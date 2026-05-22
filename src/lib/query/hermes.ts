@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import {
   commands,
+  type DetectedChat,
   type HermesBridgeStatus,
   type HermesFetchResult,
   type HermesMessage,
@@ -64,5 +65,17 @@ export function useFetchHermesMessages() {
   return useMutation<HermesFetchResult, Error, void>({
     mutationFn: () => unwrap(commands.fetchHermesMessages()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hermesMessages"] }),
+  });
+}
+
+/**
+ * getUpdates 단발 호출로 실 사용자 chat_id를 감지한다.
+ * botToken: 현재 입력 중인 토큰(저장 전에도 동작). null이면 keychain에서 읽음.
+ * 봇 토큰 본문은 캐시·반환에 절대 담기지 않는다(INVARIANT). chat_id+label만 반환.
+ */
+export function useDetectHermesChatId() {
+  return useMutation<DetectedChat, Error, string | null>({
+    mutationFn: (botToken) =>
+      unwrap(commands.detectHermesChatId(botToken)),
   });
 }

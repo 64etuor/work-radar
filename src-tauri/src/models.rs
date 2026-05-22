@@ -1112,6 +1112,17 @@ pub struct HermesFetchResult {
     pub received: u32,
 }
 
+/// detect_hermes_chat_id 결과. getUpdates에서 감지된 실 사용자 chat.
+/// 봇 토큰 본문은 절대 미포함(INVARIANT) — chat_id + 라벨만 노출한다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedChat {
+    /// 감지된 chat.id (숫자 → 문자열).
+    pub chat_id: String,
+    /// 사람이 읽을 라벨(채팅 이름/username/first_name 폴백).
+    pub label: String,
+}
+
 // ── 스킬 공유 레지스트리 (Phase 20 #21) ─────────────────────────────────────────────
 //
 // 인앱 에이전트 프롬프트(편집 가능 잡 템플릿)와 외부 Claude/Codex 스킬(~/.claude/skills)을 한

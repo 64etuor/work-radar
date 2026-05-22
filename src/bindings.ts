@@ -305,6 +305,15 @@ export const commands = {
 	/**  제어 surface용 메시지 로그(최신순, bounded). 송·수신 합쳐 최근 `limit`건. 봇 토큰 미포함. */
 	listHermesMessages: (limit: number) => typedError<HermesMessage[], string>(__TAURI_INVOKE("list_hermes_messages", { limit })),
 	/**
+	 *  getUpdates를 단발 호출해 실 사용자의 chat_id를 감지한다.
+	 * 
+	 *  - `bot_token`: 현재 입력 중인 토큰(Some & non-empty) ELSE keychain에서 읽음. 없으면 Err.
+	 *  - offset 0으로 조회하되 **영속 오프셋을 전진하지 않는다** — fetch_hermes_messages와 독립(#5).
+	 *  - from_is_bot=false인 가장 최신 후보를 반환. 봇 계정만 있으면 Err. 없으면 Err.
+	 *  - 봇 토큰은 절대 반환·로깅 안 됨(INVARIANT). chat_id+label만 노출.
+	 */
+	detectHermesChatId: (botToken: string | null) => typedError<DetectedChat, string>(__TAURI_INVOKE("detect_hermes_chat_id", { botToken })),
+	/**
 	 *  레지스트리 목록: 인앱 프롬프트 + (디스크 스캔한) 외부 스킬을 합쳐 돌려준다. 인앱은 DB에서, 외부는
 	 *  ~/.claude/skills를 스캔해 ExternalSkill→Skill(kind="external")로 합성한다(영속 안 함 — 디스크 SSOT).
 	 */
@@ -583,6 +592,17 @@ export type DebtPoint = {
 	staleBacklog: number,
 	cleanupNeeded: number,
 	prAttention: number,
+};
+
+/**
+ *  detect_hermes_chat_id 결과. getUpdates에서 감지된 실 사용자 chat.
+ *  봇 토큰 본문은 절대 미포함(INVARIANT) — chat_id + 라벨만 노출한다.
+ */
+export type DetectedChat = {
+	/**  감지된 chat.id (숫자 → 문자열). */
+	chatId: string,
+	/**  사람이 읽을 라벨(채팅 이름/username/first_name 폴백). */
+	label: string,
 };
 
 /**  diff 파일 목록 한 항목 (통계만 — 파일별 hunk는 지연 로드). specta i64/u64 금지 → adds/dels u32. */

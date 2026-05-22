@@ -160,6 +160,82 @@ pub fn parse_updates(body: &serde_json::Value, current_offset: i64) -> (Vec<Inco
     (msgs, max_update + 1)
 }
 
+/// getUpdates 응답에서 실 사용자 chat 후보를 추출하는 순수 헬퍼.
+/// detect_hermes_chat_id가 "내 chat_id 감지"를 위해 쓴다. update_id 오름차순 반환.
+/// 봇 토큰 미포함 — chat_id·라벨·from.is_bot만 노출한다.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatCandidate {
+    /// Telegram chat.id (숫자 → 문자열).
+    pub chat_id: String,
+    /// 사람이 읽을 라벨(title / username / first_name 우선순위 폴백, 없으면 chat_id).
+    pub label: String,
+    /// 발신자(message.from)가 봇인지 여부(default false — from 필드 없으면 false).
+    pub from_is_bot: bool,
+}
+
+/// getUpdates 응답(JSON) → ChatCandidate 목록. update_id 오름차순.
+/// message / channel_post 둘 다 처리. chat.id 없는 update는 스킵.
+/// 봇 토큰 미포함 — 순수 파싱 함수. 단위 테스트 대상.
+pub fn parse_chat_candidates(body: &serde_json::Value) -> Vec<ChatCandidate> {
+    let Some(items) = body.get("result").and_then(|r| r.as_array()) else {
+        return Vec::new();
+    };
+
+    let mut candidates: Vec<(i64, ChatCandidate)> = Vec::new();
+
+    for it in items {
+        let update_id = it.get("update_id").and_then(|v| v.as_i64()).unwrap_or(0);
+
+        // message 또는 channel_post에서 chat 추출.
+        let chat_obj = it
+            .get("message")
+            .and_then(|m| m.get("chat"))
+            .or_else(|| it.get("channel_post").and_then(|m| m.get("chat")));
+
+        let Some(chat) = chat_obj else {
+            continue;
+        };
+
+        let chat_id_num = chat.get("id").and_then(|v| v.as_i64());
+        let Some(id_num) = chat_id_num else {
+            continue;
+        };
+        let chat_id = id_num.to_string();
+
+        // 사람이 읽을 라벨: title(그룹/채널) → username → first_name → chat_id.
+        let label = chat
+            .get("title")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                chat.get("username")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+            })
+            .or_else(|| {
+                chat.get("first_name")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or(&chat_id)
+            .to_string();
+
+        // message.from.is_bot (봇 발신자 여부). channel_post는 from 없으므로 false.
+        let from_is_bot = it
+            .get("message")
+            .and_then(|m| m.get("from"))
+            .and_then(|f| f.get("is_bot"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        candidates.push((update_id, ChatCandidate { chat_id, label, from_is_bot }));
+    }
+
+    // update_id 오름차순 정렬(서버가 정렬해 주지만 방어적).
+    candidates.sort_by_key(|(uid, _)| *uid);
+    candidates.into_iter().map(|(_, c)| c).collect()
+}
+
 /// sendMessage 응답(JSON)에서 ok 여부 확인. ok=false면 description을 Terminal로(잘못된 chat_id 등). 순수.
 pub fn parse_send_ok(body: &serde_json::Value) -> Result<(), MessengerError> {
     if body.get("ok").and_then(|v| v.as_bool()) == Some(true) {
@@ -170,6 +246,49 @@ pub fn parse_send_ok(body: &serde_json::Value) -> Result<(), MessengerError> {
             .and_then(|v| v.as_str())
             .unwrap_or("Telegram sendMessage 실패");
         Err(MessengerError::Terminal(desc.to_string()))
+    }
+}
+
+/// detect_hermes_chat_id 전용 단발 헬퍼. offset=0으로 getUpdates를 한 번 호출해 ChatCandidate
+/// 목록을 반환한다. 저장된 오프셋을 읽거나 전진하지 않는다(fetch_hermes_messages 불간섭, #5).
+/// 봇 토큰은 URL 안에서만 잠시 쓰이고 반환·로깅 안 됨(INVARIANT). 순수 I/O — 단발·bounded.
+pub async fn fetch_chat_candidates(bot_token: &str) -> Result<Vec<ChatCandidate>, MessengerError> {
+    let provider = HttpMessengerProvider::new()?;
+    let url = HttpMessengerProvider::method_url(bot_token, "getUpdates");
+    // offset=0: 저장된 오프셋 무관하게 최근 업데이트를 가져온다(Telegram은 최대 100개 보존).
+    // limit + timeout으로 bounded — 무한 long-poll 아님(#5).
+    let payload = serde_json::json!({
+        "offset": 0i64,
+        "limit": GET_UPDATES_LIMIT,
+        "timeout": GET_UPDATES_TIMEOUT_SEC,
+    });
+    let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| provider.post_json(&url, &payload)).await?;
+    Ok(parse_chat_candidates(&json))
+}
+
+/// detect_hermes_chat_id 후보 선택 결과. 순수 분리로 단위 테스트 가능.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChatSelection {
+    /// from_is_bot=false인 가장 최신 후보.
+    Found { chat_id: String, label: String },
+    /// 후보는 있으나 전부 봇 발신.
+    OnlyBots,
+    /// 후보 없음(수신 메시지 없음).
+    None,
+}
+
+/// 후보 목록(update_id 오름차순)에서 실 사용자 chat을 선택한다 — from_is_bot=false인 가장 최신
+/// (마지막) 후보. 비었으면 None, 전부 봇이면 OnlyBots. 순수 — 단위 테스트 대상.
+pub fn select_detected_chat(candidates: &[ChatCandidate]) -> ChatSelection {
+    if candidates.is_empty() {
+        return ChatSelection::None;
+    }
+    match candidates.iter().rev().find(|c| !c.from_is_bot) {
+        Some(c) => ChatSelection::Found {
+            chat_id: c.chat_id.clone(),
+            label: c.label.clone(),
+        },
+        None => ChatSelection::OnlyBots,
     }
 }
 
@@ -392,6 +511,127 @@ mod tests {
         let ids: Vec<i64> = msgs.iter().map(|m| m.update_id).collect();
         assert_eq!(ids, vec![8, 9], "오름차순 + malformed 스킵");
         assert_eq!(next, 10);
+    }
+
+    // ── parse_chat_candidates 단위 테스트 ─────────────────────────────────────────
+
+    /// 사람 발신 DM: from_is_bot=false, chat_id/label 정확히 추출.
+    #[test]
+    fn parse_chat_candidates_human_private_message() {
+        let body = serde_json::json!({
+            "ok": true,
+            "result": [{
+                "update_id": 1001,
+                "message": {
+                    "chat": { "id": 123456789, "first_name": "David", "type": "private" },
+                    "from": { "id": 123456789, "is_bot": false, "first_name": "David" },
+                    "text": "안녕"
+                }
+            }]
+        });
+        let cands = parse_chat_candidates(&body);
+        assert_eq!(cands.len(), 1);
+        assert_eq!(cands[0].chat_id, "123456789");
+        assert_eq!(cands[0].label, "David");
+        assert!(!cands[0].from_is_bot);
+    }
+
+    /// 봇 발신 메시지: from_is_bot=true.
+    #[test]
+    fn parse_chat_candidates_bot_sender() {
+        let body = serde_json::json!({
+            "ok": true,
+            "result": [{
+                "update_id": 2001,
+                "message": {
+                    "chat": { "id": 987654321, "username": "mybot", "type": "private" },
+                    "from": { "id": 987654321, "is_bot": true, "username": "mybot" },
+                    "text": "I am a bot"
+                }
+            }]
+        });
+        let cands = parse_chat_candidates(&body);
+        assert_eq!(cands.len(), 1);
+        assert_eq!(cands[0].chat_id, "987654321");
+        assert_eq!(cands[0].label, "mybot");
+        assert!(cands[0].from_is_bot);
+    }
+
+    /// 빈/garbage body: 빈 Vec 반환(패닉 없음).
+    #[test]
+    fn parse_chat_candidates_empty_or_garbage() {
+        assert!(parse_chat_candidates(&serde_json::json!({})).is_empty());
+        assert!(parse_chat_candidates(&serde_json::json!({"ok":true,"result":[]})).is_empty());
+        assert!(parse_chat_candidates(&serde_json::json!("garbage")).is_empty());
+        // chat.id 없는 update는 스킵.
+        let no_id = serde_json::json!({"ok":true,"result":[{"update_id":1,"message":{"chat":{"type":"private"}}}]});
+        assert!(parse_chat_candidates(&no_id).is_empty());
+    }
+
+    /// update_id 오름차순 정렬 + channel_post 처리.
+    #[test]
+    fn parse_chat_candidates_sorted_and_channel_post() {
+        let body = serde_json::json!({
+            "ok": true,
+            "result": [
+                {
+                    "update_id": 20,
+                    "channel_post": {
+                        "chat": { "id": -100111, "title": "My Channel", "type": "channel" },
+                        "text": "post"
+                    }
+                },
+                {
+                    "update_id": 10,
+                    "message": {
+                        "chat": { "id": 111, "first_name": "Alice", "type": "private" },
+                        "from": { "id": 111, "is_bot": false, "first_name": "Alice" },
+                        "text": "hi"
+                    }
+                }
+            ]
+        });
+        let cands = parse_chat_candidates(&body);
+        assert_eq!(cands.len(), 2);
+        // update_id 10이 먼저(오름차순).
+        assert_eq!(cands[0].chat_id, "111");
+        assert_eq!(cands[0].label, "Alice");
+        assert!(!cands[0].from_is_bot);
+        // channel_post: from 없으므로 from_is_bot=false, label=title.
+        assert_eq!(cands[1].chat_id, "-100111");
+        assert_eq!(cands[1].label, "My Channel");
+        assert!(!cands[1].from_is_bot);
+    }
+
+    fn cand(chat_id: &str, label: &str, from_is_bot: bool) -> ChatCandidate {
+        ChatCandidate {
+            chat_id: chat_id.into(),
+            label: label.into(),
+            from_is_bot,
+        }
+    }
+
+    /// 선택: 비었으면 None, 전부 봇이면 OnlyBots, 사람 있으면 가장 최신(마지막) 비-봇.
+    #[test]
+    fn select_detected_chat_cases() {
+        assert_eq!(select_detected_chat(&[]), ChatSelection::None);
+        assert_eq!(
+            select_detected_chat(&[cand("1", "BotA", true), cand("2", "BotB", true)]),
+            ChatSelection::OnlyBots
+        );
+        // 후보는 update_id 오름차순 → 마지막 비-봇이 가장 최신. 봇 후보는 건너뛴다.
+        let picked = select_detected_chat(&[
+            cand("111", "Alice", false),
+            cand("222", "Carol", false),
+            cand("999", "BotZ", true),
+        ]);
+        assert_eq!(
+            picked,
+            ChatSelection::Found {
+                chat_id: "222".into(),
+                label: "Carol".into()
+            }
+        );
     }
 
     /// send 응답: ok=true면 Ok, ok=false면 description을 Terminal로.

@@ -14,7 +14,7 @@ use tauri::State;
 use crate::db::Db;
 use crate::keychain;
 use crate::messenger;
-use crate::models::{HermesBridgeStatus, HermesFetchResult, HermesMessage, TokenKind};
+use crate::models::{DetectedChat, HermesBridgeStatus, HermesFetchResult, HermesMessage, TokenKind};
 
 /// 앱 레벨 단일 브리지의 keychain 분리 키(project별 토큰과 충돌 안 나는 고정 ref). Hermes는 외부
 /// 에이전트 하나라 project 단위가 아니다. account = `{this}:hermes_bridge`.
@@ -128,7 +128,19 @@ pub async fn send_hermes_message(db: State<'_, Db>, text: String) -> Result<(), 
     let provider = messenger::HttpMessengerProvider::new().map_err(|e| e.to_string())?;
     messenger::send_core(&provider, &bot_token, &chat_id, text)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            let orig = e.to_string();
+            // "the bot can't send messages to the bot" = chat_id가 봇 계정을 가리키는 경우.
+            // 사용자가 본인 계정 대신 봇 자신의 ID를 입력했을 때 발생. 다른 403(차단/대화 미시작
+            // 등)에는 이 안내가 틀리므로 이 특정 문구로만 매칭한다.
+            if orig.contains("can't send messages to the bot") {
+                format!(
+                    "chat_id가 봇 계정을 가리킵니다 — '내 chat id 감지'로 본인 chat id를 설정하세요 (원본: {orig})"
+                )
+            } else {
+                orig
+            }
+        })?;
 
     // 송신 성공 시 로그 기록(외부 write가 성공한 뒤에만 — 거짓 로그 방지).
     sqlx::query(
@@ -189,6 +201,44 @@ pub async fn fetch_hermes_messages(db: State<'_, Db>) -> Result<HermesFetchResul
     }
 
     Ok(HermesFetchResult { received })
+}
+
+/// getUpdates를 단발 호출해 실 사용자의 chat_id를 감지한다.
+///
+/// - `bot_token`: 현재 입력 중인 토큰(Some & non-empty) ELSE keychain에서 읽음. 없으면 Err.
+/// - offset 0으로 조회하되 **영속 오프셋을 전진하지 않는다** — fetch_hermes_messages와 독립(#5).
+/// - from_is_bot=false인 가장 최신 후보를 반환. 봇 계정만 있으면 Err. 없으면 Err.
+/// - 봇 토큰은 절대 반환·로깅 안 됨(INVARIANT). chat_id+label만 노출.
+#[tauri::command]
+#[specta::specta]
+pub async fn detect_hermes_chat_id(
+    _db: State<'_, Db>,
+    bot_token: Option<String>,
+) -> Result<DetectedChat, String> {
+    // 토큰 결정: 인자(trimmed, non-empty) → keychain → Err.
+    let token = match bot_token.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(t) => t.to_string(),
+        None => load_bot_token()?
+            .ok_or_else(|| "먼저 봇 토큰을 입력하세요".to_string())?,
+    };
+
+    // offset=0 단발 조회 — 저장된 오프셋을 읽거나 전진하지 않는다(fetch_hermes_messages 불간섭).
+    let candidates = messenger::fetch_chat_candidates(&token)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 선택 로직은 순수 함수(messenger::select_detected_chat)에 위임 — 단위 테스트 대상.
+    match messenger::select_detected_chat(&candidates) {
+        messenger::ChatSelection::Found { chat_id, label } => Ok(DetectedChat { chat_id, label }),
+        messenger::ChatSelection::OnlyBots => Err(
+            "봇 계정만 감지됨 — 본인(사람) 텔레그램 계정에서 봇에게 메시지를 보낸 뒤 다시 시도하세요"
+                .into(),
+        ),
+        messenger::ChatSelection::None => Err(
+            "수신된 메시지가 없습니다 — 텔레그램에서 봇에게 먼저 메시지를 보낸 뒤 '감지'를 누르세요"
+                .into(),
+        ),
+    }
 }
 
 /// 제어 surface용 메시지 로그(최신순, bounded). 송·수신 합쳐 최근 `limit`건. 봇 토큰 미포함.

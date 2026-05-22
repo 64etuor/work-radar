@@ -154,6 +154,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::send_hermes_message,
         commands::fetch_hermes_messages,
         commands::list_hermes_messages,
+        commands::detect_hermes_chat_id,
         // 스킬 공유 레지스트리 (Phase 20 #21) — 인앱 프롬프트 + 외부 Claude/Codex 스킬.
         commands::list_skills,
         commands::update_skill,

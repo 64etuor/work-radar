@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import {
+  useDetectHermesChatId,
   useDisconnectHermes,
   useHermesBridgeStatus,
   useSetHermesBridge,
@@ -20,6 +21,7 @@ export function HermesBridgeBlock({
   const status = useHermesBridgeStatus();
   const save = useSetHermesBridge();
   const disconnect = useDisconnectHermes();
+  const detect = useDetectHermesChatId();
 
   const [botToken, setBotToken] = useState("");
   const [chatId, setChatId] = useState("");
@@ -86,6 +88,23 @@ export function HermesBridgeBlock({
           autoComplete="off"
           aria-label="Hermes chat_id"
         />
+        <button
+          type="button"
+          className="st-btn-ghost sm"
+          disabled={detect.isPending}
+          title="getUpdates에서 본인(사람) chat_id를 자동 감지합니다"
+          onClick={() => {
+            detect.mutate(botToken.trim() || null, {
+              onSuccess: (result) => {
+                setChatId(result.chatId);
+                onToast(`감지됨: ${result.label} (${result.chatId})`);
+              },
+              onError: (e) => onToast(`감지 실패: ${(e as Error).message}`),
+            });
+          }}
+        >
+          {detect.isPending ? "감지 중…" : "내 chat id 감지"}
+        </button>
         <button
           type="button"
           className="st-btn sm"
