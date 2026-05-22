@@ -286,7 +286,7 @@ impl JobManager {
         // 큐 대기 중에도 kill 가능하도록 spawn 전에 등록한다.
         registry
             .lock()
-            .unwrap()
+            .expect("jobs registry mutex poisoned")
             .insert(run_id.clone(), cancel.clone());
 
         tokio::spawn(async move {
@@ -294,11 +294,11 @@ impl JobManager {
             let _permit = tokio::select! {
                 p = sem.acquire_owned() => match p {
                     Ok(p) => p,
-                    Err(_) => { registry.lock().unwrap().remove(&run_id); return; }
+                    Err(_) => { registry.lock().expect("jobs registry mutex poisoned").remove(&run_id); return; }
                 },
                 _ = cancel.cancelled() => {
                     mark_cancelled_in_queue(&db, &run_id).await;
-                    registry.lock().unwrap().remove(&run_id);
+                    registry.lock().expect("jobs registry mutex poisoned").remove(&run_id);
                     return;
                 }
             };
@@ -313,13 +313,21 @@ impl JobManager {
             };
 
             finalize(&db, &run_id, outcome, gated).await;
-            registry.lock().unwrap().remove(&run_id);
+            registry
+                .lock()
+                .expect("jobs registry mutex poisoned")
+                .remove(&run_id);
         });
     }
 
     /// 잡 kill switch. 실행/대기 중이면 취소 신호를 보낸다(true). 이미 끝났으면 false.
     pub fn kill(&self, run_id: &str) -> bool {
-        if let Some(token) = self.registry.lock().unwrap().get(run_id) {
+        if let Some(token) = self
+            .registry
+            .lock()
+            .expect("jobs registry mutex poisoned")
+            .get(run_id)
+        {
             token.cancel();
             true
         } else {

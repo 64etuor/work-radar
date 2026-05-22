@@ -269,7 +269,11 @@ async fn resolve_notion_target(
         match candidates.len() {
             0 => return Err("해당 kind의 프로젝트가 없음(설정에서 프로젝트 생성 필요)".into()),
             1 => {
-                let pid = candidates.into_iter().next().unwrap().0;
+                let pid = candidates
+                    .into_iter()
+                    .next()
+                    .expect("candidates.len() == 1 (matched above)")
+                    .0;
                 // 자동 지정: persist onto signal (INVARIANT #1 — 자동 확정이 아닌 메타데이터 태깅).
                 sqlx::query(
                     "UPDATE signals SET project_id = ?2, updated_at = datetime('now') WHERE id = ?1",

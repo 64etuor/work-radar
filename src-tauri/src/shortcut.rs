@@ -24,7 +24,9 @@ pub fn parse_shortcut(spec: &str) -> Result<Shortcut, String> {
     }
 
     let mut mods = Modifiers::empty();
-    let (key_part, mod_parts) = parts.split_last().unwrap();
+    let (key_part, mod_parts) = parts
+        .split_last()
+        .expect("parts has >= 2 elements (len < 2 checked above)");
     for m in mod_parts {
         match m.to_ascii_lowercase().as_str() {
             "ctrl" | "control" => mods |= Modifiers::CONTROL,

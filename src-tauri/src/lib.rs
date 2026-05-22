@@ -7,6 +7,10 @@
 //!
 //! 모든 외부 변경(Notion/GitHub)은 Acceptance 게이트를 거친다. 토큰은 keychain에만.
 
+// 프로덕션 코드에서 bare `.unwrap()` 금지(패닉=나쁜 UX). `?`+AppError 또는 불변식이면
+// `.expect("이유")`를 쓴다. 테스트(cfg test)는 unwrap 허용. (에러처리 지침 §7)
+#![cfg_attr(not(test), deny(clippy::unwrap_used))]
+
 mod agent;
 mod api;
 mod calendar;
