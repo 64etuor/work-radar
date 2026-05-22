@@ -1,4 +1,4 @@
-# Work Radar — 세션 핸드오프 (현재: PLAN Phase 0~11 완료 · Phase 12~20 통합 계획 수립, 병렬 파견 대기)
+# Work Radar — 세션 핸드오프 (현재: PLAN Phase 0~20 전부 완료 · dogfooding 정교화 Phase 12~20 머지)
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
@@ -48,10 +48,12 @@
   - **11b — Timeline 오늘 시간축 아젠다 (`22f6900`):** 순수 프런트(`TimelineView`, view:"timeline"). `useCalendarEvents(date)`+`useToday`+Q1 합성, 시(hour)별 세로 그리드 + all-day/포커스 untimed 밴드, 날짜 피커. `@theme`에 누락 토큰 정의(`--color-wr-hover`/`--color-wr-action-blue`). reviewer ACCEPT.
   - **11c — Weekly review 지난 7일 (`d2656e7`):** `weekly_review(end_date)` 커맨드(`fetch_weekly_review`, [end-6,end] 로컬 inclusive). throughput(캡처/완료/승격)·PR(attention_new/resolved≈머지·CI해소)·루틴 이행률(done=스케줄 해당 체크만, done⊆due)·debt_trend(debt_snapshots). `WeeklyReview` 등 u32. `WeeklyView`(view:"weekly"). reviewer ACCEPT(루틴 done/due 비대칭 MAJOR 수정).
   - **검증:** `cargo test` **110 passed**(11a +3, 11c +2) · clippy -D warnings 0 · cargo fmt --check green · pnpm typecheck/build green · 각 PR INVARIANTS reviewer(critic) 패스(self-approve 금지, 1/2/3/7 PASS). **실 GUI 렌더·실 캘린더 fetch·다일 추세 누적은 사용자 관찰**(`pnpm tauri dev` → 팔레트 "Today (운영)로"/"Timeline으로"/"Weekly Review로").
-- **다음 = Phase 12~20 (Dogfooding 정교화, 통합 ralplan).** 사용자 dogfooding 백로그(~24개)를 brainstorming으로 9 Phase 분할 — **정본 설계 `docs/specs/phase-12-20-dogfood-refinement.md`** + PLAN.md §3b + decisions.md "Phase 12–20". 사용자가 phase별 에이전트 **병렬 파견** 예정.
-  - **병렬 wave: (0) 12a MISMATCH 제거 → 12b commands/query 모듈 분리 [게이트, 순차] → (1) 13·14·15·17·19·12c·12d → (2) 16·20(13 의존) → (3) 18 단독.** Wave 0(prep refactor)를 dev에 머지하기 전엔 병렬 금지(`commands.rs` 충돌).
-  - 주의: **Phase 12a가 MISMATCH 기능을 전부 제거**(Phase 6 폐기) — 아래 옛 후속 중 "mismatch 실 Notion 수정"은 무효.
-- 옛 후속(문서화됨, 일부 유효): PR 머지 히스토리 영속(Weekly resolved 정확화 + Phase 4 auto-resolve 재실패 처리), 캘린더 access token in-memory 캐시(폴링 빈도 보고). 캘린더 access token 캐시는 Phase 11 폴링 빈도 보고 재검토 보류(현재 매 fetch refresh, bounded).
+- **Phase 12~20 (Dogfooding 정교화, 통합 ralplan) 전부 완료·머지·푸시(dev `a36c62f`).** 정본 설계 `docs/specs/phase-12-20-dogfood-refinement.md` + PLAN.md §3b + decisions.md "Phase 12–20" 각 항목. 최종 게이트: **cargo test 163 passed/0 failed · clippy -D warnings 0 · fmt · pnpm typecheck/build green · migrations 0001~0014**.
+  - **완료 phase:** 12a MISMATCH 전체 제거 · 12b commands/query 도메인 모듈 분리 · 13 트레이 상주 스파인+알림+스케줄러 · 14 gh/ntn CLI 토큰 import+폴더 picker+서명 · 15 전체 배치 enrich+브레인덤프 편집/삭제 · 16 루틴 격주/월간+드래그+시간알림+트래킹 · 17 Today 드래그+회고 뷰+보관함 · 18 단축키/창키+전환+네비정리+UI audit · 19 캘린더 쓰기(직접 모달) · 12c/12d worktree 변경중+안전 rebase+정리 · 20 에이전트 바+CI 알림+Hermes 브리지+스킬 레지스트리. 각 phase INVARIANTS reviewer(critic) ACCEPT(self-approve 금지).
+  - **실행 교훈(중요):** 병렬 `isolation:worktree` 백그라운드 에이전트가 메인 체크아웃/서로를 오염 → **순차 실행(메인 체크아웃, executor 미커밋 구현→오케스트레이터 검증+critic+커밋)으로 전환**. 이 레포 멀티-에이전트는 순차 권장(decisions.md "운영 결정" 참조). reviewer가 잡은 실수정: 캘린더 all-day 배타적 end·routines 0011 cascade 데이터손실·Hermes 토큰 누출·skills path-traversal — 전부 회귀 테스트로 가드.
+  - **남은 사용자 관찰(헤드리스 불가, `pnpm tauri dev`):** 실 tray/알림/단축키/창핫키·실 gh/ntn import·실 Google 캘린더 write·실 Telegram 송수신·실 codex 배치/스킬·실 git rebase/cleanup·UI 전환/밸런스. UI/UX 밸런스 주관 항목은 `docs/reference/ui-ux-audit.md` 펀치리스트 → **`/design-review`(라이브 앱)로 마감 권장**.
+  - **문서화된 후속(코드 미완):** routines 알림 클릭→포커스·기본 오프셋 Settings(spec §6) · `scheduled_notifications` UNIQUE(source,source_id) 인덱스 · Hermes 수신 chat_id 필터 · `delete_signal` promotions cascade 가드(braindump 한정) · 12b에서 넓어진 `pub` 헬퍼 `pub(crate)` 좁히기 · worktree backup-ref GC.
+- 옛 후속(Phase 11 이전, 일부 유효): PR 머지 히스토리 영속(Weekly resolved 정확화 + Phase 4 auto-resolve 재실패), 캘린더 access token in-memory 캐시(매 fetch refresh, bounded). **무효:** "mismatch 실 Notion 수정"(Phase 12a가 mismatch 폐기).
 
 ### Phase 11 미해결/관찰 항목 (후속에서 고려)
 - **PR `resolved` 근사(문서화):** PR Radar ambient(머지 히스토리 미영속) → Weekly의 `resolved`는 done 전이 PR 신호의 `updated_at` 기준(≈머지/CI해소). 실 머지 로그는 Phase 4 변경 필요라 범위 밖.
@@ -118,9 +120,9 @@ PLAN.md Phase 10 핵심 — **Google Calendar 연동(read 레일):** 프로젝�
 ## 시작 명령(새 세션에 붙여넣기)
 
 ```
-work-radar — PLAN Phase 0~11 완료. 다음 = Phase 12~20(Dogfooding 정교화 통합 ralplan), 병렬 파견.
-먼저 docs/specs/phase-12-20-dogfood-refinement.md(정본) → docs/HANDOFF.md(상태) → PLAN.md §1 INVARIANTS + §3b → docs/decisions.md(Phase별 결정) → AGENTS.md를 읽는다.
-병렬 wave: (0) 12a MISMATCH 제거 → 12b 모듈 분리 [게이트, dev 머지 후 병렬] → (1) 13·14·15·17·19·12c·12d → (2) 16·20 → (3) 18.
-phase 착수 시: brainstorm→implement→verify→critic ACCEPT(self-approve 금지)→commit/push dev, 한 PR=한 관심사.
+work-radar — PLAN Phase 0~20 전부 완료(dev `a36c62f`). dogfooding 정교화 Phase 12~20 머지·푸시 끝.
+먼저 docs/HANDOFF.md(상태·완료/후속) → docs/decisions.md(Phase별 결정) → PLAN.md §1 INVARIANTS + §3b → AGENTS.md를 읽는다.
+다음 작업은 사용자 지시 대기. 후보: (a) `/design-review`로 UI/UX 밸런스 마감(docs/reference/ui-ux-audit.md 펀치리스트, 라이브 앱), (b) `pnpm tauri dev`로 사용자 관찰 항목 검증(tray/알림/단축키/캘린더 write/Telegram/codex 배치), (c) 문서화된 후속(HANDOFF "문서화된 후속" 참조).
 규칙: 토큰 keychain·렌더러 미노출, 외부호출 Rust, bounded·graceful degrade, 결정 레일에 자동화 미침투, read=Acceptance 불요/외부 mutate=Acceptance 게이트. 작업/푸시는 dev에만. 각 PR done-criteria 자가검증 → INVARIANTS reviewer 패스(self-approve 금지) → docs/decisions.md 한 줄.
+멀티-에이전트는 **순차 권장**(병렬 isolation:worktree가 이 레포에서 오염 — decisions.md "운영 결정"). cargo 전 `export PATH="$HOME/.cargo/bin:$PATH"`, clippy/test는 `rtk proxy ... > log` 후 Read.
 ```
