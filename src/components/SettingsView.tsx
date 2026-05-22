@@ -5,6 +5,7 @@ import { useProjects, useReconcileSignalProjects } from "@/lib/query";
 import { useUIStore } from "@/store";
 
 import { AddProjectForm } from "./settings/AddProjectForm";
+import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 
 /**
@@ -73,6 +74,9 @@ export function SettingsView() {
         {list.map((p) => (
           <ProjectCard key={p.id} project={p} onToast={toast} />
         ))}
+
+        <div className="st-section-lbl">알림 / 트레이</div>
+        <NotificationSettings onToast={toast} />
       </div>
 
       <div className={`cb-toast${toastMsg ? " show" : ""}`}>{toastMsg}</div>

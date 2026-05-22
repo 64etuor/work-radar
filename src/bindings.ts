@@ -160,6 +160,16 @@ export const commands = {
 	 *  미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
 	 */
 	fetchCalendarEvents: (projectId: string | null, date: string) => typedError<CalendarEvent[], string>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date })),
+	/**  현재 알림 권한 상태 조회. 미지원/오류면 unknown으로 graceful degrade(앱 코어 무영향). */
+	notificationPermission: () => typedError<NotificationPermission, string>(__TAURI_INVOKE("notification_permission")),
+	/**  알림 권한 요청(미결정일 때 OS 프롬프트). 결과 상태를 돌려준다. 거부돼도 앱은 계속 동작. */
+	requestNotificationPermission: () => typedError<NotificationPermission, string>(__TAURI_INVOKE("request_notification_permission")),
+	/**
+	 *  `seconds_from_now` 뒤에 발사될 테스트 알림 행을 INSERT한다(스파인 시연용).
+	 *  발사는 백그라운드 스케줄러가 bounded tick에서 수행한다 — 여기선 큐에 넣기만 한다.
+	 *  source='test'로 태깅(Phase 16/20과 동일한 제네릭 경로).
+	 */
+	scheduleTestNotification: (secondsFromNow: number) => typedError<null, string>(__TAURI_INVOKE("schedule_test_notification", { secondsFromNow })),
 };
 
 /* Types */
@@ -370,6 +380,17 @@ export type GoogleCalendarStatus = {
 
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
+
+/**
+ *  알림 권한 상태(프런트 표시용 문자열 + bool). PermissionState를 직접 노출하지 않고
+ *  안정적인 직렬화 형태로 매핑한다.
+ */
+export type NotificationPermission = {
+	/**  "granted" | "denied" | "prompt" | "unknown". */
+	state: string,
+	/**  발사 가능 여부(granted일 때만 true). */
+	granted: boolean,
+};
 
 /**  외부 API ping 결과 (read-only). 토큰 본문은 포함하지 않는다. */
 export type PingResult = {

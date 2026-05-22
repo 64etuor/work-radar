@@ -18,9 +18,11 @@ mod jobs;
 mod keychain;
 mod models;
 mod notion;
+mod scheduler;
 mod shortcut;
+mod tray;
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
 
 /// specta + tauri command 레지스트리. run()과 바인딩 export 테스트가 공유한다.
@@ -102,6 +104,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_google_calendars,
         commands::set_selected_calendars,
         commands::fetch_calendar_events,
+        // 트레이 상주 스파인 + 알림 스케줄러 (Phase 13).
+        commands::notification_permission,
+        commands::request_notification_permission,
+        commands::schedule_test_notification,
     ])
 }
 
@@ -117,6 +123,23 @@ fn export_bindings(builder: &SpectaBuilder<tauri::Wry>) {
         .expect("failed to export typescript bindings");
 }
 
+/// 스케줄러가 발사를 위임하는 app 핸들 기반 Notifier. tauri-plugin-notification으로 네이티브
+/// 알림을 띄운다. 권한 없음/미지원이면 Err를 돌려주고 스케줄러가 로그만 남긴다(graceful degrade).
+struct AppNotifier(tauri::AppHandle);
+
+impl scheduler::Notifier for AppNotifier {
+    fn notify(&self, n: &scheduler::DueNotification) -> Result<(), String> {
+        use tauri_plugin_notification::NotificationExt;
+        self.0
+            .notification()
+            .builder()
+            .title(&n.title)
+            .body(&n.body)
+            .show()
+            .map_err(|e| e.to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let specta_builder = tauri_specta_builder();
@@ -129,7 +152,18 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // "Notion에서 열기" 딥링크 — 생성된 페이지 URL을 외부(브라우저/Notion 앱)에서 연다.
         .plugin(tauri_plugin_opener::init())
+        // 백그라운드 스케줄러가 발사하는 네이티브 알림 (Phase 13).
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(specta_builder.invoke_handler())
+        // 닫기 = 트레이로 hide(quit 아님). 실제 종료는 트레이 "종료"의 app.exit(0)에서만.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(move |app| {
             specta_builder.mount_events(app);
 
@@ -149,8 +183,16 @@ pub fn run() {
                 1,
             ));
 
-            // 전역 핫키(Alt+Space)로 캡처/루트 창 토글.
+            // 전역 핫키(Ctrl+Space)로 캡처/루트 창 토글.
             shortcut::register(app.handle())?;
+
+            // 트레이 상주 셸(Phase 13): 메뉴바 아이콘 + 메뉴(보기/숨기기/종료) + 좌클릭 토글.
+            tray::create(app.handle())?;
+
+            // 백그라운드 스케줄러 스파인(Phase 13): bounded tick으로 due 알림을 발사한다.
+            // 알림 발사는 app 핸들 기반 Notifier로 추상화(scheduler.rs는 발사 메커니즘 무지).
+            let sched_db: db::Db = app.state::<db::Db>().inner().clone();
+            scheduler::spawn_loop(sched_db, AppNotifier(app.handle().clone()));
 
             Ok(())
         })

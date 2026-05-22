@@ -238,6 +238,43 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    /// Phase 13 마이그레이션(0009): scheduled_notifications 테이블 + due-query 인덱스 + write/read.
+    #[tokio::test]
+    async fn migration_0009_adds_scheduled_notifications() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = 'scheduled_notifications'",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query scheduled_notifications failed");
+        assert_eq!(
+            tables.len(),
+            1,
+            "expected scheduled_notifications table from 0009"
+        );
+
+        // fired_at NULL 기본값으로 INSERT → due-query가 미발사로 본다.
+        sqlx::query(
+            "INSERT INTO scheduled_notifications (id, fire_at, title, source) \
+             VALUES ('sn1', '2026-05-22 09:00:00', '루틴 알림', 'routine')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert scheduled_notification failed");
+        let unfired: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM scheduled_notifications WHERE fired_at IS NULL")
+                .fetch_one(&pool)
+                .await
+                .expect("count unfired failed");
+        assert_eq!(unfired.0, 1, "새 행은 미발사(fired_at NULL)로 진입");
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
     #[tokio::test]
     async fn list_projects_returns_empty_on_fresh_db() {
         let path = temp_db_path();
