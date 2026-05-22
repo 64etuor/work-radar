@@ -57,6 +57,14 @@ specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 
+# 구조적·레벨별 로깅(에러처리 정본 설계). errors.log=WARN+, app.log=INFO+, stdout=EnvFilter.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# 파일 appender(일별 회전 + max_log_files로 bound). non-blocking writer.
+tracing-appender = "0.2"
+# 도메인 에러 enum의 Display/Error boilerplate 정리(컴파일타임 전용).
+thiserror = "2"
+
 [dev-dependencies]
 # 로테이션 단위 테스트용 임시 디렉터리.
 tempfile = "3"
