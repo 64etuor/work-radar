@@ -1822,6 +1822,30 @@
   background: #e3f1ec;
   color: var(--color-q2);
 }
+/* 12c: 활성 변경 활동(최근 파일 변경 = "지금 작업 중") */
+.wt .wt-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.wt .wt-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-q3);
+  animation: wt-pulse 1.6s ease-in-out infinite;
+}
+@keyframes wt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
 /* 우측 main */
 .wt .wt-main {
   flex: 1;
@@ -1862,6 +1886,200 @@
   background: var(--color-wr-fg);
   color: var(--color-wr-bg);
   border-color: var(--color-wr-fg);
+}
+/* 12c: 안전 dev rebase 액션 (모드 바 오른쪽) */
+.wt .wt-rebase {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.wt .wt-rebase-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 5px 13px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.wt .wt-rebase-btn:hover:not(:disabled) {
+  background: var(--color-wr-surface);
+}
+.wt .wt-rebase-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wt .wt-rebase-msg {
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+.wt .wt-rebase-ok {
+  color: var(--color-q2);
+}
+.wt .wt-rebase-err {
+  color: var(--color-q1);
+}
+/* 12d: 정리 패널 */
+.wt .wt-cleanup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.wt .wt-cleanup-btn:hover:not(:disabled) {
+  background: var(--color-wr-surface);
+}
+.wt .wt-cleanup-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wt .wt-cleanup-on {
+  background: var(--color-wr-fg);
+  color: var(--color-wr-bg);
+  border-color: var(--color-wr-fg);
+}
+.wt .wt-cleanup {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-surface);
+  padding: 12px 22px 14px;
+}
+.wt .wt-cleanup-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.wt .wt-cleanup-title {
+  font: 600 12px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.wt .wt-cleanup-base {
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.wt .wt-cleanup-force {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-muted);
+  cursor: pointer;
+}
+.wt .wt-cleanup-close {
+  margin-left: auto;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.wt .wt-cleanup-close:hover {
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+}
+.wt .wt-cleanup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.wt .wt-cleanup-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+.wt .wt-cleanup-row:hover {
+  background: var(--color-wr-bg);
+}
+.wt .wt-cleanup-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wt .wt-cleanup-kind {
+  flex: 0 0 auto;
+  font: 600 10px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-muted);
+}
+.wt .wt-ck-merged_branch {
+  background: #e3f1ec;
+  color: var(--color-q2);
+}
+.wt .wt-ck-stale_branch {
+  background: #ffe7e0;
+  color: #b23a1f;
+}
+.wt .wt-ck-prunable_worktree {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.wt .wt-cleanup-name {
+  font: 500 12px var(--font-mono);
+  color: var(--color-wr-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt .wt-cleanup-detail {
+  flex: 1;
+  min-width: 0;
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+.wt .wt-cleanup-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.wt .wt-cleanup-del {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #e0b4a8;
+  background: #fdeae4;
+  color: #b23a1f;
+  border-radius: 999px;
+  padding: 5px 14px;
+  cursor: pointer;
+  font: 500 12px var(--font-sans);
+}
+.wt .wt-cleanup-del:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wt .wt-cleanup-msg {
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-muted);
 }
 .wt .wt-refs {
   flex: 0 0 auto;

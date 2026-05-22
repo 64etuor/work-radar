@@ -81,6 +81,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_worktree_branches,
         commands::worktree_diff_files,
         commands::worktree_file_diff,
+        // 안전 dev rebase + 브랜치/워크트리 정리 (Phase 12c/12d).
+        commands::rebase_worktree_onto,
+        commands::list_cleanup_candidates,
+        commands::delete_cleanup_candidates,
         // Agent 스파인 (잡 큐 + bounds + kill, Phase 7).
         commands::codex_status,
         commands::trigger_echo_job,

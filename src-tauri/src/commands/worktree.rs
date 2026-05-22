@@ -104,6 +104,11 @@ async fn collect_worktrees<G: GitProvider>(
                     continue;
                 }
             };
+            // 12c: 활성 변경 활동 — worktree 안 가장 최근 파일 mtime(빌드/메타 디렉터리 제외).
+            // 순수 fs 조회라 실패는 None으로 degrade(부가 표시일 뿐, 도출 자체는 막지 않음).
+            let newest_dt = crate::git::newest_mtime_under(std::path::Path::new(&raw.path))
+                .map(chrono::DateTime::<chrono::Utc>::from);
+            let active_change = crate::git::is_active_change(newest_dt, now);
             out.push(Worktree {
                 id: format!("{}:{}", repo.repo_id, raw.path),
                 repo_id: repo.repo_id.clone(),
@@ -118,6 +123,8 @@ async fn collect_worktrees<G: GitProvider>(
                 dirty: st.dirty,
                 ahead: st.ahead,
                 behind: st.behind,
+                newest_mtime: newest_dt.map(|d| d.to_rfc3339()),
+                active_change,
                 last_fetched_at: stamp.clone(),
             });
         }
@@ -197,6 +204,170 @@ pub async fn worktree_file_diff(
         )
         .await
         .map_err(|e| e.to_string())
+}
+
+// ── Phase 12c: 안전 dev rebase ─────────────────────────────────────────────────────
+// 사용자의 자기 worktree 대상 명시 버튼 = 사람 액션(INVARIANT #6은 *에이전트* 격리 — 별개).
+// fetch → dirty 거부 → 백업 ref → rebase → 충돌 시 abort+복구. 성공/충돌 둘 다 terminal 노출.
+
+/// worktree를 base(기본 origin/dev) 위로 안전 rebase한다. dirty면 거부, 충돌이면 자동 복구.
+/// 성공 시 RebaseResult.success=true — 사용자는 기존 Diff Viewer(vs Base)로 결과를 검수한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn rebase_worktree_onto(
+    worktree_path: String,
+    base: Option<String>,
+) -> Result<crate::models::RebaseResult, String> {
+    let base = base.unwrap_or_else(|| "origin/dev".to_string());
+    // 백업 ref ts는 충돌 복구가 결정적이도록 호출 시각으로 고정.
+    let ts = chrono::Utc::now().format("%Y%m%dT%H%M%S").to_string();
+    CliGitProvider::rebase_onto(&worktree_path, &base, &ts)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ── Phase 12d: 브랜치/워크트리 정리 ─────────────────────────────────────────────────
+// merged/stale 브랜치 + prunable worktree를 후보로 나열하고, 보호 가드 통과분만 삭제한다.
+// 보호: 현재 브랜치 / 다른 worktree 점유 브랜치 / base 브랜치 / 미머지(force 필요).
+
+/// 한 브랜치의 마지막 커밋 이후 경과일이 이 값을 넘으면 stale 후보로 노출(미머지여도).
+const STALE_DAYS: i64 = 30;
+
+/// 정리 후보 나열 (Phase 12d). merged/stale 로컬 브랜치 + prunable worktree.
+/// repo_path = primary worktree(또는 임의 worktree) 경로. base = 머지 기준(예: dev).
+#[tauri::command]
+#[specta::specta]
+pub async fn list_cleanup_candidates(
+    repo_path: String,
+    base: Option<String>,
+) -> Result<Vec<crate::models::CleanupCandidate>, String> {
+    use crate::git::{classify_branch, BranchCleanupInput};
+    use crate::models::{CleanupCandidate, CleanupKind};
+
+    let base = base.unwrap_or_else(|| "dev".to_string());
+
+    // 모든 worktree가 점유한 브랜치 = 보호(현재 체크아웃 포함). raw worktree list로 도출.
+    let raws = CliGitProvider
+        .list_worktrees(&repo_path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let occupied: std::collections::HashSet<String> =
+        raws.into_iter().filter_map(|w| w.branch).collect();
+
+    // 로컬 브랜치 + merged 집합 + 브랜치별 마지막 커밋 시각(stale 판정).
+    let local = CliGitProvider::local_branches(&repo_path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let merged: std::collections::HashSet<String> =
+        CliGitProvider::merged_branches(&repo_path, &base)
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .collect();
+    let ages = CliGitProvider::branch_commit_dates(&repo_path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now();
+
+    let bases: std::collections::HashSet<&str> = [base.as_str(), "dev", "main", "master"]
+        .into_iter()
+        .collect();
+
+    let mut out: Vec<CleanupCandidate> = Vec::new();
+    for name in local {
+        let stale = ages
+            .get(&name)
+            .map(|d| now.signed_duration_since(*d).num_days() >= STALE_DAYS)
+            .unwrap_or(false);
+        let input = BranchCleanupInput {
+            merged: merged.contains(&name),
+            checked_out: occupied.contains(&name),
+            stale,
+            is_base: bases.contains(name.as_str()),
+            name,
+        };
+        if let Some(c) = classify_branch(&input) {
+            out.push(c);
+        }
+    }
+
+    // prunable worktree 등록.
+    for path in CliGitProvider::prunable_worktrees(&repo_path)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        out.push(CleanupCandidate {
+            id: format!("worktree:{path}"),
+            kind: CleanupKind::PrunableWorktree,
+            name: path,
+            detail: "디스크에서 사라진 worktree 등록 — prune 대상".to_string(),
+            protected: false,
+            needs_force: false,
+        });
+    }
+    Ok(out)
+}
+
+/// 선택 정리 후보를 삭제한다 (Phase 12d). protected는 거부, needs_force는 force일 때만.
+/// id는 `branch:<name>` 또는 `worktree:<path>`. 항목별 결과를 요약 문자열로 노출(부분 실패 격리).
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_cleanup_candidates(
+    repo_path: String,
+    base: Option<String>,
+    ids: Vec<String>,
+    force: bool,
+) -> Result<String, String> {
+    use crate::git::guard_delete;
+
+    // 현재 후보 상태를 재도출해 보호/force 분류를 서버에서 다시 확인(UI 우회/stale 선택 방지).
+    let candidates = list_cleanup_candidates(repo_path.clone(), base).await?;
+    let by_id: std::collections::HashMap<String, _> =
+        candidates.into_iter().map(|c| (c.id.clone(), c)).collect();
+
+    let mut deleted = 0usize;
+    let mut skipped: Vec<String> = Vec::new();
+    let mut pruned = false;
+
+    for id in &ids {
+        let Some(c) = by_id.get(id) else {
+            skipped.push(format!("{id}: 후보가 아니거나 이미 정리됨"));
+            continue;
+        };
+        if let Err(e) = guard_delete(c.protected, c.needs_force, force) {
+            skipped.push(format!("{}: {e}", c.name));
+            continue;
+        }
+        match c.kind {
+            crate::models::CleanupKind::MergedBranch | crate::models::CleanupKind::StaleBranch => {
+                match CliGitProvider::delete_branch(&repo_path, &c.name, force).await {
+                    Ok(_) => deleted += 1,
+                    Err(e) => skipped.push(format!("{}: {e}", c.name)),
+                }
+            }
+            crate::models::CleanupKind::PrunableWorktree => {
+                pruned = true; // prune은 한 번에 전체 — 아래서 1회 실행.
+            }
+        }
+    }
+
+    if pruned {
+        if let Err(e) = CliGitProvider::prune_worktrees(&repo_path).await {
+            skipped.push(format!("worktree prune: {e}"));
+        } else {
+            deleted += 1;
+        }
+    }
+
+    let mut msg = format!("{deleted}건 정리 완료");
+    if !skipped.is_empty() {
+        msg.push_str(&format!(
+            " · 건너뜀 {}: {}",
+            skipped.len(),
+            skipped.join("; ")
+        ));
+    }
+    Ok(msg)
 }
 
 #[cfg(test)]

@@ -1,9 +1,24 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, GitCompare, RefreshCw } from "lucide-react";
-
-import type { DiffFileSummary, DiffMode, FileChange, Worktree } from "@/bindings";
 import {
+  ArrowLeft,
+  GitCompare,
+  RefreshCw,
+  Trash2,
+  Waypoints,
+} from "lucide-react";
+
+import type {
+  CleanupCandidate,
+  DiffFileSummary,
+  DiffMode,
+  FileChange,
+  Worktree,
+} from "@/bindings";
+import {
+  useCleanupCandidates,
+  useDeleteCleanupCandidates,
   useProjects,
+  useRebaseWorktree,
   useWorktreeBranches,
   useWorktreeDiffFiles,
   useWorktreeFileDiff,
@@ -35,13 +50,15 @@ export function WorktreeView() {
   const { goTo } = useUIStore();
   const projects = useProjects();
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
-  const worktrees = useWorktrees(projectFilter);
+  // 12c: live=true → dirty/ahead/behind + 활성 변경 활동을 bounded 주기로 자동 갱신.
+  const worktrees = useWorktrees(projectFilter, true);
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [mode, setMode] = useState<DiffMode>("working");
   const [baseRef, setBaseRef] = useState<string | null>(null);
   const [headRef, setHeadRef] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [showCleanup, setShowCleanup] = useState(false);
 
   const list = worktrees.data ?? [];
   const selected = list.find((w) => w.path === selectedPath) ?? null;
@@ -104,6 +121,9 @@ export function WorktreeView() {
 
   const branchList = branches.data ?? [];
 
+  // 정리 패널은 선택 worktree(없으면 primary)의 repo를 대상으로 한다.
+  const cleanupRepo = selected ?? list.find((w) => w.isPrimary) ?? list[0] ?? null;
+
   return (
     <div className="wt">
       <header className="wt-head" data-tauri-drag-region>
@@ -130,6 +150,16 @@ export function WorktreeView() {
         </select>
         <button
           type="button"
+          className={`wt-cleanup-btn${showCleanup ? " wt-cleanup-on" : ""}`}
+          onClick={() => setShowCleanup((s) => !s)}
+          disabled={!cleanupRepo}
+          title="브랜치/워크트리 정리"
+        >
+          <Trash2 className="size-3.5" />
+          정리
+        </button>
+        <button
+          type="button"
           className="wt-refresh"
           onClick={() => void worktrees.refetch()}
           title="새로고침"
@@ -139,6 +169,14 @@ export function WorktreeView() {
           />
         </button>
       </header>
+
+      {showCleanup && cleanupRepo && (
+        <CleanupPanel
+          repoPath={cleanupRepo.path}
+          base={cleanupRepo.baseBranch}
+          onClose={() => setShowCleanup(false)}
+        />
+      )}
 
       <div className="wt-body">
         {/* 좌: worktree 목록 */}
@@ -194,6 +232,7 @@ export function WorktreeView() {
                     {m.label}
                   </button>
                 ))}
+                <RebaseBar worktree={selected} onReviewBase={() => changeMode("vs_base")} />
               </div>
 
               {/* ref picker (vs_base = base, branch↔branch = base + head) */}
@@ -294,10 +333,16 @@ export function WorktreeView() {
   );
 }
 
-/** worktree 상태 배지: dirty / +ahead / -behind / clean. */
+/** worktree 상태 배지: 활성 / dirty / +ahead / -behind / clean. (활성 = 최근 파일 변경) */
 function StatusBadges({ w }: { w: Worktree }) {
   return (
     <>
+      {w.activeChange && (
+        <span className="wt-badge wt-active" title="최근 파일 변경 — 지금 작업 중">
+          <span className="wt-active-dot" />
+          작업중
+        </span>
+      )}
       {w.dirty && <span className="wt-badge wt-dirty">dirty</span>}
       {w.ahead > 0 && <span className="wt-badge wt-ahead">↑{w.ahead}</span>}
       {w.behind > 0 && <span className="wt-badge wt-behind">↓{w.behind}</span>}
@@ -305,6 +350,205 @@ function StatusBadges({ w }: { w: Worktree }) {
         <span className="wt-badge wt-clean">clean</span>
       )}
     </>
+  );
+}
+
+/**
+ * 안전 dev rebase 액션 (Phase 12c). dirty면 백엔드가 거부, 충돌이면 자동 abort+복구.
+ * 성공 후 사용자는 "vs Base" 모드로 결과를 검수한다(onReviewBase).
+ */
+function RebaseBar({
+  worktree,
+  onReviewBase,
+}: {
+  worktree: Worktree;
+  onReviewBase: () => void;
+}) {
+  const rebase = useRebaseWorktree();
+  const base = "origin/dev";
+
+  function run() {
+    if (rebase.isPending) return;
+    if (
+      !window.confirm(
+        `${worktree.branch ?? "(detached)"} 를 ${base} 위로 rebase합니다.\n` +
+          "미커밋 변경이 있으면 거부되고, 충돌 시 자동으로 원상복구됩니다. 계속할까요?",
+      )
+    )
+      return;
+    rebase.mutate(
+      { worktreePath: worktree.path, base },
+      {
+        onSuccess: (res) => {
+          if (res.success) onReviewBase();
+        },
+      },
+    );
+  }
+
+  const result = rebase.data;
+  return (
+    <div className="wt-rebase">
+      <button
+        type="button"
+        className="wt-rebase-btn"
+        onClick={run}
+        disabled={rebase.isPending || worktree.dirty}
+        title={
+          worktree.dirty
+            ? "미커밋 변경이 있어 rebase할 수 없습니다"
+            : `${base} 위로 안전 rebase`
+        }
+      >
+        <Waypoints className="size-3.5" />
+        {rebase.isPending ? "rebase 중…" : `${base} rebase`}
+      </button>
+      {rebase.error && (
+        <span className="wt-rebase-msg wt-rebase-err">
+          {(rebase.error as Error).message}
+        </span>
+      )}
+      {result && (
+        <span
+          className={`wt-rebase-msg${result.success ? " wt-rebase-ok" : " wt-rebase-err"}`}
+        >
+          {result.success ? "rebase 성공 — vs Base로 검수하세요." : result.message}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const CLEANUP_KIND_LABEL: Record<CleanupCandidate["kind"], string> = {
+  merged_branch: "머지됨",
+  stale_branch: "오래됨",
+  prunable_worktree: "prune",
+};
+
+/**
+ * 브랜치/워크트리 정리 패널 (Phase 12d). merged/stale 브랜치 + prunable worktree를 다중 선택해
+ * 확인 후 삭제. 보호 항목(현재/base/dirty)은 선택 불가, 미머지는 force 토글이 켜져야 선택 가능.
+ */
+function CleanupPanel({
+  repoPath,
+  base,
+  onClose,
+}: {
+  repoPath: string;
+  base: string;
+  onClose: () => void;
+}) {
+  const candidates = useCleanupCandidates(repoPath, base);
+  const del = useDeleteCleanupCandidates();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [force, setForce] = useState(false);
+
+  const list = candidates.data ?? [];
+
+  // 선택 가능 = 비보호 && (force 불필요 || force 켜짐).
+  function selectable(c: CleanupCandidate): boolean {
+    return !c.protected && (!c.needsForce || force);
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function run() {
+    const ids = [...selected];
+    if (ids.length === 0 || del.isPending) return;
+    if (!window.confirm(`${ids.length}개 항목을 삭제합니다. 계속할까요?`)) return;
+    del.mutate(
+      { repoPath, base, ids, force },
+      { onSuccess: () => setSelected(new Set()) },
+    );
+  }
+
+  return (
+    <div className="wt-cleanup">
+      <div className="wt-cleanup-head">
+        <span className="wt-cleanup-title">브랜치 / 워크트리 정리</span>
+        <span className="wt-cleanup-base">기준: {base}</span>
+        <label className="wt-cleanup-force">
+          <input
+            type="checkbox"
+            checked={force}
+            onChange={(e) => {
+              setForce(e.target.checked);
+              if (!e.target.checked) {
+                // force 끄면 force-필요 항목 선택 해제.
+                setSelected((prev) => {
+                  const next = new Set(prev);
+                  for (const c of list) {
+                    if (c.needsForce && next.has(c.id)) next.delete(c.id);
+                  }
+                  return next;
+                });
+              }
+            }}
+          />
+          미머지 강제 삭제(force)
+        </label>
+        <button type="button" className="wt-cleanup-close" onClick={onClose}>
+          닫기
+        </button>
+      </div>
+
+      {candidates.isLoading && <div className="wt-empty">불러오는 중…</div>}
+      {candidates.error && (
+        <div className="wt-err">{(candidates.error as Error).message}</div>
+      )}
+      {!candidates.isLoading && list.length === 0 && !candidates.error && (
+        <div className="wt-empty">정리할 후보가 없습니다.</div>
+      )}
+
+      <div className="wt-cleanup-list">
+        {list.map((c) => {
+          const can = selectable(c);
+          return (
+            <label
+              key={c.id}
+              className={`wt-cleanup-row${can ? "" : " wt-cleanup-locked"}`}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(c.id)}
+                disabled={!can}
+                onChange={() => toggle(c.id)}
+              />
+              <span className={`wt-cleanup-kind wt-ck-${c.kind}`}>
+                {CLEANUP_KIND_LABEL[c.kind]}
+              </span>
+              <span className="wt-cleanup-name">{c.name}</span>
+              <span className="wt-cleanup-detail">{c.detail}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <div className="wt-cleanup-foot">
+        <button
+          type="button"
+          className="wt-cleanup-del"
+          onClick={run}
+          disabled={selected.size === 0 || del.isPending}
+        >
+          <Trash2 className="size-3.5" />
+          {del.isPending ? "삭제 중…" : `선택 ${selected.size}개 삭제`}
+        </button>
+        {del.error && (
+          <span className="wt-cleanup-msg wt-rebase-err">
+            {(del.error as Error).message}
+          </span>
+        )}
+        {del.data && <span className="wt-cleanup-msg">{del.data}</span>}
+      </div>
+    </div>
   );
 }
 
