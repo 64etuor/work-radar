@@ -277,6 +277,39 @@ export const commands = {
 	fetchHermesMessages: () => typedError<HermesFetchResult, string>(__TAURI_INVOKE("fetch_hermes_messages")),
 	/**  제어 surface용 메시지 로그(최신순, bounded). 송·수신 합쳐 최근 `limit`건. 봇 토큰 미포함. */
 	listHermesMessages: (limit: number) => typedError<HermesMessage[], string>(__TAURI_INVOKE("list_hermes_messages", { limit })),
+	/**
+	 *  레지스트리 목록: 인앱 프롬프트 + (디스크 스캔한) 외부 스킬을 합쳐 돌려준다. 인앱은 DB에서, 외부는
+	 *  ~/.claude/skills를 스캔해 ExternalSkill→Skill(kind="external")로 합성한다(영속 안 함 — 디스크 SSOT).
+	 */
+	listSkills: () => typedError<Skill[], string>(__TAURI_INVOKE("list_skills")),
+	/**
+	 *  인앱 스킬 수정(prompt/name/enabled/binding). 외부 스킬(id="ext:…")은 DB 행이 아니라 수정 불가 —
+	 *  외부는 파일 자체를 사용자가 명시 편집한다(write_external_skill). prompt 편집은 codex 제안 내용만
+	 *  바꾼다(#1/#2 — 잡 게이트/accept 불변). None 인자는 미변경(부분 업데이트).
+	 */
+	updateSkill: (id: string, prompt: string | null, name: string | null, enabled: boolean | null) => typedError<Skill, string>(__TAURI_INVOKE("update_skill", { id, prompt, name, enabled })),
+	/**
+	 *  인앱 프롬프트 추가(미바인딩 또는 binding 지정). binding은 닫힌 세트(4개 잡 키)에서만 — 미지의
+	 *  binding은 거부(잡 lookup이 못 찾는 죽은 행 방지). binding UNIQUE라 이미 그 잡에 행이 있으면 거부.
+	 */
+	createSkill: (input: CreateSkillInput) => typedError<Skill, string>(__TAURI_INVOKE("create_skill", { input })),
+	/**
+	 *  인앱 스킬 삭제(외부 스킬은 삭제 불가 — 파일은 사용자 소유). 시드된 4개 binding 행은 삭제 시 잡이
+	 *  폴백(코드 상수)으로 돌아가므로 안전(기본 동작 보존). 외부 id는 거부.
+	 */
+	deleteSkill: (id: string) => typedError<null, string>(__TAURI_INVOKE("delete_skill", { id })),
+	/**
+	 *  외부 Claude/Codex 스킬 스캔(~/.claude/skills/*\/SKILL.md frontmatter → name/description/path).
+	 *  읽기 전용 브라우즈. 디렉터리 부재면 빈 목록(graceful degrade).
+	 */
+	scanExternalSkills: () => typedError<ExternalSkill[], string>(__TAURI_INVOKE("scan_external_skills")),
+	/**  외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관. */
+	readExternalSkill: (path: string) => typedError<string, string>(__TAURI_INVOKE("read_external_skill", { path })),
+	/**
+	 *  외부 스킬 파일 내용 쓰기(사용자 명시 액션 — 자기 파일 편집). ~/.claude/skills 하위만 허용(가드).
+	 *  실행하지 않는다(쓰기만). 외부 스킬을 work-radar가 자동 적용/실행하는 경로는 없다.
+	 */
+	writeExternalSkill: (path: string, content: string) => typedError<null, string>(__TAURI_INVOKE("write_external_skill", { path, content })),
 };
 
 /* Types */
@@ -501,6 +534,14 @@ export type CreateSignalInput = {
 	projectId: string | null,
 };
 
+/**  인앱 프롬프트 생성 입력(레지스트리에 새 편집 가능 템플릿 추가). binding은 선택(미바인딩 템플릿도 가능). */
+export type CreateSkillInput = {
+	name: string,
+	prompt: string,
+	/**  잡 키(enrich/batch_enrich/ci_triage/pr_selfcheck) 또는 None(미바인딩). */
+	binding: string | null,
+};
+
 /**  생성된 캘린더 이벤트 결과 (write 응답, Phase 19). id + 딥링크(htmlLink). 토큰 미포함. */
 export type CreatedCalendarEvent = {
 	id: string,
@@ -555,6 +596,19 @@ export type EnrichProposal = {
 	suggestedArea?: AreaTag | null,
 	/**  제안 근거(짧은 설명). */
 	reason?: string | null,
+};
+
+/**
+ *  외부 스킬 스캔 결과 한 건(~/.claude/skills/<dir>/SKILL.md frontmatter). 디스크가 SSOT이므로
+ *  DB에 영속하지 않고 매 스캔마다 읽는다(읽기 전용 브라우즈 + 선택적 내용 열람).
+ */
+export type ExternalSkill = {
+	/**  frontmatter name(없으면 디렉터리명). */
+	name: string,
+	/**  frontmatter description(없으면 빈 문자열). */
+	description: string,
+	/**  SKILL.md 파일 절대 경로(내용 열람·편집 대상). */
+	path: string,
 };
 
 /**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
@@ -833,6 +887,29 @@ export type SignalStatus = "new" | "classified" | "promoted" | "linked" | "done"
 
 /**  신호 종류. */
 export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "cleanup";
+
+/**
+ *  레지스트리 한 행. kind="in_app_prompt"면 prompt/binding이 의미 있고(편집 가능 잡 템플릿),
+ *  kind="external"이면 source_path/prompt(=디스크에서 읽은 description)가 의미 있다(읽기 전용 브라우즈).
+ */
+export type Skill = {
+	id: string,
+	name: string,
+	/**  "in_app_prompt" | "external". */
+	kind: string,
+	/**  in_app_prompt: 편집 가능 템플릿. external: 디스크 description(스캔 시 채움). */
+	prompt: string | null,
+	/**  in_app_prompt: 잡 키(enrich/batch_enrich/ci_triage/pr_selfcheck). external: None. */
+	binding: string | null,
+	/**  표시용 레일(suggestion). 결정 레일 침범 없음(메타). */
+	rail: string | null,
+	/**  비활성이면 잡 lookup이 코드 상수로 폴백한다(기본 동작 보존). */
+	enabled: boolean,
+	/**  external: SKILL.md 디렉터리/파일 경로. in_app: None. */
+	sourcePath: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
 
 /**  Today 운영 뷰 집계. 캘린더 오늘 이벤트·Today 레일·루틴은 프런트가 기존 헬퍼로 합성한다. */
 export type TodayOverview = {

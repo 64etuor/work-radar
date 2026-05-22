@@ -13,3 +13,4 @@ export * from "./worktree";
 export * from "./agents";
 export * from "./scheduler";
 export * from "./hermes";
+export * from "./skills";

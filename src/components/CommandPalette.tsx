@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Repeat,
   Settings,
+  Wrench,
 } from "lucide-react";
 
 import {
@@ -117,6 +118,13 @@ export function CommandPalette() {
               >
                 <MessageCircle className="size-4 text-wr-subtle" />
                 <span>Hermes (메신저 브리지)로</span>
+              </CommandItem>
+              <CommandItem
+                value="skills 스킬 레지스트리 프롬프트 에이전트 claude codex 외부 스킬 편집"
+                onSelect={() => goTo("skills")}
+              >
+                <Wrench className="size-4 text-wr-subtle" />
+                <span>스킬 레지스트리로</span>
               </CommandItem>
               <CommandItem
                 value="settings 설정 open"

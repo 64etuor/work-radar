@@ -145,6 +145,14 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::send_hermes_message,
         commands::fetch_hermes_messages,
         commands::list_hermes_messages,
+        // 스킬 공유 레지스트리 (Phase 20 #21) — 인앱 프롬프트 + 외부 Claude/Codex 스킬.
+        commands::list_skills,
+        commands::update_skill,
+        commands::create_skill,
+        commands::delete_skill,
+        commands::scan_external_skills,
+        commands::read_external_skill,
+        commands::write_external_skill,
     ])
 }
 
@@ -210,6 +218,12 @@ pub fn run() {
             let app_data = app.path().app_data_dir().expect("resolve app data dir");
             let pool = tauri::async_runtime::block_on(db::init_db(&app_data.join("work-radar.db")))
                 .expect("failed to initialize database");
+
+            // 스킬 레지스트리 시드(Phase 20 #21): 4개 인앱 프롬프트를 코드 상수에서 멱등 시드한다.
+            // 시드 프롬프트 = 코드 상수라 잡 lookup이 시드 행을 써도 기본 동작 불변. 실패는 무시
+            // (잡 트리거가 코드 상수로 폴백하므로 graceful — 레지스트리 없이도 오늘과 동일 동작).
+            let _ = tauri::async_runtime::block_on(commands::skills::seed_in_app_skills(&pool));
+
             app.manage(pool);
 
             // 잡 큐 매니저(Phase 7): codex 경로 해석(graceful degrade) + worktree/로그 디렉터리 +

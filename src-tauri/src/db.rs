@@ -423,6 +423,67 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    /// Phase 20 마이그레이션(0013): skills 테이블 + binding UNIQUE + kind CHECK + 시드/폴백 라운드트립.
+    #[tokio::test]
+    async fn migration_0013_adds_skills_registry() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> =
+            sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name = 'skills'")
+                .fetch_all(&pool)
+                .await
+                .expect("query skills table failed");
+        assert_eq!(tables.len(), 1, "expected skills table from 0013");
+
+        // 인앱 프롬프트 시드는 lib.rs/커맨드가 하지만, 마이그레이션 단독은 빈 표여야 한다(시드는 별도).
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM skills")
+            .fetch_one(&pool)
+            .await
+            .expect("count skills failed");
+        assert_eq!(n, 0, "마이그레이션 단독은 빈 레지스트리(시드는 앱 시작 시)");
+
+        // kind CHECK: 허용 밖 kind는 거부.
+        let bad_kind = sqlx::query("INSERT INTO skills (id, name, kind) VALUES ('k1','x','bogus')")
+            .execute(&pool)
+            .await;
+        assert!(bad_kind.is_err(), "kind CHECK가 허용 밖 값을 거부해야 한다");
+
+        // binding UNIQUE(부분 인덱스): 같은 binding 두 인앱 행은 거부, binding NULL(external)은 자유.
+        sqlx::query(
+            "INSERT INTO skills (id, name, kind, prompt, binding) \
+             VALUES ('k_enrich','enrich','in_app_prompt','p','enrich')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert in_app skill failed");
+        let dup = sqlx::query(
+            "INSERT INTO skills (id, name, kind, prompt, binding) \
+             VALUES ('k_enrich2','enrich2','in_app_prompt','p2','enrich')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            dup.is_err(),
+            "binding UNIQUE가 같은 잡 중복 바인딩을 거부해야 한다"
+        );
+
+        // binding NULL(external)은 여러 건 가능(partial UNIQUE에서 자유).
+        for id in ["e1", "e2"] {
+            sqlx::query(
+                "INSERT INTO skills (id, name, kind, source_path) \
+                 VALUES (?1, 'ext', 'external', '/p/SKILL.md')",
+            )
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap_or_else(|e| panic!("insert external {id}: {e}"));
+        }
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
     /// Phase 17 마이그레이션(0010): signals.impact_high/regret 컬럼 + bool(0/1) write/read.
     #[tokio::test]
     async fn migration_0010_adds_retro_tags() {

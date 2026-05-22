@@ -2,6 +2,9 @@ use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner, EchoRunner};
 use crate::commands::shared::SIGNAL_COLS;
+use crate::commands::skills::{
+    resolve_prompt, BINDING_BATCH_ENRICH, BINDING_CI_TRIAGE, BINDING_ENRICH, BINDING_PR_SELFCHECK,
+};
 use crate::db::Db;
 use crate::github::{HttpPrProvider, PrProvider};
 use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
@@ -206,7 +209,8 @@ pub async fn read_agent_log(db: State<'_, Db>, run_id: String) -> Result<String,
 
 /// codex에 넘기는 self-check 초안 프롬프트(상수 — diff는 cwd의 `pr.diff` 파일로 전달, 인젝션 없음).
 /// 엄격 JSON 하나만 마지막 메시지로 요구한다(프롬프트 지시 JSON — 사용자 결정).
-const PR_SELFCHECK_PROMPT: &str = "\
+/// pub(crate): 스킬 레지스트리(skills.rs) 시드 + 잡 lookup 폴백의 단일 출처(SSOT).
+pub(crate) const PR_SELFCHECK_PROMPT: &str = "\
 당신은 PR self-check 초안 도우미다. 작업 디렉터리의 `pr.diff` 파일에 GitHub PR의 unified diff가 있다. \
 이 diff를 read-only로 분석하라(필요하면 현재 레포 코드도 참고). \
 어떤 파일도 수정하지 말고 외부 네트워크/명령도 쓰지 마라(read-only). \
@@ -338,6 +342,9 @@ pub async fn trigger_pr_selfcheck(
     .await
     .map_err(|e| e.to_string())?;
 
+    // 스킬 레지스트리 lookup(편집된 프롬프트) + 코드 상수 폴백(#21). *제안 내용*만 바뀐다 —
+    // 잡은 여전히 gated(awaiting_approval)이고 accept는 로컬 기록만(#1/#2 구조적 불변).
+    let prompt = resolve_prompt(db.inner(), BINDING_PR_SELFCHECK, PR_SELFCHECK_PROMPT).await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -345,7 +352,7 @@ pub async fn trigger_pr_selfcheck(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt: PR_SELFCHECK_PROMPT.to_string(),
+            prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: Some(std::path::PathBuf::from(local_path)),
@@ -578,7 +585,8 @@ fn trigger_field(trigger: Option<&str>, key: &str) -> Option<String> {
 // ── enrich (braindump suggestedQuadrant + suggestedArea, #2) ──────────────────────
 
 /// enrich 프롬프트(상수 — 카드 텍스트는 cwd `card.txt`로 전달, 인젝션 없음). 닫힌 세트만 허용을 명시한다.
-const ENRICH_PROMPT: &str = "\
+/// pub(crate): 스킬 레지스트리 시드 + 잡 lookup 폴백의 단일 출처.
+pub(crate) const ENRICH_PROMPT: &str = "\
 당신은 개인 업무 카드 분류 **제안** 도우미다. 작업 디렉터리의 `card.txt`에 한 줄짜리 업무 메모(브레인덤프)가 있다. \
 이 메모를 read-only로 읽고, 아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(코드펜스·설명 없이 순수 JSON):\n\
 {\
@@ -643,6 +651,8 @@ pub async fn trigger_enrich(
     .await
     .map_err(|e| e.to_string())?;
 
+    // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
+    let prompt = resolve_prompt(db.inner(), BINDING_ENRICH, ENRICH_PROMPT).await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -650,7 +660,7 @@ pub async fn trigger_enrich(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt: ENRICH_PROMPT.to_string(),
+            prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: None,
@@ -745,7 +755,8 @@ pub async fn set_signal_area(
 
 /// 배치 enrich 프롬프트(상수 — 카드 목록은 cwd `cards.json`으로 전달, 인젝션 없음). 닫힌 세트만 허용 +
 /// **JSON 배열이 아니라 객체**로 감싸 출력하게 한다(러너의 proposal_from_message는 객체만 보존).
-const BATCH_ENRICH_PROMPT: &str = "\
+/// pub(crate): 스킬 레지스트리 시드 + 잡 lookup 폴백의 단일 출처.
+pub(crate) const BATCH_ENRICH_PROMPT: &str = "\
 당신은 개인 업무 카드 분류 **제안** 도우미다. 작업 디렉터리의 `cards.json`에 미분류 업무 카드 배열이 \
 있다(각 항목 `{\"id\": \"...\", \"title\": \"...\"}`). 각 카드를 read-only로 읽고, 아래 형식의 JSON 객체 \
 **하나만** 마지막 메시지로 출력하라(코드펜스·설명 없이 순수 JSON):\n\
@@ -844,6 +855,8 @@ pub async fn trigger_enrich_all(
     .await
     .map_err(|e| e.to_string())?;
 
+    // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
+    let prompt = resolve_prompt(db.inner(), BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -851,7 +864,7 @@ pub async fn trigger_enrich_all(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt: BATCH_ENRICH_PROMPT.to_string(),
+            prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: None,
@@ -988,7 +1001,8 @@ pub async fn accept_enrich_all(
 const TRIAGE_RETRY_CAP: i64 = 3;
 
 /// CI triage 프롬프트(상수 — PR diff는 cwd `pr.diff`로 전달, 인젝션 없음).
-const CI_TRIAGE_PROMPT: &str = "\
+/// pub(crate): 스킬 레지스트리 시드 + 잡 lookup 폴백의 단일 출처.
+pub(crate) const CI_TRIAGE_PROMPT: &str = "\
 당신은 CI 실패 triage **제안** 도우미다. 작업 디렉터리의 `pr.diff`에 CI가 실패한 PR의 unified diff가 있다. \
 이 diff를 read-only로 분석하라(필요하면 현재 레포 코드도 참고). 어떤 파일도 수정하지 말고 외부 명령도 쓰지 마라. \
 실패 원인 가설과 수정안을 아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(순수 JSON):\n\
@@ -1132,6 +1146,8 @@ pub async fn trigger_ci_triage(
     .await
     .map_err(|e| e.to_string())?;
 
+    // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
+    let prompt = resolve_prompt(db.inner(), BINDING_CI_TRIAGE, CI_TRIAGE_PROMPT).await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -1139,7 +1155,7 @@ pub async fn trigger_ci_triage(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt: CI_TRIAGE_PROMPT.to_string(),
+            prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: Some(std::path::PathBuf::from(local_path)),

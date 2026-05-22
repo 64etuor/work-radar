@@ -10,6 +10,7 @@ import { PrRadarView } from "@/components/PrRadarView";
 import { RetroView } from "@/components/RetroView";
 import { RoutineTrackingView } from "@/components/RoutineTrackingView";
 import { SettingsView } from "@/components/SettingsView";
+import { SkillsView } from "@/components/SkillsView";
 import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
 import { WeeklyView } from "@/components/WeeklyView";
@@ -55,7 +56,8 @@ export default function App() {
           view === "radar" ||
           view === "worktree" ||
           view === "jobs" ||
-          view === "hermes"
+          view === "hermes" ||
+          view === "skills"
         ) {
           goTo("board");
           return;
@@ -91,6 +93,8 @@ export default function App() {
         <JobsView />
       ) : view === "hermes" ? (
         <HermesView />
+      ) : view === "skills" ? (
+        <SkillsView />
       ) : (
         <CaptureBoard />
       )}
