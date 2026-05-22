@@ -10,8 +10,8 @@ use crate::github::{HttpPrProvider, PrProvider};
 use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
 use crate::keychain;
 use crate::models::{
-    AgentRail, AgentRunView, AreaTag, BatchEnrichItem, BatchEnrichProposal, CiTriageProposal,
-    CodexAvailability, Engine, EnrichProposal, Sandbox, TokenKind, TriageOutcome,
+    AgentRail, AgentRunStatus, AgentRunView, AreaTag, BatchEnrichItem, BatchEnrichProposal,
+    CiTriageProposal, CodexAvailability, Engine, EnrichProposal, Sandbox, TokenKind, TriageOutcome,
     TriggerCiTriageInput, TriggerCodexInput, TriggerEchoInput, TriggerEnrichAllInput,
     TriggerEnrichInput, TriggerPrSelfCheckInput, WorkSignal,
 };
@@ -1227,6 +1227,37 @@ pub async fn accept_triage(
         .map_err(|e| e.to_string())
 }
 
+/// result JSON({detail|error})에서 사람이 읽을 상세를 뽑는다(jobs.rs detail_from_result 동일 로직).
+fn detail_from_result_json(result: Option<&str>) -> Option<String> {
+    let raw = result?;
+    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
+    v.get("detail")
+        .or_else(|| v.get("error"))
+        .and_then(|x| x.as_str())
+        .map(|s| s.to_string())
+}
+
+/// 단일 잡 상태 폴링 (B3: EnrichModal 인플레이스 폴링). 1초 주기 폴링용으로 가볍게 설계.
+/// terminal 상태(awaiting_approval/succeeded/failed/cancelled)에서 폴링을 멈춰도 된다.
+#[tauri::command]
+#[specta::specta]
+pub async fn agent_run_status(db: State<'_, Db>, run_id: String) -> Result<AgentRunStatus, String> {
+    let row: Option<(String, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT status, result, proposal FROM agent_runs WHERE id = ?1")
+            .bind(&run_id)
+            .fetch_optional(db.inner())
+            .await
+            .map_err(|e| e.to_string())?;
+
+    let (status, result, proposal) = row.ok_or_else(|| "잡을 찾을 수 없음".to_string())?;
+    let detail = detail_from_result_json(result.as_deref());
+    Ok(AgentRunStatus {
+        status,
+        has_proposal: proposal.is_some(),
+        detail,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1578,5 +1609,33 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(n.0, 1, "dedup — 중복 0");
+    }
+
+    /// agent_run_status: awaiting_approval + proposal 있으면 has_proposal=true.
+    #[tokio::test]
+    async fn agent_run_status_returns_has_proposal_when_present() {
+        let db = fresh_db().await;
+        let proposal =
+            r#"{"suggestedQuadrant":"q1_do_now","suggestedArea":"work","reason":"테스트"}"#;
+        insert_awaiting_run(&db, "ars1", proposal, "{}").await;
+
+        // status, result, proposal 컬럼으로 검증 (detail은 result JSON에서 추출).
+        let row: (String, Option<String>, Option<String>) =
+            sqlx::query_as("SELECT status, result, proposal FROM agent_runs WHERE id='ars1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        let status = row.0.clone();
+        let result = row.1.clone();
+        let has_proposal = row.2.is_some();
+
+        assert_eq!(status, "awaiting_approval");
+        assert!(
+            has_proposal,
+            "awaiting_approval 잡 + proposal → has_proposal=true"
+        );
+        // detail_from_result_json: result 없으면 None.
+        let detail = detail_from_result_json(result.as_deref());
+        assert!(detail.is_none());
     }
 }

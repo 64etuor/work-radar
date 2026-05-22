@@ -198,6 +198,11 @@ export const commands = {
 	 */
 	setSignalArea: (id: string, area: "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other" | null) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_area", { id, area })),
 	/**
+	 *  단일 잡 상태 폴링 (B3: EnrichModal 인플레이스 폴링). 1초 주기 폴링용으로 가볍게 설계.
+	 *  terminal 상태(awaiting_approval/succeeded/failed/cancelled)에서 폴링을 멈춰도 된다.
+	 */
+	agentRunStatus: (runId: string) => typedError<AgentRunStatus, string>(__TAURI_INVOKE("agent_run_status", { runId })),
+	/**
 	 *  미분류 전체 배치 enrich 잡 트리거(미분류 영역 "전체 제안 실행"). 모든 미분류 카드를 `cards.json`
 	 *  배열로 모아 **한** codex 호출(비-레포·read_only)로 카드별 suggested 힌트를 제안한다. 산출 Proposal은
 	 *  awaiting_approval로 멈추고(Acceptance 게이트), accept해도 quadrant는 자동 확정되지 않는다(INVARIANT #1).
@@ -374,6 +379,16 @@ export const commands = {
 /* Types */
 /**  잡이 속한 레일. 결정 레일은 사람만 — 자동화는 제안/실행 레일에만 (INVARIANT #1). */
 export type AgentRail = "suggestion" | "execution";
+
+/**
+ *  단일 잡 폴링용 경량 상태 (B3: EnrichModal 인플레이스 폴링).
+ *  status: 잡 상태 문자열, has_proposal: proposal 컬럼 비-NULL 여부, detail: 실패 메시지.
+ */
+export type AgentRunStatus = {
+	status: string,
+	hasProposal: boolean,
+	detail: string | null,
+};
 
 /**
  *  Jobs 뷰 표시용 잡 한 항목. agent_runs에서 도출 (i64 컬럼은 specta 금지 → u32/f64로 변환).

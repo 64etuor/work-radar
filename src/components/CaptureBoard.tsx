@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AreaTag, Kind, PromotionTarget } from "@/bindings";
+import type { Kind, PromotionTarget } from "@/bindings";
 import {
   type CardMenuAction,
   type CardMenuState,
@@ -10,6 +10,7 @@ import {
   type CalendarModalState,
   CalendarEventModal,
 } from "@/components/board/CalendarEventModal";
+import { EnrichModal } from "@/components/board/EnrichModal";
 import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas } from "@/components/board/MatrixCanvas";
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
@@ -31,7 +32,6 @@ import {
   usePromoteToNotion,
   useReorderRoutines,
   useReorderToday,
-  useSetSignalArea,
   useSetSignalStatus,
   useSignals,
   useSnoozeSignal,
@@ -93,7 +93,6 @@ export function CaptureBoard() {
   const triggerEnrichAll = useTriggerEnrichAll();
   const updateTitle = useUpdateSignalTitle();
   const deleteSignal = useDeleteSignal();
-  const setSignalArea = useSetSignalArea();
   const { goTo } = useUIStore();
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
@@ -105,6 +104,7 @@ export function CaptureBoard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
+  const [enrichRunId, setEnrichRunId] = useState<string | null>(null);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
@@ -235,12 +235,6 @@ export function CaptureBoard() {
     doPromote(sig?.projectId ?? null);
   };
 
-  // AI 제안 영역(suggestedArea)을 사람이 확정 (별개 축 — quadrant 결정 레일과 무관, INVARIANT #1).
-  const handleConfirmArea = (id: string, area: AreaTag) => {
-    setSignalArea.mutate({ id, area });
-    pushSuccess("영역 확정");
-  };
-
   // 미분류 전체 배치 enrich(Phase 15 #4): 단일 codex 잡 → Jobs에서 카드별 제안 검토·accept(자동 분류 0).
   const unclassifiedCount = signals.filter((s) => s.quadrant === "unclassified").length;
   const handleEnrichAll = () => {
@@ -267,7 +261,8 @@ export function CaptureBoard() {
         handlePromoteToday(signalId);
         break;
       case "enrich":
-        // 제안 레일: codex로 영역/사분면 제안(Acceptance 게이트 — Jobs에서 검토·accept).
+        // 제안 레일: codex로 영역/사분면 제안(Acceptance 게이트 — 인플레이스 모달로 검토·accept).
+        // gated 잡 유지: trigger_enrich → awaiting_approval → EnrichModal 폴링 → accept_enrich.
         if (!codexReady) {
           pushError("codex", "codex 미가용 — 설치·로그인 후 사용");
           break;
@@ -275,16 +270,17 @@ export function CaptureBoard() {
         triggerEnrich.mutate(
           { signalId, timeoutSec: 90, maxTurns: 6, costCapUsd: 0.5 },
           {
-            onSuccess: () => goTo("jobs"),
+            onSuccess: (runId) => setEnrichRunId(runId),
             onError: (e) => pushError("codex", `AI 제안 실패: ${String(e)}`),
           },
         );
         break;
       case "edit": {
         // 인라인 제목 편집(Phase 15 #5). dedup 키는 백엔드가 새 제목으로 갱신.
+        // window.prompt 방식: 기존 패턴과 동일하게 유지하되 항상 동작하도록 확인.
         const sig = signals.find((s) => s.id === signalId);
         const next = window.prompt("카드 제목 편집", sig?.title ?? "");
-        if (next != null && next.trim() && next.trim() !== sig?.title) {
+        if (next !== null && next.trim() !== "" && next.trim() !== sig?.title) {
           updateTitle.mutate(
             { id: signalId, title: next.trim() },
             {
@@ -475,7 +471,6 @@ export function CaptureBoard() {
             setSelectedId(id);
             setMenu({ signalId: id, anchor });
           }}
-          onConfirmArea={handleConfirmArea}
           onEnrichAll={handleEnrichAll}
           enrichAllDisabled={
             !codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending
@@ -521,6 +516,12 @@ export function CaptureBoard() {
         state={calendarModal}
         onClose={() => setCalendarModal(null)}
       />
+      {enrichRunId && (
+        <EnrichModal
+          runId={enrichRunId}
+          onClose={() => setEnrichRunId(null)}
+        />
+      )}
     </div>
   );
 }

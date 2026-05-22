@@ -137,6 +137,16 @@ pub struct CliToolStatus {
     pub detail: String,
 }
 
+/// 단일 잡 폴링용 경량 상태 (B3: EnrichModal 인플레이스 폴링).
+/// status: 잡 상태 문자열, has_proposal: proposal 컬럼 비-NULL 여부, detail: 실패 메시지.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRunStatus {
+    pub status: String,
+    pub has_proposal: bool,
+    pub detail: Option<String>,
+}
+
 // ── 신호(WorkSignal) ──────────────────────────────────────────────────────────
 
 /// 개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무.

@@ -122,6 +122,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::enrich_proposal,
         commands::accept_enrich,
         commands::set_signal_area,
+        // 단일 잡 상태 폴링 (B3: EnrichModal 인플레이스).
+        commands::agent_run_status,
         // 미분류 전체 배치 enrich (단일 잡, 부분 실패 격리, Phase 15 #4).
         commands::trigger_enrich_all,
         commands::batch_enrich_proposal,

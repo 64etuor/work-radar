@@ -1150,6 +1150,128 @@
 }
 
 /*
+ * ── Enrich Modal (B3: 인플레이스 enrich 제안 모달) ──
+ * CalendarEventModal(cev) 톤 재사용: 흰 패널 · thin border · near-black pill CTA.
+ */
+.enrich-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(15, 20, 40, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.enrich-modal-panel {
+  width: min(400px, 92vw);
+  max-height: 78vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 60px rgba(10, 14, 30, 0.28);
+  padding: 20px;
+}
+.enrich-modal-head {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+.enrich-modal-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.enrich-modal-err {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-danger);
+  background: var(--color-wr-danger-soft);
+  border: 1px solid var(--color-wr-danger-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.enrich-modal-label {
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.enrich-modal-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font: 400 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+}
+.enrich-modal-select:focus {
+  border-color: var(--color-wr-accent);
+}
+.enrich-modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font: 400 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+  resize: vertical;
+  min-height: 48px;
+  font-family: var(--font-sans);
+}
+.enrich-modal-textarea:focus {
+  border-color: var(--color-wr-accent);
+}
+.enrich-modal-hint {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.enrich-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+.enrich-modal-btn {
+  border: none;
+  cursor: pointer;
+  background: var(--color-wr-near-black);
+  color: #fff;
+  font: 500 14px var(--font-sans);
+  padding: 9px 22px;
+  border-radius: 999px;
+}
+.enrich-modal-btn:hover {
+  background: var(--color-wr-black);
+}
+.enrich-modal-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.enrich-modal-btn-ghost {
+  border: 1px solid var(--color-wr-border-light);
+  cursor: pointer;
+  background: var(--color-wr-bg);
+  font: 500 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  padding: 8px 16px;
+  border-radius: 999px;
+}
+.enrich-modal-btn-ghost:hover {
+  background: var(--color-wr-surface);
+}
+
+/*
  * ── 설정 / 프로젝트 뷰 (Phase 2) ──
  * contact-form-card 톤: 흰 카드 · thin gray 보더 · near-black pill CTA. DESIGN.md 정본.
  */
