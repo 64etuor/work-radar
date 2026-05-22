@@ -88,6 +88,11 @@ export const commands = {
 	flushPromotions: () => typedError<FlushSummary, string>(__TAURI_INVOKE("flush_promotions")),
 	/**  승격 이력(undo/audit). signal_id가 있으면 그 신호만, 없으면 전체(최신순). */
 	listPromotions: (signalId: string | null) => typedError<Promotion[], string>(__TAURI_INVOKE("list_promotions", { signalId })),
+	/**
+	 *  프로젝트의 Notion DB 연결을 테스트한다. token은 keychain에서 Rust 안에서만 읽고 반환하지 않는다.
+	 *  성공: DB title 속성명을 포함한 짧은 확인 메시지. 실패: 액션 가능 에러 메시지.
+	 */
+	testNotionConnection: (projectId: string, target: PromotionTarget) => typedError<string, string>(__TAURI_INVOKE("test_notion_connection", { projectId, target })),
 	createRoutine: (input: CreateRoutineInput) => typedError<RoutineToday, string>(__TAURI_INVOKE("create_routine", { input })),
 	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], string>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
 	/**

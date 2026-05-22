@@ -79,6 +79,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::promote_to_notion,
         commands::flush_promotions,
         commands::list_promotions,
+        // Notion 연결 테스트 (DB ID 검증 + 통합 공유 확인).
+        commands::test_notion_connection,
         // Routines (Phase 16: biweekly/monthly · 드래그 정렬 · 시간/알림 · 트래킹).
         commands::create_routine,
         commands::list_today_routines,

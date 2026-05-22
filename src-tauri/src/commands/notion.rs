@@ -6,7 +6,7 @@ use crate::keychain;
 use crate::models::{
     FlushSummary, Promotion, PromotionOutcome, PromotionStatus, PromotionTarget, TokenKind,
 };
-use crate::notion::{HttpNotionWriter, NotionError, NotionWriter};
+use crate::notion::{find_title_prop, HttpNotionWriter, NotionError, NotionWriter};
 
 // ── Notion 승격 (write 레일, Phase 3 — 즉시 write) ─────────────────────────────
 // INVARIANT #2: 사람이 카드 메뉴를 누르는 것이 곧 결정/accept다(자동화 출력 아님 → acceptances
@@ -170,6 +170,34 @@ async fn execute_promotion<W: NotionWriter>(
         }),
         // 영구 실패(인증/권한/검증 등): failed로 표시하고 사유 노출.
         Err(NotionError::Terminal(msg)) => {
+            sqlx::query("UPDATE promotions SET status = 'failed' WHERE id = ?1")
+                .bind(&promo.id)
+                .execute(db)
+                .await?;
+            Ok(PromotionOutcome {
+                promotion_id: promo.id,
+                status: PromotionStatus::Failed,
+                page_url: None,
+                detail: msg,
+                resolved_project_id: None,
+            })
+        }
+        // DB를 찾을 수 없음 (404): ID 오류 또는 통합 미공유 — 액션 가능 메시지로 failed.
+        Err(NotionError::NotFound(msg)) => {
+            sqlx::query("UPDATE promotions SET status = 'failed' WHERE id = ?1")
+                .bind(&promo.id)
+                .execute(db)
+                .await?;
+            Ok(PromotionOutcome {
+                promotion_id: promo.id,
+                status: PromotionStatus::Failed,
+                page_url: None,
+                detail: msg,
+                resolved_project_id: None,
+            })
+        }
+        // 권한 없음 (403): 통합 권한 부족 — 액션 가능 메시지로 failed.
+        Err(NotionError::Forbidden(msg)) => {
             sqlx::query("UPDATE promotions SET status = 'failed' WHERE id = ?1")
                 .bind(&promo.id)
                 .execute(db)
@@ -350,6 +378,63 @@ pub async fn flush_promotions(db: State<'_, Db>) -> Result<FlushSummary, String>
     flush_inner(db.inner(), &writer)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 프로젝트의 Notion DB 연결을 테스트한다. token은 keychain에서 Rust 안에서만 읽고 반환하지 않는다.
+/// 성공: DB title 속성명을 포함한 짧은 확인 메시지. 실패: 액션 가능 에러 메시지.
+#[tauri::command]
+#[specta::specta]
+pub async fn test_notion_connection(
+    db: State<'_, Db>,
+    project_id: String,
+    target: PromotionTarget,
+) -> Result<String, String> {
+    // 프로젝트에서 credential_ref + DB ID 조회.
+    let proj: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT credential_ref, notion_backlog_db_id, notion_agenda_db_id FROM projects WHERE id = ?1",
+    )
+    .bind(&project_id)
+    .fetch_optional(db.inner())
+    .await
+    .map_err(|e| e.to_string())?;
+    let (cref, backlog, agenda) = proj.ok_or("프로젝트를 찾을 수 없음")?;
+
+    let db_id = match target {
+        PromotionTarget::NotionBacklog => backlog,
+        PromotionTarget::NotionAgenda => agenda,
+        _ => return Err("Notion 타깃이 아님".into()),
+    }
+    .ok_or("프로젝트에 Notion DB ID가 설정되지 않음(설정에서 바인딩 필요)")?;
+
+    // 토큰 keychain에서만 — 반환하지 않는다(INVARIANT).
+    let token = keychain::get_token(&cref, TokenKind::Notion)
+        .map_err(|e| e.to_string())?
+        .ok_or("Notion 토큰이 없음(설정에서 토큰 저장 필요)")?;
+
+    // GET /databases/{id} — HttpNotionWriter의 rate limiter를 거치지 않고 직접 호출한다
+    // (테스트 단발이므로 pacing 불필요). reqwest 클라이언트를 최소 구성으로 직접 사용한다.
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get(format!("https://api.notion.com/v1/databases/{db_id}"))
+        .bearer_auth(&token)
+        .header("Notion-Version", "2022-06-28")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status().as_u16();
+    let body = resp.text().await.unwrap_or_default();
+
+    if !(200..300).contains(&status) {
+        let err = crate::notion::classify_http_pub(status, &body);
+        return Err(err.to_string());
+    }
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|e| format!("응답 파싱 실패: {e}"))?;
+    let title_prop = find_title_prop(&json).unwrap_or_else(|| "(title 속성 없음)".into());
+    Ok(format!("연결됨 — DB title 속성: {title_prop}"))
 }
 
 /// 승격 이력(undo/audit). signal_id가 있으면 그 신호만, 없으면 전체(최신순).
@@ -656,7 +741,7 @@ mod tests {
             &CreateProjectInput {
                 name: "테스트워크".into(),
                 kind: ProjectKind::Work,
-                notion_backlog_db_id: Some("db-123".into()),
+                notion_backlog_db_id: Some("1234567890abcdef1234567890abcdef".into()),
                 notion_agenda_db_id: None,
                 ticket_key_pattern: None,
             },
@@ -702,7 +787,7 @@ mod tests {
             assert_eq!(resolved_pid, proj.id, "resolved_project_id = matching project");
             // execute_promotion으로 end-to-end 검증.
             let outcome =
-                execute_promotion(&db, &sig.id, PromotionTarget::NotionBacklog, &writer, "tok", "db-123")
+                execute_promotion(&db, &sig.id, PromotionTarget::NotionBacklog, &writer, "tok", "1234567890abcdef1234567890abcdef")
                     .await
                     .unwrap();
             assert!(matches!(outcome.status, PromotionStatus::Created));
@@ -722,7 +807,7 @@ mod tests {
                 &CreateProjectInput {
                     name: name.into(),
                     kind: ProjectKind::Work,
-                    notion_backlog_db_id: Some("db-x".into()),
+                    notion_backlog_db_id: Some("abcdef1234567890abcdef1234567890".into()),
                     notion_agenda_db_id: None,
                     ticket_key_pattern: None,
                 },

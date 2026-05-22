@@ -47,3 +47,19 @@ export function useFlushPromotions() {
     },
   });
 }
+
+/**
+ * 프로젝트 Notion DB 연결 테스트. 토큰은 Rust keychain에서만 — IPC로 반환하지 않는다(INVARIANT).
+ * 성공: "연결됨 — DB title 속성: {name}". 실패: 액션 가능 에러 메시지.
+ */
+export function useTestNotionConnection() {
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      target,
+    }: {
+      projectId: string;
+      target: PromotionTarget;
+    }) => unwrap(commands.testNotionConnection(projectId, target)),
+  });
+}

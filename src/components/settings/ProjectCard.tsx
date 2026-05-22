@@ -1,9 +1,61 @@
-import type { Project } from "@/bindings";
-import { useProjectTokenStatus, useRepos } from "@/lib/query";
+import { useState } from "react";
+
+import type { Project, PromotionTarget } from "@/bindings";
+import { useProjectTokenStatus, useRepos, useTestNotionConnection } from "@/lib/query";
 
 import { AddRepoForm } from "./AddRepoForm";
 import { GoogleCalendarBlock } from "./GoogleCalendarBlock";
 import { TokenRow } from "./TokenRow";
+
+/** Notion DB 연결 테스트 버튼 + 인라인 결과 표시. */
+function NotionDbTestButton({
+  projectId,
+  target,
+  dbId,
+}: {
+  projectId: string;
+  target: PromotionTarget;
+  dbId: string;
+}) {
+  const test = useTestNotionConnection();
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const run = () => {
+    setResult(null);
+    test.mutate(
+      { projectId, target },
+      {
+        onSuccess: (msg) => setResult({ ok: true, msg }),
+        onError: (e) => setResult({ ok: false, msg: String(e) }),
+      },
+    );
+  };
+
+  return (
+    <div className="st-field">
+      <span className="st-label">
+        {target === "notion_backlog" ? "백로그 DB" : "안건 DB"}
+      </span>
+      <span className="st-proj-meta" style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+        {dbId}
+      </span>
+      <button
+        type="button"
+        className="st-btn-ghost sm"
+        onClick={run}
+        disabled={test.isPending}
+        style={{ marginLeft: "auto" }}
+      >
+        {test.isPending ? "테스트 중…" : "연결 테스트"}
+      </button>
+      {result && (
+        <div className={result.ok ? "st-ok" : "st-err"} style={{ marginTop: "0.25rem" }}>
+          {result.msg}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** 프로젝트 한 장: 토큰(Notion/GitHub) + 레포 목록 + Add Repo. */
 export function ProjectCard({
@@ -44,6 +96,26 @@ export function ProjectCard({
           hasToken={tokenStatus.data?.hasGithub ?? false}
           onToast={onToast}
         />
+
+        {(project.notionBacklogDbId || project.notionAgendaDbId) && (
+          <>
+            <div className="st-subhead">Notion DB 연결</div>
+            {project.notionBacklogDbId && (
+              <NotionDbTestButton
+                projectId={project.id}
+                target="notion_backlog"
+                dbId={project.notionBacklogDbId}
+              />
+            )}
+            {project.notionAgendaDbId && (
+              <NotionDbTestButton
+                projectId={project.id}
+                target="notion_agenda"
+                dbId={project.notionAgendaDbId}
+              />
+            )}
+          </>
+        )}
 
         <div className="st-subhead">Google Calendar (keychain · read-only)</div>
         <GoogleCalendarBlock projectId={project.id} onToast={onToast} />

@@ -3,6 +3,7 @@ use tauri::State;
 use crate::commands::shared::SIGNAL_COLS;
 use crate::db::Db;
 use crate::models::{CreateProjectInput, CreateRepoInput, Project, Repo, WorkSignal};
+use crate::notion::normalize_notion_db_id;
 
 // ── Projects (Phase 0) ────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ const REPO_COLS: &str = "id, project_id, provider, remote_url, local_path, defau
      ticket_key_pattern, enabled, created_at";
 
 /// 프로젝트 생성. `credential_ref`는 백엔드가 생성하는 keychain 분리 키(토큰 본문 아님).
+/// Notion DB ID는 저장 전 정규화(dashed UUID 형식). 유효하지 않은 ID는 Protocol 에러.
 pub(crate) async fn insert_project(
     db: &Db,
     input: &CreateProjectInput,
@@ -39,6 +41,21 @@ pub(crate) async fn insert_project(
     if name.is_empty() {
         return Err(sqlx::Error::Protocol("empty project name".into()));
     }
+    // Notion DB ID 정규화 — 사용자가 URL이나 raw hex를 붙여넣어도 표준 UUID로 저장한다.
+    let backlog_db_id = input
+        .notion_backlog_db_id
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(normalize_notion_db_id)
+        .transpose()
+        .map_err(|e| sqlx::Error::Protocol(format!("notion_backlog_db_id: {e}")))?;
+    let agenda_db_id = input
+        .notion_agenda_db_id
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(normalize_notion_db_id)
+        .transpose()
+        .map_err(|e| sqlx::Error::Protocol(format!("notion_agenda_db_id: {e}")))?;
     sqlx::query_as::<_, Project>(&format!(
         "INSERT INTO projects \
             (id, name, kind, notion_backlog_db_id, notion_agenda_db_id, ticket_key_pattern, \
@@ -48,8 +65,8 @@ pub(crate) async fn insert_project(
     ))
     .bind(name)
     .bind(input.kind)
-    .bind(&input.notion_backlog_db_id)
-    .bind(&input.notion_agenda_db_id)
+    .bind(&backlog_db_id)
+    .bind(&agenda_db_id)
     .bind(&input.ticket_key_pattern)
     .fetch_one(db)
     .await
@@ -61,9 +78,13 @@ pub async fn create_project(
     db: State<'_, Db>,
     input: CreateProjectInput,
 ) -> Result<Project, String> {
-    insert_project(db.inner(), &input)
-        .await
-        .map_err(|e| e.to_string())
+    insert_project(db.inner(), &input).await.map_err(|e| {
+        // Protocol 에러는 정규화 실패 등 사람이 읽을 메시지 — 그대로 노출.
+        match &e {
+            sqlx::Error::Protocol(msg) => msg.to_string(),
+            other => other.to_string(),
+        }
+    })
 }
 
 // ── Repos (project별 멀티 레포) ───────────────────────────────────────────────

@@ -27,11 +27,18 @@ const BASE_DELAY: Duration = Duration::from_millis(400);
 const MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(350);
 
 /// 외부 write 실패 분류. Transient = 재시도/큐잉 대상(네트워크·429·5xx),
-/// Terminal = 재시도 무의미(인증/권한/검증 등 4xx). 큐 전이는 commands.rs가 결정한다.
+/// Terminal = 재시도 무의미(인증/권한/검증 등 4xx 중 일반).
+/// NotFound(404) = DB ID 오류 또는 통합 미공유 — 액션 가능 메시지 포함.
+/// Forbidden(403) = 통합 권한 부족 — 액션 가능 메시지 포함.
+/// 큐 전이는 commands.rs가 결정한다.
 #[derive(Debug, Clone)]
 pub enum NotionError {
     Transient(String),
     Terminal(String),
+    /// 404: DB ID가 잘못됐거나 통합이 해당 DB에 공유되지 않음.
+    NotFound(String),
+    /// 403: 통합 권한 부족.
+    Forbidden(String),
 }
 
 impl std::fmt::Display for NotionError {
@@ -39,6 +46,8 @@ impl std::fmt::Display for NotionError {
         match self {
             NotionError::Transient(m) => write!(f, "{m}"),
             NotionError::Terminal(m) => write!(f, "{m}"),
+            NotionError::NotFound(m) => write!(f, "{m}"),
+            NotionError::Forbidden(m) => write!(f, "{m}"),
         }
     }
 }
@@ -64,14 +73,28 @@ pub trait NotionWriter {
     ) -> impl std::future::Future<Output = Result<CreatedPage, NotionError>> + Send;
 }
 
-/// HTTP 상태코드 → 분류. 429/5xx는 일시적, 그 외 4xx는 영구.
+/// HTTP 상태코드 → 분류.
+/// - 404 → NotFound (DB ID 오류 또는 통합 미공유 — Notion은 unshared도 404 반환).
+/// - 403 → Forbidden (통합 권한 부족).
+/// - 429/5xx → Transient (재시도 대상).
+/// - 그 외 4xx → Terminal (영구 실패).
 fn classify_http(status: u16, body: &str) -> NotionError {
     let snippet: String = body.chars().take(300).collect();
-    if status == 429 || status >= 500 {
-        NotionError::Transient(format!("HTTP {status}: {snippet}"))
-    } else {
-        NotionError::Terminal(format!("HTTP {status}: {snippet}"))
+    match status {
+        404 => NotionError::NotFound(format!(
+            "DB를 찾을 수 없음 — ID가 맞는지, 그리고 통합(integration)이 이 DB에 공유됐는지 확인 (HTTP 404: {snippet})"
+        )),
+        403 => NotionError::Forbidden(format!(
+            "권한 없음 — 통합 권한 확인 (HTTP 403: {snippet})"
+        )),
+        429 | 500..=599 => NotionError::Transient(format!("HTTP {status}: {snippet}")),
+        _ => NotionError::Terminal(format!("HTTP {status}: {snippet}")),
     }
+}
+
+/// 공개 래퍼 — commands 모듈에서 직접 HTTP 호출 시 분류용.
+pub fn classify_http_pub(status: u16, body: &str) -> NotionError {
+    classify_http(status, body)
 }
 
 /// reqwest 전송 에러 → 분류. 네트워크/타임아웃은 일시적, 디코드 실패는 영구.
@@ -108,7 +131,10 @@ where
     loop {
         match op(attempt).await {
             Ok(v) => return Ok(v),
+            // Non-retryable: 즉시 반환.
             Err(NotionError::Terminal(m)) => return Err(NotionError::Terminal(m)),
+            Err(NotionError::NotFound(m)) => return Err(NotionError::NotFound(m)),
+            Err(NotionError::Forbidden(m)) => return Err(NotionError::Forbidden(m)),
             Err(NotionError::Transient(m)) => {
                 attempt += 1;
                 if attempt >= max_attempts {
@@ -276,6 +302,59 @@ impl NotionWriter for HttpNotionWriter {
     }
 }
 
+/// Notion DB ID/URL을 정규화해 표준 dashed UUID(8-4-4-4-12)로 반환한다.
+///
+/// - 순수 32-hex(대소문자 무관, 대시 포함/제외 모두 허용) → 정규화.
+/// - URL(`https://www.notion.so/…`) → 경로에서 마지막 32-hex 런 추출 후 정규화.
+/// - 뷰 링크(`?v=…`)나 타이틀-슬러그(`Title-<id>`) 모두 처리.
+/// - 32-hex가 없거나 형식 불일치 → Err (안내 메시지 포함).
+pub fn normalize_notion_db_id(input: &str) -> Result<String, String> {
+    let s = input.trim();
+    if s.is_empty() {
+        return Err(
+            "Notion DB ID/URL을 확인하세요 — 뷰(?v=) 링크가 아닌 데이터베이스 링크를 사용하세요."
+                .into(),
+        );
+    }
+
+    // URL이면 경로 부분만 추출(? 이전).
+    let path_part = if s.contains("://") || s.contains('/') {
+        s.split('?').next().unwrap_or(s)
+    } else {
+        s
+    };
+
+    // 마지막 32-hex 런 추출. 대시 제거 후 연속 hex 문자를 구간으로 모은다.
+    // Notion ID = 32 hex chars(대시 포함 시 36자 UUID, 미포함 시 32자 raw).
+    let hex_only: String = path_part.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    // 경로에 여러 hex 런이 있을 수 있다 — 마지막 32-hex 연속 블록을 찾는다.
+    // 전략: hex_only의 마지막 32글자를 취한다(ID가 경로 끝에 옴).
+    if hex_only.len() < 32 {
+        return Err(
+            "Notion DB ID/URL을 확인하세요 — 뷰(?v=) 링크가 아닌 데이터베이스 링크를 사용하세요."
+                .into(),
+        );
+    }
+    let raw = &hex_only[hex_only.len() - 32..];
+    // 모두 hex인지 재확인(이미 필터링됐으나 방어적으로).
+    if !raw.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(
+            "Notion DB ID/URL을 확인하세요 — 뷰(?v=) 링크가 아닌 데이터베이스 링크를 사용하세요."
+                .into(),
+        );
+    }
+    let lower = raw.to_lowercase();
+    // 8-4-4-4-12 dashed UUID 형식으로 반환.
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        &lower[0..8],
+        &lower[8..12],
+        &lower[12..16],
+        &lower[16..20],
+        &lower[20..32],
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,7 +409,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::Relaxed), 1, "terminal은 1회만");
     }
 
-    /// HTTP 분류: 429/5xx=Transient, 그 외 4xx=Terminal.
+    /// HTTP 분류: 429/5xx=Transient, 404=NotFound, 403=Forbidden, 그 외 4xx=Terminal.
     #[test]
     fn classify_http_buckets() {
         assert!(matches!(
@@ -351,8 +430,47 @@ mod tests {
         ));
         assert!(matches!(
             classify_http(404, "no db"),
-            NotionError::Terminal(_)
+            NotionError::NotFound(_)
         ));
+        assert!(matches!(
+            classify_http(403, "forbidden"),
+            NotionError::Forbidden(_)
+        ));
+    }
+
+    /// normalize_notion_db_id: 순수 32-hex raw ID.
+    #[test]
+    fn normalize_raw_hex() {
+        let raw = "1234567890abcdef1234567890abcdef";
+        let r = normalize_notion_db_id(raw).unwrap();
+        assert_eq!(r, "12345678-90ab-cdef-1234-567890abcdef");
+    }
+
+    /// normalize_notion_db_id: 이미 dashed UUID 형식.
+    #[test]
+    fn normalize_dashed_uuid() {
+        let dashed = "12345678-90ab-cdef-1234-567890abcdef";
+        let r = normalize_notion_db_id(dashed).unwrap();
+        assert_eq!(r, "12345678-90ab-cdef-1234-567890abcdef");
+    }
+
+    /// normalize_notion_db_id: 전체 URL (타이틀-슬러그 + ?v= 뷰 파라미터).
+    #[test]
+    fn normalize_full_url_with_slug_and_view() {
+        // 실제 Notion 공유 URL 패턴: notion.so/<workspace>/<Title-Slug>-<32hex>?v=<view_id>
+        let url =
+            "https://www.notion.so/myworkspace/My-Project-Backlog-1234567890abcdef1234567890abcdef?v=ffffffffffffffffffffffffffffffff";
+        let r = normalize_notion_db_id(url).unwrap();
+        // ?v= 이전 경로의 마지막 32-hex = DB id
+        assert_eq!(r, "12345678-90ab-cdef-1234-567890abcdef");
+    }
+
+    /// normalize_notion_db_id: 너무 짧거나 garbage → Err.
+    #[test]
+    fn normalize_garbage_returns_err() {
+        assert!(normalize_notion_db_id("not-a-db-id").is_err());
+        assert!(normalize_notion_db_id("").is_err());
+        assert!(normalize_notion_db_id("12345").is_err());
     }
 
     /// 스키마에서 title 타입 속성명을 발견(이름/언어 무관, type='title' 기준).
