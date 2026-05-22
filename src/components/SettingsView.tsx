@@ -51,10 +51,8 @@ export function SettingsView() {
   const reconcile = useReconcileSignalProjects();
   const { pushSuccess } = useToastStore();
 
-  // 기본 카테고리: add_project intent면 projects, 아니면 첫 번째.
-  const [category, setCategory] = useState<SettingsCategory>(
-    settingsIntent === "add_project" ? "projects" : "projects",
-  );
+  // 기본 카테고리: Projects(첫 번째). add_project intent는 폼 autoFocus로 처리(아래).
+  const [category, setCategory] = useState<SettingsCategory>("projects");
 
   const list = projects.data ?? [];
 
