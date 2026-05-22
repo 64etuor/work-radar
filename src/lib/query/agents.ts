@@ -1,0 +1,202 @@
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { unwrap } from "./client";
+import {
+  commands,
+  type CiTriageProposal,
+  type EnrichProposal,
+  type PrSelfCheckProposal,
+  type TriageOutcome,
+  type TriggerCiTriageInput,
+  type TriggerCodexInput,
+  type TriggerEchoInput,
+  type TriggerEnrichInput,
+  type TriggerPrSelfCheckInput,
+} from "@/bindings";
+
+/** Jobs 뷰 폴링 주기 — 실행 중 잡 상태 전이를 따라잡되 과한 부하 없이. */
+export const JOBS_POLL_MS = 2_000;
+
+/** codex 설치/인증 상태 (자동화 UI 활성/비활성 판정). */
+export function useCodexStatus() {
+  return useQuery({
+    queryKey: ["codexStatus"],
+    queryFn: () => unwrap(commands.codexStatus()),
+    staleTime: 60_000,
+  });
+}
+
+/** 최근 잡 목록. 실행 중인 잡이 있으면 짧은 주기로 폴링해 상태/cost를 갱신한다. */
+export function useAgentRuns() {
+  return useQuery({
+    queryKey: ["agentRuns"],
+    queryFn: () => unwrap(commands.listAgentRuns()),
+    refetchInterval: (q) => {
+      const runs = q.state.data ?? [];
+      const active = runs.some(
+        (r) => r.status === "running" || r.status === "proposed",
+      );
+      return active ? JOBS_POLL_MS : false;
+    },
+  });
+}
+
+/** echo 테스트 잡 트리거(codex 없이 bound/kill/로그 검증). */
+export function useTriggerEchoJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerEchoInput) =>
+      unwrap(commands.triggerEchoJob(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** codex 잡 트리거(read_only 샌드박스). 미설치/미인증이면 백엔드가 Err로 막는다. */
+export function useTriggerCodexJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerCodexInput) =>
+      unwrap(commands.triggerCodexJob(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** 잡 kill switch. */
+export function useKillAgentRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => unwrap(commands.killAgentRun(runId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** 잡 로그 tail(최대 16KB). 펼친 잡에 대해서만 enabled. */
+export function useAgentLog(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["agentLog", runId],
+    queryFn: () => unwrap(commands.readAgentLog(runId as string)),
+    enabled: !!runId && ready,
+    refetchInterval: ready ? JOBS_POLL_MS : false,
+  });
+}
+
+// ── Phase 8: PR self-check 자동 초안 (제안 레일 + Acceptance 게이트) ──────────────────
+//
+// 트리거(PR Radar 카드)→codex 잡(read_only·worktree)→Proposal(awaiting_approval)→사람 accept(로컬 반영).
+// accept 전 GitHub 무변경(INVARIANT #2). 제출은 사람 수동.
+
+/** PR self-check 초안 잡 트리거(PR Radar 카드). 성공 시 잡 목록 갱신. */
+export function useTriggerPrSelfcheck() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerPrSelfCheckInput) =>
+      unwrap(commands.triggerPrSelfcheck(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** awaiting_approval 잡의 Proposal(타입 파싱). 펼친 잡에 대해서만 enabled. */
+export function usePrProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["prProposal", runId],
+    queryFn: () => unwrap(commands.prProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false, // 파싱 실패(raw)는 즉시 노출(재시도 무의미).
+  });
+}
+
+/** Proposal accept(INVARIANT #2 게이트) — 편집한 self-check/설명을 로컬에 반영하고 잡 succeeded. */
+export function useAcceptProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: PrSelfCheckProposal }) =>
+      unwrap(commands.acceptProposal(runId, accepted)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["prRadar"] }); // 로컬 self-check 표시 반영.
+    },
+  });
+}
+
+/** Proposal reject(폐기) — 잡 cancelled. */
+export function useRejectProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => unwrap(commands.rejectProposal(runId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage) ───────────────
+//
+// 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴). codex 잡(awaiting_approval)→Proposal→
+// 사람 accept(로컬 반영). accept 전·후 외부(Notion/GitHub) 무변경(INVARIANT #2). enrich는 quadrant를
+// 자동 확정하지 않는다(INVARIANT #1 — suggested 힌트만).
+
+/** braindump enrich 잡 트리거(미분류 카드 ⋯). 성공 시 잡 목록 갱신. */
+export function useTriggerEnrich() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerEnrichInput) => unwrap(commands.triggerEnrich(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** awaiting_approval enrich 잡의 Proposal(타입 파싱). 펼친 잡에 대해서만 enabled. */
+export function useEnrichProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["enrichProposal", runId],
+    queryFn: () => unwrap(commands.enrichProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false, // 파싱 실패(raw/세트 밖)는 즉시 노출.
+  });
+}
+
+/** enrich accept(INVARIANT #1/#2 게이트) — 신호에 suggested 힌트 반영(quadrant 자동 확정 없음). */
+export function useAcceptEnrich() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: EnrichProposal }) =>
+      unwrap(commands.acceptEnrich(runId, accepted)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // suggested 힌트 칩 반영.
+    },
+  });
+}
+
+/** CI triage 잡 트리거(PR Radar CI Blocked 카드). 캡 초과면 Q1 escalate(escalated=true, run_id 없음). */
+export function useTriggerCiTriage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerCiTriageInput): Promise<TriageOutcome> =>
+      unwrap(commands.triggerCiTriage(input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // escalate 시 Q1 신호 반영.
+    },
+  });
+}
+
+/** awaiting_approval CI triage 잡의 Proposal(타입 파싱). */
+export function useTriageProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["triageProposal", runId],
+    queryFn: () => unwrap(commands.triageProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false,
+  });
+}
+
+/** CI triage accept(INVARIANT #2 게이트) — 로컬 기록만(외부 무변경). */
+export function useAcceptTriage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: CiTriageProposal }) =>
+      unwrap(commands.acceptTriage(runId, accepted)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
