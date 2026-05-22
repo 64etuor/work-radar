@@ -19,6 +19,12 @@
 
 도메인 enum(`NotionError` 등)은 내부 분류 로직으로 **유지**한다. 커맨드 경계에서 `?`로만 `AppError`에 접힌다(변환 표는 정본 스펙 §3.2). 변환을 추가하면 `error.rs`에 `From` + 단위테스트를 같이 둔다.
 
+### 커맨드 변환 idiom (수렴 규칙)
+
+- **From이 있는 에러(도메인/sqlx/keyring/reqwest/io)**: `?`로 승격. 분류(transient/terminal/...)가 보존되므로 `.map_err(|e| e.to_string())`로 절대 납작화하지 말 것. 본문이 그 한 식이면 `Ok(expr?)`.
+- **From이 없는 String 헬퍼/serde 등**: 의미에 맞는 생성자로 명시 — 검증 `AppError::validation`, 없음 `AppError::not_found`, 내부버그(serde 직렬화 등) `AppError::unexpected`, 그 외 `AppError::terminal`. `code`는 `"<모듈>.<사유>"`.
+- 같은 연산은 같은 `code`+같은 `kind`로 통일(예: `agents.new_run_id`는 항상 `unexpected`).
+
 ## Do / Don't
 
 - ✅ 커맨드는 `Result<T, AppError>`. 내부 함수는 `?`로 승격.

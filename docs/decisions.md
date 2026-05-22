@@ -260,4 +260,10 @@
 - **로깅 = `tracing` 생태계.** 커스텀 `AppLogger`/수기 회전 제거 → `tracing-subscriber` 3레이어: errors.log(WARN+)·app.log(INFO+)·stdout(EnvFilter/RUST_LOG, 기본 warn). `tracing-appender` 일별 회전 + `max_log_files(7)`로 bound(무한 증가 방지). `thiserror` 채택(도메인 enum boilerplate). 백엔드가 직접 로그(이전엔 프런트만 로그하던 갭 해소).
 - **trace_id 단일 백엔드 싱크.** Rust `gen_trace_id`(base32 8자)가 프런트 `genTraceId`와 동일 사양(알파벳·길이·`b%32`). 백엔드-originated 에러는 백엔드가 생성·로그 → 프런트는 그 id로 토스트만(재로깅 금지는 Stage 3에서 toast.ts 강제). 동일 이벤트는 레벨에 따라 errors.log/app.log **양쪽 파일**에 기록(app.log=상위집합) — "단일 로그"는 단일 호출 지점이지 단일 파일 아님.
 - **`app_log_path` → `app_log_dir`(디렉터리 반환).** 일별 회전으로 단일 파일명이 없어 디렉터리를 노출(설정 "로그 폴더 열기"용). 현재 프런트 소비자 없음 → 무손상 deviation.
-- **Stage 2 follow-up(보안 추적).** 외부 에러 응답 본문 snippet(≤300자, `classify_http`)이 `From` 변환으로 `AppError.message`→errors.log에 흘러들 수 있음. 자격증명은 아니나 사용자 콘텐츠 가능 → Stage 2 도메인 전환 시 logged message에서 본문 snippet 제거/스크럽(스펙 §5.5). owner: 에러처리 Stage 2.
+- **Stage 2 follow-up(보안 추적).** 외부 에러 응답 본문 snippet(≤300자, `classify_http`)이 `From` 변환으로 `AppError.message`→errors.log에 흘러들 수 있음. 자격증명은 아니나 사용자 콘텐츠 가능 → 도메인 전환 시 logged message에서 본문 snippet 제거/스크럽(스펙 §5.5). owner: 에러처리 후속.
+
+## 에러 처리 Stage 2 — 커맨드 전면 AppError 전환 (2026-05-22, dev)
+
+- **103개 `#[tauri::command]` 반환 `Result<_,String>` → `Result<_,AppError>` 전면 전환.** 17개 commands/*.rs. 도메인/sqlx/keyring/reqwest/io 에러는 `?`(From, 분류 보존), ad-hoc 문자열은 validation/not_found/terminal로 분류(`code="<모듈>.<사유>"`). 내부 헬퍼(fetch_*/insert_* 등)는 도메인/sqlx 에러 유지(스펙 §4). 4개 파일그룹을 같은 워크트리·편집전용 병렬 에이전트로 처리(worktree isolation 미사용 — 오염 회피), 통합/검증/커밋은 직렬. 검증: cargo test 196 green, clippy clean, typecheck clean, critic ACCEPT-with-nits(분류손실 0, 토큰/PII 누출 0).
+- **프런트 shim(최소).** `client.ts` `unwrap`이 `AppError`를 받아 `throw new Error(res.error.message)` — 기존 동작 보존. traceId/retryable/action 기반 풍부한 surfacing + React ErrorBoundary는 Stage 3. `bindings.ts`는 cargo test가 재생성(AppError/ErrorKind 타입 등장).
+- **백로그 follow-up(INVARIANT #5 갭, Stage 2 비-회귀).** `pr_radar.rs::sync_pr_radar`는 레포별 `GithubError`를 String으로 합쳐 반환 → command가 `terminal`로 접음. 단일 레포 transient(429/5xx) 분류가 helper 단계에서 손실(Stage 1 이전부터 존재, 이 diff 미변경). 프런트 react-query `retry:2`로 일부 완화되나, sync_pr_radar를 typed 에러로 바꿔 transient 보존 권장. owner: 에러처리 후속.
