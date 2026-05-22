@@ -143,9 +143,9 @@ export function GoogleCalendarBlock({
 
       <div className="st-hint">
         Google Cloud Console에서 <b>Desktop</b> OAuth client를 만들어 client_id/secret을
-        입력하세요. 이벤트 생성을 위해 <code>calendar.events</code>(읽기+쓰기) 범위를 씁니다 —
-        기존에 읽기 전용으로 연결했다면 <b>"다시 연결"</b>로 쓰기 권한을 재동의하세요. 보통
-        "테스트 사용자"로 동의 가능(앱 게시/검증 불요).
+        입력하세요. 캘린더 목록·이벤트 생성을 위해 <code>calendar</code>(전체 읽기+쓰기) 범위를
+        씁니다 — 기존 <code>calendar.events</code> 또는 읽기 전용으로 연결했다면{" "}
+        <b>"다시 연결"</b>로 재동의하세요. 보통 "테스트 사용자"로 동의 가능(앱 게시/검증 불요).
       </div>
 
       {startOauth.isPending && (
@@ -222,9 +222,17 @@ function CalendarPicker({
     <div className="st-cal">
       <div className="st-subhead">포함할 캘린더</div>
       {calendars.isLoading && <div className="st-empty">불러오는 중…</div>}
-      {calendars.isError && (
-        <div className="st-err">{String(calendars.error)}</div>
-      )}
+      {calendars.isError && (() => {
+        const msg = String(calendars.error);
+        const isReconnect = msg.includes("재연결 필요");
+        return (
+          <div className="st-err">
+            {isReconnect
+              ? "재연결 필요 — Google Calendar를 다시 연결하세요"
+              : msg}
+          </div>
+        );
+      })()}
       {calendars.data && calendars.data.length === 0 && (
         <div className="st-empty">캘린더가 없습니다.</div>
       )}

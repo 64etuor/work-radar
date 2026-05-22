@@ -1,8 +1,9 @@
 //! Google Calendar 연동 클라이언트 (read 레일 Phase 10 + write/이벤트 생성 Phase 19).
 //! INVARIANT: 외부 호출은 Rust(reqwest)에, 자격증명(client_id/secret/refresh_token)은 keychain blob에서만
 //! 읽혀 Rust 안에서만 쓰인다(렌더러 미노출).
-//! 스코프는 `calendar.events`(read+write) — Phase 19에서 이벤트 생성(write)을 추가하며 readonly에서 승격.
-//! 기존 readonly 토큰은 events 스코프 동의가 없어 write 시 거부됨 → 재동의(다시 연결)로 갱신.
+//! 스코프는 `calendar`(full read+write, calendarList + events 모두 커버).
+//! 기존 `calendar.events` 또는 `calendar.readonly` 토큰은 이 스코프 동의가 없어 calendarList.list 시
+//! 403이 발생함 → 재동의(다시 연결)로 갱신. 재연결 신호는 `CalendarError::ReconnectRequired`로 노출.
 //! write는 **사용자 폼 제출 = 사람 결정**이라 Acceptance 게이트 불요(게이트는 자동화/Codex의 외부 mutate
 //! 차단용 — INVARIANT #2). 외부 호출은 bounded retry + graceful terminal failure.
 //!
@@ -35,10 +36,10 @@ pub const LOOPBACK_TIMEOUT: Duration = Duration::from_secs(180);
 
 const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
-/// read+write 스코프 (Phase 19). 이벤트 생성(POST)을 포함하므로 readonly에서 events로 승격.
-/// 기존 readonly 토큰은 이 스코프 동의가 없어 write 거부됨 → 재동의(다시 연결) 필요.
+/// full read+write 스코프 (calendarList + events 모두 커버). 기존 `calendar.events` 또는
+/// `calendar.readonly` 토큰은 calendarList.list를 허용하지 않아 403이 발생하므로 재연결 필요.
 /// write는 사용자 폼 제출(사람 결정)이라 Acceptance 게이트 불요 — 게이트는 자동화의 외부 mutate 차단용(#2).
-const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
+const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
 const CALENDAR_LIST_URL: &str = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
 const CALENDAR_API_BASE: &str = "https://www.googleapis.com/calendar/v3/calendars";
 /// events 조회 상한(bounded — 무한 페이지네이션 금지). 오늘 윈도우라 단발로 충분.
@@ -54,10 +55,12 @@ const WAIT_HTML: &str =
 
 /// 외부 호출 실패 분류. Transient = 재시도 대상(네트워크·429·5xx),
 /// Terminal = 재시도 무의미(인증/권한/검증 등 4xx, 디코드 실패).
+/// ReconnectRequired = 스코프 불일치로 재연결이 필요한 경우(calendarList 403).
 #[derive(Debug, Clone)]
 pub enum CalendarError {
     Transient(String),
     Terminal(String),
+    ReconnectRequired(String),
 }
 
 impl std::fmt::Display for CalendarError {
@@ -65,6 +68,7 @@ impl std::fmt::Display for CalendarError {
         match self {
             CalendarError::Transient(m) => write!(f, "{m}"),
             CalendarError::Terminal(m) => write!(f, "{m}"),
+            CalendarError::ReconnectRequired(m) => write!(f, "{m}"),
         }
     }
 }
@@ -115,6 +119,9 @@ where
         match op(attempt).await {
             Ok(v) => return Ok(v),
             Err(CalendarError::Terminal(m)) => return Err(CalendarError::Terminal(m)),
+            Err(CalendarError::ReconnectRequired(m)) => {
+                return Err(CalendarError::ReconnectRequired(m))
+            }
             Err(CalendarError::Transient(m)) => {
                 attempt += 1;
                 if attempt >= max_attempts {
@@ -763,7 +770,17 @@ impl CalendarProvider for HttpCalendarProvider {
         let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
             self.get_json(CALENDAR_LIST_URL, access_token, &no_query)
         })
-        .await?;
+        .await
+        .map_err(|e| match &e {
+            // 403 on calendarList = 스코프 불일치 (기존 calendar.events/readonly 토큰).
+            // 재연결이 필요하므로 Terminal 대신 ReconnectRequired로 승격.
+            CalendarError::Terminal(m) if m.contains("HTTP 403") => {
+                CalendarError::ReconnectRequired(
+                    "재연결 필요 — Google Calendar를 다시 연결하세요".to_string(),
+                )
+            }
+            _ => e,
+        })?;
         Ok(parse_calendar_list(&json))
     }
 
