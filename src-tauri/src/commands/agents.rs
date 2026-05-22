@@ -6,6 +6,7 @@ use crate::commands::skills::{
     resolve_prompt, BINDING_BATCH_ENRICH, BINDING_CI_TRIAGE, BINDING_ENRICH, BINDING_PR_SELFCHECK,
 };
 use crate::db::Db;
+use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider};
 use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
 use crate::keychain;
@@ -34,7 +35,7 @@ async fn new_run_id(db: &Db) -> Result<String, String> {
 /// codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정).
 #[tauri::command]
 #[specta::specta]
-pub async fn codex_status(jm: State<'_, JobManager>) -> Result<CodexAvailability, String> {
+pub async fn codex_status(jm: State<'_, JobManager>) -> Result<CodexAvailability, AppError> {
     Ok(codex_availability(jm.codex_bin.as_deref()).await)
 }
 
@@ -45,8 +46,10 @@ pub async fn trigger_echo_job(
     db: State<'_, Db>,
     jm: State<'_, JobManager>,
     input: TriggerEchoInput,
-) -> Result<String, String> {
-    let id = new_run_id(db.inner()).await?;
+) -> Result<String, AppError> {
+    let id = new_run_id(db.inner())
+        .await
+        .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
         timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
         max_turns: 1,
@@ -70,8 +73,7 @@ pub async fn trigger_echo_job(
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     jm.spawn(
         db.inner().clone(),
@@ -93,18 +95,24 @@ pub async fn trigger_codex_job(
     db: State<'_, Db>,
     jm: State<'_, JobManager>,
     input: TriggerCodexInput,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let prompt = input.prompt.trim();
     if prompt.is_empty() {
-        return Err("프롬프트가 비었습니다.".into());
+        return Err(AppError::validation(
+            "agents.prompt_empty",
+            "프롬프트가 비었습니다.",
+        ));
     }
     // graceful degrade: codex 미설치/미인증이면 잡을 만들지 않는다.
     let Some(codex_bin) = jm.codex_bin.clone() else {
-        return Err("codex CLI를 찾을 수 없습니다 — 설치 후 재시작하세요.".into());
+        return Err(AppError::terminal(
+            "agents.codex_not_found",
+            "codex CLI를 찾을 수 없습니다 — 설치 후 재시작하세요.",
+        ));
     };
     let avail = codex_availability(Some(&codex_bin)).await;
     if !avail.authed {
-        return Err(avail.detail);
+        return Err(AppError::terminal("agents.codex_unauthed", avail.detail));
     }
 
     // 코드 잡이면 repo.local_path 해석(worktree 베이스).
@@ -114,17 +122,23 @@ pub async fn trigger_codex_job(
             sqlx::query_as("SELECT local_path FROM repos WHERE id = ? AND enabled = 1")
                 .bind(repo_id)
                 .fetch_optional(db.inner())
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
         match row {
             Some((Some(p),)) if !p.trim().is_empty() => {
                 repo_path = Some(std::path::PathBuf::from(p))
             }
-            _ => return Err("레포의 local_path가 없습니다(코드 잡은 로컬 경로 필요).".into()),
+            _ => {
+                return Err(AppError::validation(
+                    "agents.repo_no_local_path",
+                    "레포의 local_path가 없습니다(코드 잡은 로컬 경로 필요).",
+                ))
+            }
         }
     }
 
-    let id = new_run_id(db.inner()).await?;
+    let id = new_run_id(db.inner())
+        .await
+        .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
         timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
         max_turns: input.max_turns.max(1),
@@ -152,8 +166,7 @@ pub async fn trigger_codex_job(
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     jm.spawn(
         db.inner().clone(),
@@ -182,26 +195,22 @@ pub async fn trigger_codex_job(
 /// Jobs 뷰 — 최근 잡 목록(영속된 agent_runs에서).
 #[tauri::command]
 #[specta::specta]
-pub async fn list_agent_runs(db: State<'_, Db>) -> Result<Vec<AgentRunView>, String> {
-    fetch_agent_runs(db.inner())
-        .await
-        .map_err(|e| e.to_string())
+pub async fn list_agent_runs(db: State<'_, Db>) -> Result<Vec<AgentRunView>, AppError> {
+    Ok(fetch_agent_runs(db.inner()).await?)
 }
 
 /// 잡 kill switch. 실행/대기 중이면 취소(true), 이미 끝났으면 false.
 #[tauri::command]
 #[specta::specta]
-pub async fn kill_agent_run(jm: State<'_, JobManager>, run_id: String) -> Result<bool, String> {
+pub async fn kill_agent_run(jm: State<'_, JobManager>, run_id: String) -> Result<bool, AppError> {
     Ok(jm.kill(&run_id))
 }
 
 /// 잡 로그 tail(최대 16KB) — Jobs 뷰 로그 패널.
 #[tauri::command]
 #[specta::specta]
-pub async fn read_agent_log(db: State<'_, Db>, run_id: String) -> Result<String, String> {
-    fetch_log_tail(db.inner(), &run_id)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn read_agent_log(db: State<'_, Db>, run_id: String) -> Result<String, AppError> {
+    Ok(fetch_log_tail(db.inner(), &run_id).await?)
 }
 
 // ── PR self-check 자동 초안 (Phase 8, 제안 레일 첫 자동화) ──────────────────────────
@@ -293,14 +302,17 @@ pub async fn trigger_pr_selfcheck(
     db: State<'_, Db>,
     jm: State<'_, JobManager>,
     input: TriggerPrSelfCheckInput,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     // graceful degrade: codex 미설치/미인증이면 잡을 만들지 않는다.
     let Some(codex_bin) = jm.codex_bin.clone() else {
-        return Err("codex CLI를 찾을 수 없습니다 — 설치 후 재시작하세요.".into());
+        return Err(AppError::terminal(
+            "agents.codex_not_found",
+            "codex CLI를 찾을 수 없습니다 — 설치 후 재시작하세요.",
+        ));
     };
     let avail = codex_availability(Some(&codex_bin)).await;
     if !avail.authed {
-        return Err(avail.detail);
+        return Err(AppError::terminal("agents.codex_unauthed", avail.detail));
     }
 
     let (repo_id, local_path, project_id, gh_token) = resolve_selfcheck_repo(
@@ -308,16 +320,18 @@ pub async fn trigger_pr_selfcheck(
         input.project_id.as_deref(),
         &input.repo_full_name,
     )
-    .await?;
+    .await
+    .map_err(|e| AppError::terminal("agents.selfcheck_repo", e))?;
 
     // PR diff fetch(read 레일, bounded retry). 트리거 시점에 받아 실패를 즉시 노출한다(삼키지 않음).
-    let provider = HttpPrProvider::new(&gh_token).map_err(|e| e.to_string())?;
+    let provider = HttpPrProvider::new(&gh_token)?;
     let diff = provider
         .fetch_pr_diff(&input.repo_full_name, input.pr_number as u64)
-        .await
-        .map_err(|e| format!("PR diff 가져오기 실패: {e}"))?;
+        .await?;
 
-    let id = new_run_id(db.inner()).await?;
+    let id = new_run_id(db.inner())
+        .await
+        .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
         timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
         max_turns: input.max_turns.max(1),
@@ -348,8 +362,7 @@ pub async fn trigger_pr_selfcheck(
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     // 스킬 레지스트리 lookup(편집된 프롬프트) + 코드 상수 폴백(#21). *제안 내용*만 바뀐다 —
     // 잡은 여전히 gated(awaiting_approval)이고 accept는 로컬 기록만(#1/#2 구조적 불변).
@@ -385,18 +398,22 @@ pub async fn trigger_pr_selfcheck(
 pub async fn pr_proposal(
     db: State<'_, Db>,
     run_id: String,
-) -> Result<crate::models::PrSelfCheckProposal, String> {
+) -> Result<crate::models::PrSelfCheckProposal, AppError> {
     let row: Option<(Option<String>,)> =
         sqlx::query_as("SELECT proposal FROM agent_runs WHERE id = ?1")
             .bind(&run_id)
             .fetch_optional(db.inner())
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     let raw = row
-        .ok_or("잡을 찾을 수 없음")?
+        .ok_or_else(|| AppError::not_found("agents.job_not_found", "잡을 찾을 수 없음"))?
         .0
-        .ok_or("아직 proposal이 없습니다(잡이 끝나지 않았거나 산출물 없음).")?;
-    parse_pr_proposal(&raw)
+        .ok_or_else(|| {
+            AppError::not_found(
+                "agents.proposal_not_ready",
+                "아직 proposal이 없습니다(잡이 끝나지 않았거나 산출물 없음).",
+            )
+        })?;
+    parse_pr_proposal(&raw).map_err(|e| AppError::terminal("agents.proposal_parse", e))
 }
 
 /// proposal JSON → 타입. raw fallback(`{"raw":...}`)이면 codex 출력이 형식과 달랐다는 뜻이라 Err로 노출.
@@ -467,28 +484,31 @@ pub async fn accept_proposal(
     db: State<'_, Db>,
     run_id: String,
     accepted: crate::models::PrSelfCheckProposal,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     // 상태 가드: awaiting_approval만 accept 가능(이미 처리/실행 중이면 거부).
     let row: Option<(String, Option<String>)> =
         sqlx::query_as("SELECT status, trigger FROM agent_runs WHERE id = ?1")
             .bind(&run_id)
             .fetch_optional(db.inner())
-            .await
-            .map_err(|e| e.to_string())?;
-    let (status, trigger) = row.ok_or("잡을 찾을 수 없음")?;
+            .await?;
+    let (status, trigger) =
+        row.ok_or_else(|| AppError::not_found("agents.job_not_found", "잡을 찾을 수 없음"))?;
     if status != "awaiting_approval" {
-        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
+        return Err(AppError::validation(
+            "agents.accept_wrong_status",
+            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
+        ));
     }
-    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
-    execute_accept(db.inner(), &run_id, &accepted_json, trigger.as_deref())
-        .await
-        .map_err(|e| e.to_string())
+    let accepted_json = serde_json::to_string(&accepted)
+        .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
+    execute_accept(db.inner(), &run_id, &accepted_json, trigger.as_deref()).await?;
+    Ok(())
 }
 
 /// Proposal reject(폐기). awaiting_approval 잡을 cancelled로 마감한다(acceptances 기록 없음, 외부 무변경).
 #[tauri::command]
 #[specta::specta]
-pub async fn reject_proposal(db: State<'_, Db>, run_id: String) -> Result<(), String> {
+pub async fn reject_proposal(db: State<'_, Db>, run_id: String) -> Result<(), AppError> {
     let res = sqlx::query(
         "UPDATE agent_runs SET status = 'cancelled', \
             result = json_object('error', '사용자가 제안을 폐기(reject)함'), \
@@ -497,10 +517,12 @@ pub async fn reject_proposal(db: State<'_, Db>, run_id: String) -> Result<(), St
     )
     .bind(&run_id)
     .execute(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     if res.rows_affected() == 0 {
-        return Err("reject 가능한 상태가 아닙니다(awaiting_approval 아님).".into());
+        return Err(AppError::validation(
+            "agents.reject_wrong_status",
+            "reject 가능한 상태가 아닙니다(awaiting_approval 아님).",
+        ));
     }
     Ok(())
 }
@@ -620,23 +642,27 @@ pub async fn trigger_enrich(
     db: State<'_, Db>,
     jm: State<'_, JobManager>,
     input: TriggerEnrichInput,
-) -> Result<String, String> {
-    let codex_bin = require_codex(&jm).await?;
+) -> Result<String, AppError> {
+    let codex_bin = require_codex(&jm)
+        .await
+        .map_err(|e| AppError::terminal("agents.codex_unavailable", e))?;
 
     // 카드 본문 로드(제목+본문). codex 입력 파일로 넘긴다(인젝션 없음).
     let row: Option<(String, Option<String>, Option<String>)> =
         sqlx::query_as("SELECT title, body, project_id FROM signals WHERE id = ?1")
             .bind(&input.signal_id)
             .fetch_optional(db.inner())
-            .await
-            .map_err(|e| e.to_string())?;
-    let (title, body, project_id) = row.ok_or("신호를 찾을 수 없음")?;
+            .await?;
+    let (title, body, project_id) =
+        row.ok_or_else(|| AppError::not_found("agents.signal_not_found", "신호를 찾을 수 없음"))?;
     let card_text = match body.filter(|b| !b.trim().is_empty()) {
         Some(b) => format!("{title}\n\n{b}"),
         None => title,
     };
 
-    let id = new_run_id(db.inner()).await?;
+    let id = new_run_id(db.inner())
+        .await
+        .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
         timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
         max_turns: input.max_turns.max(1),
@@ -661,8 +687,7 @@ pub async fn trigger_enrich(
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
     let prompt = resolve_prompt(db.inner(), BINDING_ENRICH, ENRICH_PROMPT).await;
@@ -693,9 +718,15 @@ pub async fn trigger_enrich(
 /// enrich Proposal(타입 파싱). raw/세트 밖 값이면 Err(조용한 빈 proposal 금지 + 닫힌 세트 강제).
 #[tauri::command]
 #[specta::specta]
-pub async fn enrich_proposal(db: State<'_, Db>, run_id: String) -> Result<EnrichProposal, String> {
-    let raw = run_proposal_raw(db.inner(), &run_id).await?;
+pub async fn enrich_proposal(
+    db: State<'_, Db>,
+    run_id: String,
+) -> Result<EnrichProposal, AppError> {
+    let raw = run_proposal_raw(db.inner(), &run_id)
+        .await
+        .map_err(|e| AppError::not_found("agents.proposal_not_ready", e))?;
     parse_proposal::<EnrichProposal>(&raw)
+        .map_err(|e| AppError::terminal("agents.proposal_parse", e))
 }
 
 /// enrich accept 코어(테스트 가능). 신호에 suggested_quadrant/suggested_area/suggestion_reason을
@@ -731,17 +762,25 @@ pub async fn accept_enrich(
     db: State<'_, Db>,
     run_id: String,
     accepted: EnrichProposal,
-) -> Result<WorkSignal, String> {
-    let (status, trigger) = run_status_trigger(db.inner(), &run_id).await?;
-    if status != "awaiting_approval" {
-        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
-    }
-    let signal_id =
-        trigger_field(trigger.as_deref(), "signalId").ok_or("잡 트리거에 signalId가 없음")?;
-    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
-    execute_accept_enrich(db.inner(), &run_id, &signal_id, &accepted, &accepted_json)
+) -> Result<WorkSignal, AppError> {
+    let (status, trigger) = run_status_trigger(db.inner(), &run_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::not_found("agents.job_not_found", e))?;
+    if status != "awaiting_approval" {
+        return Err(AppError::validation(
+            "agents.accept_wrong_status",
+            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
+        ));
+    }
+    let signal_id = trigger_field(trigger.as_deref(), "signalId").ok_or_else(|| {
+        AppError::terminal(
+            "agents.trigger_missing_signal_id",
+            "잡 트리거에 signalId가 없음",
+        )
+    })?;
+    let accepted_json = serde_json::to_string(&accepted)
+        .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
+    Ok(execute_accept_enrich(db.inner(), &run_id, &signal_id, &accepted, &accepted_json).await?)
 }
 
 /// 라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관). enrich 제안을 사람이
@@ -752,16 +791,15 @@ pub async fn set_signal_area(
     db: State<'_, Db>,
     id: String,
     area: Option<AreaTag>,
-) -> Result<WorkSignal, String> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
+) -> Result<WorkSignal, AppError> {
+    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
         "UPDATE signals SET area = ?2, updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(&id)
     .bind(area)
     .fetch_one(db.inner())
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 // ── 배치 enrich (#4, 미분류 전체 일괄 제안 — 단일 codex 잡, 부분 실패 격리) ──────────────
@@ -825,14 +863,17 @@ pub async fn trigger_enrich_all(
     db: State<'_, Db>,
     jm: State<'_, JobManager>,
     input: TriggerEnrichAllInput,
-) -> Result<String, String> {
-    let codex_bin = require_codex(&jm).await?;
-
-    let cards = fetch_unclassified_for_enrich(db.inner(), input.project_id.as_deref())
+) -> Result<String, AppError> {
+    let codex_bin = require_codex(&jm)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::terminal("agents.codex_unavailable", e))?;
+
+    let cards = fetch_unclassified_for_enrich(db.inner(), input.project_id.as_deref()).await?;
     if cards.is_empty() {
-        return Err("미분류 카드가 없습니다.".into());
+        return Err(AppError::not_found(
+            "agents.no_unclassified_cards",
+            "미분류 카드가 없습니다.",
+        ));
     }
 
     // codex 입력 파일(인젝션 없음 — 카드는 데이터 파일로만 전달).
@@ -844,7 +885,9 @@ pub async fn trigger_enrich_all(
     )
     .to_string();
 
-    let id = new_run_id(db.inner()).await?;
+    let id = new_run_id(db.inner())
+        .await
+        .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
         timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
         max_turns: input.max_turns.max(1),
@@ -869,8 +912,7 @@ pub async fn trigger_enrich_all(
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
     let prompt = resolve_prompt(db.inner(), BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
@@ -950,23 +992,23 @@ fn build_batch_proposal(
 pub async fn batch_enrich_proposal(
     db: State<'_, Db>,
     run_id: String,
-) -> Result<BatchEnrichProposal, String> {
-    let raw = run_proposal_raw(db.inner(), &run_id).await?;
+) -> Result<BatchEnrichProposal, AppError> {
+    let raw = run_proposal_raw(db.inner(), &run_id)
+        .await
+        .map_err(|e| AppError::terminal("agents.proposal_unavailable", e))?;
     // 잡의 project_id 한정으로 현재 미분류 신호를 다시 모아 검증 기준으로 쓴다(잡 이후 변화 반영).
     let pid: Option<(Option<String>,)> =
         sqlx::query_as("SELECT project_id FROM agent_runs WHERE id = ?1")
             .bind(&run_id)
             .fetch_optional(db.inner())
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     let project_id = pid.and_then(|r| r.0);
     let valid: std::collections::HashMap<String, String> =
         fetch_unclassified_for_enrich(db.inner(), project_id.as_deref())
-            .await
-            .map_err(|e| e.to_string())?
+            .await?
             .into_iter()
             .collect();
-    build_batch_proposal(&raw, &valid)
+    build_batch_proposal(&raw, &valid).map_err(|e| AppError::terminal("agents.build_proposal", e))
 }
 
 /// 배치 enrich accept 코어(테스트 가능). items의 카드마다 suggested_* 힌트만 쓴다 — quadrant/area(확정값)는
@@ -1005,15 +1047,19 @@ pub async fn accept_enrich_all(
     db: State<'_, Db>,
     run_id: String,
     accepted: BatchEnrichProposal,
-) -> Result<u32, String> {
-    let (status, _trigger) = run_status_trigger(db.inner(), &run_id).await?;
-    if status != "awaiting_approval" {
-        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
-    }
-    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
-    execute_accept_enrich_all(db.inner(), &run_id, &accepted, &accepted_json)
+) -> Result<u32, AppError> {
+    let (status, _trigger) = run_status_trigger(db.inner(), &run_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::terminal("agents.run_status", e))?;
+    if status != "awaiting_approval" {
+        return Err(AppError::validation(
+            "agents.not_acceptable",
+            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
+        ));
+    }
+    let accepted_json = serde_json::to_string(&accepted)
+        .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
+    Ok(execute_accept_enrich_all(db.inner(), &run_id, &accepted, &accepted_json).await?)
 }
 
 // ── CI triage (#3, 재트리거 캡 + Q1 escalate) ───────────────────────────────────────
@@ -1091,14 +1137,14 @@ pub async fn trigger_ci_triage(
     db: State<'_, Db>,
     jm: State<'_, JobManager>,
     input: TriggerCiTriageInput,
-) -> Result<TriageOutcome, String> {
-    let codex_bin = require_codex(&jm).await?;
+) -> Result<TriageOutcome, AppError> {
+    let codex_bin = require_codex(&jm)
+        .await
+        .map_err(|e| AppError::terminal("agents.codex_unavailable", e))?;
 
     let retry_key = format!("triage:{}:{}", input.repo_full_name, input.pr_number);
     // 재트리거 캡: 초과면 잡 대신 Q1 escalate(사람).
-    let prior = count_triage_runs(db.inner(), &retry_key)
-        .await
-        .map_err(|e| e.to_string())?;
+    let prior = count_triage_runs(db.inner(), &retry_key).await?;
     if prior >= TRIAGE_RETRY_CAP {
         escalate_triage_to_q1(
             db.inner(),
@@ -1108,8 +1154,7 @@ pub async fn trigger_ci_triage(
             &input.pr_url,
             &retry_key,
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
         return Ok(TriageOutcome {
             run_id: None,
             escalated: true,
@@ -1124,16 +1169,19 @@ pub async fn trigger_ci_triage(
         input.project_id.as_deref(),
         &input.repo_full_name,
     )
-    .await?;
+    .await
+    .map_err(|e| AppError::terminal("agents.resolve_repo", e))?;
 
     // PR diff fetch(read 레일, bounded retry). 트리거 시점에 받아 실패를 즉시 노출한다.
-    let provider = HttpPrProvider::new(&gh_token).map_err(|e| e.to_string())?;
+    // GithubError의 transient/terminal 분류는 From<GithubError>로 보존된다.
+    let provider = HttpPrProvider::new(&gh_token)?;
     let diff = provider
         .fetch_pr_diff(&input.repo_full_name, input.pr_number as u64)
-        .await
-        .map_err(|e| format!("PR diff 가져오기 실패: {e}"))?;
+        .await?;
 
-    let id = new_run_id(db.inner()).await?;
+    let id = new_run_id(db.inner())
+        .await
+        .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
         timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
         max_turns: input.max_turns.max(1),
@@ -1164,8 +1212,7 @@ pub async fn trigger_ci_triage(
             log_path: jm.log_path(&id).to_string_lossy().into_owned(),
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
     let prompt = resolve_prompt(db.inner(), BINDING_CI_TRIAGE, CI_TRIAGE_PROMPT).await;
@@ -1203,9 +1250,12 @@ pub async fn trigger_ci_triage(
 pub async fn triage_proposal(
     db: State<'_, Db>,
     run_id: String,
-) -> Result<CiTriageProposal, String> {
-    let raw = run_proposal_raw(db.inner(), &run_id).await?;
+) -> Result<CiTriageProposal, AppError> {
+    let raw = run_proposal_raw(db.inner(), &run_id)
+        .await
+        .map_err(|e| AppError::terminal("agents.proposal_unavailable", e))?;
     parse_proposal::<CiTriageProposal>(&raw)
+        .map_err(|e| AppError::terminal("agents.parse_proposal", e))
 }
 
 /// CI triage Proposal accept(INVARIANT #2 게이트). 로컬 기록만(acceptances + 잡 succeeded) — 외부 무변경.
@@ -1216,15 +1266,19 @@ pub async fn accept_triage(
     db: State<'_, Db>,
     run_id: String,
     accepted: CiTriageProposal,
-) -> Result<(), String> {
-    let (status, _trigger) = run_status_trigger(db.inner(), &run_id).await?;
-    if status != "awaiting_approval" {
-        return Err(format!("accept 가능한 상태가 아닙니다(현재: {status})."));
-    }
-    let accepted_json = serde_json::to_string(&accepted).map_err(|e| e.to_string())?;
-    record_acceptance(db.inner(), &run_id, "triage_ci", &accepted_json)
+) -> Result<(), AppError> {
+    let (status, _trigger) = run_status_trigger(db.inner(), &run_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::terminal("agents.run_status", e))?;
+    if status != "awaiting_approval" {
+        return Err(AppError::validation(
+            "agents.not_acceptable",
+            format!("accept 가능한 상태가 아닙니다(현재: {status})."),
+        ));
+    }
+    let accepted_json = serde_json::to_string(&accepted)
+        .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
+    Ok(record_acceptance(db.inner(), &run_id, "triage_ci", &accepted_json).await?)
 }
 
 /// result JSON({detail|error})에서 사람이 읽을 상세를 뽑는다(jobs.rs detail_from_result 동일 로직).
@@ -1241,15 +1295,18 @@ fn detail_from_result_json(result: Option<&str>) -> Option<String> {
 /// terminal 상태(awaiting_approval/succeeded/failed/cancelled)에서 폴링을 멈춰도 된다.
 #[tauri::command]
 #[specta::specta]
-pub async fn agent_run_status(db: State<'_, Db>, run_id: String) -> Result<AgentRunStatus, String> {
+pub async fn agent_run_status(
+    db: State<'_, Db>,
+    run_id: String,
+) -> Result<AgentRunStatus, AppError> {
     let row: Option<(String, Option<String>, Option<String>)> =
         sqlx::query_as("SELECT status, result, proposal FROM agent_runs WHERE id = ?1")
             .bind(&run_id)
             .fetch_optional(db.inner())
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
-    let (status, result, proposal) = row.ok_or_else(|| "잡을 찾을 수 없음".to_string())?;
+    let (status, result, proposal) =
+        row.ok_or_else(|| AppError::not_found("agents.run_not_found", "잡을 찾을 수 없음"))?;
     let detail = detail_from_result_json(result.as_deref());
     Ok(AgentRunStatus {
         status,

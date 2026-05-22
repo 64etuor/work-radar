@@ -5,33 +5,29 @@ use tauri::State;
 
 use crate::commands::nav::{get_config, set_config};
 use crate::db::Db;
+use crate::error::AppError;
 
 const KEY_CODEX_MODEL: &str = "agent.codex_model";
 
 /// 저장된 Codex 모델 문자열(없으면 None → 기본 동작 유지).
 #[tauri::command]
 #[specta::specta]
-pub async fn get_codex_model(db: State<'_, Db>) -> Result<Option<String>, String> {
-    get_config(db.inner(), KEY_CODEX_MODEL)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn get_codex_model(db: State<'_, Db>) -> Result<Option<String>, AppError> {
+    Ok(get_config(db.inner(), KEY_CODEX_MODEL).await?)
 }
 
 /// Codex 모델 설정(또는 None으로 삭제 → 기본 동작 복원).
 /// None 또는 빈 문자열이면 저장 행을 삭제한다.
 #[tauri::command]
 #[specta::specta]
-pub async fn set_codex_model(db: State<'_, Db>, model: Option<String>) -> Result<(), String> {
+pub async fn set_codex_model(db: State<'_, Db>, model: Option<String>) -> Result<(), AppError> {
     match model.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        Some(m) => set_config(db.inner(), KEY_CODEX_MODEL, m)
-            .await
-            .map_err(|e| e.to_string()),
+        Some(m) => Ok(set_config(db.inner(), KEY_CODEX_MODEL, m).await?),
         None => {
             sqlx::query("DELETE FROM app_config WHERE key = ?1")
                 .bind(KEY_CODEX_MODEL)
                 .execute(db.inner())
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
             Ok(())
         }
     }

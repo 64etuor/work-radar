@@ -5,324 +5,324 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	/**  모든 프로젝트 목록. Phase 0에서는 빈 DB라 빈 배열을 반환한다. */
-	listProjects: () => typedError<Project[], string>(__TAURI_INVOKE("list_projects")),
-	createProject: (input: CreateProjectInput) => typedError<Project, string>(__TAURI_INVOKE("create_project", { input })),
-	listRepos: (projectId: string) => typedError<Repo[], string>(__TAURI_INVOKE("list_repos", { projectId })),
-	createRepo: (input: CreateRepoInput) => typedError<Repo, string>(__TAURI_INVOKE("create_repo", { input })),
+	listProjects: () => typedError<Project[], AppError>(__TAURI_INVOKE("list_projects")),
+	createProject: (input: CreateProjectInput) => typedError<Project, AppError>(__TAURI_INVOKE("create_project", { input })),
+	listRepos: (projectId: string) => typedError<Repo[], AppError>(__TAURI_INVOKE("list_repos", { projectId })),
+	createRepo: (input: CreateRepoInput) => typedError<Repo, AppError>(__TAURI_INVOKE("create_repo", { input })),
 	/**  토큰 저장. 토큰은 IPC 인자로만 들어와 즉시 keychain으로 가고, 반환되지 않는다. */
-	setProjectToken: (projectId: string, kind: TokenKind, token: string) => typedError<null, string>(__TAURI_INVOKE("set_project_token", { projectId, kind, token })),
+	setProjectToken: (projectId: string, kind: TokenKind, token: string) => typedError<null, AppError>(__TAURI_INVOKE("set_project_token", { projectId, kind, token })),
 	/**  토큰 삭제(클리어). */
-	deleteProjectToken: (projectId: string, kind: TokenKind) => typedError<null, string>(__TAURI_INVOKE("delete_project_token", { projectId, kind })),
+	deleteProjectToken: (projectId: string, kind: TokenKind) => typedError<null, AppError>(__TAURI_INVOKE("delete_project_token", { projectId, kind })),
 	/**  토큰 존재 여부만 (본문 미노출). UI 마스킹 표시용. */
-	projectTokenStatus: (projectId: string) => typedError<TokenStatus, string>(__TAURI_INVOKE("project_token_status", { projectId })),
+	projectTokenStatus: (projectId: string) => typedError<TokenStatus, AppError>(__TAURI_INVOKE("project_token_status", { projectId })),
 	/**  토큰으로 외부 API ping(read-only). 토큰은 keychain에서 읽어 Rust 안에서만 쓰인다. */
-	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, string>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
+	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
 	/**  gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
-	ghCliStatus: () => typedError<CliToolStatus, string>(__TAURI_INVOKE("gh_cli_status")),
+	ghCliStatus: () => typedError<CliToolStatus, AppError>(__TAURI_INVOKE("gh_cli_status")),
 	/**
 	 *  `gh auth token` → keychain(TokenKind::Github). 토큰 본문은 stdout→keychain으로만 흐르고
 	 *  IPC로 반환되지 않는다(INVARIANT). 미설치/미로그인/빈 토큰은 Err로 graceful 노출.
 	 */
-	importGithubToken: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("import_github_token", { projectId })),
+	importGithubToken: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("import_github_token", { projectId })),
 	/**
 	 *  `gh auth login --web` 런처(미로그인 시 인앱 버튼). 브라우저 동의 후 사용자가 '가져오기'를
 	 *  다시 누른다. 대화식 흐름이라 완료를 기다리지 않고 spawn만 한다(bounded: 즉시 반환).
 	 */
-	ghAuthLoginWeb: () => typedError<null, string>(__TAURI_INVOKE("gh_auth_login_web")),
+	ghAuthLoginWeb: () => typedError<null, AppError>(__TAURI_INVOKE("gh_auth_login_web")),
 	/**
 	 *  ntn CLI 가용성 + 로그인(토큰 import 가능) 상태. ntn은 토큰을 file-auth 위치
 	 *  (`~/.config/notion/api_key`)에 저장하므로 그 파일 존재로 import 가능 여부를 판정한다.
 	 *  (OS keychain 모드면 파일이 없을 수 있음 → 그 경우 붙여넣기 fallback.) 토큰 본문 미포함.
 	 */
-	ntnCliStatus: () => typedError<CliToolStatus, string>(__TAURI_INVOKE("ntn_cli_status")),
+	ntnCliStatus: () => typedError<CliToolStatus, AppError>(__TAURI_INVOKE("ntn_cli_status")),
 	/**
 	 *  ntn file-auth 토큰 → 라이브 검증(ping) → keychain(TokenKind::Notion). 토큰 본문은 절대
 	 *  IPC로 반환되지 않는다(INVARIANT). 파일 없음/검증 실패는 Err로 graceful 노출(붙여넣기 fallback 안내).
 	 */
-	importNotionToken: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("import_notion_token", { projectId })),
+	importNotionToken: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("import_notion_token", { projectId })),
 	/**  `ntn login` 런처(미로그인 시 인앱 버튼). 대화식이라 완료를 기다리지 않고 spawn만 한다. */
-	ntnLogin: () => typedError<null, string>(__TAURI_INVOKE("ntn_login")),
-	reconcileSignalProjects: () => typedError<number, string>(__TAURI_INVOKE("reconcile_signal_projects")),
+	ntnLogin: () => typedError<null, AppError>(__TAURI_INVOKE("ntn_login")),
+	reconcileSignalProjects: () => typedError<number, AppError>(__TAURI_INVOKE("reconcile_signal_projects")),
 	/**  신호의 소속 프로젝트를 명시 지정(또는 해제). 메타데이터. */
-	setSignalProject: (id: string, projectId: string | null) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_project", { id, projectId })),
-	createSignal: (input: CreateSignalInput) => typedError<WorkSignal, string>(__TAURI_INVOKE("create_signal", { input })),
-	listSignals: () => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_signals")),
-	classifySignal: (id: string, quadrant: Quadrant) => typedError<WorkSignal, string>(__TAURI_INVOKE("classify_signal", { id, quadrant })),
+	setSignalProject: (id: string, projectId: string | null) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_project", { id, projectId })),
+	createSignal: (input: CreateSignalInput) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("create_signal", { input })),
+	listSignals: () => typedError<WorkSignal[], AppError>(__TAURI_INVOKE("list_signals")),
+	classifySignal: (id: string, quadrant: Quadrant) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("classify_signal", { id, quadrant })),
 	/**  상태 변경 (완료/보관 등). done/archive 카드 메뉴. */
-	setSignalStatus: (id: string, status: SignalStatus) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_status", { id, status })),
+	setSignalStatus: (id: string, status: SignalStatus) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_status", { id, status })),
 	/**  미루기 (snooze). 매트릭스에서 숨고 snooze_until에 복귀 시점 기록. */
-	snoozeSignal: (id: string, until: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("snooze_signal", { id, until })),
+	snoozeSignal: (id: string, until: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("snooze_signal", { id, until })),
 	/**  본문/제목 전역 검색 (FTS5). 빈 쿼리는 빈 결과. */
-	searchSignals: (query: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("search_signals", { query })),
+	searchSignals: (query: string) => typedError<WorkSignal[], AppError>(__TAURI_INVOKE("search_signals", { query })),
 	/**  브레인덤프 카드 제목 인라인 편집. dedup 키를 새 제목으로 갱신한다(INVARIANT #3). */
-	updateSignalTitle: (id: string, title: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("update_signal_title", { id, title })),
+	updateSignalTitle: (id: string, title: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("update_signal_title", { id, title })),
 	/**  신호 하드 삭제(영구 — archive와 구분). 카드 행 자체를 DELETE한다(보관/스누즈와 달리 복원 불가). */
-	deleteSignal: (id: string) => typedError<null, string>(__TAURI_INVOKE("delete_signal", { id })),
-	promoteToday: (id: string, date: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("promote_today", { id, date })),
-	unpromoteToday: (id: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("unpromote_today", { id })),
+	deleteSignal: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_signal", { id })),
+	promoteToday: (id: string, date: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("promote_today", { id, date })),
+	unpromoteToday: (id: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("unpromote_today", { id })),
 	/**  Today 항목 완료 토글. 완료(done)=해당 날짜 기록 → 다음날 이월 안 됨. */
-	toggleTodayDone: (id: string, date: string, done: boolean) => typedError<WorkSignal, string>(__TAURI_INVOKE("toggle_today_done", { id, date, done })),
+	toggleTodayDone: (id: string, date: string, done: boolean) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("toggle_today_done", { id, date, done })),
 	/**  Today 레일 재정렬. ordered_ids 순서대로 today_rank 부여. */
-	reorderToday: (orderedIds: string[]) => typedError<null, string>(__TAURI_INVOKE("reorder_today", { orderedIds })),
-	listToday: (today: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_today", { today })),
+	reorderToday: (orderedIds: string[]) => typedError<null, AppError>(__TAURI_INVOKE("reorder_today", { orderedIds })),
+	listToday: (today: string) => typedError<WorkSignal[], AppError>(__TAURI_INVOKE("list_today", { today })),
 	/**
 	 *  Today 운영 뷰 집계 + 오늘 부채 스냅샷 기록. `date`는 프런트가 보내는 로컬 오늘.
 	 *  TodayView만 호출(항상 오늘) — 과거 날짜로 스냅샷이 오염되지 않는다.
 	 */
-	todayOverview: (date: string) => typedError<TodayOverview, string>(__TAURI_INVOKE("today_overview", { date })),
+	todayOverview: (date: string) => typedError<TodayOverview, AppError>(__TAURI_INVOKE("today_overview", { date })),
 	/**  지난 7일 주간 회고 집계. `end_date`=프런트가 보내는 로컬 오늘. */
-	weeklyReview: (endDate: string) => typedError<WeeklyReview, string>(__TAURI_INVOKE("weekly_review", { endDate })),
+	weeklyReview: (endDate: string) => typedError<WeeklyReview, AppError>(__TAURI_INVOKE("weekly_review", { endDate })),
 	/**  완료 todo 타임라인. `start`/`end`는 프런트가 보내는 로컬 날짜(YYYY-MM-DD) inclusive. */
-	listCompleted: (start: string, end: string) => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_completed", { start, end })),
-	setSignalImpact: (id: string, value: boolean) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_impact", { id, value })),
-	setSignalRegret: (id: string, value: boolean) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_regret", { id, value })),
-	listArchivedSnoozed: () => typedError<WorkSignal[], string>(__TAURI_INVOKE("list_archived_snoozed")),
-	restoreSignal: (id: string) => typedError<WorkSignal, string>(__TAURI_INVOKE("restore_signal", { id })),
-	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, string>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
+	listCompleted: (start: string, end: string) => typedError<WorkSignal[], AppError>(__TAURI_INVOKE("list_completed", { start, end })),
+	setSignalImpact: (id: string, value: boolean) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_impact", { id, value })),
+	setSignalRegret: (id: string, value: boolean) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_regret", { id, value })),
+	listArchivedSnoozed: () => typedError<WorkSignal[], AppError>(__TAURI_INVOKE("list_archived_snoozed")),
+	restoreSignal: (id: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("restore_signal", { id })),
+	createPromotionDraft: (signalId: string, target: PromotionTarget) => typedError<Promotion, AppError>(__TAURI_INVOKE("create_promotion_draft", { signalId, target })),
 	/**
 	 *  카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2).
 	 *  `project_id`: 프런트 picker에서 사람이 고른 프로젝트(Some) 또는 자동 해석 위임(None).
 	 *  자동 해석 결과는 outcome.resolved_project_id로 반환 — 프런트가 라벨을 표시한다(INVARIANT #1).
 	 */
-	promoteToNotion: (signalId: string, target: PromotionTarget, projectId: string | null) => typedError<PromotionOutcome, string>(__TAURI_INVOKE("promote_to_notion", { signalId, target, projectId })),
-	flushPromotions: () => typedError<FlushSummary, string>(__TAURI_INVOKE("flush_promotions")),
+	promoteToNotion: (signalId: string, target: PromotionTarget, projectId: string | null) => typedError<PromotionOutcome, AppError>(__TAURI_INVOKE("promote_to_notion", { signalId, target, projectId })),
+	flushPromotions: () => typedError<FlushSummary, AppError>(__TAURI_INVOKE("flush_promotions")),
 	/**  승격 이력(undo/audit). signal_id가 있으면 그 신호만, 없으면 전체(최신순). */
-	listPromotions: (signalId: string | null) => typedError<Promotion[], string>(__TAURI_INVOKE("list_promotions", { signalId })),
+	listPromotions: (signalId: string | null) => typedError<Promotion[], AppError>(__TAURI_INVOKE("list_promotions", { signalId })),
 	/**
 	 *  프로젝트의 Notion DB 연결을 테스트한다. token은 keychain에서 Rust 안에서만 읽고 반환하지 않는다.
 	 *  성공: DB title 속성명을 포함한 짧은 확인 메시지. 실패: 액션 가능 에러 메시지.
 	 */
-	testNotionConnection: (projectId: string, target: PromotionTarget) => typedError<string, string>(__TAURI_INVOKE("test_notion_connection", { projectId, target })),
-	createRoutine: (input: CreateRoutineInput) => typedError<RoutineToday, string>(__TAURI_INVOKE("create_routine", { input })),
+	testNotionConnection: (projectId: string, target: PromotionTarget) => typedError<string, AppError>(__TAURI_INVOKE("test_notion_connection", { projectId, target })),
+	createRoutine: (input: CreateRoutineInput) => typedError<RoutineToday, AppError>(__TAURI_INVOKE("create_routine", { input })),
 	/**  루틴 수정. 필드 업데이트 후 미발사 루틴 알림을 삭제(다음 list_today_routines에서 재enqueue). */
-	updateRoutine: (input: UpdateRoutineInput) => typedError<null, string>(__TAURI_INVOKE("update_routine", { input })),
+	updateRoutine: (input: UpdateRoutineInput) => typedError<null, AppError>(__TAURI_INVOKE("update_routine", { input })),
 	/**
 	 *  루틴 삭제. 트랜잭션: 미발사 알림 + routine_checks + routines 행 삭제.
 	 *  발사된 알림 행(히스토리)은 보존. 루틴 없으면 오류 반환.
 	 */
-	deleteRoutine: (id: string) => typedError<null, string>(__TAURI_INVOKE("delete_routine", { id })),
-	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], string>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
+	deleteRoutine: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_routine", { id })),
+	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], AppError>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
 	/**
 	 *  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋.
 	 *  완료(done=true) 시 그 루틴의 오늘 알림을 fired 처리해 더는 발사되지 않게 한다(완료=알림 불필요).
 	 */
-	toggleRoutineCheck: (routineId: string, date: string, done: boolean) => typedError<null, string>(__TAURI_INVOKE("toggle_routine_check", { routineId, date, done })),
+	toggleRoutineCheck: (routineId: string, date: string, done: boolean) => typedError<null, AppError>(__TAURI_INVOKE("toggle_routine_check", { routineId, date, done })),
 	/**  루틴 재정렬 (드래그, 공용 useListReorder). ordered_ids 순서대로 rank 부여. */
-	reorderRoutines: (orderedIds: string[]) => typedError<null, string>(__TAURI_INVOKE("reorder_routines", { orderedIds })),
-	routineTracking: (endDate: string, days: number) => typedError<RoutineTrackingItem[], string>(__TAURI_INVOKE("routine_tracking", { endDate, days })),
+	reorderRoutines: (orderedIds: string[]) => typedError<null, AppError>(__TAURI_INVOKE("reorder_routines", { orderedIds })),
+	routineTracking: (endDate: string, days: number) => typedError<RoutineTrackingItem[], AppError>(__TAURI_INVOKE("routine_tracking", { endDate, days })),
 	/**
 	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출하고
 	 *  임계치 넘는 것만 매트릭스로 escalate(dedup)·원인 해소분 auto-resolve. 토큰은 keychain에서만.
 	 */
-	refreshPrRadar: (projectId: string) => typedError<PrRadarItem[], string>(__TAURI_INVOKE("refresh_pr_radar", { projectId })),
+	refreshPrRadar: (projectId: string) => typedError<PrRadarItem[], AppError>(__TAURI_INVOKE("refresh_pr_radar", { projectId })),
 	/**  수동 self-check 토글(로컬 상태). checked면 행 추가, 아니면 삭제(다음 도출이 반영). */
-	setPrSelfCheck: (repoFullName: string, prNumber: number, checked: boolean) => typedError<null, string>(__TAURI_INVOKE("set_pr_self_check", { repoFullName, prNumber, checked })),
+	setPrSelfCheck: (repoFullName: string, prNumber: number, checked: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_pr_self_check", { repoFullName, prNumber, checked })),
 	/**
 	 *  repo별 worktree를 상태 배지(ahead/behind/dirty)와 함께 나열한다. project_id=None이면 멀티 repo 전체.
 	 *  ambient — 매 호출 git에서 fresh 도출(영속 없음). read-only(INVARIANT #6).
 	 */
-	listWorktrees: (projectId: string | null) => typedError<Worktree[], string>(__TAURI_INVOKE("list_worktrees", { projectId })),
+	listWorktrees: (projectId: string | null) => typedError<Worktree[], AppError>(__TAURI_INVOKE("list_worktrees", { projectId })),
 	/**  worktree의 로컬+원격추적 브랜치 (branch↔branch 비교 picker용). */
-	listWorktreeBranches: (worktreePath: string) => typedError<string[], string>(__TAURI_INVOKE("list_worktree_branches", { worktreePath })),
+	listWorktreeBranches: (worktreePath: string) => typedError<string[], AppError>(__TAURI_INVOKE("list_worktree_branches", { worktreePath })),
 	/**  비교 모드의 파일 목록(통계만 — hunk는 지연 로드). 대용량 diff 비차단의 1단계. */
-	worktreeDiffFiles: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null) => typedError<DiffFileSummary[], string>(__TAURI_INVOKE("worktree_diff_files", { worktreePath, mode, baseRef, headRef })),
+	worktreeDiffFiles: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null) => typedError<DiffFileSummary[], AppError>(__TAURI_INVOKE("worktree_diff_files", { worktreePath, mode, baseRef, headRef })),
 	/**  한 파일의 unified diff 텍스트(프런트 구문강조용). 선택한 파일만 지연 로드(비차단 2단계). */
-	worktreeFileDiff: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null, path: string) => typedError<string, string>(__TAURI_INVOKE("worktree_file_diff", { worktreePath, mode, baseRef, headRef, path })),
+	worktreeFileDiff: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null, path: string) => typedError<string, AppError>(__TAURI_INVOKE("worktree_file_diff", { worktreePath, mode, baseRef, headRef, path })),
 	/**
 	 *  worktree를 base(기본 origin/dev) 위로 안전 rebase한다. dirty면 거부, 충돌이면 자동 복구.
 	 *  성공 시 RebaseResult.success=true — 사용자는 기존 Diff Viewer(vs Base)로 결과를 검수한다.
 	 */
-	rebaseWorktreeOnto: (worktreePath: string, base: string | null) => typedError<RebaseResult, string>(__TAURI_INVOKE("rebase_worktree_onto", { worktreePath, base })),
+	rebaseWorktreeOnto: (worktreePath: string, base: string | null) => typedError<RebaseResult, AppError>(__TAURI_INVOKE("rebase_worktree_onto", { worktreePath, base })),
 	/**
 	 *  정리 후보 나열 (Phase 12d). merged/stale 로컬 브랜치 + prunable worktree.
 	 *  repo_path = primary worktree(또는 임의 worktree) 경로. base = 머지 기준(예: dev).
 	 */
-	listCleanupCandidates: (repoPath: string, base: string | null) => typedError<CleanupCandidate[], string>(__TAURI_INVOKE("list_cleanup_candidates", { repoPath, base })),
+	listCleanupCandidates: (repoPath: string, base: string | null) => typedError<CleanupCandidate[], AppError>(__TAURI_INVOKE("list_cleanup_candidates", { repoPath, base })),
 	/**
 	 *  선택 정리 후보를 삭제한다 (Phase 12d). protected는 거부, needs_force는 force일 때만.
 	 *  id는 `branch:<name>` 또는 `worktree:<path>`. 항목별 결과를 요약 문자열로 노출(부분 실패 격리).
 	 */
-	deleteCleanupCandidates: (repoPath: string, base: string | null, ids: string[], force: boolean) => typedError<string, string>(__TAURI_INVOKE("delete_cleanup_candidates", { repoPath, base, ids, force })),
+	deleteCleanupCandidates: (repoPath: string, base: string | null, ids: string[], force: boolean) => typedError<string, AppError>(__TAURI_INVOKE("delete_cleanup_candidates", { repoPath, base, ids, force })),
 	/**  저장된 Codex 모델 문자열(없으면 None → 기본 동작 유지). */
-	getCodexModel: () => typedError<string | null, string>(__TAURI_INVOKE("get_codex_model")),
+	getCodexModel: () => typedError<string | null, AppError>(__TAURI_INVOKE("get_codex_model")),
 	/**
 	 *  Codex 모델 설정(또는 None으로 삭제 → 기본 동작 복원).
 	 *  None 또는 빈 문자열이면 저장 행을 삭제한다.
 	 */
-	setCodexModel: (model: string | null) => typedError<null, string>(__TAURI_INVOKE("set_codex_model", { model })),
+	setCodexModel: (model: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_codex_model", { model })),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
-	codexStatus: () => typedError<CodexAvailability, string>(__TAURI_INVOKE("codex_status")),
+	codexStatus: () => typedError<CodexAvailability, AppError>(__TAURI_INVOKE("codex_status")),
 	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */
-	triggerEchoJob: (input: TriggerEchoInput) => typedError<string, string>(__TAURI_INVOKE("trigger_echo_job", { input })),
+	triggerEchoJob: (input: TriggerEchoInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_echo_job", { input })),
 	/**  codex 잡 트리거 (read_only 샌드박스 고정 — 실행 레일=Phase 10). 미설치/미인증이면 Err(graceful degrade). */
-	triggerCodexJob: (input: TriggerCodexInput) => typedError<string, string>(__TAURI_INVOKE("trigger_codex_job", { input })),
+	triggerCodexJob: (input: TriggerCodexInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_codex_job", { input })),
 	/**  Jobs 뷰 — 최근 잡 목록(영속된 agent_runs에서). */
-	listAgentRuns: () => typedError<AgentRunView[], string>(__TAURI_INVOKE("list_agent_runs")),
+	listAgentRuns: () => typedError<AgentRunView[], AppError>(__TAURI_INVOKE("list_agent_runs")),
 	/**  잡 kill switch. 실행/대기 중이면 취소(true), 이미 끝났으면 false. */
-	killAgentRun: (runId: string) => typedError<boolean, string>(__TAURI_INVOKE("kill_agent_run", { runId })),
+	killAgentRun: (runId: string) => typedError<boolean, AppError>(__TAURI_INVOKE("kill_agent_run", { runId })),
 	/**  잡 로그 tail(최대 16KB) — Jobs 뷰 로그 패널. */
-	readAgentLog: (runId: string) => typedError<string, string>(__TAURI_INVOKE("read_agent_log", { runId })),
+	readAgentLog: (runId: string) => typedError<string, AppError>(__TAURI_INVOKE("read_agent_log", { runId })),
 	/**
 	 *  PR self-check 초안 잡 트리거(PR Radar 카드에서). diff를 GitHub에서 받아(read) worktree 격리 codex
 	 *  잡(read_only)을 띄운다. 산출 Proposal은 awaiting_approval로 멈추고 사람 accept 전엔 외부 무변경(INVARIANT #2).
 	 */
-	triggerPrSelfcheck: (input: TriggerPrSelfCheckInput) => typedError<string, string>(__TAURI_INVOKE("trigger_pr_selfcheck", { input })),
+	triggerPrSelfcheck: (input: TriggerPrSelfCheckInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_pr_selfcheck", { input })),
 	/**
 	 *  잡의 proposal(JSON)을 타입 구조로 파싱해 돌려준다. codex 출력이 형식과 다르면(raw fallback) Err로
 	 *  노출(조용한 빈 proposal 금지). awaiting_approval 잡의 Proposal 패널이 소비한다.
 	 */
-	prProposal: (runId: string) => typedError<PrSelfCheckProposal, string>(__TAURI_INVOKE("pr_proposal", { runId })),
+	prProposal: (runId: string) => typedError<PrSelfCheckProposal, AppError>(__TAURI_INVOKE("pr_proposal", { runId })),
 	/**
 	 *  Proposal accept(INVARIANT #2 게이트). 사람이 (편집한) self-check/설명 초안을 accept하면 로컬에 반영하고
 	 *  잡을 succeeded로 마감한다. 외부 제출(GitHub)은 사람이 수동으로 — 여기서 mutate하지 않는다.
 	 */
-	acceptProposal: (runId: string, accepted: PrSelfCheckProposal) => typedError<null, string>(__TAURI_INVOKE("accept_proposal", { runId, accepted })),
+	acceptProposal: (runId: string, accepted: PrSelfCheckProposal) => typedError<null, AppError>(__TAURI_INVOKE("accept_proposal", { runId, accepted })),
 	/**  Proposal reject(폐기). awaiting_approval 잡을 cancelled로 마감한다(acceptances 기록 없음, 외부 무변경). */
-	rejectProposal: (runId: string) => typedError<null, string>(__TAURI_INVOKE("reject_proposal", { runId })),
+	rejectProposal: (runId: string) => typedError<null, AppError>(__TAURI_INVOKE("reject_proposal", { runId })),
 	/**
 	 *  braindump enrich 잡 트리거(미분류 카드 ⋯ 메뉴). 카드 텍스트를 읽어 suggestedQuadrant/suggestedArea를
 	 *  **제안**한다(비-레포 잡·read_only). 산출 Proposal은 awaiting_approval로 멈추고, accept해도 quadrant는
 	 *  자동 확정되지 않는다(INVARIANT #1). 미설치/미인증이면 Err(graceful degrade).
 	 */
-	triggerEnrich: (input: TriggerEnrichInput) => typedError<string, string>(__TAURI_INVOKE("trigger_enrich", { input })),
+	triggerEnrich: (input: TriggerEnrichInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_enrich", { input })),
 	/**  enrich Proposal(타입 파싱). raw/세트 밖 값이면 Err(조용한 빈 proposal 금지 + 닫힌 세트 강제). */
-	enrichProposal: (runId: string) => typedError<EnrichProposal, string>(__TAURI_INVOKE("enrich_proposal", { runId })),
+	enrichProposal: (runId: string) => typedError<EnrichProposal, AppError>(__TAURI_INVOKE("enrich_proposal", { runId })),
 	/**
 	 *  enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 제안을 accept하면 신호에 힌트로 반영하고
 	 *  잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
 	 */
-	acceptEnrich: (runId: string, accepted: EnrichProposal) => typedError<WorkSignal, string>(__TAURI_INVOKE("accept_enrich", { runId, accepted })),
+	acceptEnrich: (runId: string, accepted: EnrichProposal) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("accept_enrich", { runId, accepted })),
 	/**
 	 *  라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관). enrich 제안을 사람이
 	 *  확정하거나 직접 고른다. None이면 미설정으로 되돌린다.
 	 */
-	setSignalArea: (id: string, area: "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other" | null) => typedError<WorkSignal, string>(__TAURI_INVOKE("set_signal_area", { id, area })),
+	setSignalArea: (id: string, area: "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other" | null) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_area", { id, area })),
 	/**
 	 *  단일 잡 상태 폴링 (B3: EnrichModal 인플레이스 폴링). 1초 주기 폴링용으로 가볍게 설계.
 	 *  terminal 상태(awaiting_approval/succeeded/failed/cancelled)에서 폴링을 멈춰도 된다.
 	 */
-	agentRunStatus: (runId: string) => typedError<AgentRunStatus, string>(__TAURI_INVOKE("agent_run_status", { runId })),
+	agentRunStatus: (runId: string) => typedError<AgentRunStatus, AppError>(__TAURI_INVOKE("agent_run_status", { runId })),
 	/**
 	 *  미분류 전체 배치 enrich 잡 트리거(미분류 영역 "전체 제안 실행"). 모든 미분류 카드를 `cards.json`
 	 *  배열로 모아 **한** codex 호출(비-레포·read_only)로 카드별 suggested 힌트를 제안한다. 산출 Proposal은
 	 *  awaiting_approval로 멈추고(Acceptance 게이트), accept해도 quadrant는 자동 확정되지 않는다(INVARIANT #1).
 	 *  대상이 없으면 잡을 만들지 않고 Err. 미설치/미인증이면 Err(graceful degrade).
 	 */
-	triggerEnrichAll: (input: TriggerEnrichAllInput) => typedError<string, string>(__TAURI_INVOKE("trigger_enrich_all", { input })),
+	triggerEnrichAll: (input: TriggerEnrichAllInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_enrich_all", { input })),
 	/**
 	 *  배치 enrich Proposal(타입 파싱 + 카드별 검증). 현재 미분류 active 신호와 교차검증해 유효 항목만 남기고
 	 *  나머지는 skipped로 격리한다(부분 실패 격리). raw/형식 밖이면 Err.
 	 */
-	batchEnrichProposal: (runId: string) => typedError<BatchEnrichProposal, string>(__TAURI_INVOKE("batch_enrich_proposal", { runId })),
+	batchEnrichProposal: (runId: string) => typedError<BatchEnrichProposal, AppError>(__TAURI_INVOKE("batch_enrich_proposal", { runId })),
 	/**
 	 *  배치 enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 카드별 제안을 accept하면 각 신호에
 	 *  힌트로만 반영하고 잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
 	 */
-	acceptEnrichAll: (runId: string, accepted: BatchEnrichProposal) => typedError<number, string>(__TAURI_INVOKE("accept_enrich_all", { runId, accepted })),
+	acceptEnrichAll: (runId: string, accepted: BatchEnrichProposal) => typedError<number, AppError>(__TAURI_INVOKE("accept_enrich_all", { runId, accepted })),
 	/**
 	 *  CI triage 잡 트리거(PR Radar CI Blocked 카드). diff를 GitHub에서 받아 worktree 격리 codex 잡(read_only).
 	 *  **재트리거 캡**(INVARIANT #5): 같은 PR(retry_key=triage:{repo}:{pr})의 기존 triage가 캡 이상이면 잡을
 	 *  만들지 않고 매트릭스 Q1으로 escalate한다. 산출 Proposal은 awaiting_approval(Acceptance 게이트).
 	 */
-	triggerCiTriage: (input: TriggerCiTriageInput) => typedError<TriageOutcome, string>(__TAURI_INVOKE("trigger_ci_triage", { input })),
+	triggerCiTriage: (input: TriggerCiTriageInput) => typedError<TriageOutcome, AppError>(__TAURI_INVOKE("trigger_ci_triage", { input })),
 	/**  CI triage Proposal(타입 파싱). raw면 Err. */
-	triageProposal: (runId: string) => typedError<CiTriageProposal, string>(__TAURI_INVOKE("triage_proposal", { runId })),
+	triageProposal: (runId: string) => typedError<CiTriageProposal, AppError>(__TAURI_INVOKE("triage_proposal", { runId })),
 	/**
 	 *  CI triage Proposal accept(INVARIANT #2 게이트). 로컬 기록만(acceptances + 잡 succeeded) — 외부 무변경.
 	 *  실제 수정은 사람이 수동(또는 실행 레일 Phase 10).
 	 */
-	acceptTriage: (runId: string, accepted: CiTriageProposal) => typedError<null, string>(__TAURI_INVOKE("accept_triage", { runId, accepted })),
+	acceptTriage: (runId: string, accepted: CiTriageProposal) => typedError<null, AppError>(__TAURI_INVOKE("accept_triage", { runId, accepted })),
 	/**
 	 *  OAuth client(client_id/secret)을 keychain blob에 저장(반환 없음). 같은 client면 refresh_token 보존,
 	 *  client가 바뀌면 refresh_token은 버린다(다른 client엔 무효 — 재연결 필요).
 	 */
-	setGoogleOauthClient: (projectId: string, clientId: string, clientSecret: string) => typedError<null, string>(__TAURI_INVOKE("set_google_oauth_client", { projectId, clientId, clientSecret })),
+	setGoogleOauthClient: (projectId: string, clientId: string, clientSecret: string) => typedError<null, AppError>(__TAURI_INVOKE("set_google_oauth_client", { projectId, clientId, clientSecret })),
 	/**
 	 *  loopback + PKCE(S256) OAuth 실행 → refresh_token을 keychain blob에 저장. bounded(loopback timeout).
 	 *  client 미입력이면 Err(graceful degrade). 실 네트워크/브라우저라 cargo test 아님(사용자 관찰).
 	 */
-	startGoogleOauth: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("start_google_oauth", { projectId })),
+	startGoogleOauth: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("start_google_oauth", { projectId })),
 	/**  연결 상태(client 입력됨 / refresh_token 보유). 토큰 본문 미노출(graceful degrade 판정용). */
-	googleCalendarStatus: (projectId: string) => typedError<GoogleCalendarStatus, string>(__TAURI_INVOKE("google_calendar_status", { projectId })),
+	googleCalendarStatus: (projectId: string) => typedError<GoogleCalendarStatus, AppError>(__TAURI_INVOKE("google_calendar_status", { projectId })),
 	/**  연결 해제: keychain blob 전체(client + refresh_token) 삭제. */
-	disconnectGoogle: (projectId: string) => typedError<null, string>(__TAURI_INVOKE("disconnect_google", { projectId })),
+	disconnectGoogle: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("disconnect_google", { projectId })),
 	/**
 	 *  연결 검증(read-only): refresh_token으로 access token 재발급을 시도해 본다(bounded). 토큰 본문 미노출.
 	 *  done-criteria 10a: access token 만료 시 refresh 자동 재발급 경로의 사용자 실측 진입점(Notion/GitHub
 	 *  "Test ping" 선례). 회전된 refresh_token은 merge로 보존 저장. 실 네트워크라 cargo test 아님(사용자 관찰).
 	 */
-	pingGoogleCalendar: (projectId: string) => typedError<PingResult, string>(__TAURI_INVOKE("ping_google_calendar", { projectId })),
+	pingGoogleCalendar: (projectId: string) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_google_calendar", { projectId })),
 	/**  calendarList 조회 + 저장된 선택 반영(selected 플래그). 미연결이면 Err(graceful degrade). */
-	listGoogleCalendars: (projectId: string) => typedError<CalendarListItem[], string>(__TAURI_INVOKE("list_google_calendars", { projectId })),
+	listGoogleCalendars: (projectId: string) => typedError<CalendarListItem[], AppError>(__TAURI_INVOKE("list_google_calendars", { projectId })),
 	/**  선택 캘린더 목록을 저장(JSON [{id,summary}]). 빈 목록이면 fetch 결과 없음. */
-	setSelectedCalendars: (projectId: string, calendars: SelectedCalendar[]) => typedError<null, string>(__TAURI_INVOKE("set_selected_calendars", { projectId, calendars })),
+	setSelectedCalendars: (projectId: string, calendars: SelectedCalendar[]) => typedError<null, AppError>(__TAURI_INVOKE("set_selected_calendars", { projectId, calendars })),
 	/**
 	 *  선택 캘린더의 오늘 이벤트를 시간순 병합 반환(ambient). `project_id=None`이면 모든 프로젝트 병합(Today용).
 	 *  미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
 	 */
-	fetchCalendarEvents: (projectId: string | null, date: string) => typedError<CalendarEvent[], string>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date })),
+	fetchCalendarEvents: (projectId: string | null, date: string) => typedError<CalendarEvent[], AppError>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date })),
 	/**
 	 *  직접 모달의 캘린더 picker가 쓸 프로젝트의 저장된 선택 캘린더([{id,summary}]). 네트워크 없음(로컬 DB).
 	 *  모달이 어느 캘린더에 쓸지 고르게 한다(연결된 프로젝트의 선택 목록 = 사용자가 이미 고른 캘린더).
 	 */
-	listSelectedCalendars: (projectId: string) => typedError<SelectedCalendar[], string>(__TAURI_INVOKE("list_selected_calendars", { projectId })),
+	listSelectedCalendars: (projectId: string) => typedError<SelectedCalendar[], AppError>(__TAURI_INVOKE("list_selected_calendars", { projectId })),
 	/**
 	 *  카드 → 직접 모달 → Google Calendar 이벤트 생성(write). 사용자 폼 = 사람 결정이라 Acceptance 게이트
 	 *  불요(#2). 미연결/스코프 부족(readonly 토큰)/네트워크 실패는 graceful Err로 노출. bounded retry.
 	 *  실 Google write는 사용자 관찰(헤드리스 불가) — 페이로드 빌드/응답 파싱은 calendar.rs cargo test.
 	 */
-	createCalendarEvent: (projectId: string, calendarId: string, event: CreateCalendarEventInput) => typedError<CreatedCalendarEvent, string>(__TAURI_INVOKE("create_calendar_event", { projectId, calendarId, event })),
+	createCalendarEvent: (projectId: string, calendarId: string, event: CreateCalendarEventInput) => typedError<CreatedCalendarEvent, AppError>(__TAURI_INVOKE("create_calendar_event", { projectId, calendarId, event })),
 	/**  현재 글로벌 창 핫키 문자열 조회(Settings 표시용). 미설정 시 기본값. */
-	getGlobalHotkey: () => typedError<string, string>(__TAURI_INVOKE("get_global_hotkey")),
+	getGlobalHotkey: () => typedError<string, AppError>(__TAURI_INVOKE("get_global_hotkey")),
 	/**
 	 *  글로벌 창 핫키 변경: 검증 → 런타임 재등록(옛 unregister → 새 register) → 성공 시 영속.
 	 *  등록 실패(충돌/무효) 시 옛 핫키를 유지하고 Err를 노출한다(저장 안 함 — graceful, #5 정신).
 	 */
-	setGlobalHotkey: (spec: string) => typedError<null, string>(__TAURI_INVOKE("set_global_hotkey", { spec })),
+	setGlobalHotkey: (spec: string) => typedError<null, AppError>(__TAURI_INVOKE("set_global_hotkey", { spec })),
 	/**  글로벌 핫키를 기본값(Ctrl+Space)으로 리셋 + 재등록. */
-	resetGlobalHotkey: () => typedError<string, string>(__TAURI_INVOKE("reset_global_hotkey")),
+	resetGlobalHotkey: () => typedError<string, AppError>(__TAURI_INVOKE("reset_global_hotkey")),
 	/**  저장된 per-view keymap(JSON 문자열) 조회. 미설정 시 None — 프런트가 기본 keymap을 쓴다. */
-	getNavKeymap: () => typedError<string | null, string>(__TAURI_INVOKE("get_nav_keymap")),
+	getNavKeymap: () => typedError<string | null, AppError>(__TAURI_INVOKE("get_nav_keymap")),
 	/**
 	 *  per-view keymap(JSON 문자열) 저장. 렌더러가 view→shortcut 의미를 소유 — Rust는 blob 영속만.
 	 *  비어 있지 않은 JSON 객체 문자열만 받는다(가벼운 검증).
 	 */
-	setNavKeymap: (keymapJson: string) => typedError<null, string>(__TAURI_INVOKE("set_nav_keymap", { keymapJson })),
+	setNavKeymap: (keymapJson: string) => typedError<null, AppError>(__TAURI_INVOKE("set_nav_keymap", { keymapJson })),
 	/**  keymap을 기본값으로 리셋(저장 행 삭제 → 프런트가 코드 상수 기본 keymap 사용). */
-	resetNavKeymap: () => typedError<null, string>(__TAURI_INVOKE("reset_nav_keymap")),
+	resetNavKeymap: () => typedError<null, AppError>(__TAURI_INVOKE("reset_nav_keymap")),
 	/**  현재 알림 권한 상태 조회. 미지원/오류면 unknown으로 graceful degrade(앱 코어 무영향). */
-	notificationPermission: () => typedError<NotificationPermission, string>(__TAURI_INVOKE("notification_permission")),
+	notificationPermission: () => typedError<NotificationPermission, AppError>(__TAURI_INVOKE("notification_permission")),
 	/**  알림 권한 요청(미결정일 때 OS 프롬프트). 결과 상태를 돌려준다. 거부돼도 앱은 계속 동작. */
-	requestNotificationPermission: () => typedError<NotificationPermission, string>(__TAURI_INVOKE("request_notification_permission")),
+	requestNotificationPermission: () => typedError<NotificationPermission, AppError>(__TAURI_INVOKE("request_notification_permission")),
 	/**
 	 *  `seconds_from_now` 뒤에 발사될 테스트 알림 행을 INSERT한다(스파인 시연용).
 	 *  발사는 백그라운드 스케줄러가 bounded tick에서 수행한다 — 여기선 큐에 넣기만 한다.
 	 *  source='test'로 태깅(Phase 16/20과 동일한 제네릭 경로).
 	 */
-	scheduleTestNotification: (secondsFromNow: number) => typedError<null, string>(__TAURI_INVOKE("schedule_test_notification", { secondsFromNow })),
+	scheduleTestNotification: (secondsFromNow: number) => typedError<null, AppError>(__TAURI_INVOKE("schedule_test_notification", { secondsFromNow })),
 	/**
 	 *  브리지 설정: 봇 토큰 → keychain(반환 없음), chat_id → hermes_bridge 단일 행. 토큰 본문은 IPC
 	 *  인자로만 들어와 즉시 keychain으로 가고 절대 반환되지 않는다(INVARIANT). offset은 보존(재설정 시
 	 *  같은 봇이면 이미 소비한 update를 다시 받지 않게 — 새 행이면 0).
 	 */
-	setHermesBridge: (botToken: string, chatId: string) => typedError<null, string>(__TAURI_INVOKE("set_hermes_bridge", { botToken, chatId })),
+	setHermesBridge: (botToken: string, chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("set_hermes_bridge", { botToken, chatId })),
 	/**  브리지 연결 상태(토큰 keychain 보유 + chat_id 설정). 봇 토큰 본문은 절대 미노출(INVARIANT). */
-	hermesBridgeStatus: () => typedError<HermesBridgeStatus, string>(__TAURI_INVOKE("hermes_bridge_status")),
+	hermesBridgeStatus: () => typedError<HermesBridgeStatus, AppError>(__TAURI_INVOKE("hermes_bridge_status")),
 	/**  연결 해제: keychain 봇 토큰 삭제 + hermes_bridge 행 삭제(메시지 로그는 보존 — 열람 가치). 멱등. */
-	disconnectHermes: () => typedError<null, string>(__TAURI_INVOKE("disconnect_hermes")),
+	disconnectHermes: () => typedError<null, AppError>(__TAURI_INVOKE("disconnect_hermes")),
 	/**
 	 *  Hermes에게 메시지 전송(Telegram sendMessage). bounded retry·graceful terminal failure. 송신
 	 *  로그를 hermes_messages에 기록한다(제어 surface). 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
 	 */
-	sendHermesMessage: (text: string) => typedError<null, string>(__TAURI_INVOKE("send_hermes_message", { text })),
+	sendHermesMessage: (text: string) => typedError<null, AppError>(__TAURI_INVOKE("send_hermes_message", { text })),
 	/**
 	 *  Hermes로부터 새 메시지를 **bounded 단발**로 수신(Telegram getUpdates). 무한 long-poll 아님 —
 	 *  한 호출 = 한 왕복(#5). 저장된 offset 이후 update를 받아 새 메시지를 hermes_messages에 기록하고
 	 *  (update_id UNIQUE로 멱등) offset을 전진 영속한다. 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
 	 */
-	fetchHermesMessages: () => typedError<HermesFetchResult, string>(__TAURI_INVOKE("fetch_hermes_messages")),
+	fetchHermesMessages: () => typedError<HermesFetchResult, AppError>(__TAURI_INVOKE("fetch_hermes_messages")),
 	/**  제어 surface용 메시지 로그(최신순, bounded). 송·수신 합쳐 최근 `limit`건. 봇 토큰 미포함. */
-	listHermesMessages: (limit: number) => typedError<HermesMessage[], string>(__TAURI_INVOKE("list_hermes_messages", { limit })),
+	listHermesMessages: (limit: number) => typedError<HermesMessage[], AppError>(__TAURI_INVOKE("list_hermes_messages", { limit })),
 	/**
 	 *  getUpdates를 단발 호출해 실 사용자의 chat_id를 감지한다.
 	 * 
@@ -331,40 +331,40 @@ export const commands = {
 	 *  - from_is_bot=false인 가장 최신 후보를 반환. 봇 계정만 있으면 Err. 없으면 Err.
 	 *  - 봇 토큰은 절대 반환·로깅 안 됨(INVARIANT). chat_id+label만 노출.
 	 */
-	detectHermesChatId: (botToken: string | null) => typedError<DetectedChat, string>(__TAURI_INVOKE("detect_hermes_chat_id", { botToken })),
+	detectHermesChatId: (botToken: string | null) => typedError<DetectedChat, AppError>(__TAURI_INVOKE("detect_hermes_chat_id", { botToken })),
 	/**
 	 *  레지스트리 목록: 인앱 프롬프트 + (디스크 스캔한) 외부 스킬을 합쳐 돌려준다. 인앱은 DB에서, 외부는
 	 *  ~/.claude/skills를 스캔해 ExternalSkill→Skill(kind="external")로 합성한다(영속 안 함 — 디스크 SSOT).
 	 */
-	listSkills: () => typedError<Skill[], string>(__TAURI_INVOKE("list_skills")),
+	listSkills: () => typedError<Skill[], AppError>(__TAURI_INVOKE("list_skills")),
 	/**
 	 *  인앱 스킬 수정(prompt/name/enabled/binding). 외부 스킬(id="ext:…")은 DB 행이 아니라 수정 불가 —
 	 *  외부는 파일 자체를 사용자가 명시 편집한다(write_external_skill). prompt 편집은 codex 제안 내용만
 	 *  바꾼다(#1/#2 — 잡 게이트/accept 불변). None 인자는 미변경(부분 업데이트).
 	 */
-	updateSkill: (id: string, prompt: string | null, name: string | null, enabled: boolean | null) => typedError<Skill, string>(__TAURI_INVOKE("update_skill", { id, prompt, name, enabled })),
+	updateSkill: (id: string, prompt: string | null, name: string | null, enabled: boolean | null) => typedError<Skill, AppError>(__TAURI_INVOKE("update_skill", { id, prompt, name, enabled })),
 	/**
 	 *  인앱 프롬프트 추가(미바인딩 또는 binding 지정). binding은 닫힌 세트(4개 잡 키)에서만 — 미지의
 	 *  binding은 거부(잡 lookup이 못 찾는 죽은 행 방지). binding UNIQUE라 이미 그 잡에 행이 있으면 거부.
 	 */
-	createSkill: (input: CreateSkillInput) => typedError<Skill, string>(__TAURI_INVOKE("create_skill", { input })),
+	createSkill: (input: CreateSkillInput) => typedError<Skill, AppError>(__TAURI_INVOKE("create_skill", { input })),
 	/**
 	 *  인앱 스킬 삭제(외부 스킬은 삭제 불가 — 파일은 사용자 소유). 시드된 4개 binding 행은 삭제 시 잡이
 	 *  폴백(코드 상수)으로 돌아가므로 안전(기본 동작 보존). 외부 id는 거부.
 	 */
-	deleteSkill: (id: string) => typedError<null, string>(__TAURI_INVOKE("delete_skill", { id })),
+	deleteSkill: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_skill", { id })),
 	/**
 	 *  외부 Claude/Codex 스킬 스캔(~/.claude/skills/*\/SKILL.md frontmatter → name/description/path).
 	 *  읽기 전용 브라우즈. 디렉터리 부재면 빈 목록(graceful degrade).
 	 */
-	scanExternalSkills: () => typedError<ExternalSkill[], string>(__TAURI_INVOKE("scan_external_skills")),
+	scanExternalSkills: () => typedError<ExternalSkill[], AppError>(__TAURI_INVOKE("scan_external_skills")),
 	/**  외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관. */
-	readExternalSkill: (path: string) => typedError<string, string>(__TAURI_INVOKE("read_external_skill", { path })),
+	readExternalSkill: (path: string) => typedError<string, AppError>(__TAURI_INVOKE("read_external_skill", { path })),
 	/**
 	 *  외부 스킬 파일 내용 쓰기(사용자 명시 액션 — 자기 파일 편집). ~/.claude/skills 하위만 허용(가드).
 	 *  실행하지 않는다(쓰기만). 외부 스킬을 work-radar가 자동 적용/실행하는 경로는 없다.
 	 */
-	writeExternalSkill: (path: string, content: string) => typedError<null, string>(__TAURI_INVOKE("write_external_skill", { path, content })),
+	writeExternalSkill: (path: string, content: string) => typedError<null, AppError>(__TAURI_INVOKE("write_external_skill", { path, content })),
 	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.
@@ -379,7 +379,7 @@ export const commands = {
 	 *  cmux 워크스페이스 상태 조회 (best-effort, 표시 전용).
 	 *  바이너리 부재·타임아웃·비-0 종료 → Ok(available:false, []) — 절대 Err 아님.
 	 */
-	cmuxStatus: () => typedError<CmuxStatus, string>(__TAURI_INVOKE("cmux_status")),
+	cmuxStatus: () => typedError<CmuxStatus, AppError>(__TAURI_INVOKE("cmux_status")),
 };
 
 /* Types */
@@ -433,6 +433,20 @@ export type AgentRunView = {
  *  proposed(큐 대기) → running → succeeded | failed | cancelled. (awaiting_approval은 Phase 8.)
  */
 export type AgentStatus = "proposed" | "awaiting_approval" | "running" | "succeeded" | "failed" | "cancelled";
+
+/**  IPC 경계를 넘는 유일한 에러 타입. */
+export type AppError = {
+	kind: ErrorKind,
+	/**  머신 식별자(예: "notion.not_found", "db.query"). */
+	code: string,
+	/**  사람용 메시지(현지화) — Display 출력. */
+	message: string,
+	/**  토스트 ↔ 로그 상관키(base32 8자). */
+	traceId: string,
+	/**  kind에서 파생(Transient → true). */
+	retryable: boolean,
+	action: ErrorAction | null,
+};
 
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
@@ -699,6 +713,32 @@ export type EnrichProposal = {
 	/**  제안 근거(짧은 설명). */
 	reason?: string | null,
 };
+
+/**  액션 가능 힌트(열기/이동 등). 프런트가 버튼/링크로 노출. */
+export type ErrorAction = {
+	label: string,
+	/**  외부 딥링크(예: Notion DB 공유 안내). */
+	url: string | null,
+	/**  앱 내부 네비게이션 키(예: "settings"). */
+	nav: string | null,
+};
+
+/**  에러 분류. 큐 전이·재시도·UI surfacing의 입력(INVARIANT #2/#5). */
+export type ErrorKind = 
+/**  네트워크/429/5xx — bounded retry/큐잉 대상. */
+"transient" | 
+/**  4xx 일반/검증 실패 — 재시도 무의미. */
+"terminal" | 
+/**  404 — DB ID/공유 등 액션 가능. */
+"notFound" | 
+/**  403/권한 — 통합 권한 등 액션 가능. */
+"forbidden" | 
+/**  kill switch/사용자 취소. */
+"cancelled" | 
+/**  입력 검증 실패. */
+"validation" | 
+/**  버그/불변식 위반 — 로그 + 버그리포트 유도. */
+"unexpected";
 
 /**
  *  외부 스킬 스캔 결과 한 건(~/.claude/skills/<dir>/SKILL.md frontmatter). 디스크가 SSOT이므로

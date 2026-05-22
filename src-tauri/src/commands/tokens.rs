@@ -5,6 +5,7 @@ use tauri::State;
 use tokio::process::Command;
 
 use crate::db::Db;
+use crate::error::AppError;
 use crate::models::{CliToolStatus, PingResult, TokenKind, TokenStatus};
 use crate::{api, keychain};
 
@@ -33,13 +34,18 @@ pub async fn set_project_token(
     project_id: String,
     kind: TokenKind,
     token: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let token = token.trim();
     if token.is_empty() {
-        return Err("empty token".into());
+        return Err(AppError::validation(
+            "tokens.empty_token",
+            "토큰이 비었습니다",
+        ));
     }
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    keychain::set_token(&cref, kind, token).map_err(|e| e.to_string())
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("tokens.project_not_found", e))?;
+    Ok(keychain::set_token(&cref, kind, token)?)
 }
 
 /// 토큰 삭제(클리어).
@@ -49,9 +55,11 @@ pub async fn delete_project_token(
     db: State<'_, Db>,
     project_id: String,
     kind: TokenKind,
-) -> Result<(), String> {
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    keychain::delete_token(&cref, kind).map_err(|e| e.to_string())
+) -> Result<(), AppError> {
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("tokens.project_not_found", e))?;
+    Ok(keychain::delete_token(&cref, kind)?)
 }
 
 /// 토큰 존재 여부만 (본문 미노출). UI 마스킹 표시용.
@@ -60,11 +68,13 @@ pub async fn delete_project_token(
 pub async fn project_token_status(
     db: State<'_, Db>,
     project_id: String,
-) -> Result<TokenStatus, String> {
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
+) -> Result<TokenStatus, AppError> {
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("tokens.project_not_found", e))?;
     Ok(TokenStatus {
-        has_notion: keychain::has_token(&cref, TokenKind::Notion).map_err(|e| e.to_string())?,
-        has_github: keychain::has_token(&cref, TokenKind::Github).map_err(|e| e.to_string())?,
+        has_notion: keychain::has_token(&cref, TokenKind::Notion)?,
+        has_github: keychain::has_token(&cref, TokenKind::Github)?,
     })
 }
 
@@ -75,9 +85,11 @@ pub async fn ping_project_token(
     db: State<'_, Db>,
     project_id: String,
     kind: TokenKind,
-) -> Result<PingResult, String> {
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    let token = keychain::get_token(&cref, kind).map_err(|e| e.to_string())?;
+) -> Result<PingResult, AppError> {
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("tokens.project_not_found", e))?;
+    let token = keychain::get_token(&cref, kind)?;
     let Some(token) = token else {
         return Ok(PingResult {
             ok: false,
@@ -161,7 +173,7 @@ async fn run_capture(bin: &str, args: &[&str]) -> (bool, String) {
 /// gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함.
 #[tauri::command]
 #[specta::specta]
-pub async fn gh_cli_status() -> Result<CliToolStatus, String> {
+pub async fn gh_cli_status() -> Result<CliToolStatus, AppError> {
     let bin = gh_bin();
     // 설치 확인(--version). spawn 실패면 미설치로 간주.
     let (ver_ok, _) = run_capture(&bin, &["--version"]).await;
@@ -188,14 +200,19 @@ pub async fn gh_cli_status() -> Result<CliToolStatus, String> {
 /// IPC로 반환되지 않는다(INVARIANT). 미설치/미로그인/빈 토큰은 Err로 graceful 노출.
 #[tauri::command]
 #[specta::specta]
-pub async fn import_github_token(db: State<'_, Db>, project_id: String) -> Result<(), String> {
+pub async fn import_github_token(db: State<'_, Db>, project_id: String) -> Result<(), AppError> {
     let bin = gh_bin();
     let (ok, token) = run_capture(&bin, &["auth", "token"]).await;
     if !ok || token.is_empty() {
-        return Err("gh 토큰을 가져오지 못했습니다 — 'gh 로그인'을 먼저 진행하세요.".into());
+        return Err(AppError::terminal(
+            "tokens.gh_import_failed",
+            "gh 토큰을 가져오지 못했습니다 — 'gh 로그인'을 먼저 진행하세요.",
+        ));
     }
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    keychain::set_token(&cref, TokenKind::Github, &token).map_err(|e| e.to_string())
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("tokens.project_not_found", e))?;
+    Ok(keychain::set_token(&cref, TokenKind::Github, &token)?)
     // token은 여기서 drop — 어디에도 보관/반환되지 않는다.
 }
 
@@ -203,13 +220,16 @@ pub async fn import_github_token(db: State<'_, Db>, project_id: String) -> Resul
 /// 다시 누른다. 대화식 흐름이라 완료를 기다리지 않고 spawn만 한다(bounded: 즉시 반환).
 #[tauri::command]
 #[specta::specta]
-pub async fn gh_auth_login_web() -> Result<(), String> {
+pub async fn gh_auth_login_web() -> Result<(), AppError> {
     let bin = gh_bin();
     Command::new(&bin)
         .args(["auth", "login", "--web"])
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("gh 로그인 실행 실패: {e}"))
+        .map_err(|e| {
+            AppError::terminal("tokens.gh_login_spawn", format!("gh 로그인 실행 실패: {e}"))
+        })?;
+    Ok(())
 }
 
 /// ntn CLI 가용성 + 로그인(토큰 import 가능) 상태. ntn은 토큰을 file-auth 위치
@@ -217,7 +237,7 @@ pub async fn gh_auth_login_web() -> Result<(), String> {
 /// (OS keychain 모드면 파일이 없을 수 있음 → 그 경우 붙여넣기 fallback.) 토큰 본문 미포함.
 #[tauri::command]
 #[specta::specta]
-pub async fn ntn_cli_status() -> Result<CliToolStatus, String> {
+pub async fn ntn_cli_status() -> Result<CliToolStatus, AppError> {
     let bin = ntn_bin();
     let (ver_ok, _) = run_capture(&bin, &["--version"]).await;
     if !ver_ok {
@@ -259,30 +279,44 @@ fn ntn_token_from_file() -> Option<String> {
 /// IPC로 반환되지 않는다(INVARIANT). 파일 없음/검증 실패는 Err로 graceful 노출(붙여넣기 fallback 안내).
 #[tauri::command]
 #[specta::specta]
-pub async fn import_notion_token(db: State<'_, Db>, project_id: String) -> Result<(), String> {
-    let token = ntn_token_from_file().ok_or(
-        "ntn 토큰 파일을 찾지 못했습니다 — 'ntn 로그인' 후 다시 시도하거나 붙여넣기를 사용하세요.",
-    )?;
+pub async fn import_notion_token(db: State<'_, Db>, project_id: String) -> Result<(), AppError> {
+    let token = ntn_token_from_file().ok_or_else(|| {
+        AppError::not_found(
+            "tokens.ntn_file_missing",
+            "ntn 토큰 파일을 찾지 못했습니다 — 'ntn 로그인' 후 다시 시도하거나 붙여넣기를 사용하세요.",
+        )
+    })?;
     // 저장 전 라이브 검증(잘못된/만료 토큰을 keychain에 넣지 않음).
     let ping = api::ping_notion(&token).await;
     if !ping.ok {
-        return Err(format!("ntn 토큰 검증 실패: {}", ping.detail));
+        return Err(AppError::terminal(
+            "tokens.ntn_verify_failed",
+            format!("ntn 토큰 검증 실패: {}", ping.detail),
+        ));
     }
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    keychain::set_token(&cref, TokenKind::Notion, &token).map_err(|e| e.to_string())
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("tokens.project_not_found", e))?;
+    Ok(keychain::set_token(&cref, TokenKind::Notion, &token)?)
     // token은 여기서 drop — 어디에도 보관/반환되지 않는다.
 }
 
 /// `ntn login` 런처(미로그인 시 인앱 버튼). 대화식이라 완료를 기다리지 않고 spawn만 한다.
 #[tauri::command]
 #[specta::specta]
-pub async fn ntn_login() -> Result<(), String> {
+pub async fn ntn_login() -> Result<(), AppError> {
     let bin = ntn_bin();
     Command::new(&bin)
         .arg("login")
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("ntn 로그인 실행 실패: {e}"))
+        .map_err(|e| {
+            AppError::terminal(
+                "tokens.ntn_login_spawn",
+                format!("ntn 로그인 실행 실패: {e}"),
+            )
+        })?;
+    Ok(())
 }
 
 #[cfg(test)]

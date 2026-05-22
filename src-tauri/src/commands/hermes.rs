@@ -12,6 +12,7 @@
 use tauri::State;
 
 use crate::db::Db;
+use crate::error::AppError;
 use crate::keychain;
 use crate::messenger;
 use crate::models::{
@@ -49,17 +50,22 @@ pub async fn set_hermes_bridge(
     db: State<'_, Db>,
     bot_token: String,
     chat_id: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let bot_token = bot_token.trim();
     let chat_id = chat_id.trim();
     if bot_token.is_empty() {
-        return Err("봇 토큰이 비었습니다".into());
+        return Err(AppError::validation(
+            "hermes.empty_token",
+            "봇 토큰이 비었습니다",
+        ));
     }
     if chat_id.is_empty() {
-        return Err("chat_id가 비었습니다".into());
+        return Err(AppError::validation(
+            "hermes.empty_chat_id",
+            "chat_id가 비었습니다",
+        ));
     }
-    keychain::set_token(HERMES_CREDENTIAL_REF, TokenKind::HermesBridge, bot_token)
-        .map_err(|e| e.to_string())?;
+    keychain::set_token(HERMES_CREDENTIAL_REF, TokenKind::HermesBridge, bot_token)?;
     // chat_id upsert(단일 행). last_offset은 기존 값 보존(없으면 0).
     sqlx::query(
         "INSERT INTO hermes_bridge (id, chat_id) VALUES (?1, ?2) \
@@ -68,8 +74,7 @@ pub async fn set_hermes_bridge(
     .bind(SINGLETON_ID)
     .bind(chat_id)
     .execute(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(())
     // bot_token은 여기서 drop — 어디에도 보관/반환되지 않는다.
 }
@@ -77,9 +82,13 @@ pub async fn set_hermes_bridge(
 /// 브리지 연결 상태(토큰 keychain 보유 + chat_id 설정). 봇 토큰 본문은 절대 미노출(INVARIANT).
 #[tauri::command]
 #[specta::specta]
-pub async fn hermes_bridge_status(db: State<'_, Db>) -> Result<HermesBridgeStatus, String> {
-    let has_token = load_bot_token()?.is_some();
-    let row = load_bridge_row(db.inner()).await?;
+pub async fn hermes_bridge_status(db: State<'_, Db>) -> Result<HermesBridgeStatus, AppError> {
+    let has_token = load_bot_token()
+        .map_err(|e| AppError::terminal("hermes.token_load", e))?
+        .is_some();
+    let row = load_bridge_row(db.inner())
+        .await
+        .map_err(|e| AppError::terminal("hermes.bridge_row_load", e))?;
     let chat_id = row.map(|(c, _)| c).filter(|c| !c.is_empty());
     let configured = has_token && chat_id.is_some();
     let detail = if configured {
@@ -101,14 +110,12 @@ pub async fn hermes_bridge_status(db: State<'_, Db>) -> Result<HermesBridgeStatu
 /// 연결 해제: keychain 봇 토큰 삭제 + hermes_bridge 행 삭제(메시지 로그는 보존 — 열람 가치). 멱등.
 #[tauri::command]
 #[specta::specta]
-pub async fn disconnect_hermes(db: State<'_, Db>) -> Result<(), String> {
-    keychain::delete_token(HERMES_CREDENTIAL_REF, TokenKind::HermesBridge)
-        .map_err(|e| e.to_string())?;
+pub async fn disconnect_hermes(db: State<'_, Db>) -> Result<(), AppError> {
+    keychain::delete_token(HERMES_CREDENTIAL_REF, TokenKind::HermesBridge)?;
     sqlx::query("DELETE FROM hermes_bridge WHERE id = ?1")
         .bind(SINGLETON_ID)
         .execute(db.inner())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -116,18 +123,31 @@ pub async fn disconnect_hermes(db: State<'_, Db>) -> Result<(), String> {
 /// 로그를 hermes_messages에 기록한다(제어 surface). 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
 #[tauri::command]
 #[specta::specta]
-pub async fn send_hermes_message(db: State<'_, Db>, text: String) -> Result<(), String> {
+pub async fn send_hermes_message(db: State<'_, Db>, text: String) -> Result<(), AppError> {
     let text = text.trim();
     if text.is_empty() {
-        return Err("빈 메시지는 보낼 수 없습니다".into());
+        return Err(AppError::validation(
+            "hermes.empty_message",
+            "빈 메시지는 보낼 수 없습니다",
+        ));
     }
-    let bot_token = load_bot_token()?.ok_or("미설정 — 먼저 봇 토큰을 설정하세요")?;
+    let bot_token = load_bot_token()
+        .map_err(|e| AppError::terminal("hermes.token_load", e))?
+        .ok_or_else(|| {
+            AppError::not_found("hermes.token_missing", "미설정 — 먼저 봇 토큰을 설정하세요")
+        })?;
     let (chat_id, _offset) = load_bridge_row(db.inner())
-        .await?
+        .await
+        .map_err(|e| AppError::terminal("hermes.bridge_row_load", e))?
         .filter(|(c, _)| !c.is_empty())
-        .ok_or("미설정 — 먼저 chat_id를 설정하세요")?;
+        .ok_or_else(|| {
+            AppError::not_found(
+                "hermes.chat_id_missing",
+                "미설정 — 먼저 chat_id를 설정하세요",
+            )
+        })?;
 
-    let provider = messenger::HttpMessengerProvider::new().map_err(|e| e.to_string())?;
+    let provider = messenger::HttpMessengerProvider::new()?;
     messenger::send_core(&provider, &bot_token, &chat_id, text)
         .await
         .map_err(|e| {
@@ -136,11 +156,13 @@ pub async fn send_hermes_message(db: State<'_, Db>, text: String) -> Result<(), 
             // 사용자가 본인 계정 대신 봇 자신의 ID를 입력했을 때 발생. 다른 403(차단/대화 미시작
             // 등)에는 이 안내가 틀리므로 이 특정 문구로만 매칭한다.
             if orig.contains("can't send messages to the bot") {
-                format!(
-                    "chat_id가 봇 계정을 가리킵니다 — '내 chat id 감지'로 본인 chat id를 설정하세요 (원본: {orig})"
+                AppError::terminal(
+                    "hermes.wrong_chat_id",
+                    format!("chat_id가 봇 계정을 가리킵니다 — '내 chat id 감지'로 본인 chat id를 설정하세요 (원본: {orig})"),
                 )
             } else {
-                orig
+                // From<MessengerError>를 통해 Transient/Terminal 분류 보존.
+                AppError::from(e)
             }
         })?;
 
@@ -151,8 +173,7 @@ pub async fn send_hermes_message(db: State<'_, Db>, text: String) -> Result<(), 
     )
     .bind(text)
     .execute(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(())
 }
 
@@ -161,16 +182,24 @@ pub async fn send_hermes_message(db: State<'_, Db>, text: String) -> Result<(), 
 /// (update_id UNIQUE로 멱등) offset을 전진 영속한다. 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
 #[tauri::command]
 #[specta::specta]
-pub async fn fetch_hermes_messages(db: State<'_, Db>) -> Result<HermesFetchResult, String> {
-    let bot_token = load_bot_token()?.ok_or("미설정 — 먼저 봇 토큰을 설정하세요")?;
+pub async fn fetch_hermes_messages(db: State<'_, Db>) -> Result<HermesFetchResult, AppError> {
+    let bot_token = load_bot_token()
+        .map_err(|e| AppError::terminal("hermes.token_load", e))?
+        .ok_or_else(|| {
+            AppError::not_found("hermes.token_missing", "미설정 — 먼저 봇 토큰을 설정하세요")
+        })?;
     let (_chat_id, offset) = load_bridge_row(db.inner())
-        .await?
-        .ok_or("미설정 — 먼저 봇 토큰 + chat_id를 설정하세요")?;
-
-    let provider = messenger::HttpMessengerProvider::new().map_err(|e| e.to_string())?;
-    let (msgs, next_offset) = messenger::fetch_core(&provider, &bot_token, offset)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::terminal("hermes.bridge_row_load", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "hermes.bridge_missing",
+                "미설정 — 먼저 봇 토큰 + chat_id를 설정하세요",
+            )
+        })?;
+
+    let provider = messenger::HttpMessengerProvider::new()?;
+    let (msgs, next_offset) = messenger::fetch_core(&provider, &bot_token, offset).await?;
 
     // 새 메시지 기록(text 있는 것만 로그). update_id UNIQUE 인덱스로 중복 fetch는 멱등(무시).
     let mut received = 0u32;
@@ -185,8 +214,7 @@ pub async fn fetch_hermes_messages(db: State<'_, Db>) -> Result<HermesFetchResul
         .bind(&m.text)
         .bind(m.update_id)
         .execute(db.inner())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
         received += res.rows_affected() as u32;
     }
 
@@ -198,8 +226,7 @@ pub async fn fetch_hermes_messages(db: State<'_, Db>) -> Result<HermesFetchResul
         .bind(SINGLETON_ID)
         .bind(next_offset)
         .execute(db.inner())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     }
 
     Ok(HermesFetchResult { received })
@@ -216,7 +243,7 @@ pub async fn fetch_hermes_messages(db: State<'_, Db>) -> Result<HermesFetchResul
 pub async fn detect_hermes_chat_id(
     _db: State<'_, Db>,
     bot_token: Option<String>,
-) -> Result<DetectedChat, String> {
+) -> Result<DetectedChat, AppError> {
     // 토큰 결정: 인자(trimmed, non-empty) → keychain → Err.
     let token = match bot_token
         .as_deref()
@@ -224,25 +251,27 @@ pub async fn detect_hermes_chat_id(
         .filter(|s| !s.is_empty())
     {
         Some(t) => t.to_string(),
-        None => load_bot_token()?.ok_or_else(|| "먼저 봇 토큰을 입력하세요".to_string())?,
+        None => load_bot_token()
+            .map_err(|e| AppError::terminal("hermes.token_load", e))?
+            .ok_or_else(|| {
+                AppError::not_found("hermes.token_missing", "먼저 봇 토큰을 입력하세요")
+            })?,
     };
 
     // offset=0 단발 조회 — 저장된 오프셋을 읽거나 전진하지 않는다(fetch_hermes_messages 불간섭).
-    let candidates = messenger::fetch_chat_candidates(&token)
-        .await
-        .map_err(|e| e.to_string())?;
+    let candidates = messenger::fetch_chat_candidates(&token).await?;
 
     // 선택 로직은 순수 함수(messenger::select_detected_chat)에 위임 — 단위 테스트 대상.
     match messenger::select_detected_chat(&candidates) {
         messenger::ChatSelection::Found { chat_id, label } => Ok(DetectedChat { chat_id, label }),
-        messenger::ChatSelection::OnlyBots => Err(
-            "봇 계정만 감지됨 — 본인(사람) 텔레그램 계정에서 봇에게 메시지를 보낸 뒤 다시 시도하세요"
-                .into(),
-        ),
-        messenger::ChatSelection::None => Err(
-            "수신된 메시지가 없습니다 — 텔레그램에서 봇에게 먼저 메시지를 보낸 뒤 '감지'를 누르세요"
-                .into(),
-        ),
+        messenger::ChatSelection::OnlyBots => Err(AppError::not_found(
+            "hermes.only_bots",
+            "봇 계정만 감지됨 — 본인(사람) 텔레그램 계정에서 봇에게 메시지를 보낸 뒤 다시 시도하세요",
+        )),
+        messenger::ChatSelection::None => Err(AppError::not_found(
+            "hermes.no_messages",
+            "수신된 메시지가 없습니다 — 텔레그램에서 봇에게 먼저 메시지를 보낸 뒤 '감지'를 누르세요",
+        )),
     }
 }
 
@@ -252,7 +281,7 @@ pub async fn detect_hermes_chat_id(
 pub async fn list_hermes_messages(
     db: State<'_, Db>,
     limit: u32,
-) -> Result<Vec<HermesMessage>, String> {
+) -> Result<Vec<HermesMessage>, AppError> {
     // bound: 과도한 행 로드 방지(기본 상한). 0이면 기본 200.
     let cap = if limit == 0 { 200 } else { limit.min(500) } as i64;
     let rows: Vec<HermesMessage> = sqlx::query_as(
@@ -261,8 +290,7 @@ pub async fn list_hermes_messages(
     )
     .bind(cap)
     .fetch_all(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     // UI는 오래된→최신(채팅 흐름)으로 보여주기 좋게 뒤집어 반환.
     Ok(rows.into_iter().rev().collect())
 }

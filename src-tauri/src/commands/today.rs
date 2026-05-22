@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::commands::shared::SIGNAL_COLS;
 use crate::db::Db;
+use crate::error::AppError;
 use crate::models::{
     DebtPoint, TodayOverview, WeeklyPrActivity, WeeklyReview, WeeklyRoutineAdherence,
     WeeklyThroughput, WorkDebt, WorkSignal,
@@ -31,10 +32,8 @@ pub async fn promote_today(
     db: State<'_, Db>,
     id: String,
     date: String,
-) -> Result<WorkSignal, String> {
-    promote_today_inner(db.inner(), &id, &date)
-        .await
-        .map_err(|e| e.to_string())
+) -> Result<WorkSignal, AppError> {
+    Ok(promote_today_inner(db.inner(), &id, &date).await?)
 }
 
 /// Today 승격 취소 → 원 사분면으로 복귀(없으면 미분류). 카운터 리셋.
@@ -52,10 +51,8 @@ pub async fn unpromote_today_inner(db: &Db, id: &str) -> Result<WorkSignal, sqlx
 
 #[tauri::command]
 #[specta::specta]
-pub async fn unpromote_today(db: State<'_, Db>, id: String) -> Result<WorkSignal, String> {
-    unpromote_today_inner(db.inner(), &id)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn unpromote_today(db: State<'_, Db>, id: String) -> Result<WorkSignal, AppError> {
+    Ok(unpromote_today_inner(db.inner(), &id).await?)
 }
 
 /// Today 항목 완료 토글. 완료(done)=해당 날짜 기록 → 다음날 이월 안 됨.
@@ -66,33 +63,31 @@ pub async fn toggle_today_done(
     id: String,
     date: String,
     done: bool,
-) -> Result<WorkSignal, String> {
+) -> Result<WorkSignal, AppError> {
     let done_at: Option<String> = if done { Some(date) } else { None };
-    sqlx::query_as::<_, WorkSignal>(&format!(
+    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
         "UPDATE signals SET today_done_at = ?2, updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(&id)
     .bind(done_at)
     .fetch_one(db.inner())
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 /// Today 레일 재정렬. ordered_ids 순서대로 today_rank 부여.
 #[tauri::command]
 #[specta::specta]
-pub async fn reorder_today(db: State<'_, Db>, ordered_ids: Vec<String>) -> Result<(), String> {
-    let mut tx = db.inner().begin().await.map_err(|e| e.to_string())?;
+pub async fn reorder_today(db: State<'_, Db>, ordered_ids: Vec<String>) -> Result<(), AppError> {
+    let mut tx = db.inner().begin().await?;
     for (i, id) in ordered_ids.iter().enumerate() {
         sqlx::query("UPDATE signals SET today_rank = ?2 WHERE id = ?1")
             .bind(id)
             .bind(i as i32)
             .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     }
-    tx.commit().await.map_err(|e| e.to_string())
+    Ok(tx.commit().await?)
 }
 
 /// 오늘의 Today 항목. 미완료는 매일 잔류(rollover), 완료(today_done_at=오늘)는 당일만 표시.
@@ -111,10 +106,8 @@ pub async fn fetch_today(db: &Db, today: &str) -> Result<Vec<WorkSignal>, sqlx::
 
 #[tauri::command]
 #[specta::specta]
-pub async fn list_today(db: State<'_, Db>, today: String) -> Result<Vec<WorkSignal>, String> {
-    fetch_today(db.inner(), &today)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn list_today(db: State<'_, Db>, today: String) -> Result<Vec<WorkSignal>, AppError> {
+    Ok(fetch_today(db.inner(), &today).await?)
 }
 
 // ── Today 운영 뷰 + Work Debt (Phase 11a, read 집계) ───────────────────────────
@@ -237,18 +230,15 @@ pub async fn upsert_debt_snapshot(
 /// TodayView만 호출(항상 오늘) — 과거 날짜로 스냅샷이 오염되지 않는다.
 #[tauri::command]
 #[specta::specta]
-pub async fn today_overview(db: State<'_, Db>, date: String) -> Result<TodayOverview, String> {
-    let overview = fetch_today_overview(db.inner(), &date)
-        .await
-        .map_err(|e| e.to_string())?;
+pub async fn today_overview(db: State<'_, Db>, date: String) -> Result<TodayOverview, AppError> {
+    let overview = fetch_today_overview(db.inner(), &date).await?;
     upsert_debt_snapshot(
         db.inner(),
         &date,
         &overview.work_debt,
         overview.pr_attention.len() as i64,
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(overview)
 }
 
@@ -402,10 +392,13 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
 /// 지난 7일 주간 회고 집계. `end_date`=프런트가 보내는 로컬 오늘.
 #[tauri::command]
 #[specta::specta]
-pub async fn weekly_review(db: State<'_, Db>, end_date: String) -> Result<WeeklyReview, String> {
+pub async fn weekly_review(db: State<'_, Db>, end_date: String) -> Result<WeeklyReview, AppError> {
     fetch_weekly_review(db.inner(), &end_date)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| match e {
+            sqlx::Error::Protocol(msg) => AppError::validation("today.bad_end_date", msg),
+            other => AppError::from(other),
+        })
 }
 
 #[cfg(test)]

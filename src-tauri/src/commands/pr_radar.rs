@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::commands::tokens::project_credential_ref;
 use crate::db::Db;
+use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
 use crate::keychain;
 use crate::models::{CiStatus, PrRadarItem, ReadinessBucket, TokenKind};
@@ -320,16 +321,23 @@ async fn fetch_github_repo_refs(db: &Db, project_id: &str) -> Result<Vec<RepoRef
 pub async fn refresh_pr_radar(
     db: State<'_, Db>,
     project_id: String,
-) -> Result<Vec<PrRadarItem>, String> {
-    let repos = fetch_github_repo_refs(db.inner(), &project_id).await?;
+) -> Result<Vec<PrRadarItem>, AppError> {
+    let repos = fetch_github_repo_refs(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("pr_radar.fetch_repos", e))?;
     if repos.is_empty() {
         return Ok(Vec::new());
     }
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    let token = keychain::get_token(&cref, TokenKind::Github)
-        .map_err(|e| e.to_string())?
-        .ok_or("GitHub 토큰이 없음(설정에서 토큰 저장 필요)")?;
-    let provider = HttpPrProvider::new(&token).map_err(|e| e.to_string())?;
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("pr_radar.project_not_found", e))?;
+    let token = keychain::get_token(&cref, TokenKind::Github)?.ok_or_else(|| {
+        AppError::not_found(
+            "pr_radar.token_missing",
+            "GitHub 토큰이 없음(설정에서 토큰 저장 필요)",
+        )
+    })?;
+    let provider = HttpPrProvider::new(&token)?;
     sync_pr_radar(
         db.inner(),
         &provider,
@@ -338,6 +346,7 @@ pub async fn refresh_pr_radar(
         chrono::Utc::now(),
     )
     .await
+    .map_err(|e| AppError::terminal("pr_radar.sync", e))
 }
 
 // DEPRECATED: UI의 수동 체크박스는 제거됨(PR B4). 커맨드·바인딩·pr_self_checks 테이블은 보존 —
@@ -350,7 +359,7 @@ pub async fn set_pr_self_check(
     repo_full_name: String,
     pr_number: u32,
     checked: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if checked {
         sqlx::query(
             "INSERT OR IGNORE INTO pr_self_checks (id, repo_full_name, pr_number) \
@@ -359,15 +368,13 @@ pub async fn set_pr_self_check(
         .bind(&repo_full_name)
         .bind(pr_number as i64)
         .execute(db.inner())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     } else {
         sqlx::query("DELETE FROM pr_self_checks WHERE repo_full_name = ?1 AND pr_number = ?2")
             .bind(&repo_full_name)
             .bind(pr_number as i64)
             .execute(db.inner())
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     }
     Ok(())
 }

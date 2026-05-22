@@ -2,6 +2,7 @@ use chrono::{Datelike, NaiveDate};
 use tauri::State;
 
 use crate::db::Db;
+use crate::error::AppError;
 use crate::models::{
     CreateRoutineInput, Kind, RoutineFreq, RoutineHistoryDay, RoutineToday, RoutineTrackingItem,
     UpdateRoutineInput, Weekday,
@@ -194,19 +195,19 @@ fn local_today() -> String {
 pub async fn create_routine(
     db: State<'_, Db>,
     input: CreateRoutineInput,
-) -> Result<RoutineToday, String> {
+) -> Result<RoutineToday, AppError> {
     insert_routine(db.inner(), &input)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// 루틴 수정. 필드 업데이트 후 미발사 루틴 알림을 삭제(다음 list_today_routines에서 재enqueue).
 #[tauri::command]
 #[specta::specta]
-pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Result<(), String> {
+pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Result<(), AppError> {
     update_routine_inner(db.inner(), input)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<(), sqlx::Error> {
@@ -278,10 +279,10 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
 /// 발사된 알림 행(히스토리)은 보존. 루틴 없으면 오류 반환.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_routine(db: State<'_, Db>, id: String) -> Result<(), String> {
+pub async fn delete_routine(db: State<'_, Db>, id: String) -> Result<(), AppError> {
     delete_routine_inner(db.inner(), id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 pub async fn delete_routine_inner(db: &Db, id: String) -> Result<(), sqlx::Error> {
@@ -366,10 +367,10 @@ pub async fn list_today_routines(
     db: State<'_, Db>,
     date: String,
     weekday: Weekday,
-) -> Result<Vec<RoutineToday>, String> {
+) -> Result<Vec<RoutineToday>, AppError> {
     let routines = fetch_today_routines(db.inner(), &date, weekday)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     // 오늘 due이고 시각이 있는 루틴의 알림을 멱등 enqueue(스케줄러가 발사). 실패해도 목록은 반환.
     if let Err(e) = sync_reminders(db.inner(), &date, &routines).await {
         eprintln!("[routines] reminder sync failed (date={date}): {e}");
@@ -386,7 +387,7 @@ pub async fn toggle_routine_check(
     routine_id: String,
     date: String,
     done: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if done {
         sqlx::query(
             "INSERT OR IGNORE INTO routine_checks (id, routine_id, date) \
@@ -396,7 +397,7 @@ pub async fn toggle_routine_check(
         .bind(&date)
         .execute(db.inner())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
         // 완료된 루틴은 오늘 알림을 발사하지 않는다 — 미발사 행을 fired로 마킹(skip).
         let source_id = reminder_source_id(&routine_id, &date);
@@ -408,14 +409,14 @@ pub async fn toggle_routine_check(
         .bind(utc_now_string())
         .execute(db.inner())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     } else {
         sqlx::query("DELETE FROM routine_checks WHERE routine_id = ?1 AND date = ?2")
             .bind(&routine_id)
             .bind(&date)
             .execute(db.inner())
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
     }
     Ok(())
 }
@@ -423,17 +424,17 @@ pub async fn toggle_routine_check(
 /// 루틴 재정렬 (드래그, 공용 useListReorder). ordered_ids 순서대로 rank 부여.
 #[tauri::command]
 #[specta::specta]
-pub async fn reorder_routines(db: State<'_, Db>, ordered_ids: Vec<String>) -> Result<(), String> {
-    let mut tx = db.inner().begin().await.map_err(|e| e.to_string())?;
+pub async fn reorder_routines(db: State<'_, Db>, ordered_ids: Vec<String>) -> Result<(), AppError> {
+    let mut tx = db.inner().begin().await.map_err(AppError::from)?;
     for (i, id) in ordered_ids.iter().enumerate() {
         sqlx::query("UPDATE routines SET rank = ?2 WHERE id = ?1")
             .bind(id)
             .bind(i as i32)
             .execute(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
     }
-    tx.commit().await.map_err(|e| e.to_string())
+    tx.commit().await.map_err(AppError::from)
 }
 
 // ── 알림 enqueue (시간 + 오프셋, Phase 16 #6) ──────────────────────────────────
@@ -612,10 +613,10 @@ pub async fn routine_tracking(
     db: State<'_, Db>,
     end_date: String,
     days: u32,
-) -> Result<Vec<RoutineTrackingItem>, String> {
+) -> Result<Vec<RoutineTrackingItem>, AppError> {
     fetch_routine_tracking(db.inner(), &end_date, days)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 #[cfg(test)]

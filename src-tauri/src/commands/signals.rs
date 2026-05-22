@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::commands::shared::SIGNAL_COLS;
 use crate::db::Db;
+use crate::error::AppError;
 use crate::models::{
     CreateSignalInput, Promotion, PromotionTarget, Quadrant, SignalStatus, WorkSignal,
 };
@@ -61,10 +62,13 @@ pub(crate) async fn insert_signal(
 pub async fn create_signal(
     db: State<'_, Db>,
     input: CreateSignalInput,
-) -> Result<WorkSignal, String> {
+) -> Result<WorkSignal, AppError> {
     insert_signal(db.inner(), &input)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| match e {
+            sqlx::Error::Protocol(msg) => AppError::validation("signals.empty_title", msg),
+            other => AppError::from(other),
+        })
 }
 
 /// 매트릭스 + 미분류 카드 (Today로 승격되지 않은 active 신호).
@@ -80,8 +84,8 @@ pub(crate) async fn fetch_signals(db: &Db) -> Result<Vec<WorkSignal>, sqlx::Erro
 
 #[tauri::command]
 #[specta::specta]
-pub async fn list_signals(db: State<'_, Db>) -> Result<Vec<WorkSignal>, String> {
-    fetch_signals(db.inner()).await.map_err(|e| e.to_string())
+pub async fn list_signals(db: State<'_, Db>) -> Result<Vec<WorkSignal>, AppError> {
+    Ok(fetch_signals(db.inner()).await?)
 }
 
 /// 사분면 분류 (사람 결정 레일 — INVARIANT #1). quadrant를 바꾸는 유일한 경로.
@@ -112,10 +116,8 @@ pub async fn classify_signal(
     db: State<'_, Db>,
     id: String,
     quadrant: Quadrant,
-) -> Result<WorkSignal, String> {
-    set_quadrant(db.inner(), &id, quadrant)
-        .await
-        .map_err(|e| e.to_string())
+) -> Result<WorkSignal, AppError> {
+    Ok(set_quadrant(db.inner(), &id, quadrant).await?)
 }
 
 /// 상태 변경 (완료/보관 등). done/archive 카드 메뉴.
@@ -125,16 +127,15 @@ pub async fn set_signal_status(
     db: State<'_, Db>,
     id: String,
     status: SignalStatus,
-) -> Result<WorkSignal, String> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
+) -> Result<WorkSignal, AppError> {
+    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
         "UPDATE signals SET status = ?2, updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(&id)
     .bind(status)
     .fetch_one(db.inner())
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 /// 미루기 (snooze). 매트릭스에서 숨고 snooze_until에 복귀 시점 기록.
@@ -144,16 +145,15 @@ pub async fn snooze_signal(
     db: State<'_, Db>,
     id: String,
     until: String,
-) -> Result<WorkSignal, String> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
+) -> Result<WorkSignal, AppError> {
+    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
         "UPDATE signals SET status = 'snoozed', snooze_until = ?2, updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(&id)
     .bind(&until)
     .fetch_one(db.inner())
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 // ── 브레인덤프 편집 / 하드 삭제 (Phase 15 #5) ──────────────────────────────────
@@ -191,21 +191,23 @@ pub async fn update_signal_title(
     db: State<'_, Db>,
     id: String,
     title: String,
-) -> Result<WorkSignal, String> {
+) -> Result<WorkSignal, AppError> {
     update_title(db.inner(), &id, &title)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| match e {
+            sqlx::Error::Protocol(msg) => AppError::validation("signals.empty_title", msg),
+            other => AppError::from(other),
+        })
 }
 
 /// 신호 하드 삭제(영구 — archive와 구분). 카드 행 자체를 DELETE한다(보관/스누즈와 달리 복원 불가).
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_signal(db: State<'_, Db>, id: String) -> Result<(), String> {
+pub async fn delete_signal(db: State<'_, Db>, id: String) -> Result<(), AppError> {
     sqlx::query("DELETE FROM signals WHERE id = ?1")
         .bind(&id)
         .execute(db.inner())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -243,10 +245,8 @@ pub async fn create_promotion_draft(
     db: State<'_, Db>,
     signal_id: String,
     target: PromotionTarget,
-) -> Result<Promotion, String> {
-    insert_promotion_draft(db.inner(), &signal_id, target)
-        .await
-        .map_err(|e| e.to_string())
+) -> Result<Promotion, AppError> {
+    Ok(insert_promotion_draft(db.inner(), &signal_id, target).await?)
 }
 
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────
@@ -254,14 +254,14 @@ pub async fn create_promotion_draft(
 /// 본문/제목 전역 검색 (FTS5). 빈 쿼리는 빈 결과.
 #[tauri::command]
 #[specta::specta]
-pub async fn search_signals(db: State<'_, Db>, query: String) -> Result<Vec<WorkSignal>, String> {
+pub async fn search_signals(db: State<'_, Db>, query: String) -> Result<Vec<WorkSignal>, AppError> {
     let q = query.trim();
     if q.is_empty() {
         return Ok(Vec::new());
     }
     // 사용자 입력을 phrase로 감싸 FTS 연산자 오인을 막는다.
     let match_expr = format!("\"{}\"", q.replace('"', "\"\""));
-    sqlx::query_as::<_, WorkSignal>(&format!(
+    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
         "SELECT {} FROM signals s \
          JOIN signals_fts f ON f.rowid = s.rowid \
          WHERE signals_fts MATCH ?1 ORDER BY rank",
@@ -273,8 +273,7 @@ pub async fn search_signals(db: State<'_, Db>, query: String) -> Result<Vec<Work
     ))
     .bind(match_expr)
     .fetch_all(db.inner())
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 #[cfg(test)]

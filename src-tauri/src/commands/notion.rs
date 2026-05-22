@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::commands::signals::insert_promotion_draft;
 use crate::db::Db;
+use crate::error::AppError;
 use crate::keychain;
 use crate::models::{
     FlushSummary, Promotion, PromotionOutcome, PromotionStatus, PromotionTarget, TokenKind,
@@ -322,13 +323,14 @@ pub async fn promote_to_notion(
     signal_id: String,
     target: PromotionTarget,
     project_id: Option<String>,
-) -> Result<PromotionOutcome, String> {
+) -> Result<PromotionOutcome, AppError> {
     let (token, db_id, resolved_pid) =
-        resolve_notion_target(db.inner(), &signal_id, target, project_id.as_deref()).await?;
-    let writer = HttpNotionWriter::new().map_err(|e| e.to_string())?;
-    let mut outcome = execute_promotion(db.inner(), &signal_id, target, &writer, &token, &db_id)
-        .await
-        .map_err(|e| e.to_string())?;
+        resolve_notion_target(db.inner(), &signal_id, target, project_id.as_deref())
+            .await
+            .map_err(|e| AppError::terminal("notion.promote_resolve", e))?;
+    let writer = HttpNotionWriter::new()?;
+    let mut outcome =
+        execute_promotion(db.inner(), &signal_id, target, &writer, &token, &db_id).await?;
     // 자동 지정(또는 명시 전달)된 project_id를 outcome에 노출해 프런트 라벨용으로 돌려준다.
     outcome.resolved_project_id = Some(resolved_pid);
     Ok(outcome)
@@ -373,11 +375,9 @@ async fn flush_inner<W: NotionWriter>(db: &Db, writer: &W) -> Result<FlushSummar
 
 #[tauri::command]
 #[specta::specta]
-pub async fn flush_promotions(db: State<'_, Db>) -> Result<FlushSummary, String> {
-    let writer = HttpNotionWriter::new().map_err(|e| e.to_string())?;
-    flush_inner(db.inner(), &writer)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn flush_promotions(db: State<'_, Db>) -> Result<FlushSummary, AppError> {
+    let writer = HttpNotionWriter::new()?;
+    Ok(flush_inner(db.inner(), &writer).await?)
 }
 
 /// 프로젝트의 Notion DB 연결을 테스트한다. token은 keychain에서 Rust 안에서만 읽고 반환하지 않는다.
@@ -388,51 +388,63 @@ pub async fn test_notion_connection(
     db: State<'_, Db>,
     project_id: String,
     target: PromotionTarget,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     // 프로젝트에서 credential_ref + DB ID 조회.
     let proj: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT credential_ref, notion_backlog_db_id, notion_agenda_db_id FROM projects WHERE id = ?1",
     )
     .bind(&project_id)
     .fetch_optional(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
-    let (cref, backlog, agenda) = proj.ok_or("프로젝트를 찾을 수 없음")?;
+    .await?;
+    let (cref, backlog, agenda) = proj.ok_or_else(|| {
+        AppError::not_found("notion.project_not_found", "프로젝트를 찾을 수 없음")
+    })?;
 
     let db_id = match target {
         PromotionTarget::NotionBacklog => backlog,
         PromotionTarget::NotionAgenda => agenda,
-        _ => return Err("Notion 타깃이 아님".into()),
+        _ => {
+            return Err(AppError::validation(
+                "notion.invalid_target",
+                "Notion 타깃이 아님",
+            ))
+        }
     }
-    .ok_or("프로젝트에 Notion DB ID가 설정되지 않음(설정에서 바인딩 필요)")?;
+    .ok_or_else(|| {
+        AppError::not_found(
+            "notion.db_id_missing",
+            "프로젝트에 Notion DB ID가 설정되지 않음(설정에서 바인딩 필요)",
+        )
+    })?;
 
     // 토큰 keychain에서만 — 반환하지 않는다(INVARIANT).
-    let token = keychain::get_token(&cref, TokenKind::Notion)
-        .map_err(|e| e.to_string())?
-        .ok_or("Notion 토큰이 없음(설정에서 토큰 저장 필요)")?;
+    let token = keychain::get_token(&cref, TokenKind::Notion)?.ok_or_else(|| {
+        AppError::not_found(
+            "notion.token_missing",
+            "Notion 토큰이 없음(설정에서 토큰 저장 필요)",
+        )
+    })?;
 
     // GET /databases/{id} — HttpNotionWriter의 rate limiter를 거치지 않고 직접 호출한다
     // (테스트 단발이므로 pacing 불필요). reqwest 클라이언트를 최소 구성으로 직접 사용한다.
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| e.to_string())?;
+        .build()?;
     let resp = client
         .get(format!("https://api.notion.com/v1/databases/{db_id}"))
         .bearer_auth(&token)
         .header("Notion-Version", "2022-06-28")
         .send()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let status = resp.status().as_u16();
     let body = resp.text().await.unwrap_or_default();
 
     if !(200..300).contains(&status) {
         let err = crate::notion::classify_http_pub(status, &body);
-        return Err(err.to_string());
+        return Err(AppError::from(err));
     }
-    let json: serde_json::Value =
-        serde_json::from_str(&body).map_err(|e| format!("응답 파싱 실패: {e}"))?;
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|e| AppError::terminal("notion.parse_error", format!("응답 파싱 실패: {e}")))?;
     let title_prop = find_title_prop(&json).unwrap_or_else(|| "(title 속성 없음)".into());
     Ok(format!("연결됨 — DB title 속성: {title_prop}"))
 }
@@ -443,7 +455,7 @@ pub async fn test_notion_connection(
 pub async fn list_promotions(
     db: State<'_, Db>,
     signal_id: Option<String>,
-) -> Result<Vec<Promotion>, String> {
+) -> Result<Vec<Promotion>, AppError> {
     let rows = if let Some(sid) = signal_id {
         sqlx::query_as::<_, Promotion>(&format!(
             "SELECT {PROMOTION_COLS} FROM promotions WHERE signal_id = ?1 ORDER BY created_at DESC"
@@ -458,7 +470,7 @@ pub async fn list_promotions(
         .fetch_all(db.inner())
         .await
     };
-    rows.map_err(|e| e.to_string())
+    Ok(rows?)
 }
 
 #[cfg(test)]

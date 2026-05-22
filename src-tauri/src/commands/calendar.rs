@@ -4,6 +4,7 @@ use crate::calendar::{self, CalendarCreds, CalendarProvider};
 use crate::commands::projects::fetch_projects;
 use crate::commands::tokens::project_credential_ref;
 use crate::db::Db;
+use crate::error::AppError;
 use crate::keychain;
 use crate::models::{
     CalendarEvent, CalendarListItem, CreateCalendarEventInput, CreatedCalendarEvent,
@@ -36,15 +37,19 @@ pub async fn set_google_oauth_client(
     project_id: String,
     client_id: String,
     client_secret: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let client_id = client_id.trim();
     let client_secret = client_secret.trim();
     if client_id.is_empty() || client_secret.is_empty() {
-        return Err("client_id/secret이 비었습니다".into());
+        return Err(AppError::validation(
+            "calendar.empty_client",
+            "client_id/secret이 비었습니다",
+        ));
     }
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    let refresh_token = keychain::get_token(&cref, TokenKind::GoogleCalendar)
-        .map_err(|e| e.to_string())?
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.project_not_found", e))?;
+    let refresh_token = keychain::get_token(&cref, TokenKind::GoogleCalendar)?
         .and_then(|s| CalendarCreds::from_blob(&s).ok())
         .filter(|c| c.client_id == client_id) // 같은 client일 때만 기존 연결 유지.
         .and_then(|c| c.refresh_token);
@@ -53,47 +58,60 @@ pub async fn set_google_oauth_client(
         client_secret: client_secret.to_string(),
         refresh_token,
     };
-    keychain::set_token(&cref, TokenKind::GoogleCalendar, &creds.to_blob())
-        .map_err(|e| e.to_string())
+    Ok(keychain::set_token(
+        &cref,
+        TokenKind::GoogleCalendar,
+        &creds.to_blob(),
+    )?)
 }
 
 /// loopback + PKCE(S256) OAuth 실행 → refresh_token을 keychain blob에 저장. bounded(loopback timeout).
 /// client 미입력이면 Err(graceful degrade). 실 네트워크/브라우저라 cargo test 아님(사용자 관찰).
 #[tauri::command]
 #[specta::specta]
-pub async fn start_google_oauth(db: State<'_, Db>, project_id: String) -> Result<(), String> {
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
+pub async fn start_google_oauth(db: State<'_, Db>, project_id: String) -> Result<(), AppError> {
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.project_not_found", e))?;
     let creds = load_calendar_creds(db.inner(), &project_id)
-        .await?
+        .await
+        .map_err(|e| AppError::terminal("calendar.creds_load", e))?
         .filter(|c| !c.client_id.is_empty() && !c.client_secret.is_empty())
-        .ok_or_else(|| "먼저 OAuth client(client_id/secret)를 입력하세요".to_string())?;
+        .ok_or_else(|| {
+            AppError::validation(
+                "calendar.client_missing",
+                "먼저 OAuth client(client_id/secret)를 입력하세요",
+            )
+        })?;
 
     // PKCE + state + loopback bind(redirect_uri 확정) → 브라우저 열기 → redirect 수신(bounded).
     let verifier = calendar::gen_code_verifier();
     let challenge = calendar::pkce_challenge(&verifier);
     let state = calendar::gen_state();
-    let loopback = calendar::Loopback::bind()
-        .await
-        .map_err(|e| e.to_string())?;
+    let loopback = calendar::Loopback::bind().await?;
     let redirect_uri = loopback.redirect_uri.clone();
     let url = calendar::auth_url(&creds.client_id, &redirect_uri, &challenge, &state);
-    tauri_plugin_opener::open_url(&url, None::<&str>)
-        .map_err(|e| format!("브라우저 열기 실패: {e}"))?;
+    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| {
+        AppError::terminal("calendar.browser_open", format!("브라우저 열기 실패: {e}"))
+    })?;
 
     let (code, recv_state) = loopback
         .wait_for_redirect(calendar::LOOPBACK_TIMEOUT)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     if recv_state != state {
-        return Err("OAuth state 불일치 (CSRF 의심) — 다시 시도하세요".into());
+        return Err(AppError::terminal(
+            "calendar.oauth_state_mismatch",
+            "OAuth state 불일치 (CSRF 의심) — 다시 시도하세요",
+        ));
     }
 
-    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
-    let updated = calendar::connect_core(&provider, creds, &code, &verifier, &redirect_uri)
-        .await
-        .map_err(|e| e.to_string())?;
-    keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())
-        .map_err(|e| e.to_string())
+    let provider = calendar::HttpCalendarProvider::new()?;
+    let updated = calendar::connect_core(&provider, creds, &code, &verifier, &redirect_uri).await?;
+    Ok(keychain::set_token(
+        &cref,
+        TokenKind::GoogleCalendar,
+        &updated.to_blob(),
+    )?)
 }
 
 /// 연결 상태(client 입력됨 / refresh_token 보유). 토큰 본문 미노출(graceful degrade 판정용).
@@ -102,38 +120,45 @@ pub async fn start_google_oauth(db: State<'_, Db>, project_id: String) -> Result
 pub async fn google_calendar_status(
     db: State<'_, Db>,
     project_id: String,
-) -> Result<GoogleCalendarStatus, String> {
-    Ok(match load_calendar_creds(db.inner(), &project_id).await? {
-        None => GoogleCalendarStatus {
-            has_client: false,
-            connected: false,
-            detail: "OAuth client 미입력".into(),
-        },
-        Some(c) => {
-            let has_client = !c.client_id.is_empty() && !c.client_secret.is_empty();
-            let connected = c.has_refresh();
-            let detail = if connected {
-                "연결됨".into()
-            } else if has_client {
-                "client 입력됨 — '연결'로 Google 동의 진행".into()
-            } else {
-                "OAuth client 미입력".into()
-            };
-            GoogleCalendarStatus {
-                has_client,
-                connected,
-                detail,
+) -> Result<GoogleCalendarStatus, AppError> {
+    Ok(
+        match load_calendar_creds(db.inner(), &project_id)
+            .await
+            .map_err(|e| AppError::terminal("calendar.creds_load", e))?
+        {
+            None => GoogleCalendarStatus {
+                has_client: false,
+                connected: false,
+                detail: "OAuth client 미입력".into(),
+            },
+            Some(c) => {
+                let has_client = !c.client_id.is_empty() && !c.client_secret.is_empty();
+                let connected = c.has_refresh();
+                let detail = if connected {
+                    "연결됨".into()
+                } else if has_client {
+                    "client 입력됨 — '연결'로 Google 동의 진행".into()
+                } else {
+                    "OAuth client 미입력".into()
+                };
+                GoogleCalendarStatus {
+                    has_client,
+                    connected,
+                    detail,
+                }
             }
-        }
-    })
+        },
+    )
 }
 
 /// 연결 해제: keychain blob 전체(client + refresh_token) 삭제.
 #[tauri::command]
 #[specta::specta]
-pub async fn disconnect_google(db: State<'_, Db>, project_id: String) -> Result<(), String> {
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    keychain::delete_token(&cref, TokenKind::GoogleCalendar).map_err(|e| e.to_string())
+pub async fn disconnect_google(db: State<'_, Db>, project_id: String) -> Result<(), AppError> {
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.project_not_found", e))?;
+    Ok(keychain::delete_token(&cref, TokenKind::GoogleCalendar)?)
 }
 
 /// 연결 검증(read-only): refresh_token으로 access token 재발급을 시도해 본다(bounded). 토큰 본문 미노출.
@@ -144,9 +169,14 @@ pub async fn disconnect_google(db: State<'_, Db>, project_id: String) -> Result<
 pub async fn ping_google_calendar(
     db: State<'_, Db>,
     project_id: String,
-) -> Result<PingResult, String> {
-    let cref = project_credential_ref(db.inner(), &project_id).await?;
-    let Some(creds) = load_calendar_creds(db.inner(), &project_id).await? else {
+) -> Result<PingResult, AppError> {
+    let cref = project_credential_ref(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.project_not_found", e))?;
+    let Some(creds) = load_calendar_creds(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.creds_load", e))?
+    else {
         return Ok(PingResult {
             ok: false,
             detail: "OAuth client 미입력".into(),
@@ -158,12 +188,11 @@ pub async fn ping_google_calendar(
             detail: "미연결 — '연결'을 먼저 진행하세요".into(),
         });
     }
-    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    let provider = calendar::HttpCalendarProvider::new()?;
     match calendar::refresh_core(&provider, creds).await {
         Ok((_access, updated)) => {
             // refresh_token이 회전됐을 수 있으니 갱신 저장(merge_refresh로 기존 보존).
-            keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())
-                .map_err(|e| e.to_string())?;
+            keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())?;
             Ok(PingResult {
                 ok: true,
                 detail: "연결 정상 (access token 재발급됨)".into(),
@@ -226,18 +255,17 @@ async fn access_token_for(db: &Db, project_id: &str) -> Result<Option<String>, S
 pub async fn list_google_calendars(
     db: State<'_, Db>,
     project_id: String,
-) -> Result<Vec<CalendarListItem>, String> {
+) -> Result<Vec<CalendarListItem>, AppError> {
     let access = access_token_for(db.inner(), &project_id)
-        .await?
-        .ok_or_else(|| "미연결 — 먼저 연결하세요".to_string())?;
-    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
-    let cals = provider
-        .list_calendars(&access)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| AppError::not_found("calendar.not_connected", "미연결 — 먼저 연결하세요"))?;
+    let provider = calendar::HttpCalendarProvider::new()?;
+    let cals = provider.list_calendars(&access).await?;
     let selected: std::collections::HashSet<String> =
         load_selected_calendars(db.inner(), &project_id)
-            .await?
+            .await
+            .map_err(|e| AppError::terminal("calendar.load_selected", e))?
             .into_iter()
             .map(|c| c.id)
             .collect();
@@ -259,16 +287,16 @@ pub async fn set_selected_calendars(
     db: State<'_, Db>,
     project_id: String,
     calendars: Vec<SelectedCalendar>,
-) -> Result<(), String> {
-    let json = serde_json::to_string(&calendars).map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    let json = serde_json::to_string(&calendars)
+        .map_err(|e| AppError::terminal("calendar.serialize", format!("직렬화 실패: {e}")))?;
     sqlx::query(
         "UPDATE projects SET google_calendar_ids = ?2, updated_at = datetime('now') WHERE id = ?1",
     )
     .bind(&project_id)
     .bind(json)
     .execute(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(())
 }
 
@@ -280,21 +308,20 @@ pub async fn fetch_calendar_events(
     db: State<'_, Db>,
     project_id: Option<String>,
     date: String,
-) -> Result<Vec<CalendarEvent>, String> {
+) -> Result<Vec<CalendarEvent>, AppError> {
     let offset = calendar::local_offset();
     let (time_min, time_max) = calendar::today_window(&date, &offset);
 
     let project_ids: Vec<String> = match project_id {
         Some(p) => vec![p],
         None => fetch_projects(db.inner())
-            .await
-            .map_err(|e| e.to_string())?
+            .await?
             .into_iter()
             .map(|p| p.id)
             .collect(),
     };
 
-    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
+    let provider = calendar::HttpCalendarProvider::new()?;
     let mut ctxs = Vec::new();
     for pid in project_ids {
         // 프로젝트별 부분 실패 격리: 미연결/refresh 실패/선택 없음은 건너뛴다.
@@ -330,8 +357,10 @@ pub async fn fetch_calendar_events(
 pub async fn list_selected_calendars(
     db: State<'_, Db>,
     project_id: String,
-) -> Result<Vec<SelectedCalendar>, String> {
-    load_selected_calendars(db.inner(), &project_id).await
+) -> Result<Vec<SelectedCalendar>, AppError> {
+    load_selected_calendars(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.load_selected", e))
 }
 
 /// 카드 → 직접 모달 → Google Calendar 이벤트 생성(write). 사용자 폼 = 사람 결정이라 Acceptance 게이트
@@ -344,17 +373,29 @@ pub async fn create_calendar_event(
     project_id: String,
     calendar_id: String,
     event: CreateCalendarEventInput,
-) -> Result<CreatedCalendarEvent, String> {
+) -> Result<CreatedCalendarEvent, AppError> {
     let title = event.title.trim();
     if title.is_empty() {
-        return Err("이벤트 제목이 비었습니다".into());
+        return Err(AppError::validation(
+            "calendar.empty_title",
+            "이벤트 제목이 비었습니다",
+        ));
     }
     if calendar_id.trim().is_empty() {
-        return Err("캘린더를 선택하세요".into());
+        return Err(AppError::validation(
+            "calendar.no_calendar_selected",
+            "캘린더를 선택하세요",
+        ));
     }
     let access = access_token_for(db.inner(), &project_id)
-        .await?
-        .ok_or_else(|| "미연결 — 먼저 Google Calendar를 연결하세요".to_string())?;
+        .await
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "calendar.not_connected",
+                "미연결 — 먼저 Google Calendar를 연결하세요",
+            )
+        })?;
 
     let input = calendar::CreateEventInput {
         title: title.to_string(),
@@ -366,10 +407,7 @@ pub async fn create_calendar_event(
             .map(|d| d.trim().to_string())
             .filter(|d| !d.is_empty()),
     };
-    let provider = calendar::HttpCalendarProvider::new().map_err(|e| e.to_string())?;
-    let (id, url) = provider
-        .create_event(&access, &calendar_id, &input)
-        .await
-        .map_err(|e| e.to_string())?;
+    let provider = calendar::HttpCalendarProvider::new()?;
+    let (id, url) = provider.create_event(&access, &calendar_id, &input).await?;
     Ok(CreatedCalendarEvent { id, url })
 }

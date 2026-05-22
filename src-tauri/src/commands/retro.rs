@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::commands::shared::SIGNAL_COLS;
 use crate::db::Db;
+use crate::error::AppError;
 use crate::models::WorkSignal;
 
 // ── 회고(retro) 뷰 (Phase 17, 로컬 read + 사람 태깅) ──────────────────────────────
@@ -33,10 +34,10 @@ pub async fn list_completed(
     db: State<'_, Db>,
     start: String,
     end: String,
-) -> Result<Vec<WorkSignal>, String> {
+) -> Result<Vec<WorkSignal>, AppError> {
     fetch_completed(db.inner(), &start, &end)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// 고임팩트 태그 토글(사람 결정 — INVARIANT #1). quadrant/status는 건드리지 않는다.
@@ -57,10 +58,10 @@ pub async fn set_signal_impact(
     db: State<'_, Db>,
     id: String,
     value: bool,
-) -> Result<WorkSignal, String> {
+) -> Result<WorkSignal, AppError> {
     set_impact(db.inner(), &id, value)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// 후회(하지말걸) 태그 토글(사람 결정 — INVARIANT #1).
@@ -81,10 +82,10 @@ pub async fn set_signal_regret(
     db: State<'_, Db>,
     id: String,
     value: bool,
-) -> Result<WorkSignal, String> {
+) -> Result<WorkSignal, AppError> {
     set_regret(db.inner(), &id, value)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 // ── 보관함(archive) 뷰 (Phase 17, archived + snoozed 열람 + 복원) ─────────────────
@@ -103,10 +104,10 @@ pub async fn fetch_archived_snoozed(db: &Db) -> Result<Vec<WorkSignal>, sqlx::Er
 
 #[tauri::command]
 #[specta::specta]
-pub async fn list_archived_snoozed(db: State<'_, Db>) -> Result<Vec<WorkSignal>, String> {
+pub async fn list_archived_snoozed(db: State<'_, Db>) -> Result<Vec<WorkSignal>, AppError> {
     fetch_archived_snoozed(db.inner())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// 신호 복원(사람 결정 — INVARIANT #1). archived → unclassified(new). snoozed → 원 사분면 복귀
@@ -125,8 +126,8 @@ pub async fn restore(db: &Db, id: &str) -> Result<WorkSignal, sqlx::Error> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn restore_signal(db: State<'_, Db>, id: String) -> Result<WorkSignal, String> {
-    restore(db.inner(), &id).await.map_err(|e| e.to_string())
+pub async fn restore_signal(db: State<'_, Db>, id: String) -> Result<WorkSignal, AppError> {
+    restore(db.inner(), &id).await.map_err(AppError::from)
 }
 
 #[cfg(test)]

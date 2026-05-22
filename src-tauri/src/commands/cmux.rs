@@ -6,6 +6,8 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::error::AppError;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CmuxWorkspace {
@@ -96,7 +98,7 @@ fn resolve_cmux_bin() -> Option<std::path::PathBuf> {
 /// 바이너리 부재·타임아웃·비-0 종료 → Ok(available:false, []) — 절대 Err 아님.
 #[tauri::command]
 #[specta::specta]
-pub async fn cmux_status() -> Result<CmuxStatus, String> {
+pub async fn cmux_status() -> Result<CmuxStatus, AppError> {
     let unavailable = CmuxStatus {
         available: false,
         workspaces: vec![],

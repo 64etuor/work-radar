@@ -20,6 +20,7 @@ use crate::commands::agents::{
     BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, ENRICH_PROMPT, PR_SELFCHECK_PROMPT,
 };
 use crate::db::Db;
+use crate::error::AppError;
 use crate::models::{CreateSkillInput, ExternalSkill, Skill};
 
 /// 인앱 프롬프트 binding 키(잡 트리거가 lookup에 쓰는 식별자). 4개 하드코딩 프롬프트와 1:1.
@@ -93,7 +94,7 @@ pub async fn resolve_prompt(db: &Db, binding: &str, fallback: &str) -> String {
 /// ~/.claude/skills를 스캔해 ExternalSkill→Skill(kind="external")로 합성한다(영속 안 함 — 디스크 SSOT).
 #[tauri::command]
 #[specta::specta]
-pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, String> {
+pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, AppError> {
     // 인앱(편집 가능 잡 템플릿) — DB SSOT.
     let mut skills: Vec<Skill> = sqlx::query_as::<_, Skill>(
         "SELECT id, name, kind, prompt, binding, rail, enabled, source_path, created_at, updated_at \
@@ -101,7 +102,7 @@ pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, String> {
     )
     .fetch_all(db.inner())
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::from)?;
 
     // 외부(디스크 스킬) — 스캔해서 합성 행으로 덧붙인다(영속 안 함). 스캔 실패는 인앱만 반환(graceful).
     if let Ok(externals) = scan_external_skills_core() {
@@ -134,11 +135,12 @@ pub async fn update_skill(
     prompt: Option<String>,
     name: Option<String>,
     enabled: Option<bool>,
-) -> Result<Skill, String> {
+) -> Result<Skill, AppError> {
     if id.starts_with("ext:") {
-        return Err(
-            "외부 스킬은 레지스트리에서 수정할 수 없습니다(파일을 직접 편집하세요).".into(),
-        );
+        return Err(AppError::validation(
+            "skills.external_readonly",
+            "외부 스킬은 레지스트리에서 수정할 수 없습니다(파일을 직접 편집하세요).",
+        ));
     }
     // COALESCE로 부분 업데이트(None은 기존값 유지). enabled는 0/1로 바인딩.
     sqlx::query_as::<_, Skill>(
@@ -156,34 +158,43 @@ pub async fn update_skill(
     .bind(enabled)
     .fetch_optional(db.inner())
     .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| "인앱 스킬을 찾을 수 없습니다.".to_string())
+    .map_err(AppError::from)?
+    .ok_or_else(|| AppError::not_found("skills.not_found", "인앱 스킬을 찾을 수 없습니다."))
 }
 
 /// 인앱 프롬프트 추가(미바인딩 또는 binding 지정). binding은 닫힌 세트(4개 잡 키)에서만 — 미지의
 /// binding은 거부(잡 lookup이 못 찾는 죽은 행 방지). binding UNIQUE라 이미 그 잡에 행이 있으면 거부.
 #[tauri::command]
 #[specta::specta]
-pub async fn create_skill(db: State<'_, Db>, input: CreateSkillInput) -> Result<Skill, String> {
+pub async fn create_skill(db: State<'_, Db>, input: CreateSkillInput) -> Result<Skill, AppError> {
     let name = input.name.trim();
     let prompt = input.prompt.trim();
     if name.is_empty() {
-        return Err("이름이 비었습니다.".into());
+        return Err(AppError::validation(
+            "skills.name_empty",
+            "이름이 비었습니다.",
+        ));
     }
     if prompt.is_empty() {
-        return Err("프롬프트가 비었습니다.".into());
+        return Err(AppError::validation(
+            "skills.prompt_empty",
+            "프롬프트가 비었습니다.",
+        ));
     }
     if let Some(b) = &input.binding {
         if fallback_prompt(b).is_none() {
-            return Err(format!(
-                "알 수 없는 binding '{b}' — enrich/batch_enrich/ci_triage/pr_selfcheck 중 하나여야 합니다."
+            return Err(AppError::validation(
+                "skills.unknown_binding",
+                format!(
+                    "알 수 없는 binding '{b}' — enrich/batch_enrich/ci_triage/pr_selfcheck 중 하나여야 합니다."
+                ),
             ));
         }
     }
     let id: (String,) = sqlx::query_as("SELECT lower(hex(randomblob(16)))")
         .fetch_one(db.inner())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     sqlx::query_as::<_, Skill>(
         "INSERT INTO skills (id, name, kind, prompt, binding, rail, enabled) \
          VALUES (?1, ?2, 'in_app_prompt', ?3, ?4, 'suggestion', 1) \
@@ -198,9 +209,12 @@ pub async fn create_skill(db: State<'_, Db>, input: CreateSkillInput) -> Result<
     .map_err(|e| {
         // binding UNIQUE 충돌은 사람이 읽을 메시지로.
         if e.to_string().contains("UNIQUE") {
-            "이미 그 잡에 바인딩된 인앱 프롬프트가 있습니다(기존 것을 편집하세요).".to_string()
+            AppError::terminal(
+                "skills.binding_conflict",
+                "이미 그 잡에 바인딩된 인앱 프롬프트가 있습니다(기존 것을 편집하세요).",
+            )
         } else {
-            e.to_string()
+            AppError::from(e)
         }
     })
 }
@@ -209,17 +223,23 @@ pub async fn create_skill(db: State<'_, Db>, input: CreateSkillInput) -> Result<
 /// 폴백(코드 상수)으로 돌아가므로 안전(기본 동작 보존). 외부 id는 거부.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_skill(db: State<'_, Db>, id: String) -> Result<(), String> {
+pub async fn delete_skill(db: State<'_, Db>, id: String) -> Result<(), AppError> {
     if id.starts_with("ext:") {
-        return Err("외부 스킬은 레지스트리에서 삭제할 수 없습니다(파일은 사용자 소유).".into());
+        return Err(AppError::validation(
+            "skills.external_readonly",
+            "외부 스킬은 레지스트리에서 삭제할 수 없습니다(파일은 사용자 소유).",
+        ));
     }
     let res = sqlx::query("DELETE FROM skills WHERE id = ?1 AND kind = 'in_app_prompt'")
         .bind(&id)
         .execute(db.inner())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     if res.rows_affected() == 0 {
-        return Err("인앱 스킬을 찾을 수 없습니다.".into());
+        return Err(AppError::not_found(
+            "skills.not_found",
+            "인앱 스킬을 찾을 수 없습니다.",
+        ));
     }
     Ok(())
 }
@@ -307,25 +327,32 @@ pub(crate) fn scan_external_skills_core() -> Result<Vec<ExternalSkill>, String> 
 /// 읽기 전용 브라우즈. 디렉터리 부재면 빈 목록(graceful degrade).
 #[tauri::command]
 #[specta::specta]
-pub async fn scan_external_skills() -> Result<Vec<ExternalSkill>, String> {
-    scan_external_skills_core()
+pub async fn scan_external_skills() -> Result<Vec<ExternalSkill>, AppError> {
+    scan_external_skills_core().map_err(|e| AppError::terminal("skills.scan_failed", e))
 }
 
 /// 외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관.
 #[tauri::command]
 #[specta::specta]
-pub async fn read_external_skill(path: String) -> Result<String, String> {
-    ensure_within_skills_dir(&path)?;
-    std::fs::read_to_string(&path).map_err(|e| format!("파일을 읽지 못했습니다: {e}"))
+pub async fn read_external_skill(path: String) -> Result<String, AppError> {
+    ensure_within_skills_dir(&path).map_err(|e| AppError::validation("skills.path_guard", e))?;
+    std::fs::read_to_string(&path).map_err(|e| {
+        AppError::terminal("skills.read_failed", format!("파일을 읽지 못했습니다: {e}"))
+    })
 }
 
 /// 외부 스킬 파일 내용 쓰기(사용자 명시 액션 — 자기 파일 편집). ~/.claude/skills 하위만 허용(가드).
 /// 실행하지 않는다(쓰기만). 외부 스킬을 work-radar가 자동 적용/실행하는 경로는 없다.
 #[tauri::command]
 #[specta::specta]
-pub async fn write_external_skill(path: String, content: String) -> Result<(), String> {
-    ensure_within_skills_dir(&path)?;
-    std::fs::write(&path, content).map_err(|e| format!("파일을 쓰지 못했습니다: {e}"))
+pub async fn write_external_skill(path: String, content: String) -> Result<(), AppError> {
+    ensure_within_skills_dir(&path).map_err(|e| AppError::validation("skills.path_guard", e))?;
+    std::fs::write(&path, content).map_err(|e| {
+        AppError::terminal(
+            "skills.write_failed",
+            format!("파일을 쓰지 못했습니다: {e}"),
+        )
+    })
 }
 
 /// 경로가 ~/.claude/skills 안에 있고 SKILL.md인지 검증(디렉터리 탈출/임의 파일 접근 방지).

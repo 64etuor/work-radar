@@ -8,6 +8,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 use crate::db::Db;
+use crate::error::AppError;
 use crate::scheduler::utc_now_string;
 
 /// 알림 권한 상태(프런트 표시용 문자열 + bool). PermissionState를 직접 노출하지 않고
@@ -37,7 +38,7 @@ fn map_state(s: PermissionState) -> NotificationPermission {
 /// 현재 알림 권한 상태 조회. 미지원/오류면 unknown으로 graceful degrade(앱 코어 무영향).
 #[tauri::command]
 #[specta::specta]
-pub async fn notification_permission(app: AppHandle) -> Result<NotificationPermission, String> {
+pub async fn notification_permission(app: AppHandle) -> Result<NotificationPermission, AppError> {
     match app.notification().permission_state() {
         Ok(s) => Ok(map_state(s)),
         Err(_) => Ok(NotificationPermission {
@@ -52,10 +53,13 @@ pub async fn notification_permission(app: AppHandle) -> Result<NotificationPermi
 #[specta::specta]
 pub async fn request_notification_permission(
     app: AppHandle,
-) -> Result<NotificationPermission, String> {
+) -> Result<NotificationPermission, AppError> {
     match app.notification().request_permission() {
         Ok(s) => Ok(map_state(s)),
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(AppError::terminal(
+            "scheduler.permission_request",
+            e.to_string(),
+        )),
     }
 }
 
@@ -67,7 +71,7 @@ pub async fn request_notification_permission(
 pub async fn schedule_test_notification(
     db: State<'_, Db>,
     seconds_from_now: i32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let secs = seconds_from_now.max(0) as i64;
     let now = utc_now_string();
     sqlx::query(
@@ -78,7 +82,6 @@ pub async fn schedule_test_notification(
     .bind(&now)
     .bind(secs)
     .execute(db.inner())
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(())
 }

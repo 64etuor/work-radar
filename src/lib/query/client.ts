@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  type AppError,
   type Weekday,
   type WorkSignal,
 } from "@/bindings";
@@ -32,11 +33,13 @@ export const queryClient = new QueryClient({
 });
 
 // ── IPC 결과 언랩 (terminal failure를 그대로 노출 — INVARIANT, 삼키지 않음) ──────
-type IpcResult<T> = { status: "ok"; data: T } | { status: "error"; error: string };
+// IPC 에러는 이제 정본 AppError(분류/traceId/action 보유). Stage 2에서는 message만 surfacing하고
+// (기존 동작 유지), traceId/retryable/action 기반 풍부한 surfacing + ErrorBoundary는 Stage 3.
+type IpcResult<T> = { status: "ok"; data: T } | { status: "error"; error: AppError };
 
 export async function unwrap<T>(p: Promise<IpcResult<T>>): Promise<T> {
   const res = await p;
-  if (res.status === "error") throw new Error(res.error);
+  if (res.status === "error") throw new Error(res.error.message);
   return res.data;
 }
 

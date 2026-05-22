@@ -8,6 +8,7 @@
 use tauri::{AppHandle, State};
 
 use crate::db::Db;
+use crate::error::AppError;
 use crate::shortcut::{self, DEFAULT_GLOBAL_HOTKEY};
 
 /// app_config 단일 값 조회. 없으면 None.
@@ -47,7 +48,7 @@ pub(crate) async fn current_global_hotkey(db: &Db) -> String {
 /// 현재 글로벌 창 핫키 문자열 조회(Settings 표시용). 미설정 시 기본값.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_global_hotkey(db: State<'_, Db>) -> Result<String, String> {
+pub async fn get_global_hotkey(db: State<'_, Db>) -> Result<String, AppError> {
     Ok(current_global_hotkey(db.inner()).await)
 }
 
@@ -59,67 +60,64 @@ pub async fn set_global_hotkey(
     app: AppHandle,
     db: State<'_, Db>,
     spec: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let new_spec = spec.trim().to_string();
     // 빠른 검증(저장 거부) — 무효 조합은 재등록 시도 전에 거른다.
-    shortcut::parse_shortcut(&new_spec)?;
+    shortcut::parse_shortcut(&new_spec)
+        .map_err(|msg| AppError::validation("nav.invalid_hotkey", msg))?;
 
     let old = current_global_hotkey(db.inner()).await;
     // 같은 값이면 재등록 불필요(이미 등록됨).
     if old != new_spec {
-        shortcut::reregister(&app, &old, &new_spec)?;
+        shortcut::reregister(&app, &old, &new_spec)
+            .map_err(|msg| AppError::validation("nav.hotkey_register", msg))?;
     }
-    set_config(db.inner(), KEY_GLOBAL_HOTKEY, &new_spec)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(set_config(db.inner(), KEY_GLOBAL_HOTKEY, &new_spec).await?)
 }
 
 /// 글로벌 핫키를 기본값(Ctrl+Space)으로 리셋 + 재등록.
 #[tauri::command]
 #[specta::specta]
-pub async fn reset_global_hotkey(app: AppHandle, db: State<'_, Db>) -> Result<String, String> {
+pub async fn reset_global_hotkey(app: AppHandle, db: State<'_, Db>) -> Result<String, AppError> {
     let old = current_global_hotkey(db.inner()).await;
     if old != DEFAULT_GLOBAL_HOTKEY {
-        shortcut::reregister(&app, &old, DEFAULT_GLOBAL_HOTKEY)?;
+        shortcut::reregister(&app, &old, DEFAULT_GLOBAL_HOTKEY)
+            .map_err(|msg| AppError::validation("nav.hotkey_register", msg))?;
     }
-    set_config(db.inner(), KEY_GLOBAL_HOTKEY, DEFAULT_GLOBAL_HOTKEY)
-        .await
-        .map_err(|e| e.to_string())?;
+    set_config(db.inner(), KEY_GLOBAL_HOTKEY, DEFAULT_GLOBAL_HOTKEY).await?;
     Ok(DEFAULT_GLOBAL_HOTKEY.to_string())
 }
 
 /// 저장된 per-view keymap(JSON 문자열) 조회. 미설정 시 None — 프런트가 기본 keymap을 쓴다.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_nav_keymap(db: State<'_, Db>) -> Result<Option<String>, String> {
-    get_config(db.inner(), KEY_KEYMAP)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn get_nav_keymap(db: State<'_, Db>) -> Result<Option<String>, AppError> {
+    Ok(get_config(db.inner(), KEY_KEYMAP).await?)
 }
 
 /// per-view keymap(JSON 문자열) 저장. 렌더러가 view→shortcut 의미를 소유 — Rust는 blob 영속만.
 /// 비어 있지 않은 JSON 객체 문자열만 받는다(가벼운 검증).
 #[tauri::command]
 #[specta::specta]
-pub async fn set_nav_keymap(db: State<'_, Db>, keymap_json: String) -> Result<(), String> {
+pub async fn set_nav_keymap(db: State<'_, Db>, keymap_json: String) -> Result<(), AppError> {
     let trimmed = keymap_json.trim();
     if trimmed.is_empty() || !trimmed.starts_with('{') {
-        return Err("keymap은 비어있지 않은 JSON 객체여야 합니다".into());
+        return Err(AppError::validation(
+            "nav.invalid_keymap",
+            "keymap은 비어있지 않은 JSON 객체여야 합니다",
+        ));
     }
-    set_config(db.inner(), KEY_KEYMAP, trimmed)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(set_config(db.inner(), KEY_KEYMAP, trimmed).await?)
 }
 
 /// keymap을 기본값으로 리셋(저장 행 삭제 → 프런트가 코드 상수 기본 keymap 사용).
 #[tauri::command]
 #[specta::specta]
-pub async fn reset_nav_keymap(db: State<'_, Db>) -> Result<(), String> {
+pub async fn reset_nav_keymap(db: State<'_, Db>) -> Result<(), AppError> {
     sqlx::query("DELETE FROM app_config WHERE key = ?1")
         .bind(KEY_KEYMAP)
         .execute(db.inner())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 

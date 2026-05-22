@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::commands::shared::SIGNAL_COLS;
 use crate::db::Db;
+use crate::error::AppError;
 use crate::models::{CreateProjectInput, CreateRepoInput, Project, Repo, WorkSignal};
 use crate::notion::normalize_notion_db_id;
 
@@ -19,8 +20,8 @@ pub(crate) async fn fetch_projects(db: &Db) -> Result<Vec<Project>, sqlx::Error>
 /// 모든 프로젝트 목록. Phase 0에서는 빈 DB라 빈 배열을 반환한다.
 #[tauri::command]
 #[specta::specta]
-pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, String> {
-    fetch_projects(db.inner()).await.map_err(|e| e.to_string())
+pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, AppError> {
+    Ok(fetch_projects(db.inner()).await?)
 }
 
 /// Project SELECT/RETURNING 공통 컬럼.
@@ -77,12 +78,12 @@ pub(crate) async fn insert_project(
 pub async fn create_project(
     db: State<'_, Db>,
     input: CreateProjectInput,
-) -> Result<Project, String> {
+) -> Result<Project, AppError> {
     insert_project(db.inner(), &input).await.map_err(|e| {
-        // Protocol 에러는 정규화 실패 등 사람이 읽을 메시지 — 그대로 노출.
-        match &e {
-            sqlx::Error::Protocol(msg) => msg.to_string(),
-            other => other.to_string(),
+        // Protocol 에러는 검증 실패(빈 이름 / 잘못된 Notion ID) — validation으로.
+        match e {
+            sqlx::Error::Protocol(msg) => AppError::validation("projects.invalid_input", msg),
+            other => AppError::from(other),
         }
     })
 }
@@ -100,10 +101,8 @@ pub(crate) async fn fetch_repos(db: &Db, project_id: &str) -> Result<Vec<Repo>, 
 
 #[tauri::command]
 #[specta::specta]
-pub async fn list_repos(db: State<'_, Db>, project_id: String) -> Result<Vec<Repo>, String> {
-    fetch_repos(db.inner(), &project_id)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn list_repos(db: State<'_, Db>, project_id: String) -> Result<Vec<Repo>, AppError> {
+    Ok(fetch_repos(db.inner(), &project_id).await?)
 }
 
 pub(crate) async fn insert_repo(db: &Db, input: &CreateRepoInput) -> Result<Repo, sqlx::Error> {
@@ -131,10 +130,8 @@ pub(crate) async fn insert_repo(db: &Db, input: &CreateRepoInput) -> Result<Repo
 
 #[tauri::command]
 #[specta::specta]
-pub async fn create_repo(db: State<'_, Db>, input: CreateRepoInput) -> Result<Repo, String> {
-    insert_repo(db.inner(), &input)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn create_repo(db: State<'_, Db>, input: CreateRepoInput) -> Result<Repo, AppError> {
+    Ok(insert_repo(db.inner(), &input).await?)
 }
 
 // ── projectId 태깅 / reconcile (Phase 1 kind 힌트 → projectId) ─────────────────
@@ -156,11 +153,8 @@ pub async fn reconcile_inner(db: &Db) -> Result<u64, sqlx::Error> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn reconcile_signal_projects(db: State<'_, Db>) -> Result<u32, String> {
-    reconcile_inner(db.inner())
-        .await
-        .map(|n| n as u32)
-        .map_err(|e| e.to_string())
+pub async fn reconcile_signal_projects(db: State<'_, Db>) -> Result<u32, AppError> {
+    Ok(reconcile_inner(db.inner()).await? as u32)
 }
 
 /// 신호의 소속 프로젝트를 명시 지정(또는 해제). 메타데이터.
@@ -170,16 +164,15 @@ pub async fn set_signal_project(
     db: State<'_, Db>,
     id: String,
     project_id: Option<String>,
-) -> Result<WorkSignal, String> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
+) -> Result<WorkSignal, AppError> {
+    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
         "UPDATE signals SET project_id = ?2, updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(&id)
     .bind(&project_id)
     .fetch_one(db.inner())
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 #[cfg(test)]

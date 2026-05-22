@@ -1,6 +1,7 @@
 use tauri::State;
 
 use crate::db::Db;
+use crate::error::AppError;
 use crate::git::{summarize_status, CliGitProvider, GitProvider};
 use crate::models::{DiffFileSummary, DiffMode, Worktree};
 
@@ -146,22 +147,26 @@ async fn collect_worktrees<G: GitProvider>(
 pub async fn list_worktrees(
     db: State<'_, Db>,
     project_id: Option<String>,
-) -> Result<Vec<Worktree>, String> {
-    let repos = fetch_local_repo_refs(db.inner(), project_id.as_deref()).await?;
+) -> Result<Vec<Worktree>, AppError> {
+    let repos = fetch_local_repo_refs(db.inner(), project_id.as_deref())
+        .await
+        .map_err(|e| AppError::terminal("worktree.db_query", e))?;
     if repos.is_empty() {
         return Ok(Vec::new());
     }
-    collect_worktrees(&CliGitProvider, &repos, chrono::Utc::now()).await
+    collect_worktrees(&CliGitProvider, &repos, chrono::Utc::now())
+        .await
+        .map_err(|e| AppError::terminal("worktree.list_failed", e))
 }
 
 /// worktree의 로컬+원격추적 브랜치 (branch↔branch 비교 picker용).
 #[tauri::command]
 #[specta::specta]
-pub async fn list_worktree_branches(worktree_path: String) -> Result<Vec<String>, String> {
+pub async fn list_worktree_branches(worktree_path: String) -> Result<Vec<String>, AppError> {
     CliGitProvider
         .branches(&worktree_path)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// 비교 모드의 파일 목록(통계만 — hunk는 지연 로드). 대용량 diff 비차단의 1단계.
@@ -172,7 +177,7 @@ pub async fn worktree_diff_files(
     mode: DiffMode,
     base_ref: Option<String>,
     head_ref: Option<String>,
-) -> Result<Vec<DiffFileSummary>, String> {
+) -> Result<Vec<DiffFileSummary>, AppError> {
     CliGitProvider
         .diff_files(
             &worktree_path,
@@ -181,7 +186,7 @@ pub async fn worktree_diff_files(
             head_ref.as_deref(),
         )
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// 한 파일의 unified diff 텍스트(프런트 구문강조용). 선택한 파일만 지연 로드(비차단 2단계).
@@ -193,7 +198,7 @@ pub async fn worktree_file_diff(
     base_ref: Option<String>,
     head_ref: Option<String>,
     path: String,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     CliGitProvider
         .file_diff(
             &worktree_path,
@@ -203,7 +208,7 @@ pub async fn worktree_file_diff(
             &path,
         )
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 // ── Phase 12c: 안전 dev rebase ─────────────────────────────────────────────────────
@@ -217,13 +222,13 @@ pub async fn worktree_file_diff(
 pub async fn rebase_worktree_onto(
     worktree_path: String,
     base: Option<String>,
-) -> Result<crate::models::RebaseResult, String> {
+) -> Result<crate::models::RebaseResult, AppError> {
     let base = base.unwrap_or_else(|| "origin/dev".to_string());
     // 백업 ref ts는 충돌 복구가 결정적이도록 호출 시각으로 고정.
     let ts = chrono::Utc::now().format("%Y%m%dT%H%M%S").to_string();
     CliGitProvider::rebase_onto(&worktree_path, &base, &ts)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 // ── Phase 12d: 브랜치/워크트리 정리 ─────────────────────────────────────────────────
@@ -240,7 +245,7 @@ const STALE_DAYS: i64 = 30;
 pub async fn list_cleanup_candidates(
     repo_path: String,
     base: Option<String>,
-) -> Result<Vec<crate::models::CleanupCandidate>, String> {
+) -> Result<Vec<crate::models::CleanupCandidate>, AppError> {
     use crate::git::{classify_branch, BranchCleanupInput};
     use crate::models::{CleanupCandidate, CleanupKind};
 
@@ -250,23 +255,23 @@ pub async fn list_cleanup_candidates(
     let raws = CliGitProvider
         .list_worktrees(&repo_path)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     let occupied: std::collections::HashSet<String> =
         raws.into_iter().filter_map(|w| w.branch).collect();
 
     // 로컬 브랜치 + merged 집합 + 브랜치별 마지막 커밋 시각(stale 판정).
     let local = CliGitProvider::local_branches(&repo_path)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     let merged: std::collections::HashSet<String> =
         CliGitProvider::merged_branches(&repo_path, &base)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(AppError::from)?
             .into_iter()
             .collect();
     let ages = CliGitProvider::branch_commit_dates(&repo_path)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     let now = chrono::Utc::now();
 
     let bases: std::collections::HashSet<&str> = [base.as_str(), "dev", "main", "master"]
@@ -294,7 +299,7 @@ pub async fn list_cleanup_candidates(
     // prunable worktree 등록.
     for path in CliGitProvider::prunable_worktrees(&repo_path)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
     {
         out.push(CleanupCandidate {
             id: format!("worktree:{path}"),
@@ -317,7 +322,7 @@ pub async fn delete_cleanup_candidates(
     base: Option<String>,
     ids: Vec<String>,
     force: bool,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     use crate::git::guard_delete;
 
     // 현재 후보 상태를 재도출해 보호/force 분류를 서버에서 다시 확인(UI 우회/stale 선택 방지).
