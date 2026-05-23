@@ -506,6 +506,39 @@ pub(crate) async fn set_signal_project(
     Ok(())
 }
 
+// ── 프로젝트 태깅 / reconcile (signals-write; projects는 서브쿼리 참조) ──────────
+
+/// 미태깅 & kind 보유 신호를 같은 kind의 가장 오래된 프로젝트로 태깅(메타데이터 — INVARIANT #1).
+/// UPDATE 대상이 signals라 store; projects는 서브쿼리 참조. (projects.rs 이전)
+pub(crate) async fn reconcile_signal_projects(db: &Db) -> Result<u64, sqlx::Error> {
+    let res = sqlx::query(
+        "UPDATE signals SET \
+            project_id = (SELECT p.id FROM projects p WHERE p.kind = signals.kind ORDER BY p.created_at LIMIT 1), \
+            updated_at = datetime('now') \
+         WHERE project_id IS NULL AND kind IS NOT NULL \
+           AND EXISTS (SELECT 1 FROM projects p WHERE p.kind = signals.kind)",
+    )
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected())
+}
+
+/// 신호의 소속 프로젝트를 명시 지정(또는 None 해제). 메타데이터(RETURNING). (projects.rs 이전)
+pub(crate) async fn set_signal_project_tag(
+    db: &Db,
+    id: &str,
+    project_id: Option<&str>,
+) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET project_id = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(project_id)
+    .fetch_one(db)
+    .await
+}
+
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────
 
 /// 본문/제목 전역 검색 (FTS5). 호출자는 빈 쿼리를 걸러 넘긴다.

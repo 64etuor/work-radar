@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::signal_store::SIGNAL_COLS;
+use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{CreateProjectInput, CreateRepoInput, Project, Repo, WorkSignal};
@@ -136,25 +136,10 @@ pub async fn create_repo(db: State<'_, Db>, input: CreateRepoInput) -> Result<Re
 
 // ── projectId 태깅 / reconcile (Phase 1 kind 힌트 → projectId) ─────────────────
 
-/// 미태깅(project_id NULL) & kind 보유 신호를 같은 kind의 가장 오래된 프로젝트로 태깅.
-/// 메타데이터 reconcile일 뿐 결정 레일(quadrant/승격)은 건드리지 않는다(INVARIANT #1).
-pub async fn reconcile_inner(db: &Db) -> Result<u64, sqlx::Error> {
-    let res = sqlx::query(
-        "UPDATE signals SET \
-            project_id = (SELECT p.id FROM projects p WHERE p.kind = signals.kind ORDER BY p.created_at LIMIT 1), \
-            updated_at = datetime('now') \
-         WHERE project_id IS NULL AND kind IS NOT NULL \
-           AND EXISTS (SELECT 1 FROM projects p WHERE p.kind = signals.kind)",
-    )
-    .execute(db)
-    .await?;
-    Ok(res.rows_affected())
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn reconcile_signal_projects(db: State<'_, Db>) -> Result<u32, AppError> {
-    Ok(reconcile_inner(db.inner()).await? as u32)
+    Ok(signal_store::reconcile_signal_projects(db.inner()).await? as u32)
 }
 
 /// 신호의 소속 프로젝트를 명시 지정(또는 해제). 메타데이터.
@@ -165,14 +150,7 @@ pub async fn set_signal_project(
     id: String,
     project_id: Option<String>,
 ) -> Result<WorkSignal, AppError> {
-    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET project_id = ?2, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(&id)
-    .bind(&project_id)
-    .fetch_one(db.inner())
-    .await?)
+    Ok(signal_store::set_signal_project_tag(db.inner(), &id, project_id.as_deref()).await?)
 }
 
 #[cfg(test)]
@@ -255,7 +233,7 @@ mod tests {
         let none_sig = insert_signal(&db, &input("kind 없음", None)).await.unwrap();
         assert!(p_sig.project_id.is_none());
 
-        let n = reconcile_inner(&db).await.unwrap();
+        let n = signal_store::reconcile_signal_projects(&db).await.unwrap();
         assert_eq!(n, 2, "kind 보유 신호 2건만 태깅");
 
         let tagged: Vec<(String, Option<String>)> =
