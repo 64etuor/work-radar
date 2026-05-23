@@ -2,7 +2,8 @@ use tauri::State;
 
 use crate::agent::{Bounds, CodexRunner};
 use crate::commands::agent_run_store::{
-    insert_agent_run, new_run_id, record_acceptance, run_proposal_raw, run_status_trigger,
+    count_triage_runs, insert_agent_run, new_run_id, record_acceptance, run_proposal_raw,
+    run_status_trigger,
 };
 use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_CI_TRIAGE};
@@ -31,17 +32,6 @@ pub(crate) const CI_TRIAGE_PROMPT: &str = "\
 \"summary\": \"한국어 2~3문장 요약\"\
 }\n\
 이건 제안일 뿐이다 — 실제 수정/적용은 사람이 결정한다.";
-
-/// retry_key 체인의 기존 triage 잡 수(캡 판정 입력).
-pub(super) async fn count_triage_runs(db: &Db, retry_key: &str) -> Result<i64, sqlx::Error> {
-    let row: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM agent_runs WHERE retry_key = ?1 AND kind = 'triage_ci'",
-    )
-    .bind(retry_key)
-    .fetch_one(db)
-    .await?;
-    Ok(row.0)
-}
 
 /// 재트리거 캡 초과 시 매트릭스로 Q1 escalate(사람 개입). dedup upsert(중복 0) + 항상 unclassified 진입 +
 /// suggested q1 힌트만(INVARIANT #1 — 자동 분류 아님). type=agent_alert(시스템 신호).

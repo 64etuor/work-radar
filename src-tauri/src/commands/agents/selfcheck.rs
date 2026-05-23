@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner};
 use crate::commands::agent_run_store::{
-    insert_agent_run, new_run_id, record_acceptance, reject_run, run_status_trigger,
+    fetch_proposal, insert_agent_run, new_run_id, record_acceptance, reject_run, run_status_trigger,
 };
 use crate::commands::skills::{resolve_prompt, BINDING_PR_SELFCHECK};
 use crate::db::Db;
@@ -198,14 +198,9 @@ pub async fn pr_proposal(
     db: State<'_, Db>,
     run_id: String,
 ) -> Result<crate::models::PrSelfCheckProposal, AppError> {
-    let row: Option<(Option<String>,)> =
-        sqlx::query_as("SELECT proposal FROM agent_runs WHERE id = ?1")
-            .bind(&run_id)
-            .fetch_optional(db.inner())
-            .await?;
-    let raw = row
+    let raw = fetch_proposal(db.inner(), &run_id)
+        .await?
         .ok_or_else(|| AppError::not_found("agents.job_not_found", "잡을 찾을 수 없음"))?
-        .0
         .ok_or_else(|| {
             AppError::not_found(
                 "agents.proposal_not_ready",

@@ -1,7 +1,8 @@
 use tauri::State;
 
 use crate::commands::agent_run_store::{
-    insert_agent_run, new_run_id, record_acceptance, run_proposal_raw, run_status_trigger,
+    fetch_run_project_id, insert_agent_run, new_run_id, record_acceptance, run_proposal_raw,
+    run_status_trigger,
 };
 use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_BATCH_ENRICH, BINDING_ENRICH};
@@ -369,12 +370,7 @@ pub async fn batch_enrich_proposal(
         .await
         .map_err(|e| AppError::terminal("agents.proposal_unavailable", e))?;
     // 잡의 project_id 한정으로 현재 미분류 신호를 다시 모아 검증 기준으로 쓴다(잡 이후 변화 반영).
-    let pid: Option<(Option<String>,)> =
-        sqlx::query_as("SELECT project_id FROM agent_runs WHERE id = ?1")
-            .bind(&run_id)
-            .fetch_optional(db.inner())
-            .await?;
-    let project_id = pid.and_then(|r| r.0);
+    let project_id = fetch_run_project_id(db.inner(), &run_id).await?;
     let valid: std::collections::HashMap<String, String> =
         fetch_unclassified_for_enrich(db.inner(), project_id.as_deref())
             .await?

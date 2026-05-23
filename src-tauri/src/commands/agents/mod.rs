@@ -445,7 +445,10 @@ mod tests {
         .await
         .unwrap();
         assert!(
-            triage::count_triage_runs(&db, retry_key).await.unwrap() < triage::TRIAGE_RETRY_CAP
+            crate::commands::agent_run_store::count_triage_runs(&db, retry_key)
+                .await
+                .unwrap()
+                < triage::TRIAGE_RETRY_CAP
         );
 
         // 캡만큼 채운다.
@@ -462,7 +465,9 @@ mod tests {
             .unwrap();
         }
         assert_eq!(
-            triage::count_triage_runs(&db, retry_key).await.unwrap(),
+            crate::commands::agent_run_store::count_triage_runs(&db, retry_key)
+                .await
+                .unwrap(),
             triage::TRIAGE_RETRY_CAP
         );
 

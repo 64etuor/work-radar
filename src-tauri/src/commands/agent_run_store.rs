@@ -240,17 +240,56 @@ pub(crate) async fn run_status_trigger(
     row.ok_or_else(|| "잡을 찾을 수 없음".to_string())
 }
 
-/// 잡의 proposal JSON 원문. 없으면 Err(아직 산출물 없음).
-pub(crate) async fn run_proposal_raw(db: &Db, run_id: &str) -> Result<String, String> {
+/// 잡의 proposal 컬럼 raw 조회. 바깥 Option=행 존재 여부, 안쪽 Option=컬럼 NULL 여부
+/// (커맨드가 "잡 없음"과 "아직 산출물 없음"을 구분해 에러 코드를 달리할 수 있도록 구조 보존).
+pub(crate) async fn fetch_proposal(
+    db: &Db,
+    run_id: &str,
+) -> Result<Option<Option<String>>, sqlx::Error> {
     let row: Option<(Option<String>,)> =
         sqlx::query_as("SELECT proposal FROM agent_runs WHERE id = ?1")
             .bind(run_id)
             .fetch_optional(db)
-            .await
-            .map_err(|e| e.to_string())?;
-    row.ok_or("잡을 찾을 수 없음")?
-        .0
-        .ok_or_else(|| "아직 proposal이 없습니다(잡이 끝나지 않았거나 산출물 없음).".to_string())
+            .await?;
+    Ok(row.map(|r| r.0))
+}
+
+/// 잡의 proposal JSON 원문. 없으면 Err(잡 없음 / 아직 산출물 없음).
+pub(crate) async fn run_proposal_raw(db: &Db, run_id: &str) -> Result<String, String> {
+    match fetch_proposal(db, run_id)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        None => Err("잡을 찾을 수 없음".to_string()),
+        Some(None) => {
+            Err("아직 proposal이 없습니다(잡이 끝나지 않았거나 산출물 없음).".to_string())
+        }
+        Some(Some(raw)) => Ok(raw),
+    }
+}
+
+/// 잡의 project_id(없거나 NULL이면 None). batch enrich 검증이 잡 한정 신호를 재조회할 때 쓴다.
+pub(crate) async fn fetch_run_project_id(
+    db: &Db,
+    run_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT project_id FROM agent_runs WHERE id = ?1")
+            .bind(run_id)
+            .fetch_optional(db)
+            .await?;
+    Ok(row.and_then(|r| r.0))
+}
+
+/// retry_key 체인의 기존 triage 잡 수(재트리거 캡 판정 입력 — INVARIANT #5).
+pub(crate) async fn count_triage_runs(db: &Db, retry_key: &str) -> Result<i64, sqlx::Error> {
+    let row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM agent_runs WHERE retry_key = ?1 AND kind = 'triage_ci'",
+    )
+    .bind(retry_key)
+    .fetch_one(db)
+    .await?;
+    Ok(row.0)
 }
 
 /// 단일 잡 폴링용 (status, result, proposal) 읽기. 커맨드(agent_run_status)가 호출.
