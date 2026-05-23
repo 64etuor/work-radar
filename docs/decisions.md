@@ -306,3 +306,7 @@
 ## 리스트 재정렬 드래그 '들어올림' 감각 (2026-05-23)
 
 - **useListReorder에 포인터 추적 lift 추가(routines·today 공용).** 기존엔 드래그 행이 제자리에서 `opacity:0.5`만 — 브레인덤프 postit(커서 추적+그림자)과 이질적. → 드래그 행을 직접 DOM `transform: translateY(커서Δ)`로 따라오게 하고(React state 대신 매 move 리렌더 회피, MatrixCanvas 패턴 동일), CSS `[data-dragging]`을 흰 카드+`box-shadow 0 12px 26px`+`z-index:50`+grabbing으로 교체(postit 톤). **핵심 버그 회피:** 행이 커서를 따라오면 그 `getBoundingClientRect()`가 같이 이동해 `computeOver`가 항상 self를 잡아 재정렬 불능 → 드롭 계산에서 자기 id 제외(`oid===id continue`). 이웃 reflow는 범위 외(postit도 원점 그대로 두므로 동일 감각). 검증: typecheck·prettier green(보드 부팅 육안 미확인).
+
+## signal_store 데이터 접근 레이어 (백로그 F · 2026-05-23)
+
+- **signals/signals_fts SQL을 단일 `commands/signal_store.rs`로 verbatim relocation.** ~10개 커맨드 모듈에 흩어진 signals 테이블 접근을 `pub(crate) async fn` free 함수로 모아 커맨드는 위임만. **동작·스키마 무변경**(순수 relocation): SQL 문자열·바인드·반환타입 보존, `cargo test` 204→209(+5 store 직접 단위테스트), clippy 0, `git diff src/bindings.ts` 빈값(IPC 표면 동일) — critic ACCEPT. 트레이드오프: 대형 단일 작업(15파일)이지만 모듈별 bisectable 커밋 10개. **백로그 G(signals god-table 분리) 선행** — G는 signal_store 내부만 바꾸면 됨. (Approach A 채택, 대안 B/C 기각: spec `docs/superpowers/specs/2026-05-23-signal-store-design.md`.)
