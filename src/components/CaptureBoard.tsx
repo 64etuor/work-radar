@@ -21,6 +21,7 @@ import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
+import { SprintTimer } from "@/components/SprintTimer";
 import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
 import {
   localToday,
@@ -481,10 +482,14 @@ export function CaptureBoard() {
     <div className="cb">
       <div className="cb-head">
         <span className="mark">◎ Work Radar / Capture</span>
-        <span className="hint">
-          드래그로 분류 · <b>1 2 3 4</b> 사분면 · <b>T</b> Today · 카드 ⋯ 메뉴 ·{" "}
-          <b>⌘K</b> 설정/프로젝트
-        </span>
+        {/* 헤더 우측 존 — 에이전트 바와 분리. hint + 스프린트 카운트다운(P11). */}
+        <div className="cb-head-right">
+          <span className="hint">
+            드래그로 분류 · <b>1 2 3 4</b> 사분면 · <b>T</b> Today · 카드 ⋯ 메뉴
+            · <b>⌘K</b> 설정/프로젝트
+          </span>
+          <SprintTimer />
+        </div>
       </div>
 
       {loadError && (

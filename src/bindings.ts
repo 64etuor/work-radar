@@ -154,6 +154,32 @@ export const commands = {
 	getAgentName: (sessionKey: string) => typedError<string | null, AppError>(__TAURI_INVOKE("get_agent_name", { sessionKey })),
 	/**  박스 이름 설정(또는 None/빈 문자열 → 저장 행 삭제 → 기본 라벨 복원). */
 	setAgentName: (sessionKey: string, name: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_agent_name", { sessionKey, name })),
+	/**  저장된 스프린트 설정(미설정 시 None → 프런트가 empty 상태 표시). */
+	getSprintConfig: () => typedError<{
+	/**  스프린트 길이(일). 1 이상. */
+	intervalDays: number,
+	/**  경계 기준 요일(예: 금요일). */
+	anchorWeekday: Weekday,
+	/**  경계 기준 시각 'HH:MM'(로컬 wall-clock). */
+	anchorTime: string,
+} | null, AppError>(__TAURI_INVOKE("get_sprint_config")),
+	/**  스프린트 설정 저장(검증 후 JSON upsert). 단일 전역 — app_config 한 행. */
+	setSprintConfig: (config: SprintConfig) => typedError<null, AppError>(__TAURI_INVOKE("set_sprint_config", { config })),
+	/**  스프린트 설정 삭제(미설정 상태로 복원 → 헤더 empty 링크). */
+	clearSprintConfig: () => typedError<null, AppError>(__TAURI_INVOKE("clear_sprint_config")),
+	/**
+	 *  헤더 카운트다운용 다음 경계 + 남은 초(SSOT = 직접 구현 `next_boundary`). 미설정/무효 시 None.
+	 *  로컬 wall-clock(`Local::now()`)으로 계산하므로 DST 환경에서도 안전(절대 인스턴트 미저장 — drift 없음).
+	 */
+	sprintStatus: () => typedError<{
+	/**  다음 경계의 로컬 wall-clock RFC3339 문자열(오프셋 포함). 헤더 1s tick의 기준점. */
+	nextBoundary: string,
+	/**
+	 *  산출 시점 기준 남은 초(음수=overdue). 프런트는 이 기준점에서 로컬 시계로 매초 재계산한다.
+	 *  specta는 i64/u64 export 금지 → i32(범위: 격주=~120만초, i32 ~21억으로 충분 + 음수=overdue).
+	 */
+	remainingSeconds: number,
+} | null, AppError>(__TAURI_INVOKE("sprint_status")),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, AppError>(__TAURI_INVOKE("codex_status")),
 	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */
@@ -1081,6 +1107,30 @@ export type Skill = {
 	sourcePath: string | null,
 	createdAt: string,
 	updatedAt: string,
+};
+
+/**
+ *  단일 글로벌 스프린트 설정. 길이(interval_days) + 경계 앵커(요일 + 시각).
+ *  다음 경계 = 이 앵커에 정렬한 뒤 interval_days 주기로 계산한다(절대 종료시각 미저장).
+ */
+export type SprintConfig = {
+	/**  스프린트 길이(일). 1 이상. */
+	intervalDays: number,
+	/**  경계 기준 요일(예: 금요일). */
+	anchorWeekday: Weekday,
+	/**  경계 기준 시각 'HH:MM'(로컬 wall-clock). */
+	anchorTime: string,
+};
+
+/**  헤더 카운트다운 데이터: 다음 경계(로컬 RFC3339)와 남은 초(음수=overdue). 미설정 시 None. */
+export type SprintStatus = {
+	/**  다음 경계의 로컬 wall-clock RFC3339 문자열(오프셋 포함). 헤더 1s tick의 기준점. */
+	nextBoundary: string,
+	/**
+	 *  산출 시점 기준 남은 초(음수=overdue). 프런트는 이 기준점에서 로컬 시계로 매초 재계산한다.
+	 *  specta는 i64/u64 export 금지 → i32(범위: 격주=~120만초, i32 ~21억으로 충분 + 음수=overdue).
+	 */
+	remainingSeconds: number,
 };
 
 /**  Today 운영 뷰 집계. 캘린더 오늘 이벤트·Today 레일·루틴은 프런트가 기존 헬퍼로 합성한다. */

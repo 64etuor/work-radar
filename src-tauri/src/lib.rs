@@ -116,6 +116,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // 에이전트 바 박스 이름 영속 (P10b: app_config per-machine 라벨).
         commands::get_agent_name,
         commands::set_agent_name,
+        // 스프린트 타이머 설정 (P11: 단일 글로벌, app_config — interval+anchor 조합).
+        commands::get_sprint_config,
+        commands::set_sprint_config,
+        commands::clear_sprint_config,
+        commands::sprint_status,
         // Agent 스파인 (잡 큐 + bounds + kill, Phase 7).
         commands::codex_status,
         commands::trigger_echo_job,

@@ -5753,3 +5753,226 @@
 .today .today-connect:hover {
   background: var(--color-wr-black);
 }
+
+/*
+ * ── Sprint Timer (P11: 브랜드 헤더 우측 존 카운트다운 + 일정 편집) ──
+ * DESIGN.md `sprint-timer` 정본. 에이전트 바와 분리된 헤더 우측 존.
+ * 'D일 HH:MM' CohereMono Ink · 1s tick · overdue=Coral + '지남' 라벨(색+라벨 병기).
+ * 미설정=텍스트 링크(button-secondary). 클릭→팝오버 에디터(흰 카드 radius lg).
+ */
+.cb .cb-head-right {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.sprint-timer {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 0 auto;
+}
+.sprint-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-wr-fg);
+}
+.sprint-count:hover {
+  background: var(--color-wr-surface);
+}
+.sprint-count-text {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.04em;
+}
+/* 좁은 폭에서 'D일 HH:MM'→'D일'만(반응형). 기본은 full 표시. */
+.sprint-count-compact {
+  display: none;
+}
+.sprint-count.is-overdue .sprint-count-text {
+  color: var(--color-wr-coral);
+}
+.sprint-overdue-lbl {
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-wr-coral);
+}
+.sprint-empty-link {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: 500 12px var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--color-wr-subtle);
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.sprint-empty-link:hover {
+  color: var(--color-wr-fg);
+  background: var(--color-wr-surface);
+}
+
+/* 팝오버 에디터 — cev 모달 톤 재사용(흰 카드, radius lg). */
+.sprint-pop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(15, 20, 40, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10vh;
+}
+.sprint-pop {
+  width: min(360px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(10, 14, 30, 0.28);
+  padding: 22px;
+}
+.sprint-pop-head {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+.sprint-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sprint-lbl {
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.sprint-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sprint-step-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font: 500 18px var(--font-sans);
+  cursor: pointer;
+  line-height: 1;
+}
+.sprint-step-btn:hover {
+  background: var(--color-wr-surface);
+}
+.sprint-step-val {
+  width: 64px;
+  text-align: center;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  padding: 7px 6px;
+  font: 600 14px var(--font-mono);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+}
+.sprint-step-val:focus {
+  border-color: var(--color-wr-accent);
+}
+.sprint-wd-row {
+  display: flex;
+  gap: 6px;
+}
+.sprint-wd {
+  flex: 1;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-subtle);
+  font: 500 13px var(--font-sans);
+  padding: 8px 0;
+  cursor: pointer;
+}
+.sprint-wd:hover {
+  background: var(--color-wr-surface);
+}
+.sprint-wd.is-on {
+  border-color: var(--color-wr-accent);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-surface);
+  font-weight: 600;
+}
+.sprint-time {
+  width: 140px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font: 400 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+}
+.sprint-time:focus {
+  border-color: var(--color-wr-accent);
+}
+.sprint-err {
+  font: 400 12px var(--font-sans);
+  color: var(--color-q1);
+}
+.sprint-pop-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.sprint-actions-spacer {
+  flex: 1;
+}
+.sprint-btn {
+  border: none;
+  cursor: pointer;
+  background: var(--color-wr-near-black);
+  color: #fff;
+  font: 500 14px var(--font-sans);
+  padding: 9px 22px;
+  border-radius: 999px;
+}
+.sprint-btn:hover {
+  background: var(--color-wr-black);
+}
+.sprint-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.sprint-btn-ghost {
+  border: 1px solid var(--color-wr-border-light);
+  cursor: pointer;
+  background: var(--color-wr-bg);
+  font: 500 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  padding: 8px 16px;
+  border-radius: 999px;
+}
+.sprint-btn-ghost:hover {
+  background: var(--color-wr-surface);
+}
+
+/* 반응형: 좁으면 'D일 HH:MM'→'D일'만(overdue 색 유지). DESIGN sprint-timer 반응형. */
+@media (max-width: 860px) {
+  .cb .cb-head-right .hint {
+    display: none;
+  }
+  .sprint-count-full {
+    display: none;
+  }
+  .sprint-count-compact {
+    display: inline;
+  }
+}
