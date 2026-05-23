@@ -296,3 +296,13 @@
 
 - **① `sync_pr_radar` transient 분류 보존(Stage 2 백로그 해소, INVARIANT #5).** 레포별 `GithubError`를 String으로 납작화하던 탓에 전부 transient(429/5xx) 실패도 command가 terminal로 접어 `retryable=false`로 나갔다(프런트 bounded retry 미동작). → `sync_pr_radar` 반환을 `Result<_, AppError>`로 전환(내부 sqlx는 `?`+From), 실패를 `Retryable`로 추적해 **전부 transient면 transient, 하나라도 terminal이면 terminal**(거짓 retryable 금지). **트레이드오프:** 혼합 실패는 terminal로 보수 분류(전체 성공이 retry로 불가하므로). 비-command 코어라 `result_large_err`는 agents/mod.rs와 동일하게 국소 `#[allow]`. 회귀 가드 2종(transient→retryable, terminal→not). 검증: cargo test 201·clippy -D warnings·fmt·build green.
 - **② 외부 응답 본문을 에러 메시지/로그에서 제거(Stage 1/2 보안 후속, 스펙 §5.5).** `classify_http`(calendar/messenger/notion)가 응답 본문 snippet(≤300자)을 메시지에 실어 `From→AppError.message→errors.log` 평문 노출. → 본문 내용 제거, **HTTP 상태코드 + 응답 크기(바이트)만** 노출(상태 prefix 보존 → 분류·기존 단언 무회귀). **스코프 확장(동일 관심사):** 정의된 classify_http 외에 calendar `parse_token_response`(OAuth 토큰 응답)·`parse_created_event`(이벤트 상세)도 동일 누출 패턴이라 함께 스크럽(OAuth 응답이 더 민감). 회귀 가드 5종(본문 문자열 미노출 단언). **잔여(미수정):** `github.rs:120/122`는 raw body가 아니라 octocrab의 구조화된 `source.message`(예: "Not Found")라 저위험으로 판단해 보존.
+
+## 아이콘 thin-line 통일 + 약한 선택 교체 (2026-05-23)
+
+- **lucide 아이콘 전역 thin-line(stroke 1.5).** DESIGN.md "thin-line geometric"에 맞춰 `@layer base`에 `svg.lucide { stroke-width: 1.5 }` 한 줄 추가 — CSS가 SVG 프레젠테이션 속성(기본 2)을 이기므로 ~40개 호출부 수정 없이 전역 적용(가장 작은 변경). 라이브러리 교체는 안 함(이미 lucide=thin-line). 핸드롤 `CheckIcon`은 11px white-on-green라 1.5면 너무 얇아 stroke 3→2만 정렬(의도적 예외).
+- **약한 아이콘 선택 2건 교체(nav.ts + 뷰 헤더).** timeline `CalendarClock→GanttChart`(today/timeline/weekly 3-달력 충돌 해소, 시간축 의미), skills `Wrench→Blocks`(Wrench의 '설정/수리' 오인 제거, 합성 capability). 이름 일관화: TodayView `AlertTriangle→TriangleAlert`(PrRadarView와 동일 글리프 단일 명칭), `CalendarDays→CalendarCheck`(nav 정체성 일치). 검증: typecheck·prettier·nav.test(5) green.
+- **루틴 행 액션 글리프→lucide.** RoutinesPanel 수정/삭제가 텍스트 글리프(✎/✕)+무스타일이라 시스템과 이질·간격 0. → `Pencil`/`X` lucide(thin-line 상속) + `.ract` 26px ghost 버튼·4px 간격, 삭제는 danger hover. aria-label 추가.
+
+## 리스트 재정렬 드래그 '들어올림' 감각 (2026-05-23)
+
+- **useListReorder에 포인터 추적 lift 추가(routines·today 공용).** 기존엔 드래그 행이 제자리에서 `opacity:0.5`만 — 브레인덤프 postit(커서 추적+그림자)과 이질적. → 드래그 행을 직접 DOM `transform: translateY(커서Δ)`로 따라오게 하고(React state 대신 매 move 리렌더 회피, MatrixCanvas 패턴 동일), CSS `[data-dragging]`을 흰 카드+`box-shadow 0 12px 26px`+`z-index:50`+grabbing으로 교체(postit 톤). **핵심 버그 회피:** 행이 커서를 따라오면 그 `getBoundingClientRect()`가 같이 이동해 `computeOver`가 항상 self를 잡아 재정렬 불능 → 드롭 계산에서 자기 id 제외(`oid===id continue`). 이웃 reflow는 범위 외(postit도 원점 그대로 두므로 동일 감각). 검증: typecheck·prettier green(보드 부팅 육안 미확인).

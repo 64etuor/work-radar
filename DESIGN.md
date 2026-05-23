@@ -317,6 +317,65 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
   2×2 축 라벨 간소화, 매우 좁으면 KO 라벨 숨김.
 - 조작 패널 폭 `min(640px, 100%-여백)`, 좁으면 행 wrap.
 
+## App Surface — Agent Bar · Header Timer · Calendar Drawer · Enrich Panel (work-radar 전용)
+
+> UI 이슈 오케스트레이션(2026-05-23, plan-design-review)에서 추가된 상주 앱 표면.
+> Cohere 토큰을 그대로 쓰되 마케팅 컴포넌트가 아닌 **상주 유틸 표면**이다.
+> 마케팅용 `agent-console-card`(다크 목업)와 혼동 금지 — 아래는 **밝은 상주 스트립**.
+
+### **`agent-status-bar`** (상주 최상단 스트립)
+- 흰 캔버스(`#fff`), 하단 1px `hairline`. 높이 ~56–64px(현행 얇은 트랙에서 상향).
+- 내용 = `agent-box` 가로 행 + 좌측 Mono 마이크로 라벨 `AGENTS`.
+- **`agent-box`**: 1px `border-light`, radius `sm`(8px). 구성:
+  - thin-line **engine 아이콘**(codex=terminal · hermes=paper-plane · claude=sparkle).
+  - **편집 가능 이름**(Body 14px). 더블클릭/편집아이콘 → 인라인 input, Focus Blue(`#4c6ee6`) 링.
+  - **상태 = 색 dot + Mono 마이크로 라벨 병기**(idle=Muted Slate · working=Action Blue · error=Error Red).
+    **색만으로 의미 금지**(DESIGN 전역 규칙).
+  - **진행 백필**: working 시 박스를 좌→우로 채우는 옅은 wash(과한 그림자/그라데이션 금지).
+  - **너비 = 경과 시간 기반**: idle=초기(~96px), 길어질수록 증가, **상한 ~240px**(bounded).
+- **hermes·cmux 세션 각 1박스**(세션 enumerate). **개수 상한 8 + '+N' 오버플로 칩**
+  (`button-pill-outline` 스타일, 클릭 시 나머지 팝오버).
+- **빈 상태(에이전트 없음)**: 조용한 단일 `Agents · idle` pill(Mono 라벨), 박스 없음.
+
+### **`sprint-timer`** (브랜드 헤더 내 카운트다운)
+- 위치 = 뷰 헤더("Work Radar / Capture" 등) **우측 존**. (에이전트 바와 분리.)
+- 카운트다운 `D일 HH:MM` = **CohereMono**, Ink 색. 1분 단위 갱신.
+- 상태: not-configured=`스프린트 설정` 텍스트 링크(`button-secondary`) · running=mono 카운트다운 ·
+  **overdue=카운트다운 Coral + Mono `지남` 라벨**(색+라벨 병기).
+- 클릭 → **팝오버 에디터**(흰 카드 radius `lg`): interval_days 스테퍼 + 기준요일·시각 피커 +
+  `button-primary` 저장. (모델 = 길이+앵커 조합.)
+
+### **`calendar-drawer`** (우측 슬라이드 드로어)
+- 캡처 보드 **우측에서 슬라이드 인**(today-rail 위 오버레이/확장). 흰 패널, 좌측 모서리 radius `lg`,
+  좌측 1px `hairline`. 무거운 그림자 금지(절제된 Media Lift만).
+- 헤더: Mono `CALENDAR` + **일/주/월 세그먼트**(`kind-toggle` 스타일 pill) + `‹ 오늘 ›` 날짜 네비.
+- 본문: 일=시간 행 / 주=7열 / 월=셀 그리드. 이벤트=radius `sm` 블록, 종일/시간 분리.
+- 상태: loading=스켈레톤 행 · empty=따뜻한 "이 날짜에 일정 없음" + 맥락 ·
+  **OAuth 미연결=`Google Calendar 연결` `button-primary`** · error=재시도.
+- 닫기: ESC / 백드롭 / 우상단 ✕.
+
+### **`enrich-review-panel`** (보드 내 인라인 제안 검토)
+- "전체 제안 실행" 완료 시 **오버레이가 아닌 보드 영역 인라인 패널**(INBOX 컬럼 자리/보드 패널).
+  카드는 계속 보이게 — 결정 맥락 유지(INVARIANT #1).
+- 헤더 Mono `제안 검토 (N)`. 행 = 카드 제목 + **수정 가능** 제안(사분면/우선순위 칩) + 적용/건너뜀.
+- 푸터: `모두 적용`(`button-primary`) + `닫기`. **사람이 수정 후 적용해야 반영**(자동 적용 금지).
+- 상태: running=진행 표시(에이전트 바 연동) · partial=행 스트리밍 · empty="제안 없음" · error=재시도.
+
+### Cmd+K 팰레트 — 스킬 그룹핑
+- 스킬은 Cmd+K에서 Mono 섹션 라벨 `SKILLS` 아래 노출. **현재 프로젝트 관련 스킬 우선**(표시 그룹핑).
+- 선택은 **제안까지만**(잡 자동 실행/확정 금지, INVARIANT #1).
+
+### 반응형(신규 표면)
+- **agent-status-bar**: 좁으면 박스 너비 축소 + '+N' 더 빨리. 매우 좁으면 이름 숨기고 아이콘+상태만.
+- **sprint-timer**: 좁으면 `D일 HH:MM`→`D일`만, overdue 색 유지.
+- **calendar-drawer**: ≥1040px=우측 드로어 / <720px=하단 시트로 전환(보드 반응형과 일관). 월뷰는 좁으면 주뷰로 강등.
+- **enrich-review-panel**: 좁으면 전체폭 스택.
+
+### a11y(신규 표면)
+- 모든 상태는 **색+라벨/텍스트 병기**(이미 전역 규칙). 포커스=Focus Blue 링.
+- agent-box 이름 편집·드로어·팰레트 **키보드 도달 가능**(Tab/Enter/ESC). 터치 타깃 ≥44px.
+- 카운트다운은 `aria-live=polite`로 분 단위 갱신만 알림(과알림 금지).
+
 ## Responsive Behavior
 
 ### Breakpoints
