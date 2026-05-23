@@ -93,6 +93,14 @@ async fn pr_self_checked(db: &Db, repo_full_name: &str, number: u64) -> Result<b
 }
 
 /// PR 신호 dedup upsert(INVARIANT #3). 항상 unclassified 진입 + suggested q1 힌트(INVARIANT #1).
+/// PR 신호 links 페이로드(내부 — signals.links JSON). 앱이 통제하므로 타입화(camelCase 보존).
+/// 프런트가 PR 링크 렌더에 소비. (codex proposal 등 외부 페이로드는 문자열 유지 — 별개.)
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrSignalLinks {
+    github_pr_url: String,
+}
+
 /// 충돌 시 quadrant/status는 보존하고 title/body/links/suggested_quadrant/updated_at만 갱신한다.
 async fn upsert_pr_signal(
     db: &Db,
@@ -110,7 +118,10 @@ async fn upsert_pr_signal(
         Some(t) => format!("{} · 링크 티켓 {}", pr.url, t),
         None => pr.url.clone(),
     };
-    let links = serde_json::json!({ "githubPrUrl": pr.url }).to_string();
+    let links = serde_json::to_string(&PrSignalLinks {
+        github_pr_url: pr.url.clone(),
+    })
+    .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
     sqlx::query(
         "INSERT INTO signals \
             (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links) \
@@ -393,6 +404,16 @@ mod tests {
     use crate::error::ErrorKind;
     use crate::github::GithubError;
     use crate::models::ProjectKind;
+
+    /// links 구조체가 기존 camelCase 키(githubPrUrl)를 그대로 직렬화하는지 잠근다(프런트 계약).
+    #[test]
+    fn pr_signal_links_serialize_to_stable_camelcase_key() {
+        let s = serde_json::to_string(&PrSignalLinks {
+            github_pr_url: "https://x/pr/1".into(),
+        })
+        .unwrap();
+        assert_eq!(s, r#"{"githubPrUrl":"https://x/pr/1"}"#);
+    }
     use crate::models::Quadrant;
 
     /// fake PR provider — 정해둔 PR 목록을 돌려준다(폴링 cycle 간 set으로 교체 가능). 실 네트워크 없음.

@@ -63,7 +63,10 @@ pub async fn trigger_enrich(
         max_turns: input.max_turns.max(1),
         cost_cap_usd: input.cost_cap_usd.max(0.0),
     };
-    let trigger = serde_json::json!({ "signalId": input.signal_id }).to_string();
+    let trigger = serde_json::to_string(&super::EnrichTrigger {
+        signal_id: input.signal_id.clone(),
+    })
+    .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     insert_agent_run(
         db.inner(),
         &NewAgentRun {
@@ -162,12 +165,16 @@ pub async fn accept_enrich(
         .await
         .map_err(|e| AppError::not_found("agents.job_not_found", e))?;
     super::require_awaiting(&status, "agents.accept_wrong_status")?;
-    let signal_id = super::trigger_field(trigger.as_deref(), "signalId").ok_or_else(|| {
-        AppError::terminal(
-            "agents.trigger_missing_signal_id",
-            "잡 트리거에 signalId가 없음",
-        )
-    })?;
+    let signal_id = trigger
+        .as_deref()
+        .and_then(|t| serde_json::from_str::<super::EnrichTrigger>(t).ok())
+        .map(|t| t.signal_id)
+        .ok_or_else(|| {
+            AppError::terminal(
+                "agents.trigger_missing_signal_id",
+                "잡 트리거에 signalId가 없음",
+            )
+        })?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     Ok(execute_accept_enrich(db.inner(), &run_id, &signal_id, &accepted, &accepted_json).await?)
@@ -285,7 +292,10 @@ pub async fn trigger_enrich_all(
         max_turns: input.max_turns.max(1),
         cost_cap_usd: input.cost_cap_usd.max(0.0),
     };
-    let trigger = serde_json::json!({ "batchCount": cards.len() as u32 }).to_string();
+    let trigger = serde_json::to_string(&super::BatchEnrichTrigger {
+        batch_count: cards.len() as u32,
+    })
+    .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     insert_agent_run(
         db.inner(),
         &NewAgentRun {

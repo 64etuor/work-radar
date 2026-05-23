@@ -135,12 +135,12 @@ pub async fn trigger_ci_triage(
         max_turns: input.max_turns.max(1),
         cost_cap_usd: input.cost_cap_usd.max(0.0),
     };
-    let trigger = serde_json::json!({
-        "prUrl": input.pr_url,
-        "repoFullName": input.repo_full_name,
-        "prNumber": input.pr_number,
+    let trigger = serde_json::to_string(&super::PrJobTrigger {
+        pr_url: input.pr_url.clone(),
+        repo_full_name: input.repo_full_name.clone(),
+        pr_number: input.pr_number,
     })
-    .to_string();
+    .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     let workdir = jm.worktree_root.join(&id).to_string_lossy().into_owned();
     insert_agent_run(
         db.inner(),

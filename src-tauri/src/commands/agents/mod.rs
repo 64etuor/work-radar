@@ -120,11 +120,31 @@ pub(super) async fn record_acceptance(
     Ok(())
 }
 
-/// trigger JSON에서 문자열 필드 추출(없으면 None).
-pub(super) fn trigger_field(trigger: Option<&str>, key: &str) -> Option<String> {
-    let t = trigger?;
-    let v: serde_json::Value = serde_json::from_str(t).ok()?;
-    v.get(key).and_then(|x| x.as_str()).map(String::from)
+// ── 잡 trigger 페이로드 (내부 — agent_runs.trigger 컬럼에 JSON 영속, 프런트 표시·accept 경로용) ──
+// codex가 내는 proposal과 달리 trigger는 앱이 전적으로 통제하므로 타입화한다(stringly-typed JSON 제거).
+// camelCase 직렬화로 기존 JSON 키(signalId/batchCount/prUrl/repoFullName/prNumber)를 그대로 보존.
+
+/// enrich(단건) 트리거 — accept 경로가 signalId를 읽는다.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct EnrichTrigger {
+    pub signal_id: String,
+}
+
+/// enrich(전체 배치) 트리거 — 표시용(읽기 없음).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct BatchEnrichTrigger {
+    pub batch_count: u32,
+}
+
+/// PR 대상 잡(self-check / CI triage) 트리거 — 표시용(읽기 없음).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct PrJobTrigger {
+    pub pr_url: String,
+    pub repo_full_name: String,
+    pub pr_number: u32,
 }
 
 /// result JSON({detail|error})에서 사람이 읽을 상세를 뽑는다(jobs.rs detail_from_result 동일 로직).
@@ -172,6 +192,34 @@ mod tests {
     use crate::commands::shared::test_support::*;
     use crate::commands::signals::insert_signal;
     use crate::models::{Kind, Quadrant};
+
+    /// trigger 구조체가 기존 camelCase JSON 키를 그대로 직렬화하는지 잠근다(프런트/accept 경계 계약).
+    #[test]
+    fn trigger_structs_serialize_to_stable_camelcase_keys() {
+        let e = serde_json::to_string(&EnrichTrigger {
+            signal_id: "s1".into(),
+        })
+        .unwrap();
+        assert_eq!(e, r#"{"signalId":"s1"}"#);
+
+        let b = serde_json::to_string(&BatchEnrichTrigger { batch_count: 3 }).unwrap();
+        assert_eq!(b, r#"{"batchCount":3}"#);
+
+        let p = serde_json::to_string(&PrJobTrigger {
+            pr_url: "https://x/pr/7".into(),
+            repo_full_name: "o/r".into(),
+            pr_number: 7,
+        })
+        .unwrap();
+        assert_eq!(
+            p,
+            r#"{"prUrl":"https://x/pr/7","repoFullName":"o/r","prNumber":7}"#
+        );
+
+        // accept 경로 read-side: 직렬화→역직렬화 라운드트립으로 signalId 보존.
+        let parsed: EnrichTrigger = serde_json::from_str(&e).unwrap();
+        assert_eq!(parsed.signal_id, "s1");
+    }
 
     /// awaiting_approval 잡 한 행을 직접 INSERT(테스트 픽스처). proposal/trigger 포함.
     async fn insert_awaiting_run(db: &Db, id: &str, proposal: &str, trigger: &str) {
@@ -315,7 +363,10 @@ mod tests {
             .await
             .unwrap();
         assert!(matches!(sig.quadrant, Quadrant::Unclassified));
-        let trigger = serde_json::json!({ "signalId": sig.id }).to_string();
+        let trigger = serde_json::to_string(&EnrichTrigger {
+            signal_id: sig.id.clone(),
+        })
+        .unwrap();
         let proposal =
             r#"{"suggestedQuadrant":"q1_do_now","suggestedArea":"work","reason":"마감 임박"}"#;
         insert_awaiting_run(&db, "e1", proposal, &trigger).await;
