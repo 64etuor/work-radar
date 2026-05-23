@@ -26,6 +26,8 @@
 - **프런트 Vitest 도입**(node 환경, 빌드용 `vite.config.ts`와 분리한 `vitest.config.ts`): 순수 헬퍼 테스트 10개 + CI `test` 스텝. jsdom/RTL은 컴포넌트 테스트 도입 시 별도.
 - **`commands/agents.rs`(1641)·`today.rs`(908) 서브모듈 분리**: 도메인별 디렉터리 모듈(agents=spine/selfcheck/enrich/triage, today=rail/overview/weekly). `pub use`로 `commands::*` 경로·`bindings.ts` 무변경(IPC 표면 동일 = 행위 보존 증명). 공유 게이트 헬퍼는 `mod.rs`(submodule이 `super::`로 접근). critic ACCEPT(INVARIANT #1/#2/#5 보존 확인).
 - **문서 정합성**: README 전면 재작성(Phase 0-20·코드·remote 반영), 위 "하네스 보강" 항목의 미적용 게이트 정정, `architecture.md` 모듈 맵 §9 + RPITIT 노트.
+- **(2026-05-23, 남은 백로그 A) `NOTION_VERSION` 단일화 + 하드코딩 제거**(`notion.rs`/`api.rs`/`commands/notion.rs`): 중복 const 2개 + 리터럴 1개 → `pub(crate) const NOTION_VERSION`(notion.rs) 단일 출처로 통일, api.rs·commands::notion이 참조. 행위 보존(bindings.ts 무변경 · clippy 0 · test 202 green).
+- **(2026-05-23, 남은 백로그 B) shortcut 파서 빈 입력 가드**(`shortcut.rs` `parse_shortcut`): 비-test `split_last().expect()` 제거 → `match split_last()` 가드로 빈/공백/구분자만 입력을 panic 없이 Err. startup은 기존대로 `DEFAULT_GLOBAL_HOTKEY` 폴백(lib.rs). 빈/공백 회귀 테스트 추가. 트레이드오프: 단일-토큰 입력 Err 메시지를 통합(동작 동일 — 모두 Err).
 
 ## 하네스 / 디자인 (cross-cutting, 2026-05-21)
 

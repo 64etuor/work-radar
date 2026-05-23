@@ -19,14 +19,14 @@ pub fn parse_shortcut(spec: &str) -> Result<Shortcut, String> {
         .map(|p| p.trim())
         .filter(|p| !p.is_empty())
         .collect();
-    if parts.len() < 2 {
-        return Err("핫키는 최소 1개 modifier + 1개 키여야 합니다 (예: Ctrl+Space)".into());
-    }
 
+    // 키(마지막 토큰) + 1개 이상 modifier로 분리. 빈/공백/단일 토큰 입력은 split_last가 None이거나
+    // modifier 토큰이 없으므로 panic 없이 Err로 거른다(스펙은 config에서도 옴 — unwrap 금지).
     let mut mods = Modifiers::empty();
-    let (key_part, mod_parts) = parts
-        .split_last()
-        .expect("parts has >= 2 elements (len < 2 checked above)");
+    let (key_part, mod_parts) = match parts.split_last() {
+        Some((key, modifiers)) if !modifiers.is_empty() => (key, modifiers),
+        _ => return Err("핫키는 최소 1개 modifier + 1개 키여야 합니다 (예: Ctrl+Space)".into()),
+    };
     for m in mod_parts {
         match m.to_ascii_lowercase().as_str() {
             "ctrl" | "control" => mods |= Modifiers::CONTROL,
@@ -35,9 +35,6 @@ pub fn parse_shortcut(spec: &str) -> Result<Shortcut, String> {
             "cmd" | "command" | "super" | "meta" | "win" => mods |= Modifiers::SUPER,
             other => return Err(format!("알 수 없는 modifier: {other}")),
         }
-    }
-    if mods.is_empty() {
-        return Err("최소 1개 modifier가 필요합니다".into());
     }
 
     let code = parse_code(key_part)?;
@@ -188,6 +185,15 @@ mod tests {
     fn rejects_no_modifier() {
         assert!(parse_shortcut("Space").is_err());
         assert!(parse_shortcut("K").is_err());
+    }
+
+    #[test]
+    fn rejects_empty_or_blank_without_panic() {
+        // config에서 빈/공백/구분자만 있는 스펙이 와도 panic 없이 Err로 거른다(startup은 DEFAULT 폴백).
+        assert!(parse_shortcut("").is_err());
+        assert!(parse_shortcut("   ").is_err());
+        assert!(parse_shortcut("+").is_err());
+        assert!(parse_shortcut(" + ").is_err());
     }
 
     #[test]
