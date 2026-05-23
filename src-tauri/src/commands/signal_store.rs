@@ -2,7 +2,7 @@
 //! Approach A: 커맨드에서 verbatim 이전 — 동작 무변경. 백로그 G(테이블 분리)는 이 모듈만 바꾼다.
 
 use crate::db::Db;
-use crate::models::{CreateSignalInput, Quadrant, SignalStatus, WorkSignal};
+use crate::models::{AreaTag, CreateSignalInput, Quadrant, SignalStatus, WorkSignal};
 
 /// signals 행 → WorkSignal 매핑 컬럼 목록(기존 shared.rs에서 이전).
 /// FromRow는 이름으로 매핑 → 순서 무관.
@@ -537,6 +537,138 @@ pub(crate) async fn set_signal_project_tag(
     .bind(project_id)
     .fetch_one(db)
     .await
+}
+
+// ── agents enrich / triage (suggested_* / area 힌트만 — INVARIANT #1: quadrant 확정 무변경) ──
+//
+// ⚠️ 이 fn들은 suggested_quadrant/suggested_area/area만 쓴다. 확정 `quadrant` 컬럼은 절대 건드리지
+//    않는다(사분면 확정 = classify_signal=set_quadrant, area 확정 = set_signal_area, 둘 다 사람 결정).
+
+/// enrich 카드 텍스트(title/body/project_id) 조회. (enrich.rs trigger 이전)
+pub(crate) async fn fetch_card_text(
+    db: &Db,
+    signal_id: &str,
+) -> Result<Option<(String, Option<String>, Option<String>)>, sqlx::Error> {
+    sqlx::query_as("SELECT title, body, project_id FROM signals WHERE id = ?1")
+        .bind(signal_id)
+        .fetch_optional(db)
+        .await
+}
+
+/// enrich accept: suggested_* 힌트만 반영(확정 quadrant/area 무변경 — INVARIANT #1). (enrich.rs 이전)
+pub(crate) async fn set_enrich_hints(
+    db: &Db,
+    signal_id: &str,
+    suggested_quadrant: Option<Quadrant>,
+    suggested_area: Option<AreaTag>,
+    reason: Option<&str>,
+) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
+            updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(signal_id)
+    .bind(suggested_quadrant)
+    .bind(suggested_area)
+    .bind(reason)
+    .fetch_one(db)
+    .await
+}
+
+/// 배치 enrich accept 1건: suggested_* 힌트만, unclassified 카드에만(루프는 커맨드 잔류). 영향 행수 반환.
+/// (enrich.rs 배치 루프 내부 UPDATE 이전)
+pub(crate) async fn set_enrich_hints_batch_one(
+    db: &Db,
+    id: &str,
+    suggested_quadrant: Option<Quadrant>,
+    suggested_area: Option<AreaTag>,
+    reason: Option<&str>,
+) -> Result<u64, sqlx::Error> {
+    let res = sqlx::query(
+        "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
+            updated_at = datetime('now') \
+         WHERE id = ?1 AND quadrant = 'unclassified'",
+    )
+    .bind(id)
+    .bind(suggested_quadrant)
+    .bind(suggested_area)
+    .bind(reason)
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected())
+}
+
+/// area(라이프 도메인) 확정/수정(사람 결정 — quadrant 결정 레일과 무관 축). (enrich.rs 이전)
+pub(crate) async fn set_signal_area(
+    db: &Db,
+    id: &str,
+    area: Option<AreaTag>,
+) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET area = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(area)
+    .fetch_one(db)
+    .await
+}
+
+/// 배치 enrich 대상: 미분류 active 신호 (id, title). project_id로 한정(또는 전체). (enrich.rs 이전)
+pub(crate) async fn fetch_unclassified_for_enrich(
+    db: &Db,
+    project_id: Option<&str>,
+) -> Result<Vec<(String, String)>, sqlx::Error> {
+    if let Some(pid) = project_id {
+        sqlx::query_as(
+            "SELECT id, title FROM signals \
+             WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
+               AND status NOT IN ('done','archived','snoozed') AND project_id = ?1 \
+             ORDER BY created_at",
+        )
+        .bind(pid)
+        .fetch_all(db)
+        .await
+    } else {
+        sqlx::query_as(
+            "SELECT id, title FROM signals \
+             WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
+               AND status NOT IN ('done','archived','snoozed') \
+             ORDER BY created_at",
+        )
+        .fetch_all(db)
+        .await
+    }
+}
+
+/// triage 재트리거 캡 초과 → 매트릭스 Q1 escalate dedup upsert. 항상 unclassified 진입 + suggested q1
+/// 힌트만(INVARIANT #1). title/body/links 조립은 커맨드 잔류. (triage.rs 이전)
+pub(crate) async fn insert_triage_q1_escalation(
+    db: &Db,
+    project_id: Option<&str>,
+    title: &str,
+    body: &str,
+    dedup_key: &str,
+    links: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO signals \
+            (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'system', 'agent_alert', \
+                 'unclassified', 'q1_do_now', ?4, 'new', ?5) \
+         ON CONFLICT(dedup_key) WHERE dedup_key IS NOT NULL DO UPDATE SET \
+            title = excluded.title, body = excluded.body, links = excluded.links, \
+            suggested_quadrant = excluded.suggested_quadrant, updated_at = datetime('now')",
+    )
+    .bind(project_id)
+    .bind(title)
+    .bind(body)
+    .bind(dedup_key)
+    .bind(links)
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::signal_store::SIGNAL_COLS;
+use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_BATCH_ENRICH, BINDING_ENRICH};
 use crate::db::Db;
 use crate::error::AppError;
@@ -43,11 +43,7 @@ pub async fn trigger_enrich(
         .map_err(|e| AppError::terminal("agents.codex_unavailable", e))?;
 
     // 카드 본문 로드(제목+본문). codex 입력 파일로 넘긴다(인젝션 없음).
-    let row: Option<(String, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT title, body, project_id FROM signals WHERE id = ?1")
-            .bind(&input.signal_id)
-            .fetch_optional(db.inner())
-            .await?;
+    let row = signal_store::fetch_card_text(db.inner(), &input.signal_id).await?;
     let (title, body, project_id) =
         row.ok_or_else(|| AppError::not_found("agents.signal_not_found", "신호를 찾을 수 없음"))?;
     let card_text = match body.filter(|b| !b.trim().is_empty()) {
@@ -137,16 +133,13 @@ pub(super) async fn execute_accept_enrich(
     accepted: &EnrichProposal,
     accepted_json: &str,
 ) -> Result<WorkSignal, sqlx::Error> {
-    let sig = sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
-            updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(signal_id)
-    .bind(accepted.suggested_quadrant)
-    .bind(accepted.suggested_area)
-    .bind(&accepted.reason)
-    .fetch_one(db)
+    let sig = signal_store::set_enrich_hints(
+        db,
+        signal_id,
+        accepted.suggested_quadrant,
+        accepted.suggested_area,
+        accepted.reason.as_deref(),
+    )
     .await?;
     super::record_acceptance(db, run_id, "enrich_braindump", accepted_json).await?;
     Ok(sig)
@@ -189,14 +182,7 @@ pub async fn set_signal_area(
     id: String,
     area: Option<AreaTag>,
 ) -> Result<WorkSignal, AppError> {
-    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET area = ?2, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(&id)
-    .bind(area)
-    .fetch_one(db.inner())
-    .await?)
+    Ok(signal_store::set_signal_area(db.inner(), &id, area).await?)
 }
 
 // ── 배치 enrich (#4, 미분류 전체 일괄 제안 — 단일 codex 잡, 부분 실패 격리) ──────────────
@@ -228,26 +214,7 @@ pub(super) async fn fetch_unclassified_for_enrich(
     db: &Db,
     project_id: Option<&str>,
 ) -> Result<Vec<(String, String)>, sqlx::Error> {
-    if let Some(pid) = project_id {
-        sqlx::query_as(
-            "SELECT id, title FROM signals \
-             WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
-               AND status NOT IN ('done','archived','snoozed') AND project_id = ?1 \
-             ORDER BY created_at",
-        )
-        .bind(pid)
-        .fetch_all(db)
-        .await
-    } else {
-        sqlx::query_as(
-            "SELECT id, title FROM signals \
-             WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
-               AND status NOT IN ('done','archived','snoozed') \
-             ORDER BY created_at",
-        )
-        .fetch_all(db)
-        .await
-    }
+    signal_store::fetch_unclassified_for_enrich(db, project_id).await
 }
 
 /// 미분류 전체 배치 enrich 잡 트리거(미분류 영역 "전체 제안 실행"). 모든 미분류 카드를 `cards.json`
@@ -424,18 +391,15 @@ pub(super) async fn execute_accept_enrich_all(
     let mut applied: u32 = 0;
     for item in &accepted.items {
         // 힌트만 반영. quadrant/area 확정값은 건드리지 않는다(set_quadrant/set_signal_area = 사람 결정).
-        let res = sqlx::query(
-            "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
-                updated_at = datetime('now') \
-             WHERE id = ?1 AND quadrant = 'unclassified'",
+        let rows = signal_store::set_enrich_hints_batch_one(
+            db,
+            &item.id,
+            item.suggested_quadrant,
+            item.suggested_area,
+            item.reason.as_deref(),
         )
-        .bind(&item.id)
-        .bind(item.suggested_quadrant)
-        .bind(item.suggested_area)
-        .bind(&item.reason)
-        .execute(db)
         .await?;
-        applied = applied.saturating_add(res.rows_affected() as u32);
+        applied = applied.saturating_add(rows as u32);
     }
     super::record_acceptance(db, run_id, "enrich_batch", accepted_json).await?;
     Ok(applied)

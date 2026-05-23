@@ -1,6 +1,7 @@
 use tauri::State;
 
 use crate::agent::{Bounds, CodexRunner};
+use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_CI_TRIAGE};
 use crate::db::Db;
 use crate::error::AppError;
@@ -57,23 +58,7 @@ pub(super) async fn escalate_triage_to_q1(
     );
     let dedup = format!("{retry_key}:escalated");
     let links = serde_json::json!({ "githubPrUrl": pr_url }).to_string();
-    sqlx::query(
-        "INSERT INTO signals \
-            (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'system', 'agent_alert', \
-                 'unclassified', 'q1_do_now', ?4, 'new', ?5) \
-         ON CONFLICT(dedup_key) WHERE dedup_key IS NOT NULL DO UPDATE SET \
-            title = excluded.title, body = excluded.body, links = excluded.links, \
-            suggested_quadrant = excluded.suggested_quadrant, updated_at = datetime('now')",
-    )
-    .bind(project_id)
-    .bind(&title)
-    .bind(&body)
-    .bind(&dedup)
-    .bind(&links)
-    .execute(db)
-    .await?;
-    Ok(())
+    signal_store::insert_triage_q1_escalation(db, project_id, &title, &body, &dedup, &links).await
 }
 
 /// CI triage 잡 트리거(PR Radar CI Blocked 카드). diff를 GitHub에서 받아 worktree 격리 codex 잡(read_only).
