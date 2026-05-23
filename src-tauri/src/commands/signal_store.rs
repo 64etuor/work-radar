@@ -671,6 +671,74 @@ pub(crate) async fn insert_triage_q1_escalation(
     Ok(())
 }
 
+// ── 회고 (완료 타임라인 / impact·regret 태깅 / 보관·복원) ───────────────────────
+
+/// [start,end] 범위(로컬 날짜 inclusive) 완료 Today 항목. today_done_at은 이미 로컬 날짜라 변환 불요.
+/// (retro.rs 이전)
+pub(crate) async fn fetch_completed(
+    db: &Db,
+    start: &str,
+    end: &str,
+) -> Result<Vec<WorkSignal>, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "SELECT {SIGNAL_COLS} FROM signals \
+         WHERE today_done_at IS NOT NULL AND today_done_at BETWEEN ?1 AND ?2 \
+         ORDER BY today_done_at DESC, updated_at DESC"
+    ))
+    .bind(start)
+    .bind(end)
+    .fetch_all(db)
+    .await
+}
+
+/// 고임팩트 태그 토글(사람 결정 — INVARIANT #1). quadrant/status 무변경. (retro.rs 이전)
+pub(crate) async fn set_impact(db: &Db, id: &str, value: bool) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET impact_high = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(value)
+    .fetch_one(db)
+    .await
+}
+
+/// 후회 태그 토글(사람 결정 — INVARIANT #1). (retro.rs 이전)
+pub(crate) async fn set_regret(db: &Db, id: &str, value: bool) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET regret = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(value)
+    .fetch_one(db)
+    .await
+}
+
+/// 보관/미루기된 신호 열람(archived + snoozed, updated_at 내림차순). (retro.rs 이전)
+pub(crate) async fn fetch_archived_snoozed(db: &Db) -> Result<Vec<WorkSignal>, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "SELECT {SIGNAL_COLS} FROM signals \
+         WHERE status IN ('archived','snoozed') \
+         ORDER BY updated_at DESC"
+    ))
+    .fetch_all(db)
+    .await
+}
+
+/// 신호 복원(사람 결정 — INVARIANT #1). quadrant 보존(자동 분류 0), snooze_until 비움. (retro.rs 이전)
+pub(crate) async fn restore(db: &Db, id: &str) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET \
+            status = CASE WHEN quadrant = 'unclassified' THEN 'new' ELSE 'classified' END, \
+            snooze_until = NULL, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .fetch_one(db)
+    .await
+}
+
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────
 
 /// 본문/제목 전역 검색 (FTS5). 호출자는 빈 쿼리를 걸러 넘긴다.

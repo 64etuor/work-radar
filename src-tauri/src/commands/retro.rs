@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::signal_store::SIGNAL_COLS;
+use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::WorkSignal;
@@ -8,24 +8,6 @@ use crate::models::WorkSignal;
 // ── 회고(retro) 뷰 (Phase 17, 로컬 read + 사람 태깅) ──────────────────────────────
 // INVARIANT #1: 자동 분류 0 — impact/regret는 사람이 단다. INVARIANT #2: 외부 변경 없음.
 // INVARIANT #7: 로컬 SQLite SSOT. 완료 todo는 today_done_at(로컬 날짜)로 식별한다.
-
-/// [start,end] 범위(로컬 날짜 inclusive) 안에서 완료된 Today 항목. 완료일 내림차순 타임라인.
-/// today_done_at은 이미 로컬 날짜(YYYY-MM-DD)로 저장되므로 'localtime' 변환이 필요 없다.
-pub async fn fetch_completed(
-    db: &Db,
-    start: &str,
-    end: &str,
-) -> Result<Vec<WorkSignal>, sqlx::Error> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "SELECT {SIGNAL_COLS} FROM signals \
-         WHERE today_done_at IS NOT NULL AND today_done_at BETWEEN ?1 AND ?2 \
-         ORDER BY today_done_at DESC, updated_at DESC"
-    ))
-    .bind(start)
-    .bind(end)
-    .fetch_all(db)
-    .await
-}
 
 /// 완료 todo 타임라인. `start`/`end`는 프런트가 보내는 로컬 날짜(YYYY-MM-DD) inclusive.
 #[tauri::command]
@@ -35,23 +17,12 @@ pub async fn list_completed(
     start: String,
     end: String,
 ) -> Result<Vec<WorkSignal>, AppError> {
-    fetch_completed(db.inner(), &start, &end)
+    signal_store::fetch_completed(db.inner(), &start, &end)
         .await
         .map_err(AppError::from)
 }
 
-/// 고임팩트 태그 토글(사람 결정 — INVARIANT #1). quadrant/status는 건드리지 않는다.
-pub async fn set_impact(db: &Db, id: &str, value: bool) -> Result<WorkSignal, sqlx::Error> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET impact_high = ?2, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(id)
-    .bind(value)
-    .fetch_one(db)
-    .await
-}
-
+// 고임팩트 태그 토글(사람 결정 — INVARIANT #1). SQL은 signal_store::set_impact.
 #[tauri::command]
 #[specta::specta]
 pub async fn set_signal_impact(
@@ -59,23 +30,12 @@ pub async fn set_signal_impact(
     id: String,
     value: bool,
 ) -> Result<WorkSignal, AppError> {
-    set_impact(db.inner(), &id, value)
+    signal_store::set_impact(db.inner(), &id, value)
         .await
         .map_err(AppError::from)
 }
 
-/// 후회(하지말걸) 태그 토글(사람 결정 — INVARIANT #1).
-pub async fn set_regret(db: &Db, id: &str, value: bool) -> Result<WorkSignal, sqlx::Error> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET regret = ?2, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(id)
-    .bind(value)
-    .fetch_one(db)
-    .await
-}
-
+// 후회(하지말걸) 태그 토글(사람 결정 — INVARIANT #1). SQL은 signal_store::set_regret.
 #[tauri::command]
 #[specta::specta]
 pub async fn set_signal_regret(
@@ -83,7 +43,7 @@ pub async fn set_signal_regret(
     id: String,
     value: bool,
 ) -> Result<WorkSignal, AppError> {
-    set_regret(db.inner(), &id, value)
+    signal_store::set_regret(db.inner(), &id, value)
         .await
         .map_err(AppError::from)
 }
@@ -91,51 +51,30 @@ pub async fn set_signal_regret(
 // ── 보관함(archive) 뷰 (Phase 17, archived + snoozed 열람 + 복원) ─────────────────
 // 새 status 없음(snooze/archive 재사용 — INVARIANT). 복원은 로컬 액션(외부 변경 0).
 
-/// 보관/미루기된 신호 열람. archived + snoozed를 한 목록으로(updated_at 내림차순).
-pub async fn fetch_archived_snoozed(db: &Db) -> Result<Vec<WorkSignal>, sqlx::Error> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "SELECT {SIGNAL_COLS} FROM signals \
-         WHERE status IN ('archived','snoozed') \
-         ORDER BY updated_at DESC"
-    ))
-    .fetch_all(db)
-    .await
-}
-
+// 보관/미루기 열람 + 복원. signals SQL은 signal_store::fetch_archived_snoozed / restore.
 #[tauri::command]
 #[specta::specta]
 pub async fn list_archived_snoozed(db: State<'_, Db>) -> Result<Vec<WorkSignal>, AppError> {
-    fetch_archived_snoozed(db.inner())
+    signal_store::fetch_archived_snoozed(db.inner())
         .await
         .map_err(AppError::from)
-}
-
-/// 신호 복원(사람 결정 — INVARIANT #1). archived → unclassified(new). snoozed → 원 사분면 복귀
-/// (quadrant=unclassified면 new, 아니면 classified). snooze_until은 비운다. quadrant는 보존(자동 분류 0).
-pub async fn restore(db: &Db, id: &str) -> Result<WorkSignal, sqlx::Error> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET \
-            status = CASE WHEN quadrant = 'unclassified' THEN 'new' ELSE 'classified' END, \
-            snooze_until = NULL, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(id)
-    .fetch_one(db)
-    .await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn restore_signal(db: State<'_, Db>, id: String) -> Result<WorkSignal, AppError> {
-    restore(db.inner(), &id).await.map_err(AppError::from)
+    signal_store::restore(db.inner(), &id)
+        .await
+        .map_err(AppError::from)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signal_store::promote_today;
-    use crate::commands::signal_store::{insert_signal, set_quadrant};
+    use crate::commands::signal_store::{
+        fetch_archived_snoozed, fetch_completed, insert_signal, promote_today, restore, set_impact,
+        set_quadrant, set_regret,
+    };
     use crate::models::{Kind, Quadrant, SignalStatus};
 
     /// 완료 todo는 today_done_at 범위로 잡히고, impact/regret 태깅이 라운드트립된다.
