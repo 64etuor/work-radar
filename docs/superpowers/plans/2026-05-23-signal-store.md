@@ -13,8 +13,14 @@
 
 ---
 
+## 세션 시작 (다음 세션이 이 파일만 보고 시작)
+
+- 자동 로드: `CLAUDE.md`→`AGENTS.md`→메모리(`MEMORY.md`). 추가로 읽을 정본: 이 플랜 + spec(`docs/superpowers/specs/2026-05-23-signal-store-design.md`) + `PLAN.md §1`(INVARIANTS).
+- 베이스라인: 시작 전 `git fetch && git checkout dev` 후 **clean `origin/dev` 기준**에서 `refactor/signal-store` 분기(stale 로컬에서 분기 금지). 이 플랜 작성 시점 dev = `2744fbe`.
+
 ## 실행 프로토콜 (모든 태스크 공통 — 반드시)
 
+- **순차 실행 · 단일 writer (이 레포 필수).** `isolation:worktree` / 병렬 백그라운드 에이전트 **금지** — 이 레포에서 두 번 메인 트리·`dev`를 오염시킨 전례(공유 허브파일 `lib.rs`/`models.rs`/`bindings.ts` + 단일 dev). 위임은 **단일·순차 executor가 미커밋 구현 → 오케스트레이터만 검증·critic·커밋**. (배경: `decisions.md` "운영 결정", 메모리 `work-radar-parallel-worktree-contaminates`.)
 - cargo/커밋 전: `export PATH="$HOME/.cargo/bin:$PATH"` (husky pre-commit = `cargo fmt --check`+`tsc`).
 - clippy/test는 rtk 출력이 부정확하므로 `rtk proxy cargo ... > /tmp/x.log 2>&1` 후 **Read 도구**로 확인.
 - **행위 보존 증명(매 모듈 태스크 필수):** `cargo test`가 `src/bindings.ts`를 재생성 → `git diff --exit-code src/bindings.ts`가 **빈값**이어야 함(IPC 표면 동일). 비면 커맨드 시그니처가 바뀐 것 → 되돌린다.
