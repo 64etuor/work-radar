@@ -30,9 +30,10 @@ WAL+busy_timeout, 도메인 에러 thiserror, `with_retry` 통합+`Retryable`, `
 > 위 8건(A·B·C·D·E·H·I·J)은 `docs/decisions.md` "품질 후속 (cross-cutting, 2026-05-22)"에 커밋 단위로 기록돼 있음.
 
 **남은 진짜 작업(전부 게이트 필요 — 자율 착수 금지):**
-- **F · repository 레이어**(대형) → **G · signals god-table 분리**(대형·스키마·가장 위험). 둘 다 **brainstorming + Phase 승격 + 단계 분할** 선행, G는 F 이후.
+- **F · repository 레이어**(대형, 진행 중) — `signal_store`(signals 슬라이스, `dd586b7`) + `agent_run_store`(agent_runs 슬라이스, 2026-05-23) **done**. 설계/구현 정본: `docs/plans/2026-05-23-agent-run-store-{design,impl}.md`. **남은 store(별도 PR, 한 PR=한 store, 큰 것부터)**: `routine_store`(~31) → `promotion_store`(notion ~21) → `skill_store`(~20) → `pr_radar_store`(~11, `pr_self_checks` 합류) → 소형(projects/hermes/calendar/retro/nav). today 레일은 signals 직접 읽어 G와 강결합 → G와 함께.
+- **G · signals god-table 분리**(대형·스키마·가장 위험). `signal_store`만 의존하므로 F 잔여와 독립 착수 가능. **brainstorming + Phase 승격 + 마이그레이션(임의 ALTER 금지) + 데이터 보존 테스트 + critic** 선행.
 
-> 즉 자율-안전 배치 + D(critic)까지 소진됨. 다음 착수는 §3 순서대로 **F→G(brainstorming)** — 사람 확인 후.
+> 자율-안전 배치 + D(critic) + F의 signals·agent_runs 슬라이스까지 소진됨. 다음 착수는 **F 잔여 store(routine_store 권장)** 또는 **G(brainstorming)** — 사람 확인 후.
 
 ---
 
