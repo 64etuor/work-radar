@@ -15,6 +15,7 @@ pub mod calendar;
 pub mod cmux;
 pub mod hermes;
 pub mod nav;
+pub mod notification_store;
 pub mod notion;
 pub mod pr_radar;
 pub mod projects;

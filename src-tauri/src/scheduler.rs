@@ -14,21 +14,15 @@
 
 use std::time::Duration;
 
+use crate::commands::notification_store;
 use crate::db::Db;
+
+// Notifier 트레이트가 여기 있으므로 DueNotification을 scheduler:: 경로로 재노출(소비처 lib.rs Notifier impl).
+pub(crate) use crate::commands::notification_store::DueNotification;
 
 /// 스케줄러 틱 간격. busy-loop가 아닌 bounded interval(INVARIANT #5). 30s = 분 단위 알림에
 /// 충분하면서 idle CPU를 거의 쓰지 않는 절충.
 pub const TICK_INTERVAL: Duration = Duration::from_secs(30);
-
-/// 한 틱에서 발사할 due 알림 한 행 (source/source_id는 소비처가 포커스/dedup에 쓴다).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DueNotification {
-    pub id: String,
-    pub title: String,
-    pub body: String,
-    pub source: String,
-    pub source_id: Option<String>,
-}
 
 /// 네이티브 알림 발사 추상화. 실제 구현은 tauri-plugin-notification(앱 핸들),
 /// 테스트는 발사 호출을 기록하는 fake. 발사 실패는 Err로 노출(스케줄러가 로그만 남기고 계속).
@@ -36,52 +30,16 @@ pub trait Notifier: Send + Sync + 'static {
     fn notify(&self, n: &DueNotification) -> Result<(), String>;
 }
 
-/// 발사 시각이 도래한 미발사 알림을 선택한다. `now`는 `datetime('now')`와 같은 UTC 문자열
-/// 형식(테스트 주입 가능). 정렬은 fire_at 오름차순(가장 먼저 예약된 것부터).
-pub async fn due_notifications(db: &Db, now: &str) -> Result<Vec<DueNotification>, sqlx::Error> {
-    let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
-        "SELECT id, title, body, source, source_id FROM scheduled_notifications \
-         WHERE fired_at IS NULL AND fire_at <= ?1 ORDER BY fire_at ASC, id ASC",
-    )
-    .bind(now)
-    .fetch_all(db)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|(id, title, body, source, source_id)| DueNotification {
-            id,
-            title,
-            body,
-            source,
-            source_id,
-        })
-        .collect())
-}
-
-/// 한 행을 발사 완료로 표시한다(멱등 가드). `fired_at IS NULL` 조건으로만 UPDATE하므로
-/// 어떤 경합에서도 한 번만 발사 처리되고, 이미 fired된 행은 다시 표시되지 않는다.
-pub async fn mark_fired(db: &Db, id: &str, now: &str) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE scheduled_notifications SET fired_at = ?2 \
-         WHERE id = ?1 AND fired_at IS NULL",
-    )
-    .bind(id)
-    .bind(now)
-    .execute(db)
-    .await?;
-    Ok(())
-}
-
 /// 한 틱: due 행을 발사하고 fired_at을 찍는다. 발사가 실패한 행은 fired로 표시하지 않아
 /// 다음 틱에서 재시도되지만, 발사 시도 자체가 bounded interval에 묶여 있어 폭주하지 않는다
 /// (재시도 = 다음 틱, busy-loop 아님). 발사된 행 수를 반환(테스트/로그용).
 pub async fn run_tick<N: Notifier>(db: &Db, notifier: &N, now: &str) -> Result<usize, sqlx::Error> {
-    let due = due_notifications(db, now).await?;
+    let due = notification_store::due(db, now).await?;
     let mut fired = 0usize;
     for n in &due {
         match notifier.notify(n) {
             Ok(()) => {
-                mark_fired(db, &n.id, now).await?;
+                notification_store::mark_fired_by_id(db, &n.id, now).await?;
                 fired += 1;
             }
             Err(e) => {
@@ -197,7 +155,9 @@ mod tests {
         )
         .await; // fired → 제외
 
-        let due = due_notifications(&db, "2026-05-22 10:00:00").await.unwrap();
+        let due = notification_store::due(&db, "2026-05-22 10:00:00")
+            .await
+            .unwrap();
         let ids: Vec<&str> = due.iter().map(|d| d.id.as_str()).collect();
         assert_eq!(ids, vec!["past", "now"], "due = past+now, 정렬 오름차순");
     }
@@ -237,7 +197,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(failed, 0);
-        let still_due = due_notifications(&db, "2026-05-22 10:00:00").await.unwrap();
+        let still_due = notification_store::due(&db, "2026-05-22 10:00:00")
+            .await
+            .unwrap();
         assert_eq!(still_due.len(), 1, "실패 행은 다음 틱 재시도 대상으로 남음");
 
         // 이후 성공 notifier로 복구되면 정상 발사.
@@ -263,7 +225,7 @@ mod tests {
         }
         // "재시작": 같은 파일로 새 풀.
         let db2 = init_db(&path).await.unwrap();
-        let due = due_notifications(&db2, "2026-05-22 10:00:00")
+        let due = notification_store::due(&db2, "2026-05-22 10:00:00")
             .await
             .unwrap();
         assert_eq!(due.len(), 1);
