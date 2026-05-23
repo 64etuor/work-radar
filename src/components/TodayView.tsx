@@ -1,7 +1,10 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   CalendarCheck,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Circle,
   ExternalLink,
   Flame,
@@ -13,6 +16,7 @@ import {
 } from "lucide-react";
 
 import type { CalendarEvent, WorkSignal } from "@/bindings";
+import { stepDate } from "@/lib/calendarRange";
 import {
   ageFromForDate,
   isTodayDone,
@@ -21,6 +25,7 @@ import {
   openExternal,
   usePromoteToday,
   useCalendarEvents,
+  useProjects,
   useToday,
   useTodayOverview,
   useTodayRoutines,
@@ -49,10 +54,29 @@ export function TodayView() {
   const today = localToday();
   const weekday = localWeekday();
 
+  // 헤더 < > 날짜 네비의 선택 날짜(기본 오늘). **캘린더 일정만** 이 날짜로 재조회(쿼리 키에 date
+  // → P6 persist/캐시와 날짜별 정합). overview(Work Debt)는 **today 고정** — 현재상태 집계(live count)일
+  // 뿐 아니라 today_overview가 그 날짜로 debt_snapshot을 upsert(write)하므로 임의 날짜 조회는 과거
+  // 스냅샷을 오염(INVARIANT #7). focus 레일·루틴도 today-bound(승격/완료/rollover=로컬 오늘 의미).
+  const [date, setDate] = useState<string>(today);
+  const isToday = date === today;
+
   const overview = useTodayOverview(today);
-  const events = useCalendarEvents(today);
+  const events = useCalendarEvents(date);
   const todayRail = useToday(today);
   const routines = useTodayRoutines(today, weekday);
+
+  // 캘린더 미연결 판정(P7 CalendarDrawer 패턴 재사용 — 네트워크 없는 ambient 판정).
+  // 어떤 프로젝트도 캘린더를 선택하지 않았으면 OAuth 미연결/미설정 → 빈 화면 방치 대신 연결 CTA.
+  const projectsQ = useProjects();
+  const projects = projectsQ.data ?? [];
+  const noCalendarsConfigured =
+    !projectsQ.isLoading &&
+    projects.length > 0 &&
+    projects.every((p) => {
+      const ids = p.googleCalendarIds?.trim();
+      return !ids || ids === "[]";
+    });
 
   const promoteToday = usePromoteToday();
   const unpromote = useUnpromoteToday();
@@ -75,7 +99,33 @@ export function TodayView() {
           보드
         </button>
         <span className="today-title">Today</span>
-        <span className="today-date">{today}</span>
+        <div className="today-nav">
+          <button
+            type="button"
+            className="today-navbtn"
+            aria-label="이전 날짜"
+            onClick={() => setDate((d) => stepDate("day", d, -1))}
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="today-date">{date}</span>
+          <button
+            type="button"
+            className="today-navbtn"
+            aria-label="다음 날짜"
+            onClick={() => setDate((d) => stepDate("day", d, 1))}
+          >
+            <ChevronRight className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="today-navtoday"
+            disabled={isToday}
+            onClick={() => setDate(today)}
+          >
+            오늘로
+          </button>
+        </div>
       </header>
 
       <div className="today-scroll">
@@ -111,39 +161,61 @@ export function TodayView() {
           />
         </div>
 
-        {/* 캘린더 오늘 일정 (ambient — 미연결/실패는 graceful degrade). */}
+        {/* 캘린더 선택일 일정 (ambient — 미연결/실패는 graceful degrade). */}
         <section className="today-sec">
           <div className="today-sec-head">
             <CalendarCheck className="size-4 text-wr-subtle" />
-            <span className="today-sec-name">오늘 일정</span>
+            <span className="today-sec-name">{isToday ? "오늘 일정" : "일정"}</span>
             <span className="today-sec-count">{(events.data ?? []).length}</span>
           </div>
-          {events.isError && (
-            <div className="today-hint">캘린더를 불러오지 못했습니다 — 설정에서 Google Calendar 연결을 확인하세요.</div>
-          )}
-          {!events.isError && (events.data ?? []).length === 0 && (
-            <div className="today-hint">오늘 일정이 없습니다 (연결된 캘린더 기준).</div>
-          )}
-          {allDay.length > 0 && (
-            <div className="today-allday">
-              {allDay.map((e) => (
-                <EventChip key={e.id} ev={e} allDay />
-              ))}
+          {/* 미연결 시 빈 화면 방치 금지 — 설정의 연결 CTA로 유도(P7 드로어 OAuth 미연결 패턴과 일관). */}
+          {noCalendarsConfigured ? (
+            <div className="today-state">
+              <p className="today-state-msg">
+                Google Calendar가 연결되지 않았습니다. 연결하면 일정이 여기에 표시됩니다.
+              </p>
+              <button
+                type="button"
+                className="today-connect"
+                onClick={() => goTo("settings")}
+              >
+                Google Calendar 연결
+              </button>
             </div>
+          ) : (
+            <>
+              {events.isError && (
+                <div className="today-hint">
+                  캘린더를 불러오지 못했습니다 — 설정에서 Google Calendar 연결을 확인하세요.
+                </div>
+              )}
+              {!events.isError && (events.data ?? []).length === 0 && (
+                <div className="today-hint">
+                  {isToday ? "오늘" : "이 날짜에"} 일정이 없습니다 (연결된 캘린더 기준).
+                </div>
+              )}
+              {allDay.length > 0 && (
+                <div className="today-allday">
+                  {allDay.map((e) => (
+                    <EventChip key={e.id} ev={e} allDay />
+                  ))}
+                </div>
+              )}
+              {timed.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  className="today-event"
+                  onClick={() => e.url && void openExternal(e.url)}
+                >
+                  <span className="today-event-time">{eventTime(e.start)}</span>
+                  <span className="today-event-title">{e.title}</span>
+                  <span className="today-event-cal">{e.calendarSummary}</span>
+                  {e.url && <ExternalLink className="size-3.5 text-wr-subtle" />}
+                </button>
+              ))}
+            </>
           )}
-          {timed.map((e) => (
-            <button
-              key={e.id}
-              type="button"
-              className="today-event"
-              onClick={() => e.url && void openExternal(e.url)}
-            >
-              <span className="today-event-time">{eventTime(e.start)}</span>
-              <span className="today-event-title">{e.title}</span>
-              <span className="today-event-cal">{e.calendarSummary}</span>
-              {e.url && <ExternalLink className="size-3.5 text-wr-subtle" />}
-            </button>
-          ))}
         </section>
 
         {/* Q1 — 사람이 분류한 긴급·중요, 아직 Today에 안 올린 것 (콕핏에서 끌어올림). */}
