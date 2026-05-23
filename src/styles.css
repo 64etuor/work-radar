@@ -4410,6 +4410,23 @@
   cursor: default;
   white-space: nowrap;
 }
+/* 박스 이름 인라인 편집 input (P10b) — 이름 span과 동일 타이포, 칩 안에 끼우는 단정한 필드. */
+.asb-box-name-edit {
+  position: relative;
+  z-index: 1;
+  width: 9ch;
+  min-width: 0;
+  font: 500 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 4px;
+  padding: 1px 4px;
+  outline: none;
+}
+.asb-box-name-edit:focus {
+  border-color: var(--color-wr-accent);
+}
 
 /* ── Hermes 메신저 브리지 제어 surface (Phase 20 #15) ───────────────────────────── */
 .hermes {

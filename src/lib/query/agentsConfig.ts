@@ -24,3 +24,42 @@ export function useSetCodexModel() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["codexModel"] }),
   });
 }
+
+/**
+ * 에이전트 바 박스 이름 (P10b). `agent.name.<sessionKey>` app_config 키에 영속.
+ * per-machine 표시 라벨일 뿐 — 결정 레일(#1)/상태 SSOT(signals, #7) 무관.
+ */
+
+/** 박스 이름 오버라이드 맵({ sessionKey → name }). 다건 키를 한 번에 폴링하는 단일 쿼리. */
+export function useAgentNames(sessionKeys: string[]) {
+  // 키 내용으로 안정된 캐시 키 — 박스 집합이 바뀔 때만 재조회.
+  const sorted = [...sessionKeys].sort();
+  return useQuery<Record<string, string>>({
+    queryKey: ["agentNames", sorted],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        sorted.map(
+          async (key) =>
+            [key, await unwrap(commands.getAgentName(key))] as const,
+        ),
+      );
+      const out: Record<string, string> = {};
+      for (const [key, name] of entries) {
+        if (name != null && name.trim() !== "") out[key] = name;
+      }
+      return out;
+    },
+    staleTime: 60_000,
+    enabled: sorted.length > 0,
+  });
+}
+
+/** 박스 이름 설정(null/빈 문자열 → 삭제 → 기본 라벨 복원). 성공 시 이름 맵 무효화. */
+export function useSetAgentName() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { sessionKey: string; name: string | null }) =>
+      unwrap(commands.setAgentName(args.sessionKey, args.name)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentNames"] }),
+  });
+}

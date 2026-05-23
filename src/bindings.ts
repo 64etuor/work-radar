@@ -150,6 +150,10 @@ export const commands = {
 	 *  None 또는 빈 문자열이면 저장 행을 삭제한다.
 	 */
 	setCodexModel: (model: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_codex_model", { model })),
+	/**  박스의 사용자 지정 이름(없으면 None → 호출부가 기본 라벨 fallback). */
+	getAgentName: (sessionKey: string) => typedError<string | null, AppError>(__TAURI_INVOKE("get_agent_name", { sessionKey })),
+	/**  박스 이름 설정(또는 None/빈 문자열 → 저장 행 삭제 → 기본 라벨 복원). */
+	setAgentName: (sessionKey: string, name: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_agent_name", { sessionKey, name })),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, AppError>(__TAURI_INVOKE("codex_status")),
 	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */

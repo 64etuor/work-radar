@@ -14,6 +14,7 @@ import {
   progressRatio,
 } from "@/lib/agentBar";
 import { useAgentRuns } from "@/lib/query";
+import { useAgentNames, useSetAgentName } from "@/lib/query/agentsConfig";
 import { useCmuxStatus } from "@/lib/query/cmux";
 import { useHermesBridgeStatus } from "@/lib/query/hermes";
 import { useUIStore } from "@/store";
@@ -177,6 +178,12 @@ export function AgentStatusBar() {
     return out;
   }, [list, hermes.data, cmux.data]);
 
+  // 박스 이름 오버라이드(app_config) — 키별 사용자 지정 라벨. 없으면 box.name fallback.
+  const sessionKeys = useMemo(() => boxes.map((b) => b.key), [boxes]);
+  const names = useAgentNames(sessionKeys);
+  const nameOverrides = names.data ?? {};
+  const setName = useSetAgentName();
+
   const { visibleCount, overflow } = overflowSplit(boxes.length);
   const visible = boxes.slice(0, visibleCount);
 
@@ -188,6 +195,16 @@ export function AgentStatusBar() {
     const id = setInterval(() => setNowMs(Date.now()), 1_000);
     return () => clearInterval(id);
   }, [hasWorking]);
+
+  // 인라인 이름 편집 중인 박스 key(없으면 null). 더블클릭으로 진입.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const commitName = (sessionKey: string, defaultName: string, next: string) => {
+    setEditingKey(null);
+    const trimmed = next.trim();
+    // 빈 값 또는 기본 라벨과 동일 → 오버라이드 삭제(null). 그 외 새 이름 저장.
+    const value = trimmed === "" || trimmed === defaultName ? null : trimmed;
+    setName.mutate({ sessionKey, name: value });
+  };
 
   // ── 빈 상태: 조용한 단일 'Agents · idle' pill (박스 없음). ──────────────
   if (boxes.length === 0) {
@@ -211,12 +228,22 @@ export function AgentStatusBar() {
       <span className="asb-label asb-label-lead">Agents</span>
       <div className="asb-boxes">
         {visible.map((box) => (
-          <AgentBox key={box.key} box={box} nowMs={nowMs} onOpen={() => goTo("jobs")} />
+          <AgentBox
+            key={box.key}
+            box={box}
+            displayName={nameOverrides[box.key] ?? box.name}
+            nowMs={nowMs}
+            editing={editingKey === box.key}
+            onOpen={() => goTo("jobs")}
+            onEditStart={() => setEditingKey(box.key)}
+            onCommit={(next) => commitName(box.key, box.name, next)}
+            onCancel={() => setEditingKey(null)}
+          />
         ))}
         {overflow > 0 && (
           <span
             className="asb-overflow"
-            title={overflowTitle(boxes.slice(visibleCount))}
+            title={overflowTitle(boxes.slice(visibleCount), nameOverrides)}
           >
             +{overflow}
           </span>
@@ -229,27 +256,41 @@ export function AgentStatusBar() {
 /** 정체성 박스 1개 — 아이콘 + 이름 + 상태(색 dot + 라벨) + 경과 백필 wash. */
 function AgentBox({
   box,
+  displayName,
   nowMs,
+  editing,
   onOpen,
+  onEditStart,
+  onCommit,
+  onCancel,
 }: {
   box: SessionBox;
+  /** 표시 이름 = app_config 오버라이드 또는 기본 라벨(box.name) fallback. */
+  displayName: string;
   nowMs: number;
+  editing: boolean;
   onOpen: () => void;
+  onEditStart: () => void;
+  onCommit: (next: string) => void;
+  onCancel: () => void;
 }) {
   const working = box.state === "working";
   const elapsedSec = box.startedMs != null ? (nowMs - box.startedMs) / 1000 : 0;
   const ratio = working ? progressRatio(elapsedSec, box.timeoutSec) : 0;
-  const width = boxWidth(ratio, working && box.startedMs != null);
+  const width = editing ? undefined : boxWidth(ratio, working && box.startedMs != null);
+
+  // 편집 중에는 클릭이 Jobs로 이동하지 않도록 div로 전환(input 포커스 보존).
+  const Tag = editing ? "div" : "button";
 
   return (
-    <button
-      type="button"
+    <Tag
+      type={editing ? undefined : "button"}
       className={`asb-box asb-box-${box.state}`}
       style={{ width }}
-      onClick={onOpen}
-      title={box.title}
+      onClick={editing ? undefined : onOpen}
+      title={editing ? undefined : box.title}
     >
-      {working && box.startedMs != null && (
+      {working && box.startedMs != null && !editing && (
         <span
           className="asb-box-fill"
           style={{ width: `${Math.round(ratio * 100)}%` }}
@@ -258,12 +299,94 @@ function AgentBox({
       <span className="asb-box-icon">
         <EngineIcon engine={box.engine} size={13} />
       </span>
-      <span className="asb-box-name">{box.name}</span>
+      {editing ? (
+        <NameEditor initial={displayName} onCommit={onCommit} onCancel={onCancel} />
+      ) : (
+        <span
+          className="asb-box-name"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            onEditStart();
+          }}
+          title="더블클릭해서 이름 편집"
+        >
+          {displayName}
+        </span>
+      )}
       <span className={`asb-box-state asb-box-state-${box.state}`}>
         <span className="asb-box-dot" aria-hidden="true" />
         <span className="asb-box-state-label">{box.stateLabel}</span>
       </span>
-    </button>
+    </Tag>
+  );
+}
+
+/**
+ * 박스 이름 인라인 입력. 마운트 시 포커스+전체선택, Enter/blur 저장, Esc 취소.
+ * P2 `TitleEditor` 패턴 재사용: capture-phase Esc(App 셸 창 숨김 핸들러보다 먼저 가로챔)
+ * + settled 1회 가드(Esc 언마운트→blur(commit) 되살아남 차단).
+ */
+function NameEditor({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  const settled = useRef(false);
+  const commit = (value: string) => {
+    if (settled.current) return;
+    settled.current = true;
+    onCommit(value);
+  };
+  const cancel = () => {
+    if (settled.current) return;
+    settled.current = true;
+    onCancel();
+  };
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, []);
+
+  // Esc 취소(캡처 단계 — App 셸의 창 숨김 핸들러보다 먼저 가로채야 한다).
+  // synthetic stopPropagation은 native window 리스너를 못 막으므로 ProjectPickerModal과 동일 패턴.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        cancel();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <input
+      ref={ref}
+      className="asb-box-name-edit"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={() => commit(draft)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit(draft);
+        }
+      }}
+    />
   );
 }
 
@@ -284,7 +407,12 @@ function pruneFirstSeen(map: Map<string, number>, liveKeys: string[]): void {
   }
 }
 
-/** '+N' 오버플로 칩 tooltip — 접힌 세션 이름 나열. */
-function overflowTitle(hidden: SessionBox[]): string {
-  return hidden.map((b) => `${b.name} (${b.stateLabel})`).join("\n");
+/** '+N' 오버플로 칩 tooltip — 접힌 세션 이름 나열(오버라이드 우선). */
+function overflowTitle(
+  hidden: SessionBox[],
+  nameOverrides: Record<string, string>,
+): string {
+  return hidden
+    .map((b) => `${nameOverrides[b.key] ?? b.name} (${b.stateLabel})`)
+    .join("\n");
 }

@@ -113,6 +113,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Codex 에이전트 설정 (B2: 모델 선택).
         commands::get_codex_model,
         commands::set_codex_model,
+        // 에이전트 바 박스 이름 영속 (P10b: app_config per-machine 라벨).
+        commands::get_agent_name,
+        commands::set_agent_name,
         // Agent 스파인 (잡 큐 + bounds + kill, Phase 7).
         commands::codex_status,
         commands::trigger_echo_job,
