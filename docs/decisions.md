@@ -310,3 +310,7 @@
 ## signal_store 데이터 접근 레이어 (백로그 F · 2026-05-23)
 
 - **signals/signals_fts SQL을 단일 `commands/signal_store.rs`로 verbatim relocation.** ~10개 커맨드 모듈에 흩어진 signals 테이블 접근을 `pub(crate) async fn` free 함수로 모아 커맨드는 위임만. **동작·스키마 무변경**(순수 relocation): SQL 문자열·바인드·반환타입 보존, `cargo test` 204→209(+5 store 직접 단위테스트), clippy 0, `git diff src/bindings.ts` 빈값(IPC 표면 동일) — critic ACCEPT. 트레이드오프: 대형 단일 작업(15파일)이지만 모듈별 bisectable 커밋 10개. **백로그 G(signals god-table 분리) 선행** — G는 signal_store 내부만 바꾸면 됨. (Approach A 채택, 대안 B/C 기각: spec `docs/superpowers/specs/2026-05-23-signal-store-design.md`.)
+
+## UI/UX 미해결 이슈 자율 페이즈 (plan: docs/plans/2026-05-23-ui-fixes-orchestration.md)
+
+- **P1 Notion 백로그: DB ID 매칭 + 프로젝트 선택 picker + 딥링크.** 증상("프로젝트에 Notion DB ID가 설정되지 않음")의 근본은 *백엔드 누락이 아니라 FE surfacing 미완*이었다(notion.rs는 이미 `resolved_project_id`를 #1 라벨과 함께 반환). → (1) `>1` 같은-kind 후보는 구조화 에러 `notion.needs_project_pick` 반환 → FE `ProjectPickerModal`(cev-* 토큰 재사용, `window.prompt` 제거)로 사람이 선택→재승격. (2) DB ID NULL은 `notion.db_id_missing`(프로젝트명 포함 + `ErrorAction{nav:"settings","설정 열기"}`)로 토스트 액션 버튼 노출. (3) 단일 명확 후보 auto-persist는 **유지**하되 `set_signal_project`가 `project_id`만 쓰고 분류 레일(quadrant) 무변경 + "설정에서 변경 가능" 라벨로 사람이 가시·변경 가능 → INVARIANT #1 정합(라우팅 태그 ≠ 결정). (4) 순수 `notion_deep_link`(https↔notion:// 스킴 스왑·raw uuid·idempotent) + 4 단위테스트, FE는 `pageDeepLink ?? pageUrl`. 검증: cargo test 214 pass·clippy 0·typecheck 0, critic ACCEPT(#1/#2 PASS). 잔여: `notion://` OS 핸들러 미설치 시 단일 토스트 버튼 fallback UX는 범위 외.

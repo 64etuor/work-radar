@@ -10,6 +10,10 @@ import {
   type CalendarModalState,
   CalendarEventModal,
 } from "@/components/board/CalendarEventModal";
+import {
+  type ProjectPickerState,
+  ProjectPickerModal,
+} from "@/components/board/ProjectPickerModal";
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas } from "@/components/board/MatrixCanvas";
@@ -45,6 +49,7 @@ import {
   useUpdateSignalTitle,
   tomorrow,
 } from "@/lib/query";
+import { IpcError } from "@/lib/query/client";
 import { useUIStore } from "@/store";
 import { useToastStore } from "@/lib/toast";
 
@@ -104,6 +109,7 @@ export function CaptureBoard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
+  const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
   const [enrichRunId, setEnrichRunId] = useState<string | null>(null);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
@@ -176,6 +182,11 @@ export function CaptureBoard() {
         {
           onSuccess: (outcome) => {
             if (outcome.status === "created") {
+              // 생성된 페이지 열기: notion:// 딥링크 우선, https는 폴백(데스크톱 앱 없을 때).
+              const openUrl = outcome.pageDeepLink ?? outcome.pageUrl;
+              const openOpt = openUrl
+                ? { actionUrl: openUrl, actionLabel: "열기" }
+                : undefined;
               // 자동 지정(projectId=null로 호출 → 백엔드가 단일 후보 해석)된 경우에만 라벨 표시
               // (INVARIANT #1: 사람이 볼 수 있게). picker로 직접 고른 경우(projectId!=null)는 제외.
               if (projectId === null && outcome.resolvedProjectId && !sig?.projectId) {
@@ -183,17 +194,10 @@ export function CaptureBoard() {
                 const projName = autoProj?.name ?? outcome.resolvedProjectId;
                 pushSuccess(
                   `${label}됨 — 프로젝트 자동 지정: ${projName} (설정에서 변경 가능)`,
-                  outcome.pageUrl
-                    ? { actionUrl: outcome.pageUrl, actionLabel: "열기" }
-                    : undefined,
+                  openOpt,
                 );
               } else {
-                pushSuccess(
-                  `${label}됨`,
-                  outcome.pageUrl
-                    ? { actionUrl: outcome.pageUrl, actionLabel: "열기" }
-                    : undefined,
-                );
+                pushSuccess(`${label}됨`, openOpt);
               }
             } else if (outcome.status === "draft") {
               pushSuccess(`${label} — 오프라인, 큐에 저장됨(복구 시 등록)`);
@@ -202,30 +206,21 @@ export function CaptureBoard() {
             }
           },
           onError: (e) => {
-            const msg = String(e);
-            if (msg.includes("프로젝트 선택 필요")) {
-              // 여러 프로젝트: picker — 사람이 직접 선택 (INVARIANT #1).
+            const code = e instanceof IpcError ? e.app.code : null;
+            if (code === "notion.needs_project_pick") {
+              // 여러 프로젝트: picker 모달 — 사람이 직접 선택 (INVARIANT #1).
               const kind = sig?.kind ?? null;
               const candidates = kind ? projects.filter((p) => p.kind === kind) : projects;
               if (candidates.length === 0) {
                 pushError("notion", `${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
                 return;
               }
-              // window.prompt을 picker 대용으로 사용 (기존 코드 패턴 — 인라인 편집과 동일).
-              const names = candidates.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
-              const answer = window.prompt(
-                `승격할 프로젝트를 선택하세요:\n${names}\n\n번호를 입력하세요:`,
-              );
-              const idx = answer ? parseInt(answer, 10) - 1 : -1;
-              if (idx >= 0 && idx < candidates.length) {
-                doPromote(candidates[idx].id);
-              } else if (answer !== null) {
-                pushError("notion", `${label} 취소 — 올바른 번호를 입력하세요`);
-              }
-            } else if (msg.includes("해당 kind의 프로젝트가 없음")) {
-              pushError("notion", `${label} 실패: 설정에서 프로젝트를 먼저 생성하세요`);
+              setProjectPicker({ signalId, target, label, candidates });
+            } else if (code === "notion.db_id_missing" && e instanceof IpcError) {
+              // DB ID 미설정: 프로젝트명 + "설정 열기" 액션(AppError.action) 그대로 surface.
+              pushError("notion", e.app);
             } else {
-              pushError("notion", `${label} 실패: ${msg}`);
+              pushError("notion", `${label} 실패: ${String(e)}`);
             }
           },
         },
@@ -515,6 +510,41 @@ export function CaptureBoard() {
       <CalendarEventModal
         state={calendarModal}
         onClose={() => setCalendarModal(null)}
+      />
+      <ProjectPickerModal
+        state={projectPicker}
+        onClose={() => setProjectPicker(null)}
+        onPick={(projectId) => {
+          if (!projectPicker) return;
+          // 사람이 고른 프로젝트로 재승격(projectId 명시 → 백엔드가 persist, INVARIANT #1).
+          promoteToNotion.mutate(
+            {
+              signalId: projectPicker.signalId,
+              target: projectPicker.target,
+              projectId,
+            },
+            {
+              onSuccess: (outcome) => {
+                if (outcome.status === "created") {
+                  const openUrl = outcome.pageDeepLink ?? outcome.pageUrl;
+                  pushSuccess(
+                    `${projectPicker.label}됨`,
+                    openUrl ? { actionUrl: openUrl, actionLabel: "열기" } : undefined,
+                  );
+                } else if (outcome.status === "draft") {
+                  pushSuccess(`${projectPicker.label} — 오프라인, 큐에 저장됨(복구 시 등록)`);
+                } else {
+                  pushError("notion", `${projectPicker.label} 실패: ${outcome.detail}`);
+                }
+              },
+              onError: (e) =>
+                pushError(
+                  "notion",
+                  e instanceof IpcError ? e.app : `${projectPicker.label} 실패: ${String(e)}`,
+                ),
+            },
+          );
+        }}
       />
       {enrichRunId && (
         <EnrichModal

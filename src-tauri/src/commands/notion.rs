@@ -3,7 +3,7 @@ use tauri::State;
 use crate::commands::signal_store;
 use crate::commands::signals::insert_promotion_draft;
 use crate::db::Db;
-use crate::error::AppError;
+use crate::error::{AppError, ErrorAction};
 use crate::keychain;
 use crate::models::{
     FlushSummary, Promotion, PromotionOutcome, PromotionStatus, PromotionTarget, TokenKind,
@@ -125,8 +125,10 @@ async fn execute_promotion<W: NotionWriter>(
 
     // 멱등: 이미 created면 중복 write 없이 기존 결과 반환(INVARIANT #3).
     if let Some(done) = find_promotion(db, signal_id, target, PromotionStatus::Created).await? {
+        let url = payload_str(&done.draft_payload, "url");
         return Ok(PromotionOutcome {
-            page_url: payload_str(&done.draft_payload, "url"),
+            page_deep_link: url.as_deref().map(crate::notion::notion_deep_link),
+            page_url: url,
             promotion_id: done.id,
             status: PromotionStatus::Created,
             detail: "이미 등록됨".into(),
@@ -143,10 +145,12 @@ async fn execute_promotion<W: NotionWriter>(
     match writer.create_page(token, db_id, &title).await {
         Ok(page) => {
             finalize_created(db, &promo.id, signal_id, target, &page).await?;
+            let deep_link = crate::notion::notion_deep_link(&page.url);
             Ok(PromotionOutcome {
                 promotion_id: promo.id,
                 status: PromotionStatus::Created,
                 page_url: Some(page.url),
+                page_deep_link: Some(deep_link),
                 detail: "Notion 페이지 생성됨".into(),
                 resolved_project_id: None,
             })
@@ -156,6 +160,7 @@ async fn execute_promotion<W: NotionWriter>(
             promotion_id: promo.id,
             status: PromotionStatus::Draft,
             page_url: None,
+            page_deep_link: None,
             detail: format!("오프라인/일시 오류 — 큐에 저장됨(복구 시 등록): {msg}"),
             resolved_project_id: None,
         }),
@@ -169,6 +174,7 @@ async fn execute_promotion<W: NotionWriter>(
                 promotion_id: promo.id,
                 status: PromotionStatus::Failed,
                 page_url: None,
+                page_deep_link: None,
                 detail: msg,
                 resolved_project_id: None,
             })
@@ -183,6 +189,7 @@ async fn execute_promotion<W: NotionWriter>(
                 promotion_id: promo.id,
                 status: PromotionStatus::Failed,
                 page_url: None,
+                page_deep_link: None,
                 detail: msg,
                 resolved_project_id: None,
             })
@@ -197,10 +204,53 @@ async fn execute_promotion<W: NotionWriter>(
                 promotion_id: promo.id,
                 status: PromotionStatus::Failed,
                 page_url: None,
+                page_deep_link: None,
                 detail: msg,
                 resolved_project_id: None,
             })
         }
+    }
+}
+
+/// 승격 해석 단계의 구조화 실패. 커맨드가 AppError(코드/액션)로 접고, flush는 무시한다.
+/// 메시지(Display)는 기존 문자열을 보존해 외부(테스트/flush 로그) 동작 불변.
+#[derive(Debug)]
+enum ResolveError {
+    /// 사람이 골라야 함(같은 kind 후보 >1) — 프런트가 picker를 띄운다(INVARIANT #1).
+    NeedsProjectPick,
+    /// 해석된 프로젝트에 대상 DB ID가 비어 있음 — 설정으로 안내(프로젝트명 포함).
+    MissingDbId { project_name: String },
+    /// 일반 실패(타깃 아님/신호 없음/프로젝트 없음/토큰 없음/DB 오류 등).
+    Other(String),
+}
+
+impl std::fmt::Display for ResolveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolveError::NeedsProjectPick => {
+                write!(
+                    f,
+                    "프로젝트 선택 필요(여러 프로젝트) — 프런트에서 picker를 표시할 것"
+                )
+            }
+            ResolveError::MissingDbId { project_name } => write!(
+                f,
+                "프로젝트 '{project_name}'에 Notion DB ID가 설정되지 않음(설정에서 바인딩 필요)"
+            ),
+            ResolveError::Other(m) => write!(f, "{m}"),
+        }
+    }
+}
+
+impl From<String> for ResolveError {
+    fn from(m: String) -> Self {
+        ResolveError::Other(m)
+    }
+}
+
+impl From<&str> for ResolveError {
+    fn from(m: &str) -> Self {
+        ResolveError::Other(m.to_string())
     }
 }
 
@@ -209,8 +259,8 @@ async fn execute_promotion<W: NotionWriter>(
 /// None이면 signal.project_id를 조회하고, NULL이면 kind 매칭 프로젝트를 자동 해석한다:
 ///
 /// - 1개 → persist + 사용 (자동 지정, 사람이 나중에 설정에서 변경 가능)
-/// - >1개 → Err("프로젝트 선택 필요(여러 프로젝트)") — 프런트가 picker를 표시
-/// - 0개 → Err("해당 kind의 프로젝트가 없음") — 프런트가 설정 안내
+/// - >1개 → Err(NeedsProjectPick) — 프런트가 picker를 표시
+/// - 0개 → Err(Other("해당 kind의 프로젝트가 없음")) — 프런트가 설정 안내
 ///
 /// notion 타깃 아님이면 즉시 Err.
 async fn resolve_notion_target(
@@ -218,7 +268,7 @@ async fn resolve_notion_target(
     signal_id: &str,
     target: PromotionTarget,
     explicit_project_id: Option<&str>,
-) -> Result<(String, String, String), String> {
+) -> Result<(String, String, String), ResolveError> {
     if notion_link_key(target).is_none() {
         return Err("Notion 타깃이 아님(calendar/today는 이 경로로 승격하지 않음)".into());
     }
@@ -264,34 +314,51 @@ async fn resolve_notion_target(
             }
             _ => {
                 // 여러 프로젝트 — 사람이 선택해야 함 (INVARIANT #1).
-                return Err(
-                    "프로젝트 선택 필요(여러 프로젝트) — 프런트에서 picker를 표시할 것".into(),
-                );
+                return Err(ResolveError::NeedsProjectPick);
             }
         }
     };
 
-    let proj: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT credential_ref, notion_backlog_db_id, notion_agenda_db_id FROM projects WHERE id = ?1",
+    let proj: Option<(String, String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT name, credential_ref, notion_backlog_db_id, notion_agenda_db_id FROM projects WHERE id = ?1",
     )
     .bind(&project_id)
     .fetch_optional(db)
     .await
     .map_err(|e| e.to_string())?;
-    let (cref, backlog, agenda) = proj.ok_or("프로젝트를 찾을 수 없음")?;
+    let (name, cref, backlog, agenda) = proj.ok_or("프로젝트를 찾을 수 없음")?;
 
     let db_id = match target {
         PromotionTarget::NotionBacklog => backlog,
         PromotionTarget::NotionAgenda => agenda,
         _ => None,
     }
-    .ok_or("프로젝트에 Notion DB ID가 설정되지 않음(설정에서 바인딩 필요)")?;
+    .ok_or(ResolveError::MissingDbId { project_name: name })?;
 
     let token = keychain::get_token(&cref, TokenKind::Notion)
         .map_err(|e| e.to_string())?
         .ok_or("Notion 토큰이 없음(설정에서 토큰 저장 필요)")?;
 
     Ok((token, db_id, project_id))
+}
+
+/// ResolveError → AppError(코드/액션). 프런트는 code로 분기한다:
+/// - `notion.needs_project_pick`: picker 모달 표시(후보는 프런트가 kind로 필터).
+/// - `notion.db_id_missing`: 프로젝트명 메시지 + "설정 열기" nav 액션(토스트 버튼).
+fn resolve_to_app_error(e: ResolveError) -> AppError {
+    match e {
+        ResolveError::NeedsProjectPick => {
+            AppError::validation("notion.needs_project_pick", e.to_string())
+        }
+        ResolveError::MissingDbId { .. } => {
+            AppError::terminal("notion.db_id_missing", e.to_string()).with_action(ErrorAction {
+                label: "설정 열기".into(),
+                url: None,
+                nav: Some("settings".into()),
+            })
+        }
+        ResolveError::Other(m) => AppError::terminal("notion.promote_resolve", m),
+    }
 }
 
 /// 카드 → Notion 백로그/안건 즉시 승격(write). 사람이 누른 결정이므로 즉시 write한다(INVARIANT #2).
@@ -308,7 +375,7 @@ pub async fn promote_to_notion(
     let (token, db_id, resolved_pid) =
         resolve_notion_target(db.inner(), &signal_id, target, project_id.as_deref())
             .await
-            .map_err(|e| AppError::terminal("notion.promote_resolve", e))?;
+            .map_err(resolve_to_app_error)?;
     let writer = HttpNotionWriter::new()?;
     let mut outcome =
         execute_promotion(db.inner(), &signal_id, target, &writer, &token, &db_id).await?;
@@ -821,11 +888,52 @@ mod tests {
             .await
             .unwrap();
         let r = resolve_notion_target(&db, &sig.id, PromotionTarget::NotionBacklog, None).await;
-        assert!(r.is_err());
-        let msg = r.unwrap_err();
         assert!(
-            msg.contains("프로젝트 선택 필요"),
-            "다중 프로젝트 Err 메시지: {msg}"
+            matches!(r, Err(ResolveError::NeedsProjectPick)),
+            "다중 프로젝트는 NeedsProjectPick(사람이 선택) — 자동 확정 없음(INVARIANT #1)"
+        );
+    }
+
+    /// DB ID 미설정 프로젝트로 해석되면 MissingDbId(프로젝트명 포함) — 설정으로 안내.
+    #[tokio::test]
+    async fn resolve_errors_when_db_id_missing() {
+        use crate::commands::projects::insert_project;
+        use crate::models::{CreateProjectInput, ProjectKind};
+
+        let db = fresh_db().await;
+        // backlog DB ID 미설정 프로젝트 1개(agenda만 있음).
+        insert_project(
+            &db,
+            &CreateProjectInput {
+                name: "DB미설정워크".into(),
+                kind: ProjectKind::Work,
+                notion_backlog_db_id: None,
+                notion_agenda_db_id: Some("abcdef1234567890abcdef1234567890".into()),
+                ticket_key_pattern: None,
+            },
+        )
+        .await
+        .unwrap();
+        let sig = insert_signal(&db, &input("DB미설정 후보", Some(Kind::Work)))
+            .await
+            .unwrap();
+        // backlog 타깃 → DB ID 없음 → MissingDbId(프로젝트명 포함).
+        let r = resolve_notion_target(&db, &sig.id, PromotionTarget::NotionBacklog, None).await;
+        match r {
+            Err(ResolveError::MissingDbId { project_name }) => {
+                assert_eq!(project_name, "DB미설정워크", "에러에 프로젝트명 포함");
+            }
+            other => panic!("MissingDbId 기대, 실제: {other:?}"),
+        }
+        // command 매핑: code=notion.db_id_missing + 설정 nav 액션.
+        let app = resolve_to_app_error(ResolveError::MissingDbId {
+            project_name: "DB미설정워크".into(),
+        });
+        assert_eq!(app.code, "notion.db_id_missing");
+        assert!(app.message.contains("DB미설정워크"));
+        assert_eq!(
+            app.action.as_ref().and_then(|a| a.nav.as_deref()),
+            Some("settings")
         );
     }
 

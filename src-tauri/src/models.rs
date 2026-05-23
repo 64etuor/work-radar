@@ -322,6 +322,9 @@ pub struct PromotionOutcome {
     pub promotion_id: String,
     pub status: PromotionStatus,
     pub page_url: Option<String>,
+    /// 데스크톱 앱 딥링크(`notion://`). page_url에서 파생(스킴 교체). 호출부는 이걸 우선 열고
+    /// 실패 시 page_url(https)로 폴백한다.
+    pub page_deep_link: Option<String>,
     /// 사람이 읽을 상세(성공 식별 또는 실패 사유).
     pub detail: String,
     /// 실제 사용된 project_id (프런트의 자동 지정 라벨 표시용). 미변경이면 None.

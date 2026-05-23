@@ -317,6 +317,35 @@ pub fn normalize_notion_db_id(input: &str) -> Result<String, String> {
     ))
 }
 
+/// 생성된 Notion 페이지의 https url(또는 raw uuid)을 데스크톱 앱 딥링크(`notion://`)로 변환한다.
+///
+/// Notion 데스크톱 앱은 `https://www.notion.so/<id>`를 `notion://www.notion.so/<id>`로
+/// 그대로 매핑한다(스킴만 교체). 따라서:
+/// - `https://…` / `http://…` url → 스킴만 `notion://`로 교체.
+/// - 이미 `notion://`면 그대로.
+/// - 스킴 없는 입력(raw 32-hex uuid 등) → `notion://www.notion.so/<hex>`로 구성.
+///
+/// 순수 함수(네트워크/IO 없음). https url 자체는 fallback으로 호출부가 보존한다.
+pub fn notion_deep_link(url: &str) -> String {
+    let s = url.trim();
+    if let Some(rest) = s.strip_prefix("https://") {
+        format!("notion://{rest}")
+    } else if let Some(rest) = s.strip_prefix("http://") {
+        format!("notion://{rest}")
+    } else if s.starts_with("notion://") {
+        s.to_string()
+    } else {
+        // 스킴 없는 입력 → 32-hex만 추려 표준 페이지 경로로 구성. hex가 없으면 입력 그대로 붙인다.
+        let hex: String = s.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+        let id = if hex.len() >= 32 {
+            hex[hex.len() - 32..].to_lowercase()
+        } else {
+            s.replace('-', "")
+        };
+        format!("notion://www.notion.so/{id}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,6 +467,49 @@ mod tests {
         assert!(normalize_notion_db_id("not-a-db-id").is_err());
         assert!(normalize_notion_db_id("").is_err());
         assert!(normalize_notion_db_id("12345").is_err());
+    }
+
+    /// notion_deep_link: https url → notion:// 스킴 교체(경로/슬러그/uuid 보존).
+    #[test]
+    fn deep_link_https_swaps_scheme() {
+        assert_eq!(
+            notion_deep_link("https://www.notion.so/1234567890abcdef1234567890abcdef"),
+            "notion://www.notion.so/1234567890abcdef1234567890abcdef"
+        );
+        // 워크스페이스 슬러그 + dashed uuid가 붙은 실제 생성 페이지 url도 경로 그대로 보존.
+        assert_eq!(
+            notion_deep_link("https://www.notion.so/ws/My-Page-1234567890abcdef1234567890abcdef"),
+            "notion://www.notion.so/ws/My-Page-1234567890abcdef1234567890abcdef"
+        );
+    }
+
+    /// notion_deep_link: http(평문)도 notion://로 교체.
+    #[test]
+    fn deep_link_http_swaps_scheme() {
+        assert_eq!(
+            notion_deep_link("http://www.notion.so/abc123"),
+            "notion://www.notion.so/abc123"
+        );
+    }
+
+    /// notion_deep_link: 이미 notion://면 그대로 둔다(이중 변환 방지).
+    #[test]
+    fn deep_link_already_notion_is_idempotent() {
+        let dl = "notion://www.notion.so/1234567890abcdef1234567890abcdef";
+        assert_eq!(notion_deep_link(dl), dl);
+    }
+
+    /// notion_deep_link: 스킴 없는 raw uuid(대시 포함/제외) → 표준 페이지 딥링크.
+    #[test]
+    fn deep_link_raw_uuid_builds_page_link() {
+        assert_eq!(
+            notion_deep_link("12345678-90ab-cdef-1234-567890abcdef"),
+            "notion://www.notion.so/1234567890abcdef1234567890abcdef"
+        );
+        assert_eq!(
+            notion_deep_link("1234567890ABCDEF1234567890abcdef"),
+            "notion://www.notion.so/1234567890abcdef1234567890abcdef"
+        );
     }
 
     /// 스키마에서 title 타입 속성명을 발견(이름/언어 무관, type='title' 기준).
