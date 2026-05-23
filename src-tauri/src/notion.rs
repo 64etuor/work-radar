@@ -18,7 +18,8 @@ use tokio::sync::Mutex;
 use crate::retry::{with_retry, Retryable};
 
 const NOTION_BASE: &str = "https://api.notion.com/v1";
-const NOTION_VERSION: &str = "2022-06-28";
+/// Notion REST API 버전 헤더(`Notion-Version`)의 단일 출처. api.rs/commands::notion이 참조.
+pub(crate) const NOTION_VERSION: &str = "2022-06-28";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 한 승격 시도 내 재시도 횟수 캡 (INVARIANT #5: 무한 retry 금지).

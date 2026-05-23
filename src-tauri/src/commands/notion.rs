@@ -437,7 +437,7 @@ pub async fn test_notion_connection(
     let resp = client
         .get(format!("https://api.notion.com/v1/databases/{db_id}"))
         .bearer_auth(&token)
-        .header("Notion-Version", "2022-06-28")
+        .header("Notion-Version", crate::notion::NOTION_VERSION)
         .send()
         .await?;
     let status = resp.status().as_u16();

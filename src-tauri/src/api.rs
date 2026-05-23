@@ -5,8 +5,8 @@
 use std::time::Duration;
 
 use crate::models::PingResult;
+use crate::notion::NOTION_VERSION;
 
-const NOTION_VERSION: &str = "2022-06-28";
 const PING_TIMEOUT: Duration = Duration::from_secs(12);
 
 /// Notion 토큰 검증: `GET /v1/users/me`. 200이면 ok, 그 외/에러는 실패(메시지 노출).
