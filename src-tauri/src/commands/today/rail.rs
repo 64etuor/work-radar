@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::shared::SIGNAL_COLS;
+use crate::commands::signal_store::SIGNAL_COLS;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::WorkSignal;

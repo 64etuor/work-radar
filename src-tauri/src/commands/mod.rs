@@ -20,6 +20,7 @@ pub mod projects;
 pub mod retro;
 pub mod routines;
 pub mod scheduler;
+pub mod signal_store;
 pub mod signals;
 pub mod skills;
 pub mod today;

@@ -1,10 +1,5 @@
 //! 도메인 간 공유 상수/헬퍼. 단일 도메인 전용은 해당 서브모듈에 둔다.
-
-/// WorkSignal SELECT/RETURNING 공통 컬럼 목록 (FromRow는 이름으로 매핑 → 순서 무관).
-pub(crate) const SIGNAL_COLS: &str =
-    "id, project_id, title, body, source, type, quadrant, suggested_quadrant, \
-     kind, area, suggested_area, status, snooze_until, today_for_date, today_done_at, today_rank, \
-     impact_high, regret, created_at, updated_at";
+//! (SIGNAL_COLS는 백로그 F에서 `signal_store`로 이전.)
 
 #[cfg(test)]
 pub(crate) mod test_support {

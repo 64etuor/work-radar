@@ -4,7 +4,7 @@ use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{TodayOverview, WorkDebt, WorkSignal};
 
-use crate::commands::shared::SIGNAL_COLS;
+use crate::commands::signal_store::SIGNAL_COLS;
 
 // ── Today 운영 뷰 + Work Debt (Phase 11a, read 집계) ───────────────────────────
 // 전부 로컬 SQLite read — 네트워크 없음(캘린더는 프런트가 fetchCalendarEvents로 합성).

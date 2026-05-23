@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::shared::SIGNAL_COLS;
+use crate::commands::signal_store::SIGNAL_COLS;
 use crate::commands::skills::{resolve_prompt, BINDING_BATCH_ENRICH, BINDING_ENRICH};
 use crate::db::Db;
 use crate::error::AppError;
