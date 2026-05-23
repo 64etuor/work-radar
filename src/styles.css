@@ -4271,6 +4271,146 @@
   -webkit-app-region: no-drag;
 }
 
+/* ── P10a: 에이전트 바 정체성 박스 (DESIGN.md `agent-status-bar`) ──────────────────
+ * 상주 스트립을 얇은 트랙에서 박스 행으로 상향(높이 ~56–64px). 흰 캔버스 + 하단 hairline.
+ * 좌측 Mono 마이크로 라벨 AGENTS + agent-box 가로 행. 박스 = 아이콘 + 이름 + 상태(색+라벨) + 백필. */
+.asb-row {
+  min-height: 56px;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-wr-border);
+  background: var(--color-wr-bg);
+  overflow: hidden;
+}
+/* 좌측 상주 라벨(Mono) — idle pill의 .asb-label 과 톤 일치. */
+.asb-label-lead {
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+  flex: 0 0 auto;
+}
+/* 박스 가로 행 — 넘침 방지(상한+'+N'으로 이미 bound, 잔여는 클립). */
+.asb-boxes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+/* agent-box: 1px border-light, radius sm(8px). 아이콘 + 이름 + 상태. width는 인라인(경과). */
+.asb-box {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 8px;
+  background: var(--color-wr-bg);
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  -webkit-app-region: no-drag;
+  /* Bespoke: width가 경과로 성장 — 느린 선형 전이로 물리감(진행 fill과 동일 cadence). */
+  transition: width 0.9s linear;
+}
+.asb-box:hover {
+  background: var(--color-wr-hover);
+}
+.asb-box:focus-visible {
+  outline: 2px solid var(--color-wr-accent);
+  outline-offset: 1px;
+}
+/* 진행 백필: working 박스를 좌→우로 채우는 옅은 wash(과한 그림자/그라데이션 금지). */
+.asb-box-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--color-wr-accent-soft);
+  pointer-events: none;
+  z-index: 0;
+  transition: width 0.9s linear;
+}
+.asb-box-icon,
+.asb-box-name,
+.asb-box-state {
+  position: relative;
+  z-index: 1;
+}
+.asb-box-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-wr-muted);
+  flex: 0 0 auto;
+}
+.asb-box-name {
+  font: 500 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* 상태 = 색 dot + Mono 마이크로 라벨 병기(색만으로 의미 금지). */
+.asb-box-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.asb-box-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+.asb-box-state-label {
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.02em;
+}
+/* idle = Muted Slate · working = Action Blue · error = Error Red. */
+.asb-box-state-idle .asb-box-dot {
+  background: var(--color-wr-subtle);
+}
+.asb-box-state-idle .asb-box-state-label {
+  color: var(--color-wr-subtle);
+}
+.asb-box-state-working .asb-box-dot {
+  background: var(--color-wr-accent);
+}
+.asb-box-state-working .asb-box-state-label {
+  color: var(--color-wr-accent);
+}
+.asb-box-state-error .asb-box-dot {
+  background: var(--color-wr-danger);
+}
+.asb-box-state-error .asb-box-state-label {
+  color: var(--color-wr-danger);
+}
+/* error 박스 보더 강조(상태 추가 단서). */
+.asb-box-error {
+  border-color: var(--color-wr-danger-border);
+}
+/* '+N' 오버플로 칩 — button-pill-outline 톤, 클릭 전 tooltip로 나머지 노출. */
+.asb-overflow {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-muted);
+  background: var(--color-wr-bg);
+  cursor: default;
+  white-space: nowrap;
+}
+
 /* ── Hermes 메신저 브리지 제어 surface (Phase 20 #15) ───────────────────────────── */
 .hermes {
   display: flex;
