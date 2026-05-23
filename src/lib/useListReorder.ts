@@ -21,11 +21,16 @@ import { useCallback, useRef, useState } from "react";
  * 클래스: 드래그 중 항목엔 `dragging`, 드롭 위치 인디케이터는 `drag-over-before`/`drag-over-after`가
  * data-attr로 노출되니 호출자가 CSS로 표시한다.
  */
-export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) => void) {
+export function useListReorder(
+  ids: string[],
+  onReorder: (orderedIds: string[]) => void,
+) {
   // 드래그 중인 id (없으면 null).
   const [dragId, setDragId] = useState<string | null>(null);
   // 드롭 대상 id + before/after (인디케이터 표시용).
-  const [over, setOver] = useState<{ id: string; before: boolean } | null>(null);
+  const [over, setOver] = useState<{ id: string; before: boolean } | null>(
+    null,
+  );
 
   // 최신 ids/콜백을 pointer 리스너에서 안전하게 읽기 위한 ref.
   const idsRef = useRef(ids);
@@ -51,10 +56,21 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
       setDragId(id);
       setOver(null);
 
+      // 드래그 중 행을 포인터에 맞춰 들어올려 따라오게 한다(브레인덤프 postit과 동일 감각).
+      // React state 대신 직접 DOM 변형(MatrixCanvas 패턴) — 매 move 리렌더 회피.
+      const startY = e.clientY;
+      const draggingEl = itemEls.current.get(id) ?? null;
+      if (draggingEl) draggingEl.style.willChange = "transform";
+
       // 포인터 Y가 어느 항목의 어느 절반에 있는지 → 드롭 위치.
-      const computeOver = (clientY: number): { id: string; before: boolean } | null => {
+      const computeOver = (
+        clientY: number,
+      ): { id: string; before: boolean } | null => {
         let best: { id: string; before: boolean } | null = null;
         for (const oid of idsRef.current) {
+          // 따라다니는(transform된) 자기 자신은 드롭 대상/측정에서 제외 —
+          // 아니면 자신의 rect가 커서를 따라와 항상 self가 잡혀 재정렬이 안 된다.
+          if (oid === id) continue;
           const el = itemEls.current.get(oid);
           if (!el) continue;
           const r = el.getBoundingClientRect();
@@ -72,6 +88,9 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
       };
 
       const move = (ev: PointerEvent) => {
+        if (draggingEl) {
+          draggingEl.style.transform = `translateY(${ev.clientY - startY}px)`;
+        }
         setOver(computeOver(ev.clientY));
       };
       const up = (ev: PointerEvent) => {
@@ -79,6 +98,11 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
         handle.removeEventListener("pointermove", move);
         handle.removeEventListener("pointerup", up);
         const target = computeOver(ev.clientY);
+        // 들어올림 해제(따라다니던 transform 원복) 후 새 순서 반영.
+        if (draggingEl) {
+          draggingEl.style.transform = "";
+          draggingEl.style.willChange = "";
+        }
         setDragId(null);
         setOver(null);
         if (!target || target.id === id) return;

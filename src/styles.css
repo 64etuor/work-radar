@@ -701,7 +701,18 @@
   opacity: 1;
 }
 .cb .item[data-dragging] {
-  opacity: 0.5;
+  /*
+   * 브레인덤프 postit과 동일한 '들어올림' 감각: 흰 카드 배경 + 큰 그림자 + 상단 레이어 +
+   * grabbing. 포인터 추적(translateY)은 useListReorder가 직접 DOM transform으로 적용한다.
+   * 반투명(opacity)으로 띄워 z-index 위에 떠도 아래 행의 드롭 가이드 선이 비쳐 보이게 한다.
+   */
+  cursor: grabbing;
+  position: relative;
+  z-index: 50;
+  opacity: 0.6;
+  background: var(--color-wr-bg);
+  box-shadow: 0 12px 26px rgba(15, 20, 40, 0.22);
+  transition: box-shadow var(--wr-motion-base);
 }
 .cb .item[data-dragging] .grip {
   cursor: grabbing;
