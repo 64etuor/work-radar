@@ -28,6 +28,7 @@
 - **문서 정합성**: README 전면 재작성(Phase 0-20·코드·remote 반영), 위 "하네스 보강" 항목의 미적용 게이트 정정, `architecture.md` 모듈 맵 §9 + RPITIT 노트.
 - **(2026-05-23, 남은 백로그 A) `NOTION_VERSION` 단일화 + 하드코딩 제거**(`notion.rs`/`api.rs`/`commands/notion.rs`): 중복 const 2개 + 리터럴 1개 → `pub(crate) const NOTION_VERSION`(notion.rs) 단일 출처로 통일, api.rs·commands::notion이 참조. 행위 보존(bindings.ts 무변경 · clippy 0 · test 202 green).
 - **(2026-05-23, 남은 백로그 B) shortcut 파서 빈 입력 가드**(`shortcut.rs` `parse_shortcut`): 비-test `split_last().expect()` 제거 → `match split_last()` 가드로 빈/공백/구분자만 입력을 panic 없이 Err. startup은 기존대로 `DEFAULT_GLOBAL_HOTKEY` 폴백(lib.rs). 빈/공백 회귀 테스트 추가. 트레이드오프: 단일-토큰 입력 Err 메시지를 통합(동작 동일 — 모두 Err).
+- **(2026-05-23, 남은 백로그 C) `commands/routines.rs`(1208 LOC) 서브모듈 분리**: `today/`·`agents/`와 동일 패턴으로 `commands/routines/`(schedule/crud/listing/reminders/tracking + mod.rs)로 순수 move. `pub use`로 `commands::*`·외부 경로 보존, 내부 전용 `reminders`는 비-pub(공개 커맨드 없음 → 직접 `super::reminders::` 접근). 행위 보존: bindings.ts 무변경 + test 202 동일 + clippy 0. critic 불요(결정레일/스키마/IPC 무관, bindings.ts diff가 객관 증명).
 
 ## 하네스 / 디자인 (cross-cutting, 2026-05-21)
 
