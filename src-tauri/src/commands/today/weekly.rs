@@ -1,6 +1,7 @@
 use tauri::State;
 
 use crate::commands::routines::{parse_weekdays, routine_due_on};
+use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
@@ -20,21 +21,10 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     let start_s = start.format("%Y-%m-%d").to_string();
     let end_s = end.format("%Y-%m-%d").to_string();
 
-    // throughput — created_at/updated_at은 UTC라 'localtime'으로 로컬 날짜 정렬, today_done_at은 이미 로컬.
-    let (captured,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM signals \
-         WHERE source = 'braindump' AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
-    )
-    .bind(&start_s)
-    .bind(&end_s)
-    .fetch_one(db)
-    .await?;
-    let (completed,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM signals WHERE today_done_at BETWEEN ?1 AND ?2")
-            .bind(&start_s)
-            .bind(&end_s)
-            .fetch_one(db)
-            .await?;
+    // throughput — signals-primary 카운트는 signal_store 위임(localtime 정렬 규칙은 store에 보존).
+    // promoted는 promotions 테이블이라 여기 잔류.
+    let captured = signal_store::count_captured_in_range(db, &start_s, &end_s).await?;
+    let completed = signal_store::count_completed_in_range(db, &start_s, &end_s).await?;
     let (promoted,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM promotions \
          WHERE status = 'created' AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
@@ -45,24 +35,8 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     .await?;
 
     // PR 활동 — attention_new=범위 내 새 PR 신호, resolved=done 전이(머지/CI해소 근사, updated_at).
-    let (attention_new,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM signals \
-         WHERE source = 'github_pr' AND type = 'pr_attention' \
-           AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
-    )
-    .bind(&start_s)
-    .bind(&end_s)
-    .fetch_one(db)
-    .await?;
-    let (resolved,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM signals \
-         WHERE source = 'github_pr' AND status = 'done' \
-           AND date(updated_at, 'localtime') BETWEEN ?1 AND ?2",
-    )
-    .bind(&start_s)
-    .bind(&end_s)
-    .fetch_one(db)
-    .await?;
+    let attention_new = signal_store::count_pr_new_in_range(db, &start_s, &end_s).await?;
+    let resolved = signal_store::count_pr_resolved_in_range(db, &start_s, &end_s).await?;
 
     // 루틴 이행률 — 공용 due-calc(routine_due_on)로 daily/weekly/biweekly/monthly 모두 일관 집계.
     // done=스케줄 해당 날의 체크만(due와 동일 기준), due=스케줄 occurrence 합산.

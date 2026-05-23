@@ -1,10 +1,9 @@
 use tauri::State;
 
+use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{TodayOverview, WorkDebt, WorkSignal};
-
-use crate::commands::signal_store::SIGNAL_COLS;
+use crate::models::{TodayOverview, WorkDebt};
 
 // ── Today 운영 뷰 + Work Debt (Phase 11a, read 집계) ───────────────────────────
 // 전부 로컬 SQLite read — 네트워크 없음(캘린더는 프런트가 fetchCalendarEvents로 합성).
@@ -19,68 +18,14 @@ const STALE_BACKLOG_DAYS: i64 = 14;
 /// Work Debt 집계 + Today 콕핏 섹션(Q1·PR attention)을 한 번에 도출. 순수 read(테스트 가능).
 /// `date`는 로컬 오늘(YYYY-MM-DD) — 경과일 비교 기준.
 pub async fn fetch_today_overview(db: &Db, date: &str) -> Result<TodayOverview, sqlx::Error> {
-    // 미분류: quadrant=unclassified active, today 레일 밖(미분류는 보통 레일에 없음 — 일관성 위해 명시).
-    let (unclassified,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM signals \
-         WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
-           AND status NOT IN ('done','archived','snoozed')",
-    )
-    .fetch_one(db)
-    .await?;
-
-    // Q1 overdue: q1_do_now active 중 생성 ≥ Q1_OVERDUE_DAYS일(레일 여부 무관 — 쌓인 긴급 부채).
-    // created_at은 UTC 저장, ?1(date)은 호스트 로컬 날짜 → date(created_at,'localtime')로 맞춰
-    // *로컬 캘린더 일수* 차이를 비교한다(아침 시간대 false-overdue 방지).
-    // ⚠️ 'localtime'은 제거 금지(load-bearing) — 회귀 테스트 q1_overdue_uses_local_calendar_not_utc.
-    let (q1_overdue,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM signals \
-         WHERE quadrant = 'q1_do_now' AND status NOT IN ('done','archived','snoozed') \
-           AND julianday(?1) - julianday(date(created_at, 'localtime')) >= ?2",
-    )
-    .bind(date)
-    .bind(Q1_OVERDUE_DAYS)
-    .fetch_one(db)
-    .await?;
-
-    // stale backlog: active 신호가 생성 ≥ STALE_DAYS일 멈춤(today 레일 밖). quadrant 무관(나이 렌즈).
-    let (stale_backlog,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM signals \
-         WHERE today_for_date IS NULL AND status NOT IN ('done','archived','snoozed') \
-           AND julianday(?1) - julianday(date(created_at, 'localtime')) >= ?2",
-    )
-    .bind(date)
-    .bind(STALE_BACKLOG_DAYS)
-    .fetch_one(db)
-    .await?;
-
-    // cleanup needed: type=cleanup active(머지 후 정리 등). today 레일 무관(정리 부채는 어디 있든 부채 —
-    // 다른 타일과 달리 today_for_date 미필터, 의도적). 현재 로컬 신호만(PR merged-cleanup 버킷은 ambient).
-    let (cleanup_needed,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM signals \
-         WHERE type = 'cleanup' AND status NOT IN ('done','archived','snoozed')",
-    )
-    .fetch_one(db)
-    .await?;
-
-    // Q1 콕핏 리스트: 사람이 q1 분류했고 아직 today 레일에 없는 것(끌어올릴 대상).
-    let q1_items = sqlx::query_as::<_, WorkSignal>(&format!(
-        "SELECT {SIGNAL_COLS} FROM signals \
-         WHERE quadrant = 'q1_do_now' AND today_for_date IS NULL \
-           AND status NOT IN ('done','archived','snoozed') \
-         ORDER BY created_at"
-    ))
-    .fetch_all(db)
-    .await?;
-
-    // PR attention: 매트릭스로 escalate된 PR 신호(unclassified로 진입하지만 source/type로 식별).
-    let pr_attention = sqlx::query_as::<_, WorkSignal>(&format!(
-        "SELECT {SIGNAL_COLS} FROM signals \
-         WHERE source = 'github_pr' AND type = 'pr_attention' \
-           AND status NOT IN ('done','archived','snoozed') \
-         ORDER BY updated_at DESC"
-    ))
-    .fetch_all(db)
-    .await?;
+    // 부채 카운트/리스트는 signals-primary → signal_store 위임. 임계치 상수는 여기서 전달.
+    // 비-signals 조립(WorkDebt 구조화, debt 스냅샷 upsert)은 이 커맨드 레이어에 잔류.
+    let unclassified = signal_store::count_unclassified_active(db).await?;
+    let q1_overdue = signal_store::count_q1_overdue(db, date, Q1_OVERDUE_DAYS).await?;
+    let stale_backlog = signal_store::count_stale_backlog(db, date, STALE_BACKLOG_DAYS).await?;
+    let cleanup_needed = signal_store::count_cleanup_needed(db).await?;
+    let q1_items = signal_store::fetch_q1_items(db).await?;
+    let pr_attention = signal_store::fetch_pr_attention(db).await?;
 
     Ok(TodayOverview {
         work_debt: WorkDebt {

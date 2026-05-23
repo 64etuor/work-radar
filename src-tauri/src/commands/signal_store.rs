@@ -245,6 +245,157 @@ pub(crate) async fn fetch_today(db: &Db, today: &str) -> Result<Vec<WorkSignal>,
     .await
 }
 
+// ── 집계 (signals-primary count/select; 비-signals 조인은 커맨드 잔류) ──────────
+
+/// 미분류 active 카운트 (today 레일 밖). (overview.rs 이전)
+pub(crate) async fn count_unclassified_active(db: &Db) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE quadrant = 'unclassified' AND today_for_date IS NULL \
+           AND status NOT IN ('done','archived','snoozed')",
+    )
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
+/// Q1 overdue 카운트. created_at(UTC)을 date(...,'localtime')으로 맞춰 로컬 캘린더 일수 비교.
+/// ⚠️ 'localtime'은 제거 금지(load-bearing) — 회귀 테스트 q1_overdue_uses_local_calendar_not_utc.
+/// `days`는 호출자가 임계치(Q1_OVERDUE_DAYS)를 전달. (overview.rs 이전)
+pub(crate) async fn count_q1_overdue(db: &Db, date: &str, days: i64) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE quadrant = 'q1_do_now' AND status NOT IN ('done','archived','snoozed') \
+           AND julianday(?1) - julianday(date(created_at, 'localtime')) >= ?2",
+    )
+    .bind(date)
+    .bind(days)
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
+/// stale backlog 카운트(quadrant 무관, 나이 렌즈). `days`=STALE_BACKLOG_DAYS. (overview.rs 이전)
+pub(crate) async fn count_stale_backlog(
+    db: &Db,
+    date: &str,
+    days: i64,
+) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE today_for_date IS NULL AND status NOT IN ('done','archived','snoozed') \
+           AND julianday(?1) - julianday(date(created_at, 'localtime')) >= ?2",
+    )
+    .bind(date)
+    .bind(days)
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
+/// cleanup 부채 카운트(type=cleanup active, today 레일 무관 — 의도적). (overview.rs 이전)
+pub(crate) async fn count_cleanup_needed(db: &Db) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE type = 'cleanup' AND status NOT IN ('done','archived','snoozed')",
+    )
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
+/// Q1 콕핏 리스트: q1 분류됐고 아직 today 레일 밖(끌어올릴 대상). (overview.rs 이전)
+pub(crate) async fn fetch_q1_items(db: &Db) -> Result<Vec<WorkSignal>, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "SELECT {SIGNAL_COLS} FROM signals \
+         WHERE quadrant = 'q1_do_now' AND today_for_date IS NULL \
+           AND status NOT IN ('done','archived','snoozed') \
+         ORDER BY created_at"
+    ))
+    .fetch_all(db)
+    .await
+}
+
+/// PR attention 리스트(매트릭스로 escalate된 PR 신호). (overview.rs 이전)
+pub(crate) async fn fetch_pr_attention(db: &Db) -> Result<Vec<WorkSignal>, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "SELECT {SIGNAL_COLS} FROM signals \
+         WHERE source = 'github_pr' AND type = 'pr_attention' \
+           AND status NOT IN ('done','archived','snoozed') \
+         ORDER BY updated_at DESC"
+    ))
+    .fetch_all(db)
+    .await
+}
+
+/// weekly: braindump 캡처 수(범위 내, created_at localtime). (weekly.rs 이전)
+pub(crate) async fn count_captured_in_range(
+    db: &Db,
+    start: &str,
+    end: &str,
+) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE source = 'braindump' AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
+/// weekly: 완료 수(today_done_at 범위 내, 이미 로컬). (weekly.rs 이전)
+pub(crate) async fn count_completed_in_range(
+    db: &Db,
+    start: &str,
+    end: &str,
+) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM signals WHERE today_done_at BETWEEN ?1 AND ?2")
+            .bind(start)
+            .bind(end)
+            .fetch_one(db)
+            .await?;
+    Ok(n)
+}
+
+/// weekly: 범위 내 새 PR attention 신호 수. (weekly.rs 이전)
+pub(crate) async fn count_pr_new_in_range(
+    db: &Db,
+    start: &str,
+    end: &str,
+) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE source = 'github_pr' AND type = 'pr_attention' \
+           AND date(created_at, 'localtime') BETWEEN ?1 AND ?2",
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
+/// weekly: 범위 내 done 전이 PR 수(updated_at localtime 근사). (weekly.rs 이전)
+pub(crate) async fn count_pr_resolved_in_range(
+    db: &Db,
+    start: &str,
+    end: &str,
+) -> Result<i64, sqlx::Error> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM signals \
+         WHERE source = 'github_pr' AND status = 'done' \
+           AND date(updated_at, 'localtime') BETWEEN ?1 AND ?2",
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────
 
 /// 본문/제목 전역 검색 (FTS5). 호출자는 빈 쿼리를 걸러 넘긴다.
