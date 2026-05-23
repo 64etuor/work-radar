@@ -450,6 +450,62 @@ pub(crate) async fn mark_signal_done(db: &Db, id: &str) -> Result<(), sqlx::Erro
     Ok(())
 }
 
+// ── Notion 승격 (links/project 연결; 외부 응답 파싱은 커맨드 잔류) ───────────────
+
+/// 승격된 신호의 links JSON 조회. 병합 로직은 커맨드 잔류. (notion.rs 이전)
+pub(crate) async fn fetch_signal_links(
+    db: &Db,
+    signal_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: (Option<String>,) = sqlx::query_as("SELECT links FROM signals WHERE id = ?1")
+        .bind(signal_id)
+        .fetch_one(db)
+        .await?;
+    Ok(row.0)
+}
+
+/// 승격 완료 시 links 갱신 + status='linked'. (notion.rs 이전)
+pub(crate) async fn set_signal_links_linked(
+    db: &Db,
+    signal_id: &str,
+    links: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE signals SET links = ?2, status = 'linked', updated_at = datetime('now') \
+         WHERE id = ?1",
+    )
+    .bind(signal_id)
+    .bind(links)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// 신호의 project_id + kind 조회(프로젝트 해석용). (notion.rs 이전)
+pub(crate) async fn fetch_signal_project_kind(
+    db: &Db,
+    signal_id: &str,
+) -> Result<Option<(Option<String>, Option<String>)>, sqlx::Error> {
+    sqlx::query_as("SELECT project_id, kind FROM signals WHERE id = ?1")
+        .bind(signal_id)
+        .fetch_optional(db)
+        .await
+}
+
+/// 신호에 project_id persist(사람 선택/자동 해석 결과 메타데이터 태깅 — INVARIANT #1). (notion.rs 이전)
+pub(crate) async fn set_signal_project(
+    db: &Db,
+    signal_id: &str,
+    project_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE signals SET project_id = ?2, updated_at = datetime('now') WHERE id = ?1")
+        .bind(signal_id)
+        .bind(project_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────
 
 /// 본문/제목 전역 검색 (FTS5). 호출자는 빈 쿼리를 걸러 넘긴다.

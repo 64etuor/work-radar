@@ -1,5 +1,6 @@
 use tauri::State;
 
+use crate::commands::signal_store;
 use crate::commands::signals::insert_promotion_draft;
 use crate::db::Db;
 use crate::error::AppError;
@@ -89,26 +90,15 @@ async fn finalize_created(
     .await?;
 
     if let Some(key) = notion_link_key(target) {
-        let row: (Option<String>,) = sqlx::query_as("SELECT links FROM signals WHERE id = ?1")
-            .bind(signal_id)
-            .fetch_one(db)
-            .await?;
-        let mut links: serde_json::Value = row
-            .0
+        let existing = signal_store::fetch_signal_links(db, signal_id).await?;
+        let mut links: serde_json::Value = existing
             .as_deref()
             .and_then(|s| serde_json::from_str(s).ok())
             .unwrap_or_else(|| serde_json::json!({}));
         if let Some(obj) = links.as_object_mut() {
             obj.insert(key.into(), serde_json::json!(page.id));
         }
-        sqlx::query(
-            "UPDATE signals SET links = ?2, status = 'linked', updated_at = datetime('now') \
-             WHERE id = ?1",
-        )
-        .bind(signal_id)
-        .bind(links.to_string())
-        .execute(db)
-        .await?;
+        signal_store::set_signal_links_linked(db, signal_id, &links.to_string()).await?;
     }
     Ok(())
 }
@@ -234,25 +224,17 @@ async fn resolve_notion_target(
     }
 
     // 신호 조회 (project_id + kind).
-    let sig: Option<(Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT project_id, kind FROM signals WHERE id = ?1")
-            .bind(signal_id)
-            .fetch_optional(db)
-            .await
-            .map_err(|e| e.to_string())?;
+    let sig = signal_store::fetch_signal_project_kind(db, signal_id)
+        .await
+        .map_err(|e| e.to_string())?;
     let (existing_project_id, signal_kind) = sig.ok_or("신호를 찾을 수 없음")?;
 
     // 사용할 project_id 결정 + 필요 시 signal에 persist.
     let project_id: String = if let Some(pid) = explicit_project_id {
         // 명시 전달: persist onto signal (사람이 picker에서 고른 것 — INVARIANT #1).
-        sqlx::query(
-            "UPDATE signals SET project_id = ?2, updated_at = datetime('now') WHERE id = ?1",
-        )
-        .bind(signal_id)
-        .bind(pid)
-        .execute(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        signal_store::set_signal_project(db, signal_id, pid)
+            .await
+            .map_err(|e| e.to_string())?;
         pid.to_string()
     } else if let Some(pid) = existing_project_id {
         // 이미 태깅된 경우 → 기존 동작.
@@ -275,14 +257,9 @@ async fn resolve_notion_target(
                     .expect("candidates.len() == 1 (matched above)")
                     .0;
                 // 자동 지정: persist onto signal (INVARIANT #1 — 자동 확정이 아닌 메타데이터 태깅).
-                sqlx::query(
-                    "UPDATE signals SET project_id = ?2, updated_at = datetime('now') WHERE id = ?1",
-                )
-                .bind(signal_id)
-                .bind(&pid)
-                .execute(db)
-                .await
-                .map_err(|e| e.to_string())?;
+                signal_store::set_signal_project(db, signal_id, &pid)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 pid
             }
             _ => {
