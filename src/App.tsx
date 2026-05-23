@@ -16,6 +16,7 @@ import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
 import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
+import { adjacentView } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
 import { useViewShortcuts } from "@/lib/useViewShortcuts";
 import { useUIStore } from "@/store";
@@ -29,8 +30,14 @@ export default function App() {
   const { view, paletteOpen, setPaletteOpen, goTo } = useUIStore();
 
   // per-view 단축키 (Phase 18 #7) — 입력 비포커스 + 팔레트 닫힘일 때만 활성.
+  // Cmd+←/→ → NAV_ITEMS 순서 기준 인접 뷰 전환(P3).
   const keymap = useNavKeymap();
-  useViewShortcuts(keymap.data, !paletteOpen, (v) => goTo(v));
+  useViewShortcuts(
+    keymap.data,
+    !paletteOpen,
+    (v) => goTo(v),
+    (dir) => goTo(adjacentView(view, dir)),
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

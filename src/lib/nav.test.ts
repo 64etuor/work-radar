@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultKeymap, NAV_BY_VIEW, NAV_ITEMS, navItemsByGroup } from "@/lib/nav";
+import {
+  adjacentView,
+  defaultKeymap,
+  NAV_BY_VIEW,
+  NAV_ITEMS,
+  navItemsByGroup,
+} from "@/lib/nav";
 
 describe("navItemsByGroup", () => {
   it("4개 그룹을 정해진 순서로 반환한다", () => {
@@ -37,5 +43,37 @@ describe("defaultKeymap", () => {
 
   it("chord 단축키 형식을 보존한다 (board = 'g b')", () => {
     expect(defaultKeymap().board).toBe("g b");
+  });
+});
+
+describe("adjacentView", () => {
+  const first = NAV_ITEMS[0].view;
+  const last = NAV_ITEMS[NAV_ITEMS.length - 1].view;
+
+  it("다음(+1) 뷰는 NAV_ITEMS 순서를 따른다", () => {
+    for (let i = 0; i < NAV_ITEMS.length - 1; i++) {
+      expect(adjacentView(NAV_ITEMS[i].view, 1)).toBe(NAV_ITEMS[i + 1].view);
+    }
+  });
+
+  it("이전(-1) 뷰는 NAV_ITEMS 역순을 따른다", () => {
+    for (let i = NAV_ITEMS.length - 1; i > 0; i--) {
+      expect(adjacentView(NAV_ITEMS[i].view, -1)).toBe(NAV_ITEMS[i - 1].view);
+    }
+  });
+
+  it("마지막에서 다음(+1)은 첫으로 wrap 한다", () => {
+    expect(adjacentView(last, 1)).toBe(first);
+  });
+
+  it("첫에서 이전(-1)은 마지막으로 wrap 한다", () => {
+    expect(adjacentView(first, -1)).toBe(last);
+  });
+
+  it("dir +1/-1은 서로 역연산이다(왕복하면 제자리)", () => {
+    for (const item of NAV_ITEMS) {
+      expect(adjacentView(adjacentView(item.view, 1), -1)).toBe(item.view);
+      expect(adjacentView(adjacentView(item.view, -1), 1)).toBe(item.view);
+    }
   });
 });

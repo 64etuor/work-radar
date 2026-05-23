@@ -172,3 +172,19 @@ export function defaultKeymap(): Record<string, string> {
   for (const n of NAV_ITEMS) if (n.defaultShortcut) m[n.view] = n.defaultShortcut;
   return m;
 }
+
+/**
+ * NAV_ITEMS 순서 기반 인접 뷰 계산(Cmd+←/→ 네비). 순수 함수.
+ * dir: -1 = 이전, +1 = 다음.
+ * 경계 동작은 **wrap**(첫에서 ←는 마지막으로, 마지막에서 →는 첫으로) —
+ * plan의 "인접 뷰 전환"이 끊김 없는 순환이라 clamp 대신 wrap 채택.
+ * current가 NAV_ITEMS에 없으면 current를 그대로 반환(안전 폴백).
+ */
+export function adjacentView(current: View, dir: -1 | 1): View {
+  const n = NAV_ITEMS.length;
+  if (n === 0) return current;
+  const idx = NAV_ITEMS.findIndex((item) => item.view === current);
+  if (idx === -1) return current;
+  const next = (idx + dir + n) % n;
+  return NAV_ITEMS[next].view;
+}

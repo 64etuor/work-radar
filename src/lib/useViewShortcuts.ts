@@ -4,8 +4,12 @@ import type { View } from "@/store";
 
 /**
  * per-view 키보드 단축키 적용 (Phase 18 #7). keymap(view→shortcut)을 받아 전역 keydown에서
- * 매칭되면 onJump(view)를 부른다. 입력 포커스(input/textarea/select/contenteditable) 또는
- * modifier(meta/ctrl/alt) 동반 시에는 비활성 — Cmd+K 팔레트/타이핑과 충돌하지 않게.
+ * 매칭되면 onJump(view)를 부른다. 입력 포커스(input/textarea/select/contenteditable)에서는
+ * 비활성 — Cmd+K 팔레트/타이핑과 충돌하지 않게.
+ *
+ * modifier 정책:
+ *   - chord/단일 키 단축키: meta/ctrl/alt 동반 시 비활성(타이핑·OS 단축키 보존).
+ *   - Cmd+←/→ (mac) / Ctrl+←/→: 인접 뷰 전환(P3). meta||ctrl 일 때만 처리.
  *
  * 지원 형식:
  *   - 단일 키: "1" / "b"            (해당 키 단독 입력)
@@ -35,10 +39,13 @@ export function useViewShortcuts(
   keymap: Record<string, string> | undefined,
   enabled: boolean,
   onJump: (view: View) => void,
+  onAdjacent?: (dir: -1 | 1) => void,
 ) {
   // 콜백/맵을 ref로 들고 effect 재구독을 막는다(매 키 입력마다 최신 참조 사용).
   const onJumpRef = useRef(onJump);
   onJumpRef.current = onJump;
+  const onAdjacentRef = useRef(onAdjacent);
+  onAdjacentRef.current = onAdjacent;
   const keymapRef = useRef(keymap);
   keymapRef.current = keymap;
   const enabledRef = useRef(enabled);
@@ -56,8 +63,21 @@ export function useViewShortcuts(
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (!enabledRef.current) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (isEditableTarget(e.target)) return;
+
+      // Cmd+←/→ (mac) / Ctrl+←/→ → 인접 뷰 전환(P3). alt/shift 동반 시는 무시(OS 단어 이동 등 보존).
+      // editable 포커스·팔레트 오픈 시는 위 가드로 이미 비활성 → 캐럿 이동/팰레트 탐색 보존.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.preventDefault();
+          clearPrefix();
+          onAdjacentRef.current?.(e.key === "ArrowLeft" ? -1 : 1);
+          return;
+        }
+      }
+
+      // 그 외 modifier 동반은 chord/단일 단축키와 무관 → 비활성(타이핑·OS 단축키 보존).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const map = keymapRef.current;
       if (!map) return;
 
