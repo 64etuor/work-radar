@@ -1,11 +1,11 @@
 import { useState } from "react";
 import {
   ArrowLeft,
-  CalendarClock,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Flame,
+  GanttChart,
 } from "lucide-react";
 
 import type { CalendarEvent, WorkSignal } from "@/bindings";
@@ -186,7 +186,7 @@ export function TimelineView() {
         )}
 
         <div className="tl-foot">
-          <CalendarClock className="size-3.5" />
+          <GanttChart className="size-3.5" />
           {isToday ? "오늘 · Today 레일·Q1 오버레이 포함" : "다른 날짜 · 캘린더 일정만"}
         </div>
       </div>

@@ -53,11 +53,12 @@
   --color-q4: #93939f; /* Muted Slate — Q4 그 외 */
 
   /* Typography — DESIGN.md 폰트 스택(프로프라이어터리 미번들 → 폴백 사용) */
-  --font-display: "CohereText", "Space Grotesk", "Inter", ui-sans-serif, system-ui,
-    sans-serif;
-  --font-sans: "Unica77 Cohere Web", "Inter", Arial, ui-sans-serif, system-ui,
-    sans-serif;
-  --font-mono: "CohereMono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+  --font-display:
+    "CohereText", "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Unica77 Cohere Web", "Inter", Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    "CohereMono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
 
   /* Radius scale — DESIGN.md Shapes */
   --radius: 8px; /* 기본(=sm) */
@@ -99,6 +100,15 @@
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
     user-select: none;
+  }
+
+  /*
+   * Lucide 아이콘 thin-line 통일 (DESIGN.md "thin-line geometric").
+   * lucide 기본 stroke=2(프레젠테이션 속성)를 전역 1.5로 낮춰 editorial 톤에 맞춤.
+   * CSS가 SVG 프레젠테이션 속성을 이기므로 호출부 size/색 수정 없이 전 아이콘 적용.
+   */
+  svg.lucide {
+    stroke-width: 1.5;
   }
 
   ::selection {
@@ -554,7 +564,8 @@
   width: 11px;
   height: 11px;
   stroke: #fff;
-  stroke-width: 3;
+  /* thin-line 정렬: 3 → 2 (11px white-on-green 체크는 1.5면 너무 얇아 가독성 위해 2 유지). */
+  stroke-width: 2;
   fill: none;
   opacity: 0;
 }
@@ -564,6 +575,40 @@
 .cb .item .body {
   flex: 1;
   min-width: 0;
+}
+/*
+ * 루틴 행 액션(수정/삭제) — thin-line lucide 아이콘 ghost 버튼.
+ * 이전: 텍스트 글리프(✎/✕) + 무 스타일이라 시스템과 이질·간격 0. → 26px 정사각 ghost + 4px 간격,
+ * hover 시 부각, 삭제는 danger 톤. 폼 컨트롤 기본 폰트 상속 차단(line-height/baseline 정렬).
+ */
+.cb .item .ractions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+}
+.cb .item .ract {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-wr-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--wr-motion-fast);
+}
+.cb .item .ract:hover {
+  background: var(--color-wr-hover);
+  color: var(--color-wr-fg);
+}
+.cb .item .ract.danger:hover {
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
 }
 .cb .item .ttl {
   font: 400 13px/1.35 var(--font-sans);

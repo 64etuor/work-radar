@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Pencil, X } from "lucide-react";
 
 import type { RoutineFreq, RoutineToday, Weekday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
@@ -121,7 +122,9 @@ export function RoutinesPanel({
     const t = title.trim();
     if (!t) return;
     if (needsWeekdays && days.size === 0) return; // weekly/biweekly는 요일 필수.
-    const weekdays = needsWeekdays ? DAYS.filter((d) => days.has(d.key)).map((d) => d.key) : [];
+    const weekdays = needsWeekdays
+      ? DAYS.filter((d) => days.has(d.key)).map((d) => d.key)
+      : [];
     const offNum = offset.trim() === "" ? null : Math.max(0, Number(offset));
     const draft: RoutineDraft = {
       title: t,
@@ -150,7 +153,12 @@ export function RoutinesPanel({
     <div className="panelbox">
       <div className="pb-head">
         <span className="lbl">Routines</span>
-        <button type="button" className="add" onClick={onOpenTracking} title="루틴 트래킹">
+        <button
+          type="button"
+          className="add"
+          onClick={onOpenTracking}
+          title="루틴 트래킹"
+        >
           트래킹
         </button>
         <button type="button" className="add" onClick={openCreate}>
@@ -196,7 +204,9 @@ export function RoutinesPanel({
             </div>
           )}
           {freq === "monthly" && (
-            <div className="rhint">오늘 날짜를 매월 기준일로 사용합니다 (월말 자동 보정).</div>
+            <div className="rhint">
+              오늘 날짜를 매월 기준일로 사용합니다 (월말 자동 보정).
+            </div>
           )}
           {freq === "biweekly" && (
             <div className="rhint">이번 주를 기준으로 2주마다 반복합니다.</div>
@@ -204,7 +214,11 @@ export function RoutinesPanel({
           <div className="rtime">
             <label>
               시간
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
             </label>
             <label>
               알림
@@ -228,7 +242,10 @@ export function RoutinesPanel({
             <button
               type="button"
               className="save"
-              onClick={() => { reset(); setOpen(false); }}
+              onClick={() => {
+                reset();
+                setOpen(false);
+              }}
             >
               취소
             </button>
@@ -238,11 +255,21 @@ export function RoutinesPanel({
 
       <div className="pb-body">
         {routines.length === 0 ? (
-          <div className="empty">오늘 해당하는 루틴이 없습니다 — + 루틴으로 추가</div>
+          <div className="empty">
+            오늘 해당하는 루틴이 없습니다 — + 루틴으로 추가
+          </div>
         ) : (
           routines.map((r) => (
-            <div key={r.id} className={`item${r.done ? " done" : ""}`} {...dnd.itemProps(r.id)}>
-              <span className="grip" title="드래그로 정렬" {...dnd.handleProps(r.id)}>
+            <div
+              key={r.id}
+              className={`item${r.done ? " done" : ""}`}
+              {...dnd.itemProps(r.id)}
+            >
+              <span
+                className="grip"
+                title="드래그로 정렬"
+                {...dnd.handleProps(r.id)}
+              >
                 ⠿
               </span>
               <div
@@ -257,7 +284,9 @@ export function RoutinesPanel({
                 <div className="ttl">{r.title}</div>
                 <div className="meta">
                   <span className="badge b-sched">{schedLabel(r)}</span>
-                  {r.timeOfDay && <span className="badge b-time">{r.timeOfDay}</span>}
+                  {r.timeOfDay && (
+                    <span className="badge b-time">{r.timeOfDay}</span>
+                  )}
                 </div>
               </div>
               <div className="ractions">
@@ -265,17 +294,19 @@ export function RoutinesPanel({
                   type="button"
                   className="ract"
                   title="수정"
+                  aria-label="루틴 수정"
                   onClick={() => openEdit(r)}
                 >
-                  ✎
+                  <Pencil className="size-3.5" />
                 </button>
                 <button
                   type="button"
-                  className="ract"
+                  className="ract danger"
                   title="삭제"
+                  aria-label="루틴 삭제"
                   onClick={() => handleDelete(r)}
                 >
-                  ✕
+                  <X className="size-4" />
                 </button>
               </div>
             </div>

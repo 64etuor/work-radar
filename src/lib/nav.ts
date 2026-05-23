@@ -1,8 +1,9 @@
 import {
+  Blocks,
   Bot,
   CalendarCheck,
-  CalendarClock,
   CalendarRange,
+  GanttChart,
   GitCompare,
   GitPullRequest,
   History,
@@ -10,7 +11,6 @@ import {
   MessageCircle,
   Repeat,
   Settings,
-  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -73,7 +73,7 @@ export const NAV_ITEMS: NavItem[] = [
     view: "timeline",
     label: "Timeline",
     search: "timeline 타임라인 시간축 아젠다 일정",
-    icon: CalendarClock,
+    icon: GanttChart,
     group: "operate",
     defaultShortcut: "g l",
   },
@@ -138,7 +138,7 @@ export const NAV_ITEMS: NavItem[] = [
     view: "skills",
     label: "스킬 레지스트리",
     search: "skills 스킬 레지스트리 프롬프트 에이전트 claude codex 외부 스킬 편집",
-    icon: Wrench,
+    icon: Blocks,
     group: "connect",
     defaultShortcut: "g s",
   },

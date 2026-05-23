@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileText, Plus, Save, Trash2, Wrench } from "lucide-react";
+import { ArrowLeft, Blocks, FileText, Plus, Save, Trash2 } from "lucide-react";
 
 import type { Skill } from "@/bindings";
 import {
@@ -143,7 +143,7 @@ function SkillRow({
       onClick={onSelect}
     >
       {isInApp ? (
-        <Wrench className="size-4 skl-row-ico" />
+        <Blocks className="size-4 skl-row-ico" />
       ) : (
         <FileText className="size-4 skl-row-ico" />
       )}

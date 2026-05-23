@@ -1,7 +1,6 @@
 import {
-  AlertTriangle,
   ArrowLeft,
-  CalendarDays,
+  CalendarCheck,
   CheckCircle2,
   Circle,
   ExternalLink,
@@ -10,6 +9,7 @@ import {
   Inbox,
   Repeat,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 
 import type { CalendarEvent, WorkSignal } from "@/bindings";
@@ -98,7 +98,7 @@ export function TodayView() {
           <DebtTile
             label="stale backlog"
             value={debt?.staleBacklog}
-            icon={<AlertTriangle className="size-4" />}
+            icon={<TriangleAlert className="size-4" />}
             tone="warn"
             onClick={() => goTo("board")}
           />
@@ -114,7 +114,7 @@ export function TodayView() {
         {/* 캘린더 오늘 일정 (ambient — 미연결/실패는 graceful degrade). */}
         <section className="today-sec">
           <div className="today-sec-head">
-            <CalendarDays className="size-4 text-wr-subtle" />
+            <CalendarCheck className="size-4 text-wr-subtle" />
             <span className="today-sec-name">오늘 일정</span>
             <span className="today-sec-count">{(events.data ?? []).length}</span>
           </div>
