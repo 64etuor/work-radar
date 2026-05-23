@@ -13,6 +13,7 @@
 
 mod agent;
 mod api;
+mod cache;
 mod calendar;
 mod commands;
 mod db;

@@ -14,7 +14,9 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.100.0",
+    "@tanstack/query-sync-storage-persister": "^5.100.13",
+    "@tanstack/react-query": "^5.100.13",
+    "@tanstack/react-query-persist-client": "^5.100.13",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.4.0",
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",

@@ -49,6 +49,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
+      // gcTime은 disk-persist maxAge(24h)와 맞춘다 — 복원된 ambient 캐시가 GC로 먼저 사라지지
+      // 않도록(persist는 표시 가속 전용, 결정 큐는 persist.ts allowlist에서 제외 — INVARIANT).
+      gcTime: 1000 * 60 * 60 * 24,
       retry: 1, // bounded retry only — 무한 retry 금지 (INVARIANT)
       refetchOnWindowFocus: false,
     },

@@ -259,8 +259,9 @@ export const commands = {
 	/**
 	 *  선택 캘린더의 오늘 이벤트를 시간순 병합 반환(ambient). `project_id=None`이면 모든 프로젝트 병합(Today용).
 	 *  미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
+	 *  P6: 외부 Google API 읽기를 TTL 캐시로 가속(표시 전용). escalation/accept/결정 레일 무침투.
 	 */
-	fetchCalendarEvents: (projectId: string | null, date: string) => typedError<CalendarEvent[], AppError>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date })),
+	fetchCalendarEvents: (projectId: string | null, date: string, forceRefresh: boolean) => typedError<CalendarEvent[], AppError>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date, forceRefresh })),
 	/**
 	 *  직접 모달의 캘린더 picker가 쓸 프로젝트의 저장된 선택 캘린더([{id,summary}]). 네트워크 없음(로컬 DB).
 	 *  모달이 어느 캘린더에 쓸지 고르게 한다(연결된 프로젝트의 선택 목록 = 사용자가 이미 고른 캘린더).

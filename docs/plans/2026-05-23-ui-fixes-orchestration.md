@@ -241,12 +241,11 @@ Rust측 캐시 없음. (`@tanstack/react-query-persist-client`는 **미설치 �
   (stale 데이터로 인한 잘못된 *사람* 판단 방지. ambient 가속만 persist.)
 - [ ] #7: 캐시는 표시 가속만, 상태 SSOT는 SQLite 유지.
 
-**Done-criteria (공통 +)**
-- [ ] 앱 재시작 후 PR Radar/Today 캐시 즉시 표시 → 백그라운드 갱신(관찰).
-- [ ] 강제 새로고침이 캐시 우회(관찰). cargo test: TTL 만료/적중 단위 green.
-- [ ] **호출 횟수 측정**: PR Radar 외부 호출 수를 캐시 도입 전/후 60s 동안 카운트(폴링 로그) →
-  **after < before** 단언(수치 기록).
-- [ ] `moka` 크레이트 추가는 브레인스토밍 산출 → 추가 시 decisions.md 한 줄(현재 Cargo.toml 미포함).
+**Done-criteria (공통 +)** — *Rev 7: 구현 중 PR Radar는 fetch+escalate 한 패스라 캐시 금지(#4) 발견 → 캐시 대상은 캘린더로 한정. PR Radar 표시는 프론트 persist로만 가속. 아래는 그 현실 반영.*
+- [x] 앱 재시작 후 PR Radar/Today **표시** 캐시 즉시 복원(프론트 react-query persist allowlist `prRadar`/`calendarEvents`/`todayOverview` 등) → 백그라운드 갱신. (자동 단위테스트 외 부팅 육안 관찰은 P7/사용자 측에서 권장.)
+- [x] **강제 새로고침 capability를 IPC로 배선**: `fetch_calendar_events(force_refresh)` → `get_or_fetch(force=true)` 캐시 우회. cargo test `force_bypasses_cache` + TTL 만료/적중 green. **관찰용 새로고침 UI는 P7 캘린더 드로어 버튼 소관**(P6는 백엔드 capability + 단위테스트로 충족).
+- [x] **호출 횟수 절감(캘린더로 재정의)**: PR Radar는 의도적 비캐시(#4)라 측정 대상 아님. 캘린더 캐시 hit 시 underlying Google fetch 미호출을 cargo test(`hit_within_ttl_skips_fetcher`: 2회 호출→1 fetch, `concurrent_misses_coalesce_to_single_fetch`)로 단언 + miss 시 `tracing::debug!` 로그로 런타임 관측 가능.
+- [x] `moka` 0.12 추가 → decisions.md 한 줄(+ PR-Radar-비캐시 사유 기록). TTL=60s(프론트 staleTime 정합), bounded 256, `try_get_with` 코얼레싱, 에러 미캐싱.
 
 ---
 

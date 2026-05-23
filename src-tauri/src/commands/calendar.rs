@@ -1,5 +1,9 @@
+use std::sync::OnceLock;
+use std::time::Duration;
+
 use tauri::State;
 
+use crate::cache::TtlCache;
 use crate::calendar::{self, CalendarCreds, CalendarProvider};
 use crate::commands::projects::fetch_projects;
 use crate::commands::tokens::project_credential_ref;
@@ -300,19 +304,31 @@ pub async fn set_selected_calendars(
     Ok(())
 }
 
+/// 캘린더 이벤트 표시 캐시(P6). TTL = 60초(프런트 `useCalendarEvents` staleTime과 정합 — 같은
+/// staleTime 윈도 안의 다중 뷰가 Rust 캐시도 적중해 Google fetch 횟수를 줄인다). bounded
+/// `max_capacity`로 무한 증가 금지. **표시(ambient) 읽기 가속 전용** — escalation/accept/결정
+/// 레일 무침투(INVARIANT #2/#4/#7). 상태 SSOT는 SQLite(이 캐시는 Google API 표시 사본일 뿐,
+/// 쓰기/상태 소스 아님).
+fn calendar_events_cache() -> &'static TtlCache<String, Vec<CalendarEvent>> {
+    static CACHE: OnceLock<TtlCache<String, Vec<CalendarEvent>>> = OnceLock::new();
+    CACHE.get_or_init(|| TtlCache::new(Duration::from_secs(60), 256))
+}
+
 /// 선택 캘린더의 오늘 이벤트를 시간순 병합 반환(ambient). `project_id=None`이면 모든 프로젝트 병합(Today용).
 /// 미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
+/// P6: 외부 Google API 읽기를 TTL 캐시로 가속(표시 전용). escalation/accept/결정 레일 무침투.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_calendar_events(
     db: State<'_, Db>,
     project_id: Option<String>,
     date: String,
+    force_refresh: bool,
 ) -> Result<Vec<CalendarEvent>, AppError> {
     let offset = calendar::local_offset();
     let (time_min, time_max) = calendar::today_window(&date, &offset);
 
-    let project_ids: Vec<String> = match project_id {
+    let mut project_ids: Vec<String> = match project_id {
         Some(p) => vec![p],
         None => fetch_projects(db.inner())
             .await?
@@ -320,28 +336,45 @@ pub async fn fetch_calendar_events(
             .map(|p| p.id)
             .collect(),
     };
+    // 캐시 키 안정화: 정렬된 project_ids + date(+window). 같은 표시 요청은 같은 키.
+    project_ids.sort();
+    let cache_key = format!("{date}|{time_min}|{time_max}|{}", project_ids.join(","));
 
-    let provider = calendar::HttpCalendarProvider::new()?;
-    let mut ctxs = Vec::new();
-    for pid in project_ids {
-        // 프로젝트별 부분 실패 격리: 미연결/refresh 실패/선택 없음은 건너뛴다.
-        let Ok(Some(access)) = access_token_for(db.inner(), &pid).await else {
-            continue;
-        };
-        let calendars = load_selected_calendars(db.inner(), &pid)
-            .await
-            .unwrap_or_default();
-        if calendars.is_empty() {
-            continue;
-        }
-        ctxs.push(calendar::ProjectCalendars {
-            project_id: pid,
-            access_token: access,
-            calendars: calendars.into_iter().map(|c| (c.id, c.summary)).collect(),
-        });
-    }
-
-    Ok(calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await)
+    // force_refresh=true: TTL 내라도 캐시 우회 → fresh Google fetch(P7 캘린더 드로어 수동 새로고침
+    // 버튼이 호출). false면 TTL 내 적중 시 underlying Google fetch를 건너뛴다(표시 가속).
+    let log_key = cache_key.clone();
+    calendar_events_cache()
+        .get_or_fetch(cache_key, force_refresh, || async {
+            // 캐시 miss → 실제 Google fetch 시점(hit이면 이 클로저 미실행 → 로그 없음). 캐시 도입
+            // 후 fetch 횟수 절감을 로그로 관측 가능.
+            tracing::debug!(
+                code = "calendar.cache_miss",
+                key = %log_key,
+                force = force_refresh,
+                "calendar google fetch (cache miss)"
+            );
+            let provider = calendar::HttpCalendarProvider::new()?;
+            let mut ctxs = Vec::new();
+            for pid in project_ids {
+                // 프로젝트별 부분 실패 격리: 미연결/refresh 실패/선택 없음은 건너뛴다.
+                let Ok(Some(access)) = access_token_for(db.inner(), &pid).await else {
+                    continue;
+                };
+                let calendars = load_selected_calendars(db.inner(), &pid)
+                    .await
+                    .unwrap_or_default();
+                if calendars.is_empty() {
+                    continue;
+                }
+                ctxs.push(calendar::ProjectCalendars {
+                    project_id: pid,
+                    access_token: access,
+                    calendars: calendars.into_iter().map(|c| (c.id, c.summary)).collect(),
+                });
+            }
+            Ok(calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await)
+        })
+        .await
 }
 
 // ── Google Calendar 이벤트 생성 (Phase 19, write 레일) ──────────────────────────────

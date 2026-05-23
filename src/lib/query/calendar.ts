@@ -16,7 +16,8 @@ import {
 export function useCalendarEvents(date: string) {
   return useQuery<CalendarEvent[]>({
     queryKey: ["calendarEvents", date],
-    queryFn: () => fetchCalendarEvents(null, date),
+    // 폴링/재마운트는 캐시 가속(force=false). 수동 새로고침(P7 드로어)은 force=true로 별도 호출.
+    queryFn: () => fetchCalendarEvents(null, date, false),
     staleTime: 60_000,
     retry: 1,
   });
@@ -113,12 +114,14 @@ export function useSetSelectedCalendars() {
 /**
  * 오늘 캘린더 이벤트 fetch 헬퍼 (Phase 11 Today/Timeline이 소비). projectId=null이면 전체 병합.
  * ambient read — 캐시하지 않고 호출부가 필요 시 직접 부른다(영속 없음).
+ * `forceRefresh=true`면 Rust TTL 캐시를 우회해 fresh Google fetch(P7 드로어 수동 새로고침 버튼용).
  */
 export function fetchCalendarEvents(
   projectId: string | null,
   date: string,
+  forceRefresh = false,
 ): Promise<CalendarEvent[]> {
-  return unwrap(commands.fetchCalendarEvents(projectId, date));
+  return unwrap(commands.fetchCalendarEvents(projectId, date, forceRefresh));
 }
 
 // ── Phase 19: 이벤트 생성 (write 레일, 직접 모달) ────────────────────────────────────
