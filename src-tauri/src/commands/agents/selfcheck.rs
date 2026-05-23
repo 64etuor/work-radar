@@ -7,7 +7,7 @@ use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider};
 use crate::jobs::{insert_agent_run, JobManager, NewAgentRun};
 use crate::keychain;
-use crate::models::{AgentRail, Engine, Sandbox, TokenKind, TriggerPrSelfCheckInput};
+use crate::models::{AgentRail, AgentStatus, Engine, Sandbox, TokenKind, TriggerPrSelfCheckInput};
 
 // ── PR self-check 자동 초안 (Phase 8, 제안 레일 첫 자동화) ──────────────────────────
 //
@@ -263,10 +263,12 @@ pub(super) async fn execute_accept(
 
     // 잡을 succeeded로 마감(게이트 통과). awaiting_approval에서만 전이.
     sqlx::query(
-        "UPDATE agent_runs SET status = 'succeeded', finished_at = COALESCE(finished_at, datetime('now')) \
-         WHERE id = ?1 AND status = 'awaiting_approval'",
+        "UPDATE agent_runs SET status = ?1, finished_at = COALESCE(finished_at, datetime('now')) \
+         WHERE id = ?2 AND status = ?3",
     )
+    .bind(AgentStatus::Succeeded)
     .bind(run_id)
+    .bind(AgentStatus::AwaitingApproval)
     .execute(db)
     .await?;
     Ok(())
@@ -282,14 +284,14 @@ pub async fn accept_proposal(
     accepted: crate::models::PrSelfCheckProposal,
 ) -> Result<(), AppError> {
     // 상태 가드: awaiting_approval만 accept 가능(이미 처리/실행 중이면 거부).
-    let row: Option<(String, Option<String>)> =
+    let row: Option<(AgentStatus, Option<String>)> =
         sqlx::query_as("SELECT status, trigger FROM agent_runs WHERE id = ?1")
             .bind(&run_id)
             .fetch_optional(db.inner())
             .await?;
     let (status, trigger) =
         row.ok_or_else(|| AppError::not_found("agents.job_not_found", "잡을 찾을 수 없음"))?;
-    super::require_awaiting(&status, "agents.accept_wrong_status")?;
+    super::require_awaiting(status, "agents.accept_wrong_status")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     execute_accept(db.inner(), &run_id, &accepted_json, trigger.as_deref()).await?;
@@ -301,12 +303,14 @@ pub async fn accept_proposal(
 #[specta::specta]
 pub async fn reject_proposal(db: State<'_, Db>, run_id: String) -> Result<(), AppError> {
     let res = sqlx::query(
-        "UPDATE agent_runs SET status = 'cancelled', \
+        "UPDATE agent_runs SET status = ?1, \
             result = json_object('error', '사용자가 제안을 폐기(reject)함'), \
             finished_at = COALESCE(finished_at, datetime('now')) \
-         WHERE id = ?1 AND status = 'awaiting_approval'",
+         WHERE id = ?2 AND status = ?3",
     )
+    .bind(AgentStatus::Cancelled)
     .bind(&run_id)
+    .bind(AgentStatus::AwaitingApproval)
     .execute(db.inner())
     .await?;
     if res.rows_affected() == 0 {

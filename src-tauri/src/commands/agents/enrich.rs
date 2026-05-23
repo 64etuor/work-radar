@@ -157,7 +157,7 @@ pub async fn accept_enrich(
     let (status, trigger) = super::run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::not_found("agents.job_not_found", e))?;
-    super::require_awaiting(&status, "agents.accept_wrong_status")?;
+    super::require_awaiting(status, "agents.accept_wrong_status")?;
     let signal_id = trigger
         .as_deref()
         .and_then(|t| serde_json::from_str::<super::EnrichTrigger>(t).ok())
@@ -417,7 +417,7 @@ pub async fn accept_enrich_all(
     let (status, _trigger) = super::run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.run_status", e))?;
-    super::require_awaiting(&status, "agents.not_acceptable")?;
+    super::require_awaiting(status, "agents.not_acceptable")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     Ok(execute_accept_enrich_all(db.inner(), &run_id, &accepted, &accepted_json).await?)

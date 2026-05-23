@@ -203,7 +203,7 @@ pub async fn accept_triage(
     let (status, _trigger) = super::run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.run_status", e))?;
-    super::require_awaiting(&status, "agents.not_acceptable")?;
+    super::require_awaiting(status, "agents.not_acceptable")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
     Ok(super::record_acceptance(db.inner(), &run_id, "triage_ci", &accepted_json).await?)

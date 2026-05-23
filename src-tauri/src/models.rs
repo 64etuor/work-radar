@@ -138,11 +138,11 @@ pub struct CliToolStatus {
 }
 
 /// 단일 잡 폴링용 경량 상태 (B3: EnrichModal 인플레이스 폴링).
-/// status: 잡 상태 문자열, has_proposal: proposal 컬럼 비-NULL 여부, detail: 실패 메시지.
+/// status: 잡 상태(닫힌 enum), has_proposal: proposal 컬럼 비-NULL 여부, detail: 실패 메시지.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentRunStatus {
-    pub status: String,
+    pub status: AgentStatus,
     pub has_proposal: bool,
     pub detail: Option<String>,
 }
@@ -791,6 +791,27 @@ pub enum AgentStatus {
     Cancelled,
 }
 
+impl AgentStatus {
+    /// 영속(SQLite)·IPC 문자열 표현. serde/sqlx의 snake_case와 동일 — 잡 상태 문자열의 **단일 출처**.
+    /// SQL 바인딩·로그·에러 메시지가 흩어진 리터럴 대신 이 함수를 경유한다.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AgentStatus::Proposed => "proposed",
+            AgentStatus::AwaitingApproval => "awaiting_approval",
+            AgentStatus::Running => "running",
+            AgentStatus::Succeeded => "succeeded",
+            AgentStatus::Failed => "failed",
+            AgentStatus::Cancelled => "cancelled",
+        }
+    }
+}
+
+impl std::fmt::Display for AgentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Jobs 뷰 표시용 잡 한 항목. agent_runs에서 도출 (i64 컬럼은 specta 금지 → u32/f64로 변환).
 /// 토큰 본문은 절대 담기지 않는다(INVARIANT).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -1209,4 +1230,30 @@ pub struct CreateSkillInput {
     pub prompt: String,
     /// 잡 키(enrich/batch_enrich/ci_triage/pr_selfcheck) 또는 None(미바인딩).
     pub binding: Option<String>,
+}
+
+#[cfg(test)]
+mod agent_status_tests {
+    use super::AgentStatus;
+
+    /// `as_str()`(단일 출처)가 serde·sqlx 인코딩(snake_case)과 1:1로 일치함을 잠근다.
+    /// 셋 중 하나라도 어긋나면 영속/IPC/SQL 바인딩 사이에 상태 문자열 드리프트가 생긴다.
+    #[test]
+    fn as_str_matches_serde_snake_case_and_display() {
+        let all = [
+            AgentStatus::Proposed,
+            AgentStatus::AwaitingApproval,
+            AgentStatus::Running,
+            AgentStatus::Succeeded,
+            AgentStatus::Failed,
+            AgentStatus::Cancelled,
+        ];
+        for v in all {
+            let json = serde_json::to_string(&v).unwrap();
+            assert_eq!(json, format!("\"{}\"", v.as_str()), "serde != as_str");
+            assert_eq!(v.to_string(), v.as_str(), "Display != as_str");
+        }
+        // 닫힌 세트 — 마이그레이션 CHECK(0001)과 동일한 6개 값.
+        assert_eq!(AgentStatus::AwaitingApproval.as_str(), "awaiting_approval");
+    }
 }

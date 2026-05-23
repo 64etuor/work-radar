@@ -12,6 +12,7 @@ use crate::agent::codex_availability;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::jobs::JobManager;
+use crate::models::AgentStatus;
 
 // ── SHARED helpers ─────────────────────────────────────────────────────────────────
 // These are called via `super::<name>` from child submodules.
@@ -42,8 +43,8 @@ pub(super) async fn require_codex(jm: &JobManager) -> Result<std::path::PathBuf,
 pub(super) async fn run_status_trigger(
     db: &Db,
     run_id: &str,
-) -> Result<(String, Option<String>), String> {
-    let row: Option<(String, Option<String>)> =
+) -> Result<(AgentStatus, Option<String>), String> {
+    let row: Option<(AgentStatus, Option<String>)> =
         sqlx::query_as("SELECT status, trigger FROM agent_runs WHERE id = ?1")
             .bind(run_id)
             .fetch_optional(db)
@@ -57,8 +58,8 @@ pub(super) async fn run_status_trigger(
 // AppError는 리치 에러 envelope이라 의도적으로 크다(커맨드는 매크로로 면제됨). 가드 헬퍼는
 // 커맨드와 동일한 AppError를 그대로 전파해야 하므로 large-err 린트를 국소 허용한다.
 #[allow(clippy::result_large_err)]
-pub(super) fn require_awaiting(status: &str, code: &'static str) -> Result<(), AppError> {
-    if status != "awaiting_approval" {
+pub(super) fn require_awaiting(status: AgentStatus, code: &'static str) -> Result<(), AppError> {
+    if status != AgentStatus::AwaitingApproval {
         return Err(AppError::validation(
             code,
             format!("accept 가능한 상태가 아닙니다(현재: {status})."),
@@ -111,10 +112,12 @@ pub(super) async fn record_acceptance(
     .execute(db)
     .await?;
     sqlx::query(
-        "UPDATE agent_runs SET status = 'succeeded', finished_at = COALESCE(finished_at, datetime('now')) \
-         WHERE id = ?1 AND status = 'awaiting_approval'",
+        "UPDATE agent_runs SET status = ?1, finished_at = COALESCE(finished_at, datetime('now')) \
+         WHERE id = ?2 AND status = ?3",
     )
+    .bind(AgentStatus::Succeeded)
     .bind(run_id)
+    .bind(AgentStatus::AwaitingApproval)
     .execute(db)
     .await?;
     Ok(())
@@ -170,7 +173,7 @@ pub async fn agent_run_status(
     db: State<'_, Db>,
     run_id: String,
 ) -> Result<AgentRunStatus, AppError> {
-    let row: Option<(String, Option<String>, Option<String>)> =
+    let row: Option<(AgentStatus, Option<String>, Option<String>)> =
         sqlx::query_as("SELECT status, result, proposal FROM agent_runs WHERE id = ?1")
             .bind(&run_id)
             .fetch_optional(db.inner())

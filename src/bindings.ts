@@ -433,10 +433,10 @@ export type AgentRail = "suggestion" | "execution";
 
 /**
  *  단일 잡 폴링용 경량 상태 (B3: EnrichModal 인플레이스 폴링).
- *  status: 잡 상태 문자열, has_proposal: proposal 컬럼 비-NULL 여부, detail: 실패 메시지.
+ *  status: 잡 상태(닫힌 enum), has_proposal: proposal 컬럼 비-NULL 여부, detail: 실패 메시지.
  */
 export type AgentRunStatus = {
-	status: string,
+	status: AgentStatus,
 	hasProposal: boolean,
 	detail: string | null,
 };

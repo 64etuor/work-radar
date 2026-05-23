@@ -25,14 +25,14 @@ WAL+busy_timeout, 도메인 에러 thiserror, `with_retry` 통합+`Retryable`, `
 - **I · 로그 스크럽(보안)** ✅ — `classify_http`(calendar.rs/messenger.rs)가 본문 대신 크기만 노출(`HTTP {status} (응답 {len}B)`, 스펙 §5.5). `classify_http_buckets` 테스트가 `!contains("SECRET_BODY_xyz")` 검증.
 - **J · toast retryable 배선(UX)** ✅ — `query/client.ts` 전역 `onError`가 retryable 시 `onRetry: () => query.fetch()` 주입 → `toast.ts`/`ToastHost.tsx` "재시도" 버튼(decisions.md "품질 후속" 참조).
 - **E · 내부 JSON 타이핑** ✅ — 잡 `trigger`(`EnrichTrigger`/`BatchEnrichTrigger`/`PrJobTrigger`)·신호 `links`(`PrSignalLinks`)가 serde 구조체로 타입화(camelCase 키 보존, critic ACCEPT). DB 컬럼은 직렬화된 JSON이라 경계의 `Option<String>`은 정상(외부 codex `proposal`은 의도적으로 문자열 유지).
+- **D · 잡 상태 enum 단일화** ✅ — `AgentRunStatus.status: String`과 흩어진 SQL 리터럴을 닫힌 enum으로 통일. **신규 `JobStatus`를 만들지 않고 기존 `AgentStatus`를 재사용**(이미 6변종+sqlx::Type/specta/serde, `AgentRunView` 사용 — 병렬 enum은 드리프트 신설이라 DRY가 옳음). `AgentStatus::as_str()`+`Display`를 문자열 단일 출처로 추가, 모델 경계·`require_awaiting`·`run_status_trigger`·`finalize`·Acceptance 게이트 UPDATE까지 enum 바인딩으로 경유. 스키마 무변경(TEXT+CHECK 유지). bindings.ts `AgentRunStatus.status`는 의도적으로 `string`→`AgentStatus` union으로 좁아짐. critic ACCEPT(INVARIANT #1/#2/#5 보존), SSOT 잠금 테스트 2개 추가(test 241 green). decisions.md "품질 후속" 기록.
 
-> 위 7건(A·B·C·E·H·I·J)은 `docs/decisions.md` "품질 후속 (cross-cutting, 2026-05-22)"에 커밋 단위로 기록돼 있음.
+> 위 8건(A·B·C·D·E·H·I·J)은 `docs/decisions.md` "품질 후속 (cross-cutting, 2026-05-22)"에 커밋 단위로 기록돼 있음.
 
 **남은 진짜 작업(전부 게이트 필요 — 자율 착수 금지):**
-- **D · JobStatus enum** — `models.rs:145` `AgentRunStatus.status`가 아직 `String`(형제 enum: SignalStatus/PromotionStatus/CiStatus 존재). Acceptance 게이트 문자열(`'awaiting_approval'` 등)을 건드림 → **critic 필수**.
 - **F · repository 레이어**(대형) → **G · signals god-table 분리**(대형·스키마·가장 위험). 둘 다 **brainstorming + Phase 승격 + 단계 분할** 선행, G는 F 이후.
 
-> 즉 자율-안전 배치는 소진됨. 다음 착수는 §3 순서대로 **D(critic 패스)** 또는 **F→G(brainstorming)** — 사람 확인 후.
+> 즉 자율-안전 배치 + D(critic)까지 소진됨. 다음 착수는 §3 순서대로 **F→G(brainstorming)** — 사람 확인 후.
 
 ---
 

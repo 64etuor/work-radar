@@ -109,7 +109,7 @@ pub async fn insert_agent_run(db: &Db, r: &NewAgentRun) -> Result<(), sqlx::Erro
         "INSERT INTO agent_runs \
          (id, project_id, engine, kind, rail, trigger, repo_id, workdir, sandbox, status, \
           timeout_sec, max_turns, cost_cap_usd, retry_key, retry_count, log_path) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&r.id)
     .bind(&r.project_id)
@@ -120,6 +120,7 @@ pub async fn insert_agent_run(db: &Db, r: &NewAgentRun) -> Result<(), sqlx::Erro
     .bind(&r.repo_id)
     .bind(&r.workdir)
     .bind(r.sandbox)
+    .bind(AgentStatus::Proposed)
     .bind(r.bounds.timeout.as_secs() as i64)
     .bind(r.bounds.max_turns as i64)
     .bind(r.bounds.cost_cap_usd)
@@ -164,10 +165,12 @@ pub async fn fetch_log_tail(db: &Db, run_id: &str) -> Result<String, sqlx::Error
 
 async fn mark_running(db: &Db, run_id: &str) {
     let _ = sqlx::query(
-        "UPDATE agent_runs SET status='running', started_at=datetime('now') \
-         WHERE id = ? AND status='proposed'",
+        "UPDATE agent_runs SET status=?, started_at=datetime('now') \
+         WHERE id = ? AND status=?",
     )
+    .bind(AgentStatus::Running)
     .bind(run_id)
+    .bind(AgentStatus::Proposed)
     .execute(db)
     .await;
 }
@@ -177,7 +180,7 @@ async fn mark_running(db: &Db, run_id: &str) {
 /// `awaiting_approval`로 멈춘다 — 사람 accept 전엔 어떤 외부 변경도 없다(INVARIANT #2).
 async fn finalize(db: &Db, run_id: &str, res: Result<AgentOutcome, AgentError>, gated: bool) {
     let (status, result_json, cost_tokens, cost_usd, proposal): (
-        &str,
+        AgentStatus,
         String,
         Option<i64>,
         Option<f64>,
@@ -185,9 +188,9 @@ async fn finalize(db: &Db, run_id: &str, res: Result<AgentOutcome, AgentError>, 
     ) = match res {
         Ok(o) => (
             if gated && o.proposal.is_some() {
-                "awaiting_approval"
+                AgentStatus::AwaitingApproval
             } else {
-                "succeeded"
+                AgentStatus::Succeeded
             },
             json!({ "detail": o.detail }).to_string(),
             o.cost_tokens.map(|t| t as i64),
@@ -195,14 +198,14 @@ async fn finalize(db: &Db, run_id: &str, res: Result<AgentOutcome, AgentError>, 
             o.proposal,
         ),
         Err(AgentError::Cancelled) => (
-            "cancelled",
+            AgentStatus::Cancelled,
             json!({ "error": AgentError::Cancelled.to_string() }).to_string(),
             None,
             None,
             None,
         ),
         Err(e) => (
-            "failed",
+            AgentStatus::Failed,
             json!({ "error": e.to_string() }).to_string(),
             None,
             None,
@@ -226,11 +229,13 @@ async fn finalize(db: &Db, run_id: &str, res: Result<AgentOutcome, AgentError>, 
 /// 큐 대기 중(proposed) 취소 마감.
 async fn mark_cancelled_in_queue(db: &Db, run_id: &str) {
     let _ = sqlx::query(
-        "UPDATE agent_runs SET status='cancelled', result=?, finished_at=datetime('now') \
-         WHERE id = ? AND status='proposed'",
+        "UPDATE agent_runs SET status=?, result=?, finished_at=datetime('now') \
+         WHERE id = ? AND status=?",
     )
+    .bind(AgentStatus::Cancelled)
     .bind(json!({ "error": AgentError::Cancelled.to_string() }).to_string())
     .bind(run_id)
+    .bind(AgentStatus::Proposed)
     .execute(db)
     .await;
 }
@@ -379,6 +384,29 @@ mod tests {
     async fn fresh_db() -> Db {
         let dir = temp_dir("db");
         crate::db::init_db(&dir.join("t.db")).await.unwrap()
+    }
+
+    /// SSOT 잠금: sqlx가 `AgentStatus`를 바인딩하는 문자열이 `as_str()`와 byte-identical인지 직접 확인.
+    /// (serde/Display는 models.rs 단위테스트가, sqlx encode 경로는 여기서 잠근다 — 둘 중 하나라도
+    /// 어긋나면 accept/reject 게이트의 `WHERE status = ?` 비교가 0행 매치로 조용히 깨진다.)
+    #[tokio::test]
+    async fn agent_status_sqlx_encoding_matches_as_str() {
+        let db = fresh_db().await;
+        for v in [
+            AgentStatus::Proposed,
+            AgentStatus::AwaitingApproval,
+            AgentStatus::Running,
+            AgentStatus::Succeeded,
+            AgentStatus::Failed,
+            AgentStatus::Cancelled,
+        ] {
+            let back: (String,) = sqlx::query_as("SELECT ?1")
+                .bind(v)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+            assert_eq!(back.0, v.as_str(), "sqlx encode != as_str for {v:?}");
+        }
     }
 
     fn manager(dir: &std::path::Path) -> JobManager {
