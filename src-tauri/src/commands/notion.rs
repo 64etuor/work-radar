@@ -481,7 +481,7 @@ pub async fn list_promotions(
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signals::insert_signal;
+    use crate::commands::signal_store::insert_signal;
     use crate::models::Kind;
     use crate::notion::CreatedPage;
     use std::sync::atomic::{AtomicU32, Ordering};

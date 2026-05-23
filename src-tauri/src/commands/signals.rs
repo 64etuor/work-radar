@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::signal_store::SIGNAL_COLS;
+use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
@@ -9,61 +9,13 @@ use crate::models::{
 
 // ── Signals: 생성 / 조회 / 분류 ──────────────────────────────────────────────
 
-/// braindump 입력 정규화 (dedup 키 기준). 소문자 + 공백 정리.
-fn normalize(title: &str) -> String {
-    title
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
-}
-
-/// 한 줄 braindump → 미분류 카드 생성.
-/// INVARIANT #1: 항상 `unclassified`로 진입한다 (자동 분류 없음).
-/// INVARIANT #3: 같은 입력은 dedup 키로 합쳐진다 (append 아님, upsert).
-pub(crate) async fn insert_signal(
-    db: &Db,
-    input: &CreateSignalInput,
-) -> Result<WorkSignal, sqlx::Error> {
-    let title = input.title.trim();
-    if title.is_empty() {
-        return Err(sqlx::Error::Protocol("empty signal title".into()));
-    }
-    let dedup_key = format!("braindump:{}", normalize(title));
-
-    // dedup: 동일 입력이 이미 있으면 touch 후 반환 (합쳐짐). 미태깅이면 project_id 보강.
-    let existing = sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET updated_at = datetime('now'), project_id = COALESCE(project_id, ?2) \
-         WHERE dedup_key = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(&dedup_key)
-    .bind(&input.project_id)
-    .fetch_optional(db)
-    .await?;
-    if let Some(sig) = existing {
-        return Ok(sig);
-    }
-
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "INSERT INTO signals (id, project_id, title, source, type, quadrant, kind, dedup_key, status) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, 'braindump', 'thought', 'unclassified', ?3, ?4, 'new') \
-         RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(&input.project_id)
-    .bind(title)
-    .bind(input.kind)
-    .bind(&dedup_key)
-    .fetch_one(db)
-    .await
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn create_signal(
     db: State<'_, Db>,
     input: CreateSignalInput,
 ) -> Result<WorkSignal, AppError> {
-    insert_signal(db.inner(), &input)
+    signal_store::insert_signal(db.inner(), &input)
         .await
         .map_err(|e| match e {
             sqlx::Error::Protocol(msg) => AppError::validation("signals.empty_title", msg),
@@ -71,43 +23,10 @@ pub async fn create_signal(
         })
 }
 
-/// 매트릭스 + 미분류 카드 (Today로 승격되지 않은 active 신호).
-pub(crate) async fn fetch_signals(db: &Db) -> Result<Vec<WorkSignal>, sqlx::Error> {
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "SELECT {SIGNAL_COLS} FROM signals \
-         WHERE today_for_date IS NULL AND status NOT IN ('done','archived','snoozed') \
-         ORDER BY created_at"
-    ))
-    .fetch_all(db)
-    .await
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn list_signals(db: State<'_, Db>) -> Result<Vec<WorkSignal>, AppError> {
-    Ok(fetch_signals(db.inner()).await?)
-}
-
-/// 사분면 분류 (사람 결정 레일 — INVARIANT #1). quadrant를 바꾸는 유일한 경로.
-pub(crate) async fn set_quadrant(
-    db: &Db,
-    id: &str,
-    quadrant: Quadrant,
-) -> Result<WorkSignal, sqlx::Error> {
-    let status = if matches!(quadrant, Quadrant::Unclassified) {
-        SignalStatus::New
-    } else {
-        SignalStatus::Classified
-    };
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET quadrant = ?2, status = ?3, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(id)
-    .bind(quadrant)
-    .bind(status)
-    .fetch_one(db)
-    .await
+    Ok(signal_store::fetch_signals(db.inner()).await?)
 }
 
 #[tauri::command]
@@ -117,7 +36,7 @@ pub async fn classify_signal(
     id: String,
     quadrant: Quadrant,
 ) -> Result<WorkSignal, AppError> {
-    Ok(set_quadrant(db.inner(), &id, quadrant).await?)
+    Ok(signal_store::set_quadrant(db.inner(), &id, quadrant).await?)
 }
 
 /// 상태 변경 (완료/보관 등). done/archive 카드 메뉴.
@@ -128,14 +47,7 @@ pub async fn set_signal_status(
     id: String,
     status: SignalStatus,
 ) -> Result<WorkSignal, AppError> {
-    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET status = ?2, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(&id)
-    .bind(status)
-    .fetch_one(db.inner())
-    .await?)
+    Ok(signal_store::set_signal_status(db.inner(), &id, status).await?)
 }
 
 /// 미루기 (snooze). 매트릭스에서 숨고 snooze_until에 복귀 시점 기록.
@@ -146,43 +58,13 @@ pub async fn snooze_signal(
     id: String,
     until: String,
 ) -> Result<WorkSignal, AppError> {
-    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET status = 'snoozed', snooze_until = ?2, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(&id)
-    .bind(&until)
-    .fetch_one(db.inner())
-    .await?)
+    Ok(signal_store::snooze_signal(db.inner(), &id, &until).await?)
 }
 
 // ── 브레인덤프 편집 / 하드 삭제 (Phase 15 #5) ──────────────────────────────────
 //
 // 둘 다 로컬 액션(외부 무변경) + 결정 레일 무침범(quadrant 안 건드림 — INVARIANT #1).
 // 편집은 제목 변경 시 dedup 키를 새 제목 normalize로 갱신한다(INVARIANT #3: dedup 키 일관).
-
-/// 신호 제목 편집 코어(테스트 가능). 새 제목으로 title + dedup_key(braindump:normalize) 갱신.
-/// 빈 제목은 거부. quadrant/status는 건드리지 않는다(결정 레일 무침범).
-pub(crate) async fn update_title(
-    db: &Db,
-    id: &str,
-    title: &str,
-) -> Result<WorkSignal, sqlx::Error> {
-    let title = title.trim();
-    if title.is_empty() {
-        return Err(sqlx::Error::Protocol("empty signal title".into()));
-    }
-    let dedup_key = format!("braindump:{}", normalize(title));
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET title = ?2, dedup_key = ?3, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(id)
-    .bind(title)
-    .bind(&dedup_key)
-    .fetch_one(db)
-    .await
-}
 
 /// 브레인덤프 카드 제목 인라인 편집. dedup 키를 새 제목으로 갱신한다(INVARIANT #3).
 #[tauri::command]
@@ -192,7 +74,7 @@ pub async fn update_signal_title(
     id: String,
     title: String,
 ) -> Result<WorkSignal, AppError> {
-    update_title(db.inner(), &id, &title)
+    signal_store::update_title(db.inner(), &id, &title)
         .await
         .map_err(|e| match e {
             sqlx::Error::Protocol(msg) => AppError::validation("signals.empty_title", msg),
@@ -204,10 +86,7 @@ pub async fn update_signal_title(
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_signal(db: State<'_, Db>, id: String) -> Result<(), AppError> {
-    sqlx::query("DELETE FROM signals WHERE id = ?1")
-        .bind(&id)
-        .execute(db.inner())
-        .await?;
+    signal_store::delete_signal_row(db.inner(), &id).await?;
     Ok(())
 }
 
@@ -221,11 +100,8 @@ pub(crate) async fn insert_promotion_draft(
     target: PromotionTarget,
 ) -> Result<Promotion, sqlx::Error> {
     // draft payload에 제목 스냅샷만 담는다 (미래 외부 write의 입력).
-    let title: (String,) = sqlx::query_as("SELECT title FROM signals WHERE id = ?1")
-        .bind(signal_id)
-        .fetch_one(db)
-        .await?;
-    let payload = serde_json::json!({ "title": title.0 }).to_string();
+    let title = signal_store::fetch_signal_title(db, signal_id).await?;
+    let payload = serde_json::json!({ "title": title }).to_string();
 
     sqlx::query_as::<_, Promotion>(
         "INSERT INTO promotions (id, signal_id, target, status, draft_payload) \
@@ -259,27 +135,16 @@ pub async fn search_signals(db: State<'_, Db>, query: String) -> Result<Vec<Work
     if q.is_empty() {
         return Ok(Vec::new());
     }
-    // 사용자 입력을 phrase로 감싸 FTS 연산자 오인을 막는다.
-    let match_expr = format!("\"{}\"", q.replace('"', "\"\""));
-    Ok(sqlx::query_as::<_, WorkSignal>(&format!(
-        "SELECT {} FROM signals s \
-         JOIN signals_fts f ON f.rowid = s.rowid \
-         WHERE signals_fts MATCH ?1 ORDER BY rank",
-        SIGNAL_COLS
-            .split(", ")
-            .map(|c| format!("s.{c}"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    ))
-    .bind(match_expr)
-    .fetch_all(db.inner())
-    .await?)
+    Ok(signal_store::search_signals(db.inner(), q).await?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
+    use crate::commands::signal_store::{
+        fetch_signals, insert_signal, set_quadrant, update_title, SIGNAL_COLS,
+    };
     use crate::models::Kind;
     use crate::models::SignalSource;
 

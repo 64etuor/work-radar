@@ -179,7 +179,7 @@ pub async fn set_signal_project(
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signals::insert_signal;
+    use crate::commands::signal_store::insert_signal;
     use crate::models::{CreateSignalInput, Kind};
     use crate::models::{ProjectKind, Provider};
 

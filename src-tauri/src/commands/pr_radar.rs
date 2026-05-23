@@ -400,7 +400,7 @@ mod tests {
     use super::*;
     use crate::commands::projects::insert_project;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signals::set_quadrant;
+    use crate::commands::signal_store::set_quadrant;
     use crate::error::ErrorKind;
     use crate::github::GithubError;
     use crate::models::ProjectKind;

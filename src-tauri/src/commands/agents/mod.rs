@@ -190,7 +190,7 @@ pub async fn agent_run_status(
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signals::insert_signal;
+    use crate::commands::signal_store::insert_signal;
     use crate::models::{Kind, Quadrant};
 
     /// trigger 구조체가 기존 camelCase JSON 키를 그대로 직렬화하는지 잠근다(프런트/accept 경계 계약).

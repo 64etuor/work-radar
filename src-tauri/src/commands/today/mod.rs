@@ -10,7 +10,7 @@ pub use weekly::*;
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signals::{fetch_signals, insert_signal, set_quadrant};
+    use crate::commands::signal_store::{fetch_signals, insert_signal, set_quadrant};
     use crate::models::{Kind, Quadrant, WorkDebt};
 
     /// Work Debt 집계 테스트용 raw seed — created_at/quadrant/today 레일을 직접 제어한다.

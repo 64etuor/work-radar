@@ -134,7 +134,7 @@ pub async fn restore_signal(db: State<'_, Db>, id: String) -> Result<WorkSignal,
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signals::{insert_signal, set_quadrant};
+    use crate::commands::signal_store::{insert_signal, set_quadrant};
     use crate::commands::today::promote_today_inner;
     use crate::models::{Kind, Quadrant, SignalStatus};
 
