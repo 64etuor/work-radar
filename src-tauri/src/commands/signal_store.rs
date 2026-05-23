@@ -759,3 +759,72 @@ pub(crate) async fn search_signals(db: &Db, query: &str) -> Result<Vec<WorkSigna
     .fetch_all(db)
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::shared::test_support::{fresh_db, input};
+    use crate::models::Kind;
+
+    /// 코어: insert_signal → fetch_signals 라운드트립(매트릭스 active 집합에 들어온다).
+    #[tokio::test]
+    async fn insert_then_fetch_roundtrips() {
+        let db = fresh_db().await;
+        let s = insert_signal(&db, &input("파이프라인 점검", Some(Kind::Work)))
+            .await
+            .unwrap();
+        let all = fetch_signals(&db).await.unwrap();
+        assert!(all.iter().any(|x| x.id == s.id));
+        assert!(matches!(s.quadrant, Quadrant::Unclassified)); // 항상 미분류 진입(INVARIANT #1).
+    }
+
+    /// 결정 레일: set_quadrant만 quadrant를 바꾼다(사람 결정).
+    #[tokio::test]
+    async fn set_quadrant_changes_quadrant_and_status() {
+        let db = fresh_db().await;
+        let s = insert_signal(&db, &input("긴급 처리", Some(Kind::Work)))
+            .await
+            .unwrap();
+        let c = set_quadrant(&db, &s.id, Quadrant::Q1DoNow).await.unwrap();
+        assert!(matches!(c.quadrant, Quadrant::Q1DoNow));
+        assert!(matches!(c.status, SignalStatus::Classified));
+    }
+
+    /// Today 레일: promote_today가 멤버십을 만들고 fetch_today가 그날 항목을 돌려준다.
+    #[tokio::test]
+    async fn promote_sets_today_membership_and_fetch_today_returns_it() {
+        let db = fresh_db().await;
+        let s = insert_signal(&db, &input("데모 준비", Some(Kind::Work)))
+            .await
+            .unwrap();
+        promote_today(&db, &s.id, "2026-05-23").await.unwrap();
+        let today = fetch_today(&db, "2026-05-23").await.unwrap();
+        assert!(today.iter().any(|x| x.id == s.id));
+        // 승격된 카드는 매트릭스(active, today 레일 밖) 집합에서 빠진다.
+        let matrix = fetch_signals(&db).await.unwrap();
+        assert!(!matrix.iter().any(|x| x.id == s.id));
+    }
+
+    /// FTS: search_signals가 제목 토큰을 매칭한다(호출자가 빈 쿼리를 걸러 넘긴다는 전제).
+    #[tokio::test]
+    async fn search_signals_matches_title_via_fts() {
+        let db = fresh_db().await;
+        insert_signal(&db, &input("파이프라인 점검", Some(Kind::Work)))
+            .await
+            .unwrap();
+        let hits = search_signals(&db, "파이프라인").await.unwrap();
+        assert_eq!(hits.len(), 1);
+    }
+
+    /// 회고: set_impact/set_regret 태깅이 라운드트립되고 confirmed quadrant는 무변경.
+    #[tokio::test]
+    async fn impact_regret_tagging_roundtrips_without_touching_quadrant() {
+        let db = fresh_db().await;
+        let s = insert_signal(&db, &input("회고 대상", None)).await.unwrap();
+        let i = set_impact(&db, &s.id, true).await.unwrap();
+        assert_eq!(i.impact_high, Some(true));
+        let r = set_regret(&db, &s.id, true).await.unwrap();
+        assert_eq!(r.regret, Some(true));
+        assert!(matches!(r.quadrant, Quadrant::Unclassified)); // 태깅은 결정 레일 무침범.
+    }
+}
