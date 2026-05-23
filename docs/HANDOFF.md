@@ -2,6 +2,8 @@
 
 > 새 세션은 **이 파일 + 아래 정본들**을 먼저 읽고 시작한다. 이전 대화 컨텍스트 없이도 진행 가능하도록 작성됨.
 
+> **다음 작업(남은 품질 후속)** 은 `docs/plans/2026-05-23-quality-followups-remaining.md` 에 실행 지침으로 정리돼 있다 — 공통 프로토콜 + 항목별 anchor/접근/done-criteria + 권장 순서. 2026-05-22 머지분은 `docs/decisions.md` "품질 후속" 참조.
+
 ## 지금 상태
 
 - **Phase 0~9 완료·검증됨.** 레포 `64etuor/work-radar`(Private), `dev`.
