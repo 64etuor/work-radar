@@ -29,6 +29,8 @@
 - **(2026-05-23, 남은 백로그 A) `NOTION_VERSION` 단일화 + 하드코딩 제거**(`notion.rs`/`api.rs`/`commands/notion.rs`): 중복 const 2개 + 리터럴 1개 → `pub(crate) const NOTION_VERSION`(notion.rs) 단일 출처로 통일, api.rs·commands::notion이 참조. 행위 보존(bindings.ts 무변경 · clippy 0 · test 202 green).
 - **(2026-05-23, 남은 백로그 B) shortcut 파서 빈 입력 가드**(`shortcut.rs` `parse_shortcut`): 비-test `split_last().expect()` 제거 → `match split_last()` 가드로 빈/공백/구분자만 입력을 panic 없이 Err. startup은 기존대로 `DEFAULT_GLOBAL_HOTKEY` 폴백(lib.rs). 빈/공백 회귀 테스트 추가. 트레이드오프: 단일-토큰 입력 Err 메시지를 통합(동작 동일 — 모두 Err).
 - **(2026-05-23, 남은 백로그 C) `commands/routines.rs`(1208 LOC) 서브모듈 분리**: `today/`·`agents/`와 동일 패턴으로 `commands/routines/`(schedule/crud/listing/reminders/tracking + mod.rs)로 순수 move. `pub use`로 `commands::*`·외부 경로 보존, 내부 전용 `reminders`는 비-pub(공개 커맨드 없음 → 직접 `super::reminders::` 접근). 행위 보존: bindings.ts 무변경 + test 202 동일 + clippy 0. critic 불요(결정레일/스키마/IPC 무관, bindings.ts diff가 객관 증명).
+- **(2026-05-23, 남은 백로그 H·I 검증) 이미 해소 확인**: H(sync_pr_radar 분류 손실)는 `410e86f`가 `all_transient` 플래그로 전부실패 시 transient/terminal 분류 보존(INVARIANT #5) — 잔여 없음. I(로그 스크럽)는 `7ddcd0c`가 calendar/messenger/notion `classify_http`를 본문 대신 `응답 {len}B`만 노출하도록 수정 — 잔여 없음. 둘 다 추가 작업 불요(재조사 방지용 기록).
+- **(2026-05-23, 남은 백로그 J) toast retryable refetch 배선**(`query/client.ts`·`toast.ts`·`ToastHost.tsx`): 전역 QueryCache `onError(err, query)`에서 `err.app.retryable`이면 `onRetry: () => query.fetch()` 주입 → 토스트가 "재시도" 버튼 노출(클릭→refetch+dismiss), 비-retryable은 기존 힌트. 단일 지점 배선(19개 call site 무변경), mutation은 의도적으로 전역 미처리(client.ts 주석)라 범위 밖. 스토어 회귀 테스트 2개 추가(test 12 green, typecheck/build green). 버튼 렌더/클릭은 사용자 관찰.
 
 ## 하네스 / 디자인 (cross-cutting, 2026-05-21)
 

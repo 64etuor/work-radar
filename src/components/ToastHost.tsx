@@ -8,7 +8,7 @@
  *   - "복사" 버튼: clipboard에 "{message} ({traceId})" 복사
  *   - "×" 버튼: dismiss
  *   - action(백엔드 AppError) 또는 actionUrl(프런트)이 있으면 action 버튼 렌더
- *   - retryable(transient)이면 절제된 "재시도 가능" 힌트(표시만 — refetch 배선은 범위 밖)
+ *   - retryable(transient): onRetry가 있으면 "재시도" 버튼(클릭→refetch+dismiss), 없으면 절제된 힌트
  * success/info 토스트: 간단 메시지 + auto-dismiss (2500ms, 스토어에서 처리).
  */
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -39,7 +39,7 @@ export function ToastHost() {
         >
           <span className="toast-msg">
             {t.message}
-            {t.retryable && (
+            {t.retryable && !t.onRetry && (
               <span className="toast-retry-hint"> · 재시도 가능</span>
             )}
             {t.traceId && (
@@ -61,6 +61,20 @@ export function ToastHost() {
                 }}
               >
                 복사
+              </button>
+            )}
+
+            {t.onRetry && (
+              <button
+                type="button"
+                className="toast-btn toast-action"
+                title="실패한 요청을 다시 시도"
+                onClick={() => {
+                  t.onRetry!();
+                  dismiss(t.id);
+                }}
+              >
+                재시도
               </button>
             )}
 

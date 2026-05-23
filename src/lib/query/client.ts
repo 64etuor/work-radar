@@ -27,12 +27,17 @@ export class IpcError extends Error {
 /** 전역 쿼리 클라이언트. 읽기는 로컬 SQLite라 빠르므로 짧은 staleTime + bounded retry. */
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
-    onError: (err) => {
+    onError: (err, query) => {
       // 핸들되지 않은 query 에러를 전역 토스트로 — getState()로 React 외부에서 접근.
       // IpcError면 backend AppError 그대로(traceId/retryable/action 보존, 재로그 금지).
+      // transient(retryable)면 그 query를 다시 fetch하는 onRetry를 주입 → 토스트 "재시도" 버튼.
       const store = useToastStore.getState();
       if (err instanceof IpcError) {
-        store.pushError("query", err.app);
+        store.pushError(
+          "query",
+          err.app,
+          err.app.retryable ? { onRetry: () => void query.fetch() } : undefined,
+        );
       } else {
         store.pushError("query", err instanceof Error ? err.message : String(err));
       }

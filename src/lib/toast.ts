@@ -44,8 +44,10 @@ export interface ToastItem {
   actionLabel?: string;
   /** 백엔드 AppError 분류(있으면). transient면 retryable 힌트의 근거. */
   errorKind?: ToastErrorKind;
-  /** 재시도 가능 여부(AppError.retryable). 표시 힌트만 — 실제 refetch 배선은 범위 밖. */
+  /** 재시도 가능 여부(AppError.retryable). retryable이고 onRetry가 있으면 "재시도" 버튼 노출. */
   retryable?: boolean;
+  /** 재시도 콜백(transient 에러의 실제 refetch 배선). 호출부가 주입(예: query.fetch). */
+  onRetry?: () => void;
   /** 액션 버튼(외부 url 또는 내부 nav). */
   action?: ToastAction;
 }
@@ -72,7 +74,7 @@ interface ToastState {
   pushError: (
     scope: string,
     error: string | AppError,
-    opts?: { actionUrl?: string; actionLabel?: string },
+    opts?: { actionUrl?: string; actionLabel?: string; onRetry?: () => void },
   ) => void;
   /** 성공 토스트 push (2500ms 자동 dismiss). */
   pushSuccess: (
@@ -118,6 +120,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
               traceId,
               errorKind: error.kind,
               retryable: error.retryable,
+              onRetry: opts?.onRetry,
               action,
             },
           ],
