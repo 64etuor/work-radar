@@ -16,7 +16,7 @@ import {
 } from "@/components/board/ProjectPickerModal";
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { CapturePanel } from "@/components/board/CapturePanel";
-import { MatrixCanvas } from "@/components/board/MatrixCanvas";
+import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
@@ -107,6 +107,7 @@ export function CaptureBoard() {
   const routines = routinesQ.data ?? [];
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
   const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
@@ -270,22 +271,11 @@ export function CaptureBoard() {
           },
         );
         break;
-      case "edit": {
-        // 인라인 제목 편집(Phase 15 #5). dedup 키는 백엔드가 새 제목으로 갱신.
-        // window.prompt 방식: 기존 패턴과 동일하게 유지하되 항상 동작하도록 확인.
-        const sig = signals.find((s) => s.id === signalId);
-        const next = window.prompt("카드 제목 편집", sig?.title ?? "");
-        if (next !== null && next.trim() !== "" && next.trim() !== sig?.title) {
-          updateTitle.mutate(
-            { id: signalId, title: next.trim() },
-            {
-              onSuccess: () => pushSuccess("제목 수정"),
-              onError: (e) => pushError("signal", `수정 실패: ${String(e)}`),
-            },
-          );
-        }
+      case "edit":
+        // 인라인 제목 편집(Phase 15 #5). 카드에 <textarea>를 띄워 Enter/blur 저장, Esc 취소.
+        // dedup 키는 백엔드가 새 제목으로 갱신. 저장 정규화는 handleTitleCommit에서.
+        setEditingId(signalId);
         break;
-      }
       case "delete":
         // 하드 삭제(영구 — archive와 구분, Phase 15 #5). 확인 후 삭제.
         if (window.confirm("이 카드를 영구 삭제합니다(복원 불가). 계속할까요?")) {
@@ -328,6 +318,22 @@ export function CaptureBoard() {
         break;
       }
     }
+  };
+
+  // 인라인 제목 편집 저장: 트림 후 빈 값/무변경이면 무시(원복), 그 외 update title 뮤테이션.
+  // 성공 시 signals invalidate(훅 onSuccess) → 즉시 재조회 반영.
+  const handleTitleCommit = (signalId: string, nextTitle: string) => {
+    const sig = signals.find((s) => s.id === signalId);
+    const normalized = normalizeTitleEdit(nextTitle, sig?.title ?? "");
+    setEditingId(null);
+    if (normalized === null) return;
+    updateTitle.mutate(
+      { id: signalId, title: normalized },
+      {
+        onSuccess: () => pushSuccess("제목 수정"),
+        onError: (e) => pushError("signal", `수정 실패: ${String(e)}`),
+      },
+    );
   };
 
   const handleCreateRoutine = (draft: RoutineDraft) => {
@@ -466,6 +472,13 @@ export function CaptureBoard() {
             setSelectedId(id);
             setMenu({ signalId: id, anchor });
           }}
+          editingId={editingId}
+          onEditStart={(id) => {
+            setSelectedId(id);
+            setEditingId(id);
+          }}
+          onEditCommit={handleTitleCommit}
+          onEditCancel={() => setEditingId(null)}
           onEnrichAll={handleEnrichAll}
           enrichAllDisabled={
             !codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending

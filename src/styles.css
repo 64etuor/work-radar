@@ -4948,3 +4948,28 @@
   height: 20px;
   border-width: 2.5px;
 }
+
+/* ── P2: 브레인덤프 카드 제목 인라인 편집 (append-only) ──
+   포스트잇 body 위치에 textarea를 띄워 제목을 바로 수정. Cohere white editorial 톤 —
+   흰 카드 위 얇은 보더 + Focus Blue 포커스링. .body 더블클릭 affordance도 함께. */
+.cb .postit .body {
+  cursor: text;
+}
+.cb .postit .postit-edit {
+  width: 100%;
+  margin: 0 0 2px;
+  padding: 3px 5px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--cb-r-sm);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font: inherit;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+}
+.cb .postit .postit-edit:focus {
+  border-color: var(--color-wr-accent);
+  box-shadow: 0 0 0 2px var(--color-wr-accent-soft);
+}

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { WorkSignal } from "@/bindings";
 import {
@@ -30,6 +30,14 @@ type Props = {
   onPromoteToday: (id: string) => void;
   /** ⋯ 메뉴 열기. */
   onOpenMenu: (id: string, anchor: HTMLElement) => void;
+  /** 인라인 제목 편집 중인 카드 id (없으면 null). */
+  editingId: string | null;
+  /** 카드 제목 편집 시작(더블클릭 또는 메뉴 edit). */
+  onEditStart: (id: string) => void;
+  /** 편집 확정(트림 후 빈 값/무변경은 호출자가 무시). */
+  onEditCommit: (id: string, title: string) => void;
+  /** 편집 취소(Esc). */
+  onEditCancel: () => void;
   /** 미분류 전체 배치 enrich 실행 (단일 codex 잡 — Phase 15 #4). */
   onEnrichAll: () => void;
   /** codex 미가용 또는 미분류 0개면 배치 enrich 버튼 비활성. */
@@ -51,6 +59,10 @@ export function MatrixCanvas({
   onClassify,
   onPromoteToday,
   onOpenMenu,
+  editingId,
+  onEditStart,
+  onEditCommit,
+  onEditCancel,
   onEnrichAll,
   enrichAllDisabled,
   todayPanelRef,
@@ -226,6 +238,8 @@ export function MatrixCanvas({
 
   const onCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: string) => {
     if ((e.target as HTMLElement).closest(".menu-btn")) return;
+    // 인라인 편집 중인 카드는 드래그 비활성(입력 조작 보호).
+    if (id === editingId || (e.target as HTMLElement).closest(".postit-edit")) return;
     const el = e.currentTarget;
     cbRef.current.onSelect(id);
     let moved = false;
@@ -368,7 +382,24 @@ export function MatrixCanvas({
                 {sugQ}
               </span>
             )}
-            <div className="body">{s.title}</div>
+            {s.id === editingId ? (
+              <TitleEditor
+                initial={s.title}
+                onCommit={(t) => onEditCommit(s.id, t)}
+                onCancel={onEditCancel}
+              />
+            ) : (
+              <div
+                className="body"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onEditStart(s.id);
+                }}
+                title="더블클릭해서 제목 편집"
+              >
+                {s.title}
+              </div>
+            )}
             <div className="pdate">{shortDate(s.createdAt)}</div>
             <button
               type="button"
@@ -385,5 +416,84 @@ export function MatrixCanvas({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * 인라인 제목 편집 결과를 정규화한다(순수 함수 — 단위테스트 대상).
+ * 트림 후 빈 값이거나 원본과 동일하면 null(저장 안 함). 그 외 트림된 새 제목.
+ */
+export function normalizeTitleEdit(next: string, original: string): string | null {
+  const trimmed = next.trim();
+  if (trimmed === "" || trimmed === original.trim()) return null;
+  return trimmed;
+}
+
+/**
+ * 포스트잇 카드의 인라인 제목 입력. 마운트 시 포커스+전체선택,
+ * Enter/blur 저장(정규화는 부모 onEditCommit), Esc 취소.
+ */
+function TitleEditor({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  onCommit: (title: string) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState(initial);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  // commit/cancel 1회만 — Esc 취소가 textarea 언마운트→blur(onCommit)로 되살아나는 것을 차단.
+  const settled = useRef(false);
+  const commit = (value: string) => {
+    if (settled.current) return;
+    settled.current = true;
+    onCommit(value);
+  };
+  const cancel = () => {
+    if (settled.current) return;
+    settled.current = true;
+    onCancel();
+  };
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, []);
+
+  // Esc 취소(캡처 단계 — App 셸의 창 숨김 핸들러보다 먼저 가로채야 한다).
+  // synthetic stopPropagation은 native window 리스너를 못 막으므로 ProjectPickerModal과 동일 패턴.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        cancel();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <textarea
+      ref={ref}
+      className="postit-edit"
+      value={draft}
+      rows={2}
+      onChange={(e) => setDraft(e.target.value)}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={() => commit(draft)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          commit(draft);
+        }
+      }}
+    />
   );
 }
