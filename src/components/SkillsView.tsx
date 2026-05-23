@@ -21,11 +21,20 @@ import { useUIStore } from "@/store";
  * 편집해도 자동 분류/자동 적용 경로는 절대 생기지 않는다. 외부 스킬 파일은 실행하지 않는다(읽기/편집).
  */
 export function SkillsView() {
-  const { goTo } = useUIStore();
+  const { goTo, pendingSkillId, clearPendingSkill } = useUIStore();
   const skills = useSkills();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+
+  // 팔레트에서 스킬을 고르면 그 스킬을 선택(보기/편집)한다 — 한 번만 소비.
+  // 동일 선택 핸들러(selectedId) 경로라 자동 실행은 없다(INVARIANT #1).
+  useEffect(() => {
+    if (!pendingSkillId) return;
+    setSelectedId(pendingSkillId);
+    setAdding(false);
+    clearPendingSkill();
+  }, [pendingSkillId, clearPendingSkill]);
 
   const list = skills.data ?? [];
   const inApp = useMemo(

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderPlus, GitBranchPlus } from "lucide-react";
+import { Blocks, FileText, FolderPlus, GitBranchPlus } from "lucide-react";
 
 import {
   Command,
@@ -10,8 +10,9 @@ import {
   CommandShortcut,
   CommandList,
 } from "@/components/ui/command";
-import { useNavKeymap, useProjects } from "@/lib/query";
+import { useNavKeymap, useProjects, useSkills } from "@/lib/query";
 import { NAV_GROUP_LABELS, navItemsByGroup } from "@/lib/nav";
+import { groupSkillsForPalette, skillSearchValue } from "@/lib/skill-grouping";
 import { useUIStore } from "@/store";
 
 /**
@@ -21,12 +22,16 @@ import { useUIStore } from "@/store";
  * 오버레이 backdrop 클릭 또는 Esc로 닫힌다(닫힘은 App 셸이 처리).
  */
 export function CommandPalette() {
-  const { goTo, setPaletteOpen } = useUIStore();
+  const { goTo, goToSkill, setPaletteOpen } = useUIStore();
   const projects = useProjects();
   const keymap = useNavKeymap();
+  // SkillsView와 동일 쿼리(["skills"]) — react-query가 키로 dedup하므로 중복 fetch 없음.
+  const skills = useSkills();
   const [query, setQuery] = useState("");
 
   const groups = navItemsByGroup();
+  // 표시 전용 프로젝트 우선 그룹핑(option B). 스키마 변경 없음(INVARIANT #7).
+  const skillGroups = groupSkillsForPalette(skills.data ?? []);
 
   return (
     <div className="cmdk-overlay" onPointerDown={() => setPaletteOpen(false)}>
@@ -57,6 +62,37 @@ export function CommandPalette() {
                       <Icon className="size-4 text-wr-subtle" />
                       <span>{item.label}</span>
                       {sc && <CommandShortcut>{sc}</CommandShortcut>}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+
+            {skillGroups.map(({ key, heading, skills: groupSkills }) => (
+              <CommandGroup key={key} heading={heading}>
+                {groupSkills.map((s) => {
+                  const isInApp = s.kind === "in_app_prompt";
+                  return (
+                    <CommandItem
+                      key={s.id}
+                      value={skillSearchValue(s)}
+                      // 선택 = SkillsView로 이동해 보기/편집. 자동 실행 없음(INVARIANT #1/#5).
+                      onSelect={() => goToSkill(s.id)}
+                    >
+                      {isInApp ? (
+                        <Blocks className="size-4 text-wr-subtle" />
+                      ) : (
+                        <FileText className="size-4 text-wr-subtle" />
+                      )}
+                      <span>{s.name}</span>
+                      {isInApp && s.binding && (
+                        <span className="ml-2 font-mono text-xs text-wr-subtle">
+                          {s.binding}
+                        </span>
+                      )}
+                      {isInApp && !s.enabled && (
+                        <CommandShortcut>꺼짐</CommandShortcut>
+                      )}
                     </CommandItem>
                   );
                 })}
