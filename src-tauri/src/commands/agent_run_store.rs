@@ -309,3 +309,96 @@ pub(crate) async fn reject_run(db: &Db, run_id: &str) -> Result<u64, sqlx::Error
     .await?;
     Ok(res.rows_affected())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn fresh_db() -> Db {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("wr-arstore-{nanos}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::db::init_db(&dir.join("t.db")).await.unwrap()
+    }
+
+    /// awaiting_approval 한 행을 직접 삽입(픽스처).
+    async fn insert_awaiting(db: &Db, id: &str) {
+        sqlx::query(
+            "INSERT INTO agent_runs \
+                (id, engine, kind, rail, sandbox, status, timeout_sec, max_turns, cost_cap_usd) \
+             VALUES (?1, 'codex', 'draft_pr_selfcheck', 'suggestion', 'read_only', \
+                     'awaiting_approval', 60, 8, 1.0)",
+        )
+        .bind(id)
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
+    /// record_acceptance: awaiting_approval → succeeded + acceptances 1행. 외부 호출 없음(로컬).
+    #[tokio::test]
+    async fn record_acceptance_marks_succeeded_and_appends_row() {
+        let db = fresh_db().await;
+        insert_awaiting(&db, "r1").await;
+        record_acceptance(&db, "r1", "pr_self_check", r#"{"summary":"x"}"#)
+            .await
+            .unwrap();
+        let st: (AgentStatus,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='r1'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(st.0, AgentStatus::Succeeded);
+        let cnt: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM acceptances WHERE agent_run_id='r1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(cnt.0, 1);
+    }
+
+    /// record_acceptance는 awaiting_approval이 아니면 상태를 바꾸지 않는다(게이트 CAS — INVARIANT #2).
+    #[tokio::test]
+    async fn record_acceptance_no_op_when_not_awaiting() {
+        let db = fresh_db().await;
+        // proposed 상태로 삽입(status 컬럼 default).
+        sqlx::query(
+            "INSERT INTO agent_runs (id, engine, kind, rail, sandbox, timeout_sec, max_turns, cost_cap_usd) \
+             VALUES ('r2','codex','k','suggestion','read_only',60,8,1.0)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        record_acceptance(&db, "r2", "pr_self_check", "{}")
+            .await
+            .unwrap();
+        let st: (AgentStatus,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='r2'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(
+            st.0,
+            AgentStatus::Proposed,
+            "게이트: awaiting_approval만 succeeded로 전이"
+        );
+    }
+
+    /// reject_run: awaiting_approval → cancelled, 영향 행수 1. 비-awaiting이면 0(가드).
+    #[tokio::test]
+    async fn reject_run_cancels_only_awaiting() {
+        let db = fresh_db().await;
+        insert_awaiting(&db, "r3").await;
+        let n = reject_run(&db, "r3").await.unwrap();
+        assert_eq!(n, 1);
+        let st: (AgentStatus,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='r3'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(st.0, AgentStatus::Cancelled);
+        // 두 번째 reject은 0행(이미 cancelled).
+        let n2 = reject_run(&db, "r3").await.unwrap();
+        assert_eq!(n2, 0);
+    }
+}
