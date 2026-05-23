@@ -1,10 +1,11 @@
 use tauri::State;
 
+use crate::commands::agent_run_store::insert_agent_run;
 use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_BATCH_ENRICH, BINDING_ENRICH};
 use crate::db::Db;
 use crate::error::AppError;
-use crate::jobs::{insert_agent_run, JobManager, NewAgentRun};
+use crate::jobs::{JobManager, NewAgentRun};
 use crate::models::{
     AgentRail, AreaTag, BatchEnrichItem, BatchEnrichProposal, Engine, EnrichProposal, Sandbox,
     TriggerEnrichAllInput, TriggerEnrichInput, WorkSignal,

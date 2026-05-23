@@ -1,9 +1,10 @@
 use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner, EchoRunner};
+use crate::commands::agent_run_store::{fetch_agent_runs, fetch_log_tail, insert_agent_run};
 use crate::db::Db;
 use crate::error::AppError;
-use crate::jobs::{fetch_agent_runs, fetch_log_tail, insert_agent_run, JobManager, NewAgentRun};
+use crate::jobs::{JobManager, NewAgentRun};
 use crate::models::{
     AgentRail, AgentRunView, CodexAvailability, Engine, Sandbox, TriggerCodexInput,
     TriggerEchoInput,

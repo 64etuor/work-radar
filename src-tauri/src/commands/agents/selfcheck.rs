@@ -1,11 +1,12 @@
 use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner};
+use crate::commands::agent_run_store::insert_agent_run;
 use crate::commands::skills::{resolve_prompt, BINDING_PR_SELFCHECK};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider};
-use crate::jobs::{insert_agent_run, JobManager, NewAgentRun};
+use crate::jobs::{JobManager, NewAgentRun};
 use crate::keychain;
 use crate::models::{AgentRail, AgentStatus, Engine, Sandbox, TokenKind, TriggerPrSelfCheckInput};
 

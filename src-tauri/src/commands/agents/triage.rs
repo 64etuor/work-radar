@@ -1,12 +1,13 @@
 use tauri::State;
 
 use crate::agent::{Bounds, CodexRunner};
+use crate::commands::agent_run_store::insert_agent_run;
 use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_CI_TRIAGE};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider};
-use crate::jobs::{insert_agent_run, JobManager, NewAgentRun};
+use crate::jobs::{JobManager, NewAgentRun};
 use crate::models::{
     AgentRail, CiTriageProposal, Engine, Sandbox, TriageOutcome, TriggerCiTriageInput,
 };

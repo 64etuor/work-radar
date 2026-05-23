@@ -8,6 +8,7 @@
 
 pub mod shared;
 
+pub mod agent_run_store;
 pub mod agents;
 pub mod agents_config;
 pub mod calendar;
