@@ -5,6 +5,7 @@
 
 use chrono::NaiveDate;
 
+use crate::commands::notification_store;
 use crate::db::Db;
 use crate::models::RoutineToday;
 
@@ -52,13 +53,7 @@ pub async fn sync_reminders(
         let source_id = reminder_source_id(&r.id, date);
 
         // 멱등: 같은 source_id 행이 (미발사든 발사든) 이미 있으면 새로 만들지 않는다.
-        let exists: Option<(i64,)> = sqlx::query_as(
-            "SELECT 1 FROM scheduled_notifications WHERE source = 'routine' AND source_id = ?1 LIMIT 1",
-        )
-        .bind(&source_id)
-        .fetch_optional(db)
-        .await?;
-        if exists.is_some() {
+        if notification_store::exists(db, "routine", &source_id).await? {
             continue;
         }
 
@@ -68,16 +63,8 @@ pub async fn sync_reminders(
         } else {
             format!("{time} 예정")
         };
-        sqlx::query(
-            "INSERT INTO scheduled_notifications (id, fire_at, title, body, source, source_id) \
-             VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'routine', ?4)",
-        )
-        .bind(&fire_at)
-        .bind(&title)
-        .bind(&body)
-        .bind(&source_id)
-        .execute(db)
-        .await?;
+        notification_store::enqueue(db, &fire_at, &title, &body, "routine", Some(&source_id))
+            .await?;
     }
     Ok(())
 }

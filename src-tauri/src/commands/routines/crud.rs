@@ -2,6 +2,7 @@
 
 use tauri::State;
 
+use crate::commands::notification_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{CreateRoutineInput, RoutineFreq, RoutineToday, UpdateRoutineInput};
@@ -138,13 +139,7 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     // 미발사 루틴 알림 삭제 — 다음 list_today_routines 호출 시 새 시간으로 재enqueue됨.
     // LIKE 패턴: 'routine:{id}:%' (발사된 rows는 보존 — 히스토리).
     let pattern = format!("routine:{}:%", input.id);
-    sqlx::query(
-        "DELETE FROM scheduled_notifications \
-         WHERE source='routine' AND source_id LIKE ?1 AND fired_at IS NULL",
-    )
-    .bind(&pattern)
-    .execute(db)
-    .await?;
+    notification_store::delete_unfired_by_source(db, "routine", &pattern).await?;
 
     Ok(())
 }
@@ -163,6 +158,9 @@ pub async fn delete_routine_inner(db: &Db, id: String) -> Result<(), sqlx::Error
     let mut tx = db.begin().await?;
 
     // 미발사 루틴 알림 삭제 (발사된 rows는 보존).
+    // 예외: 이 DELETE는 notification_store를 경유하지 않고 inline으로 둔다 — routine_checks/routines
+    // 삭제와 같은 트랜잭션에 묶여 원자성을 보장해야 하는데, &Db store fn은 이 tx(&mut *tx)에 합류할 수
+    // 없기 때문(executor-generic 도입 회피). scheduled_notifications의 그 외 모든 SQL은 store가 소유.
     let pattern = format!("routine:{id}:%");
     sqlx::query(
         "DELETE FROM scheduled_notifications \
@@ -215,13 +213,12 @@ pub async fn toggle_routine_check(
 
         // 완료된 루틴은 오늘 알림을 발사하지 않는다 — 미발사 행을 fired로 마킹(skip).
         let source_id = reminder_source_id(&routine_id, &date);
-        sqlx::query(
-            "UPDATE scheduled_notifications SET fired_at = ?2 \
-             WHERE source = 'routine' AND source_id = ?1 AND fired_at IS NULL",
+        notification_store::mark_fired_by_source(
+            db.inner(),
+            "routine",
+            &source_id,
+            &utc_now_string(),
         )
-        .bind(&source_id)
-        .bind(utc_now_string())
-        .execute(db.inner())
         .await
         .map_err(AppError::from)?;
     } else {

@@ -1,5 +1,6 @@
 use tauri::State;
 
+use crate::commands::notification_store;
 use crate::commands::signal_store;
 use crate::commands::tokens::project_credential_ref;
 use crate::db::Db;
@@ -146,29 +147,14 @@ async fn enqueue_ci_failure_notification(
     let source_id = format!("pr:{repo_full_name}:{}:{sha}", pr.number);
 
     // 멱등: 같은 source_id 행이 (미발사든 발사든) 이미 있으면 다시 만들지 않는다(중복 알림 0).
-    let exists: Option<(i64,)> = sqlx::query_as(
-        "SELECT 1 FROM scheduled_notifications WHERE source = 'ci' AND source_id = ?1 LIMIT 1",
-    )
-    .bind(&source_id)
-    .fetch_optional(db)
-    .await?;
-    if exists.is_some() {
+    if notification_store::exists(db, "ci", &source_id).await? {
         return Ok(());
     }
 
     let title = format!("CI 실패: {repo_full_name} #{}", pr.number);
     let body = format!("{} — {} · Q1 결정 큐로 올렸습니다.", pr.title, pr.url);
     let fire_at = now.format("%Y-%m-%d %H:%M:%S").to_string();
-    sqlx::query(
-        "INSERT INTO scheduled_notifications (id, fire_at, title, body, source, source_id) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'ci', ?4)",
-    )
-    .bind(&fire_at)
-    .bind(&title)
-    .bind(&body)
-    .bind(&source_id)
-    .execute(db)
-    .await?;
+    notification_store::enqueue(db, &fire_at, &title, &body, "ci", Some(&source_id)).await?;
     Ok(())
 }
 

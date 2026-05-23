@@ -7,9 +7,9 @@ use specta::Type;
 use tauri::{AppHandle, State};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
+use crate::commands::notification_store;
 use crate::db::Db;
 use crate::error::AppError;
-use crate::scheduler::utc_now_string;
 
 /// 알림 권한 상태(프런트 표시용 문자열 + bool). PermissionState를 직접 노출하지 않고
 /// 안정적인 직렬화 형태로 매핑한다.
@@ -73,15 +73,18 @@ pub async fn schedule_test_notification(
     seconds_from_now: i32,
 ) -> Result<(), AppError> {
     let secs = seconds_from_now.max(0) as i64;
-    let now = utc_now_string();
-    sqlx::query(
-        "INSERT INTO scheduled_notifications (id, fire_at, title, body, source, source_id) \
-         VALUES (lower(hex(randomblob(16))), datetime(?1, '+' || ?2 || ' seconds'), \
-                 'Work Radar 테스트 알림', '백그라운드 스케줄러 스파인이 동작합니다.', 'test', NULL)",
+    // fire_at = now + secs (UTC, datetime('now') 동일 포맷). 기존 SQL datetime() 계산을 Rust로 옮김(동작 동일).
+    let fire_at = (chrono::Utc::now() + chrono::Duration::seconds(secs))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+    notification_store::enqueue(
+        db.inner(),
+        &fire_at,
+        "Work Radar 테스트 알림",
+        "백그라운드 스케줄러 스파인이 동작합니다.",
+        "test",
+        None,
     )
-    .bind(&now)
-    .bind(secs)
-    .execute(db.inner())
     .await?;
     Ok(())
 }
