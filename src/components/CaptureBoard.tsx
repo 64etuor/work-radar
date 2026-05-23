@@ -14,6 +14,7 @@ import {
   type ProjectPickerState,
   ProjectPickerModal,
 } from "@/components/board/ProjectPickerModal";
+import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
@@ -111,6 +112,7 @@ export function CaptureBoard() {
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
   const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [enrichRunId, setEnrichRunId] = useState<string | null>(null);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
@@ -487,6 +489,17 @@ export function CaptureBoard() {
         />
 
         <div className="execute">
+          <button
+            type="button"
+            className="cal-open"
+            onClick={() => setCalendarOpen(true)}
+            title="캘린더 열기 (일/주/월)"
+          >
+            <span className="cal-open-ico" aria-hidden>
+              ▤
+            </span>
+            캘린더
+          </button>
           <TodayRail
             items={todayItems}
             panelRef={todayPanelRef}
@@ -524,6 +537,7 @@ export function CaptureBoard() {
         state={calendarModal}
         onClose={() => setCalendarModal(null)}
       />
+      <CalendarDrawer open={calendarOpen} onClose={() => setCalendarOpen(false)} />
       <ProjectPickerModal
         state={projectPicker}
         onClose={() => setProjectPicker(null)}

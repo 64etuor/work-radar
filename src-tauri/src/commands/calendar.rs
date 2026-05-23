@@ -314,6 +314,66 @@ fn calendar_events_cache() -> &'static TtlCache<String, Vec<CalendarEvent>> {
     CACHE.get_or_init(|| TtlCache::new(Duration::from_secs(60), 256))
 }
 
+/// 캐시 키([time_min,time_max] 윈도우)로 선택 캘린더 이벤트를 단일 Google range 호출로 병합 반환.
+/// `fetch_calendar_events`(하루)와 `fetch_calendar_events_range`(임의 범위)가 공유하는 본체. 한 윈도우
+/// = 한 [time_min,time_max] 쌍 → 캘린더당 **단일 range 호출**(N일×1콜 아님 — 주/월도 단발). 프로젝트별
+/// 부분 실패 격리(미연결/refresh 실패/선택 없음 건너뜀 — graceful degrade). P6 TTL 캐시(표시 가속, 결정
+/// 레일 무침투). force_refresh=true면 TTL 내라도 캐시 우회 → fresh Google fetch(드로어 수동 새로고침).
+async fn fetch_events_windowed(
+    db: &Db,
+    mut project_ids: Vec<String>,
+    time_min: String,
+    time_max: String,
+    force_refresh: bool,
+) -> Result<Vec<CalendarEvent>, AppError> {
+    // 캐시 키 안정화: 정렬된 project_ids + 윈도우. 같은 표시 요청은 같은 키.
+    project_ids.sort();
+    let cache_key = format!("{time_min}|{time_max}|{}", project_ids.join(","));
+
+    let log_key = cache_key.clone();
+    calendar_events_cache()
+        .get_or_fetch(cache_key, force_refresh, || async {
+            // 캐시 miss → 실제 Google fetch 시점(hit이면 이 클로저 미실행 → 로그 없음).
+            tracing::debug!(
+                code = "calendar.cache_miss",
+                key = %log_key,
+                force = force_refresh,
+                "calendar google fetch (cache miss)"
+            );
+            let provider = calendar::HttpCalendarProvider::new()?;
+            let mut ctxs = Vec::new();
+            for pid in project_ids {
+                // 프로젝트별 부분 실패 격리: 미연결/refresh 실패/선택 없음은 건너뛴다.
+                let Ok(Some(access)) = access_token_for(db, &pid).await else {
+                    continue;
+                };
+                let calendars = load_selected_calendars(db, &pid).await.unwrap_or_default();
+                if calendars.is_empty() {
+                    continue;
+                }
+                ctxs.push(calendar::ProjectCalendars {
+                    project_id: pid,
+                    access_token: access,
+                    calendars: calendars.into_iter().map(|c| (c.id, c.summary)).collect(),
+                });
+            }
+            Ok(calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await)
+        })
+        .await
+}
+
+/// 단일 프로젝트(또는 전체)의 project_id 목록을 해석한다(None=모든 프로젝트 병합, Today/Drawer 공용).
+async fn resolve_project_ids(db: &Db, project_id: Option<String>) -> Result<Vec<String>, AppError> {
+    Ok(match project_id {
+        Some(p) => vec![p],
+        None => fetch_projects(db)
+            .await?
+            .into_iter()
+            .map(|p| p.id)
+            .collect(),
+    })
+}
+
 /// 선택 캘린더의 오늘 이벤트를 시간순 병합 반환(ambient). `project_id=None`이면 모든 프로젝트 병합(Today용).
 /// 미연결/refresh 실패/선택 없음 프로젝트는 격리(나머지 정상 — INVARIANT graceful degrade).
 /// P6: 외부 Google API 읽기를 TTL 캐시로 가속(표시 전용). escalation/accept/결정 레일 무침투.
@@ -327,54 +387,28 @@ pub async fn fetch_calendar_events(
 ) -> Result<Vec<CalendarEvent>, AppError> {
     let offset = calendar::local_offset();
     let (time_min, time_max) = calendar::today_window(&date, &offset);
+    let project_ids = resolve_project_ids(db.inner(), project_id).await?;
+    fetch_events_windowed(db.inner(), project_ids, time_min, time_max, force_refresh).await
+}
 
-    let mut project_ids: Vec<String> = match project_id {
-        Some(p) => vec![p],
-        None => fetch_projects(db.inner())
-            .await?
-            .into_iter()
-            .map(|p| p.id)
-            .collect(),
-    };
-    // 캐시 키 안정화: 정렬된 project_ids + date(+window). 같은 표시 요청은 같은 키.
-    project_ids.sort();
-    let cache_key = format!("{date}|{time_min}|{time_max}|{}", project_ids.join(","));
-
-    // force_refresh=true: TTL 내라도 캐시 우회 → fresh Google fetch(P7 캘린더 드로어 수동 새로고침
-    // 버튼이 호출). false면 TTL 내 적중 시 underlying Google fetch를 건너뛴다(표시 가속).
-    let log_key = cache_key.clone();
-    calendar_events_cache()
-        .get_or_fetch(cache_key, force_refresh, || async {
-            // 캐시 miss → 실제 Google fetch 시점(hit이면 이 클로저 미실행 → 로그 없음). 캐시 도입
-            // 후 fetch 횟수 절감을 로그로 관측 가능.
-            tracing::debug!(
-                code = "calendar.cache_miss",
-                key = %log_key,
-                force = force_refresh,
-                "calendar google fetch (cache miss)"
-            );
-            let provider = calendar::HttpCalendarProvider::new()?;
-            let mut ctxs = Vec::new();
-            for pid in project_ids {
-                // 프로젝트별 부분 실패 격리: 미연결/refresh 실패/선택 없음은 건너뛴다.
-                let Ok(Some(access)) = access_token_for(db.inner(), &pid).await else {
-                    continue;
-                };
-                let calendars = load_selected_calendars(db.inner(), &pid)
-                    .await
-                    .unwrap_or_default();
-                if calendars.is_empty() {
-                    continue;
-                }
-                ctxs.push(calendar::ProjectCalendars {
-                    project_id: pid,
-                    access_token: access,
-                    calendars: calendars.into_iter().map(|c| (c.id, c.summary)).collect(),
-                });
-            }
-            Ok(calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await)
-        })
-        .await
+/// 임의 [start_date, end_date] 범위 이벤트를 시간순 병합 반환(P7 드로어 일/주/월 뷰). 경계 산출(주 시작
+/// 요일·월 경계)은 프런트가 정하고, Rust는 그 [start,end]를 단일 RFC3339 윈도우로 감싸 **캘린더당 단일
+/// range 호출**한다(주/월도 N일×1콜 금지). `project_id=None`이면 모든 프로젝트 병합. P6 TTL 캐시는 윈도우
+/// (time_min/time_max)별 키 → 일/주/월 각 범위가 독립 캐시. force_refresh=true는 드로어 수동 새로고침이
+/// 캐시를 우회해 fresh Google fetch(표시 가속 전용, escalation/accept/결정 레일 무침투 — INVARIANT #2/#4).
+#[tauri::command]
+#[specta::specta]
+pub async fn fetch_calendar_events_range(
+    db: State<'_, Db>,
+    project_id: Option<String>,
+    start_date: String,
+    end_date: String,
+    force_refresh: bool,
+) -> Result<Vec<CalendarEvent>, AppError> {
+    let offset = calendar::local_offset();
+    let (time_min, time_max) = calendar::range_window(&start_date, &end_date, &offset);
+    let project_ids = resolve_project_ids(db.inner(), project_id).await?;
+    fetch_events_windowed(db.inner(), project_ids, time_min, time_max, force_refresh).await
 }
 
 // ── Google Calendar 이벤트 생성 (Phase 19, write 레일) ──────────────────────────────

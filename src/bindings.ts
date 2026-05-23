@@ -263,6 +263,14 @@ export const commands = {
 	 */
 	fetchCalendarEvents: (projectId: string | null, date: string, forceRefresh: boolean) => typedError<CalendarEvent[], AppError>(__TAURI_INVOKE("fetch_calendar_events", { projectId, date, forceRefresh })),
 	/**
+	 *  임의 [start_date, end_date] 범위 이벤트를 시간순 병합 반환(P7 드로어 일/주/월 뷰). 경계 산출(주 시작
+	 *  요일·월 경계)은 프런트가 정하고, Rust는 그 [start,end]를 단일 RFC3339 윈도우로 감싸 **캘린더당 단일
+	 *  range 호출**한다(주/월도 N일×1콜 금지). `project_id=None`이면 모든 프로젝트 병합. P6 TTL 캐시는 윈도우
+	 *  (time_min/time_max)별 키 → 일/주/월 각 범위가 독립 캐시. force_refresh=true는 드로어 수동 새로고침이
+	 *  캐시를 우회해 fresh Google fetch(표시 가속 전용, escalation/accept/결정 레일 무침투 — INVARIANT #2/#4).
+	 */
+	fetchCalendarEventsRange: (projectId: string | null, startDate: string, endDate: string, forceRefresh: boolean) => typedError<CalendarEvent[], AppError>(__TAURI_INVOKE("fetch_calendar_events_range", { projectId, startDate, endDate, forceRefresh })),
+	/**
 	 *  직접 모달의 캘린더 picker가 쓸 프로젝트의 저장된 선택 캘린더([{id,summary}]). 네트워크 없음(로컬 DB).
 	 *  모달이 어느 캘린더에 쓸지 고르게 한다(연결된 프로젝트의 선택 목록 = 사용자가 이미 고른 캘린더).
 	 */

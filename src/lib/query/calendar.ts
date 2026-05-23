@@ -124,6 +124,41 @@ export function fetchCalendarEvents(
   return unwrap(commands.fetchCalendarEvents(projectId, date, forceRefresh));
 }
 
+/**
+ * P7 캘린더 드로어용 임의 [start,end] 범위 이벤트 쿼리(ambient — 일/주/월 뷰). 경계 산출(주 시작 요일·
+ * 월 경계)은 프런트(calendarRange)가 정하고, Rust는 단일 윈도우로 감싸 **캘린더당 단일 range 호출**한다
+ * (주/월도 N일×1콜 아님). 캐시 키에 [start,end] 포함 → 일/주/월 각 범위가 독립 캐시(P6 persist allowlist
+ * `calendarEvents` 적용). 폴링/재방문은 force=false(캐시 가속), 수동 새로고침은 force=true(별도 호출).
+ */
+export function useCalendarEventsRange(
+  start: string,
+  end: string,
+  enabled = true,
+) {
+  return useQuery<CalendarEvent[]>({
+    queryKey: ["calendarEvents", "range", start, end],
+    queryFn: () => fetchCalendarEventsRange(null, start, end, false),
+    enabled,
+    staleTime: 60_000,
+    retry: 1,
+  });
+}
+
+/**
+ * 범위 캘린더 이벤트 fetch 헬퍼. projectId=null이면 전체 병합. `forceRefresh=true`면 Rust TTL 캐시를
+ * 우회해 fresh Google fetch(드로어 수동 새로고침 버튼용 — 표시 가속 전용, 결정 레일 무관).
+ */
+export function fetchCalendarEventsRange(
+  projectId: string | null,
+  start: string,
+  end: string,
+  forceRefresh = false,
+): Promise<CalendarEvent[]> {
+  return unwrap(
+    commands.fetchCalendarEventsRange(projectId, start, end, forceRefresh),
+  );
+}
+
 // ── Phase 19: 이벤트 생성 (write 레일, 직접 모달) ────────────────────────────────────
 //
 // INVARIANT #2: 사용자 폼 제출 = 사람 결정 → 직접 write 정합(Acceptance 게이트는 자동화용).
