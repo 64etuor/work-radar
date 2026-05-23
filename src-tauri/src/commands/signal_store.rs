@@ -167,6 +167,84 @@ pub(crate) async fn fetch_signal_title(db: &Db, signal_id: &str) -> Result<Strin
     Ok(title.0)
 }
 
+// ── Today 레일 ─────────────────────────────────────────────────────────────────
+
+/// 매트릭스 카드를 Today로 승격. 새 항목은 레일 맨 위(가장 작은 rank). (rail.rs 본문 이전)
+pub(crate) async fn promote_today(
+    db: &Db,
+    id: &str,
+    date: &str,
+) -> Result<WorkSignal, sqlx::Error> {
+    // 새 항목은 레일 맨 위에 (가장 작은 rank).
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET today_for_date = ?2, today_done_at = NULL, status = 'promoted', \
+            today_rank = COALESCE((SELECT MIN(today_rank) FROM signals WHERE today_for_date IS NOT NULL), 0) - 1, \
+            updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(date)
+    .fetch_one(db)
+    .await
+}
+
+/// Today 승격 취소 → 원 사분면으로 복귀(없으면 미분류). 카운터 리셋. (rail.rs 본문 이전)
+pub(crate) async fn unpromote_today(db: &Db, id: &str) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET today_for_date = NULL, today_done_at = NULL, today_rank = NULL, \
+            status = CASE WHEN quadrant = 'unclassified' THEN 'new' ELSE 'classified' END, \
+            updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .fetch_one(db)
+    .await
+}
+
+/// Today 항목 완료 토글. 완료(done)=해당 날짜 기록 → 다음날 이월 안 됨. (rail.rs 본문 이전)
+pub(crate) async fn toggle_today_done(
+    db: &Db,
+    id: &str,
+    date: &str,
+    done: bool,
+) -> Result<WorkSignal, sqlx::Error> {
+    let done_at: Option<&str> = if done { Some(date) } else { None };
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET today_done_at = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(done_at)
+    .fetch_one(db)
+    .await
+}
+
+/// Today 레일 재정렬. ordered_ids 순서대로 today_rank 부여. (rail.rs 트랜잭션 이전)
+pub(crate) async fn reorder_today(db: &Db, ordered_ids: &[String]) -> Result<(), sqlx::Error> {
+    let mut tx = db.begin().await?;
+    for (i, id) in ordered_ids.iter().enumerate() {
+        sqlx::query("UPDATE signals SET today_rank = ?2 WHERE id = ?1")
+            .bind(id)
+            .bind(i as i32)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await
+}
+
+/// 오늘의 Today 항목. 미완료는 매일 잔류(rollover), 완료(today_done_at=오늘)는 당일만 표시. (rail.rs 본문 이전)
+pub(crate) async fn fetch_today(db: &Db, today: &str) -> Result<Vec<WorkSignal>, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "SELECT {SIGNAL_COLS} FROM signals \
+         WHERE today_for_date IS NOT NULL AND status NOT IN ('done','archived') \
+           AND (today_done_at IS NULL OR today_done_at = ?1) \
+         ORDER BY today_rank, today_for_date"
+    ))
+    .bind(today)
+    .fetch_all(db)
+    .await
+}
+
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────
 
 /// 본문/제목 전역 검색 (FTS5). 호출자는 빈 쿼리를 걸러 넘긴다.

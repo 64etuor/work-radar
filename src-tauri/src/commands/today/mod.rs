@@ -10,7 +10,9 @@ pub use weekly::*;
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
-    use crate::commands::signal_store::{fetch_signals, insert_signal, set_quadrant};
+    use crate::commands::signal_store::{
+        fetch_signals, fetch_today, insert_signal, promote_today, set_quadrant, unpromote_today,
+    };
     use crate::models::{Kind, Quadrant, WorkDebt};
 
     /// Work Debt 집계 테스트용 raw seed — created_at/quadrant/today 레일을 직접 제어한다.
@@ -451,9 +453,7 @@ mod tests {
             .await
             .unwrap();
         set_quadrant(&db, &sig.id, Quadrant::Q1DoNow).await.unwrap();
-        promote_today_inner(&db, &sig.id, "2026-05-21")
-            .await
-            .unwrap();
+        promote_today(&db, &sig.id, "2026-05-21").await.unwrap();
 
         let matrix = fetch_signals(&db).await.unwrap();
         assert!(matrix.is_empty(), "승격된 카드는 매트릭스에서 제외");
@@ -466,7 +466,7 @@ mod tests {
         );
 
         // 되돌리기 → 원 사분면으로 복귀, 매트릭스에 재등장.
-        unpromote_today_inner(&db, &sig.id).await.unwrap();
+        unpromote_today(&db, &sig.id).await.unwrap();
         let matrix2 = fetch_signals(&db).await.unwrap();
         assert_eq!(matrix2.len(), 1);
         assert!(matches!(matrix2[0].quadrant, Quadrant::Q1DoNow));
@@ -480,9 +480,7 @@ mod tests {
         let sig = insert_signal(&db, &input("세금계산서 확인", None))
             .await
             .unwrap();
-        promote_today_inner(&db, &sig.id, "2026-05-21")
-            .await
-            .unwrap();
+        promote_today(&db, &sig.id, "2026-05-21").await.unwrap();
 
         // 미완료: 다음날에도 잔류(rollover).
         assert_eq!(fetch_today(&db, "2026-05-22").await.unwrap().len(), 1);

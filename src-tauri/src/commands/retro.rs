@@ -134,8 +134,8 @@ pub async fn restore_signal(db: State<'_, Db>, id: String) -> Result<WorkSignal,
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
+    use crate::commands::signal_store::promote_today;
     use crate::commands::signal_store::{insert_signal, set_quadrant};
-    use crate::commands::today::promote_today_inner;
     use crate::models::{Kind, Quadrant, SignalStatus};
 
     /// 완료 todo는 today_done_at 범위로 잡히고, impact/regret 태깅이 라운드트립된다.
@@ -151,9 +151,9 @@ mod tests {
         let c = insert_signal(&db, &input("범위 밖 완료", None))
             .await
             .unwrap();
-        promote_today_inner(&db, &a.id, "2026-05-20").await.unwrap();
-        promote_today_inner(&db, &b.id, "2026-05-20").await.unwrap();
-        promote_today_inner(&db, &c.id, "2026-05-01").await.unwrap();
+        promote_today(&db, &a.id, "2026-05-20").await.unwrap();
+        promote_today(&db, &b.id, "2026-05-20").await.unwrap();
+        promote_today(&db, &c.id, "2026-05-01").await.unwrap();
         // 완료일 설정.
         for (id, done_at) in [
             (&a.id, "2026-05-20"),
