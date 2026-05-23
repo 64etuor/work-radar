@@ -14,6 +14,28 @@ WAL+busy_timeout, 도메인 에러 thiserror, `with_retry` 통합+`Retryable`, `
 
 ---
 
+## 0.5 진행 상황 (2026-05-23 재검증 — dev 239 tests green, clippy 0)
+
+후속 세션들이 §2의 **자율-안전 항목(A·B·C·H)과 소형 백로그(I·J)를 이미 완료**했다. 코드 재검증 결과:
+
+- **A · NOTION_VERSION** ✅ — `notion.rs:22` 단일 `pub(crate) const NOTION_VERSION`, `api.rs:8`/`commands/notion.rs:484`가 참조(하드코딩 리터럴 0). (플랜의 api.rs:9 / commands/notion.rs:440 라인은 stale.)
+- **B · shortcut 빈입력 가드** ✅ — `shortcut.rs:26` `split_last()` → match `Err` 폴백(비-test unwrap 없음), `shortcut::tests::rejects_empty_or_blank_without_panic` green.
+- **C · routines 분리** ✅ — `commands/routines/`(mod.rs + crud/listing/reminders/schedule/tracking), `bindings.ts` 동일.
+- **H · sync_pr_radar 타입에러** ✅ 해소(B-시리즈) — `sync_pr_radar`가 `AppError` 반환 + `e.is_retryable()`→`AppError::transient/terminal` 분류 보존. `pr_radar::tests::all_repos_{transient,terminal}_failure_*` green. 분류 손실 없음.
+- **I · 로그 스크럽(보안)** ✅ — `classify_http`(calendar.rs/messenger.rs)가 본문 대신 크기만 노출(`HTTP {status} (응답 {len}B)`, 스펙 §5.5). `classify_http_buckets` 테스트가 `!contains("SECRET_BODY_xyz")` 검증.
+- **J · toast retryable 배선(UX)** ✅ — `query/client.ts` 전역 `onError`가 retryable 시 `onRetry: () => query.fetch()` 주입 → `toast.ts`/`ToastHost.tsx` "재시도" 버튼(decisions.md "품질 후속" 참조).
+- **E · 내부 JSON 타이핑** ✅ — 잡 `trigger`(`EnrichTrigger`/`BatchEnrichTrigger`/`PrJobTrigger`)·신호 `links`(`PrSignalLinks`)가 serde 구조체로 타입화(camelCase 키 보존, critic ACCEPT). DB 컬럼은 직렬화된 JSON이라 경계의 `Option<String>`은 정상(외부 codex `proposal`은 의도적으로 문자열 유지).
+
+> 위 7건(A·B·C·E·H·I·J)은 `docs/decisions.md` "품질 후속 (cross-cutting, 2026-05-22)"에 커밋 단위로 기록돼 있음.
+
+**남은 진짜 작업(전부 게이트 필요 — 자율 착수 금지):**
+- **D · JobStatus enum** — `models.rs:145` `AgentRunStatus.status`가 아직 `String`(형제 enum: SignalStatus/PromotionStatus/CiStatus 존재). Acceptance 게이트 문자열(`'awaiting_approval'` 등)을 건드림 → **critic 필수**.
+- **F · repository 레이어**(대형) → **G · signals god-table 분리**(대형·스키마·가장 위험). 둘 다 **brainstorming + Phase 승격 + 단계 분할** 선행, G는 F 이후.
+
+> 즉 자율-안전 배치는 소진됨. 다음 착수는 §3 순서대로 **D(critic 패스)** 또는 **F→G(brainstorming)** — 사람 확인 후.
+
+---
+
 ## 1. 실행 프로토콜 (모든 항목 공통 — 반드시 지킬 것)
 
 ### 1.1 브랜치/머지 (dev 오염 금지)
