@@ -33,9 +33,9 @@ struct AgentRunRecord {
     finished_at: Option<String>,
 }
 
-/// result JSON({detail|error})에서 사람이 읽을 상세를 뽑는다.
-fn detail_from_result(result: &Option<String>) -> Option<String> {
-    let raw = result.as_ref()?;
+/// result JSON({detail|error})에서 사람이 읽을 상세를 뽑는다(jobs/agents 공통 — 단일 정의).
+pub(crate) fn detail_from_result(result: Option<&str>) -> Option<String> {
+    let raw = result?;
     let v: serde_json::Value = serde_json::from_str(raw).ok()?;
     v.get("detail")
         .or_else(|| v.get("error"))
@@ -45,7 +45,7 @@ fn detail_from_result(result: &Option<String>) -> Option<String> {
 
 impl From<AgentRunRecord> for AgentRunView {
     fn from(r: AgentRunRecord) -> Self {
-        let detail = detail_from_result(&r.result);
+        let detail = detail_from_result(r.result.as_deref());
         AgentRunView {
             id: r.id,
             project_id: r.project_id,
@@ -212,4 +212,83 @@ pub(crate) async fn mark_cancelled_in_queue(db: &Db, run_id: &str) {
     .bind(AgentStatus::Proposed)
     .execute(db)
     .await;
+}
+
+// ── 커맨드 레이어가 위임하는 읽기/게이트 (agents/* 에서 이전) ─────────────────────────
+
+/// 새 잡 id (기존 엔티티와 동일한 hex 형식). agent_runs는 id를 미리 알아야 한다
+/// (log_path/worktree 경로 산정 + kill 레지스트리 등록 + 반환).
+pub(crate) async fn new_run_id(db: &Db) -> Result<String, String> {
+    let id: (String,) = sqlx::query_as("SELECT lower(hex(randomblob(16)))")
+        .fetch_one(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(id.0)
+}
+
+/// awaiting_approval 잡의 (status, trigger). accept 상태 가드 공유.
+pub(crate) async fn run_status_trigger(
+    db: &Db,
+    run_id: &str,
+) -> Result<(AgentStatus, Option<String>), String> {
+    let row: Option<(AgentStatus, Option<String>)> =
+        sqlx::query_as("SELECT status, trigger FROM agent_runs WHERE id = ?1")
+            .bind(run_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    row.ok_or_else(|| "잡을 찾을 수 없음".to_string())
+}
+
+/// 잡의 proposal JSON 원문. 없으면 Err(아직 산출물 없음).
+pub(crate) async fn run_proposal_raw(db: &Db, run_id: &str) -> Result<String, String> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT proposal FROM agent_runs WHERE id = ?1")
+            .bind(run_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    row.ok_or("잡을 찾을 수 없음")?
+        .0
+        .ok_or_else(|| "아직 proposal이 없습니다(잡이 끝나지 않았거나 산출물 없음).".to_string())
+}
+
+/// 단일 잡 폴링용 (status, result, proposal) 읽기. 커맨드(agent_run_status)가 호출.
+pub(crate) async fn fetch_run_status(
+    db: &Db,
+    run_id: &str,
+) -> Result<Option<(AgentStatus, Option<String>, Option<String>)>, sqlx::Error> {
+    sqlx::query_as("SELECT status, result, proposal FROM agent_runs WHERE id = ?1")
+        .bind(run_id)
+        .fetch_optional(db)
+        .await
+}
+
+/// 공통 accept 마감: append-only acceptances 행 + 잡 succeeded(awaiting_approval에서만 전이).
+/// **외부(Notion/GitHub)는 어떤 호출도 없다** — 로컬 기록일 뿐(INVARIANT #2). 특수 로컬 효과는 호출자가.
+pub(crate) async fn record_acceptance(
+    db: &Db,
+    run_id: &str,
+    target: &str,
+    accepted_json: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO acceptances (id, agent_run_id, accepted_fields, target) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3)",
+    )
+    .bind(run_id)
+    .bind(accepted_json)
+    .bind(target)
+    .execute(db)
+    .await?;
+    sqlx::query(
+        "UPDATE agent_runs SET status = ?1, finished_at = COALESCE(finished_at, datetime('now')) \
+         WHERE id = ?2 AND status = ?3",
+    )
+    .bind(AgentStatus::Succeeded)
+    .bind(run_id)
+    .bind(AgentStatus::AwaitingApproval)
+    .execute(db)
+    .await?;
+    Ok(())
 }

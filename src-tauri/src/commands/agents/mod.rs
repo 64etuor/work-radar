@@ -17,16 +17,6 @@ use crate::models::AgentStatus;
 // ── SHARED helpers ─────────────────────────────────────────────────────────────────
 // These are called via `super::<name>` from child submodules.
 
-/// 새 잡 id (기존 엔티티와 동일한 hex 형식). agent_runs는 id를 미리 알아야 한다
-/// (log_path/worktree 경로 산정 + kill 레지스트리 등록 + 반환).
-pub(super) async fn new_run_id(db: &Db) -> Result<String, String> {
-    let id: (String,) = sqlx::query_as("SELECT lower(hex(randomblob(16)))")
-        .fetch_one(db)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(id.0)
-}
-
 /// codex 미설치/미인증이면 Err(graceful degrade 게이트). Phase 9 트리거들이 공유한다.
 pub(super) async fn require_codex(jm: &JobManager) -> Result<std::path::PathBuf, String> {
     let Some(codex_bin) = jm.codex_bin.clone() else {
@@ -37,20 +27,6 @@ pub(super) async fn require_codex(jm: &JobManager) -> Result<std::path::PathBuf,
         return Err(avail.detail);
     }
     Ok(codex_bin)
-}
-
-/// awaiting_approval 잡의 (status, trigger). accept 상태 가드 공유.
-pub(super) async fn run_status_trigger(
-    db: &Db,
-    run_id: &str,
-) -> Result<(AgentStatus, Option<String>), String> {
-    let row: Option<(AgentStatus, Option<String>)> =
-        sqlx::query_as("SELECT status, trigger FROM agent_runs WHERE id = ?1")
-            .bind(run_id)
-            .fetch_optional(db)
-            .await
-            .map_err(|e| e.to_string())?;
-    row.ok_or_else(|| "잡을 찾을 수 없음".to_string())
 }
 
 /// accept 류 작업의 상태 가드: awaiting_approval만 허용(이미 처리/실행 중이면 거부 — INVARIANT #2).
@@ -68,19 +44,6 @@ pub(super) fn require_awaiting(status: AgentStatus, code: &'static str) -> Resul
     Ok(())
 }
 
-/// 잡의 proposal JSON 원문. 없으면 Err(아직 산출물 없음).
-pub(super) async fn run_proposal_raw(db: &Db, run_id: &str) -> Result<String, String> {
-    let row: Option<(Option<String>,)> =
-        sqlx::query_as("SELECT proposal FROM agent_runs WHERE id = ?1")
-            .bind(run_id)
-            .fetch_optional(db)
-            .await
-            .map_err(|e| e.to_string())?;
-    row.ok_or("잡을 찾을 수 없음")?
-        .0
-        .ok_or_else(|| "아직 proposal이 없습니다(잡이 끝나지 않았거나 산출물 없음).".to_string())
-}
-
 /// raw fallback(`{"raw":...}`) 가드 후 타입 파싱(Phase 8 parse_pr_proposal 일반화). codex가 형식 밖
 /// 출력(또는 닫힌 세트 밖 값)을 내면 Err로 노출한다(조용한 빈 proposal 금지 — INVARIANT #2 정신).
 pub(super) fn parse_proposal<T: serde::de::DeserializeOwned>(raw: &str) -> Result<T, String> {
@@ -92,35 +55,6 @@ pub(super) fn parse_proposal<T: serde::de::DeserializeOwned>(raw: &str) -> Resul
         ));
     }
     serde_json::from_value(v).map_err(|e| format!("proposal 구조 불일치: {e}"))
-}
-
-/// 공통 accept 마감: append-only acceptances 행 + 잡 succeeded(awaiting_approval에서만 전이).
-/// **외부(Notion/GitHub)는 어떤 호출도 없다** — 로컬 기록일 뿐(INVARIANT #2). 특수 로컬 효과는 호출자가.
-pub(super) async fn record_acceptance(
-    db: &Db,
-    run_id: &str,
-    target: &str,
-    accepted_json: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "INSERT INTO acceptances (id, agent_run_id, accepted_fields, target) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3)",
-    )
-    .bind(run_id)
-    .bind(accepted_json)
-    .bind(target)
-    .execute(db)
-    .await?;
-    sqlx::query(
-        "UPDATE agent_runs SET status = ?1, finished_at = COALESCE(finished_at, datetime('now')) \
-         WHERE id = ?2 AND status = ?3",
-    )
-    .bind(AgentStatus::Succeeded)
-    .bind(run_id)
-    .bind(AgentStatus::AwaitingApproval)
-    .execute(db)
-    .await?;
-    Ok(())
 }
 
 // ── 잡 trigger 페이로드 (내부 — agent_runs.trigger 컬럼에 JSON 영속, 프런트 표시·accept 경로용) ──
@@ -150,17 +84,7 @@ pub(super) struct PrJobTrigger {
     pub pr_number: u32,
 }
 
-/// result JSON({detail|error})에서 사람이 읽을 상세를 뽑는다(jobs.rs detail_from_result 동일 로직).
-pub(super) fn detail_from_result_json(result: Option<&str>) -> Option<String> {
-    let raw = result?;
-    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
-    v.get("detail")
-        .or_else(|| v.get("error"))
-        .and_then(|x| x.as_str())
-        .map(|s| s.to_string())
-}
-
-// ── agent_run_status lives here (uses detail_from_result_json shared helper) ──────
+// ── agent_run_status: 영속은 agent_run_store(fetch_run_status/detail_from_result)에 위임 ──────
 
 use crate::models::AgentRunStatus;
 use tauri::State;
@@ -173,15 +97,10 @@ pub async fn agent_run_status(
     db: State<'_, Db>,
     run_id: String,
 ) -> Result<AgentRunStatus, AppError> {
-    let row: Option<(AgentStatus, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT status, result, proposal FROM agent_runs WHERE id = ?1")
-            .bind(&run_id)
-            .fetch_optional(db.inner())
-            .await?;
-
+    let row = crate::commands::agent_run_store::fetch_run_status(db.inner(), &run_id).await?;
     let (status, result, proposal) =
         row.ok_or_else(|| AppError::not_found("agents.run_not_found", "잡을 찾을 수 없음"))?;
-    let detail = detail_from_result_json(result.as_deref());
+    let detail = crate::commands::agent_run_store::detail_from_result(result.as_deref());
     Ok(AgentRunStatus {
         status,
         has_proposal: proposal.is_some(),
@@ -612,8 +531,8 @@ mod tests {
             has_proposal,
             "awaiting_approval 잡 + proposal → has_proposal=true"
         );
-        // detail_from_result_json: result 없으면 None.
-        let detail = detail_from_result_json(result.as_deref());
+        // detail_from_result: result 없으면 None.
+        let detail = crate::commands::agent_run_store::detail_from_result(result.as_deref());
         assert!(detail.is_none());
     }
 }

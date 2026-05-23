@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner};
-use crate::commands::agent_run_store::insert_agent_run;
+use crate::commands::agent_run_store::{insert_agent_run, new_run_id};
 use crate::commands::skills::{resolve_prompt, BINDING_PR_SELFCHECK};
 use crate::db::Db;
 use crate::error::AppError;
@@ -126,7 +126,7 @@ pub async fn trigger_pr_selfcheck(
         .fetch_pr_diff(&input.repo_full_name, input.pr_number as u64)
         .await?;
 
-    let id = super::new_run_id(db.inner())
+    let id = new_run_id(db.inner())
         .await
         .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {

@@ -1,7 +1,9 @@
 use tauri::State;
 
 use crate::agent::{Bounds, CodexRunner};
-use crate::commands::agent_run_store::insert_agent_run;
+use crate::commands::agent_run_store::{
+    insert_agent_run, new_run_id, record_acceptance, run_proposal_raw, run_status_trigger,
+};
 use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_CI_TRIAGE};
 use crate::db::Db;
@@ -113,7 +115,7 @@ pub async fn trigger_ci_triage(
         .fetch_pr_diff(&input.repo_full_name, input.pr_number as u64)
         .await?;
 
-    let id = super::new_run_id(db.inner())
+    let id = new_run_id(db.inner())
         .await
         .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
@@ -185,7 +187,7 @@ pub async fn triage_proposal(
     db: State<'_, Db>,
     run_id: String,
 ) -> Result<CiTriageProposal, AppError> {
-    let raw = super::run_proposal_raw(db.inner(), &run_id)
+    let raw = run_proposal_raw(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.proposal_unavailable", e))?;
     super::parse_proposal::<CiTriageProposal>(&raw)
@@ -201,11 +203,11 @@ pub async fn accept_triage(
     run_id: String,
     accepted: CiTriageProposal,
 ) -> Result<(), AppError> {
-    let (status, _trigger) = super::run_status_trigger(db.inner(), &run_id)
+    let (status, _trigger) = run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.run_status", e))?;
     super::require_awaiting(status, "agents.not_acceptable")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
-    Ok(super::record_acceptance(db.inner(), &run_id, "triage_ci", &accepted_json).await?)
+    Ok(record_acceptance(db.inner(), &run_id, "triage_ci", &accepted_json).await?)
 }

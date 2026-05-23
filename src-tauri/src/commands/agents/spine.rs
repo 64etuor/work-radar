@@ -1,7 +1,9 @@
 use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner, EchoRunner};
-use crate::commands::agent_run_store::{fetch_agent_runs, fetch_log_tail, insert_agent_run};
+use crate::commands::agent_run_store::{
+    fetch_agent_runs, fetch_log_tail, insert_agent_run, new_run_id,
+};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::jobs::{JobManager, NewAgentRun};
@@ -25,7 +27,7 @@ pub async fn trigger_echo_job(
     jm: State<'_, JobManager>,
     input: TriggerEchoInput,
 ) -> Result<String, AppError> {
-    let id = super::new_run_id(db.inner())
+    let id = new_run_id(db.inner())
         .await
         .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
@@ -114,7 +116,7 @@ pub async fn trigger_codex_job(
         }
     }
 
-    let id = super::new_run_id(db.inner())
+    let id = new_run_id(db.inner())
         .await
         .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {

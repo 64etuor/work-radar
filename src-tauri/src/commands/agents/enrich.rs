@@ -1,6 +1,8 @@
 use tauri::State;
 
-use crate::commands::agent_run_store::insert_agent_run;
+use crate::commands::agent_run_store::{
+    insert_agent_run, new_run_id, record_acceptance, run_proposal_raw, run_status_trigger,
+};
 use crate::commands::signal_store;
 use crate::commands::skills::{resolve_prompt, BINDING_BATCH_ENRICH, BINDING_ENRICH};
 use crate::db::Db;
@@ -52,7 +54,7 @@ pub async fn trigger_enrich(
         None => title,
     };
 
-    let id = super::new_run_id(db.inner())
+    let id = new_run_id(db.inner())
         .await
         .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
@@ -117,7 +119,7 @@ pub async fn enrich_proposal(
     db: State<'_, Db>,
     run_id: String,
 ) -> Result<EnrichProposal, AppError> {
-    let raw = super::run_proposal_raw(db.inner(), &run_id)
+    let raw = run_proposal_raw(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::not_found("agents.proposal_not_ready", e))?;
     super::parse_proposal::<EnrichProposal>(&raw)
@@ -142,7 +144,7 @@ pub(super) async fn execute_accept_enrich(
         accepted.reason.as_deref(),
     )
     .await?;
-    super::record_acceptance(db, run_id, "enrich_braindump", accepted_json).await?;
+    record_acceptance(db, run_id, "enrich_braindump", accepted_json).await?;
     Ok(sig)
 }
 
@@ -155,7 +157,7 @@ pub async fn accept_enrich(
     run_id: String,
     accepted: EnrichProposal,
 ) -> Result<WorkSignal, AppError> {
-    let (status, trigger) = super::run_status_trigger(db.inner(), &run_id)
+    let (status, trigger) = run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::not_found("agents.job_not_found", e))?;
     super::require_awaiting(status, "agents.accept_wrong_status")?;
@@ -252,7 +254,7 @@ pub async fn trigger_enrich_all(
     )
     .to_string();
 
-    let id = super::new_run_id(db.inner())
+    let id = new_run_id(db.inner())
         .await
         .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
     let bounds = Bounds {
@@ -363,7 +365,7 @@ pub async fn batch_enrich_proposal(
     db: State<'_, Db>,
     run_id: String,
 ) -> Result<BatchEnrichProposal, AppError> {
-    let raw = super::run_proposal_raw(db.inner(), &run_id)
+    let raw = run_proposal_raw(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.proposal_unavailable", e))?;
     // 잡의 project_id 한정으로 현재 미분류 신호를 다시 모아 검증 기준으로 쓴다(잡 이후 변화 반영).
@@ -402,7 +404,7 @@ pub(super) async fn execute_accept_enrich_all(
         .await?;
         applied = applied.saturating_add(rows as u32);
     }
-    super::record_acceptance(db, run_id, "enrich_batch", accepted_json).await?;
+    record_acceptance(db, run_id, "enrich_batch", accepted_json).await?;
     Ok(applied)
 }
 
@@ -415,7 +417,7 @@ pub async fn accept_enrich_all(
     run_id: String,
     accepted: BatchEnrichProposal,
 ) -> Result<u32, AppError> {
-    let (status, _trigger) = super::run_status_trigger(db.inner(), &run_id)
+    let (status, _trigger) = run_status_trigger(db.inner(), &run_id)
         .await
         .map_err(|e| AppError::terminal("agents.run_status", e))?;
     super::require_awaiting(status, "agents.not_acceptable")?;
