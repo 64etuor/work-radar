@@ -179,7 +179,9 @@
   --cb-pale-green: #edfce9;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* view-shell(=100vh - AgentStatusBar) 안을 채운다. 100vh면 에이전트 바(P10a 56px)만큼
+     아래로 밀려 하단 .capture 입력창이 뷰포트 밖으로 잘린다(P5). 100%로 실제 가용 높이에 맞춤. */
+  height: 100%;
   font-family: var(--font-sans);
   color: var(--color-wr-fg);
   background: var(--color-wr-bg);
