@@ -1,5 +1,6 @@
 use tauri::State;
 
+use crate::commands::signal_store;
 use crate::commands::tokens::project_credential_ref;
 use crate::db::Db;
 use crate::error::AppError;
@@ -122,23 +123,7 @@ async fn upsert_pr_signal(
         github_pr_url: pr.url.clone(),
     })
     .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-    sqlx::query(
-        "INSERT INTO signals \
-            (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'github_pr', 'pr_attention', \
-                 'unclassified', 'q1_do_now', ?4, 'new', ?5) \
-         ON CONFLICT(dedup_key) WHERE dedup_key IS NOT NULL DO UPDATE SET \
-            title = excluded.title, body = excluded.body, links = excluded.links, \
-            suggested_quadrant = excluded.suggested_quadrant, updated_at = datetime('now')",
-    )
-    .bind(project_id)
-    .bind(&title)
-    .bind(&body)
-    .bind(dedup_key)
-    .bind(&links)
-    .execute(db)
-    .await?;
-    Ok(())
+    signal_store::upsert_pr_signal(db, project_id, &title, &body, dedup_key, &links).await
 }
 
 /// CI 실패 알림을 큐에 넣는다(Phase 20 #17). 자동 triage 없음 — 네이티브 알림 + Q1 escalate(상위
@@ -195,13 +180,7 @@ async fn auto_resolve(
     fetched_full_names: &[String],
     active_keys: &[String],
 ) -> Result<(), sqlx::Error> {
-    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
-        "SELECT id, dedup_key FROM signals \
-         WHERE source = 'github_pr' AND project_id = ?1 AND status NOT IN ('done','archived')",
-    )
-    .bind(project_id)
-    .fetch_all(db)
-    .await?;
+    let rows = signal_store::fetch_pr_signal_keys(db, project_id).await?;
     for (id, key) in rows {
         let Some(key) = key else { continue };
         // 이 cycle에 fetch한 repo의 신호인가? (정확 prefix — LIKE 와일드카드 회피)
@@ -209,12 +188,7 @@ async fn auto_resolve(
             .iter()
             .any(|r| key.starts_with(&format!("pr:{r}:")));
         if in_fetched && !active_keys.iter().any(|k| k == &key) {
-            sqlx::query(
-                "UPDATE signals SET status = 'done', updated_at = datetime('now') WHERE id = ?1",
-            )
-            .bind(&id)
-            .execute(db)
-            .await?;
+            signal_store::mark_signal_done(db, &id).await?;
         }
     }
     Ok(())

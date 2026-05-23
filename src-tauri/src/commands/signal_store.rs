@@ -396,6 +396,60 @@ pub(crate) async fn count_pr_resolved_in_range(
     Ok(n)
 }
 
+// ── PR Radar (dedup upsert + auto-resolve; 루프/제어는 커맨드 잔류 — INVARIANT #3) ──
+
+/// PR escalate 신호 dedup upsert. quadrant/status는 ON CONFLICT에서 보존(사람 결정 — INVARIANT #1).
+/// title/body/links 조립과 escalation 판단은 커맨드 잔류, 이 fn은 SQL만. (pr_radar.rs 이전)
+pub(crate) async fn upsert_pr_signal(
+    db: &Db,
+    project_id: &str,
+    title: &str,
+    body: &str,
+    dedup_key: &str,
+    links: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO signals \
+            (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'github_pr', 'pr_attention', \
+                 'unclassified', 'q1_do_now', ?4, 'new', ?5) \
+         ON CONFLICT(dedup_key) WHERE dedup_key IS NOT NULL DO UPDATE SET \
+            title = excluded.title, body = excluded.body, links = excluded.links, \
+            suggested_quadrant = excluded.suggested_quadrant, updated_at = datetime('now')",
+    )
+    .bind(project_id)
+    .bind(title)
+    .bind(body)
+    .bind(dedup_key)
+    .bind(links)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// auto-resolve용 active github_pr 신호 (id, dedup_key) 목록. 루프 판단은 커맨드. (pr_radar.rs 이전)
+pub(crate) async fn fetch_pr_signal_keys(
+    db: &Db,
+    project_id: &str,
+) -> Result<Vec<(String, Option<String>)>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT id, dedup_key FROM signals \
+         WHERE source = 'github_pr' AND project_id = ?1 AND status NOT IN ('done','archived')",
+    )
+    .bind(project_id)
+    .fetch_all(db)
+    .await
+}
+
+/// 신호를 done으로 전이(auto-resolve 매트릭스 소멸). (pr_radar.rs 이전)
+pub(crate) async fn mark_signal_done(db: &Db, id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE signals SET status = 'done', updated_at = datetime('now') WHERE id = ?1")
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 // ── FTS 검색 ──────────────────────────────────────────────────────────────────
 
 /// 본문/제목 전역 검색 (FTS5). 호출자는 빈 쿼리를 걸러 넘긴다.
