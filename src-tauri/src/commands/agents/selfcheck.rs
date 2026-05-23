@@ -1,14 +1,16 @@
 use tauri::State;
 
 use crate::agent::{codex_availability, Bounds, CodexRunner};
-use crate::commands::agent_run_store::{insert_agent_run, new_run_id};
+use crate::commands::agent_run_store::{
+    insert_agent_run, new_run_id, record_acceptance, reject_run, run_status_trigger,
+};
 use crate::commands::skills::{resolve_prompt, BINDING_PR_SELFCHECK};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider};
 use crate::jobs::{JobManager, NewAgentRun};
 use crate::keychain;
-use crate::models::{AgentRail, AgentStatus, Engine, Sandbox, TokenKind, TriggerPrSelfCheckInput};
+use crate::models::{AgentRail, Engine, Sandbox, TokenKind, TriggerPrSelfCheckInput};
 
 // ── PR self-check 자동 초안 (Phase 8, 제안 레일 첫 자동화) ──────────────────────────
 //
@@ -233,17 +235,10 @@ pub(super) async fn execute_accept(
     accepted_json: &str,
     trigger: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    // append-only acceptances 행(외부 변경의 유일한 관문 — 이번 단계는 로컬 기록일 뿐).
-    sqlx::query(
-        "INSERT INTO acceptances (id, agent_run_id, accepted_fields, target) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, 'pr_self_check')",
-    )
-    .bind(run_id)
-    .bind(accepted_json)
-    .execute(db)
-    .await?;
-
     // 로컬 효과: 해당 PR을 self-checked로 표시(로컬 상태 — pr_self_checks, Phase 4 재사용).
+    // 게이트 전이(record_acceptance)보다 *먼저* 둔다 — 상태 UPDATE를 마지막에 두어 부분 실패 시
+    // 잡이 awaiting_approval로 남아 재accept 가능(INVARIANT #2 정신 보존). pr_self_checks는
+    // pr_radar aggregate라 store(agent_runs/acceptances)로 옮기지 않는다.
     if let Some(t) = trigger {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(t) {
             if let (Some(repo), Some(num)) = (
@@ -262,16 +257,8 @@ pub(super) async fn execute_accept(
         }
     }
 
-    // 잡을 succeeded로 마감(게이트 통과). awaiting_approval에서만 전이.
-    sqlx::query(
-        "UPDATE agent_runs SET status = ?1, finished_at = COALESCE(finished_at, datetime('now')) \
-         WHERE id = ?2 AND status = ?3",
-    )
-    .bind(AgentStatus::Succeeded)
-    .bind(run_id)
-    .bind(AgentStatus::AwaitingApproval)
-    .execute(db)
-    .await?;
+    // append-only acceptances 행 + 잡 succeeded(awaiting_approval에서만 전이). 외부 무변경(INVARIANT #2).
+    record_acceptance(db, run_id, "pr_self_check", accepted_json).await?;
     Ok(())
 }
 
@@ -285,13 +272,9 @@ pub async fn accept_proposal(
     accepted: crate::models::PrSelfCheckProposal,
 ) -> Result<(), AppError> {
     // 상태 가드: awaiting_approval만 accept 가능(이미 처리/실행 중이면 거부).
-    let row: Option<(AgentStatus, Option<String>)> =
-        sqlx::query_as("SELECT status, trigger FROM agent_runs WHERE id = ?1")
-            .bind(&run_id)
-            .fetch_optional(db.inner())
-            .await?;
-    let (status, trigger) =
-        row.ok_or_else(|| AppError::not_found("agents.job_not_found", "잡을 찾을 수 없음"))?;
+    let (status, trigger) = run_status_trigger(db.inner(), &run_id)
+        .await
+        .map_err(|e| AppError::not_found("agents.job_not_found", e))?;
     super::require_awaiting(status, "agents.accept_wrong_status")?;
     let accepted_json = serde_json::to_string(&accepted)
         .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
@@ -303,18 +286,8 @@ pub async fn accept_proposal(
 #[tauri::command]
 #[specta::specta]
 pub async fn reject_proposal(db: State<'_, Db>, run_id: String) -> Result<(), AppError> {
-    let res = sqlx::query(
-        "UPDATE agent_runs SET status = ?1, \
-            result = json_object('error', '사용자가 제안을 폐기(reject)함'), \
-            finished_at = COALESCE(finished_at, datetime('now')) \
-         WHERE id = ?2 AND status = ?3",
-    )
-    .bind(AgentStatus::Cancelled)
-    .bind(&run_id)
-    .bind(AgentStatus::AwaitingApproval)
-    .execute(db.inner())
-    .await?;
-    if res.rows_affected() == 0 {
+    let affected = reject_run(db.inner(), &run_id).await?;
+    if affected == 0 {
         return Err(AppError::validation(
             "agents.reject_wrong_status",
             "reject 가능한 상태가 아닙니다(awaiting_approval 아님).",

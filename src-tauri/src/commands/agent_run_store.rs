@@ -292,3 +292,20 @@ pub(crate) async fn record_acceptance(
     .await?;
     Ok(())
 }
+
+/// Proposal reject: awaiting_approval 잡을 cancelled로 마감(외부 무변경). 영향 행수 반환
+/// (0이면 awaiting_approval이 아니라 가드 실패 — 호출자가 검증 에러로 변환).
+pub(crate) async fn reject_run(db: &Db, run_id: &str) -> Result<u64, sqlx::Error> {
+    let res = sqlx::query(
+        "UPDATE agent_runs SET status = ?1, \
+            result = json_object('error', '사용자가 제안을 폐기(reject)함'), \
+            finished_at = COALESCE(finished_at, datetime('now')) \
+         WHERE id = ?2 AND status = ?3",
+    )
+    .bind(AgentStatus::Cancelled)
+    .bind(run_id)
+    .bind(AgentStatus::AwaitingApproval)
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected())
+}
