@@ -271,6 +271,12 @@ export const commands = {
 	 */
 	fetchCalendarEventsRange: (projectId: string | null, startDate: string, endDate: string, forceRefresh: boolean) => typedError<CalendarEvent[], AppError>(__TAURI_INVOKE("fetch_calendar_events_range", { projectId, startDate, endDate, forceRefresh })),
 	/**
+	 *  미분류 카드 1개에 캘린더 긴급도 가중을 적용한다(표시 힌트 — suggested_quadrant만). 호출부(보드)가
+	 *  이미 가진 ambient 캘린더 이벤트를 그대로 넘긴다(추가 네트워크/토큰 없음 — 표시 사본 재사용). 반환은
+	 *  갱신된 신호(확정 quadrant는 unclassified 유지). 매칭 이벤트가 없거나 임계치 미만이면 힌트 무변경.
+	 */
+	applyCalendarUrgency: (signalId: string, keywords: string[], events: CalendarEvent[]) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("apply_calendar_urgency", { signalId, keywords, events })),
+	/**
 	 *  직접 모달의 캘린더 picker가 쓸 프로젝트의 저장된 선택 캘린더([{id,summary}]). 네트워크 없음(로컬 DB).
 	 *  모달이 어느 캘린더에 쓸지 고르게 한다(연결된 프로젝트의 선택 목록 = 사용자가 이미 고른 캘린더).
 	 */

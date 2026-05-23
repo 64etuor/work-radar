@@ -16,6 +16,7 @@ import {
 } from "@/components/board/ProjectPickerModal";
 import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { EnrichModal } from "@/components/board/EnrichModal";
+import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
 import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
@@ -24,6 +25,8 @@ import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
 import {
   localToday,
   localWeekday,
+  useApplyCalendarUrgency,
+  useCalendarEvents,
   useClassifySignal,
   useCodexStatus,
   useCreateRoutine,
@@ -78,6 +81,9 @@ export function CaptureBoard() {
   const todayQ = useToday(today);
   const routinesQ = useTodayRoutines(today, weekday);
   const projectsQ = useProjects();
+  // 캘린더 긴급도 가중(표시 힌트 전용). 보드의 오늘 이벤트(ambient)를 미분류 카드에 퍼지 매칭한다.
+  const calendarQ = useCalendarEvents(today);
+  const applyUrgency = useApplyCalendarUrgency();
 
   const createSignal = useCreateSignal();
   const classifySignal = useClassifySignal();
@@ -114,6 +120,8 @@ export function CaptureBoard() {
   const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [enrichRunId, setEnrichRunId] = useState<string | null>(null);
+  // "전체 제안 실행" 잡 id — set되면 보드 내 인라인 리뷰 패널이 폴링·표시(페이지 이동 없음).
+  const [enrichAllRunId, setEnrichAllRunId] = useState<string | null>(null);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +129,8 @@ export function CaptureBoard() {
   // 새 카드 pop 추적: 직전까지 알던 id 집합. 새로 등장한 카드만 pop.
   const knownIdsRef = useRef<Set<string>>(new Set());
   const expectPopRef = useRef(false);
+  // 긴급도 가중을 이미 적용한 (signalId|eventsSig) 키 — 같은 이벤트 집합에 중복 호출/churn 방지.
+  const urgencyAppliedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const current = new Set(signals.map((s) => s.id));
@@ -233,7 +243,9 @@ export function CaptureBoard() {
     doPromote(sig?.projectId ?? null);
   };
 
-  // 미분류 전체 배치 enrich(Phase 15 #4): 단일 codex 잡 → Jobs에서 카드별 제안 검토·accept(자동 분류 0).
+  // 미분류 전체 배치 enrich(Phase 8 #1/#2): 단일 codex 잡을 **백그라운드**로 트리거하고, 페이지 이동
+  // 없이 보드 내 **인라인 리뷰 패널**(EnrichReviewPanel)이 폴링·표시한다. 잡 캡(timeout/turns/cost)은
+  // 유지(INVARIANT #5). accept해도 quadrant 자동 확정 0(INVARIANT #1) — 패널에서 사람이 수정·적용.
   const unclassifiedCount = signals.filter((s) => s.quadrant === "unclassified").length;
   const handleEnrichAll = () => {
     if (!codexReady) {
@@ -247,7 +259,8 @@ export function CaptureBoard() {
     triggerEnrichAll.mutate(
       { projectId: null, timeoutSec: 180, maxTurns: 12, costCapUsd: 1.0 },
       {
-        onSuccess: () => goTo("jobs"),
+        // 페이지 이동(goTo) 대신 인라인 패널 — 카드는 계속 보임(결정 맥락 유지).
+        onSuccess: (runId) => setEnrichAllRunId(runId),
         onError: (e) => pushError("codex", `전체 제안 실패: ${String(e)}`),
       },
     );
@@ -440,6 +453,28 @@ export function CaptureBoard() {
     return () => window.removeEventListener("online", onOnline);
   }, [flushPromotions, pushSuccess]);
 
+  // 캘린더 긴급도 가중(제안 레일 — suggested_quadrant 힌트만, 카드 자동 이동 0 = INVARIANT #1).
+  // 오늘 이벤트(ambient)가 로드되면 미분류 active 카드를 이벤트 title과 퍼지 매칭해 suggested 힌트를
+  // Rust 순수 함수로 가중한다. 같은 (카드,이벤트집합)엔 한 번만 호출(ref 가드 — churn/무한 호출 방지).
+  // 매칭/가중은 표시일 뿐 — 매트릭스 확정 quadrant는 백엔드가 절대 안 건드린다(set_suggested_quadrant_only).
+  useEffect(() => {
+    const events = calendarQ.data ?? [];
+    if (events.length === 0) return;
+    // 이벤트 집합 시그니처(id+start) — 같은 표시 데이터면 재적용 안 함.
+    const eventsSig = events.map((e) => `${e.id}@${e.start}`).join("|");
+    const unclassified = signals.filter(
+      (s) => s.quadrant === "unclassified" && s.status !== "snoozed",
+    );
+    for (const s of unclassified) {
+      const key = `${s.id}::${eventsSig}`;
+      if (urgencyAppliedRef.current.has(key)) continue;
+      urgencyAppliedRef.current.add(key);
+      // keywords는 현재 보조 키워드 모델이 없어 빈 배열(제목 매칭만). 실패는 조용히 무시(표시 힌트).
+      applyUrgency.mutate({ signalId: s.id, keywords: [], events });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendarQ.data, signals]);
+
   const loadError = signalsQ.isError || todayQ.isError || routinesQ.isError;
 
   return (
@@ -487,6 +522,14 @@ export function CaptureBoard() {
           }
           todayPanelRef={todayPanelRef}
         />
+
+        {/* "전체 제안 실행" 인라인 리뷰 패널 — 보드 영역에 띄우되 카드는 계속 보임(오버레이 아님). */}
+        {enrichAllRunId && (
+          <EnrichReviewPanel
+            runId={enrichAllRunId}
+            onClose={() => setEnrichAllRunId(null)}
+          />
+        )}
 
         <div className="execute">
           <button

@@ -599,6 +599,24 @@ pub(crate) async fn set_enrich_hints_batch_one(
     Ok(res.rows_affected())
 }
 
+/// 캘린더 긴급도 가중: **suggested_quadrant 힌트만** 갱신(area/reason은 보존). unclassified 카드에만
+/// 적용한다(WHERE quadrant='unclassified' — 확정 위치는 절대 미접근, INVARIANT #1). 갱신된 신호를
+/// 돌려준다(확정 quadrant는 그대로 unclassified). 미존재/이미 분류된 카드면 Err(RowNotFound).
+pub(crate) async fn set_suggested_quadrant_only(
+    db: &Db,
+    id: &str,
+    suggested_quadrant: Option<Quadrant>,
+) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET suggested_quadrant = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 AND quadrant = 'unclassified' RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(suggested_quadrant)
+    .fetch_one(db)
+    .await
+}
+
 /// area(라이프 도메인) 확정/수정(사람 결정 — quadrant 결정 레일과 무관 축). (enrich.rs 이전)
 pub(crate) async fn set_signal_area(
     db: &Db,

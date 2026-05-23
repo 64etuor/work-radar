@@ -30,6 +30,7 @@ mod retry;
 mod scheduler;
 mod shortcut;
 mod tray;
+mod urgency;
 
 use tauri::{Manager, WindowEvent};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
@@ -149,6 +150,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_selected_calendars,
         commands::fetch_calendar_events,
         commands::fetch_calendar_events_range,
+        // 캘린더 긴급도 가중 (Phase 8 #3, 표시 힌트 전용 — suggested_quadrant만, 확정 quadrant 무접근).
+        commands::apply_calendar_urgency,
         // Google Calendar 이벤트 생성 (write 레일, Phase 19).
         commands::list_selected_calendars,
         commands::create_calendar_event,

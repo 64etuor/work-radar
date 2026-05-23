@@ -5369,3 +5369,162 @@
     opacity: 1;
   }
 }
+
+/*
+ * ── enrich-review-panel (Phase 8 #2, 보드 내 인라인 제안 검토) ──
+ * "전체 제안 실행" 완료 시 오버레이가 아닌 보드 영역 인라인 패널. 좌측(인박스 영역) 위에 떠서
+ * 카드는 계속 보이게 — 결정 맥락 유지(INVARIANT #1). 사람이 수정 후 적용해야 반영(자동 적용 금지).
+ */
+.cb .board {
+  position: relative;
+}
+.enrich-review {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  z-index: 40;
+  width: min(420px, calc(50% - 24px));
+  max-height: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 44px rgba(10, 14, 30, 0.22);
+  padding: 14px 16px;
+  overflow: hidden;
+  animation: caldrawer-sheet-in 0.18s ease;
+}
+.enrich-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.enrich-review-title {
+  font: 600 12px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+.enrich-review-x {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-wr-muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.enrich-review-x:hover {
+  color: var(--color-wr-fg);
+}
+.enrich-review-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.enrich-review-err {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-danger);
+  background: var(--color-wr-danger-soft);
+  border: 1px solid var(--color-wr-danger-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.enrich-review-empty {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-subtle);
+  padding: 6px 2px;
+}
+.enrich-review-meta {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.enrich-review-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.enrich-review-row {
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.enrich-review-row-title {
+  font: 500 13px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.enrich-review-row-fields {
+  display: flex;
+  gap: 8px;
+}
+.enrich-review-select {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+}
+.enrich-review-select:focus {
+  border-color: var(--color-wr-accent);
+}
+.enrich-review-row-reason {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.enrich-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+.enrich-review-apply {
+  border: none;
+  cursor: pointer;
+  background: var(--color-wr-near-black);
+  color: #fff;
+  font: 500 13px var(--font-sans);
+  padding: 8px 18px;
+  border-radius: 999px;
+}
+.enrich-review-apply:hover {
+  background: var(--color-wr-black);
+}
+.enrich-review-apply:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.enrich-review-close {
+  border: 1px solid var(--color-wr-border-light);
+  cursor: pointer;
+  background: var(--color-wr-bg);
+  font: 500 13px var(--font-sans);
+  color: var(--color-wr-fg);
+  padding: 7px 14px;
+  border-radius: 999px;
+}
+.enrich-review-close:hover {
+  background: var(--color-wr-surface);
+}
+/* 좁은 폭: 전체폭 스택(DESIGN enrich-review-panel 반응형). */
+@media (max-width: 900px) {
+  .enrich-review {
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+}

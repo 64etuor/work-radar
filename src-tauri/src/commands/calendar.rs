@@ -478,3 +478,173 @@ pub async fn create_calendar_event(
     let (id, url) = provider.create_event(&access, &calendar_id, &input).await?;
     Ok(CreatedCalendarEvent { id, url })
 }
+
+// ── 캘린더 긴급도 가중 (Phase 8 #3, 표시 힌트 전용) ──────────────────────────────────
+//
+// ⚠️ INVARIANT #1: 카드 title/keywords를 (이미 표시 중인 ambient) 캘린더 이벤트 title과 퍼지 매칭해,
+//    연관 이벤트가 임박하면 그 카드의 **suggested_quadrant 힌트만** 위로 가중한다. 확정 `quadrant`(사람
+//    결정 위치)는 절대 미접근 — 자동 이동/자동 분류 0. 가중 결과는 unclassified 카드의 suggested_quadrant
+//    에만 쓰인다(set_suggested_quadrant_only이 WHERE quadrant='unclassified'로 구조적 강제). 점수 계산은
+//    순수 함수 urgency::calendar_urgency_score(cargo test)이고, 이 커맨드는 그 결과를 힌트로 영속할 뿐이다.
+
+/// 미분류 카드 1개에 캘린더 긴급도 가중을 적용한다(표시 힌트 — suggested_quadrant만). 호출부(보드)가
+/// 이미 가진 ambient 캘린더 이벤트를 그대로 넘긴다(추가 네트워크/토큰 없음 — 표시 사본 재사용). 반환은
+/// 갱신된 신호(확정 quadrant는 unclassified 유지). 매칭 이벤트가 없거나 임계치 미만이면 힌트 무변경.
+#[tauri::command]
+#[specta::specta]
+pub async fn apply_calendar_urgency(
+    db: State<'_, Db>,
+    signal_id: String,
+    keywords: Vec<String>,
+    events: Vec<CalendarEvent>,
+) -> Result<crate::models::WorkSignal, AppError> {
+    use crate::commands::signal_store;
+    use crate::urgency::{calendar_urgency_score, urgency_escalated_quadrant};
+
+    // 카드(title + 현재 suggested_quadrant base) 조회. 미존재면 not_found.
+    let row: Option<(String, String, Option<String>)> =
+        sqlx::query_as("SELECT title, quadrant, suggested_quadrant FROM signals WHERE id = ?1")
+            .bind(&signal_id)
+            .fetch_optional(db.inner())
+            .await?;
+    let (title, quadrant, suggested) =
+        row.ok_or_else(|| AppError::not_found("calendar.signal_not_found", "신호를 찾을 수 없음"))?;
+
+    // 확정 분류된 카드는 가중 대상 아님(suggested 힌트는 미분류 카드의 표시용). 확정 quadrant 무접근.
+    if quadrant != "unclassified" {
+        return Err(AppError::validation(
+            "calendar.signal_already_classified",
+            "이미 분류된 카드에는 긴급도 힌트를 쓰지 않습니다(확정 위치 무변경).",
+        ));
+    }
+
+    // base = 현재 suggested_quadrant(enrich 제안 등). 닫힌 세트 밖/None이면 None으로 본다.
+    let base = suggested.as_deref().and_then(parse_quadrant_hint);
+    let now = chrono::Utc::now().timestamp();
+    let score = calendar_urgency_score(&title, &keywords, &events, now);
+    let next = urgency_escalated_quadrant(base, score);
+
+    // 표시 힌트만 갱신(area/reason 보존, WHERE quadrant='unclassified'). 확정 quadrant 미접근.
+    Ok(signal_store::set_suggested_quadrant_only(db.inner(), &signal_id, next).await?)
+}
+
+/// suggested_quadrant 문자열 힌트 → Quadrant(닫힌 세트). 세트 밖/미상은 None(가중 base 없음 취급).
+fn parse_quadrant_hint(s: &str) -> Option<crate::models::Quadrant> {
+    use crate::models::Quadrant;
+    match s {
+        "q1_do_now" => Some(Quadrant::Q1DoNow),
+        "q2_schedule" => Some(Quadrant::Q2Schedule),
+        "q3_quick_contain" => Some(Quadrant::Q3QuickContain),
+        "q4_drop" => Some(Quadrant::Q4Drop),
+        "unclassified" => Some(Quadrant::Unclassified),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::shared::test_support::*;
+    use crate::commands::signal_store::{insert_signal, set_suggested_quadrant_only};
+    use crate::models::CalendarEvent;
+    use crate::urgency::{calendar_urgency_score, urgency_escalated_quadrant};
+
+    fn ev(title: &str, start: &str, end: &str) -> CalendarEvent {
+        CalendarEvent {
+            id: "e".into(),
+            calendar_id: "c".into(),
+            calendar_summary: "cal".into(),
+            title: title.into(),
+            start: start.into(),
+            end: end.into(),
+            all_day: false,
+            location: None,
+            url: None,
+            project_id: "p".into(),
+        }
+    }
+
+    /// INVARIANT #1/#2 펜스(plan 검증): 미분류 카드 + **제목 매칭** 캘린더 이벤트가 임박하면 긴급도 점수가
+    /// (매칭 없을 때보다) 상승하고, 그 가중은 **suggested_quadrant**에만 반영된다. 확정 `quadrant`는 끝까지
+    /// unclassified로 남아야 한다(카드 자동 이동 0).
+    #[tokio::test]
+    async fn urgency_raises_suggested_hint_without_moving_quadrant() {
+        let db = fresh_db().await;
+        let sig = insert_signal(&db, &input("데모 준비", None)).await.unwrap();
+        // 시작 상태: 확정 미분류 + 제안 힌트 없음.
+        assert!(matches!(
+            sig.quadrant,
+            crate::models::Quadrant::Unclassified
+        ));
+        assert!(sig.suggested_quadrant.is_none());
+
+        let now = chrono::Utc::now().timestamp();
+
+        // 매칭 이벤트 없음(전): 점수 0 → 힌트 무변경(None 유지).
+        let score_before = calendar_urgency_score(
+            &sig.title,
+            &[],
+            &[ev(
+                "치과 예약",
+                &rfc3339_from_now(now, 6 * 3600),
+                &rfc3339_from_now(now, 7 * 3600),
+            )],
+            now,
+        );
+        assert_eq!(score_before, 0.0, "매칭 이벤트 없으면 점수 0");
+
+        // 매칭 이벤트 임박(후): 6시간 뒤 "팀 데모 발표" → 점수 상승.
+        let matching = vec![ev(
+            "팀 데모 발표",
+            &rfc3339_from_now(now, 6 * 3600),
+            &rfc3339_from_now(now, 7 * 3600),
+        )];
+        let score_after = calendar_urgency_score(&sig.title, &[], &matching, now);
+        assert!(
+            score_after > score_before,
+            "매칭+임박이면 긴급도 상승: {score_after} > {score_before}"
+        );
+
+        // 가중을 suggested_quadrant에만 반영(확정 quadrant 무접근).
+        let base = sig
+            .suggested_quadrant
+            .as_deref()
+            .and_then(parse_quadrant_hint);
+        let next = urgency_escalated_quadrant(base, score_after);
+        assert!(
+            matches!(next, Some(crate::models::Quadrant::Q1DoNow)),
+            "임박 매칭 → q1 제안 힌트"
+        );
+        let updated = set_suggested_quadrant_only(&db, &sig.id, next)
+            .await
+            .unwrap();
+
+        // 펜스: 확정 quadrant는 여전히 unclassified(카드 자동 이동 0), suggested만 상승.
+        assert!(
+            matches!(updated.quadrant, crate::models::Quadrant::Unclassified),
+            "INVARIANT #1: 긴급도가 카드를 자동 이동시키지 않음(quadrant 불변)"
+        );
+        assert_eq!(
+            updated.suggested_quadrant.as_deref(),
+            Some("q1_do_now"),
+            "긴급도 가중은 suggested_quadrant에만 반영"
+        );
+
+        // DB 재조회로 영속 확인(확정 quadrant 무변경 재확인).
+        let row: (String, Option<String>) =
+            sqlx::query_as("SELECT quadrant, suggested_quadrant FROM signals WHERE id = ?1")
+                .bind(&sig.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(row.0, "unclassified", "확정 quadrant 영속 무변경");
+        assert_eq!(row.1.as_deref(), Some("q1_do_now"));
+    }
+
+    /// now+offset초의 RFC3339(UTC) 문자열. 테스트 이벤트 시각 합성용.
+    fn rfc3339_from_now(now: i64, offset: i64) -> String {
+        chrono::DateTime::from_timestamp(now + offset, 0)
+            .unwrap()
+            .to_rfc3339()
+    }
+}

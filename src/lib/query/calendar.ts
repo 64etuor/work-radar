@@ -10,6 +10,7 @@ import {
   type CreateCalendarEventInput,
   type CreatedCalendarEvent,
   type SelectedCalendar,
+  type WorkSignal,
 } from "@/bindings";
 
 /** Today 콕핏용 캘린더 이벤트 쿼리 래퍼(ambient — 짧은 staleTime). projectId=null → 전 프로젝트 병합. */
@@ -183,6 +184,28 @@ export function useCreateCalendarEvent() {
   >({
     mutationFn: ({ projectId, calendarId, event }) =>
       unwrap(commands.createCalendarEvent(projectId, calendarId, event)),
+  });
+}
+
+// ── Phase 8 #3: 캘린더 긴급도 가중 (표시 힌트 전용 — suggested_quadrant만) ─────────────
+//
+// 카드 title/keywords를 (이미 표시 중인 ambient) 캘린더 이벤트 title과 퍼지 매칭해, 연관 이벤트가
+// 임박하면 그 카드의 suggested_quadrant 힌트만 위로 가중한다. 확정 quadrant(사람 결정 위치)는 절대
+// 안 건드린다(INVARIANT #1 — 카드 자동 이동 0). 점수는 Rust 순수 함수(urgency.rs, cargo test).
+
+/** 미분류 카드 1개에 캘린더 긴급도 가중 적용(suggested_quadrant 힌트만). 성공 시 signals invalidate. */
+export function useApplyCalendarUrgency() {
+  const qc = useQueryClient();
+  return useMutation<
+    WorkSignal,
+    Error,
+    { signalId: string; keywords: string[]; events: CalendarEvent[] }
+  >({
+    mutationFn: ({ signalId, keywords, events }) =>
+      unwrap(commands.applyCalendarUrgency(signalId, keywords, events)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // suggested 힌트 칩 반영.
+    },
   });
 }
 

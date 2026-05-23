@@ -322,7 +322,7 @@ export function MatrixCanvas({
           type="button"
           className="inbox-enrich-all"
           disabled={enrichAllDisabled}
-          title="미분류 전체를 AI로 일괄 제안 (Jobs에서 검토·accept — 자동 분류 없음)"
+          title="미분류 전체를 AI로 일괄 제안 (보드 내 인라인 패널에서 검토·적용 — 자동 분류 없음)"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
