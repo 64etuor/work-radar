@@ -1127,37 +1127,8 @@
  * ── 캘린더 이벤트 등록 모달 (직접 write, Phase 19) ──
  * Cohere white editorial: 흰 패널 · thin border · near-black pill CTA. cmdk 오버레이 톤 재사용.
  */
-/* NOTE: .cev-overlay/panel/head/input/btn/btn-ghost는 ProjectPickerModal(아직 미변환)이 공유 사용 중 —
-   CalendarEventModal은 shadcn로 변환됨. 이 공유 클래스 dead 정리는 ProjectPickerModal 변환 슬라이스(2.8)에서. */
-.cev-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 95;
-  background: rgba(15, 20, 40, 0.28);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 12vh;
-}
-.cev-panel {
-  width: min(440px, 92vw);
-  max-height: 78vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: var(--color-wr-bg);
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-md);
-  box-shadow: 0 24px 60px rgba(10, 14, 30, 0.28);
-  padding: 20px;
-}
-.cev-head {
-  font: 600 13px var(--font-mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-wr-fg);
-}
+/* cev-*: 컨테이너/제목/input/버튼은 shadcn Dialog·Input·Select·Button(Wave 2.7~2.8).
+   남은 cev-*는 CalendarEventModal 폼 레이아웃·종일 체크박스·상태 클래스뿐. */
 .cev-field {
   display: flex;
   flex-direction: column;
@@ -1166,21 +1137,6 @@
 .cev-lbl {
   font: 500 11px var(--font-sans);
   color: var(--color-wr-subtle);
-}
-/* ProjectPickerModal 공유 — CalendarEventModal은 shadcn Input 사용(2.8에서 정리). */
-.cev-input {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid var(--color-wr-border);
-  border-radius: var(--radius-sm);
-  padding: 9px 11px;
-  font: 400 14px var(--font-sans);
-  color: var(--color-wr-fg);
-  background: var(--color-wr-bg);
-  outline: none;
-}
-.cev-input:focus {
-  border-color: var(--color-wr-accent);
 }
 .cev-row {
   display: grid;
@@ -1214,36 +1170,6 @@
   gap: 8px;
   margin-top: 2px;
 }
-/* ProjectPickerModal 공유 — CalendarEventModal은 shadcn Button 사용(2.8에서 정리). */
-.cev-btn {
-  border: none;
-  cursor: pointer;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  font: 500 14px var(--font-sans);
-  padding: 9px 22px;
-  border-radius: 999px;
-}
-.cev-btn:hover {
-  background: var(--color-wr-black);
-}
-.cev-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.cev-btn-ghost {
-  border: 1px solid var(--color-wr-border-light);
-  cursor: pointer;
-  background: var(--color-wr-bg);
-  font: 500 14px var(--font-sans);
-  color: var(--color-wr-fg);
-  padding: 8px 16px;
-  border-radius: 999px;
-}
-.cev-btn-ghost:hover {
-  background: var(--color-wr-surface);
-}
-
 /*
  * ── Enrich Modal (B3: 인플레이스 enrich 제안 모달) ──
  * CalendarEventModal(cev) 톤 재사용: 흰 패널 · thin border · near-black pill CTA.
