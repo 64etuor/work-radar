@@ -52,8 +52,9 @@
 ### 1.3 검증 (체크박스 = 실행 증거, prose 우회 금지)
 - **`git diff --exit-code src/bindings.ts` = 빈값** (전부 FE-only — IPC 표면 무변경 증명). **`bindings.ts`는 이 플랜 전체에서 무변경**(불변). 비면 잘못 건드린 것.
 - `pnpm typecheck`(0) · `pnpm lint`(신규 **에러** 0; react-hooks 경고는 기존 정책대로 비차단) · `pnpm build` green.
-- **모달/메뉴 슬라이스(3·5·6·7·8·23) = Playwright MCP 인터랙션 스모크 필수(hard gate)**: (a) 모달/메뉴 열기, (b) Esc 1회 → 오버레이만 닫힘 **AND 창 유지(`window.hide` 미호출)**, (c) 트리거 포커스 복원, (d) 메뉴는 보드 카드 selection 불변. **스모크 통과 증거 없으면 머지 금지.** (정적 게이트가 Esc/portal/focus 회귀를 못 잡으므로 자율 루프와 양립시키는 유일한 게이트.)
-- `pnpm tauri dev` **뷰 육안** — 그 외 시각 확인은 **사용자 관찰 항목**으로 명시(헤드리스 시각 QA 부재).
+- **모달/메뉴 슬라이스(3·5·6·7·8·23) = cmux 브라우저 인터랙션 스모크 필수(hard gate)**: (a) 모달/메뉴 열기, (b) Esc 1회 → 오버레이만 닫힘 **AND 창 유지(`window.hide` 미호출)**, (c) 트리거 포커스 복원, (d) 메뉴는 보드 카드 selection 불변. **스모크 통과 증거 없으면 머지 금지.** (정적 게이트가 Esc/portal/focus 회귀를 못 잡으므로 자율 루프와 양립시키는 게이트.)
+  - **cmux 스모크 메커니즘(검증됨 2026-05-24)**: `pnpm dev`(vite, :1420)에 cmux 브라우저로 접속 → `cmux browser addinitscript`로 tauri 스텁+hide 스파이 주입(`__TAURI_INTERNALS__.invoke`가 `hide` 호출을 `window.__omcHide`에 기록) → reload → 모달 트리거 click(eval) → `cmux browser press Escape` → `eval`로 `{hideCalls: window.__omcHide(빈배열), dialogRole(false)}` 단언. 실 모달에서 open `[role=dialog]`=true / Esc 후 false·hideCalls=[] 재현 완료. raw radix Dialog면 hideCalls 비지 않음 → 스모크 실패로 회귀 검출.
+- **시각 QA = cmux 브라우저 스크린샷**(`cmux browser screenshot --out`, vite dev 대상). 헤드리스로 뷰 렌더 확인 가능(앱이 IPC 미가용이어도 셸·레이아웃 렌더; tauri 스텁 주입 시 toast 노이즈 제거). 데이터 의존 시각은 여전히 사용자 관찰 보조.
 - 행위 보존: 핸들러/쿼리/IPC 무변경, className·마크업·프리미티브 컴포넌트만 교체.
 - **결정 레일 인접(보드 분류·accept/promote·Acceptance 게이트 버튼) 변경은 self-approve 금지** → `code-reviewer` 또는 `critic` 별도 패스로 INVARIANT #1/#2 + **Esc/focus/selection 불변** 확인.
 - 각 슬라이스 머지 시 `docs/decisions.md`에 한 줄 + 의도적 시각 변화 기록.
@@ -78,7 +79,7 @@
 - **lazy(YAGNI — 소비처 만날 때)**: `popover`·`toggle-group`·`separator`·`scroll-area`. (DESIGN.md가 popover를 요구하지 않고 Wave 1-2 소비처 없음 — critic 확인.)
 - **건드리지 않음**: ToastHost(커스텀 유지), CommandPalette(cmdk 유지).
 - **Done**: 래퍼 2종 + 표준 4종 추가; typecheck/build green; `bindings.ts` drift 0; **Playwright MCP 스모크로 Esc 계약 증명**(Dialog/DropdownMenu 열기 → Esc → 오버레이만 닫힘·창 유지·포커스 복원); 래퍼가 vanilla shadcn에서 벗어난 점 `decisions.md` 기록.
-  - **스모크 구현 메커니즘**: Tauri 런타임 없이 Chromium+`vite dev`에서 검증 가능 — 버그는 capture-vs-bubble 이벤트 전파라 host 무관. `browser_evaluate`로 `getCurrentWindow().hide`를 스파이(또는 App의 Esc hide-branch 도달 여부 관찰)해 **Esc 후 미호출** 단언. (이 레포엔 `@playwright/test` 미설치 — Playwright **MCP**로 구동, vite dev URL 대상.)
+  - **스모크 구현 메커니즘(cmux, 검증됨)**: `cmux browser`로 `vite dev`(:1420) 접속 → `addinitscript`로 tauri 스텁+`hide` 스파이 주입 → 모달 열고 `press Escape` → `eval`로 `window.__omcHide`(빈배열)·모달 닫힘 단언. §1.3 참조. (Playwright MCP는 tauri webview 미구동이라 불가 — cmux 브라우저로 해결.)
 
 ### PR 0.5 — settings 잔여 raw 정리 + commands.md MN1 [tiny]
 - `SettingsView`(b3)·`settings/NavigationSettings`(b2)·`settings/TokenRow`(b1)·`settings/kit.tsx`(b1)·`settings/GoogleCalendarBlock`(i1)의 잔여 raw 프리미티브 → shadcn.
