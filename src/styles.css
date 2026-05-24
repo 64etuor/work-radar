@@ -41,7 +41,22 @@
   --color-wr-danger: #b30000; /* 위험/오류 텍스트 (DESIGN.md Error Red) */
   --color-wr-danger-soft: #ffe7e0; /* 위험/경고 pale wash 배경 */
   --color-wr-danger-border: #e0b4a8; /* 위험 카드 보더 */
+  --color-wr-danger-border-strong: #f0c4b8; /* 위험 버튼/kill 보더 */
+  --color-wr-danger-hover: #ffd9cf; /* 위험 reject hover 배경 */
   --color-wr-success-soft: #e3f1ec; /* 긍정/정상 pale wash 배경 */
+
+  /* Diff semantic colors (worktree diff view) — dark-mode-safe */
+  --color-wr-diff-add-bg: #e6f4ec; /* add 줄 배경 */
+  --color-wr-diff-add-fg: #1d7a4d; /* add 줄 텍스트 */
+  --color-wr-diff-del-fg: #b30000; /* del 줄 텍스트 (=danger light; dark 별도 오버라이드) */
+  --color-wr-diff-hunk-fg: #1863dc; /* hunk 줄 텍스트 (=accent light; dark 별도 오버라이드) */
+
+  /* Component-specific surface tokens */
+  --color-wr-pale-green: #edfce9; /* work 분류 chip/seg/badge 배경 */
+  --color-wr-sticky-border: #c9c7c0; /* 스티키 노트 왼쪽 보더 */
+  --color-wr-on-dark-btn: #ffffff; /* near-black 버튼 위 텍스트 — 다크에서 배경이 #ededea로 반전돼 어두운 텍스트로 역전 */
+  --color-wr-on-coral-btn: #ffffff; /* coral/green 버튼 텍스트 — 다크 미반전(배경 미반전) */
+  --color-wr-popup-bg: #ffffff; /* 팝업/메뉴 배경 (다크에서 카드로 반전) */
 
   /*
    * 사분면 색 (결정 큐). 색만으로 의미 전달 금지 — 항상 라벨 병기.
@@ -176,7 +191,7 @@
   --cb-r-sm: 8px;
   --cb-r-md: 12px;
   --cb-r-lg: 16px;
-  --cb-pale-green: #edfce9;
+  --cb-pale-green: var(--color-wr-pale-green);
   display: flex;
   flex-direction: column;
   /* view-shell(=100vh - AgentStatusBar) 안을 채운다. 100vh면 에이전트 바(P10a 56px)만큼
@@ -343,7 +358,7 @@
   z-index: 5;
   background: var(--color-wr-bg);
   border: 1px solid var(--color-wr-border-light);
-  border-left: 4px solid #c9c7c0;
+  border-left: 4px solid var(--color-wr-sticky-border);
   border-radius: var(--cb-r-sm);
   padding: 10px 11px 24px;
   cursor: grab;
@@ -768,7 +783,7 @@
 }
 .cb .day.on {
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   border-color: var(--color-wr-near-black);
 }
 .cb .rform .row {
@@ -795,7 +810,7 @@
 }
 .cb .rfreq.on {
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   border-color: var(--color-wr-near-black);
 }
 .cb .rhint {
@@ -849,7 +864,7 @@
 .cb .rform .save {
   border: none;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   cursor: pointer;
   font: 500 12px var(--font-sans);
   padding: 5px 14px;
@@ -916,7 +931,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 14px var(--font-sans);
   padding: 9px 20px;
   border-radius: 999px;
@@ -934,7 +949,7 @@
   position: fixed;
   z-index: 80;
   min-width: 170px;
-  background: #fff;
+  background: var(--color-wr-popup-bg);
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--cb-r-md);
   box-shadow: 0 16px 40px rgba(10, 14, 30, 0.22);
@@ -1008,7 +1023,7 @@
   align-items: center;
   gap: 12px;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   padding: 9px 16px;
   border-radius: 999px;
   font: 500 13px var(--font-sans);
@@ -1025,7 +1040,7 @@
 }
 .cb-toast-link {
   background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   border: 0;
   padding: 3px 10px;
   border-radius: 999px;
@@ -1205,7 +1220,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 14px var(--font-sans);
   padding: 9px 22px;
   border-radius: 999px;
@@ -1327,7 +1342,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 14px var(--font-sans);
   padding: 9px 22px;
   border-radius: 999px;
@@ -1477,12 +1492,12 @@
   color: var(--color-wr-accent);
 }
 .settings .st-seg button.on[data-kind="work"] {
-  background: #edfce9;
+  background: var(--color-wr-pale-green);
   color: var(--color-wr-green);
 }
 .settings .st-seg button.on:not([data-kind]) {
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
 }
 
 .settings .st-actions {
@@ -1496,7 +1511,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 14px var(--font-sans);
   padding: 9px 22px;
   border-radius: 999px;
@@ -1576,7 +1591,7 @@
   color: var(--color-wr-accent);
 }
 .settings .st-chip.work {
-  background: #edfce9;
+  background: var(--color-wr-pale-green);
   color: var(--color-wr-green);
 }
 .settings .st-proj-body {
@@ -1826,7 +1841,7 @@
   color: var(--color-wr-muted);
 }
 .settings .st-repo-prov.github {
-  background: #edfce9;
+  background: var(--color-wr-pale-green);
   color: var(--color-wr-green);
 }
 .settings .st-repo-loc {
@@ -2040,7 +2055,7 @@
 }
 .pr .pr-esc {
   background: var(--color-wr-coral);
-  color: #fff;
+  color: var(--color-wr-on-coral-btn);
 }
 /* Legacy card meta token reuse for row meta */
 .pr .pr-card-meta {
@@ -2679,16 +2694,16 @@
   min-height: 18px;
 }
 .wt .wt-l-add {
-  background: #e6f4ec;
-  color: #1d7a4d;
+  background: var(--color-wr-diff-add-bg);
+  color: var(--color-wr-diff-add-fg);
 }
 .wt .wt-l-del {
   background: var(--color-wr-danger-soft);
-  color: var(--color-wr-danger);
+  color: var(--color-wr-diff-del-fg);
 }
 .wt .wt-l-hunk {
   background: var(--color-wr-accent-soft);
-  color: var(--color-q3);
+  color: var(--color-wr-diff-hunk-fg);
 }
 .wt .wt-l-meta {
   color: var(--color-wr-subtle);
@@ -2925,7 +2940,7 @@
 .jobs .jobs-btn-primary {
   background: var(--color-wr-coral);
   border-color: var(--color-wr-coral);
-  color: #fff;
+  color: var(--color-wr-on-coral-btn);
   align-self: flex-start;
 }
 .jobs .jobs-codex-form {
@@ -3017,7 +3032,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid #f0c4b8;
+  border: 1px solid var(--color-wr-danger-border-strong);
   background: var(--color-wr-danger-soft);
   color: var(--color-wr-danger);
   border-radius: 999px;
@@ -3192,12 +3207,12 @@
   margin-top: 2px;
 }
 .jobs .jobs-reject {
-  border: 1px solid #f0c4b8;
+  border: 1px solid var(--color-wr-danger-border-strong);
   background: var(--color-wr-danger-soft);
   color: var(--color-wr-danger);
 }
 .jobs .jobs-reject:hover:not(:disabled) {
-  background: #ffd9cf;
+  background: var(--color-wr-danger-hover);
 }
 
 /* ── Today 운영 뷰 (Phase 11a) ─────────────────────────────────────────────── */
@@ -4685,7 +4700,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 13px var(--font-sans);
   padding: 9px 18px;
   border-radius: 999px;
@@ -4937,7 +4952,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 13px var(--font-sans);
   padding: 9px 18px;
   border-radius: 999px;
@@ -5016,13 +5031,13 @@
 
 .toast-error {
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .toast-success {
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -5071,7 +5086,7 @@
 .toast-error .toast-btn,
 .toast-success .toast-btn {
   background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
 }
 .toast-error .toast-btn:hover,
 .toast-success .toast-btn:hover {
@@ -5156,7 +5171,7 @@
 
 .error-boundary-btn-primary {
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   border-color: var(--color-wr-near-black);
 }
 .error-boundary-btn-primary:hover {
@@ -5399,7 +5414,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 13px var(--font-sans);
   padding: 8px 18px;
   border-radius: 999px;
@@ -5732,7 +5747,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 13px var(--font-sans);
   padding: 8px 18px;
   border-radius: 999px;
@@ -5824,7 +5839,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 13px var(--font-sans);
   padding: 8px 18px;
   border-radius: 999px;
@@ -6018,7 +6033,7 @@
   border: none;
   cursor: pointer;
   background: var(--color-wr-near-black);
-  color: #fff;
+  color: var(--color-wr-on-dark-btn);
   font: 500 14px var(--font-sans);
   padding: 9px 22px;
   border-radius: 999px;
@@ -6132,6 +6147,20 @@
   --color-wr-success-soft: #16312a;
   --color-wr-danger-soft: #3a1f1f;
   --color-wr-elevated: #202027;
+
+  /* Diff dark overrides */
+  --color-wr-diff-add-bg: #16312a;
+  --color-wr-diff-add-fg: #5fb89e;
+  --color-wr-diff-del-fg: #ff6b6b;
+  --color-wr-diff-hunk-fg: #6b9bf0;
+
+  /* Component surface dark overrides */
+  --color-wr-pale-green: #16312a;
+  --color-wr-sticky-border: #4a4840;
+  --color-wr-danger-border-strong: #5a2a20;
+  --color-wr-danger-hover: #4a1f18;
+  --color-wr-on-dark-btn: #131318;
+  --color-wr-popup-bg: #1a1a20;
 }
 
 @theme inline {
