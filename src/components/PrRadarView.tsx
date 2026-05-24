@@ -204,7 +204,6 @@ function PrRow({
         <span className={`pr-ci pr-ci-${item.ci}`}>{CI_LABEL[item.ci]}</span>
         {item.hasConflict && <span className="pr-flag pr-conflict">충돌</span>}
         {item.isDraft && <span className="pr-flag">draft</span>}
-        {item.escalated && <span className="pr-badge pr-esc">매트릭스 ↑</span>}
         <span className={`prr-comments${item.isSuspicious ? " prr-suspicious" : ""}`}>
           {item.isSuspicious && <TriangleAlert className="size-3" />}
           {item.commentCount}

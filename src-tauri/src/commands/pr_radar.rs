@@ -136,8 +136,6 @@ async fn sync_pr_radar<P: PrProvider>(
                 is_draft: pr.is_draft,
                 self_checked,
                 age_days: elapsed.max(0) as u32,
-                // 표시 전용 전환(PR B): 더 이상 escalate하지 않으므로 항상 false.
-                escalated: false,
                 project_id: project_id.to_string(),
                 comment_count: pr.comment_count,
                 is_suspicious: pr.comment_count > SUSPICIOUS_COMMENT_THRESHOLD,
@@ -455,7 +453,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(items.len(), 1);
-        assert!(!items[0].escalated, "표시 전용 → escalated는 항상 false");
         assert_eq!(items[0].bucket, ReadinessBucket::CiBlocked);
 
         let n: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM signals WHERE source = 'github_pr'")
@@ -476,6 +473,14 @@ mod tests {
         // 레거시 escalated PR 신호(표시 전용 전환 전에 만들어진 것)를 시드.
         seed_legacy_pr_signal(&db, &proj.id, 42).await;
         assert_eq!(pr_signal_statuses(&db).await, vec!["new"], "시드는 active");
+        // 사람이 quadrant를 결정(set_quadrant는 status도 classified로 전이)한 상태를 모사 —
+        // CI-green 정리 경로에서도 그 quadrant가 보존돼야 함(INVARIANT #1).
+        let id: (String,) =
+            sqlx::query_as("SELECT id FROM signals WHERE source = 'github_pr' LIMIT 1")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        set_quadrant(&db, &id.0, Quadrant::Q1DoNow).await.unwrap();
 
         // 같은 PR이 CI green으로 fetch됨 → active_keys 비어 있음 → 레거시 신호 정리.
         let provider = FakeProvider::new(vec![raw_pr(
@@ -487,10 +492,20 @@ mod tests {
         sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
             .await
             .unwrap();
+        // CI-green 정리 경로: status만 done으로 전이하고 사람 quadrant는 보존(INVARIANT #1).
+        let row: (String, String) = sqlx::query_as(
+            "SELECT status, quadrant FROM signals WHERE source = 'github_pr' LIMIT 1",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
         assert_eq!(
-            pr_signal_statuses(&db).await,
-            vec!["done"],
-            "원인 해소(또는 표시 전용 전환) → auto-resolve"
+            row.0, "done",
+            "원인 해소(CI green) → status만 done으로 auto-resolve"
+        );
+        assert_eq!(
+            row.1, "q1_do_now",
+            "CI-green 정리 경로에서도 사람 quadrant 보존(INVARIANT #1)"
         );
     }
 

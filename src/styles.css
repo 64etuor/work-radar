@@ -1590,15 +1590,6 @@
   gap: 6px;
   flex: 0 0 auto;
 }
-.pr .pr-badge {
-  font: 600 10px var(--font-mono);
-  padding: 2px 7px;
-  border-radius: 999px;
-}
-.pr .pr-esc {
-  background: var(--color-wr-coral);
-  color: var(--color-wr-on-coral-btn);
-}
 /* Legacy card meta token reuse for row meta */
 .pr .pr-card-meta {
   display: flex;
