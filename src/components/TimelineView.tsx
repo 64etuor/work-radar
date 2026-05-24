@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 
 import type { CalendarEvent, WorkSignal } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import {
   ageFromForDate,
   localToday,
@@ -84,27 +86,45 @@ export function TimelineView() {
   return (
     <div className="tl">
       <header className="tl-head" data-tauri-drag-region>
-        <button type="button" className="tl-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="tl-title">Timeline</span>
         <div className="tl-nav">
-          <button type="button" className="tl-navbtn" onClick={() => setDate(shiftDate(date, -1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="size-8 p-0"
+            aria-label="이전 날짜"
+            onClick={() => setDate(shiftDate(date, -1))}
+          >
             <ChevronLeft className="size-4" />
-          </button>
-          <button
-            type="button"
-            className={`tl-date${isToday ? " tl-date-today" : ""}`}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("gap-1.5 rounded-md font-mono", isToday && "border-wr-accent")}
             onClick={() => setDate(today)}
             title="오늘로"
           >
             {date}
             {isToday && <span className="tl-today-tag">오늘</span>}
-          </button>
-          <button type="button" className="tl-navbtn" onClick={() => setDate(shiftDate(date, 1))}>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="size-8 p-0"
+            aria-label="다음 날짜"
+            onClick={() => setDate(shiftDate(date, 1))}
+          >
             <ChevronRight className="size-4" />
-          </button>
+          </Button>
         </div>
       </header>
 

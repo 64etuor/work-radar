@@ -2550,53 +2550,11 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.tl .tl-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.tl .tl-back:hover {
-  background: var(--color-wr-surface);
-}
 .tl .tl-nav {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-.tl .tl-navbtn {
-  display: inline-flex;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 8px;
-  padding: 4px;
-  cursor: pointer;
-  color: var(--color-wr-fg);
-}
-.tl .tl-navbtn:hover {
-  background: var(--color-wr-surface);
-}
-.tl .tl-date {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 8px;
-  padding: 4px 12px;
-  cursor: pointer;
-  font: 500 12px var(--font-mono);
-  color: var(--color-wr-fg);
-}
-.tl .tl-date-today {
-  border-color: var(--color-wr-accent);
 }
 .tl .tl-today-tag {
   font: 600 9px var(--font-mono);
