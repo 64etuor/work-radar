@@ -3891,24 +3891,6 @@
   letter-spacing: 0.12em;
   color: var(--color-wr-subtle);
 }
-.caldrawer-seg {
-  display: inline-flex;
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.caldrawer-seg button {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 5px 12px;
-  font: 600 12px var(--font-sans);
-  color: var(--color-wr-subtle);
-}
-.caldrawer-seg button.on {
-  background: var(--color-wr-accent-soft);
-  color: var(--color-wr-accent);
-}
 .caldrawer-close {
   margin-left: auto;
   border: none;
@@ -3928,40 +3910,6 @@
   gap: 6px;
   padding: 10px 18px;
   border-bottom: 1px solid var(--color-wr-border-light);
-}
-.caldrawer-navbtn,
-.caldrawer-refresh {
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  cursor: pointer;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  font-size: 15px;
-  color: var(--color-wr-fg);
-}
-.caldrawer-navbtn:hover,
-.caldrawer-refresh:hover {
-  background: var(--color-wr-surface);
-}
-.caldrawer-refresh {
-  margin-left: auto;
-}
-.caldrawer-refresh:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.caldrawer-today {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font: 600 13px var(--font-sans);
-  color: var(--color-wr-fg);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-}
-.caldrawer-today:hover {
-  background: var(--color-wr-surface);
 }
 .caldrawer-body {
   flex: 1;
@@ -4006,18 +3954,6 @@
   margin: 0;
   font: 400 13px var(--font-sans);
   color: var(--color-wr-muted);
-}
-.caldrawer-connect {
-  border: none;
-  cursor: pointer;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  font: 500 13px var(--font-sans);
-  padding: 8px 18px;
-  border-radius: 999px;
-}
-.caldrawer-connect:hover {
-  background: var(--color-wr-black);
 }
 
 /*

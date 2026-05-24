@@ -14,6 +14,8 @@ import {
   useProjects,
 } from "@/lib/query";
 import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useUIStore } from "@/store";
 
 type Props = {
@@ -69,9 +71,13 @@ export function CalendarDrawer({ open, onClose }: Props) {
       return !ids || ids === "[]";
     });
 
-  // ESC로 닫기.
+  // ESC로 닫기 + 트리거(캘린더 열기 버튼) 포커스 복원.
+  // capture-phase + stopPropagation: App 셸의 bubble Esc→window.hide()보다 먼저 가로채 창 숨김을 막는다
+  // (plan §0.6 — radix Dialog로 바꾸지 않고 bespoke 드로어가 직접 계약 인코딩). 닫힐 때 열기 직전
+  // 포커스(트리거)를 복원해 모달/메뉴 슬라이스 hard gate (c)를 만족(원래 없던 동작 — focus body 누수 방지).
   useEffect(() => {
     if (!open) return;
+    const trigger = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -79,7 +85,10 @@ export function CalendarDrawer({ open, onClose }: Props) {
       }
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      trigger?.focus?.();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -102,18 +111,23 @@ export function CalendarDrawer({ open, onClose }: Props) {
       >
         <header className="caldrawer-head">
           <span className="caldrawer-mark">CALENDAR</span>
-          <div className="caldrawer-seg">
+          <ToggleGroup
+            type="single"
+            value={mode}
+            onValueChange={(v) => v && setMode(v as CalendarViewMode)}
+            className="overflow-hidden rounded-full border border-wr-border-light"
+          >
             {(["day", "week", "month"] as CalendarViewMode[]).map((m) => (
-              <button
+              <ToggleGroupItem
                 key={m}
-                type="button"
-                className={mode === m ? "on" : ""}
-                onClick={() => setMode(m)}
+                value={m}
+                size="sm"
+                className="font-semibold text-wr-subtle data-[state=on]:bg-wr-accent-soft data-[state=on]:text-wr-accent"
               >
                 {MODE_LABEL[m]}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
           <button
             type="button"
             className="caldrawer-close"
@@ -125,39 +139,47 @@ export function CalendarDrawer({ open, onClose }: Props) {
         </header>
 
         <div className="caldrawer-nav">
-          <button
+          <Button
             type="button"
-            className="caldrawer-navbtn"
+            variant="outline"
+            size="sm"
+            className="size-7 p-0 text-[15px]"
             aria-label="이전"
             onClick={() => setDate((d) => stepDate(mode, d, -1))}
           >
             ‹
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="caldrawer-today"
+            variant="ghost"
+            size="sm"
+            className="text-[13px] font-semibold"
             onClick={() => setDate(localToday())}
           >
             {headerLabel(mode, date)}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="caldrawer-navbtn"
+            variant="outline"
+            size="sm"
+            className="size-7 p-0 text-[15px]"
             aria-label="다음"
             onClick={() => setDate((d) => stepDate(mode, d, 1))}
           >
             ›
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="caldrawer-refresh"
+            variant="outline"
+            size="sm"
+            className="ml-auto size-7 p-0 text-[15px]"
             aria-label="새로고침"
             title="새로고침 (캐시 우회)"
             onClick={() => void refresh()}
             disabled={eventsQ.isFetching}
           >
             ⟳
-          </button>
+          </Button>
         </div>
 
         <div className="caldrawer-body">
@@ -166,16 +188,16 @@ export function CalendarDrawer({ open, onClose }: Props) {
               <p className="caldrawer-state-msg">
                 Google Calendar가 연결되지 않았습니다.
               </p>
-              <button
+              <Button
                 type="button"
-                className="caldrawer-connect"
+                className="rounded-full px-[18px] text-[13px]"
                 onClick={() => {
                   onClose();
                   goTo("settings");
                 }}
               >
                 Google Calendar 연결
-              </button>
+              </Button>
             </div>
           ) : eventsQ.isLoading ? (
             <div className="caldrawer-skeleton">
@@ -188,13 +210,13 @@ export function CalendarDrawer({ open, onClose }: Props) {
               <p className="caldrawer-state-msg">
                 일정을 불러오지 못했습니다 — {String(eventsQ.error)}
               </p>
-              <button
+              <Button
                 type="button"
-                className="caldrawer-connect"
+                className="rounded-full px-[18px] text-[13px]"
                 onClick={() => void eventsQ.refetch()}
               >
                 재시도
-              </button>
+              </Button>
             </div>
           ) : (
             <CalendarView
