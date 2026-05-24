@@ -30,7 +30,7 @@ const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
  * 브랜드 헤더 우측 존 스프린트 카운트다운 (P11) — DESIGN.md `sprint-timer` 정본.
  * 에이전트 바와 **분리**된 헤더 우측 존. 'D일 HH:MM' CohereMono, **1s tick**,
  * overdue=Coral + '지남' 라벨(색+라벨 병기). 미설정 시 "스프린트 설정" 텍스트 링크(empty).
- * 클릭 → 팝오버 에디터(interval_days 스테퍼 + 기준요일·시각 피커 + 저장).
+ * 클릭 → Dialog 에디터(interval_days 스테퍼 + 기준요일·시각 피커 + 저장).
  *
  * 다음 경계 계산 SSOT = Rust `next_boundary`(직접 구현 + cargo test, rrule 미사용, DST 안전).
  * 프런트는 받은 경계 RFC3339로 로컬 1s tick 표시만 한다(drift 없음 — 경계는 anchor+interval로 매번 산출).
@@ -102,7 +102,7 @@ const DEFAULT_CONFIG: SprintConfig = {
   anchorTime: "21:00",
 };
 
-/** 팝오버 에디터: interval_days 스테퍼 + 기준요일·시각 피커 + 저장(흰 카드 radius lg). */
+/** Dialog 에디터(shadcn Dialog 래퍼): interval_days 스테퍼 + 기준요일·시각 피커 + 저장. */
 function SprintEditor({ config, onClose }: EditorProps) {
   // Esc/외부 클릭/포커스 복원/마운트는 PR 0 Dialog 래퍼(overlay-stack 계약, radix)가 전담(plan §0.6).
   // 필드 본체는 DialogContent 자식이라 열릴 때마다 마운트 → draft가 config로 매번 초기화된다.
