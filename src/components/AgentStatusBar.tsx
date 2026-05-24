@@ -1,3 +1,4 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
@@ -219,7 +220,13 @@ export function AgentStatusBar() {
   const openBox = (box: SessionBox) => {
     if (box.engine === "hermes") setHermesOpen(true);
     else if (box.key.startsWith("cmux:"))
-      focusCmux.mutate(box.key.slice("cmux:".length));
+      // cmux 딥링크: 포커스 이동이 실제 성공(true)하면 Work Radar 창을 숨겨 cmux에 자리 양보.
+      // best-effort 실패(false)면 숨기지 않는다 — 앞에 뜨는 창이 없는데 앱만 사라지는 상황 방지.
+      focusCmux.mutate(box.key.slice("cmux:".length), {
+        onSuccess: (focused) => {
+          if (focused) void getCurrentWindow().hide();
+        },
+      });
     else goTo("jobs");
   };
   const commitName = (sessionKey: string, defaultName: string, next: string) => {
