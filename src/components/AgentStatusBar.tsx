@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bot,
   Calendar,
-  MessageCircle,
-  Send,
+  MessagesSquare,
+  PanelsTopLeft,
   Sparkles,
   SquareTerminal,
 } from "lucide-react";
@@ -80,17 +81,23 @@ function isActive(s: AgentStatus): boolean {
   return s === "running" || s === "proposed" || s === "awaiting_approval";
 }
 
-/** engine → lucide thin-line 아이콘. */
-function EngineIcon({ engine, size = 13 }: { engine: Engine; size?: number }) {
-  switch (engine) {
+/**
+ * box → lucide thin-line 아이콘.
+ * cmux 세션은 engine="claude"로 들어오지만 멀티플렉서 정체성을 위해 별도 식별(분할 패널).
+ * 식별은 key 접두사("cmux:")로 — openBox 라우팅과 동일 규약.
+ */
+function BoxIcon({ box, size = 13 }: { box: SessionBox; size?: number }) {
+  if (box.key.startsWith("cmux:"))
+    return <PanelsTopLeft size={size} strokeWidth={1.5} />;
+  switch (box.engine) {
     case "codex":
       return <SquareTerminal size={size} strokeWidth={1.5} />;
     case "hermes":
-      return <Send size={size} strokeWidth={1.5} />;
+      return <MessagesSquare size={size} strokeWidth={1.5} />;
     case "claude":
       return <Sparkles size={size} strokeWidth={1.5} />;
     default:
-      return <MessageCircle size={size} strokeWidth={1.5} />;
+      return <Bot size={size} strokeWidth={1.5} />;
   }
 }
 
@@ -357,7 +364,7 @@ function AgentBox({
         title={box.stateLabel}
       />
       <span className="asb-box-icon">
-        <EngineIcon engine={box.engine} size={13} />
+        <BoxIcon box={box} size={13} />
       </span>
       {editing ? (
         <NameEditor initial={displayName} onCommit={onCommit} onCancel={onCancel} />
