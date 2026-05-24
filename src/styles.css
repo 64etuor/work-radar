@@ -580,7 +580,7 @@
 .cb .item .cb-check svg {
   width: 11px;
   height: 11px;
-  stroke: #fff;
+  stroke: var(--color-wr-on-coral-btn); /* 항상 흰색(다크 미반전) — 초록 체크칩 위 화이트 체크 */
   /* thin-line 정렬: 3 → 2 (11px white-on-green 체크는 1.5면 너무 얇아 가독성 위해 2 유지). */
   stroke-width: 2;
   fill: none;
