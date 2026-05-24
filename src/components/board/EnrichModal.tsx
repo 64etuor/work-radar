@@ -9,6 +9,19 @@ import {
 import { useToastStore } from "@/lib/toast";
 import { commands } from "@/bindings";
 import { unwrap } from "@/lib/query/client";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+
+/** area select 미설정 센티넬 — radix Select는 빈 문자열 value를 허용하지 않는다. */
+const AREA_NONE = "__none__";
 
 /** EnrichModal에서 사용하는 닫힌 세트 옵션들 (JobsView.tsx EnrichPanel에서 미러). */
 const QUADRANT_OPTS: { value: Quadrant; label: string }[] = [
@@ -113,17 +126,7 @@ export function EnrichModal({ runId, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
-  // Esc로 닫기
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  // Esc/외부 클릭/창 양보는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
 
   // 실패 시 error toast
   useEffect(() => {
@@ -163,14 +166,20 @@ export function EnrichModal({ runId, onClose }: Props) {
     proposal.data ?? { suggestedQuadrant: null, suggestedArea: null, reason: null };
 
   return (
-    <div className="enrich-modal-overlay" onPointerDown={onClose}>
-      <div
-        className="enrich-modal-panel"
-        role="dialog"
-        aria-label="AI 제안 확인"
-        onPointerDown={(e) => e.stopPropagation()}
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
+      <DialogContent
+        showClose={false}
+        aria-describedby={undefined}
+        className="max-h-[78vh] w-[min(400px,92vw)] max-w-none gap-3 overflow-y-auto p-5"
       >
-        <div className="enrich-modal-head">AI 제안 — 영역 / 사분면</div>
+        <DialogTitle className="font-mono text-[13px] font-semibold uppercase tracking-[0.1em]">
+          AI 제안 — 영역 / 사분면
+        </DialogTitle>
 
         {/* 실행 중 스피너 */}
         {!TERMINAL.has(status) && (
@@ -207,46 +216,53 @@ export function EnrichModal({ runId, onClose }: Props) {
           </div>
         )}
 
-        {/* 편집 가능한 제안 폼 */}
+        {/* 편집 가능한 제안 폼 (suggested-only — INVARIANT #1) */}
         {proposalReady && proposal.data && (
           <>
             <label className="enrich-modal-label">제안 사분면 (힌트 — 자동 분류 아님)</label>
-            <select
-              className="enrich-modal-select"
+            <Select
               value={d.suggestedQuadrant ?? "unclassified"}
-              onChange={(e) =>
-                setDraft({ ...d, suggestedQuadrant: e.target.value as Quadrant })
+              onValueChange={(v) =>
+                setDraft({ ...d, suggestedQuadrant: v as Quadrant })
               }
             >
-              {QUADRANT_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {QUADRANT_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <label className="enrich-modal-label">제안 영역 (라이프 도메인)</label>
-            <select
-              className="enrich-modal-select"
-              value={d.suggestedArea ?? ""}
-              onChange={(e) =>
+            <Select
+              value={d.suggestedArea ?? AREA_NONE}
+              onValueChange={(v) =>
                 setDraft({
                   ...d,
-                  suggestedArea: (e.target.value || null) as AreaTag | null,
+                  suggestedArea: v === AREA_NONE ? null : (v as AreaTag),
                 })
               }
             >
-              <option value="">(미설정)</option>
-              {AREA_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={AREA_NONE}>(미설정)</SelectItem>
+                {AREA_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <label className="enrich-modal-label">근거</label>
-            <textarea
-              className="enrich-modal-textarea"
+            <Textarea
               rows={2}
               value={d.reason ?? ""}
               onChange={(e) => setDraft({ ...d, reason: e.target.value })}
@@ -268,24 +284,23 @@ export function EnrichModal({ runId, onClose }: Props) {
         <div className="enrich-modal-actions">
           {/* 수락 버튼: awaiting_approval + proposal 있을 때만 */}
           {proposalReady && proposal.data && (
-            <button
-              type="button"
-              className="enrich-modal-btn"
+            <Button
+              className="rounded-full px-[22px]"
               disabled={acceptEnrich.isPending}
               onClick={handleAccept}
             >
               수락
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            className="enrich-modal-btn-ghost"
+          <Button
+            variant="outline"
+            className="rounded-full"
             onClick={() => void handleCancel()}
           >
             {status === "running" || status === "proposed" ? "취소" : "닫기"}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
