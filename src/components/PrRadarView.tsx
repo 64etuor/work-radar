@@ -12,6 +12,7 @@ import {
   useTriggerPrSelfcheck,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
+import { Button } from "@/components/ui/button";
 
 /** 5개 readiness 버킷 표시 순서 + 라벨 (PLAN.md Phase 4). */
 const BUCKETS: { key: ReadinessBucket; label: string; hint: string }[] = [
@@ -78,10 +79,15 @@ export function PrRadarView() {
   return (
     <div className="pr">
       <header className="pr-head" data-tauri-drag-region>
-        <button type="button" className="pr-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full text-[12px]"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="pr-title">PR Radar</span>
         <span className="pr-poll">
           <RefreshCw className={`size-3.5${isFetching ? " pr-spin" : ""}`} />
@@ -213,9 +219,10 @@ function PrRow({
       </div>
       <div className="prr-actions">
         {canDraft && (
-          <button
-            type="button"
-            className="pr-draft"
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 rounded-full text-[11px] text-[color:var(--color-wr-action-blue,#2d6cdf)]"
             disabled={!codexReady || drafting}
             title={
               codexReady
@@ -226,12 +233,13 @@ function PrRow({
           >
             <Bot className="size-3.5" />
             코드 리뷰
-          </button>
+          </Button>
         )}
         {canTriage && (
-          <button
-            type="button"
-            className="pr-draft"
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 rounded-full text-[11px] text-[color:var(--color-wr-action-blue,#2d6cdf)]"
             disabled={!codexReady || triaging}
             title={
               codexReady
@@ -242,16 +250,17 @@ function PrRow({
           >
             <Bot className="size-3.5" />
             CI triage
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className="pr-open"
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-1 rounded-full text-[11px]"
           onClick={() => void openExternal(item.url)}
         >
           <ExternalLink className="size-3.5" />
           열기
-        </button>
+        </Button>
       </div>
     </div>
   );

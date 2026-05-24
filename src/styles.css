@@ -1437,21 +1437,6 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.pr .pr-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.pr .pr-back:hover {
-  background: var(--color-wr-surface);
-}
 .pr .pr-poll {
   margin-left: auto;
   display: inline-flex;
@@ -1648,42 +1633,6 @@
   gap: 10px;
   margin-top: 1px;
 }
-.pr .pr-open {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font: 500 11px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.pr .pr-open:hover {
-  background: var(--color-wr-surface);
-}
-.pr .pr-draft {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font: 500 11px var(--font-sans);
-  color: var(--color-wr-action-blue, #2d6cdf);
-}
-.pr .pr-draft:hover:not(:disabled) {
-  background: var(--color-wr-surface);
-}
-.pr .pr-draft:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 /* ──────────────────────────────────────────────────────────────────────────────
  * Worktree & Branch Diff (Phase 5) — read-only diff 뷰어. white editorial, .wt 스코프.
  * ────────────────────────────────────────────────────────────────────────────── */
