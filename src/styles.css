@@ -1127,6 +1127,8 @@
  * ── 캘린더 이벤트 등록 모달 (직접 write, Phase 19) ──
  * Cohere white editorial: 흰 패널 · thin border · near-black pill CTA. cmdk 오버레이 톤 재사용.
  */
+/* NOTE: .cev-overlay/panel/head/input/btn/btn-ghost는 ProjectPickerModal(아직 미변환)이 공유 사용 중 —
+   CalendarEventModal은 shadcn로 변환됨. 이 공유 클래스 dead 정리는 ProjectPickerModal 변환 슬라이스(2.8)에서. */
 .cev-overlay {
   position: fixed;
   inset: 0;
@@ -1165,6 +1167,7 @@
   font: 500 11px var(--font-sans);
   color: var(--color-wr-subtle);
 }
+/* ProjectPickerModal 공유 — CalendarEventModal은 shadcn Input 사용(2.8에서 정리). */
 .cev-input {
   width: 100%;
   box-sizing: border-box;
@@ -1178,11 +1181,6 @@
 }
 .cev-input:focus {
   border-color: var(--color-wr-accent);
-}
-.cev-textarea {
-  resize: vertical;
-  min-height: 48px;
-  font-family: var(--font-sans);
 }
 .cev-row {
   display: grid;
@@ -1216,6 +1214,7 @@
   gap: 8px;
   margin-top: 2px;
 }
+/* ProjectPickerModal 공유 — CalendarEventModal은 shadcn Button 사용(2.8에서 정리). */
 .cev-btn {
   border: none;
   cursor: pointer;

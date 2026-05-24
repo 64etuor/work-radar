@@ -6,6 +6,17 @@ import {
   useSelectedCalendars,
 } from "@/lib/query";
 import { useToastStore } from "@/lib/toast";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 
 /** 모달이 다룰 카드 컨텍스트(제목 prefill + 어느 프로젝트의 캘린더를 쓸지). */
 export type CalendarModalState = {
@@ -90,18 +101,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
     }
   }, [calendars, calendarId]);
 
-  // Esc로 닫기.
-  useEffect(() => {
-    if (!state) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [state, onClose]);
+  // Esc/외부 클릭/창 양보는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
 
   if (!state) return null;
 
@@ -165,19 +165,24 @@ export function CalendarEventModal({ state, onClose }: Props) {
   };
 
   return (
-    <div className="cev-overlay" onPointerDown={onClose}>
-      <div
-        className="cev-panel"
-        role="dialog"
-        aria-label="캘린더 이벤트 등록"
-        onPointerDown={(e) => e.stopPropagation()}
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
+      <DialogContent
+        showClose={false}
+        aria-describedby={undefined}
+        className="max-h-[78vh] w-[min(440px,92vw)] max-w-none gap-3 overflow-y-auto p-5"
       >
-        <div className="cev-head">캘린더에 등록</div>
+        <DialogTitle className="font-mono text-[13px] font-semibold uppercase tracking-[0.1em]">
+          캘린더에 등록
+        </DialogTitle>
 
         <label className="cev-field">
           <span className="cev-lbl">제목</span>
-          <input
-            className="cev-input"
+          <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="이벤트 제목"
@@ -185,6 +190,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
           />
         </label>
 
+        {/* 종일 토글: 행 클릭 토글(label) 접근성 유지 위해 native checkbox 보존(plan keep 정책). */}
         <label className="cev-check">
           <input
             type="checkbox"
@@ -197,8 +203,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
         <div className="cev-row">
           <label className="cev-field">
             <span className="cev-lbl">시작</span>
-            <input
-              className="cev-input"
+            <Input
               type={allDay ? "date" : "datetime-local"}
               value={allDay ? start.slice(0, 10) : start}
               onChange={(e) => setStart(e.target.value)}
@@ -206,8 +211,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
           </label>
           <label className="cev-field">
             <span className="cev-lbl">종료</span>
-            <input
-              className="cev-input"
+            <Input
               type={allDay ? "date" : "datetime-local"}
               value={allDay ? end.slice(0, 10) : end}
               onChange={(e) => setEnd(e.target.value)}
@@ -223,25 +227,28 @@ export function CalendarEventModal({ state, onClose }: Props) {
               선택하세요.
             </div>
           ) : (
-            <select
-              className="cev-input"
+            <Select
               value={calendarId}
-              onChange={(e) => setCalendarId(e.target.value)}
+              onValueChange={setCalendarId}
               disabled={calendarsQ.isLoading}
             >
-              {calendars.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.summary}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue placeholder="캘린더 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {calendars.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.summary}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </label>
 
         <label className="cev-field">
           <span className="cev-lbl">설명 (선택)</span>
-          <textarea
-            className="cev-input cev-textarea"
+          <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="메모"
@@ -254,12 +261,11 @@ export function CalendarEventModal({ state, onClose }: Props) {
         )}
 
         <div className="cev-actions">
-          <button type="button" className="cev-btn-ghost" onClick={onClose}>
+          <Button variant="outline" className="rounded-full" onClick={onClose}>
             취소
-          </button>
-          <button
-            type="button"
-            className="cev-btn"
+          </Button>
+          <Button
+            className="rounded-full px-[22px]"
             onClick={submit}
             disabled={
               create.isPending ||
@@ -276,7 +282,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
             }
           >
             {create.isPending ? "등록 중…" : "등록"}
-          </button>
+          </Button>
         </div>
         {!projectId && (
           <div className="cev-hint">
@@ -287,7 +293,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
         <div className="cev-hint">
           오늘: {localToday()} · 폼 제출이 곧 등록입니다(승인 대기 없음).
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
