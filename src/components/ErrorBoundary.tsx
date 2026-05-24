@@ -12,6 +12,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 import { commands } from "@/bindings";
 import { genTraceId } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   children: ReactNode;
@@ -68,20 +69,19 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="error-boundary-trace">trace: {traceId}</p>
           )}
           <div className="error-boundary-actions">
-            <button
-              type="button"
-              className="error-boundary-btn error-boundary-btn-primary"
+            <Button
+              className="rounded-full text-[13px] font-semibold"
               onClick={this.reset}
             >
               다시 시도
-            </button>
-            <button
-              type="button"
-              className="error-boundary-btn"
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-full text-[13px] font-semibold"
               onClick={() => void navigator.clipboard.writeText(copyText)}
             >
               복사
-            </button>
+            </Button>
           </div>
         </div>
       </div>

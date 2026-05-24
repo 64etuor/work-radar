@@ -4636,29 +4636,7 @@
   display: flex;
   gap: 8px;
 }
-
-.error-boundary-btn {
-  border: 1px solid var(--color-wr-border);
-  background: var(--color-wr-bg);
-  color: var(--color-wr-fg);
-  cursor: pointer;
-  border-radius: 999px;
-  padding: 6px 16px;
-  font: 600 13px var(--font-sans);
-  transition: background var(--wr-motion-fast);
-}
-.error-boundary-btn:hover {
-  background: var(--color-wr-hover);
-}
-
-.error-boundary-btn-primary {
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  border-color: var(--color-wr-near-black);
-}
-.error-boundary-btn-primary:hover {
-  background: var(--color-wr-black);
-}
+/* 액션 버튼은 shadcn Button(다시 시도=filled pill, 복사=outline pill, Wave 1.4). */
 
 /* ── Spinner (A7) ────────────────────────────────────────────────────────── */
 
