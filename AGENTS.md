@@ -31,6 +31,10 @@
 - **bounded retry only** — 무한 retry/poll 금지. backoff + jitter + terminal failure 노출.
 - **SQLite 마이그레이션**으로만 스키마 변경. 임의 ALTER 금지.
 - **시각 디자인은 `DESIGN.md`(정본)을 따른다.** Cohere 스타일(white editorial). 토큰(컬러/타이포/라운드/스페이싱)은 Tailwind v4 `@theme`, 컴포넌트는 shadcn/ui 위에. 웹/마케팅 전용 컴포넌트(announcement-bar·trust-logo-strip·blog-filter-chip·research-table·footer-newsletter)는 데스크톱 앱 셸에 쓰지 말 것. 이전 Raycast 방향은 폐기(`docs/archive/design-raycast.md`).
+- **shadcn 마이그레이션 규율(Wave 1 실측 교훈, 정본=`docs/plans/2026-05-24-shadcn-app-wide-migration.md`):**
+  - **grep raw 카운트 ≠ shadcn 변환 대상.** raw `<button>/<input>`이라도 **bespoke 위젯**(전폭/상태바 트리거, 동적 `div|button` 태그, `overflow:hidden` 안 인라인 에디터, 키스트로크 캡처 필드, 복합 컨트롤=Segmented 등)이면 강제 변환 시 **레이아웃/동작/포커스가 회귀**한다. 변환은 **클린 매핑(≤~3 오버라이드·회귀 0)일 때만**; 아니면 keep + `docs/decisions.md`에 근거 한 줄. 이미 토큰만 쓰는 요소는 무변경.
+  - **radix `Dialog` 포커스 복원 = `DialogTrigger`(triggerRef)로만 동작.** controlled `open`만 쓰고 트리거를 `DialogTrigger asChild`로 감싸지 않으면 Esc 후 포커스가 `body`로 샌다(정적 게이트가 못 잡음 — cmux 스모크 필수). 모달 draft 상태는 `DialogContent` **자식 컴포넌트**로 분리해 열림마다 마운트(상태 초기화 + radix가 mount/unmount·포커스 소유).
+  - **모달/메뉴 슬라이스는 cmux 브라우저 인터랙션 스모크가 hard gate**(Esc→오버레이만 닫힘 AND `window.hide` 미호출 AND 트리거 포커스 복원). 정적 게이트는 이 계약 위반을 검출 못 한다.
 
 ## 작업 전
 
