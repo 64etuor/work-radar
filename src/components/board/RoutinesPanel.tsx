@@ -3,6 +3,8 @@ import { Pencil, X } from "lucide-react";
 
 import type { RoutineFreq, RoutineToday, Weekday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useListReorder } from "@/lib/useListReorder";
 
 /** 루틴 생성 입력(폼 → CaptureBoard). */
@@ -153,22 +155,30 @@ export function RoutinesPanel({
     <div className="panelbox">
       <div className="pb-head">
         <span className="lbl">Routines</span>
-        <button
+        <Button
           type="button"
-          className="add"
+          variant="outline"
+          size="sm"
+          className="h-7 rounded-full px-2.5 text-[11px]"
           onClick={onOpenTracking}
           title="루틴 트래킹"
         >
           트래킹
-        </button>
-        <button type="button" className="add" onClick={openCreate}>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 rounded-full px-2.5 text-[11px]"
+          onClick={openCreate}
+        >
           + 루틴
-        </button>
+        </Button>
       </div>
 
       {open && (
         <form className="rform" onSubmit={submit}>
-          <input
+          <Input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -176,30 +186,37 @@ export function RoutinesPanel({
             autoComplete="off"
             data-cb-routine-title
             autoFocus
+            className="mb-1.5 h-8 text-[13px]"
           />
           <div className="rfreqs">
             {FREQS.map((f) => (
-              <button
+              <Button
                 key={f.value}
                 type="button"
-                className={`rfreq${freq === f.value ? " on" : ""}`}
+                variant={freq === f.value ? "default" : "outline"}
+                size="sm"
+                aria-pressed={freq === f.value}
+                className="flex-1 text-[11px]"
                 onClick={() => setFreq(f.value)}
               >
                 {f.label}
-              </button>
+              </Button>
             ))}
           </div>
           {needsWeekdays && (
             <div className="days">
               {DAYS.map((d) => (
-                <button
+                <Button
                   key={d.key}
                   type="button"
-                  className={`day${days.has(d.key) ? " on" : ""}`}
+                  variant={days.has(d.key) ? "default" : "outline"}
+                  size="sm"
+                  aria-pressed={days.has(d.key)}
+                  className="size-[26px] p-0 text-[11px]"
                   onClick={() => toggleDay(d.key)}
                 >
                   {d.label}
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -214,41 +231,45 @@ export function RoutinesPanel({
           <div className="rtime">
             <label>
               시간
-              <input
+              <Input
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
+                className="h-8 w-auto px-2 text-xs"
               />
             </label>
             <label>
               알림
               <span className="roff">
-                <input
+                <Input
                   type="number"
                   min={0}
                   value={offset}
                   onChange={(e) => setOffset(e.target.value)}
                   placeholder="0"
                   disabled={time.trim() === ""}
+                  className="h-8 w-12 px-2 text-xs"
                 />
                 분 전
               </span>
             </label>
           </div>
           <div className="row">
-            <button type="submit" className="save">
+            <Button type="submit" size="sm" className="rounded-full px-3.5 text-xs">
               {editId ? "저장" : "추가"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="save"
+              variant="outline"
+              size="sm"
+              className="rounded-full px-3.5 text-xs"
               onClick={() => {
                 reset();
                 setOpen(false);
               }}
             >
               취소
-            </button>
+            </Button>
           </div>
         </form>
       )}
