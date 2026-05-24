@@ -414,3 +414,5 @@
 - **진단(코드 변경 없음): area(Wheel of Life) 제안은 정상 동작**. enrich 프롬프트(단건+배치)가 10개 라이프 도메인으로 `suggestedArea` 요청 → codex가 반환(실 DB 확인: "결혼"→romance, 모호→other) → 저장/파싱/EnrichReviewPanel 영역 드롭다운 표시·적용 전부 구현됨(스킬 레지스트리 프롬프트도 area 포함 — stale 아님). "안 보임"의 원인은 **카드(postit)에 suggested_area 배지가 없어서** — 카드는 확정 `area`(chip-area)와 suggested **quadrant**(chip-q-sug)만 렌더하고 suggested **area**는 리뷰 패널에만 보임. suggested_area는 힌트(INVARIANT #1)라 카드 확정 area로 자동 반영 안 함. (후속: 카드에 "제안 영역" 배지 추가 여부 사용자 확인 대기.)
 
 검증(전체): typecheck 0 · lint 0 errors(49 baseline) · build green · Rust fmt+컴파일 · bindings 재생성. dev push.
+
+- **카드 "제안 영역" 배지 추가(area 진단 후속)**: postit에 `suggestedArea` 힌트 배지(예: "건강?") 렌더 — 확정 `area` 없을 때만(있으면 chip-area), suggested **quadrant** 배지(`chip-q-sug`)와 동일 패턴. 죽어있던 `.chip-area-sug`(옛 클릭-확정 버튼) CSS를 비-인터랙티브 dashed 힌트 배지(span, chip-q-sug 톤)로 repurpose. 힌트 표시일 뿐 자동 확정 0(INVARIANT #1). 검증: typecheck 0·lint 0·build green·bindings drift 0. dev push.
