@@ -2,6 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Blocks, FileText, Plus, Save, Trash2 } from "lucide-react";
 
 import type { Skill } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateSkill,
   useDeleteSkill,
@@ -51,14 +61,20 @@ export function SkillsView() {
   return (
     <div className="skl">
       <header className="skl-head" data-tauri-drag-region>
-        <button type="button" className="skl-back" onClick={() => goTo("board")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="skl-title">스킬 레지스트리</span>
-        <button
-          type="button"
-          className="skl-add"
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-1.5 rounded-full"
           onClick={() => {
             setAdding(true);
             setSelectedId(null);
@@ -66,7 +82,7 @@ export function SkillsView() {
         >
           <Plus className="size-4" />
           인앱 프롬프트 추가
-        </button>
+        </Button>
       </header>
 
       <div className="skl-body">
@@ -218,8 +234,8 @@ function InAppEditor({ skill }: { skill: Skill }) {
   return (
     <div className="skl-edit">
       <div className="skl-edit-top">
-        <input
-          className="skl-name-input"
+        <Input
+          className="flex-1 font-semibold"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -238,8 +254,8 @@ function InAppEditor({ skill }: { skill: Skill }) {
         </div>
       )}
 
-      <textarea
-        className="skl-textarea"
+      <Textarea
+        className="min-h-[320px] resize-y font-mono leading-relaxed"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         spellCheck={false}
@@ -247,24 +263,23 @@ function InAppEditor({ skill }: { skill: Skill }) {
       />
 
       <div className="skl-actions">
-        <button
-          type="button"
-          className="skl-save"
+        <Button
+          className="gap-1.5 rounded-full"
           onClick={save}
           disabled={!dirty || update.isPending}
         >
           <Save className="size-4" />
           {update.isPending ? "저장 중…" : "저장"}
-        </button>
-        <button
-          type="button"
-          className="skl-del"
+        </Button>
+        <Button
+          variant="outline"
+          className="gap-1.5 rounded-full"
           onClick={remove}
           disabled={del.isPending}
         >
           <Trash2 className="size-4" />
           삭제
-        </button>
+        </Button>
         {note && <span className="skl-note">{note}</span>}
       </div>
     </div>
@@ -309,19 +324,18 @@ function ExternalViewer({ skill }: { skill: Skill }) {
       <div className="skl-edit-top">
         <span className="skl-name-static">{skill.name}</span>
         {!editing ? (
-          <button type="button" className="skl-save" onClick={startEdit}>
+          <Button className="rounded-full" onClick={startEdit}>
             파일 편집
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
-            className="skl-save"
+          <Button
+            className="gap-1.5 rounded-full"
             onClick={save}
             disabled={!dirty || write.isPending}
           >
             <Save className="size-4" />
             {write.isPending ? "저장 중…" : "파일 저장"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -335,8 +349,8 @@ function ExternalViewer({ skill }: { skill: Skill }) {
           파일을 읽지 못했습니다: {(content.error as Error).message}
         </div>
       ) : editing ? (
-        <textarea
-          className="skl-textarea"
+        <Textarea
+          className="min-h-[320px] resize-y font-mono leading-relaxed"
           value={draft ?? ""}
           onChange={(e) => setDraft(e.target.value)}
           spellCheck={false}
@@ -350,6 +364,9 @@ function ExternalViewer({ skill }: { skill: Skill }) {
     </div>
   );
 }
+
+/** radix Select는 빈 문자열 value를 금지 → "미바인딩"을 센티넬로 표현(write 시 빈 문자열로 정규화). */
+const BIND_NONE = "__none__";
 
 /** 인앱 프롬프트 추가 패널. binding은 닫힌 세트(또는 미바인딩). */
 function CreatePanel({ onDone }: { onDone: (id: string | null) => void }) {
@@ -374,29 +391,32 @@ function CreatePanel({ onDone }: { onDone: (id: string | null) => void }) {
   return (
     <div className="skl-edit">
       <div className="skl-edit-top">
-        <input
-          className="skl-name-input"
+        <Input
+          className="flex-1 font-semibold"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="스킬 이름"
           aria-label="새 스킬 이름"
         />
-        <select
-          className="skl-bind-select"
-          value={binding}
-          onChange={(e) => setBinding(e.target.value)}
-          aria-label="잡 바인딩"
+        <Select
+          value={binding || BIND_NONE}
+          onValueChange={(v) => setBinding(v === BIND_NONE ? "" : v)}
         >
-          <option value="">미바인딩</option>
-          <option value="enrich">enrich</option>
-          <option value="batch_enrich">batch_enrich</option>
-          <option value="ci_triage">ci_triage</option>
-          <option value="pr_selfcheck">pr_selfcheck</option>
-        </select>
+          <SelectTrigger className="w-auto min-w-[140px] font-mono" aria-label="잡 바인딩">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={BIND_NONE}>미바인딩</SelectItem>
+            <SelectItem value="enrich">enrich</SelectItem>
+            <SelectItem value="batch_enrich">batch_enrich</SelectItem>
+            <SelectItem value="ci_triage">ci_triage</SelectItem>
+            <SelectItem value="pr_selfcheck">pr_selfcheck</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <textarea
-        className="skl-textarea"
+      <Textarea
+        className="min-h-[320px] resize-y font-mono leading-relaxed"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="프롬프트 템플릿…"
@@ -404,18 +424,17 @@ function CreatePanel({ onDone }: { onDone: (id: string | null) => void }) {
         aria-label="새 프롬프트 템플릿"
       />
       <div className="skl-actions">
-        <button
-          type="button"
-          className="skl-save"
+        <Button
+          className="gap-1.5 rounded-full"
           onClick={submit}
           disabled={!name.trim() || !prompt.trim() || create.isPending}
         >
           <Plus className="size-4" />
           {create.isPending ? "추가 중…" : "추가"}
-        </button>
-        <button type="button" className="skl-del" onClick={() => onDone(null)}>
+        </Button>
+        <Button variant="outline" className="rounded-full" onClick={() => onDone(null)}>
           취소
-        </button>
+        </Button>
         {note && <span className="skl-note">{note}</span>}
       </div>
     </div>
