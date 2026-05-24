@@ -34,6 +34,7 @@ import {
   useUnpromoteToday,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
+import { Button } from "@/components/ui/button";
 
 /** 타임드 이벤트 시작 → 로컬 HH:MM. all-day는 호출 안 함. */
 function eventTime(iso: string): string {
@@ -94,37 +95,45 @@ export function TodayView() {
   return (
     <div className="today">
       <header className="today-head" data-tauri-drag-region>
-        <button type="button" className="today-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full text-[12px]"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="today-title">Today</span>
         <div className="today-nav">
-          <button
-            type="button"
-            className="today-navbtn"
+          <Button
+            variant="outline"
+            size="sm"
+            className="size-[26px] shrink-0 p-0"
             aria-label="이전 날짜"
             onClick={() => setDate((d) => stepDate("day", d, -1))}
           >
             <ChevronLeft className="size-4" />
-          </button>
+          </Button>
           <span className="today-date">{date}</span>
-          <button
-            type="button"
-            className="today-navbtn"
+          <Button
+            variant="outline"
+            size="sm"
+            className="size-[26px] shrink-0 p-0"
             aria-label="다음 날짜"
             onClick={() => setDate((d) => stepDate("day", d, 1))}
           >
             <ChevronRight className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="today-navtoday"
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-[26px] rounded-full px-3 text-[12px]"
             disabled={isToday}
             onClick={() => setDate(today)}
           >
             오늘로
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -174,13 +183,12 @@ export function TodayView() {
               <p className="today-state-msg">
                 Google Calendar가 연결되지 않았습니다. 연결하면 일정이 여기에 표시됩니다.
               </p>
-              <button
-                type="button"
-                className="today-connect"
+              <Button
+                className="rounded-full px-[18px] text-[13px]"
                 onClick={() => goTo("settings")}
               >
                 Google Calendar 연결
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -230,14 +238,15 @@ export function TodayView() {
             <div key={s.id} className="today-row">
               <span className="today-badge today-q1">Q1</span>
               <span className="today-row-title">{s.title}</span>
-              <button
-                type="button"
-                className="today-act"
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 rounded-full px-2.5 text-[11px]"
                 disabled={promoteToday.isPending}
                 onClick={() => promoteToday.mutate({ id: s.id, date: today })}
               >
                 + Today
-              </button>
+              </Button>
             </div>
           ))}
         </section>
@@ -273,14 +282,15 @@ export function TodayView() {
                 </button>
                 <span className="today-row-title">{s.title}</span>
                 {age > 1 && <span className="today-age" title="경과일">+{age}</span>}
-                <button
-                  type="button"
-                  className="today-act"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 rounded-full px-2.5 text-[11px]"
                   title="매트릭스로 되돌리기"
                   onClick={() => unpromote.mutate(s.id)}
                 >
                   되돌리기
-                </button>
+                </Button>
               </div>
             );
           })}

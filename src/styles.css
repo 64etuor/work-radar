@@ -2481,21 +2481,6 @@
   letter-spacing: 0.04em;
   color: var(--color-wr-subtle);
 }
-.today .today-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.today .today-back:hover {
-  background: var(--color-wr-surface);
-}
 .today .today-scroll {
   flex: 1;
   min-height: 0;
@@ -2620,22 +2605,6 @@
 .today .today-age {
   font: 600 11px var(--font-mono);
   color: var(--color-wr-coral);
-}
-.today .today-act {
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 3px 10px;
-  cursor: pointer;
-  font: 500 11px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.today .today-act:hover:not(:disabled) {
-  background: var(--color-wr-surface);
-}
-.today .today-act:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .today .today-badge {
   font: 600 10px var(--font-mono);
@@ -4966,37 +4935,6 @@
   min-width: 88px;
   text-align: center;
 }
-.today .today-navbtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: var(--radius-sm);
-  width: 26px;
-  height: 26px;
-  cursor: pointer;
-  color: var(--color-wr-fg);
-}
-.today .today-navbtn:hover {
-  background: var(--color-wr-surface);
-}
-.today .today-navtoday {
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 4px 11px;
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.today .today-navtoday:hover:not(:disabled) {
-  background: var(--color-wr-surface);
-}
-.today .today-navtoday:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
 .today .today-state {
   display: flex;
   flex-direction: column;
@@ -5008,18 +4946,6 @@
   margin: 0;
   font: 400 13px var(--font-sans);
   color: var(--color-wr-muted);
-}
-.today .today-connect {
-  border: none;
-  cursor: pointer;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  font: 500 13px var(--font-sans);
-  padding: 8px 18px;
-  border-radius: 999px;
-}
-.today .today-connect:hover {
-  background: var(--color-wr-black);
 }
 
 /*
