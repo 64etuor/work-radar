@@ -5,6 +5,9 @@ import {
   useRequestNotificationPermission,
   useScheduleTestNotification,
 } from "@/lib/query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusDot } from "./kit";
 
 /**
  * 알림 / 트레이 설정 (Phase 13). 알림 권한 상태 + 권한 요청 + 테스트 알림 버튼.
@@ -26,12 +29,12 @@ export function NotificationSettings({
   const state = perm.data?.state ?? "unknown";
   const statusLabel =
     state === "granted"
-      ? "● 허용됨"
+      ? "허용됨"
       : state === "denied"
-        ? "○ 거부됨"
+        ? "거부됨"
         : state === "prompt"
-          ? "○ 미결정"
-          : "○ 알 수 없음";
+          ? "미결정"
+          : "알 수 없음";
 
   const ask = () => {
     if (request.isPending) return;
@@ -52,18 +55,16 @@ export function NotificationSettings({
   };
 
   return (
-    <div className="st-token">
-      <div className="st-token-head">
-        <span className="st-token-lbl">알림 / 트레이</span>
-        <span className={granted ? "st-status on" : "st-status"}>
-          {statusLabel}
-        </span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium">알림 / 트레이</span>
+        <StatusDot on={granted}>{statusLabel}</StatusDot>
       </div>
 
-      <div className="st-token-row">
-        <button
-          type="button"
-          className="st-btn sm"
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={granted ? "secondary" : "default"}
           onClick={ask}
           disabled={request.isPending || granted}
           title={granted ? "이미 허용됨" : "OS 알림 권한 요청"}
@@ -73,38 +74,39 @@ export function NotificationSettings({
             : granted
               ? "권한 허용됨"
               : "알림 권한 요청"}
-        </button>
-        <input
-          className="st-input"
+        </Button>
+        <Input
           type="number"
           min={0}
           max={3600}
           value={seconds}
           onChange={(e) => setSeconds(Number(e.target.value) || 0)}
-          style={{ width: 72 }}
+          className="w-[72px]"
           aria-label="테스트 알림 지연(초)"
         />
-        <span className="st-status">초 뒤</span>
-        <button
-          type="button"
-          className="st-btn-ghost sm"
+        <span className="text-xs text-muted-foreground">초 뒤</span>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={fireTest}
           disabled={scheduleTest.isPending}
           title="백그라운드 스케줄러가 발사할 테스트 알림 예약"
         >
           {scheduleTest.isPending ? "예약 중…" : "테스트 알림"}
-        </button>
+        </Button>
       </div>
 
-      <div className="st-hint">
+      <p className="text-xs text-muted-foreground">
         창을 닫아도 앱은 트레이/메뉴바에 상주합니다 — 트레이 아이콘에서 보기/숨기기/종료.
         백그라운드 스케줄러가 예약된 알림(루틴·CI 등)을 발사합니다. 권한이 없으면 알림만
         건너뛰고 나머지 기능은 정상 동작합니다.
-      </div>
+      </p>
 
-      {request.isError && <div className="st-err">{String(request.error)}</div>}
+      {request.isError && (
+        <p className="text-xs text-[color:var(--destructive)]">{String(request.error)}</p>
+      )}
       {scheduleTest.isError && (
-        <div className="st-err">{String(scheduleTest.error)}</div>
+        <p className="text-xs text-[color:var(--destructive)]">{String(scheduleTest.error)}</p>
       )}
     </div>
   );

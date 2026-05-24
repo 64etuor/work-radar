@@ -9,6 +9,9 @@ import {
   useSetNavKeymap,
 } from "@/lib/query";
 import { NAV_ITEMS } from "@/lib/nav";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
+import { SectionLabel } from "./kit";
 
 /**
  * 네비게이션 설정 (Phase 18 #7 + B2 Part C).
@@ -87,89 +90,90 @@ export function NavigationSettings({
   };
 
   return (
-    <div className="st-token">
-      <div className="st-token-head">
-        <span className="st-token-lbl">네비게이션 / 단축키</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium">네비게이션 / 단축키</span>
       </div>
 
       {/* 글로벌 창 핫키 — 키 캡처 */}
-      <div className="st-token-row">
-        <span className="st-status" style={{ minWidth: 96 }}>
-          글로벌 창 핫키
-        </span>
+      <div className="flex items-center gap-2">
+        <span className="min-w-[96px] text-xs text-muted-foreground">글로벌 창 핫키</span>
         <GlobalHotkeyCapture
           value={hkSpec}
           onChange={setHkSpec}
           recording={hkRecording}
           setRecording={setHkRecording}
         />
-        <button
-          type="button"
-          className="st-btn sm"
+        <Button
+          size="sm"
           onClick={saveHotkey}
           disabled={setHotkey.isPending || hkSpec.trim() === hotkey.data}
           title="창 토글 핫키를 변경하고 즉시 재등록"
         >
           {setHotkey.isPending ? "등록 중…" : "변경"}
-        </button>
-        <button
-          type="button"
-          className="st-btn-ghost sm"
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={resetHk}
           disabled={resetHotkey.isPending}
           title="기본값 Ctrl+Space로 리셋"
         >
           기본값
-        </button>
+        </Button>
       </div>
-      {hkErr && <div className="set-keycap-err">{hkErr}</div>}
-      <div className="st-hint">
+      {hkErr && (
+        <p className="text-xs text-[color:var(--destructive)]">{hkErr}</p>
+      )}
+      <p className="text-xs text-muted-foreground">
         캡처 버튼 클릭 후 원하는 단축키를 누르세요 (예: Ctrl+Space, Cmd+Shift+K).
         변경 시 즉시 재등록되며, 충돌 또는 지원하지 않는 키이면 이전 핫키를 유지합니다.
-      </div>
+      </p>
 
       {/* per-view keymap */}
-      <div className="st-section-lbl" style={{ marginTop: 12 }}>
-        메뉴별 단축키 (입력 중이 아닐 때 적용)
+      <div className="flex flex-col gap-1.5">
+        <SectionLabel>메뉴별 단축키 (입력 중이 아닐 때 적용)</SectionLabel>
+        <div className="flex flex-col gap-1">
+          {NAV_ITEMS.map((item) => (
+            <div key={item.view} className="flex items-center gap-3 py-1">
+              <span className="w-28 shrink-0 text-[13px] text-foreground">{item.label}</span>
+              <ViewKeymapCapture
+                value={kmDraft[item.view] ?? ""}
+                onChange={(v) =>
+                  setKmDraft((prev) => ({ ...prev, [item.view]: v }))
+                }
+                label={item.label}
+              />
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="nav-keymap-grid">
-        {NAV_ITEMS.map((item) => (
-          <div key={item.view} className="nav-keymap-row">
-            <span className="nav-keymap-label">{item.label}</span>
-            <ViewKeymapCapture
-              value={kmDraft[item.view] ?? ""}
-              onChange={(v) =>
-                setKmDraft((prev) => ({ ...prev, [item.view]: v }))
-              }
-              label={item.label}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="st-token-row" style={{ marginTop: 8 }}>
-        <button
-          type="button"
-          className="st-btn sm"
+
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
           onClick={saveKeymap}
           disabled={setKeymap.isPending}
         >
           {setKeymap.isPending ? "저장 중…" : "단축키 저장"}
-        </button>
-        <button
-          type="button"
-          className="st-btn-ghost sm"
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={resetKm}
           disabled={resetKeymap.isPending}
         >
           기본값으로 리셋
-        </button>
+        </Button>
       </div>
-      <div className="st-hint">
+      <p className="text-xs text-muted-foreground">
         캡처 버튼 클릭 후 단일 키(1) 또는 시퀀스(g → b = "g b")를 입력하세요.
         빈 칸은 그 뷰의 단축키를 끕니다. 입력란에 포커스가 있을 땐 적용되지 않습니다.
-      </div>
+      </p>
 
-      {hotkey.isError && <div className="st-err">{String(hotkey.error)}</div>}
+      {hotkey.isError && (
+        <p className="text-xs text-[color:var(--destructive)]">{String(hotkey.error)}</p>
+      )}
     </div>
   );
 }
@@ -232,11 +236,14 @@ function GlobalHotkeyCapture({
   };
 
   return (
-    <div className="set-keycap">
+    <div className="flex-1">
       <button
         ref={btnRef}
         type="button"
-        className={`set-keycap-btn${recording ? " recording" : ""}`}
+        className={cn(
+          "flex h-9 w-full items-center rounded-md border border-input bg-background px-3 text-sm font-mono text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          recording && "border-primary ring-2 ring-ring",
+        )}
         onClick={start}
         onKeyDown={handleKeyDown}
         onBlur={() => setRecording(false)}
@@ -335,8 +342,10 @@ function ViewKeymapCapture({
     <button
       ref={btnRef}
       type="button"
-      className={`set-keycap-btn${recording ? " recording" : ""}`}
-      style={{ minWidth: 100 }}
+      className={cn(
+        "flex h-8 min-w-[100px] items-center rounded-md border border-input bg-background px-3 font-mono text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        recording && "border-primary ring-2 ring-ring",
+      )}
       onClick={start}
       onKeyDown={handleKeyDown}
       onBlur={() => {
