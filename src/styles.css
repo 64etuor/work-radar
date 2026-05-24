@@ -3827,23 +3827,6 @@
  * 우측 슬라이드 드로어(today-rail 위 오버레이). 흰 패널, 좌측 hairline + radius lg, 절제된 Media Lift.
  * ≥1040px = 우측 드로어 / <720px = 하단 시트. 조회 전용(읽기) — 일정 생성/편집 없음.
  */
-.cal-open {
-  align-self: flex-end;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  color: var(--color-wr-fg);
-  font: 600 12px var(--font-sans);
-  padding: 6px 13px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background var(--wr-motion-fast) var(--wr-ease-out);
-}
-.cal-open:hover {
-  background: var(--color-wr-surface);
-}
 .cal-open-ico {
   font-size: 12px;
   color: var(--color-wr-subtle);

@@ -22,6 +22,7 @@ import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanva
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 import { SprintTimer } from "@/components/SprintTimer";
+import { Button } from "@/components/ui/button";
 import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
 import {
   localToday,
@@ -537,9 +538,11 @@ export function CaptureBoard() {
         )}
 
         <div className="execute">
-          <button
+          <Button
             type="button"
-            className="cal-open"
+            variant="outline"
+            size="sm"
+            className="self-end gap-1.5 rounded-full font-semibold"
             onClick={() => setCalendarOpen(true)}
             title="캘린더 열기 (일/주/월)"
           >
@@ -547,7 +550,7 @@ export function CaptureBoard() {
               ▤
             </span>
             캘린더
-          </button>
+          </Button>
           <TodayRail
             items={todayItems}
             panelRef={todayPanelRef}
