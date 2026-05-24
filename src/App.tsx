@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { AgentStatusBar } from "@/components/AgentStatusBar";
+import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { ToastHost } from "@/components/ToastHost";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -59,7 +60,10 @@ export default function App() {
           setPaletteOpen(false);
           return;
         }
-        // 카드 메뉴가 열려 있으면 그 닫힘을 CaptureBoard에 맡기고 창은 유지한다.
+        // shadcn 오버레이(Dialog/DropdownMenu/Select)가 열려 있으면 radix가 Esc로 최상위 레이어를
+        // 닫고 포커스를 복원한다 — 셸은 창을 숨기지 않고 양보한다(plan §0.6 상호작용 계약).
+        if (isOverlayOpen()) return;
+        // (레거시) 커스텀 카드 메뉴가 열려 있으면 그 닫힘을 CaptureBoard에 맡기고 창은 유지한다.
         if (document.querySelector(".cb-card-menu")) return;
         // board 외 뷰는 Esc로 보드 복귀, board에서 Esc는 창 숨김.
         if (view !== "board") {
