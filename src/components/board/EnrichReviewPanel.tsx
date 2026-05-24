@@ -9,6 +9,17 @@ import {
 } from "@/lib/query";
 import { unwrap } from "@/lib/query/client";
 import { useToastStore } from "@/lib/toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+
+/** area select 미설정 센티넬 — radix Select는 빈 문자열 value를 허용하지 않는다. */
+const AREA_NONE = "__none__";
 
 /** 닫힌 세트 옵션(JobsView BatchEnrichPanel에서 미러 — 인라인 이전). */
 const QUADRANT_OPTS: { value: Quadrant; label: string }[] = [
@@ -181,37 +192,43 @@ export function EnrichReviewPanel({ runId, onClose }: Props) {
                 <div key={it.id} className="enrich-review-row">
                   <div className="enrich-review-row-title">{it.title ?? it.id}</div>
                   <div className="enrich-review-row-fields">
-                    <select
-                      className="enrich-review-select"
-                      aria-label="제안 사분면"
+                    <Select
                       value={it.suggestedQuadrant ?? "unclassified"}
-                      onChange={(e) =>
-                        setItem(i, { suggestedQuadrant: e.target.value as Quadrant })
+                      onValueChange={(v) =>
+                        setItem(i, { suggestedQuadrant: v as Quadrant })
                       }
                     >
-                      {QUADRANT_OPTS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="enrich-review-select"
-                      aria-label="제안 영역"
-                      value={it.suggestedArea ?? ""}
-                      onChange={(e) =>
+                      <SelectTrigger className="flex-1" aria-label="제안 사분면">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {QUADRANT_OPTS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={it.suggestedArea ?? AREA_NONE}
+                      onValueChange={(v) =>
                         setItem(i, {
-                          suggestedArea: (e.target.value || null) as AreaTag | null,
+                          suggestedArea: v === AREA_NONE ? null : (v as AreaTag),
                         })
                       }
                     >
-                      <option value="">(영역 미설정)</option>
-                      {AREA_OPTS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="flex-1" aria-label="제안 영역">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={AREA_NONE}>(영역 미설정)</SelectItem>
+                        {AREA_OPTS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {it.reason && <div className="enrich-review-row-reason">{it.reason}</div>}
                 </div>
@@ -227,18 +244,21 @@ export function EnrichReviewPanel({ runId, onClose }: Props) {
 
       <div className="enrich-review-actions">
         {proposalReady && proposal.data && items.length > 0 && (
-          <button
-            type="button"
-            className="enrich-review-apply"
+          <Button
+            className="rounded-full px-[18px] text-[13px]"
             disabled={acceptEnrichAll.isPending}
             onClick={handleApplyAll}
           >
             모두 적용 (힌트 반영)
-          </button>
+          </Button>
         )}
-        <button type="button" className="enrich-review-close" onClick={onClose}>
+        <Button
+          variant="outline"
+          className="rounded-full text-[13px]"
+          onClick={onClose}
+        >
           닫기
-        </button>
+        </Button>
       </div>
     </div>
   );

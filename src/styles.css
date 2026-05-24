@@ -5016,21 +5016,6 @@
   display: flex;
   gap: 8px;
 }
-.enrich-review-select {
-  flex: 1;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 1px solid var(--color-wr-border);
-  border-radius: var(--radius-sm);
-  padding: 6px 8px;
-  font: 400 13px var(--font-sans);
-  color: var(--color-wr-fg);
-  background: var(--color-wr-bg);
-  outline: none;
-}
-.enrich-review-select:focus {
-  border-color: var(--color-wr-accent);
-}
 .enrich-review-row-reason {
   font: 400 11px var(--font-sans);
   color: var(--color-wr-subtle);
@@ -5041,34 +5026,7 @@
   gap: 8px;
   margin-top: 2px;
 }
-.enrich-review-apply {
-  border: none;
-  cursor: pointer;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  font: 500 13px var(--font-sans);
-  padding: 8px 18px;
-  border-radius: 999px;
-}
-.enrich-review-apply:hover {
-  background: var(--color-wr-black);
-}
-.enrich-review-apply:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.enrich-review-close {
-  border: 1px solid var(--color-wr-border-light);
-  cursor: pointer;
-  background: var(--color-wr-bg);
-  font: 500 13px var(--font-sans);
-  color: var(--color-wr-fg);
-  padding: 7px 14px;
-  border-radius: 999px;
-}
-.enrich-review-close:hover {
-  background: var(--color-wr-surface);
-}
+/* 적용/닫기 버튼은 shadcn Button(Wave 2.9). ✕ 헤더 close는 무테두리 아이콘이라 raw 유지. */
 /* 좁은 폭: 전체폭 스택(DESIGN enrich-review-panel 반응형). */
 @media (max-width: 900px) {
   .enrich-review {
