@@ -2170,21 +2170,6 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.jobs .jobs-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.jobs .jobs-back:hover {
-  background: var(--color-wr-surface);
-}
 .jobs .jobs-poll {
   margin-left: auto;
   display: inline-flex;
@@ -2241,46 +2226,10 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-.jobs .jobs-btn {
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 6px 14px;
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.jobs .jobs-btn:hover:not(:disabled) {
-  background: var(--color-wr-surface);
-}
-.jobs .jobs-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.jobs .jobs-btn-primary {
-  background: var(--color-wr-coral);
-  border-color: var(--color-wr-coral);
-  color: var(--color-wr-on-coral-btn);
-  align-self: flex-start;
-}
 .jobs .jobs-codex-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.jobs .jobs-prompt {
-  width: 100%;
-  resize: vertical;
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-wr-bg);
-  padding: 9px 11px;
-  font: 400 13px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.jobs .jobs-prompt:disabled {
-  background: var(--color-wr-elevated);
-  color: var(--color-wr-subtle);
 }
 .jobs .jobs-err {
   font: 400 12px var(--font-sans);
@@ -2437,25 +2386,6 @@
   letter-spacing: 0.04em;
   color: var(--color-wr-subtle);
 }
-.jobs .jobs-prop-summary {
-  resize: vertical;
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-xs);
-  background: var(--color-wr-bg);
-  padding: 7px 9px;
-  font: 400 12px var(--font-sans);
-  color: var(--color-wr-fg);
-  line-height: 1.4;
-}
-/* Phase 9 — enrich Proposal의 select/input(드롭다운·텍스트 입력). */
-.jobs .jobs-prop-select {
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-xs);
-  background: var(--color-wr-bg);
-  padding: 6px 9px;
-  font: 400 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
 .jobs .jobs-prop-checks {
   display: flex;
   flex-direction: column;
@@ -2507,9 +2437,6 @@
   display: flex;
   gap: 8px;
 }
-.jobs .jobs-prop-batch-row .jobs-prop-select {
-  flex: 1;
-}
 .jobs .jobs-prop-batch-reason {
   font: 400 11px var(--font-sans);
   color: var(--color-wr-subtle);
@@ -2526,15 +2453,6 @@
   gap: 8px;
   margin-top: 2px;
 }
-.jobs .jobs-reject {
-  border: 1px solid var(--color-wr-danger-border-strong);
-  background: var(--color-wr-danger-soft);
-  color: var(--color-wr-danger);
-}
-.jobs .jobs-reject:hover:not(:disabled) {
-  background: var(--color-wr-danger-hover);
-}
-
 /* ── Today 운영 뷰 (Phase 11a) ─────────────────────────────────────────────── */
 .today {
   display: flex;

@@ -41,6 +41,18 @@ import {
   useTriggerEchoJob,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+/** area select 미설정 센티넬 — radix Select는 빈 문자열 value를 허용하지 않는다(EnrichReviewPanel 선례). */
+const AREA_NONE = "__none__";
 
 /** run.trigger(JSON)에서 PR 링크 정보 추출 (없으면 null). */
 function prTrigger(
@@ -90,10 +102,15 @@ export function JobsView() {
   return (
     <div className="jobs">
       <header className="jobs-head" data-tauri-drag-region>
-        <button type="button" className="jobs-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full text-[12px]"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="jobs-title">Jobs · Agent</span>
         <span className="jobs-poll">
           <RefreshCw className={`size-3.5${runs.isFetching ? " jobs-spin" : ""}`} />
@@ -116,9 +133,10 @@ export function JobsView() {
         {/* 테스트 잡 컨트롤 (codex 없이 bound/kill/로그 검증). */}
         <section className="jobs-controls">
           <div className="jobs-controls-row">
-            <button
-              type="button"
-              className="jobs-btn"
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full text-[12px]"
               disabled={echoJob.isPending}
               onClick={() =>
                 echoJob.mutate({
@@ -129,10 +147,11 @@ export function JobsView() {
               }
             >
               Echo 잡 (즉시 완료)
-            </button>
-            <button
-              type="button"
-              className="jobs-btn"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full text-[12px]"
               disabled={echoJob.isPending}
               onClick={() =>
                 echoJob.mutate({
@@ -143,12 +162,12 @@ export function JobsView() {
               }
             >
               Timeout 잡 (3s→kill)
-            </button>
+            </Button>
           </div>
 
           <div className="jobs-codex-form">
-            <textarea
-              className="jobs-prompt"
+            <Textarea
+              className="min-h-0 resize-y"
               placeholder={
                 codexReady
                   ? "codex 잡 프롬프트 (read-only 샌드박스)…"
@@ -159,9 +178,9 @@ export function JobsView() {
               disabled={!codexReady}
               rows={2}
             />
-            <button
-              type="button"
-              className="jobs-btn jobs-btn-primary"
+            <Button
+              size="sm"
+              className="self-start rounded-full text-[12px]"
               disabled={!codexReady || codexJob.isPending || !prompt.trim()}
               onClick={() =>
                 codexJob.mutate(
@@ -178,7 +197,7 @@ export function JobsView() {
               }
             >
               codex 잡 실행
-            </button>
+            </Button>
           </div>
           {(echoJob.error || codexJob.error) && (
             <div className="jobs-err">
@@ -311,15 +330,16 @@ function SelfCheckPanel({ run }: { run: AgentRunView }) {
           {(proposal.error as Error).message}
         </div>
         <div className="jobs-prop-actions">
-          <button
-            type="button"
-            className="jobs-btn jobs-reject"
+          <Button
+            variant="destructiveOutline"
+            size="sm"
+            className="rounded-full text-[12px]"
             disabled={reject.isPending}
             onClick={() => reject.mutate(run.id)}
           >
             <X className="size-3.5" />
             폐기
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -343,8 +363,8 @@ function SelfCheckPanel({ run }: { run: AgentRunView }) {
       )}
 
       <label className="jobs-prop-label">PR 설명 초안</label>
-      <textarea
-        className="jobs-prop-summary"
+      <Textarea
+        className="min-h-0 resize-y"
         value={d.summary ?? ""}
         rows={3}
         onChange={(e) => setDraft({ ...d, summary: e.target.value })}
@@ -403,24 +423,25 @@ function SelfCheckPanel({ run }: { run: AgentRunView }) {
         </div>
       )}
       <div className="jobs-prop-actions">
-        <button
-          type="button"
-          className="jobs-btn jobs-btn-primary"
+        <Button
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={accept.isPending}
           onClick={() => accept.mutate({ runId: run.id, accepted: d })}
         >
           <Check className="size-3.5" />
           accept (로컬 반영)
-        </button>
-        <button
-          type="button"
-          className="jobs-btn jobs-reject"
+        </Button>
+        <Button
+          variant="destructiveOutline"
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={reject.isPending}
           onClick={() => reject.mutate(run.id)}
         >
           <X className="size-3.5" />
           폐기
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -474,15 +495,16 @@ function ProposalError({
     <div className="jobs-prop">
       <div className="jobs-prop-err">{message}</div>
       <div className="jobs-prop-actions">
-        <button
-          type="button"
-          className="jobs-btn jobs-reject"
+        <Button
+          variant="destructiveOutline"
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={reject.isPending}
           onClick={() => reject.mutate(runId)}
         >
           <X className="size-3.5" />
           폐기
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -519,42 +541,50 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
   return (
     <div className="jobs-prop">
       <label className="jobs-prop-label">제안 사분면 (힌트 — 자동 분류 아님)</label>
-      <select
-        className="jobs-prop-select"
+      <Select
         value={d.suggestedQuadrant ?? "unclassified"}
-        onChange={(e) =>
-          setDraft({ ...d, suggestedQuadrant: e.target.value as Quadrant })
+        onValueChange={(v) =>
+          setDraft({ ...d, suggestedQuadrant: v as Quadrant })
         }
       >
-        {QUADRANT_OPTS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="제안 사분면">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {QUADRANT_OPTS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <label className="jobs-prop-label">제안 영역 (라이프 도메인)</label>
-      <select
-        className="jobs-prop-select"
-        value={d.suggestedArea ?? ""}
-        onChange={(e) =>
+      <Select
+        value={d.suggestedArea ?? AREA_NONE}
+        onValueChange={(v) =>
           setDraft({
             ...d,
-            suggestedArea: (e.target.value || null) as AreaTag | null,
+            suggestedArea: v === AREA_NONE ? null : (v as AreaTag),
           })
         }
       >
-        <option value="">(미설정)</option>
-        {AREA_OPTS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="제안 영역">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={AREA_NONE}>(미설정)</SelectItem>
+          {AREA_OPTS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <label className="jobs-prop-label">근거</label>
-      <textarea
-        className="jobs-prop-summary"
+      <Textarea
+        className="min-h-0 resize-y"
         rows={2}
         value={d.reason ?? ""}
         onChange={(e) => setDraft({ ...d, reason: e.target.value })}
@@ -570,24 +600,25 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
         </div>
       )}
       <div className="jobs-prop-actions">
-        <button
-          type="button"
-          className="jobs-btn jobs-btn-primary"
+        <Button
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={accept.isPending}
           onClick={() => accept.mutate({ runId: run.id, accepted: d })}
         >
           <Check className="size-3.5" />
           accept (힌트 반영)
-        </button>
-        <button
-          type="button"
-          className="jobs-btn jobs-reject"
+        </Button>
+        <Button
+          variant="destructiveOutline"
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={reject.isPending}
           onClick={() => reject.mutate(run.id)}
         >
           <X className="size-3.5" />
           폐기
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -643,35 +674,43 @@ function BatchEnrichPanel({ run }: { run: AgentRunView }) {
         <div key={it.id} className="jobs-prop-batch-item">
           <div className="jobs-prop-batch-title">{it.title ?? it.id}</div>
           <div className="jobs-prop-batch-row">
-            <select
-              className="jobs-prop-select"
+            <Select
               value={it.suggestedQuadrant ?? "unclassified"}
-              onChange={(e) =>
-                setItem(i, { suggestedQuadrant: e.target.value as Quadrant })
+              onValueChange={(v) =>
+                setItem(i, { suggestedQuadrant: v as Quadrant })
               }
             >
-              {QUADRANT_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className="jobs-prop-select"
-              value={it.suggestedArea ?? ""}
-              onChange={(e) =>
+              <SelectTrigger className="flex-1" aria-label="제안 사분면">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {QUADRANT_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={it.suggestedArea ?? AREA_NONE}
+              onValueChange={(v) =>
                 setItem(i, {
-                  suggestedArea: (e.target.value || null) as AreaTag | null,
+                  suggestedArea: v === AREA_NONE ? null : (v as AreaTag),
                 })
               }
             >
-              <option value="">(미설정)</option>
-              {AREA_OPTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="flex-1" aria-label="제안 영역">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={AREA_NONE}>(미설정)</SelectItem>
+                {AREA_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {it.reason && <div className="jobs-prop-batch-reason">{it.reason}</div>}
         </div>
@@ -683,9 +722,9 @@ function BatchEnrichPanel({ run }: { run: AgentRunView }) {
         </div>
       )}
       <div className="jobs-prop-actions">
-        <button
-          type="button"
-          className="jobs-btn jobs-btn-primary"
+        <Button
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={accept.isPending || items.length === 0}
           onClick={() =>
             accept.mutate({
@@ -696,16 +735,17 @@ function BatchEnrichPanel({ run }: { run: AgentRunView }) {
         >
           <Check className="size-3.5" />
           전체 accept (힌트 반영)
-        </button>
-        <button
-          type="button"
-          className="jobs-btn jobs-reject"
+        </Button>
+        <Button
+          variant="destructiveOutline"
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={reject.isPending}
           onClick={() => reject.mutate(run.id)}
         >
           <X className="size-3.5" />
           폐기
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -753,8 +793,8 @@ function TriagePanel({ run }: { run: AgentRunView }) {
         </button>
       )}
       <label className="jobs-prop-label">CI 실패 원인 가설</label>
-      <textarea
-        className="jobs-prop-summary"
+      <Textarea
+        className="min-h-0 resize-y"
         rows={2}
         value={d.cause ?? ""}
         onChange={(e) => setDraft({ ...d, cause: e.target.value })}
@@ -769,8 +809,8 @@ function TriagePanel({ run }: { run: AgentRunView }) {
         ))}
       </ul>
       <label className="jobs-prop-label">요약</label>
-      <textarea
-        className="jobs-prop-summary"
+      <Textarea
+        className="min-h-0 resize-y"
         rows={2}
         value={d.summary ?? ""}
         onChange={(e) => setDraft({ ...d, summary: e.target.value })}
@@ -784,24 +824,25 @@ function TriagePanel({ run }: { run: AgentRunView }) {
         </div>
       )}
       <div className="jobs-prop-actions">
-        <button
-          type="button"
-          className="jobs-btn jobs-btn-primary"
+        <Button
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={accept.isPending}
           onClick={() => accept.mutate({ runId: run.id, accepted: d })}
         >
           <Check className="size-3.5" />
           accept (로컬 기록)
-        </button>
-        <button
-          type="button"
-          className="jobs-btn jobs-reject"
+        </Button>
+        <Button
+          variant="destructiveOutline"
+          size="sm"
+          className="rounded-full text-[12px]"
           disabled={reject.isPending}
           onClick={() => reject.mutate(run.id)}
         >
           <X className="size-3.5" />
           폐기
-        </button>
+        </Button>
       </div>
     </div>
   );
