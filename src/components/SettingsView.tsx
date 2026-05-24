@@ -73,14 +73,15 @@ export function SettingsView() {
         className="flex items-center gap-3 border-b border-border px-5 py-3"
         data-tauri-drag-region
       >
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => goTo("board")}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-muted"
+          className="gap-1.5 rounded-full border-border text-[13px]"
         >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="font-mono text-[13px] font-semibold uppercase tracking-[0.12em]">
           설정
         </span>
@@ -95,15 +96,16 @@ export function SettingsView() {
             {reconcile.isPending ? "재정렬 중…" : "신호 projectId 재정렬"}
           </Button>
         )}
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={toggleTheme}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-muted"
+          className="ml-auto gap-1.5 rounded-full border-border text-[13px]"
           title="라이트/다크 전환"
         >
           {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           {theme === "dark" ? "라이트" : "다크"}
-        </button>
+        </Button>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -113,20 +115,20 @@ export function SettingsView() {
           aria-label="설정 카테고리"
         >
           {CATEGORIES.map(({ id, label, icon: Icon }) => (
-            <button
+            <Button
               key={id}
-              type="button"
+              variant="ghost"
               onClick={() => setCategory(id)}
               aria-current={category === id ? "page" : undefined}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+              className={`w-full justify-start gap-2.5 rounded-lg px-3 text-[13px] ${
                 category === id
-                  ? "bg-secondary text-foreground"
+                  ? "bg-secondary hover:bg-secondary"
                   : "text-muted-foreground hover:bg-hover hover:text-foreground"
               }`}
             >
               <Icon className="size-4" />
               {label}
-            </button>
+            </Button>
           ))}
         </nav>
 
