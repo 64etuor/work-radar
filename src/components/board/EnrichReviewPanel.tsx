@@ -50,6 +50,8 @@ type Props = {
   runId: string;
   /** 패널 닫기(부모가 enrichAllRunId를 null로). */
   onClose: () => void;
+  /** 생성 중(터미널 전) 여부 보고 — 인박스 버튼 스피너 표시용(토스트/팝업 대신). */
+  onRunningChange?: (running: boolean) => void;
 };
 
 /**
@@ -63,7 +65,7 @@ type Props = {
  * 상태: running=진행 표시 · empty="제안 없음" · error=재시도(잡 reject은 부모가 닫기로 처리) ·
  * partial=skipped 카운트 노출. (Jobs 페이지 BatchEnrichPanel을 점프 없이 인라인으로 이전.)
  */
-export function EnrichReviewPanel({ runId, onClose }: Props) {
+export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
   const { pushSuccess, pushError } = useToastStore();
   const acceptEnrichAll = useAcceptEnrichAll();
 
@@ -111,6 +113,11 @@ export function EnrichReviewPanel({ runId, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
+  // 생성 중(터미널 전) 여부를 부모에 보고 — 인박스 버튼 스피너로 표시(여기선 팝업/토스트 안 띄움).
+  useEffect(() => {
+    onRunningChange?.(!TERMINAL.has(status));
+  }, [status, onRunningChange]);
+
   const items = draft ?? proposal.data?.items ?? [];
   const skipped = proposal.data?.skipped ?? 0;
 
@@ -134,6 +141,10 @@ export function EnrichReviewPanel({ runId, onClose }: Props) {
     );
   };
 
+  // 생성 중(proposed/running 등 터미널 전)에는 패널을 렌더하지 않는다 — 인박스 버튼 스피너가 진행을
+  // 표시(팝업/토스트 대신). awaiting_approval/succeeded/failed/cancelled에 도달해야 패널이 뜬다.
+  if (!TERMINAL.has(status)) return null;
+
   return (
     <div className="enrich-review" role="region" aria-label="AI 제안 검토">
       <div className="enrich-review-head">
@@ -144,14 +155,6 @@ export function EnrichReviewPanel({ runId, onClose }: Props) {
           ✕
         </button>
       </div>
-
-      {/* running — 진행 표시(영구 로컬 fallback). */}
-      {!TERMINAL.has(status) && (
-        <div className="enrich-review-loading">
-          <Spinner />
-          <span>codex 분석 중… (백그라운드 — 보드는 계속 사용 가능)</span>
-        </div>
-      )}
 
       {/* error — 재시도는 "전체 제안 실행" 버튼으로(여기선 닫기). */}
       {status === "failed" && (

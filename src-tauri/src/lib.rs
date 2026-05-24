@@ -195,6 +195,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         logging::app_log_dir,
         // cmux 워크스페이스 상태 (B1, best-effort 표시 전용 — INVARIANT #1: 결정 레일 미사용).
         commands::cmux_status,
+        commands::cmux_focus_workspace,
     ])
 }
 

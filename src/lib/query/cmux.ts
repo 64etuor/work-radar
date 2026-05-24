@@ -4,7 +4,7 @@
 // 이 훅의 데이터는 어떤 결정(분류·승격·실행)에도 입력으로 쓰이지 않는다.
 // cmux 미설치 또는 오류 → available:false → AgentStatusBar에서 칩을 렌더링하지 않음.
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import { commands } from "@/bindings";
 
@@ -23,5 +23,15 @@ export function useCmuxStatus() {
     refetchOnWindowFocus: true,
     // cmux 오류는 표시 전용이라 조용히 처리 — toast 없이.
     retry: false,
+  });
+}
+
+/**
+ * cmux 워크스페이스로 포커스 이동 (best-effort 네비 보조 — INVARIANT #1 결정 레일 무관).
+ * 에이전트 바의 cmux 박스 클릭 → 해당 워크스페이스를 cmux에서 select. 실패는 조용히 무시.
+ */
+export function useFocusCmuxWorkspace() {
+  return useMutation({
+    mutationFn: (reference: string) => unwrap(commands.cmuxFocusWorkspace(reference)),
   });
 }

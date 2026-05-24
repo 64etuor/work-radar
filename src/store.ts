@@ -37,6 +37,9 @@ interface UIState {
   /** cmdk 명령 팔레트 오버레이 열림 여부. */
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
+  /** 캘린더 드로어 열림(전역) — 에이전트 바 우측 아이콘/단축키로 토글, 어느 뷰에서나. 표시 전용. */
+  calendarOpen: boolean;
+  setCalendarOpen: (open: boolean) => void;
   /** Settings 뷰 진입 시 포커스 의도 (한 번 소비). */
   settingsIntent: SettingsIntent;
   /** 팔레트에서 고른 스킬 id (한 번 소비). SkillsView가 읽어 선택 후 clear. */
@@ -59,6 +62,8 @@ export const useUIStore = create<UIState>((set) => ({
   view: "board",
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  calendarOpen: false,
+  setCalendarOpen: (calendarOpen) => set({ calendarOpen }),
   settingsIntent: "open",
   pendingSkillId: null,
   theme: initialTheme(),

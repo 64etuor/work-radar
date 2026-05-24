@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, RefreshCw, Send } from "lucide-react";
+import { ArrowLeft, RefreshCw, Send, X } from "lucide-react";
 
 import type { HermesMessage } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,16 @@ import { useUIStore } from "@/store";
  * 채팅형 뷰 — 명령 입력(전송) + 송·수신 메시지 목록. 수신은 bounded 단발 fetch(무한 polling 아님,
  * #5) — 사용자가 "수신" 버튼으로 cadence를 정한다. 미설정이면 graceful degrade(설정 안내).
  * 봇 토큰은 keychain(Rust)에만 — 이 surface는 토큰을 절대 다루지 않는다.
+ *
+ * `onClose` 주어지면 **모달(채팅창) 모드**: 헤더의 "보드" 백버튼 → 닫기(X), 설정 이동 시 모달 먼저 닫음,
+ * 창 드래그 영역 비활성. 없으면 풀 페이지 모드(보드 복귀 백버튼).
  */
-export function HermesView() {
+export function HermesView({ onClose }: { onClose?: () => void } = {}) {
   const { goTo } = useUIStore();
+  const openSettings = () => {
+    onClose?.();
+    goTo("settings", "open");
+  };
   const status = useHermesBridgeStatus();
   const messages = useHermesMessages();
   const send = useSendHermesMessage();
@@ -54,16 +61,31 @@ export function HermesView() {
 
   return (
     <div className="hermes">
-      <header className="hm-head" data-tauri-drag-region>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
+      <header
+        className="hm-head"
+        {...(onClose ? {} : { "data-tauri-drag-region": "" })}
+      >
+        {onClose ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={onClose}
+            aria-label="닫기"
+          >
+            <X className="size-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => goTo("board")}
+          >
+            <ArrowLeft className="size-4" />
+            보드
+          </Button>
+        )}
         <span className="hm-title">Hermes</span>
         <span className={configured ? "hm-status on" : "hm-status"}>
           {configured ? "● 연결됨" : "○ 미설정"}
@@ -89,7 +111,7 @@ export function HermesView() {
             variant="outline"
             size="sm"
             className="rounded-full"
-            onClick={() => goTo("settings", "open")}
+            onClick={openSettings}
           >
             설정 열기
           </Button>

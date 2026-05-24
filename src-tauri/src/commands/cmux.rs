@@ -13,7 +13,9 @@ use crate::error::AppError;
 pub struct CmuxWorkspace {
     pub reference: String,
     pub title: String,
-    pub selected: bool,
+    /// cmux `claude_code` 상태 태그 값("Running"/"Needs input" 등). cmux가 추적하는 권위 신호.
+    /// 태그가 없으면 None = 해당 워크스페이스에 (cmux가 인지하는) 활성 에이전트 없음 → idle.
+    pub agent_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -23,53 +25,61 @@ pub struct CmuxStatus {
     pub workspaces: Vec<CmuxWorkspace>,
 }
 
-/// `cmux list-workspaces` stdout → CmuxWorkspace 목록.
-/// 순수 파서: 빈 줄 건너뜀, `* ` 접두 = selected, `workspace:<n>` ref 추출,
-/// 나머지 = 제목(leading `✳ ` glyph · trailing ` [selected]` 제거).
-pub(crate) fn parse_cmux_workspaces(stdout: &str) -> Vec<CmuxWorkspace> {
-    let mut out = Vec::new();
+/// 워크스페이스/서피스 제목 앞의 활동 글리프를 제거한다.
+/// cmux는 실행 중이면 점자 스피너(U+2800–U+28FF), 입력 대기 등이면 `✳`(U+2733)를 제목 앞에 붙인다.
+/// 글리프는 표시 노이즈라 제거하고, 활성 판정은 별도 `claude_code` 상태 태그(권위 신호)로 한다.
+pub(crate) fn strip_activity_glyph(title: &str) -> String {
+    let t = title.trim();
+    let mut chars = t.chars();
+    if let Some(first) = chars.clone().next() {
+        let is_glyph = ('\u{2800}'..='\u{28FF}').contains(&first) || first == '✳';
+        if is_glyph {
+            chars.next(); // 글리프 1자 소비
+            return chars.as_str().trim_start().to_string();
+        }
+    }
+    t.to_string()
+}
+
+/// `cmux top --format tsv` stdout → CmuxWorkspace 목록.
+/// TSV 컬럼: cpu_percent, memory_bytes, process_count, kind, ref, parent_ref, title.
+/// - `kind=workspace` 행 → 워크스페이스(ref·제목, 글리프 제거).
+/// - `kind=tag` 이고 ref에 `:tag:claude_code` 포함 → 그 워크스페이스(parent_ref)의 에이전트 상태.
+///   cmux가 추적하는 claude_code 상태 태그가 `selected`(포커스 탭)보다 훨씬 정확한 활성 신호다.
+pub(crate) fn parse_cmux_top(stdout: &str) -> Vec<CmuxWorkspace> {
+    let mut out: Vec<CmuxWorkspace> = Vec::new();
+    let mut statuses: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
     for line in stdout.lines() {
-        if line.trim().is_empty() {
+        let cols: Vec<&str> = line.split('\t').collect();
+        if cols.len() < 7 {
             continue;
         }
-        // selected 마커
-        let (selected, rest) = if let Some(s) = line.strip_prefix("* ") {
-            (true, s)
-        } else {
-            // 비-selected 줄은 선행 공백 있을 수 있음
-            (false, line.trim_start_matches(' '))
-        };
+        let kind = cols[3];
+        let reference = cols[4];
+        let parent = cols[5];
+        let title = cols[6];
+        match kind {
+            "workspace" => out.push(CmuxWorkspace {
+                reference: reference.to_string(),
+                title: strip_activity_glyph(title),
+                agent_status: None,
+            }),
+            "tag" if reference.contains(":tag:claude_code") => {
+                let value = title.trim();
+                if !value.is_empty() {
+                    statuses.insert(parent.to_string(), value.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
 
-        // `workspace:<n>` ref 추출
-        let Some(ws_pos) = rest.find("workspace:") else {
-            continue;
-        };
-        let after_ws = &rest[ws_pos..];
-        // ref = "workspace:<n>" (공백까지)
-        let ref_end = after_ws
-            .find(|c: char| c.is_whitespace())
-            .unwrap_or(after_ws.len());
-        let reference = after_ws[..ref_end].to_string();
-
-        // 제목: ref 이후 공백 두 개 건너뜀
-        let title_raw = after_ws[ref_end..].trim_start();
-        // 선행 ✳ glyph 제거 (U+2733 + 공백 또는 단독)
-        let title_after_glyph = title_raw
-            .strip_prefix("✳ ")
-            .or_else(|| title_raw.strip_prefix('✳'))
-            .unwrap_or(title_raw);
-        // 후행 ` [selected]` 제거
-        let title = title_after_glyph
-            .strip_suffix(" [selected]")
-            .unwrap_or(title_after_glyph)
-            .trim()
-            .to_string();
-
-        out.push(CmuxWorkspace {
-            reference,
-            title,
-            selected,
-        });
+    // 태그 상태를 해당 워크스페이스(parent ref = "workspace:<n>")에 병합.
+    for w in out.iter_mut() {
+        if let Some(s) = statuses.get(&w.reference) {
+            w.agent_status = Some(s.clone());
+        }
     }
     out
 }
@@ -108,10 +118,12 @@ pub async fn cmux_status() -> Result<CmuxStatus, AppError> {
         return Ok(unavailable);
     };
 
+    // `cmux top`은 워크스페이스 + claude_code 상태 태그(권위 활성 신호)를 한 번에 준다.
+    // process accounting이 섞여 list-workspaces보다 무겁지만 폴링이 15s라 허용(timeout 5s).
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(3),
+        std::time::Duration::from_secs(5),
         tokio::process::Command::new(&bin)
-            .arg("list-workspaces")
+            .args(["top", "--format", "tsv"])
             .output(),
     )
     .await;
@@ -121,7 +133,7 @@ pub async fn cmux_status() -> Result<CmuxStatus, AppError> {
             let stdout = String::from_utf8_lossy(&output.stdout);
             Ok(CmuxStatus {
                 available: true,
-                workspaces: parse_cmux_workspaces(&stdout),
+                workspaces: parse_cmux_top(&stdout),
             })
         }
         // 타임아웃, 비-0 종료, IO 오류 모두 graceful
@@ -129,58 +141,122 @@ pub async fn cmux_status() -> Result<CmuxStatus, AppError> {
     }
 }
 
+/// cmux 워크스페이스로 포커스 이동 (best-effort — 네비 보조, INVARIANT #1 결정 레일 무관).
+/// `cmux select-workspace --workspace <ref>`. 바이너리 부재·실패는 graceful(Ok(false), 에러 아님).
+#[tauri::command]
+#[specta::specta]
+pub async fn cmux_focus_workspace(reference: String) -> Result<bool, AppError> {
+    let Some(bin) = resolve_cmux_bin() else {
+        return Ok(false);
+    };
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        tokio::process::Command::new(&bin)
+            .args(["select-workspace", "--workspace", &reference])
+            .output(),
+    )
+    .await;
+    Ok(matches!(result, Ok(Ok(o)) if o.status.success()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn parse_selected_workspace() {
-        let stdout = "* workspace:1  WORK RADAR  [selected]\n";
-        let ws = parse_cmux_workspaces(stdout);
-        assert_eq!(ws.len(), 1);
-        assert!(ws[0].selected);
-        assert_eq!(ws[0].reference, "workspace:1");
-        assert_eq!(ws[0].title, "WORK RADAR");
+    fn strip_glyph_braille_spinner() {
+        // 점자 스피너(running) 글리프 제거.
+        assert_eq!(
+            strip_activity_glyph("⠐ Execute NS cutover"),
+            "Execute NS cutover"
+        );
     }
 
     #[test]
-    fn parse_unselected_with_glyph() {
-        let stdout = "  workspace:8  ✳ Some title\n";
-        let ws = parse_cmux_workspaces(stdout);
-        assert_eq!(ws.len(), 1);
-        assert!(!ws[0].selected);
-        assert_eq!(ws[0].reference, "workspace:8");
-        assert_eq!(ws[0].title, "Some title");
+    fn strip_glyph_attention_star() {
+        // ✳(needs input 등) 글리프 제거.
+        assert_eq!(
+            strip_activity_glyph("✳ Review refactoring"),
+            "Review refactoring"
+        );
     }
 
     #[test]
-    fn parse_multiple_workspaces() {
-        let stdout =
-            "* workspace:1  WORK RADAR  [selected]\n  workspace:8  ✳ Some title\n  workspace:2  Other\n";
-        let ws = parse_cmux_workspaces(stdout);
+    fn strip_glyph_none_passthrough() {
+        assert_eq!(strip_activity_glyph("WORK RADAR"), "WORK RADAR");
+        assert_eq!(strip_activity_glyph("~/Projects/Mono"), "~/Projects/Mono");
+    }
+
+    /// 헬퍼: TSV 한 행(7 컬럼) 생성.
+    fn row(kind: &str, reference: &str, parent: &str, title: &str) -> String {
+        format!("0.0\t0\t1\t{kind}\t{reference}\t{parent}\t{title}\n")
+    }
+
+    #[test]
+    fn parse_top_tags_mapped_to_workspaces() {
+        let mut tsv = String::new();
+        tsv.push_str(&row("total", "total", "", ""));
+        tsv.push_str(&row("window", "window:1", "total", ""));
+        tsv.push_str(&row(
+            "workspace",
+            "workspace:6",
+            "window:1",
+            "⠐ Execute NS cutover",
+        ));
+        tsv.push_str(&row(
+            "tag",
+            "workspace:UUID6:tag:claude_code",
+            "workspace:6",
+            "Running",
+        ));
+        tsv.push_str(&row("workspace", "workspace:2", "window:1", "WORK RADAR"));
+        tsv.push_str(&row(
+            "workspace",
+            "workspace:5",
+            "window:1",
+            "✳ Review mirrorless",
+        ));
+        tsv.push_str(&row(
+            "tag",
+            "workspace:UUID5:tag:claude_code",
+            "workspace:5",
+            "Needs input",
+        ));
+
+        let ws = parse_cmux_top(&tsv);
         assert_eq!(ws.len(), 3);
-        assert!(ws[0].selected);
-        assert_eq!(ws[0].reference, "workspace:1");
-        assert_eq!(ws[0].title, "WORK RADAR");
-        assert!(!ws[1].selected);
-        assert_eq!(ws[1].reference, "workspace:8");
-        assert_eq!(ws[1].title, "Some title");
-        assert!(!ws[2].selected);
-        assert_eq!(ws[2].reference, "workspace:2");
-        assert_eq!(ws[2].title, "Other");
+
+        assert_eq!(ws[0].reference, "workspace:6");
+        assert_eq!(ws[0].title, "Execute NS cutover"); // 글리프 제거
+        assert_eq!(ws[0].agent_status.as_deref(), Some("Running"));
+
+        // 태그 없는 워크스페이스 → None(idle).
+        assert_eq!(ws[1].reference, "workspace:2");
+        assert_eq!(ws[1].title, "WORK RADAR");
+        assert_eq!(ws[1].agent_status, None);
+
+        assert_eq!(ws[2].reference, "workspace:5");
+        assert_eq!(ws[2].title, "Review mirrorless");
+        assert_eq!(ws[2].agent_status.as_deref(), Some("Needs input"));
     }
 
     #[test]
-    fn parse_empty_input() {
-        let ws = parse_cmux_workspaces("");
-        assert!(ws.is_empty());
-    }
+    fn parse_top_ignores_non_claude_tags_and_short_rows() {
+        let mut tsv = String::new();
+        tsv.push_str(&row("workspace", "workspace:1", "window:1", "Solo"));
+        // 다른 태그(claude_code 아님) → 무시.
+        tsv.push_str(&row("tag", "workspace:X:tag:other", "workspace:1", "Busy"));
+        // 7 컬럼 미만 → 스킵.
+        tsv.push_str("garbage\tline\n");
 
-    #[test]
-    fn parse_empty_lines_ignored() {
-        let stdout = "\n  workspace:3  Hello\n\n";
-        let ws = parse_cmux_workspaces(stdout);
+        let ws = parse_cmux_top(&tsv);
         assert_eq!(ws.len(), 1);
-        assert_eq!(ws[0].title, "Hello");
+        assert_eq!(ws[0].reference, "workspace:1");
+        assert_eq!(ws[0].agent_status, None);
+    }
+
+    #[test]
+    fn parse_top_empty_input() {
+        assert!(parse_cmux_top("").is_empty());
     }
 }

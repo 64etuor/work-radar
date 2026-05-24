@@ -29,6 +29,8 @@
   --color-wr-coral: #ff7759; /* Coral — 분류 chip/따뜻한 마커 */
   --color-wr-coral-soft: #ffad9b; /* Soft Coral — chip 보더 */
   --color-wr-green: #003c33; /* Deep Enterprise Green — 다크 product band */
+  --color-wr-status-working: #16a34a; /* 에이전트 상태등 — 작업중(초록), 흰/다크 양쪽 가독 */
+  --color-wr-status-waiting: #eab308; /* 에이전트 상태등 — 입력 대기(노랑) */
   --color-wr-navy: #071829; /* Dark Navy — security/financial band */
 
   /* Semantic */
@@ -868,24 +870,29 @@
 }
 
 /* Phase 15 — 미분류 영역 "전체 제안 실행"(배치 enrich) 버튼. */
+/* 인박스 하단 풀폭 액션 버튼(전체 제안 실행) — 카드 영역은 layoutZone이 INBOX_FOOTER만큼 비워둠. */
 .cb .inbox-enrich-all {
   position: absolute;
-  top: 9px;
-  right: 10px;
+  bottom: 10px;
+  left: 14px;
+  right: 14px;
   z-index: 3;
   pointer-events: auto;
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: 999px;
-  background: var(--color-wr-surface);
-  color: var(--color-wr-muted);
-  padding: 3px 9px;
-  font: 600 10px var(--font-mono);
-  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--cb-r-sm);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  padding: 8px 10px;
+  font: 600 12px var(--font-sans);
   cursor: pointer;
+  transition: background var(--wr-motion-fast);
 }
 .cb .inbox-enrich-all:hover:not(:disabled) {
-  background: var(--color-wr-elevated);
-  color: var(--color-wr-fg);
+  background: var(--color-wr-surface);
 }
 .cb .inbox-enrich-all:disabled {
   opacity: 0.4;
@@ -3212,6 +3219,8 @@
   align-items: center;
   gap: 8px;
   height: 40px;
+  /* 너비는 내용(세션명)에 맞춰 자동 — 상한까지 풀 표시, 넘치면 이름이 말줄임(…). 진행은 .asb-box-fill 워시로. */
+  max-width: 240px;
   padding: 0 12px;
   border: 1px solid var(--color-wr-border-light);
   border-radius: 8px;
@@ -3220,8 +3229,6 @@
   overflow: hidden;
   text-align: left;
   -webkit-app-region: no-drag;
-  /* Bespoke: width가 경과로 성장 — 느린 선형 전이로 물리감(진행 fill과 동일 cadence). */
-  transition: width 0.9s linear;
 }
 .asb-box:hover {
   background: var(--color-wr-hover);
@@ -3242,7 +3249,7 @@
 }
 .asb-box-icon,
 .asb-box-name,
-.asb-box-state {
+.asb-box-dot {
   position: relative;
   z-index: 1;
 }
@@ -3259,42 +3266,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  /* 세션명은 한글 ~6자에서 말줄임(…) — 너무 긴 제목이 바를 늘리지 않게(약 6.5em ≈ 6자). */
+  max-width: 6.5em;
 }
-/* 상태 = 색 dot + Mono 마이크로 라벨 병기(색만으로 의미 금지). */
-.asb-box-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-}
+/* 상태등 — 맨 앞 색 dot. 색으로만 상태 구분(텍스트 라벨 없음, 의미는 dot의 aria-label/title로 보강). */
 .asb-box-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   flex: 0 0 auto;
 }
-.asb-box-state-label {
-  font: 500 10px var(--font-mono);
-  letter-spacing: 0.02em;
-}
-/* idle = Muted Slate · working = Action Blue · error = Error Red. */
-.asb-box-state-idle .asb-box-dot {
+/* 상태등 신호색: idle = 회색(Muted Slate) · working = 초록 · waiting = 노랑(입력/승인 대기) · error = 빨강. */
+.asb-box-idle .asb-box-dot {
   background: var(--color-wr-subtle);
 }
-.asb-box-state-idle .asb-box-state-label {
-  color: var(--color-wr-subtle);
+.asb-box-working .asb-box-dot {
+  background: var(--color-wr-status-working);
 }
-.asb-box-state-working .asb-box-dot {
-  background: var(--color-wr-accent);
+.asb-box-waiting .asb-box-dot {
+  background: var(--color-wr-status-waiting);
 }
-.asb-box-state-working .asb-box-state-label {
-  color: var(--color-wr-accent);
-}
-.asb-box-state-error .asb-box-dot {
+.asb-box-error .asb-box-dot {
   background: var(--color-wr-danger);
-}
-.asb-box-state-error .asb-box-state-label {
-  color: var(--color-wr-danger);
 }
 /* error 박스 보더 강조(상태 추가 단서). */
 .asb-box-error {
@@ -3314,6 +3307,26 @@
   background: var(--color-wr-bg);
   cursor: default;
   white-space: nowrap;
+}
+/* 캘린더 트리거 — 바 최우측 상주 아이콘(margin-left:auto로 우측 정렬). 단축키 ⌘⇧C와 동일 토글. */
+.asb-cal {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 8px;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-muted);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.asb-cal:hover {
+  background: var(--color-wr-hover);
+  color: var(--color-wr-fg);
 }
 /* 박스 이름 인라인 편집 input (P10b) — 이름 span과 동일 타이포, 칩 안에 끼우는 단정한 필드. */
 .asb-box-name-edit {
@@ -3827,22 +3840,14 @@
  * 우측 슬라이드 드로어(today-rail 위 오버레이). 흰 패널, 좌측 hairline + radius lg, 절제된 Media Lift.
  * ≥1040px = 우측 드로어 / <720px = 하단 시트. 조회 전용(읽기) — 일정 생성/편집 없음.
  */
-.cal-open-ico {
-  font-size: 12px;
-  color: var(--color-wr-subtle);
-}
-
-.caldrawer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 96;
-  background: rgba(15, 20, 40, 0.18);
-  display: flex;
-  justify-content: flex-end;
-}
+/* 비모달 사이드 패널 — 백드롭 없음(캘린더 보면서 보드/브레인덤프 조작 가능). 고정 우측·전체 높이. */
 .caldrawer {
-  width: min(440px, 92vw);
-  height: 100%;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 96;
+  width: min(560px, 96vw);
   display: flex;
   flex-direction: column;
   background: var(--color-wr-bg);
@@ -4109,13 +4114,12 @@
 
 /* 반응형: <720px = 하단 시트. 월뷰는 좁으면 셀 높이 축소(주뷰 강등은 사용자 토글로). */
 @media (max-width: 720px) {
-  .caldrawer-backdrop {
-    align-items: flex-end;
-    justify-content: stretch;
-  }
   .caldrawer {
+    top: auto;
+    left: 0;
+    right: 0;
     width: 100%;
-    height: 78vh;
+    height: 85vh;
     border-left: none;
     border-top: 1px solid var(--color-wr-border);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;

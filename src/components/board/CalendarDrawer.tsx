@@ -102,14 +102,9 @@ export function CalendarDrawer({ open, onClose }: Props) {
   };
 
   return (
-    <div className="caldrawer-backdrop" onPointerDown={onClose}>
-      <aside
-        className="caldrawer"
-        role="dialog"
-        aria-label="캘린더"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <header className="caldrawer-head">
+    // 백드롭 없음(비모달) — 캘린더를 보면서 보드/브레인덤프를 그대로 조작할 수 있다. 닫기=✕/Esc.
+    <aside className="caldrawer" role="dialog" aria-label="캘린더">
+      <header className="caldrawer-head">
           <span className="caldrawer-mark">CALENDAR</span>
           <ToggleGroup
             type="single"
@@ -230,7 +225,6 @@ export function CalendarDrawer({ open, onClose }: Props) {
             />
           )}
         </div>
-      </aside>
-    </div>
+    </aside>
   );
 }

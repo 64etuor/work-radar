@@ -426,6 +426,11 @@ export const commands = {
 	 *  바이너리 부재·타임아웃·비-0 종료 → Ok(available:false, []) — 절대 Err 아님.
 	 */
 	cmuxStatus: () => typedError<CmuxStatus, AppError>(__TAURI_INVOKE("cmux_status")),
+	/**
+	 *  cmux 워크스페이스로 포커스 이동 (best-effort — 네비 보조, INVARIANT #1 결정 레일 무관).
+	 *  `cmux select-workspace --workspace <ref>`. 바이너리 부재·실패는 graceful(Ok(false), 에러 아님).
+	 */
+	cmuxFocusWorkspace: (reference: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cmux_focus_workspace", { reference })),
 };
 
 /* Types */
@@ -612,7 +617,11 @@ export type CmuxStatus = {
 export type CmuxWorkspace = {
 	reference: string,
 	title: string,
-	selected: boolean,
+	/**
+	 *  cmux `claude_code` 상태 태그 값("Running"/"Needs input" 등). cmux가 추적하는 권위 신호.
+	 *  태그가 없으면 None = 해당 워크스페이스에 (cmux가 인지하는) 활성 에이전트 없음 → idle.
+	 */
+	agentStatus: string | null,
 };
 
 /**  codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성). */

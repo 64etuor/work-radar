@@ -14,7 +14,6 @@ import {
   type ProjectPickerState,
   ProjectPickerModal,
 } from "@/components/board/ProjectPickerModal";
-import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
 import { CapturePanel } from "@/components/board/CapturePanel";
@@ -22,7 +21,6 @@ import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanva
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 import { SprintTimer } from "@/components/SprintTimer";
-import { Button } from "@/components/ui/button";
 import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
 import {
   localToday,
@@ -120,10 +118,11 @@ export function CaptureBoard() {
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
   const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [enrichRunId, setEnrichRunId] = useState<string | null>(null);
   // "전체 제안 실행" 잡 id — set되면 보드 내 인라인 리뷰 패널이 폴링·표시(페이지 이동 없음).
   const [enrichAllRunId, setEnrichAllRunId] = useState<string | null>(null);
+  // 배치 enrich 생성 중 여부(패널이 폴링하며 보고) — 인박스 버튼 스피너 표시용(토스트 대신).
+  const [enrichAllGenerating, setEnrichAllGenerating] = useState(false);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
@@ -526,6 +525,7 @@ export function CaptureBoard() {
           enrichAllDisabled={
             !codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending
           }
+          enrichAllRunning={triggerEnrichAll.isPending || enrichAllGenerating}
           todayPanelRef={todayPanelRef}
         />
 
@@ -533,24 +533,15 @@ export function CaptureBoard() {
         {enrichAllRunId && (
           <EnrichReviewPanel
             runId={enrichAllRunId}
-            onClose={() => setEnrichAllRunId(null)}
+            onClose={() => {
+              setEnrichAllRunId(null);
+              setEnrichAllGenerating(false);
+            }}
+            onRunningChange={setEnrichAllGenerating}
           />
         )}
 
         <div className="execute">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-end gap-1.5 rounded-full font-semibold"
-            onClick={() => setCalendarOpen(true)}
-            title="캘린더 열기 (일/주/월)"
-          >
-            <span className="cal-open-ico" aria-hidden>
-              ▤
-            </span>
-            캘린더
-          </Button>
           <TodayRail
             items={todayItems}
             panelRef={todayPanelRef}
@@ -588,7 +579,6 @@ export function CaptureBoard() {
         state={calendarModal}
         onClose={() => setCalendarModal(null)}
       />
-      <CalendarDrawer open={calendarOpen} onClose={() => setCalendarOpen(false)} />
       <ProjectPickerModal
         state={projectPicker}
         onClose={() => setProjectPicker(null)}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Calendar,
   MessageCircle,
   Send,
   Sparkles,
@@ -7,15 +8,12 @@ import {
 } from "lucide-react";
 
 import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
-import {
-  type BoxState,
-  boxWidth,
-  overflowSplit,
-  progressRatio,
-} from "@/lib/agentBar";
+import { HermesView } from "@/components/HermesView";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { type BoxState, overflowSplit, progressRatio } from "@/lib/agentBar";
 import { useAgentRuns } from "@/lib/query";
 import { useAgentNames, useSetAgentName } from "@/lib/query/agentsConfig";
-import { useCmuxStatus } from "@/lib/query/cmux";
+import { useCmuxStatus, useFocusCmuxWorkspace } from "@/lib/query/cmux";
 import { useHermesBridgeStatus } from "@/lib/query/hermes";
 import { useUIStore } from "@/store";
 
@@ -49,8 +47,16 @@ type SessionBox = {
 const STATE_LABEL: Record<BoxState, string> = {
   idle: "대기",
   working: "작업 중",
+  waiting: "입력 대기",
   error: "오류",
 };
+
+/** cmux `claude_code` 상태 태그 → 박스 상태(색 dot). "Running"=working, "Needs input"=waiting, 그 외/없음=idle. */
+function cmuxBoxState(status: string | null): BoxState {
+  if (status === "Running") return "working";
+  if (status === "Needs input") return "waiting";
+  return "idle";
+}
 
 const STATUS_TO_STATE: Record<AgentStatus, BoxState> = {
   proposed: "working",
@@ -95,7 +101,7 @@ function parseUtcMs(s: string | null): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** agent_runs(codex 등) → 세션 박스. 활성 잡 우선, 그 외 최근 종료 잡도 1박스로 표시. */
+/** agent_runs(codex 등) 활성 잡 → 세션 박스. 호출부에서 isActive로 필터(종료/취소 잡은 제외). */
 function runToBox(run: AgentRunView): SessionBox {
   const state = STATUS_TO_STATE[run.status];
   return {
@@ -112,13 +118,14 @@ function runToBox(run: AgentRunView): SessionBox {
 }
 
 export function AgentStatusBar() {
-  const { goTo } = useUIStore();
+  const { goTo, setCalendarOpen } = useUIStore();
   const runs = useAgentRuns();
   const list = runs.data ?? [];
 
   // hermes/cmux 세션 (agent_runs에 없을 수 있어 별도 enumerate — 표시 전용 INVARIANT #1).
   const hermes = useHermesBridgeStatus();
   const cmux = useCmuxStatus();
+  const focusCmux = useFocusCmuxWorkspace();
 
   // client-side first-seen: 백엔드 timestamp 없는 세션(hermes/cmux)의 경과 기준점.
   // 표시 전용 — 결정 로직 미사용. 사라진 세션 키는 정리.
@@ -128,13 +135,12 @@ export function AgentStatusBar() {
   const boxes = useMemo<SessionBox[]>(() => {
     const out: SessionBox[] = [];
 
-    // 1) agent_runs: 활성 잡 먼저(list는 created_at DESC), 그 외 최근 잡.
-    const sortedRuns = [...list].sort((a, b) => {
-      const aw = isActive(a.status) ? 0 : 1;
-      const bw = isActive(b.status) ? 0 : 1;
-      return aw - bw;
-    });
-    for (const run of sortedRuns) out.push(runToBox(run));
+    // 1) agent_runs: 활성 잡만 표시(running/proposed/awaiting_approval, list는 created_at DESC).
+    //    종료 잡(succeeded/failed/cancelled)은 바에 안 띄운다 — 끝났거나 취소된 잡이 남으면
+    //    "작업 중"으로 오인됨(이력은 Jobs 뷰). 활성이 없고 hermes/cmux도 없으면 'Agents · idle' pill.
+    for (const run of list) {
+      if (isActive(run.status)) out.push(runToBox(run));
+    }
 
     // 2) hermes 세션: 연결되어 있으면 1박스(엔진 박스, idle).
     if (hermes.data?.configured) {
@@ -150,21 +156,23 @@ export function AgentStatusBar() {
       });
     }
 
-    // 3) cmux 워크스페이스: 각 1박스(세션 enumerate). selected=working, 그 외 idle.
+    // 3) cmux 워크스페이스: 각 1박스(세션 enumerate). 활성 판정 = cmux의 claude_code 상태 태그
+    //    (agentStatus): "Running"=working, 그 외("Needs input"/없음)=idle. 이전엔 selected(포커스 탭)를
+    //    working으로 썼으나 실제 실행 상태와 불일치 → cmux가 추적하는 권위 태그로 교체(표시 전용 #1).
     const cmuxData = cmux.data;
     if (cmuxData?.available && cmuxData.workspaces.length > 0) {
       for (const w of cmuxData.workspaces) {
         const key = `cmux:${w.reference}`;
-        const working = w.selected;
+        const state = cmuxBoxState(w.agentStatus);
         out.push({
           key,
           engine: "claude",
           name: w.title,
-          state: working ? "working" : "idle",
-          stateLabel: working ? STATE_LABEL.working : STATE_LABEL.idle,
-          startedMs: working ? firstSeenMs(firstSeenRef.current, key) : null,
+          state,
+          stateLabel: STATE_LABEL[state],
+          startedMs: state === "working" ? firstSeenMs(firstSeenRef.current, key) : null,
           timeoutSec: null,
-          title: `cmux · ${w.title} (${w.reference})`,
+          title: `cmux · ${w.title} (${w.reference})${w.agentStatus ? ` · ${w.agentStatus}` : ""}`,
         });
       }
     }
@@ -198,6 +206,15 @@ export function AgentStatusBar() {
 
   // 인라인 이름 편집 중인 박스 key(없으면 null). 더블클릭으로 진입.
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  // 박스 클릭 라우팅: Hermes → 채팅 모달, cmux 워크스페이스 → cmux 포커스 이동(select-workspace),
+  // 그 외(codex 잡) → Jobs 뷰.
+  const [hermesOpen, setHermesOpen] = useState(false);
+  const openBox = (box: SessionBox) => {
+    if (box.engine === "hermes") setHermesOpen(true);
+    else if (box.key.startsWith("cmux:"))
+      focusCmux.mutate(box.key.slice("cmux:".length));
+    else goTo("jobs");
+  };
   const commitName = (sessionKey: string, defaultName: string, next: string) => {
     setEditingKey(null);
     const trimmed = next.trim();
@@ -205,6 +222,19 @@ export function AgentStatusBar() {
     const value = trimmed === "" || trimmed === defaultName ? null : trimmed;
     setName.mutate({ sessionKey, name: value });
   };
+
+  // 캘린더 트리거 — 바 최우측 상주 아이콘(단축키 ⌘⇧C와 동일 전역 토글). 어느 뷰에서나.
+  const calendarBtn = (
+    <button
+      type="button"
+      className="asb-cal"
+      onClick={() => setCalendarOpen(true)}
+      title="캘린더 (⌘⇧C)"
+      aria-label="캘린더 열기"
+    >
+      <Calendar size={15} strokeWidth={1.5} />
+    </button>
+  );
 
   // ── 빈 상태: 조용한 단일 'Agents · idle' pill (박스 없음). ──────────────
   if (boxes.length === 0) {
@@ -219,6 +249,7 @@ export function AgentStatusBar() {
           <span className="asb-label">Agents</span>
           <span className="asb-idle-text">idle</span>
         </button>
+        {calendarBtn}
       </div>
     );
   }
@@ -234,7 +265,7 @@ export function AgentStatusBar() {
             displayName={nameOverrides[box.key] ?? box.name}
             nowMs={nowMs}
             editing={editingKey === box.key}
-            onOpen={() => goTo("jobs")}
+            onOpen={() => openBox(box)}
             onEditStart={() => setEditingKey(box.key)}
             onCommit={(next) => commitName(box.key, box.name, next)}
             onCancel={() => setEditingKey(null)}
@@ -249,7 +280,31 @@ export function AgentStatusBar() {
           </span>
         )}
       </div>
+      {calendarBtn}
+      <HermesModal open={hermesOpen} onClose={() => setHermesOpen(false)} />
     </div>
+  );
+}
+
+/** Hermes 채팅 모달 — 에이전트 바의 Hermes 박스 클릭 시 페이지 이동 대신 채팅창(Dialog)으로 연다.
+ *  PR 0 Dialog 래퍼(overlay-stack) → Esc/외부클릭 닫힘·창 숨김 방지·트리거 포커스 복원을 radix가 전담. */
+function HermesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
+      <DialogContent
+        showClose={false}
+        aria-describedby={undefined}
+        className="flex h-[70vh] w-[min(460px,92vw)] max-w-none flex-col overflow-hidden p-0"
+      >
+        <DialogTitle className="sr-only">Hermes</DialogTitle>
+        <HermesView onClose={onClose} />
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -277,7 +332,6 @@ function AgentBox({
   const working = box.state === "working";
   const elapsedSec = box.startedMs != null ? (nowMs - box.startedMs) / 1000 : 0;
   const ratio = working ? progressRatio(elapsedSec, box.timeoutSec) : 0;
-  const width = editing ? undefined : boxWidth(ratio, working && box.startedMs != null);
 
   // 편집 중에는 클릭이 Jobs로 이동하지 않도록 div로 전환(input 포커스 보존).
   const Tag = editing ? "div" : "button";
@@ -286,7 +340,6 @@ function AgentBox({
     <Tag
       type={editing ? undefined : "button"}
       className={`asb-box asb-box-${box.state}`}
-      style={{ width }}
       onClick={editing ? undefined : onOpen}
       title={editing ? undefined : box.title}
     >
@@ -296,6 +349,13 @@ function AgentBox({
           style={{ width: `${Math.round(ratio * 100)}%` }}
         />
       )}
+      {/* 상태등 — 맨 앞, 색으로만 상태 표시(텍스트 라벨 없음). 의미는 aria-label/title로 보강. */}
+      <span
+        className="asb-box-dot"
+        role="img"
+        aria-label={box.stateLabel}
+        title={box.stateLabel}
+      />
       <span className="asb-box-icon">
         <EngineIcon engine={box.engine} size={13} />
       </span>
@@ -313,10 +373,6 @@ function AgentBox({
           {displayName}
         </span>
       )}
-      <span className={`asb-box-state asb-box-state-${box.state}`}>
-        <span className="asb-box-dot" aria-hidden="true" />
-        <span className="asb-box-state-label">{box.stateLabel}</span>
-      </span>
     </Tag>
   );
 }

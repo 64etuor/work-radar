@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Loader2, Sparkles } from "lucide-react";
 
 import type { WorkSignal } from "@/bindings";
 import {
@@ -15,6 +16,8 @@ import {
 const CW = 150;
 const CH = 92;
 const GAP = 12;
+/** 인박스 하단 '전체 제안 실행' 버튼 높이만큼 카드 배치 영역을 비워둔다(겹침 방지). */
+const INBOX_FOOTER = 48;
 
 type DropTarget = ZoneKey | "today";
 
@@ -42,6 +45,8 @@ type Props = {
   onEnrichAll: () => void;
   /** codex 미가용 또는 미분류 0개면 배치 enrich 버튼 비활성. */
   enrichAllDisabled: boolean;
+  /** 전체 제안(배치 enrich) 생성 중 — 버튼 아이콘을 스피너로(토스트 대신 인-버튼 표시). */
+  enrichAllRunning: boolean;
   /** Today 패널 DOM (드롭 히트 테스트용). */
   todayPanelRef: React.RefObject<HTMLDivElement | null>;
 };
@@ -65,6 +70,7 @@ export function MatrixCanvas({
   onEditCancel,
   onEnrichAll,
   enrichAllDisabled,
+  enrichAllRunning,
   todayPanelRef,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -103,7 +109,7 @@ export function MatrixCanvas({
     const w = inbox.getBoundingClientRect().width;
     const cols = Math.max(1, Math.floor((w - 24) / (CW + GAP)));
     const rows = Math.max(1, Math.ceil((n || 1) / cols));
-    inbox.style.height = `${40 + rows * (CH + GAP) + 8}px`;
+    inbox.style.height = `${40 + rows * (CH + GAP) + 8 + INBOX_FOOTER}px`;
   };
 
   const place = (
@@ -150,7 +156,7 @@ export function MatrixCanvas({
       const cols = Math.max(1, Math.floor((z.w - 24) / (CW + GAP)));
       if (cols <= 1) {
         const top = z.y + 40;
-        const bot = z.y + z.h - CH - 8;
+        const bot = z.y + z.h - CH - 8 - INBOX_FOOTER;
         const step = list.length > 1 ? Math.min(58, (bot - top) / (list.length - 1)) : 0;
         list.forEach((s, i) => {
           const el2 = cardRefs.current.get(s.id);
@@ -321,7 +327,7 @@ export function MatrixCanvas({
         <button
           type="button"
           className="inbox-enrich-all"
-          disabled={enrichAllDisabled}
+          disabled={enrichAllDisabled || enrichAllRunning}
           title="미분류 전체를 AI로 일괄 제안 (보드 내 인라인 패널에서 검토·적용 — 자동 분류 없음)"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -329,7 +335,12 @@ export function MatrixCanvas({
             onEnrichAll();
           }}
         >
-          전체 제안 실행
+          {enrichAllRunning ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Sparkles className="size-3.5" aria-hidden />
+          )}
+          {enrichAllRunning ? "제안 생성 중…" : "전체 제안 실행"}
         </button>
       </div>
 

@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
+import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { ToastHost } from "@/components/ToastHost";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -20,7 +21,7 @@ import { WorktreeView } from "@/components/WorktreeView";
 import { adjacentView } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
 import { useViewShortcuts } from "@/lib/useViewShortcuts";
-import { useUIStore } from "@/store";
+import { useUIStore, type View } from "@/store";
 
 /**
  * 단일 창 셸. 전역 핫키(기본 Ctrl+Space, Rust·사용자 설정 가능)로 토글되고 Esc로 숨긴다.
@@ -28,7 +29,8 @@ import { useUIStore } from "@/store";
  * 뷰 전환은 view 키 기반 subtle CSS 트랜지션(styles.css .view-shell).
  */
 export default function App() {
-  const { view, paletteOpen, setPaletteOpen, goTo, theme } = useUIStore();
+  const { view, paletteOpen, setPaletteOpen, goTo, theme, calendarOpen, setCalendarOpen } =
+    useUIStore();
 
   // per-view 단축키 (Phase 18 #7) — 입력 비포커스 + 팔레트 닫힘일 때만 활성.
   // Cmd+←/→ → NAV_ITEMS 순서 기준 인접 뷰 전환(P3).
@@ -36,7 +38,10 @@ export default function App() {
   useViewShortcuts(
     keymap.data,
     !paletteOpen,
-    (v) => goTo(v),
+    (action) => {
+      if (action === "calendar") setCalendarOpen(!calendarOpen);
+      else goTo(action as View);
+    },
     (dir) => goTo(adjacentView(view, dir)),
   );
 
@@ -49,12 +54,8 @@ export default function App() {
         setPaletteOpen(!paletteOpen);
         return;
       }
-      // Cmd/Ctrl+, → 설정 바로 열기.
-      if (meta && e.key === ",") {
-        e.preventDefault();
-        goTo("settings", "open");
-        return;
-      }
+      // 설정(Cmd+,)·캘린더(Cmd+Shift+C) 등은 이제 per-view keymap(useViewShortcuts)이 처리 —
+      // 설정에서 변경 가능. 여기선 팔레트 토글(Cmd+K)과 Esc만 하드코딩.
       if (e.key === "Escape") {
         if (paletteOpen) {
           setPaletteOpen(false);
@@ -111,6 +112,8 @@ export default function App() {
         )}
       </div>
       {paletteOpen && <CommandPalette />}
+      {/* 전역 캘린더 드로어 — 에이전트 바 우측 아이콘 / ⌘⇧C 로 토글, 모든 뷰 위에 슬라이드. */}
+      <CalendarDrawer open={calendarOpen} onClose={() => setCalendarOpen(false)} />
       {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
       <ToastHost />
     </div>

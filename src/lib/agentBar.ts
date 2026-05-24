@@ -19,8 +19,9 @@ export const BOX_MAX_PX = 240;
  */
 export const UNBOUNDED_SATURATE_SEC = 30 * 60; // 30분
 
-/** 박스 시각 상태 — 색+라벨 병기 대상(DESIGN 전역 a11y 규칙). */
-export type BoxState = "idle" | "working" | "error";
+/** 박스 시각 상태. 상태등(색 dot)으로 표시하고 텍스트는 aria-label/title로만 제공.
+ *  waiting = 사람 입력/승인 대기(cmux "Needs input" 등) — working(실행)과 색으로 구분. */
+export type BoxState = "idle" | "working" | "waiting" | "error";
 
 /**
  * 경과(초) → 진행 ratio(0~1).

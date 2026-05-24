@@ -48,9 +48,9 @@ export const NAV_GROUP_LABELS: Record<NavGroup, string> = {
 };
 
 /**
- * 기본 단축키 = Cmd+K 팔레트와 충돌하지 않는 g-then-key chord(Vim/GitHub식 — 데스크톱 norm)
- * + 자주 쓰는 보드/today/jobs는 chord. 입력 포커스 시 비활성(App.tsx).
- * board는 "g b"처럼 두 키 시퀀스. (Cmd+1..9는 OS/탭 전환과 잦은 충돌이라 chord 채택.)
+ * 기본 단축키 = Cmd+숫자(단일 창이라 OS 탭 전환과 충돌 없음 — 사용자 선택). NAV 순서대로 1~9·0.
+ * 설정에서 개별 변경 가능(빈 값=끔). 매처는 조합("Cmd+1")과 레거시 단일/체인("1"·"g b") 둘 다 지원.
+ * skills는 기본 미할당(Cmd+K 팔레트로 도달) — 숫자가 모자라 남김. calendar는 EXTRA_ACTIONS 참고.
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -59,7 +59,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "board matrix 보드 매트릭스 캡처 아이젠하워",
     icon: LayoutGrid,
     group: "operate",
-    defaultShortcut: "g b",
+    defaultShortcut: "Cmd+1",
   },
   {
     view: "today",
@@ -67,7 +67,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "today 오늘 운영 일정 work debt 부채",
     icon: CalendarCheck,
     group: "operate",
-    defaultShortcut: "g d",
+    defaultShortcut: "Cmd+2",
   },
   {
     view: "timeline",
@@ -75,7 +75,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "timeline 타임라인 시간축 아젠다 일정",
     icon: GanttChart,
     group: "operate",
-    defaultShortcut: "g l",
+    defaultShortcut: "Cmd+3",
   },
   {
     view: "weekly",
@@ -83,7 +83,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "weekly review 주간 회고 집계 처리량 추세",
     icon: CalendarRange,
     group: "review",
-    defaultShortcut: "g w",
+    defaultShortcut: "Cmd+4",
   },
   {
     view: "retro",
@@ -91,7 +91,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "retro 회고 완료 임팩트 보관함 archive 복원 regret",
     icon: History,
     group: "review",
-    defaultShortcut: "g e",
+    defaultShortcut: "Cmd+5",
   },
   {
     view: "routines",
@@ -99,7 +99,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "routine tracking 루틴 트래킹 이행률 streak 연속 히스토리 반복",
     icon: Repeat,
     group: "review",
-    defaultShortcut: "g u",
+    defaultShortcut: "Cmd+6",
   },
   {
     view: "radar",
@@ -107,7 +107,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "pr radar github 레이더 풀리퀘스트",
     icon: GitPullRequest,
     group: "code",
-    defaultShortcut: "g r",
+    defaultShortcut: "Cmd+7",
   },
   {
     view: "worktree",
@@ -115,7 +115,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "worktree diff branch 워크트리 브랜치 디프 차이",
     icon: GitCompare,
     group: "code",
-    defaultShortcut: "g t",
+    defaultShortcut: "Cmd+8",
   },
   {
     view: "jobs",
@@ -123,7 +123,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "jobs agent codex 잡 에이전트 코덱스 자동화",
     icon: Bot,
     group: "code",
-    defaultShortcut: "g j",
+    defaultShortcut: "Cmd+9",
   },
   {
     view: "hermes",
@@ -132,7 +132,7 @@ export const NAV_ITEMS: NavItem[] = [
       "hermes 헤르메스 메신저 브리지 텔레그램 telegram bot 외부 에이전트 채팅",
     icon: MessageCircle,
     group: "connect",
-    defaultShortcut: "g h",
+    defaultShortcut: "Cmd+0",
   },
   {
     view: "skills",
@@ -140,7 +140,6 @@ export const NAV_ITEMS: NavItem[] = [
     search: "skills 스킬 레지스트리 프롬프트 에이전트 claude codex 외부 스킬 편집",
     icon: Blocks,
     group: "connect",
-    defaultShortcut: "g s",
   },
   {
     view: "settings",
@@ -148,7 +147,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "settings 설정 open keymap 단축키 핫키",
     icon: Settings,
     group: "connect",
-    defaultShortcut: "g ,",
+    defaultShortcut: "Cmd+,",
   },
 ];
 
@@ -166,10 +165,24 @@ export const NAV_BY_VIEW: Record<View, NavItem> = Object.fromEntries(
   NAV_ITEMS.map((n) => [n.view, n]),
 ) as Record<View, NavItem>;
 
-/** 기본 keymap(view → shortcut). 저장된 keymap이 없을 때 폴백. */
+/** view가 아닌 추가 단축키 액션(설정 키맵 목록에 함께 노출 + App에서 직접 처리). */
+export interface ExtraAction {
+  /** keymap 키(view와 겹치지 않는 액션 식별자). */
+  key: string;
+  label: string;
+  defaultShortcut: string;
+}
+
+/** 캘린더 등 view-비귀속 단축키. App의 onAction이 key로 분기해 처리한다. */
+export const EXTRA_ACTIONS: ExtraAction[] = [
+  { key: "calendar", label: "캘린더 열기/닫기", defaultShortcut: "Cmd+Shift+C" },
+];
+
+/** 기본 keymap(action → shortcut). 저장된 keymap이 없을 때 폴백. view + EXTRA_ACTIONS. */
 export function defaultKeymap(): Record<string, string> {
   const m: Record<string, string> = {};
   for (const n of NAV_ITEMS) if (n.defaultShortcut) m[n.view] = n.defaultShortcut;
+  for (const a of EXTRA_ACTIONS) if (a.defaultShortcut) m[a.key] = a.defaultShortcut;
   return m;
 }
 
