@@ -173,7 +173,8 @@ export function useAcceptEnrich() {
 // ── Phase 15: 미분류 전체 배치 enrich (단일 잡, 부분 실패 격리) ─────────────────────
 //
 // 미분류 영역 "전체 제안 실행" → 모든 미분류 카드를 한 codex 호출로 enrich(awaiting_approval) →
-// 사람이 카드별 제안을 검토·accept(로컬 반영). accept해도 quadrant 자동 확정 0(INVARIANT #1).
+// 사람이 카드별 제안을 검토·수정 후 적용하면 미분류 카드의 quadrant+area를 확정(로컬). codex 자동 확정
+// 0 — 적용 클릭이 드래그/키보드 분류와 동일한 사람 결정 레일(INVARIANT #1).
 
 /** 미분류 전체 배치 enrich 잡 트리거(단일 잡). 대상 없으면 백엔드가 Err로 막는다. */
 export function useTriggerEnrichAll() {
@@ -195,7 +196,7 @@ export function useBatchEnrichProposal(runId: string | null, ready: boolean) {
   });
 }
 
-/** 배치 enrich accept(INVARIANT #1/#2 게이트) — 카드별 suggested 힌트만 반영(quadrant 자동 확정 0). */
+/** 배치 enrich accept(INVARIANT #1/#2 게이트) — 사람 적용 시 미분류 카드의 quadrant+area 확정(codex 자동 확정 0). */
 export function useAcceptEnrichAll() {
   const qc = useQueryClient();
   return useMutation({
@@ -208,7 +209,7 @@ export function useAcceptEnrichAll() {
     }) => unwrap(commands.acceptEnrichAll(runId, accepted)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agentRuns"] });
-      void qc.invalidateQueries({ queryKey: ["signals"] }); // suggested 힌트 칩 반영.
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // 확정 반영 → 카드 섹션 이동/태그 solid화.
     },
   });
 }

@@ -513,10 +513,11 @@ pub(crate) async fn set_signal_project_tag(
     .await
 }
 
-// ── agents enrich / triage (suggested_* / area 힌트만 — INVARIANT #1: quadrant 확정 무변경) ──
+// ── agents enrich / triage (suggested_* 힌트 — INVARIANT #1: codex 자동 확정 없음) ──
 //
-// ⚠️ 이 fn들은 suggested_quadrant/suggested_area/area만 쓴다. 확정 `quadrant` 컬럼은 절대 건드리지
-//    않는다(사분면 확정 = classify_signal=set_quadrant, area 확정 = set_signal_area, 둘 다 사람 결정).
+// ⚠️ codex가 내는 제안은 suggested_quadrant/suggested_area로만 쓴다(set_enrich_hints 등). 확정 `quadrant`
+//    컬럼은 codex/자동화가 절대 건드리지 않는다. 확정은 사람 제스처에서만 — 드래그/키보드(classify_signal=
+//    set_quadrant), area(set_signal_area), 그리고 enrich 검토 후 사람의 "적용" 클릭(confirm_enrich_batch_one).
 
 /// enrich 카드 텍스트(title/body/project_id) 조회. (enrich.rs trigger 이전)
 pub(crate) async fn fetch_card_text(
@@ -550,24 +551,31 @@ pub(crate) async fn set_enrich_hints(
     .await
 }
 
-/// 배치 enrich accept 1건: suggested_* 힌트만, unclassified 카드에만(루프는 커맨드 잔류). 영향 행수 반환.
-/// (enrich.rs 배치 루프 내부 UPDATE 이전)
-pub(crate) async fn set_enrich_hints_batch_one(
+/// 배치 enrich **사람 확정**(적용 클릭): 미분류 카드에 quadrant+area를 한 번에 확정하고 suggested_* 힌트를
+/// 비운다. quadrant != unclassified면 status=Classified, 아니면 New. `WHERE quadrant='unclassified'`로
+/// **이미 분류된 카드는 덮지 않는다**(사람이 이미 내린 결정 보존). 자동 분류가 아니라 드래그/키보드 분류와
+/// 동일한 사람 결정 레일 — 호출은 사람의 명시적 "적용"에서만(INVARIANT #1). 영향 행수 반환.
+pub(crate) async fn confirm_enrich_batch_one(
     db: &Db,
     id: &str,
-    suggested_quadrant: Option<Quadrant>,
-    suggested_area: Option<AreaTag>,
-    reason: Option<&str>,
+    quadrant: Quadrant,
+    area: Option<AreaTag>,
 ) -> Result<u64, sqlx::Error> {
+    let status = if matches!(quadrant, Quadrant::Unclassified) {
+        SignalStatus::New
+    } else {
+        SignalStatus::Classified
+    };
     let res = sqlx::query(
-        "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
+        "UPDATE signals SET quadrant = ?2, status = ?3, area = ?4, \
+            suggested_quadrant = NULL, suggested_area = NULL, suggestion_reason = NULL, \
             updated_at = datetime('now') \
          WHERE id = ?1 AND quadrant = 'unclassified'",
     )
     .bind(id)
-    .bind(suggested_quadrant)
-    .bind(suggested_area)
-    .bind(reason)
+    .bind(quadrant)
+    .bind(status)
+    .bind(area)
     .execute(db)
     .await?;
     Ok(res.rows_affected())

@@ -10,8 +10,8 @@ use crate::db::Db;
 use crate::error::AppError;
 use crate::jobs::{JobManager, NewAgentRun};
 use crate::models::{
-    AgentRail, AreaTag, BatchEnrichItem, BatchEnrichProposal, Engine, EnrichProposal, Sandbox,
-    TriggerEnrichAllInput, TriggerEnrichInput, WorkSignal,
+    AgentRail, AreaTag, BatchEnrichItem, BatchEnrichProposal, Engine, EnrichProposal, Quadrant,
+    Sandbox, TriggerEnrichAllInput, TriggerEnrichInput, WorkSignal,
 };
 
 // ── enrich (braindump suggestedQuadrant + suggestedArea, #2) ──────────────────────
@@ -191,7 +191,8 @@ pub async fn set_signal_area(
 
 // ── 배치 enrich (#4, 미분류 전체 일괄 제안 — 단일 codex 잡, 부분 실패 격리) ──────────────
 //
-// INVARIANT #1: 배치 enrich도 suggested_*만 — quadrant 자동 확정 0(accept해도 카드는 unclassified).
+// INVARIANT #1: codex는 suggested_*만 제안 — 자동 확정 0. 확정은 사람이 검토·편집 후 "적용"을 클릭할 때만
+//   (드래그/키보드 분류와 동일한 사람 결정 레일). 자동화는 결정 레일에 침투하지 않는다.
 // INVARIANT #2: Acceptance 게이트(awaiting_approval) 통과 후에만 (로컬) 반영, 외부 무변경.
 // INVARIANT #5: 단일 잡 bound(timeout/max_turns/cost_cap). 카드 N개를 한 호출로 묶어 잡 폭주 방지.
 
@@ -223,7 +224,8 @@ pub(super) async fn fetch_unclassified_for_enrich(
 
 /// 미분류 전체 배치 enrich 잡 트리거(미분류 영역 "전체 제안 실행"). 모든 미분류 카드를 `cards.json`
 /// 배열로 모아 **한** codex 호출(비-레포·read_only)로 카드별 suggested 힌트를 제안한다. 산출 Proposal은
-/// awaiting_approval로 멈추고(Acceptance 게이트), accept해도 quadrant는 자동 확정되지 않는다(INVARIANT #1).
+/// awaiting_approval로 멈추고(Acceptance 게이트) — codex는 절대 확정하지 않는다. 확정은 사람이 검토 후
+/// "적용"을 클릭할 때만(accept_enrich_all에서 quadrant+area 확정, INVARIANT #1).
 /// 대상이 없으면 잡을 만들지 않고 Err. 미설치/미인증이면 Err(graceful degrade).
 #[tauri::command]
 #[specta::specta]
@@ -379,8 +381,10 @@ pub async fn batch_enrich_proposal(
     build_batch_proposal(&raw, &valid).map_err(|e| AppError::terminal("agents.build_proposal", e))
 }
 
-/// 배치 enrich accept 코어(테스트 가능). items의 카드마다 suggested_* 힌트만 쓴다 — quadrant/area(확정값)는
-/// 절대 건드리지 않는다(INVARIANT #1). 적용한 카드 수를 돌려준다. 외부 호출 없음(로컬 기록만).
+/// 배치 enrich accept 코어(테스트 가능). 사람이 검토·편집 후 "적용"하면 items의 카드마다 quadrant+area를
+/// **한 번에 확정**하고 suggested_* 힌트를 비운다(미분류 카드에만 — 이미 분류된 카드는 사람 결정 보존,
+/// 덮지 않음). 자동 분류가 아니라 사람의 명시적 적용 클릭 = 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
+/// 확정한 카드 수를 돌려준다. 외부 호출 없음(로컬 기록만).
 pub(super) async fn execute_accept_enrich_all(
     db: &Db,
     run_id: &str,
@@ -389,23 +393,20 @@ pub(super) async fn execute_accept_enrich_all(
 ) -> Result<u32, sqlx::Error> {
     let mut applied: u32 = 0;
     for item in &accepted.items {
-        // 힌트만 반영. quadrant/area 확정값은 건드리지 않는다(set_quadrant/set_signal_area = 사람 결정).
-        let rows = signal_store::set_enrich_hints_batch_one(
-            db,
-            &item.id,
-            item.suggested_quadrant,
-            item.suggested_area,
-            item.reason.as_deref(),
-        )
-        .await?;
+        // 사람 확정: quadrant(없으면 unclassified)+area를 한 번에 반영하고 suggested 힌트는 비운다.
+        let quadrant = item.suggested_quadrant.unwrap_or(Quadrant::Unclassified);
+        let rows =
+            signal_store::confirm_enrich_batch_one(db, &item.id, quadrant, item.suggested_area)
+                .await?;
         applied = applied.saturating_add(rows as u32);
     }
     record_acceptance(db, run_id, "enrich_batch", accepted_json).await?;
     Ok(applied)
 }
 
-/// 배치 enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 카드별 제안을 accept하면 각 신호에
-/// 힌트로만 반영하고 잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+/// 배치 enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 검토·편집한 카드별 제안을 accept(적용)하면
+/// 각 신호의 quadrant+area를 **확정**하고(미분류 카드에 한함) suggested 힌트를 비운 뒤 잡을 succeeded로 마감한다.
+/// codex가 아니라 사람의 명시적 적용 클릭으로만 확정 — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
 #[tauri::command]
 #[specta::specta]
 pub async fn accept_enrich_all(

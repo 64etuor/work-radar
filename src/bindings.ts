@@ -236,7 +236,8 @@ export const commands = {
 	/**
 	 *  미분류 전체 배치 enrich 잡 트리거(미분류 영역 "전체 제안 실행"). 모든 미분류 카드를 `cards.json`
 	 *  배열로 모아 **한** codex 호출(비-레포·read_only)로 카드별 suggested 힌트를 제안한다. 산출 Proposal은
-	 *  awaiting_approval로 멈추고(Acceptance 게이트), accept해도 quadrant는 자동 확정되지 않는다(INVARIANT #1).
+	 *  awaiting_approval로 멈추고(Acceptance 게이트) — codex는 절대 확정하지 않는다. 확정은 사람이 검토 후
+	 *  "적용"을 클릭할 때만(accept_enrich_all에서 quadrant+area 확정, INVARIANT #1).
 	 *  대상이 없으면 잡을 만들지 않고 Err. 미설치/미인증이면 Err(graceful degrade).
 	 */
 	triggerEnrichAll: (input: TriggerEnrichAllInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_enrich_all", { input })),
@@ -246,8 +247,9 @@ export const commands = {
 	 */
 	batchEnrichProposal: (runId: string) => typedError<BatchEnrichProposal, AppError>(__TAURI_INVOKE("batch_enrich_proposal", { runId })),
 	/**
-	 *  배치 enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 카드별 제안을 accept하면 각 신호에
-	 *  힌트로만 반영하고 잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+	 *  배치 enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 검토·편집한 카드별 제안을 accept(적용)하면
+	 *  각 신호의 quadrant+area를 **확정**하고(미분류 카드에 한함) suggested 힌트를 비운 뒤 잡을 succeeded로 마감한다.
+	 *  codex가 아니라 사람의 명시적 적용 클릭으로만 확정 — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
 	 */
 	acceptEnrichAll: (runId: string, accepted: BatchEnrichProposal) => typedError<number, AppError>(__TAURI_INVOKE("accept_enrich_all", { runId, accepted })),
 	/**

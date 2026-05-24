@@ -360,15 +360,28 @@ mod tests {
         assert!(enrich::build_batch_proposal(r#"{"foo":1}"#, &valid).is_err());
     }
 
-    /// INVARIANT #1: 배치 accept는 카드별 suggested_* 힌트만 쓰고 quadrant(결정 레일)는 안 건드린다.
+    /// 배치 accept는 **사람의 명시적 적용**이므로 quadrant+area를 확정하고 suggested 힌트를 비운다.
+    /// 자동 분류가 아니라 사람 제스처 — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
+    /// 이미 분류된 카드는 덮지 않는다(사람이 내린 결정 보존).
     #[tokio::test]
-    async fn batch_accept_sets_hints_not_quadrant() {
-        use crate::models::{AreaTag, BatchEnrichItem, BatchEnrichProposal};
+    async fn batch_accept_confirms_quadrant_and_area() {
+        use crate::models::{AreaTag, BatchEnrichItem, BatchEnrichProposal, SignalStatus};
         let db = fresh_db().await;
         let s1 = insert_signal(&db, &input("원두 주문", Some(Kind::Personal)))
             .await
             .unwrap();
         let s2 = insert_signal(&db, &input("데모 준비", Some(Kind::Work)))
+            .await
+            .unwrap();
+        // 이미 사람이 Q2로 분류한 카드 — 배치 accept가 덮으면 안 된다(가드).
+        let s3 = insert_signal(&db, &input("이미 분류됨", Some(Kind::Work)))
+            .await
+            .unwrap();
+        crate::commands::signal_store::set_quadrant(&db, &s3.id, Quadrant::Q2Schedule)
+            .await
+            .unwrap();
+        // 사분면 제안 없이(None) 영역만 제안된 카드 — quadrant는 unclassified로 두고 area만 확정.
+        let s4 = insert_signal(&db, &input("영역만 제안", Some(Kind::Personal)))
             .await
             .unwrap();
         insert_awaiting_run(&db, "ba1", r#"{"items":[]}"#, "{}").await;
@@ -389,6 +402,20 @@ mod tests {
                     suggested_area: Some(AreaTag::Work),
                     reason: None,
                 },
+                BatchEnrichItem {
+                    id: s3.id.clone(),
+                    title: Some("이미 분류됨".into()),
+                    suggested_quadrant: Some(Quadrant::Q1DoNow),
+                    suggested_area: Some(AreaTag::Health),
+                    reason: None,
+                },
+                BatchEnrichItem {
+                    id: s4.id.clone(),
+                    title: Some("영역만 제안".into()),
+                    suggested_quadrant: None,
+                    suggested_area: Some(AreaTag::Studies),
+                    reason: None,
+                },
             ],
             skipped: 0,
         };
@@ -396,24 +423,75 @@ mod tests {
         let applied = enrich::execute_accept_enrich_all(&db, "ba1", &accepted, &accepted_json)
             .await
             .unwrap();
-        assert_eq!(applied, 2);
+        // s1·s2·s4는 미분류였으니 처리됨, s3은 가드(WHERE quadrant='unclassified')로 스킵 → 3건.
+        assert_eq!(applied, 3);
 
-        // 두 카드 모두 힌트만 들어가고 quadrant는 unclassified로 남는다(자동 분류 0).
+        // 미분류였던 두 카드: quadrant+area 확정 + status=classified + suggested 힌트 비움.
         for (id, q, area) in [
             (&s1.id, "q3_quick_contain", AreaTag::Finances),
             (&s2.id, "q1_do_now", AreaTag::Work),
         ] {
-            let row: (String, Option<String>, Option<AreaTag>) = sqlx::query_as(
-                "SELECT quadrant, suggested_quadrant, suggested_area FROM signals WHERE id = ?1",
+            let row: (
+                String,
+                SignalStatus,
+                Option<AreaTag>,
+                Option<String>,
+                Option<AreaTag>,
+            ) = sqlx::query_as(
+                "SELECT quadrant, status, area, suggested_quadrant, suggested_area \
+                     FROM signals WHERE id = ?1",
             )
             .bind(id)
             .fetch_one(&db)
             .await
             .unwrap();
-            assert_eq!(row.0, "unclassified", "INVARIANT #1: quadrant 자동 확정 0");
-            assert_eq!(row.1.as_deref(), Some(q));
-            assert!(matches!(row.2, Some(a) if a as u8 == area as u8));
+            assert_eq!(row.0, q, "사람 적용 → quadrant 확정");
+            assert!(
+                matches!(row.1, SignalStatus::Classified),
+                "확정 시 status=classified"
+            );
+            assert!(
+                matches!(row.2, Some(a) if a as u8 == area as u8),
+                "area 확정"
+            );
+            assert!(row.3.is_none(), "확정 후 suggested_quadrant 비움");
+            assert!(row.4.is_none(), "확정 후 suggested_area 비움");
         }
+
+        // 이미 분류된 s3은 그대로(덮지 않음) — 사람 결정 보존.
+        let s3row: (String, Option<AreaTag>) =
+            sqlx::query_as("SELECT quadrant, area FROM signals WHERE id = ?1")
+                .bind(&s3.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(
+            s3row.0, "q2_schedule",
+            "이미 분류된 카드는 배치 accept가 덮지 않음"
+        );
+        assert!(s3row.1.is_none(), "s3 area 무변경");
+
+        // s4(사분면 제안 None): quadrant는 unclassified 유지(status=new) + area만 확정 + 힌트 비움.
+        let s4row: (String, SignalStatus, Option<AreaTag>, Option<String>) = sqlx::query_as(
+            "SELECT quadrant, status, area, suggested_area FROM signals WHERE id = ?1",
+        )
+        .bind(&s4.id)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(
+            s4row.0, "unclassified",
+            "사분면 제안 없으면 unclassified 유지"
+        );
+        assert!(
+            matches!(s4row.1, SignalStatus::New),
+            "unclassified 확정 시 status=new"
+        );
+        assert!(
+            matches!(s4row.2, Some(AreaTag::Studies)),
+            "사분면 None이어도 area는 확정"
+        );
+        assert!(s4row.3.is_none(), "확정 후 suggested_area 비움");
 
         // 잡 succeeded + acceptances 1행(target=enrich_batch).
         let st: (String,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='ba1'")

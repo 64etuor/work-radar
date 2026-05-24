@@ -59,8 +59,9 @@ type Props = {
  *
  * 오버레이 모달이 아니다(카드 계속 보임 — 결정 맥락 유지, DESIGN enrich-review-panel). 잡을 1초마다
  * 폴링하다 awaiting_approval에 도달하면 카드별 제안(사분면/영역/근거)을 **수정 가능**하게 보여주고,
- * 사람이 수정 후 `모두 적용`해야 반영된다(자동 적용 절대 금지 — INVARIANT #1). accept 경로는 기존
- * useAcceptEnrichAll(awaiting_approval → accept_enrich_all → suggested_* 힌트만) 그대로 재사용한다.
+ * 사람이 수정 후 `모두 적용`을 눌러야 **확정**된다(codex 자동 확정 절대 없음 — INVARIANT #1; 적용 클릭이
+ * 드래그/키보드 분류와 동일한 사람 결정 레일). accept 경로는 useAcceptEnrichAll(awaiting_approval →
+ * accept_enrich_all → 미분류 카드의 quadrant+area 확정 + 힌트 비움) 그대로 재사용한다.
  *
  * 상태: running=진행 표시 · empty="제안 없음" · error=재시도(잡 reject은 부모가 닫기로 처리) ·
  * partial=skipped 카운트 노출. (Jobs 페이지 BatchEnrichPanel을 점프 없이 인라인으로 이전.)
@@ -133,7 +134,7 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
       { runId, accepted: { items, skipped } },
       {
         onSuccess: (applied) => {
-          pushSuccess(`제안 ${applied}건 힌트 적용됨 (자동 분류 없음)`);
+          pushSuccess(`제안 ${applied}건 확정됨 (사분면·영역)`);
           onClose();
         },
         onError: (e) => pushError("codex", `적용 실패: ${String(e)}`),
@@ -179,12 +180,12 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
         <div className="enrich-review-err">{(proposal.error as Error).message}</div>
       )}
 
-      {/* 카드별 제안(수정 가능) — 사람이 수정 후 적용해야 반영(자동 적용 금지). */}
+      {/* 카드별 제안(수정 가능) — 사람이 수정 후 적용해야 확정(codex 자동 확정 없음 — INVARIANT #1). */}
       {proposalReady && proposal.data && (
         <>
           <div className="enrich-review-meta">
             미분류 <b>{items.length}</b>개 제안
-            {skipped > 0 && <> · 격리(skip) {skipped}개</>} — 수정 후 적용해야 반영(자동 분류 없음).
+            {skipped > 0 && <> · 격리(skip) {skipped}개</>} — 수정 후 적용하면 사분면·영역이 확정됩니다.
           </div>
 
           {items.length === 0 ? (
@@ -252,7 +253,7 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
             disabled={acceptEnrichAll.isPending}
             onClick={handleApplyAll}
           >
-            모두 적용 (힌트 반영)
+            모두 적용 (확정)
           </Button>
         )}
         <Button
