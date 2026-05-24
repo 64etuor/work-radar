@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ["**"]
 
+# push("**")와 pull_request("**")가 같은 커밋에 둘 다 걸려 중복 실행되므로,
+# ref 단위로 묶고 진행 중 실행은 취소해 러너 낭비를 막는다.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     name: Rust (fmt / clippy / test)
@@ -52,6 +58,15 @@ jobs:
 
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # cargo test가 src/bindings.ts를 재생성한다(lib.rs bindings_export 테스트).
+      # 커밋된 바인딩이 stale이면 여기서 diff가 떠 머지를 막는다(tauri-specta INVARIANT).
+      - name: Verify generated TS bindings are committed
+        run: |
+          if ! git diff --exit-code src/bindings.ts; then
+            echo "::error::src/bindings.ts가 최신이 아닙니다. 'cargo test' 후 재생성된 바인딩을 커밋하세요." >&2
+            exit 1
+          fi
 
   frontend:
     name: Frontend (typecheck / build)

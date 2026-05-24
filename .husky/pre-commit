@@ -1,5 +1,9 @@
 # pre-commit: 빠른 검증만 실행 (cargo fmt + pnpm typecheck)
 # clippy와 cargo test는 시간이 오래 걸리므로 CI에 위임한다.
+#
+# set -e 필수: 없으면 스크립트 종료코드가 마지막 명령(pnpm typecheck)의 것이 되어
+# cargo fmt --check 실패가 무시되고 커밋이 그대로 통과한다.
+set -e
 
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
 pnpm typecheck
