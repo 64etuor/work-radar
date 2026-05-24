@@ -5392,34 +5392,8 @@
   background: var(--color-wr-surface);
 }
 
-/* 팝오버 에디터 — cev 모달 톤 재사용(흰 카드, radius lg). */
-.sprint-pop-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 95;
-  background: rgba(15, 20, 40, 0.28);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 10vh;
-}
-.sprint-pop {
-  width: min(360px, 92vw);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  background: var(--color-wr-bg);
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 60px rgba(10, 14, 30, 0.28);
-  padding: 22px;
-}
-.sprint-pop-head {
-  font: 600 13px var(--font-mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-wr-fg);
-}
+/* 스프린트 에디터 — 모달 컨테이너/제목/버튼/인풋은 shadcn Dialog·Button·Input(PR 0).
+   여기엔 내부 필드 레이아웃 래퍼만 유지한다(prim 스왑으로 일부 클래스는 dead 제거됨). */
 .sprint-field {
   display: flex;
   flex-direction: column;
@@ -5434,69 +5408,9 @@
   align-items: center;
   gap: 8px;
 }
-.sprint-step-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-wr-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-wr-bg);
-  color: var(--color-wr-fg);
-  font: 500 18px var(--font-sans);
-  cursor: pointer;
-  line-height: 1;
-}
-.sprint-step-btn:hover {
-  background: var(--color-wr-surface);
-}
-.sprint-step-val {
-  width: 64px;
-  text-align: center;
-  border: 1px solid var(--color-wr-border);
-  border-radius: var(--radius-sm);
-  padding: 7px 6px;
-  font: 600 14px var(--font-mono);
-  color: var(--color-wr-fg);
-  background: var(--color-wr-bg);
-  outline: none;
-}
-.sprint-step-val:focus {
-  border-color: var(--color-wr-accent);
-}
 .sprint-wd-row {
   display: flex;
   gap: 6px;
-}
-.sprint-wd {
-  flex: 1;
-  border: 1px solid var(--color-wr-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-wr-bg);
-  color: var(--color-wr-subtle);
-  font: 500 13px var(--font-sans);
-  padding: 8px 0;
-  cursor: pointer;
-}
-.sprint-wd:hover {
-  background: var(--color-wr-surface);
-}
-.sprint-wd.is-on {
-  border-color: var(--color-wr-accent);
-  color: var(--color-wr-fg);
-  background: var(--color-wr-surface);
-  font-weight: 600;
-}
-.sprint-time {
-  width: 140px;
-  border: 1px solid var(--color-wr-border);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font: 400 14px var(--font-sans);
-  color: var(--color-wr-fg);
-  background: var(--color-wr-bg);
-  outline: none;
-}
-.sprint-time:focus {
-  border-color: var(--color-wr-accent);
 }
 .sprint-err {
   font: 400 12px var(--font-sans);
@@ -5511,35 +5425,6 @@
 .sprint-actions-spacer {
   flex: 1;
 }
-.sprint-btn {
-  border: none;
-  cursor: pointer;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  font: 500 14px var(--font-sans);
-  padding: 9px 22px;
-  border-radius: 999px;
-}
-.sprint-btn:hover {
-  background: var(--color-wr-black);
-}
-.sprint-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.sprint-btn-ghost {
-  border: 1px solid var(--color-wr-border-light);
-  cursor: pointer;
-  background: var(--color-wr-bg);
-  font: 500 14px var(--font-sans);
-  color: var(--color-wr-fg);
-  padding: 8px 16px;
-  border-radius: 999px;
-}
-.sprint-btn-ghost:hover {
-  background: var(--color-wr-surface);
-}
-
 /* 반응형: 좁으면 'D일 HH:MM'→'D일'만(overdue 색 유지). DESIGN sprint-timer 반응형. */
 @media (max-width: 860px) {
   .cb .cb-head-right .hint {
