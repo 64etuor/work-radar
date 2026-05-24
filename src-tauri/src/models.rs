@@ -23,7 +23,6 @@ pub struct Project {
     pub kind: ProjectKind,
     pub notion_backlog_db_id: Option<String>,
     pub notion_agenda_db_id: Option<String>,
-    pub ticket_key_pattern: Option<String>,
     /// 포함할 Google Calendar 선택 목록 (JSON `[{id,summary}]`). Phase 10b. NULL/빈 목록이면 fetch 없음.
     /// INVARIANT #7: 선택 목록만 로컬 SSOT — 이벤트는 ambient(영속 없음), 토큰은 keychain.
     pub google_calendar_ids: Option<String>,
@@ -40,7 +39,6 @@ pub struct CreateProjectInput {
     pub kind: ProjectKind,
     pub notion_backlog_db_id: Option<String>,
     pub notion_agenda_db_id: Option<String>,
-    pub ticket_key_pattern: Option<String>,
 }
 
 // ── 레포(Repo) ────────────────────────────────────────────────────────────────
@@ -64,7 +62,6 @@ pub struct Repo {
     pub remote_url: Option<String>,
     pub local_path: Option<String>,
     pub default_branch: String,
-    pub ticket_key_pattern: Option<String>,
     pub enabled: bool,
     pub created_at: String,
 }
@@ -79,7 +76,6 @@ pub struct CreateRepoInput {
     pub local_path: Option<String>,
     /// 기본 브랜치. 비면 'main'.
     pub default_branch: Option<String>,
-    pub ticket_key_pattern: Option<String>,
 }
 
 // ── 토큰 / 외부 ping (토큰 본문은 절대 이 타입들에 담기지 않는다) ────────────────
@@ -582,8 +578,6 @@ pub struct PrRadarItem {
     pub ci: CiStatus,
     pub has_conflict: bool,
     pub is_draft: bool,
-    /// ticketKeyPattern으로 PR title/branch에서 추출한 링크 백로그 티켓 (없으면 None).
-    pub linked_ticket: Option<String>,
     /// 수동 self-check 로컬 상태 (GitHub 아님).
     pub self_checked: bool,
     /// 경과일 (updated_at 기준, 0 = 오늘 갱신).

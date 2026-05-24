@@ -41,9 +41,8 @@ keyring = { version = "3", features = ["apple-native"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 octocrab = "0.42"
 
-# PR Radar(Phase 4): ticketKeyPattern 매칭 + age/stale 날짜연산.
+# PR Radar(Phase 4): age/stale 날짜연산.
 #   chrono는 octocrab가 이미 transitive로 쓰므로 빌드 비용 추가 없음(clock = Utc::now()).
-regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 # Google Calendar OAuth(Phase 10a): PKCE(S256) code_challenge + base64url 인코딩 + CSPRNG.

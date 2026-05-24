@@ -396,36 +396,10 @@ pub(crate) async fn count_pr_resolved_in_range(
     Ok(n)
 }
 
-// ── PR Radar (dedup upsert + auto-resolve; 루프/제어는 커맨드 잔류 — INVARIANT #3) ──
-
-/// PR escalate 신호 dedup upsert. quadrant/status는 ON CONFLICT에서 보존(사람 결정 — INVARIANT #1).
-/// title/body/links 조립과 escalation 판단은 커맨드 잔류, 이 fn은 SQL만. (pr_radar.rs 이전)
-pub(crate) async fn upsert_pr_signal(
-    db: &Db,
-    project_id: &str,
-    title: &str,
-    body: &str,
-    dedup_key: &str,
-    links: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "INSERT INTO signals \
-            (id, project_id, title, body, source, type, quadrant, suggested_quadrant, dedup_key, status, links) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'github_pr', 'pr_attention', \
-                 'unclassified', 'q1_do_now', ?4, 'new', ?5) \
-         ON CONFLICT(dedup_key) WHERE dedup_key IS NOT NULL DO UPDATE SET \
-            title = excluded.title, body = excluded.body, links = excluded.links, \
-            suggested_quadrant = excluded.suggested_quadrant, updated_at = datetime('now')",
-    )
-    .bind(project_id)
-    .bind(title)
-    .bind(body)
-    .bind(dedup_key)
-    .bind(links)
-    .execute(db)
-    .await?;
-    Ok(())
-}
+// ── PR Radar (auto-resolve; 루프/제어는 커맨드 잔류 — INVARIANT #3) ──
+//
+// PR B(표시 전용 전환)로 escalate upsert는 제거됐다. 아래 두 fn은 *기존* escalated PR 신호를
+// auto-resolve(정리)하는 데만 쓰인다.
 
 /// auto-resolve용 active github_pr 신호 (id, dedup_key) 목록. 루프 판단은 커맨드. (pr_radar.rs 이전)
 pub(crate) async fn fetch_pr_signal_keys(

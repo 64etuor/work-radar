@@ -33,7 +33,6 @@ pub(crate) mod test_support {
             kind,
             notion_backlog_db_id: None,
             notion_agenda_db_id: None,
-            ticket_key_pattern: None,
         }
     }
 }

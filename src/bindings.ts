@@ -111,8 +111,9 @@ export const commands = {
 	reorderRoutines: (orderedIds: string[]) => typedError<null, AppError>(__TAURI_INVOKE("reorder_routines", { orderedIds })),
 	routineTracking: (endDate: string, days: number) => typedError<RoutineTrackingItem[], AppError>(__TAURI_INVOKE("routine_tracking", { endDate, days })),
 	/**
-	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출하고
-	 *  임계치 넘는 것만 매트릭스로 escalate(dedup)·원인 해소분 auto-resolve. 토큰은 keychain에서만.
+	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
+	 *  자동 escalate/알림 없음, INVARIANT #4). 기존 escalated PR 신호는 원인 해소분만 auto-resolve.
+	 *  토큰은 keychain에서만.
 	 */
 	refreshPrRadar: (projectId: string) => typedError<PrRadarItem[], AppError>(__TAURI_INVOKE("refresh_pr_radar", { projectId })),
 	/**  수동 self-check 토글(로컬 상태). checked면 행 추가, 아니면 삭제(다음 도출이 반영). */
@@ -645,7 +646,6 @@ export type CreateProjectInput = {
 	kind: ProjectKind,
 	notionBacklogDbId: string | null,
 	notionAgendaDbId: string | null,
-	ticketKeyPattern: string | null,
 };
 
 /**  레포 추가 입력. */
@@ -656,7 +656,6 @@ export type CreateRepoInput = {
 	localPath: string | null,
 	/**  기본 브랜치. 비면 'main'. */
 	defaultBranch: string | null,
-	ticketKeyPattern: string | null,
 };
 
 /**  루틴 생성 입력. */
@@ -884,8 +883,6 @@ export type PrRadarItem = {
 	ci: CiStatus,
 	hasConflict: boolean,
 	isDraft: boolean,
-	/**  ticketKeyPattern으로 PR title/branch에서 추출한 링크 백로그 티켓 (없으면 None). */
-	linkedTicket: string | null,
 	/**  수동 self-check 로컬 상태 (GitHub 아님). */
 	selfChecked: boolean,
 	/**  경과일 (updated_at 기준, 0 = 오늘 갱신). */
@@ -921,7 +918,6 @@ export type Project = {
 	kind: ProjectKind,
 	notionBacklogDbId: string | null,
 	notionAgendaDbId: string | null,
-	ticketKeyPattern: string | null,
 	/**
 	 *  포함할 Google Calendar 선택 목록 (JSON `[{id,summary}]`). Phase 10b. NULL/빈 목록이면 fetch 없음.
 	 *  INVARIANT #7: 선택 목록만 로컬 SSOT — 이벤트는 ambient(영속 없음), 토큰은 keychain.
@@ -1000,7 +996,6 @@ export type Repo = {
 	remoteUrl: string | null,
 	localPath: string | null,
 	defaultBranch: string,
-	ticketKeyPattern: string | null,
 	enabled: boolean,
 	createdAt: string,
 };

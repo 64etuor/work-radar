@@ -61,7 +61,8 @@ pub struct RawPr {
     pub title: String,
     pub url: String,
     pub author_login: String,
-    /// head 브랜치 이름 (ticket 추출 차선 소스).
+    /// head 브랜치 이름. provider DTO 계약으로 유지(현재 미읽음 — PR B 표시 전용 전환으로 ticket 추출 경로 제거됨).
+    #[allow(dead_code)]
     pub head_ref: String,
     pub is_draft: bool,
     pub state: RawPrState,
@@ -69,8 +70,8 @@ pub struct RawPr {
     pub has_conflict: bool,
     /// 마지막 갱신 시각(RFC3339). age/stale 계산 기준.
     pub updated_at: String,
-    /// head 커밋 SHA. CI 실패 알림 dedup 키(같은 커밋 = 같은 실패, 재알림 0). open/merged 모두 채움
-    /// (단 escalation은 open PR만 → merged head_sha는 알림 경로에 도달하지 않음).
+    /// head 커밋 SHA. provider DTO 계약으로 유지(현재 미읽음 — PR B 표시 전용 전환으로 CI 실패 알림 경로 제거됨).
+    #[allow(dead_code)]
     pub head_sha: String,
     /// 댓글 수 (comments + review_comments). open PR만 채움(bounded per-PR get). merged는 0.
     /// 가져오기 실패 시 0으로 degrade(레이더 전체 실패 방지).

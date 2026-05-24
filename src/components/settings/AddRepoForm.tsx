@@ -37,7 +37,6 @@ export function AddRepoForm({
         remoteUrl: provider === "github" ? trimOrNull(location) : null,
         localPath: provider === "local" ? trimOrNull(location) : null,
         defaultBranch: trimOrNull(branch),
-        ticketKeyPattern: null,
       },
       {
         onSuccess: () => {

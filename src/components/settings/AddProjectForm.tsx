@@ -47,7 +47,6 @@ export function AddProjectForm({
         kind,
         notionBacklogDbId: trimOrNull(backlogDb),
         notionAgendaDbId: trimOrNull(agendaDb),
-        ticketKeyPattern: null,
       },
       {
         onSuccess: (p) => {

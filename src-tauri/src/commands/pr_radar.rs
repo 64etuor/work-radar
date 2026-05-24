@@ -1,6 +1,5 @@
 use tauri::State;
 
-use crate::commands::notification_store;
 use crate::commands::signal_store;
 use crate::commands::tokens::project_credential_ref;
 use crate::db::Db;
@@ -11,10 +10,10 @@ use crate::models::{CiStatus, PrRadarItem, ReadinessBucket, TokenKind};
 use crate::retry::Retryable;
 
 // ── PR Radar (Phase 4, read 레일) ──────────────────────────────────────────────
-// INVARIANT #1: escalate 신호는 항상 quadrant=unclassified로 진입(자동 분류 0); suggested_quadrant=q1는
-//   힌트일 뿐. dedup upsert(ON CONFLICT)도 quadrant/status를 절대 덮어쓰지 않는다(사람 결정 보존).
+// INVARIANT #1: 결정 레일은 사람만 — PR Radar는 자동 분류/자동 승격을 하지 않는다.
 // INVARIANT #3: pr:{owner}/{repo}:{number}:{reason} 안정 키로 upsert(중복 0) + 원인 해소 시 auto-resolve.
-// INVARIANT #4: 모든 PR은 radar 자기 뷰(버킷)에 살고, 임계치(CI 실패+링크 티켓) 넘는 것만 escalate.
+// INVARIANT #4: PR Radar = 표시 전용(display-only). 자동 escalate/알림 없음 — 모든 PR은 radar 자기
+//   뷰(버킷)에 살 뿐 매트릭스로 올라가지 않는다. auto_resolve는 기존 escalated 신호 정리용으로만 남는다.
 // INVARIANT #5: 폴링/재시도 bounded(github.rs with_retry + 프런트 refetchInterval).
 // INVARIANT #7: 토큰은 keychain에서만 읽혀 Rust 안에서만. refresh 인자에 token 없음.
 
@@ -22,27 +21,10 @@ use crate::retry::Retryable;
 const STALE_DAYS: i64 = 14;
 /// 댓글이 이 수를 초과하면 is_suspicious = true (시각 경고 힌트, 결정 레일 미침범).
 const SUSPICIOUS_COMMENT_THRESHOLD: u32 = 10;
-/// escalate 사유 (dedup_key의 reason 세그먼트). Phase 4는 CI 실패만.
-const ESCALATE_REASON_CI: &str = "ci_failed";
 
-/// fetch 대상 레포 (escalate/auto-resolve 스코프). full_name = 'owner/repo'.
+/// fetch 대상 레포 (auto-resolve 스코프). full_name = 'owner/repo'.
 struct RepoRef {
     full_name: String,
-    /// ticketKeyPattern (repo 우선, 없으면 project). 링크 백로그 티켓 추출용.
-    ticket_pattern: Option<String>,
-}
-
-/// ticketKeyPattern(regex)으로 PR title 우선, head_ref 차선에서 첫 매칭 티켓을 추출한다.
-/// 패턴이 없거나 잘못된 regex면 무매칭(graceful — noise 0).
-fn extract_ticket(pattern: Option<&str>, title: &str, head_ref: &str) -> Option<String> {
-    let pat = pattern?.trim();
-    if pat.is_empty() {
-        return None;
-    }
-    let re = regex::Regex::new(pat).ok()?;
-    re.find(title)
-        .or_else(|| re.find(head_ref))
-        .map(|m| m.as_str().to_string())
 }
 
 /// updated_at(RFC3339) 기준 경과일(>=0). 파싱 실패 시 0.
@@ -71,18 +53,6 @@ fn classify_bucket(pr: &RawPr, self_checked: bool, elapsed: i64) -> ReadinessBuc
     }
 }
 
-/// escalate 사유 (사용자 결정: CI 실패 + 링크 백로그 티켓). 그 외는 None(매트릭스에 안 올라옴).
-fn escalation_reason(pr: &RawPr, ticket: &Option<String>) -> Option<&'static str> {
-    if matches!(pr.state, RawPrState::Open)
-        && matches!(pr.ci, CiStatus::Failing)
-        && ticket.is_some()
-    {
-        Some(ESCALATE_REASON_CI)
-    } else {
-        None
-    }
-}
-
 /// PR이 self-check(로컬 상태)됐는지.
 async fn pr_self_checked(db: &Db, repo_full_name: &str, number: u64) -> Result<bool, sqlx::Error> {
     let row: Option<(i64,)> =
@@ -94,72 +64,10 @@ async fn pr_self_checked(db: &Db, repo_full_name: &str, number: u64) -> Result<b
     Ok(row.is_some())
 }
 
-/// PR 신호 dedup upsert(INVARIANT #3). 항상 unclassified 진입 + suggested q1 힌트(INVARIANT #1).
-/// PR 신호 links 페이로드(내부 — signals.links JSON). 앱이 통제하므로 타입화(camelCase 보존).
-/// 프런트가 PR 링크 렌더에 소비. (codex proposal 등 외부 페이로드는 문자열 유지 — 별개.)
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PrSignalLinks {
-    github_pr_url: String,
-}
-
-/// 충돌 시 quadrant/status는 보존하고 title/body/links/suggested_quadrant/updated_at만 갱신한다.
-async fn upsert_pr_signal(
-    db: &Db,
-    project_id: &str,
-    repo_full_name: &str,
-    pr: &RawPr,
-    ticket: &Option<String>,
-    dedup_key: &str,
-) -> Result<(), sqlx::Error> {
-    let title = format!(
-        "[{}] PR #{} CI 실패: {}",
-        repo_full_name, pr.number, pr.title
-    );
-    let body = match ticket {
-        Some(t) => format!("{} · 링크 티켓 {}", pr.url, t),
-        None => pr.url.clone(),
-    };
-    let links = serde_json::to_string(&PrSignalLinks {
-        github_pr_url: pr.url.clone(),
-    })
-    .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-    signal_store::upsert_pr_signal(db, project_id, &title, &body, dedup_key, &links).await
-}
-
-/// CI 실패 알림을 큐에 넣는다(Phase 20 #17). 자동 triage 없음 — 네이티브 알림 + Q1 escalate(상위
-/// upsert_pr_signal)까지만, 실제 결정은 사람이 한다(INVARIANT #1). dedup은 PR+head_sha 기준
-/// `source_id`로 멱등(같은 커밋 = 같은 실패, 재알림 0; 새 커밋이 또 실패하면 1회 알림 — INVARIANT #5).
-/// fire_at=now라 백그라운드 스케줄러(scheduler.rs)가 다음 틱에 발사한다(창 닫혀도 트레이 상주로 발사).
-/// 발사 마커는 `scheduled_notifications`(로컬 SQLite SSOT — INVARIANT #7).
-async fn enqueue_ci_failure_notification(
-    db: &Db,
-    repo_full_name: &str,
-    pr: &RawPr,
-    now: chrono::DateTime<chrono::Utc>,
-) -> Result<(), sqlx::Error> {
-    // head_sha가 비면(예: 비정상 응답) PR 번호로만 dedup해 폭주는 막되 알림은 보낸다.
-    let sha = if pr.head_sha.is_empty() {
-        "nosha".to_string()
-    } else {
-        pr.head_sha.clone()
-    };
-    let source_id = format!("pr:{repo_full_name}:{}:{sha}", pr.number);
-
-    // 멱등: 같은 source_id 행이 (미발사든 발사든) 이미 있으면 다시 만들지 않는다(중복 알림 0).
-    if notification_store::exists(db, "ci", &source_id).await? {
-        return Ok(());
-    }
-
-    let title = format!("CI 실패: {repo_full_name} #{}", pr.number);
-    let body = format!("{} — {} · Q1 결정 큐로 올렸습니다.", pr.title, pr.url);
-    let fire_at = now.format("%Y-%m-%d %H:%M:%S").to_string();
-    notification_store::enqueue(db, &fire_at, &title, &body, "ci", Some(&source_id)).await?;
-    Ok(())
-}
-
 /// auto-resolve(INVARIANT #3): 성공 fetch된 repo 범위에서, 이번 cycle active set 밖의 github_pr
 /// 신호를 status=done으로 전이(매트릭스에서 소멸). fetch 실패 repo는 fresh 데이터가 없어 제외된다.
+/// PR B 이후 active_keys는 항상 비어 있어(표시 전용 — 새 escalate 없음) 이 fn은 *기존* escalated PR
+/// 신호를 정리하는 역할만 한다(정리 완료 후엔 no-op).
 async fn auto_resolve(
     db: &Db,
     project_id: &str,
@@ -181,7 +89,7 @@ async fn auto_resolve(
 }
 
 /// PR Radar 동기화 코어(테스트 가능 — provider를 fake로 대체). keychain/네트워크는 호출자(command)가 담당.
-/// 각 repo의 PR을 fetch → 버킷 분류 + escalate(dedup upsert) → 마지막에 auto-resolve.
+/// 각 repo의 PR을 fetch → 버킷 분류(표시 전용) → 마지막에 auto-resolve(기존 escalated 신호 정리).
 /// 일부 repo fetch 실패는 그 repo만 건너뛰고(해당 신호 auto-resolve 제외), 전부 실패면 Err로 노출(삼키지 않음).
 // AppError는 리치 에러 envelope이라 의도적으로 크다(커맨드는 매크로로 면제됨). 이 코어는 command와
 // 동일한 AppError를 그대로 전파해 transient 분류를 보존하므로 large-err 린트를 국소 허용한다(agents/mod.rs와 동일 패턴).
@@ -199,7 +107,6 @@ async fn sync_pr_radar<P: PrProvider>(
     // 하나라도 terminal이면 terminal(재시도로 못 고침). GithubError가 스스로 분류(Retryable).
     let mut all_transient = true;
     let mut fetched_full_names: Vec<String> = Vec::new();
-    let mut active_keys: Vec<String> = Vec::new();
 
     for repo in repos {
         let prs = match provider.fetch_prs(&repo.full_name).await {
@@ -213,20 +120,9 @@ async fn sync_pr_radar<P: PrProvider>(
         fetched_full_names.push(repo.full_name.clone());
 
         for pr in &prs {
-            let ticket = extract_ticket(repo.ticket_pattern.as_deref(), &pr.title, &pr.head_ref);
             let self_checked = pr_self_checked(db, &repo.full_name, pr.number).await?;
             let elapsed = elapsed_days(&pr.updated_at, now);
             let bucket = classify_bucket(pr, self_checked, elapsed);
-
-            let mut escalated = false;
-            if let Some(reason) = escalation_reason(pr, &ticket) {
-                let dedup = format!("pr:{}:{}:{}", repo.full_name, pr.number, reason);
-                upsert_pr_signal(db, project_id, &repo.full_name, pr, &ticket, &dedup).await?;
-                active_keys.push(dedup);
-                escalated = true;
-                // CI 실패 → 네이티브 알림 큐잉(자동 triage 없음, PR+SHA dedup — Phase 20 #17).
-                enqueue_ci_failure_notification(db, &repo.full_name, pr, now).await?;
-            }
 
             items.push(PrRadarItem {
                 repo_full_name: repo.full_name.clone(),
@@ -238,10 +134,10 @@ async fn sync_pr_radar<P: PrProvider>(
                 ci: pr.ci,
                 has_conflict: pr.has_conflict,
                 is_draft: pr.is_draft,
-                linked_ticket: ticket,
                 self_checked,
                 age_days: elapsed.max(0) as u32,
-                escalated,
+                // 표시 전용 전환(PR B): 더 이상 escalate하지 않으므로 항상 false.
+                escalated: false,
                 project_id: project_id.to_string(),
                 comment_count: pr.comment_count,
                 is_suspicious: pr.comment_count > SUSPICIOUS_COMMENT_THRESHOLD,
@@ -249,7 +145,9 @@ async fn sync_pr_radar<P: PrProvider>(
         }
     }
 
-    auto_resolve(db, project_id, &fetched_full_names, &active_keys).await?;
+    // active_keys는 비어 있다(표시 전용 — 새 escalate 없음). 기존 escalated PR 신호는 fetch된
+    // repo 범위에서 정리된다(INVARIANT #3 auto-resolve; 정리 완료 후엔 no-op).
+    auto_resolve(db, project_id, &fetched_full_names, &[]).await?;
 
     // 전부 실패(레포는 있는데 하나도 못 가져옴)면 failure 노출(INVARIANT #5: 삼키지 않음).
     // 전부 transient면 transient로 보존해 프런트 bounded retry가 동작하게 한다(retryable=true).
@@ -264,11 +162,10 @@ async fn sync_pr_radar<P: PrProvider>(
     Ok(items)
 }
 
-/// project의 enabled github 레포 + ticketKeyPattern(repo 우선, 없으면 project) 로드.
+/// project의 enabled github 레포 로드.
 async fn fetch_github_repo_refs(db: &Db, project_id: &str) -> Result<Vec<RepoRef>, String> {
-    let rows: Vec<(Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT r.remote_url, COALESCE(r.ticket_key_pattern, p.ticket_key_pattern) \
-         FROM repos r JOIN projects p ON p.id = r.project_id \
+    let rows: Vec<(Option<String>,)> = sqlx::query_as(
+        "SELECT r.remote_url FROM repos r \
          WHERE r.project_id = ?1 AND r.provider = 'github' AND r.enabled = 1 \
          ORDER BY r.created_at",
     )
@@ -278,21 +175,21 @@ async fn fetch_github_repo_refs(db: &Db, project_id: &str) -> Result<Vec<RepoRef
     .map_err(|e| e.to_string())?;
 
     let mut refs = Vec::new();
-    for (remote_url, ticket_pattern) in rows {
+    for (remote_url,) in rows {
         let Some(url) = remote_url else { continue };
         let Some((owner, repo)) = crate::github::parse_owner_repo(&url) else {
             continue;
         };
         refs.push(RepoRef {
             full_name: format!("{owner}/{repo}"),
-            ticket_pattern,
         });
     }
     Ok(refs)
 }
 
-/// PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출하고
-/// 임계치 넘는 것만 매트릭스로 escalate(dedup)·원인 해소분 auto-resolve. 토큰은 keychain에서만.
+/// PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
+/// 자동 escalate/알림 없음, INVARIANT #4). 기존 escalated PR 신호는 원인 해소분만 auto-resolve.
+/// 토큰은 keychain에서만.
 #[tauri::command]
 #[specta::specta]
 pub async fn refresh_pr_radar(
@@ -363,18 +260,7 @@ mod tests {
     use crate::commands::signal_store::set_quadrant;
     use crate::error::ErrorKind;
     use crate::github::GithubError;
-    use crate::models::ProjectKind;
-
-    /// links 구조체가 기존 camelCase 키(githubPrUrl)를 그대로 직렬화하는지 잠근다(프런트 계약).
-    #[test]
-    fn pr_signal_links_serialize_to_stable_camelcase_key() {
-        let s = serde_json::to_string(&PrSignalLinks {
-            github_pr_url: "https://x/pr/1".into(),
-        })
-        .unwrap();
-        assert_eq!(s, r#"{"githubPrUrl":"https://x/pr/1"}"#);
-    }
-    use crate::models::Quadrant;
+    use crate::models::{ProjectKind, Quadrant};
 
     /// fake PR provider — 정해둔 PR 목록을 돌려준다(폴링 cycle 간 set으로 교체 가능). 실 네트워크 없음.
     struct FakeProvider {
@@ -403,9 +289,6 @@ mod tests {
                 fail: false,
                 fail_terminal: true,
             }
-        }
-        fn set(&self, prs: Vec<RawPr>) {
-            *self.prs.lock().unwrap() = prs;
         }
     }
     impl PrProvider for FakeProvider {
@@ -454,27 +337,37 @@ mod tests {
     fn repo_refs() -> Vec<RepoRef> {
         vec![RepoRef {
             full_name: "o/r".into(),
-            ticket_pattern: Some(r"MIR-DEV-\d+".into()),
         }]
     }
 
-    /// 매트릭스에 살아있는(active) github_pr 신호: (quadrant, suggested_quadrant, status, dedup_key, links).
-    async fn pr_signals(
-        db: &Db,
-    ) -> Vec<(
-        String,
-        Option<String>,
-        String,
-        Option<String>,
-        Option<String>,
-    )> {
-        sqlx::query_as(
-            "SELECT quadrant, suggested_quadrant, status, dedup_key, links \
-             FROM signals WHERE source = 'github_pr' ORDER BY created_at",
+    /// 활성(active) github_pr 신호 status 목록(생성순). 표시 전용 전환 후 auto-resolve 검증용.
+    async fn pr_signal_statuses(db: &Db) -> Vec<String> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT status FROM signals WHERE source = 'github_pr' ORDER BY created_at",
         )
         .fetch_all(db)
         .await
-        .unwrap()
+        .unwrap();
+        rows.into_iter().map(|(s,)| s).collect()
+    }
+
+    /// 레거시 escalated PR 신호를 직접 SQL로 시드한다(표시 전용 전환 전에 만들어진 행 모사).
+    /// dedup_key = pr:o/r:{number}:ci_failed, status='new', quadrant='unclassified'.
+    async fn seed_legacy_pr_signal(db: &Db, project_id: &str, number: u64) {
+        let dedup = format!("pr:o/r:{number}:ci_failed");
+        sqlx::query(
+            "INSERT INTO signals \
+                (id, project_id, title, body, source, type, quadrant, dedup_key, status) \
+             VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, 'github_pr', 'pr_attention', \
+                     'unclassified', ?4, 'new')",
+        )
+        .bind(project_id)
+        .bind(format!("[o/r] PR #{number} CI 실패"))
+        .bind(format!("https://github.com/o/r/pull/{number}"))
+        .bind(&dedup)
+        .execute(db)
+        .await
+        .unwrap();
     }
 
     /// (0) is_suspicious: comment_count > 10이면 true, 10 이하면 false.
@@ -542,9 +435,10 @@ mod tests {
         assert_eq!(classify_bucket(&ready, true, 0), ReadinessBucket::Ready);
     }
 
-    /// (2) CI 실패 + 링크 티켓 → 정확히 1 신호(unclassified + suggested q1 + dedup + links).
+    /// (2) 표시 전용: CI 실패 PR이라도 새 신호(escalate)를 만들지 않는다(INVARIANT #4 — noise 0).
+    /// items는 정상 도출(버킷=CiBlocked)되지만 github_pr 신호는 0행.
     #[tokio::test]
-    async fn escalates_ci_failed_with_ticket() {
+    async fn display_only_creates_no_signal() {
         let db = fresh_db().await;
         let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
             .await
@@ -561,67 +455,30 @@ mod tests {
             .unwrap();
 
         assert_eq!(items.len(), 1);
-        assert!(items[0].escalated, "임계치 초과 → escalated");
-        assert_eq!(items[0].linked_ticket.as_deref(), Some("MIR-DEV-7"));
+        assert!(!items[0].escalated, "표시 전용 → escalated는 항상 false");
         assert_eq!(items[0].bucket, ReadinessBucket::CiBlocked);
 
-        let sigs = pr_signals(&db).await;
-        assert_eq!(sigs.len(), 1, "정확히 1 신호");
-        assert_eq!(sigs[0].0, "unclassified", "항상 미분류 진입 (INVARIANT #1)");
-        assert_eq!(
-            sigs[0].1.as_deref(),
-            Some("q1_do_now"),
-            "Q1 제안은 힌트로만"
-        );
-        assert_eq!(sigs[0].3.as_deref(), Some("pr:o/r:42:ci_failed"));
-        assert!(sigs[0].4.as_deref().unwrap().contains("githubPrUrl"));
-    }
-
-    /// (3) 같은 입력으로 폴링 N회 → 신호 1행 유지(dedup upsert, 중복 0).
-    #[tokio::test]
-    async fn polling_n_times_no_duplicate() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "MIR-DEV-7 버그",
-        )]);
-        for _ in 0..4 {
-            sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-                .await
-                .unwrap();
-        }
         let n: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM signals WHERE source = 'github_pr'")
             .fetch_one(&db)
             .await
             .unwrap();
-        assert_eq!(n.0, 1, "폴링 N회 반복해도 중복 0");
+        assert_eq!(n.0, 0, "표시 전용 → escalate 신호 0(매트릭스 미진입)");
     }
 
-    /// (4) CI 통과로 바뀌면 해당 신호 auto-resolve(status=done).
+    /// (3) CI 통과로 바뀌면 레거시 escalated 신호가 auto-resolve(status=done)된다.
+    /// 표시 전용 전환 후 sync는 신호를 만들지 않으므로 레거시 행을 직접 시드해 정리 동작을 검증한다.
     #[tokio::test]
     async fn ci_green_auto_resolves() {
         let db = fresh_db().await;
         let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
             .await
             .unwrap();
-        let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "MIR-DEV-7 버그",
-        )]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
-        assert_eq!(pr_signals(&db).await[0].2, "new", "처음엔 active");
+        // 레거시 escalated PR 신호(표시 전용 전환 전에 만들어진 것)를 시드.
+        seed_legacy_pr_signal(&db, &proj.id, 42).await;
+        assert_eq!(pr_signal_statuses(&db).await, vec!["new"], "시드는 active");
 
-        // CI green으로 바뀜 → 같은 PR이지만 escalate 조건 사라짐.
-        provider.set(vec![raw_pr(
+        // 같은 PR이 CI green으로 fetch됨 → active_keys 비어 있음 → 레거시 신호 정리.
+        let provider = FakeProvider::new(vec![raw_pr(
             42,
             CiStatus::Passing,
             RawPrState::Open,
@@ -631,29 +488,22 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            pr_signals(&db).await[0].2,
-            "done",
-            "원인 해소 → auto-resolve"
+            pr_signal_statuses(&db).await,
+            vec!["done"],
+            "원인 해소(또는 표시 전용 전환) → auto-resolve"
         );
     }
 
-    /// (5) merged로 바뀌면 auto-resolve(open 목록에서 사라짐 = 원인 해소).
+    /// (4) merged로 바뀌면 레거시 escalated 신호가 auto-resolve(open 목록에서 사라짐 = 원인 해소).
     #[tokio::test]
     async fn merged_auto_resolves() {
         let db = fresh_db().await;
         let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
             .await
             .unwrap();
+        seed_legacy_pr_signal(&db, &proj.id, 42).await;
+
         let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "MIR-DEV-7 버그",
-        )]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
-        provider.set(vec![raw_pr(
             42,
             CiStatus::None,
             RawPrState::Merged,
@@ -662,66 +512,11 @@ mod tests {
         sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
             .await
             .unwrap();
-        assert_eq!(pr_signals(&db).await[0].2, "done", "merged → auto-resolve");
-    }
-
-    /// (6) 링크 티켓 없으면 escalate 0(CI 실패라도 noise 안 만듦 — INVARIANT #4).
-    #[tokio::test]
-    async fn no_ticket_no_escalation() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "리팩터 (티켓 없음)",
-        )]);
-        let items = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
-        assert!(!items[0].escalated);
-        let n: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM signals WHERE source = 'github_pr'")
-            .fetch_one(&db)
-            .await
-            .unwrap();
-        assert_eq!(n.0, 0, "링크 티켓 없으면 escalate 안 함");
-    }
-
-    /// (7) 사람이 classify한 PR 신호는 재sync upsert가 quadrant/status를 덮지 않는다(INVARIANT #1).
-    #[tokio::test]
-    async fn human_classification_preserved_on_resync() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "MIR-DEV-7 버그",
-        )]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
-
-        // 사람이 Q1으로 분류(결정 레일).
-        let id: (String,) =
-            sqlx::query_as("SELECT id FROM signals WHERE source = 'github_pr' LIMIT 1")
-                .fetch_one(&db)
-                .await
-                .unwrap();
-        set_quadrant(&db, &id.0, Quadrant::Q1DoNow).await.unwrap();
-
-        // 재폴링(같은 실패 PR) → upsert가 사람 결정을 보존해야 함.
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
-        let sigs = pr_signals(&db).await;
-        assert_eq!(sigs.len(), 1, "여전히 1행");
-        assert_eq!(sigs[0].0, "q1_do_now", "사람 분류 보존(quadrant 미덮음)");
-        assert_eq!(sigs[0].2, "classified", "사람 status 보존");
+        assert_eq!(
+            pr_signal_statuses(&db).await,
+            vec!["done"],
+            "merged(또는 표시 전용 전환) → auto-resolve"
+        );
     }
 
     /// 전부 transient(429/5xx) 실패는 transient로 노출 → 프런트 bounded retry 동작(INVARIANT #5).
@@ -759,115 +554,36 @@ mod tests {
         assert!(!err.retryable, "terminal은 재시도 불가");
     }
 
-    /// 큐잉된 CI 알림 행 (source='ci'): (source_id, title, body).
-    async fn ci_notifications(db: &Db) -> Vec<(Option<String>, String, String)> {
-        sqlx::query_as(
-            "SELECT source_id, title, body FROM scheduled_notifications \
-             WHERE source = 'ci' ORDER BY id",
-        )
-        .fetch_all(db)
-        .await
-        .unwrap()
-    }
-
-    /// (CI 알림 1) CI 실패 + 링크 티켓 escalate → 정확히 1개 CI 알림 큐잉(PR+SHA source_id).
+    /// INVARIANT #1 잠금: auto_resolve는 status만 'done'으로 전환하며 사람이 결정한 quadrant는 건드리지 않는다.
     #[tokio::test]
-    async fn ci_failure_enqueues_notification() {
+    async fn auto_resolve_preserves_human_quadrant() {
         let db = fresh_db().await;
         let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
             .await
             .unwrap();
-        let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "MIR-DEV-7 버그",
-        )]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
-        let notes = ci_notifications(&db).await;
-        assert_eq!(notes.len(), 1, "CI 실패 → 알림 1개 큐잉");
-        assert_eq!(
-            notes[0].0.as_deref(),
-            Some("pr:o/r:42:sha-42"),
-            "dedup source_id = PR+head_sha"
-        );
-        assert!(notes[0].1.contains("CI 실패"), "제목에 CI 실패 표기");
-    }
-
-    /// (CI 알림 2) 같은 실패(같은 SHA)로 폴링 N회 → 알림 1개 유지(중복 알림 0, INVARIANT #5).
-    #[tokio::test]
-    async fn same_failure_does_not_double_notify() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "MIR-DEV-7 버그",
-        )]);
-        for _ in 0..4 {
-            sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
+        // 레거시 escalated 신호를 시드하고 사람이 quadrant를 직접 지정한 상황을 모사.
+        seed_legacy_pr_signal(&db, &proj.id, 42).await;
+        let id: (String,) =
+            sqlx::query_as("SELECT id FROM signals WHERE source = 'github_pr' LIMIT 1")
+                .fetch_one(&db)
                 .await
                 .unwrap();
-        }
-        assert_eq!(
-            ci_notifications(&db).await.len(),
-            1,
-            "같은 SHA 반복 폴링 → 알림 중복 0"
-        );
-    }
-
-    /// (CI 알림 3) 새 커밋(다른 SHA)이 또 실패하면 새 알림 1개(총 2개). 같은 PR이라도 별개 실패.
-    #[tokio::test]
-    async fn new_commit_failure_notifies_again() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let mut pr = raw_pr(42, CiStatus::Failing, RawPrState::Open, "MIR-DEV-7 버그");
-        let provider = FakeProvider::new(vec![pr.clone()]);
+        set_quadrant(&db, &id.0, Quadrant::Q1DoNow).await.unwrap();
+        // PR이 사라진 상태(provider에 PR 없음) → auto_resolve 작동.
+        let provider = FakeProvider::new(vec![]);
         sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
             .await
             .unwrap();
-        assert_eq!(ci_notifications(&db).await.len(), 1);
-
-        // 새 커밋으로 push했지만 여전히 CI 실패 → 새 SHA → 새 알림.
-        pr.head_sha = "sha-42-v2".into();
-        provider.set(vec![pr]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
+        let row: (String, String) = sqlx::query_as(
+            "SELECT status, quadrant FROM signals WHERE source = 'github_pr' LIMIT 1",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(row.0, "done", "레거시 신호는 status만 done으로 정리");
         assert_eq!(
-            ci_notifications(&db).await.len(),
-            2,
-            "새 커밋 실패 → 새 알림 1개 추가(총 2)"
-        );
-    }
-
-    /// (CI 알림 4) 링크 티켓 없는 CI 실패는 escalate 안 함 → 알림도 0(noise 0, INVARIANT #4).
-    #[tokio::test]
-    async fn no_ticket_no_ci_notification() {
-        let db = fresh_db().await;
-        let proj = insert_project(&db, &project_input("업무", ProjectKind::Work))
-            .await
-            .unwrap();
-        let provider = FakeProvider::new(vec![raw_pr(
-            42,
-            CiStatus::Failing,
-            RawPrState::Open,
-            "리팩터 (티켓 없음)",
-        )]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
-        assert_eq!(
-            ci_notifications(&db).await.len(),
-            0,
-            "escalate 0 → CI 알림 0"
+            row.1, "q1_do_now",
+            "사람 quadrant 결정은 보존(INVARIANT #1)"
         );
     }
 }

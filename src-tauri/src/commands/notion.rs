@@ -803,7 +803,6 @@ mod tests {
                 kind: ProjectKind::Work,
                 notion_backlog_db_id: Some("1234567890abcdef1234567890abcdef".into()),
                 notion_agenda_db_id: None,
-                ticket_key_pattern: None,
             },
         )
         .await
@@ -878,7 +877,6 @@ mod tests {
                     kind: ProjectKind::Work,
                     notion_backlog_db_id: Some("abcdef1234567890abcdef1234567890".into()),
                     notion_agenda_db_id: None,
-                    ticket_key_pattern: None,
                 },
             )
             .await
@@ -909,7 +907,6 @@ mod tests {
                 kind: ProjectKind::Work,
                 notion_backlog_db_id: None,
                 notion_agenda_db_id: Some("abcdef1234567890abcdef1234567890".into()),
-                ticket_key_pattern: None,
             },
         )
         .await

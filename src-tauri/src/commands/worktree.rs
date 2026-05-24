@@ -570,7 +570,6 @@ mod tests {
                 remote_url: Some("https://github.com/64etuor/work-radar".into()),
                 local_path: Some("/work/work-radar".into()),
                 default_branch: Some("dev".into()),
-                ticket_key_pattern: None,
             },
         )
         .await
@@ -584,7 +583,6 @@ mod tests {
                 remote_url: Some("https://github.com/64etuor/other".into()),
                 local_path: None,
                 default_branch: None,
-                ticket_key_pattern: None,
             },
         )
         .await

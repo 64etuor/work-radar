@@ -26,11 +26,11 @@ pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, AppError> 
 
 /// Project SELECT/RETURNING 공통 컬럼.
 const PROJECT_COLS: &str = "id, name, kind, notion_backlog_db_id, notion_agenda_db_id, \
-     ticket_key_pattern, google_calendar_ids, credential_ref, \
+     google_calendar_ids, credential_ref, \
      created_at, updated_at";
 /// Repo SELECT/RETURNING 공통 컬럼.
 const REPO_COLS: &str = "id, project_id, provider, remote_url, local_path, default_branch, \
-     ticket_key_pattern, enabled, created_at";
+     enabled, created_at";
 
 /// 프로젝트 생성. `credential_ref`는 백엔드가 생성하는 keychain 분리 키(토큰 본문 아님).
 /// Notion DB ID는 저장 전 정규화(dashed UUID 형식). 유효하지 않은 ID는 Protocol 에러.
@@ -59,16 +59,15 @@ pub(crate) async fn insert_project(
         .map_err(|e| sqlx::Error::Protocol(format!("notion_agenda_db_id: {e}")))?;
     sqlx::query_as::<_, Project>(&format!(
         "INSERT INTO projects \
-            (id, name, kind, notion_backlog_db_id, notion_agenda_db_id, ticket_key_pattern, \
+            (id, name, kind, notion_backlog_db_id, notion_agenda_db_id, \
              credential_ref) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, lower(hex(randomblob(16)))) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, lower(hex(randomblob(16)))) \
          RETURNING {PROJECT_COLS}"
     ))
     .bind(name)
     .bind(input.kind)
     .bind(&backlog_db_id)
     .bind(&agenda_db_id)
-    .bind(&input.ticket_key_pattern)
     .fetch_one(db)
     .await
 }
@@ -114,8 +113,8 @@ pub(crate) async fn insert_repo(db: &Db, input: &CreateRepoInput) -> Result<Repo
         .unwrap_or("main");
     sqlx::query_as::<_, Repo>(&format!(
         "INSERT INTO repos \
-            (id, project_id, provider, remote_url, local_path, default_branch, ticket_key_pattern) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6) \
+            (id, project_id, provider, remote_url, local_path, default_branch) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5) \
          RETURNING {REPO_COLS}"
     ))
     .bind(&input.project_id)
@@ -123,7 +122,6 @@ pub(crate) async fn insert_repo(db: &Db, input: &CreateRepoInput) -> Result<Repo
     .bind(&input.remote_url)
     .bind(&input.local_path)
     .bind(default_branch)
-    .bind(&input.ticket_key_pattern)
     .fetch_one(db)
     .await
 }
@@ -196,7 +194,6 @@ mod tests {
                 remote_url: Some("https://github.com/64etuor/work-radar".into()),
                 local_path: None,
                 default_branch: None,
-                ticket_key_pattern: Some(r"MIR-DEV-\d+".into()),
             },
         )
         .await
