@@ -891,29 +891,6 @@
   text-transform: uppercase;
   color: var(--color-wr-coral);
 }
-.cb .seg {
-  display: inline-flex;
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: 999px;
-  overflow: hidden;
-  flex: 0 0 auto;
-}
-.cb .seg button {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 6px 13px;
-  font: 600 12px var(--font-sans);
-  color: var(--color-wr-subtle);
-}
-.cb .seg button.on[data-kind="personal"] {
-  background: var(--color-wr-accent-soft);
-  color: var(--color-wr-accent);
-}
-.cb .seg button.on[data-kind="work"] {
-  background: var(--cb-pale-green);
-  color: var(--color-wr-green);
-}
 .cb .capture input.dump {
   flex: 1;
   min-width: 160px;
@@ -926,22 +903,6 @@
 }
 .cb .capture input.dump::placeholder {
   color: var(--color-wr-subtle);
-}
-.cb .capture .send {
-  border: none;
-  cursor: pointer;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  font: 500 14px var(--font-sans);
-  padding: 9px 20px;
-  border-radius: 999px;
-}
-.cb .capture .send:hover {
-  background: var(--color-wr-black);
-}
-.cb .capture .send:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* 카드 액션 메뉴 — fixed, .cb 밖에 portal 없이 body 안에 그리므로 별도 스코프 */

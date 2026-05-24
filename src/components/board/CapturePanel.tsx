@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import type { Kind } from "@/bindings";
 import { parseDump } from "@/components/board/board-utils";
+import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type Props = {
   /** kind = 파싱된 마커 우선, 없으면 토글 기본값. */
@@ -27,24 +29,29 @@ export function CapturePanel({ onSubmit, disabled, inputRef }: Props) {
   return (
     <div className="capture">
       <span className="bd">Brain&nbsp;Dump</span>
-      <div className="seg">
-        <button
-          type="button"
-          data-kind="personal"
-          className={pendingKind === "personal" ? "on" : ""}
-          onClick={() => setPendingKind("personal")}
+      {/* 개인/업무 2-state 세그먼트(toggle-group). single이라 활성 항목 재클릭 시 빈값 콜백 → 가드로 무시(항상 1개 선택 보존). 의미색은 항목별 data-[state=on]:* (personal=accent-soft, work=pale-green). */}
+      <ToggleGroup
+        type="single"
+        value={pendingKind}
+        onValueChange={(v) => v && setPendingKind(v as Kind)}
+        className="shrink-0 overflow-hidden rounded-full border border-wr-border-light"
+      >
+        <ToggleGroupItem
+          value="personal"
+          size="sm"
+          className="font-semibold text-wr-subtle data-[state=on]:bg-wr-accent-soft data-[state=on]:text-wr-accent"
         >
           개인
-        </button>
-        <button
-          type="button"
-          data-kind="work"
-          className={pendingKind === "work" ? "on" : ""}
-          onClick={() => setPendingKind("work")}
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="work"
+          size="sm"
+          className="font-semibold text-wr-subtle data-[state=on]:bg-wr-pale-green data-[state=on]:text-wr-green"
         >
           업무
-        </button>
-      </div>
+        </ToggleGroupItem>
+      </ToggleGroup>
+      {/* .dump = 보더리스/투명 blend-in 캡처 필드(16px·포커스 링 없음) — shadcn Input은 6+ 오버라이드+링 회귀라 bespoke 유지(plan §0.5 / AGENTS.md ≤3 규율). */}
       <input
         ref={inputRef}
         className="dump"
@@ -58,9 +65,9 @@ export function CapturePanel({ onSubmit, disabled, inputRef }: Props) {
         autoComplete="off"
         autoFocus
       />
-      <button type="button" className="send" onClick={submit} disabled={disabled}>
+      <Button type="button" size="pill" onClick={submit} disabled={disabled}>
         붙이기
-      </button>
+      </Button>
     </div>
   );
 }
