@@ -204,13 +204,19 @@
   background: var(--color-wr-bg);
 }
 
-/* 헤더 */
+/* 헤더 — 3존 그리드(좌=mark · 중=Sprint · 우=hint)로 스프린트 칩을 시각적 정중앙에. */
 .cb .cb-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  column-gap: 16px;
+  align-items: center;
   padding: 14px 22px 6px;
   flex: 0 0 auto;
+}
+.cb .cb-head-center {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
 }
 .cb .cb-head .mark {
   font: 600 13px var(--font-mono);
@@ -791,7 +797,10 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin: 0 16px 16px;
+  /* 풀폭 너무 휑함 → 가운데 정렬 + 가독 폭으로 캡. 측여백 16px 보존(작은 창에서). */
+  width: calc(100% - 32px);
+  max-width: 640px;
+  margin: 0 auto 16px;
   padding: 12px 14px;
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--cb-r-lg);
@@ -4285,58 +4294,94 @@
  */
 .cb .cb-head-right {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 16px;
+  justify-self: end;
 }
 .sprint-timer {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   flex: 0 0 auto;
 }
-.sprint-count {
+/* ── 스프린트 미터 ──
+   에디토리얼 1줄 라벨 + 그 아래 얇은 진행 바. 박스/필 없음 — 헤더 라인에 자연스럽게 녹는다.
+   라벨: 'SPRINT · {n일 남음}' (mono caps + 본문). 색만으로 의미 전달 금지 → 'SPRINT' 라벨 병기.
+   바: 3px 트랙(border-light) + 채움(near-black). overdue=coral 풀필 + 텍스트 코랄. */
+.sprint-meter {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  width: 240px;
+  padding: 4px 6px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-wr-fg);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+.sprint-meter:hover {
+  background: var(--color-wr-elevated);
+}
+.sprint-meter-label {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+}
+.sprint-meter-tag {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   color: var(--color-wr-fg);
 }
-.sprint-count:hover {
-  background: var(--color-wr-surface);
+.sprint-meter-sep {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-border);
 }
-.sprint-count-text {
-  font: 600 13px var(--font-mono);
-  letter-spacing: 0.04em;
-}
-/* 좁은 폭에서 'D일 HH:MM'→'D일'만(반응형). 기본은 full 표시. */
-.sprint-count-compact {
-  display: none;
-}
-.sprint-count.is-overdue .sprint-count-text {
-  color: var(--color-wr-coral);
-}
-.sprint-overdue-lbl {
-  font: 600 10px var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-wr-coral);
-}
-.sprint-empty-link {
-  border: none;
-  background: transparent;
-  cursor: pointer;
+.sprint-meter-text {
   font: 500 12px var(--font-mono);
   letter-spacing: 0.04em;
-  color: var(--color-wr-subtle);
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-wr-muted);
 }
-.sprint-empty-link:hover {
-  color: var(--color-wr-fg);
-  background: var(--color-wr-surface);
+.sprint-meter-bar {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-wr-border-light);
+  overflow: hidden;
+}
+.sprint-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-wr-near-black);
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+/* Overdue — 텍스트+바 코랄. 'SPRINT' 라벨도 코랄로 강조(라벨 병기 유지). */
+.sprint-meter.is-overdue .sprint-meter-tag,
+.sprint-meter.is-overdue .sprint-meter-text {
+  color: var(--color-wr-coral);
+}
+.sprint-meter.is-overdue .sprint-meter-bar {
+  background: var(--color-wr-danger-soft);
+}
+.sprint-meter.is-overdue .sprint-meter-fill {
+  background: var(--color-wr-coral);
+}
+/* Empty — 라벨 톤 다운 + 점선 트랙. */
+.sprint-meter.is-empty .sprint-meter-tag,
+.sprint-meter.is-empty .sprint-meter-text {
+  color: var(--color-wr-subtle);
+}
+.sprint-meter.is-empty .sprint-meter-bar {
+  background: transparent;
+  border-top: 1px dashed var(--color-wr-border);
+  height: 1px;
+  border-radius: 0;
 }
 
 /* 스프린트 에디터 — 모달 컨테이너/제목/버튼/인풋은 shadcn Dialog·Button·Input(PR 0).
@@ -4372,16 +4417,13 @@
 .sprint-actions-spacer {
   flex: 1;
 }
-/* 반응형: 좁으면 'D일 HH:MM'→'D일'만(overdue 색 유지). DESIGN sprint-timer 반응형. */
+/* 반응형: 좁으면 hint 숨김. 미터 라벨은 짧으므로 그대로(필요 시 width 축소). */
 @media (max-width: 860px) {
   .cb .cb-head-right .hint {
     display: none;
   }
-  .sprint-count-full {
-    display: none;
-  }
-  .sprint-count-compact {
-    display: inline;
+  .sprint-meter {
+    width: 200px;
   }
 }
 

@@ -27,13 +27,13 @@ import { cn } from "@/components/ui/cn";
 const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 /**
- * 브랜드 헤더 우측 존 스프린트 카운트다운 (P11) — DESIGN.md `sprint-timer` 정본.
- * 에이전트 바와 **분리**된 헤더 우측 존. 'D일 HH:MM' CohereMono, **1s tick**,
- * overdue=Coral + '지남' 라벨(색+라벨 병기). 미설정 시 "스프린트 설정" 텍스트 링크(empty).
+ * 헤더 중앙 존 스프린트 미터 (P11, 2026-05-25 재설계) — 에디토리얼 1줄 라벨 + 얇은 진행 바.
+ * 라벨 'SPRINT · {n일 남음}' + 3px 트랙(near-black 채움). 색만으로 의미 전달 금지 → 'SPRINT'/'남음/지남' 라벨 병기.
+ * overdue=Coral 풀필 + 라벨 코랄. 미설정="SPRINT · 설정" + 점선 트랙(empty).
  * 클릭 → Dialog 에디터(interval_days 스테퍼 + 기준요일·시각 피커 + 저장).
  *
- * 다음 경계 계산 SSOT = Rust `next_boundary`(직접 구현 + cargo test, rrule 미사용, DST 안전).
- * 프런트는 받은 경계 RFC3339로 로컬 1s tick 표시만 한다(drift 없음 — 경계는 anchor+interval로 매번 산출).
+ * 다음 경계 SSOT = Rust `next_boundary`(직접 구현 + cargo test, DST 안전).
+ * 진행도 = (intervalDays·86400 − remaining) / total — 매 1s tick으로 재계산(드리프트 없음).
  */
 export function SprintTimer() {
   const configQ = useSprintConfig();
@@ -48,14 +48,22 @@ export function SprintTimer() {
   }, []);
 
   const status = statusQ.data ?? null;
-  const display = useMemo(() => {
-    if (!status) return null;
+  const config = configQ.data ?? null;
+  const meter = useMemo(() => {
+    if (!status || !config) return null;
     const secs = remainingSecondsUntil(status.nextBoundary, nowMs);
     if (secs == null) return null;
-    return formatCountdown(secs);
-  }, [status, nowMs]);
+    const display = formatCountdown(secs);
+    // 진행도 = 전체 인터벌 대비 경과 비율. overdue면 100% 채움(시각 cap).
+    const totalSec = Math.max(1, config.intervalDays * 86_400);
+    const elapsedSec = totalSec - secs;
+    const pct = display.overdue
+      ? 1
+      : Math.max(0, Math.min(1, elapsedSec / totalSec));
+    return { display, pct };
+  }, [status, config, nowMs]);
 
-  const configured = !!configQ.data;
+  const configured = !!config;
 
   return (
     <div className="sprint-timer">
@@ -63,22 +71,44 @@ export function SprintTimer() {
           트리거(triggerRef)로 포커스 복원(plan §1.3 c). 트리거 시각은 그대로 유지. */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          {configured && display ? (
+          {configured && meter ? (
             <button
               type="button"
-              className={`sprint-count${display.overdue ? " is-overdue" : ""}`}
+              className={`sprint-meter${meter.display.overdue ? " is-overdue" : ""}`}
               title="스프린트 일정 편집"
               aria-live="polite"
+              aria-label={`스프린트 ${remainingLabel(meter.display)} (${Math.round(meter.pct * 100)}%)`}
             >
-              <span className="sprint-count-text">
-                <span className="sprint-count-full">{display.text}</span>
-                <span className="sprint-count-compact">{display.compact}</span>
+              <span className="sprint-meter-label">
+                <span className="sprint-meter-tag">SPRINT</span>
+                <span className="sprint-meter-sep" aria-hidden>
+                  ·
+                </span>
+                <span className="sprint-meter-text">
+                  {remainingLabel(meter.display)}
+                </span>
               </span>
-              {display.overdue && <span className="sprint-overdue-lbl">지남</span>}
+              <span className="sprint-meter-bar" aria-hidden>
+                <span
+                  className="sprint-meter-fill"
+                  style={{ width: `${meter.pct * 100}%` }}
+                />
+              </span>
             </button>
           ) : (
-            <button type="button" className="sprint-empty-link">
-              스프린트 설정
+            <button
+              type="button"
+              className="sprint-meter is-empty"
+              title="스프린트 일정 설정"
+            >
+              <span className="sprint-meter-label">
+                <span className="sprint-meter-tag">SPRINT</span>
+                <span className="sprint-meter-sep" aria-hidden>
+                  ·
+                </span>
+                <span className="sprint-meter-text">설정</span>
+              </span>
+              <span className="sprint-meter-bar" aria-hidden />
             </button>
           )}
         </DialogTrigger>
@@ -89,6 +119,24 @@ export function SprintTimer() {
       </Dialog>
     </div>
   );
+}
+
+/**
+ * 라벨 텍스트 — 'D일 남음' / 'HH:MM 남음' / 'D일 지남'.
+ * 포맷 SSOT는 `formatCountdown` (D일 HH:MM). 매치 실패 시 원문 폴백.
+ */
+function remainingLabel(display: {
+  text: string;
+  overdue: boolean;
+}): string {
+  const m = display.text.match(/^(\d+)일 (\d{2}):(\d{2})$/);
+  if (!m) return display.text;
+  const [, dStr, hh, mm] = m;
+  const days = Number(dStr);
+  if (display.overdue) {
+    return days > 0 ? `${days}일 지남` : `${hh}:${mm} 지남`;
+  }
+  return days > 0 ? `${days}일 남음` : `${hh}:${mm} 남음`;
 }
 
 type EditorProps = {

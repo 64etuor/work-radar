@@ -482,13 +482,16 @@ export function CaptureBoard() {
     <div className="cb">
       <div className="cb-head">
         <span className="mark">◎ Work Radar / Capture</span>
-        {/* 헤더 우측 존 — 에이전트 바와 분리. hint + 스프린트 카운트다운(P11). */}
+        {/* 중앙 존 — 헤더 그리드의 auto 트랙. 스프린트 칩만 들어간다(시각적 중앙 정렬). */}
+        <div className="cb-head-center">
+          <SprintTimer />
+        </div>
+        {/* 우측 존 — 에이전트 바와 분리. hint만(스프린트는 중앙으로 분리). */}
         <div className="cb-head-right">
           <span className="hint">
             드래그로 분류 · <b>1 2 3 4</b> 사분면 · <b>T</b> Today · 카드 ⋯ 메뉴
             · <b>⌘K</b> 설정/프로젝트
           </span>
-          <SprintTimer />
         </div>
       </div>
 
