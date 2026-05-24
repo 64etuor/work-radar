@@ -3499,21 +3499,6 @@
   padding: 12px 18px;
   border-bottom: 1px solid var(--color-wr-border-light);
 }
-.hermes .hm-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font: 500 13px var(--font-sans);
-  color: var(--color-wr-fg);
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-}
-.hermes .hm-back:hover {
-  background: var(--color-wr-surface);
-}
 .hermes .hm-title {
   font: 600 15px var(--font-sans);
 }
@@ -3523,29 +3508,6 @@
 }
 .hermes .hm-status.on {
   color: var(--color-wr-green);
-}
-.hermes .hm-refresh {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-  padding: 6px 12px;
-  border-radius: 999px;
-}
-.hermes .hm-refresh:hover {
-  background: var(--color-wr-surface);
-}
-.hermes .hm-refresh:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.hermes .hm-refresh .spin {
-  animation: wr-spin 1s linear infinite;
 }
 .hermes .hm-scroll {
   flex: 1;
@@ -3606,18 +3568,6 @@
   max-width: 620px;
   margin: 0 auto;
 }
-.hermes .hm-go-settings {
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-  padding: 7px 14px;
-  border-radius: 999px;
-}
-.hermes .hm-go-settings:hover {
-  background: var(--color-wr-surface);
-}
 .hermes .hm-note {
   font: 400 12px var(--font-mono);
   color: var(--color-wr-subtle);
@@ -3637,42 +3587,6 @@
   max-width: 760px;
   margin: 0 auto;
   box-sizing: border-box;
-}
-.hermes .hm-input {
-  flex: 1;
-  box-sizing: border-box;
-  border: 1px solid var(--color-wr-border);
-  border-radius: var(--radius-sm);
-  padding: 9px 12px;
-  font: 400 14px var(--font-sans);
-  color: var(--color-wr-fg);
-  background: var(--color-wr-bg);
-  outline: none;
-}
-.hermes .hm-input:focus {
-  border-color: var(--color-wr-accent);
-}
-.hermes .hm-input:disabled {
-  opacity: 0.55;
-}
-.hermes .hm-send {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  cursor: pointer;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  font: 500 13px var(--font-sans);
-  padding: 9px 18px;
-  border-radius: 999px;
-}
-.hermes .hm-send:hover {
-  background: var(--color-wr-black);
-}
-.hermes .hm-send:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* ── 스킬 공유 레지스트리 뷰 (Phase 20 #21) ───────────────────────────────── */

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { ArrowLeft, RefreshCw, Send } from "lucide-react";
 
 import type { HermesMessage } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
+import { Input } from "@/components/ui/input";
 import {
   useFetchHermesMessages,
   useHermesBridgeStatus,
@@ -52,37 +55,44 @@ export function HermesView() {
   return (
     <div className="hermes">
       <header className="hm-head" data-tauri-drag-region>
-        <button type="button" className="hm-back" onClick={() => goTo("board")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="hm-title">Hermes</span>
         <span className={configured ? "hm-status on" : "hm-status"}>
           {configured ? "● 연결됨" : "○ 미설정"}
         </span>
-        <button
-          type="button"
-          className="hm-refresh"
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-1.5 rounded-full"
           onClick={receive}
           disabled={!configured || fetch.isPending}
           title="새 메시지 단발 수신 (bounded)"
         >
-          <RefreshCw className={`size-4${fetch.isPending ? " spin" : ""}`} />
+          <RefreshCw className={cn("size-4", fetch.isPending && "animate-spin")} />
           수신
-        </button>
+        </Button>
       </header>
 
       {!configured ? (
         <div className="hm-empty">
           Hermes 브리지가 설정되지 않았습니다. 설정 → Hermes 브리지에서 봇 토큰과 chat_id를
           입력하세요.
-          <button
-            type="button"
-            className="hm-go-settings"
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full"
             onClick={() => goTo("settings", "open")}
           >
             설정 열기
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="hm-scroll">
@@ -108,8 +118,8 @@ export function HermesView() {
       {note && <div className="hm-note">{note}</div>}
 
       <div className="hm-compose">
-        <input
-          className="hm-input"
+        <Input
+          className="flex-1"
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -125,16 +135,15 @@ export function HermesView() {
           disabled={!configured || send.isPending}
           aria-label="Hermes 명령 입력"
         />
-        <button
-          type="button"
-          className="hm-send"
+        <Button
+          className="gap-1.5 rounded-full"
           onClick={submit}
           disabled={!configured || send.isPending || !text.trim()}
           title="명령 전송 (Enter)"
         >
           <Send className="size-4" />
           {send.isPending ? "전송 중…" : "전송"}
-        </button>
+        </Button>
       </div>
     </div>
   );
