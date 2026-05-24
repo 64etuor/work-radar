@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ArrowLeft, Flame, Repeat } from "lucide-react";
 
 import type { RoutineFreq, RoutineTrackingItem } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { localToday, useRoutineTracking } from "@/lib/query";
 import { useUIStore } from "@/store";
 
@@ -38,10 +40,15 @@ export function RoutineTrackingView() {
   return (
     <div className="rt">
       <header className="rt-head" data-tauri-drag-region>
-        <button type="button" className="rt-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="rt-title">루틴 트래킹</span>
         <div className="rt-tabs" />
       </header>
@@ -49,14 +56,20 @@ export function RoutineTrackingView() {
       <div className="rt-scroll">
         <div className="rt-periods">
           {PERIODS.map((p) => (
-            <button
+            <Button
               key={p.value}
-              type="button"
-              className={`rt-period${period === p.value ? " on" : ""}`}
+              variant="outline"
+              size="sm"
+              aria-pressed={period === p.value}
+              className={cn(
+                "rounded-full",
+                period === p.value &&
+                  "border-wr-accent bg-wr-accent-soft text-wr-accent hover:bg-wr-accent-soft",
+              )}
               onClick={() => setPeriod(p.value)}
             >
               {p.label}
-            </button>
+            </Button>
           ))}
         </div>
 
