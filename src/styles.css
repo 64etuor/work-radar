@@ -2937,23 +2937,6 @@
   gap: 4px;
   margin-left: auto;
 }
-.rt .rt-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  color: var(--color-wr-subtle);
-  font: 500 12px var(--font-sans);
-  padding: 4px 11px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.rt .rt-tab.on {
-  background: var(--color-wr-fg);
-  color: var(--color-wr-bg);
-  border-color: var(--color-wr-fg);
-}
 .rt .rt-scroll {
   flex: 1;
   overflow-y: auto;
@@ -3168,26 +3151,6 @@
 .rt .rt-arc-sub {
   font: 400 11px var(--font-mono);
   color: var(--color-wr-subtle);
-}
-.rt .rt-restore {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  color: var(--color-wr-fg);
-  font: 500 12px var(--font-sans);
-  padding: 5px 11px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.rt .rt-restore:hover:not(:disabled) {
-  background: var(--color-wr-surface);
-}
-.rt .rt-restore:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 /* ── 루틴 트래킹 뷰 (Phase 16 #12) — .rt 셸 재사용 ───────────────────────────── */

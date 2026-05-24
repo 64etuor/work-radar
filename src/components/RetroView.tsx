@@ -10,6 +10,8 @@ import {
 
 import type { WorkSignal } from "@/bindings";
 import { kindChipClass, kindLabel } from "@/components/board/board-utils";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import {
   localToday,
   useArchivedSnoozed,
@@ -53,28 +55,37 @@ export function RetroView() {
   return (
     <div className="rt">
       <header className="rt-head" data-tauri-drag-region>
-        <button type="button" className="rt-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="rt-title">회고</span>
         <div className="rt-tabs">
-          <button
-            type="button"
-            className={`rt-tab${tab === "retro" ? " on" : ""}`}
+          <Button
+            variant={tab === "retro" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5 rounded-full"
+            aria-pressed={tab === "retro"}
             onClick={() => setTab("retro")}
           >
             <Sparkles className="size-3.5" />
             회고
-          </button>
-          <button
-            type="button"
-            className={`rt-tab${tab === "archive" ? " on" : ""}`}
+          </Button>
+          <Button
+            variant={tab === "archive" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5 rounded-full"
+            aria-pressed={tab === "archive"}
             onClick={() => setTab("archive")}
           >
             <Archive className="size-3.5" />
             보관함
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -113,14 +124,20 @@ function RetroTab() {
     <div className="rt-scroll">
       <div className="rt-periods">
         {PERIODS.map((p) => (
-          <button
+          <Button
             key={p.value}
-            type="button"
-            className={`rt-period${period === p.value ? " on" : ""}`}
+            variant="outline"
+            size="sm"
+            aria-pressed={period === p.value}
+            className={cn(
+              "rounded-full",
+              period === p.value &&
+                "border-wr-accent bg-wr-accent-soft text-wr-accent hover:bg-wr-accent-soft",
+            )}
             onClick={() => setPeriod(p.value)}
           >
             {p.label}
-          </button>
+          </Button>
         ))}
         <span className="rt-range">
           {md(start)} – {md(end)}
@@ -264,16 +281,17 @@ function ArchiveTab() {
               )}
             </div>
           </div>
-          <button
-            type="button"
-            className="rt-restore"
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 rounded-full"
             title="복원"
             disabled={restore.isPending}
             onClick={() => restore.mutate(s.id)}
           >
             <RotateCcw className="size-3.5" />
             복원
-          </button>
+          </Button>
         </div>
       ))}
     </div>
