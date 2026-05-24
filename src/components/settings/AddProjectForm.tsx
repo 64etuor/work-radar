@@ -1,12 +1,24 @@
 import { useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 
 import type { ProjectKind } from "@/bindings";
 import { useCreateProject } from "@/lib/query";
 import { trimOrNull } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Field, Segmented } from "./kit";
 
 /**
- * Add Project 폼 (contact-form-card 톤). 개인/업무 + Notion DB 바인딩 + ticketKeyPattern.
- * 토큰은 여기서 받지 않는다 — 프로젝트 생성 후 ProjectCard의 토큰 입력에서 keychain으로.
+ * Add Project 폼 — 개인/업무 + Notion DB 바인딩.
+ * 토큰은 여기서 받지 않는다 — 프로젝트 생성 후 ProjectCard의 CLI 가져오기/keychain으로.
  */
 export function AddProjectForm({
   autoFocus,
@@ -22,7 +34,6 @@ export function AddProjectForm({
   const [kind, setKind] = useState<ProjectKind>("work");
   const [backlogDb, setBacklogDb] = useState("");
   const [agendaDb, setAgendaDb] = useState("");
-  const [ticketPattern, setTicketPattern] = useState("");
 
   useEffect(() => {
     if (autoFocus) nameRef.current?.focus();
@@ -36,14 +47,13 @@ export function AddProjectForm({
         kind,
         notionBacklogDbId: trimOrNull(backlogDb),
         notionAgendaDbId: trimOrNull(agendaDb),
-        ticketKeyPattern: trimOrNull(ticketPattern),
+        ticketKeyPattern: null,
       },
       {
         onSuccess: (p) => {
           setName("");
           setBacklogDb("");
           setAgendaDb("");
-          setTicketPattern("");
           onCreated?.(`프로젝트 "${p.name}" 추가`);
         },
       },
@@ -51,85 +61,69 @@ export function AddProjectForm({
   };
 
   return (
-    <div className="st-card">
-      <div className="st-card-lbl">새 프로젝트</div>
+    <Card>
+      <CardHeader>
+        <CardTitle>새 프로젝트</CardTitle>
+        <CardDescription>
+          개인 또는 업무 프로젝트를 추가하고 Notion DB를 연결하세요.
+        </CardDescription>
+      </CardHeader>
 
-      <div className="st-field">
-        <label className="st-label">이름</label>
-        <input
-          ref={nameRef}
-          className="st-input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="예: Mirrorless / 내 삶"
-        />
-      </div>
+      <CardContent>
+        <Field label="이름" htmlFor="new-project-name">
+          <Input
+            id="new-project-name"
+            ref={nameRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder="예: Mirrorless / 내 삶"
+          />
+        </Field>
 
-      <div className="st-field">
-        <label className="st-label">종류</label>
-        <div className="st-seg">
-          <button
-            type="button"
-            className={kind === "personal" ? "on" : ""}
-            data-kind="personal"
-            onClick={() => setKind("personal")}
-          >
-            개인
-          </button>
-          <button
-            type="button"
-            className={kind === "work" ? "on" : ""}
-            data-kind="work"
-            onClick={() => setKind("work")}
-          >
-            업무
-          </button>
+        <Field label="종류">
+          <Segmented
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: "personal", label: "개인" },
+              { value: "work", label: "업무" },
+            ]}
+          />
+        </Field>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Notion 백로그 DB ID" hint="선택 — 백로그 미러링 대상">
+            <Input
+              value={backlogDb}
+              onChange={(e) => setBacklogDb(e.target.value)}
+              placeholder="데이터베이스 ID"
+              className="font-mono"
+            />
+          </Field>
+          <Field label="Notion 안건 DB ID" hint="선택 — 안건/회의 미러링 대상">
+            <Input
+              value={agendaDb}
+              onChange={(e) => setAgendaDb(e.target.value)}
+              placeholder="데이터베이스 ID"
+              className="font-mono"
+            />
+          </Field>
         </div>
-      </div>
 
-      <div className="st-field">
-        <label className="st-label">Notion 백로그 DB ID</label>
-        <input
-          className="st-input"
-          value={backlogDb}
-          onChange={(e) => setBacklogDb(e.target.value)}
-          placeholder="(선택) 백로그 데이터베이스 ID"
-        />
-      </div>
+        {create.isError && (
+          <div className="text-sm text-[color:var(--destructive)]">
+            {String(create.error)}
+          </div>
+        )}
+      </CardContent>
 
-      <div className="st-field">
-        <label className="st-label">Notion 안건 DB ID</label>
-        <input
-          className="st-input"
-          value={agendaDb}
-          onChange={(e) => setAgendaDb(e.target.value)}
-          placeholder="(선택) 안건 데이터베이스 ID"
-        />
-      </div>
-
-      <div className="st-field">
-        <label className="st-label">티켓 키 패턴</label>
-        <input
-          className="st-input"
-          value={ticketPattern}
-          onChange={(e) => setTicketPattern(e.target.value)}
-          placeholder="예: MIR-DEV-\d+ (조인 키)"
-        />
-      </div>
-
-      {create.isError && <div className="st-err">{String(create.error)}</div>}
-
-      <div className="st-actions">
-        <button
-          type="button"
-          className="st-btn"
-          onClick={submit}
-          disabled={!name.trim() || create.isPending}
-        >
+      <CardFooter className="justify-end">
+        <Button onClick={submit} disabled={!name.trim() || create.isPending}>
+          <Plus className="size-4" />
           {create.isPending ? "추가 중…" : "프로젝트 추가"}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

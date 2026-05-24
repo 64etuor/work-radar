@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { FolderSearch, Plus } from "lucide-react";
 
 import type { Provider } from "@/bindings";
 import { useCreateRepo } from "@/lib/query";
 import { trimOrNull } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Segmented } from "./kit";
 
 /** Add Repo 폼 (프로젝트 카드 내부). github=remote URL, local=경로(Codex worktree 베이스). */
 export function AddRepoForm({
@@ -17,9 +21,8 @@ export function AddRepoForm({
   const [provider, setProvider] = useState<Provider>("github");
   const [location, setLocation] = useState("");
   const [branch, setBranch] = useState("");
-  const [ticketPattern, setTicketPattern] = useState("");
 
-  // 폴더 picker (Phase 14): local 경로는 붙여넣기 대신 OS 다이얼로그로 선택한다.
+  // 폴더 picker: local 경로는 붙여넣기 대신 OS 다이얼로그로 선택한다.
   const pickFolder = async () => {
     const selected = await open({ directory: true, multiple: false });
     if (typeof selected === "string") setLocation(selected);
@@ -34,13 +37,12 @@ export function AddRepoForm({
         remoteUrl: provider === "github" ? trimOrNull(location) : null,
         localPath: provider === "local" ? trimOrNull(location) : null,
         defaultBranch: trimOrNull(branch),
-        ticketKeyPattern: trimOrNull(ticketPattern),
+        ticketKeyPattern: null,
       },
       {
         onSuccess: () => {
           setLocation("");
           setBranch("");
-          setTicketPattern("");
           onToast("레포 추가됨");
         },
       },
@@ -48,68 +50,64 @@ export function AddRepoForm({
   };
 
   return (
-    <div className="st-repoform">
-      <div className="st-seg sm">
-        <button
-          type="button"
-          className={provider === "github" ? "on" : ""}
-          onClick={() => setProvider("github")}
-        >
-          GitHub
-        </button>
-        <button
-          type="button"
-          className={provider === "local" ? "on" : ""}
-          onClick={() => setProvider("local")}
-        >
-          Local
-        </button>
+    <div className="flex flex-col gap-2.5 rounded-lg border border-dashed border-border p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <Segmented
+          size="sm"
+          value={provider}
+          onChange={setProvider}
+          options={[
+            { value: "github", label: "GitHub" },
+            { value: "local", label: "Local" },
+          ]}
+        />
       </div>
+
       {provider === "github" ? (
-        <input
-          className="st-input"
+        <Input
           value={location}
           onChange={(e) => setLocation(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder="https://github.com/org/repo"
+          className="font-mono"
         />
       ) : (
-        <div className="st-token-row">
-          <input
-            className="st-input"
+        <div className="flex items-center gap-2">
+          <Input
             value={location}
             readOnly
             placeholder="폴더를 선택하세요…"
             title={location || "선택된 폴더 없음"}
+            className="font-mono"
           />
-          <button type="button" className="st-btn sm" onClick={pickFolder}>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={pickFolder}>
+            <FolderSearch className="size-3.5" />
             폴더 선택
-          </button>
+          </Button>
         </div>
       )}
-      <div className="st-repoform-row">
-        <input
-          className="st-input"
+
+      <div className="flex items-center gap-2">
+        <Input
           value={branch}
           onChange={(e) => setBranch(e.target.value)}
           placeholder="기본 브랜치 (비면 main)"
+          className="font-mono"
         />
-        <input
-          className="st-input"
-          value={ticketPattern}
-          onChange={(e) => setTicketPattern(e.target.value)}
-          placeholder="티켓 패턴 (선택)"
-        />
-        <button
-          type="button"
-          className="st-btn sm"
+        <Button
+          size="sm"
+          className="shrink-0"
           onClick={submit}
           disabled={!location.trim() || create.isPending}
         >
-          추가
-        </button>
+          <Plus className="size-3.5" />
+          {create.isPending ? "추가 중…" : "추가"}
+        </Button>
       </div>
-      {create.isError && <div className="st-err">{String(create.error)}</div>}
+
+      {create.isError && (
+        <div className="text-xs text-[color:var(--destructive)]">{String(create.error)}</div>
+      )}
     </div>
   );
 }

@@ -1,13 +1,22 @@
 import { useState } from "react";
+import { FolderGit2, FolderOpen, Github, Plus } from "lucide-react";
 
 import type { Project, PromotionTarget } from "@/bindings";
-import { useProjectTokenStatus, useRepos, useTestNotionConnection } from "@/lib/query";
+import {
+  useProjectTokenStatus,
+  useRepos,
+  useTestNotionConnection,
+} from "@/lib/query";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 import { AddRepoForm } from "./AddRepoForm";
 import { GoogleCalendarBlock } from "./GoogleCalendarBlock";
 import { TokenRow } from "./TokenRow";
+import { SectionLabel } from "./kit";
 
-/** Notion DB 연결 테스트 버튼 + 인라인 결과 표시. */
+/** Notion DB 연결 테스트 버튼 + 인라인 결과. */
 function NotionDbTestButton({
   projectId,
   target,
@@ -32,24 +41,24 @@ function NotionDbTestButton({
   };
 
   return (
-    <div className="st-field">
-      <span className="st-label">
-        {target === "notion_backlog" ? "백로그 DB" : "안건 DB"}
-      </span>
-      <span className="st-proj-meta" style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-        {dbId}
-      </span>
-      <button
-        type="button"
-        className="st-btn-ghost sm"
-        onClick={run}
-        disabled={test.isPending}
-        style={{ marginLeft: "auto" }}
-      >
-        {test.isPending ? "테스트 중…" : "연결 테스트"}
-      </button>
+    <div className="rounded-lg border border-border px-4 py-3">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium">
+          {target === "notion_backlog" ? "백로그 DB" : "안건 DB"}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+          {dbId}
+        </span>
+        <Button variant="outline" size="sm" onClick={run} disabled={test.isPending}>
+          {test.isPending ? "테스트 중…" : "연결 테스트"}
+        </Button>
+      </div>
       {result && (
-        <div className={result.ok ? "st-ok" : "st-err"} style={{ marginTop: "0.25rem" }}>
+        <div
+          className={`mt-2 text-xs ${
+            result.ok ? "text-[color:var(--success)]" : "text-[color:var(--destructive)]"
+          }`}
+        >
           {result.msg}
         </div>
       )}
@@ -57,7 +66,29 @@ function NotionDbTestButton({
   );
 }
 
-/** 프로젝트 한 장: 토큰(Notion/GitHub) + 레포 목록 + Add Repo. */
+function RepoRow({
+  provider,
+  loc,
+  branch,
+}: {
+  provider: string;
+  loc: string;
+  branch: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5">
+      {provider === "github" ? (
+        <Github className="size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+      )}
+      <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{loc}</span>
+      <Badge variant="outline">{branch}</Badge>
+    </div>
+  );
+}
+
+/** 프로젝트 한 장: 토큰(Notion/GitHub) + Notion DB + 캘린더 + 레포. */
 export function ProjectCard({
   project,
   onToast,
@@ -67,39 +98,46 @@ export function ProjectCard({
 }) {
   const repos = useRepos(project.id);
   const tokenStatus = useProjectTokenStatus(project.id);
+  const hasNotionDb = !!(project.notionBacklogDbId || project.notionAgendaDbId);
 
   return (
-    <div className="st-proj">
-      <div className="st-proj-head">
-        <span className="st-proj-name">{project.name}</span>
-        <span className={`st-chip ${project.kind === "personal" ? "personal" : "work"}`}>
-          {project.kind === "personal" ? "개인" : "업무"}
-        </span>
-        {project.ticketKeyPattern && (
-          <span className="st-proj-meta">패턴 {project.ticketKeyPattern}</span>
-        )}
+    <Card>
+      <div className="flex items-center gap-3 px-5 py-4">
+        <div className="flex size-9 items-center justify-center rounded-lg bg-muted">
+          <FolderOpen className="size-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold">{project.name}</span>
+            <Badge variant={project.kind === "personal" ? "secondary" : "accent"}>
+              {project.kind === "personal" ? "개인" : "업무"}
+            </Badge>
+          </div>
+        </div>
       </div>
 
-      <div className="st-proj-body">
-        <div className="st-subhead">토큰 (keychain)</div>
-        <TokenRow
-          projectId={project.id}
-          kind="notion"
-          label="Notion"
-          hasToken={tokenStatus.data?.hasNotion ?? false}
-          onToast={onToast}
-        />
-        <TokenRow
-          projectId={project.id}
-          kind="github"
-          label="GitHub"
-          hasToken={tokenStatus.data?.hasGithub ?? false}
-          onToast={onToast}
-        />
+      <div className="flex flex-col gap-5 border-t border-border px-5 py-5">
+        <div className="flex flex-col gap-2.5">
+          <SectionLabel>토큰 · keychain</SectionLabel>
+          <TokenRow
+            projectId={project.id}
+            kind="notion"
+            label="Notion"
+            hasToken={tokenStatus.data?.hasNotion ?? false}
+            onToast={onToast}
+          />
+          <TokenRow
+            projectId={project.id}
+            kind="github"
+            label="GitHub"
+            hasToken={tokenStatus.data?.hasGithub ?? false}
+            onToast={onToast}
+          />
+        </div>
 
-        {(project.notionBacklogDbId || project.notionAgendaDbId) && (
-          <>
-            <div className="st-subhead">Notion DB 연결</div>
+        {hasNotionDb && (
+          <div className="flex flex-col gap-2.5">
+            <SectionLabel>Notion DB 연결</SectionLabel>
             {project.notionBacklogDbId && (
               <NotionDbTestButton
                 projectId={project.id}
@@ -114,28 +152,40 @@ export function ProjectCard({
                 dbId={project.notionAgendaDbId}
               />
             )}
-          </>
-        )}
-
-        <div className="st-subhead">Google Calendar (keychain · read-only)</div>
-        <GoogleCalendarBlock projectId={project.id} onToast={onToast} />
-
-        <div className="st-subhead">레포</div>
-        {repos.isError && <div className="st-err">{String(repos.error)}</div>}
-        {repos.data && repos.data.length === 0 && (
-          <div className="st-empty">아직 레포가 없습니다.</div>
-        )}
-        {repos.data?.map((r) => (
-          <div key={r.id} className="st-repo">
-            <span className={`st-repo-prov ${r.provider}`}>
-              {r.provider === "github" ? "GitHub" : "Local"}
-            </span>
-            <span className="st-repo-loc">{r.remoteUrl ?? r.localPath ?? "—"}</span>
-            <span className="st-repo-branch">{r.defaultBranch}</span>
           </div>
-        ))}
-        <AddRepoForm projectId={project.id} onToast={onToast} />
+        )}
+
+        <div className="flex flex-col gap-2.5">
+          <SectionLabel>Google Calendar</SectionLabel>
+          <GoogleCalendarBlock projectId={project.id} onToast={onToast} />
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <SectionLabel>레포</SectionLabel>
+          </div>
+          {repos.isError && (
+            <div className="text-xs text-[color:var(--destructive)]">
+              {String(repos.error)}
+            </div>
+          )}
+          {repos.data && repos.data.length === 0 && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Plus className="size-3.5" />
+              아직 레포가 없습니다 — 아래에서 추가하세요.
+            </div>
+          )}
+          {repos.data?.map((r) => (
+            <RepoRow
+              key={r.id}
+              provider={r.provider}
+              loc={r.remoteUrl ?? r.localPath ?? "—"}
+              branch={r.defaultBranch}
+            />
+          ))}
+          <AddRepoForm projectId={project.id} onToast={onToast} />
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }

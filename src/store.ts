@@ -17,6 +17,17 @@ export type View =
 /** 설정 진입 의도 (cmdk 팔레트 항목 → Settings 뷰 포커스). */
 export type SettingsIntent = "open" | "add_project" | "add_repo";
 
+/** 앱 테마. localStorage에 유지(부팅 시 복원). */
+export type Theme = "light" | "dark";
+const THEME_KEY = "wr-theme";
+function initialTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
 /** 경량 UI 상태 (Zustand). 데이터는 TanStack Query가, 화면/팔레트 상태는 여기서. */
 interface UIState {
   query: string;
@@ -30,6 +41,10 @@ interface UIState {
   settingsIntent: SettingsIntent;
   /** 팔레트에서 고른 스킬 id (한 번 소비). SkillsView가 읽어 선택 후 clear. */
   pendingSkillId: string | null;
+  /** 앱 테마(light/dark). 표시 전용 — 결정 레일과 무관. */
+  theme: Theme;
+  /** 테마 토글(+ localStorage 영속). */
+  toggleTheme: () => void;
   /** 보드↔설정 이동 (팔레트는 닫는다). */
   goTo: (view: View, intent?: SettingsIntent) => void;
   /** 팔레트에서 스킬 선택 → SkillsView로 이동하며 그 스킬을 선택(보기/편집). 자동 실행 아님. */
@@ -46,6 +61,17 @@ export const useUIStore = create<UIState>((set) => ({
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   settingsIntent: "open",
   pendingSkillId: null,
+  theme: initialTheme(),
+  toggleTheme: () =>
+    set((s) => {
+      const theme: Theme = s.theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch {
+        /* private mode 등 — 무시 */
+      }
+      return { theme };
+    }),
   goTo: (view, intent = "open") =>
     set({ view, settingsIntent: intent, paletteOpen: false }),
   goToSkill: (skillId) =>

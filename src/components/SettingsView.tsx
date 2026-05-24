@@ -2,16 +2,19 @@ import { useState } from "react";
 import {
   ArrowLeft,
   Bell,
+  Bot,
   FolderOpen,
   Keyboard,
   Link2,
-  Bot,
+  Moon,
+  Sun,
 } from "lucide-react";
 
 import type { Project } from "@/bindings";
 import { useProjects, useReconcileSignalProjects } from "@/lib/query";
 import { useUIStore } from "@/store";
 import { useToastStore } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
 
 import { AddProjectForm } from "./settings/AddProjectForm";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
@@ -20,6 +23,7 @@ import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 import { AgentsPane } from "./settings/AgentsPane";
 import { GoogleCalendarBlock } from "./settings/GoogleCalendarBlock";
+import { SectionLabel } from "./settings/kit";
 
 type SettingsCategory =
   | "projects"
@@ -32,29 +36,29 @@ const CATEGORIES: {
   id: SettingsCategory;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  blurb: string;
 }[] = [
-  { id: "projects", label: "프로젝트", icon: FolderOpen },
-  { id: "agents", label: "에이전트", icon: Bot },
-  { id: "shortcuts", label: "단축키", icon: Keyboard },
-  { id: "integrations", label: "통합", icon: Link2 },
-  { id: "notifications", label: "알림", icon: Bell },
+  { id: "projects", label: "프로젝트", icon: FolderOpen, blurb: "개인/업무 프로젝트와 Notion·GitHub·캘린더 연결을 관리합니다." },
+  { id: "agents", label: "에이전트", icon: Bot, blurb: "Codex CLI 상태와 에이전트 모델을 설정합니다." },
+  { id: "shortcuts", label: "단축키", icon: Keyboard, blurb: "뷰 전환 단축키와 키맵을 설정합니다." },
+  { id: "integrations", label: "통합", icon: Link2, blurb: "Google Calendar·Hermes 브리지 연결을 관리합니다." },
+  { id: "notifications", label: "알림", icon: Bell, blurb: "데스크톱 알림과 트리거를 설정합니다." },
 ];
 
 /**
- * 설정 / 프로젝트 뷰 (B2: macOS System-Settings-style split).
- * LEFT: 카테고리 사이드바. RIGHT: 선택된 카테고리 콘텐츠.
+ * 설정 / 프로젝트 뷰 — 사이드바 + 콘텐츠 split (Cohere white editorial, shadcn).
  * Cmd+, 또는 cmdk 팔레트로 진입, Esc/← 로 보드 복귀.
  */
 export function SettingsView() {
-  const { goTo, settingsIntent } = useUIStore();
+  const { goTo, settingsIntent, theme, toggleTheme } = useUIStore();
   const projects = useProjects();
   const reconcile = useReconcileSignalProjects();
   const { pushSuccess } = useToastStore();
 
-  // 기본 카테고리: Projects(첫 번째). add_project intent는 폼 autoFocus로 처리(아래).
   const [category, setCategory] = useState<SettingsCategory>("projects");
 
   const list = projects.data ?? [];
+  const active = CATEGORIES.find((c) => c.id === category)!;
 
   const runReconcile = () => {
     reconcile.mutate(undefined, {
@@ -64,65 +68,93 @@ export function SettingsView() {
   };
 
   return (
-    <div className="settings">
-      <header className="st-head" data-tauri-drag-region>
-        <button type="button" className="st-back" onClick={() => goTo("board")}>
+    <div className="flex h-full flex-col bg-background text-foreground">
+      <header
+        className="flex items-center gap-3 border-b border-border px-5 py-3"
+        data-tauri-drag-region
+      >
+        <button
+          type="button"
+          onClick={() => goTo("board")}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-muted"
+        >
           <ArrowLeft className="size-4" />
           보드
         </button>
-        <span className="st-title">설정</span>
+        <span className="font-mono text-[13px] font-semibold uppercase tracking-[0.12em]">
+          설정
+        </span>
         {category === "projects" && (
-          <button
-            type="button"
-            className="st-btn-ghost sm"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={runReconcile}
             disabled={reconcile.isPending || list.length === 0}
             title="미태깅 신호를 kind→프로젝트로 reconcile"
           >
             {reconcile.isPending ? "재정렬 중…" : "신호 projectId 재정렬"}
-          </button>
+          </Button>
         )}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-muted"
+          title="라이트/다크 전환"
+        >
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          {theme === "dark" ? "라이트" : "다크"}
+        </button>
       </header>
 
-      <div className="settings-split">
+      <div className="flex min-h-0 flex-1">
         {/* 왼쪽 사이드바 */}
-        <nav className="set-sidebar" aria-label="설정 카테고리">
+        <nav
+          className="flex w-48 shrink-0 flex-col gap-0.5 border-r border-border p-3"
+          aria-label="설정 카테고리"
+        >
           {CATEGORIES.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
-              className={`set-sidebar-item${category === id ? " active" : ""}`}
               onClick={() => setCategory(id)}
               aria-current={category === id ? "page" : undefined}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                category === id
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:bg-hover hover:text-foreground"
+              }`}
             >
-              <Icon className="set-sidebar-icon size-4" />
+              <Icon className="size-4" />
               {label}
             </button>
           ))}
         </nav>
 
         {/* 오른쪽 콘텐츠 */}
-        <main className="set-pane">
-          {category === "projects" && (
-            <ProjectsPane
-              list={list}
-              projects={projects}
-              settingsIntent={settingsIntent}
-              pushSuccess={pushSuccess}
-            />
-          )}
-          {category === "agents" && (
-            <AgentsPane onToast={pushSuccess} />
-          )}
-          {category === "shortcuts" && (
-            <NavigationSettings onToast={pushSuccess} />
-          )}
-          {category === "integrations" && (
-            <IntegrationsPane list={list} pushSuccess={pushSuccess} />
-          )}
-          {category === "notifications" && (
-            <NotificationSettings onToast={pushSuccess} />
-          )}
+        <main className="min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex max-w-3xl flex-col gap-6 px-7 py-7">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">{active.label}</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">{active.blurb}</p>
+            </div>
+
+            {category === "projects" && (
+              <ProjectsPane
+                list={list}
+                projects={projects}
+                settingsIntent={settingsIntent}
+                pushSuccess={pushSuccess}
+              />
+            )}
+            {category === "agents" && <AgentsPane onToast={pushSuccess} />}
+            {category === "shortcuts" && <NavigationSettings onToast={pushSuccess} />}
+            {category === "integrations" && (
+              <IntegrationsPane list={list} pushSuccess={pushSuccess} />
+            )}
+            {category === "notifications" && (
+              <NotificationSettings onToast={pushSuccess} />
+            )}
+          </div>
         </main>
       </div>
     </div>
@@ -149,21 +181,27 @@ function ProjectsPane({
         onCreated={pushSuccess}
       />
 
-      <div className="st-section-lbl">프로젝트 ({list.length})</div>
+      <div className="flex flex-col gap-3">
+        <SectionLabel>프로젝트 ({list.length})</SectionLabel>
 
-      {projects.isLoading && <div className="st-empty">불러오는 중…</div>}
-      {projects.isError && (
-        <div className="st-err">프로젝트 로드 실패: {String(projects.error)}</div>
-      )}
-      {projects.data && list.length === 0 && (
-        <div className="st-empty">
-          아직 프로젝트가 없습니다 — 위에서 개인/업무 프로젝트를 추가하세요.
-        </div>
-      )}
+        {projects.isLoading && (
+          <div className="text-sm text-muted-foreground">불러오는 중…</div>
+        )}
+        {projects.isError && (
+          <div className="text-sm text-[color:var(--destructive)]">
+            프로젝트 로드 실패: {String(projects.error)}
+          </div>
+        )}
+        {projects.data && list.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">
+            아직 프로젝트가 없습니다 — 위에서 개인/업무 프로젝트를 추가하세요.
+          </div>
+        )}
 
-      {list.map((p) => (
-        <ProjectCard key={p.id} project={p} onToast={pushSuccess} />
-      ))}
+        {list.map((p) => (
+          <ProjectCard key={p.id} project={p} onToast={pushSuccess} />
+        ))}
+      </div>
     </>
   );
 }
@@ -177,18 +215,22 @@ function IntegrationsPane({
 }) {
   return (
     <>
-      <div className="st-section-lbl">Google Calendar</div>
-      {list.length === 0 && (
-        <div className="st-empty">
-          프로젝트를 먼저 추가한 뒤 각 프로젝트에서 Google Calendar를 연결하세요.
-        </div>
-      )}
-      {list.map((p) => (
-        <GoogleCalendarBlock key={p.id} projectId={p.id} onToast={pushSuccess} />
-      ))}
+      <div className="flex flex-col gap-3">
+        <SectionLabel>Google Calendar</SectionLabel>
+        {list.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">
+            프로젝트를 먼저 추가한 뒤 각 프로젝트에서 Google Calendar를 연결하세요.
+          </div>
+        )}
+        {list.map((p) => (
+          <GoogleCalendarBlock key={p.id} projectId={p.id} onToast={pushSuccess} />
+        ))}
+      </div>
 
-      <div className="st-section-lbl" style={{ marginTop: 22 }}>Hermes 브리지</div>
-      <HermesBridgeBlock onToast={pushSuccess} />
+      <div className="flex flex-col gap-3">
+        <SectionLabel>Hermes 브리지</SectionLabel>
+        <HermesBridgeBlock onToast={pushSuccess} />
+      </div>
     </>
   );
 }

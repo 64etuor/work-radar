@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+/* ── shadcn 토큰(Cohere white editorial 팔레트) — :root(라이트) / .dark ── */
+:root {
+  --background: #ffffff;
+  --foreground: #212121;
+  --card: #ffffff;
+  --card-foreground: #212121;
+  --popover: #ffffff;
+  --popover-foreground: #212121;
+  --primary: #17171c;
+  --primary-foreground: #ffffff;
+  --secondary: #eeece7;
+  --secondary-foreground: #212121;
+  --muted: #f6f5f2;
+  --muted-foreground: #75758a;
+  --subtle: #93939f;
+  --accent: #ff7759;
+  --accent-foreground: #ffffff;
+  --accent-soft: #f1f5ff;
+  --info: #1863dc;
+  --success: #003c33;
+  --success-soft: #e3f1ec;
+  --destructive: #b30000;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: #ffe7e0;
+  --border: #e5e7eb;
+  --border-strong: #d9d9dd;
+  --input: #d9d9dd;
+  --ring: #4c6ee6;
+  --hover: #f6f5f2;
+}
+
+.dark {
+  --background: #131318;
+  --foreground: #ededea;
+  --card: #1a1a20;
+  --card-foreground: #ededea;
+  --popover: #1a1a20;
+  --popover-foreground: #ededea;
+  --primary: #ededea;
+  --primary-foreground: #131318;
+  --secondary: #26262e;
+  --secondary-foreground: #ededea;
+  --muted: #202027;
+  --muted-foreground: #a0a0ad;
+  --subtle: #7c7c89;
+  --accent: #ff8a70;
+  --accent-foreground: #131318;
+  --accent-soft: #1d2740;
+  --info: #6b9bf0;
+  --success: #5fb89e;
+  --success-soft: #16312a;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #131318;
+  --destructive-soft: #3a1f1f;
+  --border: #2c2c34;
+  --border-strong: #3a3a44;
+  --input: #3a3a44;
+  --ring: #6b9bf0;
+  --hover: #202027;
+}
+
+/* shadcn 토큰 → Tailwind 컬러 유틸(inline = :root 변수 미방출). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-info: var(--info);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-hover: var(--hover);
+  --font-mono:
+    ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  margin: 0;
+}
+body {
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

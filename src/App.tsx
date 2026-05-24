@@ -27,7 +27,7 @@ import { useUIStore } from "@/store";
  * 뷰 전환은 view 키 기반 subtle CSS 트랜지션(styles.css .view-shell).
  */
 export default function App() {
-  const { view, paletteOpen, setPaletteOpen, goTo } = useUIStore();
+  const { view, paletteOpen, setPaletteOpen, goTo, theme } = useUIStore();
 
   // per-view 단축키 (Phase 18 #7) — 입력 비포커스 + 팔레트 닫힘일 때만 활성.
   // Cmd+←/→ → NAV_ITEMS 순서 기준 인접 뷰 전환(P3).
@@ -74,7 +74,9 @@ export default function App() {
   }, [view, paletteOpen, setPaletteOpen, goTo]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-wr-bg">
+    <div
+      className={`${theme === "dark" ? "dark " : ""}flex h-screen w-screen flex-col overflow-hidden bg-wr-bg`}
+    >
       {/* 글로벌 에이전트 상태 바 (Phase 20 #16) — 모든 뷰 위에 상주, 클릭 → Jobs. */}
       <AgentStatusBar />
       {/* view 키로 remount → subtle enter 트랜지션(styles.css .view-shell). 과한 모션 금지(상주 유틸). */}
