@@ -29,6 +29,18 @@ import {
   useWorktrees,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+/** radix Select는 빈 문자열 value를 허용하지 않는다 → "전체"/"선택 안 함"은 센티넬로(write 시 null 매핑). */
+const PROJECT_ALL = "__all__";
+const REF_NONE = "__none__";
 
 /** 4종 비교 모드 라벨 (PLAN.md Phase 5). */
 const MODES: { key: DiffMode; label: string }[] = [
@@ -161,47 +173,61 @@ export function WorktreeView() {
   return (
     <div className="wt">
       <header className="wt-head" data-tauri-drag-region>
-        <button type="button" className="wt-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full text-[12px]"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="wt-title">Worktree Diff</span>
-        <select
-          className="wt-project"
-          value={projectFilter ?? ""}
-          onChange={(e) => {
-            setProjectFilter(e.target.value || null);
+        <Select
+          value={projectFilter ?? PROJECT_ALL}
+          onValueChange={(v) => {
+            setProjectFilter(v === PROJECT_ALL ? null : v);
             setSelectedPath(null);
             setSelectedFile(null);
           }}
         >
-          <option value="">전체 프로젝트</option>
-          {(projects.data ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.kind === "personal" ? "개인" : "업무"})
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className={`wt-cleanup-btn${showCleanup ? " wt-cleanup-on" : ""}`}
+          <SelectTrigger
+            className="ml-auto w-auto min-w-[150px] text-[12px]"
+            aria-label="프로젝트 필터"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={PROJECT_ALL}>전체 프로젝트</SelectItem>
+            {(projects.data ?? []).map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name} ({p.kind === "personal" ? "개인" : "업무"})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant={showCleanup ? "default" : "outline"}
+          size="sm"
+          className="gap-1.5 rounded-full text-[12px]"
           onClick={() => setShowCleanup((s) => !s)}
           disabled={!cleanupRepo}
           title="브랜치/워크트리 정리"
         >
           <Trash2 className="size-3.5" />
           정리
-        </button>
-        <button
-          type="button"
-          className="wt-refresh"
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="size-8 shrink-0 rounded-full p-0 text-wr-muted"
           onClick={() => void worktrees.refetch()}
           title="새로고침"
         >
           <RefreshCw
             className={`size-3.5${worktrees.isFetching ? " wt-spin" : ""}`}
           />
-        </button>
+        </Button>
       </header>
 
       {showCleanup && cleanupRepo && (
@@ -228,14 +254,15 @@ export function WorktreeView() {
           <aside className="wt-side">
             <div className="wt-panel-head">
               <span className="wt-panel-title">Worktrees</span>
-              <button
-                type="button"
-                className="wt-panel-toggle"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-6 shrink-0 p-0 text-wr-muted"
                 onClick={() => setSideCollapsed(true)}
                 title="패널 접기"
               >
                 <PanelLeftClose className="size-3.5" />
-              </button>
+              </Button>
             </div>
           {worktrees.error && (
             <div className="wt-err">{(worktrees.error as Error).message}</div>
@@ -280,14 +307,16 @@ export function WorktreeView() {
             <>
               <div className="wt-modes">
                 {MODES.map((m) => (
-                  <button
+                  <Button
                     key={m.key}
-                    type="button"
-                    className={`wt-mode${mode === m.key ? " wt-mode-on" : ""}`}
+                    variant={mode === m.key ? "default" : "outline"}
+                    size="sm"
+                    className="rounded-full text-[12px]"
+                    aria-pressed={mode === m.key}
                     onClick={() => changeMode(m.key)}
                   >
                     {m.label}
-                  </button>
+                  </Button>
                 ))}
                 <RebaseBar worktree={selected} onReviewBase={() => changeMode("vs_base")} />
               </div>
@@ -297,38 +326,48 @@ export function WorktreeView() {
                 <div className="wt-refs">
                   <label className="wt-ref">
                     <span>base</span>
-                    <select
-                      value={baseRef ?? ""}
-                      onChange={(e) => {
-                        setBaseRef(e.target.value || null);
+                    <Select
+                      value={baseRef ?? REF_NONE}
+                      onValueChange={(v) => {
+                        setBaseRef(v === REF_NONE ? null : v);
                         setSelectedFile(null);
                       }}
                     >
-                      <option value="">선택…</option>
-                      {branchList.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-[150px] text-[12px]" aria-label="base ref">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={REF_NONE}>선택…</SelectItem>
+                        {branchList.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                   {mode === "branch_branch" && (
                     <label className="wt-ref">
                       <span>head</span>
-                      <select
-                        value={headRef ?? ""}
-                        onChange={(e) => {
-                          setHeadRef(e.target.value || null);
+                      <Select
+                        value={headRef ?? REF_NONE}
+                        onValueChange={(v) => {
+                          setHeadRef(v === REF_NONE ? null : v);
                           setSelectedFile(null);
                         }}
                       >
-                        <option value="">선택…</option>
-                        {branchList.map((b) => (
-                          <option key={b} value={b}>
-                            {b}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-[150px] text-[12px]" aria-label="head ref">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={REF_NONE}>선택…</SelectItem>
+                          {branchList.map((b) => (
+                            <SelectItem key={b} value={b}>
+                              {b}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </label>
                   )}
                   {mode === "vs_base" && (
@@ -363,14 +402,15 @@ export function WorktreeView() {
                         ? ` (${diffFiles.data?.length})`
                         : ""}
                     </span>
-                    <button
-                      type="button"
-                      className="wt-panel-toggle"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="size-6 shrink-0 p-0 text-wr-muted"
                       onClick={() => setFilesCollapsed(true)}
                       title="패널 접기"
                     >
                       <PanelLeftClose className="size-3.5" />
-                    </button>
+                    </Button>
                   </div>
                   {!ready && (
                     <div className="wt-empty">비교할 ref를 선택하세요.</div>
@@ -506,9 +546,10 @@ function RebaseBar({
   const result = rebase.data;
   return (
     <div className="wt-rebase">
-      <button
-        type="button"
-        className="wt-rebase-btn"
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5 rounded-full text-[12px]"
         onClick={run}
         disabled={rebase.isPending || worktree.dirty}
         title={
@@ -519,7 +560,7 @@ function RebaseBar({
       >
         <Waypoints className="size-3.5" />
         {rebase.isPending ? "rebase 중…" : `${base} rebase`}
-      </button>
+      </Button>
       {rebase.error && (
         <span className="wt-rebase-msg wt-rebase-err">
           {(rebase.error as Error).message}
@@ -611,9 +652,14 @@ function CleanupPanel({
           />
           미머지 강제 삭제(force)
         </label>
-        <button type="button" className="wt-cleanup-close" onClick={onClose}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto rounded-full text-[12px]"
+          onClick={onClose}
+        >
           닫기
-        </button>
+        </Button>
       </div>
 
       {candidates.isLoading && (
@@ -653,15 +699,16 @@ function CleanupPanel({
       </div>
 
       <div className="wt-cleanup-foot">
-        <button
-          type="button"
-          className="wt-cleanup-del"
+        <Button
+          variant="destructiveOutline"
+          size="sm"
+          className="gap-1.5 rounded-full text-[12px]"
           onClick={run}
           disabled={selected.size === 0 || del.isPending}
         >
           <Trash2 className="size-3.5" />
           {del.isPending ? "삭제 중…" : `선택 ${selected.size}개 삭제`}
-        </button>
+        </Button>
         {del.error && (
           <span className="wt-cleanup-msg wt-rebase-err">
             {(del.error as Error).message}
