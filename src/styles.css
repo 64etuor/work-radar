@@ -400,17 +400,11 @@
   background: var(--color-wr-surface);
   color: var(--color-wr-muted);
 }
-/* Phase 9 enrich — AI 제안 영역(suggestedArea) chip(클릭해 확정). dashed = 미확정 힌트. */
-.cb .postit button.chip-area-sug {
-  border: 1px dashed var(--color-wr-border);
+/* enrich — AI 제안 영역(suggestedArea) 힌트 배지(자동 분류 아님, 확정 아님). dashed = 미확정 힌트(chip-q-sug와 동일 톤). */
+.cb .chip-area-sug {
   background: transparent;
   color: var(--color-wr-subtle);
-  cursor: pointer;
-  line-height: 1.2;
-}
-.cb .postit button.chip-area-sug:hover {
-  border-color: var(--color-wr-accent);
-  color: var(--color-wr-accent);
+  border: 1px dashed var(--color-wr-border);
 }
 /* Phase 9 enrich — AI 제안 사분면(suggestedQuadrant) 힌트 배지(자동 분류 아님). */
 .cb .chip-q-sug {

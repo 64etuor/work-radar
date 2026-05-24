@@ -371,6 +371,8 @@ export function MatrixCanvas({
         const selCls = s.id === selectedId ? " sel" : "";
         const popCls = poppedIds.has(s.id) ? " pop" : "";
         const sugQ = s.quadrant === "unclassified" ? suggestedQuadrantBadge(s.suggestedQuadrant) : "";
+        // 제안 영역(Wheel of Life) 힌트 배지 — 확정 area 없을 때만(확정되면 chip-area로 표시). 힌트라 자동 확정 0(INVARIANT #1).
+        const sugA = !s.area && s.suggestedArea ? `${areaLabel(s.suggestedArea)}?` : "";
         return (
           <div
             key={s.id}
@@ -391,6 +393,11 @@ export function MatrixCanvas({
             {sugQ && (
               <span className="chip chip-q-sug" title="AI 제안 사분면(힌트 — 자동 분류 아님)">
                 {sugQ}
+              </span>
+            )}
+            {sugA && (
+              <span className="chip chip-area-sug" title="AI 제안 영역(힌트 — 자동 분류 아님)">
+                {sugA}
               </span>
             )}
             {s.id === editingId ? (
