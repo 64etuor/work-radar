@@ -459,7 +459,7 @@ function normalizeProposal(p: PrSelfCheckProposal): PrSelfCheckProposal {
 
 // ── Phase 9 패널 (enrich / CI triage) ────────────────────────────────
 
-/** 제안 사분면 옵션(힌트 — INVARIANT #1: 자동 분류 아님). */
+/** 사분면 닫힌 세트 옵션(accept 시 사람 확정 — INVARIANT #1: codex 자동 분류 아님). */
 const QUADRANT_OPTS: { value: Quadrant; label: string }[] = [
   { value: "unclassified", label: "미분류" },
   { value: "q1_do_now", label: "Q1 지금" },
@@ -511,8 +511,8 @@ function ProposalError({
 }
 
 /**
- * enrich Proposal 패널 (Phase 9 #2). 제안 사분면/영역/근거를 편집·accept한다. accept해도 **카드는
- * 자동 분류되지 않고**(INVARIANT #1) 힌트로만 표시된다 — 사분면 분류·영역 확정은 보드에서 사람이.
+ * enrich Proposal 패널 (Phase 9 #2). 제안 사분면/영역/근거를 편집·accept한다. accept하면 **사람이 확인한
+ * 사분면+area가 확정**된다(제안에 quadrant 없으면 기존 분류 보존) — codex 자동 확정 아님(INVARIANT #1).
  */
 function EnrichPanel({ run }: { run: AgentRunView }) {
   const proposal = useEnrichProposal(run.id, true);
@@ -540,7 +540,7 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
 
   return (
     <div className="jobs-prop">
-      <label className="jobs-prop-label">제안 사분면 (힌트 — 자동 분류 아님)</label>
+      <label className="jobs-prop-label">사분면 (accept 시 확정)</label>
       <Select
         value={d.suggestedQuadrant ?? "unclassified"}
         onValueChange={(v) =>
@@ -559,7 +559,7 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
         </SelectContent>
       </Select>
 
-      <label className="jobs-prop-label">제안 영역 (라이프 도메인)</label>
+      <label className="jobs-prop-label">영역 (accept 시 확정)</label>
       <Select
         value={d.suggestedArea ?? AREA_NONE}
         onValueChange={(v) =>
@@ -591,8 +591,8 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
       />
 
       <div className="jobs-prop-hint">
-        accept하면 카드에 <b>제안 힌트</b>로만 표시됩니다 — 사분면 분류·영역 확정은
-        보드에서 직접(자동 분류 없음).
+        accept하면 카드의 <b>사분면·영역이 확정</b>됩니다 — codex 자동 확정이 아니라
+        지금 사람이 확인한 결과(드래그/키보드 분류와 동일 결정 레일).
       </div>
       {(accept.error || reject.error) && (
         <div className="jobs-prop-err">
@@ -607,7 +607,7 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
           onClick={() => accept.mutate({ runId: run.id, accepted: d })}
         >
           <Check className="size-3.5" />
-          accept (힌트 반영)
+          accept (확정)
         </Button>
         <Button
           variant="destructiveOutline"
@@ -626,8 +626,9 @@ function EnrichPanel({ run }: { run: AgentRunView }) {
 
 /**
  * 배치 enrich Proposal 패널 (Phase 15 #4). 미분류 전체를 한 잡으로 enrich한 결과를 **카드별로** 나열하고
- * 사분면/영역을 편집한 뒤 일괄 accept한다. accept해도 **카드는 자동 분류되지 않고**(INVARIANT #1) 힌트로만
- * 표시된다 — 사분면 분류·영역 확정은 보드에서 사람이. 부분 실패(skipped) 카운트를 함께 노출한다.
+ * 사분면/영역을 편집한 뒤 일괄 accept한다. accept하면 **미분류 카드의 사분면+영역이 확정**되고 힌트가
+ * 비워진다(이미 분류된 카드는 가드로 보존). codex 자동 확정 아님 — 사람의 적용 클릭이 결정 레일(INVARIANT #1).
+ * 부분 실패(skipped) 카운트를 함께 노출한다.
  */
 function BatchEnrichPanel({ run }: { run: AgentRunView }) {
   const proposal = useBatchEnrichProposal(run.id, true);
@@ -663,7 +664,7 @@ function BatchEnrichPanel({ run }: { run: AgentRunView }) {
     <div className="jobs-prop">
       <div className="jobs-prop-hint">
         미분류 <b>{items.length}</b>개 카드 제안{skipped > 0 && <> · 격리(skip) {skipped}개</>}.
-        accept하면 카드에 <b>제안 힌트</b>로만 표시됩니다 — 사분면 분류는 보드에서 직접(자동 분류 없음).
+        수정 후 accept하면 <b>사분면·영역이 확정</b>됩니다(이미 분류된 카드는 보존).
       </div>
 
       {items.length === 0 && (
@@ -734,7 +735,7 @@ function BatchEnrichPanel({ run }: { run: AgentRunView }) {
           }
         >
           <Check className="size-3.5" />
-          전체 accept (힌트 반영)
+          전체 accept (확정)
         </Button>
         <Button
           variant="destructiveOutline"

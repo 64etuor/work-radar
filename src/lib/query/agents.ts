@@ -157,7 +157,7 @@ export function useEnrichProposal(runId: string | null, ready: boolean) {
   });
 }
 
-/** enrich accept(INVARIANT #1/#2 게이트) — 신호에 suggested 힌트 반영(quadrant 자동 확정 없음). */
+/** enrich accept(INVARIANT #1/#2 게이트) — 사람 accept 시 사분면+영역 확정(제안에 quadrant 없으면 보존). */
 export function useAcceptEnrich() {
   const qc = useQueryClient();
   return useMutation({
@@ -165,7 +165,7 @@ export function useAcceptEnrich() {
       unwrap(commands.acceptEnrich(runId, accepted)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agentRuns"] });
-      void qc.invalidateQueries({ queryKey: ["signals"] }); // suggested 힌트 칩 반영.
+      void qc.invalidateQueries({ queryKey: ["signals"] }); // 확정 반영(카드 이동/태그).
     },
   });
 }

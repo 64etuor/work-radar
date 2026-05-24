@@ -513,11 +513,12 @@ pub(crate) async fn set_signal_project_tag(
     .await
 }
 
-// ── agents enrich / triage (suggested_* 힌트 — INVARIANT #1: codex 자동 확정 없음) ──
+// ── agents enrich / triage (사람 확정 + suggested_* 힌트) — INVARIANT #1: codex 자동 확정 없음 ──
 //
-// ⚠️ codex가 내는 제안은 suggested_quadrant/suggested_area로만 쓴다(set_enrich_hints 등). 확정 `quadrant`
-//    컬럼은 codex/자동화가 절대 건드리지 않는다. 확정은 사람 제스처에서만 — 드래그/키보드(classify_signal=
-//    set_quadrant), area(set_signal_area), 그리고 enrich 검토 후 사람의 "적용" 클릭(confirm_enrich_batch_one).
+// ⚠️ codex 제안은 신호에 직접 쓰지 않는다(proposal은 agent_runs에 보관). 확정 `quadrant`/`area`는 오직
+//    사람 제스처에서만 — 드래그/키보드(classify_signal=set_quadrant), area(set_signal_area), enrich 검토 후
+//    accept(confirm_enrich_single / confirm_enrich_batch_one). suggested_* 힌트 컬럼은 캘린더 긴급도
+//    가중(set_suggested_quadrant_only)만 쓰며 확정 위치는 안 건드린다(자동 분류 아님).
 
 /// enrich 카드 텍스트(title/body/project_id) 조회. (enrich.rs trigger 이전)
 pub(crate) async fn fetch_card_text(
@@ -530,23 +531,36 @@ pub(crate) async fn fetch_card_text(
         .await
 }
 
-/// enrich accept: suggested_* 힌트만 반영(확정 quadrant/area 무변경 — INVARIANT #1). (enrich.rs 이전)
-pub(crate) async fn set_enrich_hints(
+/// 단일 enrich **사람 확정**(accept 클릭): quadrant+area를 확정하고 suggested 힌트를 비운다.
+/// quadrant/area가 None(제안 없음)이면 기존 값을 덮지 않고 보존(COALESCE) — 단일 enrich는 이미 분류된
+/// 카드에도 열릴 수 있어 클로버링을 막는다. status는 quadrant가 Some일 때만 갱신(unclassified→New, 그 외
+/// Classified). 자동 분류가 아니라 사람의 명시적 accept — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
+pub(crate) async fn confirm_enrich_single(
     db: &Db,
-    signal_id: &str,
-    suggested_quadrant: Option<Quadrant>,
-    suggested_area: Option<AreaTag>,
-    reason: Option<&str>,
+    id: &str,
+    quadrant: Option<Quadrant>,
+    area: Option<AreaTag>,
 ) -> Result<WorkSignal, sqlx::Error> {
+    let status: Option<SignalStatus> = quadrant.map(|q| {
+        if matches!(q, Quadrant::Unclassified) {
+            SignalStatus::New
+        } else {
+            SignalStatus::Classified
+        }
+    });
     sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET suggested_quadrant = ?2, suggested_area = ?3, suggestion_reason = ?4, \
+        "UPDATE signals SET \
+            quadrant = COALESCE(?2, quadrant), \
+            status = CASE WHEN ?2 IS NOT NULL THEN ?3 ELSE status END, \
+            area = COALESCE(?4, area), \
+            suggested_quadrant = NULL, suggested_area = NULL, suggestion_reason = NULL, \
             updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
-    .bind(signal_id)
-    .bind(suggested_quadrant)
-    .bind(suggested_area)
-    .bind(reason)
+    .bind(id)
+    .bind(quadrant)
+    .bind(status)
+    .bind(area)
     .fetch_one(db)
     .await
 }

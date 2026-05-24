@@ -277,10 +277,15 @@ mod tests {
         assert_eq!(t.suggested_fixes.len(), 1);
     }
 
-    /// INVARIANT #1: enrich accept는 suggested_* 힌트만 쓰고 quadrant(결정 레일)/area(확정값)는 안 건드린다.
+    /// 단일 enrich accept는 **사람의 명시적 확정** — quadrant+area를 확정하고 suggested 힌트를 비운다.
+    /// 자동 분류가 아니라 사람 제스처(드래그/키보드 분류와 동일 결정 레일, INVARIANT #1).
+    /// 제안에 quadrant가 없으면(None) 기존 분류를 덮지 않는다(단일 모달은 분류된 카드에도 열림 — 클로버링 방지).
     #[tokio::test]
-    async fn enrich_accept_sets_hints_not_quadrant() {
+    async fn enrich_accept_confirms_quadrant_and_area() {
+        use crate::models::AreaTag;
         let db = fresh_db().await;
+
+        // (1) 미분류 카드 + 사분면·영역 제안 → 둘 다 확정 + 힌트 비움.
         let sig = insert_signal(&db, &input("히어로 카피 다시", Some(Kind::Work)))
             .await
             .unwrap();
@@ -292,27 +297,48 @@ mod tests {
         let proposal =
             r#"{"suggestedQuadrant":"q1_do_now","suggestedArea":"work","reason":"마감 임박"}"#;
         insert_awaiting_run(&db, "e1", proposal, &trigger).await;
-
         let parsed = parse_proposal::<crate::models::EnrichProposal>(proposal).unwrap();
         let accepted_json = serde_json::to_string(&parsed).unwrap();
         let updated = enrich::execute_accept_enrich(&db, "e1", &sig.id, &parsed, &accepted_json)
             .await
             .unwrap();
-
-        // 힌트는 들어가고 quadrant는 unclassified로 남는다(자동 분류 0).
         assert!(
-            matches!(updated.quadrant, Quadrant::Unclassified),
-            "INVARIANT #1: quadrant 자동 확정 0"
+            matches!(updated.quadrant, Quadrant::Q1DoNow),
+            "사람 accept → quadrant 확정"
         );
-        assert_eq!(updated.suggested_quadrant.as_deref(), Some("q1_do_now"));
-        assert!(matches!(
-            updated.suggested_area,
-            Some(crate::models::AreaTag::Work)
-        ));
-        // area(확정값)는 accept로 바뀌지 않는다(사람 set_signal_area로만).
-        assert!(updated.area.is_none());
+        assert!(matches!(updated.area, Some(AreaTag::Work)), "area 확정");
+        assert!(updated.suggested_quadrant.is_none(), "확정 후 힌트 비움");
+        assert!(updated.suggested_area.is_none(), "확정 후 힌트 비움");
 
-        // 잡 succeeded + acceptances 1행.
+        // (2) 이미 분류된 카드(Q2) + 사분면 제안 None + 영역만 제안 → 기존 분류 보존(COALESCE), area만 확정.
+        let sig2 = insert_signal(&db, &input("이미 분류됨", Some(Kind::Work)))
+            .await
+            .unwrap();
+        crate::commands::signal_store::set_quadrant(&db, &sig2.id, Quadrant::Q2Schedule)
+            .await
+            .unwrap();
+        let trigger2 = serde_json::to_string(&EnrichTrigger {
+            signal_id: sig2.id.clone(),
+        })
+        .unwrap();
+        let proposal2 = r#"{"suggestedArea":"health","reason":"건강"}"#;
+        insert_awaiting_run(&db, "e2", proposal2, &trigger2).await;
+        let parsed2 = parse_proposal::<crate::models::EnrichProposal>(proposal2).unwrap();
+        let json2 = serde_json::to_string(&parsed2).unwrap();
+        let updated2 = enrich::execute_accept_enrich(&db, "e2", &sig2.id, &parsed2, &json2)
+            .await
+            .unwrap();
+        assert!(
+            matches!(updated2.quadrant, Quadrant::Q2Schedule),
+            "사분면 제안 None이면 기존 분류 보존(덮지 않음)"
+        );
+        assert!(
+            matches!(updated2.area, Some(AreaTag::Health)),
+            "영역 제안은 확정"
+        );
+        assert!(updated2.suggested_area.is_none(), "확정 후 힌트 비움");
+
+        // 잡 succeeded + acceptances 1행(e1 — enrich_braindump).
         let st: (String,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='e1'")
             .fetch_one(&db)
             .await

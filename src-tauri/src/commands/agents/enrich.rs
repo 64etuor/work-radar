@@ -127,9 +127,10 @@ pub async fn enrich_proposal(
         .map_err(|e| AppError::terminal("agents.proposal_parse", e))
 }
 
-/// enrich accept 코어(테스트 가능). 신호에 suggested_quadrant/suggested_area/suggestion_reason을
-/// **힌트로만** 쓴다 — quadrant/area(확정값)는 절대 건드리지 않는다(INVARIANT #1). 사분면 확정은
-/// classify_signal, area 확정은 set_signal_area로만(사람 결정).
+/// enrich accept 코어(테스트 가능). 사람이 검토·편집 후 accept하면 신호의 quadrant+area를 **확정**하고
+/// suggested 힌트를 비운다 — 단, 제안에 quadrant가 없으면(None) 기존 분류를 덮지 않는다(단일 enrich는
+/// 이미 분류된 카드에도 열릴 수 있어 COALESCE로 보존). 자동 분류가 아니라 사람의 명시적 accept 클릭 =
+/// 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
 pub(super) async fn execute_accept_enrich(
     db: &Db,
     run_id: &str,
@@ -137,20 +138,20 @@ pub(super) async fn execute_accept_enrich(
     accepted: &EnrichProposal,
     accepted_json: &str,
 ) -> Result<WorkSignal, sqlx::Error> {
-    let sig = signal_store::set_enrich_hints(
+    let sig = signal_store::confirm_enrich_single(
         db,
         signal_id,
         accepted.suggested_quadrant,
         accepted.suggested_area,
-        accepted.reason.as_deref(),
     )
     .await?;
     record_acceptance(db, run_id, "enrich_braindump", accepted_json).await?;
     Ok(sig)
 }
 
-/// enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 제안을 accept하면 신호에 힌트로 반영하고
-/// 잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+/// enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 검토·편집한 제안을 accept하면 신호의 quadrant+area를
+/// **확정**(제안에 quadrant 없으면 기존 보존)하고 suggested 힌트를 비운 뒤 잡을 succeeded로 마감한다.
+/// codex가 아니라 사람의 명시적 accept 클릭으로만 확정 — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
 #[tauri::command]
 #[specta::specta]
 pub async fn accept_enrich(

@@ -64,7 +64,8 @@ type Props = {
  *  6. failed: detail 텍스트를 error toast로 표시 + 닫기 버튼만.
  *
  * INVARIANT #5 준수: 폴링은 terminal 상태에서 중단(무한 폴링 없음).
- * INVARIANT #1 준수: accept는 accept_enrich를 통해 suggested_* 힌트만 씀(quadrant 자동 확정 없음).
+ * INVARIANT #1 준수: codex는 절대 확정하지 않는다(proposal만 생성). 사람이 검토·편집 후 accept를 클릭하면
+ *   accept_enrich가 quadrant+area를 확정(제안에 quadrant 없으면 기존 분류 보존, COALESCE) + 힌트 비움.
  * gated 잡 유지: trigger_enrich는 변경하지 않음 — 모달은 폴링만 함.
  */
 export function EnrichModal({ runId, onClose }: Props) {
@@ -142,7 +143,7 @@ export function EnrichModal({ runId, onClose }: Props) {
       { runId, accepted: d },
       {
         onSuccess: () => {
-          pushSuccess("AI 제안 힌트 적용됨 (자동 분류 없음)");
+          pushSuccess("AI 제안 확정됨 (사분면·영역)");
           onClose();
         },
         onError: (e) => pushError("codex", `수락 실패: ${String(e)}`),
@@ -216,10 +217,10 @@ export function EnrichModal({ runId, onClose }: Props) {
           </div>
         )}
 
-        {/* 편집 가능한 제안 폼 (suggested-only — INVARIANT #1) */}
+        {/* 편집 가능한 제안 폼 — accept 시 quadrant+area 확정(사람 결정 레일, INVARIANT #1) */}
         {proposalReady && proposal.data && (
           <>
-            <label className="enrich-modal-label">제안 사분면 (힌트 — 자동 분류 아님)</label>
+            <label className="enrich-modal-label">사분면 (accept 시 확정)</label>
             <Select
               value={d.suggestedQuadrant ?? "unclassified"}
               onValueChange={(v) =>
@@ -238,7 +239,7 @@ export function EnrichModal({ runId, onClose }: Props) {
               </SelectContent>
             </Select>
 
-            <label className="enrich-modal-label">제안 영역 (라이프 도메인)</label>
+            <label className="enrich-modal-label">영역 (accept 시 확정)</label>
             <Select
               value={d.suggestedArea ?? AREA_NONE}
               onValueChange={(v) =>
@@ -269,8 +270,8 @@ export function EnrichModal({ runId, onClose }: Props) {
             />
 
             <div className="enrich-modal-hint">
-              수락하면 카드에 <b>제안 힌트</b>로만 표시됩니다 — 사분면 분류·영역 확정은
-              보드에서 직접(자동 분류 없음).
+              accept하면 카드의 <b>사분면·영역이 확정</b>됩니다 — codex 자동 확정이 아니라
+              지금 사람이 확인한 결과(드래그/키보드 분류와 동일 결정 레일).
             </div>
           </>
         )}

@@ -219,8 +219,9 @@ export const commands = {
 	/**  enrich Proposal(타입 파싱). raw/세트 밖 값이면 Err(조용한 빈 proposal 금지 + 닫힌 세트 강제). */
 	enrichProposal: (runId: string) => typedError<EnrichProposal, AppError>(__TAURI_INVOKE("enrich_proposal", { runId })),
 	/**
-	 *  enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 (편집한) 제안을 accept하면 신호에 힌트로 반영하고
-	 *  잡을 succeeded로 마감한다. **quadrant는 자동 확정되지 않는다**(카드는 unclassified 유지).
+	 *  enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 검토·편집한 제안을 accept하면 신호의 quadrant+area를
+	 *  **확정**(제안에 quadrant 없으면 기존 보존)하고 suggested 힌트를 비운 뒤 잡을 succeeded로 마감한다.
+	 *  codex가 아니라 사람의 명시적 accept 클릭으로만 확정 — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
 	 */
 	acceptEnrich: (runId: string, accepted: EnrichProposal) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("accept_enrich", { runId, accepted })),
 	/**
