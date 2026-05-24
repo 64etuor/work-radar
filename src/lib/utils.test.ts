@@ -8,6 +8,8 @@ describe("cn", () => {
   });
 
   it("falsy 값은 버린다", () => {
+    // `false && "b"`는 실사용 패턴(cond && "class")을 모사한 의도적 falsy 입력.
+    // eslint-disable-next-line no-constant-binary-expression
     expect(cn("a", false && "b", undefined, null, "c")).toBe("a c");
   });
 
