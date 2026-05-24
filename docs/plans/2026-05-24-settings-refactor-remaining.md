@@ -51,8 +51,7 @@ typecheck/lint/build green 확인됨.
 `escalation_reason`(`src-tauri/src/commands/pr_radar.rs:75-84`)은 `Open && CI Failing && ticket.is_some()`로 게이팅 — **티켓 링크가 #4 노이즈 필터**(주석 line 17, 테스트 `no_ticket_no_escalation` ~line 670). `enqueue_ci_failure_notification` **호출이 escalation 분기 안에 중첩**(line 222-228) → escalation = OS 알림.
 - **컬럼만 DROP해도 중립 아님**: 패턴 소실 → `extract_ticket`→`None` → escalation 미발화 → PR Radar 전원 display-only 강제(=B2). 즉 #4 행동 변경 불가피.
 - **B1(추천 형태)**: 티켓 전제를 **명시 노이즈 임계치로 치환**(예 `CI Failing && review_requested` 또는 `&& age>=N일`). dedup/auto-resolve/임계치/알림 커플링 보존, 알림 볼륨 테스트 재고정.
-- **B2**: escalation 비활성 → 표시 전용.
-- **게이트 산출물**: B1(임계치 명시)/B2 + **알림 볼륨 변화 동의**를 사용자에게 확정. 미확정 → PR B 보류.
+- **B2 ✅ 결정됨(2026-05-24)**: escalation 완전 비활성 → **PR Radar 표시 전용**. escalation에 종속된 **OS 알림 경로도 함께 제거**. (B1 임계치 치환 검토했으나 사용자가 "깔끔한 제거" 선호.) → PR B 게이트 해소.
 
 ---
 
@@ -62,7 +61,7 @@ typecheck/lint/build green 확인됨.
 3. **escalation/알림 정책이 #4 위반** → B1/B2 사람 확정 + 새 기준 테스트 고정 + 알림 볼륨 테스트 + reviewer #4 전용 확인.
 
 ## 3. 확장 테스트 계획
-- **Rust(PR B)**: 새 `escalation_reason`(티켓 무관) 테스트, 기존 `no_ticket_no_escalation`/`escalates_ci_failed_with_ticket`를 새 정책으로 치환, **알림 커플링 테스트**(`no_ticket_no_ci_notification`→`no_signal_no_ci_notification`), `extract_ticket`/`linked_ticket` 제거 반영. `cargo test`·`clippy` green.
+- **Rust(PR B, B2)**: 기존 escalation/알림 테스트(`no_ticket_no_escalation`/`escalates_ci_failed_with_ticket`/`no_ticket_no_ci_notification`)는 **제거**(escalation 자체 소멸), **표시 전용**(fetch→목록 반환) + **auto_resolve**(기존 escalated PR 신호 정리) 테스트로 치환. `extract_ticket`/`escalation_reason`/`linked_ticket` 제거 반영. `cargo test`·`clippy` green.
 - **FE**: vitest **스위트 green 유지**(고정 카운트 비의존).
 - **Integration**: `cargo test`(bindings_export) 후 `git diff --exit-code src/bindings.ts`(드리프트 0).
 - **관찰(헤드리스)**: FE PR마다 `pnpm tauri dev`(권위) 또는 styleguide 라이트/다크 스크린샷, 설정 5개 카테고리 전수, destructiveOutline 확인. PR C는 worktree-diff 뷰 라이트 픽셀 동일성.
@@ -82,8 +81,8 @@ typecheck/lint/build green 확인됨.
 - **Verify**: `pnpm typecheck && pnpm lint && pnpm build` green; 5개 카테고리 라이트/다크 스크린샷; reviewer 패스.
 
 ### PR B — ticket_key_pattern 백엔드 제거 + escalation/알림 재정의 (백엔드, 고위험, ⚠게이트)
-- **선행 게이트(필수)**: §1 정책 B1(임계치 명시)/B2 + **알림 볼륨 동의** 사용자 확정. 미확정 → 착수 금지.
-- **`src-tauri/src/commands/pr_radar.rs`**: `extract_ticket` 제거; `escalation_reason`에서 ticket 인자/조건 제거 후 새 정책 반영; `enqueue_ci_failure_notification`(line 222-228) 커플링이 새 정책 따르는지 확인; `RepoRef.ticket_pattern`·`PrRadarItem.linked_ticket` 제거; `fetch_github_repo_refs`(line 270) COALESCE 제거; **INVARIANT 헤더 주석(line 14-19, 74) "링크 티켓" 정본 표현 갱신**; 테스트 새 정책으로 치환(+알림 볼륨 테스트).
+- **정책 = B2 (✅ 결정됨 2026-05-24)**: PR Radar **표시 전용** — escalation·티켓·알림(escalation 종속) 전부 제거. 게이트 해소.
+- **`src-tauri/src/commands/pr_radar.rs`**: `extract_ticket`·`escalation_reason` 제거; `sync_pr_radar`에서 **escalate(`upsert_pr_signal`)·`enqueue_ci_failure_notification`(line 222-228) 호출 제거**(PR은 fetch해 목록만 반환); **`auto_resolve`는 유지**(기존에 escalate된 PR 신호를 표시전용 전환 시 정리); `RepoRef.ticket_pattern`·`PrRadarItem.linked_ticket` 제거; `fetch_github_repo_refs`(line 270) COALESCE 제거; **INVARIANT 헤더 주석(line 14-19, 74) "링크 티켓/escalation" 표현을 "표시 전용"으로 갱신**; 테스트를 **표시전용 + auto_resolve 정리**로 치환(escalation/알림 테스트 제거).
 - **DB**: `src-tauri/migrations/0015_remove_ticket_key_pattern.sql` — `ALTER TABLE projects DROP COLUMN ticket_key_pattern;` + `ALTER TABLE repos DROP COLUMN ticket_key_pattern;`(0008 선례). 실패 시 0015 revert+재발행.
 - **모델/커맨드**: `src-tauri/src/models.rs`(4곳), `commands/projects.rs`(SELECT/INSERT/seed), `notion.rs`/`worktree.rs`/`shared.rs`의 `ticket_key_pattern: None` 생성자 제거.
 - **IPC/FE**: `cargo test`(bindings_export)로 `src/bindings.ts` 재생성; `AddProjectForm`/`AddRepoForm`의 `ticketKeyPattern: null` 제거; **`src/components/PrRadarView.tsx:207`의 `linkedTicket` 뱃지 렌더 제거**.
