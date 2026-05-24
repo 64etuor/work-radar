@@ -16,10 +16,8 @@
 | `pnpm dev` | Vite 개발 서버 시작 (HMR 활성) |
 | `pnpm build` | TypeScript 컴파일(`tsc`) 후 Vite 번들 빌드 |
 | `pnpm typecheck` | `tsc --noEmit` — 타입 오류만 검사, 출력 파일 없음 |
+| `pnpm lint` | `eslint .` — flat config(`@eslint/js` + `typescript-eslint` + `react-hooks` v7 + `react-refresh`). 게이트 = 에러만 차단(react-hooks v7 경고는 의도적 비차단, decisions 참조) |
 | `pnpm preview` | 빌드 결과물을 로컬 서버로 미리보기 |
-
-> **lint 스크립트 없음**: 현재 `package.json`에 lint 스크립트가 정의되어 있지 않다.
-> lint가 필요하면 devDependency와 scripts를 별도로 추가해야 한다.
 
 ---
 
@@ -70,10 +68,11 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
 ```bash
 pnpm typecheck
+pnpm lint
 ```
 
 - `pnpm typecheck` (`tsc --noEmit`): 타입 안전성 확인.
-- lint 스크립트가 현재 없으므로 lint 항목은 생략. 추가 시 이 섹션에 명령을 등록할 것.
+- `pnpm lint` (`eslint .`): 린트. 게이트는 **에러만 차단** — react-hooks v7 경고는 의도적 비차단(점진 정리는 백로그, decisions 참조).
 
 ### Tauri 통합 검증
 
