@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { registerOverlay } from "@/components/ui/overlay-stack";
+
 export type CardMenuAction =
   | "today"
   | "enrich"
@@ -51,6 +53,26 @@ export function CardMenu({ state, onAct, onClose, codexReady }: Props) {
     };
     window.addEventListener("pointerdown", onDown);
     return () => window.removeEventListener("pointerdown", onDown);
+  }, [state, onClose]);
+
+  // 상호작용 계약(plan §0.6): 열린 동안 overlay-stack에 등록 → App 셸 Esc가 `isOverlayOpen()`으로
+  // 양보(창 숨김 안 함). 셸은 메뉴를 닫지 않으므로 여기서 Esc로 닫고 트리거(anchor) 포커스를 복원한다
+  // (radix DropdownMenu 동등 동작 — 이 메뉴는 싱글톤 anchor 구조라 래퍼 대신 계약만 채택).
+  useEffect(() => {
+    if (!state) return;
+    const unregister = registerOverlay();
+    const anchor = state.anchor;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        anchor.focus?.();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      unregister();
+      window.removeEventListener("keydown", onKey);
+    };
   }, [state, onClose]);
 
   if (!state) return null;

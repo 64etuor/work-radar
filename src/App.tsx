@@ -60,11 +60,10 @@ export default function App() {
           setPaletteOpen(false);
           return;
         }
-        // shadcn 오버레이(Dialog/DropdownMenu/Select)가 열려 있으면 radix가 Esc로 최상위 레이어를
-        // 닫고 포커스를 복원한다 — 셸은 창을 숨기지 않고 양보한다(plan §0.6 상호작용 계약).
+        // 오버레이(shadcn Dialog/DropdownMenu/Select + CardMenu)가 열려 있으면 overlay-stack에
+        // 등록돼 있으므로 셸은 창을 숨기지 않고 양보한다 — 각 오버레이가 Esc 닫기·포커스 복원 전담
+        // (plan §0.6 상호작용 계약). CardMenu도 overlay-stack 계약을 채택했다.
         if (isOverlayOpen()) return;
-        // (레거시) 커스텀 카드 메뉴가 열려 있으면 그 닫힘을 CaptureBoard에 맡기고 창은 유지한다.
-        if (document.querySelector(".cb-card-menu")) return;
         // board 외 뷰는 Esc로 보드 복귀, board에서 Esc는 창 숨김.
         if (view !== "board") {
           goTo("board");
