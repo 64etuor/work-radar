@@ -2719,21 +2719,6 @@
   font: 500 12px var(--font-mono);
   color: var(--color-wr-subtle);
 }
-.wk .wk-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
-  font: 500 12px var(--font-sans);
-  color: var(--color-wr-fg);
-}
-.wk .wk-back:hover {
-  background: var(--color-wr-surface);
-}
 .wk .wk-scroll {
   flex: 1;
   min-height: 0;

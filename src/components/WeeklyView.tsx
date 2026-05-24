@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import type { DebtPoint } from "@/bindings";
+import { Button } from "@/components/ui/button";
 import { localToday, useWeeklyReview } from "@/lib/query";
 import { useUIStore } from "@/store";
 
@@ -30,10 +31,15 @@ export function WeeklyView() {
   return (
     <div className="wk">
       <header className="wk-head" data-tauri-drag-region>
-        <button type="button" className="wk-back" onClick={() => goTo("board")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => goTo("board")}
+        >
           <ArrowLeft className="size-4" />
           보드
-        </button>
+        </Button>
         <span className="wk-title">Weekly Review</span>
         {data && (
           <span className="wk-range">
