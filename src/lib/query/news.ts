@@ -4,7 +4,12 @@
 // 백엔드 fetcher는 15분 주기(news/fetcher.rs). 프런트는 매 5분 refetch로
 // 사용자가 앱에 머무는 동안 신선도 보장(빠른 토글에도 즉시 invalidate).
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { unwrap } from "./client";
 import { commands } from "@/bindings";
 
@@ -22,6 +27,9 @@ export function useNewsList() {
     refetchInterval: NEWS_POLL_MS,
     // 페치 실패는 빈 티커로 자연 graceful — 토스트 띄울 필요 없음.
     retry: false,
+    // 토글/refetch 사이에 isLoading flicker(빈 티커→"불러오는 중…"→다시 채움) 방지.
+    // 마퀴는 중단 없이 이전 콘텐츠를 그대로 보여주다 invalidate 응답이 도착하면 부드럽게 교체.
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -68,30 +68,39 @@ async fn tick(db: &Db, app: &AppHandle, client: &Client) -> Result<(), AppError>
     // 소스별 격리: 한 소스의 fetch/upsert 실패가 나머지 소스 페치를 막지 않는다.
     // (critic Major #3) `?`로 조기 이탈하면 N번째 소스 실패 시 N+1, N+2가 15분 동안 stale.
     let mut any_success = false;
+    // per-tick 요약 카운터(follow-up #4): 소스별 페치 결과를 한 줄 info로 남겨 관측성.
+    let mut summary: Vec<(String, Result<usize, String>)> = Vec::new();
     for source in registry() {
         if !enabled.iter().any(|id| id == source.id()) {
             continue;
         }
+        let id = source.id().to_string();
         match fetch_with_retry(&*source, client).await {
-            Ok(items) => match store::upsert_many(db, &items).await {
-                Ok(()) => {
-                    any_success = true;
+            Ok(items) => {
+                let n = items.len();
+                match store::upsert_many(db, &items).await {
+                    Ok(()) => {
+                        any_success = true;
+                        summary.push((id, Ok(n)));
+                    }
+                    Err(e) => {
+                        summary.push((id.clone(), Err(format!("upsert: {e}"))));
+                        let _ = app.emit(
+                            "news_fetch_failed",
+                            NewsFetchFailed {
+                                source: id,
+                                error: format!("upsert: {e}"),
+                            },
+                        );
+                    }
                 }
-                Err(e) => {
-                    let _ = app.emit(
-                        "news_fetch_failed",
-                        NewsFetchFailed {
-                            source: source.id().to_string(),
-                            error: format!("upsert: {e}"),
-                        },
-                    );
-                }
-            },
+            }
             Err(e) => {
+                summary.push((id.clone(), Err(e.to_string())));
                 let _ = app.emit(
                     "news_fetch_failed",
                     NewsFetchFailed {
-                        source: source.id().to_string(),
+                        source: id,
                         error: e.to_string(),
                     },
                 );
@@ -100,6 +109,17 @@ async fn tick(db: &Db, app: &AppHandle, client: &Client) -> Result<(), AppError>
     }
     if any_success {
         let _ = app.emit("news_items_updated", ());
+    }
+    // 한 줄 요약 — 예: "news tick: hn=30 geeknews=15 lobsters=ERR(...)".
+    if !summary.is_empty() {
+        let parts: Vec<String> = summary
+            .into_iter()
+            .map(|(id, r)| match r {
+                Ok(n) => format!("{id}={n}"),
+                Err(_) => format!("{id}=ERR"),
+            })
+            .collect();
+        tracing::info!(summary = %parts.join(" "), "news tick");
     }
     Ok(())
 }

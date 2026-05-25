@@ -5,7 +5,7 @@ use chrono::Utc;
 use feed_rs::parser;
 use reqwest::Client;
 
-use super::{NewsItem, NewsSource};
+use super::{http_bytes, NewsItem, NewsSource};
 use crate::error::AppError;
 
 const RSS_URL: &str = "https://news.hada.io/rss/news";
@@ -22,7 +22,8 @@ impl NewsSource for GeekNewsSource {
     }
 
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError> {
-        let bytes = client.get(RSS_URL).send().await?.bytes().await?;
+        let resp = client.get(RSS_URL).send().await?;
+        let bytes = http_bytes(resp, "geeknews").await?;
         let feed = parser::parse(&bytes[..])
             .map_err(|e| AppError::transient("news.parse.geeknews", e.to_string()))?;
 

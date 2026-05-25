@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use tokio::task::JoinSet;
 
-use super::{NewsItem, NewsSource};
+use super::{http_json, NewsItem, NewsSource};
 use crate::error::AppError;
 
 const TOP_URL: &str = "https://hacker-news.firebaseio.com/v0/topstories.json";
@@ -42,18 +42,15 @@ impl NewsSource for HnSource {
     }
 
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError> {
-        let ids: Vec<u64> = client.get(TOP_URL).send().await?.json().await?;
+        let resp = client.get(TOP_URL).send().await?;
+        let ids: Vec<u64> = http_json(resp, "hn.top").await?;
 
         let mut set: JoinSet<Result<Option<NewsItem>, AppError>> = JoinSet::new();
         for id in ids.into_iter().take(TAKE) {
             let client = client.clone();
             set.spawn(async move {
-                let item: Item = client
-                    .get(format!("{ITEM_URL}/{id}.json"))
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
+                let resp = client.get(format!("{ITEM_URL}/{id}.json")).send().await?;
+                let item: Item = http_json(resp, "hn.item").await?;
                 Ok(item_to_news(item))
             });
         }

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
 
-use super::{NewsItem, NewsSource};
+use super::{http_json, NewsItem, NewsSource};
 use crate::error::AppError;
 
 const URL: &str = "https://lobste.rs/hottest.json";
@@ -33,7 +33,8 @@ impl NewsSource for LobstersSource {
     }
 
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError> {
-        let stories: Vec<Story> = client.get(URL).send().await?.json().await?;
+        let resp = client.get(URL).send().await?;
+        let stories: Vec<Story> = http_json(resp, "lobsters").await?;
 
         Ok(stories
             .into_iter()
