@@ -434,6 +434,9 @@ export const commands = {
 	 *  `cmux select-workspace --workspace <ref>`. 바이너리 부재·실패는 graceful(Ok(false), 에러 아님).
 	 */
 	cmuxFocusWorkspace: (reference: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cmux_focus_workspace", { reference })),
+	newsListRecent: (limit: number) => typedError<NewsItem[], AppError>(__TAURI_INVOKE("news_list_recent", { limit })),
+	newsSourcesAvailable: () => typedError<NewsSourceMeta[], AppError>(__TAURI_INVOKE("news_sources_available")),
+	newsSourcesSetEnabled: (source: string, enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("news_sources_set_enabled", { source, enabled })),
 };
 
 /* Types */
@@ -862,6 +865,30 @@ export type HermesMessage = {
 
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
+
+/**
+ *  정규화된 뉴스 아이템 — 모든 소스가 이 형태로 반환.
+ *  `posted_at`은 RFC3339 문자열(코드베이스 patterns: IPC 타입은 chrono 노출 없이 문자열).
+ */
+export type NewsItem = {
+	/**  소스 id (예: "hn", "geeknews", "lobsters"). registry id와 동일. */
+	source: string,
+	/**  소스 내 안정적 id (HN: story id, RSS: guid). */
+	externalId: string,
+	title: string,
+	url: string,
+	commentsUrl: string | null,
+	commentCount: number | null,
+	/**  RFC3339 (e.g. `2026-05-25T10:00:00+00:00`). */
+	postedAt: string,
+};
+
+/**  소스 메타 정보 — IPC `news_sources_available`이 반환. */
+export type NewsSourceMeta = {
+	id: string,
+	label: string,
+	enabled: boolean,
+};
 
 /**
  *  알림 권한 상태(프런트 표시용 문자열 + bool). PermissionState를 직접 노출하지 않고

@@ -67,6 +67,9 @@ thiserror = "2"
 # TTL + bounded(max_capacity) 캐시(P6). 외부 HTTP *읽기* 가속 전용 — 결정/escalation/accept
 # 레일 무침투(INVARIANT #2/#4/#7). future::Cache는 clone으로 공유(Arc<Mutex> 금지).
 moka = { version = "0.12", features = ["future"] }
+async-trait = "0.1.89"
+feed-rs = "2.3.1"
+rand = "0.10.1"
 
 [dev-dependencies]
 # 로테이션 단위 테스트용 임시 디렉터리.

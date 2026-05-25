@@ -25,6 +25,7 @@ mod keychain;
 mod logging;
 mod messenger;
 mod models;
+mod news;
 mod notion;
 mod retry;
 mod scheduler;
@@ -196,6 +197,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // cmux 워크스페이스 상태 (B1, best-effort 표시 전용 — INVARIANT #1: 결정 레일 미사용).
         commands::cmux_status,
         commands::cmux_focus_workspace,
+        // 외부 뉴스 페처 (PR B, 표시 전용 — INVARIANT #1: 큐/매트릭스 자동 주입 금지).
+        commands::news_list_recent,
+        commands::news_sources_available,
+        commands::news_sources_set_enabled,
     ])
 }
 
@@ -308,6 +313,12 @@ pub fn run() {
             // 알림 발사는 app 핸들 기반 Notifier로 추상화(scheduler.rs는 발사 메커니즘 무지).
             let sched_db: db::Db = app.state::<db::Db>().inner().clone();
             scheduler::spawn_loop(sched_db, AppNotifier(app.handle().clone()));
+
+            // 외부 뉴스 페처(PR B): 15분 주기 tokio interval, 페치당 최대 3회 지수
+            // 백오프+jitter, 실패는 news_fetch_failed 이벤트로 surface. 표시 전용 — 큐/
+            // 매트릭스에 자동 주입 절대 금지(INVARIANT #1).
+            let news_db: db::Db = app.state::<db::Db>().inner().clone();
+            news::fetcher::spawn_loop(news_db, app.handle().clone());
 
             Ok(())
         })
