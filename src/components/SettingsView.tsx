@@ -7,6 +7,7 @@ import {
   Keyboard,
   Link2,
   Moon,
+  Newspaper,
   Sun,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { AddProjectForm } from "./settings/AddProjectForm";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
 import { NavigationSettings } from "./settings/NavigationSettings";
+import { NewsSourceSettings } from "./settings/NewsSourceSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 import { AgentsPane } from "./settings/AgentsPane";
@@ -30,7 +32,8 @@ type SettingsCategory =
   | "agents"
   | "shortcuts"
   | "integrations"
-  | "notifications";
+  | "notifications"
+  | "news";
 
 const CATEGORIES: {
   id: SettingsCategory;
@@ -43,6 +46,7 @@ const CATEGORIES: {
   { id: "shortcuts", label: "단축키", icon: Keyboard, blurb: "뷰 전환 단축키와 키맵을 설정합니다." },
   { id: "integrations", label: "통합", icon: Link2, blurb: "Google Calendar·Hermes 브리지 연결을 관리합니다." },
   { id: "notifications", label: "알림", icon: Bell, blurb: "데스크톱 알림과 트리거를 설정합니다." },
+  { id: "news", label: "뉴스", icon: Newspaper, blurb: "보드 하단 티커에 표시할 외부 뉴스 소스를 켜고 끕니다." },
 ];
 
 /**
@@ -156,6 +160,7 @@ export function SettingsView() {
             {category === "notifications" && (
               <NotificationSettings onToast={pushSuccess} />
             )}
+            {category === "news" && <NewsSourceSettings onToast={pushSuccess} />}
           </div>
         </main>
       </div>

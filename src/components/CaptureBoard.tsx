@@ -17,6 +17,7 @@ import {
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
 import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
+import { NewsTicker } from "@/components/news/NewsTicker";
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 import { SprintTimer } from "@/components/SprintTimer";
@@ -568,8 +569,10 @@ export function CaptureBoard() {
         </div>
       </div>
 
-      {/* 하단 풀폭 슬롯 — PR C에서 뉴스 티커로 채워짐. 그 전까지 빈 라인(시각 균형). */}
-      <div className="news-ticker-slot" aria-hidden />
+      {/* 하단 풀폭 외부 뉴스 티커 (PR C). 표시 전용 — INVARIANT #1 무관. */}
+      <div className="news-ticker-slot">
+        <NewsTicker />
+      </div>
 
       <CardMenu
         state={menu}

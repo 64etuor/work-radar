@@ -17,4 +17,5 @@ export * from "./nav";
 export * from "./hermes";
 export * from "./skills";
 export * from "./cmux";
+export * from "./news";
 export * from "./sprint";
