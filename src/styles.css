@@ -966,9 +966,10 @@
   }
 }
 
-/* 하단 풀폭 외부 뉴스 티커 슬롯 (PR C). 표시 전용 — INVARIANT #1 무관.
-   슬롯 자체는 컨테이너 역할만; 내부 `.news-ticker`가 마퀴/빈 상태를 그린다. */
-.cb .news-ticker-slot {
+/* 전역 하단 외부 뉴스 티커 슬롯 (PR C). 표시 전용 — INVARIANT #1 무관.
+   App 크롬에서 view-shell 아래 모든 뷰 하단에 상주한다. 슬롯 자체는 컨테이너 역할만;
+   내부 `.news-ticker`가 마퀴/빈 상태를 그린다. */
+.news-ticker-slot {
   flex: 0 0 auto;
   margin: 0 16px 12px;
   border-top: 1px solid var(--color-wr-border-light);
@@ -995,7 +996,7 @@
 .news-ticker-track {
   display: flex;
   width: max-content;       /* 두 트랙의 자연 너비 합 */
-  animation: news-ticker-scroll 60s linear infinite;
+  animation: news-ticker-scroll var(--news-marquee-duration, 60s) linear infinite;
   will-change: transform;   /* 30fps+ 부드러움 — compositor 레이어 보장 */
 }
 
@@ -1041,6 +1042,7 @@
   font: inherit;
   color: inherit;
   white-space: nowrap;     /* 마퀴 — 줄바꿈 없음 */
+  max-width: min(72vw, 760px);
 }
 .news-ticker-item:hover .news-title {
   color: var(--color-wr-accent, var(--color-wr-fg));
@@ -1054,6 +1056,9 @@
 /* 소스 배지 — 10px caps mono(spec §6). 색상은 소스별 modifier. */
 .news-src-badge {
   flex-shrink: 0;
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 2px 6px;
   border-radius: 3px;
   font: 600 10px/1 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
@@ -1064,8 +1069,28 @@
 .news-src-hn       { background: #ff6600; }   /* HN 오렌지 */
 .news-src-geeknews { background: #1f7a8c; }   /* GeekNews 청록(브랜드 톤) */
 .news-src-lobsters { background: #ac130d; }   /* Lobsters 레드 */
+.news-src-reddit_programming { background: #ff4500; }
+.news-src-devto { background: #17171c; }
+.news-src-naver_d2,
+.news-src-kakao_tech,
+.news-src-woowahan,
+.news-src-toss_tech,
+.news-src-line_tech,
+.news-src-yozm { background: var(--color-wr-green); }
+.news-src-arxiv_cs_ai,
+.news-src-arxiv_cs_lg { background: var(--color-wr-accent); }
+
+.news-hot {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  filter: saturate(1.1);
+}
 
 .news-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 13px;
   color: var(--color-wr-fg);
   transition: color 120ms ease;

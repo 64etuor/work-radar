@@ -211,6 +211,7 @@ mod tests {
             per_source_limit: 0,
             sort_mode: SortMode::Recent,
             fetch_interval_minutes: 15,
+            marquee_seconds: 60,
         }
     }
 

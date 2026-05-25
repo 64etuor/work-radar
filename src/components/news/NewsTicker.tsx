@@ -1,34 +1,32 @@
-// 하단 풀폭 뉴스 티커 (PR C, spec §6).
+// 전역 하단 뉴스 티커 (PR C, spec §6).
 //
 // 좌측 스크롤 마퀴(30s linear infinite). hover 일시정지. 클릭→OS 기본 브라우저(`openUrl`).
 // `prefers-reduced-motion: reduce` 폴백은 CSS에서 정적 fade pagination(처음 5개)으로 처리.
 // INVARIANT #1: 표시 전용 — 큐/매트릭스 무관.
 
 import { openUrl } from "@tauri-apps/plugin-opener";
+import type { CSSProperties } from "react";
 import type { NewsItem } from "@/bindings";
-import { useNewsList, useNewsFilters } from "@/lib/query/news";
-
-/** 소스별 사람-친화 라벨 + CSS 배지 modifier id. */
-const SOURCE_LABEL: Record<string, string> = {
-  hn: "HN",
-  geeknews: "GEEK",
-  lobsters: "LOBSTERS",
-};
-
-function sourceLabel(id: string): string {
-  return SOURCE_LABEL[id] ?? id.toUpperCase();
-}
+import {
+  isHotTrendingNews,
+  newsSourceClass,
+  newsSourceLabel,
+} from "@/lib/newsTicker";
+import { useNewsList, useNewsFilters, useNewsOptions } from "@/lib/query/news";
 
 /**
  * 뉴스 티커. 활성 소스에서 받은 최근 아이템을 좌측 스크롤 마퀴로 흘린다.
+ * App 글로벌 크롬 하단에 한 번만 마운트해 CaptureBoard뿐 아니라 모든 뷰에서 보이게 한다.
  * 같은 콘텐츠를 두 번 렌더 → `transform: translateX(0) → translateX(-50%)`로 seamless 루프.
  * 한쪽 트랙만 aria-label 노출(스크린리더 중복 방지), 사본 트랙은 `aria-hidden`.
  */
 export function NewsTicker() {
   const q = useNewsList();
   const filters = useNewsFilters();
+  const options = useNewsOptions();
   const items = q.data ?? [];
   const hasFilters = (filters.data ?? []).length > 0;
+  const marqueeSeconds = options.data?.marqueeSeconds ?? 60;
 
   // 빈 상태 — 로딩/실패/소스 0개/아이템 0개 모두 동일 톤으로 subtle 안내.
   if (q.isLoading) {
@@ -46,7 +44,10 @@ export function NewsTicker() {
 
   return (
     <div className="news-ticker" role="region" aria-label="외부 뉴스 티커">
-      <div className="news-ticker-track">
+      <div
+        className="news-ticker-track"
+        style={{ "--news-marquee-duration": `${marqueeSeconds}s` } as CSSProperties}
+      >
         <NewsTrack items={items} />
         <NewsTrack items={items} ariaHidden />
       </div>
@@ -63,14 +64,23 @@ function NewsTrack({ items, ariaHidden }: { items: NewsItem[]; ariaHidden?: bool
       {items.map((it) => (
         <li key={`${it.source}-${it.externalId}`} className="news-ticker-li">
           {/* 사본(seamless 마퀴 위한 두 번째 트랙)은 키보드 포커스/클릭 대상 제외 — critic Minor #2 */}
-          <NewsTickerItem item={it} tabbable={!ariaHidden} />
+          <NewsTickerItem item={it} items={items} tabbable={!ariaHidden} />
         </li>
       ))}
     </ul>
   );
 }
 
-function NewsTickerItem({ item, tabbable }: { item: NewsItem; tabbable: boolean }) {
+function NewsTickerItem({
+  item,
+  items,
+  tabbable,
+}: {
+  item: NewsItem;
+  items: NewsItem[];
+  tabbable: boolean;
+}) {
+  const hot = isHotTrendingNews(item, items);
   return (
     <button
       type="button"
@@ -80,9 +90,14 @@ function NewsTickerItem({ item, tabbable }: { item: NewsItem; tabbable: boolean 
       tabIndex={tabbable ? 0 : -1}
       aria-hidden={tabbable ? undefined : true}
     >
-      <span className={`news-src-badge news-src-${item.source}`}>
-        {sourceLabel(item.source)}
+      <span className={`news-src-badge ${newsSourceClass(item.source)}`}>
+        {newsSourceLabel(item.source)}
       </span>
+      {hot && (
+        <span className="news-hot" aria-label="핫 트렌딩" title="핫 트렌딩">
+          🔥
+        </span>
+      )}
       <span className="news-title">{item.title}</span>
       {item.commentCount != null && (
         <span className="news-cmt">💬 {item.commentCount}</span>

@@ -10,6 +10,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { unwrap } from "./client";
 import { commands } from "@/bindings";
 import type { FilterMode, NewsOptions } from "@/bindings";
@@ -19,6 +21,27 @@ const NEWS_POLL_MS = 5 * 60 * 1000;
 
 /** 활성 소스 합본의 최근 N개(opts에서 결정). 비활성 소스는 서버에서 이미 제외. */
 export function useNewsList() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+
+    void listen("news_items_updated", () => {
+      void qc.invalidateQueries({ queryKey: ["newsList"] });
+    })
+      .then((cleanup) => {
+        if (cancelled) cleanup();
+        else unlisten = cleanup;
+      })
+      // Tauri 이벤트 브릿지가 없는 Vite preview/테스트형 실행에서는 5분 폴링 폴백만 유지.
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [qc]);
+
   return useQuery({
     queryKey: ["newsList"],
     queryFn: () => unwrap(commands.newsListRecent()),

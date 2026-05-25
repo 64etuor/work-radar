@@ -5,6 +5,7 @@ import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { CaptureBoard } from "@/components/CaptureBoard";
+import { NewsTicker } from "@/components/news/NewsTicker";
 import { ToastHost } from "@/components/ToastHost";
 import { CommandPalette } from "@/components/CommandPalette";
 import { HermesView } from "@/components/HermesView";
@@ -110,6 +111,10 @@ export default function App() {
         ) : (
           <CaptureBoard />
         )}
+      </div>
+      {/* 글로벌 뉴스 티커 — CaptureBoard 전용 콘텐츠가 아니라 모든 뷰 하단에 상주. */}
+      <div className="news-ticker-slot" aria-label="전역 뉴스 배너">
+        <NewsTicker />
       </div>
       {paletteOpen && <CommandPalette />}
       {/* 전역 캘린더 드로어 — 에이전트 바 우측 아이콘 / ⌘⇧C 로 토글, 모든 뷰 위에 슬라이드. */}

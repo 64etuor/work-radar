@@ -41,6 +41,8 @@ pub struct NewsOptions {
     pub sort_mode: SortMode,
     /// 0/5/10/15/30/60. 0 = 자동 갱신 끔(fetcher 진짜 park, Notify 깨움만).
     pub fetch_interval_minutes: u32,
+    /// 티커 마퀴 한 사이클 시간(초). UI slider에서 20..180으로 조절.
+    pub marquee_seconds: u32,
 }
 
 impl Default for NewsOptions {
@@ -50,6 +52,7 @@ impl Default for NewsOptions {
             per_source_limit: 10,
             sort_mode: SortMode::Recent,
             fetch_interval_minutes: 15,
+            marquee_seconds: 60,
         }
     }
 }
@@ -59,8 +62,8 @@ pub async fn get(db: &Db) -> Result<NewsOptions, AppError> {
     sqlx::query("INSERT INTO news_options(id) VALUES (1) ON CONFLICT DO NOTHING")
         .execute(db)
         .await?;
-    let row: (i64, i64, String, i64) = sqlx::query_as(
-        "SELECT total_limit, per_source_limit, sort_mode, fetch_interval_minutes \
+    let row: (i64, i64, String, i64, i64) = sqlx::query_as(
+        "SELECT total_limit, per_source_limit, sort_mode, fetch_interval_minutes, marquee_seconds \
          FROM news_options WHERE id = 1",
     )
     .fetch_one(db)
@@ -70,23 +73,26 @@ pub async fn get(db: &Db) -> Result<NewsOptions, AppError> {
         per_source_limit: row.1 as u32,
         sort_mode: SortMode::parse(&row.2),
         fetch_interval_minutes: row.3 as u32,
+        marquee_seconds: row.4 as u32,
     })
 }
 
 pub async fn set(db: &Db, o: &NewsOptions) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO news_options(id, total_limit, per_source_limit, sort_mode, fetch_interval_minutes) \
-         VALUES (1, ?, ?, ?, ?) \
+        "INSERT INTO news_options(id, total_limit, per_source_limit, sort_mode, fetch_interval_minutes, marquee_seconds) \
+         VALUES (1, ?, ?, ?, ?, ?) \
          ON CONFLICT(id) DO UPDATE SET \
              total_limit = excluded.total_limit, \
              per_source_limit = excluded.per_source_limit, \
              sort_mode = excluded.sort_mode, \
-             fetch_interval_minutes = excluded.fetch_interval_minutes"
+             fetch_interval_minutes = excluded.fetch_interval_minutes, \
+             marquee_seconds = excluded.marquee_seconds"
     )
     .bind(o.total_limit as i64)
     .bind(o.per_source_limit as i64)
     .bind(o.sort_mode.as_str())
     .bind(o.fetch_interval_minutes as i64)
+    .bind(o.marquee_seconds as i64)
     .execute(db)
     .await?;
     Ok(())
@@ -120,6 +126,7 @@ mod tests {
                 per_source_limit: 0,
                 sort_mode: SortMode::Mixed,
                 fetch_interval_minutes: 30,
+                marquee_seconds: 90,
             },
         )
         .await
@@ -129,6 +136,7 @@ mod tests {
         assert_eq!(o.per_source_limit, 0);
         assert_eq!(o.sort_mode, SortMode::Mixed);
         assert_eq!(o.fetch_interval_minutes, 30);
+        assert_eq!(o.marquee_seconds, 90);
     }
 
     #[tokio::test]
@@ -145,6 +153,7 @@ mod tests {
                 per_source_limit: 7,
                 sort_mode: SortMode::Comments,
                 fetch_interval_minutes: 30,
+                marquee_seconds: 120,
             },
         )
         .await
@@ -154,6 +163,7 @@ mod tests {
         assert_eq!(o.per_source_limit, 7);
         assert_eq!(o.sort_mode, SortMode::Comments);
         assert_eq!(o.fetch_interval_minutes, 30);
+        assert_eq!(o.marquee_seconds, 120);
     }
 
     #[tokio::test]

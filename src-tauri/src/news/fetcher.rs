@@ -131,19 +131,22 @@ pub fn spawn_loop(db: Db, app: AppHandle, notify: OptionsNotify) {
             // 다음 트리거: helper로 분기(R6 — 같은 함수를 단위 테스트가 호출).
             let reason = select_next_wake(ticker_opt.as_mut(), &notify).await;
 
-            // R7: woke_for_reconfig — park 안전망(PARK_TIMEOUT)도 Reconfig로 분기되므로 의도 정확.
-            let woke_for_reconfig = matches!(reason, WakeReason::Reconfig);
-            if woke_for_reconfig {
-                // 옵션이 바뀌었을 수 있으니 loop 머리에서 재평가 + interval 재구성.
-                continue;
-            }
-
-            // 정상 tick — fetch 실행.
-            if let Err(e) = tick(&db, &app, &client).await {
-                tracing::warn!(error = %e, "news fetcher tick failed");
+            if should_fetch_after_wake(reason) {
+                if let Err(e) = tick(&db, &app, &client).await {
+                    tracing::warn!(error = %e, "news fetcher tick failed");
+                }
             }
         }
     });
+}
+
+fn should_fetch_after_wake(reason: WakeReason) -> bool {
+    match reason {
+        WakeReason::Tick => true,
+        // 소스 on/off와 옵션 변경은 Notify로 들어온다. 특히 새 소스를 켰을 때 캐시가 비어 있으면
+        // 다음 interval까지 빈 티커가 유지되므로, 깨운 직후 즉시 한 번 fetch한다.
+        WakeReason::Reconfig => true,
+    }
 }
 
 async fn tick(db: &Db, app: &AppHandle, client: &Client) -> Result<(), AppError> {
@@ -276,6 +279,12 @@ mod tests {
         notify.notify_one();
         let reason = select_next_wake(None, &notify).await;
         assert!(matches!(reason, WakeReason::Reconfig));
+    }
+
+    #[test]
+    fn reconfig_wake_fetches_immediately() {
+        assert!(should_fetch_after_wake(WakeReason::Reconfig));
+        assert!(should_fetch_after_wake(WakeReason::Tick));
     }
 
     /// build_ticker(0)은 None 반환 — park 모드 진입 가드.

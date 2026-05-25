@@ -32,10 +32,22 @@ pub async fn news_sources_available(db: State<'_, Db>) -> Result<Vec<NewsSourceM
 #[specta::specta]
 pub async fn news_sources_set_enabled(
     db: State<'_, Db>,
+    notify: State<'_, OptionsNotify>,
     source: String,
     enabled: bool,
 ) -> Result<(), AppError> {
-    pref_store::set_enabled(db.inner(), &source, enabled).await
+    set_news_source_enabled_and_wake(db.inner(), notify.inner(), &source, enabled).await
+}
+
+async fn set_news_source_enabled_and_wake(
+    db: &Db,
+    notify: &OptionsNotify,
+    source: &str,
+    enabled: bool,
+) -> Result<(), AppError> {
+    pref_store::set_enabled(db, source, enabled).await?;
+    notify.notify_one(); // source on/off 후 캐시가 비어 있어도 다음 interval까지 기다리지 않고 즉시 fetch.
+    Ok(())
 }
 
 #[tauri::command]
@@ -76,4 +88,37 @@ pub async fn news_set_options(
     options_store::set(db.inner(), &options).await?;
     notify.notify_one(); // fetcher 즉시 깨움 → 옵션 재읽기 → interval 재구성.
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::Notify;
+
+    async fn pool() -> sqlx::SqlitePool {
+        let p = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("sqlite in-memory");
+        sqlx::migrate!("./migrations")
+            .run(&p)
+            .await
+            .expect("migrations");
+        p
+    }
+
+    #[tokio::test]
+    async fn source_toggle_wakes_fetcher_immediately() {
+        let db = pool().await;
+        let notify: OptionsNotify = Arc::new(Notify::new());
+
+        set_news_source_enabled_and_wake(&db, &notify, "geeknews", true)
+            .await
+            .expect("source toggle");
+
+        tokio::time::timeout(Duration::from_millis(20), notify.notified())
+            .await
+            .expect("source toggle should notify fetcher");
+    }
 }

@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { useToastStore } from "@/lib/toast";
 import {
   useNewsSources,
@@ -262,7 +263,52 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
           </SelectContent>
         </Select>
       </Field>
+      <NewsMarqueeSpeedField
+        key={o.marqueeSeconds}
+        disabled={m.isPending}
+        seconds={o.marqueeSeconds}
+        onCommit={(marqueeSeconds) => update({ marqueeSeconds })}
+      />
     </section>
+  );
+}
+
+function NewsMarqueeSpeedField({
+  disabled,
+  seconds,
+  onCommit,
+}: {
+  disabled: boolean;
+  seconds: number;
+  onCommit: (seconds: number) => void;
+}) {
+  const [draft, setDraft] = useState(seconds);
+
+  return (
+    <Field
+      label="마퀴 속도"
+      hint="왼쪽으로 한 바퀴 도는 시간. 짧을수록 빠르게 흐릅니다."
+    >
+      <div className="flex items-center gap-3">
+        <Slider
+          value={[draft]}
+          min={20}
+          max={180}
+          step={5}
+          disabled={disabled}
+          onValueChange={([v]) => setDraft(v ?? seconds)}
+          onValueCommit={([v]) => {
+            const next = Math.max(20, Math.min(180, Math.trunc(v ?? seconds)));
+            setDraft(next);
+            onCommit(next);
+          }}
+          aria-label="뉴스 마퀴 속도"
+        />
+        <span className="w-14 shrink-0 text-right font-mono text-xs text-muted-foreground">
+          {draft}s
+        </span>
+      </div>
+    </Field>
   );
 }
 

@@ -906,6 +906,8 @@ export type NewsOptions = {
 	sortMode: SortMode,
 	/**  0/5/10/15/30/60. 0 = 자동 갱신 끔(fetcher 진짜 park, Notify 깨움만). */
 	fetchIntervalMinutes: number,
+	/**  티커 마퀴 한 사이클 시간(초). UI slider에서 20..180으로 조절. */
+	marqueeSeconds: number,
 };
 
 /**  소스 메타 정보 — IPC `news_sources_available`이 반환. */
