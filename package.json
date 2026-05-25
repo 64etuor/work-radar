@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "tauri": "tauri",
+    "tauri:dev:signed": "bash scripts/dev-signed.sh",
     "prepare": "husky"
   },
   "dependencies": {
