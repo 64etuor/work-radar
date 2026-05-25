@@ -74,6 +74,8 @@ rand = "0.10.1"
 [dev-dependencies]
 # 로테이션 단위 테스트용 임시 디렉터리.
 tempfile = "3"
+# tokio::time::pause/advance/start_paused — fetcher 단위 테스트에서 시간 제어.
+tokio = { version = "1", features = ["test-util"] }
 
 [features]
 # default Tauri custom-protocol toggle used by `tauri build`.

@@ -1,7 +1,7 @@
-// 외부 뉴스 페처(HN/GeekNews/Lobsters) 표시 전용 훅 (PR C).
+// 외부 뉴스 페처(HN/GeekNews/Lobsters 등) 표시 전용 훅 (PR C + D-Tune).
 //
 // INVARIANT #1: 뉴스 데이터는 화면 표시 전용 — 큐/매트릭스/결정에 어떤 입력으로도 쓰지 않는다.
-// 백엔드 fetcher는 15분 주기(news/fetcher.rs). 프런트는 매 5분 refetch로
+// 백엔드 fetcher는 사용자 설정 주기(news/fetcher.rs). 프런트는 매 5분 refetch로
 // 사용자가 앱에 머무는 동안 신선도 보장(빠른 토글에도 즉시 invalidate).
 
 import {
@@ -12,24 +12,20 @@ import {
 } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import { commands } from "@/bindings";
-import type { FilterMode } from "@/bindings";
+import type { FilterMode, NewsOptions } from "@/bindings";
 
-/** 티커 표시 한도. 30개면 30s linear 마퀴에서 ~2.5건/초로 자연스럽게 흐름. */
-const TICKER_LIMIT = 30;
-
-/** 프런트 폴 주기 — 백엔드가 15분에 한 번 갱신하므로 5분이면 평균 7.5분 stale 이내 보장. */
+/** 프런트 폴 주기 — 백엔드가 설정 주기에 한 번 갱신하므로 5분이면 평균 stale 이내 보장. */
 const NEWS_POLL_MS = 5 * 60 * 1000;
 
-/** 활성 소스 합본의 최근 N개(posted_at DESC). 비활성 소스는 서버에서 이미 제외. */
+/** 활성 소스 합본의 최근 N개(opts에서 결정). 비활성 소스는 서버에서 이미 제외. */
 export function useNewsList() {
   return useQuery({
-    queryKey: ["newsList", TICKER_LIMIT],
-    queryFn: () => unwrap(commands.newsListRecent(TICKER_LIMIT)),
+    queryKey: ["newsList"],
+    queryFn: () => unwrap(commands.newsListRecent()),
     refetchInterval: NEWS_POLL_MS,
     // 페치 실패는 빈 티커로 자연 graceful — 토스트 띄울 필요 없음.
     retry: false,
     // 토글/refetch 사이에 isLoading flicker(빈 티커→"불러오는 중…"→다시 채움) 방지.
-    // 마퀴는 중단 없이 이전 콘텐츠를 그대로 보여주다 invalidate 응답이 도착하면 부드럽게 교체.
     placeholderData: keepPreviousData,
   });
 }
@@ -85,6 +81,27 @@ export function useRemoveNewsFilter() {
     mutationFn: (id: number) => unwrap(commands.newsRemoveFilter(id)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["newsFilters"] });
+      void qc.invalidateQueries({ queryKey: ["newsList"] });
+    },
+  });
+}
+
+/** 글로벌 뉴스 옵션 (총 한도/소스당 한도/정렬/갱신 주기). */
+export function useNewsOptions() {
+  return useQuery({
+    queryKey: ["newsOptions"],
+    queryFn: () => unwrap(commands.newsGetOptions()),
+    retry: false,
+  });
+}
+
+/** 옵션 저장 + fetcher 즉시 깨움(Notify). 성공 시 newsOptions + newsList invalidate. */
+export function useSetNewsOptions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (opts: NewsOptions) => unwrap(commands.newsSetOptions(opts)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["newsOptions"] });
       void qc.invalidateQueries({ queryKey: ["newsList"] });
     },
   });

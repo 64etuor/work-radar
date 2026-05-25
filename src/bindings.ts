@@ -434,12 +434,14 @@ export const commands = {
 	 *  `cmux select-workspace --workspace <ref>`. 바이너리 부재·실패는 graceful(Ok(false), 에러 아님).
 	 */
 	cmuxFocusWorkspace: (reference: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cmux_focus_workspace", { reference })),
-	newsListRecent: (limit: number) => typedError<NewsItem[], AppError>(__TAURI_INVOKE("news_list_recent", { limit })),
+	newsListRecent: () => typedError<NewsItem[], AppError>(__TAURI_INVOKE("news_list_recent")),
 	newsSourcesAvailable: () => typedError<NewsSourceMeta[], AppError>(__TAURI_INVOKE("news_sources_available")),
 	newsSourcesSetEnabled: (source: string, enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("news_sources_set_enabled", { source, enabled })),
 	newsListFilters: () => typedError<KeywordFilter[], AppError>(__TAURI_INVOKE("news_list_filters")),
 	newsAddFilter: (keyword: string, mode: FilterMode) => typedError<KeywordFilter, AppError>(__TAURI_INVOKE("news_add_filter", { keyword, mode })),
 	newsRemoveFilter: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("news_remove_filter", { id })),
+	newsGetOptions: () => typedError<NewsOptions, AppError>(__TAURI_INVOKE("news_get_options")),
+	newsSetOptions: (options: NewsOptions) => typedError<null, AppError>(__TAURI_INVOKE("news_set_options", { options })),
 };
 
 /* Types */
@@ -896,6 +898,16 @@ export type NewsItem = {
 	postedAt: string,
 };
 
+export type NewsOptions = {
+	/**  5..100. UI에서 clamp. */
+	totalLimit: number,
+	/**  0=무제한. */
+	perSourceLimit: number,
+	sortMode: SortMode,
+	/**  0/5/10/15/30/60. 0 = 자동 갱신 끔(fetcher 진짜 park, Notify 깨움만). */
+	fetchIntervalMinutes: number,
+};
+
 /**  소스 메타 정보 — IPC `news_sources_available`이 반환. */
 export type NewsSourceMeta = {
 	id: string,
@@ -1154,6 +1166,8 @@ export type Skill = {
 	createdAt: string,
 	updatedAt: string,
 };
+
+export type SortMode = "recent" | "comments" | "mixed";
 
 /**
  *  단일 글로벌 스프린트 설정. 길이(interval_days) + 경계 앵커(요일 + 시각).

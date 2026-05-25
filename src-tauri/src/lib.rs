@@ -205,6 +205,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::news_list_filters,
         commands::news_add_filter,
         commands::news_remove_filter,
+        // 뉴스 글로벌 옵션 (D-Tune, 표시 옵션 전용 — INVARIANT #1).
+        commands::news_get_options,
+        commands::news_set_options,
     ])
 }
 
@@ -318,11 +321,14 @@ pub fn run() {
             let sched_db: db::Db = app.state::<db::Db>().inner().clone();
             scheduler::spawn_loop(sched_db, AppNotifier(app.handle().clone()));
 
-            // 외부 뉴스 페처(PR B): 15분 주기 tokio interval, 페치당 최대 3회 지수
-            // 백오프+jitter, 실패는 news_fetch_failed 이벤트로 surface. 표시 전용 — 큐/
-            // 매트릭스에 자동 주입 절대 금지(INVARIANT #1).
+            // 외부 뉴스 페처(PR B/D-Tune): tokio interval + Notify 즉시 적용.
+            // 페치당 최대 3회 지수 백오프+jitter, 실패는 news_fetch_failed 이벤트로 surface.
+            // 표시 전용 — 큐/매트릭스에 자동 주입 절대 금지(INVARIANT #1).
+            let notify: news::fetcher::OptionsNotify =
+                std::sync::Arc::new(tokio::sync::Notify::new());
+            app.manage(notify.clone());
             let news_db: db::Db = app.state::<db::Db>().inner().clone();
-            news::fetcher::spawn_loop(news_db, app.handle().clone());
+            news::fetcher::spawn_loop(news_db, app.handle().clone(), notify);
 
             Ok(())
         })

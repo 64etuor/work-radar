@@ -4,6 +4,7 @@
 use chrono::{Duration, Utc};
 
 use super::filter_store::{FilterMode, KeywordFilter};
+use super::options_store::{NewsOptions, SortMode};
 use super::NewsItem;
 use crate::db::Db;
 use crate::error::AppError;
@@ -19,6 +20,21 @@ fn like_escape(s: &str) -> String {
     s.replace('\\', r"\\")
         .replace('%', r"\%")
         .replace('_', r"\_")
+}
+
+/// SortMode → 외부 SELECT의 ORDER BY 고정 절. closed-set → `&'static str` only.
+/// 모든 모드 마지막에 `n.external_id DESC` tiebreak를 둬서 같은 timestamp(arXiv 배치
+/// 등에서 흔함) 시에도 결정적 순서를 보장(v3 minor).
+fn order_clause(mode: SortMode) -> &'static str {
+    match mode {
+        SortMode::Recent => "ORDER BY n.posted_at DESC, n.external_id DESC",
+        SortMode::Comments => {
+            "ORDER BY COALESCE(n.comment_count, 0) DESC, n.posted_at DESC, n.external_id DESC"
+        }
+        // mixed: rn ASC로 라운드 우선, 같은 rn 내에서 source ASC tiebreak로 deterministic,
+        // 그 다음 최신순 + external_id tiebreak(v3 minor).
+        SortMode::Mixed => "ORDER BY n.rn ASC, n.source ASC, n.posted_at DESC, n.external_id DESC",
+    }
 }
 
 /// 새/갱신 아이템 upsert. 동일 (source, external_id) → title/comment_count/fetched_at 갱신.
@@ -56,10 +72,11 @@ pub async fn upsert_many(db: &Db, items: &[NewsItem]) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 활성 소스만 합본해 posted_at DESC로 limit개. 필터 있으면 include OR + exclude AND 적용.
+/// 활성 소스만 합본해 opts 설정대로 조회. 필터 있으면 include OR + exclude AND 적용.
+/// per-source 한도는 ROW_NUMBER() 윈도우 함수로 적용(0=무제한).
 pub async fn list_recent(
     db: &Db,
-    limit: u32,
+    opts: &NewsOptions,
     filters: &[KeywordFilter],
 ) -> Result<Vec<NewsItem>, AppError> {
     let includes: Vec<&KeywordFilter> = filters
@@ -86,13 +103,30 @@ pub async fn list_recent(
         format!(" AND ({})", parts.join(" AND "))
     };
 
-    // SAFETY: 필터 fragment는 모두 closed-set `&'static str`. 동적 값은 ?로만.
+    let per_source_limit = if opts.per_source_limit == 0 {
+        i64::MAX
+    } else {
+        opts.per_source_limit as i64
+    };
+    let order = order_clause(opts.sort_mode);
+
+    // SAFETY: include_clause/exclude_clause/order 모두 closed-set static fragment 조합.
+    // 동적 값은 후속 .bind만.
     let sql = format!(
-        "SELECT n.source, n.external_id, n.title, n.url, n.comments_url, n.comment_count, n.posted_at \
-         FROM news_items n \
-         JOIN news_source_pref p ON p.source = n.source AND p.enabled = 1 \
-         WHERE 1=1{include_clause}{exclude_clause} \
-         ORDER BY n.posted_at DESC \
+        "WITH ranked AS ( \
+             SELECT n.*, \
+                    ROW_NUMBER() OVER ( \
+                        PARTITION BY n.source \
+                        ORDER BY n.posted_at DESC, n.external_id DESC \
+                    ) AS rn \
+             FROM news_items n \
+             JOIN news_source_pref p ON p.source = n.source AND p.enabled = 1 \
+             WHERE 1=1{include_clause}{exclude_clause} \
+         ) \
+         SELECT n.source, n.external_id, n.title, n.url, n.comments_url, n.comment_count, n.posted_at \
+         FROM ranked AS n \
+         WHERE n.rn <= ? \
+         {order} \
          LIMIT ?"
     );
 
@@ -103,7 +137,7 @@ pub async fn list_recent(
     for kw in &excludes {
         q = q.bind(format!("%{}%", like_escape(&kw.keyword)));
     }
-    q = q.bind(limit as i64);
+    q = q.bind(per_source_limit).bind(opts.total_limit as i64);
 
     let rows = q.fetch_all(db).await?;
     Ok(rows.into_iter().map(Into::into).collect())
@@ -171,13 +205,22 @@ mod tests {
         }
     }
 
+    fn test_opts() -> NewsOptions {
+        NewsOptions {
+            total_limit: 10,
+            per_source_limit: 0,
+            sort_mode: SortMode::Recent,
+            fetch_interval_minutes: 15,
+        }
+    }
+
     #[tokio::test]
     async fn upsert_dedup_keeps_latest_title() {
         let p = pool().await;
         upsert_many(&p, &[item("hn", "1", "old"), item("hn", "1", "new")])
             .await
             .unwrap();
-        let rows = list_recent(&p, 10, &[]).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &[]).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "new");
     }
@@ -200,7 +243,7 @@ mod tests {
         .execute(&p)
         .await
         .unwrap();
-        let rows = list_recent(&p, 10, &[]).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &[]).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].source, "hn");
     }
@@ -240,7 +283,7 @@ mod tests {
             keyword: "AI".into(),
             mode: FilterMode::Include,
         }];
-        let rows = list_recent(&p, 10, &filters).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &filters).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].external_id, "1");
     }
@@ -263,7 +306,7 @@ mod tests {
             keyword: "crypto".into(),
             mode: FilterMode::Exclude,
         }];
-        let rows = list_recent(&p, 10, &filters).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &filters).await.unwrap();
         let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
         assert_eq!(ids.len(), 2);
         assert!(!ids.contains(&"2"));
@@ -294,7 +337,7 @@ mod tests {
                 mode: FilterMode::Include,
             },
         ];
-        let rows = list_recent(&p, 10, &filters).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &filters).await.unwrap();
         assert_eq!(rows.len(), 2);
         let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
         assert!(ids.contains(&"1") && ids.contains(&"2"));
@@ -325,7 +368,7 @@ mod tests {
                 mode: FilterMode::Exclude,
             },
         ];
-        let rows = list_recent(&p, 10, &filters).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &filters).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(
             rows[0].external_id, "1",
@@ -344,7 +387,7 @@ mod tests {
             keyword: "RUST".into(),
             mode: FilterMode::Include,
         }];
-        let rows = list_recent(&p, 10, &filters).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &filters).await.unwrap();
         assert_eq!(rows.len(), 1);
     }
 
@@ -370,7 +413,7 @@ mod tests {
             keyword: "100%".into(),
             mode: FilterMode::Include,
         }];
-        let rows = list_recent(&p, 10, &f).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &f).await.unwrap();
         let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
         assert_eq!(ids, vec!["2"], "100% include는 literal % 만 매치");
 
@@ -380,8 +423,96 @@ mod tests {
             keyword: "unit_test".into(),
             mode: FilterMode::Include,
         }];
-        let rows = list_recent(&p, 10, &f).await.unwrap();
+        let rows = list_recent(&p, &test_opts(), &f).await.unwrap();
         let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
         assert_eq!(ids, vec!["3"], "unit_test include는 literal _ 만 매치");
+    }
+
+    #[tokio::test]
+    async fn per_source_limit_caps_per_source() {
+        let p = pool().await;
+        sqlx::query(
+            "INSERT INTO news_source_pref(source, enabled) VALUES ('geeknews', 1) \
+             ON CONFLICT(source) DO UPDATE SET enabled = excluded.enabled",
+        )
+        .execute(&p)
+        .await
+        .unwrap();
+        for i in 0..5 {
+            upsert_many(&p, &[item("hn", &format!("h{i}"), &format!("hn-{i}"))])
+                .await
+                .unwrap();
+            upsert_many(
+                &p,
+                &[item("geeknews", &format!("g{i}"), &format!("gn-{i}"))],
+            )
+            .await
+            .unwrap();
+        }
+        let mut opts = test_opts();
+        opts.per_source_limit = 2;
+        opts.total_limit = 100;
+        let rows = list_recent(&p, &opts, &[]).await.unwrap();
+        assert_eq!(rows.iter().filter(|r| r.source == "hn").count(), 2);
+        assert_eq!(rows.iter().filter(|r| r.source == "geeknews").count(), 2);
+    }
+
+    #[tokio::test]
+    async fn sort_mode_comments_orders_by_comment_count_desc() {
+        let p = pool().await;
+        let mut a = item("hn", "1", "a");
+        a.comment_count = Some(10);
+        let mut b = item("hn", "2", "b");
+        b.comment_count = Some(50);
+        let mut c = item("hn", "3", "c");
+        c.comment_count = Some(20);
+        upsert_many(&p, &[a, b, c]).await.unwrap();
+        let mut opts = test_opts();
+        opts.sort_mode = SortMode::Comments;
+        let rows = list_recent(&p, &opts, &[]).await.unwrap();
+        let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
+        assert_eq!(ids, vec!["2", "3", "1"]);
+    }
+
+    #[tokio::test]
+    async fn sort_mode_mixed_round_robin_deterministic() {
+        let p = pool().await;
+        sqlx::query(
+            "INSERT INTO news_source_pref(source, enabled) VALUES ('geeknews', 1), ('lobsters', 1) \
+             ON CONFLICT(source) DO UPDATE SET enabled = excluded.enabled",
+        )
+        .execute(&p)
+        .await
+        .unwrap();
+        // 각 소스 2개씩.
+        upsert_many(
+            &p,
+            &[
+                item("hn", "h1", "hn-1"),
+                item("hn", "h2", "hn-2"),
+                item("geeknews", "g1", "gn-1"),
+                item("geeknews", "g2", "gn-2"),
+                item("lobsters", "l1", "lb-1"),
+                item("lobsters", "l2", "lb-2"),
+            ],
+        )
+        .await
+        .unwrap();
+        let mut opts = test_opts();
+        opts.sort_mode = SortMode::Mixed;
+        opts.total_limit = 6;
+        let rows = list_recent(&p, &opts, &[]).await.unwrap();
+        // rn=1 라운드 3건(source ASC: geeknews, hn, lobsters), 그 다음 rn=2 라운드.
+        let sources: Vec<&str> = rows.iter().map(|r| r.source.as_str()).collect();
+        assert_eq!(
+            &sources[..3],
+            &["geeknews", "hn", "lobsters"],
+            "라운드 1 source ASC"
+        );
+        assert_eq!(
+            &sources[3..],
+            &["geeknews", "hn", "lobsters"],
+            "라운드 2 source ASC"
+        );
     }
 }

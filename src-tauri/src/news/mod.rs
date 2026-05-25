@@ -9,6 +9,7 @@ pub mod filter_store;
 pub mod geeknews;
 pub mod hn;
 pub mod lobsters;
+pub mod options_store;
 pub mod pref_store;
 pub mod rss_generic;
 pub mod store;

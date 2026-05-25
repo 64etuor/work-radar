@@ -1,5 +1,5 @@
-// 설정 → 뉴스 카테고리. 키워드 필터(D-Safe) + 소스별 on/off 토글(카테고리 그룹). 즉시 반영 + 토스트.
-// INVARIANT #1: 뉴스는 표시 전용 — 토글/필터가 결정 레일 어떤 데이터도 안 건드림.
+// 설정 → 뉴스 카테고리. 글로벌 옵션(D-Tune) + 키워드 필터(D-Safe) + 소스별 on/off 토글(카테고리 그룹). 즉시 반영 + 토스트.
+// INVARIANT #1: 뉴스는 표시 전용 — 토글/필터/옵션이 결정 레일 어떤 데이터도 안 건드림.
 
 import { useMemo, useState } from "react";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
@@ -20,9 +20,18 @@ import {
   useNewsFilters,
   useAddNewsFilter,
   useRemoveNewsFilter,
+  useNewsOptions,
+  useSetNewsOptions,
 } from "@/lib/query/news";
-import type { FilterMode, KeywordFilter, NewsCategory, NewsSourceMeta } from "@/bindings";
-import { SectionLabel } from "./kit";
+import type {
+  FilterMode,
+  KeywordFilter,
+  NewsCategory,
+  NewsOptions,
+  NewsSourceMeta,
+  SortMode,
+} from "@/bindings";
+import { Field, SectionLabel } from "./kit";
 
 const CATEGORY_LABEL: Record<NewsCategory, string> = {
   koreanTech: "한글 기술블로그",
@@ -74,6 +83,7 @@ export function NewsSourceSettings({
 
   return (
     <div className="flex flex-col gap-4">
+      <NewsOptionsForm onToast={onToast} />
       <NewsFiltersForm onToast={onToast} />
 
       <SectionLabel>뉴스 소스</SectionLabel>
@@ -166,6 +176,93 @@ export function NewsSourceSettings({
         15분마다 백그라운드에서 갱신 — 토글/필터 변경은 다음 페치부터 반영.
       </p>
     </div>
+  );
+}
+
+function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
+  const q = useNewsOptions();
+  const m = useSetNewsOptions();
+  const o = q.data;
+  if (!o) return null;
+  const update = (patch: Partial<NewsOptions>) =>
+    m.mutate(
+      { ...o, ...patch },
+      { onSuccess: () => onToast("옵션 저장됨 — 다음 페치부터 적용") },
+    );
+
+  return (
+    <section className="rounded-xl border border-border p-4 flex flex-col gap-3">
+      <SectionLabel>표시 옵션</SectionLabel>
+      <Field label="총 표시 개수" hint="티커가 동시에 보여줄 최대(5~100)">
+        <Input
+          type="number"
+          min={5}
+          max={100}
+          step={1}
+          inputMode="numeric"
+          value={o.totalLimit}
+          onChange={(e) => {
+            const n = Math.trunc(Number(e.target.value));
+            if (Number.isNaN(n)) return;
+            update({ totalLimit: Math.max(5, Math.min(100, n)) });
+          }}
+        />
+      </Field>
+      <Field
+        label="소스당 최대 개수"
+        hint="0이면 무제한(한 소스가 티커를 독점할 수 있음)"
+      >
+        <Input
+          type="number"
+          min={0}
+          max={50}
+          step={1}
+          inputMode="numeric"
+          value={o.perSourceLimit}
+          onChange={(e) => {
+            const n = Math.trunc(Number(e.target.value));
+            if (Number.isNaN(n)) return;
+            update({ perSourceLimit: Math.max(0, Math.min(50, n)) });
+          }}
+        />
+      </Field>
+      <Field label="정렬">
+        <Select
+          value={o.sortMode}
+          onValueChange={(v) => update({ sortMode: v as SortMode })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recent">최신순</SelectItem>
+            <SelectItem value="comments">댓글 많은 순</SelectItem>
+            <SelectItem value="mixed">소스 라운드로빈</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field
+        label="갱신 주기"
+        hint="0=자동 갱신 끔(설정 변경 시 즉시 깨움)"
+      >
+        <Select
+          value={String(o.fetchIntervalMinutes)}
+          onValueChange={(v) => update({ fetchIntervalMinutes: Number(v) })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">자동 갱신 끔</SelectItem>
+            <SelectItem value="5">5분</SelectItem>
+            <SelectItem value="10">10분</SelectItem>
+            <SelectItem value="15">15분(기본)</SelectItem>
+            <SelectItem value="30">30분</SelectItem>
+            <SelectItem value="60">60분</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+    </section>
   );
 }
 
