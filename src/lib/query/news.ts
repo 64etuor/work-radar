@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import { commands } from "@/bindings";
+import type { FilterMode } from "@/bindings";
 
 /** 티커 표시 한도. 30개면 30s linear 마퀴에서 ~2.5건/초로 자연스럽게 흐름. */
 const TICKER_LIMIT = 30;
@@ -50,6 +51,40 @@ export function useSetNewsSourceEnabled() {
       unwrap(commands.newsSourcesSetEnabled(source, enabled)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["newsSources"] });
+      void qc.invalidateQueries({ queryKey: ["newsList"] });
+    },
+  });
+}
+
+/** 현재 키워드 필터 목록. */
+export function useNewsFilters() {
+  return useQuery({
+    queryKey: ["newsFilters"],
+    queryFn: () => unwrap(commands.newsListFilters()),
+    retry: false,
+  });
+}
+
+/** 키워드 필터 추가. 성공 시 filters + list 둘 다 invalidate. */
+export function useAddNewsFilter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keyword, mode }: { keyword: string; mode: FilterMode }) =>
+      unwrap(commands.newsAddFilter(keyword, mode)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["newsFilters"] });
+      void qc.invalidateQueries({ queryKey: ["newsList"] });
+    },
+  });
+}
+
+/** 키워드 필터 제거. 성공 시 filters + list 둘 다 invalidate. */
+export function useRemoveNewsFilter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(commands.newsRemoveFilter(id)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["newsFilters"] });
       void qc.invalidateQueries({ queryKey: ["newsList"] });
     },
   });

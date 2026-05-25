@@ -201,6 +201,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::news_list_recent,
         commands::news_sources_available,
         commands::news_sources_set_enabled,
+        // 뉴스 키워드 필터 (D-Safe, 표시 필터 전용 — INVARIANT #1).
+        commands::news_list_filters,
+        commands::news_add_filter,
+        commands::news_remove_filter,
     ])
 }
 

@@ -6,7 +6,7 @@
 
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { NewsItem } from "@/bindings";
-import { useNewsList } from "@/lib/query/news";
+import { useNewsList, useNewsFilters } from "@/lib/query/news";
 
 /** 소스별 사람-친화 라벨 + CSS 배지 modifier id. */
 const SOURCE_LABEL: Record<string, string> = {
@@ -26,7 +26,9 @@ function sourceLabel(id: string): string {
  */
 export function NewsTicker() {
   const q = useNewsList();
+  const filters = useNewsFilters();
   const items = q.data ?? [];
+  const hasFilters = (filters.data ?? []).length > 0;
 
   // 빈 상태 — 로딩/실패/소스 0개/아이템 0개 모두 동일 톤으로 subtle 안내.
   if (q.isLoading) {
@@ -35,7 +37,9 @@ export function NewsTicker() {
   if (items.length === 0) {
     return (
       <div className="news-ticker is-empty">
-        뉴스 소스가 꺼져 있거나 아직 수신된 항목이 없습니다 — 설정 → 뉴스에서 선택
+        {hasFilters
+          ? "필터에 매치되는 뉴스가 없습니다 — 설정에서 키워드 조정"
+          : "뉴스 소스가 꺼져 있거나 아직 수신된 항목이 없습니다 — 설정 → 뉴스에서 선택"}
       </div>
     );
   }

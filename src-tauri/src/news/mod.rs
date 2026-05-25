@@ -5,6 +5,7 @@
 //! INVARIANT #7(SSOT 분리): 원본 SSOT=외부 사이트, SQLite=캐시(`fetched_at` 7일 만료).
 
 pub mod fetcher;
+pub mod filter_store;
 pub mod geeknews;
 pub mod hn;
 pub mod lobsters;

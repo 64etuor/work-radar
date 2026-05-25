@@ -437,6 +437,9 @@ export const commands = {
 	newsListRecent: (limit: number) => typedError<NewsItem[], AppError>(__TAURI_INVOKE("news_list_recent", { limit })),
 	newsSourcesAvailable: () => typedError<NewsSourceMeta[], AppError>(__TAURI_INVOKE("news_sources_available")),
 	newsSourcesSetEnabled: (source: string, enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("news_sources_set_enabled", { source, enabled })),
+	newsListFilters: () => typedError<KeywordFilter[], AppError>(__TAURI_INVOKE("news_list_filters")),
+	newsAddFilter: (keyword: string, mode: FilterMode) => typedError<KeywordFilter, AppError>(__TAURI_INVOKE("news_add_filter", { keyword, mode })),
+	newsRemoveFilter: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("news_remove_filter", { id })),
 };
 
 /* Types */
@@ -815,6 +818,8 @@ export type ExternalSkill = {
 /**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
 export type FileChange = "M" | "A" | "D" | "R";
 
+export type FilterMode = "include" | "exclude";
+
 /**  오프라인 복구 시 큐(draft) 재시도 집계. specta는 i64/u64 export 금지 → u32. */
 export type FlushSummary = {
 	created: number,
@@ -861,6 +866,12 @@ export type HermesMessage = {
 	direction: string,
 	text: string,
 	createdAt: string,
+};
+
+export type KeywordFilter = {
+	id: number,
+	keyword: string,
+	mode: FilterMode,
 };
 
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
