@@ -46,11 +46,25 @@ openssl req -new -x509 -newkey rsa:2048 -nodes \
     2>/dev/null
 
 # 2. PKCS12로 묶기 (security import가 받는 포맷).
+#    -legacy: openssl 3.x는 기본으로 AES-256/SHA-256 PBE를 쓰는데 macOS Security
+#    framework는 옛 SHA-1 기반(PBE-SHA1-3DES)만 지원해 "MAC verification failed"
+#    에러로 import가 실패. -legacy는 OpenSSL 3.0+에서 옛 PKCS12 알고리즘으로 폴백.
+#    LibreSSL이나 openssl 1.x에서는 옵션 무시되므로 둘 다 호환.
 openssl pkcs12 -export \
     -inkey "$TMPDIR/dev.key" -in "$TMPDIR/dev.crt" \
     -out "$TMPDIR/dev.p12" \
     -name "$CERT_NAME" \
     -passout pass:dev \
+    -legacy \
+    2>/dev/null || \
+openssl pkcs12 -export \
+    -inkey "$TMPDIR/dev.key" -in "$TMPDIR/dev.crt" \
+    -out "$TMPDIR/dev.p12" \
+    -name "$CERT_NAME" \
+    -passout pass:dev \
+    -keypbe PBE-SHA1-3DES \
+    -certpbe PBE-SHA1-3DES \
+    -macalg sha1 \
     2>/dev/null
 
 # 3. login keychain에 import.
