@@ -877,6 +877,8 @@ export type KeywordFilter = {
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
 
+export type NewsCategory = "koreanTech" | "englishTech" | "aiResearch";
+
 /**
  *  정규화된 뉴스 아이템 — 모든 소스가 이 형태로 반환.
  *  `posted_at`은 RFC3339 문자열(코드베이스 patterns: IPC 타입은 chrono 노출 없이 문자열).
@@ -898,6 +900,7 @@ export type NewsItem = {
 export type NewsSourceMeta = {
 	id: string,
 	label: string,
+	category: NewsCategory,
 	enabled: boolean,
 };
 

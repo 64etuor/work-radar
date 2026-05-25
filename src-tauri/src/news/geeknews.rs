@@ -20,6 +20,9 @@ impl NewsSource for GeekNewsSource {
     fn label(&self) -> &'static str {
         "GeekNews"
     }
+    fn category(&self) -> super::NewsCategory {
+        super::NewsCategory::KoreanTech
+    }
 
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError> {
         let resp = client.get(RSS_URL).send().await?;

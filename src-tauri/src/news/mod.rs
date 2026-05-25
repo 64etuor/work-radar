@@ -10,6 +10,7 @@ pub mod geeknews;
 pub mod hn;
 pub mod lobsters;
 pub mod pref_store;
+pub mod rss_generic;
 pub mod store;
 
 use async_trait::async_trait;
@@ -18,6 +19,14 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::error::AppError;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum NewsCategory {
+    KoreanTech,
+    EnglishTech,
+    AiResearch,
+}
 
 /// 비-2xx HTTP status + (잘린) 응답 본문을 AppError로 분류한다.
 ///
@@ -86,6 +95,7 @@ pub struct NewsItem {
 pub struct NewsSourceMeta {
     pub id: String,
     pub label: String,
+    pub category: NewsCategory,
     pub enabled: bool,
 }
 
@@ -93,6 +103,7 @@ pub struct NewsSourceMeta {
 pub trait NewsSource: Send + Sync {
     fn id(&self) -> &'static str;
     fn label(&self) -> &'static str;
+    fn category(&self) -> NewsCategory;
     /// 페치. 실패는 AppError로 — 호출자(fetcher.rs)가 retry 결정.
     /// 네트워크 실패는 transient(retryable)로 마크해 fetcher가 backoff 후 재시도하게 한다.
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError>;
@@ -100,10 +111,100 @@ pub trait NewsSource: Send + Sync {
 
 /// 컴파일 시 고정 — 새 소스 추가 = 한 줄.
 pub fn registry() -> Vec<Box<dyn NewsSource>> {
+    use rss_generic::GenericRssSource;
+    use NewsCategory::*;
+    const REDDIT_HEADERS: &[(&str, &str)] = &[(
+        "user-agent",
+        "work-radar/1.0 (https://github.com/work-radar)",
+    )];
+    const NO_HEADERS: &[(&str, &str)] = &[];
     vec![
         Box::new(hn::HnSource),
         Box::new(geeknews::GeekNewsSource),
         Box::new(lobsters::LobstersSource),
+        // 영문 추가(default OFF).
+        Box::new(GenericRssSource {
+            id: "reddit_programming",
+            label: "r/programming",
+            category: EnglishTech,
+            url: "https://www.reddit.com/r/programming/.rss",
+            headers: REDDIT_HEADERS,
+            take: 0,
+        }),
+        Box::new(GenericRssSource {
+            id: "devto",
+            label: "dev.to",
+            category: EnglishTech,
+            url: "https://dev.to/feed",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        // 한글(default OFF).
+        Box::new(GenericRssSource {
+            id: "naver_d2",
+            label: "NAVER D2",
+            category: KoreanTech,
+            url: "https://d2.naver.com/d2.atom",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        Box::new(GenericRssSource {
+            id: "kakao_tech",
+            label: "카카오 기술블로그",
+            category: KoreanTech,
+            url: "https://tech.kakao.com/feed/",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        Box::new(GenericRssSource {
+            id: "woowahan_tech",
+            label: "우아한형제들 기술블로그",
+            category: KoreanTech,
+            url: "https://techblog.woowahan.com/feed/",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        Box::new(GenericRssSource {
+            id: "toss_tech",
+            label: "토스 tech",
+            category: KoreanTech,
+            url: "https://toss.tech/rss.xml",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        Box::new(GenericRssSource {
+            id: "line_engineering",
+            label: "LINE engineering",
+            category: KoreanTech,
+            url: "https://engineering.linecorp.com/ko/blog/rss/",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        Box::new(GenericRssSource {
+            id: "yozm_it",
+            label: "요즘IT",
+            category: KoreanTech,
+            url: "https://yozm.wishket.com/magazine/rss/",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        // AI/ML — HTTPS (critic 지적).
+        Box::new(GenericRssSource {
+            id: "arxiv_cs_lg",
+            label: "arXiv cs.LG",
+            category: AiResearch,
+            url: "https://export.arxiv.org/rss/cs.LG",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
+        Box::new(GenericRssSource {
+            id: "arxiv_cs_ai",
+            label: "arXiv cs.AI",
+            category: AiResearch,
+            url: "https://export.arxiv.org/rss/cs.AI",
+            headers: NO_HEADERS,
+            take: 0,
+        }),
     ]
 }
 
@@ -111,6 +212,80 @@ pub fn registry() -> Vec<Box<dyn NewsSource>> {
 mod tests {
     use super::*;
     use crate::error::ErrorKind;
+
+    #[test]
+    fn registry_ids_are_unique() {
+        let all: Vec<&str> = registry().iter().map(|s| s.id()).collect();
+        let uniq: std::collections::HashSet<&str> = all.iter().copied().collect();
+        assert_eq!(all.len(), uniq.len(), "registry 중복 id: {:?}", all);
+    }
+
+    #[test]
+    fn registry_covers_all_categories() {
+        let cats: std::collections::HashSet<NewsCategory> =
+            registry().iter().map(|s| s.category()).collect();
+        assert!(cats.contains(&NewsCategory::KoreanTech));
+        assert!(cats.contains(&NewsCategory::EnglishTech));
+        assert!(cats.contains(&NewsCategory::AiResearch));
+    }
+
+    #[tokio::test]
+    async fn every_registry_id_has_resolved_pref() {
+        // critic blocker: registry에 추가하고 마이그레이션 seed를 빠뜨리면 silent default-ON 회귀.
+        //
+        // NOTE(v3 minor): 이 등식이 성립하는 이유는 `pref_store::list_available`이 DB에 행이
+        // 없으면 default ON으로 meta를 *합성*하기 때문(`saved.get(...).unwrap_or(true)`).
+        // 향후 누군가 `list_available`을 "seeded rows만 반환"으로 바꾸면 기존 hn/geeknews/
+        // lobsters 3개가 default-ON 동작을 잃으면서 이 테스트도 깨진다 — 그 회귀를 보호하는
+        // 의도된 coupling.
+        let p = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./migrations").run(&p).await.unwrap();
+        let avail = crate::news::pref_store::list_available(&p).await.unwrap();
+        let pref_ids: std::collections::HashSet<&str> =
+            avail.iter().map(|m| m.id.as_str()).collect();
+        let reg_ids: std::collections::HashSet<&str> = registry().iter().map(|s| s.id()).collect();
+        assert_eq!(
+            pref_ids, reg_ids,
+            "registry vs pref 불일치 → seed 누락 가능성"
+        );
+    }
+
+    #[tokio::test]
+    async fn new_sources_default_off_after_0019() {
+        let p = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./migrations").run(&p).await.unwrap();
+        let avail = crate::news::pref_store::list_available(&p).await.unwrap();
+        let by_id: std::collections::HashMap<String, bool> =
+            avail.into_iter().map(|m| (m.id, m.enabled)).collect();
+        assert_eq!(by_id.get("hn"), Some(&true));
+        assert_eq!(by_id.get("geeknews"), Some(&true));
+        assert_eq!(by_id.get("lobsters"), Some(&true));
+        assert_eq!(by_id.get("reddit_programming"), Some(&false));
+        assert_eq!(by_id.get("arxiv_cs_lg"), Some(&false));
+    }
+
+    #[tokio::test]
+    async fn migration_0019_idempotent_preserves_user_changes() {
+        let p = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./migrations").run(&p).await.unwrap();
+        // 사용자가 reddit_programming을 켰다고 가정.
+        sqlx::query("UPDATE news_source_pref SET enabled=1 WHERE source='reddit_programming'")
+            .execute(&p)
+            .await
+            .unwrap();
+        // 마이그레이션을 같은 풀에 한 번 더 시도 — sqlx::migrate!는 멱등.
+        sqlx::migrate!("./migrations").run(&p).await.unwrap();
+        let r: (i64,) = sqlx::query_as(
+            "SELECT enabled FROM news_source_pref WHERE source='reddit_programming'",
+        )
+        .fetch_one(&p)
+        .await
+        .unwrap();
+        assert_eq!(
+            r.0, 1,
+            "사용자가 켠 상태가 마이그레이션에 의해 덮어쓰여지지 않음"
+        );
+    }
 
     // classify_http_status 단위 테스트 — http_json/http_bytes 두 helper의 핵심 정책 보호.
     // (이 분기 로직이 회귀하면 `errors.log` 노이즈가 다시 들어와도 정적 게이트가 못 잡음.)

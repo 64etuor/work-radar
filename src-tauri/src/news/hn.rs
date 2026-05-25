@@ -40,6 +40,9 @@ impl NewsSource for HnSource {
     fn label(&self) -> &'static str {
         "Hacker News"
     }
+    fn category(&self) -> super::NewsCategory {
+        super::NewsCategory::EnglishTech
+    }
 
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError> {
         let resp = client.get(TOP_URL).send().await?;

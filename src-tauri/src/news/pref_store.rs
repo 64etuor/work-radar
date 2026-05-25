@@ -22,6 +22,7 @@ pub async fn list_available(db: &Db) -> Result<Vec<NewsSourceMeta>, AppError> {
         out.push(NewsSourceMeta {
             label: src.label().to_string(),
             id,
+            category: src.category(),
             enabled,
         });
     }
@@ -63,11 +64,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn default_enabled_true_for_all() {
+    async fn defaults_existing_three_on_new_off() {
         let p = pool().await;
         let list = list_available(&p).await.unwrap();
-        assert_eq!(list.len(), 3);
-        assert!(list.iter().all(|m| m.enabled));
+        // registry는 이제 13개 소스.
+        assert_eq!(list.len(), 13);
+        // 기존 3개는 기본 ON(DB에 행 없으면 unwrap_or(true)).
+        assert!(list.iter().find(|m| m.id == "hn").unwrap().enabled);
+        assert!(list.iter().find(|m| m.id == "geeknews").unwrap().enabled);
+        assert!(list.iter().find(|m| m.id == "lobsters").unwrap().enabled);
+        // 신규 10개는 0019 마이그레이션에서 enabled=0 시드 → OFF.
+        assert!(
+            !list
+                .iter()
+                .find(|m| m.id == "reddit_programming")
+                .unwrap()
+                .enabled
+        );
+        assert!(!list.iter().find(|m| m.id == "arxiv_cs_ai").unwrap().enabled);
     }
 
     #[tokio::test]

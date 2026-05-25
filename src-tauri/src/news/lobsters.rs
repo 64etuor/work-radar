@@ -31,6 +31,9 @@ impl NewsSource for LobstersSource {
     fn label(&self) -> &'static str {
         "Lobsters"
     }
+    fn category(&self) -> super::NewsCategory {
+        super::NewsCategory::EnglishTech
+    }
 
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError> {
         let resp = client.get(URL).send().await?;
