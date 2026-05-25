@@ -790,41 +790,188 @@
   background: var(--color-wr-accent-soft);
   color: var(--color-wr-accent);
 }
-/* 하단 캡처 패널 */
-.cb .capture {
+/* ── Brain Dump 토글(매트릭스 사분면 정중앙) ──
+   `.matrix`(position:relative) 안 absolute 중앙 → 진짜 4분면 교차점.
+   collapsed=원형 트리거(48px ⏎ + 펄스), expanded=가로 pill(원형이 좌측 안으로 흡수, form fade-in).
+   z=20(카드 < 20 < cmdk 90). `prefers-reduced-motion: reduce`면 펄스/transition 무효. */
+.brain-dump-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  /* collapsed = 원형(48px). open 시 cubic-bezier로 가로 grow. */
+  height: 48px;
+  width: 48px;
+  padding: 0;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 9999px;
+  box-shadow:
+    0 1px 0 rgba(10, 14, 30, 0.02),
+    0 8px 22px rgba(10, 14, 30, 0.08);
+  transform: translate(-50%, -50%);
+  transition:
+    width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    padding 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 200ms ease,
+    border-color 200ms ease,
+    background-color 200ms ease;
+  will-change: width;
+}
+.brain-dump-toggle[data-state="open"] {
+  width: min(560px, 78%);
+  padding: 0 8px 0 4px;
+  background: var(--color-wr-bg);
+  border-color: var(--color-wr-coral-soft);
+  box-shadow:
+    0 1px 0 rgba(10, 14, 30, 0.02),
+    0 14px 32px rgba(255, 119, 89, 0.18);
+}
+.brain-dump-toggle:hover {
+  border-color: var(--color-wr-coral-soft);
+  box-shadow:
+    0 1px 0 rgba(10, 14, 30, 0.02),
+    0 12px 28px rgba(255, 119, 89, 0.18);
+}
+
+/* 원형 트리거 — ⏎ 아이콘. collapsed 상태에서만 펄스 링 발산. */
+.bd-trigger {
+  position: relative;
   flex: 0 0 auto;
-  display: flex;
+  width: 40px;
+  height: 40px;
+  margin: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: linear-gradient(135deg, #1a1a20 0%, #303038 100%);
+  color: var(--color-wr-coral);
+  border-radius: 9999px;
+  cursor: pointer;
+  outline-offset: 3px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.brain-dump-toggle[data-state="closed"] .bd-trigger:hover {
+  transform: scale(1.06);
+}
+.brain-dump-toggle[data-state="open"] .bd-trigger {
+  /* expanded 트리거 — 살짝 축소, 펄스는 꺼지고 ⏎가 "Enter로 제출" 힌트로 변신. */
+  width: 32px;
+  height: 32px;
+  margin: 7px 6px 7px 7px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-wr-coral) 0%, #d65a44 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+}
+.bd-icon {
+  position: relative;
+  z-index: 1;
+}
+
+/* 펄스 링 — 두 겹의 ring이 외곽으로 퍼지며 fade. collapsed일 때만 동작. */
+.bd-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  box-shadow: 0 0 0 0 rgba(255, 119, 89, 0.55);
+}
+.brain-dump-toggle[data-state="closed"] .bd-pulse {
+  animation: bd-pulse 2.4s cubic-bezier(0.16, 0.8, 0.32, 1) infinite;
+}
+@keyframes bd-pulse {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(255, 119, 89, 0.55),
+      0 0 0 0 rgba(255, 119, 89, 0.35);
+  }
+  70% {
+    box-shadow:
+      0 0 0 14px rgba(255, 119, 89, 0),
+      0 0 0 22px rgba(255, 119, 89, 0);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(255, 119, 89, 0),
+      0 0 0 0 rgba(255, 119, 89, 0);
+  }
+}
+
+/* 펼친 폼 — collapsed면 width 0 + opacity 0 + 비활성, open이면 fade-in. */
+.bd-form {
+  display: inline-flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
-  /* 풀폭 너무 휑함 → 가운데 정렬 + 가독 폭으로 캡. 측여백 16px 보존(작은 창에서). */
-  width: calc(100% - 32px);
-  max-width: 640px;
-  margin: 0 auto 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--cb-r-lg);
-  background: var(--color-wr-bg);
-  box-shadow: 0 10px 30px rgba(10, 14, 30, 0.08);
+  flex: 1 1 auto;
+  min-width: 0;
+  opacity: 0;
+  transform: translateX(-6px);
+  pointer-events: none;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    opacity 200ms ease 80ms,
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms;
 }
-.cb .capture .bd {
+.brain-dump-toggle[data-state="open"] .bd-form {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+/* collapsed: 폼 자체는 width 0(트리거 옆에서 공간 차지 안 함). */
+.brain-dump-toggle[data-state="closed"] .bd-form {
+  width: 0;
+}
+
+.bd-label {
   font: 700 10px var(--font-mono);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--color-wr-coral);
+  color: var(--color-wr-fg);
+  flex: 0 0 auto;
+  padding-left: 4px;
 }
-.cb .capture input.dump {
+.brain-dump-toggle .dump {
   flex: 1;
-  min-width: 160px;
+  min-width: 0;
   border: none;
   outline: none;
   background: transparent;
-  font: 400 16px var(--font-sans);
+  font: 400 14px var(--font-sans);
   color: var(--color-wr-fg);
-  padding: 6px 2px;
+  padding: 4px 2px;
 }
-.cb .capture input.dump::placeholder {
+.brain-dump-toggle .dump::placeholder {
   color: var(--color-wr-subtle);
+}
+
+/* reduced-motion — 펄스/펼침 transition 무효(즉시 토글). 시각 동치, 동작 동등. */
+@media (prefers-reduced-motion: reduce) {
+  .brain-dump-toggle,
+  .brain-dump-toggle[data-state="open"] .bd-trigger,
+  .bd-trigger,
+  .bd-form {
+    transition: none;
+  }
+  .brain-dump-toggle[data-state="closed"] .bd-pulse {
+    animation: none;
+  }
+}
+
+/* PR C에서 뉴스 티커가 차지할 슬롯 — PR A 동안에는 빈 라인(시각 균형용 높이만 확보). */
+.cb .news-ticker-slot {
+  flex: 0 0 auto;
+  height: 28px;
+  margin: 0 16px 12px;
+  border-top: 1px solid var(--color-wr-border-light);
 }
 
 /* 카드 액션 메뉴 — fixed, .cb 밖에 portal 없이 body 안에 그리므로 별도 스코프 */
@@ -981,9 +1128,6 @@
 @media (max-width: 560px) {
   .cb .execute {
     flex-direction: column;
-  }
-  .cb .capture .bd {
-    display: none;
   }
 }
 

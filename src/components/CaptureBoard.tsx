@@ -16,7 +16,6 @@ import {
 } from "@/components/board/ProjectPickerModal";
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
-import { CapturePanel } from "@/components/board/CapturePanel";
 import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
@@ -530,6 +529,9 @@ export function CaptureBoard() {
           }
           enrichAllRunning={triggerEnrichAll.isPending || enrichAllGenerating}
           todayPanelRef={todayPanelRef}
+          onCapture={handleCapture}
+          captureInputRef={captureInputRef}
+          captureDisabled={createSignal.isPending}
         />
 
         {/* "전체 제안 실행" 인라인 리뷰 패널 — 보드 영역에 띄우되 카드는 계속 보임(오버레이 아님). */}
@@ -566,11 +568,8 @@ export function CaptureBoard() {
         </div>
       </div>
 
-      <CapturePanel
-        onSubmit={handleCapture}
-        disabled={createSignal.isPending}
-        inputRef={captureInputRef}
-      />
+      {/* 하단 풀폭 슬롯 — PR C에서 뉴스 티커로 채워짐. 그 전까지 빈 라인(시각 균형). */}
+      <div className="news-ticker-slot" aria-hidden />
 
       <CardMenu
         state={menu}

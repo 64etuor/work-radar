@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 
-import type { WorkSignal } from "@/bindings";
+import type { Kind, WorkSignal } from "@/bindings";
+import { BrainDumpToggle } from "@/components/board/BrainDumpToggle";
 import {
   areaLabel,
   kindChipClass,
@@ -49,6 +50,12 @@ type Props = {
   enrichAllRunning: boolean;
   /** Today 패널 DOM (드롭 히트 테스트용). */
   todayPanelRef: React.RefObject<HTMLDivElement | null>;
+  /** 매트릭스 중앙 BrainDump 토글에서 캡처 제출. */
+  onCapture: (title: string, kind: Kind) => void;
+  /** 단축키(F)가 포커스 잡을 입력 ref. */
+  captureInputRef?: React.RefObject<HTMLInputElement | null>;
+  /** create_signal 진행 중 — 붙이기 버튼 disable. */
+  captureDisabled?: boolean;
 };
 
 /**
@@ -72,6 +79,9 @@ export function MatrixCanvas({
   enrichAllDisabled,
   enrichAllRunning,
   todayPanelRef,
+  onCapture,
+  captureInputRef,
+  captureDisabled,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -362,6 +372,14 @@ export function MatrixCanvas({
             </div>
           ))}
         </div>
+        {/* 사분면 4개 교차점 정중앙 — .matrix(position:relative) 기준 absolute.
+            inbox는 .canvas 안 별도 컬럼이라 .matrix 중앙 = 진짜 사분면 교차점.
+            collapsed=원형 트리거, expanded=가로 pill(애니메이션). z=20(카드<20<cmdk 90). */}
+        <BrainDumpToggle
+          onSubmit={onCapture}
+          disabled={captureDisabled}
+          inputRef={captureInputRef}
+        />
       </div>
 
       {/* 포스트잇 — canvas 직속 absolute */}
