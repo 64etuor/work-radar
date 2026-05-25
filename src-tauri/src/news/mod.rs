@@ -18,33 +18,36 @@ use specta::Type;
 
 use crate::error::AppError;
 
-/// HTTP 응답을 받아 status 분류 후 JSON으로 디코드한다.
+/// 비-2xx HTTP status + (잘린) 응답 본문을 AppError로 분류한다.
 ///
-/// 기본 `From<reqwest::Error>`(error.rs)는 timeout/connect만 Transient로 분류 →
-/// 5xx/429는 Terminal로 떨어져 `errors.log`에 error 레벨 노이즈가 생긴다(follow-up #1).
-/// `fetch_with_retry`는 `retryable`을 무시하고 항상 3회 시도하므로 동작은 정상이지만
-/// 로그 위계가 잘못된다. 여기서 5xx + 429만 Transient로 명시 분류해 `warn` 레벨로 떨어뜨린다.
+/// 정책: 5xx + 429만 Transient(retryable, warn 레벨), 나머지 비-2xx는 Terminal(error 레벨).
+/// 기본 `From<reqwest::Error>`(error.rs)는 timeout/connect만 Transient라 5xx 응답이
+/// Terminal로 떨어져 `errors.log`에 노이즈를 만들었음(follow-up #1). 이 함수는 순수 — HTTP
+/// I/O 없이 분기 로직만 담당해 단위 테스트 가능.
+fn classify_http_status(status: StatusCode, code_prefix: &str, body_snip: &str) -> AppError {
+    let snip: String = body_snip.chars().take(200).collect();
+    let msg = format!("HTTP {status}: {snip}");
+    let code = format!("{code_prefix}.http_{}", status.as_u16());
+    if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
+        AppError::transient(code, msg)
+    } else {
+        AppError::terminal(code, msg)
+    }
+}
+
+/// HTTP 응답을 받아 status 분류 후 JSON으로 디코드한다. 비-2xx면 본문 200자까지
+/// 잘라 `classify_http_status`로 분류, 2xx면 reqwest의 기본 `From<reqwest::Error>`로
+/// JSON 디코드 실패를 Terminal로 처리.
 pub(crate) async fn http_json<T: serde::de::DeserializeOwned>(
     resp: Response,
     code_prefix: &str,
 ) -> Result<T, AppError> {
     let status = resp.status();
     if !status.is_success() {
-        let body_snip = resp.text().await.unwrap_or_default();
-        let snip: String = body_snip.chars().take(200).collect();
-        let msg = format!("HTTP {status}: {snip}");
-        if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
-            return Err(AppError::transient(
-                format!("{code_prefix}.http_{}", status.as_u16()),
-                msg,
-            ));
-        }
-        return Err(AppError::terminal(
-            format!("{code_prefix}.http_{}", status.as_u16()),
-            msg,
-        ));
+        let body = resp.text().await.unwrap_or_default();
+        return Err(classify_http_status(status, code_prefix, &body));
     }
-    let value = resp.json::<T>().await?; // 기본 From<reqwest::Error> — JSON 디코드 실패는 Terminal
+    let value = resp.json::<T>().await?;
     Ok(value)
 }
 
@@ -53,19 +56,8 @@ pub(crate) async fn http_json<T: serde::de::DeserializeOwned>(
 pub(crate) async fn http_bytes(resp: Response, code_prefix: &str) -> Result<Vec<u8>, AppError> {
     let status = resp.status();
     if !status.is_success() {
-        let body_snip = resp.text().await.unwrap_or_default();
-        let snip: String = body_snip.chars().take(200).collect();
-        let msg = format!("HTTP {status}: {snip}");
-        if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
-            return Err(AppError::transient(
-                format!("{code_prefix}.http_{}", status.as_u16()),
-                msg,
-            ));
-        }
-        return Err(AppError::terminal(
-            format!("{code_prefix}.http_{}", status.as_u16()),
-            msg,
-        ));
+        let body = resp.text().await.unwrap_or_default();
+        return Err(classify_http_status(status, code_prefix, &body));
     }
     Ok(resp.bytes().await?.to_vec())
 }
@@ -112,4 +104,83 @@ pub fn registry() -> Vec<Box<dyn NewsSource>> {
         Box::new(geeknews::GeekNewsSource),
         Box::new(lobsters::LobstersSource),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::ErrorKind;
+
+    // classify_http_status 단위 테스트 — http_json/http_bytes 두 helper의 핵심 정책 보호.
+    // (이 분기 로직이 회귀하면 `errors.log` 노이즈가 다시 들어와도 정적 게이트가 못 잡음.)
+
+    #[test]
+    fn classify_5xx_is_transient_warn() {
+        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "hn.top", "oops");
+        assert_eq!(e.kind, ErrorKind::Transient, "5xx은 Transient(retry+warn)");
+        assert!(e.retryable);
+        assert_eq!(e.code, "hn.top.http_500");
+        assert!(e.message.contains("HTTP 500"));
+        assert!(e.message.contains("oops"));
+    }
+
+    #[test]
+    fn classify_503_is_transient() {
+        let e = classify_http_status(StatusCode::SERVICE_UNAVAILABLE, "geeknews", "");
+        assert_eq!(e.kind, ErrorKind::Transient);
+        assert_eq!(e.code, "geeknews.http_503");
+    }
+
+    #[test]
+    fn classify_429_is_transient() {
+        let e = classify_http_status(StatusCode::TOO_MANY_REQUESTS, "lobsters", "rate limited");
+        assert_eq!(e.kind, ErrorKind::Transient, "429는 명시적으로 Transient");
+        assert!(e.retryable);
+        assert_eq!(e.code, "lobsters.http_429");
+    }
+
+    #[test]
+    fn classify_404_is_terminal_not_retryable() {
+        let e = classify_http_status(StatusCode::NOT_FOUND, "hn.item", "not found");
+        assert_eq!(e.kind, ErrorKind::Terminal, "4xx(429 제외)는 Terminal");
+        assert!(!e.retryable);
+        assert_eq!(e.code, "hn.item.http_404");
+    }
+
+    #[test]
+    fn classify_400_is_terminal() {
+        let e = classify_http_status(StatusCode::BAD_REQUEST, "hn.top", "bad");
+        assert_eq!(e.kind, ErrorKind::Terminal);
+        assert_eq!(e.code, "hn.top.http_400");
+    }
+
+    #[test]
+    fn classify_403_is_terminal() {
+        let e = classify_http_status(StatusCode::FORBIDDEN, "geeknews", "");
+        assert_eq!(e.kind, ErrorKind::Terminal);
+        assert_eq!(e.code, "geeknews.http_403");
+    }
+
+    #[test]
+    fn classify_truncates_body_to_200_chars() {
+        let body = "x".repeat(500);
+        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "hn", &body);
+        // "HTTP 500 Internal Server Error: " 접두 + 잘린 본문.
+        let snip_start = e
+            .message
+            .find(": ")
+            .expect("colon-space in HTTP error message")
+            + 2;
+        let snip = &e.message[snip_start..];
+        assert_eq!(snip.len(), 200, "본문은 200자로 잘림");
+    }
+
+    #[test]
+    fn classify_handles_multibyte_safely() {
+        // chars().take(200)은 grapheme이 아니라 char 단위지만 UTF-8 경계는 안전.
+        let body = "가".repeat(300); // 각 '가'는 3바이트
+        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "geeknews", &body);
+        // 패닉 없이 끝나면 OK + 메시지 길이가 비어있지 않음.
+        assert!(e.message.contains("HTTP 500"));
+    }
 }
