@@ -9,7 +9,7 @@ import { NewsTicker } from "@/components/news/NewsTicker";
 import { ToastHost } from "@/components/ToastHost";
 import { CommandPalette } from "@/components/CommandPalette";
 import { HermesView } from "@/components/HermesView";
-import { JobsView } from "@/components/JobsView";
+import { JobsView } from "@/components/jobs/JobsView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { RetroView } from "@/components/RetroView";
 import { RoutineTrackingView } from "@/components/RoutineTrackingView";

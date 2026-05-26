@@ -3,6 +3,11 @@ import { useEffect, useState } from "react";
 import type { AreaTag, EnrichProposal, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import {
+  AREA_NONE,
+  AREA_OPTS,
+  QUADRANT_OPTS,
+} from "@/components/jobs/jobsConstants";
+import {
   AGENT_TERMINAL_STATUSES,
   useAcceptEnrich,
   useAgentRunStatus,
@@ -20,30 +25,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-
-/** area select 미설정 센티넬 — radix Select는 빈 문자열 value를 허용하지 않는다. */
-const AREA_NONE = "__none__";
-
-/** EnrichModal에서 사용하는 닫힌 세트 옵션들 (JobsView.tsx EnrichPanel에서 미러). */
-const QUADRANT_OPTS: { value: Quadrant; label: string }[] = [
-  { value: "unclassified", label: "미분류" },
-  { value: "q1_do_now", label: "Q1 지금" },
-  { value: "q2_schedule", label: "Q2 일정" },
-  { value: "q3_quick_contain", label: "Q3 빠르게" },
-  { value: "q4_drop", label: "Q4 버림" },
-];
-const AREA_OPTS: { value: AreaTag; label: string }[] = [
-  { value: "health", label: "건강" },
-  { value: "work", label: "업무" },
-  { value: "studies", label: "학습" },
-  { value: "environment", label: "환경" },
-  { value: "recreation", label: "휴식" },
-  { value: "romance", label: "연애" },
-  { value: "family", label: "가족" },
-  { value: "finances", label: "재정" },
-  { value: "friends", label: "친구" },
-  { value: "other", label: "기타" },
-];
 
 type Props = {
   runId: string;
