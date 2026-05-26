@@ -1396,7 +1396,7 @@
 .settings {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background: var(--color-wr-bg);
   color: var(--color-wr-fg);
   font-family: var(--font-sans);

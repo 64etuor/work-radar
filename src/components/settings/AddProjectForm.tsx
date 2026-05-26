@@ -14,7 +14,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Field, Segmented } from "./kit";
+import { Field, SectionLabel, Segmented } from "./kit";
 
 /**
  * Add Project 폼 — 개인/업무 + Notion DB 바인딩.
@@ -25,7 +25,7 @@ export function AddProjectForm({
   onCreated,
 }: {
   autoFocus?: boolean;
-  onCreated?: (msg: string) => void;
+  onCreated?: (msg: string, projectId?: string) => void;
 }) {
   const create = useCreateProject();
   const nameRef = useRef<HTMLInputElement>(null);
@@ -53,22 +53,25 @@ export function AddProjectForm({
           setName("");
           setBacklogDb("");
           setAgendaDb("");
-          onCreated?.(`프로젝트 "${p.name}" 추가`);
+          onCreated?.(`프로젝트 "${p.name}" 추가`, p.id);
         },
       },
     );
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>새 프로젝트</CardTitle>
-        <CardDescription>
-          개인 또는 업무 프로젝트를 추가하고 Notion DB를 연결하세요.
+    <Card className="overflow-hidden rounded-2xl">
+      <CardHeader className="border-b border-border p-5">
+        <SectionLabel>프로젝트 추가</SectionLabel>
+        <CardTitle className="mt-1 text-[17px] leading-tight tracking-[-0.01em]">
+          새 프로젝트
+        </CardTitle>
+        <CardDescription className="max-w-[60ch] leading-6">
+          개인 또는 업무 프로젝트를 추가하고 필요한 Notion DB를 선택적으로 연결하세요.
         </CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="gap-5 pt-5">
         <Field label="이름" htmlFor="new-project-name">
           <Input
             id="new-project-name"
@@ -80,7 +83,7 @@ export function AddProjectForm({
           />
         </Field>
 
-        <Field label="종류">
+        <Field label="종류" hint="분류는 표시와 필터에만 쓰이며 자동 결정을 만들지 않습니다.">
           <Segmented
             value={kind}
             onChange={setKind}
@@ -91,7 +94,7 @@ export function AddProjectForm({
           />
         </Field>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/15 p-4 sm:grid-cols-2">
           <Field label="Notion 백로그 DB ID" hint="선택 — 백로그 미러링 대상">
             <Input
               value={backlogDb}
@@ -117,7 +120,10 @@ export function AddProjectForm({
         )}
       </CardContent>
 
-      <CardFooter className="justify-end">
+      <CardFooter className="justify-between bg-muted/10">
+        <span className="text-xs text-muted-foreground">
+          토큰은 생성 후 keychain 섹션에서 연결합니다.
+        </span>
         <Button onClick={submit} disabled={!name.trim() || create.isPending}>
           <Plus className="size-4" />
           {create.isPending ? "추가 중…" : "프로젝트 추가"}

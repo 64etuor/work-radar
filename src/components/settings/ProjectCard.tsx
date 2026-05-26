@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { FolderGit2, FolderOpen, Github, Plus } from "lucide-react";
+import {
+  CalendarDays,
+  FolderGit2,
+  FolderOpen,
+  Github,
+  KeyRound,
+  Plus,
+} from "lucide-react";
 
 import type { Project, PromotionTarget } from "@/bindings";
 import {
@@ -101,24 +108,32 @@ export function ProjectCard({
   const hasNotionDb = !!(project.notionBacklogDbId || project.notionAgendaDbId);
 
   return (
-    <Card>
-      <div className="flex items-center gap-3 px-5 py-4">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-muted">
+    <Card className="overflow-hidden rounded-2xl">
+      <div className="flex items-start gap-3 px-5 py-5">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted">
           <FolderOpen className="size-4 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold">{project.name}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-[17px] font-semibold leading-tight tracking-[-0.01em]">
+              {project.name}
+            </span>
             <Badge variant={project.kind === "personal" ? "secondary" : "accent"}>
               {project.kind === "personal" ? "개인" : "업무"}
             </Badge>
           </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            토큰은 OS keychain에 저장하고, Notion/GitHub/Calendar 연결은 이 프로젝트 범위에서만 사용합니다.
+          </p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-5 border-t border-border px-5 py-5">
-        <div className="flex flex-col gap-2.5">
-          <SectionLabel>토큰 · keychain</SectionLabel>
+      <div className="flex flex-col gap-4 border-t border-border px-5 py-5">
+        <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
+          <div className="flex items-center gap-2">
+            <KeyRound className="size-4 text-muted-foreground" />
+            <SectionLabel>토큰 · keychain</SectionLabel>
+          </div>
           <TokenRow
             projectId={project.id}
             kind="notion"
@@ -136,7 +151,7 @@ export function ProjectCard({
         </div>
 
         {hasNotionDb && (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
             <SectionLabel>Notion DB 연결</SectionLabel>
             {project.notionBacklogDbId && (
               <NotionDbTestButton
@@ -155,14 +170,20 @@ export function ProjectCard({
           </div>
         )}
 
-        <div className="flex flex-col gap-2.5">
-          <SectionLabel>Google Calendar</SectionLabel>
+        <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="size-4 text-muted-foreground" />
+            <SectionLabel>Google Calendar</SectionLabel>
+          </div>
           <GoogleCalendarBlock projectId={project.id} onToast={onToast} />
         </div>
 
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
           <div className="flex items-center justify-between">
-            <SectionLabel>레포</SectionLabel>
+            <div className="flex items-center gap-2">
+              <Github className="size-4 text-muted-foreground" />
+              <SectionLabel>레포</SectionLabel>
+            </div>
           </div>
           {repos.isError && (
             <div className="text-xs text-[color:var(--destructive)]">
