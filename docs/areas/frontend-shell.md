@@ -71,7 +71,7 @@ settings-refactor B(2026-05-24)에서 결정:
 - `HermesBridgeBlock.tsx` — 봇 토큰 설정.
 - `NotificationSettings.tsx`, `NavigationSettings.tsx`(키캡처 위젯 bespoke), `AgentsPane.tsx`.
 - `NewsSourceSettings.tsx` — 카테고리 그룹화, 키워드 필터.
-- `kit.tsx` — 공유 패널 컴포넌트.
+- `SettingsKit.tsx` — 공유 패널 컴포넌트.
 
 ## Phase 5 Worktree Diff Viewer
 
@@ -86,6 +86,26 @@ settings-refactor B(2026-05-24)에서 결정:
 - light 모드 기본 (`index.html`엔 `class="dark"` 없음, color-scheme: light).
 - 다크 토큰은 `.dark` override (PR C 2026-05-24). `--color-wr-coral`/`--color-wr-green`은
   override 없음 → on-coral/on-green 텍스트는 non-inverting `--color-wr-on-coral-btn` 사용.
+
+## 분해 가드 — audit 권장 ≠ auto-execute
+
+god-component(LOC ≥ 500)이라도 분해 전 **의존성 그래프**를 먼저 본다. audit이 권장한
+"hook으로 추출"이 항상 옳지는 않다(2026-05-26 PR-F-Capture 재평가 결과 — `docs/plans/2026-05-26-harness-and-design-rigor.md` §후행 재평가 노트).
+
+분해 채택 기준:
+
+1. **추출 단위의 입력 의존성이 작은가.** 새 훅/컴포넌트가 12+ deps(`state setter`/`ref`/
+   `derived value`/`query result`)를 인자로 받아야 한다면 false-positive. LOC만 두 파일로
+   분산되고 의존성 그래프는 동일 → 가독성 개선 0(안티패턴).
+2. **추출 후 의미가 독립적인가.** `JobsView`의 4 Acceptance 패널(SelfCheck/Enrich/
+   BatchEnrich/Triage)처럼 실제로 서로 다른 잡 종류 + 독립 폴링/뮤테이션이면 분해 가치 분명.
+   반면 `CaptureBoard`의 핸들러들은 보드 lifecycle/state에 깊이 결합 — 같은 컴포넌트의
+   책임이 분산이 아닌 **이동**일 뿐.
+3. **분해 대신 sub-effect / sub-component가 맞는가.** keyboard/online-event/calendar-urgency
+   같은 effect 응집은 dedicated child component(자체 state) 추출이 hook 추출보다 깨끗할 때가
+   많다.
+
+god-component를 분해 못 했다고 done-criteria 미달은 아니다. 안티패턴 분해는 회귀 risk만 키운다.
 
 ## ESLint (errors-only 게이트)
 

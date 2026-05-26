@@ -78,6 +78,30 @@
 - 큰 도메인(agents, today, routines)은 서브모듈로 분리됨 — 새 커맨드는 적절한 서브모듈 또는
   domain 파일에 추가.
 
+## `commands/X.rs` ↔ `X.rs` 경계 — 의도된 글루 vs 도메인
+
+이 레포는 의도적으로 두 층을 가진다:
+
+| 층                          | 책임                                                                                | import 가능                                                |
+| --------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `src-tauri/src/X.rs` (도메인) | 타입 / 트레이트 / HTTP provider / OAuth 순수 로직 / 파서 / 분류기 / RateLimiter      | `crate::retry`, `crate::error`, 표준 라이브러리만           |
+| `src-tauri/src/commands/X.rs` (글루) | `#[tauri::command]` 핸들러 + **그 핸들러가 필요로 하는 cross-subsystem orchestration** | `crate::db`, `crate::keychain`, `crate::commands::*`, 도메인 모듈 |
+
+**글루의 정상 거주지는 `commands/X.rs`.** DB + keychain + provider를 함께 부르는 함수
+(`access_token_for`, `fetch_events_windowed` 등)는 `commands/X.rs`에 있는 것이 맞다.
+이를 `X.rs`로 옮기면 도메인 모듈이 `use crate::db; use crate::keychain` 의존을 얻어
+순수성이 깨진다 — **strictly 후퇴**.
+
+분해 채택 기준(audit 권장을 실측 검증한 패턴):
+
+1. **순수 도메인이면** `X.rs`로 옮긴다(분류기, 파서, HTTP provider 등).
+2. **DB+keychain+provider 글루이면** `commands/X.rs`에 둔다(자연 위치).
+3. **IPC 핸들러(`#[tauri::command]`)이면** `commands/X.rs`에 둔다(이동 불가).
+
+audit-rust.md가 본 "leak"이 사실 의도된 글루 패턴인 경우가 있다(2026-05-26 PR-R-CalendarLeak
+재평가 — `docs/plans/2026-05-26-harness-and-design-rigor.md` §후행 재평가 노트).
+분해 전 위 기준으로 후보를 분류하라.
+
 ## 정본 / 참조
 
 - `src-tauri/src/error.rs` — `AppError` 정의 + From
