@@ -8,7 +8,7 @@ use crate::keychain;
 use crate::models::{
     FlushSummary, Promotion, PromotionOutcome, PromotionStatus, PromotionTarget, TokenKind,
 };
-use crate::notion::{find_title_prop, HttpNotionWriter, NotionError, NotionWriter};
+use crate::notion::{HttpNotionWriter, NotionError, NotionWriter};
 
 // ── Notion 승격 (write 레일, Phase 3 — 즉시 write) ─────────────────────────────
 // INVARIANT #2: 사람이 카드 메뉴를 누르는 것이 곧 결정/accept다(자동화 출력 아님 → acceptances
@@ -473,27 +473,8 @@ pub async fn test_notion_connection(
         )
     })?;
 
-    // GET /databases/{id} — HttpNotionWriter의 rate limiter를 거치지 않고 직접 호출한다
-    // (테스트 단발이므로 pacing 불필요). reqwest 클라이언트를 최소 구성으로 직접 사용한다.
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()?;
-    let resp = client
-        .get(format!("https://api.notion.com/v1/databases/{db_id}"))
-        .bearer_auth(&token)
-        .header("Notion-Version", crate::notion::NOTION_VERSION)
-        .send()
-        .await?;
-    let status = resp.status().as_u16();
-    let body = resp.text().await.unwrap_or_default();
-
-    if !(200..300).contains(&status) {
-        let err = crate::notion::classify_http_pub(status, &body);
-        return Err(AppError::from(err));
-    }
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| AppError::terminal("notion.parse_error", format!("응답 파싱 실패: {e}")))?;
-    let title_prop = find_title_prop(&json).unwrap_or_else(|| "(title 속성 없음)".into());
+    // 도메인 모듈의 단발 probe 호출 — HTTP 구성/분류는 notion.rs 단일 책임.
+    let title_prop = crate::notion::probe_database(&token, &db_id).await?;
     Ok(format!("연결됨 — DB title 속성: {title_prop}"))
 }
 

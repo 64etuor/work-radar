@@ -91,9 +91,29 @@ fn classify_http(status: u16, body: &str) -> NotionError {
     }
 }
 
-/// 공개 래퍼 — commands 모듈에서 직접 HTTP 호출 시 분류용.
-pub fn classify_http_pub(status: u16, body: &str) -> NotionError {
-    classify_http(status, body)
+/// 단발 DB 접근 테스트 — rate limiter 없음(연결 점검 일회용, pacing 불필요).
+/// 성공 시 title 속성명을, 속성 없으면 `(title 속성 없음)` 문구를 반환한다.
+/// HTTP 구성/분류를 도메인 모듈 안에서 한 곳에 모아 commands 층의 인라인 reqwest를 제거한다.
+pub async fn probe_database(token: &str, db_id: &str) -> Result<String, NotionError> {
+    let client = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        .map_err(|e| NotionError::Terminal(format!("client build: {e}")))?;
+    let resp = client
+        .get(format!("{NOTION_BASE}/databases/{db_id}"))
+        .bearer_auth(token)
+        .header("Notion-Version", NOTION_VERSION)
+        .send()
+        .await
+        .map_err(|e| classify_reqwest(&e))?;
+    let status = resp.status().as_u16();
+    let body = resp.text().await.unwrap_or_default();
+    if !(200..300).contains(&status) {
+        return Err(classify_http(status, &body));
+    }
+    let json: serde_json::Value =
+        serde_json::from_str(&body).map_err(|e| NotionError::Terminal(format!("db parse: {e}")))?;
+    Ok(find_title_prop(&json).unwrap_or_else(|| "(title 속성 없음)".into()))
 }
 
 /// reqwest 전송 에러 → 분류. 네트워크/타임아웃은 일시적, 디코드 실패는 영구.
