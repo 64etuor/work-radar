@@ -3960,81 +3960,6 @@
   font: 400 11px var(--font-sans);
   color: var(--color-wr-subtle);
 }
-.asb .asb-track {
-  display: flex;
-  align-items: stretch;
-  gap: 3px;
-  flex: 1 1 auto;
-  height: 8px;
-  min-width: 0;
-}
-.asb .asb-seg {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 6px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--color-wr-border);
-}
-.asb .asb-seg-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  height: 100%;
-  background: var(--color-q3);
-  border-radius: 999px;
-  /* Bespoke: 상태바 진행 애니메이션 — 느린 선형 채움이 의도된 물리감 */
-  transition: width 0.9s linear;
-}
-/* 상태별 세그먼트 색 (Jobs 뷰 톤 재사용 — 색만으로 의미 전달 금지: title 라벨 병기). */
-.asb .asb-seg-proposed {
-  background: var(--color-wr-border);
-}
-.asb .asb-seg-running {
-  background: var(--color-wr-accent-soft);
-}
-.asb .asb-seg-awaiting {
-  background: var(--color-wr-coral-soft);
-}
-.asb .asb-seg-succeeded {
-  background: var(--color-q2);
-}
-.asb .asb-seg-failed {
-  background: var(--color-wr-danger);
-}
-.asb .asb-seg-cancelled {
-  background: var(--color-wr-subtle);
-}
-.asb .asb-count {
-  font: 600 10px var(--font-mono);
-  color: var(--color-wr-fg);
-  flex: 0 0 auto;
-  min-width: 14px;
-  text-align: right;
-}
-/* B1: kind 라벨 + engine 아이콘 (가장 최근 active 잡). */
-.asb .asb-kind-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font: 500 10px var(--font-sans);
-  color: var(--color-wr-muted);
-  flex: 0 0 auto;
-  max-width: 140px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-/* B1: engine 아이콘 오버레이 — 세그먼트 위 중앙. */
-.asb .asb-seg-icon {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(0, 0, 0, 0.28);
-  pointer-events: none;
-  z-index: 1;
-}
 /* B1: asb-row — agent 버튼 + cmux 칩을 나란히 놓는 flex 래퍼. */
 .asb-row {
   display: flex;
@@ -4046,22 +3971,6 @@
 .asb-row .asb {
   flex: 1 1 auto;
   width: auto;
-}
-/* B1: cmux 워크스페이스 칩 — 표시 전용(INVARIANT #1). 오른쪽 끝, 작고 절제됨. */
-.asb-cmux-chip {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 10px;
-  height: 100%;
-  font: 500 10px var(--font-mono);
-  color: var(--color-wr-subtle);
-  border-left: 1px solid var(--color-wr-border);
-  background: var(--color-wr-elevated);
-  white-space: nowrap;
-  cursor: default;
-  -webkit-app-region: no-drag;
 }
 
 /* ── P10a: 에이전트 바 정체성 박스 (DESIGN.md `agent-status-bar`) ──────────────────
@@ -4156,23 +4065,6 @@
   height: 7px;
   border-radius: 999px;
   flex: 0 0 auto;
-}
-/* 상태등 신호색: idle = 회색(Muted Slate) · working = 초록 · waiting = 노랑(입력/승인 대기) · error = 빨강. */
-.asb-box-idle .asb-box-dot {
-  background: var(--color-wr-subtle);
-}
-.asb-box-working .asb-box-dot {
-  background: var(--color-wr-status-working);
-}
-.asb-box-waiting .asb-box-dot {
-  background: var(--color-wr-status-waiting);
-}
-.asb-box-error .asb-box-dot {
-  background: var(--color-wr-danger);
-}
-/* error 박스 보더 강조(상태 추가 단서). */
-.asb-box-error {
-  border-color: var(--color-wr-danger-border);
 }
 /* '+N' 오버플로 칩 — button-pill-outline 톤, 클릭 전 tooltip로 나머지 노출. */
 .asb-overflow {
