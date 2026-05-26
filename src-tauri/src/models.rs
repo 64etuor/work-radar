@@ -625,11 +625,23 @@ pub struct Worktree {
     pub head: String,
     /// diff 비교 기본 기준 (repo.default_branch). vs_base 모드 기본값.
     pub base_branch: String,
+    /// 현재 브랜치가 base_branch에 머지됐는지. detached/base/조회 실패는 None으로 둔다.
+    pub merged_into_base: Option<bool>,
+    /// base_branch에는 없고 현재 HEAD에만 있는 커밋 수(`git rev-list base...HEAD` right side).
+    /// detached/조회 실패는 None.
+    pub base_ahead: Option<u32>,
+    /// 현재 HEAD에는 없고 base_branch에만 있는 커밋 수(`git rev-list base...HEAD` left side).
+    /// detached/조회 실패는 None.
+    pub base_behind: Option<u32>,
     /// 메인 워킹카피 여부 (`git worktree list` 첫 항목).
     pub is_primary: bool,
     pub status: WorktreeStatus,
     /// 미커밋 변경(추적 변경 + untracked) 존재 여부.
     pub dirty: bool,
+    /// staged(index vs HEAD) 변경 파일 수. Worktree Review Cockpit이 staged-only 상태를 설명한다.
+    pub staged_count: u32,
+    /// unstaged(working tree vs index + untracked) 변경 파일 수.
+    pub unstaged_count: u32,
     pub ahead: u32,
     pub behind: u32,
     /// worktree 안 가장 최근 파일 mtime(RFC3339). .git/target/node_modules 등은 제외. 없으면 None.
@@ -722,6 +734,39 @@ pub struct DiffFileSummary {
     pub old_path: Option<String>,
     /// 바이너리 파일 (numstat이 '-'). adds/dels는 0.
     pub binary: bool,
+}
+
+/// base...HEAD 커밋 그래프 한 커밋의 방향. right=head 전용, left=base 전용.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CommitSide {
+    Left,
+    Right,
+}
+
+/// 커밋 그래프 drawer용 구조화 커밋. Git read-only log 출력에서 도출.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitGraphEntry {
+    pub side: CommitSide,
+    pub hash: String,
+    pub short_hash: String,
+    pub author: String,
+    pub date: String,
+    pub subject: String,
+    /// 짧은 hash 리스트(`git log %p`). 빈 벡터면 root 커밋. lane 토폴로지 계산용.
+    pub parents: Vec<String>,
+}
+
+/// `git log --graph` 원문 라인 + 구조화 커밋 목록. 표시 전용(read-only).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitGraph {
+    pub base: String,
+    pub head: String,
+    pub graph_lines: Vec<String>,
+    pub commits: Vec<CommitGraphEntry>,
+    pub truncated: bool,
 }
 
 // ── Agent 스파인 (Phase 7, 잡 큐 + bounds + kill) ──────────────────────────────────

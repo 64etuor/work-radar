@@ -14,7 +14,12 @@ use std::time::Duration;
 
 use tokio::process::Command;
 
-use crate::models::{DiffFileSummary, DiffMode, FileChange, WorktreeStatus};
+use crate::models::{
+    CommitGraph, CommitGraphEntry, CommitSide, DiffFileSummary, DiffMode, FileChange,
+    WorktreeStatus,
+};
+
+const COMMIT_GRAPH_LIMIT: usize = 80;
 
 /// 한 git 서브프로세스 호출 상한 (INVARIANT #5: 무한 대기 금지).
 const CMD_TIMEOUT: Duration = Duration::from_secs(20);
@@ -42,6 +47,10 @@ pub struct RawStatus {
     pub dirty: bool,
     pub ahead: u32,
     pub behind: u32,
+    /// index vs HEAD changes (`git diff --cached`) counted by status record.
+    pub staged_count: u32,
+    /// working tree vs index changes (`git diff`) plus untracked files.
+    pub unstaged_count: u32,
 }
 
 /// 코어가 의존하는 유일한 git read 계약. 테스트는 fake로 대체한다.
@@ -58,6 +67,20 @@ pub trait GitProvider {
         &self,
         worktree_path: &str,
     ) -> impl std::future::Future<Output = Result<RawStatus, GitError>> + Send;
+
+    /// base에 이미 머지된 로컬 브랜치 목록. worktree list의 merge badge 산출용(read-only).
+    fn merged_branches(
+        &self,
+        repo_path: &str,
+        base: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<String>, GitError>> + Send;
+
+    /// base와 현재 HEAD 사이의 좌/우 커밋 수(`git rev-list --left-right --count base...HEAD`).
+    fn base_counts(
+        &self,
+        worktree_path: &str,
+        base: &str,
+    ) -> impl std::future::Future<Output = Result<(u32, u32), GitError>> + Send;
 
     /// 로컬 + 원격추적 브랜치 (branch↔branch 비교 picker용).
     fn branches(
@@ -217,8 +240,9 @@ pub(crate) fn parse_prunable_worktrees(out: &str) -> Vec<String> {
     result
 }
 
-/// `git status --porcelain=v2 --branch` 파싱 → 더티/ahead/behind.
+/// `git status --porcelain=v2 --branch` 파싱 → 더티/ahead/behind + staged/unstaged counts.
 /// 더티 = '#' 외 라인(추적 변경 1/2/u, untracked ?) 존재. ahead/behind = `# branch.ab +A -B`.
+/// porcelain v2 `1 XY` / `2 XY`에서 X=index(staged), Y=worktree(unstaged).
 pub(crate) fn parse_status_v2(out: &str) -> RawStatus {
     let mut s = RawStatus::default();
     for line in out.lines() {
@@ -233,10 +257,92 @@ pub(crate) fn parse_status_v2(out: &str) -> RawStatus {
             }
         } else if !line.starts_with('#') && !line.trim().is_empty() {
             // 1/2(추적 변경), u(unmerged), ?(untracked), !(ignored — porcelain 기본 미출력)
-            s.dirty = true;
+            match status_record_buckets(line) {
+                Some((staged, unstaged)) => {
+                    if staged {
+                        s.staged_count += 1;
+                    }
+                    if unstaged {
+                        s.unstaged_count += 1;
+                    }
+                    s.dirty = s.dirty || staged || unstaged;
+                }
+                None => {
+                    s.dirty = true;
+                }
+            }
         }
     }
     s
+}
+
+/// `git rev-list --left-right --count base...HEAD` → (behind, ahead).
+pub(crate) fn parse_left_right_count(out: &str) -> Result<(u32, u32), GitError> {
+    let mut parts = out.split_whitespace();
+    let behind = parts
+        .next()
+        .ok_or_else(|| GitError("rev-list count missing behind".into()))?
+        .parse::<u32>()
+        .map_err(|e| GitError(format!("rev-list behind parse failed: {e}")))?;
+    let ahead = parts
+        .next()
+        .ok_or_else(|| GitError("rev-list count missing ahead".into()))?
+        .parse::<u32>()
+        .map_err(|e| GitError(format!("rev-list ahead parse failed: {e}")))?;
+    Ok((behind, ahead))
+}
+
+pub(crate) fn parse_commit_graph_entries(out: &str) -> Vec<CommitGraphEntry> {
+    out.lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\x1f');
+            let side = match parts.next()? {
+                "<" => CommitSide::Left,
+                ">" => CommitSide::Right,
+                _ => return None,
+            };
+            let hash = parts.next()?.to_string();
+            let short_hash = parts.next()?.to_string();
+            let author = parts.next()?.to_string();
+            let date = parts.next()?.to_string();
+            let parents_field = parts.next()?;
+            let parents = parents_field
+                .split_whitespace()
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            let subject = parts.collect::<Vec<_>>().join("\x1f");
+            Some(CommitGraphEntry {
+                side,
+                hash,
+                short_hash,
+                author,
+                date,
+                subject,
+                parents,
+            })
+        })
+        .collect()
+}
+
+/// 한 porcelain v2 status record가 staged/unstaged bucket 중 어디에 속하는지 분류한다.
+/// ignored(`!`)는 기본 status 출력엔 없지만 명시되면 dirty로 세지 않는다.
+fn status_record_buckets(line: &str) -> Option<(bool, bool)> {
+    if line.starts_with("? ") {
+        return Some((false, true));
+    }
+    if line.starts_with("! ") {
+        return Some((false, false));
+    }
+    if line.starts_with("u ") {
+        return Some((true, true));
+    }
+    if line.starts_with("1 ") || line.starts_with("2 ") {
+        let xy = line.as_bytes().get(2..4)?;
+        let staged = xy.first().copied() != Some(b'.');
+        let unstaged = xy.get(1).copied() != Some(b'.');
+        return Some((staged, unstaged));
+    }
+    None
 }
 
 /// `--numstat` (라인 기반) 파싱 → (adds, dels, binary, path). binary는 '-' 필드.
@@ -666,6 +772,65 @@ impl CliGitProvider {
         Ok(parse_branches(&out))
     }
 
+    /// base와 현재 HEAD 사이의 좌/우 커밋 수. `rev-list`는 read-only.
+    pub async fn base_counts(worktree_path: &str, base: &str) -> Result<(u32, u32), GitError> {
+        let base = validate_base_ref(base)?;
+        let range = format!("{base}...HEAD");
+        let out = Self::run(
+            worktree_path,
+            &["rev-list", "--left-right", "--count", &range],
+        )
+        .await?;
+        parse_left_right_count(&out)
+    }
+
+    /// base...HEAD 커밋 그래프(drawer). `limit + 1`로 잘림 여부를 감지한다.
+    pub async fn commit_graph(worktree_path: &str, base: &str) -> Result<CommitGraph, GitError> {
+        let base = validate_base_ref(base)?;
+        let range = format!("{base}...HEAD");
+        let limit = (COMMIT_GRAPH_LIMIT + 1).to_string();
+        let graph = Self::run(
+            worktree_path,
+            &[
+                "log",
+                "--graph",
+                "--decorate",
+                "--oneline",
+                "--date=short",
+                "--max-count",
+                &limit,
+                &range,
+            ],
+        )
+        .await?;
+        let structured = Self::run(
+            worktree_path,
+            &[
+                "log",
+                "--left-right",
+                "--date=short",
+                "--pretty=format:%m%x1f%H%x1f%h%x1f%an%x1f%ad%x1f%p%x1f%s",
+                "--max-count",
+                &limit,
+                &range,
+            ],
+        )
+        .await?;
+        let mut graph_lines: Vec<String> = graph.lines().map(ToString::to_string).collect();
+        let mut commits = parse_commit_graph_entries(&structured);
+        let truncated =
+            graph_lines.len() > COMMIT_GRAPH_LIMIT || commits.len() > COMMIT_GRAPH_LIMIT;
+        graph_lines.truncate(COMMIT_GRAPH_LIMIT);
+        commits.truncate(COMMIT_GRAPH_LIMIT);
+        Ok(CommitGraph {
+            base,
+            head: "HEAD".to_string(),
+            graph_lines,
+            commits,
+            truncated,
+        })
+    }
+
     /// 로컬 브랜치별 마지막 커밋 시각(stale 판정용). `for-each-ref ... %(committerdate:iso-strict)`.
     pub async fn branch_commit_dates(
         repo_path: &str,
@@ -698,6 +863,14 @@ impl GitProvider for CliGitProvider {
     async fn status(&self, worktree_path: &str) -> Result<RawStatus, GitError> {
         let out = Self::run(worktree_path, &["status", "--porcelain=v2", "--branch"]).await?;
         Ok(parse_status_v2(&out))
+    }
+
+    async fn merged_branches(&self, repo_path: &str, base: &str) -> Result<Vec<String>, GitError> {
+        CliGitProvider::merged_branches(repo_path, base).await
+    }
+
+    async fn base_counts(&self, worktree_path: &str, base: &str) -> Result<(u32, u32), GitError> {
+        CliGitProvider::base_counts(worktree_path, base).await
     }
 
     async fn branches(&self, repo_path: &str) -> Result<Vec<String>, GitError> {
@@ -763,6 +936,8 @@ mod tests {
                 dirty,
                 ahead,
                 behind,
+                staged_count: u32::from(dirty),
+                unstaged_count: 0,
             })
         };
         assert_eq!(s(false, 0, 0), WorktreeStatus::Clean);
@@ -844,11 +1019,71 @@ bare
         assert_eq!(s.ahead, 2);
         assert_eq!(s.behind, 1);
         assert!(s.dirty);
+        assert_eq!(s.staged_count, 0);
+        assert_eq!(s.unstaged_count, 2);
         // ahead만(클린 워킹트리).
         let ahead_only = "# branch.ab +3 -0\n";
         let s2 = parse_status_v2(ahead_only);
         assert_eq!(s2.ahead, 3);
         assert!(!s2.dirty);
+    }
+
+    #[test]
+    fn parse_status_v2_staged_only_counts_staged() {
+        let out = "# branch.ab +0 -0\n1 M. N... 100644 100644 100644 aaa bbb src/lib.rs\n";
+        let s = parse_status_v2(out);
+        assert!(s.dirty);
+        assert_eq!(s.staged_count, 1);
+        assert_eq!(s.unstaged_count, 0);
+    }
+
+    #[test]
+    fn parse_status_v2_unstaged_only_counts_unstaged() {
+        let out = "# branch.ab +0 -0\n1 .M N... 100644 100644 100644 aaa bbb src/lib.rs\n";
+        let s = parse_status_v2(out);
+        assert!(s.dirty);
+        assert_eq!(s.staged_count, 0);
+        assert_eq!(s.unstaged_count, 1);
+    }
+
+    #[test]
+    fn parse_status_v2_mixed_same_file_counts_both() {
+        let out = "# branch.ab +0 -0\n1 MM N... 100644 100644 100644 aaa bbb src/lib.rs\n";
+        let s = parse_status_v2(out);
+        assert!(s.dirty);
+        assert_eq!(s.staged_count, 1);
+        assert_eq!(s.unstaged_count, 1);
+    }
+
+    #[test]
+    fn parse_status_v2_untracked_counts_unstaged() {
+        let out = "# branch.ab +0 -0\n? src/new.rs\n";
+        let s = parse_status_v2(out);
+        assert!(s.dirty);
+        assert_eq!(s.staged_count, 0);
+        assert_eq!(s.unstaged_count, 1);
+    }
+
+    #[test]
+    fn parse_left_right_count_reads_behind_then_ahead() {
+        assert_eq!(parse_left_right_count("3\t7\n").unwrap(), (3, 7));
+        assert!(parse_left_right_count("nope 7").is_err());
+    }
+
+    #[test]
+    fn parse_commit_graph_entries_keeps_side_and_subject() {
+        let out = ">\x1fabcdef\x1fabcd\x1fAda\x1f2026-05-26\x1f1234 5678\x1fImplement graph\n<\x1f123456\x1f1234\x1fLin\x1f2026-05-25\x1f\x1fBase change";
+        let entries = parse_commit_graph_entries(out);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].side, CommitSide::Right);
+        assert_eq!(entries[0].subject, "Implement graph");
+        assert_eq!(
+            entries[0].parents,
+            vec!["1234".to_string(), "5678".to_string()]
+        );
+        assert_eq!(entries[1].side, CommitSide::Left);
+        assert_eq!(entries[1].short_hash, "1234");
+        assert!(entries[1].parents.is_empty(), "root commit has no parents");
     }
 
     #[test]

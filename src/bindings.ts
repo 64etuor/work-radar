@@ -129,6 +129,8 @@ export const commands = {
 	worktreeDiffFiles: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null) => typedError<DiffFileSummary[], AppError>(__TAURI_INVOKE("worktree_diff_files", { worktreePath, mode, baseRef, headRef })),
 	/**  한 파일의 unified diff 텍스트(프런트 구문강조용). 선택한 파일만 지연 로드(비차단 2단계). */
 	worktreeFileDiff: (worktreePath: string, mode: DiffMode, baseRef: string | null, headRef: string | null, path: string) => typedError<string, AppError>(__TAURI_INVOKE("worktree_file_diff", { worktreePath, mode, baseRef, headRef, path })),
+	/**  base...HEAD 커밋 그래프(drawer). read-only git log/rev-list 계열만 사용. */
+	worktreeCommitGraph: (worktreePath: string, baseRef: string) => typedError<CommitGraph, AppError>(__TAURI_INVOKE("worktree_commit_graph", { worktreePath, baseRef })),
 	/**
 	 *  worktree를 base(기본 origin/dev) 위로 안전 rebase한다. dirty면 거부, 충돌이면 자동 복구.
 	 *  성공 시 RebaseResult.success=true — 사용자는 기존 Diff Viewer(vs Base)로 결과를 검수한다.
@@ -645,6 +647,30 @@ export type CodexAvailability = {
 	/**  사람이 읽을 상태 상세. */
 	detail: string,
 };
+
+/**  `git log --graph` 원문 라인 + 구조화 커밋 목록. 표시 전용(read-only). */
+export type CommitGraph = {
+	base: string,
+	head: string,
+	graphLines: string[],
+	commits: CommitGraphEntry[],
+	truncated: boolean,
+};
+
+/**  커밋 그래프 drawer용 구조화 커밋. Git read-only log 출력에서 도출. */
+export type CommitGraphEntry = {
+	side: CommitSide,
+	hash: string,
+	shortHash: string,
+	author: string,
+	date: string,
+	subject: string,
+	/**  짧은 hash 리스트(`git log %p`). 빈 벡터면 root 커밋. lane 토폴로지 계산용. */
+	parents: string[],
+};
+
+/**  base...HEAD 커밋 그래프 한 커밋의 방향. right=head 전용, left=base 전용. */
+export type CommitSide = "left" | "right";
 
 /**
  *  카드 → 캘린더 이벤트 생성 입력 (직접 모달, Phase 19). 사용자 폼 = 사람 결정이라 Acceptance 게이트
@@ -1415,11 +1441,27 @@ export type Worktree = {
 	head: string,
 	/**  diff 비교 기본 기준 (repo.default_branch). vs_base 모드 기본값. */
 	baseBranch: string,
+	/**  현재 브랜치가 base_branch에 머지됐는지. detached/base/조회 실패는 None으로 둔다. */
+	mergedIntoBase: boolean | null,
+	/**
+	 *  base_branch에는 없고 현재 HEAD에만 있는 커밋 수(`git rev-list base...HEAD` right side).
+	 *  detached/조회 실패는 None.
+	 */
+	baseAhead: number | null,
+	/**
+	 *  현재 HEAD에는 없고 base_branch에만 있는 커밋 수(`git rev-list base...HEAD` left side).
+	 *  detached/조회 실패는 None.
+	 */
+	baseBehind: number | null,
 	/**  메인 워킹카피 여부 (`git worktree list` 첫 항목). */
 	isPrimary: boolean,
 	status: WorktreeStatus,
 	/**  미커밋 변경(추적 변경 + untracked) 존재 여부. */
 	dirty: boolean,
+	/**  staged(index vs HEAD) 변경 파일 수. Worktree Review Cockpit이 staged-only 상태를 설명한다. */
+	stagedCount: number,
+	/**  unstaged(working tree vs index + untracked) 변경 파일 수. */
+	unstagedCount: number,
 	ahead: number,
 	behind: number,
 	/**  worktree 안 가장 최근 파일 mtime(RFC3339). .git/target/node_modules 등은 제외. 없으면 None. */

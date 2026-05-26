@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   adjacentView,
   defaultKeymap,
+  EXTRA_ACTIONS,
   NAV_BY_VIEW,
   NAV_ITEMS,
   navItemsByGroup,
@@ -34,15 +35,16 @@ describe("NAV_BY_VIEW", () => {
 });
 
 describe("defaultKeymap", () => {
-  it("defaultShortcut이 있는 항목만 매핑한다", () => {
+  it("defaultShortcut이 있는 view와 extra action만 매핑한다", () => {
     const km = defaultKeymap();
     const withShortcut = NAV_ITEMS.filter((n) => n.defaultShortcut);
-    expect(Object.keys(km)).toHaveLength(withShortcut.length);
+    expect(Object.keys(km)).toHaveLength(withShortcut.length + EXTRA_ACTIONS.length);
     for (const n of withShortcut) expect(km[n.view]).toBe(n.defaultShortcut);
+    for (const a of EXTRA_ACTIONS) expect(km[a.key]).toBe(a.defaultShortcut);
   });
 
-  it("chord 단축키 형식을 보존한다 (board = 'g b')", () => {
-    expect(defaultKeymap().board).toBe("g b");
+  it("조합 단축키 기본값을 보존한다 (board = 'Cmd+1')", () => {
+    expect(defaultKeymap().board).toBe("Cmd+1");
   });
 });
 

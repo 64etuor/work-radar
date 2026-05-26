@@ -107,6 +107,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_worktree_branches,
         commands::worktree_diff_files,
         commands::worktree_file_diff,
+        commands::worktree_commit_graph,
         // 안전 dev rebase + 브랜치/워크트리 정리 (Phase 12c/12d).
         commands::rebase_worktree_onto,
         commands::list_cleanup_candidates,

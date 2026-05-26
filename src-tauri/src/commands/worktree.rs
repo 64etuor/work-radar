@@ -3,7 +3,7 @@ use tauri::State;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::git::{summarize_status, CliGitProvider, GitProvider};
-use crate::models::{DiffFileSummary, DiffMode, Worktree};
+use crate::models::{CommitGraph, DiffFileSummary, DiffMode, Worktree};
 
 // ── Worktree & Branch Diff (Phase 5, read-only) ──────────────────────────────────
 // INVARIANT #6: Diff Viewer는 워킹트리/브랜치를 변경하지 않는다(git.rs는 read 서브커맨드만).
@@ -93,6 +93,16 @@ async fn collect_worktrees<G: GitProvider>(
             }
         };
         ok_any = true;
+        let merged_branches: Option<std::collections::HashSet<String>> = match provider
+            .merged_branches(&repo.local_path, &repo.default_branch)
+            .await
+        {
+            Ok(names) => Some(names.into_iter().collect()),
+            Err(e) => {
+                errors.push(format!("{} merged: {e}", repo.label));
+                None
+            }
+        };
         for raw in raws {
             if raw.bare {
                 continue; // bare는 diff 대상 아님.
@@ -110,6 +120,24 @@ async fn collect_worktrees<G: GitProvider>(
             let newest_dt = crate::git::newest_mtime_under(std::path::Path::new(&raw.path))
                 .map(chrono::DateTime::<chrono::Utc>::from);
             let active_change = crate::git::is_active_change(newest_dt, now);
+            let merged_into_base = raw.branch.as_ref().and_then(|branch| {
+                if branch == &repo.default_branch {
+                    None
+                } else {
+                    merged_branches.as_ref().map(|names| names.contains(branch))
+                }
+            });
+            let base_counts = if raw.branch.is_some() {
+                match provider.base_counts(&raw.path, &repo.default_branch).await {
+                    Ok(counts) => Some(counts),
+                    Err(e) => {
+                        errors.push(format!("{} base-counts: {e}", raw.path));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
             out.push(Worktree {
                 id: format!("{}:{}", repo.repo_id, raw.path),
                 repo_id: repo.repo_id.clone(),
@@ -119,9 +147,14 @@ async fn collect_worktrees<G: GitProvider>(
                 branch: raw.branch,
                 head: raw.head,
                 base_branch: repo.default_branch.clone(),
+                merged_into_base,
+                base_behind: base_counts.map(|(behind, _)| behind),
+                base_ahead: base_counts.map(|(_, ahead)| ahead),
                 is_primary: raw.is_primary,
                 status: summarize_status(st),
                 dirty: st.dirty,
+                staged_count: st.staged_count,
+                unstaged_count: st.unstaged_count,
                 ahead: st.ahead,
                 behind: st.behind,
                 newest_mtime: newest_dt.map(|d| d.to_rfc3339()),
@@ -207,6 +240,18 @@ pub async fn worktree_file_diff(
             head_ref.as_deref(),
             &path,
         )
+        .await
+        .map_err(AppError::from)
+}
+
+/// base...HEAD 커밋 그래프(drawer). read-only git log/rev-list 계열만 사용.
+#[tauri::command]
+#[specta::specta]
+pub async fn worktree_commit_graph(
+    worktree_path: String,
+    base_ref: String,
+) -> Result<CommitGraph, AppError> {
+    CliGitProvider::commit_graph(&worktree_path, &base_ref)
         .await
         .map_err(AppError::from)
 }
@@ -391,6 +436,8 @@ mod tests {
     struct FakeGit {
         worktrees: std::collections::HashMap<String, Result<Vec<RawWorktree>, GitError>>,
         statuses: std::collections::HashMap<String, RawStatus>,
+        merged: std::collections::HashMap<String, Result<Vec<String>, GitError>>,
+        base_counts: std::collections::HashMap<String, Result<(u32, u32), GitError>>,
     }
     impl GitProvider for FakeGit {
         async fn list_worktrees(&self, repo_path: &str) -> Result<Vec<RawWorktree>, GitError> {
@@ -405,6 +452,26 @@ mod tests {
                 .get(worktree_path)
                 .copied()
                 .unwrap_or_default())
+        }
+        async fn merged_branches(
+            &self,
+            repo_path: &str,
+            _base: &str,
+        ) -> Result<Vec<String>, GitError> {
+            self.merged
+                .get(repo_path)
+                .cloned()
+                .unwrap_or_else(|| Ok(vec![]))
+        }
+        async fn base_counts(
+            &self,
+            worktree_path: &str,
+            _base: &str,
+        ) -> Result<(u32, u32), GitError> {
+            self.base_counts
+                .get(worktree_path)
+                .cloned()
+                .unwrap_or(Ok((0, 0)))
         }
         async fn branches(&self, _repo_path: &str) -> Result<Vec<String>, GitError> {
             Ok(vec![])
@@ -477,6 +544,8 @@ mod tests {
                 dirty: true,
                 ahead: 0,
                 behind: 0,
+                staged_count: 1,
+                unstaged_count: 2,
             },
         );
         statuses.insert(
@@ -485,12 +554,24 @@ mod tests {
                 dirty: false,
                 ahead: 2,
                 behind: 1,
+                staged_count: 0,
+                unstaged_count: 0,
             },
         );
+        let mut merged = std::collections::HashMap::new();
+        merged.insert(
+            "/repoA".to_string(),
+            Ok(vec!["dev".to_string(), "feature".to_string()]),
+        );
+        let mut base_counts = std::collections::HashMap::new();
+        base_counts.insert("/repoA/main".to_string(), Ok((0, 0)));
+        base_counts.insert("/repoA/feat".to_string(), Ok((0, 2)));
         // /repoB/main 상태 미지정 → default(clean).
         let provider = FakeGit {
             worktrees,
             statuses,
+            merged,
+            base_counts,
         };
         let repos = vec![
             local_repo("ra", "p1", "/repoA"),
@@ -507,11 +588,18 @@ mod tests {
         assert_eq!(main.branch.as_deref(), Some("dev"));
         assert!(main.is_primary);
         assert!(main.dirty);
+        assert_eq!((main.staged_count, main.unstaged_count), (1, 2));
         assert!(matches!(main.status, crate::models::WorktreeStatus::Dirty));
         assert_eq!(main.base_branch, "dev");
+        assert_eq!(
+            main.merged_into_base, None,
+            "base branch itself does not show merge badge"
+        );
 
         let feat = wts.iter().find(|w| w.path == "/repoA/feat").unwrap();
         assert_eq!((feat.ahead, feat.behind), (2, 1));
+        assert_eq!(feat.merged_into_base, Some(true));
+        assert_eq!((feat.base_behind, feat.base_ahead), (Some(0), Some(2)));
         assert!(matches!(
             feat.status,
             crate::models::WorktreeStatus::Diverged
@@ -519,6 +607,7 @@ mod tests {
 
         let b = wts.iter().find(|w| w.path == "/repoB/main").unwrap();
         assert_eq!(b.branch, None, "detached → branch None");
+        assert_eq!(b.merged_into_base, None);
         assert!(matches!(b.status, crate::models::WorktreeStatus::Clean));
         assert!(wts.iter().all(|w| w.path != "/repoA/bare"), "bare 제외");
     }
@@ -538,6 +627,8 @@ mod tests {
         let provider = FakeGit {
             worktrees,
             statuses: std::collections::HashMap::new(),
+            merged: std::collections::HashMap::new(),
+            base_counts: std::collections::HashMap::new(),
         };
 
         // 하나 실패 + 하나 성공 → 성공분만 반환(Err 아님).

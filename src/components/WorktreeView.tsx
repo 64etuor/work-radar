@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Spinner } from "@/components/Spinner";
 import {
   GitCompare,
@@ -7,11 +7,27 @@ import {
   RefreshCw,
   Trash2,
   Waypoints,
+  X,
 } from "lucide-react";
 import { detectLang, tokenizeLines, type ThemedToken } from "@/lib/shiki";
+import {
+  branchGraphAriaLabel,
+  branchChangeSummary,
+  chooseInitialReviewLens,
+  diffContextLabel,
+  emptyStateForLens,
+  localChangeCount,
+  localChangeSummary,
+  mergeStateSummary,
+  reviewQueueLabel,
+  computeGraphTopology,
+  type GraphTopologyRow,
+  type ReviewLens,
+} from "@/lib/worktreeReview";
 
 import type {
   CleanupCandidate,
+  CommitGraph,
   DiffFileSummary,
   DiffMode,
   FileChange,
@@ -22,11 +38,13 @@ import {
   useDeleteCleanupCandidates,
   useProjects,
   useRebaseWorktree,
+  useWorktreeCommitGraph,
   useWorktreeBranches,
   useWorktreeDiffFiles,
   useWorktreeFileDiff,
   useWorktrees,
 } from "@/lib/query";
+import { registerOverlay } from "@/components/ui/overlay-stack";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -40,13 +58,26 @@ import {
 const PROJECT_ALL = "__all__";
 const REF_NONE = "__none__";
 
-/** 4종 비교 모드 라벨 (PLAN.md Phase 5). */
-const MODES: { key: DiffMode; label: string }[] = [
-  { key: "working", label: "Working" },
+/** Review Cockpit lenses: 사람 작업 단위 라벨을 앞세우고 Git plumbing은 설명으로 낮춘다. */
+const REVIEW_LENSES: { key: ReviewLens; label: string }[] = [
+  { key: "local", label: "Local" },
+  { key: "working", label: "Unstaged" },
   { key: "staged", label: "Staged" },
-  { key: "vs_base", label: "vs Base" },
-  { key: "branch_branch", label: "Branch↔Branch" },
+  { key: "vs_base", label: "Branch vs base" },
+  { key: "branch_branch", label: "Compare refs" },
 ];
+
+const SOURCE_LABEL: Record<DiffMode, string> = {
+  working: "unstaged",
+  staged: "staged",
+  vs_base: "branch",
+  branch_branch: "compare",
+};
+
+type SelectedDiff = {
+  path: string;
+  mode: DiffMode;
+};
 
 const FILE_STATUS_LABEL: Record<FileChange, string> = {
   M: "수정",
@@ -84,49 +115,82 @@ export function WorktreeView() {
   const projects = useProjects();
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // 12c: live=true → dirty/ahead/behind + 활성 변경 활동을 bounded 주기로 자동 갱신.
-  const worktrees = useWorktrees(projectFilter, true);
+  const worktrees = useWorktrees(null, true);
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [mode, setMode] = useState<DiffMode>("working");
+  const [lens, setLens] = useState<ReviewLens>("local");
   const [baseRef, setBaseRef] = useState<string | null>(null);
   const [headRef, setHeadRef] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedDiff, setSelectedDiff] = useState<SelectedDiff | null>(null);
   const [showCleanup, setShowCleanup] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const closeGraph = useCallback(() => setGraphOpen(false), []);
   // 패널 접기(레이아웃 선호 — localStorage로 세션 간 유지). diff 본문은 항상 표시.
   const [sideCollapsed, setSideCollapsed] = useStickyToggle("wt-side-collapsed");
   const [filesCollapsed, setFilesCollapsed] = useStickyToggle("wt-files-collapsed");
 
-  const list = worktrees.data ?? [];
+  const list = useMemo(() => {
+    const raw = worktrees.data ?? [];
+    if (!projectFilter) return raw;
+    return raw.filter((w) => w.projectId === projectFilter);
+  }, [worktrees.data, projectFilter]);
   const selected = list.find((w) => w.path === selectedPath) ?? null;
 
   // 모드별 ref 준비 상태: working/staged는 항상, vs_base는 base, branch↔branch는 base+head.
-  const ready =
-    mode === "working" ||
-    mode === "staged" ||
-    (mode === "vs_base" && !!baseRef) ||
-    (mode === "branch_branch" && !!baseRef && !!headRef);
+  const modeReady = (m: DiffMode) =>
+    m === "working" ||
+    m === "staged" ||
+    (m === "vs_base" && !!baseRef) ||
+    (m === "branch_branch" && !!baseRef && !!headRef);
+  const activeMode = lens === "local" ? null : lens;
+  const ready = activeMode ? modeReady(activeMode) : true;
 
   const branches = useWorktreeBranches(
-    selected && (mode === "vs_base" || mode === "branch_branch")
+    selected && (lens === "vs_base" || lens === "branch_branch")
       ? selected.path
       : null,
   );
 
   const diffFiles = useWorktreeDiffFiles({
     worktreePath: selected?.path ?? null,
-    mode,
+    mode: activeMode ?? "working",
     baseRef,
     headRef,
-    ready,
+    ready: !!activeMode && ready,
   });
 
+  const unstagedFiles = useWorktreeDiffFiles({
+    worktreePath: selected?.path ?? null,
+    mode: "working",
+    baseRef: null,
+    headRef: null,
+    ready: lens === "local" && !!selected,
+  });
+
+  const stagedFiles = useWorktreeDiffFiles({
+    worktreePath: selected?.path ?? null,
+    mode: "staged",
+    baseRef: null,
+    headRef: null,
+    ready: lens === "local" && !!selected,
+  });
+
+  const branchFiles = useWorktreeDiffFiles({
+    worktreePath: selected?.path ?? null,
+    mode: "vs_base",
+    baseRef,
+    headRef: null,
+    ready: !!selected && !!baseRef,
+  });
+
+  const selectedDiffReady = selectedDiff ? modeReady(selectedDiff.mode) : false;
   const fileDiff = useWorktreeFileDiff({
     worktreePath: selected?.path ?? null,
-    mode,
-    baseRef,
-    headRef,
-    path: selectedFile,
-    ready: ready && !!selectedFile,
+    mode: selectedDiff?.mode ?? "working",
+    baseRef: selectedDiff?.mode === "vs_base" || selectedDiff?.mode === "branch_branch" ? baseRef : null,
+    headRef: selectedDiff?.mode === "branch_branch" ? headRef : null,
+    path: selectedDiff?.path ?? null,
+    ready: selectedDiffReady && !!selectedDiff,
   });
 
   // worktree 선택 시 모드/ref/파일 초기화.
@@ -137,18 +201,17 @@ export function WorktreeView() {
     setSelectedPath(w.path);
     setBaseRef(w.baseBranch);
     setHeadRef(null);
-    setSelectedFile(null);
-    if (w.dirty) {
-      setMode("working");
-    } else {
-      setMode("vs_base");
-    }
+    setSelectedDiff(null);
+    setGraphOpen(false);
+    setLens(chooseInitialReviewLens(w));
   }
 
-  function changeMode(m: DiffMode) {
-    setMode(m);
-    setSelectedFile(null);
-    if (m === "vs_base" && selected && !baseRef) setBaseRef(selected.baseBranch);
+  function changeLens(next: ReviewLens) {
+    setLens(next);
+    setSelectedDiff(null);
+    if ((next === "vs_base" || next === "local") && selected && !baseRef) {
+      setBaseRef(selected.baseBranch);
+    }
   }
 
   // repo_label로 그룹핑(멀티 repo 동시 표시).
@@ -166,6 +229,11 @@ export function WorktreeView() {
 
   // 정리 패널은 선택 worktree(없으면 primary)의 repo를 대상으로 한다.
   const cleanupRepo = selected ?? list.find((w) => w.isPrimary) ?? list[0] ?? null;
+  const branchFileCount = branchFiles.data?.length ?? null;
+  const fileCount =
+    lens === "local"
+      ? (stagedFiles.data?.length ?? 0) + (unstagedFiles.data?.length ?? 0)
+      : (diffFiles.data?.length ?? 0);
 
   return (
     <div className="wt">
@@ -176,7 +244,7 @@ export function WorktreeView() {
           onValueChange={(v) => {
             setProjectFilter(v === PROJECT_ALL ? null : v);
             setSelectedPath(null);
-            setSelectedFile(null);
+            setSelectedDiff(null);
           }}
         >
           <SelectTrigger
@@ -194,6 +262,17 @@ export function WorktreeView() {
             ))}
           </SelectContent>
         </Select>
+        <Button
+          variant={graphOpen ? "default" : "outline"}
+          size="sm"
+          className="gap-1.5 rounded-full text-[12px]"
+          onClick={() => setGraphOpen((v) => !v)}
+          disabled={!selected}
+          title={selected ? "커밋 그래프 보기" : "worktree 선택 필요"}
+        >
+          <Waypoints className="size-3.5" />
+          Graph
+        </Button>
         <Button
           variant={showCleanup ? "default" : "outline"}
           size="sm"
@@ -293,24 +372,34 @@ export function WorktreeView() {
             </div>
           ) : (
             <>
+              <ReviewSummary worktree={selected} branchFileCount={branchFileCount} />
+
               <div className="wt-modes">
-                {MODES.map((m) => (
-                  <Button
-                    key={m.key}
-                    variant={mode === m.key ? "default" : "outline"}
-                    size="sm"
-                    className="rounded-full text-[12px]"
-                    aria-pressed={mode === m.key}
-                    onClick={() => changeMode(m.key)}
-                  >
-                    {m.label}
-                  </Button>
-                ))}
-                <RebaseBar worktree={selected} onReviewBase={() => changeMode("vs_base")} />
+                <div className="wt-review-tabs" role="tablist" aria-label="Review lens">
+                  {REVIEW_LENSES.map((m) => (
+                    <Button
+                      key={m.key}
+                      variant={lens === m.key ? "default" : "outline"}
+                      size="sm"
+                      className="rounded-full text-[12px]"
+                      aria-pressed={lens === m.key}
+                      role="tab"
+                      onClick={() => changeLens(m.key)}
+                    >
+                      {m.key === "vs_base" && selected.baseBranch
+                        ? `Branch vs ${selected.baseBranch}`
+                        : m.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="wt-maintenance">
+                  <span className="wt-maintenance-label">Maintenance</span>
+                  <RebaseBar worktree={selected} onReviewBase={() => changeLens("vs_base")} />
+                </div>
               </div>
 
               {/* ref picker (vs_base = base, branch↔branch = base + head) */}
-              {(mode === "vs_base" || mode === "branch_branch") && (
+              {(lens === "vs_base" || lens === "branch_branch") && (
                 <div className="wt-refs">
                   <label className="wt-ref">
                     <span>base</span>
@@ -318,7 +407,7 @@ export function WorktreeView() {
                       value={baseRef ?? REF_NONE}
                       onValueChange={(v) => {
                         setBaseRef(v === REF_NONE ? null : v);
-                        setSelectedFile(null);
+                        setSelectedDiff(null);
                       }}
                     >
                       <SelectTrigger className="w-[150px] text-[12px]" aria-label="base ref">
@@ -334,14 +423,14 @@ export function WorktreeView() {
                       </SelectContent>
                     </Select>
                   </label>
-                  {mode === "branch_branch" && (
+                  {lens === "branch_branch" && (
                     <label className="wt-ref">
                       <span>head</span>
                       <Select
                         value={headRef ?? REF_NONE}
                         onValueChange={(v) => {
                           setHeadRef(v === REF_NONE ? null : v);
-                          setSelectedFile(null);
+                          setSelectedDiff(null);
                         }}
                       >
                         <SelectTrigger className="w-[150px] text-[12px]" aria-label="head ref">
@@ -358,7 +447,7 @@ export function WorktreeView() {
                       </Select>
                     </label>
                   )}
-                  {mode === "vs_base" && (
+                  {lens === "vs_base" && (
                     <span className="wt-ref-hint">base...HEAD (3-dot)</span>
                   )}
                 </div>
@@ -376,9 +465,7 @@ export function WorktreeView() {
                     <PanelLeftOpen className="size-4" />
                     <span className="wt-rail-label">
                       Files
-                      {(diffFiles.data?.length ?? 0) > 0
-                        ? ` (${diffFiles.data?.length})`
-                        : ""}
+                      {fileCount > 0 ? ` (${fileCount})` : ""}
                     </span>
                   </button>
                 ) : (
@@ -386,9 +473,7 @@ export function WorktreeView() {
                   <div className="wt-panel-head">
                     <span className="wt-panel-title">
                       Files
-                      {(diffFiles.data?.length ?? 0) > 0
-                        ? ` (${diffFiles.data?.length})`
-                        : ""}
+                      {fileCount > 0 ? ` (${fileCount})` : ""}
                     </span>
                     <Button
                       variant="ghost"
@@ -400,39 +485,56 @@ export function WorktreeView() {
                       <PanelLeftClose className="size-3.5" />
                     </Button>
                   </div>
-                  {!ready && (
+                  {lens === "local" ? (
+                    <LocalFileSections
+                      stagedFiles={stagedFiles.data ?? []}
+                      unstagedFiles={unstagedFiles.data ?? []}
+                      stagedLoading={stagedFiles.isFetching}
+                      unstagedLoading={unstagedFiles.isFetching}
+                      stagedError={stagedFiles.error}
+                      unstagedError={unstagedFiles.error}
+                      selectedDiff={selectedDiff}
+                      onSelect={(next) => setSelectedDiff(next)}
+                    />
+                  ) : !ready ? (
                     <div className="wt-empty">비교할 ref를 선택하세요.</div>
-                  )}
-                  {ready && diffFiles.isFetching && (
+                  ) : diffFiles.isFetching ? (
                     <div className="wt-empty">
                       <Spinner />
                     </div>
-                  )}
-                  {ready && diffFiles.error && (
+                  ) : diffFiles.error ? (
                     <div className="wt-err">
                       {(diffFiles.error as Error).message}
                     </div>
-                  )}
-                  {ready &&
-                    !diffFiles.isFetching &&
-                    (diffFiles.data?.length ?? 0) === 0 &&
-                    !diffFiles.error && (
-                      <div className="wt-empty">변경 파일이 없습니다.</div>
-                    )}
-                  {(diffFiles.data ?? []).map((f) => (
-                    <FileRow
-                      key={f.path}
-                      file={f}
-                      active={f.path === selectedFile}
-                      onSelect={() => setSelectedFile(f.path)}
+                  ) : (diffFiles.data?.length ?? 0) === 0 ? (
+                    <LensEmptyState
+                      lens={activeMode ?? "working"}
+                      worktree={selected}
+                      onSwitch={changeLens}
                     />
-                  ))}
+                  ) : (
+                    (diffFiles.data ?? []).map((f) => (
+                      <FileRow
+                        key={`${activeMode}:${f.path}`}
+                        file={f}
+                        source={activeMode ?? "working"}
+                        active={
+                          selectedDiff?.path === f.path &&
+                          selectedDiff.mode === activeMode
+                        }
+                        onSelect={() =>
+                          activeMode &&
+                          setSelectedDiff({ path: f.path, mode: activeMode })
+                        }
+                      />
+                    ))
+                  )}
                 </div>
                 )}
 
                 {/* 파일별 diff(지연 로드) */}
                 <div className="wt-diff">
-                  {!selectedFile ? (
+                  {!selectedDiff ? (
                     <div className="wt-empty">파일을 선택하면 diff를 봅니다.</div>
                   ) : fileDiff.isFetching ? (
                     <div className="wt-empty">diff 로드 중…</div>
@@ -441,14 +543,540 @@ export function WorktreeView() {
                       {(fileDiff.error as Error).message}
                     </div>
                   ) : (
-                    <DiffText text={fileDiff.data ?? ""} path={selectedFile} />
+                    <>
+                      <div className="wt-diff-context">
+                        <span className={`wt-source wt-source-${selectedDiff.mode}`}>
+                          {SOURCE_LABEL[selectedDiff.mode]}
+                        </span>
+                        <span className="wt-diff-path">{selectedDiff.path}</span>
+                        <span className="wt-diff-mode">
+                          {diffContextLabel(selectedDiff.mode)}
+                        </span>
+                      </div>
+                      <DiffText text={fileDiff.data ?? ""} path={selectedDiff.path} />
+                    </>
                   )}
                 </div>
               </div>
             </>
           )}
         </main>
+        {selected && graphOpen && (
+          <CommitGraphDrawer
+            worktree={selected}
+            baseRef={baseRef ?? selected.baseBranch}
+            onClose={closeGraph}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+function ReviewSummary({
+  worktree,
+  branchFileCount,
+}: {
+  worktree: Worktree;
+  branchFileCount: number | null;
+}) {
+  const activity = relativeActivity(worktree.newestMtime);
+  return (
+    <section className="wt-review-summary" aria-label="선택한 worktree 요약">
+      <div className="wt-review-title-row">
+        <span className="wt-review-kicker">Review queue</span>
+        <h2 className="wt-review-title">{worktree.branch ?? "(detached)"}</h2>
+        <span className="wt-review-base">base {worktree.baseBranch}</span>
+        <strong className="wt-review-total">
+          {reviewQueueLabel({
+            stagedCount: worktree.stagedCount,
+            unstagedCount: worktree.unstagedCount,
+            branchFileCount,
+          })}
+        </strong>
+      </div>
+      <div className="wt-review-facts">
+        <BranchRail worktree={worktree} activity={activity} />
+      </div>
+      <p className="wt-review-help">
+        Unstaged는 working tree vs index, Staged는 index vs HEAD, Branch는 HEAD vs base입니다.
+      </p>
+    </section>
+  );
+}
+
+function BranchRail({
+  worktree,
+  activity,
+}: {
+  worktree: Worktree;
+  activity: string;
+}) {
+  const baseAhead = worktree.baseAhead ?? 0;
+  const baseBehind = worktree.baseBehind ?? 0;
+  const baseUnknown = worktree.baseAhead == null || worktree.baseBehind == null;
+  const local = localChangeCount(worktree);
+  const relation = branchChangeSummary(worktree);
+  return (
+    <div
+      className={`wt-branch-rail${worktree.mergedIntoBase === true ? " wt-branch-rail-merged" : ""}${baseUnknown ? " wt-branch-rail-unknown" : ""}`}
+      aria-label={branchGraphAriaLabel(worktree)}
+      title={relation}
+    >
+      <span className="wt-graph-ref wt-graph-base">{worktree.baseBranch}</span>
+      <span className="wt-graph" aria-hidden="true">
+        <span className="wt-graph-dot" />
+        <span className="wt-graph-line" />
+        <span className="wt-graph-dot wt-graph-head" />
+      </span>
+      <span className="wt-graph-ref wt-graph-branch">{worktree.branch ?? "detached"}</span>
+      {!baseUnknown && baseBehind > 0 && <span className="wt-graph-pill">behind {baseBehind}</span>}
+      {!baseUnknown && baseAhead > 0 && <span className="wt-graph-pill">ahead {baseAhead}</span>}
+      {!baseUnknown && baseAhead === 0 && baseBehind === 0 && (
+        <span className="wt-graph-pill">in sync</span>
+      )}
+      {baseUnknown && <span className="wt-graph-pill">base unknown</span>}
+      <span className={worktree.mergedIntoBase === true ? "wt-graph-pill wt-merge-ok" : "wt-graph-pill"}>
+        {mergeStateSummary(worktree)}
+      </span>
+      {local > 0 && <span className="wt-graph-pill">local {local}</span>}
+      <span className="wt-graph-pill">{activity || "no recent files"}</span>
+    </div>
+  );
+}
+
+function CommitGraphDrawer({
+  worktree,
+  baseRef,
+  onClose,
+}: {
+  worktree: Worktree;
+  baseRef: string;
+  onClose: () => void;
+}) {
+  const graph = useWorktreeCommitGraph({
+    worktreePath: worktree.path,
+    baseRef,
+    open: true,
+  });
+
+  useEffect(() => {
+    const unregister = registerOverlay();
+    const trigger = document.activeElement as HTMLElement | null;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      unregister();
+      trigger?.focus?.();
+    };
+  }, [onClose]);
+
+  return (
+    <aside className="wt-commit-drawer" role="dialog" aria-label="커밋 그래프">
+      <header className="wt-commit-head">
+        <div>
+          <span className="wt-commit-kicker">Commit graph</span>
+          <h3>{worktree.branch ?? "detached"}</h3>
+          <p>{baseRef}...HEAD</p>
+        </div>
+        <button
+          type="button"
+          className="wt-commit-close"
+          aria-label="커밋 그래프 닫기"
+          onClick={onClose}
+        >
+          <X className="size-4" />
+        </button>
+      </header>
+
+      {graph.isFetching ? (
+        <div className="wt-commit-state">
+          <Spinner />
+          <span>커밋 그래프 로드 중…</span>
+        </div>
+      ) : graph.error ? (
+        <div className="wt-err">{(graph.error as Error).message}</div>
+      ) : (
+        <CommitGraphBody graph={graph.data} />
+      )}
+    </aside>
+  );
+}
+
+const LANE_WIDTH = 16;
+const ROW_HEIGHT = 28;
+const MID_Y = ROW_HEIGHT / 2;
+const NODE_RADIUS = 4.5;
+const laneCenter = (l: number) => l * LANE_WIDTH + LANE_WIDTH / 2;
+
+function CommitGraphBody({ graph }: { graph: CommitGraph | undefined }) {
+  if (!graph) return <div className="wt-commit-state">커밋 그래프가 없습니다.</div>;
+
+  if (graph.commits.length === 0) {
+    return (
+      <div className="wt-commit-body">
+        <section className="wt-commit-table" aria-label="commit graph">
+          <div className="wt-commit-table-meta">
+            <span>차이 없음</span>
+            <strong>verified</strong>
+          </div>
+          <div className="wt-commit-empty">base와 HEAD 사이 커밋 차이가 없습니다.</div>
+        </section>
+      </div>
+    );
+  }
+
+  const topology = computeGraphTopology(graph.commits);
+  const graphWidth = topology.maxLanes * LANE_WIDTH + 8;
+  const totalHeight = graph.commits.length * ROW_HEIGHT;
+
+  return (
+    <div className="wt-commit-body">
+      <section
+        className="wt-commit-table"
+        aria-label="commit graph"
+        style={{ ["--wt-graph-w" as never]: `${graphWidth}px` }}
+      >
+        <div className="wt-commit-table-meta">
+          <span>
+            {graph.commits.length} commit{graph.commits.length === 1 ? "" : "s"}
+          </span>
+          {graph.truncated ? <strong>최근 80개만</strong> : <strong>verified</strong>}
+        </div>
+        <div className="wt-commit-table-scroll">
+          <div className="wt-commit-grid" role="grid" aria-label="commit grid">
+            <div className="wt-h wt-h-graph" role="columnheader">Graph</div>
+            <div className="wt-h wt-h-commit" role="columnheader">Commit</div>
+            <div className="wt-h wt-h-author" role="columnheader">Author</div>
+            <div className="wt-h wt-h-date" role="columnheader">Date</div>
+
+            <GraphCanvas
+              rows={topology.rows}
+              commits={graph.commits}
+              width={graphWidth}
+              height={totalHeight}
+            />
+
+            {graph.commits.map((commit, idx) => {
+              const gridRow = idx + 2;
+              return (
+                <Fragment key={commit.hash}>
+                  <div
+                    className={`wt-c wt-c-commit wt-c-side-${commit.side}`}
+                    style={{ gridRow }}
+                    role="cell"
+                    title={commit.subject}
+                  >
+                    <code className="wt-commit-hash">{commit.shortHash}</code>
+                    <span className="wt-commit-subject">{commit.subject}</span>
+                  </div>
+                  <div
+                    className="wt-c wt-c-author"
+                    style={{ gridRow }}
+                    role="cell"
+                    title={commit.author}
+                  >
+                    {commit.author}
+                  </div>
+                  <div
+                    className="wt-c wt-c-date"
+                    style={{ gridRow }}
+                    role="cell"
+                  >
+                    {commit.date}
+                  </div>
+                </Fragment>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="wt-commit-detail" aria-label="commit messages">
+        <div className="wt-commit-table-meta">
+          <span>Commit messages</span>
+          <strong>{graph.commits.length}</strong>
+        </div>
+        <ol className="wt-commit-detail-list">
+          {graph.commits.map((commit) => (
+            <li
+              key={commit.hash}
+              className={`wt-commit-card wt-commit-card-${commit.side}`}
+            >
+              <code className="wt-commit-card-hash">{commit.shortHash}</code>
+              <div className="wt-commit-card-body">
+                <h4 className="wt-commit-card-subject">{commit.subject}</h4>
+                <p className="wt-commit-card-meta">
+                  <span>{commit.author}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{commit.date}</span>
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
+  );
+}
+
+function GraphCanvas({
+  rows,
+  commits,
+  width,
+  height,
+}: {
+  rows: GraphTopologyRow[];
+  commits: { shortHash: string }[];
+  width: number;
+  height: number;
+}) {
+  const segments: React.ReactNode[] = [];
+  const nodes: React.ReactNode[] = [];
+
+  rows.forEach((row, rowIdx) => {
+    const top = rowIdx * ROW_HEIGHT;
+    const mid = top + MID_Y;
+    const bottom = top + ROW_HEIGHT;
+    const nodeX = laneCenter(row.laneNode);
+    const shortHash = commits[rowIdx].shortHash;
+    const colorClass = (l: number) => `wt-commit-lane-${row.laneColors[l] ?? 0}`;
+
+    row.lanesAbove.forEach((hash, l) => {
+      if (hash === null) return;
+      const xl = laneCenter(l);
+      const cls = `wt-commit-visual-line ${colorClass(l)}`;
+      if (hash === shortHash) {
+        if (l === row.laneNode) {
+          segments.push(
+            <line
+              key={`u-s-${rowIdx}-${l}`}
+              className={cls}
+              x1={xl}
+              y1={top}
+              x2={xl}
+              y2={mid}
+            />,
+          );
+        } else {
+          const dx = nodeX - xl;
+          segments.push(
+            <path
+              key={`u-c-${rowIdx}-${l}`}
+              className={cls}
+              d={`M ${xl} ${top} C ${xl} ${top + MID_Y * 0.55}, ${xl + dx * 0.45} ${mid}, ${nodeX} ${mid}`}
+            />,
+          );
+        }
+      } else {
+        segments.push(
+          <line
+            key={`u-p-${rowIdx}-${l}`}
+            className={cls}
+            x1={xl}
+            y1={top}
+            x2={xl}
+            y2={mid}
+          />,
+        );
+      }
+    });
+
+    const halfBottom = ROW_HEIGHT - MID_Y;
+    row.lanesBelow.forEach((hash, l) => {
+      if (hash === null) return;
+      const xl = laneCenter(l);
+      const cls = `wt-commit-visual-line ${colorClass(l)}`;
+      const above = row.lanesAbove[l];
+      const born = above === null || above === shortHash;
+      if (born) {
+        if (l === row.laneNode) {
+          segments.push(
+            <line
+              key={`d-s-${rowIdx}-${l}`}
+              className={cls}
+              x1={xl}
+              y1={mid}
+              x2={xl}
+              y2={bottom}
+            />,
+          );
+        } else {
+          const dx = xl - nodeX;
+          segments.push(
+            <path
+              key={`d-c-${rowIdx}-${l}`}
+              className={cls}
+              d={`M ${nodeX} ${mid} C ${nodeX + dx * 0.45} ${mid}, ${xl} ${mid + halfBottom * 0.55}, ${xl} ${bottom}`}
+            />,
+          );
+        }
+      } else {
+        segments.push(
+          <line
+            key={`d-p-${rowIdx}-${l}`}
+            className={cls}
+            x1={xl}
+            y1={mid}
+            x2={xl}
+            y2={bottom}
+          />,
+        );
+      }
+    });
+
+    nodes.push(
+      <circle
+        key={`n-${rowIdx}`}
+        className={`wt-commit-visual-node ${colorClass(row.laneNode)}`}
+        cx={nodeX}
+        cy={mid}
+        r={NODE_RADIUS}
+      />,
+    );
+  });
+
+  return (
+    <svg
+      className="wt-commit-canvas"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-hidden="true"
+    >
+      {segments}
+      {nodes}
+    </svg>
+  );
+}
+
+function LocalFileSections({
+  stagedFiles,
+  unstagedFiles,
+  stagedLoading,
+  unstagedLoading,
+  stagedError,
+  unstagedError,
+  selectedDiff,
+  onSelect,
+}: {
+  stagedFiles: DiffFileSummary[];
+  unstagedFiles: DiffFileSummary[];
+  stagedLoading: boolean;
+  unstagedLoading: boolean;
+  stagedError: Error | null;
+  unstagedError: Error | null;
+  selectedDiff: SelectedDiff | null;
+  onSelect: (next: SelectedDiff) => void;
+}) {
+  const loading = stagedLoading || unstagedLoading;
+  if (loading) {
+    return (
+      <div className="wt-empty">
+        <Spinner />
+      </div>
+    );
+  }
+  if (stagedError || unstagedError) {
+    return (
+      <div className="wt-err">
+        {(stagedError ?? unstagedError)?.message ?? "diff 파일 목록을 불러오지 못했습니다."}
+      </div>
+    );
+  }
+  if (stagedFiles.length === 0 && unstagedFiles.length === 0) {
+    return <div className="wt-empty">로컬 staged/unstaged 변경이 없습니다.</div>;
+  }
+  return (
+    <>
+      <FileSection
+        title="Staged"
+        description="index vs HEAD"
+        mode="staged"
+        files={stagedFiles}
+        selectedDiff={selectedDiff}
+        onSelect={onSelect}
+      />
+      <FileSection
+        title="Unstaged"
+        description="working tree vs index"
+        mode="working"
+        files={unstagedFiles}
+        selectedDiff={selectedDiff}
+        onSelect={onSelect}
+      />
+    </>
+  );
+}
+
+function FileSection({
+  title,
+  description,
+  mode,
+  files,
+  selectedDiff,
+  onSelect,
+}: {
+  title: string;
+  description: string;
+  mode: DiffMode;
+  files: DiffFileSummary[];
+  selectedDiff: SelectedDiff | null;
+  onSelect: (next: SelectedDiff) => void;
+}) {
+  return (
+    <section className="wt-file-section">
+      <div className="wt-file-section-head">
+        <span>{title}</span>
+        <em>{description}</em>
+      </div>
+      {files.length === 0 ? (
+        <div className="wt-file-section-empty">이 bucket에는 파일이 없습니다.</div>
+      ) : (
+        files.map((f) => (
+          <FileRow
+            key={`${mode}:${f.path}`}
+            file={f}
+            source={mode}
+            active={selectedDiff?.path === f.path && selectedDiff.mode === mode}
+            onSelect={() => onSelect({ path: f.path, mode })}
+          />
+        ))
+      )}
+    </section>
+  );
+}
+
+function LensEmptyState({
+  lens,
+  worktree,
+  onSwitch,
+}: {
+  lens: DiffMode;
+  worktree: Worktree;
+  onSwitch: (lens: ReviewLens) => void;
+}) {
+  const empty = emptyStateForLens(lens, worktree);
+  return (
+    <div className="wt-empty wt-empty-action">
+      <span>{empty.message}</span>
+      {empty.switchTo && empty.switchLabel && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full text-[12px]"
+          onClick={() => onSwitch(empty.switchTo ?? "local")}
+        >
+          {empty.switchLabel}
+        </Button>
+      )}
     </div>
   );
 }
@@ -475,6 +1103,8 @@ function relativeActivity(newestMtime: string | null): string {
 /** worktree 상태 배지: 활성 펄스(90초 이내) / 상대시간 / dirty / +ahead / -behind / clean. */
 function StatusBadges({ w }: { w: Worktree }) {
   const activityLabel = relativeActivity(w.newestMtime);
+  const baseAhead = w.baseAhead ?? 0;
+  const baseBehind = w.baseBehind ?? 0;
   return (
     <>
       {w.activeChange && (
@@ -488,10 +1118,38 @@ function StatusBadges({ w }: { w: Worktree }) {
           {activityLabel}
         </span>
       )}
-      {w.dirty && <span className="wt-badge wt-dirty">dirty</span>}
-      {w.ahead > 0 && <span className="wt-badge wt-ahead">↑{w.ahead}</span>}
-      {w.behind > 0 && <span className="wt-badge wt-behind">↓{w.behind}</span>}
-      {!w.dirty && w.ahead === 0 && w.behind === 0 && (
+      {localChangeCount(w) > 0 && (
+        <span className="wt-badge wt-dirty" title={localChangeSummary(w)}>
+          local {localChangeCount(w)}
+        </span>
+      )}
+      {w.stagedCount > 0 && (
+        <span className="wt-badge wt-staged">staged {w.stagedCount}</span>
+      )}
+      {w.unstagedCount > 0 && (
+        <span className="wt-badge wt-unstaged">unstaged {w.unstagedCount}</span>
+      )}
+      {baseAhead > 0 && (
+        <span className="wt-badge wt-ahead" title={`${w.baseBranch}보다 커밋 ${baseAhead}개 앞섬`}>
+          +{baseAhead}
+        </span>
+      )}
+      {baseBehind > 0 && (
+        <span className="wt-badge wt-behind" title={`${w.baseBranch}보다 커밋 ${baseBehind}개 뒤처짐`}>
+          -{baseBehind}
+        </span>
+      )}
+      {w.mergedIntoBase === true && (
+        <span className="wt-badge wt-merged" title={`${w.baseBranch}에 이미 머지됨`}>
+          merged
+        </span>
+      )}
+      {w.mergedIntoBase === false && (
+        <span className="wt-badge wt-unmerged" title={`${w.baseBranch}에 아직 머지되지 않음`}>
+          unmerged
+        </span>
+      )}
+      {localChangeCount(w) === 0 && baseAhead === 0 && baseBehind === 0 && (
         <span className="wt-badge wt-clean">clean</span>
       )}
     </>
@@ -710,10 +1368,12 @@ function CleanupPanel({
 
 function FileRow({
   file,
+  source,
   active,
   onSelect,
 }: {
   file: DiffFileSummary;
+  source: DiffMode;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -726,6 +1386,7 @@ function FileRow({
       <span className={`wt-fstatus wt-fs-${file.status}`} title={FILE_STATUS_LABEL[file.status]}>
         {file.status}
       </span>
+      <span className={`wt-source wt-source-${source}`}>{SOURCE_LABEL[source]}</span>
       <span className="wt-fpath">
         {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
       </span>
@@ -813,13 +1474,17 @@ function DiffText({ text, path }: { text: string; path: string | null }) {
   }, [parsed]);
 
   // parsed 인덱스 → 토큰 줄. 강조 준비 전/미지원이면 null(평문 렌더).
-  const [tokenByLine, setTokenByLine] = useState<Map<
-    number,
-    ThemedToken[]
-  > | null>(null);
+  const [tokenState, setTokenState] = useState<{
+    lang: string;
+    codeText: string;
+    map: Map<number, ThemedToken[]>;
+  } | null>(null);
+  const tokenByLine =
+    tokenState?.lang === lang && tokenState.codeText === codeText
+      ? tokenState.map
+      : null;
 
   useEffect(() => {
-    setTokenByLine(null);
     if (
       !lang ||
       codeIndices.length === 0 ||
@@ -833,7 +1498,7 @@ function DiffText({ text, path }: { text: string; path: string | null }) {
         if (cancelled || tokens.length !== codeIndices.length) return;
         const map = new Map<number, ThemedToken[]>();
         codeIndices.forEach((pi, k) => map.set(pi, tokens[k]));
-        setTokenByLine(map);
+        setTokenState({ lang, codeText, map });
       })
       .catch(() => {
         /* 강조 실패 → 평문 폴백 */

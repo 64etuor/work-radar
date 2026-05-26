@@ -82,6 +82,21 @@ export function useWorktreeFileDiff(args: {
   });
 }
 
+/** base...HEAD 커밋 그래프(drawer). read-only log, drawer가 열릴 때만 로드. */
+export function useWorktreeCommitGraph(args: {
+  worktreePath: string | null;
+  baseRef: string | null;
+  open: boolean;
+}) {
+  const { worktreePath, baseRef, open } = args;
+  return useQuery({
+    queryKey: ["worktreeCommitGraph", worktreePath, baseRef],
+    queryFn: () =>
+      unwrap(commands.worktreeCommitGraph(worktreePath as string, baseRef as string)),
+    enabled: open && !!worktreePath && !!baseRef,
+  });
+}
+
 // ── Phase 12c: 안전 dev rebase ─────────────────────────────────────────────────────
 
 /**

@@ -88,7 +88,15 @@ function NewsTickerItem({
     <button
       type="button"
       className="news-ticker-item"
-      onClick={tabbable ? () => void openUrl(item.url) : undefined}
+      onClick={
+        tabbable
+          ? () => {
+              openUrl(item.url).catch((e) => {
+                console.error("[news-ticker] openUrl failed", item.url, e);
+              });
+            }
+          : undefined
+      }
       title={item.title}
       tabIndex={tabbable ? 0 : -1}
       aria-hidden={tabbable ? undefined : true}
