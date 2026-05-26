@@ -18,30 +18,8 @@
 
 ## 1. INVARIANTS — Ralph가 절대 위반하면 안 되는 것
 
-이 7개는 모든 Phase에서 강제된다. 위반하는 구현은 done이 아니다.
-
-1. **결정 레일은 사람만.** Codex/규칙은 매트릭스 분류·승격 여부를 자동 확정하지 못한다.
-   suggested quadrant는 *힌트*일 뿐, 카드는 항상 `unclassified`로 진입한다.
-2. **모든 외부 변경은 Acceptance 게이트를 거친다.** Codex 출력이 Notion/GitHub를
-   직접 mutate하지 못한다. 사람이 accept해야 변경된다.
-3. **신호는 upsert(dedup), append 아님.** system/PR/Hermes 신호는 안정적 dedup 키로
-   중복 생성을 막고, 원인이 해소되면 auto-resolve 한다. (예: CI 통과 시 신호 소멸)
-4. **매트릭스는 거울이 아니라 결정 큐.** ambient status(PR Radar/Hermes)는 자기 뷰에
-   살고, **임계치를 넘을 때만** 매트릭스로 escalate 한다.
-5. **모든 에이전트 잡은 bound된다.** timeout + max turns + cost cap + kill switch.
-   재트리거 체인(CI triage 등)에도 횟수 캡을 두고 초과 시 사람에게 escalate(Q1).
-6. **코드 작업은 git worktree에 격리.** 사용자 워킹트리를 절대 건드리지 않는다.
-   샌드박스 기본 read-only, 쓰기는 명시 승인 시 workspace-write, danger-full 금지.
-7. **SSOT 분리.** Notion = 백로그/안건 *내용*의 SSOT. 로컬 SQLite = 매트릭스 상태·
-   신호·승격 이력·에이전트 잡의 SSOT. 로컬 미러는 read cache + write-through일 뿐.
-
-추가 규칙:
-- **Next.js 쓰지 말 것.** desktop webview엔 Vite + React. (`docs/architecture.md` 참조)
-- **Notion/GitHub 호출은 Rust에 둔다.** 토큰을 렌더러에 노출하지 않는다.
-- **토큰은 OS keychain.** SQLite 평문/프런트 저장 금지. project별 분리.
-- **bounded retry only.** 무한 retry/poll 금지. backoff + jitter + terminal failure 노출.
-- **디자인 정본 = `DESIGN.md`(Cohere white editorial).** 캡처 보드 인터랙션 레퍼런스 =
-  `docs/prototypes/capture-board.html`. 이전 Raycast 다크 방향은 `docs/archive/design-raycast.md`(폐기).
+→ **`docs/areas/decision-rails.md`** 정본. PLAN.md는 Phase 계획만 남긴다.
+INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 모두 거기에 있다.
 
 ---
 
