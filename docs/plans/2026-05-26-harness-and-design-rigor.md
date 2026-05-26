@@ -329,6 +329,55 @@ Day 5: PR-F-CSS-Dead
 
 ---
 
+## 후행 재평가 노트 (2026-05-26 PR 실행 중 발견)
+
+이 플랜의 Part 4/5 일부 PR은 코드 실측 후 폐기됐다. audit이 layering/SRP를 과대평가한 케이스.
+
+### PR-R-CalendarLeak → **폐기**
+
+audit-rust.md는 `commands/calendar.rs`의 4개 함수를 `calendar.rs`로 이전 권장. 실측:
+
+- **`apply_calendar_urgency`**: `#[tauri::command]` + `#[specta::specta]` IPC 핸들러. 이동 불가.
+- **`access_token_for`**: DB(`project_credential_ref`/`load_calendar_creds`) + keychain(`set_token`) + HTTP provider(`refresh_core`)를 함께 호출하는 cross-subsystem 글루. `calendar.rs`로 옮기면 거기에 `use crate::keychain; use crate::db::Db`가 들어가 도메인 모듈의 순수성이 오히려 훼손됨.
+- **`fetch_events_windowed`**: `OnceLock<TtlCache>` 싱글톤 + DB + provider 호출 — 같은 문제.
+- **`parse_quadrant_hint`**: 9줄 순수 helper. 단독 이전 가치 미미(PR 1개 값이 안 됨).
+
+결론: 이 레포의 `commands/X.rs` ↔ `X.rs` 경계는 audit이 본 "leak"이 아니라 **의도된 글루 vs 도메인** 패턴이다. 글루(DB+keychain+provider orchestration)는 `commands/`가 자연스러운 위치. **권장 대안:** layering 가드는 `docs/areas/ipc-conventions.md`에 "글루는 commands/, 순수 도메인은 root /, 다른 서브시스템 import는 commands/만"으로 명시.
+
+### PR-F-Capture (useCaptureActions) → **폐기**
+
+audit-frontend.md는 `CaptureBoard.tsx`의 19 mutation hooks + 핸들러 3개를 `useCaptureActions` 훅으로 이전 권장. 실측:
+
+- 핸들러들이 `signals`/`projects`/`selectedId`/`editingId`/`menu`/`enrichRunId`/`enrichAllRunId`/`projectPicker`/`calendarModal`/`expectPopRef`/`codexReady`/`pushSuccess`/`pushError` 등 12+ 로컬 state setter+ref+rederived 값에 깊이 결합.
+- `useCaptureActions(deps: { ... 15+ fields ... })` 시그니처는 복잡성을 **줄이지 않고 옮기기만** 한다. LOC는 두 파일로 분산되지만 의존성 그래프는 동일 — 가독성 개선 0.
+- 더 적절한 decomposition은 **하위 effect/sub-component 분리**(`CaptureKeyboardEffect`, `CaptureCalendarUrgencyEffect`, `CapturePopAnimation` 등)이지만 그건 audit이 권장한 방향과 다름.
+
+결론: god-component 사이즈는 사실이지만 audit의 분해 권장이 안티패턴. **권장 대안:** 따로 디자인 세션을 잡아 sub-effect/sub-component 분해 방향으로 다시 설계.
+
+### 폐기되지 않은 Part 4/5 PR들
+
+PR-R-Models (audit-rust.md §models.rs special analysis — 14 도메인 그룹 facade) — 여전히 유효. M models.rs 충돌만 해소되면 진행 가능.
+
+PR-R-Calendar (1432 LOC → 6 slice) — 여전히 유효. 단 OAuth 통합 smoke는 사용자 수동 검증 필요.
+
+PR-F-Worktree (9 파일 분할) — audit이 가장 구체적이고 합리적인 분해 권장(독립된 sub-component 5개 + 1 hook). M WorktreeView.tsx 해소 후 진행 가능.
+
+PR-F-Jobs (4 패널 추출) — 4개 패널이 실제로 독립적(SelfCheck/Enrich/BatchEnrich/Triage)이라 명확한 분해 경계 존재. CaptureBoard보다 분해 가치 분명함.
+
+PR-F-CSS-Dead — 단순 삭제 작업, 여전히 유효.
+
+### 학습 (audit과 실행 사이의 간격)
+
+audit 결과는 **분해 후보 list**이지 자동 실행 대상이 아니다. 각 권장사항은 코드 실측에서 다음을 검사 후 채택:
+
+1. 추출 대상이 진짜 독립적인가 (의존성 12+ deps는 false-positive)
+2. 추출 후 정말 구조가 개선되는가 (LOC 분산은 개선 아님)
+3. audit이 본 "leak"이 의도된 패턴인지 (commands/=글루 vs root=도메인은 이 레포의 의도)
+
+이 재평가 패턴 자체를 `docs/areas/frontend-shell.md` + `docs/areas/ipc-conventions.md`에 "분해 전 의존성 그래프 검사" 가드로 추가 권장.
+
+---
+
 ## 향후 follow-up (이 플랜 외)
 
 1. **Doc budget 자동화** — `docs/areas/area-map.md`의 "forbidden when only this domain" 컬럼을 pre-commit 훅으로 강제 (잘못된 docs 로드 시 경고)
