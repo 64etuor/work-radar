@@ -1,7 +1,7 @@
 // 설정 → 뉴스 카테고리. 글로벌 옵션(D-Tune) + 키워드 필터(D-Safe) + 소스별 on/off 토글(카테고리 그룹). 즉시 반영 + 토스트.
 // INVARIANT #1: 뉴스는 표시 전용 — 토글/필터/옵션이 결정 레일 어떤 데이터도 안 건드림.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,10 @@ import type {
   NewsSourceMeta,
   SortMode,
 } from "@/bindings";
-import { Field, SectionLabel } from "./kit";
+import { SectionLabel } from "./kit";
+
+const MARQUEE_SPEED_MIN = 1;
+const MARQUEE_SPEED_MAX = 9;
 
 const CATEGORY_LABEL: Record<NewsCategory, string> = {
   koreanTech: "한글 기술블로그",
@@ -185,91 +188,156 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
   const m = useSetNewsOptions();
   const o = q.data;
   if (!o) return null;
-  const update = (patch: Partial<NewsOptions>) =>
+  const update = (patch: Partial<NewsOptions>, toast = "옵션 저장됨") =>
     m.mutate(
       { ...o, ...patch },
-      { onSuccess: () => onToast("옵션 저장됨 — 다음 페치부터 적용") },
+      { onSuccess: () => toast && onToast(toast) },
     );
 
   return (
-    <section className="rounded-xl border border-border p-4 flex flex-col gap-3">
-      <SectionLabel>표시 옵션</SectionLabel>
-      <Field label="총 표시 개수" hint="티커가 동시에 보여줄 최대(5~100)">
-        <Input
-          type="number"
-          min={5}
-          max={100}
-          step={1}
-          inputMode="numeric"
-          value={o.totalLimit}
-          onChange={(e) => {
-            const n = Math.trunc(Number(e.target.value));
-            if (Number.isNaN(n)) return;
-            update({ totalLimit: Math.max(5, Math.min(100, n)) });
-          }}
-        />
-      </Field>
-      <Field
-        label="소스당 최대 개수"
-        hint="0이면 무제한(한 소스가 티커를 독점할 수 있음)"
-      >
-        <Input
-          type="number"
-          min={0}
-          max={50}
-          step={1}
-          inputMode="numeric"
-          value={o.perSourceLimit}
-          onChange={(e) => {
-            const n = Math.trunc(Number(e.target.value));
-            if (Number.isNaN(n)) return;
-            update({ perSourceLimit: Math.max(0, Math.min(50, n)) });
-          }}
-        />
-      </Field>
-      <Field label="정렬">
-        <Select
-          value={o.sortMode}
-          onValueChange={(v) => update({ sortMode: v as SortMode })}
+    <section className="rounded-2xl border border-border bg-card/80 p-5 shadow-[0_1px_0_rgba(255,255,255,0.35)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <SectionLabel>표시 옵션</SectionLabel>
+          <p className="mt-1 text-xs text-muted-foreground">
+            뉴스 개수와 정렬, 마퀴 체감 속도를 한 곳에서 조절합니다.
+          </p>
+        </div>
+        <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+          실시간 반영
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        <OptionRow label="총 표시 개수" hint="티커 최대 5~100개">
+          <Input
+            type="number"
+            min={5}
+            max={100}
+            step={1}
+            inputMode="numeric"
+            value={o.totalLimit}
+            className="h-8 w-32 text-right"
+            onChange={(e) => {
+              const n = Math.trunc(Number(e.target.value));
+              if (Number.isNaN(n)) return;
+              update({ totalLimit: Math.max(5, Math.min(100, n)) });
+            }}
+          />
+        </OptionRow>
+
+        <OptionRow
+          label="소스당 최대"
+          hint="0이면 소스별 제한 없음"
         >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="recent">최신순</SelectItem>
-            <SelectItem value="comments">댓글 많은 순</SelectItem>
-            <SelectItem value="mixed">소스 라운드로빈</SelectItem>
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field
-        label="갱신 주기"
-        hint="0=자동 갱신 끔(설정 변경 시 즉시 깨움)"
-      >
-        <Select
-          value={String(o.fetchIntervalMinutes)}
-          onValueChange={(v) => update({ fetchIntervalMinutes: Number(v) })}
+          <Input
+            type="number"
+            min={0}
+            max={50}
+            step={1}
+            inputMode="numeric"
+            value={o.perSourceLimit}
+            className="h-8 w-32 text-right"
+            onChange={(e) => {
+              const n = Math.trunc(Number(e.target.value));
+              if (Number.isNaN(n)) return;
+              update({ perSourceLimit: Math.max(0, Math.min(50, n)) });
+            }}
+          />
+        </OptionRow>
+
+        <OptionRow label="정렬" hint="티커 후보 우선순위">
+          <Select
+            value={o.sortMode}
+            onValueChange={(v) => update({ sortMode: v as SortMode })}
+          >
+            <SelectTrigger className="h-8 w-32 [&>span]:flex-1 [&>span]:text-right">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">최신순</SelectItem>
+              <SelectItem value="comments">댓글 많은 순</SelectItem>
+              <SelectItem value="mixed">소스 라운드로빈</SelectItem>
+            </SelectContent>
+          </Select>
+        </OptionRow>
+
+        <OptionRow
+          label="갱신 주기"
+          hint="설정 변경 시 즉시 깨움"
         >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="0">자동 갱신 끔</SelectItem>
-            <SelectItem value="5">5분</SelectItem>
-            <SelectItem value="10">10분</SelectItem>
-            <SelectItem value="15">15분(기본)</SelectItem>
-            <SelectItem value="30">30분</SelectItem>
-            <SelectItem value="60">60분</SelectItem>
-          </SelectContent>
-        </Select>
-      </Field>
-      <NewsMarqueeSpeedField
-        key={o.marqueeSeconds}
-        disabled={m.isPending}
-        seconds={o.marqueeSeconds}
-        onCommit={(marqueeSeconds) => update({ marqueeSeconds })}
-      />
+          <Select
+            value={String(o.fetchIntervalMinutes)}
+            onValueChange={(v) => update({ fetchIntervalMinutes: Number(v) })}
+          >
+            <SelectTrigger className="h-8 w-32 [&>span]:flex-1 [&>span]:text-right">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">자동 갱신 끔</SelectItem>
+              <SelectItem value="5">5분</SelectItem>
+              <SelectItem value="10">10분</SelectItem>
+              <SelectItem value="15">15분(기본)</SelectItem>
+              <SelectItem value="30">30분</SelectItem>
+              <SelectItem value="60">60분</SelectItem>
+            </SelectContent>
+          </Select>
+        </OptionRow>
+
+        <div className="md:col-span-2 rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
+          <NewsMarqueeSpeedField
+            key={o.marqueeSeconds}
+            disabled={m.isPending}
+            seconds={o.marqueeSeconds}
+            onCommit={(marqueeSeconds) => update({ marqueeSeconds }, "")}
+          />
+        </div>
+        <OptionRow
+          className="md:col-span-2"
+          label="핫 뉴스만 표시"
+          hint="댓글이 붙은 hot/trending 항목만 표시"
+        >
+          <Switch
+            checked={o.hotOnly}
+            disabled={m.isPending}
+            onCheckedChange={(checked) =>
+              update(
+                { hotOnly: checked },
+                `핫 뉴스만 표시 ${checked ? "켰습니다" : "껐습니다"}`,
+              )
+            }
+          />
+        </OptionRow>
+      </div>
     </section>
+  );
+}
+
+function OptionRow({
+  label,
+  hint,
+  className,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/15 px-3 py-2.5 ${className ?? ""}`}
+    >
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium text-foreground">{label}</div>
+        {hint && (
+          <div className="mt-0.5 truncate text-[11px] leading-snug text-muted-foreground">
+            {hint}
+          </div>
+        )}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
   );
 }
 
@@ -282,34 +350,87 @@ function NewsMarqueeSpeedField({
   seconds: number;
   onCommit: (seconds: number) => void;
 }) {
-  const [draft, setDraft] = useState(seconds);
+  const initialSpeed = secondsToMarqueeSpeed(seconds);
+  const [draft, setDraft] = useState(initialSpeed);
 
   return (
-    <Field
-      label="마퀴 속도"
-      hint="왼쪽으로 한 바퀴 도는 시간. 짧을수록 빠르게 흐릅니다."
-    >
-      <div className="flex items-center gap-3">
-        <Slider
-          value={[draft]}
-          min={20}
-          max={180}
-          step={5}
-          disabled={disabled}
-          onValueChange={([v]) => setDraft(v ?? seconds)}
-          onValueCommit={([v]) => {
-            const next = Math.max(20, Math.min(180, Math.trunc(v ?? seconds)));
-            setDraft(next);
-            onCommit(next);
-          }}
-          aria-label="뉴스 마퀴 속도"
-        />
-        <span className="w-14 shrink-0 text-right font-mono text-xs text-muted-foreground">
-          {draft}s
-        </span>
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[13px] font-medium text-foreground">마퀴 속도</div>
+        <div className="max-w-[28rem] text-right text-[11px] leading-snug text-muted-foreground">
+          뉴스가 흘러가는 체감 속도입니다. 기본은 보통.
+        </div>
       </div>
-    </Field>
+      <div className="flex flex-col gap-2">
+        <div className="relative pt-1">
+          <Slider
+            value={[draft]}
+            min={MARQUEE_SPEED_MIN}
+            max={MARQUEE_SPEED_MAX}
+            step={1}
+            disabled={disabled}
+            onValueChange={([v]) => setDraft(clampMarqueeSpeed(v ?? initialSpeed))}
+            onValueCommit={([v]) => {
+              const next = clampMarqueeSpeed(v ?? initialSpeed);
+              setDraft(next);
+              onCommit(marqueeSpeedToSeconds(next));
+            }}
+            aria-label="뉴스 마퀴 속도"
+          />
+          <div className="pointer-events-none mt-1 flex justify-between px-1">
+            {Array.from(
+              { length: MARQUEE_SPEED_MAX - MARQUEE_SPEED_MIN + 1 },
+              (_, i) => (
+                <span
+                  key={i}
+                  className="h-1.5 w-px rounded-full bg-border"
+                  aria-hidden="true"
+                />
+              ),
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-0.5 text-xs text-muted-foreground">
+          <span>느림</span>
+          <span>빠름</span>
+        </div>
+      </div>
+    </div>
   );
+}
+
+function clampMarqueeSpeed(value: number): number {
+  return Math.max(
+    MARQUEE_SPEED_MIN,
+    Math.min(MARQUEE_SPEED_MAX, Math.trunc(value)),
+  );
+}
+
+function marqueeSpeedToSeconds(speed: number): number {
+  const bySpeed: Record<number, number> = {
+    1: 180,
+    2: 150,
+    3: 120,
+    4: 90,
+    5: 60,
+    6: 45,
+    7: 35,
+    8: 28,
+    9: 20,
+  };
+  return bySpeed[clampMarqueeSpeed(speed)] ?? 60;
+}
+
+function secondsToMarqueeSpeed(seconds: number): number {
+  if (seconds >= 165) return 1;
+  if (seconds >= 135) return 2;
+  if (seconds >= 105) return 3;
+  if (seconds >= 75) return 4;
+  if (seconds >= 53) return 5;
+  if (seconds >= 40) return 6;
+  if (seconds >= 32) return 7;
+  if (seconds >= 24) return 8;
+  return 9;
 }
 
 function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
@@ -338,9 +459,16 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
   const excludes = list.filter((f) => f.mode === "exclude");
 
   return (
-    <section className="rounded-xl border border-border p-4 flex flex-col gap-3">
-      <SectionLabel>키워드 필터</SectionLabel>
-      <div className="flex gap-2">
+    <section className="rounded-2xl border border-border bg-card/80 p-5 shadow-[0_1px_0_rgba(255,255,255,0.35)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <SectionLabel>키워드 필터</SectionLabel>
+          <p className="mt-1 text-xs text-muted-foreground">
+            포함은 OR, 제외는 AND. 빈 리스트면 전체를 보여줍니다.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_auto]">
         <Input
           value={kw}
           onChange={(e) => setKw(e.target.value)}
@@ -351,10 +479,10 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
             }
           }}
           placeholder="예: AI, Rust, crypto"
-          className="flex-1"
+          className="w-full"
         />
         <Select value={mode} onValueChange={(v) => setMode(v as FilterMode)}>
-          <SelectTrigger className="w-28">
+          <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -366,18 +494,17 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
           추가
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        포함: 적어도 하나의 키워드를 포함한 제목만 표시(OR). 제외: 이 키워드를 포함한 제목
-        숨김(AND). 대소문자 무관, 부분 일치. 빈 리스트면 전체 표시.
+      <p className="mt-2 text-xs text-muted-foreground">
+        대소문자 무관, 부분 일치. 필터를 비우면 전체 표시.
       </p>
       {includes.length > 0 && (
-        <div>
+        <div className="mt-4">
           <SectionLabel className="mb-1.5">포함</SectionLabel>
           <ChipList list={includes} onRemove={(id) => remove.mutate(id)} />
         </div>
       )}
       {excludes.length > 0 && (
-        <div>
+        <div className="mt-4">
           <SectionLabel className="mb-1.5">제외</SectionLabel>
           <ChipList list={excludes} onRemove={(id) => remove.mutate(id)} />
         </div>

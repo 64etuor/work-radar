@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  ArrowLeft,
   CalendarCheck,
   CheckCircle2,
   ChevronLeft,
@@ -95,15 +94,6 @@ export function TodayView() {
   return (
     <div className="today">
       <header className="today-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full text-[12px]"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="today-title">Today</span>
         <div className="today-nav">
           <Button

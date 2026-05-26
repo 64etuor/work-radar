@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Blocks, FileText, Plus, Save, Trash2 } from "lucide-react";
+import { Blocks, FileText, Plus, Save, Trash2 } from "lucide-react";
 
 import type { Skill } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ import { useUIStore } from "@/store";
  * 편집해도 자동 분류/자동 적용 경로는 절대 생기지 않는다. 외부 스킬 파일은 실행하지 않는다(읽기/편집).
  */
 export function SkillsView() {
-  const { goTo, pendingSkillId, clearPendingSkill } = useUIStore();
+  const { pendingSkillId, clearPendingSkill } = useUIStore();
   const skills = useSkills();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -61,15 +61,6 @@ export function SkillsView() {
   return (
     <div className="skl">
       <header className="skl-head" data-tauri-drag-region>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="skl-title">스킬 레지스트리</span>
         <Button
           variant="outline"

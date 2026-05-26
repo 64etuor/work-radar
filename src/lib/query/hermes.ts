@@ -12,10 +12,11 @@ import {
 // 수신은 bounded 단발 fetch(무한 long-poll 아님) — cadence는 사용자 버튼/뷰 폴링이 정한다(#5).
 
 /** 브리지 연결 상태(configured/chat_id). 봇 토큰 본문 미노출. */
-export function useHermesBridgeStatus() {
+export function useHermesBridgeStatus(options?: { enabled?: boolean }) {
   return useQuery<HermesBridgeStatus>({
     queryKey: ["hermesBridgeStatus"],
     queryFn: () => unwrap(commands.hermesBridgeStatus()),
+    enabled: options?.enabled ?? true,
     staleTime: 30_000,
   });
 }

@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   Archive,
-  ArrowLeft,
   CheckCircle2,
   RotateCcw,
   Sparkles,
@@ -20,7 +19,6 @@ import {
   useSetSignalImpact,
   useSetSignalRegret,
 } from "@/lib/query";
-import { useUIStore } from "@/store";
 
 /** YYYY-MM-DD → M/D (짧은 라벨). */
 function md(date: string): string {
@@ -49,21 +47,11 @@ const PERIODS: { value: Period; label: string }[] = [
  * 자동 분류 0(INVARIANT #1), 외부 변경 0(INVARIANT #2). 완료 todo는 today_done_at 범위로 잡는다.
  */
 export function RetroView() {
-  const { goTo } = useUIStore();
   const [tab, setTab] = useState<"retro" | "archive">("retro");
 
   return (
     <div className="rt">
       <header className="rt-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="rt-title">회고</span>
         <div className="rt-tabs">
           <Button

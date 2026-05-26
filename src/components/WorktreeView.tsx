@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Spinner } from "@/components/Spinner";
 import {
-  ArrowLeft,
   GitCompare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -28,7 +27,6 @@ import {
   useWorktreeFileDiff,
   useWorktrees,
 } from "@/lib/query";
-import { useUIStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -83,7 +81,6 @@ function useStickyToggle(key: string): [boolean, (v: boolean) => void] {
  * 파일별 diff를 본다. 대용량 비차단 = 파일목록 먼저 + 선택 파일만 지연 로드. git 접근은 Rust(셸아웃).
  */
 export function WorktreeView() {
-  const { goTo } = useUIStore();
   const projects = useProjects();
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // 12c: live=true → dirty/ahead/behind + 활성 변경 활동을 bounded 주기로 자동 갱신.
@@ -173,15 +170,6 @@ export function WorktreeView() {
   return (
     <div className="wt">
       <header className="wt-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full text-[12px]"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="wt-title">Worktree Diff</span>
         <Select
           value={projectFilter ?? PROJECT_ALL}

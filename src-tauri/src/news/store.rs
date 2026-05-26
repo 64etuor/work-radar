@@ -108,6 +108,7 @@ pub async fn list_recent(
     } else {
         opts.per_source_limit as i64
     };
+    let candidate_limit = candidate_limit(opts.total_limit);
     let order = order_clause(opts.sort_mode);
 
     // SAFETY: include_clause/exclude_clause/order 모두 closed-set static fragment 조합.
@@ -137,10 +138,67 @@ pub async fn list_recent(
     for kw in &excludes {
         q = q.bind(format!("%{}%", like_escape(&kw.keyword)));
     }
-    q = q.bind(per_source_limit).bind(opts.total_limit as i64);
+    q = q.bind(per_source_limit).bind(candidate_limit);
 
     let rows = q.fetch_all(db).await?;
-    Ok(rows.into_iter().map(Into::into).collect())
+    Ok(rank_and_trim(
+        rows.into_iter().map(Into::into).collect(),
+        opts.total_limit as usize,
+        opts.hot_only,
+    ))
+}
+
+fn candidate_limit(total_limit: u32) -> i64 {
+    let base = i64::from(total_limit);
+    // 핫/트렌딩이 total_limit 밖으로 밀려도 후보군에 남아있게 넉넉히 overfetch.
+    base.saturating_mul(4).max(base.saturating_add(20))
+}
+
+fn rank_and_trim(items: Vec<NewsItem>, total_limit: usize, hot_only: bool) -> Vec<NewsItem> {
+    if items.len() <= total_limit {
+        return if hot_only {
+            hot_only_items(items, total_limit)
+        } else {
+            items
+        };
+    }
+    let threshold = hot_threshold(&items);
+    let mut hot = Vec::with_capacity(items.len());
+    let mut rest = Vec::with_capacity(items.len());
+    for item in items {
+        if threshold.is_some_and(|t| item.comment_count.is_some_and(|c| c >= t)) {
+            hot.push(item);
+        } else {
+            rest.push(item);
+        }
+    }
+    if hot_only {
+        hot.truncate(total_limit);
+        return hot;
+    }
+    hot.extend(rest);
+    hot.truncate(total_limit);
+    hot
+}
+
+fn hot_only_items(items: Vec<NewsItem>, total_limit: usize) -> Vec<NewsItem> {
+    let threshold = hot_threshold(&items);
+    let mut hot = items
+        .into_iter()
+        .filter(|item| threshold.is_some_and(|t| item.comment_count.is_some_and(|c| c >= t)))
+        .collect::<Vec<_>>();
+    hot.truncate(total_limit);
+    hot
+}
+
+fn hot_threshold(items: &[NewsItem]) -> Option<u32> {
+    let mut counts: Vec<u32> = items.iter().filter_map(|i| i.comment_count).collect();
+    if counts.is_empty() {
+        return None;
+    }
+    counts.sort_unstable_by(|a, b| b.cmp(a));
+    let idx = ((counts.len().saturating_sub(1)) as f64 * 0.25).floor() as usize;
+    Some(std::cmp::max(10, counts[idx]))
 }
 
 /// 7일 초과 아이템 정리 — fetcher tick 시작 시 호출.
@@ -212,6 +270,7 @@ mod tests {
             sort_mode: SortMode::Recent,
             fetch_interval_minutes: 15,
             marquee_seconds: 60,
+            hot_only: false,
         }
     }
 
@@ -456,6 +515,51 @@ mod tests {
         let rows = list_recent(&p, &opts, &[]).await.unwrap();
         assert_eq!(rows.iter().filter(|r| r.source == "hn").count(), 2);
         assert_eq!(rows.iter().filter(|r| r.source == "geeknews").count(), 2);
+    }
+
+    #[tokio::test]
+    async fn hot_items_survive_total_limit_cut() {
+        let p = pool().await;
+        let now = Utc::now();
+        let mut items = Vec::new();
+        for i in 0..6 {
+            let mut n = item("hn", &format!("h{i}"), &format!("hn-{i}"));
+            n.posted_at = (now - Duration::seconds(i as i64)).to_rfc3339();
+            n.comment_count = if i == 5 { Some(100) } else { Some(i as u32) };
+            items.push(n);
+        }
+        upsert_many(&p, &items).await.unwrap();
+        let mut opts = test_opts();
+        opts.total_limit = 3;
+        opts.per_source_limit = 0;
+        opts.sort_mode = SortMode::Recent;
+        let rows = list_recent(&p, &opts, &[]).await.unwrap();
+        let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
+        assert_eq!(ids.len(), 3);
+        assert_eq!(
+            ids[0], "h5",
+            "핫 아이템은 total_limit 밖에 있어도 후보군에서 살아남아야 함"
+        );
+    }
+
+    #[tokio::test]
+    async fn hot_only_filters_non_hot_items() {
+        let p = pool().await;
+        let mut cool = item("hn", "1", "cool");
+        cool.comment_count = Some(3);
+        let mut hot = item("hn", "2", "hot");
+        hot.comment_count = Some(50);
+        upsert_many(&p, &[cool, hot]).await.unwrap();
+        let mut opts = test_opts();
+        opts.hot_only = true;
+        opts.total_limit = 10;
+        let rows = list_recent(&p, &opts, &[]).await.unwrap();
+        let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["2"],
+            "hot_only=true면 댓글 없는/낮은 뉴스는 숨겨야 함"
+        );
     }
 
     #[tokio::test]

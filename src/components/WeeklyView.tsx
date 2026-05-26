@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   CheckCircle2,
   GitPullRequest,
   Inbox,
@@ -9,9 +8,7 @@ import {
 } from "lucide-react";
 
 import type { DebtPoint } from "@/bindings";
-import { Button } from "@/components/ui/button";
 import { localToday, useWeeklyReview } from "@/lib/query";
-import { useUIStore } from "@/store";
 
 /** YYYY-MM-DD → M/D (짧은 라벨). */
 function md(date: string): string {
@@ -24,22 +21,12 @@ function md(date: string): string {
  * 전부 read 집계(기존 타임스탬프 + debt_snapshots). 외부 변경 없음.
  */
 export function WeeklyView() {
-  const { goTo } = useUIStore();
   const review = useWeeklyReview(localToday());
   const data = review.data;
 
   return (
     <div className="wk">
       <header className="wk-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="wk-title">Weekly Review</span>
         {data && (
           <span className="wk-range">

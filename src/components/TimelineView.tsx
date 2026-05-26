@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -19,7 +18,6 @@ import {
   useSignals,
   useToday,
 } from "@/lib/query";
-import { useUIStore } from "@/store";
 
 /** YYYY-MM-DD 를 delta일 만큼 이동(로컬). */
 function shiftDate(date: string, delta: number): string {
@@ -47,7 +45,6 @@ function hhmm(iso: string): string {
  * 전부 read 합성 — 외부 변경 없음. 캘린더는 ambient(미연결 graceful degrade).
  */
 export function TimelineView() {
-  const { goTo } = useUIStore();
   const today = localToday();
   const [date, setDate] = useState(today);
   const isToday = date === today;
@@ -86,15 +83,6 @@ export function TimelineView() {
   return (
     <div className="tl">
       <header className="tl-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="tl-title">Timeline</span>
         <div className="tl-nav">
           <Button

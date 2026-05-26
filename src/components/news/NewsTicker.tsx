@@ -27,6 +27,7 @@ export function NewsTicker() {
   const items = q.data ?? [];
   const hasFilters = (filters.data ?? []).length > 0;
   const marqueeSeconds = options.data?.marqueeSeconds ?? 60;
+  const hotOnly = options.data?.hotOnly ?? false;
 
   // 빈 상태 — 로딩/실패/소스 0개/아이템 0개 모두 동일 톤으로 subtle 안내.
   if (q.isLoading) {
@@ -35,7 +36,9 @@ export function NewsTicker() {
   if (items.length === 0) {
     return (
       <div className="news-ticker is-empty">
-        {hasFilters
+        {hotOnly
+          ? "핫 뉴스가 없습니다 — 설정에서 핫 뉴스만 표시를 끄거나 댓글 있는 소스를 켜세요"
+          : hasFilters
           ? "필터에 매치되는 뉴스가 없습니다 — 설정에서 키워드 조정"
           : "뉴스 소스가 꺼져 있거나 아직 수신된 항목이 없습니다 — 설정 → 뉴스에서 선택"}
       </div>

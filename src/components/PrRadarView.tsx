@@ -1,5 +1,5 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bot, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
+import { Bot, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
 
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";
 import {
@@ -79,15 +79,6 @@ export function PrRadarView() {
   return (
     <div className="pr">
       <header className="pr-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full text-[12px]"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="pr-title">PR Radar</span>
         <span className="pr-poll">
           <RefreshCw className={`size-3.5${isFetching ? " pr-spin" : ""}`} />

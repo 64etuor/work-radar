@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { ArrowLeft, Flame, Repeat } from "lucide-react";
+import { Flame, Repeat } from "lucide-react";
 
 import type { RoutineFreq, RoutineTrackingItem } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { localToday, useRoutineTracking } from "@/lib/query";
-import { useUIStore } from "@/store";
 
 type Period = 7 | 30 | 90;
 const PERIODS: { value: Period; label: string }[] = [
@@ -32,7 +31,6 @@ function md(date: string): string {
  * 전부 로컬 routine_checks 집계 — 자동화/외부 변경 없음(INVARIANT #1/#7).
  */
 export function RoutineTrackingView() {
-  const { goTo } = useUIStore();
   const [period, setPeriod] = useState<Period>(30);
   const tracking = useRoutineTracking(localToday(), period);
   const items = tracking.data ?? [];
@@ -40,15 +38,6 @@ export function RoutineTrackingView() {
   return (
     <div className="rt">
       <header className="rt-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="rt-title">루틴 트래킹</span>
         <div className="rt-tabs" />
       </header>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Spinner } from "@/components/Spinner";
 import {
-  ArrowLeft,
   Bot,
   Check,
   ExternalLink,
@@ -40,7 +39,6 @@ import {
   useTriggerCodexJob,
   useTriggerEchoJob,
 } from "@/lib/query";
-import { useUIStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -88,7 +86,6 @@ function isActive(s: AgentStatus): boolean {
  * codex 미설치/미인증이면 codex 트리거는 비활성(graceful degrade) — 나머지(echo·목록·kill)는 정상.
  */
 export function JobsView() {
-  const { goTo } = useUIStore();
   const runs = useAgentRuns();
   const codex = useCodexStatus();
   const echoJob = useTriggerEchoJob();
@@ -102,15 +99,6 @@ export function JobsView() {
   return (
     <div className="jobs">
       <header className="jobs-head" data-tauri-drag-region>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full text-[12px]"
-          onClick={() => goTo("board")}
-        >
-          <ArrowLeft className="size-4" />
-          보드
-        </Button>
         <span className="jobs-title">Jobs · Agent</span>
         <span className="jobs-poll">
           <RefreshCw className={`size-3.5${runs.isFetching ? " jobs-spin" : ""}`} />

@@ -131,7 +131,10 @@ export function AgentStatusBar() {
   const list = runs.data ?? [];
 
   // hermes/cmux 세션 (agent_runs에 없을 수 있어 별도 enumerate — 표시 전용 INVARIANT #1).
-  const hermes = useHermesBridgeStatus();
+  // Do not initiate a keychain read from the always-mounted status bar.
+  // HermesView/Settings own explicit status refresh; this bar only consumes
+  // hydrated/cached status so `pnpm tauri dev` can boot without keychain prompts.
+  const hermes = useHermesBridgeStatus({ enabled: false });
   const cmux = useCmuxStatus();
   const focusCmux = useFocusCmuxWorkspace();
 

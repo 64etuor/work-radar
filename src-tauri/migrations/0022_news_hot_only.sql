@@ -1,0 +1,2 @@
+ALTER TABLE news_options
+    ADD COLUMN hot_only INTEGER NOT NULL DEFAULT 0;

@@ -908,6 +908,8 @@ export type NewsOptions = {
 	fetchIntervalMinutes: number,
 	/**  티커 마퀴 한 사이클 시간(초). UI slider에서 20..180으로 조절. */
 	marqueeSeconds: number,
+	/**  댓글 있는 hot 항목만 표시. */
+	hotOnly: boolean,
 };
 
 /**  소스 메타 정보 — IPC `news_sources_available`이 반환. */

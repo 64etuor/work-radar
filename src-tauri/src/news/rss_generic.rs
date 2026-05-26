@@ -10,6 +10,8 @@
 use async_trait::async_trait;
 use feed_rs::parser;
 use reqwest::{header::HeaderMap, header::HeaderName, header::HeaderValue, Client};
+use serde::Deserialize;
+use tokio::task::JoinSet;
 
 use super::{http_bytes, NewsCategory, NewsItem, NewsSource};
 use crate::error::AppError;
@@ -61,7 +63,7 @@ impl NewsSource for GenericRssSource {
         let feed = parser::parse(&bytes[..])
             .map_err(|e| AppError::transient(format!("rss.{}.parse", self.id), e.to_string()))?;
         let id = self.id;
-        Ok(feed
+        let items: Vec<NewsItem> = feed
             .entries
             .into_iter()
             .take(take)
@@ -71,16 +73,143 @@ impl NewsSource for GenericRssSource {
                 let external_id = e.id.clone();
                 // critic Critical: 둘 다 없으면 drop. Utc::now() 폴백 절대 금지.
                 let posted_at = e.published.or(e.updated)?;
+                let comments_url = extract_comments_url(&e);
                 Some(NewsItem {
                     source: id.to_string(),
                     external_id,
                     title,
                     url,
-                    comments_url: None,
+                    comments_url,
                     comment_count: None,
                     posted_at: posted_at.to_rfc3339(),
                 })
             })
-            .collect())
+            .collect();
+
+        if id == "reddit_programming" {
+            let mut set: JoinSet<NewsItem> = JoinSet::new();
+            for item in items {
+                let client = client.clone();
+                set.spawn(async move { enrich_reddit_comment_count(client, item).await });
+            }
+            let mut out = Vec::with_capacity(take);
+            while let Some(j) = set.join_next().await {
+                match j {
+                    Ok(item) => out.push(item),
+                    Err(e) => tracing::warn!(error = %e, "reddit comment join error"),
+                }
+            }
+            return Ok(out);
+        }
+
+        Ok(items)
+    }
+}
+
+fn extract_comments_url(entry: &feed_rs::model::Entry) -> Option<String> {
+    entry
+        .links
+        .iter()
+        .find(|link| link.rel.as_deref() == Some("comments"))
+        .map(|link| link.href.clone())
+        .or_else(|| {
+            entry
+                .content
+                .as_ref()
+                .and_then(|c| c.body.as_deref())
+                .and_then(extract_comments_href_from_html)
+        })
+        .or_else(|| {
+            entry
+                .summary
+                .as_ref()
+                .map(|s| s.content.as_str())
+                .and_then(extract_comments_href_from_html)
+        })
+}
+
+fn extract_comments_href_from_html(html: &str) -> Option<String> {
+    let marker = "[comments]";
+    let marker_pos = html.find(marker)?;
+    let prefix = &html[..marker_pos];
+    let href_pos = prefix.rfind("href=")?;
+    let after = &prefix[href_pos + "href=".len()..];
+    let mut chars = after.chars();
+    let quote = chars.next()?;
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+    let rest = chars.as_str();
+    let end = rest.find(quote)?;
+    Some(rest[..end].to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct RedditListing {
+    data: RedditListingData,
+}
+
+#[derive(Debug, Deserialize)]
+struct RedditListingData {
+    children: Vec<RedditChild>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RedditChild {
+    data: RedditPostData,
+}
+
+#[derive(Debug, Deserialize)]
+struct RedditPostData {
+    num_comments: u32,
+}
+
+async fn enrich_reddit_comment_count(client: Client, mut item: NewsItem) -> NewsItem {
+    match fetch_reddit_comment_count(&client, &item.url).await {
+        Ok(count) => item.comment_count = count,
+        Err(e) => tracing::warn!(url = %item.url, error = %e, "reddit comment count skip"),
+    }
+    item
+}
+
+async fn fetch_reddit_comment_count(client: &Client, url: &str) -> Result<Option<u32>, AppError> {
+    let api_url = format!("{url}.json?raw_json=1");
+    let resp = client.get(api_url).send().await?;
+    let posts: Vec<RedditListing> = super::http_json(resp, "reddit_programming.post").await?;
+    Ok(posts
+        .first()
+        .and_then(|listing| listing.data.children.first())
+        .map(|child| child.data.num_comments))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        extract_comments_href_from_html, RedditChild, RedditListing, RedditListingData,
+        RedditPostData,
+    };
+
+    #[test]
+    fn extracts_comments_href_from_inline_html() {
+        let html = r#"<span><a href="https://example.com/comments/1">[comments]</a></span>"#;
+        assert_eq!(
+            extract_comments_href_from_html(html),
+            Some("https://example.com/comments/1".into())
+        );
+    }
+
+    #[test]
+    fn reddit_listing_shape_matches_num_comments() {
+        let listing = RedditListing {
+            data: RedditListingData {
+                children: vec![RedditChild {
+                    data: RedditPostData { num_comments: 42 },
+                }],
+            },
+        };
+        assert_eq!(
+            listing.data.children.first().map(|c| c.data.num_comments),
+            Some(42)
+        );
     }
 }
