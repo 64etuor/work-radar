@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
-import { commands } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import {
+  AGENT_TERMINAL_STATUSES,
   useAcceptEnrichAll,
+  useAgentRunStatus,
   useBatchEnrichProposal,
 } from "@/lib/query";
-import { unwrap } from "@/lib/query/client";
 import { useToastStore } from "@/lib/toast";
 import {
   Select,
@@ -42,9 +42,6 @@ const AREA_OPTS: { value: AreaTag; label: string }[] = [
   { value: "other", label: "기타" },
 ];
 
-/** terminal 상태 — 도달하면 폴링 중단(INVARIANT #5: 무한 폴링 없음). */
-const TERMINAL = new Set(["awaiting_approval", "succeeded", "failed", "cancelled"]);
-
 type Props = {
   /** trigger_enrich_all이 만든 잡 id(폴링 대상). */
   runId: string;
@@ -70,10 +67,17 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
   const { pushSuccess, pushError } = useToastStore();
   const acceptEnrichAll = useAcceptEnrichAll();
 
-  const [status, setStatus] = useState<string>("proposed");
-  const [hasProposal, setHasProposal] = useState(false);
-  const [failDetail, setFailDetail] = useState<string | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 잡 상태 — query 레이어가 폴링/중단/에러 처리 단일화(INVARIANT #5).
+  const runStatus = useAgentRunStatus(runId);
+  const status: string = runStatus.isError
+    ? "failed"
+    : runStatus.data?.status ?? "proposed";
+  const hasProposal = runStatus.data?.hasProposal ?? false;
+  const failDetail: string | null = runStatus.isError
+    ? String(runStatus.error)
+    : runStatus.data?.status === "failed"
+      ? runStatus.data.detail ?? "알 수 없는 오류"
+      : null;
 
   // awaiting_approval + proposal 있을 때만 카드별 제안 로드(파싱 실패는 즉시 노출).
   const proposalReady = status === "awaiting_approval" && hasProposal;
@@ -85,38 +89,9 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
     if (proposal.data && !draft) setDraft(proposal.data.items);
   }, [proposal.data, draft]);
 
-  // 폴링(1초 주기, terminal에서 중단 — INVARIANT #5).
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const s = await unwrap(commands.agentRunStatus(runId));
-        setStatus(s.status);
-        setHasProposal(s.hasProposal);
-        if (s.status === "failed") setFailDetail(s.detail ?? "알 수 없는 오류");
-        if (TERMINAL.has(s.status) && intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      } catch (e) {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        setFailDetail(String(e));
-        setStatus("failed");
-      }
-    };
-    void poll();
-    intervalRef.current = setInterval(() => void poll(), 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId]);
-
   // 생성 중(터미널 전) 여부를 부모에 보고 — 인박스 버튼 스피너로 표시(여기선 팝업/토스트 안 띄움).
   useEffect(() => {
-    onRunningChange?.(!TERMINAL.has(status));
+    onRunningChange?.(!AGENT_TERMINAL_STATUSES.has(status));
   }, [status, onRunningChange]);
 
   const items = draft ?? proposal.data?.items ?? [];
@@ -144,7 +119,7 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
 
   // 생성 중(proposed/running 등 터미널 전)에는 패널을 렌더하지 않는다 — 인박스 버튼 스피너가 진행을
   // 표시(팝업/토스트 대신). awaiting_approval/succeeded/failed/cancelled에 도달해야 패널이 뜬다.
-  if (!TERMINAL.has(status)) return null;
+  if (!AGENT_TERMINAL_STATUSES.has(status)) return null;
 
   return (
     <div className="enrich-review" role="region" aria-label="AI 제안 검토">

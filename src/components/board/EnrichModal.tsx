@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { AreaTag, EnrichProposal, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import {
+  AGENT_TERMINAL_STATUSES,
   useAcceptEnrich,
+  useAgentRunStatus,
   useEnrichProposal,
+  useKillAgentRun,
 } from "@/lib/query";
 import { useToastStore } from "@/lib/toast";
-import { commands } from "@/bindings";
-import { unwrap } from "@/lib/query/client";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -44,9 +45,6 @@ const AREA_OPTS: { value: AreaTag; label: string }[] = [
   { value: "other", label: "기타" },
 ];
 
-/** terminal 상태 — 이 상태에 도달하면 폴링 중단. */
-const TERMINAL = new Set(["awaiting_approval", "succeeded", "failed", "cancelled"]);
-
 type Props = {
   runId: string;
   onClose: () => void;
@@ -72,11 +70,17 @@ export function EnrichModal({ runId, onClose }: Props) {
   const { pushSuccess, pushError } = useToastStore();
   const acceptEnrich = useAcceptEnrich();
 
-  // 폴링 상태
-  const [status, setStatus] = useState<string>("proposed");
-  const [hasProposal, setHasProposal] = useState(false);
-  const [failDetail, setFailDetail] = useState<string | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 잡 상태 — query 레이어가 폴링/중단/에러 처리 단일화(INVARIANT #5: terminal 자동 정지).
+  const runStatus = useAgentRunStatus(runId);
+  const status: string = runStatus.isError
+    ? "failed"
+    : runStatus.data?.status ?? "proposed";
+  const hasProposal = runStatus.data?.hasProposal ?? false;
+  const failDetail: string | null = runStatus.isError
+    ? String(runStatus.error)
+    : runStatus.data?.status === "failed"
+      ? runStatus.data.detail ?? "알 수 없는 오류"
+      : null;
 
   // 편집 가능한 proposal 초안
   const [draft, setDraft] = useState<EnrichProposal | null>(null);
@@ -91,41 +95,6 @@ export function EnrichModal({ runId, onClose }: Props) {
       setDraft(proposal.data);
     }
   }, [proposal.data, draft]);
-
-  // 폴링 시작 (1초 주기, terminal에서 중단)
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const s = await unwrap(commands.agentRunStatus(runId));
-        setStatus(s.status);
-        setHasProposal(s.hasProposal);
-        if (s.status === "failed") {
-          setFailDetail(s.detail ?? "알 수 없는 오류");
-        }
-        if (TERMINAL.has(s.status)) {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-        }
-      } catch (e) {
-        // 잡을 못 찾으면 폴링 중단
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        setFailDetail(String(e));
-        setStatus("failed");
-      }
-    };
-
-    void poll(); // 즉시 1회 실행
-    intervalRef.current = setInterval(() => void poll(), 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId]);
 
   // Esc/외부 클릭/창 양보는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
 
@@ -151,11 +120,12 @@ export function EnrichModal({ runId, onClose }: Props) {
     );
   };
 
+  const killAgentRun = useKillAgentRun();
   const handleCancel = async () => {
-    // running/proposed 상태이면 kill (terminal이면 그냥 닫기)
+    // running/proposed 상태이면 kill (terminal이면 그냥 닫기). kill 실패는 닫기에 영향 없음.
     if (status === "running" || status === "proposed") {
       try {
-        await unwrap(commands.killAgentRun(runId));
+        await killAgentRun.mutateAsync(runId);
       } catch {
         // kill 실패는 무시하고 닫음
       }
@@ -183,7 +153,7 @@ export function EnrichModal({ runId, onClose }: Props) {
         </DialogTitle>
 
         {/* 실행 중 스피너 */}
-        {!TERMINAL.has(status) && (
+        {!AGENT_TERMINAL_STATUSES.has(status) && (
           <div className="enrich-modal-loading">
             <Spinner />
             <span>codex 분석 중…</span>
