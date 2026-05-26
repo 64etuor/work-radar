@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/command";
 import { useNavKeymap, useProjects, useSkills } from "@/lib/query";
 import { NAV_GROUP_LABELS, navItemsByGroup } from "@/lib/nav";
-import { groupSkillsForPalette, skillSearchValue } from "@/lib/skill-grouping";
+import { groupSkillsForPalette, skillSearchValue } from "@/lib/skillGrouping";
 import { useUIStore } from "@/store";
 
 /**

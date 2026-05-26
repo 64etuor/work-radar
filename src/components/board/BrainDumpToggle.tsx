@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CornerDownLeft } from "lucide-react";
 
 import type { Kind } from "@/bindings";
-import { parseDump } from "@/components/board/board-utils";
+import { parseDump } from "@/components/board/boardUtils";
 import { Button } from "@/components/ui/button";
 import { registerOverlay } from "@/components/ui/overlay-stack";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

@@ -12,7 +12,7 @@ import { EXTRA_ACTIONS, NAV_ITEMS } from "@/lib/nav";
 import { eventToHotkeySpec } from "@/lib/hotkey";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
-import { SectionLabel } from "./kit";
+import { SectionLabel } from "./SettingsKit";
 
 /** 키맵 에디터 행: view + EXTRA_ACTIONS(calendar 등)를 한 목록으로. */
 const KEYMAP_ROWS: { key: string; label: string }[] = [

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 import type { WorkSignal } from "@/bindings";
-import { kindChipClass, kindLabel } from "@/components/board/board-utils";
+import { kindChipClass, kindLabel } from "@/components/board/boardUtils";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import {

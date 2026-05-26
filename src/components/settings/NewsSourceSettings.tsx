@@ -32,7 +32,7 @@ import type {
   NewsSourceMeta,
   SortMode,
 } from "@/bindings";
-import { SectionLabel } from "./kit";
+import { SectionLabel } from "./SettingsKit";
 
 const MARQUEE_SPEED_MIN = 1;
 const MARQUEE_SPEED_MAX = 9;

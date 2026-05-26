@@ -21,7 +21,7 @@ import { Card } from "@/components/ui/card";
 import { AddRepoForm } from "./AddRepoForm";
 import { GoogleCalendarBlock } from "./GoogleCalendarBlock";
 import { TokenRow } from "./TokenRow";
-import { SectionLabel } from "./kit";
+import { SectionLabel } from "./SettingsKit";
 
 /** Notion DB 연결 테스트 버튼 + 인라인 결과. */
 function NotionDbTestButton({

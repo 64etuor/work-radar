@@ -30,7 +30,7 @@ import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 import { AgentsPane } from "./settings/AgentsPane";
 import { GoogleCalendarBlock } from "./settings/GoogleCalendarBlock";
-import { SectionLabel } from "./settings/kit";
+import { SectionLabel } from "./settings/SettingsKit";
 
 type SettingsCategory =
   | "projects"

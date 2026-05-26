@@ -14,7 +14,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Field, SectionLabel, Segmented } from "./kit";
+import { Field, SectionLabel, Segmented } from "./SettingsKit";
 
 /**
  * Add Project 폼 — 개인/업무 + Notion DB 바인딩.

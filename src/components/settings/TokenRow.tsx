@@ -15,7 +15,7 @@ import {
 } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatusDot } from "./kit";
+import { StatusDot } from "./SettingsKit";
 
 /** Notion 마크 (lucide에 브랜드 아이콘이 없어 작은 글리프). */
 function NotionGlyph() {

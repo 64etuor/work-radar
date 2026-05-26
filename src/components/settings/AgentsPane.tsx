@@ -5,7 +5,7 @@ import { useCodexModel, useSetCodexModel } from "@/lib/query/agentsConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/components/ui/cn";
-import { SectionLabel, StatusDot } from "./kit";
+import { SectionLabel, StatusDot } from "./SettingsKit";
 
 /**
  * 에이전트 설정 패널 (B2 Part B).

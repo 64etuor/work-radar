@@ -12,7 +12,7 @@ import {
 } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SectionLabel, StatusDot } from "./kit";
+import { SectionLabel, StatusDot } from "./SettingsKit";
 
 /**
  * 프로젝트별 Google Calendar 연결 (read+write — 캘린더 목록·이벤트 생성).

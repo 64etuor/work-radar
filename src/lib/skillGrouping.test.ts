@@ -5,7 +5,7 @@ import {
   groupSkillsForPalette,
   skillSearchValue,
   SKILL_PALETTE_HEADINGS,
-} from "@/lib/skill-grouping";
+} from "@/lib/skillGrouping";
 
 function mk(over: Partial<Skill> & { id: string; name: string }): Skill {
   return {

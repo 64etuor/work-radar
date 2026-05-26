@@ -20,7 +20,7 @@ import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanva
 import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 import { SprintTimer } from "@/components/SprintTimer";
-import { zoneToQuadrant, type ZoneKey } from "@/components/board/board-utils";
+import { zoneToQuadrant, type ZoneKey } from "@/components/board/boardUtils";
 import {
   localToday,
   localWeekday,

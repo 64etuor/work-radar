@@ -5,7 +5,7 @@ import {
   kindLabel,
   quadrantToZone,
   type ZoneKey,
-} from "@/components/board/board-utils";
+} from "@/components/board/boardUtils";
 import { ageFromForDate, isTodayDone, localToday } from "@/lib/query";
 import { useListReorder } from "@/lib/useListReorder";
 

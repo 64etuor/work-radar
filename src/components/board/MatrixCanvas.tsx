@@ -12,7 +12,7 @@ import {
   suggestedQuadrantBadge,
   ZONES,
   type ZoneKey,
-} from "@/components/board/board-utils";
+} from "@/components/board/boardUtils";
 
 const CW = 150;
 const CH = 92;

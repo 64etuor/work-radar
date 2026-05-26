@@ -7,7 +7,7 @@ import {
 } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatusDot } from "./kit";
+import { StatusDot } from "./SettingsKit";
 
 /**
  * 알림 / 트레이 설정 (Phase 13). 알림 권한 상태 + 권한 요청 + 테스트 알림 버튼.

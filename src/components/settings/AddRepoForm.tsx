@@ -7,7 +7,7 @@ import { useCreateRepo } from "@/lib/query";
 import { trimOrNull } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Segmented } from "./kit";
+import { Segmented } from "./SettingsKit";
 
 /** Add Repo 폼 (프로젝트 카드 내부). github=remote URL, local=경로(Codex worktree 베이스). */
 export function AddRepoForm({

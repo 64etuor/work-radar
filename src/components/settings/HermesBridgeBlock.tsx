@@ -8,7 +8,7 @@ import {
 } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatusDot } from "./kit";
+import { StatusDot } from "./SettingsKit";
 
 /**
  * Hermes 메신저 브리지 설정 (Phase 20 #15). 외부 Hermes 에이전트를 Telegram Bot API류로 제어하기
