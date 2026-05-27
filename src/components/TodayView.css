@@ -124,6 +124,21 @@
   z-index: 4;
 }
 
+/* 15분 스냅 슬롯 시각 라벨 (PR 6 Task 3). */
+.today-canvas-drop-guide::after {
+  content: attr(data-time);
+  position: absolute;
+  left: 6px;
+  top: -16px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #4a7bb8;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0 4px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 .today-tray-row[data-dragging] {
   opacity: 0.6;
 }

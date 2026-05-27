@@ -104,13 +104,21 @@ export function TimelineCanvas({ date, today, boxes, onBlockClick, pointerYRef }
             aria-label="현재 시각"
           />
         )}
-        {isOver && hoverPx !== null && (
-          <div
-            className="today-canvas-drop-guide"
-            style={{ top: `${Math.round(hoverPx / 15) * 15}px` }}
-            aria-hidden
-          />
-        )}
+        {isOver && hoverPx !== null && (() => {
+          // 15분 그리드 스냅 — 분 단위로 환산해 라벨까지 표시(스펙 §D2).
+          // HOUR_PX=60이라 1min=1px, snap = round(min/15)*15.
+          const snapMin = Math.max(0, Math.min(24 * 60, Math.round(hoverPx / 15) * 15));
+          const hh = String(Math.floor(snapMin / 60)).padStart(2, "0");
+          const mm = String(snapMin % 60).padStart(2, "0");
+          return (
+            <div
+              className="today-canvas-drop-guide"
+              style={{ top: `${snapMin}px` }}
+              data-time={`${hh}:${mm}`}
+              aria-hidden
+            />
+          );
+        })()}
       </div>
     </div>
   );
