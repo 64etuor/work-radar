@@ -1,0 +1,23 @@
+/*
+ * ── 명령 팔레트 (cmdk 오버레이, Phase 2) ──
+ * Cohere white editorial: 흰 패널 + thin border, 절제된 그림자. 단일 창 네비게이션.
+ */
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 20, 40, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.cmdk-panel {
+  width: min(560px, 92vw);
+  max-height: 60vh;
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 60px rgba(10, 14, 30, 0.28);
+  overflow: hidden;
+}

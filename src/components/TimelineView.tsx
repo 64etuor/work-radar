@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./TimelineView.css";
 import {
   ChevronLeft,
   ChevronRight,

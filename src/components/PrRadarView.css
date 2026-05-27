@@ -1,0 +1,220 @@
+/* ──────────────────────────────────────────────────────────────────────────────
+ * PR Radar (Phase 4) — readiness 버킷 뷰. white editorial(DESIGN.md), .pr 스코프.
+ * ────────────────────────────────────────────────────────────────────────────── */
+.pr {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+.pr .pr-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.pr .pr-title {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.pr .pr-poll {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--color-wr-subtle);
+}
+.pr .pr-spin {
+  animation: wr-spin 1s linear infinite;
+}
+.pr .pr-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+}
+.pr .pr-empty,
+.pr .pr-err {
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-muted);
+  padding: 18px 2px;
+}
+.pr .pr-err {
+  color: var(--color-q1);
+}
+.pr .pr-bucket {
+  margin-bottom: 22px;
+}
+.pr .pr-bucket-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 2px 10px;
+}
+.pr .pr-bucket-name {
+  font: 700 11px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.pr .pr-b-ci_blocked {
+  color: var(--color-q1);
+}
+.pr .pr-b-ready {
+  color: var(--color-q2);
+}
+.pr .pr-b-needs_self_check {
+  color: var(--color-q3);
+}
+.pr .pr-b-stale,
+.pr .pr-b-merged_cleanup {
+  color: var(--color-wr-muted);
+}
+.pr .pr-bucket-hint {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.pr .pr-bucket-count {
+  margin-left: auto;
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+/* PR 행 목록 레이아웃 (GitHub-style rows). */
+.pr .pr-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.pr .prr-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--color-wr-bg);
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.pr .prr-row:last-child {
+  border-bottom: none;
+}
+.pr .prr-row:hover {
+  background: var(--color-wr-elevated);
+}
+.pr .prr-id {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.pr .prr-repo {
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-muted);
+  white-space: nowrap;
+}
+.pr .prr-num {
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  white-space: nowrap;
+}
+.pr .prr-title {
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.pr .prr-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  flex-wrap: nowrap;
+}
+.pr .prr-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  white-space: nowrap;
+}
+.pr .prr-comments.prr-suspicious {
+  color: var(--color-wr-danger);
+}
+.pr .prr-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+/* Legacy card meta token reuse for row meta */
+.pr .pr-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.pr .pr-ci {
+  font: 600 10px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+}
+.pr .pr-ci-failing {
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
+}
+.pr .pr-ci-passing {
+  background: var(--color-wr-success-soft);
+  color: var(--color-q2);
+}
+.pr .pr-ci-pending {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.pr .pr-ci-none {
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-subtle);
+}
+.pr .pr-flag {
+  font: 500 10px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-wr-elevated);
+  color: var(--color-wr-muted);
+}
+.pr .pr-conflict {
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
+}
+.pr .pr-ticket {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-q3);
+}
+.pr .pr-age,
+.pr .pr-author {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.pr .pr-author {
+  margin-left: auto;
+}
+.pr .pr-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 1px;
+}

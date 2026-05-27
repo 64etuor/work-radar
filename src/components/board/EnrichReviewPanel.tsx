@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./EnrichReviewPanel.css";
 
 import type { AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";

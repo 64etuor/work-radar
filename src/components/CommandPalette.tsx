@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./CommandPalette.css";
 import { Blocks, FileText, FolderPlus, GitBranchPlus } from "lucide-react";
 
 import {

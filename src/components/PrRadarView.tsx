@@ -1,4 +1,5 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
+import "./PrRadarView.css";
 import { Bot, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
 
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";

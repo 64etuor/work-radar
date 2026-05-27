@@ -82,7 +82,18 @@ settings-refactor B(2026-05-24)에서 결정:
 
 ## 디자인 토큰
 
-- `src/styles.css` `@theme` (`--color-wr-*`, `--radius-*`, `--font-*`).
+- `src/styles.css`는 CSS import hub만 담당한다. 전역 단일 파일로 새 selector를 추가하지 않는다.
+- `src/styles/tokens.css` = Tailwind v4 `@theme` 디자인 토큰 SSOT. `--color-wr-*`, `--radius-*`,
+  `--font-*`, motion, elevation/shadow, z-index/overlay, density spacing, graph/diff semantic token을 둔다.
+- `src/styles/base.css` = reset, `html/body/#root`, body 기본값, Lucide stroke, selection, scrollbar.
+- `src/styles/shared.css` = 진짜 앱 전역 utility와 공통 keyframes만. 특정 뷰/컴포넌트 selector 금지.
+- 컴포넌트 CSS는 컴포넌트 옆에 둔다. 예: `src/components/worktree/WorktreeView.css`,
+  `src/components/AgentStatusBar.css`, `src/components/news/NewsTicker.css`, `src/components/jobs/JobsView.css`.
+  해당 컴포넌트 TSX가 직접 import한다.
+- component-local token은 해당 CSS root selector 안에 `--wt-*`, `--asb-*`, `--news-*`, `--jobs-*`처럼 둔다.
+  graph lane, 외부 브랜드 색상(news source colors), 좁은 의미의 shadow는 전역 토큰으로 승격하지 않는다.
+- Raw value 정책: 전역/공유 CSS에서는 raw hex/rgb/shadow 금지. 컴포넌트 CSS에서는 먼저 local semantic
+  token으로 선언하고 selector는 token을 참조한다. 레거시 전역 CSS 파일을 다시 만들지 않는다.
 - light 모드 기본 (`index.html`엔 `class="dark"` 없음, color-scheme: light).
 - 다크 토큰은 `.dark` override (PR C 2026-05-24). `--color-wr-coral`/`--color-wr-green`은
   override 없음 → on-coral/on-green 텍스트는 non-inverting `--color-wr-on-coral-btn` 사용.
@@ -91,6 +102,33 @@ settings-refactor B(2026-05-24)에서 결정:
 
 god-component(LOC ≥ 500)이라도 분해 전 **의존성 그래프**를 먼저 본다. audit이 권장한
 "hook으로 추출"이 항상 옳지는 않다(2026-05-26 PR-F-Capture 재평가 결과 — `docs/plans/2026-05-26-harness-and-design-rigor.md` §후행 재평가 노트).
+
+## God Component 분해 기준 — Orchestrator + Domain Sections + Leaves
+
+목표는 atomic design 도입이 아니라 사용자 워크플로우 단위 ownership를 코드 구조에 반영하는 것이다.
+`atoms/`, `molecules/` 같은 범용 계층 폴더를 만들지 않는다. 상위 container는 query/mutation/state
+orchestration을 유지하고, child는 가능하면 pure props 렌더링만 담당한다. Hook 추출은 props 경계가 안정된 뒤
+반복 의존성이 보일 때만 한다.
+
+현재 분해 대상 책임:
+
+- `src/components/worktree/WorktreeView.tsx`: 프로젝트 필터, worktree 선택, review lens/ref 선택, diff query
+  orchestration, cleanup/graph drawer 열림 상태를 소유한다. 분해 단위는 Header, Sidebar, Lens/Refs toolbar,
+  Review surface, Diff panel처럼 Worktree 검수 워크플로우 이름을 따른다.
+- `src/components/jobs/JobsView.tsx`: agent/codex 상태 query, echo/codex/self-check/enrich/triage job mutation,
+  polling/kill/acceptance 패널 조립을 소유한다. 카드/controls/proposal panel은 파일 분리 가능하지만 accept/kill/polling
+  계약은 container에서 끊기지 않게 한다.
+- `src/components/CaptureBoard.tsx`: signal/today/routine/project/calendar query와 mutation, board selection,
+  overlay/Esc/drag lifecycle owner다. 초기 분해는 Header, ExecutionRail, BoardOverlays, CaptureToast처럼
+  drag/MatrixCanvas/useListReorder 경계를 건드리지 않는 JSX bulk에 한정한다.
+
+분해 회귀 잠금:
+
+- UI 전용 렌더 테스트가 없는 표면은 먼저 기존 unit tests + 렌더 스모크 수준으로 baseline을 잡고 시작한다.
+- Worktree/Jobs/CaptureBoard 같은 화면 단위 phase 종료 시 `pnpm typecheck`, `pnpm lint`, `pnpm vitest run`,
+  `pnpm build`를 유지한다. Tauri smoke는 화면 단위 종료 시 실행한다.
+- CSS class namespace(`.wt-*`, `.jobs-*`, `.cb-*`)는 먼저 유지하고, CSS raw token cleanup은 TSX 분해 직후 별도
+  작은 패스로만 진행한다.
 
 분해 채택 기준:
 

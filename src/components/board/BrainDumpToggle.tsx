@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import "./BrainDumpToggle.css";
 import { CornerDownLeft } from "lucide-react";
 
 import type { Kind } from "@/bindings";

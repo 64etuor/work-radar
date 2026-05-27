@@ -1,0 +1,104 @@
+/* ── Hermes 메신저 브리지 제어 surface (Phase 20 #15) ───────────────────────────── */
+.hermes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-wr-bg);
+}
+.hermes .hm-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.hermes .hm-title {
+  font: 600 15px var(--font-sans);
+}
+.hermes .hm-status {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.hermes .hm-status.on {
+  color: var(--color-wr-green);
+}
+.hermes .hm-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 22px;
+}
+.hermes .hm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hermes .hm-msg {
+  display: flex;
+}
+.hermes .hm-msg.sent {
+  justify-content: flex-end;
+}
+.hermes .hm-msg.recv {
+  justify-content: flex-start;
+}
+.hermes .hm-bubble {
+  max-width: 78%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  background: var(--color-wr-bg);
+}
+.hermes .hm-msg.sent .hm-bubble {
+  background: var(--color-wr-accent-soft);
+  border-color: var(--color-wr-accent-soft);
+}
+.hermes .hm-text {
+  font: 400 14px var(--font-sans);
+  color: var(--color-wr-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.hermes .hm-meta {
+  font: 400 10px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.hermes .hm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--color-wr-subtle);
+  font: 400 13px var(--font-sans);
+  line-height: 1.6;
+  padding: 28px 22px;
+  max-width: 620px;
+  margin: 0 auto;
+}
+.hermes .hm-note {
+  font: 400 12px var(--font-mono);
+  color: var(--color-wr-subtle);
+  text-align: center;
+  padding: 6px 18px;
+}
+.hermes .hm-note.err {
+  color: var(--color-wr-danger);
+}
+.hermes .hm-compose {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--color-wr-border-light);
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}

@@ -1,0 +1,140 @@
+/*
+ * ── Sprint Timer (P11: 브랜드 헤더 우측 존 카운트다운 + 일정 편집) ──
+ * DESIGN.md `sprint-timer` 정본. 에이전트 바와 분리된 헤더 우측 존.
+ * 'D일 HH:MM' CohereMono Ink · 1s tick · overdue=Coral + '지남' 라벨(색+라벨 병기).
+ * 미설정=텍스트 링크(button-secondary). 클릭→팝오버 에디터(흰 카드 radius lg).
+ */
+.cb .cb-head-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-self: end;
+}
+.sprint-timer {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+/* ── 스프린트 미터 ──
+   에디토리얼 1줄 라벨 + 그 아래 얇은 진행 바. 박스/필 없음 — 헤더 라인에 자연스럽게 녹는다.
+   라벨: 'SPRINT · {n일 남음}' (mono caps + 본문). 색만으로 의미 전달 금지 → 'SPRINT' 라벨 병기.
+   바: 3px 트랙(border-light) + 채움(near-black). overdue=coral 풀필 + 텍스트 코랄. */
+.sprint-meter {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  width: 240px;
+  padding: 4px 6px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-wr-fg);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+.sprint-meter:hover {
+  background: var(--color-wr-elevated);
+}
+.sprint-meter-label {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+}
+.sprint-meter-tag {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+.sprint-meter-sep {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-border);
+}
+.sprint-meter-text {
+  font: 500 12px var(--font-mono);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-wr-muted);
+}
+.sprint-meter-bar {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-wr-border-light);
+  overflow: hidden;
+}
+.sprint-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-wr-near-black);
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+/* Overdue — 텍스트+바 코랄. 'SPRINT' 라벨도 코랄로 강조(라벨 병기 유지). */
+.sprint-meter.is-overdue .sprint-meter-tag,
+.sprint-meter.is-overdue .sprint-meter-text {
+  color: var(--color-wr-coral);
+}
+.sprint-meter.is-overdue .sprint-meter-bar {
+  background: var(--color-wr-danger-soft);
+}
+.sprint-meter.is-overdue .sprint-meter-fill {
+  background: var(--color-wr-coral);
+}
+/* Empty — 라벨 톤 다운 + 점선 트랙. */
+.sprint-meter.is-empty .sprint-meter-tag,
+.sprint-meter.is-empty .sprint-meter-text {
+  color: var(--color-wr-subtle);
+}
+.sprint-meter.is-empty .sprint-meter-bar {
+  background: transparent;
+  border-top: 1px dashed var(--color-wr-border);
+  height: 1px;
+  border-radius: 0;
+}
+
+/* 스프린트 에디터 — 모달 컨테이너/제목/버튼/인풋은 shadcn Dialog·Button·Input(PR 0).
+   여기엔 내부 필드 레이아웃 래퍼만 유지한다(prim 스왑으로 일부 클래스는 dead 제거됨). */
+.sprint-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sprint-lbl {
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.sprint-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sprint-wd-row {
+  display: flex;
+  gap: 6px;
+}
+.sprint-err {
+  font: 400 12px var(--font-sans);
+  color: var(--color-q1);
+}
+.sprint-pop-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.sprint-actions-spacer {
+  flex: 1;
+}
+/* 반응형: 좁으면 hint 숨김. 미터 라벨은 짧으므로 그대로(필요 시 width 축소). */
+@media (max-width: 860px) {
+  .cb .cb-head-right .hint {
+    display: none;
+  }
+  .sprint-meter {
+    width: 200px;
+  }
+}

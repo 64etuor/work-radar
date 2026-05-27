@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./SprintTimer.css";
 
 import type { SprintConfig, Weekday } from "@/bindings";
 import {

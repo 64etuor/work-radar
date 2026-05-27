@@ -1,0 +1,44 @@
+/* 카드 액션 메뉴 — fixed, .cb 밖에 portal 없이 body 안에 그리므로 별도 스코프 */
+.cb-card-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 170px;
+  background: var(--color-wr-popup-bg);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--cb-r-md);
+  box-shadow: 0 16px 40px rgba(10, 14, 30, 0.22);
+  padding: 6px;
+}
+.cb-card-menu button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--cb-r-sm);
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.cb-card-menu button:hover {
+  background: var(--color-wr-surface);
+}
+.cb-card-menu small {
+  color: var(--color-wr-subtle);
+  font: 400 11px var(--font-mono);
+}
+.cb-card-menu .sep {
+  height: 1px;
+  background: var(--color-wr-border-light);
+  margin: 5px 4px;
+}
+/* Phase 15 — 하드 삭제(영구) 메뉴 항목. */
+.cb-card-menu button.danger {
+  color: var(--color-wr-danger);
+}
+.cb-card-menu button.danger:hover {
+  background: var(--color-wr-danger-soft);
+}

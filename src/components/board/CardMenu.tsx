@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import "./CardMenu.css";
 
 import { registerOverlay } from "@/components/ui/overlay-stack";
 

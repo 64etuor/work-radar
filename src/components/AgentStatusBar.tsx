@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useMemo, useRef, useState } from "react";
+import "./AgentStatusBar.css";
 import {
   Bot,
   Calendar,

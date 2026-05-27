@@ -1,0 +1,163 @@
+/* ── Timeline 뷰 (Phase 11b) ───────────────────────────────────────────────── */
+.tl {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+.tl .tl-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.tl .tl-title {
+  font: 600 13px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.tl .tl-nav {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tl .tl-today-tag {
+  font: 600 9px var(--font-mono);
+  color: var(--color-wr-action-blue);
+}
+.tl .tl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+}
+.tl .tl-hint {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
+  padding: 12px 2px;
+}
+.tl .tl-band {
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 12px;
+  background: var(--color-wr-surface);
+  padding: 10px 12px;
+  margin-bottom: 18px;
+}
+.tl .tl-band-label {
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+  margin-bottom: 8px;
+}
+.tl .tl-band-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tl .tl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.tl .tl-chip-cal {
+  cursor: pointer;
+}
+.tl .tl-chip-cal:hover {
+  background: var(--color-wr-surface);
+}
+.tl .tl-chip-q1 {
+  background: var(--color-wr-coral-soft);
+  border-color: var(--color-wr-coral-soft);
+  color: var(--color-q1);
+}
+.tl .tl-chip-focus {
+  background: var(--color-wr-accent-soft);
+  border-color: var(--color-wr-accent-soft);
+}
+.tl .tl-chip-age {
+  font: 600 10px var(--font-mono);
+  color: var(--color-wr-coral);
+}
+.tl .tl-grid {
+  display: flex;
+  flex-direction: column;
+}
+.tl .tl-hour {
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid var(--color-wr-border-light);
+  padding: 6px 0;
+  min-height: 34px;
+}
+.tl .tl-hour-empty {
+  min-height: 22px;
+}
+.tl .tl-hour-label {
+  flex: 0 0 auto;
+  width: 46px;
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  padding-top: 3px;
+}
+.tl .tl-hour-events {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tl .tl-event {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 8px;
+  background: var(--color-wr-surface);
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.tl .tl-event:hover {
+  background: var(--color-wr-hover);
+}
+.tl .tl-event-time {
+  flex: 0 0 auto;
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-fg);
+}
+.tl .tl-event-title {
+  flex: 1;
+  min-width: 0;
+  font: 400 13px var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl .tl-event-cal {
+  flex: 0 0 auto;
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.tl .tl-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}

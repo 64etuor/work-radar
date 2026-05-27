@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./SettingsView.css";
 import {
   Bell,
   Bot,

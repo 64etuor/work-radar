@@ -9,6 +9,7 @@
  * (scope="react-error-boundary").
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import "./ErrorBoundary.css";
 
 import { commands } from "@/bindings";
 import { genTraceId } from "@/lib/toast";

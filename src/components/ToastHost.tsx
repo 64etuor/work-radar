@@ -12,6 +12,7 @@
  * success/info 토스트: 간단 메시지 + auto-dismiss (2500ms, 스토어에서 처리).
  */
 import { openUrl } from "@tauri-apps/plugin-opener";
+import "./ToastHost.css";
 
 import { useToastStore } from "@/lib/toast";
 import { useUIStore } from "@/store";

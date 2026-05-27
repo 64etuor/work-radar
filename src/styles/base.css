@@ -1,0 +1,44 @@
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-wr-bg);
+    color: var(--color-wr-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /*
+   * Lucide 아이콘 thin-line 통일 (DESIGN.md "thin-line geometric").
+   * lucide 기본 stroke=2(프레젠테이션 속성)를 전역 1.5로 낮춰 editorial 톤에 맞춤.
+   * CSS가 SVG 프레젠테이션 속성을 이기므로 호출부 size/색 수정 없이 전 아이콘 적용.
+   */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
+  ::selection {
+    background: var(--color-wr-accent-soft);
+  }
+
+  /* 얇은 스크롤바 (flat) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-wr-border);
+    border-radius: 9999px;
+  }
+}

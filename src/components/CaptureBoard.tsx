@@ -1,26 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import "./CaptureBoard.css";
 
 import type { Kind, PromotionTarget } from "@/bindings";
-import {
-  type CardMenuAction,
-  type CardMenuState,
-  CardMenu,
-} from "@/components/board/CardMenu";
-import {
-  type CalendarModalState,
-  CalendarEventModal,
-} from "@/components/board/CalendarEventModal";
-import {
-  type ProjectPickerState,
-  ProjectPickerModal,
-} from "@/components/board/ProjectPickerModal";
-import { EnrichModal } from "@/components/board/EnrichModal";
-import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
+import { type CardMenuAction, type CardMenuState } from "@/components/board/CardMenu";
+import { type CalendarModalState } from "@/components/board/CalendarEventModal";
+import { type ProjectPickerState } from "@/components/board/ProjectPickerModal";
 import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
-import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
-import { TodayRail } from "@/components/board/TodayRail";
-import { SprintTimer } from "@/components/SprintTimer";
+import { type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { zoneToQuadrant, type ZoneKey } from "@/components/board/boardUtils";
+import { BoardOverlays } from "@/components/board/BoardOverlays";
+import { CaptureBoardHeader } from "@/components/board/CaptureBoardHeader";
+import { ExecutionRail } from "@/components/board/ExecutionRail";
+import {
+  projectPickerErrorMessage,
+  projectPickerSuccessMessage,
+} from "@/components/board/boardOverlayUtils";
 import {
   localToday,
   localWeekday,
@@ -477,22 +471,38 @@ export function CaptureBoard() {
 
   const loadError = signalsQ.isError || todayQ.isError || routinesQ.isError;
 
+  const handleProjectPick = (projectId: string) => {
+    if (!projectPicker) return;
+    // 사람이 고른 프로젝트로 재승격(projectId 명시 → 백엔드가 persist, INVARIANT #1).
+    promoteToNotion.mutate(
+      {
+        signalId: projectPicker.signalId,
+        target: projectPicker.target,
+        projectId,
+      },
+      {
+        onSuccess: (outcome) => {
+          const result = projectPickerSuccessMessage(projectPicker.label, outcome);
+          if (outcome.status === "failed") {
+            pushError("notion", result.message);
+            return;
+          }
+          pushSuccess(
+            result.message,
+            result.openUrl
+              ? { actionUrl: result.openUrl, actionLabel: "열기" }
+              : undefined,
+          );
+        },
+        onError: (e) =>
+          pushError("notion", projectPickerErrorMessage(projectPicker.label, e)),
+      },
+    );
+  };
+
   return (
     <div className="cb">
-      <div className="cb-head">
-        <span className="mark">◎ Work Radar / Capture</span>
-        {/* 중앙 존 — 헤더 그리드의 auto 트랙. 스프린트 칩만 들어간다(시각적 중앙 정렬). */}
-        <div className="cb-head-center">
-          <SprintTimer />
-        </div>
-        {/* 우측 존 — 에이전트 바와 분리. hint만(스프린트는 중앙으로 분리). */}
-        <div className="cb-head-right">
-          <span className="hint">
-            드래그로 분류 · <b>1 2 3 4</b> 사분면 · <b>T</b> Today · 카드 ⋯ 메뉴
-            · <b>⌘K</b> 설정/프로젝트
-          </span>
-        </div>
-      </div>
+      <CaptureBoardHeader />
 
       {loadError && (
         <div
@@ -534,91 +544,63 @@ export function CaptureBoard() {
           captureDisabled={createSignal.isPending}
         />
 
-        {/* "전체 제안 실행" 인라인 리뷰 패널 — 보드 영역에 띄우되 카드는 계속 보임(오버레이 아님). */}
-        {enrichAllRunId && (
-          <EnrichReviewPanel
-            runId={enrichAllRunId}
-            onClose={() => {
-              setEnrichAllRunId(null);
-              setEnrichAllGenerating(false);
-            }}
-            onRunningChange={setEnrichAllGenerating}
-          />
-        )}
+        <BoardOverlays
+          menu={null}
+          calendarModal={null}
+          projectPicker={null}
+          enrichRunId={null}
+          enrichAllRunId={enrichAllRunId}
+          codexReady={codexReady}
+          onMenuAction={handleMenuAction}
+          onMenuClose={() => setMenu(null)}
+          onCalendarClose={() => setCalendarModal(null)}
+          onProjectPickerClose={() => setProjectPicker(null)}
+          onProjectPick={handleProjectPick}
+          onEnrichClose={() => setEnrichRunId(null)}
+          onEnrichAllClose={() => {
+            setEnrichAllRunId(null);
+            setEnrichAllGenerating(false);
+          }}
+          onEnrichAllRunningChange={setEnrichAllGenerating}
+        />
 
-        <div className="execute">
-          <TodayRail
-            items={todayItems}
-            panelRef={todayPanelRef}
-            onToggleDone={(id, done) => toggleTodayDone.mutate({ id, date: today, done })}
-            onUnpromote={handleUnpromote}
-            onReorder={(ids) => reorderToday.mutate(ids)}
-          />
-          <RoutinesPanel
-            routines={routines}
-            onToggle={(routineId, done) =>
-              toggleRoutine.mutate({ routineId, date: today, done })
-            }
-            onCreate={handleCreateRoutine}
-            onUpdate={handleUpdateRoutine}
-            onDelete={handleDeleteRoutine}
-            onReorder={(ids) => reorderRoutines.mutate(ids)}
-            onOpenTracking={() => goTo("routines")}
-          />
-        </div>
+        <ExecutionRail
+          todayItems={todayItems}
+          routines={routines}
+          todayPanelRef={todayPanelRef}
+          onToggleTodayDone={(id, done) => toggleTodayDone.mutate({ id, date: today, done })}
+          onUnpromoteToday={handleUnpromote}
+          onReorderToday={(ids) => reorderToday.mutate(ids)}
+          onToggleRoutine={(routineId, done) =>
+            toggleRoutine.mutate({ routineId, date: today, done })
+          }
+          onCreateRoutine={handleCreateRoutine}
+          onUpdateRoutine={handleUpdateRoutine}
+          onDeleteRoutine={handleDeleteRoutine}
+          onReorderRoutines={(ids) => reorderRoutines.mutate(ids)}
+          onOpenRoutineTracking={() => goTo("routines")}
+        />
       </div>
 
-      <CardMenu
-        state={menu}
-        onAct={handleMenuAction}
-        onClose={() => setMenu(null)}
+      <BoardOverlays
+        menu={menu}
+        calendarModal={calendarModal}
+        projectPicker={projectPicker}
+        enrichRunId={enrichRunId}
+        enrichAllRunId={null}
         codexReady={codexReady}
-      />
-      <CalendarEventModal
-        state={calendarModal}
-        onClose={() => setCalendarModal(null)}
-      />
-      <ProjectPickerModal
-        state={projectPicker}
-        onClose={() => setProjectPicker(null)}
-        onPick={(projectId) => {
-          if (!projectPicker) return;
-          // 사람이 고른 프로젝트로 재승격(projectId 명시 → 백엔드가 persist, INVARIANT #1).
-          promoteToNotion.mutate(
-            {
-              signalId: projectPicker.signalId,
-              target: projectPicker.target,
-              projectId,
-            },
-            {
-              onSuccess: (outcome) => {
-                if (outcome.status === "created") {
-                  const openUrl = outcome.pageDeepLink ?? outcome.pageUrl;
-                  pushSuccess(
-                    `${projectPicker.label}됨`,
-                    openUrl ? { actionUrl: openUrl, actionLabel: "열기" } : undefined,
-                  );
-                } else if (outcome.status === "draft") {
-                  pushSuccess(`${projectPicker.label} — 오프라인, 큐에 저장됨(복구 시 등록)`);
-                } else {
-                  pushError("notion", `${projectPicker.label} 실패: ${outcome.detail}`);
-                }
-              },
-              onError: (e) =>
-                pushError(
-                  "notion",
-                  e instanceof IpcError ? e.app : `${projectPicker.label} 실패: ${String(e)}`,
-                ),
-            },
-          );
+        onMenuAction={handleMenuAction}
+        onMenuClose={() => setMenu(null)}
+        onCalendarClose={() => setCalendarModal(null)}
+        onProjectPickerClose={() => setProjectPicker(null)}
+        onProjectPick={handleProjectPick}
+        onEnrichClose={() => setEnrichRunId(null)}
+        onEnrichAllClose={() => {
+          setEnrichAllRunId(null);
+          setEnrichAllGenerating(false);
         }}
+        onEnrichAllRunningChange={setEnrichAllGenerating}
       />
-      {enrichRunId && (
-        <EnrichModal
-          runId={enrichRunId}
-          onClose={() => setEnrichRunId(null)}
-        />
-      )}
     </div>
   );
 }

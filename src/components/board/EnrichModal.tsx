@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./EnrichModal.css";
 
 import type { AreaTag, EnrichProposal, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";

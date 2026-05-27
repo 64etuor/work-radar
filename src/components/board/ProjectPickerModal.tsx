@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./CalendarEventModal.css";
 
 import type { Project, PromotionTarget } from "@/bindings";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";

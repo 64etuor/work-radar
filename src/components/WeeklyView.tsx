@@ -1,3 +1,4 @@
+import "./WeeklyView.css";
 import {
   CheckCircle2,
   GitPullRequest,

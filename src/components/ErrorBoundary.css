@@ -1,0 +1,45 @@
+/* ── ErrorBoundary 폴백 (렌더 크래시) — DESIGN.md white editorial 톤 ─────────── */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: var(--color-wr-bg);
+  padding: 24px;
+}
+
+.error-boundary-card {
+  max-width: 420px;
+  width: 100%;
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.error-boundary-title {
+  font: 600 16px var(--font-sans);
+  color: var(--color-wr-fg);
+  margin: 0 0 8px;
+}
+
+.error-boundary-msg {
+  font: 400 13px var(--font-sans);
+  line-height: 1.5;
+  color: var(--color-wr-fg);
+  margin: 0 0 6px;
+  word-break: break-word;
+}
+
+.error-boundary-trace {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+  margin: 0 0 16px;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 8px;
+}
+/* 액션 버튼은 shadcn Button(다시 시도=filled pill, 복사=outline pill, Wave 1.4). */

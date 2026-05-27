@@ -1,0 +1,245 @@
+/*
+ * Work Radar 디자인 토큰 — Cohere 스타일(white editorial). 정본: 루트 DESIGN.md.
+ * 원칙: white canvas 기본, flat(그림자 없음), thin hairline 보더, 큰 라운드 미디어,
+ * 색은 절제(coral/blue 악센트). 이전 Raycast 다크 방향은 docs/archive/design-raycast.md.
+ */
+@theme {
+  /* Surface & Background */
+  --color-wr-bg: #ffffff; /* Canvas White — 기본 페이지/카드 surface */
+  --color-wr-surface: #eeece7; /* Soft Stone — 카드/선택 행/중립 블록 */
+  --color-wr-elevated: #f6f5f2; /* 옅은 stone — kbd/segmented 디테일 */
+  --color-wr-hover: #e7e5df; /* Soft Stone보다 한 톤 진한 hover 배경(행/타일/카드) */
+  --color-wr-card-border: #f2f2f2; /* 가장 옅은 카드 보더 */
+
+  /* Text & Rules */
+  --color-wr-fg: #212121; /* Ink — 본문/링크 기본 */
+  --color-wr-muted: #75758a; /* Slate — 보조 텍스트 */
+  --color-wr-subtle: #93939f; /* Muted Slate — 메타데이터/날짜/비활성 라벨 */
+  --color-wr-border: #d9d9dd; /* Hairline — 표준 리스트 룰/구분선 */
+  --color-wr-border-light: #e5e7eb; /* 보조 구분선 */
+
+  /* Brand & Accent */
+  --color-wr-black: #000000; /* 최고 대비/브랜드 앵커 */
+  --color-wr-near-black: #17171c; /* Near-Black — primary pill CTA/딥 카드 */
+  --color-wr-accent: #1863dc; /* Action Blue — 에디토리얼 링크/보조 강조 */
+  --color-wr-action-blue: #1863dc; /* = Action Blue 별칭(코드 호환) */
+  --color-wr-accent-soft: #f1f5ff; /* Pale Blue Wash */
+  --color-wr-coral: #ff7759; /* Coral — 분류 chip/따뜻한 마커 */
+  --color-wr-coral-soft: #ffad9b; /* Soft Coral — chip 보더 */
+  --color-wr-green: #003c33; /* Deep Enterprise Green — 다크 product band */
+  --color-wr-status-working: #16a34a; /* 에이전트 상태등 — 작업중(초록), 흰/다크 양쪽 가독 */
+  --color-wr-status-waiting: #eab308; /* 에이전트 상태등 — 입력 대기(노랑) */
+  --color-wr-navy: #071829; /* Dark Navy — security/financial band */
+
+  /* Semantic */
+  --color-wr-focus: #4c6ee6; /* 키보드 포커스 ring */
+  /*
+   * 상태 의미 토큰 (Phase 18 UI/UX conformance). DESIGN.md "Error Red"를 위험/오류
+   * 텍스트의 단일 토큰으로 통일 — 이전에 3종의 빨강이 같은 역할로 흩어져 있던 것을 합쳤다.
+   * pale wash 계열은 값 보존(시각 무변경)하되 토큰으로 참조해 일관성 확보.
+   */
+  --color-wr-danger: #b30000; /* 위험/오류 텍스트 (DESIGN.md Error Red) */
+  --color-wr-danger-soft: #ffe7e0; /* 위험/경고 pale wash 배경 */
+  --color-wr-danger-border: #e0b4a8; /* 위험 카드 보더 */
+  --color-wr-danger-border-strong: #f0c4b8; /* 위험 버튼/kill 보더 */
+  --color-wr-danger-hover: #ffd9cf; /* 위험 reject hover 배경 */
+  --color-wr-success-soft: #e3f1ec; /* 긍정/정상 pale wash 배경 */
+
+  /* Diff semantic colors (worktree diff view) — dark-mode-safe */
+  --color-wr-diff-add-bg: #e6f4ec; /* add 줄 배경 */
+  --color-wr-diff-add-fg: #1d7a4d; /* add 줄 텍스트 */
+  --color-wr-diff-del-fg: #b30000; /* del 줄 텍스트 (=danger light; dark 별도 오버라이드) */
+  --color-wr-diff-hunk-fg: #1863dc; /* hunk 줄 텍스트 (=accent light; dark 별도 오버라이드) */
+
+  /* Component-specific surface tokens */
+  --color-wr-pale-green: #edfce9; /* work 분류 chip/seg/badge 배경 */
+  --color-wr-sticky-border: #c9c7c0; /* 스티키 노트 왼쪽 보더 */
+  --color-wr-on-dark-btn: #ffffff; /* near-black 버튼 위 텍스트 — 다크에서 배경이 #ededea로 반전돼 어두운 텍스트로 역전 */
+  --color-wr-on-coral-btn: #ffffff; /* coral/green 버튼 텍스트 — 다크 미반전(배경 미반전) */
+  --color-wr-popup-bg: #ffffff; /* 팝업/메뉴 배경 (다크에서 카드로 반전) */
+
+  /*
+   * 사분면 색 (결정 큐). 색만으로 의미 전달 금지 — 항상 라벨 병기.
+   * Cohere 팔레트에 맞춘 light-theme 변형.
+   */
+  --color-q1: #ff7759; /* Coral — Q1 긴급·중요 (DESIGN App Surface) */
+  --color-q2: #003c33; /* Deep Enterprise Green — Q2 중요 */
+  --color-q3: #1863dc; /* Action Blue — Q3 긴급 */
+  --color-q4: #93939f; /* Muted Slate — Q4 그 외 */
+
+  /* Typography — DESIGN.md 폰트 스택(프로프라이어터리 미번들 → 폴백 사용) */
+  --font-display:
+    "CohereText", "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Unica77 Cohere Web", "Inter", Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    "CohereMono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+
+  /* Radius scale — DESIGN.md Shapes */
+  --radius: 8px; /* 기본(=sm) */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 22px; /* signature 미디어 카드 */
+  --radius-xl: 30px; /* 필터 pill */
+  --radius-pill: 32px; /* primary CTA */
+
+  /*
+   * Motion tokens — DESIGN.md "과한 모션 금지" (white editorial, subtle).
+   * 모든 transition/animation은 이 토큰을 참조한다.
+   * 예외: MatrixCanvas 카드 drag(물리 튜닝값)와 cb-pop 스프링 애니메이션은 의도적 bespoke.
+   */
+  --wr-motion-fast: 0.12s; /* 빠른 상호작용 피드백 (hover, toggle) */
+  --wr-motion-base: 0.16s; /* 뷰 전환 + 표준 요소 전환 */
+  --wr-motion-slow: 0.3s; /* 슬라이드/팝오버 등 느린 전환 */
+  --wr-ease-out: ease-out; /* 표준 ease-out */
+  --wr-ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1); /* 표준 스프링 커브 */
+
+  /* Elevation / shadow scale — raw shadow values stay behind semantic tokens. */
+  --wr-shadow-hairline: 0 1px 0 rgb(10 14 30 / 0.02);
+  --wr-shadow-sm: 0 8px 22px rgb(10 14 30 / 0.08);
+  --wr-shadow-md: 0 14px 32px rgb(10 14 30 / 0.12);
+  --wr-shadow-lg: 0 24px 60px rgb(10 14 30 / 0.18);
+  --wr-shadow-overlay: 0 24px 60px rgb(10 14 30 / 0.28);
+  --wr-shadow-toast: 0 2px 8px rgb(10 14 30 / 0.12);
+
+  /* Z-index / overlay scale — use these before ad-hoc z values in shared CSS. */
+  --wr-z-base: 0;
+  --wr-z-raised: 2;
+  --wr-z-popover: 40;
+  --wr-z-command: 90;
+  --wr-z-drawer: 96;
+  --wr-z-toast: 200;
+
+  /* Density spacing tokens — for compact operational UI rhythm. */
+  --wr-density-2xs: 2px;
+  --wr-density-xs: 4px;
+  --wr-density-sm: 6px;
+  --wr-density-md: 8px;
+  --wr-density-lg: 12px;
+  --wr-density-xl: 16px;
+
+  /* Graph/diff semantics; lane hues remain component-local where the graph owns them. */
+  --wr-graph-node-size: 10px;
+  --wr-graph-line-width: 2px;
+  --wr-diff-line-pad-x: 10px;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * shadcn/ui 토큰 레이어 + 앱 전역 다크모드 (2026-05-24)
+ * - shadcn 프리미티브(src/components/ui)가 쓰는 시맨틱 토큰(--background 등)을 Cohere 팔레트로 정의.
+ * - .dark 는 (1) shadcn 토큰 다크값 + (2) 기존 --color-wr-* 구조 토큰 오버라이드 → 전역 다크.
+ * - @theme inline 으로 bg-background/text-foreground/border-border 등 유틸 노출(:root 변수 미방출 → 충돌 회피).
+ * ────────────────────────────────────────────────────────────────────────────── */
+:root {
+  --background: #ffffff;
+  --foreground: #212121;
+  --card: #ffffff;
+  --card-foreground: #212121;
+  --popover: #ffffff;
+  --popover-foreground: #212121;
+  --primary: #17171c;
+  --primary-foreground: #ffffff;
+  --secondary: #eeece7;
+  --secondary-foreground: #212121;
+  --muted: #f6f5f2;
+  --muted-foreground: #75758a;
+  --subtle: #93939f;
+  --accent: #ff7759;
+  --accent-foreground: #ffffff;
+  --destructive: #b30000;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: #ffe7e0;
+  --border: #e5e7eb;
+  --border-strong: #d9d9dd;
+  --input: #d9d9dd;
+  --ring: #4c6ee6;
+  --hover: #f6f5f2;
+  --success: #003c33;
+}
+
+.dark {
+  /* shadcn 토큰 다크 */
+  --background: #131318;
+  --foreground: #ededea;
+  --card: #1a1a20;
+  --card-foreground: #ededea;
+  --popover: #1a1a20;
+  --popover-foreground: #ededea;
+  --primary: #ededea;
+  --primary-foreground: #131318;
+  --secondary: #26262e;
+  --secondary-foreground: #ededea;
+  --muted: #202027;
+  --muted-foreground: #a0a0ad;
+  --subtle: #7c7c89;
+  --accent: #ff8a70;
+  --accent-foreground: #131318;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #131318;
+  --destructive-soft: #3a1f1f;
+  --border: #2c2c34;
+  --border-strong: #3a3a44;
+  --input: #3a3a44;
+  --ring: #6b9bf0;
+  --hover: #202027;
+  --success: #5fb89e;
+
+  /* 기존 --color-wr-* 구조 토큰 오버라이드 → 미변환 뷰도 다크 적용 */
+  --color-wr-bg: #131318;
+  --color-wr-surface: #26262e;
+  --color-wr-elevated: #1f1f26;
+  --color-wr-hover: #2c2c34;
+  --color-wr-card-border: #26262e;
+  --color-wr-fg: #ededea;
+  --color-wr-muted: #a0a0ad;
+  --color-wr-subtle: #7c7c89;
+  --color-wr-border: #3a3a44;
+  --color-wr-border-light: #2c2c34;
+  --color-wr-near-black: #ededea;
+  --color-wr-accent-soft: #1d2740;
+  --color-wr-success-soft: #16312a;
+  --color-wr-danger-soft: #3a1f1f;
+  --color-wr-elevated: #202027;
+
+  /* Diff dark overrides */
+  --color-wr-diff-add-bg: #16312a;
+  --color-wr-diff-add-fg: #5fb89e;
+  --color-wr-diff-del-fg: #ff6b6b;
+  --color-wr-diff-hunk-fg: #6b9bf0;
+
+  /* Component surface dark overrides */
+  --color-wr-pale-green: #16312a;
+  --color-wr-sticky-border: #4a4840;
+  --color-wr-danger-border-strong: #5a2a20;
+  --color-wr-danger-hover: #4a1f18;
+  --color-wr-on-dark-btn: #131318;
+  --color-wr-popup-bg: #1a1a20;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-hover: var(--hover);
+  --color-success: var(--success);
+}

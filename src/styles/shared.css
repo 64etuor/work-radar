@@ -1,0 +1,33 @@
+/*
+ * ── View shell 전환 (Phase 18 #7) ──
+ * 뷰 전환 시 subtle fade+rise. 상주 유틸이라 빠르고 절제된 모션(DESIGN.md "과한 모션 금지").
+ * view 키 remount(App.tsx)로 매 전환마다 enter 애니메이션이 한 번 재생된다.
+ * AgentStatusBar 아래 남은 공간을 채우고 자식(height:100vh 뷰)을 clip한다(레이아웃 무변경).
+ */
+.view-shell {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  animation: view-enter var(--wr-motion-base) var(--wr-ease-out) both;
+}
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* 공유 스핀 키프레임 — pr-spin/hm-spin/spinner-spin 통합 */
+@keyframes wr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-shell {
+    animation: none;
+  }
+}

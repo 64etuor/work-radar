@@ -1,0 +1,47 @@
+/*
+ * ── 캘린더 이벤트 등록 모달 (직접 write, Phase 19) ──
+ * Cohere white editorial: 흰 패널 · thin border · near-black pill CTA. cmdk 오버레이 톤 재사용.
+ */
+/* cev-*: 컨테이너/제목/input/버튼은 shadcn Dialog·Input·Select·Button(Wave 2.7~2.8).
+   남은 cev-*는 CalendarEventModal 폼 레이아웃·종일 체크박스·상태 클래스뿐. */
+.cev-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cev-lbl {
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.cev-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.cev-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 13px var(--font-sans);
+  color: var(--color-wr-fg);
+  cursor: pointer;
+}
+.cev-empty {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-subtle);
+  padding: 8px 0;
+}
+.cev-err {
+  font: 400 12px var(--font-sans);
+  color: var(--color-q1);
+}
+.cev-hint {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.cev-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}

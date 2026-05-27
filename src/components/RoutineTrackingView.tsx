@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./RetroView.css";
 import { Flame, Repeat } from "lucide-react";
 
 import type { RoutineFreq, RoutineTrackingItem } from "@/bindings";

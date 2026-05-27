@@ -6,6 +6,7 @@
 
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { CSSProperties } from "react";
+import "./NewsTicker.css";
 import type { NewsItem } from "@/bindings";
 import {
   isHotTrendingNews,

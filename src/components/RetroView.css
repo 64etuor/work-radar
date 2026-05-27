@@ -1,0 +1,318 @@
+/* ── 회고 / 보관함 (Phase 17, RetroView) ──────────────────────────────────────── */
+.rt {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-wr-bg);
+}
+.rt .rt-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.rt .rt-title {
+  font: 700 13px var(--font-display);
+  letter-spacing: 0.02em;
+  color: var(--color-wr-fg);
+}
+.rt .rt-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.rt .rt-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 22px 40px;
+}
+.rt .rt-hint {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-subtle);
+  padding: 14px 2px;
+}
+.rt .rt-periods {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.rt .rt-range {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  margin-left: 4px;
+}
+
+/* 랭킹 집계 */
+.rt .rt-rank {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.rt .rt-rank-card {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--cb-r-lg);
+  padding: 12px 14px;
+  background: var(--color-wr-bg);
+}
+.rt .rt-rank-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+.rt .rt-rank-title {
+  font: 700 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+.rt .rt-rank-count {
+  margin-left: auto;
+  font: 700 12px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.rt .rt-rank-card.impact .rt-rank-head svg {
+  color: var(--color-wr-green);
+}
+.rt .rt-rank-card.regret .rt-rank-head svg {
+  color: var(--color-q1);
+}
+.rt .rt-rank-empty {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.rt .rt-rank-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rt .rt-rank-item {
+  font: 400 12px/1.4 var(--font-sans);
+  color: var(--color-wr-fg);
+}
+
+/* 완료 todo 타임라인 */
+.rt .rt-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.rt .rt-sec-name {
+  font: 700 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+.rt .rt-sec-count {
+  font: 700 12px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.rt .rt-group {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+.rt .rt-group-date {
+  flex: 0 0 44px;
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  padding-top: 8px;
+}
+.rt .rt-group-items {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rt .rt-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--cb-r-sm);
+}
+.rt .rt-item:hover {
+  background: var(--color-wr-elevated);
+}
+.rt .rt-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rt .rt-item-ttl {
+  font: 400 13px/1.35 var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.rt .rt-item-tags {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+}
+.rt .rt-tag-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-subtle);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: var(--wr-motion-fast);
+}
+.rt .rt-tag-btn:hover:not(:disabled) {
+  background: var(--color-wr-surface);
+}
+.rt .rt-tag-btn.impact.on {
+  background: var(--cb-pale-green);
+  color: var(--color-wr-green);
+  border-color: var(--color-wr-green);
+}
+.rt .rt-tag-btn.regret.on {
+  background: rgba(255, 119, 89, 0.14);
+  color: var(--color-q1);
+  border-color: var(--color-q1);
+}
+.rt .rt-tag-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 보관함 */
+.rt .rt-arc-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.rt .rt-arc-body {
+  flex: 1;
+  min-width: 0;
+}
+.rt .rt-arc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.rt .rt-arc-badge {
+  font: 700 9px var(--font-mono);
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+.rt .rt-arc-badge.archived {
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
+}
+.rt .rt-arc-badge.snoozed {
+  background: var(--color-wr-accent-soft);
+  color: var(--color-wr-accent);
+}
+.rt .rt-arc-sub {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+
+/* ── 루틴 트래킹 뷰 (Phase 16 #12) — .rt 셸 재사용 ───────────────────────────── */
+.rt .trk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rt .trk-card {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--color-wr-bg);
+}
+.rt .trk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.rt .trk-ttl {
+  font: 500 14px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.rt .trk-card .b-sched {
+  font: 700 9px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
+}
+.rt .trk-spacer {
+  flex: 1;
+}
+.rt .trk-streak {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font: 700 12px var(--font-mono);
+  color: var(--color-wr-danger);
+}
+.rt .trk-rate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.rt .trk-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-wr-surface);
+  overflow: hidden;
+}
+.rt .trk-bar-fill {
+  height: 100%;
+  background: var(--color-wr-green);
+  border-radius: 999px;
+  transition: width var(--wr-motion-base);
+}
+.rt .trk-rate-num {
+  font: 700 13px var(--font-mono);
+  color: var(--color-wr-fg);
+  min-width: 36px;
+  text-align: right;
+}
+.rt .trk-rate-sub {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.rt .trk-heat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.rt .trk-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--color-wr-surface);
+  border: 1px solid var(--color-wr-border-light);
+}
+.rt .trk-cell.on {
+  background: var(--color-wr-green);
+  border-color: var(--color-wr-green);
+}
+.rt .trk-empty {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}

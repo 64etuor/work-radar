@@ -13,12 +13,12 @@ import {
   ZONES,
   type ZoneKey,
 } from "@/components/board/boardUtils";
-
-const CW = 150;
-const CH = 92;
-const GAP = 12;
-/** 인박스 하단 '전체 제안 실행' 버튼 높이만큼 카드 배치 영역을 비워둔다(겹침 방지). */
-const INBOX_FOOTER = 48;
+import {
+  CARD_WIDTH,
+  computeInboxHeight,
+  computeZonePositions,
+  rectContainsPoint,
+} from "@/components/board/matrixGeometry";
 
 type DropTarget = ZoneKey | "today";
 
@@ -117,9 +117,7 @@ export function MatrixCanvas({
     if (!inbox) return;
     const n = signalsRef.current.filter((s) => zoneOf(s) === "unclassified").length;
     const w = inbox.getBoundingClientRect().width;
-    const cols = Math.max(1, Math.floor((w - 24) / (CW + GAP)));
-    const rows = Math.max(1, Math.ceil((n || 1) / cols));
-    inbox.style.height = `${40 + rows * (CH + GAP) + 8 + INBOX_FOOTER}px`;
+    inbox.style.height = `${computeInboxHeight({ itemCount: n, width: w })}px`;
   };
 
   const place = (
@@ -133,7 +131,7 @@ export function MatrixCanvas({
     if (fromOrigin && canvasRef.current) {
       const o = canvasRef.current.getBoundingClientRect();
       el.style.transition = "none";
-      el.style.left = `${o.width / 2 - CW / 2}px`;
+      el.style.left = `${o.width / 2 - CARD_WIDTH / 2}px`;
       el.style.top = `${o.height - 40}px`;
       el.style.transform = "scale(.34)";
       el.style.opacity = "0";
@@ -162,32 +160,11 @@ export function MatrixCanvas({
     }
     const list = signalsRef.current.filter((s) => zoneOf(s) === zone);
     const z = rectIn(el);
-    if (zone === "unclassified") {
-      const cols = Math.max(1, Math.floor((z.w - 24) / (CW + GAP)));
-      if (cols <= 1) {
-        const top = z.y + 40;
-        const bot = z.y + z.h - CH - 8 - INBOX_FOOTER;
-        const step = list.length > 1 ? Math.min(58, (bot - top) / (list.length - 1)) : 0;
-        list.forEach((s, i) => {
-          const el2 = cardRefs.current.get(s.id);
-          if (el2) place(el2, z.x + 16 + (i % 2) * 12, top + i * step, i % 2 ? 2 : -2, anim, i);
-        });
-      } else {
-        list.forEach((s, i) => {
-          const el2 = cardRefs.current.get(s.id);
-          const col = i % cols;
-          const row = (i / cols) | 0;
-          if (el2) place(el2, z.x + 14 + col * (CW + GAP), z.y + 40 + row * (CH + GAP), 0, anim, i);
-        });
-      }
-      return;
-    }
-    const cols = Math.max(1, Math.floor((z.w - 28) / (CW + GAP)));
+    const positions = computeZonePositions({ count: list.length, zone, rect: z });
     list.forEach((s, i) => {
       const el2 = cardRefs.current.get(s.id);
-      const col = i % cols;
-      const row = (i / cols) | 0;
-      if (el2) place(el2, z.x + 14 + col * (CW + GAP), z.y + 38 + row * (CH + GAP), 0, false, i);
+      const pos = positions[i];
+      if (el2 && pos) place(el2, pos.x, pos.y, pos.rotation, zone === "unclassified" && anim, i);
     });
   };
 
@@ -225,7 +202,7 @@ export function MatrixCanvas({
       const el = zoneEl(z);
       if (!el) continue;
       const r = el.getBoundingClientRect();
-      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) return z;
+      if (rectContainsPoint({ x: r.left, y: r.top, w: r.width, h: r.height }, cx, cy)) return z;
     }
     return null;
   };
@@ -240,7 +217,7 @@ export function MatrixCanvas({
     const tp = todayPanelRef.current;
     if (tp) {
       const r = tp.getBoundingClientRect();
-      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+      if (rectContainsPoint({ x: r.left, y: r.top, w: r.width, h: r.height }, cx, cy)) {
         tp.classList.add("drop");
         return "today";
       }
@@ -290,12 +267,7 @@ export function MatrixCanvas({
       const tp = todayPanelRef.current;
       if (tp) {
         const tr = tp.getBoundingClientRect();
-        if (
-          ev.clientX >= tr.left &&
-          ev.clientX <= tr.right &&
-          ev.clientY >= tr.top &&
-          ev.clientY <= tr.bottom
-        ) {
+        if (rectContainsPoint({ x: tr.left, y: tr.top, w: tr.width, h: tr.height }, ev.clientX, ev.clientY)) {
           cbRef.current.onPromoteToday(id);
           return;
         }
