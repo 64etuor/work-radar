@@ -86,6 +86,32 @@ pub async fn stage_calendar_write(
     notify: State<'_, Arc<Notify>>,
 ) -> Result<(), AppError> {
     let pool = db.inner();
+    // PR 6: 루틴은 오늘 처음 인터랙션 시점에 routine_checks 행이 없을 수 있다.
+    // build_queue_row 전에 idempotent INSERT로 행 보장(UNIQUE(routine_id, date) 0011 마이그레이션).
+    // 이렇게 해야 fetch_linked_event/이후 sync 워커의 link_back UPDATE가 0행이 안 되고
+    // Schedule 직후 time_override UPDATE도 안전.
+    if let WriteTarget::RoutineCheck { routine_id, date } = &req.target {
+        ensure_routine_check_row(pool, routine_id, date).await?;
+        // Schedule/Reschedule이면 time_override를 즉시 로컬에 반영 — Google mirror는 큐 워커가.
+        // 트레이↔캔버스 드래그 직후 UI가 다음 fetch에서 time_override를 보는 게 보장돼야 한다(spec §D10).
+        let hhmm = match &req.op {
+            WriteOp::Schedule { at, .. }
+            | WriteOp::Reschedule { at, .. }
+            | WriteOp::Resize { at, .. } => Some(extract_hhmm(at)),
+            _ => None,
+        };
+        if let Some(hhmm) = hhmm {
+            sqlx::query(
+                "UPDATE routine_checks SET time_override = ?1 \
+                 WHERE routine_id = ?2 AND date = ?3",
+            )
+            .bind(&hhmm)
+            .bind(routine_id)
+            .bind(date)
+            .execute(pool)
+            .await?;
+        }
+    }
     let (target_kind, target_id) = match &req.target {
         WriteTarget::Signal { id } => ("signal", id.clone()),
         WriteTarget::RoutineCheck { routine_id, date } => {
@@ -107,6 +133,30 @@ pub async fn stage_calendar_write(
     .await?;
     notify.notify_one();
     Ok(())
+}
+
+/// 루틴 체크 행 보장 — (routine_id, date) UNIQUE 위에서 INSERT...ON CONFLICT DO NOTHING.
+/// 마이그레이션 0011이 UNIQUE(routine_id, date)를 강제해 멱등.
+pub(crate) async fn ensure_routine_check_row(
+    pool: &SqlitePool,
+    routine_id: &str,
+    date: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO routine_checks (id, routine_id, date) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2) \
+         ON CONFLICT(routine_id, date) DO NOTHING",
+    )
+    .bind(routine_id)
+    .bind(date)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// ISO 'YYYY-MM-DDTHH:MM[:SS...]'에서 HH:MM만 추출. 형식 불일치 시 "00:00".
+fn extract_hhmm(at: &str) -> String {
+    at.get(11..16).unwrap_or("00:00").to_string()
 }
 
 /// staged=true 행에서 staged 플래그를 제거하고 next_attempt_at을 now로 당겨 워커가 즉시 가져가게 한다
@@ -290,5 +340,55 @@ fn pair_or_none(t: (Option<String>, Option<String>)) -> Option<(String, String)>
     match t {
         (Some(a), Some(b)) => Some((a, b)),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::shared::test_support::fresh_db;
+
+    /// 시드 routine + ensure_routine_check_row 두 번 호출 → 한 행만 생성(멱등).
+    /// 0011 UNIQUE(routine_id, date) ON CONFLICT DO NOTHING 동작 보증.
+    #[tokio::test]
+    async fn ensure_routine_check_row_is_idempotent() {
+        let db = fresh_db().await;
+        // 루틴 1개 시드 (직접 INSERT — 테스트 격리).
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, active) \
+             VALUES ('r1', '아침', 'daily', 1)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 첫 호출 — 행 생성.
+        ensure_routine_check_row(&db, "r1", "2026-05-28")
+            .await
+            .unwrap();
+        // 두 번째 호출 — ON CONFLICT DO NOTHING (UNIQUE 위반 시 에러 안 남).
+        ensure_routine_check_row(&db, "r1", "2026-05-28")
+            .await
+            .unwrap();
+
+        let (count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(
+            count, 1,
+            "멱등 — UNIQUE(routine_id, date) ON CONFLICT DO NOTHING"
+        );
+    }
+
+    /// extract_hhmm: 다양한 ISO 입력에서 HH:MM 추출.
+    #[test]
+    fn extract_hhmm_isos() {
+        assert_eq!(extract_hhmm("2026-05-28T09:30:00"), "09:30");
+        assert_eq!(extract_hhmm("2026-05-28T23:45:00"), "23:45");
+        // 형식 미달 — fallback "00:00".
+        assert_eq!(extract_hhmm("invalid"), "00:00");
     }
 }
