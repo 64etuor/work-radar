@@ -349,6 +349,76 @@ mod tests {
         assert!(reset.calendar_color.is_none());
     }
 
+    #[tokio::test]
+    async fn project_default_write_calendar_is_trimmed_and_resettable() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+
+        // 1) Normal set.
+        let updated = update_project_default_write_calendar(
+            &db,
+            &SetProjectDefaultWriteCalendarInput {
+                project_id: proj.id.clone(),
+                calendar_id: Some("cal_abc".into()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            updated.default_write_calendar_id.as_deref(),
+            Some("cal_abc")
+        );
+
+        // 2) Whitespace-only input → 정규화 결과 None.
+        let whitespace = update_project_default_write_calendar(
+            &db,
+            &SetProjectDefaultWriteCalendarInput {
+                project_id: proj.id.clone(),
+                calendar_id: Some("   ".into()),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(whitespace.default_write_calendar_id.is_none());
+
+        // 다시 set 후 None으로 명시 리셋.
+        update_project_default_write_calendar(
+            &db,
+            &SetProjectDefaultWriteCalendarInput {
+                project_id: proj.id.clone(),
+                calendar_id: Some("cal_xyz".into()),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 3) 명시 None reset.
+        let reset = update_project_default_write_calendar(
+            &db,
+            &SetProjectDefaultWriteCalendarInput {
+                project_id: proj.id.clone(),
+                calendar_id: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(reset.default_write_calendar_id.is_none());
+
+        // 4) Unknown project id → projects.not_found.
+        let missing = update_project_default_write_calendar(
+            &db,
+            &SetProjectDefaultWriteCalendarInput {
+                project_id: "does-not-exist".into(),
+                calendar_id: Some("cal_abc".into()),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(missing.code, "projects.not_found");
+    }
+
     #[test]
     fn readable_text_color_picks_high_contrast_foreground() {
         assert_eq!(readable_text_color("#111827"), "#FFFFFF");
