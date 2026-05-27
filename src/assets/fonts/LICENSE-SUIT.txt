@@ -1,0 +1,8 @@
+SUIT Variable font
+
+Copyright (c) sunn.us — https://github.com/sunn-us/SUIT
+
+Released under the SIL Open Font License (OFL-1.1).
+See LICENSE-Pretendard.txt for the full OFL-1.1 text (same license terms).
+
+Upstream source: https://github.com/sunn-us/SUIT

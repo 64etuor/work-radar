@@ -27,6 +27,39 @@ function initialTheme(): Theme {
   }
 }
 
+/**
+ * 본문 폰트 프리셋. `--font-sans` 토큰을 덮어쓰는 단일 전역 선택.
+ * 타이틀(`--font-display`)·모노(`--font-mono`)는 변경하지 않는다(시각 디자인 정본 유지).
+ * 표시 전용 — 결정 레일과 무관.
+ */
+export type FontPreset =
+  | "system"
+  | "cohere"
+  | "inter"
+  | "pretendard"
+  | "suit"
+  | "jbm-hangul";
+const FONT_KEY = "wr-font";
+const DEFAULT_FONT: FontPreset = "cohere";
+function isFontPreset(value: string | null): value is FontPreset {
+  return (
+    value === "system" ||
+    value === "cohere" ||
+    value === "inter" ||
+    value === "pretendard" ||
+    value === "suit" ||
+    value === "jbm-hangul"
+  );
+}
+function initialFont(): FontPreset {
+  try {
+    const raw = localStorage.getItem(FONT_KEY);
+    return isFontPreset(raw) ? raw : DEFAULT_FONT;
+  } catch {
+    return DEFAULT_FONT;
+  }
+}
+
 /** 경량 UI 상태 (Zustand). 데이터는 TanStack Query가, 화면/팔레트 상태는 여기서. */
 interface UIState {
   query: string;
@@ -53,6 +86,12 @@ interface UIState {
   theme: Theme;
   /** 테마 토글(+ localStorage 영속). */
   toggleTheme: () => void;
+  /** 테마 명시 설정(+ localStorage 영속) — Appearance 라디오 UI용. */
+  setTheme: (theme: Theme) => void;
+  /** 본문 폰트 프리셋. */
+  font: FontPreset;
+  /** 폰트 설정(+ localStorage 영속). */
+  setFont: (font: FontPreset) => void;
   /** 보드↔설정 이동 (팔레트는 닫는다). */
   goTo: (view: View, intent?: SettingsIntent) => void;
   /** 팔레트에서 스킬 선택 → SkillsView로 이동하며 그 스킬을 선택(보기/편집). 자동 실행 아님. */
@@ -85,6 +124,25 @@ export const useUIStore = create<UIState>((set) => ({
         /* private mode 등 — 무시 */
       }
       return { theme };
+    }),
+  setTheme: (theme) =>
+    set(() => {
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch {
+        /* private mode 등 — 무시 */
+      }
+      return { theme };
+    }),
+  font: initialFont(),
+  setFont: (font) =>
+    set(() => {
+      try {
+        localStorage.setItem(FONT_KEY, font);
+      } catch {
+        /* private mode 등 — 무시 */
+      }
+      return { font };
     }),
   goTo: (view, intent = "open") =>
     set({ view, settingsIntent: intent, paletteOpen: false }),

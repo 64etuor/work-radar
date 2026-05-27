@@ -1,0 +1,49 @@
+/*
+ * 번들된 본문 폰트 선언.
+ *
+ * 사용자가 Settings → Appearance 에서 선택할 수 있는 6종 프리셋 중
+ * 직접 번들이 필요한 4종(Pretendard / SUIT / Inter / JetBrains Mono Hangul)을 여기서 등록한다.
+ * System / Cohere fallback 은 OS 폰트 스택만 사용하므로 별도 @font-face 없음.
+ *
+ * 라이선스: src/assets/fonts/LICENSE-*.txt (전부 OFL-1.1).
+ */
+
+@font-face {
+  font-family: "Pretendard Variable";
+  src: url("../assets/fonts/PretendardVariable.woff2") format("woff2-variations");
+  font-weight: 45 920;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "SUIT Variable";
+  src: url("../assets/fonts/SUIT-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Inter Variable";
+  src: url("../assets/fonts/InterVariable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono Hangul";
+  src: url("../assets/fonts/JetBrainsMonoHangul-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono Hangul";
+  src: url("../assets/fonts/JetBrainsMonoHangul-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+  font-style: normal;
+}

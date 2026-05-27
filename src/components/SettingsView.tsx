@@ -7,10 +7,9 @@ import {
   FolderOpen,
   Keyboard,
   Link2,
-  Moon,
   Newspaper,
+  Palette,
   Plus,
-  Sun,
   Tags,
   User,
 } from "lucide-react";
@@ -34,6 +33,7 @@ import { ProjectCard } from "./settings/ProjectCard";
 import { AgentsPane } from "./settings/AgentsPane";
 import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
 import { LifeWheelTagSettings } from "./settings/LifeWheelTagSettings";
+import { AppearanceSettings } from "./settings/AppearanceSettings";
 import { SectionLabel } from "./settings/SettingsKit";
 
 type SettingsCategory =
@@ -43,7 +43,8 @@ type SettingsCategory =
   | "integrations"
   | "notifications"
   | "news"
-  | "tags";
+  | "tags"
+  | "appearance";
 
 const CATEGORIES: {
   id: SettingsCategory;
@@ -58,6 +59,7 @@ const CATEGORIES: {
   { id: "notifications", label: "알림", icon: Bell, blurb: "데스크톱 알림과 트리거를 설정합니다." },
   { id: "news", label: "뉴스", icon: Newspaper, blurb: "보드 하단 티커에 표시할 외부 뉴스 소스를 켜고 끕니다." },
   { id: "tags", label: "태그", icon: Tags, blurb: "브레인덤프 카드의 Life Wheel 태그와 팔레트 색상을 관리합니다." },
+  { id: "appearance", label: "외관", icon: Palette, blurb: "테마(라이트/다크)와 본문 폰트를 설정합니다." },
 ];
 
 const NEW_PROJECT_ID = "__new_project__";
@@ -67,7 +69,7 @@ const NEW_PROJECT_ID = "__new_project__";
  * Cmd+, 또는 cmdk 팔레트로 진입한다. 화면 전환은 전역 창/뷰 선택 로직이 담당한다.
  */
 export function SettingsView() {
-  const { settingsIntent, theme, toggleTheme } = useUIStore();
+  const { settingsIntent } = useUIStore();
   const projects = useProjects();
   const reconcile = useReconcileSignalProjects();
   const { pushSuccess } = useToastStore();
@@ -102,21 +104,12 @@ export function SettingsView() {
             size="sm"
             onClick={runReconcile}
             disabled={reconcile.isPending || list.length === 0}
+            className="ml-auto"
             title="미태깅 신호를 kind→프로젝트로 reconcile"
           >
             {reconcile.isPending ? "재정렬 중…" : "신호 projectId 재정렬"}
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleTheme}
-          className="ml-auto gap-1.5 rounded-full border-border text-[13px]"
-          title="라이트/다크 전환"
-        >
-          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          {theme === "dark" ? "라이트" : "다크"}
-        </Button>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -179,6 +172,7 @@ export function SettingsView() {
             )}
             {category === "news" && <NewsSourceSettings onToast={pushSuccess} />}
             {category === "tags" && <LifeWheelTagSettings onToast={pushSuccess} />}
+            {category === "appearance" && <AppearanceSettings />}
           </div>
         </main>
       </div>
