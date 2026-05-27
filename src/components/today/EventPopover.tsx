@@ -13,6 +13,11 @@ type Props = {
   anchor: { x: number; y: number } | null;
   onClose: () => void;
   onOpenFullModal: (box: LayoutBox) => void;
+  /**
+   * 루틴 블록 popover에서 완료/미완료 토글. 호출자(TodayView)가 date+useToggleRoutineCheck로
+   * 묶어 전달한다. routine 외 kind는 무시.
+   */
+  onToggleRoutineDone?: (routineId: string, done: boolean) => void;
 };
 
 function hhmm(iso: string): string {
@@ -33,9 +38,11 @@ export function EventPopover({
   anchor,
   onClose,
   onOpenFullModal,
+  onToggleRoutineDone,
 }: Props) {
   if (!open || !box || !anchor) return null;
   const { block } = box;
+  const isRoutine = block.kind === "routine";
 
   return (
     <Popover open={open} onOpenChange={(o) => !o && onClose()}>
@@ -59,6 +66,18 @@ export function EventPopover({
             {block.calendarId || block.kind}
           </div>
           <div className="flex gap-2 pt-2">
+            {isRoutine && block.routineId && onToggleRoutineDone && (
+              <Button
+                size="sm"
+                variant={block.done ? "secondary" : "default"}
+                onClick={() => {
+                  onToggleRoutineDone(block.routineId!, !block.done);
+                  onClose();
+                }}
+              >
+                {block.done ? "미완료로" : "완료"}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"

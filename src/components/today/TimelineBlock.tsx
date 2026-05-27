@@ -49,11 +49,14 @@ export function TimelineBlock({ box, onClick }: Props) {
     ? { transform: CSS.Translate.toString(drag.transform) }
     : {};
 
+  const isDoneRoutine = block.kind === "routine" && block.done === true;
+
   return (
     <button
       ref={isSignal ? drag.setNodeRef : undefined}
       type="button"
-      className={`tl-block tl-block-${block.kind}`}
+      className={`tl-block tl-block-${block.kind}${isDoneRoutine ? " tl-block-done" : ""}`}
+      data-done={isDoneRoutine || undefined}
       style={{
         top: `${topPx}px`,
         height: `${heightPx}px`,

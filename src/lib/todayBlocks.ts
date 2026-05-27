@@ -96,6 +96,8 @@ export function buildTodayBlocks({
       endISO,
       calendarId: r.linkedCalendarId ?? "",
       color: ROUTINE_COLOR,
+      done: r.done,
+      routineId: r.id,
     });
   }
 

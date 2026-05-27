@@ -22,6 +22,10 @@ export type TimedBlock = {
   color: string;
   /** 신호가 Google event를 mirror할 때 사용 (중복 렌더 회피). */
   linkedEventId?: string;
+  /** 루틴 블록 완료 여부 (오늘 routine_checks 행 존재). 다른 kind에선 무의미. */
+  done?: boolean;
+  /** 루틴 블록의 routine_id (popover 토글 호출용). 다른 kind에선 무의미. */
+  routineId?: string;
 };
 
 export type LayoutBox = {

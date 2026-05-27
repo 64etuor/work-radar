@@ -381,6 +381,12 @@
   background: #f6fbf2;
 }
 
+/* 완료된 루틴 블록은 strike-through + 페이드 (PR 6 Task 4). */
+.tl-block-done .tl-block-title {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
 /* ── 반응형 ────────────────────────────────────────────────────────── */
 
 @media (max-width: 1040px) {

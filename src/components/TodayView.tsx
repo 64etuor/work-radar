@@ -206,6 +206,9 @@ export function TodayView() {
           anchor={popover?.anchor ?? null}
           onClose={handlePopoverClose}
           onOpenFullModal={handleOpenFullModal}
+          onToggleRoutineDone={(routineId, done) =>
+            toggleRoutine.mutate({ routineId, date: today, done })
+          }
         />
         {picker && (
           <CalendarPickerPopover
