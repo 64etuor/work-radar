@@ -315,4 +315,67 @@ mod tests {
         assert_eq!(unread, 1);
         assert_eq!(severity, "critical");
     }
+
+    #[tokio::test]
+    async fn quiet_upsert_preserves_read_state_for_stable_polling_alert() {
+        let db = fresh_db().await;
+        upsert_inbox_item_quiet(
+            &db,
+            NewInboxItem {
+                project_id: None,
+                source: "pr_radar",
+                source_id: Some("pr:repo:7:comments"),
+                group_key: Some("pr:repo:7"),
+                title: "PR needs attention",
+                body: "11 comments",
+                summary: None,
+                priority: "high",
+                severity: "warning",
+                related_entity_type: Some("pr"),
+                related_entity_id: Some("repo#7"),
+                action_payload: None,
+            },
+        )
+        .await
+        .expect("insert quiet inbox");
+
+        sqlx::query(
+            "UPDATE inbox_items SET status='read', unread=0, read_at=datetime('now') \
+             WHERE source='pr_radar' AND source_id='pr:repo:7:comments'",
+        )
+        .execute(&db)
+        .await
+        .expect("mark read");
+
+        upsert_inbox_item_quiet(
+            &db,
+            NewInboxItem {
+                project_id: None,
+                source: "pr_radar",
+                source_id: Some("pr:repo:7:comments"),
+                group_key: Some("pr:repo:7"),
+                title: "PR still needs attention",
+                body: "12 comments",
+                summary: Some("updated summary"),
+                priority: "urgent",
+                severity: "critical",
+                related_entity_type: Some("pr"),
+                related_entity_id: Some("repo#7"),
+                action_payload: None,
+            },
+        )
+        .await
+        .expect("quiet update inbox");
+
+        let (count, status, unread, severity, summary): (i64, String, i64, String, Option<String>) =
+            sqlx::query_as("SELECT COUNT(*), status, unread, severity, summary FROM inbox_items")
+                .fetch_one(&db)
+                .await
+                .expect("read inbox");
+        assert_eq!(count, 1);
+        assert_eq!(status, "read");
+        assert_eq!(unread, 0);
+        assert_eq!(severity, "critical");
+        assert_eq!(summary.as_deref(), Some("updated summary"));
+    }
 }

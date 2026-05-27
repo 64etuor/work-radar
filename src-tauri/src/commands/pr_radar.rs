@@ -13,8 +13,9 @@ use crate::retry::Retryable;
 // ── PR Radar (Phase 4, read 레일) ──────────────────────────────────────────────
 // INVARIANT #1: 결정 레일은 사람만 — PR Radar는 자동 분류/자동 승격을 하지 않는다.
 // INVARIANT #3: pr:{owner}/{repo}:{number}:{reason} 안정 키로 upsert(중복 0) + 원인 해소 시 auto-resolve.
-// INVARIANT #4: PR Radar = 표시 전용(display-only). 자동 escalate/알림 없음 — 모든 PR은 radar 자기
-//   뷰(버킷)에 살 뿐 매트릭스로 올라가지 않는다. auto_resolve는 기존 escalated 신호 정리용으로만 남는다.
+// INVARIANT #4: PR Radar = 표시 전용(display-only). 매트릭스 자동 escalate 없음 — 모든 PR은 radar
+//   자기 뷰(버킷)에 살고, threshold/충돌은 Inbox 운영 알림으로만 남는다. auto_resolve는 기존 escalated
+//   신호 정리용으로만 남는다.
 // INVARIANT #5: 폴링/재시도 bounded(github.rs with_retry + 프런트 refetchInterval).
 // INVARIANT #7: 토큰은 keychain에서만 읽혀 Rust 안에서만. refresh 인자에 token 없음.
 
@@ -303,7 +304,8 @@ async fn fetch_github_repo_refs(db: &Db, project_id: &str) -> Result<Vec<RepoRef
 }
 
 /// PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
-/// 자동 escalate/알림 없음, INVARIANT #4). 기존 escalated PR 신호는 원인 해소분만 auto-resolve.
+/// 매트릭스 자동 escalate 없음, INVARIANT #4). threshold/충돌은 Inbox 알림으로 mirror하고, 기존
+/// escalated PR 신호는 원인 해소분만 auto-resolve.
 /// 토큰은 keychain에서만.
 #[tauri::command]
 #[specta::specta]

@@ -1,6 +1,6 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import "./PrRadarView.css";
-import { Bot, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
+import { Bot, ExternalLink, MessageSquare, RefreshCw, TriangleAlert } from "lucide-react";
 
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";
 import {
@@ -34,8 +34,8 @@ const CI_LABEL: Record<CiStatus, string> = {
 };
 
 /**
- * PR Radar — 멀티 레포 PR을 readiness 버킷별로(INVARIANT #4: 자기 뷰). 임계치 넘는 것만 매트릭스로
- * escalate되며, 그 escalate/auto-resolve는 Rust가 폴링 cycle에서 수행한다(보드는 signals로 반영).
+ * PR Radar — 멀티 레포 PR을 readiness 버킷별로(INVARIANT #4: 자기 뷰). 임계치/충돌은 Inbox
+ * 운영 알림으로만 남기고, 매트릭스 자동 escalate는 하지 않는다.
  * 주기 폴링 + bounded backoff(INVARIANT #5)는 useQueries refetchInterval/retry로.
  */
 export function PrRadarView() {
@@ -144,6 +144,7 @@ export function PrRadarView() {
                       key={`${it.repoFullName}#${it.number}`}
                       item={it}
                       codexReady={codexReady}
+                      commentThreshold={settings.data?.commentAlertThreshold ?? 10}
                       drafting={selfcheckDraft.isPending}
                       onSelfcheckDraft={() =>
                         selfcheckDraft.mutate(
@@ -180,6 +181,7 @@ export function PrRadarView() {
                           {
                             projectId: it.projectId,
                             repoId: null,
+                            agentPromptBinding: null,
                             prompt: prEscalationPrompt(it),
                             timeoutSec: 180,
                             maxTurns: 8,
@@ -202,6 +204,7 @@ export function PrRadarView() {
 function PrRow({
   item,
   codexReady,
+  commentThreshold,
   drafting,
   triaging,
   escalating,
@@ -211,6 +214,7 @@ function PrRow({
 }: {
   item: PrRadarItem;
   codexReady: boolean;
+  commentThreshold: number;
   drafting: boolean;
   triaging: boolean;
   escalating: boolean;
@@ -222,7 +226,7 @@ function PrRow({
   const canDraft = item.bucket !== "merged_cleanup";
   // CI triage는 CI Blocked 버킷만(원인/수정안 제안 + 재트리거 캡).
   const canTriage = item.bucket === "ci_blocked";
-  const canEscalate = item.aiFlagged || item.commentCount > 10 || item.hasConflict;
+  const canEscalate = item.aiFlagged || item.commentCount > commentThreshold || item.hasConflict;
   return (
     <div className="prr-row">
       <div className="prr-id">
@@ -246,6 +250,7 @@ function PrRow({
                   : "comments"
           }
         >
+          <MessageSquare className="size-3" />
           {(item.isSuspicious || item.aiFlagged) && <TriangleAlert className="size-3" />}
           {item.commentCount}
         </span>
