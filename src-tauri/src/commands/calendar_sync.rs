@@ -119,6 +119,9 @@ pub async fn commit_staged_writes(
     notify: State<'_, Arc<Notify>>,
 ) -> Result<(), AppError> {
     let pool = db.inner();
+    // 한 트랜잭션으로 묶어 중도 실패 시 부분 적용을 막는다(staged 일부만 풀린 상태 = 사용자
+    // Acceptance의 partial 적용이라 INVARIANT #2 회색지대). all-or-nothing이 안전.
+    let mut tx = pool.begin().await?;
     for id in ids {
         sqlx::query(
             "UPDATE pending_calendar_writes
@@ -127,9 +130,10 @@ pub async fn commit_staged_writes(
              WHERE id = ?1",
         )
         .bind(id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
     }
+    tx.commit().await?;
     notify.notify_one();
     Ok(())
 }

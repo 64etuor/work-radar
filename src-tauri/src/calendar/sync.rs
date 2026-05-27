@@ -10,6 +10,7 @@
 //! INVARIANT #2: cross-cal 변경은 payload `staged=true`라 `fetch_due_writes`가 skip한다
 //! (commit_staged_writes IPC가 staged 플래그를 제거할 때만 워커가 가져간다).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use sqlx::SqlitePool;
@@ -79,15 +80,44 @@ impl SyncEngine {
 
     async fn flush_once(&self) -> sqlx::Result<()> {
         let due = fetch_due_writes(&self.pool).await?;
+        if due.is_empty() {
+            return Ok(());
+        }
+        // tick 시작 시점에 (1) provider 1회 빌드, (2) calendar_id → project_id 매핑 1회 스캔,
+        // (3) project_id → access_token lazy 캐시. 한 tick 안에서 동일 캘린더/프로젝트의 다중 행이
+        // refresh_core(외부 호출 + keychain rotate)를 여러 번 때리는 비용을 제거한다.
+        let provider = match HttpCalendarProvider::new() {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(
+                    code = "calendar.sync.provider_init_failed",
+                    error = %e,
+                    "skip flush tick"
+                );
+                return Ok(());
+            }
+        };
+        let calendar_to_project = build_calendar_to_project_map(&self.pool).await?;
+        let mut token_cache: HashMap<String, String> = HashMap::new();
         for w in due {
-            self.process(w).await;
+            self.process(&provider, &calendar_to_project, &mut token_cache, w)
+                .await;
         }
         Ok(())
     }
 
-    async fn process(&self, w: PendingWrite) {
+    async fn process<P: CalendarProvider>(
+        &self,
+        provider: &P,
+        calendar_to_project: &HashMap<String, String>,
+        token_cache: &mut HashMap<String, String>,
+        w: PendingWrite,
+    ) {
         let pending_id = w.id;
-        match self.execute(&w).await {
+        match self
+            .execute(provider, calendar_to_project, token_cache, &w)
+            .await
+        {
             Ok(()) => {
                 if let Err(e) = delete_write(&self.pool, pending_id).await {
                     tracing::warn!(
@@ -171,12 +201,18 @@ impl SyncEngine {
     }
 
     /// 실제 외부 호출 한 단위. 토큰 본문/외부 응답 본문은 로그/메시지에 노출되지 않는다(스펙 §5.5).
-    async fn execute(&self, w: &PendingWrite) -> SyncResult {
-        let access = access_token_for_calendar(&self.pool, &w.calendar_id)
-            .await?
-            .ok_or_else(|| SyncError::Terminal("calendar not connected".into()))?;
-        let provider = HttpCalendarProvider::new()
-            .map_err(|e| SyncError::Terminal(format!("provider init: {e}")))?;
+    /// provider/token_cache는 flush_once tick 단위로 공유 — 다중 행이 같은 캘린더/프로젝트면 1회만 refresh.
+    /// 제네릭은 cargo test에서 FakeProvider를 꽂기 위한 seam.
+    async fn execute<P: CalendarProvider>(
+        &self,
+        provider: &P,
+        calendar_to_project: &HashMap<String, String>,
+        token_cache: &mut HashMap<String, String>,
+        w: &PendingWrite,
+    ) -> SyncResult {
+        let access = self
+            .access_token_cached(provider, calendar_to_project, token_cache, &w.calendar_id)
+            .await?;
         match w.kind.as_str() {
             "create" => {
                 let input = parse_create_input(&w.payload_json)?;
@@ -376,22 +412,39 @@ fn compute_end(start: &str, duration_min: i64, all_day: bool) -> Result<String, 
     Ok(end.to_rfc3339())
 }
 
-// ── access token resolution: calendar_id → project_id → access ────────────────
+// ── access token resolution: calendar_id → project_id → access (cached per tick) ────
 
-/// 큐 행의 calendar_id로 어느 프로젝트에 속한 캘린더인지 찾고, 그 프로젝트의 access token을 재발급한다.
-/// `projects.google_calendar_ids`는 `[{"id":"...","summary":"..."}]` JSON 배열 — id 일치하는 프로젝트의
-/// credential_ref + keychain blob → refresh_core. 회전된 refresh_token은 보존 저장. 토큰 본문 미반환.
-async fn access_token_for_calendar(
-    pool: &SqlitePool,
-    calendar_id: &str,
-) -> SyncResult<Option<String>> {
-    // 모든 프로젝트의 (id, google_calendar_ids) 쌍을 가져와 JSON을 파싱해 매칭.
-    // 프로젝트 수는 작아(개인용 도구) 풀스캔 OK. 최적화는 필요해지면 그때.
+impl SyncEngine {
+    /// tick 단위 캐시 access token. project_id 단위로 cache → 같은 프로젝트의 다중 캘린더/행이
+    /// keychain · refresh_core를 1회만 거친다. 회전된 refresh_token은 즉시 keychain에 저장.
+    /// 토큰 본문은 캐시 안에만 — 메시지/로그 미노출(스펙 §5.5).
+    async fn access_token_cached<P: CalendarProvider>(
+        &self,
+        provider: &P,
+        calendar_to_project: &HashMap<String, String>,
+        token_cache: &mut HashMap<String, String>,
+        calendar_id: &str,
+    ) -> SyncResult<String> {
+        let project_id = calendar_to_project.get(calendar_id).ok_or_else(|| {
+            SyncError::Terminal(format!("calendar {calendar_id} not bound to any project"))
+        })?;
+        if let Some(t) = token_cache.get(project_id) {
+            return Ok(t.clone());
+        }
+        let access = resolve_access_token(&self.pool, provider, project_id).await?;
+        token_cache.insert(project_id.clone(), access.clone());
+        Ok(access)
+    }
+}
+
+/// flush_once tick 시작 시 1회 스캔: 모든 프로젝트의 google_calendar_ids JSON을 파싱해
+/// calendar_id → project_id 매핑 빌드. 프로젝트 수는 작아(개인용 도구) 풀스캔 OK.
+async fn build_calendar_to_project_map(pool: &SqlitePool) -> sqlx::Result<HashMap<String, String>> {
     let rows: Vec<(String, Option<String>)> =
         sqlx::query_as("SELECT id, google_calendar_ids FROM projects")
             .fetch_all(pool)
-            .await
-            .map_err(|e| SyncError::Terminal(format!("projects fetch: {e}")))?;
+            .await?;
+    let mut map = HashMap::new();
     for (project_id, ids_json) in rows {
         let Some(ids_json) = ids_json.filter(|s| !s.trim().is_empty()) else {
             continue;
@@ -403,20 +456,23 @@ async fn access_token_for_calendar(
         let Some(arr) = parsed.as_array() else {
             continue;
         };
-        let matched = arr
-            .iter()
-            .any(|item| item.get("id").and_then(|v| v.as_str()) == Some(calendar_id));
-        if !matched {
-            continue;
+        for item in arr {
+            if let Some(cid) = item.get("id").and_then(|v| v.as_str()) {
+                map.entry(cid.to_string())
+                    .or_insert_with(|| project_id.clone());
+            }
         }
-        return resolve_access_token(pool, &project_id).await.map(Some);
     }
-    Ok(None)
+    Ok(map)
 }
 
 /// project_id → access token(refresh_core 경유). 회전된 refresh_token은 keychain에 보존 저장.
 /// 토큰 본문은 메시지/로그에 노출되지 않는다(스펙 §5.5).
-async fn resolve_access_token(pool: &SqlitePool, project_id: &str) -> SyncResult<String> {
+async fn resolve_access_token<P: CalendarProvider>(
+    pool: &SqlitePool,
+    provider: &P,
+    project_id: &str,
+) -> SyncResult<String> {
     let cref = project_credential_ref(pool, project_id)
         .await
         .map_err(|e| SyncError::Terminal(format!("credential_ref: {e}")))?;
@@ -432,10 +488,8 @@ async fn resolve_access_token(pool: &SqlitePool, project_id: &str) -> SyncResult
             "calendar not connected (no refresh_token)".into(),
         ));
     }
-    let provider = HttpCalendarProvider::new()
-        .map_err(|e| SyncError::Terminal(format!("provider init: {e}")))?;
     let before = creds.refresh_token.clone();
-    let (access, updated) = refresh_core(&provider, creds).await?;
+    let (access, updated) = refresh_core(provider, creds).await?;
     if updated.refresh_token != before {
         keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())
             .map_err(|e| SyncError::Terminal(format!("keychain set: {e}")))?;
