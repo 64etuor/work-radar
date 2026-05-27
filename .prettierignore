@@ -1,0 +1,24 @@
+# build / deps
+node_modules
+dist
+dist-ssr
+
+# 생성물 — 절대 손대지 않음
+src/bindings.ts
+src-tauri/gen/
+
+# Rust 트리는 cargo fmt 소관
+src-tauri/
+
+# 벤더링/도구/세션 산출물
+.claude/
+.codex/
+.gstack/
+.omc/
+.playwright-mcp/
+.playwright-cli/
+.superpowers/
+output/
+
+# 락파일
+pnpm-lock.yaml

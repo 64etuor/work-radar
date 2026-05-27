@@ -6,6 +6,7 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
+import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
@@ -42,10 +43,7 @@ export default tseslint.config(
       // exhaustive-deps는 전통적으로 warn (의도적 disable 주석이 이미 존재).
       "react-hooks/exhaustive-deps": "warn",
       // Fast Refresh 휴리스틱은 DX 경고지 정합성 에러가 아니다(표준 Vite 템플릿과 동일).
-      "react-refresh/only-export-components": [
-        "warn",
-        { allowConstantExport: true },
-      ],
+      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
     },
   },
   {
@@ -55,4 +53,6 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  // 마지막에 와야 함 — Prettier와 충돌하는 stylistic 룰을 비활성화.
+  prettier,
 );

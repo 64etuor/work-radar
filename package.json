@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "check:frontend-ownership": "node scripts/check-frontend-ownership.mjs",
     "test:frontend-ownership": "node --test scripts/check-frontend-ownership.test.mjs",
     "test": "vitest run",
@@ -58,14 +60,22 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
     "globals": "^17.6.0",
     "husky": "^9",
+    "lint-staged": "^17.0.5",
+    "prettier": "^3.8.3",
+    "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.59.4",
     "vite": "^7.0.4",
     "vitest": "^4.1.7"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css,md,html,yaml,yml}": "prettier --write"
   }
 }
