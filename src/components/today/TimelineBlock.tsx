@@ -110,6 +110,7 @@ export function TimelineBlock({ box, onClick }: Props) {
   return (
     <div
       className="tl-block-wrap"
+      data-dragging={drag.isDragging || undefined}
       style={{
         position: "absolute",
         top: `${topPx}px`,

@@ -439,10 +439,30 @@
 /* ── 블록 레이어(PR 4) ────────────────────────────────────────────── */
 
 /*
- * PR 7: 블록은 컨테이너 div(.tl-block-wrap) 안에 button + resize handle.
- * 컨테이너가 좌표/transform/opacity 소유 — block button은 컨테이너 100% 채움.
- * 중첩 interactive(button inside button) 회피를 위해 핸들은 형제.
+ * 블록 컨테이너 — 좌표/크기/transform 소유. 드래그 중이 아닐 때만 layout 변화
+ * (left/width/top/height)에 transition을 줘서 겹침이 들어오고 빠질 때 옆 블록이
+ * 부드럽게 밀리고 펼쳐진다 (Google Calendar/Notion 류). 드래그 중엔 transform이
+ * dnd-kit pixel 좌표라 transition을 끄지 않으면 따라옴이 부자연스러움.
  */
+.tl-block-wrap {
+  transition:
+    left var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(.2,0,0,1)),
+    width var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(.2,0,0,1)),
+    top var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(.2,0,0,1)),
+    height var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(.2,0,0,1));
+  will-change: left, width, top, height;
+}
+
+.tl-block-wrap[data-dragging] {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-block-wrap {
+    transition: none;
+  }
+}
+
 .tl-block {
   position: absolute;
   inset: 0;

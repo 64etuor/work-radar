@@ -112,6 +112,69 @@ pub async fn stage_calendar_write(
             .await?;
         }
     }
+    // ADR-0002 카드 정본: signals.scheduled_at/duration/linked_calendar_id를 즉시
+    // 로컬에 반영한다. 워커는 Google mirror만 담당 — UI가 다음 fetch에서 즉시
+    // 새 schedule을 본다. (이전엔 link_back만 있어서 Google round-trip 끝나야
+    // UI에 반영, 사용자 체감 "한참 있다 보임".)
+    if let WriteTarget::Signal { id } = &req.target {
+        match &req.op {
+            WriteOp::Schedule {
+                at,
+                duration_min,
+                calendar_id,
+                ..
+            }
+            | WriteOp::CreateBlank {
+                at,
+                duration_min,
+                calendar_id,
+                ..
+            } => {
+                sqlx::query(
+                    "UPDATE signals SET scheduled_at = ?1, scheduled_duration = ?2, \
+                     linked_calendar_id = ?3 WHERE id = ?4",
+                )
+                .bind(at)
+                .bind(*duration_min)
+                .bind(calendar_id)
+                .bind(id)
+                .execute(pool)
+                .await?;
+            }
+            WriteOp::Reschedule { at, duration_min } => {
+                sqlx::query(
+                    "UPDATE signals SET scheduled_at = ?1, scheduled_duration = ?2 WHERE id = ?3",
+                )
+                .bind(at)
+                .bind(*duration_min)
+                .bind(id)
+                .execute(pool)
+                .await?;
+            }
+            WriteOp::Resize { at, duration_min } => {
+                sqlx::query(
+                    "UPDATE signals SET scheduled_at = ?1, scheduled_duration = ?2 WHERE id = ?3",
+                )
+                .bind(at)
+                .bind(*duration_min)
+                .bind(id)
+                .execute(pool)
+                .await?;
+            }
+            WriteOp::Unschedule => {
+                sqlx::query(
+                    "UPDATE signals SET scheduled_at = NULL, scheduled_duration = NULL, \
+                     linked_event_id = NULL, linked_calendar_id = NULL WHERE id = ?1",
+                )
+                .bind(id)
+                .execute(pool)
+                .await?;
+            }
+            // MoveCalendar는 staged — Acceptance 게이트 전까지 로컬 mirror도 보류.
+            // commit_staged_writes 시점이 아니라 워커 flush 시 link_back에서 반영된다.
+            WriteOp::MoveCalendar { .. } => {}
+        }
+    }
     let (target_kind, target_id) = match &req.target {
         WriteTarget::Signal { id } => ("signal", id.clone()),
         WriteTarget::RoutineCheck { routine_id, date } => {
