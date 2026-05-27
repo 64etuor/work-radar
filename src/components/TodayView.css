@@ -191,6 +191,26 @@
   background: #fff;
   border: 1px solid var(--wr-border-light);
   border-radius: 6px;
+  cursor: grab;
+  user-select: none;
+}
+
+.today-tray-row:active {
+  cursor: grabbing;
+}
+
+.today-tray-row[data-dragging] {
+  cursor: grabbing;
+}
+
+/* 트레이 row 좌측 그립 — 드래그 가능 affordance. 보드의 ⠿ 패턴 재사용. */
+.today-tray-grip {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--wr-subtle);
+  opacity: 0.5;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .today-tray-check {
@@ -401,6 +421,11 @@
 
 .tl-block-signal {
   background: #f6f9ff;
+  cursor: grab;
+}
+
+.tl-block-signal:active {
+  cursor: grabbing;
 }
 
 /*
@@ -409,10 +434,10 @@
  */
 .tl-block-resize {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 8px;
+  right: 8px;
   bottom: 0;
-  height: 6px;
+  height: 8px;
   cursor: ns-resize;
   z-index: 3;
   background: transparent;
@@ -421,12 +446,31 @@
   transition: background var(--wr-motion-fast) var(--wr-ease-out);
 }
 
-.tl-block-resize:hover,
-.tl-block-resize[data-dragging],
-.tl-block-resize:focus-visible {
-  background: var(--color-today-signal);
+/* 항상 보이는 가운데 그립 라인 — hover 전에도 "여기 잡을 수 있다" 신호. */
+.tl-block-resize::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 24px;
+  height: 3px;
+  background: var(--color-today-signal, #4a7bb8);
   opacity: 0.35;
-  outline: none;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: opacity var(--wr-motion-fast) var(--wr-ease-out);
+  pointer-events: none;
+}
+
+.tl-block-resize:hover::after,
+.tl-block-resize[data-dragging]::after,
+.tl-block-resize:focus-visible::after {
+  opacity: 0.85;
+}
+
+.tl-block-resize:focus-visible {
+  outline: 2px solid var(--wr-color-focus, #4c6ee6);
+  outline-offset: 1px;
 }
 
 .tl-block-routine {

@@ -49,8 +49,9 @@ function SignalDraggableRow({
       {...attributes}
       {...listeners}
       role="listitem"
-      aria-label={`${signal.title} (Today)`}
+      aria-label={`${signal.title} (Today, 드래그하여 시간축에 배치)`}
     >
+      <span className="today-tray-grip" aria-hidden>⠿</span>
       <button
         type="button"
         className="today-tray-check"
@@ -96,8 +97,9 @@ function RoutineDraggableRow({
       {...attributes}
       {...listeners}
       role="listitem"
-      aria-label={`${routine.title} (루틴)`}
+      aria-label={`${routine.title} (루틴, 드래그하여 시간축에 배치)`}
     >
+      <span className="today-tray-grip" aria-hidden>⠿</span>
       <button
         type="button"
         className="today-tray-check"
