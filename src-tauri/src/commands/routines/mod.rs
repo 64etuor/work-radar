@@ -325,6 +325,79 @@ mod tests {
         assert_eq!(unfired, 0, "완료 루틴 알림은 fired로 skip");
     }
 
+    /// PR 6 §D10: 루틴 정의의 time_of_day 변경은 오늘 routine_checks.time_override를 건드리지 않는다.
+    /// 정책 — 정의 변경은 "내일부터" 자동 적용. 오늘 인스턴스(override)는 보존.
+    #[tokio::test]
+    async fn update_routine_time_does_not_touch_today_override() {
+        let db = fresh_db().await;
+        let r = insert_routine(
+            &db,
+            &CreateRoutineInput {
+                title: "아침 운동".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: Some("07:00".into()),
+                reminder_offset_min: None,
+                area: None,
+                kind: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 오늘 routine_checks 행 + time_override='10:00' 시드 (사용자가 드래그로 이동했다고 가정).
+        sqlx::query(
+            "INSERT INTO routine_checks (id, routine_id, date, time_override) \
+             VALUES (lower(hex(randomblob(16))), ?1, '2026-05-22', '10:00')",
+        )
+        .bind(&r.id)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 정의 시간을 07:00 → 08:00으로 변경.
+        update_routine_inner(
+            &db,
+            UpdateRoutineInput {
+                id: r.id.clone(),
+                title: "아침 운동".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: Some("08:00".into()),
+                reminder_offset_min: None,
+                area: None,
+                kind: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 오늘 인스턴스의 time_override는 '10:00' 그대로 보존.
+        let (override_after,): (Option<String>,) = sqlx::query_as(
+            "SELECT time_override FROM routine_checks WHERE routine_id = ?1 AND date = '2026-05-22'",
+        )
+        .bind(&r.id)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(
+            override_after.as_deref(),
+            Some("10:00"),
+            "정의 시간 변경은 오늘 override를 건드리지 말아야 함 (spec §D10)"
+        );
+
+        // 정의 자체는 08:00으로 변경됨.
+        let (defn_time,): (Option<String>,) =
+            sqlx::query_as("SELECT time_of_day FROM routines WHERE id = ?1")
+                .bind(&r.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(defn_time.as_deref(), Some("08:00"));
+    }
+
     /// 정렬: reorder_routines가 rank를 부여하고 list가 rank 순으로 반환.
     #[tokio::test]
     async fn reorder_persists_rank_order() {
