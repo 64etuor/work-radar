@@ -155,8 +155,20 @@ pub(crate) async fn ensure_routine_check_row(
 }
 
 /// ISO 'YYYY-MM-DDTHH:MM[:SS...]'에서 HH:MM만 추출. 형식 불일치 시 "00:00".
+/// 입력이 11..16 슬라이스를 갖지 않으면 (a) ISO 가정 오류이거나 (b) 빈/짧은 문자열 →
+/// `tracing::warn!`로 표면화한 뒤 안전 폴백. 침묵 "00:00" 폴백은 시간이 어긋난
+/// 캘린더 이벤트가 silent하게 생성될 수 있어 위험(PR 7 코드리뷰).
 fn extract_hhmm(at: &str) -> String {
-    at.get(11..16).unwrap_or("00:00").to_string()
+    match at.get(11..16) {
+        Some(s) => s.to_string(),
+        None => {
+            tracing::warn!(
+                input_len = at.len(),
+                "extract_hhmm: malformed ISO input — falling back to 00:00"
+            );
+            "00:00".to_string()
+        }
+    }
 }
 
 /// staged=true 행에서 staged 플래그를 제거하고 next_attempt_at을 now로 당겨 워커가 즉시 가져가게 한다

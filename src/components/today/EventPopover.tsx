@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/popover";
 import { openExternal } from "@/lib/query";
 import type { LayoutBox } from "@/lib/timelineLayout";
+import { useUIStore } from "@/store";
 
 type Props = {
   open: boolean;
@@ -40,9 +41,37 @@ export function EventPopover({
   onOpenFullModal,
   onToggleRoutineDone,
 }: Props) {
+  const goTo = useUIStore((s) => s.goTo);
   if (!open || !box || !anchor) return null;
-  const { block } = box;
+  // narrowed local: closure capture는 LayoutBox(null 제외) 보장.
+  const currentBox = box;
+  const { block } = currentBox;
   const isRoutine = block.kind === "routine";
+  const isSignal = block.kind === "signal";
+  const isEvent = block.kind === "event";
+
+  /**
+   * 더보기 동작 분기 (PR 7, 이전엔 disabled stub):
+   *  - signal: 보드 화면으로 이동 — 카드 정본이라 board에서 편집.
+   *  - event: linkedEventId가 있으면 Google에서 열기, 아니면 onOpenFullModal로 위임.
+   *  - 그 외(routine): onOpenFullModal로 호출자 위임.
+   * 단순 wiring — 풀 모달(편집)은 v2 follow-up(area doc 참조).
+   */
+  const handleMore = () => {
+    if (isSignal) {
+      goTo("board");
+      onClose();
+      return;
+    }
+    if (isEvent && block.linkedEventId) {
+      void openExternal(
+        `https://calendar.google.com/calendar/event?eid=${block.linkedEventId}`,
+      );
+      onClose();
+      return;
+    }
+    onOpenFullModal(currentBox);
+  };
 
   return (
     <Popover open={open} onOpenChange={(o) => !o && onClose()}>
@@ -81,9 +110,14 @@ export function EventPopover({
             <Button
               size="sm"
               variant="outline"
-              disabled
-              title="PR 7 예정"
-              onClick={() => onOpenFullModal(box)}
+              onClick={handleMore}
+              aria-label={
+                isSignal
+                  ? "보드에서 카드 열기"
+                  : isEvent && block.linkedEventId
+                    ? "Google에서 이벤트 열기"
+                    : "더보기"
+              }
             >
               더보기
             </Button>

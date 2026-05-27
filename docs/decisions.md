@@ -6,6 +6,7 @@
 ## Phase 0 — 스켈레톤 & 스파인
 
 - **ADR 체계 도입(2026-05-27).** 구조적/비싼 결정은 `docs/adr/`(accepted/rejected 본문 freeze)에 기록하고, 이 파일은 Phase별 chronology/운영 breadcrumb로 유지. 정본: `docs/adr/0001-adopt-adr-governance.md`.
+- **Today×Timeline 머지(2026-05-28).** PR 1~7로 `/timeline` 라우트 제거 + Today 표면에 흡수. 카드 정본 + Google mirror(ADR-0002) + 800ms 디바운스 큐(ADR-0003) + `@dnd-kit` 도입(ADR-0004) + ATracker 분할. 영역 라우팅 정본: `docs/areas/today-timeline.md`(area-map row 14). v2 follow-up은 area 문서 v2 섹션 참조.
 
 - **Tailwind v4 채택** (CSS-first, `@tailwindcss/vite` 플러그인 + `@theme`): 현재 기본 라인. v3식 `tailwind.config.js` 대신 `src/styles.css`에 토큰 정의.
 - **keyring 3.x 사용** (`apple-native` feature): keyring 4.x는 `keyring-core` + 별도 backend 크레이트로 재패키징되어 feature가 비어 있음 → 안정적이고 문서화된 3.6.x API(`Entry`/`set_password`/`get_password`/`delete_credential`) 채택.
