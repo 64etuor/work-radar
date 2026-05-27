@@ -10,6 +10,7 @@ import "./NewsTicker.css";
 import type { NewsItem } from "@/bindings";
 import {
   isHotTrendingNews,
+  newsTickerItemKey,
   newsSourceClass,
   newsSourceLabel,
 } from "@/lib/newsTicker";
@@ -66,7 +67,7 @@ function NewsTrack({ items, ariaHidden }: { items: NewsItem[]; ariaHidden?: bool
       aria-hidden={ariaHidden ? true : undefined}
     >
       {items.map((it) => (
-        <li key={`${it.source}-${it.externalId}`} className="news-ticker-li">
+        <li key={newsTickerItemKey(it)} className="news-ticker-li">
           {/* 사본(seamless 마퀴 위한 두 번째 트랙)은 키보드 포커스/클릭 대상 제외 — critic Minor #2 */}
           <NewsTickerItem item={it} items={items} tabbable={!ariaHidden} />
         </li>

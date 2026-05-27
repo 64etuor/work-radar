@@ -7,4 +7,9 @@ describe("news ticker refresh", () => {
     expect(newsQuerySource).toContain('listen("news_items_updated"');
     expect(newsQuerySource).toContain('invalidateQueries({ queryKey: ["newsList"] })');
   });
+
+  it("keeps marquee flow stable when refetch returns a reordered full list", () => {
+    expect(newsQuerySource).toContain("structuralSharing");
+    expect(newsQuerySource).toContain("mergeNewsTickerItems");
+  });
 });

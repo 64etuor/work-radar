@@ -14,7 +14,8 @@ import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { unwrap } from "./client";
 import { commands } from "@/bindings";
-import type { FilterMode, NewsOptions } from "@/bindings";
+import type { FilterMode, NewsItem, NewsOptions } from "@/bindings";
+import { mergeNewsTickerItems } from "@/lib/newsTicker";
 
 /** 프런트 폴 주기 — 백엔드가 설정 주기에 한 번 갱신하므로 5분이면 평균 stale 이내 보장. */
 const NEWS_POLL_MS = 5 * 60 * 1000;
@@ -50,6 +51,8 @@ export function useNewsList() {
     retry: false,
     // 토글/refetch 사이에 isLoading flicker(빈 티커→"불러오는 중…"→다시 채움) 방지.
     placeholderData: keepPreviousData,
+    structuralSharing: (previous, incoming) =>
+      mergeNewsTickerItems((previous as NewsItem[] | undefined) ?? [], incoming as NewsItem[]),
   });
 }
 

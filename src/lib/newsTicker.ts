@@ -1,5 +1,30 @@
 import type { NewsItem } from "@/bindings";
 
+export function newsTickerItemKey(item: Pick<NewsItem, "source" | "externalId">): string {
+  return `${item.source}:${item.externalId}`;
+}
+
+/**
+ * Polling returns the whole list in newest-first order. Reordering the marquee pool on every
+ * refresh resets the visual flow, so keep the existing order and append unseen arrivals at the end.
+ * A zero-overlap update means filters/sources changed enough that a full replacement is clearer.
+ */
+export function mergeNewsTickerItems(previous: NewsItem[], incoming: NewsItem[]): NewsItem[] {
+  if (previous.length === 0 || incoming.length === 0) return incoming;
+
+  const incomingByKey = new Map(incoming.map((item) => [newsTickerItemKey(item), item]));
+  const previousKeys = new Set(previous.map(newsTickerItemKey));
+  const hasOverlap = incoming.some((item) => previousKeys.has(newsTickerItemKey(item)));
+  if (!hasOverlap) return incoming;
+
+  const kept = previous
+    .map((item) => incomingByKey.get(newsTickerItemKey(item)))
+    .filter((item): item is NewsItem => item != null);
+  const appended = incoming.filter((item) => !previousKeys.has(newsTickerItemKey(item)));
+
+  return [...kept, ...appended];
+}
+
 /** 소스별 티커용 짧은 라벨. 긴 registry id를 그대로 노출하면 여러 소스 ON 시 배너가 깨진다. */
 const SOURCE_LABEL: Record<string, string> = {
   hn: "HN",

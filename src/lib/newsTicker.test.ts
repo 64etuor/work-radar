@@ -1,13 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import type { NewsItem } from "@/bindings";
-import { isHotTrendingNews, newsSourceClass, newsSourceLabel } from "./newsTicker";
+import {
+  isHotTrendingNews,
+  mergeNewsTickerItems,
+  newsSourceClass,
+  newsSourceLabel,
+  newsTickerItemKey,
+} from "./newsTicker";
 
-function item(source: string, id: string, commentCount: number | null): NewsItem {
+function item(
+  source: string,
+  id: string,
+  commentCount: number | null,
+  title = id,
+): NewsItem {
   return {
     source,
     externalId: id,
-    title: id,
+    title,
     url: "https://example.com",
     commentsUrl: null,
     commentCount,
@@ -25,6 +36,34 @@ describe("news ticker display helpers", () => {
   it("sanitizes source class modifiers", () => {
     expect(newsSourceClass("reddit_programming")).toBe("news-src-reddit_programming");
     expect(newsSourceClass("bad/source")).toBe("news-src-bad-source");
+  });
+
+  it("uses a stable item key for marquee list identity", () => {
+    expect(newsTickerItemKey(item("hn", "42", null))).toBe("hn:42");
+  });
+
+  it("keeps marquee order stable on polling and appends new items to the tail", () => {
+    const previous = [item("hn", "old", 10), item("hn", "older", 1)];
+    const incoming = [
+      item("hn", "new", 20),
+      item("hn", "old", 11, "old-updated"),
+      item("hn", "older", 2),
+    ];
+
+    expect(mergeNewsTickerItems(previous, incoming).map((it) => it.externalId)).toEqual([
+      "old",
+      "older",
+      "new",
+    ]);
+    expect(mergeNewsTickerItems(previous, incoming)[0].title).toBe("old-updated");
+  });
+
+  it("replaces the marquee pool when filters or sources produce a disjoint result", () => {
+    expect(
+      mergeNewsTickerItems([item("hn", "old", null)], [item("geeknews", "fresh", null)]).map(
+        (it) => it.externalId,
+      ),
+    ).toEqual(["fresh"]);
   });
 
   it("marks only high-comment top-quartile items as hot trending", () => {
