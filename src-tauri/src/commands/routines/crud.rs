@@ -57,6 +57,10 @@ pub async fn insert_routine(
         area: input.area,
         kind: input.kind,
         done: false,
+        // 신규 루틴은 오늘 routine_checks 행이 없으므로 모두 None.
+        time_override: None,
+        linked_event_id: None,
+        linked_calendar_id: None,
     })
 }
 

@@ -23,6 +23,10 @@ struct RoutineRow {
     area: Option<crate::models::AreaTag>,
     kind: Option<Kind>,
     done: bool,
+    /// 오늘 routine_checks 행의 시간 override (spec §D10).
+    time_override: Option<String>,
+    linked_event_id: Option<String>,
+    linked_calendar_id: Option<String>,
 }
 
 /// 오늘 해당하는 루틴 + 날짜별 완료 상태. 신규 freq는 routine_due_on으로 계산한다.
@@ -36,7 +40,8 @@ pub async fn fetch_today_routines(
     let rows = sqlx::query_as::<_, RoutineRow>(
         "SELECT r.id, r.title, r.freq, r.weekdays, r.anchor_date, r.time_of_day, \
                 r.reminder_offset_min, r.area, r.kind, \
-                (rc.id IS NOT NULL) AS done \
+                (rc.id IS NOT NULL) AS done, \
+                rc.time_override, rc.linked_event_id, rc.linked_calendar_id \
          FROM routines r \
          LEFT JOIN routine_checks rc ON rc.routine_id = r.id AND rc.date = ?1 \
          WHERE r.active = 1 ORDER BY r.rank IS NULL, r.rank, r.created_at",
@@ -63,6 +68,9 @@ pub async fn fetch_today_routines(
                 area: r.area,
                 kind: r.kind,
                 done: r.done,
+                time_override: r.time_override,
+                linked_event_id: r.linked_event_id,
+                linked_calendar_id: r.linked_calendar_id,
             })
         })
         .collect())

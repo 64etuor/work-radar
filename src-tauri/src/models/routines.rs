@@ -49,6 +49,12 @@ pub struct RoutineToday {
     pub kind: Option<Kind>,
     /// 주어진 날짜에 완료 체크됐는지 (RoutineCheck 존재 여부).
     pub done: bool,
+    /// 오늘만 적용되는 시각 override 'HH:MM' (spec §D10). 내일은 정의의 `time_of_day`로 복귀.
+    pub time_override: Option<String>,
+    /// Google mirror event id (오늘 인스턴스 한정).
+    pub linked_event_id: Option<String>,
+    /// Google mirror calendar id (오늘 인스턴스 한정).
+    pub linked_calendar_id: Option<String>,
 }
 
 /// 루틴 생성 입력.
