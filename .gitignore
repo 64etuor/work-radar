@@ -41,3 +41,5 @@ output/
 
 # Claude Code per-session read logs (machine-local)
 .claude/.read-log.*
+# Claude Code scheduled-task lock (런타임 산출물)
+.claude/scheduled_tasks.lock

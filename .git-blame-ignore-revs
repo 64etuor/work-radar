@@ -1,0 +1,6 @@
+# git blame ignore — 자동/일괄 포맷 커밋. 코드 의미 변경 없음.
+# 활성화:  git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub UI는 이 파일을 자동으로 사용한다.
+
+# chore(format): apply Prettier across repo (+tailwind class sort)
+3393e6dc1522bb84f08e068552e881dd8bc6d20a
