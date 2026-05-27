@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import "./TodayView.css";
 
+import { EventPopover } from "@/components/today/EventPopover";
 import { TimelineCanvas } from "@/components/today/TimelineCanvas";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
@@ -16,7 +17,7 @@ import {
   useToggleRoutineCheck,
   useToggleTodayDone,
 } from "@/lib/query";
-import { computeLayout } from "@/lib/timelineLayout";
+import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
 import { buildTodayBlocks } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
 
@@ -65,6 +66,11 @@ export function TodayView() {
   );
   const boxes = useMemo(() => computeLayout(blocks), [blocks]);
 
+  const [popover, setPopover] = useState<{
+    box: LayoutBox;
+    anchor: { x: number; y: number };
+  } | null>(null);
+
   return (
     <div className="today">
       <TodayHeader
@@ -94,13 +100,27 @@ export function TodayView() {
               date={date}
               today={today}
               boxes={boxes}
-              onBlockClick={() => {
-                /* EventPopover wiring lands in Task 4. */
+              onBlockClick={(box, e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setPopover({
+                  box,
+                  anchor: { x: rect.right + 8, y: rect.top },
+                });
               }}
             />
           )}
         </div>
       </div>
+      <EventPopover
+        open={popover !== null}
+        box={popover?.box ?? null}
+        anchor={popover?.anchor ?? null}
+        onClose={() => setPopover(null)}
+        onOpenFullModal={() => {
+          // PR 7에서 풀 모달(카드 편집/이벤트 상세) 정련. 현 PR은 닫기 자리표시.
+          setPopover(null);
+        }}
+      />
     </div>
   );
 }
