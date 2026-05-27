@@ -129,6 +129,14 @@ pub struct WorkSignal {
     pub impact_high: Option<bool>,
     /// 회고 태그: 하지말걸(사람 태깅, Phase 17). NULL/false=미태깅, true=후회 ⚠️. INVARIANT #1.
     pub regret: Option<bool>,
+    /// 시간축 배치 (spec §D8 카드 정본): RFC3339 UTC. NULL=미배치(트레이).
+    pub scheduled_at: Option<String>,
+    /// 시간축 배치 길이(분). NULL=미배치.
+    pub scheduled_duration: Option<i32>,
+    /// Google mirror event id. delete 후 NULL.
+    pub linked_event_id: Option<String>,
+    /// Google mirror calendar id. delete 후 NULL.
+    pub linked_calendar_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

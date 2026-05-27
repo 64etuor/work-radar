@@ -9,7 +9,8 @@ use crate::models::{AreaTag, CreateSignalInput, Kind, Quadrant, SignalStatus, Wo
 pub(crate) const SIGNAL_COLS: &str =
     "id, project_id, title, body, source, type, quadrant, suggested_quadrant, \
      kind, area, area_tags, suggested_area, status, snooze_until, today_for_date, today_done_at, today_rank, \
-     impact_high, regret, created_at, updated_at";
+     impact_high, regret, scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id, \
+     created_at, updated_at";
 
 /// braindump 입력 정규화 (dedup 키 기준). 소문자 + 공백 정리.
 fn normalize(title: &str) -> String {
