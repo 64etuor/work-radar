@@ -173,6 +173,37 @@ mod tests {
         assert!(rows[0].1.contains("T2"), "latest payload must win");
     }
 
+    /// Event targets use the same durable pending queue as signals/routine checks.
+    #[tokio::test]
+    async fn upsert_accepts_event_target_kind() {
+        let p = pool().await;
+        let id = upsert_write(
+            &p,
+            "patch",
+            "event",
+            "cal1|evt1",
+            "cal1",
+            Some("evt1"),
+            r#"{"start":"2026-05-28T10:00:00+09:00","duration_min":30}"#,
+            800,
+        )
+        .await
+        .unwrap();
+
+        let row: (String, String, Option<String>) = sqlx::query_as(
+            "SELECT target_kind, calendar_id, event_id
+             FROM pending_calendar_writes
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_one(&p)
+        .await
+        .unwrap();
+        assert_eq!(row.0, "event");
+        assert_eq!(row.1, "cal1");
+        assert_eq!(row.2.as_deref(), Some("evt1"));
+    }
+
     /// Task 3: backoff 스케줄 [1s, 3s, 9s].
     #[test]
     fn backoff_delay_progression() {

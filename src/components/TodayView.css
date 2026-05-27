@@ -124,6 +124,46 @@
   z-index: 4;
 }
 
+.today-canvas-drop-x-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #4a7bb8;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.today-canvas-drop-preview {
+  position: absolute;
+  border: 1px solid #4a7bb8;
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #eaf2ff;
+  box-shadow: 0 4px 14px rgba(38, 74, 120, 0.16);
+  pointer-events: none;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  padding: 4px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #24476f;
+}
+
+.today-canvas-drop-preview-event {
+  background: #fff1d6;
+  border-color: #b47f2a;
+  color: #6d4610;
+}
+
+.today-canvas-drop-preview-routine {
+  background: #edf7e6;
+  border-color: #5c8a3a;
+  color: #36591f;
+}
+
 /* 15분 스냅 슬롯 시각 라벨 (PR 6 Task 3). */
 .today-canvas-drop-guide::after {
   content: attr(data-time);
@@ -352,21 +392,24 @@
   right: 0;
   top: 30px;
   height: 0;
-  border-top: 1px dashed var(--wr-border-light);
-  opacity: 0.55;
+  border-top: 1px dashed rgba(120, 113, 108, 0.36);
+  opacity: 1;
   pointer-events: none;
 }
 
 .today-canvas-hour-label {
   position: absolute;
-  left: 8px;
-  top: -7px;
+  left: 6px;
+  top: -10px;
   font-size: 10px;
-  font-weight: 600;
-  color: var(--wr-subtle);
+  font-weight: 700;
+  color: #57534e;
   font-family: ui-monospace, monospace;
   background: #fff;
-  padding: 0 2px;
+  border: 1px solid rgba(214, 207, 191, 0.9);
+  border-radius: 9999px;
+  padding: 1px 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .today-canvas-hour-rule {
@@ -375,8 +418,8 @@
   right: 0;
   top: 0;
   height: 1px;
-  background: var(--wr-border, #d9d4c7);
-  opacity: 0.7;
+  background: rgba(87, 83, 78, 0.34);
+  opacity: 1;
 }
 
 /* 좌측 시간 라벨 거터 — 그리드와 분리되어 보이는 얇은 세로선. */
@@ -387,7 +430,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--wr-border-light);
+  background: rgba(87, 83, 78, 0.24);
   z-index: 1;
   pointer-events: none;
 }
@@ -399,7 +442,7 @@
   right: 0;
   top: 540px; /* 9h × 60px */
   height: 540px; /* 9h band */
-  background: rgba(74, 123, 184, 0.025);
+  background: rgba(74, 123, 184, 0.055);
   z-index: 0;
   pointer-events: none;
 }
@@ -424,6 +467,20 @@
   height: 8px;
   border-radius: 50%;
   background: var(--color-today-now-line);
+}
+
+.today-canvas-block-layer {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.today-canvas-block-layer .tl-block-wrap {
+  pointer-events: auto;
 }
 
 .today-canvas-cta {
@@ -466,7 +523,7 @@
 .tl-block {
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 14%, #fff);
   border: 1px solid var(--wr-border, #c8c2b0);
   border-left-width: 4px;
   border-radius: 6px;
@@ -474,7 +531,7 @@
   font-size: 11px;
   text-align: left;
   overflow: hidden;
-  cursor: pointer;
+  cursor: grab;
   z-index: 2;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   /*
@@ -489,10 +546,11 @@
 }
 
 .tl-block:hover {
-  background: #fafaf7;
+  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 20%, #fff);
 }
 
 .tl-block:active {
+  cursor: grabbing;
   transform: scale(1.02);
   box-shadow: var(--wr-shadow-sm);
 }
@@ -524,7 +582,7 @@
 }
 
 .tl-block-signal {
-  background: linear-gradient(180deg, #eaf2ff 0%, #dfeaff 100%);
+  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 16%, #fff);
   border-color: rgba(74, 123, 184, 0.45);
   cursor: grab;
   box-shadow:
@@ -533,7 +591,7 @@
 }
 
 .tl-block-signal:hover {
-  background: linear-gradient(180deg, #e0ecff 0%, #d2e1ff 100%);
+  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 22%, #fff);
   box-shadow:
     0 2px 4px rgba(74, 123, 184, 0.18),
     0 4px 12px rgba(74, 123, 184, 0.1);
@@ -553,17 +611,26 @@
   font-weight: 600;
 }
 
-/* Google event 블록 — 외부 데이터, 드래그 불가 시각 표시. */
+/* Google event 블록 — 외부 캘린더 정본이지만 직접 drag/resize 가능. */
 .tl-block-event {
-  background: #fafaf7;
-  border-style: dashed;
+  background: color-mix(in srgb, var(--tl-accent, #b47f2a) 16%, #fff);
+  border-color: rgba(180, 127, 42, 0.42);
+  border-style: solid;
   border-left-style: solid;
-  opacity: 0.92;
+  box-shadow:
+    0 1px 2px rgba(180, 127, 42, 0.1),
+    0 3px 10px rgba(180, 127, 42, 0.07);
 }
 
 .tl-block-event .tl-block-title {
-  color: var(--wr-subtle);
-  font-style: italic;
+  color: #573b12;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.tl-block-event .tl-block-time {
+  color: #8a5b14;
+  font-weight: 600;
 }
 
 /*
@@ -574,7 +641,6 @@
   position: absolute;
   left: 8px;
   right: 8px;
-  bottom: 0;
   height: 8px;
   cursor: ns-resize;
   z-index: 3;
@@ -584,20 +650,42 @@
   transition: background var(--wr-motion-fast) var(--wr-ease-out);
 }
 
+.tl-block-resize-top {
+  top: 0;
+  bottom: auto;
+}
+
+.tl-block-resize-bottom {
+  top: auto;
+  bottom: 0;
+}
+
 /* 항상 보이는 가운데 그립 라인 — hover 전에도 "여기 잡을 수 있다" 신호. */
 .tl-block-resize::after {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 2px;
+  top: 50%;
   width: 24px;
   height: 3px;
-  background: var(--color-today-signal, #4a7bb8);
+  background: currentColor;
   opacity: 0.35;
   border-radius: 2px;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   transition: opacity var(--wr-motion-fast) var(--wr-ease-out);
   pointer-events: none;
+}
+
+.tl-block-signal + .tl-block-resize {
+  color: var(--color-today-signal, #4a7bb8);
+}
+
+.tl-block-event + .tl-block-resize {
+  color: #b47f2a;
+}
+
+.tl-block-routine + .tl-block-resize {
+  color: var(--color-today-routine, #5c8a3a);
 }
 
 .tl-block-resize:hover::after,
@@ -612,7 +700,16 @@
 }
 
 .tl-block-routine {
-  background: #f6fbf2;
+  background: color-mix(in srgb, var(--tl-accent, #5c8a3a) 16%, #fff);
+  border-color: rgba(92, 138, 58, 0.4);
+  box-shadow:
+    0 1px 2px rgba(92, 138, 58, 0.1),
+    0 3px 10px rgba(92, 138, 58, 0.06);
+}
+
+.tl-block-routine .tl-block-time {
+  color: #4d7c2d;
+  font-weight: 600;
 }
 
 /* 완료된 루틴 블록은 strike-through + 페이드 (PR 6 Task 4). */

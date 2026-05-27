@@ -28,7 +28,7 @@ import {
 } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 
-import type { WorkSignal } from "@/bindings";
+import type { CalendarEvent, WorkSignal } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
 import { applySchedulePatch } from "@/lib/optimisticSchedule";
 import { useToastStore } from "@/lib/toast";
@@ -89,6 +89,50 @@ export function shiftIsoByPx(
   return `${date}T${pad(h)}:${pad(m)}:00${tzOffset()}`;
 }
 
+export function plusMinutesLocal(iso: string, minutes: number): string {
+  const d = new Date(new Date(iso).getTime() + minutes * 60_000);
+  const offsetMatch = iso.match(/([+-]\d{2}:\d{2})$/);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${offsetMatch?.[1] ?? ""}`;
+}
+
+export function resizeIsoByPx({
+  date,
+  startISO,
+  durationMin,
+  edge,
+  deltaPx,
+}: {
+  date: string;
+  startISO: string;
+  durationMin: number;
+  edge: "top" | "bottom";
+  deltaPx: number;
+}): { at: string; durationMin: number } {
+  const startDate = new Date(startISO);
+  const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+  const endMin = startMin + durationMin;
+  const deltaMin = (deltaPx / HOUR_PX) * 60;
+  if (edge === "top") {
+    const nextStartMin = Math.max(
+      0,
+      Math.min(endMin - SNAP_MIN, snap(startMin + deltaMin)),
+    );
+    return {
+      at: pixelToLocalIso(date, nextStartMin),
+      durationMin: endMin - nextStartMin,
+    };
+  }
+  return {
+    at: startISO,
+    durationMin: Math.max(
+      SNAP_MIN,
+      Math.min(24 * 60 - startMin, snap(durationMin + deltaMin)),
+    ),
+  };
+}
+
 /** drag data attached to draggable nodes via `useDraggable({ data: ... })`. */
 export type DragData =
   | {
@@ -99,7 +143,26 @@ export type DragData =
     }
   | {
       from: "canvas";
+      blockKind: "signal";
       signalId: string;
+      title: string;
+      startISO: string;
+      durationMin: number;
+      calendarId: string;
+    }
+  | {
+      from: "canvas";
+      blockKind: "event";
+      eventId: string;
+      title: string;
+      startISO: string;
+      durationMin: number;
+      calendarId: string;
+    }
+  | {
+      from: "canvas";
+      blockKind: "routine";
+      routineId: string;
       title: string;
       startISO: string;
       durationMin: number;
@@ -117,7 +180,26 @@ export type DragData =
        * canvas droppable이 받지만 본 dispatcher가 from 분기로 reschedule이 아닌 resize stage 호출.
        */
       from: "canvas-resize";
+      edge: "top" | "bottom";
+      blockKind: "signal";
       signalId: string;
+      startISO: string;
+      durationMin: number;
+    }
+  | {
+      from: "canvas-resize";
+      edge: "top" | "bottom";
+      blockKind: "event";
+      eventId: string;
+      calendarId: string;
+      startISO: string;
+      durationMin: number;
+    }
+  | {
+      from: "canvas-resize";
+      edge: "top" | "bottom";
+      blockKind: "routine";
+      routineId: string;
       startISO: string;
       durationMin: number;
     };
@@ -127,6 +209,18 @@ export type DropData =
   | { to: "tray" }
   | { to: "canvas"; gridY: number }
   | { to: "canvas:cal"; calendarId: string; gridY: number };
+
+export function normalizeDropDataForDragEnd(
+  active: DragData | undefined,
+  over: DropData | undefined,
+): DropData | undefined {
+  if (over) return over;
+  if (!active) return undefined;
+  if (active.from === "canvas" || active.from === "canvas-resize") {
+    return { to: "canvas", gridY: 0 };
+  }
+  return undefined;
+}
 
 type Opts = {
   date: string;
@@ -173,10 +267,44 @@ export function useTimelineDnd(opts: Opts) {
     void qc.invalidateQueries({ queryKey: ["today"] });
   }, [qc]);
 
+  const patchEventCache = useCallback(
+    (eventId: string, patch: { start?: string; durationMin?: number }) => {
+      qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) => {
+        if (!old) return old;
+        return old.map((event) => {
+          if (event.id !== eventId) return event;
+          const start = patch.start ?? event.start;
+          const durationMin =
+            patch.durationMin ??
+            Math.max(
+              SNAP_MIN,
+              Math.round(
+                (new Date(event.end).getTime() - new Date(event.start).getTime()) /
+                  60000,
+              ),
+            );
+          return {
+            ...event,
+            start,
+            end: plusMinutesLocal(start, durationMin),
+          };
+        });
+      });
+    },
+    [qc, date],
+  );
+
+  const invalidateEventCaches = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ["calendarEvents", date] });
+  }, [qc, date]);
+
   const onDragEnd = useCallback(
     async (ev: DragEndEvent) => {
       const a = ev.active.data.current as DragData | undefined;
-      const o = ev.over?.data.current as DropData | undefined;
+      const o = normalizeDropDataForDragEnd(
+        a,
+        ev.over?.data.current as DropData | undefined,
+      );
       if (!a || !o) return;
 
       // ── 1: tray → canvas ─────────────────────────────────────────────
@@ -203,33 +331,62 @@ export function useTimelineDnd(opts: Opts) {
         return;
       }
 
-      // ── 3: canvas-resize → canvas (block 하단 핸들 드래그) ──────────
-      // ev.delta.y만 사용해 새 durationMin 계산 — start는 그대로, end가 이동.
-      // 최소 15분(1 snap) 보장, 최대 24h 종료 안 넘게 clamp.
+      // ── 3: canvas-resize → canvas (block 상/하단 핸들 드래그) ───────
+      // ev.delta.y만 사용해 새 시간 계산. 아래 핸들은 end 이동, 위 핸들은 start 이동.
+      // 최소 15분(1 snap) 보장, 00:00–24:00 안에 clamp.
       if (a.from === "canvas-resize" && o.to === "canvas") {
-        const startMin =
-          new Date(a.startISO).getHours() * 60 +
-          new Date(a.startISO).getMinutes();
-        const deltaMin = (ev.delta.y / HOUR_PX) * 60;
-        const newDur = snap(a.durationMin + deltaMin);
-        const clamped = Math.max(
-          SNAP_MIN,
-          Math.min(24 * 60 - startMin, newDur),
-        );
-        if (clamped === a.durationMin) return;
-        patchSignalCaches(a.signalId, {
-          at: a.startISO,
-          durationMin: clamped,
+        const resized = resizeIsoByPx({
+          date,
+          startISO: a.startISO,
+          durationMin: a.durationMin,
+          edge: a.edge,
+          deltaPx: ev.delta.y,
         });
-        try {
-          await stage({
-            kind: "resize",
-            targetSignalId: a.signalId,
-            at: a.startISO,
+        const { at } = resized;
+        const clamped = resized.durationMin;
+        if (clamped === a.durationMin && at === a.startISO) return;
+        if (a.blockKind === "event") {
+          patchEventCache(a.eventId, {
+            start: at,
             durationMin: clamped,
           });
+        } else if (a.blockKind === "signal") {
+          patchSignalCaches(a.signalId, {
+            at,
+            durationMin: clamped,
+          });
+        }
+        try {
+          if (a.blockKind === "event") {
+            await stage({
+              kind: "eventResize",
+              eventId: a.eventId,
+              calendarId: a.calendarId,
+              at,
+              durationMin: clamped,
+            });
+          } else if (a.blockKind === "routine") {
+            await stage({
+              kind: "routineResize",
+              routineId: a.routineId,
+              date,
+              at,
+              durationMin: clamped,
+            });
+            void qc.invalidateQueries({ queryKey: ["routines"] });
+          } else {
+            await stage({
+              kind: "resize",
+              targetSignalId: a.signalId,
+              at,
+              durationMin: clamped,
+            });
+          }
         } catch {
-          invalidateSignalCaches();
+          if (a.blockKind === "event") invalidateEventCaches();
+          else if (a.blockKind === "routine")
+            void qc.invalidateQueries({ queryKey: ["routines"] });
+          else invalidateSignalCaches();
         }
         return;
       }
@@ -237,22 +394,48 @@ export function useTimelineDnd(opts: Opts) {
       // ── 2: canvas → canvas (reschedule, 같은 캘린더 시간 이동) ───────
       if (a.from === "canvas" && o.to === "canvas") {
         const at = shiftIsoByPx(date, a.startISO, ev.delta.y);
-        patchSignalCaches(a.signalId, { at });
+        if (a.blockKind === "event") {
+          patchEventCache(a.eventId, { start: at, durationMin: a.durationMin });
+        } else if (a.blockKind === "signal") {
+          patchSignalCaches(a.signalId, { at });
+        }
         try {
-          await stage({
-            kind: "reschedule",
-            targetSignalId: a.signalId,
-            at,
-            durationMin: a.durationMin,
-          });
+          if (a.blockKind === "event") {
+            await stage({
+              kind: "eventReschedule",
+              eventId: a.eventId,
+              calendarId: a.calendarId,
+              at,
+              durationMin: a.durationMin,
+            });
+          } else if (a.blockKind === "routine") {
+            await stage({
+              kind: "routineReschedule",
+              routineId: a.routineId,
+              date,
+              at,
+              durationMin: a.durationMin,
+            });
+            void qc.invalidateQueries({ queryKey: ["routines"] });
+          } else {
+            await stage({
+              kind: "reschedule",
+              targetSignalId: a.signalId,
+              at,
+              durationMin: a.durationMin,
+            });
+          }
         } catch {
-          invalidateSignalCaches();
+          if (a.blockKind === "event") invalidateEventCaches();
+          else if (a.blockKind === "routine")
+            void qc.invalidateQueries({ queryKey: ["routines"] });
+          else invalidateSignalCaches();
         }
         return;
       }
 
       // ── 4: canvas → tray (unschedule) ─────────────────────────────────
-      if (a.from === "canvas" && o.to === "tray") {
+      if (a.from === "canvas" && a.blockKind === "signal" && o.to === "tray") {
         // 사전 상태 캡처 — undo 시 정확한 prior state 복원용.
         const prevAt = a.startISO;
         const prevDur = a.durationMin;
@@ -280,7 +463,7 @@ export function useTimelineDnd(opts: Opts) {
       }
 
       // ── 5: canvas → 다른 캘린더 zone (moveCalendar, staged) ──────────
-      if (a.from === "canvas" && o.to === "canvas:cal") {
+      if (a.from === "canvas" && a.blockKind === "signal" && o.to === "canvas:cal") {
         if (o.calendarId === a.calendarId) return; // 동일 캘린더면 noop.
         const at = shiftIsoByPx(date, a.startISO, ev.delta.y);
         try {
@@ -328,8 +511,11 @@ export function useTimelineDnd(opts: Opts) {
       date,
       defaultCalendarFor,
       promptCalendarPicker,
+      resolveCanvasGridY,
       patchSignalCaches,
       invalidateSignalCaches,
+      invalidateEventCaches,
+      patchEventCache,
       qc,
     ],
   );

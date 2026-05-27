@@ -1086,9 +1086,9 @@ export type PendingWrite = {
 	id: number,
 	/**  create | patch | delete. */
 	kind: string,
-	/**  signal | routine_check. */
+	/**  signal | routine_check | event. */
 	target_kind: string,
-	/**  signal id, 또는 `routine_id|date`(routine_check). */
+	/**  signal id, `routine_id|date`(routine_check), 또는 `calendar_id|event_id`(event). */
 	target_id: string,
 	calendar_id: string,
 	event_id: string | null,
@@ -1717,7 +1717,7 @@ export type WriteOp =
 { op: "create_blank"; title: string; at: string; duration_min: number; calendar_id: string };
 
 /**  stage_calendar_write의 대상. routine_check은 (routine_id, date)로 식별. */
-export type WriteTarget = { kind: "signal"; id: string } | { kind: "routine_check"; routine_id: string; date: string };
+export type WriteTarget = { kind: "signal"; id: string } | { kind: "routine_check"; routine_id: string; date: string } | { kind: "event"; calendar_id: string; event_id: string };
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

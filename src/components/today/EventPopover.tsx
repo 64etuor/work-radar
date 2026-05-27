@@ -92,7 +92,7 @@ export function EventPopover({
           <div className="text-sm font-semibold">{block.title}</div>
           <div className="text-xs text-muted-foreground">
             {hhmm(block.startISO)}–{hhmm(block.endISO)} ·{" "}
-            {block.calendarId || block.kind}
+            {block.calendarLabel || block.calendarId || block.kind}
           </div>
           <div className="flex gap-2 pt-2">
             {isRoutine && block.routineId && onToggleRoutineDone && (

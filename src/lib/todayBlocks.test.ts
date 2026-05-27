@@ -22,6 +22,7 @@ describe("buildTodayBlocks", () => {
         start: "2026-05-28T09:00:00",
         end: "2026-05-28T10:00:00",
         allDay: false,
+        calendarId: "cal-id",
         calendarSummary: "cal",
         projectColor: "#444",
       },
@@ -39,6 +40,7 @@ describe("buildTodayBlocks", () => {
         start: "2026-05-28T09:00:00",
         end: "2026-05-28T10:00:00",
         allDay: false,
+        calendarId: "cal-id",
         calendarSummary: "cal",
         projectColor: "#444",
       },
@@ -46,6 +48,9 @@ describe("buildTodayBlocks", () => {
     const blocks = buildTodayBlocks({ signals: [], events, routines: [], date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].calendarId).toBe("cal-id");
+    expect(blocks[0].calendarLabel).toBe("cal");
+    expect(blocks[0].linkedEventId).toBe("g1");
   });
 
   it("all-day events are excluded from blocks", () => {
@@ -56,6 +61,7 @@ describe("buildTodayBlocks", () => {
         start: "2026-05-28",
         end: "2026-05-29",
         allDay: true,
+        calendarId: "cal-id",
         calendarSummary: "cal",
         projectColor: "#444",
       },

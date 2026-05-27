@@ -70,6 +70,7 @@ export function buildTodayBlocks({
       startISO: s.scheduledAt,
       endISO: plusMin(s.scheduledAt, s.scheduledDuration),
       calendarId: s.linkedCalendarId ?? "",
+      calendarLabel: s.linkedCalendarId ?? "",
       color: SIGNAL_COLOR,
       linkedEventId: s.linkedEventId ?? undefined,
     });
@@ -85,8 +86,10 @@ export function buildTodayBlocks({
       title: e.title,
       startISO: e.start,
       endISO: e.end ?? plusMin(e.start, 30),
-      calendarId: e.calendarSummary ?? "",
+      calendarId: e.calendarId,
+      calendarLabel: e.calendarSummary,
       color: e.projectColor ?? EVENT_FALLBACK_COLOR,
+      linkedEventId: e.id,
     });
   }
 
@@ -101,6 +104,7 @@ export function buildTodayBlocks({
       startISO,
       endISO,
       calendarId: r.linkedCalendarId ?? "",
+      calendarLabel: r.linkedCalendarId ?? "",
       color: ROUTINE_COLOR,
       done: r.done,
       routineId: r.id,

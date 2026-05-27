@@ -28,8 +28,17 @@ use crate::models::PendingWrite;
 #[derive(Debug, Clone, Deserialize, Serialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WriteTarget {
-    Signal { id: String },
-    RoutineCheck { routine_id: String, date: String },
+    Signal {
+        id: String,
+    },
+    RoutineCheck {
+        routine_id: String,
+        date: String,
+    },
+    Event {
+        calendar_id: String,
+        event_id: String,
+    },
 }
 
 /// stage_calendar_write의 op. 각 분기가 큐 행의 kind/payload/디바운스를 결정한다.
@@ -180,6 +189,10 @@ pub async fn stage_calendar_write(
         WriteTarget::RoutineCheck { routine_id, date } => {
             ("routine_check", format!("{routine_id}|{date}"))
         }
+        WriteTarget::Event {
+            calendar_id,
+            event_id,
+        } => ("event", format!("{calendar_id}|{event_id}")),
     };
     let (kind, calendar_id, event_id_opt, payload, debounce_ms) =
         build_queue_row(&req, pool, target_kind, &target_id).await?;
@@ -406,6 +419,15 @@ async fn fetch_linked_event(
             .fetch_optional(pool)
             .await?;
             Ok(row.and_then(pair_or_none))
+        }
+        "event" => {
+            let Some((calendar_id, event_id)) = target_id.split_once('|') else {
+                return Ok(None);
+            };
+            if calendar_id.is_empty() || event_id.is_empty() {
+                return Ok(None);
+            }
+            Ok(Some((calendar_id.to_string(), event_id.to_string())))
         }
         _ => Ok(None),
     }

@@ -17,7 +17,10 @@ export type TimedBlock = {
   /** 로컬 시각 ISO ("YYYY-MM-DDTHH:MM:SS"). */
   startISO: string;
   endISO: string;
+  /** Actual external/local calendar id used for write targets. */
   calendarId: string;
+  /** Human-readable calendar label. Falls back to `calendarId`. */
+  calendarLabel?: string;
   /** border-left-color (스펙 §D8 카드 컬러). */
   color: string;
   /** 신호가 Google event를 mirror할 때 사용 (중복 렌더 회피). */

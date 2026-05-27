@@ -6,6 +6,8 @@
  * SSOT(SQLite)에서 재로드 = optimistic 패치의 롤백 효과.
  *
  * Flushed는 성공 알림 — toast 없이 큐만 갱신(usePendingWrites도 같은 이벤트를 본다).
+ * 성공 시 calendarEvents는 무효화하지 않는다. Rust fetch TTL이 방금 PATCH 전 이벤트를
+ * 돌려줄 수 있어 optimistic 위치/길이를 원위치로 되돌리는 원인이 된다.
  */
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -47,10 +49,9 @@ export function useCalendarSyncEvents() {
     });
 
     void listen("CalendarSyncFlushed", () => {
-      // 성공 — 토스트 없음. 캐시만 갱신해 linked_event_id가 최신화되도록.
+      // 성공 — 토스트 없음. signal/routine mirror와 큐만 갱신한다.
       void qc.invalidateQueries({ queryKey: ["signals"] });
       void qc.invalidateQueries({ queryKey: ["today"] });
-      void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
       void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
     }).then((u) => {
       disposeFlushed = u;

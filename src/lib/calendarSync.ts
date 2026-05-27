@@ -31,6 +31,20 @@ export type StageInput =
       at: string;
       durationMin: number;
     }
+  | {
+      kind: "eventReschedule";
+      eventId: string;
+      calendarId: string;
+      at: string;
+      durationMin: number;
+    }
+  | {
+      kind: "eventResize";
+      eventId: string;
+      calendarId: string;
+      at: string;
+      durationMin: number;
+    }
   | { kind: "unschedule"; targetSignalId: string }
   | {
       kind: "moveCalendar";
@@ -56,6 +70,20 @@ export type StageInput =
       durationMin: number;
       calendarId: string;
       title: string;
+    }
+  | {
+      kind: "routineReschedule";
+      routineId: string;
+      date: string;
+      at: string;
+      durationMin: number;
+    }
+  | {
+      kind: "routineResize";
+      routineId: string;
+      date: string;
+      at: string;
+      durationMin: number;
     }
   | { kind: "routineUnschedule"; routineId: string; date: string };
 
@@ -99,6 +127,32 @@ function toRequest(i: StageInput): StageWriteRequest {
     }
     case "resize": {
       const target: WriteTarget = { kind: "signal", id: i.targetSignalId };
+      const op: WriteOp = {
+        op: "resize",
+        at: i.at,
+        duration_min: i.durationMin,
+      };
+      return { target, op, idempotency_key };
+    }
+    case "eventReschedule": {
+      const target: WriteTarget = {
+        kind: "event",
+        calendar_id: i.calendarId,
+        event_id: i.eventId,
+      };
+      const op: WriteOp = {
+        op: "reschedule",
+        at: i.at,
+        duration_min: i.durationMin,
+      };
+      return { target, op, idempotency_key };
+    }
+    case "eventResize": {
+      const target: WriteTarget = {
+        kind: "event",
+        calendar_id: i.calendarId,
+        event_id: i.eventId,
+      };
       const op: WriteOp = {
         op: "resize",
         at: i.at,
@@ -156,6 +210,32 @@ function toRequest(i: StageInput): StageWriteRequest {
         date: i.date,
       };
       const op: WriteOp = { op: "unschedule" };
+      return { target, op, idempotency_key };
+    }
+    case "routineReschedule": {
+      const target: WriteTarget = {
+        kind: "routine_check",
+        routine_id: i.routineId,
+        date: i.date,
+      };
+      const op: WriteOp = {
+        op: "reschedule",
+        at: i.at,
+        duration_min: i.durationMin,
+      };
+      return { target, op, idempotency_key };
+    }
+    case "routineResize": {
+      const target: WriteTarget = {
+        kind: "routine_check",
+        routine_id: i.routineId,
+        date: i.date,
+      };
+      const op: WriteOp = {
+        op: "resize",
+        at: i.at,
+        duration_min: i.durationMin,
+      };
       return { target, op, idempotency_key };
     }
   }

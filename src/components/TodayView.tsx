@@ -16,6 +16,7 @@ import { TimelineCanvas } from "@/components/today/TimelineCanvas";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
 import { DragOverlay } from "@dnd-kit/core";
+import type { DragMoveEvent } from "@dnd-kit/core";
 import {
   DndContext,
   buildDefaultCalendarFor,
@@ -39,6 +40,7 @@ import {
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
 import { buildTodayBlocks } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
+import type { DragDelta } from "@/components/today/timelinePreview";
 
 /**
  * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).
@@ -73,11 +75,11 @@ export function TodayView() {
     });
   }, [projectsQ.data, projectsQ.isLoading]);
 
-  const allEvents = events.data ?? [];
+  const allEvents = useMemo(() => events.data ?? [], [events.data]);
   const allDay = allEvents.filter((e) => e.allDay);
-  const rail = todayRail.data ?? [];
+  const rail = useMemo(() => todayRail.data ?? [], [todayRail.data]);
   const unscheduledTodays = rail.filter((s) => !s.scheduledAt);
-  const routineList = routines.data ?? [];
+  const routineList = useMemo(() => routines.data ?? [], [routines.data]);
   const unscheduledRoutines = routineList.filter(
     (r) => !r.timeOverride && !r.timeOfDay,
   );
@@ -126,6 +128,7 @@ export function TodayView() {
   const pickerResolverRef = useRef<((v: string | null) => void) | null>(null);
   // TimelineCanvas pointer Y — useTimelineDnd가 onDragEnd에서 읽는다.
   const canvasPointerYRef = useRef<number | null>(null);
+  const canvasPointerXRef = useRef<number | null>(null);
 
   const promptCalendarPicker = useCallback(
     (signalId: string) =>
@@ -161,31 +164,29 @@ export function TodayView() {
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
+  const [activeDelta, setActiveDelta] = useState<DragDelta | null>(null);
   const handleDragStart = useCallback(
     (ev: { active: { id: string | number; data: { current?: unknown } } }) => {
-      // 디버그: 캔버스 블록·resize 핸들 드래그가 시작 안 되는 증상 추적용.
-      // eslint-disable-next-line no-console
-      console.log("[today.dnd] onDragStart", ev.active.id, ev.active.data.current);
       setActiveDrag(ev.active.data.current as DragData | undefined ?? null);
+      setActiveDelta({ x: 0, y: 0 });
     },
     [],
   );
+  const handleDragMove = useCallback((ev: DragMoveEvent) => {
+    setActiveDelta(ev.delta);
+  }, []);
   const handleDragEndWithReset = useCallback(
     async (ev: Parameters<typeof onDragEnd>[0]) => {
-      // eslint-disable-next-line no-console
-      console.log("[today.dnd] onDragEnd", {
-        active: ev.active.id,
-        over: ev.over?.id,
-        activeData: ev.active.data.current,
-        overData: ev.over?.data.current,
-        delta: ev.delta,
-      });
       setActiveDrag(null);
+      setActiveDelta(null);
       await onDragEnd(ev);
     },
     [onDragEnd],
   );
-  const handleDragCancel = useCallback(() => setActiveDrag(null), []);
+  const handleDragCancel = useCallback(() => {
+    setActiveDrag(null);
+    setActiveDelta(null);
+  }, []);
 
   const pickerSignalProjectId = useMemo(() => {
     if (!picker) return null;
@@ -196,6 +197,7 @@ export function TodayView() {
     <DndContext
       sensors={sensors}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEndWithReset}
       onDragCancel={handleDragCancel}
     >
@@ -232,6 +234,9 @@ export function TodayView() {
                 boxes={boxes}
                 onBlockClick={handleBlockClick}
                 pointerYRef={canvasPointerYRef}
+                pointerXRef={canvasPointerXRef}
+                activeDrag={activeDrag}
+                activeDelta={activeDelta}
               />
             )}
           </div>
@@ -276,8 +281,9 @@ export function TodayView() {
  * pointer 이벤트 무시 — Notion/Linear 류 "옮기는 느낌" 제공.
  */
 function DragGhost({ data }: { data: DragData }) {
+  if (data.from === "canvas") return null;
   const title =
-    data.from === "tray" || data.from === "canvas" || data.from === "routine"
+    data.from === "tray" || data.from === "routine"
       ? data.title
       : "block";
   const isResize = data.from === "canvas-resize";

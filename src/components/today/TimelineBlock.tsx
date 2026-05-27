@@ -1,13 +1,18 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Repeat } from "lucide-react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 
 import type { LayoutBox } from "@/lib/timelineLayout";
 import type { DragData } from "@/components/today/useTimelineDnd";
+import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockStyle";
 
 type Props = {
   box: LayoutBox;
   onClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
+  suppressDragTransform?: boolean;
 };
 
 function hhmm(iso: string): string {
@@ -15,30 +20,101 @@ function hhmm(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function stripBlockPrefix(id: string, kind: "signal" | "event" | "routine"): string {
+  return id.replace(new RegExp(`^${kind}:`), "");
+}
+
+function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
+  const { block } = box;
+  if (block.kind === "event") {
+    return {
+      from: "canvas",
+      blockKind: "event",
+      eventId: stripBlockPrefix(block.id, "event"),
+      title: block.title,
+      startISO: block.startISO,
+      durationMin,
+      calendarId: block.calendarId,
+    };
+  }
+  if (block.kind === "routine") {
+    return {
+      from: "canvas",
+      blockKind: "routine",
+      routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
+      title: block.title,
+      startISO: block.startISO,
+      durationMin,
+      calendarId: block.calendarId,
+    };
+  }
+  return {
+    from: "canvas",
+    blockKind: "signal",
+    signalId: stripBlockPrefix(block.id, "signal"),
+    title: block.title,
+    startISO: block.startISO,
+    durationMin,
+    calendarId: block.calendarId,
+  };
+}
+
+function resizeDataForBox(
+  box: LayoutBox,
+  edge: "top" | "bottom",
+  durationMin: number,
+): DragData {
+  const { block } = box;
+  if (block.kind === "event") {
+    return {
+      from: "canvas-resize",
+      edge,
+      blockKind: "event",
+      eventId: stripBlockPrefix(block.id, "event"),
+      calendarId: block.calendarId,
+      startISO: block.startISO,
+      durationMin,
+    };
+  }
+  if (block.kind === "routine") {
+    return {
+      from: "canvas-resize",
+      edge,
+      blockKind: "routine",
+      routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
+      startISO: block.startISO,
+      durationMin,
+    };
+  }
+  return {
+    from: "canvas-resize",
+    edge,
+    blockKind: "signal",
+    signalId: stripBlockPrefix(block.id, "signal"),
+    startISO: block.startISO,
+    durationMin,
+  };
+}
+
 /**
- * 블록 하단 리사이즈 핸들 (PR 7 spec §7 row 3).
+ * 블록 상/하단 리사이즈 핸들 (Today×Timeline spec §7 row 3).
  * 별도 useDraggable로 등록 — `from: "canvas-resize"` 분기로 useTimelineDnd가
- * ev.delta.y → durationMin 재계산 후 stage(resize).
+ * ev.delta.y → start/durationMin 재계산 후 stage(resize).
  *
  * 블록 button의 형제로 배치(중첩 interactive 회피) — 컨테이너 div가 둘을 같은 좌표계로 묶는다.
  */
 function ResizeHandle({
-  signalId,
-  startISO,
+  edge,
+  box,
   durationMin,
 }: {
-  signalId: string;
-  startISO: string;
+  edge: "top" | "bottom";
+  box: LayoutBox;
   durationMin: number;
 }) {
-  const data: DragData = {
-    from: "canvas-resize",
-    signalId,
-    startISO,
-    durationMin,
-  };
+  const data = resizeDataForBox(box, edge, durationMin);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `resize:${signalId}`,
+    id: `resize:${box.block.id}:${edge}`,
     data,
   });
   // 부모 .tl-block-wrap 안에서 button과 형제 — pointer 이벤트가 button의 dnd-kit
@@ -46,9 +122,9 @@ function ResizeHandle({
   return (
     <div
       ref={setNodeRef}
-      className="tl-block-resize"
+      className={`tl-block-resize tl-block-resize-${edge}`}
       data-dragging={isDragging || undefined}
-      aria-label="블록 길이 조정"
+      aria-label={edge === "top" ? "블록 시작 시간 조정" : "블록 종료 시간 조정"}
       {...attributes}
       {...listeners}
     />
@@ -57,44 +133,33 @@ function ResizeHandle({
 
 /**
  * 시간축 위 단일 블록(스펙 §D8 카드 정본).
- * PR 5: signal 종류 블록만 draggable(canvas reschedule / unschedule / cross-cal).
- * PR 7: signal 블록 하단에 ResizeHandle 추가 (스펙 §7 row 3).
- * event/routine 가상 블록은 클릭만 — 외부 캘린더 또는 별도 routine 처리(스펙 §7).
+ * 모든 block kind는 캔버스 안에서 드래그/리사이즈 가능하다. tray drop과 cross-calendar
+ * move는 signal만 dispatcher가 허용한다.
  *
  * 구조: 컨테이너 <div> 안에 <button>(클릭/드래그) + <ResizeHandle>(별도 draggable).
  * 중첩 interactive 회피를 위해 핸들은 button의 형제. 컨테이너는 absolutely-positioned.
  */
-export function TimelineBlock({ box, onClick }: Props) {
+export function TimelineBlock({ box, onClick, suppressDragTransform = false }: Props) {
   const { block, topPx, heightPx, leftPct, widthPct } = box;
-  const isSignal = block.kind === "signal";
-  const signalId = isSignal ? block.id.replace(/^signal:/, "") : "";
   // 실제 endISO−startISO 그대로 — 15분 floor는 dispatcher(useTimelineDnd) 책임.
   const durationMin = Math.round(
     (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) /
       60000,
   );
-  const dragData: DragData | undefined = isSignal
-    ? {
-        from: "canvas",
-        signalId,
-        title: block.title,
-        startISO: block.startISO,
-        durationMin,
-        calendarId: block.calendarId,
-      }
-    : undefined;
   const drag = useDraggable({
     id: `block:${block.id}`,
-    data: dragData,
-    disabled: !isSignal,
+    data: dragDataForBox(box, durationMin),
   });
+  const { attributes, listeners, setNodeRef, transform } = drag;
 
   const isDoneRoutine = block.kind === "routine" && block.done === true;
 
   const ariaLabel = [
     block.title,
     `${hhmm(block.startISO)}–${hhmm(block.endISO)}`,
-    block.calendarId ? `(${block.calendarId})` : `(${block.kind})`,
+    block.calendarLabel || block.calendarId
+      ? `(${block.calendarLabel || block.calendarId})`
+      : `(${block.kind})`,
     isDoneRoutine ? "완료됨" : null,
   ]
     .filter(Boolean)
@@ -106,29 +171,30 @@ export function TimelineBlock({ box, onClick }: Props) {
     <div
       className="tl-block-wrap"
       data-dragging={drag.isDragging || undefined}
-      style={{
-        position: "absolute",
-        top: `${topPx}px`,
-        height: `${heightPx}px`,
-        left: `calc(60px + ((100% - 60px) * ${leftPct} / 100))`,
-        width: `calc(((100% - 60px) * ${widthPct} / 100) - 4px)`,
-        zIndex: drag.isDragging ? 10 : 2,
-        opacity: drag.isDragging ? 0.4 : 1,
-        // 드래그 중 transform은 적용 안 함 — DragOverlay ghost가 cursor를 따라가는 단일 진실.
-        // 이전에 wrap에 transform + 별도 DragOverlay 둘 다 돌아 충돌(double-translate, dnd-kit
-        // pointer 추적 혼란)이 났다.
-      }}
+      style={timelineBlockPlacementStyle({
+        topPx,
+        heightPx,
+        leftPct,
+        widthPct,
+        dragging: drag.isDragging,
+        translate: suppressDragTransform ? null : transform,
+      })}
     >
       <button
-        ref={isSignal ? drag.setNodeRef : undefined}
+        ref={setNodeRef}
         type="button"
         className={`tl-block tl-block-${block.kind}${isDoneRoutine ? " tl-block-done" : ""}`}
         data-done={isDoneRoutine || undefined}
-        style={{ borderLeftColor: block.color }}
+        style={
+          {
+            borderLeftColor: block.color,
+            "--tl-accent": block.color,
+          } as CSSProperties
+        }
         onClick={(e) => onClick(box, e)}
         title={block.title}
-        {...(isSignal ? drag.attributes : {})}
-        {...(isSignal ? drag.listeners : {})}
+        {...attributes}
+        {...listeners}
         aria-label={ariaLabel}
       >
         <div className="tl-block-time">
@@ -141,13 +207,16 @@ export function TimelineBlock({ box, onClick }: Props) {
           {block.title}
         </div>
       </button>
-      {isSignal && (
-        <ResizeHandle
-          signalId={signalId}
-          startISO={block.startISO}
-          durationMin={durationMin}
-        />
-      )}
+      <ResizeHandle
+        edge="top"
+        box={box}
+        durationMin={durationMin}
+      />
+      <ResizeHandle
+        edge="bottom"
+        box={box}
+        durationMin={durationMin}
+      />
     </div>
   );
 }

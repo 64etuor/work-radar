@@ -1,7 +1,8 @@
 //! Pending calendar writes 큐 row 모델 (Today×Timeline PR 2).
 //! UI/IPC가 큐 상태를 관찰할 때 쓰는 DTO. INVARIANT: 토큰 없음(이 큐는 외부 mutate 의도일 뿐).
 //!
-//! 페이로드/스키마는 마이그레이션 `0032_pending_calendar_writes.sql` 참조.
+//! 페이로드/스키마는 마이그레이션 `0032_pending_calendar_writes.sql` +
+//! `0033_pending_calendar_writes_event_target.sql` 참조.
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -14,9 +15,9 @@ pub struct PendingWrite {
     pub id: i32,
     /// create | patch | delete.
     pub kind: String,
-    /// signal | routine_check.
+    /// signal | routine_check | event.
     pub target_kind: String,
-    /// signal id, 또는 `routine_id|date`(routine_check).
+    /// signal id, `routine_id|date`(routine_check), 또는 `calendar_id|event_id`(event).
     pub target_id: String,
     pub calendar_id: String,
     pub event_id: Option<String>,
