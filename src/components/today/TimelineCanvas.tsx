@@ -51,19 +51,20 @@ export function TimelineCanvas({ date, today, boxes, onBlockClick, pointerYRef }
   const { setNodeRef, isOver } = useDroppable({ id: "today-canvas", data: dropData });
 
   // pointer-tracking: 캔버스 위 pointer Y를 그리드 로컬 좌표로 환산.
-  // - state(setHoverPx)는 가이드 라인 렌더용(이 컴포넌트 내부).
-  // - 부모 pointerYRef는 onDragEnd에서 마지막 위치를 읽는 용도(props로 주입).
+  // - 부모 pointerYRef(ref-only)는 매 move마다 갱신 — onDragEnd에서 읽힘.
+  // - state(setHoverPx)는 가이드 라인 렌더용 — drag 활성(isOver) 시에만 setState해서
+  //   매 pointermove 리렌더로 인한 dnd-kit pointer state 교란/성능 저하 방지.
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
     const el = gridRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const y = Math.max(0, Math.min(24 * HOUR_PX, e.clientY - rect.top));
-    setHoverPx(y);
     if (pointerYRef) pointerYRef.current = y;
+    if (isOver) setHoverPx(y);
   }
 
   function onPointerLeave() {
-    setHoverPx(null);
+    if (hoverPx !== null) setHoverPx(null);
   }
 
   return (

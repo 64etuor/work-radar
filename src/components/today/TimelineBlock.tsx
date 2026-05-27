@@ -1,5 +1,4 @@
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { Repeat } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
@@ -90,10 +89,6 @@ export function TimelineBlock({ box, onClick }: Props) {
     disabled: !isSignal,
   });
 
-  const transformStyle = drag.transform
-    ? { transform: CSS.Translate.toString(drag.transform) }
-    : {};
-
   const isDoneRoutine = block.kind === "routine" && block.done === true;
 
   const ariaLabel = [
@@ -118,8 +113,10 @@ export function TimelineBlock({ box, onClick }: Props) {
         left: `calc(60px + ((100% - 60px) * ${leftPct} / 100))`,
         width: `calc(((100% - 60px) * ${widthPct} / 100) - 4px)`,
         zIndex: drag.isDragging ? 10 : 2,
-        ...transformStyle,
-        ...(drag.isDragging ? { opacity: 0.7 } : {}),
+        opacity: drag.isDragging ? 0.4 : 1,
+        // 드래그 중 transform은 적용 안 함 — DragOverlay ghost가 cursor를 따라가는 단일 진실.
+        // 이전에 wrap에 transform + 별도 DragOverlay 둘 다 돌아 충돌(double-translate, dnd-kit
+        // pointer 추적 혼란)이 났다.
       }}
     >
       <button
