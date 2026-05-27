@@ -1,10 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Repeat } from "lucide-react";
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
 import type { LayoutBox } from "@/lib/timelineLayout";
 import type { DragData } from "@/components/today/useTimelineDnd";
@@ -45,13 +42,13 @@ function ResizeHandle({
     id: `resize:${signalId}`,
     data,
   });
-  const stop = (e: ReactPointerEvent<HTMLDivElement>) => e.stopPropagation();
+  // 부모 .tl-block-wrap 안에서 button과 형제 — pointer 이벤트가 button의 dnd-kit
+  // listener로 버블되지 않으므로 별도 stopPropagation 불필요.
   return (
     <div
       ref={setNodeRef}
       className="tl-block-resize"
       data-dragging={isDragging || undefined}
-      onPointerDown={stop}
       aria-label="블록 길이 조정"
       {...attributes}
       {...listeners}
@@ -72,12 +69,10 @@ export function TimelineBlock({ box, onClick }: Props) {
   const { block, topPx, heightPx, leftPct, widthPct } = box;
   const isSignal = block.kind === "signal";
   const signalId = isSignal ? block.id.replace(/^signal:/, "") : "";
-  const durationMin = Math.max(
-    15,
-    Math.round(
-      (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) /
-        60000,
-    ),
+  // 실제 endISO−startISO 그대로 — 15분 floor는 dispatcher(useTimelineDnd) 책임.
+  const durationMin = Math.round(
+    (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) /
+      60000,
   );
   const dragData: DragData | undefined = isSignal
     ? {

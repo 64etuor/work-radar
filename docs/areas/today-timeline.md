@@ -111,6 +111,11 @@ hide(Raycast 모델)로 양보된다. 별도 키 핸들러 불필요.
 - **자동 스크롤(드래그 중 가장자리).**
 - **키보드 only 블록 이동.** `@dnd-kit` KeyboardSensor 기본 동작은 지원되나,
   block-to-canvas 픽셀 이동의 UX 설계는 v2.
+- **키보드 only 블록 resize.** resize handle은 KeyboardSensor attribute를 받지만
+  6px 띠가 시각적으로 focus indicator를 표시하지 않아 실용 불가. 향후 더 큰 focus
+  ring + `aria-keyshortcuts` 필요.
+- **signal "더보기" → 보드 점프 시 해당 카드 스크롤/하이라이트.** 현재
+  `goTo("board")`만 호출 — 어떤 카드 때문에 왔는지 시각적 단서 없음.
 - **명시적 충돌 토스트** (silent last-write-wins 대신). 실제 사용 신호 보고 결정.
 
 ## 검증 명령

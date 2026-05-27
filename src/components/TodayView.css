@@ -340,11 +340,6 @@
  * 컨테이너가 좌표/transform/opacity 소유 — block button은 컨테이너 100% 채움.
  * 중첩 interactive(button inside button) 회피를 위해 핸들은 형제.
  */
-.tl-block-wrap {
-  /* style.top/height/left/width는 인라인. position:absolute도 인라인이지만
-   * 명시해 둔다(class 단독 적용 시 fallback). */
-}
-
 .tl-block {
   position: absolute;
   inset: 0;
