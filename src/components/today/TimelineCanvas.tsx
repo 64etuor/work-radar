@@ -82,6 +82,8 @@ export function TimelineCanvas({ date, today, boxes, onBlockClick, pointerYRef }
         className="today-canvas-grid"
         style={{ height: `${24 * HOUR_PX}px` }}
       >
+        {/* 업무시간 음영 (09–18) — 시각적 닻. */}
+        <div className="today-canvas-workhours" aria-hidden />
         {HOURS.map((h) => (
           <div
             key={h}

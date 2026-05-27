@@ -15,11 +15,13 @@ import { StagedBadge } from "@/components/today/StagedBadge";
 import { TimelineCanvas } from "@/components/today/TimelineCanvas";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
+import { DragOverlay } from "@dnd-kit/core";
 import {
   DndContext,
   buildDefaultCalendarFor,
   useTimelineDnd,
   useTodayDndSensors,
+  type DragData,
 } from "@/components/today/useTimelineDnd";
 import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import { Button } from "@/components/ui/button";
@@ -156,13 +158,36 @@ export function TodayView() {
     canvasPointerYRef,
   });
 
+  // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
+  // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
+  const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
+  const handleDragStart = useCallback(
+    (ev: { active: { data: { current?: unknown } } }) => {
+      setActiveDrag(ev.active.data.current as DragData | undefined ?? null);
+    },
+    [],
+  );
+  const handleDragEndWithReset = useCallback(
+    async (ev: Parameters<typeof onDragEnd>[0]) => {
+      setActiveDrag(null);
+      await onDragEnd(ev);
+    },
+    [onDragEnd],
+  );
+  const handleDragCancel = useCallback(() => setActiveDrag(null), []);
+
   const pickerSignalProjectId = useMemo(() => {
     if (!picker) return null;
     return rail.find((s) => s.id === picker.signalId)?.projectId ?? null;
   }, [picker, rail]);
 
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEndWithReset}
+      onDragCancel={handleDragCancel}
+    >
       <div className="today" onPointerMove={trackPointer}>
         <TodayHeader
           date={date}
@@ -228,6 +253,30 @@ export function TodayView() {
           />
         )}
       </div>
+      <DragOverlay dropAnimation={null}>
+        {activeDrag ? <DragGhost data={activeDrag} /> : null}
+      </DragOverlay>
     </DndContext>
+  );
+}
+
+/**
+ * 드래그 중 cursor를 따라다니는 ghost. dnd-kit `DragOverlay`는 Portal 렌더,
+ * pointer 이벤트 무시 — Notion/Linear 류 "옮기는 느낌" 제공.
+ */
+function DragGhost({ data }: { data: DragData }) {
+  const title =
+    data.from === "tray" || data.from === "canvas" || data.from === "routine"
+      ? data.title
+      : "block";
+  const isResize = data.from === "canvas-resize";
+  if (isResize) {
+    return <div className="today-drag-ghost today-drag-ghost-resize" />;
+  }
+  return (
+    <div className="today-drag-ghost">
+      <span className="today-drag-ghost-grip" aria-hidden>⠿</span>
+      <span className="today-drag-ghost-title">{title}</span>
+    </div>
   );
 }

@@ -140,7 +140,48 @@
 }
 
 .today-tray-row[data-dragging] {
-  opacity: 0.6;
+  opacity: 0.4;
+  background: #fafaf7;
+}
+
+/* DragOverlay ghost — Notion-style 따라오는 미리보기. */
+.today-drag-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid var(--wr-border, #d9d4c7);
+  border-left: 3px solid var(--color-today-signal, #4a7bb8);
+  border-radius: 6px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: grabbing;
+  user-select: none;
+  max-width: 280px;
+}
+
+.today-drag-ghost-grip {
+  color: var(--wr-subtle);
+  flex-shrink: 0;
+}
+
+.today-drag-ghost-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.today-drag-ghost-resize {
+  width: 60px;
+  height: 6px;
+  background: var(--color-today-signal, #4a7bb8);
+  border-radius: 3px;
+  opacity: 0.7;
+  cursor: ns-resize;
 }
 
 /* ── 본문 그리드 (트레이 + 캔버스) ─────────────────────────────────── */
@@ -303,13 +344,29 @@
   height: 60px;
 }
 
+/* 30분 점선 — 시간 리듬 시각화 (ATracker/Google Calendar 스타일). */
+.today-canvas-hour::before {
+  content: "";
+  position: absolute;
+  left: 60px;
+  right: 0;
+  top: 30px;
+  height: 0;
+  border-top: 1px dashed var(--wr-border-light);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .today-canvas-hour-label {
   position: absolute;
   left: 8px;
   top: -7px;
   font-size: 10px;
+  font-weight: 600;
   color: var(--wr-subtle);
   font-family: ui-monospace, monospace;
+  background: #fff;
+  padding: 0 2px;
 }
 
 .today-canvas-hour-rule {
@@ -318,7 +375,33 @@
   right: 0;
   top: 0;
   height: 1px;
+  background: var(--wr-border, #d9d4c7);
+  opacity: 0.7;
+}
+
+/* 좌측 시간 라벨 거터 — 그리드와 분리되어 보이는 얇은 세로선. */
+.today-canvas-grid::before {
+  content: "";
+  position: absolute;
+  left: 60px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
   background: var(--wr-border-light);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* 업무시간(09-18) 가벼운 음영 — 시각적 닻. */
+.today-canvas-workhours {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  top: 540px; /* 9h × 60px */
+  height: 540px; /* 9h band */
+  background: rgba(74, 123, 184, 0.025);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .today-canvas-now {

@@ -49,8 +49,20 @@ function pad(n: number): string {
 }
 
 /**
- * date(YYYY-MM-DD) + 그리드 픽셀 오프셋 → 로컬 ISO(YYYY-MM-DDTHH:MM:SS).
- * 음수는 0(00:00)으로 clamp, 24h 초과는 23:45로 clamp(스냅 정렬 유지).
+ * 로컬 timezone offset 문자열 (`+09:00` 형태). RFC3339 datetime 표기에 필수
+ * (백엔드 `chrono::DateTime::parse_from_rfc3339`는 offset이 없으면 reject).
+ */
+function tzOffset(): string {
+  const min = -new Date().getTimezoneOffset();
+  const sign = min >= 0 ? "+" : "-";
+  const abs = Math.abs(min);
+  return `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+}
+
+/**
+ * date(YYYY-MM-DD) + 그리드 픽셀 오프셋 → RFC3339 with local offset
+ * (`YYYY-MM-DDTHH:MM:SS+09:00`). 음수는 0(00:00)으로 clamp, 24h 초과는
+ * 23:45로 clamp(스냅 정렬 유지). 백엔드 sync 워커가 `parse_from_rfc3339`로 받음.
  */
 export function pixelToLocalIso(date: string, gridY: number): string {
   const rawMin = (gridY / HOUR_PX) * 60;
@@ -58,10 +70,10 @@ export function pixelToLocalIso(date: string, gridY: number): string {
   const clamped = Math.max(0, Math.min(24 * 60 - SNAP_MIN, snapped));
   const h = Math.floor(clamped / 60);
   const m = clamped % 60;
-  return `${date}T${pad(h)}:${pad(m)}:00`;
+  return `${date}T${pad(h)}:${pad(m)}:00${tzOffset()}`;
 }
 
-/** 기존 ISO(또는 null) + delta px → 새 로컬 ISO. timezone-drift 안전. */
+/** 기존 ISO(또는 null) + delta px → 새 RFC3339(with offset). timezone-drift 안전. */
 export function shiftIsoByPx(
   date: string,
   startISO: string,
@@ -74,7 +86,7 @@ export function shiftIsoByPx(
   const clamped = Math.max(0, Math.min(24 * 60 - SNAP_MIN, snapped));
   const h = Math.floor(clamped / 60);
   const m = clamped % 60;
-  return `${date}T${pad(h)}:${pad(m)}:00`;
+  return `${date}T${pad(h)}:${pad(m)}:00${tzOffset()}`;
 }
 
 /** drag data attached to draggable nodes via `useDraggable({ data: ... })`. */
