@@ -29,6 +29,7 @@ mod http;
 mod loopback;
 mod oauth;
 mod parse;
+pub mod pending_store;
 mod windows;
 mod write;
 
