@@ -60,4 +60,3 @@ pub async fn set_routine_area_tag_key(
         .map_err(AppError::from)?;
     Ok(())
 }
-

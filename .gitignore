@@ -33,4 +33,11 @@ logs
 
 # agent visual-check artifacts (playwright MCP screenshots/logs)
 .playwright-mcp/
+.playwright-cli/
 .superpowers/
+
+# agent scratch output (screenshots, traces, etc.)
+output/
+
+# Claude Code per-session read logs (machine-local)
+.claude/.read-log.*
