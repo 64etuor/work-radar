@@ -8,6 +8,7 @@ export const commands = {
 	listProjects: () => typedError<Project[], AppError>(__TAURI_INVOKE("list_projects")),
 	createProject: (input: CreateProjectInput) => typedError<Project, AppError>(__TAURI_INVOKE("create_project", { input })),
 	setProjectCalendarColor: (input: SetProjectCalendarColorInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_calendar_color", { input })),
+	setProjectDefaultWriteCalendar: (input: SetProjectDefaultWriteCalendarInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_default_write_calendar", { input })),
 	listRepos: (projectId: string) => typedError<Repo[], AppError>(__TAURI_INVOKE("list_repos", { projectId })),
 	createRepo: (input: CreateRepoInput) => typedError<Repo, AppError>(__TAURI_INVOKE("create_repo", { input })),
 	/**  토큰 저장. 토큰은 IPC 인자로만 들어와 즉시 keychain으로 가고, 반환되지 않는다. */
@@ -1141,6 +1142,11 @@ export type Project = {
 	googleCalendarIds: string | null,
 	/**  캘린더 표시 배경색(`#RRGGBB`). NULL이면 project id 기반 기본 팔레트. */
 	calendarColor: string | null,
+	/**
+	 *  "일정 생성 기본 캘린더" id. NULL=미설정 → 프런트가 드롭 시 popover로 첫 선택을 저장.
+	 *  `google_calendar_ids` JSON array에 없는 id면 무효 → 프런트가 NULL 취급.
+	 */
+	defaultWriteCalendarId: string | null,
 	credentialRef: string,
 	createdAt: string,
 	updatedAt: string,
@@ -1249,6 +1255,12 @@ export type RoutineToday = {
 	kind: Kind | null,
 	/**  주어진 날짜에 완료 체크됐는지 (RoutineCheck 존재 여부). */
 	done: boolean,
+	/**  오늘만 적용되는 시각 override 'HH:MM' (spec §D10). 내일은 정의의 `time_of_day`로 복귀. */
+	timeOverride: string | null,
+	/**  Google mirror event id (오늘 인스턴스 한정). */
+	linkedEventId: string | null,
+	/**  Google mirror calendar id (오늘 인스턴스 한정). */
+	linkedCalendarId: string | null,
 };
 
 /**
@@ -1294,6 +1306,12 @@ export type SelfCheckItem = {
 export type SetProjectCalendarColorInput = {
 	projectId: string,
 	color: string | null,
+};
+
+/**  프로젝트별 "일정 생성 기본 캘린더" 변경 입력. `calendarId=NULL`은 미설정으로 되돌림. */
+export type SetProjectDefaultWriteCalendarInput = {
+	projectId: string,
+	calendarId: string | null,
 };
 
 /**  신호 출처. */
@@ -1573,6 +1591,14 @@ export type WorkSignal = {
 	impactHigh: boolean | null,
 	/**  회고 태그: 하지말걸(사람 태깅, Phase 17). NULL/false=미태깅, true=후회 ⚠️. INVARIANT #1. */
 	regret: boolean | null,
+	/**  시간축 배치 (spec §D8 카드 정본): RFC3339 UTC. NULL=미배치(트레이). */
+	scheduledAt: string | null,
+	/**  시간축 배치 길이(분). NULL=미배치. */
+	scheduledDuration: number | null,
+	/**  Google mirror event id. delete 후 NULL. */
+	linkedEventId: string | null,
+	/**  Google mirror calendar id. delete 후 NULL. */
+	linkedCalendarId: string | null,
 	createdAt: string,
 	updatedAt: string,
 };
