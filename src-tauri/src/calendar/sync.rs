@@ -55,8 +55,9 @@ impl SyncEngine {
     }
 
     /// 백그라운드 태스크로 굴린다. 한 인스턴스(start_recovery_monitor 패턴과 동일) 가정.
+    /// Tauri setup hook이 sync context이므로 tokio::spawn 대신 tauri::async_runtime::spawn 사용.
     pub fn spawn(self) {
-        tokio::spawn(async move { self.run().await });
+        tauri::async_runtime::spawn(async move { self.run().await });
     }
 
     async fn run(self) {
