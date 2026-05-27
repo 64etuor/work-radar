@@ -137,6 +137,96 @@ pub struct CodexAvailability {
     pub detail: String,
 }
 
+/// Codex thinking 수준. CLI에는 `-c model_reasoning_effort=<value>`로 전달한다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum AgentReasoningEffort {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+}
+
+impl AgentReasoningEffort {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AgentReasoningEffort::Low => "low",
+            AgentReasoningEffort::Medium => "medium",
+            AgentReasoningEffort::High => "high",
+            AgentReasoningEffort::Xhigh => "xhigh",
+        }
+    }
+}
+
+impl std::fmt::Display for AgentReasoningEffort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for AgentReasoningEffort {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim() {
+            "low" => Ok(Self::Low),
+            "medium" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            "xhigh" => Ok(Self::Xhigh),
+            other => Err(format!(
+                "unknown reasoning effort '{other}' (expected low, medium, high, xhigh)"
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexModelOption {
+    pub slug: String,
+    pub display_name: String,
+    pub default_reasoning_level: Option<AgentReasoningEffort>,
+    pub supported_reasoning_levels: Vec<AgentReasoningEffort>,
+    pub supports_fast: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexModelCatalog {
+    pub models: Vec<CodexModelOption>,
+    pub cached_at: String,
+    pub source: String,
+}
+
+/// 설정 > Agents에서 보이는 내부 프롬프트 실행 설정.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPromptConfig {
+    pub id: String,
+    pub name: String,
+    pub binding: String,
+    pub prompt: String,
+    pub enabled: bool,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<AgentReasoningEffort>,
+    pub fast_mode: bool,
+    pub updated_at: String,
+}
+
+/// 내부 프롬프트 실행 설정 저장 입력. `None`은 상속/미설정이다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAgentPromptConfigInput {
+    pub id: String,
+    pub prompt: String,
+    pub name: String,
+    pub enabled: bool,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<AgentReasoningEffort>,
+    pub fast_mode: bool,
+}
+
 /// echo 테스트 잡 입력 (codex 없이 bound/kill/로그 캡처 검증). seconds 동안 틱을 출력하는
 /// 셸아웃 잡 — happy(짧은 seconds) / timeout 테스트(긴 seconds + 짧은 timeout_sec).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -157,6 +247,8 @@ pub struct TriggerCodexInput {
     pub project_id: Option<String>,
     /// 코드 잡이면 worktree 베이스 레포 (없으면 비-레포 prompt 잡).
     pub repo_id: Option<String>,
+    /// 앱 내부 프롬프트 설정 binding. 있으면 해당 프롬프트 실행 설정(model/thinking/fast)을 적용한다.
+    pub agent_prompt_binding: Option<String>,
     pub prompt: String,
     pub timeout_sec: u32,
     pub max_turns: u32,

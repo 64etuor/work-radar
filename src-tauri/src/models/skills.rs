@@ -1,3 +1,4 @@
+use super::AgentReasoningEffort;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 // ── 스킬 공유 레지스트리 (Phase 20 #21) ─────────────────────────────────────────────
@@ -23,6 +24,12 @@ pub struct Skill {
     pub rail: Option<String>,
     /// 비활성이면 잡 lookup이 코드 상수로 폴백한다(기본 동작 보존).
     pub enabled: bool,
+    /// 내부 프롬프트별 Codex 모델 override. None이면 설정 > Agents 기본 모델을 상속한다.
+    pub model: Option<String>,
+    /// 내부 프롬프트별 thinking 수준 override. None이면 Codex 기본 설정을 상속한다.
+    pub reasoning_effort: Option<AgentReasoningEffort>,
+    /// true면 모델 override가 없을 때 fast 모델(gpt-5.3-codex-spark)을 사용한다.
+    pub fast_mode: bool,
     /// external: SKILL.md 디렉터리/파일 경로. in_app: None.
     pub source_path: Option<String>,
     pub created_at: String,

@@ -4,7 +4,7 @@ use crate::agent::{codex_availability, Bounds, CodexRunner};
 use crate::commands::agent_run_store::{
     fetch_proposal, insert_agent_run, new_run_id, record_acceptance, reject_run, run_status_trigger,
 };
-use crate::commands::skills::{resolve_prompt, BINDING_PR_SELFCHECK};
+use crate::commands::skills::{resolve_agent_prompt_runtime, BINDING_PR_SELFCHECK};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider};
@@ -163,9 +163,14 @@ pub async fn trigger_pr_selfcheck(
     )
     .await?;
 
-    // 스킬 레지스트리 lookup(편집된 프롬프트) + 코드 상수 폴백(#21). *제안 내용*만 바뀐다 —
-    // 잡은 여전히 gated(awaiting_approval)이고 accept는 로컬 기록만(#1/#2 구조적 불변).
-    let prompt = resolve_prompt(db.inner(), BINDING_PR_SELFCHECK, PR_SELFCHECK_PROMPT).await;
+    let runtime =
+        resolve_agent_prompt_runtime(db.inner(), BINDING_PR_SELFCHECK, PR_SELFCHECK_PROMPT).await;
+    let model = crate::commands::agents_config::resolve_codex_model_for_prompt(
+        db.inner(),
+        runtime.model.clone(),
+        runtime.fast_mode,
+    )
+    .await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -173,17 +178,15 @@ pub async fn trigger_pr_selfcheck(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt,
+            prompt: runtime.prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: Some(std::path::PathBuf::from(local_path)),
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("pr.diff".to_string(), diff)],
-            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
-                .await
-                .ok()
-                .flatten(),
+            model,
+            reasoning_effort: runtime.reasoning_effort,
         },
         true, // 게이트 잡: 성공+proposal이면 awaiting_approval로 멈춘다(Acceptance 게이트).
     );

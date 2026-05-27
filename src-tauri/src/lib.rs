@@ -123,6 +123,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Codex 에이전트 설정 (B2: 모델 선택).
         commands::get_codex_model,
         commands::set_codex_model,
+        commands::get_codex_model_catalog,
+        commands::list_agent_prompt_configs,
+        commands::update_agent_prompt_config,
         // 에이전트 바 박스 이름 영속 (P10b: app_config per-machine 라벨).
         commands::get_agent_name,
         commands::set_agent_name,
@@ -315,6 +318,12 @@ pub fn run() {
             // 잡 큐 매니저(Phase 7): codex 경로 해석(graceful degrade) + worktree/로그 디렉터리 +
             // 동시성 1. INVARIANT #5/#6은 jobs.rs/agent.rs에서 강제.
             let codex_bin = tauri::async_runtime::block_on(agent::resolve_codex_bin());
+            tauri::async_runtime::block_on(
+                commands::agents_config::cache_codex_model_catalog_on_startup(
+                    &pool,
+                    codex_bin.as_deref(),
+                ),
+            );
             let job_manager = jobs::JobManager::new(
                 codex_bin,
                 app_data.join("worktrees"),

@@ -6,7 +6,7 @@ use crate::commands::agent_run_store::{
     run_status_trigger,
 };
 use crate::commands::signal_store;
-use crate::commands::skills::{resolve_prompt, BINDING_CI_TRIAGE};
+use crate::commands::skills::{resolve_agent_prompt_runtime, BINDING_CI_TRIAGE};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider};
@@ -140,8 +140,14 @@ pub async fn trigger_ci_triage(
     )
     .await?;
 
-    // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
-    let prompt = resolve_prompt(db.inner(), BINDING_CI_TRIAGE, CI_TRIAGE_PROMPT).await;
+    let runtime =
+        resolve_agent_prompt_runtime(db.inner(), BINDING_CI_TRIAGE, CI_TRIAGE_PROMPT).await;
+    let model = crate::commands::agents_config::resolve_codex_model_for_prompt(
+        db.inner(),
+        runtime.model.clone(),
+        runtime.fast_mode,
+    )
+    .await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -149,17 +155,15 @@ pub async fn trigger_ci_triage(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt,
+            prompt: runtime.prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: Some(std::path::PathBuf::from(local_path)),
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("pr.diff".to_string(), diff)],
-            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
-                .await
-                .ok()
-                .flatten(),
+            model,
+            reasoning_effort: runtime.reasoning_effort,
         },
         true,
     );

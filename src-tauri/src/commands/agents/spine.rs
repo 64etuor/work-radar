@@ -148,6 +148,35 @@ pub async fn trigger_codex_job(
     )
     .await?;
 
+    let (resolved_prompt, model, reasoning_effort) = if let Some(binding) = input
+        .agent_prompt_binding
+        .as_deref()
+        .map(str::trim)
+        .filter(|b| !b.is_empty())
+    {
+        let runtime =
+            crate::commands::skills::resolve_agent_prompt_runtime(db.inner(), binding, prompt)
+                .await;
+        let model = crate::commands::agents_config::resolve_codex_model_for_prompt(
+            db.inner(),
+            runtime.model.clone(),
+            runtime.fast_mode,
+        )
+        .await;
+        (
+            format!("{}\n\nContext:\n{}", runtime.prompt.trim(), prompt),
+            model,
+            runtime.reasoning_effort,
+        )
+    } else {
+        (
+            prompt.to_string(),
+            crate::commands::agents_config::resolve_codex_model_for_prompt(db.inner(), None, false)
+                .await,
+            None,
+        )
+    };
+
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -155,17 +184,15 @@ pub async fn trigger_codex_job(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt: prompt.to_string(),
+            prompt: resolved_prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path,
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: Vec::new(),
-            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
-                .await
-                .ok()
-                .flatten(),
+            model,
+            reasoning_effort,
         },
         false, // 자유형 codex 잡은 게이트 아님 — 산출물 표시는 Phase 8 PR self-check 잡만.
     );

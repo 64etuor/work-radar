@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
-import { commands } from "@/bindings";
+import { commands, type UpdateAgentPromptConfigInput } from "@/bindings";
 
 /**
  * Codex 에이전트 설정 훅 (B2). 모델 선택을 app_config(SQLite)에서 읽고 쓴다.
@@ -16,12 +16,38 @@ export function useCodexModel() {
   });
 }
 
+export function useCodexModelCatalog() {
+  return useQuery({
+    queryKey: ["codexModelCatalog"],
+    queryFn: () => unwrap(commands.getCodexModelCatalog()),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
 /** Codex 모델 설정(None 또는 빈 문자열이면 삭제 → 기본값으로 복원). */
 export function useSetCodexModel() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (model: string | null) => unwrap(commands.setCodexModel(model)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["codexModel"] }),
+  });
+}
+
+export function useAgentPromptConfigs() {
+  return useQuery({
+    queryKey: ["agentPromptConfigs"],
+    queryFn: () => unwrap(commands.listAgentPromptConfigs()),
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateAgentPromptConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateAgentPromptConfigInput) =>
+      unwrap(commands.updateAgentPromptConfig(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentPromptConfigs"] }),
   });
 }
 

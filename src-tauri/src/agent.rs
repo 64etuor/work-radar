@@ -19,7 +19,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
-use crate::models::{AgentRail, CodexAvailability, Engine, Sandbox};
+use crate::models::{AgentRail, AgentReasoningEffort, CodexAvailability, Engine, Sandbox};
 
 /// codex 감지/worktree 등 보조 서브프로세스 호출 상한 (무한 대기 금지 — INVARIANT #5).
 const AUX_TIMEOUT: Duration = Duration::from_secs(20);
@@ -411,6 +411,8 @@ pub struct CodexRunner {
     pub input_files: Vec<(String, String)>,
     /// 선택적 모델 override (`--model <model>`). None이면 codex 기본 동작.
     pub model: Option<String>,
+    /// 선택적 thinking 수준 override (`-c model_reasoning_effort=<level>`).
+    pub reasoning_effort: Option<AgentReasoningEffort>,
 }
 
 impl CodexRunner {
@@ -498,6 +500,10 @@ impl AgentRunner for CodexRunner {
             if !m.trim().is_empty() {
                 cmd.arg("--model").arg(m.trim());
             }
+        }
+        if let Some(effort) = self.reasoning_effort {
+            cmd.arg("-c")
+                .arg(format!("model_reasoning_effort=\"{}\"", effort.as_str()));
         }
         cmd.arg("-C")
             .arg(cwd_str)

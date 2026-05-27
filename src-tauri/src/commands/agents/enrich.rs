@@ -5,7 +5,7 @@ use crate::commands::agent_run_store::{
     run_status_trigger,
 };
 use crate::commands::signal_store;
-use crate::commands::skills::{resolve_prompt, BINDING_BATCH_ENRICH, BINDING_ENRICH};
+use crate::commands::skills::{resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH, BINDING_ENRICH};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::jobs::{JobManager, NewAgentRun};
@@ -87,8 +87,13 @@ pub async fn trigger_enrich(
     )
     .await?;
 
-    // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
-    let prompt = resolve_prompt(db.inner(), BINDING_ENRICH, ENRICH_PROMPT).await;
+    let runtime = resolve_agent_prompt_runtime(db.inner(), BINDING_ENRICH, ENRICH_PROMPT).await;
+    let model = crate::commands::agents_config::resolve_codex_model_for_prompt(
+        db.inner(),
+        runtime.model.clone(),
+        runtime.fast_mode,
+    )
+    .await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -96,17 +101,15 @@ pub async fn trigger_enrich(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt,
+            prompt: runtime.prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: None,
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("card.txt".to_string(), card_text)],
-            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
-                .await
-                .ok()
-                .flatten(),
+            model,
+            reasoning_effort: runtime.reasoning_effort,
         },
         true, // 게이트 잡: 성공+proposal이면 awaiting_approval(Acceptance 게이트).
     );
@@ -290,8 +293,14 @@ pub async fn trigger_enrich_all(
     )
     .await?;
 
-    // 스킬 레지스트리 lookup + 코드 상수 폴백(#21). 제안 내용만 바뀐다(잡 게이트/accept 불변 — #1/#2).
-    let prompt = resolve_prompt(db.inner(), BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
+    let runtime =
+        resolve_agent_prompt_runtime(db.inner(), BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
+    let model = crate::commands::agents_config::resolve_codex_model_for_prompt(
+        db.inner(),
+        runtime.model.clone(),
+        runtime.fast_mode,
+    )
+    .await;
     jm.spawn(
         db.inner().clone(),
         id.clone(),
@@ -299,17 +308,15 @@ pub async fn trigger_enrich_all(
         CodexRunner {
             codex_bin,
             run_id: id.clone(),
-            prompt,
+            prompt: runtime.prompt,
             sandbox: Sandbox::ReadOnly,
             rail: AgentRail::Suggestion,
             repo_path: None,
             worktree_root: jm.worktree_root.clone(),
             scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
             input_files: vec![("cards.json".to_string(), cards_json)],
-            model: crate::commands::nav::get_config(db.inner(), "agent.codex_model")
-                .await
-                .ok()
-                .flatten(),
+            model,
+            reasoning_effort: runtime.reasoning_effort,
         },
         true, // 게이트 잡: 성공+proposal이면 awaiting_approval(Acceptance 게이트).
     );

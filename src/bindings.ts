@@ -123,7 +123,8 @@ export const commands = {
 	routineTracking: (endDate: string, days: number) => typedError<RoutineTrackingItem[], AppError>(__TAURI_INVOKE("routine_tracking", { endDate, days })),
 	/**
 	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
-	 *  자동 escalate/알림 없음, INVARIANT #4). 기존 escalated PR 신호는 원인 해소분만 auto-resolve.
+	 *  매트릭스 자동 escalate 없음, INVARIANT #4). threshold/충돌은 Inbox 알림으로 mirror하고, 기존
+	 *  escalated PR 신호는 원인 해소분만 auto-resolve.
 	 *  토큰은 keychain에서만.
 	 */
 	refreshPrRadar: (projectId: string) => typedError<PrRadarItem[], AppError>(__TAURI_INVOKE("refresh_pr_radar", { projectId })),
@@ -166,6 +167,9 @@ export const commands = {
 	 *  None 또는 빈 문자열이면 저장 행을 삭제한다.
 	 */
 	setCodexModel: (model: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_codex_model", { model })),
+	getCodexModelCatalog: () => typedError<CodexModelCatalog, AppError>(__TAURI_INVOKE("get_codex_model_catalog")),
+	listAgentPromptConfigs: () => typedError<AgentPromptConfig[], AppError>(__TAURI_INVOKE("list_agent_prompt_configs")),
+	updateAgentPromptConfig: (input: UpdateAgentPromptConfigInput) => typedError<AgentPromptConfig, AppError>(__TAURI_INVOKE("update_agent_prompt_config", { input })),
 	/**  박스의 사용자 지정 이름(없으면 None → 호출부가 기본 라벨 fallback). */
 	getAgentName: (sessionKey: string) => typedError<string | null, AppError>(__TAURI_INVOKE("get_agent_name", { sessionKey })),
 	/**  박스 이름 설정(또는 None/빈 문자열 → 저장 행 삭제 → 기본 라벨 복원). */
@@ -469,8 +473,24 @@ export const commands = {
 };
 
 /* Types */
+/**  설정 > Agents에서 보이는 내부 프롬프트 실행 설정. */
+export type AgentPromptConfig = {
+	id: string,
+	name: string,
+	binding: string,
+	prompt: string,
+	enabled: boolean,
+	model: string | null,
+	reasoningEffort: AgentReasoningEffort | null,
+	fastMode: boolean,
+	updatedAt: string,
+};
+
 /**  잡이 속한 레일. 결정 레일은 사람만 — 자동화는 제안/실행 레일에만 (INVARIANT #1). */
 export type AgentRail = "suggestion" | "execution";
+
+/**  Codex thinking 수준. CLI에는 `-c model_reasoning_effort=<value>`로 전달한다. */
+export type AgentReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
 /**
  *  단일 잡 폴링용 경량 상태 (B3: EnrichModal 인플레이스 폴링).
@@ -674,6 +694,20 @@ export type CodexAvailability = {
 	version: string | null,
 	/**  사람이 읽을 상태 상세. */
 	detail: string,
+};
+
+export type CodexModelCatalog = {
+	models: CodexModelOption[],
+	cachedAt: string,
+	source: string,
+};
+
+export type CodexModelOption = {
+	slug: string,
+	displayName: string,
+	defaultReasoningLevel: AgentReasoningEffort | null,
+	supportedReasoningLevels: AgentReasoningEffort[],
+	supportsFast: boolean,
 };
 
 /**  `git log --graph` 원문 라인 + 구조화 커밋 목록. 표시 전용(read-only). */
@@ -1288,6 +1322,12 @@ export type Skill = {
 	rail: string | null,
 	/**  비활성이면 잡 lookup이 코드 상수로 폴백한다(기본 동작 보존). */
 	enabled: boolean,
+	/**  내부 프롬프트별 Codex 모델 override. None이면 설정 > Agents 기본 모델을 상속한다. */
+	model: string | null,
+	/**  내부 프롬프트별 thinking 수준 override. None이면 Codex 기본 설정을 상속한다. */
+	reasoningEffort: AgentReasoningEffort | null,
+	/**  true면 모델 override가 없을 때 fast 모델(gpt-5.3-codex-spark)을 사용한다. */
+	fastMode: boolean,
 	/**  external: SKILL.md 디렉터리/파일 경로. in_app: None. */
 	sourcePath: string | null,
 	createdAt: string,
@@ -1368,6 +1408,8 @@ export type TriggerCodexInput = {
 	projectId: string | null,
 	/**  코드 잡이면 worktree 베이스 레포 (없으면 비-레포 prompt 잡). */
 	repoId: string | null,
+	/**  앱 내부 프롬프트 설정 binding. 있으면 해당 프롬프트 실행 설정(model/thinking/fast)을 적용한다. */
+	agentPromptBinding: string | null,
 	prompt: string,
 	timeoutSec: number,
 	maxTurns: number,
@@ -1417,6 +1459,17 @@ export type TriggerPrSelfCheckInput = {
 	timeoutSec: number,
 	maxTurns: number,
 	costCapUsd: number | null,
+};
+
+/**  내부 프롬프트 실행 설정 저장 입력. `None`은 상속/미설정이다. */
+export type UpdateAgentPromptConfigInput = {
+	id: string,
+	prompt: string,
+	name: string,
+	enabled: boolean,
+	model: string | null,
+	reasoningEffort: AgentReasoningEffort | null,
+	fastMode: boolean,
 };
 
 /**  루틴 수정 입력. */

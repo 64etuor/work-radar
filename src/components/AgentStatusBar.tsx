@@ -4,6 +4,7 @@ import "./AgentStatusBar.css";
 import {
   Bot,
   Calendar,
+  Inbox,
   MessagesSquare,
   PanelsTopLeft,
   Sparkles,
@@ -14,7 +15,7 @@ import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
 import { HermesView } from "@/components/HermesView";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { type BoxState, overflowSplit, progressRatio } from "@/lib/agentBar";
-import { useAgentRuns } from "@/lib/query";
+import { useAgentRuns, useInboxCounts } from "@/lib/query";
 import { useAgentNames, useSetAgentName } from "@/lib/query/agentsConfig";
 import { useCmuxStatus, useFocusCmuxWorkspace } from "@/lib/query/cmux";
 import { useHermesBridgeStatus } from "@/lib/query/hermes";
@@ -129,6 +130,7 @@ function runToBox(run: AgentRunView): SessionBox {
 export function AgentStatusBar() {
   const { goTo, setCalendarOpen } = useUIStore();
   const runs = useAgentRuns();
+  const inboxCounts = useInboxCounts();
   const list = runs.data ?? [];
 
   // hermes/cmux 세션 (agent_runs에 없을 수 있어 별도 enumerate — 표시 전용 INVARIANT #1).
@@ -253,6 +255,19 @@ export function AgentStatusBar() {
       <Calendar size={15} strokeWidth={1.5} />
     </button>
   );
+  const unreadInbox = inboxCounts.data?.unread ?? 0;
+  const inboxBtn = (
+    <button
+      type="button"
+      className="asb-inbox"
+      onClick={() => goTo("inbox")}
+      title={unreadInbox > 0 ? `Inbox unread ${unreadInbox}` : "Inbox"}
+      aria-label={unreadInbox > 0 ? `Inbox unread ${unreadInbox}` : "Inbox 열기"}
+    >
+      <Inbox size={15} strokeWidth={1.5} />
+      {unreadInbox > 0 && <span className="asb-badge">{unreadInbox}</span>}
+    </button>
+  );
 
   // ── 빈 상태: 조용한 단일 'Agents · idle' pill (박스 없음). ──────────────
   if (boxes.length === 0) {
@@ -267,6 +282,7 @@ export function AgentStatusBar() {
           <span className="asb-label">Agents</span>
           <span className="asb-idle-text">idle</span>
         </button>
+        {inboxBtn}
         {calendarBtn}
       </div>
     );
@@ -298,6 +314,7 @@ export function AgentStatusBar() {
           </span>
         )}
       </div>
+      {inboxBtn}
       {calendarBtn}
       <HermesModal open={hermesOpen} onClose={() => setHermesOpen(false)} />
     </div>

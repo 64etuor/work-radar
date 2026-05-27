@@ -28,12 +28,15 @@ pub(crate) const BINDING_ENRICH: &str = "enrich";
 pub(crate) const BINDING_BATCH_ENRICH: &str = "batch_enrich";
 pub(crate) const BINDING_CI_TRIAGE: &str = "ci_triage";
 pub(crate) const BINDING_PR_SELFCHECK: &str = "pr_selfcheck";
+pub(crate) const BINDING_WORKTREE_REVIEW: &str = "worktree_review";
 pub(crate) const BINDING_WORKTREE_CLEANUP: &str = "worktree_cleanup";
+pub(crate) const FAST_CODEX_MODEL: &str = "gpt-5.3-codex-spark";
 
+const WORKTREE_REVIEW_PROMPT: &str = "You are reviewing a worktree in read-only mode. Focus on architectural issues, risky changes, dead code, dependency impact, missing tests, and merge conflict risk. Do not edit files. Return a concise Korean review with findings ordered by severity and concrete file references when available.";
 const WORKTREE_CLEANUP_PROMPT: &str = "Review the listed local worktree cleanup candidates. Identify which items are safe to delete and explain the evidence for each recommendation. Use a conservative rule: stale means 2+ days with no activity, merged branches are safer than unmerged stale branches, protected/current/base branches must stay, and destructive cleanup needs human confirmation. Return concise bullets with keep/delete/review labels.";
 
 /// (binding, 표시 이름, 코드 상수 프롬프트) 시드 정의. 시드/폴백 둘 다 이 표에서 도출한다(단일 출처).
-pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 5] {
+pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 6] {
     [
         (BINDING_ENRICH, "브레인덤프 enrich (단건)", ENRICH_PROMPT),
         (
@@ -43,6 +46,11 @@ pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 5] {
         ),
         (BINDING_CI_TRIAGE, "CI 실패 triage", CI_TRIAGE_PROMPT),
         (BINDING_PR_SELFCHECK, "코드 리뷰", PR_SELFCHECK_PROMPT),
+        (
+            BINDING_WORKTREE_REVIEW,
+            "worktree 리뷰",
+            WORKTREE_REVIEW_PROMPT,
+        ),
         (
             BINDING_WORKTREE_CLEANUP,
             "worktree cleanup 추천",
@@ -82,9 +90,37 @@ pub async fn seed_in_app_skills(db: &Db) -> Result<(), sqlx::Error> {
 /// 있고 prompt가 비어 있지 않으면 그 편집된 템플릿을, 아니면 코드 상수(fallback)를 돌려준다.
 /// **레지스트리 조회 실패/부재 시 항상 코드 상수로 폴백** — 기본 동작은 절대 바뀌지 않는다.
 /// 이 함수는 *제안 내용*(프롬프트)만 고른다. 잡의 게이트/accept 경로는 호출자 쪽에서 불변이다(#1/#2).
+#[cfg_attr(not(test), allow(dead_code))]
 pub async fn resolve_prompt(db: &Db, binding: &str, fallback: &str) -> String {
-    let row: Option<(Option<String>,)> = sqlx::query_as(
-        "SELECT prompt FROM skills \
+    resolve_agent_prompt_runtime(db, binding, fallback)
+        .await
+        .prompt
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AgentPromptRuntime {
+    pub prompt: String,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<crate::models::AgentReasoningEffort>,
+    pub fast_mode: bool,
+}
+
+type RuntimeRow = (
+    Option<String>,
+    Option<String>,
+    Option<crate::models::AgentReasoningEffort>,
+    bool,
+);
+
+/// 내부 프롬프트 실행 설정을 잡 트리거 직전에 해석한다.
+/// 행이 없거나 비활성이면 프롬프트는 코드 상수로, 실행 설정은 전역 기본값으로 폴백한다.
+pub(crate) async fn resolve_agent_prompt_runtime(
+    db: &Db,
+    binding: &str,
+    fallback: &str,
+) -> AgentPromptRuntime {
+    let row: Option<RuntimeRow> = sqlx::query_as(
+        "SELECT prompt, model, reasoning_effort, fast_mode FROM skills \
          WHERE binding = ?1 AND kind = 'in_app_prompt' AND enabled = 1",
     )
     .bind(binding)
@@ -92,9 +128,22 @@ pub async fn resolve_prompt(db: &Db, binding: &str, fallback: &str) -> String {
     .await
     .ok()
     .flatten();
-    match row.and_then(|(p,)| p).filter(|p| !p.trim().is_empty()) {
-        Some(p) => p,
-        None => fallback.to_string(),
+
+    match row {
+        Some((prompt, model, reasoning_effort, fast_mode)) => AgentPromptRuntime {
+            prompt: prompt
+                .filter(|p| !p.trim().is_empty())
+                .unwrap_or_else(|| fallback.to_string()),
+            model: model
+                .map(|m| m.trim().to_string())
+                .filter(|m| !m.is_empty()),
+            reasoning_effort,
+            fast_mode,
+        },
+        None => AgentPromptRuntime {
+            prompt: fallback.to_string(),
+            ..Default::default()
+        },
     }
 }
 
@@ -105,7 +154,7 @@ pub async fn resolve_prompt(db: &Db, binding: &str, fallback: &str) -> String {
 pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, AppError> {
     // 인앱(편집 가능 잡 템플릿) — DB SSOT.
     let mut skills: Vec<Skill> = sqlx::query_as::<_, Skill>(
-        "SELECT id, name, kind, prompt, binding, rail, enabled, source_path, created_at, updated_at \
+        "SELECT id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at \
          FROM skills WHERE kind = 'in_app_prompt' ORDER BY binding, name",
     )
     .fetch_all(db.inner())
@@ -123,6 +172,9 @@ pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, AppError> {
                 binding: None,
                 rail: None,
                 enabled: true,
+                model: None,
+                reasoning_effort: None,
+                fast_mode: false,
                 source_path: Some(ex.path),
                 created_at: String::new(),
                 updated_at: String::new(),
@@ -158,7 +210,7 @@ pub async fn update_skill(
             enabled = COALESCE(?4, enabled), \
             updated_at = datetime('now') \
          WHERE id = ?1 AND kind = 'in_app_prompt' \
-         RETURNING id, name, kind, prompt, binding, rail, enabled, source_path, created_at, updated_at",
+         RETURNING id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at",
     )
     .bind(&id)
     .bind(prompt)
@@ -194,7 +246,7 @@ pub async fn create_skill(db: State<'_, Db>, input: CreateSkillInput) -> Result<
             return Err(AppError::validation(
                 "skills.unknown_binding",
                 format!(
-                    "알 수 없는 binding '{b}' — enrich/batch_enrich/ci_triage/pr_selfcheck 중 하나여야 합니다."
+                    "알 수 없는 binding '{b}' — 설정 > Agents의 내부 프롬프트 binding 중 하나여야 합니다."
                 ),
             ));
         }
@@ -206,7 +258,7 @@ pub async fn create_skill(db: State<'_, Db>, input: CreateSkillInput) -> Result<
     sqlx::query_as::<_, Skill>(
         "INSERT INTO skills (id, name, kind, prompt, binding, rail, enabled) \
          VALUES (?1, ?2, 'in_app_prompt', ?3, ?4, 'suggestion', 1) \
-         RETURNING id, name, kind, prompt, binding, rail, enabled, source_path, created_at, updated_at",
+         RETURNING id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at",
     )
     .bind(&id.0)
     .bind(name)
@@ -575,7 +627,7 @@ mod tests {
         sqlx::query_as::<_, Skill>(
             "INSERT INTO skills (id, name, kind, prompt, binding, rail, enabled) \
              VALUES (?1, ?2, 'in_app_prompt', ?3, ?4, 'suggestion', 1) \
-             RETURNING id, name, kind, prompt, binding, rail, enabled, source_path, created_at, updated_at",
+             RETURNING id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at",
         )
         .bind(&id.0)
         .bind(name)
@@ -600,7 +652,7 @@ mod tests {
             "UPDATE skills SET prompt = COALESCE(?2, prompt), name = COALESCE(?3, name), \
                 enabled = COALESCE(?4, enabled), updated_at = datetime('now') \
              WHERE id = ?1 AND kind = 'in_app_prompt' \
-             RETURNING id, name, kind, prompt, binding, rail, enabled, source_path, created_at, updated_at",
+             RETURNING id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at",
         )
         .bind(id)
         .bind(prompt)

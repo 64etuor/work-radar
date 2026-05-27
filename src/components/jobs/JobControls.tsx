@@ -75,6 +75,7 @@ export function JobControls({
               {
                 projectId: null,
                 repoId: null,
+                agentPromptBinding: null,
                 prompt,
                 timeoutSec: 60,
                 maxTurns: 8,
