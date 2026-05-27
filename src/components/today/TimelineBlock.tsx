@@ -1,7 +1,10 @@
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { Repeat } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 import type { LayoutBox } from "@/lib/timelineLayout";
+import type { DragData } from "@/components/today/useTimelineDnd";
 
 type Props = {
   box: LayoutBox;
@@ -15,13 +18,40 @@ function hhmm(iso: string): string {
 
 /**
  * 시간축 위 단일 블록(스펙 §D8 카드 정본).
- * 위치/높이는 호출부의 `LayoutBox`가 산출 — 본 컴포넌트는 순수 렌더.
- * 클릭은 EventPopover 트리거(드래그/리사이즈는 PR 5).
+ * PR 5: signal 종류 블록만 draggable(canvas reschedule / unschedule / cross-cal).
+ * event/routine 가상 블록은 클릭만 — 외부 캘린더 또는 별도 routine 처리(스펙 §7).
  */
 export function TimelineBlock({ box, onClick }: Props) {
   const { block, topPx, heightPx, leftPct, widthPct } = box;
+  const isSignal = block.kind === "signal";
+  // signal 블록만 draggable — id는 signal:{signalId} 패턴(block.id).
+  const signalId = isSignal ? block.id.replace(/^signal:/, "") : "";
+  const dragData: DragData | undefined = isSignal
+    ? {
+        from: "canvas",
+        signalId,
+        title: block.title,
+        startISO: block.startISO,
+        durationMin: Math.max(
+          15,
+          Math.round((new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) / 60000),
+        ),
+        calendarId: block.calendarId,
+      }
+    : undefined;
+  const drag = useDraggable({
+    id: `block:${block.id}`,
+    data: dragData,
+    disabled: !isSignal,
+  });
+
+  const transformStyle = drag.transform
+    ? { transform: CSS.Translate.toString(drag.transform) }
+    : {};
+
   return (
     <button
+      ref={isSignal ? drag.setNodeRef : undefined}
       type="button"
       className={`tl-block tl-block-${block.kind}`}
       style={{
@@ -31,9 +61,13 @@ export function TimelineBlock({ box, onClick }: Props) {
         left: `calc(60px + ((100% - 60px) * ${leftPct} / 100))`,
         width: `calc(((100% - 60px) * ${widthPct} / 100) - 4px)`,
         borderLeftColor: block.color,
+        ...transformStyle,
+        ...(drag.isDragging ? { opacity: 0.7, zIndex: 10 } : {}),
       }}
       onClick={(e) => onClick(box, e)}
       title={block.title}
+      {...(isSignal ? drag.attributes : {})}
+      {...(isSignal ? drag.listeners : {})}
     >
       <div className="tl-block-time">
         {hhmm(block.startISO)}–{hhmm(block.endISO)}

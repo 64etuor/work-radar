@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import {
   Calendar,
   CheckCircle2,
@@ -10,6 +11,7 @@ import {
 
 import type { CalendarEvent, RoutineToday, WorkSignal } from "@/bindings";
 import { calendarColorStyle } from "@/lib/projectCalendarColor";
+import type { DragData, DropData } from "@/components/today/useTimelineDnd";
 
 type Props = {
   unscheduledTodays: WorkSignal[];
@@ -19,9 +21,101 @@ type Props = {
   onToggleRoutine: (routineId: string, done: boolean) => void;
 };
 
+/** 트레이의 미배치 signal 한 row — useDraggable로 캔버스에 drop 가능. */
+function SignalDraggableRow({
+  signal,
+  done,
+  onToggleDone,
+}: {
+  signal: WorkSignal;
+  done: boolean;
+  onToggleDone: (id: string, done: boolean) => void;
+}) {
+  const data: DragData = {
+    from: "tray",
+    signalId: signal.id,
+    title: signal.title,
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `tray:signal:${signal.id}`,
+    data,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className="today-tray-row"
+      data-kind="today"
+      data-dragging={isDragging || undefined}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        type="button"
+        className="today-tray-check"
+        aria-label={done ? "완료 취소" : "완료"}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => onToggleDone(signal.id, !done)}
+      >
+        {done ? (
+          <CheckCircle2 className="size-4 text-q2" />
+        ) : (
+          <Circle className="size-4 text-wr-subtle" />
+        )}
+      </button>
+      <span className="today-tray-title">{signal.title}</span>
+      <span className="today-tray-tag tag-today">Today</span>
+    </div>
+  );
+}
+
+/** 트레이의 미배치 routine 한 row — useDraggable로 캔버스에 drop 가능. */
+function RoutineDraggableRow({
+  routine,
+  onToggleRoutine,
+}: {
+  routine: RoutineToday;
+  onToggleRoutine: (routineId: string, done: boolean) => void;
+}) {
+  const data: DragData = {
+    from: "routine",
+    routineId: routine.id,
+    title: routine.title,
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `tray:routine:${routine.id}`,
+    data,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className="today-tray-row"
+      data-kind="routine"
+      data-dragging={isDragging || undefined}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        type="button"
+        className="today-tray-check"
+        aria-label={routine.done ? "완료 취소" : "완료"}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => onToggleRoutine(routine.id, !routine.done)}
+      >
+        {routine.done ? (
+          <CheckCircle2 className="size-4 text-q2" />
+        ) : (
+          <Circle className="size-4 text-wr-subtle" />
+        )}
+      </button>
+      <Repeat className="size-3.5 text-wr-subtle" />
+      <span className="today-tray-title">{routine.title}</span>
+    </div>
+  );
+}
+
 /**
  * 미배치 트레이(스펙 §3·§D2·§D3). 시간 미지정 Today + 시간 미지정 루틴 + 종일 이벤트(접힘).
- * 본 PR(3)은 read-only — 토글만 동작, 드래그는 PR 5에서 추가.
+ * PR 5: 전체 영역이 droppable("tray") — 캔버스에서 unschedule, signal/routine row는 draggable.
  */
 export function UnscheduledTray({
   unscheduledTodays,
@@ -36,51 +130,34 @@ export function UnscheduledTray({
     unscheduledRoutines.length === 0 &&
     allDayEvents.length === 0;
 
+  const dropData: DropData = { to: "tray" };
+  const { setNodeRef, isOver } = useDroppable({ id: "today-tray", data: dropData });
+
   return (
-    <aside className="today-tray">
+    <aside
+      ref={setNodeRef}
+      className="today-tray"
+      data-drop-over={isOver || undefined}
+    >
       <div className="today-tray-head">미배치</div>
       <div className="today-tray-body">
         {empty && (
           <div className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</div>
         )}
-        {unscheduledTodays.map((s) => {
-          const done = Boolean(s.todayDoneAt);
-          return (
-            <div key={`s-${s.id}`} className="today-tray-row" data-kind="today">
-              <button
-                type="button"
-                className="today-tray-check"
-                aria-label={done ? "완료 취소" : "완료"}
-                onClick={() => onToggleDone(s.id, !done)}
-              >
-                {done ? (
-                  <CheckCircle2 className="size-4 text-q2" />
-                ) : (
-                  <Circle className="size-4 text-wr-subtle" />
-                )}
-              </button>
-              <span className="today-tray-title">{s.title}</span>
-              <span className="today-tray-tag tag-today">Today</span>
-            </div>
-          );
-        })}
+        {unscheduledTodays.map((s) => (
+          <SignalDraggableRow
+            key={`s-${s.id}`}
+            signal={s}
+            done={Boolean(s.todayDoneAt)}
+            onToggleDone={onToggleDone}
+          />
+        ))}
         {unscheduledRoutines.map((r) => (
-          <div key={`r-${r.id}`} className="today-tray-row" data-kind="routine">
-            <button
-              type="button"
-              className="today-tray-check"
-              aria-label={r.done ? "완료 취소" : "완료"}
-              onClick={() => onToggleRoutine(r.id, !r.done)}
-            >
-              {r.done ? (
-                <CheckCircle2 className="size-4 text-q2" />
-              ) : (
-                <Circle className="size-4 text-wr-subtle" />
-              )}
-            </button>
-            <Repeat className="size-3.5 text-wr-subtle" />
-            <span className="today-tray-title">{r.title}</span>
-          </div>
+          <RoutineDraggableRow
+            key={`r-${r.id}`}
+            routine={r}
+            onToggleRoutine={onToggleRoutine}
+          />
         ))}
         {allDayEvents.length > 0 && (
           <div className="today-tray-section">
