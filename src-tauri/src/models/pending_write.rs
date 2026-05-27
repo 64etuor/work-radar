@@ -11,7 +11,7 @@ use sqlx::FromRow;
 /// patch=start/duration_min, delete={}; staged=true는 워커가 skip — cross-cal Acceptance 게이트).
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, Type)]
 pub struct PendingWrite {
-    pub id: i64,
+    pub id: i32,
     /// create | patch | delete.
     pub kind: String,
     /// signal | routine_check.

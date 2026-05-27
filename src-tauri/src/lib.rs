@@ -178,6 +178,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Google Calendar 이벤트 생성 (write 레일, Phase 19).
         commands::list_selected_calendars,
         commands::create_calendar_event,
+        // Today×Timeline 캘린더 sync 큐(Today×Timeline PR 2): pending_calendar_writes IPC.
+        // 외부 호출은 calendar::sync::SyncEngine 워커에서만, IPC는 큐 머지/조회만.
+        commands::stage_calendar_write,
+        commands::commit_staged_writes,
+        commands::cancel_pending_write,
+        commands::list_pending_writes,
         // 네비게이션 설정 (Phase 18 #7) — 글로벌 창 핫키 + 메뉴별 단축키 keymap.
         commands::get_global_hotkey,
         commands::set_global_hotkey,

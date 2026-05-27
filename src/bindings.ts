@@ -346,6 +346,20 @@ export const commands = {
 	 *  실 Google write는 사용자 관찰(헤드리스 불가) — 페이로드 빌드/응답 파싱은 calendar.rs cargo test.
 	 */
 	createCalendarEvent: (projectId: string, calendarId: string, event: CreateCalendarEventInput) => typedError<CreatedCalendarEvent, AppError>(__TAURI_INVOKE("create_calendar_event", { projectId, calendarId, event })),
+	/**
+	 *  UI 드래그/리사이즈/언스케줄/cross-cal 이동을 pending_calendar_writes 큐에 머지하고 워커를 깨운다.
+	 *  외부 호출은 워커에서만 — 이 함수는 SQL UPSERT만 한다.
+	 */
+	stageCalendarWrite: (req: StageWriteRequest) => typedError<null, AppError>(__TAURI_INVOKE("stage_calendar_write", { req })),
+	/**
+	 *  staged=true 행에서 staged 플래그를 제거하고 next_attempt_at을 now로 당겨 워커가 즉시 가져가게 한다
+	 *  (cross-cal Acceptance, spec §6.2). 워커는 깨우기만 — 실제 외부 호출은 워커에서.
+	 */
+	commitStagedWrites: (ids: number[]) => typedError<null, AppError>(__TAURI_INVOKE("commit_staged_writes", { ids })),
+	/**  큐에서 한 행을 지운다(외부 호출 안 함 — UI 취소/롤백 전용). */
+	cancelPendingWrite: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("cancel_pending_write", { id })),
+	/**  디버그/관찰용 큐 스냅샷(created_at DESC). 토큰/외부 응답 본문은 큐에 없으므로 안전. */
+	listPendingWrites: () => typedError<PendingWrite[], AppError>(__TAURI_INVOKE("list_pending_writes")),
 	/**  현재 글로벌 창 핫키 문자열 조회(Settings 표시용). 미설정 시 기본값. */
 	getGlobalHotkey: () => typedError<string, AppError>(__TAURI_INVOKE("get_global_hotkey")),
 	/**
@@ -1064,6 +1078,27 @@ export type NotificationPermission = {
 	granted: boolean,
 };
 
+/**
+ *  pending_calendar_writes 행. payload_json은 op별 자유 형태(create=title/start/duration_min,
+ *  patch=start/duration_min, delete={}; staged=true는 워커가 skip — cross-cal Acceptance 게이트).
+ */
+export type PendingWrite = {
+	id: number,
+	/**  create | patch | delete. */
+	kind: string,
+	/**  signal | routine_check. */
+	target_kind: string,
+	/**  signal id, 또는 `routine_id|date`(routine_check). */
+	target_id: string,
+	calendar_id: string,
+	event_id: string | null,
+	payload_json: string,
+	attempts: number,
+	next_attempt_at: string,
+	last_error: string | null,
+	created_at: string,
+};
+
 /**  외부 API ping 결과 (read-only). 토큰 본문은 포함하지 않는다. */
 export type PingResult = {
 	ok: boolean,
@@ -1378,6 +1413,13 @@ export type SprintStatus = {
 	remainingSeconds: number,
 };
 
+export type StageWriteRequest = {
+	target: WriteTarget,
+	op: WriteOp,
+	/**  같은 키는 (target_kind, target_id, kind) UNIQUE로 머지된다. UI는 디바운스용으로 자유 사용. */
+	idempotency_key: string,
+};
+
 /**  Today 운영 뷰 집계. 캘린더 오늘 이벤트·Today 레일·루틴은 프런트가 기존 헬퍼로 합성한다. */
 export type TodayOverview = {
 	workDebt: WorkDebt,
@@ -1655,6 +1697,27 @@ export type Worktree = {
  *  Diverged(ahead&behind) > Dirty > Ahead > Behind > Clean. 수치는 ahead/behind로 별도 노출.
  */
 export type WorktreeStatus = "clean" | "dirty" | "ahead" | "behind" | "diverged";
+
+/**  stage_calendar_write의 op. 각 분기가 큐 행의 kind/payload/디바운스를 결정한다. */
+export type WriteOp = 
+/**  신규 배치 — create 이벤트, 800ms 디바운스. */
+{ op: "schedule"; at: string; duration_min: number; calendar_id: string; title: string } | 
+/**  시간 이동 — patch(start+duration), 기존 linked event 필요, 800ms 디바운스. */
+{ op: "reschedule"; at: string; duration_min: number } | 
+/**  리사이즈만 — start와 함께 묶어 patch로 보낸다(워커 단순화). 기존 linked event 필요. */
+{ op: "resize"; at: string; duration_min: number } | 
+/**  큐에서 delete → 카드 mirror 정리(scheduled_at/duration/linked_* NULL). */
+{ op: "unschedule" } | 
+/**
+ *  다른 캘린더로 이동 — create with staged=true(commit_staged_writes로 풀릴 때까지 skip).
+ *  기존 이벤트의 delete는 호출자(UI)가 별도 unschedule을 추가로 stage해 처리한다.
+ */
+{ op: "move_calendar"; calendar_id: string; at: string; duration_min: number; title: string } | 
+/**  캘린더에서 빈 슬롯에 새 이벤트(추후 카드와 연결) — 800ms 디바운스. */
+{ op: "create_blank"; title: string; at: string; duration_min: number; calendar_id: string };
+
+/**  stage_calendar_write의 대상. routine_check은 (routine_id, date)로 식별. */
+export type WriteTarget = { kind: "signal"; id: string } | { kind: "routine_check"; routine_id: string; date: string };
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

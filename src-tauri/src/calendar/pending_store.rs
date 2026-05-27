@@ -19,6 +19,7 @@ use crate::models::PendingWrite;
 /// 같은 `(target_kind, target_id, kind)`의 후속 write는 마지막 페이로드로 머지된다(spec §6).
 /// `debounce_ms` 후가 next_attempt_at — 디바운스 윈도우 안의 다중 호출이 합쳐진다.
 /// 머지될 때 attempts/last_error는 리셋(새 의도 = 깨끗한 1차 시도).
+#[allow(clippy::too_many_arguments)] // 큐 행은 본디 8필드 — DTO 도입은 한 호출지점뿐인 지금 과스펙.
 pub async fn upsert_write(
     pool: &SqlitePool,
     kind: &str,
@@ -28,9 +29,9 @@ pub async fn upsert_write(
     event_id: Option<&str>,
     payload_json: &str,
     debounce_ms: i64,
-) -> sqlx::Result<i64> {
+) -> sqlx::Result<i32> {
     let next = format_sqlite_datetime(Utc::now() + Duration::milliseconds(debounce_ms));
-    let row: (i64,) = sqlx::query_as(
+    let row: (i32,) = sqlx::query_as(
         r#"INSERT INTO pending_calendar_writes
              (kind, target_kind, target_id, calendar_id, event_id, payload_json, next_attempt_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -89,7 +90,7 @@ pub async fn fetch_due_writes(pool: &SqlitePool) -> sqlx::Result<Vec<PendingWrit
 
 /// 시도 실패 기록 — attempts += 1, next_attempt_at = now + backoff(prev_attempts), last_error 보존.
 /// 워커가 이 함수 호출 후 `is_terminal_attempt`로 종료 여부 판단(이 함수는 큐를 지우지 않는다).
-pub async fn record_failure(pool: &SqlitePool, id: i64, err: &str) -> sqlx::Result<()> {
+pub async fn record_failure(pool: &SqlitePool, id: i32, err: &str) -> sqlx::Result<()> {
     let row: (i32,) = sqlx::query_as("SELECT attempts FROM pending_calendar_writes WHERE id = ?")
         .bind(id)
         .fetch_one(pool)
@@ -112,7 +113,7 @@ pub async fn record_failure(pool: &SqlitePool, id: i64, err: &str) -> sqlx::Resu
 }
 
 /// 성공/취소/IPC commit 후 큐에서 제거.
-pub async fn delete_write(pool: &SqlitePool, id: i64) -> sqlx::Result<()> {
+pub async fn delete_write(pool: &SqlitePool, id: i32) -> sqlx::Result<()> {
     sqlx::query("DELETE FROM pending_calendar_writes WHERE id = ?")
         .bind(id)
         .execute(pool)
@@ -162,7 +163,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let rows: Vec<(i64, String)> = sqlx::query_as(
+        let rows: Vec<(i32, String)> = sqlx::query_as(
             "SELECT id, payload_json FROM pending_calendar_writes WHERE target_id='s1'",
         )
         .fetch_all(&p)

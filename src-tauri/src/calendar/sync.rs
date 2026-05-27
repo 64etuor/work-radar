@@ -4,9 +4,10 @@
 //! `next_attempt_at = now + debounce_ms` (pending_store.upsert_write) + `fetch_due_writes`
 //! 가 처리.
 //!
-//! INVARIANT #5: bounded retry — 실패는 backoff [1s, 3s, 9s] 3회 후 `last_error` 보존
-//! + emit `CalendarSyncFailed`(spec §6.4). 성공은 큐에서 제거 + emit `CalendarSyncFlushed`.
-//! INVARIANT #2: cross-cal 변경은 payload `staged=true` → `fetch_due_writes`가 skip
+//! INVARIANT #5: bounded retry — 실패는 backoff [1s, 3s, 9s] 3회 후 `last_error` 보존하고
+//! emit `CalendarSyncFailed`(spec §6.4). 성공은 큐에서 제거하고 emit `CalendarSyncFlushed`.
+//!
+//! INVARIANT #2: cross-cal 변경은 payload `staged=true`라 `fetch_due_writes`가 skip한다
 //! (commit_staged_writes IPC가 staged 플래그를 제거할 때만 워커가 가져간다).
 
 use std::sync::Arc;
@@ -241,9 +242,7 @@ impl SyncEngine {
 
 /// `routine_id|date` → `(routine_id, date)`. 형식 어긋나면 None(워커가 mirror 무변경).
 fn split_routine_key(key: &str) -> Option<(&str, &str)> {
-    let mut it = key.splitn(2, '|');
-    let id = it.next()?;
-    let date = it.next()?;
+    let (id, date) = key.split_once('|')?;
     if id.is_empty() || date.is_empty() {
         return None;
     }
