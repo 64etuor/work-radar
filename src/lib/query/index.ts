@@ -3,6 +3,7 @@ export * from "./client";
 export * from "./projects";
 export * from "./tokens";
 export * from "./calendar";
+export * from "./calendarSync";
 export * from "./signals";
 export * from "./today";
 export * from "./retro";
