@@ -1,13 +1,22 @@
-import { useState } from "react";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { FileText, Square } from "lucide-react";
 import type { AgentRunView } from "@/bindings";
-import { useAgentLog } from "@/lib/query";
 import { JOB_STATUS } from "./jobsConstants";
 import { ProposalPanel } from "./ProposalPanel";
 
-export function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void }) {
-  const [open, setOpen] = useState(false);
-  const log = useAgentLog(run.id, open);
+export function JobCard({
+  run,
+  logOpen,
+  log,
+  onToggleLog,
+  onKill,
+}: {
+  run: AgentRunView;
+  logOpen: boolean;
+  log: UseQueryResult<string, Error> | undefined;
+  onToggleLog: () => void;
+  onKill: () => void;
+}) {
   const st = JOB_STATUS[run.status];
   // 실행/대기 중에만 kill (awaiting_approval은 프로세스 종료 → accept/reject로 처리).
   const killable = run.status === "running" || run.status === "proposed";
@@ -43,18 +52,18 @@ export function JobCard({ run, onKill }: { run: AgentRunView; onKill: () => void
         <button
           type="button"
           className="jobs-log-toggle"
-          onClick={() => setOpen((v) => !v)}
+          onClick={onToggleLog}
         >
           <FileText className="size-3.5" />
-          로그 {open ? "닫기" : "보기"}
+          로그 {logOpen ? "닫기" : "보기"}
         </button>
       </div>
 
-      {open && (
+      {logOpen && (
         <pre className="jobs-log">
-          {log.isLoading
+          {log?.isLoading
             ? "로그 불러오는 중…"
-            : log.data?.trim()
+            : log?.data?.trim()
               ? log.data
               : "(로그 없음)"}
         </pre>

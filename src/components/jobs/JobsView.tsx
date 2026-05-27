@@ -2,6 +2,7 @@ import { useState } from "react";
 import "./JobsView.css";
 
 import {
+  useAgentLogs,
   useAgentRuns,
   useCodexStatus,
   useKillAgentRun,
@@ -27,8 +28,19 @@ export function JobsView() {
   const killJob = useKillAgentRun();
 
   const [prompt, setPrompt] = useState("");
+  const [openLogIds, setOpenLogIds] = useState<Set<string>>(new Set());
   const list = runs.data ?? [];
+  const openLogIdList = list.map((run) => run.id).filter((id) => openLogIds.has(id));
+  const logs = useAgentLogs(openLogIdList);
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
+  const toggleLog = (runId: string) => {
+    setOpenLogIds((current) => {
+      const next = new Set(current);
+      if (next.has(runId)) next.delete(runId);
+      else next.add(runId);
+      return next;
+    });
+  };
 
   return (
     <div className="jobs">
@@ -51,7 +63,13 @@ export function JobsView() {
           onPromptChange={setPrompt}
           onCodexSuccess={() => setPrompt("")}
         />
-        <JobList runs={list} onKill={(runId) => killJob.mutate(runId)} />
+        <JobList
+          runs={list}
+          openLogIds={openLogIds}
+          logs={logs}
+          onToggleLog={toggleLog}
+          onKill={(runId) => killJob.mutate(runId)}
+        />
       </div>
     </div>
   );

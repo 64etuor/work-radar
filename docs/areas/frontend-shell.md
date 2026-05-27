@@ -150,6 +150,16 @@ god-component를 분해 못 했다고 done-criteria 미달은 아니다. 안티�
 - react-hooks v7 추가 룰은 warn으로 강등(35건). 35건 일괄 리팩터 금지(`shell-tooling.md` §7).
 - 벤더 디렉터리·`bindings.ts`·`src-tauri`는 ignore.
 
+## 자동 구조 가드
+
+- `pnpm check:frontend-ownership`은 `scripts/check-frontend-ownership.mjs`를 실행한다.
+- pre-commit에서 `cargo fmt --check`, `pnpm typecheck` 다음에 실행되어 다음 회귀를 차단한다:
+  - `atoms/`, `molecules/`, `organisms/` 폴더 생성
+  - `src/styles.css` import-hub 회귀 및 `shared.css`에 component namespace selector 추가
+  - Worktree/Jobs/CaptureBoard child leaf로 query orchestration 이동
+  - WorktreeView/JobsView/CaptureBoard/MatrixCanvas line-budget 초과
+  - MatrixCanvas geometry helper 분리 회귀
+
 ## 정본 / 참조
 
 - `src/store.ts` — view enum + 글로벌 state

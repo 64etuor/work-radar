@@ -7,3 +7,4 @@ set -e
 
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
 pnpm typecheck
+pnpm check:frontend-ownership

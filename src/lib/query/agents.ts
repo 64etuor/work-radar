@@ -2,6 +2,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  useQueries,
 } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import {
@@ -117,6 +118,19 @@ export function useAgentLog(runId: string | null, ready: boolean) {
     enabled: !!runId && ready,
     refetchInterval: ready ? JOBS_POLL_MS : false,
   });
+}
+
+/** 여러 잡 로그 tail. JobsView가 log-open state와 query ownership을 함께 소유한다. */
+export function useAgentLogs(runIds: string[]) {
+  const results = useQueries({
+    queries: runIds.map((runId) => ({
+      queryKey: ["agentLog", runId],
+      queryFn: () => unwrap(commands.readAgentLog(runId)),
+      refetchInterval: JOBS_POLL_MS,
+    })),
+  });
+
+  return new Map(runIds.map((runId, index) => [runId, results[index]]));
 }
 
 // ── Phase 8: PR self-check 자동 초안 (제안 레일 + Acceptance 게이트) ──────────────────
