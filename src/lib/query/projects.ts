@@ -9,6 +9,7 @@ import {
   type CreateProjectInput,
   type CreateRepoInput,
   type SetProjectCalendarColorInput,
+  type SetProjectDefaultWriteCalendarInput,
 } from "@/bindings";
 
 /** 프로젝트 목록 (Phase 0). */
@@ -46,6 +47,22 @@ export function useSetProjectCalendarColor() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["projects"] });
       void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
+    },
+  });
+}
+
+/**
+ * 프로젝트별 "일정 생성 기본 캘린더" 저장 (스펙 §6.5).
+ * Today×Timeline DnD에서 trayrow를 캔버스에 떨어뜨릴 때, 해당 signal의 project default가
+ * 없으면 popover로 묻고 "기본으로 저장" 체크 시 이 mutation으로 영속(다음부터 묻지 않음).
+ */
+export function useSetProjectDefaultWriteCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SetProjectDefaultWriteCalendarInput) =>
+      unwrap(commands.setProjectDefaultWriteCalendar(input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }
