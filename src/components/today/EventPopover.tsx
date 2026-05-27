@@ -62,6 +62,8 @@ export function EventPopover({
             <Button
               size="sm"
               variant="outline"
+              disabled
+              title="PR 7 예정"
               onClick={() => onOpenFullModal(box)}
             >
               더보기

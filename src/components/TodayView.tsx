@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import "./TodayView.css";
 
 import { EventPopover } from "@/components/today/EventPopover";
@@ -71,6 +71,20 @@ export function TodayView() {
     anchor: { x: number; y: number };
   } | null>(null);
 
+  // setPopover는 안정 reference이므로 deps=[] — TimelineCanvas로 내려보내 리렌더 트리거 차단.
+  const handleBlockClick = useCallback(
+    (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setPopover({ box, anchor: { x: rect.right + 8, y: rect.top } });
+    },
+    [],
+  );
+  const handlePopoverClose = useCallback(() => setPopover(null), []);
+  const handleOpenFullModal = useCallback(() => {
+    // PR 7에서 풀 모달(카드 편집/이벤트 상세) 정련. 현 PR은 닫기 자리표시.
+    setPopover(null);
+  }, []);
+
   return (
     <div className="today">
       <TodayHeader
@@ -100,13 +114,7 @@ export function TodayView() {
               date={date}
               today={today}
               boxes={boxes}
-              onBlockClick={(box, e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                setPopover({
-                  box,
-                  anchor: { x: rect.right + 8, y: rect.top },
-                });
-              }}
+              onBlockClick={handleBlockClick}
             />
           )}
         </div>
@@ -115,11 +123,8 @@ export function TodayView() {
         open={popover !== null}
         box={popover?.box ?? null}
         anchor={popover?.anchor ?? null}
-        onClose={() => setPopover(null)}
-        onOpenFullModal={() => {
-          // PR 7에서 풀 모달(카드 편집/이벤트 상세) 정련. 현 PR은 닫기 자리표시.
-          setPopover(null);
-        }}
+        onClose={handlePopoverClose}
+        onOpenFullModal={handleOpenFullModal}
       />
     </div>
   );
