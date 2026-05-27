@@ -33,3 +33,4 @@ logs
 
 # agent visual-check artifacts (playwright MCP screenshots/logs)
 .playwright-mcp/
+.superpowers/
