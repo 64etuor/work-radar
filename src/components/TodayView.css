@@ -467,15 +467,16 @@
   position: absolute;
   inset: 0;
   background: #fff;
-  border: 1px solid var(--wr-border-light);
-  border-left-width: 3px;
-  border-radius: 4px;
-  padding: 2px 6px;
+  border: 1px solid var(--wr-border, #c8c2b0);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 4px 8px;
   font-size: 11px;
   text-align: left;
   overflow: hidden;
   cursor: pointer;
   z-index: 2;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   /*
    * PR 7 motion tokens: subtle hover + active feedback. transform/box-shadow는
    * GPU-accelerated, background는 CSS-paint. drag 중에는 transform이 dnd-kit translate로
@@ -523,12 +524,46 @@
 }
 
 .tl-block-signal {
-  background: #f6f9ff;
+  background: linear-gradient(180deg, #eaf2ff 0%, #dfeaff 100%);
+  border-color: rgba(74, 123, 184, 0.45);
   cursor: grab;
+  box-shadow:
+    0 1px 2px rgba(74, 123, 184, 0.12),
+    0 2px 6px rgba(74, 123, 184, 0.06);
+}
+
+.tl-block-signal:hover {
+  background: linear-gradient(180deg, #e0ecff 0%, #d2e1ff 100%);
+  box-shadow:
+    0 2px 4px rgba(74, 123, 184, 0.18),
+    0 4px 12px rgba(74, 123, 184, 0.1);
 }
 
 .tl-block-signal:active {
   cursor: grabbing;
+}
+
+.tl-block-signal .tl-block-time {
+  color: #4a7bb8;
+  font-weight: 600;
+}
+
+.tl-block-signal .tl-block-title {
+  color: #1a3a5c;
+  font-weight: 600;
+}
+
+/* Google event 블록 — 외부 데이터, 드래그 불가 시각 표시. */
+.tl-block-event {
+  background: #fafaf7;
+  border-style: dashed;
+  border-left-style: solid;
+  opacity: 0.92;
+}
+
+.tl-block-event .tl-block-title {
+  color: var(--wr-subtle);
+  font-style: italic;
 }
 
 /*
