@@ -347,11 +347,29 @@
   overflow: hidden;
   cursor: pointer;
   z-index: 2;
-  transition: background 0.15s ease;
+  /*
+   * PR 7 motion tokens: subtle hover + active feedback. transform/box-shadow는
+   * GPU-accelerated, background는 CSS-paint. drag 중에는 transform이 dnd-kit translate로
+   * 덮이지만 다른 transition은 살아남아 release 시 부드럽게 settle.
+   */
+  transition:
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    transform var(--wr-motion-fast) var(--wr-ease-out),
+    box-shadow var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .tl-block:hover {
   background: #fafaf7;
+}
+
+.tl-block:active {
+  transform: scale(1.02);
+  box-shadow: var(--wr-shadow-sm);
+}
+
+.tl-block:focus-visible {
+  outline: 2px solid var(--wr-color-focus, var(--color-wr-focus, #4c6ee6));
+  outline-offset: 1px;
 }
 
 .tl-block-time {
@@ -389,27 +407,64 @@
   opacity: 0.6;
 }
 
-/* ── 반응형 ────────────────────────────────────────────────────────── */
+/* ── 반응형 (PR 7 정밀화, spec §3) ───────────────────────────────── */
 
-@media (max-width: 1040px) {
+/*
+ * 720–1040: 좌트레이+우캔버스 2열 그리드를 상단 띠+캔버스 1열로 변경.
+ * 트레이는 grid auto-fill로 카드형 칩 — 시간축 가로 스크롤 0 확보.
+ */
+@media (max-width: 1040px) and (min-width: 720px) {
   .today-main {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: minmax(120px, auto) 1fr;
   }
   .today-tray {
     border-right: 0;
     border-bottom: 1px solid var(--wr-border-light);
     max-height: 200px;
   }
+  .today-tray-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 4px;
+  }
 }
 
+/*
+ * <720: 세로 스택. 헤더 debt 칩 wrap. 캔버스는 viewport 기준 가용 높이 사용
+ * (280px 헤더/트레이/staged slot 합계 보정 — 1040 미만 단일 컬럼).
+ */
 @media (max-width: 720px) {
+  .today-main {
+    display: block;
+  }
+  .today-tray {
+    border-right: 0;
+    border-bottom: 1px solid var(--wr-border-light);
+  }
+  .today-canvas-wrap {
+    height: calc(100vh - 280px);
+  }
   .today-head {
     flex-wrap: wrap;
   }
   .today-debt-chips {
     margin-left: 0;
     width: 100%;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+/* ── prefers-reduced-motion 폴백 (PR 7, ADR-0004 a11y) ─────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-block,
+  .today-canvas-now,
+  .today-debt-chip {
+    transition: none;
+  }
+  .tl-block:active {
+    transform: none;
   }
 }
