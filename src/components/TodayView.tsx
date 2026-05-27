@@ -162,13 +162,24 @@ export function TodayView() {
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
   const handleDragStart = useCallback(
-    (ev: { active: { data: { current?: unknown } } }) => {
+    (ev: { active: { id: string | number; data: { current?: unknown } } }) => {
+      // 디버그: 캔버스 블록·resize 핸들 드래그가 시작 안 되는 증상 추적용.
+      // eslint-disable-next-line no-console
+      console.log("[today.dnd] onDragStart", ev.active.id, ev.active.data.current);
       setActiveDrag(ev.active.data.current as DragData | undefined ?? null);
     },
     [],
   );
   const handleDragEndWithReset = useCallback(
     async (ev: Parameters<typeof onDragEnd>[0]) => {
+      // eslint-disable-next-line no-console
+      console.log("[today.dnd] onDragEnd", {
+        active: ev.active.id,
+        over: ev.over?.id,
+        activeData: ev.active.data.current,
+        overData: ev.over?.data.current,
+        delta: ev.delta,
+      });
       setActiveDrag(null);
       await onDragEnd(ev);
     },

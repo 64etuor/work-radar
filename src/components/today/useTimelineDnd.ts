@@ -340,7 +340,9 @@ export function useTimelineDnd(opts: Opts) {
 /** sensors까지 묶어 한 번에 쓸 수 있는 컨테이너 컴포넌트 helper. */
 export function useTodayDndSensors() {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // distance 3px로 낮춤 — 6px은 일부 환경에서 활성화가 느렸다.
+    // delay-based 활성화도 고려 가능(touch 친화)이지만 desktop은 distance가 적합.
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
     useSensor(KeyboardSensor),
   );
   return sensors;
