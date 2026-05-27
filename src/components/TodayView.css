@@ -68,13 +68,13 @@
 }
 
 .today-debt-urgent {
-  color: #b8413a;
-  border-color: #ecc2bf;
+  color: var(--color-today-debt-urgent);
+  border-color: var(--color-today-debt-urgent-border);
 }
 
 .today-debt-warn {
-  color: #b58b1f;
-  border-color: #eddfaa;
+  color: var(--color-today-debt-warn);
+  border-color: var(--color-today-debt-warn-border);
 }
 
 .today-debt-muted {
@@ -306,8 +306,10 @@
   left: 60px;
   right: 0;
   height: 2px;
-  background: #e0584a;
+  background: var(--color-today-now-line);
   z-index: 5;
+  /* PR 7 모션: 분 단위 갱신 시 부드럽게 슬라이드(`top`이 1분=1px이라 60s 일치). */
+  transition: top 60s linear;
 }
 
 .today-canvas-now::before {
@@ -318,7 +320,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #e0584a;
+  background: var(--color-today-now-line);
 }
 
 .today-canvas-cta {

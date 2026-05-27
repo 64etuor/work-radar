@@ -45,6 +45,21 @@
   --color-wr-danger-hover: #ffd9cf; /* 위험 reject hover 배경 */
   --color-wr-success-soft: #e3f1ec; /* 긍정/정상 pale wash 배경 */
 
+  /*
+   * Today×Timeline 시맨틱 컬러 (PR 7 토큰화).
+   * 이전엔 todayBlocks.ts / TodayView.css에 hex literal로 박혀 있었다.
+   * 단일 토큰으로 합치고 light/dark 분리가 필요해지면 .dark 블록에 오버라이드 추가.
+   * --color-event-fallback은 google event projectColor 미수신 시 폴백.
+   */
+  --color-today-signal: #4a7bb8;
+  --color-today-routine: #7aa84e;
+  --color-today-debt-urgent: #b8413a;
+  --color-today-debt-urgent-border: #ecc2bf;
+  --color-today-debt-warn: #b58b1f;
+  --color-today-debt-warn-border: #eddfaa;
+  --color-today-now-line: #e0584a;
+  --color-event-fallback: #888888;
+
   /* Diff semantic colors (worktree diff view) — dark-mode-safe */
   --color-wr-diff-add-bg: #e6f4ec; /* add 줄 배경 */
   --color-wr-diff-add-fg: #1d7a4d; /* add 줄 텍스트 */

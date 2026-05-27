@@ -20,8 +20,14 @@ type Input = {
 };
 
 const ROUTINE_DURATION_MIN = 30;
-const SIGNAL_COLOR = "#4a7bb8";
-const ROUTINE_COLOR = "#7aa84e";
+/**
+ * 컬러는 CSS 토큰(`--color-today-*`, `--color-event-fallback`)을 var()로 참조한다.
+ * 정의는 `src/styles/tokens.css`. 이 값들은 `style.borderLeftColor`로 인라인 적용된다 —
+ * CSS variable string은 그대로 인라인 style에 유효(브라우저 resolve).
+ */
+const SIGNAL_COLOR = "var(--color-today-signal)";
+const ROUTINE_COLOR = "var(--color-today-routine)";
+const EVENT_FALLBACK_COLOR = "var(--color-event-fallback)";
 
 function plusMin(iso: string, m: number): string {
   // 로컬 ISO 보존(예: "2026-05-28T23:30:00"). `.toISOString()`을 쓰면 UTC로 변환되어
@@ -80,7 +86,7 @@ export function buildTodayBlocks({
       startISO: e.start,
       endISO: e.end ?? plusMin(e.start, 30),
       calendarId: e.calendarSummary ?? "",
-      color: e.projectColor ?? "#888",
+      color: e.projectColor ?? EVENT_FALLBACK_COLOR,
     });
   }
 
