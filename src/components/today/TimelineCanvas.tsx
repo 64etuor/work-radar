@@ -14,6 +14,11 @@ type Props = {
   today: string;
   boxes: LayoutBox[];
   onBlockClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
+  /**
+   * 캔버스 그리드 로컬 좌표(Y)를 기록하는 ref. 부모(TodayView)가 소유하고 useTimelineDnd가
+   * onDragEnd에서 마지막 hover Y를 읽는다. dropData에 mutable 객체를 박는 antipattern을 회피.
+   */
+  pointerYRef?: React.MutableRefObject<number | null>;
 };
 
 function nowOffsetPx(): number {
@@ -26,7 +31,7 @@ function nowOffsetPx(): number {
  * PR 5: 그리드 전체가 droppable("canvas") — drop 시 그리드 내부 Y 좌표(gridY)를 dropData에 담아
  * useTimelineDnd가 15분 스냅 ISO로 변환. 드래그 중 hover Y는 setHoverY로 가이드 라인 렌더(선택).
  */
-export function TimelineCanvas({ date, today, boxes, onBlockClick }: Props) {
+export function TimelineCanvas({ date, today, boxes, onBlockClick, pointerYRef }: Props) {
   const [nowPx, setNowPx] = useState<number>(() => nowOffsetPx());
   const [hoverPx, setHoverPx] = useState<number | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -39,26 +44,22 @@ export function TimelineCanvas({ date, today, boxes, onBlockClick }: Props) {
 
   const showNow = date === today;
 
-  // dropData는 매 drop마다 useDroppable 등록 시점의 객체로 잠겨버린다 — gridY는 별도
-  // pointer move 기반으로 추정(setHoverPx) → onDragEnd에서 hoverPx를 함께 dispatch하기 위해
-  // dropData에는 동적 ref를 담는다(아래 callback 객체로 마지막 hoverPx를 노출).
-  const dropDataRef = useRef<DropData>({ to: "canvas", gridY: 0 });
-  const dropData: DropData = dropDataRef.current;
+  // dropData는 상수 — gridY는 dropData에 박지 않는다(@dnd-kit가 register 시점 스냅샷할
+  // 위험 + mutable ref antipattern). 실제 Y 좌표는 부모 pointerYRef에 기록되어
+  // useTimelineDnd가 onDragEnd에서 읽는다.
+  const dropData: DropData = { to: "canvas", gridY: 0 };
   const { setNodeRef, isOver } = useDroppable({ id: "today-canvas", data: dropData });
 
-  // pointer-tracking: 캔버스 위 pointer Y를 그리드 로컬 좌표로 환산해 ref+state 둘 다 갱신.
-  // - state(setHoverPx)는 가이드 라인 렌더용
-  // - ref(dropDataRef.current.gridY)는 onDragEnd에서 마지막 위치를 dispatch
+  // pointer-tracking: 캔버스 위 pointer Y를 그리드 로컬 좌표로 환산.
+  // - state(setHoverPx)는 가이드 라인 렌더용(이 컴포넌트 내부).
+  // - 부모 pointerYRef는 onDragEnd에서 마지막 위치를 읽는 용도(props로 주입).
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
     const el = gridRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const y = Math.max(0, Math.min(24 * HOUR_PX, e.clientY - rect.top));
     setHoverPx(y);
-    if (dropData.to === "canvas") {
-      // dropData는 mutable — useDroppable이 내부적으로 ref로 보관해 매 drop 시 최신 값을 본다.
-      (dropData as { to: "canvas"; gridY: number }).gridY = y;
-    }
+    if (pointerYRef) pointerYRef.current = y;
   }
 
   function onPointerLeave() {

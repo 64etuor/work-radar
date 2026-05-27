@@ -17,7 +17,7 @@
  * 픽셀→시간: 60px/h, 15분 스냅. 로컬 ISO("YYYY-MM-DDTHH:MM:SS")로 빌드 — UTC 미사용
  * (PR 4 todayBlocks.ts plusMin 패턴과 동일, 동일 timezone-drift 버그 방지).
  */
-import { useCallback } from "react";
+import { useCallback, type MutableRefObject } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -110,6 +110,11 @@ type Opts = {
   defaultCalendarFor: (signalId: string) => string | null;
   /** project default가 없을 때 popover를 띄우고 사용자가 고른 캘린더 id를 resolve. */
   promptCalendarPicker: (signalId: string) => Promise<string | null>;
+  /**
+   * 캔버스 그리드 로컬 Y (px). TimelineCanvas가 pointermove로 기록 → onDragEnd에서 읽는다.
+   * dropData에 mutable 객체를 박는 antipattern 회피용 (PR 5 코드리뷰).
+   */
+  canvasPointerYRef?: MutableRefObject<number | null>;
 };
 
 /**
@@ -118,7 +123,13 @@ type Opts = {
  */
 export function useTimelineDnd(opts: Opts) {
   const qc = useQueryClient();
-  const { date, defaultCalendarFor, promptCalendarPicker } = opts;
+  const { date, defaultCalendarFor, promptCalendarPicker, canvasPointerYRef } = opts;
+
+  /** dropData.gridY는 register 시점 스냅샷일 수 있어 신뢰 못함 — 부모 pointer ref 우선. */
+  const resolveCanvasGridY = useCallback(
+    (fallback: number): number => canvasPointerYRef?.current ?? fallback,
+    [canvasPointerYRef],
+  );
 
   /** signals 캐시 + today 레일 캐시(둘 다 WorkSignal[]) 동시 패치. */
   const patchSignalCaches = useCallback(
@@ -150,7 +161,7 @@ export function useTimelineDnd(opts: Opts) {
           defaultCalendarFor(a.signalId) ??
           (await promptCalendarPicker(a.signalId));
         if (!cal) return;
-        const at = pixelToLocalIso(date, o.gridY);
+        const at = pixelToLocalIso(date, resolveCanvasGridY(o.gridY));
         const durationMin = a.durationMin ?? DEFAULT_SCHEDULE_MIN;
         patchSignalCaches(a.signalId, { at, durationMin, calendarId: cal });
         try {
@@ -221,7 +232,7 @@ export function useTimelineDnd(opts: Opts) {
         // routine은 routineId 기반 calendar 매핑이 없으므로 picker만(default lookup 없음).
         const cal = await promptCalendarPicker(a.routineId);
         if (!cal) return;
-        const at = pixelToLocalIso(date, o.gridY);
+        const at = pixelToLocalIso(date, resolveCanvasGridY(o.gridY));
         try {
           await stage({
             kind: "routineSchedule",
@@ -232,10 +243,10 @@ export function useTimelineDnd(opts: Opts) {
             calendarId: cal,
             title: a.title,
           });
-        } catch {
+        } finally {
+          // success/failure 모두 한 번만 invalidate (이전엔 catch + 무조건 중복 호출).
           void qc.invalidateQueries({ queryKey: ["routines"] });
         }
-        void qc.invalidateQueries({ queryKey: ["routines"] });
         return;
       }
 

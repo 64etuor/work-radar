@@ -119,6 +119,8 @@ export function TodayView() {
     resolve: (calendarId: string | null) => void;
   } | null>(null);
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
+  // TimelineCanvas pointer Y — useTimelineDnd가 onDragEnd에서 읽는다.
+  const canvasPointerYRef = useRef<number | null>(null);
 
   const promptCalendarPicker = useCallback(
     (signalId: string) =>
@@ -138,6 +140,7 @@ export function TodayView() {
     date,
     defaultCalendarFor,
     promptCalendarPicker,
+    canvasPointerYRef,
   });
 
   const pickerSignalProjectId = useMemo(() => {
@@ -179,6 +182,7 @@ export function TodayView() {
                 today={today}
                 boxes={boxes}
                 onBlockClick={handleBlockClick}
+                pointerYRef={canvasPointerYRef}
               />
             )}
           </div>
