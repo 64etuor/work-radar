@@ -353,4 +353,5 @@ impact/regret 태깅(`signals.impact_high`/`regret` 마이그레이션)+랭킹 �
 - 한 번에 한 Phase. 그 Phase의 done-criteria 체크박스를 검증 가능한 테스트/관찰로 채울 것.
 - 매 Phase 종료 시 INVARIANTS 7개 위반 여부를 reviewer로 확인. 위반 시 done 아님.
 - done-criteria가 모두 green일 때만 다음 Phase. 실패는 그 Phase에서 반복.
-- 새 결정/트레이드오프는 `docs/decisions.md`(없으면 생성)에 한 줄로 남길 것.
+- 구조적/비싼 결정은 `docs/adr/`에 ADR로 기록하고, 작은 Phase 트레이드오프는
+  `docs/decisions.md`에 한 줄로 남길 것.

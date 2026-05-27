@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  CalendarDays,
+  CircleUserRound,
   FolderGit2,
   FolderOpen,
   Github,
@@ -12,14 +12,22 @@ import type { Project, PromotionTarget } from "@/bindings";
 import {
   useProjectTokenStatus,
   useRepos,
+  useSetProjectCalendarColor,
   useTestNotionConnection,
 } from "@/lib/query";
+import {
+  calendarColorStyle,
+  normalizeHexColor,
+  projectCalendarColors,
+  PROJECT_CALENDAR_PALETTE,
+} from "@/lib/projectCalendarColor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 import { AddRepoForm } from "./AddRepoForm";
-import { GoogleCalendarBlock } from "./GoogleCalendarBlock";
+import { GoogleAccountBlock } from "./GoogleAccountBlock";
 import { TokenRow } from "./TokenRow";
 import { SectionLabel } from "./SettingsKit";
 
@@ -95,7 +103,96 @@ function RepoRow({
   );
 }
 
-/** 프로젝트 한 장: 토큰(Notion/GitHub) + Notion DB + 캘린더 + 레포. */
+function ProjectCalendarColorControl({
+  project,
+  onToast,
+}: {
+  project: Project;
+  onToast: (msg: string) => void;
+}) {
+  const colors = projectCalendarColors(project.id, project.calendarColor);
+  const [draft, setDraft] = useState(colors.background);
+  const saveColor = useSetProjectCalendarColor();
+  const normalizedDraft = normalizeHexColor(draft);
+  const savedBackground = normalizeHexColor(project.calendarColor ?? null) ?? colors.background;
+  const preview = normalizedDraft
+    ? projectCalendarColors(project.id, normalizedDraft)
+    : colors;
+  const dirty = normalizedDraft !== savedBackground;
+
+  const save = (color: string | null) => {
+    if (saveColor.isPending) return;
+    saveColor.mutate(
+      { projectId: project.id, color },
+      {
+        onSuccess: () => {
+          setDraft(projectCalendarColors(project.id, color).background);
+          onToast(color ? "캘린더 색상 저장됨" : "캘린더 색상 기본값으로 복원됨");
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="rounded-lg border border-border px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span
+          className="inline-flex min-w-[104px] items-center justify-center rounded-md border px-3 py-1.5 text-xs font-semibold"
+          style={calendarColorStyle(preview.background, preview.foreground)}
+        >
+          {project.name}
+        </span>
+        <input
+          type="color"
+          value={normalizedDraft ?? colors.background}
+          onChange={(e) => setDraft(e.target.value)}
+          aria-label="프로젝트 캘린더 색상"
+          className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
+        />
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="h-8 w-[112px] font-mono text-xs"
+          aria-label="프로젝트 캘린더 색상 hex"
+        />
+        <div className="flex items-center gap-1">
+          {PROJECT_CALENDAR_PALETTE.map((color) => (
+            <button
+              key={color}
+              type="button"
+              aria-label={`색상 ${color}`}
+              className="size-5 rounded-full border border-border"
+              style={{ backgroundColor: color }}
+              onClick={() => setDraft(color)}
+            />
+          ))}
+        </div>
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => save(null)}
+            disabled={saveColor.isPending || !project.calendarColor}
+          >
+            기본값
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => normalizedDraft && save(normalizedDraft)}
+            disabled={saveColor.isPending || !normalizedDraft || !dirty}
+          >
+            저장
+          </Button>
+        </div>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        배경색만 저장합니다. 일정 제목과 캘린더명 글자색은 대비 기준으로 자동 조정됩니다.
+      </p>
+    </div>
+  );
+}
+
+/** 프로젝트 한 장: 토큰(Notion/GitHub) + Notion DB + Google 계정 + 레포. */
 export function ProjectCard({
   project,
   onToast,
@@ -123,7 +220,7 @@ export function ProjectCard({
             </Badge>
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            토큰은 OS keychain에 저장하고, Notion/GitHub/Calendar 연결은 이 프로젝트 범위에서만 사용합니다.
+            토큰은 OS keychain에 저장하고, Notion/GitHub/Google 계정 연결은 이 프로젝트 범위에서만 사용합니다.
           </p>
         </div>
       </div>
@@ -172,10 +269,11 @@ export function ProjectCard({
 
         <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
           <div className="flex items-center gap-2">
-            <CalendarDays className="size-4 text-muted-foreground" />
-            <SectionLabel>Google Calendar</SectionLabel>
+            <CircleUserRound className="size-4 text-muted-foreground" />
+            <SectionLabel>Google 계정</SectionLabel>
           </div>
-          <GoogleCalendarBlock projectId={project.id} onToast={onToast} />
+          <ProjectCalendarColorControl project={project} onToast={onToast} />
+          <GoogleAccountBlock projectId={project.id} onToast={onToast} />
         </div>
 
         <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">

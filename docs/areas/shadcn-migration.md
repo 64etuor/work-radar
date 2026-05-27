@@ -27,7 +27,7 @@ raw `<button>/<input>`을 발견해도 즉시 변환하지 않는다:
    - `overflow:hidden` 부모 안 인라인 에디터(`MatrixCanvas` `postit-edit` — Textarea 링이 클립),
    - 키스트로크 캡처 필드(capture-Esc, NavigationSettings 키캡처),
    - 복합 컨트롤(요일토글·세그먼트 — `toggle-group` 도입 후에도 5+ 오버라이드면 keep),
-   - 디스클로저/체크박스가 label 행 전체 클릭(GoogleCalendarBlock, TokenRow, RoutinesPanel).
+   - 디스클로저/체크박스가 label 행 전체 클릭(GoogleAccountBlock, TokenRow, RoutinesPanel).
 3. **클린 매핑(≤~3 오버라이드 + 회귀 0)일 때만 변환.** 강제 변환 시 레이아웃/동작/포커스가
    회귀한다(Wave 1.2 AgentStatusBar 무변환 결정).
 

@@ -24,17 +24,17 @@ export function useCalendarEvents(date: string) {
   });
 }
 
-/** 프로젝트별 Google Calendar 연결 상태(hasClient/connected). 토큰 본문 미노출. */
-export function useGoogleCalendarStatus(projectId: string) {
+/** 프로젝트별 Google 계정 연결 상태(hasClient/connected). 토큰 본문 미노출. */
+export function useGoogleAccountStatus(projectId: string) {
   return useQuery({
-    queryKey: ["googleCalendarStatus", projectId],
+    queryKey: ["googleAccountStatus", projectId],
     queryFn: () => unwrap(commands.googleCalendarStatus(projectId)),
     enabled: !!projectId,
   });
 }
 
 /** OAuth client(client_id/secret) 저장. 본문은 IPC 인자로만 전달, 캐시 미저장. */
-export function useSetGoogleOauthClient() {
+export function useSetGoogleAccountOauthClient() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -48,34 +48,42 @@ export function useSetGoogleOauthClient() {
     }) =>
       unwrap(commands.setGoogleOauthClient(projectId, clientId, clientSecret)),
     onSuccess: (_data, v) =>
-      qc.invalidateQueries({ queryKey: ["googleCalendarStatus", v.projectId] }),
+      qc.invalidateQueries({ queryKey: ["googleAccountStatus", v.projectId] }),
   });
 }
 
 /** loopback + PKCE OAuth 실행(브라우저 동의 → refresh_token keychain 저장). bounded timeout. */
-export function useStartGoogleOauth() {
+export function useStartGoogleAccountOauth() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) =>
       unwrap(commands.startGoogleOauth(projectId)),
     onSuccess: (_data, projectId) =>
-      qc.invalidateQueries({ queryKey: ["googleCalendarStatus", projectId] }),
+      qc.invalidateQueries({ queryKey: ["googleAccountStatus", projectId] }),
+  });
+}
+
+/** 진행 중인 loopback OAuth 대기를 취소한다. */
+export function useCancelGoogleAccountOauth() {
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      unwrap(commands.cancelGoogleOauth(projectId)),
   });
 }
 
 /** 연결 해제(keychain blob 삭제). */
-export function useDisconnectGoogle() {
+export function useDisconnectGoogleAccount() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) =>
       unwrap(commands.disconnectGoogle(projectId)),
     onSuccess: (_data, projectId) =>
-      qc.invalidateQueries({ queryKey: ["googleCalendarStatus", projectId] }),
+      qc.invalidateQueries({ queryKey: ["googleAccountStatus", projectId] }),
   });
 }
 
 /** 연결 검증(read-only refresh). 결과(PingResult)를 호출부가 표시. */
-export function usePingGoogleCalendar() {
+export function usePingGoogleAccount() {
   return useMutation({
     mutationFn: (projectId: string) =>
       unwrap(commands.pingGoogleCalendar(projectId)),

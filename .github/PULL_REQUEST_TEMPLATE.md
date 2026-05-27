@@ -18,7 +18,7 @@ work-radar PR 템플릿. 규칙 출처: AGENTS.md(Working Agreement) + PLAN.md �
 
 ## Architecture Fit — 아키텍처 적합성
 
-> `docs/architecture.md` 구조와 `docs/decisions.md` 결정에 부합하는 이유. 레일 경계(결정/제안/실행)를 침범하지 않음을 명시.
+> `docs/architecture.md`, 관련 ADR, `docs/decisions.md` 결정에 부합하는 이유. 레일 경계(결정/제안/실행)를 침범하지 않음을 명시.
 
 -
 
@@ -55,7 +55,8 @@ work-radar PR 템플릿. 규칙 출처: AGENTS.md(Working Agreement) + PLAN.md �
 
 - [ ] 문서 변경 불필요
 - [ ] `docs/` 업데이트 (architecture/design 등)
-- [ ] `docs/decisions.md`에 결정/트레이드오프 한 줄 추가
+- [ ] `docs/adr/`에 구조적 결정 추가/갱신
+- [ ] `docs/decisions.md`에 Phase 트레이드오프 한 줄 추가
 - [ ] `DESIGN.md` 업데이트 (UI/시각 변경 시)
 
 ## Risks / Rollback / Migration

@@ -7,6 +7,7 @@ export const commands = {
 	/**  모든 프로젝트 목록. Phase 0에서는 빈 DB라 빈 배열을 반환한다. */
 	listProjects: () => typedError<Project[], AppError>(__TAURI_INVOKE("list_projects")),
 	createProject: (input: CreateProjectInput) => typedError<Project, AppError>(__TAURI_INVOKE("create_project", { input })),
+	setProjectCalendarColor: (input: SetProjectCalendarColorInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_calendar_color", { input })),
 	listRepos: (projectId: string) => typedError<Repo[], AppError>(__TAURI_INVOKE("list_repos", { projectId })),
 	createRepo: (input: CreateRepoInput) => typedError<Repo, AppError>(__TAURI_INVOKE("create_repo", { input })),
 	/**  토큰 저장. 토큰은 IPC 인자로만 들어와 즉시 keychain으로 가고, 반환되지 않는다. */
@@ -278,6 +279,11 @@ export const commands = {
 	 *  client 미입력이면 Err(graceful degrade). 실 네트워크/브라우저라 cargo test 아님(사용자 관찰).
 	 */
 	startGoogleOauth: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("start_google_oauth", { projectId })),
+	/**
+	 *  진행 중인 loopback OAuth 대기를 취소한다. 브라우저 창을 닫았거나 잘못 열었을 때 UI가 180초
+	 *  timeout을 기다리지 않고 재시도할 수 있게 한다.
+	 */
+	cancelGoogleOauth: (projectId: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cancel_google_oauth", { projectId })),
 	/**  연결 상태(client 입력됨 / refresh_token 보유). 토큰 본문 미노출(graceful degrade 판정용). */
 	googleCalendarStatus: (projectId: string) => typedError<GoogleCalendarStatus, AppError>(__TAURI_INVOKE("google_calendar_status", { projectId })),
 	/**  연결 해제: keychain blob 전체(client + refresh_token) 삭제. */
@@ -562,6 +568,10 @@ export type CalendarEvent = {
 	/**  이벤트 딥링크 (`htmlLink`). */
 	url: string | null,
 	projectId: string,
+	/**  프로젝트 캘린더 표시 배경색(`#RRGGBB`). */
+	projectColor: string,
+	/**  `project_color` 위에서 읽히는 자동 텍스트색(`#111827` 또는 `#FFFFFF`). */
+	projectTextColor: string,
 };
 
 /**  calendarList 한 항목 (다중 선택 picker용). selected = 저장된 선택 목록에 포함됨. Phase 10b. */
@@ -1016,6 +1026,8 @@ export type Project = {
 	 *  INVARIANT #7: 선택 목록만 로컬 SSOT — 이벤트는 ambient(영속 없음), 토큰은 keychain.
 	 */
 	googleCalendarIds: string | null,
+	/**  캘린더 표시 배경색(`#RRGGBB`). NULL이면 project id 기반 기본 팔레트. */
+	calendarColor: string | null,
 	credentialRef: string,
 	createdAt: string,
 	updatedAt: string,
@@ -1163,6 +1175,12 @@ export type SelfCheckItem = {
 	item: string,
 	checked?: boolean,
 	note: string | null,
+};
+
+/**  프로젝트별 캘린더 표시 색상 변경 입력. `color=NULL`은 기본 팔레트로 되돌림. */
+export type SetProjectCalendarColorInput = {
+	projectId: string,
+	color: string | null,
 };
 
 /**  신호 출처. */

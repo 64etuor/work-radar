@@ -1,11 +1,17 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use tauri::State;
+use tokio_util::sync::CancellationToken;
 
 use crate::cache::TtlCache;
 use crate::calendar::{self, CalendarCreds, CalendarProvider};
-use crate::commands::projects::fetch_projects;
+use crate::commands::projects::{
+    effective_project_calendar_color, fetch_projects, readable_text_color,
+};
 use crate::commands::tokens::project_credential_ref;
 use crate::db::Db;
 use crate::error::AppError;
@@ -14,6 +20,57 @@ use crate::models::{
     CalendarEvent, CalendarListItem, CreateCalendarEventInput, CreatedCalendarEvent,
     GoogleCalendarStatus, PingResult, SelectedCalendar, TokenKind,
 };
+
+#[derive(Clone)]
+struct GoogleOauthAttempt {
+    id: u64,
+    cancel: CancellationToken,
+}
+
+fn oauth_attempts() -> &'static Mutex<HashMap<String, GoogleOauthAttempt>> {
+    static ATTEMPTS: OnceLock<Mutex<HashMap<String, GoogleOauthAttempt>>> = OnceLock::new();
+    ATTEMPTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn lock_oauth_attempts() -> MutexGuard<'static, HashMap<String, GoogleOauthAttempt>> {
+    match oauth_attempts().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn begin_google_oauth_attempt(project_id: &str) -> GoogleOauthAttempt {
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let attempt = GoogleOauthAttempt {
+        id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+        cancel: CancellationToken::new(),
+    };
+    let previous = lock_oauth_attempts().insert(project_id.to_string(), attempt.clone());
+    if let Some(previous) = previous {
+        previous.cancel.cancel();
+    }
+    attempt
+}
+
+fn finish_google_oauth_attempt(project_id: &str, attempt_id: u64) {
+    let mut attempts = lock_oauth_attempts();
+    if attempts
+        .get(project_id)
+        .is_some_and(|attempt| attempt.id == attempt_id)
+    {
+        attempts.remove(project_id);
+    }
+}
+
+fn cancel_google_oauth_attempt(project_id: &str) -> bool {
+    let attempt = lock_oauth_attempts().remove(project_id);
+    if let Some(attempt) = attempt {
+        attempt.cancel.cancel();
+        true
+    } else {
+        false
+    }
+}
 
 // ── Google Calendar OAuth (Phase 10a, read 레일) ───────────────────────────────────
 //
@@ -88,34 +145,55 @@ pub async fn start_google_oauth(db: State<'_, Db>, project_id: String) -> Result
             )
         })?;
 
-    // PKCE + state + loopback bind(redirect_uri 확정) → 브라우저 열기 → redirect 수신(bounded).
-    let verifier = calendar::gen_code_verifier();
-    let challenge = calendar::pkce_challenge(&verifier);
-    let state = calendar::gen_state();
-    let loopback = calendar::Loopback::bind().await?;
-    let redirect_uri = loopback.redirect_uri.clone();
-    let url = calendar::auth_url(&creds.client_id, &redirect_uri, &challenge, &state);
-    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| {
-        AppError::terminal("calendar.browser_open", format!("브라우저 열기 실패: {e}"))
-    })?;
+    let attempt = begin_google_oauth_attempt(&project_id);
+    let result = async {
+        // PKCE + state + loopback bind(redirect_uri 확정) → 브라우저 열기 → redirect 수신(bounded).
+        let verifier = calendar::gen_code_verifier();
+        let challenge = calendar::pkce_challenge(&verifier);
+        let state = calendar::gen_state();
+        let loopback = calendar::Loopback::bind().await?;
+        let redirect_uri = loopback.redirect_uri.clone();
+        let url = calendar::auth_url(&creds.client_id, &redirect_uri, &challenge, &state);
+        tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| {
+            AppError::terminal("calendar.browser_open", format!("브라우저 열기 실패: {e}"))
+        })?;
 
-    let (code, recv_state) = loopback
-        .wait_for_redirect(calendar::LOOPBACK_TIMEOUT)
-        .await?;
-    if recv_state != state {
-        return Err(AppError::terminal(
-            "calendar.oauth_state_mismatch",
-            "OAuth state 불일치 (CSRF 의심) — 다시 시도하세요",
-        ));
+        let (code, recv_state) = tokio::select! {
+            result = loopback.wait_for_redirect(calendar::LOOPBACK_TIMEOUT) => result?,
+            _ = attempt.cancel.cancelled() => {
+                return Err(AppError::cancelled(
+                    "calendar.oauth_cancelled",
+                    "Google Calendar 연결 대기를 취소했습니다",
+                ));
+            }
+        };
+        if recv_state != state {
+            return Err(AppError::terminal(
+                "calendar.oauth_state_mismatch",
+                "OAuth state 불일치 (CSRF 의심) — 다시 시도하세요",
+            ));
+        }
+
+        let provider = calendar::HttpCalendarProvider::new()?;
+        let updated =
+            calendar::connect_core(&provider, creds, &code, &verifier, &redirect_uri).await?;
+        Ok(keychain::set_token(
+            &cref,
+            TokenKind::GoogleCalendar,
+            &updated.to_blob(),
+        )?)
     }
+    .await;
+    finish_google_oauth_attempt(&project_id, attempt.id);
+    result
+}
 
-    let provider = calendar::HttpCalendarProvider::new()?;
-    let updated = calendar::connect_core(&provider, creds, &code, &verifier, &redirect_uri).await?;
-    Ok(keychain::set_token(
-        &cref,
-        TokenKind::GoogleCalendar,
-        &updated.to_blob(),
-    )?)
+/// 진행 중인 loopback OAuth 대기를 취소한다. 브라우저 창을 닫았거나 잘못 열었을 때 UI가 180초
+/// timeout을 기다리지 않고 재시도할 수 있게 한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn cancel_google_oauth(project_id: String) -> Result<bool, AppError> {
+    Ok(cancel_google_oauth_attempt(&project_id))
 }
 
 /// 연결 상태(client 입력됨 / refresh_token 보유). 토큰 본문 미노출(graceful degrade 판정용).
@@ -351,8 +429,19 @@ async fn fetch_events_windowed(
                 if calendars.is_empty() {
                     continue;
                 }
+                let configured_color: Option<String> =
+                    sqlx::query_scalar("SELECT calendar_color FROM projects WHERE id = ?1")
+                        .bind(&pid)
+                        .fetch_optional(db)
+                        .await?
+                        .flatten();
+                let project_color =
+                    effective_project_calendar_color(&pid, configured_color.as_deref());
+                let project_text_color = readable_text_color(&project_color);
                 ctxs.push(calendar::ProjectCalendars {
-                    project_id: pid,
+                    project_id: pid.clone(),
+                    project_color,
+                    project_text_color,
                     access_token: access,
                     calendars: calendars.into_iter().map(|c| (c.id, c.summary)).collect(),
                 });
@@ -561,7 +650,30 @@ mod tests {
             location: None,
             url: None,
             project_id: "p".into(),
+            project_color: "#2D6CDF".into(),
+            project_text_color: "#FFFFFF".into(),
         }
+    }
+
+    #[test]
+    fn google_oauth_attempts_are_cancelled_and_removed() {
+        static TEST_ID: AtomicU64 = AtomicU64::new(1);
+        let project_id = format!("oauth-test-{}", TEST_ID.fetch_add(1, Ordering::Relaxed));
+        let first = begin_google_oauth_attempt(&project_id);
+        assert!(!first.cancel.is_cancelled());
+
+        let second = begin_google_oauth_attempt(&project_id);
+        assert!(first.cancel.is_cancelled());
+        assert!(!second.cancel.is_cancelled());
+
+        assert!(cancel_google_oauth_attempt(&project_id));
+        assert!(second.cancel.is_cancelled());
+        assert!(!cancel_google_oauth_attempt(&project_id));
+
+        let third = begin_google_oauth_attempt(&project_id);
+        finish_google_oauth_attempt(&project_id, third.id + 1);
+        assert!(cancel_google_oauth_attempt(&project_id));
+        assert!(third.cancel.is_cancelled());
     }
 
     /// INVARIANT #1/#2 펜스(plan 검증): 미분류 카드 + **제목 매칭** 캘린더 이벤트가 임박하면 긴급도 점수가

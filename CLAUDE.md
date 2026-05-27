@@ -28,7 +28,8 @@
 - `docs/reference/commands.md` — 빌드·검증 명령(정본). 이 파일에 명령 중복 금지.
 - `DESIGN.md` — 시각 디자인 정본 (Cohere white editorial).
 - `docs/architecture.md` — 시스템 구조·모듈 경계.
-- `docs/decisions.md` — 결정/트레이드오프 한 줄 기록(매 커밋 후).
+- `docs/adr/` — 구조적 결정 기록. accepted/rejected ADR 본문은 freeze.
+- `docs/decisions.md` — 작은 Phase 트레이드오프/운영 breadcrumb 한 줄 기록.
 
 ## Git / PR
 
@@ -40,4 +41,4 @@
 - **self-approve 금지.** INVARIANT 위반 여부는 별도 reviewer 패스(critic 등).
 - **검증은 실제 실행 증거로.** 체크박스 = 관찰 결과. prose 우회 금지.
 - **가장 작은 변경.** 요청 범위 밖 리팩터·정리 금지.
-- **결정/트레이드오프는 `docs/decisions.md`에** 한 줄.
+- **구조적 결정은 `docs/adr/`, 작은 Phase 트레이드오프는 `docs/decisions.md`에** 기록.

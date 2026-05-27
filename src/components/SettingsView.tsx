@@ -30,7 +30,7 @@ import { NewsSourceSettings } from "./settings/NewsSourceSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 import { AgentsPane } from "./settings/AgentsPane";
-import { GoogleCalendarBlock } from "./settings/GoogleCalendarBlock";
+import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
 import { SectionLabel } from "./settings/SettingsKit";
 
 type SettingsCategory =
@@ -47,10 +47,10 @@ const CATEGORIES: {
   icon: React.ComponentType<{ className?: string }>;
   blurb: string;
 }[] = [
-  { id: "projects", label: "프로젝트", icon: FolderOpen, blurb: "개인/업무 프로젝트와 Notion·GitHub·캘린더 연결을 관리합니다." },
+  { id: "projects", label: "프로젝트", icon: FolderOpen, blurb: "개인/업무 프로젝트와 Notion·GitHub·Google 계정 연결을 관리합니다." },
   { id: "agents", label: "에이전트", icon: Bot, blurb: "Codex CLI 상태와 에이전트 모델을 설정합니다." },
   { id: "shortcuts", label: "단축키", icon: Keyboard, blurb: "뷰 전환 단축키와 키맵을 설정합니다." },
-  { id: "integrations", label: "통합", icon: Link2, blurb: "Google Calendar·Hermes 브리지 연결을 관리합니다." },
+  { id: "integrations", label: "통합", icon: Link2, blurb: "Google 계정·Hermes 브리지 연결을 관리합니다." },
   { id: "notifications", label: "알림", icon: Bell, blurb: "데스크톱 알림과 트리거를 설정합니다." },
   { id: "news", label: "뉴스", icon: Newspaper, blurb: "보드 하단 티커에 표시할 외부 뉴스 소스를 켜고 끕니다." },
 ];
@@ -288,10 +288,10 @@ function ProjectsPane({
             }}
           />
         ) : selectedProject ? (
-          <ProjectCard project={selectedProject} onToast={pushSuccess} />
+          <ProjectCard key={selectedProject.id} project={selectedProject} onToast={pushSuccess} />
         ) : (
           <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground">
-            프로젝트를 선택하면 토큰, Notion DB, 캘린더, 레포 설정을 볼 수 있습니다.
+            프로젝트를 선택하면 토큰, Notion DB, Google 계정, 레포 설정을 볼 수 있습니다.
           </div>
         )}
       </div>
@@ -359,14 +359,14 @@ function IntegrationsPane({
   return (
     <>
       <div className="flex flex-col gap-3">
-        <SectionLabel>Google Calendar</SectionLabel>
+        <SectionLabel>Google 계정</SectionLabel>
         {list.length === 0 && (
           <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">
-            프로젝트를 먼저 추가한 뒤 각 프로젝트에서 Google Calendar를 연결하세요.
+            프로젝트를 먼저 추가한 뒤 각 프로젝트에서 Google 계정을 연결하세요.
           </div>
         )}
         {list.map((p) => (
-          <GoogleCalendarBlock key={p.id} projectId={p.id} onToast={pushSuccess} />
+          <GoogleAccountBlock key={p.id} projectId={p.id} onToast={pushSuccess} />
         ))}
       </div>
 

@@ -25,7 +25,7 @@ typecheck/lint/build green 확인됨.
   - `src/components/settings/kit.tsx`: `SectionLabel`, `Field`, `StatusDot`, `Segmented`.
   - `src/styles.css` 끝 shadcn 토큰 레이어: `:root`/`.dark` + `@theme inline` + 앱 전역 다크(`.dark`가 `--color-wr-*` 오버라이드) + `--destructive-soft`.
   - `store.ts` `theme`+`toggleTheme`(localStorage `wr-theme`), `App.tsx` 루트 `dark` 클래스, 설정 헤더 다크 토글.
-- **Projects 패널 재설계**(훅/핸들러 보존): `SettingsView.tsx`, `AddProjectForm.tsx`(티켓 제거, `ticketKeyPattern: null`), `ProjectCard.tsx`(티켓·read-only 표시 제거), `TokenRow.tsx`(CLI 가져오기/웹 로그인 1차+고급 붙여넣기; 삭제=destructiveOutline), `GoogleCalendarBlock.tsx`(OAuth+피커; read-only→읽기+쓰기; 연결 해제=destructiveOutline), `AddRepoForm.tsx`(티켓 제거, 폴더 선택 유지).
+- **Projects 패널 재설계**(훅/핸들러 보존): `SettingsView.tsx`, `AddProjectForm.tsx`(티켓 제거, `ticketKeyPattern: null`), `ProjectCard.tsx`(티켓·read-only 표시 제거), `TokenRow.tsx`(CLI 가져오기/웹 로그인 1차+고급 붙여넣기; 삭제=destructiveOutline), `GoogleAccountBlock.tsx`(OAuth+피커; read-only→읽기+쓰기; 연결 해제=destructiveOutline), `AddRepoForm.tsx`(티켓 제거, 폴더 선택 유지).
 - **잔재(미추적)**: `src/poc/`·`poc.html`(styleguide, @/components/ui 사용) = git `??`. `daisyui` devDependency 미사용 잔존. 참고: `src/components/AgentStatusBar.tsx`가 "poc" 문자열 참조 → 삭제 전 확인 필요(PR D).
 
 ---

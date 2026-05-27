@@ -1,8 +1,11 @@
 # Work Radar — Decisions Log
 
-각 Phase에서 내린 결정/트레이드오프를 한 줄로 남긴다 (AGENTS.md 규칙).
+각 Phase에서 내린 작은 결정/트레이드오프를 한 줄로 남긴다. 구조적/비싼 결정의 정본은
+`docs/adr/`에 둔다.
 
 ## Phase 0 — 스켈레톤 & 스파인
+
+- **ADR 체계 도입(2026-05-27).** 구조적/비싼 결정은 `docs/adr/`(accepted/rejected 본문 freeze)에 기록하고, 이 파일은 Phase별 chronology/운영 breadcrumb로 유지. 정본: `docs/adr/0001-adopt-adr-governance.md`.
 
 - **Tailwind v4 채택** (CSS-first, `@tailwindcss/vite` 플러그인 + `@theme`): 현재 기본 라인. v3식 `tailwind.config.js` 대신 `src/styles.css`에 토큰 정의.
 - **keyring 3.x 사용** (`apple-native` feature): keyring 4.x는 `keyring-core` + 별도 backend 크레이트로 재패키징되어 feature가 비어 있음 → 안정적이고 문서화된 3.6.x API(`Entry`/`set_password`/`get_password`/`delete_credential`) 채택.
@@ -433,3 +436,4 @@
 - **PR D-Tune — 뉴스 글로벌 옵션 + Notify 즉시 적용 머지(2026-05-25)**: `news_options` 단일 row(total_limit/per_source_limit/sort_mode/fetch_interval_minutes, CHECK constraints) + `options_store` 멱등 re-seed get(`INSERT ON CONFLICT DO NOTHING` then SELECT) + `NewsOptions::default()`(30/10/Recent/15). `store::list_recent`이 `(db, opts, filters)` — ROW_NUMBER() OVER(PARTITION BY source) 윈도우로 per-source 캡, `order_clause(SortMode) -> &'static str` closed-set 절(recent/comments/mixed), mixed는 `rn ASC, source ASC, posted_at DESC`로 결정적 라운드로빈. fetcher: `tokio::time::interval` 유지(drift 보정) + `MissedTickBehavior::Delay` 명시(R1) + `tokio::sync::Notify`로 옵션 변경 즉시 깨움 — `fetch_interval=0`은 진짜 park(Notify만 대기 + 1h PARK_TIMEOUT 안전망). `select_next_wake(ticker, notify) -> WakeReason` 헬퍼 추출(R6) — spawn_loop와 단위 테스트가 같은 코드 경로 호출. breaking IPC: `news_list_recent()` limit 인자 제거(opts에서). IPC 2개 추가: `news_get_options`/`news_set_options`(set 후 notify_one). `tokio test-util` dev-dep 추가(`start_paused`/`advance`). `NewsOptionsForm` 컴포넌트(`Field`/`SectionLabel`) `NewsFiltersForm` 위에 마운트. INVARIANT #1 표시-only·#5 bounded retry(주기 floor 5분, 0=park). **deviation**: `WakeReason` → `pub(crate)`(clippy `-D private-interfaces` 요구). 검증: cargo test news:: 39/39 pass·clippy 0·bindings export pass·typecheck 0·lint 0 errors(49 baseline). bindings drift 0(`rg newsListRecent\(` → 인자 없는 호출 1건만).
 - **God component refactor direction (2026-05-27)**: adopt **Orchestrator + Domain Sections + Leaves** for Worktree/Jobs/CaptureBoard refactors, not atomic design; containers retain query/mutation/state ownership, children render workflow-named sections via props, and MatrixCanvas remains a separate high-risk read-only-first pass because drag/ref/Esc geometry is load-bearing.
 - **Frontend ownership guard (2026-05-27)**: enforce the god-component refactor result with `pnpm check:frontend-ownership` in pre-commit; the guard blocks atomic folders, styles hub/shared namespace regressions, child query orchestration leaks, MatrixCanvas geometry re-inline, and line-budget drift.
+- **프로젝트별 캘린더 색상(2026-05-27)**: `projects.calendar_color`에 `#RRGGBB` 배경색만 저장하고, NULL이면 project id 기반 기본 팔레트를 사용한다. Calendar 이벤트 DTO는 `projectColor/projectTextColor`를 포함해 Drawer/Today/Timeline이 동일한 대비 규칙을 쓰며, 텍스트색은 저장하지 않고 배경색 luminance 대비로 자동 산출한다.

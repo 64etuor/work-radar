@@ -67,7 +67,9 @@ settings-refactor B(2026-05-24)에서 결정:
 - `AddProjectForm.tsx`, `AddRepoForm.tsx`, `ProjectCard.tsx`
 - `TokenRow.tsx` — 토큰 입력. `type="password"`, 로컬 useState만, 저장 후 비움. 토큰을
   query/zustand 캐시에 저장 금지.
-- `GoogleCalendarBlock.tsx` — OAuth 연결 + 다중 캘린더 선택 (Phase 10).
+- `GoogleAccountBlock.tsx` — Google 계정 OAuth 연결 + 다중 캘린더 선택 (Phase 10).
+- 프로젝트별 캘린더 색상은 `projects.calendar_color`에 배경색만 저장하고, 일정 표시 글자색은 대비
+  계산으로 자동 산출한다.
 - `HermesBridgeBlock.tsx` — 봇 토큰 설정.
 - `NotificationSettings.tsx`, `NavigationSettings.tsx`(키캡처 위젯 bespoke), `AgentsPane.tsx`.
 - `NewsSourceSettings.tsx` — 카테고리 그룹화, 키워드 필터.

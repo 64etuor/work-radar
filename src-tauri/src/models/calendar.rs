@@ -55,6 +55,10 @@ pub struct CalendarEvent {
     /// 이벤트 딥링크 (`htmlLink`).
     pub url: Option<String>,
     pub project_id: String,
+    /// 프로젝트 캘린더 표시 배경색(`#RRGGBB`).
+    pub project_color: String,
+    /// `project_color` 위에서 읽히는 자동 텍스트색(`#111827` 또는 `#FFFFFF`).
+    pub project_text_color: String,
 }
 
 /// 카드 → 캘린더 이벤트 생성 입력 (직접 모달, Phase 19). 사용자 폼 = 사람 결정이라 Acceptance 게이트

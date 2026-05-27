@@ -183,6 +183,8 @@ mod tests {
             location: None,
             url: None,
             project_id: "p".into(),
+            project_color: "#2D6CDF".into(),
+            project_text_color: "#FFFFFF".into(),
         }
     }
 

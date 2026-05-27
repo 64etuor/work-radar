@@ -198,7 +198,7 @@ PR-R-CalendarLeak 머지 **후** 진행.
 - [ ] 6 슬라이스 각 ≤ 400 LOC, mod.rs ≤ 200 LOC
 - [ ] `cargo test calendar::`
 - [ ] `cargo clippy -D warnings`
-- [ ] OAuth 통합 스모크 (수동, 1회): 새 Google Calendar 연결 성공
+- [ ] OAuth 통합 스모크 (수동, 1회): 새 Google 계정 연결 성공
 
 ### 백로그 (이 플랜 스코프 외)
 

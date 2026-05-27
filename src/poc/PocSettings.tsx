@@ -3,9 +3,9 @@ import {
   ArrowLeft,
   Bell,
   Bot,
-  Calendar,
   Check,
   ChevronRight,
+  CircleUserRound,
   FolderGit2,
   FolderOpen,
   Github,
@@ -214,15 +214,15 @@ function TokenRow({
   );
 }
 
-function CalendarRow() {
+function GoogleAccountRow() {
   return (
     <div className="rounded-lg border border-border">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <Calendar className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Google Calendar</span>
-          <StatusDot on>연결됨</StatusDot>
-          <Badge variant="outline">read-only</Badge>
+          <CircleUserRound className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Google 계정</span>
+          <StatusDot on>계정 연결됨</StatusDot>
+          <Badge variant="outline">calendar</Badge>
         </div>
         <div className="flex items-center gap-1.5">
           <Button variant="outline" size="sm">
@@ -320,8 +320,8 @@ function ProjectCard({
           </div>
 
           <div className="flex flex-col gap-2.5">
-            <SectionLabel>Google Calendar</SectionLabel>
-            <CalendarRow />
+            <SectionLabel>Google 계정</SectionLabel>
+            <GoogleAccountRow />
           </div>
 
           <div className="flex flex-col gap-2.5">
@@ -386,7 +386,7 @@ export function PocSettings() {
           <div>
             <h2 className="text-lg font-semibold tracking-tight">프로젝트</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              개인/업무 프로젝트와 Notion·GitHub·캘린더 연결을 관리합니다.
+              개인/업무 프로젝트와 Notion·GitHub·Google 계정 연결을 관리합니다.
             </p>
           </div>
 

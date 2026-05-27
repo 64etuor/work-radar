@@ -224,7 +224,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
           <span className="cev-lbl">캘린더</span>
           {noCalendars ? (
             <div className="cev-empty">
-              선택된 캘린더가 없습니다 — 설정에서 Google Calendar 연결 후 캘린더를
+              선택된 캘린더가 없습니다 — 설정에서 Google 계정 연결 후 캘린더를
               선택하세요.
             </div>
           ) : (

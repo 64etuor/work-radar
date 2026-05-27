@@ -3,7 +3,9 @@ use tauri::State;
 use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{CreateProjectInput, CreateRepoInput, Project, Repo, WorkSignal};
+use crate::models::{
+    CreateProjectInput, CreateRepoInput, Project, Repo, SetProjectCalendarColorInput, WorkSignal,
+};
 use crate::notion::normalize_notion_db_id;
 
 // ── Projects (Phase 0) ────────────────────────────────────────────────────────
@@ -26,7 +28,7 @@ pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, AppError> 
 
 /// Project SELECT/RETURNING 공통 컬럼.
 const PROJECT_COLS: &str = "id, name, kind, notion_backlog_db_id, notion_agenda_db_id, \
-     google_calendar_ids, credential_ref, \
+     google_calendar_ids, calendar_color, credential_ref, \
      created_at, updated_at";
 /// Repo SELECT/RETURNING 공통 컬럼.
 const REPO_COLS: &str = "id, project_id, provider, remote_url, local_path, default_branch, \
@@ -85,6 +87,100 @@ pub async fn create_project(
             other => AppError::from(other),
         }
     })
+}
+
+const PROJECT_CALENDAR_PALETTE: [&str; 8] = [
+    "#2D6CDF", "#1F8A70", "#B45309", "#C2410C", "#7C3AED", "#0F766E", "#BE123C", "#4D7C0F",
+];
+
+pub(crate) fn default_project_calendar_color(project_id: &str) -> String {
+    let mut hash: u64 = 14_695_981_039_346_656_037;
+    for b in project_id.as_bytes() {
+        hash ^= u64::from(*b);
+        hash = hash.wrapping_mul(1_099_511_628_211);
+    }
+    PROJECT_CALENDAR_PALETTE[(hash as usize) % PROJECT_CALENDAR_PALETTE.len()].to_string()
+}
+
+pub(crate) fn normalize_project_calendar_color(
+    input: Option<&str>,
+) -> Result<Option<String>, String> {
+    let Some(raw) = input else {
+        return Ok(None);
+    };
+    let s = raw.trim();
+    if s.is_empty() {
+        return Ok(None);
+    }
+    let hex = s.strip_prefix('#').unwrap_or(s);
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("calendar color must be #RRGGBB".into());
+    }
+    Ok(Some(format!("#{hex}", hex = hex.to_ascii_uppercase())))
+}
+
+pub(crate) fn readable_text_color(background: &str) -> String {
+    fn channel(v: u8) -> f64 {
+        let x = f64::from(v) / 255.0;
+        if x <= 0.03928 {
+            x / 12.92
+        } else {
+            ((x + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    let hex = background
+        .trim()
+        .strip_prefix('#')
+        .unwrap_or(background.trim());
+    if hex.len() != 6 {
+        return "#111827".to_string();
+    }
+    let parse = |range: std::ops::Range<usize>| u8::from_str_radix(&hex[range], 16).ok();
+    let (Some(r), Some(g), Some(b)) = (parse(0..2), parse(2..4), parse(4..6)) else {
+        return "#111827".to_string();
+    };
+    let luminance = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+    let contrast_dark = (luminance + 0.05) / 0.05;
+    let contrast_light = 1.05 / (luminance + 0.05);
+    if contrast_light > contrast_dark {
+        "#FFFFFF".to_string()
+    } else {
+        "#111827".to_string()
+    }
+}
+
+pub(crate) fn effective_project_calendar_color(project_id: &str, color: Option<&str>) -> String {
+    normalize_project_calendar_color(color)
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| default_project_calendar_color(project_id))
+}
+
+pub(crate) async fn update_project_calendar_color(
+    db: &Db,
+    input: &SetProjectCalendarColorInput,
+) -> Result<Project, AppError> {
+    let color = normalize_project_calendar_color(input.color.as_deref())
+        .map_err(|e| AppError::validation("projects.invalid_calendar_color", e))?;
+    sqlx::query_as::<_, Project>(&format!(
+        "UPDATE projects SET calendar_color = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {PROJECT_COLS}"
+    ))
+    .bind(&input.project_id)
+    .bind(&color)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_project_calendar_color(
+    db: State<'_, Db>,
+    input: SetProjectCalendarColorInput,
+) -> Result<Project, AppError> {
+    update_project_calendar_color(db.inner(), &input).await
 }
 
 // ── Repos (project별 멀티 레포) ───────────────────────────────────────────────
@@ -177,6 +273,53 @@ mod tests {
             "project별 keychain 키는 분리"
         );
         assert_eq!(fetch_projects(&db).await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn project_calendar_color_is_validated_and_resettable() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+
+        let updated = update_project_calendar_color(
+            &db,
+            &SetProjectCalendarColorInput {
+                project_id: proj.id.clone(),
+                color: Some("2d6cdf".into()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.calendar_color.as_deref(), Some("#2D6CDF"));
+
+        let invalid = update_project_calendar_color(
+            &db,
+            &SetProjectCalendarColorInput {
+                project_id: proj.id.clone(),
+                color: Some("not-a-color".into()),
+            },
+        )
+        .await;
+        assert!(invalid.is_err());
+
+        let reset = update_project_calendar_color(
+            &db,
+            &SetProjectCalendarColorInput {
+                project_id: proj.id,
+                color: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(reset.calendar_color.is_none());
+    }
+
+    #[test]
+    fn readable_text_color_picks_high_contrast_foreground() {
+        assert_eq!(readable_text_color("#111827"), "#FFFFFF");
+        assert_eq!(readable_text_color("#F8FAFC"), "#111827");
+        assert!(default_project_calendar_color("project-a").starts_with('#'));
     }
 
     /// repo 추가 후 project별 목록에 표시되고 default_branch 기본값이 채워진다.

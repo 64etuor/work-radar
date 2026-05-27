@@ -28,7 +28,7 @@ feature와 광범위 refactor를 섞지 않는다. 무관 파일 정리도 같�
 - INVARIANT 체크(`docs/areas/decision-rails.md`의 7개)
 - 위험·롤백·마이그레이션 노트
 - 실행한 검증 명령(`docs/reference/commands.md`) **출력 포함**
-- 문서/`docs/decisions.md` 업데이트
+- 문서/`docs/adr/` 또는 `docs/decisions.md` 업데이트
 - 의도적 deferred follow-up
 
 ## Push 규칙 (이 레포 한정)
@@ -65,7 +65,8 @@ agent 기본 PATH에 cargo 없음 → `export PATH="$HOME/.cargo/bin:$PATH" && g
 ## Phase 종료 시
 
 - INVARIANTS reviewer 패스(self-approve 금지). `oh-my-claudecode:critic` 등.
-- `docs/decisions.md`에 결정/트레이드오프 한 줄.
+- 구조적/비싼 결정은 `docs/adr/`에 ADR로 기록하고, 작은 Phase 트레이드오프는
+  `docs/decisions.md`에 한 줄로 기록.
 - done-criteria 전부 green일 때만 다음 Phase.
 
 ## Dependabot
@@ -75,6 +76,7 @@ agent 기본 PATH에 cargo 없음 → `export PATH="$HOME/.cargo/bin:$PATH" && g
 ## 정본 / 참조
 
 - `.github/PULL_REQUEST_TEMPLATE.md`
+- `docs/adr/README.md`
 - `.husky/pre-commit`, `.husky/pre-push`
 - `.github/workflows/ci.yml`
 - `~/.claude/projects/-Users-davidpark-private-project-work-radar/memory/work-radar-push-to-dev-only.md`

@@ -1,42 +1,67 @@
-import { useEffect, useState } from "react";
-import { Calendar, Check } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CircleUserRound, Check, X } from "lucide-react";
 
 import {
-  useDisconnectGoogle,
-  useGoogleCalendarStatus,
+  useCancelGoogleAccountOauth,
+  useDisconnectGoogleAccount,
+  useGoogleAccountStatus,
   useGoogleCalendars,
-  usePingGoogleCalendar,
-  useSetGoogleOauthClient,
+  usePingGoogleAccount,
+  useSetGoogleAccountOauthClient,
   useSetSelectedCalendars,
-  useStartGoogleOauth,
+  useStartGoogleAccountOauth,
 } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionLabel, StatusDot } from "./SettingsKit";
+import { googleAccountOauthViewState } from "./googleAccountUx";
 
 /**
- * 프로젝트별 Google Calendar 연결 (read+write — 캘린더 목록·이벤트 생성).
+ * 프로젝트별 Google 계정 연결 (현재 Calendar read+write — 캘린더 목록·이벤트 생성).
  * INVARIANT: client_id/secret은 **로컬 입력 상태에만** 잠시 머물고 저장(IPC) 직후 비운다.
  * refresh_token/secret은 keychain에만. 미연결/네트워크 실패는 기능 비활성(graceful degrade).
  */
-export function GoogleCalendarBlock({
+export function GoogleAccountBlock({
   projectId,
   onToast,
 }: {
   projectId: string;
   onToast: (msg: string) => void;
 }) {
-  const status = useGoogleCalendarStatus(projectId);
-  const setClient = useSetGoogleOauthClient();
-  const startOauth = useStartGoogleOauth();
-  const disconnect = useDisconnectGoogle();
-  const ping = usePingGoogleCalendar();
+  const status = useGoogleAccountStatus(projectId);
+  const setClient = useSetGoogleAccountOauthClient();
+  const startOauth = useStartGoogleAccountOauth();
+  const cancelOauth = useCancelGoogleAccountOauth();
+  const disconnect = useDisconnectGoogleAccount();
+  const ping = usePingGoogleAccount();
 
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [oauthAttempt, setOauthAttempt] = useState<{ id: number; startedAt: number } | null>(null);
+  const [oauthElapsedMs, setOauthElapsedMs] = useState(0);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const currentAttempt = useRef<number | null>(null);
+  const nextAttempt = useRef(1);
 
   const hasClient = status.data?.hasClient ?? false;
   const connected = status.data?.connected ?? false;
+  const oauthWaiting = oauthAttempt !== null;
+  const oauthState = googleAccountOauthViewState({
+    hasClient,
+    connected,
+    waiting: oauthWaiting,
+    elapsedMs: oauthElapsedMs,
+  });
+
+  useEffect(() => {
+    if (!oauthAttempt) {
+      return;
+    }
+    const tick = () => setOauthElapsedMs(Date.now() - oauthAttempt.startedAt);
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [oauthAttempt]);
 
   const saveClient = () => {
     const id = clientId.trim();
@@ -48,22 +73,52 @@ export function GoogleCalendarBlock({
         onSuccess: () => {
           setClientId("");
           setClientSecret("");
-          onToast("OAuth client 저장됨 (keychain) — '연결'을 진행하세요");
+          onToast("Google OAuth client 저장됨 (keychain) — Google 계정을 연결하세요");
         },
       },
     );
   };
 
   const connect = () => {
-    if (startOauth.isPending) return;
+    if (oauthWaiting || !hasClient) return;
+    const attemptId = nextAttempt.current++;
+    currentAttempt.current = attemptId;
+    setOauthError(null);
+    setOauthAttempt({ id: attemptId, startedAt: Date.now() });
+    startOauth.reset();
     startOauth.mutate(projectId, {
-      onSuccess: () => onToast("Google Calendar 연결됨"),
+      onSuccess: () => {
+        if (currentAttempt.current !== attemptId) return;
+        onToast("Google 계정 연결됨");
+      },
+      onError: (e) => {
+        if (currentAttempt.current !== attemptId) return;
+        setOauthError((e as Error).message);
+      },
+      onSettled: () => {
+        if (currentAttempt.current !== attemptId) return;
+        currentAttempt.current = null;
+        setOauthAttempt(null);
+        setOauthElapsedMs(0);
+      },
+    });
+  };
+
+  const cancelWaiting = () => {
+    if (!oauthWaiting) return;
+    currentAttempt.current = null;
+    setOauthAttempt(null);
+    setOauthElapsedMs(0);
+    setOauthError(null);
+    startOauth.reset();
+    cancelOauth.mutate(projectId, {
+      onSuccess: () => onToast("Google 계정 동의 대기 취소됨"),
     });
   };
 
   const remove = () => {
     disconnect.mutate(projectId, {
-      onSuccess: () => onToast("Google Calendar 연결 해제됨"),
+      onSuccess: () => onToast("Google 계정 연결 해제됨"),
     });
   };
 
@@ -73,20 +128,20 @@ export function GoogleCalendarBlock({
     <div className="rounded-lg border border-border">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <Calendar className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Google Calendar</span>
+          <CircleUserRound className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Google 계정</span>
           <StatusDot on={connected}>
-            {connected ? "연결됨" : hasClient ? "client 입력됨" : "미설정"}
+            {connected ? "계정 연결됨" : hasClient ? "client 입력됨" : "미설정"}
           </StatusDot>
         </div>
         <div className="flex items-center gap-1.5">
           <Button
             size="sm"
             onClick={connect}
-            disabled={!hasClient || startOauth.isPending}
-            title={hasClient ? "브라우저로 Google 동의 진행" : "먼저 client를 저장하세요"}
+            disabled={oauthState.primaryDisabled}
+            title={hasClient ? "브라우저로 Google 계정 동의 진행" : "먼저 client를 저장하세요"}
           >
-            {startOauth.isPending ? "동의 대기 중…" : connected ? "다시 연결" : "연결"}
+            {oauthState.primaryLabel}
           </Button>
           {connected && (
             <Button
@@ -145,19 +200,50 @@ export function GoogleCalendarBlock({
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">
           Google Cloud Console에서 <b>Desktop</b> OAuth client를 만들어 입력하세요. 캘린더
-          목록·이벤트 생성을 위해 <code>calendar</code>(읽기+쓰기) 범위를 씁니다. 읽기 전용으로
-          연결했었다면 <b>"다시 연결"</b>로 재동의하세요.
+          목록·이벤트 생성을 위해 현재는 <code>calendar</code>(읽기+쓰기) 범위를 씁니다.
+          Gmail·Drive·Sheets 기능이 추가되면 같은 Google 계정 연결에서 필요한 권한을 더 요청할 수
+          있습니다. 읽기 전용이나 이전 권한으로 연결했었다면 <b>"다시 연결"</b>로 재동의하세요.
         </p>
       </div>
 
-      {startOauth.isPending && (
-        <div className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
-          브라우저에서 Google 동의를 완료하세요…
+      {oauthState.showWaitingPanel && (
+        <div
+          className={`flex items-start justify-between gap-3 border-t border-border px-4 py-2.5 text-xs ${
+            oauthState.waitingTone === "stale"
+              ? "text-[color:var(--destructive)]"
+              : "text-muted-foreground"
+          }`}
+        >
+          <div className="min-w-0">
+            <div className="font-medium text-foreground">
+              Google 계정 동의 대기 중 · {oauthState.elapsedLabel}
+            </div>
+            <div className="mt-0.5">{oauthState.waitingMessage}</div>
+          </div>
+          {oauthState.showCancel && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 gap-1 px-2 text-xs"
+              onClick={cancelWaiting}
+              disabled={cancelOauth.isPending}
+              title="현재 OAuth 대기를 취소하고 다시 시도할 수 있게 합니다"
+            >
+              <X className="size-3" />
+              {cancelOauth.isPending ? "취소 중" : "취소"}
+            </Button>
+          )}
         </div>
       )}
-      {startOauth.isError && (
+      {(oauthError || startOauth.isError) && !oauthWaiting && (
         <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
-          {String(startOauth.error)}
+          {oauthError ?? String(startOauth.error)}
+        </div>
+      )}
+      {cancelOauth.isError && (
+        <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
+          {String(cancelOauth.error)}
         </div>
       )}
       {ping.isError && (
@@ -191,17 +277,16 @@ function CalendarPicker({
 }) {
   const calendars = useGoogleCalendars(projectId, true);
   const save = useSetSelectedCalendars();
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (calendars.data) {
-      setChecked(new Set(calendars.data.filter((c) => c.selected).map((c) => c.id)));
-    }
-  }, [calendars.data]);
+  const [draftChecked, setDraftChecked] = useState<Set<string> | null>(null);
+  const savedChecked = useMemo(
+    () => new Set(calendars.data?.filter((c) => c.selected).map((c) => c.id) ?? []),
+    [calendars.data],
+  );
+  const checked = draftChecked ?? savedChecked;
 
   const toggle = (id: string) => {
-    setChecked((prev) => {
-      const next = new Set(prev);
+    setDraftChecked((prev) => {
+      const next = new Set(prev ?? checked);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
@@ -216,10 +301,12 @@ function CalendarPicker({
     save.mutate(
       { projectId, calendars: selected },
       {
-        onSuccess: () =>
+        onSuccess: () => {
+          setDraftChecked(null);
           onToast(
             selected.length > 0 ? `캘린더 ${selected.length}개 선택 저장` : "캘린더 선택 비움",
-          ),
+          );
+        },
       },
     );
   };
@@ -234,7 +321,7 @@ function CalendarPicker({
           const isReconnect = msg.includes("재연결 필요");
           return (
             <div className="text-xs text-[color:var(--destructive)]">
-              {isReconnect ? "재연결 필요 — Google Calendar를 다시 연결하세요" : msg}
+              {isReconnect ? "재연결 필요 — Google 계정을 다시 연결하세요" : msg}
             </div>
           );
         })()}

@@ -39,7 +39,7 @@ export const PERSIST_ALLOWED_KEY_PREFIXES: readonly string[] = [
   "projects",
   // 연결/도구 상태 표시(토큰 본문 미포함 — 상태 플래그만).
   "tokenStatus",
-  "googleCalendarStatus",
+  "googleAccountStatus",
   "ghCliStatus",
   "ntnCliStatus",
   "codexStatus",

@@ -8,6 +8,7 @@ import {
   commands,
   type CreateProjectInput,
   type CreateRepoInput,
+  type SetProjectCalendarColorInput,
 } from "@/bindings";
 
 /** 프로젝트 목록 (Phase 0). */
@@ -33,6 +34,19 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: (input: CreateProjectInput) => unwrap(commands.createProject(input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  });
+}
+
+/** 프로젝트별 캘린더 표시 배경색 저장. 글자색은 배경색 대비로 자동 산출된다. */
+export function useSetProjectCalendarColor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SetProjectCalendarColorInput) =>
+      unwrap(commands.setProjectCalendarColor(input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
+    },
   });
 }
 

@@ -17,6 +17,7 @@ import {
 
 import type { CalendarEvent, WorkSignal } from "@/bindings";
 import { stepDate } from "@/lib/calendarRange";
+import { calendarColorStyle } from "@/lib/projectCalendarColor";
 import {
   ageFromForDate,
   isTodayDone,
@@ -172,20 +173,20 @@ export function TodayView() {
           {noCalendarsConfigured ? (
             <div className="today-state">
               <p className="today-state-msg">
-                Google Calendar가 연결되지 않았습니다. 연결하면 일정이 여기에 표시됩니다.
+                Google 계정이 연결되지 않았습니다. 연결하면 일정이 여기에 표시됩니다.
               </p>
               <Button
                 className="rounded-full px-[18px] text-[13px]"
                 onClick={() => goTo("settings")}
               >
-                Google Calendar 연결
+                Google 계정 연결
               </Button>
             </div>
           ) : (
             <>
               {events.isError && (
                 <div className="today-hint">
-                  캘린더를 불러오지 못했습니다 — 설정에서 Google Calendar 연결을 확인하세요.
+                  캘린더를 불러오지 못했습니다 — 설정에서 Google 계정 연결을 확인하세요.
                 </div>
               )}
               {!events.isError && (events.data ?? []).length === 0 && (
@@ -205,6 +206,7 @@ export function TodayView() {
                   key={e.id}
                   type="button"
                   className="today-event"
+                  style={calendarColorStyle(e.projectColor, e.projectTextColor)}
                   onClick={() => e.url && void openExternal(e.url)}
                 >
                   <span className="today-event-time">{eventTime(e.start)}</span>
@@ -370,6 +372,7 @@ function EventChip({ ev, allDay }: { ev: CalendarEvent; allDay?: boolean }) {
     <button
       type="button"
       className="today-allday-chip"
+      style={calendarColorStyle(ev.projectColor, ev.projectTextColor)}
       onClick={() => ev.url && void openExternal(ev.url)}
       title={ev.calendarSummary}
     >

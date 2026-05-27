@@ -68,17 +68,17 @@
   align-items: center;
   gap: 5px;
   border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-bg);
+  background: var(--project-calendar-bg, var(--color-wr-bg));
   border-radius: 999px;
   padding: 3px 10px;
   font: 400 12px var(--font-sans);
-  color: var(--color-wr-fg);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
 }
 .tl .tl-chip-cal {
   cursor: pointer;
 }
 .tl .tl-chip-cal:hover {
-  background: var(--color-wr-surface);
+  filter: brightness(0.96);
 }
 .tl .tl-chip-q1 {
   background: var(--color-wr-coral-soft);
@@ -127,18 +127,19 @@
   gap: 10px;
   border: 1px solid var(--color-wr-card-border);
   border-radius: 8px;
-  background: var(--color-wr-surface);
+  background: var(--project-calendar-bg, var(--color-wr-surface));
+  color: var(--project-calendar-fg, var(--color-wr-fg));
   padding: 6px 10px;
   cursor: pointer;
   text-align: left;
 }
 .tl .tl-event:hover {
-  background: var(--color-wr-hover);
+  filter: brightness(0.96);
 }
 .tl .tl-event-time {
   flex: 0 0 auto;
   font: 600 11px var(--font-mono);
-  color: var(--color-wr-fg);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
 }
 .tl .tl-event-title {
   flex: 1;
@@ -151,7 +152,7 @@
 .tl .tl-event-cal {
   flex: 0 0 auto;
   font: 400 11px var(--font-mono);
-  color: var(--color-wr-subtle);
+  color: var(--project-calendar-fg, var(--color-wr-subtle));
 }
 .tl .tl-foot {
   display: inline-flex;

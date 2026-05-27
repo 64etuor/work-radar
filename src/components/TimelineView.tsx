@@ -11,6 +11,7 @@ import {
 import type { CalendarEvent, WorkSignal } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { calendarColorStyle } from "@/lib/projectCalendarColor";
 import {
   ageFromForDate,
   localToday,
@@ -119,7 +120,7 @@ export function TimelineView() {
 
       <div className="tl-scroll">
         {events.isError && (
-          <div className="tl-hint">캘린더를 불러오지 못했습니다 — 설정에서 Google Calendar 연결을 확인하세요.</div>
+          <div className="tl-hint">캘린더를 불러오지 못했습니다 — 설정에서 Google 계정 연결을 확인하세요.</div>
         )}
 
         {/* untimed 밴드: all-day + (오늘) Today 레일 + Q1 */}
@@ -134,6 +135,7 @@ export function TimelineView() {
                   key={e.id}
                   type="button"
                   className="tl-chip tl-chip-cal"
+                  style={calendarColorStyle(e.projectColor, e.projectTextColor)}
                   onClick={() => e.url && void openExternal(e.url)}
                   title={e.calendarSummary}
                 >
@@ -176,6 +178,7 @@ export function TimelineView() {
                         key={e.id}
                         type="button"
                         className="tl-event"
+                        style={calendarColorStyle(e.projectColor, e.projectTextColor)}
                         onClick={() => e.url && void openExternal(e.url)}
                       >
                         <span className="tl-event-time">

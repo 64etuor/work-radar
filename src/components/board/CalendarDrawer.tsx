@@ -182,7 +182,7 @@ export function CalendarDrawer({ open, onClose }: Props) {
           {noCalendarsConfigured ? (
             <div className="caldrawer-state">
               <p className="caldrawer-state-msg">
-                Google Calendar가 연결되지 않았습니다.
+                Google 계정이 연결되지 않았습니다.
               </p>
               <Button
                 type="button"
@@ -192,7 +192,7 @@ export function CalendarDrawer({ open, onClose }: Props) {
                   goTo("settings");
                 }}
               >
-                Google Calendar 연결
+                Google 계정 연결
               </Button>
             </div>
           ) : eventsQ.isLoading ? (

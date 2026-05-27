@@ -42,6 +42,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_projects,
         // Projects / Repos / 토큰 (Phase 2).
         commands::create_project,
+        commands::set_project_calendar_color,
         commands::list_repos,
         commands::create_repo,
         commands::set_project_token,
@@ -152,6 +153,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Google Calendar OAuth 연결 (read 레일, Phase 10a).
         commands::set_google_oauth_client,
         commands::start_google_oauth,
+        commands::cancel_google_oauth,
         commands::google_calendar_status,
         commands::disconnect_google,
         commands::ping_google_calendar,

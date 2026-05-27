@@ -124,6 +124,8 @@ pub trait CalendarProvider {
 /// 한 프로젝트의 fetch 컨텍스트(access token + 선택 캘린더 [(id, summary)]).
 pub struct ProjectCalendars {
     pub project_id: String,
+    pub project_color: String,
+    pub project_text_color: String,
     pub access_token: String,
     pub calendars: Vec<(String, String)>,
 }
@@ -158,6 +160,8 @@ pub async fn fetch_events_core<P: CalendarProvider>(
                     location: r.location,
                     url: r.url,
                     project_id: proj.project_id.clone(),
+                    project_color: proj.project_color.clone(),
+                    project_text_color: proj.project_text_color.clone(),
                 });
             }
         }

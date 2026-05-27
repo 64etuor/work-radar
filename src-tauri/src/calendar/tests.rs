@@ -189,6 +189,8 @@ async fn fetch_events_core_merges_sorts_isolates() {
     let projects = vec![
         ProjectCalendars {
             project_id: "pA".into(),
+            project_color: "#2D6CDF".into(),
+            project_text_color: "#FFFFFF".into(),
             access_token: "a".into(),
             calendars: vec![
                 ("calA".into(), "업무".into()),
@@ -197,6 +199,8 @@ async fn fetch_events_core_merges_sorts_isolates() {
         },
         ProjectCalendars {
             project_id: "pB".into(),
+            project_color: "#1F8A70".into(),
+            project_text_color: "#FFFFFF".into(),
             access_token: "b".into(),
             calendars: vec![("calBoom".into(), "깨짐".into())], // 실패 → 격리
         },
@@ -218,6 +222,8 @@ async fn fetch_events_core_empty_selection_is_empty() {
         &provider,
         vec![ProjectCalendars {
             project_id: "p".into(),
+            project_color: "#2D6CDF".into(),
+            project_text_color: "#FFFFFF".into(),
             access_token: "a".into(),
             calendars: vec![],
         }],

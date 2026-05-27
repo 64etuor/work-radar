@@ -23,11 +23,12 @@ work-radar는 **단일 패키지** Tauri 데스크톱 앱(Rust + Vite/React). �
 1. 자동화된 검사(`docs/reference/commands.md` + CI)와 그 결과
 2. `AGENTS.md`(이 파일) + 변경이 닿는 도메인의 `docs/areas/<area>.md` + 그 area가 가리키는 정본 문서
 3. `PLAN.md` §1 INVARIANTS = `docs/areas/decision-rails.md`(추출본)
-4. `docs/decisions.md` 직전 결정(이력)
-5. 닿은 영역의 기존 로컬 패턴
+4. `docs/adr/`의 accepted ADR(구조적 결정)
+5. `docs/decisions.md` 직전 결정(Phase 이력/운영 로그)
+6. 닿은 영역의 기존 로컬 패턴
 
 규칙 충돌 시 자동화 검사를 위반하지 않는 한도에서 **가장 국소적인 규칙**을 따른다.
-스킬(OMC 등)은 추천일 뿐 — 위 1–5를 override 하지 않는다.
+스킬(OMC 등)은 추천일 뿐 — 위 1–6을 override 하지 않는다.
 
 ## Before Editing
 
@@ -77,7 +78,7 @@ PR 본문에 반드시:
 - 왜 현재 아키텍처에 맞나(area 문서 참조)
 - 위험·롤백·마이그레이션 노트
 - 실행한 검증 명령(`docs/reference/commands.md` 인덱스)
-- 문서/`docs/decisions.md` 업데이트
+- 문서/`docs/adr/` 또는 `docs/decisions.md` 업데이트
 - 의도적 deferred follow-up
 
 상세 템플릿: `.github/PULL_REQUEST_TEMPLATE.md`.
@@ -106,7 +107,8 @@ PR 본문에 반드시:
 ## Phase 종료 시
 
 - INVARIANTS 7개 위반 여부를 별도 reviewer 패스로 확인(self-approve 금지).
-- 새 결정/트레이드오프는 `docs/decisions.md`에 한 줄.
+- 구조적/비싼 결정은 `docs/adr/`에 ADR로 기록하고, 작은 Phase 트레이드오프는
+  `docs/decisions.md`에 한 줄로 남긴다.
 - done-criteria 전부 green일 때만 다음 Phase.
 
 ## Important Paths (index)
@@ -134,4 +136,5 @@ Area 문서:
 - `docs/architecture.md` — 시스템 구조
 - `DESIGN.md` — 시각 디자인 정본
 - `PLAN.md` — Phase 계획(INVARIANTS는 `decision-rails.md`로 이전)
-- `docs/decisions.md` — 결정 로그(append-only)
+- `docs/adr/` — 구조적 결정 기록(accepted/rejected 본문 freeze)
+- `docs/decisions.md` — Phase별 결정 로그(append-only)

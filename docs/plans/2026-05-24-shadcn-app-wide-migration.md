@@ -82,7 +82,7 @@
   - **스모크 구현 메커니즘(cmux, 검증됨)**: `cmux browser`로 `vite dev`(:1420) 접속 → `addinitscript`로 tauri 스텁+`hide` 스파이 주입 → 모달 열고 `press Escape` → `eval`로 `window.__omcHide`(빈배열)·모달 닫힘 단언. §1.3 참조. (Playwright MCP는 tauri webview 미구동이라 불가 — cmux 브라우저로 해결.)
 
 ### PR 0.5 — settings 잔여 raw 정리 + commands.md MN1 [tiny]
-- `SettingsView`(b3)·`settings/NavigationSettings`(b2)·`settings/TokenRow`(b1)·`settings/kit.tsx`(b1)·`settings/GoogleCalendarBlock`(i1)의 잔여 raw 프리미티브 → shadcn.
+- `SettingsView`(b3)·`settings/NavigationSettings`(b2)·`settings/TokenRow`(b1)·`settings/kit.tsx`(b1)·`settings/GoogleAccountBlock`(i1)의 잔여 raw 프리미티브 → shadcn.
 - **MN1**: `docs/reference/commands.md`의 "lint 스크립트 없음"(21-22·75-76행)을 `pnpm lint`(=`eslint .`) 존재로 갱신.
 - **Done**: settings 트리 raw `<button>`/`<input>` 0(grep), commands.md lint 항목 정확, 검증(1.3).
 

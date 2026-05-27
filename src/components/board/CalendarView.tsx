@@ -9,6 +9,7 @@ import {
   toLocalISODate,
   weekDays,
 } from "@/lib/calendarRange";
+import { calendarColorStyle } from "@/lib/projectCalendarColor";
 
 /** 한 이벤트가 속한 로컬 날짜(YYYY-MM-DD). timed=RFC3339 시작, all-day=date. */
 function eventDate(ev: CalendarEvent): string {
@@ -135,6 +136,7 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
                     key={ev.id}
                     className={`calv-dot${ev.allDay ? " is-allday" : ""}`}
                     title={ev.title}
+                    style={calendarColorStyle(ev.projectColor, ev.projectTextColor)}
                   >
                     {ev.title}
                   </span>
@@ -163,7 +165,10 @@ function EventBlock({
 }) {
   const time = eventTime(ev);
   const body = (
-    <div className={`calv-ev${ev.allDay ? " is-allday" : ""}${compact ? " is-compact" : ""}`}>
+    <div
+      className={`calv-ev${ev.allDay ? " is-allday" : ""}${compact ? " is-compact" : ""}`}
+      style={calendarColorStyle(ev.projectColor, ev.projectTextColor)}
+    >
       {showTime && (
         <span className="calv-ev-time">{ev.allDay ? "종일" : (time ?? "")}</span>
       )}

@@ -178,16 +178,16 @@
   align-items: center;
   gap: 5px;
   border: 1px solid var(--color-wr-border-light);
-  background: var(--color-wr-surface);
+  background: var(--project-calendar-bg, var(--color-wr-surface));
   border-radius: 999px;
   padding: 3px 10px;
   cursor: pointer;
   font: 400 12px var(--font-sans);
-  color: var(--color-wr-fg);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
 }
 .today .today-allday-tag {
   font: 600 9px var(--font-mono);
-  color: var(--color-wr-subtle);
+  color: var(--project-calendar-fg, var(--color-wr-subtle));
 }
 .today .today-event {
   display: flex;
@@ -197,16 +197,17 @@
   padding: 8px 4px;
   border: none;
   border-bottom: 1px solid var(--color-wr-border-light);
-  background: none;
+  background: var(--project-calendar-bg, none);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
   cursor: pointer;
   text-align: left;
 }
 .today .today-event:hover {
-  background: var(--color-wr-hover);
+  filter: brightness(0.96);
 }
 .today .today-event-time {
   font: 600 12px var(--font-mono);
-  color: var(--color-wr-fg);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
   flex: 0 0 auto;
   width: 44px;
 }
@@ -220,7 +221,7 @@
 }
 .today .today-event-cal {
   font: 400 11px var(--font-mono);
-  color: var(--color-wr-subtle);
+  color: var(--project-calendar-fg, var(--color-wr-subtle));
   flex: 0 0 auto;
 }
 

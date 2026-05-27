@@ -215,8 +215,8 @@
 }
 .calv-dot {
   font: 400 10px var(--font-sans);
-  color: var(--color-wr-fg);
-  background: var(--color-wr-accent-soft);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
+  background: var(--project-calendar-bg, var(--color-wr-accent-soft));
   border-radius: var(--radius-xs);
   padding: 0 3px;
   white-space: nowrap;
@@ -224,7 +224,7 @@
   text-overflow: ellipsis;
 }
 .calv-dot.is-allday {
-  background: var(--color-wr-success-soft);
+  background: var(--project-calendar-bg, var(--color-wr-success-soft));
 }
 .calv-more {
   font: 500 9px var(--font-mono);
@@ -240,14 +240,16 @@
   align-items: baseline;
   gap: 8px;
   border: 1px solid var(--color-wr-border-light);
-  border-left: 3px solid var(--color-wr-accent);
+  border-left: 3px solid var(--project-calendar-bg, var(--color-wr-accent));
+  background: var(--project-calendar-bg, transparent);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
   border-radius: var(--radius-sm);
   padding: 6px 9px;
   min-width: 0;
 }
 .calv-ev.is-allday {
-  border-left-color: var(--color-wr-green);
-  background: var(--color-wr-success-soft);
+  border-left-color: var(--project-calendar-bg, var(--color-wr-green));
+  background: var(--project-calendar-bg, var(--color-wr-success-soft));
 }
 .calv-ev.is-compact {
   padding: 3px 5px;
@@ -255,12 +257,12 @@
 }
 .calv-ev-time {
   font: 600 11px var(--font-mono);
-  color: var(--color-wr-muted);
+  color: var(--project-calendar-fg, var(--color-wr-muted));
   flex: 0 0 auto;
 }
 .calv-ev-title {
   font: 400 13px var(--font-sans);
-  color: var(--color-wr-fg);
+  color: var(--project-calendar-fg, var(--color-wr-fg));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -271,7 +273,7 @@
 .calv-ev-cal {
   margin-left: auto;
   font: 400 10px var(--font-mono);
-  color: var(--color-wr-subtle);
+  color: var(--project-calendar-fg, var(--color-wr-subtle));
   flex: 0 0 auto;
 }
 
