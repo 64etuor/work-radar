@@ -91,6 +91,24 @@ describe("buildTodayBlocks", () => {
     expect(blocks).toHaveLength(0);
   });
 
+  it("plusMin preserves local time across hour boundary (no UTC drift)", () => {
+    const signals = [
+      {
+        id: "s1",
+        title: "S",
+        scheduledAt: "2026-05-28T23:30:00",
+        scheduledDuration: 60,
+        linkedEventId: null,
+        linkedCalendarId: null,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
+    // local 00:30 다음날, NOT 15:30Z(UTC). `.toISOString()` 회귀 차단.
+    expect(blocks[0].endISO).toMatch(/^2026-05-29T00:30:00/);
+    // 로컬 포맷 보존 확인 — 'Z' 접미사 금지.
+    expect(blocks[0].endISO.endsWith("Z")).toBe(false);
+  });
+
   it("signal without scheduledAt is skipped (unscheduled)", () => {
     const signals = [
       {

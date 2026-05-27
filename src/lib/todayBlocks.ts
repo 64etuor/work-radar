@@ -24,7 +24,11 @@ const SIGNAL_COLOR = "#4a7bb8";
 const ROUTINE_COLOR = "#7aa84e";
 
 function plusMin(iso: string, m: number): string {
-  return new Date(new Date(iso).getTime() + m * 60_000).toISOString();
+  // 로컬 ISO 보존(예: "2026-05-28T23:30:00"). `.toISOString()`을 쓰면 UTC로 변환되어
+  // 다운스트림 `new Date(iso).getHours()`에서 시간이 어긋난다(KST=+9 등). 자정/DST 교차 시 블록 위치가 깨진다.
+  const d = new Date(new Date(iso).getTime() + m * 60_000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function isoFor(
