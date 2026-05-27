@@ -1,10 +1,12 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+
 import type { DiffFileSummary, DiffMode, Worktree } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { usePaneSize } from "@/lib/usePaneSize";
 import { diffContextLabel, type ReviewLens } from "@/lib/worktreeReview";
+
 import { DiffText } from "./WorktreeDiffText";
 import { FileRow, LocalFileSections, type SelectedDiff } from "./WorktreeFileList";
 import { LensEmptyState } from "./WorktreeReviewPanel";

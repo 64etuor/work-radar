@@ -1,6 +1,7 @@
 import { Waypoints } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 import type { Worktree } from "@/bindings";
+import { Button } from "@/components/ui/button";
 import { useRebaseWorktree } from "@/lib/query";
 
 export function RebaseBar({

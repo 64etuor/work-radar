@@ -2,9 +2,9 @@ import { useDraggable } from "@dnd-kit/core";
 import { Repeat } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
-import type { LayoutBox } from "@/lib/timelineLayout";
-import type { DragData } from "@/components/today/useTimelineDnd";
 import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockStyle";
+import type { DragData } from "@/components/today/useTimelineDnd";
+import type { LayoutBox } from "@/lib/timelineLayout";
 
 type Props = {
   box: LayoutBox;

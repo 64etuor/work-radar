@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./SprintTimer.css";
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import type { SprintConfig, Weekday } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
+import { Input } from "@/components/ui/input";
 import {
   useClearSprintConfig,
   useSetSprintConfig,
@@ -15,9 +19,6 @@ import {
   WEEKDAY_LABELS,
 } from "@/lib/sprint";
 import { useToastStore } from "@/lib/toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/components/ui/cn";
 
 /** 에디터 요일 선택 순서(월→일). */
 const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];

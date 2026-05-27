@@ -1,6 +1,8 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { FileText, Square } from "lucide-react";
+
 import type { AgentRunView } from "@/bindings";
+
 import { JOB_STATUS } from "./jobsConstants";
 import { ProposalPanel } from "./ProposalPanel";
 

@@ -1,20 +1,20 @@
-import { useState } from "react";
 import "./CommandPalette.css";
+
 import { Blocks, FileText, FolderPlus, GitBranchPlus } from "lucide-react";
+import { useState } from "react";
 
 import { KindBadge } from "@/components/board/LifeWheelPalette";
-
 import {
   Command,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandShortcut,
   CommandList,
+  CommandShortcut,
 } from "@/components/ui/command";
-import { useNavKeymap, useProjects, useSkills } from "@/lib/query";
 import { NAV_GROUP_LABELS, navItemsByGroup } from "@/lib/nav";
+import { useNavKeymap, useProjects, useSkills } from "@/lib/query";
 import { skillSearchValue } from "@/lib/skillGrouping";
 import { useUIStore } from "@/store";
 

@@ -1,5 +1,6 @@
-import { useState } from "react";
 import "./JobsView.css";
+
+import { useState } from "react";
 
 import {
   useAgentLogs,
@@ -9,11 +10,12 @@ import {
   useTriggerCodexJob,
   useTriggerEchoJob,
 } from "@/lib/query";
+
 import { CodexStatusBanner } from "./CodexStatusBanner";
 import { JobControls } from "./JobControls";
 import { JobList } from "./JobList";
-import { JobsHeader } from "./JobsHeader";
 import { isActiveJobStatus } from "./jobsConstants";
+import { JobsHeader } from "./JobsHeader";
 
 /**
  * Jobs (Agent 스파인, Phase 7) — 잡 큐를 표시하고 테스트 잡을 트리거한다. 모든 잡은 bound되며

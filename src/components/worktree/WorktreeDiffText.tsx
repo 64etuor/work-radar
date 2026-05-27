@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { detectLang, tokenizeLines, type ThemedToken } from "@/lib/shiki";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
+
+import { detectLang, type ThemedToken, tokenizeLines } from "@/lib/shiki";
 
 /** 표시 줄 상한 — 초과분은 비차단 위해 잘라 표시(전체는 외부 도구로). */
 const MAX_DIFF_LINES = 6000;

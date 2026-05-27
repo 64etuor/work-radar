@@ -1,19 +1,20 @@
-import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ProjectKind } from "@/bindings";
-import { useCreateProject } from "@/lib/query";
-import { trimOrNull } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useCreateProject } from "@/lib/query";
+import { trimOrNull } from "@/lib/utils";
+
 import { Field, SectionLabel, Segmented } from "./SettingsKit";
 
 /**

@@ -1,17 +1,11 @@
-import { useEffect, useState } from "react";
 import "./EnrichModal.css";
 
+import { useEffect, useState } from "react";
+
 import type { AreaTag, EnrichProposal, Quadrant } from "@/bindings";
-import { Spinner } from "@/components/Spinner";
 import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "@/components/jobs/jobsConstants";
-import {
-  AGENT_TERMINAL_STATUSES,
-  useAcceptEnrich,
-  useAgentRunStatus,
-  useEnrichProposal,
-  useKillAgentRun,
-} from "@/lib/query";
-import { useToastStore } from "@/lib/toast";
+import { Spinner } from "@/components/Spinner";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -21,7 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import {
+  AGENT_TERMINAL_STATUSES,
+  useAcceptEnrich,
+  useAgentRunStatus,
+  useEnrichProposal,
+  useKillAgentRun,
+} from "@/lib/query";
+import { useToastStore } from "@/lib/toast";
 
 type Props = {
   runId: string;

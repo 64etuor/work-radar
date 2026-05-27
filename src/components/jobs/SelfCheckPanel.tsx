@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
 import { Check, ExternalLink, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { AgentRunView, PrSelfCheckProposal, SelfCheckItem } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import { openExternal, useAcceptProposal, usePrProposal, useRejectProposal } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { openExternal, useAcceptProposal, usePrProposal, useRejectProposal } from "@/lib/query";
+
 import { prTrigger } from "./jobsUtils";
 
 /** Proposal 옵셔널 필드를 안전한 기본값으로 정규화. */

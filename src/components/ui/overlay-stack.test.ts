@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { registerOverlay, isOverlayOpen } from "./overlay-stack";
+import { describe, expect, it } from "vitest";
+
+import { isOverlayOpen, registerOverlay } from "./overlay-stack";
 
 // 상호작용 계약(plan §0.6) 핵심 로직 검증: 오버레이 열림 카운트가 App 셸 Esc 양보의 기준.
 // (radix content mount=push / unmount=pop를 각 *Content effect가 호출 — 여기선 그 레지스트리 자체를 잠근다.)

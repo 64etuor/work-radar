@@ -1,6 +1,7 @@
-import { useState } from "react";
 import "./RetroView.css";
+
 import { Flame, Repeat } from "lucide-react";
+import { useState } from "react";
 
 import type { LifeWheelTagConfig, RoutineFreq, RoutineTrackingItem } from "@/bindings";
 import { KindAreaChips } from "@/components/board/LifeWheelPalette";

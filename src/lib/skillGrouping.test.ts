@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { Skill } from "@/bindings";
 import {
   groupSkillsForPalette,
-  skillSearchValue,
   SKILL_PALETTE_HEADINGS,
+  skillSearchValue,
 } from "@/lib/skillGrouping";
 
 function mk(over: Partial<Skill> & { id: string; name: string }): Skill {

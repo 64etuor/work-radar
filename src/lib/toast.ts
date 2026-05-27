@@ -6,7 +6,8 @@
  * - 로깅은 fire-and-forget — 실패해도 UI에 영향 없음.
  */
 import { create } from "zustand";
-import { commands, type AppError } from "@/bindings";
+
+import { type AppError, commands } from "@/bindings";
 
 // ── trace id 생성 ─────────────────────────────────────────────────────────────
 

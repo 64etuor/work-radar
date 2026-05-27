@@ -8,9 +8,9 @@ import {
   History,
   Inbox,
   LayoutGrid,
+  type LucideIcon,
   Repeat,
   Settings,
-  type LucideIcon,
 } from "lucide-react";
 
 import type { View } from "@/store";

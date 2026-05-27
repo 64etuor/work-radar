@@ -3,7 +3,8 @@
  *
  * 순수 함수 — DnD 한 번에 캐시(WorkSignal[])를 즉시 갱신하고, sync 실패 시 원본으로 되돌린다.
  */
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import type { WorkSignal } from "@/bindings";
 
 import { applySchedulePatch, rollbackSchedulePatch } from "./optimisticSchedule";

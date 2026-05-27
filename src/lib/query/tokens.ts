@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { unwrap } from "./client";
+
 import { commands, type TokenKind } from "@/bindings";
+
+import { unwrap } from "./client";
 
 /** 토큰 존재 여부만(본문 미노출 — INVARIANT). 마스킹 표시용. */
 export function useProjectTokenStatus(projectId: string) {

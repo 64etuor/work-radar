@@ -1,6 +1,7 @@
 import type { Worktree } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import type { ReviewLens } from "@/lib/worktreeReview";
+
 import { RebaseBar } from "./RebaseBar";
 
 const REVIEW_LENSES: { key: ReviewLens; label: string }[] = [

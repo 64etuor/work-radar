@@ -1,30 +1,30 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { AgentStatusBar } from "@/components/AgentStatusBar";
-import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
 import { CaptureBoard } from "@/components/CaptureBoard";
-import { NewsTicker } from "@/components/news/NewsTicker";
-import { ToastHost } from "@/components/ToastHost";
 import { CommandPalette } from "@/components/CommandPalette";
 import { InboxView } from "@/components/InboxView";
 import { JobsView } from "@/components/jobs/JobsView";
+import { NewsTicker } from "@/components/news/NewsTicker";
 import { PrRadarView } from "@/components/PrRadarView";
 import { RetroView } from "@/components/RetroView";
 import { RoutineTrackingView } from "@/components/RoutineTrackingView";
 import { SettingsView } from "@/components/SettingsView";
 import { SkillsView } from "@/components/SkillsView";
+import { ToastHost } from "@/components/ToastHost";
 import { TodayView } from "@/components/TodayView";
+import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
+import { fontFamilyFor } from "@/lib/fontPresets";
 import { adjacentView } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
 import { useViewShortcuts } from "@/lib/useViewShortcuts";
 import { useUIStore, type View } from "@/store";
-import { fontFamilyFor } from "@/lib/fontPresets";
 
 type ViewMotion = "forward" | "back";
 type ViewSnapshot = {

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -16,9 +15,11 @@ import {
   Plus,
   Sun,
 } from "lucide-react";
+import { useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 
 const CATEGORIES = [
   { id: "projects", label: "프로젝트", icon: FolderOpen },

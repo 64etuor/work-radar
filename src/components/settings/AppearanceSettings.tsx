@@ -1,6 +1,5 @@
 import { Moon, Sun } from "lucide-react";
 
-import { useUIStore } from "@/store";
 import {
   Select,
   SelectContent,
@@ -10,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { FONT_PRESETS, fontFamilyFor } from "@/lib/fontPresets";
+import { useUIStore } from "@/store";
 
 /**
  * 외관 (Appearance) 설정 — 단일 전역. 테마(light/dark)와 본문 폰트 프리셋만 다룬다.

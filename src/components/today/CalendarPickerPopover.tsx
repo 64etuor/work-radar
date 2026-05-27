@@ -7,9 +7,9 @@
  */
 import { useMemo, useState } from "react";
 
+import type { Project, SelectedCalendar } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { Project, SelectedCalendar } from "@/bindings";
 import { useProjects, useSetProjectDefaultWriteCalendar } from "@/lib/query";
 
 type Props = {

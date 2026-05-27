@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { NewsItem } from "@/bindings";
+
 import {
   isHotTrendingNews,
   mergeNewsTickerItems,

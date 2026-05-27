@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands, type InboxItem, type InboxCounts } from "@/bindings";
+import { commands, type InboxCounts, type InboxItem } from "@/bindings";
+
 import { unwrap } from "./client";
 
 export function useInboxItems(source: string | null = null, includeDismissed = false) {

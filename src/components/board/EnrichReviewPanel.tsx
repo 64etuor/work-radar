@@ -1,16 +1,11 @@
-import { useEffect, useState } from "react";
 import "./EnrichReviewPanel.css";
 
+import { useEffect, useState } from "react";
+
 import type { AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
-import { Spinner } from "@/components/Spinner";
 import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "@/components/jobs/jobsConstants";
-import {
-  AGENT_TERMINAL_STATUSES,
-  useAcceptEnrichAll,
-  useAgentRunStatus,
-  useBatchEnrichProposal,
-} from "@/lib/query";
-import { useToastStore } from "@/lib/toast";
+import { Spinner } from "@/components/Spinner";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -18,7 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+import {
+  AGENT_TERMINAL_STATUSES,
+  useAcceptEnrichAll,
+  useAgentRunStatus,
+  useBatchEnrichProposal,
+} from "@/lib/query";
+import { useToastStore } from "@/lib/toast";
 
 type Props = {
   /** trigger_enrich_all이 만든 잡 id(폴링 대상). */

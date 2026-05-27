@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from "node:url";
+
 import { defineConfig } from "vitest/config";
 
 // 빌드용 vite.config.ts와 분리한 테스트 전용 설정(빌드 경로 무영향).

@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { unwrap } from "./client";
+
 import { commands } from "@/bindings";
 import { defaultKeymap } from "@/lib/nav";
+
+import { unwrap } from "./client";
 
 /**
  * 네비게이션 설정 훅 (Phase 18 #7). 글로벌 창 핫키 + per-view keymap을 app_config(SQLite)에서

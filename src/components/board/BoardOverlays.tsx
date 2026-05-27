@@ -1,8 +1,8 @@
-import { type CardMenuAction, type CardMenuState, CardMenu } from "@/components/board/CardMenu";
-import { type CalendarModalState, CalendarEventModal } from "@/components/board/CalendarEventModal";
+import { CalendarEventModal, type CalendarModalState } from "@/components/board/CalendarEventModal";
+import { CardMenu, type CardMenuAction, type CardMenuState } from "@/components/board/CardMenu";
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
-import { type ProjectPickerState, ProjectPickerModal } from "@/components/board/ProjectPickerModal";
+import { ProjectPickerModal, type ProjectPickerState } from "@/components/board/ProjectPickerModal";
 
 export function BoardOverlays({
   menu,

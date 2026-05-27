@@ -5,12 +5,14 @@
 // 사용자가 앱에 머무는 동안 신선도 보장(빠른 토글에도 즉시 invalidate).
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { unwrap } from "./client";
-import { commands } from "@/bindings";
+import { useEffect } from "react";
+
 import type { FilterMode, NewsItem, NewsOptions } from "@/bindings";
+import { commands } from "@/bindings";
 import { mergeNewsTickerItems } from "@/lib/newsTicker";
+
+import { unwrap } from "./client";
 
 /** 프런트 폴 주기 — 백엔드가 설정 주기에 한 번 갱신하므로 5분이면 평균 stale 이내 보장. */
 const NEWS_POLL_MS = 5 * 60 * 1000;

@@ -1,21 +1,22 @@
-import { useQueries, useQueryClient } from "@tanstack/react-query";
 import "./PrRadarView.css";
+
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Bot, ExternalLink, MessageSquare, RefreshCw, TriangleAlert } from "lucide-react";
 
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";
+import { Button } from "@/components/ui/button";
 import {
-  PR_RADAR_POLL_MS,
   fetchPrRadar,
   openExternal,
+  PR_RADAR_POLL_MS,
   useCodexStatus,
-  usePrRadarSettings,
   useProjects,
+  usePrRadarSettings,
   useTriggerCiTriage,
   useTriggerCodexJob,
   useTriggerPrSelfcheck,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
-import { Button } from "@/components/ui/button";
 
 /** 5개 readiness 버킷 표시 순서 + 라벨 (PLAN.md Phase 4). */
 const BUCKETS: { key: ReadinessBucket; label: string; hint: string }[] = [

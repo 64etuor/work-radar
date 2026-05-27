@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { computeLayout, type TimedBlock } from "./timelineLayout";
 
 const make = (

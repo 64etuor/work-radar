@@ -1,4 +1,5 @@
 import "./WeeklyView.css";
+
 import { CheckCircle2, GitPullRequest, Inbox, Repeat, Send, TrendingDown } from "lucide-react";
 
 import type { DebtPoint } from "@/bindings";

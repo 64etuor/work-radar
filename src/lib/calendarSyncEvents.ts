@@ -9,9 +9,9 @@
  * 성공 시 calendarEvents는 무효화하지 않는다. Rust fetch TTL이 방금 PATCH 전 이벤트를
  * 돌려줄 수 있어 optimistic 위치/길이를 원위치로 되돌리는 원인이 된다.
  */
-import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
+import { useEffect } from "react";
 
 import { useToastStore } from "@/lib/toast";
 

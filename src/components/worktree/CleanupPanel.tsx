@@ -1,8 +1,9 @@
-import { useState } from "react";
 import { Trash2 } from "lucide-react";
+import { useState } from "react";
+
+import type { CleanupCandidate } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import type { CleanupCandidate } from "@/bindings";
 import { useCleanupCandidates, useDeleteCleanupCandidates, useTriggerCodexJob } from "@/lib/query";
 
 const CLEANUP_KIND_LABEL: Record<CleanupCandidate["kind"], string> = {

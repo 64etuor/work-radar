@@ -1,6 +1,7 @@
-import * as React from "react";
 import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group";
 import { cva, type VariantProps } from "class-variance-authority";
+import * as React from "react";
+
 import { cn } from "./cn";
 
 // 세그먼트 컨트롤(2+ 상태). overlay 아님 → Esc/포커스 계약 불필요(raw shadcn 래퍼).

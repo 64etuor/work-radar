@@ -1,5 +1,5 @@
-import { useState } from "react";
 import "./SettingsView.css";
+
 import {
   Bell,
   Bot,
@@ -13,27 +13,28 @@ import {
   Tags,
   User,
 } from "lucide-react";
+import { useState } from "react";
 
 import type { Project } from "@/bindings";
-import { useProjects, useReconcileSignalProjects } from "@/lib/query";
-import { useUIStore } from "@/store";
-import { useToastStore } from "@/lib/toast";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { KindBadge } from "@/components/board/LifeWheelPalette";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/components/ui/cn";
+import { useProjects, useReconcileSignalProjects } from "@/lib/query";
+import { useToastStore } from "@/lib/toast";
+import { useUIStore } from "@/store";
 
 import { AddProjectForm } from "./settings/AddProjectForm";
+import { AgentsPane } from "./settings/AgentsPane";
+import { AppearanceSettings } from "./settings/AppearanceSettings";
+import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
+import { LifeWheelTagSettings } from "./settings/LifeWheelTagSettings";
 import { NavigationSettings } from "./settings/NavigationSettings";
 import { NewsSourceSettings } from "./settings/NewsSourceSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
-import { AgentsPane } from "./settings/AgentsPane";
-import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
-import { LifeWheelTagSettings } from "./settings/LifeWheelTagSettings";
-import { AppearanceSettings } from "./settings/AppearanceSettings";
 import { SectionLabel } from "./settings/SettingsKit";
 
 type SettingsCategory =

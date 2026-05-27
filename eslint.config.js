@@ -2,11 +2,12 @@
 // 게이트는 보수적(에러만 차단). 생성물(src/bindings.ts)·Rust 트리(src-tauri)·
 // 빌드 산출물(dist)·벤더링된 도구 디렉터리(.claude/.codex/...)는 린트 제외.
 import js from "@eslint/js";
-import globals from "globals";
+import prettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import simpleImportSort from "eslint-plugin-simple-import-sort";
+import globals from "globals";
 import tseslint from "typescript-eslint";
-import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
@@ -26,6 +27,16 @@ export default tseslint.config(
   tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
   reactRefresh.configs.vite,
+  {
+    files: ["**/*.{ts,tsx,js,jsx,mjs}"],
+    plugins: { "simple-import-sort": simpleImportSort },
+    rules: {
+      // import 순서 결정론적 — autofix만으로 해결되는 에러로 둔다.
+      // AI 에이전트가 import를 추가할 때 형제 줄을 셔플하지 않도록.
+      "simple-import-sort/imports": "error",
+      "simple-import-sort/exports": "error",
+    },
+  },
   {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {

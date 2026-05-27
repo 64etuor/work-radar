@@ -7,7 +7,7 @@
  *   까지 워커가 skip한다(INVARIANT #2).
  * - Resize는 bindings상 `at`도 필수(워커 단순화 — patch는 start+duration 묶음).
  */
-import { commands, type StageWriteRequest, type WriteTarget, type WriteOp } from "@/bindings";
+import { commands, type StageWriteRequest, type WriteOp, type WriteTarget } from "@/bindings";
 import { unwrap } from "@/lib/query/client";
 
 export type StageInput =

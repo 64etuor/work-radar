@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
 import "./CalendarDrawer.css";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+
 import { CalendarView } from "@/components/board/CalendarView";
+import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type CalendarViewMode, parseLocalISODate, stepDate, viewRange } from "@/lib/calendarRange";
 import {
   fetchCalendarEventsRange,
@@ -9,9 +13,6 @@ import {
   useCalendarEventsRange,
   useProjects,
 } from "@/lib/query";
-import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useUIStore } from "@/store";
 
 type Props = {

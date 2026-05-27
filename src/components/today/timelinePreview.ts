@@ -1,10 +1,10 @@
-import { computeLayout, type LayoutBox, type TimedBlock } from "@/lib/timelineLayout";
 import {
+  type DragData,
   plusMinutesLocal,
   resizeIsoByPx,
   shiftIsoByPx,
-  type DragData,
 } from "@/components/today/useTimelineDnd";
+import { computeLayout, type LayoutBox, type TimedBlock } from "@/lib/timelineLayout";
 
 export type DragDelta = { x: number; y: number };
 export type DragGuide = {

@@ -1,29 +1,29 @@
-import { useState } from "react";
 import { CircleUserRound, FolderGit2, FolderOpen, Github, KeyRound, Plus } from "lucide-react";
+import { useState } from "react";
 
 import type { Project, PromotionTarget } from "@/bindings";
+import { KindBadge } from "@/components/board/LifeWheelPalette";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  calendarColorStyle,
+  normalizeHexColor,
+  PROJECT_CALENDAR_PALETTE,
+  projectCalendarColors,
+} from "@/lib/projectCalendarColor";
 import {
   useProjectTokenStatus,
   useRepos,
   useSetProjectCalendarColor,
   useTestNotionConnection,
 } from "@/lib/query";
-import {
-  calendarColorStyle,
-  normalizeHexColor,
-  projectCalendarColors,
-  PROJECT_CALENDAR_PALETTE,
-} from "@/lib/projectCalendarColor";
-import { KindBadge } from "@/components/board/LifeWheelPalette";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 
 import { AddRepoForm } from "./AddRepoForm";
 import { GoogleAccountBlock } from "./GoogleAccountBlock";
-import { TokenRow } from "./TokenRow";
 import { SectionLabel } from "./SettingsKit";
+import { TokenRow } from "./TokenRow";
 
 /** Notion DB 연결 테스트 버튼 + 인라인 결과. */
 function NotionDbTestButton({

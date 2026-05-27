@@ -5,8 +5,10 @@
 // cmux 미설치 또는 오류 → available:false → AgentStatusBar에서 칩을 렌더링하지 않음.
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { unwrap } from "./client";
+
 import { commands } from "@/bindings";
+
+import { unwrap } from "./client";
 
 /** cmux 상태 폴링 주기 — 워크스페이스는 자주 바뀌지 않으므로 15s로 느리게. */
 const CMUX_POLL_MS = 15_000;

@@ -1,6 +1,6 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useMemo, useRef, useState } from "react";
 import "./AgentStatusBar.css";
+
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Bot,
   Calendar,
@@ -10,6 +10,7 @@ import {
   Sparkles,
   SquareTerminal,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
 import { HermesView } from "@/components/HermesView";

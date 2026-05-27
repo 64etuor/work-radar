@@ -1,9 +1,10 @@
-import { Fragment, useEffect } from "react";
 import { X } from "lucide-react";
-import { Spinner } from "@/components/Spinner";
+import { Fragment, useEffect } from "react";
+
 import type { CommitGraph, Worktree } from "@/bindings";
-import { useWorktreeCommitGraph } from "@/lib/query";
+import { Spinner } from "@/components/Spinner";
 import { registerOverlay } from "@/components/ui/overlay-stack";
+import { useWorktreeCommitGraph } from "@/lib/query";
 import { computeGraphTopology, type GraphTopologyRow } from "@/lib/worktreeReview";
 
 export function CommitGraphDrawer({

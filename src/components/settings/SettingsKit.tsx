@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+
 import { cn } from "@/components/ui/cn";
 
 /** 섹션 라벨 — 작은 mono uppercase, 절제된 위계. */

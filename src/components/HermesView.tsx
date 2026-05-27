@@ -1,6 +1,7 @@
-import { useState } from "react";
 import "./HermesView.css";
+
 import { RefreshCw, Send, X } from "lucide-react";
+import { useState } from "react";
 
 import type { HermesMessage } from "@/bindings";
 import { Button } from "@/components/ui/button";

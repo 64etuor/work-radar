@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Calendar, CheckCircle2, ChevronDown, ChevronRight, Circle, Repeat } from "lucide-react";
+import { useState } from "react";
 
 import type { CalendarEvent, RoutineToday, WorkSignal } from "@/bindings";
-import { calendarColorStyle } from "@/lib/projectCalendarColor";
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
+import { calendarColorStyle } from "@/lib/projectCalendarColor";
 
 type Props = {
   unscheduledTodays: WorkSignal[];

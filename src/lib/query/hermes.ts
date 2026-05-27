@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { unwrap } from "./client";
+
 import {
   commands,
   type DetectedChat,
@@ -7,6 +7,8 @@ import {
   type HermesFetchResult,
   type HermesMessage,
 } from "@/bindings";
+
+import { unwrap } from "./client";
 
 // Hermes 메신저 브리지 (Phase 20 #15). 봇 토큰은 keychain(Rust) — 본문은 IPC 인자로만 전달, 캐시 미저장.
 // 수신은 bounded 단발 fetch(무한 long-poll 아님) — cadence는 사용자 버튼/뷰 폴링이 정한다(#5).

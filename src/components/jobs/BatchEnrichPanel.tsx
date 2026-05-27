@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { AgentRunView, AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import { useAcceptEnrichAll, useBatchEnrichProposal, useRejectProposal } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -12,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAcceptEnrichAll, useBatchEnrichProposal, useRejectProposal } from "@/lib/query";
+
 import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "./jobsConstants";
 import { ProposalError } from "./jobsUtils";
 

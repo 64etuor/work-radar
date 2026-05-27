@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { computeLayout, type TimedBlock } from "@/lib/timelineLayout";
+
 import {
   dragGuideFromLayout,
   previewTimelineBoxes,
   renderTimelineBoxesForDrag,
 } from "./timelinePreview";
-import { computeLayout, type TimedBlock } from "@/lib/timelineLayout";
 import type { DragData } from "./useTimelineDnd";
 
 function block(id: string, startISO: string, endISO: string): TimedBlock {

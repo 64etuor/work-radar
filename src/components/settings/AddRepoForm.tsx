@@ -1,12 +1,13 @@
-import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderSearch, Plus } from "lucide-react";
+import { useState } from "react";
 
 import type { Provider } from "@/bindings";
-import { useCreateRepo } from "@/lib/query";
-import { trimOrNull } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useCreateRepo } from "@/lib/query";
+import { trimOrNull } from "@/lib/utils";
+
 import { Segmented } from "./SettingsKit";
 
 /** Add Repo 폼 (프로젝트 카드 내부). github=remote URL, local=경로(Codex worktree 베이스). */

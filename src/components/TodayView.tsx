@@ -1,31 +1,33 @@
+import "./TodayView.css";
+
+import type { DragMoveEvent } from "@dnd-kit/core";
+import { DragOverlay } from "@dnd-kit/core";
 import {
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
-import "./TodayView.css";
 
 import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
 import { EventPopover } from "@/components/today/EventPopover";
 import { StagedBadge } from "@/components/today/StagedBadge";
 import { TimelineCanvas } from "@/components/today/TimelineCanvas";
+import type { DragDelta } from "@/components/today/timelinePreview";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
-import { DragOverlay } from "@dnd-kit/core";
-import type { DragMoveEvent } from "@dnd-kit/core";
 import {
-  DndContext,
   buildDefaultCalendarFor,
+  DndContext,
+  type DragData,
   useTimelineDnd,
   useTodayDndSensors,
-  type DragData,
 } from "@/components/today/useTimelineDnd";
-import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import { Button } from "@/components/ui/button";
+import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import {
   localToday,
   localWeekday,
@@ -40,7 +42,6 @@ import {
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
 import { buildTodayBlocks } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
-import type { DragDelta } from "@/components/today/timelinePreview";
 
 /**
  * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).

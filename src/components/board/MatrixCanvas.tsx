@@ -1,17 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
-import { BrainDumpToggle } from "@/components/board/BrainDumpToggle";
-import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import {
   areaLabel,
   quadrantToZone,
   shortDate,
   suggestedQuadrantBadge,
-  ZONES,
   type ZoneKey,
+  ZONES,
 } from "@/components/board/boardUtils";
+import { BrainDumpToggle } from "@/components/board/BrainDumpToggle";
+import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import {
   CARD_WIDTH,
   computeInboxHeight,

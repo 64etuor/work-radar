@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type DragData,
   normalizeDropDataForDragEnd,
   plusMinutesLocal,
-  resolveDragEndActiveData,
   resizeIsoByPx,
-  type DragData,
+  resolveDragEndActiveData,
 } from "./useTimelineDnd";
 
 describe("normalizeDropDataForDragEnd", () => {

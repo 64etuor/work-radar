@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   BOX_MAX_PX,
   BOX_MIN_PX,
-  UNBOUNDED_SATURATE_SEC,
   boxWidth,
   overflowSplit,
   progressRatio,
+  UNBOUNDED_SATURATE_SEC,
 } from "@/lib/agentBar";
 
 describe("agentBar — 경과 → 진행 ratio(P10a)", () => {

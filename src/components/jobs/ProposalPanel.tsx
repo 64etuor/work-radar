@@ -1,4 +1,5 @@
 import type { AgentRunView } from "@/bindings";
+
 import { BatchEnrichPanel } from "./BatchEnrichPanel";
 import { EnrichPanel } from "./EnrichPanel";
 import { SelfCheckPanel } from "./SelfCheckPanel";

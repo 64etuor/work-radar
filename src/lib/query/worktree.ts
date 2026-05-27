@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { unwrap } from "./client";
+
 import { commands, type DiffMode } from "@/bindings";
+
+import { unwrap } from "./client";
 
 /**
  * worktree 목록 라이브 폴링 주기 (Phase 12c). bounded interval(busy-loop 아님 — INVARIANT #5).

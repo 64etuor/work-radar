@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 type PaneSizeOptions = {
   key: string;

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { unwrap } from "./client";
+
 import { commands, type UpdateAgentPromptConfigInput } from "@/bindings";
+
+import { unwrap } from "./client";
 
 /**
  * Codex 에이전트 설정 훅 (B2). 모델 선택을 app_config(SQLite)에서 읽고 쓴다.

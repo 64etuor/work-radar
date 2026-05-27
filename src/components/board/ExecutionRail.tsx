@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 
 import type { Kind, LifeWheelTagConfig, RoutineToday, WorkSignal } from "@/bindings";
-import { RoutinesPanel, type RoutineDraft } from "@/components/board/RoutinesPanel";
+import { type RoutineDraft, RoutinesPanel } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 
 export function ExecutionRail({

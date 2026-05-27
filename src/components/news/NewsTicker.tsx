@@ -4,17 +4,19 @@
 // `prefers-reduced-motion: reduce` 폴백은 CSS에서 정적 fade pagination(처음 5개)으로 처리.
 // INVARIANT #1: 표시 전용 — 큐/매트릭스 무관.
 
+import "./NewsTicker.css";
+
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { CSSProperties } from "react";
-import "./NewsTicker.css";
+
 import type { NewsItem } from "@/bindings";
 import {
   isHotTrendingNews,
-  newsTickerItemKey,
   newsSourceClass,
   newsSourceLabel,
+  newsTickerItemKey,
 } from "@/lib/newsTicker";
-import { useNewsList, useNewsFilters, useNewsOptions } from "@/lib/query/news";
+import { useNewsFilters, useNewsList, useNewsOptions } from "@/lib/query/news";
 
 /**
  * 뉴스 티커. 활성 소스에서 받은 최근 아이템을 좌측 스크롤 마퀴로 흘린다.

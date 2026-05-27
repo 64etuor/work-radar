@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
-import type { ComponentType } from "react";
 import "./InboxView.css";
+
 import {
   Archive,
   Bell,
@@ -13,6 +12,8 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
+import type { ComponentType } from "react";
+import { useMemo, useState } from "react";
 
 import type { InboxItem } from "@/bindings";
 import { Button } from "@/components/ui/button";

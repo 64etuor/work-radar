@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { unwrap, useInvalidate } from "./client";
+
 import {
-  commands,
   type AreaTag,
+  commands,
   type CreateSignalInput,
   type Kind,
   type LifeWheelTagConfig,
   type Quadrant,
   type SignalStatus,
 } from "@/bindings";
+
+import { unwrap, useInvalidate } from "./client";
 
 /** 매트릭스 + 미분류 카드 (Today로 승격되지 않은 active 신호). */
 export function useSignals() {

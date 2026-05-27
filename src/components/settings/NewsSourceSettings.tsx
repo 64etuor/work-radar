@@ -1,29 +1,9 @@
 // 설정 → 뉴스 카테고리. 글로벌 옵션(D-Tune) + 키워드 필터(D-Safe) + 소스별 on/off 토글(카테고리 그룹). 즉시 반영 + 토스트.
 // INVARIANT #1: 뉴스는 표시 전용 — 토글/필터/옵션이 결정 레일 어떤 데이터도 안 건드림.
 
-import { useMemo, useState, type ReactNode } from "react";
-import { X, ChevronDown, ChevronRight } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { useToastStore } from "@/lib/toast";
-import {
-  useNewsSources,
-  useSetNewsSourceEnabled,
-  useNewsFilters,
-  useAddNewsFilter,
-  useRemoveNewsFilter,
-  useNewsOptions,
-  useSetNewsOptions,
-} from "@/lib/query/news";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
+
 import type {
   FilterMode,
   KeywordFilter,
@@ -32,6 +12,28 @@ import type {
   NewsSourceMeta,
   SortMode,
 } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import {
+  useAddNewsFilter,
+  useNewsFilters,
+  useNewsOptions,
+  useNewsSources,
+  useRemoveNewsFilter,
+  useSetNewsOptions,
+  useSetNewsSourceEnabled,
+} from "@/lib/query/news";
+import { useToastStore } from "@/lib/toast";
+
 import { SectionLabel } from "./SettingsKit";
 
 const MARQUEE_SPEED_MIN = 1;

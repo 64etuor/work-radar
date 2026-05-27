@@ -1,7 +1,8 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { CSSProperties, HTMLAttributes } from "react";
-import { Button } from "@/components/ui/button";
+
 import type { Worktree } from "@/bindings";
+import { Button } from "@/components/ui/button";
 import { localChangeCount, localChangeSummary } from "@/lib/worktreeReview";
 
 type WorktreeSideListProps = {

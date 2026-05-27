@@ -1,6 +1,8 @@
 import { useState } from "react";
 
 import type { PrRadarSettings } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   useNotificationPermission,
   usePrRadarSettings,
@@ -8,8 +10,7 @@ import {
   useScheduleTestNotification,
   useSetPrRadarSettings,
 } from "@/lib/query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { StatusDot } from "./SettingsKit";
 
 /**

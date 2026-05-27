@@ -8,8 +8,8 @@
  * INVARIANT: 외부 네트워크 호출은 워커에만 — 본 hooks는 큐 SQL과 이벤트만 본다.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useEffect } from "react";
 
 import { commands, type PendingWrite } from "@/bindings";
 import { unwrap } from "@/lib/query/client";

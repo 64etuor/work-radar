@@ -1,9 +1,9 @@
-import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
-import { unwrap } from "./client";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import {
-  commands,
   type BatchEnrichProposal,
   type CiTriageProposal,
+  commands,
   type EnrichProposal,
   type PrSelfCheckProposal,
   type TriageOutcome,
@@ -14,6 +14,8 @@ import {
   type TriggerEnrichInput,
   type TriggerPrSelfCheckInput,
 } from "@/bindings";
+
+import { unwrap } from "./client";
 
 /** Jobs 뷰 폴링 주기 — 실행 중 잡 상태 전이를 따라잡되 과한 부하 없이. */
 export const JOBS_POLL_MS = 2_000;

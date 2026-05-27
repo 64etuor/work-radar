@@ -11,13 +11,14 @@
  *   - retryable(transient): onRetry가 있으면 "재시도" 버튼(클릭→refetch+dismiss), 없으면 절제된 힌트
  * success/info 토스트: 간단 메시지 + auto-dismiss (2500ms, 스토어에서 처리).
  */
-import { openUrl } from "@tauri-apps/plugin-opener";
 import "./ToastHost.css";
 
-import { useToastStore } from "@/lib/toast";
-import { useUIStore } from "@/store";
+import { openUrl } from "@tauri-apps/plugin-opener";
+
 import { NAV_BY_VIEW } from "@/lib/nav";
+import { useToastStore } from "@/lib/toast";
 import type { View } from "@/store";
+import { useUIStore } from "@/store";
 
 /** action.nav 문자열이 실제 등록된 View인지 검증(런타임 string → View 좁히기). */
 function isView(nav: string): nav is View {

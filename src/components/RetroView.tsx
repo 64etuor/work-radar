@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
 import "./RetroView.css";
+
 import { Archive, CheckCircle2, RotateCcw, Sparkles, ThumbsDown } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import type { WorkSignal } from "@/bindings";
 import { KindAreaChips } from "@/components/board/LifeWheelPalette";

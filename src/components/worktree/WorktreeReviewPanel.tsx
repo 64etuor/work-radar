@@ -1,14 +1,14 @@
 import type { DiffMode, Worktree } from "@/bindings";
+import { Button } from "@/components/ui/button";
 import {
-  branchGraphAriaLabel,
   branchChangeSummary,
+  branchGraphAriaLabel,
   emptyStateForLens,
   localChangeCount,
   mergeStateSummary,
-  reviewQueueLabel,
   type ReviewLens,
+  reviewQueueLabel,
 } from "@/lib/worktreeReview";
-import { Button } from "@/components/ui/button";
 
 export function ReviewSummary({
   worktree,

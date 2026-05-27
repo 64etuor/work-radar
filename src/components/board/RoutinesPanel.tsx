@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import type { Kind, LifeWheelTagConfig, RoutineFreq, RoutineToday, Weekday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";

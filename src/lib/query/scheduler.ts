@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { unwrap } from "./client";
+
 import { commands, type NotificationPermission } from "@/bindings";
+
+import { unwrap } from "./client";
 
 /** 알림 권한 상태(granted/denied/prompt/unknown). 발사 가능 여부는 granted일 때만. */
 export function useNotificationPermission() {

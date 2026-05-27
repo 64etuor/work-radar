@@ -1,44 +1,45 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./CaptureBoard.css";
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import type { Kind, PromotionTarget } from "@/bindings";
-import { type CardMenuAction, type CardMenuState } from "@/components/board/CardMenu";
-import { type CalendarModalState } from "@/components/board/CalendarEventModal";
-import { type ProjectPickerState } from "@/components/board/ProjectPickerModal";
-import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
-import { type RoutineDraft } from "@/components/board/RoutinesPanel";
-import { zoneToQuadrant, type ZoneKey } from "@/components/board/boardUtils";
 import { BoardOverlays } from "@/components/board/BoardOverlays";
-import { CaptureBoardHeader } from "@/components/board/CaptureBoardHeader";
-import { ExecutionRail } from "@/components/board/ExecutionRail";
 import {
   projectPickerErrorMessage,
   projectPickerSuccessMessage,
 } from "@/components/board/boardOverlayUtils";
+import { type ZoneKey, zoneToQuadrant } from "@/components/board/boardUtils";
+import { type CalendarModalState } from "@/components/board/CalendarEventModal";
+import { CaptureBoardHeader } from "@/components/board/CaptureBoardHeader";
+import { type CardMenuAction, type CardMenuState } from "@/components/board/CardMenu";
+import { ExecutionRail } from "@/components/board/ExecutionRail";
+import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
+import { type ProjectPickerState } from "@/components/board/ProjectPickerModal";
+import { type RoutineDraft } from "@/components/board/RoutinesPanel";
 import {
   localToday,
   localWeekday,
+  tomorrow,
   useApplyCalendarUrgency,
   useCalendarEvents,
   useClassifySignal,
   useCodexStatus,
   useCreateRoutine,
-  useUpdateRoutine,
-  useDeleteRoutine,
   useCreateSignal,
+  useDeleteRoutine,
   useDeleteSignal,
   useFlushPromotions,
+  useLifeWheelTags,
   useProjects,
   usePromoteToday,
   usePromoteToNotion,
   useReorderRoutines,
   useReorderToday,
-  useSetSignalStatus,
-  useLifeWheelTags,
   useSetRoutineAreaTagKey,
   useSetRoutineKind,
   useSetSignalAreaTagKey,
   useSetSignalKind,
+  useSetSignalStatus,
   useSignals,
   useSnoozeSignal,
   useToday,
@@ -48,12 +49,12 @@ import {
   useTriggerEnrich,
   useTriggerEnrichAll,
   useUnpromoteToday,
+  useUpdateRoutine,
   useUpdateSignalTitle,
-  tomorrow,
 } from "@/lib/query";
 import { IpcError } from "@/lib/query/client";
-import { useUIStore } from "@/store";
 import { useToastStore } from "@/lib/toast";
+import { useUIStore } from "@/store";
 
 const PROMOTION_TARGET: Record<"backlog" | "agenda", PromotionTarget> = {
   backlog: "notion_backlog",

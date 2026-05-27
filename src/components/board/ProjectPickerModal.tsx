@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
 import "./CalendarEventModal.css";
 
+import { useEffect, useState } from "react";
+
 import type { Project, PromotionTarget } from "@/bindings";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -10,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 
 /** picker가 다룰 컨텍스트: 어느 카드를 어느 타깃으로 승격하며, 어떤 후보 중에서 고르는지. */
 export type ProjectPickerState = {

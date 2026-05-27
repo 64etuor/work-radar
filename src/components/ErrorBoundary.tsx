@@ -8,12 +8,13 @@
  * 백엔드-originated 에러는 이미 로그되므로, 여기서는 **프런트 렌더 크래시만** 로깅한다
  * (scope="react-error-boundary").
  */
-import { Component, type ErrorInfo, type ReactNode } from "react";
 import "./ErrorBoundary.css";
 
+import { Component, type ErrorInfo, type ReactNode } from "react";
+
 import { commands } from "@/bindings";
-import { genTraceId } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
+import { genTraceId } from "@/lib/toast";
 
 interface Props {
   children: ReactNode;

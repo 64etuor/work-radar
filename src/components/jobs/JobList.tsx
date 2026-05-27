@@ -1,5 +1,7 @@
 import type { UseQueryResult } from "@tanstack/react-query";
+
 import type { AgentRunView } from "@/bindings";
+
 import { JobCard } from "./JobCard";
 
 export function JobList({

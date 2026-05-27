@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
 import "./WorktreeView.css";
+
+import { useCallback, useMemo, useState } from "react";
+
 import type { DiffMode, Worktree } from "@/bindings";
 import {
   useProjects,
@@ -12,9 +14,10 @@ import {
 import { useStickyToggle } from "@/lib/useStickyToggle";
 import { chooseInitialReviewLens, type ReviewLens } from "@/lib/worktreeReview";
 import { useUIStore } from "@/store";
+
 import { CleanupPanel } from "./CleanupPanel";
-import { type SelectedDiff } from "./WorktreeFileList";
 import { WorktreeBody } from "./WorktreeBody";
+import { type SelectedDiff } from "./WorktreeFileList";
 import { WorktreeHeader } from "./WorktreeHeader";
 
 /**

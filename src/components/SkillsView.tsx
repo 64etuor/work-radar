@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
 import "./SkillsView.css";
+
 import { Blocks, FileText, Plus, Save, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Skill } from "@/bindings";
 import { Button } from "@/components/ui/button";

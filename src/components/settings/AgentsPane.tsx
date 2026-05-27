@@ -1,15 +1,8 @@
 import { useState } from "react";
 
-import { useCodexStatus } from "@/lib/query/agents";
-import {
-  useAgentPromptConfigs,
-  useCodexModel,
-  useCodexModelCatalog,
-  useSetCodexModel,
-  useUpdateAgentPromptConfig,
-} from "@/lib/query/agentsConfig";
 import type { AgentPromptConfig, AgentReasoningEffort } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,7 +12,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/components/ui/cn";
+import { useCodexStatus } from "@/lib/query/agents";
+import {
+  useAgentPromptConfigs,
+  useCodexModel,
+  useCodexModelCatalog,
+  useSetCodexModel,
+  useUpdateAgentPromptConfig,
+} from "@/lib/query/agentsConfig";
+
 import { SectionLabel, StatusDot } from "./SettingsKit";
 
 /**

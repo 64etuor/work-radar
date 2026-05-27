@@ -1,8 +1,8 @@
 import { useState } from "react";
 
 import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
-import { CheckIcon } from "@/components/board/CheckIcon";
 import { quadrantToZone, type ZoneKey } from "@/components/board/boardUtils";
+import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import { ageFromForDate, isTodayDone, localToday } from "@/lib/query";
 import { useListReorder } from "@/lib/useListReorder";

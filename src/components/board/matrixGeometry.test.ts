@@ -4,9 +4,9 @@ import {
   CARD_GAP,
   CARD_HEIGHT,
   CARD_WIDTH,
-  INBOX_FOOTER_HEIGHT,
   computeInboxHeight,
   computeZonePositions,
+  INBOX_FOOTER_HEIGHT,
   rectContainsPoint,
 } from "@/components/board/matrixGeometry";
 

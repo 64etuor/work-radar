@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
 import { Check, ExternalLink, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { AgentRunView, CiTriageProposal } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import { openExternal, useAcceptTriage, useRejectProposal, useTriageProposal } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { openExternal, useAcceptTriage, useRejectProposal, useTriageProposal } from "@/lib/query";
+
 import { ProposalError, prTrigger } from "./jobsUtils";
 
 /**

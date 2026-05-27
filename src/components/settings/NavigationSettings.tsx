@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
+import { eventToHotkeySpec } from "@/lib/hotkey";
+import { EXTRA_ACTIONS, NAV_ITEMS } from "@/lib/nav";
 import {
   useGlobalHotkey,
   useNavKeymap,
@@ -8,10 +12,7 @@ import {
   useSetGlobalHotkey,
   useSetNavKeymap,
 } from "@/lib/query";
-import { EXTRA_ACTIONS, NAV_ITEMS } from "@/lib/nav";
-import { eventToHotkeySpec } from "@/lib/hotkey";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/components/ui/cn";
+
 import { SectionLabel } from "./SettingsKit";
 
 /** 키맵 에디터 행: view + EXTRA_ACTIONS(calendar 등)를 한 목록으로. */

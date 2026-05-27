@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import type { LifeWheelTagConfig } from "@/bindings";
-import { useLifeWheelTags, useSetLifeWheelTags } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/components/ui/cn";
+import { useLifeWheelTags, useSetLifeWheelTags } from "@/lib/query";
+
 import { Field, SectionLabel } from "./SettingsKit";
 
 function slugify(raw: string): string {

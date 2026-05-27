@@ -1,11 +1,13 @@
 import type { UseQueryResult } from "@tanstack/react-query";
+
 import type { DiffFileSummary, DiffMode, Worktree } from "@/bindings";
 import { usePaneSize } from "@/lib/usePaneSize";
 import type { ReviewLens } from "@/lib/worktreeReview";
+
 import { CommitGraphDrawer } from "./CommitGraphDrawer";
-import { type SelectedDiff } from "./WorktreeFileList";
 import { WorktreeDiffPanel } from "./WorktreeDiffPanel";
 import { WorktreeEmptyState } from "./WorktreeEmptyState";
+import { type SelectedDiff } from "./WorktreeFileList";
 import { WorktreeLensToolbar } from "./WorktreeLensToolbar";
 import { WorktreeRefsBar } from "./WorktreeRefsBar";
 import { ReviewSummary } from "./WorktreeReviewPanel";

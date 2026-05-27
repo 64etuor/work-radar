@@ -1,5 +1,5 @@
-import * as React from "react";
 import { Popover as PopoverPrimitive } from "radix-ui";
+import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -63,10 +63,10 @@ function PopoverDescription({ className, ...props }: React.ComponentProps<"p">) 
 
 export {
   Popover,
-  PopoverTrigger,
-  PopoverContent,
   PopoverAnchor,
+  PopoverContent,
+  PopoverDescription,
   PopoverHeader,
   PopoverTitle,
-  PopoverDescription,
+  PopoverTrigger,
 };

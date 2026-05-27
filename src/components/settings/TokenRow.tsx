@@ -1,7 +1,9 @@
-import { useState } from "react";
 import { ChevronRight, Github } from "lucide-react";
+import { useState } from "react";
 
 import type { TokenKind } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   useDeleteProjectToken,
   useGhAuthLoginWeb,
@@ -13,8 +15,7 @@ import {
   usePingProjectToken,
   useSetProjectToken,
 } from "@/lib/query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { StatusDot } from "./SettingsKit";
 
 /** Notion 마크 (lucide에 브랜드 아이콘이 없어 작은 글리프). */

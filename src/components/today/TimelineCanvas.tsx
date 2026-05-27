@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useDroppable } from "@dnd-kit/core";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TimelineBlock } from "@/components/today/TimelineBlock";
-import type { DragData, DropData } from "@/components/today/useTimelineDnd";
-import type { LayoutBox } from "@/lib/timelineLayout";
 import {
+  type DragDelta,
   dragGuideFromLayout,
   previewTimelineBoxes,
   renderTimelineBoxesForDrag,
-  type DragDelta,
 } from "@/components/today/timelinePreview";
+import type { DragData, DropData } from "@/components/today/useTimelineDnd";
+import type { LayoutBox } from "@/lib/timelineLayout";
 
 const HOUR_PX = 60;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);

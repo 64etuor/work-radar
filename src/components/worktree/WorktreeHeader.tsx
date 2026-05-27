@@ -1,4 +1,5 @@
 import { RefreshCw, Trash2, Waypoints } from "lucide-react";
+
 import type { Project } from "@/bindings";
 import { KindBadge } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";

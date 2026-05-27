@@ -1,6 +1,8 @@
+import { Check, CircleUserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CircleUserRound, Check, X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   useCancelGoogleAccountOauth,
   useDisconnectGoogleAccount,
@@ -11,10 +13,9 @@ import {
   useSetSelectedCalendars,
   useStartGoogleAccountOauth,
 } from "@/lib/query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SectionLabel, StatusDot } from "./SettingsKit";
+
 import { googleAccountOauthViewState } from "./googleAccountUx";
+import { SectionLabel, StatusDot } from "./SettingsKit";
 
 /**
  * 프로젝트별 Google 계정 연결 (현재 Calendar read+write — 캘린더 목록·이벤트 생성).

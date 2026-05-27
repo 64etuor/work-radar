@@ -17,16 +17,16 @@
  * 픽셀→시간: 60px/h, 15분 스냅. 로컬 ISO("YYYY-MM-DDTHH:MM:SS")로 빌드 — UTC 미사용
  * (PR 4 todayBlocks.ts plusMin 패턴과 동일, 동일 timezone-drift 버그 방지).
  */
-import { useCallback, type MutableRefObject } from "react";
 import {
   DndContext,
+  type DragEndEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
+import { type MutableRefObject, useCallback } from "react";
 
 import type { CalendarEvent, WorkSignal } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
