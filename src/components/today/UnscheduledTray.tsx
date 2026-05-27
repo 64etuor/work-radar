@@ -48,6 +48,8 @@ function SignalDraggableRow({
       data-dragging={isDragging || undefined}
       {...attributes}
       {...listeners}
+      role="listitem"
+      aria-label={`${signal.title} (Today)`}
     >
       <button
         type="button"
@@ -93,6 +95,8 @@ function RoutineDraggableRow({
       data-dragging={isDragging || undefined}
       {...attributes}
       {...listeners}
+      role="listitem"
+      aria-label={`${routine.title} (루틴)`}
     >
       <button
         type="button"
@@ -137,10 +141,17 @@ export function UnscheduledTray({
     <aside
       ref={setNodeRef}
       className="today-tray"
+      aria-label="미배치 항목"
       data-drop-over={isOver || undefined}
     >
-      <div className="today-tray-head">미배치</div>
-      <div className="today-tray-body">
+      <div className="today-tray-head" id="today-tray-head">
+        미배치
+      </div>
+      <div
+        className="today-tray-body"
+        role="list"
+        aria-labelledby="today-tray-head"
+      >
         {empty && (
           <div className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</div>
         )}
@@ -165,21 +176,32 @@ export function UnscheduledTray({
               type="button"
               className="today-tray-section-head"
               onClick={() => setAllDayOpen((v) => !v)}
+              aria-expanded={allDayOpen}
+              aria-controls="today-tray-allday-body"
+              aria-label={`종일 이벤트 ${allDayEvents.length}건${allDayOpen ? "(펼침)" : "(접힘)"}`}
             >
               {allDayOpen ? (
-                <ChevronDown className="size-3.5" />
+                <ChevronDown className="size-3.5" aria-hidden />
               ) : (
-                <ChevronRight className="size-3.5" />
+                <ChevronRight className="size-3.5" aria-hidden />
               )}
-              <Calendar className="size-3.5" />
+              <Calendar className="size-3.5" aria-hidden />
               <span>종일</span>
-              <span className="today-tray-count">{allDayEvents.length}</span>
+              <span className="today-tray-count" aria-hidden>
+                {allDayEvents.length}
+              </span>
             </button>
             {allDayOpen && (
-              <div className="today-tray-allday">
+              <div
+                id="today-tray-allday-body"
+                className="today-tray-allday"
+                role="list"
+                aria-label="종일 이벤트 목록"
+              >
                 {allDayEvents.map((e) => (
                   <span
                     key={e.id}
+                    role="listitem"
                     className="today-tray-chip"
                     style={calendarColorStyle(e.projectColor, e.projectTextColor)}
                     title={e.calendarSummary}

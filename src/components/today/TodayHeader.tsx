@@ -107,20 +107,30 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
           오늘로
         </Button>
       </div>
-      <div className="today-debt-chips">
-        {CHIPS.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            className={`today-debt-chip today-debt-${c.tone}`}
-            onClick={() => goTo(c.go)}
-            title={c.label}
-          >
-            {c.icon}
-            <span>{c.label}</span>
-            <span className="today-debt-num">{debt[c.key] ?? "—"}</span>
-          </button>
-        ))}
+      <div className="today-debt-chips" role="group" aria-label="Work Debt 요약">
+        {CHIPS.map((c) => {
+          const n = debt[c.key];
+          // a11y: 아이콘만 있는 chip이라 텍스트 라벨 + 숫자를 aria-label로 합쳐 노출.
+          // 숫자 미도착 시 "데이터 없음"으로 fallback.
+          const ariaLabel =
+            n === undefined ? `${c.label} 데이터 없음` : `${c.label} ${n}건`;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              className={`today-debt-chip today-debt-${c.tone}`}
+              onClick={() => goTo(c.go)}
+              title={c.label}
+              aria-label={ariaLabel}
+            >
+              {c.icon}
+              <span>{c.label}</span>
+              <span className="today-debt-num" aria-hidden>
+                {n ?? "—"}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </header>
   );

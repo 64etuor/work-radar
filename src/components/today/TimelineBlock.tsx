@@ -51,6 +51,17 @@ export function TimelineBlock({ box, onClick }: Props) {
 
   const isDoneRoutine = block.kind === "routine" && block.done === true;
 
+  // a11y: 색만으로 의미 전달 X — aria-label에 시간/캘린더/완료 상태를 텍스트로 노출.
+  // 스크린리더 사용자가 "title 09:30–10:00 (cal-id) 완료됨" 형태로 듣게 된다.
+  const ariaLabel = [
+    block.title,
+    `${hhmm(block.startISO)}–${hhmm(block.endISO)}`,
+    block.calendarId ? `(${block.calendarId})` : `(${block.kind})`,
+    isDoneRoutine ? "완료됨" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <button
       ref={isSignal ? drag.setNodeRef : undefined}
@@ -71,6 +82,7 @@ export function TimelineBlock({ box, onClick }: Props) {
       title={block.title}
       {...(isSignal ? drag.attributes : {})}
       {...(isSignal ? drag.listeners : {})}
+      aria-label={ariaLabel}
     >
       <div className="tl-block-time">
         {hhmm(block.startISO)}–{hhmm(block.endISO)}
