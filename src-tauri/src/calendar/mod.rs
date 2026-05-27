@@ -30,6 +30,7 @@ mod loopback;
 mod oauth;
 mod parse;
 pub mod pending_store;
+pub mod sync;
 mod windows;
 mod write;
 
@@ -118,6 +119,24 @@ pub trait CalendarProvider {
         calendar_id: &str,
         input: &CreateEventInput,
     ) -> impl std::future::Future<Output = Result<(String, Option<String>), CalendarError>> + Send;
+
+    /// 기존 이벤트 부분 갱신(Today×Timeline PR 2). patch 페이로드는 시작/지속시간/제목 등 변경분만.
+    /// bounded retry. 사용자 폼/타임라인 드래그 = 사람 결정 — Acceptance 게이트 불요(#2).
+    fn patch_event(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        event_id: &str,
+        patch: &serde_json::Value,
+    ) -> impl std::future::Future<Output = Result<(), CalendarError>> + Send;
+
+    /// 이벤트 삭제(Today×Timeline PR 2). 카드 unschedule → mirror 정리. bounded retry.
+    fn delete_event(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        event_id: &str,
+    ) -> impl std::future::Future<Output = Result<(), CalendarError>> + Send;
 }
 
 // ── 한 프로젝트의 fetch 컨텍스트 + 다중 프로젝트 병합 코어 ──────────────────────────

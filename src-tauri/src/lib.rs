@@ -358,6 +358,15 @@ pub fn run() {
             let sched_db: db::Db = app.state::<db::Db>().inner().clone();
             scheduler::spawn_loop(sched_db, AppNotifier(app.handle().clone()));
 
+            // 캘린더 sync 워커(Today×Timeline PR 2): pending_calendar_writes 큐를 200ms tick +
+            // Notify로 굴린다. 외부 호출 Rust only(INVARIANT) · bounded retry [1s,3s,9s]×3(#5) ·
+            // staged=true는 commit_staged_writes로 풀릴 때까지 skip(#2 Acceptance).
+            let sync_db: db::Db = app.state::<db::Db>().inner().clone();
+            let (sync_engine, sync_notify) =
+                calendar::sync::SyncEngine::new(sync_db, app.handle().clone());
+            app.manage(sync_notify);
+            sync_engine.spawn();
+
             // 외부 뉴스 페처(PR B/D-Tune): tokio interval + Notify 즉시 적용.
             // 페치당 최대 3회 지수 백오프+jitter, 실패는 news_fetch_failed 이벤트로 surface.
             // 표시 전용 — 큐/매트릭스에 자동 주입 절대 금지(INVARIANT #1).

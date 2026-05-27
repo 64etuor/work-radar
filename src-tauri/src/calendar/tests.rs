@@ -65,6 +65,23 @@ impl CalendarProvider for FakeProvider {
     ) -> Result<(String, Option<String>), CalendarError> {
         self.create.clone()
     }
+    async fn patch_event(
+        &self,
+        _access_token: &str,
+        _calendar_id: &str,
+        _event_id: &str,
+        _patch: &serde_json::Value,
+    ) -> Result<(), CalendarError> {
+        Ok(())
+    }
+    async fn delete_event(
+        &self,
+        _access_token: &str,
+        _calendar_id: &str,
+        _event_id: &str,
+    ) -> Result<(), CalendarError> {
+        Ok(())
+    }
 }
 
 fn client_only() -> CalendarCreds {

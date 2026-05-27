@@ -115,6 +115,52 @@ impl HttpCalendarProvider {
             .map_err(|e| CalendarError::Terminal(format!("calendar parse: {e}")))
     }
 
+    /// Bearer PATCH(JSON body) → 빈 응답 OK(204) 또는 JSON. 200대가 아니면 분류된 에러.
+    /// 401/403/404 등은 Terminal로 노출. Today×Timeline PR 2 — 이벤트 부분 갱신.
+    async fn patch_json(
+        &self,
+        url: &str,
+        access_token: &str,
+        body: &serde_json::Value,
+    ) -> Result<(), CalendarError> {
+        let resp = self
+            .http
+            .patch(url)
+            .bearer_auth(access_token)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| classify_reqwest(&e))?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        if !(200..300).contains(&status) {
+            return Err(classify_http(status, &text));
+        }
+        Ok(())
+    }
+
+    /// Bearer DELETE → 빈 응답(204) 또는 JSON. 200대/204가 아니면 분류된 에러.
+    /// Today×Timeline PR 2 — 이벤트 삭제(unschedule mirror 정리).
+    async fn delete_request(&self, url: &str, access_token: &str) -> Result<(), CalendarError> {
+        let resp = self
+            .http
+            .delete(url)
+            .bearer_auth(access_token)
+            .send()
+            .await
+            .map_err(|e| classify_reqwest(&e))?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        // 410 Gone(이미 삭제됨)도 성공으로 간주 — idempotent unschedule.
+        if status == 410 {
+            return Ok(());
+        }
+        if !(200..300).contains(&status) {
+            return Err(classify_http(status, &text));
+        }
+        Ok(())
+    }
+
     /// Bearer POST(JSON body) → JSON 1회(write, Phase 19). 200대가 아니면 분류된 에러.
     /// 401(만료)·403(스코프 부족: readonly 토큰)·404 등은 Terminal로 노출(graceful).
     async fn post_json(
@@ -242,6 +288,43 @@ impl CalendarProvider for HttpCalendarProvider {
         })
         .await?;
         parse_created_event(&json)
+    }
+
+    async fn patch_event(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        event_id: &str,
+        patch: &serde_json::Value,
+    ) -> Result<(), CalendarError> {
+        let url = format!(
+            "{CALENDAR_API_BASE}/{}/events/{}",
+            encode_path_segment(calendar_id),
+            encode_path_segment(event_id)
+        );
+        with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.patch_json(&url, access_token, patch)
+        })
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_event(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        event_id: &str,
+    ) -> Result<(), CalendarError> {
+        let url = format!(
+            "{CALENDAR_API_BASE}/{}/events/{}",
+            encode_path_segment(calendar_id),
+            encode_path_segment(event_id)
+        );
+        with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.delete_request(&url, access_token)
+        })
+        .await?;
+        Ok(())
     }
 }
 
