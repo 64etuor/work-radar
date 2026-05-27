@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
+
+import { TimelineBlock } from "@/components/today/TimelineBlock";
+import type { LayoutBox } from "@/lib/timelineLayout";
 
 const HOUR_PX = 60;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -6,6 +10,8 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 type Props = {
   date: string;
   today: string;
+  boxes: LayoutBox[];
+  onBlockClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
 };
 
 function nowOffsetPx(): number {
@@ -16,9 +22,9 @@ function nowOffsetPx(): number {
 /**
  * 24시간 read-only 그리드(스펙 §3·§D2). 1시간=60px, 총 1440px.
  * "현재 시각" 빨간 선은 `date === today`일 때만 표시 — 다른 날 보기에선 노출 금지.
- * 블록 렌더는 PR 4, 드래그는 PR 5에서 추가한다.
+ * PR 4에서 블록 레이어 추가(클릭 = EventPopover). 드래그는 PR 5.
  */
-export function TimelineCanvas({ date, today }: Props) {
+export function TimelineCanvas({ date, today, boxes, onBlockClick }: Props) {
   const [nowPx, setNowPx] = useState<number>(() => nowOffsetPx());
 
   useEffect(() => {
@@ -43,6 +49,9 @@ export function TimelineCanvas({ date, today }: Props) {
             </span>
             <div className="today-canvas-hour-rule" />
           </div>
+        ))}
+        {boxes.map((b) => (
+          <TimelineBlock key={b.id} box={b} onClick={onBlockClick} />
         ))}
         {showNow && (
           <div

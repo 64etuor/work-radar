@@ -16,6 +16,8 @@ import {
   useToggleRoutineCheck,
   useToggleTodayDone,
 } from "@/lib/query";
+import { computeLayout } from "@/lib/timelineLayout";
+import { buildTodayBlocks } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
 
 /**
@@ -57,6 +59,12 @@ export function TodayView() {
     (r) => !r.timeOverride && !r.timeOfDay,
   );
 
+  const blocks = useMemo(
+    () => buildTodayBlocks({ signals: rail, events: allEvents, routines: routineList, date }),
+    [rail, allEvents, routineList, date],
+  );
+  const boxes = useMemo(() => computeLayout(blocks), [blocks]);
+
   return (
     <div className="today">
       <TodayHeader
@@ -82,7 +90,14 @@ export function TodayView() {
               <Button onClick={() => goTo("settings")}>Google 계정 연결</Button>
             </div>
           ) : (
-            <TimelineCanvas date={date} today={today} />
+            <TimelineCanvas
+              date={date}
+              today={today}
+              boxes={boxes}
+              onBlockClick={() => {
+                /* EventPopover wiring lands in Task 4. */
+              }}
+            />
           )}
         </div>
       </div>

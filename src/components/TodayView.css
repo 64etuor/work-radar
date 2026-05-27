@@ -269,6 +269,56 @@
   height: 100%;
 }
 
+/* ── 블록 레이어(PR 4) ────────────────────────────────────────────── */
+
+.tl-block {
+  position: absolute;
+  background: #fff;
+  border: 1px solid var(--wr-border-light);
+  border-left-width: 3px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.15s ease;
+}
+
+.tl-block:hover {
+  background: #fafaf7;
+}
+
+.tl-block-time {
+  font-size: 10px;
+  color: var(--wr-subtle);
+  font-family: ui-monospace, monospace;
+}
+
+.tl-block-title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-block-icon {
+  width: 11px;
+  height: 11px;
+  display: inline;
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+
+.tl-block-signal {
+  background: #f6f9ff;
+}
+
+.tl-block-routine {
+  background: #f6fbf2;
+}
+
 /* ── 반응형 ────────────────────────────────────────────────────────── */
 
 @media (max-width: 1040px) {
