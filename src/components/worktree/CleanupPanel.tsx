@@ -77,6 +77,7 @@ export function CleanupPanel({
     cleanupReview.mutate({
       projectId: null,
       repoId: null,
+      agentPromptBinding: "worktree_cleanup",
       prompt,
       timeoutSec: 120,
       maxTurns: 6,

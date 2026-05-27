@@ -145,6 +145,7 @@ export function WorktreeView() {
       {
         projectId: selected.projectId,
         repoId: selected.repoId,
+        agentPromptBinding: "worktree_review",
         prompt,
         timeoutSec: 180,
         maxTurns: 10,
