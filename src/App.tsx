@@ -17,7 +17,6 @@ import { RetroView } from "@/components/RetroView";
 import { RoutineTrackingView } from "@/components/RoutineTrackingView";
 import { SettingsView } from "@/components/SettingsView";
 import { SkillsView } from "@/components/SkillsView";
-import { TimelineView } from "@/components/TimelineView";
 import { TodayView } from "@/components/TodayView";
 import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
@@ -153,8 +152,6 @@ export default function App() {
           <TodayView />
         ) : view === "inbox" ? (
           <InboxView />
-        ) : view === "timeline" ? (
-          <TimelineView />
         ) : view === "weekly" ? (
           <WeeklyView />
         ) : view === "retro" ? (

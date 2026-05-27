@@ -5,7 +5,6 @@ export type View =
   | "board"
   | "today"
   | "inbox"
-  | "timeline"
   | "weekly"
   | "retro"
   | "routines"

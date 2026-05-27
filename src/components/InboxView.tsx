@@ -279,7 +279,7 @@ function inferTargetView(item: InboxItem): View | null {
   if (item.relatedEntityType === "agent" || item.source === "agent") return "jobs";
   if (item.relatedEntityType === "worktree") return "worktree";
   if (item.source === "notification") return null;
-  return "timeline";
+  return "today";
 }
 
 function formatDate(value: string): string {
