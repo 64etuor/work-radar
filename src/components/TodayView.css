@@ -1,252 +1,295 @@
-/* ── Today 운영 뷰 (Phase 11a) ─────────────────────────────────────────────── */
+/**
+ * Today — PR 3 셸 레이아웃(스펙 §3·§D2·§D13).
+ * 헤더(날짜 네비 + Work Debt 4칩) + 좌 미배치 트레이(280px) + 우 24h read-only 캔버스.
+ * 블록·드래그는 후속 PR(4·5).
+ */
+
 .today {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  background: var(--color-wr-bg);
-  color: var(--color-wr-fg);
-  font-family: var(--font-sans);
+  height: 100%;
+  background: var(--wr-bg);
 }
-.today .today-head {
-  flex: 0 0 auto;
+
+/* ── 헤더 ───────────────────────────────────────────────────────────── */
+
+.today-head {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 22px;
-  border-bottom: 1px solid var(--color-wr-border-light);
-}
-.today .today-title {
-  font: 600 13px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.today .today-date {
-  margin-left: auto;
-  font: 500 12px var(--font-mono);
-  letter-spacing: 0.04em;
-  color: var(--color-wr-subtle);
-}
-.today .today-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 18px 22px 40px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wr-border-light);
 }
 
-/* Work Debt 스트립 */
-.today .today-debt {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-bottom: 22px;
+.today-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
-.today .today-tile {
+
+.today-nav {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-  border: 1px solid var(--color-wr-card-border);
-  border-radius: 12px;
-  background: var(--color-wr-surface);
-  padding: 12px 14px;
-  cursor: pointer;
-  text-align: left;
-}
-.today .today-tile:hover {
-  background: var(--color-wr-hover);
-}
-.today .today-tile-top {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-wr-subtle);
-}
-.today .today-tile-label {
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.04em;
-}
-.today .today-tile-val {
-  font: 600 24px var(--font-sans);
-  line-height: 1;
-}
-.today .today-tile-urgent .today-tile-val {
-  color: var(--color-q1);
-}
-.today .today-tile-warn .today-tile-val {
-  color: var(--color-wr-coral);
-}
-.today .today-tile-muted .today-tile-val {
-  color: var(--color-wr-muted);
-}
-
-/* 섹션 */
-.today .today-sec {
-  margin-bottom: 22px;
-}
-.today .today-sec-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--color-wr-border-light);
-}
-.today .today-sec-name {
-  font: 600 12px var(--font-sans);
-}
-.today .today-sec-count {
-  margin-left: auto;
-  font: 500 11px var(--font-mono);
-  color: var(--color-wr-subtle);
-}
-.today .today-hint {
-  font: 400 12px var(--font-sans);
-  color: var(--color-wr-muted);
-  padding: 6px 2px;
-}
-
-/* 행 (Q1 / 레일 / PR / 루틴 공용) */
-.today .today-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 4px;
-  border-bottom: 1px solid var(--color-wr-border-light);
-}
-.today .today-row-btn {
-  width: 100%;
-  background: none;
-  border-top: none;
-  border-left: none;
-  border-right: none;
-  cursor: pointer;
-  text-align: left;
-}
-.today .today-row-btn:hover {
-  background: var(--color-wr-hover);
-}
-.today .today-row-title {
-  flex: 1;
-  min-width: 0;
-  font: 400 13px var(--font-sans);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.today .today-done .today-row-title {
-  color: var(--color-wr-muted);
-  text-decoration: line-through;
-}
-.today .today-check {
-  display: inline-flex;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-.today .today-age {
-  font: 600 11px var(--font-mono);
-  color: var(--color-wr-coral);
-}
-.today .today-badge {
-  font: 600 10px var(--font-mono);
-  letter-spacing: 0.04em;
-  border-radius: 4px;
-  padding: 2px 5px;
-}
-.today .today-q1 {
-  background: var(--color-wr-coral-soft);
-  color: var(--color-q1);
-}
-.today .today-pr {
-  background: var(--color-wr-accent-soft);
-  color: var(--color-wr-action-blue);
-}
-
-/* 캘린더 이벤트 */
-.today .today-allday {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.today .today-allday-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--color-wr-border-light);
-  background: var(--project-calendar-bg, var(--color-wr-surface));
-  border-radius: 999px;
-  padding: 3px 10px;
-  cursor: pointer;
-  font: 400 12px var(--font-sans);
-  color: var(--project-calendar-fg, var(--color-wr-fg));
-}
-.today .today-allday-tag {
-  font: 600 9px var(--font-mono);
-  color: var(--project-calendar-fg, var(--color-wr-subtle));
-}
-.today .today-event {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 4px;
-  border: none;
-  border-bottom: 1px solid var(--color-wr-border-light);
-  background: var(--project-calendar-bg, none);
-  color: var(--project-calendar-fg, var(--color-wr-fg));
-  cursor: pointer;
-  text-align: left;
-}
-.today .today-event:hover {
-  filter: brightness(0.96);
-}
-.today .today-event-time {
-  font: 600 12px var(--font-mono);
-  color: var(--project-calendar-fg, var(--color-wr-fg));
-  flex: 0 0 auto;
-  width: 44px;
-}
-.today .today-event-title {
-  flex: 1;
-  min-width: 0;
-  font: 400 13px var(--font-sans);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.today .today-event-cal {
-  font: 400 11px var(--font-mono);
-  color: var(--project-calendar-fg, var(--color-wr-subtle));
-  flex: 0 0 auto;
-}
-
-
-/* ── P9: Today 헤더 < > 날짜 네비 + 캘린더 미연결 CTA ── */
-.today .today-nav {
-  margin-left: auto;
-  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.today .today-nav .today-date {
-  margin-left: 0;
-  min-width: 88px;
+
+.today-date {
+  font-family: ui-monospace, SF Mono, monospace;
+  font-size: 13px;
+  min-width: 96px;
   text-align: center;
 }
-.today .today-state {
+
+.today-debt-chips {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.today-debt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  border: 1px solid var(--wr-border-light);
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.today-debt-chip:hover {
+  background: var(--wr-bg-soft, #f6f5f1);
+}
+
+.today-debt-chip .today-debt-num {
+  font-weight: 700;
+}
+
+.today-debt-urgent {
+  color: #b8413a;
+  border-color: #ecc2bf;
+}
+
+.today-debt-warn {
+  color: #b58b1f;
+  border-color: #eddfaa;
+}
+
+.today-debt-muted {
+  color: var(--wr-subtle);
+}
+
+/* ── 본문 그리드 (트레이 + 캔버스) ─────────────────────────────────── */
+
+.today-main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── 좌측 트레이 ───────────────────────────────────────────────────── */
+
+.today-tray {
+  border-right: 1px solid var(--wr-border-light);
+  overflow-y: auto;
+  background: var(--wr-bg);
+}
+
+.today-tray-head {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--wr-subtle);
+  border-bottom: 1px solid var(--wr-border-light);
+}
+
+.today-tray-body {
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 0 4px;
+  gap: 4px;
 }
-.today .today-state-msg {
-  margin: 0;
-  font: 400 13px var(--font-sans);
-  color: var(--color-wr-muted);
+
+.today-tray-empty {
+  padding: 16px;
+  color: var(--wr-subtle);
+  font-size: 12px;
+}
+
+.today-tray-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid var(--wr-border-light);
+  border-radius: 6px;
+}
+
+.today-tray-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.today-tray-title {
+  flex: 1;
+  font-size: 12px;
+  text-align: left;
+}
+
+.today-tray-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+}
+
+.tag-today {
+  background: #eef3ff;
+  color: #4a7bb8;
+}
+
+.today-tray-section {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.today-tray-section-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--wr-subtle);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.today-tray-count {
+  margin-left: auto;
+}
+
+.today-tray-allday {
+  padding: 0 8px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.today-tray-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--wr-border-light);
+  background: #fff;
+}
+
+/* ── 우측 캔버스 ───────────────────────────────────────────────────── */
+
+.today-canvas-wrap {
+  position: relative;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.today-canvas {
+  position: relative;
+  min-height: 100%;
+}
+
+.today-canvas-grid {
+  position: relative;
+  padding-left: 60px;
+}
+
+.today-canvas-hour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 60px;
+}
+
+.today-canvas-hour-label {
+  position: absolute;
+  left: 8px;
+  top: -7px;
+  font-size: 10px;
+  color: var(--wr-subtle);
+  font-family: ui-monospace, monospace;
+}
+
+.today-canvas-hour-rule {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--wr-border-light);
+}
+
+.today-canvas-now {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  height: 2px;
+  background: #e0584a;
+  z-index: 5;
+}
+
+.today-canvas-now::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e0584a;
+}
+
+.today-canvas-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  height: 100%;
+}
+
+/* ── 반응형 ────────────────────────────────────────────────────────── */
+
+@media (max-width: 1040px) {
+  .today-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .today-tray {
+    border-right: 0;
+    border-bottom: 1px solid var(--wr-border-light);
+    max-height: 200px;
+  }
+}
+
+@media (max-width: 720px) {
+  .today-head {
+    flex-wrap: wrap;
+  }
+  .today-debt-chips {
+    margin-left: 0;
+    width: 100%;
+    overflow-x: auto;
+  }
 }
