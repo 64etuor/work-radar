@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -119,14 +120,26 @@ export function TodayView() {
     resolve: (calendarId: string | null) => void;
   } | null>(null);
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
+  // 활성 picker resolver — unmount 시 promise leak 방지용(아래 cleanup effect에서 resolve(null)).
+  const pickerResolverRef = useRef<((v: string | null) => void) | null>(null);
   // TimelineCanvas pointer Y — useTimelineDnd가 onDragEnd에서 읽는다.
   const canvasPointerYRef = useRef<number | null>(null);
 
   const promptCalendarPicker = useCallback(
     (signalId: string) =>
       new Promise<string | null>((resolve) => {
+        pickerResolverRef.current = resolve;
         setPicker({ signalId, anchor: { ...lastPointerRef.current }, resolve });
       }),
+    [],
+  );
+
+  // Unmount cleanup — 미해결 picker promise가 있으면 null로 resolve하고 ref 정리.
+  useEffect(
+    () => () => {
+      pickerResolverRef.current?.(null);
+      pickerResolverRef.current = null;
+    },
     [],
   );
 
@@ -201,10 +214,12 @@ export function TodayView() {
             signalProjectId={pickerSignalProjectId}
             onPick={(calendarId) => {
               picker.resolve(calendarId);
+              pickerResolverRef.current = null;
               setPicker(null);
             }}
             onClose={() => {
               picker.resolve(null);
+              pickerResolverRef.current = null;
               setPicker(null);
             }}
           />

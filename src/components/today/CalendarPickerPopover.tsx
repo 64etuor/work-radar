@@ -50,7 +50,8 @@ export function CalendarPickerPopover({
   const projectsQ = useProjects();
   const setDefault = useSetProjectDefaultWriteCalendar();
   const [picked, setPicked] = useState<string | null>(null);
-  const [saveDefault, setSaveDefault] = useState<boolean>(true);
+  // 안전 기본값: 사용자가 의식적으로 체크해야 영속 저장 — 첫 picker에서 무의식 저장 방지.
+  const [saveDefault, setSaveDefault] = useState<boolean>(false);
 
   const project: Project | undefined = useMemo(() => {
     if (!signalProjectId) return undefined;
