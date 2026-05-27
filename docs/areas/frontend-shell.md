@@ -88,7 +88,10 @@ settings-refactor B(2026-05-24)에서 결정:
 - `src/styles/tokens.css` = Tailwind v4 `@theme` 디자인 토큰 SSOT. `--color-wr-*`, `--radius-*`,
   `--font-*`, motion, elevation/shadow, z-index/overlay, density spacing, graph/diff semantic token을 둔다.
 - `src/styles/base.css` = reset, `html/body/#root`, body 기본값, Lucide stroke, selection, scrollbar.
-- `src/styles/shared.css` = 진짜 앱 전역 utility와 공통 keyframes만. 특정 뷰/컴포넌트 selector 금지.
+- `src/styles/shared.css` = 진짜 앱 전역 구조 utility만. 특정 뷰/컴포넌트 selector와 keyframes 금지.
+- `src/styles/motion.css` = 전역 motion layer. `wr-*` motion selector와 공통 keyframes만 둔다.
+  컴포넌트별 레이아웃/색/간격 selector 금지. 모든 모션은 transform/opacity 중심,
+  `prefers-reduced-motion` 대응 필수.
 - 컴포넌트 CSS는 컴포넌트 옆에 둔다. 예: `src/components/worktree/WorktreeView.css`,
   `src/components/AgentStatusBar.css`, `src/components/news/NewsTicker.css`, `src/components/jobs/JobsView.css`.
   해당 컴포넌트 TSX가 직접 import한다.

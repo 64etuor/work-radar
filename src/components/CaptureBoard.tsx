@@ -104,7 +104,7 @@ export function CaptureBoard() {
   const triggerEnrichAll = useTriggerEnrichAll();
   const updateTitle = useUpdateSignalTitle();
   const deleteSignal = useDeleteSignal();
-  const { goTo } = useUIStore();
+  const { goTo, enrichAllGenerating, setEnrichAllRunId } = useUIStore();
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
@@ -118,10 +118,6 @@ export function CaptureBoard() {
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
   const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
   const [enrichRunId, setEnrichRunId] = useState<string | null>(null);
-  // "전체 제안 실행" 잡 id — set되면 보드 내 인라인 리뷰 패널이 폴링·표시(페이지 이동 없음).
-  const [enrichAllRunId, setEnrichAllRunId] = useState<string | null>(null);
-  // 배치 enrich 생성 중 여부(패널이 폴링하며 보고) — 인박스 버튼 스피너 표시용(토스트 대신).
-  const [enrichAllGenerating, setEnrichAllGenerating] = useState(false);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
@@ -243,7 +239,7 @@ export function CaptureBoard() {
   };
 
   // 미분류 전체 배치 enrich(Phase 8 #1/#2): 단일 codex 잡을 **백그라운드**로 트리거하고, 페이지 이동
-  // 없이 보드 내 **인라인 리뷰 패널**(EnrichReviewPanel)이 폴링·표시한다. 잡 캡(timeout/turns/cost)은
+  // 없이 전역 리뷰 패널(App shell)이 폴링·표시한다. 잡 캡(timeout/turns/cost)은
   // 유지(INVARIANT #5). accept해도 quadrant 자동 확정 0(INVARIANT #1) — 패널에서 사람이 수정·적용.
   const unclassifiedCount = signals.filter((s) => s.quadrant === "unclassified").length;
   const handleEnrichAll = () => {
@@ -258,7 +254,7 @@ export function CaptureBoard() {
     triggerEnrichAll.mutate(
       { projectId: null, timeoutSec: 180, maxTurns: 12, costCapUsd: 1.0 },
       {
-        // 페이지 이동(goTo) 대신 인라인 패널 — 카드는 계속 보임(결정 맥락 유지).
+        // 페이지 이동(goTo) 대신 전역 패널 — 다른 뷰로 이동해도 제안 검토가 유지된다.
         onSuccess: (runId) => setEnrichAllRunId(runId),
         onError: (e) => pushError("codex", `전체 제안 실패: ${String(e)}`),
       },
@@ -552,26 +548,6 @@ export function CaptureBoard() {
           captureDisabled={createSignal.isPending}
         />
 
-        <BoardOverlays
-          menu={null}
-          calendarModal={null}
-          projectPicker={null}
-          enrichRunId={null}
-          enrichAllRunId={enrichAllRunId}
-          codexReady={codexReady}
-          onMenuAction={handleMenuAction}
-          onMenuClose={() => setMenu(null)}
-          onCalendarClose={() => setCalendarModal(null)}
-          onProjectPickerClose={() => setProjectPicker(null)}
-          onProjectPick={handleProjectPick}
-          onEnrichClose={() => setEnrichRunId(null)}
-          onEnrichAllClose={() => {
-            setEnrichAllRunId(null);
-            setEnrichAllGenerating(false);
-          }}
-          onEnrichAllRunningChange={setEnrichAllGenerating}
-        />
-
         <ExecutionRail
           todayItems={todayItems}
           routines={routines}
@@ -603,11 +579,8 @@ export function CaptureBoard() {
         onProjectPickerClose={() => setProjectPicker(null)}
         onProjectPick={handleProjectPick}
         onEnrichClose={() => setEnrichRunId(null)}
-        onEnrichAllClose={() => {
-          setEnrichAllRunId(null);
-          setEnrichAllGenerating(false);
-        }}
-        onEnrichAllRunningChange={setEnrichAllGenerating}
+        onEnrichAllClose={() => setEnrichAllRunId(null)}
+        onEnrichAllRunningChange={() => undefined}
       />
     </div>
   );

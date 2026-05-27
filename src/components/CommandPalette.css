@@ -11,6 +11,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
+  animation: wr-backdrop-in var(--wr-motion-fast) var(--wr-ease-out) both;
 }
 .cmdk-panel {
   width: min(560px, 92vw);
@@ -19,6 +20,15 @@
   background: var(--color-wr-bg);
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-md);
-  box-shadow: 0 24px 60px rgba(10, 14, 30, 0.28);
+  box-shadow: var(--wr-shadow-overlay);
   overflow: hidden;
+  animation: wr-panel-pop-in var(--wr-motion-panel) var(--wr-ease-out) both;
+  transform-origin: top center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmdk-overlay,
+  .cmdk-panel {
+    animation: none;
+  }
 }

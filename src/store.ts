@@ -40,6 +40,12 @@ interface UIState {
   /** 캘린더 드로어 열림(전역) — 에이전트 바 우측 아이콘/단축키로 토글, 어느 뷰에서나. 표시 전용. */
   calendarOpen: boolean;
   setCalendarOpen: (open: boolean) => void;
+  /** 미분류 전체 AI 제안 잡 id — 전역 패널이 어느 뷰에서나 유지되도록 App shell이 소유한다. */
+  enrichAllRunId: string | null;
+  setEnrichAllRunId: (runId: string | null) => void;
+  /** 전체 제안 생성 중 여부 — 보드 버튼과 전역 패널이 같은 진행 상태를 공유한다. */
+  enrichAllGenerating: boolean;
+  setEnrichAllGenerating: (running: boolean) => void;
   /** Settings 뷰 진입 시 포커스 의도 (한 번 소비). */
   settingsIntent: SettingsIntent;
   /** 팔레트에서 고른 스킬 id (한 번 소비). SkillsView가 읽어 선택 후 clear. */
@@ -64,6 +70,10 @@ export const useUIStore = create<UIState>((set) => ({
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   calendarOpen: false,
   setCalendarOpen: (calendarOpen) => set({ calendarOpen }),
+  enrichAllRunId: null,
+  setEnrichAllRunId: (enrichAllRunId) => set({ enrichAllRunId }),
+  enrichAllGenerating: false,
+  setEnrichAllGenerating: (enrichAllGenerating) => set({ enrichAllGenerating }),
   settingsIntent: "open",
   pendingSkillId: null,
   theme: initialTheme(),

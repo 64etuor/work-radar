@@ -17,18 +17,8 @@
   border-left: 1px solid var(--color-wr-border);
   border-top-left-radius: var(--radius-lg);
   border-bottom-left-radius: var(--radius-lg);
-  box-shadow: -12px 0 32px rgba(10, 14, 30, 0.1);
-  animation: caldrawer-in var(--wr-motion-slow) var(--wr-ease-spring);
-}
-@keyframes caldrawer-in {
-  from {
-    transform: translateX(16px);
-    opacity: 0.4;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  box-shadow: var(--wr-shadow-md);
+  animation: wr-drawer-right-in var(--wr-motion-drawer) var(--wr-ease-out) both;
 }
 .caldrawer-head {
   display: flex;
@@ -288,20 +278,16 @@
     border-left: none;
     border-top: 1px solid var(--color-wr-border);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    box-shadow: 0 -12px 32px rgba(10, 14, 30, 0.12);
-    animation: caldrawer-sheet-in var(--wr-motion-slow) var(--wr-ease-spring);
+    box-shadow: var(--wr-shadow-md);
+    animation: wr-sheet-up-in var(--wr-motion-drawer) var(--wr-ease-out) both;
   }
   .calv-month-grid {
     grid-auto-rows: minmax(40px, auto);
   }
 }
-@keyframes caldrawer-sheet-in {
-  from {
-    transform: translateY(16px);
-    opacity: 0.4;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
+@media (prefers-reduced-motion: reduce) {
+  .caldrawer,
+  .caldrawer-skel-row {
+    animation: none;
   }
 }

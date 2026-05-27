@@ -21,19 +21,8 @@
   font: 500 13px var(--font-sans);
   line-height: 1.45;
   pointer-events: auto;
-  animation: toast-in var(--wr-motion-base) var(--wr-ease-out);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: wr-panel-pop-in var(--wr-motion-panel) var(--wr-ease-out) both;
+  box-shadow: var(--wr-shadow-toast);
 }
 
 .toast-error {
@@ -115,4 +104,10 @@
 }
 .toast-dismiss:hover {
   opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-item {
+    animation: none;
+  }
 }

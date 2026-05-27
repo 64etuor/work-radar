@@ -90,10 +90,15 @@
    * 예외: MatrixCanvas 카드 drag(물리 튜닝값)와 cb-pop 스프링 애니메이션은 의도적 bespoke.
    */
   --wr-motion-fast: 0.12s; /* 빠른 상호작용 피드백 (hover, toggle) */
-  --wr-motion-base: 0.16s; /* 뷰 전환 + 표준 요소 전환 */
-  --wr-motion-slow: 0.3s; /* 슬라이드/팝오버 등 느린 전환 */
-  --wr-ease-out: ease-out; /* 표준 ease-out */
+  --wr-motion-base: 0.18s; /* 뷰 전환 + 표준 요소 전환 */
+  --wr-motion-slow: 0.28s; /* 슬라이드/팝오버 등 느린 전환 */
+  --wr-motion-panel: 0.22s; /* 모달/팔레트/토스트 출현 */
+  --wr-motion-drawer: 0.32s; /* 드로어/시트 출현 */
+  --wr-motion-space: 0.42s; /* 화면/워크스페이스 전환 */
+  --wr-ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* 표준 material out */
+  --wr-ease-in: cubic-bezier(0.7, 0, 0.84, 0); /* 빠른 이탈 */
   --wr-ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1); /* 표준 스프링 커브 */
+  --wr-ease-space: cubic-bezier(0.22, 1, 0.36, 1); /* macOS Spaces에 가까운 감속 */
 
   /* Elevation / shadow scale — raw shadow values stay behind semantic tokens. */
   --wr-shadow-hairline: 0 1px 0 rgb(10 14 30 / 0.02);

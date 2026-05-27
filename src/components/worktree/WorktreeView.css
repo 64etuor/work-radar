@@ -396,6 +396,7 @@
   border-left: 1px solid var(--color-wr-border-light);
   background: var(--color-wr-bg);
   box-shadow: var(--wt-commit-edge-shadow);
+  animation: wr-drawer-right-in var(--wr-motion-drawer) var(--wr-ease-out) both;
 }
 .wt .wt-commit-head {
   flex: 0 0 auto;
@@ -1185,6 +1186,7 @@
     border-left: none;
     border-top: 1px solid var(--color-wr-border-light);
     box-shadow: var(--wt-commit-edge-shadow-mobile);
+    animation: wr-sheet-up-in var(--wr-motion-drawer) var(--wr-ease-out) both;
   }
   .wt .wt-commit-head {
     padding: 12px;
@@ -1232,6 +1234,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .wt .wt-commit-drawer,
   .wt .wt-active-dot {
     animation: none;
   }
