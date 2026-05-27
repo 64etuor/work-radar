@@ -65,6 +65,19 @@ export function ToastHost() {
               </button>
             )}
 
+            {t.onUndo && (
+              <button
+                type="button"
+                className="toast-btn toast-action"
+                onClick={() => {
+                  t.onUndo!();
+                  dismiss(t.id);
+                }}
+              >
+                {t.undoLabel ?? "되돌리기"}
+              </button>
+            )}
+
             {t.onRetry && (
               <button
                 type="button"

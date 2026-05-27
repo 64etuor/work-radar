@@ -31,6 +31,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { WorkSignal } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
 import { applySchedulePatch } from "@/lib/optimisticSchedule";
+import { useToastStore } from "@/lib/toast";
 
 const HOUR_PX = 60;
 const SNAP_MIN = 15;
@@ -198,9 +199,26 @@ export function useTimelineDnd(opts: Opts) {
 
       // ── 4: canvas → tray (unschedule) ─────────────────────────────────
       if (a.from === "canvas" && o.to === "tray") {
-        patchSignalCaches(a.signalId, { clearLink: true });
+        // 사전 상태 캡처 — undo 시 정확한 prior state 복원용.
+        const prevAt = a.startISO;
+        const prevDur = a.durationMin;
+        const signalId = a.signalId;
+        patchSignalCaches(signalId, { clearLink: true });
         try {
-          await stage({ kind: "unschedule", targetSignalId: a.signalId });
+          await stage({ kind: "unschedule", targetSignalId: signalId });
+          // 1.5s 토스트 + undo 액션(다시 reschedule). pushInfo 자동 dismiss(2500ms)에 의존,
+          // onUndo는 사용자가 명시적으로 눌렀을 때만 실행.
+          useToastStore.getState().pushInfo("일정 해제됨", {
+            onUndo: () => {
+              void stage({
+                kind: "reschedule",
+                targetSignalId: signalId,
+                at: prevAt,
+                durationMin: prevDur,
+              });
+            },
+            undoLabel: "되돌리기",
+          });
         } catch {
           invalidateSignalCaches();
         }

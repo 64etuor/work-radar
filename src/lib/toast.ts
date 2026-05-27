@@ -50,6 +50,13 @@ export interface ToastItem {
   onRetry?: () => void;
   /** 액션 버튼(외부 url 또는 내부 nav). */
   action?: ToastAction;
+  /**
+   * Undo 콜백(info/success 토스트 한정). 사용자가 명시적으로 눌렀을 때만 실행.
+   * 자동 dismiss 타이머(2500ms)는 그대로 — 이 시간 안에 누르면 직전 행동을 되돌린다.
+   */
+  onUndo?: () => void;
+  /** Undo 버튼 라벨(기본: "되돌리기"). */
+  undoLabel?: string;
 }
 
 /** AppError 판별(IpcError.app 또는 backend 결과). traceId + kind로 식별. */
@@ -81,10 +88,15 @@ interface ToastState {
     message: string,
     opts?: { actionUrl?: string; actionLabel?: string },
   ) => void;
-  /** 정보 토스트 push (2500ms 자동 dismiss). */
+  /** 정보 토스트 push (2500ms 자동 dismiss). onUndo가 있으면 "되돌리기" 버튼 노출. */
   pushInfo: (
     message: string,
-    opts?: { actionUrl?: string; actionLabel?: string },
+    opts?: {
+      actionUrl?: string;
+      actionLabel?: string;
+      onUndo?: () => void;
+      undoLabel?: string;
+    },
   ) => void;
   /** 토스트 dismiss. */
   dismiss: (id: string) => void;
