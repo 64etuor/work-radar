@@ -1,7 +1,10 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Repeat } from "lucide-react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 
 import type { LayoutBox } from "@/lib/timelineLayout";
 import type { DragData } from "@/components/today/useTimelineDnd";
@@ -17,25 +20,72 @@ function hhmm(iso: string): string {
 }
 
 /**
+ * 블록 하단 리사이즈 핸들 (PR 7 spec §7 row 3).
+ * 별도 useDraggable로 등록 — `from: "canvas-resize"` 분기로 useTimelineDnd가
+ * ev.delta.y → durationMin 재계산 후 stage(resize).
+ *
+ * 블록 button의 형제로 배치(중첩 interactive 회피) — 컨테이너 div가 둘을 같은 좌표계로 묶는다.
+ */
+function ResizeHandle({
+  signalId,
+  startISO,
+  durationMin,
+}: {
+  signalId: string;
+  startISO: string;
+  durationMin: number;
+}) {
+  const data: DragData = {
+    from: "canvas-resize",
+    signalId,
+    startISO,
+    durationMin,
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `resize:${signalId}`,
+    data,
+  });
+  const stop = (e: ReactPointerEvent<HTMLDivElement>) => e.stopPropagation();
+  return (
+    <div
+      ref={setNodeRef}
+      className="tl-block-resize"
+      data-dragging={isDragging || undefined}
+      onPointerDown={stop}
+      aria-label="블록 길이 조정"
+      {...attributes}
+      {...listeners}
+    />
+  );
+}
+
+/**
  * 시간축 위 단일 블록(스펙 §D8 카드 정본).
  * PR 5: signal 종류 블록만 draggable(canvas reschedule / unschedule / cross-cal).
+ * PR 7: signal 블록 하단에 ResizeHandle 추가 (스펙 §7 row 3).
  * event/routine 가상 블록은 클릭만 — 외부 캘린더 또는 별도 routine 처리(스펙 §7).
+ *
+ * 구조: 컨테이너 <div> 안에 <button>(클릭/드래그) + <ResizeHandle>(별도 draggable).
+ * 중첩 interactive 회피를 위해 핸들은 button의 형제. 컨테이너는 absolutely-positioned.
  */
 export function TimelineBlock({ box, onClick }: Props) {
   const { block, topPx, heightPx, leftPct, widthPct } = box;
   const isSignal = block.kind === "signal";
-  // signal 블록만 draggable — id는 signal:{signalId} 패턴(block.id).
   const signalId = isSignal ? block.id.replace(/^signal:/, "") : "";
+  const durationMin = Math.max(
+    15,
+    Math.round(
+      (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) /
+        60000,
+    ),
+  );
   const dragData: DragData | undefined = isSignal
     ? {
         from: "canvas",
         signalId,
         title: block.title,
         startISO: block.startISO,
-        durationMin: Math.max(
-          15,
-          Math.round((new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) / 60000),
-        ),
+        durationMin,
         calendarId: block.calendarId,
       }
     : undefined;
@@ -51,8 +101,6 @@ export function TimelineBlock({ box, onClick }: Props) {
 
   const isDoneRoutine = block.kind === "routine" && block.done === true;
 
-  // a11y: 색만으로 의미 전달 X — aria-label에 시간/캘린더/완료 상태를 텍스트로 노출.
-  // 스크린리더 사용자가 "title 09:30–10:00 (cal-id) 완료됨" 형태로 듣게 된다.
   const ariaLabel = [
     block.title,
     `${hhmm(block.startISO)}–${hhmm(block.endISO)}`,
@@ -62,37 +110,51 @@ export function TimelineBlock({ box, onClick }: Props) {
     .filter(Boolean)
     .join(" ");
 
+  // 컨테이너가 좌표/transform/opacity를 소유 — block button은 컨테이너 100% 채움.
+  // resize handle은 컨테이너 하단 4px 띠.
   return (
-    <button
-      ref={isSignal ? drag.setNodeRef : undefined}
-      type="button"
-      className={`tl-block tl-block-${block.kind}${isDoneRoutine ? " tl-block-done" : ""}`}
-      data-done={isDoneRoutine || undefined}
+    <div
+      className="tl-block-wrap"
       style={{
+        position: "absolute",
         top: `${topPx}px`,
         height: `${heightPx}px`,
-        // 60px 라벨 거터 안쪽 영역에서 leftPct/widthPct를 백분율로 적용.
         left: `calc(60px + ((100% - 60px) * ${leftPct} / 100))`,
         width: `calc(((100% - 60px) * ${widthPct} / 100) - 4px)`,
-        borderLeftColor: block.color,
+        zIndex: drag.isDragging ? 10 : 2,
         ...transformStyle,
-        ...(drag.isDragging ? { opacity: 0.7, zIndex: 10 } : {}),
+        ...(drag.isDragging ? { opacity: 0.7 } : {}),
       }}
-      onClick={(e) => onClick(box, e)}
-      title={block.title}
-      {...(isSignal ? drag.attributes : {})}
-      {...(isSignal ? drag.listeners : {})}
-      aria-label={ariaLabel}
     >
-      <div className="tl-block-time">
-        {hhmm(block.startISO)}–{hhmm(block.endISO)}
-      </div>
-      <div className="tl-block-title">
-        {block.kind === "routine" && (
-          <Repeat className="tl-block-icon" aria-hidden />
-        )}
-        {block.title}
-      </div>
-    </button>
+      <button
+        ref={isSignal ? drag.setNodeRef : undefined}
+        type="button"
+        className={`tl-block tl-block-${block.kind}${isDoneRoutine ? " tl-block-done" : ""}`}
+        data-done={isDoneRoutine || undefined}
+        style={{ borderLeftColor: block.color }}
+        onClick={(e) => onClick(box, e)}
+        title={block.title}
+        {...(isSignal ? drag.attributes : {})}
+        {...(isSignal ? drag.listeners : {})}
+        aria-label={ariaLabel}
+      >
+        <div className="tl-block-time">
+          {hhmm(block.startISO)}–{hhmm(block.endISO)}
+        </div>
+        <div className="tl-block-title">
+          {block.kind === "routine" && (
+            <Repeat className="tl-block-icon" aria-hidden />
+          )}
+          {block.title}
+        </div>
+      </button>
+      {isSignal && (
+        <ResizeHandle
+          signalId={signalId}
+          startISO={block.startISO}
+          durationMin={durationMin}
+        />
+      )}
+    </div>
   );
 }

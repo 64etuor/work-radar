@@ -335,8 +335,19 @@
 
 /* ── 블록 레이어(PR 4) ────────────────────────────────────────────── */
 
+/*
+ * PR 7: 블록은 컨테이너 div(.tl-block-wrap) 안에 button + resize handle.
+ * 컨테이너가 좌표/transform/opacity 소유 — block button은 컨테이너 100% 채움.
+ * 중첩 interactive(button inside button) 회피를 위해 핸들은 형제.
+ */
+.tl-block-wrap {
+  /* style.top/height/left/width는 인라인. position:absolute도 인라인이지만
+   * 명시해 둔다(class 단독 적용 시 fallback). */
+}
+
 .tl-block {
   position: absolute;
+  inset: 0;
   background: #fff;
   border: 1px solid var(--wr-border-light);
   border-left-width: 3px;
@@ -395,6 +406,32 @@
 
 .tl-block-signal {
   background: #f6f9ff;
+}
+
+/*
+ * PR 7: 블록 하단 리사이즈 핸들 (스펙 §7 row 3).
+ * 6px 높이 띠 — 호버 시 진해진다. dnd-kit이 spread하는 role=button + tabindex로 키보드 가능.
+ */
+.tl-block-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 3;
+  background: transparent;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.tl-block-resize:hover,
+.tl-block-resize[data-dragging],
+.tl-block-resize:focus-visible {
+  background: var(--color-today-signal);
+  opacity: 0.35;
+  outline: none;
 }
 
 .tl-block-routine {

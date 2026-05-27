@@ -97,6 +97,17 @@ export type DragData =
       from: "routine";
       routineId: string;
       title: string;
+    }
+  | {
+      /**
+       * 블록 하단 리사이즈 핸들 드래그 (스펙 §7 row 3).
+       * `from: "canvas-resize"` — onDragEnd에서 ev.delta.y만 사용해 durationMin을 재계산.
+       * canvas droppable이 받지만 본 dispatcher가 from 분기로 reschedule이 아닌 resize stage 호출.
+       */
+      from: "canvas-resize";
+      signalId: string;
+      startISO: string;
+      durationMin: number;
     };
 
 /** drop data attached to droppable nodes via `useDroppable({ data: ... })`. */
@@ -173,6 +184,37 @@ export function useTimelineDnd(opts: Opts) {
             durationMin,
             calendarId: cal,
             title: a.title,
+          });
+        } catch {
+          invalidateSignalCaches();
+        }
+        return;
+      }
+
+      // ── 3: canvas-resize → canvas (block 하단 핸들 드래그) ──────────
+      // ev.delta.y만 사용해 새 durationMin 계산 — start는 그대로, end가 이동.
+      // 최소 15분(1 snap) 보장, 최대 24h 종료 안 넘게 clamp.
+      if (a.from === "canvas-resize" && o.to === "canvas") {
+        const startMin =
+          new Date(a.startISO).getHours() * 60 +
+          new Date(a.startISO).getMinutes();
+        const deltaMin = (ev.delta.y / HOUR_PX) * 60;
+        const newDur = snap(a.durationMin + deltaMin);
+        const clamped = Math.max(
+          SNAP_MIN,
+          Math.min(24 * 60 - startMin, newDur),
+        );
+        if (clamped === a.durationMin) return;
+        patchSignalCaches(a.signalId, {
+          at: a.startISO,
+          durationMin: clamped,
+        });
+        try {
+          await stage({
+            kind: "resize",
+            targetSignalId: a.signalId,
+            at: a.startISO,
+            durationMin: clamped,
           });
         } catch {
           invalidateSignalCaches();
