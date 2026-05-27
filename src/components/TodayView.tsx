@@ -1,10 +1,26 @@
-import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import "./TodayView.css";
 
+import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
 import { EventPopover } from "@/components/today/EventPopover";
+import { StagedBadge } from "@/components/today/StagedBadge";
 import { TimelineCanvas } from "@/components/today/TimelineCanvas";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
+import {
+  DndContext,
+  buildDefaultCalendarFor,
+  useTimelineDnd,
+  useTodayDndSensors,
+} from "@/components/today/useTimelineDnd";
+import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import { Button } from "@/components/ui/button";
 import {
   localToday,
@@ -22,16 +38,20 @@ import { buildTodayBlocks } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
 
 /**
- * Today — 하루 운영 콕핏(스펙 §3 통합 뷰). PR 3 셸:
- *   좌 미배치 트레이 + 우 24h read-only 캔버스 + 헤더(날짜 네비 + Work Debt 4칩).
- * 블록 렌더는 PR 4, 드래그/배치는 PR 5에서 추가. 본 PR은 read-only 뼈대.
- * 데이터: today-bound(오버뷰/레일/루틴은 `today` 고정), 캘린더 일정만 선택 날짜 재조회.
+ * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).
+ *   좌 미배치 트레이 + 우 24h 캔버스 + 헤더(날짜 네비 + Work Debt 4칩 + Staged 배지).
+ * PR 5: DnD wiring — tray↔canvas schedule/reschedule/unschedule + cross-cal staged
+ * (resize/createBlank은 후속 정련). 데이터: today-bound(오버뷰/레일/루틴은 today 고정),
+ * 캘린더 일정만 선택 날짜 재조회.
  */
 export function TodayView() {
   const { goTo } = useUIStore();
   const today = localToday();
   const weekday = localWeekday();
   const [date, setDate] = useState<string>(today);
+
+  // sync 실패 이벤트 → 토스트 + 캐시 invalidate(rollback).
+  useCalendarSyncEvents();
 
   const overview = useTodayOverview(today);
   const events = useCalendarEvents(date);
@@ -41,7 +61,6 @@ export function TodayView() {
   const toggleDone = useToggleTodayDone();
   const toggleRoutine = useToggleRoutineCheck();
 
-  // 캘린더 미연결 판정(P7 드로어 패턴 재사용 — 네트워크 없는 ambient 검사).
   const noCalendarsConfigured = useMemo(() => {
     const projects = projectsQ.data ?? [];
     if (projectsQ.isLoading || projects.length === 0) return false;
@@ -71,7 +90,6 @@ export function TodayView() {
     anchor: { x: number; y: number };
   } | null>(null);
 
-  // setPopover는 안정 reference이므로 deps=[] — TimelineCanvas로 내려보내 리렌더 트리거 차단.
   const handleBlockClick = useCallback(
     (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -81,51 +99,113 @@ export function TodayView() {
   );
   const handlePopoverClose = useCallback(() => setPopover(null), []);
   const handleOpenFullModal = useCallback(() => {
-    // PR 7에서 풀 모달(카드 편집/이벤트 상세) 정련. 현 PR은 닫기 자리표시.
     setPopover(null);
   }, []);
 
+  // ── DnD wiring ──────────────────────────────────────────────────────
+  const defaultCalendarFor = useMemo(
+    () => buildDefaultCalendarFor(rail, projectsQ.data ?? []),
+    [rail, projectsQ.data],
+  );
+
+  /**
+   * Picker state — useTimelineDnd가 `promptCalendarPicker(signalId)`를 호출하면
+   * 여기서 popover를 띄우고 사용자가 고른 calendarId로 resolve. cancel 시 null resolve.
+   * pointer 좌표는 마지막 pointermove 위치(없으면 화면 안쪽 기본값)로 anchor.
+   */
+  const [picker, setPicker] = useState<{
+    signalId: string;
+    anchor: { x: number; y: number };
+    resolve: (calendarId: string | null) => void;
+  } | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
+
+  const promptCalendarPicker = useCallback(
+    (signalId: string) =>
+      new Promise<string | null>((resolve) => {
+        setPicker({ signalId, anchor: { ...lastPointerRef.current }, resolve });
+      }),
+    [],
+  );
+
+  // 트레이/캔버스 어디서든 pointer move를 트래킹 → picker anchor에 재사용.
+  const trackPointer = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  const sensors = useTodayDndSensors();
+  const { onDragEnd } = useTimelineDnd({
+    date,
+    defaultCalendarFor,
+    promptCalendarPicker,
+  });
+
+  const pickerSignalProjectId = useMemo(() => {
+    if (!picker) return null;
+    return rail.find((s) => s.id === picker.signalId)?.projectId ?? null;
+  }, [picker, rail]);
+
   return (
-    <div className="today">
-      <TodayHeader
-        date={date}
-        today={today}
-        debt={overview.data?.workDebt ?? {}}
-        onDateChange={setDate}
-      />
-      <div className="today-main">
-        <UnscheduledTray
-          unscheduledTodays={unscheduledTodays}
-          unscheduledRoutines={unscheduledRoutines}
-          allDayEvents={allDay}
-          onToggleDone={(id, done) => toggleDone.mutate({ id, date: today, done })}
-          onToggleRoutine={(routineId, done) =>
-            toggleRoutine.mutate({ routineId, date: today, done })
-          }
+    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <div className="today" onPointerMove={trackPointer}>
+        <TodayHeader
+          date={date}
+          today={today}
+          debt={overview.data?.workDebt ?? {}}
+          onDateChange={setDate}
         />
-        <div className="today-canvas-wrap">
-          {noCalendarsConfigured ? (
-            <div className="today-canvas-cta">
-              <p>Google 계정이 연결되지 않았습니다.</p>
-              <Button onClick={() => goTo("settings")}>Google 계정 연결</Button>
-            </div>
-          ) : (
-            <TimelineCanvas
-              date={date}
-              today={today}
-              boxes={boxes}
-              onBlockClick={handleBlockClick}
-            />
-          )}
+        <div className="today-staged-slot">
+          <StagedBadge />
         </div>
+        <div className="today-main">
+          <UnscheduledTray
+            unscheduledTodays={unscheduledTodays}
+            unscheduledRoutines={unscheduledRoutines}
+            allDayEvents={allDay}
+            onToggleDone={(id, done) => toggleDone.mutate({ id, date: today, done })}
+            onToggleRoutine={(routineId, done) =>
+              toggleRoutine.mutate({ routineId, date: today, done })
+            }
+          />
+          <div className="today-canvas-wrap">
+            {noCalendarsConfigured ? (
+              <div className="today-canvas-cta">
+                <p>Google 계정이 연결되지 않았습니다.</p>
+                <Button onClick={() => goTo("settings")}>Google 계정 연결</Button>
+              </div>
+            ) : (
+              <TimelineCanvas
+                date={date}
+                today={today}
+                boxes={boxes}
+                onBlockClick={handleBlockClick}
+              />
+            )}
+          </div>
+        </div>
+        <EventPopover
+          open={popover !== null}
+          box={popover?.box ?? null}
+          anchor={popover?.anchor ?? null}
+          onClose={handlePopoverClose}
+          onOpenFullModal={handleOpenFullModal}
+        />
+        {picker && (
+          <CalendarPickerPopover
+            open
+            anchor={picker.anchor}
+            signalProjectId={pickerSignalProjectId}
+            onPick={(calendarId) => {
+              picker.resolve(calendarId);
+              setPicker(null);
+            }}
+            onClose={() => {
+              picker.resolve(null);
+              setPicker(null);
+            }}
+          />
+        )}
       </div>
-      <EventPopover
-        open={popover !== null}
-        box={popover?.box ?? null}
-        anchor={popover?.anchor ?? null}
-        onClose={handlePopoverClose}
-        onOpenFullModal={handleOpenFullModal}
-      />
-    </div>
+    </DndContext>
   );
 }

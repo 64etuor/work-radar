@@ -81,6 +81,53 @@
   color: var(--wr-subtle);
 }
 
+/* ── Staged 배지(PR 5, cross-cal Acceptance 게이트) ───────────────── */
+
+.today-staged-slot {
+  padding: 0 16px;
+}
+
+.today-staged {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 4px 10px 4px 12px;
+  background: #fff3cd;
+  border: 1px solid #f0d878;
+  border-radius: 9999px;
+  font-size: 11px;
+  color: #6b4f00;
+}
+
+.today-staged-text {
+  font-weight: 600;
+}
+
+/* ── DnD 가시화(PR 5) ─────────────────────────────────────────────── */
+
+.today-tray[data-drop-over] {
+  background: var(--wr-bg-soft, #f6f5f1);
+}
+
+.today-canvas[data-drop-over] .today-canvas-grid {
+  background: rgba(74, 123, 184, 0.03);
+}
+
+.today-canvas-drop-guide {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  height: 2px;
+  background: rgba(74, 123, 184, 0.5);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.today-tray-row[data-dragging] {
+  opacity: 0.6;
+}
+
 /* ── 본문 그리드 (트레이 + 캔버스) ─────────────────────────────────── */
 
 .today-main {
