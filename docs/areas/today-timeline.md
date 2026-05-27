@@ -19,7 +19,7 @@ Today 표면은 캡처 보드와 별개의 **운영(실행) 표면**이다. 결�
    단 큐에 우리 pending이 있으면 우리 값이 이긴다.
 3. 모든 외부 mutation은 **`pending_calendar_writes` 큐 경유**. 프런트에서
    직접 `commands.createCalendarEvent`/`updateCalendarEvent` 등을 호출 금지.
-4. **800ms 디바운스 + backoff `[1s, 3s, 9s]` 3회**. 무한 retry 금지.
+4. **Google API sync 디바운스 + backoff `[1s, 3s, 9s]` 3회**. 무한 retry 금지.
    terminal failure는 `CalendarSyncFailed` 이벤트로 표면화 (ADR-0003).
 5. **Cross-calendar 이동만 명시 Acceptance** ("적용" 버튼 = `commit_staged_writes`).
    within-cal 시간 nudge/리사이즈는 사람 손 = 암묵 통과(INVARIANT #7).
@@ -66,7 +66,7 @@ UI 드래그 → useTimelineDnd.onDragEnd
         → commands.stageCalendarWrite (IPC)
         → calendar/pending_store::upsert_write (SQLite UPSERT)
         → tokio Notify wake
-        → calendar/sync.rs worker (800ms 디바운스, backoff, staged skip)
+        → calendar/sync.rs worker (Google API debounce, backoff, staged skip)
         → Google Calendar API (PATCH/POST/DELETE)
         → 행 삭제 (성공) 또는 last_error + CalendarSyncFailed (terminal)
 ```

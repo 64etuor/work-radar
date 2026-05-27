@@ -1,6 +1,6 @@
 //! SyncEngine — pending_calendar_writes 워커 (Today×Timeline PR 2).
 //!
-//! tokio interval(200ms) + Notify 즉시 깨우기로 큐를 굴린다. 800ms 디바운스는
+//! tokio interval + Notify 즉시 깨우기로 큐를 굴린다. Google API 디바운스는
 //! `next_attempt_at = now + debounce_ms` (pending_store.upsert_write) + `fetch_due_writes`
 //! 가 처리.
 //!
@@ -21,15 +21,13 @@ use tokio::time::{interval, Duration, MissedTickBehavior};
 use crate::calendar::pending_store::{
     delete_write, fetch_due_writes, is_terminal_attempt, record_failure,
 };
+use crate::calendar::timing::SYNC_WORKER_TICK_MS;
 use crate::calendar::{
     refresh_core, CalendarCreds, CalendarProvider, CreateEventInput, HttpCalendarProvider,
 };
 use crate::commands::tokens::project_credential_ref;
 use crate::keychain;
 use crate::models::{PendingWrite, TokenKind};
-
-/// 200ms 폴링 tick — Notify로 즉시 깨워질 때까지의 floor.
-const TICK_MS: u64 = 200;
 
 /// 워커 컨텍스트. `spawn`이 self를 통째로 move해 백그라운드 태스크가 된다. notify는 IPC 커맨드가
 /// 큐를 채운 직후 깨울 핸들 — `tauri::Builder::manage(Arc<Notify>)`로 외부에 노출된다.
@@ -61,7 +59,7 @@ impl SyncEngine {
     }
 
     async fn run(self) {
-        let mut tick = interval(Duration::from_millis(TICK_MS));
+        let mut tick = interval(Duration::from_millis(SYNC_WORKER_TICK_MS));
         // 슬립/일시정지 후 tight-loop catch-up 방지(다음 tick까지 한 박자 지연).
         tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
         loop {

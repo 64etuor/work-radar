@@ -222,6 +222,13 @@ export function normalizeDropDataForDragEnd(
   return undefined;
 }
 
+export function resolveDragEndActiveData(
+  activeAtStart: DragData | null | undefined,
+  activeAtEnd: DragData | undefined,
+): DragData | undefined {
+  return activeAtStart ?? activeAtEnd;
+}
+
 type Opts = {
   date: string;
   /** 시그널 id로 프로젝트 기본 캘린더를 찾는다. 없으면 null. */
@@ -299,8 +306,11 @@ export function useTimelineDnd(opts: Opts) {
   }, [qc, date]);
 
   const onDragEnd = useCallback(
-    async (ev: DragEndEvent) => {
-      const a = ev.active.data.current as DragData | undefined;
+    async (ev: DragEndEvent, activeAtStart?: DragData | null) => {
+      const a = resolveDragEndActiveData(
+        activeAtStart,
+        ev.active.data.current as DragData | undefined,
+      );
       const o = normalizeDropDataForDragEnd(
         a,
         ev.over?.data.current as DropData | undefined,

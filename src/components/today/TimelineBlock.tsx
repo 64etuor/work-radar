@@ -13,6 +13,7 @@ type Props = {
   box: LayoutBox;
   onClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
   suppressDragTransform?: boolean;
+  disableLayoutTransition?: boolean;
 };
 
 function hhmm(iso: string): string {
@@ -139,7 +140,12 @@ function ResizeHandle({
  * 구조: 컨테이너 <div> 안에 <button>(클릭/드래그) + <ResizeHandle>(별도 draggable).
  * 중첩 interactive 회피를 위해 핸들은 button의 형제. 컨테이너는 absolutely-positioned.
  */
-export function TimelineBlock({ box, onClick, suppressDragTransform = false }: Props) {
+export function TimelineBlock({
+  box,
+  onClick,
+  suppressDragTransform = false,
+  disableLayoutTransition = false,
+}: Props) {
   const { block, topPx, heightPx, leftPct, widthPct } = box;
   // 실제 endISO−startISO 그대로 — 15분 floor는 dispatcher(useTimelineDnd) 책임.
   const durationMin = Math.round(
@@ -178,6 +184,7 @@ export function TimelineBlock({ box, onClick, suppressDragTransform = false }: P
         widthPct,
         dragging: drag.isDragging,
         translate: suppressDragTransform ? null : transform,
+        disableLayoutTransition,
       })}
     >
       <button

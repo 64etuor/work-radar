@@ -18,6 +18,7 @@ use tauri::State;
 use tokio::sync::Notify;
 
 use crate::calendar::pending_store::{delete_write, upsert_write};
+use crate::calendar::timing::GOOGLE_SYNC_DEBOUNCE_MS;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::PendingWrite;
@@ -45,14 +46,14 @@ pub enum WriteTarget {
 #[derive(Debug, Clone, Deserialize, Serialize, Type)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum WriteOp {
-    /// 신규 배치 — create 이벤트, 800ms 디바운스.
+    /// 신규 배치 — create 이벤트, Google API 디바운스.
     Schedule {
         at: String,
         duration_min: i32,
         calendar_id: String,
         title: String,
     },
-    /// 시간 이동 — patch(start+duration), 기존 linked event 필요, 800ms 디바운스.
+    /// 시간 이동 — patch(start+duration), 기존 linked event 필요, Google API 디바운스.
     Reschedule { at: String, duration_min: i32 },
     /// 리사이즈만 — start와 함께 묶어 patch로 보낸다(워커 단순화). 기존 linked event 필요.
     Resize { at: String, duration_min: i32 },
@@ -66,7 +67,7 @@ pub enum WriteOp {
         duration_min: i32,
         title: String,
     },
-    /// 캘린더에서 빈 슬롯에 새 이벤트(추후 카드와 연결) — 800ms 디바운스.
+    /// 캘린더에서 빈 슬롯에 새 이벤트(추후 카드와 연결) — Google API 디바운스.
     CreateBlank {
         title: String,
         at: String,
@@ -301,8 +302,6 @@ pub async fn list_pending_writes(db: State<'_, Db>) -> Result<Vec<PendingWrite>,
 
 // ── op → queue row 변환 (build_queue_row) ──────────────────────────────────────
 
-const DEBOUNCE_MS: i64 = 800;
-
 /// op + 기존 linked event(있다면) → (kind, calendar_id, event_id, payload_json, debounce_ms).
 async fn build_queue_row(
     req: &StageWriteRequest,
@@ -324,7 +323,13 @@ async fn build_queue_row(
                 "duration_min": duration_min,
             })
             .to_string();
-            ("create", calendar_id.clone(), None, payload, DEBOUNCE_MS)
+            (
+                "create",
+                calendar_id.clone(),
+                None,
+                payload,
+                GOOGLE_SYNC_DEBOUNCE_MS,
+            )
         }
         WriteOp::Reschedule { at, duration_min } => {
             let (cal, ev) = existing.ok_or_else(|| {
@@ -335,7 +340,7 @@ async fn build_queue_row(
                 "duration_min": duration_min,
             })
             .to_string();
-            ("patch", cal, Some(ev), payload, DEBOUNCE_MS)
+            ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
         }
         WriteOp::Resize { at, duration_min } => {
             let (cal, ev) = existing.ok_or_else(|| {
@@ -347,13 +352,19 @@ async fn build_queue_row(
                 "duration_min": duration_min,
             })
             .to_string();
-            ("patch", cal, Some(ev), payload, DEBOUNCE_MS)
+            ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
         }
         WriteOp::Unschedule => {
             let (cal, ev) = existing.ok_or_else(|| {
                 AppError::validation("calendar.no_linked_event", "no linked event to unschedule")
             })?;
-            ("delete", cal, Some(ev), "{}".into(), DEBOUNCE_MS)
+            (
+                "delete",
+                cal,
+                Some(ev),
+                "{}".into(),
+                GOOGLE_SYNC_DEBOUNCE_MS,
+            )
         }
         WriteOp::MoveCalendar {
             calendar_id,
@@ -383,7 +394,13 @@ async fn build_queue_row(
                 "duration_min": duration_min,
             })
             .to_string();
-            ("create", calendar_id.clone(), None, payload, DEBOUNCE_MS)
+            (
+                "create",
+                calendar_id.clone(),
+                None,
+                payload,
+                GOOGLE_SYNC_DEBOUNCE_MS,
+            )
         }
     })
 }

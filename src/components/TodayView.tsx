@@ -165,9 +165,12 @@ export function TodayView() {
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
   const [activeDelta, setActiveDelta] = useState<DragDelta | null>(null);
+  const activeDragStartRef = useRef<DragData | null>(null);
   const handleDragStart = useCallback(
     (ev: { active: { id: string | number; data: { current?: unknown } } }) => {
-      setActiveDrag(ev.active.data.current as DragData | undefined ?? null);
+      const data = ev.active.data.current as DragData | undefined ?? null;
+      activeDragStartRef.current = data;
+      setActiveDrag(data);
       setActiveDelta({ x: 0, y: 0 });
     },
     [],
@@ -177,13 +180,16 @@ export function TodayView() {
   }, []);
   const handleDragEndWithReset = useCallback(
     async (ev: Parameters<typeof onDragEnd>[0]) => {
+      const activeAtStart = activeDragStartRef.current;
       setActiveDrag(null);
       setActiveDelta(null);
-      await onDragEnd(ev);
+      activeDragStartRef.current = null;
+      await onDragEnd(ev, activeAtStart);
     },
     [onDragEnd],
   );
   const handleDragCancel = useCallback(() => {
+    activeDragStartRef.current = null;
     setActiveDrag(null);
     setActiveDelta(null);
   }, []);

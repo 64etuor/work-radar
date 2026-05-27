@@ -14,26 +14,43 @@ const motionSource = readFileSync?.(resolve?.(__dirname, "../styles/motion.css")
 
 describe("app view motion", () => {
   it("preserves Cmd+arrow navigation direction as the view-shell motion class", () => {
-    expect(appSource).toContain('type ViewMotion = "forward" | "back" | "neutral"');
+    expect(appSource).toContain('type ViewMotion = "forward" | "back"');
     expect(appSource).toContain('const motion = dir > 0 ? "forward" : "back"');
     expect(appSource).toContain("navigateView(adjacentView(view, dir), motion)");
-    expect(appSource).toContain('className={`view-shell view-shell-${viewMotion}`}');
+    expect(appSource).toContain("transitionRunningRef.current");
+    expect(appSource).toContain('className="view-stage"');
+    expect(appSource).toContain('className="view-shell"');
+    expect(appSource).toContain('<div key={view} className="view-content">');
   });
 
-  it("uses native view transitions for Apple-style bidirectional workspace slides", () => {
-    expect(appSource).toContain("startViewTransition");
-    expect(appSource).toContain("root.dataset.viewMotion = motion");
-    expect(appSource).toContain("root.dataset.viewMotionId = motionId");
-    expect(appSource).toContain("delete root.dataset.viewMotion");
-    expect(appSource).toContain("delete root.dataset.viewMotionId");
-    expect(motionSource).toContain("view-transition-name: wr-view-shell");
-    expect(motionSource).toContain("view-transition-name: none");
-    expect(motionSource).toContain("::view-transition-old(root)");
-    expect(motionSource).toContain("::view-transition-old(wr-view-shell)");
-    expect(motionSource).toContain("::view-transition-new(wr-view-shell)");
-    expect(motionSource).toContain("mix-blend-mode: normal");
-    expect(motionSource).not.toContain("block-size: 100%");
-    expect(motionSource).not.toContain("inline-size: 100%");
+  it("uses manual shell snapshots for workspace slides instead of webview-dependent transitions", () => {
+    expect(appSource).not.toContain("startViewTransition");
+    expect(appSource).toContain('document.querySelector<HTMLElement>(".view-shell")');
+    expect(appSource).toContain("type ViewSnapshot");
+    expect(appSource).toContain("setViewSnapshot({");
+    expect(appSource).toContain("html: shell?.innerHTML ??");
+    expect(appSource).toContain("dangerouslySetInnerHTML={{ __html: viewSnapshot.html }}");
+    expect(appSource).toContain("const VIEW_SLIDE_CLEANUP_MS = 460");
+    expect(appSource).toContain("transitionTimerRef.current");
+    expect(motionSource).toContain(".view-stage");
+    expect(motionSource).toContain(".view-snapshot");
+    expect(motionSource).toContain(".view-content");
+    expect(motionSource).toContain("background: var(--color-wr-bg)");
+    expect(motionSource).not.toContain("view-transition-name");
+    expect(motionSource).not.toContain("::view-transition");
+    expect(motionSource).not.toContain("view-enter");
+    expect(motionSource).not.toContain("view-shell-forward");
+    expect(motionSource).not.toContain("view-shell-back");
+    expect(appSource).toContain("data-slide-motion={viewSnapshot?.motion}");
+    expect(motionSource).toContain('.view-stage[data-slide-motion="forward"] .view-snapshot');
+    expect(motionSource).toContain('.view-stage[data-slide-motion="back"] .view-shell');
+    expect(motionSource).not.toContain("data-fallback-motion");
+    expect(motionSource).toContain("animation-play-state: paused !important");
+    expect(motionSource).not.toContain(":root[data-view-motion] .view-shell *");
+    expect(motionSource).not.toContain("animation: none !important");
+    expect(motionSource).not.toContain(":root[data-view-motion] .view-shell *::after {\n  animation-play-state");
+    expect(motionSource).toContain(".view-snapshot *::after {\n  animation-play-state");
+    expect(motionSource).toContain("inline-size: 100%");
     expect(motionSource).toContain("wr-space-old-forward");
     expect(motionSource).toContain("wr-space-new-back");
   });

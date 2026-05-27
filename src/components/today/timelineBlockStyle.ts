@@ -7,6 +7,7 @@ export function timelineBlockPlacementStyle({
   widthPct,
   dragging,
   translate,
+  disableLayoutTransition = false,
 }: {
   topPx: number;
   heightPx: number;
@@ -14,6 +15,7 @@ export function timelineBlockPlacementStyle({
   widthPct: number;
   dragging: boolean;
   translate?: { x: number; y: number } | null;
+  disableLayoutTransition?: boolean;
 }): CSSProperties {
   return {
     position: "absolute",
@@ -23,6 +25,8 @@ export function timelineBlockPlacementStyle({
     width: `calc(${widthPct}% - 4px)`,
     zIndex: dragging ? 10 : 2,
     opacity: dragging ? 0.4 : 1,
+    transition: disableLayoutTransition ? "none" : undefined,
+    willChange: disableLayoutTransition ? "auto" : undefined,
     transform: translate
       ? `translate3d(${translate.x}px, ${translate.y}px, 0)`
       : undefined,

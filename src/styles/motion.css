@@ -3,62 +3,69 @@
  * 앱 전역 animation selector/keyframes만 둔다. 컴포넌트별 레이아웃/색/간격은 각 컴포넌트 CSS가 소유한다.
  * 모든 전역 모션은 transform/opacity 중심, 짧은 duration, prefers-reduced-motion 대응을 기본으로 한다.
  */
+.view-stage {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  position: relative;
+  overflow: clip;
+  background: var(--color-wr-bg);
+}
+
 .view-shell {
-  --wr-view-enter-x: 0;
-  animation: view-enter var(--wr-motion-panel) var(--wr-ease-out) both;
-  view-transition-name: wr-view-shell;
+  block-size: 100%;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  inline-size: 100%;
+  overflow: clip;
+  background: var(--color-wr-bg);
   contain: paint;
 }
 
-.view-shell-forward {
-  --wr-view-enter-x: 34px;
+.view-content {
+  block-size: 100%;
+  min-block-size: 0;
+  background: var(--color-wr-bg);
 }
 
-.view-shell-back {
-  --wr-view-enter-x: -34px;
+.view-stage[data-slide-motion] .view-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
-:root[data-view-motion] .view-shell {
-  animation: none;
-}
-
-:root[data-view-motion] {
-  view-transition-name: none;
-}
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-}
-
-::view-transition-group(wr-view-shell) {
-  animation: none;
-}
-
-::view-transition-image-pair(wr-view-shell) {
-  isolation: isolate;
-}
-
-::view-transition-old(wr-view-shell),
-::view-transition-new(wr-view-shell) {
-  mix-blend-mode: normal;
-  overflow: clip;
-}
-
-:root[data-view-motion="forward"]::view-transition-old(wr-view-shell) {
-  animation: wr-space-old-forward var(--wr-motion-space) var(--wr-ease-space) both;
-}
-
-:root[data-view-motion="forward"]::view-transition-new(wr-view-shell) {
+.view-stage[data-slide-motion="forward"] .view-shell {
   animation: wr-space-new-forward var(--wr-motion-space) var(--wr-ease-space) both;
 }
 
-:root[data-view-motion="back"]::view-transition-old(wr-view-shell) {
+.view-stage[data-slide-motion="back"] .view-shell {
+  animation: wr-space-new-back var(--wr-motion-space) var(--wr-ease-space) both;
+}
+
+.view-snapshot {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  block-size: 100%;
+  inline-size: 100%;
+  overflow: clip;
+  pointer-events: none;
+  background: var(--color-wr-bg);
+  contain: paint;
+}
+
+.view-stage[data-slide-motion="forward"] .view-snapshot {
+  animation: wr-space-old-forward var(--wr-motion-space) var(--wr-ease-space) both;
+}
+
+.view-stage[data-slide-motion="back"] .view-snapshot {
   animation: wr-space-old-back var(--wr-motion-space) var(--wr-ease-space) both;
 }
 
-:root[data-view-motion="back"]::view-transition-new(wr-view-shell) {
-  animation: wr-space-new-back var(--wr-motion-space) var(--wr-ease-space) both;
+.view-snapshot *,
+.view-snapshot *::before,
+.view-snapshot *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
 }
 
 .wr-dialog-overlay[data-state="open"] {
@@ -69,58 +76,39 @@
   animation: wr-dialog-pop-in var(--wr-motion-panel) var(--wr-ease-out) both;
 }
 
-@keyframes view-enter {
-  from {
-    opacity: 0;
-    transform: translate3d(var(--wr-view-enter-x), 6px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 @keyframes wr-space-old-forward {
   from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    opacity: 1;
-    transform: translate3d(-100%, 0, 0) scale(1);
+    transform: translate3d(-100%, 0, 0);
   }
 }
 
 @keyframes wr-space-new-forward {
   from {
-    opacity: 1;
-    transform: translate3d(100%, 0, 0) scale(1);
+    transform: translate3d(100%, 0, 0);
   }
   to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes wr-space-old-back {
   from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    opacity: 1;
-    transform: translate3d(100%, 0, 0) scale(1);
+    transform: translate3d(100%, 0, 0);
   }
 }
 
 @keyframes wr-space-new-back {
   from {
-    opacity: 1;
-    transform: translate3d(-100%, 0, 0) scale(1);
+    transform: translate3d(-100%, 0, 0);
   }
   to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -306,11 +294,6 @@
   .wr-radial-effect-layer,
   .wr-radial-effect,
   .wr-radial-effect-item {
-    animation: none;
-  }
-
-  ::view-transition-old(wr-view-shell),
-  ::view-transition-new(wr-view-shell) {
     animation: none;
   }
 }

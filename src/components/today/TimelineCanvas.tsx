@@ -157,6 +157,7 @@ export function TimelineCanvas({
               box={b}
               onClick={onBlockClick}
               suppressDragTransform={suppressBlockTransform}
+              disableLayoutTransition={activeDrag?.from === "canvas-resize"}
             />
           ))}
         </div>

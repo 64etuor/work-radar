@@ -6,7 +6,6 @@
   margin: 0 16px 12px;
   border-top: 1px solid var(--color-wr-border-light);
   transform: translateZ(0);
-  view-transition-name: none;
 }
 
 /* 티커 컨테이너 — 좌측 스크롤 마퀴. 높이 40px(spec §6). overflow hidden으로 트랙 클리핑. */

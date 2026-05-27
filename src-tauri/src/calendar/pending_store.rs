@@ -1,6 +1,6 @@
 //! pending_calendar_writes 큐 store (Today×Timeline PR 2).
 //!
-//! 큐 UPSERT 머지 + 800ms 디바운스 + backoff [1s, 3s, 9s] + 3회 terminal.
+//! 큐 UPSERT 머지 + Google API 디바운스 + backoff [1s, 3s, 9s] + 3회 terminal.
 //! INVARIANT #5: bounded retry only — 3회 후엔 `last_error` 보존하고 워커가 더 시도하지 않는다.
 //! `payload_json.staged=true`인 행은 워커가 `fetch_due_writes` 단계에서 skip
 //! (cross-cal 변경의 명시 Acceptance 게이트, spec §6.2).

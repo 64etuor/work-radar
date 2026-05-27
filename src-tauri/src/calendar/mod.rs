@@ -31,6 +31,7 @@ mod oauth;
 mod parse;
 pub mod pending_store;
 pub mod sync;
+pub mod timing;
 mod windows;
 mod write;
 

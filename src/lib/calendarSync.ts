@@ -2,7 +2,7 @@
  * Today×Timeline 드래그/리사이즈 → PR 2의 `stage_calendar_write` 큐로 보내는 단일 dispatcher.
  *
  * - 외부 호출은 워커가 한다(스펙 §6.1·§6.4). 이 함수는 SQL UPSERT만 트리거.
- * - 디바운스(800ms)는 Rust 측에서 보장 — 프런트는 즉시 stage 호출.
+ * - SQLite mirror는 Rust가 즉시 반영하고, Google API sync 디바운스는 Rust 큐가 보장한다.
  * - cross-cal `moveCalendar`는 staged=true로 들어가 사용자 Acceptance(`commit_staged_writes`)
  *   까지 워커가 skip한다(INVARIANT #2).
  * - Resize는 bindings상 `at`도 필수(워커 단순화 — patch는 start+duration 묶음).

@@ -1717,9 +1717,9 @@ export type WorktreeStatus = "clean" | "dirty" | "ahead" | "behind" | "diverged"
 
 /**  stage_calendar_write의 op. 각 분기가 큐 행의 kind/payload/디바운스를 결정한다. */
 export type WriteOp = 
-/**  신규 배치 — create 이벤트, 800ms 디바운스. */
+/**  신규 배치 — create 이벤트, Google API 디바운스. */
 { op: "schedule"; at: string; duration_min: number; calendar_id: string; title: string } | 
-/**  시간 이동 — patch(start+duration), 기존 linked event 필요, 800ms 디바운스. */
+/**  시간 이동 — patch(start+duration), 기존 linked event 필요, Google API 디바운스. */
 { op: "reschedule"; at: string; duration_min: number } | 
 /**  리사이즈만 — start와 함께 묶어 patch로 보낸다(워커 단순화). 기존 linked event 필요. */
 { op: "resize"; at: string; duration_min: number } | 
@@ -1730,7 +1730,7 @@ export type WriteOp =
  *  기존 이벤트의 delete는 호출자(UI)가 별도 unschedule을 추가로 stage해 처리한다.
  */
 { op: "move_calendar"; calendar_id: string; at: string; duration_min: number; title: string } | 
-/**  캘린더에서 빈 슬롯에 새 이벤트(추후 카드와 연결) — 800ms 디바운스. */
+/**  캘린더에서 빈 슬롯에 새 이벤트(추후 카드와 연결) — Google API 디바운스. */
 { op: "create_blank"; title: string; at: string; duration_min: number; calendar_id: string };
 
 /**  stage_calendar_write의 대상. routine_check은 (routine_id, date)로 식별. */

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeDropDataForDragEnd,
   plusMinutesLocal,
+  resolveDragEndActiveData,
   resizeIsoByPx,
   type DragData,
 } from "./useTimelineDnd";
@@ -80,5 +81,39 @@ describe("resizeIsoByPx", () => {
     expect(resized.at).toBe("2026-05-28T09:00:00+09:00");
     expect(resized.durationMin).toBe(75);
     expect(plusMinutesLocal(resized.at, resized.durationMin)).toContain("10:15");
+  });
+});
+
+describe("resolveDragEndActiveData", () => {
+  it("uses the drag-start snapshot so resize preview duration is not counted twice", () => {
+    const started: DragData = {
+      from: "canvas-resize",
+      edge: "bottom",
+      blockKind: "signal",
+      signalId: "sig1",
+      startISO: "2026-05-28T09:00:00+09:00",
+      durationMin: 60,
+    };
+    const previewMutated: DragData = {
+      ...started,
+      durationMin: 120,
+    };
+
+    const active = resolveDragEndActiveData(started, previewMutated);
+    expect(active).toBe(started);
+    if (active?.from !== "canvas-resize") {
+      throw new Error("expected resize drag data");
+    }
+
+    const resized = resizeIsoByPx({
+      date: "2026-05-28",
+      startISO: active.startISO,
+      durationMin: active.durationMin,
+      edge: active.edge,
+      deltaPx: 60,
+    });
+
+    expect(resized.durationMin).toBe(120);
+    expect(plusMinutesLocal(resized.at, resized.durationMin)).toContain("11:00");
   });
 });

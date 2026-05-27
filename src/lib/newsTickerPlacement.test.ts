@@ -19,7 +19,7 @@ describe("news ticker placement", () => {
     expect(appSource).toContain('import { NewsTicker } from "@/components/news/NewsTicker"');
     expect(appSource).toContain("<AgentStatusBar />");
     expect(appSource).toContain("<NewsTicker />");
-    expect(appSource.indexOf("view-shell view-shell-${viewMotion}")).toBeLessThan(
+    expect(appSource.indexOf('className="view-shell"')).toBeLessThan(
       appSource.indexOf("<NewsTicker />"),
     );
   });
@@ -29,8 +29,8 @@ describe("news ticker placement", () => {
     expect(captureBoardSource).not.toContain("news-ticker-slot");
   });
 
-  it("keeps the ticker out of view-transition snapshots", () => {
+  it("keeps the ticker outside manual view snapshots", () => {
     expect(newsTickerCss).toContain(".news-ticker-slot");
-    expect(newsTickerCss).toContain("view-transition-name: none");
+    expect(newsTickerCss).not.toContain("view-transition-name");
   });
 });
