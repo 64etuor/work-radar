@@ -82,17 +82,17 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
       </div>
 
       {avail && !avail.installed && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">
           codex CLI를 설치하세요: <code>npm install -g @openai/codex</code> 후 재시작.
         </p>
       )}
       {avail && avail.installed && !avail.authed && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">
           <code>codex login</code>을 실행해 인증하세요.
         </p>
       )}
       {avail?.detail && avail.installed && (
-        <p className="text-xs text-muted-foreground">{avail.detail}</p>
+        <p className="text-muted-foreground text-xs">{avail.detail}</p>
       )}
 
       {/* Codex 모델 설정 */}
@@ -110,10 +110,7 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
             size="sm"
             className="shrink-0"
             onClick={save}
-            disabled={
-              setModel.isPending ||
-              (draft === null || draft.trim() === (model.data ?? ""))
-            }
+            disabled={setModel.isPending || draft === null || draft.trim() === (model.data ?? "")}
           >
             {setModel.isPending ? "저장 중…" : "저장"}
           </Button>
@@ -139,10 +136,7 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
             type="button"
             variant="outline"
             size="sm"
-            className={cn(
-              "font-mono text-[11px]",
-              displayValue === p && "bg-muted",
-            )}
+            className={cn("font-mono text-[11px]", displayValue === p && "bg-muted")}
             onClick={() => setDraft(p)}
           >
             {p}
@@ -151,20 +145,20 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
       </div>
 
       {modelCatalog.data && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-muted-foreground text-[11px]">
           모델 목록: {modelCatalog.data.source} · {modelCatalog.data.cachedAt}
         </p>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        이 값은 내부 프롬프트가 모델을 따로 지정하지 않았을 때 쓰는 fallback입니다.
-        미설정이면 codex CLI 설정을 그대로 상속합니다.
+      <p className="text-muted-foreground text-xs">
+        이 값은 내부 프롬프트가 모델을 따로 지정하지 않았을 때 쓰는 fallback입니다. 미설정이면 codex
+        CLI 설정을 그대로 상속합니다.
       </p>
 
       <div className="flex flex-col gap-2 pt-2">
         <SectionLabel>내부 프롬프트별 실행 설정</SectionLabel>
         {promptConfigs.isLoading && (
-          <p className="text-xs text-muted-foreground">프롬프트 설정을 불러오는 중…</p>
+          <p className="text-muted-foreground text-xs">프롬프트 설정을 불러오는 중…</p>
         )}
         {promptConfigs.data?.map((cfg) => (
           <AgentPromptConfigRow
@@ -175,9 +169,7 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
           />
         ))}
         {promptConfigs.isError && (
-          <p className="text-xs text-[color:var(--destructive)]">
-            {String(promptConfigs.error)}
-          </p>
+          <p className="text-xs text-[color:var(--destructive)]">{String(promptConfigs.error)}</p>
         )}
       </div>
 
@@ -237,7 +229,7 @@ function AgentPromptConfigRow({
   };
 
   return (
-    <div className="rounded-md border border-border bg-card/40 p-3">
+    <div className="border-border bg-card/40 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={name}
@@ -245,8 +237,8 @@ function AgentPromptConfigRow({
           className="h-8 min-w-48 flex-1"
           aria-label={`${config.binding} 이름`}
         />
-        <code className="rounded bg-muted px-2 py-1 text-[11px]">{config.binding}</code>
-        <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+        <code className="bg-muted rounded px-2 py-1 text-[11px]">{config.binding}</code>
+        <label className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
           <Switch checked={enabled} onCheckedChange={setEnabled} />
           사용
         </label>
@@ -254,7 +246,7 @@ function AgentPromptConfigRow({
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        className="mt-2 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono text-foreground outline-none focus:ring-2 focus:ring-ring"
+        className="border-input bg-background text-foreground focus:ring-ring mt-2 min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs outline-none focus:ring-2"
         aria-label={`${config.binding} 프롬프트`}
       />
       <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_150px_120px_auto]">
@@ -286,7 +278,7 @@ function AgentPromptConfigRow({
             <SelectItem value="xhigh">xhigh</SelectItem>
           </SelectContent>
         </Select>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <label className="text-muted-foreground flex items-center gap-2 text-xs">
           <Switch checked={fastMode} onCheckedChange={setFastMode} />
           fast
         </label>
@@ -299,9 +291,9 @@ function AgentPromptConfigRow({
           {update.isPending ? "저장 중…" : "저장"}
         </Button>
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        모델 공란은 기본 모델을 상속합니다. fast는 모델 공란일 때{" "}
-        <code>gpt-5.3-codex-spark</code>로 실행합니다.
+      <p className="text-muted-foreground mt-1 text-[11px]">
+        모델 공란은 기본 모델을 상속합니다. fast는 모델 공란일 때 <code>gpt-5.3-codex-spark</code>로
+        실행합니다.
       </p>
     </div>
   );

@@ -43,10 +43,8 @@ export function applySchedulePatch(
     return {
       ...s,
       scheduledAt: patch.at !== undefined ? patch.at : s.scheduledAt,
-      scheduledDuration:
-        patch.durationMin !== undefined ? patch.durationMin : s.scheduledDuration,
-      linkedCalendarId:
-        patch.calendarId !== undefined ? patch.calendarId : s.linkedCalendarId,
+      scheduledDuration: patch.durationMin !== undefined ? patch.durationMin : s.scheduledDuration,
+      linkedCalendarId: patch.calendarId !== undefined ? patch.calendarId : s.linkedCalendarId,
     };
   });
 }

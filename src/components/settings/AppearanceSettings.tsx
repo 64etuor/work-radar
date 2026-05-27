@@ -26,9 +26,7 @@ export function AppearanceSettings() {
       <section className="flex flex-col gap-3">
         <header>
           <h3 className="text-sm font-medium">테마</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            앱 전체에 적용되는 라이트/다크 모드.
-          </p>
+          <p className="text-muted-foreground mt-1 text-xs">앱 전체에 적용되는 라이트/다크 모드.</p>
         </header>
         <ToggleGroup
           type="single"
@@ -52,7 +50,7 @@ export function AppearanceSettings() {
       <section className="flex flex-col gap-3">
         <header>
           <h3 className="text-sm font-medium">본문 폰트</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-xs">
             `--font-sans` 토큰을 덮어쓴다. 타이틀·코드 블록은 변경되지 않는다.
           </p>
         </header>
@@ -68,16 +66,16 @@ export function AppearanceSettings() {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{current.hint}</p>
+        <p className="text-muted-foreground text-xs">{current.hint}</p>
 
         <div
-          className="mt-2 rounded-md border border-border bg-muted/30 p-4"
+          className="border-border bg-muted/30 mt-2 rounded-md border p-4"
           style={{ fontFamily: fontFamilyFor(font) }}
         >
           <p className="text-base leading-relaxed">
             오늘은 데일리 리뷰를 빠르게 끝내고, Work Radar에 새 신호를 모아둡니다.
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-sm">
             The quick brown fox jumps over the lazy dog. 0123456789
           </p>
         </div>

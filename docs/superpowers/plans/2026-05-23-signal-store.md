@@ -28,6 +28,7 @@
 - **결정 레일/Acceptance 무관**하지만 INVARIANT #1/#3/#7 보존이 핵심 → 최종 critic 패스(self-approve 금지).
 
 ### Relocation 규칙 (각 store fn 작성 시)
+
 1. 원본 `sqlx::query*(...)` 블록의 **SQL 문자열을 한 글자도 바꾸지 않고** signal_store fn 본문으로 옮긴다.
 2. 반환타입 보존: 원본이 `Result<_, sqlx::Error>`면 store fn도 그대로. 원본이 `AppError`를 반환하던 커맨드면, **store fn은 `sqlx::Error`를 반환**하고 커맨드가 기존처럼 `?`/`map_err(AppError::from)`로 변환(커맨드 시그니처 무변경).
 3. `WorkSignal` 매핑 쿼리는 `SIGNAL_COLS` + `query_as::<_, WorkSignal>`를 그대로 사용(이제 `signal_store::SIGNAL_COLS`).
@@ -298,7 +299,7 @@ mod tests {
 
 - [ ] **Step 1:** 잔여 signals 인라인 SQL 0 확인(테스트 픽스처 제외): `grep -rn "FROM signals\|INTO signals\|UPDATE signals\|signals_fts" src-tauri/src/commands --include="*.rs"` 가 signal_store.rs(+테스트 픽스처)만 남는지 확인.
 - [ ] **Step 2:** 최종 번들: clippy 0 · `cargo test` (≥204+N) · `git diff --exit-code src/bindings.ts` 빈값 · `pnpm typecheck && pnpm build` green.
-- [ ] **Step 3:** **critic 패스(self-approve 금지)** — INVARIANT #1(quadrant/결정레일 무변경: enrich/triage가 suggested_*만), #3(dedup upsert+auto-resolve 의미 보존), #7(SQLite SSOT) + 행위 보존(bindings.ts 빈 diff·전 SQL verbatim) 확인. critic ACCEPT 전 머지 금지.
+- [ ] **Step 3:** **critic 패스(self-approve 금지)** — INVARIANT #1(quadrant/결정레일 무변경: enrich/triage가 suggested\_\*만), #3(dedup upsert+auto-resolve 의미 보존), #7(SQLite SSOT) + 행위 보존(bindings.ts 빈 diff·전 SQL verbatim) 확인. critic ACCEPT 전 머지 금지.
 - [ ] **Step 4:** `docs/decisions.md`에 한 줄 + 트레이드오프(대형 단일 PR, verbatim relocation, G 선행).
 - [ ] **Step 5:** (선택) `PLAN.md`에 Phase 21(F+G) 승격 한 단락 — F done-criteria 체크.
 - [ ] **Step 6:** `git checkout dev && git merge --ff-only refactor/signal-store && git push origin dev && git branch -d refactor/signal-store`.

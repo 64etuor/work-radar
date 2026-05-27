@@ -32,7 +32,7 @@ keyring(`keyring` 크레이트, `apple-native`)은 토큰을 macOS keychain에 �
 무료로 **안정된 self-signed 코드서명 인증서**를 keychain에 만들어 그걸로 서명한다. ACL이
 이 안정 아이덴티티에 묶이므로 리빌드해도 프롬프트가 안 뜬다.
 
-1. **인증서 생성** — `Keychain Access.app` → 메뉴 *Certificate Assistant ▸ Create a Certificate…*
+1. **인증서 생성** — `Keychain Access.app` → 메뉴 _Certificate Assistant ▸ Create a Certificate…_
    - Name: `Work Radar Dev` (예시)
    - Identity Type: **Self Signed Root**
    - Certificate Type: **Code Signing**
@@ -71,7 +71,8 @@ keyring(`keyring` 크레이트, `apple-native`)은 토큰을 macOS keychain에 �
 ## 검증 (사용자 관찰)
 
 헤드리스로는 확인 불가. 사용자가:
-1. 위 설정으로 `pnpm tauri dev` 1회 실행 → keychain 프롬프트에서 *항상 허용*.
+
+1. 위 설정으로 `pnpm tauri dev` 1회 실행 → keychain 프롬프트에서 _항상 허용_.
 2. 코드 수정 후 **리빌드** → keychain 토큰 접근(예: Test ping) 시 **암호 프롬프트가 안 떠야** 한다.
 
 → 뜨지 않으면 done. 머신/인증서 상태에 따라 다르므로 코드 변경만으로 "고쳤다"고 단정하지 않는다.

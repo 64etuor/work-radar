@@ -146,13 +146,16 @@ export function MatrixCanvas({
       el.style.transform = "scale(.34)";
       el.style.opacity = "0";
       el.getBoundingClientRect(); // reflow
-      window.setTimeout(() => {
-        el.style.transition = "";
-        el.style.left = `${x}px`;
-        el.style.top = `${y}px`;
-        el.style.transform = `rotate(${rot || 0}deg)`;
-        el.style.opacity = "1";
-      }, 70 + i * 80);
+      window.setTimeout(
+        () => {
+          el.style.transition = "";
+          el.style.left = `${x}px`;
+          el.style.top = `${y}px`;
+          el.style.transform = `rotate(${rot || 0}deg)`;
+          el.style.opacity = "1";
+        },
+        70 + i * 80,
+      );
     } else {
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
@@ -277,7 +280,13 @@ export function MatrixCanvas({
       const tp = todayPanelRef.current;
       if (tp) {
         const tr = tp.getBoundingClientRect();
-        if (rectContainsPoint({ x: tr.left, y: tr.top, w: tr.width, h: tr.height }, ev.clientX, ev.clientY)) {
+        if (
+          rectContainsPoint(
+            { x: tr.left, y: tr.top, w: tr.width, h: tr.height },
+            ev.clientX,
+            ev.clientY,
+          )
+        ) {
           cbRef.current.onPromoteToday(id);
           return;
         }
@@ -373,7 +382,8 @@ export function MatrixCanvas({
         const qClass = zone === "unclassified" ? "" : ` ${zone}`;
         const selCls = s.id === selectedId ? " sel" : "";
         const popCls = poppedIds.has(s.id) ? " pop" : "";
-        const sugQ = s.quadrant === "unclassified" ? suggestedQuadrantBadge(s.suggestedQuadrant) : "";
+        const sugQ =
+          s.quadrant === "unclassified" ? suggestedQuadrantBadge(s.suggestedQuadrant) : "";
         // 제안 영역(Wheel of Life) 힌트 배지 — 확정 area 없을 때만(확정되면 chip-area로 표시). 힌트라 자동 확정 0(INVARIANT #1).
         const sugA = !s.area && s.suggestedArea ? `${areaLabel(s.suggestedArea)}?` : "";
         return (

@@ -1,12 +1,7 @@
-import {
-  useMutation,
-} from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { unwrap, useInvalidate } from "./client";
-import {
-  commands,
-  type PromotionTarget,
-} from "@/bindings";
+import { commands, type PromotionTarget } from "@/bindings";
 
 /** 외부 URL(생성된 Notion 페이지)을 브라우저/Notion 앱에서 연다("Notion에서 열기"). */
 export async function openExternal(url: string): Promise<void> {
@@ -54,12 +49,7 @@ export function useFlushPromotions() {
  */
 export function useTestNotionConnection() {
   return useMutation({
-    mutationFn: ({
-      projectId,
-      target,
-    }: {
-      projectId: string;
-      target: PromotionTarget;
-    }) => unwrap(commands.testNotionConnection(projectId, target)),
+    mutationFn: ({ projectId, target }: { projectId: string; target: PromotionTarget }) =>
+      unwrap(commands.testNotionConnection(projectId, target)),
   });
 }

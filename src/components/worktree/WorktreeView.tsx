@@ -58,9 +58,7 @@ export function WorktreeView() {
   const ready = activeMode ? modeReady(activeMode) : true;
 
   const branches = useWorktreeBranches(
-    selected && (lens === "vs_base" || lens === "branch_branch")
-      ? selected.path
-      : null,
+    selected && (lens === "vs_base" || lens === "branch_branch") ? selected.path : null,
   );
 
   const diffFiles = useWorktreeDiffFiles({
@@ -100,9 +98,7 @@ export function WorktreeView() {
     worktreePath: selected?.path ?? null,
     mode: selectedDiff?.mode ?? "working",
     baseRef:
-      selectedDiff?.mode === "vs_base" || selectedDiff?.mode === "branch_branch"
-        ? baseRef
-        : null,
+      selectedDiff?.mode === "vs_base" || selectedDiff?.mode === "branch_branch" ? baseRef : null,
     headRef: selectedDiff?.mode === "branch_branch" ? headRef : null,
     path: selectedDiff?.path ?? null,
     ready: selectedDiffReady && !!selectedDiff,

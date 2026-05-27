@@ -395,8 +395,7 @@
   fill: color-mix(in srgb, var(--area-color) 92%, white);
   stroke: var(--color-wr-action-blue);
   stroke-width: 3;
-  filter:
-    drop-shadow(0 0 0.5px var(--color-wr-bg))
+  filter: drop-shadow(0 0 0.5px var(--color-wr-bg))
     drop-shadow(0 5px 8px color-mix(in srgb, var(--color-wr-action-blue) 26%, transparent));
 }
 .cb .area-wheel-segment.active text {
@@ -993,7 +992,6 @@
     flex-direction: column;
   }
 }
-
 
 /* ── P2: 브레인덤프 카드 제목 인라인 편집 (append-only) ──
    포스트잇 body 위치에 textarea를 띄워 제목을 바로 수정. Cohere white editorial 톤 —

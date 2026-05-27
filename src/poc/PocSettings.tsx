@@ -30,7 +30,7 @@ const CATEGORIES = [
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+    <div className="text-subtle font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
       {children}
     </div>
   );
@@ -47,9 +47,9 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[13px] font-medium text-foreground">{label}</label>
+      <label className="text-foreground text-[13px] font-medium">{label}</label>
       {children}
-      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+      {hint && <span className="text-muted-foreground text-xs">{hint}</span>}
     </div>
   );
 }
@@ -83,7 +83,7 @@ function Segmented<T extends string>({
 }) {
   return (
     <div
-      className={`inline-flex w-fit self-start items-center rounded-lg border border-border bg-muted p-0.5 ${
+      className={`border-border bg-muted inline-flex w-fit items-center self-start rounded-lg border p-0.5 ${
         size === "md" ? "h-9" : "h-8"
       }`}
     >
@@ -108,10 +108,10 @@ function Segmented<T extends string>({
 function NewProjectCard() {
   const [kind, setKind] = useState<"personal" | "work">("work");
   return (
-    <div className="rounded-xl border border-border bg-card">
-      <div className="border-b border-border px-5 py-3.5">
+    <div className="border-border bg-card rounded-xl border">
+      <div className="border-border border-b px-5 py-3.5">
         <h3 className="text-sm font-semibold">새 프로젝트</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mt-0.5 text-xs">
           개인 또는 업무 프로젝트를 추가하고 Notion DB를 연결하세요.
         </p>
       </div>
@@ -138,7 +138,7 @@ function NewProjectCard() {
           </Field>
         </div>
       </div>
-      <div className="flex justify-end border-t border-border px-5 py-3.5">
+      <div className="border-border flex justify-end border-t px-5 py-3.5">
         <Button>
           <Plus className="size-4" />
           프로젝트 추가
@@ -163,7 +163,7 @@ function TokenRow({
   const [paste, setPaste] = useState(false);
   const isSet = state === "set";
   return (
-    <div className="rounded-lg border border-border">
+    <div className="border-border rounded-lg border">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2.5">
           {icon}
@@ -189,21 +189,19 @@ function TokenRow({
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5">
-        <span className="text-xs text-muted-foreground">{cli}</span>
+      <div className="border-border flex items-center justify-between gap-3 border-t px-4 py-2.5">
+        <span className="text-muted-foreground text-xs">{cli}</span>
         <button
           type="button"
           onClick={() => setPaste((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
         >
-          <ChevronRight
-            className={`size-3 transition-transform ${paste ? "rotate-90" : ""}`}
-          />
+          <ChevronRight className={`size-3 transition-transform ${paste ? "rotate-90" : ""}`} />
           직접 붙여넣기 (고급)
         </button>
       </div>
       {paste && (
-        <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+        <div className="border-border flex items-center gap-2 border-t px-4 py-3">
           <Input type="password" placeholder={`${label} 토큰 붙여넣기`} className="font-mono" />
           <Button size="sm" className="shrink-0">
             저장
@@ -216,10 +214,10 @@ function TokenRow({
 
 function GoogleAccountRow() {
   return (
-    <div className="rounded-lg border border-border">
+    <div className="border-border rounded-lg border">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <CircleUserRound className="size-4 text-muted-foreground" />
+          <CircleUserRound className="text-muted-foreground size-4" />
           <span className="text-sm font-medium">Google 계정</span>
           <StatusDot on>계정 연결됨</StatusDot>
           <Badge variant="outline">calendar</Badge>
@@ -233,7 +231,7 @@ function GoogleAccountRow() {
           </Button>
         </div>
       </div>
-      <div className="flex flex-col gap-2 border-t border-border px-4 py-3">
+      <div className="border-border flex flex-col gap-2 border-t px-4 py-3">
         <SectionLabel>포함할 캘린더</SectionLabel>
         {[
           ["yangha@mirrorless.co.kr", true],
@@ -256,13 +254,21 @@ function GoogleAccountRow() {
   );
 }
 
-function RepoRow({ provider, loc, branch }: { provider: "github" | "local"; loc: string; branch: string }) {
+function RepoRow({
+  provider,
+  loc,
+  branch,
+}: {
+  provider: "github" | "local";
+  loc: string;
+  branch: string;
+}) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5">
+    <div className="border-border flex items-center gap-3 rounded-lg border px-3.5 py-2.5">
       {provider === "github" ? (
-        <Github className="size-4 shrink-0 text-muted-foreground" />
+        <Github className="text-muted-foreground size-4 shrink-0" />
       ) : (
-        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+        <FolderGit2 className="text-muted-foreground size-4 shrink-0" />
       )}
       <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{loc}</span>
       <Badge variant="outline">{branch}</Badge>
@@ -280,10 +286,10 @@ function ProjectCard({
   expanded: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <div className="border-border bg-card rounded-xl border">
       <div className="flex items-center gap-3 px-5 py-4">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-muted">
-          <FolderOpen className="size-4 text-muted-foreground" />
+        <div className="bg-muted flex size-9 items-center justify-center rounded-lg">
+          <FolderOpen className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -292,7 +298,7 @@ function ProjectCard({
               {kind === "work" ? "업무" : "개인"}
             </Badge>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {expanded ? "토큰·캘린더·레포 1개 연결됨" : "미연결"}
           </span>
         </div>
@@ -302,11 +308,15 @@ function ProjectCard({
       </div>
 
       {expanded && (
-        <div className="flex flex-col gap-5 border-t border-border px-5 py-5">
+        <div className="border-border flex flex-col gap-5 border-t px-5 py-5">
           <div className="flex flex-col gap-2.5">
             <SectionLabel>토큰 · keychain</SectionLabel>
             <TokenRow
-              icon={<span className="grid size-4 place-items-center rounded bg-foreground text-[9px] font-bold text-background">N</span>}
+              icon={
+                <span className="bg-foreground text-background grid size-4 place-items-center rounded text-[9px] font-bold">
+                  N
+                </span>
+              }
               label="Notion"
               cli="ntn CLI · 로그인됨"
               state="set"
@@ -346,18 +356,18 @@ export function PocSettings() {
   const [cat, setCat] = useState<(typeof CATEGORIES)[number]["id"]>("projects");
 
   return (
-    <div className={`${dark ? "dark " : ""}min-h-screen bg-background text-foreground`}>
-      <header className="flex items-center gap-3 border-b border-border px-5 py-3">
-        <button className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-muted">
+    <div className={`${dark ? "dark" : ""}min-h-screen bg-background text-foreground`}>
+      <header className="border-border flex items-center gap-3 border-b px-5 py-3">
+        <button className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium">
           <ArrowLeft className="size-4" />
           보드
         </button>
-        <span className="font-mono text-[13px] font-semibold uppercase tracking-[0.12em]">
+        <span className="font-mono text-[13px] font-semibold tracking-[0.12em] uppercase">
           설정
         </span>
         <button
           onClick={() => setDark((d) => !d)}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-muted"
+          className="border-border hover:bg-muted ml-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium"
         >
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           {dark ? "라이트" : "다크"}
@@ -385,7 +395,7 @@ export function PocSettings() {
         <main className="flex min-w-0 flex-1 flex-col gap-6">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">프로젝트</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+            <p className="text-muted-foreground mt-0.5 text-sm">
               개인/업무 프로젝트와 Notion·GitHub·Google 계정 연결을 관리합니다.
             </p>
           </div>

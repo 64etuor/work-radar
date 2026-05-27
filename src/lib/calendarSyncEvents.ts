@@ -30,15 +30,11 @@ export function useCalendarSyncEvents() {
     void listen<FailedPayload>("CalendarSyncFailed", (ev) => {
       const detail = ev.payload?.error ?? "원인 미상";
       // 프런트-originated 메시지 — pushError(string) 경로로 trace id 자동 생성.
-      useToastStore.getState().pushError(
-        "calendar.sync",
-        `캘린더 동기화 실패: ${detail}`,
-        {
-          onRetry: () => {
-            void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
-          },
+      useToastStore.getState().pushError("calendar.sync", `캘린더 동기화 실패: ${detail}`, {
+        onRetry: () => {
+          void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
         },
-      );
+      });
       // 실패 = optimistic 패치 롤백: SSOT에서 재로드.
       void qc.invalidateQueries({ queryKey: ["signals"] });
       void qc.invalidateQueries({ queryKey: ["today"] });

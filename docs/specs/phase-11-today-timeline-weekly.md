@@ -19,13 +19,14 @@
   PLAN.md:97 "전체 Today 운영 뷰는 Phase 11" 근거. (대안: 보드에 욱여넣기 → 5영역 이미 과밀, 기각.)
 - **B. 부채 추세는 신규 테이블 필요(migration 0007 `debt_snapshots`).** 현재 DB는 *현재 상태*만 보관하고
   `updated_at`이 덮여서 일별 부채를 재구성할 수 없다. → `debt_snapshots(date PK, …)`를 **하루 1회 멱등 upsert**
-  (INVARIANT #3 upsert-not-append)로 Today 뷰 진입 시 기록. 추세는 *전진 누적*(첫 주는 sparse, 백필 없음).
+  (INVARIANT #3 upsert-not-append)로 Today 뷰 진입 시 기록. 추세는 _전진 누적_(첫 주는 sparse, 백필 없음).
   11a에서 도입(Work Debt 카운트는 어차피 11a에서 계산) → 11c가 읽는다.
   (대안: flow에서 추세 유도 → 정확 재구성 불가, 기각. 대안: 현재 상태만, 추세 없음 → 선택한 지표 누락, 기각.)
 
 ## 2. PR 11a — Today 운영 뷰 + Work Debt
 
 ### Backend
+
 - 신규 커맨드 `today_overview(date) -> TodayOverview`:
   `{ work_debt{unclassified,q1_overdue,stale_backlog,cleanup_needed}, q1_items: Vec<SignalView>, pr_attention: Vec<SignalView>, unclassified_count }`.
   Today 레일/루틴/캘린더는 프런트가 기존 훅(`useToday`, `useTodayRoutines`, `fetchCalendarEvents`)으로 합성.
@@ -36,6 +37,7 @@
 - specta: 카운트는 `i32`/`u32`(i64 금지).
 
 ### Frontend
+
 - `store.ts` View += `"today"`. 신규 `TodayView.tsx`. 섹션(위→아래):
   **Work Debt 스트립(4 타일, 클릭 시 소스로 점프)** → 캘린더 오늘 이벤트(미연결 graceful degrade)
   → Q1 리스트 → Today 레일(focus, 완료 토글) → PR attention → 루틴.
@@ -43,12 +45,14 @@
 - Today = 오늘 고정(날짜 피커 없음 — 날짜 네비는 11b Timeline).
 
 ### Done-criteria
+
 - [ ] Today가 Q1 / 캘린더 오늘 이벤트 / PR attention / 미분류 수를 정확히 집계
 - [ ] Work Debt 4지표(미분류·Q1 overdue·stale backlog·cleanup needed) 표시
 
 ## 3. PR 11b — Timeline (오늘 시간축 아젠다)
 
 ### 구현 (주로 프런트)
+
 - `fetchCalendarEvents(null, date)`(신규 `useCalendarEvents(date)` 쿼리 훅으로 래핑) + `list_today(date)` +
   Q1 항목 합성. 세로 시간 그리드, 타임드 이벤트=블록, **all-day + Today 레일 + Q1 = 상단 untimed 밴드.**
   날짜 피커(이전/오늘/다음). 이벤트 클릭→htmlLink, Today 항목 클릭→토글/점프.
@@ -56,11 +60,13 @@
 - `store.ts` View += `"timeline"`, CommandPalette/App/Esc/`.timeline-*`.
 
 ### Done-criteria
+
 - [ ] 이벤트가 시간축에 렌더, 날짜 피커 동작, all-day 밴드, Today/Q1 병합
 
 ## 4. PR 11c — Weekly review
 
 ### Backend
+
 - 신규 커맨드 `weekly_review(week_start?) -> WeeklyReview` (지난 7일):
   - `throughput{captured,completed,promoted}` — 기존 타임스탬프에서 **live 유도**
     (`signals.created_at`, `today_done_at`, acceptances/promotions `created_at`).
@@ -72,10 +78,12 @@
 - specta i32/u32.
 
 ### Frontend
+
 - `store.ts` View += `"weekly"`. `WeeklyView.tsx`: 처리량 카드 / PR 활동 / 루틴 이행률 % /
   부채 추세 스파크라인 + 완료 항목 하이라이트. `query.ts` `useWeeklyReview()`. CommandPalette/App/Esc/`.weekly-*`.
 
 ### Done-criteria
+
 - [ ] 주간 4종(처리량·PR 활동·루틴 이행률·부채 추세)을 7일 범위로 집계
 
 ## 5. INVARIANTS 적합성

@@ -3,11 +3,7 @@ import "./EnrichModal.css";
 
 import type { AreaTag, EnrichProposal, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import {
-  AREA_NONE,
-  AREA_OPTS,
-  QUADRANT_OPTS,
-} from "@/components/jobs/jobsConstants";
+import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "@/components/jobs/jobsConstants";
 import {
   AGENT_TERMINAL_STATUSES,
   useAcceptEnrich,
@@ -54,14 +50,12 @@ export function EnrichModal({ runId, onClose }: Props) {
 
   // 잡 상태 — query 레이어가 폴링/중단/에러 처리 단일화(INVARIANT #5: terminal 자동 정지).
   const runStatus = useAgentRunStatus(runId);
-  const status: string = runStatus.isError
-    ? "failed"
-    : runStatus.data?.status ?? "proposed";
+  const status: string = runStatus.isError ? "failed" : (runStatus.data?.status ?? "proposed");
   const hasProposal = runStatus.data?.hasProposal ?? false;
   const failDetail: string | null = runStatus.isError
     ? String(runStatus.error)
     : runStatus.data?.status === "failed"
-      ? runStatus.data.detail ?? "알 수 없는 오류"
+      ? (runStatus.data.detail ?? "알 수 없는 오류")
       : null;
 
   // 편집 가능한 proposal 초안
@@ -130,7 +124,7 @@ export function EnrichModal({ runId, onClose }: Props) {
         aria-describedby={undefined}
         className="max-h-[78vh] w-[min(400px,92vw)] max-w-none gap-3 overflow-y-auto p-5"
       >
-        <DialogTitle className="font-mono text-[13px] font-semibold uppercase tracking-[0.1em]">
+        <DialogTitle className="font-mono text-[13px] font-semibold tracking-[0.1em] uppercase">
           AI 제안 — 영역 / 사분면
         </DialogTitle>
 
@@ -144,9 +138,7 @@ export function EnrichModal({ runId, onClose }: Props) {
 
         {/* 실패 */}
         {status === "failed" && (
-          <div className="enrich-modal-err">
-            {failDetail ?? "제안 생성에 실패했습니다."}
-          </div>
+          <div className="enrich-modal-err">{failDetail ?? "제안 생성에 실패했습니다."}</div>
         )}
 
         {/* 취소/완료 (proposal 없이 succeeded/cancelled) */}
@@ -164,9 +156,7 @@ export function EnrichModal({ runId, onClose }: Props) {
 
         {/* Proposal 파싱 실패 */}
         {proposalReady && proposal.error && (
-          <div className="enrich-modal-err">
-            {(proposal.error as Error).message}
-          </div>
+          <div className="enrich-modal-err">{(proposal.error as Error).message}</div>
         )}
 
         {/* 편집 가능한 제안 폼 — accept 시 quadrant+area 확정(사람 결정 레일, INVARIANT #1) */}
@@ -175,9 +165,7 @@ export function EnrichModal({ runId, onClose }: Props) {
             <label className="enrich-modal-label">사분면 (accept 시 확정)</label>
             <Select
               value={d.suggestedQuadrant ?? "unclassified"}
-              onValueChange={(v) =>
-                setDraft({ ...d, suggestedQuadrant: v as Quadrant })
-              }
+              onValueChange={(v) => setDraft({ ...d, suggestedQuadrant: v as Quadrant })}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -222,16 +210,14 @@ export function EnrichModal({ runId, onClose }: Props) {
             />
 
             <div className="enrich-modal-hint">
-              accept하면 카드의 <b>사분면·영역이 확정</b>됩니다 — codex 자동 확정이 아니라
-              지금 사람이 확인한 결과(드래그/키보드 분류와 동일 결정 레일).
+              accept하면 카드의 <b>사분면·영역이 확정</b>됩니다 — codex 자동 확정이 아니라 지금
+              사람이 확인한 결과(드래그/키보드 분류와 동일 결정 레일).
             </div>
           </>
         )}
 
         {acceptEnrich.error && (
-          <div className="enrich-modal-err">
-            {(acceptEnrich.error as Error).message}
-          </div>
+          <div className="enrich-modal-err">{(acceptEnrich.error as Error).message}</div>
         )}
 
         <div className="enrich-modal-actions">
@@ -245,11 +231,7 @@ export function EnrichModal({ runId, onClose }: Props) {
               수락
             </Button>
           )}
-          <Button
-            variant="outline"
-            className="rounded-full"
-            onClick={() => void handleCancel()}
-          >
+          <Button variant="outline" className="rounded-full" onClick={() => void handleCancel()}>
             {status === "running" || status === "proposed" ? "취소" : "닫기"}
           </Button>
         </div>

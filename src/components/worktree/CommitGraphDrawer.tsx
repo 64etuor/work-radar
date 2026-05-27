@@ -113,10 +113,18 @@ function CommitGraphBody({ graph }: { graph: CommitGraph | undefined }) {
         </div>
         <div className="wt-commit-table-scroll">
           <div className="wt-commit-grid" role="grid" aria-label="commit grid">
-            <div className="wt-h wt-h-graph" role="columnheader">Graph</div>
-            <div className="wt-h wt-h-commit" role="columnheader">Commit</div>
-            <div className="wt-h wt-h-author" role="columnheader">Author</div>
-            <div className="wt-h wt-h-date" role="columnheader">Date</div>
+            <div className="wt-h wt-h-graph" role="columnheader">
+              Graph
+            </div>
+            <div className="wt-h wt-h-commit" role="columnheader">
+              Commit
+            </div>
+            <div className="wt-h wt-h-author" role="columnheader">
+              Author
+            </div>
+            <div className="wt-h wt-h-date" role="columnheader">
+              Date
+            </div>
 
             <GraphCanvas
               rows={topology.rows}
@@ -146,11 +154,7 @@ function CommitGraphBody({ graph }: { graph: CommitGraph | undefined }) {
                   >
                     {commit.author}
                   </div>
-                  <div
-                    className="wt-c wt-c-date"
-                    style={{ gridRow }}
-                    role="cell"
-                  >
+                  <div className="wt-c wt-c-date" style={{ gridRow }} role="cell">
                     {commit.date}
                   </div>
                 </Fragment>
@@ -167,10 +171,7 @@ function CommitGraphBody({ graph }: { graph: CommitGraph | undefined }) {
         </div>
         <ol className="wt-commit-detail-list">
           {graph.commits.map((commit) => (
-            <li
-              key={commit.hash}
-              className={`wt-commit-card wt-commit-card-${commit.side}`}
-            >
+            <li key={commit.hash} className={`wt-commit-card wt-commit-card-${commit.side}`}>
               <code className="wt-commit-card-hash">{commit.shortHash}</code>
               <div className="wt-commit-card-body">
                 <h4 className="wt-commit-card-subject">{commit.subject}</h4>
@@ -217,14 +218,7 @@ function GraphCanvas({
       if (hash === shortHash) {
         if (l === row.laneNode) {
           segments.push(
-            <line
-              key={`u-s-${rowIdx}-${l}`}
-              className={cls}
-              x1={xl}
-              y1={top}
-              x2={xl}
-              y2={mid}
-            />,
+            <line key={`u-s-${rowIdx}-${l}`} className={cls} x1={xl} y1={top} x2={xl} y2={mid} />,
           );
         } else {
           const dx = nodeX - xl;
@@ -238,14 +232,7 @@ function GraphCanvas({
         }
       } else {
         segments.push(
-          <line
-            key={`u-p-${rowIdx}-${l}`}
-            className={cls}
-            x1={xl}
-            y1={top}
-            x2={xl}
-            y2={mid}
-          />,
+          <line key={`u-p-${rowIdx}-${l}`} className={cls} x1={xl} y1={top} x2={xl} y2={mid} />,
         );
       }
     });
@@ -281,14 +268,7 @@ function GraphCanvas({
         }
       } else {
         segments.push(
-          <line
-            key={`d-p-${rowIdx}-${l}`}
-            className={cls}
-            x1={xl}
-            y1={mid}
-            x2={xl}
-            y2={bottom}
-          />,
+          <line key={`d-p-${rowIdx}-${l}`} className={cls} x1={xl} y1={mid} x2={xl} y2={bottom} />,
         );
       }
     });

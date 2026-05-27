@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import {
-  Calendar,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Circle,
-  Repeat,
-} from "lucide-react";
+import { Calendar, CheckCircle2, ChevronDown, ChevronRight, Circle, Repeat } from "lucide-react";
 
 import type { CalendarEvent, RoutineToday, WorkSignal } from "@/bindings";
 import { calendarColorStyle } from "@/lib/projectCalendarColor";
@@ -51,7 +44,9 @@ function SignalDraggableRow({
       role="listitem"
       aria-label={`${signal.title} (Today, 드래그하여 시간축에 배치)`}
     >
-      <span className="today-tray-grip" aria-hidden>⠿</span>
+      <span className="today-tray-grip" aria-hidden>
+        ⠿
+      </span>
       <button
         type="button"
         className="today-tray-check"
@@ -60,9 +55,9 @@ function SignalDraggableRow({
         onClick={() => onToggleDone(signal.id, !done)}
       >
         {done ? (
-          <CheckCircle2 className="size-4 text-q2" />
+          <CheckCircle2 className="text-q2 size-4" />
         ) : (
-          <Circle className="size-4 text-wr-subtle" />
+          <Circle className="text-wr-subtle size-4" />
         )}
       </button>
       <span className="today-tray-title">{signal.title}</span>
@@ -99,7 +94,9 @@ function RoutineDraggableRow({
       role="listitem"
       aria-label={`${routine.title} (루틴, 드래그하여 시간축에 배치)`}
     >
-      <span className="today-tray-grip" aria-hidden>⠿</span>
+      <span className="today-tray-grip" aria-hidden>
+        ⠿
+      </span>
       <button
         type="button"
         className="today-tray-check"
@@ -108,12 +105,12 @@ function RoutineDraggableRow({
         onClick={() => onToggleRoutine(routine.id, !routine.done)}
       >
         {routine.done ? (
-          <CheckCircle2 className="size-4 text-q2" />
+          <CheckCircle2 className="text-q2 size-4" />
         ) : (
-          <Circle className="size-4 text-wr-subtle" />
+          <Circle className="text-wr-subtle size-4" />
         )}
       </button>
-      <Repeat className="size-3.5 text-wr-subtle" />
+      <Repeat className="text-wr-subtle size-3.5" />
       <span className="today-tray-title">{routine.title}</span>
     </div>
   );
@@ -132,9 +129,7 @@ export function UnscheduledTray({
 }: Props) {
   const [allDayOpen, setAllDayOpen] = useState(false);
   const empty =
-    unscheduledTodays.length === 0 &&
-    unscheduledRoutines.length === 0 &&
-    allDayEvents.length === 0;
+    unscheduledTodays.length === 0 && unscheduledRoutines.length === 0 && allDayEvents.length === 0;
 
   const dropData: DropData = { to: "tray" };
   const { setNodeRef, isOver } = useDroppable({ id: "today-tray", data: dropData });
@@ -149,14 +144,8 @@ export function UnscheduledTray({
       <div className="today-tray-head" id="today-tray-head">
         미배치
       </div>
-      <div
-        className="today-tray-body"
-        role="list"
-        aria-labelledby="today-tray-head"
-      >
-        {empty && (
-          <div className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</div>
-        )}
+      <div className="today-tray-body" role="list" aria-labelledby="today-tray-head">
+        {empty && <div className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</div>}
         {unscheduledTodays.map((s) => (
           <SignalDraggableRow
             key={`s-${s.id}`}
@@ -166,11 +155,7 @@ export function UnscheduledTray({
           />
         ))}
         {unscheduledRoutines.map((r) => (
-          <RoutineDraggableRow
-            key={`r-${r.id}`}
-            routine={r}
-            onToggleRoutine={onToggleRoutine}
-          />
+          <RoutineDraggableRow key={`r-${r.id}`} routine={r} onToggleRoutine={onToggleRoutine} />
         ))}
         {allDayEvents.length > 0 && (
           <div className="today-tray-section">

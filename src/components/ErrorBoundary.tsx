@@ -46,9 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     this.setState({ traceId });
     // fire-and-forget 로그 — 실패는 조용히 삼킨다(폴백 UI 흐름 보호).
-    void commands
-      .logAppError("react-error-boundary", summary, traceId)
-      .catch(() => undefined);
+    void commands.logAppError("react-error-boundary", summary, traceId).catch(() => undefined);
   }
 
   private reset = (): void => {
@@ -66,14 +64,9 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="error-boundary-card">
           <h2 className="error-boundary-title">문제가 발생했어요</h2>
           <p className="error-boundary-msg">{error.message}</p>
-          {traceId && (
-            <p className="error-boundary-trace">trace: {traceId}</p>
-          )}
+          {traceId && <p className="error-boundary-trace">trace: {traceId}</p>}
           <div className="error-boundary-actions">
-            <Button
-              className="rounded-full text-[13px] font-semibold"
-              onClick={this.reset}
-            >
+            <Button className="rounded-full text-[13px] font-semibold" onClick={this.reset}>
               다시 시도
             </Button>
             <Button

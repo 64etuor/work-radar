@@ -19,9 +19,10 @@
 ```
 
 > **실행 레일은 폐기됨(2026-05-21, 사용자 결정).** 앱 내 Codex 백로그 구현(workspace-write
-> + 브랜치 push + draft PR)은 외부 코딩 에이전트와 중복·고위험이라 들어냄 — 자동화는 **제안
-> 레일까지만**. 근거: `PLAN.md` 부록 / `docs/decisions.md` "(폐기) 옛 Phase 10". (worktree
-> 격리·Acceptance 게이트·bounded는 제안 레일 코드 잡과 Diff Viewer에 그대로 유효.)
+>
+> - 브랜치 push + draft PR)은 외부 코딩 에이전트와 중복·고위험이라 들어냄 — 자동화는 **제안
+>   레일까지만**. 근거: `PLAN.md` 부록 / `docs/decisions.md` "(폐기) 옛 Phase 10". (worktree
+>   격리·Acceptance 게이트·bounded는 제안 레일 코드 잡과 Diff Viewer에 그대로 유효.)
 
 모든 외부 변경(Notion/GitHub)은 **Acceptance**를 거친다. Codex 출력은 직접 mutate 불가.
 
@@ -121,9 +122,10 @@ DiffFileSummary { path; status: "M" | "A" | "D" | "R"; adds: number; dels: numbe
 ```
 
 설계 노트:
+
 - `quadrant`(사람 결정) vs `suggestedQuadrant`(파생) 분리 — 점수 이중저장 안 함.
 - **`area`(라이프 도메인)는 닫힌 taxonomy**: `AreaTag = "health" | "work" | "studies" |
-  "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other"`
+"environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other"`
   (Wheel of Life + other). AI(enrich, Phase 9)가 `suggestedArea`로 추론하고, 사람이 `area`로 확정/수정한다.
   AI는 세트 밖 카테고리를 만들지 않는다(닫힘). 사용자 커스텀 영역은 추후. `area`는 personal/work `kind`와 **별개 축**.
 - **Today's Todo = 로컬 승격**: `Promotion(target:"today", forDate)`는 SQLite 로컬 액션이라 **Acceptance 게이트 불요**

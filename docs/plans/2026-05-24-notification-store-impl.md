@@ -11,6 +11,7 @@
 ---
 
 ## 실행 규칙 (모든 Task)
+
 - cargo 전 `export PATH="$HOME/.cargo/bin:$PATH"`; 검증 `rtk proxy cargo ...`, 파일 확인 Read.
 - 브랜치 `refactor/notification-store`. push는 dev만(ff-merge 마지막).
 - 순수 이전: SQL 문자열/바인드/동작 무변경. 변경은 위치·가시성·import·(test cmd) fire_at 계산 위치뿐.
@@ -18,6 +19,7 @@
 - manifest 경로는 절대경로(`/Users/davidpark/private_project/work-radar/src-tauri/Cargo.toml`) 권장(쉘 cwd 주의).
 
 ## 파일 구조
+
 - Create `src-tauri/src/commands/notification_store.rs`
 - Modify `src-tauri/src/commands/mod.rs`(`pub mod notification_store;`)
 - Modify `src-tauri/src/scheduler.rs`(런타임만 잔류, store 호출)
@@ -115,7 +117,7 @@ pub(crate) async fn delete_unfired_by_source(db: &Db, source: &str, source_id_li
 - [ ] **Step 3: scheduler.rs 배선** — `DueNotification`·`due_notifications`·`mark_fired` 정의 제거. `use crate::commands::notification_store::{self, DueNotification};` 추가(또는 경로 직접). `run_tick`:
   - `let due = notification_store::due(db, now).await?;`
   - 발사 성공 시 `notification_store::mark_fired_by_id(db, &n.id, now).await?;`
-  `Notifier` trait·`run_tick`·`spawn_loop`·`utc_now_string`·`TICK_INTERVAL`·테스트는 잔류. `DueNotification` 참조는 store의 것을 사용.
+    `Notifier` trait·`run_tick`·`spawn_loop`·`utc_now_string`·`TICK_INTERVAL`·테스트는 잔류. `DueNotification` 참조는 store의 것을 사용.
 
 - [ ] **Step 4: 빌드** — `rtk proxy cargo build --manifest-path .../Cargo.toml` → 성공. scheduler.rs 테스트가 `due_notifications`/`mark_fired`를 직접 부르면 `notification_store::{due,mark_fired_by_id}`로 경로 보정.
 
@@ -134,8 +136,8 @@ pub(crate) async fn delete_unfired_by_source(db: &Db, source: &str, source_id_li
 - [ ] **Step 2: pr_radar.rs** — `enqueue_ci_failure_notification`의 exists → `notification_store::exists(db, "ci", &source_id)`, INSERT → `notification_store::enqueue(db, &fire_at, &title, &body, "ci", Some(&source_id))`.
 
 - [ ] **Step 3: commands/scheduler.rs** — `schedule_test_notification`: fire_at를 Rust로 계산
-  `let fire_at = (chrono::Utc::now() + chrono::Duration::seconds(secs)).format("%Y-%m-%d %H:%M:%S").to_string();`
-  후 `notification_store::enqueue(db.inner(), &fire_at, "Work Radar 테스트 알림", "백그라운드 스케줄러 스파인이 동작합니다.", "test", None)`. (기존 SQL `datetime(now,'+N seconds')`와 동일 결과.) `utc_now_string` import가 더 안 쓰이면 제거.
+      `let fire_at = (chrono::Utc::now() + chrono::Duration::seconds(secs)).format("%Y-%m-%d %H:%M:%S").to_string();`
+      후 `notification_store::enqueue(db.inner(), &fire_at, "Work Radar 테스트 알림", "백그라운드 스케줄러 스파인이 동작합니다.", "test", None)`. (기존 SQL `datetime(now,'+N seconds')`와 동일 결과.) `utc_now_string` import가 더 안 쓰이면 제거.
 
 - [ ] **Step 4: build + test + bindings** — 성공/green/diff 0. (reminder 멱등·CI 알림 멱등 테스트 보존 확인.)
 
@@ -237,6 +239,7 @@ mod tests {
 - [ ] **Step 6: 후속 상태** — followups 플랜 갱신(notification_store done, routine_store 재가능).
 
 ## Self-Review 메모
+
 - Spec coverage: §3 API → Task1; §4.1 scheduler → Task1; §4.2 producer → Task2; §4.3 routine lifecycle → Task3; §5 예외 → Task3 Step3; §6 → Task5.
 - Placeholder: 없음(코드/테스트 전문 수록).
 - Type consistency: `DueNotification`(store) Task1 정의·scheduler/Task1 사용 일치. `enqueue(...,source_id: Option<&str>)` Task1 정의·Task2 사용(Some/None) 일치. `exists -> bool` Task1·Task2 일치.

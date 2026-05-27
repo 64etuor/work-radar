@@ -40,12 +40,8 @@ export function ToastHost() {
         >
           <span className="toast-msg">
             {t.message}
-            {t.retryable && !t.onRetry && (
-              <span className="toast-retry-hint"> · 재시도 가능</span>
-            )}
-            {t.traceId && (
-              <span className="toast-trace"> (trace: {t.traceId})</span>
-            )}
+            {t.retryable && !t.onRetry && <span className="toast-retry-hint"> · 재시도 가능</span>}
+            {t.traceId && <span className="toast-trace"> (trace: {t.traceId})</span>}
           </span>
 
           <div className="toast-actions">
@@ -55,9 +51,7 @@ export function ToastHost() {
                 className="toast-btn toast-copy"
                 title="클립보드에 복사"
                 onClick={() => {
-                  const text = t.traceId
-                    ? `${t.message} (${t.traceId})`
-                    : t.message;
+                  const text = t.traceId ? `${t.message} (${t.traceId})` : t.message;
                   void navigator.clipboard.writeText(text);
                 }}
               >

@@ -6,11 +6,7 @@ import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persist
 import App from "@/App";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query";
-import {
-  PERSIST_BUSTER,
-  PERSIST_MAX_AGE_MS,
-  shouldPersistQuery,
-} from "@/lib/query/persist";
+import { PERSIST_BUSTER, PERSIST_MAX_AGE_MS, shouldPersistQuery } from "@/lib/query/persist";
 import "@/styles.css";
 
 // P6: ambient 표시 데이터만 localStorage에 persist — 부팅 시 복원으로 첫 페인트 가속.

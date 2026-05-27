@@ -1,4 +1,3 @@
-
 # Git & PR Conventions
 
 ## Conventional Commits

@@ -61,13 +61,7 @@ export interface ToastItem {
 
 /** AppError 판별(IpcError.app 또는 backend 결과). traceId + kind로 식별. */
 function isAppError(v: unknown): v is AppError {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    "traceId" in v &&
-    "kind" in v &&
-    "message" in v
-  );
+  return typeof v === "object" && v !== null && "traceId" in v && "kind" in v && "message" in v;
 }
 
 interface ToastState {
@@ -84,10 +78,7 @@ interface ToastState {
     opts?: { actionUrl?: string; actionLabel?: string; onRetry?: () => void },
   ) => void;
   /** 성공 토스트 push (2500ms 자동 dismiss). */
-  pushSuccess: (
-    message: string,
-    opts?: { actionUrl?: string; actionLabel?: string },
-  ) => void;
+  pushSuccess: (message: string, opts?: { actionUrl?: string; actionLabel?: string }) => void;
   /** 정보 토스트 push (2500ms 자동 dismiss). onUndo가 있으면 "되돌리기" 버튼 노출. */
   pushInfo: (
     message: string,

@@ -4,7 +4,7 @@
 
 **Goal:** 마이그레이션 0029~0032 + 모델 필드 확장 + IPC 반환/입력 확장. UI 변경 0건. `src/bindings.ts` drift만 발생.
 
-**Architecture:** sqlx migrations (additive ALTER + 신규 테이블) → Rust 모델 구조체 필드 추가 → 기존 list_* 쿼리에 SELECT 절 확장 → `update_project` 입력 옵셔널 필드 추가 → tauri-specta export → `pnpm tauri-bindings` 재생성.
+**Architecture:** sqlx migrations (additive ALTER + 신규 테이블) → Rust 모델 구조체 필드 추가 → 기존 list\_\* 쿼리에 SELECT 절 확장 → `update_project` 입력 옵셔널 필드 추가 → tauri-specta export → `pnpm tauri-bindings` 재생성.
 
 **Tech Stack:** Rust 2021, sqlx 0.8, tauri-specta, specta, vitest (typecheck only).
 
@@ -15,6 +15,7 @@
 ### Task 1: Migration 0029 — projects.default_write_calendar_id
 
 **Files:**
+
 - Create: `src-tauri/migrations/0029_project_default_write_calendar.sql`
 
 - [ ] **Step 1: 마이그레이션 작성**
@@ -45,6 +46,7 @@ git commit -m "feat(db): add projects.default_write_calendar_id (PR 1/7)"
 ### Task 2: Migration 0030 — signals scheduling 필드
 
 **Files:**
+
 - Create: `src-tauri/migrations/0030_signal_scheduling.sql`
 
 - [ ] **Step 1: 마이그레이션 작성**
@@ -82,6 +84,7 @@ git commit -m "feat(db): add signal scheduling fields (PR 1/7)"
 ### Task 3: Migration 0031 — routine_check time_override
 
 **Files:**
+
 - Create: `src-tauri/migrations/0031_routine_check_time_override.sql`
 
 - [ ] **Step 1: 마이그레이션 작성**
@@ -113,6 +116,7 @@ git commit -m "feat(db): add routine_check time_override (PR 1/7)"
 ### Task 4: Migration 0032 — pending_calendar_writes 테이블
 
 **Files:**
+
 - Create: `src-tauri/migrations/0032_pending_calendar_writes.sql`
 
 - [ ] **Step 1: 마이그레이션 작성**
@@ -157,6 +161,7 @@ git commit -m "feat(db): add pending_calendar_writes queue (PR 1/7)"
 ### Task 5: Project 모델 필드 추가
 
 **Files:**
+
 - Modify: `src-tauri/src/models/project.rs`
 
 - [ ] **Step 1: 현재 Project struct 위치 확인**
@@ -196,6 +201,7 @@ Run: `grep -n "fn update_project\|update_project_handler" src-tauri/src/`로 위
 export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo test --lib && cargo clippy --all-targets -- -D warnings
 ```
+
 Expected: 모두 통과.
 
 - [ ] **Step 6: 커밋**
@@ -210,6 +216,7 @@ git commit -m "feat(model): Project.default_write_calendar_id + update plumbing 
 ### Task 6: WorkSignal 모델에 scheduling 필드
 
 **Files:**
+
 - Modify: `src-tauri/src/models/signals.rs`
 
 - [ ] **Step 1: WorkSignal struct에 필드 추가**
@@ -234,6 +241,7 @@ Run: `grep -rn "FROM signals" src-tauri/src/`로 모든 쿼리 위치 찾기. �
 export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo test --lib
 ```
+
 Expected: 통과.
 
 - [ ] **Step 4: 커밋**
@@ -248,6 +256,7 @@ git commit -m "feat(model): WorkSignal scheduling fields (PR 1/7)"
 ### Task 7: RoutineCheck 모델에 override 필드
 
 **Files:**
+
 - Modify: `src-tauri/src/models/routines.rs`
 
 - [ ] **Step 1: RoutineCheck (또는 TodayRoutineItem) struct에 추가**
@@ -271,6 +280,7 @@ Run: `grep -rn "FROM routine_check\|routines_today" src-tauri/src/`. SELECT에 3
 export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo test --lib
 ```
+
 Expected: 통과.
 
 - [ ] **Step 4: 커밋**
@@ -285,6 +295,7 @@ git commit -m "feat(model): RoutineCheck time_override (PR 1/7)"
 ### Task 8: tauri-specta bindings 재생성
 
 **Files:**
+
 - Modify: `src/bindings.ts` (자동 생성)
 
 - [ ] **Step 1: bindings 재생성 명령 확인**
@@ -298,6 +309,7 @@ Expected: `tauri-bindings` 또는 유사 스크립트 발견. 보통 `pnpm tauri
 export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo run --bin generate_bindings 2>/dev/null || cargo test --lib export_bindings
 ```
+
 (프로젝트 패턴에 맞게 조정. 보통 `cargo test`가 export 트리거.)
 
 - [ ] **Step 3: drift 확인**
@@ -310,6 +322,7 @@ Expected: `default_write_calendar_id`, `scheduled_at`, `scheduled_duration`, `li
 ```bash
 pnpm typecheck && pnpm lint
 ```
+
 Expected: 통과. (`bindings.ts` 변경으로 인한 컴파일 에러 없음 — 신규 필드가 옵셔널이므로.)
 
 - [ ] **Step 5: 커밋**
@@ -330,6 +343,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 cd .. && pnpm typecheck && pnpm lint && pnpm vitest run
 ```
+
 Expected: 모두 통과.
 
 - [ ] **Step 2: tauri dev 부팅 스모크**
@@ -342,6 +356,7 @@ Expected: 부팅 실패 없음. 마이그레이션 자동 적용.
 ```bash
 git push origin dev
 ```
+
 Expected: husky pre-push 통과 (dev 브랜치 OK, memory 참조). CI green.
 
 ---
@@ -349,7 +364,7 @@ Expected: husky pre-push 통과 (dev 브랜치 OK, memory 참조). CI green.
 ## 자체 검증
 
 - ✅ Spec §4.1~§4.4 모든 마이그레이션 추가됨
-- ✅ Spec §5.2 모든 list_* 반환 확장
+- ✅ Spec §5.2 모든 list\_\* 반환 확장
 - ✅ Spec §5.2 update_project 입력 확장
 - ✅ UI 변경 0건 (PR 1 스코프)
 - ✅ INVARIANT: 마이그레이션으로만 (임의 ALTER 없음), bounded retry는 PR 2

@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import {
   commands,
@@ -45,8 +41,7 @@ export function useSetGoogleAccountOauthClient() {
       projectId: string;
       clientId: string;
       clientSecret: string;
-    }) =>
-      unwrap(commands.setGoogleOauthClient(projectId, clientId, clientSecret)),
+    }) => unwrap(commands.setGoogleOauthClient(projectId, clientId, clientSecret)),
     onSuccess: (_data, v) =>
       qc.invalidateQueries({ queryKey: ["googleAccountStatus", v.projectId] }),
   });
@@ -56,8 +51,7 @@ export function useSetGoogleAccountOauthClient() {
 export function useStartGoogleAccountOauth() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (projectId: string) =>
-      unwrap(commands.startGoogleOauth(projectId)),
+    mutationFn: (projectId: string) => unwrap(commands.startGoogleOauth(projectId)),
     onSuccess: (_data, projectId) =>
       qc.invalidateQueries({ queryKey: ["googleAccountStatus", projectId] }),
   });
@@ -66,8 +60,7 @@ export function useStartGoogleAccountOauth() {
 /** 진행 중인 loopback OAuth 대기를 취소한다. */
 export function useCancelGoogleAccountOauth() {
   return useMutation({
-    mutationFn: (projectId: string) =>
-      unwrap(commands.cancelGoogleOauth(projectId)),
+    mutationFn: (projectId: string) => unwrap(commands.cancelGoogleOauth(projectId)),
   });
 }
 
@@ -75,8 +68,7 @@ export function useCancelGoogleAccountOauth() {
 export function useDisconnectGoogleAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (projectId: string) =>
-      unwrap(commands.disconnectGoogle(projectId)),
+    mutationFn: (projectId: string) => unwrap(commands.disconnectGoogle(projectId)),
     onSuccess: (_data, projectId) =>
       qc.invalidateQueries({ queryKey: ["googleAccountStatus", projectId] }),
   });
@@ -85,8 +77,7 @@ export function useDisconnectGoogleAccount() {
 /** 연결 검증(read-only refresh). 결과(PingResult)를 호출부가 표시. */
 export function usePingGoogleAccount() {
   return useMutation({
-    mutationFn: (projectId: string) =>
-      unwrap(commands.pingGoogleCalendar(projectId)),
+    mutationFn: (projectId: string) => unwrap(commands.pingGoogleCalendar(projectId)),
   });
 }
 
@@ -106,13 +97,8 @@ export function useGoogleCalendars(projectId: string, enabled: boolean) {
 export function useSetSelectedCalendars() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      projectId,
-      calendars,
-    }: {
-      projectId: string;
-      calendars: SelectedCalendar[];
-    }) => unwrap(commands.setSelectedCalendars(projectId, calendars)),
+    mutationFn: ({ projectId, calendars }: { projectId: string; calendars: SelectedCalendar[] }) =>
+      unwrap(commands.setSelectedCalendars(projectId, calendars)),
     onSuccess: (_data, v) => {
       void qc.invalidateQueries({ queryKey: ["googleCalendars", v.projectId] });
       void qc.invalidateQueries({ queryKey: ["projects"] });
@@ -139,11 +125,7 @@ export function fetchCalendarEvents(
  * (주/월도 N일×1콜 아님). 캐시 키에 [start,end] 포함 → 일/주/월 각 범위가 독립 캐시(P6 persist allowlist
  * `calendarEvents` 적용). 폴링/재방문은 force=false(캐시 가속), 수동 새로고침은 force=true(별도 호출).
  */
-export function useCalendarEventsRange(
-  start: string,
-  end: string,
-  enabled = true,
-) {
+export function useCalendarEventsRange(start: string, end: string, enabled = true) {
   return useQuery<CalendarEvent[]>({
     queryKey: ["calendarEvents", "range", start, end],
     queryFn: () => fetchCalendarEventsRange(null, start, end, false),
@@ -163,9 +145,7 @@ export function fetchCalendarEventsRange(
   end: string,
   forceRefresh = false,
 ): Promise<CalendarEvent[]> {
-  return unwrap(
-    commands.fetchCalendarEventsRange(projectId, start, end, forceRefresh),
-  );
+  return unwrap(commands.fetchCalendarEventsRange(projectId, start, end, forceRefresh));
 }
 
 // ── Phase 19: 이벤트 생성 (write 레일, 직접 모달) ────────────────────────────────────

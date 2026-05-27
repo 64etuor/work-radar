@@ -8,11 +8,7 @@
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Project, SelectedCalendar } from "@/bindings";
 import { useProjects, useSetProjectDefaultWriteCalendar } from "@/lib/query";
 
@@ -40,13 +36,7 @@ function safeParse(json: string | null | undefined): SelectedCalendar[] {
   }
 }
 
-export function CalendarPickerPopover({
-  open,
-  anchor,
-  signalProjectId,
-  onPick,
-  onClose,
-}: Props) {
+export function CalendarPickerPopover({ open, anchor, signalProjectId, onPick, onClose }: Props) {
   const projectsQ = useProjects();
   const setDefault = useSetProjectDefaultWriteCalendar();
   const [picked, setPicked] = useState<string | null>(null);
@@ -82,12 +72,12 @@ export function CalendarPickerPopover({
       <PopoverContent className="w-[280px] space-y-2" align="start">
         <div className="text-sm font-semibold">캘린더 선택</div>
         {!project && (
-          <div className="text-xs text-muted-foreground">
+          <div className="text-muted-foreground text-xs">
             연결된 프로젝트가 없어요. 트레이 항목의 프로젝트를 먼저 지정하세요.
           </div>
         )}
         {project && candidates.length === 0 && (
-          <div className="text-xs text-muted-foreground">
+          <div className="text-muted-foreground text-xs">
             이 프로젝트에 선택된 Google 캘린더가 없어요. 설정에서 먼저 선택하세요.
           </div>
         )}

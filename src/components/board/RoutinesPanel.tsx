@@ -139,9 +139,7 @@ export function RoutinesPanel({
     const t = title.trim();
     if (!t) return;
     if (needsWeekdays && days.size === 0) return; // weekly/biweekly는 요일 필수.
-    const weekdays = needsWeekdays
-      ? DAYS.filter((d) => days.has(d.key)).map((d) => d.key)
-      : [];
+    const weekdays = needsWeekdays ? DAYS.filter((d) => days.has(d.key)).map((d) => d.key) : [];
     const offNum = offset.trim() === "" ? null : Math.max(0, Number(offset));
     const draft: RoutineDraft = {
       title: t,
@@ -236,9 +234,7 @@ export function RoutinesPanel({
             </div>
           )}
           {freq === "monthly" && (
-            <div className="rhint">
-              오늘 날짜를 매월 기준일로 사용합니다 (월말 자동 보정).
-            </div>
+            <div className="rhint">오늘 날짜를 매월 기준일로 사용합니다 (월말 자동 보정).</div>
           )}
           {freq === "biweekly" && (
             <div className="rhint">이번 주를 기준으로 2주마다 반복합니다.</div>
@@ -291,21 +287,11 @@ export function RoutinesPanel({
 
       <div className="pb-body">
         {routines.length === 0 ? (
-          <div className="empty">
-            오늘 해당하는 루틴이 없습니다 — + 루틴으로 추가
-          </div>
+          <div className="empty">오늘 해당하는 루틴이 없습니다 — + 루틴으로 추가</div>
         ) : (
           routines.map((r) => (
-            <div
-              key={r.id}
-              className={`item${r.done ? " done" : ""}`}
-              {...dnd.itemProps(r.id)}
-            >
-              <span
-                className="grip"
-                title="드래그로 정렬"
-                {...dnd.handleProps(r.id)}
-              >
+            <div key={r.id} className={`item${r.done ? "done" : ""}`} {...dnd.itemProps(r.id)}>
+              <span className="grip" title="드래그로 정렬" {...dnd.handleProps(r.id)}>
                 ⠿
               </span>
               <div
@@ -320,9 +306,7 @@ export function RoutinesPanel({
                 <div className="ttl">{r.title}</div>
                 <div className="meta">
                   <span className="badge b-sched">{schedLabel(r)}</span>
-                  {r.timeOfDay && (
-                    <span className="badge b-time">{r.timeOfDay}</span>
-                  )}
+                  {r.timeOfDay && <span className="badge b-time">{r.timeOfDay}</span>}
                   <CardTagEditor
                     target={r}
                     tags={lifeWheelTags}

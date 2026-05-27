@@ -61,7 +61,7 @@ export function AddProjectForm({
 
   return (
     <Card className="overflow-hidden rounded-2xl">
-      <CardHeader className="border-b border-border p-5">
+      <CardHeader className="border-border border-b p-5">
         <SectionLabel>프로젝트 추가</SectionLabel>
         <CardTitle className="mt-1 text-[17px] leading-tight tracking-[-0.01em]">
           새 프로젝트
@@ -94,7 +94,7 @@ export function AddProjectForm({
           />
         </Field>
 
-        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/15 p-4 sm:grid-cols-2">
+        <div className="border-border bg-muted/15 grid grid-cols-1 gap-4 rounded-xl border p-4 sm:grid-cols-2">
           <Field label="Notion 백로그 DB ID" hint="선택 — 백로그 미러링 대상">
             <Input
               value={backlogDb}
@@ -114,14 +114,12 @@ export function AddProjectForm({
         </div>
 
         {create.isError && (
-          <div className="text-sm text-[color:var(--destructive)]">
-            {String(create.error)}
-          </div>
+          <div className="text-sm text-[color:var(--destructive)]">{String(create.error)}</div>
         )}
       </CardContent>
 
-      <CardFooter className="justify-between bg-muted/10">
-        <span className="text-xs text-muted-foreground">
+      <CardFooter className="bg-muted/10 justify-between">
+        <span className="text-muted-foreground text-xs">
           토큰은 생성 후 keychain 섹션에서 연결합니다.
         </span>
         <Button onClick={submit} disabled={!name.trim() || create.isPending}>

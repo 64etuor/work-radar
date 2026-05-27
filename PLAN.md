@@ -34,14 +34,16 @@ INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 �
 ## 3. Phases
 
 ### Phase 0 — 스켈레톤 & 스파인
+
 **Goal:** 빈 앱이 부팅되고, Rust↔TS 타입 계약과 DB 마이그레이션 스파인이 선다.
 **Deliverables:**
+
 - Tauri 2 + Vite + React + TS + Tailwind + shadcn/ui + cmdk 부트스트랩
 - Rust: tokio · sqlx(SQLite) + migrations · tauri-specta · keyring 래퍼
 - SQLite 스키마 v1: `projects, repos, signals, promotions, agent_runs, acceptances` + FTS5
 - 전역 핫키로 캡처창 토글 (tauri-plugin-global-shortcut)
 - AGENTS.md의 불변식을 코드 주석/모듈 경계에 반영
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] `pnpm tauri dev` 부팅, 빈 창 렌더
 - [ ] 빈 DB가 마이그레이션 적용됨 (테이블 6개 + FTS 존재)
 - [ ] specta가 Rust 타입을 TS로 생성, 프런트가 import
@@ -49,10 +51,12 @@ INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 �
 - [ ] 전역 핫키로 캡처창 show/hide
 
 ### Phase 1 — Capture Board (THESIS): 촤라락 포스트잇 + 아이젠하워 오버레이
+
 **Goal:** 캡처→분류→액션의 핵심 루프가 **공간형 포스트잇 보드**로 끈끈하게 동작 (Notion 없이).
 디자인 정본: `DESIGN.md`(Cohere white editorial). 인터랙션 레퍼런스: `docs/prototypes/capture-board.html`.
 
 **Deliverables:**
+
 - **캡처 보드 = 앱 창(현행 decorationless 단일 창, 불투명 white canvas)**이 곧 보드. 전역 핫키로 토글, Esc로 닫힘. (Tauri 투명 데스크톱 오버레이는 **폐기** — 클릭스루/멀티모니터 리스크.)
 - **보드 레이아웃(5영역):** 흐름 = 캡처(하단) → **미분류(좌)** → **아이젠하워 2×2(중앙)** →
   **실행(우: Today's Todo 위 / Routines 아래)**. 좌=intake · 중앙=decide · 우=execute · 하단=capture.
@@ -68,7 +72,7 @@ INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 �
   생성(=**Acceptance 게이트**, 실제 외부 write는 Phase 3/11) + **Today 추가** + 미루기/완료/보관(`S/D/E`).
 - **Today's Todo 레일(우측 고정·기본 표시):** 오늘 집중할 항목 큐레이션 리스트. 매트릭스 카드를 우측 레일로
   **드래그** 또는 카드 액션 **"Today 추가"**로 승격. Today 승격은 **로컬(SQLite) 액션** — 사람이 결정,
-  외부 write 아님 → **Acceptance 불요**(notion_*/calendar 승격과 구분). 승격하면 카드는 **매트릭스(아이젠하워)에서
+  외부 write 아님 → **Acceptance 불요**(notion\_\*/calendar 승격과 구분). 승격하면 카드는 **매트릭스(아이젠하워)에서
   빠지고 Today 레일에만 표시**(분류돼 있었으면 Q1~Q4 배지 유지). 각 항목 **완료 체크박스** + 재정렬,
   **미완료 항목은 다음날로 자동 이월(rollover)·완료는 이월 안 함**, **날짜 스코프(오늘)**.
   각 항목에 **경과일 카운터 `+N`** — Today로 옮긴 날 `+1`, 미완료로 이월될 때마다 +1 증가(쌓인 부채 가시화), 완료 시 종료.
@@ -82,6 +86,7 @@ INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 �
   데이터만; **AI 영역 추론과 칩 표시는 Phase 9 enrich**.)
 
 **Done-criteria:**
+
 - [ ] 전역 핫키로 보드 창 토글(show/hide), Esc로 닫힘
 - [ ] 한 줄 입력 → 미분류 카드 톡 생성, 태그 규칙대로 개인/업무 부여(마커 > 토글, 기본 업무)
 - [ ] 진입 시 기존 미분류 카드가 촤라락(staggered)으로 펼쳐짐
@@ -96,50 +101,58 @@ INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 �
 - [ ] FTS 검색이 본문/제목 매칭, 앱 재시작 후 상태 유지, 같은 입력이 dedup 키로 합쳐짐
 
 ### Phase 2 — Project & 멀티 레포 설정
+
 **Goal:** 개인/업무 프로젝트와 여러 레포를 추가/관리.
 **Deliverables:**
+
 - Add Project(`personal`/`work`) / Add Repo(github remote · local path)
 - project별 토큰 keychain 저장 + Notion DB(backlog/agenda) 바인딩
 - `ticketKeyPattern`(예: `MIR-DEV-\d+`) 설정 — 이후 join key
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] 개인 1 + 업무 1 프로젝트 생성, repo 목록 표시
 - [ ] 토큰이 keychain에 저장됨(평문 DB 아님), 재부팅 후 유지
 - [ ] 각 project 토큰으로 테스트 API ping 성공/실패 표시
 - [ ] 모든 signal/run이 `projectId` 태깅
 
 ### Phase 3 — Notion 승격 (write 레일)
+
 **Goal:** 매트릭스 카드를 Notion 백로그/안건으로 수동 승격.
 **Deliverables:**
+
 - Notion read(미러 캐시) + 카드→백로그/안건 write-through + `Promotion` append-only 로그
 - rate-limit(3 req/s) 인지 클라이언트 + bounded retry/backoff/jitter + terminal failure 노출
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] 카드 승격 → 해당 project Notion DB에 페이지 생성
 - [ ] Promotion 로그에 기록(undo 가능 데이터)
 - [ ] 오프라인 시 승격이 큐잉되고 복구 시 flush
 - [ ] rate limit 초과해도 무한 retry 없이 backoff 후 실패 노출
 
 ### Phase 4 — GitHub PR Radar (read 레일)
+
 **Goal:** 멀티 레포 PR을 readiness 버킷으로, 임계치 넘는 것만 매트릭스로.
 **Deliverables:**
+
 - project별 octocrab, open/my PR across repos
 - 도출: CI 상태·conflict·draft·age·linked-backlog(ticketKeyPattern 조인)
 - readiness 버킷(Needs Self Check / CI Blocked / Ready / Merged Cleanup / Stale) + 수동 self-check(로컬 상태)
 - PR 신호는 임계치 넘을 때만 매트릭스 escalate, dedup 키 사용
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] 두 프로젝트 PR이 버킷별 표시
 - [ ] `CI failed + 오늘 마감 백로그 링크` → Q1에 1건
 - [ ] 폴링 N회 반복해도 동일 PR 신호 중복 0
 - [ ] CI 통과로 바뀌면 해당 신호 auto-resolve
 
 ### Phase 5 — Worktree & Branch Diff Viewer
+
 **Goal:** 레포별 git worktree/브랜치를 나열하고, worktree·브랜치별 diff를 본다.
 **Deliverables:**
+
 - repo별 `git worktree list` + 브랜치 목록 (Rust: git2 또는 git CLI 셸아웃)
 - `Worktree` 모델: path · branch · head · baseBranch · ahead/behind · dirty 상태
 - Diff 뷰 비교 모드 4종: `working`(미커밋) / `staged` / `vs_base`(예: origin/dev) / `branch↔branch`
 - 파일 목록(+adds/-dels, status M/A/D/R) + 파일별 diff(구문 강조)
 - PR Radar와 연결: PR 브랜치·(제안 레일 코드 잡 등) worktree의 diff를 같은 뷰로 검수 (실행 레일은 폐기)
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] 한 repo의 모든 worktree가 상태 배지(ahead/behind/dirty)와 함께 표시
 - [ ] worktree 선택 → 파일 목록 + 파일별 diff 렌더
 - [ ] 비교 모드 4종(working/staged/vs_base/branch↔branch) 동작
@@ -147,43 +160,51 @@ INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 �
 - [ ] 대용량 diff에서 UI 비차단(지연/가상 로드)
 
 ### Phase 6 — status mismatch 감지 (차별점)
+
 **Goal:** Notion↔PR drift를 잡는다.
 **Deliverables:**
+
 - 티켓별 마지막 PR/Notion 스냅샷 저장 → drift 감지 → mismatch 신호(dedup + auto-resolve)
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] "Notion Doing + PR Merged" 시뮬 → mismatch 정확히 1건
 - [ ] Notion 갱신 시 mismatch auto-resolve
 - [ ] join key 매칭 실패 케이스가 noise를 만들지 않음(매칭 안 되면 신호 없음)
 
 ### Phase 7 — Agent 스파인 (Codex 기능 전, 뼈대만)
+
 **Goal:** 안전한 에이전트 실행 인프라.
 **Deliverables:**
+
 - `AgentRun` 모델 + 잡 큐(동시 1~2) + bounds(timeout/turns/cost cap) + kill switch + Jobs 뷰
 - `AgentRunner` trait + `CodexRunner`(=`codex exec --json`, read-only 샌드박스, worktree)
 - codex 미설치/미인증 시 graceful degrade (앱 핵심 100% 동작)
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] echo 잡이 bound 내 실행, Jobs 뷰 표시, kill 동작, 로그 캡처
 - [ ] timeout/cost cap 초과 시 kill + `failed`
 - [ ] codex 없을 때 자동화 UI는 비활성, 나머지 정상
 
 ### Phase 8 — 첫 자동화: PR self-check 자동 초안 (suggestion 레일)
+
 **Goal:** diff를 읽고 self-check 초안을 Proposal로.
 **Deliverables:**
+
 - `CodexRunner`가 PR diff 읽고 self-check/설명/스크린샷필요/마이그레이션노트를 Proposal로
 - 사람 accept → 로컬 체크리스트/PR 설명 초안 채움 (제출은 수동)
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] 실제 PR에 실행 → Proposal 표시
 - [ ] accept 전 GitHub 무변경 (Acceptance 게이트 검증)
 - [ ] worktree 격리, 잡 종료 후 정리
 
 ### Phase 9 — 추가 suggestion 자동화
+
 **Goal:** enrich / CI triage / mismatch 초안.
 **Deliverables:**
+
 - braindump enrich(#2): `suggestedQuadrant` + **`suggestedArea`(라이프 도메인, 닫힌 taxonomy)** 추론.
   suggested만 — 카드는 unclassified 유지, area는 사람이 확정/수정. AI는 세트 밖 카테고리 생성 금지.
 - CI triage(#3): 원인/수정안 Proposal + **재트리거 횟수 캡 + 초과 시 Q1 escalate**
 - mismatch 해소 초안(#4): Notion 업데이트 draft
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] 각 잡이 Acceptance 게이트 뒤 Proposal 생성
 - [ ] 동일 CI 실패 재triage가 캡에서 멈추고 Q1으로 escalate
 - [ ] enrich가 카드를 자동 분류하지 않음 (quadrant 자동 확정 0)
@@ -200,6 +221,7 @@ INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 �
 패턴). PR Radar처럼 ambient(이벤트 영속 없음). Today/Timeline(Phase 11)이 소비.
 
 **스코프 = 2개 PR (Today 표시는 Phase 11):**
+
 - **10a — OAuth 연결:** `TokenKind::GoogleCalendar`(keychain blob: clientId/secret/refreshToken),
   사용자 제공 client(Settings 입력), loopback + PKCE(S256) OAuth(`calendar.readonly`),
   토큰 refresh, connect/disconnect/status 커맨드 + Settings 연결 UI. graceful degrade.
@@ -213,6 +235,7 @@ bounded·graceful degrade(#5), read-only 스코프(외부 mutate 0 → Acceptanc
 선택목록 SQLite SSOT(#7), specta i64 금지.
 
 **Done-criteria:**
+
 - [ ] (10a) Settings 프로젝트별 client 입력 → "연결" → 브라우저 동의 → refresh token keychain 저장(재부팅 유지); 미연결/client 미입력 graceful degrade; 토큰 렌더러 미노출
 - [ ] (10a) access token 만료 시 refresh로 자동 재발급(bounded, 무한 retry 아님)
 - [ ] (10b) 연결 후 calendarList 표시 + 다중 캘린더 선택 저장(개인/업무 계정 분리)
@@ -221,11 +244,13 @@ bounded·graceful degrade(#5), read-only 스코프(외부 mutate 0 → Acceptanc
 - [ ] 파싱·오늘 윈도잉·PKCE(S256)·병합/정렬은 cargo test; 실 OAuth loopback·실 Google fetch·keychain 영속은 사용자 관찰 항목
 
 ### Phase 11 — Today / Timeline / Weekly review / 마감(Work Debt)
+
 **Goal:** 하루 운영 뷰 + 부채 지표. (Phase 10 Google Calendar를 "일정"으로 소비.)
 **Deliverables:**
+
 - Today(Google Calendar 오늘 이벤트[Phase 10] + Q1 + focus + PR attention + unprocessed count + Today 레일 + 오늘 루틴)
 - Timeline(신호/승격/이벤트 시간축) + Weekly review(주간 집계) + Work Debt 지표
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] Today가 Q1/캘린더 오늘 이벤트/PR attention/미분류 수를 정확히 집계
 - [ ] Work Debt 지표(미분류, Q1 overdue, stale backlog, cleanup needed 등) 표시
 - [ ] Timeline + Weekly review 동작 (정의는 Phase 11 착수 시 brainstorming으로 확정)
@@ -239,82 +264,100 @@ bounded·graceful degrade(#5), read-only 스코프(외부 mutate 0 → Acceptanc
 > 병렬 파견 wave: **(0) 12a→12b 게이트 → (1) 13·14·15·17·19·12c·12d → (2) 16·20 → (3) 18.**
 
 ### Phase 12 — Prep/Cleanup + Git 운영
+
 **Goal:** 병렬 기반(표면 축소+모듈 분리) + worktree/브랜치 운영.
 **Deliverables:** (12a) MISMATCH 전체 제거(코드/UI/신호/컬럼 마이그레이션) · (12b) `commands.rs`/`query.ts`
 도메인 모듈 분리(행위 무변경) · (12c) worktree live dirty+활성 변경 표시 + 안전 dev rebase(fetch→dirty 거부→
 백업 ref→충돌 abort+복구→diff 검수) · (12d) merged/stale 브랜치·워크트리 정리(다중선택·확인·current/dirty 보호).
 **Done-criteria:**
+
 - [ ] mismatch 코드 0(grep), 신호+컬럼 마이그레이션 제거, test/clippy/typecheck/build green
 - [ ] commands/query 모듈 분리, 커맨드 등록·bindings 동일
 - [ ] worktree live dirty 자동 갱신 + 활성 변경 표시
 - [ ] 안전 dev rebase(가드 5단계), 브랜치/워크트리 정리(보호 가드)
 
 ### Phase 13 — 트레이 상주 스파인 + 알림 + 스케줄러 (foundational)
+
 **Goal:** 메뉴바 상주 + 알림 + bounded 백그라운드 스케줄러(16·20 소비).
 **Deliverables:** tray icon/menu(show/hide/quit), 닫기=트레이 hide, `tauri-plugin-notification`+권한,
 `Scheduler` managed state(bounded tick·등록형 due-check·다음 발사 SQLite 영속).
 **Done-criteria:**
+
 - [ ] 트레이 상주, 창 닫아도 백그라운드 유지, 트레이 show/hide/quit
 - [ ] 알림 권한 + 테스트 알림(사용자 관찰)
 - [ ] 스케줄러 bounded tick(busy-loop 아님), 등록 due-check 호출, 재부팅 후 복구
 
 ### Phase 14 — 온보딩 & Auth
+
 **Goal:** 토큰 어포던스 통일(CLI import) + 키체인 프롬프트 + 폴더 picker.
 **Deliverables:** (8) 안정 코드서명으로 keychain 매번-프롬프트 제거 · (9) `tauri-plugin-dialog` 폴더 picker
 (붙여넣기 제거) · (18/19) `gh auth token`/ntn 토큰 import→keychain, 미로그인 시 앱 버튼 `gh auth login --web`,
 paste는 fallback.
 **Done-criteria:**
+
 - [ ] 안정 서명 → keychain 암호 프롬프트 안 뜸(리빌드 후, 사용자 관찰)
 - [ ] repo local_path 폴더 picker, 경로 입력 통일
 - [ ] GitHub/Notion 토큰 CLI import(불가 시 paste fallback), 토큰 keychain만·평문 0
 
 ### Phase 15 — Capture / Inbox UX
+
 **Goal:** 미분류 전체 일괄 enrich + 브레인덤프 편집/삭제.
 **Deliverables:** (4) `trigger_enrich_all` 단일 codex 배치 잡(suggested-only, 부분 실패 격리, Acceptance 게이트) +
 "전체 제안 실행" 버튼 · (5) `update_signal_title`(dedup 갱신)+`delete_signal`(하드, archive와 구분).
 **Done-criteria:**
+
 - [ ] "전체 제안 실행" 1버튼=단일 배치 잡(bounded), 결과 suggested 표시(자동 분류 0)
 - [ ] 브레인덤프 편집+하드 삭제, accept 전 외부 무변경
 
 ### Phase 16 — Routines 강화
+
 **Goal:** 격주/월간 + 드래그 정렬 + 시간/알림 + 트래킹. **Depends:** 13(알림), 공용 dnd.
 **Deliverables:** (1) `RoutineFreq`+=Biweekly/Monthly+`anchor_date`(월간=같은 날짜·월말 클램프, 격주=앵커 2주) ·
 (2) `routines.rank`+`reorder_routines`(드래그) · (6) `time_of_day?`/`reminder_offset_min?`+스케줄러 알림 ·
 (12) 루틴 트래킹 뷰(이행률/streak/히스토리).
 **Done-criteria:**
+
 - [ ] 격주·월간 스케줄, 오늘 해당만 표시
 - [ ] 드래그 정렬(rank), 시간+알림(트레이 상주 발송), 트래킹 차트
 
 ### Phase 17 — Today / Todo & 회고
+
 **Goal:** Today 드래그 + 전용 회고 뷰 + 보관함. **Depends:** 공용 dnd.
 **Deliverables:** (3) TodayRail 드래그(±1 버튼 제거) · (13) `view:"retro"` 기간 피커+완료 todo 타임라인+
 impact/regret 태깅(`signals.impact_high`/`regret` 마이그레이션)+랭킹 · (14) 보관함 뷰(archived+snoozed 열람+복원).
 **Done-criteria:**
+
 - [ ] Today 드래그 정렬
 - [ ] 회고 뷰(타임라인+impact/regret+랭킹), 보관함(열람+복원), 모든 액션 로컬·자동 분류 0
 
 ### Phase 18 — Navigation & UI/UX 폴리시 (fleet 마지막)
+
 **Goal:** 단축키/창키/전환/중복 제거 + UI/UX 밸런스 audit.
 **Deliverables:** (7) Settings keymap(view→shortcut)+글로벌 창 핫키 변경(재등록)+전환 효과+중복 뷰/기능 정리 ·
 (24) DESIGN.md 기준 audit→punch-list 수정(`/design-review` 권장).
 **Done-criteria:**
+
 - [ ] 메뉴별 단축키 편집·창 핫키 변경, 전환 효과, 중복 정리
 - [ ] UI/UX 밸런스 audit + 수정(DESIGN.md 기준)
 
 ### Phase 19 — Calendar 쓰기 (이벤트 생성)
+
 **Goal:** 카드→직접 모달→Google Calendar 이벤트 생성. **Depends:** Phase 10 OAuth.
 **Deliverables:** scope events 업그레이드(재동의) · `CalendarProvider.create_event`+`create_calendar_event` 커맨드 ·
 카드 "캘린더 등록"→직접 모달(제목/시간/캘린더/설명)→write, **acceptance 대기 제거**(사용자 폼=사람 결정).
 **Done-criteria:**
+
 - [ ] scope events 재동의, 토큰 keychain 유지
 - [ ] 직접 모달→이벤트 생성(write), Rust·bounded·graceful, 읽기 레일 무영향
 
 ### Phase 20 — Agents & AI surface
+
 **Goal:** Hermes 브리지 + 글로벌 에이전트 바 + CI 봇 알림 + 스킬 레지스트리. **Depends:** 13(16/17 알림).
 **Deliverables:** (15) Telegram류 메신저 브리지(봇 토큰/chat keychain, send + bounded getUpdates, 제어 surface) ·
 (16) 모든 뷰 상단 에이전트 바(stacked·경과 비례 진행·클릭→Jobs·모든 AI 집계) · (17) Actions `if:failure()` 훅→
 네이티브 알림+Q1 escalate(자동 triage 없음·notify 캡) · (21) 인앱 프롬프트+외부 Claude/Codex 스킬 공유 레지스트리.
 **Done-criteria:**
+
 - [ ] Hermes 송수신 제어(bounded), 글로벌 에이전트 바, CI 봇 알림(자동 triage 없음)
 - [ ] 스킬 레지스트리(인앱+외부, 잡 바인딩), 자동화는 제안 레일+Acceptance(#1/#2)·bounds(#5)
 
@@ -335,9 +378,10 @@ impact/regret 태깅(`signals.impact_high`/`regret` 마이그레이션)+랭킹 �
 
 **Goal:** 승격된 백로그를 Codex가 격리 worktree에서 구현 → draft PR.
 **Deliverables:**
+
 - "지금 실행"만 트리거, 동시 1, workspace-write 샌드박스, full bounds
 - push 전 **Phase 5 Worktree Diff Viewer로 diff 검수**, draft PR 생성
-**Done-criteria:**
+  **Done-criteria:**
 - [ ] 백로그 1건 → worktree 브랜치 + draft PR
 - [ ] 생성된 worktree diff가 Diff Viewer에 그대로 표시
 - [ ] 사용자 워킹트리 무손상 확인

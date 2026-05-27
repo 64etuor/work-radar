@@ -5,6 +5,7 @@
 ## 1. 동기
 
 캡처 보드 하단 풀폭 CapturePanel은:
+
 - 자주 쓰지 않는 동안 큰 화면 면적을 차지(뇌덤프 입력은 발산적·간헐적 행위)
 - 매트릭스 자체에 시각적 무게 중심이 없음(중앙 사분면 교차점이 빔)
 
@@ -13,11 +14,13 @@
 ## 2. 범위와 비범위
 
 ### In scope
+
 - A: 매트릭스 중앙 BrainDump 토글 + 인라인 펼침(기존 `CapturePanel` 재배치)
 - B: Rust 뉴스 페처 백엔드 (3소스 + trait 기반 확장 슬롯)
 - C: 좌측 스크롤 뉴스 티커 UI + 설정 다이얼로그 소스 토글
 
 ### Out of scope (다음 phase)
+
 - 클릭당 다른 동작(in-app webview, 즐겨찾기, 읽음 처리, 키워드 필터)
 - 푸시 알림(에이전트 알림 채널과 분리 유지)
 - 사용자 정의 소스 추가(custom RSS URL 입력)
@@ -25,13 +28,13 @@
 
 ## 3. INVARIANTS 적용
 
-| # | 불변식 | 본 spec 영향 |
-|---|---|---|
-| ① | 결정 레일 자동화 금지 | 뉴스는 **표시만**, 큐/매트릭스에 자동 주입 절대 금지 |
-| ② | 외부 mutation Acceptance gate | 뉴스 페치는 read-only — gate 무관 |
-| ③ | 신호 dedup upsert | 뉴스 아이템은 `(source, external_id)` UNIQUE upsert |
-| ⑤ | bounded retry | 페치 실패 최대 3회 지수 백오프, terminal 실패는 IPC event |
-| ⑦ | SSOT 분리 | 뉴스 원본 SSOT=외부 사이트, SQLite=캐시(TTL/만료 정책으로 신선도 보장) |
+| #   | 불변식                        | 본 spec 영향                                                           |
+| --- | ----------------------------- | ---------------------------------------------------------------------- |
+| ①   | 결정 레일 자동화 금지         | 뉴스는 **표시만**, 큐/매트릭스에 자동 주입 절대 금지                   |
+| ②   | 외부 mutation Acceptance gate | 뉴스 페치는 read-only — gate 무관                                      |
+| ③   | 신호 dedup upsert             | 뉴스 아이템은 `(source, external_id)` UNIQUE upsert                    |
+| ⑤   | bounded retry                 | 페치 실패 최대 3회 지수 백오프, terminal 실패는 IPC event              |
+| ⑦   | SSOT 분리                     | 뉴스 원본 SSOT=외부 사이트, SQLite=캐시(TTL/만료 정책으로 신선도 보장) |
 
 ## 4. PR A — 중앙 BrainDump 토글
 
@@ -120,11 +123,11 @@ pub fn registry() -> Vec<Box<dyn NewsSource>> {
 
 ### 소스별 페치
 
-| 소스 | 엔드포인트 | 댓글 수 |
-|---|---|---|
-| HN | `https://hacker-news.firebaseio.com/v0/topstories.json` → 30건 → 각 `/item/{id}.json` (병렬 batched) | `kids.len()` 또는 `descendants` |
-| GeekNews | `https://news.hada.io/rss` (RSS) | 댓글 수는 RSS에 없음 — `None` (제목·링크만) |
-| Lobsters | `https://lobste.rs/hottest.json` | `comment_count` 필드 |
+| 소스     | 엔드포인트                                                                                           | 댓글 수                                     |
+| -------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| HN       | `https://hacker-news.firebaseio.com/v0/topstories.json` → 30건 → 각 `/item/{id}.json` (병렬 batched) | `kids.len()` 또는 `descendants`             |
+| GeekNews | `https://news.hada.io/rss` (RSS)                                                                     | 댓글 수는 RSS에 없음 — `None` (제목·링크만) |
+| Lobsters | `https://lobste.rs/hottest.json`                                                                     | `comment_count` 필드                        |
 
 각 페치는 10s timeout, 실패 시 지수 백오프 최대 3회 → 그 주기는 skip, 다음 15분 주기에 재시도. terminal failure는 `news_fetch_failed` IPC event로 표면.
 

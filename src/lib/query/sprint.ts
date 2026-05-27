@@ -38,8 +38,7 @@ export function useSprintStatus(enabled = true) {
 export function useSetSprintConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (config: SprintConfig) =>
-      unwrap(commands.setSprintConfig(config)),
+    mutationFn: (config: SprintConfig) => unwrap(commands.setSprintConfig(config)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sprintConfig"] });
       qc.invalidateQueries({ queryKey: ["sprintStatus"] });

@@ -46,9 +46,7 @@ export function groupSkillsForPalette(skills: Skill[]): SkillPaletteGroup[] {
     .map((key) => ({
       key,
       heading: SKILL_PALETTE_HEADINGS[key],
-      skills: skills
-        .filter((s) => groupKeyOf(s) === key)
-        .sort(sortWithin),
+      skills: skills.filter((s) => groupKeyOf(s) === key).sort(sortWithin),
     }))
     .filter((g) => g.skills.length > 0);
 }
@@ -57,8 +55,6 @@ export function groupSkillsForPalette(skills: Skill[]): SkillPaletteGroup[] {
 export function skillSearchValue(skill: Skill): string {
   const parts = ["skill", "스킬", skill.name];
   if (skill.binding) parts.push(skill.binding);
-  parts.push(
-    skill.kind === "in_app_prompt" ? "프롬프트 prompt 프로젝트" : "external 외부 전역",
-  );
+  parts.push(skill.kind === "in_app_prompt" ? "프롬프트 prompt 프로젝트" : "external 외부 전역");
   return parts.join(" ");
 }

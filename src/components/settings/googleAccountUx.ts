@@ -38,11 +38,7 @@ export function googleAccountOauthViewState(
       : "브라우저에서 Google 계정 동의를 완료하면 이 카드가 자동으로 갱신됩니다.";
 
   return {
-    primaryLabel: input.waiting
-      ? "동의 대기 중"
-      : input.connected
-        ? "다시 연결"
-        : "연결",
+    primaryLabel: input.waiting ? "동의 대기 중" : input.connected ? "다시 연결" : "연결",
     primaryDisabled: !input.hasClient || input.waiting,
     showWaitingPanel: input.waiting,
     showCancel: input.waiting,

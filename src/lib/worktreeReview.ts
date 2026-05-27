@@ -108,7 +108,6 @@ export function diffContextLabel(lens: DiffMode): string {
   }
 }
 
-
 export type VisualGitGraphCommit = {
   shortHash: string;
   side: "left" | "right";
@@ -243,10 +242,7 @@ export function computeGraphTopology(commits: GraphTopologyCommit[]): GraphTopol
     rows.push({ laneNode, lanesAbove, lanesBelow, laneColors });
   }
 
-  const maxLanes = rows.reduce(
-    (m, r) => Math.max(m, r.lanesAbove.length, r.lanesBelow.length),
-    1,
-  );
+  const maxLanes = rows.reduce((m, r) => Math.max(m, r.lanesAbove.length, r.lanesBelow.length), 1);
   return { rows, maxLanes };
 }
 

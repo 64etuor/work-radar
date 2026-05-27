@@ -16,8 +16,7 @@ export function useRequestNotificationPermission() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => unwrap(commands.requestNotificationPermission()),
-    onSuccess: (perm) =>
-      qc.setQueryData(["notificationPermission"], perm),
+    onSuccess: (perm) => qc.setQueryData(["notificationPermission"], perm),
   });
 }
 

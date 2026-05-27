@@ -100,10 +100,7 @@ export function detectLang(path: string | null): BundledLanguage | null {
  * 코드 문자열을 줄 단위 토큰 배열로 토크나이즈.
  * 반환: 입력 줄마다 ThemedToken[] 한 개씩(= tokens[i] 가 i번째 줄).
  */
-export async function tokenizeLines(
-  code: string,
-  lang: BundledLanguage,
-): Promise<ThemedToken[][]> {
+export async function tokenizeLines(code: string, lang: BundledLanguage): Promise<ThemedToken[][]> {
   const { codeToTokens } = await import("shiki");
   const { tokens } = await codeToTokens(code, { lang, theme: DIFF_THEME });
   return tokens;

@@ -6,14 +6,14 @@
 
 모든 `#[tauri::command]`는 `Result<T, error::AppError>`를 반환한다. `String`/도메인 enum 직접 반환 금지.
 
-| 필드 | 의미 |
-|---|---|
-| `kind` | `transient`/`terminal`/`notFound`/`forbidden`/`cancelled`/`validation`/`unexpected` |
-| `code` | 머신 식별자(`notion.not_found`, `db.query` …) |
-| `message` | 사람용(현지화). 토큰/PII 금지. |
-| `traceId` | 토스트 ↔ 로그 상관키(base32 8자) |
-| `retryable` | `kind`에서 파생(`transient`만 true). 직접 설정 불가. |
-| `action` | 액션 힌트(`label`/`url`/`nav`) |
+| 필드        | 의미                                                                                |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `kind`      | `transient`/`terminal`/`notFound`/`forbidden`/`cancelled`/`validation`/`unexpected` |
+| `code`      | 머신 식별자(`notion.not_found`, `db.query` …)                                       |
+| `message`   | 사람용(현지화). 토큰/PII 금지.                                                      |
+| `traceId`   | 토스트 ↔ 로그 상관키(base32 8자)                                                    |
+| `retryable` | `kind`에서 파생(`transient`만 true). 직접 설정 불가.                                |
+| `action`    | 액션 힌트(`label`/`url`/`nav`)                                                      |
 
 ### 도메인 enum → AppError
 

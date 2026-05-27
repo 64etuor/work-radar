@@ -129,11 +129,7 @@ export function FileRow({
   onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={`wt-file${active ? " wt-file-on" : ""}`}
-      onClick={onSelect}
-    >
+    <button type="button" className={`wt-file${active ? "wt-file-on" : ""}`} onClick={onSelect}>
       <span className={`wt-fstatus wt-fs-${file.status}`} title={FILE_STATUS_LABEL[file.status]}>
         {file.status}
       </span>

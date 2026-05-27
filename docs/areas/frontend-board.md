@@ -1,4 +1,3 @@
-
 # Frontend — Capture Board
 
 캡처 보드는 앱의 THESIS 표면. **공간형 포스트잇 보드**로 INVARIANT #1(결정 레일은 사람)을

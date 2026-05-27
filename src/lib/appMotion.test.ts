@@ -10,7 +10,8 @@ declare const require: (moduleName: string) => {
 
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
-const motionSource = readFileSync?.(resolve?.(__dirname, "../styles/motion.css") ?? "", "utf8") ?? "";
+const motionSource =
+  readFileSync?.(resolve?.(__dirname, "../styles/motion.css") ?? "", "utf8") ?? "";
 
 describe("app view motion", () => {
   it("preserves Cmd+arrow navigation direction as the view-shell motion class", () => {
@@ -48,7 +49,9 @@ describe("app view motion", () => {
     expect(motionSource).toContain("animation-play-state: paused !important");
     expect(motionSource).not.toContain(":root[data-view-motion] .view-shell *");
     expect(motionSource).not.toContain("animation: none !important");
-    expect(motionSource).not.toContain(":root[data-view-motion] .view-shell *::after {\n  animation-play-state");
+    expect(motionSource).not.toContain(
+      ":root[data-view-motion] .view-shell *::after {\n  animation-play-state",
+    );
     expect(motionSource).toContain(".view-snapshot *::after {\n  animation-play-state");
     expect(motionSource).toContain("inline-size: 100%");
     expect(motionSource).toContain("wr-space-old-forward");

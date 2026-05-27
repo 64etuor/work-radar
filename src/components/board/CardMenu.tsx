@@ -99,7 +99,11 @@ export function CardMenu({ state, onAct, onClose, codexReady }: Props) {
       <button
         type="button"
         disabled={!codexReady}
-        title={codexReady ? "codex로 영역/사분면 제안 (Jobs에서 검토·accept)" : "codex 미가용 — 설치·로그인 후 사용"}
+        title={
+          codexReady
+            ? "codex로 영역/사분면 제안 (Jobs에서 검토·accept)"
+            : "codex 미가용 — 설치·로그인 후 사용"
+        }
         onClick={() => act("enrich")}
       >
         AI 제안<small>영역·사분면</small>

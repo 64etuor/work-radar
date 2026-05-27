@@ -89,9 +89,7 @@ export function JobControls({
         </Button>
       </div>
       {(echoJob.error || codexJob.error) && (
-        <div className="jobs-err">
-          {echoJob.error?.message ?? codexJob.error?.message}
-        </div>
+        <div className="jobs-err">{echoJob.error?.message ?? codexJob.error?.message}</div>
       )}
     </section>
   );

@@ -1,4 +1,3 @@
-
 # News Feature
 
 뉴스 티커는 6-PR 피처(2026-05-25), **전부 dev 머지 완료**. 이 문서는 이 도메인의
@@ -30,7 +29,7 @@ add column + 동일 row UPDATE.
 
 ## 키워드 필터 안전 가드
 
-`LIKE ... ESCAPE '\'` + `like_escape()` (% / _ / \ 안전). critic MAJOR fix. SQL
+`LIKE ... ESCAPE '\'` + `like_escape()` (% / \_ / \ 안전). critic MAJOR fix. SQL
 injection-by-pattern 방어. 9 store tests.
 
 ## 소스 어댑터
@@ -84,7 +83,7 @@ D-Tune NIT (deferred):
 - Reddit 403 시 대체 UA 시도.
 - 사용자 정의 RSS URL 입력 (out-of-scope).
 - PR A: cmux 브라우저 스모크 (Esc → 토글만 닫힘 + `window.hide` 미호출 + 트리거 포커스 복원).
-- D-* PR: `pnpm tauri dev` 부팅 스모크 (controller가 implementer에 skip 지시).
+- D-\* PR: `pnpm tauri dev` 부팅 스모크 (controller가 implementer에 skip 지시).
 
 ## 정본 / 참조
 

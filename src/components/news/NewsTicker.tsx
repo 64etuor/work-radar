@@ -41,8 +41,8 @@ export function NewsTicker() {
         {hotOnly
           ? "핫 뉴스가 없습니다 — 설정에서 핫 뉴스만 표시를 끄거나 댓글 있는 소스를 켜세요"
           : hasFilters
-          ? "필터에 매치되는 뉴스가 없습니다 — 설정에서 키워드 조정"
-          : "뉴스 소스가 꺼져 있거나 아직 수신된 항목이 없습니다 — 설정 → 뉴스에서 선택"}
+            ? "필터에 매치되는 뉴스가 없습니다 — 설정에서 키워드 조정"
+            : "뉴스 소스가 꺼져 있거나 아직 수신된 항목이 없습니다 — 설정 → 뉴스에서 선택"}
       </div>
     );
   }
@@ -62,10 +62,7 @@ export function NewsTicker() {
 
 function NewsTrack({ items, ariaHidden }: { items: NewsItem[]; ariaHidden?: boolean }) {
   return (
-    <ul
-      className="news-ticker-set"
-      aria-hidden={ariaHidden ? true : undefined}
-    >
+    <ul className="news-ticker-set" aria-hidden={ariaHidden ? true : undefined}>
       {items.map((it) => (
         <li key={newsTickerItemKey(it)} className="news-ticker-li">
           {/* 사본(seamless 마퀴 위한 두 번째 트랙)은 키보드 포커스/클릭 대상 제외 — critic Minor #2 */}
@@ -112,9 +109,7 @@ function NewsTickerItem({
         </span>
       )}
       <span className="news-title">{item.title}</span>
-      {item.commentCount != null && (
-        <span className="news-cmt">💬 {item.commentCount}</span>
-      )}
+      {item.commentCount != null && <span className="news-cmt">💬 {item.commentCount}</span>}
     </button>
   );
 }

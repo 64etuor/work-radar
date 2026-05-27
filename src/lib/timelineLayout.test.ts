@@ -18,9 +18,7 @@ const make = (
 
 describe("computeLayout", () => {
   it("single block fills width", () => {
-    const out = computeLayout([
-      make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00"),
-    ]);
+    const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00")]);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ id: "a", leftPct: 0, widthPct: 100 });
   });
@@ -93,9 +91,7 @@ describe("computeLayout", () => {
   });
 
   it("topPx and heightPx derived from minutes (60px/hour)", () => {
-    const out = computeLayout([
-      make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00"),
-    ]);
+    const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00")]);
     expect(out[0].topPx).toBe(9 * 60);
     expect(out[0].heightPx).toBe(60);
   });

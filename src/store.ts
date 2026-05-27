@@ -32,13 +32,7 @@ function initialTheme(): Theme {
  * 타이틀(`--font-display`)·모노(`--font-mono`)는 변경하지 않는다(시각 디자인 정본 유지).
  * 표시 전용 — 결정 레일과 무관.
  */
-export type FontPreset =
-  | "system"
-  | "cohere"
-  | "inter"
-  | "pretendard"
-  | "suit"
-  | "jbm-hangul";
+export type FontPreset = "system" | "cohere" | "inter" | "pretendard" | "suit" | "jbm-hangul";
 const FONT_KEY = "wr-font";
 const DEFAULT_FONT: FontPreset = "cohere";
 function isFontPreset(value: string | null): value is FontPreset {
@@ -144,9 +138,7 @@ export const useUIStore = create<UIState>((set) => ({
       }
       return { font };
     }),
-  goTo: (view, intent = "open") =>
-    set({ view, settingsIntent: intent, paletteOpen: false }),
-  goToSkill: (skillId) =>
-    set({ view: "skills", pendingSkillId: skillId, paletteOpen: false }),
+  goTo: (view, intent = "open") => set({ view, settingsIntent: intent, paletteOpen: false }),
+  goToSkill: (skillId) => set({ view: "skills", pendingSkillId: skillId, paletteOpen: false }),
   clearPendingSkill: () => set({ pendingSkillId: null }),
 }));

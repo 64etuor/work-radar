@@ -21,16 +21,11 @@ import { useCallback, useRef, useState } from "react";
  * 클래스: 드래그 중 항목엔 `dragging`, 드롭 위치 인디케이터는 `drag-over-before`/`drag-over-after`가
  * data-attr로 노출되니 호출자가 CSS로 표시한다.
  */
-export function useListReorder(
-  ids: string[],
-  onReorder: (orderedIds: string[]) => void,
-) {
+export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) => void) {
   // 드래그 중인 id (없으면 null).
   const [dragId, setDragId] = useState<string | null>(null);
   // 드롭 대상 id + before/after (인디케이터 표시용).
-  const [over, setOver] = useState<{ id: string; before: boolean } | null>(
-    null,
-  );
+  const [over, setOver] = useState<{ id: string; before: boolean } | null>(null);
 
   // 최신 ids/콜백을 pointer 리스너에서 안전하게 읽기 위한 ref.
   const idsRef = useRef(ids);
@@ -45,82 +40,77 @@ export function useListReorder(
     else itemEls.current.delete(id);
   }, []);
 
-  const onHandlePointerDown = useCallback(
-    (e: React.PointerEvent, id: string) => {
-      // 좌클릭/터치만. 다른 핸들/버튼과 충돌하지 않게 stopPropagation.
-      if (e.button !== 0 && e.pointerType === "mouse") return;
-      e.preventDefault();
-      e.stopPropagation();
-      const handle = e.currentTarget as HTMLElement;
-      handle.setPointerCapture(e.pointerId);
-      setDragId(id);
+  const onHandlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
+    // 좌클릭/터치만. 다른 핸들/버튼과 충돌하지 않게 stopPropagation.
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture(e.pointerId);
+    setDragId(id);
+    setOver(null);
+
+    // 드래그 중 행을 포인터에 맞춰 들어올려 따라오게 한다(브레인덤프 postit과 동일 감각).
+    // React state 대신 직접 DOM 변형(MatrixCanvas 패턴) — 매 move 리렌더 회피.
+    const startY = e.clientY;
+    const draggingEl = itemEls.current.get(id) ?? null;
+    if (draggingEl) draggingEl.style.willChange = "transform";
+
+    // 포인터 Y가 어느 항목의 어느 절반에 있는지 → 드롭 위치.
+    const computeOver = (clientY: number): { id: string; before: boolean } | null => {
+      let best: { id: string; before: boolean } | null = null;
+      for (const oid of idsRef.current) {
+        // 따라다니는(transform된) 자기 자신은 드롭 대상/측정에서 제외 —
+        // 아니면 자신의 rect가 커서를 따라와 항상 self가 잡혀 재정렬이 안 된다.
+        if (oid === id) continue;
+        const el = itemEls.current.get(oid);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (clientY >= r.top && clientY <= r.bottom) {
+          return { id: oid, before: clientY < r.top + r.height / 2 };
+        }
+        // 범위 밖이면 가장 가까운 끝으로 폴백(리스트 위/아래).
+        if (clientY < r.top) {
+          best = best ?? { id: oid, before: true };
+        } else {
+          best = { id: oid, before: false };
+        }
+      }
+      return best;
+    };
+
+    const move = (ev: PointerEvent) => {
+      if (draggingEl) {
+        draggingEl.style.transform = `translateY(${ev.clientY - startY}px)`;
+      }
+      setOver(computeOver(ev.clientY));
+    };
+    const up = (ev: PointerEvent) => {
+      handle.releasePointerCapture(e.pointerId);
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      const target = computeOver(ev.clientY);
+      // 들어올림 해제(따라다니던 transform 원복) 후 새 순서 반영.
+      if (draggingEl) {
+        draggingEl.style.transform = "";
+        draggingEl.style.willChange = "";
+      }
+      setDragId(null);
       setOver(null);
+      if (!target || target.id === id) return;
 
-      // 드래그 중 행을 포인터에 맞춰 들어올려 따라오게 한다(브레인덤프 postit과 동일 감각).
-      // React state 대신 직접 DOM 변형(MatrixCanvas 패턴) — 매 move 리렌더 회피.
-      const startY = e.clientY;
-      const draggingEl = itemEls.current.get(id) ?? null;
-      if (draggingEl) draggingEl.style.willChange = "transform";
-
-      // 포인터 Y가 어느 항목의 어느 절반에 있는지 → 드롭 위치.
-      const computeOver = (
-        clientY: number,
-      ): { id: string; before: boolean } | null => {
-        let best: { id: string; before: boolean } | null = null;
-        for (const oid of idsRef.current) {
-          // 따라다니는(transform된) 자기 자신은 드롭 대상/측정에서 제외 —
-          // 아니면 자신의 rect가 커서를 따라와 항상 self가 잡혀 재정렬이 안 된다.
-          if (oid === id) continue;
-          const el = itemEls.current.get(oid);
-          if (!el) continue;
-          const r = el.getBoundingClientRect();
-          if (clientY >= r.top && clientY <= r.bottom) {
-            return { id: oid, before: clientY < r.top + r.height / 2 };
-          }
-          // 범위 밖이면 가장 가까운 끝으로 폴백(리스트 위/아래).
-          if (clientY < r.top) {
-            best = best ?? { id: oid, before: true };
-          } else {
-            best = { id: oid, before: false };
-          }
-        }
-        return best;
-      };
-
-      const move = (ev: PointerEvent) => {
-        if (draggingEl) {
-          draggingEl.style.transform = `translateY(${ev.clientY - startY}px)`;
-        }
-        setOver(computeOver(ev.clientY));
-      };
-      const up = (ev: PointerEvent) => {
-        handle.releasePointerCapture(e.pointerId);
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", up);
-        const target = computeOver(ev.clientY);
-        // 들어올림 해제(따라다니던 transform 원복) 후 새 순서 반영.
-        if (draggingEl) {
-          draggingEl.style.transform = "";
-          draggingEl.style.willChange = "";
-        }
-        setDragId(null);
-        setOver(null);
-        if (!target || target.id === id) return;
-
-        // 새 순서 계산: id를 빼고, target 위치(before/after)에 끼운다.
-        const next = idsRef.current.filter((x) => x !== id);
-        const at = next.indexOf(target.id);
-        if (at < 0) return;
-        next.splice(target.before ? at : at + 1, 0, id);
-        // 순서가 바뀐 경우에만 호출(불필요한 mutation 방지).
-        const changed = next.some((x, i) => x !== idsRef.current[i]);
-        if (changed) cbRef.current(next);
-      };
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", up);
-    },
-    [],
-  );
+      // 새 순서 계산: id를 빼고, target 위치(before/after)에 끼운다.
+      const next = idsRef.current.filter((x) => x !== id);
+      const at = next.indexOf(target.id);
+      if (at < 0) return;
+      next.splice(target.before ? at : at + 1, 0, id);
+      // 순서가 바뀐 경우에만 호출(불필요한 mutation 방지).
+      const changed = next.some((x, i) => x !== idsRef.current[i]);
+      if (changed) cbRef.current(next);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  }, []);
 
   return {
     /** 드래그 중인 항목 id (스타일링용). */
@@ -129,8 +119,7 @@ export function useListReorder(
     itemProps: (id: string) => ({
       ref: (el: HTMLElement | null) => registerItem(id, el),
       "data-dragging": dragId === id ? "" : undefined,
-      "data-drag-over":
-        over?.id === id ? (over.before ? "before" : "after") : undefined,
+      "data-drag-over": over?.id === id ? (over.before ? "before" : "after") : undefined,
     }),
     /** 드래그 핸들에 펴 넣을 props. */
     handleProps: (id: string) => ({

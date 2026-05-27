@@ -3,12 +3,7 @@ import { Check, ExternalLink, X } from "lucide-react";
 
 import type { AgentRunView, CiTriageProposal } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import {
-  openExternal,
-  useAcceptTriage,
-  useRejectProposal,
-  useTriageProposal,
-} from "@/lib/query";
+import { openExternal, useAcceptTriage, useRejectProposal, useTriageProposal } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ProposalError, prTrigger } from "./jobsUtils";
@@ -28,15 +23,15 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
+    return (
+      <div className="jobs-prop jobs-prop-loading">
+        <Spinner /> Proposal 불러오는 중…
+      </div>
+    );
   }
   if (proposal.error) {
     return (
-      <ProposalError
-        runId={run.id}
-        message={(proposal.error as Error).message}
-        reject={reject}
-      />
+      <ProposalError runId={run.id} message={(proposal.error as Error).message} reject={reject} />
     );
   }
   const d: CiTriageProposal = draft ??
@@ -45,11 +40,7 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
   return (
     <div className="jobs-prop">
       {pr && (
-        <button
-          type="button"
-          className="jobs-prop-pr"
-          onClick={() => void openExternal(pr.prUrl)}
-        >
+        <button type="button" className="jobs-prop-pr" onClick={() => void openExternal(pr.prUrl)}>
           <ExternalLink className="size-3" />
           {pr.repoFullName} #{pr.prNumber}
         </button>
@@ -62,9 +53,7 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
         onChange={(e) => setDraft({ ...d, cause: e.target.value })}
       />
       <label className="jobs-prop-label">수정안</label>
-      {(d.suggestedFixes ?? []).length === 0 && (
-        <div className="jobs-prop-empty">(항목 없음)</div>
-      )}
+      {(d.suggestedFixes ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
       <ul className="jobs-prop-ul">
         {(d.suggestedFixes ?? []).map((s, i) => (
           <li key={i}>{s}</li>
@@ -81,9 +70,7 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
         accept는 <b>로컬 기록</b>일 뿐입니다(외부 무변경) — 실제 수정은 직접.
       </div>
       {(accept.error || reject.error) && (
-        <div className="jobs-prop-err">
-          {((accept.error ?? reject.error) as Error).message}
-        </div>
+        <div className="jobs-prop-err">{((accept.error ?? reject.error) as Error).message}</div>
       )}
       <div className="jobs-prop-actions">
         <Button

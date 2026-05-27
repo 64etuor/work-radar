@@ -16,6 +16,7 @@
 ## §0 Session Handoff (다음 세션에서 가장 먼저 읽기)
 
 ### 현재 상태 (2026-05-25 세션 종료 시점)
+
 - 브랜치 `dev` @ `35094c2..` (PR A 머지 완료)
 - PR A — 매트릭스 정중앙 BrainDump 원형 토글 + 펄스/펼침 애니메이션 dev push 완료
 - PR A follow-up(비차단): cmux 브라우저 스모크 실측(Esc → 토글만 닫힘 + window.hide 미호출 + 트리거 포커스 복원) — 사용자가 환경에서 확인 필요
@@ -23,6 +24,7 @@
 - 하단 `.news-ticker-slot`은 빈 라인(border-top만) — PR B+C에서 채움
 
 ### 다음 세션 첫 액션 체크리스트
+
 1. **컨텍스트 로드** — 이 plan(§0~§9)과 spec(`docs/specs/2026-05-25-brain-dump-toggle-and-news-ticker-design.md`) §5 정독.
 2. **dev 최신 확인** — `git fetch origin && git status -sb` → `dev` clean이어야 진행.
 3. **브랜치 생성** — `git checkout -b feat/news-fetcher-pr-b`.
@@ -36,35 +38,36 @@
    - `executor late writes` — agent 완료 후 항상 `git status`로 진짜 변경 파일 확인.
 
 ### INVARIANTS 적용 가드
-| # | 불변식 | PR B 적용 |
-|---|---|---|
-| ① | 결정 레일 자동화 금지 | 뉴스 아이템은 **표시만** — 큐/매트릭스 자동 주입 절대 금지(아예 wiring 안 함) |
-| ② | 외부 mutation Acceptance | 뉴스 페치는 read-only — 무관 |
-| ③ | 신호 dedup upsert | 뉴스 `news_items` 도 `(source, external_id) UNIQUE` upsert로 동일 패턴 |
-| ⑤ | bounded retry | 페치 실패 최대 3회 지수 백오프 + jitter, terminal failure는 `news_fetch_failed` 이벤트로 surface |
-| ⑥ | 코드 worktree | 본 PR은 코드 변경 worktree 의무 무관(단일 트리 OK) |
-| ⑦ | SSOT 분리 | 뉴스 원본 SSOT=외부 사이트, SQLite=캐시(`fetched_at` 7일 만료 nightly cleanup) |
+
+| #   | 불변식                   | PR B 적용                                                                                        |
+| --- | ------------------------ | ------------------------------------------------------------------------------------------------ |
+| ①   | 결정 레일 자동화 금지    | 뉴스 아이템은 **표시만** — 큐/매트릭스 자동 주입 절대 금지(아예 wiring 안 함)                    |
+| ②   | 외부 mutation Acceptance | 뉴스 페치는 read-only — 무관                                                                     |
+| ③   | 신호 dedup upsert        | 뉴스 `news_items` 도 `(source, external_id) UNIQUE` upsert로 동일 패턴                           |
+| ⑤   | bounded retry            | 페치 실패 최대 3회 지수 백오프 + jitter, terminal failure는 `news_fetch_failed` 이벤트로 surface |
+| ⑥   | 코드 worktree            | 본 PR은 코드 변경 worktree 의무 무관(단일 트리 OK)                                               |
+| ⑦   | SSOT 분리                | 뉴스 원본 SSOT=외부 사이트, SQLite=캐시(`fetched_at` 7일 만료 nightly cleanup)                   |
 
 ---
 
 ## File Structure
 
-| 파일 | 변경 | 책임 |
-|---|---|---|
-| `src-tauri/migrations/0016_news_items.sql` | **Create** | `news_items` 테이블 + 인덱스 |
-| `src-tauri/migrations/0017_news_source_pref.sql` | **Create** | 소스별 on/off 설정 테이블 |
-| `src-tauri/src/news/mod.rs` | **Create** | `NewsSource` trait, `NewsItem` 타입, registry, AppError 통합 |
-| `src-tauri/src/news/hn.rs` | **Create** | HackerNews Firebase API impl |
-| `src-tauri/src/news/geeknews.rs` | **Create** | GeekNews RSS impl |
-| `src-tauri/src/news/lobsters.rs` | **Create** | Lobsters JSON impl |
-| `src-tauri/src/news/store.rs` | **Create** | SQLite upsert + 조회 + cleanup |
-| `src-tauri/src/news/pref_store.rs` | **Create** | 소스 on/off 저장 |
-| `src-tauri/src/news/fetcher.rs` | **Create** | 15분 주기 tokio interval task (scheduler.rs 패턴 답습) |
-| `src-tauri/src/commands/news.rs` | **Create** | tauri commands: `news_list_recent`, `news_sources_available`, `news_sources_set_enabled` |
-| `src-tauri/src/commands/mod.rs` | **Modify** | `pub mod news;` 등록 |
-| `src-tauri/src/lib.rs` (또는 `main.rs`) | **Modify** | news 모듈 등록 + setup hook에서 `fetcher::spawn(state)` 호출 + specta builder에 commands 등록 |
-| `Cargo.toml` (src-tauri) | **Modify** | `feed-rs` 또는 `rss` 의존성 추가(반드시 `cargo add` 사용) |
-| `src/bindings.ts` | **Auto-regen** | specta generate로 새 커맨드 타입 자동 노출 |
+| 파일                                             | 변경           | 책임                                                                                          |
+| ------------------------------------------------ | -------------- | --------------------------------------------------------------------------------------------- |
+| `src-tauri/migrations/0016_news_items.sql`       | **Create**     | `news_items` 테이블 + 인덱스                                                                  |
+| `src-tauri/migrations/0017_news_source_pref.sql` | **Create**     | 소스별 on/off 설정 테이블                                                                     |
+| `src-tauri/src/news/mod.rs`                      | **Create**     | `NewsSource` trait, `NewsItem` 타입, registry, AppError 통합                                  |
+| `src-tauri/src/news/hn.rs`                       | **Create**     | HackerNews Firebase API impl                                                                  |
+| `src-tauri/src/news/geeknews.rs`                 | **Create**     | GeekNews RSS impl                                                                             |
+| `src-tauri/src/news/lobsters.rs`                 | **Create**     | Lobsters JSON impl                                                                            |
+| `src-tauri/src/news/store.rs`                    | **Create**     | SQLite upsert + 조회 + cleanup                                                                |
+| `src-tauri/src/news/pref_store.rs`               | **Create**     | 소스 on/off 저장                                                                              |
+| `src-tauri/src/news/fetcher.rs`                  | **Create**     | 15분 주기 tokio interval task (scheduler.rs 패턴 답습)                                        |
+| `src-tauri/src/commands/news.rs`                 | **Create**     | tauri commands: `news_list_recent`, `news_sources_available`, `news_sources_set_enabled`      |
+| `src-tauri/src/commands/mod.rs`                  | **Modify**     | `pub mod news;` 등록                                                                          |
+| `src-tauri/src/lib.rs` (또는 `main.rs`)          | **Modify**     | news 모듈 등록 + setup hook에서 `fetcher::spawn(state)` 호출 + specta builder에 commands 등록 |
+| `Cargo.toml` (src-tauri)                         | **Modify**     | `feed-rs` 또는 `rss` 의존성 추가(반드시 `cargo add` 사용)                                     |
+| `src/bindings.ts`                                | **Auto-regen** | specta generate로 새 커맨드 타입 자동 노출                                                    |
 
 ---
 
@@ -97,9 +100,11 @@ rtk cargo add chrono --features "serde"   # 이미 있으면 no-op
 - [ ] **Step 0.3: scheduler.rs 패턴 정독**
 
 읽기 전용:
+
 ```bash
 rg -n "tokio::time::interval|setup" src-tauri/src/scheduler.rs src-tauri/src/lib.rs
 ```
+
 `scheduler::spawn(state)`가 어떻게 `setup` hook에서 호출되는지 확인 — fetcher.rs도 같은 시그니처(`pub fn spawn(state: AppState)`).
 
 ---
@@ -107,6 +112,7 @@ rg -n "tokio::time::interval|setup" src-tauri/src/scheduler.rs src-tauri/src/lib
 ## Task 1 — DB 스키마 (마이그레이션 2개)
 
 **Files:**
+
 - Create: `src-tauri/migrations/0016_news_items.sql`
 - Create: `src-tauri/migrations/0017_news_source_pref.sql`
 
@@ -153,6 +159,7 @@ cd /Users/davidpark/private_project/work-radar/src-tauri
 export PATH="$HOME/.cargo/bin:$PATH"
 rtk proxy cargo check 2>&1 | tail -15
 ```
+
 Expected: 0 errors. 마이그레이션은 런타임에 적용되므로 cargo check만으로는 SQL 문법 검증 안 됨 — Task 2의 store.rs 작성 후 store unit test에서 schema 동작 검증.
 
 ---
@@ -160,6 +167,7 @@ Expected: 0 errors. 마이그레이션은 런타임에 적용되므로 cargo che
 ## Task 2 — `NewsSource` trait + 타입 + registry (mod.rs)
 
 **Files:**
+
 - Create: `src-tauri/src/news/mod.rs`
 
 - [ ] **Step 2.1: 작성**
@@ -235,6 +243,7 @@ cd /Users/davidpark/private_project/work-radar/src-tauri
 export PATH="$HOME/.cargo/bin:$PATH"
 rtk proxy cargo check 2>&1 | tail -15
 ```
+
 Expected: 하위 모듈(`hn`/`geeknews`/`lobsters`/`pref_store`/`store`/`fetcher`)이 없으니 unresolved module 에러. 정상 — Task 3~7에서 채움. 진행.
 
 ---
@@ -242,6 +251,7 @@ Expected: 하위 모듈(`hn`/`geeknews`/`lobsters`/`pref_store`/`store`/`fetcher
 ## Task 3 — `store.rs` (SQLite upsert + 조회 + cleanup)
 
 **Files:**
+
 - Create: `src-tauri/src/news/store.rs`
 
 - [ ] **Step 3.1: 작성**
@@ -424,6 +434,7 @@ cd /Users/davidpark/private_project/work-radar/src-tauri
 export PATH="$HOME/.cargo/bin:$PATH"
 rtk proxy cargo test --lib news::store:: 2>&1 | tail -20
 ```
+
 Expected: 3 tests pass. 실패면 SQL 문법/마이그레이션 순서 점검(in-memory DB가 `sqlx::migrate!` 적용 성공해야 함).
 
 ---
@@ -431,6 +442,7 @@ Expected: 3 tests pass. 실패면 SQL 문법/마이그레이션 순서 점검(in
 ## Task 4 — `pref_store.rs` (소스 on/off)
 
 **Files:**
+
 - Create: `src-tauri/src/news/pref_store.rs`
 
 - [ ] **Step 4.1: 작성**
@@ -529,6 +541,7 @@ mod tests {
 ```bash
 rtk proxy cargo test --lib news::pref_store:: 2>&1 | tail -15
 ```
+
 Expected: 2 tests pass.
 
 ---
@@ -536,9 +549,11 @@ Expected: 2 tests pass.
 ## Task 5 — `hn.rs` (HackerNews Firebase API)
 
 **Files:**
+
 - Create: `src-tauri/src/news/hn.rs`
 
 API:
+
 - `https://hacker-news.firebaseio.com/v0/topstories.json` → `[id, id, ...]` (최대 500개)
 - `https://hacker-news.firebaseio.com/v0/item/{id}.json` → `{ id, title, url, kids, descendants, time, ... }`
 - Item 30개로 제한, 병렬 페치 — `tokio::task::JoinSet`.
@@ -643,6 +658,7 @@ fn item_to_news(it: Item) -> Option<NewsItem> {
 ```bash
 rtk proxy cargo check --lib 2>&1 | tail -10
 ```
+
 Expected: 0 errors.
 
 ---
@@ -650,6 +666,7 @@ Expected: 0 errors.
 ## Task 6 — `geeknews.rs` (RSS)
 
 **Files:**
+
 - Create: `src-tauri/src/news/geeknews.rs`
 
 GeekNews RSS: `https://news.hada.io/rss/news` (또는 `/rss/all` — 다음 세션에서 정확한 endpoint를 한 번 brower로 확인).
@@ -712,6 +729,7 @@ Expected: 0 errors. `feed-rs`가 RSS+Atom 둘 다 파싱.
 ## Task 7 — `lobsters.rs` (JSON)
 
 **Files:**
+
 - Create: `src-tauri/src/news/lobsters.rs`
 
 API: `https://lobste.rs/hottest.json` → array of stories with `short_id`, `title`, `url`, `comments_url`, `comment_count`, `created_at`.
@@ -776,6 +794,7 @@ Expected: 0 errors.
 ## Task 8 — `fetcher.rs` (15분 주기 + bounded retry + 이벤트)
 
 **Files:**
+
 - Create: `src-tauri/src/news/fetcher.rs`
 
 - [ ] **Step 8.1: 작성**
@@ -884,6 +903,7 @@ async fn fetch_with_retry(
 - [ ] **Step 8.2: 의존성 확인**
 
 `rand` crate가 이미 있는지 — 없으면 추가:
+
 ```bash
 rtk proxy cargo add rand 2>&1 | tail -3
 ```
@@ -897,6 +917,7 @@ Expected: 0 errors. `AppState`의 `pool()` 메서드와 `crate::error::AppError`
 ## Task 9 — `commands/news.rs` (tauri-specta IPC)
 
 **Files:**
+
 - Create: `src-tauri/src/commands/news.rs`
 - Modify: `src-tauri/src/commands/mod.rs`
 
@@ -943,6 +964,7 @@ pub struct NewsItemsUpdated; // 페이로드 없음(empty struct)
 - [ ] **Step 9.2: `commands/mod.rs` 등록**
 
 `src-tauri/src/commands/mod.rs` 끝에 추가:
+
 ```rust
 pub mod news;
 ```
@@ -956,19 +978,23 @@ Expected: 0 errors.
 ## Task 10 — `lib.rs`에 모듈 등록 + fetcher spawn + specta builder 등록
 
 **Files:**
+
 - Modify: `src-tauri/src/lib.rs` (또는 `main.rs` — `Builder::default().setup(...)` 있는 곳)
 
 - [ ] **Step 10.1: 모듈 등록**
 
 `src-tauri/src/lib.rs` 상단에 추가:
+
 ```rust
 mod news;
 ```
+
 또는 이미 `mod commands;`만 있고 news가 commands 안이라면 추가 mod 선언 불필요. **다음 세션이 lib.rs 보고 정확한 위치 파악**.
 
 - [ ] **Step 10.2: specta builder에 commands 등록**
 
 기존 `Builder::<tauri::Wry>::new().commands(collect_commands![...])` 호출을 찾아 추가:
+
 ```rust
 commands::news::news_list_recent,
 commands::news::news_sources_available,
@@ -978,6 +1004,7 @@ commands::news::news_sources_set_enabled,
 - [ ] **Step 10.3: 이벤트 등록**
 
 기존 `events(collect_events![...])` 자리에 추가(없으면 새로):
+
 ```rust
 news::fetcher::NewsFetchFailed,
 commands::news::NewsItemsUpdated,
@@ -1003,9 +1030,11 @@ cd /Users/davidpark/private_project/work-radar/src-tauri
 export PATH="$HOME/.cargo/bin:$PATH"
 rtk proxy cargo check --lib 2>&1 | tail -10
 ```
+
 Expected: 0 errors.
 
 bindings 재생성(specta는 cargo test/build 시 자동 export):
+
 ```bash
 rtk proxy cargo test --lib --features specta-export 2>&1 | tail -10
 # 또는 프로젝트가 사용하는 generate 명령 (CLAUDE.md/AGENTS.md 패턴 확인)
@@ -1027,6 +1056,7 @@ pnpm lint 2>&1 | tail -10
 cd src-tauri && rtk proxy cargo test --lib news:: 2>&1 | tail -15
 rtk proxy cargo clippy --lib -- -D warnings 2>&1 | tail -10
 ```
+
 Expected: 모두 0 errors.
 
 - [ ] **Step 11.2: 수동 확인 (앱 부팅)**
@@ -1035,12 +1065,15 @@ Expected: 모두 0 errors.
 cd /Users/davidpark/private_project/work-radar
 pnpm tauri dev
 ```
+
 - 로그(콘솔)에 "news fetcher tick failed" 같은 워닝이 첫 15분 내 없는지(첫 즉시 tick 성공해야)
 - DB 검사: `sqlite3 ~/Library/Application\ Support/com.work-radar.app/db.sqlite "select count(*), source from news_items group by source;"` — 3개 소스 row 존재해야
 - IPC 직접 호출(devtools 콘솔):
+
   ```js
-  await __TAURI__.invoke('news_list_recent', { limit: 5 })
+  await __TAURI__.invoke("news_list_recent", { limit: 5 });
   ```
+
   → 최신 5건 JSON 반환
 
 - [ ] **Step 11.3: 커밋**
@@ -1084,6 +1117,7 @@ rtk git push origin dev
 - [ ] **Step 11.5: decisions.md 한 줄**
 
 `docs/decisions.md` 끝에:
+
 ```
 - **PR B — 뉴스 페처 백엔드 머지**: `src-tauri/src/news/` 신설 — `NewsSource` trait + HN(Firebase JSON)/GeekNews(RSS)/Lobsters(JSON) 3 impls. `news_items` (source, external_id) UNIQUE upsert + 7일 만료 nightly purge. 15분 주기 `tokio::interval` fetcher(첫 tick 즉시 실행), 페치당 최대 3회 지수 백오프+jitter — 실패 시 `news_fetch_failed` 이벤트(소스별), 성공 시 `news_items_updated`. 글로벌 소스 on/off는 `news_source_pref`(기본 ON). IPC 3개: `news_list_recent`/`news_sources_available`/`news_sources_set_enabled` (tauri-specta). 토큰 무관(공개 API/RSS). INVARIANTS: #1 표시 only(큐/매트릭스 자동 주입 0)·#3 dedup upsert·#5 bounded retry·#7 외부 SSOT+SQLite 캐시. 검증: cargo test news:: pass·clippy 0·typecheck 0·lint 0. bindings 재생성. dev push. Follow-up(비차단): GeekNews RSS endpoint 정확성 첫 tick 후 콘솔/DB로 사용자 확인.
 ```
@@ -1094,32 +1128,35 @@ rtk git push origin dev
 
 **1. Spec §5 coverage:**
 
-| spec §5 항목 | task |
-|---|---|
-| NewsSource trait | Task 2 |
-| HN/GeekNews/Lobsters impls | Task 5/6/7 |
-| (source, external_id) UNIQUE upsert | Task 1+3 |
-| 7일 만료 cleanup | Task 3 (`purge_expired`) |
-| 15분 주기 + 지수 백오프 3회 + 이벤트 | Task 8 |
-| 글로벌 설정(news_source_pref) | Task 1+4 |
-| IPC 3개 + 이벤트 2개 | Task 9+10 |
-| INVARIANTS ①/③/⑤/⑦ | 모든 task에 매핑 |
+| spec §5 항목                         | task                     |
+| ------------------------------------ | ------------------------ |
+| NewsSource trait                     | Task 2                   |
+| HN/GeekNews/Lobsters impls           | Task 5/6/7               |
+| (source, external_id) UNIQUE upsert  | Task 1+3                 |
+| 7일 만료 cleanup                     | Task 3 (`purge_expired`) |
+| 15분 주기 + 지수 백오프 3회 + 이벤트 | Task 8                   |
+| 글로벌 설정(news_source_pref)        | Task 1+4                 |
+| IPC 3개 + 이벤트 2개                 | Task 9+10                |
+| INVARIANTS ①/③/⑤/⑦                   | 모든 task에 매핑         |
 
 **2. Placeholder scan:** 없음. 모든 step에 실제 코드/명령.
 
 **3. Type consistency:** `AppError`/`AppResult`는 `crate::error`의 기존 타입 사용 — Task 5 §주의에서 다음 세션이 정확한 variant 이름 확인하라고 명시. `AppState.pool()` 시그니처도 마찬가지.
 
 **4. 의존성 가드:**
+
 - `feed-rs`, `rand`(없으면) — `cargo add`로만(Cargo.toml 직접 편집 금지: AGENTS.md 패턴)
 - `async-trait`, `reqwest`, `tokio`, `sqlx`, `serde`, `chrono`, `tracing`, `specta`, `tauri-specta` — 이미 존재
 
 **5. 위험:**
+
 - HN Firebase `topstories.json` 응답이 500개 → 30개만 페치하지만 30 HTTP 호출은 부담. `tokio::task::JoinSet` 병렬로 ~1-2초.
 - GeekNews RSS endpoint 정확성 미확정 — Step 6.1에서 다음 세션이 한 번 brower로 확인.
 - 첫 즉시 tick(`ticker.tick()` 첫 호출은 즉시 반환)이 setup hook 직후 — DB 마이그레이션이 끝났는지 race 가능성. setup hook이 마이그레이션 await 후에 spawn 호출하는지 확인.
 - specta-export feature gate가 프로젝트에 어떻게 구성됐는지 — Step 10.5에서 정확한 명령 사용.
 
 **6. 후속(다음 PR):**
+
 - PR C: NewsTicker UI + 설정 다이얼로그 뉴스 섹션 + 빈 상태(소스 0/아이템 0). hover 일시정지 + `prefers-reduced-motion` 폴백(spec §6).
 
 ---
@@ -1127,6 +1164,7 @@ rtk git push origin dev
 ## Plan complete
 
 **다음 세션 실행 옵션** (세션 핸드오프):
+
 1. **Subagent-Driven** — task별 fresh subagent + critic 최종 리뷰
 2. **Inline Execution** — controller가 직접 실행
 3. **Autonomous loop** — 메모리 `work-radar autonomous phase loop` 패턴 (brainstorm 끝났으므로 plan 단계도 끝, 바로 impl→verify→critic→commit→push 루프)

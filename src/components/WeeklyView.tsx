@@ -1,12 +1,5 @@
 import "./WeeklyView.css";
-import {
-  CheckCircle2,
-  GitPullRequest,
-  Inbox,
-  Repeat,
-  Send,
-  TrendingDown,
-} from "lucide-react";
+import { CheckCircle2, GitPullRequest, Inbox, Repeat, Send, TrendingDown } from "lucide-react";
 
 import type { DebtPoint } from "@/bindings";
 import { localToday, useWeeklyReview } from "@/lib/query";
@@ -38,7 +31,9 @@ export function WeeklyView() {
 
       <div className="wk-scroll">
         {review.isError && (
-          <div className="wk-hint">집계를 불러오지 못했습니다: {(review.error as Error).message}</div>
+          <div className="wk-hint">
+            집계를 불러오지 못했습니다: {(review.error as Error).message}
+          </div>
         )}
         {!data && !review.isError && <div className="wk-hint">집계 중…</div>}
 
@@ -47,11 +42,15 @@ export function WeeklyView() {
             {/* 처리량 */}
             <section className="wk-sec">
               <div className="wk-sec-head">
-                <Send className="size-4 text-wr-subtle" />
+                <Send className="text-wr-subtle size-4" />
                 <span className="wk-sec-name">처리량 (지난 7일)</span>
               </div>
               <div className="wk-stats">
-                <StatTile icon={<Inbox className="size-4" />} label="캡처" value={data.throughput.captured} />
+                <StatTile
+                  icon={<Inbox className="size-4" />}
+                  label="캡처"
+                  value={data.throughput.captured}
+                />
                 <StatTile
                   icon={<CheckCircle2 className="size-4" />}
                   label="완료"
@@ -68,7 +67,7 @@ export function WeeklyView() {
             {/* PR 활동 */}
             <section className="wk-sec">
               <div className="wk-sec-head">
-                <GitPullRequest className="size-4 text-wr-subtle" />
+                <GitPullRequest className="text-wr-subtle size-4" />
                 <span className="wk-sec-name">PR 활동</span>
               </div>
               <div className="wk-stats">
@@ -88,7 +87,7 @@ export function WeeklyView() {
             {/* 루틴 이행률 */}
             <section className="wk-sec">
               <div className="wk-sec-head">
-                <Repeat className="size-4 text-wr-subtle" />
+                <Repeat className="text-wr-subtle size-4" />
                 <span className="wk-sec-name">루틴 이행률</span>
                 <span className="wk-sec-count">
                   {data.routineAdherence.done}/{data.routineAdherence.due}
@@ -106,12 +105,13 @@ export function WeeklyView() {
             {/* 부채 추세 */}
             <section className="wk-sec">
               <div className="wk-sec-head">
-                <TrendingDown className="size-4 text-wr-subtle" />
+                <TrendingDown className="text-wr-subtle size-4" />
                 <span className="wk-sec-name">부채 추세 (미분류 · Q1 overdue)</span>
               </div>
               {data.debtTrend.length === 0 ? (
                 <div className="wk-hint">
-                  추세 데이터가 쌓이는 중입니다 — Today 운영 뷰를 열 때마다 그날의 부채가 기록됩니다.
+                  추세 데이터가 쌓이는 중입니다 — Today 운영 뷰를 열 때마다 그날의 부채가
+                  기록됩니다.
                 </div>
               ) : (
                 <DebtTrend points={data.debtTrend} />
@@ -124,15 +124,7 @@ export function WeeklyView() {
   );
 }
 
-function StatTile({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-}) {
+function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
     <div className="wk-tile">
       <span className="wk-tile-top">

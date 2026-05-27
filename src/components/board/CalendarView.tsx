@@ -85,7 +85,7 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
           return (
             <div
               key={d}
-              className={`calv-col${d === todayIso ? " is-today" : ""}`}
+              className={`calv-col${d === todayIso ? "is-today" : ""}`}
               onClick={onSelectDate ? () => onSelectDate(d) : undefined}
             >
               <div className="calv-col-head">
@@ -126,7 +126,7 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
           return (
             <div
               key={d}
-              className={`calv-cell${outside ? " is-outside" : ""}${d === todayIso ? " is-today" : ""}`}
+              className={`calv-cell${outside ? "is-outside" : ""}${d === todayIso ? "is-today" : ""}`}
               onClick={onSelectDate ? () => onSelectDate(d) : undefined}
             >
               <span className="calv-cell-dom">{dd.getDate()}</span>
@@ -134,16 +134,14 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
                 {list.slice(0, 3).map((ev) => (
                   <span
                     key={ev.id}
-                    className={`calv-dot${ev.allDay ? " is-allday" : ""}`}
+                    className={`calv-dot${ev.allDay ? "is-allday" : ""}`}
                     title={ev.title}
                     style={calendarColorStyle(ev.projectColor, ev.projectTextColor)}
                   >
                     {ev.title}
                   </span>
                 ))}
-                {list.length > 3 && (
-                  <span className="calv-more">+{list.length - 3}</span>
-                )}
+                {list.length > 3 && <span className="calv-more">+{list.length - 3}</span>}
               </div>
             </div>
           );
@@ -166,27 +164,17 @@ function EventBlock({
   const time = eventTime(ev);
   const body = (
     <div
-      className={`calv-ev${ev.allDay ? " is-allday" : ""}${compact ? " is-compact" : ""}`}
+      className={`calv-ev${ev.allDay ? "is-allday" : ""}${compact ? "is-compact" : ""}`}
       style={calendarColorStyle(ev.projectColor, ev.projectTextColor)}
     >
-      {showTime && (
-        <span className="calv-ev-time">{ev.allDay ? "종일" : (time ?? "")}</span>
-      )}
+      {showTime && <span className="calv-ev-time">{ev.allDay ? "종일" : (time ?? "")}</span>}
       <span className="calv-ev-title">{ev.title}</span>
-      {ev.calendarSummary && !compact && (
-        <span className="calv-ev-cal">{ev.calendarSummary}</span>
-      )}
+      {ev.calendarSummary && !compact && <span className="calv-ev-cal">{ev.calendarSummary}</span>}
     </div>
   );
   if (ev.url) {
     return (
-      <a
-        className="calv-ev-link"
-        href={ev.url}
-        target="_blank"
-        rel="noreferrer"
-        title={ev.title}
-      >
+      <a className="calv-ev-link" href={ev.url} target="_blank" rel="noreferrer" title={ev.title}>
         {body}
       </a>
     );

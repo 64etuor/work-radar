@@ -33,10 +33,10 @@ keychain.rs(set/get/has/delete + TokenKind), commands.rs(set_project_token/ping_
 
 **스코프 = 2개 PR:**
 
-| PR | 이름 | 내용 |
-|---|---|---|
-| **10a** | OAuth 연결 | `TokenKind::GoogleCalendar`, 사용자 제공 client(Settings 입력), loopback+PKCE OAuth(`calendar.readonly`), 토큰 refresh, connect/disconnect/status 커맨드 + Settings 연결 UI. graceful degrade. |
-| **10b** | 캘린더 선택 + 이벤트 | migration 0006(`projects.google_calendar_ids`), calendarList 조회 + 다중 선택 저장, `fetch_calendar_events`, `CalendarProvider` 트레잇 + Http 구현, Settings 다중 캘린더 picker. |
+| PR      | 이름                 | 내용                                                                                                                                                                                           |
+| ------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **10a** | OAuth 연결           | `TokenKind::GoogleCalendar`, 사용자 제공 client(Settings 입력), loopback+PKCE OAuth(`calendar.readonly`), 토큰 refresh, connect/disconnect/status 커맨드 + Settings 연결 UI. graceful degrade. |
+| **10b** | 캘린더 선택 + 이벤트 | migration 0006(`projects.google_calendar_ids`), calendarList 조회 + 다중 선택 저장, `fetch_calendar_events`, `CalendarProvider` 트레잇 + Http 구현, Settings 다중 캘린더 picker.               |
 
 **범위 밖(명시):** Today/Timeline 표시(Phase 11), 캘린더 write/이벤트 생성(read-only), .ics·CalDAV·타 제공자
 (Google 전용), 실시간 push 알림(폴링만), 다계정 단일 프로젝트(계정=프로젝트 단위).
@@ -77,6 +77,7 @@ keychain.rs(set/get/has/delete + TokenKind), commands.rs(set_project_token/ping_
 > 아니지만 Google 토큰 교환에 포함되므로 함께 저장한다.
 
 **연결(`start_google_oauth`):**
+
 1. keychain에서 client_id/secret 로드(없으면 Err — 먼저 입력 필요).
 2. `code_verifier`(43~128 unreserved) + `code_challenge=S256` + `state` 생성.
 3. loopback 서버 bind(127.0.0.1:임의포트) → `redirect_uri = http://127.0.0.1:{port}`.
@@ -89,6 +90,7 @@ keychain.rs(set/get/has/delete + TokenKind), commands.rs(set_project_token/ping_
 **갱신(`refresh_access`):** `POST .../token`(grant_type=refresh_token, refresh_token, client_id, client_secret) → access_token(+expires_in). refresh_token은 응답에 없을 수 있음 → 기존 유지.
 
 **API:**
+
 - calendarList: `GET https://www.googleapis.com/calendar/v3/users/me/calendarList`(Bearer) → items[]{id, summary, primary?}.
 - events: `GET https://www.googleapis.com/calendar/v3/calendars/{cal_id}/events?timeMin=…&timeMax=…&singleEvents=true&orderBy=startTime&maxResults=50`(cal_id 퍼센트 인코딩). 이벤트 start = `start.dateTime`(timed) 또는 `start.date`(all-day).
 
@@ -111,6 +113,7 @@ struct CalendarEvent {
   project_id: String,
 }
 ```
+
 specta i64/u64 export 금지(이 Phase는 정수 필드 거의 없음 — 있으면 u32).
 
 영속: `projects.google_calendar_ids`(0006) = 선택된 캘린더 JSON `[{id,summary}]`. 이벤트는 영속 안 함.
@@ -120,12 +123,14 @@ specta i64/u64 export 금지(이 Phase는 정수 필드 거의 없음 — 있으
 ## 6. IPC 커맨드
 
 **10a:**
+
 - `set_google_oauth_client(project_id, client_id, client_secret) -> ()` — keychain blob에 client 저장(반환 없음).
 - `start_google_oauth(project_id) -> ()` — loopback OAuth 실행, refresh_token 저장. bounded timeout.
 - `google_calendar_status(project_id) -> GoogleCalendarStatus` — has_client(client 입력됨) / connected(refresh_token 있음).
 - `disconnect_google(project_id) -> ()` — keychain blob 삭제.
 
 **10b:**
+
 - `list_google_calendars(project_id) -> Vec<CalendarListItem>` — calendarList(저장된 선택 반영해 selected 플래그).
 - `set_selected_calendars(project_id, calendar_ids: Vec<String>) -> ()` — `google_calendar_ids` 저장.
 - `fetch_calendar_events(project_id: Option<String>, date: String) -> Vec<CalendarEvent>` — 선택 캘린더 오늘 이벤트 시간순 병합. `None`이면 **연결된 모든 프로젝트** 병합(Today용). 미연결/실패 프로젝트는 건너뛴다(부분 실패 격리).
@@ -172,6 +177,7 @@ specta i64/u64 export 금지(이 Phase는 정수 필드 거의 없음 — 있으
 ## 11. 구현 순서 (ordered — 새 세션이 그대로 따라감)
 
 ### PR1 — Phase 10a (OAuth 연결)
+
 1. `models.rs`: `TokenKind::GoogleCalendar`(+as_str), `GoogleCalendarStatus` DTO.
 2. `keychain.rs`: GoogleCalendar account 매핑 확인(기존 set/get/has/delete 재사용). blob get/set 헬퍼(JSON 병합).
 3. `calendar.rs`(신설): `CalendarError`+`with_retry`, 순수 OAuth 헬퍼(`gen_code_verifier`/`pkce_challenge`/`gen_state`/`auth_url`/`parse_redirect_query`) + 단위 테스트, `run_loopback`(bounded), `exchange_code`/`refresh_access`(reqwest), `CalendarProvider` 트레잇(이번 PR은 exchange/refresh만 구현·나머지는 10b).
@@ -181,6 +187,7 @@ specta i64/u64 export 금지(이 Phase는 정수 필드 거의 없음 — 있으
 7. 검증: cargo test(순수 OAuth 헬퍼) + clippy -D warnings + cargo fmt + pnpm typecheck/build. 실 OAuth는 사용자 관찰.
 
 ### PR2 — Phase 10b (캘린더 선택 + 이벤트)
+
 1. `migrations/0006_google_calendar_ids.sql`: `projects.google_calendar_ids TEXT`.
 2. `models.rs`: `CalendarListItem`, `CalendarEvent` DTO.
 3. `calendar.rs`: `list_calendars`/`fetch_events` 구현 + 순수 파싱(`parse_calendar_list`/`parse_calendar_event`/`today_window`/`merge_sort_events`) + 단위 테스트.

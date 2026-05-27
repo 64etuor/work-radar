@@ -114,16 +114,11 @@ describe("emptyStateForLens", () => {
   });
 });
 
-
 describe("visualGitGraphRows", () => {
   it("git log --graph 원문에서 graph prefix와 커밋 본문을 분리한다", () => {
     expect(
       visualGitGraphRows(
-        [
-          "* a1b2c3d (HEAD -> feature) add drawer",
-          "| * b2c3d4e (origin/main) base fix",
-          "|/",
-        ],
+        ["* a1b2c3d (HEAD -> feature) add drawer", "| * b2c3d4e (origin/main) base fix", "|/"],
         [
           { shortHash: "a1b2c3d", side: "right" },
           { shortHash: "b2c3d4e", side: "left" },
@@ -137,9 +132,7 @@ describe("visualGitGraphRows", () => {
   });
 
   it("커밋 hash를 못 찾으면 전체 라인을 graph-only로 보존한다", () => {
-    expect(visualGitGraphRows(["|\\"], [])).toEqual([
-      { graph: "|\\", text: "", side: null },
-    ]);
+    expect(visualGitGraphRows(["|\\"], [])).toEqual([{ graph: "|\\", text: "", side: null }]);
   });
 
   it("커밋 제목에 다른 short hash가 있어도 라인의 첫 커밋 토큰을 기준으로 분리한다", () => {

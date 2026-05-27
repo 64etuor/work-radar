@@ -119,11 +119,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
   };
 
   return (
-    <div
-      ref={rootRef}
-      className="brain-dump-toggle"
-      data-state={open ? "open" : "closed"}
-    >
+    <div ref={rootRef} className="brain-dump-toggle" data-state={open ? "open" : "closed"}>
       <button
         ref={triggerRef}
         type="button"
@@ -149,13 +145,13 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
           type="single"
           value={pendingKind}
           onValueChange={(v) => v && setPendingKind(v as Kind)}
-          className="shrink-0 overflow-hidden rounded-full border border-wr-border-light"
+          className="border-wr-border-light shrink-0 overflow-hidden rounded-full border"
         >
           <ToggleGroupItem
             value="personal"
             size="sm"
             tabIndex={open ? 0 : -1}
-            className="font-semibold text-wr-subtle data-[state=on]:bg-secondary data-[state=on]:text-secondary-foreground"
+            className="text-wr-subtle data-[state=on]:bg-secondary data-[state=on]:text-secondary-foreground font-semibold"
           >
             개인
           </ToggleGroupItem>
@@ -163,7 +159,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
             value="work"
             size="sm"
             tabIndex={open ? 0 : -1}
-            className="font-semibold text-wr-subtle data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+            className="text-wr-subtle data-[state=on]:bg-accent data-[state=on]:text-accent-foreground font-semibold"
           >
             업무
           </ToggleGroupItem>

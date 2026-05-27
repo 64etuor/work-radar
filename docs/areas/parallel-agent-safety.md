@@ -1,4 +1,3 @@
-
 # Parallel Agent Safety
 
 이 문서는 **이 앱을 만드는 에이전트**(orchestrator + implementer)들이 동시 실행될 때의

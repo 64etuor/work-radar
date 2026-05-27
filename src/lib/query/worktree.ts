@@ -1,13 +1,6 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
-import {
-  commands,
-  type DiffMode,
-} from "@/bindings";
+import { commands, type DiffMode } from "@/bindings";
 
 /**
  * worktree 목록 라이브 폴링 주기 (Phase 12c). bounded interval(busy-loop 아님 — INVARIANT #5).
@@ -49,9 +42,7 @@ export function useWorktreeDiffFiles(args: {
   return useQuery({
     queryKey: ["worktreeDiffFiles", worktreePath, mode, baseRef, headRef],
     queryFn: () =>
-      unwrap(
-        commands.worktreeDiffFiles(worktreePath as string, mode, baseRef, headRef),
-      ),
+      unwrap(commands.worktreeDiffFiles(worktreePath as string, mode, baseRef, headRef)),
     enabled: !!worktreePath && ready,
   });
 }
@@ -70,13 +61,7 @@ export function useWorktreeFileDiff(args: {
     queryKey: ["worktreeFileDiff", worktreePath, mode, baseRef, headRef, path],
     queryFn: () =>
       unwrap(
-        commands.worktreeFileDiff(
-          worktreePath as string,
-          mode,
-          baseRef,
-          headRef,
-          path as string,
-        ),
+        commands.worktreeFileDiff(worktreePath as string, mode, baseRef, headRef, path as string),
       ),
     enabled: !!worktreePath && !!path && ready,
   });
@@ -91,8 +76,7 @@ export function useWorktreeCommitGraph(args: {
   const { worktreePath, baseRef, open } = args;
   return useQuery({
     queryKey: ["worktreeCommitGraph", worktreePath, baseRef],
-    queryFn: () =>
-      unwrap(commands.worktreeCommitGraph(worktreePath as string, baseRef as string)),
+    queryFn: () => unwrap(commands.worktreeCommitGraph(worktreePath as string, baseRef as string)),
     enabled: open && !!worktreePath && !!baseRef,
   });
 }
@@ -119,8 +103,7 @@ export function useRebaseWorktree() {
 export function useCleanupCandidates(repoPath: string | null, base: string | null) {
   return useQuery({
     queryKey: ["cleanupCandidates", repoPath, base],
-    queryFn: () =>
-      unwrap(commands.listCleanupCandidates(repoPath as string, base)),
+    queryFn: () => unwrap(commands.listCleanupCandidates(repoPath as string, base)),
     enabled: !!repoPath,
   });
 }
@@ -129,20 +112,8 @@ export function useCleanupCandidates(repoPath: string | null, base: string | nul
 export function useDeleteCleanupCandidates() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: {
-      repoPath: string;
-      base: string | null;
-      ids: string[];
-      force: boolean;
-    }) =>
-      unwrap(
-        commands.deleteCleanupCandidates(
-          args.repoPath,
-          args.base,
-          args.ids,
-          args.force,
-        ),
-      ),
+    mutationFn: (args: { repoPath: string; base: string | null; ids: string[]; force: boolean }) =>
+      unwrap(commands.deleteCleanupCandidates(args.repoPath, args.base, args.ids, args.force)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["cleanupCandidates"] });
       void qc.invalidateQueries({ queryKey: ["worktrees"] });

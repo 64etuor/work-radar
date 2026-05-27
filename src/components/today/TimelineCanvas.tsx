@@ -81,8 +81,7 @@ export function TimelineCanvas({
       }),
     [boxes, activeDrag, activeDelta, gridWidth],
   );
-  const suppressBlockTransform =
-    activeDrag?.from === "canvas-resize";
+  const suppressBlockTransform = activeDrag?.from === "canvas-resize";
 
   // dropData는 상수 — gridY는 dropData에 박지 않는다(@dnd-kit가 register 시점 스냅샷할
   // 위험 + mutable ref antipattern). 실제 Y 좌표는 부모 pointerYRef에 기록되어
@@ -131,22 +130,12 @@ export function TimelineCanvas({
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
     >
-      <div
-        ref={bindGridRef}
-        className="today-canvas-grid"
-        style={{ height: `${24 * HOUR_PX}px` }}
-      >
+      <div ref={bindGridRef} className="today-canvas-grid" style={{ height: `${24 * HOUR_PX}px` }}>
         {/* 업무시간 음영 (09–18) — 시각적 닻. */}
         <div className="today-canvas-workhours" aria-hidden />
         {HOURS.map((h) => (
-          <div
-            key={h}
-            className="today-canvas-hour"
-            style={{ top: `${h * HOUR_PX}px` }}
-          >
-            <span className="today-canvas-hour-label">
-              {String(h).padStart(2, "0")}:00
-            </span>
+          <div key={h} className="today-canvas-hour" style={{ top: `${h * HOUR_PX}px` }}>
+            <span className="today-canvas-hour-label">{String(h).padStart(2, "0")}:00</span>
             <div className="today-canvas-hour-rule" />
           </div>
         ))}
@@ -162,60 +151,59 @@ export function TimelineCanvas({
           ))}
         </div>
         {showNow && (
-          <div
-            className="today-canvas-now"
-            style={{ top: `${nowPx}px` }}
-            aria-label="현재 시각"
-          />
+          <div className="today-canvas-now" style={{ top: `${nowPx}px` }} aria-label="현재 시각" />
         )}
-        {activeDrag && (() => {
-          const guideY = activeGuide?.y ?? hoverPx;
-          const guideX = activeGuide?.x ?? hoverX;
-          if (guideY === null || guideX === null) return null;
-          // 15분 그리드 스냅 — 분 단위로 환산해 라벨까지 표시(스펙 §D2).
-          // HOUR_PX=60이라 1min=1px, snap = round(min/15)*15.
-          const snapMin = Math.max(0, Math.min(24 * 60, Math.round(guideY / 15) * 15));
-          const hh = String(Math.floor(snapMin / 60)).padStart(2, "0");
-          const mm = String(snapMin % 60).padStart(2, "0");
-          const previewDuration =
-            activeGuide?.durationMin ??
-            ("durationMin" in activeDrag ? (activeDrag.durationMin ?? 60) : 60);
-          const previewHeight = Math.max(20, previewDuration);
-          const previewWidth = Math.min(260, Math.max(120, guideX - 60));
-          const previewLeft = Math.max(
-            60,
-            Math.min(guideX - previewWidth / 2, Math.max(60, gridWidth - previewWidth)),
-          );
-          return (
-            <>
-              <div
-                className="today-canvas-drop-guide"
-                style={{ top: `${snapMin}px` }}
-                data-time={`${hh}:${mm}`}
-                aria-hidden
-              />
-              <div
-                className="today-canvas-drop-x-guide"
-                style={{ left: `${guideX}px` }}
-                aria-hidden
-              />
-              {activeDrag.from !== "canvas" && activeDrag.from !== "canvas-resize" && (
+        {activeDrag &&
+          (() => {
+            const guideY = activeGuide?.y ?? hoverPx;
+            const guideX = activeGuide?.x ?? hoverX;
+            if (guideY === null || guideX === null) return null;
+            // 15분 그리드 스냅 — 분 단위로 환산해 라벨까지 표시(스펙 §D2).
+            // HOUR_PX=60이라 1min=1px, snap = round(min/15)*15.
+            const snapMin = Math.max(0, Math.min(24 * 60, Math.round(guideY / 15) * 15));
+            const hh = String(Math.floor(snapMin / 60)).padStart(2, "0");
+            const mm = String(snapMin % 60).padStart(2, "0");
+            const previewDuration =
+              activeGuide?.durationMin ??
+              ("durationMin" in activeDrag ? (activeDrag.durationMin ?? 60) : 60);
+            const previewHeight = Math.max(20, previewDuration);
+            const previewWidth = Math.min(260, Math.max(120, guideX - 60));
+            const previewLeft = Math.max(
+              60,
+              Math.min(guideX - previewWidth / 2, Math.max(60, gridWidth - previewWidth)),
+            );
+            return (
+              <>
                 <div
-                  className={`today-canvas-drop-preview today-canvas-drop-preview-${activeDrag.from}`}
-                  style={{
-                    top: `${snapMin}px`,
-                    left: `${previewLeft}px`,
-                    width: `${previewWidth}px`,
-                    height: `${previewHeight}px`,
-                  }}
+                  className="today-canvas-drop-guide"
+                  style={{ top: `${snapMin}px` }}
+                  data-time={`${hh}:${mm}`}
                   aria-hidden
-                >
-                  <span>{hh}:{mm}</span>
-                </div>
-              )}
-            </>
-          );
-        })()}
+                />
+                <div
+                  className="today-canvas-drop-x-guide"
+                  style={{ left: `${guideX}px` }}
+                  aria-hidden
+                />
+                {activeDrag.from !== "canvas" && activeDrag.from !== "canvas-resize" && (
+                  <div
+                    className={`today-canvas-drop-preview today-canvas-drop-preview-${activeDrag.from}`}
+                    style={{
+                      top: `${snapMin}px`,
+                      left: `${previewLeft}px`,
+                      width: `${previewWidth}px`,
+                      height: `${previewHeight}px`,
+                    }}
+                    aria-hidden
+                  >
+                    <span>
+                      {hh}:{mm}
+                    </span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
       </div>
     </div>
   );

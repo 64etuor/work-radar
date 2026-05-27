@@ -65,7 +65,7 @@ export function TodayRail({
             const zone = quadrantToZone(s.quadrant);
             const age = s.todayForDate ? ageFromForDate(s.todayForDate) : 1;
             return (
-              <div key={s.id} className={`item${done ? " done" : ""}`} {...dnd.itemProps(s.id)}>
+              <div key={s.id} className={`item${done ? "done" : ""}`} {...dnd.itemProps(s.id)}>
                 <span className="grip" title="드래그로 정렬" {...dnd.handleProps(s.id)}>
                   ⠿
                 </span>
@@ -83,7 +83,7 @@ export function TodayRail({
                     {zone !== "unclassified" && (
                       <span className={`badge b-${zone}`}>{Q_BADGE[zone]}</span>
                     )}
-                    <span className={`badge b-age${age >= 3 ? " old" : ""}`}>+{age}</span>
+                    <span className={`badge b-age${age >= 3 ? "old" : ""}`}>+{age}</span>
                     <CardTagEditor
                       target={s}
                       tags={lifeWheelTags}

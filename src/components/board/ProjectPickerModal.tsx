@@ -64,7 +64,7 @@ export function ProjectPickerModal({ state, onClose, onPick }: Props) {
         aria-describedby={undefined}
         className="w-[min(440px,92vw)] max-w-none gap-3 p-5"
       >
-        <DialogTitle className="font-mono text-[13px] font-semibold uppercase tracking-[0.1em]">
+        <DialogTitle className="font-mono text-[13px] font-semibold tracking-[0.1em] uppercase">
           프로젝트 선택 — {state.label}
         </DialogTitle>
 
@@ -88,11 +88,7 @@ export function ProjectPickerModal({ state, onClose, onPick }: Props) {
           <Button variant="outline" className="rounded-full" onClick={onClose}>
             취소
           </Button>
-          <Button
-            className="rounded-full px-[22px]"
-            onClick={submit}
-            disabled={!selected}
-          >
+          <Button className="rounded-full px-[22px]" onClick={submit} disabled={!selected}>
             등록
           </Button>
         </div>

@@ -11,6 +11,7 @@
 **정본 스펙:** `docs/specs/2026-05-22-error-handling-logging-design.md`
 
 **검증 명령(메모리 주의):**
+
 - cargo는 기본 PATH에 없음 → 매번 `export PATH="$HOME/.cargo/bin:$PATH"` 선행.
 - rtk-wrapped cargo 요약은 부정확 → 검증은 `rtk proxy cargo ...`로.
 - 테스트: `export PATH="$HOME/.cargo/bin:$PATH" && rtk proxy cargo test --manifest-path src-tauri/Cargo.toml --lib 2>&1 | tail -30`
@@ -35,6 +36,7 @@
 ## Task 0: 의존성 추가
 
 **Files:**
+
 - Modify: `src-tauri/Cargo.toml` (`[dependencies]` 블록)
 
 - [ ] **Step 1: deps 추가**
@@ -67,6 +69,7 @@ export PATH="$HOME/.cargo/bin:$PATH" && rtk git add src-tauri/Cargo.toml src-tau
 ## Task 1: `error.rs` — AppError 모델 + 생성 헬퍼
 
 **Files:**
+
 - Create: `src-tauri/src/error.rs`
 - Modify: `src-tauri/src/lib.rs` (모듈 선언)
 
@@ -300,6 +303,7 @@ export PATH="$HOME/.cargo/bin:$PATH" && rtk git add src-tauri/src/error.rs src-t
 ## Task 2: 도메인 enum → AppError `From` 변환
 
 **Files:**
+
 - Modify: `src-tauri/src/error.rs` (변환 + 테스트 추가)
 
 - [ ] **Step 1: From 변환 추가**
@@ -490,6 +494,7 @@ export PATH="$HOME/.cargo/bin:$PATH" && rtk git add src-tauri/src/error.rs && rt
 ## Task 3: `logging.rs` — tracing 재작성
 
 **Files:**
+
 - Rewrite: `src-tauri/src/logging.rs`
 
 기존 `AppLogger`/`should_rotate`/`rotation_renames`/`rotate_logs` 및 그 테스트를 전부 제거하고 아래로 교체한다. `log_app_error`/`app_log_path` 커맨드는 시그니처 유지(프런트 호환). `app_log_path`는 일별 회전으로 단일 파일명이 없으므로 **로그 디렉터리 경로**를 반환한다(현재 프런트 소비자 없음 — 안전).
@@ -695,6 +700,7 @@ export PATH="$HOME/.cargo/bin:$PATH" && rtk git add src-tauri/src/logging.rs && 
 ## Task 4: lib.rs setup 배선
 
 **Files:**
+
 - Modify: `src-tauri/src/lib.rs` (setup 클로저 + 커맨드 목록)
 
 - [ ] **Step 1: init_tracing 호출 + guard manage**
@@ -753,6 +759,7 @@ export PATH="$HOME/.cargo/bin:$PATH" && rtk git add src-tauri/src/lib.rs && rtk 
 ## Task 5: 지침 문서
 
 **Files:**
+
 - Create: `docs/reference/error-handling.md`
 - Modify: `docs/reference/commands.md` (인덱스 등재)
 
@@ -769,14 +776,14 @@ export PATH="$HOME/.cargo/bin:$PATH" && rtk git add src-tauri/src/lib.rs && rtk 
 
 모든 `#[tauri::command]`는 `Result<T, error::AppError>`를 반환한다. `String`/도메인 enum 직접 반환 금지.
 
-| 필드 | 의미 |
-|---|---|
-| `kind` | `transient`/`terminal`/`notFound`/`forbidden`/`cancelled`/`validation`/`unexpected` |
-| `code` | 머신 식별자(`notion.not_found`, `db.query` …) |
-| `message` | 사람용(현지화). 토큰/PII 금지. |
-| `traceId` | 토스트 ↔ 로그 상관키(base32 8자) |
-| `retryable` | `kind`에서 파생(`transient`만 true). 직접 설정 불가. |
-| `action` | 액션 힌트(`label`/`url`/`nav`) |
+| 필드        | 의미                                                                                |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `kind`      | `transient`/`terminal`/`notFound`/`forbidden`/`cancelled`/`validation`/`unexpected` |
+| `code`      | 머신 식별자(`notion.not_found`, `db.query` …)                                       |
+| `message`   | 사람용(현지화). 토큰/PII 금지.                                                      |
+| `traceId`   | 토스트 ↔ 로그 상관키(base32 8자)                                                    |
+| `retryable` | `kind`에서 파생(`transient`만 true). 직접 설정 불가.                                |
+| `action`    | 액션 힌트(`label`/`url`/`nav`)                                                      |
 
 ### 도메인 enum → AppError
 
@@ -841,10 +848,12 @@ export PATH="$HOME/.cargo/bin:$PATH" && rtk git add docs/reference/error-handlin
 - [ ] **Step 1: 전체 테스트 + clippy**
 
 Run:
+
 ```
 export PATH="$HOME/.cargo/bin:$PATH" && rtk proxy cargo test --manifest-path src-tauri/Cargo.toml --lib 2>&1 | tail -30
 export PATH="$HOME/.cargo/bin:$PATH" && rtk proxy cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets 2>&1 | tail -30
 ```
+
 Expected: 전부 PASS, clippy 클린.
 
 - [ ] **Step 2: 프런트 타입체크(앱 빌드 영향 없음 확인 — bindings 미변경)**

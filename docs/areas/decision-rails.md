@@ -1,4 +1,3 @@
-
 # Decision Rails — INVARIANTS
 
 이 7개는 **모든 Phase·모든 PR에서 강제된다.** 위반하는 구현은 done이 아니다.
@@ -39,7 +38,7 @@ Q1으로 사람에게 escalate. 전부-실패 분류 보존(transient vs termina
 코드 작업은 git worktree에 격리. 사용자 워킹트리를 절대 건드리지 않는다.
 샌드박스 기본 read-only, 쓰기는 명시 승인 시 workspace-write, **danger-full 금지**.
 
-> 주의: 이 INVARIANT는 **앱이 실행하는 Codex 잡**에 적용된다. 이 앱을 *만드는* 에이전트의
+> 주의: 이 INVARIANT는 **앱이 실행하는 Codex 잡**에 적용된다. 이 앱을 _만드는_ 에이전트의
 > 멀티-에이전트 디스패치 가드(parallel worktree 사고 등)는 `parallel-agent-safety.md`에 있다.
 
 ## 7. SSOT 분리

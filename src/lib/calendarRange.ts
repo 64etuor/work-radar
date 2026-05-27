@@ -64,10 +64,7 @@ export function endOfMonth(date: string): string {
  *  - week: [월요일, 일요일]
  *  - month: [1일, 말일]
  */
-export function viewRange(
-  mode: CalendarViewMode,
-  date: string,
-): { start: string; end: string } {
+export function viewRange(mode: CalendarViewMode, date: string): { start: string; end: string } {
   switch (mode) {
     case "day":
       return { start: date, end: date };
@@ -79,11 +76,7 @@ export function viewRange(
 }
 
 /** 날짜 네비(< >)의 한 스텝 이동: day=±1일, week=±7일, month=±1개월. 순수. */
-export function stepDate(
-  mode: CalendarViewMode,
-  date: string,
-  dir: -1 | 1,
-): string {
+export function stepDate(mode: CalendarViewMode, date: string, dir: -1 | 1): string {
   switch (mode) {
     case "day":
       return addDays(date, dir);

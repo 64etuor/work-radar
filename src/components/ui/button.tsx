@@ -8,13 +8,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:opacity-90",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:brightness-95",
-        outline:
-          "border border-input bg-background text-foreground hover:bg-muted",
+        secondary: "bg-secondary text-secondary-foreground hover:brightness-95",
+        outline: "border border-input bg-background text-foreground hover:bg-muted",
         ghost: "text-foreground hover:bg-muted",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:opacity-90",
+        destructive: "bg-destructive text-destructive-foreground hover:opacity-90",
         destructiveOutline:
           "border border-destructive/40 text-destructive hover:bg-destructive-soft hover:border-destructive/60",
         destructiveGhost: "text-destructive hover:bg-destructive-soft",
@@ -30,14 +27,8 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
 export function Button({ className, variant, size, ...props }: ButtonProps) {
-  return (
-    <button
-      className={cn(buttonVariants({ variant, size }), className)}
-      {...props}
-    />
-  );
+  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }

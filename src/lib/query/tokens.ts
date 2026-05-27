@@ -1,13 +1,6 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
-import {
-  commands,
-  type TokenKind,
-} from "@/bindings";
+import { commands, type TokenKind } from "@/bindings";
 
 /** 토큰 존재 여부만(본문 미노출 — INVARIANT). 마스킹 표시용. */
 export function useProjectTokenStatus(projectId: string) {
@@ -34,8 +27,7 @@ export function useSetProjectToken() {
       kind: TokenKind;
       token: string;
     }) => unwrap(commands.setProjectToken(projectId, kind, token)),
-    onSuccess: (_data, v) =>
-      qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
+    onSuccess: (_data, v) => qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
   });
 }
 
@@ -45,8 +37,7 @@ export function useDeleteProjectToken() {
   return useMutation({
     mutationFn: ({ projectId, kind }: { projectId: string; kind: TokenKind }) =>
       unwrap(commands.deleteProjectToken(projectId, kind)),
-    onSuccess: (_data, v) =>
-      qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
+    onSuccess: (_data, v) => qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
   });
 }
 
@@ -83,10 +74,8 @@ export function useNtnCliStatus() {
 export function useImportGithubToken() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (projectId: string) =>
-      unwrap(commands.importGithubToken(projectId)),
-    onSuccess: (_data, projectId) =>
-      qc.invalidateQueries({ queryKey: ["tokenStatus", projectId] }),
+    mutationFn: (projectId: string) => unwrap(commands.importGithubToken(projectId)),
+    onSuccess: (_data, projectId) => qc.invalidateQueries({ queryKey: ["tokenStatus", projectId] }),
   });
 }
 
@@ -94,10 +83,8 @@ export function useImportGithubToken() {
 export function useImportNotionToken() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (projectId: string) =>
-      unwrap(commands.importNotionToken(projectId)),
-    onSuccess: (_data, projectId) =>
-      qc.invalidateQueries({ queryKey: ["tokenStatus", projectId] }),
+    mutationFn: (projectId: string) => unwrap(commands.importNotionToken(projectId)),
+    onSuccess: (_data, projectId) => qc.invalidateQueries({ queryKey: ["tokenStatus", projectId] }),
   });
 }
 

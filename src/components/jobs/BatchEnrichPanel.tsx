@@ -1,18 +1,9 @@
 import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 
-import type {
-  AgentRunView,
-  AreaTag,
-  BatchEnrichItem,
-  Quadrant,
-} from "@/bindings";
+import type { AgentRunView, AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import {
-  useAcceptEnrichAll,
-  useBatchEnrichProposal,
-  useRejectProposal,
-} from "@/lib/query";
+import { useAcceptEnrichAll, useBatchEnrichProposal, useRejectProposal } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -40,15 +31,15 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
+    return (
+      <div className="jobs-prop jobs-prop-loading">
+        <Spinner /> Proposal 불러오는 중…
+      </div>
+    );
   }
   if (proposal.error) {
     return (
-      <ProposalError
-        runId={run.id}
-        message={(proposal.error as Error).message}
-        reject={reject}
-      />
+      <ProposalError runId={run.id} message={(proposal.error as Error).message} reject={reject} />
     );
   }
   const items = draft ?? proposal.data?.items ?? [];
@@ -77,9 +68,7 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
           <div className="jobs-prop-batch-row">
             <Select
               value={it.suggestedQuadrant ?? "unclassified"}
-              onValueChange={(v) =>
-                setItem(i, { suggestedQuadrant: v as Quadrant })
-              }
+              onValueChange={(v) => setItem(i, { suggestedQuadrant: v as Quadrant })}
             >
               <SelectTrigger className="flex-1" aria-label="제안 사분면">
                 <SelectValue />
@@ -118,9 +107,7 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
       ))}
 
       {(accept.error || reject.error) && (
-        <div className="jobs-prop-err">
-          {((accept.error ?? reject.error) as Error).message}
-        </div>
+        <div className="jobs-prop-err">{((accept.error ?? reject.error) as Error).message}</div>
       )}
       <div className="jobs-prop-actions">
         <Button

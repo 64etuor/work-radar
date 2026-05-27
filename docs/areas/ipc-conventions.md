@@ -1,4 +1,3 @@
-
 # IPC Conventions — Rust ↔ TypeScript boundary
 
 ## tauri-specta = 타입 생성 정본
@@ -82,9 +81,9 @@
 
 이 레포는 의도적으로 두 층을 가진다:
 
-| 층                          | 책임                                                                                | import 가능                                                |
-| --------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `src-tauri/src/X.rs` (도메인) | 타입 / 트레이트 / HTTP provider / OAuth 순수 로직 / 파서 / 분류기 / RateLimiter      | `crate::retry`, `crate::error`, 표준 라이브러리만           |
+| 층                                   | 책임                                                                                   | import 가능                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `src-tauri/src/X.rs` (도메인)        | 타입 / 트레이트 / HTTP provider / OAuth 순수 로직 / 파서 / 분류기 / RateLimiter        | `crate::retry`, `crate::error`, 표준 라이브러리만                 |
 | `src-tauri/src/commands/X.rs` (글루) | `#[tauri::command]` 핸들러 + **그 핸들러가 필요로 하는 cross-subsystem orchestration** | `crate::db`, `crate::keychain`, `crate::commands::*`, 도메인 모듈 |
 
 **글루의 정상 거주지는 `commands/X.rs`.** DB + keychain + provider를 함께 부르는 함수

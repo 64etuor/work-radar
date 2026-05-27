@@ -66,7 +66,9 @@ export function RoutineTrackingView() {
         </div>
 
         {tracking.isError && (
-          <div className="rt-hint">집계를 불러오지 못했습니다: {(tracking.error as Error).message}</div>
+          <div className="rt-hint">
+            집계를 불러오지 못했습니다: {(tracking.error as Error).message}
+          </div>
         )}
         {!tracking.isError && items.length === 0 && (
           <div className="rt-hint">활성 루틴이 없습니다 — 보드에서 + 루틴으로 추가하세요.</div>
@@ -118,15 +120,14 @@ function TrackCard({
           {item.history.map((h) => (
             <span
               key={h.date}
-              className={`trk-cell${h.done ? " on" : ""}`}
+              className={`trk-cell${h.done ? "on" : ""}`}
               title={`${md(h.date)} ${h.done ? "완료" : "미완료"}`}
             />
           ))}
         </div>
       ) : (
         <div className="trk-empty">
-          <Repeat className="size-3.5" />
-          이 기간에 해당 occurrence 없음
+          <Repeat className="size-3.5" />이 기간에 해당 occurrence 없음
         </div>
       )}
     </div>

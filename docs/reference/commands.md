@@ -10,14 +10,14 @@
 
 패키지 매니저: **pnpm**. 루트에서 실행.
 
-| 명령 | 설명 |
-|------|------|
-| `pnpm install` | 의존성 설치 (`pnpm-lock.yaml` 기준 재현) |
-| `pnpm dev` | Vite 개발 서버 시작 (HMR 활성) |
-| `pnpm build` | TypeScript 컴파일(`tsc`) 후 Vite 번들 빌드 |
-| `pnpm typecheck` | `tsc --noEmit` — 타입 오류만 검사, 출력 파일 없음 |
-| `pnpm lint` | `eslint .` — flat config(`@eslint/js` + `typescript-eslint` + `react-hooks` v7 + `react-refresh`). 게이트 = 에러만 차단(react-hooks v7 경고는 의도적 비차단, decisions 참조) |
-| `pnpm preview` | 빌드 결과물을 로컬 서버로 미리보기 |
+| 명령             | 설명                                                                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`   | 의존성 설치 (`pnpm-lock.yaml` 기준 재현)                                                                                                                                     |
+| `pnpm dev`       | Vite 개발 서버 시작 (HMR 활성)                                                                                                                                               |
+| `pnpm build`     | TypeScript 컴파일(`tsc`) 후 Vite 번들 빌드                                                                                                                                   |
+| `pnpm typecheck` | `tsc --noEmit` — 타입 오류만 검사, 출력 파일 없음                                                                                                                            |
+| `pnpm lint`      | `eslint .` — flat config(`@eslint/js` + `typescript-eslint` + `react-hooks` v7 + `react-refresh`). 게이트 = 에러만 차단(react-hooks v7 경고는 의도적 비차단, decisions 참조) |
+| `pnpm preview`   | 빌드 결과물을 로컬 서버로 미리보기                                                                                                                                           |
 
 ---
 
@@ -25,10 +25,10 @@
 
 Tauri CLI는 `pnpm tauri` 래퍼로 실행한다 (`package.json` `"tauri": "tauri"` 스크립트).
 
-| 명령 | 설명 |
-|------|------|
-| `pnpm tauri dev` | Tauri 개발 모드 실행 — 앱 부팅 및 통합 동작 확인의 기준 명령 |
-| `pnpm tauri build` | 릴리스용 네이티브 바이너리 빌드 (코드 서명 포함) |
+| 명령               | 설명                                                         |
+| ------------------ | ------------------------------------------------------------ |
+| `pnpm tauri dev`   | Tauri 개발 모드 실행 — 앱 부팅 및 통합 동작 확인의 기준 명령 |
+| `pnpm tauri build` | 릴리스용 네이티브 바이너리 빌드 (코드 서명 포함)             |
 
 ---
 
@@ -39,13 +39,13 @@ Tauri CLI는 `pnpm tauri` 래퍼로 실행한다 (`package.json` `"tauri": "taur
 루트에서 실행 시 반드시 `--manifest-path src-tauri/Cargo.toml`를 붙이거나,
 `src-tauri/` 디렉터리 안에서 실행해야 한다.
 
-| 명령 | 설명 |
-|------|------|
-| `cargo build --manifest-path src-tauri/Cargo.toml` | Rust 크레이트 컴파일 |
-| `cargo test --manifest-path src-tauri/Cargo.toml` | 모든 단위·통합 테스트 실행 |
+| 명령                                                              | 설명                                                 |
+| ----------------------------------------------------------------- | ---------------------------------------------------- |
+| `cargo build --manifest-path src-tauri/Cargo.toml`                | Rust 크레이트 컴파일                                 |
+| `cargo test --manifest-path src-tauri/Cargo.toml`                 | 모든 단위·통합 테스트 실행                           |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets` | 린트 경고 검사 (`-- -D warnings`로 CI에서 오류 처리) |
-| `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | 포맷 검사 (변경 없이 확인만) |
-| `cargo fmt --manifest-path src-tauri/Cargo.toml` | 포맷 자동 수정 (커밋 전 로컬 정리용) |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check`          | 포맷 검사 (변경 없이 확인만)                         |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml`                  | 포맷 자동 수정 (커밋 전 로컬 정리용)                 |
 
 ---
 

@@ -15,6 +15,7 @@
 ### Task 1: TimedBlock 타입 + 입력 합성 함수 (TDD)
 
 **Files:**
+
 - Create: `src/lib/timelineLayout.ts`, `src/lib/timelineLayout.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
@@ -25,7 +26,13 @@ import { describe, it, expect } from "vitest";
 import { computeLayout, type TimedBlock } from "./timelineLayout";
 
 const make = (id: string, start: string, end: string): TimedBlock => ({
-  id, kind: "event", title: id, startISO: start, endISO: end, calendarId: "c", color: "#888",
+  id,
+  kind: "event",
+  title: id,
+  startISO: start,
+  endISO: end,
+  calendarId: "c",
+  color: "#888",
 });
 
 describe("computeLayout", () => {
@@ -60,7 +67,9 @@ describe("computeLayout", () => {
       make("b", "2026-05-28T09:30:00", "2026-05-28T10:30:00"),
       make("c", "2026-05-28T10:00:00", "2026-05-28T11:30:00"),
     ]);
-    expect(out.map((b) => Math.round(b.widthPct))).toEqual([34, 33, 33].sort((x, y) => x - y).map((_, i, arr) => i === 0 ? 34 : 33));
+    expect(out.map((b) => Math.round(b.widthPct))).toEqual(
+      [34, 33, 33].sort((x, y) => x - y).map((_, i, arr) => (i === 0 ? 34 : 33)),
+    );
   });
 
   it("cluster boundary: a-b overlap, c separate → cluster1=50/50, c=100", () => {
@@ -81,6 +90,7 @@ describe("computeLayout", () => {
 ```bash
 pnpm vitest run timelineLayout
 ```
+
 Expected: FAIL (모듈 없음).
 
 - [ ] **Step 3: 최소 구현**
@@ -142,9 +152,15 @@ export function computeLayout(blocks: TimedBlock[]): LayoutBox[] {
       const s = toMin(b.startISO);
       let placed = -1;
       for (let i = 0; i < cols.length; i++) {
-        if (cols[i].end <= s) { placed = i; break; }
+        if (cols[i].end <= s) {
+          placed = i;
+          break;
+        }
       }
-      if (placed === -1) { placed = cols.length; cols.push({ end: 0, idx: placed }); }
+      if (placed === -1) {
+        placed = cols.length;
+        cols.push({ end: 0, idx: placed });
+      }
       cols[placed].end = toMin(b.endISO);
       colOf.set(b.id, placed);
     }
@@ -171,6 +187,7 @@ export function computeLayout(blocks: TimedBlock[]): LayoutBox[] {
 ```bash
 pnpm vitest run timelineLayout
 ```
+
 Expected: 첫 4개 PASS. 3중겹침 테스트는 `widthPct = 100/3 ≈ 33.33`이므로 둥글기 검증 수정 필요할 수 있음. 수정 (예: `Math.abs(b.widthPct - 100/3) < 0.01` 등).
 
 - [ ] **Step 5: 커밋**
@@ -185,6 +202,7 @@ git commit -m "feat(today): timelineLayout pure fn with overlap clustering (PR 4
 ### Task 2: blocks 합성 — signals + events + routines
 
 **Files:**
+
 - Create: `src/lib/todayBlocks.ts`
 - Create: `src/lib/todayBlocks.test.ts`
 
@@ -197,15 +215,44 @@ import { buildTodayBlocks } from "./todayBlocks";
 
 describe("buildTodayBlocks", () => {
   it("signal with linked_event_id absorbs matching google event", () => {
-    const signals = [{ id: "s1", title: "S", scheduledAt: "2026-05-28T09:00:00", scheduledDuration: 60, linkedEventId: "g1", linkedCalendarId: "cal" } as any];
-    const events  = [{ id: "g1", title: "G", start: "2026-05-28T09:00:00", end: "2026-05-28T10:00:00", allDay: false, calendarSummary: "cal", projectColor: "#444" } as any];
+    const signals = [
+      {
+        id: "s1",
+        title: "S",
+        scheduledAt: "2026-05-28T09:00:00",
+        scheduledDuration: 60,
+        linkedEventId: "g1",
+        linkedCalendarId: "cal",
+      } as any,
+    ];
+    const events = [
+      {
+        id: "g1",
+        title: "G",
+        start: "2026-05-28T09:00:00",
+        end: "2026-05-28T10:00:00",
+        allDay: false,
+        calendarSummary: "cal",
+        projectColor: "#444",
+      } as any,
+    ];
     const blocks = buildTodayBlocks({ signals, events, routines: [], date: "2026-05-28" });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("signal");
   });
 
   it("google event without linked signal renders as event kind", () => {
-    const events = [{ id: "g1", title: "G", start: "2026-05-28T09:00:00", end: "2026-05-28T10:00:00", allDay: false, calendarSummary: "cal", projectColor: "#444" } as any];
+    const events = [
+      {
+        id: "g1",
+        title: "G",
+        start: "2026-05-28T09:00:00",
+        end: "2026-05-28T10:00:00",
+        allDay: false,
+        calendarSummary: "cal",
+        projectColor: "#444",
+      } as any,
+    ];
     const blocks = buildTodayBlocks({ signals: [], events, routines: [], date: "2026-05-28" });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("event");
@@ -242,9 +289,13 @@ type Input = {
   date: string; // YYYY-MM-DD
 };
 
-function isoFor(date: string, hhmm: string, durationMin = 30): { startISO: string; endISO: string } {
+function isoFor(
+  date: string,
+  hhmm: string,
+  durationMin = 30,
+): { startISO: string; endISO: string } {
   const [h, m] = hhmm.split(":").map(Number);
-  const start = new Date(`${date}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`);
+  const start = new Date(`${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`);
   const end = new Date(start.getTime() + durationMin * 60_000);
   return { startISO: start.toISOString(), endISO: end.toISOString() };
 }
@@ -319,6 +370,7 @@ git commit -m "feat(today): buildTodayBlocks merges signals/events/routines (PR 
 ### Task 3: TimelineBlock 컴포넌트
 
 **Files:**
+
 - Create: `src/components/today/TimelineBlock.tsx`
 
 - [ ] **Step 1: 작성**
@@ -334,7 +386,7 @@ type Props = {
 
 function hhmm(iso: string): string {
   const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 export function TimelineBlock({ box, onClick }: Props) {
@@ -353,9 +405,11 @@ export function TimelineBlock({ box, onClick }: Props) {
       onClick={(e) => onClick(box, e)}
       title={block.title}
     >
-      <div className="tl-block-time">{hhmm(block.startISO)}–{hhmm(block.endISO)}</div>
+      <div className="tl-block-time">
+        {hhmm(block.startISO)}–{hhmm(block.endISO)}
+      </div>
       <div className="tl-block-title">
-        {block.kind === "routine" && <Repeat className="size-3 inline mr-1" />}
+        {block.kind === "routine" && <Repeat className="mr-1 inline size-3" />}
         {block.title}
       </div>
     </button>
@@ -375,9 +429,9 @@ type Props = {
   onBlockClick: (box: LayoutBox, e: React.MouseEvent) => void;
 };
 // ... 기존 grid 안에 추가:
-{boxes.map((b) => (
-  <TimelineBlock key={b.id} box={b} onClick={onBlockClick} />
-))}
+{
+  boxes.map((b) => <TimelineBlock key={b.id} box={b} onClick={onBlockClick} />);
+}
 ```
 
 - [ ] **Step 3: TodayView에서 blocks 계산 + 전달**
@@ -396,12 +450,35 @@ const boxes = useMemo(() => computeLayout(blocks), [blocks]);
 `TodayView.css`에 추가:
 
 ```css
-.tl-block { position: absolute; background: #fff; border: 1px solid var(--wr-border-light); border-left-width: 3px; border-radius: 4px; padding: 2px 6px; font-size: 11px; text-align: left; overflow: hidden; cursor: pointer; }
-.tl-block:hover { background: #fafaf7; }
-.tl-block-time { font-size: 10px; color: var(--wr-subtle); font-family: ui-monospace, monospace; }
-.tl-block-title { font-weight: 500; }
-.tl-block-signal { background: #f6f9ff; }
-.tl-block-routine { background: #f6fbf2; }
+.tl-block {
+  position: absolute;
+  background: #fff;
+  border: 1px solid var(--wr-border-light);
+  border-left-width: 3px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+}
+.tl-block:hover {
+  background: #fafaf7;
+}
+.tl-block-time {
+  font-size: 10px;
+  color: var(--wr-subtle);
+  font-family: ui-monospace, monospace;
+}
+.tl-block-title {
+  font-weight: 500;
+}
+.tl-block-signal {
+  background: #f6f9ff;
+}
+.tl-block-routine {
+  background: #f6fbf2;
+}
 ```
 
 - [ ] **Step 5: tauri dev 스모크**
@@ -409,6 +486,7 @@ const boxes = useMemo(() => computeLayout(blocks), [blocks]);
 ```bash
 pnpm tauri dev
 ```
+
 Expected: 블록이 시간축에 정확히 배치됨. 겹침 시 균등 분할. 클릭은 아직 무반응.
 
 - [ ] **Step 6: 타입체크 + 커밋**
@@ -424,6 +502,7 @@ git commit -m "feat(today): render timeline blocks with overlap layout (PR 4/7)"
 ### Task 4: EventPopover — 인라인 조회/편집
 
 **Files:**
+
 - Create: `src/components/today/EventPopover.tsx`
 
 - [ ] **Step 1: 작성 (shadcn Popover 활용)**
@@ -444,7 +523,7 @@ type Props = {
 
 function hhmm(iso: string): string {
   const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 export function EventPopover({ open, box, anchor, onClose, onOpenFullModal }: Props) {
@@ -462,7 +541,7 @@ export function EventPopover({ open, box, anchor, onClose, onOpenFullModal }: Pr
       <PopoverContent className="w-[280px]">
         <div className="space-y-2">
           <div className="text-sm font-semibold">{block.title}</div>
-          <div className="text-xs text-wr-subtle">
+          <div className="text-wr-subtle text-xs">
             {hhmm(block.startISO)}–{hhmm(block.endISO)} · {block.calendarId || block.kind}
           </div>
           <div className="flex gap-2 pt-2">
@@ -470,8 +549,15 @@ export function EventPopover({ open, box, anchor, onClose, onOpenFullModal }: Pr
               더보기
             </Button>
             {block.linkedEventId && (
-              <Button size="sm" variant="ghost"
-                onClick={() => void openExternal(`https://calendar.google.com/calendar/event?eid=${block.linkedEventId}`)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  void openExternal(
+                    `https://calendar.google.com/calendar/event?eid=${block.linkedEventId}`,
+                  )
+                }
+              >
                 Google에서 열기
               </Button>
             )}
@@ -486,7 +572,9 @@ export function EventPopover({ open, box, anchor, onClose, onOpenFullModal }: Pr
 - [ ] **Step 2: TodayView에서 wiring**
 
 ```tsx
-const [popover, setPopover] = useState<{ box: LayoutBox; anchor: { x: number; y: number } } | null>(null);
+const [popover, setPopover] = useState<{ box: LayoutBox; anchor: { x: number; y: number } } | null>(
+  null,
+);
 const handleBlockClick = (box: LayoutBox, e: React.MouseEvent) => {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   setPopover({ box, anchor: { x: rect.right + 8, y: rect.top } });
@@ -502,7 +590,7 @@ const handleBlockClick = (box: LayoutBox, e: React.MouseEvent) => {
     setPopover(null);
     // 기존 CalendarEventModal 또는 카드 편집 UI 호출 (signal이면 board로 jump 등 — PR 7에서 정련)
   }}
-/>
+/>;
 ```
 
 - [ ] **Step 3: shadcn popover가 없으면 추가**

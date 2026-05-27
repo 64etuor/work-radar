@@ -27,8 +27,6 @@ export function timelineBlockPlacementStyle({
     opacity: dragging ? 0.4 : 1,
     transition: disableLayoutTransition ? "none" : undefined,
     willChange: disableLayoutTransition ? "auto" : undefined,
-    transform: translate
-      ? `translate3d(${translate.x}px, ${translate.y}px, 0)`
-      : undefined,
+    transform: translate ? `translate3d(${translate.x}px, ${translate.y}px, 0)` : undefined,
   };
 }

@@ -52,12 +52,7 @@ function isoFor(
   return { startISO, endISO };
 }
 
-export function buildTodayBlocks({
-  signals,
-  events,
-  routines,
-  date,
-}: Input): TimedBlock[] {
+export function buildTodayBlocks({ signals, events, routines, date }: Input): TimedBlock[] {
   const out: TimedBlock[] = [];
   const absorbed = new Set<string>();
 

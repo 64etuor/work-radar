@@ -39,17 +39,20 @@ pub(crate) async fn delete_unfired_by_source(db, source: &str, source_id_like: &
 ## 4. 이전 인벤토리 (무엇이 어디로)
 
 ### 4.1 `scheduler.rs`(백그라운드 런타임) → store
+
 - `DueNotification` struct → store(자연스러운 row shape). `scheduler.rs`가 import.
 - `due_notifications` → `notification_store::due`.
 - `mark_fired` → `notification_store::mark_fired_by_id`.
 - 잔류: `Notifier` trait, `run_tick`(due→notify→mark_fired_by_id 호출), `spawn_loop`, `utc_now_string`, `TICK_INTERVAL`.
 
 ### 4.2 producer 위임
+
 - `routines/reminders.rs sync_reminders`: exists(`'routine'`,source_id) + INSERT → `exists` + `enqueue(...,'routine',Some(id))`.
 - `pr_radar.rs enqueue_ci_failure_notification`: exists(`'ci'`,source_id) + INSERT → `exists` + `enqueue(...,'ci',Some(id))`.
 - `commands/scheduler.rs schedule_test_notification`: INSERT(computed fire_at) → fire_at를 Rust(now+secs, chrono)로 계산 후 `enqueue(...,'test',None)`. (SQL `datetime()` → Rust 계산, 동작 동일.)
 
 ### 4.3 routine 리마인더 라이프사이클(`routines/crud.rs`)
+
 - `toggle_routine_check`: UPDATE fired_at WHERE source='routine' AND source_id → `mark_fired_by_source('routine',id,now)`.
 - `update_routine_inner`: DELETE unfired WHERE source='routine' AND source_id LIKE pattern → `delete_unfired_by_source('routine',pattern)` (비-트랜잭션 — `&Db` OK).
 

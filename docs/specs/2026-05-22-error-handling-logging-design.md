@@ -13,14 +13,14 @@
 
 세 가지 에러 패턴이 공존하고, IPC 경계에서 분류가 손실된다.
 
-| 영역 | 현재 | 문제 |
-|---|---|---|
-| IPC 에러 타입 | 149개 커맨드가 `Result<_, String>` | 분류 손실 — 프런트가 transient/terminal 구분 불가 |
-| 도메인 enum | `NotionError`/`GithubError`/`CalendarError`/`MessengerError`/`AgentError` (Transient/Terminal/NotFound/Forbidden 분류 우수) | `Serialize`/`specta::Type` 미파생 → 경계에서 `Display`로 납작해짐 |
-| 기타 | `GitError(String)` newtype, `sqlx::Error`/`keyring::Error` 시그니처 누출 | 내부 에러 형이 IPC로 새어나갈 위험 |
-| 백엔드 로깅 | `AppLogger`(rotating `errors.log`)가 **프런트(`toast.ts`)에서만 호출** | Rust 측 retry 소진·잡 kill·삼킨 에러가 추적 불가 |
-| 로깅 수준 | `tracing`/레벨/스팬 없음, ERROR-only | 운영 가시성 없음, 구조적 필드 없음 |
-| 프런트 | `unwrap()` throw, persistent 토스트(trace_id+복사), per-component mutation 처리 | React `ErrorBoundary` 부재 → 렌더 크래시 미포착 |
+| 영역          | 현재                                                                                                                        | 문제                                                              |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| IPC 에러 타입 | 149개 커맨드가 `Result<_, String>`                                                                                          | 분류 손실 — 프런트가 transient/terminal 구분 불가                 |
+| 도메인 enum   | `NotionError`/`GithubError`/`CalendarError`/`MessengerError`/`AgentError` (Transient/Terminal/NotFound/Forbidden 분류 우수) | `Serialize`/`specta::Type` 미파생 → 경계에서 `Display`로 납작해짐 |
+| 기타          | `GitError(String)` newtype, `sqlx::Error`/`keyring::Error` 시그니처 누출                                                    | 내부 에러 형이 IPC로 새어나갈 위험                                |
+| 백엔드 로깅   | `AppLogger`(rotating `errors.log`)가 **프런트(`toast.ts`)에서만 호출**                                                      | Rust 측 retry 소진·잡 kill·삼킨 에러가 추적 불가                  |
+| 로깅 수준     | `tracing`/레벨/스팬 없음, ERROR-only                                                                                        | 운영 가시성 없음, 구조적 필드 없음                                |
+| 프런트        | `unwrap()` throw, persistent 토스트(trace_id+복사), per-component mutation 처리                                             | React `ErrorBoundary` 부재 → 렌더 크래시 미포착                   |
 
 **유지할 좋은 자산**: `trace_id`(프런트 `genTraceId`, base32 8자)가 토스트↔로그 상관키로
 이미 동작 — 이 척추(spine)에 백엔드 로깅을 끼워 넣는다.
@@ -85,29 +85,29 @@ pub struct ErrorAction {
 
 도메인 enum은 **내부에 그대로 유지**(분류 로직 보존). 커맨드 경계에서 `?`로만 접힌다.
 
-| From | → ErrorKind | code 접두 | 비고 |
-|---|---|---|---|
-| `NotionError::Transient` | Transient | `notion.transient` | |
-| `NotionError::Terminal` | Terminal | `notion.terminal` | |
-| `NotionError::NotFound` | NotFound | `notion.not_found` | action: DB 공유 안내 |
-| `NotionError::Forbidden` | Forbidden | `notion.forbidden` | action: 통합 권한 안내 |
-| `GithubError::*` | (동형 매핑) | `github.*` | |
-| `CalendarError::*` | (동형 매핑) | `calendar.*` | |
-| `MessengerError::*` | (동형 매핑) | `messenger.*` | |
-| `AgentError::Timeout` | Terminal | `agent.timeout` | bounds 초과 kill |
-| `AgentError::Cancelled` | Cancelled | `agent.cancelled` | |
-| `AgentError::MaxTurnsExceeded` | Terminal | `agent.max_turns` | |
-| `AgentError::CostCapExceeded` | Terminal | `agent.cost_cap` | |
-| `AgentError::Spawn` | Terminal | `agent.spawn` | |
-| `AgentError::Failed` | Terminal | `agent.failed` | |
-| `GitError(String)` | Terminal | `git.error` | 향후 분류 세분화 여지 |
-| `sqlx::Error::RowNotFound` | NotFound | `db.row_not_found` | |
-| `sqlx::Error` (그 외) | Unexpected | `db.query` | 로컬 DB=대체로 버그 |
-| `keyring::Error::NoEntry` | NotFound | `token.missing` | action: 설정에서 토큰 등록 |
-| `keyring::Error` (그 외) | Terminal | `token.keychain` | |
-| `reqwest::Error` (timeout/connect) | Transient | `net.transient` | |
-| `reqwest::Error` (그 외) | Terminal | `net.error` | |
-| `std::io::Error` | Unexpected | `io.error` | |
+| From                               | → ErrorKind | code 접두          | 비고                       |
+| ---------------------------------- | ----------- | ------------------ | -------------------------- |
+| `NotionError::Transient`           | Transient   | `notion.transient` |                            |
+| `NotionError::Terminal`            | Terminal    | `notion.terminal`  |                            |
+| `NotionError::NotFound`            | NotFound    | `notion.not_found` | action: DB 공유 안내       |
+| `NotionError::Forbidden`           | Forbidden   | `notion.forbidden` | action: 통합 권한 안내     |
+| `GithubError::*`                   | (동형 매핑) | `github.*`         |                            |
+| `CalendarError::*`                 | (동형 매핑) | `calendar.*`       |                            |
+| `MessengerError::*`                | (동형 매핑) | `messenger.*`      |                            |
+| `AgentError::Timeout`              | Terminal    | `agent.timeout`    | bounds 초과 kill           |
+| `AgentError::Cancelled`            | Cancelled   | `agent.cancelled`  |                            |
+| `AgentError::MaxTurnsExceeded`     | Terminal    | `agent.max_turns`  |                            |
+| `AgentError::CostCapExceeded`      | Terminal    | `agent.cost_cap`   |                            |
+| `AgentError::Spawn`                | Terminal    | `agent.spawn`      |                            |
+| `AgentError::Failed`               | Terminal    | `agent.failed`     |                            |
+| `GitError(String)`                 | Terminal    | `git.error`        | 향후 분류 세분화 여지      |
+| `sqlx::Error::RowNotFound`         | NotFound    | `db.row_not_found` |                            |
+| `sqlx::Error` (그 외)              | Unexpected  | `db.query`         | 로컬 DB=대체로 버그        |
+| `keyring::Error::NoEntry`          | NotFound    | `token.missing`    | action: 설정에서 토큰 등록 |
+| `keyring::Error` (그 외)           | Terminal    | `token.keychain`   |                            |
+| `reqwest::Error` (timeout/connect) | Transient   | `net.transient`    |                            |
+| `reqwest::Error` (그 외)           | Terminal    | `net.error`        |                            |
+| `std::io::Error`                   | Unexpected  | `io.error`         |                            |
 
 > 모든 From 변환은 단위 테스트로 kind/retryable/code를 고정한다(§8).
 

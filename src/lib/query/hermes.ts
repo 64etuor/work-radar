@@ -27,8 +27,7 @@ export function useSetHermesBridge() {
   return useMutation({
     mutationFn: ({ botToken, chatId }: { botToken: string; chatId: string }) =>
       unwrap(commands.setHermesBridge(botToken, chatId)),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["hermesBridgeStatus"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hermesBridgeStatus"] }),
   });
 }
 
@@ -37,8 +36,7 @@ export function useDisconnectHermes() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => unwrap(commands.disconnectHermes()),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["hermesBridgeStatus"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hermesBridgeStatus"] }),
   });
 }
 
@@ -76,7 +74,6 @@ export function useFetchHermesMessages() {
  */
 export function useDetectHermesChatId() {
   return useMutation<DetectedChat, Error, string | null>({
-    mutationFn: (botToken) =>
-      unwrap(commands.detectHermesChatId(botToken)),
+    mutationFn: (botToken) => unwrap(commands.detectHermesChatId(botToken)),
   });
 }

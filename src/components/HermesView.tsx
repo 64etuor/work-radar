@@ -54,26 +54,16 @@ export function HermesView({ onClose }: { onClose?: () => void } = {}) {
     if (fetch.isPending) return;
     setNote(null);
     fetch.mutate(undefined, {
-      onSuccess: (r) =>
-        setNote(r.received > 0 ? `${r.received}건 수신` : "새 메시지 없음"),
+      onSuccess: (r) => setNote(r.received > 0 ? `${r.received}건 수신` : "새 메시지 없음"),
       onError: (e) => setNote(`수신 실패: ${(e as Error).message}`),
     });
   };
 
   return (
     <div className="hermes">
-      <header
-        className="hm-head"
-        {...(onClose ? {} : { "data-tauri-drag-region": "" })}
-      >
+      <header className="hm-head" {...(onClose ? {} : { "data-tauri-drag-region": "" })}>
         {onClose && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-            onClick={onClose}
-            aria-label="닫기"
-          >
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={onClose} aria-label="닫기">
             <X className="size-4" />
           </Button>
         )}
@@ -98,12 +88,7 @@ export function HermesView({ onClose }: { onClose?: () => void } = {}) {
         <div className="hm-empty">
           Hermes 브리지가 설정되지 않았습니다. 설정 → Hermes 브리지에서 봇 토큰과 chat_id를
           입력하세요.
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full"
-            onClick={openSettings}
-          >
+          <Button variant="outline" size="sm" className="rounded-full" onClick={openSettings}>
             설정 열기
           </Button>
         </div>
@@ -142,9 +127,7 @@ export function HermesView({ onClose }: { onClose?: () => void } = {}) {
               submit();
             }
           }}
-          placeholder={
-            configured ? "Hermes에게 명령 보내기…" : "먼저 브리지를 설정하세요"
-          }
+          placeholder={configured ? "Hermes에게 명령 보내기…" : "먼저 브리지를 설정하세요"}
           disabled={!configured || send.isPending}
           aria-label="Hermes 명령 입력"
         />
@@ -166,7 +149,7 @@ export function HermesView({ onClose }: { onClose?: () => void } = {}) {
 function MessageRow({ msg }: { msg: HermesMessage }) {
   const sent = msg.direction === "sent";
   return (
-    <div className={`hm-msg${sent ? " sent" : " recv"}`}>
+    <div className={`hm-msg${sent ? "sent" : "recv"}`}>
       <div className="hm-bubble">
         <span className="hm-text">{msg.text}</span>
         <span className="hm-meta">

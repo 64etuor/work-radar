@@ -42,23 +42,17 @@ export function RebaseBar({
         onClick={run}
         disabled={rebase.isPending || worktree.dirty}
         title={
-          worktree.dirty
-            ? "미커밋 변경이 있어 rebase할 수 없습니다"
-            : `${base} 위로 안전 rebase`
+          worktree.dirty ? "미커밋 변경이 있어 rebase할 수 없습니다" : `${base} 위로 안전 rebase`
         }
       >
         <Waypoints className="size-3.5" />
         {rebase.isPending ? "rebase 중…" : `${base} rebase`}
       </Button>
       {rebase.error && (
-        <span className="wt-rebase-msg wt-rebase-err">
-          {(rebase.error as Error).message}
-        </span>
+        <span className="wt-rebase-msg wt-rebase-err">{(rebase.error as Error).message}</span>
       )}
       {result && (
-        <span
-          className={`wt-rebase-msg${result.success ? " wt-rebase-ok" : " wt-rebase-err"}`}
-        >
+        <span className={`wt-rebase-msg${result.success ? "wt-rebase-ok" : "wt-rebase-err"}`}>
           {result.success ? "rebase 성공 — vs Base로 검수하세요." : result.message}
         </span>
       )}

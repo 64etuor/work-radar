@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  CircleUserRound,
-  FolderGit2,
-  FolderOpen,
-  Github,
-  KeyRound,
-  Plus,
-} from "lucide-react";
+import { CircleUserRound, FolderGit2, FolderOpen, Github, KeyRound, Plus } from "lucide-react";
 
 import type { Project, PromotionTarget } from "@/bindings";
 import {
@@ -57,12 +50,12 @@ function NotionDbTestButton({
   };
 
   return (
-    <div className="rounded-lg border border-border px-4 py-3">
+    <div className="border-border rounded-lg border px-4 py-3">
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium">
           {target === "notion_backlog" ? "백로그 DB" : "안건 DB"}
         </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+        <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">
           {dbId}
         </span>
         <Button variant="outline" size="sm" onClick={run} disabled={test.isPending}>
@@ -82,21 +75,13 @@ function NotionDbTestButton({
   );
 }
 
-function RepoRow({
-  provider,
-  loc,
-  branch,
-}: {
-  provider: string;
-  loc: string;
-  branch: string;
-}) {
+function RepoRow({ provider, loc, branch }: { provider: string; loc: string; branch: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5">
+    <div className="border-border flex items-center gap-3 rounded-lg border px-3.5 py-2.5">
       {provider === "github" ? (
-        <Github className="size-4 shrink-0 text-muted-foreground" />
+        <Github className="text-muted-foreground size-4 shrink-0" />
       ) : (
-        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+        <FolderGit2 className="text-muted-foreground size-4 shrink-0" />
       )}
       <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{loc}</span>
       <Badge variant="outline">{branch}</Badge>
@@ -116,9 +101,7 @@ function ProjectCalendarColorControl({
   const saveColor = useSetProjectCalendarColor();
   const normalizedDraft = normalizeHexColor(draft);
   const savedBackground = normalizeHexColor(project.calendarColor ?? null) ?? colors.background;
-  const preview = normalizedDraft
-    ? projectCalendarColors(project.id, normalizedDraft)
-    : colors;
+  const preview = normalizedDraft ? projectCalendarColors(project.id, normalizedDraft) : colors;
   const dirty = normalizedDraft !== savedBackground;
 
   const save = (color: string | null) => {
@@ -135,7 +118,7 @@ function ProjectCalendarColorControl({
   };
 
   return (
-    <div className="rounded-lg border border-border px-4 py-3">
+    <div className="border-border rounded-lg border px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
         <span
           className="inline-flex min-w-[104px] items-center justify-center rounded-md border px-3 py-1.5 text-xs font-semibold"
@@ -148,7 +131,7 @@ function ProjectCalendarColorControl({
           value={normalizedDraft ?? colors.background}
           onChange={(e) => setDraft(e.target.value)}
           aria-label="프로젝트 캘린더 색상"
-          className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
+          className="border-border h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5"
         />
         <Input
           value={draft}
@@ -162,7 +145,7 @@ function ProjectCalendarColorControl({
               key={color}
               type="button"
               aria-label={`색상 ${color}`}
-              className="size-5 rounded-full border border-border"
+              className="border-border size-5 rounded-full border"
               style={{ backgroundColor: color }}
               onClick={() => setDraft(color)}
             />
@@ -186,7 +169,7 @@ function ProjectCalendarColorControl({
           </Button>
         </div>
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+      <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
         배경색만 저장합니다. 일정 제목과 캘린더명 글자색은 대비 기준으로 자동 조정됩니다.
       </p>
     </div>
@@ -208,26 +191,27 @@ export function ProjectCard({
   return (
     <Card className="overflow-hidden rounded-2xl">
       <div className="flex items-start gap-3 px-5 py-5">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted">
-          <FolderOpen className="size-4 text-muted-foreground" />
+        <div className="border-border bg-muted flex size-10 shrink-0 items-center justify-center rounded-xl border">
+          <FolderOpen className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-[17px] font-semibold leading-tight tracking-[-0.01em]">
+            <span className="truncate text-[17px] leading-tight font-semibold tracking-[-0.01em]">
               {project.name}
             </span>
             <KindBadge kind={project.kind} className="px-2.5 py-0.5 text-xs" />
           </div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            토큰은 OS keychain에 저장하고, Notion/GitHub/Google 계정 연결은 이 프로젝트 범위에서만 사용합니다.
+          <p className="text-muted-foreground mt-1 text-xs leading-5">
+            토큰은 OS keychain에 저장하고, Notion/GitHub/Google 계정 연결은 이 프로젝트 범위에서만
+            사용합니다.
           </p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 border-t border-border px-5 py-5">
-        <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
+      <div className="border-border flex flex-col gap-4 border-t px-5 py-5">
+        <div className="border-border bg-muted/15 flex flex-col gap-2.5 rounded-xl border p-4">
           <div className="flex items-center gap-2">
-            <KeyRound className="size-4 text-muted-foreground" />
+            <KeyRound className="text-muted-foreground size-4" />
             <SectionLabel>토큰 · keychain</SectionLabel>
           </div>
           <TokenRow
@@ -247,7 +231,7 @@ export function ProjectCard({
         </div>
 
         {hasNotionDb && (
-          <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
+          <div className="border-border bg-muted/15 flex flex-col gap-2.5 rounded-xl border p-4">
             <SectionLabel>Notion DB 연결</SectionLabel>
             {project.notionBacklogDbId && (
               <NotionDbTestButton
@@ -266,29 +250,27 @@ export function ProjectCard({
           </div>
         )}
 
-        <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
+        <div className="border-border bg-muted/15 flex flex-col gap-2.5 rounded-xl border p-4">
           <div className="flex items-center gap-2">
-            <CircleUserRound className="size-4 text-muted-foreground" />
+            <CircleUserRound className="text-muted-foreground size-4" />
             <SectionLabel>Google 계정</SectionLabel>
           </div>
           <ProjectCalendarColorControl project={project} onToast={onToast} />
           <GoogleAccountBlock projectId={project.id} onToast={onToast} />
         </div>
 
-        <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-muted/15 p-4">
+        <div className="border-border bg-muted/15 flex flex-col gap-2.5 rounded-xl border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Github className="size-4 text-muted-foreground" />
+              <Github className="text-muted-foreground size-4" />
               <SectionLabel>레포</SectionLabel>
             </div>
           </div>
           {repos.isError && (
-            <div className="text-xs text-[color:var(--destructive)]">
-              {String(repos.error)}
-            </div>
+            <div className="text-xs text-[color:var(--destructive)]">{String(repos.error)}</div>
           )}
           {repos.data && repos.data.length === 0 && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
               <Plus className="size-3.5" />
               아직 레포가 없습니다 — 아래에서 추가하세요.
             </div>

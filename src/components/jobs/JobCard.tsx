@@ -49,11 +49,7 @@ export function JobCard({
       {run.status === "awaiting_approval" && <ProposalPanel run={run} />}
 
       <div className="jobs-card-actions">
-        <button
-          type="button"
-          className="jobs-log-toggle"
-          onClick={onToggleLog}
-        >
+        <button type="button" className="jobs-log-toggle" onClick={onToggleLog}>
           <FileText className="size-3.5" />
           로그 {logOpen ? "닫기" : "보기"}
         </button>
@@ -61,11 +57,7 @@ export function JobCard({
 
       {logOpen && (
         <pre className="jobs-log">
-          {log?.isLoading
-            ? "로그 불러오는 중…"
-            : log?.data?.trim()
-              ? log.data
-              : "(로그 없음)"}
+          {log?.isLoading ? "로그 불러오는 중…" : log?.data?.trim() ? log.data : "(로그 없음)"}
         </pre>
       )}
     </div>

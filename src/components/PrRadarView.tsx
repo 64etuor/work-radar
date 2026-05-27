@@ -60,8 +60,7 @@ export function PrRadarView() {
         return items;
       },
       refetchInterval:
-        Math.max(1, settings.data?.pollIntervalMinutes ?? PR_RADAR_POLL_MS / 60_000) *
-        60_000,
+        Math.max(1, settings.data?.pollIntervalMinutes ?? PR_RADAR_POLL_MS / 60_000) * 60_000,
       refetchOnWindowFocus: false,
       retry: 2,
     })),
@@ -88,10 +87,8 @@ export function PrRadarView() {
       <header className="pr-head" data-tauri-drag-region>
         <span className="pr-title">PR Radar</span>
         <span className="pr-poll">
-          <RefreshCw className={`size-3.5${isFetching ? " pr-spin" : ""}`} />
-          {isFetching
-            ? "새로고침 중…"
-            : `${settings.data?.pollIntervalMinutes ?? 10}분 폴링`}
+          <RefreshCw className={`size-3.5${isFetching ? "pr-spin" : ""}`} />
+          {isFetching ? "새로고침 중…" : `${settings.data?.pollIntervalMinutes ?? 10}분 폴링`}
         </span>
       </header>
 
@@ -102,24 +99,16 @@ export function PrRadarView() {
           </div>
         )}
         {errors.length > 0 && (
-          <div className="pr-err">
-            일부 폴링 실패: {errors.map((e) => e.message).join(" · ")}
-          </div>
+          <div className="pr-err">일부 폴링 실패: {errors.map((e) => e.message).join(" · ")}</div>
         )}
         {selfcheckDraft.error && (
-          <div className="pr-err">
-            코드 리뷰 실패: {(selfcheckDraft.error as Error).message}
-          </div>
+          <div className="pr-err">코드 리뷰 실패: {(selfcheckDraft.error as Error).message}</div>
         )}
         {ciTriage.error && (
-          <div className="pr-err">
-            CI triage 실패: {(ciTriage.error as Error).message}
-          </div>
+          <div className="pr-err">CI triage 실패: {(ciTriage.error as Error).message}</div>
         )}
         {aiEscalation.error && (
-          <div className="pr-err">
-            AI escalation 실패: {(aiEscalation.error as Error).message}
-          </div>
+          <div className="pr-err">AI escalation 실패: {(aiEscalation.error as Error).message}</div>
         )}
         {empty && !noProjects && (
           <div className="pr-empty">
@@ -239,7 +228,7 @@ function PrRow({
         {item.hasConflict && <span className="pr-flag pr-conflict">충돌</span>}
         {item.isDraft && <span className="pr-flag">draft</span>}
         <span
-          className={`prr-comments${item.isSuspicious ? " prr-suspicious" : ""}${item.hasUnreadAlert ? " prr-unread-alert" : ""}${item.hasCriticalAlert ? " prr-critical-alert" : ""}`}
+          className={`prr-comments${item.isSuspicious ? "prr-suspicious" : ""}${item.hasUnreadAlert ? "prr-unread-alert" : ""}${item.hasCriticalAlert ? "prr-critical-alert" : ""}`}
           title={
             item.hasCriticalAlert
               ? "critical Inbox alert"

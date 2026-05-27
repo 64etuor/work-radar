@@ -183,14 +183,11 @@ export default function App() {
 
   return (
     <div
-      className={`${theme === "dark" ? "dark " : ""}flex h-screen w-screen flex-col overflow-hidden bg-wr-bg`}
+      className={`${theme === "dark" ? "dark" : ""}flex bg-wr-bg h-screen w-screen flex-col overflow-hidden`}
     >
       {/* 글로벌 에이전트 상태 바 (Phase 20 #16) — 모든 뷰 위에 상주, 클릭 → Jobs. */}
       <AgentStatusBar />
-      <div
-        className="view-stage"
-        data-slide-motion={viewSnapshot?.motion}
-      >
+      <div className="view-stage" data-slide-motion={viewSnapshot?.motion}>
         <div className="view-shell">
           <div key={view} className="view-content">
             {renderView(view)}

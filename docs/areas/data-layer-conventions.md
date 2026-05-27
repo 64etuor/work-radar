@@ -1,4 +1,3 @@
-
 # Data Layer Conventions
 
 ## sqlx + SQLite + WAL

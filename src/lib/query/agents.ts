@@ -1,9 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useQueries,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import {
   commands,
@@ -39,10 +34,7 @@ export const AGENT_TERMINAL_STATUSES = new Set([
  * terminal 상태에 도달하면 자동으로 폴링 중단(`refetchInterval` 반환값으로 제어).
  * 직접 `setInterval`로 commands.agentRunStatus를 호출하지 말 것 — IPC 호출은 query 레이어를 거친다.
  */
-export function useAgentRunStatus(
-  runId: string | null,
-  opts?: { pollMs?: number },
-) {
+export function useAgentRunStatus(runId: string | null, opts?: { pollMs?: number }) {
   const pollMs = opts?.pollMs ?? AGENT_RUN_POLL_MS;
   return useQuery({
     queryKey: ["agentRunStatus", runId],
@@ -73,9 +65,7 @@ export function useAgentRuns() {
     queryFn: () => unwrap(commands.listAgentRuns()),
     refetchInterval: (q) => {
       const runs = q.state.data ?? [];
-      const active = runs.some(
-        (r) => r.status === "running" || r.status === "proposed",
-      );
+      const active = runs.some((r) => r.status === "running" || r.status === "proposed");
       return active ? JOBS_POLL_MS : false;
     },
   });
@@ -85,8 +75,7 @@ export function useAgentRuns() {
 export function useTriggerEchoJob() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: TriggerEchoInput) =>
-      unwrap(commands.triggerEchoJob(input)),
+    mutationFn: (input: TriggerEchoInput) => unwrap(commands.triggerEchoJob(input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
   });
 }
@@ -95,8 +84,7 @@ export function useTriggerEchoJob() {
 export function useTriggerCodexJob() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: TriggerCodexInput) =>
-      unwrap(commands.triggerCodexJob(input)),
+    mutationFn: (input: TriggerCodexInput) => unwrap(commands.triggerCodexJob(input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
   });
 }
@@ -142,8 +130,7 @@ export function useAgentLogs(runIds: string[]) {
 export function useTriggerPrSelfcheck() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: TriggerPrSelfCheckInput) =>
-      unwrap(commands.triggerPrSelfcheck(input)),
+    mutationFn: (input: TriggerPrSelfCheckInput) => unwrap(commands.triggerPrSelfcheck(input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
   });
 }
@@ -228,8 +215,7 @@ export function useAcceptEnrich() {
 export function useTriggerEnrichAll() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: TriggerEnrichAllInput) =>
-      unwrap(commands.triggerEnrichAll(input)),
+    mutationFn: (input: TriggerEnrichAllInput) => unwrap(commands.triggerEnrichAll(input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
   });
 }
@@ -248,13 +234,8 @@ export function useBatchEnrichProposal(runId: string | null, ready: boolean) {
 export function useAcceptEnrichAll() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      runId,
-      accepted,
-    }: {
-      runId: string;
-      accepted: BatchEnrichProposal;
-    }) => unwrap(commands.acceptEnrichAll(runId, accepted)),
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: BatchEnrichProposal }) =>
+      unwrap(commands.acceptEnrichAll(runId, accepted)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agentRuns"] });
       void qc.invalidateQueries({ queryKey: ["signals"] }); // 확정 반영 → 카드 섹션 이동/태그 solid화.

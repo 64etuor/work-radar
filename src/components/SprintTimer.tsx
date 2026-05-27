@@ -21,12 +21,8 @@ import { cn } from "@/components/ui/cn";
 
 /** 에디터 요일 선택 순서(월→일). */
 const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const HOURS = Array.from({ length: 24 }, (_, hour) =>
-  String(hour).padStart(2, "0"),
-);
-const MINUTES = Array.from({ length: 60 }, (_, minute) =>
-  String(minute).padStart(2, "0"),
-);
+const HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
+const MINUTES = Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, "0"));
 const EDITOR_OPEN_ANIMATION_MS = 220;
 const EDITOR_CLOSE_ANIMATION_MS = 180;
 
@@ -43,9 +39,9 @@ export function SprintTimer() {
   const configQ = useSprintConfig();
   const statusQ = useSprintStatus();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [editorState, setEditorState] = useState<
-    "closed" | "opening" | "open" | "closing"
-  >("closed");
+  const [editorState, setEditorState] = useState<"closed" | "opening" | "open" | "closing">(
+    "closed",
+  );
 
   // 1s tick — 표시 갱신용(now ms). 경계는 statusQ가 분 단위로 재조회한다.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -64,9 +60,7 @@ export function SprintTimer() {
     // 진행도 = 전체 인터벌 대비 경과 비율. overdue면 100% 채움(시각 cap).
     const totalSec = Math.max(1, config.intervalDays * 86_400);
     const elapsedSec = totalSec - secs;
-    const pct = display.overdue
-      ? 1
-      : Math.max(0, Math.min(1, elapsedSec / totalSec));
+    const pct = display.overdue ? 1 : Math.max(0, Math.min(1, elapsedSec / totalSec));
     return { display, pct };
   }, [status, config, nowMs]);
 
@@ -85,9 +79,7 @@ export function SprintTimer() {
     if (editorState !== "opening" && editorState !== "closing") return undefined;
     const id = window.setTimeout(
       () => setEditorState(editorState === "opening" ? "open" : "closed"),
-      editorState === "opening"
-        ? EDITOR_OPEN_ANIMATION_MS
-        : EDITOR_CLOSE_ANIMATION_MS,
+      editorState === "opening" ? EDITOR_OPEN_ANIMATION_MS : EDITOR_CLOSE_ANIMATION_MS,
     );
     return () => window.clearTimeout(id);
   }, [editorState]);
@@ -106,55 +98,47 @@ export function SprintTimer() {
 
   const renderMeter = (extraClass = "", disabled = false) =>
     configured && meter ? (
-        <button
-          type="button"
-          className={`sprint-meter${extraClass}`}
-          title="스프린트 일정 편집"
-          aria-live="polite"
-          aria-label={`스프린트 ${formatCountdownLabel(meter.display)} (${Math.round(meter.pct * 100)}%)`}
-          disabled={disabled}
-          onClick={openEditor}
-        >
-          <span className="sprint-meter-label">
-            <span className="sprint-meter-tag">SPRINT</span>
-            <span className="sprint-meter-sep" aria-hidden>
-              ·
-            </span>
-            <span className="sprint-meter-text">
-              {formatCountdownLabel(meter.display)}
-            </span>
+      <button
+        type="button"
+        className={`sprint-meter${extraClass}`}
+        title="스프린트 일정 편집"
+        aria-live="polite"
+        aria-label={`스프린트 ${formatCountdownLabel(meter.display)} (${Math.round(meter.pct * 100)}%)`}
+        disabled={disabled}
+        onClick={openEditor}
+      >
+        <span className="sprint-meter-label">
+          <span className="sprint-meter-tag">SPRINT</span>
+          <span className="sprint-meter-sep" aria-hidden>
+            ·
           </span>
-          <span className="sprint-meter-bar" aria-hidden>
-            <span
-              className="sprint-meter-fill"
-              style={{ width: `${meter.pct * 100}%` }}
-            />
+          <span className="sprint-meter-text">{formatCountdownLabel(meter.display)}</span>
+        </span>
+        <span className="sprint-meter-bar" aria-hidden>
+          <span className="sprint-meter-fill" style={{ width: `${meter.pct * 100}%` }} />
+        </span>
+      </button>
+    ) : (
+      <button
+        type="button"
+        className={`sprint-meter is-empty${extraClass}`}
+        title="스프린트 일정 설정"
+        disabled={disabled}
+        onClick={openEditor}
+      >
+        <span className="sprint-meter-label">
+          <span className="sprint-meter-tag">SPRINT</span>
+          <span className="sprint-meter-sep" aria-hidden>
+            ·
           </span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          className={`sprint-meter is-empty${extraClass}`}
-          title="스프린트 일정 설정"
-          disabled={disabled}
-          onClick={openEditor}
-        >
-          <span className="sprint-meter-label">
-            <span className="sprint-meter-tag">SPRINT</span>
-            <span className="sprint-meter-sep" aria-hidden>
-              ·
-            </span>
-            <span className="sprint-meter-text">설정</span>
-          </span>
-          <span className="sprint-meter-bar" aria-hidden />
-        </button>
-      );
+          <span className="sprint-meter-text">설정</span>
+        </span>
+        <span className="sprint-meter-bar" aria-hidden />
+      </button>
+    );
 
   return (
-    <div
-      ref={rootRef}
-      className={`sprint-timer${editorVisible ? " is-editing" : ""}`}
-    >
+    <div ref={rootRef} className={`sprint-timer${editorVisible ? "is-editing" : ""}`}>
       {editorState === "opening" && renderMeter(" is-leaving", true)}
       {editorVisible ? (
         <SprintEditor
@@ -183,15 +167,10 @@ const DEFAULT_CONFIG: SprintConfig = {
   anchorTime: "21:00",
 };
 
-function SprintEditor({
-  config,
-  opening = false,
-  closing = false,
-  onClose,
-}: EditorProps) {
+function SprintEditor({ config, opening = false, closing = false, onClose }: EditorProps) {
   return (
     <section
-      className={`sprint-inline-editor${opening ? " is-opening" : ""}${closing ? " is-closing" : ""}`}
+      className={`sprint-inline-editor${opening ? "is-opening" : ""}${closing ? "is-closing" : ""}`}
       aria-label="스프린트 일정 편집"
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
@@ -214,9 +193,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
   const [weekday, setWeekday] = useState<Weekday>(
     config?.anchorWeekday ?? DEFAULT_CONFIG.anchorWeekday,
   );
-  const [time, setTime] = useState(
-    config?.anchorTime ?? DEFAULT_CONFIG.anchorTime,
-  );
+  const [time, setTime] = useState(config?.anchorTime ?? DEFAULT_CONFIG.anchorTime);
   const [hour, minute] = time.split(":");
   const setTimePart = (nextHour: string, nextMinute: string) =>
     setTime(`${nextHour}:${nextMinute}`);
@@ -261,9 +238,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
             type="number"
             min={1}
             value={intervalDays}
-            onChange={(e) =>
-              setIntervalDays(Math.max(1, Number(e.target.value) || 1))
-            }
+            onChange={(e) => setIntervalDays(Math.max(1, Number(e.target.value) || 1))}
             className="h-7 w-14 px-1 text-center font-mono text-xs font-semibold"
           />
           <Button
@@ -288,7 +263,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
               className={cn(
                 "flex-1 rounded-[var(--radius-sm)] px-0 text-[13px] text-[color:var(--color-wr-subtle)]",
                 wd === weekday &&
-                  "border-[color:var(--color-wr-accent)] bg-[color:var(--color-wr-surface)] font-semibold text-foreground",
+                  "text-foreground border-[color:var(--color-wr-accent)] bg-[color:var(--color-wr-surface)] font-semibold",
               )}
               onClick={() => setWeekday(wd)}
               aria-pressed={wd === weekday}
@@ -336,9 +311,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
         </div>
       </label>
 
-      {setConfig.isError && (
-        <div className="sprint-err">{String(setConfig.error)}</div>
-      )}
+      {setConfig.isError && <div className="sprint-err">{String(setConfig.error)}</div>}
 
       <div className="sprint-pop-actions">
         {config && (
@@ -352,11 +325,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
           </Button>
         )}
         <span className="sprint-actions-spacer" />
-        <Button
-          variant="outline"
-          className="h-7 rounded-full px-3 text-xs"
-          onClick={onClose}
-        >
+        <Button variant="outline" className="h-7 rounded-full px-3 text-xs" onClick={onClose}>
           취소
         </Button>
         <Button

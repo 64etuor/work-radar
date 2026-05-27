@@ -46,15 +46,15 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
 ## 문서
 
-| 파일 | 내용 |
-| --- | --- |
-| `docs/HANDOFF.md` | **현재 상태 + 세션 핸드오프** — 처음 들어오면 여기부터 |
-| `PLAN.md` | Phase 0–20 플랜 + §1 **INVARIANTS 7개**(절대 규칙) |
-| `AGENTS.md` | 이 앱을 만드는 에이전트(Ralph/Codex/Claude)의 working agreement |
-| `CLAUDE.md` | Claude 진입점(thin) — "작업 전 읽을 것" 인덱스 |
-| `docs/architecture.md` | 데이터 모델, 3-rail, AgentRunner, 멀티프로젝트/레포, SSOT, IPC |
-| `docs/decisions.md` | 결정·트레이드오프 원장(Phase별 한 줄) |
-| `docs/reference/commands.md` | **빌드·검증 명령 정본 인덱스** |
-| `docs/specs/` | Phase 상세 스펙(10 / 11 / 12–20) |
-| `DESIGN.md` | **시각 디자인 정본** — Cohere 스타일(white editorial). 토큰·컴포넌트·반응형 |
-| `docs/archive/design-raycast.md` | 폐기된 Raycast 다크 방향(이력 보존) |
+| 파일                             | 내용                                                                        |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `docs/HANDOFF.md`                | **현재 상태 + 세션 핸드오프** — 처음 들어오면 여기부터                      |
+| `PLAN.md`                        | Phase 0–20 플랜 + §1 **INVARIANTS 7개**(절대 규칙)                          |
+| `AGENTS.md`                      | 이 앱을 만드는 에이전트(Ralph/Codex/Claude)의 working agreement             |
+| `CLAUDE.md`                      | Claude 진입점(thin) — "작업 전 읽을 것" 인덱스                              |
+| `docs/architecture.md`           | 데이터 모델, 3-rail, AgentRunner, 멀티프로젝트/레포, SSOT, IPC              |
+| `docs/decisions.md`              | 결정·트레이드오프 원장(Phase별 한 줄)                                       |
+| `docs/reference/commands.md`     | **빌드·검증 명령 정본 인덱스**                                              |
+| `docs/specs/`                    | Phase 상세 스펙(10 / 11 / 12–20)                                            |
+| `DESIGN.md`                      | **시각 디자인 정본** — Cohere 스타일(white editorial). 토큰·컴포넌트·반응형 |
+| `docs/archive/design-raycast.md` | 폐기된 Raycast 다크 방향(이력 보존)                                         |

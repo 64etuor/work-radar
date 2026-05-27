@@ -125,10 +125,10 @@ export function GoogleAccountBlock({
   const pingResult = ping.data;
 
   return (
-    <div className="rounded-lg border border-border">
+    <div className="border-border rounded-lg border">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <CircleUserRound className="size-4 text-muted-foreground" />
+          <CircleUserRound className="text-muted-foreground size-4" />
           <span className="text-sm font-medium">Google 계정</span>
           <StatusDot on={connected}>
             {connected ? "계정 연결됨" : hasClient ? "client 입력됨" : "미설정"}
@@ -168,7 +168,7 @@ export function GoogleAccountBlock({
       </div>
 
       {/* OAuth client(client_id/secret) — Google Cloud Console > Desktop OAuth client */}
-      <div className="flex flex-col gap-2 border-t border-border px-4 py-3">
+      <div className="border-border flex flex-col gap-2 border-t px-4 py-3">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Input
             type="password"
@@ -198,7 +198,7 @@ export function GoogleAccountBlock({
             </Button>
           </div>
         </div>
-        <p className="text-xs leading-relaxed text-muted-foreground">
+        <p className="text-muted-foreground text-xs leading-relaxed">
           Google Cloud Console에서 <b>Desktop</b> OAuth client를 만들어 입력하세요. 캘린더
           목록·이벤트 생성을 위해 현재는 <code>calendar</code>(읽기+쓰기) 범위를 씁니다.
           Gmail·Drive·Sheets 기능이 추가되면 같은 Google 계정 연결에서 필요한 권한을 더 요청할 수
@@ -208,14 +208,14 @@ export function GoogleAccountBlock({
 
       {oauthState.showWaitingPanel && (
         <div
-          className={`flex items-start justify-between gap-3 border-t border-border px-4 py-2.5 text-xs ${
+          className={`border-border flex items-start justify-between gap-3 border-t px-4 py-2.5 text-xs ${
             oauthState.waitingTone === "stale"
               ? "text-[color:var(--destructive)]"
               : "text-muted-foreground"
           }`}
         >
           <div className="min-w-0">
-            <div className="font-medium text-foreground">
+            <div className="text-foreground font-medium">
               Google 계정 동의 대기 중 · {oauthState.elapsedLabel}
             </div>
             <div className="mt-0.5">{oauthState.waitingMessage}</div>
@@ -237,23 +237,23 @@ export function GoogleAccountBlock({
         </div>
       )}
       {(oauthError || startOauth.isError) && !oauthWaiting && (
-        <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
+        <div className="border-border border-t px-4 py-2.5 text-xs text-[color:var(--destructive)]">
           {oauthError ?? String(startOauth.error)}
         </div>
       )}
       {cancelOauth.isError && (
-        <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
+        <div className="border-border border-t px-4 py-2.5 text-xs text-[color:var(--destructive)]">
           {String(cancelOauth.error)}
         </div>
       )}
       {ping.isError && (
-        <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
+        <div className="border-border border-t px-4 py-2.5 text-xs text-[color:var(--destructive)]">
           {String(ping.error)}
         </div>
       )}
       {pingResult && (
         <div
-          className={`border-t border-border px-4 py-2.5 text-xs ${
+          className={`border-border border-t px-4 py-2.5 text-xs ${
             pingResult.ok ? "text-[color:var(--success)]" : "text-[color:var(--destructive)]"
           }`}
         >
@@ -312,9 +312,9 @@ function CalendarPicker({
   };
 
   return (
-    <div className="flex flex-col gap-2 border-t border-border px-4 py-3">
+    <div className="border-border flex flex-col gap-2 border-t px-4 py-3">
       <SectionLabel>포함할 캘린더</SectionLabel>
-      {calendars.isLoading && <div className="text-sm text-muted-foreground">불러오는 중…</div>}
+      {calendars.isLoading && <div className="text-muted-foreground text-sm">불러오는 중…</div>}
       {calendars.isError &&
         (() => {
           const msg = String(calendars.error);
@@ -326,18 +326,13 @@ function CalendarPicker({
           );
         })()}
       {calendars.data && calendars.data.length === 0 && (
-        <div className="text-sm text-muted-foreground">캘린더가 없습니다.</div>
+        <div className="text-muted-foreground text-sm">캘린더가 없습니다.</div>
       )}
       {calendars.data?.map((c) => {
         const on = checked.has(c.id);
         return (
           <label key={c.id} className="flex cursor-pointer items-center gap-2.5 text-sm">
-            <input
-              type="checkbox"
-              checked={on}
-              onChange={() => toggle(c.id)}
-              className="sr-only"
-            />
+            <input type="checkbox" checked={on} onChange={() => toggle(c.id)} className="sr-only" />
             <span
               className={`flex size-4 shrink-0 items-center justify-center rounded border ${
                 on ? "border-primary bg-primary text-primary-foreground" : "border-input"
@@ -347,7 +342,7 @@ function CalendarPicker({
             </span>
             <span className="min-w-0 flex-1 truncate">{c.summary}</span>
             {c.primary && (
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
                 기본
               </span>
             )}

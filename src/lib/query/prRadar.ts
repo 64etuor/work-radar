@@ -1,14 +1,6 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
-import {
-  commands,
-  type PrRadarItem,
-  type PrRadarSettings,
-} from "@/bindings";
+import { commands, type PrRadarItem, type PrRadarSettings } from "@/bindings";
 
 /** PR Radar 주기 폴링 간격. INVARIANT #5: bounded(무한 tight loop 아님 — 고정 cadence). */
 export const PR_RADAR_POLL_MS = 10 * 60_000;
@@ -36,8 +28,7 @@ export function fetchPrRadarSettings(): Promise<PrRadarSettings> {
 export function useSetPrRadarSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (settings: PrRadarSettings) =>
-      unwrap(commands.setPrRadarSettings(settings)),
+    mutationFn: (settings: PrRadarSettings) => unwrap(commands.setPrRadarSettings(settings)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["prRadarSettings"] });
       void qc.invalidateQueries({ queryKey: ["prRadar"] });

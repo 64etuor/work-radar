@@ -508,10 +508,22 @@
   text-transform: uppercase;
   color: var(--color-wr-subtle);
 }
-.wt .wt-h-graph { grid-column: 1; margin-left: -12px; padding-left: 12px; }
-.wt .wt-h-commit { grid-column: 2; }
-.wt .wt-h-author { grid-column: 3; }
-.wt .wt-h-date { grid-column: 4; margin-right: -12px; padding-right: 12px; }
+.wt .wt-h-graph {
+  grid-column: 1;
+  margin-left: -12px;
+  padding-left: 12px;
+}
+.wt .wt-h-commit {
+  grid-column: 2;
+}
+.wt .wt-h-author {
+  grid-column: 3;
+}
+.wt .wt-h-date {
+  grid-column: 4;
+  margin-right: -12px;
+  padding-right: 12px;
+}
 .wt .wt-commit-canvas {
   position: absolute;
   top: var(--wt-row-h);
@@ -591,12 +603,24 @@
   stroke-width: 2;
   filter: var(--wt-commit-node-shadow);
 }
-.wt .wt-commit-lane-0 { color: var(--wt-graph-lane-0); }
-.wt .wt-commit-lane-1 { color: var(--wt-graph-lane-1); }
-.wt .wt-commit-lane-2 { color: var(--wt-graph-lane-2); }
-.wt .wt-commit-lane-3 { color: var(--wt-graph-lane-3); }
-.wt .wt-commit-lane-4 { color: var(--wt-graph-lane-4); }
-.wt .wt-commit-lane-5 { color: var(--wt-graph-lane-5); }
+.wt .wt-commit-lane-0 {
+  color: var(--wt-graph-lane-0);
+}
+.wt .wt-commit-lane-1 {
+  color: var(--wt-graph-lane-1);
+}
+.wt .wt-commit-lane-2 {
+  color: var(--wt-graph-lane-2);
+}
+.wt .wt-commit-lane-3 {
+  color: var(--wt-graph-lane-3);
+}
+.wt .wt-commit-lane-4 {
+  color: var(--wt-graph-lane-4);
+}
+.wt .wt-commit-lane-5 {
+  color: var(--wt-graph-lane-5);
+}
 .wt .wt-commit-detail {
   margin-top: 16px;
   display: flex;

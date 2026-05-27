@@ -90,8 +90,7 @@ function isActive(s: AgentStatus): boolean {
  * 식별은 key 접두사("cmux:")로 — openBox 라우팅과 동일 규약.
  */
 function BoxIcon({ box, size = 13 }: { box: SessionBox; size?: number }) {
-  if (box.key.startsWith("cmux:"))
-    return <PanelsTopLeft size={size} strokeWidth={1.5} />;
+  if (box.key.startsWith("cmux:")) return <PanelsTopLeft size={size} strokeWidth={1.5} />;
   switch (box.engine) {
     case "codex":
       return <SquareTerminal size={size} strokeWidth={1.5} />;
@@ -379,18 +378,10 @@ function AgentBox({
       title={editing ? undefined : box.title}
     >
       {working && box.startedMs != null && !editing && (
-        <span
-          className="asb-box-fill"
-          style={{ width: `${Math.round(ratio * 100)}%` }}
-        />
+        <span className="asb-box-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
       )}
       {/* 상태등 — 맨 앞, 색으로만 상태 표시(텍스트 라벨 없음). 의미는 aria-label/title로 보강. */}
-      <span
-        className="asb-box-dot"
-        role="img"
-        aria-label={box.stateLabel}
-        title={box.stateLabel}
-      />
+      <span className="asb-box-dot" role="img" aria-label={box.stateLabel} title={box.stateLabel} />
       <span className="asb-box-icon">
         <BoxIcon box={box} size={13} />
       </span>
@@ -499,11 +490,6 @@ function pruneFirstSeen(map: Map<string, number>, liveKeys: string[]): void {
 }
 
 /** '+N' 오버플로 칩 tooltip — 접힌 세션 이름 나열(오버라이드 우선). */
-function overflowTitle(
-  hidden: SessionBox[],
-  nameOverrides: Record<string, string>,
-): string {
-  return hidden
-    .map((b) => `${nameOverrides[b.key] ?? b.name} (${b.stateLabel})`)
-    .join("\n");
+function overflowTitle(hidden: SessionBox[], nameOverrides: Record<string, string>): string {
+  return hidden.map((b) => `${nameOverrides[b.key] ?? b.name} (${b.stateLabel})`).join("\n");
 }

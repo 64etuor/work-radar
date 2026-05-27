@@ -2,17 +2,11 @@ import type { ReactNode } from "react";
 import { cn } from "@/components/ui/cn";
 
 /** 섹션 라벨 — 작은 mono uppercase, 절제된 위계. */
-export function SectionLabel({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function SectionLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
       className={cn(
-        "font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle",
+        "text-subtle font-mono text-[11px] font-semibold tracking-[0.12em] uppercase",
         className,
       )}
     >
@@ -35,23 +29,17 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-[13px] font-medium text-foreground">
+      <label htmlFor={htmlFor} className="text-foreground text-[13px] font-medium">
         {label}
       </label>
       {children}
-      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+      {hint && <span className="text-muted-foreground text-xs">{hint}</span>}
     </div>
   );
 }
 
 /** 연결 상태 점 + 라벨. */
-export function StatusDot({
-  on,
-  children,
-}: {
-  on: boolean;
-  children: ReactNode;
-}) {
+export function StatusDot({ on, children }: { on: boolean; children: ReactNode }) {
   return (
     <span
       className={cn(
@@ -85,7 +73,7 @@ export function Segmented<T extends string>({
   return (
     <div
       className={cn(
-        "inline-flex w-fit items-center self-start rounded-lg border border-border bg-muted p-0.5",
+        "border-border bg-muted inline-flex w-fit items-center self-start rounded-lg border p-0.5",
         size === "md" ? "h-9" : "h-8",
       )}
     >

@@ -87,9 +87,7 @@ export function WorktreeBody({
         selectedPath={sidebar.selectedPath}
         onSelect={actions.onSelectWorktree}
         style={sidePane.style}
-        resizeHandleProps={sidePane.bindResizeHandle(() =>
-          actions.onSidebarCollapsedChange(true),
-        )}
+        resizeHandleProps={sidePane.bindResizeHandle(() => actions.onSidebarCollapsedChange(true))}
       />
 
       <main className="wt-main">

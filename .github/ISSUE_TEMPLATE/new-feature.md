@@ -1,9 +1,9 @@
 ---
 name: New Feature / Task
 about: work-radar 작업 항목(기능·버그·태스크). 간단히 기술하고 필요 시 PLAN Phase를 참조하세요.
-title: ''
-labels: ''
-assignees: ''
+title: ""
+labels: ""
+assignees: ""
 ---
 
 ## 설명

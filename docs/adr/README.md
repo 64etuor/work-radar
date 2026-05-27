@@ -17,13 +17,13 @@ Format: MADR-style records with AI-agent-oriented fields.
 
 Write an ADR when any of these are true:
 
-| Trigger | Example |
-| --- | --- |
-| Multiple viable options exist | SQLite schema shape vs app-config table vs JSON file |
+| Trigger                                                                     | Example                                                       |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Multiple viable options exist                                               | SQLite schema shape vs app-config table vs JSON file          |
 | The decision affects architecture, data, security, or automation boundaries | IPC command ownership, keychain posture, agent sandbox policy |
-| Reversing the decision is expensive | migrations, external API contracts, accepted UI primitives |
-| A future engineer will ask why the repo uses this pattern | tauri-specta generated bindings, local DB as SSOT |
-| A standard exists but is only implicit | docs area routing, reviewer pass separation |
+| Reversing the decision is expensive                                         | migrations, external API contracts, accepted UI primitives    |
+| A future engineer will ask why the repo uses this pattern                   | tauri-specta generated bindings, local DB as SSOT             |
+| A standard exists but is only implicit                                      | docs area routing, reviewer pass separation                   |
 
 Do not write an ADR for a local implementation detail, a trivially reversible
 single-file choice, or a Phase note that only needs a chronological breadcrumb.

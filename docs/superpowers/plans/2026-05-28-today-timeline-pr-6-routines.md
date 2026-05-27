@@ -15,6 +15,7 @@
 ### Task 1: routine_check 자동 행 생성 (드래그 시점)
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/calendar_sync.rs`
 
 문제: `stage_calendar_write`가 `RoutineCheck { routine_id, date }`를 받지만 그 행이 routine_check 테이블에 아직 없을 수 있음 (오늘 처음 인터랙션). UPDATE/SELECT가 0행 영향이 되어 link_back/fetch_linked_event가 실패. → 큐잉 직전 idempotent INSERT 보장.
@@ -82,6 +83,7 @@ git commit -m "feat(routine): ensure routine_check row + set time_override on st
 ### Task 2: 루틴 정의 시간 변경 → 다음날부터 적용 (정책 보장)
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/routines.rs` (또는 update_routine 핸들러)
 
 정책: `routines.time_of_day` 변경 시 **기존 routine_check.time_override는 건드리지 않는다** (오늘 인스턴스는 그대로). 다음날부터 새 정의 시간으로 자동.
@@ -115,6 +117,7 @@ git commit -m "feat(routine): definition time change leaves today override intac
 ### Task 3: 트레이 → 시간축 드래그 시 시간 슬롯 표시
 
 **Files:**
+
 - Modify: `src/components/today/UnscheduledTray.tsx`
 - Modify: `src/components/today/TimelineCanvas.tsx`
 
@@ -127,14 +130,16 @@ const [hoverMin, setHoverMin] = useState<number | null>(null);
 const onPointerMove = (e: React.PointerEvent) => {
   const rect = e.currentTarget.getBoundingClientRect();
   const y = e.clientY - rect.top;
-  setHoverMin(Math.round((y / HOUR_PX) * 60 / 15) * 15);
+  setHoverMin(Math.round(((y / HOUR_PX) * 60) / 15) * 15);
 };
 // ... render hint:
-{hoverMin !== null && (
-  <div className="today-canvas-hint" style={{ top: (hoverMin/60)*HOUR_PX }}>
-    {String(Math.floor(hoverMin/60)).padStart(2,"0")}:{String(hoverMin%60).padStart(2,"0")}
-  </div>
-)}
+{
+  hoverMin !== null && (
+    <div className="today-canvas-hint" style={{ top: (hoverMin / 60) * HOUR_PX }}>
+      {String(Math.floor(hoverMin / 60)).padStart(2, "0")}:{String(hoverMin % 60).padStart(2, "0")}
+    </div>
+  );
+}
 ```
 
 (또는 @dnd-kit의 `useDndMonitor`로 active drag일 때만 표시.)
@@ -142,8 +147,23 @@ const onPointerMove = (e: React.PointerEvent) => {
 - [ ] **Step 2: CSS**
 
 ```css
-.today-canvas-hint { position: absolute; left: 60px; right: 0; height: 2px; background: rgba(74,123,184,0.5); pointer-events: none; }
-.today-canvas-hint::after { content: attr(data-time); position: absolute; left: 6px; top: -16px; font-size: 10px; color: #4a7bb8; font-family: ui-monospace, monospace; }
+.today-canvas-hint {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  height: 2px;
+  background: rgba(74, 123, 184, 0.5);
+  pointer-events: none;
+}
+.today-canvas-hint::after {
+  content: attr(data-time);
+  position: absolute;
+  left: 6px;
+  top: -16px;
+  font-size: 10px;
+  color: #4a7bb8;
+  font-family: ui-monospace, monospace;
+}
 ```
 
 - [ ] **Step 3: 스모크 + 커밋**
@@ -160,6 +180,7 @@ git commit -m "feat(today): hover time hint during drag (PR 6/7)"
 ### Task 4: 루틴 블록 시각 구분 + 인스턴스 토글 (완료)
 
 **Files:**
+
 - Modify: `src/components/today/TimelineBlock.tsx`
 
 루틴은 시간축에 있지만 완료 체크는 `routine_check.done` (`useToggleRoutineCheck`). popover 클릭 시 토글 가능해야 함.
@@ -171,7 +192,11 @@ git commit -m "feat(today): hover time hint during drag (PR 6/7)"
 `TimelineBlock`:
 
 ```tsx
-{block.kind === "routine" && block.done && <span className="line-through opacity-60">{block.title}</span>}
+{
+  block.kind === "routine" && block.done && (
+    <span className="line-through opacity-60">{block.title}</span>
+  );
+}
 ```
 
 - [ ] **Step 2: EventPopover에 routine done 토글**
@@ -204,6 +229,7 @@ cd .. && pnpm typecheck && pnpm lint && pnpm vitest run
 ```bash
 pnpm tauri dev
 ```
+
 - 정의 시간 07:00 루틴이 시간축 07:00에 자동 표시
 - 트레이로 드래그 → time_override clear + Google delete + 트레이에 다시 노출
 - 트레이에서 다시 09:00로 드래그 → time_override='09:00' + Google create

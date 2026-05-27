@@ -40,17 +40,17 @@ source_id = pr:{owner}/{repo}:{number}:{head_sha}
 CI 워크플로(`.github/workflows/ci.yml`) 각 job 끝에 추가:
 
 ```yaml
-      # CI 실패 시 ntfy.sh로 컨텍스트 push (보강 채널 — 1차는 앱-측 폴링 감지).
-      # WR_NTFY_TOPIC 은 추측 어려운 임의 문자열로(공개 토픽이므로 사실상 비밀).
-      - name: Notify on failure (ntfy.sh)
-        if: failure()
-        run: |
-          curl -fsS \
-            -H "Title: CI 실패: ${{ github.repository }} #${{ github.run_number }}" \
-            -H "Tags: rotating_light" \
-            -H "Click: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            -d "job=${{ github.job }} ref=${{ github.ref_name }} by=${{ github.actor }}" \
-            "https://ntfy.sh/${{ vars.WR_NTFY_TOPIC || 'work-radar-ci-CHANGE-ME' }}"
+# CI 실패 시 ntfy.sh로 컨텍스트 push (보강 채널 — 1차는 앱-측 폴링 감지).
+# WR_NTFY_TOPIC 은 추측 어려운 임의 문자열로(공개 토픽이므로 사실상 비밀).
+- name: Notify on failure (ntfy.sh)
+  if: failure()
+  run: |
+    curl -fsS \
+      -H "Title: CI 실패: ${{ github.repository }} #${{ github.run_number }}" \
+      -H "Tags: rotating_light" \
+      -H "Click: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+      -d "job=${{ github.job }} ref=${{ github.ref_name }} by=${{ github.actor }}" \
+      "https://ntfy.sh/${{ vars.WR_NTFY_TOPIC || 'work-radar-ci-CHANGE-ME' }}"
 ```
 
 앱은 이 topic을 SSE(`https://ntfy.sh/<topic>/sse`)로 구독해 동일한 알림 경로로 띄울 수 있다.
@@ -61,9 +61,9 @@ CI 워크플로(`.github/workflows/ci.yml`) 각 job 끝에 추가:
 
 ## INVARIANT 적합성
 
-| INVARIANT | 처리 |
-|---|---|
+| INVARIANT             | 처리                                                                 |
+| --------------------- | -------------------------------------------------------------------- |
 | #1 (결정 레일 사람만) | CI 봇은 자동 분류/triage 0 — 알림 + Q1 escalate(결정 큐 항목)까지만. |
-| #4 (임계치 escalate) | CI 실패 + 링크 티켓만 escalate(noise 0). |
-| #5 (bounded + 캡) | 기존 폴링에 올라타고, PR+SHA dedup으로 중복 알림 0. |
-| #7 (SQLite SSOT) | 발사 마커는 `scheduled_notifications` 로컬 영속. |
+| #4 (임계치 escalate)  | CI 실패 + 링크 티켓만 escalate(noise 0).                             |
+| #5 (bounded + 캡)     | 기존 폴링에 올라타고, PR+SHA dedup으로 중복 알림 0.                  |
+| #7 (SQLite SSOT)      | 발사 마커는 `scheduled_notifications` 로컬 영속.                     |

@@ -49,7 +49,7 @@ export function AddRepoForm({
   };
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-lg border border-dashed border-border p-3.5">
+    <div className="border-border flex flex-col gap-2.5 rounded-lg border border-dashed p-3.5">
       <div className="flex items-center justify-between gap-3">
         <Segmented
           size="sm"

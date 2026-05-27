@@ -1,11 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
-import {
-  commands,
-  type CreateSkillInput,
-  type ExternalSkill,
-  type Skill,
-} from "@/bindings";
+import { commands, type CreateSkillInput, type ExternalSkill, type Skill } from "@/bindings";
 
 // 스킬 공유 레지스트리 (Phase 20 #21). 인앱 에이전트 프롬프트(편집 가능 잡 템플릿)와 외부
 // Claude/Codex 스킬(~/.claude/skills)을 한 곳에서 본다. 프롬프트 편집은 codex 제안 *내용*만
@@ -31,12 +26,7 @@ export function useUpdateSkill() {
       enabled?: boolean | null;
     }) =>
       unwrap(
-        commands.updateSkill(
-          args.id,
-          args.prompt ?? null,
-          args.name ?? null,
-          args.enabled ?? null,
-        ),
+        commands.updateSkill(args.id, args.prompt ?? null, args.name ?? null, args.enabled ?? null),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
   });
@@ -46,8 +36,7 @@ export function useUpdateSkill() {
 export function useCreateSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateSkillInput) =>
-      unwrap(commands.createSkill(input)),
+    mutationFn: (input: CreateSkillInput) => unwrap(commands.createSkill(input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
   });
 }

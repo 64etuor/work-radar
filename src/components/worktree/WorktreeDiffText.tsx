@@ -43,17 +43,11 @@ function tokenStyle(t: ThemedToken): CSSProperties {
  * MAX_DIFF_LINES 초과 시 잘라 비차단을 보장한다.
  */
 export function DiffText({ text, path }: { text: string; path: string | null }) {
-  const allLines = useMemo(
-    () => (text.length === 0 ? [] : text.split("\n")),
-    [text],
-  );
+  const allLines = useMemo(() => (text.length === 0 ? [] : text.split("\n")), [text]);
   const truncated = allLines.length > MAX_DIFF_LINES;
 
   const parsed = useMemo<ParsedDiffLine[]>(() => {
-    const lines =
-      allLines.length > MAX_DIFF_LINES
-        ? allLines.slice(0, MAX_DIFF_LINES)
-        : allLines;
+    const lines = allLines.length > MAX_DIFF_LINES ? allLines.slice(0, MAX_DIFF_LINES) : allLines;
     return lines.map(parseDiffLine);
   }, [allLines]);
 
@@ -79,16 +73,10 @@ export function DiffText({ text, path }: { text: string; path: string | null }) 
     map: Map<number, ThemedToken[]>;
   } | null>(null);
   const tokenByLine =
-    tokenState?.lang === lang && tokenState.codeText === codeText
-      ? tokenState.map
-      : null;
+    tokenState?.lang === lang && tokenState.codeText === codeText ? tokenState.map : null;
 
   useEffect(() => {
-    if (
-      !lang ||
-      codeIndices.length === 0 ||
-      codeIndices.length > SYNTAX_MAX_LINES
-    ) {
+    if (!lang || codeIndices.length === 0 || codeIndices.length > SYNTAX_MAX_LINES) {
       return;
     }
     let cancelled = false;
@@ -144,8 +132,7 @@ export function DiffText({ text, path }: { text: string; path: string | null }) 
       ))}
       {truncated && (
         <div className="wt-trunc">
-          큰 diff — {MAX_DIFF_LINES.toLocaleString()}/
-          {allLines.length.toLocaleString()}줄만 표시.
+          큰 diff — {MAX_DIFF_LINES.toLocaleString()}/{allLines.length.toLocaleString()}줄만 표시.
         </div>
       )}
     </div>

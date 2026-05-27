@@ -111,13 +111,7 @@ function relativeActivity(newestMtime: string | null): string {
   return `${diffDay}일 전 변경`;
 }
 
-function BranchRail({
-  worktree,
-  activity,
-}: {
-  worktree: Worktree;
-  activity: string;
-}) {
+function BranchRail({ worktree, activity }: { worktree: Worktree; activity: string }) {
   const baseAhead = worktree.baseAhead ?? 0;
   const baseBehind = worktree.baseBehind ?? 0;
   const baseUnknown = worktree.baseAhead == null || worktree.baseBehind == null;
@@ -125,7 +119,7 @@ function BranchRail({
   const relation = branchChangeSummary(worktree);
   return (
     <div
-      className={`wt-branch-rail${worktree.mergedIntoBase === true ? " wt-branch-rail-merged" : ""}${baseUnknown ? " wt-branch-rail-unknown" : ""}`}
+      className={`wt-branch-rail${worktree.mergedIntoBase === true ? "wt-branch-rail-merged" : ""}${baseUnknown ? "wt-branch-rail-unknown" : ""}`}
       aria-label={branchGraphAriaLabel(worktree)}
       title={relation}
     >
@@ -142,7 +136,9 @@ function BranchRail({
         <span className="wt-graph-pill">in sync</span>
       )}
       {baseUnknown && <span className="wt-graph-pill">base unknown</span>}
-      <span className={worktree.mergedIntoBase === true ? "wt-graph-pill wt-merge-ok" : "wt-graph-pill"}>
+      <span
+        className={worktree.mergedIntoBase === true ? "wt-graph-pill wt-merge-ok" : "wt-graph-pill"}
+      >
         {mergeStateSummary(worktree)}
       </span>
       {local > 0 && <span className="wt-graph-pill">local {local}</span>}

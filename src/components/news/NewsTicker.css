@@ -34,9 +34,9 @@
 /* 같은 콘텐츠 두 번을 가로로 이어 붙여 -50% translate로 seamless 마퀴. */
 .news-ticker-track {
   display: flex;
-  width: max-content;       /* 두 트랙의 자연 너비 합 */
+  width: max-content; /* 두 트랙의 자연 너비 합 */
   animation: news-ticker-scroll var(--news-marquee-duration, 60s) linear infinite;
-  will-change: transform;   /* 30fps+ 부드러움 — compositor 레이어 보장 */
+  will-change: transform; /* 30fps+ 부드러움 — compositor 레이어 보장 */
 }
 
 /* hover 일시정지(spec §6) + focus-within 일시정지(critic Minor #1, 키보드 사용자가
@@ -49,7 +49,7 @@
 .news-ticker-set {
   display: flex;
   align-items: center;
-  gap: 0;                   /* item 자체에 padding으로 spacing 부여 */
+  gap: 0; /* item 자체에 padding으로 spacing 부여 */
   margin: 0;
   padding: 0;
   list-style: none;
@@ -80,7 +80,7 @@
   cursor: pointer;
   font: inherit;
   color: inherit;
-  white-space: nowrap;     /* 마퀴 — 줄바꿈 없음 */
+  white-space: nowrap; /* 마퀴 — 줄바꿈 없음 */
   max-width: min(72vw, 760px);
 }
 .news-ticker-item:hover .news-title {
@@ -105,19 +105,33 @@
   text-transform: uppercase;
   color: var(--news-source-text);
 }
-.news-src-hn       { background: var(--news-source-hn); }   /* HN 오렌지 */
-.news-src-geeknews { background: var(--news-source-geeknews); }   /* GeekNews 청록(브랜드 톤) */
-.news-src-lobsters { background: var(--news-source-lobsters); }   /* Lobsters 레드 */
-.news-src-reddit_programming { background: var(--news-source-reddit-programming); }
-.news-src-devto { background: var(--news-source-devto); }
+.news-src-hn {
+  background: var(--news-source-hn);
+} /* HN 오렌지 */
+.news-src-geeknews {
+  background: var(--news-source-geeknews);
+} /* GeekNews 청록(브랜드 톤) */
+.news-src-lobsters {
+  background: var(--news-source-lobsters);
+} /* Lobsters 레드 */
+.news-src-reddit_programming {
+  background: var(--news-source-reddit-programming);
+}
+.news-src-devto {
+  background: var(--news-source-devto);
+}
 .news-src-naver_d2,
 .news-src-kakao_tech,
 .news-src-woowahan,
 .news-src-toss_tech,
 .news-src-line_tech,
-.news-src-yozm { background: var(--color-wr-green); }
+.news-src-yozm {
+  background: var(--color-wr-green);
+}
 .news-src-arxiv_cs_ai,
-.news-src-arxiv_cs_lg { background: var(--color-wr-accent); }
+.news-src-arxiv_cs_lg {
+  background: var(--color-wr-accent);
+}
 
 .news-hot {
   flex-shrink: 0;
@@ -146,8 +160,12 @@
    화면 좌측에서 첫 트랙처럼 다시 등장 → seamless. duration은 컨텐츠 길이와 무관하게
    같은 px/s 속도(약 80px/s) 유지하도록 60s로 고정. */
 @keyframes news-ticker-scroll {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 /* 접근성 — reduce-motion 시 마퀴 무효 + 가로 스크롤(키보드/터치 가능)로 폴백.

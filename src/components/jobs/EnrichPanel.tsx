@@ -3,11 +3,7 @@ import { Check, X } from "lucide-react";
 
 import type { AgentRunView, AreaTag, EnrichProposal, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import {
-  useAcceptEnrich,
-  useEnrichProposal,
-  useRejectProposal,
-} from "@/lib/query";
+import { useAcceptEnrich, useEnrichProposal, useRejectProposal } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -34,15 +30,15 @@ export function EnrichPanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
+    return (
+      <div className="jobs-prop jobs-prop-loading">
+        <Spinner /> Proposal 불러오는 중…
+      </div>
+    );
   }
   if (proposal.error) {
     return (
-      <ProposalError
-        runId={run.id}
-        message={(proposal.error as Error).message}
-        reject={reject}
-      />
+      <ProposalError runId={run.id} message={(proposal.error as Error).message} reject={reject} />
     );
   }
   const d: EnrichProposal = draft ??
@@ -53,9 +49,7 @@ export function EnrichPanel({ run }: { run: AgentRunView }) {
       <label className="jobs-prop-label">사분면 (accept 시 확정)</label>
       <Select
         value={d.suggestedQuadrant ?? "unclassified"}
-        onValueChange={(v) =>
-          setDraft({ ...d, suggestedQuadrant: v as Quadrant })
-        }
+        onValueChange={(v) => setDraft({ ...d, suggestedQuadrant: v as Quadrant })}
       >
         <SelectTrigger aria-label="제안 사분면">
           <SelectValue />
@@ -101,13 +95,11 @@ export function EnrichPanel({ run }: { run: AgentRunView }) {
       />
 
       <div className="jobs-prop-hint">
-        accept하면 카드의 <b>사분면·영역이 확정</b>됩니다 — codex 자동 확정이 아니라
-        지금 사람이 확인한 결과(드래그/키보드 분류와 동일 결정 레일).
+        accept하면 카드의 <b>사분면·영역이 확정</b>됩니다 — codex 자동 확정이 아니라 지금 사람이
+        확인한 결과(드래그/키보드 분류와 동일 결정 레일).
       </div>
       {(accept.error || reject.error) && (
-        <div className="jobs-prop-err">
-          {((accept.error ?? reject.error) as Error).message}
-        </div>
+        <div className="jobs-prop-err">{((accept.error ?? reject.error) as Error).message}</div>
       )}
       <div className="jobs-prop-actions">
         <Button

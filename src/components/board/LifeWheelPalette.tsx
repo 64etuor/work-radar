@@ -10,13 +10,7 @@ import { cn } from "@/components/ui/cn";
  * personal=`secondary`(베이지 #eeece7), work=`accent`(코랄 #ff7759).
  * 다른 색(pale-blue/pale-green)으로 kind를 표시하지 말 것.
  */
-export function KindBadge({
-  kind,
-  className,
-}: {
-  kind: Kind;
-  className?: string;
-}) {
+export function KindBadge({ kind, className }: { kind: Kind; className?: string }) {
   return (
     <Badge
       variant={kind === "work" ? "accent" : "secondary"}
@@ -42,7 +36,9 @@ export function KindAreaChips({
   const areaTag = areaKey ? tags.find((t) => t.id === areaKey) : null;
   return (
     <>
-      {target.kind && <KindBadge kind={target.kind} className="h-4 px-1.5 py-0 text-[10px] leading-none" />}
+      {target.kind && (
+        <KindBadge kind={target.kind} className="h-4 px-1.5 py-0 text-[10px] leading-none" />
+      )}
       {areaKey && (
         <span
           className="b-tag"
@@ -89,7 +85,8 @@ export function CardTagEditor({
   const selectedTag = selectedArea ? tags.find((tag) => tag.id === selectedArea) : null;
   const areaColor = selectedTag?.color ?? "#75758a";
   const areaLabelText = selectedTag?.label ?? selectedArea ?? "미분류";
-  const areaAriaLabel = selectedAreas.length === 0 ? "Life wheel tag 선택: 미분류" : "Life wheel tag 선택";
+  const areaAriaLabel =
+    selectedAreas.length === 0 ? "Life wheel tag 선택: 미분류" : "Life wheel tag 선택";
   const keepCardDragPrimary = (event: React.PointerEvent<HTMLButtonElement>) => {
     // Keep button clicks available, but do not let pointer activation focus the
     // button or block the parent post-it drag handler.
@@ -110,7 +107,7 @@ export function CardTagEditor({
       </button>
       <button
         type="button"
-        className={`postit-tag-button postit-area-button${selectedAreas.length === 0 ? " empty" : ""}`}
+        className={`postit-tag-button postit-area-button${selectedAreas.length === 0 ? "empty" : ""}`}
         draggable={false}
         style={
           {
@@ -165,11 +162,11 @@ export function AreaRadialPalette({
 
   return (
     <div
-      className={`area-radial-layer wr-radial-effect-layer${closing ? " closing" : ""}`}
+      className={`area-radial-layer wr-radial-effect-layer${closing ? "closing" : ""}`}
       onPointerDown={closePalette}
     >
       <div
-        className={`area-radial wr-radial-effect${closing ? " closing" : ""}`}
+        className={`area-radial wr-radial-effect${closing ? "closing" : ""}`}
         style={
           {
             left: anchor.x,
@@ -181,7 +178,7 @@ export function AreaRadialPalette({
       >
         <button
           type="button"
-          className={`area-radial-core${!selectedArea ? " active" : ""}${closing ? " closing" : ""}`}
+          className={`area-radial-core${!selectedArea ? "active" : ""}${closing ? "closing" : ""}`}
           onClick={() => selectArea(null)}
           style={
             {
@@ -202,7 +199,7 @@ export function AreaRadialPalette({
             return (
               <g
                 key={choice.id}
-                className={`area-wheel-segment${active ? " active" : ""}${closing ? " closing" : ""}`}
+                className={`area-wheel-segment${active ? "active" : ""}${closing ? "closing" : ""}`}
                 role="button"
                 tabIndex={0}
                 aria-label={`${choice.label} 선택`}

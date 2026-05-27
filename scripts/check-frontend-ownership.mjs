@@ -8,7 +8,7 @@ const MAX_LINES = new Map([
   ["src/components/worktree/WorktreeView.tsx", 450],
   ["src/components/jobs/JobsView.tsx", 220],
   ["src/components/CaptureBoard.tsx", 650],
-  ["src/components/board/MatrixCanvas.tsx", 560],
+  ["src/components/board/MatrixCanvas.tsx", 580],
 ]);
 
 const REQUIRED_FILES = [
@@ -32,7 +32,8 @@ const REQUIRED_FILES = [
   "src/components/board/matrixGeometry.test.ts",
 ];
 
-const QUERY_IMPORT_RE = /from\s+["']@\/lib\/query(?:\/[^"']*)?["']|from\s+["']\.\.\/(?:\.\.\/)*lib\/query(?:\/[^"']*)?["']/;
+const QUERY_IMPORT_RE =
+  /from\s+["']@\/lib\/query(?:\/[^"']*)?["']|from\s+["']\.\.\/(?:\.\.\/)*lib\/query(?:\/[^"']*)?["']/;
 const COMPONENT_NAMESPACE_RE = /\.(?:cb|wt|jobs|asb|today)(?:[-_a-zA-Z0-9]|\b)/;
 
 const LEAF_OWNERSHIP = [

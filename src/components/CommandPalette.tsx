@@ -42,7 +42,7 @@ export function CommandPalette() {
     ? (skills.data ?? [])
         .filter((s) => skillSearchValue(s).toLowerCase().includes(normalizedQuery))
         .slice(0, 8)
-      : [];
+    : [];
   const recentActions = recentCommands()
     .map((label) => ({ label, action: actionForRecent(label, goTo) }))
     .filter((item): item is { label: string; action: () => void } => !!item.action);
@@ -80,7 +80,7 @@ export function CommandPalette() {
                         )
                       }
                     >
-                      <Icon className="size-4 text-wr-subtle" />
+                      <Icon className="text-wr-subtle size-4" />
                       <span>{item.label}</span>
                       {sc && <CommandShortcut>{sc}</CommandShortcut>}
                     </CommandItem>
@@ -90,13 +90,19 @@ export function CommandPalette() {
             ))}
 
             <CommandGroup heading="추천 액션">
-              <CommandItem value="inbox unread alert 알림" onSelect={() => runCommand("Inbox", () => goTo("inbox"))}>
-                <Blocks className="size-4 text-wr-subtle" />
+              <CommandItem
+                value="inbox unread alert 알림"
+                onSelect={() => runCommand("Inbox", () => goTo("inbox"))}
+              >
+                <Blocks className="text-wr-subtle size-4" />
                 <span>Inbox 확인</span>
                 <CommandShortcut>운영</CommandShortcut>
               </CommandItem>
-              <CommandItem value="pr radar refresh review" onSelect={() => runCommand("PR Radar", () => goTo("radar"))}>
-                <GitBranchPlus className="size-4 text-wr-subtle" />
+              <CommandItem
+                value="pr radar refresh review"
+                onSelect={() => runCommand("PR Radar", () => goTo("radar"))}
+              >
+                <GitBranchPlus className="text-wr-subtle size-4" />
                 <span>PR Radar 보기</span>
                 <CommandShortcut>context</CommandShortcut>
               </CommandItem>
@@ -110,7 +116,7 @@ export function CommandPalette() {
                     value={`recent ${label}`}
                     onSelect={() => runCommand(label, action)}
                   >
-                    <FileText className="size-4 text-wr-subtle" />
+                    <FileText className="text-wr-subtle size-4" />
                     <span>{label}</span>
                   </CommandItem>
                 ))}
@@ -129,19 +135,15 @@ export function CommandPalette() {
                       onSelect={() => runCommand(`Skill: ${s.name}`, () => goToSkill(s.id))}
                     >
                       {isInApp ? (
-                        <Blocks className="size-4 text-wr-subtle" />
+                        <Blocks className="text-wr-subtle size-4" />
                       ) : (
-                        <FileText className="size-4 text-wr-subtle" />
+                        <FileText className="text-wr-subtle size-4" />
                       )}
                       <span>{s.name}</span>
                       {isInApp && s.binding && (
-                        <span className="ml-2 font-mono text-xs text-wr-subtle">
-                          {s.binding}
-                        </span>
+                        <span className="text-wr-subtle ml-2 font-mono text-xs">{s.binding}</span>
                       )}
-                      {isInApp && !s.enabled && (
-                        <CommandShortcut>꺼짐</CommandShortcut>
-                      )}
+                      {isInApp && !s.enabled && <CommandShortcut>꺼짐</CommandShortcut>}
                     </CommandItem>
                   );
                 })}
@@ -153,14 +155,14 @@ export function CommandPalette() {
                 value="add project 프로젝트 추가"
                 onSelect={() => runCommand("프로젝트 추가", () => goTo("settings", "add_project"))}
               >
-                <FolderPlus className="size-4 text-wr-subtle" />
+                <FolderPlus className="text-wr-subtle size-4" />
                 <span>프로젝트 추가</span>
               </CommandItem>
               <CommandItem
                 value="add repo 레포 추가"
                 onSelect={() => runCommand("레포 추가", () => goTo("settings", "add_repo"))}
               >
-                <GitBranchPlus className="size-4 text-wr-subtle" />
+                <GitBranchPlus className="text-wr-subtle size-4" />
                 <span>레포 추가</span>
               </CommandItem>
             </CommandGroup>
@@ -171,7 +173,9 @@ export function CommandPalette() {
                   <CommandItem
                     key={p.id}
                     value={`project ${p.name} ${p.kind}`}
-                    onSelect={() => runCommand(`Project: ${p.name}`, () => goTo("settings", "open"))}
+                    onSelect={() =>
+                      runCommand(`Project: ${p.name}`, () => goTo("settings", "open"))
+                    }
                   >
                     <span>{p.name}</span>
                     <KindBadge

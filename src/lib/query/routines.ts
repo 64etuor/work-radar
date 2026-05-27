@@ -1,7 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-} from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { unwrap, useInvalidate } from "./client";
 import {
   commands,
@@ -89,15 +86,8 @@ export function useSetRoutineAreaTagKey() {
 export function useToggleRoutineCheck() {
   const inv = useInvalidate();
   return useMutation({
-    mutationFn: ({
-      routineId,
-      date,
-      done,
-    }: {
-      routineId: string;
-      date: string;
-      done: boolean;
-    }) => unwrap(commands.toggleRoutineCheck(routineId, date, done)),
+    mutationFn: ({ routineId, date, done }: { routineId: string; date: string; done: boolean }) =>
+      unwrap(commands.toggleRoutineCheck(routineId, date, done)),
     onSuccess: () => inv.routines(),
   });
 }

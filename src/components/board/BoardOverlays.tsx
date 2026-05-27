@@ -1,14 +1,8 @@
 import { type CardMenuAction, type CardMenuState, CardMenu } from "@/components/board/CardMenu";
-import {
-  type CalendarModalState,
-  CalendarEventModal,
-} from "@/components/board/CalendarEventModal";
+import { type CalendarModalState, CalendarEventModal } from "@/components/board/CalendarEventModal";
 import { EnrichModal } from "@/components/board/EnrichModal";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
-import {
-  type ProjectPickerState,
-  ProjectPickerModal,
-} from "@/components/board/ProjectPickerModal";
+import { type ProjectPickerState, ProjectPickerModal } from "@/components/board/ProjectPickerModal";
 
 export function BoardOverlays({
   menu,
@@ -50,12 +44,7 @@ export function BoardOverlays({
           onRunningChange={onEnrichAllRunningChange}
         />
       )}
-      <CardMenu
-        state={menu}
-        onAct={onMenuAction}
-        onClose={onMenuClose}
-        codexReady={codexReady}
-      />
+      <CardMenu state={menu} onAct={onMenuAction} onClose={onMenuClose} codexReady={codexReady} />
       <CalendarEventModal state={calendarModal} onClose={onCalendarClose} />
       <ProjectPickerModal
         state={projectPicker}

@@ -89,7 +89,7 @@ export function WorktreeDiffPanel({
             <Button
               variant="ghost"
               size="sm"
-              className="size-6 shrink-0 p-0 text-wr-muted"
+              className="text-wr-muted size-6 shrink-0 p-0"
               onClick={() => onFilesCollapsedChange(true)}
               title="패널 접기"
             >
@@ -168,7 +168,9 @@ function FileTimeline({ file, mode }: { file: DiffFileSummary; mode: DiffMode })
           : "file modified",
     `${file.adds}+ / ${file.dels}-`,
     SOURCE_LABEL[mode],
-    mode === "vs_base" || mode === "branch_branch" ? "merge review surface" : "local review surface",
+    mode === "vs_base" || mode === "branch_branch"
+      ? "merge review surface"
+      : "local review surface",
     "AI review can attach from worktree header",
   ];
   return (
@@ -231,11 +233,7 @@ function WorktreeFilePanel({
   if (diffFiles.error) return <div className="wt-err">{diffFiles.error.message}</div>;
   if ((diffFiles.data?.length ?? 0) === 0) {
     return (
-      <LensEmptyState
-        lens={activeMode ?? "working"}
-        worktree={worktree}
-        onSwitch={onLensChange}
-      />
+      <LensEmptyState lens={activeMode ?? "working"} worktree={worktree} onSwitch={onLensChange} />
     );
   }
 

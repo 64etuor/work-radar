@@ -53,10 +53,7 @@ export function CleanupPanel({
     const ids = [...selected];
     if (ids.length === 0 || del.isPending) return;
     if (!window.confirm(`${ids.length}개 항목을 삭제합니다. 계속할까요?`)) return;
-    del.mutate(
-      { repoPath, base, ids, force },
-      { onSuccess: () => setSelected(new Set()) },
-    );
+    del.mutate({ repoPath, base, ids, force }, { onSuccess: () => setSelected(new Set()) });
   }
 
   function runAiReview() {
@@ -154,9 +151,7 @@ export function CleanupPanel({
           <Spinner />
         </div>
       )}
-      {candidates.error && (
-        <div className="wt-err">{(candidates.error as Error).message}</div>
-      )}
+      {candidates.error && <div className="wt-err">{(candidates.error as Error).message}</div>}
       {!candidates.isLoading && list.length === 0 && !candidates.error && (
         <div className="wt-empty">정리할 후보가 없습니다.</div>
       )}
@@ -165,10 +160,7 @@ export function CleanupPanel({
         {list.map((c) => {
           const can = selectable(c);
           return (
-            <label
-              key={c.id}
-              className={`wt-cleanup-row${can ? "" : " wt-cleanup-locked"}`}
-            >
+            <label key={c.id} className={`wt-cleanup-row${can ? "" : "wt-cleanup-locked"}`}>
               <input
                 type="checkbox"
                 checked={selected.has(c.id)}
@@ -198,9 +190,7 @@ export function CleanupPanel({
           {del.isPending ? "삭제 중…" : `선택 ${selected.size}개 삭제`}
         </Button>
         {del.error && (
-          <span className="wt-cleanup-msg wt-rebase-err">
-            {(del.error as Error).message}
-          </span>
+          <span className="wt-cleanup-msg wt-rebase-err">{(del.error as Error).message}</span>
         )}
         {del.data && <span className="wt-cleanup-msg">{del.data}</span>}
       </div>

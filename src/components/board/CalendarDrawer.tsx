@@ -2,12 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./CalendarDrawer.css";
 
 import { CalendarView } from "@/components/board/CalendarView";
-import {
-  type CalendarViewMode,
-  parseLocalISODate,
-  stepDate,
-  viewRange,
-} from "@/lib/calendarRange";
+import { type CalendarViewMode, parseLocalISODate, stepDate, viewRange } from "@/lib/calendarRange";
 import {
   fetchCalendarEventsRange,
   localToday,
@@ -106,126 +101,119 @@ export function CalendarDrawer({ open, onClose }: Props) {
     // 백드롭 없음(비모달) — 캘린더를 보면서 보드/브레인덤프를 그대로 조작할 수 있다. 닫기=✕/Esc.
     <aside className="caldrawer" role="dialog" aria-label="캘린더">
       <header className="caldrawer-head">
-          <span className="caldrawer-mark">CALENDAR</span>
-          <ToggleGroup
-            type="single"
-            value={mode}
-            onValueChange={(v) => v && setMode(v as CalendarViewMode)}
-            className="overflow-hidden rounded-full border border-wr-border-light"
-          >
-            {(["day", "week", "month"] as CalendarViewMode[]).map((m) => (
-              <ToggleGroupItem
-                key={m}
-                value={m}
-                size="sm"
-                className="font-semibold text-wr-subtle data-[state=on]:bg-wr-accent-soft data-[state=on]:text-wr-accent"
-              >
-                {MODE_LABEL[m]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <button
-            type="button"
-            className="caldrawer-close"
-            aria-label="닫기"
-            onClick={onClose}
-          >
-            ✕
-          </button>
-        </header>
+        <span className="caldrawer-mark">CALENDAR</span>
+        <ToggleGroup
+          type="single"
+          value={mode}
+          onValueChange={(v) => v && setMode(v as CalendarViewMode)}
+          className="border-wr-border-light overflow-hidden rounded-full border"
+        >
+          {(["day", "week", "month"] as CalendarViewMode[]).map((m) => (
+            <ToggleGroupItem
+              key={m}
+              value={m}
+              size="sm"
+              className="text-wr-subtle data-[state=on]:bg-wr-accent-soft data-[state=on]:text-wr-accent font-semibold"
+            >
+              {MODE_LABEL[m]}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        <button type="button" className="caldrawer-close" aria-label="닫기" onClick={onClose}>
+          ✕
+        </button>
+      </header>
 
-        <div className="caldrawer-nav">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="size-7 p-0 text-[15px]"
-            aria-label="이전"
-            onClick={() => setDate((d) => stepDate(mode, d, -1))}
-          >
-            ‹
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-[13px] font-semibold"
-            onClick={() => setDate(localToday())}
-          >
-            {headerLabel(mode, date)}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="size-7 p-0 text-[15px]"
-            aria-label="다음"
-            onClick={() => setDate((d) => stepDate(mode, d, 1))}
-          >
-            ›
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="ml-auto size-7 p-0 text-[15px]"
-            aria-label="새로고침"
-            title="새로고침 (캐시 우회)"
-            onClick={() => void refresh()}
-            disabled={eventsQ.isFetching}
-          >
-            ⟳
-          </Button>
-        </div>
+      <div className="caldrawer-nav">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="size-7 p-0 text-[15px]"
+          aria-label="이전"
+          onClick={() => setDate((d) => stepDate(mode, d, -1))}
+        >
+          ‹
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-[13px] font-semibold"
+          onClick={() => setDate(localToday())}
+        >
+          {headerLabel(mode, date)}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="size-7 p-0 text-[15px]"
+          aria-label="다음"
+          onClick={() => setDate((d) => stepDate(mode, d, 1))}
+        >
+          ›
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto size-7 p-0 text-[15px]"
+          aria-label="새로고침"
+          title="새로고침 (캐시 우회)"
+          onClick={() => void refresh()}
+          disabled={eventsQ.isFetching}
+        >
+          ⟳
+        </Button>
+      </div>
 
-        <div className="caldrawer-body">
-          {noCalendarsConfigured ? (
-            <div className="caldrawer-state">
-              <p className="caldrawer-state-msg">
-                Google 계정이 연결되지 않았습니다.
-              </p>
-              <Button
-                type="button"
-                className="rounded-full px-[18px] text-[13px]"
-                onClick={() => {
-                  onClose();
-                  goTo("settings");
-                }}
-              >
-                Google 계정 연결
-              </Button>
-            </div>
-          ) : eventsQ.isLoading ? (
-            <div className="caldrawer-skeleton">
-              {Array.from({ length: 5 }, (_, i) => (
-                <div key={i} className="caldrawer-skel-row" />
-              ))}
-            </div>
-          ) : eventsQ.isError ? (
-            <div className="caldrawer-state">
-              <p className="caldrawer-state-msg">
-                일정을 불러오지 못했습니다 — {String(eventsQ.error)}
-              </p>
-              <Button
-                type="button"
-                className="rounded-full px-[18px] text-[13px]"
-                onClick={() => void eventsQ.refetch()}
-              >
-                재시도
-              </Button>
-            </div>
-          ) : (
-            <CalendarView
-              events={events}
-              mode={mode}
-              date={date}
-              onSelectDate={(d) => {
-                setDate(d);
-                setMode("day");
+      <div className="caldrawer-body">
+        {noCalendarsConfigured ? (
+          <div className="caldrawer-state">
+            <p className="caldrawer-state-msg">Google 계정이 연결되지 않았습니다.</p>
+            <Button
+              type="button"
+              className="rounded-full px-[18px] text-[13px]"
+              onClick={() => {
+                onClose();
+                goTo("settings");
               }}
-            />
-          )}
-        </div>
+            >
+              Google 계정 연결
+            </Button>
+          </div>
+        ) : eventsQ.isLoading ? (
+          <div className="caldrawer-skeleton">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="caldrawer-skel-row" />
+            ))}
+          </div>
+        ) : eventsQ.isError ? (
+          <div className="caldrawer-state">
+            <p className="caldrawer-state-msg">
+              일정을 불러오지 못했습니다 — {String(eventsQ.error)}
+            </p>
+            <Button
+              type="button"
+              className="rounded-full px-[18px] text-[13px]"
+              onClick={() => void eventsQ.refetch()}
+            >
+              재시도
+            </Button>
+          </div>
+        ) : (
+          <CalendarView
+            events={events}
+            mode={mode}
+            date={date}
+            onSelectDate={(d) => {
+              setDate(d);
+              setMode("day");
+            }}
+          />
+        )}
+      </div>
     </aside>
   );
 }

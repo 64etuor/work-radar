@@ -71,9 +71,9 @@ pnpm tauri:dev:setup
 
 ## Troubleshooting
 
-| 증상 | 원인 / 대응 |
-|---|---|
-| `전용 dev keychain에서 사용할 수 없습니다` | `pnpm tauri:dev:setup` 실행. |
-| `unlock 실패` | 전용 keychain이 이전 비밀번호로 생성됨. `security delete-keychain "$HOME/Library/Keychains/work-radar-dev.keychain-db" && pnpm tauri:dev:setup`. |
-| `codesign smoke test 실패` | setup이 실패 상태를 감지한 것. 출력된 진단을 확인하고 전용 keychain 삭제 후 재생성. |
-| 앱 첫 토큰 접근 때 1회 prompt | 기존 토큰 ACL이 옛 바이너리에 묶임. `Always Allow` 1회 또는 토큰 재등록. |
+| 증상                                       | 원인 / 대응                                                                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `전용 dev keychain에서 사용할 수 없습니다` | `pnpm tauri:dev:setup` 실행.                                                                                                                     |
+| `unlock 실패`                              | 전용 keychain이 이전 비밀번호로 생성됨. `security delete-keychain "$HOME/Library/Keychains/work-radar-dev.keychain-db" && pnpm tauri:dev:setup`. |
+| `codesign smoke test 실패`                 | setup이 실패 상태를 감지한 것. 출력된 진단을 확인하고 전용 keychain 삭제 후 재생성.                                                              |
+| 앱 첫 토큰 접근 때 1회 prompt              | 기존 토큰 ACL이 옛 바이너리에 묶임. `Always Allow` 1회 또는 토큰 재등록.                                                                         |

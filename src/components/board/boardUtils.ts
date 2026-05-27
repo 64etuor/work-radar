@@ -49,8 +49,7 @@ export function parseDump(raw: string): { kind: Kind | null; text: string } {
     const l = h.toLowerCase();
     if (PERSONAL.includes(h) || PERSONAL.includes(l))
       return { kind: "personal", text: m[2].trim() };
-    if (WORK.includes(h) || WORK.includes(l))
-      return { kind: "work", text: m[2].trim() };
+    if (WORK.includes(h) || WORK.includes(l)) return { kind: "work", text: m[2].trim() };
   }
   return { kind: null, text: raw.trim() };
 }

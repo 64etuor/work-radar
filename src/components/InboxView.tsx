@@ -77,13 +77,13 @@ export function InboxView() {
       </header>
 
       <div className="inbox-toolbar">
-        <Filter className="size-4 text-wr-subtle" />
+        <Filter className="text-wr-subtle size-4" />
         <div className="inbox-filter-row" role="tablist" aria-label="Inbox source filter">
           {SOURCE_FILTERS.map((f) => (
             <button
               key={f.key ?? "all"}
               type="button"
-              className={`inbox-filter${source === f.key ? " active" : ""}`}
+              className={`inbox-filter${source === f.key ? "active" : ""}`}
               onClick={() => setSource(f.key)}
             >
               {f.label}
@@ -136,15 +136,7 @@ export function InboxView() {
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: "critical";
-}) {
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "critical" }) {
   return (
     <div className={`inbox-stat${tone ? ` ${tone}` : ""}`}>
       <span>{label}</span>
@@ -179,7 +171,7 @@ function InboxRow({
   const action = parseActionPayload(item.actionPayload);
 
   return (
-    <article className={`inbox-row ${item.severity}${item.unread ? " unread" : ""}`}>
+    <article className={`inbox-row ${item.severity}${item.unread ? "unread" : ""}`}>
       <div className="inbox-row-icon">
         <Icon className="size-4" />
       </div>

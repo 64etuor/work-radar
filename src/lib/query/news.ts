@@ -4,12 +4,7 @@
 // 백엔드 fetcher는 사용자 설정 주기(news/fetcher.rs). 프런트는 매 5분 refetch로
 // 사용자가 앱에 머무는 동안 신선도 보장(빠른 토글에도 즉시 invalidate).
 
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { unwrap } from "./client";

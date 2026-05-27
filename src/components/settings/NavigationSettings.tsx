@@ -26,11 +26,7 @@ const KEYMAP_ROWS: { key: string; label: string }[] = [
  * per-action keymap: 각 메뉴/액션마다 조합 단축키 캡처(Cmd+숫자 등). 빈 값 = 끔.
  * 중복 단축키는 빨갛게 경고만 — 저장은 허용(사용자 정책). 저장 포맷은 spec 문자열.
  */
-export function NavigationSettings({
-  onToast,
-}: {
-  onToast: (msg: string) => void;
-}) {
+export function NavigationSettings({ onToast }: { onToast: (msg: string) => void }) {
   const hotkey = useGlobalHotkey();
   const setHotkey = useSetGlobalHotkey();
   const resetHotkey = useResetGlobalHotkey();
@@ -121,7 +117,7 @@ export function NavigationSettings({
 
       {/* 글로벌 창 핫키 — 키 캡처 */}
       <div className="flex items-center gap-2">
-        <span className="min-w-[96px] text-xs text-muted-foreground">글로벌 창 핫키</span>
+        <span className="text-muted-foreground min-w-[96px] text-xs">글로벌 창 핫키</span>
         <GlobalHotkeyCapture
           value={hkSpec}
           onChange={setHkSpec}
@@ -146,12 +142,10 @@ export function NavigationSettings({
           기본값
         </Button>
       </div>
-      {hkErr && (
-        <p className="text-xs text-[color:var(--destructive)]">{hkErr}</p>
-      )}
-      <p className="text-xs text-muted-foreground">
-        캡처 버튼 클릭 후 원하는 단축키를 누르세요 (예: Ctrl+Space, Cmd+Shift+K).
-        변경 시 즉시 재등록되며, 충돌 또는 지원하지 않는 키이면 이전 핫키를 유지합니다.
+      {hkErr && <p className="text-xs text-[color:var(--destructive)]">{hkErr}</p>}
+      <p className="text-muted-foreground text-xs">
+        캡처 버튼 클릭 후 원하는 단축키를 누르세요 (예: Ctrl+Space, Cmd+Shift+K). 변경 시 즉시
+        재등록되며, 충돌 또는 지원하지 않는 키이면 이전 핫키를 유지합니다.
       </p>
 
       {/* per-action keymap */}
@@ -160,12 +154,10 @@ export function NavigationSettings({
         <div className="flex flex-col gap-1">
           {KEYMAP_ROWS.map((row) => (
             <div key={row.key} className="flex items-center gap-3 py-1">
-              <span className="w-28 shrink-0 text-[13px] text-foreground">{row.label}</span>
+              <span className="text-foreground w-28 shrink-0 text-[13px]">{row.label}</span>
               <ViewKeymapCapture
                 value={kmDraft[row.key] ?? ""}
-                onChange={(v) =>
-                  setKmDraft((prev) => ({ ...prev, [row.key]: v }))
-                }
+                onChange={(v) => setKmDraft((prev) => ({ ...prev, [row.key]: v }))}
                 label={row.label}
                 duplicate={isDup(kmDraft[row.key] ?? "")}
               />
@@ -182,25 +174,16 @@ export function NavigationSettings({
       )}
 
       <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          onClick={saveKeymap}
-          disabled={setKeymap.isPending}
-        >
+        <Button size="sm" onClick={saveKeymap} disabled={setKeymap.isPending}>
           {setKeymap.isPending ? "저장 중…" : "단축키 저장"}
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetKm}
-          disabled={resetKeymap.isPending}
-        >
+        <Button variant="ghost" size="sm" onClick={resetKm} disabled={resetKeymap.isPending}>
           기본값으로 리셋
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        캡처 버튼 클릭 후 조합 단축키(예: Cmd+1, Cmd+Shift+C)를 누르세요. ✕로 끄기.
-        조합 단축키는 입력 중에도 동작합니다.
+      <p className="text-muted-foreground text-xs">
+        캡처 버튼 클릭 후 조합 단축키(예: Cmd+1, Cmd+Shift+C)를 누르세요. ✕로 끄기. 조합 단축키는
+        입력 중에도 동작합니다.
       </p>
 
       {hotkey.isError && (
@@ -256,8 +239,8 @@ function GlobalHotkeyCapture({
         ref={btnRef}
         type="button"
         className={cn(
-          "flex h-9 w-full items-center rounded-md border border-input bg-background px-3 text-sm font-mono text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          recording && "border-primary ring-2 ring-ring",
+          "border-input bg-background text-foreground focus-visible:ring-ring flex h-9 w-full items-center rounded-md border px-3 font-mono text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          recording && "border-primary ring-ring ring-2",
         )}
         onClick={start}
         onKeyDown={handleKeyDown}
@@ -312,8 +295,8 @@ function ViewKeymapCapture({
         ref={btnRef}
         type="button"
         className={cn(
-          "flex h-8 min-w-[120px] items-center rounded-md border border-input bg-background px-3 font-mono text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          recording && "border-primary ring-2 ring-ring",
+          "border-input bg-background text-foreground focus-visible:ring-ring flex h-8 min-w-[120px] items-center rounded-md border px-3 font-mono text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          recording && "border-primary ring-ring ring-2",
           duplicate &&
             !recording &&
             "border-[color:var(--destructive)] text-[color:var(--destructive)]",
@@ -326,9 +309,7 @@ function ViewKeymapCapture({
         onBlur={() => setRecording(false)}
         aria-label={`${label} 단축키 캡처`}
         title={
-          recording
-            ? "조합 단축키를 누르세요 (Esc = 취소)"
-            : "클릭 후 조합 단축키 입력 (예: Cmd+1)"
+          recording ? "조합 단축키를 누르세요 (Esc = 취소)" : "클릭 후 조합 단축키 입력 (예: Cmd+1)"
         }
       >
         {recording ? "🔴 단축키를 누르세요…" : value || "—"}
@@ -336,7 +317,7 @@ function ViewKeymapCapture({
       {value && !recording && (
         <button
           type="button"
-          className="px-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground px-1 text-xs transition-colors"
           onClick={() => onChange("")}
           aria-label={`${label} 단축키 끄기`}
           title="단축키 끄기"

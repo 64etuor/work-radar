@@ -3,12 +3,7 @@ import { Check, ExternalLink, X } from "lucide-react";
 
 import type { AgentRunView, PrSelfCheckProposal, SelfCheckItem } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import {
-  openExternal,
-  useAcceptProposal,
-  usePrProposal,
-  useRejectProposal,
-} from "@/lib/query";
+import { openExternal, useAcceptProposal, usePrProposal, useRejectProposal } from "@/lib/query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { prTrigger } from "./jobsUtils";
@@ -40,15 +35,17 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
   }, [proposal.data]);
 
   if (proposal.isLoading) {
-    return <div className="jobs-prop jobs-prop-loading"><Spinner /> Proposal 불러오는 중…</div>;
+    return (
+      <div className="jobs-prop jobs-prop-loading">
+        <Spinner /> Proposal 불러오는 중…
+      </div>
+    );
   }
   if (proposal.error) {
     // 파싱 실패(codex가 형식 밖 출력) — raw를 노출하고 accept는 막는다(reject만).
     return (
       <div className="jobs-prop">
-        <div className="jobs-prop-err">
-          {(proposal.error as Error).message}
-        </div>
+        <div className="jobs-prop-err">{(proposal.error as Error).message}</div>
         <div className="jobs-prop-actions">
           <Button
             variant="destructiveOutline"
@@ -66,17 +63,12 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
   }
   const d = draft ?? normalizeProposal(proposal.data ?? {});
 
-  const setChecks = (checks: SelfCheckItem[]) =>
-    setDraft({ ...d, selfChecks: checks });
+  const setChecks = (checks: SelfCheckItem[]) => setDraft({ ...d, selfChecks: checks });
 
   return (
     <div className="jobs-prop">
       {pr && (
-        <button
-          type="button"
-          className="jobs-prop-pr"
-          onClick={() => void openExternal(pr.prUrl)}
-        >
+        <button type="button" className="jobs-prop-pr" onClick={() => void openExternal(pr.prUrl)}>
           <ExternalLink className="size-3" />
           {pr.repoFullName} #{pr.prNumber}
         </button>
@@ -92,9 +84,7 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
 
       <label className="jobs-prop-label">self-check 체크리스트</label>
       <div className="jobs-prop-checks">
-        {(d.selfChecks ?? []).length === 0 && (
-          <div className="jobs-prop-empty">(항목 없음)</div>
-        )}
+        {(d.selfChecks ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
         {(d.selfChecks ?? []).map((c, i) => (
           <label key={i} className="jobs-prop-check">
             <input
@@ -138,9 +128,7 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
         accept하면 로컬 self-check가 표시됩니다. <b>GitHub 제출은 직접</b> 하세요(외부 무변경).
       </div>
       {(accept.error || reject.error) && (
-        <div className="jobs-prop-err">
-          {((accept.error ?? reject.error) as Error).message}
-        </div>
+        <div className="jobs-prop-err">{((accept.error ?? reject.error) as Error).message}</div>
       )}
       <div className="jobs-prop-actions">
         <Button

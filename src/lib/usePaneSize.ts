@@ -43,9 +43,7 @@ export function usePaneSize({
   collapsed,
 }: PaneSizeOptions) {
   const storageKey = `wr-pane:${key}`;
-  const [size, setSizeState] = useState(() =>
-    clamp(readSize(storageKey, defaultSize), min, max),
-  );
+  const [size, setSizeState] = useState(() => clamp(readSize(storageKey, defaultSize), min, max));
 
   const setSize = useCallback(
     (next: number) => {

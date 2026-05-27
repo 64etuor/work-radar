@@ -3,11 +3,7 @@ import "./EnrichReviewPanel.css";
 
 import type { AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import {
-  AREA_NONE,
-  AREA_OPTS,
-  QUADRANT_OPTS,
-} from "@/components/jobs/jobsConstants";
+import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "@/components/jobs/jobsConstants";
 import {
   AGENT_TERMINAL_STATUSES,
   useAcceptEnrichAll,
@@ -51,14 +47,12 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
 
   // 잡 상태 — query 레이어가 폴링/중단/에러 처리 단일화(INVARIANT #5).
   const runStatus = useAgentRunStatus(runId);
-  const status: string = runStatus.isError
-    ? "failed"
-    : runStatus.data?.status ?? "proposed";
+  const status: string = runStatus.isError ? "failed" : (runStatus.data?.status ?? "proposed");
   const hasProposal = runStatus.data?.hasProposal ?? false;
   const failDetail: string | null = runStatus.isError
     ? String(runStatus.error)
     : runStatus.data?.status === "failed"
-      ? runStatus.data.detail ?? "알 수 없는 오류"
+      ? (runStatus.data.detail ?? "알 수 없는 오류")
       : null;
 
   // awaiting_approval + proposal 있을 때만 카드별 제안 로드(파싱 실패는 즉시 노출).
@@ -142,7 +136,8 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
         <>
           <div className="enrich-review-meta">
             미분류 <b>{items.length}</b>개 제안
-            {skipped > 0 && <> · 격리(skip) {skipped}개</>} — 수정 후 적용하면 사분면·영역이 확정됩니다.
+            {skipped > 0 && <> · 격리(skip) {skipped}개</>} — 수정 후 적용하면 사분면·영역이
+            확정됩니다.
           </div>
 
           {items.length === 0 ? (
@@ -155,9 +150,7 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
                   <div className="enrich-review-row-fields">
                     <Select
                       value={it.suggestedQuadrant ?? "unclassified"}
-                      onValueChange={(v) =>
-                        setItem(i, { suggestedQuadrant: v as Quadrant })
-                      }
+                      onValueChange={(v) => setItem(i, { suggestedQuadrant: v as Quadrant })}
                     >
                       <SelectTrigger className="flex-1" aria-label="제안 사분면">
                         <SelectValue />
@@ -213,11 +206,7 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
             모두 적용 (확정)
           </Button>
         )}
-        <Button
-          variant="outline"
-          className="rounded-full text-[13px]"
-          onClick={onClose}
-        >
+        <Button variant="outline" className="rounded-full text-[13px]" onClick={onClose}>
           닫기
         </Button>
       </div>

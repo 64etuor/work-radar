@@ -196,9 +196,7 @@ export function CaptureBoard() {
             if (outcome.status === "created") {
               // 생성된 페이지 열기: notion:// 딥링크 우선, https는 폴백(데스크톱 앱 없을 때).
               const openUrl = outcome.pageDeepLink ?? outcome.pageUrl;
-              const openOpt = openUrl
-                ? { actionUrl: openUrl, actionLabel: "열기" }
-                : undefined;
+              const openOpt = openUrl ? { actionUrl: openUrl, actionLabel: "열기" } : undefined;
               // 자동 지정(projectId=null로 호출 → 백엔드가 단일 후보 해석)된 경우에만 라벨 표시
               // (INVARIANT #1: 사람이 볼 수 있게). picker로 직접 고른 경우(projectId!=null)는 제외.
               if (projectId === null && outcome.resolvedProjectId && !sig?.projectId) {
@@ -492,13 +490,10 @@ export function CaptureBoard() {
           }
           pushSuccess(
             result.message,
-            result.openUrl
-              ? { actionUrl: result.openUrl, actionLabel: "열기" }
-              : undefined,
+            result.openUrl ? { actionUrl: result.openUrl, actionLabel: "열기" } : undefined,
           );
         },
-        onError: (e) =>
-          pushError("notion", projectPickerErrorMessage(projectPicker.label, e)),
+        onError: (e) => pushError("notion", projectPickerErrorMessage(projectPicker.label, e)),
       },
     );
   };
@@ -508,12 +503,8 @@ export function CaptureBoard() {
       <CaptureBoardHeader />
 
       {loadError && (
-        <div
-          className="empty"
-          style={{ color: "var(--color-q1)", padding: "4px 22px" }}
-        >
-          데이터 로드 실패 —{" "}
-          {String(signalsQ.error ?? todayQ.error ?? routinesQ.error)}
+        <div className="empty" style={{ color: "var(--color-q1)", padding: "4px 22px" }}>
+          데이터 로드 실패 — {String(signalsQ.error ?? todayQ.error ?? routinesQ.error)}
         </div>
       )}
 
@@ -540,9 +531,7 @@ export function CaptureBoard() {
           onSetKind={(id, kind) => setKind.mutate({ id, kind })}
           onSetAreaTagKey={(id, tagKey) => setAreaTagKey.mutate({ id, tagKey })}
           lifeWheelTags={lifeWheelTags.data ?? []}
-          enrichAllDisabled={
-            !codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending
-          }
+          enrichAllDisabled={!codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending}
           enrichAllRunning={triggerEnrichAll.isPending || enrichAllGenerating}
           todayPanelRef={todayPanelRef}
           onCapture={handleCapture}
@@ -559,9 +548,7 @@ export function CaptureBoard() {
           onUnpromoteToday={handleUnpromote}
           onReorderToday={(ids) => reorderToday.mutate(ids)}
           onSetTodayKind={(id, kind) => setKind.mutate({ id, kind })}
-          onSetTodayAreaTagKey={(id, tagKey) =>
-            setAreaTagKey.mutate({ id, tagKey })
-          }
+          onSetTodayAreaTagKey={(id, tagKey) => setAreaTagKey.mutate({ id, tagKey })}
           onToggleRoutine={(routineId, done) =>
             toggleRoutine.mutate({ routineId, date: today, done })
           }
@@ -571,9 +558,7 @@ export function CaptureBoard() {
           onReorderRoutines={(ids) => reorderRoutines.mutate(ids)}
           onOpenRoutineTracking={() => goTo("routines")}
           onSetRoutineKind={(id, kind) => setRoutineKind.mutate({ id, kind })}
-          onSetRoutineAreaTagKey={(id, tagKey) =>
-            setRoutineAreaTagKey.mutate({ id, tagKey })
-          }
+          onSetRoutineAreaTagKey={(id, tagKey) => setRoutineAreaTagKey.mutate({ id, tagKey })}
         />
       </div>
 

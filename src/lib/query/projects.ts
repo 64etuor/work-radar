@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import {
   commands,
@@ -72,8 +68,7 @@ export function useCreateRepo() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateRepoInput) => unwrap(commands.createRepo(input)),
-    onSuccess: (repo) =>
-      qc.invalidateQueries({ queryKey: ["repos", repo.projectId] }),
+    onSuccess: (repo) => qc.invalidateQueries({ queryKey: ["repos", repo.projectId] }),
   });
 }
 

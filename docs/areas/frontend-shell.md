@@ -1,4 +1,3 @@
-
 # Frontend — App Shell (Views, Settings, Hooks, Queries)
 
 보드(`frontend-board.md`)·UI 프리미티브(`shadcn-migration.md`)·뉴스(`news-feature.md`)를
@@ -8,20 +7,20 @@
 
 `src/store.ts`의 `view` 값으로 전환:
 
-| view             | 컴포넌트                  | 책임                                                           |
-| ---------------- | ------------------------- | -------------------------------------------------------------- |
-| board            | `CaptureBoard.tsx`        | 캡처 보드 (frontend-board.md)                                  |
-| settings         | `SettingsView.tsx`        | 프로젝트·토큰·캘린더·뉴스·키맵·알림·Hermes                     |
-| pr               | `PrRadarView.tsx`         | PR Radar (DISPLAY-ONLY — escalation 제거)                      |
-| wt               | `WorktreeView.tsx`        | Worktree + Diff Viewer (Phase 5)                               |
-| jobs             | `JobsView.tsx`            | Agent Run / Acceptance 게이트 / kill switch                    |
-| today            | `TodayView.tsx`           | Today 운영 뷰 (Phase 11)                                       |
-| tl               | `TimelineView.tsx`        | 신호/승격/이벤트 시간축                                        |
-| wk               | `WeeklyView.tsx`          | 주간 집계                                                      |
-| retro            | `RetroView.tsx`           | 회고 (Phase 17)                                                |
-| skills           | `SkillsView.tsx`          | 스킬 레지스트리                                                |
-| hm               | `HermesView.tsx`          | Hermes/메신저 surface                                          |
-| routinetrack     | `RoutineTrackingView.tsx` | 루틴 트래킹 차트                                               |
+| view         | 컴포넌트                  | 책임                                        |
+| ------------ | ------------------------- | ------------------------------------------- |
+| board        | `CaptureBoard.tsx`        | 캡처 보드 (frontend-board.md)               |
+| settings     | `SettingsView.tsx`        | 프로젝트·토큰·캘린더·뉴스·키맵·알림·Hermes  |
+| pr           | `PrRadarView.tsx`         | PR Radar (DISPLAY-ONLY — escalation 제거)   |
+| wt           | `WorktreeView.tsx`        | Worktree + Diff Viewer (Phase 5)            |
+| jobs         | `JobsView.tsx`            | Agent Run / Acceptance 게이트 / kill switch |
+| today        | `TodayView.tsx`           | Today 운영 뷰 (Phase 11)                    |
+| tl           | `TimelineView.tsx`        | 신호/승격/이벤트 시간축                     |
+| wk           | `WeeklyView.tsx`          | 주간 집계                                   |
+| retro        | `RetroView.tsx`           | 회고 (Phase 17)                             |
+| skills       | `SkillsView.tsx`          | 스킬 레지스트리                             |
+| hm           | `HermesView.tsx`          | Hermes/메신저 surface                       |
+| routinetrack | `RoutineTrackingView.tsx` | 루틴 트래킹 차트                            |
 
 상주 표면(뷰와 독립):
 

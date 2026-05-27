@@ -1,4 +1,3 @@
-
 # Shell Tooling — Agent shell gotchas
 
 이 환경은 agent Bash가 rtk(Rust Token Killer) hook으로 감싸여 있고, `.cargo/bin`이

@@ -1,12 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Flame,
-  Inbox,
-  Trash2,
-  TriangleAlert,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, Inbox, Trash2, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { stepDate } from "@/lib/calendarRange";
@@ -112,8 +105,7 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
           const n = debt[c.key];
           // a11y: 아이콘만 있는 chip이라 텍스트 라벨 + 숫자를 aria-label로 합쳐 노출.
           // 숫자 미도착 시 "데이터 없음"으로 fallback.
-          const ariaLabel =
-            n === undefined ? `${c.label} 데이터 없음` : `${c.label} ${n}건`;
+          const ariaLabel = n === undefined ? `${c.label} 데이터 없음` : `${c.label} ${n}건`;
           return (
             <button
               key={c.key}

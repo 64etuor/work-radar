@@ -15,6 +15,7 @@
 ### Task 1: PendingWrite 모델 + 쿼리 함수
 
 **Files:**
+
 - Create: `src-tauri/src/models/pending_write.rs`
 - Modify: `src-tauri/src/models/mod.rs`
 
@@ -64,6 +65,7 @@ git commit -m "feat(model): PendingWrite struct (PR 2/7)"
 ### Task 2: 큐 store — UPSERT 머지 함수 (TDD)
 
 **Files:**
+
 - Create: `src-tauri/src/calendar/pending_store.rs`
 - Modify: `src-tauri/src/calendar/mod.rs` (`pub mod pending_store;`)
 
@@ -157,6 +159,7 @@ git commit -m "feat(sync): pending_store upsert with UNIQUE merge (PR 2/7)"
 ### Task 3: backoff 스케줄 (TDD)
 
 **Files:**
+
 - Modify: `src-tauri/src/calendar/pending_store.rs`
 
 - [ ] **Step 1: 실패 테스트 추가**
@@ -214,6 +217,7 @@ git commit -m "feat(sync): backoff schedule (PR 2/7)"
 ### Task 4: staged skip + due 행 fetch (TDD)
 
 **Files:**
+
 - Modify: `src-tauri/src/calendar/pending_store.rs`
 
 - [ ] **Step 1: 테스트**
@@ -263,6 +267,7 @@ git commit -m "feat(sync): fetch_due_writes skips staged (PR 2/7)"
 ### Task 5: 실패 처리 — record_failure (TDD)
 
 **Files:**
+
 - Modify: `src-tauri/src/calendar/pending_store.rs`
 
 - [ ] **Step 1: 테스트**
@@ -319,6 +324,7 @@ git commit -m "feat(sync): record_failure + delete_write (PR 2/7)"
 ### Task 6: sync 워커 모듈 구조
 
 **Files:**
+
 - Create: `src-tauri/src/calendar/sync.rs`
 - Modify: `src-tauri/src/calendar/mod.rs`
 
@@ -471,6 +477,7 @@ engine.spawn();
 export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo build
 ```
+
 Expected: 컴파일 성공.
 
 - [ ] **Step 4: 커밋**
@@ -485,6 +492,7 @@ git commit -m "feat(sync): SyncEngine worker scaffold (PR 2/7)"
 ### Task 7: IPC — stage_calendar_write 커맨드
 
 **Files:**
+
 - Create: `src-tauri/src/commands/calendar_sync.rs`
 - Modify: `src-tauri/src/lib.rs` (invoke_handler 등록)
 
@@ -624,6 +632,7 @@ async fn fetch_linked_event(pool: &SqlitePool, target_kind: &str, target_id: &st
 ```bash
 cd src-tauri && cargo build
 ```
+
 Expected: 성공.
 
 - [ ] **Step 4: 커밋**
@@ -638,6 +647,7 @@ git commit -m "feat(ipc): stage_calendar_write command (PR 2/7)"
 ### Task 8: 나머지 3개 IPC 커맨드
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/calendar_sync.rs`
 
 - [ ] **Step 1: 추가 작성**
@@ -687,6 +697,7 @@ pub async fn list_pending_writes(pool: State<'_, SqlitePool>) -> Result<Vec<Pend
 export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 ```
+
 Expected: 통과.
 
 - [ ] **Step 3: 커밋**
@@ -714,6 +725,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 cd .. && pnpm typecheck && pnpm lint
 ```
+
 Expected: 모두 통과.
 
 - [ ] **Step 3: push**

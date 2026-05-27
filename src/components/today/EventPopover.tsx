@@ -1,9 +1,5 @@
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { openExternal } from "@/lib/query";
 import type { LayoutBox } from "@/lib/timelineLayout";
 import { useUIStore } from "@/store";
@@ -64,9 +60,7 @@ export function EventPopover({
       return;
     }
     if (isEvent && block.linkedEventId) {
-      void openExternal(
-        `https://calendar.google.com/calendar/event?eid=${block.linkedEventId}`,
-      );
+      void openExternal(`https://calendar.google.com/calendar/event?eid=${block.linkedEventId}`);
       onClose();
       return;
     }
@@ -90,7 +84,7 @@ export function EventPopover({
       <PopoverContent className="w-[280px]" align="start">
         <div className="space-y-2">
           <div className="text-sm font-semibold">{block.title}</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-muted-foreground text-xs">
             {hhmm(block.startISO)}–{hhmm(block.endISO)} ·{" "}
             {block.calendarLabel || block.calendarId || block.kind}
           </div>

@@ -80,9 +80,7 @@ export function TodayView() {
   const rail = useMemo(() => todayRail.data ?? [], [todayRail.data]);
   const unscheduledTodays = rail.filter((s) => !s.scheduledAt);
   const routineList = useMemo(() => routines.data ?? [], [routines.data]);
-  const unscheduledRoutines = routineList.filter(
-    (r) => !r.timeOverride && !r.timeOfDay,
-  );
+  const unscheduledRoutines = routineList.filter((r) => !r.timeOverride && !r.timeOfDay);
 
   const blocks = useMemo(
     () => buildTodayBlocks({ signals: rail, events: allEvents, routines: routineList, date }),
@@ -95,13 +93,10 @@ export function TodayView() {
     anchor: { x: number; y: number };
   } | null>(null);
 
-  const handleBlockClick = useCallback(
-    (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setPopover({ box, anchor: { x: rect.right + 8, y: rect.top } });
-    },
-    [],
-  );
+  const handleBlockClick = useCallback((box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPopover({ box, anchor: { x: rect.right + 8, y: rect.top } });
+  }, []);
   const handlePopoverClose = useCallback(() => setPopover(null), []);
   const handleOpenFullModal = useCallback(() => {
     setPopover(null);
@@ -168,7 +163,7 @@ export function TodayView() {
   const activeDragStartRef = useRef<DragData | null>(null);
   const handleDragStart = useCallback(
     (ev: { active: { id: string | number; data: { current?: unknown } } }) => {
-      const data = ev.active.data.current as DragData | undefined ?? null;
+      const data = (ev.active.data.current as DragData | undefined) ?? null;
       activeDragStartRef.current = data;
       setActiveDrag(data);
       setActiveDelta({ x: 0, y: 0 });
@@ -288,17 +283,16 @@ export function TodayView() {
  */
 function DragGhost({ data }: { data: DragData }) {
   if (data.from === "canvas") return null;
-  const title =
-    data.from === "tray" || data.from === "routine"
-      ? data.title
-      : "block";
+  const title = data.from === "tray" || data.from === "routine" ? data.title : "block";
   const isResize = data.from === "canvas-resize";
   if (isResize) {
     return <div className="today-drag-ghost today-drag-ghost-resize" />;
   }
   return (
     <div className="today-drag-ghost">
-      <span className="today-drag-ghost-grip" aria-hidden>⠿</span>
+      <span className="today-drag-ghost-grip" aria-hidden>
+        ⠿
+      </span>
       <span className="today-drag-ghost-title">{title}</span>
     </div>
   );

@@ -36,6 +36,7 @@
 ## Task 1: store 모듈 생성 + jobs.rs 영속 이전
 
 **Files:**
+
 - Create: `src-tauri/src/commands/agent_run_store.rs`
 - Modify: `src-tauri/src/commands/mod.rs`
 - Modify: `src-tauri/src/jobs.rs`
@@ -55,6 +56,7 @@ pub mod agent_run_store;
 `agent_run_store.rs`를 생성하고, `jobs.rs`에서 아래 항목을 **본문 그대로** 잘라 옮긴다(verbatim):
 
 이전 대상(jobs.rs → agent_run_store.rs):
+
 - `struct AgentRunRecord` (sqlx::FromRow)
 - `fn detail_from_result(result: &Option<String>) -> Option<String>` → store-private (`fn`, 비공개 유지)
 - `impl From<AgentRunRecord> for AgentRunView`
@@ -124,12 +126,14 @@ rtk proxy git commit -m "refactor(store): jobs.rs agent_runs 영속을 agent_run
 ## Task 2: agents/mod.rs 영속 이전 + dedup
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/agent_run_store.rs`
 - Modify: `src-tauri/src/commands/agents/mod.rs`
 
 - [ ] **Step 1: agents/mod.rs 영속 fn 이전**
 
 `agents/mod.rs`에서 아래를 `agent_run_store.rs`로 verbatim 이전(가시성 `pub(crate)`):
+
 - `new_run_id`
 - `run_status_trigger` (D 결과 타입 `(AgentStatus, Option<String>)` 보존)
 - `run_proposal_raw`
@@ -211,6 +215,7 @@ rtk proxy git commit -m "refactor(store): agents 영속(new_run_id/status/propos
 ## Task 3: selfcheck.rs 게이트 write 위임
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/agent_run_store.rs`
 - Modify: `src-tauri/src/commands/agents/selfcheck.rs`
 
@@ -288,6 +293,7 @@ rtk proxy git commit -m "refactor(store): selfcheck accept/reject 게이트 writ
 ## Task 4: store 직접 단위테스트 (genuine new — TDD)
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/agent_run_store.rs` (`#[cfg(test)] mod tests`)
 
 > signal_store가 직접 store 테스트 +5를 더한 선례. 게이트 fn(record_acceptance/reject_run)과 상태 전이를 store 레벨에서 직접 검증한다.
@@ -410,6 +416,7 @@ rtk proxy git commit -m "test(store): agent_run_store 게이트 fn 직접 단위
 ## Task 5: 최종 검증 게이트 + critic + 머지
 
 **Files:**
+
 - Modify: `docs/decisions.md`
 
 - [ ] **Step 1: 전체 검증 번들**
@@ -440,7 +447,7 @@ Expected: **테스트 픽스처(`#[cfg(test)]`) 외에 0건**. 비-테스트 잔
 `docs/decisions.md` "품질 후속" 섹션 D 항목 다음에 추가:
 
 ```markdown
-- **(2026-05-23, 백로그 F-2) `agent_run_store` 추출**(`commands/agent_run_store.rs` 신설): jobs.rs(영속)·agents/*(게이트 write)에 흩어진 agent_runs+acceptances SQL을 단일 소유 store로 verbatim 이전(signal_store 패턴). jobs.rs는 JobManager 런타임만 잔류. dedup 2건(detail_from_result 중복, execute_accept의 acceptances INSERT→record_acceptance 재사용). 게이트 SQL이 store named fn(record_acceptance/reject_run/finalize)에 모여 INVARIANT #2 단일 감사 지점. 행위 보존: bindings.ts 무변경 + clippy 0 + test 244(게이트 직접테스트 +3) + typecheck/test/build green. critic ACCEPT. 트레이드오프: 게이트 SQL이 호출부에서 한 단계 멀어짐(단일 소유와 교환). pr_self_checks(pr_radar aggregate)·signals(signal_store) write는 미이전.
+- **(2026-05-23, 백로그 F-2) `agent_run_store` 추출**(`commands/agent_run_store.rs` 신설): jobs.rs(영속)·agents/\*(게이트 write)에 흩어진 agent_runs+acceptances SQL을 단일 소유 store로 verbatim 이전(signal_store 패턴). jobs.rs는 JobManager 런타임만 잔류. dedup 2건(detail_from_result 중복, execute_accept의 acceptances INSERT→record_acceptance 재사용). 게이트 SQL이 store named fn(record_acceptance/reject_run/finalize)에 모여 INVARIANT #2 단일 감사 지점. 행위 보존: bindings.ts 무변경 + clippy 0 + test 244(게이트 직접테스트 +3) + typecheck/test/build green. critic ACCEPT. 트레이드오프: 게이트 SQL이 호출부에서 한 단계 멀어짐(단일 소유와 교환). pr_self_checks(pr_radar aggregate)·signals(signal_store) write는 미이전.
 ```
 
 ```bash

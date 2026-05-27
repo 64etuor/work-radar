@@ -50,16 +50,14 @@ export function WorktreeSideList({
         <Button
           variant="ghost"
           size="sm"
-          className="size-6 shrink-0 p-0 text-wr-muted"
+          className="text-wr-muted size-6 shrink-0 p-0"
           onClick={() => onCollapsedChange(true)}
           title="패널 접기"
         >
           <PanelLeftClose className="size-3.5" />
         </Button>
       </div>
-      {Boolean(error) && (
-        <div className="wt-err">{String((error as Error).message ?? error)}</div>
-      )}
+      {Boolean(error) && <div className="wt-err">{String((error as Error).message ?? error)}</div>}
       {!isLoading && list.length === 0 && !error && (
         <div className="wt-empty">
           표시할 worktree가 없습니다 — 설정에서 local 경로가 있는 레포를 추가하세요.
@@ -72,7 +70,7 @@ export function WorktreeSideList({
             <button
               key={w.id}
               type="button"
-              className={`wt-item${w.path === selectedPath ? " wt-item-on" : ""}`}
+              className={`wt-item${w.path === selectedPath ? "wt-item-on" : ""}`}
               onClick={() => onSelect(w)}
             >
               <div className="wt-item-top">
@@ -127,9 +125,7 @@ function StatusBadges({ w }: { w: Worktree }) {
           local {localChangeCount(w)}
         </span>
       )}
-      {w.stagedCount > 0 && (
-        <span className="wt-badge wt-staged">staged {w.stagedCount}</span>
-      )}
+      {w.stagedCount > 0 && <span className="wt-badge wt-staged">staged {w.stagedCount}</span>}
       {w.unstagedCount > 0 && (
         <span className="wt-badge wt-unstaged">unstaged {w.unstagedCount}</span>
       )}
@@ -139,7 +135,10 @@ function StatusBadges({ w }: { w: Worktree }) {
         </span>
       )}
       {baseBehind > 0 && (
-        <span className="wt-badge wt-behind" title={`${w.baseBranch}보다 커밋 ${baseBehind}개 뒤처짐`}>
+        <span
+          className="wt-badge wt-behind"
+          title={`${w.baseBranch}보다 커밋 ${baseBehind}개 뒤처짐`}
+        >
           -{baseBehind}
         </span>
       )}

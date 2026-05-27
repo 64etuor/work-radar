@@ -15,6 +15,7 @@
 ### Task 1: calendarSync IPC 래퍼
 
 **Files:**
+
 - Create: `src/lib/calendarSync.ts`
 
 - [ ] **Step 1: 작성**
@@ -24,13 +25,35 @@ import { commands } from "@/bindings";
 import { v4 as uuid } from "uuid";
 
 export type StageInput =
-  | { kind: "schedule"; targetSignalId: string; at: string; durationMin: number; calendarId: string; title: string }
+  | {
+      kind: "schedule";
+      targetSignalId: string;
+      at: string;
+      durationMin: number;
+      calendarId: string;
+      title: string;
+    }
   | { kind: "reschedule"; targetSignalId: string; at: string; durationMin: number }
   | { kind: "resize"; targetSignalId: string; durationMin: number }
   | { kind: "unschedule"; targetSignalId: string }
-  | { kind: "moveCalendar"; targetSignalId: string; calendarId: string; at: string; durationMin: number; title: string }
+  | {
+      kind: "moveCalendar";
+      targetSignalId: string;
+      calendarId: string;
+      at: string;
+      durationMin: number;
+      title: string;
+    }
   | { kind: "createBlank"; title: string; at: string; durationMin: number; calendarId: string }
-  | { kind: "routineSchedule"; routineId: string; date: string; at: string; durationMin: number; calendarId: string; title: string }
+  | {
+      kind: "routineSchedule";
+      routineId: string;
+      date: string;
+      at: string;
+      durationMin: number;
+      calendarId: string;
+      title: string;
+    }
   | { kind: "routineUnschedule"; routineId: string; date: string };
 
 export async function stage(input: StageInput): Promise<void> {
@@ -44,37 +67,77 @@ function toRequest(i: StageInput, key: string) {
   // bindings에서 생성된 enum 타입에 맞춰 매핑
   switch (i.kind) {
     case "schedule":
-      return { target: { kind: "signal", id: i.targetSignalId },
-               op: { op: "schedule", at: i.at, duration_min: i.durationMin, calendar_id: i.calendarId, title: i.title },
-               idempotency_key: key };
+      return {
+        target: { kind: "signal", id: i.targetSignalId },
+        op: {
+          op: "schedule",
+          at: i.at,
+          duration_min: i.durationMin,
+          calendar_id: i.calendarId,
+          title: i.title,
+        },
+        idempotency_key: key,
+      };
     case "reschedule":
-      return { target: { kind: "signal", id: i.targetSignalId },
-               op: { op: "reschedule", at: i.at, duration_min: i.durationMin },
-               idempotency_key: key };
+      return {
+        target: { kind: "signal", id: i.targetSignalId },
+        op: { op: "reschedule", at: i.at, duration_min: i.durationMin },
+        idempotency_key: key,
+      };
     case "resize":
-      return { target: { kind: "signal", id: i.targetSignalId },
-               op: { op: "resize", duration_min: i.durationMin },
-               idempotency_key: key };
+      return {
+        target: { kind: "signal", id: i.targetSignalId },
+        op: { op: "resize", duration_min: i.durationMin },
+        idempotency_key: key,
+      };
     case "unschedule":
-      return { target: { kind: "signal", id: i.targetSignalId },
-               op: { op: "unschedule" },
-               idempotency_key: key };
+      return {
+        target: { kind: "signal", id: i.targetSignalId },
+        op: { op: "unschedule" },
+        idempotency_key: key,
+      };
     case "moveCalendar":
-      return { target: { kind: "signal", id: i.targetSignalId },
-               op: { op: "move_calendar", calendar_id: i.calendarId, at: i.at, duration_min: i.durationMin, title: i.title },
-               idempotency_key: key };
+      return {
+        target: { kind: "signal", id: i.targetSignalId },
+        op: {
+          op: "move_calendar",
+          calendar_id: i.calendarId,
+          at: i.at,
+          duration_min: i.durationMin,
+          title: i.title,
+        },
+        idempotency_key: key,
+      };
     case "createBlank":
-      return { target: { kind: "signal", id: "" /* unused for blank → spec note */ },
-               op: { op: "create_blank", title: i.title, at: i.at, duration_min: i.durationMin, calendar_id: i.calendarId },
-               idempotency_key: key };
+      return {
+        target: { kind: "signal", id: "" /* unused for blank → spec note */ },
+        op: {
+          op: "create_blank",
+          title: i.title,
+          at: i.at,
+          duration_min: i.durationMin,
+          calendar_id: i.calendarId,
+        },
+        idempotency_key: key,
+      };
     case "routineSchedule":
-      return { target: { kind: "routine_check", routine_id: i.routineId, date: i.date },
-               op: { op: "schedule", at: i.at, duration_min: i.durationMin, calendar_id: i.calendarId, title: i.title },
-               idempotency_key: key };
+      return {
+        target: { kind: "routine_check", routine_id: i.routineId, date: i.date },
+        op: {
+          op: "schedule",
+          at: i.at,
+          duration_min: i.durationMin,
+          calendar_id: i.calendarId,
+          title: i.title,
+        },
+        idempotency_key: key,
+      };
     case "routineUnschedule":
-      return { target: { kind: "routine_check", routine_id: i.routineId, date: i.date },
-               op: { op: "unschedule" },
-               idempotency_key: key };
+      return {
+        target: { kind: "routine_check", routine_id: i.routineId, date: i.date },
+        op: { op: "unschedule" },
+        idempotency_key: key,
+      };
   }
 }
 ```
@@ -95,6 +158,7 @@ git commit -m "feat(today): calendarSync IPC wrapper (PR 5/7)"
 ### Task 2: optimistic 패치 헬퍼 (TDD)
 
 **Files:**
+
 - Create: `src/lib/optimisticSchedule.ts`
 - Create: `src/lib/optimisticSchedule.test.ts`
 
@@ -168,12 +232,14 @@ git commit -m "feat(today): optimistic schedule patch + rollback (PR 5/7)"
 ### Task 3: DnD context + 7가지 인터랙션 매핑
 
 **Files:**
+
 - Modify: `src/components/TodayView.tsx`
 - Create: `src/components/today/useTimelineDnd.ts`
 
 - [ ] **Step 1: useTimelineDnd hook**
 
 `useTimelineDnd.ts`는 큰 hook이 됨. 핵심 책임:
+
 - `DndContext` props 제공 (`sensors`, `onDragEnd`).
 - 드래그 종류 식별 (data attribute `data-from`, `data-to`, `data-target`).
 - onDragEnd에서 픽셀 → 시간 변환 (drop Y / HOUR_PX), 15분 스냅.
@@ -198,7 +264,7 @@ function pixelToIso(date: string, yPx: number, scrollTop: number): string {
   const totalMin = snap(((yPx + scrollTop) / HOUR_PX) * 60);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  const d = new Date(`${date}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`);
+  const d = new Date(`${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`);
   return d.toISOString();
 }
 
@@ -210,74 +276,129 @@ export function useTimelineDnd(opts: {
   const qc = useQueryClient();
   const today = localToday();
 
-  const onDragEnd = useCallback(async (ev: DragEndEvent) => {
-    const a = ev.active;
-    const o = ev.over;
-    if (!o) return;
-    const from = String(a.data.current?.from ?? "");
-    const to = String(o.data.current?.to ?? "");
-    const signalId = String(a.data.current?.signalId ?? "");
-    const routineId = String(a.data.current?.routineId ?? "");
-    const date = opts.date;
+  const onDragEnd = useCallback(
+    async (ev: DragEndEvent) => {
+      const a = ev.active;
+      const o = ev.over;
+      if (!o) return;
+      const from = String(a.data.current?.from ?? "");
+      const to = String(o.data.current?.to ?? "");
+      const signalId = String(a.data.current?.signalId ?? "");
+      const routineId = String(a.data.current?.routineId ?? "");
+      const date = opts.date;
 
-    // 1: tray → canvas
-    if (from === "tray" && to === "canvas" && signalId) {
-      const cal = (await opts.defaultCalendarFor(signalId)) ?? (await opts.promptCalendarPicker(signalId));
-      if (!cal) return;
-      const at = pixelToIso(date, ev.delta.y + (a.data.current?.startY ?? 0), 0); // 단순화
-      const durationMin = 60;
-      const title = String(a.data.current?.title ?? "");
-      qc.setQueryData(["signals"], (old: any) => old ? applySchedulePatch(old, signalId, { at, durationMin, calendarId: cal }) : old);
-      try { await stage({ kind: "schedule", targetSignalId: signalId, at, durationMin, calendarId: cal, title }); }
-      catch { qc.invalidateQueries({ queryKey: ["signals"] }); }
-      return;
-    }
+      // 1: tray → canvas
+      if (from === "tray" && to === "canvas" && signalId) {
+        const cal =
+          (await opts.defaultCalendarFor(signalId)) ?? (await opts.promptCalendarPicker(signalId));
+        if (!cal) return;
+        const at = pixelToIso(date, ev.delta.y + (a.data.current?.startY ?? 0), 0); // 단순화
+        const durationMin = 60;
+        const title = String(a.data.current?.title ?? "");
+        qc.setQueryData(["signals"], (old: any) =>
+          old ? applySchedulePatch(old, signalId, { at, durationMin, calendarId: cal }) : old,
+        );
+        try {
+          await stage({
+            kind: "schedule",
+            targetSignalId: signalId,
+            at,
+            durationMin,
+            calendarId: cal,
+            title,
+          });
+        } catch {
+          qc.invalidateQueries({ queryKey: ["signals"] });
+        }
+        return;
+      }
 
-    // 2: canvas reschedule
-    if (from === "canvas" && to === "canvas" && signalId) {
-      const currentAt = String(a.data.current?.startISO ?? "");
-      const durationMin = Number(a.data.current?.durationMin ?? 60);
-      const at = pixelToIso(date, ev.delta.y + (a.data.current?.topPx ?? 0), 0);
-      qc.setQueryData(["signals"], (old: any) => old ? applySchedulePatch(old, signalId, { at }) : old);
-      try { await stage({ kind: "reschedule", targetSignalId: signalId, at, durationMin }); }
-      catch { qc.invalidateQueries({ queryKey: ["signals"] }); }
-      return;
-    }
+      // 2: canvas reschedule
+      if (from === "canvas" && to === "canvas" && signalId) {
+        const currentAt = String(a.data.current?.startISO ?? "");
+        const durationMin = Number(a.data.current?.durationMin ?? 60);
+        const at = pixelToIso(date, ev.delta.y + (a.data.current?.topPx ?? 0), 0);
+        qc.setQueryData(["signals"], (old: any) =>
+          old ? applySchedulePatch(old, signalId, { at }) : old,
+        );
+        try {
+          await stage({ kind: "reschedule", targetSignalId: signalId, at, durationMin });
+        } catch {
+          qc.invalidateQueries({ queryKey: ["signals"] });
+        }
+        return;
+      }
 
-    // 3: resize handled separately (special droppable on bottom edge — Task 4)
-    // 4: canvas → tray
-    if (from === "canvas" && to === "tray" && signalId) {
-      qc.setQueryData(["signals"], (old: any) => old ? applySchedulePatch(old, signalId, { at: null as any, durationMin: null as any, clearLink: true }) : old);
-      try { await stage({ kind: "unschedule", targetSignalId: signalId }); }
-      catch { qc.invalidateQueries({ queryKey: ["signals"] }); }
-      return;
-    }
+      // 3: resize handled separately (special droppable on bottom edge — Task 4)
+      // 4: canvas → tray
+      if (from === "canvas" && to === "tray" && signalId) {
+        qc.setQueryData(["signals"], (old: any) =>
+          old
+            ? applySchedulePatch(old, signalId, {
+                at: null as any,
+                durationMin: null as any,
+                clearLink: true,
+              })
+            : old,
+        );
+        try {
+          await stage({ kind: "unschedule", targetSignalId: signalId });
+        } catch {
+          qc.invalidateQueries({ queryKey: ["signals"] });
+        }
+        return;
+      }
 
-    // 5: cross-cal move → staged
-    if (from === "canvas" && to.startsWith("canvas:cal:") && signalId) {
-      const newCal = to.slice("canvas:cal:".length);
-      const at = pixelToIso(date, ev.delta.y + (a.data.current?.topPx ?? 0), 0);
-      const durationMin = Number(a.data.current?.durationMin ?? 60);
-      const title = String(a.data.current?.title ?? "");
-      // staged는 optimistic 안 함 — 명시 적용 게이트.
-      try { await stage({ kind: "moveCalendar", targetSignalId: signalId, calendarId: newCal, at, durationMin, title }); }
-      catch { /* UI 토스트 */ }
-      qc.invalidateQueries({ queryKey: ["pendingWrites"] });
-      return;
-    }
+      // 5: cross-cal move → staged
+      if (from === "canvas" && to.startsWith("canvas:cal:") && signalId) {
+        const newCal = to.slice("canvas:cal:".length);
+        const at = pixelToIso(date, ev.delta.y + (a.data.current?.topPx ?? 0), 0);
+        const durationMin = Number(a.data.current?.durationMin ?? 60);
+        const title = String(a.data.current?.title ?? "");
+        // staged는 optimistic 안 함 — 명시 적용 게이트.
+        try {
+          await stage({
+            kind: "moveCalendar",
+            targetSignalId: signalId,
+            calendarId: newCal,
+            at,
+            durationMin,
+            title,
+          });
+        } catch {
+          /* UI 토스트 */
+        }
+        qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+        return;
+      }
 
-    // 7: routine drag
-    if (from === "routine" && to === "canvas" && routineId) {
-      const cal = (await opts.defaultCalendarFor(routineId)) ?? (await opts.promptCalendarPicker(routineId));
-      if (!cal) return;
-      const at = pixelToIso(date, ev.delta.y + (a.data.current?.startY ?? 0), 0);
-      const title = String(a.data.current?.title ?? "");
-      try { await stage({ kind: "routineSchedule", routineId, date: today, at, durationMin: 30, calendarId: cal, title }); }
-      catch { qc.invalidateQueries({ queryKey: ["todayRoutines"] }); }
-      qc.invalidateQueries({ queryKey: ["todayRoutines"] });
-      return;
-    }
-  }, [opts, qc, today]);
+      // 7: routine drag
+      if (from === "routine" && to === "canvas" && routineId) {
+        const cal =
+          (await opts.defaultCalendarFor(routineId)) ??
+          (await opts.promptCalendarPicker(routineId));
+        if (!cal) return;
+        const at = pixelToIso(date, ev.delta.y + (a.data.current?.startY ?? 0), 0);
+        const title = String(a.data.current?.title ?? "");
+        try {
+          await stage({
+            kind: "routineSchedule",
+            routineId,
+            date: today,
+            at,
+            durationMin: 30,
+            calendarId: cal,
+            title,
+          });
+        } catch {
+          qc.invalidateQueries({ queryKey: ["todayRoutines"] });
+        }
+        qc.invalidateQueries({ queryKey: ["todayRoutines"] });
+        return;
+      }
+    },
+    [opts, qc, today],
+  );
 
   return { onDragEnd };
 }
@@ -322,6 +443,7 @@ git commit -m "feat(today): DnD wiring with optimistic UI (PR 5/7)"
 ### Task 4: 캘린더 픽 popover (project default 미설정 시)
 
 **Files:**
+
 - Create: `src/components/today/CalendarPickerPopover.tsx`
 
 - [ ] **Step 1: 작성**
@@ -348,28 +470,43 @@ export function CalendarPickerPopover({ signalProjectId, onPick, onClose }: Prop
 
   return (
     <Popover open onOpenChange={(o) => !o && onClose()}>
-      <PopoverTrigger asChild><span style={{ position: "fixed", left: 0, top: 0 }} /></PopoverTrigger>
+      <PopoverTrigger asChild>
+        <span style={{ position: "fixed", left: 0, top: 0 }} />
+      </PopoverTrigger>
       <PopoverContent className="w-[280px] space-y-2">
         <div className="text-sm font-semibold">캘린더 선택</div>
         {candidates.length === 0 && (
-          <div className="text-xs text-wr-subtle">이 프로젝트에 연결된 캘린더가 없습니다.</div>
+          <div className="text-wr-subtle text-xs">이 프로젝트에 연결된 캘린더가 없습니다.</div>
         )}
         {candidates.map((c) => (
-          <button key={c} className={`w-full text-left text-xs px-2 py-1 rounded ${picked === c ? "bg-wr-accent-soft" : "hover:bg-wr-bg-soft"}`}
-            onClick={() => setPicked(c)}>{c}</button>
+          <button
+            key={c}
+            className={`w-full rounded px-2 py-1 text-left text-xs ${picked === c ? "bg-wr-accent-soft" : "hover:bg-wr-bg-soft"}`}
+            onClick={() => setPicked(c)}
+          >
+            {c}
+          </button>
         ))}
         <label className="flex items-center gap-1 text-xs">
           <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} />
           기본 캘린더로 저장
         </label>
-        <div className="flex gap-2 justify-end">
-          <Button variant="ghost" size="sm" onClick={onClose}>취소</Button>
-          <Button size="sm" disabled={!picked}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            취소
+          </Button>
+          <Button
+            size="sm"
+            disabled={!picked}
             onClick={() => {
               if (!picked) return;
-              if (save && project) update.mutate({ id: project.id, defaultWriteCalendarId: picked });
+              if (save && project)
+                update.mutate({ id: project.id, defaultWriteCalendarId: picked });
               onPick(picked, save);
-            }}>적용</Button>
+            }}
+          >
+            적용
+          </Button>
         </div>
       </PopoverContent>
     </Popover>
@@ -393,6 +530,7 @@ git commit -m "feat(today): calendar picker popover + auto-save default (PR 5/7)
 ### Task 5: Staged "변경 N건 적용" 배지
 
 **Files:**
+
 - Create: `src/components/today/StagedBadge.tsx`
 - Create: `src/lib/query/calendarSync.ts`
 
@@ -452,8 +590,13 @@ export function StagedBadge() {
   return (
     <div className="today-staged">
       <span>변경 {staged.length}건 대기</span>
-      <Button size="sm" disabled={commit.isPending}
-        onClick={() => commit.mutate(staged.map((s) => s.id))}>적용</Button>
+      <Button
+        size="sm"
+        disabled={commit.isPending}
+        onClick={() => commit.mutate(staged.map((s) => s.id))}
+      >
+        적용
+      </Button>
     </div>
   );
 }
@@ -462,7 +605,16 @@ export function StagedBadge() {
 - [ ] **Step 3: TodayHeader에 StagedBadge 마운트 + CSS**
 
 ```css
-.today-staged { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; background: #fff3cd; border: 1px solid #f0d878; border-radius: 9999px; font-size: 11px; }
+.today-staged {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: #fff3cd;
+  border: 1px solid #f0d878;
+  border-radius: 9999px;
+  font-size: 11px;
+}
 ```
 
 - [ ] **Step 4: 스모크 + 커밋**
@@ -479,6 +631,7 @@ git commit -m "feat(today): staged badge with apply button (PR 5/7)"
 ### Task 6: 실패 이벤트 수신 → 토스트 + 롤백
 
 **Files:**
+
 - Create: `src/lib/calendarSyncEvents.ts`
 - Modify: `src/components/TodayView.tsx`
 
@@ -494,11 +647,20 @@ export function useCalendarSyncEvents() {
   const qc = useQueryClient();
   useEffect(() => {
     const unsub = events.calendarSyncFailed.listen((ev) => {
-      toast({ kind: "error", message: `동기화 실패 — ${ev.payload.error}`, action: { label: "다시 시도", onClick: () => qc.invalidateQueries({ queryKey: ["pendingWrites"] }) } });
+      toast({
+        kind: "error",
+        message: `동기화 실패 — ${ev.payload.error}`,
+        action: {
+          label: "다시 시도",
+          onClick: () => qc.invalidateQueries({ queryKey: ["pendingWrites"] }),
+        },
+      });
       qc.invalidateQueries({ queryKey: ["signals"] });
       qc.invalidateQueries({ queryKey: ["calendarEvents"] });
     });
-    return () => { void unsub.then((u) => u()); };
+    return () => {
+      void unsub.then((u) => u());
+    };
   }, [qc]);
 }
 ```
@@ -535,7 +697,9 @@ cd .. && pnpm typecheck && pnpm lint && pnpm vitest run
 ```bash
 pnpm tauri dev
 ```
+
 체크리스트 (직접 클릭/드래그):
+
 - 트레이 → 캔버스 빈영역 드래그 → 800ms 후 Google PATCH/POST 발사 (콘솔 trace 확인)
 - 캔버스 블록 → 같은 캔버스 다른 시간 → patch
 - 캔버스 블록 → 트레이 → delete

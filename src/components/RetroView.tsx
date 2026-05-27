@@ -1,12 +1,6 @@
 import { useMemo, useState } from "react";
 import "./RetroView.css";
-import {
-  Archive,
-  CheckCircle2,
-  RotateCcw,
-  Sparkles,
-  ThumbsDown,
-} from "lucide-react";
+import { Archive, CheckCircle2, RotateCcw, Sparkles, ThumbsDown } from "lucide-react";
 
 import type { WorkSignal } from "@/bindings";
 import { KindAreaChips } from "@/components/board/LifeWheelPalette";
@@ -137,7 +131,9 @@ function RetroTab() {
       </div>
 
       {completed.isError && (
-        <div className="rt-hint">집계를 불러오지 못했습니다: {(completed.error as Error).message}</div>
+        <div className="rt-hint">
+          집계를 불러오지 못했습니다: {(completed.error as Error).message}
+        </div>
       )}
 
       {/* 랭킹 집계 */}
@@ -159,7 +155,7 @@ function RetroTab() {
       {/* 완료 todo 타임라인 */}
       <section className="rt-sec">
         <div className="rt-sec-head">
-          <CheckCircle2 className="size-4 text-wr-subtle" />
+          <CheckCircle2 className="text-wr-subtle size-4" />
           <span className="rt-sec-name">완료한 일</span>
           <span className="rt-sec-count">{items.length}</span>
         </div>
@@ -179,7 +175,7 @@ function RetroTab() {
                     <div className="rt-item-tags">
                       <button
                         type="button"
-                        className={`rt-tag-btn impact${s.impactHigh ? " on" : ""}`}
+                        className={`rt-tag-btn impact${s.impactHigh ? "on" : ""}`}
                         title="고임팩트 ⭐"
                         disabled={setImpact.isPending}
                         onClick={() => setImpact.mutate({ id: s.id, value: !s.impactHigh })}
@@ -188,7 +184,7 @@ function RetroTab() {
                       </button>
                       <button
                         type="button"
-                        className={`rt-tag-btn regret${s.regret ? " on" : ""}`}
+                        className={`rt-tag-btn regret${s.regret ? "on" : ""}`}
                         title="하지말걸 ⚠️"
                         disabled={setRegret.isPending}
                         onClick={() => setRegret.mutate({ id: s.id, value: !s.regret })}

@@ -15,6 +15,7 @@
 ### Task 1: TimelineView 제거 + 라우트 정리
 
 **Files:**
+
 - Delete: `src/components/TimelineView.tsx`, `src/components/TimelineView.css`
 - Modify: `src/lib/nav.ts`, `src/App.tsx`
 
@@ -37,6 +38,7 @@ Run: `grep -n "TimelineView\|timeline" src/App.tsx`. import 제거, route case �
 ```bash
 pnpm typecheck
 ```
+
 Expected: 통과 (남은 참조 없음).
 
 - [ ] **Step 5: 커밋**
@@ -51,6 +53,7 @@ git commit -m "refactor(today): remove TimelineView, absorbed into Today (PR 3/7
 ### Task 2: `@dnd-kit` 의존성 추가
 
 **Files:**
+
 - Modify: `package.json`, `pnpm-lock.yaml`
 
 - [ ] **Step 1: 설치**
@@ -58,6 +61,7 @@ git commit -m "refactor(today): remove TimelineView, absorbed into Today (PR 3/7
 ```bash
 pnpm add @dnd-kit/core @dnd-kit/utilities
 ```
+
 Expected: 두 패키지 추가됨.
 
 - [ ] **Step 2: 타입체크 + lint**
@@ -65,6 +69,7 @@ Expected: 두 패키지 추가됨.
 ```bash
 pnpm typecheck && pnpm lint
 ```
+
 Expected: 통과.
 
 - [ ] **Step 3: 커밋**
@@ -79,6 +84,7 @@ git commit -m "chore(deps): add @dnd-kit/core for timeline drag (PR 3/7)"
 ### Task 3: TodayHeader — debt 흡수
 
 **Files:**
+
 - Create: `src/components/today/TodayHeader.tsx`
 
 - [ ] **Step 1: 작성**
@@ -110,10 +116,34 @@ const CHIPS: Array<{
   tone: "urgent" | "warn" | "muted";
   go: "board" | "radar";
 }> = [
-  { key: "unclassified", label: "미분류", icon: <Inbox className="size-3.5" />, tone: "warn", go: "board" },
-  { key: "q1Overdue", label: "Q1 overdue", icon: <Flame className="size-3.5" />, tone: "urgent", go: "board" },
-  { key: "staleBacklog", label: "stale", icon: <TriangleAlert className="size-3.5" />, tone: "warn", go: "board" },
-  { key: "cleanupNeeded", label: "cleanup", icon: <Trash2 className="size-3.5" />, tone: "muted", go: "radar" },
+  {
+    key: "unclassified",
+    label: "미분류",
+    icon: <Inbox className="size-3.5" />,
+    tone: "warn",
+    go: "board",
+  },
+  {
+    key: "q1Overdue",
+    label: "Q1 overdue",
+    icon: <Flame className="size-3.5" />,
+    tone: "urgent",
+    go: "board",
+  },
+  {
+    key: "staleBacklog",
+    label: "stale",
+    icon: <TriangleAlert className="size-3.5" />,
+    tone: "warn",
+    go: "board",
+  },
+  {
+    key: "cleanupNeeded",
+    label: "cleanup",
+    icon: <Trash2 className="size-3.5" />,
+    tone: "muted",
+    go: "radar",
+  },
 ];
 
 export function TodayHeader({ date, today, debt, onDateChange }: Props) {
@@ -123,26 +153,44 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
     <header className="today-head" data-tauri-drag-region>
       <span className="today-title">Today</span>
       <div className="today-nav">
-        <Button variant="outline" size="sm" className="size-[26px] shrink-0 p-0"
-          aria-label="이전 날짜" onClick={() => onDateChange(stepDate("day", date, -1))}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="size-[26px] shrink-0 p-0"
+          aria-label="이전 날짜"
+          onClick={() => onDateChange(stepDate("day", date, -1))}
+        >
           <ChevronLeft className="size-4" />
         </Button>
         <span className="today-date">{date}</span>
-        <Button variant="outline" size="sm" className="size-[26px] shrink-0 p-0"
-          aria-label="다음 날짜" onClick={() => onDateChange(stepDate("day", date, 1))}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="size-[26px] shrink-0 p-0"
+          aria-label="다음 날짜"
+          onClick={() => onDateChange(stepDate("day", date, 1))}
+        >
           <ChevronRight className="size-4" />
         </Button>
-        <Button variant="outline" size="sm" className="h-[26px] rounded-full px-3 text-[12px]"
-          disabled={isToday} onClick={() => onDateChange(today)}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-[26px] rounded-full px-3 text-[12px]"
+          disabled={isToday}
+          onClick={() => onDateChange(today)}
+        >
           오늘로
         </Button>
       </div>
       <div className="today-debt-chips">
         {CHIPS.map((c) => (
-          <button key={c.key} type="button"
+          <button
+            key={c.key}
+            type="button"
             className={`today-debt-chip today-debt-${c.tone}`}
             onClick={() => goTo(c.go)}
-            title={c.label}>
+            title={c.label}
+          >
             {c.icon}
             <span>{c.label}</span>
             <span className="today-debt-num">{debt[c.key] ?? "—"}</span>
@@ -159,6 +207,7 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
 ```bash
 pnpm typecheck
 ```
+
 Expected: 통과.
 
 - [ ] **Step 3: 커밋**
@@ -173,6 +222,7 @@ git commit -m "feat(today): TodayHeader with absorbed debt chips (PR 3/7)"
 ### Task 4: UnscheduledTray (read-only)
 
 **Files:**
+
 - Create: `src/components/today/UnscheduledTray.tsx`
 
 - [ ] **Step 1: 작성**
@@ -201,19 +251,13 @@ export function UnscheduledTray({
 }: Props) {
   const [allDayOpen, setAllDayOpen] = useState(false);
   const empty =
-    unscheduledTodays.length === 0 &&
-    unscheduledRoutines.length === 0 &&
-    allDayEvents.length === 0;
+    unscheduledTodays.length === 0 && unscheduledRoutines.length === 0 && allDayEvents.length === 0;
 
   return (
     <aside className="today-tray">
       <div className="today-tray-head">미배치</div>
       <div className="today-tray-body">
-        {empty && (
-          <div className="today-tray-empty">
-            모든 항목이 시간축에 배치됐어요.
-          </div>
-        )}
+        {empty && <div className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</div>}
         {unscheduledTodays.map((s) => (
           <div key={`s-${s.id}`} className="today-tray-row" data-kind="today">
             <button
@@ -222,7 +266,11 @@ export function UnscheduledTray({
               aria-label={s.completedAt ? "완료 취소" : "완료"}
               onClick={() => onToggleDone(s.id, !s.completedAt)}
             >
-              {s.completedAt ? <CheckCircle2 className="size-4 text-q2" /> : <Circle className="size-4 text-wr-subtle" />}
+              {s.completedAt ? (
+                <CheckCircle2 className="text-q2 size-4" />
+              ) : (
+                <Circle className="text-wr-subtle size-4" />
+              )}
             </button>
             <span className="today-tray-title">{s.title}</span>
             <span className="today-tray-tag tag-today">Today</span>
@@ -236,9 +284,13 @@ export function UnscheduledTray({
               aria-label={r.done ? "완료 취소" : "완료"}
               onClick={() => onToggleRoutine(r.id, !r.done)}
             >
-              {r.done ? <CheckCircle2 className="size-4 text-q2" /> : <Circle className="size-4 text-wr-subtle" />}
+              {r.done ? (
+                <CheckCircle2 className="text-q2 size-4" />
+              ) : (
+                <Circle className="text-wr-subtle size-4" />
+              )}
             </button>
-            <Repeat className="size-3.5 text-wr-subtle" />
+            <Repeat className="text-wr-subtle size-3.5" />
             <span className="today-tray-title">{r.title}</span>
           </div>
         ))}
@@ -249,7 +301,11 @@ export function UnscheduledTray({
               className="today-tray-section-head"
               onClick={() => setAllDayOpen((v) => !v)}
             >
-              {allDayOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+              {allDayOpen ? (
+                <ChevronDown className="size-3.5" />
+              ) : (
+                <ChevronRight className="size-3.5" />
+              )}
               <Calendar className="size-3.5" />
               <span>종일</span>
               <span className="today-tray-count">{allDayEvents.length}</span>
@@ -281,6 +337,7 @@ export function UnscheduledTray({
 ```bash
 pnpm typecheck
 ```
+
 Expected: 통과. 안 통과면 `useTodayRoutines` 반환 타입을 export하도록 `src/lib/query/index.ts` 손봐.
 
 - [ ] **Step 3: 커밋**
@@ -295,6 +352,7 @@ git commit -m "feat(today): UnscheduledTray read-only (PR 3/7)"
 ### Task 5: TimelineCanvas — 빈 시간 그리드 + now line
 
 **Files:**
+
 - Create: `src/components/today/TimelineCanvas.tsx`
 
 - [ ] **Step 1: 작성**
@@ -331,18 +389,12 @@ export function TimelineCanvas({ date, today }: Props) {
       <div className="today-canvas-grid" style={{ height: `${24 * HOUR_PX}px` }}>
         {HOURS.map((h) => (
           <div key={h} className="today-canvas-hour" style={{ top: `${h * HOUR_PX}px` }}>
-            <span className="today-canvas-hour-label">
-              {String(h).padStart(2, "0")}:00
-            </span>
+            <span className="today-canvas-hour-label">{String(h).padStart(2, "0")}:00</span>
             <div className="today-canvas-hour-rule" />
           </div>
         ))}
         {showNow && (
-          <div
-            className="today-canvas-now"
-            style={{ top: `${nowPx}px` }}
-            aria-label="현재 시각"
-          />
+          <div className="today-canvas-now" style={{ top: `${nowPx}px` }} aria-label="현재 시각" />
         )}
         {/* 블록 레이어는 PR 4에서 추가 */}
       </div>
@@ -364,6 +416,7 @@ git commit -m "feat(today): TimelineCanvas read-only grid + now line (PR 3/7)"
 ### Task 6: 새 TodayView 셸
 
 **Files:**
+
 - Modify: `src/components/TodayView.tsx`
 - Replace: `src/components/TodayView.css`
 
@@ -458,45 +511,218 @@ export function TodayView() {
 `src/components/TodayView.css` 전체 교체 (디자인 시안 §1 따라). 핵심 그리드:
 
 ```css
-.today { display: flex; flex-direction: column; height: 100%; background: var(--wr-bg); }
-.today-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--wr-border-light); }
-.today-title { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
-.today-nav { display: flex; align-items: center; gap: 6px; }
-.today-date { font-family: ui-monospace, SF Mono, monospace; font-size: 13px; min-width: 96px; text-align: center; }
-.today-debt-chips { margin-left: auto; display: flex; gap: 6px; }
-.today-debt-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 9999px; font-size: 11px; border: 1px solid var(--wr-border-light); background: #fff; }
-.today-debt-chip .today-debt-num { font-weight: 700; }
-.today-debt-urgent { color: #b8413a; border-color: #ecc2bf; }
-.today-debt-warn   { color: #b58b1f; border-color: #eddfaa; }
-.today-debt-muted  { color: var(--wr-subtle); }
+.today {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--wr-bg);
+}
+.today-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wr-border-light);
+}
+.today-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.today-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.today-date {
+  font-family:
+    ui-monospace,
+    SF Mono,
+    monospace;
+  font-size: 13px;
+  min-width: 96px;
+  text-align: center;
+}
+.today-debt-chips {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.today-debt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  border: 1px solid var(--wr-border-light);
+  background: #fff;
+}
+.today-debt-chip .today-debt-num {
+  font-weight: 700;
+}
+.today-debt-urgent {
+  color: #b8413a;
+  border-color: #ecc2bf;
+}
+.today-debt-warn {
+  color: #b58b1f;
+  border-color: #eddfaa;
+}
+.today-debt-muted {
+  color: var(--wr-subtle);
+}
 
-.today-main { display: grid; grid-template-columns: 280px 1fr; flex: 1; min-height: 0; }
-.today-tray { border-right: 1px solid var(--wr-border-light); overflow-y: auto; }
-.today-tray-head { padding: 10px 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--wr-subtle); border-bottom: 1px solid var(--wr-border-light); }
-.today-tray-body { padding: 6px; display: flex; flex-direction: column; gap: 4px; }
-.today-tray-empty { padding: 16px; color: var(--wr-subtle); font-size: 12px; }
-.today-tray-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #fff; border: 1px solid var(--wr-border-light); border-radius: 6px; }
-.today-tray-title { flex: 1; font-size: 12px; }
-.today-tray-tag { font-size: 10px; padding: 2px 6px; border-radius: 9999px; }
-.tag-today { background: #eef3ff; color: #4a7bb8; }
-.today-tray-section-head { display: inline-flex; align-items: center; gap: 4px; padding: 6px 8px; font-size: 11px; color: var(--wr-subtle); }
-.today-tray-count { margin-left: auto; }
-.today-tray-allday { padding: 0 8px 8px; display: flex; flex-wrap: wrap; gap: 4px; }
-.today-tray-chip { font-size: 11px; padding: 2px 8px; border-radius: 9999px; border: 1px solid var(--wr-border-light); background: #fff; }
+.today-main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.today-tray {
+  border-right: 1px solid var(--wr-border-light);
+  overflow-y: auto;
+}
+.today-tray-head {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--wr-subtle);
+  border-bottom: 1px solid var(--wr-border-light);
+}
+.today-tray-body {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.today-tray-empty {
+  padding: 16px;
+  color: var(--wr-subtle);
+  font-size: 12px;
+}
+.today-tray-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid var(--wr-border-light);
+  border-radius: 6px;
+}
+.today-tray-title {
+  flex: 1;
+  font-size: 12px;
+}
+.today-tray-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+}
+.tag-today {
+  background: #eef3ff;
+  color: #4a7bb8;
+}
+.today-tray-section-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--wr-subtle);
+}
+.today-tray-count {
+  margin-left: auto;
+}
+.today-tray-allday {
+  padding: 0 8px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.today-tray-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--wr-border-light);
+  background: #fff;
+}
 
-.today-canvas-wrap { position: relative; overflow-y: auto; background: #fff; }
-.today-canvas { position: relative; min-height: 100%; }
-.today-canvas-grid { position: relative; padding-left: 60px; }
-.today-canvas-hour { position: absolute; left: 0; right: 0; height: 60px; }
-.today-canvas-hour-label { position: absolute; left: 8px; top: -7px; font-size: 10px; color: var(--wr-subtle); font-family: ui-monospace, monospace; }
-.today-canvas-hour-rule { position: absolute; left: 60px; right: 0; top: 0; height: 1px; background: var(--wr-border-light); }
-.today-canvas-now { position: absolute; left: 60px; right: 0; height: 2px; background: #e0584a; z-index: 5; }
-.today-canvas-now::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: #e0584a; }
-.today-canvas-cta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px; height: 100%; }
+.today-canvas-wrap {
+  position: relative;
+  overflow-y: auto;
+  background: #fff;
+}
+.today-canvas {
+  position: relative;
+  min-height: 100%;
+}
+.today-canvas-grid {
+  position: relative;
+  padding-left: 60px;
+}
+.today-canvas-hour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 60px;
+}
+.today-canvas-hour-label {
+  position: absolute;
+  left: 8px;
+  top: -7px;
+  font-size: 10px;
+  color: var(--wr-subtle);
+  font-family: ui-monospace, monospace;
+}
+.today-canvas-hour-rule {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--wr-border-light);
+}
+.today-canvas-now {
+  position: absolute;
+  left: 60px;
+  right: 0;
+  height: 2px;
+  background: #e0584a;
+  z-index: 5;
+}
+.today-canvas-now::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e0584a;
+}
+.today-canvas-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  height: 100%;
+}
 
 @media (max-width: 1040px) {
-  .today-main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .today-tray { border-right: 0; border-bottom: 1px solid var(--wr-border-light); max-height: 200px; }
+  .today-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .today-tray {
+    border-right: 0;
+    border-bottom: 1px solid var(--wr-border-light);
+    max-height: 200px;
+  }
 }
 ```
 
@@ -505,6 +731,7 @@ export function TodayView() {
 ```bash
 pnpm tauri dev
 ```
+
 Expected: 부팅, Today 화면이 새 레이아웃으로 표시됨 (좌 트레이 + 우 빈 시간축 + 헤더 debt 칩 4개). 일정·블록은 아직 안 보임 (PR 4에서).
 
 - [ ] **Step 4: 타입체크 + lint + vitest**
@@ -512,6 +739,7 @@ Expected: 부팅, Today 화면이 새 레이아웃으로 표시됨 (좌 트레�
 ```bash
 pnpm typecheck && pnpm lint && pnpm vitest run
 ```
+
 Expected: 통과.
 
 - [ ] **Step 5: 커밋**

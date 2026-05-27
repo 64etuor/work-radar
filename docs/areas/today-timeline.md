@@ -23,7 +23,7 @@ Today 표면은 캡처 보드와 별개의 **운영(실행) 표면**이다. 결�
    terminal failure는 `CalendarSyncFailed` 이벤트로 표면화 (ADR-0003).
 5. **Cross-calendar 이동만 명시 Acceptance** ("적용" 버튼 = `commit_staged_writes`).
    within-cal 시간 nudge/리사이즈는 사람 손 = 암묵 통과(INVARIANT #7).
-6. `@dnd-kit` import는 **`src/components/today/**`에만** 등장 (ADR-0004).
+6. `@dnd-kit` import는 **`src/components/today/**`에만\*\* 등장 (ADR-0004).
 7. **로컬 시각 ISO 보존** — 모든 시간 계산은 `YYYY-MM-DDTHH:MM:SS` 로컬 포맷.
    `.toISOString()` 사용 금지(UTC drift → 자정/DST 교차 시 블록 위치 깨짐).
 

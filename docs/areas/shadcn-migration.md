@@ -1,4 +1,3 @@
-
 # shadcn Migration & Primitive Discipline
 
 shadcn/ui + Tailwind v4 + radix가 본체. **앱 전면 마이그레이션은 완료**(Wave 1–5,

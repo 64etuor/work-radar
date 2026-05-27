@@ -71,9 +71,7 @@ describe("buildTodayBlocks", () => {
   });
 
   it("routine with timeOfDay produces virtual instance", () => {
-    const routines = [
-      { id: "r1", title: "R", timeOfDay: "07:00", timeOverride: null },
-    ] as never[];
+    const routines = [{ id: "r1", title: "R", timeOfDay: "07:00", timeOverride: null }] as never[];
     const blocks = buildTodayBlocks({ signals: [], events: [], routines, date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("routine");
@@ -90,9 +88,7 @@ describe("buildTodayBlocks", () => {
   });
 
   it("routine without any time is skipped", () => {
-    const routines = [
-      { id: "r1", title: "R", timeOfDay: null, timeOverride: null },
-    ] as never[];
+    const routines = [{ id: "r1", title: "R", timeOfDay: null, timeOverride: null }] as never[];
     const blocks = buildTodayBlocks({ signals: [], events: [], routines, date: DATE });
     expect(blocks).toHaveLength(0);
   });

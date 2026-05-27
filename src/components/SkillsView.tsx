@@ -53,11 +53,7 @@ export function SkillsView() {
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((s) =>
-      [s.name, s.binding, s.sourcePath, s.kind]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
+      [s.name, s.binding, s.sourcePath, s.kind].filter(Boolean).join(" ").toLowerCase().includes(q),
     );
   }, [list, search]);
   const segments = useMemo(() => segmentSkills(filtered), [filtered]);
@@ -155,11 +151,31 @@ function providerOf(skill: Skill): "codex" | "claude" | "other" | "project" {
 
 function segmentSkills(skills: Skill[]) {
   const defs = [
-    { key: "global", label: "Global Skills", match: (s: Skill) => s.kind === "in_app_prompt" && !s.binding },
-    { key: "external-codex", label: "External Skills · Codex", match: (s: Skill) => providerOf(s) === "codex" },
-    { key: "external-claude", label: "External Skills · Claude", match: (s: Skill) => providerOf(s) === "claude" },
-    { key: "external-other", label: "External Skills · Other", match: (s: Skill) => providerOf(s) === "other" },
-    { key: "project", label: "Project Skills", match: (s: Skill) => s.kind === "in_app_prompt" && !!s.binding },
+    {
+      key: "global",
+      label: "Global Skills",
+      match: (s: Skill) => s.kind === "in_app_prompt" && !s.binding,
+    },
+    {
+      key: "external-codex",
+      label: "External Skills · Codex",
+      match: (s: Skill) => providerOf(s) === "codex",
+    },
+    {
+      key: "external-claude",
+      label: "External Skills · Claude",
+      match: (s: Skill) => providerOf(s) === "claude",
+    },
+    {
+      key: "external-other",
+      label: "External Skills · Other",
+      match: (s: Skill) => providerOf(s) === "other",
+    },
+    {
+      key: "project",
+      label: "Project Skills",
+      match: (s: Skill) => s.kind === "in_app_prompt" && !!s.binding,
+    },
   ];
   return defs.map((def) => {
     const group = skills.filter(def.match);
@@ -184,21 +200,15 @@ function SkillRow({
 }) {
   const isInApp = skill.kind === "in_app_prompt";
   return (
-    <button
-      type="button"
-      className={`skl-row${active ? " active" : ""}`}
-      onClick={onSelect}
-    >
+    <button type="button" className={`skl-row${active ? "active" : ""}`} onClick={onSelect}>
       {isInApp ? (
-        <Blocks className="size-4 skl-row-ico" />
+        <Blocks className="skl-row-ico size-4" />
       ) : (
-        <FileText className="size-4 skl-row-ico" />
+        <FileText className="skl-row-ico size-4" />
       )}
       <span className="skl-row-main">
         <span className="skl-row-name">{skill.name}</span>
-        {isInApp && skill.binding && (
-          <span className="skl-row-bind">{skill.binding}</span>
-        )}
+        {isInApp && skill.binding && <span className="skl-row-bind">{skill.binding}</span>}
       </span>
       {isInApp && !skill.enabled && <span className="skl-row-off">꺼짐</span>}
     </button>
@@ -271,8 +281,7 @@ function InAppEditor({ skill }: { skill: Skill }) {
 
       {skill.binding && (
         <div className="skl-bind-line">
-          잡 바인딩: <code>{skill.binding}</code> · 끄거나 비우면 잡이 기본 프롬프트를
-          사용합니다.
+          잡 바인딩: <code>{skill.binding}</code> · 끄거나 비우면 잡이 기본 프롬프트를 사용합니다.
         </div>
       )}
 

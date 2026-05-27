@@ -64,10 +64,7 @@ export function useAgentNames(sessionKeys: string[]) {
     queryKey: ["agentNames", sorted],
     queryFn: async () => {
       const entries = await Promise.all(
-        sorted.map(
-          async (key) =>
-            [key, await unwrap(commands.getAgentName(key))] as const,
-        ),
+        sorted.map(async (key) => [key, await unwrap(commands.getAgentName(key))] as const),
       );
       const out: Record<string, string> = {};
       for (const [key, name] of entries) {

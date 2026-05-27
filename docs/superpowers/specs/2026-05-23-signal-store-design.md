@@ -25,7 +25,7 @@ notification 등)는 이 작업 범위 밖이며 추후 별도로 다룬다.
 - 동작 변경·스키마 변경·쿼리 최적화 — **없음**. 순수 relocation. (스키마 변경은 G에서.)
 - trait/mock 추상화 — 거부. DB 테스트는 in-memory SQLite(`fresh_db()`)로 이미 가능하므로
   store는 외부 I/O가 없어 fake가 불필요(코드베이스 선례: trait seam은 Notion/GitHub/Calendar/codex
-  같은 *외부* I/O에만 도입).
+  같은 _외부_ I/O에만 도입).
 
 ## 3. 접근 (Approach A — 그대로 이전)
 
@@ -38,14 +38,16 @@ notification 등)는 이 작업 범위 밖이며 추후 별도로 다룬다.
 ## 4. 아키텍처
 
 ### 4.1 위치 / 모듈
+
 - 신규 `src-tauri/src/commands/signal_store.rs` — `pub(crate)` free fn 모음. `signals` + `signals_fts`
   접근의 **단일 소유자**. `commands/mod.rs`에 `mod signal_store;` 등록(필요한 항목만 `pub(crate)`).
 - `SIGNAL_COLS`(현재 `commands/shared.rs`)를 `signal_store`로 이전(자연스러운 home). `shared.rs`의
   다른 소비자가 있으면 `signal_store::SIGNAL_COLS`를 참조하도록 갱신.
-- 소비자(signals/today*/retro/pr_radar/notion/enrich/triage/projects/agents)는
+- 소비자(signals/today\*/retro/pr_radar/notion/enrich/triage/projects/agents)는
   `use crate::commands::signal_store;` 후 `signal_store::fn(...)` 호출.
 
 ### 4.2 함수 표면 (범주별, 그대로 이전)
+
 - **코어 CRUD/dedup:** `insert_signal` · `fetch_signals` · `set_quadrant` · `classify_*` 코어 ·
   `set_signal_status` · `delete_signal` 코어 · `insert_promotion_draft` · title/dedup_key 갱신 · FTS 매칭.
 - **Today 레일:** `promote_today_inner` · `unpromote_today_inner` · `toggle_today_done` 코어 ·
@@ -59,8 +61,9 @@ notification 등)는 이 작업 범위 밖이며 추후 별도로 다룬다.
 > 정확한 함수 목록·시그니처는 writing-plans 단계에서 콜사이트별로 확정한다(이 설계는 경계와 규칙을 정함).
 
 ### 4.3 경계 규칙 (무엇이 store로 가고 무엇이 남나)
+
 - 쿼리의 `FROM`/`JOIN`이 **signals 중심**이면 store fn으로 이전.
-- 순수 *타 테이블* 쿼리, 그리고 교차 집계(예: today overview가 `debt_snapshots` 조인, weekly가
+- 순수 _타 테이블_ 쿼리, 그리고 교차 집계(예: today overview가 `debt_snapshots` 조인, weekly가
   routines 조인)의 **비-signals 부분**은 커맨드에 잔류하고 store fn을 호출.
 - 로직 결합 쿼리(예: `pr_radar.rs`의 `auto_resolve` 루프)는 **쿼리만** store로 이전하고 루프/제어
   흐름은 커맨드에 잔류.
@@ -79,6 +82,7 @@ notification 등)는 이 작업 범위 밖이며 추후 별도로 다룬다.
 ## 6. PLAN Phase 승격
 
 F+G를 신규 **Phase 21 — Signals 영속 레이어(F) + god-table 분리(G)**로 `PLAN.md`에 승격.
+
 - **F(이 설계):** signal_store 1 PR(원자적). Done = §5 전 항목 green + critic ACCEPT.
 - **G(별도 spec):** `signals` 분리 마이그레이션 + 위성 테이블 + 데이터 보존 테스트 + signal_store
   내부 변경. F 머지 후 별도 brainstorming/spec.
@@ -91,12 +95,12 @@ F+G를 신규 **Phase 21 — Signals 영속 레이어(F) + god-table 분리(G)**
 
 ## 8. 리스크 / 완화
 
-| 리스크 | 완화 |
-|---|---|
-| 대형 단일 PR(~13파일 위임 변경) | verbatim SQL(로직 무변경) + `bindings.ts` 빈 diff + critic |
-| `SIGNAL_COLS`/`WorkSignal` 매핑 어긋남 | 컬럼 상수·FromRow 매핑 그대로 이전, 회귀 테스트 |
-| 로직 결합 쿼리(auto_resolve 등) 분리 시 동작 변화 | 쿼리만 이전, 루프/제어는 커맨드 잔류; 기존 테스트로 가드 |
-| store가 또 다른 god-module화 | 현재 god-table(signals) 1:1 미러. G가 테이블을 쪼개면 store도 후속 분할 여지 |
+| 리스크                                            | 완화                                                                         |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 대형 단일 PR(~13파일 위임 변경)                   | verbatim SQL(로직 무변경) + `bindings.ts` 빈 diff + critic                   |
+| `SIGNAL_COLS`/`WorkSignal` 매핑 어긋남            | 컬럼 상수·FromRow 매핑 그대로 이전, 회귀 테스트                              |
+| 로직 결합 쿼리(auto_resolve 등) 분리 시 동작 변화 | 쿼리만 이전, 루프/제어는 커맨드 잔류; 기존 테스트로 가드                     |
+| store가 또 다른 god-module화                      | 현재 god-table(signals) 1:1 미러. G가 테이블을 쪼개면 store도 후속 분할 여지 |
 
 ## 9. 미해결(구현 계획에서 확정)
 

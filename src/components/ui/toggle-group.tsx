@@ -23,10 +23,7 @@ export function ToggleGroup({
   ...props
 }: React.ComponentProps<typeof ToggleGroupPrimitive.Root>) {
   return (
-    <ToggleGroupPrimitive.Root
-      className={cn("inline-flex items-center", className)}
-      {...props}
-    />
+    <ToggleGroupPrimitive.Root className={cn("inline-flex items-center", className)} {...props} />
   );
 }
 

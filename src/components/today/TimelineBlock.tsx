@@ -1,9 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Repeat } from "lucide-react";
-import type {
-  CSSProperties,
-  MouseEvent as ReactMouseEvent,
-} from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import type { LayoutBox } from "@/lib/timelineLayout";
 import type { DragData } from "@/components/today/useTimelineDnd";
@@ -60,11 +57,7 @@ function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
   };
 }
 
-function resizeDataForBox(
-  box: LayoutBox,
-  edge: "top" | "bottom",
-  durationMin: number,
-): DragData {
+function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: number): DragData {
   const { block } = box;
   if (block.kind === "event") {
     return {
@@ -149,8 +142,7 @@ export function TimelineBlock({
   const { block, topPx, heightPx, leftPct, widthPct } = box;
   // 실제 endISO−startISO 그대로 — 15분 floor는 dispatcher(useTimelineDnd) 책임.
   const durationMin = Math.round(
-    (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) /
-      60000,
+    (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) / 60000,
   );
   const drag = useDraggable({
     id: `block:${block.id}`,
@@ -190,7 +182,7 @@ export function TimelineBlock({
       <button
         ref={setNodeRef}
         type="button"
-        className={`tl-block tl-block-${block.kind}${isDoneRoutine ? " tl-block-done" : ""}`}
+        className={`tl-block tl-block-${block.kind}${isDoneRoutine ? "tl-block-done" : ""}`}
         data-done={isDoneRoutine || undefined}
         style={
           {
@@ -208,22 +200,12 @@ export function TimelineBlock({
           {hhmm(block.startISO)}–{hhmm(block.endISO)}
         </div>
         <div className="tl-block-title">
-          {block.kind === "routine" && (
-            <Repeat className="tl-block-icon" aria-hidden />
-          )}
+          {block.kind === "routine" && <Repeat className="tl-block-icon" aria-hidden />}
           {block.title}
         </div>
       </button>
-      <ResizeHandle
-        edge="top"
-        box={box}
-        durationMin={durationMin}
-      />
-      <ResizeHandle
-        edge="bottom"
-        box={box}
-        durationMin={durationMin}
-      />
+      <ResizeHandle edge="top" box={box} durationMin={durationMin} />
+      <ResizeHandle edge="bottom" box={box} durationMin={durationMin} />
     </div>
   );
 }

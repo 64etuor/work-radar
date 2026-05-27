@@ -4,6 +4,7 @@
 **Status:** DRAFT — 사용자 승인 게이트 (Part 1 PR-H1 머지 전까지 다른 PR 미진행)
 **Source agents:** Phase A (opus, harness 설계) + Phase B1 (sonnet, Rust 감사) + Phase B2 (sonnet, Frontend 감사)
 **Source artifacts (drafts):**
+
 - `.omc/research/harness-design/area-map.md` (centerpiece)
 - `.omc/research/harness-design/{claude,agents}-md.draft.md`
 - `.omc/research/harness-design/extracted/*.md` (10개 area docs)
@@ -28,33 +29,33 @@
 
 ### 변경 내역
 
-| 액션 | 파일 | 출처 |
-|---|---|---|
-| **NEW** | `docs/areas/area-map.md` | `.omc/research/harness-design/area-map.md` |
-| **REPLACE** | `CLAUDE.md` (현 41 lines → 36 lines, thin router) | `.omc/research/harness-design/claude-md.draft.md` |
-| **REPLACE** | `AGENTS.md` (현 ~65 lines, 도메인 규율 인라인 → ~140 lines working agreement + Important Paths index) | `.omc/research/harness-design/agents-md.draft.md` |
-| **NEW** | `docs/areas/decision-rails.md` (PLAN.md §1 INVARIANTS 추출) | extracted/decision-rails.md |
-| **NEW** | `docs/areas/ipc-conventions.md` | extracted/ipc-conventions.md |
-| **NEW** | `docs/areas/data-layer-conventions.md` | extracted/data-layer-conventions.md |
-| **NEW** | `docs/areas/shadcn-migration.md` | extracted/shadcn-migration.md |
-| **NEW** | `docs/areas/frontend-board.md` | extracted/frontend-board.md |
-| **NEW** | `docs/areas/frontend-shell.md` | extracted/frontend-shell.md |
-| **NEW** | `docs/areas/news-feature.md` | extracted/news-feature.md |
-| **NEW** | `docs/areas/parallel-agent-safety.md` | extracted/parallel-agent-safety.md |
-| **NEW** | `docs/areas/shell-tooling.md` | extracted/shell-tooling.md |
-| **NEW** | `docs/areas/git-conventions.md` | extracted/git-conventions.md |
-| **EDIT** | `PLAN.md` — §1 INVARIANTS 섹션을 1줄 포인터로 (`→ docs/areas/decision-rails.md`) | — |
-| **EDIT** | `docs/decisions.md` — 한 줄: "2026-05-26: 하네스 라우팅 도입(`docs/areas/area-map.md`), AGENTS.md slim, INVARIANTS → `docs/areas/decision-rails.md`. Rationale: 도메인별 로드. Mirrorless_Mono 패턴 인용." | — |
+| 액션        | 파일                                                                                                                                                                                                       | 출처                                              |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **NEW**     | `docs/areas/area-map.md`                                                                                                                                                                                   | `.omc/research/harness-design/area-map.md`        |
+| **REPLACE** | `CLAUDE.md` (현 41 lines → 36 lines, thin router)                                                                                                                                                          | `.omc/research/harness-design/claude-md.draft.md` |
+| **REPLACE** | `AGENTS.md` (현 ~65 lines, 도메인 규율 인라인 → ~140 lines working agreement + Important Paths index)                                                                                                      | `.omc/research/harness-design/agents-md.draft.md` |
+| **NEW**     | `docs/areas/decision-rails.md` (PLAN.md §1 INVARIANTS 추출)                                                                                                                                                | extracted/decision-rails.md                       |
+| **NEW**     | `docs/areas/ipc-conventions.md`                                                                                                                                                                            | extracted/ipc-conventions.md                      |
+| **NEW**     | `docs/areas/data-layer-conventions.md`                                                                                                                                                                     | extracted/data-layer-conventions.md               |
+| **NEW**     | `docs/areas/shadcn-migration.md`                                                                                                                                                                           | extracted/shadcn-migration.md                     |
+| **NEW**     | `docs/areas/frontend-board.md`                                                                                                                                                                             | extracted/frontend-board.md                       |
+| **NEW**     | `docs/areas/frontend-shell.md`                                                                                                                                                                             | extracted/frontend-shell.md                       |
+| **NEW**     | `docs/areas/news-feature.md`                                                                                                                                                                               | extracted/news-feature.md                         |
+| **NEW**     | `docs/areas/parallel-agent-safety.md`                                                                                                                                                                      | extracted/parallel-agent-safety.md                |
+| **NEW**     | `docs/areas/shell-tooling.md`                                                                                                                                                                              | extracted/shell-tooling.md                        |
+| **NEW**     | `docs/areas/git-conventions.md`                                                                                                                                                                            | extracted/git-conventions.md                      |
+| **EDIT**    | `PLAN.md` — §1 INVARIANTS 섹션을 1줄 포인터로 (`→ docs/areas/decision-rails.md`)                                                                                                                           | —                                                 |
+| **EDIT**    | `docs/decisions.md` — 한 줄: "2026-05-26: 하네스 라우팅 도입(`docs/areas/area-map.md`), AGENTS.md slim, INVARIANTS → `docs/areas/decision-rails.md`. Rationale: 도메인별 로드. Mirrorless_Mono 패턴 인용." | —                                                 |
 
 ### 결정 (Phase A open questions 해소)
 
-| 질문 | 결정 | 사유 |
-|---|---|---|
-| area-map 경로: `docs/architecture/` vs `docs/areas/` | **`docs/areas/area-map.md`** | sibling area docs와 일관성. Mirrorless는 monorepo여서 `docs/architecture/package-map.md`였음. work-radar는 단일 패키지여서 area-anchored가 자연. |
-| `news-feature.md` 크기 (4.4K, state 중심) | **유지 — full doc** | 로드는 on-demand. 크기는 도메인 안에서만 부담. 상태가 흘러도 area 안에서. |
-| `shadcn-migration.md` ↔ `docs/plans/2026-05-24-shadcn-app-wide-migration.md` | **plan 유지, area는 distilled durable만** | plan은 historical record, area는 durable rules. area에서 plan 인용. |
-| `claude-md.draft.md` 36줄 vs Mirrorless 33줄 | **36줄 keep** | 한국어 표현 차이 + 빠른 라우팅 라인 보존. 가독성 우선. |
-| `ipc-conventions.md` ↔ 기존 `docs/reference/error-handling.md` | **별도 유지** + ipc-conventions.md에서 포인터 | reference는 명령/패턴 인덱스, area는 작업 가드. 역할 다름. |
+| 질문                                                                         | 결정                                          | 사유                                                                                                                                             |
+| ---------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| area-map 경로: `docs/architecture/` vs `docs/areas/`                         | **`docs/areas/area-map.md`**                  | sibling area docs와 일관성. Mirrorless는 monorepo여서 `docs/architecture/package-map.md`였음. work-radar는 단일 패키지여서 area-anchored가 자연. |
+| `news-feature.md` 크기 (4.4K, state 중심)                                    | **유지 — full doc**                           | 로드는 on-demand. 크기는 도메인 안에서만 부담. 상태가 흘러도 area 안에서.                                                                        |
+| `shadcn-migration.md` ↔ `docs/plans/2026-05-24-shadcn-app-wide-migration.md` | **plan 유지, area는 distilled durable만**     | plan은 historical record, area는 durable rules. area에서 plan 인용.                                                                              |
+| `claude-md.draft.md` 36줄 vs Mirrorless 33줄                                 | **36줄 keep**                                 | 한국어 표현 차이 + 빠른 라우팅 라인 보존. 가독성 우선.                                                                                           |
+| `ipc-conventions.md` ↔ 기존 `docs/reference/error-handling.md`               | **별도 유지** + ipc-conventions.md에서 포인터 | reference는 명령/패턴 인덱스, area는 작업 가드. 역할 다름.                                                                                       |
 
 ### Done-criteria
 
@@ -74,6 +75,7 @@
 ### 사용자 승인 게이트
 
 PR-H1 머지 전 사용자가 다음을 확인:
+
 1. `docs/areas/area-map.md` 라우팅 테이블이 실제 작업 패턴과 일치하는가
 2. `AGENTS.md`에서 빠진 항목 중 빠뜨리면 안 되는 것이 없는가
 3. extracted area docs의 내용이 정본으로 채택할 만한 정확도인가
@@ -91,10 +93,12 @@ PR-H1 머지 전 사용자가 다음을 확인:
 **문제:** `test_notion_connection`이 `HttpNotionWriter`를 우회해 inline `reqwest::Client`를 빌드 → 레이트리미터 우회 + HTTP 구성 중복.
 
 **변경:**
+
 - `commands/notion.rs::test_notion_connection`이 `HttpNotionWriter::test_connection(db_id, token)` (notion.rs에 신설)을 호출하도록 수정
 - 인라인 `reqwest::Client` 코드 제거
 
 **Done:**
+
 - [ ] `rg 'reqwest::Client::builder' src-tauri/src/commands/` → 0 매치
 - [ ] `cargo test notion::` (기존 + test_connection 신규 테스트 추가)
 - [ ] `cargo clippy --all-targets -- -D warnings`
@@ -104,11 +108,13 @@ PR-H1 머지 전 사용자가 다음을 확인:
 **문제:** 두 컴포넌트 모두 `setInterval` + `commands.agentRunStatus()` 직접 호출 → TanStack Query 레이어 우회 → AGENTS.md INVARIANT 위반 (IPC는 query 레이어를 거쳐야 함).
 
 **변경:**
+
 - `src/lib/query/agents.ts`에 `useAgentRunStatus(runId, { enabled, refetchInterval })` 추가 — `staleTime: 0`, `refetchInterval: 2000`, `enabled`로 폴링 ON/OFF
 - 두 컴포넌트가 이 hook으로 마이그레이션
 - `setInterval` 제거
 
 **Done:**
+
 - [ ] `rg "setInterval.*agentRunStatus" src/` → 0 매치
 - [ ] `rg "invoke\(" src/components/board/Enrich*` → 0 매치
 - [ ] `pnpm typecheck` + `pnpm lint` + `pnpm vitest run`
@@ -121,11 +127,11 @@ PR-H1 머지 전 사용자가 다음을 확인:
 
 ### Rename 목록
 
-| 현재 | 새 이름 | 사유 |
-|---|---|---|
-| `src/lib/skill-grouping.ts` | `src/lib/skillGrouping.ts` | util은 camelCase. (`agentBar.ts`/`newsTicker.ts`/`worktreeReview.ts`와 일관) |
-| `src/components/board/board-utils.ts` | `src/components/board/boardUtils.ts` | board/는 ui/ 아님 — util 컨벤션 적용 |
-| `src/components/settings/kit.tsx` | `src/components/settings/SettingsKit.tsx` | 컴포넌트는 PascalCase |
+| 현재                                  | 새 이름                                   | 사유                                                                         |
+| ------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `src/lib/skill-grouping.ts`           | `src/lib/skillGrouping.ts`                | util은 camelCase. (`agentBar.ts`/`newsTicker.ts`/`worktreeReview.ts`와 일관) |
+| `src/components/board/board-utils.ts` | `src/components/board/boardUtils.ts`      | board/는 ui/ 아님 — util 컨벤션 적용                                         |
+| `src/components/settings/kit.tsx`     | `src/components/settings/SettingsKit.tsx` | 컴포넌트는 PascalCase                                                        |
 
 ### 변경
 
@@ -156,12 +162,14 @@ PR-H1 머지 전 사용자가 다음을 확인:
 가장 안전 (rename 전용). 다른 PR의 임팩트를 줄이기 위해 먼저.
 
 **변경:**
+
 - 14 도메인 그룹을 식별 (audit-rust.md §models.rs special analysis 참조)
 - 각 그룹을 해당 도메인 모듈로 이동 (예: signal-related → `signal.rs`, agent-related → `agent.rs`, notion-related → `notion.rs`, …)
 - `models.rs`는 한동안 `pub use` 재-export facade로 유지 (호환성)
 - 그 후 점진적 import 직접화 (별도 follow-up)
 
 **Done:**
+
 - [ ] `models.rs` ≤ 200 LOC (facade만)
 - [ ] `cargo test` 전체 그린
 - [ ] `cargo clippy --all-targets -- -D warnings`
@@ -170,6 +178,7 @@ PR-H1 머지 전 사용자가 다음을 확인:
 ### PR-R-CalendarLeak (Priority M) — `calendar.rs` ↔ `commands/calendar.rs` 도메인 누수 수선
 
 **변경:** `commands/calendar.rs`의 다음을 `calendar.rs`로 이동
+
 - `access_token_for` (creds load + refresh + write)
 - `fetch_events_windowed` (orchestration)
 - `apply_calendar_urgency`, `parse_quadrant_hint` (순수 도메인 분류)
@@ -177,6 +186,7 @@ PR-H1 머지 전 사용자가 다음을 확인:
 `OnceLock<TtlCache>` 캐시 싱글톤은 commands/에 유지 (앱 lifecycle state).
 
 **Done:**
+
 - [ ] `commands/calendar.rs` ≤ 250 LOC (thin IPC handlers)
 - [ ] `cargo test calendar::`
 - [ ] `cargo clippy -D warnings`
@@ -184,6 +194,7 @@ PR-H1 머지 전 사용자가 다음을 확인:
 ### PR-R-Calendar (Priority H) — `calendar.rs` (1432 LOC) → 6 slice
 
 **변경:** (audit-rust.md의 제안 그대로)
+
 - `calendar/oauth.rs` (PKCE, creds serialize)
 - `calendar/loopback.rs` (TCP accept)
 - `calendar/parse.rs` (list + event parse)
@@ -195,6 +206,7 @@ PR-H1 머지 전 사용자가 다음을 확인:
 PR-R-CalendarLeak 머지 **후** 진행.
 
 **Done:**
+
 - [ ] 6 슬라이스 각 ≤ 400 LOC, mod.rs ≤ 200 LOC
 - [ ] `cargo test calendar::`
 - [ ] `cargo clippy -D warnings`
@@ -212,6 +224,7 @@ PR-R-CalendarLeak 머지 **후** 진행.
 ### PR-F-Worktree (Priority H) — `WorktreeView.tsx` (1575 LOC) → 9 파일
 
 **변경:** (audit-frontend.md의 제안 그대로)
+
 - `src/lib/useStickyToggle.ts` (~20 LOC)
 - `src/components/worktree/WorktreeView.tsx` (~250 LOC, shell)
 - `src/components/worktree/WorktreeSideList.tsx` (~80)
@@ -225,6 +238,7 @@ PR-R-CalendarLeak 머지 **후** 진행.
 **Risk gate:** `GraphCanvas` 데이터 흐름 (topology → SVG) 보존 필수. 추출 후 시각 동등성 수동 확인.
 
 **Done:**
+
 - [ ] 새 파일 9개, 각 LOC 추정치 ±20%
 - [ ] `pnpm typecheck` + `pnpm lint` + `pnpm vitest run`
 - [ ] `pnpm tauri dev` 부팅 → Worktree 뷰 진입 → CommitGraph drawer 열기/닫기 정상
@@ -233,6 +247,7 @@ PR-R-CalendarLeak 머지 **후** 진행.
 ### PR-F-Jobs (Priority H) — `JobsView.tsx` (838 LOC) → 4 패널
 
 **변경:**
+
 - `src/components/jobs/SelfCheckPanel.tsx`
 - `src/components/jobs/EnrichPanel.tsx`
 - `src/components/jobs/BatchEnrichPanel.tsx`
@@ -241,6 +256,7 @@ PR-R-CalendarLeak 머지 **후** 진행.
 - `src/components/jobs/jobsConstants.ts` — `QUADRANT_OPTS`/`AREA_OPTS` 추출 (EnrichModal.tsx 중복 제거 동반)
 
 **Done:**
+
 - [ ] EnrichModal.tsx의 `QUADRANT_OPTS`/`AREA_OPTS` 중복 제거 → 신설 상수 import
 - [ ] `pnpm typecheck` + `pnpm lint` + `pnpm vitest run`
 - [ ] Acceptance 게이트 4종 수동 스모크
@@ -248,10 +264,12 @@ PR-R-CalendarLeak 머지 **후** 진행.
 ### PR-F-Capture (Priority H) — `CaptureBoard.tsx` (624 LOC) → useCaptureActions hook
 
 **변경:**
+
 - `src/components/board/useCaptureActions.ts` (~250 LOC) — 19 mutation hooks + handleNotionPromote/handleEnrichAll/handleMenuAction 추출
 - `CaptureBoard.tsx` (~350 LOC) — keyboard / online-flush / calendar-urgency / pop-animation effects + 렌더링만 잔존
 
 **Done:**
+
 - [ ] `pnpm typecheck` + `pnpm lint` + `pnpm vitest run`
 - [ ] cmux 스모크: 카드 promote/enrich/menu 액션 모두 동작
 - [ ] **MatrixCanvas / CalendarDrawer / BrainDumpToggle 무변경** (frontend-board.md protected list)
@@ -269,10 +287,12 @@ PR-R-CalendarLeak 머지 **후** 진행.
 작은 isolation PR.
 
 **변경:**
+
 - `src/styles.css` 라인 3963–4065 (`.asb-seg*`, `.asb-track`, `.asb-count`, `.asb-kind-label`, `.asb-cmux-chip` — 약 65 LOC) 제거. P10a AgentStatusBar 박스 리디자인 이후 stranded.
 - 8개 raw 뉴스 소스 브랜드 색 (`#ff6600`, `#1f7a8c` 등)을 `@theme` 토큰으로 (선호: `--color-news-brand-{slug}` 또는 컴포넌트에서 인라인 유지 결정 — 결정 필요. **권장:** Tailwind v4 `@theme`에 `--news-brand-*` 토큰 추가)
 
 **Done:**
+
 - [ ] 각 제거 클래스가 TSX에서 미참조 (grep 확인)
 - [ ] `pnpm typecheck` + `pnpm lint`
 - [ ] 시각 회귀 없음 (수동: AgentStatusBar / News sources 화면)
@@ -297,6 +317,7 @@ Day 5: PR-F-CSS-Dead
 ```
 
 **각 PR마다:**
+
 - 단일 관심사 (`AGENTS.md` "한 PR = 한 관심사")
 - PR 본문: 문제 / 변경 / 검증 명령 출력 / INVARIANT 체크 / 의도적 deferred
 - `docs/decisions.md` 한 줄
@@ -315,15 +336,15 @@ Day 5: PR-F-CSS-Dead
 
 ## 변경 임팩트 요약
 
-| 영역 | 변경 종류 | LOC delta(추정) |
-|---|---|---|
-| Harness docs | +11 area docs, AGENTS.md slim, CLAUDE.md slim, PLAN.md §1 축약 | +60K(문서) / 코드 0 |
-| Rust 도메인 누수 | 2 PR (Notion 인라인 reqwest, calendar leak) | ±0 (이동) |
-| Rust god split | 2 PR (models facade, calendar 6 slice) | ±0 (이동) |
-| Frontend god split | 3 PR (Worktree 9, Jobs 4+const, Capture hook) | ±0 (이동) |
-| Frontend IPC 위반 | 1 PR (useAgentRunStatus 신설) | +~40 / -~20 |
-| Naming | 1 PR (3 rename) | ±0 |
-| CSS | 1 PR (~65 dead + 토큰화) | -~65 / +~10 (토큰) |
+| 영역               | 변경 종류                                                      | LOC delta(추정)     |
+| ------------------ | -------------------------------------------------------------- | ------------------- |
+| Harness docs       | +11 area docs, AGENTS.md slim, CLAUDE.md slim, PLAN.md §1 축약 | +60K(문서) / 코드 0 |
+| Rust 도메인 누수   | 2 PR (Notion 인라인 reqwest, calendar leak)                    | ±0 (이동)           |
+| Rust god split     | 2 PR (models facade, calendar 6 slice)                         | ±0 (이동)           |
+| Frontend god split | 3 PR (Worktree 9, Jobs 4+const, Capture hook)                  | ±0 (이동)           |
+| Frontend IPC 위반  | 1 PR (useAgentRunStatus 신설)                                  | +~40 / -~20         |
+| Naming             | 1 PR (3 rename)                                                | ±0                  |
+| CSS                | 1 PR (~65 dead + 토큰화)                                       | -~65 / +~10 (토큰)  |
 
 **총 10 PR**, 모두 단일 관심사. PR-H1만 무거움(문서 11개) — 정본 채택 게이트.
 

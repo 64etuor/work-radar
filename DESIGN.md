@@ -5,6 +5,7 @@
 > 이전 Raycast 방향은 `docs/archive/design-raycast.md`에 보존.
 >
 > **적용 범위 메모 (work-radar 컨텍스트):**
+>
 > - **앱 전반 적용:** 토큰 계열(Colors / Typography / Layout / Elevation / Shapes)과
 >   `button-primary` · `button-secondary` · `button-pill-outline` · `capability-card` ·
 >   `product-card` · `contact-form-card` · `agent-console-card`.
@@ -22,6 +23,7 @@ Cohere's current web presence feels like a sober enterprise AI command center wi
 What makes the system distinctive is the mix of austere black-and-white UI with bursts of tactile brand imagery. The site avoids decorative chrome in the normal interface; color arrives through photography, abstract 3D media, coral blog taxonomy chips, blue research links, and dark product environments. Cards are rounded but not cute. Type is large, tight, and almost monospaced in spirit, creating a research-lab cadence across marketing, product, and editorial surfaces.
 
 **Key Characteristics:**
+
 - Monumental display headlines with very tight line height and negative tracking.
 - White editorial canvases interrupted by deep green, dark navy, and image-led CTA bands.
 - Rounded media cards and product cards, usually 8px to 22px.
@@ -79,20 +81,20 @@ Cohere does not use gradients as a generic UI fill. Gradients and color fields a
 
 ### Hierarchy
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|---|---|---:|---:|---:|---:|---|
-| Hero Display | CohereText | 96px | 400 | 1.00 | -1.92px | Home page declaration scale. |
-| Product Display | CohereText | 72px | 400 | 1.00 | -1.44px | Product and research hero headlines. |
-| Section Display | Unica77 | 60px | 400 | 1.00 | -1.2px | Large product-page headings. |
-| Section Heading | Unica77 | 48px | 400 | 1.20 | -0.48px | Split hero and CTA headings. |
-| Card Heading | Unica77 | 32px | 400 | 1.20 | -0.32px | Feature card and list section titles. |
-| Feature Heading | Unica77 | 24px | 400 | 1.30 | 0 | Cards, filters, and article titles. |
-| Body Large | Unica77 | 18px | 400 | 1.40 | 0 | Lead text and larger paragraphs. |
-| Body | Unica77 | 16px | 400 | 1.50 | 0 | Default copy and link text. |
-| Button | Unica77 | 14px | 500 | 1.71 | 0 | Compact CTA labels. |
-| Caption | Unica77 | 14px | 400 | 1.40 | 0 | Metadata and small explanatory text. |
-| Mono Label | CohereMono | 14px | 400 | 1.40 | 0.28px | Uppercase technical labels. |
-| Micro | Unica77 | 12px | 400 | 1.40 | 0 | Footer, nav microcopy, and small links. |
+| Role            | Font       | Size | Weight | Line Height | Letter Spacing | Notes                                   |
+| --------------- | ---------- | ---: | -----: | ----------: | -------------: | --------------------------------------- |
+| Hero Display    | CohereText | 96px |    400 |        1.00 |        -1.92px | Home page declaration scale.            |
+| Product Display | CohereText | 72px |    400 |        1.00 |        -1.44px | Product and research hero headlines.    |
+| Section Display | Unica77    | 60px |    400 |        1.00 |         -1.2px | Large product-page headings.            |
+| Section Heading | Unica77    | 48px |    400 |        1.20 |        -0.48px | Split hero and CTA headings.            |
+| Card Heading    | Unica77    | 32px |    400 |        1.20 |        -0.32px | Feature card and list section titles.   |
+| Feature Heading | Unica77    | 24px |    400 |        1.30 |              0 | Cards, filters, and article titles.     |
+| Body Large      | Unica77    | 18px |    400 |        1.40 |              0 | Lead text and larger paragraphs.        |
+| Body            | Unica77    | 16px |    400 |        1.50 |              0 | Default copy and link text.             |
+| Button          | Unica77    | 14px |    500 |        1.71 |              0 | Compact CTA labels.                     |
+| Caption         | Unica77    | 14px |    400 |        1.40 |              0 | Metadata and small explanatory text.    |
+| Mono Label      | CohereMono | 14px |    400 |        1.40 |         0.28px | Uppercase technical labels.             |
+| Micro           | Unica77    | 12px |    400 |        1.40 |              0 | Footer, nav microcopy, and small links. |
 
 ### Principles
 
@@ -127,26 +129,26 @@ Cohere uses whitespace as a trust signal. Large empty intervals separate the bra
 
 Cohere is mostly flat. Depth comes from surface alternation, media contrast, rounded corners, and thin borders rather than drop shadows.
 
-| Level | Treatment | Use |
-|---|---|---|
-| Flat | No shadow, white or dark field | Hero copy, research lists, editorial surfaces |
-| Bordered | 1px `#d9d9dd`, `#e5e7eb`, or dark translucent rules | Research rows, forms, pale cards, footer inputs |
-| Media Lift | Rounded image or video over contrasting section color | Hero photo cards, product videos, CTA imagery |
-| Dark Product Field | Deep green or navy full-width band | Command, North, financial services, security sections |
+| Level              | Treatment                                             | Use                                                   |
+| ------------------ | ----------------------------------------------------- | ----------------------------------------------------- |
+| Flat               | No shadow, white or dark field                        | Hero copy, research lists, editorial surfaces         |
+| Bordered           | 1px `#d9d9dd`, `#e5e7eb`, or dark translucent rules   | Research rows, forms, pale cards, footer inputs       |
+| Media Lift         | Rounded image or video over contrasting section color | Hero photo cards, product videos, CTA imagery         |
+| Dark Product Field | Deep green or navy full-width band                    | Command, North, financial services, security sections |
 
 ## Shapes
 
 ### Radius Scale
 
-| Token | Value | Role |
-|---|---:|---|
-| `xs` | 4px | Small images, search fields, article thumbnails, utility elements |
-| `sm` | 8px | Blog chips, cards, small media, dialogs |
-| `md` | 16px | Medium product cards and grouped blocks |
-| `lg` | 22px | Signature media-card and soft placeholder radius |
-| `xl` | 30px | Research/topic filter pills |
-| `pill` | 32px | Primary CTA buttons |
-| `full` | 9999px | Round status elements and fully pill-shaped controls |
+| Token  |  Value | Role                                                              |
+| ------ | -----: | ----------------------------------------------------------------- |
+| `xs`   |    4px | Small images, search fields, article thumbnails, utility elements |
+| `sm`   |    8px | Blog chips, cards, small media, dialogs                           |
+| `md`   |   16px | Medium product cards and grouped blocks                           |
+| `lg`   |   22px | Signature media-card and soft placeholder radius                  |
+| `xl`   |   30px | Research/topic filter pills                                       |
+| `pill` |   32px | Primary CTA buttons                                               |
+| `full` | 9999px | Round status elements and fully pill-shaped controls              |
 
 ### Image Treatment
 
@@ -324,6 +326,7 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 > 마케팅용 `agent-console-card`(다크 목업)와 혼동 금지 — 아래는 **밝은 상주 스트립**.
 
 ### **`agent-status-bar`** (상주 최상단 스트립)
+
 - 흰 캔버스(`#fff`), 하단 1px `hairline`. 높이 ~56–64px(현행 얇은 트랙에서 상향).
 - 내용 = `agent-box` 가로 행 + 좌측 Mono 마이크로 라벨 `AGENTS`.
 - **`agent-box`**: 1px `border-light`, radius `sm`(8px). 구성:
@@ -338,6 +341,7 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 - **빈 상태(에이전트 없음)**: 조용한 단일 `Agents · idle` pill(Mono 라벨), 박스 없음.
 
 ### **`sprint-timer`** (브랜드 헤더 내 카운트다운)
+
 - 위치 = 뷰 헤더("Work Radar / Capture" 등) **우측 존**. (에이전트 바와 분리.)
 - 카운트다운 `D일 HH:MM` = **CohereMono**, Ink 색. 1분 단위 갱신.
 - 상태: not-configured=`스프린트 설정` 텍스트 링크(`button-secondary`) · running=mono 카운트다운 ·
@@ -346,6 +350,7 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
   `button-primary` 저장. (모델 = 길이+앵커 조합.)
 
 ### **`calendar-drawer`** (우측 슬라이드 드로어)
+
 - 캡처 보드 **우측에서 슬라이드 인**(today-rail 위 오버레이/확장). 흰 패널, 좌측 모서리 radius `lg`,
   좌측 1px `hairline`. 무거운 그림자 금지(절제된 Media Lift만).
 - 헤더: Mono `CALENDAR` + **일/주/월 세그먼트**(`kind-toggle` 스타일 pill) + `‹ 오늘 ›` 날짜 네비.
@@ -355,6 +360,7 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 - 닫기: ESC / 백드롭 / 우상단 ✕.
 
 ### **`enrich-review-panel`** (보드 내 인라인 제안 검토)
+
 - "전체 제안 실행" 완료 시 **오버레이가 아닌 보드 영역 인라인 패널**(INBOX 컬럼 자리/보드 패널).
   카드는 계속 보이게 — 결정 맥락 유지(INVARIANT #1).
 - 헤더 Mono `제안 검토 (N)`. 행 = 카드 제목 + **수정 가능** 제안(사분면/우선순위 칩) + 적용/건너뜀.
@@ -362,16 +368,19 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 - 상태: running=진행 표시(에이전트 바 연동) · partial=행 스트리밍 · empty="제안 없음" · error=재시도.
 
 ### Cmd+K 팰레트 — 스킬 그룹핑
+
 - 스킬은 Cmd+K에서 Mono 섹션 라벨 `SKILLS` 아래 노출. **현재 프로젝트 관련 스킬 우선**(표시 그룹핑).
 - 선택은 **제안까지만**(잡 자동 실행/확정 금지, INVARIANT #1).
 
 ### 반응형(신규 표면)
+
 - **agent-status-bar**: 좁으면 박스 너비 축소 + '+N' 더 빨리. 매우 좁으면 이름 숨기고 아이콘+상태만.
 - **sprint-timer**: 좁으면 `D일 HH:MM`→`D일`만, overdue 색 유지.
 - **calendar-drawer**: ≥1040px=우측 드로어 / <720px=하단 시트로 전환(보드 반응형과 일관). 월뷰는 좁으면 주뷰로 강등.
 - **enrich-review-panel**: 좁으면 전체폭 스택.
 
 ### a11y(신규 표면)
+
 - 모든 상태는 **색+라벨/텍스트 병기**(이미 전역 규칙). 포커스=Focus Blue 링.
 - agent-box 이름 편집·드로어·팰레트 **키보드 도달 가능**(Tab/Enter/ESC). 터치 타깃 ≥44px.
 - 카운트다운은 `aria-live=polite`로 분 단위 갱신만 알림(과알림 금지).
@@ -380,14 +389,14 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 
 ### Breakpoints
 
-| Name | Width | Key Changes |
-|---|---:|---|
-| Small Mobile | <425px | Single-column cards, compact nav, reduced hero headline scale |
-| Mobile | 425-640px | Hero media stacks, card grids become one column, form rows stack |
-| Large Mobile | 640-768px | Wider one-column layouts with larger media cards |
-| Tablet | 768-1024px | Two-column cards begin, nav spacing tightens |
-| Desktop | 1024-1440px | Full nav, 3-column card grids, split hero compositions |
-| Large Desktop | 1440-2560px | Wide containers and large empty vertical intervals |
+| Name          |       Width | Key Changes                                                      |
+| ------------- | ----------: | ---------------------------------------------------------------- |
+| Small Mobile  |      <425px | Single-column cards, compact nav, reduced hero headline scale    |
+| Mobile        |   425-640px | Hero media stacks, card grids become one column, form rows stack |
+| Large Mobile  |   640-768px | Wider one-column layouts with larger media cards                 |
+| Tablet        |  768-1024px | Two-column cards begin, nav spacing tightens                     |
+| Desktop       | 1024-1440px | Full nav, 3-column card grids, split hero compositions           |
+| Large Desktop | 1440-2560px | Wide containers and large empty vertical intervals               |
 
 ### Touch Targets
 

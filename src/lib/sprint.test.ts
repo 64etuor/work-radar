@@ -43,9 +43,7 @@ describe("sprint — 카운트다운 순수 헬퍼(P11)", () => {
   });
 
   it("formatCountdownLabel: 음수 입력에도 지남 문구를 노출하지 않음", () => {
-    expect(formatCountdownLabel(formatCountdown(-(1 * 86400 + 2 * 3600)))).toBe(
-      "1일 02:00 남음",
-    );
+    expect(formatCountdownLabel(formatCountdown(-(1 * 86400 + 2 * 3600)))).toBe("1일 02:00 남음");
   });
 
   it("remainingSecondsUntil: 경계 - now(ms) 초 차이(양수=남음)", () => {

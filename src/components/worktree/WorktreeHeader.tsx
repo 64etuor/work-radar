@@ -54,10 +54,7 @@ export function WorktreeHeader({
             <SelectItem key={p.id} value={p.id}>
               <span className="inline-flex items-center gap-1.5">
                 {p.name}
-                <KindBadge
-                  kind={p.kind}
-                  className="h-4 px-1.5 py-0 text-[10px] leading-none"
-                />
+                <KindBadge kind={p.kind} className="h-4 px-1.5 py-0 text-[10px] leading-none" />
               </span>
             </SelectItem>
           ))}
@@ -88,11 +85,11 @@ export function WorktreeHeader({
       <Button
         variant="outline"
         size="sm"
-        className="size-8 shrink-0 rounded-full p-0 text-wr-muted"
+        className="text-wr-muted size-8 shrink-0 rounded-full p-0"
         onClick={onRefresh}
         title="새로고침"
       >
-        <RefreshCw className={`size-3.5${worktreesFetching ? " wt-spin" : ""}`} />
+        <RefreshCw className={`size-3.5${worktreesFetching ? "wt-spin" : ""}`} />
       </Button>
     </header>
   );

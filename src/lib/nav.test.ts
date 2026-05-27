@@ -11,12 +11,7 @@ import {
 
 describe("navItemsByGroup", () => {
   it("4개 그룹을 정해진 순서로 반환한다", () => {
-    expect(navItemsByGroup().map((g) => g.group)).toEqual([
-      "operate",
-      "review",
-      "code",
-      "connect",
-    ]);
+    expect(navItemsByGroup().map((g) => g.group)).toEqual(["operate", "review", "code", "connect"]);
   });
 
   it("모든 NAV_ITEMS를 누락·중복 없이 분배한다", () => {

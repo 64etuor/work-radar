@@ -8,10 +8,7 @@
 // 정책: **allowlist(deny-by-default).** 아래 ambient 표시 키만 persist하고, 그 외(결정 큐
 // 포함)는 모두 디스크에 쓰지 않는다. 새 쿼리 키는 명시적으로 추가해야 persist된다(안전 기본값).
 
-import {
-  defaultShouldDehydrateQuery,
-  type Query,
-} from "@tanstack/react-query";
+import { defaultShouldDehydrateQuery, type Query } from "@tanstack/react-query";
 
 /**
  * persist 대상(ambient 표시 데이터)의 query key prefix allowlist.

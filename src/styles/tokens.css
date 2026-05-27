@@ -83,12 +83,9 @@
   --color-q4: #93939f; /* Muted Slate — Q4 그 외 */
 
   /* Typography — DESIGN.md 폰트 스택(프로프라이어터리 미번들 → 폴백 사용) */
-  --font-display:
-    "CohereText", "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-sans:
-    "Unica77 Cohere Web", "Inter", Arial, ui-sans-serif, system-ui, sans-serif;
-  --font-mono:
-    "CohereMono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+  --font-display: "CohereText", "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Unica77 Cohere Web", "Inter", Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "CohereMono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
 
   /* Radius scale — DESIGN.md Shapes */
   --radius: 8px; /* 기본(=sm) */

@@ -52,14 +52,49 @@ const CATEGORIES: {
   icon: React.ComponentType<{ className?: string }>;
   blurb: string;
 }[] = [
-  { id: "projects", label: "프로젝트", icon: FolderOpen, blurb: "개인/업무 프로젝트와 Notion·GitHub·Google 계정 연결을 관리합니다." },
-  { id: "agents", label: "에이전트", icon: Bot, blurb: "Codex CLI 상태와 에이전트 모델을 설정합니다." },
-  { id: "shortcuts", label: "단축키", icon: Keyboard, blurb: "뷰 전환 단축키와 키맵을 설정합니다." },
-  { id: "integrations", label: "통합", icon: Link2, blurb: "Google 계정·Hermes 브리지 연결을 관리합니다." },
+  {
+    id: "projects",
+    label: "프로젝트",
+    icon: FolderOpen,
+    blurb: "개인/업무 프로젝트와 Notion·GitHub·Google 계정 연결을 관리합니다.",
+  },
+  {
+    id: "agents",
+    label: "에이전트",
+    icon: Bot,
+    blurb: "Codex CLI 상태와 에이전트 모델을 설정합니다.",
+  },
+  {
+    id: "shortcuts",
+    label: "단축키",
+    icon: Keyboard,
+    blurb: "뷰 전환 단축키와 키맵을 설정합니다.",
+  },
+  {
+    id: "integrations",
+    label: "통합",
+    icon: Link2,
+    blurb: "Google 계정·Hermes 브리지 연결을 관리합니다.",
+  },
   { id: "notifications", label: "알림", icon: Bell, blurb: "데스크톱 알림과 트리거를 설정합니다." },
-  { id: "news", label: "뉴스", icon: Newspaper, blurb: "보드 하단 티커에 표시할 외부 뉴스 소스를 켜고 끕니다." },
-  { id: "tags", label: "태그", icon: Tags, blurb: "브레인덤프 카드의 Life Wheel 태그와 팔레트 색상을 관리합니다." },
-  { id: "appearance", label: "외관", icon: Palette, blurb: "테마(라이트/다크)와 본문 폰트를 설정합니다." },
+  {
+    id: "news",
+    label: "뉴스",
+    icon: Newspaper,
+    blurb: "보드 하단 티커에 표시할 외부 뉴스 소스를 켜고 끕니다.",
+  },
+  {
+    id: "tags",
+    label: "태그",
+    icon: Tags,
+    blurb: "브레인덤프 카드의 Life Wheel 태그와 팔레트 색상을 관리합니다.",
+  },
+  {
+    id: "appearance",
+    label: "외관",
+    icon: Palette,
+    blurb: "테마(라이트/다크)와 본문 폰트를 설정합니다.",
+  },
 ];
 
 const NEW_PROJECT_ID = "__new_project__";
@@ -81,23 +116,20 @@ export function SettingsView() {
 
   const runReconcile = () => {
     reconcile.mutate(undefined, {
-      onSuccess: (n) =>
-        pushSuccess(n > 0 ? `${n}건 신호를 projectId로 태깅` : "태깅할 신호 없음"),
+      onSuccess: (n) => pushSuccess(n > 0 ? `${n}건 신호를 projectId로 태깅` : "태깅할 신호 없음"),
     });
   };
 
   return (
-    <div className="settings flex h-full flex-col bg-background text-foreground">
+    <div className="settings bg-background text-foreground flex h-full flex-col">
       <header
-        className="flex items-center gap-3 border-b border-border px-[22px] py-3.5"
+        className="border-border flex items-center gap-3 border-b px-[22px] py-3.5"
         data-tauri-drag-region
       >
-        <span className="font-mono text-[13px] font-semibold uppercase tracking-[0.12em]">
+        <span className="font-mono text-[13px] font-semibold tracking-[0.12em] uppercase">
           설정
         </span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">
-          {active.label}
-        </span>
+        <span className="text-muted-foreground hidden text-xs sm:inline">{active.label}</span>
         {category === "projects" && (
           <Button
             variant="ghost"
@@ -115,7 +147,7 @@ export function SettingsView() {
       <div className="flex min-h-0 flex-1">
         {/* 왼쪽 사이드바 */}
         <nav
-          className="flex w-52 shrink-0 flex-col gap-1 border-r border-border bg-muted/20 p-3"
+          className="border-border bg-muted/20 flex w-52 shrink-0 flex-col gap-1 border-r p-3"
           aria-label="설정 카테고리"
         >
           {CATEGORIES.map(({ id, label, icon: Icon }) => (
@@ -144,12 +176,12 @@ export function SettingsView() {
               category === "projects" ? "max-w-5xl" : "max-w-3xl",
             )}
           >
-            <div className="border-b border-border pb-4">
+            <div className="border-border border-b pb-4">
               <SectionLabel>settings</SectionLabel>
-              <h2 className="mt-2 text-[22px] font-semibold leading-tight tracking-[-0.02em]">
+              <h2 className="mt-2 text-[22px] leading-tight font-semibold tracking-[-0.02em]">
                 {active.label}
               </h2>
-              <p className="mt-1 max-w-[62ch] text-sm leading-6 text-muted-foreground">
+              <p className="text-muted-foreground mt-1 max-w-[62ch] text-sm leading-6">
                 {active.blurb}
               </p>
             </div>
@@ -167,9 +199,7 @@ export function SettingsView() {
             {category === "integrations" && (
               <IntegrationsPane list={list} pushSuccess={pushSuccess} />
             )}
-            {category === "notifications" && (
-              <NotificationSettings onToast={pushSuccess} />
-            )}
+            {category === "notifications" && <NotificationSettings onToast={pushSuccess} />}
             {category === "news" && <NewsSourceSettings onToast={pushSuccess} />}
             {category === "tags" && <LifeWheelTagSettings onToast={pushSuccess} />}
             {category === "appearance" && <AppearanceSettings />}
@@ -197,20 +227,17 @@ function ProjectsPane({
     settingsIntent === "add_project" ? NEW_PROJECT_ID : null,
   );
   const isCreating = selectedProjectId === NEW_PROJECT_ID || list.length === 0;
-  const selectedId = !isCreating && list.some((p) => p.id === selectedProjectId)
-    ? selectedProjectId
-    : list[0]?.id;
+  const selectedId =
+    !isCreating && list.some((p) => p.id === selectedProjectId) ? selectedProjectId : list[0]?.id;
   const selectedProject = list.find((p) => p.id === selectedId);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
       <Card className="self-start overflow-hidden rounded-2xl">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+        <div className="border-border flex items-center justify-between border-b px-4 py-3.5">
           <div>
             <SectionLabel>프로젝트</SectionLabel>
-            <p className="mt-1 text-xs text-muted-foreground">
-              설정할 프로젝트를 선택하세요.
-            </p>
+            <p className="text-muted-foreground mt-1 text-xs">설정할 프로젝트를 선택하세요.</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline">{list.length}</Badge>
@@ -228,9 +255,7 @@ function ProjectsPane({
         </div>
 
         {projects.isLoading && (
-          <div className="px-4 py-6 text-sm text-muted-foreground">
-            불러오는 중…
-          </div>
+          <div className="text-muted-foreground px-4 py-6 text-sm">불러오는 중…</div>
         )}
         {projects.isError && (
           <div className="px-4 py-6 text-sm text-[color:var(--destructive)]">
@@ -238,7 +263,7 @@ function ProjectsPane({
           </div>
         )}
         {projects.data && list.length === 0 && (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground px-4 py-8 text-center text-sm">
             아직 프로젝트가 없습니다. 오른쪽에서 첫 프로젝트를 추가하세요.
           </div>
         )}
@@ -255,12 +280,12 @@ function ProjectsPane({
                 : "border-border text-muted-foreground hover:bg-hover hover:text-foreground",
             )}
           >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card">
+            <span className="border-border bg-card flex size-8 shrink-0 items-center justify-center rounded-lg border">
               <Plus className="size-4" />
             </span>
             <span className="min-w-0">
               <span className="block text-[13px] font-semibold">새 프로젝트</span>
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+              <span className="text-muted-foreground mt-0.5 block text-[11px]">
                 개인/업무 프로젝트 추가
               </span>
             </span>
@@ -290,7 +315,7 @@ function ProjectsPane({
         ) : selectedProject ? (
           <ProjectCard key={selectedProject.id} project={selectedProject} onToast={pushSuccess} />
         ) : (
-          <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground">
+          <div className="border-border text-muted-foreground rounded-2xl border border-dashed px-5 py-10 text-center text-sm">
             프로젝트를 선택하면 토큰, Notion DB, Google 계정, 레포 설정을 볼 수 있습니다.
           </div>
         )}
@@ -320,26 +345,21 @@ function ProjectSelectTile({
         "group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
         selected
           ? "border-border-strong bg-secondary text-foreground"
-          : "border-transparent text-muted-foreground hover:border-border hover:bg-hover hover:text-foreground",
+          : "text-muted-foreground hover:border-border hover:bg-hover hover:text-foreground border-transparent",
       )}
     >
       <span
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-lg border",
-          selected ? "border-border bg-card" : "border-transparent bg-muted",
+          selected ? "border-border bg-card" : "bg-muted border-transparent",
         )}
       >
         <Icon className="size-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold">
-          {project.name}
-        </span>
+        <span className="block truncate text-[13px] font-semibold">{project.name}</span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[11px]">
-          <KindBadge
-            kind={project.kind}
-            className="h-4 px-1.5 py-0 text-[10px] leading-none"
-          />
+          <KindBadge kind={project.kind} className="h-4 px-1.5 py-0 text-[10px] leading-none" />
           {hasNotion && (
             <>
               <span className="text-border-strong">·</span>
@@ -364,7 +384,7 @@ function IntegrationsPane({
       <div className="flex flex-col gap-3">
         <SectionLabel>Google 계정</SectionLabel>
         {list.length === 0 && (
-          <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="border-border text-muted-foreground rounded-xl border border-dashed px-5 py-8 text-center text-sm">
             프로젝트를 먼저 추가한 뒤 각 프로젝트에서 Google 계정을 연결하세요.
           </div>
         )}

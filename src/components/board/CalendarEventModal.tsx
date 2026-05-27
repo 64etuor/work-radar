@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./CalendarEventModal.css";
 
-import {
-  localToday,
-  useCreateCalendarEvent,
-  useSelectedCalendars,
-} from "@/lib/query";
+import { localToday, useCreateCalendarEvent, useSelectedCalendars } from "@/lib/query";
 import { useToastStore } from "@/lib/toast";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -177,7 +173,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
         aria-describedby={undefined}
         className="max-h-[78vh] w-[min(440px,92vw)] max-w-none gap-3 overflow-y-auto p-5"
       >
-        <DialogTitle className="font-mono text-[13px] font-semibold uppercase tracking-[0.1em]">
+        <DialogTitle className="font-mono text-[13px] font-semibold tracking-[0.1em] uppercase">
           캘린더에 등록
         </DialogTitle>
 
@@ -224,8 +220,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
           <span className="cev-lbl">캘린더</span>
           {noCalendars ? (
             <div className="cev-empty">
-              선택된 캘린더가 없습니다 — 설정에서 Google 계정 연결 후 캘린더를
-              선택하세요.
+              선택된 캘린더가 없습니다 — 설정에서 Google 계정 연결 후 캘린더를 선택하세요.
             </div>
           ) : (
             <Select
@@ -257,9 +252,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
           />
         </label>
 
-        {create.isError && (
-          <div className="cev-err">{String(create.error)}</div>
-        )}
+        {create.isError && <div className="cev-err">{String(create.error)}</div>}
 
         <div className="cev-actions">
           <Button variant="outline" className="rounded-full" onClick={onClose}>
@@ -269,26 +262,17 @@ export function CalendarEventModal({ state, onClose }: Props) {
             className="rounded-full px-[22px]"
             onClick={submit}
             disabled={
-              create.isPending ||
-              noCalendars ||
-              !title.trim() ||
-              !calendarId ||
-              !start ||
-              !end
+              create.isPending || noCalendars || !title.trim() || !calendarId || !start || !end
             }
-            title={
-              projectId
-                ? "Google Calendar에 이벤트 생성"
-                : "프로젝트 미태깅 카드"
-            }
+            title={projectId ? "Google Calendar에 이벤트 생성" : "프로젝트 미태깅 카드"}
           >
             {create.isPending ? "등록 중…" : "등록"}
           </Button>
         </div>
         {!projectId && (
           <div className="cev-hint">
-            이 카드는 프로젝트에 태깅되어 있지 않아 캘린더를 찾을 수 없습니다. 먼저
-            프로젝트를 연결하세요.
+            이 카드는 프로젝트에 태깅되어 있지 않아 캘린더를 찾을 수 없습니다. 먼저 프로젝트를
+            연결하세요.
           </div>
         )}
         <div className="cev-hint">

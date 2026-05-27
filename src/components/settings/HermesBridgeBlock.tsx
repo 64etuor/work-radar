@@ -16,11 +16,7 @@ import { StatusDot } from "./SettingsKit";
  * 노출되지 않는다(INVARIANT) — 입력란은 항상 비어 있고 상태는 configured 여부만 보여준다.
  * 앱 레벨 단일 브리지(외부 Hermes 하나)라 프로젝트와 무관한 전역 블록이다(NotificationSettings 선례).
  */
-export function HermesBridgeBlock({
-  onToast,
-}: {
-  onToast: (msg: string) => void;
-}) {
+export function HermesBridgeBlock({ onToast }: { onToast: (msg: string) => void }) {
   const status = useHermesBridgeStatus();
   const save = useSetHermesBridge();
   const disconnect = useDisconnectHermes();
@@ -129,10 +125,10 @@ export function HermesBridgeBlock({
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        외부 Hermes 에이전트를 Telegram Bot API류로 제어합니다 — work-radar가 명령을 보내고
-        응답을 받습니다(Hermes 뷰). 봇 토큰은 OS keychain에만 저장되고 절대 화면/DB로 노출되지
-        않습니다. 수신은 bounded 단발(무한 polling 아님)입니다. 미설정이어도 앱 코어는 정상입니다.
+      <p className="text-muted-foreground text-xs">
+        외부 Hermes 에이전트를 Telegram Bot API류로 제어합니다 — work-radar가 명령을 보내고 응답을
+        받습니다(Hermes 뷰). 봇 토큰은 OS keychain에만 저장되고 절대 화면/DB로 노출되지 않습니다.
+        수신은 bounded 단발(무한 polling 아님)입니다. 미설정이어도 앱 코어는 정상입니다.
       </p>
 
       {status.isError && (

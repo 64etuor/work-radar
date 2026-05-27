@@ -3,6 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **v3 changes vs v2** — ralplan iteration 2(Architect Sound-with-revisions + Critic ITERATE) 후 반영:
+>
 > - **R1**: `tokio::time::interval` 생성 직후 `set_missed_tick_behavior(Delay)` 명시(Tokio 기본은 `Burst` — 옵션 churn 후 back-to-back tick 방지, INVARIANT #5 보장).
 > - **R6**: `select_next_wake(ticker, notify) -> WakeReason` 헬퍼 추출 → `spawn_loop`와 `notify_wakes_loop_immediately` 통합 테스트 둘 다 같은 helper 호출 → 진짜 production code 경로 검증.
 > - **R7**: 변수 `woke_by_notify` → `woke_for_reconfig` 개명(park 안전망 polling도 true이므로 명명 정확화).
@@ -11,6 +12,7 @@
 > - Minor: `Field`/`SectionLabel` import 경로 명시(`./kit`).
 >
 > **v2 changes vs v1** — ralplan iteration 1(Architect Sound-with-revisions + Critic ITERATE) 후 반영:
+>
 > - **PR 재순서**: ~~D1→D2→D3→D4~~ → **D-Safe(필터) → D-Expand(소스+그룹) → D-Tune(옵션)**. arXiv flood 안전판이 먼저.
 > - **D3 fetcher**: `tokio::time::interval` **유지**(drift 보정/MissedTickBehavior 보존) + `tokio::sync::Notify`로 옵션 변경 즉시 적용. `fetch_interval=0`은 진짜 park(Notify만 대기).
 > - **`options_store::get`** 멱등 re-seed(`INSERT ON CONFLICT DO NOTHING` then SELECT) + `Default for NewsOptions`.
@@ -40,6 +42,7 @@
 3. **D-Tune** (옛 D3): 글로벌 옵션 — 총 한도/소스당 한도/정렬/갱신 주기. fetcher `Notify` 도입. breaking IPC(`news_list_recent` limit 인자 제거).
 
 ### Out of scope
+
 - 사용자 정의 RSS URL 입력 (registry는 컴파일 시 고정)
 - 즐겨찾기/읽음 상태
 - 키워드 매치 강조(highlight)
@@ -47,16 +50,17 @@
 
 ### INVARIANTS 가드
 
-| # | 불변식 | 본 plan |
-|---|---|---|
-| ① | 결정 레일 자동화 금지 | 옵션·필터 모두 **표시만**. 큐/매트릭스 무접근 |
-| ② | 외부 mutation Acceptance | read-only — 무관 |
-| ③ | dedup upsert | 기존 `(source, external_id)` 그대로 |
-| ⑤ | bounded retry | 갱신 주기 floor 5분(0=park, busy-poll 아님). fetcher 재시도 3회 유지 |
-| ⑥ | worktree | UI/DB만 — 무관 |
-| ⑦ | SSOT 분리 | 옵션·필터 SSOT = 로컬 SQLite. 외부 사이트 원본 SSOT 유지 |
+| #   | 불변식                   | 본 plan                                                              |
+| --- | ------------------------ | -------------------------------------------------------------------- |
+| ①   | 결정 레일 자동화 금지    | 옵션·필터 모두 **표시만**. 큐/매트릭스 무접근                        |
+| ②   | 외부 mutation Acceptance | read-only — 무관                                                     |
+| ③   | dedup upsert             | 기존 `(source, external_id)` 그대로                                  |
+| ⑤   | bounded retry            | 갱신 주기 floor 5분(0=park, busy-poll 아님). fetcher 재시도 3회 유지 |
+| ⑥   | worktree                 | UI/DB만 — 무관                                                       |
+| ⑦   | SSOT 분리                | 옵션·필터 SSOT = 로컬 SQLite. 외부 사이트 원본 SSOT 유지             |
 
 ### 소스 카테고리 (D-Expand에서 도입)
+
 ```rust
 pub enum NewsCategory {
     KoreanTech,   // 한국 기술블로그
@@ -67,18 +71,18 @@ pub enum NewsCategory {
 
 ### D-Expand 신규 소스 (10개)
 
-| id | label | category | endpoint | UA / 비고 |
-|---|---|---|---|---|
-| reddit_programming | r/programming | EnglishTech | `https://www.reddit.com/r/programming/.rss` | **Reddit UA 필수**: `"work-radar bot/1.0 (+https://github.com/...)"` per-source 헤더 |
-| devto | dev.to | EnglishTech | `https://dev.to/feed` | |
-| naver_d2 | NAVER D2 | KoreanTech | `https://d2.naver.com/d2.atom` | Atom |
-| kakao_tech | 카카오 기술블로그 | KoreanTech | `https://tech.kakao.com/feed/` | |
-| woowahan_tech | 우아한형제들 기술블로그 | KoreanTech | `https://techblog.woowahan.com/feed/` | |
-| toss_tech | 토스 tech | KoreanTech | `https://toss.tech/rss.xml` | |
-| line_engineering | LINE engineering | KoreanTech | `https://engineering.linecorp.com/ko/blog/rss/` | |
-| yozm_it | 요즘IT | KoreanTech | `https://yozm.wishket.com/magazine/rss/` | |
-| arxiv_cs_lg | arXiv cs.LG | AiResearch | `https://export.arxiv.org/rss/cs.LG` | **HTTPS** |
-| arxiv_cs_ai | arXiv cs.AI | AiResearch | `https://export.arxiv.org/rss/cs.AI` | **HTTPS** |
+| id                 | label                   | category    | endpoint                                        | UA / 비고                                                                            |
+| ------------------ | ----------------------- | ----------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| reddit_programming | r/programming           | EnglishTech | `https://www.reddit.com/r/programming/.rss`     | **Reddit UA 필수**: `"work-radar bot/1.0 (+https://github.com/...)"` per-source 헤더 |
+| devto              | dev.to                  | EnglishTech | `https://dev.to/feed`                           |                                                                                      |
+| naver_d2           | NAVER D2                | KoreanTech  | `https://d2.naver.com/d2.atom`                  | Atom                                                                                 |
+| kakao_tech         | 카카오 기술블로그       | KoreanTech  | `https://tech.kakao.com/feed/`                  |                                                                                      |
+| woowahan_tech      | 우아한형제들 기술블로그 | KoreanTech  | `https://techblog.woowahan.com/feed/`           |                                                                                      |
+| toss_tech          | 토스 tech               | KoreanTech  | `https://toss.tech/rss.xml`                     |                                                                                      |
+| line_engineering   | LINE engineering        | KoreanTech  | `https://engineering.linecorp.com/ko/blog/rss/` |                                                                                      |
+| yozm_it            | 요즘IT                  | KoreanTech  | `https://yozm.wishket.com/magazine/rss/`        |                                                                                      |
+| arxiv_cs_lg        | arXiv cs.LG             | AiResearch  | `https://export.arxiv.org/rss/cs.LG`            | **HTTPS**                                                                            |
+| arxiv_cs_ai        | arXiv cs.AI             | AiResearch  | `https://export.arxiv.org/rss/cs.AI`            | **HTTPS**                                                                            |
 
 모두 default OFF — `pref_store::list_available`가 행 없으면 ON으로 기본 처리하던 동작은 **변경하지 않음**(기존 hn/geeknews/lobsters는 그대로 ON 유지). 신규 10개는 마이그레이션에서 명시 `enabled=0` 시드 + **registry-pref 커버리지 assertion 테스트**로 누락 방지.
 
@@ -87,6 +91,7 @@ pub enum NewsCategory {
 ## §1 Pre-flight (모든 PR 공통)
 
 - [ ] **dev 최신화**
+
 ```bash
 cd /Users/davidpark/private_project/work-radar
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -106,6 +111,7 @@ rtk git status -sb         # clean
 ### Task S.1 — 마이그레이션 0018 + filter_store
 
 **Files:**
+
 - Create: `src-tauri/migrations/0018_news_keyword_filters.sql`
 - Create: `src-tauri/src/news/filter_store.rs`
 
@@ -263,6 +269,7 @@ mod tests {
 ```
 
 `src-tauri/src/news/mod.rs`에 등록:
+
 ```rust
 pub mod filter_store;
 ```
@@ -270,6 +277,7 @@ pub mod filter_store;
 ### Task S.2 — `store::list_recent`에 필터 인자 추가
 
 **Files:**
+
 - Modify: `src-tauri/src/news/store.rs`
 
 ⚠️ D-Safe 시점에는 옵션 시스템이 없으므로 시그니처는 `list_recent(db, limit, filters)` — D-Tune에서 다시 `(db, opts, filters)`로 한 번 더 변경.
@@ -333,6 +341,7 @@ pub async fn list_recent(
 - [ ] **Step 2: 기존 테스트 시그니처 + 신규 필터 테스트 (정수 케이스 포함)**
 
 `item` helper를 `(source, id, title)` 3-arg로 변경:
+
 ```rust
 fn item(source: &str, id: &str, title: &str) -> NewsItem {
     NewsItem {
@@ -350,6 +359,7 @@ fn item(source: &str, id: &str, title: &str) -> NewsItem {
 기존 `upsert_dedup_keeps_latest_title` / `list_recent_excludes_disabled_sources` / `purge_removes_old`는 호출만 `list_recent(&p, 10, &[])`로 수정.
 
 신규 테스트:
+
 ```rust
 #[tokio::test]
 async fn include_filter_keeps_only_matching() {
@@ -430,6 +440,7 @@ async fn case_insensitive_match() {
 ### Task S.3 — IPC + 프런트 chip 에디터
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/news.rs`
 - Modify: `src-tauri/src/lib.rs` (collect_commands)
 - Modify: `src/lib/query/news.ts`
@@ -479,6 +490,7 @@ pub async fn news_remove_filter(db: State<'_, Db>, id: i64) -> Result<(), AppErr
 - [ ] **Step 2: RQ 훅**
 
 `src/lib/query/news.ts`에 추가:
+
 ```ts
 import type { FilterMode, KeywordFilter } from "@/bindings";
 
@@ -518,7 +530,7 @@ export function useRemoveNewsFilter() {
 
 ```tsx
 // 기존 빈 상태 다음에 분기 추가:
-const filters = useNewsFilters();   // hook 추가
+const filters = useNewsFilters(); // hook 추가
 const hasFilters = (filters.data ?? []).length > 0;
 
 if (items.length === 0) {
@@ -535,17 +547,20 @@ if (items.length === 0) {
 - [ ] **Step 4: `NewsSourceSettings.tsx`에 `NewsFiltersForm` 섹션 추가**
 
 기존 소스 토글 위/아래에 추가:
+
 ```tsx
 import { X } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import {
-  useNewsFilters, useAddNewsFilter, useRemoveNewsFilter,
-} from "@/lib/query/news";
+import { useNewsFilters, useAddNewsFilter, useRemoveNewsFilter } from "@/lib/query/news";
 import type { FilterMode, KeywordFilter } from "@/bindings";
 
 function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
@@ -574,30 +589,37 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
   const excludes = list.filter((f) => f.mode === "exclude");
 
   return (
-    <section className="rounded-xl border border-border p-4 flex flex-col gap-3">
+    <section className="border-border flex flex-col gap-3 rounded-xl border p-4">
       <SectionLabel>키워드 필터</SectionLabel>
       <div className="flex gap-2">
         <Input
           value={kw}
           onChange={(e) => setKw(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); submit(); }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
           }}
           placeholder="예: AI, Rust, crypto"
           className="flex-1"
         />
         <Select value={mode} onValueChange={(v) => setMode(v as FilterMode)}>
-          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-28">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="include">포함</SelectItem>
             <SelectItem value="exclude">제외</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={submit} disabled={!kw.trim() || add.isPending}>추가</Button>
+        <Button onClick={submit} disabled={!kw.trim() || add.isPending}>
+          추가
+        </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        포함: 적어도 하나의 키워드를 포함한 제목만 표시(OR). 제외: 이 키워드를 포함한 제목 숨김(AND).
-        대소문자 무관, 부분 일치. 빈 리스트면 전체 표시.
+      <p className="text-muted-foreground text-xs">
+        포함: 적어도 하나의 키워드를 포함한 제목만 표시(OR). 제외: 이 키워드를 포함한 제목
+        숨김(AND). 대소문자 무관, 부분 일치. 빈 리스트면 전체 표시.
       </p>
       {includes.length > 0 && (
         <div>
@@ -615,25 +637,20 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
   );
 }
 
-function ChipList({
-  list, onRemove,
-}: {
-  list: KeywordFilter[];
-  onRemove: (id: number) => void;
-}) {
+function ChipList({ list, onRemove }: { list: KeywordFilter[]; onRemove: (id: number) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {list.map((f) => (
         <span
           key={f.id}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-xs"
+          className="border-border bg-muted inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs"
         >
           {f.keyword}
           <button
             type="button"
             onClick={() => onRemove(f.id)}
             aria-label={`${f.keyword} 제거`}
-            className="rounded-full p-0.5 hover:bg-hover"
+            className="hover:bg-hover rounded-full p-0.5"
           >
             <X className="size-3" />
           </button>
@@ -660,6 +677,7 @@ cd .. && rtk tsc --noEmit 2>&1 | tail -3
 pnpm lint 2>&1 | grep -E "ESLint:"
 grep -q "KeywordFilter" src/bindings.ts && echo "bindings OK" || echo "bindings MISSING"
 ```
+
 Expected: 모두 0 errors. `KeywordFilter`/`FilterMode` 노출.
 
 - [ ] **Step 2: `pnpm tauri dev` 부팅 스모크 (AGENTS.md hard gate)**
@@ -667,7 +685,9 @@ Expected: 모두 0 errors. `KeywordFilter`/`FilterMode` 노출.
 ```bash
 pnpm tauri dev
 ```
+
 수동 체크:
+
 - 설정 → 뉴스 → 키워드 필터 섹션 보임
 - "Rust" include 추가 → 티커가 Rust 포함 제목만 보임
 - 빈 매치 시 "필터에 매치되는 뉴스가 없습니다" 안내
@@ -703,11 +723,13 @@ rtk git checkout dev && rtk git merge --ff-only feat/news-d-safe-filter && rtk g
 ### Task E.1 — `NewsCategory` enum + trait 메서드
 
 **Files:**
+
 - Modify: `src-tauri/src/news/mod.rs`
 
 - [ ] **Step 1: 새 타입 + trait 시그니처 + meta 필드**
 
 `mod.rs` 상단에 추가:
+
 ```rust
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
@@ -721,6 +743,7 @@ pub enum NewsCategory {
 `NewsSource` trait에 `fn category(&self) -> NewsCategory;` 추가.
 
 `NewsSourceMeta`에 필드 추가:
+
 ```rust
 pub struct NewsSourceMeta {
     pub id: String,
@@ -737,6 +760,7 @@ pub struct NewsSourceMeta {
 `lobsters.rs`: `EnglishTech`
 
 `pref_store::list_available`:
+
 ```rust
 out.push(NewsSourceMeta {
     label: src.label().to_string(),
@@ -745,11 +769,13 @@ out.push(NewsSourceMeta {
     enabled,
 });
 ```
+
 `use super::NewsCategory;` import 필요한지 컴파일러 가이드 따름.
 
 ### Task E.2 — `GenericRssSource` 어댑터 (timestamp `?` + UA 헤더 + TAKE 캡)
 
 **Files:**
+
 - Create: `src-tauri/src/news/rss_generic.rs`
 
 ```rust
@@ -831,6 +857,7 @@ impl NewsSource for GenericRssSource {
 ### Task E.3 — registry 확장(10 소스) + 마이그레이션 0019 default OFF
 
 **Files:**
+
 - Modify: `src-tauri/src/news/mod.rs` (registry)
 - Create: `src-tauri/migrations/0019_news_source_pref_default_off.sql`
 - Modify: `src-tauri/src/news/store.rs` (index 추가 — 아래 Task E.4에서 처리)
@@ -1003,11 +1030,13 @@ async fn migration_0019_idempotent_preserves_user_changes() {
 ### Task E.4 — 인덱스 추가 (성능)
 
 **Files:**
+
 - Modify: `src-tauri/migrations/0019_news_source_pref_default_off.sql` (위 0019에 같은 파일 안에서 추가)
 
 ⚠️ 단일 마이그레이션에서 두 가지 변경 — DDL: `CREATE INDEX IF NOT EXISTS` + DML seed. 안전.
 
 추가 SQL:
+
 ```sql
 -- 성능: list_recent의 ORDER BY n.posted_at + 필터 JOIN.
 -- 7일 TTL × 13 소스 × ~30/소스 = ~2700 rows 예상이지만 인덱스로 안전 마진.
@@ -1018,6 +1047,7 @@ CREATE INDEX IF NOT EXISTS idx_news_items_source_posted
 ### Task E.5 — 설정 화면 카테고리 그룹화
 
 **Files:**
+
 - Modify: `src/components/settings/NewsSourceSettings.tsx`
 
 D-Safe에서 추가한 `<NewsFiltersForm />` 위에/아래에 카테고리 그룹 섹션 — 평면 리스트 → 카테고리별 섹션 + 접기/펴기 + "이 카테고리 전부 ON/OFF".
@@ -1039,6 +1069,7 @@ const CATEGORY_ORDER: NewsCategory[] = ["koreanTech", "englishTech", "aiResearch
 ```
 
 상세 JSX (D-Safe에서 만든 컴포넌트 안에 통합):
+
 ```tsx
 export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void }) {
   const sources = useNewsSources();
@@ -1048,7 +1079,9 @@ export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void
 
   const grouped = useMemo(() => {
     const out: Record<NewsCategory, NewsSourceMeta[]> = {
-      koreanTech: [], englishTech: [], aiResearch: [],
+      koreanTech: [],
+      englishTech: [],
+      aiResearch: [],
     };
     (sources.data ?? []).forEach((s) => out[s.category].push(s));
     return out;
@@ -1057,7 +1090,8 @@ export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void
   const toggleCollapsed = (c: NewsCategory) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(c)) next.delete(c); else next.add(c);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
       return next;
     });
   };
@@ -1079,62 +1113,77 @@ export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void
       <NewsFiltersForm onToast={onToast} />
 
       <SectionLabel>뉴스 소스</SectionLabel>
-      {sources.isLoading && <div className="text-sm text-muted-foreground">불러오는 중…</div>}
+      {sources.isLoading && <div className="text-muted-foreground text-sm">불러오는 중…</div>}
       {sources.isError && (
         <div className="text-sm text-[color:var(--destructive)]">
           소스 목록 로드 실패: {String(sources.error)}
         </div>
       )}
-      {sources.data && CATEGORY_ORDER.map((cat) => {
-        const list = grouped[cat];
-        if (list.length === 0) return null;
-        const isCollapsed = collapsed.has(cat);
-        const onCount = list.filter((s) => s.enabled).length;
-        return (
-          <section key={cat} className="rounded-xl border border-border">
-            <header className="flex items-center justify-between gap-3 px-4 py-2.5">
-              <button
-                type="button"
-                onClick={() => toggleCollapsed(cat)}
-                className="flex items-center gap-2 text-[13px] font-medium text-foreground"
-              >
-                {isCollapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
-                {CATEGORY_LABEL[cat]}
-                <span className="text-xs text-muted-foreground">{onCount}/{list.length}</span>
-              </button>
-              <div className="flex items-center gap-1.5">
-                <Button variant="ghost" size="sm" onClick={() => setCategoryAll(cat, true)}>전부 ON</Button>
-                <Button variant="ghost" size="sm" onClick={() => setCategoryAll(cat, false)}>전부 OFF</Button>
-              </div>
-            </header>
-            {!isCollapsed && (
-              <div className="flex flex-col divide-y divide-border border-t border-border">
-                {list.map((src) => (
-                  <label key={src.id} htmlFor={`news-src-${src.id}`}
-                         className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5">
-                    <span className="text-[13px] text-foreground">{src.label}</span>
-                    <Switch
-                      id={`news-src-${src.id}`}
-                      checked={src.enabled}
-                      disabled={setEnabled.isPending}
-                      onCheckedChange={(checked) =>
-                        setEnabled.mutate(
-                          { source: src.id, enabled: checked },
-                          {
-                            onSuccess: () => onToast(`${src.label} ${checked ? "켰습니다" : "껐습니다"}`),
-                            onError: () => pushError("news", `${src.label} 토글 실패`),
-                          },
-                        )
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
-          </section>
-        );
-      })}
-      <p className="text-xs text-muted-foreground">
+      {sources.data &&
+        CATEGORY_ORDER.map((cat) => {
+          const list = grouped[cat];
+          if (list.length === 0) return null;
+          const isCollapsed = collapsed.has(cat);
+          const onCount = list.filter((s) => s.enabled).length;
+          return (
+            <section key={cat} className="border-border rounded-xl border">
+              <header className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => toggleCollapsed(cat)}
+                  className="text-foreground flex items-center gap-2 text-[13px] font-medium"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="size-4" />
+                  ) : (
+                    <ChevronDown className="size-4" />
+                  )}
+                  {CATEGORY_LABEL[cat]}
+                  <span className="text-muted-foreground text-xs">
+                    {onCount}/{list.length}
+                  </span>
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="ghost" size="sm" onClick={() => setCategoryAll(cat, true)}>
+                    전부 ON
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCategoryAll(cat, false)}>
+                    전부 OFF
+                  </Button>
+                </div>
+              </header>
+              {!isCollapsed && (
+                <div className="divide-border border-border flex flex-col divide-y border-t">
+                  {list.map((src) => (
+                    <label
+                      key={src.id}
+                      htmlFor={`news-src-${src.id}`}
+                      className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5"
+                    >
+                      <span className="text-foreground text-[13px]">{src.label}</span>
+                      <Switch
+                        id={`news-src-${src.id}`}
+                        checked={src.enabled}
+                        disabled={setEnabled.isPending}
+                        onCheckedChange={(checked) =>
+                          setEnabled.mutate(
+                            { source: src.id, enabled: checked },
+                            {
+                              onSuccess: () =>
+                                onToast(`${src.label} ${checked ? "켰습니다" : "껐습니다"}`),
+                              onError: () => pushError("news", `${src.label} 토글 실패`),
+                            },
+                          )
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      <p className="text-muted-foreground text-xs">
         15분마다 백그라운드에서 갱신 — 토글/필터 변경은 다음 페치부터 반영.
       </p>
     </div>
@@ -1156,11 +1205,13 @@ cd .. && rtk tsc --noEmit 2>&1 | tail -3
 pnpm lint 2>&1 | grep -E "ESLint:"
 grep -q "NewsCategory" src/bindings.ts && echo "category OK" || echo "MISSING"
 ```
+
 Expected: 모든 news:: 테스트 pass(D-Safe 5 + 기존 8 classify + pref_store + store + registry 4건 ≈ 20+). clippy 0. typecheck 0. lint 49 baseline.
 
 - [ ] **Step 2: `pnpm tauri dev` 부팅 스모크**
 
 수동 체크:
+
 - 설정 → 뉴스: 3개 카테고리 섹션 보임. 기본 ON은 기존 3개만. 신규 10개 OFF.
 - 카테고리 펴기/접기 동작.
 - "전부 ON" → 그 카테고리만 켜짐.
@@ -1204,6 +1255,7 @@ rtk git checkout dev && rtk git merge --ff-only feat/news-d-expand-sources-and-g
 ### Task T.1 — 마이그레이션 0020 + options_store (멱등 re-seed)
 
 **Files:**
+
 - Create: `src-tauri/migrations/0020_news_options.sql`
 - Create: `src-tauri/src/news/options_store.rs`
 
@@ -1364,6 +1416,7 @@ mod tests {
 ### Task T.2 — `store::list_recent` 옵션 + 필터 통합
 
 **Files:**
+
 - Modify: `src-tauri/src/news/store.rs`
 
 ⚠️ D-Safe에서 만든 `list_recent(db, limit, filters)`를 `list_recent(db, opts, filters)`로 다시 변경.
@@ -1451,6 +1504,7 @@ pub async fn list_recent(
 - [ ] **Step 2: 기존/D-Safe 테스트 시그니처 일괄 갱신 + 신규 옵션 테스트**
 
 helper:
+
 ```rust
 fn test_opts() -> NewsOptions {
     NewsOptions { total_limit: 10, per_source_limit: 0,
@@ -1461,6 +1515,7 @@ fn test_opts() -> NewsOptions {
 기존/D-Safe 테스트의 `list_recent(&p, 10, &filters)` → `list_recent(&p, &test_opts(), &filters)` 일괄 변경.
 
 신규:
+
 ```rust
 #[tokio::test]
 async fn per_source_limit_caps_per_source() {
@@ -1517,6 +1572,7 @@ async fn sort_mode_mixed_round_robin_deterministic() {
 ### Task T.3 — `fetcher`: `interval` 유지 + `Notify` 즉시 적용
 
 **Files:**
+
 - Modify: `src-tauri/src/news/fetcher.rs`
 - Modify: `src-tauri/src/lib.rs` (Notify를 managed state로 보관)
 
@@ -1728,6 +1784,7 @@ async fn fetch_with_retry(
 - [ ] **Step 2: `lib.rs` setup hook — Notify managed state + spawn_loop 호출 변경**
 
 setup 안에서:
+
 ```rust
 let notify: news::fetcher::OptionsNotify = std::sync::Arc::new(tokio::sync::Notify::new());
 app.manage(notify.clone());
@@ -1810,6 +1867,7 @@ mod tests {
 ### Task T.4 — IPC + 프런트 옵션 폼 + Notify 트리거
 
 **Files:**
+
 - Modify: `src-tauri/src/commands/news.rs`
 - Modify: `src-tauri/src/lib.rs` (collect_commands)
 - Modify: `src/lib/query/news.ts`
@@ -1859,7 +1917,7 @@ const NEWS_POLL_MS = 5 * 60 * 1000;
 export function useNewsList() {
   return useQuery({
     queryKey: ["newsList"],
-    queryFn: () => unwrap(commands.newsListRecent()),   // 인자 제거.
+    queryFn: () => unwrap(commands.newsListRecent()), // 인자 제거.
     refetchInterval: NEWS_POLL_MS,
     retry: false,
     placeholderData: keepPreviousData,
@@ -1895,7 +1953,11 @@ export function useSetNewsOptions() {
 import { Field, SectionLabel } from "./kit";
 import { Input } from "@/components/ui/input";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { useNewsOptions, useSetNewsOptions } from "@/lib/query/news";
 import type { NewsOptions, SortMode } from "@/bindings";
@@ -1909,23 +1971,35 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
     m.mutate({ ...o, ...patch }, { onSuccess: () => onToast("옵션 저장됨 — 다음 페치부터 적용") });
 
   return (
-    <section className="rounded-xl border border-border p-4 flex flex-col gap-3">
+    <section className="border-border flex flex-col gap-3 rounded-xl border p-4">
       <SectionLabel>표시 옵션</SectionLabel>
       <Field label="총 표시 개수" hint="티커가 동시에 보여줄 최대(5~100)">
-        <Input type="number" min={5} max={100}
+        <Input
+          type="number"
+          min={5}
+          max={100}
           value={o.totalLimit}
-          onChange={(e) => update({ totalLimit: Math.max(5, Math.min(100, Number(e.target.value))) })}
+          onChange={(e) =>
+            update({ totalLimit: Math.max(5, Math.min(100, Number(e.target.value))) })
+          }
         />
       </Field>
       <Field label="소스당 최대 개수" hint="0이면 무제한(한 소스가 티커를 독점할 수 있음)">
-        <Input type="number" min={0} max={50}
+        <Input
+          type="number"
+          min={0}
+          max={50}
           value={o.perSourceLimit}
-          onChange={(e) => update({ perSourceLimit: Math.max(0, Math.min(50, Number(e.target.value))) })}
+          onChange={(e) =>
+            update({ perSourceLimit: Math.max(0, Math.min(50, Number(e.target.value))) })
+          }
         />
       </Field>
       <Field label="정렬">
         <Select value={o.sortMode} onValueChange={(v) => update({ sortMode: v as SortMode })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="recent">최신순</SelectItem>
             <SelectItem value="comments">댓글 많은 순</SelectItem>
@@ -1934,9 +2008,13 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
         </Select>
       </Field>
       <Field label="갱신 주기" hint="0=자동 갱신 끔(설정 변경 시 즉시 깨움)">
-        <Select value={String(o.fetchIntervalMinutes)}
-                onValueChange={(v) => update({ fetchIntervalMinutes: Number(v) })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+        <Select
+          value={String(o.fetchIntervalMinutes)}
+          onValueChange={(v) => update({ fetchIntervalMinutes: Number(v) })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="0">자동 갱신 끔</SelectItem>
             <SelectItem value="5">5분</SelectItem>
@@ -1970,11 +2048,13 @@ grep -E "newsGetOptions|newsSetOptions|SortMode" src/bindings.ts | head -3
 # 잔존 호출처 확인 — newsListRecent 어디에서 인자로 호출하는지.
 rg "newsListRecent\(" src/
 ```
+
 Expected: 모두 0 errors. `newsListRecent`에 인자 없는 호출만 존재(grep 결과 = `src/lib/query/news.ts:.. unwrap(commands.newsListRecent()),`).
 
 - [ ] **Step 2: `pnpm tauri dev` 부팅 스모크 + 동작**
 
 수동 체크:
+
 - 설정 → 뉴스 → 표시 옵션 섹션 보임.
 - 갱신 주기 5분으로 변경 → devtools 로그/네트워크에서 5분 후 fetcher tick 발생.
 - 갱신 주기 0("자동 갱신 끔") → 다음 tick 안 옴. 다시 15분으로 바꾸면 즉시 fetcher 깨움 → tick 즉시 실행되어야(Notify 동작).
@@ -2027,23 +2107,25 @@ rtk git checkout dev && rtk git merge --ff-only feat/news-d-tune-options && rtk 
 
 **1. Spec coverage:**
 
-| 사용자 요청 | task |
-|---|---|
-| 키워드 필터 include/exclude | D-Safe |
-| 소스 개수 증가 + 카테고리 + 영문/한글 | D-Expand |
-| 소스별 표시 개수 | D-Tune (per_source_limit) |
-| 표시 정렬 기준 | D-Tune (recent/comments/mixed) |
-| 갱신 주기 사용자 설정 | D-Tune (0/5/10/15/30/60 + 즉시 적용) |
-| INVARIANTS ①/③/⑤/⑦ | 모든 task |
+| 사용자 요청                           | task                                 |
+| ------------------------------------- | ------------------------------------ |
+| 키워드 필터 include/exclude           | D-Safe                               |
+| 소스 개수 증가 + 카테고리 + 영문/한글 | D-Expand                             |
+| 소스별 표시 개수                      | D-Tune (per_source_limit)            |
+| 표시 정렬 기준                        | D-Tune (recent/comments/mixed)       |
+| 갱신 주기 사용자 설정                 | D-Tune (0/5/10/15/30/60 + 즉시 적용) |
+| INVARIANTS ①/③/⑤/⑦                    | 모든 task                            |
 
 **2. Placeholder scan:** 없음. 모든 step에 실제 코드/명령.
 
 **3. Architect blockers 적용 ✅**
+
 - T1: `tokio::time::interval` + `Notify` 유지(spawn_loop 코드에 직접 반영).
 - Antithesis: PR 재순서(D-Safe 먼저).
 - options_store 멱등: INSERT-then-SELECT 코드에 반영.
 
 **4. Critic must-fix 적용 ✅**
+
 - GenericRssSource timestamp `?`(drop) — 반영.
 - D3.3 SQL alias 일관성(`n.*` everywhere) — 반영.
 - D-Tune 통합 테스트(`tokio::time::pause`) — Task T.3 Step 3.
@@ -2057,11 +2139,13 @@ rtk git checkout dev && rtk git merge --ff-only feat/news-d-tune-options && rtk 
 **5. 의존성 가드:** 새 crate 0 (tokio::sync::Notify는 기존 tokio "full" feature에 포함). 새 npm 0 (lucide `X`/`ChevronDown`/`ChevronRight`만 추가 사용).
 
 **6. 위험·트레이드오프:**
+
 - D-Expand RSS endpoint 변동: 신규 default OFF + per-source TAKE 캡 + `published.or(updated)?` drop으로 mitigation 강화.
 - D-Tune breaking IPC: 같은 PR에서 frontend 동시 수정 + grep 검증 명시. bindings drift 0.
 - D-Tune `Notify` 미수신 환경(매우 드뭄, 시스템 종료 직전 등): 1h 안전망 폴로 graceful.
 
 **7. 후속 follow-up(이 plan 후):**
+
 - Reddit 403 응답 시 다른 UA 시도(현재는 default OFF + Per-source 헤더 override).
 - arXiv RSS 첫 tick 후 사용자가 켜서 동작 확인.
 - 사용자 정의 RSS URL 입력(out-of-scope, 사용자 요구 시).
@@ -2075,28 +2159,33 @@ rtk git checkout dev && rtk git merge --ff-only feat/news-d-tune-options && rtk 
 **Decision**: 사용자가 뉴스 티커의 ① 소스(13개), ② 카테고리 그룹, ③ 키워드 필터(include/exclude), ④ 글로벌 옵션(총·소스당 한도, 정렬, 갱신 주기 + 즉시 적용)을 제어할 수 있게 한다. 백엔드는 단일 `NewsSource` trait + `GenericRssSource` RSS 어댑터 + `news_options` 단일 row + `news_keyword_filters` rows + `tokio::sync::Notify` 기반 즉시 적용. 프런트는 기존 shadcn Switch/Select/Input/Button 컴포넌트만 사용(새 의존성 0).
 
 **Decision Drivers**:
+
 1. **확장성** — 새 RSS 소스 추가가 단일 `GenericRssSource { id, label, url, category, headers, take }` literal 한 블록으로 끝.
 2. **사용자 안전** — 신규 10개 소스 모두 default OFF + arXiv flood 방지(per-source TAKE=30, per-source limit 옵션, 키워드 필터를 D-Safe로 먼저 출하).
 3. **회귀 0** — 기존 hn/geeknews/lobsters 동작 + PR B/C/cleanup의 INVARIANT 보존.
 
 **Alternatives considered**:
+
 - (A) **단일 통합 PR** — 큰 diff, atomicity 위험, 회귀 bisect 어려움. ❌ 무효.
 - (B) **plan 4개로 분할** — phase 내 의존성(D-Expand의 category가 D-Tune SQL에 영향 없음·D-Tune이 D-Safe의 filter API 확장) 때문에 동기화 비용만 증가. ❌ 무효.
 - (C) **4-PR 분할(D1→D2→D3→D4)** — 초안. arXiv flood가 D4 이전에 노출되는 안전 갭. Architect/Critic ITERATE.
 - (D) **3-PR 재순서: D-Safe → D-Expand → D-Tune** — 필터(안전판)가 소스 확장 전. ✅ **선택**.
 
 **Why chosen**:
+
 - Architect Antithesis(D-Safe first) 반영 — arXiv/Reddit 같이 잠재적 noise 소스가 들어오기 전 사용자가 키워드 차단 도구를 보유.
 - `tokio::time::interval` 유지(drift 보정) + `Notify`로 즉시 적용 — `MissedTickBehavior::Delay` 명시(test로 강제), INVARIANT #5 준수.
 - 사용자 요청 5항(소스 확장 + 카테고리 + 표시 한도 + 정렬 + 주기 + 필터) 모두 testable acceptance에 매핑.
 
 **Consequences**:
+
 - **Breaking IPC** (`news_list_recent` limit 인자 제거) — 같은 PR(D-Tune)에서 frontend 동시 수정 + `rg "newsListRecent\("` 잔존 호출처 검증으로 bindings drift 0.
 - **새 마이그레이션 3개**(0018 필터, 0019 신규 소스 default OFF + 인덱스, 0020 옵션 + idempotent seed).
 - **fetcher 코드 복잡도 ↑** — `select_next_wake`/`build_ticker` 헬퍼로 테스트 가능 단위로 격리(5 단위 테스트).
 - **default OFF 10 소스** — 사용자가 명시적으로 켜야 노출 → 신선도/검증 사용자 액션으로 자연 보장.
 
 **Follow-ups** (이 plan 후, 비차단):
+
 - N1: D-Tune reconfig path 즉시 fetch UX (현재는 다음 interval tick 대기) — 도그푸드 후 결정.
 - N5: `select_next_wake`의 wake reason `tracing::debug!` 추가 — 관측성 향상.
 - N6: `PARK_TIMEOUT` 안전망 경로 통합 테스트 — 회귀 방지(현재는 manual scenario).
@@ -2113,6 +2202,7 @@ ralplan iteration 3/5 합의 도달 (Architect: Sound · Critic: APPROVE).
 `--interactive` 미사용 — 본 plan을 자동 실행하지 않음. 사용자가 실행 옵션 선택 후 진행.
 
 **실행 옵션**:
+
 1. **Subagent-Driven** — task별 fresh subagent + critic 최종 리뷰 (`/oh-my-claudecode:team` 또는 superpowers:subagent-driven-development)
 2. **Inline Execution** — 본 세션이 직접 D-Safe → D-Expand → D-Tune 순서로 실행(각 PR 끝 critic ACCEPT + commit + dev push)
 3. **Skip for now** — 다른 작업 진행 후 나중에 본 plan으로 복귀

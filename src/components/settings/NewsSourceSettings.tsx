@@ -44,11 +44,7 @@ const CATEGORY_LABEL: Record<NewsCategory, string> = {
 };
 const CATEGORY_ORDER: NewsCategory[] = ["koreanTech", "englishTech", "aiResearch"];
 
-export function NewsSourceSettings({
-  onToast,
-}: {
-  onToast: (msg: string) => void;
-}) {
+export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void }) {
   const sources = useNewsSources();
   const setEnabled = useSetNewsSourceEnabled();
   const { pushError } = useToastStore();
@@ -91,9 +87,7 @@ export function NewsSourceSettings({
       <NewsFiltersForm onToast={onToast} />
 
       <SectionLabel>뉴스 소스</SectionLabel>
-      {sources.isLoading && (
-        <div className="text-sm text-muted-foreground">불러오는 중…</div>
-      )}
+      {sources.isLoading && <div className="text-muted-foreground text-sm">불러오는 중…</div>}
       {sources.isError && (
         <div className="text-sm text-[color:var(--destructive)]">
           소스 목록 로드 실패: {String(sources.error)}
@@ -106,12 +100,12 @@ export function NewsSourceSettings({
           const isCollapsed = collapsed.has(cat);
           const onCount = list.filter((s) => s.enabled).length;
           return (
-            <section key={cat} className="rounded-xl border border-border">
+            <section key={cat} className="border-border rounded-xl border">
               <header className="flex items-center justify-between gap-3 px-4 py-2.5">
                 <button
                   type="button"
                   onClick={() => toggleCollapsed(cat)}
-                  className="flex items-center gap-2 text-[13px] font-medium text-foreground"
+                  className="text-foreground flex items-center gap-2 text-[13px] font-medium"
                 >
                   {isCollapsed ? (
                     <ChevronRight className="size-4" />
@@ -119,38 +113,28 @@ export function NewsSourceSettings({
                     <ChevronDown className="size-4" />
                   )}
                   {CATEGORY_LABEL[cat]}
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {onCount}/{list.length}
                   </span>
                 </button>
                 <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCategoryAll(cat, true)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setCategoryAll(cat, true)}>
                     전부 ON
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCategoryAll(cat, false)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setCategoryAll(cat, false)}>
                     전부 OFF
                   </Button>
                 </div>
               </header>
               {!isCollapsed && (
-                <div className="flex flex-col divide-y divide-border border-t border-border">
+                <div className="divide-border border-border flex flex-col divide-y border-t">
                   {list.map((src) => (
                     <label
                       key={src.id}
                       htmlFor={`news-src-${src.id}`}
                       className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5"
                     >
-                      <span className="text-[13px] text-foreground">
-                        {src.label}
-                      </span>
+                      <span className="text-foreground text-[13px]">{src.label}</span>
                       <Switch
                         id={`news-src-${src.id}`}
                         checked={src.enabled}
@@ -160,11 +144,8 @@ export function NewsSourceSettings({
                             { source: src.id, enabled: checked },
                             {
                               onSuccess: () =>
-                                onToast(
-                                  `${src.label} ${checked ? "켰습니다" : "껐습니다"}`,
-                                ),
-                              onError: () =>
-                                pushError("news", `${src.label} 토글 실패`),
+                                onToast(`${src.label} ${checked ? "켰습니다" : "껐습니다"}`),
+                              onError: () => pushError("news", `${src.label} 토글 실패`),
                             },
                           )
                         }
@@ -176,7 +157,7 @@ export function NewsSourceSettings({
             </section>
           );
         })}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         15분마다 백그라운드에서 갱신 — 토글/필터 변경은 다음 페치부터 반영.
       </p>
     </div>
@@ -189,21 +170,18 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
   const o = q.data;
   if (!o) return null;
   const update = (patch: Partial<NewsOptions>, toast = "옵션 저장됨") =>
-    m.mutate(
-      { ...o, ...patch },
-      { onSuccess: () => toast && onToast(toast) },
-    );
+    m.mutate({ ...o, ...patch }, { onSuccess: () => toast && onToast(toast) });
 
   return (
-    <section className="rounded-2xl border border-border bg-card/80 p-5 shadow-[0_1px_0_rgba(255,255,255,0.35)]">
+    <section className="border-border bg-card/80 rounded-2xl border p-5 shadow-[0_1px_0_rgba(255,255,255,0.35)]">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <SectionLabel>표시 옵션</SectionLabel>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-xs">
             뉴스 개수와 정렬, 마퀴 체감 속도를 한 곳에서 조절합니다.
           </p>
         </div>
-        <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+        <span className="border-border bg-muted text-muted-foreground rounded-full border px-2.5 py-1 text-[11px] font-medium">
           실시간 반영
         </span>
       </div>
@@ -226,10 +204,7 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
           />
         </OptionRow>
 
-        <OptionRow
-          label="소스당 최대"
-          hint="0이면 소스별 제한 없음"
-        >
+        <OptionRow label="소스당 최대" hint="0이면 소스별 제한 없음">
           <Input
             type="number"
             min={0}
@@ -247,10 +222,7 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
         </OptionRow>
 
         <OptionRow label="정렬" hint="티커 후보 우선순위">
-          <Select
-            value={o.sortMode}
-            onValueChange={(v) => update({ sortMode: v as SortMode })}
-          >
+          <Select value={o.sortMode} onValueChange={(v) => update({ sortMode: v as SortMode })}>
             <SelectTrigger className="h-8 w-32 [&>span]:flex-1 [&>span]:text-right">
               <SelectValue />
             </SelectTrigger>
@@ -262,10 +234,7 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
           </Select>
         </OptionRow>
 
-        <OptionRow
-          label="갱신 주기"
-          hint="설정 변경 시 즉시 깨움"
-        >
+        <OptionRow label="갱신 주기" hint="설정 변경 시 즉시 깨움">
           <Select
             value={String(o.fetchIntervalMinutes)}
             onValueChange={(v) => update({ fetchIntervalMinutes: Number(v) })}
@@ -284,7 +253,7 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
           </Select>
         </OptionRow>
 
-        <div className="md:col-span-2 rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
+        <div className="border-border/70 bg-muted/15 rounded-xl border px-3 py-3 md:col-span-2">
           <NewsMarqueeSpeedField
             key={o.marqueeSeconds}
             disabled={m.isPending}
@@ -301,10 +270,7 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
             checked={o.hotOnly}
             disabled={m.isPending}
             onCheckedChange={(checked) =>
-              update(
-                { hotOnly: checked },
-                `핫 뉴스만 표시 ${checked ? "켰습니다" : "껐습니다"}`,
-              )
+              update({ hotOnly: checked }, `핫 뉴스만 표시 ${checked ? "켰습니다" : "껐습니다"}`)
             }
           />
         </OptionRow>
@@ -326,12 +292,12 @@ function OptionRow({
 }) {
   return (
     <div
-      className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/15 px-3 py-2.5 ${className ?? ""}`}
+      className={`border-border/70 bg-muted/15 flex min-h-14 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${className ?? ""}`}
     >
       <div className="min-w-0">
-        <div className="text-[13px] font-medium text-foreground">{label}</div>
+        <div className="text-foreground text-[13px] font-medium">{label}</div>
         {hint && (
-          <div className="mt-0.5 truncate text-[11px] leading-snug text-muted-foreground">
+          <div className="text-muted-foreground mt-0.5 truncate text-[11px] leading-snug">
             {hint}
           </div>
         )}
@@ -356,8 +322,8 @@ function NewsMarqueeSpeedField({
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-start justify-between gap-3">
-        <div className="text-[13px] font-medium text-foreground">마퀴 속도</div>
-        <div className="max-w-[28rem] text-right text-[11px] leading-snug text-muted-foreground">
+        <div className="text-foreground text-[13px] font-medium">마퀴 속도</div>
+        <div className="text-muted-foreground max-w-[28rem] text-right text-[11px] leading-snug">
           뉴스가 흘러가는 체감 속도입니다. 기본은 보통.
         </div>
       </div>
@@ -378,19 +344,12 @@ function NewsMarqueeSpeedField({
             aria-label="뉴스 마퀴 속도"
           />
           <div className="pointer-events-none mt-1 flex justify-between px-1">
-            {Array.from(
-              { length: MARQUEE_SPEED_MAX - MARQUEE_SPEED_MIN + 1 },
-              (_, i) => (
-                <span
-                  key={i}
-                  className="h-1.5 w-px rounded-full bg-border"
-                  aria-hidden="true"
-                />
-              ),
-            )}
+            {Array.from({ length: MARQUEE_SPEED_MAX - MARQUEE_SPEED_MIN + 1 }, (_, i) => (
+              <span key={i} className="bg-border h-1.5 w-px rounded-full" aria-hidden="true" />
+            ))}
           </div>
         </div>
-        <div className="flex items-center justify-between px-0.5 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex items-center justify-between px-0.5 text-xs">
           <span>느림</span>
           <span>빠름</span>
         </div>
@@ -400,10 +359,7 @@ function NewsMarqueeSpeedField({
 }
 
 function clampMarqueeSpeed(value: number): number {
-  return Math.max(
-    MARQUEE_SPEED_MIN,
-    Math.min(MARQUEE_SPEED_MAX, Math.trunc(value)),
-  );
+  return Math.max(MARQUEE_SPEED_MIN, Math.min(MARQUEE_SPEED_MAX, Math.trunc(value)));
 }
 
 function marqueeSpeedToSeconds(speed: number): number {
@@ -459,11 +415,11 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
   const excludes = list.filter((f) => f.mode === "exclude");
 
   return (
-    <section className="rounded-2xl border border-border bg-card/80 p-5 shadow-[0_1px_0_rgba(255,255,255,0.35)]">
+    <section className="border-border bg-card/80 rounded-2xl border p-5 shadow-[0_1px_0_rgba(255,255,255,0.35)]">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <SectionLabel>키워드 필터</SectionLabel>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-xs">
             포함은 OR, 제외는 AND. 빈 리스트면 전체를 보여줍니다.
           </p>
         </div>
@@ -494,7 +450,7 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
           추가
         </Button>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="text-muted-foreground mt-2 text-xs">
         대소문자 무관, 부분 일치. 필터를 비우면 전체 표시.
       </p>
       {includes.length > 0 && (
@@ -513,26 +469,20 @@ function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
   );
 }
 
-function ChipList({
-  list,
-  onRemove,
-}: {
-  list: KeywordFilter[];
-  onRemove: (id: number) => void;
-}) {
+function ChipList({ list, onRemove }: { list: KeywordFilter[]; onRemove: (id: number) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {list.map((f) => (
         <span
           key={f.id}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-xs"
+          className="border-border bg-muted inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs"
         >
           {f.keyword}
           <button
             type="button"
             onClick={() => onRemove(f.id)}
             aria-label={`${f.keyword} 제거`}
-            className="rounded-full p-0.5 hover:bg-hover"
+            className="hover:bg-hover rounded-full p-0.5"
           >
             <X className="size-3" />
           </button>

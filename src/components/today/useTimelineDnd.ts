@@ -74,11 +74,7 @@ export function pixelToLocalIso(date: string, gridY: number): string {
 }
 
 /** 기존 ISO(또는 null) + delta px → 새 RFC3339(with offset). timezone-drift 안전. */
-export function shiftIsoByPx(
-  date: string,
-  startISO: string,
-  deltaPx: number,
-): string {
+export function shiftIsoByPx(date: string, startISO: string, deltaPx: number): string {
   const d = new Date(startISO);
   const startMin = d.getHours() * 60 + d.getMinutes();
   const deltaMin = (deltaPx / HOUR_PX) * 60;
@@ -115,10 +111,7 @@ export function resizeIsoByPx({
   const endMin = startMin + durationMin;
   const deltaMin = (deltaPx / HOUR_PX) * 60;
   if (edge === "top") {
-    const nextStartMin = Math.max(
-      0,
-      Math.min(endMin - SNAP_MIN, snap(startMin + deltaMin)),
-    );
+    const nextStartMin = Math.max(0, Math.min(endMin - SNAP_MIN, snap(startMin + deltaMin)));
     return {
       at: pixelToLocalIso(date, nextStartMin),
       durationMin: endMin - nextStartMin,
@@ -126,10 +119,7 @@ export function resizeIsoByPx({
   }
   return {
     at: startISO,
-    durationMin: Math.max(
-      SNAP_MIN,
-      Math.min(24 * 60 - startMin, snap(durationMin + deltaMin)),
-    ),
+    durationMin: Math.max(SNAP_MIN, Math.min(24 * 60 - startMin, snap(durationMin + deltaMin))),
   };
 }
 
@@ -285,10 +275,7 @@ export function useTimelineDnd(opts: Opts) {
             patch.durationMin ??
             Math.max(
               SNAP_MIN,
-              Math.round(
-                (new Date(event.end).getTime() - new Date(event.start).getTime()) /
-                  60000,
-              ),
+              Math.round((new Date(event.end).getTime() - new Date(event.start).getTime()) / 60000),
             );
           return {
             ...event,
@@ -311,17 +298,12 @@ export function useTimelineDnd(opts: Opts) {
         activeAtStart,
         ev.active.data.current as DragData | undefined,
       );
-      const o = normalizeDropDataForDragEnd(
-        a,
-        ev.over?.data.current as DropData | undefined,
-      );
+      const o = normalizeDropDataForDragEnd(a, ev.over?.data.current as DropData | undefined);
       if (!a || !o) return;
 
       // ── 1: tray → canvas ─────────────────────────────────────────────
       if (a.from === "tray" && o.to === "canvas") {
-        const cal =
-          defaultCalendarFor(a.signalId) ??
-          (await promptCalendarPicker(a.signalId));
+        const cal = defaultCalendarFor(a.signalId) ?? (await promptCalendarPicker(a.signalId));
         if (!cal) return;
         const at = pixelToLocalIso(date, resolveCanvasGridY(o.gridY));
         const durationMin = a.durationMin ?? DEFAULT_SCHEDULE_MIN;
@@ -394,8 +376,7 @@ export function useTimelineDnd(opts: Opts) {
           }
         } catch {
           if (a.blockKind === "event") invalidateEventCaches();
-          else if (a.blockKind === "routine")
-            void qc.invalidateQueries({ queryKey: ["routines"] });
+          else if (a.blockKind === "routine") void qc.invalidateQueries({ queryKey: ["routines"] });
           else invalidateSignalCaches();
         }
         return;
@@ -437,8 +418,7 @@ export function useTimelineDnd(opts: Opts) {
           }
         } catch {
           if (a.blockKind === "event") invalidateEventCaches();
-          else if (a.blockKind === "routine")
-            void qc.invalidateQueries({ queryKey: ["routines"] });
+          else if (a.blockKind === "routine") void qc.invalidateQueries({ queryKey: ["routines"] });
           else invalidateSignalCaches();
         }
         return;
@@ -552,9 +532,7 @@ export function buildDefaultCalendarFor(
   signals: WorkSignal[],
   projects: { id: string; defaultWriteCalendarId: string | null }[],
 ): (signalId: string) => string | null {
-  const sigToProj = new Map<string, string | null>(
-    signals.map((s) => [s.id, s.projectId]),
-  );
+  const sigToProj = new Map<string, string | null>(signals.map((s) => [s.id, s.projectId]));
   const projDefault = new Map<string, string | null>(
     projects.map((p) => [p.id, p.defaultWriteCalendarId]),
   );

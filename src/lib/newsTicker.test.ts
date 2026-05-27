@@ -9,12 +9,7 @@ import {
   newsTickerItemKey,
 } from "./newsTicker";
 
-function item(
-  source: string,
-  id: string,
-  commentCount: number | null,
-  title = id,
-): NewsItem {
+function item(source: string, id: string, commentCount: number | null, title = id): NewsItem {
   return {
     source,
     externalId: id,

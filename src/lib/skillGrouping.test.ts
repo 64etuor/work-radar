@@ -72,20 +72,14 @@ describe("groupSkillsForPalette", () => {
       mk({ id: "i", name: "inapp", kind: "in_app_prompt" }),
       mk({ id: "x", name: "ext", kind: "external" }),
     ]);
-    expect(groups.find((g) => g.key === "project")!.heading).toBe(
-      SKILL_PALETTE_HEADINGS.project,
-    );
-    expect(groups.find((g) => g.key === "global")!.heading).toBe(
-      SKILL_PALETTE_HEADINGS.global,
-    );
+    expect(groups.find((g) => g.key === "project")!.heading).toBe(SKILL_PALETTE_HEADINGS.project);
+    expect(groups.find((g) => g.key === "global")!.heading).toBe(SKILL_PALETTE_HEADINGS.global);
   });
 });
 
 describe("skillSearchValue", () => {
   it("이름과 종류 동의어를 포함한다", () => {
-    const v = skillSearchValue(
-      mk({ id: "i", name: "My Skill", kind: "in_app_prompt" }),
-    );
+    const v = skillSearchValue(mk({ id: "i", name: "My Skill", kind: "in_app_prompt" }));
     expect(v).toContain("My Skill");
     expect(v).toContain("스킬");
     expect(v).toContain("프로젝트");

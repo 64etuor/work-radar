@@ -18,11 +18,7 @@ import { StatusDot } from "./SettingsKit";
  * bounded tick(30초 간격)에서 발사한다. 권한이 없어도 앱 코어는 정상(graceful degrade).
  * 프로젝트와 무관한 전역 설정이라 SettingsView 하단 단일 블록으로 둔다.
  */
-export function NotificationSettings({
-  onToast,
-}: {
-  onToast: (msg: string) => void;
-}) {
+export function NotificationSettings({ onToast }: { onToast: (msg: string) => void }) {
   const perm = useNotificationPermission();
   const request = useRequestNotificationPermission();
   const scheduleTest = useScheduleTestNotification();
@@ -44,18 +40,14 @@ export function NotificationSettings({
   const ask = () => {
     if (request.isPending) return;
     request.mutate(undefined, {
-      onSuccess: (p) =>
-        onToast(p.granted ? "알림 권한 허용됨" : "알림 권한이 허용되지 않음"),
+      onSuccess: (p) => onToast(p.granted ? "알림 권한 허용됨" : "알림 권한이 허용되지 않음"),
     });
   };
 
   const fireTest = () => {
     if (scheduleTest.isPending) return;
     scheduleTest.mutate(Math.max(0, seconds), {
-      onSuccess: () =>
-        onToast(
-          `${seconds}초 뒤 테스트 알림 예약됨 — 스케줄러가 발사합니다`,
-        ),
+      onSuccess: () => onToast(`${seconds}초 뒤 테스트 알림 예약됨 — 스케줄러가 발사합니다`),
     });
   };
 
@@ -83,11 +75,7 @@ export function NotificationSettings({
           disabled={request.isPending || granted}
           title={granted ? "이미 허용됨" : "OS 알림 권한 요청"}
         >
-          {request.isPending
-            ? "요청 중…"
-            : granted
-              ? "권한 허용됨"
-              : "알림 권한 요청"}
+          {request.isPending ? "요청 중…" : granted ? "권한 허용됨" : "알림 권한 요청"}
         </Button>
         <Input
           type="number"
@@ -98,7 +86,7 @@ export function NotificationSettings({
           className="w-[72px]"
           aria-label="테스트 알림 지연(초)"
         />
-        <span className="text-xs text-muted-foreground">초 뒤</span>
+        <span className="text-muted-foreground text-xs">초 뒤</span>
         <Button
           variant="ghost"
           size="sm"
@@ -110,21 +98,19 @@ export function NotificationSettings({
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        창을 닫아도 앱은 트레이/메뉴바에 상주합니다 — 트레이 아이콘에서 보기/숨기기/종료.
-        백그라운드 스케줄러가 예약된 알림(루틴·CI 등)을 발사합니다. 권한이 없으면 알림만
-        건너뛰고 나머지 기능은 정상 동작합니다.
+      <p className="text-muted-foreground text-xs">
+        창을 닫아도 앱은 트레이/메뉴바에 상주합니다 — 트레이 아이콘에서 보기/숨기기/종료. 백그라운드
+        스케줄러가 예약된 알림(루틴·CI 등)을 발사합니다. 권한이 없으면 알림만 건너뛰고 나머지 기능은
+        정상 동작합니다.
       </p>
 
-      <div className="mt-2 border-t border-border pt-4">
+      <div className="border-border mt-2 border-t pt-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <span className="text-sm font-medium">PR Radar Inbox rules</span>
-          <StatusDot on={!!prSettings.data}>
-            {prSettings.data ? "활성" : "로드 중"}
-          </StatusDot>
+          <StatusDot on={!!prSettings.data}>{prSettings.data ? "활성" : "로드 중"}</StatusDot>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <label className="text-muted-foreground flex flex-col gap-1.5 text-xs">
             Poll interval (minutes)
             <Input
               type="number"
@@ -139,7 +125,7 @@ export function NotificationSettings({
               aria-label="PR Radar polling interval minutes"
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <label className="text-muted-foreground flex flex-col gap-1.5 text-xs">
             Comment alert threshold
             <Input
               type="number"
@@ -154,23 +140,19 @@ export function NotificationSettings({
               aria-label="PR Radar comment threshold"
             />
           </label>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="text-muted-foreground flex items-center gap-2 text-xs">
             <input
               type="checkbox"
               checked={prSettings.data?.conflictAlertsEnabled ?? true}
-              onChange={(e) =>
-                updatePrSetting({ conflictAlertsEnabled: e.target.checked })
-              }
+              onChange={(e) => updatePrSetting({ conflictAlertsEnabled: e.target.checked })}
             />
             conflict pattern을 critical Inbox alert로 저장
           </label>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="text-muted-foreground flex items-center gap-2 text-xs">
             <input
               type="checkbox"
               checked={prSettings.data?.aiAutoAnalysisEnabled ?? true}
-              onChange={(e) =>
-                updatePrSetting({ aiAutoAnalysisEnabled: e.target.checked })
-              }
+              onChange={(e) => updatePrSetting({ aiAutoAnalysisEnabled: e.target.checked })}
             />
             threshold 초과 항목을 AI 분석 후보로 표시
           </label>

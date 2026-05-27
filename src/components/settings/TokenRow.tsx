@@ -20,7 +20,7 @@ import { StatusDot } from "./SettingsKit";
 /** Notion 마크 (lucide에 브랜드 아이콘이 없어 작은 글리프). */
 function NotionGlyph() {
   return (
-    <span className="grid size-4 place-items-center rounded bg-foreground text-[9px] font-bold text-background">
+    <span className="bg-foreground text-background grid size-4 place-items-center rounded text-[9px] font-bold">
       N
     </span>
   );
@@ -65,16 +65,13 @@ export function TokenRow({
   };
 
   const clear = () => {
-    delTok.mutate(
-      { projectId, kind },
-      { onSuccess: () => onToast(`${label} 토큰 삭제됨`) },
-    );
+    delTok.mutate({ projectId, kind }, { onSuccess: () => onToast(`${label} 토큰 삭제됨`) });
   };
 
   const result = ping.data;
 
   return (
-    <div className="rounded-lg border border-border">
+    <div className="border-border rounded-lg border">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2.5">
           {kind === "github" ? <Github className="size-4" /> : <NotionGlyph />}
@@ -114,16 +111,14 @@ export function TokenRow({
       />
 
       {/* advanced fallback: 직접 붙여넣기 */}
-      <div className="border-t border-border px-4 py-2.5">
+      <div className="border-border border-t px-4 py-2.5">
         <button
           type="button"
           onClick={() => setShowPaste((v) => !v)}
           aria-expanded={showPaste}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
         >
-          <ChevronRight
-            className={`size-3 transition-transform ${showPaste ? "rotate-90" : ""}`}
-          />
+          <ChevronRight className={`size-3 transition-transform ${showPaste ? "rotate-90" : ""}`} />
           직접 붙여넣기 (고급)
         </button>
         {showPaste && (
@@ -150,13 +145,13 @@ export function TokenRow({
       </div>
 
       {ping.isError && (
-        <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
+        <div className="border-border border-t px-4 py-2.5 text-xs text-[color:var(--destructive)]">
           {String(ping.error)}
         </div>
       )}
       {result && (
         <div
-          className={`border-t border-border px-4 py-2.5 text-xs ${
+          className={`border-border border-t px-4 py-2.5 text-xs ${
             result.ok ? "text-[color:var(--success)]" : "text-[color:var(--destructive)]"
           }`}
         >
@@ -187,19 +182,9 @@ function CliImportRow({
 }) {
   if (kind === "google_calendar") return null;
   return kind === "github" ? (
-    <GithubImportRow
-      projectId={projectId}
-      label={label}
-      hasToken={hasToken}
-      onToast={onToast}
-    />
+    <GithubImportRow projectId={projectId} label={label} hasToken={hasToken} onToast={onToast} />
   ) : (
-    <NotionImportRow
-      projectId={projectId}
-      label={label}
-      hasToken={hasToken}
-      onToast={onToast}
-    />
+    <NotionImportRow projectId={projectId} label={label} hasToken={hasToken} onToast={onToast} />
   );
 }
 
@@ -215,8 +200,8 @@ function ImportShell({
 }) {
   return (
     <>
-      <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5">
-        <span className="text-xs text-muted-foreground">{hint}</span>
+      <div className="border-border flex items-center justify-between gap-3 border-t px-4 py-2.5">
+        <span className="text-muted-foreground text-xs">{hint}</span>
         {action}
       </div>
       {error}
@@ -248,8 +233,7 @@ function GithubImportRow({
     });
   const doLogin = () =>
     login.mutate(undefined, {
-      onSuccess: () =>
-        onToast("브라우저에서 gh 로그인을 완료한 뒤 '가져오기'를 누르세요"),
+      onSuccess: () => onToast("브라우저에서 gh 로그인을 완료한 뒤 '가져오기'를 누르세요"),
     });
 
   const hint = status.isLoading
@@ -261,18 +245,33 @@ function GithubImportRow({
       hint={hint}
       action={
         installed && loggedIn ? (
-          <Button size="sm" onClick={doImport} disabled={importTok.isPending} title="gh auth token → keychain">
-            {importTok.isPending ? "가져오는 중…" : hasToken ? "gh에서 다시 가져오기" : "gh에서 가져오기"}
+          <Button
+            size="sm"
+            onClick={doImport}
+            disabled={importTok.isPending}
+            title="gh auth token → keychain"
+          >
+            {importTok.isPending
+              ? "가져오는 중…"
+              : hasToken
+                ? "gh에서 다시 가져오기"
+                : "gh에서 가져오기"}
           </Button>
         ) : installed && !loggedIn ? (
-          <Button variant="outline" size="sm" onClick={doLogin} disabled={login.isPending} title="gh auth login --web">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={doLogin}
+            disabled={login.isPending}
+            title="gh auth login --web"
+          >
             {login.isPending ? "로그인 실행…" : "gh 로그인"}
           </Button>
         ) : null
       }
       error={
         (importTok.isError || login.isError) && (
-          <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
+          <div className="border-border border-t px-4 py-2.5 text-xs text-[color:var(--destructive)]">
             {String(importTok.error ?? login.error)}
           </div>
         )
@@ -305,8 +304,7 @@ function NotionImportRow({
     });
   const doLogin = () =>
     login.mutate(undefined, {
-      onSuccess: () =>
-        onToast("터미널에서 ntn 로그인을 완료한 뒤 '가져오기'를 누르세요"),
+      onSuccess: () => onToast("터미널에서 ntn 로그인을 완료한 뒤 '가져오기'를 누르세요"),
     });
 
   const hint = status.isLoading
@@ -318,18 +316,33 @@ function NotionImportRow({
       hint={hint}
       action={
         installed && loggedIn ? (
-          <Button size="sm" onClick={doImport} disabled={importTok.isPending} title="ntn 토큰 → keychain">
-            {importTok.isPending ? "가져오는 중…" : hasToken ? "ntn에서 다시 가져오기" : "ntn에서 가져오기"}
+          <Button
+            size="sm"
+            onClick={doImport}
+            disabled={importTok.isPending}
+            title="ntn 토큰 → keychain"
+          >
+            {importTok.isPending
+              ? "가져오는 중…"
+              : hasToken
+                ? "ntn에서 다시 가져오기"
+                : "ntn에서 가져오기"}
           </Button>
         ) : installed && !loggedIn ? (
-          <Button variant="outline" size="sm" onClick={doLogin} disabled={login.isPending} title="ntn login">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={doLogin}
+            disabled={login.isPending}
+            title="ntn login"
+          >
             {login.isPending ? "로그인 실행…" : "ntn 로그인"}
           </Button>
         ) : null
       }
       error={
         (importTok.isError || login.isError) && (
-          <div className="border-t border-border px-4 py-2.5 text-xs text-[color:var(--destructive)]">
+          <div className="border-border border-t px-4 py-2.5 text-xs text-[color:var(--destructive)]">
             {String(importTok.error ?? login.error)}
           </div>
         )

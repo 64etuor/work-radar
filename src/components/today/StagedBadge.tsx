@@ -6,11 +6,7 @@
  * 워커가 즉시 가져가게 한다(INVARIANT #2 — 사용자 Acceptance 게이트).
  */
 import { Button } from "@/components/ui/button";
-import {
-  isStaged,
-  useCommitStagedWrites,
-  usePendingWrites,
-} from "@/lib/query/calendarSync";
+import { isStaged, useCommitStagedWrites, usePendingWrites } from "@/lib/query/calendarSync";
 
 export function StagedBadge() {
   const pending = usePendingWrites();

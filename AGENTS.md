@@ -124,7 +124,7 @@ Area 문서:
 - `docs/areas/data-layer-conventions.md` — sqlx·migrations·FTS5·dedup upsert·SSOT
 - `docs/areas/shadcn-migration.md` — Wave 1–5 규율, Esc 계약, overlay-stack
 - `docs/areas/frontend-board.md` — capture-board 5영역, drag 분류
-- `docs/areas/frontend-shell.md` — *View.tsx / settings / 공통 hooks
+- `docs/areas/frontend-shell.md` — \*View.tsx / settings / 공통 hooks
 - `docs/areas/news-feature.md` — RSS 페처·옵션·키워드 필터
 - `docs/areas/parallel-agent-safety.md` — worktree 격리 사고 가드, executor late-writes
 - `docs/areas/shell-tooling.md` — rtk 파이프 truncation, cargo PATH, husky 훅
