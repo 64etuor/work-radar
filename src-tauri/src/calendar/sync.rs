@@ -213,110 +213,121 @@ impl SyncEngine {
         let access = self
             .access_token_cached(provider, calendar_to_project, token_cache, &w.calendar_id)
             .await?;
-        match w.kind.as_str() {
-            "create" => {
-                let input = parse_create_input(&w.payload_json)?;
-                let (event_id, _url) = provider
-                    .create_event(&access, &w.calendar_id, &input)
-                    .await?;
-                self.link_back(w, &event_id)
-                    .await
-                    .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
-                Ok(())
-            }
-            "patch" => {
-                let event_id = w
-                    .event_id
-                    .as_deref()
-                    .ok_or_else(|| SyncError::Terminal("patch without event_id".into()))?;
-                let patch = build_patch_body(&w.payload_json)?;
-                provider
-                    .patch_event(&access, &w.calendar_id, event_id, &patch)
-                    .await?;
-                Ok(())
-            }
-            "delete" => {
-                let event_id = w
-                    .event_id
-                    .as_deref()
-                    .ok_or_else(|| SyncError::Terminal("delete without event_id".into()))?;
-                provider
-                    .delete_event(&access, &w.calendar_id, event_id)
-                    .await?;
-                self.unlink(w)
-                    .await
-                    .map_err(|e| SyncError::Terminal(format!("unlink: {e}")))?;
-                Ok(())
-            }
-            other => Err(SyncError::Terminal(format!("unknown kind {other}"))),
-        }
+        execute_with_access(&self.pool, provider, &access, w).await
     }
+}
 
-    /// create 성공 후 카드/루틴 mirror에 (event_id, calendar_id) 박기.
-    async fn link_back(&self, w: &PendingWrite, event_id: &str) -> sqlx::Result<()> {
-        match w.target_kind.as_str() {
-            "signal" => {
+// ── execute / link_back / unlink: 자유 함수로 분리(테스트에서 SyncEngine 없이 호출 가능) ───────
+
+/// `execute`의 코어. access token이 이미 해소된 상태에서 호출 — cargo test에서 SyncEngine + AppHandle
+/// 없이 직접 호출해 end-to-end 동작을 검증한다.
+async fn execute_with_access<P: CalendarProvider>(
+    pool: &SqlitePool,
+    provider: &P,
+    access: &str,
+    w: &PendingWrite,
+) -> SyncResult {
+    match w.kind.as_str() {
+        "create" => {
+            let input = parse_create_input(&w.payload_json)?;
+            let (event_id, _url) = provider
+                .create_event(access, &w.calendar_id, &input)
+                .await?;
+            link_back_impl(pool, w, &event_id)
+                .await
+                .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
+            Ok(())
+        }
+        "patch" => {
+            let event_id = w
+                .event_id
+                .as_deref()
+                .ok_or_else(|| SyncError::Terminal("patch without event_id".into()))?;
+            let patch = build_patch_body(&w.payload_json)?;
+            provider
+                .patch_event(access, &w.calendar_id, event_id, &patch)
+                .await?;
+            Ok(())
+        }
+        "delete" => {
+            let event_id = w
+                .event_id
+                .as_deref()
+                .ok_or_else(|| SyncError::Terminal("delete without event_id".into()))?;
+            provider
+                .delete_event(access, &w.calendar_id, event_id)
+                .await?;
+            unlink_impl(pool, w)
+                .await
+                .map_err(|e| SyncError::Terminal(format!("unlink: {e}")))?;
+            Ok(())
+        }
+        other => Err(SyncError::Terminal(format!("unknown kind {other}"))),
+    }
+}
+
+async fn link_back_impl(pool: &SqlitePool, w: &PendingWrite, event_id: &str) -> sqlx::Result<()> {
+    match w.target_kind.as_str() {
+        "signal" => {
+            sqlx::query(
+                "UPDATE signals SET linked_event_id = ?1, linked_calendar_id = ?2 WHERE id = ?3",
+            )
+            .bind(event_id)
+            .bind(&w.calendar_id)
+            .bind(&w.target_id)
+            .execute(pool)
+            .await?;
+        }
+        "routine_check" => {
+            if let Some((routine_id, date)) = split_routine_key(&w.target_id) {
                 sqlx::query(
-                    "UPDATE signals SET linked_event_id = ?1, linked_calendar_id = ?2 WHERE id = ?3",
+                    "UPDATE routine_checks
+                     SET linked_event_id = ?1, linked_calendar_id = ?2
+                     WHERE routine_id = ?3 AND date = ?4",
                 )
                 .bind(event_id)
                 .bind(&w.calendar_id)
-                .bind(&w.target_id)
-                .execute(&self.pool)
+                .bind(routine_id)
+                .bind(date)
+                .execute(pool)
                 .await?;
             }
-            "routine_check" => {
-                if let Some((routine_id, date)) = split_routine_key(&w.target_id) {
-                    sqlx::query(
-                        "UPDATE routine_checks
-                         SET linked_event_id = ?1, linked_calendar_id = ?2
-                         WHERE routine_id = ?3 AND date = ?4",
-                    )
-                    .bind(event_id)
-                    .bind(&w.calendar_id)
-                    .bind(routine_id)
-                    .bind(date)
-                    .execute(&self.pool)
-                    .await?;
-                }
-            }
-            _ => {}
         }
-        Ok(())
+        _ => {}
     }
+    Ok(())
+}
 
-    /// delete 성공 후 카드/루틴 mirror 정리(시간/이벤트 핸들 클리어).
-    async fn unlink(&self, w: &PendingWrite) -> sqlx::Result<()> {
-        match w.target_kind.as_str() {
-            "signal" => {
+async fn unlink_impl(pool: &SqlitePool, w: &PendingWrite) -> sqlx::Result<()> {
+    match w.target_kind.as_str() {
+        "signal" => {
+            sqlx::query(
+                "UPDATE signals
+                 SET linked_event_id = NULL, linked_calendar_id = NULL,
+                     scheduled_at = NULL, scheduled_duration = NULL
+                 WHERE id = ?1",
+            )
+            .bind(&w.target_id)
+            .execute(pool)
+            .await?;
+        }
+        "routine_check" => {
+            if let Some((routine_id, date)) = split_routine_key(&w.target_id) {
                 sqlx::query(
-                    "UPDATE signals
+                    "UPDATE routine_checks
                      SET linked_event_id = NULL, linked_calendar_id = NULL,
-                         scheduled_at = NULL, scheduled_duration = NULL
-                     WHERE id = ?1",
+                         time_override = NULL
+                     WHERE routine_id = ?1 AND date = ?2",
                 )
-                .bind(&w.target_id)
-                .execute(&self.pool)
+                .bind(routine_id)
+                .bind(date)
+                .execute(pool)
                 .await?;
             }
-            "routine_check" => {
-                if let Some((routine_id, date)) = split_routine_key(&w.target_id) {
-                    sqlx::query(
-                        "UPDATE routine_checks
-                         SET linked_event_id = NULL, linked_calendar_id = NULL,
-                             time_override = NULL
-                         WHERE routine_id = ?1 AND date = ?2",
-                    )
-                    .bind(routine_id)
-                    .bind(date)
-                    .execute(&self.pool)
-                    .await?;
-                }
-            }
-            _ => {}
         }
-        Ok(())
+        _ => {}
     }
+    Ok(())
 }
 
 /// `routine_id|date` → `(routine_id, date)`. 형식 어긋나면 None(워커가 mirror 무변경).
@@ -571,5 +582,167 @@ mod tests {
         let body = build_patch_body(payload).unwrap();
         assert!(body.get("start").is_some());
         assert!(body.get("end").is_some());
+    }
+
+    // ── 통합: execute_with_access(create) end-to-end ─────────────────────────────
+    //
+    // SyncEngine 본체는 tauri AppHandle을 필요로 해 cargo test에서 직접 끼우기 어렵다.
+    // 대신 워커 본체 한 사이클이 호출하는 자유 함수 `execute_with_access` + free
+    // `delete_write`를 직접 호출해 end-to-end 상태 변화(provider 호출 + signals mirror +
+    // pending row 제거)를 검증한다. emit 검증은 AppHandle mock이 무거워 의도적으로 생략 —
+    // emit은 process() 분기에서 별도 호출이고, 큐/DB 상태가 본 통합의 진실원이다.
+    use std::sync::Mutex;
+
+    use crate::calendar::pending_store::{delete_write, format_sqlite_datetime, upsert_write};
+    use crate::calendar::{
+        CalendarCreds, CalendarError, CalendarProvider, CreateEventInput, RawCalendar, RawEvent,
+        TokenResponse,
+    };
+    use chrono::Utc;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    /// create_event 호출을 기록하는 미니 fake. patch/delete/list/exchange/refresh/fetch는 미사용.
+    #[derive(Default)]
+    struct RecordingProvider {
+        created: Mutex<Vec<(String, String)>>, // (calendar_id, title)
+        new_event_id: String,
+    }
+
+    impl CalendarProvider for RecordingProvider {
+        async fn exchange_code(
+            &self,
+            _c: &CalendarCreds,
+            _code: &str,
+            _v: &str,
+            _r: &str,
+        ) -> Result<TokenResponse, CalendarError> {
+            unimplemented!()
+        }
+        async fn refresh_access(&self, _c: &CalendarCreds) -> Result<TokenResponse, CalendarError> {
+            unimplemented!()
+        }
+        async fn list_calendars(&self, _at: &str) -> Result<Vec<RawCalendar>, CalendarError> {
+            Ok(vec![])
+        }
+        async fn fetch_events(
+            &self,
+            _at: &str,
+            _cal: &str,
+            _min: &str,
+            _max: &str,
+        ) -> Result<Vec<RawEvent>, CalendarError> {
+            Ok(vec![])
+        }
+        async fn create_event(
+            &self,
+            _at: &str,
+            calendar_id: &str,
+            input: &CreateEventInput,
+        ) -> Result<(String, Option<String>), CalendarError> {
+            self.created
+                .lock()
+                .unwrap()
+                .push((calendar_id.to_string(), input.title.clone()));
+            Ok((self.new_event_id.clone(), None))
+        }
+        async fn patch_event(
+            &self,
+            _at: &str,
+            _cal: &str,
+            _ev: &str,
+            _p: &serde_json::Value,
+        ) -> Result<(), CalendarError> {
+            Ok(())
+        }
+        async fn delete_event(
+            &self,
+            _at: &str,
+            _cal: &str,
+            _ev: &str,
+        ) -> Result<(), CalendarError> {
+            Ok(())
+        }
+    }
+
+    async fn fresh_pool() -> sqlx::SqlitePool {
+        let p = SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&p).await.unwrap();
+        p
+    }
+
+    /// 한 due pending_calendar_write(kind=create, target=signal)에 대해
+    /// execute_with_access → delete_write 한 사이클을 돌렸을 때:
+    ///   1) provider.create_event가 calendar_id + title로 호출됐고,
+    ///   2) signals.linked_event_id / linked_calendar_id가 mirror에 박혔고,
+    ///   3) pending row가 큐에서 사라졌는지.
+    #[tokio::test]
+    async fn flush_once_create_end_to_end() {
+        let pool = fresh_pool().await;
+        // seed signal
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) VALUES ('s1','Demo','braindump','thought')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        // seed pending write (due now). debounce_ms=0이라 fetch_due_writes가 즉시 본다.
+        let pid = upsert_write(
+            &pool,
+            "create",
+            "signal",
+            "s1",
+            "calA",
+            None,
+            r#"{"title":"Demo","start":"2026-05-28T10:00:00+09:00","duration_min":30}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        // sanity: due fetcher가 1건을 잡는다.
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        assert_eq!(due.len(), 1);
+        let row = &due[0];
+
+        let provider = RecordingProvider {
+            new_event_id: "evt_xyz".into(),
+            ..Default::default()
+        };
+        let result = execute_with_access(&pool, &provider, "fake_access", row).await;
+        assert!(
+            result.is_ok(),
+            "execute_with_access should succeed: {result:?}"
+        );
+        // 워커 process() 성공 분기 모방: 큐에서 삭제.
+        delete_write(&pool, pid).await.unwrap();
+
+        // 1) provider.create_event 호출 확인.
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created, vec![("calA".to_string(), "Demo".to_string())]);
+
+        // 2) signal mirror 박힘.
+        let (le, lc): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT linked_event_id, linked_calendar_id FROM signals WHERE id = 's1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(le.as_deref(), Some("evt_xyz"));
+        assert_eq!(lc.as_deref(), Some("calA"));
+
+        // 3) pending row 삭제 확인.
+        let remaining: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes WHERE id = ?")
+                .bind(pid)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(remaining.0, 0);
+        // format_sqlite_datetime / Utc는 lifetime 워밍업으로만 참조 — 추후 patch/delete e2e 추가 시 재사용.
+        let _ = format_sqlite_datetime(Utc::now());
     }
 }
