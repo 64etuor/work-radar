@@ -90,27 +90,13 @@
   inset: 0;
   border-radius: 9999px;
   pointer-events: none;
-  box-shadow: 0 0 0 0 rgba(255, 119, 89, 0.55);
+  --wr-pulse-primary: rgba(255, 119, 89, 0.55);
+  --wr-pulse-secondary: rgba(255, 119, 89, 0.35);
+  --wr-pulse-clear: rgba(255, 119, 89, 0);
+  box-shadow: 0 0 0 0 var(--wr-pulse-primary);
 }
 .brain-dump-toggle[data-state="closed"] .bd-pulse {
-  animation: bd-pulse 2.4s cubic-bezier(0.16, 0.8, 0.32, 1) infinite;
-}
-@keyframes bd-pulse {
-  0% {
-    box-shadow:
-      0 0 0 0 rgba(255, 119, 89, 0.55),
-      0 0 0 0 rgba(255, 119, 89, 0.35);
-  }
-  70% {
-    box-shadow:
-      0 0 0 14px rgba(255, 119, 89, 0),
-      0 0 0 22px rgba(255, 119, 89, 0);
-  }
-  100% {
-    box-shadow:
-      0 0 0 0 rgba(255, 119, 89, 0),
-      0 0 0 0 rgba(255, 119, 89, 0);
-  }
+  animation: wr-pulse-ring 2.4s cubic-bezier(0.16, 0.8, 0.32, 1) infinite;
 }
 
 /* 펼친 폼 — collapsed면 width 0 + opacity 0 + 비활성, open이면 fade-in. */

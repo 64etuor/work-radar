@@ -583,6 +583,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn migration_0024_adds_inbox_items() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = 'inbox_items'",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query inbox table failed");
+        assert_eq!(tables.len(), 1, "expected inbox_items table from 0024");
+
+        sqlx::query(
+            "INSERT INTO inbox_items (id, source, source_id, title, severity, priority) \
+             VALUES ('i1', 'test', 'same', 'Alert', 'warning', 'high')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert inbox item failed");
+        let duplicate = sqlx::query(
+            "INSERT INTO inbox_items (id, source, source_id, title) \
+             VALUES ('i2', 'test', 'same', 'Duplicate')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            duplicate.is_err(),
+            "source/source_id must dedup inbox alerts"
+        );
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[tokio::test]
+    async fn migration_0025_adds_agent_recovery_columns() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let cols: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('agent_runs') \
+             WHERE name IN ('heartbeat_at','recovery_count','lock_path') ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query agent recovery columns failed");
+        assert_eq!(
+            cols,
+            vec![
+                ("heartbeat_at".to_string(),),
+                ("lock_path".to_string(),),
+                ("recovery_count".to_string(),),
+            ]
+        );
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[tokio::test]
     async fn list_projects_returns_empty_on_fresh_db() {
         let path = temp_db_path();
         let pool = init_db(&path).await.expect("init_db failed");

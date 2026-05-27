@@ -7,8 +7,8 @@ import {
   GitCompare,
   GitPullRequest,
   History,
+  Inbox,
   LayoutGrid,
-  MessageCircle,
   Repeat,
   Settings,
   type LucideIcon,
@@ -21,10 +21,10 @@ import type { View } from "@/store";
  * 이 한 곳을 소비한다 — 뷰 목록/라벨/기본 단축키가 흩어지지 않게(중복 제거).
  *
  * 그룹핑(consolidation): 네비를 의미 단위로 묶는다 — 실제 capability 삭제는 없다(보수적).
- *   운영(operate)  : board / today / timeline    — 매일 쓰는 결정·실행 표면
+ *   운영(operate)  : board / today / inbox / timeline — 매일 쓰는 결정·실행 표면
  *   리뷰(review)   : weekly / retro / routines    — 돌아보기·집계
  *   코드(code)     : radar / worktree / jobs      — PR·워크트리·에이전트 잡
- *   외부(connect)  : hermes / skills              — 메신저 브리지·스킬 레지스트리
+ *   외부(connect)  : skills                       — 스킬 레지스트리
  */
 export type NavGroup = "operate" | "review" | "code" | "connect";
 
@@ -70,12 +70,20 @@ export const NAV_ITEMS: NavItem[] = [
     defaultShortcut: "Cmd+2",
   },
   {
+    view: "inbox",
+    label: "Inbox",
+    search: "inbox 알림 인박스 alert notification escalation 운영 메모리",
+    icon: Inbox,
+    group: "operate",
+    defaultShortcut: "Cmd+3",
+  },
+  {
     view: "timeline",
     label: "Timeline",
     search: "timeline 타임라인 시간축 아젠다 일정",
     icon: GanttChart,
     group: "operate",
-    defaultShortcut: "Cmd+3",
+    defaultShortcut: "Cmd+4",
   },
   {
     view: "weekly",
@@ -83,7 +91,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "weekly review 주간 회고 집계 처리량 추세",
     icon: CalendarRange,
     group: "review",
-    defaultShortcut: "Cmd+4",
+    defaultShortcut: "Cmd+5",
   },
   {
     view: "retro",
@@ -91,7 +99,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "retro 회고 완료 임팩트 보관함 archive 복원 regret",
     icon: History,
     group: "review",
-    defaultShortcut: "Cmd+5",
+    defaultShortcut: "Cmd+6",
   },
   {
     view: "routines",
@@ -99,7 +107,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "routine tracking 루틴 트래킹 이행률 streak 연속 히스토리 반복",
     icon: Repeat,
     group: "review",
-    defaultShortcut: "Cmd+6",
+    defaultShortcut: "Cmd+7",
   },
   {
     view: "radar",
@@ -107,7 +115,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "pr radar github 레이더 풀리퀘스트",
     icon: GitPullRequest,
     group: "code",
-    defaultShortcut: "Cmd+7",
+    defaultShortcut: "Cmd+8",
   },
   {
     view: "worktree",
@@ -115,7 +123,7 @@ export const NAV_ITEMS: NavItem[] = [
     search: "worktree diff branch 워크트리 브랜치 디프 차이",
     icon: GitCompare,
     group: "code",
-    defaultShortcut: "Cmd+8",
+    defaultShortcut: "Cmd+9",
   },
   {
     view: "jobs",
@@ -123,15 +131,6 @@ export const NAV_ITEMS: NavItem[] = [
     search: "jobs agent codex 잡 에이전트 코덱스 자동화",
     icon: Bot,
     group: "code",
-    defaultShortcut: "Cmd+9",
-  },
-  {
-    view: "hermes",
-    label: "Hermes (메신저 브리지)",
-    search:
-      "hermes 헤르메스 메신저 브리지 텔레그램 telegram bot 외부 에이전트 채팅",
-    icon: MessageCircle,
-    group: "connect",
     defaultShortcut: "Cmd+0",
   },
   {

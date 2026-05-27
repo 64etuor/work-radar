@@ -59,6 +59,16 @@ export const commands = {
 	updateSignalTitle: (id: string, title: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("update_signal_title", { id, title })),
 	/**  신호 하드 삭제(영구 — archive와 구분). 카드 행 자체를 DELETE한다(보관/스누즈와 달리 복원 불가). */
 	deleteSignal: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_signal", { id })),
+	/**  개인/업무 분류 수정. 사람의 manual override이며 quadrant 결정 레일과 독립이다. */
+	setSignalKind: (id: string, kind: "personal" | "work" | null) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_kind", { id, kind })),
+	/**  Life Wheel multi-select 수정. 첫 번째 항목은 기존 primary `area` 필드에도 동기화한다. */
+	setSignalAreaTags: (id: string, areas: AreaTag[]) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_area_tags", { id, areas })),
+	/**  Life Wheel 수동 선택. 커스텀 tag key도 허용하되 설정에 존재하는 enabled tag만 저장한다. */
+	setSignalAreaTagKey: (id: string, tagKey: string | null) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_area_tag_key", { id, tagKey })),
+	/**  Life Wheel 팔레트 설정 조회. 기본 taxonomy는 유지하되 사용자가 색/노출/커스텀 태그를 편집한다. */
+	getLifeWheelTags: () => typedError<LifeWheelTagConfig[], AppError>(__TAURI_INVOKE("get_life_wheel_tags")),
+	/**  Life Wheel 팔레트 설정 저장. 비밀이 아닌 per-machine UI 설정이므로 app_config에 JSON 저장한다. */
+	setLifeWheelTags: (tags: LifeWheelTagConfig[]) => typedError<LifeWheelTagConfig[], AppError>(__TAURI_INVOKE("set_life_wheel_tags", { tags })),
 	promoteToday: (id: string, date: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("promote_today", { id, date })),
 	unpromoteToday: (id: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("unpromote_today", { id })),
 	/**  Today 항목 완료 토글. 완료(done)=해당 날짜 기록 → 다음날 이월 안 됨. */
@@ -117,6 +127,8 @@ export const commands = {
 	 *  토큰은 keychain에서만.
 	 */
 	refreshPrRadar: (projectId: string) => typedError<PrRadarItem[], AppError>(__TAURI_INVOKE("refresh_pr_radar", { projectId })),
+	getPrRadarSettings: () => typedError<PrRadarSettings, AppError>(__TAURI_INVOKE("get_pr_radar_settings")),
+	setPrRadarSettings: (settings: PrRadarSettings) => typedError<PrRadarSettings, AppError>(__TAURI_INVOKE("set_pr_radar_settings", { settings })),
 	/**  수동 self-check 토글(로컬 상태). checked면 행 추가, 아니면 삭제(다음 도출이 반영). */
 	setPrSelfCheck: (repoFullName: string, prNumber: number, checked: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_pr_self_check", { repoFullName, prNumber, checked })),
 	/**
@@ -357,6 +369,10 @@ export const commands = {
 	 *  source='test'로 태깅(Phase 16/20과 동일한 제네릭 경로).
 	 */
 	scheduleTestNotification: (secondsFromNow: number) => typedError<null, AppError>(__TAURI_INVOKE("schedule_test_notification", { secondsFromNow })),
+	listInboxItems: (source: string | null, includeDismissed: boolean) => typedError<InboxItem[], AppError>(__TAURI_INVOKE("list_inbox_items", { source, includeDismissed })),
+	inboxCounts: () => typedError<InboxCounts, AppError>(__TAURI_INVOKE("inbox_counts")),
+	markInboxItemRead: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("mark_inbox_item_read", { id })),
+	dismissInboxItem: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("dismiss_inbox_item", { id })),
 	/**
 	 *  브리지 설정: 봇 토큰 → keychain(반환 없음), chat_id → hermes_bridge 단일 행. 토큰 본문은 IPC
 	 *  인자로만 들어와 즉시 keychain으로 가고 절대 반환되지 않는다(INVARIANT). offset은 보존(재설정 시
@@ -495,6 +511,8 @@ export type AgentRunView = {
 	hasProposal: boolean,
 	createdAt: string,
 	startedAt: string | null,
+	heartbeatAt: string | null,
+	recoveryCount: number,
 	finishedAt: string | null,
 };
 
@@ -906,6 +924,38 @@ export type HermesMessage = {
 	createdAt: string,
 };
 
+export type InboxCounts = {
+	unread: number,
+	critical: number,
+	open: number,
+};
+
+/**
+ *  Unified Inbox row. This is local operational memory and navigation context,
+ *  not a decision rail.
+ */
+export type InboxItem = {
+	id: string,
+	projectId: string | null,
+	source: string,
+	sourceId: string | null,
+	groupKey: string | null,
+	title: string,
+	body: string,
+	summary: string | null,
+	priority: string,
+	severity: string,
+	status: string,
+	unread: boolean,
+	relatedEntityType: string | null,
+	relatedEntityId: string | null,
+	actionPayload: string | null,
+	readAt: string | null,
+	dismissedAt: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
 export type KeywordFilter = {
 	id: number,
 	keyword: string,
@@ -914,6 +964,18 @@ export type KeywordFilter = {
 
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
+
+/**
+ *  사람이 편집하는 Life Wheel 팔레트 항목. AI 제안 taxonomy(`AreaTag`)와 별개로,
+ *  수동 태그 선택 UI만 확장한다.
+ */
+export type LifeWheelTagConfig = {
+	id: string,
+	label: string,
+	color: string,
+	builtIn: boolean,
+	enabled: boolean,
+};
 
 export type NewsCategory = "koreanTech" | "englishTech" | "aiResearch";
 
@@ -997,6 +1059,23 @@ export type PrRadarItem = {
 	commentCount: number,
 	/**  댓글이 SUSPICIOUS_COMMENT_THRESHOLD 초과인지(시각 경고 힌트). */
 	isSuspicious: boolean,
+	/**  Inbox에 읽지 않은 alert가 있는지. */
+	hasUnreadAlert: boolean,
+	/**  threshold/패턴상 critical alert인지. */
+	hasCriticalAlert: boolean,
+	/**  AI 분석이 필요한 상태로 flag됐는지. */
+	aiFlagged: boolean,
+};
+
+export type PrRadarSettings = {
+	/**  Poll interval in minutes. Default 10. */
+	pollIntervalMinutes: number,
+	/**  Comment count threshold for Inbox escalation. Default 10. */
+	commentAlertThreshold: number,
+	/**  Conflict pattern detection creates critical Inbox alerts when enabled. */
+	conflictAlertsEnabled: boolean,
+	/**  If true, eligible alert rows are marked as AI analysis candidates. */
+	aiAutoAnalysisEnabled: boolean,
 };
 
 /**
@@ -1426,6 +1505,8 @@ export type WorkSignal = {
 	kind: Kind | null,
 	/**  사람 확정 라이프 도메인. Phase 1은 데이터 필드만. */
 	area: AreaTag | null,
+	/**  사람 확정 라이프 도메인 multi-select(JSON array). `area`는 primary tag로 유지한다. */
+	areaTags: string | null,
 	/**  AI 추론 힌트. Phase 9 enrich에서 채워짐. */
 	suggestedArea: AreaTag | null,
 	status: SignalStatus,

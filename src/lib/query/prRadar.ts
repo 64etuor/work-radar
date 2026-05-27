@@ -1,15 +1,17 @@
 import {
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { unwrap } from "./client";
 import {
   commands,
   type PrRadarItem,
+  type PrRadarSettings,
 } from "@/bindings";
 
 /** PR Radar 주기 폴링 간격. INVARIANT #5: bounded(무한 tight loop 아님 — 고정 cadence). */
-export const PR_RADAR_POLL_MS = 3 * 60_000;
+export const PR_RADAR_POLL_MS = 10 * 60_000;
 
 /**
  * PR Radar 한 cycle 실행(언랩만). escalate/dedup/auto-resolve는 Rust가 수행한다.
@@ -18,6 +20,29 @@ export const PR_RADAR_POLL_MS = 3 * 60_000;
  */
 export function fetchPrRadar(projectId: string): Promise<PrRadarItem[]> {
   return unwrap(commands.refreshPrRadar(projectId));
+}
+
+export function usePrRadarSettings() {
+  return useQuery<PrRadarSettings>({
+    queryKey: ["prRadarSettings"],
+    queryFn: () => unwrap(commands.getPrRadarSettings()),
+  });
+}
+
+export function fetchPrRadarSettings(): Promise<PrRadarSettings> {
+  return unwrap(commands.getPrRadarSettings());
+}
+
+export function useSetPrRadarSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: PrRadarSettings) =>
+      unwrap(commands.setPrRadarSettings(settings)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["prRadarSettings"] });
+      void qc.invalidateQueries({ queryKey: ["prRadar"] });
+    },
+  });
 }
 
 /** 수동 self-check 토글(로컬 상태). 성공 시 radar 갱신. */

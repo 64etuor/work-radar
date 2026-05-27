@@ -1,12 +1,13 @@
 use tauri::State;
 
-use crate::commands::signal_store;
+use crate::commands::nav::{get_config, set_config};
 use crate::commands::tokens::project_credential_ref;
+use crate::commands::{inbox, signal_store};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
 use crate::keychain;
-use crate::models::{CiStatus, PrRadarItem, ReadinessBucket, TokenKind};
+use crate::models::{CiStatus, PrRadarItem, PrRadarSettings, ReadinessBucket, TokenKind};
 use crate::retry::Retryable;
 
 // ── PR Radar (Phase 4, read 레일) ──────────────────────────────────────────────
@@ -19,8 +20,33 @@ use crate::retry::Retryable;
 
 /// open PR이 이 일수 이상 미갱신이면 Stale 버킷.
 const STALE_DAYS: i64 = 14;
-/// 댓글이 이 수를 초과하면 is_suspicious = true (시각 경고 힌트, 결정 레일 미침범).
-const SUSPICIOUS_COMMENT_THRESHOLD: u32 = 10;
+const PR_RADAR_SETTINGS_KEY: &str = "pr_radar.settings";
+const DEFAULT_COMMENT_ALERT_THRESHOLD: u32 = 10;
+
+fn default_settings() -> PrRadarSettings {
+    PrRadarSettings {
+        poll_interval_minutes: 10,
+        comment_alert_threshold: DEFAULT_COMMENT_ALERT_THRESHOLD,
+        conflict_alerts_enabled: true,
+        ai_auto_analysis_enabled: true,
+    }
+}
+
+fn normalize_settings(mut s: PrRadarSettings) -> PrRadarSettings {
+    s.poll_interval_minutes = s.poll_interval_minutes.clamp(1, 120);
+    s.comment_alert_threshold = s.comment_alert_threshold.clamp(1, 250);
+    s
+}
+
+async fn current_settings(db: &Db) -> PrRadarSettings {
+    get_config(db, PR_RADAR_SETTINGS_KEY)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<PrRadarSettings>(&raw).ok())
+        .map(normalize_settings)
+        .unwrap_or_else(default_settings)
+}
 
 /// fetch 대상 레포 (auto-resolve 스코프). full_name = 'owner/repo'.
 struct RepoRef {
@@ -64,6 +90,91 @@ async fn pr_self_checked(db: &Db, repo_full_name: &str, number: u64) -> Result<b
     Ok(row.is_some())
 }
 
+async fn upsert_pr_inbox_alerts(
+    db: &Db,
+    settings: &PrRadarSettings,
+    project_id: &str,
+    repo_full_name: &str,
+    pr: &RawPr,
+) -> Result<(bool, bool, bool), sqlx::Error> {
+    let mut alert_ids = Vec::new();
+    let group_key = format!("pr:{repo_full_name}:{}", pr.number);
+    let entity_id = format!("{repo_full_name}#{}", pr.number);
+    let action_payload = serde_json::json!({
+        "view": "radar",
+        "url": pr.url,
+        "repoFullName": repo_full_name,
+        "prNumber": pr.number
+    })
+    .to_string();
+
+    if pr.comment_count > settings.comment_alert_threshold {
+        let source_id = format!("{group_key}:comments");
+        let title = format!(
+            "[{repo_full_name}] PR #{} review thread is noisy",
+            pr.number
+        );
+        let body = format!(
+            "{} comments exceed threshold {}. AI escalation should inspect root cause, architecture bottlenecks, repeated review points, and ownership/dependency impact before continuing.",
+            pr.comment_count, settings.comment_alert_threshold
+        );
+        inbox::upsert_inbox_item_quiet(
+            db,
+            inbox::NewInboxItem {
+                project_id: Some(project_id),
+                source: "pr_radar",
+                source_id: Some(&source_id),
+                group_key: Some(&group_key),
+                title: &title,
+                body: &body,
+                summary: Some(
+                    "AI-flagged: noisy review thread needs root-cause and ownership analysis.",
+                ),
+                priority: "high",
+                severity: "warning",
+                related_entity_type: Some("pr"),
+                related_entity_id: Some(&entity_id),
+                action_payload: Some(&action_payload),
+            },
+        )
+        .await?;
+        alert_ids.push(source_id);
+    }
+
+    if settings.conflict_alerts_enabled && pr.has_conflict {
+        let source_id = format!("{group_key}:conflict");
+        let title = format!(
+            "[{repo_full_name}] PR #{} has merge conflict risk",
+            pr.number
+        );
+        let body = "Conflict pattern detected. AI escalation should inspect dependency impact, architecture bottlenecks, team ownership, and merge order.".to_string();
+        inbox::upsert_inbox_item_quiet(
+            db,
+            inbox::NewInboxItem {
+                project_id: Some(project_id),
+                source: "pr_radar",
+                source_id: Some(&source_id),
+                group_key: Some(&group_key),
+                title: &title,
+                body: &body,
+                summary: Some("AI-flagged: conflict risk needs dependency and ownership analysis."),
+                priority: "urgent",
+                severity: "critical",
+                related_entity_type: Some("pr"),
+                related_entity_id: Some(&entity_id),
+                action_payload: Some(&action_payload),
+            },
+        )
+        .await?;
+        alert_ids.push(source_id);
+    }
+
+    let has_unread = inbox::unread_alert_exists(db, "pr_radar", &alert_ids).await?;
+    let critical = settings.conflict_alerts_enabled && pr.has_conflict;
+    let ai_flagged = settings.ai_auto_analysis_enabled && !alert_ids.is_empty();
+    Ok((has_unread, critical, ai_flagged))
+}
+
 /// auto-resolve(INVARIANT #3): 성공 fetch된 repo 범위에서, 이번 cycle active set 밖의 github_pr
 /// 신호를 status=done으로 전이(매트릭스에서 소멸). fetch 실패 repo는 fresh 데이터가 없어 제외된다.
 /// PR B 이후 active_keys는 항상 비어 있어(표시 전용 — 새 escalate 없음) 이 fn은 *기존* escalated PR
@@ -99,6 +210,7 @@ async fn sync_pr_radar<P: PrProvider>(
     provider: &P,
     project_id: &str,
     repos: &[RepoRef],
+    settings: &PrRadarSettings,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Vec<PrRadarItem>, AppError> {
     let mut items: Vec<PrRadarItem> = Vec::new();
@@ -123,6 +235,8 @@ async fn sync_pr_radar<P: PrProvider>(
             let self_checked = pr_self_checked(db, &repo.full_name, pr.number).await?;
             let elapsed = elapsed_days(&pr.updated_at, now);
             let bucket = classify_bucket(pr, self_checked, elapsed);
+            let (has_unread_alert, has_critical_alert, ai_flagged) =
+                upsert_pr_inbox_alerts(db, settings, project_id, &repo.full_name, pr).await?;
 
             items.push(PrRadarItem {
                 repo_full_name: repo.full_name.clone(),
@@ -138,7 +252,10 @@ async fn sync_pr_radar<P: PrProvider>(
                 age_days: elapsed.max(0) as u32,
                 project_id: project_id.to_string(),
                 comment_count: pr.comment_count,
-                is_suspicious: pr.comment_count > SUSPICIOUS_COMMENT_THRESHOLD,
+                is_suspicious: pr.comment_count > settings.comment_alert_threshold,
+                has_unread_alert,
+                has_critical_alert,
+                ai_flagged,
             });
         }
     }
@@ -210,14 +327,35 @@ pub async fn refresh_pr_radar(
         )
     })?;
     let provider = HttpPrProvider::new(&token)?;
+    let settings = current_settings(db.inner()).await;
     sync_pr_radar(
         db.inner(),
         &provider,
         &project_id,
         &repos,
+        &settings,
         chrono::Utc::now(),
     )
     .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_pr_radar_settings(db: State<'_, Db>) -> Result<PrRadarSettings, AppError> {
+    Ok(current_settings(db.inner()).await)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_pr_radar_settings(
+    db: State<'_, Db>,
+    settings: PrRadarSettings,
+) -> Result<PrRadarSettings, AppError> {
+    let normalized = normalize_settings(settings);
+    let raw = serde_json::to_string(&normalized)
+        .map_err(|e| AppError::unexpected("pr_radar.settings_serialize", e.to_string()))?;
+    set_config(db.inner(), PR_RADAR_SETTINGS_KEY, &raw).await?;
+    Ok(normalized)
 }
 
 // DEPRECATED: UI의 수동 체크박스는 제거됨(PR B4). 커맨드·바인딩·pr_self_checks 테이블은 보존 —
@@ -375,19 +513,19 @@ mod tests {
         // 경계: 10은 초과 아님 → false.
         pr.comment_count = 10;
         assert!(
-            pr.comment_count <= SUSPICIOUS_COMMENT_THRESHOLD,
+            pr.comment_count <= DEFAULT_COMMENT_ALERT_THRESHOLD,
             "10개는 suspicious 아님"
         );
         // 경계+1: 11은 초과 → true.
         pr.comment_count = 11;
         assert!(
-            pr.comment_count > SUSPICIOUS_COMMENT_THRESHOLD,
+            pr.comment_count > DEFAULT_COMMENT_ALERT_THRESHOLD,
             "11개는 suspicious"
         );
         // 0개는 false.
         pr.comment_count = 0;
         assert!(
-            pr.comment_count <= SUSPICIOUS_COMMENT_THRESHOLD,
+            pr.comment_count <= DEFAULT_COMMENT_ALERT_THRESHOLD,
             "0개는 suspicious 아님"
         );
     }
@@ -448,9 +586,16 @@ mod tests {
             "MIR-DEV-7 로그인 버그",
         )]);
 
-        let items = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
+        let items = sync_pr_radar(
+            &db,
+            &provider,
+            &proj.id,
+            &repo_refs(),
+            &default_settings(),
+            fixed_now(),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].bucket, ReadinessBucket::CiBlocked);
@@ -489,9 +634,16 @@ mod tests {
             RawPrState::Open,
             "MIR-DEV-7 버그",
         )]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
+        sync_pr_radar(
+            &db,
+            &provider,
+            &proj.id,
+            &repo_refs(),
+            &default_settings(),
+            fixed_now(),
+        )
+        .await
+        .unwrap();
         // CI-green 정리 경로: status만 done으로 전이하고 사람 quadrant는 보존(INVARIANT #1).
         let row: (String, String) = sqlx::query_as(
             "SELECT status, quadrant FROM signals WHERE source = 'github_pr' LIMIT 1",
@@ -524,9 +676,16 @@ mod tests {
             RawPrState::Merged,
             "MIR-DEV-7 버그",
         )]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
+        sync_pr_radar(
+            &db,
+            &provider,
+            &proj.id,
+            &repo_refs(),
+            &default_settings(),
+            fixed_now(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             pr_signal_statuses(&db).await,
             vec!["done"],
@@ -543,9 +702,16 @@ mod tests {
             .await
             .unwrap();
         let provider = FakeProvider::failing();
-        let err = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap_err();
+        let err = sync_pr_radar(
+            &db,
+            &provider,
+            &proj.id,
+            &repo_refs(),
+            &default_settings(),
+            fixed_now(),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(
             err.kind,
             ErrorKind::Transient,
@@ -562,9 +728,16 @@ mod tests {
             .await
             .unwrap();
         let provider = FakeProvider::failing_terminal();
-        let err = sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap_err();
+        let err = sync_pr_radar(
+            &db,
+            &provider,
+            &proj.id,
+            &repo_refs(),
+            &default_settings(),
+            fixed_now(),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.kind, ErrorKind::Terminal, "terminal 분류 보존");
         assert!(!err.retryable, "terminal은 재시도 불가");
     }
@@ -586,9 +759,16 @@ mod tests {
         set_quadrant(&db, &id.0, Quadrant::Q1DoNow).await.unwrap();
         // PR이 사라진 상태(provider에 PR 없음) → auto_resolve 작동.
         let provider = FakeProvider::new(vec![]);
-        sync_pr_radar(&db, &provider, &proj.id, &repo_refs(), fixed_now())
-            .await
-            .unwrap();
+        sync_pr_radar(
+            &db,
+            &provider,
+            &proj.id,
+            &repo_refs(),
+            &default_settings(),
+            fixed_now(),
+        )
+        .await
+        .unwrap();
         let row: (String, String) = sqlx::query_as(
             "SELECT status, quadrant FROM signals WHERE source = 'github_pr' LIMIT 1",
         )

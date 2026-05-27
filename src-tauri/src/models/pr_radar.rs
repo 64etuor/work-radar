@@ -46,4 +46,23 @@ pub struct PrRadarItem {
     pub comment_count: u32,
     /// 댓글이 SUSPICIOUS_COMMENT_THRESHOLD 초과인지(시각 경고 힌트).
     pub is_suspicious: bool,
+    /// Inbox에 읽지 않은 alert가 있는지.
+    pub has_unread_alert: bool,
+    /// threshold/패턴상 critical alert인지.
+    pub has_critical_alert: bool,
+    /// AI 분석이 필요한 상태로 flag됐는지.
+    pub ai_flagged: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PrRadarSettings {
+    /// Poll interval in minutes. Default 10.
+    pub poll_interval_minutes: u32,
+    /// Comment count threshold for Inbox escalation. Default 10.
+    pub comment_alert_threshold: u32,
+    /// Conflict pattern detection creates critical Inbox alerts when enabled.
+    pub conflict_alerts_enabled: bool,
+    /// If true, eligible alert rows are marked as AI analysis candidates.
+    pub ai_auto_analysis_enabled: bool,
 }

@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 
-import type { Kind, WorkSignal } from "@/bindings";
+import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
 import { BrainDumpToggle } from "@/components/board/BrainDumpToggle";
+import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import {
   areaLabel,
-  kindChipClass,
-  kindLabel,
   quadrantToZone,
   shortDate,
   suggestedQuadrantBadge,
@@ -44,6 +43,9 @@ type Props = {
   onEditCancel: () => void;
   /** 미분류 전체 배치 enrich 실행 (단일 codex 잡 — Phase 15 #4). */
   onEnrichAll: () => void;
+  onSetKind: (id: string, kind: Kind | null) => void;
+  onSetAreaTagKey: (id: string, tagKey: string | null) => void;
+  lifeWheelTags: LifeWheelTagConfig[];
   /** codex 미가용 또는 미분류 0개면 배치 enrich 버튼 비활성. */
   enrichAllDisabled: boolean;
   /** 전체 제안(배치 enrich) 생성 중 — 버튼 아이콘을 스피너로(토스트 대신 인-버튼 표시). */
@@ -76,6 +78,9 @@ export function MatrixCanvas({
   onEditCommit,
   onEditCancel,
   onEnrichAll,
+  onSetKind,
+  onSetAreaTagKey,
+  lifeWheelTags,
   enrichAllDisabled,
   enrichAllRunning,
   todayPanelRef,
@@ -93,6 +98,11 @@ export function MatrixCanvas({
     q4: null,
   });
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [areaPalette, setAreaPalette] = useState<{
+    signalId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   /** 부트 fan-out을 한 번만 적용하기 위한 플래그. */
   const bootedRef = useRef(false);
 
@@ -285,6 +295,9 @@ export function MatrixCanvas({
   };
 
   const inboxCount = signals.filter((s) => zoneOf(s) === "unclassified").length;
+  const paletteSignal = areaPalette
+    ? signals.find((signal) => signal.id === areaPalette.signalId)
+    : null;
 
   const cells: { zone: ZoneKey; cls: string; dot: string; en: string; ko: string }[] = [
     { zone: "q1", cls: "q1", dot: "var(--color-q1)", en: "Q1 · Do Now", ko: "긴급·중요" },
@@ -374,12 +387,26 @@ export function MatrixCanvas({
             onPointerDown={(e) => onCardPointerDown(e, s.id)}
             onMouseDown={() => cbRef.current.onSelect(s.id)}
           >
-            {s.kind && (
-              <span className={`chip ${kindChipClass(s.kind)}`}>{kindLabel(s.kind)}</span>
-            )}
-            {s.area && (
-              <span className="chip chip-area">{areaLabel(s.area)}</span>
-            )}
+            <CardTagEditor
+              signal={s}
+              tags={lifeWheelTags}
+              onSetKind={onSetKind}
+              onOpenAreaPalette={(button) => {
+                const rect = button.getBoundingClientRect();
+                const margin = 156;
+                setAreaPalette({
+                  signalId: s.id,
+                  x: Math.min(
+                    Math.max(rect.left + rect.width / 2, margin),
+                    window.innerWidth - margin,
+                  ),
+                  y: Math.min(
+                    Math.max(rect.top + rect.height / 2, margin),
+                    window.innerHeight - margin,
+                  ),
+                });
+              }}
+            />
             {sugQ && (
               <span className="chip chip-q-sug" title="AI 제안 사분면(힌트 — 자동 분류 아님)">
                 {sugQ}
@@ -411,6 +438,19 @@ export function MatrixCanvas({
             <div className="pdate">{shortDate(s.createdAt)}</div>
             <button
               type="button"
+              className="today-quick-btn"
+              title="Today로 바로 이동"
+              aria-label="Today로 바로 이동"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPromoteToday(s.id);
+              }}
+            >
+              T
+            </button>
+            <button
+              type="button"
               className="menu-btn"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
@@ -423,6 +463,15 @@ export function MatrixCanvas({
           </div>
         );
       })}
+      {paletteSignal && areaPalette && (
+        <AreaRadialPalette
+          signal={paletteSignal}
+          tags={lifeWheelTags.filter((tag) => tag.enabled)}
+          anchor={areaPalette}
+          onClose={() => setAreaPalette(null)}
+          onSetAreaTagKey={onSetAreaTagKey}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import "./WorktreeView.css";
 import type { DiffMode, Worktree } from "@/bindings";
 import {
   useProjects,
+  useTriggerCodexJob,
   useWorktreeBranches,
   useWorktreeDiffFiles,
   useWorktreeFileDiff,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/query";
 import { useStickyToggle } from "@/lib/useStickyToggle";
 import { chooseInitialReviewLens, type ReviewLens } from "@/lib/worktreeReview";
+import { useUIStore } from "@/store";
 import { CleanupPanel } from "./CleanupPanel";
 import { type SelectedDiff } from "./WorktreeFileList";
 import { WorktreeBody } from "./WorktreeBody";
@@ -21,6 +23,8 @@ import { WorktreeHeader } from "./WorktreeHeader";
  */
 export function WorktreeView() {
   const projects = useProjects();
+  const { goTo } = useUIStore();
+  const reviewJob = useTriggerCodexJob();
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   // 12c: live=true → dirty/ahead/behind + 활성 변경 활동을 bounded 주기로 자동 갱신.
   const worktrees = useWorktrees(null, true);
@@ -127,6 +131,29 @@ export function WorktreeView() {
     setSelectedDiff(null);
   }
 
+  function startWorktreeReview() {
+    if (!selected || reviewJob.isPending) return;
+    const prompt = [
+      "You are reviewing a worktree in read-only mode.",
+      "Focus on architectural issues, risky changes, dead code, dependency impact, missing tests, and merge conflict risk.",
+      "Do not edit files. Return a concise Korean review with findings ordered by severity and concrete file references when available.",
+      `Worktree path: ${selected.path}`,
+      `Branch: ${selected.branch ?? "(detached)"}`,
+      `Base: ${selected.baseBranch}`,
+    ].join("\n");
+    reviewJob.mutate(
+      {
+        projectId: selected.projectId,
+        repoId: selected.repoId,
+        prompt,
+        timeoutSec: 180,
+        maxTurns: 10,
+        costCapUsd: 1.5,
+      },
+      { onSuccess: () => goTo("jobs") },
+    );
+  }
+
   const grouped = useMemo(() => {
     const g = new Map<string, Worktree[]>();
     for (const w of list) {
@@ -194,6 +221,7 @@ export function WorktreeView() {
           filesCollapsed,
           selectedDiff,
           graphOpen,
+          reviewing: reviewJob.isPending,
         }}
         queries={{ diffFiles, stagedFiles, unstagedFiles, fileDiff }}
         actions={{
@@ -211,6 +239,7 @@ export function WorktreeView() {
           onFilesCollapsedChange: setFilesCollapsed,
           onSelectedDiffChange: setSelectedDiff,
           onCloseGraph: closeGraph,
+          onReviewWorktree: startWorktreeReview,
         }}
       />
     </div>

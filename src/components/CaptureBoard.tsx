@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./CaptureBoard.css";
 
 import type { Kind, PromotionTarget } from "@/bindings";
@@ -34,6 +34,9 @@ import {
   useReorderRoutines,
   useReorderToday,
   useSetSignalStatus,
+  useLifeWheelTags,
+  useSetSignalAreaTagKey,
+  useSetSignalKind,
   useSignals,
   useSnoozeSignal,
   useToday,
@@ -85,6 +88,9 @@ export function CaptureBoard() {
   const toggleTodayDone = useToggleTodayDone();
   const reorderToday = useReorderToday();
   const setStatus = useSetSignalStatus();
+  const lifeWheelTags = useLifeWheelTags();
+  const setAreaTagKey = useSetSignalAreaTagKey();
+  const setKind = useSetSignalKind();
   const snoozeSignal = useSnoozeSignal();
   const promoteToNotion = usePromoteToNotion();
   const flushPromotions = useFlushPromotions();
@@ -102,9 +108,9 @@ export function CaptureBoard() {
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
-  const signals = signalsQ.data ?? [];
-  const todayItems = todayQ.data ?? [];
-  const routines = routinesQ.data ?? [];
+  const signals = useMemo(() => signalsQ.data ?? [], [signalsQ.data]);
+  const todayItems = useMemo(() => todayQ.data ?? [], [todayQ.data]);
+  const routines = useMemo(() => routinesQ.data ?? [], [routinesQ.data]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -137,7 +143,6 @@ export function CaptureBoard() {
       expectPopRef.current = false;
     }
     knownIdsRef.current = current;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signals]);
 
   // ── 액션 ──
@@ -534,6 +539,9 @@ export function CaptureBoard() {
           onEditCommit={handleTitleCommit}
           onEditCancel={() => setEditingId(null)}
           onEnrichAll={handleEnrichAll}
+          onSetKind={(id, kind) => setKind.mutate({ id, kind })}
+          onSetAreaTagKey={(id, tagKey) => setAreaTagKey.mutate({ id, tagKey })}
+          lifeWheelTags={lifeWheelTags.data ?? []}
           enrichAllDisabled={
             !codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending
           }

@@ -8,6 +8,8 @@ import {
   commands,
   type AreaTag,
   type CreateSignalInput,
+  type Kind,
+  type LifeWheelTagConfig,
   type Quadrant,
   type SignalStatus,
 } from "@/bindings";
@@ -87,6 +89,66 @@ export function useSetSignalArea() {
   return useMutation({
     mutationFn: ({ id, area }: { id: string; area: AreaTag | null }) =>
       unwrap(commands.setSignalArea(id, area)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+    },
+  });
+}
+
+/** 라이프 도메인 multi-select 확정/수정. 첫 tag는 primary area로 동기화된다. */
+export function useSetSignalAreaTags() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, areas }: { id: string; areas: AreaTag[] }) =>
+      unwrap(commands.setSignalAreaTags(id, areas)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+    },
+  });
+}
+
+/** Life Wheel 팔레트 설정. 기본 enum + 사용자 커스텀 태그/색/노출. */
+export function useLifeWheelTags() {
+  return useQuery({
+    queryKey: ["lifeWheelTags"],
+    queryFn: () => unwrap(commands.getLifeWheelTags()),
+    staleTime: 60_000,
+  });
+}
+
+export function useSetLifeWheelTags() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tags: LifeWheelTagConfig[]) => unwrap(commands.setLifeWheelTags(tags)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["lifeWheelTags"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+    },
+  });
+}
+
+/** Life Wheel 단일 선택. 커스텀 tag key도 허용한다. */
+export function useSetSignalAreaTagKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, tagKey }: { id: string; tagKey: string | null }) =>
+      unwrap(commands.setSignalAreaTagKey(id, tagKey)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+    },
+  });
+}
+
+/** 개인/업무 kind manual override. */
+export function useSetSignalKind() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, kind }: { id: string; kind: Kind | null }) =>
+      unwrap(commands.setSignalKind(id, kind)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["signals"] });
       void qc.invalidateQueries({ queryKey: ["today"] });

@@ -93,7 +93,7 @@ impl JobManager {
             .expect("jobs registry mutex poisoned")
             .insert(run_id.clone(), cancel.clone());
 
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             // 동시성 게이트. 대기 중 취소되면 running 없이 cancelled.
             let _permit = tokio::select! {
                 p = sem.acquire_owned() => match p {
@@ -110,10 +110,22 @@ impl JobManager {
             crate::commands::agent_run_store::mark_running(&db, &run_id).await;
 
             // 제네릭 bound: timeout/kill을 select!로 강제(드롭 시 kill_on_drop으로 자식 종료).
-            let outcome = tokio::select! {
-                r = runner.run(bounds, cancel.clone(), log_path.clone()) => r,
-                _ = tokio::time::sleep(bounds.timeout) => Err(AgentError::Timeout),
-                _ = cancel.cancelled() => Err(AgentError::Cancelled),
+            // 실행 중 heartbeat를 갱신해 app restart recovery가 stale 상태를 판정할 수 있게 한다.
+            let run_fut = runner.run(bounds, cancel.clone(), log_path.clone());
+            tokio::pin!(run_fut);
+            let timeout = tokio::time::sleep(bounds.timeout);
+            tokio::pin!(timeout);
+            let mut heartbeat_tick = tokio::time::interval(std::time::Duration::from_secs(15));
+            heartbeat_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let outcome = loop {
+                tokio::select! {
+                    r = &mut run_fut => break r,
+                    _ = &mut timeout => break Err(AgentError::Timeout),
+                    _ = cancel.cancelled() => break Err(AgentError::Cancelled),
+                    _ = heartbeat_tick.tick() => {
+                        crate::commands::agent_run_store::heartbeat(&db, &run_id).await;
+                    }
+                }
             };
 
             crate::commands::agent_run_store::finalize(&db, &run_id, outcome, gated).await;
@@ -137,6 +149,19 @@ impl JobManager {
         } else {
             false
         }
+    }
+
+    /// Periodic recovery for zombie DB states while the app is still running.
+    /// Active jobs refresh heartbeat every 15s; 90s without heartbeat is stale.
+    pub fn start_recovery_monitor(&self, db: Db) {
+        tauri::async_runtime::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(30));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let _ = crate::commands::agent_run_store::recover_stale_heartbeats(&db, 90).await;
+            }
+        });
     }
 }
 

@@ -28,6 +28,18 @@ pub enum AreaTag {
     Other,
 }
 
+/// 사람이 편집하는 Life Wheel 팔레트 항목. AI 제안 taxonomy(`AreaTag`)와 별개로,
+/// 수동 태그 선택 UI만 확장한다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LifeWheelTagConfig {
+    pub id: String,
+    pub label: String,
+    pub color: String,
+    pub built_in: bool,
+    pub enabled: bool,
+}
+
 /// 신호 출처.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
@@ -102,6 +114,8 @@ pub struct WorkSignal {
     pub kind: Option<Kind>,
     /// 사람 확정 라이프 도메인. Phase 1은 데이터 필드만.
     pub area: Option<AreaTag>,
+    /// 사람 확정 라이프 도메인 multi-select(JSON array). `area`는 primary tag로 유지한다.
+    pub area_tags: Option<String>,
     /// AI 추론 힌트. Phase 9 enrich에서 채워짐.
     pub suggested_area: Option<AreaTag>,
     pub status: SignalStatus,

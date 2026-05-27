@@ -2,6 +2,7 @@
 //! generic source/source_id 계약: producer(routines/pr_radar/scheduler 커맨드)가 enqueue,
 //! 백그라운드 scheduler.rs가 due→발사→mark_fired. 스키마 무변경 — 순수 데이터 접근.
 
+use crate::commands::inbox;
 use crate::db::Db;
 
 /// 발사 시각이 도래한 미발사 알림 한 행(런타임 발사용 row shape). source/source_id는 소비처가 포커스/dedup에 쓴다.
@@ -34,6 +35,7 @@ pub(crate) async fn enqueue(
     .bind(source_id)
     .execute(db)
     .await?;
+    inbox::mirror_notification(db, title, body, source, source_id).await?;
     Ok(())
 }
 

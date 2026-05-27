@@ -119,6 +119,8 @@ pub struct AgentRunView {
     pub has_proposal: bool,
     pub created_at: String,
     pub started_at: Option<String>,
+    pub heartbeat_at: Option<String>,
+    pub recovery_count: u32,
     pub finished_at: Option<String>,
 }
 

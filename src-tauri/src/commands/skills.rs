@@ -28,9 +28,12 @@ pub(crate) const BINDING_ENRICH: &str = "enrich";
 pub(crate) const BINDING_BATCH_ENRICH: &str = "batch_enrich";
 pub(crate) const BINDING_CI_TRIAGE: &str = "ci_triage";
 pub(crate) const BINDING_PR_SELFCHECK: &str = "pr_selfcheck";
+pub(crate) const BINDING_WORKTREE_CLEANUP: &str = "worktree_cleanup";
+
+const WORKTREE_CLEANUP_PROMPT: &str = "Review the listed local worktree cleanup candidates. Identify which items are safe to delete and explain the evidence for each recommendation. Use a conservative rule: stale means 2+ days with no activity, merged branches are safer than unmerged stale branches, protected/current/base branches must stay, and destructive cleanup needs human confirmation. Return concise bullets with keep/delete/review labels.";
 
 /// (binding, 표시 이름, 코드 상수 프롬프트) 시드 정의. 시드/폴백 둘 다 이 표에서 도출한다(단일 출처).
-pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 4] {
+pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 5] {
     [
         (BINDING_ENRICH, "브레인덤프 enrich (단건)", ENRICH_PROMPT),
         (
@@ -40,6 +43,11 @@ pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 4] {
         ),
         (BINDING_CI_TRIAGE, "CI 실패 triage", CI_TRIAGE_PROMPT),
         (BINDING_PR_SELFCHECK, "코드 리뷰", PR_SELFCHECK_PROMPT),
+        (
+            BINDING_WORKTREE_CLEANUP,
+            "worktree cleanup 추천",
+            WORKTREE_CLEANUP_PROMPT,
+        ),
     ]
 }
 
@@ -401,16 +409,16 @@ mod tests {
         );
     }
 
-    /// 시드: 4개 인앱 프롬프트가 들어가고, 시드 프롬프트 = 코드 상수와 동일(기본 동작 보존)이며 멱등.
+    /// 시드: 인앱 프롬프트가 들어가고, 시드 프롬프트 = 코드 상수와 동일(기본 동작 보존)이며 멱등.
     #[tokio::test]
-    async fn seed_inserts_four_in_app_prompts_idempotently() {
+    async fn seed_inserts_in_app_prompts_idempotently() {
         let db = fresh_db().await;
         seed_in_app_skills(&db).await.unwrap();
         let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM skills WHERE kind='in_app_prompt'")
             .fetch_one(&db)
             .await
             .unwrap();
-        assert_eq!(n, 4, "4개 인앱 프롬프트 시드");
+        assert_eq!(n, seed_defs().len() as i64, "인앱 프롬프트 시드");
 
         // 시드 프롬프트는 코드 상수와 동일해야 한다(잡 lookup이 시드 행을 써도 결과 불변).
         let (p,): (String,) = sqlx::query_as("SELECT prompt FROM skills WHERE binding='enrich'")
@@ -430,7 +438,7 @@ mod tests {
                 .fetch_one(&db)
                 .await
                 .unwrap();
-        assert_eq!(n2, 4, "재시드 멱등 — 행 수 불변");
+        assert_eq!(n2, seed_defs().len() as i64, "재시드 멱등 — 행 수 불변");
         let (p2,): (String,) = sqlx::query_as("SELECT prompt FROM skills WHERE binding='enrich'")
             .fetch_one(&db)
             .await

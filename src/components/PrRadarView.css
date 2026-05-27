@@ -154,6 +154,13 @@
 .pr .prr-comments.prr-suspicious {
   color: var(--color-wr-danger);
 }
+.pr .prr-comments.prr-unread-alert {
+  color: var(--color-wr-action-blue);
+}
+.pr .prr-comments.prr-critical-alert {
+  color: var(--color-wr-coral);
+  font-weight: 700;
+}
 .pr .prr-actions {
   display: flex;
   align-items: center;

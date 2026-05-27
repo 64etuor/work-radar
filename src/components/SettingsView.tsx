@@ -11,6 +11,7 @@ import {
   Newspaper,
   Plus,
   Sun,
+  Tags,
   User,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 import { AgentsPane } from "./settings/AgentsPane";
 import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
+import { LifeWheelTagSettings } from "./settings/LifeWheelTagSettings";
 import { SectionLabel } from "./settings/SettingsKit";
 
 type SettingsCategory =
@@ -39,7 +41,8 @@ type SettingsCategory =
   | "shortcuts"
   | "integrations"
   | "notifications"
-  | "news";
+  | "news"
+  | "tags";
 
 const CATEGORIES: {
   id: SettingsCategory;
@@ -53,6 +56,7 @@ const CATEGORIES: {
   { id: "integrations", label: "통합", icon: Link2, blurb: "Google 계정·Hermes 브리지 연결을 관리합니다." },
   { id: "notifications", label: "알림", icon: Bell, blurb: "데스크톱 알림과 트리거를 설정합니다." },
   { id: "news", label: "뉴스", icon: Newspaper, blurb: "보드 하단 티커에 표시할 외부 뉴스 소스를 켜고 끕니다." },
+  { id: "tags", label: "태그", icon: Tags, blurb: "브레인덤프 카드의 Life Wheel 태그와 팔레트 색상을 관리합니다." },
 ];
 
 const NEW_PROJECT_ID = "__new_project__";
@@ -173,6 +177,7 @@ export function SettingsView() {
               <NotificationSettings onToast={pushSuccess} />
             )}
             {category === "news" && <NewsSourceSettings onToast={pushSuccess} />}
+            {category === "tags" && <LifeWheelTagSettings onToast={pushSuccess} />}
           </div>
         </main>
       </div>

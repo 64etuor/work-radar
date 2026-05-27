@@ -8,7 +8,7 @@ import { CaptureBoard } from "@/components/CaptureBoard";
 import { NewsTicker } from "@/components/news/NewsTicker";
 import { ToastHost } from "@/components/ToastHost";
 import { CommandPalette } from "@/components/CommandPalette";
-import { HermesView } from "@/components/HermesView";
+import { InboxView } from "@/components/InboxView";
 import { JobsView } from "@/components/jobs/JobsView";
 import { PrRadarView } from "@/components/PrRadarView";
 import { RetroView } from "@/components/RetroView";
@@ -90,6 +90,8 @@ export default function App() {
           <SettingsView />
         ) : view === "today" ? (
           <TodayView />
+        ) : view === "inbox" ? (
+          <InboxView />
         ) : view === "timeline" ? (
           <TimelineView />
         ) : view === "weekly" ? (
@@ -104,8 +106,6 @@ export default function App() {
           <WorktreeView />
         ) : view === "jobs" ? (
           <JobsView />
-        ) : view === "hermes" ? (
-          <HermesView />
         ) : view === "skills" ? (
           <SkillsView />
         ) : (

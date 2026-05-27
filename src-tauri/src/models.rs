@@ -5,6 +5,7 @@
 mod agent;
 mod automation;
 mod calendar;
+mod inbox;
 mod messenger;
 mod pr_radar;
 mod project;
@@ -19,6 +20,7 @@ mod worktree;
 pub use agent::*;
 pub use automation::*;
 pub use calendar::*;
+pub use inbox::*;
 pub use messenger::*;
 pub use pr_radar::*;
 pub use project::*;

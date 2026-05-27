@@ -21,6 +21,7 @@ import {
 export const PERSIST_ALLOWED_KEY_PREFIXES: readonly string[] = [
   // 외부 ambient 읽기 (표시 가속의 핵심).
   "prRadar", // PR Radar 버킷(표시) — escalate 판정은 Rust가 fresh로 수행, 이건 표시 사본.
+  "prRadarSettings", // 설정 표시값. 실제 SSOT는 SQLite app_config.
   "calendarEvents", // Google Calendar 이벤트(오늘/Today 표시).
   "googleCalendars", // calendarList(picker 표시).
   "selectedCalendars", // 선택 캘린더(로컬 DB 표시).

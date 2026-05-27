@@ -31,12 +31,38 @@
   flex-direction: column;
   gap: 2px;
 }
+.skl-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 4px 8px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-subtle);
+  padding: 7px 9px;
+}
+.skl-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--color-wr-fg);
+  font: 400 13px var(--font-sans);
+  outline: none;
+}
 .skl-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font: 600 11px var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-wr-subtle);
   padding: 12px 8px 6px;
+}
+.skl-group-label span {
+  color: var(--color-wr-muted);
 }
 .skl-empty-sm {
   font: 400 12px var(--font-sans);

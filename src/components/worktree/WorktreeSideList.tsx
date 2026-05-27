@@ -1,4 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import type { CSSProperties, HTMLAttributes } from "react";
 import { Button } from "@/components/ui/button";
 import type { Worktree } from "@/bindings";
 import { localChangeCount, localChangeSummary } from "@/lib/worktreeReview";
@@ -12,6 +13,8 @@ type WorktreeSideListProps = {
   grouped: [string, Worktree[]][];
   selectedPath: string | null;
   onSelect: (worktree: Worktree) => void;
+  style?: CSSProperties;
+  resizeHandleProps?: HTMLAttributes<HTMLDivElement>;
 };
 
 export function WorktreeSideList({
@@ -23,6 +26,8 @@ export function WorktreeSideList({
   grouped,
   selectedPath,
   onSelect,
+  style,
+  resizeHandleProps,
 }: WorktreeSideListProps) {
   if (collapsed) {
     return (
@@ -39,7 +44,7 @@ export function WorktreeSideList({
   }
 
   return (
-    <aside className="wt-side">
+    <aside className="wt-side" style={style}>
       <div className="wt-panel-head">
         <span className="wt-panel-title">Worktrees</span>
         <Button
@@ -81,6 +86,7 @@ export function WorktreeSideList({
           ))}
         </section>
       ))}
+      <div className="wt-resize-handle" {...resizeHandleProps} title="패널 크기 조절" />
     </aside>
   );
 }

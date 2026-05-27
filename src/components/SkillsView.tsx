@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./SkillsView.css";
-import { Blocks, FileText, Plus, Save, Trash2 } from "lucide-react";
+import { Blocks, FileText, Plus, Save, Search, Trash2 } from "lucide-react";
 
 import type { Skill } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ export function SkillsView() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
 
   // 팔레트에서 스킬을 고르면 그 스킬을 선택(보기/편집)한다 — 한 번만 소비.
   // 동일 선택 핸들러(selectedId) 경로라 자동 실행은 없다(INVARIANT #1).
@@ -47,15 +48,19 @@ export function SkillsView() {
     clearPendingSkill();
   }, [pendingSkillId, clearPendingSkill]);
 
-  const list = skills.data ?? [];
-  const inApp = useMemo(
-    () => list.filter((s) => s.kind === "in_app_prompt"),
-    [list],
-  );
-  const external = useMemo(
-    () => list.filter((s) => s.kind === "external"),
-    [list],
-  );
+  const list = useMemo(() => skills.data ?? [], [skills.data]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((s) =>
+      [s.name, s.binding, s.sourcePath, s.kind]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [list, search]);
+  const segments = useMemo(() => segmentSkills(filtered), [filtered]);
 
   const selected = list.find((s) => s.id === selectedId) ?? null;
 
@@ -79,43 +84,41 @@ export function SkillsView() {
 
       <div className="skl-body">
         <aside className="skl-list">
+          <div className="skl-search">
+            <Search className="size-3.5" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="스킬 검색"
+              aria-label="스킬 검색"
+            />
+          </div>
           {skills.isError && (
             <div className="skl-note err">
               레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
             </div>
           )}
-          <div className="skl-group-label">인앱 프롬프트 (잡 바인딩)</div>
-          {inApp.length === 0 && (
-            <div className="skl-empty-sm">인앱 프롬프트가 없습니다.</div>
-          )}
-          {inApp.map((s) => (
-            <SkillRow
-              key={s.id}
-              skill={s}
-              active={s.id === selectedId}
-              onSelect={() => {
-                setSelectedId(s.id);
-                setAdding(false);
-              }}
-            />
-          ))}
-
-          <div className="skl-group-label">외부 스킬 (~/.claude/skills)</div>
-          {external.length === 0 && (
-            <div className="skl-empty-sm">
-              ~/.claude/skills에서 스킬을 찾지 못했습니다.
+          {segments.map((segment) => (
+            <div key={segment.key}>
+              <div className="skl-group-label">
+                {segment.label}
+                <span>{segment.health}</span>
+              </div>
+              {segment.skills.length === 0 && (
+                <div className="skl-empty-sm">해당 스킬이 없습니다.</div>
+              )}
+              {segment.skills.map((s) => (
+                <SkillRow
+                  key={s.id}
+                  skill={s}
+                  active={s.id === selectedId}
+                  onSelect={() => {
+                    setSelectedId(s.id);
+                    setAdding(false);
+                  }}
+                />
+              ))}
             </div>
-          )}
-          {external.map((s) => (
-            <SkillRow
-              key={s.id}
-              skill={s}
-              active={s.id === selectedId}
-              onSelect={() => {
-                setSelectedId(s.id);
-                setAdding(false);
-              }}
-            />
           ))}
         </aside>
 
@@ -140,6 +143,33 @@ export function SkillsView() {
       </div>
     </div>
   );
+}
+
+function providerOf(skill: Skill): "codex" | "claude" | "other" | "project" {
+  if (skill.kind === "in_app_prompt") return "project";
+  const path = (skill.sourcePath ?? "").toLowerCase();
+  if (path.includes(".codex")) return "codex";
+  if (path.includes(".claude")) return "claude";
+  return "other";
+}
+
+function segmentSkills(skills: Skill[]) {
+  const defs = [
+    { key: "global", label: "Global Skills", match: (s: Skill) => s.kind === "in_app_prompt" && !s.binding },
+    { key: "external-codex", label: "External Skills · Codex", match: (s: Skill) => providerOf(s) === "codex" },
+    { key: "external-claude", label: "External Skills · Claude", match: (s: Skill) => providerOf(s) === "claude" },
+    { key: "external-other", label: "External Skills · Other", match: (s: Skill) => providerOf(s) === "other" },
+    { key: "project", label: "Project Skills", match: (s: Skill) => s.kind === "in_app_prompt" && !!s.binding },
+  ];
+  return defs.map((def) => {
+    const group = skills.filter(def.match);
+    return {
+      key: def.key,
+      label: def.label,
+      health: `${group.filter((s) => s.enabled).length}/${group.length}`,
+      skills: group.sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  });
 }
 
 /** 목록의 한 줄(인앱/외부 공통). 인앱은 binding·enabled 배지, 외부는 경로 표시. */

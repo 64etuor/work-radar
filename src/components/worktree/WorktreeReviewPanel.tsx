@@ -13,9 +13,13 @@ import { Button } from "@/components/ui/button";
 export function ReviewSummary({
   worktree,
   branchFileCount,
+  reviewing,
+  onReview,
 }: {
   worktree: Worktree;
   branchFileCount: number | null;
+  reviewing?: boolean;
+  onReview?: () => void;
 }) {
   const activity = relativeActivity(worktree.newestMtime);
   return (
@@ -34,11 +38,59 @@ export function ReviewSummary({
       </div>
       <div className="wt-review-facts">
         <BranchRail worktree={worktree} activity={activity} />
+        {onReview && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full text-[12px]"
+            onClick={onReview}
+            disabled={reviewing}
+            title="이 worktree 변경을 AI가 read-only로 리뷰합니다"
+          >
+            {reviewing ? "리뷰 시작 중…" : "AI worktree review"}
+          </Button>
+        )}
       </div>
       <p className="wt-review-help">
         Unstaged는 working tree vs index, Staged는 index vs HEAD, Branch는 HEAD vs base입니다.
       </p>
+      <WorktreeTimeline worktree={worktree} />
     </section>
+  );
+}
+
+function WorktreeTimeline({ worktree }: { worktree: Worktree }) {
+  const events = [
+    { key: "created", label: "worktree", detail: worktree.isPrimary ? "primary" : "linked" },
+    ...(worktree.newestMtime
+      ? [{ key: "modified", label: "modified", detail: relativeActivity(worktree.newestMtime) }]
+      : []),
+    ...(worktree.mergedIntoBase === true
+      ? [{ key: "merge", label: "merged", detail: worktree.baseBranch }]
+      : []),
+    ...(worktree.stagedCount + worktree.unstagedCount > 0
+      ? [
+          {
+            key: "local",
+            label: "local changes",
+            detail: `${worktree.stagedCount + worktree.unstagedCount} files`,
+          },
+        ]
+      : []),
+    ...(worktree.baseAhead
+      ? [{ key: "branch", label: "branch commits", detail: `ahead ${worktree.baseAhead}` }]
+      : []),
+  ];
+  return (
+    <div className="wt-timeline" aria-label="worktree timeline">
+      {events.map((event) => (
+        <span key={event.key} className={`wt-timeline-event wt-te-${event.key}`}>
+          <i />
+          <b>{event.label}</b>
+          <small>{event.detail}</small>
+        </span>
+      ))}
+    </div>
   );
 }
 

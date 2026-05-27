@@ -281,7 +281,8 @@ pub async fn rebase_worktree_onto(
 // 보호: 현재 브랜치 / 다른 worktree 점유 브랜치 / base 브랜치 / 미머지(force 필요).
 
 /// 한 브랜치의 마지막 커밋 이후 경과일이 이 값을 넘으면 stale 후보로 노출(미머지여도).
-const STALE_DAYS: i64 = 30;
+/// Product goal default: 2일 이상 activity 없음.
+const STALE_DAYS: i64 = 2;
 
 /// 정리 후보 나열 (Phase 12d). merged/stale 로컬 브랜치 + prunable worktree.
 /// repo_path = primary worktree(또는 임의 worktree) 경로. base = 머지 기준(예: dev).

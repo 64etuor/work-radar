@@ -8,8 +8,10 @@ import {
   fetchPrRadar,
   openExternal,
   useCodexStatus,
+  usePrRadarSettings,
   useProjects,
   useTriggerCiTriage,
+  useTriggerCodexJob,
   useTriggerPrSelfcheck,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
@@ -42,8 +44,10 @@ export function PrRadarView() {
   const projects = useProjects();
   const projectList = projects.data ?? [];
   const codex = useCodexStatus();
+  const settings = usePrRadarSettings();
   const selfcheckDraft = useTriggerPrSelfcheck();
   const ciTriage = useTriggerCiTriage();
+  const aiEscalation = useTriggerCodexJob();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
   // 프로젝트별 주기 폴링(고정 cadence) + bounded retry(지수 backoff). 성공 시 매트릭스 invalidate.
@@ -55,7 +59,9 @@ export function PrRadarView() {
         void qc.invalidateQueries({ queryKey: ["signals"] });
         return items;
       },
-      refetchInterval: PR_RADAR_POLL_MS,
+      refetchInterval:
+        Math.max(1, settings.data?.pollIntervalMinutes ?? PR_RADAR_POLL_MS / 60_000) *
+        60_000,
       refetchOnWindowFocus: false,
       retry: 2,
     })),
@@ -83,7 +89,9 @@ export function PrRadarView() {
         <span className="pr-title">PR Radar</span>
         <span className="pr-poll">
           <RefreshCw className={`size-3.5${isFetching ? " pr-spin" : ""}`} />
-          {isFetching ? "새로고침 중…" : "주기 폴링"}
+          {isFetching
+            ? "새로고침 중…"
+            : `${settings.data?.pollIntervalMinutes ?? 10}분 폴링`}
         </span>
       </header>
 
@@ -106,6 +114,11 @@ export function PrRadarView() {
         {ciTriage.error && (
           <div className="pr-err">
             CI triage 실패: {(ciTriage.error as Error).message}
+          </div>
+        )}
+        {aiEscalation.error && (
+          <div className="pr-err">
+            AI escalation 실패: {(aiEscalation.error as Error).message}
           </div>
         )}
         {empty && !noProjects && (
@@ -147,6 +160,7 @@ export function PrRadarView() {
                         )
                       }
                       triaging={ciTriage.isPending}
+                      escalating={aiEscalation.isPending}
                       onCiTriage={() =>
                         ciTriage.mutate(
                           {
@@ -159,6 +173,19 @@ export function PrRadarView() {
                             costCapUsd: 1.0,
                           },
                           { onSuccess: (out) => goTo(out.escalated ? "board" : "jobs") },
+                        )
+                      }
+                      onAiEscalation={() =>
+                        aiEscalation.mutate(
+                          {
+                            projectId: it.projectId,
+                            repoId: null,
+                            prompt: prEscalationPrompt(it),
+                            timeoutSec: 180,
+                            maxTurns: 8,
+                            costCapUsd: 1.0,
+                          },
+                          { onSuccess: () => goTo("jobs") },
                         )
                       }
                     />
@@ -177,20 +204,25 @@ function PrRow({
   codexReady,
   drafting,
   triaging,
+  escalating,
   onSelfcheckDraft,
   onCiTriage,
+  onAiEscalation,
 }: {
   item: PrRadarItem;
   codexReady: boolean;
   drafting: boolean;
   triaging: boolean;
+  escalating: boolean;
   onSelfcheckDraft: () => void;
   onCiTriage: () => void;
+  onAiEscalation: () => void;
 }) {
   // 머지된 PR은 코드 리뷰 대상 아님(정리 버킷).
   const canDraft = item.bucket !== "merged_cleanup";
   // CI triage는 CI Blocked 버킷만(원인/수정안 제안 + 재트리거 캡).
   const canTriage = item.bucket === "ci_blocked";
+  const canEscalate = item.aiFlagged || item.commentCount > 10 || item.hasConflict;
   return (
     <div className="prr-row">
       <div className="prr-id">
@@ -202,8 +234,19 @@ function PrRow({
         <span className={`pr-ci pr-ci-${item.ci}`}>{CI_LABEL[item.ci]}</span>
         {item.hasConflict && <span className="pr-flag pr-conflict">충돌</span>}
         {item.isDraft && <span className="pr-flag">draft</span>}
-        <span className={`prr-comments${item.isSuspicious ? " prr-suspicious" : ""}`}>
-          {item.isSuspicious && <TriangleAlert className="size-3" />}
+        <span
+          className={`prr-comments${item.isSuspicious ? " prr-suspicious" : ""}${item.hasUnreadAlert ? " prr-unread-alert" : ""}${item.hasCriticalAlert ? " prr-critical-alert" : ""}`}
+          title={
+            item.hasCriticalAlert
+              ? "critical Inbox alert"
+              : item.hasUnreadAlert
+                ? "unread Inbox alert"
+                : item.aiFlagged
+                  ? "AI analysis candidate"
+                  : "comments"
+          }
+        >
+          {(item.isSuspicious || item.aiFlagged) && <TriangleAlert className="size-3" />}
           {item.commentCount}
         </span>
         <span className="pr-age">{item.ageDays}d</span>
@@ -244,6 +287,23 @@ function PrRow({
             CI triage
           </Button>
         )}
+        {canEscalate && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 rounded-full text-[11px] text-[color:var(--color-wr-coral)]"
+            disabled={!codexReady || escalating}
+            title={
+              codexReady
+                ? "댓글/충돌 패턴을 AI가 근본 원인, 반복 리뷰 포인트, 소유권 후보로 분석합니다"
+                : "codex 미가용 — 설치·로그인 후 사용"
+            }
+            onClick={onAiEscalation}
+          >
+            <Bot className="size-3.5" />
+            AI escalation
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -256,4 +316,25 @@ function PrRow({
       </div>
     </div>
   );
+}
+
+function prEscalationPrompt(item: PrRadarItem): string {
+  return [
+    "Analyze this PR Radar escalation and produce an Inbox-ready operational summary.",
+    `Repository: ${item.repoFullName}`,
+    `PR: #${item.number} ${item.title}`,
+    `URL: ${item.url}`,
+    `Author: @${item.authorLogin}`,
+    `Comments: ${item.commentCount}`,
+    `CI: ${item.ci}`,
+    `Conflict: ${item.hasConflict}`,
+    `Bucket: ${item.bucket}`,
+    "Required analysis:",
+    "- root cause of code/review friction",
+    "- architectural bottlenecks",
+    "- repeated review points",
+    "- dependency or team ownership candidates",
+    "- concrete next action shortcuts",
+    "Do not mutate GitHub. Return concise bullets.",
+  ].join("\n");
 }

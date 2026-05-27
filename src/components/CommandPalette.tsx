@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/command";
 import { useNavKeymap, useProjects, useSkills } from "@/lib/query";
 import { NAV_GROUP_LABELS, navItemsByGroup } from "@/lib/nav";
-import { groupSkillsForPalette, skillSearchValue } from "@/lib/skillGrouping";
+import { skillSearchValue } from "@/lib/skillGrouping";
 import { useUIStore } from "@/store";
 
 /**
@@ -31,8 +31,24 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
 
   const groups = navItemsByGroup();
-  // 표시 전용 프로젝트 우선 그룹핑(option B). 스키마 변경 없음(INVARIANT #7).
-  const skillGroups = groupSkillsForPalette(skills.data ?? []);
+  const normalizedQuery = query.trim().toLowerCase();
+  const showSkills =
+    normalizedQuery.includes("skill") ||
+    normalizedQuery.includes("스킬") ||
+    normalizedQuery.length >= 2;
+  const visibleSkills = showSkills
+    ? (skills.data ?? [])
+        .filter((s) => skillSearchValue(s).toLowerCase().includes(normalizedQuery))
+        .slice(0, 8)
+      : [];
+  const recentActions = recentCommands()
+    .map((label) => ({ label, action: actionForRecent(label, goTo) }))
+    .filter((item): item is { label: string; action: () => void } => !!item.action);
+
+  const runCommand = (label: string, action: () => void) => {
+    rememberRecentCommand(label);
+    action();
+  };
 
   return (
     <div className="cmdk-overlay" onPointerDown={() => setPaletteOpen(false)}>
@@ -57,7 +73,9 @@ export function CommandPalette() {
                       key={item.view}
                       value={item.search}
                       onSelect={() =>
-                        goTo(item.view, item.view === "settings" ? "open" : undefined)
+                        runCommand(item.label, () =>
+                          goTo(item.view, item.view === "settings" ? "open" : undefined),
+                        )
                       }
                     >
                       <Icon className="size-4 text-wr-subtle" />
@@ -69,16 +87,44 @@ export function CommandPalette() {
               </CommandGroup>
             ))}
 
-            {skillGroups.map(({ key, heading, skills: groupSkills }) => (
-              <CommandGroup key={key} heading={heading}>
-                {groupSkills.map((s) => {
+            <CommandGroup heading="추천 액션">
+              <CommandItem value="inbox unread alert 알림" onSelect={() => runCommand("Inbox", () => goTo("inbox"))}>
+                <Blocks className="size-4 text-wr-subtle" />
+                <span>Inbox 확인</span>
+                <CommandShortcut>운영</CommandShortcut>
+              </CommandItem>
+              <CommandItem value="pr radar refresh review" onSelect={() => runCommand("PR Radar", () => goTo("radar"))}>
+                <GitBranchPlus className="size-4 text-wr-subtle" />
+                <span>PR Radar 보기</span>
+                <CommandShortcut>context</CommandShortcut>
+              </CommandItem>
+            </CommandGroup>
+
+            {recentActions.length > 0 && (
+              <CommandGroup heading="최근 실행">
+                {recentActions.map(({ label, action }) => (
+                  <CommandItem
+                    key={label}
+                    value={`recent ${label}`}
+                    onSelect={() => runCommand(label, action)}
+                  >
+                    <FileText className="size-4 text-wr-subtle" />
+                    <span>{label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+
+            {visibleSkills.length > 0 && (
+              <CommandGroup heading="스킬 검색 결과">
+                {visibleSkills.map((s) => {
                   const isInApp = s.kind === "in_app_prompt";
                   return (
                     <CommandItem
                       key={s.id}
                       value={skillSearchValue(s)}
                       // 선택 = SkillsView로 이동해 보기/편집. 자동 실행 없음(INVARIANT #1/#5).
-                      onSelect={() => goToSkill(s.id)}
+                      onSelect={() => runCommand(`Skill: ${s.name}`, () => goToSkill(s.id))}
                     >
                       {isInApp ? (
                         <Blocks className="size-4 text-wr-subtle" />
@@ -98,19 +144,19 @@ export function CommandPalette() {
                   );
                 })}
               </CommandGroup>
-            ))}
+            )}
 
             <CommandGroup heading="추가">
               <CommandItem
                 value="add project 프로젝트 추가"
-                onSelect={() => goTo("settings", "add_project")}
+                onSelect={() => runCommand("프로젝트 추가", () => goTo("settings", "add_project"))}
               >
                 <FolderPlus className="size-4 text-wr-subtle" />
                 <span>프로젝트 추가</span>
               </CommandItem>
               <CommandItem
                 value="add repo 레포 추가"
-                onSelect={() => goTo("settings", "add_repo")}
+                onSelect={() => runCommand("레포 추가", () => goTo("settings", "add_repo"))}
               >
                 <GitBranchPlus className="size-4 text-wr-subtle" />
                 <span>레포 추가</span>
@@ -123,7 +169,7 @@ export function CommandPalette() {
                   <CommandItem
                     key={p.id}
                     value={`project ${p.name} ${p.kind}`}
-                    onSelect={() => goTo("settings", "open")}
+                    onSelect={() => runCommand(`Project: ${p.name}`, () => goTo("settings", "open"))}
                   >
                     <span>{p.name}</span>
                     <span className="ml-2 font-mono text-xs text-wr-subtle">
@@ -138,4 +184,41 @@ export function CommandPalette() {
       </div>
     </div>
   );
+}
+
+const RECENT_COMMANDS_KEY = "wr-cmdk-recent";
+
+function recentCommands(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_COMMANDS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string").slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function actionForRecent(
+  label: string,
+  goTo: ReturnType<typeof useUIStore.getState>["goTo"],
+): (() => void) | null {
+  if (label === "Inbox") return () => goTo("inbox");
+  if (label === "PR Radar") return () => goTo("radar");
+  if (label === "프로젝트 추가") return () => goTo("settings", "add_project");
+  if (label === "레포 추가") return () => goTo("settings", "add_repo");
+  if (label.startsWith("Skill: ")) return () => goTo("skills");
+  if (label.startsWith("Project: ")) return () => goTo("settings", "open");
+  const match = Object.values(navItemsByGroup())
+    .flatMap((group) => group.items)
+    .find((item) => item.label === label);
+  return match ? () => goTo(match.view, match.view === "settings" ? "open" : undefined) : null;
+}
+
+function rememberRecentCommand(label: string) {
+  try {
+    const next = [label, ...recentCommands().filter((x) => x !== label)].slice(0, 5);
+    localStorage.setItem(RECENT_COMMANDS_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore storage failures */
+  }
 }

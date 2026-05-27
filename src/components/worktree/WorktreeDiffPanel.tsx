@@ -3,6 +3,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { DiffFileSummary, DiffMode, Worktree } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { usePaneSize } from "@/lib/usePaneSize";
 import { diffContextLabel, type ReviewLens } from "@/lib/worktreeReview";
 import { DiffText } from "./WorktreeDiffText";
 import { FileRow, LocalFileSections, type SelectedDiff } from "./WorktreeFileList";
@@ -48,6 +49,20 @@ export function WorktreeDiffPanel({
   onLensChange: (lens: ReviewLens) => void;
 }) {
   const { diffFiles, stagedFiles, unstagedFiles, fileDiff } = queries;
+  const selectedFile = findSelectedFile(
+    selectedDiff,
+    diffFiles.data,
+    stagedFiles.data,
+    unstagedFiles.data,
+  );
+  const filePane = usePaneSize({
+    key: "worktree-files",
+    defaultSize: 300,
+    min: 190,
+    max: 520,
+    snap: 200,
+    collapsed: filesCollapsed,
+  });
 
   return (
     <div className="wt-split">
@@ -65,7 +80,7 @@ export function WorktreeDiffPanel({
           </span>
         </button>
       ) : (
-        <div className="wt-files">
+        <div className="wt-files" style={filePane.style}>
           <div className="wt-panel-head">
             <span className="wt-panel-title">
               Files
@@ -93,6 +108,11 @@ export function WorktreeDiffPanel({
             onSelectedDiffChange={onSelectedDiffChange}
             onLensChange={onLensChange}
           />
+          <div
+            className="wt-resize-handle"
+            {...filePane.bindResizeHandle(() => onFilesCollapsedChange(true))}
+            title="파일 패널 크기 조절"
+          />
         </div>
       )}
 
@@ -112,10 +132,53 @@ export function WorktreeDiffPanel({
               <span className="wt-diff-path">{selectedDiff.path}</span>
               <span className="wt-diff-mode">{diffContextLabel(selectedDiff.mode)}</span>
             </div>
+            {selectedFile && <FileTimeline file={selectedFile} mode={selectedDiff.mode} />}
             <DiffText text={fileDiff.data ?? ""} path={selectedDiff.path} />
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function findSelectedFile(
+  selected: SelectedDiff | null,
+  branchFiles?: DiffFileSummary[],
+  stagedFiles?: DiffFileSummary[],
+  unstagedFiles?: DiffFileSummary[],
+): DiffFileSummary | null {
+  if (!selected) return null;
+  const source =
+    selected.mode === "staged"
+      ? stagedFiles
+      : selected.mode === "working"
+        ? unstagedFiles
+        : branchFiles;
+  return source?.find((file) => file.path === selected.path) ?? null;
+}
+
+function FileTimeline({ file, mode }: { file: DiffFileSummary; mode: DiffMode }) {
+  const events = [
+    file.status === "A"
+      ? "file created"
+      : file.status === "R"
+        ? `renamed from ${file.oldPath ?? "previous path"}`
+        : file.status === "D"
+          ? "file deleted"
+          : "file modified",
+    `${file.adds}+ / ${file.dels}-`,
+    SOURCE_LABEL[mode],
+    mode === "vs_base" || mode === "branch_branch" ? "merge review surface" : "local review surface",
+    "AI review can attach from worktree header",
+  ];
+  return (
+    <div className="wt-file-timeline" aria-label="file timeline">
+      {events.map((event) => (
+        <span key={event}>
+          <i />
+          {event}
+        </span>
+      ))}
     </div>
   );
 }

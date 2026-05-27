@@ -1,5 +1,6 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { DiffFileSummary, DiffMode, Worktree } from "@/bindings";
+import { usePaneSize } from "@/lib/usePaneSize";
 import type { ReviewLens } from "@/lib/worktreeReview";
 import { CommitGraphDrawer } from "./CommitGraphDrawer";
 import { type SelectedDiff } from "./WorktreeFileList";
@@ -32,6 +33,7 @@ type ReviewModel = {
   filesCollapsed: boolean;
   selectedDiff: SelectedDiff | null;
   graphOpen: boolean;
+  reviewing: boolean;
 };
 
 type DiffQueries = {
@@ -50,6 +52,7 @@ type WorktreeBodyActions = {
   onFilesCollapsedChange: (collapsed: boolean) => void;
   onSelectedDiffChange: (next: SelectedDiff | null) => void;
   onCloseGraph: () => void;
+  onReviewWorktree: () => void;
 };
 
 export function WorktreeBody({
@@ -63,6 +66,15 @@ export function WorktreeBody({
   queries: DiffQueries;
   actions: WorktreeBodyActions;
 }) {
+  const sidePane = usePaneSize({
+    key: "worktree-sidebar",
+    defaultSize: 268,
+    min: 180,
+    max: 420,
+    snap: 190,
+    collapsed: sidebar.collapsed,
+  });
+
   return (
     <div className="wt-body">
       <WorktreeSideList
@@ -74,6 +86,10 @@ export function WorktreeBody({
         grouped={sidebar.grouped}
         selectedPath={sidebar.selectedPath}
         onSelect={actions.onSelectWorktree}
+        style={sidePane.style}
+        resizeHandleProps={sidePane.bindResizeHandle(() =>
+          actions.onSidebarCollapsedChange(true),
+        )}
       />
 
       <main className="wt-main">
@@ -84,6 +100,8 @@ export function WorktreeBody({
             <ReviewSummary
               worktree={review.selected}
               branchFileCount={review.branchFileCount}
+              reviewing={review.reviewing}
+              onReview={actions.onReviewWorktree}
             />
             <WorktreeLensToolbar
               worktree={review.selected}

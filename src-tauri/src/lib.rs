@@ -69,6 +69,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // 브레인덤프 편집/하드 삭제 (Phase 15 #5).
         commands::update_signal_title,
         commands::delete_signal,
+        commands::set_signal_kind,
+        commands::set_signal_area_tags,
+        commands::set_signal_area_tag_key,
+        commands::get_life_wheel_tags,
+        commands::set_life_wheel_tags,
         // Today 레일 (로컬 승격).
         commands::promote_today,
         commands::unpromote_today,
@@ -102,6 +107,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::routine_tracking,
         // PR Radar (read 레일, Phase 4).
         commands::refresh_pr_radar,
+        commands::get_pr_radar_settings,
+        commands::set_pr_radar_settings,
         commands::set_pr_self_check,
         // Worktree & Branch Diff (read-only, Phase 5).
         commands::list_worktrees,
@@ -178,6 +185,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::notification_permission,
         commands::request_notification_permission,
         commands::schedule_test_notification,
+        // Unified Inbox — local operational memory and notification mirror.
+        commands::list_inbox_items,
+        commands::inbox_counts,
+        commands::mark_inbox_item_read,
+        commands::dismiss_inbox_item,
         // Hermes 메신저 브리지 (Phase 20 #15) — 봇 토큰 keychain, 수신은 bounded 단발.
         commands::set_hermes_bridge,
         commands::hermes_bridge_status,
@@ -284,22 +296,34 @@ pub fn run() {
             let pool = tauri::async_runtime::block_on(db::init_db(&app_data.join("work-radar.db")))
                 .expect("failed to initialize database");
 
-            // 스킬 레지스트리 시드(Phase 20 #21): 4개 인앱 프롬프트를 코드 상수에서 멱등 시드한다.
+            // 스킬 레지스트리 시드(Phase 20 #21): 인앱 프롬프트를 코드 상수에서 멱등 시드한다.
             // 시드 프롬프트 = 코드 상수라 잡 lookup이 시드 행을 써도 기본 동작 불변. 실패는 무시
             // (잡 트리거가 코드 상수로 폴백하므로 graceful — 레지스트리 없이도 오늘과 동일 동작).
             let _ = tauri::async_runtime::block_on(commands::skills::seed_in_app_skills(&pool));
-
-            app.manage(pool);
+            let recovered = tauri::async_runtime::block_on(
+                commands::agent_run_store::recover_interrupted_runs(&pool),
+            )
+            .unwrap_or(0);
+            if recovered > 0 {
+                tracing::warn!(
+                    code = "jobs.recovered_interrupted",
+                    count = recovered,
+                    "interrupted agent runs recovered on startup"
+                );
+            }
 
             // 잡 큐 매니저(Phase 7): codex 경로 해석(graceful degrade) + worktree/로그 디렉터리 +
             // 동시성 1. INVARIANT #5/#6은 jobs.rs/agent.rs에서 강제.
             let codex_bin = tauri::async_runtime::block_on(agent::resolve_codex_bin());
-            app.manage(jobs::JobManager::new(
+            let job_manager = jobs::JobManager::new(
                 codex_bin,
                 app_data.join("worktrees"),
                 app_data.join("logs"),
                 1,
-            ));
+            );
+            job_manager.start_recovery_monitor(pool.clone());
+            app.manage(pool);
+            app.manage(job_manager);
 
             // 전역 핫키로 캡처/루트 창 토글. 저장된 핫키(app_config)가 있으면 그것으로, 없으면
             // 기본 Ctrl+Space로 등록(Phase 18 #7). 등록 실패는 graceful — 앱 코어는 동작.

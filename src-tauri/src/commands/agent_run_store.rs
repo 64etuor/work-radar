@@ -30,6 +30,8 @@ struct AgentRunRecord {
     proposal: Option<String>,
     created_at: String,
     started_at: Option<String>,
+    heartbeat_at: Option<String>,
+    recovery_count: i64,
     finished_at: Option<String>,
 }
 
@@ -67,6 +69,8 @@ impl From<AgentRunRecord> for AgentRunView {
             has_proposal: r.proposal.is_some(),
             created_at: r.created_at,
             started_at: r.started_at,
+            heartbeat_at: r.heartbeat_at,
+            recovery_count: r.recovery_count.max(0) as u32,
             finished_at: r.finished_at,
         }
     }
@@ -106,7 +110,7 @@ pub(crate) async fn fetch_agent_runs(db: &Db) -> Result<Vec<AgentRunView>, sqlx:
     let rows: Vec<AgentRunRecord> = sqlx::query_as(
         "SELECT id, project_id, engine, kind, rail, sandbox, status, timeout_sec, max_turns, \
          cost_cap_usd, cost_tokens, cost_usd, repo_id, workdir, log_path, result, trigger, proposal, \
-         created_at, started_at, finished_at \
+         created_at, started_at, heartbeat_at, recovery_count, finished_at \
          FROM agent_runs ORDER BY created_at DESC, id DESC LIMIT 100",
     )
     .fetch_all(db)
@@ -134,7 +138,7 @@ pub(crate) async fn fetch_log_tail(db: &Db, run_id: &str) -> Result<String, sqlx
 
 pub(crate) async fn mark_running(db: &Db, run_id: &str) {
     let _ = sqlx::query(
-        "UPDATE agent_runs SET status=?, started_at=datetime('now') \
+        "UPDATE agent_runs SET status=?, started_at=datetime('now'), heartbeat_at=datetime('now') \
          WHERE id = ? AND status=?",
     )
     .bind(AgentStatus::Running)
@@ -142,6 +146,15 @@ pub(crate) async fn mark_running(db: &Db, run_id: &str) {
     .bind(AgentStatus::Proposed)
     .execute(db)
     .await;
+}
+
+pub(crate) async fn heartbeat(db: &Db, run_id: &str) {
+    let _ =
+        sqlx::query("UPDATE agent_runs SET heartbeat_at=datetime('now') WHERE id=?1 AND status=?2")
+            .bind(run_id)
+            .bind(AgentStatus::Running)
+            .execute(db)
+            .await;
 }
 
 /// 종료 전이(succeeded/awaiting_approval/failed/cancelled) + result/cost 영속.
@@ -198,6 +211,69 @@ pub(crate) async fn finalize(
     .bind(run_id)
     .execute(db)
     .await;
+}
+
+/// App-start recovery: no in-memory kill token can exist for jobs left running
+/// from a previous app process. Mark them failed with a clear recoverable
+/// reason, and cancel queued proposed jobs that cannot be resumed safely.
+pub(crate) async fn recover_interrupted_runs(db: &Db) -> Result<u64, sqlx::Error> {
+    let running = sqlx::query(
+        "UPDATE agent_runs SET status=?1, result=?2, finished_at=datetime('now'), \
+         recovery_count=recovery_count+1 \
+         WHERE status=?3",
+    )
+    .bind(AgentStatus::Failed)
+    .bind(
+        json!({ "error": "App restarted while job was running; marked recoverable failed." })
+            .to_string(),
+    )
+    .bind(AgentStatus::Running)
+    .execute(db)
+    .await?
+    .rows_affected();
+
+    let proposed = sqlx::query(
+        "UPDATE agent_runs SET status=?1, result=?2, finished_at=datetime('now'), \
+         recovery_count=recovery_count+1 \
+         WHERE status=?3",
+    )
+    .bind(AgentStatus::Cancelled)
+    .bind(
+        json!({ "error": "App restarted while job was queued; cancelled for consistency." })
+            .to_string(),
+    )
+    .bind(AgentStatus::Proposed)
+    .execute(db)
+    .await?
+    .rows_affected();
+
+    Ok(running + proposed)
+}
+
+/// Runtime recovery sweep: running rows whose heartbeat has stopped are no
+/// longer recoverable through the in-memory kill registry. Mark them failed so
+/// restart-less zombie states do not stay unkillable/undeletable in the UI.
+pub(crate) async fn recover_stale_heartbeats(
+    db: &Db,
+    timeout_seconds: u32,
+) -> Result<u64, sqlx::Error> {
+    let threshold = format!("-{} seconds", timeout_seconds.max(30));
+    let res = sqlx::query(
+        "UPDATE agent_runs SET status=?1, result=?2, finished_at=datetime('now'), \
+         recovery_count=recovery_count+1 \
+         WHERE status=?3 \
+           AND COALESCE(heartbeat_at, started_at, created_at) < datetime('now', ?4)",
+    )
+    .bind(AgentStatus::Failed)
+    .bind(
+        json!({ "error": "Heartbeat timed out; forced cleanup marked this job recoverable failed." })
+            .to_string(),
+    )
+    .bind(AgentStatus::Running)
+    .bind(threshold)
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected())
 }
 
 /// 큐 대기 중(proposed) 취소 마감.
@@ -439,5 +515,37 @@ mod tests {
         // 두 번째 reject은 0행(이미 cancelled).
         let n2 = reject_run(&db, "r3").await.unwrap();
         assert_eq!(n2, 0);
+    }
+
+    #[tokio::test]
+    async fn recover_interrupted_runs_marks_active_states_terminal() {
+        let db = fresh_db().await;
+        sqlx::query(
+            "INSERT INTO agent_runs (id, engine, kind, rail, sandbox, status, timeout_sec, max_turns, cost_cap_usd) \
+             VALUES \
+             ('running1','codex','k','suggestion','read_only','running',60,8,1.0), \
+             ('queued1','codex','k','suggestion','read_only','proposed',60,8,1.0), \
+             ('done1','codex','k','suggestion','read_only','succeeded',60,8,1.0)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let n = recover_interrupted_runs(&db).await.unwrap();
+        assert_eq!(n, 2);
+
+        let rows: Vec<(String, AgentStatus, i64)> =
+            sqlx::query_as("SELECT id, status, recovery_count FROM agent_runs ORDER BY id")
+                .fetch_all(&db)
+                .await
+                .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                ("done1".to_string(), AgentStatus::Succeeded, 0),
+                ("queued1".to_string(), AgentStatus::Cancelled, 1),
+                ("running1".to_string(), AgentStatus::Failed, 1),
+            ]
+        );
     }
 }

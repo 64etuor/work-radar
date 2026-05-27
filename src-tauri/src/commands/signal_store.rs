@@ -2,13 +2,13 @@
 //! Approach A: 커맨드에서 verbatim 이전 — 동작 무변경. 백로그 G(테이블 분리)는 이 모듈만 바꾼다.
 
 use crate::db::Db;
-use crate::models::{AreaTag, CreateSignalInput, Quadrant, SignalStatus, WorkSignal};
+use crate::models::{AreaTag, CreateSignalInput, Kind, Quadrant, SignalStatus, WorkSignal};
 
 /// signals 행 → WorkSignal 매핑 컬럼 목록(기존 shared.rs에서 이전).
 /// FromRow는 이름으로 매핑 → 순서 무관.
 pub(crate) const SIGNAL_COLS: &str =
     "id, project_id, title, body, source, type, quadrant, suggested_quadrant, \
-     kind, area, suggested_area, status, snooze_until, today_for_date, today_done_at, today_rank, \
+     kind, area, area_tags, suggested_area, status, snooze_until, today_for_date, today_done_at, today_rank, \
      impact_high, regret, created_at, updated_at";
 
 /// braindump 입력 정규화 (dedup 키 기준). 소문자 + 공백 정리.
@@ -620,11 +620,117 @@ pub(crate) async fn set_signal_area(
     area: Option<AreaTag>,
 ) -> Result<WorkSignal, sqlx::Error> {
     sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET area = ?2, updated_at = datetime('now') \
+        "UPDATE signals SET area = ?2, area_tags = ?3, updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(id)
     .bind(area)
+    .bind(area.map(|a| format!(r#"["{}"]"#, area_to_str(a))))
+    .fetch_one(db)
+    .await
+}
+
+/// Life Wheel multi-select 확정/수정. 첫 번째 tag는 기존 `area` primary 필드에 동기화한다.
+pub(crate) async fn set_signal_area_tags(
+    db: &Db,
+    id: &str,
+    areas: &[AreaTag],
+) -> Result<WorkSignal, sqlx::Error> {
+    let primary = areas.first().copied();
+    let json = if areas.is_empty() {
+        None
+    } else {
+        let body = areas
+            .iter()
+            .map(|a| format!(r#""{}""#, area_to_str(*a)))
+            .collect::<Vec<_>>()
+            .join(",");
+        Some(format!("[{body}]"))
+    };
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET area = ?2, area_tags = ?3, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(primary)
+    .bind(json)
+    .fetch_one(db)
+    .await
+}
+
+/// Life Wheel 수동 선택. 커스텀 tag key는 `area_tags`에 보존하고, legacy `area` primary는
+/// 닫힌 enum에 해당하는 기본 태그일 때만 동기화한다.
+pub(crate) async fn set_signal_area_tag_key(
+    db: &Db,
+    id: &str,
+    tag_key: Option<&str>,
+) -> Result<WorkSignal, sqlx::Error> {
+    let normalized = tag_key.and_then(|key| {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    let primary = normalized.as_deref().and_then(area_from_str);
+    let json = normalized.as_deref().map(|key| {
+        let escaped = key.replace('\\', "\\\\").replace('"', "\\\"");
+        format!(r#"["{escaped}"]"#)
+    });
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET area = ?2, area_tags = ?3, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(primary)
+    .bind(json)
+    .fetch_one(db)
+    .await
+}
+
+fn area_from_str(area: &str) -> Option<AreaTag> {
+    match area {
+        "health" => Some(AreaTag::Health),
+        "work" => Some(AreaTag::Work),
+        "studies" => Some(AreaTag::Studies),
+        "environment" => Some(AreaTag::Environment),
+        "recreation" => Some(AreaTag::Recreation),
+        "romance" => Some(AreaTag::Romance),
+        "family" => Some(AreaTag::Family),
+        "friends" => Some(AreaTag::Friends),
+        "finances" => Some(AreaTag::Finances),
+        "other" => Some(AreaTag::Other),
+        _ => None,
+    }
+}
+
+fn area_to_str(area: AreaTag) -> &'static str {
+    match area {
+        AreaTag::Health => "health",
+        AreaTag::Work => "work",
+        AreaTag::Studies => "studies",
+        AreaTag::Environment => "environment",
+        AreaTag::Recreation => "recreation",
+        AreaTag::Romance => "romance",
+        AreaTag::Family => "family",
+        AreaTag::Friends => "friends",
+        AreaTag::Finances => "finances",
+        AreaTag::Other => "other",
+    }
+}
+
+pub(crate) async fn set_signal_kind(
+    db: &Db,
+    id: &str,
+    kind: Option<Kind>,
+) -> Result<WorkSignal, sqlx::Error> {
+    sqlx::query_as::<_, WorkSignal>(&format!(
+        "UPDATE signals SET kind = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
+    ))
+    .bind(id)
+    .bind(kind)
     .fetch_one(db)
     .await
 }

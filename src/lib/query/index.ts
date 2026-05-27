@@ -16,6 +16,7 @@ export * from "./scheduler";
 export * from "./nav";
 export * from "./hermes";
 export * from "./skills";
+export * from "./inbox";
 export * from "./cmux";
 export * from "./news";
 export * from "./sprint";

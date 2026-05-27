@@ -14,7 +14,8 @@
 }
 .cmdk-panel {
   width: min(560px, 92vw);
-  max-height: 60vh;
+  height: min(640px, 70vh);
+  max-height: 70vh;
   background: var(--color-wr-bg);
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-md);

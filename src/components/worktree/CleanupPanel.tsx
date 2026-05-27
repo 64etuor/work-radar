@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import type { CleanupCandidate } from "@/bindings";
-import { useCleanupCandidates, useDeleteCleanupCandidates } from "@/lib/query";
+import { useCleanupCandidates, useDeleteCleanupCandidates, useTriggerCodexJob } from "@/lib/query";
 
 const CLEANUP_KIND_LABEL: Record<CleanupCandidate["kind"], string> = {
   merged_branch: "머지됨",
@@ -26,10 +26,14 @@ export function CleanupPanel({
 }) {
   const candidates = useCleanupCandidates(repoPath, base);
   const del = useDeleteCleanupCandidates();
+  const cleanupReview = useTriggerCodexJob();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [force, setForce] = useState(false);
 
   const list = candidates.data ?? [];
+  const selectedItems = list.filter((c) => selected.has(c.id));
+  const selectedProtected = selectedItems.filter((c) => c.protected).length;
+  const selectedForce = selectedItems.filter((c) => c.needsForce).length;
 
   // 선택 가능 = 비보호 && (force 불필요 || force 켜짐).
   function selectable(c: CleanupCandidate): boolean {
@@ -53,6 +57,31 @@ export function CleanupPanel({
       { repoPath, base, ids, force },
       { onSuccess: () => setSelected(new Set()) },
     );
+  }
+
+  function runAiReview() {
+    const prompt = [
+      "Use the editable in-app skill prompt named 'worktree cleanup 추천' as the policy baseline.",
+      "Review these local cleanup candidates and recommend delete/keep/review.",
+      `Repo path: ${repoPath}`,
+      `Base: ${base}`,
+      `Default stale threshold: 2 days with no activity.`,
+      "Candidates:",
+      ...list.map(
+        (c) =>
+          `- ${c.id}: kind=${c.kind}, name=${c.name}, protected=${c.protected}, needsForce=${c.needsForce}, detail=${c.detail}`,
+      ),
+      "Include evidence: merged state, stale inactivity, abandoned-branch pattern, review inactivity if inferable, and recovery risk.",
+      "Do not delete anything. Return a concise recommendation table.",
+    ].join("\n");
+    cleanupReview.mutate({
+      projectId: null,
+      repoId: null,
+      prompt,
+      timeoutSec: 120,
+      maxTurns: 6,
+      costCapUsd: 0.75,
+    });
   }
 
   return (
@@ -90,6 +119,35 @@ export function CleanupPanel({
         </Button>
       </div>
 
+      <div className="wt-cleanup-preview">
+        <strong>삭제 preview</strong>
+        <span>
+          선택 {selected.size}개 · force 필요 {selectedForce}개 · 보호 항목 {selectedProtected}개
+        </span>
+        <p>
+          삭제는 로컬 브랜치 삭제 또는 `git worktree prune`입니다. 이미 삭제된 항목은 git reflog나
+          원격 브랜치가 없으면 앱에서 undo할 수 없습니다. 아래 근거를 확인한 항목만 선택하세요.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 rounded-full text-[12px]"
+          disabled={list.length === 0 || cleanupReview.isPending}
+          onClick={runAiReview}
+          title="스킬 레지스트리의 editable cleanup prompt 기준으로 추천 잡을 생성합니다"
+        >
+          {cleanupReview.isPending ? "AI 추천 생성 중…" : "AI 추천 잡 생성"}
+        </Button>
+        {cleanupReview.data && (
+          <span className="wt-cleanup-msg">추천 잡 생성됨: {cleanupReview.data}</span>
+        )}
+        {cleanupReview.error && (
+          <span className="wt-cleanup-msg wt-rebase-err">
+            {(cleanupReview.error as Error).message}
+          </span>
+        )}
+      </div>
+
       {candidates.isLoading && (
         <div className="wt-empty">
           <Spinner />
@@ -121,6 +179,7 @@ export function CleanupPanel({
               </span>
               <span className="wt-cleanup-name">{c.name}</span>
               <span className="wt-cleanup-detail">{c.detail}</span>
+              <span className="wt-cleanup-reason">{cleanupReason(c)}</span>
             </label>
           );
         })}
@@ -146,4 +205,11 @@ export function CleanupPanel({
       </div>
     </div>
   );
+}
+
+function cleanupReason(c: CleanupCandidate): string {
+  if (c.protected) return "보호됨: 현재/base/dirty 항목은 삭제 대상에서 제외";
+  if (c.kind === "merged_branch") return "기본 근거: base에 merge 완료";
+  if (c.kind === "stale_branch") return "기본 근거: 2일 이상 최근 activity 없음";
+  return "기본 근거: git prune 대상 worktree";
 }

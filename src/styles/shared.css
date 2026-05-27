@@ -26,8 +26,117 @@
     transform: rotate(360deg);
   }
 }
+
+/* Shared two-ring pulse. Callers set --wr-pulse-* colors and choose duration/easing. */
+@keyframes wr-pulse-ring {
+  0% {
+    box-shadow:
+      0 0 0 0 var(--wr-pulse-primary, rgba(255, 119, 89, 0.55)),
+      0 0 0 0 var(--wr-pulse-secondary, rgba(255, 119, 89, 0.35));
+  }
+  70% {
+    box-shadow:
+      0 0 0 14px var(--wr-pulse-clear, rgba(255, 119, 89, 0)),
+      0 0 0 22px var(--wr-pulse-clear, rgba(255, 119, 89, 0));
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 var(--wr-pulse-clear, rgba(255, 119, 89, 0)),
+      0 0 0 0 var(--wr-pulse-clear, rgba(255, 119, 89, 0));
+  }
+}
+
+/* Shared radial popover effect. Components provide --radial-x/--radial-y per item. */
+.wr-radial-effect-layer {
+  animation: wr-radial-backdrop-in var(--wr-motion-base) var(--wr-ease-out) both;
+}
+.wr-radial-effect-layer.closing {
+  pointer-events: none;
+  animation: wr-radial-backdrop-out var(--wr-motion-fast) var(--wr-ease-out) both;
+}
+.wr-radial-effect {
+  animation: wr-radial-core-in var(--wr-motion-slow) var(--wr-ease-spring) both;
+}
+.wr-radial-effect.closing {
+  animation: wr-radial-core-out var(--wr-motion-fast) var(--wr-ease-out) both;
+}
+.wr-radial-effect-item {
+  transform: translate(var(--radial-x), var(--radial-y)) translate(-50%, -50%) scale(1);
+  animation: wr-radial-item-in 0.34s var(--wr-ease-spring) backwards;
+  animation-delay: var(--radial-delay, 0ms);
+}
+.wr-radial-effect-item.closing {
+  animation: wr-radial-item-out var(--wr-motion-fast) var(--wr-ease-out) both;
+  animation-delay: 0ms;
+}
+@keyframes wr-radial-backdrop-in {
+  from {
+    background: rgb(255 255 255 / 0);
+  }
+  to {
+    background: var(--radial-backdrop-bg, transparent);
+  }
+}
+@keyframes wr-radial-backdrop-out {
+  from {
+    background: var(--radial-backdrop-bg, transparent);
+  }
+  to {
+    background: rgb(255 255 255 / 0);
+  }
+}
+@keyframes wr-radial-core-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes wr-radial-core-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+@keyframes wr-radial-item-in {
+  from {
+    opacity: 0;
+    transform: translate(0, 0) translate(-50%, -50%) scale(0.42);
+  }
+  72% {
+    opacity: 1;
+    transform: translate(var(--radial-overshoot-x), var(--radial-overshoot-y)) translate(-50%, -50%)
+      scale(1.03);
+  }
+  to {
+    opacity: 1;
+    transform: translate(var(--radial-x), var(--radial-y)) translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes wr-radial-item-out {
+  from {
+    opacity: 1;
+    transform: translate(var(--radial-x), var(--radial-y)) translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(0, 0) translate(-50%, -50%) scale(0.5);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .view-shell {
+    animation: none;
+  }
+  .wr-radial-effect-layer,
+  .wr-radial-effect,
+  .wr-radial-effect-item {
     animation: none;
   }
 }

@@ -1,10 +1,12 @@
 use tauri::State;
 
+use crate::commands::nav::{get_config, set_config};
 use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    CreateSignalInput, Promotion, PromotionTarget, Quadrant, SignalStatus, WorkSignal,
+    AreaTag, CreateSignalInput, Kind, LifeWheelTagConfig, Promotion, PromotionTarget, Quadrant,
+    SignalStatus, WorkSignal,
 };
 
 // ── Signals: 생성 / 조회 / 분류 ──────────────────────────────────────────────
@@ -88,6 +90,187 @@ pub async fn update_signal_title(
 pub async fn delete_signal(db: State<'_, Db>, id: String) -> Result<(), AppError> {
     signal_store::delete_signal_row(db.inner(), &id).await?;
     Ok(())
+}
+
+/// 개인/업무 분류 수정. 사람의 manual override이며 quadrant 결정 레일과 독립이다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_signal_kind(
+    db: State<'_, Db>,
+    id: String,
+    kind: Option<Kind>,
+) -> Result<WorkSignal, AppError> {
+    Ok(signal_store::set_signal_kind(db.inner(), &id, kind).await?)
+}
+
+/// Life Wheel multi-select 수정. 첫 번째 항목은 기존 primary `area` 필드에도 동기화한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_signal_area_tags(
+    db: State<'_, Db>,
+    id: String,
+    areas: Vec<AreaTag>,
+) -> Result<WorkSignal, AppError> {
+    Ok(signal_store::set_signal_area_tags(db.inner(), &id, &areas).await?)
+}
+
+const KEY_LIFE_WHEEL_TAGS: &str = "life_wheel.tags";
+
+fn default_life_wheel_tags() -> Vec<LifeWheelTagConfig> {
+    [
+        ("health", "건강", "#0f9f6e"),
+        ("work", "업무", "#003c33"),
+        ("studies", "학습", "#1863dc"),
+        ("environment", "환경", "#7a9f35"),
+        ("recreation", "휴식", "#ff7759"),
+        ("romance", "연애", "#d94f70"),
+        ("family", "가족", "#9b6a2f"),
+        ("friends", "친구", "#6f63d9"),
+        ("finances", "재정", "#0f7a8a"),
+        ("other", "기타", "#75758a"),
+    ]
+    .into_iter()
+    .map(|(id, label, color)| LifeWheelTagConfig {
+        id: id.to_string(),
+        label: label.to_string(),
+        color: color.to_string(),
+        built_in: true,
+        enabled: true,
+    })
+    .collect()
+}
+
+fn is_builtin_area_key(id: &str) -> bool {
+    matches!(
+        id,
+        "health"
+            | "work"
+            | "studies"
+            | "environment"
+            | "recreation"
+            | "romance"
+            | "family"
+            | "friends"
+            | "finances"
+            | "other"
+    )
+}
+
+fn normalize_tag_id(raw: &str) -> String {
+    raw.trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn valid_hex_color(color: &str) -> bool {
+    let bytes = color.as_bytes();
+    bytes.len() == 7 && bytes[0] == b'#' && bytes[1..].iter().all(|b| b.is_ascii_hexdigit())
+}
+
+fn normalize_life_wheel_tags(
+    tags: Vec<LifeWheelTagConfig>,
+) -> Result<Vec<LifeWheelTagConfig>, (&'static str, &'static str)> {
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for tag in tags {
+        let id = normalize_tag_id(&tag.id);
+        if id.is_empty() {
+            return Err(("life_wheel.invalid_id", "태그 key는 비어 있을 수 없습니다"));
+        }
+        if !seen.insert(id.clone()) {
+            return Err(("life_wheel.duplicate_id", "태그 key가 중복되었습니다"));
+        }
+        let label = tag.label.trim().to_string();
+        if label.is_empty() {
+            return Err((
+                "life_wheel.empty_label",
+                "태그 이름은 비어 있을 수 없습니다",
+            ));
+        }
+        if !valid_hex_color(&tag.color) {
+            return Err((
+                "life_wheel.invalid_color",
+                "색상은 #RRGGBB 형식이어야 합니다",
+            ));
+        }
+        out.push(LifeWheelTagConfig {
+            built_in: is_builtin_area_key(&id),
+            id,
+            label,
+            color: tag.color,
+            enabled: tag.enabled,
+        });
+    }
+    if out.iter().all(|tag| !tag.enabled) {
+        return Err((
+            "life_wheel.no_enabled_tags",
+            "최소 하나 이상의 Life Wheel 태그가 필요합니다",
+        ));
+    }
+    Ok(out)
+}
+
+async fn current_life_wheel_tags(db: &Db) -> Result<Vec<LifeWheelTagConfig>, AppError> {
+    let Some(raw) = get_config(db, KEY_LIFE_WHEEL_TAGS).await? else {
+        return Ok(default_life_wheel_tags());
+    };
+    match serde_json::from_str::<Vec<LifeWheelTagConfig>>(&raw) {
+        Ok(tags) => normalize_life_wheel_tags(tags)
+            .map_err(|(code, message)| AppError::validation(code, message)),
+        Err(_) => Ok(default_life_wheel_tags()),
+    }
+}
+
+/// Life Wheel 팔레트 설정 조회. 기본 taxonomy는 유지하되 사용자가 색/노출/커스텀 태그를 편집한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_life_wheel_tags(db: State<'_, Db>) -> Result<Vec<LifeWheelTagConfig>, AppError> {
+    current_life_wheel_tags(db.inner()).await
+}
+
+/// Life Wheel 팔레트 설정 저장. 비밀이 아닌 per-machine UI 설정이므로 app_config에 JSON 저장한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_life_wheel_tags(
+    db: State<'_, Db>,
+    tags: Vec<LifeWheelTagConfig>,
+) -> Result<Vec<LifeWheelTagConfig>, AppError> {
+    let normalized = normalize_life_wheel_tags(tags)
+        .map_err(|(code, message)| AppError::validation(code, message))?;
+    let raw = serde_json::to_string(&normalized)
+        .map_err(|e| AppError::unexpected("life_wheel.serialize", e.to_string()))?;
+    set_config(db.inner(), KEY_LIFE_WHEEL_TAGS, &raw).await?;
+    Ok(normalized)
+}
+
+/// Life Wheel 수동 선택. 커스텀 tag key도 허용하되 설정에 존재하는 enabled tag만 저장한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_signal_area_tag_key(
+    db: State<'_, Db>,
+    id: String,
+    tag_key: Option<String>,
+) -> Result<WorkSignal, AppError> {
+    let normalized = tag_key
+        .as_deref()
+        .map(normalize_tag_id)
+        .filter(|key| !key.is_empty());
+    if let Some(key) = normalized.as_deref() {
+        let tags = current_life_wheel_tags(db.inner()).await?;
+        if !tags.iter().any(|tag| tag.enabled && tag.id == key) {
+            return Err(AppError::validation(
+                "life_wheel.unknown_tag",
+                "설정에 없는 Life Wheel 태그입니다",
+            ));
+        }
+    }
+    Ok(signal_store::set_signal_area_tag_key(db.inner(), &id, normalized.as_deref()).await?)
 }
 
 // ── 승격 draft (외부 = Acceptance 게이트, INVARIANT #2) ────────────────────────
