@@ -20,11 +20,20 @@ export function CardTagEditor({
   const selectedTag = selectedArea ? tags.find((tag) => tag.id === selectedArea) : null;
   const areaColor = selectedTag?.color ?? "#75758a";
   const areaLabelText = selectedTag?.label ?? selectedArea ?? "미분류";
+  const areaAriaLabel = selectedAreas.length === 0 ? "Life wheel tag 선택: 미분류" : "Life wheel tag 선택";
+  const keepCardDragPrimary = (event: React.PointerEvent<HTMLButtonElement>) => {
+    // Keep button clicks available, but do not let pointer activation focus the
+    // button or block the parent post-it drag handler.
+    event.preventDefault();
+  };
+
   return (
-    <div className="postit-tags" onPointerDown={(e) => e.stopPropagation()}>
+    <div className="postit-tags">
       <button
         type="button"
         className={`postit-tag-button postit-kind ${kind}`}
+        draggable={false}
+        onPointerDown={keepCardDragPrimary}
         onClick={() => onSetKind(signal.id, nextKind)}
         aria-label="personal/work 전환"
       >
@@ -33,14 +42,17 @@ export function CardTagEditor({
       <button
         type="button"
         className={`postit-tag-button postit-area-button${selectedAreas.length === 0 ? " empty" : ""}`}
+        draggable={false}
         style={
           {
             "--area-color": areaColor,
             "--area-text-color": readableTextColor(areaColor),
           } as React.CSSProperties
         }
+        onPointerDown={keepCardDragPrimary}
         onClick={(e) => onOpenAreaPalette(e.currentTarget)}
-        aria-label="Life wheel tag 선택"
+        aria-label={areaAriaLabel}
+        title={selectedAreas.length === 0 ? "미분류" : areaLabelText}
       >
         {areaLabelText}
       </button>

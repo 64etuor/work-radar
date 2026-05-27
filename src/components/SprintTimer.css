@@ -1,8 +1,8 @@
 /*
  * ── Sprint Timer (P11: 브랜드 헤더 우측 존 카운트다운 + 일정 편집) ──
  * DESIGN.md `sprint-timer` 정본. 에이전트 바와 분리된 헤더 우측 존.
- * 'D일 HH:MM' CohereMono Ink · 1s tick · overdue=Coral + '지남' 라벨(색+라벨 병기).
- * 미설정=텍스트 링크(button-secondary). 클릭→팝오버 에디터(흰 카드 radius lg).
+ * 'D일 HH:MM 남음' CohereMono Ink · 1s tick.
+ * 미설정=텍스트 링크(button-secondary). 클릭→헤더 슬롯 인라인 에디터.
  */
 .cb .cb-head-right {
   display: flex;
@@ -11,9 +11,19 @@
   justify-self: end;
 }
 .sprint-timer {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
+  width: min(610px, 52vw);
+  height: 32px;
+  max-width: 100%;
+  overflow: hidden;
+  contain: layout paint;
+}
+.sprint-timer.is-editing {
+  display: block;
 }
 /* ── 스프린트 미터 ──
    에디토리얼 1줄 라벨 + 그 아래 얇은 진행 바. 박스/필 없음 — 헤더 라인에 자연스럽게 녹는다.
@@ -24,7 +34,9 @@
   flex-direction: column;
   align-items: stretch;
   gap: 5px;
-  width: 240px;
+  width: 270px;
+  height: 32px;
+  box-sizing: border-box;
   padding: 4px 6px 6px;
   border: none;
   background: transparent;
@@ -36,10 +48,23 @@
 .sprint-meter:hover {
   background: var(--color-wr-elevated);
 }
+.sprint-timer.is-editing .sprint-meter,
+.sprint-timer.is-editing .sprint-inline-editor {
+  position: absolute;
+  inset: 0;
+  will-change: opacity, transform;
+}
+.sprint-timer.is-editing .sprint-meter {
+  width: 100%;
+}
+.sprint-meter.is-leaving {
+  pointer-events: none;
+  animation: sprint-meter-leave 0.22s ease-out forwards;
+}
 .sprint-meter-label {
   display: inline-flex;
   align-items: baseline;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   line-height: 1;
 }
@@ -73,17 +98,6 @@
   border-radius: inherit;
   transition: width 0.4s ease;
 }
-/* Overdue — 텍스트+바 코랄. 'SPRINT' 라벨도 코랄로 강조(라벨 병기 유지). */
-.sprint-meter.is-overdue .sprint-meter-tag,
-.sprint-meter.is-overdue .sprint-meter-text {
-  color: var(--color-wr-coral);
-}
-.sprint-meter.is-overdue .sprint-meter-bar {
-  background: var(--color-wr-danger-soft);
-}
-.sprint-meter.is-overdue .sprint-meter-fill {
-  background: var(--color-wr-coral);
-}
 /* Empty — 라벨 톤 다운 + 점선 트랙. */
 .sprint-meter.is-empty .sprint-meter-tag,
 .sprint-meter.is-empty .sprint-meter-text {
@@ -96,38 +110,136 @@
   border-radius: 0;
 }
 
-/* 스프린트 에디터 — 모달 컨테이너/제목/버튼/인풋은 shadcn Dialog·Button·Input(PR 0).
-   여기엔 내부 필드 레이아웃 래퍼만 유지한다(prim 스왑으로 일부 클래스는 dead 제거됨). */
+/* 스프린트 에디터 — 헤더 행 안에서만 열리는 borderless compact controls. */
+.sprint-inline-editor {
+  width: 100%;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.sprint-inline-editor.is-opening {
+  animation: sprint-editor-enter 0.22s ease-out both;
+}
+.sprint-inline-editor.is-closing {
+  pointer-events: none;
+  animation: sprint-editor-exit 0.18s ease-in forwards;
+}
+.sprint-editor-title {
+  justify-self: start;
+  margin-right: 10px;
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+.sprint-editor-grid {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(205px, 1fr) max-content max-content;
+  align-items: center;
+  column-gap: 9px;
+  height: 100%;
+  width: 100%;
+}
 .sprint-field {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 .sprint-lbl {
-  font: 500 11px var(--font-sans);
+  font: 500 10px var(--font-sans);
   color: var(--color-wr-subtle);
 }
 .sprint-stepper {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 .sprint-wd-row {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+}
+.sprint-wd-row > button {
+  width: 26px;
+  min-width: 26px;
+  height: 28px;
+  flex: 0 0 26px;
+}
+.sprint-time-selectors {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+}
+.sprint-time-select {
+  width: 48px;
+  height: 28px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font: 600 12px/1 var(--font-mono);
+  padding: 0 4px;
+  cursor: pointer;
+}
+.sprint-time-select:focus-visible {
+  outline: 2px solid var(--color-wr-accent);
+  outline-offset: 1px;
+}
+.sprint-time-sep {
+  font: 700 11px var(--font-mono);
+  color: var(--color-wr-muted);
 }
 .sprint-err {
+  grid-column: 1 / -1;
   font: 400 12px var(--font-sans);
   color: var(--color-q1);
 }
 .sprint-pop-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 5px;
+  justify-content: flex-end;
+  margin-top: 0;
+  min-width: 0;
 }
 .sprint-actions-spacer {
-  flex: 1;
+  display: none;
+}
+@keyframes sprint-meter-leave {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes sprint-editor-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sprint-editor-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 /* 반응형: 좁으면 hint 숨김. 미터 라벨은 짧으므로 그대로(필요 시 width 축소). */
 @media (max-width: 860px) {
@@ -135,6 +247,44 @@
     display: none;
   }
   .sprint-meter {
-    width: 200px;
+    width: 240px;
+  }
+  .sprint-timer.is-editing {
+    width: min(560px, calc(100vw - 32px));
+  }
+  .sprint-timer {
+    width: min(560px, calc(100vw - 32px));
+  }
+  .sprint-editor-grid {
+    grid-template-columns: max-content max-content 1fr max-content;
+    column-gap: 8px;
+  }
+  .sprint-editor-title {
+    display: none;
+  }
+  .sprint-pop-actions {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .sprint-timer.is-editing {
+    width: min(360px, calc(100vw - 28px));
+  }
+  .sprint-timer {
+    width: min(360px, calc(100vw - 28px));
+  }
+  .sprint-editor-grid {
+    grid-template-columns: max-content 1fr max-content;
+    gap: 6px;
+  }
+  .sprint-field:first-child .sprint-lbl,
+  .sprint-field:nth-child(3),
+  .sprint-pop-actions button:first-of-type {
+    display: none;
+  }
+  .sprint-stepper,
+  .sprint-pop-actions {
+    justify-content: flex-end;
   }
 }

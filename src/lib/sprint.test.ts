@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatCountdown,
+  formatCountdownLabel,
   remainingSecondsUntil,
   WEEKDAY_LABELS,
 } from "@/lib/sprint";
@@ -32,6 +33,19 @@ describe("sprint — 카운트다운 순수 헬퍼(P11)", () => {
     expect(d.overdue).toBe(true);
     expect(d.text).toBe("1일 02:30");
     expect(d.compact).toBe("1일");
+  });
+
+  it("formatCountdownLabel: 헤더 문구에 일·시·분까지 표시", () => {
+    expect(formatCountdownLabel(formatCountdown(2 * 86400 + 3 * 3600 + 5 * 60))).toBe(
+      "2일 03:05 남음",
+    );
+    expect(formatCountdownLabel(formatCountdown(45 * 60))).toBe("0일 00:45 남음");
+  });
+
+  it("formatCountdownLabel: 음수 입력에도 지남 문구를 노출하지 않음", () => {
+    expect(formatCountdownLabel(formatCountdown(-(1 * 86400 + 2 * 3600)))).toBe(
+      "1일 02:00 남음",
+    );
   });
 
   it("remainingSecondsUntil: 경계 - now(ms) 초 차이(양수=남음)", () => {

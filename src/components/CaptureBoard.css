@@ -218,34 +218,52 @@
 }
 .cb .postit-tags {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
   margin-bottom: 7px;
   padding-right: 18px;
+  min-height: 15px;
+  line-height: 0;
 }
-.cb .postit-tag-button {
+.cb .postit-tags > .postit-tag-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 0;
+  width: auto;
+  block-size: 15px;
+  min-block-size: 15px;
+  max-block-size: 15px;
   border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-xs);
+  border-radius: 999px;
   background: transparent;
   color: var(--color-wr-subtle);
   cursor: pointer;
-  font: 600 9px var(--font-mono);
-  padding: 2px 5px;
+  font: 700 9px/9px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 6px;
+  appearance: none;
+  overflow: hidden;
+  vertical-align: top;
 }
-.cb .postit-tag-button:hover {
+.cb .postit-tags > .postit-tag-button:hover {
   border-color: var(--color-wr-border);
   color: var(--color-wr-fg);
 }
-.cb .postit-kind.work {
+.cb .postit-tags > .postit-tag-button.postit-kind.work {
   background: var(--cb-pale-green);
   color: var(--color-wr-green);
 }
-.cb .postit-kind.personal {
+.cb .postit-tags > .postit-tag-button.postit-kind.personal {
   background: var(--color-wr-accent-soft);
   color: var(--color-wr-accent);
 }
-.cb .postit-area-button {
-  max-width: 112px;
+.cb .postit-tags > .postit-tag-button.postit-area-button {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 52px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -253,10 +271,22 @@
   background: color-mix(in srgb, var(--area-color, var(--color-wr-surface)) 76%, white);
   color: var(--area-text-color, var(--color-wr-fg));
 }
-.cb .postit-area-button.empty {
-  border-color: color-mix(in srgb, var(--area-color, var(--color-wr-muted)) 58%, white);
-  background: color-mix(in srgb, var(--area-color, var(--color-wr-muted)) 76%, white);
-  color: var(--area-text-color, var(--color-wr-fg));
+.cb .postit-tags > .postit-tag-button.postit-area-button.empty {
+  width: auto;
+  max-width: 52px;
+  border-style: dashed;
+  border-color: var(--color-wr-border);
+  background: var(--color-wr-bg);
+  color: var(--color-wr-muted);
+}
+.cb .postit-tags > .postit-tag-button,
+.cb .postit-tags > .postit-tag-button.postit-area-button,
+.cb .postit-tags > .postit-tag-button.postit-area-button.empty {
+  block-size: 15px;
+  min-block-size: 15px;
+  max-block-size: 15px;
+  padding-block: 0;
+  line-height: 9px;
 }
 .cb .area-radial-layer {
   position: fixed;

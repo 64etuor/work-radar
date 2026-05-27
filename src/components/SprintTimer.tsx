@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./SprintTimer.css";
 
 import type { SprintConfig, Weekday } from "@/bindings";
@@ -10,28 +10,31 @@ import {
 } from "@/lib/query";
 import {
   formatCountdown,
+  formatCountdownLabel,
   remainingSecondsUntil,
   WEEKDAY_LABELS,
 } from "@/lib/sprint";
 import { useToastStore } from "@/lib/toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/components/ui/cn";
 
 /** 에디터 요일 선택 순서(월→일). */
 const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const HOURS = Array.from({ length: 24 }, (_, hour) =>
+  String(hour).padStart(2, "0"),
+);
+const MINUTES = Array.from({ length: 60 }, (_, minute) =>
+  String(minute).padStart(2, "0"),
+);
+const EDITOR_OPEN_ANIMATION_MS = 220;
+const EDITOR_CLOSE_ANIMATION_MS = 180;
 
 /**
  * 헤더 중앙 존 스프린트 미터 (P11, 2026-05-25 재설계) — 에디토리얼 1줄 라벨 + 얇은 진행 바.
- * 라벨 'SPRINT · {n일 남음}' + 3px 트랙(near-black 채움). 색만으로 의미 전달 금지 → 'SPRINT'/'남음/지남' 라벨 병기.
- * overdue=Coral 풀필 + 라벨 코랄. 미설정="SPRINT · 설정" + 점선 트랙(empty).
- * 클릭 → Dialog 에디터(interval_days 스테퍼 + 기준요일·시각 피커 + 저장).
+ * 라벨 'SPRINT · {n일 HH:MM 남음}' + 3px 트랙(near-black 채움).
+ * 미설정="SPRINT · 설정" + 점선 트랙(empty).
+ * 클릭 → 같은 스프린트 슬롯을 인라인 에디터로 교체(interval_days 스테퍼 + 기준요일·시각 피커 + 저장).
  *
  * 다음 경계 SSOT = Rust `next_boundary`(직접 구현 + cargo test, DST 안전).
  * 진행도 = (intervalDays·86400 − remaining) / total — 매 1s tick으로 재계산(드리프트 없음).
@@ -39,7 +42,10 @@ const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 export function SprintTimer() {
   const configQ = useSprintConfig();
   const statusQ = useSprintStatus();
-  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [editorState, setEditorState] = useState<
+    "closed" | "opening" | "open" | "closing"
+  >("closed");
 
   // 1s tick — 표시 갱신용(now ms). 경계는 statusQ가 분 단위로 재조회한다.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -65,83 +71,109 @@ export function SprintTimer() {
   }, [status, config, nowMs]);
 
   const configured = !!config;
+  const editorVisible = editorState !== "closed";
+
+  const openEditor = useCallback(() => {
+    setEditorState((state) => (state === "closed" ? "opening" : state));
+  }, []);
+
+  const closeEditor = useCallback(() => {
+    setEditorState((state) => (state === "closed" ? state : "closing"));
+  }, []);
+
+  useEffect(() => {
+    if (editorState !== "opening" && editorState !== "closing") return undefined;
+    const id = window.setTimeout(
+      () => setEditorState(editorState === "opening" ? "open" : "closed"),
+      editorState === "opening"
+        ? EDITOR_OPEN_ANIMATION_MS
+        : EDITOR_CLOSE_ANIMATION_MS,
+    );
+    return () => window.clearTimeout(id);
+  }, [editorState]);
+
+  useEffect(() => {
+    if (editorState !== "open") return undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rootRef.current?.contains(target)) return;
+      closeEditor();
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, [closeEditor, editorState]);
+
+  const renderMeter = (extraClass = "", disabled = false) =>
+    configured && meter ? (
+        <button
+          type="button"
+          className={`sprint-meter${extraClass}`}
+          title="스프린트 일정 편집"
+          aria-live="polite"
+          aria-label={`스프린트 ${formatCountdownLabel(meter.display)} (${Math.round(meter.pct * 100)}%)`}
+          disabled={disabled}
+          onClick={openEditor}
+        >
+          <span className="sprint-meter-label">
+            <span className="sprint-meter-tag">SPRINT</span>
+            <span className="sprint-meter-sep" aria-hidden>
+              ·
+            </span>
+            <span className="sprint-meter-text">
+              {formatCountdownLabel(meter.display)}
+            </span>
+          </span>
+          <span className="sprint-meter-bar" aria-hidden>
+            <span
+              className="sprint-meter-fill"
+              style={{ width: `${meter.pct * 100}%` }}
+            />
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`sprint-meter is-empty${extraClass}`}
+          title="스프린트 일정 설정"
+          disabled={disabled}
+          onClick={openEditor}
+        >
+          <span className="sprint-meter-label">
+            <span className="sprint-meter-tag">SPRINT</span>
+            <span className="sprint-meter-sep" aria-hidden>
+              ·
+            </span>
+            <span className="sprint-meter-text">설정</span>
+          </span>
+          <span className="sprint-meter-bar" aria-hidden />
+        </button>
+      );
 
   return (
-    <div className="sprint-timer">
-      {/* DialogTrigger asChild로 bespoke 트리거를 감싼다 — radix가 open 토글 + 닫힘 시
-          트리거(triggerRef)로 포커스 복원(plan §1.3 c). 트리거 시각은 그대로 유지. */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          {configured && meter ? (
-            <button
-              type="button"
-              className={`sprint-meter${meter.display.overdue ? " is-overdue" : ""}`}
-              title="스프린트 일정 편집"
-              aria-live="polite"
-              aria-label={`스프린트 ${remainingLabel(meter.display)} (${Math.round(meter.pct * 100)}%)`}
-            >
-              <span className="sprint-meter-label">
-                <span className="sprint-meter-tag">SPRINT</span>
-                <span className="sprint-meter-sep" aria-hidden>
-                  ·
-                </span>
-                <span className="sprint-meter-text">
-                  {remainingLabel(meter.display)}
-                </span>
-              </span>
-              <span className="sprint-meter-bar" aria-hidden>
-                <span
-                  className="sprint-meter-fill"
-                  style={{ width: `${meter.pct * 100}%` }}
-                />
-              </span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="sprint-meter is-empty"
-              title="스프린트 일정 설정"
-            >
-              <span className="sprint-meter-label">
-                <span className="sprint-meter-tag">SPRINT</span>
-                <span className="sprint-meter-sep" aria-hidden>
-                  ·
-                </span>
-                <span className="sprint-meter-text">설정</span>
-              </span>
-              <span className="sprint-meter-bar" aria-hidden />
-            </button>
-          )}
-        </DialogTrigger>
+    <div
+      ref={rootRef}
+      className={`sprint-timer${editorVisible ? " is-editing" : ""}`}
+    >
+      {editorState === "opening" && renderMeter(" is-leaving", true)}
+      {editorVisible ? (
         <SprintEditor
           config={configQ.data ?? null}
-          onClose={() => setOpen(false)}
+          opening={editorState === "opening"}
+          closing={editorState === "closing"}
+          onClose={closeEditor}
         />
-      </Dialog>
+      ) : (
+        renderMeter()
+      )}
     </div>
   );
 }
 
-/**
- * 라벨 텍스트 — 'D일 남음' / 'HH:MM 남음' / 'D일 지남'.
- * 포맷 SSOT는 `formatCountdown` (D일 HH:MM). 매치 실패 시 원문 폴백.
- */
-function remainingLabel(display: {
-  text: string;
-  overdue: boolean;
-}): string {
-  const m = display.text.match(/^(\d+)일 (\d{2}):(\d{2})$/);
-  if (!m) return display.text;
-  const [, dStr, hh, mm] = m;
-  const days = Number(dStr);
-  if (display.overdue) {
-    return days > 0 ? `${days}일 지남` : `${hh}:${mm} 지남`;
-  }
-  return days > 0 ? `${days}일 남음` : `${hh}:${mm} 남음`;
-}
-
 type EditorProps = {
   config: SprintConfig | null;
+  opening?: boolean;
+  closing?: boolean;
   onClose: () => void;
 };
 
@@ -151,21 +183,23 @@ const DEFAULT_CONFIG: SprintConfig = {
   anchorTime: "21:00",
 };
 
-/** Dialog 에디터(shadcn Dialog 래퍼): interval_days 스테퍼 + 기준요일·시각 피커 + 저장. */
-function SprintEditor({ config, onClose }: EditorProps) {
-  // Esc/외부 클릭/포커스 복원/마운트는 PR 0 Dialog 래퍼(overlay-stack 계약, radix)가 전담(plan §0.6).
-  // 필드 본체는 DialogContent 자식이라 열릴 때마다 마운트 → draft가 config로 매번 초기화된다.
+function SprintEditor({
+  config,
+  opening = false,
+  closing = false,
+  onClose,
+}: EditorProps) {
   return (
-    <DialogContent
-      showClose={false}
-      aria-describedby={undefined}
-      className="w-[min(360px,92vw)] max-w-none gap-3.5 p-[22px]"
+    <section
+      className={`sprint-inline-editor${opening ? " is-opening" : ""}${closing ? " is-closing" : ""}`}
+      aria-label="스프린트 일정 편집"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
     >
-      <DialogTitle className="font-mono text-[13px] font-semibold uppercase tracking-[0.1em]">
-        스프린트 일정
-      </DialogTitle>
+      <div className="sprint-editor-title">SPRINT</div>
       <SprintEditorFields config={config} onClose={onClose} />
-    </DialogContent>
+    </section>
   );
 }
 
@@ -183,6 +217,9 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
   const [time, setTime] = useState(
     config?.anchorTime ?? DEFAULT_CONFIG.anchorTime,
   );
+  const [hour, minute] = time.split(":");
+  const setTimePart = (nextHour: string, nextMinute: string) =>
+    setTime(`${nextHour}:${nextMinute}`);
 
   const save = () => {
     if (setConfig.isPending) return;
@@ -208,13 +245,13 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
   };
 
   return (
-    <>
+    <div className="sprint-editor-grid">
       <label className="sprint-field">
-        <span className="sprint-lbl">길이 (일)</span>
+        <span className="sprint-lbl">길이</span>
         <div className="sprint-stepper">
           <Button
             variant="outline"
-            className="size-8 rounded-[var(--radius-sm)] p-0 text-lg font-medium"
+            className="size-7 rounded-[var(--radius-sm)] p-0 text-base font-medium"
             onClick={() => setIntervalDays((d) => Math.max(1, d - 1))}
             aria-label="길이 감소"
           >
@@ -227,11 +264,11 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
             onChange={(e) =>
               setIntervalDays(Math.max(1, Number(e.target.value) || 1))
             }
-            className="h-8 w-16 text-center font-mono font-semibold"
+            className="h-7 w-14 px-1 text-center font-mono text-xs font-semibold"
           />
           <Button
             variant="outline"
-            className="size-8 rounded-[var(--radius-sm)] p-0 text-lg font-medium"
+            className="size-7 rounded-[var(--radius-sm)] p-0 text-base font-medium"
             onClick={() => setIntervalDays((d) => d + 1)}
             aria-label="길이 증가"
           >
@@ -241,7 +278,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
       </label>
 
       <label className="sprint-field">
-        <span className="sprint-lbl">기준 요일</span>
+        <span className="sprint-lbl">요일</span>
         <div className="sprint-wd-row">
           {WEEKDAYS.map((wd) => (
             <Button
@@ -263,13 +300,40 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
       </label>
 
       <label className="sprint-field">
-        <span className="sprint-lbl">기준 시각</span>
-        <Input
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          className="w-[140px]"
-        />
+        <span className="sprint-lbl">시각</span>
+        <div className="sprint-time-selectors">
+          <select
+            className="sprint-time-select"
+            value={hour ?? DEFAULT_CONFIG.anchorTime.slice(0, 2)}
+            onChange={(e) =>
+              setTimePart(e.target.value, minute ?? DEFAULT_CONFIG.anchorTime.slice(3, 5))
+            }
+            aria-label="스프린트 기준 시"
+          >
+            {HOURS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <span className="sprint-time-sep" aria-hidden>
+            :
+          </span>
+          <select
+            className="sprint-time-select"
+            value={minute ?? DEFAULT_CONFIG.anchorTime.slice(3, 5)}
+            onChange={(e) =>
+              setTimePart(hour ?? DEFAULT_CONFIG.anchorTime.slice(0, 2), e.target.value)
+            }
+            aria-label="스프린트 기준 분"
+          >
+            {MINUTES.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </div>
       </label>
 
       {setConfig.isError && (
@@ -280,7 +344,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
         {config && (
           <Button
             variant="outline"
-            className="rounded-full"
+            className="h-7 rounded-full px-3 text-xs"
             onClick={remove}
             disabled={clearConfig.isPending}
           >
@@ -288,17 +352,21 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
           </Button>
         )}
         <span className="sprint-actions-spacer" />
-        <Button variant="outline" className="rounded-full" onClick={onClose}>
+        <Button
+          variant="outline"
+          className="h-7 rounded-full px-3 text-xs"
+          onClick={onClose}
+        >
           취소
         </Button>
         <Button
-          className="rounded-full px-[22px]"
+          className="h-7 rounded-full px-4 text-xs"
           onClick={save}
           disabled={setConfig.isPending}
         >
           {setConfig.isPending ? "저장 중…" : "저장"}
         </Button>
       </div>
-    </>
+    </div>
   );
 }

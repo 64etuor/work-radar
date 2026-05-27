@@ -56,6 +56,11 @@ export function formatCountdown(remainingSeconds: number): CountdownDisplay {
   };
 }
 
+/** 헤더 문구: 시간 단위까지 유지한다. 다음 경계는 Rust가 다음 스프린트로 넘겨준다. */
+export function formatCountdownLabel(display: CountdownDisplay): string {
+  return `${display.text} 남음`;
+}
+
 /** 요일 코드 → 한국어 라벨(에디터 표시). bindings의 Weekday(snake_case)와 동일 키. */
 export const WEEKDAY_LABELS: Record<string, string> = {
   mon: "월",
