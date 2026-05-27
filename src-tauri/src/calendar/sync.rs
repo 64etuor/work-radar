@@ -15,7 +15,7 @@ use std::sync::Arc;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Notify;
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, Duration, MissedTickBehavior};
 
 use crate::calendar::pending_store::{
     delete_write, fetch_due_writes, is_terminal_attempt, record_failure,
@@ -60,6 +60,8 @@ impl SyncEngine {
 
     async fn run(self) {
         let mut tick = interval(Duration::from_millis(TICK_MS));
+        // 슬립/일시정지 후 tight-loop catch-up 방지(다음 tick까지 한 박자 지연).
+        tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
         loop {
             tokio::select! {
                 _ = tick.tick() => {}
@@ -95,13 +97,47 @@ impl SyncEngine {
                         "failed to delete completed pending write"
                     );
                 }
-                let _ = self.app.emit(
+                if let Err(e) = self.app.emit(
                     "CalendarSyncFlushed",
                     serde_json::json!({ "pendingId": pending_id }),
-                );
+                ) {
+                    tracing::warn!(
+                        code = "calendar.sync.emit_failed",
+                        pending_id,
+                        error = ?e,
+                        "failed to emit CalendarSyncFlushed"
+                    );
+                }
             }
-            Err(err) => {
-                let msg = err.to_string();
+            Err(SyncError::Terminal(msg)) => {
+                // Terminal = 재시도 무의미(파싱/인증/검증). retry 예산 소모 없이 즉시 종결:
+                // 큐에서 삭제 + CalendarSyncFailed 1회 emit. attempts 카운터를 굴리지 않는다.
+                tracing::error!(
+                    code = "calendar.sync.terminal",
+                    pending_id,
+                    "pending calendar write hit terminal error (skip retries)"
+                );
+                if let Err(e) = delete_write(&self.pool, pending_id).await {
+                    tracing::warn!(
+                        code = "calendar.sync.delete_failed",
+                        pending_id,
+                        error = %e,
+                        "failed to delete terminally-failed pending write"
+                    );
+                }
+                if let Err(e) = self.app.emit(
+                    "CalendarSyncFailed",
+                    serde_json::json!({ "pendingId": pending_id, "error": msg }),
+                ) {
+                    tracing::warn!(
+                        code = "calendar.sync.emit_failed",
+                        pending_id,
+                        error = ?e,
+                        "failed to emit CalendarSyncFailed (terminal)"
+                    );
+                }
+            }
+            Err(SyncError::Transient(msg)) => {
                 if let Err(e) = record_failure(&self.pool, pending_id, &msg).await {
                     tracing::warn!(
                         code = "calendar.sync.record_failure_failed",
@@ -116,12 +152,19 @@ impl SyncEngine {
                         code = "calendar.sync.terminal",
                         pending_id,
                         attempts = w.attempts + 1,
-                        "pending calendar write hit terminal failure"
+                        "pending calendar write hit terminal failure (retry budget exhausted)"
                     );
-                    let _ = self.app.emit(
+                    if let Err(e) = self.app.emit(
                         "CalendarSyncFailed",
                         serde_json::json!({ "pendingId": pending_id, "error": msg }),
-                    );
+                    ) {
+                        tracing::warn!(
+                            code = "calendar.sync.emit_failed",
+                            pending_id,
+                            error = ?e,
+                            "failed to emit CalendarSyncFailed (transient exhausted)"
+                        );
+                    }
                 }
             }
         }

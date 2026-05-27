@@ -151,8 +151,9 @@ impl HttpCalendarProvider {
             .map_err(|e| classify_reqwest(&e))?;
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        // 410 Gone(이미 삭제됨)도 성공으로 간주 — idempotent unschedule.
-        if status == 410 {
+        // 410 Gone / 404 Not Found(이미 삭제됨)도 성공으로 간주 — idempotent unschedule.
+        // 로컬 mirror 정리는 어차피 진행되어야 하므로 graceful.
+        if status == 410 || status == 404 {
             return Ok(());
         }
         if !(200..300).contains(&status) {
