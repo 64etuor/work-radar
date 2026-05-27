@@ -23,6 +23,9 @@ pub struct Project {
     pub google_calendar_ids: Option<String>,
     /// 캘린더 표시 배경색(`#RRGGBB`). NULL이면 project id 기반 기본 팔레트.
     pub calendar_color: Option<String>,
+    /// "일정 생성 기본 캘린더" id. NULL=미설정 → 프런트가 드롭 시 popover로 첫 선택을 저장.
+    /// `google_calendar_ids` JSON array에 없는 id면 무효 → 프런트가 NULL 취급.
+    pub default_write_calendar_id: Option<String>,
     pub credential_ref: String,
     pub created_at: String,
     pub updated_at: String,
@@ -44,6 +47,14 @@ pub struct CreateProjectInput {
 pub struct SetProjectCalendarColorInput {
     pub project_id: String,
     pub color: Option<String>,
+}
+
+/// 프로젝트별 "일정 생성 기본 캘린더" 변경 입력. `calendarId=NULL`은 미설정으로 되돌림.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetProjectDefaultWriteCalendarInput {
+    pub project_id: String,
+    pub calendar_id: Option<String>,
 }
 
 // ── 레포(Repo) ────────────────────────────────────────────────────────────────

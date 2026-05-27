@@ -43,6 +43,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Projects / Repos / 토큰 (Phase 2).
         commands::create_project,
         commands::set_project_calendar_color,
+        commands::set_project_default_write_calendar,
         commands::list_repos,
         commands::create_repo,
         commands::set_project_token,

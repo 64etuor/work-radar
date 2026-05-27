@@ -4,7 +4,8 @@ use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    CreateProjectInput, CreateRepoInput, Project, Repo, SetProjectCalendarColorInput, WorkSignal,
+    CreateProjectInput, CreateRepoInput, Project, Repo, SetProjectCalendarColorInput,
+    SetProjectDefaultWriteCalendarInput, WorkSignal,
 };
 use crate::notion::normalize_notion_db_id;
 
@@ -28,7 +29,7 @@ pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, AppError> 
 
 /// Project SELECT/RETURNING 공통 컬럼.
 const PROJECT_COLS: &str = "id, name, kind, notion_backlog_db_id, notion_agenda_db_id, \
-     google_calendar_ids, calendar_color, credential_ref, \
+     google_calendar_ids, calendar_color, default_write_calendar_id, credential_ref, \
      created_at, updated_at";
 /// Repo SELECT/RETURNING 공통 컬럼.
 const REPO_COLS: &str = "id, project_id, provider, remote_url, local_path, default_branch, \
@@ -181,6 +182,39 @@ pub async fn set_project_calendar_color(
     input: SetProjectCalendarColorInput,
 ) -> Result<Project, AppError> {
     update_project_calendar_color(db.inner(), &input).await
+}
+
+/// 프로젝트별 "일정 생성 기본 캘린더" id 변경. Today×Timeline drop 시 사용된다 (spec §D9).
+/// `calendar_id=None`이면 미설정으로 클리어 — 다음 드롭에서 다시 popover로 묻는다.
+/// 유효성 검증(googleCalendarIds 멤버십)은 프런트가 담당 — 여기는 단순 저장.
+pub(crate) async fn update_project_default_write_calendar(
+    db: &Db,
+    input: &SetProjectDefaultWriteCalendarInput,
+) -> Result<Project, AppError> {
+    let calendar_id = input
+        .calendar_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    sqlx::query_as::<_, Project>(&format!(
+        "UPDATE projects SET default_write_calendar_id = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {PROJECT_COLS}"
+    ))
+    .bind(&input.project_id)
+    .bind(&calendar_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_project_default_write_calendar(
+    db: State<'_, Db>,
+    input: SetProjectDefaultWriteCalendarInput,
+) -> Result<Project, AppError> {
+    update_project_default_write_calendar(db.inner(), &input).await
 }
 
 // ── Repos (project별 멀티 레포) ───────────────────────────────────────────────
