@@ -122,6 +122,13 @@ export const commands = {
 	/**  루틴 재정렬 (드래그, 공용 useListReorder). ordered_ids 순서대로 rank 부여. */
 	reorderRoutines: (orderedIds: string[]) => typedError<null, AppError>(__TAURI_INVOKE("reorder_routines", { orderedIds })),
 	routineTracking: (endDate: string, days: number) => typedError<RoutineTrackingItem[], AppError>(__TAURI_INVOKE("routine_tracking", { endDate, days })),
+	/**  kind 즉시 갱신(personal/work). signals.set_signal_kind와 동일 의미. */
+	setRoutineKind: (id: string, kind: "personal" | "work" | null) => typedError<null, AppError>(__TAURI_INVOKE("set_routine_kind", { id, kind })),
+	/**
+	 *  Life Wheel 수동 선택. signal과 동일 의미: builtin AreaTag면 primary `area`도 갱신,
+	 *  커스텀 tag key면 `area=NULL` + `area_tags=["key"]`만 저장. tag_key=None이면 둘 다 NULL.
+	 */
+	setRoutineAreaTagKey: (id: string, tagKey: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_routine_area_tag_key", { id, tagKey })),
 	/**
 	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
 	 *  매트릭스 자동 escalate 없음, INVARIANT #4). threshold/충돌은 Inbox 알림으로 mirror하고, 기존
@@ -1287,6 +1294,11 @@ export type RoutineToday = {
 	/**  발사를 시각보다 N분 앞당김(예: 30=30분 전). None/0=정시. specta i64/u64 금지 → u32. */
 	reminderOffsetMin: number | null,
 	area: AreaTag | null,
+	/**
+	 *  사용자정의 Life Wheel tag key JSON 배열(signals.area_tags 패턴 미러). 커스텀 키 보존용.
+	 *  현재는 단일 선택이라 ["key"] 형태 또는 None.
+	 */
+	areaTags: string | null,
 	kind: Kind | null,
 	/**  주어진 날짜에 완료 체크됐는지 (RoutineCheck 존재 여부). */
 	done: boolean,
@@ -1306,6 +1318,10 @@ export type RoutineTrackingItem = {
 	id: string,
 	title: string,
 	freq: RoutineFreq,
+	area: AreaTag | null,
+	/**  signals.area_tags 패턴 — 사용자정의 Life Wheel tag key JSON 배열. */
+	areaTags: string | null,
+	kind: Kind | null,
 	/**  집계 기간 내 스케줄상 due occurrence 수. */
 	due: number,
 	/**  due 날에 실제 체크된 수(done ⊆ due). */
@@ -1532,7 +1548,10 @@ export type UpdateAgentPromptConfigInput = {
 	fastMode: boolean,
 };
 
-/**  루틴 수정 입력. */
+/**
+ *  루틴 수정 입력. area/kind는 카드에서 즉시 갱신(set_routine_area_tag_key/set_routine_kind)되므로
+ *  이 입력으로는 변경하지 않는다(폼은 schedule 관련만 편집).
+ */
 export type UpdateRoutineInput = {
 	id: string,
 	title: string,
@@ -1545,8 +1564,6 @@ export type UpdateRoutineInput = {
 	timeOfDay: string | null,
 	/**  알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32. */
 	reminderOffsetMin: number | null,
-	area: AreaTag | null,
-	kind: Kind | null,
 };
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */

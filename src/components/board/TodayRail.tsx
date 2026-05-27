@@ -1,20 +1,21 @@
-import type { WorkSignal } from "@/bindings";
+import { useState } from "react";
+
+import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
-import {
-  kindChipClass,
-  kindLabel,
-  quadrantToZone,
-  type ZoneKey,
-} from "@/components/board/boardUtils";
+import { quadrantToZone, type ZoneKey } from "@/components/board/boardUtils";
+import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import { ageFromForDate, isTodayDone, localToday } from "@/lib/query";
 import { useListReorder } from "@/lib/useListReorder";
 
 type Props = {
   items: WorkSignal[];
+  lifeWheelTags: LifeWheelTagConfig[];
   panelRef: React.RefObject<HTMLDivElement | null>;
   onToggleDone: (id: string, done: boolean) => void;
   onUnpromote: (id: string) => void;
   onReorder: (orderedIds: string[]) => void;
+  onSetKind: (id: string, kind: Kind | null) => void;
+  onSetAreaTagKey: (id: string, tagKey: string | null) => void;
 };
 
 const Q_BADGE: Record<Exclude<ZoneKey, "unclassified">, string> = {
@@ -25,7 +26,16 @@ const Q_BADGE: Record<Exclude<ZoneKey, "unclassified">, string> = {
 };
 
 /** 우측 상단 Today 레일 — 오늘 집중 항목 큐레이션. 드래그 핸들(⠿)로 재정렬(공용 dnd, spec §1.C). */
-export function TodayRail({ items, panelRef, onToggleDone, onUnpromote, onReorder }: Props) {
+export function TodayRail({
+  items,
+  lifeWheelTags,
+  panelRef,
+  onToggleDone,
+  onUnpromote,
+  onReorder,
+  onSetKind,
+  onSetAreaTagKey,
+}: Props) {
   const today = localToday();
   const d = new Date();
   const dateLabel = `${d.getMonth() + 1}/${d.getDate()} 오늘`;
@@ -33,6 +43,12 @@ export function TodayRail({ items, panelRef, onToggleDone, onUnpromote, onReorde
     items.map((s) => s.id),
     onReorder,
   );
+  // BrainDump/루틴 카드와 동일하게 area 방사형 휠 anchor 상태(panel 내 자체 소유).
+  const [areaPalette, setAreaPalette] = useState<{
+    signalId: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   return (
     <div className="panelbox" data-drop="today" ref={panelRef}>
@@ -68,9 +84,19 @@ export function TodayRail({ items, panelRef, onToggleDone, onUnpromote, onReorde
                       <span className={`badge b-${zone}`}>{Q_BADGE[zone]}</span>
                     )}
                     <span className={`badge b-age${age >= 3 ? " old" : ""}`}>+{age}</span>
-                    {s.kind && (
-                      <span className={`b-tag ${kindChipClass(s.kind)}`}>{kindLabel(s.kind)}</span>
-                    )}
+                    <CardTagEditor
+                      target={s}
+                      tags={lifeWheelTags}
+                      onSetKind={onSetKind}
+                      onOpenAreaPalette={(button) => {
+                        const rect = button.getBoundingClientRect();
+                        setAreaPalette({
+                          signalId: s.id,
+                          x: rect.left + rect.width / 2,
+                          y: rect.top + rect.height / 2,
+                        });
+                      }}
+                    />
                   </div>
                 </div>
                 <button
@@ -86,6 +112,20 @@ export function TodayRail({ items, panelRef, onToggleDone, onUnpromote, onReorde
           })
         )}
       </div>
+      {areaPalette &&
+        (() => {
+          const target = items.find((s) => s.id === areaPalette.signalId);
+          if (!target) return null;
+          return (
+            <AreaRadialPalette
+              target={target}
+              tags={lifeWheelTags.filter((tag) => tag.enabled)}
+              anchor={{ x: areaPalette.x, y: areaPalette.y }}
+              onClose={() => setAreaPalette(null)}
+              onSetAreaTagKey={onSetAreaTagKey}
+            />
+          );
+        })()}
     </div>
   );
 }

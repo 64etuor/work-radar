@@ -5,7 +5,7 @@ use tauri::State;
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{RoutineFreq, RoutineHistoryDay, RoutineTrackingItem};
+use crate::models::{AreaTag, Kind, RoutineFreq, RoutineHistoryDay, RoutineTrackingItem};
 
 use super::schedule::{parse_weekdays, routine_due_on};
 
@@ -17,6 +17,9 @@ struct TrackingRoutineRow {
     freq: RoutineFreq,
     weekdays: Option<String>,
     anchor_date: Option<String>,
+    area: Option<AreaTag>,
+    area_tags: Option<String>,
+    kind: Option<Kind>,
 }
 
 /// 루틴 트래킹 집계(순수 read, 테스트 가능). 기간=[end-(days-1), end] 로컬 inclusive.
@@ -33,7 +36,7 @@ pub async fn fetch_routine_tracking(
     let start = end - chrono::Duration::days(span - 1);
 
     let routines = sqlx::query_as::<_, TrackingRoutineRow>(
-        "SELECT id, title, freq, weekdays, anchor_date FROM routines \
+        "SELECT id, title, freq, weekdays, anchor_date, area, area_tags, kind FROM routines \
          WHERE active = 1 ORDER BY rank IS NULL, rank, created_at",
     )
     .fetch_all(db)
@@ -46,6 +49,9 @@ pub async fn fetch_routine_tracking(
         freq,
         weekdays: weekdays_json,
         anchor_date: anchor,
+        area,
+        area_tags,
+        kind,
     } in routines
     {
         let weekdays = parse_weekdays(weekdays_json.as_deref());
@@ -98,6 +104,9 @@ pub async fn fetch_routine_tracking(
             id,
             title,
             freq,
+            area,
+            area_tags,
+            kind,
             due,
             done,
             rate_pct,

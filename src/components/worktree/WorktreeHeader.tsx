@@ -1,5 +1,6 @@
 import { RefreshCw, Trash2, Waypoints } from "lucide-react";
 import type { Project } from "@/bindings";
+import { KindBadge } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -51,7 +52,13 @@ export function WorktreeHeader({
           <SelectItem value={PROJECT_ALL}>전체 프로젝트</SelectItem>
           {projects.map((p) => (
             <SelectItem key={p.id} value={p.id}>
-              {p.name} ({p.kind === "personal" ? "개인" : "업무"})
+              <span className="inline-flex items-center gap-1.5">
+                {p.name}
+                <KindBadge
+                  kind={p.kind}
+                  className="h-4 px-1.5 py-0 text-[10px] leading-none"
+                />
+              </span>
             </SelectItem>
           ))}
         </SelectContent>

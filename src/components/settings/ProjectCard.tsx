@@ -21,6 +21,7 @@ import {
   projectCalendarColors,
   PROJECT_CALENDAR_PALETTE,
 } from "@/lib/projectCalendarColor";
+import { KindBadge } from "@/components/board/LifeWheelPalette";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -215,9 +216,7 @@ export function ProjectCard({
             <span className="truncate text-[17px] font-semibold leading-tight tracking-[-0.01em]">
               {project.name}
             </span>
-            <Badge variant={project.kind === "personal" ? "secondary" : "accent"}>
-              {project.kind === "personal" ? "개인" : "업무"}
-            </Badge>
+            <KindBadge kind={project.kind} className="px-2.5 py-0.5 text-xs" />
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             토큰은 OS keychain에 저장하고, Notion/GitHub/Google 계정 연결은 이 프로젝트 범위에서만 사용합니다.

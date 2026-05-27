@@ -21,6 +21,7 @@ struct RoutineRow {
     time_of_day: Option<String>,
     reminder_offset_min: Option<i64>,
     area: Option<crate::models::AreaTag>,
+    area_tags: Option<String>,
     kind: Option<Kind>,
     done: bool,
     /// 오늘 routine_checks 행의 시간 override (spec §D10).
@@ -39,7 +40,7 @@ pub async fn fetch_today_routines(
         .map_err(|_| sqlx::Error::Protocol("bad date (YYYY-MM-DD)".into()))?;
     let rows = sqlx::query_as::<_, RoutineRow>(
         "SELECT r.id, r.title, r.freq, r.weekdays, r.anchor_date, r.time_of_day, \
-                r.reminder_offset_min, r.area, r.kind, \
+                r.reminder_offset_min, r.area, r.area_tags, r.kind, \
                 (rc.id IS NOT NULL) AS done, \
                 rc.time_override, rc.linked_event_id, rc.linked_calendar_id \
          FROM routines r \
@@ -66,6 +67,7 @@ pub async fn fetch_today_routines(
                 time_of_day: r.time_of_day,
                 reminder_offset_min: r.reminder_offset_min.map(|v| v.max(0) as u32),
                 area: r.area,
+                area_tags: r.area_tags,
                 kind: r.kind,
                 done: r.done,
                 time_override: r.time_override,

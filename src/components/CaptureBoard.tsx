@@ -35,6 +35,8 @@ import {
   useReorderToday,
   useSetSignalStatus,
   useLifeWheelTags,
+  useSetRoutineAreaTagKey,
+  useSetRoutineKind,
   useSetSignalAreaTagKey,
   useSetSignalKind,
   useSignals,
@@ -91,6 +93,8 @@ export function CaptureBoard() {
   const lifeWheelTags = useLifeWheelTags();
   const setAreaTagKey = useSetSignalAreaTagKey();
   const setKind = useSetSignalKind();
+  const setRoutineKind = useSetRoutineKind();
+  const setRoutineAreaTagKey = useSetRoutineAreaTagKey();
   const snoozeSignal = useSnoozeSignal();
   const promoteToNotion = usePromoteToNotion();
   const flushPromotions = useFlushPromotions();
@@ -369,8 +373,6 @@ export function CaptureBoard() {
       anchorDate: draft.anchorDate,
       timeOfDay: draft.timeOfDay,
       reminderOffsetMin: draft.reminderOffsetMin,
-      area: null,
-      kind: null,
     });
     pushSuccess("루틴 수정");
   };
@@ -551,10 +553,15 @@ export function CaptureBoard() {
         <ExecutionRail
           todayItems={todayItems}
           routines={routines}
+          lifeWheelTags={lifeWheelTags.data ?? []}
           todayPanelRef={todayPanelRef}
           onToggleTodayDone={(id, done) => toggleTodayDone.mutate({ id, date: today, done })}
           onUnpromoteToday={handleUnpromote}
           onReorderToday={(ids) => reorderToday.mutate(ids)}
+          onSetTodayKind={(id, kind) => setKind.mutate({ id, kind })}
+          onSetTodayAreaTagKey={(id, tagKey) =>
+            setAreaTagKey.mutate({ id, tagKey })
+          }
           onToggleRoutine={(routineId, done) =>
             toggleRoutine.mutate({ routineId, date: today, done })
           }
@@ -563,6 +570,10 @@ export function CaptureBoard() {
           onDeleteRoutine={handleDeleteRoutine}
           onReorderRoutines={(ids) => reorderRoutines.mutate(ids)}
           onOpenRoutineTracking={() => goTo("routines")}
+          onSetRoutineKind={(id, kind) => setRoutineKind.mutate({ id, kind })}
+          onSetRoutineAreaTagKey={(id, tagKey) =>
+            setRoutineAreaTagKey.mutate({ id, tagKey })
+          }
         />
       </div>
 

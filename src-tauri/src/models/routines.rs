@@ -46,6 +46,9 @@ pub struct RoutineToday {
     /// 발사를 시각보다 N분 앞당김(예: 30=30분 전). None/0=정시. specta i64/u64 금지 → u32.
     pub reminder_offset_min: Option<u32>,
     pub area: Option<AreaTag>,
+    /// 사용자정의 Life Wheel tag key JSON 배열(signals.area_tags 패턴 미러). 커스텀 키 보존용.
+    /// 현재는 단일 선택이라 ["key"] 형태 또는 None.
+    pub area_tags: Option<String>,
     pub kind: Option<Kind>,
     /// 주어진 날짜에 완료 체크됐는지 (RoutineCheck 존재 여부).
     pub done: bool,
@@ -75,7 +78,8 @@ pub struct CreateRoutineInput {
     pub kind: Option<Kind>,
 }
 
-/// 루틴 수정 입력.
+/// 루틴 수정 입력. area/kind는 카드에서 즉시 갱신(set_routine_area_tag_key/set_routine_kind)되므로
+/// 이 입력으로는 변경하지 않는다(폼은 schedule 관련만 편집).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRoutineInput {
@@ -90,8 +94,6 @@ pub struct UpdateRoutineInput {
     pub time_of_day: Option<String>,
     /// 알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32.
     pub reminder_offset_min: Option<u32>,
-    pub area: Option<AreaTag>,
-    pub kind: Option<Kind>,
 }
 
 /// 루틴 트래킹 한 항목 (Phase 16 #12). 루틴별 이행률(%)·연속(streak)·히스토리.
@@ -102,6 +104,10 @@ pub struct RoutineTrackingItem {
     pub id: String,
     pub title: String,
     pub freq: RoutineFreq,
+    pub area: Option<AreaTag>,
+    /// signals.area_tags 패턴 — 사용자정의 Life Wheel tag key JSON 배열.
+    pub area_tags: Option<String>,
+    pub kind: Option<Kind>,
     /// 집계 기간 내 스케줄상 due occurrence 수.
     pub due: u32,
     /// due 날에 실제 체크된 수(done ⊆ due).

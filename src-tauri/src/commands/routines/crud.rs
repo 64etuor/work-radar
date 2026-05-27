@@ -55,6 +55,7 @@ pub async fn insert_routine(
         time_of_day,
         reminder_offset_min: input.reminder_offset_min,
         area: input.area,
+        area_tags: None,
         kind: input.kind,
         done: false,
         // 신규 루틴은 오늘 routine_checks 행이 없으므로 모두 None.
@@ -120,9 +121,11 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     let time_of_day = input.time_of_day.clone().filter(|s| !s.trim().is_empty());
     let offset = input.reminder_offset_min.map(|v| v as i64);
 
+    // area/kind는 의도적으로 갱신 안 함 — 카드 인라인 편집 IPC(set_routine_area_tag_key/
+    // set_routine_kind)가 그 두 컬럼을 소유한다(signals 패턴 미러).
     let result = sqlx::query(
         "UPDATE routines SET title=?2, freq=?3, weekdays=?4, anchor_date=?5, \
-         time_of_day=?6, reminder_offset_min=?7, area=?8, kind=?9 WHERE id=?1",
+         time_of_day=?6, reminder_offset_min=?7 WHERE id=?1",
     )
     .bind(&input.id)
     .bind(&title)
@@ -131,8 +134,6 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     .bind(&anchor)
     .bind(&time_of_day)
     .bind(offset)
-    .bind(input.area)
-    .bind(input.kind)
     .execute(db)
     .await?;
 

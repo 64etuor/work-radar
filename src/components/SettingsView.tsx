@@ -21,6 +21,7 @@ import { useUIStore } from "@/store";
 import { useToastStore } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { KindBadge } from "@/components/board/LifeWheelPalette";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/components/ui/cn";
 
@@ -341,7 +342,10 @@ function ProjectSelectTile({
           {project.name}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[11px]">
-          <span>{project.kind === "personal" ? "개인" : "업무"}</span>
+          <KindBadge
+            kind={project.kind}
+            className="h-4 px-1.5 py-0 text-[10px] leading-none"
+          />
           {hasNotion && (
             <>
               <span className="text-border-strong">·</span>

@@ -2,6 +2,8 @@ import { useState } from "react";
 import "./CommandPalette.css";
 import { Blocks, FileText, FolderPlus, GitBranchPlus } from "lucide-react";
 
+import { KindBadge } from "@/components/board/LifeWheelPalette";
+
 import {
   Command,
   CommandEmpty,
@@ -172,9 +174,10 @@ export function CommandPalette() {
                     onSelect={() => runCommand(`Project: ${p.name}`, () => goTo("settings", "open"))}
                   >
                     <span>{p.name}</span>
-                    <span className="ml-2 font-mono text-xs text-wr-subtle">
-                      {p.kind === "personal" ? "개인" : "업무"}
-                    </span>
+                    <KindBadge
+                      kind={p.kind}
+                      className="ml-2 h-4 px-1.5 py-0 text-[10px] leading-none"
+                    />
                   </CommandItem>
                 ))}
               </CommandGroup>

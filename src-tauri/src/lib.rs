@@ -106,6 +106,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::toggle_routine_check,
         commands::reorder_routines,
         commands::routine_tracking,
+        commands::set_routine_kind,
+        commands::set_routine_area_tag_key,
         // PR Radar (read 레일, Phase 4).
         commands::refresh_pr_radar,
         commands::get_pr_radar_settings,

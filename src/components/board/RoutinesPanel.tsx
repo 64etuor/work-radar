@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Pencil, X } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
-import type { RoutineFreq, RoutineToday, Weekday } from "@/bindings";
+import type { Kind, LifeWheelTagConfig, RoutineFreq, RoutineToday, Weekday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
+import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useListReorder } from "@/lib/useListReorder";
 
-/** 루틴 생성 입력(폼 → CaptureBoard). */
+/** 루틴 생성 입력(폼 → CaptureBoard). kind/area는 카드에서 즉시 갱신(IPC)되므로 폼은 안 받는다. */
 export type RoutineDraft = {
   title: string;
   freq: RoutineFreq;
@@ -19,12 +20,17 @@ export type RoutineDraft = {
 
 type Props = {
   routines: RoutineToday[];
+  lifeWheelTags: LifeWheelTagConfig[];
   onToggle: (routineId: string, done: boolean) => void;
   onCreate: (draft: RoutineDraft) => void;
   onUpdate: (id: string, draft: RoutineDraft) => void;
   onDelete: (id: string) => void;
   onReorder: (orderedIds: string[]) => void;
   onOpenTracking: () => void;
+  /** 루틴 personal/work 즉시 갱신(signals와 동일 패턴). */
+  onSetKind: (id: string, kind: Kind | null) => void;
+  /** Life Wheel tag 단일 선택(커스텀 키 허용). */
+  onSetAreaTagKey: (id: string, tagKey: string | null) => void;
 };
 
 const DAYS: { label: string; key: Weekday }[] = [
@@ -62,12 +68,15 @@ function schedLabel(r: RoutineToday): string {
 /** 우측 하단 Routines 패널 — 오늘 해당 반복 작업 체크리스트 + 추가 폼 + 드래그 정렬. */
 export function RoutinesPanel({
   routines,
+  lifeWheelTags,
   onToggle,
   onCreate,
   onUpdate,
   onDelete,
   onReorder,
   onOpenTracking,
+  onSetKind,
+  onSetAreaTagKey,
 }: Props) {
   // open=false: 폼 닫힘. open=true + editId=null: 새 루틴 추가. open=true + editId: 수정 모드.
   const [open, setOpen] = useState(false);
@@ -77,6 +86,12 @@ export function RoutinesPanel({
   const [days, setDays] = useState<Set<Weekday>>(new Set());
   const [time, setTime] = useState("");
   const [offset, setOffset] = useState("");
+  // BrainDump 카드와 동일하게 area 방사형 휠을 위한 anchor 상태(panel 내 자체 소유).
+  const [areaPalette, setAreaPalette] = useState<{
+    routineId: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const dnd = useListReorder(
     routines.map((r) => r.id),
@@ -308,6 +323,19 @@ export function RoutinesPanel({
                   {r.timeOfDay && (
                     <span className="badge b-time">{r.timeOfDay}</span>
                   )}
+                  <CardTagEditor
+                    target={r}
+                    tags={lifeWheelTags}
+                    onSetKind={onSetKind}
+                    onOpenAreaPalette={(button) => {
+                      const rect = button.getBoundingClientRect();
+                      setAreaPalette({
+                        routineId: r.id,
+                        x: rect.left + rect.width / 2,
+                        y: rect.top + rect.height / 2,
+                      });
+                    }}
+                  />
                 </div>
               </div>
               <div className="ractions">
@@ -327,13 +355,27 @@ export function RoutinesPanel({
                   aria-label="루틴 삭제"
                   onClick={() => handleDelete(r)}
                 >
-                  <X className="size-4" />
+                  <Trash2 className="size-3.5" />
                 </button>
               </div>
             </div>
           ))
         )}
       </div>
+      {areaPalette &&
+        (() => {
+          const target = routines.find((r) => r.id === areaPalette.routineId);
+          if (!target) return null;
+          return (
+            <AreaRadialPalette
+              target={target}
+              tags={lifeWheelTags.filter((tag) => tag.enabled)}
+              anchor={{ x: areaPalette.x, y: areaPalette.y }}
+              onClose={() => setAreaPalette(null)}
+              onSetAreaTagKey={onSetAreaTagKey}
+            />
+          );
+        })()}
     </div>
   );
 }

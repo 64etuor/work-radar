@@ -253,12 +253,12 @@
   color: var(--color-wr-fg);
 }
 .cb .postit-tags > .postit-tag-button.postit-kind.work {
-  background: var(--cb-pale-green);
-  color: var(--color-wr-green);
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
 }
 .cb .postit-tags > .postit-tag-button.postit-kind.personal {
-  background: var(--color-wr-accent-soft);
-  color: var(--color-wr-accent);
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
 }
 .cb .postit-tags > .postit-tag-button.postit-area-button {
   flex: 0 1 auto;
@@ -452,13 +452,14 @@
     transform: scale(0.58) translateY(4px);
   }
 }
+/* kind 정본 컬러 — 베이지(personal) / 코랄(work). KindBadge와 동일 의도. */
 .cb .chip-personal {
-  background: var(--color-wr-accent-soft);
-  color: var(--color-wr-accent);
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
 }
 .cb .chip-work {
-  background: var(--cb-pale-green);
-  color: var(--color-wr-green);
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
 }
 /* Phase 9 enrich — 확정 영역(area) chip. */
 .cb .chip-area {
@@ -573,9 +574,9 @@
   }
 }
 
-/* 우측 실행 컬럼 */
+/* 우측 실행 컬럼 — kind+area 칩 두 개가 한 줄에 들어가도록 넉넉히. */
 .cb .execute {
-  flex: 0 0 250px;
+  flex: 0 0 320px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -712,7 +713,15 @@
   gap: 6px;
   align-items: center;
   margin-top: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+/* Today/Routine 리스트 안에서는 postit-tags의 카드용 여백을 제거(인라인 칩처럼 동작). */
+.cb .item .meta > .postit-tags {
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  line-height: normal;
 }
 .cb .badge {
   font: 700 9px var(--font-mono);
@@ -946,7 +955,7 @@
     flex-basis: 152px;
   }
   .cb .execute {
-    flex-basis: 224px;
+    flex-basis: 280px;
   }
 }
 @media (max-width: 900px) {

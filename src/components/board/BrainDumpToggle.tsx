@@ -155,7 +155,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
             value="personal"
             size="sm"
             tabIndex={open ? 0 : -1}
-            className="font-semibold text-wr-subtle data-[state=on]:bg-wr-accent-soft data-[state=on]:text-wr-accent"
+            className="font-semibold text-wr-subtle data-[state=on]:bg-secondary data-[state=on]:text-secondary-foreground"
           >
             개인
           </ToggleGroupItem>
@@ -163,7 +163,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
             value="work"
             size="sm"
             tabIndex={open ? 0 : -1}
-            className="font-semibold text-wr-subtle data-[state=on]:bg-wr-pale-green data-[state=on]:text-wr-green"
+            className="font-semibold text-wr-subtle data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
           >
             업무
           </ToggleGroupItem>

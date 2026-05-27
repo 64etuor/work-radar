@@ -1,20 +1,89 @@
 import { useEffect, useState } from "react";
 
-import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
+import type { AreaTag, Kind, LifeWheelTagConfig } from "@/bindings";
+import { kindLabel } from "@/components/board/boardUtils";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/components/ui/cn";
+
+/**
+ * 정본 kind 칩 — 앱 전역 단일 색 컨벤션.
+ * personal=`secondary`(베이지 #eeece7), work=`accent`(코랄 #ff7759).
+ * 다른 색(pale-blue/pale-green)으로 kind를 표시하지 말 것.
+ */
+export function KindBadge({
+  kind,
+  className,
+}: {
+  kind: Kind;
+  className?: string;
+}) {
+  return (
+    <Badge
+      variant={kind === "work" ? "accent" : "secondary"}
+      className={cn("font-semibold", className)}
+    >
+      {kindLabel(kind)}
+    </Badge>
+  );
+}
+
+/**
+ * Read-only kind + area 칩 페어 (RetroView / RoutineTrackingView 등 비편집 컨텍스트용).
+ * 인터랙티브 편집은 [[CardTagEditor]] 사용. area 색은 사용자 Life Wheel 팔레트에서 가져온다.
+ */
+export function KindAreaChips({
+  target,
+  tags,
+}: {
+  target: Pick<CardTagTarget, "kind" | "area" | "areaTags">;
+  tags: LifeWheelTagConfig[];
+}) {
+  const areaKey = parseAreaTagKeys(target.areaTags, target.area)[0] ?? null;
+  const areaTag = areaKey ? tags.find((t) => t.id === areaKey) : null;
+  return (
+    <>
+      {target.kind && <KindBadge kind={target.kind} className="h-4 px-1.5 py-0 text-[10px] leading-none" />}
+      {areaKey && (
+        <span
+          className="b-tag"
+          style={{
+            background: areaTag?.color ?? "#75758a",
+            color: readableTextColor(areaTag?.color ?? "#75758a"),
+            borderColor: "transparent",
+          }}
+          title={areaTag?.label ?? areaKey}
+        >
+          {areaTag?.label ?? areaKey}
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * 카드 인라인 태그 편집 대상의 최소 모양 — kind 토글 + Life Wheel 버튼을 그리는 데 필요한 필드만.
+ * WorkSignal/RoutineToday 모두 이 shape을 만족(BrainDump 카드 ≡ 루틴 카드 UX 통일).
+ */
+export type CardTagTarget = {
+  id: string;
+  kind: Kind | null;
+  area: AreaTag | null;
+  areaTags: string | null;
+};
 
 export function CardTagEditor({
-  signal,
+  target,
   tags,
   onSetKind,
   onOpenAreaPalette,
 }: {
-  signal: WorkSignal;
+  target: CardTagTarget;
   tags: LifeWheelTagConfig[];
   onSetKind: (id: string, kind: Kind | null) => void;
   onOpenAreaPalette: (button: HTMLButtonElement) => void;
 }) {
-  const selectedAreas = parseAreaTagKeys(signal.areaTags, signal.area);
-  const kind = signal.kind === "personal" ? "personal" : "work";
+  const selectedAreas = parseAreaTagKeys(target.areaTags, target.area);
+  const kind = target.kind === "personal" ? "personal" : "work";
   const nextKind = kind === "work" ? "personal" : "work";
   const selectedArea = selectedAreas[0] ?? null;
   const selectedTag = selectedArea ? tags.find((tag) => tag.id === selectedArea) : null;
@@ -34,7 +103,7 @@ export function CardTagEditor({
         className={`postit-tag-button postit-kind ${kind}`}
         draggable={false}
         onPointerDown={keepCardDragPrimary}
-        onClick={() => onSetKind(signal.id, nextKind)}
+        onClick={() => onSetKind(target.id, nextKind)}
         aria-label="personal/work 전환"
       >
         {kind === "work" ? "업무" : "개인"}
@@ -61,19 +130,19 @@ export function CardTagEditor({
 }
 
 export function AreaRadialPalette({
-  signal,
+  target,
   tags,
   anchor,
   onClose,
   onSetAreaTagKey,
 }: {
-  signal: WorkSignal;
+  target: CardTagTarget;
   tags: LifeWheelTagConfig[];
   anchor: { x: number; y: number };
   onClose: () => void;
   onSetAreaTagKey: (id: string, tagKey: string | null) => void;
 }) {
-  const selectedAreas = parseAreaTagKeys(signal.areaTags, signal.area);
+  const selectedAreas = parseAreaTagKeys(target.areaTags, target.area);
   const selectedArea = selectedAreas[0] ?? null;
   const [closing, setClosing] = useState(false);
   const closePalette = () => setClosing(true);
@@ -84,7 +153,7 @@ export function AreaRadialPalette({
     return () => window.clearTimeout(timeout);
   }, [closeDurationMs, closing, onClose]);
   const selectArea = (tagKey: string | null) => {
-    onSetAreaTagKey(signal.id, tagKey);
+    onSetAreaTagKey(target.id, tagKey);
     closePalette();
   };
   const innerRadius = 82;

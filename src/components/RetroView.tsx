@@ -9,13 +9,14 @@ import {
 } from "lucide-react";
 
 import type { WorkSignal } from "@/bindings";
-import { kindChipClass, kindLabel } from "@/components/board/boardUtils";
+import { KindAreaChips } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import {
   localToday,
   useArchivedSnoozed,
   useCompleted,
+  useLifeWheelTags,
   useRestoreSignal,
   useSetSignalImpact,
   useSetSignalRegret,
@@ -91,6 +92,8 @@ function RetroTab() {
   const completed = useCompleted(start, end);
   const setImpact = useSetSignalImpact();
   const setRegret = useSetSignalRegret();
+  const lifeWheelTagsQ = useLifeWheelTags();
+  const lifeWheelTags = lifeWheelTagsQ.data ?? [];
   const items = useMemo(() => completed.data ?? [], [completed.data]);
 
   // 랭킹 집계(로컬 — 자동화 아님): 사람이 단 impact/regret만 모은다.
@@ -171,9 +174,7 @@ function RetroTab() {
                   <div key={s.id} className="rt-item">
                     <div className="rt-item-body">
                       <div className="rt-item-ttl">{s.title}</div>
-                      {s.kind && (
-                        <span className={`b-tag ${kindChipClass(s.kind)}`}>{kindLabel(s.kind)}</span>
-                      )}
+                      <KindAreaChips target={s} tags={lifeWheelTags} />
                     </div>
                     <div className="rt-item-tags">
                       <button
@@ -244,6 +245,8 @@ function RankCard({
 function ArchiveTab() {
   const list = useArchivedSnoozed();
   const restore = useRestoreSignal();
+  const lifeWheelTagsQ = useLifeWheelTags();
+  const lifeWheelTags = lifeWheelTagsQ.data ?? [];
   const items = list.data ?? [];
 
   return (
@@ -265,9 +268,7 @@ function ArchiveTab() {
               {s.status === "snoozed" && s.snoozeUntil && (
                 <span className="rt-arc-sub">복귀 {md(s.snoozeUntil)}</span>
               )}
-              {s.kind && (
-                <span className={`b-tag ${kindChipClass(s.kind)}`}>{kindLabel(s.kind)}</span>
-              )}
+              <KindAreaChips target={s} tags={lifeWheelTags} />
             </div>
           </div>
           <Button

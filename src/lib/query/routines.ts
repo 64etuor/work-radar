@@ -6,6 +6,7 @@ import { unwrap, useInvalidate } from "./client";
 import {
   commands,
   type CreateRoutineInput,
+  type Kind,
   type UpdateRoutineInput,
   type Weekday,
 } from "@/bindings";
@@ -60,6 +61,26 @@ export function useReorderRoutines() {
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (orderedIds: string[]) => unwrap(commands.reorderRoutines(orderedIds)),
+    onSuccess: () => inv.routines(),
+  });
+}
+
+/** 루틴 kind 즉시 갱신 (personal/work 토글, signals 패턴 미러). */
+export function useSetRoutineKind() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, kind }: { id: string; kind: Kind | null }) =>
+      unwrap(commands.setRoutineKind(id, kind)),
+    onSuccess: () => inv.routines(),
+  });
+}
+
+/** 루틴 Life Wheel tag key 갱신 (커스텀 키 허용, signals 패턴 미러). */
+export function useSetRoutineAreaTagKey() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, tagKey }: { id: string; tagKey: string | null }) =>
+      unwrap(commands.setRoutineAreaTagKey(id, tagKey)),
     onSuccess: () => inv.routines(),
   });
 }

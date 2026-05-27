@@ -6,11 +6,13 @@ mod crud;
 mod listing;
 mod reminders; // 내부 헬퍼 전용(공개 커맨드 없음) — crud/listing이 `super::reminders::`로 접근.
 mod schedule;
+mod tags;
 mod tracking;
 
 pub use crud::*;
 pub use listing::*;
 pub use schedule::*;
+pub use tags::*;
 pub use tracking::*;
 
 #[cfg(test)]
@@ -367,8 +369,6 @@ mod tests {
                 anchor_date: None,
                 time_of_day: Some("08:00".into()),
                 reminder_offset_min: None,
-                area: None,
-                kind: None,
             },
         )
         .await
@@ -472,8 +472,6 @@ mod tests {
                 anchor_date: None,
                 time_of_day: Some("09:00".into()),
                 reminder_offset_min: None,
-                area: None,
-                kind: None,
             },
         )
         .await

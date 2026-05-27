@@ -2,10 +2,11 @@ import { useState } from "react";
 import "./RetroView.css";
 import { Flame, Repeat } from "lucide-react";
 
-import type { RoutineFreq, RoutineTrackingItem } from "@/bindings";
+import type { LifeWheelTagConfig, RoutineFreq, RoutineTrackingItem } from "@/bindings";
+import { KindAreaChips } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
-import { localToday, useRoutineTracking } from "@/lib/query";
+import { localToday, useLifeWheelTags, useRoutineTracking } from "@/lib/query";
 
 type Period = 7 | 30 | 90;
 const PERIODS: { value: Period; label: string }[] = [
@@ -34,6 +35,7 @@ function md(date: string): string {
 export function RoutineTrackingView() {
   const [period, setPeriod] = useState<Period>(30);
   const tracking = useRoutineTracking(localToday(), period);
+  const lifeWheelTags = useLifeWheelTags();
   const items = tracking.data ?? [];
 
   return (
@@ -72,7 +74,7 @@ export function RoutineTrackingView() {
 
         <div className="trk-list">
           {items.map((it) => (
-            <TrackCard key={it.id} item={it} />
+            <TrackCard key={it.id} item={it} lifeWheelTags={lifeWheelTags.data ?? []} />
           ))}
         </div>
       </div>
@@ -80,13 +82,20 @@ export function RoutineTrackingView() {
   );
 }
 
-/** 루틴 한 개의 트래킹 카드: 이행률 바 + streak + 히스토리 히트맵. */
-function TrackCard({ item }: { item: RoutineTrackingItem }) {
+/** 루틴 한 개의 트래킹 카드: 이행률 바 + streak + 히스토리 히트맵 + kind/area 칩(read-only). */
+function TrackCard({
+  item,
+  lifeWheelTags,
+}: {
+  item: RoutineTrackingItem;
+  lifeWheelTags: LifeWheelTagConfig[];
+}) {
   return (
     <div className="trk-card">
       <div className="trk-head">
         <span className="trk-ttl">{item.title}</span>
         <span className="badge b-sched">{FREQ_LABEL[item.freq]}</span>
+        <KindAreaChips target={item} tags={lifeWheelTags} />
         <span className="trk-spacer" />
         <span className="trk-streak" title="현재 연속">
           <Flame className="size-3.5" />

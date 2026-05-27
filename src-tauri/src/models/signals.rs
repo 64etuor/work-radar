@@ -28,6 +28,41 @@ pub enum AreaTag {
     Other,
 }
 
+impl AreaTag {
+    /// Life Wheel builtin key(snake_case) → AreaTag. 커스텀 키는 None.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Some(match key {
+            "health" => Self::Health,
+            "work" => Self::Work,
+            "studies" => Self::Studies,
+            "environment" => Self::Environment,
+            "recreation" => Self::Recreation,
+            "romance" => Self::Romance,
+            "family" => Self::Family,
+            "friends" => Self::Friends,
+            "finances" => Self::Finances,
+            "other" => Self::Other,
+            _ => return None,
+        })
+    }
+
+    /// AreaTag → builtin key(snake_case). SQL/JSON 직렬화 공용 슬러그.
+    pub fn as_key(self) -> &'static str {
+        match self {
+            Self::Health => "health",
+            Self::Work => "work",
+            Self::Studies => "studies",
+            Self::Environment => "environment",
+            Self::Recreation => "recreation",
+            Self::Romance => "romance",
+            Self::Family => "family",
+            Self::Friends => "friends",
+            Self::Finances => "finances",
+            Self::Other => "other",
+        }
+    }
+}
+
 /// 사람이 편집하는 Life Wheel 팔레트 항목. AI 제안 taxonomy(`AreaTag`)와 별개로,
 /// 수동 태그 선택 UI만 확장한다.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

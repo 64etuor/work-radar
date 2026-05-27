@@ -626,7 +626,7 @@ pub(crate) async fn set_signal_area(
     ))
     .bind(id)
     .bind(area)
-    .bind(area.map(|a| format!(r#"["{}"]"#, area_to_str(a))))
+    .bind(area.map(|a| format!(r#"["{}"]"#, a.as_key())))
     .fetch_one(db)
     .await
 }
@@ -643,7 +643,7 @@ pub(crate) async fn set_signal_area_tags(
     } else {
         let body = areas
             .iter()
-            .map(|a| format!(r#""{}""#, area_to_str(*a)))
+            .map(|a| format!(r#""{}""#, a.as_key()))
             .collect::<Vec<_>>()
             .join(",");
         Some(format!("[{body}]"))
@@ -674,7 +674,7 @@ pub(crate) async fn set_signal_area_tag_key(
             Some(trimmed.to_string())
         }
     });
-    let primary = normalized.as_deref().and_then(area_from_str);
+    let primary = normalized.as_deref().and_then(AreaTag::from_key);
     let json = normalized.as_deref().map(|key| {
         let escaped = key.replace('\\', "\\\\").replace('"', "\\\"");
         format!(r#"["{escaped}"]"#)
@@ -688,37 +688,6 @@ pub(crate) async fn set_signal_area_tag_key(
     .bind(json)
     .fetch_one(db)
     .await
-}
-
-fn area_from_str(area: &str) -> Option<AreaTag> {
-    match area {
-        "health" => Some(AreaTag::Health),
-        "work" => Some(AreaTag::Work),
-        "studies" => Some(AreaTag::Studies),
-        "environment" => Some(AreaTag::Environment),
-        "recreation" => Some(AreaTag::Recreation),
-        "romance" => Some(AreaTag::Romance),
-        "family" => Some(AreaTag::Family),
-        "friends" => Some(AreaTag::Friends),
-        "finances" => Some(AreaTag::Finances),
-        "other" => Some(AreaTag::Other),
-        _ => None,
-    }
-}
-
-fn area_to_str(area: AreaTag) -> &'static str {
-    match area {
-        AreaTag::Health => "health",
-        AreaTag::Work => "work",
-        AreaTag::Studies => "studies",
-        AreaTag::Environment => "environment",
-        AreaTag::Recreation => "recreation",
-        AreaTag::Romance => "romance",
-        AreaTag::Family => "family",
-        AreaTag::Friends => "friends",
-        AreaTag::Finances => "finances",
-        AreaTag::Other => "other",
-    }
 }
 
 pub(crate) async fn set_signal_kind(

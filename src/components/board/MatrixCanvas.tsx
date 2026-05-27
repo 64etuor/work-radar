@@ -388,7 +388,7 @@ export function MatrixCanvas({
             onMouseDown={() => cbRef.current.onSelect(s.id)}
           >
             <CardTagEditor
-              signal={s}
+              target={s}
               tags={lifeWheelTags}
               onSetKind={onSetKind}
               onOpenAreaPalette={(button) => {
@@ -465,7 +465,7 @@ export function MatrixCanvas({
       })}
       {paletteSignal && areaPalette && (
         <AreaRadialPalette
-          signal={paletteSignal}
+          target={paletteSignal}
           tags={lifeWheelTags.filter((tag) => tag.enabled)}
           anchor={areaPalette}
           onClose={() => setAreaPalette(null)}
