@@ -24,8 +24,8 @@ import { useToastStore } from "@/lib/toast";
 const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, "0"));
-const EDITOR_OPEN_ANIMATION_MS = 220;
-const EDITOR_CLOSE_ANIMATION_MS = 180;
+const EDITOR_OPEN_ANIMATION_MS = 380;
+const EDITOR_CLOSE_ANIMATION_MS = 340;
 
 /**
  * 헤더 중앙 존 스프린트 미터 (P11, 2026-05-25 재설계) — 에디토리얼 1줄 라벨 + 얇은 진행 바.
@@ -140,7 +140,10 @@ export function SprintTimer() {
 
   return (
     <div ref={rootRef} className={cn("sprint-timer", editorVisible && "is-editing")}>
+      {/* opening: 미터는 위로 빠지고(slideOutUp), 에디터는 아래에서 올라옴(slideInUp).
+       *  closing: 에디터는 아래로 사라지고(slideOutDown), 미터는 위에서 내려옴(slideInDown). */}
       {editorState === "opening" && renderMeter(" is-leaving", true)}
+      {editorState === "closing" && renderMeter(" is-entering", true)}
       {editorVisible ? (
         <SprintEditor
           config={configQ.data ?? null}

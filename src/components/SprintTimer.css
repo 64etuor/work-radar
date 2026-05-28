@@ -22,9 +22,9 @@
   overflow: hidden;
   contain: layout paint;
 }
-.sprint-timer.is-editing {
-  display: block;
-}
+/* is-editing 중에도 inline-flex 중앙정렬을 유지 — 미터가 in-flow로 자연 중앙에 배치되고
+ * 에디터는 absolute inset:0 으로 그 위에 덮여 슬라이드 인/아웃. 미터의 left/width를 고정하지
+ * 않으므로 반응형(840/560px 브레이크포인트) 폭 변화도 자동 반영. */
 /* ── 스프린트 미터 ──
    에디토리얼 1줄 라벨 + 그 아래 얇은 진행 바. 박스/필 없음 — 헤더 라인에 자연스럽게 녹는다.
    라벨: 'SPRINT · {n일 남음}' (mono caps + 본문). 색만으로 의미 전달 금지 → 'SPRINT' 라벨 병기.
@@ -48,18 +48,26 @@
 .sprint-meter:hover {
   background: var(--color-wr-elevated);
 }
-.sprint-timer.is-editing .sprint-meter,
+/* 에디터는 슬롯 가득 — 인라인 컨트롤 폭을 풀로 활용. */
 .sprint-timer.is-editing .sprint-inline-editor {
   position: absolute;
   inset: 0;
   will-change: opacity, transform;
 }
+/* 미터는 in-flow 유지 — .sprint-timer 의 justify-content:center 가 그대로 중앙정렬.
+ * 본래 width(270px / 좁은 BP에서 240px) 그대로 사용하므로 어떤 폭에서도 점프 없이 동일 자리. */
 .sprint-timer.is-editing .sprint-meter {
-  width: 100%;
+  will-change: opacity, transform;
 }
+/* opening: 미터는 위로 빠진다(slideOutUp). 에디터는 동시에 아래에서 올라옴. */
 .sprint-meter.is-leaving {
   pointer-events: none;
-  animation: sprint-meter-leave 0.22s ease-out forwards;
+  animation: sprint-meter-slide-out-up 0.38s cubic-bezier(0.32, 0.72, 0.24, 1) forwards;
+}
+/* closing: 에디터는 아래로 사라지고, 미터가 위에서 내려와 자리를 다시 채운다. */
+.sprint-meter.is-entering {
+  pointer-events: none;
+  animation: sprint-meter-slide-in-down 0.34s cubic-bezier(0.32, 0.72, 0.24, 1) both;
 }
 .sprint-meter-label {
   display: inline-flex;
@@ -121,12 +129,14 @@
   display: flex;
   align-items: center;
 }
+/* 에디터는 의미상 헤더 아래에 숨겨져 있다 — 클릭 시 슬롯 안으로 위로 슬라이드인.
+ * 닫힐 때 다시 아래로 슬라이드아웃해 헤더 아래로 사라짐. */
 .sprint-inline-editor.is-opening {
-  animation: sprint-editor-enter 0.22s ease-out both;
+  animation: sprint-editor-slide-in-up 0.38s cubic-bezier(0.32, 0.72, 0.24, 1) both;
 }
 .sprint-inline-editor.is-closing {
   pointer-events: none;
-  animation: sprint-editor-exit 0.18s ease-in forwards;
+  animation: sprint-editor-slide-out-down 0.34s cubic-bezier(0.32, 0.72, 0.24, 1) forwards;
 }
 .sprint-editor-title {
   justify-self: start;
@@ -211,34 +221,47 @@
 .sprint-actions-spacer {
   display: none;
 }
-@keyframes sprint-meter-leave {
+/* slideOutUp / slideInDown / slideInUp / slideOutDown — animate.css 형태로 슬롯 높이만큼 풀이동.
+ * .sprint-timer 부모가 overflow:hidden + 32px 고정이므로 100%(=32px) 거리로 헤더 위/아래로 사라짐.
+ * opacity는 미세 페이드(0.0 머무름) — 슬라이드 시각이 주, 페이드는 가장자리 어색함만 다듬는 역할. */
+@keyframes sprint-meter-slide-out-up {
   from {
     opacity: 1;
     transform: translateY(0);
   }
   to {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-100%);
   }
 }
-@keyframes sprint-editor-enter {
+@keyframes sprint-meter-slide-in-down {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(-100%);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-@keyframes sprint-editor-exit {
+@keyframes sprint-editor-slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sprint-editor-slide-out-down {
   from {
     opacity: 1;
     transform: translateY(0);
   }
   to {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(100%);
   }
 }
 /* 반응형: 좁으면 hint 숨김. 미터 라벨은 짧으므로 그대로(필요 시 width 축소). */
