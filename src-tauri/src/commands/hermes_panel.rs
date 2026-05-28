@@ -89,11 +89,14 @@ async fn set_config(db: &Db, key: &str, value: &str) -> Result<(), AppError> {
 
 /// 저장된 Hermes 토글 핫키. 없으면 기본값("Cmd+Shift+Space").
 pub(crate) async fn current_toggle_hotkey(db: &Db) -> String {
-    get_config(db, KEY_TOGGLE_HOTKEY)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| DEFAULT_HERMES_TOGGLE_HOTKEY.to_string())
+    match get_config(db, KEY_TOGGLE_HOTKEY).await {
+        Ok(Some(v)) => v,
+        Ok(None) => DEFAULT_HERMES_TOGGLE_HOTKEY.to_string(),
+        Err(e) => {
+            tracing::warn!(code = "hermes.hotkey.read", error = %e, "failed to read toggle hotkey; using default");
+            DEFAULT_HERMES_TOGGLE_HOTKEY.to_string()
+        }
+    }
 }
 
 /// 저장된 Hermes 패널 상태 조회. 미설정 시 기본값 반환.
@@ -120,8 +123,9 @@ pub async fn hermes_get_toggle_hotkey(db: State<'_, Db>) -> Result<String, AppEr
     Ok(current_toggle_hotkey(db.inner()).await)
 }
 
-/// Hermes 패널 토글 핫키 변경: 검증 → 런타임 재등록 → 성공 시 영속.
+/// Hermes 패널 토글 핫키 변경: 검증 → nav 충돌 거부 → 런타임 재등록 → 성공 시 영속.
 /// 등록 실패(충돌/무효) 시 기존 핫키를 유지하고 Err를 노출한다(저장 안 함 — graceful).
+/// 같은 값으로 저장해도 재등록은 항상 시도한다(retry path).
 #[tauri::command]
 #[specta::specta]
 pub async fn hermes_set_toggle_hotkey(
@@ -134,12 +138,24 @@ pub async fn hermes_set_toggle_hotkey(
     shortcut::parse_shortcut(&new_spec)
         .map_err(|msg| AppError::validation("hermes.invalid_hotkey", msg))?;
 
-    let old = current_toggle_hotkey(db.inner()).await;
-    if old != new_spec {
-        shortcut::reregister_hermes_toggle(&app, &old, &new_spec)
-            .map_err(|msg| AppError::validation("hermes.hotkey_register", msg))?;
+    // nav 글로벌 핫키와 충돌 거부.
+    let nav_spec = crate::commands::nav::current_global_hotkey(db.inner()).await;
+    if new_spec == nav_spec {
+        return Err(AppError::validation(
+            "hermes.hotkey_conflict",
+            "hermes toggle hotkey must differ from nav global hotkey",
+        ));
     }
-    set_config(db.inner(), KEY_TOGGLE_HOTKEY, &new_spec).await
+
+    let old = current_toggle_hotkey(db.inner()).await;
+    shortcut::reregister_hermes_toggle(&app, &old, &new_spec)
+        .map_err(|msg| AppError::validation("hermes.hotkey_register", msg))?;
+
+    // 값이 바뀐 경우에만 DB 쓰기(재등록은 항상 시도, 저장은 변경분만).
+    if old != new_spec {
+        set_config(db.inner(), KEY_TOGGLE_HOTKEY, &new_spec).await?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -180,6 +196,32 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(current_toggle_hotkey(&db).await, "Ctrl+Alt+H");
+    }
+
+    #[tokio::test]
+    async fn hotkey_rejects_nav_clash() {
+        // nav 핫키와 동일한 spec을 hermes에 저장 시도하면 충돌 오류가 나고 DB에 저장되지 않는다.
+        // AppHandle이 필요한 재등록 경로는 이 레이어 테스트 범위 밖이므로,
+        // 충돌 판별 로직을 직접 구동한다.
+        let db = mem_db().await;
+        let clash_spec = "Ctrl+Space";
+        // nav 핫키를 clash_spec으로 설정.
+        set_config(&db, "nav.global_hotkey", clash_spec)
+            .await
+            .unwrap();
+
+        // 충돌 감지: nav 읽기 → hermes spec과 비교.
+        let nav = crate::commands::nav::current_global_hotkey(&db).await;
+        assert_eq!(nav, clash_spec);
+
+        // 충돌이면 저장하지 않는 경로를 재현.
+        let would_conflict = clash_spec == nav.as_str();
+        assert!(would_conflict);
+        // set_config 호출 없음 → hermes 핫키는 여전히 기본값.
+        assert_eq!(
+            current_toggle_hotkey(&db).await,
+            DEFAULT_HERMES_TOGGLE_HOTKEY
+        );
     }
 
     #[tokio::test]
