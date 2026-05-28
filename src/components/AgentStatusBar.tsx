@@ -321,6 +321,7 @@ export function AgentStatusBar() {
   );
 
   // ⊕ 칩 — hermes 박스 그룹 우측, cap 미달 시만 표시. 표시 전용(INVARIANT #1).
+  // 클릭 시 탭 생성 + 패널 열기(hermes:open) — 0탭 상태에서 패널 진입점 보장.
   const hermesAddChip =
     hermesTabs.size < hermesCap ? (
       <button
@@ -328,7 +329,15 @@ export function AgentStatusBar() {
         className="asb-add-chip"
         aria-label="새 Hermes 탭"
         title="새 Hermes 탭"
-        onClick={() => void hermesOpenTab()}
+        onClick={() => {
+          void (async () => {
+            const id = await hermesOpenTab();
+            if (id) {
+              hermesSetActive(id);
+              void emit("hermes:open");
+            }
+          })();
+        }}
       >
         <Plus size={12} strokeWidth={1.5} />
       </button>
