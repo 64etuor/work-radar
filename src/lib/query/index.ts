@@ -18,6 +18,7 @@ export * from "./scheduler";
 export * from "./signals";
 export * from "./skills";
 export * from "./sprint";
+export * from "./timelineNotes";
 export * from "./today";
 export * from "./tokens";
 export * from "./worktree";
