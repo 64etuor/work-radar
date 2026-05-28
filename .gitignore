@@ -43,3 +43,9 @@ output/
 .claude/.read-log.*
 # Claude Code scheduled-task lock (런타임 산출물)
 .claude/scheduled_tasks.lock
+
+# react-doctor multi-agent install dirs for tools the team doesn't use
+# (Claude Code skill is kept at .claude/skills/react-doctor/)
+/.agents/
+/.kiro/
+/skills/

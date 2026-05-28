@@ -20,7 +20,8 @@
     "tauri:dev:setup": "bash scripts/dev-codesign-setup.sh",
     "tauri:dev:signed": "bash scripts/dev-signed.sh",
     "prepare": "husky",
-    "tauri:dev": "pnpm tauri dev"
+    "tauri:dev": "pnpm tauri dev",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -70,6 +71,7 @@
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.6.14",
+    "react-doctor": "^0.2.9",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.59.4",
