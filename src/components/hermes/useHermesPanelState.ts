@@ -7,12 +7,12 @@ import { unwrap } from "@/lib/query/client";
 // 패널 상태 쿼리 키
 const QUERY_KEY = ["hermes-panel-state"] as const;
 
-// 로딩 중 기본값 (null 좌표는 초기 배치로 해석)
+// 로딩 중 기본값 — x/y/w/h=null은 프런트에서 defaultBounds로 초기 배치함을 의미.
 export const DEFAULT_PANEL_STATE: HermesPanelState = {
-  x: 0,
-  y: 0,
-  w: 460,
-  h: 600,
+  x: null,
+  y: null,
+  w: null,
+  h: null,
   open: false,
 };
 

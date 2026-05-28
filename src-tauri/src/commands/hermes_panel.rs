@@ -15,23 +15,24 @@ const KEY_TOGGLE_HOTKEY: &str = "hermes.toggle_hotkey";
 pub const DEFAULT_HERMES_TOGGLE_HOTKEY: &str = "Cmd+Shift+Space";
 
 /// Hermes 플로팅 패널의 위치·크기·열림 상태.
+/// x/y/w/h는 None = 미설정(프런트에서 defaultBounds로 초기 배치).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct HermesPanelState {
-    pub x: f64,
-    pub y: f64,
-    pub w: f64,
-    pub h: f64,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub w: Option<f64>,
+    pub h: Option<f64>,
     pub open: bool,
 }
 
 impl Default for HermesPanelState {
     fn default() -> Self {
-        HermesPanelState {
-            x: 0.0,
-            y: 0.0,
-            w: 460.0,
-            h: 600.0,
+        Self {
+            x: None,
+            y: None,
+            w: None,
+            h: None,
             open: false,
         }
     }
@@ -228,10 +229,10 @@ mod tests {
     async fn roundtrip_panel_state() {
         let db = mem_db().await;
         let input = HermesPanelState {
-            x: 100.0,
-            y: 200.0,
-            w: 500.0,
-            h: 700.0,
+            x: Some(100.0),
+            y: Some(200.0),
+            w: Some(460.0),
+            h: Some(600.0),
             open: true,
         };
         set_state(&db, &input).await.unwrap();
@@ -243,8 +244,10 @@ mod tests {
     async fn default_when_missing() {
         let db = mem_db().await;
         let state = get_state(&db).await.unwrap();
+        assert_eq!(state.x, None);
+        assert_eq!(state.y, None);
+        assert_eq!(state.w, None);
+        assert_eq!(state.h, None);
         assert!(!state.open);
-        assert!(state.w >= 360.0);
-        assert!(state.h >= 320.0);
     }
 }

@@ -1,5 +1,6 @@
 import "./AgentStatusBar.css";
 
+import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Bot,
@@ -251,9 +252,7 @@ export function AgentStatusBar() {
   // cmux 워크스페이스 → cmux 포커스 이동(select-workspace), 그 외(codex 잡) → Jobs 뷰.
   const openBox = (box: SessionBox) => {
     if (box.engine === "hermes") {
-      // HermesPanel이 "hermes:toggle" Tauri 이벤트를 구독 — 여기서는 그냥 Jobs로 이동.
-      // (패널은 hotkey 또는 hermes:toggle 이벤트로 열린다; 바 클릭도 같은 효과)
-      void import("@tauri-apps/api/event").then(({ emit }) => emit("hermes:toggle"));
+      void emit("hermes:toggle");
     } else if (box.key.startsWith("cmux:"))
       // cmux 딥링크: 포커스 이동이 실제 성공(true)하면 Work Radar 창을 숨겨 cmux에 자리 양보.
       // best-effort 실패(false)면 숨기지 않는다 — 앞에 뜨는 창이 없는데 앱만 사라지는 상황 방지.

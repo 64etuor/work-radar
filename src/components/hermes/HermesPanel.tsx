@@ -1,52 +1,65 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { commands, type HermesPanelState } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { unwrap } from "@/lib/query/client";
 
 import { clampToViewport, defaultBounds } from "./clampToViewport";
-import { useHermesPanelState } from "./useHermesPanelState";
+import { DEFAULT_PANEL_STATE, useHermesPanelState } from "./useHermesPanelState";
+
+// 쿼리 키 — useHermesPanelState와 동일해야 한다.
+const PANEL_QUERY_KEY = ["hermes-panel-state"] as const;
 
 /**
  * Hermes 플로팅 패널 셸 (Phase A4).
  * - position:fixed, transform:translate3d(x,y,0) — GPU 합성, layout 무관.
  * - 헤더 드래그 + 우하단 리사이즈 그립 (PointerCapture 기반).
- * - "hermes:toggle" Tauri 이벤트 구독 → open 토글.
- * - Esc 키 닫기 (input/textarea 포커스 시 제외).
+ * - "hermes:toggle" Tauri 이벤트 구독 → open 토글 (마운트 1회, stale closure 없음).
+ * - Esc 키 닫기 (패널 열림 시에만, input/textarea 포커스 시 제외).
  * - children만 받는다 — onRestart는 D4에서 추가.
  */
 export function HermesPanel({ children }: { children: React.ReactNode }) {
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
+  const qc = useQueryClient();
 
-  // 초기 배치: 로딩 완료 후 x=0,y=0,w=460,h=600(DEFAULT_PANEL_STATE)이면 defaultBounds로 초기화.
-  // isLoading이 false로 바뀐 직후 한 번만 실행한다.
-  const initializedRef = useRef(false);
+  // Fix #2(초기 배치): x/y/w/h 중 하나라도 null이면 defaultBounds로 초기화.
+  // shape-equality 휴리스틱 대신 null 체크 — Option<f64> 설계와 일치.
   useEffect(() => {
     if (isLoading) return;
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    if (state.x === 0 && state.y === 0 && state.w === 460 && state.h === 600) {
-      const db = defaultBounds(window.innerWidth, window.innerHeight);
-      setBounds(db);
+    if (state.x == null || state.y == null || state.w == null || state.h == null) {
+      setBounds(defaultBounds(window.innerWidth, window.innerHeight));
     }
   }, [isLoading, state.x, state.y, state.w, state.h, setBounds]);
 
-  // "hermes:toggle" Tauri 이벤트 구독
+  // Fix #1(hermes:toggle): 마운트 1회만 구독 — qc.getQueryData로 최신 상태 읽어
+  // stale closure 없이 토글. cancelled 가드로 async 경쟁 방지.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let cancelled = false;
     void listen("hermes:toggle", () => {
-      setOpen(!state.open);
+      const current = qc.getQueryData<HermesPanelState>(PANEL_QUERY_KEY);
+      const next: HermesPanelState = {
+        ...(current ?? DEFAULT_PANEL_STATE),
+        open: !(current?.open ?? false),
+      };
+      qc.setQueryData(PANEL_QUERY_KEY, next);
+      void unwrap(commands.hermesPanelStateSet(next));
     }).then((u) => {
-      unlisten = u;
+      if (cancelled) u();
+      else unlisten = u;
     });
     return () => {
+      cancelled = true;
       unlisten?.();
     };
-  }, [state.open, setOpen]);
+  }, [qc]);
 
-  // Esc 키 닫기 — input/textarea에 포커스 중이면 패스.
+  // Fix(Esc gate): 패널 열림 시에만 리스너 등록.
   useEffect(() => {
+    if (!state.open) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const active = document.activeElement;
@@ -55,7 +68,29 @@ export function HermesPanel({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [setOpen]);
+  }, [state.open, setOpen]);
+
+  // Fix #3(resize clamp): 뷰포트 크기 변경 시 패널이 벗어나면 즉시 보정.
+  useEffect(() => {
+    const onResize = () => {
+      if (state.x == null || state.y == null || state.w == null || state.h == null) return;
+      const clamped = clampToViewport(
+        { x: state.x, y: state.y, w: state.w, h: state.h },
+        window.innerWidth,
+        window.innerHeight,
+      );
+      if (
+        clamped.x !== state.x ||
+        clamped.y !== state.y ||
+        clamped.w !== state.w ||
+        clamped.h !== state.h
+      ) {
+        setBounds(clamped);
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [state.x, state.y, state.w, state.h, setBounds]);
 
   if (!state.open) return null;
 
@@ -65,9 +100,11 @@ export function HermesPanel({ children }: { children: React.ReactNode }) {
   const h = state.h ?? 600;
 
   return (
+    // TODO(a11y): focus management (trap + restore) — see Phase D
     <div
       role="dialog"
       aria-label="Hermes"
+      aria-modal="false"
       style={{
         position: "fixed",
         transform: `translate3d(${x}px, ${y}px, 0)`,
@@ -125,7 +162,6 @@ function PanelHeader({
   } | null>(null);
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    // data-no-drag 요소(닫기 버튼 등)에서 시작한 경우 드래그 금지
     if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = { startPx: e.clientX, startPy: e.clientY, startX: x, startY: y };
@@ -143,6 +179,7 @@ function PanelHeader({
     onBoundsChange({ x: next.x, y: next.y });
   };
 
+  // Fix(pointercancel): 취소 이벤트도 드래그 상태 정리.
   const onPointerUp = () => {
     dragRef.current = null;
   };
@@ -161,6 +198,7 @@ function PanelHeader({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
       <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>Hermes</span>
       <Button
@@ -203,6 +241,7 @@ function ResizeGrip({ x, y, w, h, onBoundsChange }: BoundsProps) {
     onBoundsChange({ w: next.w, h: next.h });
   };
 
+  // Fix(pointercancel): 취소 이벤트도 리사이즈 상태 정리.
   const onPointerUp = () => {
     resizeRef.current = null;
   };
@@ -220,6 +259,7 @@ function ResizeGrip({ x, y, w, h, onBoundsChange }: BoundsProps) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       aria-hidden
     />
   );
