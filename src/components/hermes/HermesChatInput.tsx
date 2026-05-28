@@ -98,11 +98,8 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
     [saveBytes],
   );
 
-  // Fix 3 — OS-level drag-drop via Tauri's webview event (Path A).
-  // HTML onDrop is a no-op in Tauri 2 default config because the OS WebView
-  // intercepts drag-drop before the DOM sees it. Register at the window level
-  // instead. Always-on: files accumulate in attachments even while panel is
-  // closed; they show up when the panel reopens (acceptable for v1).
+  // Tauri 2 기본 설정에서는 OS WebView 가 drag-drop 을 DOM 보다 먼저 가로채므로
+  // HTML onDrop 이 동작하지 않는다. 윈도우 레벨 이벤트에 직접 등록.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;

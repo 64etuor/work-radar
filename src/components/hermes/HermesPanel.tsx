@@ -10,17 +10,9 @@ import { unwrap } from "@/lib/query/client";
 import { clampToViewport, defaultBounds } from "./clampToViewport";
 import { DEFAULT_PANEL_STATE, useHermesPanelState } from "./useHermesPanelState";
 
-// 쿼리 키 — useHermesPanelState와 동일해야 한다.
+// useHermesPanelState 와 반드시 동일한 키.
 const PANEL_QUERY_KEY = ["hermes-panel-state"] as const;
 
-/**
- * Hermes 플로팅 패널 셸 (Phase A4).
- * - position:fixed, transform:translate3d(x,y,0) — GPU 합성, layout 무관.
- * - 헤더 드래그 + 우하단 리사이즈 그립 (PointerCapture 기반).
- * - "hermes:toggle" Tauri 이벤트 구독 → open 토글 (마운트 1회, stale closure 없음).
- * - Esc 키 닫기 (패널 열림 시에만, input/textarea 포커스 시 제외).
- * - onRestart?: () => void — D4에서 추가, 헤더 재시작 버튼.
- */
 export function HermesPanel({
   children,
   onRestart,
@@ -33,8 +25,8 @@ export function HermesPanel({
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
   const qc = useQueryClient();
 
-  // Fix #2(초기 배치): x/y/w/h 중 하나라도 null이면 defaultBounds로 초기화.
-  // shape-equality 휴리스틱 대신 null 체크 — Option<f64> 설계와 일치.
+  // 초기 배치: 좌표/크기 중 하나라도 null 이면 defaultBounds 로 초기화.
+  // (백엔드 Option<f64> 설계와 일치 — shape-equality 휴리스틱 회피)
   useEffect(() => {
     if (isLoading) return;
     if (state.x == null || state.y == null || state.w == null || state.h == null) {
@@ -42,8 +34,8 @@ export function HermesPanel({
     }
   }, [isLoading, state.x, state.y, state.w, state.h, setBounds]);
 
-  // Fix #1(hermes:toggle): 마운트 1회만 구독 — qc.getQueryData로 최신 상태 읽어
-  // stale closure 없이 토글. cancelled 가드로 async 경쟁 방지.
+  // 마운트 1회만 구독 — qc.getQueryData 로 최신 상태를 읽어 stale closure 없이
+  // 토글. cancelled 가드로 listen() 비동기 등록과 cleanup 경쟁 차단.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
@@ -65,7 +57,7 @@ export function HermesPanel({
     };
   }, [qc]);
 
-  // Fix(Esc gate): 패널 열림 시에만 리스너 등록.
+  // 패널 열림 시에만 Esc 리스너 등록 — 닫힌 상태에서 글로벌 키 가로채지 않도록.
   useEffect(() => {
     if (!state.open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -78,7 +70,7 @@ export function HermesPanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [state.open, setOpen]);
 
-  // Fix #3(resize clamp): 뷰포트 크기 변경 시 패널이 벗어나면 즉시 보정.
+  // 뷰포트 리사이즈 시 패널이 영역을 벗어나면 즉시 클램프.
   useEffect(() => {
     const onResize = () => {
       if (state.x == null || state.y == null || state.w == null || state.h == null) return;
@@ -108,7 +100,7 @@ export function HermesPanel({
   const h = state.h ?? 600;
 
   return (
-    // TODO(a11y): focus management (trap + restore) — see Phase D
+    // TODO(a11y): focus trap + restore
     <div
       role="dialog"
       aria-label="Hermes"
@@ -120,7 +112,6 @@ export function HermesPanel({
       }}
       className="bg-background border-border fixed z-50 flex flex-col overflow-hidden rounded-lg border font-sans shadow-lg"
     >
-      {/* ── 헤더 드래그 핸들 ─────────────────────────────────────── */}
       <PanelHeader
         x={x}
         y={y}
@@ -131,11 +122,7 @@ export function HermesPanel({
         onRestart={onRestart}
         isStreaming={isStreaming}
       />
-
-      {/* ── 본문 ───────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
-
-      {/* ── 리사이즈 그립 (우하단) ─────────────────────────────── */}
       <ResizeGrip x={x} y={y} w={w} h={h} onBoundsChange={setBounds} />
     </div>
   );
@@ -186,21 +173,14 @@ function PanelHeader({
     onBoundsChange({ x: next.x, y: next.y });
   };
 
-  // Fix(pointercancel): 취소 이벤트도 드래그 상태 정리.
+  // pointercancel 도 동일 핸들러로 드래그 상태 정리.
   const onPointerUp = () => {
     dragRef.current = null;
   };
 
   return (
     <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "6px 10px",
-        cursor: "grab",
-        userSelect: "none",
-        flexShrink: 0,
-      }}
+      className="flex shrink-0 cursor-grab items-center px-2.5 py-1.5 select-none"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -233,8 +213,8 @@ function PanelHeader({
           </Button>
         )}
         <Button
+          data-no-drag
           variant="ghost"
-          data-no-drag=""
           onClick={onClose}
           aria-label="닫기"
           className="hover:bg-muted/60 h-7 w-7 p-0"
@@ -272,21 +252,14 @@ function ResizeGrip({ x, y, w, h, onBoundsChange }: BoundsProps) {
     onBoundsChange({ w: next.w, h: next.h });
   };
 
-  // Fix(pointercancel): 취소 이벤트도 리사이즈 상태 정리.
+  // pointercancel 도 동일 핸들러로 리사이즈 상태 정리.
   const onPointerUp = () => {
     resizeRef.current = null;
   };
 
   return (
     <div
-      style={{
-        position: "absolute",
-        bottom: 0,
-        right: 0,
-        width: 16,
-        height: 16,
-        cursor: "se-resize",
-      }}
+      className="absolute right-0 bottom-0 size-4 cursor-se-resize"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
