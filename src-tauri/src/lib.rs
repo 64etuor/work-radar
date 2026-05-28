@@ -248,6 +248,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // 뉴스 글로벌 옵션 (D-Tune, 표시 옵션 전용 — INVARIANT #1).
         commands::news_get_options,
         commands::news_set_options,
+        // Timeline 메모 — Today 카드(signal/routine/event)에 붙는 사용자 메모. 로컬 액션(외부 mutate X).
+        commands::get_timeline_note,
+        commands::list_timeline_notes_for_date,
+        commands::upsert_timeline_note,
+        commands::delete_timeline_note,
     ])
 }
 

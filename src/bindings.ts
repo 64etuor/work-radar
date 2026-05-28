@@ -493,6 +493,30 @@ export const commands = {
 	newsRemoveFilter: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("news_remove_filter", { id })),
 	newsGetOptions: () => typedError<NewsOptions, AppError>(__TAURI_INVOKE("news_get_options")),
 	newsSetOptions: (options: NewsOptions) => typedError<null, AppError>(__TAURI_INVOKE("news_set_options", { options })),
+	/**  단일 메모 조회. 없으면 None. */
+	getTimelineNote: (targetKind: TimelineNoteTarget, targetId: string, date: string) => typedError<{
+	targetKind: TimelineNoteTarget,
+	targetId: string,
+	/**  로컬 'YYYY-MM-DD'. */
+	date: string,
+	body: string,
+	createdAt: string,
+	updatedAt: string,
+} | null, AppError>(__TAURI_INVOKE("get_timeline_note", { targetKind, targetId, date })),
+	/**  한 날짜의 모든 메모 일괄 조회(Today 마운트 시 1회 호출 — N+1 회피). */
+	listTimelineNotesForDate: (date: string) => typedError<TimelineNote[], AppError>(__TAURI_INVOKE("list_timeline_notes_for_date", { date })),
+	/**  메모 upsert. body trim 결과가 비면 행을 삭제하고 None 반환(=메모 클리어). */
+	upsertTimelineNote: (targetKind: TimelineNoteTarget, targetId: string, date: string, body: string) => typedError<{
+	targetKind: TimelineNoteTarget,
+	targetId: string,
+	/**  로컬 'YYYY-MM-DD'. */
+	date: string,
+	body: string,
+	createdAt: string,
+	updatedAt: string,
+} | null, AppError>(__TAURI_INVOKE("upsert_timeline_note", { targetKind, targetId, date, body })),
+	/**  메모 명시적 삭제(빈 body upsert와 동등하지만 의도 분리용). */
+	deleteTimelineNote: (targetKind: TimelineNoteTarget, targetId: string, date: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_timeline_note", { targetKind, targetId, date })),
 };
 
 /* Types */
@@ -1442,6 +1466,20 @@ export type StageWriteRequest = {
 	/**  같은 키는 (target_kind, target_id, kind) UNIQUE로 머지된다. UI는 디바운스용으로 자유 사용. */
 	idempotency_key: string,
 };
+
+/**  timeline_notes 한 행. body는 사용자 입력(공백 trim은 IPC 경계에서). */
+export type TimelineNote = {
+	targetKind: TimelineNoteTarget,
+	targetId: string,
+	/**  로컬 'YYYY-MM-DD'. */
+	date: string,
+	body: string,
+	createdAt: string,
+	updatedAt: string,
+};
+
+/**  메모 대상 종류. timeline_notes.target_kind CHECK과 동일. */
+export type TimelineNoteTarget = "signal" | "routine" | "event";
 
 /**  Today 운영 뷰 집계. 캘린더 오늘 이벤트·Today 레일·루틴은 프런트가 기존 헬퍼로 합성한다. */
 export type TodayOverview = {
