@@ -24,11 +24,15 @@ export function HermesSlashMenu({ items, activeIdx, onPick, onHover }: Props) {
   return (
     <ul
       ref={ref}
+      role="listbox"
       className="bg-popover absolute right-3 bottom-full left-3 mb-2 max-h-56 overflow-auto rounded-md border text-sm shadow-md"
     >
       {items.map((c, i) => (
         <li
           key={c.name}
+          role="option"
+          tabIndex={-1}
+          aria-selected={i === activeIdx}
           className={cn("cursor-pointer px-3 py-1.5", i === activeIdx && "bg-accent")}
           onMouseEnter={() => onHover(i)}
           onMouseDown={(e) => {

@@ -112,16 +112,11 @@ export function HermesPanel({
       aria-label="Hermes"
       aria-modal="false"
       style={{
-        position: "fixed",
         transform: `translate3d(${x}px, ${y}px, 0)`,
         width: w,
         height: h,
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
       }}
-      className="bg-background border-border rounded-lg border shadow-lg"
+      className="bg-background border-border fixed z-50 flex flex-col overflow-hidden rounded-lg border shadow-lg"
     >
       {/* ── 헤더 드래그 핸들 ─────────────────────────────────────── */}
       <PanelHeader
