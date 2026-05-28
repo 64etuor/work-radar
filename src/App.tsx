@@ -35,6 +35,22 @@ type ViewSnapshot = {
 };
 const VIEW_SLIDE_CLEANUP_MS = 460;
 
+// 뷰 라우팅 스위치 — 모듈 스코프로 두어 매 렌더마다 새 closure가 생기지 않게 한다
+// (react-doctor/no-render-in-render). App 상태에 의존하지 않는 순수 매핑.
+function renderView(renderedView: View) {
+  if (renderedView === "settings") return <SettingsView />;
+  if (renderedView === "today") return <TodayView />;
+  if (renderedView === "inbox") return <InboxView />;
+  if (renderedView === "weekly") return <WeeklyView />;
+  if (renderedView === "retro") return <RetroView />;
+  if (renderedView === "routines") return <RoutineTrackingView />;
+  if (renderedView === "radar") return <PrRadarView />;
+  if (renderedView === "worktree") return <WorktreeView />;
+  if (renderedView === "jobs") return <JobsView />;
+  if (renderedView === "skills") return <SkillsView />;
+  return <CaptureBoard />;
+}
+
 /**
  * 단일 창 셸. 전역 핫키(기본 Ctrl+Space, Rust·사용자 설정 가능)로 토글되고 Esc로 숨긴다.
  * 네비게이션 = cmdk 팔레트(Cmd+K) / Cmd+, / per-view 단축키(keymap, 입력 비포커스 시).
@@ -156,31 +172,6 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [view, paletteOpen, setPaletteOpen, navigateView]);
-
-  const renderView = (renderedView: View) =>
-    renderedView === "settings" ? (
-      <SettingsView />
-    ) : renderedView === "today" ? (
-      <TodayView />
-    ) : renderedView === "inbox" ? (
-      <InboxView />
-    ) : renderedView === "weekly" ? (
-      <WeeklyView />
-    ) : renderedView === "retro" ? (
-      <RetroView />
-    ) : renderedView === "routines" ? (
-      <RoutineTrackingView />
-    ) : renderedView === "radar" ? (
-      <PrRadarView />
-    ) : renderedView === "worktree" ? (
-      <WorktreeView />
-    ) : renderedView === "jobs" ? (
-      <JobsView />
-    ) : renderedView === "skills" ? (
-      <SkillsView />
-    ) : (
-      <CaptureBoard />
-    );
 
   return (
     <div
