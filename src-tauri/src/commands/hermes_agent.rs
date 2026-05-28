@@ -21,8 +21,14 @@ pub async fn hermes_agent_start(
     holder: State<'_, HermesAgentHolder>,
 ) -> Result<(), AppError> {
     let mut guard = holder.lock().await;
-    if guard.is_some() {
-        return Ok(()); // idempotent
+    if let Some(session) = guard.as_ref() {
+        // Already started — re-emit session-ready so late frontend listeners
+        // (mounted after the original spawn) can pick up the live session.
+        let _ = app.emit(
+            "hermes-agent:session-ready",
+            json!({ "session_id": &session.session_id }),
+        );
+        return Ok(());
     }
     let session = AcpSession::spawn(app).await?;
     *guard = Some(session);

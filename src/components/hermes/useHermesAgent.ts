@@ -147,6 +147,23 @@ export function useHermesAgent() {
           level: "error",
         });
       });
+
+      // All listeners now live. Kick off the session — session-ready event
+      // is guaranteed to be caught by the listener registered above.
+      if (cancelled) return;
+      setStatus("starting");
+      try {
+        await unwrap(commands.hermesAgentStart());
+      } catch (e) {
+        if (!cancelled) {
+          setStatus("error");
+          dispatch({
+            type: "system",
+            text: `시작 실패: ${(e as Error).message}`,
+            level: "error",
+          });
+        }
+      }
     })().catch((err) => {
       if (!cancelled) {
         setStatus("error");

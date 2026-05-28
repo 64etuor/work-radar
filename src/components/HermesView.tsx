@@ -1,18 +1,12 @@
-import { useEffect } from "react";
-
 import { HermesChatInput } from "./hermes/HermesChatInput";
 import { HermesChatLog } from "./hermes/HermesChatLog";
 import { HermesPanel } from "./hermes/HermesPanel";
 import { useHermesAgent } from "./hermes/useHermesAgent";
 
 export default function HermesView() {
+  // Session auto-starts inside useHermesAgent once event listeners are wired,
+  // so we don't kick off start() from here (avoids race-before-listeners).
   const agent = useHermesAgent();
-
-  useEffect(() => {
-    // Auto-start the ACP session on first mount.
-    void agent.start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <HermesPanel onRestart={agent.restart} isStreaming={agent.isStreaming}>
