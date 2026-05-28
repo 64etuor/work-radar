@@ -60,11 +60,14 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
   const proposalReady = status === "awaiting_approval" && hasProposal;
   const proposal = useBatchEnrichProposal(proposalReady ? runId : null, proposalReady);
 
-  // 편집 가능한 로컬 사본(제안 로드 시 시드).
+  // 편집 가능한 로컬 사본(제안 로드 시 한 번만 시드 — 이후 server push가 user 편집을 덮지 않음).
+  // prev-compare로 render에서 적용 (set-state-in-effect 회피).
   const [draft, setDraft] = useState<BatchEnrichItem[] | null>(null);
-  useEffect(() => {
-    if (proposal.data && !draft) setDraft(proposal.data.items);
-  }, [proposal.data, draft]);
+  const [seeded, setSeeded] = useState(false);
+  if (proposal.data && !seeded) {
+    setSeeded(true);
+    setDraft(proposal.data.items);
+  }
 
   // 생성 중(터미널 전) 여부를 부모에 보고 — 인박스 버튼 스피너로 표시(여기선 팝업/토스트 안 띄움).
   useEffect(() => {

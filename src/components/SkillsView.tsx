@@ -42,11 +42,18 @@ export function SkillsView() {
 
   // 팔레트에서 스킬을 고르면 그 스킬을 선택(보기/편집)한다 — 한 번만 소비.
   // 동일 선택 핸들러(selectedId) 경로라 자동 실행은 없다(INVARIANT #1).
+  // setState는 prev-compare로 render에서 적용 (set-state-in-effect 회피),
+  // store clear는 진짜 side-effect라 effect 유지.
+  const [prevPending, setPrevPending] = useState(pendingSkillId);
+  if (pendingSkillId !== prevPending) {
+    setPrevPending(pendingSkillId);
+    if (pendingSkillId) {
+      setSelectedId(pendingSkillId);
+      setAdding(false);
+    }
+  }
   useEffect(() => {
-    if (!pendingSkillId) return;
-    setSelectedId(pendingSkillId);
-    setAdding(false);
-    clearPendingSkill();
+    if (pendingSkillId) clearPendingSkill();
   }, [pendingSkillId, clearPendingSkill]);
 
   const list = useMemo(() => skills.data ?? [], [skills.data]);
@@ -225,11 +232,14 @@ function InAppEditor({ skill }: { skill: Skill }) {
   const [name, setName] = useState(skill.name);
   const [note, setNote] = useState<string | null>(null);
 
-  // 다른 스킬로 전환 시 폼 동기화(key로 재마운트하지만 안전망).
-  useEffect(() => {
+  // 다른 스킬로 전환 시 폼 동기화 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
+  // (key 재마운트가 1차 — 이건 안전망.)
+  const [seededId, setSeededId] = useState(skill.id);
+  if (skill.id !== seededId) {
+    setSeededId(skill.id);
     setPrompt(skill.prompt ?? "");
     setName(skill.name);
-  }, [skill.id, skill.prompt, skill.name]);
+  }
 
   const dirty = prompt !== (skill.prompt ?? "") || name !== skill.name;
 

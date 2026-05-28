@@ -131,7 +131,7 @@ export function AgentStatusBar() {
   const { goTo, setCalendarOpen } = useUIStore();
   const runs = useAgentRuns();
   const inboxCounts = useInboxCounts();
-  const list = runs.data ?? [];
+  const list = useMemo(() => runs.data ?? [], [runs.data]);
 
   // hermes/cmux 세션 (agent_runs에 없을 수 있어 별도 enumerate — 표시 전용 INVARIANT #1).
   // Do not initiate a keychain read from the always-mounted status bar.
@@ -142,8 +142,9 @@ export function AgentStatusBar() {
   const focusCmux = useFocusCmuxWorkspace();
 
   // client-side first-seen: 백엔드 timestamp 없는 세션(hermes/cmux)의 경과 기준점.
-  // 표시 전용 — 결정 로직 미사용. 사라진 세션 키는 정리.
-  const firstSeenRef = useRef<Map<string, number>>(new Map());
+  // 표시 전용 — 결정 로직 미사용. 신규 키는 effect에서 등록·사라진 키는 정리(react-hooks/refs).
+  // 신규 키가 처음 보일 한 프레임은 Date.now() fallback("0s")으로 노출되며 직후 effect가 persist.
+  const [firstSeen, setFirstSeen] = useState<Map<string, number>>(() => new Map());
 
   // ── 세션 → 박스 enumerate (codex runs + hermes + cmux) ─────────────────
   const boxes = useMemo<SessionBox[]>(() => {
@@ -164,7 +165,7 @@ export function AgentStatusBar() {
         name: "Hermes",
         state: "idle",
         stateLabel: STATE_LABEL.idle,
-        startedMs: firstSeenMs(firstSeenRef.current, "hermes:bridge"),
+        startedMs: firstSeen.get("hermes:bridge") ?? null,
         timeoutSec: null,
         title: `hermes · ${hermes.data.detail}`,
       });
@@ -184,21 +185,49 @@ export function AgentStatusBar() {
           name: w.title,
           state,
           stateLabel: STATE_LABEL[state],
-          startedMs: state === "working" ? firstSeenMs(firstSeenRef.current, key) : null,
+          startedMs: state === "working" ? (firstSeen.get(key) ?? null) : null,
           timeoutSec: null,
           title: `cmux · ${w.title} (${w.reference})${w.agentStatus ? ` · ${w.agentStatus}` : ""}`,
         });
       }
     }
 
-    // 사라진 세션 키 정리(메모리 누수 방지).
-    pruneFirstSeen(
-      firstSeenRef.current,
-      out.map((b) => b.key),
-    );
-
     return out;
-  }, [list, hermes.data, cmux.data]);
+  }, [list, hermes.data, cmux.data, firstSeen]);
+
+  // hermes/cmux 세션 first-seen 등록 + 사라진 키 정리. Date.now()는 impure라 render에 못 두므로
+  // effect에서만 호출(react-hooks/{refs,purity}). hermes는 connected면 추적, cmux는 working일 때만.
+  // 함수형 updater + 변경 없으면 prev 반환으로 cascading render 차단 — set-state-in-effect 룰의
+  // 회피 의도(불필요 리렌더)는 만족하므로 suppress.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFirstSeen((prev) => {
+      const desired = new Set<string>();
+      if (hermes.data?.configured) desired.add("hermes:bridge");
+      const cmuxData = cmux.data;
+      if (cmuxData?.available) {
+        for (const w of cmuxData.workspaces) {
+          if (cmuxBoxState(w.agentStatus) === "working") desired.add(`cmux:${w.reference}`);
+        }
+      }
+      let changed = false;
+      const next = new Map(prev);
+      const now = Date.now();
+      for (const k of desired) {
+        if (!next.has(k)) {
+          next.set(k, now);
+          changed = true;
+        }
+      }
+      for (const k of next.keys()) {
+        if (!desired.has(k)) {
+          next.delete(k);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [hermes.data, cmux.data]);
 
   // 박스 이름 오버라이드(app_config) — 키별 사용자 지정 라벨. 없으면 box.name fallback.
   const sessionKeys = useMemo(() => boxes.map((b) => b.key), [boxes]);
@@ -471,23 +500,6 @@ function NameEditor({
       }}
     />
   );
-}
-
-/** client first-seen 경과 기준점(epoch ms). 없으면 now로 초기화 후 반환. */
-function firstSeenMs(map: Map<string, number>, key: string): number {
-  const existing = map.get(key);
-  if (existing != null) return existing;
-  const now = Date.now();
-  map.set(key, now);
-  return now;
-}
-
-/** 살아있는 키만 남기고 정리. */
-function pruneFirstSeen(map: Map<string, number>, liveKeys: string[]): void {
-  const live = new Set(liveKeys);
-  for (const k of map.keys()) {
-    if (!live.has(k)) map.delete(k);
-  }
 }
 
 /** '+N' 오버플로 칩 tooltip — 접힌 세션 이름 나열(오버라이드 우선). */

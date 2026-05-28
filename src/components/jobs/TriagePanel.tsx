@@ -1,5 +1,5 @@
 import { Check, ExternalLink, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { AgentRunView, CiTriageProposal } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { openExternal, useAcceptTriage, useRejectProposal, useTriageProposal } from "@/lib/query";
 
-import { ProposalError, prTrigger } from "./jobsUtils";
+import { prTrigger } from "./jobsUtils";
+import { ProposalError } from "./ProposalError";
 
 /**
  * CI triage Proposal 패널 (Phase 9 #3). 원인 가설/수정안/요약을 편집·accept한다. accept는 **로컬 기록**일
@@ -18,10 +19,13 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
   const accept = useAcceptTriage();
   const reject = useRejectProposal();
   const pr = prTrigger(run.trigger);
+  // proposal 로드 시 draft 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
   const [draft, setDraft] = useState<CiTriageProposal | null>(null);
-  useEffect(() => {
-    if (proposal.data) setDraft(proposal.data);
-  }, [proposal.data]);
+  const [seededFrom, setSeededFrom] = useState<CiTriageProposal | null>(null);
+  if (proposal.data && proposal.data !== seededFrom) {
+    setSeededFrom(proposal.data);
+    setDraft(proposal.data);
+  }
 
   if (proposal.isLoading) {
     return (

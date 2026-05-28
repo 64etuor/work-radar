@@ -58,6 +58,15 @@ export default tseslint.config(
     },
   },
   {
+    // shadcn/ui primitive 재-export(`export const Dialog = DialogPrimitive.Root` 등)는
+    // 룰이 컴포넌트로 인식하지 못해 다수 워닝을 낸다. shadcn 본체 컨벤션이라 파일 분리 시
+    // upstream divergence — 디렉터리 단위로 룰을 끈다.
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
+  {
     files: ["scripts/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2022,

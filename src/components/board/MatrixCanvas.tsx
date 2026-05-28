@@ -107,10 +107,13 @@ export function MatrixCanvas({
   const bootedRef = useRef(false);
 
   // 최신 콜백/데이터를 드래그 핸들러가 참조하도록 ref에 보관 (리스너 재바인딩 회피).
+  // 포인터 이벤트는 항상 commit 이후 발생하므로 effect 동기화로 충분(react-hooks/refs).
   const cbRef = useRef({ onClassify, onPromoteToday, onSelect });
-  cbRef.current = { onClassify, onPromoteToday, onSelect };
   const signalsRef = useRef(signals);
-  signalsRef.current = signals;
+  useEffect(() => {
+    cbRef.current = { onClassify, onPromoteToday, onSelect };
+    signalsRef.current = signals;
+  });
 
   const zoneOf = (s: WorkSignal): ZoneKey => quadrantToZone(s.quadrant);
 
@@ -484,16 +487,6 @@ export function MatrixCanvas({
       )}
     </div>
   );
-}
-
-/**
- * 인라인 제목 편집 결과를 정규화한다(순수 함수 — 단위테스트 대상).
- * 트림 후 빈 값이거나 원본과 동일하면 null(저장 안 함). 그 외 트림된 새 제목.
- */
-export function normalizeTitleEdit(next: string, original: string): string | null {
-  const trimmed = next.trim();
-  if (trimmed === "" || trimmed === original.trim()) return null;
-  return trimmed;
 }
 
 /**

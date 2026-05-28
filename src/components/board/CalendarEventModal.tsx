@@ -79,25 +79,30 @@ export function CalendarEventModal({ state, onClose }: Props) {
 
   const calendars = useMemo(() => calendarsQ.data ?? [], [calendarsQ.data]);
 
-  // 모달 열릴 때 폼 시드(제목 prefill, 기본 시간, 기본 캘린더).
+  // 모달 열릴 때 폼 시드 — setState는 prev-compare로 render에서 적용 (set-state-in-effect 회피).
+  const [prevState, setPrevState] = useState(state);
+  if (state !== prevState) {
+    setPrevState(state);
+    if (state) {
+      const t = defaultTimes();
+      setTitle(state.title);
+      setAllDay(false);
+      setStart(t.start);
+      setEnd(t.end);
+      setDescription("");
+    }
+  }
+  // mutation 상태 reset은 진짜 side-effect라 effect 유지.
   useEffect(() => {
-    if (!state) return;
-    const t = defaultTimes();
-    setTitle(state.title);
-    setAllDay(false);
-    setStart(t.start);
-    setEnd(t.end);
-    setDescription("");
-    create.reset();
+    if (state) create.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  // 캘린더 목록이 오면 첫 항목을 기본 선택(아직 선택 없을 때만).
-  useEffect(() => {
-    if (calendars.length > 0 && !calendarId) {
-      setCalendarId(calendars[0].id);
-    }
-  }, [calendars, calendarId]);
+  // 캘린더 목록이 오면 첫 항목을 기본 선택(아직 선택 없을 때만) —
+  // !calendarId 가드로 idempotent하므로 render에서 직접 적용 (set-state-in-effect 회피).
+  if (calendars.length > 0 && !calendarId) {
+    setCalendarId(calendars[0].id);
+  }
 
   // Esc/외부 클릭/창 양보는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
 

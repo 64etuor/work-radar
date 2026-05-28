@@ -1,5 +1,5 @@
 import { Check, ExternalLink, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { AgentRunView, PrSelfCheckProposal, SelfCheckItem } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
@@ -29,11 +29,13 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
   const reject = useRejectProposal();
   const pr = prTrigger(run.trigger);
 
-  // 편집 가능한 로컬 사본 (proposal 로드 시 시드).
+  // 편집 가능한 로컬 사본 — prev-compare로 render에서 시드 (set-state-in-effect 회피).
   const [draft, setDraft] = useState<PrSelfCheckProposal | null>(null);
-  useEffect(() => {
-    if (proposal.data) setDraft(normalizeProposal(proposal.data));
-  }, [proposal.data]);
+  const [seededFrom, setSeededFrom] = useState<PrSelfCheckProposal | null>(null);
+  if (proposal.data && proposal.data !== seededFrom) {
+    setSeededFrom(proposal.data);
+    setDraft(normalizeProposal(proposal.data));
+  }
 
   if (proposal.isLoading) {
     return (

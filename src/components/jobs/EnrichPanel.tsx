@@ -1,5 +1,5 @@
 import { Check, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { AgentRunView, AreaTag, EnrichProposal, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAcceptEnrich, useEnrichProposal, useRejectProposal } from "@/lib/query";
 
 import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "./jobsConstants";
-import { ProposalError } from "./jobsUtils";
+import { ProposalError } from "./ProposalError";
 
 /**
  * enrich Proposal 패널 (Phase 9 #2). 제안 사분면/영역/근거를 편집·accept한다. accept하면 **사람이 확인한
@@ -25,10 +25,13 @@ export function EnrichPanel({ run }: { run: AgentRunView }) {
   const proposal = useEnrichProposal(run.id, true);
   const accept = useAcceptEnrich();
   const reject = useRejectProposal();
+  // proposal 로드 시 draft 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
   const [draft, setDraft] = useState<EnrichProposal | null>(null);
-  useEffect(() => {
-    if (proposal.data) setDraft(proposal.data);
-  }, [proposal.data]);
+  const [seededFrom, setSeededFrom] = useState<EnrichProposal | null>(null);
+  if (proposal.data && proposal.data !== seededFrom) {
+    setSeededFrom(proposal.data);
+    setDraft(proposal.data);
+  }
 
   if (proposal.isLoading) {
     return (

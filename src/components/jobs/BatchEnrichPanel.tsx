@@ -1,5 +1,5 @@
 import { Check, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { AgentRunView, AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
@@ -14,7 +14,7 @@ import {
 import { useAcceptEnrichAll, useBatchEnrichProposal, useRejectProposal } from "@/lib/query";
 
 import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "./jobsConstants";
-import { ProposalError } from "./jobsUtils";
+import { ProposalError } from "./ProposalError";
 
 /**
  * 배치 enrich Proposal 패널 (Phase 15 #4). 미분류 전체를 한 잡으로 enrich한 결과를 **카드별로** 나열하고
@@ -26,10 +26,13 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
   const proposal = useBatchEnrichProposal(run.id, true);
   const accept = useAcceptEnrichAll();
   const reject = useRejectProposal();
+  // proposal 로드 시 draft 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
   const [draft, setDraft] = useState<BatchEnrichItem[] | null>(null);
-  useEffect(() => {
-    if (proposal.data) setDraft(proposal.data.items);
-  }, [proposal.data]);
+  const [seededFrom, setSeededFrom] = useState<BatchEnrichItem[] | null>(null);
+  if (proposal.data && proposal.data.items !== seededFrom) {
+    setSeededFrom(proposal.data.items);
+    setDraft(proposal.data.items);
+  }
 
   if (proposal.isLoading) {
     return (

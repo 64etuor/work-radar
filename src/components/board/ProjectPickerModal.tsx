@@ -1,6 +1,6 @@
 import "./CalendarEventModal.css";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { Project, PromotionTarget } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -38,10 +38,12 @@ type Props = {
 export function ProjectPickerModal({ state, onClose, onPick }: Props) {
   const [selected, setSelected] = useState("");
 
-  // 모달 열릴 때 첫 후보를 기본 선택.
-  useEffect(() => {
+  // 모달 열릴 때 첫 후보를 기본 선택 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
+  const [prevState, setPrevState] = useState(state);
+  if (state !== prevState) {
+    setPrevState(state);
     if (state) setSelected(state.candidates[0]?.id ?? "");
-  }, [state]);
+  }
 
   // Esc/외부 클릭/창 양보·포커스는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
 

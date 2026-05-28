@@ -66,12 +66,13 @@ export function EnrichModal({ runId, onClose }: Props) {
   const proposalReady = status === "awaiting_approval" && hasProposal;
   const proposal = useEnrichProposal(proposalReady ? runId : null, proposalReady);
 
-  // proposal 로드되면 draft 시드
-  useEffect(() => {
-    if (proposal.data && !draft) {
-      setDraft(proposal.data);
-    }
-  }, [proposal.data, draft]);
+  // proposal 로드 시 draft 시드 (한 번만 — 이후 server push가 user 편집을 덮지 않음).
+  // prev-compare로 render에서 적용 (set-state-in-effect 회피).
+  const [seeded, setSeeded] = useState(false);
+  if (proposal.data && !seeded) {
+    setSeeded(true);
+    setDraft(proposal.data);
+  }
 
   // Esc/외부 클릭/창 양보는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
 

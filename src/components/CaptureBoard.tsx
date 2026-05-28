@@ -13,7 +13,8 @@ import { type CalendarModalState } from "@/components/board/CalendarEventModal";
 import { CaptureBoardHeader } from "@/components/board/CaptureBoardHeader";
 import { type CardMenuAction, type CardMenuState } from "@/components/board/CardMenu";
 import { ExecutionRail } from "@/components/board/ExecutionRail";
-import { MatrixCanvas, normalizeTitleEdit } from "@/components/board/MatrixCanvas";
+import { MatrixCanvas } from "@/components/board/MatrixCanvas";
+import { normalizeTitleEdit } from "@/components/board/matrixCanvasUtils";
 import { type ProjectPickerState } from "@/components/board/ProjectPickerModal";
 import { type RoutineDraft } from "@/components/board/RoutinesPanel";
 import {

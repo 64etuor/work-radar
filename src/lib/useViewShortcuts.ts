@@ -39,14 +39,18 @@ export function useViewShortcuts(
   onAction: (actionKey: string) => void,
   onAdjacent?: (dir: -1 | 1) => void,
 ) {
+  // 최신 props를 keydown 리스너에서 안전하게 읽기 위한 ref. keydown은 항상 commit 이후
+  // 발생하므로 effect로 동기화해도 stale 위험이 없다(react-hooks/refs).
   const onActionRef = useRef(onAction);
-  onActionRef.current = onAction;
   const onAdjacentRef = useRef(onAdjacent);
-  onAdjacentRef.current = onAdjacent;
   const keymapRef = useRef(keymap);
-  keymapRef.current = keymap;
   const enabledRef = useRef(enabled);
-  enabledRef.current = enabled;
+  useEffect(() => {
+    onActionRef.current = onAction;
+    onAdjacentRef.current = onAdjacent;
+    keymapRef.current = keymap;
+    enabledRef.current = enabled;
+  });
 
   useEffect(() => {
     let prefix: string | null = null;

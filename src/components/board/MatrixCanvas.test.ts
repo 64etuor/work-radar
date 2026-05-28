@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeTitleEdit } from "@/components/board/MatrixCanvas";
+import { normalizeTitleEdit } from "@/components/board/matrixCanvasUtils";
 
 describe("normalizeTitleEdit", () => {
   it("트림된 새 제목을 반환한다", () => {

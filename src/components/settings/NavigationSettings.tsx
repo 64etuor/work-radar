@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
@@ -40,15 +40,20 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
   const [hkSpec, setHkSpec] = useState("");
   const [hkRecording, setHkRecording] = useState(false);
   const [hkErr, setHkErr] = useState("");
-  useEffect(() => {
+  // 서버 값 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
+  const [hkSeededFrom, setHkSeededFrom] = useState<string | undefined>(undefined);
+  if (hotkey.data !== hkSeededFrom) {
+    setHkSeededFrom(hotkey.data);
     if (hotkey.data) setHkSpec(hotkey.data);
-  }, [hotkey.data]);
+  }
 
   // keymap 드래프트 (action → shortcut spec string).
   const [kmDraft, setKmDraft] = useState<Record<string, string>>({});
-  useEffect(() => {
+  const [kmSeededFrom, setKmSeededFrom] = useState<Record<string, string> | undefined>(undefined);
+  if (keymap.data !== kmSeededFrom) {
+    setKmSeededFrom(keymap.data);
     if (keymap.data) setKmDraft(keymap.data);
-  }, [keymap.data]);
+  }
 
   // 중복 감지: 같은 spec(대소문자 무시)을 2개 이상 액션이 쓰면 그 행을 빨갛게(경고만).
   const specCounts = useMemo(() => {

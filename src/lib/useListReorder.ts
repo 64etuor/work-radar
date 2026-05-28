@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * 공용 세로 리스트 드래그 정렬 훅 (Phase 17 Today, Phase 16 routines 재사용 — spec §1.C).
@@ -27,11 +27,14 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
   // 드롭 대상 id + before/after (인디케이터 표시용).
   const [over, setOver] = useState<{ id: string; before: boolean } | null>(null);
 
-  // 최신 ids/콜백을 pointer 리스너에서 안전하게 읽기 위한 ref.
+  // 최신 ids/콜백을 pointer 리스너에서 안전하게 읽기 위한 ref. 포인터 이벤트는
+  // 항상 commit 이후 발생하므로 effect로 동기화해도 stale 위험이 없다(react-hooks/refs).
   const idsRef = useRef(ids);
-  idsRef.current = ids;
   const cbRef = useRef(onReorder);
-  cbRef.current = onReorder;
+  useEffect(() => {
+    idsRef.current = ids;
+    cbRef.current = onReorder;
+  });
   // id → 항목 DOM(드롭 인덱스 계산용).
   const itemEls = useRef(new Map<string, HTMLElement>());
 
