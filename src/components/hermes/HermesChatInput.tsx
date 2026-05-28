@@ -146,7 +146,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
   }, [text, attachments, onSend]);
 
   return (
-    <div className="border-border/50 relative border-t px-3 py-3">
+    <div className="relative px-3 py-3">
       {isStreaming && (
         <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs">
           <span className="bg-foreground/60 size-1.5 animate-pulse rounded-full" />
@@ -161,19 +161,22 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
                 <img
                   src={convertFileSrc(p)}
                   alt=""
-                  className="border-border/60 size-16 rounded-lg border object-cover"
+                  title={p.split("/").pop()}
+                  className="border-border/60 size-12 rounded-full border object-cover"
                 />
               ) : (
-                <div className="border-border/60 bg-muted/40 flex h-16 min-w-[64px] items-center gap-1.5 rounded-lg border px-2.5 text-xs">
-                  <Paperclip className="h-3 w-3" />
-                  <span className="max-w-[120px] truncate">{p.split("/").pop()}</span>
+                <div
+                  title={p.split("/").pop()}
+                  className="border-border/60 bg-muted/40 flex size-12 items-center justify-center rounded-full border"
+                >
+                  <Paperclip className="size-4" />
                 </div>
               )}
               <button
                 type="button"
                 onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
                 aria-label="첨부 제거"
-                className="bg-foreground text-background absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                className="bg-foreground text-background absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100"
               >
                 <X className="size-3" />
               </button>
@@ -196,7 +199,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
             data-no-drag
             type="button"
             variant="ghost"
-            className="hover:bg-muted/60 absolute top-1/2 left-1.5 size-8 -translate-y-1/2 p-0"
+            className="hover:bg-muted/60 absolute top-1/2 left-1 size-9 -translate-y-1/2 rounded-full p-0"
             onClick={pickFile}
             disabled={disabled}
             aria-label="이미지 첨부"
@@ -205,7 +208,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
           </Button>
           <Textarea
             ref={taRef}
-            className="max-h-[160px] min-h-[44px] resize-none border-0 bg-transparent py-2.5 pr-14 pl-11 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="max-h-[160px] min-h-[44px] resize-none border-0 bg-transparent py-2.5 pr-12 pl-12 focus-visible:ring-0 focus-visible:ring-offset-0"
             value={text}
             onChange={(e) => {
               setText(e.target.value);
@@ -248,7 +251,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
           />
           {isStreaming ? (
             <Button
-              className="absolute top-1/2 right-1.5 size-9 -translate-y-1/2 rounded-full p-0"
+              className="absolute top-1/2 right-1 size-9 -translate-y-1/2 rounded-full p-0"
               variant="destructive"
               onClick={onCancel}
               aria-label="중단"
@@ -257,7 +260,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
             </Button>
           ) : (
             <Button
-              className="absolute top-1/2 right-1.5 size-9 -translate-y-1/2 rounded-full p-0"
+              className="absolute top-1/2 right-1 size-9 -translate-y-1/2 rounded-full p-0"
               onClick={submit}
               disabled={disabled || (!text.trim() && attachments.length === 0)}
               aria-label="전송"

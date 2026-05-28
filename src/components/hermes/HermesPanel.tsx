@@ -197,7 +197,6 @@ function PanelHeader({
         userSelect: "none",
         flexShrink: 0,
       }}
-      className="border-border/50 border-b"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
