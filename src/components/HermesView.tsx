@@ -21,7 +21,7 @@ export default function HermesView() {
         <HermesChatInput
           onSend={agent.send}
           onCancel={agent.cancel}
-          disabled={agent.status !== "ready"}
+          disabled={agent.status === "starting"}
           isStreaming={agent.isStreaming}
           commandsList={agent.commandsList}
         />

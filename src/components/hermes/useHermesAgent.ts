@@ -174,19 +174,32 @@ export function useHermesAgent() {
     }
   }, []);
 
-  const send = useCallback(async (text: string, images: string[] = []) => {
-    if (!text.trim() && images.length === 0) return;
-    dispatch({ type: "user", text, images });
-    try {
-      await unwrap(commands.hermesAgentSend(text, images));
-    } catch (e) {
-      dispatch({
-        type: "system",
-        text: `송신 실패: ${(e as Error).message}`,
-        level: "error",
-      });
-    }
-  }, []);
+  const send = useCallback(
+    async (text: string, images: string[] = []) => {
+      if (!text.trim() && images.length === 0) return;
+      dispatch({ type: "user", text, images });
+      try {
+        if (status === "error" || status === "idle") {
+          // Session is dead or never started — force restart before send.
+          try {
+            await unwrap(commands.hermesAgentStop());
+          } catch {
+            // ignore — best-effort cleanup
+          }
+          setStatus("starting");
+          await unwrap(commands.hermesAgentStart());
+        }
+        await unwrap(commands.hermesAgentSend(text, images));
+      } catch (e) {
+        dispatch({
+          type: "system",
+          text: `송신 실패: ${(e as Error).message}`,
+          level: "error",
+        });
+      }
+    },
+    [status],
+  );
 
   const cancel = useCallback(async () => {
     try {
