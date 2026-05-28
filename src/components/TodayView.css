@@ -215,6 +215,35 @@
   text-overflow: ellipsis;
 }
 
+/* 캔버스→트레이 드래그 시 인박스 카드 형태로 전환되는 ghost. PostitCard 비주얼 차용. */
+.today-drag-ghost--card {
+  display: block;
+  width: 150px;
+  max-width: 150px;
+  min-height: 74px;
+  padding: 8px 10px;
+  background: var(--wr-postit-bg, #fffdf3);
+  border: 1px solid var(--wr-border, #d9d4c7);
+  border-left: 4px solid var(--color-today-signal, #4a7bb8);
+  border-radius: 4px;
+  box-shadow:
+    0 8px 22px rgba(15, 20, 40, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.06);
+  transform: rotate(-1.5deg);
+}
+
+.today-drag-ghost-card-title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--wr-text, #1f2430);
+  white-space: normal;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
 .today-drag-ghost-resize {
   width: 60px;
   height: 6px;

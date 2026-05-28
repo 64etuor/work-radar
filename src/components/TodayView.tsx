@@ -1,6 +1,6 @@
 import "./TodayView.css";
 
-import type { DragMoveEvent } from "@dnd-kit/core";
+import type { DragMoveEvent, DragOverEvent } from "@dnd-kit/core";
 import { DragOverlay } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -228,6 +228,7 @@ export function TodayView() {
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
   const [activeDelta, setActiveDelta] = useState<DragDelta | null>(null);
+  const [isOverTray, setIsOverTray] = useState(false);
   const activeDragStartRef = useRef<DragData | null>(null);
   const handleDragStart = useCallback(
     (ev: { active: { id: string | number; data: { current?: unknown } } }) => {
@@ -235,17 +236,22 @@ export function TodayView() {
       activeDragStartRef.current = data;
       setActiveDrag(data);
       setActiveDelta({ x: 0, y: 0 });
+      setIsOverTray(false);
     },
     [],
   );
   const handleDragMove = useCallback((ev: DragMoveEvent) => {
     setActiveDelta(ev.delta);
   }, []);
+  const handleDragOver = useCallback((ev: DragOverEvent) => {
+    setIsOverTray(ev.over?.id === "today-tray");
+  }, []);
   const handleDragEndWithReset = useCallback(
     async (ev: Parameters<typeof onDragEnd>[0]) => {
       const activeAtStart = activeDragStartRef.current;
       setActiveDrag(null);
       setActiveDelta(null);
+      setIsOverTray(false);
       activeDragStartRef.current = null;
       await onDragEnd(ev, activeAtStart);
     },
@@ -255,6 +261,7 @@ export function TodayView() {
     activeDragStartRef.current = null;
     setActiveDrag(null);
     setActiveDelta(null);
+    setIsOverTray(false);
   }, []);
 
   const pickerSignalProjectId = useMemo(() => {
@@ -267,6 +274,7 @@ export function TodayView() {
       sensors={sensors}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEndWithReset}
       onDragCancel={handleDragCancel}
     >
@@ -342,7 +350,7 @@ export function TodayView() {
         )}
       </div>
       <DragOverlay dropAnimation={null}>
-        {activeDrag ? <DragGhost data={activeDrag} /> : null}
+        {activeDrag ? <DragGhost data={activeDrag} isOverTray={isOverTray} /> : null}
       </DragOverlay>
     </DndContext>
   );
@@ -351,14 +359,23 @@ export function TodayView() {
 /**
  * 드래그 중 cursor를 따라다니는 ghost. dnd-kit `DragOverlay`는 Portal 렌더,
  * pointer 이벤트 무시 — Notion/Linear 류 "옮기는 느낌" 제공.
+ * 캔버스 블록을 트레이 위로 끌면 인박스 카드 형태로 ghost를 전환해 unschedule 의도를 시각화.
  */
-function DragGhost({ data }: { data: DragData }) {
-  if (data.from === "canvas") return null;
-  const title = data.from === "tray" || data.from === "routine" ? data.title : "block";
+function DragGhost({ data, isOverTray }: { data: DragData; isOverTray: boolean }) {
   const isResize = data.from === "canvas-resize";
   if (isResize) {
     return <div className="today-drag-ghost today-drag-ghost-resize" />;
   }
+  if (data.from === "canvas") {
+    if (!isOverTray) return null;
+    // 캔버스→트레이 드래그: 인박스 카드 비주얼로 전환(unschedule 미리보기).
+    return (
+      <div className="today-drag-ghost today-drag-ghost--card">
+        <div className="today-drag-ghost-card-title">{data.title}</div>
+      </div>
+    );
+  }
+  const title = data.from === "tray" || data.from === "routine" ? data.title : "block";
   return (
     <div className="today-drag-ghost">
       <span className="today-drag-ghost-grip" aria-hidden>
