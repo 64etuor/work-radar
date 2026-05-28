@@ -146,7 +146,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
   }, [text, attachments, onSend]);
 
   return (
-    <div className="relative px-3 py-3">
+    <div className="relative px-4 py-4">
       {isStreaming && (
         <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs">
           <span className="bg-foreground/60 size-1.5 animate-pulse rounded-full" />
@@ -154,7 +154,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
         </div>
       )}
       {attachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex flex-wrap gap-2">
           {attachments.map((p, i) => (
             <div key={p + i} className="group relative">
               {isImagePath(p) ? (
