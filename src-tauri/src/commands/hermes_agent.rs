@@ -130,3 +130,26 @@ pub async fn hermes_agent_stop(holder: State<'_, HermesAgentHolder>) -> Result<(
     }
     Ok(())
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn hermes_save_pasted_image(bytes: Vec<u8>, ext: String) -> Result<String, AppError> {
+    let safe_ext = match ext.to_ascii_lowercase().as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "webp" => ext.to_ascii_lowercase(),
+        _ => "png".to_string(),
+    };
+    let id = uuid::Uuid::new_v4();
+    let path = std::env::temp_dir().join(format!("hermes-paste-{}.{}", id, safe_ext));
+    tokio::fs::write(&path, &bytes)
+        .await
+        .map_err(|e| AppError::unexpected("hermes.image.write", e.to_string()))?;
+
+    // Schedule cleanup 5 minutes later (fire-and-forget).
+    let cleanup_path = path.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+        let _ = tokio::fs::remove_file(cleanup_path).await;
+    });
+
+    Ok(path.to_string_lossy().to_string())
+}

@@ -210,6 +210,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::hermes_agent::hermes_agent_send,
         commands::hermes_agent::hermes_agent_cancel,
         commands::hermes_agent::hermes_agent_stop,
+        // Hermes 임시 이미지 저장 (feat/hermes-floating C4).
+        commands::hermes_agent::hermes_save_pasted_image,
         // Hermes 글로벌 토글 핫키 (feat/hermes-floating A2).
         commands::hermes_get_toggle_hotkey,
         commands::hermes_set_toggle_hotkey,
