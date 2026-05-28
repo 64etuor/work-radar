@@ -1,6 +1,6 @@
 import "./EnrichReviewPanel.css";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { AreaTag, BatchEnrichItem, Quadrant } from "@/bindings";
 import { AREA_NONE, AREA_OPTS, QUADRANT_OPTS } from "@/components/jobs/jobsConstants";
@@ -26,8 +26,6 @@ type Props = {
   runId: string;
   /** 패널 닫기(부모가 enrichAllRunId를 null로). */
   onClose: () => void;
-  /** 생성 중(터미널 전) 여부 보고 — 인박스 버튼 스피너 표시용(토스트/팝업 대신). */
-  onRunningChange?: (running: boolean) => void;
 };
 
 /**
@@ -42,7 +40,7 @@ type Props = {
  * 상태: running=진행 표시 · empty="제안 없음" · error=재시도(잡 reject은 부모가 닫기로 처리) ·
  * partial=skipped 카운트 노출. (Jobs 페이지 BatchEnrichPanel을 점프 없이 인라인으로 이전.)
  */
-export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
+export function EnrichReviewPanel({ runId, onClose }: Props) {
   const { pushSuccess, pushError } = useToastStore();
   const acceptEnrichAll = useAcceptEnrichAll();
 
@@ -69,10 +67,8 @@ export function EnrichReviewPanel({ runId, onClose, onRunningChange }: Props) {
     setDraft(proposal.data.items);
   }
 
-  // 생성 중(터미널 전) 여부를 부모에 보고 — 인박스 버튼 스피너로 표시(여기선 팝업/토스트 안 띄움).
-  useEffect(() => {
-    onRunningChange?.(!AGENT_TERMINAL_STATUSES.has(status));
-  }, [status, onRunningChange]);
+  // 생성 중 진행 표시는 `useEnrichAllRunning(runId)`이 store의 enrichAllRunId로 직접 파생한다
+  // (CaptureBoard 등 형제 컨슈머가 같은 query를 구독 — useEffect 콜백-푸시 anti-pattern 제거).
 
   const items = draft ?? proposal.data?.items ?? [];
   const skipped = proposal.data?.skipped ?? 0;

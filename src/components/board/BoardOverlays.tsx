@@ -18,7 +18,6 @@ export function BoardOverlays({
   onProjectPick,
   onEnrichClose,
   onEnrichAllClose,
-  onEnrichAllRunningChange,
 }: {
   menu: CardMenuState | null;
   calendarModal: CalendarModalState | null;
@@ -33,17 +32,10 @@ export function BoardOverlays({
   onProjectPick: (projectId: string) => void;
   onEnrichClose: () => void;
   onEnrichAllClose: () => void;
-  onEnrichAllRunningChange: (running: boolean) => void;
 }) {
   return (
     <>
-      {enrichAllRunId && (
-        <EnrichReviewPanel
-          runId={enrichAllRunId}
-          onClose={onEnrichAllClose}
-          onRunningChange={onEnrichAllRunningChange}
-        />
-      )}
+      {enrichAllRunId && <EnrichReviewPanel runId={enrichAllRunId} onClose={onEnrichAllClose} />}
       <CardMenu state={menu} onAct={onMenuAction} onClose={onMenuClose} codexReady={codexReady} />
       <CalendarEventModal state={calendarModal} onClose={onCalendarClose} />
       <ProjectPickerModal

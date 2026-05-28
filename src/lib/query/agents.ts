@@ -51,6 +51,19 @@ export function useAgentRunStatus(runId: string | null, opts?: { pollMs?: number
   });
 }
 
+/**
+ * `useAgentRunStatus` 위에 얹은 파생 boolean — runId가 비어있거나 terminal에 도달하면 false.
+ * lift-to-Provider 원칙: `enrich_all` 진행 표시를 useEffect로 부모에 push하지 않고,
+ * 같은 query를 구독하는 쪽 모두가 SSOT(agent run status)에서 직접 파생.
+ */
+export function useEnrichAllRunning(runId: string | null): boolean {
+  const status = useAgentRunStatus(runId);
+  if (!runId) return false;
+  const s = status.data?.status;
+  if (!s) return true; // 첫 로드 전엔 generating 가정(스피너 유지).
+  return !AGENT_TERMINAL_STATUSES.has(s);
+}
+
 /** codex 설치/인증 상태 (자동화 UI 활성/비활성 판정). */
 export function useCodexStatus() {
   return useQuery({

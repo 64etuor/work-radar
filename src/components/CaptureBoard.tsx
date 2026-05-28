@@ -29,6 +29,7 @@ import {
   useCreateSignal,
   useDeleteRoutine,
   useDeleteSignal,
+  useEnrichAllRunning,
   useFlushPromotions,
   useLifeWheelTags,
   useProjects,
@@ -110,7 +111,9 @@ export function CaptureBoard() {
   const triggerEnrichAll = useTriggerEnrichAll();
   const updateTitle = useUpdateSignalTitle();
   const deleteSignal = useDeleteSignal();
-  const { goTo, enrichAllGenerating, setEnrichAllRunId } = useUIStore();
+  const { goTo, enrichAllRunId, setEnrichAllRunId } = useUIStore();
+  // enrich_all 진행 표시는 agent run status에서 직접 파생 (SSOT — store 브릿지 없음).
+  const enrichAllAgentRunning = useEnrichAllRunning(enrichAllRunId);
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
@@ -534,7 +537,7 @@ export function CaptureBoard() {
           onSetAreaTagKey={(id, tagKey) => setAreaTagKey.mutate({ id, tagKey })}
           lifeWheelTags={lifeWheelTags.data ?? []}
           enrichAllDisabled={!codexReady || unclassifiedCount === 0 || triggerEnrichAll.isPending}
-          enrichAllRunning={triggerEnrichAll.isPending || enrichAllGenerating}
+          enrichAllRunning={triggerEnrichAll.isPending || enrichAllAgentRunning}
           todayPanelRef={todayPanelRef}
           onCapture={handleCapture}
           captureInputRef={captureInputRef}
@@ -578,7 +581,6 @@ export function CaptureBoard() {
         onProjectPick={handleProjectPick}
         onEnrichClose={() => setEnrichRunId(null)}
         onEnrichAllClose={() => setEnrichAllRunId(null)}
-        onEnrichAllRunningChange={() => undefined}
       />
     </div>
   );

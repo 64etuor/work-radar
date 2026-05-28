@@ -68,7 +68,6 @@ export default function App() {
     setCalendarOpen,
     enrichAllRunId,
     setEnrichAllRunId,
-    setEnrichAllGenerating,
   } = useUIStore();
   const [viewSnapshot, setViewSnapshot] = useState<ViewSnapshot | null>(null);
   const viewSnapshotIdRef = useRef(0);
@@ -205,14 +204,7 @@ export default function App() {
       {/* 전역 캘린더 드로어 — 에이전트 바 우측 아이콘 / ⌘⇧C 로 토글, 모든 뷰 위에 슬라이드. */}
       <CalendarDrawer open={calendarOpen} onClose={() => setCalendarOpen(false)} />
       {enrichAllRunId && (
-        <EnrichReviewPanel
-          runId={enrichAllRunId}
-          onClose={() => {
-            setEnrichAllRunId(null);
-            setEnrichAllGenerating(false);
-          }}
-          onRunningChange={setEnrichAllGenerating}
-        />
+        <EnrichReviewPanel runId={enrichAllRunId} onClose={() => setEnrichAllRunId(null)} />
       )}
       {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
       <ToastHost />
