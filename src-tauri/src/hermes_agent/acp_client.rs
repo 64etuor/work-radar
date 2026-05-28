@@ -172,7 +172,7 @@ impl AcpSession {
                 "initialize",
                 json!({
                     "protocolVersion": 1,
-                    "clientCapabilities": { "fs": {}, "terminal": {} }
+                    "clientCapabilities": { "fs": {}, "terminal": false }
                 }),
                 10,
             )
