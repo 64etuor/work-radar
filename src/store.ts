@@ -54,28 +54,13 @@ function initialFont(): FontPreset {
   }
 }
 
-/** Acked run ids — localStorage 영속(상한 200, 가장 오래된 것부터 절단). */
-const ACKED_RUNS_KEY = "wr-agent-bar-acked";
-const ACKED_RUNS_CAP = 200;
-function loadAckedRuns(): Set<string> {
-  try {
-    const raw = localStorage.getItem(ACKED_RUNS_KEY);
-    if (!raw) return new Set();
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((v): v is string => typeof v === "string"));
-  } catch {
-    return new Set();
-  }
-}
-function persistAckedRuns(set: Set<string>): void {
-  try {
-    let arr = Array.from(set);
-    if (arr.length > ACKED_RUNS_CAP) arr = arr.slice(arr.length - ACKED_RUNS_CAP);
-    localStorage.setItem(ACKED_RUNS_KEY, JSON.stringify(arr));
-  } catch {
-    /* private mode 등 — 무시 */
-  }
+// 이전엔 acked run ids를 localStorage에 보관했다(cap=200, silently trim). 캐시 클리어/리인스톨/
+// cap 초과 시 잡이 바에 재출현하는 회귀가 있어 `agent_runs.acked_at` 컬럼(0036 마이그레이션)로
+// 옮겼다. 잔존 키는 부팅 시 1회 정리(다음 릴리즈에서 제거 가능).
+try {
+  localStorage.removeItem("wr-agent-bar-acked");
+} catch {
+  /* private mode 등 — 무시 */
 }
 
 /** 경량 UI 상태 (Zustand). 데이터는 TanStack Query가, 화면/팔레트 상태는 여기서. */
@@ -95,12 +80,6 @@ interface UIState {
    * 자동 오픈 금지(INVARIANT #1 표시 전용 — 사람이 클릭해야 결과를 본다). */
   openAgentRunId: string | null;
   setOpenAgentRunId: (runId: string | null) => void;
-  /** 사용자가 한 번 본 종료 잡(succeeded/failed/cancelled) — 바에서 숨김.
-   * 활성 잡(running/proposed/awaiting_approval)은 무관. localStorage 영속. */
-  ackedRunIds: Set<string>;
-  ackRun: (runId: string) => void;
-  /** 현재 존재하는 run id 집합으로 교차 — 백엔드가 영구 삭제한 id를 정리(메모리/저장 bound). */
-  pruneAckedRuns: (presentIds: Iterable<string>) => void;
   /** Settings 뷰 진입 시 포커스 의도 (한 번 소비). */
   settingsIntent: SettingsIntent;
   /** 팔레트에서 고른 스킬 id (한 번 소비). SkillsView가 읽어 선택 후 clear. */
@@ -133,28 +112,6 @@ export const useUIStore = create<UIState>((set) => ({
   setCalendarOpen: (calendarOpen) => set({ calendarOpen }),
   openAgentRunId: null,
   setOpenAgentRunId: (openAgentRunId) => set({ openAgentRunId }),
-  ackedRunIds: loadAckedRuns(),
-  ackRun: (runId) =>
-    set((s) => {
-      if (s.ackedRunIds.has(runId)) return s;
-      const next = new Set(s.ackedRunIds);
-      next.add(runId);
-      persistAckedRuns(next);
-      return { ackedRunIds: next };
-    }),
-  pruneAckedRuns: (presentIds) =>
-    set((s) => {
-      const present = presentIds instanceof Set ? presentIds : new Set(presentIds);
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of s.ackedRunIds) {
-        if (present.has(id)) next.add(id);
-        else changed = true;
-      }
-      if (!changed) return s;
-      persistAckedRuns(next);
-      return { ackedRunIds: next };
-    }),
   settingsIntent: "open",
   pendingSkillId: null,
   theme: initialTheme(),

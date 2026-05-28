@@ -1,9 +1,8 @@
 import { useState } from "react";
 
 import { JobCard } from "@/components/jobs/JobCard";
-import { isFinishedJobStatus } from "@/components/jobs/jobsConstants";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { useAgentLogs, useAgentRuns, useKillAgentRun } from "@/lib/query";
+import { useAckAgentRun, useAgentLogs, useAgentRuns, useKillAgentRun } from "@/lib/query";
 import { useUIStore } from "@/store";
 
 /**
@@ -14,12 +13,14 @@ import { useUIStore } from "@/store";
  * awaiting_approval 시 `ProposalPanel` per-kind 디스패치를 한 곳에서 처리한다.
  *
  * INVARIANT #1: 표시 전용 — 어떤 결정도 자동 적용하지 않는다. awaiting_approval accept는 사람이.
- * 모달이 닫힐 때 최종 종료(succeeded/failed/cancelled) 잡이면 `ackRun`으로 바에서 숨긴다(localStorage 영속).
+ * 모달 close 시 SQLite SSOT(`agent_runs.acked_at`)에 무조건 마킹한다. 활성 잡은 표시 로직이
+ * 우선 노출하므로 ack가 와도 보이고, 종료되는 순간 acked로 바에서 자동으로 사라진다.
+ * 이전 localStorage 정책(`ackedRunIds`)은 cap-trim/캐시 클리어 회귀 때문에 폐기됨.
  */
 export function AgentRunModal() {
   const openAgentRunId = useUIStore((s) => s.openAgentRunId);
   const setOpen = useUIStore((s) => s.setOpenAgentRunId);
-  const ackRun = useUIStore((s) => s.ackRun);
+  const ackAgentRun = useAckAgentRun();
 
   const runs = useAgentRuns();
   const run = runs.data?.find((r) => r.id === openAgentRunId) ?? null;
@@ -32,7 +33,7 @@ export function AgentRunModal() {
 
   const handleOpenChange = (next: boolean) => {
     if (next) return;
-    if (openAgentRunId && run && isFinishedJobStatus(run.status)) ackRun(openAgentRunId);
+    if (openAgentRunId) ackAgentRun.mutate(openAgentRunId);
     setOpen(null);
     setLogOpen(false);
   };

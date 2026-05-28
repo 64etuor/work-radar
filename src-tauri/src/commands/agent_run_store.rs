@@ -33,6 +33,7 @@ struct AgentRunRecord {
     heartbeat_at: Option<String>,
     recovery_count: i64,
     finished_at: Option<String>,
+    acked_at: Option<String>,
 }
 
 /// result JSON({detail|error})에서 사람이 읽을 상세를 뽑는다(jobs/agents 공통 — 단일 정의).
@@ -72,6 +73,7 @@ impl From<AgentRunRecord> for AgentRunView {
             heartbeat_at: r.heartbeat_at,
             recovery_count: r.recovery_count.max(0) as u32,
             finished_at: r.finished_at,
+            acked_at: r.acked_at,
         }
     }
 }
@@ -110,12 +112,25 @@ pub(crate) async fn fetch_agent_runs(db: &Db) -> Result<Vec<AgentRunView>, sqlx:
     let rows: Vec<AgentRunRecord> = sqlx::query_as(
         "SELECT id, project_id, engine, kind, rail, sandbox, status, timeout_sec, max_turns, \
          cost_cap_usd, cost_tokens, cost_usd, repo_id, workdir, log_path, result, trigger, proposal, \
-         created_at, started_at, heartbeat_at, recovery_count, finished_at \
+         created_at, started_at, heartbeat_at, recovery_count, finished_at, acked_at \
          FROM agent_runs ORDER BY created_at DESC, id DESC LIMIT 100",
     )
     .fetch_all(db)
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
+}
+
+/// 사용자가 결과 모달을 닫아 "확인 완료" 마킹. 이미 acked면 그대로 둔다(보존). NULL→datetime.
+/// 활성/종료 무관 모든 잡에 허용한다 — 활성 잡은 표시 로직(`isActiveJobStatus`)이 계속 보이게
+/// 하다가 finished 전환되는 순간 acked_at이 있으므로 바에서 자동으로 사라진다.
+pub(crate) async fn ack_agent_run(db: &Db, run_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE agent_runs SET acked_at = COALESCE(acked_at, datetime('now')) WHERE id = ?1",
+    )
+    .bind(run_id)
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// 잡 로그 tail(최대 16KB). log_path가 없거나 파일이 없으면 빈 문자열.

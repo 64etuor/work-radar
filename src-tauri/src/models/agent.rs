@@ -122,6 +122,9 @@ pub struct AgentRunView {
     pub heartbeat_at: Option<String>,
     pub recovery_count: u32,
     pub finished_at: Option<String>,
+    /// 사용자가 결과 모달을 닫아 "확인 완료" 마킹한 시각. NULL = 아직 확인 안 함.
+    /// 표시 로직: 종료 잡(`isFinished`)은 acked_at이 NULL일 때만 바에 노출 — 한 번 확인하면 끝.
+    pub acked_at: Option<String>,
 }
 
 /// codex CLI 가용성 (graceful degrade 판정 — 미설치/미인증이면 자동화 UI 비활성).

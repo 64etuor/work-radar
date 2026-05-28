@@ -218,6 +218,12 @@ export const commands = {
 	listAgentRuns: () => typedError<AgentRunView[], AppError>(__TAURI_INVOKE("list_agent_runs")),
 	/**  잡 kill switch. 실행/대기 중이면 취소(true), 이미 끝났으면 false. */
 	killAgentRun: (runId: string) => typedError<boolean, AppError>(__TAURI_INVOKE("kill_agent_run", { runId })),
+	/**
+	 *  결과 모달 close 시 "확인 완료" 마킹. 이미 마킹돼 있으면 no-op(시각 보존). 활성 잡에 대해
+	 *  호출돼도 안전 — 표시 로직이 `isActiveJobStatus`로 먼저 걸러 활성인 동안엔 계속 노출된다.
+	 *  이전 클라이언트 localStorage(`ackedRunIds`) 정책 대체 (cap-trim/캐시 클리어 회귀 차단).
+	 */
+	ackAgentRun: (runId: string) => typedError<null, AppError>(__TAURI_INVOKE("ack_agent_run", { runId })),
 	/**  잡 로그 tail(최대 16KB) — Jobs 뷰 로그 패널. */
 	readAgentLog: (runId: string) => typedError<string, AppError>(__TAURI_INVOKE("read_agent_log", { runId })),
 	/**
@@ -587,6 +593,11 @@ export type AgentRunView = {
 	heartbeatAt: string | null,
 	recoveryCount: number,
 	finishedAt: string | null,
+	/**
+	 *  사용자가 결과 모달을 닫아 "확인 완료" 마킹한 시각. NULL = 아직 확인 안 함.
+	 *  표시 로직: 종료 잡(`isFinished`)은 acked_at이 NULL일 때만 바에 노출 — 한 번 확인하면 끝.
+	 */
+	ackedAt: string | null,
 };
 
 /**

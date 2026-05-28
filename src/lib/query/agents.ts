@@ -110,6 +110,18 @@ export function useKillAgentRun() {
   });
 }
 
+/**
+ * 결과 모달 close 시 "확인 완료" 마킹(SQLite SSOT — `agent_runs.acked_at`).
+ * 활성 잡에 호출돼도 무해 — 표시 로직이 활성 상태 우선이라 종료될 때 자동으로 바에서 사라진다.
+ */
+export function useAckAgentRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => unwrap(commands.ackAgentRun(runId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
 /** 여러 잡 로그 tail. JobsView가 log-open state와 query ownership을 함께 소유한다. */
 export function useAgentLogs(runIds: string[]) {
   const results = useQueries({

@@ -213,6 +213,15 @@ pub async fn kill_agent_run(jm: State<'_, JobManager>, run_id: String) -> Result
     Ok(jm.kill(&run_id))
 }
 
+/// 결과 모달 close 시 "확인 완료" 마킹. 이미 마킹돼 있으면 no-op(시각 보존). 활성 잡에 대해
+/// 호출돼도 안전 — 표시 로직이 `isActiveJobStatus`로 먼저 걸러 활성인 동안엔 계속 노출된다.
+/// 이전 클라이언트 localStorage(`ackedRunIds`) 정책 대체 (cap-trim/캐시 클리어 회귀 차단).
+#[tauri::command]
+#[specta::specta]
+pub async fn ack_agent_run(db: State<'_, Db>, run_id: String) -> Result<(), AppError> {
+    Ok(crate::commands::agent_run_store::ack_agent_run(db.inner(), &run_id).await?)
+}
+
 /// 잡 로그 tail(최대 16KB) — Jobs 뷰 로그 패널.
 #[tauri::command]
 #[specta::specta]
