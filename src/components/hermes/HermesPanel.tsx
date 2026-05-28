@@ -24,9 +24,11 @@ const PANEL_QUERY_KEY = ["hermes-panel-state"] as const;
 export function HermesPanel({
   children,
   onRestart,
+  isStreaming,
 }: {
   children: React.ReactNode;
   onRestart?: () => void;
+  isStreaming?: boolean;
 }) {
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
   const qc = useQueryClient();
@@ -127,6 +129,7 @@ export function HermesPanel({
         onBoundsChange={setBounds}
         onClose={() => setOpen(false)}
         onRestart={onRestart}
+        isStreaming={isStreaming}
       />
 
       {/* ── 본문 ───────────────────────────────────────────────── */}
@@ -156,7 +159,8 @@ function PanelHeader({
   onBoundsChange,
   onClose,
   onRestart,
-}: BoundsProps & { onClose: () => void; onRestart?: () => void }) {
+  isStreaming,
+}: BoundsProps & { onClose: () => void; onRestart?: () => void; isStreaming?: boolean }) {
   const dragRef = useRef<{
     startPx: number;
     startPy: number;
@@ -202,7 +206,19 @@ function PanelHeader({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <span className="flex-1 text-sm font-medium tracking-tight">Hermes</span>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="text-sm font-medium tracking-tight">Hermes</span>
+        {isStreaming && (
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+            <span className="inline-flex gap-0.5" aria-hidden>
+              <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current" />
+              <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current [animation-delay:0.15s]" />
+              <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current [animation-delay:0.3s]" />
+            </span>
+            작성 중
+          </span>
+        )}
+      </span>
       <div className="flex items-center gap-1" data-no-drag>
         {onRestart && (
           <Button

@@ -15,7 +15,7 @@ export default function HermesView() {
   }, []);
 
   return (
-    <HermesPanel onRestart={agent.restart}>
+    <HermesPanel onRestart={agent.restart} isStreaming={agent.isStreaming}>
       <div className="flex min-h-0 flex-1 flex-col">
         <HermesChatLog messages={agent.messages} />
         <HermesChatInput

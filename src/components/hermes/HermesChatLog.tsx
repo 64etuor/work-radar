@@ -6,9 +6,16 @@ import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 import type { HermesMessage, ToolCallSummary } from "./types";
+import { useTypewriter } from "./useTypewriter";
 
 interface Props {
   messages: HermesMessage[];
+}
+
+/** Tool pill title with typewriter reveal. */
+function ToolPillTitle({ title }: { title: string }) {
+  const revealed = useTypewriter(title);
+  return <span className="font-mono">{revealed}</span>;
 }
 
 function ToolCallPill({ t }: { t: ToolCallSummary }) {
@@ -32,7 +39,7 @@ function ToolCallPill({ t }: { t: ToolCallSummary }) {
         className="border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors"
       >
         <Wrench className="size-3 shrink-0" />
-        <span className="font-mono">{t.kind ?? t.title}</span>
+        <ToolPillTitle title={t.kind ?? t.title} />
         {statusIcon}
       </button>
       {expanded && (
@@ -42,6 +49,39 @@ function ToolCallPill({ t }: { t: ToolCallSummary }) {
           {t.id ? `\nid: ${t.id}` : ""}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Assistant message bubble with typewriter text reveal. */
+function AssistantBubble({
+  m,
+  instant,
+}: {
+  m: Extract<HermesMessage, { role: "assistant" }>;
+  instant?: boolean;
+}) {
+  const fullText = m.chunks.join("");
+  const revealed = useTypewriter(fullText, { instant });
+  const isTyping = revealed.length < fullText.length;
+
+  return (
+    <div className="max-w-full min-w-0">
+      {m.toolCalls.length > 0 && (
+        <div className="mb-1.5 flex flex-col gap-1.5">
+          {m.toolCalls.map((t, i) => (
+            <ToolCallPill key={t.id ?? i} t={t} />
+          ))}
+        </div>
+      )}
+      <div className="[&_code]:bg-muted [&_pre]:bg-muted [&_a]:text-foreground/80 [&_blockquote]:border-border [&_blockquote]:text-muted-foreground text-sm leading-relaxed [overflow-wrap:anywhere] break-words [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-2 [&_code]:rounded [&_code]:px-1 [&_code]:text-xs [&_h1]:text-base [&_h1]:font-medium [&_h2]:text-sm [&_h2]:font-medium [&_h3]:text-sm [&_h3]:font-medium [&_ol]:my-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:my-1 [&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_ul]:my-1 [&_ul]:ml-4 [&_ul]:list-disc">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{revealed}</ReactMarkdown>
+        {(!m.done || isTyping) && (
+          <span data-cursor className="ml-0.5 inline-block animate-pulse opacity-50">
+            ▍
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -116,23 +156,7 @@ export function HermesChatLog({ messages }: Props) {
                   )}
                 </div>
               )}
-              {m.role === "assistant" && (
-                <div className="max-w-full min-w-0">
-                  {m.toolCalls.length > 0 && (
-                    <div className="mb-1.5 flex flex-col gap-1.5">
-                      {m.toolCalls.map((t, i) => (
-                        <ToolCallPill key={t.id ?? i} t={t} />
-                      ))}
-                    </div>
-                  )}
-                  <div className="[&_code]:bg-muted [&_pre]:bg-muted [&_a]:text-foreground/80 [&_blockquote]:border-border [&_blockquote]:text-muted-foreground text-sm leading-relaxed [overflow-wrap:anywhere] break-words [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-2 [&_code]:rounded [&_code]:px-1 [&_code]:text-xs [&_h1]:text-base [&_h1]:font-medium [&_h2]:text-sm [&_h2]:font-medium [&_h3]:text-sm [&_h3]:font-medium [&_ol]:my-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:my-1 [&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_ul]:my-1 [&_ul]:ml-4 [&_ul]:list-disc">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.chunks.join("")}</ReactMarkdown>
-                    {!m.done && (
-                      <span className="ml-0.5 inline-block animate-pulse opacity-50">▍</span>
-                    )}
-                  </div>
-                </div>
-              )}
+              {m.role === "assistant" && <AssistantBubble m={m} instant={false} />}
               {m.role === "system" && (
                 <p
                   className={cn(

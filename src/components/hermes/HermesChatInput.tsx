@@ -147,12 +147,6 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
 
   return (
     <div className="relative px-4 py-4">
-      {isStreaming && (
-        <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs">
-          <span className="bg-foreground/60 size-1.5 animate-pulse rounded-full" />
-          Hermes가 작성 중…
-        </div>
-      )}
       {attachments.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
           {attachments.map((p, i) => (
