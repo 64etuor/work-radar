@@ -13,6 +13,7 @@ import {
   useSetNavKeymap,
 } from "@/lib/query";
 
+import { HotkeyCapture } from "./HotkeyCapture";
 import { SectionLabel } from "./SettingsKit";
 
 /** 키맵 에디터 행: view + EXTRA_ACTIONS(calendar 등)를 한 목록으로. */
@@ -38,7 +39,6 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
 
   // 글로벌 핫키 — 캡처된 사람 읽을 수 있는 라벨 / 서버 저장 spec.
   const [hkSpec, setHkSpec] = useState("");
-  const [hkRecording, setHkRecording] = useState(false);
   const [hkErr, setHkErr] = useState("");
   // 서버 값 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
   const [hkSeededFrom, setHkSeededFrom] = useState<string | undefined>(undefined);
@@ -124,12 +124,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
       {/* 글로벌 창 핫키 — 키 캡처 */}
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground min-w-[96px] text-xs">글로벌 창 핫키</span>
-        <GlobalHotkeyCapture
-          value={hkSpec}
-          onChange={setHkSpec}
-          recording={hkRecording}
-          setRecording={setHkRecording}
-        />
+        <HotkeyCapture value={hkSpec} onChange={setHkSpec} />
         <Button
           size="sm"
           onClick={saveHotkey}
@@ -195,67 +190,6 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
       {hotkey.isError && (
         <p className="text-xs text-[color:var(--destructive)]">{String(hotkey.error)}</p>
       )}
-    </div>
-  );
-}
-
-// ── 글로벌 핫키 캡처 위젯 ────────────────────────────────────────────────
-
-/**
- * 모디파이어+키 조합을 캡처하는 위젯.
- * 허용 modifier: Ctrl/Alt/Shift/Cmd(Meta). 조합이 완성되면 "Ctrl+Space" 형식으로 onChange 호출.
- */
-function GlobalHotkeyCapture({
-  value,
-  onChange,
-  recording,
-  setRecording,
-}: {
-  value: string;
-  onChange: (spec: string) => void;
-  recording: boolean;
-  setRecording: (r: boolean) => void;
-}) {
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!recording) return;
-    e.preventDefault();
-    e.stopPropagation();
-    // modifier 없이 Escape면 캡처 취소.
-    if (e.key === "Escape" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-      setRecording(false);
-      return;
-    }
-    const spec = eventToHotkeySpec(e);
-    // modifier-only/단일키/미지원 → 계속 대기. 글로벌 핫키는 modifier 필수.
-    if (!spec) return;
-    onChange(spec);
-    setRecording(false);
-  };
-
-  const start = () => {
-    setRecording(true);
-    btnRef.current?.focus();
-  };
-
-  return (
-    <div className="flex-1">
-      <button
-        ref={btnRef}
-        type="button"
-        className={cn(
-          "border-input bg-background text-foreground focus-visible:ring-ring flex h-9 w-full items-center rounded-md border px-3 font-mono text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
-          recording && "border-primary ring-ring ring-2",
-        )}
-        onClick={start}
-        onKeyDown={handleKeyDown}
-        onBlur={() => setRecording(false)}
-        aria-label="글로벌 핫키 캡처"
-        title={recording ? "단축키를 누르세요 (Esc = 취소)" : "클릭 후 단축키 입력"}
-      >
-        {recording ? "🔴 단축키를 누르세요…" : value || "캡처하려면 클릭"}
-      </button>
     </div>
   );
 }

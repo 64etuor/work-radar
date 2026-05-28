@@ -30,6 +30,7 @@ import { AgentsPane } from "./settings/AgentsPane";
 import { AppearanceSettings } from "./settings/AppearanceSettings";
 import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
+import { HermesPanelSettings } from "./settings/HermesPanelSettings";
 import { LifeWheelTagSettings } from "./settings/LifeWheelTagSettings";
 import { NavigationSettings } from "./settings/NavigationSettings";
 import { NewsSourceSettings } from "./settings/NewsSourceSettings";
@@ -397,6 +398,7 @@ function IntegrationsPane({
       <div className="flex flex-col gap-3">
         <SectionLabel>Hermes 브리지</SectionLabel>
         <HermesBridgeBlock onToast={pushSuccess} />
+        <HermesPanelSettings />
       </div>
     </>
   );
