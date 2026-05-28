@@ -50,9 +50,10 @@ worktree.
 
 Zustand. `view`, modal/picker 상태, agent 이름 persist.
 
-## PR Radar 제약 (재도입 금지)
+## PR Radar 제약
 
-settings-refactor B(2026-05-24)에서 결정:
+settings-refactor B(2026-05-24)에서 결정 — 재도입은 INVARIANT #4 임계치 정책을
+ADR로 정한 뒤(아래는 현재 상태의 정본):
 
 - **PR Radar는 표시 전용** — escalation 0, CI-failure notification 제거.
 - `ticket_key_pattern` 컬럼/필드 GONE (migration 0015). 다시 만들지 말 것.

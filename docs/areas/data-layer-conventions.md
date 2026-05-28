@@ -26,7 +26,8 @@
 - 폴링이 만드는 신호는 `dedupKey`로 **upsert**(append 아님). 매 cycle 중복 카드 방지.
 - braindump는 `braindump:{lower(공백정리(title))}`로 dedup → 같은 입력이면 touch만.
 - 원인 해소 감지(CI 통과, Notion 상태 일치) 시 신호 auto-resolve.
-- PR Radar는 표시 전용으로 escalation 제거됨(settings-refactor B 결정, 재도입 금지).
+- PR Radar는 현재 표시 전용 — escalation 경로 없음(`docs/areas/frontend-shell.md`
+  "PR Radar 제약" 참조). 재도입은 INVARIANT #4 임계치 정책을 ADR로 정한 뒤.
 
 ## FTS5
 

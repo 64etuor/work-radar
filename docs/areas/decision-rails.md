@@ -22,9 +22,13 @@ auto-resolve 한다. 예: CI 통과 시 신호 소멸. braindump 정규화 키�
 
 ## 4. 매트릭스는 결정 큐 (거울 아님)
 
-ambient status(PR Radar/Hermes/News)는 자기 뷰에 살고, **임계치를 넘을 때만**
-매트릭스로 escalate 한다. PR Radar는 현재 표시 전용으로 escalation/CI-failure
-notification 제거됨(2026-05-24 settings-refactor B). 재도입 금지.
+ambient status(PR Radar/Hermes/News)는 자기 뷰에 살고, **명시적 임계치를 넘을 때만**
+매트릭스로 escalate 한다. 임계치 없는 자동 escalation은 매트릭스를 알림 거울로
+만든다 — 신호당 결정 budget이 사라진다.
+
+> 현재 PR Radar는 표시 전용 (escalation/CI-failure notification 제거 —
+> `docs/areas/frontend-shell.md` "PR Radar 제약" + `docs/decisions.md`
+> 2026-05-24 settings-refactor B). 재도입은 새 임계치 정책을 ADR로 정한 뒤.
 
 ## 5. 에이전트 잡은 bounded
 
@@ -36,7 +40,8 @@ Q1으로 사람에게 escalate. 전부-실패 분류 보존(transient vs termina
 ## 6. 코드 작업은 격리
 
 코드 작업은 git worktree에 격리. 사용자 워킹트리를 절대 건드리지 않는다.
-샌드박스 기본 read-only, 쓰기는 명시 승인 시 workspace-write, **danger-full 금지**.
+샌드박스 기본 read-only, 쓰기는 명시 승인 시 workspace-write. **`danger-full-access`는
+코드 경로에 존재하지 않는다** — 필요 시 새 ADR로 도입 근거·범위·로그 보존을 정의.
 
 > 주의: 이 INVARIANT는 **앱이 실행하는 Codex 잡**에 적용된다. 이 앱을 _만드는_ 에이전트의
 > 멀티-에이전트 디스패치 가드(parallel worktree 사고 등)는 `parallel-agent-safety.md`에 있다.
@@ -52,5 +57,6 @@ Notion = 백로그/안건 *내용*의 SSOT. 로컬 SQLite = 매트릭스 상태�
 
 `AGENTS.md` Implementation Rules와 중복되는 항목은 거기서 정본. 결정-레일 인접:
 
-- **Next.js 금지** — desktop webview엔 Vite + React (구조적 제약).
+- **Webview = Vite + React** — Tauri webview는 SSR/Node 런타임이 없으므로
+  서버 프레임워크(Next.js 등) 도입 시 빌드·런타임 모델이 깨진다.
 - **AI는 닫힌 taxonomy만.** `AreaTag` 9개 + `other`(Wheel of Life). 세트 밖 카테고리 생성 금지.

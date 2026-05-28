@@ -19,7 +19,7 @@
 ## 1. INVARIANTS — Ralph가 절대 위반하면 안 되는 것
 
 → **`docs/areas/decision-rails.md`** 정본. PLAN.md는 Phase 계획만 남긴다.
-INVARIANT 7개 + 추가 전역 규칙(Next.js 금지, 닫힌 taxonomy 등)은 모두 거기에 있다.
+INVARIANT 7개 + 추가 전역 규칙(webview 스택, 닫힌 taxonomy 등)은 모두 거기에 있다.
 
 ---
 
