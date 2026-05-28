@@ -25,13 +25,8 @@ import {
   type TabId,
   tabsReducer,
   type TabsState,
+  uid,
 } from "./useHermesTabs";
-
-// ── uid helper (duplicated from useHermesTabs to keep this file self-contained) ──
-const uid = (): string =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 // ── Store shape ──────────────────────────────────────────────────────────────
 

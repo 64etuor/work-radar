@@ -20,36 +20,42 @@ function EmptyHermesState({ onCreateTab }: { onCreateTab: () => Promise<unknown>
 }
 
 export default function HermesView() {
-  const tabs = useHermesTabsStore();
-  const active = selectActiveTab(tabs);
-  const isStreaming = selectIsStreaming(tabs);
+  const activeTab = useHermesTabsStore(selectActiveTab);
+  const isStreaming = useHermesTabsStore(selectIsStreaming);
+  const tabsSize = useHermesTabsStore((s) => s.tabs.size);
+  const cap = useHermesTabsStore((s) => s.cap);
+  const openTab = useHermesTabsStore((s) => s.openTab);
+  const closeTab = useHermesTabsStore((s) => s.closeTab);
+  const send = useHermesTabsStore((s) => s.send);
+  const cancel = useHermesTabsStore((s) => s.cancel);
+  const restart = useHermesTabsStore((s) => s.restart);
 
   return (
     <HermesPanel
       isStreaming={isStreaming}
-      onNewTab={tabs.openTab}
+      onNewTab={openTab}
       onCloseActive={async () => {
-        if (active) await tabs.closeTab(active.id);
+        if (activeTab) await closeTab(activeTab.id);
       }}
       onRestart={async () => {
-        if (active) await tabs.restart(active.id);
+        if (activeTab) await restart(activeTab.id);
       }}
-      canCreateTab={tabs.tabs.size < tabs.cap}
-      activeTabId={active?.id ?? null}
+      canCreateTab={tabsSize < cap}
+      activeTabId={activeTab?.id ?? null}
     >
-      {active ? (
+      {activeTab ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <HermesChatLog messages={active.messages} />
+          <HermesChatLog messages={activeTab.messages} />
           <HermesChatInput
-            onSend={(text, images) => void tabs.send(active.id, text, images)}
-            onCancel={() => void tabs.cancel(active.id)}
-            disabled={active.status === "starting"}
+            onSend={(text, images) => void send(activeTab.id, text, images)}
+            onCancel={() => void cancel(activeTab.id)}
+            disabled={activeTab.status === "starting"}
             isStreaming={isStreaming}
-            commandsList={active.commandsList}
+            commandsList={activeTab.commandsList}
           />
         </div>
       ) : (
-        <EmptyHermesState onCreateTab={tabs.openTab} />
+        <EmptyHermesState onCreateTab={openTab} />
       )}
     </HermesPanel>
   );

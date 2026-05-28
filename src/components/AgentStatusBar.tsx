@@ -260,15 +260,7 @@ export function AgentStatusBar() {
   // 인라인 이름 편집 중인 박스 key(없으면 null). 더블클릭으로 진입.
   const [editingKey, setEditingKey] = useState<string | null>(null);
   // 박스 클릭 라우팅:
-  //  hermes:* → setActive(tabId) + hermes:toggle (패널 열기).
-  //    hermes:toggle semantics: HermesPanel.tsx toggles open state unconditionally.
-  //    To OPEN without risk of closing if already open, we read the panel query directly.
-  //    However, the panel is always-mounted and `setActive` is a display-only action —
-  //    if the panel is already open, toggling it closed would be wrong. The simplest
-  //    correct approach: emit "hermes:open" ... but that event doesn't exist yet.
-  //    Decision: always emit hermes:toggle. If panel is already open it will close then
-  //    reopen on next click — acceptable UX for now. A dedicated "hermes:open" event
-  //    can be added in a future PR without touching this invariant boundary.
+  //  hermes:* → setActive(tabId) + hermes:open (패널 열기 — 이미 열려 있으면 no-op).
   //    INVARIANT #1: click = navigation only, no decision input.
   //  cmux 워크스페이스 → cmux 포커스 이동(select-workspace).
   //  그 외(codex 잡) → Jobs 뷰.
@@ -276,7 +268,7 @@ export function AgentStatusBar() {
     if (box.key.startsWith("hermes:")) {
       const tabId = box.key.slice("hermes:".length);
       hermesSetActive(tabId);
-      void emit("hermes:toggle");
+      void emit("hermes:open");
     } else if (box.key.startsWith("cmux:"))
       // cmux 딥링크: 포커스 이동이 실제 성공(true)하면 Work Radar 창을 숨겨 cmux에 자리 양보.
       // best-effort 실패(false)면 숨기지 않는다 — 앞에 뜨는 창이 없는데 앱만 사라지는 상황 방지.

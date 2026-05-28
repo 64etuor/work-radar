@@ -43,10 +43,14 @@ export function HermesPanel({
   }, [isLoading, state.x, state.y, state.w, state.h, setBounds]);
 
   // 마운트 1회만 구독 — qc.getQueryData 로 최신 상태를 읽어 stale closure 없이
-  // 토글. cancelled 가드로 listen() 비동기 등록과 cleanup 경쟁 차단.
+  // 토글/오픈. cancelled 가드로 listen() 비동기 등록과 cleanup 경쟁 차단.
+  // hermes:toggle — 현재 open 상태를 반전.
+  // hermes:open   — 항상 open: true (이미 열려 있으면 no-op).
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenToggle: (() => void) | undefined;
+    let unlistenOpen: (() => void) | undefined;
     let cancelled = false;
+
     void listen("hermes:toggle", () => {
       const current = qc.getQueryData<HermesPanelState>(PANEL_QUERY_KEY);
       const next: HermesPanelState = {
@@ -57,11 +61,27 @@ export function HermesPanel({
       void unwrap(commands.hermesPanelStateSet(next));
     }).then((u) => {
       if (cancelled) u();
-      else unlisten = u;
+      else unlistenToggle = u;
     });
+
+    void listen("hermes:open", () => {
+      const current = qc.getQueryData<HermesPanelState>(PANEL_QUERY_KEY);
+      if (current?.open) return; // idempotent
+      const next: HermesPanelState = {
+        ...(current ?? DEFAULT_PANEL_STATE),
+        open: true,
+      };
+      qc.setQueryData(PANEL_QUERY_KEY, next);
+      void unwrap(commands.hermesPanelStateSet(next));
+    }).then((u) => {
+      if (cancelled) u();
+      else unlistenOpen = u;
+    });
+
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlistenToggle?.();
+      unlistenOpen?.();
     };
   }, [qc]);
 
