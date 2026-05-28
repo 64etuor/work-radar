@@ -1,10 +1,11 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import type { LifeWheelTagConfig } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/components/ui/cn";
+import { DEFAULT_LIFE_WHEEL_TAGS, NEW_TAG_COLOR_CYCLE } from "@/lib/lifeWheelDefaults";
 import { useLifeWheelTags, useSetLifeWheelTags } from "@/lib/query";
 
 import { Field, SectionLabel } from "./SettingsKit";
@@ -18,8 +19,7 @@ function slugify(raw: string): string {
 }
 
 function nextColor(index: number): string {
-  const colors = ["#0f9f6e", "#1863dc", "#ff7759", "#d94f70", "#6f63d9", "#0f7a8a", "#9b6a2f"];
-  return colors[index % colors.length];
+  return NEW_TAG_COLOR_CYCLE[index % NEW_TAG_COLOR_CYCLE.length];
 }
 
 export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) => void }) {
@@ -80,6 +80,12 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
     });
   };
 
+  // 기본 팔레트로 draft 되돌리기. 저장 버튼을 눌러야 실제 반영됨(편집 패턴과 동일).
+  const resetToDefaults = () => {
+    setDraftOverride(DEFAULT_LIFE_WHEEL_TAGS.map((tag) => ({ ...tag })));
+    setNewLabel("");
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <Card className="rounded-2xl p-4">
@@ -91,9 +97,21 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
               보드 카드에서 쓰는 Life Wheel 팔레트의 표시 여부와 색상을 관리합니다.
             </p>
           </div>
-          <Button onClick={persist} disabled={save.isPending || enabledCount === 0}>
-            {save.isPending ? "저장 중..." : "저장"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={resetToDefaults}
+              disabled={save.isPending}
+              className="gap-1.5"
+              title="브랜드 기본 팔레트로 되돌립니다. 저장을 눌러야 반영됩니다."
+            >
+              <RotateCcw className="size-4" />
+              기본값으로 초기화
+            </Button>
+            <Button onClick={persist} disabled={save.isPending || enabledCount === 0}>
+              {save.isPending ? "저장 중..." : "저장"}
+            </Button>
+          </div>
         </div>
       </Card>
 

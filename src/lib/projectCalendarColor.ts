@@ -1,14 +1,17 @@
 import type { CSSProperties } from "react";
 
+// SSOT는 `src-tauri/src/commands/projects.rs::PROJECT_CALENDAR_PALETTE`.
+// 둘 다 동일하게 유지해야 한다(hash 분배가 양쪽에서 같은 색을 내야 picker가 일관됨).
+// 색상 근거는 `DESIGN.md` §Colors (brand-aligned).
 export const PROJECT_CALENDAR_PALETTE = [
-  "#2D6CDF",
-  "#1F8A70",
-  "#B45309",
-  "#C2410C",
-  "#7C3AED",
-  "#0F766E",
-  "#BE123C",
-  "#4D7C0F",
+  "#1863DC", // Action Blue
+  "#003C33", // Deep Enterprise Green
+  "#FF7759", // Coral
+  "#071829", // Dark Navy
+  "#4C6EE6", // Focus Blue
+  "#5A8A78", // sage
+  "#A89175", // warm stone
+  "#75758A", // Slate
 ] as const;
 
 export function normalizeHexColor(input: string | null | undefined): string | null {
