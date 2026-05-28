@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { AgentPromptConfig, AgentReasoningEffort } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   useSetCodexModel,
   useUpdateAgentPromptConfig,
 } from "@/lib/query/agentsConfig";
+import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 
 import { SectionLabel, StatusDot } from "./SettingsKit";
 
@@ -39,43 +40,28 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
   // 텍스트 입력은 debounce, 프리셋/초기화는 즉시.
   const [draft, setDraft] = useState<string | null>(null);
   const displayValue = draft !== null ? draft : (model.data ?? "");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-    };
-  }, []);
 
   const avail = status.data;
 
-  const persistNow = (value: string | null) => {
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
+  const persist = useDebouncedCallback((value: string | null) => {
     setModel.mutate(value, {
       onSuccess: () => setDraft(null),
       onError: (e) => onToast(String(e)),
     });
-  };
+  }, 500);
 
   const onChangeModel = (next: string) => {
     setDraft(next);
-    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      const trimmed = next.trim();
-      if (trimmed === (model.data ?? "")) return;
-      setModel.mutate(trimmed || null, {
-        onSuccess: () => setDraft(null),
-        onError: (e) => onToast(String(e)),
-      });
-    }, 500);
+    const trimmed = next.trim();
+    if (trimmed === (model.data ?? "")) {
+      persist.cancel();
+      return;
+    }
+    persist.run(trimmed || null);
   };
 
   const reset = () => {
-    persistNow(null);
+    persist.flushNow(null);
     onToast("Codex 모델 기본값으로 초기화됨");
   };
 
@@ -149,7 +135,7 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
             variant="outline"
             size="sm"
             className={cn("font-mono text-[11px]", displayValue === p && "bg-muted")}
-            onClick={() => persistNow(p)}
+            onClick={() => persist.flushNow(p)}
           >
             {p}
           </Button>

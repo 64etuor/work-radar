@@ -1,5 +1,5 @@
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import type { LifeWheelTagConfig } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/components/ui/cn";
 import { DEFAULT_LIFE_WHEEL_TAGS, NEW_TAG_COLOR_CYCLE } from "@/lib/lifeWheelDefaults";
 import { useLifeWheelTags, useSetLifeWheelTags } from "@/lib/query";
+import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 
 import { Field, SectionLabel } from "./SettingsKit";
 
@@ -32,47 +33,23 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
   // 토글/픽커/추가/삭제/리셋은 즉시 persist — Save 버튼 없음.
   const [textDraft, setTextDraft] = useState<LifeWheelTagConfig[] | null>(null);
   const [newLabel, setNewLabel] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persist = useDebouncedCallback(
+    (next: LifeWheelTagConfig[]) => save.mutate(next, { onSuccess: () => setTextDraft(null) }),
+    400,
+  );
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
-  const serverTags = tags.data ?? [];
-  const draft = textDraft ?? serverTags;
+  const draft = useMemo(() => textDraft ?? tags.data ?? [], [textDraft, tags.data]);
   const enabledCount = useMemo(() => draft.filter((tag) => tag.enabled).length, [draft]);
-
-  const persistNow = (next: LifeWheelTagConfig[]) => {
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    save.mutate(next, {
-      onSuccess: () => setTextDraft(null),
-    });
-  };
-
-  const persistDebounced = (next: LifeWheelTagConfig[]) => {
-    setTextDraft(next);
-    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      save.mutate(next, {
-        onSuccess: () => setTextDraft(null),
-      });
-    }, 400);
-  };
 
   const updateTagText = (id: string, patch: Partial<LifeWheelTagConfig>) => {
     const next = draft.map((tag) => (tag.id === id ? { ...tag, ...patch } : tag));
-    persistDebounced(next);
+    setTextDraft(next);
+    persist.run(next);
   };
 
   const updateTagImmediate = (id: string, patch: Partial<LifeWheelTagConfig>) => {
     const next = draft.map((tag) => (tag.id === id ? { ...tag, ...patch } : tag));
-    persistNow(next);
+    persist.flushNow(next);
   };
 
   const addTag = () => {
@@ -97,15 +74,15 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
       },
     ];
     setNewLabel("");
-    persistNow(next);
+    persist.flushNow(next);
   };
 
   const removeTag = (id: string) => {
-    persistNow(draft.filter((tag) => tag.id !== id));
+    persist.flushNow(draft.filter((tag) => tag.id !== id));
   };
 
   const resetToDefaults = () => {
-    persistNow(DEFAULT_LIFE_WHEEL_TAGS.map((tag) => ({ ...tag })));
+    persist.flushNow(DEFAULT_LIFE_WHEEL_TAGS.map((tag) => ({ ...tag })));
     setNewLabel("");
     onToast("Life Wheel 태그가 기본 팔레트로 초기화됨");
   };

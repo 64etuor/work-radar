@@ -1,5 +1,5 @@
 import { CircleUserRound, FolderGit2, FolderOpen, Github, KeyRound, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { Project, PromotionTarget } from "@/bindings";
 import { KindBadge } from "@/components/board/LifeWheelPalette";
@@ -19,6 +19,7 @@ import {
   useSetProjectCalendarColor,
   useTestNotionConnection,
 } from "@/lib/query";
+import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 
 import { AddRepoForm } from "./AddRepoForm";
 import { GoogleAccountBlock } from "./GoogleAccountBlock";
@@ -102,8 +103,6 @@ function ProjectCalendarColorControl({
   const normalizedDraft = normalizeHexColor(draft);
   const savedBackground = normalizeHexColor(project.calendarColor ?? null) ?? colors.background;
   const preview = normalizedDraft ? projectCalendarColors(project.id, normalizedDraft) : colors;
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // 서버 값이 바뀌면 드래프트도 동기화.
   const [seededFrom, setSeededFrom] = useState<string | null | undefined>(undefined);
   if (project.calendarColor !== seededFrom) {
@@ -111,45 +110,26 @@ function ProjectCalendarColorControl({
     setDraft(colors.background);
   }
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
-  const persistColor = (color: string | null) => {
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
+  const persist = useDebouncedCallback((color: string | null) => {
     saveColor.mutate({ projectId: project.id, color });
+  }, 400);
+
+  // hex 텍스트 입력: debounced + 유효 hex 가드. 픽커/팔레트/리셋은 flushNow로 즉시 반영.
+  const onTypeHex = (value: string) => {
+    setDraft(value);
+    const normalized = normalizeHexColor(value);
+    if (normalized && normalized !== savedBackground) persist.run(normalized);
+    else persist.cancel();
   };
 
-  const persistColorDebounced = (color: string) => {
-    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      const normalized = normalizeHexColor(color);
-      if (normalized && normalized !== savedBackground) {
-        saveColor.mutate({ projectId: project.id, color: normalized });
-      }
-    }, 400);
-  };
-
-  const setDraftAndPersist = (color: string) => {
-    setDraft(color);
-    const normalized = normalizeHexColor(color);
-    if (normalized && normalized !== savedBackground) {
-      if (debounceRef.current !== null) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      saveColor.mutate({ projectId: project.id, color: normalized });
-    }
+  const setColorImmediate = (value: string) => {
+    setDraft(value);
+    const normalized = normalizeHexColor(value);
+    if (normalized && normalized !== savedBackground) persist.flushNow(normalized);
   };
 
   const resetToDefault = () => {
-    persistColor(null);
+    persist.flushNow(null);
     onToast("캘린더 색상 기본값으로 복원됨");
   };
 
@@ -165,16 +145,13 @@ function ProjectCalendarColorControl({
         <input
           type="color"
           value={normalizedDraft ?? colors.background}
-          onChange={(e) => setDraftAndPersist(e.target.value)}
+          onChange={(e) => setColorImmediate(e.target.value)}
           aria-label="프로젝트 캘린더 색상"
           className="border-border h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5"
         />
         <Input
           value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            persistColorDebounced(e.target.value);
-          }}
+          onChange={(e) => onTypeHex(e.target.value)}
           className="h-8 w-[112px] font-mono text-xs"
           aria-label="프로젝트 캘린더 색상 hex"
         />
@@ -186,7 +163,7 @@ function ProjectCalendarColorControl({
               aria-label={`색상 ${color}`}
               className="border-border size-5 rounded-full border"
               style={{ backgroundColor: color }}
-              onClick={() => setDraftAndPersist(color)}
+              onClick={() => setColorImmediate(color)}
             />
           ))}
         </div>

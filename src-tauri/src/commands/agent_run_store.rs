@@ -515,6 +515,42 @@ mod tests {
         );
     }
 
+    /// ack_agent_run: 첫 호출은 acked_at을 set, 재호출은 기존 시각을 보존(COALESCE).
+    #[tokio::test]
+    async fn ack_agent_run_sets_acked_at_once_and_is_idempotent() {
+        let db = fresh_db().await;
+        insert_awaiting(&db, "a1").await;
+
+        // pre: NULL.
+        let row: (Option<String>,) =
+            sqlx::query_as("SELECT acked_at FROM agent_runs WHERE id='a1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert!(row.0.is_none());
+
+        ack_agent_run(&db, "a1").await.unwrap();
+        let first: (Option<String>,) =
+            sqlx::query_as("SELECT acked_at FROM agent_runs WHERE id='a1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        let first_ts = first.0.expect("acked_at set on first call");
+
+        // 두 번째 호출은 기존 시각 보존 — 재마킹 시 사용자가 처음 확인한 시각이 흔들리지 않게.
+        ack_agent_run(&db, "a1").await.unwrap();
+        let second: (Option<String>,) =
+            sqlx::query_as("SELECT acked_at FROM agent_runs WHERE id='a1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(
+            second.0.as_deref(),
+            Some(first_ts.as_str()),
+            "재호출은 acked_at을 덮어쓰지 않는다(COALESCE)"
+        );
+    }
+
     /// reject_run: awaiting_approval → cancelled, 영향 행수 1. 비-awaiting이면 0(가드).
     #[tokio::test]
     async fn reject_run_cancels_only_awaiting() {
