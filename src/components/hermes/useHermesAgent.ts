@@ -10,6 +10,7 @@ type Action =
   | { type: "user"; text: string; images: string[] }
   | { type: "assistant-chunk"; text: string }
   | { type: "assistant-tool"; tool: ToolCallSummary }
+  | { type: "tool-update"; id?: string; patch: Partial<ToolCallSummary> }
   | { type: "assistant-end"; status: "ok" | "cancelled" | "error"; error?: string }
   | { type: "system"; text: string; level: "info" | "warn" | "error" }
   | { type: "reset" };
@@ -44,6 +45,14 @@ function reducer(state: HermesMessage[], a: Action): HermesMessage[] {
     const s = ensureAssistant();
     const lastA = s[s.length - 1] as Extract<HermesMessage, { role: "assistant" }>;
     return [...s.slice(0, -1), { ...lastA, toolCalls: [...lastA.toolCalls, a.tool] }];
+  }
+  if (a.type === "tool-update") {
+    if (!a.id) return state;
+    return state.map((m) => {
+      if (m.role !== "assistant") return m;
+      const tools = m.toolCalls.map((t) => (t.id === a.id ? { ...t, ...a.patch } : t));
+      return { ...m, toolCalls: tools };
+    });
   }
   if (a.type === "assistant-end") {
     const s = ensureAssistant();
@@ -117,9 +126,25 @@ export function useHermesAgent() {
             id: p.toolCallId,
             title: p.title ?? p.kind ?? "tool",
             kind: p.kind,
-            status: p.status,
+            status: p.status ?? "in_progress",
           },
         });
+      });
+
+      // tool_call_update: status/title patches over an in-flight tool call.
+      await setup<Record<string, unknown>>("hermes-agent:tool-call-update", (e) => {
+        const p = e.payload as {
+          toolCallId?: string;
+          title?: string;
+          kind?: string;
+          status?: string;
+        };
+        if (!p.toolCallId) return;
+        const patch: Partial<ToolCallSummary> = {};
+        if (p.title !== undefined) patch.title = p.title;
+        if (p.kind !== undefined) patch.kind = p.kind;
+        if (p.status !== undefined) patch.status = p.status;
+        dispatch({ type: "tool-update", id: p.toolCallId, patch });
       });
 
       // turn-end subscription: may never fire — see NOTE above.

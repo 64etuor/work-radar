@@ -21,14 +21,14 @@ function ToolPillTitle({ title }: { title: string }) {
 function ToolCallPill({ t }: { t: ToolCallSummary }) {
   const [expanded, setExpanded] = useState(false);
 
-  const statusIcon =
-    t.status === "completed" ? (
-      <Check className="text-foreground/60 size-3" />
-    ) : t.status === "failed" ? (
-      <X className="text-destructive size-3" />
-    ) : (
-      <Loader2 className="size-3 animate-spin" />
-    );
+  const inProgress = !t.status || t.status === "in_progress" || t.status === "pending";
+  const statusIcon = inProgress ? (
+    <Loader2 className="size-3 animate-spin" />
+  ) : t.status === "completed" ? (
+    <Check className="text-foreground/60 size-3" />
+  ) : (
+    <X className="text-destructive size-3" />
+  );
 
   return (
     <div>
@@ -39,7 +39,7 @@ function ToolCallPill({ t }: { t: ToolCallSummary }) {
         className="border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors"
       >
         <Wrench className="size-3 shrink-0" />
-        <ToolPillTitle title={t.kind ?? t.title} />
+        <ToolPillTitle title={t.title || t.kind || "tool"} />
         {statusIcon}
       </button>
       {expanded && (
