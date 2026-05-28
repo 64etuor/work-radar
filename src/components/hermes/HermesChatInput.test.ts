@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectSlashToken } from "./HermesChatInput";
+import { detectSlashToken } from "./detectSlashToken";
 
 describe("detectSlashToken", () => {
   it("no slash → inactive", () => {

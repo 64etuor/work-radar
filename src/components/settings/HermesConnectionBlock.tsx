@@ -30,7 +30,7 @@ export function HermesConnectionBlock() {
 
       {q.data && !q.data.installed && (
         <div className="flex items-start gap-2 text-sm text-[color:var(--destructive)]">
-          <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <XCircle className="mt-0.5 size-4 shrink-0" />
           <div>
             <p>Hermes를 찾을 수 없습니다.</p>
             <p className="text-muted-foreground mt-0.5 text-xs">
@@ -43,7 +43,7 @@ export function HermesConnectionBlock() {
 
       {q.data && q.data.installed && q.data.acp_ready && (
         <div className="flex items-start gap-2 text-sm">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--success)]" />
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[color:var(--success)]" />
           <div>
             <p>Hermes {q.data.version ?? ""} 감지됨 · ACP 준비 완료</p>
             {q.data.path && (
@@ -57,7 +57,7 @@ export function HermesConnectionBlock() {
 
       {q.data && q.data.installed && !q.data.acp_ready && (
         <div className="text-accent flex items-start gap-2 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <div>
             <p>Hermes {q.data.version ?? ""} 감지됨이나 ACP 준비 미완.</p>
             <p className="text-muted-foreground mt-0.5 text-xs">

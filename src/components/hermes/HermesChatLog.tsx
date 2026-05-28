@@ -167,7 +167,7 @@ export function HermesChatLog({ messages }: Props) {
 
   return (
     <div
-      className="min-w-0 flex-1 overflow-auto px-4 py-4"
+      className="min-w-0 flex-1 overflow-auto p-4"
       onScroll={(e) => {
         const el = e.currentTarget;
         followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;

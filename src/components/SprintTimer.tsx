@@ -1,6 +1,6 @@
 import "./SprintTimer.css";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
 
 import type { SprintConfig, Weekday } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -85,17 +85,18 @@ export function SprintTimer() {
     return () => window.clearTimeout(id);
   }, [editorState]);
 
+  const handleClickOutside = useEffectEvent(() => closeEditor());
   useEffect(() => {
     if (editorState !== "open") return undefined;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (rootRef.current?.contains(target)) return;
-      closeEditor();
+      handleClickOutside();
     };
     window.addEventListener("pointerdown", onPointerDown, true);
     return () => window.removeEventListener("pointerdown", onPointerDown, true);
-  }, [closeEditor, editorState]);
+  }, [editorState]);
 
   const renderMeter = (extraClass = "", disabled = false) =>
     configured && meter ? (

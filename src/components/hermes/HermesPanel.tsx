@@ -276,7 +276,7 @@ function PanelHeader({
           <Button
             data-no-drag
             variant="ghost"
-            className="hover:bg-muted/60 h-7 w-7 p-0"
+            className="hover:bg-muted/60 size-7 p-0"
             onClick={() => void onNewTab()}
             disabled={canCreateTab === false}
             aria-label="새 탭"
@@ -289,7 +289,7 @@ function PanelHeader({
           <Button
             data-no-drag
             variant="ghost"
-            className="hover:bg-muted/60 h-7 w-7 p-0"
+            className="hover:bg-muted/60 size-7 p-0"
             onClick={() => void onCloseActive()}
             aria-label="현재 탭 닫기"
             title="현재 탭 닫기"
@@ -301,7 +301,7 @@ function PanelHeader({
           <Button
             data-no-drag
             variant="ghost"
-            className="hover:bg-muted/60 h-7 w-7 p-0"
+            className="hover:bg-muted/60 size-7 p-0"
             onClick={() => void onRestart()}
             aria-label="새 세션"
             title="새 세션 시작"
@@ -314,7 +314,7 @@ function PanelHeader({
           variant="ghost"
           onClick={onClose}
           aria-label="닫기"
-          className="hover:bg-muted/60 h-7 w-7 p-0"
+          className="hover:bg-muted/60 size-7 p-0"
         >
           <X className="size-3.5" />
         </Button>

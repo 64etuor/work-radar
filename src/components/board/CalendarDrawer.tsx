@@ -1,7 +1,7 @@
 import "./CalendarDrawer.css";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { CalendarView } from "@/components/board/CalendarView";
 import { Button } from "@/components/ui/button";
@@ -72,13 +72,14 @@ export function CalendarDrawer({ open, onClose }: Props) {
   // capture-phase + stopPropagation: App 셸의 bubble Esc→window.hide()보다 먼저 가로채 창 숨김을 막는다
   // (plan §0.6 — radix Dialog로 바꾸지 않고 bespoke 드로어가 직접 계약 인코딩). 닫힐 때 열기 직전
   // 포커스(트리거)를 복원해 모달/메뉴 슬라이스 hard gate (c)를 만족(원래 없던 동작 — focus body 누수 방지).
+  const handleEscClose = useEffectEvent(() => onClose());
   useEffect(() => {
     if (!open) return;
     const trigger = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        handleEscClose();
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -86,7 +87,7 @@ export function CalendarDrawer({ open, onClose }: Props) {
       window.removeEventListener("keydown", onKey, true);
       trigger?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
