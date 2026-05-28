@@ -160,7 +160,7 @@ export function HermesChatLog({ messages }: Props) {
               {m.role === "system" && (
                 <p
                   className={cn(
-                    "py-1 text-center text-xs italic",
+                    "py-1 text-xs italic",
                     m.level === "error" && "text-destructive",
                     m.level === "warn" && "text-amber-600",
                     m.level === "info" && "text-muted-foreground",

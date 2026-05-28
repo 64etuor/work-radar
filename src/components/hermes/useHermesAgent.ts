@@ -1,17 +1,20 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { commands } from "@/bindings";
 import { unwrap } from "@/lib/query/client";
 
 import type { AcpCommand, HermesMessage, SessionStatus, ToolCallSummary } from "./types";
 
+type EndStatus = "ok" | "cancelled" | "error";
+
 type Action =
   | { type: "user"; text: string; images: string[] }
   | { type: "assistant-chunk"; text: string }
   | { type: "assistant-tool"; tool: ToolCallSummary }
   | { type: "tool-update"; id?: string; patch: Partial<ToolCallSummary> }
-  | { type: "assistant-end"; status: "ok" | "cancelled" | "error"; error?: string }
+  | { type: "assistant-end"; status: EndStatus; error?: string }
+  | { type: "cancel-if-streaming" }
   | { type: "system"; text: string; level: "info" | "warn" | "error" }
   | { type: "reset" };
 
@@ -19,6 +22,24 @@ const uid = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const isInProgressStatus = (s?: string) => !s || s === "in_progress" || s === "pending";
+
+function sweepTools(
+  tools: ToolCallSummary[],
+  status: EndStatus,
+): { tools: ToolCallSummary[]; changed: boolean } {
+  const terminal = status === "ok" ? "completed" : status === "cancelled" ? "cancelled" : "failed";
+  let changed = false;
+  const next = tools.map((t) => {
+    if (isInProgressStatus(t.status)) {
+      changed = true;
+      return { ...t, status: terminal };
+    }
+    return t;
+  });
+  return { tools: changed ? next : tools, changed };
+}
 
 function reducer(state: HermesMessage[], a: Action): HermesMessage[] {
   if (a.type === "reset") return [];
@@ -28,8 +49,9 @@ function reducer(state: HermesMessage[], a: Action): HermesMessage[] {
     return [...state, { id: uid(), role: "system", text: a.text, level: a.level, ts: Date.now() }];
 
   const last = state[state.length - 1];
+  const lastIsStreamingAssistant = !!last && last.role === "assistant" && !last.done;
   const ensureAssistant = (): HermesMessage[] => {
-    if (last && last.role === "assistant" && !last.done) return state;
+    if (lastIsStreamingAssistant) return state;
     return [
       ...state,
       { id: uid(), role: "assistant", chunks: [], toolCalls: [], ts: Date.now(), done: false },
@@ -48,24 +70,60 @@ function reducer(state: HermesMessage[], a: Action): HermesMessage[] {
   }
   if (a.type === "tool-update") {
     if (!a.id) return state;
+    // 늦은 tool-update 가 이미 종료된(done) assistant 메시지를 다시 진행 중으로
+    // 만들지 않도록, in-flight 메시지에 한해서만 패치한다.
     return state.map((m) => {
-      if (m.role !== "assistant") return m;
+      if (m.role !== "assistant" || m.done) return m;
       const tools = m.toolCalls.map((t) => (t.id === a.id ? { ...t, ...a.patch } : t));
       return { ...m, toolCalls: tools };
     });
   }
+  if (a.type === "cancel-if-streaming") {
+    // 진행 중인 턴이 없으면 no-op — 빈 assistant 버블/노이즈 방지.
+    if (!lastIsStreamingAssistant) return state;
+    const lastA = last as Extract<HermesMessage, { role: "assistant" }>;
+    const swept = sweepTools(lastA.toolCalls, "cancelled");
+    return [
+      ...state.slice(0, -1),
+      { ...lastA, toolCalls: swept.tools, done: true },
+      { id: uid(), role: "system", text: "취소됨", level: "warn", ts: Date.now() },
+    ];
+  }
   if (a.type === "assistant-end") {
-    const s = ensureAssistant();
-    const lastA = s[s.length - 1] as Extract<HermesMessage, { role: "assistant" }>;
-    const next: HermesMessage[] = [...s.slice(0, -1), { ...lastA, done: true }];
+    // 이미 done 처리된 마지막 assistant 에 대한 중복 turn-end 는 무시.
+    if (!lastIsStreamingAssistant) {
+      // 단, 직전에 user 만 보낸 상태에서 error 가 오면 시스템 메시지는 남긴다.
+      if (a.status !== "ok") {
+        const label =
+          a.status === "cancelled" ? "취소됨" : a.status === "error" ? "오류" : a.status;
+        return [
+          ...state,
+          {
+            id: uid(),
+            role: "system",
+            text: a.error ?? label,
+            level: a.status === "error" ? "error" : "warn",
+            ts: Date.now(),
+          },
+        ];
+      }
+      return state;
+    }
+    const lastA = last as Extract<HermesMessage, { role: "assistant" }>;
+    const swept = sweepTools(lastA.toolCalls, a.status);
+    const next: HermesMessage[] = [
+      ...state.slice(0, -1),
+      { ...lastA, toolCalls: swept.tools, done: true },
+    ];
     if (a.status !== "ok") {
+      const label = a.status === "cancelled" ? "취소됨" : a.status === "error" ? "오류" : a.status;
       return [
         ...next,
         {
           id: uid(),
           role: "system",
-          text: a.error ?? `turn ${a.status}`,
-          level: "warn",
+          text: a.error ?? label,
+          level: a.status === "error" ? "error" : "warn",
           ts: Date.now(),
         },
       ];
@@ -80,19 +138,23 @@ export function useHermesAgent() {
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [commandsList, setCommandsList] = useState<AcpCommand[]>([]);
 
+  // Latest snapshots for stable callbacks — avoids stale closures and lets
+  // send/cancel inspect live state without re-creating the callback on every render.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
+  const isStreaming = (() => {
+    const last = messages[messages.length - 1];
+    return !!last && last.role === "assistant" && !last.done;
+  })();
+
   // Mount-only event subscriptions — StrictMode-safe cancelled-race guard.
   // Each individual listen() await checks `cancelled` and immediately calls its
   // own unlisten if cleanup already fired. This prevents the React 19 StrictMode
   // double-mount from leaving orphaned listeners (first mount's subscriptions
   // cancel themselves before the second mount completes its own setup).
-  //
-  // NOTE: hermes-agent:turn-end is subscribed here but C2's dispatch_incoming
-  // does NOT currently emit it — turn completion is only observable when the
-  // underlying session/prompt IPC call resolves, which doesn't surface to the
-  // frontend. As a result the last assistant message may stay with done=false
-  // indefinitely. D4's smoke test should verify whether a real model response
-  // triggers this event; if not, a follow-up can wire turn completion via the
-  // IPC return value or a dedicated session/update discriminator.
   useEffect(() => {
     let cancelled = false;
     const cleanups: UnlistenFn[] = [];
@@ -147,15 +209,12 @@ export function useHermesAgent() {
         dispatch({ type: "tool-update", id: p.toolCallId, patch });
       });
 
-      // turn-end subscription: may never fire — see NOTE above.
-      await setup<{ status: "ok" | "cancelled" | "error"; error?: string }>(
-        "hermes-agent:turn-end",
-        (e) =>
-          dispatch({
-            type: "assistant-end",
-            status: e.payload.status,
-            error: e.payload.error,
-          }),
+      await setup<{ status: EndStatus; error?: string }>("hermes-agent:turn-end", (e) =>
+        dispatch({
+          type: "assistant-end",
+          status: e.payload.status,
+          error: e.payload.error,
+        }),
       );
 
       await setup<{ commands: AcpCommand[] }>("hermes-agent:available-commands", (e) =>
@@ -166,6 +225,8 @@ export function useHermesAgent() {
 
       await setup<{ kind: string; message: string }>("hermes-agent:error", (e) => {
         setStatus("error");
+        // 백엔드 에러 발생 시 진행 중인 턴도 함께 닫는다.
+        dispatch({ type: "assistant-end", status: "error", error: e.payload.message });
         dispatch({
           type: "system",
           text: `Hermes 오류: ${e.payload.message}`,
@@ -216,34 +277,48 @@ export function useHermesAgent() {
     }
   }, []);
 
-  const send = useCallback(
-    async (text: string, images: string[] = []) => {
-      if (!text.trim() && images.length === 0) return;
-      dispatch({ type: "user", text, images });
-      try {
-        if (status === "error" || status === "idle") {
-          // Session is dead or never started — force restart before send.
-          try {
-            await unwrap(commands.hermesAgentStop());
-          } catch {
-            // ignore — best-effort cleanup
-          }
-          setStatus("starting");
-          await unwrap(commands.hermesAgentStart());
+  const send = useCallback(async (text: string, images: string[] = []) => {
+    if (!text.trim() && images.length === 0) return;
+    // 스트리밍 중이면 재진입 금지 — 백엔드에 두 번째 session/prompt 가 겹치지 않도록.
+    const last = messagesRef.current[messagesRef.current.length - 1];
+    if (last && last.role === "assistant" && !last.done) {
+      dispatch({
+        type: "system",
+        text: "이전 답변이 끝난 뒤 다시 시도하세요.",
+        level: "warn",
+      });
+      return;
+    }
+    dispatch({ type: "user", text, images });
+    try {
+      const curr = statusRef.current;
+      if (curr === "error" || curr === "idle") {
+        // Session is dead or never started — force restart before send.
+        try {
+          await unwrap(commands.hermesAgentStop());
+        } catch {
+          // ignore — best-effort cleanup
         }
-        await unwrap(commands.hermesAgentSend(text, images));
-      } catch (e) {
-        dispatch({
-          type: "system",
-          text: `송신 실패: ${(e as Error).message}`,
-          level: "error",
-        });
+        setStatus("starting");
+        await unwrap(commands.hermesAgentStart());
       }
-    },
-    [status],
-  );
+      await unwrap(commands.hermesAgentSend(text, images));
+    } catch (e) {
+      // 송신 실패 → 세션이 죽었을 가능성. status 를 error 로 떨궈
+      // 다음 send 가 자동 재시작 경로를 타게 한다.
+      setStatus("error");
+      dispatch({
+        type: "system",
+        text: `송신 실패: ${(e as Error).message}`,
+        level: "error",
+      });
+    }
+  }, []);
 
   const cancel = useCallback(async () => {
+    // 진행 중인 턴이 있을 때만 프런트 상태를 닫는다.
+    // 이미 끝났는데 또 누른 경우 (예: 늦은 클릭) 빈 assistant 버블을 만들지 않는다.
+    dispatch({ type: "cancel-if-streaming" });
     try {
       await unwrap(commands.hermesAgentCancel());
     } catch {
@@ -261,11 +336,6 @@ export function useHermesAgent() {
     setStatus("idle");
     await start();
   }, [start]);
-
-  const isStreaming = (() => {
-    const last = messages[messages.length - 1];
-    return !!last && last.role === "assistant" && !last.done;
-  })();
 
   return { messages, status, commandsList, isStreaming, start, send, cancel, restart };
 }
