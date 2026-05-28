@@ -20,7 +20,7 @@ Branch: `feat/hermes-floating` (off `dev@d739e56`)
 **Goals**
 
 - 모달 → 자유 이동·리사이즈 가능한 in-renderer 플로팅 패널로 전환.
-- OS 글로벌 단축키 토글 (기본 `Cmd+Shift+H`, Settings에서 재설정 가능).
+- OS 글로벌 단축키 토글 (기본 `Cmd+Shift+Space`, Settings에서 재설정 가능).
 - 위치·크기·열림 상태 영구 저장.
 - `hermes acp` 자식 프로세스를 통해 stdio JSON-RPC로 Hermes Agent와 양방향 통신.
 - 스트리밍 채팅, 슬래시 명령 자동완성(ACP `available_commands` 그대로), 이미지 입력(paste/drag-drop/file picker).
@@ -63,6 +63,7 @@ src-tauri/src/hermes_agent/
   - `pending: HashMap<RequestId, oneshot::Sender<JsonValue>>`
   - `session_id: String`
   - `available_commands: Vec<AcpCommand>` (캐시)
+- **Frame 포맷**: LSP-style. 매 메시지는 `Content-Length: <n>\r\n\r\n<json>` 헤더 + 바디. `BufReader::read_until(b'\n')`로 헤더 라인 반복 파싱 → `Content-Length` 값 추출 → 정확히 `n` 바이트 read. 송신도 동일 포맷으로 직렬화.
 - **수명**: `hermes_agent_start` 호출 시 spawn → ACP `initialize` → `session/new` → `available-commands` emit → ready. `hermes_agent_stop` 또는 앱 종료 시 `child.kill().await`.
 
 ### 4.2 신규 IPC 커맨드 (`src-tauri/src/commands/hermes_agent.rs`)
@@ -131,7 +132,7 @@ HermesView.tsx                  // 얇은 마운트 포인트 + 라우터 진입
 | key | value (JSON 또는 string) |
 |---|---|
 | `hermes.panel` | `{"x": number, "y": number, "w": number, "h": number, "open": bool}` |
-| `hermes.toggle_hotkey` | `"Cmd+Shift+H"` (기본). 기존 `set_global_hotkey` 패턴 복제. |
+| `hermes.toggle_hotkey` | `"Cmd+Shift+Space"` (기본). 기존 `set_global_hotkey` 패턴 복제. |
 
 마이그레이션 불필요 (key-value 테이블에 새 키 삽입만).
 
@@ -152,18 +153,17 @@ type HermesMessage =
 2. drag-drop → File 객체 → 동일 흐름 (확장자 보존).
 3. file picker → Tauri `dialog::open({ filters: image })` → 직접 path.
 
-송신 시 `hermes_agent_send(text, image_paths)` 호출 → Rust가 ACP `session/prompt`로 변환:
+송신 시 `hermes_agent_send(text, image_paths)` 호출 → Rust가 ACP `session/prompt`로 변환. **기본 file path, ACP가 거부 시 base64 fallback**:
 
 ```jsonc
-{
-  "prompt": [
-    { "type": "text", "text": "..." },
-    { "type": "image", "source": { "type": "file", "path": "/.../hermes-paste-<uuid>.png" } }
-  ]
-}
+// 기본 (file path)
+{ "type": "image", "source": { "type": "file", "path": "/.../hermes-paste-<uuid>.png" } }
+
+// fallback (base64) — initialize 응답의 capabilities나 첫 prompt error 기반 자동 전환
+{ "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": "..." } }
 ```
 
-전송 직후 임시파일에 5분 TTL cleanup job 등록.
+Rust 측에 `image_transport: ImageTransport::FilePath | Base64` 상태 보유, 한 번 base64로 떨어지면 세션 내 stickness. 전송 직후 임시파일에 5분 TTL cleanup job 등록.
 
 ## 6. UI / UX 명세
 
@@ -266,7 +266,6 @@ dev 진행 시 rebase. 최종 1 PR (`feat: floating hermes panel with acp chat`)
 
 ## 12. Risks / Open Questions
 
-- **ACP 프로토콜 세부사항**: 실제 frame 포맷(Content-Length 헤더 여부, message types) — Phase C 진입 시 `hermes acp --check` + 빈 ACP 세션 실험으로 확정. 스펙에서 표현은 일반적 JSON-RPC로 두고, 실구현 시 ACP 명세서 확인.
-- **이미지 source path 지원 여부**: ACP에서 `image` 블록이 file path를 받는지 base64만 받는지 확인 필요. base64만 가능하면 임시파일 저장 단계 생략하고 직접 인코딩.
-- **단축키 충돌**: macOS Cmd+Shift+H는 시스템 단축키와 겹칠 수 있음. 기본값 충돌 시 알림 + 대체 추천.
-- **모니터 좌표 클램프**: macOS multi-display에서 음수 좌표 가능 → 모든 디스플레이의 union rect 기준으로 클램프할지 primary 기준일지 결정 필요(현재: primary 기준 단순 클램프).
+- **ACP message schema 세부**: frame은 LSP-style 결정. 하지만 `session/prompt`·`session/update`의 정확한 method 이름과 payload shape은 Phase C 진입 시 `hermes acp` 자식과 핸드셰이크 실험으로 확정. 본 스펙은 메시지 의미 단위(initialize / new session / prompt / chunk / turn-end)만 고정, wire-level method 명칭은 Phase C에서 확정.
+- **단축키 충돌**: 기본 `Cmd+Shift+Space`는 macOS 시스템 예약은 아니나 `Ctrl+Space`(기존 `nav.global_hotkey` 기본값)와 가까움. register 충돌 검출 시 settings에 경고 + 사용자가 변경. 충돌 검출은 `tauri-plugin-global-shortcut` 등록 실패 에러로 확인.
+- **모니터 좌표 클램프**: macOS multi-display에서 음수 좌표 가능 → primary 기준 단순 클램프(YAGNI). 다중 모니터에서 패널이 사라지면 "패널 위치 리셋" 버튼으로 복구 가능 → 충분.
