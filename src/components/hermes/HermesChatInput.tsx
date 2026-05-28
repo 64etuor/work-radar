@@ -1,4 +1,4 @@
-import { Paperclip, Send, X } from "lucide-react";
+import { Paperclip, Send, Square, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { commands } from "@/bindings";
@@ -10,7 +10,9 @@ import type { AcpCommand } from "./types";
 
 interface Props {
   onSend: (text: string, images: string[]) => void;
+  onCancel?: () => void;
   disabled?: boolean;
+  isStreaming?: boolean;
   commandsList: AcpCommand[];
 }
 
@@ -27,7 +29,7 @@ export function detectSlashToken(
     : { active: false, query: "", start: -1 };
 }
 
-export function HermesChatInput({ onSend, disabled, commandsList }: Props) {
+export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, commandsList }: Props) {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -128,6 +130,7 @@ export function HermesChatInput({ onSend, disabled, commandsList }: Props) {
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
+      {isStreaming && <p className="text-muted-foreground text-xs">Hermes 작성 중…</p>}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {attachments.map((p, i) => (
@@ -211,17 +214,29 @@ export function HermesChatInput({ onSend, disabled, commandsList }: Props) {
           }}
           onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart)}
           placeholder="메시지 · / 명령 · 이미지 paste/drop"
-          disabled={disabled}
+          disabled={disabled || isStreaming}
         />
-        <Button
-          size="sm"
-          className="h-9 w-9 shrink-0 p-0"
-          onClick={submit}
-          disabled={disabled || (!text.trim() && attachments.length === 0)}
-          aria-label="전송"
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+        {isStreaming ? (
+          <Button
+            className="h-9 w-9 shrink-0 p-0"
+            variant="destructive"
+            size="sm"
+            onClick={onCancel}
+            aria-label="중단"
+          >
+            <Square className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            className="h-9 w-9 shrink-0 p-0"
+            onClick={submit}
+            disabled={disabled || (!text.trim() && attachments.length === 0)}
+            aria-label="전송"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );

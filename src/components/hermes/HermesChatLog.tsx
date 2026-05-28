@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
 
@@ -51,7 +53,9 @@ export function HermesChatLog({ messages }: Props) {
                   </summary>
                 </details>
               ))}
-              <p className="break-words whitespace-pre-wrap">{m.chunks.join("")}</p>
+              <div className="[&_code]:bg-muted [&_pre]:bg-muted text-sm leading-relaxed [&_code]:rounded [&_code]:px-1 [&_code]:text-xs [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_ul]:list-disc [&_ul]:pl-4">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.chunks.join("")}</ReactMarkdown>
+              </div>
               {!m.done && <span className="ml-1 inline-block animate-pulse">▍</span>}
             </div>
           )}

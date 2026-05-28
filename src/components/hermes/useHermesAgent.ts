@@ -87,9 +87,10 @@ export function useHermesAgent() {
 
     const sub = async () => {
       unlistens.push(
-        await listen<{ text: string }>("hermes-agent:chunk", (e) =>
-          dispatch({ type: "assistant-chunk", text: e.payload.text ?? "" }),
-        ),
+        await listen<{ kind?: string; text?: string }>("hermes-agent:chunk", (e) => {
+          if (e.payload.kind !== "agent") return;
+          dispatch({ type: "assistant-chunk", text: e.payload.text ?? "" });
+        }),
       );
 
       unlistens.push(
@@ -206,5 +207,10 @@ export function useHermesAgent() {
     await start();
   }, [start]);
 
-  return { messages, status, commandsList, start, send, cancel, restart };
+  const isStreaming = (() => {
+    const last = messages[messages.length - 1];
+    return !!last && last.role === "assistant" && !last.done;
+  })();
+
+  return { messages, status, commandsList, isStreaming, start, send, cancel, restart };
 }

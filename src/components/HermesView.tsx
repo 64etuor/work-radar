@@ -20,7 +20,9 @@ export default function HermesView() {
         <HermesChatLog messages={agent.messages} />
         <HermesChatInput
           onSend={agent.send}
+          onCancel={agent.cancel}
           disabled={agent.status !== "ready"}
+          isStreaming={agent.isStreaming}
           commandsList={agent.commandsList}
         />
       </div>
