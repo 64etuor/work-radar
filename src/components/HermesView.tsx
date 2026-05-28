@@ -18,7 +18,11 @@ export default function HermesView() {
     <HermesPanel onRestart={agent.restart}>
       <div className="flex min-h-0 flex-1 flex-col">
         <HermesChatLog messages={agent.messages} />
-        <HermesChatInput onSend={agent.send} disabled={agent.status !== "ready"} />
+        <HermesChatInput
+          onSend={agent.send}
+          disabled={agent.status !== "ready"}
+          commandsList={agent.commandsList}
+        />
       </div>
     </HermesPanel>
   );
