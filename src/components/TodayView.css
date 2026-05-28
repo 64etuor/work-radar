@@ -233,9 +233,11 @@
 
 .today-main {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px minmax(560px, 860px);
+  justify-content: start;
   flex: 1;
   min-height: 0;
+  background: var(--wr-bg-soft, #f6f5f1);
 }
 
 /* ── 좌측 트레이 ───────────────────────────────────────────────────── */
@@ -370,6 +372,7 @@
   position: relative;
   overflow-y: auto;
   background: #fff;
+  border-right: 1px solid var(--wr-border-light);
 }
 
 .today-canvas {

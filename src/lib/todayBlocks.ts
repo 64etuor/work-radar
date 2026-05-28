@@ -29,6 +29,10 @@ const SIGNAL_COLOR = "var(--color-today-signal)";
 const ROUTINE_COLOR = "var(--color-today-routine)";
 const EVENT_FALLBACK_COLOR = "var(--color-event-fallback)";
 
+function eventKey(calendarId: string | null | undefined, eventId: string | null | undefined) {
+  return calendarId && eventId ? `${calendarId}\u0000${eventId}` : null;
+}
+
 function plusMin(iso: string, m: number): string {
   // 로컬 ISO 보존(예: "2026-05-28T23:30:00"). `.toISOString()`을 쓰면 UTC로 변환되어
   // 다운스트림 `new Date(iso).getHours()`에서 시간이 어긋난다(KST=+9 등). 자정/DST 교차 시 블록 위치가 깨진다.
@@ -69,14 +73,21 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
       color: SIGNAL_COLOR,
       linkedEventId: s.linkedEventId ?? undefined,
     });
-    if (s.linkedEventId) absorbed.add(s.linkedEventId);
+    const key = eventKey(s.linkedCalendarId, s.linkedEventId);
+    if (key) absorbed.add(key);
+  }
+  for (const r of routines) {
+    if (!(r.timeOverride ?? r.timeOfDay)) continue;
+    const key = eventKey(r.linkedCalendarId, r.linkedEventId);
+    if (key) absorbed.add(key);
   }
 
   for (const e of events) {
     if (e.allDay) continue;
-    if (absorbed.has(e.id)) continue;
+    const key = eventKey(e.calendarId, e.id);
+    if (key && absorbed.has(key)) continue;
     out.push({
-      id: `event:${e.id}`,
+      id: `event:${e.calendarId}:${e.id}`,
       kind: "event",
       title: e.title,
       startISO: e.start,
@@ -101,6 +112,7 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
       calendarId: r.linkedCalendarId ?? "",
       calendarLabel: r.linkedCalendarId ?? "",
       color: ROUTINE_COLOR,
+      linkedEventId: r.linkedEventId ?? undefined,
       done: r.done,
       routineId: r.id,
     });

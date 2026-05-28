@@ -10,6 +10,7 @@ type Props = {
   anchor: { x: number; y: number } | null;
   onClose: () => void;
   onOpenFullModal: (box: LayoutBox) => void;
+  onDeleteSchedule: (box: LayoutBox) => void;
   /**
    * 루틴 블록 popover에서 완료/미완료 토글. 호출자(TodayView)가 date+useToggleRoutineCheck로
    * 묶어 전달한다. routine 외 kind는 무시.
@@ -35,6 +36,7 @@ export function EventPopover({
   anchor,
   onClose,
   onOpenFullModal,
+  onDeleteSchedule,
   onToggleRoutineDone,
 }: Props) {
   const goTo = useUIStore((s) => s.goTo);
@@ -45,6 +47,7 @@ export function EventPopover({
   const isRoutine = block.kind === "routine";
   const isSignal = block.kind === "signal";
   const isEvent = block.kind === "event";
+  const canDeleteSchedule = isEvent || Boolean(block.linkedEventId);
 
   /**
    * 더보기 동작 분기 (PR 7, 이전엔 disabled stub):
@@ -59,12 +62,25 @@ export function EventPopover({
       onClose();
       return;
     }
-    if (isEvent && block.linkedEventId) {
-      void openExternal(`https://calendar.google.com/calendar/event?eid=${block.linkedEventId}`);
+    const googleEventId = block.linkedEventId;
+    if (isEvent && googleEventId) {
+      void openExternal(`https://calendar.google.com/calendar/event?eid=${googleEventId}`);
       onClose();
       return;
     }
     onOpenFullModal(currentBox);
+  };
+
+  const handleDelete = () => {
+    const message =
+      block.kind === "event"
+        ? `"${block.title}" 일정을 Google Calendar에서 삭제합니다. 계속할까요?`
+        : block.kind === "signal"
+          ? `"${block.title}"의 시간 배치를 삭제하고 연결된 Google 일정을 지웁니다. 카드는 Today에 남습니다. 계속할까요?`
+          : `"${block.title}" 루틴의 오늘 시간 배치를 삭제하고 연결된 Google 일정을 지웁니다. 계속할까요?`;
+    if (!window.confirm(message)) return;
+    onDeleteSchedule(currentBox);
+    onClose();
   };
 
   return (
@@ -88,7 +104,7 @@ export function EventPopover({
             {hhmm(block.startISO)}–{hhmm(block.endISO)} ·{" "}
             {block.calendarLabel || block.calendarId || block.kind}
           </div>
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-wrap gap-2 pt-2">
             {isRoutine && block.routineId && onToggleRoutineDone && (
               <Button
                 size="sm"
@@ -126,6 +142,16 @@ export function EventPopover({
                 }
               >
                 Google에서 열기
+              </Button>
+            )}
+            {canDeleteSchedule && (
+              <Button
+                size="sm"
+                variant="destructiveOutline"
+                onClick={handleDelete}
+                aria-label="타임라인 일정 삭제"
+              >
+                삭제
               </Button>
             )}
           </div>

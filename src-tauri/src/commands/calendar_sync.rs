@@ -95,13 +95,37 @@ pub async fn stage_calendar_write(
     db: State<'_, Db>,
     notify: State<'_, Arc<Notify>>,
 ) -> Result<(), AppError> {
-    let pool = db.inner();
+    stage_calendar_write_inner(db.inner(), notify.inner(), req).await
+}
+
+pub(crate) async fn stage_calendar_write_inner(
+    pool: &SqlitePool,
+    notify: &Arc<Notify>,
+    req: StageWriteRequest,
+) -> Result<(), AppError> {
     // PR 6: 루틴은 오늘 처음 인터랙션 시점에 routine_checks 행이 없을 수 있다.
     // build_queue_row 전에 idempotent INSERT로 행 보장(UNIQUE(routine_id, date) 0011 마이그레이션).
     // 이렇게 해야 fetch_linked_event/이후 sync 워커의 link_back UPDATE가 0행이 안 되고
     // Schedule 직후 time_override UPDATE도 안전.
     if let WriteTarget::RoutineCheck { routine_id, date } = &req.target {
         ensure_routine_check_row(pool, routine_id, date).await?;
+    }
+    let (target_kind, target_id) = match &req.target {
+        WriteTarget::Signal { id } => ("signal", id.clone()),
+        WriteTarget::RoutineCheck { routine_id, date } => {
+            ("routine_check", format!("{routine_id}|{date}"))
+        }
+        WriteTarget::Event {
+            calendar_id,
+            event_id,
+        } => ("event", format!("{calendar_id}|{event_id}")),
+    };
+    let (kind, calendar_id, event_id_opt, payload, debounce_ms) =
+        build_queue_row(&req, pool, target_kind, &target_id).await?;
+
+    // build_queue_row 성공 뒤에만 로컬 mirror를 바꾼다. linked event가 없는 unschedule/resize가
+    // 실패했는데 카드만 미배치로 돌아가는 상태 분리를 막기 위한 순서 보장이다.
+    if let WriteTarget::RoutineCheck { routine_id, date } = &req.target {
         // Schedule/Reschedule이면 time_override를 즉시 로컬에 반영 — Google mirror는 큐 워커가.
         // 트레이↔캔버스 드래그 직후 UI가 다음 fetch에서 time_override를 보는 게 보장돼야 한다(spec §D10).
         let hhmm = match &req.op {
@@ -122,6 +146,7 @@ pub async fn stage_calendar_write(
             .await?;
         }
     }
+
     // ADR-0002 카드 정본: signals.scheduled_at/duration/linked_calendar_id를 즉시
     // 로컬에 반영한다. 워커는 Google mirror만 담당 — UI가 다음 fetch에서 즉시
     // 새 schedule을 본다. (이전엔 link_back만 있어서 Google round-trip 끝나야
@@ -185,18 +210,6 @@ pub async fn stage_calendar_write(
             WriteOp::MoveCalendar { .. } => {}
         }
     }
-    let (target_kind, target_id) = match &req.target {
-        WriteTarget::Signal { id } => ("signal", id.clone()),
-        WriteTarget::RoutineCheck { routine_id, date } => {
-            ("routine_check", format!("{routine_id}|{date}"))
-        }
-        WriteTarget::Event {
-            calendar_id,
-            event_id,
-        } => ("event", format!("{calendar_id}|{event_id}")),
-    };
-    let (kind, calendar_id, event_id_opt, payload, debounce_ms) =
-        build_queue_row(&req, pool, target_kind, &target_id).await?;
     upsert_write(
         pool,
         kind,
@@ -495,6 +508,92 @@ mod tests {
             count, 1,
             "멱등 — UNIQUE(routine_id, date) ON CONFLICT DO NOTHING"
         );
+    }
+
+    #[tokio::test]
+    async fn unschedule_without_link_does_not_clear_signal_schedule_or_queue() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, scheduled_at, scheduled_duration) \
+             VALUES ('s1','Demo','braindump','thought','2026-05-28T10:00:00',30)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let req = StageWriteRequest {
+            target: WriteTarget::Signal { id: "s1".into() },
+            op: WriteOp::Unschedule,
+            idempotency_key: "test-unschedule".into(),
+        };
+        let err = stage_calendar_write_inner(&db, &notify, req)
+            .await
+            .expect_err("missing linked event should reject unschedule");
+        assert_eq!(err.code, "calendar.no_linked_event");
+
+        let (scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id): (
+            Option<String>,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id \
+             FROM signals WHERE id = 's1'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(scheduled_at.as_deref(), Some("2026-05-28T10:00:00"));
+        assert_eq!(scheduled_duration, Some(30));
+        assert!(linked_event_id.is_none());
+        assert!(linked_calendar_id.is_none());
+
+        let (queued,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(queued, 0);
+    }
+
+    #[tokio::test]
+    async fn reschedule_without_link_does_not_move_signal_or_queue() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, scheduled_at, scheduled_duration) \
+             VALUES ('s1','Demo','braindump','thought','2026-05-28T10:00:00',30)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let req = StageWriteRequest {
+            target: WriteTarget::Signal { id: "s1".into() },
+            op: WriteOp::Reschedule {
+                at: "2026-05-28T12:00:00".into(),
+                duration_min: 45,
+            },
+            idempotency_key: "test-reschedule".into(),
+        };
+        let err = stage_calendar_write_inner(&db, &notify, req)
+            .await
+            .expect_err("missing linked event should reject reschedule");
+        assert_eq!(err.code, "calendar.no_linked_event");
+
+        let (scheduled_at, scheduled_duration): (Option<String>, Option<i64>) =
+            sqlx::query_as("SELECT scheduled_at, scheduled_duration FROM signals WHERE id = 's1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(scheduled_at.as_deref(), Some("2026-05-28T10:00:00"));
+        assert_eq!(scheduled_duration, Some(30));
+
+        let (queued,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(queued, 0);
     }
 
     /// extract_hhmm: 다양한 ISO 입력에서 HH:MM 추출.

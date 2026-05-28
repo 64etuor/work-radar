@@ -45,6 +45,7 @@ export type StageInput =
       at: string;
       durationMin: number;
     }
+  | { kind: "eventUnschedule"; eventId: string; calendarId: string }
   | { kind: "unschedule"; targetSignalId: string }
   | {
       kind: "moveCalendar";
@@ -158,6 +159,15 @@ function toRequest(i: StageInput): StageWriteRequest {
         at: i.at,
         duration_min: i.durationMin,
       };
+      return { target, op, idempotency_key };
+    }
+    case "eventUnschedule": {
+      const target: WriteTarget = {
+        kind: "event",
+        calendar_id: i.calendarId,
+        event_id: i.eventId,
+      };
+      const op: WriteOp = { op: "unschedule" };
       return { target, op, idempotency_key };
     }
     case "unschedule": {

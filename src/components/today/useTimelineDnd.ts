@@ -265,11 +265,11 @@ export function useTimelineDnd(opts: Opts) {
   }, [qc]);
 
   const patchEventCache = useCallback(
-    (eventId: string, patch: { start?: string; durationMin?: number }) => {
+    (calendarId: string, eventId: string, patch: { start?: string; durationMin?: number }) => {
       qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) => {
         if (!old) return old;
         return old.map((event) => {
-          if (event.id !== eventId) return event;
+          if (event.calendarId !== calendarId || event.id !== eventId) return event;
           const start = patch.start ?? event.start;
           const durationMin =
             patch.durationMin ??
@@ -338,7 +338,7 @@ export function useTimelineDnd(opts: Opts) {
         const clamped = resized.durationMin;
         if (clamped === a.durationMin && at === a.startISO) return;
         if (a.blockKind === "event") {
-          patchEventCache(a.eventId, {
+          patchEventCache(a.calendarId, a.eventId, {
             start: at,
             durationMin: clamped,
           });
@@ -386,7 +386,7 @@ export function useTimelineDnd(opts: Opts) {
       if (a.from === "canvas" && o.to === "canvas") {
         const at = shiftIsoByPx(date, a.startISO, ev.delta.y);
         if (a.blockKind === "event") {
-          patchEventCache(a.eventId, { start: at, durationMin: a.durationMin });
+          patchEventCache(a.calendarId, a.eventId, { start: at, durationMin: a.durationMin });
         } else if (a.blockKind === "signal") {
           patchSignalCaches(a.signalId, { at });
         }

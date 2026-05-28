@@ -2,6 +2,7 @@ import "./TodayView.css";
 
 import type { DragMoveEvent } from "@dnd-kit/core";
 import { DragOverlay } from "@dnd-kit/core";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -12,6 +13,7 @@ import {
   useState,
 } from "react";
 
+import type { CalendarEvent } from "@/bindings";
 import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
 import { EventPopover } from "@/components/today/EventPopover";
 import { StagedBadge } from "@/components/today/StagedBadge";
@@ -27,6 +29,7 @@ import {
   useTodayDndSensors,
 } from "@/components/today/useTimelineDnd";
 import { Button } from "@/components/ui/button";
+import { stage } from "@/lib/calendarSync";
 import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import {
   localToday,
@@ -40,6 +43,7 @@ import {
   useToggleTodayDone,
 } from "@/lib/query";
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
+import { useToastStore } from "@/lib/toast";
 import { buildTodayBlocks } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
 
@@ -52,6 +56,7 @@ import { useUIStore } from "@/store";
  */
 export function TodayView() {
   const { goTo } = useUIStore();
+  const qc = useQueryClient();
   const today = localToday();
   const weekday = localWeekday();
   const [date, setDate] = useState<string>(today);
@@ -102,6 +107,55 @@ export function TodayView() {
   const handleOpenFullModal = useCallback(() => {
     setPopover(null);
   }, []);
+  const removeEventFromCache = useCallback(
+    (calendarId: string, eventId: string) => {
+      qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) =>
+        old?.filter((event) => !(event.calendarId === calendarId && event.id === eventId)),
+      );
+    },
+    [date, qc],
+  );
+  const handleDeleteSchedule = useCallback(
+    (box: LayoutBox) => {
+      const { block } = box;
+      const title = block.title;
+      const linkedEventId = block.linkedEventId;
+      const calendarId = block.calendarId;
+      const run = async () => {
+        if (block.kind !== "event" && !linkedEventId) {
+          useToastStore
+            .getState()
+            .pushError("calendar.delete", "연결된 Google 일정이 없어 삭제할 수 없습니다.");
+          return;
+        }
+        if (block.kind === "signal") {
+          const signalId = block.id.replace(/^signal:/, "");
+          await stage({ kind: "unschedule", targetSignalId: signalId });
+          if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
+          void qc.invalidateQueries({ queryKey: ["signals"] });
+          void qc.invalidateQueries({ queryKey: ["today"] });
+        } else if (block.kind === "event") {
+          const eventId = block.linkedEventId ?? block.id.replace(/^event:/, "");
+          await stage({ kind: "eventUnschedule", eventId, calendarId });
+          removeEventFromCache(calendarId, eventId);
+        } else if (block.kind === "routine" && block.routineId) {
+          await stage({ kind: "routineUnschedule", routineId: block.routineId, date });
+          if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
+          void qc.invalidateQueries({ queryKey: ["routines"] });
+        }
+        void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+        useToastStore.getState().pushSuccess(`일정 삭제됨: ${title}`);
+      };
+      void run().catch((err) => {
+        void qc.invalidateQueries({ queryKey: ["signals"] });
+        void qc.invalidateQueries({ queryKey: ["today"] });
+        void qc.invalidateQueries({ queryKey: ["routines"] });
+        void qc.invalidateQueries({ queryKey: ["calendarEvents", date] });
+        useToastStore.getState().pushError("calendar.delete", err);
+      });
+    },
+    [date, qc, removeEventFromCache],
+  );
 
   // ── DnD wiring ──────────────────────────────────────────────────────
   const defaultCalendarFor = useMemo(
@@ -249,6 +303,7 @@ export function TodayView() {
           anchor={popover?.anchor ?? null}
           onClose={handlePopoverClose}
           onOpenFullModal={handleOpenFullModal}
+          onDeleteSchedule={handleDeleteSchedule}
           onToggleRoutineDone={(routineId, done) =>
             toggleRoutine.mutate({ routineId, date: today, done })
           }
