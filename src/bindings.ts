@@ -386,11 +386,13 @@ export const commands = {
 	hermesPanelStateGet: () => typedError<HermesPanelState, AppError>(__TAURI_INVOKE("hermes_panel_state_get")),
 	/**  Hermes 패널 상태 저장. */
 	hermesPanelStateSet: (state: HermesPanelState) => typedError<null, AppError>(__TAURI_INVOKE("hermes_panel_state_set", { state })),
+	hermesDetect: () => typedError<HermesDetectResult, AppError>(__TAURI_INVOKE("hermes_detect")),
 	/**  저장된 Hermes 패널 토글 핫키 조회. 미설정 시 기본값("Cmd+Shift+Space"). */
 	hermesGetToggleHotkey: () => typedError<string, AppError>(__TAURI_INVOKE("hermes_get_toggle_hotkey")),
 	/**
-	 *  Hermes 패널 토글 핫키 변경: 검증 → 런타임 재등록 → 성공 시 영속.
+	 *  Hermes 패널 토글 핫키 변경: 검증 → nav 충돌 거부 → 런타임 재등록 → 성공 시 영속.
 	 *  등록 실패(충돌/무효) 시 기존 핫키를 유지하고 Err를 노출한다(저장 안 함 — graceful).
+	 *  같은 값으로 저장해도 재등록은 항상 시도한다(retry path).
 	 */
 	hermesSetToggleHotkey: (spec: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_set_toggle_hotkey", { spec })),
 	/**
@@ -939,6 +941,14 @@ export type HermesBridgeStatus = {
 	detail: string,
 };
 
+export type HermesDetectResult = {
+	installed: boolean,
+	version: string | null,
+	path: string | null,
+	acp_ready: boolean,
+	error: string | null,
+};
+
 /**
  *  fetch_hermes_messages 결과(bounded 단발 getUpdates). 이번 호출에서 새로 받은 메시지 수.
  *  메시지 본문은 별도 list_hermes_messages로 조회(제어 surface). specta i64/u64 금지 → u32.
@@ -960,7 +970,10 @@ export type HermesMessage = {
 	createdAt: string,
 };
 
-/**  Hermes 플로팅 패널의 위치·크기·열림 상태. */
+/**
+ *  Hermes 플로팅 패널의 위치·크기·열림 상태.
+ *  x/y/w/h는 None = 미설정(프런트에서 defaultBounds로 초기 배치).
+ */
 export type HermesPanelState = {
 	x: number | null,
 	y: number | null,

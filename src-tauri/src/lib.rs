@@ -20,6 +20,7 @@ mod db;
 mod error;
 mod git;
 mod github;
+mod hermes_agent;
 mod jobs;
 mod keychain;
 mod logging;
@@ -202,6 +203,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Hermes 플로팅 패널 상태 영속 (feat/hermes-floating A1).
         commands::hermes_panel_state_get,
         commands::hermes_panel_state_set,
+        // Hermes ACP 에이전트 감지 (feat/hermes-floating B1).
+        hermes_agent::detect::hermes_detect,
         // Hermes 글로벌 토글 핫키 (feat/hermes-floating A2).
         commands::hermes_get_toggle_hotkey,
         commands::hermes_set_toggle_hotkey,

@@ -16,7 +16,7 @@ pub const DEFAULT_HERMES_TOGGLE_HOTKEY: &str = "Cmd+Shift+Space";
 
 /// Hermes 플로팅 패널의 위치·크기·열림 상태.
 /// x/y/w/h는 None = 미설정(프런트에서 defaultBounds로 초기 배치).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct HermesPanelState {
     pub x: Option<f64>,
@@ -24,18 +24,6 @@ pub struct HermesPanelState {
     pub w: Option<f64>,
     pub h: Option<f64>,
     pub open: bool,
-}
-
-impl Default for HermesPanelState {
-    fn default() -> Self {
-        Self {
-            x: None,
-            y: None,
-            w: None,
-            h: None,
-            open: false,
-        }
-    }
 }
 
 /// app_config에서 패널 상태 조회. 없으면 Default 반환.
