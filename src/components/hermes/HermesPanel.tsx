@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { commands, type HermesPanelState } from "@/bindings";
@@ -19,9 +19,15 @@ const PANEL_QUERY_KEY = ["hermes-panel-state"] as const;
  * - 헤더 드래그 + 우하단 리사이즈 그립 (PointerCapture 기반).
  * - "hermes:toggle" Tauri 이벤트 구독 → open 토글 (마운트 1회, stale closure 없음).
  * - Esc 키 닫기 (패널 열림 시에만, input/textarea 포커스 시 제외).
- * - children만 받는다 — onRestart는 D4에서 추가.
+ * - onRestart?: () => void — D4에서 추가, 헤더 재시작 버튼.
  */
-export function HermesPanel({ children }: { children: React.ReactNode }) {
+export function HermesPanel({
+  children,
+  onRestart,
+}: {
+  children: React.ReactNode;
+  onRestart?: () => void;
+}) {
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
   const qc = useQueryClient();
 
@@ -125,6 +131,7 @@ export function HermesPanel({ children }: { children: React.ReactNode }) {
         h={h}
         onBoundsChange={setBounds}
         onClose={() => setOpen(false)}
+        onRestart={onRestart}
       />
 
       {/* ── 본문 ───────────────────────────────────────────────── */}
@@ -153,7 +160,8 @@ function PanelHeader({
   h,
   onBoundsChange,
   onClose,
-}: BoundsProps & { onClose: () => void }) {
+  onRestart,
+}: BoundsProps & { onClose: () => void; onRestart?: () => void }) {
   const dragRef = useRef<{
     startPx: number;
     startPy: number;
@@ -201,6 +209,18 @@ function PanelHeader({
       onPointerCancel={onPointerUp}
     >
       <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>Hermes</span>
+      {onRestart && (
+        <Button
+          data-no-drag
+          variant="ghost"
+          className="h-6 w-6 p-0"
+          onClick={onRestart}
+          aria-label="새 세션"
+          title="새 세션 시작"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="sm"
