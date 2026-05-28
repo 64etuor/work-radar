@@ -375,13 +375,13 @@ function DragGhost({ data, isOverTray }: { data: DragData; isOverTray: boolean }
       </div>
     );
   }
-  const title = data.from === "tray" || data.from === "routine" ? data.title : "block";
+  // 여기까지 오면 from은 tray | routine (canvas, canvas-resize는 위에서 처리됨).
   return (
     <div className="today-drag-ghost">
       <span className="today-drag-ghost-grip" aria-hidden>
         ⠿
       </span>
-      <span className="today-drag-ghost-title">{title}</span>
+      <span className="today-drag-ghost-title">{data.title}</span>
     </div>
   );
 }

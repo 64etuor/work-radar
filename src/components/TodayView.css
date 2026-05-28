@@ -219,7 +219,6 @@
 .today-drag-ghost--card {
   display: block;
   width: 150px;
-  max-width: 150px;
   min-height: 74px;
   padding: 8px 10px;
   background: var(--wr-postit-bg, #fffdf3);
