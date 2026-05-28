@@ -45,7 +45,6 @@ output/
 .claude/scheduled_tasks.lock
 
 # react-doctor multi-agent install dirs for tools the team doesn't use
-# (Claude Code skill is kept at .claude/skills/react-doctor/)
-/.agents/
+# (Claude Code skill at .claude/skills/react-doctor/, Codex skill at .agents/skills/react-doctor/)
 /.kiro/
 /skills/
