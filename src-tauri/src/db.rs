@@ -28,8 +28,12 @@ pub async fn init_db(db_path: &Path) -> Result<Db, sqlx::Error> {
         .synchronous(SqliteSynchronous::Normal)
         .busy_timeout(Duration::from_secs(5));
 
+    // max_connections=10: 30초 백그라운드 calendar sync flush(읽기/쓰기 다수)와 IPC 쿼리·
+    // mutation이 동시에 풀을 잡으면 5개로는 단발 spike에 acquire_timeout(기본 30초)이 터졌다.
+    // acquire_timeout=5s: 30초 매달리다 토스트 띄우는 대신 빠르게 실패해 사용자가 재시도하게 한다.
     let pool = SqlitePoolOptions::new()
-        .max_connections(5)
+        .max_connections(10)
+        .acquire_timeout(Duration::from_secs(5))
         .connect_with(opts)
         .await?;
 
