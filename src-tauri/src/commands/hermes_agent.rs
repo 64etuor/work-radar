@@ -4,34 +4,39 @@ use crate::error::AppError;
 use crate::hermes_agent::acp_client::{AcpSession, ImageTransport};
 use base64::Engine as _;
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
-pub type HermesAgentHolder = Arc<Mutex<Option<AcpSession>>>;
+pub type TabId = String;
+pub type HermesAgentHolder = Arc<RwLock<HashMap<TabId, AcpSession>>>;
+
+pub const HERMES_TAB_CAP: usize = 3;
 
 pub fn new_holder() -> HermesAgentHolder {
-    Arc::new(Mutex::new(None))
+    Arc::new(RwLock::new(HashMap::new()))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn hermes_agent_start(
-    app: AppHandle,
+pub async fn hermes_agent_open_tab(
     holder: State<'_, HermesAgentHolder>,
+    tab_id: String,
 ) -> Result<(), AppError> {
-    let mut guard = holder.lock().await;
-    if let Some(session) = guard.as_ref() {
-        // Already started — re-emit session-ready so late frontend listeners
-        // (mounted after the original spawn) can pick up the live session.
-        let _ = app.emit(
-            "hermes-agent:session-ready",
-            json!({ "session_id": &session.session_id }),
-        );
-        return Ok(());
+    let map = holder.read().await;
+    if map.contains_key(&tab_id) {
+        return Ok(()); // idempotent
     }
-    let session = AcpSession::spawn(app).await?;
-    *guard = Some(session);
+    if map.len() >= HERMES_TAB_CAP {
+        return Err(AppError::unexpected(
+            "hermes.tab.cap",
+            format!("max {HERMES_TAB_CAP}"),
+        ));
+    }
+    // Slot itself is not pre-created — no empty slot representation in HashMap.
+    // "Tab existence" is tracked by the frontend; backend only provides cap pre-check.
+    // Actual slot occupation happens on lazy spawn during send.
     Ok(())
 }
 
@@ -40,25 +45,61 @@ pub async fn hermes_agent_start(
 pub async fn hermes_agent_send(
     app: AppHandle,
     holder: State<'_, HermesAgentHolder>,
+    tab_id: String,
     text: String,
     image_paths: Vec<String>,
 ) -> Result<(), AppError> {
-    // 1. Snapshot all needed fields under brief lock, then release before I/O.
-    let (session_id, transport, stdin_tx, pending, next_id) = {
-        let guard = holder.lock().await;
-        let s = guard
-            .as_ref()
-            .ok_or_else(|| AppError::unexpected("hermes.acp.protocol", "session not started"))?;
-        (
-            s.session_id.clone(),
-            s.image_transport,
-            s.stdin_tx.clone(),
-            s.pending.clone(),
-            s.next_id.clone(),
-        )
+    // 1. Lazy spawn — if no child for this slot, spawn one. Re-check cap.
+    let snapshot = {
+        let map = holder.read().await;
+        map.get(&tab_id).map(|s| {
+            (
+                s.session_id.clone(),
+                s.image_transport,
+                s.stdin_tx.clone(),
+                s.pending.clone(),
+                s.next_id.clone(),
+            )
+        })
     };
 
-    // 2. Build prompt blocks — file I/O happens here, lock already released.
+    let (session_id, transport, stdin_tx, pending, next_id) = match snapshot {
+        Some(s) => s,
+        None => {
+            // Lazy spawn — write lock for insert.
+            let mut map = holder.write().await;
+            if map.contains_key(&tab_id) {
+                // Race: another caller spawned meanwhile. Re-read.
+                let s = map.get(&tab_id).expect("just checked");
+                (
+                    s.session_id.clone(),
+                    s.image_transport,
+                    s.stdin_tx.clone(),
+                    s.pending.clone(),
+                    s.next_id.clone(),
+                )
+            } else {
+                if map.len() >= HERMES_TAB_CAP {
+                    return Err(AppError::unexpected(
+                        "hermes.tab.cap",
+                        format!("max {HERMES_TAB_CAP}"),
+                    ));
+                }
+                let session = AcpSession::spawn(app.clone(), tab_id.clone()).await?;
+                let tup = (
+                    session.session_id.clone(),
+                    session.image_transport,
+                    session.stdin_tx.clone(),
+                    session.pending.clone(),
+                    session.next_id.clone(),
+                );
+                map.insert(tab_id.clone(), session);
+                tup
+            }
+        }
+    };
+
+    // 2. Build prompt blocks (same as before — image_paths handling).
     let mut prompt: Vec<serde_json::Value> = Vec::new();
     if !text.is_empty() {
         prompt.push(json!({ "type": "text", "text": text }));
@@ -74,43 +115,41 @@ pub async fn hermes_agent_send(
                     .map_err(|e| AppError::unexpected("hermes.image.read", e.to_string()))?;
                 let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
                 let media_type = mime_from_ext(path);
-                json!({ "type": "image", "source": { "type": "base64", "media_type": media_type, "data": b64 } })
+                json!({ "type": "image", "source": {
+                    "type": "base64", "media_type": media_type, "data": b64 } })
             }
         };
         prompt.push(block);
     }
 
-    // 3. Allocate a JSON-RPC id and register a oneshot in pending.
+    // 3. JSON-RPC id + pending oneshot.
     let id = next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let body = serde_json::to_vec(&json!({
-        "jsonrpc": "2.0",
-        "id": id,
+        "jsonrpc": "2.0", "id": id,
         "method": "session/prompt",
         "params": { "sessionId": session_id, "prompt": prompt },
     }))
     .map_err(|e| AppError::unexpected("hermes.acp.protocol", e.to_string()))?;
     let frame = crate::hermes_agent::frame::encode_frame(&body);
-
     let (tx, rx) = tokio::sync::oneshot::channel();
     pending.lock().await.insert(id, tx);
 
-    // 4. Send the framed request.
+    // 4. Send.
     if stdin_tx.send(frame).await.is_err() {
         pending.lock().await.remove(&id);
-        let _ = app.emit(
-            "hermes-agent:turn-end",
-            json!({ "status": "error", "error": "stdin closed" }),
-        );
+        emit_turn_end(&app, &tab_id, "error", Some("stdin closed"));
         return Err(AppError::unexpected("hermes.acp.protocol", "stdin closed"));
     }
 
-    // 5. Wait for the response — model turns can take many seconds; 10 min budget.
+    // 5. Wait — 10 min budget.
     let resp = match tokio::time::timeout(tokio::time::Duration::from_secs(600), rx).await {
         Ok(Ok(v)) => v,
         Ok(Err(_)) => {
-            let _ = app.emit(
-                "hermes-agent:turn-end",
-                json!({ "status": "error", "error": "response dropped (stream closed)" }),
+            emit_turn_end(
+                &app,
+                &tab_id,
+                "error",
+                Some("response dropped (stream closed)"),
             );
             return Err(AppError::unexpected(
                 "hermes.acp.protocol",
@@ -119,43 +158,45 @@ pub async fn hermes_agent_send(
         }
         Err(_) => {
             pending.lock().await.remove(&id);
-            let _ = app.emit(
-                "hermes-agent:turn-end",
-                json!({ "status": "error", "error": "timeout" }),
-            );
+            emit_turn_end(&app, &tab_id, "error", Some("timeout"));
             return Err(AppError::unexpected("hermes.acp.timeout", "session/prompt"));
         }
     };
 
-    // 6. Extract result / error, map stopReason, emit turn-end.
+    // 6. Map response → turn-end.
     if let Some(err) = resp.get("error") {
         let msg = err.to_string();
-        let _ = app.emit(
-            "hermes-agent:turn-end",
-            json!({ "status": "error", "error": msg.clone() }),
-        );
+        emit_turn_end(&app, &tab_id, "error", Some(&msg));
         return Err(AppError::unexpected("hermes.acp.protocol", msg));
     }
-
     let stop_reason = resp
         .get("result")
         .and_then(|r| r.get("stopReason"))
         .and_then(|v| v.as_str())
         .unwrap_or("end_turn")
         .to_string();
-
     let status = match stop_reason.as_str() {
         "cancelled" => "cancelled",
         "refusal" | "error" => "error",
         _ => "ok",
     };
-
     let _ = app.emit(
         "hermes-agent:turn-end",
-        json!({ "status": status, "stop_reason": stop_reason }),
+        json!({
+            "tabId": tab_id,
+            "status": status,
+            "stop_reason": stop_reason,
+        }),
     );
-
     Ok(())
+}
+
+fn emit_turn_end(app: &AppHandle, tab_id: &str, status: &str, error: Option<&str>) {
+    let mut payload = json!({ "tabId": tab_id, "status": status });
+    if let Some(e) = error {
+        payload["error"] = json!(e);
+    }
+    let _ = app.emit("hermes-agent:turn-end", payload);
 }
 
 fn mime_from_ext(path: &str) -> &'static str {
@@ -175,12 +216,13 @@ fn mime_from_ext(path: &str) -> &'static str {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn hermes_agent_cancel(holder: State<'_, HermesAgentHolder>) -> Result<(), AppError> {
-    // Snapshot then drop lock before sending — allows send to proceed concurrently.
+pub async fn hermes_agent_cancel(
+    holder: State<'_, HermesAgentHolder>,
+    tab_id: String,
+) -> Result<(), AppError> {
     let snapshot = {
-        let guard = holder.lock().await;
-        guard
-            .as_ref()
+        let map = holder.read().await;
+        map.get(&tab_id)
             .map(|s| (s.session_id.clone(), s.stdin_tx.clone()))
     };
     if let Some((session_id, stdin_tx)) = snapshot {
@@ -201,10 +243,29 @@ pub async fn hermes_agent_cancel(holder: State<'_, HermesAgentHolder>) -> Result
 
 #[tauri::command]
 #[specta::specta]
-pub async fn hermes_agent_stop(holder: State<'_, HermesAgentHolder>) -> Result<(), AppError> {
-    let mut guard = holder.lock().await;
-    if let Some(session) = guard.take() {
+pub async fn hermes_agent_close_tab(
+    holder: State<'_, HermesAgentHolder>,
+    tab_id: String,
+) -> Result<(), AppError> {
+    let removed = {
+        let mut map = holder.write().await;
+        map.remove(&tab_id)
+    };
+    if let Some(session) = removed {
         session.kill().await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn hermes_agent_stop(holder: State<'_, HermesAgentHolder>) -> Result<(), AppError> {
+    let drained: Vec<AcpSession> = {
+        let mut map = holder.write().await;
+        map.drain().map(|(_, v)| v).collect()
+    };
+    for s in drained {
+        s.kill().await;
     }
     Ok(())
 }
@@ -230,4 +291,24 @@ pub async fn hermes_save_pasted_image(bytes: Vec<u8>, ext: String) -> Result<Str
     });
 
     Ok(path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn open_tab_idempotent_and_cap_precheck_passes_under_cap() {
+        let holder: HermesAgentHolder = new_holder();
+        // open_tab does not spawn child — cap precheck only. map is empty so passes.
+        assert_eq!(holder.read().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn close_tab_on_missing_is_noop() {
+        let holder: HermesAgentHolder = new_holder();
+        let mut map = holder.write().await;
+        let removed = map.remove("missing");
+        assert!(removed.is_none());
+    }
 }

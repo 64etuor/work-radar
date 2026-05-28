@@ -387,9 +387,10 @@ export const commands = {
 	/**  Hermes 패널 상태 저장. */
 	hermesPanelStateSet: (state: HermesPanelState) => typedError<null, AppError>(__TAURI_INVOKE("hermes_panel_state_set", { state })),
 	hermesDetect: () => typedError<HermesDetectResult, AppError>(__TAURI_INVOKE("hermes_detect")),
-	hermesAgentStart: () => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_start")),
-	hermesAgentSend: (text: string, imagePaths: string[]) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_send", { text, imagePaths })),
-	hermesAgentCancel: () => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_cancel")),
+	hermesAgentOpenTab: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_open_tab", { tabId })),
+	hermesAgentSend: (tabId: string, text: string, imagePaths: string[]) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_send", { tabId, text, imagePaths })),
+	hermesAgentCancel: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_cancel", { tabId })),
+	hermesAgentCloseTab: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_close_tab", { tabId })),
 	hermesAgentStop: () => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_stop")),
 	hermesSavePastedImage: (bytes: number[], ext: string) => typedError<string, AppError>(__TAURI_INVOKE("hermes_save_pasted_image", { bytes, ext })),
 	/**  저장된 Hermes 패널 토글 핫키 조회. 미설정 시 기본값("Cmd+Shift+Space"). */

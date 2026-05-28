@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { RotateCcw, X } from "lucide-react";
+import { Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { commands, type HermesPanelState } from "@/bindings";
@@ -17,10 +17,18 @@ export function HermesPanel({
   children,
   onRestart,
   isStreaming,
+  onNewTab,
+  onCloseActive,
+  canCreateTab,
+  activeTabId,
 }: {
   children: React.ReactNode;
   onRestart?: () => void;
   isStreaming?: boolean;
+  onNewTab?: () => Promise<unknown>;
+  onCloseActive?: () => Promise<unknown>;
+  canCreateTab?: boolean;
+  activeTabId?: string | null;
 }) {
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
   const qc = useQueryClient();
@@ -121,6 +129,10 @@ export function HermesPanel({
         onClose={() => setOpen(false)}
         onRestart={onRestart}
         isStreaming={isStreaming}
+        onNewTab={onNewTab}
+        onCloseActive={onCloseActive}
+        canCreateTab={canCreateTab}
+        activeTabId={activeTabId}
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       <ResizeGrip x={x} y={y} w={w} h={h} onBoundsChange={setBounds} />
@@ -147,7 +159,19 @@ function PanelHeader({
   onClose,
   onRestart,
   isStreaming,
-}: BoundsProps & { onClose: () => void; onRestart?: () => void; isStreaming?: boolean }) {
+  onNewTab,
+  onCloseActive,
+  canCreateTab,
+  activeTabId,
+}: BoundsProps & {
+  onClose: () => void;
+  onRestart?: () => void;
+  isStreaming?: boolean;
+  onNewTab?: () => Promise<unknown>;
+  onCloseActive?: () => Promise<unknown>;
+  canCreateTab?: boolean;
+  activeTabId?: string | null;
+}) {
   const dragRef = useRef<{
     startPx: number;
     startPy: number;
@@ -200,12 +224,37 @@ function PanelHeader({
         )}
       </span>
       <div className="flex items-center gap-1" data-no-drag>
+        {onNewTab && (
+          <Button
+            data-no-drag
+            variant="ghost"
+            className="hover:bg-muted/60 h-7 w-7 p-0"
+            onClick={() => void onNewTab()}
+            disabled={canCreateTab === false}
+            aria-label="새 탭"
+            title={canCreateTab === false ? "최대 3개" : "새 탭"}
+          >
+            <Plus className="size-3.5" />
+          </Button>
+        )}
+        {onCloseActive && activeTabId && (
+          <Button
+            data-no-drag
+            variant="ghost"
+            className="hover:bg-muted/60 h-7 w-7 p-0"
+            onClick={() => void onCloseActive()}
+            aria-label="현재 탭 닫기"
+            title="현재 탭 닫기"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        )}
         {onRestart && (
           <Button
             data-no-drag
             variant="ghost"
             className="hover:bg-muted/60 h-7 w-7 p-0"
-            onClick={onRestart}
+            onClick={() => void onRestart()}
             aria-label="새 세션"
             title="새 세션 시작"
           >

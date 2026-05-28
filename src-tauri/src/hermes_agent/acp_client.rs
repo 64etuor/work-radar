@@ -77,6 +77,7 @@ pub enum ImageTransport {
 #[allow(dead_code)]
 pub struct AcpSession {
     pub session_id: String,
+    pub tab_id: String,
     pub image_transport: ImageTransport,
     pub(crate) stdin_tx: mpsc::Sender<Vec<u8>>,
     pub(crate) pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Json>>>>,
@@ -86,7 +87,7 @@ pub struct AcpSession {
 
 #[allow(dead_code)]
 impl AcpSession {
-    pub async fn spawn(app: AppHandle) -> Result<Self, AppError> {
+    pub async fn spawn(app: AppHandle, tab_id: String) -> Result<Self, AppError> {
         let mut child = Command::new("hermes")
             .arg("acp")
             .stdin(std::process::Stdio::piped())
@@ -124,13 +125,16 @@ impl AcpSession {
         // Reader task: pump stdout → dispatch_incoming
         let pending_r = pending.clone();
         let app_r = app.clone();
+        let tab_id_r = tab_id.clone();
         tokio::spawn(async move {
             let mut reader = BufReader::new(stdout);
             loop {
                 let body = match read_frame(&mut reader).await {
                     Ok(b) => b,
                     Err(_) => {
-                        let _ = app_r.emit(
+                        emit_with_tab(
+                            &app_r,
+                            &tab_id_r,
                             "hermes-agent:error",
                             json!({ "kind": "io", "message": "acp stream closed" }),
                         );
@@ -143,14 +147,16 @@ impl AcpSession {
                 let val = match serde_json::from_slice::<Json>(&body) {
                     Ok(v) => v,
                     Err(_) => {
-                        let _ = app_r.emit(
+                        emit_with_tab(
+                            &app_r,
+                            &tab_id_r,
                             "hermes-agent:error",
                             json!({ "kind": "parse", "message": "non-json frame" }),
                         );
                         continue;
                     }
                 };
-                dispatch_incoming(&app_r, &pending_r, val).await;
+                dispatch_incoming(&app_r, &tab_id_r, &pending_r, val).await;
             }
         });
 
@@ -159,6 +165,7 @@ impl AcpSession {
         // drops; `kill_on_drop` on `child` reaps the agent process automatically.
         let session = AcpSession {
             session_id: String::new(),
+            tab_id: tab_id.clone(),
             image_transport: ImageTransport::FilePath,
             stdin_tx,
             pending,
@@ -207,13 +214,16 @@ impl AcpSession {
             ));
         }
 
-        let _ = app.emit(
+        emit_with_tab(
+            &app,
+            &tab_id,
             "hermes-agent:session-ready",
             json!({ "session_id": &session_id }),
         );
 
         Ok(AcpSession {
             session_id,
+            tab_id,
             image_transport,
             ..session
         })
@@ -275,6 +285,23 @@ impl AcpSession {
     }
 }
 
+/// Emit a Tauri event with `tabId` injected at the top level of payload.
+/// `payload` MUST be a JSON object (or null → becomes {tabId}).
+/// This is the single gateway for all hermes-agent:* event emits.
+fn emit_with_tab(app: &AppHandle, tab_id: &str, event: &str, payload: Json) {
+    let mut obj = match payload {
+        Json::Object(m) => m,
+        Json::Null => serde_json::Map::new(),
+        other => {
+            let mut m = serde_json::Map::new();
+            m.insert("value".to_string(), other);
+            m
+        }
+    };
+    obj.insert("tabId".to_string(), Json::String(tab_id.to_string()));
+    let _ = app.emit(event, Json::Object(obj));
+}
+
 #[allow(dead_code)]
 /// Dispatch one incoming NDJSON frame.
 ///
@@ -284,6 +311,7 @@ impl AcpSession {
 /// - **Agent requests** (`"method"` + `"id"` present): not yet supported; silently ignored.
 async fn dispatch_incoming(
     app: &AppHandle,
+    tab_id: &str,
     pending: &Arc<Mutex<HashMap<u64, oneshot::Sender<Json>>>>,
     val: Json,
 ) {
@@ -320,7 +348,9 @@ async fn dispatch_incoming(
                     .get("availableCommands")
                     .cloned()
                     .unwrap_or(Json::Array(vec![]));
-                let _ = app.emit(
+                emit_with_tab(
+                    app,
+                    tab_id,
                     "hermes-agent:available-commands",
                     json!({ "commands": commands }),
                 );
@@ -338,7 +368,9 @@ async fn dispatch_incoming(
                     .and_then(|c| c.get("text"))
                     .and_then(|v| v.as_str())
                 {
-                    let _ = app.emit(
+                    emit_with_tab(
+                        app,
+                        tab_id,
                         "hermes-agent:chunk",
                         json!({ "kind": chunk_kind, "text": text }),
                     );
@@ -347,11 +379,11 @@ async fn dispatch_incoming(
             "tool_call" => {
                 // schema-confirmed: ToolCallStart extends ToolCall
                 // fields: toolCallId (required), title (required), kind?, status?
-                let _ = app.emit("hermes-agent:tool-call", &update);
+                emit_with_tab(app, tab_id, "hermes-agent:tool-call", update);
             }
             "tool_call_update" => {
                 // schema-confirmed: ToolCallUpdate — same fields, partial update
-                let _ = app.emit("hermes-agent:tool-call-update", &update);
+                emit_with_tab(app, tab_id, "hermes-agent:tool-call-update", update);
             }
             "plan" => {
                 // schema-confirmed: PlanUpdate with entries array
@@ -359,7 +391,12 @@ async fn dispatch_incoming(
                     .get("entries")
                     .cloned()
                     .unwrap_or(Json::Array(vec![]));
-                let _ = app.emit("hermes-agent:plan", json!({ "entries": entries }));
+                emit_with_tab(
+                    app,
+                    tab_id,
+                    "hermes-agent:plan",
+                    json!({ "entries": entries }),
+                );
             }
             // Telemetry / bookkeeping — no UI action needed yet
             "usage_update"
@@ -368,7 +405,9 @@ async fn dispatch_incoming(
             | "config_option_update" => {}
             _ => {
                 // Unknown discriminator: log for debugging
-                let _ = app.emit(
+                emit_with_tab(
+                    app,
+                    tab_id,
                     "hermes-agent:error",
                     json!({
                         "kind": "unknown_session_update",
