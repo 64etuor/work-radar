@@ -202,6 +202,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Hermes 플로팅 패널 상태 영속 (feat/hermes-floating A1).
         commands::hermes_panel_state_get,
         commands::hermes_panel_state_set,
+        // Hermes 글로벌 토글 핫키 (feat/hermes-floating A2).
+        commands::hermes_get_toggle_hotkey,
+        commands::hermes_set_toggle_hotkey,
         // Hermes 메신저 브리지 (Phase 20 #15) — 봇 토큰 keychain, 수신은 bounded 단발.
         commands::set_hermes_bridge,
         commands::hermes_bridge_status,
@@ -355,6 +358,25 @@ pub fn run() {
                         "global hotkey 등록 실패('{spec}'), 기본값으로 폴백: {e}"
                     );
                     let _ = shortcut::register(app.handle(), shortcut::DEFAULT_GLOBAL_HOTKEY);
+                }
+            }
+
+            // Hermes 패널 토글 핫키 등록. 저장된 값(app_config)이 있으면 그것으로, 없으면
+            // 기본 Cmd+Shift+Space로 등록(feat/hermes-floating A2). 등록 실패는 graceful.
+            {
+                let hk_db: db::Db = app.state::<db::Db>().inner().clone();
+                let hermes_spec = tauri::async_runtime::block_on(
+                    commands::hermes_panel::current_toggle_hotkey(&hk_db),
+                );
+                if let Err(e) = shortcut::register_hermes_toggle(app.handle(), &hermes_spec) {
+                    tracing::warn!(
+                        code = "hermes.hotkey.register",
+                        "Hermes 토글 핫키 등록 실패('{hermes_spec}'), 기본값으로 폴백: {e}"
+                    );
+                    let _ = shortcut::register_hermes_toggle(
+                        app.handle(),
+                        commands::hermes_panel::DEFAULT_HERMES_TOGGLE_HOTKEY,
+                    );
                 }
             }
 

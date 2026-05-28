@@ -4,7 +4,7 @@
 //! "Mod+Mod+Key" 형태 문자열(예: "Ctrl+Space", "Cmd+Shift+K")을 받아 검증한다.
 //! 재등록은 bounded — 옛 핫키 unregister → 새 핫키 register, 충돌/무효 시 graceful Err(#5 정신).
 
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 /// 기본 토글 핫키 문자열: Ctrl + Space. (app_config 미설정 시 폴백.)
@@ -140,6 +140,43 @@ pub fn register_spec<R: Runtime>(app: &AppHandle<R>, spec: &str) -> Result<(), S
 /// startup에서만 호출 — 실패해도 앱 코어는 동작(graceful degrade)하도록 호출부가 처리.
 pub fn register<R: Runtime>(app: &AppHandle<R>, spec: &str) -> Result<(), String> {
     register_spec(app, spec)
+}
+
+/// Hermes 토글 핫키 등록. 누를 때마다 `"hermes:toggle"` 이벤트를 emit.
+/// nav 핫키(register_spec)와 독립 — 서로 clobber하지 않는다.
+pub fn register_hermes_toggle<R: Runtime>(app: &AppHandle<R>, spec: &str) -> Result<(), String> {
+    let shortcut = parse_shortcut(spec)?;
+    app.global_shortcut()
+        .on_shortcut(shortcut, move |app, _shortcut, event| {
+            if event.state() == ShortcutState::Pressed {
+                let _ = app.emit("hermes:toggle", ());
+            }
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Hermes 토글 핫키 재등록: 옛 unregister → 새 register. 새 등록 실패 시 옛 핫키 복원 시도.
+/// bounded(2회 시도 한도) — 무한 retry 없음(#5 정신).
+pub fn reregister_hermes_toggle<R: Runtime>(
+    app: &AppHandle<R>,
+    old_spec: &str,
+    new_spec: &str,
+) -> Result<(), String> {
+    // 빠른 검증.
+    let _ = parse_shortcut(new_spec)?;
+
+    if let Ok(old) = parse_shortcut(old_spec) {
+        let _ = app.global_shortcut().unregister(old);
+    }
+
+    match register_hermes_toggle(app, new_spec) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // 새 핫키 등록 실패 → 옛 핫키 복원 시도(graceful), 사용자에게 실패 노출.
+            let _ = register_hermes_toggle(app, old_spec);
+            Err(format!("hermes 핫키 등록 실패(이전 핫키 유지): {e}"))
+        }
+    }
 }
 
 /// 핫키 재등록: 옛 핫키 unregister → 새 핫키 register. 새 핫키 등록 실패 시 옛 핫키 복원 시도.

@@ -386,6 +386,13 @@ export const commands = {
 	hermesPanelStateGet: () => typedError<HermesPanelState, AppError>(__TAURI_INVOKE("hermes_panel_state_get")),
 	/**  Hermes 패널 상태 저장. */
 	hermesPanelStateSet: (state: HermesPanelState) => typedError<null, AppError>(__TAURI_INVOKE("hermes_panel_state_set", { state })),
+	/**  저장된 Hermes 패널 토글 핫키 조회. 미설정 시 기본값("Cmd+Shift+Space"). */
+	hermesGetToggleHotkey: () => typedError<string, AppError>(__TAURI_INVOKE("hermes_get_toggle_hotkey")),
+	/**
+	 *  Hermes 패널 토글 핫키 변경: 검증 → 런타임 재등록 → 성공 시 영속.
+	 *  등록 실패(충돌/무효) 시 기존 핫키를 유지하고 Err를 노출한다(저장 안 함 — graceful).
+	 */
+	hermesSetToggleHotkey: (spec: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_set_toggle_hotkey", { spec })),
 	/**
 	 *  브리지 설정: 봇 토큰 → keychain(반환 없음), chat_id → hermes_bridge 단일 행. 토큰 본문은 IPC
 	 *  인자로만 들어와 즉시 keychain으로 가고 절대 반환되지 않는다(INVARIANT). offset은 보존(재설정 시
