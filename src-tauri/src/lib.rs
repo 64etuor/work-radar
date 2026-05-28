@@ -205,6 +205,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::hermes_panel_state_set,
         // Hermes ACP 에이전트 감지 (feat/hermes-floating B1).
         hermes_agent::detect::hermes_detect,
+        // Hermes ACP IPC (feat/hermes-floating C3).
+        commands::hermes_agent::hermes_agent_start,
+        commands::hermes_agent::hermes_agent_send,
+        commands::hermes_agent::hermes_agent_cancel,
+        commands::hermes_agent::hermes_agent_stop,
         // Hermes 글로벌 토글 핫키 (feat/hermes-floating A2).
         commands::hermes_get_toggle_hotkey,
         commands::hermes_set_toggle_hotkey,
@@ -399,6 +404,9 @@ pub fn run() {
                 calendar::sync::SyncEngine::new(sync_db, app.handle().clone());
             app.manage(sync_notify);
             sync_engine.spawn();
+
+            // Hermes ACP 세션 홀더 (feat/hermes-floating C3): start/send/cancel/stop IPC.
+            app.manage(commands::hermes_agent::new_holder());
 
             // 외부 뉴스 페처(PR B/D-Tune): tokio interval + Notify 즉시 적용.
             // 페치당 최대 3회 지수 백오프+jitter, 실패는 news_fetch_failed 이벤트로 surface.

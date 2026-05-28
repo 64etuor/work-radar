@@ -15,6 +15,7 @@ pub mod calendar;
 pub mod calendar_sync;
 pub mod cmux;
 pub mod hermes;
+pub mod hermes_agent;
 pub mod hermes_panel;
 pub mod inbox;
 pub mod nav;
