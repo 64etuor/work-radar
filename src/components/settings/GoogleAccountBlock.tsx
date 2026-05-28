@@ -278,35 +278,33 @@ function CalendarPicker({
 }) {
   const calendars = useGoogleCalendars(projectId, true);
   const save = useSetSelectedCalendars();
-  const [draftChecked, setDraftChecked] = useState<Set<string> | null>(null);
+  // optimistic: 체크박스 토글 즉시 mutate. 서버 응답이 늦어도 즉시 반응 보이도록
+  // 직전 토글 결과를 로컬에 잠깐 가지고 있다가 서버 데이터가 따라잡으면 비운다.
+  const [pendingChecked, setPendingChecked] = useState<Set<string> | null>(null);
   const savedChecked = useMemo(
     () => new Set(calendars.data?.filter((c) => c.selected).map((c) => c.id) ?? []),
     [calendars.data],
   );
-  const checked = draftChecked ?? savedChecked;
+  const checked = pendingChecked ?? savedChecked;
 
   const toggle = (id: string) => {
-    setDraftChecked((prev) => {
-      const next = new Set(prev ?? checked);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const submit = () => {
-    if (save.isPending || !calendars.data) return;
+    if (!calendars.data) return;
+    const next = new Set(checked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPendingChecked(next);
     const selected = calendars.data
-      .filter((c) => checked.has(c.id))
+      .filter((c) => next.has(c.id))
       .map((c) => ({ id: c.id, summary: c.summary }));
     save.mutate(
       { projectId, calendars: selected },
       {
         onSuccess: () => {
-          setDraftChecked(null);
-          onToast(
-            selected.length > 0 ? `캘린더 ${selected.length}개 선택 저장` : "캘린더 선택 비움",
-          );
+          setPendingChecked(null);
+        },
+        onError: (e) => {
+          setPendingChecked(null);
+          onToast(String(e));
         },
       },
     );
@@ -356,10 +354,8 @@ function CalendarPicker({
           </label>
         );
       })}
-      {calendars.data && calendars.data.length > 0 && (
-        <Button size="sm" className="mt-1 self-start" onClick={submit} disabled={save.isPending}>
-          {save.isPending ? "저장 중…" : "선택 저장"}
-        </Button>
+      {calendars.data && calendars.data.length > 0 && save.isPending && (
+        <span className="text-muted-foreground mt-1 self-start text-xs">저장 중…</span>
       )}
     </div>
   );

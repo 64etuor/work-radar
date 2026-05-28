@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AgentPromptConfig, AgentReasoningEffort } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -36,31 +36,47 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
   const setModel = useSetCodexModel();
   const promptConfigs = useAgentPromptConfigs();
 
+  // 텍스트 입력은 debounce, 프리셋/초기화는 즉시.
   const [draft, setDraft] = useState<string | null>(null);
-  // draft가 null이면 서버 값을 표시, 편집 중이면 draft 값.
   const displayValue = draft !== null ? draft : (model.data ?? "");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   const avail = status.data;
 
-  const save = () => {
-    const val = (draft ?? "").trim();
-    setModel.mutate(val || null, {
-      onSuccess: () => {
-        setDraft(null);
-        onToast(val ? `Codex 모델 설정됨: ${val}` : "Codex 모델 기본값으로 초기화됨");
-      },
+  const persistNow = (value: string | null) => {
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setModel.mutate(value, {
+      onSuccess: () => setDraft(null),
       onError: (e) => onToast(String(e)),
     });
   };
 
+  const onChangeModel = (next: string) => {
+    setDraft(next);
+    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      const trimmed = next.trim();
+      if (trimmed === (model.data ?? "")) return;
+      setModel.mutate(trimmed || null, {
+        onSuccess: () => setDraft(null),
+        onError: (e) => onToast(String(e)),
+      });
+    }, 500);
+  };
+
   const reset = () => {
-    setModel.mutate(null, {
-      onSuccess: () => {
-        setDraft(null);
-        onToast("Codex 모델 기본값으로 초기화됨");
-      },
-      onError: (e) => onToast(String(e)),
-    });
+    persistNow(null);
+    onToast("Codex 모델 기본값으로 초기화됨");
   };
 
   const presets = modelCatalog.data?.models.map((m) => m.slug) ?? [];
@@ -102,19 +118,14 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
         <div className="flex items-center gap-2">
           <Input
             value={displayValue}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onChangeModel(e.target.value)}
             placeholder="예: gpt-5.5"
             aria-label="Codex 모델"
             className="font-mono"
           />
-          <Button
-            size="sm"
-            className="shrink-0"
-            onClick={save}
-            disabled={setModel.isPending || draft === null || draft.trim() === (model.data ?? "")}
-          >
-            {setModel.isPending ? "저장 중…" : "저장"}
-          </Button>
+          {setModel.isPending && (
+            <span className="text-muted-foreground shrink-0 text-xs">저장 중…</span>
+          )}
           {(model.data || draft) && (
             <Button
               variant="ghost"
@@ -138,7 +149,7 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
             variant="outline"
             size="sm"
             className={cn("font-mono text-[11px]", displayValue === p && "bg-muted")}
-            onClick={() => setDraft(p)}
+            onClick={() => persistNow(p)}
           >
             {p}
           </Button>

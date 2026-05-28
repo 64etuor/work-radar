@@ -1,5 +1,5 @@
 import { CircleUserRound, FolderGit2, FolderOpen, Github, KeyRound, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Project, PromotionTarget } from "@/bindings";
 import { KindBadge } from "@/components/board/LifeWheelPalette";
@@ -102,19 +102,55 @@ function ProjectCalendarColorControl({
   const normalizedDraft = normalizeHexColor(draft);
   const savedBackground = normalizeHexColor(project.calendarColor ?? null) ?? colors.background;
   const preview = normalizedDraft ? projectCalendarColors(project.id, normalizedDraft) : colors;
-  const dirty = normalizedDraft !== savedBackground;
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const save = (color: string | null) => {
-    if (saveColor.isPending) return;
-    saveColor.mutate(
-      { projectId: project.id, color },
-      {
-        onSuccess: () => {
-          setDraft(projectCalendarColors(project.id, color).background);
-          onToast(color ? "캘린더 색상 저장됨" : "캘린더 색상 기본값으로 복원됨");
-        },
-      },
-    );
+  // 서버 값이 바뀌면 드래프트도 동기화.
+  const [seededFrom, setSeededFrom] = useState<string | null | undefined>(undefined);
+  if (project.calendarColor !== seededFrom) {
+    setSeededFrom(project.calendarColor ?? null);
+    setDraft(colors.background);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const persistColor = (color: string | null) => {
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    saveColor.mutate({ projectId: project.id, color });
+  };
+
+  const persistColorDebounced = (color: string) => {
+    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      const normalized = normalizeHexColor(color);
+      if (normalized && normalized !== savedBackground) {
+        saveColor.mutate({ projectId: project.id, color: normalized });
+      }
+    }, 400);
+  };
+
+  const setDraftAndPersist = (color: string) => {
+    setDraft(color);
+    const normalized = normalizeHexColor(color);
+    if (normalized && normalized !== savedBackground) {
+      if (debounceRef.current !== null) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      saveColor.mutate({ projectId: project.id, color: normalized });
+    }
+  };
+
+  const resetToDefault = () => {
+    persistColor(null);
+    onToast("캘린더 색상 기본값으로 복원됨");
   };
 
   return (
@@ -129,13 +165,16 @@ function ProjectCalendarColorControl({
         <input
           type="color"
           value={normalizedDraft ?? colors.background}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => setDraftAndPersist(e.target.value)}
           aria-label="프로젝트 캘린더 색상"
           className="border-border h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5"
         />
         <Input
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            persistColorDebounced(e.target.value);
+          }}
           className="h-8 w-[112px] font-mono text-xs"
           aria-label="프로젝트 캘린더 색상 hex"
         />
@@ -147,7 +186,7 @@ function ProjectCalendarColorControl({
               aria-label={`색상 ${color}`}
               className="border-border size-5 rounded-full border"
               style={{ backgroundColor: color }}
-              onClick={() => setDraft(color)}
+              onClick={() => setDraftAndPersist(color)}
             />
           ))}
         </div>
@@ -155,17 +194,10 @@ function ProjectCalendarColorControl({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => save(null)}
+            onClick={resetToDefault}
             disabled={saveColor.isPending || !project.calendarColor}
           >
             기본값
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => normalizedDraft && save(normalizedDraft)}
-            disabled={saveColor.isPending || !normalizedDraft || !dirty}
-          >
-            저장
           </Button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { LifeWheelTagConfig } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -28,19 +28,51 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
 
   const tags = useLifeWheelTags();
   const save = useSetLifeWheelTags();
-  const [draftOverride, setDraftOverride] = useState<LifeWheelTagConfig[] | null>(null);
+  // 텍스트 필드(라벨/hex)는 입력 중 떨림을 막기 위해 로컬 드래프트 + debounce.
+  // 토글/픽커/추가/삭제/리셋은 즉시 persist — Save 버튼 없음.
+  const [textDraft, setTextDraft] = useState<LifeWheelTagConfig[] | null>(null);
   const [newLabel, setNewLabel] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const draft = useMemo(() => draftOverride ?? tags.data ?? [], [draftOverride, tags.data]);
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
+  const serverTags = tags.data ?? [];
+  const draft = textDraft ?? serverTags;
   const enabledCount = useMemo(() => draft.filter((tag) => tag.enabled).length, [draft]);
 
-  const updateDraft = (updater: (current: LifeWheelTagConfig[]) => LifeWheelTagConfig[]) => {
-    setDraftOverride((current) => updater(current ?? tags.data ?? []));
+  const persistNow = (next: LifeWheelTagConfig[]) => {
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    save.mutate(next, {
+      onSuccess: () => setTextDraft(null),
+    });
   };
 
-  const updateTag = (id: string, patch: Partial<LifeWheelTagConfig>) => {
-    updateDraft((current) => current.map((tag) => (tag.id === id ? { ...tag, ...patch } : tag)));
+  const persistDebounced = (next: LifeWheelTagConfig[]) => {
+    setTextDraft(next);
+    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      save.mutate(next, {
+        onSuccess: () => setTextDraft(null),
+      });
+    }, 400);
+  };
+
+  const updateTagText = (id: string, patch: Partial<LifeWheelTagConfig>) => {
+    const next = draft.map((tag) => (tag.id === id ? { ...tag, ...patch } : tag));
+    persistDebounced(next);
+  };
+
+  const updateTagImmediate = (id: string, patch: Partial<LifeWheelTagConfig>) => {
+    const next = draft.map((tag) => (tag.id === id ? { ...tag, ...patch } : tag));
+    persistNow(next);
   };
 
   const addTag = () => {
@@ -54,36 +86,28 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
       id = `${base}-${suffix}`;
       suffix += 1;
     }
-    updateDraft((current) => [
-      ...current,
+    const next: LifeWheelTagConfig[] = [
+      ...draft,
       {
         id,
         label,
-        color: nextColor(current.length),
+        color: nextColor(draft.length),
         builtIn: false,
         enabled: true,
       },
-    ]);
+    ];
     setNewLabel("");
+    persistNow(next);
   };
 
   const removeTag = (id: string) => {
-    updateDraft((current) => current.filter((tag) => tag.id !== id));
+    persistNow(draft.filter((tag) => tag.id !== id));
   };
 
-  const persist = () => {
-    save.mutate(draft, {
-      onSuccess: () => {
-        setDraftOverride(null);
-        onToast("Life Wheel 태그 설정 저장됨");
-      },
-    });
-  };
-
-  // 기본 팔레트로 draft 되돌리기. 저장 버튼을 눌러야 실제 반영됨(편집 패턴과 동일).
   const resetToDefaults = () => {
-    setDraftOverride(DEFAULT_LIFE_WHEEL_TAGS.map((tag) => ({ ...tag })));
+    persistNow(DEFAULT_LIFE_WHEEL_TAGS.map((tag) => ({ ...tag })));
     setNewLabel("");
+    onToast("Life Wheel 태그가 기본 팔레트로 초기화됨");
   };
 
   return (
@@ -94,7 +118,8 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
             <SectionLabel>Life Wheel</SectionLabel>
             <h3 className="mt-1 text-base font-semibold">팔레트 태그</h3>
             <p className="text-muted-foreground mt-1 text-sm leading-6">
-              보드 카드에서 쓰는 Life Wheel 팔레트의 표시 여부와 색상을 관리합니다.
+              보드 카드에서 쓰는 Life Wheel 팔레트의 표시 여부와 색상을 관리합니다. 변경 시 자동으로
+              저장됩니다.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -103,13 +128,10 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
               onClick={resetToDefaults}
               disabled={save.isPending}
               className="gap-1.5"
-              title="브랜드 기본 팔레트로 되돌립니다. 저장을 눌러야 반영됩니다."
+              title="브랜드 기본 팔레트로 즉시 되돌립니다."
             >
               <RotateCcw className="size-4" />
               기본값으로 초기화
-            </Button>
-            <Button onClick={persist} disabled={save.isPending || enabledCount === 0}>
-              {save.isPending ? "저장 중..." : "저장"}
             </Button>
           </div>
         </div>
@@ -140,54 +162,59 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
         {tags.isLoading && (
           <Card className="text-muted-foreground rounded-2xl p-4 text-sm">불러오는 중...</Card>
         )}
-        {draft.map((tag) => (
-          <Card key={tag.id} className="rounded-2xl p-3">
-            <div className="grid items-center gap-3 sm:grid-cols-[auto_minmax(8rem,1fr)_8rem_auto_auto]">
-              <button
-                type="button"
-                onClick={() => updateTag(tag.id, { enabled: !tag.enabled })}
-                className={cn(
-                  "h-8 rounded-lg border px-3 text-xs font-medium transition-colors",
-                  tag.enabled
-                    ? "border-border-strong bg-secondary text-foreground"
-                    : "border-border bg-card text-muted-foreground",
-                )}
-              >
-                {tag.enabled ? "표시" : "숨김"}
-              </button>
-              <input
-                value={tag.label}
-                onChange={(event) => updateTag(tag.id, { label: event.target.value })}
-                className="border-border bg-card focus:border-ring h-9 rounded-lg border px-3 text-sm outline-none"
-                aria-label={`${tag.label} 태그 이름`}
-              />
-              <input
-                value={tag.color}
-                onChange={(event) => updateTag(tag.id, { color: event.target.value })}
-                className="border-border bg-card focus:border-ring h-9 rounded-lg border px-3 font-mono text-xs outline-none"
-                aria-label={`${tag.label} 색상 코드`}
-              />
-              <input
-                type="color"
-                value={tag.color}
-                onChange={(event) => updateTag(tag.id, { color: event.target.value })}
-                className="border-border bg-card h-9 w-12 rounded-lg border p-1"
-                aria-label={`${tag.label} 색상`}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground size-8 p-0"
-                onClick={() => removeTag(tag.id)}
-                disabled={tag.builtIn}
-                title={tag.builtIn ? "기본 태그는 삭제 대신 숨김 처리하세요" : "삭제"}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          </Card>
-        ))}
+        {draft.map((tag) => {
+          const isLastEnabled = tag.enabled && enabledCount === 1;
+          return (
+            <Card key={tag.id} className="rounded-2xl p-3">
+              <div className="grid items-center gap-3 sm:grid-cols-[auto_minmax(8rem,1fr)_8rem_auto_auto]">
+                <button
+                  type="button"
+                  onClick={() => updateTagImmediate(tag.id, { enabled: !tag.enabled })}
+                  disabled={isLastEnabled}
+                  title={isLastEnabled ? "최소 한 개의 태그는 표시해야 합니다" : undefined}
+                  className={cn(
+                    "h-8 rounded-lg border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                    tag.enabled
+                      ? "border-border-strong bg-secondary text-foreground"
+                      : "border-border bg-card text-muted-foreground",
+                  )}
+                >
+                  {tag.enabled ? "표시" : "숨김"}
+                </button>
+                <input
+                  value={tag.label}
+                  onChange={(event) => updateTagText(tag.id, { label: event.target.value })}
+                  className="border-border bg-card focus:border-ring h-9 rounded-lg border px-3 text-sm outline-none"
+                  aria-label={`${tag.label} 태그 이름`}
+                />
+                <input
+                  value={tag.color}
+                  onChange={(event) => updateTagText(tag.id, { color: event.target.value })}
+                  className="border-border bg-card focus:border-ring h-9 rounded-lg border px-3 font-mono text-xs outline-none"
+                  aria-label={`${tag.label} 색상 코드`}
+                />
+                <input
+                  type="color"
+                  value={tag.color}
+                  onChange={(event) => updateTagImmediate(tag.id, { color: event.target.value })}
+                  className="border-border bg-card h-9 w-12 rounded-lg border p-1"
+                  aria-label={`${tag.label} 색상`}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground size-8 p-0"
+                  onClick={() => removeTag(tag.id)}
+                  disabled={tag.builtIn}
+                  title={tag.builtIn ? "기본 태그는 삭제 대신 숨김 처리하세요" : "삭제"}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
