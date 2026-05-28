@@ -18,6 +18,20 @@ export const DEFAULT_PANEL_STATE: HermesPanelState = {
 
 const DEBOUNCE_MS = 300;
 
+/** bounds 필드를 부분 업데이트한 새 HermesPanelState를 반환한다. 순수 함수. */
+export function mergeBounds(
+  state: HermesPanelState,
+  bounds: Partial<Pick<HermesPanelState, "x" | "y" | "w" | "h">>,
+): HermesPanelState {
+  return {
+    ...state,
+    x: bounds.x ?? state.x,
+    y: bounds.y ?? state.y,
+    w: bounds.w ?? state.w,
+    h: bounds.h ?? state.h,
+  };
+}
+
 /**
  * Hermes 패널 위치/크기/열림 상태 훅.
  * - mount 시 backend에서 읽고, staleTime Infinity로 캐싱(세션 중 재fetch 없음).
@@ -58,14 +72,8 @@ export function useHermesPanelState() {
   );
 
   const setBounds = useCallback(
-    (b: Partial<{ x: number; y: number; w: number; h: number }>) => {
-      const next: HermesPanelState = {
-        ...state,
-        x: b.x ?? state.x,
-        y: b.y ?? state.y,
-        w: b.w ?? state.w,
-        h: b.h ?? state.h,
-      };
+    (b: Partial<Pick<HermesPanelState, "x" | "y" | "w" | "h">>) => {
+      const next = mergeBounds(state, b);
       // 즉시 optimistic 업데이트 (매 호출마다)
       qc.setQueryData<HermesPanelState>(QUERY_KEY, next);
       // debounce 후 backend write
