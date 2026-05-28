@@ -1,0 +1,43 @@
+/* Inbox 컬럼 — capture board `.inbox` 비주얼 공유본(178px 고정폭, 점선 회색 well).
+   col-label은 absolute top-left 오버레이. 본문 padding은 소비자가 결정한다. */
+
+.inbox-column {
+  position: relative;
+  flex: 0 0 178px;
+  width: 178px;
+  box-sizing: border-box;
+  border: 1px dashed var(--color-wr-border);
+  border-radius: var(--cb-r-lg);
+  background: var(--color-wr-elevated);
+}
+
+.inbox-column-label {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.inbox-column-tag {
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-wr-muted);
+}
+
+.inbox-column-ko {
+  font: 500 11px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+
+.inbox-column-count {
+  font: 700 10px var(--font-mono);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
+}

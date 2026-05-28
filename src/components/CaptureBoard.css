@@ -13,9 +13,7 @@
  *   pale-green→#edfce9, pale-blue→wr-accent-soft, q1..q4→color-q1..q4.
  */
 .cb {
-  --cb-r-sm: 8px;
-  --cb-r-md: 12px;
-  --cb-r-lg: 16px;
+  /* --cb-r-{sm,md,lg}는 src/styles/tokens.css @theme로 승격(글로벌 공유). */
   --cb-pale-green: var(--color-wr-pale-green);
   display: flex;
   flex-direction: column;
@@ -72,42 +70,7 @@
   gap: 16px;
 }
 
-.cb .col-label {
-  position: absolute;
-  top: 12px;
-  left: 14px;
-  z-index: 2;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.cb .col-label .tag {
-  font: 700 10px var(--font-mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-wr-muted);
-}
-.cb .col-label .ko {
-  font: 500 11px var(--font-sans);
-  color: var(--color-wr-subtle);
-}
-.cb .col-label .count {
-  font: 700 10px var(--font-mono);
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--color-wr-surface);
-  color: var(--color-wr-muted);
-}
-
-/* INBOX(미분류) */
-.cb .inbox {
-  flex: 0 0 178px;
-  position: relative;
-  border: 1px dashed var(--color-wr-border);
-  border-radius: var(--cb-r-lg);
-  background: var(--color-wr-elevated);
-}
+/* INBOX(미분류) 컬럼 컨테이너·라벨은 공유 `<InboxColumn>` 컴포넌트로 이관 — `src/components/inbox/InboxColumn.css` */
 
 /* 2×2 */
 .cb .matrix {

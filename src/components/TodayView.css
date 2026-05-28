@@ -184,11 +184,6 @@
   pointer-events: none;
 }
 
-.today-tray-row[data-dragging] {
-  opacity: 0.4;
-  background: #fafaf7;
-}
-
 /* DragOverlay ghost — Notion-style 따라오는 미리보기. */
 .today-drag-ghost {
   display: inline-flex;
@@ -233,7 +228,9 @@
 
 .today-main {
   display: grid;
-  grid-template-columns: 280px minmax(560px, 860px);
+  /* 트레이는 178px InboxColumn + 좌우 12px padding ≈ 202px만 있으면 충분.
+     타임라인을 좌측에 바짝 붙이기 위해 210px로 압축. */
+  grid-template-columns: 210px minmax(560px, 860px);
   justify-content: start;
   flex: 1;
   min-height: 0;
@@ -242,24 +239,26 @@
 
 /* ── 좌측 트레이 ───────────────────────────────────────────────────── */
 
+/* 트레이 외곽 — 흰 바탕 + 178px InboxColumn 좌측 정렬 + 전체 높이 stretch.
+   capture board `.canvas`(row flex, 첫 자식이 좌측)와 동일한 정렬. */
 .today-tray {
   border-right: 1px solid var(--wr-border-light);
   overflow-y: auto;
-  background: var(--wr-bg);
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  justify-content: flex-start;
+  /* align-items 기본값 stretch — InboxColumn이 tray 패널 높이 전체로 늘어난다. */
 }
 
-.today-tray-head {
-  padding: 10px 14px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--wr-subtle);
-  border-bottom: 1px solid var(--wr-border-light);
+/* 카드 deck — 캡쳐보드 인박스와 동일 1-col 절대배치 스택(겹치는 postit). 높이는 inline. */
+.today-tray-deck {
+  position: relative;
 }
 
-.today-tray-body {
-  padding: 6px;
+/* 종일/empty extras — deck 아래로 정상 흐름. */
+.today-tray-extras {
+  padding: 6px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -269,63 +268,7 @@
   padding: 16px;
   color: var(--wr-subtle);
   font-size: 12px;
-}
-
-.today-tray-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: #fff;
-  border: 1px solid var(--wr-border-light);
-  border-radius: 6px;
-  cursor: grab;
-  user-select: none;
-}
-
-.today-tray-row:active {
-  cursor: grabbing;
-}
-
-.today-tray-row[data-dragging] {
-  cursor: grabbing;
-}
-
-/* 트레이 row 좌측 그립 — 드래그 가능 affordance. 보드의 ⠿ 패턴 재사용. */
-.today-tray-grip {
-  font-size: 12px;
-  line-height: 1;
-  color: var(--wr-subtle);
-  opacity: 0.5;
-  flex-shrink: 0;
-  pointer-events: none;
-}
-
-.today-tray-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-.today-tray-title {
-  flex: 1;
-  font-size: 12px;
-  text-align: left;
-}
-
-.today-tray-tag {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 9999px;
-}
-
-.tag-today {
-  background: #eef3ff;
-  color: #4a7bb8;
+  text-align: center;
 }
 
 .today-tray-section {

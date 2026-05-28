@@ -1,0 +1,123 @@
+/* Postit 카드 — capture board postit과 동일 비주얼(150px 고정폭). board의 `.cb .postit`은
+   absolute 배치라 별도 클래스로 분리. position:relative로 flex/grid에서 자연 흐름. */
+
+.postit-card {
+  position: relative;
+  width: 150px;
+  box-sizing: border-box;
+  min-height: 74px;
+  background: var(--color-wr-bg, #fff);
+  border: 1px solid var(--color-wr-border-light);
+  border-left: 4px solid var(--color-wr-sticky-border);
+  border-radius: var(--cb-r-sm);
+  padding: 8px 11px 22px;
+  cursor: grab;
+  box-shadow: 0 6px 16px rgba(15, 20, 40, 0.08);
+  font: 400 13px/1.4 var(--font-sans);
+  color: var(--color-wr-fg);
+  user-select: none;
+  overflow: hidden;
+  transition:
+    box-shadow var(--wr-motion-base, 200ms ease),
+    opacity var(--wr-motion-slow, 280ms ease);
+}
+
+.postit-card:active,
+.postit-card[data-dragging] {
+  cursor: grabbing;
+  box-shadow: 0 12px 24px rgba(15, 20, 40, 0.18);
+}
+
+.postit-card[data-dragging] {
+  opacity: 0.6;
+}
+
+.postit-card--q1 {
+  border-left-color: var(--color-q1);
+}
+.postit-card--q2 {
+  border-left-color: var(--color-q2);
+}
+.postit-card--q3 {
+  border-left-color: var(--color-q3);
+}
+.postit-card--q4 {
+  border-left-color: var(--color-q4);
+}
+
+.postit-card-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  min-height: 15px;
+  padding-right: 22px; /* 우상단 check 자리 */
+}
+
+.postit-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  color: var(--color-wr-subtle);
+  background: var(--color-wr-surface);
+  border: 1px solid var(--color-wr-border-light);
+  flex-shrink: 0;
+}
+
+.postit-card-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 6px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-wr-subtle);
+  font: 700 9px/9px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.postit-card-chip--work {
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+  border-color: transparent;
+}
+
+.postit-card-chip--personal {
+  background: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+  border-color: transparent;
+}
+
+.postit-card-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.postit-card-body {
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  word-break: break-word;
+}
+
+.postit-card-pdate {
+  position: absolute;
+  left: 11px;
+  bottom: 5px;
+  font: 400 10px var(--font-mono);
+  color: var(--color-wr-subtle);
+}

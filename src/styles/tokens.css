@@ -140,6 +140,12 @@
   --wr-graph-node-size: 10px;
   --wr-graph-line-width: 2px;
   --wr-diff-line-pad-x: 10px;
+
+  /* 카드/well 라운드 — 캡쳐보드 sticky 시각 시스템 정본. `.cb` 외 컴포넌트(InboxColumn 등)
+     에서도 같은 값이 적용되도록 글로벌 토큰으로 승격. */
+  --cb-r-sm: 8px;
+  --cb-r-md: 12px;
+  --cb-r-lg: 16px;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────

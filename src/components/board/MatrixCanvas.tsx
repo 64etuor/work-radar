@@ -18,6 +18,7 @@ import {
   computeZonePositions,
   rectContainsPoint,
 } from "@/components/board/matrixGeometry";
+import { InboxColumn } from "@/components/inbox/InboxColumn";
 
 type DropTarget = ZoneKey | "today";
 
@@ -320,17 +321,14 @@ export function MatrixCanvas({
 
   return (
     <div className="canvas" ref={canvasRef}>
-      <div
-        className="inbox"
+      <InboxColumn
         ref={(el) => {
           cellRefs.current.unclassified = el;
         }}
+        label="Inbox"
+        ko="미분류"
+        count={inboxCount}
       >
-        <div className="col-label">
-          <span className="tag">Inbox</span>
-          <span className="ko">미분류</span>
-          <span className="count">{inboxCount}</span>
-        </div>
         <button
           type="button"
           className="inbox-enrich-all"
@@ -349,7 +347,7 @@ export function MatrixCanvas({
           )}
           {enrichAllRunning ? "제안 생성 중…" : "전체 제안 실행"}
         </button>
-      </div>
+      </InboxColumn>
 
       <div className="matrix">
         <div className="grid">
