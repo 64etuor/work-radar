@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { HermesChatInput } from "./hermes/HermesChatInput";
 import { HermesChatLog } from "./hermes/HermesChatLog";
 import { HermesPanel } from "./hermes/HermesPanel";
-import { HERMES_TAB_CAP, useHermesTabs } from "./hermes/useHermesTabs";
+import { useHermesTabs } from "./hermes/useHermesTabs";
 
 function EmptyHermesState({ onCreateTab }: { onCreateTab: () => Promise<unknown> }) {
   return (
@@ -29,7 +29,7 @@ export default function HermesView() {
       onRestart={async () => {
         if (active) await tabs.restart(active.id);
       }}
-      canCreateTab={tabs.state.tabs.size < HERMES_TAB_CAP}
+      canCreateTab={tabs.state.tabs.size < tabs.state.cap}
       activeTabId={active?.id ?? null}
     >
       {active ? (

@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
 import { commands } from "@/bindings";
 import { unwrap } from "@/lib/query/client";
@@ -16,17 +16,21 @@ export interface TabState {
   commandsList: AcpCommand[];
 }
 
+// Cap is the backend's single source of truth (hermes_agent_cap IPC).
+// This fallback is used only before the first IPC response to avoid blocking UX.
+export const HERMES_TAB_CAP_FALLBACK = 3;
+
 export interface TabsState {
   tabs: Map<TabId, TabState>;
   activeTabId: TabId | null;
+  cap: number;
 }
 
 export const EMPTY_TABS_STATE: TabsState = {
   tabs: new Map(),
   activeTabId: null,
+  cap: HERMES_TAB_CAP_FALLBACK,
 };
-
-export const HERMES_TAB_CAP = 3;
 
 type Action =
   | { type: "open-tab"; tabId: TabId; defaultName: string }
@@ -34,6 +38,7 @@ type Action =
   | { type: "set-active"; tabId: TabId }
   | { type: "rename"; tabId: TabId; name: string }
   | { type: "set-status"; tabId: TabId; status: SessionStatus }
+  | { type: "set-cap"; cap: number }
   | { type: "user"; tabId: TabId; text: string; images: string[] }
   | { type: "agent-chunk"; tabId: TabId; text: string }
   | { type: "agent-tool"; tabId: TabId; tool: ToolCallSummary }
@@ -88,6 +93,7 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
       return {
         tabs: next,
         activeTabId: state.activeTabId ?? a.tabId,
+        cap: state.cap,
       };
     }
     case "close-tab": {
@@ -98,7 +104,7 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
       if (activeTabId === a.tabId) {
         activeTabId = next.size > 0 ? Array.from(next.keys())[0] : null;
       }
-      return { tabs: next, activeTabId };
+      return { tabs: next, activeTabId, cap: state.cap };
     }
     case "set-active":
       return state.tabs.has(a.tabId) ? { ...state, activeTabId: a.tabId } : state;
@@ -108,6 +114,9 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
 
     case "set-status":
       return updateTab(state, a.tabId, (t) => ({ ...t, status: a.status }));
+
+    case "set-cap":
+      return { ...state, cap: a.cap };
 
     case "user":
       return updateTab(state, a.tabId, (t) =>
@@ -155,8 +164,10 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
       if (!a.id) return state;
       return updateTab(state, a.tabId, (t) => ({
         ...t,
+        // Only patch toolCalls on in-flight (not done) assistant messages.
+        // Late tool-update events arriving after agent-end must not mutate closed turns.
         messages: t.messages.map((m) =>
-          m.role === "assistant"
+          m.role === "assistant" && !m.done
             ? {
                 ...m,
                 toolCalls: m.toolCalls.map((tc) => (tc.id === a.id ? { ...tc, ...a.patch } : tc)),
@@ -168,12 +179,27 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
 
     case "agent-end": {
       return updateTab(state, a.tabId, (t) => {
-        const ensured = ensureAssistant(t);
-        const last = ensured.messages[ensured.messages.length - 1];
-        const closed =
-          last && last.role === "assistant"
-            ? { ...ensured, messages: [...ensured.messages.slice(0, -1), { ...last, done: true }] }
-            : ensured;
+        const last = t.messages[t.messages.length - 1];
+        const hasInFlight = last && last.role === "assistant" && !last.done;
+        if (!hasInFlight) {
+          // No in-flight assistant — late event. Do NOT call ensureAssistant (would create
+          // a stray done-immediately bubble). For non-ok status append a system warn directly.
+          if (a.status !== "ok") {
+            return appendMessage(t, {
+              id: uid(),
+              role: "system",
+              text: a.error ?? `turn ${a.status}`,
+              level: "warn",
+              ts: Date.now(),
+            });
+          }
+          return t; // genuine late ok-end: no-op
+        }
+        // Close the in-flight assistant turn.
+        const closed = {
+          ...t,
+          messages: [...t.messages.slice(0, -1), { ...last, done: true }],
+        };
         if (a.status !== "ok") {
           return appendMessage(closed, {
             id: uid(),
@@ -200,7 +226,7 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
   }
 }
 
-function pickDefaultName(state: TabsState): string {
+export function pickDefaultName(state: TabsState): string {
   for (let i = 1; i <= 10; i++) {
     const name = `Hermes ${i}`;
     if (!Array.from(state.tabs.values()).some((t) => t.name === name)) return name;
@@ -210,6 +236,18 @@ function pickDefaultName(state: TabsState): string {
 
 export function useHermesTabs() {
   const [state, dispatch] = useReducer(tabsReducer, EMPTY_TABS_STATE);
+  // Keep a ref in sync so callbacks don't capture stale state via closure.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  // Fetch cap from backend once at mount — single source of truth lives in Rust.
+  useEffect(() => {
+    void commands.hermesAgentCap().then((res) => {
+      if (res.status === "ok") dispatch({ type: "set-cap", cap: res.data });
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,26 +342,27 @@ export function useHermesTabs() {
   }, []);
 
   const openTab = useCallback(async (): Promise<TabId | null> => {
-    if (state.tabs.size >= HERMES_TAB_CAP) return null;
+    const s = stateRef.current;
+    if (s.tabs.size >= s.cap) return null;
     const tabId = uid();
-    const defaultName = pickDefaultName(state);
-    let assignedId: TabId | null = null;
+    const defaultName = pickDefaultName(s);
     try {
       await unwrap(commands.hermesAgentOpenTab(tabId));
       dispatch({ type: "open-tab", tabId, defaultName });
-      assignedId = tabId;
+      return tabId;
     } catch (e) {
-      if (state.activeTabId) {
+      const active = stateRef.current.activeTabId;
+      if (active) {
         dispatch({
           type: "system",
-          tabId: state.activeTabId,
+          tabId: active,
           text: `탭 생성 실패: ${(e as Error).message}`,
           level: "error",
         });
       }
+      return null;
     }
-    return assignedId;
-  }, [state]);
+  }, []);
 
   const closeTab = useCallback(async (tabId: TabId) => {
     try {

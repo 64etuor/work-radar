@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EMPTY_TABS_STATE, tabsReducer, type TabsState } from "./useHermesTabs";
+import { EMPTY_TABS_STATE, pickDefaultName, tabsReducer, type TabsState } from "./useHermesTabs";
 
 describe("tabsReducer", () => {
   it("openTab adds a new tab with given id and default name", () => {
@@ -89,5 +89,53 @@ describe("tabsReducer", () => {
       s = tabsReducer(s, { type: "open-tab", tabId: id, defaultName: id });
     }
     expect(s.tabs.size).toBe(4);
+  });
+
+  it("close last tab leaves activeTabId null (EmptyHermesState territory)", () => {
+    let s = tabsReducer(EMPTY_TABS_STATE, { type: "open-tab", tabId: "a", defaultName: "A" });
+    s = tabsReducer(s, { type: "close-tab", tabId: "a" });
+    expect(s.tabs.size).toBe(0);
+    expect(s.activeTabId).toBeNull();
+  });
+
+  it("agent-end on idle tab with no in-flight assistant does not spawn a stray bubble", () => {
+    let s = tabsReducer(EMPTY_TABS_STATE, { type: "open-tab", tabId: "a", defaultName: "A" });
+    // No user/assistant messages — purely idle.
+    s = tabsReducer(s, { type: "agent-end", tabId: "a", status: "cancelled" });
+    const msgs = s.tabs.get("a")!.messages;
+    // Late cancel on idle: no fresh assistant bubble, only system warn allowed.
+    expect(msgs.every((m) => m.role !== "assistant")).toBe(true);
+  });
+
+  it("tool-update on done assistant is a no-op (in-flight guard)", () => {
+    let s = tabsReducer(EMPTY_TABS_STATE, { type: "open-tab", tabId: "a", defaultName: "A" });
+    s = tabsReducer(s, { type: "agent-chunk", tabId: "a", text: "x" });
+    s = tabsReducer(s, {
+      type: "agent-tool",
+      tabId: "a",
+      tool: { id: "tc1", title: "t", status: "in_progress" },
+    });
+    s = tabsReducer(s, { type: "agent-end", tabId: "a", status: "ok" });
+    // Late tool-update arrives after end.
+    const before = s.tabs.get("a")!.messages;
+    s = tabsReducer(s, {
+      type: "tool-update",
+      tabId: "a",
+      id: "tc1",
+      patch: { status: "completed" },
+    });
+    // No mutation expected — messages reference equality preserved.
+    expect(s.tabs.get("a")!.messages).toEqual(before);
+  });
+
+  it("pickDefaultName skips existing names", () => {
+    let s = tabsReducer(EMPTY_TABS_STATE, {
+      type: "open-tab",
+      tabId: "a",
+      defaultName: "Hermes 1",
+    });
+    expect(pickDefaultName(s)).toBe("Hermes 2");
+    s = tabsReducer(s, { type: "open-tab", tabId: "b", defaultName: "Hermes 2" });
+    expect(pickDefaultName(s)).toBe("Hermes 3");
   });
 });
