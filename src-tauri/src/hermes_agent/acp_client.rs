@@ -78,7 +78,7 @@ pub enum ImageTransport {
 pub struct AcpSession {
     pub session_id: String,
     pub image_transport: ImageTransport,
-    stdin_tx: mpsc::Sender<Vec<u8>>,
+    pub(crate) stdin_tx: mpsc::Sender<Vec<u8>>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Json>>>>,
     next_id: Arc<AtomicU64>,
     child: Child,
