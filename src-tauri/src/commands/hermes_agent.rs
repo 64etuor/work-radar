@@ -5,7 +5,7 @@ use crate::hermes_agent::acp_client::{AcpSession, ImageTransport};
 use base64::Engine as _;
 use serde_json::json;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 pub type HermesAgentHolder = Arc<Mutex<Option<AcpSession>>>;
@@ -32,20 +32,27 @@ pub async fn hermes_agent_start(
 #[tauri::command]
 #[specta::specta]
 pub async fn hermes_agent_send(
+    app: AppHandle,
     holder: State<'_, HermesAgentHolder>,
     text: String,
     image_paths: Vec<String>,
 ) -> Result<(), AppError> {
-    // Snapshot only what we need, then release the lock before any I/O.
-    let (session_id, transport, stdin_tx) = {
+    // 1. Snapshot all needed fields under brief lock, then release before I/O.
+    let (session_id, transport, stdin_tx, pending, next_id) = {
         let guard = holder.lock().await;
         let s = guard
             .as_ref()
             .ok_or_else(|| AppError::unexpected("hermes.acp.protocol", "session not started"))?;
-        (s.session_id.clone(), s.image_transport, s.stdin_tx.clone())
+        (
+            s.session_id.clone(),
+            s.image_transport,
+            s.stdin_tx.clone(),
+            s.pending.clone(),
+            s.next_id.clone(),
+        )
     };
 
-    // Build prompt blocks — file I/O happens here, lock already released.
+    // 2. Build prompt blocks — file I/O happens here, lock already released.
     let mut prompt: Vec<serde_json::Value> = Vec::new();
     if !text.is_empty() {
         prompt.push(json!({ "type": "text", "text": text }));
@@ -67,17 +74,82 @@ pub async fn hermes_agent_send(
         prompt.push(block);
     }
 
-    // Encode + send via the cloned stdin_tx — no holder lock needed.
-    let params = json!({ "sessionId": session_id, "prompt": prompt });
-    let body = serde_json::to_vec(
-        &json!({ "jsonrpc": "2.0", "method": "session/prompt", "params": params }),
-    )
+    // 3. Allocate a JSON-RPC id and register a oneshot in pending.
+    let id = next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let body = serde_json::to_vec(&json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "session/prompt",
+        "params": { "sessionId": session_id, "prompt": prompt },
+    }))
     .map_err(|e| AppError::unexpected("hermes.acp.protocol", e.to_string()))?;
     let frame = crate::hermes_agent::frame::encode_frame(&body);
-    stdin_tx
-        .send(frame)
-        .await
-        .map_err(|_| AppError::unexpected("hermes.acp.protocol", "stdin closed"))
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    pending.lock().await.insert(id, tx);
+
+    // 4. Send the framed request.
+    if stdin_tx.send(frame).await.is_err() {
+        pending.lock().await.remove(&id);
+        let _ = app.emit(
+            "hermes-agent:turn-end",
+            json!({ "status": "error", "error": "stdin closed" }),
+        );
+        return Err(AppError::unexpected("hermes.acp.protocol", "stdin closed"));
+    }
+
+    // 5. Wait for the response — model turns can take many seconds; 10 min budget.
+    let resp = match tokio::time::timeout(tokio::time::Duration::from_secs(600), rx).await {
+        Ok(Ok(v)) => v,
+        Ok(Err(_)) => {
+            let _ = app.emit(
+                "hermes-agent:turn-end",
+                json!({ "status": "error", "error": "response dropped (stream closed)" }),
+            );
+            return Err(AppError::unexpected(
+                "hermes.acp.protocol",
+                "response dropped",
+            ));
+        }
+        Err(_) => {
+            pending.lock().await.remove(&id);
+            let _ = app.emit(
+                "hermes-agent:turn-end",
+                json!({ "status": "error", "error": "timeout" }),
+            );
+            return Err(AppError::unexpected("hermes.acp.timeout", "session/prompt"));
+        }
+    };
+
+    // 6. Extract result / error, map stopReason, emit turn-end.
+    if let Some(err) = resp.get("error") {
+        let msg = err.to_string();
+        let _ = app.emit(
+            "hermes-agent:turn-end",
+            json!({ "status": "error", "error": msg.clone() }),
+        );
+        return Err(AppError::unexpected("hermes.acp.protocol", msg));
+    }
+
+    let stop_reason = resp
+        .get("result")
+        .and_then(|r| r.get("stopReason"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("end_turn")
+        .to_string();
+
+    let status = match stop_reason.as_str() {
+        "cancelled" => "cancelled",
+        "refusal" | "error" => "error",
+        _ => "ok",
+    };
+
+    let _ = app.emit(
+        "hermes-agent:turn-end",
+        json!({ "status": status, "stop_reason": stop_reason }),
+    );
+
+    Ok(())
 }
 
 fn mime_from_ext(path: &str) -> &'static str {

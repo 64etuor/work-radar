@@ -79,8 +79,8 @@ pub struct AcpSession {
     pub session_id: String,
     pub image_transport: ImageTransport,
     pub(crate) stdin_tx: mpsc::Sender<Vec<u8>>,
-    pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Json>>>>,
-    next_id: Arc<AtomicU64>,
+    pub(crate) pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Json>>>>,
+    pub(crate) next_id: Arc<AtomicU64>,
     child: Child,
 }
 
