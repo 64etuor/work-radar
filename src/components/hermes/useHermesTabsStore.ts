@@ -84,6 +84,11 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
         // best-effort
       }
       dispatch({ type: "close-tab", tabId });
+      // Invariant: 항상 1개 이상의 탭이 떠 있어야 한다 (사용자 결정).
+      // 마지막 탭이 닫혔으면 즉시 빈 탭 1개를 다시 만든다.
+      if (get().tabs.size === 0) {
+        await get().openTab();
+      }
     },
 
     setActive: (tabId) => {
@@ -144,12 +149,26 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
  * StrictMode / double-mount safe: uses `cancelled` flag + per-await guard pattern
  * (same as original useHermesTabs).
  */
+// Module-level flag: ensures the default "always 1 tab" auto-open fires exactly
+// once across React StrictMode double-mount. Page reload resets the module.
+let didOpenDefaultTab = false;
+
 export function useHermesTabsBootstrap() {
   useEffect(() => {
     let cancelled = false;
     const cleanups: UnlistenFn[] = [];
 
     const dispatch = useHermesTabsStore.getState()._dispatch;
+
+    const ensureDefaultTab = async () => {
+      if (didOpenDefaultTab) return;
+      if (useHermesTabsStore.getState().tabs.size > 0) {
+        didOpenDefaultTab = true;
+        return;
+      }
+      didOpenDefaultTab = true;
+      await useHermesTabsStore.getState().openTab();
+    };
 
     type WithTab<T> = T & { tabId?: string };
 
@@ -167,6 +186,8 @@ export function useHermesTabsBootstrap() {
       if (!cancelled && res.status === "ok") {
         dispatch({ type: "set-cap", cap: res.data });
       }
+      // After cap is known (or fallback 3), guarantee at least 1 tab exists.
+      void ensureDefaultTab();
     });
 
     void (async () => {
