@@ -90,8 +90,17 @@ pub async fn create_project(
     })
 }
 
+// 정본 = DESIGN.md §Colors. Life Wheel과 동일한 brand-aligned 패밀리 —
+// 임의의 vivid 색상 8개 대신 brand accent + 그 derivations만 사용.
 const PROJECT_CALENDAR_PALETTE: [&str; 8] = [
-    "#2D6CDF", "#1F8A70", "#B45309", "#C2410C", "#7C3AED", "#0F766E", "#BE123C", "#4D7C0F",
+    "#1863DC", // Action Blue
+    "#003C33", // Deep Enterprise Green
+    "#FF7759", // Coral
+    "#071829", // Dark Navy
+    "#4C6EE6", // Focus Blue
+    "#5A8A78", // sage
+    "#A89175", // warm stone
+    "#75758A", // Slate
 ];
 
 pub(crate) fn default_project_calendar_color(project_id: &str) -> String {

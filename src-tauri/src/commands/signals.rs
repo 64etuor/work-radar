@@ -116,18 +116,21 @@ pub async fn set_signal_area_tags(
 
 const KEY_LIFE_WHEEL_TAGS: &str = "life_wheel.tags";
 
+// 정본 = DESIGN.md §Colors. green family(work/health/environment) +
+// blue family(studies/friends/finances) + warm family(recreation/romance/family) +
+// neutral(other). 10개여도 패밀리 3개로 묶여 시각적 잡음을 줄임.
 fn default_life_wheel_tags() -> Vec<LifeWheelTagConfig> {
     [
-        ("health", "건강", "#0f9f6e"),
-        ("work", "업무", "#003c33"),
-        ("studies", "학습", "#1863dc"),
-        ("environment", "환경", "#7a9f35"),
-        ("recreation", "휴식", "#ff7759"),
-        ("romance", "연애", "#d94f70"),
-        ("family", "가족", "#9b6a2f"),
-        ("friends", "친구", "#6f63d9"),
-        ("finances", "재정", "#0f7a8a"),
-        ("other", "기타", "#75758a"),
+        ("health", "건강", "#5a8a78"),      // sage (green family)
+        ("work", "업무", "#003c33"),        // Deep Enterprise Green
+        ("studies", "학습", "#1863dc"),     // Action Blue
+        ("environment", "환경", "#8aa67a"), // pale herb (green family)
+        ("recreation", "휴식", "#ff7759"),  // Coral
+        ("romance", "연애", "#ffad9b"),     // Soft Coral
+        ("family", "가족", "#a89175"),      // warm stone
+        ("friends", "친구", "#4c6ee6"),     // Focus Blue
+        ("finances", "재정", "#071829"),    // Dark Navy
+        ("other", "기타", "#75758a"),       // Slate
     ]
     .into_iter()
     .map(|(id, label, color)| LifeWheelTagConfig {
