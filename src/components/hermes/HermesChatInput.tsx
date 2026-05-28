@@ -199,7 +199,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
             data-no-drag
             type="button"
             variant="ghost"
-            className="hover:bg-muted/60 absolute top-1/2 left-2 size-9 -translate-y-1/2 rounded-full p-0"
+            className="bg-muted text-muted-foreground hover:bg-muted/70 absolute top-1/2 left-2 size-9 -translate-y-1/2 rounded-full p-0"
             onClick={pickFile}
             disabled={disabled}
             aria-label="이미지 첨부"
