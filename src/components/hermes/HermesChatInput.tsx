@@ -149,7 +149,7 @@ export function HermesChatInput({ onSend, disabled, commandsList }: Props) {
           ))}
         </div>
       )}
-      <div className="relative flex items-end gap-2">
+      <div className="relative flex items-end gap-1.5">
         {menuOpen && (
           <HermesSlashMenu
             items={filtered}
@@ -162,7 +162,7 @@ export function HermesChatInput({ onSend, disabled, commandsList }: Props) {
           data-no-drag
           type="button"
           variant="ghost"
-          className="h-9 w-9 shrink-0 p-0"
+          className="hover:bg-muted h-9 w-9 shrink-0 p-0"
           size="sm"
           onClick={pickFile}
           disabled={disabled}

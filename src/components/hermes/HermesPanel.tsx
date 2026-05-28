@@ -130,7 +130,7 @@ export function HermesPanel({
       />
 
       {/* ── 본문 ───────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: "auto" }}>{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
 
       {/* ── 리사이즈 그립 (우하단) ─────────────────────────────── */}
       <ResizeGrip x={x} y={y} w={w} h={h} onBoundsChange={setBounds} />

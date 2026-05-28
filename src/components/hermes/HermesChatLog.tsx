@@ -24,6 +24,11 @@ export function HermesChatLog({ messages }: Props) {
         followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
     >
+      {messages.length === 0 && (
+        <p className="text-muted-foreground py-8 text-center text-xs">
+          Hermes에게 무엇이든 물어보세요…
+        </p>
+      )}
       {messages.map((m) => (
         <div key={m.id} className={cn("text-sm", m.role === "user" && "text-right")}>
           {m.role === "user" && (
