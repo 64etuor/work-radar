@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Paperclip, Send, Square, X } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { commands } from "@/bindings";
@@ -191,21 +191,21 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
           />
         )}
         {/* Integrated input shell */}
-        <div className="border-border/60 bg-background focus-within:border-foreground/40 relative rounded-2xl border transition-colors">
+        <div className="border-border/60 bg-background focus-within:border-foreground/40 relative rounded-full border transition-colors">
           <Button
             data-no-drag
             type="button"
             variant="ghost"
-            className="hover:bg-muted/60 absolute bottom-2 left-2 h-7 w-7 p-0"
+            className="hover:bg-muted/60 absolute top-1/2 left-1.5 size-8 -translate-y-1/2 p-0"
             onClick={pickFile}
             disabled={disabled}
             aria-label="이미지 첨부"
           >
-            <Paperclip className="h-3.5 w-3.5" />
+            <Paperclip className="size-4" />
           </Button>
           <Textarea
             ref={taRef}
-            className="max-h-[160px] min-h-[44px] resize-none border-0 bg-transparent py-2.5 pr-12 pl-10 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="max-h-[160px] min-h-[44px] resize-none border-0 bg-transparent py-2.5 pr-14 pl-11 focus-visible:ring-0 focus-visible:ring-offset-0"
             value={text}
             onChange={(e) => {
               setText(e.target.value);
@@ -248,21 +248,21 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
           />
           {isStreaming ? (
             <Button
-              className="absolute right-2 bottom-2 h-7 w-7 rounded-full p-0"
+              className="absolute top-1/2 right-1.5 size-9 -translate-y-1/2 rounded-full p-0"
               variant="destructive"
               onClick={onCancel}
               aria-label="중단"
             >
-              <Square className="h-3.5 w-3.5" />
+              <Square className="size-4" />
             </Button>
           ) : (
             <Button
-              className="absolute right-2 bottom-2 h-7 w-7 rounded-full p-0"
+              className="absolute top-1/2 right-1.5 size-9 -translate-y-1/2 rounded-full p-0"
               onClick={submit}
               disabled={disabled || (!text.trim() && attachments.length === 0)}
               aria-label="전송"
             >
-              <Send className="h-3.5 w-3.5" />
+              <ArrowUp className="size-4" />
             </Button>
           )}
         </div>
