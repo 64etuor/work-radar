@@ -39,8 +39,8 @@
 //! - `hermes-agent:session-ready`    — `{ session_id: str }`
 //! - `hermes-agent:available-commands` — `{ commands: [{name, description?}] }`
 //! - `hermes-agent:chunk`            — `{ kind: "agent"|"user"|"thought", text: str }`
-//! - `hermes-agent:tool-call`        — `{ tool_call_id, title, kind?, status?, session_update }`
-//! - `hermes-agent:tool-call-update` — same shape as tool-call
+//! - `hermes-agent:tool-call`        — raw ACP `update` object (camelCase: `toolCallId`, `title`, `kind?`, `status?`)
+//! - `hermes-agent:tool-call-update` — raw ACP `update` object (same camelCase shape, partial fields)
 //! - `hermes-agent:plan`             — `{ entries: [{title, status, priority}] }`
 //! - `hermes-agent:error`            — `{ kind: str, message: str }`
 
@@ -134,6 +134,9 @@ impl AcpSession {
                             "hermes-agent:error",
                             json!({ "kind": "io", "message": "acp stream closed" }),
                         );
+                        // Drop all pending senders so in-flight request() calls wake
+                        // immediately with RecvError instead of waiting out their timeout.
+                        pending_r.lock().await.clear();
                         break;
                     }
                 };
@@ -151,6 +154,9 @@ impl AcpSession {
             }
         });
 
+        // Build a "shell" session so request()/notify() can use stdin_tx during the
+        // initialize + session/new handshake. On any early-return via `?`, this shell
+        // drops; `kill_on_drop` on `child` reaps the agent process automatically.
         let session = AcpSession {
             session_id: String::new(),
             image_transport: ImageTransport::FilePath,
@@ -263,6 +269,9 @@ impl AcpSession {
 
     pub async fn kill(mut self) {
         let _ = self.child.kill().await;
+        // Drop all pending senders so any in-flight request() callers wake immediately.
+        // stdin_tx drops with self, which closes the mpsc channel → writer task exits.
+        self.pending.lock().await.clear();
     }
 }
 
