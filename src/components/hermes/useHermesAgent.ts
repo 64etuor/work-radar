@@ -71,8 +71,11 @@ export function useHermesAgent() {
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [commandsList, setCommandsList] = useState<AcpCommand[]>([]);
 
-  // Mount-only event subscriptions with cancelled-race guard.
-  // All hermes-agent:* events are forwarded into the reducer.
+  // Mount-only event subscriptions — StrictMode-safe cancelled-race guard.
+  // Each individual listen() await checks `cancelled` and immediately calls its
+  // own unlisten if cleanup already fired. This prevents the React 19 StrictMode
+  // double-mount from leaving orphaned listeners (first mount's subscriptions
+  // cancel themselves before the second mount completes its own setup).
   //
   // NOTE: hermes-agent:turn-end is subscribed here but C2's dispatch_incoming
   // does NOT currently emit it — turn completion is only observable when the
@@ -82,72 +85,69 @@ export function useHermesAgent() {
   // triggers this event; if not, a follow-up can wire turn completion via the
   // IPC return value or a dedicated session/update discriminator.
   useEffect(() => {
-    const unlistens: UnlistenFn[] = [];
     let cancelled = false;
+    const cleanups: UnlistenFn[] = [];
 
-    const sub = async () => {
-      unlistens.push(
-        await listen<{ kind?: string; text?: string }>("hermes-agent:chunk", (e) => {
-          if (e.payload.kind !== "agent") return;
-          dispatch({ type: "assistant-chunk", text: e.payload.text ?? "" });
-        }),
-      );
-
-      unlistens.push(
-        await listen<Record<string, unknown>>("hermes-agent:tool-call", (e) => {
-          // Raw ACP update — camelCase per C2 doc.
-          const p = e.payload as {
-            toolCallId?: string;
-            title?: string;
-            kind?: string;
-            status?: string;
-          };
-          dispatch({
-            type: "assistant-tool",
-            tool: {
-              id: p.toolCallId,
-              title: p.title ?? p.kind ?? "tool",
-              kind: p.kind,
-              status: p.status,
-            },
-          });
-        }),
-      );
-
-      // turn-end subscription: may never fire — see NOTE above.
-      unlistens.push(
-        await listen<{ status: "ok" | "cancelled" | "error"; error?: string }>(
-          "hermes-agent:turn-end",
-          (e) =>
-            dispatch({
-              type: "assistant-end",
-              status: e.payload.status,
-              error: e.payload.error,
-            }),
-        ),
-      );
-
-      unlistens.push(
-        await listen<{ commands: AcpCommand[] }>("hermes-agent:available-commands", (e) =>
-          setCommandsList(e.payload.commands ?? []),
-        ),
-      );
-
-      unlistens.push(await listen("hermes-agent:session-ready", () => setStatus("ready")));
-
-      unlistens.push(
-        await listen<{ kind: string; message: string }>("hermes-agent:error", (e) => {
-          setStatus("error");
-          dispatch({
-            type: "system",
-            text: `Hermes 오류: ${e.payload.message}`,
-            level: "error",
-          });
-        }),
-      );
+    const setup = async <T>(event: string, handler: (e: { payload: T }) => void) => {
+      const un = await listen<T>(event, handler);
+      if (cancelled) {
+        un();
+        return;
+      }
+      cleanups.push(un);
     };
 
-    void sub().catch((err) => {
+    void (async () => {
+      await setup<{ kind?: string; text?: string }>("hermes-agent:chunk", (e) => {
+        if (e.payload.kind !== "agent") return;
+        dispatch({ type: "assistant-chunk", text: e.payload.text ?? "" });
+      });
+
+      // Raw ACP update — camelCase per C2 doc.
+      await setup<Record<string, unknown>>("hermes-agent:tool-call", (e) => {
+        const p = e.payload as {
+          toolCallId?: string;
+          title?: string;
+          kind?: string;
+          status?: string;
+        };
+        dispatch({
+          type: "assistant-tool",
+          tool: {
+            id: p.toolCallId,
+            title: p.title ?? p.kind ?? "tool",
+            kind: p.kind,
+            status: p.status,
+          },
+        });
+      });
+
+      // turn-end subscription: may never fire — see NOTE above.
+      await setup<{ status: "ok" | "cancelled" | "error"; error?: string }>(
+        "hermes-agent:turn-end",
+        (e) =>
+          dispatch({
+            type: "assistant-end",
+            status: e.payload.status,
+            error: e.payload.error,
+          }),
+      );
+
+      await setup<{ commands: AcpCommand[] }>("hermes-agent:available-commands", (e) =>
+        setCommandsList(e.payload.commands ?? []),
+      );
+
+      await setup<unknown>("hermes-agent:session-ready", () => setStatus("ready"));
+
+      await setup<{ kind: string; message: string }>("hermes-agent:error", (e) => {
+        setStatus("error");
+        dispatch({
+          type: "system",
+          text: `Hermes 오류: ${e.payload.message}`,
+          level: "error",
+        });
+      });
+    })().catch((err) => {
       if (!cancelled) {
         setStatus("error");
         dispatch({
@@ -160,7 +160,7 @@ export function useHermesAgent() {
 
     return () => {
       cancelled = true;
-      unlistens.forEach((u) => u());
+      cleanups.forEach((u) => u());
     };
   }, []);
 

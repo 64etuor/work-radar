@@ -116,7 +116,7 @@ export function HermesPanel({
         width: w,
         height: h,
       }}
-      className="bg-background border-border fixed z-50 flex flex-col overflow-hidden rounded-lg border shadow-lg"
+      className="bg-background border-border fixed z-50 flex flex-col overflow-hidden rounded-lg border font-sans shadow-lg"
     >
       {/* ── 헤더 드래그 핸들 ─────────────────────────────────────── */}
       <PanelHeader
