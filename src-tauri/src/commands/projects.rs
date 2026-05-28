@@ -144,11 +144,11 @@ pub(crate) fn readable_text_color(background: &str) -> String {
         .strip_prefix('#')
         .unwrap_or(background.trim());
     if hex.len() != 6 {
-        return "#111827".to_string();
+        return "#212121".to_string();
     }
     let parse = |range: std::ops::Range<usize>| u8::from_str_radix(&hex[range], 16).ok();
     let (Some(r), Some(g), Some(b)) = (parse(0..2), parse(2..4), parse(4..6)) else {
-        return "#111827".to_string();
+        return "#212121".to_string();
     };
     let luminance = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
     let contrast_dark = (luminance + 0.05) / 0.05;
@@ -156,7 +156,7 @@ pub(crate) fn readable_text_color(background: &str) -> String {
     if contrast_light > contrast_dark {
         "#FFFFFF".to_string()
     } else {
-        "#111827".to_string()
+        "#212121".to_string()
     }
 }
 
@@ -431,7 +431,7 @@ mod tests {
     #[test]
     fn readable_text_color_picks_high_contrast_foreground() {
         assert_eq!(readable_text_color("#111827"), "#FFFFFF");
-        assert_eq!(readable_text_color("#F8FAFC"), "#111827");
+        assert_eq!(readable_text_color("#F8FAFC"), "#212121");
         assert!(default_project_calendar_color("project-a").starts_with('#'));
     }
 

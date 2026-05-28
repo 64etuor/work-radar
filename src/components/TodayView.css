@@ -98,11 +98,11 @@
   gap: 10px;
   margin: 6px 0;
   padding: 4px 10px 4px 12px;
-  background: #fff3cd;
-  border: 1px solid #f0d878;
+  background: color-mix(in srgb, var(--color-today-debt-warn) 18%, #fff);
+  border: 1px solid var(--color-today-debt-warn-border);
   border-radius: 9999px;
   font-size: 11px;
-  color: #6b4f00;
+  color: var(--color-wr-fg);
 }
 
 .today-staged-text {
@@ -116,7 +116,7 @@
 }
 
 .today-canvas[data-drop-over] .today-canvas-grid {
-  background: rgba(74, 123, 184, 0.03);
+  background: color-mix(in srgb, var(--color-today-signal) 3%, transparent);
 }
 
 .today-canvas-drop-guide {
@@ -124,7 +124,7 @@
   left: 60px;
   right: 0;
   height: 2px;
-  background: rgba(74, 123, 184, 0.5);
+  background: color-mix(in srgb, var(--color-today-signal) 50%, transparent);
   pointer-events: none;
   z-index: 4;
 }
@@ -134,18 +134,18 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #4a7bb8;
+  background: var(--color-today-signal);
   pointer-events: none;
   z-index: 4;
 }
 
 .today-canvas-drop-preview {
   position: absolute;
-  border: 1px solid #4a7bb8;
+  border: 1px solid var(--color-today-signal);
   border-left-width: 4px;
   border-radius: 6px;
-  background: #eaf2ff;
-  box-shadow: 0 4px 14px rgba(38, 74, 120, 0.16);
+  background: var(--color-wr-accent-soft);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-today-signal) 16%, transparent);
   pointer-events: none;
   z-index: 4;
   display: flex;
@@ -154,19 +154,19 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 700;
-  color: #24476f;
+  color: var(--color-wr-fg);
 }
 
 .today-canvas-drop-preview-event {
-  background: #fff1d6;
-  border-color: #b47f2a;
-  color: #6d4610;
+  background: color-mix(in srgb, var(--color-today-debt-warn) 18%, #fff);
+  border-color: var(--color-today-debt-warn);
+  color: var(--color-wr-fg);
 }
 
 .today-canvas-drop-preview-routine {
-  background: #edf7e6;
-  border-color: #5c8a3a;
-  color: #36591f;
+  background: var(--color-wr-pale-green);
+  border-color: var(--color-today-routine);
+  color: var(--color-wr-green);
 }
 
 /* 15분 스냅 슬롯 시각 라벨 (PR 6 Task 3). */
@@ -177,7 +177,7 @@
   top: -16px;
   font-size: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #4a7bb8;
+  color: var(--color-today-signal);
   background: rgba(255, 255, 255, 0.85);
   padding: 0 4px;
   border-radius: 2px;
@@ -192,7 +192,7 @@
   padding: 6px 10px;
   background: #fff;
   border: 1px solid var(--wr-border, #d9d4c7);
-  border-left: 3px solid var(--color-today-signal, #4a7bb8);
+  border-left: 3px solid var(--color-today-signal, var(--color-today-signal));
   border-radius: 6px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
@@ -223,7 +223,7 @@
   padding: 8px 10px;
   background: var(--wr-postit-bg, #fffdf3);
   border: 1px solid var(--wr-border, #d9d4c7);
-  border-left: 4px solid var(--color-today-signal, #4a7bb8);
+  border-left: 4px solid var(--color-today-signal, var(--color-today-signal));
   border-radius: 4px;
   box-shadow:
     0 8px 22px rgba(15, 20, 40, 0.12),
@@ -246,7 +246,7 @@
 .today-drag-ghost-resize {
   width: 60px;
   height: 6px;
-  background: var(--color-today-signal, #4a7bb8);
+  background: var(--color-today-signal, var(--color-today-signal));
   border-radius: 3px;
   opacity: 0.7;
   cursor: ns-resize;
@@ -382,7 +382,7 @@
   top: -10px;
   font-size: 10px;
   font-weight: 700;
-  color: #57534e;
+  color: var(--color-wr-muted);
   font-family: ui-monospace, monospace;
   background: #fff;
   border: 1px solid rgba(214, 207, 191, 0.9);
@@ -421,7 +421,7 @@
   right: 0;
   top: 540px; /* 9h × 60px */
   height: 540px; /* 9h band */
-  background: rgba(74, 123, 184, 0.055);
+  background: color-mix(in srgb, var(--color-today-signal) 5.5%, transparent);
   z-index: 0;
   pointer-events: none;
 }
@@ -502,7 +502,7 @@
 .tl-block {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 14%, #fff);
+  background: color-mix(in srgb, var(--tl-accent, var(--color-today-signal)) 14%, #fff);
   border: 1px solid var(--wr-border, #c8c2b0);
   border-left-width: 4px;
   border-radius: 6px;
@@ -525,7 +525,7 @@
 }
 
 .tl-block:hover {
-  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 20%, #fff);
+  background: color-mix(in srgb, var(--tl-accent, var(--color-today-signal)) 20%, #fff);
 }
 
 .tl-block:active {
@@ -561,19 +561,19 @@
 }
 
 .tl-block-signal {
-  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 16%, #fff);
-  border-color: rgba(74, 123, 184, 0.45);
+  background: color-mix(in srgb, var(--tl-accent, var(--color-today-signal)) 16%, #fff);
+  border-color: color-mix(in srgb, var(--color-today-signal) 45%, transparent);
   cursor: grab;
   box-shadow:
-    0 1px 2px rgba(74, 123, 184, 0.12),
-    0 2px 6px rgba(74, 123, 184, 0.06);
+    0 1px 2px color-mix(in srgb, var(--color-today-signal) 12%, transparent),
+    0 2px 6px color-mix(in srgb, var(--color-today-signal) 6%, transparent);
 }
 
 .tl-block-signal:hover {
-  background: color-mix(in srgb, var(--tl-accent, #4a7bb8) 22%, #fff);
+  background: color-mix(in srgb, var(--tl-accent, var(--color-today-signal)) 22%, #fff);
   box-shadow:
-    0 2px 4px rgba(74, 123, 184, 0.18),
-    0 4px 12px rgba(74, 123, 184, 0.1);
+    0 2px 4px color-mix(in srgb, var(--color-today-signal) 18%, transparent),
+    0 4px 12px color-mix(in srgb, var(--color-today-signal) 10%, transparent);
 }
 
 .tl-block-signal:active {
@@ -581,34 +581,34 @@
 }
 
 .tl-block-signal .tl-block-time {
-  color: #4a7bb8;
+  color: var(--color-today-signal);
   font-weight: 600;
 }
 
 .tl-block-signal .tl-block-title {
-  color: #1a3a5c;
+  color: var(--color-wr-fg);
   font-weight: 600;
 }
 
 /* Google event 블록 — 외부 캘린더 정본이지만 직접 drag/resize 가능. */
 .tl-block-event {
-  background: color-mix(in srgb, var(--tl-accent, #b47f2a) 16%, #fff);
-  border-color: rgba(180, 127, 42, 0.42);
+  background: color-mix(in srgb, var(--tl-accent, var(--color-today-debt-warn)) 16%, #fff);
+  border-color: color-mix(in srgb, var(--color-today-debt-warn) 42%, transparent);
   border-style: solid;
   border-left-style: solid;
   box-shadow:
-    0 1px 2px rgba(180, 127, 42, 0.1),
-    0 3px 10px rgba(180, 127, 42, 0.07);
+    0 1px 2px color-mix(in srgb, var(--color-today-debt-warn) 10%, transparent),
+    0 3px 10px color-mix(in srgb, var(--color-today-debt-warn) 7%, transparent);
 }
 
 .tl-block-event .tl-block-title {
-  color: #573b12;
+  color: var(--color-wr-fg);
   font-style: normal;
   font-weight: 600;
 }
 
 .tl-block-event .tl-block-time {
-  color: #8a5b14;
+  color: var(--color-wr-muted);
   font-weight: 600;
 }
 
@@ -656,15 +656,15 @@
 }
 
 .tl-block-signal + .tl-block-resize {
-  color: var(--color-today-signal, #4a7bb8);
+  color: var(--color-today-signal, var(--color-today-signal));
 }
 
 .tl-block-event + .tl-block-resize {
-  color: #b47f2a;
+  color: var(--color-today-debt-warn);
 }
 
 .tl-block-routine + .tl-block-resize {
-  color: var(--color-today-routine, #5c8a3a);
+  color: var(--color-today-routine);
 }
 
 .tl-block-resize:hover::after,
@@ -679,15 +679,15 @@
 }
 
 .tl-block-routine {
-  background: color-mix(in srgb, var(--tl-accent, #5c8a3a) 16%, #fff);
-  border-color: rgba(92, 138, 58, 0.4);
+  background: color-mix(in srgb, var(--tl-accent, var(--color-today-routine)) 16%, #fff);
+  border-color: color-mix(in srgb, var(--color-today-routine) 40%, transparent);
   box-shadow:
-    0 1px 2px rgba(92, 138, 58, 0.1),
-    0 3px 10px rgba(92, 138, 58, 0.06);
+    0 1px 2px color-mix(in srgb, var(--color-today-routine) 10%, transparent),
+    0 3px 10px color-mix(in srgb, var(--color-today-routine) 6%, transparent);
 }
 
 .tl-block-routine .tl-block-time {
-  color: #4d7c2d;
+  color: var(--color-wr-green);
   font-weight: 600;
 }
 
@@ -721,7 +721,7 @@
   background: rgba(0, 0, 0, 0.06);
 }
 .tl-block-check[data-done] {
-  color: var(--color-q2, #5c8a3a);
+  color: var(--color-q2);
 }
 .tl-block-check:focus-visible {
   outline: 2px solid var(--wr-color-focus, #4c6ee6);

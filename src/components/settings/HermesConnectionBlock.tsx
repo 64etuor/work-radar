@@ -56,7 +56,7 @@ export function HermesConnectionBlock() {
       )}
 
       {q.data && q.data.installed && !q.data.acp_ready && (
-        <div className="flex items-start gap-2 text-sm text-amber-500">
+        <div className="text-accent flex items-start gap-2 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <p>Hermes {q.data.version ?? ""} 감지됨이나 ACP 준비 미완.</p>
