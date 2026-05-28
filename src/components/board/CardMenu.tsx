@@ -6,7 +6,6 @@ import { registerOverlay } from "@/components/ui/overlay-stack";
 
 export type CardMenuAction =
   | "today"
-  | "enrich"
   | "edit"
   | "backlog"
   | "agenda"
@@ -25,12 +24,10 @@ type Props = {
   state: CardMenuState | null;
   onAct: (action: CardMenuAction, signalId: string) => void;
   onClose: () => void;
-  /** codex 가용 여부 (enrich 제안 액션 활성/비활성 — graceful degrade). */
-  codexReady: boolean;
 };
 
 /** 카드 ⋯ 액션 메뉴. anchor 기준 fixed 위치, 바깥 클릭/Esc로 닫힘. */
-export function CardMenu({ state, onAct, onClose, codexReady }: Props) {
+export function CardMenu({ state, onAct, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: -9999, top: -9999 });
 
@@ -96,18 +93,6 @@ export function CardMenu({ state, onAct, onClose, codexReady }: Props) {
       </button>
       <button type="button" onClick={() => act("edit")}>
         제목 편집<small>수정</small>
-      </button>
-      <button
-        type="button"
-        disabled={!codexReady}
-        title={
-          codexReady
-            ? "codex로 영역/사분면 제안 (Jobs에서 검토·accept)"
-            : "codex 미가용 — 설치·로그인 후 사용"
-        }
-        onClick={() => act("enrich")}
-      >
-        AI 제안<small>영역·사분면</small>
       </button>
       <div className="sep" />
       <button type="button" onClick={() => act("backlog")}>

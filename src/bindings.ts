@@ -237,27 +237,10 @@ export const commands = {
 	acceptProposal: (runId: string, accepted: PrSelfCheckProposal) => typedError<null, AppError>(__TAURI_INVOKE("accept_proposal", { runId, accepted })),
 	/**  Proposal reject(폐기). awaiting_approval 잡을 cancelled로 마감한다(acceptances 기록 없음, 외부 무변경). */
 	rejectProposal: (runId: string) => typedError<null, AppError>(__TAURI_INVOKE("reject_proposal", { runId })),
-	/**
-	 *  braindump enrich 잡 트리거(미분류 카드 ⋯ 메뉴). 카드 텍스트를 읽어 suggestedQuadrant/suggestedArea를
-	 *  **제안**한다(비-레포 잡·read_only). 산출 Proposal은 awaiting_approval로 멈추고, accept해도 quadrant는
-	 *  자동 확정되지 않는다(INVARIANT #1). 미설치/미인증이면 Err(graceful degrade).
-	 */
-	triggerEnrich: (input: TriggerEnrichInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_enrich", { input })),
-	/**  enrich Proposal(타입 파싱). raw/세트 밖 값이면 Err(조용한 빈 proposal 금지 + 닫힌 세트 강제). */
-	enrichProposal: (runId: string) => typedError<EnrichProposal, AppError>(__TAURI_INVOKE("enrich_proposal", { runId })),
-	/**
-	 *  enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 검토·편집한 제안을 accept하면 신호의 quadrant+area를
-	 *  **확정**(제안에 quadrant 없으면 기존 보존)하고 suggested 힌트를 비운 뒤 잡을 succeeded로 마감한다.
-	 *  codex가 아니라 사람의 명시적 accept 클릭으로만 확정 — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
-	 */
-	acceptEnrich: (runId: string, accepted: EnrichProposal) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("accept_enrich", { runId, accepted })),
-	/**
-	 *  라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관). enrich 제안을 사람이
-	 *  확정하거나 직접 고른다. None이면 미설정으로 되돌린다.
-	 */
+	/**  라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관). */
 	setSignalArea: (id: string, area: "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other" | null) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_area", { id, area })),
 	/**
-	 *  단일 잡 상태 폴링 (B3: EnrichModal 인플레이스 폴링). 1초 주기 폴링용으로 가볍게 설계.
+	 *  단일 잡 상태 폴링 (EnrichReviewPanel awaiting_approval 게이트 등). 1초 주기 폴링용으로 가볍게 설계.
 	 *  terminal 상태(awaiting_approval/succeeded/failed/cancelled)에서 폴링을 멈춰도 된다.
 	 */
 	agentRunStatus: (runId: string) => typedError<AgentRunStatus, AppError>(__TAURI_INVOKE("agent_run_status", { runId })),
@@ -873,20 +856,6 @@ export type DiffMode =
 
 /**  잡 실행 엔진. agent_runs.engine CHECK과 동일. */
 export type Engine = "codex" | "hermes" | "claude";
-
-/**
- *  enrich 산출 Proposal (codex draft). quadrant/area는 **힌트일 뿐** — accept해도 카드는
- *  unclassified로 남고(INVARIANT #1), area는 사람이 별도로 확정한다. Quadrant/AreaTag로 타입해
- *  **닫힌 세트를 구조적으로 강제**한다(세트 밖 값이면 파싱이 거부 → INVARIANT #1). serde default로 누락 관용.
- */
-export type EnrichProposal = {
-	/**  제안 사분면 힌트(닫힌 enum). 자동 분류 아님. */
-	suggestedQuadrant?: Quadrant | null,
-	/**  제안 라이프 도메인 힌트(닫힌 taxonomy). AI는 세트 밖을 만들지 못한다. */
-	suggestedArea?: AreaTag | null,
-	/**  제안 근거(짧은 설명). */
-	reason?: string | null,
-};
 
 /**  액션 가능 힌트(열기/이동 등). 프런트가 버튼/링크로 노출. */
 export type ErrorAction = {
@@ -1511,14 +1480,6 @@ export type TriggerEchoInput = {
  */
 export type TriggerEnrichAllInput = {
 	projectId: string | null,
-	timeoutSec: number,
-	maxTurns: number,
-	costCapUsd: number | null,
-};
-
-/**  braindump enrich 잡 입력 (미분류 카드 ⋯ 메뉴에서 트리거). 비-레포 잡(worktree 불요). */
-export type TriggerEnrichInput = {
-	signalId: string,
 	timeoutSec: number,
 	maxTurns: number,
 	costCapUsd: number | null,

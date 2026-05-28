@@ -61,13 +61,6 @@ pub(super) fn parse_proposal<T: serde::de::DeserializeOwned>(raw: &str) -> Resul
 // codex가 내는 proposal과 달리 trigger는 앱이 전적으로 통제하므로 타입화한다(stringly-typed JSON 제거).
 // camelCase 직렬화로 기존 JSON 키(signalId/batchCount/prUrl/repoFullName/prNumber)를 그대로 보존.
 
-/// enrich(단건) 트리거 — accept 경로가 signalId를 읽는다.
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct EnrichTrigger {
-    pub signal_id: String,
-}
-
 /// enrich(전체 배치) 트리거 — 표시용(읽기 없음).
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,7 +82,7 @@ pub(super) struct PrJobTrigger {
 use crate::models::AgentRunStatus;
 use tauri::State;
 
-/// 단일 잡 상태 폴링 (B3: EnrichModal 인플레이스 폴링). 1초 주기 폴링용으로 가볍게 설계.
+/// 단일 잡 상태 폴링 (EnrichReviewPanel awaiting_approval 게이트 등). 1초 주기 폴링용으로 가볍게 설계.
 /// terminal 상태(awaiting_approval/succeeded/failed/cancelled)에서 폴링을 멈춰도 된다.
 #[tauri::command]
 #[specta::specta]
@@ -115,15 +108,9 @@ mod tests {
     use crate::commands::signal_store::insert_signal;
     use crate::models::{Kind, Quadrant};
 
-    /// trigger 구조체가 기존 camelCase JSON 키를 그대로 직렬화하는지 잠근다(프런트/accept 경계 계약).
+    /// trigger 구조체가 기존 camelCase JSON 키를 그대로 직렬화하는지 잠근다(프런트 경계 계약).
     #[test]
     fn trigger_structs_serialize_to_stable_camelcase_keys() {
-        let e = serde_json::to_string(&EnrichTrigger {
-            signal_id: "s1".into(),
-        })
-        .unwrap();
-        assert_eq!(e, r#"{"signalId":"s1"}"#);
-
         let b = serde_json::to_string(&BatchEnrichTrigger { batch_count: 3 }).unwrap();
         assert_eq!(b, r#"{"batchCount":3}"#);
 
@@ -137,10 +124,6 @@ mod tests {
             p,
             r#"{"prUrl":"https://x/pr/7","repoFullName":"o/r","prNumber":7}"#
         );
-
-        // accept 경로 read-side: 직렬화→역직렬화 라운드트립으로 signalId 보존.
-        let parsed: EnrichTrigger = serde_json::from_str(&e).unwrap();
-        assert_eq!(parsed.signal_id, "s1");
     }
 
     /// awaiting_approval 잡 한 행을 직접 INSERT(테스트 픽스처). proposal/trigger 포함.
@@ -245,24 +228,7 @@ mod tests {
         assert_eq!(acc.0, 0);
     }
 
-    // ── Phase 9: enrich / CI triage ──────────────────────────────────
-
-    /// enrich proposal: raw fallback과 닫힌 세트 밖 area는 Err(INVARIANT #1 구조적 강제), 누락은 관용.
-    #[test]
-    fn enrich_proposal_rejects_raw_and_out_of_set_area() {
-        use crate::models::EnrichProposal;
-        // codex가 형식 밖 출력 → raw fallback → Err.
-        assert!(parse_proposal::<EnrichProposal>(r#"{"raw":"엉뚱한 출력"}"#).is_err());
-        // 닫힌 세트 밖 area → Err (AI는 세트 밖 카테고리를 만들 수 없다).
-        assert!(parse_proposal::<EnrichProposal>(r#"{"suggestedArea":"productivity"}"#).is_err());
-        // 세트 안 + 일부 누락 관용.
-        let ok = parse_proposal::<EnrichProposal>(r#"{"suggestedArea":"health"}"#).unwrap();
-        assert!(matches!(
-            ok.suggested_area,
-            Some(crate::models::AreaTag::Health)
-        ));
-        assert!(ok.suggested_quadrant.is_none());
-    }
+    // ── Phase 9: CI triage ────────────────────────────────────────────
 
     /// CI triage proposal: raw fallback은 Err, 정상 JSON은 파싱.
     #[test]
@@ -275,82 +241,6 @@ mod tests {
         .unwrap();
         assert_eq!(t.cause, "타입 오류");
         assert_eq!(t.suggested_fixes.len(), 1);
-    }
-
-    /// 단일 enrich accept는 **사람의 명시적 확정** — quadrant+area를 확정하고 suggested 힌트를 비운다.
-    /// 자동 분류가 아니라 사람 제스처(드래그/키보드 분류와 동일 결정 레일, INVARIANT #1).
-    /// 제안에 quadrant가 없으면(None) 기존 분류를 덮지 않는다(단일 모달은 분류된 카드에도 열림 — 클로버링 방지).
-    #[tokio::test]
-    async fn enrich_accept_confirms_quadrant_and_area() {
-        use crate::models::AreaTag;
-        let db = fresh_db().await;
-
-        // (1) 미분류 카드 + 사분면·영역 제안 → 둘 다 확정 + 힌트 비움.
-        let sig = insert_signal(&db, &input("히어로 카피 다시", Some(Kind::Work)))
-            .await
-            .unwrap();
-        assert!(matches!(sig.quadrant, Quadrant::Unclassified));
-        let trigger = serde_json::to_string(&EnrichTrigger {
-            signal_id: sig.id.clone(),
-        })
-        .unwrap();
-        let proposal =
-            r#"{"suggestedQuadrant":"q1_do_now","suggestedArea":"work","reason":"마감 임박"}"#;
-        insert_awaiting_run(&db, "e1", proposal, &trigger).await;
-        let parsed = parse_proposal::<crate::models::EnrichProposal>(proposal).unwrap();
-        let accepted_json = serde_json::to_string(&parsed).unwrap();
-        let updated = enrich::execute_accept_enrich(&db, "e1", &sig.id, &parsed, &accepted_json)
-            .await
-            .unwrap();
-        assert!(
-            matches!(updated.quadrant, Quadrant::Q1DoNow),
-            "사람 accept → quadrant 확정"
-        );
-        assert!(matches!(updated.area, Some(AreaTag::Work)), "area 확정");
-        assert!(updated.suggested_quadrant.is_none(), "확정 후 힌트 비움");
-        assert!(updated.suggested_area.is_none(), "확정 후 힌트 비움");
-
-        // (2) 이미 분류된 카드(Q2) + 사분면 제안 None + 영역만 제안 → 기존 분류 보존(COALESCE), area만 확정.
-        let sig2 = insert_signal(&db, &input("이미 분류됨", Some(Kind::Work)))
-            .await
-            .unwrap();
-        crate::commands::signal_store::set_quadrant(&db, &sig2.id, Quadrant::Q2Schedule)
-            .await
-            .unwrap();
-        let trigger2 = serde_json::to_string(&EnrichTrigger {
-            signal_id: sig2.id.clone(),
-        })
-        .unwrap();
-        let proposal2 = r#"{"suggestedArea":"health","reason":"건강"}"#;
-        insert_awaiting_run(&db, "e2", proposal2, &trigger2).await;
-        let parsed2 = parse_proposal::<crate::models::EnrichProposal>(proposal2).unwrap();
-        let json2 = serde_json::to_string(&parsed2).unwrap();
-        let updated2 = enrich::execute_accept_enrich(&db, "e2", &sig2.id, &parsed2, &json2)
-            .await
-            .unwrap();
-        assert!(
-            matches!(updated2.quadrant, Quadrant::Q2Schedule),
-            "사분면 제안 None이면 기존 분류 보존(덮지 않음)"
-        );
-        assert!(
-            matches!(updated2.area, Some(AreaTag::Health)),
-            "영역 제안은 확정"
-        );
-        assert!(updated2.suggested_area.is_none(), "확정 후 힌트 비움");
-
-        // 잡 succeeded + acceptances 1행(e1 — enrich_braindump).
-        let st: (String,) = sqlx::query_as("SELECT status FROM agent_runs WHERE id='e1'")
-            .fetch_one(&db)
-            .await
-            .unwrap();
-        assert_eq!(st.0, "succeeded");
-        let cnt: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM acceptances WHERE agent_run_id='e1' AND target='enrich_braindump'",
-        )
-        .fetch_one(&db)
-        .await
-        .unwrap();
-        assert_eq!(cnt.0, 1);
     }
 
     /// 배치 proposal: items 객체 파싱 + 카드별 검증(미존재/세트 밖/중복 skip), 제목은 신호에서 채움.

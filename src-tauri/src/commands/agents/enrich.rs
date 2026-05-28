@@ -5,184 +5,19 @@ use crate::commands::agent_run_store::{
     run_status_trigger,
 };
 use crate::commands::signal_store;
-use crate::commands::skills::{resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH, BINDING_ENRICH};
+use crate::commands::skills::{resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::jobs::{JobManager, NewAgentRun};
 use crate::models::{
-    AgentRail, AreaTag, BatchEnrichItem, BatchEnrichProposal, Engine, EnrichProposal, Quadrant,
-    Sandbox, TriggerEnrichAllInput, TriggerEnrichInput, WorkSignal,
+    AgentRail, AreaTag, BatchEnrichItem, BatchEnrichProposal, Engine, Quadrant, Sandbox,
+    TriggerEnrichAllInput, WorkSignal,
 };
 
-// ── enrich (braindump suggestedQuadrant + suggestedArea, #2) ──────────────────────
+// 단건 enrich(`trigger_enrich`/`enrich_proposal`/`accept_enrich`) 경로는 제거됐다 —
+// 미분류 카드 분류는 일괄 enrich(`trigger_enrich_all`) 한 흐름으로 통일됐다.
 
-/// enrich 프롬프트(상수 — 카드 텍스트는 cwd `card.txt`로 전달, 인젝션 없음). 닫힌 세트만 허용을 명시한다.
-/// pub(crate): 스킬 레지스트리 시드 + 잡 lookup 폴백의 단일 출처.
-pub(crate) const ENRICH_PROMPT: &str = "\
-당신은 개인 업무 카드 분류 **제안** 도우미다. 작업 디렉터리의 `card.txt`에 한 줄짜리 업무 메모(브레인덤프)가 있다. \
-이 메모를 read-only로 읽고, 아래 형식의 JSON 객체 **하나만** 마지막 메시지로 출력하라(코드펜스·설명 없이 순수 JSON):\n\
-{\
-\"suggestedQuadrant\": \"q1_do_now|q2_schedule|q3_quick_contain|q4_drop|unclassified 중 하나\", \
-\"suggestedArea\": \"health|work|studies|environment|recreation|romance|family|friends|finances|other 중 하나\", \
-\"reason\": \"한국어 한 문장 근거\"\
-}\n\
-규칙: suggestedArea는 위 10개 라이프 도메인 **세트 안에서만** 고른다(세트 밖 카테고리 생성 금지). \
-이건 **제안(힌트)일 뿐**이고 실제 분류/확정은 사람이 한다 — 너는 절대 단정하지 마라. \
-애매하면 suggestedQuadrant는 \"unclassified\"로 둔다.";
-
-/// braindump enrich 잡 트리거(미분류 카드 ⋯ 메뉴). 카드 텍스트를 읽어 suggestedQuadrant/suggestedArea를
-/// **제안**한다(비-레포 잡·read_only). 산출 Proposal은 awaiting_approval로 멈추고, accept해도 quadrant는
-/// 자동 확정되지 않는다(INVARIANT #1). 미설치/미인증이면 Err(graceful degrade).
-#[tauri::command]
-#[specta::specta]
-pub async fn trigger_enrich(
-    db: State<'_, Db>,
-    jm: State<'_, JobManager>,
-    input: TriggerEnrichInput,
-) -> Result<String, AppError> {
-    use crate::agent::{Bounds, CodexRunner};
-
-    let codex_bin = super::require_codex(&jm)
-        .await
-        .map_err(|e| AppError::terminal("agents.codex_unavailable", e))?;
-
-    // 카드 본문 로드(제목+본문). codex 입력 파일로 넘긴다(인젝션 없음).
-    let row = signal_store::fetch_card_text(db.inner(), &input.signal_id).await?;
-    let (title, body, project_id) =
-        row.ok_or_else(|| AppError::not_found("agents.signal_not_found", "신호를 찾을 수 없음"))?;
-    let card_text = match body.filter(|b| !b.trim().is_empty()) {
-        Some(b) => format!("{title}\n\n{b}"),
-        None => title,
-    };
-
-    let id = new_run_id(db.inner())
-        .await
-        .map_err(|e| AppError::unexpected("agents.new_run_id", e))?;
-    let bounds = Bounds {
-        timeout: std::time::Duration::from_secs(input.timeout_sec.max(1) as u64),
-        max_turns: input.max_turns.max(1),
-        cost_cap_usd: input.cost_cap_usd.max(0.0),
-    };
-    let trigger = serde_json::to_string(&super::EnrichTrigger {
-        signal_id: input.signal_id.clone(),
-    })
-    .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
-    insert_agent_run(
-        db.inner(),
-        &NewAgentRun {
-            id: id.clone(),
-            project_id,
-            engine: Engine::Codex,
-            kind: "enrich_braindump".into(),
-            rail: AgentRail::Suggestion,
-            sandbox: Sandbox::ReadOnly,
-            repo_id: None,
-            workdir: None,
-            trigger: Some(trigger),
-            retry_key: None,
-            retry_count: 0,
-            bounds,
-            log_path: jm.log_path(&id).to_string_lossy().into_owned(),
-        },
-    )
-    .await?;
-
-    let runtime = resolve_agent_prompt_runtime(db.inner(), BINDING_ENRICH, ENRICH_PROMPT).await;
-    let model = crate::commands::agents_config::resolve_codex_model_for_prompt(
-        db.inner(),
-        runtime.model.clone(),
-        runtime.fast_mode,
-    )
-    .await;
-    jm.spawn(
-        db.inner().clone(),
-        id.clone(),
-        bounds,
-        CodexRunner {
-            codex_bin,
-            run_id: id.clone(),
-            prompt: runtime.prompt,
-            sandbox: Sandbox::ReadOnly,
-            rail: AgentRail::Suggestion,
-            repo_path: None,
-            worktree_root: jm.worktree_root.clone(),
-            scratch_dir: jm.worktree_root.join(format!("scratch-{id}")),
-            input_files: vec![("card.txt".to_string(), card_text)],
-            model,
-            reasoning_effort: runtime.reasoning_effort,
-        },
-        true, // 게이트 잡: 성공+proposal이면 awaiting_approval(Acceptance 게이트).
-    );
-    Ok(id)
-}
-
-/// enrich Proposal(타입 파싱). raw/세트 밖 값이면 Err(조용한 빈 proposal 금지 + 닫힌 세트 강제).
-#[tauri::command]
-#[specta::specta]
-pub async fn enrich_proposal(
-    db: State<'_, Db>,
-    run_id: String,
-) -> Result<EnrichProposal, AppError> {
-    let raw = run_proposal_raw(db.inner(), &run_id)
-        .await
-        .map_err(|e| AppError::not_found("agents.proposal_not_ready", e))?;
-    super::parse_proposal::<EnrichProposal>(&raw)
-        .map_err(|e| AppError::terminal("agents.proposal_parse", e))
-}
-
-/// enrich accept 코어(테스트 가능). 사람이 검토·편집 후 accept하면 신호의 quadrant+area를 **확정**하고
-/// suggested 힌트를 비운다 — 단, 제안에 quadrant가 없으면(None) 기존 분류를 덮지 않는다(단일 enrich는
-/// 이미 분류된 카드에도 열릴 수 있어 COALESCE로 보존). 자동 분류가 아니라 사람의 명시적 accept 클릭 =
-/// 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
-pub(super) async fn execute_accept_enrich(
-    db: &Db,
-    run_id: &str,
-    signal_id: &str,
-    accepted: &EnrichProposal,
-    accepted_json: &str,
-) -> Result<WorkSignal, sqlx::Error> {
-    let sig = signal_store::confirm_enrich_single(
-        db,
-        signal_id,
-        accepted.suggested_quadrant,
-        accepted.suggested_area,
-    )
-    .await?;
-    record_acceptance(db, run_id, "enrich_braindump", accepted_json).await?;
-    Ok(sig)
-}
-
-/// enrich Proposal accept(INVARIANT #1/#2 게이트). 사람이 검토·편집한 제안을 accept하면 신호의 quadrant+area를
-/// **확정**(제안에 quadrant 없으면 기존 보존)하고 suggested 힌트를 비운 뒤 잡을 succeeded로 마감한다.
-/// codex가 아니라 사람의 명시적 accept 클릭으로만 확정 — 드래그/키보드 분류와 동일 결정 레일(INVARIANT #1).
-#[tauri::command]
-#[specta::specta]
-pub async fn accept_enrich(
-    db: State<'_, Db>,
-    run_id: String,
-    accepted: EnrichProposal,
-) -> Result<WorkSignal, AppError> {
-    let (status, trigger) = run_status_trigger(db.inner(), &run_id)
-        .await
-        .map_err(|e| AppError::not_found("agents.job_not_found", e))?;
-    super::require_awaiting(status, "agents.accept_wrong_status")?;
-    let signal_id = trigger
-        .as_deref()
-        .and_then(|t| serde_json::from_str::<super::EnrichTrigger>(t).ok())
-        .map(|t| t.signal_id)
-        .ok_or_else(|| {
-            AppError::terminal(
-                "agents.trigger_missing_signal_id",
-                "잡 트리거에 signalId가 없음",
-            )
-        })?;
-    let accepted_json = serde_json::to_string(&accepted)
-        .map_err(|e| AppError::unexpected("agents.serialize", e.to_string()))?;
-    Ok(execute_accept_enrich(db.inner(), &run_id, &signal_id, &accepted, &accepted_json).await?)
-}
-
-/// 라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관). enrich 제안을 사람이
-/// 확정하거나 직접 고른다. None이면 미설정으로 되돌린다.
+/// 라이프 도메인 area 확정/수정(사람 결정 — 별개 축, quadrant 결정 레일과 무관).
 #[tauri::command]
 #[specta::specta]
 pub async fn set_signal_area(

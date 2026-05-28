@@ -8,33 +8,6 @@ use specta::Type;
 // INVARIANT #1: enrich는 quadrant를 자동 확정하지 않는다 — suggested_quadrant/suggested_area는 힌트.
 // INVARIANT #5: CI triage 재트리거는 retry_key/retry_count로 캡되고 초과 시 Q1 escalate(사람).
 
-/// braindump enrich 잡 입력 (미분류 카드 ⋯ 메뉴에서 트리거). 비-레포 잡(worktree 불요).
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct TriggerEnrichInput {
-    pub signal_id: String,
-    pub timeout_sec: u32,
-    pub max_turns: u32,
-    pub cost_cap_usd: f64,
-}
-
-/// enrich 산출 Proposal (codex draft). quadrant/area는 **힌트일 뿐** — accept해도 카드는
-/// unclassified로 남고(INVARIANT #1), area는 사람이 별도로 확정한다. Quadrant/AreaTag로 타입해
-/// **닫힌 세트를 구조적으로 강제**한다(세트 밖 값이면 파싱이 거부 → INVARIANT #1). serde default로 누락 관용.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct EnrichProposal {
-    /// 제안 사분면 힌트(닫힌 enum). 자동 분류 아님.
-    #[serde(default)]
-    pub suggested_quadrant: Option<Quadrant>,
-    /// 제안 라이프 도메인 힌트(닫힌 taxonomy). AI는 세트 밖을 만들지 못한다.
-    #[serde(default)]
-    pub suggested_area: Option<AreaTag>,
-    /// 제안 근거(짧은 설명).
-    #[serde(default)]
-    pub reason: Option<String>,
-}
-
 /// 미분류 전체 배치 enrich 잡 입력 (Phase 15 #4). 모든 미분류 카드를 한 codex 호출로 enrich한다.
 /// project_id가 있으면 해당 프로젝트로 한정, 없으면 전체. bounds는 강제(INVARIANT #5).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

@@ -4,14 +4,12 @@ import {
   type BatchEnrichProposal,
   type CiTriageProposal,
   commands,
-  type EnrichProposal,
   type PrSelfCheckProposal,
   type TriageOutcome,
   type TriggerCiTriageInput,
   type TriggerCodexInput,
   type TriggerEchoInput,
   type TriggerEnrichAllInput,
-  type TriggerEnrichInput,
   type TriggerPrSelfCheckInput,
 } from "@/bindings";
 
@@ -182,45 +180,12 @@ export function useRejectProposal() {
   });
 }
 
-// ── Phase 9: 추가 suggestion 자동화 (enrich / CI triage) ───────────────
+// ── 미분류 전체 배치 enrich (단일 잡, 부분 실패 격리) ─────────────────────
 //
-// 모두 제안 레일 + Acceptance 게이트(Phase 8 PR self-check 패턴). codex 잡(awaiting_approval)→Proposal→
-// 사람 accept(로컬 반영). accept 전·후 외부(Notion/GitHub) 무변경(INVARIANT #2). enrich는 quadrant를
-// 자동 확정하지 않는다(INVARIANT #1 — suggested 힌트만).
-
-/** braindump enrich 잡 트리거(미분류 카드 ⋯). 성공 시 잡 목록 갱신. */
-export function useTriggerEnrich() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: TriggerEnrichInput) => unwrap(commands.triggerEnrich(input)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
-  });
-}
-
-/** awaiting_approval enrich 잡의 Proposal(타입 파싱). 펼친 잡에 대해서만 enabled. */
-export function useEnrichProposal(runId: string | null, ready: boolean) {
-  return useQuery({
-    queryKey: ["enrichProposal", runId],
-    queryFn: () => unwrap(commands.enrichProposal(runId as string)),
-    enabled: !!runId && ready,
-    retry: false, // 파싱 실패(raw/세트 밖)는 즉시 노출.
-  });
-}
-
-/** enrich accept(INVARIANT #1/#2 게이트) — 사람 accept 시 사분면+영역 확정(제안에 quadrant 없으면 보존). */
-export function useAcceptEnrich() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ runId, accepted }: { runId: string; accepted: EnrichProposal }) =>
-      unwrap(commands.acceptEnrich(runId, accepted)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
-      void qc.invalidateQueries({ queryKey: ["signals"] }); // 확정 반영(카드 이동/태그).
-    },
-  });
-}
-
-// ── Phase 15: 미분류 전체 배치 enrich (단일 잡, 부분 실패 격리) ─────────────────────
+// 제안 레일 + Acceptance 게이트. codex 잡(awaiting_approval)→Proposal→사람 accept(로컬 반영).
+// accept 전·후 외부(Notion/GitHub) 무변경(INVARIANT #2). codex는 quadrant를 자동 확정하지 않는다
+// (INVARIANT #1 — suggested 힌트만). 단건 enrich 경로(`trigger_enrich`/`enrich_proposal`/
+// `accept_enrich`)는 제거됨 — 미분류 카드 분류는 배치 흐름만 유지.
 //
 // 미분류 영역 "전체 제안 실행" → 모든 미분류 카드를 한 codex 호출로 enrich(awaiting_approval) →
 // 사람이 카드별 제안을 검토·수정 후 적용하면 미분류 카드의 quadrant+area를 확정(로컬). codex 자동 확정

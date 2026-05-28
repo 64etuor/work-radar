@@ -149,12 +149,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::pr_proposal,
         commands::accept_proposal,
         commands::reject_proposal,
-        // 추가 suggestion 자동화 (enrich / CI triage, Phase 9).
-        commands::trigger_enrich,
-        commands::enrich_proposal,
-        commands::accept_enrich,
+        // 추가 suggestion 자동화 (CI triage, Phase 9). 단건 enrich 경로는 제거됨 — 전체 배치만 유지.
         commands::set_signal_area,
-        // 단일 잡 상태 폴링 (B3: EnrichModal 인플레이스).
+        // 단일 잡 상태 폴링 (EnrichReviewPanel awaiting_approval 게이트 등).
         commands::agent_run_status,
         // 미분류 전체 배치 enrich (단일 잡, 부분 실패 격리, Phase 15 #4).
         commands::trigger_enrich_all,

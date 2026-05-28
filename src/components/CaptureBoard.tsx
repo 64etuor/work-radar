@@ -48,7 +48,6 @@ import {
   useTodayRoutines,
   useToggleRoutineCheck,
   useToggleTodayDone,
-  useTriggerEnrich,
   useTriggerEnrichAll,
   useUnpromoteToday,
   useUpdateRoutine,
@@ -107,7 +106,6 @@ export function CaptureBoard() {
   const reorderRoutines = useReorderRoutines();
   const toggleRoutine = useToggleRoutineCheck();
   const codex = useCodexStatus();
-  const triggerEnrich = useTriggerEnrich();
   const triggerEnrichAll = useTriggerEnrichAll();
   const updateTitle = useUpdateSignalTitle();
   const deleteSignal = useDeleteSignal();
@@ -126,7 +124,6 @@ export function CaptureBoard() {
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
   const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
-  const [enrichRunId, setEnrichRunId] = useState<string | null>(null);
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
@@ -272,21 +269,6 @@ export function CaptureBoard() {
     switch (action) {
       case "today":
         handlePromoteToday(signalId);
-        break;
-      case "enrich":
-        // 제안 레일: codex로 영역/사분면 제안(Acceptance 게이트 — 인플레이스 모달로 검토·accept).
-        // gated 잡 유지: trigger_enrich → awaiting_approval → EnrichModal 폴링 → accept_enrich.
-        if (!codexReady) {
-          pushError("codex", "codex 미가용 — 설치·로그인 후 사용");
-          break;
-        }
-        triggerEnrich.mutate(
-          { signalId, timeoutSec: 90, maxTurns: 6, costCapUsd: 0.5 },
-          {
-            onSuccess: (runId) => setEnrichRunId(runId),
-            onError: (e) => pushError("codex", `AI 제안 실패: ${String(e)}`),
-          },
-        );
         break;
       case "edit":
         // 인라인 제목 편집(Phase 15 #5). 카드에 <textarea>를 띄워 Enter/blur 저장, Esc 취소.
@@ -571,15 +553,12 @@ export function CaptureBoard() {
         menu={menu}
         calendarModal={calendarModal}
         projectPicker={projectPicker}
-        enrichRunId={enrichRunId}
         enrichAllRunId={null}
-        codexReady={codexReady}
         onMenuAction={handleMenuAction}
         onMenuClose={() => setMenu(null)}
         onCalendarClose={() => setCalendarModal(null)}
         onProjectPickerClose={() => setProjectPicker(null)}
         onProjectPick={handleProjectPick}
-        onEnrichClose={() => setEnrichRunId(null)}
         onEnrichAllClose={() => setEnrichAllRunId(null)}
       />
     </div>

@@ -16,15 +16,12 @@
 
 use tauri::State;
 
-use crate::commands::agents::{
-    BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, ENRICH_PROMPT, PR_SELFCHECK_PROMPT,
-};
+use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHECK_PROMPT};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{CreateSkillInput, ExternalSkill, Skill};
 
-/// 인앱 프롬프트 binding 키(잡 트리거가 lookup에 쓰는 식별자). 4개 하드코딩 프롬프트와 1:1.
-pub(crate) const BINDING_ENRICH: &str = "enrich";
+/// 인앱 프롬프트 binding 키(잡 트리거가 lookup에 쓰는 식별자). 하드코딩 프롬프트와 1:1.
 pub(crate) const BINDING_BATCH_ENRICH: &str = "batch_enrich";
 pub(crate) const BINDING_CI_TRIAGE: &str = "ci_triage";
 pub(crate) const BINDING_PR_SELFCHECK: &str = "pr_selfcheck";
@@ -36,9 +33,8 @@ const WORKTREE_REVIEW_PROMPT: &str = "You are reviewing a worktree in read-only 
 const WORKTREE_CLEANUP_PROMPT: &str = "Review the listed local worktree cleanup candidates. Identify which items are safe to delete and explain the evidence for each recommendation. Use a conservative rule: stale means 2+ days with no activity, merged branches are safer than unmerged stale branches, protected/current/base branches must stay, and destructive cleanup needs human confirmation. Return concise bullets with keep/delete/review labels.";
 
 /// (binding, 표시 이름, 코드 상수 프롬프트) 시드 정의. 시드/폴백 둘 다 이 표에서 도출한다(단일 출처).
-pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 6] {
+pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 5] {
     [
-        (BINDING_ENRICH, "브레인덤프 enrich (단건)", ENRICH_PROMPT),
         (
             BINDING_BATCH_ENRICH,
             "브레인덤프 enrich (배치)",
@@ -473,14 +469,15 @@ mod tests {
         assert_eq!(n, seed_defs().len() as i64, "인앱 프롬프트 시드");
 
         // 시드 프롬프트는 코드 상수와 동일해야 한다(잡 lookup이 시드 행을 써도 결과 불변).
-        let (p,): (String,) = sqlx::query_as("SELECT prompt FROM skills WHERE binding='enrich'")
-            .fetch_one(&db)
-            .await
-            .unwrap();
-        assert_eq!(p, ENRICH_PROMPT);
+        let (p,): (String,) =
+            sqlx::query_as("SELECT prompt FROM skills WHERE binding='batch_enrich'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(p, BATCH_ENRICH_PROMPT);
 
         // 재시드는 멱등(행 수 불변, 편집 덮어쓰지 않음).
-        sqlx::query("UPDATE skills SET prompt='편집됨' WHERE binding='enrich'")
+        sqlx::query("UPDATE skills SET prompt='편집됨' WHERE binding='batch_enrich'")
             .execute(&db)
             .await
             .unwrap();
@@ -491,10 +488,11 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(n2, seed_defs().len() as i64, "재시드 멱등 — 행 수 불변");
-        let (p2,): (String,) = sqlx::query_as("SELECT prompt FROM skills WHERE binding='enrich'")
-            .fetch_one(&db)
-            .await
-            .unwrap();
+        let (p2,): (String,) =
+            sqlx::query_as("SELECT prompt FROM skills WHERE binding='batch_enrich'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
         assert_eq!(p2, "편집됨", "재시드는 사용자 편집을 보존(덮어쓰지 않음)");
     }
 
@@ -505,37 +503,37 @@ mod tests {
         let db = fresh_db().await;
 
         // (1) 레지스트리 비어 있음 → 폴백(코드 상수).
-        let p = resolve_prompt(&db, BINDING_ENRICH, ENRICH_PROMPT).await;
-        assert_eq!(p, ENRICH_PROMPT, "레지스트리 부재 → 코드 상수 폴백");
+        let p = resolve_prompt(&db, BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
+        assert_eq!(p, BATCH_ENRICH_PROMPT, "레지스트리 부재 → 코드 상수 폴백");
 
         // (2) 시드 후 → 시드 프롬프트(= 코드 상수, 기본 동작 불변).
         seed_in_app_skills(&db).await.unwrap();
-        let p = resolve_prompt(&db, BINDING_ENRICH, ENRICH_PROMPT).await;
-        assert_eq!(p, ENRICH_PROMPT, "시드 프롬프트 = 코드 상수");
+        let p = resolve_prompt(&db, BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
+        assert_eq!(p, BATCH_ENRICH_PROMPT, "시드 프롬프트 = 코드 상수");
 
         // (3) 편집 후 → 편집된 프롬프트(잡이 쓰는 제안 내용만 바뀐다).
-        sqlx::query("UPDATE skills SET prompt='커스텀 enrich 지침' WHERE binding='enrich'")
+        sqlx::query("UPDATE skills SET prompt='커스텀 enrich 지침' WHERE binding='batch_enrich'")
             .execute(&db)
             .await
             .unwrap();
-        let p = resolve_prompt(&db, BINDING_ENRICH, ENRICH_PROMPT).await;
+        let p = resolve_prompt(&db, BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
         assert_eq!(p, "커스텀 enrich 지침", "편집된 프롬프트를 잡이 사용");
 
         // (4) 비활성(enabled=0) → 코드 상수 폴백(끄면 오늘 동작으로 복귀).
-        sqlx::query("UPDATE skills SET enabled=0 WHERE binding='enrich'")
+        sqlx::query("UPDATE skills SET enabled=0 WHERE binding='batch_enrich'")
             .execute(&db)
             .await
             .unwrap();
-        let p = resolve_prompt(&db, BINDING_ENRICH, ENRICH_PROMPT).await;
-        assert_eq!(p, ENRICH_PROMPT, "비활성 → 코드 상수 폴백");
+        let p = resolve_prompt(&db, BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
+        assert_eq!(p, BATCH_ENRICH_PROMPT, "비활성 → 코드 상수 폴백");
 
         // (5) 빈 프롬프트 → 코드 상수 폴백(공백만 있는 행은 폴백).
-        sqlx::query("UPDATE skills SET enabled=1, prompt='   ' WHERE binding='enrich'")
+        sqlx::query("UPDATE skills SET enabled=1, prompt='   ' WHERE binding='batch_enrich'")
             .execute(&db)
             .await
             .unwrap();
-        let p = resolve_prompt(&db, BINDING_ENRICH, ENRICH_PROMPT).await;
-        assert_eq!(p, ENRICH_PROMPT, "빈 프롬프트 → 코드 상수 폴백");
+        let p = resolve_prompt(&db, BINDING_BATCH_ENRICH, BATCH_ENRICH_PROMPT).await;
+        assert_eq!(p, BATCH_ENRICH_PROMPT, "빈 프롬프트 → 코드 상수 폴백");
     }
 
     /// CRUD: create(닫힌 binding 강제) → update(부분) → delete. 외부 id는 거부.
