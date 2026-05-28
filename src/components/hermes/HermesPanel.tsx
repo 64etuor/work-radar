@@ -192,40 +192,41 @@ function PanelHeader({
       style={{
         display: "flex",
         alignItems: "center",
-        padding: "8px 12px",
+        padding: "6px 10px",
         cursor: "grab",
         userSelect: "none",
         flexShrink: 0,
       }}
-      className="border-border border-b"
+      className="border-border/50 border-b"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>Hermes</span>
-      {onRestart && (
+      <span className="flex-1 text-sm font-medium tracking-tight">Hermes</span>
+      <div className="flex items-center gap-1" data-no-drag>
+        {onRestart && (
+          <Button
+            data-no-drag
+            variant="ghost"
+            className="hover:bg-muted/60 h-7 w-7 p-0"
+            onClick={onRestart}
+            aria-label="새 세션"
+            title="새 세션 시작"
+          >
+            <RotateCcw className="size-3.5" />
+          </Button>
+        )}
         <Button
-          data-no-drag
           variant="ghost"
-          className="h-6 w-6 p-0"
-          onClick={onRestart}
-          aria-label="새 세션"
-          title="새 세션 시작"
+          data-no-drag=""
+          onClick={onClose}
+          aria-label="닫기"
+          className="hover:bg-muted/60 h-7 w-7 p-0"
         >
-          <RotateCcw className="h-4 w-4" />
+          <X className="size-3.5" />
         </Button>
-      )}
-      <Button
-        variant="ghost"
-        size="sm"
-        data-no-drag=""
-        onClick={onClose}
-        aria-label="닫기"
-        style={{ padding: "4px", height: "auto" }}
-      >
-        <X className="size-4" />
-      </Button>
+      </div>
     </div>
   );
 }

@@ -126,13 +126,18 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
 
   return (
     <div
-      className="relative flex flex-col gap-2 border-t p-3"
+      className="border-border/50 relative border-t px-3 py-3"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
-      {isStreaming && <p className="text-muted-foreground text-xs">Hermes 작성 중…</p>}
+      {isStreaming && (
+        <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs">
+          <span className="bg-foreground/60 size-1.5 animate-pulse rounded-full" />
+          Hermes가 작성 중…
+        </div>
+      )}
       {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
           {attachments.map((p, i) => (
             <span
               key={p + i}
@@ -152,7 +157,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
           ))}
         </div>
       )}
-      <div className="relative flex items-end gap-1.5">
+      <div className="relative">
         {menuOpen && (
           <HermesSlashMenu
             items={filtered}
@@ -161,82 +166,82 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
             onHover={setActiveIdx}
           />
         )}
-        <Button
-          data-no-drag
-          type="button"
-          variant="ghost"
-          className="hover:bg-muted h-9 w-9 shrink-0 p-0"
-          size="sm"
-          onClick={pickFile}
-          disabled={disabled}
-          aria-label="이미지 첨부"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
-        <Textarea
-          ref={taRef}
-          className="max-h-[200px] min-h-[40px] flex-1 resize-none"
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setCaret(e.target.selectionStart);
-            setActiveIdx(0);
-          }}
-          onPaste={onPaste}
-          onKeyDown={(e) => {
-            if (menuOpen) {
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setActiveIdx((i) => Math.min(i + 1, filtered.length - 1));
-                return;
-              }
-              if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActiveIdx((i) => Math.max(i - 1, 0));
-                return;
-              }
-              if (e.key === "Enter" || e.key === "Tab") {
-                e.preventDefault();
-                const sel = filtered[activeIdx];
-                if (sel) pickSlash(sel);
-                return;
-              }
-              if (e.key === "Escape") {
-                e.preventDefault();
-                setCaret(-1);
-                return;
-              }
-            }
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart)}
-          placeholder="메시지 · / 명령 · 이미지 paste/drop"
-          disabled={disabled || isStreaming}
-        />
-        {isStreaming ? (
+        {/* Integrated input shell */}
+        <div className="border-border/60 bg-background focus-within:border-foreground/40 relative rounded-2xl border transition-colors">
           <Button
-            className="h-9 w-9 shrink-0 p-0"
-            variant="destructive"
-            size="sm"
-            onClick={onCancel}
-            aria-label="중단"
+            data-no-drag
+            type="button"
+            variant="ghost"
+            className="hover:bg-muted/60 absolute bottom-2 left-2 h-7 w-7 p-0"
+            onClick={pickFile}
+            disabled={disabled}
+            aria-label="이미지 첨부"
           >
-            <Square className="h-4 w-4" />
+            <Paperclip className="h-3.5 w-3.5" />
           </Button>
-        ) : (
-          <Button
-            size="sm"
-            className="h-9 w-9 shrink-0 p-0"
-            onClick={submit}
-            disabled={disabled || (!text.trim() && attachments.length === 0)}
-            aria-label="전송"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        )}
+          <Textarea
+            ref={taRef}
+            className="max-h-[160px] min-h-[44px] resize-none border-0 bg-transparent py-2.5 pr-12 pl-10 focus-visible:ring-0 focus-visible:ring-offset-0"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              setCaret(e.target.selectionStart);
+              setActiveIdx(0);
+            }}
+            onPaste={onPaste}
+            onKeyDown={(e) => {
+              if (menuOpen) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setActiveIdx((i) => Math.min(i + 1, filtered.length - 1));
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActiveIdx((i) => Math.max(i - 1, 0));
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  const sel = filtered[activeIdx];
+                  if (sel) pickSlash(sel);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setCaret(-1);
+                  return;
+                }
+              }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart)}
+            placeholder="메시지 · `/` 명령 · 이미지 paste/drop"
+            disabled={disabled || isStreaming}
+          />
+          {isStreaming ? (
+            <Button
+              className="absolute right-2 bottom-2 h-7 w-7 rounded-full p-0"
+              variant="destructive"
+              onClick={onCancel}
+              aria-label="중단"
+            >
+              <Square className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <Button
+              className="absolute right-2 bottom-2 h-7 w-7 rounded-full p-0"
+              onClick={submit}
+              disabled={disabled || (!text.trim() && attachments.length === 0)}
+              aria-label="전송"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

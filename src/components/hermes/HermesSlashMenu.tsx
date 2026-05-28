@@ -25,7 +25,7 @@ export function HermesSlashMenu({ items, activeIdx, onPick, onHover }: Props) {
     <ul
       ref={ref}
       role="listbox"
-      className="bg-popover absolute right-3 bottom-full left-3 mb-2 max-h-56 overflow-auto rounded-md border text-sm shadow-md"
+      className="bg-popover border-border/60 absolute right-0 bottom-full left-0 mb-2 max-h-56 overflow-auto rounded-xl border py-1.5 text-sm shadow-lg"
     >
       {items.map((c, i) => (
         <li
@@ -33,7 +33,10 @@ export function HermesSlashMenu({ items, activeIdx, onPick, onHover }: Props) {
           role="option"
           tabIndex={-1}
           aria-selected={i === activeIdx}
-          className={cn("cursor-pointer px-3 py-1.5", i === activeIdx && "bg-accent")}
+          className={cn(
+            "mx-1 cursor-pointer rounded-md px-2.5 py-1.5",
+            i === activeIdx ? "bg-muted/80" : "hover:bg-muted/50",
+          )}
           onMouseEnter={() => onHover(i)}
           onMouseDown={(e) => {
             e.preventDefault(); // avoid blur of textarea
