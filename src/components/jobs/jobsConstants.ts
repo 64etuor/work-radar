@@ -1,5 +1,5 @@
 // 사분면/영역 닫힌 세트 옵션 + Select 미설정 센티넬 — 단일 정본.
-// JobsView 패널(EnrichPanel/BatchEnrichPanel), board/EnrichModal, board/EnrichReviewPanel이 공유.
+// JobsView 패널(EnrichPanel/BatchEnrichPanel)과 전역 AgentRunModal이 공유.
 // (INVARIANT #1: codex 자동 분류 아님 — accept 시 사람이 닫힌 세트에서 확정.)
 import type { AgentStatus, AreaTag, Quadrant } from "@/bindings";
 
@@ -44,4 +44,9 @@ export const JOB_STATUS: Record<AgentStatus, { label: string; cls: string }> = {
 
 export function isActiveJobStatus(status: AgentStatus): boolean {
   return status === "running" || status === "proposed" || status === "awaiting_approval";
+}
+
+/** 사용자가 ack(닫기)할 수 있는 최종 종료 상태. awaiting_approval은 여전히 액션 가능 → 제외. */
+export function isFinishedJobStatus(status: AgentStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
 }

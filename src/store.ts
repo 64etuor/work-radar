@@ -54,6 +54,30 @@ function initialFont(): FontPreset {
   }
 }
 
+/** Acked run ids — localStorage 영속(상한 200, 가장 오래된 것부터 절단). */
+const ACKED_RUNS_KEY = "wr-agent-bar-acked";
+const ACKED_RUNS_CAP = 200;
+function loadAckedRuns(): Set<string> {
+  try {
+    const raw = localStorage.getItem(ACKED_RUNS_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+  } catch {
+    return new Set();
+  }
+}
+function persistAckedRuns(set: Set<string>): void {
+  try {
+    let arr = Array.from(set);
+    if (arr.length > ACKED_RUNS_CAP) arr = arr.slice(arr.length - ACKED_RUNS_CAP);
+    localStorage.setItem(ACKED_RUNS_KEY, JSON.stringify(arr));
+  } catch {
+    /* private mode 등 — 무시 */
+  }
+}
+
 /** 경량 UI 상태 (Zustand). 데이터는 TanStack Query가, 화면/팔레트 상태는 여기서. */
 interface UIState {
   query: string;
@@ -66,11 +90,17 @@ interface UIState {
   /** 캘린더 드로어 열림(전역) — 에이전트 바 우측 아이콘/단축키로 토글, 어느 뷰에서나. 표시 전용. */
   calendarOpen: boolean;
   setCalendarOpen: (open: boolean) => void;
-  /** 미분류 전체 AI 제안 잡 id — 전역 패널이 어느 뷰에서나 유지되도록 App shell이 소유한다.
-   * "생성 중" 여부는 별도 store 필드로 두지 않는다 — `useEnrichAllRunning(runId)`이
-   * agent run status query에서 직접 파생(SSOT, lift-to-Provider). */
-  enrichAllRunId: string | null;
-  setEnrichAllRunId: (runId: string | null) => void;
+  /** 전역 에이전트 결과 모달 — 현재 열린 agent_runs row id (없으면 null).
+   * 에이전트 바 박스를 클릭하면 set. 모달이 닫히면 null + 종료 잡이면 ack.
+   * 자동 오픈 금지(INVARIANT #1 표시 전용 — 사람이 클릭해야 결과를 본다). */
+  openAgentRunId: string | null;
+  setOpenAgentRunId: (runId: string | null) => void;
+  /** 사용자가 한 번 본 종료 잡(succeeded/failed/cancelled) — 바에서 숨김.
+   * 활성 잡(running/proposed/awaiting_approval)은 무관. localStorage 영속. */
+  ackedRunIds: Set<string>;
+  ackRun: (runId: string) => void;
+  /** 현재 존재하는 run id 집합으로 교차 — 백엔드가 영구 삭제한 id를 정리(메모리/저장 bound). */
+  pruneAckedRuns: (presentIds: Iterable<string>) => void;
   /** Settings 뷰 진입 시 포커스 의도 (한 번 소비). */
   settingsIntent: SettingsIntent;
   /** 팔레트에서 고른 스킬 id (한 번 소비). SkillsView가 읽어 선택 후 clear. */
@@ -101,8 +131,30 @@ export const useUIStore = create<UIState>((set) => ({
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   calendarOpen: false,
   setCalendarOpen: (calendarOpen) => set({ calendarOpen }),
-  enrichAllRunId: null,
-  setEnrichAllRunId: (enrichAllRunId) => set({ enrichAllRunId }),
+  openAgentRunId: null,
+  setOpenAgentRunId: (openAgentRunId) => set({ openAgentRunId }),
+  ackedRunIds: loadAckedRuns(),
+  ackRun: (runId) =>
+    set((s) => {
+      if (s.ackedRunIds.has(runId)) return s;
+      const next = new Set(s.ackedRunIds);
+      next.add(runId);
+      persistAckedRuns(next);
+      return { ackedRunIds: next };
+    }),
+  pruneAckedRuns: (presentIds) =>
+    set((s) => {
+      const present = presentIds instanceof Set ? presentIds : new Set(presentIds);
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of s.ackedRunIds) {
+        if (present.has(id)) next.add(id);
+        else changed = true;
+      }
+      if (!changed) return s;
+      persistAckedRuns(next);
+      return { ackedRunIds: next };
+    }),
   settingsIntent: "open",
   pendingSkillId: null,
   theme: initialTheme(),

@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
 import { useHermesTabsStore } from "@/components/hermes/useHermesTabsStore";
+import { isActiveJobStatus, isFinishedJobStatus } from "@/components/jobs/jobsConstants";
 import { type BoxState, overflowSplit, progressRatio } from "@/lib/agentBar";
 import { useAgentRuns, useInboxCounts } from "@/lib/query";
 import { useAgentNames, useSetAgentName } from "@/lib/query/agentsConfig";
@@ -54,6 +55,7 @@ const STATE_LABEL: Record<BoxState, string> = {
   working: "작업 중",
   waiting: "입력 대기",
   error: "오류",
+  done: "완료",
 };
 
 /** cmux `claude_code` 상태 태그 → 박스 상태(색 dot). "Running"=working, "Needs input"=waiting, 그 외/없음=idle. */
@@ -66,10 +68,10 @@ function cmuxBoxState(status: string | null): BoxState {
 const STATUS_TO_STATE: Record<AgentStatus, BoxState> = {
   proposed: "working",
   running: "working",
-  awaiting_approval: "working",
-  succeeded: "idle",
+  awaiting_approval: "waiting",
+  succeeded: "done",
   failed: "error",
-  cancelled: "idle",
+  cancelled: "done",
 };
 
 const STATUS_LABEL: Record<AgentStatus, string> = {
@@ -80,10 +82,6 @@ const STATUS_LABEL: Record<AgentStatus, string> = {
   failed: "실패",
   cancelled: "취소됨",
 };
-
-function isActive(s: AgentStatus): boolean {
-  return s === "running" || s === "proposed" || s === "awaiting_approval";
-}
 
 /**
  * box → lucide thin-line 아이콘.
@@ -129,9 +127,18 @@ function runToBox(run: AgentRunView): SessionBox {
 
 export function AgentStatusBar() {
   const { goTo, setCalendarOpen } = useUIStore();
+  const setOpenAgentRunId = useUIStore((s) => s.setOpenAgentRunId);
+  const ackedRunIds = useUIStore((s) => s.ackedRunIds);
+  const pruneAckedRuns = useUIStore((s) => s.pruneAckedRuns);
   const runs = useAgentRuns();
   const inboxCounts = useInboxCounts();
   const list = useMemo(() => runs.data ?? [], [runs.data]);
+
+  // 백엔드가 영구 삭제한 잡 id는 ackedRunIds에서도 정리(localStorage bound).
+  // pruneAckedRuns는 차이 없으면 no-op이라 cascading render는 없음.
+  useEffect(() => {
+    pruneAckedRuns(list.map((r) => r.id));
+  }, [list, pruneAckedRuns]);
 
   // hermes multi-session tabs (표시 전용 INVARIANT #1 — store selector만, 결정 미사용).
   const hermesTabs = useHermesTabsStore((s) => s.tabs);
@@ -152,11 +159,14 @@ export function AgentStatusBar() {
   const boxes = useMemo<SessionBox[]>(() => {
     const out: SessionBox[] = [];
 
-    // 1) agent_runs: 활성 잡만 표시(running/proposed/awaiting_approval, list는 created_at DESC).
-    //    종료 잡(succeeded/failed/cancelled)은 바에 안 띄운다 — 끝났거나 취소된 잡이 남으면
-    //    "작업 중"으로 오인됨(이력은 Jobs 뷰). 활성이 없고 hermes/cmux도 없으면 'Agents · idle' pill.
+    // 1) agent_runs: 활성 잡 + 사용자가 아직 ack(클릭)하지 않은 종료 잡(succeeded/failed/cancelled)을
+    //    표시. 클릭 → `AgentRunModal` 오픈 → 모달 닫힐 때 ack → 바에서 숨김. 자동 모달 오픈 없음
+    //    (INVARIANT #1 표시 전용 — 사람이 클릭해야 결과를 본다). list는 created_at DESC.
     for (const run of list) {
-      if (isActive(run.status)) out.push(runToBox(run));
+      const shouldShow =
+        isActiveJobStatus(run.status) ||
+        (isFinishedJobStatus(run.status) && !ackedRunIds.has(run.id));
+      if (shouldShow) out.push(runToBox(run));
     }
 
     // 2) hermes 탭: 탭당 1박스 enumerate (useHermesTabsStore selector — 표시 전용 INVARIANT #1).
@@ -199,7 +209,7 @@ export function AgentStatusBar() {
     }
 
     return out;
-  }, [list, hermesTabs, cmux.data, firstSeen]);
+  }, [list, hermesTabs, cmux.data, firstSeen, ackedRunIds]);
 
   // hermes tab / cmux 세션 first-seen 등록 + 사라진 키 정리. Date.now()는 impure라 render에 못 두므로
   // effect에서만 호출(react-hooks/{refs,purity}). hermes는 working일 때만, cmux도 마찬가지.
@@ -263,7 +273,7 @@ export function AgentStatusBar() {
   //  hermes:* → setActive(tabId) + hermes:open (패널 열기 — 이미 열려 있으면 no-op).
   //    INVARIANT #1: click = navigation only, no decision input.
   //  cmux 워크스페이스 → cmux 포커스 이동(select-workspace).
-  //  그 외(codex 잡) → Jobs 뷰.
+  //  run:* (codex agent_runs) → 전역 `AgentRunModal` 오픈(상태별 진행/결과/Proposal 한 곳에서).
   const openBox = (box: SessionBox) => {
     if (box.key.startsWith("hermes:")) {
       const tabId = box.key.slice("hermes:".length);
@@ -277,7 +287,9 @@ export function AgentStatusBar() {
           if (focused) void getCurrentWindow().hide();
         },
       });
-    else goTo("jobs");
+    else if (box.key.startsWith("run:")) {
+      setOpenAgentRunId(box.key.slice("run:".length));
+    } else goTo("jobs");
   };
   const commitName = (sessionKey: string, defaultName: string, next: string) => {
     setEditingKey(null);
@@ -435,8 +447,7 @@ function AgentBox({
       {working && box.startedMs != null && !editing && (
         <span className="asb-box-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
       )}
-      {/* 상태등 — 맨 앞, 색으로만 상태 표시(텍스트 라벨 없음). 의미는 aria-label/title로 보강. */}
-      <span className="asb-box-dot" role="img" aria-label={box.stateLabel} title={box.stateLabel} />
+      {/* 상태는 박스 하단 보더 색으로 표시(P10c) — 별도 dot 제거. 의미는 title/aria로 보강. */}
       <span className="asb-box-icon">
         <BoxIcon box={box} size={13} />
       </span>

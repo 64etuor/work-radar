@@ -1,0 +1,62 @@
+import { useState } from "react";
+
+import { JobCard } from "@/components/jobs/JobCard";
+import { isFinishedJobStatus } from "@/components/jobs/jobsConstants";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useAgentLogs, useAgentRuns, useKillAgentRun } from "@/lib/query";
+import { useUIStore } from "@/store";
+
+/**
+ * 글로벌 agent_runs 결과 모달 — 에이전트 상태 바 박스 클릭으로만 열린다(자동 오픈 없음).
+ *
+ * 모든 내부 codex 잡(echo / enrich_batch / triage_ci / draft_pr_selfcheck 등)에
+ * 동일한 진입점을 제공한다. `JobCard`를 그대로 재사용해 status 별 표시(badge/detail/log/cost)와
+ * awaiting_approval 시 `ProposalPanel` per-kind 디스패치를 한 곳에서 처리한다.
+ *
+ * INVARIANT #1: 표시 전용 — 어떤 결정도 자동 적용하지 않는다. awaiting_approval accept는 사람이.
+ * 모달이 닫힐 때 최종 종료(succeeded/failed/cancelled) 잡이면 `ackRun`으로 바에서 숨긴다(localStorage 영속).
+ */
+export function AgentRunModal() {
+  const openAgentRunId = useUIStore((s) => s.openAgentRunId);
+  const setOpen = useUIStore((s) => s.setOpenAgentRunId);
+  const ackRun = useUIStore((s) => s.ackRun);
+
+  const runs = useAgentRuns();
+  const run = runs.data?.find((r) => r.id === openAgentRunId) ?? null;
+  const killAgentRun = useKillAgentRun();
+
+  const [logOpen, setLogOpen] = useState(false);
+  // 로그 펼친 동안에만 폴링 — JobsView와 동일 패턴(INVARIANT #5 bounded).
+  const logIds = logOpen && openAgentRunId ? [openAgentRunId] : [];
+  const logs = useAgentLogs(logIds);
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) return;
+    if (openAgentRunId && run && isFinishedJobStatus(run.status)) ackRun(openAgentRunId);
+    setOpen(null);
+    setLogOpen(false);
+  };
+
+  if (!openAgentRunId) return null;
+
+  return (
+    <Dialog open={true} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogTitle>에이전트 결과</DialogTitle>
+        {!run ? (
+          <div className="text-wr-subtle text-sm">
+            잡 정보를 찾을 수 없습니다. 이미 정리되었거나 동기화 중일 수 있습니다.
+          </div>
+        ) : (
+          <JobCard
+            run={run}
+            logOpen={logOpen}
+            log={logs.get(run.id)}
+            onToggleLog={() => setLogOpen((v) => !v)}
+            onKill={() => killAgentRun.mutate(run.id)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

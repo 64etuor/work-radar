@@ -110,8 +110,7 @@
   transition: width 0.9s linear;
 }
 .asb-box-icon,
-.asb-box-name,
-.asb-box-dot {
+.asb-box-name {
   position: relative;
   z-index: 1;
 }
@@ -131,12 +130,26 @@
   /* 세션명은 한글 ~6자에서 말줄임(…) — 너무 긴 제목이 바를 늘리지 않게(약 6.5em ≈ 6자). */
   max-width: 6.5em;
 }
-/* 상태등 — 맨 앞 색 dot. 색으로만 상태 구분(텍스트 라벨 없음, 의미는 dot의 aria-label/title로 보강). */
-.asb-box-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex: 0 0 auto;
+/* 상태 표시(P10c) — 박스 하단 보더 색으로 단일 채널화. 색만으로 의미 전달 금지(title에 라벨 병기).
+ * idle = 기본 hairline. working/waiting/error = 3px accent underline + 호환 위해 transparent 보더 보존. */
+.asb-box {
+  border-bottom-width: 3px;
+}
+.asb-box-idle {
+  border-bottom-color: var(--color-wr-border-light);
+}
+.asb-box-working {
+  border-bottom-color: var(--color-wr-status-working);
+}
+.asb-box-waiting {
+  border-bottom-color: var(--color-wr-status-waiting);
+}
+.asb-box-error {
+  border-bottom-color: var(--color-wr-danger);
+}
+/* 종료(succeeded/cancelled) — 사용자가 클릭(ack)할 때까지 잔존. 성공 톤(success), 의미는 title로 보강. */
+.asb-box-done {
+  border-bottom-color: var(--color-wr-success, var(--color-wr-accent));
 }
 /* '+N' 오버플로 칩 — button-pill-outline 톤, 클릭 전 tooltip로 나머지 노출. */
 .asb-overflow {

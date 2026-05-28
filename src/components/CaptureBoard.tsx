@@ -109,9 +109,10 @@ export function CaptureBoard() {
   const triggerEnrichAll = useTriggerEnrichAll();
   const updateTitle = useUpdateSignalTitle();
   const deleteSignal = useDeleteSignal();
-  const { goTo, enrichAllRunId, setEnrichAllRunId } = useUIStore();
-  // enrich_all 진행 표시는 agent run status에서 직접 파생 (SSOT — store 브릿지 없음).
-  const enrichAllAgentRunning = useEnrichAllRunning(enrichAllRunId);
+  const { goTo } = useUIStore();
+  // enrich_batch 진행 표시는 agent_runs SSOT에서 직접 파생 (store 브릿지 없음).
+  // 결과 모달은 사용자가 에이전트 바 박스를 클릭해야 열린다 — 자동 오픈 없음.
+  const enrichAllAgentRunning = useEnrichAllRunning();
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
@@ -258,8 +259,7 @@ export function CaptureBoard() {
     triggerEnrichAll.mutate(
       { projectId: null, timeoutSec: 180, maxTurns: 12, costCapUsd: 1.0 },
       {
-        // 페이지 이동(goTo) 대신 전역 패널 — 다른 뷰로 이동해도 제안 검토가 유지된다.
-        onSuccess: (runId) => setEnrichAllRunId(runId),
+        // 자동 모달 오픈 없음 — 에이전트 바 박스에서 사용자가 클릭해 결과를 본다(INVARIANT #1 표시 전용).
         onError: (e) => pushError("codex", `전체 제안 실패: ${String(e)}`),
       },
     );
@@ -553,13 +553,11 @@ export function CaptureBoard() {
         menu={menu}
         calendarModal={calendarModal}
         projectPicker={projectPicker}
-        enrichAllRunId={null}
         onMenuAction={handleMenuAction}
         onMenuClose={() => setMenu(null)}
         onCalendarClose={() => setCalendarModal(null)}
         onProjectPickerClose={() => setProjectPicker(null)}
         onProjectPick={handleProjectPick}
-        onEnrichAllClose={() => setEnrichAllRunId(null)}
       />
     </div>
   );

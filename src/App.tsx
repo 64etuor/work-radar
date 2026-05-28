@@ -2,9 +2,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
+import { AgentRunModal } from "@/components/agents/AgentRunModal";
 import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { CalendarDrawer } from "@/components/board/CalendarDrawer";
-import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
 import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
@@ -64,18 +64,8 @@ export default function App() {
   // share the same store state without duplicate listener registrations.
   useHermesTabsBootstrap();
 
-  const {
-    view,
-    paletteOpen,
-    setPaletteOpen,
-    goTo,
-    theme,
-    font,
-    calendarOpen,
-    setCalendarOpen,
-    enrichAllRunId,
-    setEnrichAllRunId,
-  } = useUIStore();
+  const { view, paletteOpen, setPaletteOpen, goTo, theme, font, calendarOpen, setCalendarOpen } =
+    useUIStore();
   const [viewSnapshot, setViewSnapshot] = useState<ViewSnapshot | null>(null);
   const viewSnapshotIdRef = useRef(0);
   const transitionRunningRef = useRef(false);
@@ -210,9 +200,8 @@ export default function App() {
       {paletteOpen && <CommandPalette />}
       {/* 전역 캘린더 드로어 — 에이전트 바 우측 아이콘 / ⌘⇧C 로 토글, 모든 뷰 위에 슬라이드. */}
       <CalendarDrawer open={calendarOpen} onClose={() => setCalendarOpen(false)} />
-      {enrichAllRunId && (
-        <EnrichReviewPanel runId={enrichAllRunId} onClose={() => setEnrichAllRunId(null)} />
-      )}
+      {/* 글로벌 에이전트 결과 모달 — 에이전트 바 박스 클릭으로만 열림(자동 오픈 없음). */}
+      <AgentRunModal />
       {/* Hermes 플로팅 패널 — 전역 1회 마운트, state.open=false 시 null 렌더. */}
       <HermesView />
       {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
