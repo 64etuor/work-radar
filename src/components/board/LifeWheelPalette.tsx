@@ -107,7 +107,10 @@ export function CardTagEditor({
       </button>
       <button
         type="button"
-        className={`postit-tag-button postit-area-button${selectedAreas.length === 0 ? "empty" : ""}`}
+        className={cn(
+          "postit-tag-button postit-area-button",
+          selectedAreas.length === 0 && "empty",
+        )}
         draggable={false}
         style={
           {
@@ -162,11 +165,11 @@ export function AreaRadialPalette({
 
   return (
     <div
-      className={`area-radial-layer wr-radial-effect-layer${closing ? "closing" : ""}`}
+      className={cn("area-radial-layer wr-radial-effect-layer", closing && "closing")}
       onPointerDown={closePalette}
     >
       <div
-        className={`area-radial wr-radial-effect${closing ? "closing" : ""}`}
+        className={cn("area-radial wr-radial-effect", closing && "closing")}
         style={
           {
             left: anchor.x,
@@ -178,7 +181,7 @@ export function AreaRadialPalette({
       >
         <button
           type="button"
-          className={`area-radial-core${!selectedArea ? "active" : ""}${closing ? "closing" : ""}`}
+          className={cn("area-radial-core", !selectedArea && "active", closing && "closing")}
           onClick={() => selectArea(null)}
           style={
             {
@@ -199,7 +202,7 @@ export function AreaRadialPalette({
             return (
               <g
                 key={choice.id}
-                className={`area-wheel-segment${active ? "active" : ""}${closing ? "closing" : ""}`}
+                className={cn("area-wheel-segment", active && "active", closing && "closing")}
                 role="button"
                 tabIndex={0}
                 aria-label={`${choice.label} 선택`}

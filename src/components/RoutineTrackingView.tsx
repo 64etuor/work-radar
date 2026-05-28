@@ -121,7 +121,7 @@ function TrackCard({
           {item.history.map((h) => (
             <span
               key={h.date}
-              className={`trk-cell${h.done ? "on" : ""}`}
+              className={cn("trk-cell", h.done && "on")}
               title={`${md(h.date)} ${h.done ? "완료" : "미완료"}`}
             />
           ))}

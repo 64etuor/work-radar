@@ -19,6 +19,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
 
 const CATEGORIES = [
@@ -357,7 +358,7 @@ export function PocSettings() {
   const [cat, setCat] = useState<(typeof CATEGORIES)[number]["id"]>("projects");
 
   return (
-    <div className={`${dark ? "dark" : ""}min-h-screen bg-background text-foreground`}>
+    <div className={cn(dark && "dark", "bg-background text-foreground min-h-screen")}>
       <header className="border-border flex items-center gap-3 border-b px-5 py-3">
         <button className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium">
           <ArrowLeft className="size-4" />

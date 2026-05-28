@@ -5,6 +5,7 @@ import type { Kind, LifeWheelTagConfig, RoutineFreq, RoutineToday, Weekday } fro
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
 import { useListReorder } from "@/lib/useListReorder";
 
@@ -290,7 +291,7 @@ export function RoutinesPanel({
           <div className="empty">오늘 해당하는 루틴이 없습니다 — + 루틴으로 추가</div>
         ) : (
           routines.map((r) => (
-            <div key={r.id} className={`item${r.done ? "done" : ""}`} {...dnd.itemProps(r.id)}>
+            <div key={r.id} className={cn("item", r.done && "done")} {...dnd.itemProps(r.id)}>
               <span className="grip" title="드래그로 정렬" {...dnd.handleProps(r.id)}>
                 ⠿
               </span>

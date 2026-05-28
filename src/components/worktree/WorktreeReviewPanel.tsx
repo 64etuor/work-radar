@@ -1,5 +1,6 @@
 import type { DiffMode, Worktree } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import {
   branchChangeSummary,
   branchGraphAriaLabel,
@@ -119,7 +120,11 @@ function BranchRail({ worktree, activity }: { worktree: Worktree; activity: stri
   const relation = branchChangeSummary(worktree);
   return (
     <div
-      className={`wt-branch-rail${worktree.mergedIntoBase === true ? "wt-branch-rail-merged" : ""}${baseUnknown ? "wt-branch-rail-unknown" : ""}`}
+      className={cn(
+        "wt-branch-rail",
+        worktree.mergedIntoBase === true && "wt-branch-rail-merged",
+        baseUnknown && "wt-branch-rail-unknown",
+      )}
       aria-label={branchGraphAriaLabel(worktree)}
       title={relation}
     >

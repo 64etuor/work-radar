@@ -17,6 +17,7 @@ import { SettingsView } from "@/components/SettingsView";
 import { SkillsView } from "@/components/SkillsView";
 import { ToastHost } from "@/components/ToastHost";
 import { TodayView } from "@/components/TodayView";
+import { cn } from "@/components/ui/cn";
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
@@ -183,7 +184,10 @@ export default function App() {
 
   return (
     <div
-      className={`${theme === "dark" ? "dark" : ""}flex bg-wr-bg h-screen w-screen flex-col overflow-hidden`}
+      className={cn(
+        theme === "dark" && "dark",
+        "bg-wr-bg flex h-screen w-screen flex-col overflow-hidden",
+      )}
     >
       {/* 글로벌 에이전트 상태 바 (Phase 20 #16) — 모든 뷰 위에 상주, 클릭 → Jobs. */}
       <AgentStatusBar />

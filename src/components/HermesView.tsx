@@ -150,7 +150,7 @@ export function HermesView({ onClose }: { onClose?: () => void } = {}) {
 function MessageRow({ msg }: { msg: HermesMessage }) {
   const sent = msg.direction === "sent";
   return (
-    <div className={`hm-msg${sent ? "sent" : "recv"}`}>
+    <div className={cn("hm-msg", sent ? "sent" : "recv")}>
       <div className="hm-bubble">
         <span className="hm-text">{msg.text}</span>
         <span className="hm-meta">

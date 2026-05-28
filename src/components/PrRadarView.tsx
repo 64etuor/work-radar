@@ -5,6 +5,7 @@ import { Bot, ExternalLink, MessageSquare, RefreshCw, TriangleAlert } from "luci
 
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import {
   fetchPrRadar,
   openExternal,
@@ -88,7 +89,7 @@ export function PrRadarView() {
       <header className="pr-head" data-tauri-drag-region>
         <span className="pr-title">PR Radar</span>
         <span className="pr-poll">
-          <RefreshCw className={`size-3.5${isFetching ? "pr-spin" : ""}`} />
+          <RefreshCw className={cn("size-3.5", isFetching && "pr-spin")} />
           {isFetching ? "새로고침 중…" : `${settings.data?.pollIntervalMinutes ?? 10}분 폴링`}
         </span>
       </header>
@@ -229,7 +230,12 @@ function PrRow({
         {item.hasConflict && <span className="pr-flag pr-conflict">충돌</span>}
         {item.isDraft && <span className="pr-flag">draft</span>}
         <span
-          className={`prr-comments${item.isSuspicious ? "prr-suspicious" : ""}${item.hasUnreadAlert ? "prr-unread-alert" : ""}${item.hasCriticalAlert ? "prr-critical-alert" : ""}`}
+          className={cn(
+            "prr-comments",
+            item.isSuspicious && "prr-suspicious",
+            item.hasUnreadAlert && "prr-unread-alert",
+            item.hasCriticalAlert && "prr-critical-alert",
+          )}
           title={
             item.hasCriticalAlert
               ? "critical Inbox alert"

@@ -139,7 +139,7 @@ export function SprintTimer() {
     );
 
   return (
-    <div ref={rootRef} className={`sprint-timer${editorVisible ? "is-editing" : ""}`}>
+    <div ref={rootRef} className={cn("sprint-timer", editorVisible && "is-editing")}>
       {editorState === "opening" && renderMeter(" is-leaving", true)}
       {editorVisible ? (
         <SprintEditor
@@ -171,7 +171,7 @@ const DEFAULT_CONFIG: SprintConfig = {
 function SprintEditor({ config, opening = false, closing = false, onClose }: EditorProps) {
   return (
     <section
-      className={`sprint-inline-editor${opening ? "is-opening" : ""}${closing ? "is-closing" : ""}`}
+      className={cn("sprint-inline-editor", opening && "is-opening", closing && "is-closing")}
       aria-label="스프린트 일정 편집"
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();

@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 
 import type { InboxItem } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { openExternal } from "@/lib/query";
 import {
   useDismissInboxItem,
@@ -84,7 +85,7 @@ export function InboxView() {
             <button
               key={f.key ?? "all"}
               type="button"
-              className={`inbox-filter${source === f.key ? "active" : ""}`}
+              className={cn("inbox-filter", source === f.key && "active")}
               onClick={() => setSource(f.key)}
             >
               {f.label}
@@ -172,7 +173,7 @@ function InboxRow({
   const action = parseActionPayload(item.actionPayload);
 
   return (
-    <article className={`inbox-row ${item.severity}${item.unread ? "unread" : ""}`}>
+    <article className={cn("inbox-row", item.severity, item.unread && "unread")}>
       <div className="inbox-row-icon">
         <Icon className="size-4" />
       </div>

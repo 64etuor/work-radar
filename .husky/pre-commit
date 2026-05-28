@@ -9,3 +9,4 @@ cargo fmt --check --manifest-path src-tauri/Cargo.toml
 pnpm exec lint-staged
 pnpm typecheck
 pnpm check:frontend-ownership
+pnpm check:classname-regression

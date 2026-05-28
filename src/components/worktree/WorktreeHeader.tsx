@@ -3,6 +3,7 @@ import { RefreshCw, Trash2, Waypoints } from "lucide-react";
 import type { Project } from "@/bindings";
 import { KindBadge } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import {
   Select,
   SelectContent,
@@ -90,7 +91,7 @@ export function WorktreeHeader({
         onClick={onRefresh}
         title="새로고침"
       >
-        <RefreshCw className={`size-3.5${worktreesFetching ? "wt-spin" : ""}`} />
+        <RefreshCw className={cn("size-3.5", worktreesFetching && "wt-spin")} />
       </Button>
     </header>
   );

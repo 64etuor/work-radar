@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { Skill } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -208,7 +209,7 @@ function SkillRow({
 }) {
   const isInApp = skill.kind === "in_app_prompt";
   return (
-    <button type="button" className={`skl-row${active ? "active" : ""}`} onClick={onSelect}>
+    <button type="button" className={cn("skl-row", active && "active")} onClick={onSelect}>
       {isInApp ? (
         <Blocks className="skl-row-ico size-4" />
       ) : (

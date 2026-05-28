@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:frontend-ownership": "node scripts/check-frontend-ownership.mjs",
+    "check:classname-regression": "node scripts/check-classname-regression.mjs",
     "test:frontend-ownership": "node --test scripts/check-frontend-ownership.test.mjs",
     "test": "vitest run",
     "tauri": "bash scripts/tauri-wrapper.sh",

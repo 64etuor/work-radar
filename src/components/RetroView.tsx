@@ -176,7 +176,7 @@ function RetroTab() {
                     <div className="rt-item-tags">
                       <button
                         type="button"
-                        className={`rt-tag-btn impact${s.impactHigh ? "on" : ""}`}
+                        className={cn("rt-tag-btn impact", s.impactHigh && "on")}
                         title="고임팩트 ⭐"
                         disabled={setImpact.isPending}
                         onClick={() => setImpact.mutate({ id: s.id, value: !s.impactHigh })}
@@ -185,7 +185,7 @@ function RetroTab() {
                       </button>
                       <button
                         type="button"
-                        className={`rt-tag-btn regret${s.regret ? "on" : ""}`}
+                        className={cn("rt-tag-btn regret", s.regret && "on")}
                         title="하지말걸 ⚠️"
                         disabled={setRegret.isPending}
                         onClick={() => setRegret.mutate({ id: s.id, value: !s.regret })}

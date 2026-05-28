@@ -3,6 +3,7 @@ import type { CSSProperties, HTMLAttributes } from "react";
 
 import type { Worktree } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { localChangeCount, localChangeSummary } from "@/lib/worktreeReview";
 
 type WorktreeSideListProps = {
@@ -71,7 +72,7 @@ export function WorktreeSideList({
             <button
               key={w.id}
               type="button"
-              className={`wt-item${w.path === selectedPath ? "wt-item-on" : ""}`}
+              className={cn("wt-item", w.path === selectedPath && "wt-item-on")}
               onClick={() => onSelect(w)}
             >
               <div className="wt-item-top">

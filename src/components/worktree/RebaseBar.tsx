@@ -2,6 +2,7 @@ import { Waypoints } from "lucide-react";
 
 import type { Worktree } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { useRebaseWorktree } from "@/lib/query";
 
 export function RebaseBar({
@@ -53,7 +54,7 @@ export function RebaseBar({
         <span className="wt-rebase-msg wt-rebase-err">{(rebase.error as Error).message}</span>
       )}
       {result && (
-        <span className={`wt-rebase-msg${result.success ? "wt-rebase-ok" : "wt-rebase-err"}`}>
+        <span className={cn("wt-rebase-msg", result.success ? "wt-rebase-ok" : "wt-rebase-err")}>
           {result.success ? "rebase 성공 — vs Base로 검수하세요." : result.message}
         </span>
       )}

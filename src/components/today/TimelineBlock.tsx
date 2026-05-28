@@ -4,6 +4,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockStyle";
 import type { DragData } from "@/components/today/useTimelineDnd";
+import { cn } from "@/components/ui/cn";
 import type { LayoutBox } from "@/lib/timelineLayout";
 
 type Props = {
@@ -182,7 +183,7 @@ export function TimelineBlock({
       <button
         ref={setNodeRef}
         type="button"
-        className={`tl-block tl-block-${block.kind}${isDoneRoutine ? "tl-block-done" : ""}`}
+        className={cn("tl-block", `tl-block-${block.kind}`, isDoneRoutine && "tl-block-done")}
         data-done={isDoneRoutine || undefined}
         style={
           {

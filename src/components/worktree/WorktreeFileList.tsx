@@ -1,5 +1,6 @@
 import type { DiffFileSummary, DiffMode, FileChange } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
+import { cn } from "@/components/ui/cn";
 
 export type SelectedDiff = {
   path: string;
@@ -129,7 +130,7 @@ export function FileRow({
   onSelect: () => void;
 }) {
   return (
-    <button type="button" className={`wt-file${active ? "wt-file-on" : ""}`} onClick={onSelect}>
+    <button type="button" className={cn("wt-file", active && "wt-file-on")} onClick={onSelect}>
       <span className={`wt-fstatus wt-fs-${file.status}`} title={FILE_STATUS_LABEL[file.status]}>
         {file.status}
       </span>
