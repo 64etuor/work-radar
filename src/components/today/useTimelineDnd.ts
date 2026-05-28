@@ -64,7 +64,7 @@ function tzOffset(): string {
  * (`YYYY-MM-DDTHH:MM:SS+09:00`). 음수는 0(00:00)으로 clamp, 24h 초과는
  * 23:45로 clamp(스냅 정렬 유지). 백엔드 sync 워커가 `parse_from_rfc3339`로 받음.
  */
-export function pixelToLocalIso(date: string, gridY: number): string {
+function pixelToLocalIso(date: string, gridY: number): string {
   const rawMin = (gridY / HOUR_PX) * 60;
   const snapped = snap(rawMin);
   const clamped = Math.max(0, Math.min(24 * 60 - SNAP_MIN, snapped));
@@ -542,7 +542,3 @@ export function buildDefaultCalendarFor(
     return projDefault.get(projectId) ?? null;
   };
 }
-
-/** 외부 사용을 위한 상수 노출. */
-export const TIMELINE_HOUR_PX = HOUR_PX;
-export const TIMELINE_SNAP_MIN = SNAP_MIN;

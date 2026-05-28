@@ -72,7 +72,7 @@ export function RoutineTrackingView() {
           </div>
         )}
         {!tracking.isError && items.length === 0 && (
-          <div className="rt-hint">활성 루틴이 없습니다 — 보드에서 + 루틴으로 추가하세요.</div>
+          <div className="rt-hint">활성 루틴이 없습니다. 보드에서 + 루틴으로 추가하세요.</div>
         )}
 
         <div className="trk-list">

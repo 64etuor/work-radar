@@ -190,7 +190,7 @@ export function ProjectCard({
 
   return (
     <Card className="overflow-hidden rounded-2xl">
-      <div className="flex items-start gap-3 px-5 py-5">
+      <div className="flex items-start gap-3 p-5">
         <div className="border-border bg-muted flex size-10 shrink-0 items-center justify-center rounded-xl border">
           <FolderOpen className="text-muted-foreground size-4" />
         </div>
@@ -208,7 +208,7 @@ export function ProjectCard({
         </div>
       </div>
 
-      <div className="border-border flex flex-col gap-4 border-t px-5 py-5">
+      <div className="border-border flex flex-col gap-4 border-t p-5">
         <div className="border-border bg-muted/15 flex flex-col gap-2.5 rounded-xl border p-4">
           <div className="flex items-center gap-2">
             <KeyRound className="text-muted-foreground size-4" />
@@ -272,7 +272,7 @@ export function ProjectCard({
           {repos.data && repos.data.length === 0 && (
             <div className="text-muted-foreground flex items-center gap-2 text-sm">
               <Plus className="size-3.5" />
-              아직 레포가 없습니다 — 아래에서 추가하세요.
+              아직 레포가 없습니다. 아래에서 추가하세요.
             </div>
           )}
           {repos.data?.map((r) => (

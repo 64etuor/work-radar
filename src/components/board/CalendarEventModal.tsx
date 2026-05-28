@@ -1,6 +1,6 @@
 import "./CalendarEventModal.css";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -65,6 +65,13 @@ function addDays(dateStr: string, n: number): string {
  * 토큰은 keychain(Rust) — 본문 미노출. 실패는 graceful로 표시. DESIGN.md(Cohere white editorial) 톤.
  */
 export function CalendarEventModal({ state, onClose }: Props) {
+  const fieldId = useId();
+  const titleId = `${fieldId}-title`;
+  const startId = `${fieldId}-start`;
+  const endId = `${fieldId}-end`;
+  const calendarFieldId = `${fieldId}-calendar`;
+  const descId = `${fieldId}-desc`;
+
   const projectId = state?.projectId ?? null;
   const calendarsQ = useSelectedCalendars(projectId, !!state);
   const create = useCreateCalendarEvent();
@@ -183,9 +190,10 @@ export function CalendarEventModal({ state, onClose }: Props) {
           캘린더에 등록
         </DialogTitle>
 
-        <label className="cev-field">
+        <label className="cev-field" htmlFor={titleId}>
           <span className="cev-lbl">제목</span>
           <Input
+            id={titleId}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="이벤트 제목"
@@ -197,6 +205,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
         <label className="cev-check">
           <input
             type="checkbox"
+            aria-label="종일"
             checked={allDay}
             onChange={(e) => toggleAllDay(e.target.checked)}
           />
@@ -204,17 +213,19 @@ export function CalendarEventModal({ state, onClose }: Props) {
         </label>
 
         <div className="cev-row">
-          <label className="cev-field">
+          <label className="cev-field" htmlFor={startId}>
             <span className="cev-lbl">시작</span>
             <Input
+              id={startId}
               type={allDay ? "date" : "datetime-local"}
               value={allDay ? start.slice(0, 10) : start}
               onChange={(e) => setStart(e.target.value)}
             />
           </label>
-          <label className="cev-field">
+          <label className="cev-field" htmlFor={endId}>
             <span className="cev-lbl">종료</span>
             <Input
+              id={endId}
               type={allDay ? "date" : "datetime-local"}
               value={allDay ? end.slice(0, 10) : end}
               onChange={(e) => setEnd(e.target.value)}
@@ -222,11 +233,11 @@ export function CalendarEventModal({ state, onClose }: Props) {
           </label>
         </div>
 
-        <label className="cev-field">
+        <label className="cev-field" htmlFor={calendarFieldId}>
           <span className="cev-lbl">캘린더</span>
           {noCalendars ? (
             <div className="cev-empty">
-              선택된 캘린더가 없습니다 — 설정에서 Google 계정 연결 후 캘린더를 선택하세요.
+              선택된 캘린더가 없습니다. 설정에서 Google 계정 연결 후 캘린더를 선택하세요.
             </div>
           ) : (
             <Select
@@ -234,7 +245,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
               onValueChange={setCalendarId}
               disabled={calendarsQ.isLoading}
             >
-              <SelectTrigger>
+              <SelectTrigger id={calendarFieldId} aria-label="캘린더 선택">
                 <SelectValue placeholder="캘린더 선택" />
               </SelectTrigger>
               <SelectContent>
@@ -248,9 +259,10 @@ export function CalendarEventModal({ state, onClose }: Props) {
           )}
         </label>
 
-        <label className="cev-field">
+        <label className="cev-field" htmlFor={descId}>
           <span className="cev-lbl">설명 (선택)</span>
           <Textarea
+            id={descId}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="메모"

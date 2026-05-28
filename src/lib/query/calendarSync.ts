@@ -54,15 +54,6 @@ export function useCommitStagedWrites() {
   });
 }
 
-/** 한 행을 큐에서 제거(UI cancel / 롤백). */
-export function useCancelPendingWrite() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => unwrap(commands.cancelPendingWrite(id)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["pendingWrites"] }),
-  });
-}
-
 /** payload_json이 `"staged":true`를 담는지(워커가 skip하는 cross-cal 게이트 표식). */
 export function isStaged(p: PendingWrite): boolean {
   // build_queue_row의 moveCalendar는 `serde_json::json!({..., "staged": true})`로 직렬화.

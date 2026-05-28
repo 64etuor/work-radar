@@ -286,7 +286,7 @@ function InAppEditor({ skill }: { skill: Skill }) {
           aria-label="스킬 이름"
         />
         <label className="skl-toggle">
-          <input type="checkbox" checked={skill.enabled} onChange={toggle} />
+          <input type="checkbox" aria-label="스킬 활성" checked={skill.enabled} onChange={toggle} />
           <span>활성</span>
         </label>
       </div>

@@ -8,7 +8,7 @@ import { unwrap } from "./client";
  * worktree 목록 라이브 폴링 주기 (Phase 12c). bounded interval(busy-loop 아님 — INVARIANT #5).
  * dirty/ahead/behind + 활성 변경 활동(최근 파일 mtime)을 8s마다 갱신해 "지금 작업 중"을 비춘다.
  */
-export const WORKTREE_POLL_MS = 8_000;
+const WORKTREE_POLL_MS = 8_000;
 
 /**
  * repo별 worktree 목록 (projectId=null이면 멀티 repo 전체).

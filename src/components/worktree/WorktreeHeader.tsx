@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export const PROJECT_ALL = "__all__";
+const PROJECT_ALL = "__all__";
 
 type ToggleControl = {
   enabled: boolean;

@@ -1,5 +1,5 @@
 import { Check, ExternalLink, X } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import type { AgentRunView, PrSelfCheckProposal, SelfCheckItem } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
@@ -24,6 +24,9 @@ function normalizeProposal(p: PrSelfCheckProposal): PrSelfCheckProposal {
  * 사람이 편집하고 accept하면 로컬에 반영된다. **GitHub 제출은 사람이 수동으로** 한다(INVARIANT #2).
  */
 export function SelfCheckPanel({ run }: { run: AgentRunView }) {
+  const fieldId = useId();
+  const summaryId = `${fieldId}-summary`;
+
   const proposal = usePrProposal(run.id, true);
   const accept = useAcceptProposal();
   const reject = useRejectProposal();
@@ -77,21 +80,25 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
         </button>
       )}
 
-      <label className="jobs-prop-label">PR 설명 초안</label>
+      <label className="jobs-prop-label" htmlFor={summaryId}>
+        PR 설명 초안
+      </label>
       <Textarea
+        id={summaryId}
         className="min-h-0 resize-y"
         value={d.summary ?? ""}
         rows={3}
         onChange={(e) => setDraft({ ...d, summary: e.target.value })}
       />
 
-      <label className="jobs-prop-label">self-check 체크리스트</label>
+      <div className="jobs-prop-label">self-check 체크리스트</div>
       <div className="jobs-prop-checks">
         {(d.selfChecks ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
         {(d.selfChecks ?? []).map((c, i) => (
           <label key={i} className="jobs-prop-check">
             <input
               type="checkbox"
+              aria-label={c.item}
               checked={c.checked ?? false}
               onChange={(e) => {
                 const next = [...(d.selfChecks ?? [])];
@@ -107,7 +114,7 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
 
       {(d.screenshotsNeeded ?? []).length > 0 && (
         <>
-          <label className="jobs-prop-label">스크린샷 필요</label>
+          <div className="jobs-prop-label">스크린샷 필요</div>
           <ul className="jobs-prop-ul">
             {(d.screenshotsNeeded ?? []).map((s, i) => (
               <li key={i}>{s}</li>
@@ -118,7 +125,7 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
 
       {(d.migrationNotes ?? []).length > 0 && (
         <>
-          <label className="jobs-prop-label">마이그레이션/배포 노트</label>
+          <div className="jobs-prop-label">마이그레이션/배포 노트</div>
           <ul className="jobs-prop-ul">
             {(d.migrationNotes ?? []).map((s, i) => (
               <li key={i}>{s}</li>

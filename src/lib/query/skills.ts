@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands, type CreateSkillInput, type ExternalSkill, type Skill } from "@/bindings";
+import { commands, type CreateSkillInput, type Skill } from "@/bindings";
 
 import { unwrap } from "./client";
 
@@ -49,15 +49,6 @@ export function useDeleteSkill() {
   return useMutation({
     mutationFn: (id: string) => unwrap(commands.deleteSkill(id)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
-  });
-}
-
-/** 외부 스킬 스캔(~/.claude/skills 하위 SKILL.md frontmatter, 읽기 전용). */
-export function useScanExternalSkills() {
-  return useQuery<ExternalSkill[]>({
-    queryKey: ["externalSkills"],
-    queryFn: () => unwrap(commands.scanExternalSkills()),
-    staleTime: 30_000,
   });
 }
 

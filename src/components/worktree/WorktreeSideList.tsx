@@ -62,7 +62,7 @@ export function WorktreeSideList({
       {Boolean(error) && <div className="wt-err">{String((error as Error).message ?? error)}</div>}
       {!isLoading && list.length === 0 && !error && (
         <div className="wt-empty">
-          표시할 worktree가 없습니다 — 설정에서 local 경로가 있는 레포를 추가하세요.
+          표시할 worktree가 없습니다. 설정에서 local 경로가 있는 레포를 추가하세요.
         </div>
       )}
       {grouped.map(([label, wts]) => (

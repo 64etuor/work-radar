@@ -111,7 +111,7 @@ export function EnrichReviewPanel({ runId, onClose }: Props) {
       {/* error — 재시도는 "전체 제안 실행" 버튼으로(여기선 닫기). */}
       {status === "failed" && (
         <div className="enrich-review-err">
-          {failDetail ?? "제안 생성에 실패했습니다."} — 닫고 다시 실행하세요.
+          {failDetail ?? "제안 생성에 실패했습니다."} (닫고 다시 실행하세요.)
         </div>
       )}
 
@@ -136,7 +136,7 @@ export function EnrichReviewPanel({ runId, onClose }: Props) {
         <>
           <div className="enrich-review-meta">
             미분류 <b>{items.length}</b>개 제안
-            {skipped > 0 && <> · 격리(skip) {skipped}개</>} — 수정 후 적용하면 사분면·영역이
+            {skipped > 0 && <> · 격리(skip) {skipped}개</>}. 수정 후 적용하면 사분면·영역이
             확정됩니다.
           </div>
 

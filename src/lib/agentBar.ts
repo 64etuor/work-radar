@@ -7,7 +7,7 @@
 //  - 개수 상한 + '+N' 오버플로 계산.
 
 /** 박스 개수 상한 (DESIGN.md `agent-status-bar`: 8). 초과분은 '+N' 칩으로 접는다. */
-export const MAX_BOXES = 8;
+const MAX_BOXES = 8;
 
 /** 박스 width 경계 (DESIGN.md: idle ~96px → 상한 ~240px, bounded). */
 export const BOX_MIN_PX = 96;

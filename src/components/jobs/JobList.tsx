@@ -19,7 +19,7 @@ export function JobList({
 }) {
   if (runs.length === 0) {
     return (
-      <div className="jobs-empty">아직 잡이 없습니다 — 위 테스트 잡으로 스파인을 확인하세요.</div>
+      <div className="jobs-empty">아직 잡이 없습니다. 위 테스트 잡으로 스파인을 확인하세요.</div>
     );
   }
 

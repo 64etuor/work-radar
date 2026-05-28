@@ -113,7 +113,7 @@ export function useSetSelectedCalendars() {
  * ambient read — 캐시하지 않고 호출부가 필요 시 직접 부른다(영속 없음).
  * `forceRefresh=true`면 Rust TTL 캐시를 우회해 fresh Google fetch(P7 드로어 수동 새로고침 버튼용).
  */
-export function fetchCalendarEvents(
+function fetchCalendarEvents(
   projectId: string | null,
   date: string,
   forceRefresh = false,
@@ -167,6 +167,7 @@ export function useSelectedCalendars(projectId: string | null, enabled: boolean)
 
 /** 카드 → 캘린더 이벤트 생성(write). 사람 폼 제출이 곧 결정/accept(Acceptance 대기 없음, #2). */
 export function useCreateCalendarEvent() {
+  const qc = useQueryClient();
   return useMutation<
     CreatedCalendarEvent,
     Error,
@@ -174,6 +175,8 @@ export function useCreateCalendarEvent() {
   >({
     mutationFn: ({ projectId, calendarId, event }) =>
       unwrap(commands.createCalendarEvent(projectId, calendarId, event)),
+    // 생성 즉시 Today/드로어의 calendarEvents(단일 date + range) 양쪽 갱신.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["calendarEvents"] }),
   });
 }
 

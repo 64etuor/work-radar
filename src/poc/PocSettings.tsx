@@ -310,7 +310,7 @@ function ProjectCard({
       </div>
 
       {expanded && (
-        <div className="border-border flex flex-col gap-5 border-t px-5 py-5">
+        <div className="border-border flex flex-col gap-5 border-t p-5">
           <div className="flex flex-col gap-2.5">
             <SectionLabel>토큰 · keychain</SectionLabel>
             <TokenRow
@@ -360,7 +360,10 @@ export function PocSettings() {
   return (
     <div className={cn(dark && "dark", "bg-background text-foreground min-h-screen")}>
       <header className="border-border flex items-center gap-3 border-b px-5 py-3">
-        <button className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium">
+        <button
+          type="button"
+          className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium"
+        >
           <ArrowLeft className="size-4" />
           보드
         </button>
@@ -368,6 +371,7 @@ export function PocSettings() {
           설정
         </span>
         <button
+          type="button"
           onClick={() => setDark((d) => !d)}
           className="border-border hover:bg-muted ml-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium"
         >
@@ -381,6 +385,7 @@ export function PocSettings() {
           {CATEGORIES.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
+              type="button"
               onClick={() => setCat(id)}
               className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                 cat === id

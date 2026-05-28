@@ -102,7 +102,7 @@ export function HermesView({ onClose }: { onClose?: () => void } = {}) {
           )}
           {list.length === 0 ? (
             <div className="hm-empty">
-              아직 메시지가 없습니다 — 아래에서 Hermes에게 명령을 보내세요.
+              아직 메시지가 없습니다. 아래에서 Hermes에게 명령을 보내세요.
             </div>
           ) : (
             <div className="hm-list">

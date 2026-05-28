@@ -19,7 +19,7 @@ export type GoogleAccountOauthViewState = {
 
 const STALE_WAIT_MS = 60_000;
 
-export function formatElapsed(ms: number): string {
+function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   if (totalSeconds < 60) return `${totalSeconds}초`;
   const minutes = Math.floor(totalSeconds / 60);

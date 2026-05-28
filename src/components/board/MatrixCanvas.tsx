@@ -543,6 +543,7 @@ function TitleEditor({
     <textarea
       ref={ref}
       className="postit-edit"
+      aria-label="포스트잇 내용 편집"
       value={draft}
       rows={2}
       onChange={(e) => setDraft(e.target.value)}

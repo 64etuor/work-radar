@@ -50,7 +50,7 @@ function headerLabel(mode: CalendarViewMode, date: string): string {
  */
 export function CalendarDrawer({ open, onClose }: Props) {
   const [mode, setMode] = useState<CalendarViewMode>("day");
-  const [date, setDate] = useState<string>(localToday());
+  const [date, setDate] = useState<string>(() => localToday());
   const qc = useQueryClient();
   const projectsQ = useProjects();
   const { goTo } = useUIStore();
@@ -193,7 +193,7 @@ export function CalendarDrawer({ open, onClose }: Props) {
         ) : eventsQ.isError ? (
           <div className="caldrawer-state">
             <p className="caldrawer-state-msg">
-              일정을 불러오지 못했습니다 — {String(eventsQ.error)}
+              일정을 불러오지 못했습니다: {String(eventsQ.error)}
             </p>
             <Button
               type="button"

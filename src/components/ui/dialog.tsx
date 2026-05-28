@@ -6,11 +6,9 @@ import { cn } from "./cn";
 import { registerOverlay } from "./overlay-stack";
 
 export const Dialog = DialogPrimitive.Root;
-export const DialogTrigger = DialogPrimitive.Trigger;
-export const DialogClose = DialogPrimitive.Close;
-export const DialogPortal = DialogPrimitive.Portal;
+const DialogPortal = DialogPrimitive.Portal;
 
-export function DialogOverlay({
+function DialogOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
@@ -54,19 +52,6 @@ export function DialogContent({
   );
 }
 
-export function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex flex-col gap-1.5 text-left", className)} {...props} />;
-}
-
-export function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
-      {...props}
-    />
-  );
-}
-
 export function DialogTitle({
   className,
   ...props
@@ -74,18 +59,6 @@ export function DialogTitle({
   return (
     <DialogPrimitive.Title
       className={cn("text-foreground text-base font-semibold", className)}
-      {...props}
-    />
-  );
-}
-
-export function DialogDescription({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
-  return (
-    <DialogPrimitive.Description
-      className={cn("text-muted-foreground text-sm", className)}
       {...props}
     />
   );

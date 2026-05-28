@@ -30,7 +30,7 @@ export function WorktreeLensToolbar({
             variant={lens === m.key ? "default" : "outline"}
             size="sm"
             className="rounded-full text-[12px]"
-            aria-pressed={lens === m.key}
+            aria-selected={lens === m.key}
             role="tab"
             onClick={() => onLensChange(m.key)}
           >

@@ -91,6 +91,7 @@ export function CleanupPanel({
         <label className="wt-cleanup-force">
           <input
             type="checkbox"
+            aria-label="미머지 강제 삭제(force)"
             checked={force}
             onChange={(e) => {
               setForce(e.target.checked);
@@ -164,6 +165,7 @@ export function CleanupPanel({
             <label key={c.id} className={`wt-cleanup-row${can ? "" : "wt-cleanup-locked"}`}>
               <input
                 type="checkbox"
+                aria-label={`${c.name} 선택`}
                 checked={selected.has(c.id)}
                 disabled={!can}
                 onChange={() => toggle(c.id)}

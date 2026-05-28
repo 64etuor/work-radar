@@ -13,7 +13,7 @@ export type DragGuide = {
   durationMin: number;
 };
 
-export function blockIdForDrag(data: DragData): string | null {
+function blockIdForDrag(data: DragData): string | null {
   if (data.from !== "canvas" && data.from !== "canvas-resize") return null;
   if (data.blockKind === "signal" && "signalId" in data) return `signal:${data.signalId}`;
   if (data.blockKind === "event" && "eventId" in data) return `event:${data.eventId}`;

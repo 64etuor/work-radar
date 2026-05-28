@@ -133,7 +133,7 @@ export function DiffText({ text, path }: { text: string; path: string | null }) 
       ))}
       {truncated && (
         <div className="wt-trunc">
-          큰 diff — {MAX_DIFF_LINES.toLocaleString()}/{allLines.length.toLocaleString()}줄만 표시.
+          큰 diff: {MAX_DIFF_LINES.toLocaleString()}/{allLines.length.toLocaleString()}줄만 표시.
         </div>
       )}
     </div>

@@ -16,10 +16,10 @@ import {
 import { unwrap } from "./client";
 
 /** Jobs 뷰 폴링 주기 — 실행 중 잡 상태 전이를 따라잡되 과한 부하 없이. */
-export const JOBS_POLL_MS = 2_000;
+const JOBS_POLL_MS = 2_000;
 
 /** enrich/triage 등 단건 잡 모달 폴링 주기 — 사람이 응답을 기다리는 맥락이라 더 짧게. */
-export const AGENT_RUN_POLL_MS = 1_000;
+const AGENT_RUN_POLL_MS = 1_000;
 
 /** 잡 상태 중 terminal — 도달하면 폴링 중단(INVARIANT #5: 무한 폴링 금지). */
 export const AGENT_TERMINAL_STATUSES = new Set([
@@ -108,16 +108,6 @@ export function useKillAgentRun() {
   return useMutation({
     mutationFn: (runId: string) => unwrap(commands.killAgentRun(runId)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
-  });
-}
-
-/** 잡 로그 tail(최대 16KB). 펼친 잡에 대해서만 enabled. */
-export function useAgentLog(runId: string | null, ready: boolean) {
-  return useQuery({
-    queryKey: ["agentLog", runId],
-    queryFn: () => unwrap(commands.readAgentLog(runId as string)),
-    enabled: !!runId && ready,
-    refetchInterval: ready ? JOBS_POLL_MS : false,
   });
 }
 

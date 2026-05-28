@@ -224,7 +224,7 @@ function RankCard({
         <span className="rt-rank-count">{items.length}</span>
       </div>
       {items.length === 0 ? (
-        <div className="rt-rank-empty">아직 없음 — 아래 목록에서 태깅하세요.</div>
+        <div className="rt-rank-empty">아직 없음. 아래 목록에서 태깅하세요.</div>
       ) : (
         <ol className="rt-rank-list">
           {items.map((s) => (

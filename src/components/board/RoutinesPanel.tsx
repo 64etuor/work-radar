@@ -1,13 +1,17 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import type { Kind, LifeWheelTagConfig, RoutineFreq, RoutineToday, Weekday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
 import { useListReorder } from "@/lib/useListReorder";
+
+// 매 렌더 새 JSX 노드 할당 방지(react-doctor/jsx-no-jsx-as-prop) — props/closure가 없는 정적 SVG.
+const CHECK_INDICATOR = <CheckIcon />;
 
 /** 루틴 생성 입력(폼 → CaptureBoard). kind/area는 카드에서 즉시 갱신(IPC)되므로 폼은 안 받는다. */
 export type RoutineDraft = {
@@ -80,6 +84,10 @@ export function RoutinesPanel({
   onSetAreaTagKey,
 }: Props) {
   // open=false: 폼 닫힘. open=true + editId=null: 새 루틴 추가. open=true + editId: 수정 모드.
+  const fieldId = useId();
+  const timeId = `${fieldId}-time`;
+  const offsetId = `${fieldId}-offset`;
+
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -241,19 +249,21 @@ export function RoutinesPanel({
             <div className="rhint">이번 주를 기준으로 2주마다 반복합니다.</div>
           )}
           <div className="rtime">
-            <label>
+            <label htmlFor={timeId}>
               시간
               <Input
+                id={timeId}
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 className="h-8 w-auto px-2 text-xs"
               />
             </label>
-            <label>
+            <label htmlFor={offsetId}>
               알림
               <span className="roff">
                 <Input
+                  id={offsetId}
                   type="number"
                   min={0}
                   value={offset}
@@ -288,21 +298,21 @@ export function RoutinesPanel({
 
       <div className="pb-body">
         {routines.length === 0 ? (
-          <div className="empty">오늘 해당하는 루틴이 없습니다 — + 루틴으로 추가</div>
+          <div className="empty">오늘 해당하는 루틴이 없습니다. + 루틴으로 추가</div>
         ) : (
           routines.map((r) => (
             <div key={r.id} className={cn("item", r.done && "done")} {...dnd.itemProps(r.id)}>
               <span className="grip" title="드래그로 정렬" {...dnd.handleProps(r.id)}>
                 ⠿
               </span>
-              <div
+              <Checkbox
                 className="cb-check"
-                role="checkbox"
-                aria-checked={r.done}
-                onClick={() => onToggle(r.id, !r.done)}
-              >
-                <CheckIcon />
-              </div>
+                checked={r.done}
+                onCheckedChange={(v) => onToggle(r.id, v === true)}
+                aria-label={r.done ? "완료 해제" : "완료"}
+                forceMountIndicator
+                indicator={CHECK_INDICATOR}
+              />
               <div className="body">
                 <div className="ttl">{r.title}</div>
                 <div className="meta">

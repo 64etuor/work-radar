@@ -68,7 +68,7 @@ export function ProjectPickerModal({ state, onClose, onPick }: Props) {
         className="w-[min(440px,92vw)] max-w-none gap-3 p-5"
       >
         <DialogTitle className="font-mono text-[13px] font-semibold tracking-[0.1em] uppercase">
-          프로젝트 선택 — {state.label}
+          프로젝트 선택: {state.label}
         </DialogTitle>
 
         <label className="cev-field">

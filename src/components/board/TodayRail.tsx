@@ -4,9 +4,12 @@ import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
 import { quadrantToZone, type ZoneKey } from "@/components/board/boardUtils";
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
 import { ageFromForDate, isTodayDone, localToday } from "@/lib/query";
 import { useListReorder } from "@/lib/useListReorder";
+
+const CHECK_INDICATOR = <CheckIcon />;
 
 type Props = {
   items: WorkSignal[];
@@ -70,14 +73,14 @@ export function TodayRail({
                 <span className="grip" title="드래그로 정렬" {...dnd.handleProps(s.id)}>
                   ⠿
                 </span>
-                <div
+                <Checkbox
                   className="cb-check"
-                  role="checkbox"
-                  aria-checked={done}
-                  onClick={() => onToggleDone(s.id, !done)}
-                >
-                  <CheckIcon />
-                </div>
+                  checked={done}
+                  onCheckedChange={(v) => onToggleDone(s.id, v === true)}
+                  aria-label={done ? "완료 해제" : "완료"}
+                  forceMountIndicator
+                  indicator={CHECK_INDICATOR}
+                />
                 <div className="body">
                   <div className="ttl">{s.title}</div>
                   <div className="meta">

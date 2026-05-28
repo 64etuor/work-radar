@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import type { PrRadarSettings } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,10 @@ import { StatusDot } from "./SettingsKit";
  * 프로젝트와 무관한 전역 설정이라 SettingsView 하단 단일 블록으로 둔다.
  */
 export function NotificationSettings({ onToast }: { onToast: (msg: string) => void }) {
+  const fieldId = useId();
+  const pollId = `${fieldId}-poll`;
+  const commentThreshId = `${fieldId}-comment-thresh`;
+
   const perm = useNotificationPermission();
   const request = useRequestNotificationPermission();
   const scheduleTest = useScheduleTestNotification();
@@ -100,7 +104,7 @@ export function NotificationSettings({ onToast }: { onToast: (msg: string) => vo
       </div>
 
       <p className="text-muted-foreground text-xs">
-        창을 닫아도 앱은 트레이/메뉴바에 상주합니다 — 트레이 아이콘에서 보기/숨기기/종료. 백그라운드
+        창을 닫아도 앱은 트레이/메뉴바에 상주합니다. 트레이 아이콘에서 보기/숨기기/종료. 백그라운드
         스케줄러가 예약된 알림(루틴·CI 등)을 발사합니다. 권한이 없으면 알림만 건너뛰고 나머지 기능은
         정상 동작합니다.
       </p>
@@ -111,9 +115,10 @@ export function NotificationSettings({ onToast }: { onToast: (msg: string) => vo
           <StatusDot on={!!prSettings.data}>{prSettings.data ? "활성" : "로드 중"}</StatusDot>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-muted-foreground flex flex-col gap-1.5 text-xs">
+          <label className="text-muted-foreground flex flex-col gap-1.5 text-xs" htmlFor={pollId}>
             Poll interval (minutes)
             <Input
+              id={pollId}
               type="number"
               min={1}
               max={120}
@@ -126,9 +131,13 @@ export function NotificationSettings({ onToast }: { onToast: (msg: string) => vo
               aria-label="PR Radar polling interval minutes"
             />
           </label>
-          <label className="text-muted-foreground flex flex-col gap-1.5 text-xs">
+          <label
+            className="text-muted-foreground flex flex-col gap-1.5 text-xs"
+            htmlFor={commentThreshId}
+          >
             Comment alert threshold
             <Input
+              id={commentThreshId}
               type="number"
               min={1}
               max={250}
@@ -144,6 +153,7 @@ export function NotificationSettings({ onToast }: { onToast: (msg: string) => vo
           <label className="text-muted-foreground flex items-center gap-2 text-xs">
             <input
               type="checkbox"
+              aria-label="conflict pattern을 critical Inbox alert로 저장"
               checked={prSettings.data?.conflictAlertsEnabled ?? true}
               onChange={(e) => updatePrSetting({ conflictAlertsEnabled: e.target.checked })}
             />
@@ -152,6 +162,7 @@ export function NotificationSettings({ onToast }: { onToast: (msg: string) => vo
           <label className="text-muted-foreground flex items-center gap-2 text-xs">
             <input
               type="checkbox"
+              aria-label="threshold 초과 항목을 AI 분석 후보로 표시"
               checked={prSettings.data?.aiAutoAnalysisEnabled ?? true}
               onChange={(e) => updatePrSetting({ aiAutoAnalysisEnabled: e.target.checked })}
             />

@@ -100,6 +100,7 @@ export function CalendarPickerPopover({ open, anchor, signalProjectId, onPick, o
           <label className="flex items-center gap-2 pt-1 text-xs">
             <input
               type="checkbox"
+              aria-label="기본 캘린더로 저장"
               checked={saveDefault}
               onChange={(e) => setSaveDefault(e.target.checked)}
             />

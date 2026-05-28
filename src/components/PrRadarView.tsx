@@ -97,7 +97,7 @@ export function PrRadarView() {
       <div className="pr-scroll">
         {noProjects && (
           <div className="pr-empty">
-            프로젝트가 없습니다 — 설정에서 GitHub 토큰·레포가 있는 프로젝트를 추가하세요.
+            프로젝트가 없습니다. 설정에서 GitHub 토큰·레포가 있는 프로젝트를 추가하세요.
           </div>
         )}
         {errors.length > 0 && (
@@ -114,7 +114,7 @@ export function PrRadarView() {
         )}
         {empty && !noProjects && (
           <div className="pr-empty">
-            표시할 PR이 없습니다 — enabled GitHub 레포의 열린 PR이 여기 모입니다.
+            표시할 PR이 없습니다. enabled GitHub 레포의 열린 PR이 여기 모입니다.
           </div>
         )}
 

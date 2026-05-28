@@ -9,7 +9,7 @@ import type { BundledLanguage, ThemedToken } from "shiki";
  */
 
 /** 구문 강조에 쓰는 테마(밝은 에디토리얼). */
-export const DIFF_THEME = "github-light";
+const DIFF_THEME = "github-light";
 
 /** 파일 확장자 → Shiki 번들 언어 id. 미지원 확장자는 강조 없이 평문 렌더. */
 const EXT_LANG: Record<string, BundledLanguage> = {

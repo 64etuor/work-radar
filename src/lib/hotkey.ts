@@ -23,7 +23,7 @@ const SPECIALS: Record<string, string> = {
 };
 
 /** keydown key → 화이트리스트 라벨(영숫자 대문자 / 특수키 / F1~F12). 미지원이면 null. */
-export function keyLabel(key: string): string | null {
+function keyLabel(key: string): string | null {
   if (SPECIALS[key]) return SPECIALS[key];
   if (/^F([1-9]|1[0-2])$/.test(key)) return key;
   if (/^[a-zA-Z0-9]$/.test(key)) return key.toUpperCase();

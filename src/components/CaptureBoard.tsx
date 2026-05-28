@@ -491,7 +491,7 @@ export function CaptureBoard() {
 
       {loadError && (
         <div className="empty" style={{ color: "var(--color-q1)", padding: "4px 22px" }}>
-          데이터 로드 실패 — {String(signalsQ.error ?? todayQ.error ?? routinesQ.error)}
+          데이터 로드 실패: {String(signalsQ.error ?? todayQ.error ?? routinesQ.error)}
         </div>
       )}
 

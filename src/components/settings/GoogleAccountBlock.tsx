@@ -333,7 +333,13 @@ function CalendarPicker({
         const on = checked.has(c.id);
         return (
           <label key={c.id} className="flex cursor-pointer items-center gap-2.5 text-sm">
-            <input type="checkbox" checked={on} onChange={() => toggle(c.id)} className="sr-only" />
+            <input
+              type="checkbox"
+              checked={on}
+              onChange={() => toggle(c.id)}
+              className="sr-only"
+              aria-label={c.summary}
+            />
             <span
               className={`flex size-4 shrink-0 items-center justify-center rounded border ${
                 on ? "border-primary bg-primary text-primary-foreground" : "border-input"

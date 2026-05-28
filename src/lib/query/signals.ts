@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  type AreaTag,
   commands,
   type CreateSignalInput,
   type Kind,
@@ -78,32 +77,6 @@ export function useDeleteSignal() {
   return useMutation({
     mutationFn: (id: string) => unwrap(commands.deleteSignal(id)),
     onSuccess: () => inv.signals(),
-  });
-}
-
-/** 라이프 도메인 area 확정/수정(사람 결정, 별개 축 — quadrant 결정 레일과 무관). */
-export function useSetSignalArea() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, area }: { id: string; area: AreaTag | null }) =>
-      unwrap(commands.setSignalArea(id, area)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["signals"] });
-      void qc.invalidateQueries({ queryKey: ["today"] });
-    },
-  });
-}
-
-/** 라이프 도메인 multi-select 확정/수정. 첫 tag는 primary area로 동기화된다. */
-export function useSetSignalAreaTags() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, areas }: { id: string; areas: AreaTag[] }) =>
-      unwrap(commands.setSignalAreaTags(id, areas)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["signals"] });
-      void qc.invalidateQueries({ queryKey: ["today"] });
-    },
   });
 }
 

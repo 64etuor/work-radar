@@ -1,6 +1,6 @@
 import "./SprintTimer.css";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { SprintConfig, Weekday } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -169,8 +169,11 @@ const DEFAULT_CONFIG: SprintConfig = {
 };
 
 function SprintEditor({ config, opening = false, closing = false, onClose }: EditorProps) {
+  // role="dialog" — 인라인 확장 편집 영역을 의미적으로 인터랙티브 컨테이너로 명시.
+  // 비모달이므로 aria-modal는 생략(셸 Esc는 overlay-stack 통해 양보).
   return (
-    <section
+    <div
+      role="dialog"
       className={cn("sprint-inline-editor", opening && "is-opening", closing && "is-closing")}
       aria-label="스프린트 일정 편집"
       onKeyDown={(event) => {
@@ -179,11 +182,14 @@ function SprintEditor({ config, opening = false, closing = false, onClose }: Edi
     >
       <div className="sprint-editor-title">SPRINT</div>
       <SprintEditorFields config={config} onClose={onClose} />
-    </section>
+    </div>
   );
 }
 
 function SprintEditorFields({ config, onClose }: EditorProps) {
+  const fieldId = useId();
+  const intervalId = `${fieldId}-interval`;
+
   const setConfig = useSetSprintConfig();
   const clearConfig = useClearSprintConfig();
   const { pushSuccess } = useToastStore();
@@ -224,7 +230,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
 
   return (
     <div className="sprint-editor-grid">
-      <label className="sprint-field">
+      <label className="sprint-field" htmlFor={intervalId}>
         <span className="sprint-lbl">길이</span>
         <div className="sprint-stepper">
           <Button
@@ -236,6 +242,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
             −
           </Button>
           <Input
+            id={intervalId}
             type="number"
             min={1}
             value={intervalDays}

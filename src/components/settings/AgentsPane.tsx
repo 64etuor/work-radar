@@ -239,10 +239,10 @@ function AgentPromptConfigRow({
           aria-label={`${config.binding} 이름`}
         />
         <code className="bg-muted rounded px-2 py-1 text-[11px]">{config.binding}</code>
-        <label className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
+        <div className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
+          <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="에이전트 사용" />
           사용
-        </label>
+        </div>
       </div>
       <textarea
         value={prompt}
@@ -279,10 +279,10 @@ function AgentPromptConfigRow({
             <SelectItem value="xhigh">xhigh</SelectItem>
           </SelectContent>
         </Select>
-        <label className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Switch checked={fastMode} onCheckedChange={setFastMode} />
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <Switch checked={fastMode} onCheckedChange={setFastMode} aria-label="fast 모드" />
           fast
-        </label>
+        </div>
         <Button
           size="sm"
           className="h-8 shrink-0"

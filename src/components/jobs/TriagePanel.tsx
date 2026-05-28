@@ -1,5 +1,5 @@
 import { Check, ExternalLink, X } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import type { AgentRunView, CiTriageProposal } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
@@ -15,6 +15,10 @@ import { ProposalError } from "./ProposalError";
  * 뿐 외부 무변경(INVARIANT #2) — 실제 수정은 사람이. (재트리거 캡 초과는 백엔드가 Q1 escalate.)
  */
 export function TriagePanel({ run }: { run: AgentRunView }) {
+  const fieldId = useId();
+  const causeId = `${fieldId}-cause`;
+  const summaryId = `${fieldId}-summary`;
+
   const proposal = useTriageProposal(run.id, true);
   const accept = useAcceptTriage();
   const reject = useRejectProposal();
@@ -50,29 +54,35 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
           {pr.repoFullName} #{pr.prNumber}
         </button>
       )}
-      <label className="jobs-prop-label">CI 실패 원인 가설</label>
+      <label className="jobs-prop-label" htmlFor={causeId}>
+        CI 실패 원인 가설
+      </label>
       <Textarea
+        id={causeId}
         className="min-h-0 resize-y"
         rows={2}
         value={d.cause ?? ""}
         onChange={(e) => setDraft({ ...d, cause: e.target.value })}
       />
-      <label className="jobs-prop-label">수정안</label>
+      <div className="jobs-prop-label">수정안</div>
       {(d.suggestedFixes ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
       <ul className="jobs-prop-ul">
         {(d.suggestedFixes ?? []).map((s, i) => (
           <li key={i}>{s}</li>
         ))}
       </ul>
-      <label className="jobs-prop-label">요약</label>
+      <label className="jobs-prop-label" htmlFor={summaryId}>
+        요약
+      </label>
       <Textarea
+        id={summaryId}
         className="min-h-0 resize-y"
         rows={2}
         value={d.summary ?? ""}
         onChange={(e) => setDraft({ ...d, summary: e.target.value })}
       />
       <div className="jobs-prop-hint">
-        accept는 <b>로컬 기록</b>일 뿐입니다(외부 무변경) — 실제 수정은 직접.
+        accept는 <b>로컬 기록</b>일 뿐입니다(외부 무변경). 실제 수정은 직접.
       </div>
       {(accept.error || reject.error) && (
         <div className="jobs-prop-err">{((accept.error ?? reject.error) as Error).message}</div>

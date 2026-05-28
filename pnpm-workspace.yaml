@@ -4,5 +4,8 @@
 packages: []
 
 # Supply-chain 가드: 새로 published된 버전을 7일간 격리.
-# 악성 패키지가 unpublish 되기 전에 끼어드는 것 방지 — pnpm 10+ 지원.
+# 악성 패키지가 unpublish 되기 전에 끼어드는 것 방지 (pnpm 10+ 지원).
 minimumReleaseAge: 10080
+
+# Trust policy: provenance/signature 신호가 약화되는 다운그레이드 차단.
+trustPolicy: no-downgrade

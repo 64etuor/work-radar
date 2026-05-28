@@ -487,6 +487,7 @@ function NameEditor({
     <input
       ref={ref}
       className="asb-box-name-edit"
+      aria-label="에이전트 박스 이름 편집"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onClick={(e) => e.stopPropagation()}

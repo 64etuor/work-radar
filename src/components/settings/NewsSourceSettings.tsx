@@ -160,7 +160,7 @@ export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void
           );
         })}
       <p className="text-muted-foreground text-xs">
-        15분마다 백그라운드에서 갱신 — 토글/필터 변경은 다음 페치부터 반영.
+        15분마다 백그라운드에서 갱신. 토글/필터 변경은 다음 페치부터 반영.
       </p>
     </div>
   );
@@ -255,7 +255,7 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
           </Select>
         </OptionRow>
 
-        <div className="border-border/70 bg-muted/15 rounded-xl border px-3 py-3 md:col-span-2">
+        <div className="border-border/70 bg-muted/15 rounded-xl border p-3 md:col-span-2">
           <NewsMarqueeSpeedField
             key={o.marqueeSeconds}
             disabled={m.isPending}

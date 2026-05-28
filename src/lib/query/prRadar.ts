@@ -23,10 +23,6 @@ export function usePrRadarSettings() {
   });
 }
 
-export function fetchPrRadarSettings(): Promise<PrRadarSettings> {
-  return unwrap(commands.getPrRadarSettings());
-}
-
 export function useSetPrRadarSettings() {
   const qc = useQueryClient();
   return useMutation({
@@ -35,23 +31,6 @@ export function useSetPrRadarSettings() {
       void qc.invalidateQueries({ queryKey: ["prRadarSettings"] });
       void qc.invalidateQueries({ queryKey: ["prRadar"] });
     },
-  });
-}
-
-/** 수동 self-check 토글(로컬 상태). 성공 시 radar 갱신. */
-export function useSetPrSelfCheck() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      repoFullName,
-      prNumber,
-      checked,
-    }: {
-      repoFullName: string;
-      prNumber: number;
-      checked: boolean;
-    }) => unwrap(commands.setPrSelfCheck(repoFullName, prNumber, checked)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prRadar"] }),
   });
 }
 

@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import type { LifeWheelTagConfig } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,9 @@ function nextColor(index: number): string {
 }
 
 export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) => void }) {
+  const fieldId = useId();
+  const newTagId = `${fieldId}-new-tag`;
+
   const tags = useLifeWheelTags();
   const save = useSetLifeWheelTags();
   const [draftOverride, setDraftOverride] = useState<LifeWheelTagConfig[] | null>(null);
@@ -96,8 +99,9 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
 
       <Card className="rounded-2xl p-4">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <Field label="새 태그">
+          <Field label="새 태그" htmlFor={newTagId}>
             <input
+              id={newTagId}
               value={newLabel}
               onChange={(event) => setNewLabel(event.target.value)}
               onKeyDown={(event) => {
@@ -137,11 +141,13 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
                 value={tag.label}
                 onChange={(event) => updateTag(tag.id, { label: event.target.value })}
                 className="border-border bg-card focus:border-ring h-9 rounded-lg border px-3 text-sm outline-none"
+                aria-label={`${tag.label} 태그 이름`}
               />
               <input
                 value={tag.color}
                 onChange={(event) => updateTag(tag.id, { color: event.target.value })}
                 className="border-border bg-card focus:border-ring h-9 rounded-lg border px-3 font-mono text-xs outline-none"
+                aria-label={`${tag.label} 색상 코드`}
               />
               <input
                 type="color"

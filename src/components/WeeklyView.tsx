@@ -111,8 +111,7 @@ export function WeeklyView() {
               </div>
               {data.debtTrend.length === 0 ? (
                 <div className="wk-hint">
-                  추세 데이터가 쌓이는 중입니다 — Today 운영 뷰를 열 때마다 그날의 부채가
-                  기록됩니다.
+                  추세 데이터가 쌓이는 중입니다. Today 운영 뷰를 열 때마다 그날의 부채가 기록됩니다.
                 </div>
               ) : (
                 <DebtTrend points={data.debtTrend} />

@@ -1,0 +1,155 @@
+# React Doctor — false-positive 패턴
+
+각 항목은 `react-doctor/<rule>` 키로 시작하고, 그 아래 한 줄로 코드 모양과 사유를
+적는다. 워커는 텍스트 매칭으로 발화 항목을 거른다.
+
+## `react-doctor/query-mutation-missing-invalidation`
+
+- mutation `onSuccess`가 `useInvalidate()` (src/lib/query/client.ts:109, 반환
+  `{ signals, today, routines }`) 또는 `useInvalidateRetro()` (src/lib/query/retro.ts:19)
+  헬퍼 메서드(`inv.signals()`, `inv.today()`, `inv.routines()`, `inv()`)를 호출하는 패턴.
+  헬퍼는 내부에서 `qc.invalidateQueries`를 부르지만 워커가 cross-file indirection을
+  따라가지 않아 발화 — 의도된 invalidation이 있음. 헬퍼는 `todayOverview` 같은 파생
+  집계 동봉 invariant를 강제하므로 인라인으로 풀면 코드 헬스가 회귀함.
+- mutation이 의도적으로 캐시 무변경(read-only ping / detect / cancel / focus / queue
+  insert). 패턴: `usePing*`, `useDetect*`, `useCancel*`, `useFocus*`,
+  `useSchedule*Notification` — 갱신할 쿼리 자체가 없음.
+
+## `react-doctor/design-no-three-period-ellipsis`
+
+- JSX 본문의 `"...HEAD"` / `"base...HEAD"` 처럼 git 3-dot diff 문법 표기. 텍스트
+  ellipsis가 아니므로 `…`로 치환하면 의미가 깨진다.
+
+## `react-doctor/js-set-map-lookups`
+
+- `lanes.indexOf(...)` in `src/lib/worktreeReview.ts` — 매 iteration마다 push/pop/null
+  swap으로 변형되는 작은 lanes 배열(보통 < 10) 위 lookup. Set으로 바꾸면 매 iter
+  재구축 비용이 더 큼.
+
+## `react-doctor/no-aria-hidden-on-focusable`
+
+- `aria-hidden`이 `tabIndex={-1}`과 같은 조건으로 토글되는 경우 (예: `src/components/news/NewsTicker.tsx`)
+  — 포커스 흐름과 일관, 키보드 사용자가 우회하도록 의도됨.
+
+## `react-doctor/no-flush-sync`
+
+- `src/App.tsx:3` `flushSync(() => { setViewSnapshot(...); goTo(target); })` — 뷰 전환 시
+  직전 `shell.innerHTML` 스냅샷이 새 view로 교체되기 **전에** 캡처돼야 슬라이드 트랜지션이
+  성립. `startTransition`로 바꾸면 deferred render가 되어 snapshot이 새 트리로 덮임. by-design.
+
+## `react-doctor/no-render-in-render`
+
+- `src/App.tsx:187` `{renderView(view)}` — `renderView`는 이미 모듈 스코프(line 40, 주석
+  포함) 순수 매핑 함수. 워커가 JSX 안의 함수 호출 텍스트만 보고 발화. 인라인 컴포넌트가 아님.
+
+## `react-doctor/no-danger`
+
+- `src/App.tsx:195` `dangerouslySetInnerHTML={{ __html: viewSnapshot.html }}` —
+  `viewSnapshot.html`은 직전 렌더 결과를 `shell.innerHTML`로 캡처한 자기 자신의 DOM 문자열.
+  외부 입력 0 (same-origin app DOM 재투영) → XSS surface 없음. 뷰 전환 슬라이드 전용.
+
+## `react-doctor/rerender-functional-setstate`
+
+- `src/lib/usePaneSize.ts:89,94` `setSize(size - 24)` — 여기 `setSize`는 React useState
+  setter가 **아니라** 다음 값을 return하는 사용자 정의 함수(`const next = setSize(...)`).
+  workspace 패널 사이즈 컨트롤러 — 패턴이 의도적.
+
+## `react-doctor/prefer-tag-over-role`
+
+- round 4: div + `role="checkbox"` 두 사이트(RoutinesPanel/TodayRail)는 radix
+  `CheckboxPrimitive.Root` (shadcn `<Checkbox>` wrapper)로 정식 마이그레이션 — 디자인
+  토큰(`.cb-check` opacity 패턴)은 `forceMountIndicator` + custom indicator slot으로 유지.
+- 기타 `prefer-tag-over-role` (img / section / output / address / li / menu / th / td) —
+  CommitGraphDrawer grid, UnscheduledTray, EnrichReviewPanel 등은 DESIGN.md 스타일 토큰
+  - radix wrapper와 묶여 있어 element rename이 시각/상호작용 회귀를 부를 수 있음. 사이트별
+    visual diff + DESIGN.md 토큰 검토 후 별도 a11y PR(`prefer-tag-over-role` 일괄)로 분리.
+
+## `react-doctor/control-has-associated-label`
+
+- round 4 form a11y batch에서 33/35 정리(`htmlFor`/`id` + `useId`, `aria-label`, `<label>`
+  → `<div>` 헤더 분리). 잔존 2건은 FP:
+  - `settings/LifeWheelTagSettings.tsx:103` — `Field` 컴포넌트(SettingsKit.tsx)가 내부에서
+    `<label htmlFor>`를 렌더하지만 워커가 component boundary를 따라가지 못함.
+  - `settings/AgentsPane.tsx:264` — `<datalist><option>...` 패턴 — `<option>`은 datalist의
+    추천값일 뿐 직접 라벨이 필요한 컨트롤이 아님(W3C 명세 외).
+
+## `react-doctor/exhaustive-deps`
+
+- `useEffect` deps 의도적 생략(mount-only 효과 / mutation 콜백 안정성 보장 / unrelated
+  re-run 차단). 각 사이트는 변경 시 영향 분석이 필요해 일괄 자동 픽스 불가.
+
+## `react-doctor/no-react19-deprecated-apis`
+
+- `.claude/skills/...` / `.codex/skills/...` 아래 템플릿 파일 — 앱 코드가 아니라 스킬
+  배포용 React 18 호환 템플릿. 앱 빌드/번들 대상 외.
+
+## `react-doctor/no-array-index-key`, `no-array-index-as-key`
+
+- 데이터 자체가 stable ID 없는 agent 응답 string list (`selfChecks`, `suggestedFixes`,
+  `screenshotsNeeded`, `migrationNotes`) — content를 key로 써도 중복 가능.
+- diff block/line/token (`src/components/worktree/WorktreeDiffText.tsx`) — 매 렌더마다
+  통째로 재계산되는 ephemeral 뷰. 인덱스 key가 reconcile 정확성에 영향 없음.
+
+## `react-doctor/js-combine-iterations`
+
+- `.filter().map()` / `.map().filter()` — N이 작고 두 단계가 의미를 분리해 표현(필터 의도
+  - 변환 의도). 단일 `for...of`로 합치면 가독성 손해가 perf 이득보다 큼.
+
+## `react-doctor/no-derived-useState`
+
+- **canonical React 18+ pattern** (https://react.dev/learn/you-might-not-need-an-effect#storing-information-from-previous-renders):
+  `const [prev, setPrev] = useState(propX); if (propX !== prev) setPrev(propX);` —
+  prop이 바뀔 때 reseed/reset이 필요한 경우 공식 권장 패턴. "derive during render"
+  대안은 reset 시점을 표현 못함. ProjectPickerModal, CalendarEventModal, AgentsPane,
+  AgentStatusBar, MatrixCanvas, SkillsView 모두 이 패턴 사용.
+
+## `react-doctor/rerender-state-only-in-handlers`
+
+- `prevState`/`seeded`/`seededFrom` 패턴 — JSX return 밖이지만 **render 본문의
+  change-detection 조건문**(`if (state !== prevState) setPrevState(state)`)에서 read.
+  워커가 return JSX만 검사. `useRef`로 바꾸면 render 중 mutation = React 안티패턴.
+  no-derived-useState와 같은 사이트군.
+
+## `react-doctor/prefer-use-effect-event`
+
+- `useEffectEvent`는 React 19에서도 **experimental API** (`React.experimental_useEffectEvent`).
+  stable React API만 쓰는 코드에서 적용 불가. `addEventListener` + 안정 ref 패턴이
+  현 시점 best practice.
+
+## `react-doctor/prefer-useReducer`
+
+- "5+ useState" 단순 카운트 휴리스틱. 무관한 폼 필드(Settings/AgentsPane/
+  NavigationSettings/GoogleAccountBlock/WorktreeView)는 reducer 통합이 결합도를 오히려
+  높임. 진짜 관련 state는 이미 단일 객체로 묶여 있음.
+
+## `react-doctor/no-event-handler`
+
+- `.claude/skills/` / `.codex/skills/` 템플릿 4건 — 앱 외부.
+- 앱 코드 2건은 `useEffect`가 진짜 side-effect(`mutation.reset()`, `input.focus()`)
+  실행 — explicit comment + `// eslint-disable-next-line` 동봉.
+
+## `react-doctor/no-multi-comp`
+
+- `src/components/ui/select.tsx` (`Select`/`SelectContent`/`SelectItem`) 등 — shadcn
+  primitive convention(한 파일 = primitive family). 분리하면 shadcn convention 회귀.
+
+## `react-doctor/no-giant-component`
+
+- `CaptureBoard` 491L, `MatrixCanvas` 423L, `RoutinesPanel` 304L — soft heuristic, 한
+  파일 안에서도 sub-section이 분리돼 있음. 파일 분할은 별도 관심사 PR.
+
+## `react-doctor/no-static-element-interactions`
+
+- `CalendarView.tsx:87,140` — round 3에서 `role={cb?"button":undefined}` **조건부** role
+  추가 (cb 없을 때 div는 클릭 핸들러도 없음). 워커가 조건부 role을 검출 못함.
+- `MatrixCanvas.tsx:393` — post-it 카드 `<div>`는 `@dnd-kit` drag source. role/tabIndex
+  추가가 drag-and-drop semantics와 충돌.
+
+## `react-doctor/no-noninteractive-element-interactions`
+
+- round 4: `SprintTimer.tsx`의 `<section onKeyDown>` 는 `<div role="dialog">`로 정정.
+
+## `deslop/unused-dev-dependency`
+
+- `@tauri-apps/cli` — `node_modules/.bin/tauri` 바이너리 제공원. `scripts/tauri-wrapper.sh`가
+  fallback으로 참조하므로 코드 import가 없어도 제거 불가.

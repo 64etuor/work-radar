@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import type { ReviewLens } from "@/lib/worktreeReview";
 
-export const REF_NONE = "__none__";
+const REF_NONE = "__none__";
 
 export function WorktreeRefsBar({
   lens,

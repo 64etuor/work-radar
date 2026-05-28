@@ -170,6 +170,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
           ref={effectiveInputRef}
           className="dump"
           type="text"
+          aria-label="할 일 입력"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onInputKeyDown}

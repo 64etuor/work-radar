@@ -87,7 +87,19 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
             <div
               key={d}
               className={cn("calv-col", d === todayIso && "is-today")}
+              role={onSelectDate ? "button" : undefined}
+              tabIndex={onSelectDate ? 0 : undefined}
               onClick={onSelectDate ? () => onSelectDate(d) : undefined}
+              onKeyDown={
+                onSelectDate
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelectDate(d);
+                      }
+                    }
+                  : undefined
+              }
             >
               <div className="calv-col-head">
                 <span className="calv-dow">{WEEKDAY_LABELS[i]}</span>
@@ -128,7 +140,19 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
             <div
               key={d}
               className={cn("calv-cell", outside && "is-outside", d === todayIso && "is-today")}
+              role={onSelectDate ? "button" : undefined}
+              tabIndex={onSelectDate ? 0 : undefined}
               onClick={onSelectDate ? () => onSelectDate(d) : undefined}
+              onKeyDown={
+                onSelectDate
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelectDate(d);
+                      }
+                    }
+                  : undefined
+              }
             >
               <span className="calv-cell-dom">{dd.getDate()}</span>
               <div className="calv-cell-events">

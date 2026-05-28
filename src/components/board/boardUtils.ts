@@ -65,9 +65,6 @@ export function shortDate(iso: string): string {
 export function kindLabel(kind: Kind): string {
   return kind === "work" ? "업무" : "개인";
 }
-export function kindChipClass(kind: Kind): string {
-  return kind === "work" ? "chip-work" : "chip-personal";
-}
 
 /** 라이프 도메인(area) 한국어 라벨 (닫힌 taxonomy, Phase 9 enrich). */
 const AREA_LABELS: Record<AreaTag, string> = {

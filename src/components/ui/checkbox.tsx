@@ -4,20 +4,25 @@ import * as React from "react";
 
 import { cn } from "./cn";
 
-export function Checkbox({
-  className,
-  ...props
-}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
+type CheckboxProps = React.ComponentProps<typeof CheckboxPrimitive.Root> & {
+  /**
+   * Indicator(체크 마크) 슬롯. 생략 시 기본 lucide `<Check size-3>` 사용.
+   * 항상 보이게(opacity 토글 CSS 패턴) 그리려면 `forceMountIndicator`를 켠다 —
+   * Today/Routines의 `.cb-check svg{opacity:0}` 디자인 토큰 호환용.
+   */
+  indicator?: React.ReactNode;
+  forceMountIndicator?: boolean;
+};
+
+export function Checkbox({ className, indicator, forceMountIndicator, ...props }: CheckboxProps) {
   return (
-    <CheckboxPrimitive.Root
-      className={cn(
-        "peer border-input focus-visible:ring-ring data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground size-4 shrink-0 rounded-sm border focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      )}
-      {...props}
-    >
-      <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
-        <Check className="size-3.5" />
+    <CheckboxPrimitive.Root className={className} {...props}>
+      <CheckboxPrimitive.Indicator forceMount={forceMountIndicator ? true : undefined}>
+        {indicator ?? (
+          <span className={cn("flex items-center justify-center text-current")}>
+            <Check className="size-3" />
+          </span>
+        )}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

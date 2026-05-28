@@ -95,6 +95,7 @@ export function InboxView() {
         <label className="inbox-dismissed">
           <input
             type="checkbox"
+            aria-label="dismissed 포함"
             checked={includeDismissed}
             onChange={(e) => setIncludeDismissed(e.target.checked)}
           />
@@ -276,15 +277,17 @@ function inferTargetView(item: InboxItem): View | null {
   return "today";
 }
 
+const INBOX_DATE_FMT = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function formatDate(value: string): string {
   const date = new Date(value.replace(" ", "T"));
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return INBOX_DATE_FMT.format(date);
 }
 
 function InboxSkeleton() {
