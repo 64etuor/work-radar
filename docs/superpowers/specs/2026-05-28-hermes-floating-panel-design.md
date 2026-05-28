@@ -36,15 +36,15 @@ Branch: `feat/hermes-floating` (off `dev@d739e56`)
 
 ## 3. Decisions (high-level)
 
-| Decision | Value | Why |
-|---|---|---|
-| Hermes IPC | ACP (`hermes acp` stdio JSON-RPC) | Hermes가 IDE 통합용으로 미는 표준 프로토콜; 세션·스트림·툴콜·이미지 1급. |
-| HermesView | 완전 교체 (ACP 채팅이 자리 차지) | Telegram 브릿지와 채팅 패널은 성격이 달라 같은 뷰에서 공존하기 어색. |
-| Panel state 영속 | `app_config` JSON blob (`hermes.panel`) | 기존 settings 스토리지 재사용, 마이그레이션 불필요. |
-| Toggle hotkey | OS 글로벌 (`tauri-plugin-global-shortcut`) | 다른 앱에서도 호출 가능. 기존 `nav.global_hotkey` 인프라 재사용. |
-| Slash commands | ACP `available_commands` 자동 노출 | 자체 정의 시 hermes 명령과 어긋남. ACP가 권위. |
-| Image input | paste + drag-drop + file picker 3종 | 사용자 명시 요구. |
-| Hermes 감지 | 자동 + 재감지 버튼만 (login/setup 없음) | 사용자가 터미널에서 직접 setup 한다는 전제. |
+| Decision         | Value                                      | Why                                                                      |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
+| Hermes IPC       | ACP (`hermes acp` stdio JSON-RPC)          | Hermes가 IDE 통합용으로 미는 표준 프로토콜; 세션·스트림·툴콜·이미지 1급. |
+| HermesView       | 완전 교체 (ACP 채팅이 자리 차지)           | Telegram 브릿지와 채팅 패널은 성격이 달라 같은 뷰에서 공존하기 어색.     |
+| Panel state 영속 | `app_config` JSON blob (`hermes.panel`)    | 기존 settings 스토리지 재사용, 마이그레이션 불필요.                      |
+| Toggle hotkey    | OS 글로벌 (`tauri-plugin-global-shortcut`) | 다른 앱에서도 호출 가능. 기존 `nav.global_hotkey` 인프라 재사용.         |
+| Slash commands   | ACP `available_commands` 자동 노출         | 자체 정의 시 hermes 명령과 어긋남. ACP가 권위.                           |
+| Image input      | paste + drag-drop + file picker 3종        | 사용자 명시 요구.                                                        |
+| Hermes 감지      | 자동 + 재감지 버튼만 (login/setup 없음)    | 사용자가 터미널에서 직접 setup 한다는 전제.                              |
 
 ## 4. Architecture
 
@@ -63,37 +63,39 @@ src-tauri/src/hermes_agent/
   - `pending: HashMap<RequestId, oneshot::Sender<JsonValue>>`
   - `session_id: String`
   - `available_commands: Vec<AcpCommand>` (캐시)
-- **Frame 포맷**: LSP-style. 매 메시지는 `Content-Length: <n>\r\n\r\n<json>` 헤더 + 바디. `BufReader::read_until(b'\n')`로 헤더 라인 반복 파싱 → `Content-Length` 값 추출 → 정확히 `n` 바이트 read. 송신도 동일 포맷으로 직렬화.
+- **Frame 포맷**: **NDJSON** (newline-delimited JSON-RPC 2.0). 매 메시지는 한 줄 compact JSON + `\n`. (Phase C1 discovery 2026-05-28: hermes acp 실제 wire format은 LSP-style이 아닌 NDJSON이었음. `acp/connection.py:62` docstring + 라이브 probe로 확인. frame.rs 상단 doc comment에 evidence.)
+- **Method 이름** (camelCase params): `initialize`, `session/new`, `session/prompt`, `session/cancel`, `session/close`, `session/list`, `session/load`, `session/resume`, `session/fork`. Inbound notification: `session/update`.
+- **availableCommands**: `session/new` result에 없고, 이후 별도 `session/update` notification (`{"sessionUpdate":"available_commands_update", "availableCommands": [...]}`) 로 도착. 클라이언트는 listener에서 캐시.
 - **수명**: `hermes_agent_start` 호출 시 spawn → ACP `initialize` → `session/new` → `available-commands` emit → ready. `hermes_agent_stop` 또는 앱 종료 시 `child.kill().await`.
 
 ### 4.2 신규 IPC 커맨드 (`src-tauri/src/commands/hermes_agent.rs`)
 
 전부 `Result<_, AppError>`, `#[tauri::command] #[specta::specta]`.
 
-| Command | In | Out |
-|---|---|---|
-| `hermes_detect` | – | `HermesDetectResult { installed, version, path, acp_ready, error }` |
-| `hermes_agent_start` | – | `()` (실제 데이터는 events로) |
-| `hermes_agent_send` | `text: String, image_paths: Vec<String>` | `()` |
-| `hermes_agent_cancel` | – | `()` |
-| `hermes_agent_stop` | – | `()` |
-| `hermes_panel_state_get` | – | `HermesPanelState { x, y, w, h, open }` |
-| `hermes_panel_state_set` | `state: HermesPanelState` | `()` |
-| `hermes_save_pasted_image` | `bytes: Vec<u8>, ext: String` | `path: String` (임시파일) |
-| `hermes_get_toggle_hotkey` | – | `String` |
-| `hermes_set_toggle_hotkey` | `spec: String` | `()` (글로벌 재등록) |
+| Command                    | In                                       | Out                                                                 |
+| -------------------------- | ---------------------------------------- | ------------------------------------------------------------------- |
+| `hermes_detect`            | –                                        | `HermesDetectResult { installed, version, path, acp_ready, error }` |
+| `hermes_agent_start`       | –                                        | `()` (실제 데이터는 events로)                                       |
+| `hermes_agent_send`        | `text: String, image_paths: Vec<String>` | `()`                                                                |
+| `hermes_agent_cancel`      | –                                        | `()`                                                                |
+| `hermes_agent_stop`        | –                                        | `()`                                                                |
+| `hermes_panel_state_get`   | –                                        | `HermesPanelState { x, y, w, h, open }`                             |
+| `hermes_panel_state_set`   | `state: HermesPanelState`                | `()`                                                                |
+| `hermes_save_pasted_image` | `bytes: Vec<u8>, ext: String`            | `path: String` (임시파일)                                           |
+| `hermes_get_toggle_hotkey` | –                                        | `String`                                                            |
+| `hermes_set_toggle_hotkey` | `spec: String`                           | `()` (글로벌 재등록)                                                |
 
 ### 4.3 Specta 이벤트 (Rust → Frontend)
 
-| Event | Payload |
-|---|---|
-| `hermes-agent:chunk` | `{ turn_id, text }` |
-| `hermes-agent:tool-call` | `{ turn_id, name, args_summary }` |
-| `hermes-agent:turn-end` | `{ turn_id, status: "ok" \| "cancelled" \| "error", error?: string }` |
-| `hermes-agent:available-commands` | `{ commands: AcpCommand[] }` |
-| `hermes-agent:session-ready` | `{ session_id }` |
-| `hermes-agent:error` | `{ kind, message }` |
-| `hermes:toggle` | `{}` (단축키 prss 시 frontend로) |
+| Event                             | Payload                                                               |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `hermes-agent:chunk`              | `{ turn_id, text }`                                                   |
+| `hermes-agent:tool-call`          | `{ turn_id, name, args_summary }`                                     |
+| `hermes-agent:turn-end`           | `{ turn_id, status: "ok" \| "cancelled" \| "error", error?: string }` |
+| `hermes-agent:available-commands` | `{ commands: AcpCommand[] }`                                          |
+| `hermes-agent:session-ready`      | `{ session_id }`                                                      |
+| `hermes-agent:error`              | `{ kind, message }`                                                   |
+| `hermes:toggle`                   | `{}` (단축키 prss 시 frontend로)                                      |
 
 ### 4.4 Frontend 구조 (`src/components/`)
 
@@ -129,10 +131,10 @@ HermesView.tsx                  // 얇은 마운트 포인트 + 라우터 진입
 
 ### 5.1 `app_config` (기존 테이블)
 
-| key | value (JSON 또는 string) |
-|---|---|
-| `hermes.panel` | `{"x": number, "y": number, "w": number, "h": number, "open": bool}` |
-| `hermes.toggle_hotkey` | `"Cmd+Shift+Space"` (기본). 기존 `set_global_hotkey` 패턴 복제. |
+| key                    | value (JSON 또는 string)                                             |
+| ---------------------- | -------------------------------------------------------------------- |
+| `hermes.panel`         | `{"x": number, "y": number, "w": number, "h": number, "open": bool}` |
+| `hermes.toggle_hotkey` | `"Cmd+Shift+Space"` (기본). 기존 `set_global_hotkey` 패턴 복제.      |
 
 마이그레이션 불필요 (key-value 테이블에 새 키 삽입만).
 
@@ -211,13 +213,13 @@ Rust 측에 `image_transport: ImageTransport::FilePath | Base64` 상태 보유, 
 
 UX 매핑:
 
-| 상황 | 결과 |
-|---|---|
-| `hermes` PATH 없음 | spawn 실패 → 패널에 "Hermes CLI 미발견" 배너 + retry 버튼 |
-| ACP 핸드셰이크 실패 | 토스트 + 자식 kill + 세션 nil |
+| 상황                | 결과                                                                |
+| ------------------- | ------------------------------------------------------------------- |
+| `hermes` PATH 없음  | spawn 실패 → 패널에 "Hermes CLI 미발견" 배너 + retry 버튼           |
+| ACP 핸드셰이크 실패 | 토스트 + 자식 kill + 세션 nil                                       |
 | 스트림 중 자식 사망 | `turn-end` (status=error) + system 메시지, 다음 send 시 자동 재시작 |
-| 30초 무응답 | 타임아웃 + 자식 kill |
-| 이미지 저장 실패 | 입력창 인라인 에러, 텍스트만 송신 진행 |
+| 30초 무응답         | 타임아웃 + 자식 kill                                                |
+| 이미지 저장 실패    | 입력창 인라인 에러, 텍스트만 송신 진행                              |
 
 **로그 정책** (PII 금지): 프롬프트 본문·응답 본문 로그 X, 길이·turn_id·tool_name만.
 
