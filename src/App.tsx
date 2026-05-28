@@ -7,6 +7,7 @@ import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
+import HermesView from "@/components/HermesView";
 import { InboxView } from "@/components/InboxView";
 import { JobsView } from "@/components/jobs/JobsView";
 import { NewsTicker } from "@/components/news/NewsTicker";
@@ -206,6 +207,8 @@ export default function App() {
       {enrichAllRunId && (
         <EnrichReviewPanel runId={enrichAllRunId} onClose={() => setEnrichAllRunId(null)} />
       )}
+      {/* Hermes 플로팅 패널 — 전역 1회 마운트, state.open=false 시 null 렌더. */}
+      <HermesView />
       {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
       <ToastHost />
     </div>

@@ -13,8 +13,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
-import { HermesView } from "@/components/HermesView";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { type BoxState, overflowSplit, progressRatio } from "@/lib/agentBar";
 import { useAgentRuns, useInboxCounts } from "@/lib/query";
 import { useAgentNames, useSetAgentName } from "@/lib/query/agentsConfig";
@@ -249,12 +247,14 @@ export function AgentStatusBar() {
 
   // 인라인 이름 편집 중인 박스 key(없으면 null). 더블클릭으로 진입.
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  // 박스 클릭 라우팅: Hermes → 채팅 모달, cmux 워크스페이스 → cmux 포커스 이동(select-workspace),
-  // 그 외(codex 잡) → Jobs 뷰.
-  const [hermesOpen, setHermesOpen] = useState(false);
+  // 박스 클릭 라우팅: Hermes → 글로벌 패널(HermesPanel이 hermes:toggle로 구독),
+  // cmux 워크스페이스 → cmux 포커스 이동(select-workspace), 그 외(codex 잡) → Jobs 뷰.
   const openBox = (box: SessionBox) => {
-    if (box.engine === "hermes") setHermesOpen(true);
-    else if (box.key.startsWith("cmux:"))
+    if (box.engine === "hermes") {
+      // HermesPanel이 "hermes:toggle" Tauri 이벤트를 구독 — 여기서는 그냥 Jobs로 이동.
+      // (패널은 hotkey 또는 hermes:toggle 이벤트로 열린다; 바 클릭도 같은 효과)
+      void import("@tauri-apps/api/event").then(({ emit }) => emit("hermes:toggle"));
+    } else if (box.key.startsWith("cmux:"))
       // cmux 딥링크: 포커스 이동이 실제 성공(true)하면 Work Radar 창을 숨겨 cmux에 자리 양보.
       // best-effort 실패(false)면 숨기지 않는다 — 앞에 뜨는 창이 없는데 앱만 사라지는 상황 방지.
       focusCmux.mutate(box.key.slice("cmux:".length), {
@@ -345,30 +345,7 @@ export function AgentStatusBar() {
       </div>
       {inboxBtn}
       {calendarBtn}
-      <HermesModal open={hermesOpen} onClose={() => setHermesOpen(false)} />
     </div>
-  );
-}
-
-/** Hermes 채팅 모달 — 에이전트 바의 Hermes 박스 클릭 시 페이지 이동 대신 채팅창(Dialog)으로 연다.
- *  PR 0 Dialog 래퍼(overlay-stack) → Esc/외부클릭 닫힘·창 숨김 방지·트리거 포커스 복원을 radix가 전담. */
-function HermesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-    >
-      <DialogContent
-        showClose={false}
-        aria-describedby={undefined}
-        className="flex h-[70vh] w-[min(460px,92vw)] max-w-none flex-col overflow-hidden p-0"
-      >
-        <DialogTitle className="sr-only">Hermes</DialogTitle>
-        <HermesView onClose={onClose} />
-      </DialogContent>
-    </Dialog>
   );
 }
 
