@@ -199,6 +199,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::inbox_counts,
         commands::mark_inbox_item_read,
         commands::dismiss_inbox_item,
+        // Hermes 플로팅 패널 상태 영속 (feat/hermes-floating A1).
+        commands::hermes_panel_state_get,
+        commands::hermes_panel_state_set,
         // Hermes 메신저 브리지 (Phase 20 #15) — 봇 토큰 keychain, 수신은 bounded 단발.
         commands::set_hermes_bridge,
         commands::hermes_bridge_status,

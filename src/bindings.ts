@@ -382,6 +382,10 @@ export const commands = {
 	inboxCounts: () => typedError<InboxCounts, AppError>(__TAURI_INVOKE("inbox_counts")),
 	markInboxItemRead: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("mark_inbox_item_read", { id })),
 	dismissInboxItem: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("dismiss_inbox_item", { id })),
+	/**  저장된 Hermes 패널 상태 조회. 미설정 시 기본값 반환. */
+	hermesPanelStateGet: () => typedError<HermesPanelState, AppError>(__TAURI_INVOKE("hermes_panel_state_get")),
+	/**  Hermes 패널 상태 저장. */
+	hermesPanelStateSet: (state: HermesPanelState) => typedError<null, AppError>(__TAURI_INVOKE("hermes_panel_state_set", { state })),
 	/**
 	 *  브리지 설정: 봇 토큰 → keychain(반환 없음), chat_id → hermes_bridge 단일 행. 토큰 본문은 IPC
 	 *  인자로만 들어와 즉시 keychain으로 가고 절대 반환되지 않는다(INVARIANT). offset은 보존(재설정 시
@@ -947,6 +951,15 @@ export type HermesMessage = {
 	direction: string,
 	text: string,
 	createdAt: string,
+};
+
+/**  Hermes 플로팅 패널의 위치·크기·열림 상태. */
+export type HermesPanelState = {
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
+	open: boolean,
 };
 
 export type InboxCounts = {
