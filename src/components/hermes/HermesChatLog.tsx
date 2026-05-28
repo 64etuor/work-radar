@@ -1,4 +1,4 @@
-import { Check, Loader2, Sparkles, Wrench, X } from "lucide-react";
+import { Check, Loader2, Wrench, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -57,13 +57,28 @@ export function HermesChatLog({ messages }: Props) {
   if (messages.length === 0) {
     return (
       <div className="min-w-0 flex-1 overflow-auto">
-        <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-          <div className="border-border/60 flex size-9 items-center justify-center rounded-full border">
-            <Sparkles className="size-4" />
-          </div>
-          <p className="text-foreground/80 text-sm">Hermes에게 무엇이든</p>
-          <p className="text-xs">
-            텍스트, 이미지, <span className="font-mono">/</span> 명령
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          {/*
+           * Gradient orb — intentional one-off hex values (not project tokens).
+           * Soft pastel blend: warm red → cool lavender → light purple/peach.
+           * Mirrors the "Ask Super AI" reference: centered soft multi-stop radial orb.
+           */}
+          <div
+            className="size-16 rounded-full opacity-90"
+            style={{
+              background:
+                "radial-gradient(circle at 30% 30%, #ffd4d4 0%, transparent 50%), " +
+                "radial-gradient(circle at 70% 30%, #d4d4ff 0%, transparent 55%), " +
+                "radial-gradient(circle at 50% 70%, #e0d4ff 0%, transparent 60%), " +
+                "linear-gradient(135deg, #fff7f0 0%, #f5e8ff 100%)",
+              filter: "blur(0.5px)",
+              boxShadow: "0 8px 32px -8px rgba(160, 140, 220, 0.25)",
+            }}
+            aria-hidden
+          />
+          <p className="text-foreground text-base font-medium">Hermes에게 무엇이든</p>
+          <p className="text-muted-foreground text-xs">
+            텍스트, 이미지, <span className="font-mono">/</span> 명령으로 시작하세요
           </p>
         </div>
       </div>

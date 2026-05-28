@@ -1,5 +1,6 @@
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Paperclip, Send, Square, X } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { HermesSlashMenu } from "./HermesSlashMenu";
 import type { AcpCommand } from "./types";
+
+function isImagePath(p: string): boolean {
+  const ext = p.split(".").pop()?.toLowerCase() ?? "";
+  return ["png", "jpg", "jpeg", "gif", "webp"].includes(ext);
+}
 
 interface Props {
   onSend: (text: string, images: string[]) => void;
@@ -92,19 +98,34 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
     [saveBytes],
   );
 
-  const onDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      for (const file of Array.from(e.dataTransfer.files)) {
-        if (!file.type.startsWith("image/")) continue;
-        const ab = await file.arrayBuffer();
-        const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
-        const path = await saveBytes(new Uint8Array(ab), ext);
-        if (path) setAttachments((a) => [...a, path]);
-      }
-    },
-    [saveBytes],
-  );
+  // Fix 3 — OS-level drag-drop via Tauri's webview event (Path A).
+  // HTML onDrop is a no-op in Tauri 2 default config because the OS WebView
+  // intercepts drag-drop before the DOM sees it. Register at the window level
+  // instead. Always-on: files accumulate in attachments even while panel is
+  // closed; they show up when the panel reopens (acceptable for v1).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void import("@tauri-apps/api/webviewWindow").then(({ getCurrentWebviewWindow }) =>
+      getCurrentWebviewWindow()
+        .onDragDropEvent((event) => {
+          if (event.payload.type !== "drop") return;
+          const paths = (event.payload as { type: "drop"; paths: string[] }).paths;
+          const imagePaths = paths.filter(isImagePath);
+          if (imagePaths.length > 0) {
+            setAttachments((a) => [...a, ...imagePaths]);
+          }
+        })
+        .then((u) => {
+          if (cancelled) u();
+          else unlisten = u;
+        }),
+    );
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   const pickFile = useCallback(async () => {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -125,11 +146,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
   }, [text, attachments, onSend]);
 
   return (
-    <div
-      className="border-border/50 relative border-t px-3 py-3"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onDrop}
-    >
+    <div className="border-border/50 relative border-t px-3 py-3">
       {isStreaming && (
         <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs">
           <span className="bg-foreground/60 size-1.5 animate-pulse rounded-full" />
@@ -137,23 +154,30 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
         </div>
       )}
       {attachments.length > 0 && (
-        <div className="mb-1.5 flex flex-wrap gap-1.5">
+        <div className="mb-2 flex flex-wrap gap-1.5">
           {attachments.map((p, i) => (
-            <span
-              key={p + i}
-              className="bg-muted inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
-            >
-              <Paperclip className="h-3 w-3" />
-              <span className="max-w-[200px] truncate">{p.split("/").pop()}</span>
+            <div key={p + i} className="group relative">
+              {isImagePath(p) ? (
+                <img
+                  src={convertFileSrc(p)}
+                  alt=""
+                  className="border-border/60 size-16 rounded-lg border object-cover"
+                />
+              ) : (
+                <div className="border-border/60 bg-muted/40 flex h-16 min-w-[64px] items-center gap-1.5 rounded-lg border px-2.5 text-xs">
+                  <Paperclip className="h-3 w-3" />
+                  <span className="max-w-[120px] truncate">{p.split("/").pop()}</span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
-                aria-label="remove attachment"
-                className="hover:text-foreground"
+                aria-label="첨부 제거"
+                className="bg-foreground text-background absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100"
               >
-                <X className="h-3 w-3" />
+                <X className="size-3" />
               </button>
-            </span>
+            </div>
           ))}
         </div>
       )}
