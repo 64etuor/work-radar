@@ -1,0 +1,8 @@
+# pnpm 설정: 단일 패키지 프로젝트지만 pnpm은 `pnpm-workspace.yaml`에서
+# 일부 글로벌 설정을 읽는다(예: minimumReleaseAge — supply-chain 가드).
+# `packages:` 필드는 의도적으로 비워둠(루트 패키지만 있음).
+packages: []
+
+# Supply-chain 가드: 새로 published된 버전을 7일간 격리.
+# 악성 패키지가 unpublish 되기 전에 끼어드는 것 방지 — pnpm 10+ 지원.
+minimumReleaseAge: 10080
