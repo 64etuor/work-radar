@@ -7,6 +7,7 @@ import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { EnrichReviewPanel } from "@/components/board/EnrichReviewPanel";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CommandPalette } from "@/components/CommandPalette";
+import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
 import HermesView from "@/components/HermesView";
 import { InboxView } from "@/components/InboxView";
 import { JobsView } from "@/components/jobs/JobsView";
@@ -58,6 +59,11 @@ function renderView(renderedView: View) {
  * Cmd+←/→ 뷰 전환은 현재 셸 DOM snapshot을 직접 띄워 WebView 지원 차이 없이 workspace slide를 만든다.
  */
 export default function App() {
+  // Bootstrap Hermes multi-session store (registers event listeners + fetches cap).
+  // Must be called exactly once — mounted here so both AgentStatusBar and HermesView
+  // share the same store state without duplicate listener registrations.
+  useHermesTabsBootstrap();
+
   const {
     view,
     paletteOpen,

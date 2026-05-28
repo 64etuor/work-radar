@@ -196,6 +196,30 @@
   font: 700 10px var(--font-mono);
   line-height: 1;
 }
+/* ⊕ hermes 신규 탭 칩 — hermes 박스 그룹 우측, cap 미달 시만 표시. asb-box와 동일 톤. */
+.asb-add-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  width: 28px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 8px;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-muted);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.asb-add-chip:hover {
+  background: var(--color-wr-hover);
+  color: var(--color-wr-fg);
+}
+.asb-add-chip:focus-visible {
+  outline: 2px solid var(--color-wr-accent);
+  outline-offset: 1px;
+}
+
 /* 박스 이름 인라인 편집 input (P10b) — 이름 span과 동일 타이포, 칩 안에 끼우는 단정한 필드. */
 .asb-box-name-edit {
   position: relative;

@@ -8,17 +8,18 @@ import {
   Inbox,
   MessagesSquare,
   PanelsTopLeft,
+  Plus,
   Sparkles,
   SquareTerminal,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
+import { useHermesTabsStore } from "@/components/hermes/useHermesTabsStore";
 import { type BoxState, overflowSplit, progressRatio } from "@/lib/agentBar";
 import { useAgentRuns, useInboxCounts } from "@/lib/query";
 import { useAgentNames, useSetAgentName } from "@/lib/query/agentsConfig";
 import { useCmuxStatus, useFocusCmuxWorkspace } from "@/lib/query/cmux";
-import { useHermesBridgeStatus } from "@/lib/query/hermes";
 import { useUIStore } from "@/store";
 
 /**
@@ -132,20 +133,22 @@ export function AgentStatusBar() {
   const inboxCounts = useInboxCounts();
   const list = useMemo(() => runs.data ?? [], [runs.data]);
 
-  // hermes/cmux 세션 (agent_runs에 없을 수 있어 별도 enumerate — 표시 전용 INVARIANT #1).
-  // Do not initiate a keychain read from the always-mounted status bar.
-  // HermesView/Settings own explicit status refresh; this bar only consumes
-  // hydrated/cached status so `pnpm tauri dev` can boot without keychain prompts.
-  const hermes = useHermesBridgeStatus({ enabled: false });
+  // hermes multi-session tabs (표시 전용 INVARIANT #1 — store selector만, 결정 미사용).
+  const hermesTabs = useHermesTabsStore((s) => s.tabs);
+  const hermesCap = useHermesTabsStore((s) => s.cap);
+  const hermesOpenTab = useHermesTabsStore((s) => s.openTab);
+  const hermesSetActive = useHermesTabsStore((s) => s.setActive);
+  const hermesRename = useHermesTabsStore((s) => s.rename);
+
   const cmux = useCmuxStatus();
   const focusCmux = useFocusCmuxWorkspace();
 
-  // client-side first-seen: 백엔드 timestamp 없는 세션(hermes/cmux)의 경과 기준점.
+  // client-side first-seen: 백엔드 timestamp 없는 세션(hermes tabs/cmux)의 경과 기준점.
   // 표시 전용 — 결정 로직 미사용. 신규 키는 effect에서 등록·사라진 키는 정리(react-hooks/refs).
   // 신규 키가 처음 보일 한 프레임은 Date.now() fallback("0s")으로 노출되며 직후 effect가 persist.
   const [firstSeen, setFirstSeen] = useState<Map<string, number>>(() => new Map());
 
-  // ── 세션 → 박스 enumerate (codex runs + hermes + cmux) ─────────────────
+  // ── 세션 → 박스 enumerate (codex runs + hermes tabs + cmux) ──────────────
   const boxes = useMemo<SessionBox[]>(() => {
     const out: SessionBox[] = [];
 
@@ -156,17 +159,21 @@ export function AgentStatusBar() {
       if (isActive(run.status)) out.push(runToBox(run));
     }
 
-    // 2) hermes 세션: 연결되어 있으면 1박스(엔진 박스, idle).
-    if (hermes.data?.configured) {
+    // 2) hermes 탭: 탭당 1박스 enumerate (useHermesTabsStore selector — 표시 전용 INVARIANT #1).
+    //    status "starting" = working, "error" = error, 그 외 = idle.
+    for (const t of hermesTabs.values()) {
+      const key = `hermes:${t.id}`;
+      const state: BoxState =
+        t.status === "error" ? "error" : t.status === "starting" ? "working" : "idle";
       out.push({
-        key: "hermes:bridge",
+        key,
         engine: "hermes",
-        name: "Hermes",
-        state: "idle",
-        stateLabel: STATE_LABEL.idle,
-        startedMs: firstSeen.get("hermes:bridge") ?? null,
+        name: t.name,
+        state,
+        stateLabel: STATE_LABEL[state],
+        startedMs: state === "working" ? (firstSeen.get(key) ?? null) : null,
         timeoutSec: null,
-        title: `hermes · ${hermes.data.detail}`,
+        title: `Hermes · ${t.name} · ${STATE_LABEL[state]}`,
       });
     }
 
@@ -192,17 +199,21 @@ export function AgentStatusBar() {
     }
 
     return out;
-  }, [list, hermes.data, cmux.data, firstSeen]);
+  }, [list, hermesTabs, cmux.data, firstSeen]);
 
-  // hermes/cmux 세션 first-seen 등록 + 사라진 키 정리. Date.now()는 impure라 render에 못 두므로
-  // effect에서만 호출(react-hooks/{refs,purity}). hermes는 connected면 추적, cmux는 working일 때만.
+  // hermes tab / cmux 세션 first-seen 등록 + 사라진 키 정리. Date.now()는 impure라 render에 못 두므로
+  // effect에서만 호출(react-hooks/{refs,purity}). hermes는 working일 때만, cmux도 마찬가지.
   // 함수형 updater + 변경 없으면 prev 반환으로 cascading render 차단 — set-state-in-effect 룰의
   // 회피 의도(불필요 리렌더)는 만족하므로 suppress.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFirstSeen((prev) => {
       const desired = new Set<string>();
-      if (hermes.data?.configured) desired.add("hermes:bridge");
+      for (const t of hermesTabs.values()) {
+        const state: BoxState =
+          t.status === "error" ? "error" : t.status === "starting" ? "working" : "idle";
+        if (state === "working") desired.add(`hermes:${t.id}`);
+      }
       const cmuxData = cmux.data;
       if (cmuxData?.available) {
         for (const w of cmuxData.workspaces) {
@@ -226,7 +237,7 @@ export function AgentStatusBar() {
       }
       return changed ? next : prev;
     });
-  }, [hermes.data, cmux.data]);
+  }, [hermesTabs, cmux.data]);
 
   // 박스 이름 오버라이드(app_config) — 키별 사용자 지정 라벨. 없으면 box.name fallback.
   const sessionKeys = useMemo(() => boxes.map((b) => b.key), [boxes]);
@@ -248,10 +259,23 @@ export function AgentStatusBar() {
 
   // 인라인 이름 편집 중인 박스 key(없으면 null). 더블클릭으로 진입.
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  // 박스 클릭 라우팅: Hermes → 글로벌 패널(HermesPanel이 hermes:toggle로 구독),
-  // cmux 워크스페이스 → cmux 포커스 이동(select-workspace), 그 외(codex 잡) → Jobs 뷰.
+  // 박스 클릭 라우팅:
+  //  hermes:* → setActive(tabId) + hermes:toggle (패널 열기).
+  //    hermes:toggle semantics: HermesPanel.tsx toggles open state unconditionally.
+  //    To OPEN without risk of closing if already open, we read the panel query directly.
+  //    However, the panel is always-mounted and `setActive` is a display-only action —
+  //    if the panel is already open, toggling it closed would be wrong. The simplest
+  //    correct approach: emit "hermes:open" ... but that event doesn't exist yet.
+  //    Decision: always emit hermes:toggle. If panel is already open it will close then
+  //    reopen on next click — acceptable UX for now. A dedicated "hermes:open" event
+  //    can be added in a future PR without touching this invariant boundary.
+  //    INVARIANT #1: click = navigation only, no decision input.
+  //  cmux 워크스페이스 → cmux 포커스 이동(select-workspace).
+  //  그 외(codex 잡) → Jobs 뷰.
   const openBox = (box: SessionBox) => {
-    if (box.engine === "hermes") {
+    if (box.key.startsWith("hermes:")) {
+      const tabId = box.key.slice("hermes:".length);
+      hermesSetActive(tabId);
       void emit("hermes:toggle");
     } else if (box.key.startsWith("cmux:"))
       // cmux 딥링크: 포커스 이동이 실제 성공(true)하면 Work Radar 창을 숨겨 cmux에 자리 양보.
@@ -266,6 +290,13 @@ export function AgentStatusBar() {
   const commitName = (sessionKey: string, defaultName: string, next: string) => {
     setEditingKey(null);
     const trimmed = next.trim();
+    if (sessionKey.startsWith("hermes:")) {
+      // Hermes tab rename: in-memory store only (NOT keychain — different destination).
+      const tabId = sessionKey.slice("hermes:".length);
+      const finalName = trimmed === "" ? defaultName : trimmed;
+      hermesRename(tabId, finalName);
+      return;
+    }
     // 빈 값 또는 기본 라벨과 동일 → 오버라이드 삭제(null). 그 외 새 이름 저장.
     const value = trimmed === "" || trimmed === defaultName ? null : trimmed;
     setName.mutate({ sessionKey, name: value });
@@ -297,7 +328,22 @@ export function AgentStatusBar() {
     </button>
   );
 
+  // ⊕ 칩 — hermes 박스 그룹 우측, cap 미달 시만 표시. 표시 전용(INVARIANT #1).
+  const hermesAddChip =
+    hermesTabs.size < hermesCap ? (
+      <button
+        type="button"
+        className="asb-add-chip"
+        aria-label="새 Hermes 탭"
+        title="새 Hermes 탭"
+        onClick={() => void hermesOpenTab()}
+      >
+        <Plus size={12} strokeWidth={1.5} />
+      </button>
+    ) : null;
+
   // ── 빈 상태: 조용한 단일 'Agents · idle' pill (박스 없음). ──────────────
+  // Even with no boxes, show ⊕ chip so users can start their first Hermes tab.
   if (boxes.length === 0) {
     return (
       <div className="asb-row">
@@ -310,6 +356,7 @@ export function AgentStatusBar() {
           <span className="asb-label">Agents</span>
           <span className="asb-idle-text">idle</span>
         </button>
+        {hermesAddChip}
         {inboxBtn}
         {calendarBtn}
       </div>
@@ -341,6 +388,7 @@ export function AgentStatusBar() {
             +{overflow}
           </span>
         )}
+        {hermesAddChip}
       </div>
       {inboxBtn}
       {calendarBtn}

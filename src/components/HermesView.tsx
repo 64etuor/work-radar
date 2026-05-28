@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { HermesChatInput } from "./hermes/HermesChatInput";
 import { HermesChatLog } from "./hermes/HermesChatLog";
 import { HermesPanel } from "./hermes/HermesPanel";
-import { useHermesTabs } from "./hermes/useHermesTabs";
+import {
+  selectActiveTab,
+  selectIsStreaming,
+  useHermesTabsStore,
+} from "./hermes/useHermesTabsStore";
 
 function EmptyHermesState({ onCreateTab }: { onCreateTab: () => Promise<unknown> }) {
   return (
@@ -16,12 +20,13 @@ function EmptyHermesState({ onCreateTab }: { onCreateTab: () => Promise<unknown>
 }
 
 export default function HermesView() {
-  const tabs = useHermesTabs();
-  const active = tabs.activeTab;
+  const tabs = useHermesTabsStore();
+  const active = selectActiveTab(tabs);
+  const isStreaming = selectIsStreaming(tabs);
 
   return (
     <HermesPanel
-      isStreaming={tabs.isStreaming}
+      isStreaming={isStreaming}
       onNewTab={tabs.openTab}
       onCloseActive={async () => {
         if (active) await tabs.closeTab(active.id);
@@ -29,7 +34,7 @@ export default function HermesView() {
       onRestart={async () => {
         if (active) await tabs.restart(active.id);
       }}
-      canCreateTab={tabs.state.tabs.size < tabs.state.cap}
+      canCreateTab={tabs.tabs.size < tabs.cap}
       activeTabId={active?.id ?? null}
     >
       {active ? (
@@ -39,7 +44,7 @@ export default function HermesView() {
             onSend={(text, images) => void tabs.send(active.id, text, images)}
             onCancel={() => void tabs.cancel(active.id)}
             disabled={active.status === "starting"}
-            isStreaming={tabs.isStreaming}
+            isStreaming={isStreaming}
             commandsList={active.commandsList}
           />
         </div>
