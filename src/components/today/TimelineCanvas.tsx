@@ -20,6 +20,8 @@ type Props = {
   today: string;
   boxes: LayoutBox[];
   onBlockClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
+  /** ✓ 체크 토글(signal/routine). 부모(TodayView)가 block.kind 분기로 mutate dispatch. */
+  onToggleDone?: (box: LayoutBox, done: boolean) => void;
   /**
    * 캔버스 그리드 로컬 좌표(Y)를 기록하는 ref. 부모(TodayView)가 소유하고 useTimelineDnd가
    * onDragEnd에서 마지막 hover Y를 읽는다. dropData에 mutable 객체를 박는 antipattern을 회피.
@@ -45,6 +47,7 @@ export function TimelineCanvas({
   today,
   boxes,
   onBlockClick,
+  onToggleDone,
   pointerYRef,
   pointerXRef,
   activeDrag,
@@ -145,6 +148,7 @@ export function TimelineCanvas({
               key={b.id}
               box={b}
               onClick={onBlockClick}
+              onToggleDone={onToggleDone}
               suppressDragTransform={suppressBlockTransform}
               disableLayoutTransition={activeDrag?.from === "canvas-resize"}
             />

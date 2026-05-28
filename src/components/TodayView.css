@@ -663,10 +663,41 @@
   font-weight: 600;
 }
 
-/* 완료된 루틴 블록은 strike-through + 페이드 (PR 6 Task 4). */
+/* 완료된 signal/routine 블록은 strike-through + 페이드. */
 .tl-block-done .tl-block-title {
   text-decoration: line-through;
   opacity: 0.6;
+}
+
+/* 블록 우상단 ✓ 토글 — block button 형제로 absolute. signal/routine만 렌더된다. */
+.tl-block-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 4;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-wr-subtle);
+  cursor: pointer;
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
+}
+.tl-block-check:hover,
+.tl-block-check:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+}
+.tl-block-check[data-done] {
+  color: var(--color-q2, #5c8a3a);
+}
+.tl-block-check:focus-visible {
+  outline: 2px solid var(--wr-color-focus, #4c6ee6);
+  outline-offset: 1px;
 }
 
 /* ── 반응형 (PR 7 정밀화, spec §3) ───────────────────────────────── */

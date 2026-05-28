@@ -72,6 +72,7 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
       calendarLabel: s.linkedCalendarId ?? "",
       color: SIGNAL_COLOR,
       linkedEventId: s.linkedEventId ?? undefined,
+      done: Boolean(s.todayDoneAt),
     });
     const key = eventKey(s.linkedCalendarId, s.linkedEventId);
     if (key) absorbed.add(key);

@@ -103,6 +103,19 @@ export function TodayView() {
     const rect = e.currentTarget.getBoundingClientRect();
     setPopover({ box, anchor: { x: rect.right + 8, y: rect.top } });
   }, []);
+  /** 타임라인 ✓ 토글 — block.kind에 따라 signal/routine mutation 분기(event는 done 개념 없음 → 무시). */
+  const handleBlockToggleDone = useCallback(
+    (box: LayoutBox, done: boolean) => {
+      const { block } = box;
+      if (block.kind === "signal") {
+        const id = block.id.replace(/^signal:/, "");
+        toggleDone.mutate({ id, date: today, done });
+      } else if (block.kind === "routine" && block.routineId) {
+        toggleRoutine.mutate({ routineId: block.routineId, date: today, done });
+      }
+    },
+    [today, toggleDone, toggleRoutine],
+  );
   const handlePopoverClose = useCallback(() => setPopover(null), []);
   const handleOpenFullModal = useCallback(() => {
     setPopover(null);
@@ -289,6 +302,7 @@ export function TodayView() {
                 today={today}
                 boxes={boxes}
                 onBlockClick={handleBlockClick}
+                onToggleDone={handleBlockToggleDone}
                 pointerYRef={canvasPointerYRef}
                 pointerXRef={canvasPointerXRef}
                 activeDrag={activeDrag}
@@ -300,6 +314,7 @@ export function TodayView() {
         <EventPopover
           open={popover !== null}
           box={popover?.box ?? null}
+          date={date}
           anchor={popover?.anchor ?? null}
           onClose={handlePopoverClose}
           onOpenFullModal={handleOpenFullModal}

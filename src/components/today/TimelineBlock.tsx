@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import { Repeat } from "lucide-react";
+import { CheckCircle2, Circle, Repeat } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockStyle";
@@ -10,6 +10,11 @@ import type { LayoutBox } from "@/lib/timelineLayout";
 type Props = {
   box: LayoutBox;
   onClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
+  /**
+   * 좌상단 ✓ 체크 토글. signal/routine 블록에만 표시 — event는 done 개념 없음.
+   * parent(TodayView)가 block.kind 분기로 mutate dispatch.
+   */
+  onToggleDone?: (box: LayoutBox, done: boolean) => void;
   suppressDragTransform?: boolean;
   disableLayoutTransition?: boolean;
 };
@@ -137,6 +142,7 @@ function ResizeHandle({
 export function TimelineBlock({
   box,
   onClick,
+  onToggleDone,
   suppressDragTransform = false,
   disableLayoutTransition = false,
 }: Props) {
@@ -151,7 +157,8 @@ export function TimelineBlock({
   });
   const { attributes, listeners, setNodeRef, transform } = drag;
 
-  const isDoneRoutine = block.kind === "routine" && block.done === true;
+  const isCheckable = block.kind === "signal" || block.kind === "routine";
+  const isDone = isCheckable && block.done === true;
 
   const ariaLabel = [
     block.title,
@@ -159,7 +166,7 @@ export function TimelineBlock({
     block.calendarLabel || block.calendarId
       ? `(${block.calendarLabel || block.calendarId})`
       : `(${block.kind})`,
-    isDoneRoutine ? "완료됨" : null,
+    isDone ? "완료됨" : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -183,8 +190,8 @@ export function TimelineBlock({
       <button
         ref={setNodeRef}
         type="button"
-        className={cn("tl-block", `tl-block-${block.kind}`, isDoneRoutine && "tl-block-done")}
-        data-done={isDoneRoutine || undefined}
+        className={cn("tl-block", `tl-block-${block.kind}`, isDone && "tl-block-done")}
+        data-done={isDone || undefined}
         style={
           {
             borderLeftColor: block.color,
@@ -205,6 +212,28 @@ export function TimelineBlock({
           {block.title}
         </div>
       </button>
+      {isCheckable && onToggleDone && (
+        // 블록 button의 형제로 배치(중첩 interactive 회피) — pointerdown으로 dnd-kit
+        // listener 버블 끊기. click은 done 토글로만 소비.
+        <button
+          type="button"
+          className="tl-block-check"
+          data-done={isDone || undefined}
+          aria-label={isDone ? `${block.title} 완료 취소` : `${block.title} 완료`}
+          title={isDone ? "완료 취소" : "완료"}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleDone(box, !isDone);
+          }}
+        >
+          {isDone ? (
+            <CheckCircle2 className="size-3.5" aria-hidden />
+          ) : (
+            <Circle className="size-3.5" aria-hidden />
+          )}
+        </button>
+      )}
       <ResizeHandle edge="top" box={box} durationMin={durationMin} />
       <ResizeHandle edge="bottom" box={box} durationMin={durationMin} />
     </div>
