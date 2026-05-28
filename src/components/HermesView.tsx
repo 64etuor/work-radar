@@ -33,6 +33,8 @@ export default function HermesView() {
   return (
     <HermesPanel
       isStreaming={isStreaming}
+      // 헤더 타이틀은 첫 메시지 이후로만 노출 — 빈 상태에선 중앙 워드마크가 정체성 담당.
+      showHeaderTitle={(activeTab?.messages.length ?? 0) > 0}
       onNewTab={openTab}
       onCloseActive={async () => {
         if (activeTab) await closeTab(activeTab.id);

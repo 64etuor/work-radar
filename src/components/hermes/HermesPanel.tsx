@@ -17,6 +17,7 @@ export function HermesPanel({
   children,
   onRestart,
   isStreaming,
+  showHeaderTitle,
   onNewTab,
   onCloseActive,
   canCreateTab,
@@ -25,6 +26,8 @@ export function HermesPanel({
   children: React.ReactNode;
   onRestart?: () => void;
   isStreaming?: boolean;
+  /** false면 헤더 'Hermes' 타이틀 숨김(빈 상태 중앙 워드마크와 중복 방지). true로 전환되면 블러인. */
+  showHeaderTitle?: boolean;
   onNewTab?: () => Promise<unknown>;
   onCloseActive?: () => Promise<unknown>;
   canCreateTab?: boolean;
@@ -140,6 +143,19 @@ export function HermesPanel({
       }}
       className="bg-background border-border fixed z-50 flex flex-col overflow-hidden rounded-lg border font-sans shadow-lg"
     >
+      {/* 스트리밍 중에만 — 패널 4변을 시계방향으로 돌며 흐르는 light beam.
+       * root가 rounded-lg + overflow-hidden 이라 코너서 자연 클립. */}
+      {isStreaming && (
+        <div
+          aria-hidden
+          className="hermes-border-light pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-lg"
+        >
+          <span className="hbl-top" />
+          <span className="hbl-right" />
+          <span className="hbl-bottom" />
+          <span className="hbl-left" />
+        </div>
+      )}
       <PanelHeader
         x={x}
         y={y}
@@ -149,6 +165,7 @@ export function HermesPanel({
         onClose={() => setOpen(false)}
         onRestart={onRestart}
         isStreaming={isStreaming}
+        showHeaderTitle={showHeaderTitle}
         onNewTab={onNewTab}
         onCloseActive={onCloseActive}
         canCreateTab={canCreateTab}
@@ -179,6 +196,7 @@ function PanelHeader({
   onClose,
   onRestart,
   isStreaming,
+  showHeaderTitle,
   onNewTab,
   onCloseActive,
   canCreateTab,
@@ -187,6 +205,7 @@ function PanelHeader({
   onClose: () => void;
   onRestart?: () => void;
   isStreaming?: boolean;
+  showHeaderTitle?: boolean;
   onNewTab?: () => Promise<unknown>;
   onCloseActive?: () => Promise<unknown>;
   canCreateTab?: boolean;
@@ -224,25 +243,34 @@ function PanelHeader({
 
   return (
     <div
-      className="flex shrink-0 cursor-grab items-center px-2.5 py-1.5 select-none"
+      className="relative flex shrink-0 cursor-grab items-center px-2.5 py-1.5 select-none"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="text-sm font-medium tracking-tight">Hermes</span>
-        {isStreaming && (
-          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
-            <span className="inline-flex gap-0.5" aria-hidden>
-              <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current" />
-              <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current [animation-delay:0.15s]" />
-              <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current [animation-delay:0.3s]" />
-            </span>
-            작성 중
+        {/* 첫 메시지 이후에만 노출(중앙 워드마크 exit → 약간의 딜레이 후 블러인). */}
+        {showHeaderTitle && (
+          <span className="hermes-header-title ml-1.5 font-mono text-sm font-medium tracking-tight">
+            Hermes
           </span>
         )}
       </span>
+      {isStreaming && (
+        // 작성 중 표시는 헤더 가운데에 고정(좌측 타이틀/우측 버튼과 무관) — 아우라와 시각 정렬.
+        <span
+          className="text-muted-foreground pointer-events-none absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 text-xs"
+          aria-live="polite"
+        >
+          <span className="inline-flex gap-0.5" aria-hidden>
+            <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current" />
+            <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current [animation-delay:0.15s]" />
+            <span className="size-1 animate-[hermesDot_1.2s_ease-in-out_infinite] rounded-full bg-current [animation-delay:0.3s]" />
+          </span>
+          작성 중
+        </span>
+      )}
       <div className="flex items-center gap-1" data-no-drag>
         {onNewTab && (
           <Button

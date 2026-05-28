@@ -301,13 +301,163 @@
   }
 }
 
+/* Hermes empty-state wordmark — Lottie 1회 재생 종료 후 블러인으로 등장.
+ * exit: 첫 메시지 입력으로 대화가 시작되면 워드마크가 블러아웃+expand로 사라짐. */
+.hermes-wordmark {
+  display: inline-block;
+  animation: hermesWordmarkBlurIn 700ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.hermes-wordmark.is-exiting {
+  /* 짧은 펄스(scale 1→1.1) 후 빠르게 사라짐 — 첫 메시지 직후 결단력 있는 전환. */
+  animation: hermesWordmarkPulseOut 220ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes hermesWordmarkBlurIn {
+  from {
+    opacity: 0;
+    filter: blur(14px);
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+@keyframes hermesWordmarkPulseOut {
+  0% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+  40% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: scale(0.94);
+  }
+}
+
+/* 헤더 'Hermes' 타이틀 — 빈 상태 동안 숨김, 첫 메시지 후 워드마크 exit 종료 직후 블러인.
+ * animation-delay로 EMPTY_EXIT_MS(~520ms) 와 자연스럽게 겹치지 않게 ~480ms 부근에 시작. */
+.hermes-header-title {
+  display: inline-block;
+  animation: hermesHeaderBlurIn 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  /* 워드마크 펄스아웃(220ms) 직후 살짝 겹쳐서 자연스럽게 등장. */
+  animation-delay: 180ms;
+}
+@keyframes hermesHeaderBlurIn {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+/* Hermes streaming border-light — 패널 보더 4변을 시계방향으로 돌며 흐르는 light beam.
+ * 4개의 빔(top/right/bottom/left)을 4초 사이클의 각 25% 구간에 순차 활성 → 보더를 따라 회전.
+ * pastel orb(HermesChatLog 빈 상태)와 동일 팔레트 — translateX/Y 만 변동(GPU 친화). */
+.hermes-border-light > span {
+  position: absolute;
+  display: block;
+}
+.hermes-border-light .hbl-top,
+.hermes-border-light .hbl-bottom {
+  width: 100%;
+  height: 2px;
+}
+.hermes-border-light .hbl-left,
+.hermes-border-light .hbl-right {
+  width: 2px;
+  height: 100%;
+}
+.hermes-border-light .hbl-top {
+  top: 0;
+  left: 0;
+  background: linear-gradient(90deg, transparent, #ff9eb5, #c8a6ff, #9ed5ff, transparent);
+  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  animation: hbl-top 4s linear infinite;
+}
+.hermes-border-light .hbl-right {
+  top: 0;
+  right: 0;
+  background: linear-gradient(180deg, transparent, #9ed5ff, #c8a6ff, #ff9eb5, transparent);
+  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  animation: hbl-right 4s linear infinite;
+}
+.hermes-border-light .hbl-bottom {
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(270deg, transparent, #ff9eb5, #c8a6ff, #9ed5ff, transparent);
+  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  animation: hbl-bottom 4s linear infinite;
+}
+.hermes-border-light .hbl-left {
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(0deg, transparent, #9ed5ff, #c8a6ff, #ff9eb5, transparent);
+  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  animation: hbl-left 4s linear infinite;
+}
+/* 각 빔은 자기 구간(25%) 동안 -100% → 100%로 가로지르고 나머지 시간엔 100%(=off-screen)에 대기.
+ * top: 0-25%, right: 25-50%, bottom: 50-75%, left: 75-100% — 시계방향. */
+@keyframes hbl-top {
+  0% {
+    transform: translateX(-100%);
+  }
+  25%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes hbl-right {
+  0%,
+  25% {
+    transform: translateY(-100%);
+  }
+  50%,
+  100% {
+    transform: translateY(100%);
+  }
+}
+@keyframes hbl-bottom {
+  0%,
+  50% {
+    transform: translateX(100%);
+  }
+  75%,
+  100% {
+    transform: translateX(-100%);
+  }
+}
+@keyframes hbl-left {
+  0%,
+  75% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(-100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .view-shell,
   .wr-dialog-overlay[data-state="open"],
   .wr-dialog-content[data-state="open"],
   .wr-radial-effect-layer,
   .wr-radial-effect,
-  .wr-radial-effect-item {
+  .wr-radial-effect-item,
+  .hermes-border-light > span,
+  .hermes-wordmark,
+  .hermes-header-title {
     animation: none;
   }
 }

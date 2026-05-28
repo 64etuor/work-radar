@@ -1,8 +1,10 @@
+import { type DotLottie, DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { Check, Loader2, Wrench, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import hermesOrbUrl from "@/assets/hermes-orb.json?url";
 import { cn } from "@/lib/utils";
 
 import type { HermesMessage, ToolCallSummary } from "./types";
@@ -66,9 +68,10 @@ function AssistantBubble({
   const isTyping = revealed.length < fullText.length;
 
   return (
-    <div className="max-w-full min-w-0">
+    <div className="max-w-full min-w-0 text-left">
       {m.toolCalls.length > 0 && (
-        <div className="mb-1.5 flex flex-col gap-1.5">
+        // items-start로 도구 칩을 항상 좌측 정렬(어떤 부모 flex/grid 조합에서도 가운데 쏠리지 않게).
+        <div className="mb-1.5 flex flex-col items-start gap-1.5 text-left">
           {m.toolCalls.map((t, i) => (
             <ToolCallPill key={t.id ?? i} t={t} />
           ))}
@@ -86,40 +89,77 @@ function AssistantBubble({
   );
 }
 
+/**
+ * 빈 상태 마크 — Lottie를 1회 재생 후 "Hermes" 워드마크가 블러인으로 페이드.
+ * complete 이벤트는 DotLottie ref(setDotLottie) 의 addEventListener("complete") 로 구독.
+ * `exiting=true` 일 때 워드마크에 .is-exiting 추가 → 220ms 펄스+페이드아웃.
+ */
+function EmptyHermesMark({ exiting }: { exiting: boolean }) {
+  const [done, setDone] = useState(false);
+  const [dot, setDot] = useState<DotLottie | null>(null);
+
+  useEffect(() => {
+    if (!dot) return;
+    const onComplete = () => setDone(true);
+    dot.addEventListener("complete", onComplete);
+    return () => dot.removeEventListener("complete", onComplete);
+  }, [dot]);
+
+  if (done) {
+    return (
+      <span
+        className={cn(
+          "hermes-wordmark text-foreground font-mono text-[44px] leading-none font-medium tracking-tight",
+          exiting && "is-exiting",
+        )}
+      >
+        Hermes
+      </span>
+    );
+  }
+
+  return (
+    <DotLottieReact
+      src={hermesOrbUrl}
+      autoplay
+      loop={false}
+      dotLottieRefCallback={setDot}
+      className="size-32"
+      aria-hidden
+    />
+  );
+}
+
+/** 워드마크 펄스+페이드아웃 지속 시간(ms) — motion.css `.hermes-wordmark.is-exiting` 와 일치. */
+const EMPTY_EXIT_MS = 220;
+
 export function HermesChatLog({ messages }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
+
+  // 0 → >0 전환 시 워드마크 펄스아웃 220ms 후 채팅 마운트.
+  const [exiting, setExiting] = useState(false);
+  const prevEmpty = useRef(true);
+  useEffect(() => {
+    const isEmpty = messages.length === 0;
+    if (prevEmpty.current && !isEmpty) {
+      setExiting(true);
+      const t = setTimeout(() => setExiting(false), EMPTY_EXIT_MS);
+      prevEmpty.current = false;
+      return () => clearTimeout(t);
+    }
+    prevEmpty.current = isEmpty;
+  }, [messages.length]);
 
   useEffect(() => {
     if (followRef.current) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
-  if (messages.length === 0) {
+  if (messages.length === 0 || exiting) {
     return (
       <div className="min-w-0 flex-1 overflow-auto">
-        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-          {/*
-           * Gradient orb — intentional one-off hex values (not project tokens).
-           * Soft pastel blend: warm red → cool lavender → light purple/peach.
-           * Mirrors the "Ask Super AI" reference: centered soft multi-stop radial orb.
-           */}
-          <div
-            className="size-16 rounded-full opacity-90"
-            style={{
-              background:
-                "radial-gradient(circle at 30% 30%, #ffd4d4 0%, transparent 50%), " +
-                "radial-gradient(circle at 70% 30%, #d4d4ff 0%, transparent 55%), " +
-                "radial-gradient(circle at 50% 70%, #e0d4ff 0%, transparent 60%), " +
-                "linear-gradient(135deg, #fff7f0 0%, #f5e8ff 100%)",
-              filter: "blur(0.5px)",
-              boxShadow: "0 8px 32px -8px rgba(160, 140, 220, 0.25)",
-            }}
-            aria-hidden
-          />
-          <p className="text-foreground text-base font-medium">Hermes에게 무엇이든</p>
-          <p className="text-muted-foreground text-xs">
-            텍스트, 이미지, <span className="font-mono">/</span> 명령으로 시작하세요
-          </p>
+        <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+          <EmptyHermesMark exiting={exiting} />
         </div>
       </div>
     );
@@ -156,7 +196,9 @@ export function HermesChatLog({ messages }: Props) {
                   )}
                 </div>
               )}
-              {m.role === "assistant" && <AssistantBubble m={m} instant={false} />}
+              {/* 이미 완료된 메시지(m.done)는 즉시 풀텍스트로 — 패널 재오픈 시 타이프라이터 재생 방지.
+               * 스트리밍 중인 마지막 메시지만 자연스러운 리빌. */}
+              {m.role === "assistant" && <AssistantBubble m={m} instant={m.done} />}
               {m.role === "system" && (
                 <p
                   className={cn(
