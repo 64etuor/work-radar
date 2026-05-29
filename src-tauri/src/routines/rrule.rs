@@ -244,8 +244,12 @@ fn join_byday(weekdays: &[Weekday]) -> String {
 }
 
 /// reference_date부터 시작해 weekdays 중 하나에 매칭되는 첫 날짜를 반환 (최대 7일 forward).
-/// reference_date 자체가 매칭이면 그대로 반환.
+/// reference_date 자체가 매칭이면 그대로 반환. weekdays는 비어있지 않아야 한다(호출자 보증).
 fn next_matching_weekday(reference: NaiveDate, weekdays: &[Weekday]) -> NaiveDate {
+    debug_assert!(
+        !weekdays.is_empty(),
+        "next_matching_weekday: weekdays must be non-empty (caller guarantee)"
+    );
     let allowed: Vec<Weekday> = weekdays.to_vec();
     for offset in 0..7 {
         let d = reference + Duration::days(offset);
@@ -567,5 +571,68 @@ mod tests {
         };
         let s = routine_to_rrule(&inp, &[]).unwrap();
         assert_eq!(s.duration_min, 30);
+    }
+
+    // ── PR 1 critic nits: 누락된 RRuleError 배리언트 negative-path 커버 ──
+
+    // 22) weekly 빈 weekdays → WeeklyNoWeekdays.
+    #[test]
+    fn weekly_empty_weekdays_errors() {
+        let inp = RRuleInput {
+            weekdays: &[],
+            ..input(Freq::Weekly)
+        };
+        let err = routine_to_rrule(&inp, &[]).unwrap_err();
+        assert_eq!(err, RRuleError::WeeklyNoWeekdays);
+    }
+
+    // 23) biweekly 빈 weekdays → BiweeklyNoWeekdays (anchor 체크보다 우선).
+    #[test]
+    fn biweekly_empty_weekdays_errors() {
+        let inp = RRuleInput {
+            weekdays: &[],
+            anchor_date: Some("2026-05-25"),
+            ..input(Freq::Biweekly)
+        };
+        let err = routine_to_rrule(&inp, &[]).unwrap_err();
+        assert_eq!(err, RRuleError::BiweeklyNoWeekdays);
+    }
+
+    // 24) monthly anchor 없음 → MonthlyMissingAnchor (pattern 체크보다 우선).
+    #[test]
+    fn monthly_missing_anchor_errors() {
+        let inp = RRuleInput {
+            anchor_date: None,
+            monthly_pattern: Some(MonthlyPattern::DayOfMonth),
+            ..input(Freq::Monthly)
+        };
+        let err = routine_to_rrule(&inp, &[]).unwrap_err();
+        assert_eq!(err, RRuleError::MonthlyMissingAnchor);
+    }
+
+    // 25) monthly_pattern 없음 → MonthlyPatternMissing.
+    #[test]
+    fn monthly_pattern_missing_errors() {
+        let inp = RRuleInput {
+            anchor_date: Some("2026-05-15"),
+            monthly_pattern: None,
+            ..input(Freq::Monthly)
+        };
+        let err = routine_to_rrule(&inp, &[]).unwrap_err();
+        assert_eq!(err, RRuleError::MonthlyPatternMissing);
+    }
+
+    // 26) nth_weekday + monthly_nth_week 없음 → NthWeekdayMissingNthWeek.
+    #[test]
+    fn monthly_nth_weekday_missing_nth_week_errors() {
+        let inp = RRuleInput {
+            weekdays: &[Weekday::Mon],
+            anchor_date: Some("2026-05-04"),
+            monthly_pattern: Some(MonthlyPattern::NthWeekday),
+            monthly_nth_week: None,
+            ..input(Freq::Monthly)
+        };
+        let err = routine_to_rrule(&inp, &[]).unwrap_err();
+        assert_eq!(err, RRuleError::NthWeekdayMissingNthWeek);
     }
 }
