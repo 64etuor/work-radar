@@ -311,7 +311,7 @@ async fn load_selected_calendars(
 
 /// 프로젝트의 access token 확보(refresh로 재발급, bounded). 미연결/client 미입력이면 None.
 /// refresh_token이 회전된 경우에만 keychain을 갱신(고빈도 fetch에서 churn 최소화). 토큰 본문 미반환.
-async fn access_token_for(db: &Db, project_id: &str) -> Result<Option<String>, String> {
+pub(crate) async fn access_token_for(db: &Db, project_id: &str) -> Result<Option<String>, String> {
     let cref = project_credential_ref(db, project_id).await?;
     let Some(creds) = load_calendar_creds(db, project_id).await? else {
         return Ok(None);

@@ -3,6 +3,7 @@
 //!   reminders(알림 enqueue) / tracking(이행률 집계). `pub use`로 `commands::*` 경로 보존.
 
 mod crud;
+mod google_sync;
 mod listing;
 mod reminders; // 내부 헬퍼 전용(공개 커맨드 없음) — crud/listing이 `super::reminders::`로 접근.
 mod schedule;
@@ -10,6 +11,7 @@ mod tags;
 mod tracking;
 
 pub use crud::*;
+pub use google_sync::*;
 pub use listing::*;
 pub use schedule::*;
 pub use tags::*;

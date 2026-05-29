@@ -129,6 +129,8 @@ export const commands = {
 	 *  커스텀 tag key면 `area=NULL` + `area_tags=["key"]`만 저장. tag_key=None이면 둘 다 NULL.
 	 */
 	setRoutineAreaTagKey: (id: string, tagKey: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_routine_area_tag_key", { id, tagKey })),
+	enableRoutineGoogleSync: (routineId: string, calendarId: string) => typedError<null, AppError>(__TAURI_INVOKE("enable_routine_google_sync", { routineId, calendarId })),
+	disableRoutineGoogleSync: (routineId: string) => typedError<null, AppError>(__TAURI_INVOKE("disable_routine_google_sync", { routineId })),
 	/**
 	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
 	 *  매트릭스 자동 escalate 없음, INVARIANT #4). threshold/충돌은 Inbox 알림으로 mirror하고, 기존

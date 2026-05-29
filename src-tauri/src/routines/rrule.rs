@@ -3,7 +3,7 @@
 //! Plan §3 매핑표·테스트 매트릭스 정본.
 //! 이 함수는 시간·DB·네트워크에 의존하지 않는다 — 입력→출력만.
 
-use chrono::{Datelike, Duration, NaiveDate, Weekday as ChronoWeekday};
+use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, Weekday as ChronoWeekday};
 use thiserror::Error;
 
 /// 풍부 monthly 패턴. plan §2 schema에 대응 (TEXT enum).
@@ -117,6 +117,38 @@ pub enum RRuleError {
     NthWeekdayMissingNthWeek,
     #[error("monthly nth_weekday: nth_week must be -1 or 1..=5")]
     NthWeekdayInvalidNthWeek,
+}
+
+/// Google `events.insert` 페이로드용 part들 — `start.dateTime`/`end.dateTime`/`recurrence` 배열.
+/// timeZone은 호출자(`CreateEventInput::time_zone`)에서 `RRuleSpec::tzid` 그대로 사용.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventParts {
+    /// 'YYYY-MM-DDTHH:MM:SS' (wall-clock, offset 없음).
+    pub start_iso: String,
+    pub end_iso: String,
+    /// ['RRULE:FREQ=...', 'EXDATE;TZID=<tzid>:<dt1>,<dt2>,...'] — exdates 없으면 RRULE 한 줄만.
+    pub recurrence_lines: Vec<String>,
+}
+
+impl RRuleSpec {
+    /// Google API 호출용 변환. start_iso는 `dtstart_local`(compact RFC5545)에 구분자를 끼워넣은 형태.
+    /// end_iso는 start + `duration_min`. recurrence_lines는 RRULE/EXDATE 라인.
+    pub fn to_event_parts(&self) -> Result<EventParts, RRuleError> {
+        let start_iso = compact_to_iso(&self.dtstart_local)?;
+        let end_iso = add_minutes_iso(&start_iso, self.duration_min)?;
+
+        let mut lines = Vec::with_capacity(2);
+        lines.push(format!("RRULE:{}", self.rrule));
+        if !self.exdates.is_empty() {
+            let joined = self.exdates.join(",");
+            lines.push(format!("EXDATE;TZID={}:{}", self.tzid, joined));
+        }
+        Ok(EventParts {
+            start_iso,
+            end_iso,
+            recurrence_lines: lines,
+        })
+    }
 }
 
 const DEFAULT_TIME: &str = "09:00";
@@ -233,6 +265,34 @@ fn format_dtstart(d: NaiveDate, hh: u32, mm: u32) -> String {
         hh,
         mm
     )
+}
+
+/// 'YYYYMMDDTHHMMSS' → 'YYYY-MM-DDTHH:MM:SS' (구분자 삽입). 15 chars 강제.
+fn compact_to_iso(compact: &str) -> Result<String, RRuleError> {
+    if compact.len() != 15 || compact.as_bytes()[8] != b'T' {
+        return Err(RRuleError::InvalidDate(compact.to_string()));
+    }
+    let y = &compact[0..4];
+    let mo = &compact[4..6];
+    let d = &compact[6..8];
+    let hh = &compact[9..11];
+    let mm = &compact[11..13];
+    let ss = &compact[13..15];
+    // 숫자 검증.
+    for chunk in [y, mo, d, hh, mm, ss] {
+        if !chunk.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(RRuleError::InvalidDate(compact.to_string()));
+        }
+    }
+    Ok(format!("{y}-{mo}-{d}T{hh}:{mm}:{ss}"))
+}
+
+/// 'YYYY-MM-DDTHH:MM:SS' + N분 → 동일 포맷.
+fn add_minutes_iso(iso: &str, minutes: u32) -> Result<String, RRuleError> {
+    let dt = NaiveDateTime::parse_from_str(iso, "%Y-%m-%dT%H:%M:%S")
+        .map_err(|_| RRuleError::InvalidDate(iso.to_string()))?;
+    let added = dt + Duration::minutes(i64::from(minutes));
+    Ok(added.format("%Y-%m-%dT%H:%M:%S").to_string())
 }
 
 fn join_byday(weekdays: &[Weekday]) -> String {
@@ -634,5 +694,69 @@ mod tests {
         };
         let err = routine_to_rrule(&inp, &[]).unwrap_err();
         assert_eq!(err, RRuleError::NthWeekdayMissingNthWeek);
+    }
+
+    // ── EventParts / ISO 변환 ──
+
+    // 27) to_event_parts: daily 30분 — start_iso + end_iso + RRULE 1줄.
+    #[test]
+    fn event_parts_daily_30min() {
+        let inp = RRuleInput {
+            time_of_day: Some("07:00"),
+            duration_min: Some(30),
+            ..input(Freq::Daily)
+        };
+        let spec = routine_to_rrule(&inp, &[]).unwrap();
+        let parts = spec.to_event_parts().unwrap();
+        assert_eq!(parts.start_iso, "2026-05-29T07:00:00");
+        assert_eq!(parts.end_iso, "2026-05-29T07:30:00");
+        assert_eq!(parts.recurrence_lines, vec!["RRULE:FREQ=DAILY".to_string()]);
+    }
+
+    // 28) to_event_parts: weekly + duration 90분 + EXDATE 2건 → EXDATE line 동봉.
+    #[test]
+    fn event_parts_weekly_with_exdates() {
+        let inp = RRuleInput {
+            weekdays: &[Weekday::Mon],
+            time_of_day: Some("18:30"),
+            duration_min: Some(90),
+            ..input(Freq::Weekly)
+        };
+        let spec = routine_to_rrule(&inp, &["2026-06-01", "2026-06-08"]).unwrap();
+        let parts = spec.to_event_parts().unwrap();
+        assert_eq!(parts.start_iso, "2026-06-01T18:30:00");
+        assert_eq!(parts.end_iso, "2026-06-01T20:00:00");
+        assert_eq!(parts.recurrence_lines.len(), 2);
+        assert_eq!(parts.recurrence_lines[0], "RRULE:FREQ=WEEKLY;BYDAY=MO");
+        assert_eq!(
+            parts.recurrence_lines[1],
+            "EXDATE;TZID=Asia/Seoul:20260601T183000,20260608T183000"
+        );
+    }
+
+    // 29) duration이 시간/날짜 경계를 넘는 경우.
+    #[test]
+    fn event_parts_duration_crosses_midnight() {
+        let inp = RRuleInput {
+            time_of_day: Some("23:30"),
+            duration_min: Some(60),
+            ..input(Freq::Daily)
+        };
+        let spec = routine_to_rrule(&inp, &[]).unwrap();
+        let parts = spec.to_event_parts().unwrap();
+        assert_eq!(parts.start_iso, "2026-05-29T23:30:00");
+        assert_eq!(parts.end_iso, "2026-05-30T00:30:00", "자정 넘어 다음 날로");
+    }
+
+    // 30) compact_to_iso: 잘못된 길이/문자 → InvalidDate.
+    #[test]
+    fn compact_to_iso_validates_input() {
+        assert!(compact_to_iso("2026-05-29").is_err()); // 길이 부족
+        assert!(compact_to_iso("20260529X090000").is_err()); // T 자리 X
+        assert!(compact_to_iso("20260529T09000X").is_err()); // 숫자 아님
+        assert_eq!(
+            compact_to_iso("20260529T090000").unwrap(),
+            "2026-05-29T09:00:00"
+        );
     }
 }
