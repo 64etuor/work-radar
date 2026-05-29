@@ -35,15 +35,21 @@ raw `<button>/<input>`을 발견해도 즉시 변환하지 않는다:
 `App.tsx`의 window-bubble Esc 핸들러는 `getCurrentWindow().hide()`를 호출한다. 따라서
 모달 추가 시 **반드시** overlay-stack 계약을 따라야 Esc가 모달만 닫히고 창이 살아남는다.
 
-### 패턴
+### 패턴 — overlay-stack 단일 진실원(DOM 마커)
 
-- `src/components/ui/overlay-stack.ts`의 `registerOverlay()`/`isOverlayOpen()`을 사용.
-  PR 0 래퍼(`DialogContent`·`DropdownMenuContent`·`SelectContent`)는 열린 동안 자동 등록.
+- **열림 = `data-wr-overlay-open` 마커.** 새 오버레이는 열려 있는 **콘텐츠 루트에 이 속성만** 달면
+  된다. `isOverlayOpen()`은 `document.querySelector('[data-wr-overlay-open]')` 한 줄로 판정한다
+  (수동 카운터 없음 — over/under-count drift 불가). 상수는 `overlay-stack.ts`의 `OVERLAY_OPEN_ATTR`.
+  - radix Content(`DialogContent`·`SelectContent`)는 닫히면 unmount되므로 **정적 속성**으로 단다.
+  - bespoke(CommitGraphDrawer/CardMenu)는 열려 있을 때만 렌더되므로 정적, 항상 마운트되는
+    토글(BrainDumpToggle)은 `open`일 때만 조건부로 단다(`data-wr-overlay-open={open ? "" : undefined}`).
+  - **마커를 빠뜨리면** 셸이 Esc로 창을 숨기거나 knob이 떠버린다(false-negative). 새 오버레이 PR은
+    이 마커 부여를 체크리스트로 본다.
 - App.tsx Esc 핸들러가 `isOverlayOpen()`이면 창 hide를 양보한다.
 - **`DialogTrigger asChild`로 트리거를 감싸야 포커스 복원이 동작.** controlled `open`만
   쓰면 Esc 후 포커스가 `body`로 샌다(정적 게이트가 못 잡음).
 - 프로그램적 모달(부모 `{state && <Modal>}`)은 DialogTrigger 없음 OK — body 복원 허용
-  (overlay-stack unregister가 post-commit이라 창보호 OK).
+  (radix unmount가 post-commit이라 native Esc 버블 시점엔 마커가 아직 살아있어 창보호 OK).
 - draft 상태 초기화는 필드를 `DialogContent` **자식 컴포넌트**로 분리해 열림마다 마운트
   (상태 초기화 + radix가 mount/unmount·포커스 소유).
 
@@ -63,7 +69,7 @@ raw `<button>/<input>`을 발견해도 즉시 변환하지 않는다:
 CalendarDrawer Wave 5.23(bespoke 셸 keep + 트리거 포커스 복원 추가).
 
 비-모달 Select 슬라이스는 Esc 스모크 불요(EnrichReviewPanel 2.9 선례). Select는
-overlay-stack `registerOverlay()`로 계약 배선(PR 0 단위테스트).
+`SelectContent`의 `data-wr-overlay-open` 마커로 계약 배선(`overlay-stack.test.ts` happy-dom 단위테스트).
 
 ## Button 변형 매핑
 

@@ -3,7 +3,6 @@ import { X } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "./cn";
-import { registerOverlay } from "./overlay-stack";
 
 export const Dialog = DialogPrimitive.Root;
 const DialogPortal = DialogPrimitive.Portal;
@@ -26,13 +25,14 @@ export function DialogContent({
   showClose = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean }) {
-  // 상호작용 계약(plan §0.6): 열린 동안 오버레이 레지스트리에 등록 → App 셸이 Esc로 창을 숨기지 않음.
-  // radix가 Esc로 닫기 + 트리거 포커스 복원 + 레이어 스택(중첩 안전)을 전담한다.
-  React.useEffect(() => registerOverlay(), []);
+  // 상호작용 계약(overlay-stack): 열린 동안 `data-wr-overlay-open` 마커 → App 셸이 Esc로 창을 숨기지 않음.
+  // radix가 Esc로 닫기 + 트리거 포커스 복원 + 레이어 스택(중첩 안전)을 전담한다. Content는 닫히면 unmount되어
+  // 마커가 사라진다(= isOverlayOpen false).
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        data-wr-overlay-open
         className={cn(
           "border-border bg-background fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-lg",
           "wr-dialog-content",

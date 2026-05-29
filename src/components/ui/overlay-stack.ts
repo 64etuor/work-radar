@@ -1,27 +1,23 @@
-// 열린 radix 오버레이(Dialog/DropdownMenu/Select) 카운트 레지스트리.
+// 열린 오버레이 감지. App 셸의 Esc→window.hide() 양보 + Cmd-Knob 표시 억제가 참조한다.
 //
-// 상호작용 계약(plan §0.6): App.tsx의 window(bubble) Esc 리스너는 Esc 시 `getCurrentWindow().hide()`를
-// 호출한다. radix 오버레이가 열려 있는 동안에는 셸이 그 동작을 양보해야 한다 — radix가 Esc로 최상위
-// 레이어를 닫고 포커스를 트리거로 복원하는 일을 전담하고, 셸은 단지 창을 숨기지 않는다.
+// 단일 진실원 = DOM. 모든 오버레이는 열린 동안 자기 콘텐츠 루트에 `data-wr-overlay-open` 마커를 단다
+// (radix Dialog/Select Content, bespoke CommitGraphDrawer/CardMenu/BrainDumpToggle). isOverlayOpen은
+// 그 마커를 한 번 쿼리할 뿐 — 수동 카운터가 없으니 drift(over/under-count) 원천이 없다.
 //
-// radix content는 열렸을 때만 마운트되므로 각 content의 effect가 mount=push / unmount=pop 한다.
-// 카운트(>0)는 중첩(예: Dialog 안 Select)도 안전하게 커버한다. unmount 정리는 React 커밋 이후라
-// native Esc가 window로 버블되는 시점엔 카운트가 아직 >0다(셸이 올바르게 양보).
+// 과거엔 모듈 전역 정수 카운터(registerOverlay/openCount)로 부수효과를 손으로 셌는데, React dev
+// StrictMode의 effect reconnect(이중 마운트) + radix 마운트 churn으로 카운트가 비대칭 집계돼 실제로
+// 열린 오버레이가 없는데도 >0이 고착되는 케이스가 있었다(뷰 전환이 잦은 worktree에서 knob 영구 억제).
+// DOM은 닫히면 콘텐츠가 사라지므로 그 한 클래스의 버그가 구조적으로 불가능해진다.
+//
+// Esc 타이밍 계약(shadcn-migration.md §radix Dialog Esc 계약): radix close→unmount 정리는 React
+// 커밋 이후라, native Esc가 window로 버블되는 시점엔 오버레이 DOM이 아직 살아있다 → isOverlayOpen()이
+// true → 셸이 창 숨김을 양보한다.
 
-let openCount = 0;
+/** 모든 오버레이가 열린 동안 콘텐츠 루트에 다는 공통 "열림" 마커 속성. 새 오버레이는 이 속성만 달면 된다. */
+export const OVERLAY_OPEN_ATTR = "data-wr-overlay-open";
 
-/** 오버레이 열림 등록. 반환된 함수를 호출(또는 effect cleanup)하면 해제된다. */
-export function registerOverlay(): () => void {
-  openCount += 1;
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    openCount = Math.max(0, openCount - 1);
-  };
-}
-
-/** 현재 열린 radix 오버레이가 하나라도 있는가. App 셸 Esc 핸들러가 참조. */
+/** 현재 실제로 열린 오버레이가 하나라도 있는가. 비-DOM(test/node) 환경은 false. */
 export function isOverlayOpen(): boolean {
-  return openCount > 0;
+  if (typeof document === "undefined") return false;
+  return document.querySelector(`[${OVERLAY_OPEN_ATTR}]`) !== null;
 }

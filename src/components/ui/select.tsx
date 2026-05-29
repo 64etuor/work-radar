@@ -3,7 +3,6 @@ import { Check, ChevronDown } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "./cn";
-import { registerOverlay } from "./overlay-stack";
 
 export const Select = SelectPrimitive.Root;
 export const SelectValue = SelectPrimitive.Value;
@@ -34,11 +33,12 @@ export function SelectContent({
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
-  // 상호작용 계약(plan §0.6): 열린 동안 레지스트리 등록 → Esc로 셀렉트만 닫히고 창은 유지.
-  React.useEffect(() => registerOverlay(), []);
+  // 상호작용 계약(overlay-stack): 열린 동안 `data-wr-overlay-open` 마커 → Esc로 셀렉트만 닫히고 창은 유지.
+  // Content는 닫히면 unmount되어 마커가 사라진다(= isOverlayOpen false).
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
+        data-wr-overlay-open
         position="popper"
         sideOffset={4}
         className={cn(

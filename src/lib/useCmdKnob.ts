@@ -9,13 +9,6 @@ import { useNavKeymap } from "@/lib/query";
 const DWELL_MS = 300;
 const MODIFIER_KEYS = new Set(["Meta", "Control", "Alt", "Shift"]);
 
-// TEMP DEBUG (knob 진단용 — 진단 후 제거). on-screen HUD가 읽는 링버퍼.
-export const KNOB_DBG: string[] = [];
-function dbg(s: string) {
-  KNOB_DBG.push(s);
-  if (KNOB_DBG.length > 10) KNOB_DBG.shift();
-}
-
 type TriggerMods = { ctrl: boolean; meta: boolean; alt: boolean; shift: boolean };
 
 /** "Cmd+Shift" 류 트리거 spec → 모디파이어 집합. 빈 값/무효는 Cmd 단독으로 폴백. (테스트용 export) */
@@ -111,10 +104,6 @@ export function useCmdKnob(): CmdKnobState {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!visibleRef.current)
-        dbg(
-          `kd ${e.key} m${+e.metaKey}c${+e.ctrlKey}a${+e.altKey}s${+e.shiftKey} nm${+downNonModRef.current}`,
-        );
       // visible: 키 무시(자기-발사 자기-취소 방지). 트리거 release는 keyup에서만 처리.
       if (visibleRef.current) return;
 
@@ -129,20 +118,14 @@ export function useCmdKnob(): CmdKnobState {
 
       // 모디파이어 keydown: 지금 눌린 모디파이어가 트리거와 정확히 일치 + 비모디파이어 키 없음 → dwell 시작.
       if (!downNonModRef.current && modsExactlyMatch(e, trigger)) {
-        dbg("dwell START");
         cancelDwell();
         dwellTimerRef.current = window.setTimeout(() => {
           dwellTimerRef.current = null;
-          const ov = isOverlayOpen();
-          const ed = isEditableTarget(document.activeElement);
-          dbg(`FIRE ov${+ov} ed${+ed} ae=${document.activeElement?.tagName ?? "?"}`);
-          if (ov || ed) return;
+          if (isOverlayOpen() || isEditableTarget(document.activeElement)) return;
           setOrigin(pointerRef.current);
           setVisible(true);
-          dbg("SHOWN");
         }, DWELL_MS);
       } else {
-        dbg(`SKIP nm${+downNonModRef.current} match${+modsExactlyMatch(e, trigger)}`);
         cancelDwell();
       }
     };

@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Kind } from "@/bindings";
 import { parseDump } from "@/components/board/boardUtils";
 import { Button } from "@/components/ui/button";
-import { registerOverlay } from "@/components/ui/overlay-stack";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type Props = {
@@ -30,7 +29,7 @@ type Props = {
  * Esc(빈 입력) / 외부 클릭(빈 입력) / submit 후 → collapsed로 복귀.
  * 입력에 텍스트 있을 때 Esc는 collapse 안 함(사용자 데이터 보호).
  *
- * **App 셸과의 계약**: open 동안 `registerOverlay()`로 등록 → App `window.hide()` 양보.
+ * **App 셸과의 계약**: open 동안 `data-wr-overlay-open` 마커(overlay-stack 단일 진실원) → App `window.hide()` 양보.
  * Esc는 `preventDefault + stopPropagation`으로 셸 핸들러 도달 차단.
  * close 시 트리거 버튼으로 포커스 복원(radix Dialog와 동등 동작) — 키보드 흐름 유지.
  *
@@ -58,12 +57,6 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
     }
     wasOpenRef.current = open;
   }, [open, effectiveInputRef]);
-
-  // App 셸 Esc → window.hide 양보. open일 때만 등록(중첩 안전).
-  useEffect(() => {
-    if (!open) return;
-    return registerOverlay();
-  }, [open]);
 
   // 외부 클릭 collapse(빈 입력일 때만). bubble phase — 다른 핸들러 stopPropagation 존중.
   useEffect(() => {
@@ -120,7 +113,13 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
   };
 
   return (
-    <div ref={rootRef} className="brain-dump-toggle" data-state={open ? "open" : "closed"}>
+    <div
+      ref={rootRef}
+      className="brain-dump-toggle"
+      data-state={open ? "open" : "closed"}
+      // overlay-stack 단일 진실원: open일 때만 마커 → App 셸 Esc가 창 숨김 양보 + knob 억제.
+      data-wr-overlay-open={open ? "" : undefined}
+    >
       <button
         ref={triggerRef}
         type="button"
