@@ -13,7 +13,7 @@ import {
   useState,
 } from "react";
 
-import type { CalendarEvent } from "@/bindings";
+import { type CalendarEvent, commands } from "@/bindings";
 import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
 import { EventPopover } from "@/components/today/EventPopover";
 import { HistoryRail } from "@/components/today/HistoryRail";
@@ -43,6 +43,7 @@ import {
   useToggleRoutineCheck,
   useToggleTodayDone,
 } from "@/lib/query";
+import { unwrap } from "@/lib/query/client";
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
 import { buildTodayBlocks } from "@/lib/todayBlocks";
@@ -147,9 +148,29 @@ export function TodayView() {
           await stage({ kind: "eventUnschedule", eventId, calendarId });
           removeEventFromCache(calendarId, eventId);
         } else if (block.kind === "routine" && block.routineId) {
-          await stage({ kind: "routineUnschedule", routineId: block.routineId, date });
-          if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
+          const routineId = block.routineId;
+          // 루틴 목록/블록은 today-bound(useTodayRoutines(today, …))라 "오늘 빼기"는 항상 today를
+          // 대상으로 한다 — 날짜 네비게이션 중에도 navigated date가 아닌 today에 EXDATE를 쓴다
+          // (done-토글과 동일). date를 쓰면 동기화 루틴의 엉뚱한 미래 occurrence가 조용히 지워진다.
+          // "오늘 빼기" = EXDATE: 로컬 skip 행 + 동기화 ON이면 master event EXDATE PATCH.
+          await unwrap(commands.unscheduleRoutineToday(routineId, today));
+          // per-instance Google 이벤트가 있으면(드물게 드래그로 배치됐던 경우) 함께 정리.
+          if (linkedEventId && calendarId) {
+            await stage({ kind: "routineUnschedule", routineId, date: today });
+            removeEventFromCache(calendarId, linkedEventId);
+            void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+          }
           void qc.invalidateQueries({ queryKey: ["routines"] });
+          // 되돌리기 토스트(useTimelineDnd 언스케줄 패턴과 동일 — 자동 dismiss 안에 누르면 복구).
+          useToastStore.getState().pushInfo(`오늘 타임라인에서 뺐어요: ${title}`, {
+            undoLabel: "되돌리기",
+            onUndo: () => {
+              void unwrap(commands.restoreRoutineToday(routineId, today))
+                .then(() => qc.invalidateQueries({ queryKey: ["routines"] }))
+                .catch((err) => useToastStore.getState().pushError("routine.restore", err));
+            },
+          });
+          return;
         }
         void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
         useToastStore.getState().pushSuccess(`일정 삭제됨: ${title}`);
@@ -162,7 +183,7 @@ export function TodayView() {
         useToastStore.getState().pushError("calendar.delete", err);
       });
     },
-    [date, qc, removeEventFromCache],
+    [date, today, qc, removeEventFromCache],
   );
 
   // ── DnD wiring ──────────────────────────────────────────────────────

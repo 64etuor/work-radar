@@ -113,6 +113,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Routine → Google Calendar 동기화 (opt-in, ADR-0005).
         commands::enable_routine_google_sync,
         commands::disable_routine_google_sync,
+        commands::unschedule_routine_today,
+        commands::restore_routine_today,
         // PR Radar (read 레일, Phase 4).
         commands::refresh_pr_radar,
         commands::get_pr_radar_settings,

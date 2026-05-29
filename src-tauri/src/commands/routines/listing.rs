@@ -52,7 +52,12 @@ pub async fn fetch_today_routines(
                 r.google_event_id, r.google_calendar_id \
          FROM routines r \
          LEFT JOIN routine_checks rc ON rc.routine_id = r.id AND rc.date = ?1 \
-         WHERE r.active = 1 ORDER BY r.rank IS NULL, r.rank, r.created_at",
+         WHERE r.active = 1 \
+           AND NOT EXISTS ( \
+             SELECT 1 FROM routine_exdates re \
+             WHERE re.routine_id = r.id AND re.date = ?1 \
+           ) \
+         ORDER BY r.rank IS NULL, r.rank, r.created_at",
     )
     .bind(date)
     .fetch_all(db)

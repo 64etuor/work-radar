@@ -136,6 +136,15 @@ export const commands = {
 	enableRoutineGoogleSync: (routineId: string, projectId: string, calendarId: string) => typedError<null, AppError>(__TAURI_INVOKE("enable_routine_google_sync", { routineId, projectId, calendarId })),
 	disableRoutineGoogleSync: (routineId: string) => typedError<null, AppError>(__TAURI_INVOKE("disable_routine_google_sync", { routineId })),
 	/**
+	 *  루틴을 그 날짜의 타임라인에서 뺀다(EXDATE). 로컬 routine_exdates에 skip 행을 쓰고,
+	 *  동기화 ON이면 master recurring event에 EXDATE를 PATCH로 추가한다(build_master_event_input이
+	 *  routine_exdates를 재읽어 EXDATE를 동봉). 미동기화면 토큰 조회 없이 로컬 hide만(no-op PATCH).
+	 *  동기화 PATCH 실패는 로컬 변경을 유지한 채 exdate_patch_failed로 surface(PR 3 graceful 패턴).
+	 */
+	unscheduleRoutineToday: (routineId: string, date: string) => typedError<null, AppError>(__TAURI_INVOKE("unschedule_routine_today", { routineId, date })),
+	/**  "오늘 빼기" 되돌리기 — routine_exdates skip 행 삭제 + 동기화 ON이면 master EXDATE 제거 PATCH. */
+	restoreRoutineToday: (routineId: string, date: string) => typedError<null, AppError>(__TAURI_INVOKE("restore_routine_today", { routineId, date })),
+	/**
 	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
 	 *  매트릭스 자동 escalate 없음, INVARIANT #4). threshold/충돌은 Inbox 알림으로 mirror하고, 기존
 	 *  escalated PR 신호는 원인 해소분만 auto-resolve.

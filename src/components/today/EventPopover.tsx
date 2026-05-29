@@ -139,15 +139,18 @@ export function EventPopover({
    * 이전엔 linkedEventId 없으면 숨겼는데, Google 미동기화 signal도 unschedule이 정상 동작하므로 항상 노출.
    */
   const isDone = isCheckable && block.done === true;
+  const isRoutine = block.kind === "routine";
 
   const handleDelete = () => {
-    const message =
-      block.kind === "event"
-        ? `"${block.title}" 일정을 Google Calendar에서 삭제합니다. 계속할까요?`
-        : isSignal
-          ? `"${block.title}"의 시간 배치를 삭제하고 연결된 Google 일정을 지웁니다. 카드는 Today에 남습니다. 계속할까요?`
-          : `"${block.title}" 루틴의 오늘 시간 배치를 삭제하고 연결된 Google 일정을 지웁니다. 계속할까요?`;
-    if (!window.confirm(message)) return;
+    // 루틴 "오늘 빼기"는 EXDATE(되돌리기 토스트로 복구 가능)라 confirm 없이 즉시 실행.
+    // signal/event 삭제는 비가역(Google 이벤트 삭제 포함)이라 confirm 유지.
+    if (!isRoutine) {
+      const message =
+        block.kind === "event"
+          ? `"${block.title}" 일정을 Google Calendar에서 삭제합니다. 계속할까요?`
+          : `"${block.title}"의 시간 배치를 삭제하고 연결된 Google 일정을 지웁니다. 카드는 Today에 남습니다. 계속할까요?`;
+      if (!window.confirm(message)) return;
+    }
     onDeleteSchedule(currentBox);
     onClose();
   };
@@ -225,11 +228,11 @@ export function EventPopover({
           )}
           <Button
             size="sm"
-            variant="destructiveOutline"
+            variant={isRoutine ? "outline" : "destructiveOutline"}
             onClick={handleDelete}
-            aria-label="타임라인 일정 삭제"
+            aria-label={isRoutine ? "오늘 타임라인에서 빼기" : "타임라인 일정 삭제"}
           >
-            삭제
+            {isRoutine ? "오늘 타임라인에서 빼기" : "삭제"}
           </Button>
         </div>
       </PopoverContent>

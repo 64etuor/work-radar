@@ -13,6 +13,7 @@
 // 본 모듈의 모든 IPC/helper는 Result<_, AppError>로 통일 → 모듈 단위 result_large_err 허용.
 #![allow(clippy::result_large_err)]
 
+use chrono::NaiveDate;
 use tauri::State;
 
 use crate::{
@@ -402,6 +403,120 @@ pub async fn disable_routine_google_sync(
         })?;
     let provider = HttpCalendarProvider::new()?;
     disable_routine_sync_with_provider(db.inner(), &provider, &access, &routine_id).await
+}
+
+// ── PR 4: 오늘 unschedule = EXDATE ──────────────────────────────────────────────
+
+/// 'YYYY-MM-DD' 형식 검증. exdate row의 date 컬럼은 EXDATE 매핑(exdate_local)이 슬라이스로
+/// 파싱하므로 형식이 깨지면 잘못된 EXDATE가 master event에 새겨진다 → 진입점에서 차단.
+fn validate_ymd(date: &str) -> Result<(), AppError> {
+    NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map(|_| ())
+        .map_err(|_| {
+            AppError::validation(
+                "routine.exdate.bad_date",
+                "날짜 형식이 YYYY-MM-DD가 아닙니다",
+            )
+        })
+}
+
+/// 로컬 SSOT — (routine_id, date) skip 행 추가(멱등). PK 충돌은 무시.
+async fn insert_exdate_row(db: &Db, routine_id: &str, date: &str) -> Result<(), AppError> {
+    sqlx::query("INSERT OR IGNORE INTO routine_exdates (routine_id, date) VALUES (?1, ?2)")
+        .bind(routine_id)
+        .bind(date)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+/// 로컬 SSOT — (routine_id, date) skip 행 삭제(undo). 없으면 0행(멱등).
+async fn delete_exdate_row(db: &Db, routine_id: &str, date: &str) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM routine_exdates WHERE routine_id = ?1 AND date = ?2")
+        .bind(routine_id)
+        .bind(date)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+/// 동기화 실패 wrap — 로컬 변경(exdate row)은 이미 적용됐음을 truthful하게 surface한다.
+/// 원본 detail은 메시지에 보존(PR 3 patch_failed와 동일 정책 — flatten하되 진실 유지).
+fn exdate_patch_failed(e: AppError) -> AppError {
+    AppError::terminal(
+        "routine.sync.exdate_patch_failed",
+        format!(
+            "로컬 변경은 적용했지만 Google 동기화에 실패했습니다: {}",
+            e.message
+        ),
+    )
+}
+
+/// Provider injection helper — "오늘 빼기" 흐름 단위 테스트용. exdate row 추가 후 master PATCH.
+/// 미동기화 루틴이면 patch가 no-op(멱등) — row만 남는다(로컬 hide).
+/// IPC 진입점(`unschedule_routine_today`)은 `patch_synced_routine_after_edit`로 토큰을 동기화
+/// 시에만 조회하므로, 이 wrapper는 provider 주입이 가능한 테스트 경로 전용이다.
+#[cfg(test)]
+pub(crate) async fn unschedule_today_with_provider<P: CalendarProvider>(
+    db: &Db,
+    provider: &P,
+    access_token: &str,
+    routine_id: &str,
+    date: &str,
+    tzid: &str,
+) -> Result<(), AppError> {
+    insert_exdate_row(db, routine_id, date).await?;
+    patch_routine_sync_with_provider(db, provider, access_token, routine_id, tzid).await
+}
+
+/// Provider injection helper — undo 흐름 단위 테스트용. exdate row 삭제 후 master PATCH.
+#[cfg(test)]
+pub(crate) async fn restore_today_with_provider<P: CalendarProvider>(
+    db: &Db,
+    provider: &P,
+    access_token: &str,
+    routine_id: &str,
+    date: &str,
+    tzid: &str,
+) -> Result<(), AppError> {
+    delete_exdate_row(db, routine_id, date).await?;
+    patch_routine_sync_with_provider(db, provider, access_token, routine_id, tzid).await
+}
+
+/// 루틴을 그 날짜의 타임라인에서 뺀다(EXDATE). 로컬 routine_exdates에 skip 행을 쓰고,
+/// 동기화 ON이면 master recurring event에 EXDATE를 PATCH로 추가한다(build_master_event_input이
+/// routine_exdates를 재읽어 EXDATE를 동봉). 미동기화면 토큰 조회 없이 로컬 hide만(no-op PATCH).
+/// 동기화 PATCH 실패는 로컬 변경을 유지한 채 exdate_patch_failed로 surface(PR 3 graceful 패턴).
+#[tauri::command]
+#[specta::specta]
+pub async fn unschedule_routine_today(
+    db: State<'_, Db>,
+    routine_id: String,
+    date: String,
+) -> Result<(), AppError> {
+    validate_ymd(&date)?;
+    // 존재 확인(깔끔한 not_found) — 이후 FK 위반 대신 명확한 에러.
+    load_routine(db.inner(), &routine_id).await?;
+    insert_exdate_row(db.inner(), &routine_id, &date).await?;
+    patch_synced_routine_after_edit(db.inner(), &routine_id)
+        .await
+        .map_err(exdate_patch_failed)
+}
+
+/// "오늘 빼기" 되돌리기 — routine_exdates skip 행 삭제 + 동기화 ON이면 master EXDATE 제거 PATCH.
+#[tauri::command]
+#[specta::specta]
+pub async fn restore_routine_today(
+    db: State<'_, Db>,
+    routine_id: String,
+    date: String,
+) -> Result<(), AppError> {
+    validate_ymd(&date)?;
+    load_routine(db.inner(), &routine_id).await?;
+    delete_exdate_row(db.inner(), &routine_id, &date).await?;
+    patch_synced_routine_after_edit(db.inner(), &routine_id)
+        .await
+        .map_err(exdate_patch_failed)
 }
 
 #[cfg(test)]
@@ -1035,5 +1150,167 @@ mod tests {
             .unwrap_err();
         // CalendarError → AppError From 변환으로 전파(코드 무관, 에러면 됨).
         assert!(!err.code.is_empty(), "provider 에러가 AppError로 전파");
+    }
+
+    /// 헬퍼 — routine_exdates 행 개수(특정 날짜).
+    async fn exdate_count(db: &crate::db::Db, rid: &str, date: &str) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM routine_exdates WHERE routine_id = ?1 AND date = ?2",
+        )
+        .bind(rid)
+        .bind(date)
+        .fetch_one(db)
+        .await
+        .unwrap()
+    }
+
+    /// unschedule(오늘 빼기): 동기화 루틴 → exdate row 추가 + master event에 EXDATE PATCH 동봉.
+    #[tokio::test]
+    async fn unschedule_today_adds_exdate_and_patches_master() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_g", "evt_g").await;
+
+        let provider = RecordingProvider::default();
+        unschedule_today_with_provider(&db, &provider, "tok", &rid, "2026-06-01", "Asia/Seoul")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            exdate_count(&db, &rid, "2026-06-01").await,
+            1,
+            "exdate row 1건"
+        );
+
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1, "master event PATCH 1회");
+        let recurrence = patched[0].3["recurrence"].as_array().unwrap();
+        assert!(
+            recurrence.iter().any(|l| l
+                .as_str()
+                .is_some_and(|s| s.starts_with("EXDATE") && s.contains("20260601T070000"))),
+            "EXDATE 라인에 빠진 날짜(time_of_day 동봉) 포함: {recurrence:?}"
+        );
+    }
+
+    /// unschedule: 미동기화(local-only) 루틴 → exdate row만 추가, provider 미호출(로컬 hide).
+    #[tokio::test]
+    async fn unschedule_today_local_only_no_patch() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "비타민",
+            RoutineFreq::Daily,
+            vec![],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+
+        let provider = RecordingProvider::default();
+        unschedule_today_with_provider(&db, &provider, "tok", &rid, "2026-06-02", "Asia/Seoul")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            exdate_count(&db, &rid, "2026-06-02").await,
+            1,
+            "exdate row 1건"
+        );
+        assert!(
+            provider.patched.lock().unwrap().is_empty(),
+            "미동기화 루틴은 patch_event 미호출"
+        );
+    }
+
+    /// unschedule: 같은 (routine, date) 두 번 → exdate row 1건(INSERT OR IGNORE 멱등).
+    #[tokio::test]
+    async fn unschedule_today_is_idempotent() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "스트레칭",
+            RoutineFreq::Daily,
+            vec![],
+            Some("08:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+
+        let provider = RecordingProvider::default();
+        for _ in 0..2 {
+            unschedule_today_with_provider(&db, &provider, "tok", &rid, "2026-06-03", "Asia/Seoul")
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            exdate_count(&db, &rid, "2026-06-03").await,
+            1,
+            "멱등 — PK(routine_id, date) 충돌 무시"
+        );
+    }
+
+    /// restore(되돌리기): 동기화 루틴 → exdate row 삭제 + master event PATCH에서 그 EXDATE 제거.
+    #[tokio::test]
+    async fn restore_today_removes_exdate_and_patches() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "PT",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Tue],
+            Some("18:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_p", "evt_p").await;
+        // 먼저 빼두기.
+        sqlx::query("INSERT INTO routine_exdates (routine_id, date) VALUES (?1, '2026-06-09')")
+            .bind(&rid)
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let provider = RecordingProvider::default();
+        restore_today_with_provider(&db, &provider, "tok", &rid, "2026-06-09", "Asia/Seoul")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            exdate_count(&db, &rid, "2026-06-09").await,
+            0,
+            "exdate row 삭제됨"
+        );
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1, "master event PATCH 1회");
+        let recurrence = patched[0].3["recurrence"].as_array().unwrap();
+        assert!(
+            !recurrence
+                .iter()
+                .any(|l| l.as_str().is_some_and(|s| s.contains("20260609"))),
+            "되돌린 EXDATE는 recurrence에서 빠짐: {recurrence:?}"
+        );
+    }
+
+    /// 잘못된 날짜 형식은 IPC 진입점 검증에서 거부(잘못된 EXDATE 새김 방지).
+    #[tokio::test]
+    async fn unschedule_today_rejects_bad_date() {
+        assert_eq!(
+            validate_ymd("2026/06/01").unwrap_err().code,
+            "routine.exdate.bad_date"
+        );
+        assert_eq!(
+            validate_ymd("not-a-date").unwrap_err().code,
+            "routine.exdate.bad_date"
+        );
+        assert!(validate_ymd("2026-06-01").is_ok());
     }
 }

@@ -292,17 +292,18 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 
 ### 완료 (origin에 push됨)
 
-| 단계       | 커밋                | 내용                                                                                 |
-| ---------- | ------------------- | ------------------------------------------------------------------------------------ |
-| ADR + plan | `2e2fdf9`/`a966df9` | ADR-0005 freeze, plan amend                                                          |
-| PR 1       | `d5caf3d`/`c9dc6c4` | 0037 마이그레이션 + `routines/rrule.rs` 순수 매핑 + 26 테스트                        |
-| (refactor) | `ee235e3`           | `CreateEventInput` recurrence/time_zone 확장                                         |
-| PR 2a      | `ffb19be`           | enable/disable IPC + provider injection + `RRuleSpec::to_event_parts()`              |
-| PR 2b-1    | `e809912`           | `RoutineToday`/입력에 google·monthly 필드 노출 + crud 배선 + enable kind 매핑 검증   |
-| PR 2b-2    | `5cc7b49`           | RoutineSyncButton(동기화 토글 + 캘린더 picker) + popover overlay-stack Esc 수정      |
-| PR 2b-3    | `d22bfb0`           | monthly nth_weekday 편집 UI + IPC-boundary 검증 + **로컬 due-calc nth_weekday 정합** |
-| PR 3       | `40b90ac`           | 루틴 편집 시 Google master event PATCH 전파(`build_master_event_input` 추출 공용)    |
-| 가드       | `cced37c`           | 무시각 루틴 sync 비활성(프런트 disabled + 백엔드 `routine.sync.time_required`)       |
+| 단계       | 커밋                | 내용                                                                                                                        |
+| ---------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| ADR + plan | `2e2fdf9`/`a966df9` | ADR-0005 freeze, plan amend                                                                                                 |
+| PR 1       | `d5caf3d`/`c9dc6c4` | 0037 마이그레이션 + `routines/rrule.rs` 순수 매핑 + 26 테스트                                                               |
+| (refactor) | `ee235e3`           | `CreateEventInput` recurrence/time_zone 확장                                                                                |
+| PR 2a      | `ffb19be`           | enable/disable IPC + provider injection + `RRuleSpec::to_event_parts()`                                                     |
+| PR 2b-1    | `e809912`           | `RoutineToday`/입력에 google·monthly 필드 노출 + crud 배선 + enable kind 매핑 검증                                          |
+| PR 2b-2    | `5cc7b49`           | RoutineSyncButton(동기화 토글 + 캘린더 picker) + popover overlay-stack Esc 수정                                             |
+| PR 2b-3    | `d22bfb0`           | monthly nth_weekday 편집 UI + IPC-boundary 검증 + **로컬 due-calc nth_weekday 정합**                                        |
+| PR 3       | `40b90ac`           | 루틴 편집 시 Google master event PATCH 전파(`build_master_event_input` 추출 공용)                                           |
+| 가드       | `cced37c`           | 무시각 루틴 sync 비활성(프런트 disabled + 백엔드 `routine.sync.time_required`)                                              |
+| PR 4       | (이번 세션)         | 오늘 unschedule = EXDATE — `unschedule/restore_routine_today` IPC + 로컬 hide 필터 + EventPopover "오늘 빼기" + undo 토스트 |
 
 핵심 결정(잠금): ① **루틴 kind ↔ 프로젝트 kind 매핑** — 개인 루틴은 개인 프로젝트, 업무 루틴은
 업무 프로젝트 캘린더에만 sync. 백엔드가 `project.kind == routine.kind` 검증(교차 노출 차단).
@@ -316,12 +317,17 @@ monthly 패턴 미지정 시 enable에서 `day_of_month` 기본(로컬 due-calc 
 
 1. ✅ **cmux Esc 라이브 스모크 통과**(2026-05-29) — 워크트리 앱(`pnpm tauri dev`)을 cmux pane에서
    띄워 RoutineSyncButton popover 열고 Esc → popover만 닫히고 창은 유지됨(사용자 라이브 확인). 해소됨.
-2. **PR 4** — 오늘 unschedule = EXDATE PATCH(§5 PR 4). `routine_exdates` row 쓰기 + sync ON이면
-   master event EXDATE PATCH + EventPopover 라벨("오늘 타임라인에서 빼기"). PR 3의
-   `build_master_event_input`이 이미 EXDATE를 재읽어 PATCH에 동봉하므로 PR 4는 exdate row + 흐름 위주.
-3. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5).
+2. ✅ **PR 4 완료(이번 세션)** — 오늘 unschedule = EXDATE. `unschedule_routine_today`/
+   `restore_routine_today` IPC(exdate row + 동기화 ON이면 `patch_synced_routine_after_edit` 재사용으로
+   master EXDATE PATCH) + `fetch_today_routines`에 exdate NOT EXISTS 필터(로컬 hide) + EventPopover
+   루틴 버튼 "오늘 타임라인에서 빼기"(confirm 없음, 가역) + TodayView undo 토스트(`restore_routine_today`).
+   gate 전부 green(cargo test --lib 396·clippy 0·fmt·typecheck·lint 0 err·vitest 204·bindings 의도분 2).
+   **남은 것**: cmux 라이브 스모크(블록 "오늘 빼기" → 사라짐 + 토스트 "되돌리기" → 복구) 인터랙티브 대기.
+3. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5). **다음 작업**.
 4. (follow-up, 비차단) sync된 루틴의 시간을 편집으로 비우면 PATCH가 09:00 fallback으로 재구성 —
    무시각 편집 시 sync 자동 해제 또는 편집 차단으로 처리(`patch_routine_sync_with_provider` NOTE 참조).
+5. (follow-up, 비차단) EXDATE skip이 streak/tracking(`routine_tracking`)에 미반영 — routine_exdates를
+   "missed 아님"으로 구분하는 건 별도 follow-up.
 
 > **PR 2b-3 완료 노트**: monthly nth_weekday 편집 UI + IPC-boundary 검증(`crud::validate_monthly_input`)
 >

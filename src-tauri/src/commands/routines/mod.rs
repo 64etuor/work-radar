@@ -593,6 +593,45 @@ mod tests {
         assert_eq!(titles, vec!["C", "A", "B"]);
     }
 
+    /// PR 4: routine_exdates에 (routine, date) skip 행이 있으면 그 날짜 Today 목록에서 제외("오늘 빼기").
+    #[tokio::test]
+    async fn exdate_hides_routine_from_that_date_only() {
+        let db = fresh_db().await;
+        let rid = insert_daily(&db, "물 마시기").await;
+
+        // skip 전: 두 날짜 모두 due(daily).
+        assert_eq!(
+            fetch_today_routines(&db, "2026-06-01", Weekday::Mon)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+
+        // 2026-06-01만 skip.
+        sqlx::query("INSERT INTO routine_exdates (routine_id, date) VALUES (?1, '2026-06-01')")
+            .bind(&rid)
+            .execute(&db)
+            .await
+            .unwrap();
+
+        assert!(
+            fetch_today_routines(&db, "2026-06-01", Weekday::Mon)
+                .await
+                .unwrap()
+                .is_empty(),
+            "skip한 날짜에는 루틴이 안 보임"
+        );
+        assert_eq!(
+            fetch_today_routines(&db, "2026-06-02", Weekday::Tue)
+                .await
+                .unwrap()
+                .len(),
+            1,
+            "다른 날짜에는 그대로 보임(그날만 제외)"
+        );
+    }
+
     /// update_routine: 필드 변경 후 미발사 알림 삭제, 발사된 알림은 보존.
     #[tokio::test]
     async fn update_routine_clears_unfired_keeps_fired() {
