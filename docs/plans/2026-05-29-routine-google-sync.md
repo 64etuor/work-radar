@@ -280,13 +280,55 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 
 ---
 
-## 8. 다음 액션 (PR 1 시작 순서)
+## 8. 세션 핸드오프 (현재 상태 — 2026-05-29 갱신)
 
-1. **ADR 0005 freeze** (`docs/adr/0005-routine-google-sync.md`) — 첫 커밋.
-2. PR 1 `migrations/0037_routines_google_sync.sql` 작성 → `pnpm tauri dev` 부팅 + 기존 row가 NULL 신규 컬럼으로 진입하는지 확인.
-3. PR 1 `src-tauri/src/routines/{mod.rs,rrule.rs}` 신규 모듈 + `models/routines.rs` 필드 추가 → `routine_to_rrule` + `exdate_local` 헬퍼.
-4. PR 1 ~15개 단위 테스트 TDD 사이클 (위 §3 매트릭스).
-5. `pnpm typecheck`(bindings drift 0) + `cargo test --lib routines::rrule` + `cargo clippy -D warnings` + `cargo fmt --check`.
-6. PR 본문 작성 + dev 푸시.
+> 이 §8은 **현재 진행 상태 정본**이다. 새 세션은 여기부터 읽고 재진입한다.
 
-**컨텍스트 재진입 단축경로**: 이 파일 + `docs/adr/0005-routine-google-sync.md` + `docs/areas/decision-rails.md` + `docs/areas/data-layer-conventions.md` + `migrations/0011_routines_phase16.sql` 5개만 읽으면 다음 세션 즉시 시작 가능.
+### 워크트리 / 브랜치
+
+- 워크트리: `.claude/worktrees/routine-google-sync`
+- 브랜치: `feature/routine-google-sync` (origin/dev `d3d7a2a` 위에 rebase됨, push 완료)
+- **dev 미머지** — 이 브랜치는 feature 브랜치다. main은 PR-only, push는 dev만(이 작업은 feature 브랜치로 격리).
+
+### 완료 (origin에 push됨)
+
+| 단계       | 커밋                | 내용                                                                               |
+| ---------- | ------------------- | ---------------------------------------------------------------------------------- |
+| ADR + plan | `2e2fdf9`/`a966df9` | ADR-0005 freeze, plan amend                                                        |
+| PR 1       | `d5caf3d`/`c9dc6c4` | 0037 마이그레이션 + `routines/rrule.rs` 순수 매핑 + 26 테스트                      |
+| (refactor) | `ee235e3`           | `CreateEventInput` recurrence/time_zone 확장                                       |
+| PR 2a      | `ffb19be`           | enable/disable IPC + provider injection + `RRuleSpec::to_event_parts()`            |
+| PR 2b-1    | `e809912`           | `RoutineToday`/입력에 google·monthly 필드 노출 + crud 배선 + enable kind 매핑 검증 |
+| PR 2b-2    | `5cc7b49`           | RoutineSyncButton(동기화 토글 + 캘린더 picker) + popover overlay-stack Esc 수정    |
+
+핵심 결정(잠금): **루틴 kind ↔ 프로젝트 kind 매핑** — 개인 루틴은 개인 프로젝트, 업무 루틴은
+업무 프로젝트 캘린더에만 sync. 백엔드가 `project.kind == routine.kind` 검증(교차 노출 차단).
+monthly 패턴 미지정 시 enable에서 `day_of_month` 기본(로컬 due-calc 일치).
+
+### 다음 작업 (우선순위 순)
+
+1. **⚠️ cmux Esc 라이브 스모크** (deferred, blocking-ish) — PR 2b-2의 RoutineSyncButton popover를
+   보드에서 열고 Esc → 창이 안 숨고 popover만 닫히는지 확인(`docs/areas/shadcn-migration.md` §52-58).
+   헤드리스에서 실행 못 했음. **인터랙티브 세션 필수.** (overlay-stack 단위계약+select.tsx 동일 패턴으로
+   결정적 근거는 있으나 라이브 미확인.)
+2. **PR 2b-3** — monthly nth_weekday 편집 UI (radio day_of_month/nth_weekday + nth_week 셀렉트 +
+   duration 입력). RoutineDraft 확장 + CaptureBoard 실제 값 전달. **진입 조건: `monthly_nth_week`
+   IPC-boundary 검증**(create/update — 현재 DB CHECK 의존). 상세는 §5 PR 2b-3.
+3. **PR 3** — 루틴 편집 시 PATCH 전파(§5 PR 3).
+4. **PR 4** — 오늘 unschedule = EXDATE PATCH(§5 PR 4).
+5. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5).
+
+### 컨텍스트 재진입 단축경로
+
+이 파일(§1 결정 + §8 핸드오프) + `docs/adr/0005-routine-google-sync.md` + 아래 4개 핵심 소스만
+읽으면 즉시 재개 가능:
+
+- `src-tauri/src/routines/rrule.rs` — RRULE/EXDATE 매핑 정본
+- `src-tauri/src/commands/routines/google_sync.rs` — enable/disable IPC + kind 검증
+- `src/components/board/RoutineSyncButton.tsx` + `src/lib/routineSync.ts` — 동기화 UI + 순수 로직
+- `src-tauri/migrations/0037_routines_google_sync.sql` — 스키마
+
+검증 명령(정본 `docs/reference/commands.md`): `cargo test --lib` / `cargo clippy --all-targets -- -D warnings`
+/ `cargo fmt --check` / `pnpm typecheck` / `pnpm lint` / `pnpm vitest run`. cargo PATH는
+`export PATH="$HOME/.cargo/bin:$PATH"` 필요(커밋 시 husky pre-commit도). 백그라운드 셸은 cwd가
+워크트리 루트로 리셋되니 `--manifest-path src-tauri/Cargo.toml` 권장.
