@@ -5,8 +5,8 @@ use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    DebtPoint, RoutineFreq, WeeklyPrActivity, WeeklyReview, WeeklyRoutineAdherence,
-    WeeklyThroughput,
+    DebtPoint, RoutineFreq, RoutineMonthlyPattern, WeeklyPrActivity, WeeklyReview,
+    WeeklyRoutineAdherence, WeeklyThroughput,
 };
 
 // ── Weekly review (Phase 11c, read 집계) ──────────────────────────────────────
@@ -42,8 +42,17 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     // done=스케줄 해당 날의 체크만(due와 동일 기준), due=스케줄 occurrence 합산.
     // 비스케줄 날 체크(예: 월요일 루틴을 화요일에 체크)는 done에서 제외 → done ⊆ due, 이행률 왜곡 방지.
 
-    let checks: Vec<(RoutineFreq, Option<String>, Option<String>, String)> = sqlx::query_as(
-        "SELECT r.freq, r.weekdays, r.anchor_date, rc.date FROM routine_checks rc \
+    type CheckRow = (
+        RoutineFreq,
+        Option<String>,
+        Option<String>,
+        Option<RoutineMonthlyPattern>,
+        Option<i64>,
+        String,
+    );
+    let checks: Vec<CheckRow> = sqlx::query_as(
+        "SELECT r.freq, r.weekdays, r.anchor_date, r.monthly_pattern, r.monthly_nth_week, rc.date \
+             FROM routine_checks rc \
              JOIN routines r ON r.id = rc.routine_id \
              WHERE r.active = 1 AND rc.date BETWEEN ?1 AND ?2",
     )
@@ -52,26 +61,49 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     .fetch_all(db)
     .await?;
     let mut done: u32 = 0;
-    for (freq, weekdays, anchor, date) in &checks {
+    for (freq, weekdays, anchor, mpattern, nth_week, date) in &checks {
         let parsed = match chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
             Ok(d) => d,
             Err(_) => continue,
         };
         let wkdays = parse_weekdays(weekdays.as_deref());
-        if routine_due_on(*freq, &wkdays, anchor.as_deref(), parsed) {
+        if routine_due_on(
+            *freq,
+            &wkdays,
+            anchor.as_deref(),
+            *mpattern,
+            nth_week.map(|v| v as i32),
+            parsed,
+        ) {
             done += 1;
         }
     }
-    let routines: Vec<(RoutineFreq, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT freq, weekdays, anchor_date FROM routines WHERE active = 1")
-            .fetch_all(db)
-            .await?;
+    type RoutineRow = (
+        RoutineFreq,
+        Option<String>,
+        Option<String>,
+        Option<RoutineMonthlyPattern>,
+        Option<i64>,
+    );
+    let routines: Vec<RoutineRow> = sqlx::query_as(
+        "SELECT freq, weekdays, anchor_date, monthly_pattern, monthly_nth_week \
+         FROM routines WHERE active = 1",
+    )
+    .fetch_all(db)
+    .await?;
     let mut due: u32 = 0;
     let mut d = start;
     while d <= end {
-        for (freq, weekdays, anchor) in &routines {
+        for (freq, weekdays, anchor, mpattern, nth_week) in &routines {
             let wkdays = parse_weekdays(weekdays.as_deref());
-            if routine_due_on(*freq, &wkdays, anchor.as_deref(), d) {
+            if routine_due_on(
+                *freq,
+                &wkdays,
+                anchor.as_deref(),
+                *mpattern,
+                nth_week.map(|v| v as i32),
+                d,
+            ) {
                 due += 1;
             }
         }

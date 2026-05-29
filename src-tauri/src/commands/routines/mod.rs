@@ -80,18 +80,22 @@ mod tests {
     /// monthly: anchor day와 같은 day-of-month면 due. 월말 클램프(31 → 그달 말일).
     #[test]
     fn monthly_due_calc_with_month_end_clamp() {
-        // anchor=1/15 → 매월 15일.
+        // anchor=1/15 → 매월 15일. monthly_pattern=None → 레거시 day_of_month 경로.
         let a15 = nd("2026-01-15");
         assert!(routine_due_on(
             RoutineFreq::Monthly,
             &[],
             Some("2026-01-15"),
+            None,
+            None,
             nd("2026-03-15")
         ));
         assert!(!routine_due_on(
             RoutineFreq::Monthly,
             &[],
             Some("2026-01-15"),
+            None,
+            None,
             nd("2026-03-14")
         ));
         let _ = a15;
@@ -102,6 +106,8 @@ mod tests {
                 RoutineFreq::Monthly,
                 &[],
                 Some("2026-01-31"),
+                None,
+                None,
                 nd("2026-02-28")
             ),
             "2월 말일로 클램프"
@@ -111,6 +117,8 @@ mod tests {
                 RoutineFreq::Monthly,
                 &[],
                 Some("2026-01-31"),
+                None,
+                None,
                 nd("2026-02-27")
             ),
             "2/27은 due 아님"
@@ -120,6 +128,8 @@ mod tests {
                 RoutineFreq::Monthly,
                 &[],
                 Some("2026-01-31"),
+                None,
+                None,
                 nd("2026-03-31")
             ),
             "3월 31일은 그대로 due"
@@ -129,6 +139,8 @@ mod tests {
                 RoutineFreq::Monthly,
                 &[],
                 Some("2026-01-31"),
+                None,
+                None,
                 nd("2026-04-30")
             ),
             "4월(30일)은 30일로 클램프"
@@ -139,20 +151,127 @@ mod tests {
                 RoutineFreq::Monthly,
                 &[],
                 Some("2024-01-31"),
+                None,
+                None,
                 nd("2024-02-29")
             ),
             "윤년 2월은 29일로 클램프"
         );
+
+        // monthly_pattern=Some(DayOfMonth) 명시도 동일 경로(BYMONTHDAY 의미).
+        assert!(routine_due_on(
+            RoutineFreq::Monthly,
+            &[],
+            Some("2026-01-15"),
+            Some(RoutineMonthlyPattern::DayOfMonth),
+            None,
+            nd("2026-03-15")
+        ));
     }
 
-    /// monthly: anchor 없으면 보수적으로 due 아님.
+    /// monthly: anchor 없으면 보수적으로 due 아님(day_of_month 경로).
     #[test]
     fn monthly_without_anchor_is_not_due() {
         assert!(!routine_due_on(
             RoutineFreq::Monthly,
             &[],
             None,
+            None,
+            None,
             nd("2026-05-15")
+        ));
+    }
+
+    /// monthly nth_weekday: 그달 N번째 요일에만 due (anchor 무관). 2nd Tue / 1st Mon / last Fri.
+    #[test]
+    fn monthly_nth_weekday_due_calc() {
+        // 2nd Tue: 2026-05 화요일 = 5,12,19,26 → 2번째 = 12일.
+        let nth2_tue = |d: &str| {
+            routine_due_on(
+                RoutineFreq::Monthly,
+                &[Weekday::Tue],
+                Some("2026-05-12"),
+                Some(RoutineMonthlyPattern::NthWeekday),
+                Some(2),
+                nd(d),
+            )
+        };
+        assert!(nth2_tue("2026-05-12"), "5/12는 2번째 화요일");
+        assert!(!nth2_tue("2026-05-05"), "5/5는 1번째 화요일");
+        assert!(!nth2_tue("2026-05-19"), "5/19는 3번째 화요일");
+        assert!(!nth2_tue("2026-05-13"), "5/13은 화요일 아님(수)");
+        // 다음 달도 2번째 화요일에 due — 2026-06 화요일 = 2,9,16,23,30 → 2번째 = 9일.
+        assert!(nth2_tue("2026-06-09"), "6/9는 다음 달 2번째 화요일");
+
+        // last Fri: 2026-05 금요일 = 1,8,15,22,29 → 마지막 = 29일.
+        let last_fri = |d: &str| {
+            routine_due_on(
+                RoutineFreq::Monthly,
+                &[Weekday::Fri],
+                Some("2026-05-29"),
+                Some(RoutineMonthlyPattern::NthWeekday),
+                Some(-1),
+                nd(d),
+            )
+        };
+        assert!(last_fri("2026-05-29"), "5/29는 마지막 금요일");
+        assert!(!last_fri("2026-05-22"), "5/22는 마지막 직전 금요일");
+        // 2026-07 금요일 = 3,10,17,24,31 → 마지막 = 31일.
+        assert!(last_fri("2026-07-31"), "7/31은 마지막 금요일");
+        assert!(!last_fri("2026-07-24"), "7/24는 마지막 아님");
+        // 연말 경계(12월) — Dec 2026 금요일 = 4,11,18,25 → 마지막 = 25일.
+        assert!(last_fri("2026-12-25"), "12/25는 마지막 금요일(연말 경계)");
+        assert!(!last_fri("2026-12-18"), "12/18은 마지막 아님");
+
+        // 5번째가 없는 달은 nth=5에서 due 0건(Google BYDAY=5xx skip과 동일). vs 있는 달은 due.
+        let nth5_tue = |d: &str| {
+            routine_due_on(
+                RoutineFreq::Monthly,
+                &[Weekday::Tue],
+                Some("2026-06-30"),
+                Some(RoutineMonthlyPattern::NthWeekday),
+                Some(5),
+                nd(d),
+            )
+        };
+        // 2026-06 화요일 = 2,9,16,23,30 → 5번째 존재(30일).
+        assert!(nth5_tue("2026-06-30"), "6/30은 5번째 화요일");
+        // 2026-05 화요일 = 5,12,19,26 → 5번째 없음 → 4번째(26)도 nth=5엔 due 아님.
+        assert!(
+            !nth5_tue("2026-05-26"),
+            "5월엔 5번째 화요일 없음 → due 아님"
+        );
+    }
+
+    /// monthly nth_weekday: 계약 불충족(요일 0/2개, nth_week None)은 보수적으로 due 아님.
+    #[test]
+    fn monthly_nth_weekday_contract_violations_not_due() {
+        // 요일 0개.
+        assert!(!routine_due_on(
+            RoutineFreq::Monthly,
+            &[],
+            None,
+            Some(RoutineMonthlyPattern::NthWeekday),
+            Some(2),
+            nd("2026-05-12")
+        ));
+        // 요일 2개.
+        assert!(!routine_due_on(
+            RoutineFreq::Monthly,
+            &[Weekday::Tue, Weekday::Wed],
+            None,
+            Some(RoutineMonthlyPattern::NthWeekday),
+            Some(2),
+            nd("2026-05-12")
+        ));
+        // nth_week None.
+        assert!(!routine_due_on(
+            RoutineFreq::Monthly,
+            &[Weekday::Tue],
+            None,
+            Some(RoutineMonthlyPattern::NthWeekday),
+            None,
+            nd("2026-05-12")
         ));
     }
 
@@ -163,22 +282,50 @@ mod tests {
         let anchor = "2026-05-22";
         let days = [Weekday::Fri];
         assert!(
-            routine_due_on(RoutineFreq::Biweekly, &days, Some(anchor), nd("2026-05-22")),
+            routine_due_on(
+                RoutineFreq::Biweekly,
+                &days,
+                Some(anchor),
+                None,
+                None,
+                nd("2026-05-22")
+            ),
             "앵커 당일(금) due"
         );
         // 1주 뒤 금(5/29) → parity off → 아님.
         assert!(
-            !routine_due_on(RoutineFreq::Biweekly, &days, Some(anchor), nd("2026-05-29")),
+            !routine_due_on(
+                RoutineFreq::Biweekly,
+                &days,
+                Some(anchor),
+                None,
+                None,
+                nd("2026-05-29")
+            ),
             "1주 뒤는 격주 off"
         );
         // 2주 뒤 금(6/5) → parity on → due.
         assert!(
-            routine_due_on(RoutineFreq::Biweekly, &days, Some(anchor), nd("2026-06-05")),
+            routine_due_on(
+                RoutineFreq::Biweekly,
+                &days,
+                Some(anchor),
+                None,
+                None,
+                nd("2026-06-05")
+            ),
             "2주 뒤는 격주 on"
         );
         // 앵커 주여도 다른 요일이면 아님(목 5/21).
         assert!(
-            !routine_due_on(RoutineFreq::Biweekly, &days, Some(anchor), nd("2026-05-21")),
+            !routine_due_on(
+                RoutineFreq::Biweekly,
+                &days,
+                Some(anchor),
+                None,
+                None,
+                nd("2026-05-21")
+            ),
             "선택 요일 아니면 아님"
         );
     }
@@ -193,6 +340,8 @@ mod tests {
             RoutineFreq::Biweekly,
             &days,
             Some(anchor),
+            None,
+            None,
             nd("2026-05-08")
         ));
         // 1주 전 금(5/15) → parity off.
@@ -200,6 +349,8 @@ mod tests {
             RoutineFreq::Biweekly,
             &days,
             Some(anchor),
+            None,
+            None,
             nd("2026-05-15")
         ));
     }
@@ -211,17 +362,23 @@ mod tests {
             RoutineFreq::Daily,
             &[],
             None,
+            None,
+            None,
             nd("2026-05-22")
         ));
         assert!(routine_due_on(
             RoutineFreq::Weekly,
             &[Weekday::Fri],
             None,
+            None,
+            None,
             nd("2026-05-22")
         ));
         assert!(!routine_due_on(
             RoutineFreq::Weekly,
             &[Weekday::Mon],
+            None,
+            None,
             None,
             nd("2026-05-22")
         ));
@@ -672,14 +829,15 @@ mod tests {
         .await
         .unwrap();
 
-        // 조회 라운드트립 — anchor의 day-of-month(12)에 due.
-        let listed = fetch_today_routines(&db, "2026-06-12", Weekday::Fri)
+        // 조회 라운드트립 — nth_weekday(2nd Tue)이므로 2026-06의 2번째 화요일(6/9)에 due.
+        // (day_of_month=12가 아니라 패턴이 결정 — nth_weekday due-calc 검증.)
+        let listed = fetch_today_routines(&db, "2026-06-09", Weekday::Tue)
             .await
             .unwrap();
         let item = listed
             .iter()
             .find(|x| x.id == r.id)
-            .expect("monthly 루틴 due");
+            .expect("monthly nth_weekday 루틴 due");
         assert_eq!(
             item.monthly_pattern,
             Some(RoutineMonthlyPattern::NthWeekday)

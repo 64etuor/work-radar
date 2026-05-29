@@ -5,7 +5,9 @@ use tauri::State;
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{AreaTag, Kind, RoutineFreq, RoutineHistoryDay, RoutineTrackingItem};
+use crate::models::{
+    AreaTag, Kind, RoutineFreq, RoutineHistoryDay, RoutineMonthlyPattern, RoutineTrackingItem,
+};
 
 use super::schedule::{parse_weekdays, routine_due_on};
 
@@ -17,6 +19,8 @@ struct TrackingRoutineRow {
     freq: RoutineFreq,
     weekdays: Option<String>,
     anchor_date: Option<String>,
+    monthly_pattern: Option<RoutineMonthlyPattern>,
+    monthly_nth_week: Option<i64>,
     area: Option<AreaTag>,
     area_tags: Option<String>,
     kind: Option<Kind>,
@@ -36,7 +40,8 @@ pub async fn fetch_routine_tracking(
     let start = end - chrono::Duration::days(span - 1);
 
     let routines = sqlx::query_as::<_, TrackingRoutineRow>(
-        "SELECT id, title, freq, weekdays, anchor_date, area, area_tags, kind FROM routines \
+        "SELECT id, title, freq, weekdays, anchor_date, monthly_pattern, monthly_nth_week, \
+                area, area_tags, kind FROM routines \
          WHERE active = 1 ORDER BY rank IS NULL, rank, created_at",
     )
     .fetch_all(db)
@@ -49,12 +54,15 @@ pub async fn fetch_routine_tracking(
         freq,
         weekdays: weekdays_json,
         anchor_date: anchor,
+        monthly_pattern,
+        monthly_nth_week,
         area,
         area_tags,
         kind,
     } in routines
     {
         let weekdays = parse_weekdays(weekdays_json.as_deref());
+        let nth_week = monthly_nth_week.map(|v| v as i32);
 
         // 이 루틴의 체크 날짜 집합(기간 내).
         let check_rows: Vec<(String,)> = sqlx::query_as(
@@ -74,7 +82,14 @@ pub async fn fetch_routine_tracking(
         let mut done = 0u32;
         let mut d = start;
         while d <= end {
-            if routine_due_on(freq, &weekdays, anchor.as_deref(), d) {
+            if routine_due_on(
+                freq,
+                &weekdays,
+                anchor.as_deref(),
+                monthly_pattern,
+                nth_week,
+                d,
+            ) {
                 let ds = d.format("%Y-%m-%d").to_string();
                 let is_done = checked.contains(&ds);
                 due += 1;

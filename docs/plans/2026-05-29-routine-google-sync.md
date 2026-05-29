@@ -292,14 +292,15 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 
 ### 완료 (origin에 push됨)
 
-| 단계       | 커밋                | 내용                                                                               |
-| ---------- | ------------------- | ---------------------------------------------------------------------------------- |
-| ADR + plan | `2e2fdf9`/`a966df9` | ADR-0005 freeze, plan amend                                                        |
-| PR 1       | `d5caf3d`/`c9dc6c4` | 0037 마이그레이션 + `routines/rrule.rs` 순수 매핑 + 26 테스트                      |
-| (refactor) | `ee235e3`           | `CreateEventInput` recurrence/time_zone 확장                                       |
-| PR 2a      | `ffb19be`           | enable/disable IPC + provider injection + `RRuleSpec::to_event_parts()`            |
-| PR 2b-1    | `e809912`           | `RoutineToday`/입력에 google·monthly 필드 노출 + crud 배선 + enable kind 매핑 검증 |
-| PR 2b-2    | `5cc7b49`           | RoutineSyncButton(동기화 토글 + 캘린더 picker) + popover overlay-stack Esc 수정    |
+| 단계       | 커밋                | 내용                                                                                 |
+| ---------- | ------------------- | ------------------------------------------------------------------------------------ |
+| ADR + plan | `2e2fdf9`/`a966df9` | ADR-0005 freeze, plan amend                                                          |
+| PR 1       | `d5caf3d`/`c9dc6c4` | 0037 마이그레이션 + `routines/rrule.rs` 순수 매핑 + 26 테스트                        |
+| (refactor) | `ee235e3`           | `CreateEventInput` recurrence/time_zone 확장                                         |
+| PR 2a      | `ffb19be`           | enable/disable IPC + provider injection + `RRuleSpec::to_event_parts()`              |
+| PR 2b-1    | `e809912`           | `RoutineToday`/입력에 google·monthly 필드 노출 + crud 배선 + enable kind 매핑 검증   |
+| PR 2b-2    | `5cc7b49`           | RoutineSyncButton(동기화 토글 + 캘린더 picker) + popover overlay-stack Esc 수정      |
+| PR 2b-3    | (이 세션)           | monthly nth_weekday 편집 UI + IPC-boundary 검증 + **로컬 due-calc nth_weekday 정합** |
 
 핵심 결정(잠금): **루틴 kind ↔ 프로젝트 kind 매핑** — 개인 루틴은 개인 프로젝트, 업무 루틴은
 업무 프로젝트 캘린더에만 sync. 백엔드가 `project.kind == routine.kind` 검증(교차 노출 차단).
@@ -310,13 +311,18 @@ monthly 패턴 미지정 시 enable에서 `day_of_month` 기본(로컬 due-calc 
 1. **⚠️ cmux Esc 라이브 스모크** (deferred, blocking-ish) — PR 2b-2의 RoutineSyncButton popover를
    보드에서 열고 Esc → 창이 안 숨고 popover만 닫히는지 확인(`docs/areas/shadcn-migration.md` §52-58).
    헤드리스에서 실행 못 했음. **인터랙티브 세션 필수.** (overlay-stack 단위계약+select.tsx 동일 패턴으로
-   결정적 근거는 있으나 라이브 미확인.)
-2. **PR 2b-3** — monthly nth_weekday 편집 UI (radio day_of_month/nth_weekday + nth_week 셀렉트 +
-   duration 입력). RoutineDraft 확장 + CaptureBoard 실제 값 전달. **진입 조건: `monthly_nth_week`
-   IPC-boundary 검증**(create/update — 현재 DB CHECK 의존). 상세는 §5 PR 2b-3.
-3. **PR 3** — 루틴 편집 시 PATCH 전파(§5 PR 3).
-4. **PR 4** — 오늘 unschedule = EXDATE PATCH(§5 PR 4).
-5. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5).
+   결정적 근거는 있으나 라이브 미확인.) PR 2b-3은 native `<select>` 없이 버튼 행으로 구현해 새 overlay를
+   추가하지 않았으므로 이 스모크 범위는 2b-2 popover 그대로.
+2. **PR 3** — 루틴 편집 시 PATCH 전파(§5 PR 3). `update_routine_inner`는 현재 `google_*` 미변경
+   (crud.rs 주석) — 동기화된 루틴의 스케줄 편집이 Google master event에 전파되도록 PATCH 추가.
+3. **PR 4** — 오늘 unschedule = EXDATE PATCH(§5 PR 4).
+4. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5).
+
+> **PR 2b-3 완료 노트**: monthly nth_weekday 편집 UI + IPC-boundary 검증(`crud::validate_monthly_input`)
+>
+> - 로컬 due-calc nth_weekday 정합(`schedule::routine_due_on`에 monthly_pattern/nth_week 인자 추가,
+>   호출처 4곳 갱신). 사용자 결정으로 로컬 due-calc까지 같은 PR에 포함(local↔Google 정합). nit(비차단):
+>   nth_weekday 요일 미선택 시 submit 무피드백(기존 weekly 관례와 동일, 백엔드가 차단).
 
 ### 컨텍스트 재진입 단축경로
 

@@ -62,7 +62,14 @@ pub async fn fetch_today_routines(
         .into_iter()
         .filter_map(|r| {
             let weekdays = parse_weekdays(r.weekdays.as_deref());
-            if !routine_due_on(r.freq, &weekdays, r.anchor_date.as_deref(), parsed) {
+            if !routine_due_on(
+                r.freq,
+                &weekdays,
+                r.anchor_date.as_deref(),
+                r.monthly_pattern,
+                r.monthly_nth_week.map(|v| v as i32),
+                parsed,
+            ) {
                 return None;
             }
             Some(RoutineToday {

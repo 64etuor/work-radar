@@ -3,7 +3,7 @@
 
 use chrono::{Datelike, NaiveDate};
 
-use crate::models::{RoutineFreq, Weekday};
+use crate::models::{RoutineFreq, RoutineMonthlyPattern, Weekday};
 
 /// weekdays JSON 컬럼('["wed","fri"]') → Vec<Weekday>. 누락/형식오류는 빈 목록.
 pub fn parse_weekdays(raw: Option<&str>) -> Vec<Weekday> {
@@ -33,6 +33,29 @@ fn monthly_due(anchor: NaiveDate, date: NaiveDate) -> bool {
     date.day() == target
 }
 
+/// nth_weekday monthly due-calc: 그달에서 지정 요일의 N번째(1..=5, -1=마지막) 출현이면 due.
+/// 패턴 계약(요일 정확히 1개 + nth_week 존재)은 IPC 검증(`crud::validate_monthly_input`)이 보증 —
+/// 여기선 불충족 시 보수적으로 false(스케줄 불명 → 표시 안 함). anchor에 의존하지 않는다.
+fn nth_weekday_due(weekdays: &[Weekday], nth_week: Option<i32>, date: NaiveDate) -> bool {
+    let [wd] = weekdays else {
+        return false;
+    };
+    let Some(nth) = nth_week else {
+        return false;
+    };
+    if weekday_enum_key(*wd) != weekday_key(date.weekday()) {
+        return false;
+    }
+    if nth == -1 {
+        // 마지막 출현: 같은 요일이 7일 뒤면 다음 달로 넘어가는 경우.
+        date.day() + 7 > last_day_of_month(date.year(), date.month())
+    } else {
+        // 그달에서 이 요일의 몇 번째 출현인지(1-7일=1번째, 8-14일=2번째 …).
+        let ordinal = (date.day() - 1) / 7 + 1;
+        ordinal as i32 == nth
+    }
+}
+
 /// 주어진 연/월의 말일(28..=31).
 fn last_day_of_month(year: i32, month: u32) -> u32 {
     // 다음 달 1일에서 하루 빼면 이번 달 말일.
@@ -46,12 +69,15 @@ fn last_day_of_month(year: i32, month: u32) -> u32 {
 }
 
 /// **순수 due-calc** — 주어진 날짜에 루틴이 해당(due)하는지. Daily/Weekly/Biweekly/Monthly.
-/// weekdays는 weekly/biweekly에서만 의미, anchor는 biweekly(주 parity)·monthly(day) 기준.
-/// anchor가 없거나 날짜 파싱 실패면 보수적으로 false(스케줄 불명 → 표시 안 함).
+/// weekdays는 weekly/biweekly + monthly nth_weekday에서 의미, anchor는 biweekly(주 parity)·
+/// monthly day_of_month 기준. monthly nth_weekday는 `monthly_pattern`/`monthly_nth_week`로 결정
+/// (anchor 무관). anchor가 없거나 날짜 파싱 실패면 보수적으로 false(스케줄 불명 → 표시 안 함).
 pub fn routine_due_on(
     freq: RoutineFreq,
     weekdays: &[Weekday],
     anchor: Option<&str>,
+    monthly_pattern: Option<RoutineMonthlyPattern>,
+    monthly_nth_week: Option<i32>,
     date: NaiveDate,
 ) -> bool {
     let wk = weekday_key(date.weekday());
@@ -75,13 +101,20 @@ pub fn routine_due_on(
             let weeks = (date_week - anchor_week).num_days() / 7;
             weeks % 2 == 0
         }
-        RoutineFreq::Monthly => {
-            let Some(anchor) = anchor.and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-            else {
-                return false;
-            };
-            monthly_due(anchor, date)
-        }
+        RoutineFreq::Monthly => match monthly_pattern {
+            Some(RoutineMonthlyPattern::NthWeekday) => {
+                nth_weekday_due(weekdays, monthly_nth_week, date)
+            }
+            // day_of_month(명시) 또는 미지정(레거시 기본) → anchor day-of-month 기준.
+            Some(RoutineMonthlyPattern::DayOfMonth) | None => {
+                let Some(anchor) =
+                    anchor.and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+                else {
+                    return false;
+                };
+                monthly_due(anchor, date)
+            }
+        },
     }
 }
 

@@ -5,7 +5,10 @@ use tauri::State;
 use crate::commands::notification_store;
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{CreateRoutineInput, RoutineFreq, RoutineToday, UpdateRoutineInput};
+use crate::models::{
+    CreateRoutineInput, RoutineFreq, RoutineMonthlyPattern, RoutineToday, UpdateRoutineInput,
+    Weekday,
+};
 use crate::scheduler::utc_now_string;
 
 use super::reminders::reminder_source_id;
@@ -86,12 +89,56 @@ fn local_today() -> String {
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 
+/// IPC-boundary 검증 (plan §5 PR 2b-3 진입 조건). DB CHECK은 `monthly_nth_week` **범위**만 본다 —
+/// nth_weekday 패턴의 교차 필드 계약(주차 존재 + 요일 정확히 1개)은 애플리케이션이 보증해야
+/// sync(rrule 매핑)와 로컬 nth_weekday due-calc가 어긋나지 않는다. monthly가 아니면 패턴 필드는
+/// 저장 시 NULL로 정리되므로 검증 불필요.
+// AppError 단일 envelope — Result<_, AppError> 통일(코드베이스 관례, agents/pr_radar와 동일).
+#[allow(clippy::result_large_err)]
+pub(crate) fn validate_monthly_input(
+    freq: RoutineFreq,
+    monthly_pattern: Option<RoutineMonthlyPattern>,
+    monthly_nth_week: Option<i32>,
+    weekdays: &[Weekday],
+) -> Result<(), AppError> {
+    if !matches!(freq, RoutineFreq::Monthly) {
+        return Ok(());
+    }
+    if let Some(RoutineMonthlyPattern::NthWeekday) = monthly_pattern {
+        let nth = monthly_nth_week.ok_or_else(|| {
+            AppError::validation(
+                "routine.monthly.nth_week_required",
+                "N번째 요일 패턴은 주차(첫째~다섯째 또는 마지막)가 필요합니다",
+            )
+        })?;
+        if nth == 0 || !(-1..=5).contains(&nth) {
+            return Err(AppError::validation(
+                "routine.monthly.nth_week_out_of_range",
+                "주차는 1~5 또는 -1(마지막)이어야 합니다",
+            ));
+        }
+        if weekdays.len() != 1 {
+            return Err(AppError::validation(
+                "routine.monthly.nth_weekday_single",
+                "N번째 요일 패턴은 요일을 정확히 하나 선택하세요",
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn create_routine(
     db: State<'_, Db>,
     input: CreateRoutineInput,
 ) -> Result<RoutineToday, AppError> {
+    validate_monthly_input(
+        input.freq,
+        input.monthly_pattern,
+        input.monthly_nth_week,
+        &input.weekdays,
+    )?;
     insert_routine(db.inner(), &input)
         .await
         .map_err(AppError::from)
@@ -101,6 +148,12 @@ pub async fn create_routine(
 #[tauri::command]
 #[specta::specta]
 pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Result<(), AppError> {
+    validate_monthly_input(
+        input.freq,
+        input.monthly_pattern,
+        input.monthly_nth_week,
+        &input.weekdays,
+    )?;
     update_routine_inner(db.inner(), input)
         .await
         .map_err(AppError::from)
@@ -278,4 +331,104 @@ pub async fn reorder_routines(db: State<'_, Db>, ordered_ids: Vec<String>) -> Re
             .map_err(AppError::from)?;
     }
     tx.commit().await.map_err(AppError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // nth_weekday 계약 충족: 주차 1..=5/-1 + 요일 정확히 1개 → 통과.
+    #[test]
+    fn validate_nth_weekday_ok() {
+        for nth in [-1, 1, 2, 3, 4, 5] {
+            assert!(
+                validate_monthly_input(
+                    RoutineFreq::Monthly,
+                    Some(RoutineMonthlyPattern::NthWeekday),
+                    Some(nth),
+                    &[Weekday::Tue],
+                )
+                .is_ok(),
+                "nth={nth} 통과해야 함"
+            );
+        }
+    }
+
+    // nth_weekday인데 nth_week 없음 → nth_week_required.
+    #[test]
+    fn validate_nth_weekday_missing_nth_week() {
+        let err = validate_monthly_input(
+            RoutineFreq::Monthly,
+            Some(RoutineMonthlyPattern::NthWeekday),
+            None,
+            &[Weekday::Tue],
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "routine.monthly.nth_week_required");
+    }
+
+    // nth_week 범위 밖(0, 6, -2) → nth_week_out_of_range.
+    #[test]
+    fn validate_nth_weekday_out_of_range() {
+        for bad in [0, 6, -2, 99] {
+            let err = validate_monthly_input(
+                RoutineFreq::Monthly,
+                Some(RoutineMonthlyPattern::NthWeekday),
+                Some(bad),
+                &[Weekday::Tue],
+            )
+            .unwrap_err();
+            assert_eq!(
+                err.code, "routine.monthly.nth_week_out_of_range",
+                "bad={bad}"
+            );
+        }
+    }
+
+    // nth_weekday인데 요일 0개/2개 → nth_weekday_single.
+    #[test]
+    fn validate_nth_weekday_single_weekday() {
+        let zero = validate_monthly_input(
+            RoutineFreq::Monthly,
+            Some(RoutineMonthlyPattern::NthWeekday),
+            Some(2),
+            &[],
+        )
+        .unwrap_err();
+        assert_eq!(zero.code, "routine.monthly.nth_weekday_single");
+
+        let two = validate_monthly_input(
+            RoutineFreq::Monthly,
+            Some(RoutineMonthlyPattern::NthWeekday),
+            Some(2),
+            &[Weekday::Tue, Weekday::Wed],
+        )
+        .unwrap_err();
+        assert_eq!(two.code, "routine.monthly.nth_weekday_single");
+    }
+
+    // day_of_month / 패턴 미지정 monthly는 교차검증 없음 → 통과.
+    #[test]
+    fn validate_day_of_month_and_none_ok() {
+        assert!(validate_monthly_input(
+            RoutineFreq::Monthly,
+            Some(RoutineMonthlyPattern::DayOfMonth),
+            None,
+            &[],
+        )
+        .is_ok());
+        assert!(validate_monthly_input(RoutineFreq::Monthly, None, None, &[]).is_ok());
+    }
+
+    // 비monthly freq는 패턴 필드가 있어도 무시(저장 시 NULL 정리) → 통과.
+    #[test]
+    fn validate_non_monthly_ignores_pattern() {
+        assert!(validate_monthly_input(
+            RoutineFreq::Weekly,
+            Some(RoutineMonthlyPattern::NthWeekday),
+            None,
+            &[],
+        )
+        .is_ok());
+    }
 }
