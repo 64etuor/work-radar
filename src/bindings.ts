@@ -109,10 +109,18 @@ export const commands = {
 	/**  루틴 수정. 필드 업데이트 후 미발사 루틴 알림을 삭제(다음 list_today_routines에서 재enqueue). */
 	updateRoutine: (input: UpdateRoutineInput) => typedError<null, AppError>(__TAURI_INVOKE("update_routine", { input })),
 	/**
-	 *  루틴 삭제. 트랜잭션: 미발사 알림 + routine_checks + routines 행 삭제.
-	 *  발사된 알림 행(히스토리)은 보존. 루틴 없으면 오류 반환.
+	 *  루틴 삭제. 동기화 ON이면 Google master event를 **먼저** 삭제하고(ADR-0005 DELETE 경로), 그 후
+	 *  로컬 행을 지운다. Google 삭제 실패 시 로컬은 보존하고 `routine.sync.delete_remote_failed`로
+	 *  surface — 프런트가 "로컬만 삭제할까요?" confirm 후 `delete_routine_local_only`를 호출한다.
+	 *  미동기화 루틴은 토큰 조회 없이 곧장 로컬 삭제(기존 동작 보존).
 	 */
 	deleteRoutine: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_routine", { id })),
+	/**
+	 *  루틴을 로컬에서만 삭제(Google master event는 건드리지 않음). `delete_routine`이 Google 삭제에
+	 *  실패했을 때 사용자가 confirm한 fallback 경로. 동기화 mirror 컬럼은 행과 함께 사라지므로 별도
+	 *  정리 불필요.
+	 */
+	deleteRoutineLocalOnly: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_routine_local_only", { id })),
 	listTodayRoutines: (date: string, weekday: Weekday) => typedError<RoutineToday[], AppError>(__TAURI_INVOKE("list_today_routines", { date, weekday })),
 	/**
 	 *  루틴 완료 토글 (날짜별). done이면 RoutineCheck 추가, 아니면 삭제 → 다음날 자동 리셋.
@@ -135,6 +143,13 @@ export const commands = {
 	 */
 	enableRoutineGoogleSync: (routineId: string, projectId: string, calendarId: string) => typedError<null, AppError>(__TAURI_INVOKE("enable_routine_google_sync", { routineId, projectId, calendarId })),
 	disableRoutineGoogleSync: (routineId: string) => typedError<null, AppError>(__TAURI_INVOKE("disable_routine_google_sync", { routineId })),
+	/**
+	 *  동기화 중인 루틴을 다른 캘린더로 이동(PR 5). Google API가 calendarId 변경 PATCH를 지원하지
+	 *  않아 옛 master DELETE + 새 master CREATE다(메타 손실 — 프런트가 명시 confirm). `project_id`는
+	 *  새 캘린더 소유 프로젝트(routine.kind와 같은 kind). 옛 이벤트는 옛 프로젝트 토큰으로, 새 이벤트는
+	 *  새 프로젝트 토큰으로 호출한다(같은 프로젝트면 같은 토큰).
+	 */
+	moveRoutineGoogleSync: (routineId: string, projectId: string, calendarId: string) => typedError<null, AppError>(__TAURI_INVOKE("move_routine_google_sync", { routineId, projectId, calendarId })),
 	/**
 	 *  루틴을 그 날짜의 타임라인에서 뺀다(EXDATE). 로컬 routine_exdates에 skip 행을 쓰고,
 	 *  동기화 ON이면 master recurring event에 EXDATE를 PATCH로 추가한다(build_master_event_input이

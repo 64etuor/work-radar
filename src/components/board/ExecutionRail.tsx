@@ -25,6 +25,7 @@ export function ExecutionRail({
   onSetRoutineAreaTagKey,
   onEnableRoutineSync,
   onDisableRoutineSync,
+  onMoveRoutineSync,
   routineSyncBusy,
 }: {
   todayItems: WorkSignal[];
@@ -47,6 +48,7 @@ export function ExecutionRail({
   onSetRoutineAreaTagKey: (id: string, tagKey: string | null) => void;
   onEnableRoutineSync: (routineId: string, projectId: string, calendarId: string) => void;
   onDisableRoutineSync: (routineId: string) => void;
+  onMoveRoutineSync: (routineId: string, projectId: string, calendarId: string) => void;
   routineSyncBusy?: boolean;
 }) {
   return (
@@ -75,6 +77,7 @@ export function ExecutionRail({
         onSetAreaTagKey={onSetRoutineAreaTagKey}
         onEnableSync={onEnableRoutineSync}
         onDisableSync={onDisableRoutineSync}
+        onMoveSync={onMoveRoutineSync}
         syncBusy={routineSyncBusy}
       />
     </div>

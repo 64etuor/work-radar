@@ -57,6 +57,8 @@ type Props = {
   onEnableSync: (routineId: string, projectId: string, calendarId: string) => void;
   /** Google 동기화 OFF. */
   onDisableSync: (routineId: string) => void;
+  /** 동기화 캘린더 이동(옛 master 삭제 + 새 캘린더에 생성). */
+  onMoveSync: (routineId: string, projectId: string, calendarId: string) => void;
   /** 동기화 mutation 진행 중(중복 클릭 방지). */
   syncBusy?: boolean;
 };
@@ -128,6 +130,7 @@ export function RoutinesPanel({
   onSetAreaTagKey,
   onEnableSync,
   onDisableSync,
+  onMoveSync,
   syncBusy,
 }: Props) {
   // open=false: 폼 닫힘. open=true + editId=null: 새 루틴 추가. open=true + editId: 수정 모드.
@@ -463,6 +466,7 @@ export function RoutinesPanel({
                   projects={projects}
                   onEnable={onEnableSync}
                   onDisable={onDisableSync}
+                  onMove={onMoveSync}
                   busy={syncBusy}
                 />
                 <button

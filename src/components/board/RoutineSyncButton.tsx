@@ -19,10 +19,12 @@ type Props = {
   projects: Project[];
   onEnable: (routineId: string, projectId: string, calendarId: string) => void;
   onDisable: (routineId: string) => void;
+  /** 동기화된 루틴을 다른 캘린더로 이동(옛 master 삭제 + 새 master 생성). */
+  onMove: (routineId: string, projectId: string, calendarId: string) => void;
   busy?: boolean;
 };
 
-export function RoutineSyncButton({ routine, projects, onEnable, onDisable, busy }: Props) {
+export function RoutineSyncButton({ routine, projects, onEnable, onDisable, onMove, busy }: Props) {
   const [open, setOpen] = useState(false);
   const synced = routine.googleCalendarId != null;
   // 시간 미지정 루틴은 Google 이벤트로 만들 의미가 없다(시간 없으면 09:00 fallback으로 어긋남).
@@ -39,6 +41,12 @@ export function RoutineSyncButton({ routine, projects, onEnable, onDisable, busy
 
   const syncedLabel = useMemo(
     () => routineSyncedLabel(candidates, routine.googleCalendarId),
+    [candidates, routine.googleCalendarId],
+  );
+
+  // 이동 후보 = 현재 동기화 캘린더를 제외한 같은 kind 후보들(다른 캘린더로 이동).
+  const moveCandidates = useMemo(
+    () => candidates.filter((c) => c.id !== routine.googleCalendarId),
     [candidates, routine.googleCalendarId],
   );
 
@@ -76,6 +84,33 @@ export function RoutineSyncButton({ routine, projects, onEnable, onDisable, busy
             <div className="text-muted-foreground text-xs">
               <span className="text-wr-fg">{syncedLabel}</span> 캘린더에 동기화 중입니다.
             </div>
+            {moveCandidates.length > 0 && (
+              <div className="space-y-1 pt-1">
+                <div className="text-muted-foreground text-[11px]">다른 캘린더로 이동</div>
+                {moveCandidates.map((c) => (
+                  <button
+                    key={`${c.projectId}:${c.id}`}
+                    type="button"
+                    className="hover:bg-wr-bg-soft w-full rounded px-2 py-1 text-left text-xs transition-colors"
+                    disabled={busy}
+                    onClick={() => {
+                      // 이동 = 옛 Google 이벤트 삭제 + 새로 생성. 위치·참석자 등 Google에서 직접
+                      // 추가한 메타는 사라지므로(ADR-0005) 명시 confirm.
+                      if (
+                        window.confirm(
+                          `"${c.summary || c.id}" 캘린더로 이동하면 기존 Google 이벤트를 지우고 새로 만듭니다. Google에서 직접 추가한 위치·참석자·알림은 사라집니다. 계속할까요?`,
+                        )
+                      ) {
+                        onMove(routine.id, c.projectId, c.id);
+                        setOpen(false);
+                      }
+                    }}
+                  >
+                    {c.summary || c.id}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex justify-end pt-1">
               <Button
                 variant="outline"

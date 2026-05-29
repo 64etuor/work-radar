@@ -245,11 +245,37 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     Ok(())
 }
 
-/// 루틴 삭제. 트랜잭션: 미발사 알림 + routine_checks + routines 행 삭제.
-/// 발사된 알림 행(히스토리)은 보존. 루틴 없으면 오류 반환.
+/// 루틴 삭제. 동기화 ON이면 Google master event를 **먼저** 삭제하고(ADR-0005 DELETE 경로), 그 후
+/// 로컬 행을 지운다. Google 삭제 실패 시 로컬은 보존하고 `routine.sync.delete_remote_failed`로
+/// surface — 프런트가 "로컬만 삭제할까요?" confirm 후 `delete_routine_local_only`를 호출한다.
+/// 미동기화 루틴은 토큰 조회 없이 곧장 로컬 삭제(기존 동작 보존).
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_routine(db: State<'_, Db>, id: String) -> Result<(), AppError> {
+    // 동기화 ON이면 master event 먼저 DELETE. 토큰/연결/Google 실패는 모두 delete_remote_failed로
+    // 평탄화하되 원본 detail은 메시지에 보존(truthful) — 사용자가 로컬-only 삭제로 진행 가능.
+    super::google_sync::delete_routine_master_event(db.inner(), &id)
+        .await
+        .map_err(|e| {
+            AppError::terminal(
+                "routine.sync.delete_remote_failed",
+                format!(
+                    "Google 캘린더 이벤트 삭제에 실패했습니다 — 로컬에서만 삭제할 수 있습니다 ({})",
+                    e.message
+                ),
+            )
+        })?;
+    delete_routine_inner(db.inner(), id)
+        .await
+        .map_err(AppError::from)
+}
+
+/// 루틴을 로컬에서만 삭제(Google master event는 건드리지 않음). `delete_routine`이 Google 삭제에
+/// 실패했을 때 사용자가 confirm한 fallback 경로. 동기화 mirror 컬럼은 행과 함께 사라지므로 별도
+/// 정리 불필요.
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_routine_local_only(db: State<'_, Db>, id: String) -> Result<(), AppError> {
     delete_routine_inner(db.inner(), id)
         .await
         .map_err(AppError::from)

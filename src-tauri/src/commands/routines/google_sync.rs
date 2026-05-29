@@ -182,6 +182,45 @@ async fn build_master_event_input(
     })
 }
 
+/// 동기화 활성화/이동 전 매핑 가드(enable·move 공용). 파괴적 Google 호출 **전에** 검증해야
+/// 한다 — move는 옛 master를 DELETE하기 전에 이걸 통과시켜 "지운 뒤 kind 불일치로 실패" 같은
+/// 비가역 상태를 막는다.
+///
+/// - 루틴 kind 미지정 → 매핑 불가(`kind_required`).
+/// - `project.kind != routine.kind` → 개인↔업무 캘린더 교차 노출 차단(`kind_mismatch`).
+/// - 시간 미지정 → 09:00 fallback이 화면/캘린더를 어긋나게 하므로 거부(`time_required`).
+async fn ensure_kind_and_time(
+    db: &Db,
+    row: &RoutineSyncRow,
+    project_id: &str,
+) -> Result<(), AppError> {
+    let Some(routine_kind) = row.kind.as_deref() else {
+        return Err(AppError::validation(
+            "routine.sync.kind_required",
+            "동기화 전에 루틴의 개인/업무 구분을 먼저 지정하세요",
+        ));
+    };
+    let proj_kind = project_kind(db, project_id).await?;
+    if proj_kind != routine_kind {
+        return Err(AppError::validation(
+            "routine.sync.kind_mismatch",
+            format!("루틴({routine_kind})과 프로젝트({proj_kind})의 개인/업무 구분이 다릅니다",),
+        ));
+    }
+    if row
+        .time_of_day
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .is_none()
+    {
+        return Err(AppError::validation(
+            "routine.sync.time_required",
+            "동기화하려면 먼저 루틴 시간을 지정하세요",
+        ));
+    }
+    Ok(())
+}
+
 /// Provider injection helper — enable 흐름 단위 테스트용. IPC 명령은 이걸 호출.
 ///
 /// `project_id`는 routine.kind와 같은 kind의 프로젝트(개인 루틴→개인 프로젝트, 업무→업무).
@@ -204,34 +243,9 @@ pub(crate) async fn enable_routine_sync_with_provider<P: CalendarProvider>(
         ));
     }
 
-    // kind 매핑 검증: 루틴 kind 미지정 → 매핑 불가, kind 불일치 → 교차 노출 차단.
-    let Some(routine_kind) = row.kind.as_deref() else {
-        return Err(AppError::validation(
-            "routine.sync.kind_required",
-            "동기화 전에 루틴의 개인/업무 구분을 먼저 지정하세요",
-        ));
-    };
-    let proj_kind = project_kind(db, project_id).await?;
-    if proj_kind != routine_kind {
-        return Err(AppError::validation(
-            "routine.sync.kind_mismatch",
-            format!("루틴({routine_kind})과 프로젝트({proj_kind})의 개인/업무 구분이 다릅니다",),
-        ));
-    }
-
-    // 시간 미지정 루틴은 동기화 거부 — 시간 없으면 09:00 fallback으로 화면/캘린더가 어긋난다.
-    // 프런트 RoutineSyncButton도 동일 가드(무시각이면 토글 비활성)이고, 여기서 재검증한다.
-    if row
-        .time_of_day
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .is_none()
-    {
-        return Err(AppError::validation(
-            "routine.sync.time_required",
-            "동기화하려면 먼저 루틴 시간을 지정하세요",
-        ));
-    }
+    // 매핑 가드(kind 일치 + 시간 지정). 프런트 RoutineSyncButton도 동일 가드(무시각/kind 미지정이면
+    // 비활성)이고, 여기서 재검증한다.
+    ensure_kind_and_time(db, &row, project_id).await?;
 
     let create_input = build_master_event_input(db, routine_id, &row, tzid).await?;
     let (event_id, _html_link) = provider
@@ -280,6 +294,73 @@ pub(crate) async fn disable_routine_sync_with_provider<P: CalendarProvider>(
     .bind(routine_id)
     .execute(db)
     .await?;
+    Ok(())
+}
+
+/// Provider injection helper — 다른 캘린더로 이동(PR 5, 단위 테스트용). Google API는 기존 이벤트의
+/// calendarId를 PATCH로 바꿀 수 없으므로(plan §6, ADR-0005) **옛 master DELETE + 새 master CREATE**다.
+///
+/// 파괴 전 가드: 현재 동기화 중이어야 하고(`not_synced`), 새 프로젝트와의 kind 일치·시간 지정을
+/// **disable 전에** 검증한다(`ensure_kind_and_time`). 통과 후 disable(DELETE 옛 master + mirror NULL)
+/// → enable(CREATE 새 master + mirror set) 순서로 기존 검증된 헬퍼를 재사용한다.
+///
+/// 부분 실패 시맨틱: DELETE 실패면 mirror 불변(옛 캘린더에 그대로 sync, 에러 전파) — 비파괴.
+/// DELETE 성공 후 CREATE 실패면 mirror는 NULL(동기화 해제 상태)로 남고 에러 전파 — 사용자가 다시
+/// 켤 수 있도록 truthful하게 surface(다른 캘린더로 이동은 명시적 confirm 액션이라 #2 게이트 충족).
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn move_routine_sync_with_provider<P: CalendarProvider>(
+    db: &Db,
+    provider: &P,
+    old_access: &str,
+    new_access: &str,
+    routine_id: &str,
+    new_project_id: &str,
+    new_calendar_id: &str,
+    tzid: &str,
+) -> Result<(), AppError> {
+    let row = load_routine(db, routine_id).await?;
+    if row.google_event_id.is_none() {
+        return Err(AppError::validation(
+            "routine.sync.not_synced",
+            "동기화되지 않은 루틴은 이동할 수 없습니다 — 먼저 동기화를 켜세요",
+        ));
+    }
+    // 옛 master를 지우기 전에 새 매핑을 검증(비가역 상태 방지).
+    ensure_kind_and_time(db, &row, new_project_id).await?;
+
+    // DELETE 옛 master + mirror NULL.
+    disable_routine_sync_with_provider(db, provider, old_access, routine_id).await?;
+    // CREATE 새 master + mirror set(project_id/cal/evt). disable로 event_id가 NULL이라
+    // already_enabled 가드는 통과한다.
+    enable_routine_sync_with_provider(
+        db,
+        provider,
+        new_access,
+        routine_id,
+        new_project_id,
+        new_calendar_id,
+        tzid,
+    )
+    .await
+}
+
+/// Provider injection helper — 루틴 삭제 시 Google master event DELETE(PR 5, 단위 테스트용).
+/// disable과 달리 mirror를 NULL로 정리하지 않는다 — 호출 직후 루틴 행 자체가 삭제되기 때문.
+/// 미동기화면 no-op(멱등).
+pub(crate) async fn delete_master_with_provider<P: CalendarProvider>(
+    db: &Db,
+    provider: &P,
+    access_token: &str,
+    routine_id: &str,
+) -> Result<(), AppError> {
+    let row = load_routine(db, routine_id).await?;
+    let (Some(cal_id), Some(evt_id)) = (
+        row.google_calendar_id.as_deref(),
+        row.google_event_id.as_deref(),
+    ) else {
+        return Ok(());
+    };
+    provider.delete_event(access_token, cal_id, evt_id).await?;
     Ok(())
 }
 
@@ -343,6 +424,35 @@ pub(crate) async fn patch_synced_routine_after_edit(
     patch_routine_sync_with_provider(db, &provider, &access, routine_id, TZID_DEFAULT).await
 }
 
+/// 루틴 삭제 전 Google master event 정리(crud::delete_routine에서 호출). 동기화 OFF면 토큰 조회
+/// 없이 no-op. 동기화 ON이면 master event DELETE — 실패는 호출자가 delete_remote_failed로 surface
+/// (로컬 행은 보존, 사용자가 "로컬만 삭제" confirm).
+#[allow(clippy::result_large_err)]
+pub(crate) async fn delete_routine_master_event(db: &Db, routine_id: &str) -> Result<(), AppError> {
+    let row = load_routine(db, routine_id).await?;
+    if row.google_event_id.is_none() {
+        // 미동기화 — 토큰 조회 없이 no-op (삭제의 흔한 경우).
+        return Ok(());
+    }
+    let project_id = row.project_id.as_deref().ok_or_else(|| {
+        AppError::validation(
+            "routine.sync.no_project",
+            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
+        )
+    })?;
+    let access = access_token_for(db, project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "calendar.not_connected",
+                "미연결 — 먼저 Google Calendar를 연결하세요",
+            )
+        })?;
+    let provider = HttpCalendarProvider::new()?;
+    delete_master_with_provider(db, &provider, &access, routine_id).await
+}
+
 /// 루틴 Google 동기화 ON. `project_id`는 routine.kind와 같은 kind의 프로젝트(개인→개인,
 /// 업무→업무) — 프런트가 그 프로젝트의 캘린더를 picker로 넘긴다. 토큰은 그 프로젝트의 OAuth.
 #[tauri::command]
@@ -403,6 +513,64 @@ pub async fn disable_routine_google_sync(
         })?;
     let provider = HttpCalendarProvider::new()?;
     disable_routine_sync_with_provider(db.inner(), &provider, &access, &routine_id).await
+}
+
+/// 동기화 중인 루틴을 다른 캘린더로 이동(PR 5). Google API가 calendarId 변경 PATCH를 지원하지
+/// 않아 옛 master DELETE + 새 master CREATE다(메타 손실 — 프런트가 명시 confirm). `project_id`는
+/// 새 캘린더 소유 프로젝트(routine.kind와 같은 kind). 옛 이벤트는 옛 프로젝트 토큰으로, 새 이벤트는
+/// 새 프로젝트 토큰으로 호출한다(같은 프로젝트면 같은 토큰).
+#[tauri::command]
+#[specta::specta]
+pub async fn move_routine_google_sync(
+    db: State<'_, Db>,
+    routine_id: String,
+    project_id: String,
+    calendar_id: String,
+) -> Result<(), AppError> {
+    let row = load_routine(db.inner(), &routine_id).await?;
+    if row.google_event_id.is_none() {
+        return Err(AppError::validation(
+            "routine.sync.not_synced",
+            "동기화되지 않은 루틴은 이동할 수 없습니다 — 먼저 동기화를 켜세요",
+        ));
+    }
+    // 동기화 중이면 enable이 project_id를 set했으므로 옛 프로젝트가 있어야 한다.
+    let old_project_id = row.project_id.as_deref().ok_or_else(|| {
+        AppError::validation(
+            "routine.sync.no_project",
+            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
+        )
+    })?;
+    let old_access = access_token_for(db.inner(), old_project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "calendar.not_connected",
+                "미연결 — 먼저 Google Calendar를 연결하세요",
+            )
+        })?;
+    let new_access = access_token_for(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "calendar.not_connected",
+                "미연결 — 먼저 Google Calendar를 연결하세요",
+            )
+        })?;
+    let provider = HttpCalendarProvider::new()?;
+    move_routine_sync_with_provider(
+        db.inner(),
+        &provider,
+        &old_access,
+        &new_access,
+        &routine_id,
+        &project_id,
+        &calendar_id,
+        TZID_DEFAULT,
+    )
+    .await
 }
 
 // ── PR 4: 오늘 unschedule = EXDATE ──────────────────────────────────────────────
@@ -1312,5 +1480,378 @@ mod tests {
             "routine.exdate.bad_date"
         );
         assert!(validate_ymd("2026-06-01").is_ok());
+    }
+
+    // ── PR 5: 캘린더 이동 / 삭제 / invariant 가드 ───────────────────────────────
+
+    /// sync-pair invariant 검사 헬퍼 — cal_id와 evt_id는 항상 동시 set 또는 동시 NULL.
+    /// 반환값은 "현재 동기화 중인가"(둘 다 set).
+    async fn assert_pair_consistent(db: &crate::db::Db, rid: &str) -> bool {
+        let (cal, evt): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_calendar_id, google_event_id FROM routines WHERE id = ?1",
+        )
+        .bind(rid)
+        .fetch_one(db)
+        .await
+        .unwrap();
+        assert_eq!(
+            cal.is_some(),
+            evt.is_some(),
+            "sync-pair invariant: google_calendar_id ↔ google_event_id 동시 set/NULL"
+        );
+        cal.is_some()
+    }
+
+    /// move: 동기화 루틴을 다른 캘린더로 → 옛 master DELETE(옛 토큰) + 새 master CREATE(새 토큰) +
+    /// mirror(project/cal/evt) 갱신.
+    #[tokio::test]
+    async fn move_deletes_old_and_creates_new() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // 옛 캘린더로 동기화 상태 + project_id set.
+        sqlx::query(
+            "UPDATE routines SET project_id='proj_personal', google_calendar_id='cal_old', \
+             google_event_id='evt_old' WHERE id=?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let provider = RecordingProvider::with_create_id("evt_new");
+        move_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok_old",
+            "tok_new",
+            &rid,
+            "proj_personal",
+            "cal_new",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+
+        // DELETE 옛 master(옛 토큰/캘린더/이벤트).
+        let deleted = provider.deleted.lock().unwrap().clone();
+        assert_eq!(deleted.len(), 1, "옛 master DELETE 1회");
+        assert_eq!(
+            deleted[0],
+            ("tok_old".into(), "cal_old".into(), "evt_old".into())
+        );
+        // CREATE 새 master(새 토큰/캘린더).
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created.len(), 1, "새 master CREATE 1회");
+        assert_eq!(created[0].0, "tok_new");
+        assert_eq!(created[0].1, "cal_new");
+
+        // mirror 갱신 + pair 일관.
+        assert!(assert_pair_consistent(&db, &rid).await);
+        let (proj, cal, evt): (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT project_id, google_calendar_id, google_event_id FROM routines WHERE id=?1",
+        )
+        .bind(&rid)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(proj.as_deref(), Some("proj_personal"));
+        assert_eq!(cal.as_deref(), Some("cal_new"));
+        assert_eq!(evt.as_deref(), Some("evt_new"));
+    }
+
+    /// move: 미동기화 루틴은 not_synced로 거부(provider 미호출).
+    #[tokio::test]
+    async fn move_rejects_when_not_synced() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "비타민",
+            RoutineFreq::Daily,
+            vec![],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        let provider = RecordingProvider::default();
+        let err = move_routine_sync_with_provider(
+            &db,
+            &provider,
+            "t",
+            "t",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "routine.sync.not_synced");
+        assert!(provider.deleted.lock().unwrap().is_empty());
+        assert!(provider.created.lock().unwrap().is_empty());
+    }
+
+    /// move: 새 프로젝트 kind 불일치는 **옛 master를 지우기 전에** 거부(파괴 전 가드). DELETE/CREATE
+    /// 미호출 + mirror 불변(옛 캘린더 그대로 sync).
+    #[tokio::test]
+    async fn move_rejects_kind_mismatch_before_delete() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_old", "personal").await;
+        seed_project(&db, "proj_work", "work").await;
+        let rid = seed_routine(
+            &db,
+            "PT",
+            RoutineFreq::Daily,
+            vec![],
+            Some("18:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // 개인 루틴, 옛 캘린더로 동기화 상태(옛 개인 프로젝트 proj_old).
+        sqlx::query(
+            "UPDATE routines SET project_id='proj_old', google_calendar_id='cal_old', \
+             google_event_id='evt_old' WHERE id=?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let provider = RecordingProvider::default();
+        // 업무 프로젝트로 이동 시도 → kind_mismatch.
+        let err = move_routine_sync_with_provider(
+            &db,
+            &provider,
+            "t",
+            "t",
+            &rid,
+            "proj_work",
+            "cal_new",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "routine.sync.kind_mismatch");
+        // 파괴 전 거부 — 옛 master 무손상.
+        assert!(
+            provider.deleted.lock().unwrap().is_empty(),
+            "kind 불일치는 DELETE 전에 거부(비가역 상태 방지)"
+        );
+        assert!(provider.created.lock().unwrap().is_empty());
+        // mirror 불변 + pair 일관(여전히 옛 캘린더 동기화).
+        assert!(assert_pair_consistent(&db, &rid).await);
+        let (cal, evt): (Option<String>, Option<String>) =
+            sqlx::query_as("SELECT google_calendar_id, google_event_id FROM routines WHERE id=?1")
+                .bind(&rid)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(cal.as_deref(), Some("cal_old"));
+        assert_eq!(evt.as_deref(), Some("evt_old"));
+    }
+
+    /// move 부분 실패: 옛 master DELETE는 성공했으나 새 master CREATE가 실패하면 mirror는
+    /// (cal=NULL, evt=NULL)로 남아 pair 일관 + 동기화 OFF 상태가 되고, 에러를 전파한다(사용자가
+    /// 다시 켤 수 있게 truthful surface). project_id는 옛 값으로 남지만(stale, 재-enable이 새로
+    /// set하므로 무해) sync-pair invariant는 깨지지 않는다.
+    #[tokio::test]
+    async fn move_create_failure_leaves_mirror_off_and_consistent() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET project_id='proj_personal', google_calendar_id='cal_old', \
+             google_event_id='evt_old' WHERE id=?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let provider = RecordingProvider::default();
+        // DELETE는 성공(default Ok), CREATE만 실패.
+        *provider.create_result.lock().unwrap() =
+            Err(CalendarError::Terminal("create boom".into()));
+
+        let err = move_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok_old",
+            "tok_new",
+            &rid,
+            "proj_personal",
+            "cal_new",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert!(!err.code.is_empty(), "CREATE 실패가 에러로 전파");
+
+        // 옛 master는 지워졌고(DELETE 1회), 새 master는 생성 안 됨.
+        assert_eq!(
+            provider.deleted.lock().unwrap().len(),
+            1,
+            "옛 master DELETE 성공"
+        );
+        // mirror는 동기화 OFF(cal/evt NULL) + pair 일관.
+        assert!(
+            !assert_pair_consistent(&db, &rid).await,
+            "CREATE 실패 후 동기화 OFF(cal/evt NULL)"
+        );
+        let (proj, cal, evt): (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT project_id, google_calendar_id, google_event_id FROM routines WHERE id=?1",
+        )
+        .bind(&rid)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(cal.is_none() && evt.is_none(), "sync-pair NULL out");
+        assert_eq!(
+            proj.as_deref(),
+            Some("proj_personal"),
+            "project_id는 stale로 남음(의도 — 재-enable이 새로 set)"
+        );
+    }
+
+    /// delete(master): 동기화 루틴 → delete_event 호출. mirror는 NULL 정리하지 않는다(행이 곧 삭제됨).
+    #[tokio::test]
+    async fn delete_master_deletes_when_synced() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_d", "evt_d").await;
+
+        let provider = RecordingProvider::default();
+        delete_master_with_provider(&db, &provider, "tok_x", &rid)
+            .await
+            .unwrap();
+        let deleted = provider.deleted.lock().unwrap().clone();
+        assert_eq!(deleted.len(), 1);
+        assert_eq!(deleted[0], ("tok_x".into(), "cal_d".into(), "evt_d".into()));
+    }
+
+    /// delete(master): 미동기화 루틴 → no-op(provider 미호출).
+    #[tokio::test]
+    async fn delete_master_noop_when_not_synced() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "비타민",
+            RoutineFreq::Daily,
+            vec![],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        let provider = RecordingProvider::default();
+        delete_master_with_provider(&db, &provider, "tok", &rid)
+            .await
+            .unwrap();
+        assert!(provider.deleted.lock().unwrap().is_empty());
+    }
+
+    /// delete(master): provider 실패는 에러로 전파(crud::delete_routine이 delete_remote_failed로
+    /// wrap). helper는 로컬 행을 건드리지 않으므로 행이 보존된다(crud가 이 에러를 받으면 로컬
+    /// delete를 호출하지 않음 — "Google 삭제 실패 시 로컬 보존").
+    #[tokio::test]
+    async fn delete_master_propagates_error_keeps_row() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "PT",
+            RoutineFreq::Daily,
+            vec![],
+            Some("18:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_p", "evt_p").await;
+
+        let provider = RecordingProvider::default();
+        *provider.delete_result.lock().unwrap() = Err(CalendarError::Terminal("boom".into()));
+        let err = delete_master_with_provider(&db, &provider, "tok", &rid)
+            .await
+            .unwrap_err();
+        assert!(!err.code.is_empty(), "provider 에러가 AppError로 전파");
+
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM routines WHERE id=?1")
+            .bind(&rid)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n, 1, "Google 삭제 실패 시 로컬 행 보존");
+    }
+
+    /// invariant: monthly_pattern/monthly_nth_week DB CHECK이 잘못된 값을 거부(스키마 가드 회귀).
+    #[tokio::test]
+    async fn monthly_check_constraints_reject_bad_values() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "회고",
+            RoutineFreq::Monthly,
+            vec![MWeekday::Tue],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+
+        // monthly_pattern은 'day_of_month'|'nth_weekday'만 허용.
+        assert!(
+            sqlx::query("UPDATE routines SET monthly_pattern = 'bogus' WHERE id = ?1")
+                .bind(&rid)
+                .execute(&db)
+                .await
+                .is_err(),
+            "monthly_pattern CHECK이 'bogus' 거부"
+        );
+        // monthly_nth_week은 -1..5(0 제외).
+        for bad in [0_i64, 6, -2] {
+            assert!(
+                sqlx::query("UPDATE routines SET monthly_nth_week = ?2 WHERE id = ?1")
+                    .bind(&rid)
+                    .bind(bad)
+                    .execute(&db)
+                    .await
+                    .is_err(),
+                "monthly_nth_week CHECK이 {bad} 거부"
+            );
+        }
+        // 유효값(nth_weekday + -1)은 통과.
+        assert!(
+            sqlx::query(
+                "UPDATE routines SET monthly_pattern = 'nth_weekday', monthly_nth_week = -1 \
+                 WHERE id = ?1"
+            )
+            .bind(&rid)
+            .execute(&db)
+            .await
+            .is_ok(),
+            "유효한 nth_weekday/-1은 통과"
+        );
     }
 }

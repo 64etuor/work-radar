@@ -47,11 +47,23 @@ export function useUpdateRoutine() {
   });
 }
 
-/** 루틴 삭제. */
+/** 루틴 삭제. 동기화 ON이면 Google master event를 먼저 지운다(실패 시 delete_remote_failed —
+ *  호출부가 "로컬만 삭제" confirm 후 useDeleteRoutineLocalOnly로 진행). onSettled로 무효화해
+ *  실패 후에도 화면이 최신 로컬 상태를 반영하게 한다. */
 export function useDeleteRoutine() {
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (id: string) => unwrap(commands.deleteRoutine(id)),
+    onSettled: () => inv.routines(),
+  });
+}
+
+/** 루틴을 로컬에서만 삭제(Google master event 무시). delete가 Google 삭제에 실패했을 때의
+ *  사용자 confirm fallback. */
+export function useDeleteRoutineLocalOnly() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.deleteRoutineLocalOnly(id)),
     onSuccess: () => inv.routines(),
   });
 }
@@ -108,6 +120,25 @@ export function useDisableRoutineGoogleSync() {
   return useMutation({
     mutationFn: (routineId: string) => unwrap(commands.disableRoutineGoogleSync(routineId)),
     onSuccess: () => inv.routines(),
+  });
+}
+
+/** 루틴 동기화 캘린더 이동 (옛 master 삭제 + 새 캘린더에 master 생성). Google API가 calendarId
+ *  PATCH를 지원하지 않아 DELETE+CREATE. 실패해도 로컬 mirror는 truthful하게 반영되므로 onSettled
+ *  무효화. */
+export function useMoveRoutineGoogleSync() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: ({
+      routineId,
+      projectId,
+      calendarId,
+    }: {
+      routineId: string;
+      projectId: string;
+      calendarId: string;
+    }) => unwrap(commands.moveRoutineGoogleSync(routineId, projectId, calendarId)),
+    onSettled: () => inv.routines(),
   });
 }
 

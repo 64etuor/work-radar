@@ -28,12 +28,14 @@ import {
   useCreateRoutine,
   useCreateSignal,
   useDeleteRoutine,
+  useDeleteRoutineLocalOnly,
   useDeleteSignal,
   useDisableRoutineGoogleSync,
   useEnableRoutineGoogleSync,
   useEnrichAllRunning,
   useFlushPromotions,
   useLifeWheelTags,
+  useMoveRoutineGoogleSync,
   useProjects,
   usePromoteToday,
   usePromoteToNotion,
@@ -105,10 +107,12 @@ export function CaptureBoard() {
   const createRoutine = useCreateRoutine();
   const updateRoutine = useUpdateRoutine();
   const deleteRoutine = useDeleteRoutine();
+  const deleteRoutineLocalOnly = useDeleteRoutineLocalOnly();
   const reorderRoutines = useReorderRoutines();
   const toggleRoutine = useToggleRoutineCheck();
   const enableRoutineSync = useEnableRoutineGoogleSync();
   const disableRoutineSync = useDisableRoutineGoogleSync();
+  const moveRoutineSync = useMoveRoutineGoogleSync();
   const codex = useCodexStatus();
   const triggerEnrichAll = useTriggerEnrichAll();
   const updateTitle = useUpdateSignalTitle();
@@ -399,9 +403,41 @@ export function CaptureBoard() {
     });
   };
 
+  const handleMoveRoutineSync = (routineId: string, projectId: string, calendarId: string) => {
+    moveRoutineSync.mutate(
+      { routineId, projectId, calendarId },
+      {
+        onSuccess: () => pushSuccess("Google 캘린더 이동됨"),
+        onError: (e) =>
+          pushError("calendar", e instanceof IpcError ? e.app : `이동 실패: ${String(e)}`),
+      },
+    );
+  };
+
   const handleDeleteRoutine = (id: string) => {
-    deleteRoutine.mutate(id);
-    pushSuccess("루틴 삭제");
+    deleteRoutine.mutate(id, {
+      onSuccess: () => pushSuccess("루틴 삭제"),
+      onError: (e) => {
+        const app = e instanceof IpcError ? e.app : null;
+        // 동기화 ON 루틴의 Google master event 삭제 실패 → 로컬만 지울지 confirm.
+        if (app?.code === "routine.sync.delete_remote_failed") {
+          if (
+            window.confirm("Google 캘린더에서 이벤트를 삭제하지 못했습니다. 로컬에서만 삭제할까요?")
+          ) {
+            deleteRoutineLocalOnly.mutate(id, {
+              onSuccess: () => pushSuccess("루틴 삭제 (로컬만)"),
+              onError: (e2) =>
+                pushError(
+                  "calendar",
+                  e2 instanceof IpcError ? e2.app : `루틴 삭제 실패: ${String(e2)}`,
+                ),
+            });
+          }
+        } else {
+          pushError("calendar", app ?? `루틴 삭제 실패: ${String(e)}`);
+        }
+      },
+    });
   };
 
   // ── 키보드 (1/2/3/4 분류, 0/u 미분류, T Today, D/E 완료/보관) ──
@@ -586,7 +622,10 @@ export function CaptureBoard() {
           onSetRoutineAreaTagKey={(id, tagKey) => setRoutineAreaTagKey.mutate({ id, tagKey })}
           onEnableRoutineSync={handleEnableRoutineSync}
           onDisableRoutineSync={handleDisableRoutineSync}
-          routineSyncBusy={enableRoutineSync.isPending || disableRoutineSync.isPending}
+          onMoveRoutineSync={handleMoveRoutineSync}
+          routineSyncBusy={
+            enableRoutineSync.isPending || disableRoutineSync.isPending || moveRoutineSync.isPending
+          }
         />
       </div>
 
