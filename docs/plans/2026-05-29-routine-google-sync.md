@@ -287,7 +287,7 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 ### 워크트리 / 브랜치
 
 - 워크트리: `.claude/worktrees/routine-google-sync`
-- 브랜치: `feature/routine-google-sync` (origin/dev `d3d7a2a` 위에 rebase됨, push 완료)
+- 브랜치: `feature/routine-google-sync`, **HEAD `cced37c`** (origin push 완료, 클린 트리)
 - **dev 미머지** — 이 브랜치는 feature 브랜치다. main은 PR-only, push는 dev만(이 작업은 feature 브랜치로 격리).
 
 ### 완료 (origin에 push됨)
@@ -301,11 +301,16 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 | PR 2b-1    | `e809912`           | `RoutineToday`/입력에 google·monthly 필드 노출 + crud 배선 + enable kind 매핑 검증   |
 | PR 2b-2    | `5cc7b49`           | RoutineSyncButton(동기화 토글 + 캘린더 picker) + popover overlay-stack Esc 수정      |
 | PR 2b-3    | `d22bfb0`           | monthly nth_weekday 편집 UI + IPC-boundary 검증 + **로컬 due-calc nth_weekday 정합** |
-| PR 3       | (이 세션)           | 루틴 편집 시 Google master event PATCH 전파(`build_master_event_input` 추출 공용)    |
+| PR 3       | `40b90ac`           | 루틴 편집 시 Google master event PATCH 전파(`build_master_event_input` 추출 공용)    |
+| 가드       | `cced37c`           | 무시각 루틴 sync 비활성(프런트 disabled + 백엔드 `routine.sync.time_required`)       |
 
-핵심 결정(잠금): **루틴 kind ↔ 프로젝트 kind 매핑** — 개인 루틴은 개인 프로젝트, 업무 루틴은
+핵심 결정(잠금): ① **루틴 kind ↔ 프로젝트 kind 매핑** — 개인 루틴은 개인 프로젝트, 업무 루틴은
 업무 프로젝트 캘린더에만 sync. 백엔드가 `project.kind == routine.kind` 검증(교차 노출 차단).
-monthly 패턴 미지정 시 enable에서 `day_of_month` 기본(로컬 due-calc 일치).
+monthly 패턴 미지정 시 enable에서 `day_of_month` 기본(로컬 due-calc 일치). ② nth_weekday 계약
+(nth_week∈{-1,1..5} + 요일 1개)·무시각 sync 거부는 세 레이어(프런트/IPC 검증/enable)에서 일치.
+③ sync는 **시간 지정 루틴만** 가능(09:00 fallback 어긋남 방지).
+
+✅ **cmux Esc 라이브 스모크 통과**(RoutineSyncButton popover Esc → popover만 닫히고 창 유지).
 
 ### 다음 작업 (우선순위 순)
 
