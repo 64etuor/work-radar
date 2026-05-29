@@ -3,7 +3,6 @@ import { Fragment, useEffect } from "react";
 
 import type { CommitGraph, Worktree } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
-import { registerOverlay } from "@/components/ui/overlay-stack";
 import { useWorktreeCommitGraph } from "@/lib/query";
 import { computeGraphTopology, type GraphTopologyRow } from "@/lib/worktreeReview";
 
@@ -22,8 +21,9 @@ export function CommitGraphDrawer({
     open: true,
   });
 
+  // Esc로 닫기 + 트리거 포커스 복원. 열림 표시는 아래 `data-wr-overlay-open` 마커가 담당
+  // (overlay-stack 단일 진실원) → App 셸 Esc가 창 숨김을 양보.
   useEffect(() => {
-    const unregister = registerOverlay();
     const trigger = document.activeElement as HTMLElement | null;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -35,13 +35,12 @@ export function CommitGraphDrawer({
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
-      unregister();
       trigger?.focus?.();
     };
   }, [onClose]);
 
   return (
-    <aside className="wt-commit-drawer" role="dialog" aria-label="커밋 그래프">
+    <aside className="wt-commit-drawer" role="dialog" aria-label="커밋 그래프" data-wr-overlay-open>
       <header className="wt-commit-head">
         <div>
           <span className="wt-commit-kicker">Commit graph</span>

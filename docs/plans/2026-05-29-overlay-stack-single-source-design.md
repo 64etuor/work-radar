@@ -1,7 +1,9 @@
 # overlay-stack 단일 진실원 리팩터 (Design / 핸드오프)
 
-> 상태: design / 다음 세션에서 plan→구현. 별도 PR(한 관심사). 현재 knob 버그픽스(dev `a7b618f`)
-> 위에서 출발. 관련: `docs/areas/frontend-shell.md`, `docs/areas/shadcn-migration.md`(overlay 계약 §0.6).
+> 상태: **구현 완료**(branch `refactor/overlay-stack-ssot`, 2026-05-29). 결정 = 통일 마커
+> `data-wr-overlay-open`(§3.1) + happy-dom 단위테스트(§5). 결과 로그는 `docs/decisions.md`,
+> 컨벤션 정본은 `docs/areas/shadcn-migration.md §radix Dialog Esc 계약`. 별도 PR(한 관심사).
+> 현재 knob 버그픽스(dev `a7b618f`) 위에서 출발. 관련: `docs/areas/frontend-shell.md`.
 
 ## 0. 다음 세션 핸드오프 (여기부터 읽어)
 
