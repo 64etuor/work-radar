@@ -54,3 +54,56 @@ export function eventToHotkeySpec(e: KeyEventLike): string | null {
   if (!label) return null;
   return [...mods, label].join("+");
 }
+
+/** label → e.key 역매핑(SPECIALS 반대 방향). "Left"→"ArrowLeft", "Comma"→"," 등. */
+const LABEL_TO_KEY: Record<string, string> = Object.fromEntries(
+  Object.entries(SPECIALS).map(([key, label]) => [label, key]),
+);
+
+export interface ParsedHotkey {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}
+
+/**
+ * "Cmd+Left" 류 spec → 합성 KeyboardEvent에 넣을 필드. modifier가 하나도 없거나
+ * 키 라벨이 없으면 null(eventToHotkeySpec의 역). 단일 문자는 소문자 e.key로,
+ * 특수 라벨은 LABEL_TO_KEY로 복원한다(F1~F12는 그대로).
+ */
+export function parseHotkeySpec(spec: string): ParsedHotkey | null {
+  const parts = spec
+    .trim()
+    .split("+")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+
+  const mods = { ctrlKey: false, metaKey: false, altKey: false, shiftKey: false };
+  let label: string | null = null;
+  for (const p of parts) {
+    switch (p.toLowerCase()) {
+      case "ctrl":
+        mods.ctrlKey = true;
+        break;
+      case "cmd":
+      case "meta":
+        mods.metaKey = true;
+        break;
+      case "alt":
+        mods.altKey = true;
+        break;
+      case "shift":
+        mods.shiftKey = true;
+        break;
+      default:
+        label = p;
+    }
+  }
+  if (!label) return null;
+  if (!mods.ctrlKey && !mods.metaKey && !mods.altKey && !mods.shiftKey) return null;
+  const key = LABEL_TO_KEY[label] ?? (label.length === 1 ? label.toLowerCase() : label);
+  return { key, ...mods };
+}
