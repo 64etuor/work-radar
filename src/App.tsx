@@ -6,6 +6,7 @@ import { AgentRunModal } from "@/components/agents/AgentRunModal";
 import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { CaptureBoard } from "@/components/CaptureBoard";
+import { CmdKnob } from "@/components/CmdKnob";
 import { CommandPalette } from "@/components/CommandPalette";
 import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
 import HermesView from "@/components/HermesView";
@@ -206,6 +207,8 @@ export default function App() {
       <HermesView />
       {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
       <ToastHost />
+      {/* 전역 오락실 조이스틱 — 트리거 hold 시 커서 위치에 등장(useCmdKnob). */}
+      <CmdKnob />
     </div>
   );
 }

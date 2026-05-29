@@ -1,0 +1,105 @@
+/* 전역 오락실 조이스틱. origin(커서 좌표)에 fixed, 베이스 중심을 origin에 맞춘다. */
+.cmd-knob {
+  position: fixed;
+  z-index: 70; /* 오버레이 스택 위 — 팔레트/드로어와 겹치지 않게(억제는 훅에서) */
+  width: 0;
+  height: 0;
+  pointer-events: none; /* 베이스는 통과, 스틱만 잡힘 */
+  animation: cmd-knob-in var(--wr-motion-fast, 0.16s) var(--wr-ease-out, ease-out) both;
+}
+
+.cmd-knob-base {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 124px;
+  height: 124px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--color-wr-surface, #fff);
+  border: 1px solid var(--color-wr-border, rgba(0, 0, 0, 0.12));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.cmd-knob-guide {
+  position: absolute;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--color-wr-muted, rgba(0, 0, 0, 0.28));
+  opacity: 0.35;
+  transition:
+    opacity 0.12s ease-out,
+    color 0.12s ease-out;
+}
+.cmd-knob-guide[data-enabled] {
+  opacity: 0.7;
+}
+.cmd-knob-guide[data-armed] {
+  color: var(--color-wr-accent, #2563eb);
+  opacity: 1;
+}
+.cmd-knob-guide[data-dir="up"] {
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+}
+.cmd-knob-guide[data-dir="down"] {
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+}
+.cmd-knob-guide[data-dir="left"] {
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.cmd-knob-guide[data-dir="right"] {
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.cmd-knob-stick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--color-wr-border, rgba(0, 0, 0, 0.16));
+  background: radial-gradient(circle at 38% 32%, #fff 0%, #ececed 62%, #d8d8da 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    0 4px 10px rgba(0, 0, 0, 0.22);
+  cursor: grab;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1); /* 스프링백 */
+}
+.cmd-knob-stick[data-dragging] {
+  cursor: grabbing;
+  transition: none; /* 드래그 중 1:1 추적 */
+}
+
+@keyframes cmd-knob-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmd-knob {
+    animation: none;
+  }
+  .cmd-knob-stick {
+    transition: none;
+  }
+}
