@@ -67,6 +67,30 @@ async fn project_kind(db: &Db, project_id: &str) -> Result<String, AppError> {
         .ok_or_else(|| AppError::not_found("project.not_found", "프로젝트를 찾을 수 없습니다"))
 }
 
+/// project의 Google access token 조회(필요 시 refresh). 미연결이면 not_connected.
+/// enable/disable/move/patch/delete IPC가 반복하던 토큰 조회 + 에러 매핑을 한 곳으로 모은다.
+async fn access_token_or_not_connected(db: &Db, project_id: &str) -> Result<String, AppError> {
+    access_token_for(db, project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "calendar.not_connected",
+                "미연결 — 먼저 Google Calendar를 연결하세요",
+            )
+        })
+}
+
+/// 동기화 루틴의 project_id를 꺼낸다(enable이 set하므로 동기화 중이면 있어야 함). 없으면 no_project.
+fn require_project_id(row: &RoutineSyncRow) -> Result<&str, AppError> {
+    row.project_id.as_deref().ok_or_else(|| {
+        AppError::validation(
+            "routine.sync.no_project",
+            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
+        )
+    })
+}
+
 fn parse_freq(s: &str) -> Result<Freq, AppError> {
     match s {
         "daily" => Ok(Freq::Daily),
@@ -405,21 +429,8 @@ pub(crate) async fn patch_synced_routine_after_edit(
         // 미동기화 — 토큰 조회 없이 no-op (편집의 흔한 경우).
         return Ok(());
     }
-    let project_id = row.project_id.as_deref().ok_or_else(|| {
-        AppError::validation(
-            "routine.sync.no_project",
-            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
-        )
-    })?;
-    let access = access_token_for(db, project_id)
-        .await
-        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "calendar.not_connected",
-                "미연결 — 먼저 Google Calendar를 연결하세요",
-            )
-        })?;
+    let project_id = require_project_id(&row)?;
+    let access = access_token_or_not_connected(db, project_id).await?;
     let provider = HttpCalendarProvider::new()?;
     patch_routine_sync_with_provider(db, &provider, &access, routine_id, TZID_DEFAULT).await
 }
@@ -434,21 +445,8 @@ pub(crate) async fn delete_routine_master_event(db: &Db, routine_id: &str) -> Re
         // 미동기화 — 토큰 조회 없이 no-op (삭제의 흔한 경우).
         return Ok(());
     }
-    let project_id = row.project_id.as_deref().ok_or_else(|| {
-        AppError::validation(
-            "routine.sync.no_project",
-            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
-        )
-    })?;
-    let access = access_token_for(db, project_id)
-        .await
-        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "calendar.not_connected",
-                "미연결 — 먼저 Google Calendar를 연결하세요",
-            )
-        })?;
+    let project_id = require_project_id(&row)?;
+    let access = access_token_or_not_connected(db, project_id).await?;
     let provider = HttpCalendarProvider::new()?;
     delete_master_with_provider(db, &provider, &access, routine_id).await
 }
@@ -463,15 +461,7 @@ pub async fn enable_routine_google_sync(
     project_id: String,
     calendar_id: String,
 ) -> Result<(), AppError> {
-    let access = access_token_for(db.inner(), &project_id)
-        .await
-        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "calendar.not_connected",
-                "미연결 — 먼저 Google Calendar를 연결하세요",
-            )
-        })?;
+    let access = access_token_or_not_connected(db.inner(), &project_id).await?;
     let provider = HttpCalendarProvider::new()?;
     enable_routine_sync_with_provider(
         db.inner(),
@@ -496,21 +486,8 @@ pub async fn disable_routine_google_sync(
         // 이미 disabled — no-op without 토큰 fetch.
         return Ok(());
     }
-    let project_id = row.project_id.as_deref().ok_or_else(|| {
-        AppError::validation(
-            "routine.sync.no_project",
-            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
-        )
-    })?;
-    let access = access_token_for(db.inner(), project_id)
-        .await
-        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "calendar.not_connected",
-                "미연결 — 먼저 Google Calendar를 연결하세요",
-            )
-        })?;
+    let project_id = require_project_id(&row)?;
+    let access = access_token_or_not_connected(db.inner(), project_id).await?;
     let provider = HttpCalendarProvider::new()?;
     disable_routine_sync_with_provider(db.inner(), &provider, &access, &routine_id).await
 }
@@ -535,30 +512,9 @@ pub async fn move_routine_google_sync(
         ));
     }
     // 동기화 중이면 enable이 project_id를 set했으므로 옛 프로젝트가 있어야 한다.
-    let old_project_id = row.project_id.as_deref().ok_or_else(|| {
-        AppError::validation(
-            "routine.sync.no_project",
-            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
-        )
-    })?;
-    let old_access = access_token_for(db.inner(), old_project_id)
-        .await
-        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "calendar.not_connected",
-                "미연결 — 먼저 Google Calendar를 연결하세요",
-            )
-        })?;
-    let new_access = access_token_for(db.inner(), &project_id)
-        .await
-        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "calendar.not_connected",
-                "미연결 — 먼저 Google Calendar를 연결하세요",
-            )
-        })?;
+    let old_project_id = require_project_id(&row)?;
+    let old_access = access_token_or_not_connected(db.inner(), old_project_id).await?;
+    let new_access = access_token_or_not_connected(db.inner(), &project_id).await?;
     let provider = HttpCalendarProvider::new()?;
     move_routine_sync_with_provider(
         db.inner(),
