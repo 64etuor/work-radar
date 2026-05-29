@@ -16,7 +16,7 @@
 use tauri::State;
 
 use crate::{
-    calendar::{CalendarProvider, CreateEventInput, HttpCalendarProvider},
+    calendar::{build_event_payload, CalendarProvider, CreateEventInput, HttpCalendarProvider},
     commands::calendar::access_token_for,
     db::Db,
     error::AppError,
@@ -119,6 +119,68 @@ fn parse_monthly_pattern(s: &str) -> Result<MonthlyPattern, AppError> {
     }
 }
 
+/// 동기화 루틴 row → Google master event 입력(CREATE/PATCH 공용). exdate 조회 + RRULE 매핑 +
+/// ISO 변환을 한 곳에 모은다. enable(CREATE)·patch(PATCH) 둘 다 이걸 거쳐 같은 매핑을 보장한다.
+/// monthly 패턴 미지정이면 day_of_month 기본 — 로컬 due-calc(day-of-month)와 일치해 화면/캘린더가
+/// 어긋나지 않게 한다(nth_weekday는 명시적 업그레이드, 2b-3 UI).
+async fn build_master_event_input(
+    db: &Db,
+    routine_id: &str,
+    row: &RoutineSyncRow,
+    tzid: &str,
+) -> Result<CreateEventInput, AppError> {
+    let exdate_dates: Vec<String> =
+        sqlx::query_scalar("SELECT date FROM routine_exdates WHERE routine_id = ?1 ORDER BY date")
+            .bind(routine_id)
+            .fetch_all(db)
+            .await?;
+    let exdate_refs: Vec<&str> = exdate_dates.iter().map(String::as_str).collect();
+
+    let freq = parse_freq(&row.freq)?;
+    let weekdays = parse_weekdays_json(row.weekdays.as_deref())?;
+    let monthly_pattern = match row.monthly_pattern.as_deref() {
+        Some(s) => Some(parse_monthly_pattern(s)?),
+        None if matches!(freq, Freq::Monthly) => Some(MonthlyPattern::DayOfMonth),
+        None => None,
+    };
+    // created_at은 'YYYY-MM-DD HH:MM:SS' (sqlx datetime('now')) — 앞 10자 = 날짜.
+    // 포맷이 깨졌다면 1970 fallback이 DTSTART에 새겨질 위험 → 명시적 거부.
+    let reference = row.created_at.get(0..10).ok_or_else(|| {
+        AppError::validation(
+            "routine.created_at_malformed",
+            "routine.created_at 포맷이 YYYY-MM-DD HH:MM:SS가 아닙니다",
+        )
+    })?;
+
+    let input = RRuleInput {
+        freq,
+        weekdays: &weekdays,
+        anchor_date: row.anchor_date.as_deref(),
+        time_of_day: row.time_of_day.as_deref(),
+        duration_min: row.duration_min.map(|n| n.max(0) as u32),
+        monthly_pattern,
+        monthly_nth_week: row.monthly_nth_week.map(|n| n as i32),
+        tzid,
+        reference_date: reference,
+    };
+    let spec = rrule::routine_to_rrule(&input, &exdate_refs).map_err(|e| {
+        AppError::validation("routine.rrule_invalid", format!("RRULE 매핑 실패: {e}"))
+    })?;
+    let parts = spec.to_event_parts().map_err(|e| {
+        AppError::validation("routine.rrule_invalid", format!("ISO 변환 실패: {e}"))
+    })?;
+
+    Ok(CreateEventInput {
+        title: row.title.clone(),
+        start: parts.start_iso,
+        end: parts.end_iso,
+        all_day: false,
+        description: None,
+        recurrence: parts.recurrence_lines,
+        time_zone: Some(spec.tzid),
+    })
+}
+
 /// Provider injection helper — enable 흐름 단위 테스트용. IPC 명령은 이걸 호출.
 ///
 /// `project_id`는 routine.kind와 같은 kind의 프로젝트(개인 루틴→개인 프로젝트, 업무→업무).
@@ -156,58 +218,7 @@ pub(crate) async fn enable_routine_sync_with_provider<P: CalendarProvider>(
         ));
     }
 
-    let exdate_dates: Vec<String> =
-        sqlx::query_scalar("SELECT date FROM routine_exdates WHERE routine_id = ?1 ORDER BY date")
-            .bind(routine_id)
-            .fetch_all(db)
-            .await?;
-    let exdate_refs: Vec<&str> = exdate_dates.iter().map(String::as_str).collect();
-
-    let freq = parse_freq(&row.freq)?;
-    let weekdays = parse_weekdays_json(row.weekdays.as_deref())?;
-    // monthly인데 패턴 미지정이면 day_of_month로 기본 — 로컬 due-calc(day-of-month 기준)와
-    // 일치시켜 sync 결과가 화면 표시와 어긋나지 않게 한다. nth_weekday는 명시적 업그레이드(2b-3 UI).
-    let monthly_pattern = match row.monthly_pattern.as_deref() {
-        Some(s) => Some(parse_monthly_pattern(s)?),
-        None if matches!(freq, Freq::Monthly) => Some(MonthlyPattern::DayOfMonth),
-        None => None,
-    };
-    // created_at은 'YYYY-MM-DD HH:MM:SS' (sqlx datetime('now')) — 앞 10자 = 날짜.
-    // 포맷이 깨졌다면 1970 fallback이 DTSTART에 새겨질 위험 → 명시적 거부.
-    let reference = row.created_at.get(0..10).ok_or_else(|| {
-        AppError::validation(
-            "routine.created_at_malformed",
-            "routine.created_at 포맷이 YYYY-MM-DD HH:MM:SS가 아닙니다",
-        )
-    })?;
-
-    let input = RRuleInput {
-        freq,
-        weekdays: &weekdays,
-        anchor_date: row.anchor_date.as_deref(),
-        time_of_day: row.time_of_day.as_deref(),
-        duration_min: row.duration_min.map(|n| n.max(0) as u32),
-        monthly_pattern,
-        monthly_nth_week: row.monthly_nth_week.map(|n| n as i32),
-        tzid,
-        reference_date: reference,
-    };
-    let spec = rrule::routine_to_rrule(&input, &exdate_refs).map_err(|e| {
-        AppError::validation("routine.rrule_invalid", format!("RRULE 매핑 실패: {e}"))
-    })?;
-    let parts = spec.to_event_parts().map_err(|e| {
-        AppError::validation("routine.rrule_invalid", format!("ISO 변환 실패: {e}"))
-    })?;
-
-    let create_input = CreateEventInput {
-        title: row.title.clone(),
-        start: parts.start_iso,
-        end: parts.end_iso,
-        all_day: false,
-        description: None,
-        recurrence: parts.recurrence_lines,
-        time_zone: Some(spec.tzid.clone()),
-    };
+    let create_input = build_master_event_input(db, routine_id, &row, tzid).await?;
     let (event_id, _html_link) = provider
         .create_event(access_token, calendar_id, &create_input)
         .await?;
@@ -255,6 +266,63 @@ pub(crate) async fn disable_routine_sync_with_provider<P: CalendarProvider>(
     .execute(db)
     .await?;
     Ok(())
+}
+
+/// Provider injection helper — 편집된 동기화 루틴의 master event PATCH 전파(PR 3, 단위 테스트용).
+/// 미동기화 루틴이면 no-op(멱등). recurrence+start+end+summary를 한 번에 보낸다(plan §4 PATCH).
+/// PATCH 전략: DELETE+CREATE가 아니라 PATCH라 EXDATE/이벤트 ID/사용자가 Google에 추가한 메타 보존.
+pub(crate) async fn patch_routine_sync_with_provider<P: CalendarProvider>(
+    db: &Db,
+    provider: &P,
+    access_token: &str,
+    routine_id: &str,
+    tzid: &str,
+) -> Result<(), AppError> {
+    let row = load_routine(db, routine_id).await?;
+    let (Some(cal_id), Some(evt_id)) = (
+        row.google_calendar_id.as_deref(),
+        row.google_event_id.as_deref(),
+    ) else {
+        // 미동기화 — PATCH 불요(멱등).
+        return Ok(());
+    };
+    let create_input = build_master_event_input(db, routine_id, &row, tzid).await?;
+    let payload = build_event_payload(&create_input);
+    provider
+        .patch_event(access_token, cal_id, evt_id, &payload)
+        .await?;
+    Ok(())
+}
+
+/// 루틴 편집 후 동기화 전파(crud::update_routine에서 호출). 동기화 OFF면 토큰 조회 없이 no-op.
+/// 동기화 ON이면 master event PATCH — 실패는 호출자가 patch_failed로 surface(로컬 변경은 유지).
+#[allow(clippy::result_large_err)]
+pub(crate) async fn patch_synced_routine_after_edit(
+    db: &Db,
+    routine_id: &str,
+) -> Result<(), AppError> {
+    let row = load_routine(db, routine_id).await?;
+    if row.google_event_id.is_none() {
+        // 미동기화 — 토큰 조회 없이 no-op (편집의 흔한 경우).
+        return Ok(());
+    }
+    let project_id = row.project_id.as_deref().ok_or_else(|| {
+        AppError::validation(
+            "routine.sync.no_project",
+            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
+        )
+    })?;
+    let access = access_token_for(db, project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "calendar.not_connected",
+                "미연결 — 먼저 Google Calendar를 연결하세요",
+            )
+        })?;
+    let provider = HttpCalendarProvider::new()?;
+    patch_routine_sync_with_provider(db, &provider, &access, routine_id, TZID_DEFAULT).await
 }
 
 /// 루틴 Google 동기화 ON. `project_id`는 routine.kind와 같은 kind의 프로젝트(개인→개인,
@@ -323,16 +391,20 @@ pub async fn disable_routine_google_sync(
 mod tests {
     use super::*;
     use crate::calendar::{CalendarCreds, CalendarError, RawCalendar, RawEvent, TokenResponse};
-    use crate::commands::routines::insert_routine;
+    use crate::commands::routines::{insert_routine, update_routine_inner};
     use crate::commands::shared::test_support::*;
-    use crate::models::{CreateRoutineInput, Kind, RoutineFreq, Weekday as MWeekday};
+    use crate::models::{
+        CreateRoutineInput, Kind, RoutineFreq, UpdateRoutineInput, Weekday as MWeekday,
+    };
     use std::sync::Mutex;
 
-    /// 최소 mock — create_event/delete_event 호출 기록 + 결과 모킹.
+    /// 최소 mock — create/patch/delete 호출 기록 + 결과 모킹.
     struct RecordingProvider {
         create_result: Mutex<Result<(String, Option<String>), CalendarError>>,
+        patch_result: Mutex<Result<(), CalendarError>>,
         delete_result: Mutex<Result<(), CalendarError>>,
         created: Mutex<Vec<(String, String, CreateEventInput)>>,
+        patched: Mutex<Vec<(String, String, String, serde_json::Value)>>,
         deleted: Mutex<Vec<(String, String, String)>>,
     }
 
@@ -340,8 +412,10 @@ mod tests {
         fn default() -> Self {
             Self {
                 create_result: Mutex::new(Ok(("evt_default".into(), None))),
+                patch_result: Mutex::new(Ok(())),
                 delete_result: Mutex::new(Ok(())),
                 created: Mutex::new(Vec::new()),
+                patched: Mutex::new(Vec::new()),
                 deleted: Mutex::new(Vec::new()),
             }
         }
@@ -396,12 +470,18 @@ mod tests {
         }
         async fn patch_event(
             &self,
-            _: &str,
-            _: &str,
-            _: &str,
-            _: &serde_json::Value,
+            access: &str,
+            calendar_id: &str,
+            event_id: &str,
+            patch: &serde_json::Value,
         ) -> Result<(), CalendarError> {
-            unimplemented!()
+            self.patched.lock().unwrap().push((
+                access.to_string(),
+                calendar_id.to_string(),
+                event_id.to_string(),
+                patch.clone(),
+            ));
+            self.patch_result.lock().unwrap().clone()
         }
         async fn delete_event(
             &self,
@@ -725,5 +805,156 @@ mod tests {
             provider.deleted.lock().unwrap().is_empty(),
             "local-only 루틴은 provider 미호출"
         );
+    }
+
+    /// 루틴을 동기화 상태로 표시(테스트 헬퍼) — google_calendar_id/google_event_id 세팅.
+    async fn mark_synced(db: &crate::db::Db, rid: &str, cal: &str, evt: &str) {
+        sqlx::query(
+            "UPDATE routines SET google_calendar_id = ?2, google_event_id = ?3 WHERE id = ?1",
+        )
+        .bind(rid)
+        .bind(cal)
+        .bind(evt)
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
+    /// patch: 동기화된 루틴 → master event PATCH 1회(recurrence+start+summary 동봉).
+    #[tokio::test]
+    async fn patch_propagates_to_master_event() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "주간 회의",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Mon],
+            Some("10:00".into()),
+            Some(Kind::Work),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_w", "evt_w").await;
+
+        let provider = RecordingProvider::default();
+        patch_routine_sync_with_provider(&db, &provider, "tok_p", &rid, "Asia/Seoul")
+            .await
+            .unwrap();
+
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1, "patch_event 1회 호출");
+        let (access, cal, evt, payload) = &patched[0];
+        assert_eq!(access, "tok_p");
+        assert_eq!(cal, "cal_w");
+        assert_eq!(evt, "evt_w");
+        assert_eq!(payload["summary"], "주간 회의");
+        let rec = payload["recurrence"][0].as_str().unwrap();
+        assert!(
+            rec.starts_with("RRULE:FREQ=WEEKLY;BYDAY=MO"),
+            "recurrence 라인 동봉: {rec}"
+        );
+        assert!(payload["start"]["dateTime"]
+            .as_str()
+            .unwrap()
+            .ends_with("T10:00:00"));
+        // §4: recurrence + start + end 동시 send — end도 동봉(기본 30분 fallback → 10:30).
+        assert!(payload["end"]["dateTime"]
+            .as_str()
+            .unwrap()
+            .ends_with("T10:30:00"));
+    }
+
+    /// patch: 미동기화 루틴이면 no-op (provider 미호출, 에러 없음 — 멱등).
+    #[tokio::test]
+    async fn patch_noop_when_not_synced() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "물 마시기",
+            RoutineFreq::Daily,
+            vec![],
+            None,
+            Some(Kind::Personal),
+        )
+        .await;
+        let provider = RecordingProvider::default();
+        patch_routine_sync_with_provider(&db, &provider, "tok", &rid, "Asia/Seoul")
+            .await
+            .unwrap();
+        assert!(
+            provider.patched.lock().unwrap().is_empty(),
+            "미동기화 루틴은 patch_event 미호출"
+        );
+    }
+
+    /// patch: 편집(freq daily→weekly Mon) 후 PATCH가 갱신된 스케줄을 반영(현재 row 기준).
+    #[tokio::test]
+    async fn patch_reflects_edited_schedule() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_g", "evt_g").await;
+
+        // 스케줄 편집: daily → weekly(월).
+        update_routine_inner(
+            &db,
+            UpdateRoutineInput {
+                id: rid.clone(),
+                title: "헬스장".into(),
+                freq: RoutineFreq::Weekly,
+                weekdays: vec![MWeekday::Mon],
+                anchor_date: None,
+                time_of_day: Some("07:00".into()),
+                reminder_offset_min: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let provider = RecordingProvider::default();
+        patch_routine_sync_with_provider(&db, &provider, "tok", &rid, "Asia/Seoul")
+            .await
+            .unwrap();
+
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1);
+        let rec = patched[0].3["recurrence"][0].as_str().unwrap();
+        assert!(
+            rec.starts_with("RRULE:FREQ=WEEKLY;BYDAY=MO"),
+            "PATCH가 편집된 weekly 스케줄 반영: {rec}"
+        );
+    }
+
+    /// patch: provider 실패는 에러로 전파(호출자 update_routine이 patch_failed로 wrap).
+    #[tokio::test]
+    async fn patch_propagates_provider_error() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "PT",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Tue],
+            Some("18:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_p", "evt_p").await;
+
+        let provider = RecordingProvider::default();
+        *provider.patch_result.lock().unwrap() = Err(CalendarError::Terminal("boom".into()));
+        let err = patch_routine_sync_with_provider(&db, &provider, "tok", &rid, "Asia/Seoul")
+            .await
+            .unwrap_err();
+        // CalendarError → AppError From 변환으로 전파(코드 무관, 에러면 됨).
+        assert!(!err.code.is_empty(), "provider 에러가 AppError로 전파");
     }
 }

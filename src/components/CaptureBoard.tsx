@@ -357,19 +357,27 @@ export function CaptureBoard() {
   };
 
   const handleUpdateRoutine = (id: string, draft: RoutineDraft) => {
-    updateRoutine.mutate({
-      id,
-      title: draft.title,
-      freq: draft.freq,
-      weekdays: draft.weekdays,
-      anchorDate: draft.anchorDate,
-      timeOfDay: draft.timeOfDay,
-      reminderOffsetMin: draft.reminderOffsetMin,
-      monthlyPattern: draft.monthlyPattern,
-      monthlyNthWeek: draft.monthlyNthWeek,
-      durationMin: draft.durationMin,
-    });
-    pushSuccess("루틴 수정");
+    updateRoutine.mutate(
+      {
+        id,
+        title: draft.title,
+        freq: draft.freq,
+        weekdays: draft.weekdays,
+        anchorDate: draft.anchorDate,
+        timeOfDay: draft.timeOfDay,
+        reminderOffsetMin: draft.reminderOffsetMin,
+        monthlyPattern: draft.monthlyPattern,
+        monthlyNthWeek: draft.monthlyNthWeek,
+        durationMin: draft.durationMin,
+      },
+      {
+        onSuccess: () => pushSuccess("루틴 수정"),
+        // 동기화 루틴의 Google PATCH 실패(routine.sync.patch_failed)는 "저장됐지만 동기화 실패"
+        // 메시지를 그대로 노출. 로컬 변경은 onSettled 무효화로 화면에 반영된다.
+        onError: (e) =>
+          pushError("calendar", e instanceof IpcError ? e.app : `루틴 수정 실패: ${String(e)}`),
+      },
+    );
   };
 
   const handleEnableRoutineSync = (routineId: string, projectId: string, calendarId: string) => {

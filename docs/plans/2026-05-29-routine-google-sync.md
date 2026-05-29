@@ -300,7 +300,8 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 | PR 2a      | `ffb19be`           | enable/disable IPC + provider injection + `RRuleSpec::to_event_parts()`              |
 | PR 2b-1    | `e809912`           | `RoutineToday`/입력에 google·monthly 필드 노출 + crud 배선 + enable kind 매핑 검증   |
 | PR 2b-2    | `5cc7b49`           | RoutineSyncButton(동기화 토글 + 캘린더 picker) + popover overlay-stack Esc 수정      |
-| PR 2b-3    | (이 세션)           | monthly nth_weekday 편집 UI + IPC-boundary 검증 + **로컬 due-calc nth_weekday 정합** |
+| PR 2b-3    | `d22bfb0`           | monthly nth_weekday 편집 UI + IPC-boundary 검증 + **로컬 due-calc nth_weekday 정합** |
+| PR 3       | (이 세션)           | 루틴 편집 시 Google master event PATCH 전파(`build_master_event_input` 추출 공용)    |
 
 핵심 결정(잠금): **루틴 kind ↔ 프로젝트 kind 매핑** — 개인 루틴은 개인 프로젝트, 업무 루틴은
 업무 프로젝트 캘린더에만 sync. 백엔드가 `project.kind == routine.kind` 검증(교차 노출 차단).
@@ -313,16 +314,23 @@ monthly 패턴 미지정 시 enable에서 `day_of_month` 기본(로컬 due-calc 
    헤드리스에서 실행 못 했음. **인터랙티브 세션 필수.** (overlay-stack 단위계약+select.tsx 동일 패턴으로
    결정적 근거는 있으나 라이브 미확인.) PR 2b-3은 native `<select>` 없이 버튼 행으로 구현해 새 overlay를
    추가하지 않았으므로 이 스모크 범위는 2b-2 popover 그대로.
-2. **PR 3** — 루틴 편집 시 PATCH 전파(§5 PR 3). `update_routine_inner`는 현재 `google_*` 미변경
-   (crud.rs 주석) — 동기화된 루틴의 스케줄 편집이 Google master event에 전파되도록 PATCH 추가.
-3. **PR 4** — 오늘 unschedule = EXDATE PATCH(§5 PR 4).
-4. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5).
+2. **PR 4** — 오늘 unschedule = EXDATE PATCH(§5 PR 4). `routine_exdates` row 쓰기 + sync ON이면
+   master event EXDATE PATCH + EventPopover 라벨("오늘 타임라인에서 빼기"). PR 3의
+   `build_master_event_input`이 이미 EXDATE를 재읽어 PATCH에 동봉하므로 PR 4는 exdate row + 흐름 위주.
+3. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5).
 
 > **PR 2b-3 완료 노트**: monthly nth_weekday 편집 UI + IPC-boundary 검증(`crud::validate_monthly_input`)
 >
 > - 로컬 due-calc nth_weekday 정합(`schedule::routine_due_on`에 monthly_pattern/nth_week 인자 추가,
 >   호출처 4곳 갱신). 사용자 결정으로 로컬 due-calc까지 같은 PR에 포함(local↔Google 정합). nit(비차단):
 >   nth_weekday 요일 미선택 시 submit 무피드백(기존 weekly 관례와 동일, 백엔드가 차단).
+
+> **PR 3 완료 노트**: `update_routine`이 로컬 커밋 후 `patch_synced_routine_after_edit` 호출 —
+> 동기화 루틴이면 master event PATCH(recurrence+start+end+summary), 미동기화면 토큰 조회 없이 no-op.
+> enable/patch 공용 매핑은 `build_master_event_input`으로 추출(behavior-preserving). 전파 실패는
+> 로컬 변경 유지 + `routine.sync.patch_failed`로 wrap, 프런트 `useUpdateRoutine`은 `onSettled`
+> 무효화로 화면 반영 + onError 토스트. nit(비차단, backlog): patch_failed가 no_project/not_connected
+> 등 비-PATCH 에러도 평탄화(메시지엔 원본 detail 포함되어 truthful). critic(opus) ACCEPT.
 
 ### 컨텍스트 재진입 단축경로
 

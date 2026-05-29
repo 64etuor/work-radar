@@ -37,12 +37,13 @@ export function useCreateRoutine() {
   });
 }
 
-/** 루틴 수정. */
+/** 루틴 수정. 동기화 루틴은 Google PATCH 전파가 실패해도 로컬 변경은 커밋되므로(서버
+ *  patch_failed 에러여도), onSettled로 무효화해 화면이 항상 최신 로컬 상태를 반영한다. */
 export function useUpdateRoutine() {
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (input: UpdateRoutineInput) => unwrap(commands.updateRoutine(input)),
-    onSuccess: () => inv.routines(),
+    onSettled: () => inv.routines(),
   });
 }
 
