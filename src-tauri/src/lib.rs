@@ -29,6 +29,7 @@ mod models;
 mod news;
 mod notion;
 mod retry;
+mod routines;
 mod scheduler;
 mod shortcut;
 mod tray;
