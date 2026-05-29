@@ -371,6 +371,13 @@ pub(crate) async fn move_routine_sync_with_provider<P: CalendarProvider>(
             "동기화되지 않은 루틴은 이동할 수 없습니다 — 먼저 동기화를 켜세요",
         ));
     }
+    // 현재 동기화 중인 바로 그 캘린더로의 이동 = 무의미한 DELETE+CREATE round-trip — no-op(Ok)으로
+    // 차단한다. 같은 물리 캘린더를 여러 프로젝트가 고르면 발생 가능(프런트 dedup/필터는 happy-path
+    // 가드일 뿐). DELETE 후 CREATE 실패 시 이벤트 유실 + Google-side 메타 손실 위험이라 권위 계층에서
+    // 막는다. sync-pair invariant로 google_event_id가 Some이면 google_calendar_id도 Some이다.
+    if row.google_calendar_id.as_deref() == Some(new_calendar_id) {
+        return Ok(());
+    }
     // 옛 master를 지우기 전에 새 매핑을 검증(비가역 상태 방지).
     ensure_kind_and_time(db, &row, new_project_id).await?;
 
@@ -1638,6 +1645,71 @@ mod tests {
         assert_eq!(proj.as_deref(), Some("proj_personal"));
         assert_eq!(cal.as_deref(), Some("cal_new"));
         assert_eq!(evt.as_deref(), Some("evt_new"));
+    }
+
+    /// move: 현재 동기화 중인 바로 그 캘린더로 이동 = 무의미한 round-trip → no-op(Ok).
+    /// 같은 물리 캘린더가 두 프로젝트의 후보로 중복될 때 발생 가능 — DELETE+CREATE round-trip을
+    /// 권위 계층(백엔드)에서 차단한다(프런트 dedup/`c.id !=` 필터는 happy-path 가드일 뿐).
+    /// 메타 손실·CREATE 실패 시 이벤트 유실 위험이 있는 파괴적 op이므로 provider 미호출이어야 한다.
+    #[tokio::test]
+    async fn move_to_same_calendar_is_noop() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET project_id='proj_personal', google_calendar_id='cal_same', \
+             google_event_id='evt_same' WHERE id=?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let provider = RecordingProvider::with_create_id("evt_should_not_create");
+        move_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok_old",
+            "tok_new",
+            &rid,
+            "proj_personal",
+            "cal_same", // 현재 동기화 캘린더와 동일
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+
+        // 파괴적 round-trip 미발생: DELETE/CREATE 둘 다 미호출.
+        assert!(
+            provider.deleted.lock().unwrap().is_empty(),
+            "같은 캘린더로 이동은 DELETE 미호출(round-trip 차단)"
+        );
+        assert!(
+            provider.created.lock().unwrap().is_empty(),
+            "같은 캘린더로 이동은 CREATE 미호출"
+        );
+        // mirror 불변(같은 캘린더/이벤트 그대로 동기화).
+        assert!(assert_pair_consistent(&db, &rid).await);
+        let (cal, evt): (Option<String>, Option<String>) =
+            sqlx::query_as("SELECT google_calendar_id, google_event_id FROM routines WHERE id=?1")
+                .bind(&rid)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(cal.as_deref(), Some("cal_same"));
+        assert_eq!(
+            evt.as_deref(),
+            Some("evt_same"),
+            "이벤트 ID 보존(재생성 안 함)"
+        );
     }
 
     /// move: 미동기화 루틴은 not_synced로 거부(provider 미호출).

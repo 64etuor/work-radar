@@ -81,6 +81,19 @@ describe("routineSyncCandidates", () => {
     expect(out.map((c) => c.id)).toEqual(["cal-me", "cal-family"]);
   });
 
+  it("두 같은-kind 프로젝트가 같은 물리 캘린더를 고르면 중복 제거(첫 프로젝트 유지)", () => {
+    // 같은 물리 캘린더 cal-me가 두 개인 프로젝트의 후보로 중복되면 picker에 같은 캘린더가
+    // 두 번 뜨고, "다른 프로젝트로 같은 캘린더 이동" = 무의미한 DELETE+CREATE round-trip을 부른다.
+    // → 물리 캘린더 id 기준 dedup(첫 프로젝트 유지, 안정 순서).
+    const personalB = project({
+      id: "pb",
+      kind: "personal",
+      googleCalendarIds: calsJson([{ id: "cal-me", summary: "내 캘린더(공유)" }]),
+    });
+    const out = routineSyncCandidates([personalA, personalB], "personal");
+    expect(out).toEqual([{ id: "cal-me", summary: "내 캘린더", projectId: "pa" }]);
+  });
+
   it("선택 캘린더 없는 프로젝트는 후보 0(막다른 길 안내용)", () => {
     const empty = project({ id: "pe", kind: "personal", googleCalendarIds: null });
     expect(routineSyncCandidates([empty], "personal")).toEqual([]);

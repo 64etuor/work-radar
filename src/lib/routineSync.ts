@@ -33,11 +33,20 @@ export function routineSyncCandidates(
   routineKind: Kind | null,
 ): RoutineSyncCandidate[] {
   if (routineKind == null) return [];
+  // 물리 캘린더 id 기준 dedup(첫 프로젝트 유지, 안정 순서). 같은 캘린더를 여러 같은-kind
+  // 프로젝트가 고르면 picker에 중복으로 뜨고, "다른 프로젝트로 같은 캘린더 이동" = 무의미한
+  // DELETE+CREATE round-trip을 부른다 — id가 같으면 동일 물리 캘린더이므로 한 번만 노출한다.
+  const seen = new Set<string>();
   return projects
     .filter((p) => p.kind === routineKind)
     .flatMap((p) =>
       safeParseSelectedCalendars(p.googleCalendarIds).map((c) => ({ ...c, projectId: p.id })),
-    );
+    )
+    .filter((c) => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
 }
 
 /**
