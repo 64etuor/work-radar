@@ -37,6 +37,8 @@ struct RoutineSyncRow {
     duration_min: Option<i64>,
     monthly_pattern: Option<String>,
     monthly_nth_week: Option<i64>,
+    /// 루틴 개인/업무 구분 ('personal'|'work'|NULL). project.kind와 매칭해 교차 노출 차단.
+    kind: Option<String>,
     google_calendar_id: Option<String>,
     google_event_id: Option<String>,
     created_at: String,
@@ -45,7 +47,7 @@ struct RoutineSyncRow {
 async fn load_routine(db: &Db, id: &str) -> Result<RoutineSyncRow, AppError> {
     sqlx::query_as::<_, RoutineSyncRow>(
         "SELECT project_id, title, freq, weekdays, anchor_date, time_of_day, \
-                duration_min, monthly_pattern, monthly_nth_week, \
+                duration_min, monthly_pattern, monthly_nth_week, kind, \
                 google_calendar_id, google_event_id, created_at \
          FROM routines WHERE id = ?1",
     )
@@ -53,6 +55,15 @@ async fn load_routine(db: &Db, id: &str) -> Result<RoutineSyncRow, AppError> {
     .fetch_optional(db)
     .await?
     .ok_or_else(|| AppError::not_found("routine.not_found", "루틴을 찾을 수 없습니다"))
+}
+
+/// 프로젝트 kind 조회 ('personal'|'work'). 프로젝트 없으면 not_found.
+async fn project_kind(db: &Db, project_id: &str) -> Result<String, AppError> {
+    sqlx::query_scalar::<_, String>("SELECT kind FROM projects WHERE id = ?1")
+        .bind(project_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| AppError::not_found("project.not_found", "프로젝트를 찾을 수 없습니다"))
 }
 
 fn parse_freq(s: &str) -> Result<Freq, AppError> {
@@ -109,11 +120,16 @@ fn parse_monthly_pattern(s: &str) -> Result<MonthlyPattern, AppError> {
 }
 
 /// Provider injection helper — enable 흐름 단위 테스트용. IPC 명령은 이걸 호출.
+///
+/// `project_id`는 routine.kind와 같은 kind의 프로젝트(개인 루틴→개인 프로젝트, 업무→업무).
+/// 백엔드가 `project.kind == routine.kind`를 검증해 개인↔업무 캘린더 교차 노출을 차단한다.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn enable_routine_sync_with_provider<P: CalendarProvider>(
     db: &Db,
     provider: &P,
     access_token: &str,
     routine_id: &str,
+    project_id: &str,
     calendar_id: &str,
     tzid: &str,
 ) -> Result<(), AppError> {
@@ -122,6 +138,21 @@ pub(crate) async fn enable_routine_sync_with_provider<P: CalendarProvider>(
         return Err(AppError::validation(
             "routine.sync.already_enabled",
             "이미 동기화 중인 루틴입니다",
+        ));
+    }
+
+    // kind 매핑 검증: 루틴 kind 미지정 → 매핑 불가, kind 불일치 → 교차 노출 차단.
+    let Some(routine_kind) = row.kind.as_deref() else {
+        return Err(AppError::validation(
+            "routine.sync.kind_required",
+            "동기화 전에 루틴의 개인/업무 구분을 먼저 지정하세요",
+        ));
+    };
+    let proj_kind = project_kind(db, project_id).await?;
+    if proj_kind != routine_kind {
+        return Err(AppError::validation(
+            "routine.sync.kind_mismatch",
+            format!("루틴({routine_kind})과 프로젝트({proj_kind})의 개인/업무 구분이 다릅니다",),
         ));
     }
 
@@ -178,13 +209,18 @@ pub(crate) async fn enable_routine_sync_with_provider<P: CalendarProvider>(
         .create_event(access_token, calendar_id, &create_input)
         .await?;
 
-    // sync-pair invariant: 두 필드 동시 UPDATE (atomic single statement).
-    sqlx::query("UPDATE routines SET google_calendar_id = ?1, google_event_id = ?2 WHERE id = ?3")
-        .bind(calendar_id)
-        .bind(&event_id)
-        .bind(routine_id)
-        .execute(db)
-        .await?;
+    // sync-pair invariant: 세 필드 동시 UPDATE (atomic). project_id도 함께 set →
+    // 이후 disable/patch가 routine.project_id로 토큰을 다시 얻을 수 있다.
+    sqlx::query(
+        "UPDATE routines SET project_id = ?1, google_calendar_id = ?2, google_event_id = ?3 \
+         WHERE id = ?4",
+    )
+    .bind(project_id)
+    .bind(calendar_id)
+    .bind(&event_id)
+    .bind(routine_id)
+    .execute(db)
+    .await?;
     Ok(())
 }
 
@@ -218,21 +254,17 @@ pub(crate) async fn disable_routine_sync_with_provider<P: CalendarProvider>(
     Ok(())
 }
 
+/// 루틴 Google 동기화 ON. `project_id`는 routine.kind와 같은 kind의 프로젝트(개인→개인,
+/// 업무→업무) — 프런트가 그 프로젝트의 캘린더를 picker로 넘긴다. 토큰은 그 프로젝트의 OAuth.
 #[tauri::command]
 #[specta::specta]
 pub async fn enable_routine_google_sync(
     db: State<'_, Db>,
     routine_id: String,
+    project_id: String,
     calendar_id: String,
 ) -> Result<(), AppError> {
-    let row = load_routine(db.inner(), &routine_id).await?;
-    let project_id = row.project_id.as_deref().ok_or_else(|| {
-        AppError::validation(
-            "routine.sync.no_project",
-            "프로젝트가 없는 루틴은 동기화할 수 없습니다",
-        )
-    })?;
-    let access = access_token_for(db.inner(), project_id)
+    let access = access_token_for(db.inner(), &project_id)
         .await
         .map_err(|e| AppError::terminal("calendar.access_token", e))?
         .ok_or_else(|| {
@@ -247,6 +279,7 @@ pub async fn enable_routine_google_sync(
         &provider,
         &access,
         &routine_id,
+        &project_id,
         &calendar_id,
         TZID_DEFAULT,
     )
@@ -289,7 +322,7 @@ mod tests {
     use crate::calendar::{CalendarCreds, CalendarError, RawCalendar, RawEvent, TokenResponse};
     use crate::commands::routines::insert_routine;
     use crate::commands::shared::test_support::*;
-    use crate::models::{CreateRoutineInput, RoutineFreq, Weekday as MWeekday};
+    use crate::models::{CreateRoutineInput, Kind, RoutineFreq, Weekday as MWeekday};
     use std::sync::Mutex;
 
     /// 최소 mock — create_event/delete_event 호출 기록 + 결과 모킹.
@@ -382,25 +415,29 @@ mod tests {
         }
     }
 
-    async fn seed_routine_with_project(
+    /// 프로젝트 시드(주어진 kind). credential_ref는 keychain 분리 키(테스트 더미).
+    async fn seed_project(db: &crate::db::Db, id: &str, kind: &str) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO projects (id, name, kind, credential_ref) \
+             VALUES (?1, 'Test', ?2, 'test_creds')",
+        )
+        .bind(id)
+        .bind(kind)
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
+    /// 루틴 시드(주어진 kind). project_id는 비워둔다(enable이 set) — disable 테스트는 별도 세팅.
+    async fn seed_routine(
         db: &crate::db::Db,
         title: &str,
         freq: RoutineFreq,
         weekdays: Vec<MWeekday>,
         time_of_day: Option<String>,
+        kind: Option<Kind>,
     ) -> String {
-        // 프로젝트 1개 시드 (routines.project_id 채우기 위해).
-        let pid = "p1".to_string();
-        sqlx::query(
-            "INSERT OR IGNORE INTO projects (id, name, kind, credential_ref) \
-             VALUES (?1, 'Test', 'work', 'test_creds')",
-        )
-        .bind(&pid)
-        .execute(db)
-        .await
-        .unwrap();
-
-        let r = insert_routine(
+        insert_routine(
             db,
             &CreateRoutineInput {
                 title: title.into(),
@@ -410,32 +447,29 @@ mod tests {
                 time_of_day,
                 reminder_offset_min: None,
                 area: None,
-                kind: None,
+                kind,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
-        .unwrap();
-
-        // project_id를 직접 UPDATE (CreateRoutineInput에 없음).
-        sqlx::query("UPDATE routines SET project_id = ?1 WHERE id = ?2")
-            .bind(&pid)
-            .bind(&r.id)
-            .execute(db)
-            .await
-            .unwrap();
-        r.id
+        .unwrap()
+        .id
     }
 
-    /// enable: provider.create_event 호출됨 + routines.google_* atomic UPDATE.
+    /// enable: kind 일치(개인 루틴→개인 프로젝트) → create_event + project_id/google_* atomic UPDATE.
     #[tokio::test]
     async fn enable_creates_master_and_persists_mirror() {
         let db = fresh_db().await;
-        let rid = seed_routine_with_project(
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
             &db,
             "아침 운동",
             RoutineFreq::Weekly,
             vec![MWeekday::Mon, MWeekday::Wed, MWeekday::Fri],
             Some("07:00".into()),
+            Some(Kind::Personal),
         )
         .await;
         let provider = RecordingProvider::with_create_id("evt_master_1");
@@ -445,6 +479,7 @@ mod tests {
             &provider,
             "access_xyz",
             &rid,
+            "proj_personal",
             "cal_user_a",
             "Asia/Seoul",
         )
@@ -469,28 +504,92 @@ mod tests {
         assert!(input.start.starts_with("20"));
         assert!(input.start.ends_with("T07:00:00"));
 
-        // DB mirror 검증 (sync-pair atomic UPDATE).
-        let (cal_id, evt_id): (Option<String>, Option<String>) = sqlx::query_as(
-            "SELECT google_calendar_id, google_event_id FROM routines WHERE id = ?1",
-        )
-        .bind(&rid)
-        .fetch_one(&db)
-        .await
-        .unwrap();
+        // DB mirror 검증 (project_id + sync-pair atomic UPDATE).
+        let (proj, cal_id, evt_id): (Option<String>, Option<String>, Option<String>) =
+            sqlx::query_as(
+                "SELECT project_id, google_calendar_id, google_event_id FROM routines WHERE id = ?1",
+            )
+            .bind(&rid)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(proj.as_deref(), Some("proj_personal"), "project_id도 set");
         assert_eq!(cal_id.as_deref(), Some("cal_user_a"));
         assert_eq!(evt_id.as_deref(), Some("evt_master_1"));
+    }
+
+    /// enable: 개인 루틴 → 업무 프로젝트는 kind_mismatch로 거부 (교차 노출 차단). provider 미호출.
+    #[tokio::test]
+    async fn enable_rejects_kind_mismatch() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_work", "work").await;
+        let rid = seed_routine(
+            &db,
+            "비타민",
+            RoutineFreq::Daily,
+            vec![],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        let provider = RecordingProvider::default();
+        let err = enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_work",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "routine.sync.kind_mismatch");
+        assert!(provider.created.lock().unwrap().is_empty());
+    }
+
+    /// enable: kind 미지정 루틴은 kind_required로 거부 (매핑 결정 불가). provider 미호출.
+    #[tokio::test]
+    async fn enable_rejects_kind_required() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "무명 루틴",
+            RoutineFreq::Daily,
+            vec![],
+            Some("09:00".into()),
+            None,
+        )
+        .await;
+        let provider = RecordingProvider::default();
+        let err = enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "routine.sync.kind_required");
+        assert!(provider.created.lock().unwrap().is_empty());
     }
 
     /// 이미 동기화 중 루틴 enable 재호출 → already_enabled 에러, provider 미호출.
     #[tokio::test]
     async fn enable_rejects_when_already_synced() {
         let db = fresh_db().await;
-        let rid = seed_routine_with_project(
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
             &db,
             "헬스장",
             RoutineFreq::Daily,
             vec![],
             Some("19:00".into()),
+            Some(Kind::Personal),
         )
         .await;
         // 미리 sync 상태로 세팅.
@@ -503,10 +602,17 @@ mod tests {
         .unwrap();
 
         let provider = RecordingProvider::with_create_id("nope");
-        let err =
-            enable_routine_sync_with_provider(&db, &provider, "tok", &rid, "c2", "Asia/Seoul")
-                .await
-                .unwrap_err();
+        let err = enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "c2",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.code, "routine.sync.already_enabled");
         assert!(
             provider.created.lock().unwrap().is_empty(),
@@ -518,12 +624,13 @@ mod tests {
     #[tokio::test]
     async fn disable_deletes_master_and_clears_mirror() {
         let db = fresh_db().await;
-        let rid = seed_routine_with_project(
+        let rid = seed_routine(
             &db,
             "PT",
             RoutineFreq::Weekly,
             vec![MWeekday::Tue, MWeekday::Thu],
             Some("18:30".into()),
+            Some(Kind::Personal),
         )
         .await;
         sqlx::query(
@@ -557,8 +664,15 @@ mod tests {
     #[tokio::test]
     async fn disable_is_noop_when_already_local_only() {
         let db = fresh_db().await;
-        let rid =
-            seed_routine_with_project(&db, "스트레칭", RoutineFreq::Daily, vec![], None).await;
+        let rid = seed_routine(
+            &db,
+            "스트레칭",
+            RoutineFreq::Daily,
+            vec![],
+            None,
+            Some(Kind::Personal),
+        )
+        .await;
         let provider = RecordingProvider::default();
         disable_routine_sync_with_provider(&db, &provider, "tok", &rid)
             .await

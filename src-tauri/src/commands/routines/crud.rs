@@ -29,11 +29,18 @@ pub async fn insert_routine(
     };
     let time_of_day = input.time_of_day.clone().filter(|s| !s.trim().is_empty());
     let offset = input.reminder_offset_min.map(|v| v as i64);
+    // monthly 패턴 필드는 monthly일 때만 의미 — 그 외 freq면 무시(NULL 저장).
+    let (monthly_pattern, monthly_nth_week) = match input.freq {
+        RoutineFreq::Monthly => (input.monthly_pattern, input.monthly_nth_week),
+        _ => (None, None),
+    };
+    let duration = input.duration_min.map(|v| v as i64);
 
     let row: (String,) = sqlx::query_as(
         "INSERT INTO routines \
-           (id, title, freq, weekdays, anchor_date, time_of_day, reminder_offset_min, area, kind) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
+           (id, title, freq, weekdays, anchor_date, time_of_day, reminder_offset_min, area, kind, \
+            monthly_pattern, monthly_nth_week, duration_min) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id",
     )
     .bind(input.title.trim())
     .bind(input.freq)
@@ -43,6 +50,9 @@ pub async fn insert_routine(
     .bind(offset)
     .bind(input.area)
     .bind(input.kind)
+    .bind(monthly_pattern)
+    .bind(monthly_nth_week)
+    .bind(duration)
     .fetch_one(db)
     .await?;
 
@@ -62,6 +72,12 @@ pub async fn insert_routine(
         time_override: None,
         linked_event_id: None,
         linked_calendar_id: None,
+        monthly_pattern,
+        monthly_nth_week,
+        duration_min: input.duration_min,
+        // 생성 직후는 sync OFF — 토글 IPC가 채운다.
+        google_event_id: None,
+        google_calendar_id: None,
     })
 }
 
@@ -120,12 +136,20 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
 
     let time_of_day = input.time_of_day.clone().filter(|s| !s.trim().is_empty());
     let offset = input.reminder_offset_min.map(|v| v as i64);
+    // monthly 패턴은 monthly일 때만 — 그 외 freq면 NULL로 정리(패턴 잔존 방지).
+    let (monthly_pattern, monthly_nth_week) = match input.freq {
+        RoutineFreq::Monthly => (input.monthly_pattern, input.monthly_nth_week),
+        _ => (None, None),
+    };
+    let duration = input.duration_min.map(|v| v as i64);
 
     // area/kind는 의도적으로 갱신 안 함 — 카드 인라인 편집 IPC(set_routine_area_tag_key/
     // set_routine_kind)가 그 두 컬럼을 소유한다(signals 패턴 미러).
+    // google_*도 갱신 안 함 — sync 토글 IPC가 소유. (스케줄 변경의 Google PATCH 전파는 PR 3.)
     let result = sqlx::query(
         "UPDATE routines SET title=?2, freq=?3, weekdays=?4, anchor_date=?5, \
-         time_of_day=?6, reminder_offset_min=?7 WHERE id=?1",
+         time_of_day=?6, reminder_offset_min=?7, \
+         monthly_pattern=?8, monthly_nth_week=?9, duration_min=?10 WHERE id=?1",
     )
     .bind(&input.id)
     .bind(&title)
@@ -134,6 +158,9 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     .bind(&anchor)
     .bind(&time_of_day)
     .bind(offset)
+    .bind(monthly_pattern)
+    .bind(monthly_nth_week)
+    .bind(duration)
     .execute(db)
     .await?;
 

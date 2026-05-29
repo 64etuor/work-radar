@@ -129,7 +129,11 @@ export const commands = {
 	 *  커스텀 tag key면 `area=NULL` + `area_tags=["key"]`만 저장. tag_key=None이면 둘 다 NULL.
 	 */
 	setRoutineAreaTagKey: (id: string, tagKey: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_routine_area_tag_key", { id, tagKey })),
-	enableRoutineGoogleSync: (routineId: string, calendarId: string) => typedError<null, AppError>(__TAURI_INVOKE("enable_routine_google_sync", { routineId, calendarId })),
+	/**
+	 *  루틴 Google 동기화 ON. `project_id`는 routine.kind와 같은 kind의 프로젝트(개인→개인,
+	 *  업무→업무) — 프런트가 그 프로젝트의 캘린더를 picker로 넘긴다. 토큰은 그 프로젝트의 OAuth.
+	 */
+	enableRoutineGoogleSync: (routineId: string, projectId: string, calendarId: string) => typedError<null, AppError>(__TAURI_INVOKE("enable_routine_google_sync", { routineId, projectId, calendarId })),
 	disableRoutineGoogleSync: (routineId: string) => typedError<null, AppError>(__TAURI_INVOKE("disable_routine_google_sync", { routineId })),
 	/**
 	 *  PR Radar 새로고침(주기 폴링의 한 cycle). project의 github 레포 PR을 버킷별로 도출한다(표시 전용 —
@@ -846,6 +850,12 @@ export type CreateRoutineInput = {
 	reminderOffsetMin: number | null,
 	area: AreaTag | null,
 	kind: Kind | null,
+	/**  monthly 풍부 패턴. monthly가 아니면 None(백엔드 무시). */
+	monthlyPattern: RoutineMonthlyPattern | null,
+	/**  nth_weekday 주차(1..5, -1=마지막). nth_weekday가 아니면 None. */
+	monthlyNthWeek: number | null,
+	/**  이벤트 길이(분). None=기본 30분 fallback (sync 시). */
+	durationMin: number | null,
 };
 
 /**  신호 생성 입력. 카드는 항상 unclassified로 만들어진다. */
@@ -1331,6 +1341,13 @@ export type RoutineHistoryDay = {
 	done: boolean,
 };
 
+/**
+ *  monthly 루틴의 풍부 패턴 (0037 schema의 `monthly_pattern` TEXT enum과 1:1).
+ *  - DayOfMonth: anchor의 day-of-month (예: 매월 15일). 월말 클램프.
+ *  - NthWeekday: anchor 기준 N번째 요일 (예: 둘째 화요일, 마지막 금요일). `monthly_nth_week` 동반.
+ */
+export type RoutineMonthlyPattern = "day_of_month" | "nth_weekday";
+
 /**  오늘 표시할 루틴 항목 (스케줄 매칭 + 날짜별 완료 상태 포함). */
 export type RoutineToday = {
 	id: string,
@@ -1358,6 +1375,16 @@ export type RoutineToday = {
 	linkedEventId: string | null,
 	/**  Google mirror calendar id (오늘 인스턴스 한정). */
 	linkedCalendarId: string | null,
+	/**  monthly 풍부 패턴(0037). monthly가 아니면 None. */
+	monthlyPattern: RoutineMonthlyPattern | null,
+	/**  nth_weekday 패턴의 주차 (1..5, -1=마지막). day_of_month/비monthly면 None. */
+	monthlyNthWeek: number | null,
+	/**  이벤트 길이(분). None=기본 30분 fallback. Google master event DTEND 계산용. */
+	durationMin: number | null,
+	/**  동기화된 Google master recurring event id (sync OFF면 None). sync-pair invariant: calendar_id와 함께. */
+	googleEventId: string | null,
+	/**  동기화된 Google calendar id (sync OFF면 None). */
+	googleCalendarId: string | null,
 };
 
 /**
@@ -1620,6 +1647,12 @@ export type UpdateRoutineInput = {
 	timeOfDay: string | null,
 	/**  알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32. */
 	reminderOffsetMin: number | null,
+	/**  monthly 풍부 패턴. monthly가 아니면 None(백엔드 무시). */
+	monthlyPattern: RoutineMonthlyPattern | null,
+	/**  nth_weekday 주차(1..5, -1=마지막). nth_weekday가 아니면 None. */
+	monthlyNthWeek: number | null,
+	/**  이벤트 길이(분). None=기본 30분 fallback (sync 시). */
+	durationMin: number | null,
 };
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */

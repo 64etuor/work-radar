@@ -11,14 +11,16 @@
 → **루틴별 opt-in 동기화**. 기본 local-only, 사용자가 켠 루틴만 Google master recurring event로 등록.
 
 ### 잠금된 결정 (사용자 확정)
-| # | 결정 | 의미 |
-|---|---|---|
-| 1 | **BYDAY 풍부 모델** | `monthly_pattern` 추가 — `day_of_month` 외 `nth_weekday`("2nd Tuesday", "last Friday") 지원 |
-| 2 | **EXDATE 지원** | sync된 루틴의 "오늘 빼기" = master event에 EXDATE PATCH. skip 이력 보존. |
-| 3 | **`duration_min` 컬럼 추가** | NULL → 기존 30분 default fallback. 헬스장 60분 / 스트레칭 15분 등 다양성 대응. |
-| 4 | **PATCH 전략 (DELETE+CREATE 아님)** | 루틴 편집 시 master event PATCH — EXDATE/이벤트 ID/사용자가 Google에 추가한 메타(위치·참석자·알림) 보존. quota 절약. |
+
+| #   | 결정                                | 의미                                                                                                                 |
+| --- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 1   | **BYDAY 풍부 모델**                 | `monthly_pattern` 추가 — `day_of_month` 외 `nth_weekday`("2nd Tuesday", "last Friday") 지원                          |
+| 2   | **EXDATE 지원**                     | sync된 루틴의 "오늘 빼기" = master event에 EXDATE PATCH. skip 이력 보존.                                             |
+| 3   | **`duration_min` 컬럼 추가**        | NULL → 기존 30분 default fallback. 헬스장 60분 / 스트레칭 15분 등 다양성 대응.                                       |
+| 4   | **PATCH 전략 (DELETE+CREATE 아님)** | 루틴 편집 시 master event PATCH — EXDATE/이벤트 ID/사용자가 Google에 추가한 메타(위치·참석자·알림) 보존. quota 절약. |
 
 ### INVARIANTS 준수
+
 - INVARIANT #1 (자동 분류 0): sync 결정은 100% 사용자 토글. 자동 동기화 X.
 - INVARIANT #2 (외부 변경 = Acceptance 게이트): Google PATCH/DELETE는 명시적 사용자 액션에서만.
 - INVARIANT #5 (bounded retry): Google 호출은 backoff + jitter + terminal failure 토스트.
@@ -65,11 +67,13 @@ CREATE INDEX idx_routine_exdates_routine ON routine_exdates(routine_id);
 ```
 
 **선후 가드**:
+
 - `monthly_pattern='nth_weekday'` 일 때 application-level 검증: `monthly_nth_week IS NOT NULL` + `weekdays`가 정확히 1개 요소.
 - `google_event_id IS NOT NULL` ↔ `google_calendar_id IS NOT NULL` — rebuild 채택 시 CHECK, 아니면 application + 테스트.
 - biweekly: `anchor_date`는 `weekdays` 중 하나의 요일이어야 하고 그 자체가 ON week이어야 함 (PR 1 RRule 매핑에서 normalize, 단위 테스트 포함).
 
 **모듈 경로 (신규)**:
+
 - `src-tauri/src/routines/` 신규 모듈 디렉터리 생성 — `mod.rs` + `rrule.rs` (PR 1) + `google.rs` (PR 2~).
 - 모델은 기존 `src-tauri/src/models/routines.rs` 유지(신규 컬럼 필드 추가).
 - IPC는 기존 `src-tauri/src/commands/routines/` 유지(신규 명령 파일 추가).
@@ -98,19 +102,21 @@ pub fn exdate_local(date_ymd: &str, time_hm: Option<&str>) -> Result<String, RRu
 
 ### 매핑 표
 
-| 입력 | 출력 RRULE | DTSTART |
-|---|---|---|
-| `freq=daily`, `time=09:00` | `FREQ=DAILY` | `anchor_date or created_at` + 09:00 |
-| `freq=weekly`, `weekdays=[mon,wed,fri]` | `FREQ=WEEKLY;BYDAY=MO,WE,FR` | 첫 매칭 요일 |
-| `freq=biweekly`, `weekdays=[mon]`, `anchor_date=2026-05-25` | `FREQ=WEEKLY;INTERVAL=2;BYDAY=MO` | anchor_date (anchor가 ON 주) |
-| `freq=monthly`, `monthly_pattern=day_of_month`, `anchor_date=2026-05-15` | `FREQ=MONTHLY;BYMONTHDAY=15` | anchor_date |
-| `freq=monthly`, `monthly_pattern=nth_weekday`, `monthly_nth_week=2`, `weekdays=[tue]` | `FREQ=MONTHLY;BYDAY=2TU` | anchor_date |
-| `freq=monthly`, `monthly_nth_week=-1`, `weekdays=[fri]` | `FREQ=MONTHLY;BYDAY=-1FR` | anchor_date |
+| 입력                                                                                  | 출력 RRULE                        | DTSTART                             |
+| ------------------------------------------------------------------------------------- | --------------------------------- | ----------------------------------- |
+| `freq=daily`, `time=09:00`                                                            | `FREQ=DAILY`                      | `anchor_date or created_at` + 09:00 |
+| `freq=weekly`, `weekdays=[mon,wed,fri]`                                               | `FREQ=WEEKLY;BYDAY=MO,WE,FR`      | 첫 매칭 요일                        |
+| `freq=biweekly`, `weekdays=[mon]`, `anchor_date=2026-05-25`                           | `FREQ=WEEKLY;INTERVAL=2;BYDAY=MO` | anchor_date (anchor가 ON 주)        |
+| `freq=monthly`, `monthly_pattern=day_of_month`, `anchor_date=2026-05-15`              | `FREQ=MONTHLY;BYMONTHDAY=15`      | anchor_date                         |
+| `freq=monthly`, `monthly_pattern=nth_weekday`, `monthly_nth_week=2`, `weekdays=[tue]` | `FREQ=MONTHLY;BYDAY=2TU`          | anchor_date                         |
+| `freq=monthly`, `monthly_nth_week=-1`, `weekdays=[fri]`                               | `FREQ=MONTHLY;BYDAY=-1FR`         | anchor_date                         |
 
 ### 요일 코드 매핑
+
 `["sun","mon","tue","wed","thu","fri","sat"]` → `["SU","MO","TU","WE","TH","FR","SA"]` (상수 함수)
 
 ### 단위 테스트 매트릭스 (~15개)
+
 - daily 기본 / 자정 경계 (`time_of_day=00:00`, `23:59`) — KST(no DST) 정합 회귀.
 - weekly 단일 요일 / 복수 요일 / 모든 요일(=daily 의미)
 - biweekly anchor 주 (ON week, weekdays 중 하나) / off-week (validation error) / anchor 변경
@@ -124,6 +130,7 @@ pub fn exdate_local(date_ymd: &str, time_hm: Option<&str>) -> Result<String, RRu
 ## 4. Google API 호출 정본 (Rust)
 
 ### CREATE master event (sync ON)
+
 ```
 POST /calendar/v3/calendars/{calId}/events
 {
@@ -136,6 +143,7 @@ POST /calendar/v3/calendars/{calId}/events
 ```
 
 ### PATCH (편집 / EXDATE 추가)
+
 ```
 PATCH /calendar/v3/calendars/{calId}/events/{eventId}
 - 시간/요일/주기 편집 → recurrence + start + end 동시 send
@@ -143,12 +151,14 @@ PATCH /calendar/v3/calendars/{calId}/events/{eventId}
 ```
 
 ### DELETE (sync OFF / 루틴 삭제)
+
 ```
 DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 → routine.google_calendar_id = NULL, google_event_id = NULL
 ```
 
 ### Bounded retry 정책 (INVARIANT #5)
+
 - 5xx / 429: exponential backoff (1s, 2s, 4s) + jitter, **최대 3회**.
 - 4xx (404=already deleted 등): no retry, graceful — 로컬 상태만 정리.
 - timeout 30s — 그 외엔 toast로 terminal failure surface (메시지 + traceId).
@@ -158,6 +168,7 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 ## 5. PR 분할 (5개)
 
 ### PR 1 — Schema + RRULE 매핑 (백엔드 only, IPC 미노출)
+
 - `migrations/0036_routines_google_sync.sql`
 - `src-tauri/src/routines/rrule.rs` — `routine_to_rrule` 순수 함수
 - 단위 테스트 ~14개 (위 매트릭스)
@@ -167,14 +178,45 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 **검증**: `cargo test --lib routines::rrule` + `pnpm typecheck`(bindings drift 0).
 
 ### PR 2 — Google 동기화 enable/disable IPC + 설정 UI
-- IPC: `enable_routine_google_sync(routine_id, calendar_id)`, `disable_routine_google_sync(routine_id)`
-- Rust: master event CREATE/DELETE + bounded retry + `google_event_id` 저장
-- 설정 UI: 루틴 행에 calendar picker + 토글 (signal의 default_write_calendar 흐름 재사용)
-- 신규 monthly 필드 편집 UI (radio: day_of_month vs nth_weekday)
 
-**검증**: integration test — fake Google client(`MockGoogle`) injection으로 CREATE/DELETE 라운드트립. 설정에서 토글 후 `google_event_id` populated 확인.
+> ⚠️ **결정 (2026-05-29, 사용자 확정): 루틴은 자신의 kind와 같은 kind의 프로젝트에 매핑.**
+> 루틴에도 개인/업무 구분이 있다(`RoutineToday.kind` = personal|work). 개인 루틴 → 개인
+> 프로젝트, 업무 루틴 → 업무 프로젝트. Google OAuth는 이 앱에서 **프로젝트별 연결**
+> (`start_google_oauth(projectId)` 등)이고 루틴은 `project_id`가 NULL인 채 생성돼 왔으므로
+> 토큰 경로가 없었다. → sync 토글 시 UI가 **routine.kind와 같은 kind의 프로젝트 + 그 캘린더**를
+> 넘기고, 백엔드가 `project.kind == routine.kind`를 검증한다(개인↔업무 캘린더 교차 노출을
+> 양방향 차단 — §1 프라이버시 우려를 구조로 강제). `routine.kind`가 None이면 매핑 결정 불가 →
+> 거부. enable 시 `routine.project_id`를 그 프로젝트로 set → 이후 disable/patch가 그대로 동작.
+
+#### PR 2a — 백엔드 IPC + RRuleSpec→event parts (완료, ffb19be)
+
+- IPC: `enable_routine_google_sync` / `disable_routine_google_sync` + provider injection 헬퍼.
+- `RRuleSpec::to_event_parts()` + `CreateEventInput` recurrence/time_zone 확장.
+- ⚠️ enable 시그니처는 PR 2a에서 `(routine_id, calendar_id)`였고, **PR 2b-1에서
+  `(routine_id, project_id, calendar_id)` + kind=personal 검증으로 수정**(아래).
+
+#### PR 2b-1 — 신규 필드 노출 + crud 배선 + enable 시그니처 수정 (백엔드)
+
+- `RoutineToday`에 `googleCalendarId`/`googleEventId`/`monthlyPattern`/`monthlyNthWeek`/`durationMin` 노출
+  (`models/routines.rs` + `commands/routines/listing.rs` SELECT).
+- `CreateRoutineInput`/`UpdateRoutineInput` + `crud` INSERT/UPDATE에 monthly_pattern/monthly_nth_week/duration_min 배선.
+- `enable_routine_google_sync(routine_id, project_id, calendar_id)` — `project.kind == routine.kind`
+  검증(`routine.sync.kind_mismatch`), `routine.kind` None이면 `routine.sync.kind_required`,
+  통과 시 `routine.project_id` set.
+- 테스트: kind mismatch 거부 / kind None 거부 / kind 일치 통과 + project_id 저장 / 신규 필드 라운드트립.
+
+**검증**: `cargo test --lib` + `pnpm typecheck`(bindings drift 의도분만).
+
+#### PR 2b-2 — 설정 UI (프런트)
+
+- RoutinesPanel: monthly 패턴 편집 (radio: day_of_month vs nth_weekday + nth_week 셀렉트).
+- sync 토글 + 캘린더 picker — routine.kind와 같은 kind의 프로젝트만 노출(1개면 자동, 복수면 picker).
+- `listProjects()` 필터 `kind===routine.kind` → `listGoogleCalendars(matchedProjectId)`.
+
+**검증**: `pnpm typecheck` + `pnpm lint` + (가능하면) cmux 스모크.
 
 ### PR 3 — 루틴 편집 시 PATCH 전파
+
 - 루틴 freq/weekdays/anchor/time/duration 변경 시 sync 켜진 거면 PATCH 트리거
 - recurrence + start + end 동시 send
 - 실패 시 graceful: 로컬 변경은 유지, sync 실패는 toast로 surface ("Google 동기화 실패 — 설정에서 재시도")
@@ -182,6 +224,7 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 **검증**: PATCH 호출 케이스 단위 (단순 시각 변경 / 요일 변경 / freq 변경 daily→weekly).
 
 ### PR 4 — 오늘 unschedule = EXDATE PATCH (EventPopover 통합)
+
 - EventPopover 루틴 블록 라벨: "삭제" → "**오늘 타임라인에서 빼기**" (명확한 의도)
 - 호출 흐름:
   1. `routine_exdates` 테이블에 `(routine_id, today)` INSERT OR IGNORE
@@ -192,6 +235,7 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 **검증**: routine without sync(local) / with sync 양쪽 unschedule 후 Google 호출 여부 확인.
 
 ### PR 5 — invariant 가드 + 이동/삭제 경로
+
 > ⚠️ **백필 없음**: `routine_checks.linked_event_id`는 **per-instance 이벤트 ID**(그날 batch write 단일)
 > 라서 master recurring event id로 백필할 수 없다. 첫 sync ON 시 신규 master event CREATE만 한다.
 > per-instance routine_checks 흐름은 건드리지 않는다.

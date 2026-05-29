@@ -5,7 +5,7 @@ use tauri::State;
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{Kind, RoutineFreq, RoutineToday, Weekday};
+use crate::models::{Kind, RoutineFreq, RoutineMonthlyPattern, RoutineToday, Weekday};
 
 use super::reminders::sync_reminders;
 use super::schedule::{parse_weekdays, routine_due_on};
@@ -28,6 +28,11 @@ struct RoutineRow {
     time_override: Option<String>,
     linked_event_id: Option<String>,
     linked_calendar_id: Option<String>,
+    monthly_pattern: Option<RoutineMonthlyPattern>,
+    monthly_nth_week: Option<i64>,
+    duration_min: Option<i64>,
+    google_event_id: Option<String>,
+    google_calendar_id: Option<String>,
 }
 
 /// 오늘 해당하는 루틴 + 날짜별 완료 상태. 신규 freq는 routine_due_on으로 계산한다.
@@ -42,7 +47,9 @@ pub async fn fetch_today_routines(
         "SELECT r.id, r.title, r.freq, r.weekdays, r.anchor_date, r.time_of_day, \
                 r.reminder_offset_min, r.area, r.area_tags, r.kind, \
                 (rc.id IS NOT NULL) AS done, \
-                rc.time_override, rc.linked_event_id, rc.linked_calendar_id \
+                rc.time_override, rc.linked_event_id, rc.linked_calendar_id, \
+                r.monthly_pattern, r.monthly_nth_week, r.duration_min, \
+                r.google_event_id, r.google_calendar_id \
          FROM routines r \
          LEFT JOIN routine_checks rc ON rc.routine_id = r.id AND rc.date = ?1 \
          WHERE r.active = 1 ORDER BY r.rank IS NULL, r.rank, r.created_at",
@@ -73,6 +80,11 @@ pub async fn fetch_today_routines(
                 time_override: r.time_override,
                 linked_event_id: r.linked_event_id,
                 linked_calendar_id: r.linked_calendar_id,
+                monthly_pattern: r.monthly_pattern,
+                monthly_nth_week: r.monthly_nth_week.map(|v| v as i32),
+                duration_min: r.duration_min.map(|v| v.max(0) as u32),
+                google_event_id: r.google_event_id,
+                google_calendar_id: r.google_calendar_id,
             })
         })
         .collect())

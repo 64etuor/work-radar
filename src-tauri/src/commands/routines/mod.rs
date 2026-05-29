@@ -23,7 +23,9 @@ mod tests {
     use super::*;
     use crate::commands::shared::test_support::*;
     use crate::db::Db;
-    use crate::models::{CreateRoutineInput, Kind, RoutineFreq, UpdateRoutineInput, Weekday};
+    use crate::models::{
+        CreateRoutineInput, Kind, RoutineFreq, RoutineMonthlyPattern, UpdateRoutineInput, Weekday,
+    };
     use crate::scheduler::utc_now_string;
     use chrono::NaiveDate;
 
@@ -47,6 +49,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: Some(Kind::Work),
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -237,6 +242,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -272,6 +280,9 @@ mod tests {
                 reminder_offset_min: Some(30),
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -307,6 +318,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -345,6 +359,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -371,6 +388,9 @@ mod tests {
                 anchor_date: None,
                 time_of_day: Some("08:00".into()),
                 reminder_offset_min: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -431,6 +451,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -474,6 +497,9 @@ mod tests {
                 anchor_date: None,
                 time_of_day: Some("09:00".into()),
                 reminder_offset_min: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -519,6 +545,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -535,6 +564,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await
@@ -616,6 +648,73 @@ mod tests {
         assert_eq!(remaining[0].id, r2.id, "다른 루틴은 무손상");
     }
 
+    /// 신규 컬럼(monthly_pattern/monthly_nth_week/duration_min) 생성→조회 라운드트립 +
+    /// freq 변경 시 monthly 패턴 정리(daily면 None). listing.rs의 i64→i32/u32 매핑도 커버.
+    #[tokio::test]
+    async fn monthly_pattern_fields_roundtrip_and_cleanup() {
+        let db = fresh_db().await;
+        let r = insert_routine(
+            &db,
+            &CreateRoutineInput {
+                title: "회고".into(),
+                freq: RoutineFreq::Monthly,
+                weekdays: vec![Weekday::Tue],
+                anchor_date: Some("2026-05-12".into()), // day-of-month 12 → 매월 12일 due
+                time_of_day: Some("09:00".into()),
+                reminder_offset_min: None,
+                area: None,
+                kind: Some(Kind::Personal),
+                monthly_pattern: Some(RoutineMonthlyPattern::NthWeekday),
+                monthly_nth_week: Some(2),
+                duration_min: Some(45),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 조회 라운드트립 — anchor의 day-of-month(12)에 due.
+        let listed = fetch_today_routines(&db, "2026-06-12", Weekday::Fri)
+            .await
+            .unwrap();
+        let item = listed
+            .iter()
+            .find(|x| x.id == r.id)
+            .expect("monthly 루틴 due");
+        assert_eq!(
+            item.monthly_pattern,
+            Some(RoutineMonthlyPattern::NthWeekday)
+        );
+        assert_eq!(item.monthly_nth_week, Some(2));
+        assert_eq!(item.duration_min, Some(45));
+
+        // freq monthly→daily 변경: monthly 패턴은 정리(None), duration은 freq 무관 유지.
+        update_routine_inner(
+            &db,
+            UpdateRoutineInput {
+                id: r.id.clone(),
+                title: "회고".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: Some("09:00".into()),
+                reminder_offset_min: None,
+                monthly_pattern: Some(RoutineMonthlyPattern::DayOfMonth), // daily면 무시돼야
+                monthly_nth_week: Some(3),
+                duration_min: Some(20),
+            },
+        )
+        .await
+        .unwrap();
+
+        let after = fetch_today_routines(&db, "2026-06-12", Weekday::Fri)
+            .await
+            .unwrap();
+        let item2 = after.iter().find(|x| x.id == r.id).expect("daily 루틴 due");
+        assert_eq!(item2.monthly_pattern, None, "daily면 monthly_pattern 정리");
+        assert_eq!(item2.monthly_nth_week, None, "daily면 nth_week 정리");
+        assert_eq!(item2.duration_min, Some(20), "duration은 freq 무관 유지");
+    }
+
     // ── 테스트 헬퍼 (command 본문과 동일 로직, State 없이) ──────────────────────
     async fn insert_daily(db: &Db, title: &str) -> String {
         insert_routine(
@@ -629,6 +728,9 @@ mod tests {
                 reminder_offset_min: None,
                 area: None,
                 kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
             },
         )
         .await

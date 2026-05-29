@@ -345,6 +345,10 @@ export function CaptureBoard() {
       reminderOffsetMin: draft.reminderOffsetMin,
       area: null,
       kind: null,
+      // monthly 풍부 패턴 + duration 편집 UI는 PR 2b-2 — 지금은 기본값(NULL).
+      monthlyPattern: null,
+      monthlyNthWeek: null,
+      durationMin: null,
     });
     pushSuccess("루틴 추가");
   };
@@ -358,6 +362,10 @@ export function CaptureBoard() {
       anchorDate: draft.anchorDate,
       timeOfDay: draft.timeOfDay,
       reminderOffsetMin: draft.reminderOffsetMin,
+      // monthly 풍부 패턴 + duration 편집 UI는 PR 2b-2 — 지금은 기본값(NULL).
+      monthlyPattern: null,
+      monthlyNthWeek: null,
+      durationMin: null,
     });
     pushSuccess("루틴 수정");
   };
