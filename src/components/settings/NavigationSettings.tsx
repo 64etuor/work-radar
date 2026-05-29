@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { eventToHotkeySpec } from "@/lib/hotkey";
-import { EXTRA_ACTIONS, NAV_ITEMS } from "@/lib/nav";
+import { EXTRA_ACTIONS, KNOB_DIRECTIONS, KNOB_TRIGGER_KEY, NAV_ITEMS } from "@/lib/nav";
 import {
   useGlobalHotkey,
   useNavKeymap,
@@ -174,6 +174,34 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         </p>
       )}
 
+      {/* 조이스틱(knob) — 방향별 발사 단축키 + 호출 키 */}
+      <div className="flex flex-col gap-1.5">
+        <SectionLabel>조이스틱 (호출 키 hold → 커서에 등장, 방향으로 밀어 실행)</SectionLabel>
+        <div className="flex items-center gap-3 py-1">
+          <span className="text-foreground w-28 shrink-0 text-[13px]">호출 키</span>
+          <TriggerPicker
+            value={kmDraft[KNOB_TRIGGER_KEY] ?? ""}
+            onChange={(v) => setKmDraft((prev) => ({ ...prev, [KNOB_TRIGGER_KEY]: v }))}
+          />
+        </div>
+        {KNOB_DIRECTIONS.map((d) => (
+          <div key={d.key} className="flex items-center gap-3 py-1">
+            <span className="text-foreground w-28 shrink-0 text-[13px]">{d.label}</span>
+            <ViewKeymapCapture
+              value={kmDraft[d.key] ?? ""}
+              onChange={(v) => setKmDraft((prev) => ({ ...prev, [d.key]: v }))}
+              label={d.label}
+              duplicate={false}
+            />
+          </div>
+        ))}
+        <p className="text-muted-foreground text-xs">
+          뷰 전환(인접 이동)은 <code>Cmd+Left</code>/<code>Cmd+Right</code>처럼 Shift·Alt 없는
+          조합만 동작합니다. 그 외 방향엔 원하는 메뉴 단축키(예: Cmd+1)를 지정하세요. 빈 값 = 그
+          방향 비활성.
+        </p>
+      </div>
+
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={saveKeymap} disabled={setKeymap.isPending}>
           {setKeymap.isPending ? "저장 중…" : "단축키 저장"}
@@ -265,6 +293,50 @@ function ViewKeymapCapture({
           ✕
         </button>
       )}
+    </div>
+  );
+}
+
+// ── 호출 키(모디파이어 전용) 칩 피커 ───────────────────────────────
+const TRIGGER_CHIPS: { mod: string; glyph: string }[] = [
+  { mod: "Cmd", glyph: "⌘" },
+  { mod: "Ctrl", glyph: "⌃" },
+  { mod: "Alt", glyph: "⌥" },
+  { mod: "Shift", glyph: "⇧" },
+];
+
+/** "Cmd+Shift" 류 spec ↔ 칩 토글. 모디파이어 순서는 Ctrl→Cmd→Alt→Shift 고정. */
+function TriggerPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const active = new Set(
+    value
+      .split("+")
+      .map((p) => p.trim())
+      .filter(Boolean),
+  );
+  const toggle = (mod: string) => {
+    const next = new Set(active);
+    if (next.has(mod)) next.delete(mod);
+    else next.add(mod);
+    const ordered = ["Ctrl", "Cmd", "Alt", "Shift"].filter((m) => next.has(m));
+    onChange(ordered.join("+"));
+  };
+  return (
+    <div className="flex items-center gap-1.5">
+      {TRIGGER_CHIPS.map((c) => (
+        <button
+          key={c.mod}
+          type="button"
+          className={cn(
+            "border-input bg-background text-foreground flex h-8 min-w-[40px] items-center justify-center rounded-md border font-mono text-sm transition-colors",
+            active.has(c.mod) && "border-primary ring-ring ring-2",
+          )}
+          onClick={() => toggle(c.mod)}
+          aria-pressed={active.has(c.mod)}
+          title={`${c.mod} 토글`}
+        >
+          {c.glyph}
+        </button>
+      ))}
     </div>
   );
 }
