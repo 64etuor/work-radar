@@ -74,7 +74,7 @@ export function CmdKnob() {
     const id = window.setInterval(() => forceTick((n) => n + 1), 250);
     return () => window.clearInterval(id);
   }, []);
-  const hud = (
+  const hud = import.meta.env.DEV ? (
     <div
       style={{
         position: "fixed",
@@ -92,7 +92,7 @@ export function CmdKnob() {
     >
       {`knob vis=${visible}\n` + KNOB_DBG.slice(-7).join("\n")}
     </div>
-  );
+  ) : null;
 
   if (!visible) return hud;
 

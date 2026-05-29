@@ -9,9 +9,10 @@ import { useNavKeymap } from "@/lib/query";
 const DWELL_MS = 300;
 const MODIFIER_KEYS = new Set(["Meta", "Control", "Alt", "Shift"]);
 
-// TEMP DEBUG (knob 진단용 — 진단 후 제거). on-screen HUD가 읽는 링버퍼.
+// TEMP DEBUG (knob 진단용 — 진단 후 제거). DEV 빌드에서만 동작 + 원문 키 미기록(보안).
 export const KNOB_DBG: string[] = [];
 function dbg(s: string) {
+  if (!import.meta.env.DEV) return; // 프로덕션 빌드엔 진단 코드 비활성
   KNOB_DBG.push(s);
   if (KNOB_DBG.length > 10) KNOB_DBG.shift();
 }
@@ -112,8 +113,9 @@ export function useCmdKnob(): CmdKnobState {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (!visibleRef.current)
+        // 원문 키는 기록하지 않는다(키스트로크 노출 방지) — 모디파이어 이름만, 그 외엔 "nonmod".
         dbg(
-          `kd ${e.key} m${+e.metaKey}c${+e.ctrlKey}a${+e.altKey}s${+e.shiftKey} nm${+downNonModRef.current}`,
+          `kd ${MODIFIER_KEYS.has(e.key) ? e.key : "nonmod"} m${+e.metaKey}c${+e.ctrlKey}a${+e.altKey}s${+e.shiftKey} nm${+downNonModRef.current}`,
         );
       // visible: 키 무시(자기-발사 자기-취소 방지). 트리거 release는 keyup에서만 처리.
       if (visibleRef.current) return;
