@@ -5,7 +5,7 @@
   width: 0;
   height: 0;
   pointer-events: none; /* 베이스는 통과, 스틱만 잡힘 */
-  animation: cmd-knob-in var(--wr-motion-fast, 0.16s) var(--wr-ease-out, ease-out) both;
+  animation: cmd-knob-in var(--wr-motion-fast) var(--wr-ease-out) both;
 }
 
 .cmd-knob-base {
@@ -16,8 +16,8 @@
   height: 124px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--color-wr-surface, #fff);
-  border: 1px solid var(--color-wr-border, rgba(0, 0, 0, 0.12));
+  background: var(--color-wr-surface);
+  border: 1px solid var(--color-wr-border);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 8px 24px rgba(0, 0, 0, 0.14);
@@ -27,7 +27,7 @@
   position: absolute;
   font-size: 13px;
   line-height: 1;
-  color: var(--color-wr-muted, rgba(0, 0, 0, 0.28));
+  color: var(--color-wr-muted);
   opacity: 0.35;
   transition:
     opacity 0.12s ease-out,
@@ -37,7 +37,7 @@
   opacity: 0.7;
 }
 .cmd-knob-guide[data-armed] {
-  color: var(--color-wr-accent, #2563eb);
+  color: var(--color-wr-accent);
   opacity: 1;
 }
 .cmd-knob-guide[data-dir="up"] {
@@ -69,7 +69,7 @@
   height: 56px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid var(--color-wr-border, rgba(0, 0, 0, 0.16));
+  border: 1px solid var(--color-wr-border);
   background: radial-gradient(circle at 38% 32%, #fff 0%, #ececed 62%, #d8d8da 100%);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.8),
