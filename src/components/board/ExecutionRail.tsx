@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 
-import type { Kind, LifeWheelTagConfig, RoutineToday, WorkSignal } from "@/bindings";
+import type { Kind, LifeWheelTagConfig, Project, RoutineToday, WorkSignal } from "@/bindings";
 import { type RoutineDraft, RoutinesPanel } from "@/components/board/RoutinesPanel";
 import { TodayRail } from "@/components/board/TodayRail";
 
@@ -8,6 +8,7 @@ export function ExecutionRail({
   todayItems,
   routines,
   lifeWheelTags,
+  projects,
   todayPanelRef,
   onToggleTodayDone,
   onUnpromoteToday,
@@ -22,10 +23,14 @@ export function ExecutionRail({
   onOpenRoutineTracking,
   onSetRoutineKind,
   onSetRoutineAreaTagKey,
+  onEnableRoutineSync,
+  onDisableRoutineSync,
+  routineSyncBusy,
 }: {
   todayItems: WorkSignal[];
   routines: RoutineToday[];
   lifeWheelTags: LifeWheelTagConfig[];
+  projects: Project[];
   todayPanelRef: RefObject<HTMLDivElement | null>;
   onToggleTodayDone: (id: string, done: boolean) => void;
   onUnpromoteToday: (id: string) => void;
@@ -40,6 +45,9 @@ export function ExecutionRail({
   onOpenRoutineTracking: () => void;
   onSetRoutineKind: (id: string, kind: Kind | null) => void;
   onSetRoutineAreaTagKey: (id: string, tagKey: string | null) => void;
+  onEnableRoutineSync: (routineId: string, projectId: string, calendarId: string) => void;
+  onDisableRoutineSync: (routineId: string) => void;
+  routineSyncBusy?: boolean;
 }) {
   return (
     <div className="execute">
@@ -56,6 +64,7 @@ export function ExecutionRail({
       <RoutinesPanel
         routines={routines}
         lifeWheelTags={lifeWheelTags}
+        projects={projects}
         onToggle={(routineId, done) => onToggleRoutine(routineId, done)}
         onCreate={onCreateRoutine}
         onUpdate={onUpdateRoutine}
@@ -64,6 +73,9 @@ export function ExecutionRail({
         onOpenTracking={onOpenRoutineTracking}
         onSetKind={onSetRoutineKind}
         onSetAreaTagKey={onSetRoutineAreaTagKey}
+        onEnableSync={onEnableRoutineSync}
+        onDisableSync={onDisableRoutineSync}
+        syncBusy={routineSyncBusy}
       />
     </div>
   );

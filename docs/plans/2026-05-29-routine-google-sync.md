@@ -207,13 +207,26 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 
 **검증**: `cargo test --lib` + `pnpm typecheck`(bindings drift 의도분만).
 
-#### PR 2b-2 — 설정 UI (프런트)
+#### PR 2b-2 — sync 토글 + 캘린더 picker (프런트, 헤드라인)
 
-- RoutinesPanel: monthly 패턴 편집 (radio: day_of_month vs nth_weekday + nth_week 셀렉트).
-- sync 토글 + 캘린더 picker — routine.kind와 같은 kind의 프로젝트만 노출(1개면 자동, 복수면 picker).
-- `listProjects()` 필터 `kind===routine.kind` → `listGoogleCalendars(matchedProjectId)`.
+- `RoutineSyncButton`(신규) — RoutinesPanel 행 액션에 Google 동기화 토글. shadcn Popover로
+  picker(overlay-stack Esc 계약 자동). 후보 = routine.kind와 같은 kind 프로젝트의 선택 캘린더
+  (`project.googleCalendarIds` 로컬 JSON — 네트워크 없음, CalendarPickerPopover 패턴 미러).
+- 훅 `useEnableRoutineGoogleSync`/`useDisableRoutineGoogleSync` + CaptureBoard 핸들러(토스트).
+- 백엔드: monthly인데 패턴 미지정이면 enable에서 `day_of_month` 기본 → 로컬 due-calc와 일치
+  (nth_weekday 없이도 monthly 루틴 sync 가능).
+- kind None / 후보 없음 / 이미 sync 각각 명확한 상태 표시.
 
-**검증**: `pnpm typecheck` + `pnpm lint` + (가능하면) cmux 스모크.
+**검증**: `cargo test --lib`(google_sync 7) + `pnpm typecheck` + `pnpm lint`.
+
+#### PR 2b-3 — monthly nth_weekday 편집 UI (프런트, deferred)
+
+- RoutinesPanel 폼: monthly일 때 radio(day_of_month vs nth_weekday) + nth_week 셀렉트
+  (1st~5th, last) + duration(분) 입력. RoutineDraft 확장 + CaptureBoard 실제 값 전달.
+- **진입 조건(critic)**: `monthly_nth_week` IPC-boundary 검증(create/update) — 현재 DB CHECK 의존.
+- (선택) 로컬 due-calc의 nth_weekday 지원 — 현재 day_of_month만 → 별도 follow-up일 수도.
+
+**검증**: `cargo test --lib`(create/update nth_week 검증) + `pnpm typecheck` + `pnpm lint`.
 
 ### PR 3 — 루틴 편집 시 PATCH 전파
 

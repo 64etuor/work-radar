@@ -29,6 +29,8 @@ import {
   useCreateSignal,
   useDeleteRoutine,
   useDeleteSignal,
+  useDisableRoutineGoogleSync,
+  useEnableRoutineGoogleSync,
   useEnrichAllRunning,
   useFlushPromotions,
   useLifeWheelTags,
@@ -105,6 +107,8 @@ export function CaptureBoard() {
   const deleteRoutine = useDeleteRoutine();
   const reorderRoutines = useReorderRoutines();
   const toggleRoutine = useToggleRoutineCheck();
+  const enableRoutineSync = useEnableRoutineGoogleSync();
+  const disableRoutineSync = useDisableRoutineGoogleSync();
   const codex = useCodexStatus();
   const triggerEnrichAll = useTriggerEnrichAll();
   const updateTitle = useUpdateSignalTitle();
@@ -370,6 +374,25 @@ export function CaptureBoard() {
     pushSuccess("루틴 수정");
   };
 
+  const handleEnableRoutineSync = (routineId: string, projectId: string, calendarId: string) => {
+    enableRoutineSync.mutate(
+      { routineId, projectId, calendarId },
+      {
+        onSuccess: () => pushSuccess("Google 캘린더 동기화 켜짐"),
+        onError: (e) =>
+          pushError("calendar", e instanceof IpcError ? e.app : `동기화 실패: ${String(e)}`),
+      },
+    );
+  };
+
+  const handleDisableRoutineSync = (routineId: string) => {
+    disableRoutineSync.mutate(routineId, {
+      onSuccess: () => pushSuccess("Google 캘린더 동기화 해제"),
+      onError: (e) =>
+        pushError("calendar", e instanceof IpcError ? e.app : `해제 실패: ${String(e)}`),
+    });
+  };
+
   const handleDeleteRoutine = (id: string) => {
     deleteRoutine.mutate(id);
     pushSuccess("루틴 삭제");
@@ -538,6 +561,7 @@ export function CaptureBoard() {
           todayItems={todayItems}
           routines={routines}
           lifeWheelTags={lifeWheelTags.data ?? []}
+          projects={projects}
           todayPanelRef={todayPanelRef}
           onToggleTodayDone={(id, done) => toggleTodayDone.mutate({ id, date: today, done })}
           onUnpromoteToday={handleUnpromote}
@@ -554,6 +578,9 @@ export function CaptureBoard() {
           onOpenRoutineTracking={() => goTo("routines")}
           onSetRoutineKind={(id, kind) => setRoutineKind.mutate({ id, kind })}
           onSetRoutineAreaTagKey={(id, tagKey) => setRoutineAreaTagKey.mutate({ id, tagKey })}
+          onEnableRoutineSync={handleEnableRoutineSync}
+          onDisableRoutineSync={handleDisableRoutineSync}
+          routineSyncBusy={enableRoutineSync.isPending || disableRoutineSync.isPending}
         />
       </div>
 

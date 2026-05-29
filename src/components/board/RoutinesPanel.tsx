@@ -1,9 +1,17 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
-import type { Kind, LifeWheelTagConfig, RoutineFreq, RoutineToday, Weekday } from "@/bindings";
+import type {
+  Kind,
+  LifeWheelTagConfig,
+  Project,
+  RoutineFreq,
+  RoutineToday,
+  Weekday,
+} from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
+import { RoutineSyncButton } from "@/components/board/RoutineSyncButton";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
@@ -26,6 +34,8 @@ export type RoutineDraft = {
 type Props = {
   routines: RoutineToday[];
   lifeWheelTags: LifeWheelTagConfig[];
+  /** Google 캘린더 동기화 picker 후보 산출용(루틴 kind와 같은 kind 프로젝트의 선택 캘린더). */
+  projects: Project[];
   onToggle: (routineId: string, done: boolean) => void;
   onCreate: (draft: RoutineDraft) => void;
   onUpdate: (id: string, draft: RoutineDraft) => void;
@@ -36,6 +46,12 @@ type Props = {
   onSetKind: (id: string, kind: Kind | null) => void;
   /** Life Wheel tag 단일 선택(커스텀 키 허용). */
   onSetAreaTagKey: (id: string, tagKey: string | null) => void;
+  /** Google 동기화 ON(kind 일치 프로젝트 + 캘린더). */
+  onEnableSync: (routineId: string, projectId: string, calendarId: string) => void;
+  /** Google 동기화 OFF. */
+  onDisableSync: (routineId: string) => void;
+  /** 동기화 mutation 진행 중(중복 클릭 방지). */
+  syncBusy?: boolean;
 };
 
 const DAYS: { label: string; key: Weekday }[] = [
@@ -74,6 +90,7 @@ function schedLabel(r: RoutineToday): string {
 export function RoutinesPanel({
   routines,
   lifeWheelTags,
+  projects,
   onToggle,
   onCreate,
   onUpdate,
@@ -82,6 +99,9 @@ export function RoutinesPanel({
   onOpenTracking,
   onSetKind,
   onSetAreaTagKey,
+  onEnableSync,
+  onDisableSync,
+  syncBusy,
 }: Props) {
   // open=false: 폼 닫힘. open=true + editId=null: 새 루틴 추가. open=true + editId: 수정 모드.
   const fieldId = useId();
@@ -334,6 +354,13 @@ export function RoutinesPanel({
                 </div>
               </div>
               <div className="ractions">
+                <RoutineSyncButton
+                  routine={r}
+                  projects={projects}
+                  onEnable={onEnableSync}
+                  onDisable={onDisableSync}
+                  busy={syncBusy}
+                />
                 <button
                   type="button"
                   className="ract"

@@ -84,6 +84,32 @@ export function useSetRoutineAreaTagKey() {
   });
 }
 
+/** 루틴 Google Calendar 동기화 ON (kind 일치 프로젝트 + 그 캘린더). */
+export function useEnableRoutineGoogleSync() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: ({
+      routineId,
+      projectId,
+      calendarId,
+    }: {
+      routineId: string;
+      projectId: string;
+      calendarId: string;
+    }) => unwrap(commands.enableRoutineGoogleSync(routineId, projectId, calendarId)),
+    onSuccess: () => inv.routines(),
+  });
+}
+
+/** 루틴 Google Calendar 동기화 OFF (master event 삭제 + 로컬 mirror 정리). */
+export function useDisableRoutineGoogleSync() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: (routineId: string) => unwrap(commands.disableRoutineGoogleSync(routineId)),
+    onSuccess: () => inv.routines(),
+  });
+}
+
 /** 루틴 완료 토글 (날짜별, 다음날 리셋). */
 export function useToggleRoutineCheck() {
   const inv = useInvalidate();

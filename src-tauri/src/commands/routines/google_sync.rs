@@ -165,8 +165,11 @@ pub(crate) async fn enable_routine_sync_with_provider<P: CalendarProvider>(
 
     let freq = parse_freq(&row.freq)?;
     let weekdays = parse_weekdays_json(row.weekdays.as_deref())?;
+    // monthly인데 패턴 미지정이면 day_of_month로 기본 — 로컬 due-calc(day-of-month 기준)와
+    // 일치시켜 sync 결과가 화면 표시와 어긋나지 않게 한다. nth_weekday는 명시적 업그레이드(2b-3 UI).
     let monthly_pattern = match row.monthly_pattern.as_deref() {
         Some(s) => Some(parse_monthly_pattern(s)?),
+        None if matches!(freq, Freq::Monthly) => Some(MonthlyPattern::DayOfMonth),
         None => None,
     };
     // created_at은 'YYYY-MM-DD HH:MM:SS' (sqlx datetime('now')) — 앞 10자 = 날짜.
@@ -617,6 +620,47 @@ mod tests {
         assert!(
             provider.created.lock().unwrap().is_empty(),
             "이미 sync면 provider.create_event 호출 안 됨"
+        );
+    }
+
+    /// enable: monthly 루틴이 패턴 미지정이어도 day_of_month로 기본 적용 → BYMONTHDAY RRULE.
+    #[tokio::test]
+    async fn enable_monthly_defaults_day_of_month() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        // monthly + 패턴 미지정. insert_routine이 anchor를 오늘로 채운다.
+        let rid = seed_routine(
+            &db,
+            "월간 점검",
+            RoutineFreq::Monthly,
+            vec![],
+            Some("10:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        let provider = RecordingProvider::with_create_id("evt_m");
+
+        enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created.len(), 1);
+        assert!(
+            created[0]
+                .2
+                .recurrence
+                .iter()
+                .any(|l| l.starts_with("RRULE:FREQ=MONTHLY;BYMONTHDAY=")),
+            "패턴 미지정 monthly → day_of_month 기본(BYMONTHDAY)"
         );
     }
 

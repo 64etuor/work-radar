@@ -3,6 +3,8 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+import { registerOverlay } from "./overlay-stack";
+
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
 }
@@ -17,6 +19,9 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  // 상호작용 계약(frontend-board.md §Esc, shadcn-migration.md): 열린 동안 overlay-stack에
+  // 등록 → 보드 표면에서 Esc로 popover만 닫히고 App.tsx의 window.hide()는 양보된다.
+  React.useEffect(() => registerOverlay(), []);
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
