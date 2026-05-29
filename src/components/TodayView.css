@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--wr-bg);
+  background: var(--color-wr-bg);
 }
 
 /* ── 헤더 ───────────────────────────────────────────────────────────── */
@@ -18,7 +18,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--wr-border-light);
+  border-bottom: 1px solid var(--color-wr-border-light);
 }
 
 .today-title {
@@ -56,7 +56,7 @@
   padding: 4px 10px;
   border-radius: 9999px;
   font-size: 11px;
-  border: 1px solid var(--wr-border-light);
+  border: 1px solid var(--color-wr-border-light);
   background: #fff;
   cursor: pointer;
   transition:
@@ -65,7 +65,7 @@
 }
 
 .today-debt-chip:hover {
-  background: var(--wr-bg-soft, #f6f5f1);
+  background: var(--color-wr-elevated);
 }
 
 .today-debt-chip .today-debt-num {
@@ -83,7 +83,7 @@
 }
 
 .today-debt-muted {
-  color: var(--wr-subtle);
+  color: var(--color-wr-subtle);
 }
 
 /* ── Staged 배지(PR 5, cross-cal Acceptance 게이트) ───────────────── */
@@ -112,7 +112,7 @@
 /* ── DnD 가시화(PR 5) ─────────────────────────────────────────────── */
 
 .today-tray[data-drop-over] {
-  background: var(--wr-bg-soft, #f6f5f1);
+  background: var(--color-wr-elevated);
 }
 
 .today-canvas[data-drop-over] .today-canvas-grid {
@@ -191,7 +191,7 @@
   gap: 6px;
   padding: 6px 10px;
   background: #fff;
-  border: 1px solid var(--wr-border, #d9d4c7);
+  border: 1px solid var(--color-wr-border);
   border-left: 3px solid var(--color-today-signal, var(--color-today-signal));
   border-radius: 6px;
   box-shadow:
@@ -205,7 +205,7 @@
 }
 
 .today-drag-ghost-grip {
-  color: var(--wr-subtle);
+  color: var(--color-wr-subtle);
   flex-shrink: 0;
 }
 
@@ -222,7 +222,7 @@
   min-height: 74px;
   padding: 8px 10px;
   background: var(--wr-postit-bg, #fffdf3);
-  border: 1px solid var(--wr-border, #d9d4c7);
+  border: 1px solid var(--color-wr-border);
   border-left: 4px solid var(--color-today-signal, var(--color-today-signal));
   border-radius: 4px;
   box-shadow:
@@ -235,7 +235,7 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 1.35;
-  color: var(--wr-text, #1f2430);
+  color: var(--color-wr-fg);
   white-space: normal;
   overflow: hidden;
   display: -webkit-box;
@@ -256,13 +256,15 @@
 
 .today-main {
   display: grid;
-  /* 트레이는 178px InboxColumn + 좌우 12px padding ≈ 202px만 있으면 충분.
-     타임라인을 좌측에 바짝 붙이기 위해 210px로 압축. */
-  grid-template-columns: 210px minmax(560px, 860px);
-  justify-content: start;
+  /*
+   * 트레이 210px · 캔버스 1fr(남은 공간 흡수) · 이력 320px(pin).
+   * 1440+ 와이드 화면에서 우측이 죽은 stone tint로 남던 dead-area 제거 — 캔버스가 채움.
+   * 너무 좁아지지 않게 minmax min=560px(이하부터는 미디어 쿼리가 history 칼럼을 떨군다).
+   */
+  grid-template-columns: 210px minmax(560px, 1fr) 320px;
   flex: 1;
   min-height: 0;
-  background: var(--wr-bg-soft, #f6f5f1);
+  background: var(--color-wr-elevated);
 }
 
 /* ── 좌측 트레이 ───────────────────────────────────────────────────── */
@@ -270,7 +272,7 @@
 /* 트레이 외곽 — 흰 바탕 + 178px InboxColumn 좌측 정렬 + 전체 높이 stretch.
    capture board `.canvas`(row flex, 첫 자식이 좌측)와 동일한 정렬. */
 .today-tray {
-  border-right: 1px solid var(--wr-border-light);
+  border-right: 1px solid var(--color-wr-border-light);
   overflow-y: auto;
   background: #fff;
   padding: 12px;
@@ -294,7 +296,7 @@
 
 .today-tray-empty {
   padding: 16px;
-  color: var(--wr-subtle);
+  color: var(--color-wr-subtle);
   font-size: 12px;
   text-align: center;
 }
@@ -311,7 +313,7 @@
   gap: 4px;
   padding: 6px 8px;
   font-size: 11px;
-  color: var(--wr-subtle);
+  color: var(--color-wr-subtle);
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -333,7 +335,7 @@
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 9999px;
-  border: 1px solid var(--wr-border-light);
+  border: 1px solid var(--color-wr-border-light);
   background: #fff;
 }
 
@@ -343,7 +345,7 @@
   position: relative;
   overflow-y: auto;
   background: #fff;
-  border-right: 1px solid var(--wr-border-light);
+  border-right: 1px solid var(--color-wr-border-light);
 }
 
 .today-canvas {
@@ -503,7 +505,7 @@
   position: absolute;
   inset: 0;
   background: color-mix(in srgb, var(--tl-accent, var(--color-today-signal)) 14%, #fff);
-  border: 1px solid var(--wr-border, #c8c2b0);
+  border: 1px solid var(--color-wr-border);
   border-left-width: 4px;
   border-radius: 6px;
   padding: 4px 8px;
@@ -535,13 +537,13 @@
 }
 
 .tl-block:focus-visible {
-  outline: 2px solid var(--wr-color-focus, var(--color-wr-focus, #4c6ee6));
+  outline: 2px solid var(--color-wr-focus);
   outline-offset: 1px;
 }
 
 .tl-block-time {
   font-size: 10px;
-  color: var(--wr-subtle);
+  color: var(--color-wr-subtle);
   font-family: ui-monospace, monospace;
 }
 
@@ -674,7 +676,7 @@
 }
 
 .tl-block-resize:focus-visible {
-  outline: 2px solid var(--wr-color-focus, #4c6ee6);
+  outline: 2px solid var(--color-wr-focus);
   outline-offset: 1px;
 }
 
@@ -695,6 +697,99 @@
 .tl-block-done .tl-block-title {
   text-decoration: line-through;
   opacity: 0.6;
+}
+
+/*
+ * ── 짧은 블록 반응형 (30분 / 15분 등) ─────────────────────────────────
+ * 30px(30분) 이하 블록은 두 줄 stack이 잘려 무용지물 — 한 줄(flex row)로 전환.
+ * time · title(ellipsis) 가로 배치 + check 버튼은 세로 중앙(absolute) + 작은 폰트.
+ */
+.tl-block--compact {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  /* check 22px 우측 마진 + 좌측 8px. */
+  padding: 1px 24px 1px 8px;
+}
+
+.tl-block--compact .tl-block-time {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tl-block--compact .tl-block-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-block--compact .tl-block-icon {
+  width: 9px;
+  height: 9px;
+  margin-right: 2px;
+  vertical-align: -1px;
+}
+
+/*
+ * ultra-compact (15분 ≈ 15px): time·title 한 줄도 빠듯 → 폰트 더 작고 패딩 최소.
+ * 리사이즈 핸들은 5px로 얇게(터치는 부정확해지지만 데스크톱이라 마우스 OK).
+ */
+.tl-block--ultra {
+  padding: 0 22px 0 6px;
+  gap: 5px;
+}
+
+.tl-block--ultra .tl-block-time {
+  font-size: 9px;
+}
+
+.tl-block--ultra .tl-block-title {
+  font-size: 10px;
+}
+
+/*
+ * compact/ultra 모드에서 체크 버튼 위치 보정 — 부모 .tl-block-wrap 기준.
+ * 기본은 top:4px right:4px → compact는 세로 중앙. ultra는 14px 사이즈로 축소.
+ */
+.tl-block-wrap:has(.tl-block--compact) .tl-block-check {
+  top: 50%;
+  transform: translateY(-50%);
+  right: 3px;
+  width: 18px;
+  height: 18px;
+}
+
+.tl-block-wrap:has(.tl-block--ultra) .tl-block-check {
+  width: 16px;
+  height: 16px;
+}
+
+.tl-block-wrap:has(.tl-block--ultra) .tl-block-check svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* 리사이즈 핸들도 작은 블록에선 더 얇게 — 본문 보존 영역 확보. */
+.tl-block-wrap:has(.tl-block--compact) .tl-block-resize {
+  height: 6px;
+}
+
+.tl-block-wrap:has(.tl-block--ultra) .tl-block-resize {
+  height: 5px;
+}
+
+.tl-block-wrap:has(.tl-block--ultra) .tl-block-resize::after {
+  width: 16px;
+  height: 2px;
 }
 
 /* 블록 우상단 ✓ 토글 — block button 형제로 absolute. signal/routine만 렌더된다. */
@@ -724,8 +819,149 @@
   color: var(--color-q2);
 }
 .tl-block-check:focus-visible {
-  outline: 2px solid var(--wr-color-focus, #4c6ee6);
+  outline: 2px solid var(--color-wr-focus);
   outline-offset: 1px;
+}
+
+/* ── 우측 완료 이력 패널 (HistoryRail) ─────────────────────────────
+ *
+ * RetroView와 동일한 시각 언어:
+ *   - section head: mono uppercase 11px(`--font-mono` letter-spacing 0.08em)
+ *   - date label: mono 11px subtle
+ *   - hairline border-light 분리선, hover/focus에 옅은 bg-soft tint
+ * 좁은 화면(<1280)에선 grid에서 빠지고 hidden — 회고는 RetroView로 유도.
+ */
+
+.today-history {
+  border-left: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-bg, #fff);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.today-history-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.today-history-title {
+  font: 700 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+
+.today-history-count {
+  margin-left: auto;
+  font: 700 12px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+
+.today-history-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0 32px;
+}
+
+.today-history-hint {
+  padding: 20px 18px;
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-subtle);
+  text-align: center;
+}
+
+.today-history-empty {
+  margin: 24px 18px;
+  padding: 22px 18px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-wr-bg-soft, #f6f5f1) 35%, transparent);
+  text-align: center;
+}
+
+.today-history-empty-title {
+  font: 600 12px/1.4 var(--font-sans);
+  color: var(--color-wr-fg);
+  margin-bottom: 6px;
+}
+
+.today-history-empty-sub {
+  font: 400 11px/1.5 var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+
+.today-history-group + .today-history-group {
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.today-history-date {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 18px 6px;
+  font: 700 11px var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--color-wr-subtle);
+  background: color-mix(in srgb, var(--color-wr-bg, #fff) 92%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.today-history-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.today-history-item {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-wr-border-light) 65%, transparent);
+  padding: 8px 18px 8px;
+  transition: background var(--wr-motion-fast, 120ms) var(--wr-ease-out, ease);
+}
+
+.today-history-item:hover {
+  background: color-mix(in srgb, var(--color-wr-bg-soft, #f6f5f1) 55%, transparent);
+}
+
+.today-history-item:focus-within {
+  background: color-mix(in srgb, var(--color-wr-bg-soft, #f6f5f1) 80%, transparent);
+}
+
+.today-history-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 12px/1.35 var(--font-sans);
+  color: var(--color-wr-fg);
+}
+
+.today-history-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) inset;
+}
+
+.today-history-item-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.005em;
+}
+
+.today-history-sentinel {
+  padding: 14px 18px;
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+  text-align: center;
 }
 
 /* ── 반응형 (PR 7 정밀화, spec §3) ───────────────────────────────── */
@@ -734,6 +970,16 @@
  * 720–1040: 좌트레이+우캔버스 2열 그리드를 상단 띠+캔버스 1열로 변경.
  * 트레이는 grid auto-fill로 카드형 칩 — 시간축 가로 스크롤 0 확보.
  */
+/* 1280 미만: 우측 완료 이력 패널 숨김(2단으로 회귀). 회고는 RetroView로 유도. */
+@media (max-width: 1279px) {
+  .today-main {
+    grid-template-columns: 210px minmax(560px, 1fr);
+  }
+  .today-history {
+    display: none;
+  }
+}
+
 @media (max-width: 1040px) and (min-width: 720px) {
   .today-main {
     grid-template-columns: 1fr;
@@ -741,7 +987,7 @@
   }
   .today-tray {
     border-right: 0;
-    border-bottom: 1px solid var(--wr-border-light);
+    border-bottom: 1px solid var(--color-wr-border-light);
     max-height: 200px;
   }
   .today-tray-body {
@@ -761,7 +1007,7 @@
   }
   .today-tray {
     border-right: 0;
-    border-bottom: 1px solid var(--wr-border-light);
+    border-bottom: 1px solid var(--color-wr-border-light);
   }
   .today-canvas-wrap {
     height: calc(100vh - 280px);

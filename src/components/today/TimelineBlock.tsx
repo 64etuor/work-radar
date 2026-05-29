@@ -151,6 +151,15 @@ export function TimelineBlock({
   const durationMin = Math.round(
     (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) / 60000,
   );
+  /*
+   * 반응형 블록 높이:
+   *   - normal  (≥36px ≈ 36분+):  두 줄 stack — 시간 위, 제목 아래(기본 디자인).
+   *   - compact (22~35px ≈ 30분): 한 줄 — 시간 · 제목(ellipsis), 작은 폰트, tight padding.
+   *   - ultra   (<22px ≈ 15분):   한 줄 + 리사이즈 핸들/체크 더 얇게.
+   * 두 줄 stack은 30분(30px) 이하에서 항상 잘림 → compact 한 줄 전환이 필요.
+   */
+  const compact = heightPx < 36;
+  const ultraCompact = heightPx < 22;
   const drag = useDraggable({
     id: `block:${block.id}`,
     data: dragDataForBox(box, durationMin),
@@ -190,7 +199,13 @@ export function TimelineBlock({
       <button
         ref={setNodeRef}
         type="button"
-        className={cn("tl-block", `tl-block-${block.kind}`, isDone && "tl-block-done")}
+        className={cn(
+          "tl-block",
+          `tl-block-${block.kind}`,
+          isDone && "tl-block-done",
+          compact && "tl-block--compact",
+          ultraCompact && "tl-block--ultra",
+        )}
         data-done={isDone || undefined}
         style={
           {

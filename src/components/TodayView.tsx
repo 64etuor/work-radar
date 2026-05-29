@@ -16,6 +16,7 @@ import {
 import type { CalendarEvent } from "@/bindings";
 import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
 import { EventPopover } from "@/components/today/EventPopover";
+import { HistoryRail } from "@/components/today/HistoryRail";
 import { StagedBadge } from "@/components/today/StagedBadge";
 import { TimelineCanvas } from "@/components/today/TimelineCanvas";
 import type { DragDelta } from "@/components/today/timelinePreview";
@@ -101,7 +102,8 @@ export function TodayView() {
 
   const handleBlockClick = useCallback((box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setPopover({ box, anchor: { x: rect.right + 8, y: rect.top } });
+    // 블록 상단 중앙을 anchor로 → popover는 side="top" align="center"로 블록 위에 띄움.
+    setPopover({ box, anchor: { x: rect.left + rect.width / 2, y: rect.top } });
   }, []);
   /** 타임라인 ✓ 토글 — block.kind에 따라 signal/routine mutation 분기(event는 done 개념 없음 → 무시). */
   const handleBlockToggleDone = useCallback(
@@ -117,9 +119,6 @@ export function TodayView() {
     [today, toggleDone, toggleRoutine],
   );
   const handlePopoverClose = useCallback(() => setPopover(null), []);
-  const handleOpenFullModal = useCallback(() => {
-    setPopover(null);
-  }, []);
   const removeEventFromCache = useCallback(
     (calendarId: string, eventId: string) => {
       qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) =>
@@ -135,12 +134,8 @@ export function TodayView() {
       const linkedEventId = block.linkedEventId;
       const calendarId = block.calendarId;
       const run = async () => {
-        if (block.kind !== "event" && !linkedEventId) {
-          useToastStore
-            .getState()
-            .pushError("calendar.delete", "연결된 Google 일정이 없어 삭제할 수 없습니다.");
-          return;
-        }
+        // 모든 kind에서 unschedule 가능 — signal/routine은 linkedEventId 없어도 stage(unschedule)
+        // 자체는 동작(타임라인에서만 빼고 카드는 Today 잔류). Google 캐시 제거는 linkedEventId 있을 때만.
         if (block.kind === "signal") {
           const signalId = block.id.replace(/^signal:/, "");
           await stage({ kind: "unschedule", targetSignalId: signalId });
@@ -318,6 +313,7 @@ export function TodayView() {
               />
             )}
           </div>
+          <HistoryRail today={today} />
         </div>
         <EventPopover
           open={popover !== null}
@@ -325,11 +321,8 @@ export function TodayView() {
           date={date}
           anchor={popover?.anchor ?? null}
           onClose={handlePopoverClose}
-          onOpenFullModal={handleOpenFullModal}
           onDeleteSchedule={handleDeleteSchedule}
-          onToggleRoutineDone={(routineId, done) =>
-            toggleRoutine.mutate({ routineId, date: today, done })
-          }
+          onToggleDone={handleBlockToggleDone}
         />
         {picker && (
           <CalendarPickerPopover

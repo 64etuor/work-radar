@@ -19,6 +19,15 @@ export function useTimelineNote(key: Key | null) {
   });
 }
 
+/** 한 날짜의 모든 메모(signal/routine/event 통합) — N+1 회피용 prefetch. */
+export function useTimelineNotesForDate(date: string | null) {
+  return useQuery<TimelineNote[]>({
+    queryKey: ["timelineNotesForDate", date],
+    enabled: date !== null,
+    queryFn: () => unwrap(commands.listTimelineNotesForDate(date as string)),
+  });
+}
+
 /** 메모 upsert — body trim 빈문자열이면 backend가 행 삭제 + null 반환. */
 export function useUpsertTimelineNote() {
   const qc = useQueryClient();

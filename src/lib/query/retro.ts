@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands } from "@/bindings";
+import { commands, type WorkSignal } from "@/bindings";
 
 import { unwrap } from "./client";
 
@@ -12,6 +12,42 @@ export function useCompleted(start: string, end: string) {
   return useQuery({
     queryKey: ["completed", start, end],
     queryFn: () => unwrap(commands.listCompleted(start, end)),
+  });
+}
+
+/**
+ * Today 우측 "완료 이력" 패널용 무한 쿼리. today 기준으로 7일씩 과거로 페이징.
+ * pageParam=0 → [today-6, today], pageParam=1 → [today-13, today-7], …
+ * `listCompleted`는 today_done_at DESC 정렬 → 페이지 내부는 최신부터.
+ * 26주(약 6개월) 캡 — 그 이상은 사용자가 명시적으로 회고 뷰로 가는 게 자연스럽다.
+ */
+const HISTORY_WINDOW_DAYS = 7;
+const HISTORY_MAX_PAGES = 26;
+
+function subtractDays(yyyymmdd: string, days: number): string {
+  const [y, m, d] = yyyymmdd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d - days);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+type HistoryPage = { rows: WorkSignal[]; pageParam: number; start: string; end: string };
+
+export function useCompletedHistory(today: string) {
+  return useInfiniteQuery<HistoryPage>({
+    queryKey: ["completedHistory", today],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const p = pageParam as number;
+      const end = subtractDays(today, p * HISTORY_WINDOW_DAYS);
+      const start = subtractDays(today, (p + 1) * HISTORY_WINDOW_DAYS - 1);
+      const rows = await unwrap(commands.listCompleted(start, end));
+      return { rows, pageParam: p, start, end };
+    },
+    getNextPageParam: (last) =>
+      last.pageParam + 1 < HISTORY_MAX_PAGES ? last.pageParam + 1 : undefined,
   });
 }
 
