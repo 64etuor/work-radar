@@ -336,9 +336,8 @@ pub(crate) async fn disable_routine_sync_with_provider<P: CalendarProvider>(
         return Ok(());
     };
 
-    // PR 2 §4: 4xx(404=already deleted 등)는 no retry, graceful — 로컬 상태만 정리.
-    // 현재 CalendarError가 4xx 세분 미지원 → PR 2c(설정 UI 단계)에서 404 graceful 추가 예정.
-    // 지금은 모든 에러 전파(보수적). 사용자가 토스트 보고 재시도.
+    // 404/410(이미 삭제됨/stale mirror)은 delete_request가 멱등 Ok로 흡수하므로(http.rs) 여기선
+    // graceful — 로컬 mirror만 정리하면 된다. 그 외(401/403/5xx 등)는 전파해 사용자가 재시도.
     provider.delete_event(access_token, cal_id, evt_id).await?;
 
     clear_google_mirror(db, routine_id).await
