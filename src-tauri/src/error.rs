@@ -187,6 +187,9 @@ impl From<crate::calendar::CalendarError> for AppError {
                     url: None,
                     nav: Some("settings".into()),
                 }),
+            // 대상 이벤트가 Google에서 사라짐(404/410). 라우틴 PATCH 경로는 이걸 가로채 mirror를
+            // sweep하지만(google_sync), 다른 경로로 새면 not_found로 노출(기본 fallback).
+            E::NotFound(m) => AppError::not_found("calendar.not_found", m),
         }
     }
 }

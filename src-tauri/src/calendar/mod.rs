@@ -61,6 +61,9 @@ pub use write::{build_event_payload, parse_created_event, CreateEventInput};
 /// 외부 호출 실패 분류. Transient = 재시도 대상(네트워크·429·5xx),
 /// Terminal = 재시도 무의미(인증/권한/검증 등 4xx, 디코드 실패).
 /// ReconnectRequired = 스코프 불일치로 재연결이 필요한 경우(calendarList 403).
+/// NotFound = 대상 이벤트가 Google에서 사라짐(404/410, stale mirror). 재시도 무의미 →
+/// 호출자가 로컬 mirror를 NULL로 sweep하는 reactive 경로(ADR-0005). DELETE는 멱등 Ok로
+/// 흡수하지만 PATCH는 진행 불가라 이 변형으로 노출한다.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CalendarError {
     #[error("{0}")]
@@ -69,6 +72,8 @@ pub enum CalendarError {
     Terminal(String),
     #[error("{0}")]
     ReconnectRequired(String),
+    #[error("{0}")]
+    NotFound(String),
 }
 
 impl Retryable for CalendarError {

@@ -525,7 +525,8 @@ impl From<crate::calendar::CalendarError> for SyncError {
         use crate::calendar::CalendarError as E;
         match e {
             E::Transient(m) => SyncError::Transient(m),
-            E::Terminal(m) | E::ReconnectRequired(m) => SyncError::Terminal(m),
+            // NotFound(404/410)은 이 큐 경로에선 재시도 무의미 → Terminal(기존 동작 보존).
+            E::Terminal(m) | E::ReconnectRequired(m) | E::NotFound(m) => SyncError::Terminal(m),
         }
     }
 }

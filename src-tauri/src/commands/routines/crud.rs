@@ -165,6 +165,11 @@ pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Res
     super::google_sync::patch_synced_routine_after_edit(db.inner(), &routine_id)
         .await
         .map_err(|e| {
+            // stale mirror로 sync가 자동 해제된 경우(routine.sync.expired)는 마스킹하지 않고 그대로
+            // 통과 — "다시 켜세요" 재연결 안내가 토스트에 닿아야 한다(generic patch_failed로 덮으면 손실).
+            if e.code == super::google_sync::SYNC_EXPIRED_CODE {
+                return e;
+            }
             AppError::terminal(
                 "routine.sync.patch_failed",
                 format!(

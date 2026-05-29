@@ -35,6 +35,17 @@ pub(super) fn classify_http(status: u16, body: &str) -> CalendarError {
     }
 }
 
+/// PATCH 상태코드 → 분류. 404/410(이벤트가 Google에서 사라짐 = stale mirror)은 `NotFound`로
+/// 승격해 호출자가 로컬 mirror를 NULL로 sweep하게 한다(ADR-0005 reactive 경로). 그 외는
+/// `classify_http`와 동일(429/5xx=Transient, 나머지 4xx=Terminal). 본문 내용은 노출하지 않는다.
+pub(super) fn classify_patch_http(status: u16, body: &str) -> CalendarError {
+    if status == 404 || status == 410 {
+        CalendarError::NotFound(format!("HTTP {status} (응답 {}B)", body.len()))
+    } else {
+        classify_http(status, body)
+    }
+}
+
 /// reqwest 전송 에러 → 분류. 네트워크/타임아웃은 일시적, 디코드 실패는 영구.
 pub(super) fn classify_reqwest(e: &reqwest::Error) -> CalendarError {
     if e.is_decode() {
@@ -116,7 +127,8 @@ impl HttpCalendarProvider {
     }
 
     /// Bearer PATCH(JSON body) → 빈 응답 OK(204) 또는 JSON. 200대가 아니면 분류된 에러.
-    /// 401/403/404 등은 Terminal로 노출. Today×Timeline PR 2 — 이벤트 부분 갱신.
+    /// 401/403은 Terminal로 노출. 404/410(stale mirror)은 `classify_patch_http`가 `NotFound`로
+    /// 승격 → 호출자가 mirror를 NULL로 sweep(ADR-0005). Today×Timeline PR 2 — 이벤트 부분 갱신.
     async fn patch_json(
         &self,
         url: &str,
@@ -134,7 +146,7 @@ impl HttpCalendarProvider {
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
         if !(200..300).contains(&status) {
-            return Err(classify_http(status, &text));
+            return Err(classify_patch_http(status, &text));
         }
         Ok(())
     }
@@ -355,6 +367,33 @@ mod tests {
         // 본문 스크럽(스펙 §5.5): 응답 본문 내용은 메시지에 노출되지 않는다.
         let CalendarError::Terminal(m) = classify_http(400, "SECRET_BODY_xyz") else {
             panic!("400 → Terminal");
+        };
+        assert!(!m.contains("SECRET_BODY_xyz"), "본문이 메시지에 새면 안 됨");
+    }
+
+    /// PATCH 분류: 404/410은 NotFound(stale mirror sweep), 그 외는 classify_http와 동일.
+    #[test]
+    fn classify_patch_http_promotes_404_410() {
+        assert!(matches!(
+            classify_patch_http(404, "gone"),
+            CalendarError::NotFound(_)
+        ));
+        assert!(matches!(
+            classify_patch_http(410, "gone"),
+            CalendarError::NotFound(_)
+        ));
+        // 그 외는 classify_http 위임: 401=Terminal, 429=Transient.
+        assert!(matches!(
+            classify_patch_http(401, "auth"),
+            CalendarError::Terminal(_)
+        ));
+        assert!(matches!(
+            classify_patch_http(429, "rate"),
+            CalendarError::Transient(_)
+        ));
+        // 본문 스크럽(스펙 §5.5): 응답 본문 내용은 메시지에 노출되지 않는다.
+        let CalendarError::NotFound(m) = classify_patch_http(404, "SECRET_BODY_xyz") else {
+            panic!("404 → NotFound");
         };
         assert!(!m.contains("SECRET_BODY_xyz"), "본문이 메시지에 새면 안 됨");
     }

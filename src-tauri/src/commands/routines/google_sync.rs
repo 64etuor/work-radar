@@ -17,7 +17,10 @@ use chrono::NaiveDate;
 use tauri::State;
 
 use crate::{
-    calendar::{build_event_payload, CalendarProvider, CreateEventInput, HttpCalendarProvider},
+    calendar::{
+        build_event_payload, CalendarError, CalendarProvider, CreateEventInput,
+        HttpCalendarProvider,
+    },
     commands::calendar::access_token_for,
     db::Db,
     error::AppError,
@@ -89,6 +92,32 @@ fn require_project_id(row: &RoutineSyncRow) -> Result<&str, AppError> {
             "프로젝트가 없는 루틴은 동기화할 수 없습니다",
         )
     })
+}
+
+/// stale mirror reactive sweep — `google_calendar_id`/`google_event_id`를 NULL out(ADR-0005
+/// "404 → sweep"). disable(DELETE 후 정리)와 PATCH 404 경로가 공유하는 단일 sync-pair 해제 SQL.
+async fn clear_google_mirror(db: &Db, routine_id: &str) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE routines SET google_calendar_id = NULL, google_event_id = NULL WHERE id = ?1",
+    )
+    .bind(routine_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// stale mirror(Google master가 외부에서 삭제됨)로 sync를 자동 해제했을 때의 terminal 에러.
+/// 코드(`SYNC_EXPIRED_CODE`)로 식별되며, 호출자 wrapper(patch_failed/exdate_patch_failed)는 이
+/// 코드를 마스킹하지 않고 그대로 통과시켜 "다시 켜세요" 안내가 토스트에 닿게 한다(generic
+/// patch_failed로 덮으면 재연결 안내가 손실). 로컬 변경(편집/exdate row)은 이미 커밋돼 유지된다.
+pub(crate) const SYNC_EXPIRED_CODE: &str = "routine.sync.expired";
+
+fn sync_expired() -> AppError {
+    AppError::terminal(
+        SYNC_EXPIRED_CODE,
+        "Google 캘린더에서 이 일정이 사라져 동기화를 자동 해제했습니다 — \
+         로컬 변경은 유지됩니다. 동기화를 다시 켜세요",
+    )
 }
 
 fn parse_freq(s: &str) -> Result<Freq, AppError> {
@@ -312,13 +341,7 @@ pub(crate) async fn disable_routine_sync_with_provider<P: CalendarProvider>(
     // 지금은 모든 에러 전파(보수적). 사용자가 토스트 보고 재시도.
     provider.delete_event(access_token, cal_id, evt_id).await?;
 
-    sqlx::query(
-        "UPDATE routines SET google_calendar_id = NULL, google_event_id = NULL WHERE id = ?1",
-    )
-    .bind(routine_id)
-    .execute(db)
-    .await?;
-    Ok(())
+    clear_google_mirror(db, routine_id).await
 }
 
 /// Provider injection helper — 다른 캘린더로 이동(PR 5, 단위 테스트용). Google API는 기존 이벤트의
@@ -411,10 +434,20 @@ pub(crate) async fn patch_routine_sync_with_provider<P: CalendarProvider>(
     // 별도 follow-up으로 둔다 — 필요 시 무시각 편집 시 sync 자동 해제 또는 편집 차단으로 처리.
     let create_input = build_master_event_input(db, routine_id, &row, tzid).await?;
     let payload = build_event_payload(&create_input);
-    provider
+    match provider
         .patch_event(access_token, cal_id, evt_id, &payload)
-        .await?;
-    Ok(())
+        .await
+    {
+        Ok(()) => Ok(()),
+        // stale mirror: Google master가 외부에서 삭제됨(404/410) → reactive sweep + 재연결 안내.
+        // ADR-0005 "404 → sweep". DELETE 경로의 멱등 처리와 대칭(거긴 Ok로 흡수, 여긴 진행 불가라
+        // sync를 해제하고 surface). NULL out 없이 두면 이후 모든 편집·"오늘 빼기"가 영구 실패한다.
+        Err(CalendarError::NotFound(_)) => {
+            clear_google_mirror(db, routine_id).await?;
+            Err(sync_expired())
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// 루틴 편집 후 동기화 전파(crud::update_routine에서 호출). 동기화 OFF면 토큰 조회 없이 no-op.
@@ -566,7 +599,12 @@ async fn delete_exdate_row(db: &Db, routine_id: &str, date: &str) -> Result<(), 
 
 /// 동기화 실패 wrap — 로컬 변경(exdate row)은 이미 적용됐음을 truthful하게 surface한다.
 /// 원본 detail은 메시지에 보존(PR 3 patch_failed와 동일 정책 — flatten하되 진실 유지).
+/// 단, stale mirror sweep(`routine.sync.expired`)은 마스킹하지 않고 그대로 통과 —
+/// "다시 켜세요" 재연결 안내가 토스트에 닿아야 한다.
 fn exdate_patch_failed(e: AppError) -> AppError {
+    if e.code == SYNC_EXPIRED_CODE {
+        return e;
+    }
     AppError::terminal(
         "routine.sync.exdate_patch_failed",
         format!(
@@ -1201,6 +1239,85 @@ mod tests {
         assert!(
             provider.patched.lock().unwrap().is_empty(),
             "미동기화 루틴은 patch_event 미호출"
+        );
+    }
+
+    /// patch: Google master가 외부에서 삭제됨(404 NotFound) → mirror를 NULL로 sweep + expired surface.
+    /// ADR-0005 reactive 경로. NULL out 없이 두면 이후 편집·"오늘 빼기"가 영구 실패한다(stale lock).
+    #[tokio::test]
+    async fn patch_404_sweeps_mirror_and_surfaces_expired() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "사라진 일정",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Tue],
+            Some("09:00".into()),
+            Some(Kind::Work),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_gone", "evt_gone").await;
+
+        let provider = RecordingProvider::default();
+        *provider.patch_result.lock().unwrap() =
+            Err(CalendarError::NotFound("HTTP 404 (응답 0B)".into()));
+
+        let err = patch_routine_sync_with_provider(&db, &provider, "tok", &rid, "Asia/Seoul")
+            .await
+            .expect_err("404 → expired");
+        assert_eq!(err.code, SYNC_EXPIRED_CODE, "stale mirror → sync 만료 코드");
+
+        // reactive sweep: mirror 양 컬럼이 NULL이어야 stale lock이 풀린다.
+        let row = load_routine(&db, &rid).await.unwrap();
+        assert!(row.google_event_id.is_none(), "google_event_id NULL out");
+        assert!(
+            row.google_calendar_id.is_none(),
+            "google_calendar_id NULL out"
+        );
+    }
+
+    /// 일반 PATCH 실패(Terminal)는 mirror를 건드리지 않고 전파(stale lock 아님 — 재시도 가능 상태 유지).
+    #[tokio::test]
+    async fn patch_terminal_failure_keeps_mirror() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "일시 실패",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Wed],
+            Some("09:00".into()),
+            Some(Kind::Work),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_keep", "evt_keep").await;
+
+        let provider = RecordingProvider::default();
+        *provider.patch_result.lock().unwrap() = Err(CalendarError::Terminal("boom".into()));
+
+        patch_routine_sync_with_provider(&db, &provider, "tok", &rid, "Asia/Seoul")
+            .await
+            .expect_err("Terminal 전파");
+        let row = load_routine(&db, &rid).await.unwrap();
+        assert_eq!(
+            row.google_event_id.as_deref(),
+            Some("evt_keep"),
+            "Terminal 실패는 mirror 유지"
+        );
+    }
+
+    /// exdate_patch_failed wrapper: expired는 그대로 통과(재연결 안내 보존), 그 외는 평탄화.
+    #[test]
+    fn exdate_patch_failed_passes_through_expired() {
+        let passed = exdate_patch_failed(sync_expired());
+        assert_eq!(
+            passed.code, SYNC_EXPIRED_CODE,
+            "expired는 마스킹되지 않고 통과"
+        );
+
+        let wrapped = exdate_patch_failed(AppError::terminal("calendar.terminal", "boom"));
+        assert_eq!(
+            wrapped.code, "routine.sync.exdate_patch_failed",
+            "그 외는 평탄화"
         );
     }
 
