@@ -1,6 +1,6 @@
 import "./SkillsView.css";
 
-import { Blocks, FileText, Plus, Save, Search, Trash2 } from "lucide-react";
+import { Blocks, FileText, LayoutGrid, List, Plus, Save, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { Skill } from "@/bindings";
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateSkill,
@@ -23,11 +24,15 @@ import {
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
+import { useStickyToggle } from "@/lib/useStickyToggle";
 import { useUIStore } from "@/store";
 
 /**
  * 스킬 공유 레지스트리 뷰 (Phase 20 #21). 인앱 에이전트 프롬프트(편집 가능 잡 템플릿)와 외부
  * Claude/Codex 스킬(~/.claude/skills)을 한 곳에서 보기/편집/추가/토글한다.
+ *
+ * 레이아웃은 skills-manager(오픈소스)에서 차용: 헤더(검색·grid/list 토글·추가) + 카드 그리드 +
+ * 슬라이드오버 Sheet(편집기/뷰어). 데이터 모델·커맨드·레일은 무변경(표현만 교체).
  *
  * INVARIANT #1/#2: 프롬프트 편집은 codex가 내는 *제안 내용*만 바꾼다. 잡은 여전히 제안 레일 +
  * Acceptance 게이트(awaiting_approval)를 거치고 accept는 suggested 필드/proposal만 쓴다 — 스킬을
@@ -40,6 +45,7 @@ export function SkillsView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
+  const [listView, setListView] = useStickyToggle("wr:skills:list-view");
 
   // 팔레트에서 스킬을 고르면 그 스킬을 선택(보기/편집)한다 — 한 번만 소비.
   // 동일 선택 핸들러(selectedId) 경로라 자동 실행은 없다(INVARIANT #1).
@@ -66,17 +72,61 @@ export function SkillsView() {
     );
   }, [list, search]);
   const segments = useMemo(() => segmentSkills(filtered), [filtered]);
+  const total = filtered.length;
 
   const selected = list.find((s) => s.id === selectedId) ?? null;
+  const sheetOpen = adding || !!selected;
+  const closeSheet = () => {
+    setAdding(false);
+    setSelectedId(null);
+  };
 
   return (
     <div className="skl">
       <header className="skl-head" data-tauri-drag-region>
         <span className="skl-title">스킬 레지스트리</span>
+        <span className="skl-count">{total}</span>
+      </header>
+
+      {/* 상호작용 컨트롤은 drag-region 밖 별도 툴바에(InboxView 선례) — 드래그가 입력/클릭을 삼키지 않도록. */}
+      <div className="skl-toolbar">
+        <div className="skl-search">
+          <Search className="size-3.5" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="스킬 검색"
+            aria-label="스킬 검색"
+          />
+        </div>
+
+        <div className="skl-viewtoggle" role="group" aria-label="보기 전환">
+          <Button
+            variant={listView ? "outline" : "default"}
+            size="sm"
+            className="rounded-full px-2.5"
+            aria-pressed={!listView}
+            aria-label="그리드 보기"
+            onClick={() => setListView(false)}
+          >
+            <LayoutGrid className="size-4" />
+          </Button>
+          <Button
+            variant={listView ? "default" : "outline"}
+            size="sm"
+            className="rounded-full px-2.5"
+            aria-pressed={listView}
+            aria-label="리스트 보기"
+            onClick={() => setListView(true)}
+          >
+            <List className="size-4" />
+          </Button>
+        </div>
+
         <Button
           variant="outline"
           size="sm"
-          className="ml-auto gap-1.5 rounded-full"
+          className="gap-1.5 rounded-full"
           onClick={() => {
             setAdding(true);
             setSelectedId(null);
@@ -85,37 +135,33 @@ export function SkillsView() {
           <Plus className="size-4" />
           인앱 프롬프트 추가
         </Button>
-      </header>
+      </div>
 
       <div className="skl-body">
-        <aside className="skl-list">
-          <div className="skl-search">
-            <Search className="size-3.5" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="스킬 검색"
-              aria-label="스킬 검색"
-            />
+        {skills.isError && (
+          <div className="skl-note err">
+            레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
           </div>
-          {skills.isError && (
-            <div className="skl-note err">
-              레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
+        )}
+        {!skills.isError && total === 0 && (
+          <div className="skl-empty">
+            {search.trim()
+              ? "검색 결과가 없습니다."
+              : "스킬이 없습니다. 인앱 프롬프트를 추가하거나 ~/.claude/skills에 스킬을 두세요."}
+          </div>
+        )}
+        {segments.map((segment) => (
+          <section key={segment.key} className="skl-section">
+            <div className="skl-group-label">
+              {segment.label}
+              <span>{segment.health}</span>
             </div>
-          )}
-          {segments.map((segment) => (
-            <div key={segment.key}>
-              <div className="skl-group-label">
-                {segment.label}
-                <span>{segment.health}</span>
-              </div>
-              {segment.skills.length === 0 && (
-                <div className="skl-empty-sm">해당 스킬이 없습니다.</div>
-              )}
+            <div className={cn("skl-cards", listView ? "list" : "grid")}>
               {segment.skills.map((s) => (
-                <SkillRow
+                <SkillCard
                   key={s.id}
                   skill={s}
+                  listView={listView}
                   active={s.id === selectedId}
                   onSelect={() => {
                     setSelectedId(s.id);
@@ -124,28 +170,38 @@ export function SkillsView() {
                 />
               ))}
             </div>
-          ))}
-        </aside>
-
-        <section className="skl-detail">
-          {adding ? (
-            <CreatePanel
-              onDone={(id) => {
-                setAdding(false);
-                if (id) setSelectedId(id);
-              }}
-            />
-          ) : selected?.kind === "in_app_prompt" ? (
-            <InAppEditor key={selected.id} skill={selected} />
-          ) : selected?.kind === "external" ? (
-            <ExternalViewer key={selected.id} skill={selected} />
-          ) : (
-            <div className="skl-empty">
-              왼쪽에서 스킬을 선택해 보기/편집하거나, 인앱 프롬프트를 추가하세요.
-            </div>
-          )}
-        </section>
+          </section>
+        ))}
       </div>
+
+      <Sheet open={sheetOpen} onOpenChange={(o) => !o && closeSheet()}>
+        {sheetOpen && (
+          <SheetContent className="skl-sheet">
+            <SheetTitle className="skl-sheet-kind">
+              {adding
+                ? "인앱 프롬프트 추가"
+                : selected?.kind === "external"
+                  ? "외부 스킬"
+                  : "인앱 프롬프트"}
+            </SheetTitle>
+            <div className="skl-sheet-body">
+              {adding ? (
+                <CreatePanel
+                  onDone={(id) => {
+                    setAdding(false);
+                    if (id) setSelectedId(id);
+                    else closeSheet();
+                  }}
+                />
+              ) : selected?.kind === "in_app_prompt" ? (
+                <InAppEditor key={selected.id} skill={selected} />
+              ) : selected?.kind === "external" ? (
+                <ExternalViewer key={selected.id} skill={selected} />
+              ) : null}
+            </div>
+          </SheetContent>
+        )}
+      </Sheet>
     </div>
   );
 }
@@ -186,40 +242,54 @@ function segmentSkills(skills: Skill[]) {
       match: (s: Skill) => s.kind === "in_app_prompt" && !!s.binding,
     },
   ];
-  return defs.map((def) => {
-    const group = skills.filter(def.match);
-    return {
-      key: def.key,
-      label: def.label,
-      health: `${group.filter((s) => s.enabled).length}/${group.length}`,
-      skills: group.sort((a, b) => a.name.localeCompare(b.name)),
-    };
-  });
+  return defs
+    .map((def) => {
+      const group = skills.filter(def.match);
+      return {
+        key: def.key,
+        label: def.label,
+        health: `${group.filter((s) => s.enabled).length}/${group.length}`,
+        skills: group.sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    })
+    .filter((seg) => seg.skills.length > 0);
 }
 
-/** 목록의 한 줄(인앱/외부 공통). 인앱은 binding·enabled 배지, 외부는 경로 표시. */
-function SkillRow({
+/** /Users/<me> 접두를 ~로 축약(외부 스킬 경로 표시용). */
+function compactPath(path: string): string {
+  return path.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
+}
+
+/** 레지스트리 카드(인앱/외부 공통). 클릭하면 Sheet로 보기/편집. grid/list 두 변형. */
+function SkillCard({
   skill,
+  listView,
   active,
   onSelect,
 }: {
   skill: Skill;
+  listView: boolean;
   active: boolean;
   onSelect: () => void;
 }) {
   const isInApp = skill.kind === "in_app_prompt";
+  const Icon = isInApp ? Blocks : FileText;
+  const desc = (skill.prompt ?? "").trim();
+  const sub = isInApp ? skill.binding : skill.sourcePath ? compactPath(skill.sourcePath) : null;
+
   return (
-    <button type="button" className={cn("skl-row", active && "active")} onClick={onSelect}>
-      {isInApp ? (
-        <Blocks className="skl-row-ico size-4" />
-      ) : (
-        <FileText className="skl-row-ico size-4" />
-      )}
-      <span className="skl-row-main">
-        <span className="skl-row-name">{skill.name}</span>
-        {isInApp && skill.binding && <span className="skl-row-bind">{skill.binding}</span>}
+    <button
+      type="button"
+      className={cn("skl-card", listView ? "list" : "grid", active && "active")}
+      onClick={onSelect}
+    >
+      <span className="skl-card-top">
+        <Icon className="skl-card-ico size-4" />
+        <span className="skl-card-name">{skill.name}</span>
+        {isInApp && !skill.enabled && <span className="skl-card-off">꺼짐</span>}
       </span>
-      {isInApp && !skill.enabled && <span className="skl-row-off">꺼짐</span>}
+      {sub && <span className="skl-card-sub">{sub}</span>}
+      {desc && <span className="skl-card-desc">{desc}</span>}
     </button>
   );
 }
