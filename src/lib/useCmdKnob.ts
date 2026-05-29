@@ -11,8 +11,8 @@ const MODIFIER_KEYS = new Set(["Meta", "Control", "Alt", "Shift"]);
 
 type TriggerMods = { ctrl: boolean; meta: boolean; alt: boolean; shift: boolean };
 
-/** "Cmd+Shift" 류 트리거 spec → 모디파이어 집합. 빈 값/무효는 Cmd 단독으로 폴백. */
-function parseTrigger(spec: string | undefined): TriggerMods {
+/** "Cmd+Shift" 류 트리거 spec → 모디파이어 집합. 빈 값/무효는 Cmd 단독으로 폴백. (테스트용 export) */
+export function parseTrigger(spec: string | undefined): TriggerMods {
   const mods: TriggerMods = { ctrl: false, meta: false, alt: false, shift: false };
   const parts = (spec && spec.trim() ? spec : KNOB_TRIGGER_DEFAULT)
     .split("+")
@@ -28,8 +28,11 @@ function parseTrigger(spec: string | undefined): TriggerMods {
   return mods;
 }
 
-/** 이벤트의 현재 모디파이어 상태가 트리거와 정확히 일치하는가(추가 모디파이어 없음). */
-function modsExactlyMatch(e: KeyboardEvent, t: TriggerMods): boolean {
+/** 이벤트의 현재 모디파이어 상태가 트리거와 정확히 일치하는가(추가 모디파이어 없음). (테스트용 export) */
+export function modsExactlyMatch(
+  e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean },
+  t: TriggerMods,
+): boolean {
   return (
     e.ctrlKey === t.ctrl && e.metaKey === t.meta && e.altKey === t.alt && e.shiftKey === t.shift
   );
@@ -48,8 +51,6 @@ export interface CmdKnobState {
   dirEnabled: Record<KnobDir, boolean>;
   /** 방향 발사: 그 방향에 설정된 combo를 dispatch. 미설정이면 no-op. */
   fire: (dir: KnobDir) => void;
-  /** 강제 해제(드래그 취소 등). */
-  dismiss: () => void;
 }
 
 /**
@@ -81,14 +82,6 @@ export function useCmdKnob(): CmdKnobState {
     down: !!(keymap.data?.knob_down ?? "").trim(),
     left: !!(keymap.data?.knob_left ?? "").trim(),
     right: !!(keymap.data?.knob_right ?? "").trim(),
-  };
-
-  const dismiss = () => {
-    if (dwellTimerRef.current !== null) {
-      window.clearTimeout(dwellTimerRef.current);
-      dwellTimerRef.current = null;
-    }
-    if (visibleRef.current) setVisible(false);
   };
 
   const fire = (dir: KnobDir) => {
@@ -151,24 +144,30 @@ export function useCmdKnob(): CmdKnobState {
       }
     };
 
+    // 포커스 상실/창 비활성/탭 전환(Cmd+Tab 등) — 모디파이어 keyup을 놓쳐도 knob이 갇히지 않게.
     const onBlur = () => {
       cancelDwell();
       downNonModRef.current = false;
       if (visibleRef.current) setVisible(false);
+    };
+    const onVisibility = () => {
+      if (document.hidden) onBlur();
     };
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
       cancelDwell();
     };
   }, []);
 
-  return { visible, origin, dirEnabled, fire, dismiss };
+  return { visible, origin, dirEnabled, fire };
 }
