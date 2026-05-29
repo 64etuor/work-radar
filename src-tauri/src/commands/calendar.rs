@@ -562,6 +562,7 @@ pub async fn create_calendar_event(
             .description
             .map(|d| d.trim().to_string())
             .filter(|d| !d.is_empty()),
+        ..Default::default()
     };
     let provider = calendar::HttpCalendarProvider::new()?;
     let (id, url) = provider.create_event(&access, &calendar_id, &input).await?;

@@ -7,29 +7,54 @@ use super::CalendarError;
 
 /// 카드 → 캘린더 이벤트 생성 입력(사용자 폼). title은 카드에서 prefill, start/end는 RFC3339(timed)
 /// 또는 YYYY-MM-DD(all-day). description은 선택. 토큰/외부 ID 미포함(write 입력만). 순수 페이로드로 변환된다.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// 반복 이벤트(루틴 master): `recurrence`에 ["RRULE:...", "EXDATE;TZID=...:..."] 라인 전달 + `time_zone`
+/// 세팅 (Google API는 recurring 시 `start.timeZone`/`end.timeZone` 별도 필드를 요구하고 `start.dateTime`은
+/// offset 없는 wall-clock 'YYYY-MM-DDTHH:MM:SS'). 비반복(기존)은 `recurrence=vec![]`, `time_zone=None`
+/// 유지 — `start/end`는 종전대로 offset 포함 RFC3339.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CreateEventInput {
     pub title: String,
-    /// timed = RFC3339(`2026-05-22T09:00:00+09:00`), all-day = YYYY-MM-DD.
+    /// timed = RFC3339(`2026-05-22T09:00:00+09:00`) 또는 wall-clock(`2026-05-22T09:00:00`, recurring), all-day = YYYY-MM-DD.
     pub start: String,
     pub end: String,
     pub all_day: bool,
     pub description: Option<String>,
+    /// 빈 vec = 비반복. 비어있지 않으면 `recurrence` 배열로 직렬화.
+    pub recurrence: Vec<String>,
+    /// recurring 이벤트의 IANA timezone (e.g. `Asia/Seoul`). None = legacy(non-recurring, offset 포함 start/end).
+    pub time_zone: Option<String>,
 }
 
 /// Google Calendar `events.insert` 요청 본문(JSON). all-day는 `start.date`/`end.date`,
-/// timed는 `start.dateTime`/`end.dateTime`. description은 비었으면 생략. 순수 — 단위 테스트 대상.
+/// timed는 `start.dateTime`/`end.dateTime`. description은 비었으면 생략.
+/// recurrence/time_zone이 주어지면 반복 이벤트로 직렬화. 순수 — 단위 테스트 대상.
 pub fn build_event_payload(input: &CreateEventInput) -> serde_json::Value {
     let key = if input.all_day { "date" } else { "dateTime" };
+    let mut start = serde_json::json!({ key: input.start });
+    let mut end = serde_json::json!({ key: input.end });
+    if let Some(tz) = input.time_zone.as_deref() {
+        start["timeZone"] = serde_json::Value::String(tz.to_string());
+        end["timeZone"] = serde_json::Value::String(tz.to_string());
+    }
     let mut body = serde_json::json!({
         "summary": input.title,
-        "start": { key: input.start },
-        "end": { key: input.end },
+        "start": start,
+        "end": end,
     });
     if let Some(desc) = input.description.as_deref() {
         if !desc.is_empty() {
             body["description"] = serde_json::Value::String(desc.to_string());
         }
+    }
+    if !input.recurrence.is_empty() {
+        body["recurrence"] = serde_json::Value::Array(
+            input
+                .recurrence
+                .iter()
+                .map(|s| serde_json::Value::String(s.clone()))
+                .collect(),
+        );
     }
     body
 }
@@ -64,6 +89,7 @@ mod tests {
             end: "2026-05-22T15:00:00+09:00".into(),
             all_day: false,
             description: Some("Q2 폴리시".into()),
+            ..Default::default()
         };
         let body = build_event_payload(&input);
         assert_eq!(body["summary"], "디자인 리뷰");
@@ -72,6 +98,9 @@ mod tests {
         assert_eq!(body["description"], "Q2 폴리시");
         // all-day 키는 없어야 한다.
         assert!(body["start"].get("date").is_none());
+        // 기본은 비반복 — recurrence/timeZone 키 없음.
+        assert!(body.get("recurrence").is_none());
+        assert!(body["start"].get("timeZone").is_none());
     }
 
     /// all-day 이벤트: start/end.date(YYYY-MM-DD), description 비었으면 생략.
@@ -83,6 +112,7 @@ mod tests {
             end: "2026-05-23".into(),
             all_day: true,
             description: None,
+            ..Default::default()
         };
         let body = build_event_payload(&input);
         assert_eq!(body["start"]["date"], "2026-05-22");
@@ -101,6 +131,31 @@ mod tests {
         assert!(build_event_payload(&empty_desc)
             .get("description")
             .is_none());
+    }
+
+    /// 반복 이벤트(루틴 master): recurrence 배열 + start/end.timeZone 직렬화. start/end는 wall-clock.
+    #[test]
+    fn build_event_payload_recurring_with_timezone_and_exdate() {
+        let input = CreateEventInput {
+            title: "아침 운동".into(),
+            start: "2026-05-29T07:00:00".into(),
+            end: "2026-05-29T07:30:00".into(),
+            all_day: false,
+            description: None,
+            recurrence: vec![
+                "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR".into(),
+                "EXDATE;TZID=Asia/Seoul:20260601T070000".into(),
+            ],
+            time_zone: Some("Asia/Seoul".into()),
+        };
+        let body = build_event_payload(&input);
+        assert_eq!(body["start"]["dateTime"], "2026-05-29T07:00:00");
+        assert_eq!(body["start"]["timeZone"], "Asia/Seoul");
+        assert_eq!(body["end"]["timeZone"], "Asia/Seoul");
+        let rec = body["recurrence"].as_array().expect("recurrence array");
+        assert_eq!(rec.len(), 2);
+        assert_eq!(rec[0], "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR");
+        assert_eq!(rec[1], "EXDATE;TZID=Asia/Seoul:20260601T070000");
     }
 
     /// 생성 응답 파싱: id + htmlLink, htmlLink 누락 관용, id 누락=Terminal.

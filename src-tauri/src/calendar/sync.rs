@@ -372,6 +372,7 @@ fn parse_create_input(payload: &str) -> Result<CreateEventInput, SyncError> {
         end,
         all_day,
         description,
+        ..Default::default()
     })
 }
 
