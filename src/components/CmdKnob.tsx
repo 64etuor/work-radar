@@ -3,7 +3,7 @@ import "./CmdKnob.css";
 import { useEffect, useRef, useState } from "react";
 
 import { armedDirection, clampToThrow, type KnobDir } from "@/lib/knobGeometry";
-import { KNOB_DBG, useCmdKnob } from "@/lib/useCmdKnob";
+import { useCmdKnob } from "@/lib/useCmdKnob";
 
 const THROW_RADIUS = 46; // px — 스틱 최대 편향
 const ARM_RATIO = 0.55; // 임계 = 반경 * 0.55
@@ -68,33 +68,7 @@ export function CmdKnob() {
     };
   }, [visible]);
 
-  // TEMP DEBUG HUD (knob 진단용 — 진단 후 제거). 250ms 폴링으로 KNOB_DBG 링버퍼 표시.
-  const [, forceTick] = useState(0);
-  useEffect(() => {
-    const id = window.setInterval(() => forceTick((n) => n + 1), 250);
-    return () => window.clearInterval(id);
-  }, []);
-  const hud = import.meta.env.DEV ? (
-    <div
-      style={{
-        position: "fixed",
-        top: 4,
-        left: 4,
-        zIndex: 99999,
-        background: "rgba(0,0,0,0.85)",
-        color: "#0f0",
-        font: "11px monospace",
-        padding: "4px 6px",
-        whiteSpace: "pre",
-        pointerEvents: "none",
-        maxWidth: "70vw",
-      }}
-    >
-      {`knob vis=${visible}\n` + KNOB_DBG.slice(-7).join("\n")}
-    </div>
-  ) : null;
-
-  if (!visible) return hud;
+  if (!visible) return null;
 
   // 드래그 중이 아닐 땐 항상 중앙(스프링백 + 세션 간 stale 방지) — raw state는 드래그 중에만 반영.
   const shown = dragging ? offset : CENTER;
@@ -103,45 +77,42 @@ export function CmdKnob() {
   const tiltY = (shown.x / THROW_RADIUS) * TILT_DEG;
 
   return (
-    <>
-      {hud}
-      <div
-        className="cmd-knob"
-        style={{ left: origin.x, top: origin.y }}
-        role="presentation"
-        aria-hidden
-      >
-        <div className="cmd-knob-base">
-          {(Object.keys(GLYPH) as KnobDir[]).map((dir) => (
-            <span
-              key={dir}
-              className="cmd-knob-guide"
-              data-dir={dir}
-              data-enabled={dirEnabled[dir] || undefined}
-              data-armed={shownArmed === dir || undefined}
-            >
-              {GLYPH[dir]}
-            </span>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="cmd-knob-stick"
-          data-dragging={dragging || undefined}
-          style={{
-            transform: `translate(-50%, -50%) translate(${shown.x}px, ${shown.y}px) perspective(220px) rotateX(${-tiltX}deg) rotateY(${tiltY}deg)`,
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            draggingRef.current = true;
-            armedRef.current = null;
-            setOffset(CENTER);
-            setArmed(null);
-            setDragging(true);
-          }}
-          aria-label="조이스틱 — 방향으로 밀어 단축키 실행"
-        />
+    <div
+      className="cmd-knob"
+      style={{ left: origin.x, top: origin.y }}
+      role="presentation"
+      aria-hidden
+    >
+      <div className="cmd-knob-base">
+        {(Object.keys(GLYPH) as KnobDir[]).map((dir) => (
+          <span
+            key={dir}
+            className="cmd-knob-guide"
+            data-dir={dir}
+            data-enabled={dirEnabled[dir] || undefined}
+            data-armed={shownArmed === dir || undefined}
+          >
+            {GLYPH[dir]}
+          </span>
+        ))}
       </div>
-    </>
+      <button
+        type="button"
+        className="cmd-knob-stick"
+        data-dragging={dragging || undefined}
+        style={{
+          transform: `translate(-50%, -50%) translate(${shown.x}px, ${shown.y}px) perspective(220px) rotateX(${-tiltX}deg) rotateY(${tiltY}deg)`,
+        }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          draggingRef.current = true;
+          armedRef.current = null;
+          setOffset(CENTER);
+          setArmed(null);
+          setDragging(true);
+        }}
+        aria-label="조이스틱 — 방향으로 밀어 단축키 실행"
+      />
+    </div>
   );
 }
