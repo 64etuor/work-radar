@@ -309,15 +309,14 @@ monthly 패턴 미지정 시 enable에서 `day_of_month` 기본(로컬 due-calc 
 
 ### 다음 작업 (우선순위 순)
 
-1. **⚠️ cmux Esc 라이브 스모크** (deferred, blocking-ish) — PR 2b-2의 RoutineSyncButton popover를
-   보드에서 열고 Esc → 창이 안 숨고 popover만 닫히는지 확인(`docs/areas/shadcn-migration.md` §52-58).
-   헤드리스에서 실행 못 했음. **인터랙티브 세션 필수.** (overlay-stack 단위계약+select.tsx 동일 패턴으로
-   결정적 근거는 있으나 라이브 미확인.) PR 2b-3은 native `<select>` 없이 버튼 행으로 구현해 새 overlay를
-   추가하지 않았으므로 이 스모크 범위는 2b-2 popover 그대로.
+1. ✅ **cmux Esc 라이브 스모크 통과**(2026-05-29) — 워크트리 앱(`pnpm tauri dev`)을 cmux pane에서
+   띄워 RoutineSyncButton popover 열고 Esc → popover만 닫히고 창은 유지됨(사용자 라이브 확인). 해소됨.
 2. **PR 4** — 오늘 unschedule = EXDATE PATCH(§5 PR 4). `routine_exdates` row 쓰기 + sync ON이면
    master event EXDATE PATCH + EventPopover 라벨("오늘 타임라인에서 빼기"). PR 3의
    `build_master_event_input`이 이미 EXDATE를 재읽어 PATCH에 동봉하므로 PR 4는 exdate row + 흐름 위주.
 3. **PR 5** — invariant 가드 + 캘린더 이동/삭제 경로(§5 PR 5).
+4. (follow-up, 비차단) sync된 루틴의 시간을 편집으로 비우면 PATCH가 09:00 fallback으로 재구성 —
+   무시각 편집 시 sync 자동 해제 또는 편집 차단으로 처리(`patch_routine_sync_with_provider` NOTE 참조).
 
 > **PR 2b-3 완료 노트**: monthly nth_weekday 편집 UI + IPC-boundary 검증(`crud::validate_monthly_input`)
 >

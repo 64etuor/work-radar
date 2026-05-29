@@ -218,6 +218,20 @@ pub(crate) async fn enable_routine_sync_with_provider<P: CalendarProvider>(
         ));
     }
 
+    // 시간 미지정 루틴은 동기화 거부 — 시간 없으면 09:00 fallback으로 화면/캘린더가 어긋난다.
+    // 프런트 RoutineSyncButton도 동일 가드(무시각이면 토글 비활성)이고, 여기서 재검증한다.
+    if row
+        .time_of_day
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .is_none()
+    {
+        return Err(AppError::validation(
+            "routine.sync.time_required",
+            "동기화하려면 먼저 루틴 시간을 지정하세요",
+        ));
+    }
+
     let create_input = build_master_event_input(db, routine_id, &row, tzid).await?;
     let (event_id, _html_link) = provider
         .create_event(access_token, calendar_id, &create_input)
@@ -286,6 +300,9 @@ pub(crate) async fn patch_routine_sync_with_provider<P: CalendarProvider>(
         // 미동기화 — PATCH 불요(멱등).
         return Ok(());
     };
+    // NOTE(deferred): enable은 무시각 루틴을 time_required로 거부하지만, 이미 sync된 루틴의 시간을
+    // 편집으로 비우면 이 PATCH가 09:00 fallback으로 재구성한다(silent, non-destructive). 드문 시퀀스라
+    // 별도 follow-up으로 둔다 — 필요 시 무시각 편집 시 sync 자동 해제 또는 편집 차단으로 처리.
     let create_input = build_master_event_input(db, routine_id, &row, tzid).await?;
     let payload = build_event_payload(&create_input);
     provider
@@ -599,6 +616,68 @@ mod tests {
         assert_eq!(proj.as_deref(), Some("proj_personal"), "project_id도 set");
         assert_eq!(cal_id.as_deref(), Some("cal_user_a"));
         assert_eq!(evt_id.as_deref(), Some("evt_master_1"));
+    }
+
+    /// enable: 시간 미지정 루틴은 time_required로 거부 (09:00 fallback 어긋남 방지). provider 미호출.
+    #[tokio::test]
+    async fn enable_rejects_when_no_time() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "무시각 루틴",
+            RoutineFreq::Daily,
+            vec![],
+            None, // time_of_day 없음
+            Some(Kind::Personal),
+        )
+        .await;
+        let provider = RecordingProvider::default();
+        let err = enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "routine.sync.time_required");
+        assert!(
+            provider.created.lock().unwrap().is_empty(),
+            "무시각 루틴은 create_event 미호출"
+        );
+
+        // 방어적 trim 검증: 정상 insert는 공백을 NULL로 정규화하므로, DB에 공백 문자열이
+        // 직접 들어간 경우(이론상 경로)에도 guard가 무시각으로 취급하는지 직접 UPDATE로 확인.
+        let blank = seed_routine(
+            &db,
+            "공백시각 루틴",
+            RoutineFreq::Daily,
+            vec![],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query("UPDATE routines SET time_of_day = '   ' WHERE id = ?1")
+            .bind(&blank)
+            .execute(&db)
+            .await
+            .unwrap();
+        let err2 = enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &blank,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err2.code, "routine.sync.time_required");
     }
 
     /// enable: 개인 루틴 → 업무 프로젝트는 kind_mismatch로 거부 (교차 노출 차단). provider 미호출.

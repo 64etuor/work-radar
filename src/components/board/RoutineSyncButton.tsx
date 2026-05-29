@@ -25,6 +25,11 @@ type Props = {
 export function RoutineSyncButton({ routine, projects, onEnable, onDisable, busy }: Props) {
   const [open, setOpen] = useState(false);
   const synced = routine.googleCalendarId != null;
+  // 시간 미지정 루틴은 Google 이벤트로 만들 의미가 없다(시간 없으면 09:00 fallback으로 어긋남).
+  // 아직 sync 안 된 무시각 루틴은 토글 비활성 — 시간을 먼저 지정하게 유도. (이미 sync된 경우는
+  // 해제할 수 있어야 하므로 유지.) 백엔드 enable도 동일 가드(routine.sync.time_required).
+  const noTime = routine.timeOfDay == null || routine.timeOfDay.trim() === "";
+  const disabledNoTime = !synced && noTime;
 
   // 루틴 kind와 같은 kind의 프로젝트가 설정에서 고른 캘린더들 = sync 후보(순수 로직 — routineSync.ts).
   const candidates = useMemo(
@@ -43,10 +48,22 @@ export function RoutineSyncButton({ routine, projects, onEnable, onDisable, busy
         <button
           type="button"
           className={cn("ract", synced && "synced")}
-          title={synced ? "Google 동기화 중" : "Google 캘린더 동기화"}
-          aria-label={synced ? "Google 동기화 설정" : "Google 캘린더 동기화"}
+          title={
+            disabledNoTime
+              ? "동기화하려면 먼저 루틴 시간을 지정하세요"
+              : synced
+                ? "Google 동기화 중"
+                : "Google 캘린더 동기화"
+          }
+          aria-label={
+            disabledNoTime
+              ? "Google 캘린더 동기화 — 먼저 루틴 시간을 지정하세요"
+              : synced
+                ? "Google 동기화 설정"
+                : "Google 캘린더 동기화"
+          }
           aria-pressed={synced}
-          disabled={busy}
+          disabled={busy || disabledNoTime}
         >
           {synced ? <CalendarCheck className="size-3.5" /> : <CalendarPlus className="size-3.5" />}
         </button>
