@@ -28,10 +28,14 @@
 
 ## 2. Schema 델타 (PR 1)
 
+> ⚠️ **마이그레이션 번호**: dev에 `0036_agent_runs_acked_at.sql`가 이미 머지됨(4852d37).
+> → 이 변경은 **`0037_routines_google_sync.sql`**.
+
 ```sql
--- 0036_routines_google_sync.sql
+-- 0037_routines_google_sync.sql
 
 -- 1) routines에 sync 필드 + 풍부 monthly 패턴 + duration 추가
+--    sync-pair invariant는 SQLite row-level CHECK으로 enforce (drift 차단).
 ALTER TABLE routines ADD COLUMN google_calendar_id TEXT;       -- NULL = local-only
 ALTER TABLE routines ADD COLUMN google_event_id TEXT;          -- master recurring event id
 ALTER TABLE routines ADD COLUMN duration_min INTEGER;          -- NULL → fallback 30
@@ -40,6 +44,15 @@ ALTER TABLE routines ADD COLUMN monthly_pattern TEXT
 ALTER TABLE routines ADD COLUMN monthly_nth_week INTEGER
   CHECK (monthly_nth_week IS NULL OR (monthly_nth_week BETWEEN -1 AND 5 AND monthly_nth_week != 0));
 -- nth_week: 1=첫째, 2=둘째, 3=셋째, 4=넷째, 5=다섯째(존재 시), -1=마지막
+
+-- NOTE: ALTER TABLE ADD COLUMN ... CHECK 제약은 0011처럼 rebuild 패턴이 필요할 수 있음.
+-- sync-pair invariant는 0011 패턴을 따라 routines_new 재작성으로 추가:
+--   CHECK (
+--     (google_event_id IS NULL AND google_calendar_id IS NULL)
+--     OR (google_event_id IS NOT NULL AND google_calendar_id IS NOT NULL)
+--   )
+-- PR 1 시작 시 ALTER vs rebuild 비용 비교 — 신규 컬럼만 추가하므로 ALTER로 충분하면
+-- application-level 가드로 합의(0011 rebuild 비용 회피). 결정은 ADR에 한 줄.
 
 -- 2) EXDATE 저장(local SSOT) — Google EXDATE와 양방향 일치
 CREATE TABLE routine_exdates (
@@ -53,7 +66,13 @@ CREATE INDEX idx_routine_exdates_routine ON routine_exdates(routine_id);
 
 **선후 가드**:
 - `monthly_pattern='nth_weekday'` 일 때 application-level 검증: `monthly_nth_week IS NOT NULL` + `weekdays`가 정확히 1개 요소.
-- `google_event_id IS NOT NULL` ↔ `google_calendar_id IS NOT NULL` (한쪽만 있으면 inconsistent).
+- `google_event_id IS NOT NULL` ↔ `google_calendar_id IS NOT NULL` — rebuild 채택 시 CHECK, 아니면 application + 테스트.
+- biweekly: `anchor_date`는 `weekdays` 중 하나의 요일이어야 하고 그 자체가 ON week이어야 함 (PR 1 RRule 매핑에서 normalize, 단위 테스트 포함).
+
+**모듈 경로 (신규)**:
+- `src-tauri/src/routines/` 신규 모듈 디렉터리 생성 — `mod.rs` + `rrule.rs` (PR 1) + `google.rs` (PR 2~).
+- 모델은 기존 `src-tauri/src/models/routines.rs` 유지(신규 컬럼 필드 추가).
+- IPC는 기존 `src-tauri/src/commands/routines/` 유지(신규 명령 파일 추가).
 
 ---
 
@@ -71,6 +90,10 @@ pub struct RRuleSpec {
 }
 
 pub fn routine_to_rrule(r: &Routine, exdates: &[String]) -> Result<RRuleSpec, RRuleError>;
+
+// EXDATE 변환 헬퍼: routine_exdates.date('YYYY-MM-DD') + routine.time_of_day('HH:MM')
+// → EXDATE local format 'YYYYMMDDTHHMMSS'. NULL time → 09:00 fallback (DTSTART와 일치).
+pub fn exdate_local(date_ymd: &str, time_hm: Option<&str>) -> Result<String, RRuleError>;
 ```
 
 ### 매핑 표
@@ -87,14 +110,14 @@ pub fn routine_to_rrule(r: &Routine, exdates: &[String]) -> Result<RRuleSpec, RR
 ### 요일 코드 매핑
 `["sun","mon","tue","wed","thu","fri","sat"]` → `["SU","MO","TU","WE","TH","FR","SA"]` (상수 함수)
 
-### 단위 테스트 매트릭스 (~14개)
-- daily 기본 / DST 전환일 ("2026-03-08" US DST 진입)
+### 단위 테스트 매트릭스 (~15개)
+- daily 기본 / 자정 경계 (`time_of_day=00:00`, `23:59`) — KST(no DST) 정합 회귀.
 - weekly 단일 요일 / 복수 요일 / 모든 요일(=daily 의미)
-- biweekly anchor 주 / off-week / anchor 변경
+- biweekly anchor 주 (ON week, weekdays 중 하나) / off-week (validation error) / anchor 변경
 - monthly day_of_month: 1일 / 15일 / 31일(2월 처리는 Google이 알아서 — RRULE은 그대로 전달)
 - monthly nth_weekday: 2nd Tue / 1st Mon / -1st Fri
 - monthly nth_weekday 5번째 존재 안 함 (RRULE 그대로 전달, Google이 skip)
-- EXDATE 1건 + 다중 + 정렬 보장
+- EXDATE 1건 + 다중 + 정렬 보장 + `exdate_local` 헬퍼 (`time_of_day` NULL→09:00 fallback)
 
 ---
 
@@ -168,12 +191,17 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 
 **검증**: routine without sync(local) / with sync 양쪽 unschedule 후 Google 호출 여부 확인.
 
-### PR 5 — 백필 + invariant 가드
-- 기존 linkedEventId가 있던 루틴 sweep → `google_calendar_id` + `google_event_id` 채움 (백필 마이그레이션 또는 startup hook)
-- Settings UI: sync ON 루틴의 calendar_id 변경 시 (다른 캘린더로 이동) 명시 confirm
-- Routine 삭제 시: sync ON이면 Google master event 먼저 DELETE → 실패 시 confirm "Google 삭제 실패. 로컬만 지울까요?"
+### PR 5 — invariant 가드 + 이동/삭제 경로
+> ⚠️ **백필 없음**: `routine_checks.linked_event_id`는 **per-instance 이벤트 ID**(그날 batch write 단일)
+> 라서 master recurring event id로 백필할 수 없다. 첫 sync ON 시 신규 master event CREATE만 한다.
+> per-instance routine_checks 흐름은 건드리지 않는다.
 
-**검증**: 백필 멱등성 (재실행해도 같은 결과). DELETE 실패 경로 토스트.
+- Settings UI: sync ON 루틴의 calendar_id 변경 시 (다른 캘린더로 이동) 명시 confirm
+  → Google API 제약상 PATCH로 calendarId 못 바꿈 → DELETE 옛 master + CREATE 새 master.
+- Routine 삭제 시: sync ON이면 Google master event 먼저 DELETE → 실패 시 confirm "Google 삭제 실패. 로컬만 지울까요?"
+- Invariant 가드 회귀 테스트: `google_event_id ↔ google_calendar_id` pair, monthly_pattern 가드.
+
+**검증**: 캘린더 이동(DELETE+CREATE 라운드트립) / DELETE 실패 경로 토스트 / pair invariant 위반 차단.
 
 ---
 
@@ -188,16 +216,20 @@ DELETE /calendar/v3/calendars/{calId}/events/{eventId}
 
 ## 7. 결정 갱신 로그 위치
 
-- 구조적 결정 (PATCH vs DELETE+CREATE, RRULE subset 등) → `docs/adr/ADR-NNNN-routine-google-sync.md` (PR 1 함께)
-- 작은 Phase 트레이드오프 → `docs/decisions.md`에 한 줄씩
+- 구조적 결정 (PATCH vs DELETE+CREATE, opt-in 토글, EXDATE local-SSOT) →
+  **`docs/adr/0005-routine-google-sync.md`** — PR 1 **첫 커밋**(또는 그 직전 별도 커밋)으로 freeze.
+  schema/IPC 모양이 ADR에 의존하므로 PR 1 코드보다 먼저 정착시킨다.
+- 작은 Phase 트레이드오프 (ALTER vs rebuild for CHECK 등) → `docs/decisions.md`에 한 줄씩
 
 ---
 
-## 8. 다음 액션 (이번 세션은 여기서 끝, 다음 세션 시작점)
+## 8. 다음 액션 (PR 1 시작 순서)
 
-1. 이 plan 검토 + ADR 초안 작성 (`docs/adr/`)
-2. PR 1 마이그레이션 SQL 작성 → `pnpm tauri dev` 부팅 확인 (마이그레이션 실패 시 즉시 catch)
-3. PR 1 RRULE 함수 + 14개 테스트 TDD 사이클
-4. PR 1 PR 본문 작성 + 푸시
+1. **ADR 0005 freeze** (`docs/adr/0005-routine-google-sync.md`) — 첫 커밋.
+2. PR 1 `migrations/0037_routines_google_sync.sql` 작성 → `pnpm tauri dev` 부팅 + 기존 row가 NULL 신규 컬럼으로 진입하는지 확인.
+3. PR 1 `src-tauri/src/routines/{mod.rs,rrule.rs}` 신규 모듈 + `models/routines.rs` 필드 추가 → `routine_to_rrule` + `exdate_local` 헬퍼.
+4. PR 1 ~15개 단위 테스트 TDD 사이클 (위 §3 매트릭스).
+5. `pnpm typecheck`(bindings drift 0) + `cargo test --lib routines::rrule` + `cargo clippy -D warnings` + `cargo fmt --check`.
+6. PR 본문 작성 + dev 푸시.
 
-**컨텍스트 재진입 단축경로**: 이 파일 + `docs/areas/decision-rails.md` + `docs/areas/data-layer-conventions.md` + `migrations/0011_routines_phase16.sql` 4개만 읽으면 다음 세션 즉시 시작 가능.
+**컨텍스트 재진입 단축경로**: 이 파일 + `docs/adr/0005-routine-google-sync.md` + `docs/areas/decision-rails.md` + `docs/areas/data-layer-conventions.md` + `migrations/0011_routines_phase16.sql` 5개만 읽으면 다음 세션 즉시 시작 가능.
