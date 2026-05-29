@@ -13,6 +13,7 @@ import {
   Settings,
 } from "lucide-react";
 
+import type { KnobDir } from "@/lib/knobGeometry";
 import type { View } from "@/store";
 
 /**
@@ -173,8 +174,26 @@ export function defaultKeymap(): Record<string, string> {
   const m: Record<string, string> = {};
   for (const n of NAV_ITEMS) if (n.defaultShortcut) m[n.view] = n.defaultShortcut;
   for (const a of EXTRA_ACTIONS) if (a.defaultShortcut) m[a.key] = a.defaultShortcut;
+  // 조이스틱: 좌우는 인접 뷰 nav(기존 슬라이드 재사용), 상하는 기본 비활성(빈값).
+  m.knob_left = "Cmd+Left";
+  m.knob_right = "Cmd+Right";
+  m.knob_up = "";
+  m.knob_down = "";
+  m[KNOB_TRIGGER_KEY] = KNOB_TRIGGER_DEFAULT;
   return m;
 }
+
+/** 조이스틱 방향 메타 — 설정 행/가이드 글리프/keymap 키를 한 곳에서. */
+export const KNOB_DIRECTIONS: { dir: KnobDir; key: string; label: string; glyph: string }[] = [
+  { dir: "up", key: "knob_up", label: "조이스틱 ↑", glyph: "↑" },
+  { dir: "down", key: "knob_down", label: "조이스틱 ↓", glyph: "↓" },
+  { dir: "left", key: "knob_left", label: "조이스틱 ←", glyph: "←" },
+  { dir: "right", key: "knob_right", label: "조이스틱 →", glyph: "→" },
+];
+
+/** knob 호출(트리거) 모디파이어 spec을 담는 예약 keymap 키 + 기본값. */
+export const KNOB_TRIGGER_KEY = "knob_trigger";
+export const KNOB_TRIGGER_DEFAULT = "Cmd";
 
 /**
  * NAV_ITEMS 순서 기반 인접 뷰 계산(Cmd+←/→ 네비). 순수 함수.

@@ -4,6 +4,9 @@ import {
   adjacentView,
   defaultKeymap,
   EXTRA_ACTIONS,
+  KNOB_DIRECTIONS,
+  KNOB_TRIGGER_DEFAULT,
+  KNOB_TRIGGER_KEY,
   NAV_BY_VIEW,
   NAV_ITEMS,
   navItemsByGroup,
@@ -33,7 +36,9 @@ describe("defaultKeymap", () => {
   it("defaultShortcut이 있는 view와 extra action만 매핑한다", () => {
     const km = defaultKeymap();
     const withShortcut = NAV_ITEMS.filter((n) => n.defaultShortcut);
-    expect(Object.keys(km)).toHaveLength(withShortcut.length + EXTRA_ACTIONS.length);
+    // knob 엔트리 5개(knob_left/right/up/down + knob_trigger)가 추가됨.
+    const knobCount = KNOB_DIRECTIONS.length + 1; // 4방향 + 트리거
+    expect(Object.keys(km)).toHaveLength(withShortcut.length + EXTRA_ACTIONS.length + knobCount);
     for (const n of withShortcut) expect(km[n.view]).toBe(n.defaultShortcut);
     for (const a of EXTRA_ACTIONS) expect(km[a.key]).toBe(a.defaultShortcut);
   });
@@ -72,5 +77,21 @@ describe("adjacentView", () => {
       expect(adjacentView(adjacentView(item.view, 1), -1)).toBe(item.view);
       expect(adjacentView(adjacentView(item.view, -1), 1)).toBe(item.view);
     }
+  });
+});
+
+describe("defaultKeymap knob 엔트리", () => {
+  it("좌우 기본 = Cmd+Left/Right, 상하 = 빈값", () => {
+    const m = defaultKeymap();
+    expect(m.knob_left).toBe("Cmd+Left");
+    expect(m.knob_right).toBe("Cmd+Right");
+    expect(m.knob_up).toBe("");
+    expect(m.knob_down).toBe("");
+  });
+  it("트리거 기본 = Cmd", () => {
+    expect(defaultKeymap()[KNOB_TRIGGER_KEY]).toBe(KNOB_TRIGGER_DEFAULT);
+  });
+  it("KNOB_DIRECTIONS는 4방향", () => {
+    expect(KNOB_DIRECTIONS.map((d) => d.dir)).toEqual(["up", "down", "left", "right"]);
   });
 });
