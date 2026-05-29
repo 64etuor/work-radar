@@ -16,10 +16,8 @@
 /** 모든 오버레이가 열린 동안 콘텐츠 루트에 다는 공통 "열림" 마커 속성. 새 오버레이는 이 속성만 달면 된다. */
 export const OVERLAY_OPEN_ATTR = "data-wr-overlay-open";
 
-const OPEN_OVERLAY_SELECTOR = `[${OVERLAY_OPEN_ATTR}]`;
-
 /** 현재 실제로 열린 오버레이가 하나라도 있는가. 비-DOM(test/node) 환경은 false. */
 export function isOverlayOpen(): boolean {
   if (typeof document === "undefined") return false;
-  return document.querySelector(OPEN_OVERLAY_SELECTOR) !== null;
+  return document.querySelector(`[${OVERLAY_OPEN_ATTR}]`) !== null;
 }
