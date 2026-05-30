@@ -29,6 +29,7 @@ P0(`b7dd89f`, `src-tauri/src/`)가 이미 제공:
 ## 2. P1이 바꾸는 것 (Deliverables — 플랜 Phase 1)
 
 1. **신규 커맨드 `detect_skill_environments`** (`commands/skills.rs`): P0에서 **의도적으로 P1로 이관(C4)**. 동일 `skill_roots()` + provider 태깅된 스캔에서 도출. 환경별 `{provider, present: bool, skill_count}` 반환. 사이드바가 유일 소비자라 여기서 신설. `list_skills`/`scan_external_skills_core`를 재사용(roots 주입 → hermetic 테스트).
+   - ⚠️ **개정(2026-05-30)**: detect는 **하드코딩 ROOTS 재사용이 아니라 env-aware 루트 resolution**이 돼야 함(`CODEX_HOME`/`XDG_CONFIG_HOME` 등 → dotfile 폴백). 사용자가 Hermes/중첩 스킬 누락을 발견 → **위치(경로 다르면 못 찾음) + 깊이(비재귀라 중첩 누락)** 두 축. 재귀·Hermes 루트·레포-로컬/사용자 루트는 **신규 Phase 1.5**로 분리. 정본: plan **Phase 1·1.5**(이 핸드오프보다 우선).
    - `lib.rs`의 `collect_commands![]`에 **새 커맨드 등록 필요**(`src-tauri/src/lib.rs:238` 근처 skills 커맨드들 옆). P0와 달리 새 `#[tauri::command]`라 등록 필수 → bindings 재생성.
 2. **SkillsView 좌측 env 사이드바** (`src/components/SkillsView.tsx` + `SkillsView.css`): skills-manager `Sidebar.tsx` 그룹 구조 차용 → **"All"(집계) + 감지된 환경 그룹만**(detect dir 존재 시에만 렌더 — OpenClaw 없으면 섹션 X). PR1에서 사이드바 클래스는 제거됐으니 **재도입**.
 3. **카운트 배지** = `enabled/total` (기존 `segmentSkills`의 health 재사용).
@@ -68,7 +69,7 @@ git diff --exit-code src/bindings.ts                                     # drift
 ## 6. P0 breadcrumb (다음에 잃기 쉬운 암묵지)
 
 - `#[sqlx(default)]`는 컴파일 실패(FromRow가 Decode 바운드 요구) → `Skill.provider`는 **`#[sqlx(skip)]`**(항상 Default=None; 외부 행은 `list_skills_core`가 직접 세팅). detect도 DB 비영속이면 동일 주의.
-- 심링크 스킬 dir 수용(`is_dir() || is_symlink()`)·심링크 타깃 **canonicalize 안 함**(가드 lexical starts_with) — G의 _프로그램적_ 쓰기 전 재검토(P1 무관).
+- 심링크 스킬 dir 수용(`is_dir() || is_symlink()`)·심링크 타깃 **canonicalize 안 함**(가드 lexical starts*with) — G의 *프로그램적\_ 쓰기 전 재검토(P1 무관).
 - critic nit: 플랜의 `tool_adapters.rs:189` 인용은 stale(파일 부재) — P1 landing 시 정정 가능.
 - radix Esc gotcha(Sheet `onEscapeKeyDown` stopPropagation) — P1에서 사이드바/필터 추가 시 overlay-stack 마커 계약 깨지 말 것. cmux/Playwright Esc 스모크.
 

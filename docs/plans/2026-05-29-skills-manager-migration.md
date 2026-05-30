@@ -39,32 +39,34 @@ work-radar의 데이터 모델·커맨드·INVARIANT는 **그대로 둔다**. sk
 사용자 선택: A–F 전부 차용. INVARIANT 충돌 항목은 **ADR-0006(풀 매니저 채택)**으로 레일을 재설정해
 Phase G1–G3에서 구현한다. 표식: ✅ 레일 안전 · ⚠️ 각색 필요 · 🟢 ADR-0006으로 채택(레일 재설정) · 📌 PR1 완료.
 
-| #   | 기능                                        | 표식 | Phase |
-| --- | ------------------------------------------- | ---- | ----- |
-| 1   | 멀티루트 스캔(claude/codex/openclaw/agents) | ✅   | P0    |
-| 3   | 재귀 스캔(중첩 카테고리)                    | ✅   | P0    |
-| 2   | 환경 감지 사이드바 + All 집계 + 카운트      | ✅   | P1    |
-| 14  | 사이드바 드래그 재정렬(로컬 순서)           | ✅   | P1    |
-| 5   | 카드 그리드 ↔ 리스트 토글                   | 📌   | P2    |
-| 6   | 슬라이드오버 Sheet 상세                     | 📌   | P2    |
-| 7   | SKILL.md 마크다운 렌더                      | ✅   | P2    |
-| 8   | 커맨드 팔레트 → 스킬 점프                   | ✅   | P2    |
-| 11  | 도움말 다이얼로그(Help)                     | ✅   | P2    |
-| 12  | 태그 + 태그 필터 (유일 스키마 변경)         | ✅   | P3    |
-| 9   | 다중 선택 툴바 + 배치(인앱 한정)            | ⚠️   | P3    |
-| 10  | 상태 인디케이터(work-radar 의미로 재정의)   | ⚠️   | P3    |
-| 18  | Diff 뷰어(인앱 커스터마이즈 vs 폴백)        | ✅   | P4    |
-| 19  | 외부 파일 편집(이미 존재 — Sheet 통합)      | ✅   | P4    |
-| 4   | 콘텐츠 지문 dedup(도구 간 동일 스킬 그룹화) | ⚠️   | P5    |
-| 20  | skills.sh 마켓플레이스 설치(네트워크)       | 🟢   | G1    |
-| 21  | git 레포에서 스킬 설치                      | 🟢   | G1    |
-| 23  | git 백업 / 복구                             | 🟢   | G1    |
-| 24  | 스킬 auto-updater(백그라운드 git pull)      | 🟢   | G1    |
-| 13  | 프리셋 = 에이전트 dir에 설치/심링크         | 🟢   | G2    |
-| 15  | 에이전트별 enable/disable = 심링크 토글     | 🟢   | G2    |
-| 16  | 프로젝트 워크스페이스 추가/보기             | 🟢   | G3    |
-| 17  | 프로젝트 sync 헬스 배지                     | 🟢   | G3    |
-| 22  | 양방향 sync 엔진(프로젝트↔중앙레포)         | 🟢   | G3    |
+| #   | 기능                                        | 표식 | Phase    |
+| --- | ------------------------------------------- | ---- | -------- |
+| 1   | 멀티루트 스캔(claude/codex/openclaw/agents) | 📌   | P0(평면) |
+| 1b  | Hermes 루트 + env-aware 위치 resolution     | ⚠️   | P1·P1.5  |
+| 1c  | 사용자 설정 임의 루트 + 레포-로컬 루트      | ⚠️   | P1.5     |
+| 3   | 재귀 스캔(중첩 카테고리)                    | ⚠️   | P1.5     |
+| 2   | 환경 감지 사이드바 + All 집계 + 카운트      | ✅   | P1       |
+| 14  | 사이드바 드래그 재정렬(로컬 순서)           | ✅   | P1       |
+| 5   | 카드 그리드 ↔ 리스트 토글                   | 📌   | P2       |
+| 6   | 슬라이드오버 Sheet 상세                     | 📌   | P2       |
+| 7   | SKILL.md 마크다운 렌더                      | ✅   | P2       |
+| 8   | 커맨드 팔레트 → 스킬 점프                   | ✅   | P2       |
+| 11  | 도움말 다이얼로그(Help)                     | ✅   | P2       |
+| 12  | 태그 + 태그 필터 (유일 스키마 변경)         | ✅   | P3       |
+| 9   | 다중 선택 툴바 + 배치(인앱 한정)            | ⚠️   | P3       |
+| 10  | 상태 인디케이터(work-radar 의미로 재정의)   | ⚠️   | P3       |
+| 18  | Diff 뷰어(인앱 커스터마이즈 vs 폴백)        | ✅   | P4       |
+| 19  | 외부 파일 편집(이미 존재 — Sheet 통합)      | ✅   | P4       |
+| 4   | 콘텐츠 지문 dedup(도구 간 동일 스킬 그룹화) | ⚠️   | P5       |
+| 20  | skills.sh 마켓플레이스 설치(네트워크)       | 🟢   | G1       |
+| 21  | git 레포에서 스킬 설치                      | 🟢   | G1       |
+| 23  | git 백업 / 복구                             | 🟢   | G1       |
+| 24  | 스킬 auto-updater(백그라운드 git pull)      | 🟢   | G1       |
+| 13  | 프리셋 = 에이전트 dir에 설치/심링크         | 🟢   | G2       |
+| 15  | 에이전트별 enable/disable = 심링크 토글     | 🟢   | G2       |
+| 16  | 프로젝트 워크스페이스 추가/보기             | 🟢   | G3       |
+| 17  | 프로젝트 sync 헬스 배지                     | 🟢   | G3       |
+| 22  | 양방향 sync 엔진(프로젝트↔중앙레포)         | 🟢   | G3       |
 
 > G(13·15·16·17·20–24)는 skills-manager의 **"패키지 매니저" 절반**이다. **ADR-0006(풀 매니저 채택,
 > accepted 2026-05-30)**으로 레일을 재설정해 구현한다 — 외부 dir 쓰기는 사용자 발동·가역·감사,
@@ -112,7 +114,8 @@ Phase G1–G3에서 구현한다. 표식: ✅ 레일 안전 · ⚠️ 각색 필
 ### P0에서 명시적으로 DEFER
 
 - `detect_skill_environments` → **P1**(P0 소비자 없음; 동일 ROOTS + provider 태깅 list_skills에서 도출). (C4)
-- 재귀 발견 + Hermes 루트/경로 → **후속 노트** "Hermes recursion — 경로 확정 시"; 재귀 코드 P0 미반입(데드코드 금지). (C5)
+- 재귀 발견 + Hermes 루트 → **P1.5로 이관**. (위 표의 "#3 재귀=P0"는 구현에서 deferred됨 — **표↔구현 불일치 정정**.) 재귀 코드 P0 미반입(데드코드 금지). (C5)
+  - **2026-05-30 실측 발견**: Hermes 경로 = **`~/.hermes/skills`(확정·존재)** — P0의 "경로 미확인"은 해소됨. Hermes는 대부분 **카테고리 중첩**(`<root>/<cat>/<skill>/SKILL.md`)이라 재귀 101개 중 평면은 2개뿐. **비재귀 누락은 Hermes만이 아니다**: 이미 스캔 중인 `~/.claude/skills`도 평면 70 + **중첩 53 누락**. 따라서 P1.5에서 재귀 필수(아래 Phase 1.5).
 - 도구 간 dedup → **P5**. P0는 동일 스킬을 두 루트에서 별도 provider 행으로 표시 가능(P5 전까지 허용).
 
 ### Done-criteria — hermetic CI + 수동 스모크
@@ -132,8 +135,11 @@ Phase G1–G3에서 구현한다. 표식: ✅ 레일 안전 · ⚠️ 각색 필
 
 ### Deliverables
 
-- **`detect_skill_environments` 커맨드**(P0에서 이관 — C4): 동일 ROOTS 테이블 + provider 태깅된
-  `list_skills`에서 도출. 환경별 `{provider, present, skill_count}` 반환. 사이드바가 유일 소비자라 여기서 신설.
+- **`detect_skill_environments` 커맨드**(P0에서 이관 — C4): 환경별 `{provider, present, skill_count, root_path}`
+  반환. 사이드바가 유일 소비자라 여기서 신설. **위치 문제 해결(위치 ≠ 깊이)**: 루트를 상수로 가정하지 말고
+  **env-aware resolution**으로 찾는다 — `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`XDG_CONFIG_HOME`(→`~/.config/<tool>/skills`)
+  등을 먼저 보고 표준 dotfile(`~/.<tool>/skills`)은 **폴백**. (P0의 하드코딩 ROOTS → resolve 함수로 강등; C6 단일
+  출처 유지 — `skill_roots()`가 정적 상수 → resolve 결과를 돌려주게 진화.)
 - SkillsView에 **좌측 env 사이드바**(#2): skills-manager `Sidebar.tsx`의 그룹 구조 차용 →
   **"All"(집계) + 감지된 환경 그룹만**(detect dir 존재 시에만 렌더; OpenClaw 없으면 섹션 X).
 - 환경별 **카운트 배지** = `enabled/total`(기존 `segmentSkills`의 health 재사용).
@@ -146,6 +152,61 @@ Phase G1–G3에서 구현한다. 표식: ✅ 레일 안전 · ⚠️ 각색 필
 - 설치된 환경만 사이드바에 노출(스모크: `~/.openclaw` 없음 → Lobster 그룹 미노출).
 - Claude/Codex 카운트 정확, All 집계 = 합.
 - `pnpm typecheck`/`lint`/`vitest run` green.
+
+## Phase 1.5 — 루트 발견·깊이 완성 (⚠️ skm-초월 스캔 로직)
+
+**의존**: P1(env-resolution·detect). **목표**: "보이는 스킬 = 실제 디스크 스킬"이 되도록 **위치(어디)**와
+**깊이(얼마나 깊이)** 두 축을 모두 닫는다. 동기 = 사용자가 Hermes·중첩 스킬 누락을 발견(2026-05-30).
+
+### 문제 두 축 (재귀만으로 안 풀린다)
+
+| 축                  | 증상                                         | 해법                                                    |
+| ------------------- | -------------------------------------------- | ------------------------------------------------------- |
+| **깊이**(루트 안)   | 중첩 카테고리 스킬 누락(claude 53·hermes 99) | **바운디드 재귀**                                       |
+| **위치**(루트 자체) | 루트 경로가 우리 상수와 다르면 트리째 안 봄  | **루트 resolution + 사용자/레포 루트** ← 재귀로 안 풀림 |
+
+### skills-manager(skm) 대비 — "더 나은 로직"의 정의
+
+skm은 (a) 매 스캔 **전 파일 SHA256 + 싱글스레드 + 무캐시**라 느리고, (b) 자체 중앙 스토어
+`~/.skills-manager/skills`(이 머신 680개)로 **복사-집계**해야 "다 보인다"(디스크 중복·sync 부담). 우리는:
+
+| 항목           | skm                         | work-radar(목표)                                                 |
+| -------------- | --------------------------- | ---------------------------------------------------------------- |
+| 발견 메타      | 전 콘텐츠 SHA256            | **frontmatter-only**(해싱 금지, C3) — 재귀해도 저렴              |
+| "다 보임" 방식 | 중앙 스토어로 **복사-집계** | **in-place 스캔**(디스크=SSOT, 복사 불요; 중앙화는 G에서 opt-in) |
+| 위치           | (가정/스토어)               | **env-aware resolution + 사용자 설정 루트 + 레포 루트**          |
+| 깊이           | naive 재귀                  | **바운디드 재귀**(depth cap·ignore·심링크 사이클 가드)           |
+| 레포 스캔 안전 | node_modules 등 무방비      | **ignore 리스트 + depth bound**로 거대 트리 방어                 |
+| 중복           | (스토어가 단일화)           | P5 lazy dedup(`path,mtime,size` 캐시 — eager 해시 안 함)         |
+
+### Deliverables
+
+1. **루트 resolution 합성(C6 단일 출처 유지)**: `skill_roots()`를 정적 상수 → **`[env-resolved 도구 루트] +
+[사용자 설정 루트] + [레포 local_path 루트]`** 합성으로. 각 루트 메타 = `(provider, root, recursive, ignore, max_depth)`.
+   - **env-resolution**: 도구별 `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`XDG_CONFIG_HOME` 우선 → 표준 dotfile 폴백.
+   - **Hermes 루트 추가**: `~/.hermes/skills`(`SkillProvider::Hermes` — enum에 이미 존재), `recursive=true`.
+2. **바운디드 재귀**(`recursive=true` 처리 — 현재 컬럼만 존재):
+   - **리프 규칙**: SKILL.md를 가진 dir = 스킬, 거기서 하강 중단(이중 카운트·무한 하강 방지).
+   - **max_depth 바운드**(글로벌 카테고리엔 2 충분; per-root 설정), **ignore 리스트**(`.git`/`node_modules`/
+     `target`/`dist`/`vendor`/숨김 dir) — **특히 레포 루트에서 필수**.
+   - **심링크**: 재귀 하강 중엔 안 따라감(P0처럼 최상위 심링크 dir만 수용) + 방문 셋 사이클 가드.
+3. **사용자 설정 임의 루트**: Settings에서 임의 스킬 dir 추가(우리가 모르는 위치의 최종 안전망). 이게
+   "설정의 레포" 요청과 한 메커니즘으로 합쳐짐. 영속(app_config/DB), provider=`Other`(또는 사용자 라벨).
+4. **레포-로컬 루트**(설정의 프로젝트/로컬 레포): `repos.local_path`가 있는 레포의 스킬 dir를 ROOTS에 동적
+   추가 — **레포 내 에이전트 dir 규칙**(`<repo>/.claude/skills`·`.codex/skills`·`.agents/skills`, 글로벌과 동일
+   규칙을 레포 루트로). `Provider::Github`(remote_url만, 로컬 체크아웃 없음)은 대상 아님. 재귀+ignore 필수.
+5. **path-guard 동일 합성 ROOTS 소비**(C1 유지): resolve된 전 루트(도구+사용자+레포)에 대해 starts_with 검사.
+6. **no-`~/.skills-manager/skills`**: skm 자체 스토어는 ROOTS 제외(대량 중복 방지).
+
+### Done-criteria
+
+- **위치**: env override(`CODEX_HOME` 등) 적용 시 그 경로 스캔 / 미설정 시 dotfile 폴백 — hermetic 테스트
+  (tempdir + env 주입). 사용자 설정 루트·레포 루트 추가분이 결과에 병합.
+- **깊이**: 중첩 fixture(`<root>/<cat>/<skill>/SKILL.md`)가 재귀로 발견 / ignore dir(`node_modules`) 스킵 /
+  max_depth 초과 미하강 / 심링크 사이클 무한루프 없음 — 전부 hermetic.
+- **회귀**: 이 머신 스모크 — Hermes 표면(평면 2 → 재귀 ~101), claude 평면 70 → 70+중첩(누락 53 회복) 확인.
+- **레일**: 읽기 전용·외부 dir 무쓰기 유지. no-PII 로그(provider+count+root는 OK, frontmatter 본문·전 경로 금지).
+- 게이트: `cargo test`·clippy·fmt·bindings drift 0·프런트. **해싱 부재(C3) grep 유지**.
 
 ## Phase 2 — 표현 (📌 PR1 일부 완료 + ✅ 추가)
 
@@ -264,12 +325,16 @@ auto-update가 잡/스킬 자동실행 안 함(#1/#2 가드 테스트 유지); �
 ## 진행 순서 / 의존
 
 ```
-P0(스캔 토대) ─┬─ P1(env 네비) ── P2(표현) ──┬─ P3(태그/배치)
-               │                              └─ P4(편집/Diff)
-               └─ P5(dedup)
+P0(스캔 토대·평면) ─ P1(env-resolution 네비) ─ P1.5(재귀+Hermes+레포/사용자 루트) ─┬─ P2(표현) ─┬─ P3
+                                                                                    │            └─ P4
+                                                                                    └─ P5(dedup)
 P0·P1 완료 후 ── G1(중앙 라이브러리+설치/백업/업데이트) ── G2(외부 dir 적용) ── G3(프로젝트+sync)
                  (ADR-0006 accepted — decision-rails/AGENTS INVARIANT 개정 follow-up 선행)
 ```
+
+> **P1.5 = 스캔 완성도(위치+깊이)**. P0는 평면·하드코딩-루트 토대였고, 사용자가 Hermes/중첩 누락을 발견해
+> 추가됨(2026-05-30). skm 대비 우위 = frontmatter-only(무해싱) + in-place(무복사) + env/사용자/레포 루트
+> resolution + 바운디드 재귀. 상세: 위 Phase 1.5.
 
 한 PR = 한 관심사. Phase 내 여러 PR 가능. dev push만, main은 PR-only(git-conventions).
 
