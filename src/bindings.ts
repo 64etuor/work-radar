@@ -1538,6 +1538,12 @@ export type Skill = {
 	 *  합성 시 통합 id(`ext:` 접두 포함)로 일괄 채운다. 사람 태깅 전용(#1 — 자동 분류 없음).
 	 */
 	tags: string[],
+	/**
+	 *  in_app_prompt 중 시드된 binding을 가진 행의 **코드 상수 프롬프트**(폴백 출처 — Phase 4 #18 diff/복원).
+	 *  `skills` 테이블엔 컬럼이 없어(코드 상수에서 도출) FromRow에서 `#[sqlx(skip)]`로 항상 Default(None)이고,
+	 *  `list_skills`가 in_app 행에 한해 binding으로 합성한다. 외부/미시드 binding은 None(diff 비대상).
+	 */
+	fallbackPrompt: string | null,
 	createdAt: string,
 	updatedAt: string,
 };

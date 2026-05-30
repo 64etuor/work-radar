@@ -180,6 +180,16 @@ async fn list_skills_core(db: &Db, roots: &[SkillRoot]) -> Result<Vec<Skill>, Ap
     .await
     .map_err(AppError::from)?;
 
+    // 시드된 binding의 코드 상수 프롬프트를 in_app 행에 합성한다(#18 diff/복원 출처 — 외부 push 전이라
+    // in_app만 순회). 미시드 binding/바인딩 없는 행은 None(diff 비대상). 도출이라 DB 컬럼 없음.
+    for s in &mut skills {
+        s.fallback_prompt = s
+            .binding
+            .as_deref()
+            .and_then(fallback_prompt)
+            .map(str::to_string);
+    }
+
     // 외부(디스크 스킬) — 멀티루트 스캔해서 합성 행으로 덧붙인다(영속 안 함). 부재/읽기불가 루트는
     // per-root skip(무에러)이라 항상 가능분을 반환한다.
     for ex in scan_external_skills_core(roots) {
@@ -197,6 +207,7 @@ async fn list_skills_core(db: &Db, roots: &[SkillRoot]) -> Result<Vec<Skill>, Ap
             source_path: Some(ex.path),
             provider: Some(ex.provider),
             tags: Vec::new(),
+            fallback_prompt: None,
             created_at: String::new(),
             updated_at: String::new(),
         });
@@ -1131,6 +1142,57 @@ mod tests {
         assert_eq!(ext("alpha").provider, Some(SkillProvider::Claude));
         assert_eq!(ext("gamma").provider, Some(SkillProvider::Codex));
         assert!(ext("alpha").id.starts_with("ext:"));
+    }
+
+    /// #18: 시드된 binding의 in_app 행은 코드 상수(fallback_prompt)를 합성하고, 외부 행은 None.
+    /// 사용자가 prompt를 편집해도 fallback_prompt는 코드 상수를 유지(diff/복원의 기준).
+    #[tokio::test]
+    async fn list_skills_core_populates_fallback_prompt_for_seeded_in_app() {
+        let db = fresh_db().await;
+        seed_in_app_skills(&db).await.unwrap();
+        // 한 시드 행의 prompt를 편집 — fallback_prompt는 그대로 코드 상수여야 한다.
+        sqlx::query("UPDATE skills SET prompt='편집된 내용' WHERE binding=?1")
+            .bind(BINDING_BATCH_ENRICH)
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let claude = TempDir::new().unwrap();
+        make_skill(
+            claude.path(),
+            "alpha",
+            "---\nname: alpha\ndescription: A\n---\n",
+        );
+        let roots = vec![SkillRoot::flat(
+            SkillProvider::Claude,
+            claude.path().to_path_buf(),
+        )];
+
+        let all = list_skills_core(&db, &roots).await.unwrap();
+        let edited = all
+            .iter()
+            .find(|s| s.binding.as_deref() == Some(BINDING_BATCH_ENRICH))
+            .unwrap();
+        assert_eq!(edited.prompt.as_deref(), Some("편집된 내용"), "편집 반영");
+        assert_eq!(
+            edited.fallback_prompt.as_deref(),
+            fallback_prompt(BINDING_BATCH_ENRICH),
+            "fallback_prompt = 코드 상수(편집과 무관)"
+        );
+        // 모든 시드 in_app 행이 fallback_prompt를 가진다.
+        assert!(
+            all.iter()
+                .filter(|s| s.kind == "in_app_prompt")
+                .all(|s| s.fallback_prompt.is_some()),
+            "시드 in_app 행 전부 fallback_prompt 보유"
+        );
+        // 외부 행은 fallback_prompt 없음(diff 비대상).
+        assert!(
+            all.iter()
+                .filter(|s| s.kind == "external")
+                .all(|s| s.fallback_prompt.is_none()),
+            "외부 행은 fallback_prompt=None"
+        );
     }
 
     /// 시드: 인앱 프롬프트가 들어가고, 시드 프롬프트 = 코드 상수와 동일(기본 동작 보존)이며 멱등.

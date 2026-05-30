@@ -5,9 +5,11 @@ import {
   Blocks,
   CircleHelp,
   FileText,
+  GitCompare,
   LayoutGrid,
   List,
   Plus,
+  RotateCcw,
   Save,
   Search,
   Tag,
@@ -33,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { type DiffLine, diffStats, lineDiff } from "@/lib/lineDiff";
 import {
   useCreateSkill,
   useDeleteSkill,
@@ -722,6 +725,23 @@ function SkillTagsEditor({ skill }: { skill: Skill }) {
   );
 }
 
+/** 기본값(코드 상수) ↔ 현재 편집본 라인 diff 렌더(#18). remove=기본에만/add=현재에만/equal=공통.
+ * 표시 전용 — 신규 의존성 없이 `lineDiff`(LCS) 결과를 +/− 거터로 보여준다. */
+function SkillPromptDiff({ lines }: { lines: DiffLine[] }) {
+  return (
+    <div className="skl-diff" role="region" aria-label="기본값과의 차이">
+      {lines.map((l, idx) => (
+        <div key={`${idx}-${l.op}`} className={cn("skl-diff-line", `skl-diff-${l.op}`)}>
+          <span className="skl-diff-gutter" aria-hidden="true">
+            {l.op === "add" ? "+" : l.op === "remove" ? "−" : " "}
+          </span>
+          <span className="skl-diff-text">{l.text || " "}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** 인앱 프롬프트 편집기: 이름 + 텍스트에어리어(템플릿) + enable 토글 + 저장/삭제. */
 function InAppEditor({ skill }: { skill: Skill }) {
   const update = useUpdateSkill();
@@ -730,6 +750,8 @@ function InAppEditor({ skill }: { skill: Skill }) {
   const [prompt, setPrompt] = useState(skill.prompt ?? "");
   const [name, setName] = useState(skill.name);
   const [note, setNote] = useState<string | null>(null);
+  // 기본값(코드 상수)과의 diff 펼침 여부(#18). 스킬 전환 시 초기화.
+  const [showDiff, setShowDiff] = useState(false);
 
   // 다른 스킬로 전환 시 폼 동기화 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
   // (key 재마운트가 1차 — 이건 안전망.)
@@ -738,9 +760,28 @@ function InAppEditor({ skill }: { skill: Skill }) {
     setSeededId(skill.id);
     setPrompt(skill.prompt ?? "");
     setName(skill.name);
+    setShowDiff(false);
   }
 
   const dirty = prompt !== (skill.prompt ?? "") || name !== skill.name;
+
+  // #18: 시드 binding을 가진 인앱 프롬프트만 코드 상수 폴백이 있다(외부/미시드는 null → diff 비대상).
+  // 현재 편집본(prompt)을 기본값과 비교 — 같으면 "기본값과 동일", 다르면 diff/복원 노출.
+  const fallback = skill.fallbackPrompt;
+  const diff = useMemo(
+    () => (fallback != null ? lineDiff(fallback, prompt) : []),
+    [fallback, prompt],
+  );
+  const customized = fallback != null && prompt !== fallback;
+  const stats = diffStats(diff);
+
+  // 기본값으로 복원: prompt를 코드 상수로 되돌린다(로컬 상태 — 저장해야 영속, 가역). #1: 사람 발동.
+  const resetToDefault = () => {
+    if (fallback == null) return;
+    setPrompt(fallback);
+    setShowDiff(false);
+    setNote("기본값으로 되돌렸습니다 — 저장하면 적용됩니다.");
+  };
 
   const save = () => {
     if (update.isPending) return;
@@ -802,6 +843,44 @@ function InAppEditor({ skill }: { skill: Skill }) {
         spellCheck={false}
         aria-label="프롬프트 템플릿"
       />
+
+      {fallback != null && (
+        <div className="skl-fallback">
+          {customized ? (
+            <>
+              <span className="skl-fallback-label">
+                기본값과 다름{" "}
+                <span className="skl-fallback-stat">
+                  +{stats.added} −{stats.removed}
+                </span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 rounded-full"
+                aria-pressed={showDiff}
+                onClick={() => setShowDiff((v) => !v)}
+              >
+                <GitCompare className="size-4" />
+                {showDiff ? "비교 숨기기" : "기본값과 비교"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 rounded-full"
+                onClick={resetToDefault}
+              >
+                <RotateCcw className="size-4" />
+                기본값으로 복원
+              </Button>
+            </>
+          ) : (
+            <span className="skl-fallback-label muted">기본값과 동일</span>
+          )}
+        </div>
+      )}
+
+      {customized && showDiff && <SkillPromptDiff lines={diff} />}
 
       <div className="skl-actions">
         <Button

@@ -488,3 +488,70 @@
   border-color: var(--color-wr-accent);
   background: var(--color-wr-surface);
 }
+
+/* ── 인앱 프롬프트 기본값 diff / 복원(#18) ── */
+.skl-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.skl-fallback-label {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
+}
+.skl-fallback-label.muted {
+  color: var(--color-wr-subtle);
+}
+.skl-fallback-stat {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.skl-diff {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-bg);
+  padding: 6px 0;
+  font: 400 12px var(--font-mono);
+  line-height: 1.55;
+}
+.skl-diff-line {
+  display: flex;
+  gap: 8px;
+  padding: 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.skl-diff-gutter {
+  flex-shrink: 0;
+  width: 1ch;
+  text-align: center;
+  color: var(--color-wr-subtle);
+  user-select: none;
+}
+.skl-diff-text {
+  min-width: 0;
+  flex: 1;
+}
+.skl-diff-add {
+  background: color-mix(in srgb, var(--color-wr-accent) 12%, transparent);
+}
+.skl-diff-add .skl-diff-gutter {
+  color: var(--color-wr-accent);
+}
+.skl-diff-remove {
+  background: color-mix(in srgb, var(--color-wr-danger) 12%, transparent);
+}
+.skl-diff-remove .skl-diff-text {
+  text-decoration: line-through;
+  color: var(--color-wr-muted);
+}
+.skl-diff-remove .skl-diff-gutter {
+  color: var(--color-wr-danger);
+}
+.skl-diff-equal {
+  color: var(--color-wr-muted);
+}
