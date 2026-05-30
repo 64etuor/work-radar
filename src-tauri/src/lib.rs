@@ -334,7 +334,23 @@ pub fn run() {
             app.manage(log_guards);
             app.manage(logging::LogDir(log_dir));
 
-            let pool = tauri::async_runtime::block_on(db::init_db(&app_data.join("work-radar.db")))
+            // DB 경로: release(설치본)는 app-data의 prod SSOT(`work-radar.db`). **개발(debug) 빌드는
+            // 실 prod DB를 절대 건드리지 않도록** OS temp의 격리된 dev DB를 쓴다(랜덤 아님 → dev 런 간
+            // 지속). `cargo tauri dev`는 debug 빌드라 `debug_assertions`로 깔끔히 분기된다.
+            let is_dev = cfg!(debug_assertions);
+            let db_path = if is_dev {
+                std::env::temp_dir()
+                    .join("work-radar-dev")
+                    .join("work-radar.db")
+            } else {
+                app_data.join("work-radar.db")
+            };
+            tracing::info!(
+                code = "db.path_selected",
+                dev = is_dev,
+                "database path selected"
+            );
+            let pool = tauri::async_runtime::block_on(db::init_db(&db_path))
                 .expect("failed to initialize database");
 
             // 스킬 레지스트리 시드(Phase 20 #21): 인앱 프롬프트를 코드 상수에서 멱등 시드한다.
