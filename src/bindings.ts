@@ -506,6 +506,17 @@ export const commands = {
 	 *  동일 ROOTS(`skill_roots`) 소비 — 두 번째 루트 정의 없음(C6). 읽기 전용.
 	 */
 	detectSkillEnvironments: () => typedError<SkillEnvironment[], AppError>(__TAURI_INVOKE("detect_skill_environments")),
+	/**
+	 *  사용자 설정 임의 스킬 루트 조회(P1.5 #3). `app_config`에서 JSON 배열을 읽는다 — 미설정/빈 값이면
+	 *  빈 vec. 읽기 전용(외부 dir 무쓰기). 로그는 count만(C7 — 절대 경로 금지).
+	 */
+	getSkillUserRoots: () => typedError<UserSkillRoot[], AppError>(__TAURI_INVOKE("get_skill_user_roots")),
+	/**
+	 *  사용자 설정 임의 스킬 루트 저장(P1.5 #3). 각 경로는 **절대경로**여야 한다(상대경로 거부 — path-guard가
+	 *  의미 있으려면 필요). 존재하지 않는 dir은 허용(안전망: 곧 만들 dir). 동일 경로는 dedup. JSON 배열로
+	 *  `app_config`에 영속한다(스키마 변경 없음). 외부 dir에 쓰지 않는다(설정만 저장 — 쓰기/설치는 Phase G).
+	 */
+	setSkillUserRoots: (roots: UserSkillRoot[]) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_user_roots", { roots })),
 	/**  외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관. */
 	readExternalSkill: (path: string) => typedError<string, AppError>(__TAURI_INVOKE("read_external_skill", { path })),
 	/**
@@ -1715,6 +1726,17 @@ export type UpdateRoutineInput = {
 	monthlyNthWeek: number | null,
 	/**  이벤트 길이(분). None=기본 30분 fallback (sync 시). */
 	durationMin: number | null,
+};
+
+/**
+ *  사용자가 직접 등록한 임의 스킬 루트(P1.5 #3 — 위치-축 안전망). 우리가 하드코딩하지 않은 디렉터리를
+ *  사용자가 명시적으로 추가한다. `app_config`에 JSON 배열로 영속된다(스키마 변경 없음 — Phase 3만 마이그
+ *  레이션). provider는 루트별 영속하지 않고 집계 시 `SkillProvider::Other`로 합성한다. 경로는 절대경로만
+ *  (path-guard가 의미 있으려면 절대 필요) — 아직 존재하지 않는 dir도 허용한다(안전망: 곧 만들 dir).
+ */
+export type UserSkillRoot = {
+	/**  스킬 루트 절대 경로(스캔/path-guard 대상). 비절대/공백은 set 시 거부한다. */
+	path: string,
 };
 
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */

@@ -23,11 +23,13 @@
 use tauri::State;
 
 use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHECK_PROMPT};
+use crate::commands::nav::{get_config, set_config};
 use crate::commands::projects::fetch_all_repos;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
     CreateSkillInput, ExternalSkill, Provider, Repo, Skill, SkillEnvironment, SkillProvider,
+    UserSkillRoot,
 };
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -39,6 +41,10 @@ pub(crate) const BINDING_PR_SELFCHECK: &str = "pr_selfcheck";
 pub(crate) const BINDING_WORKTREE_REVIEW: &str = "worktree_review";
 pub(crate) const BINDING_WORKTREE_CLEANUP: &str = "worktree_cleanup";
 pub(crate) const FAST_CODEX_MODEL: &str = "gpt-5.3-codex-spark";
+
+/// 사용자 설정 임의 스킬 루트(P1.5 #3)의 `app_config` 키. 값은 `UserSkillRoot` JSON 배열 문자열.
+/// 스키마 변경 없음(기존 key-value 스토어 재사용) — Phase 3만 마이그레이션 페이즈.
+const KEY_USER_SKILL_ROOTS: &str = "skills.user_roots";
 
 const WORKTREE_REVIEW_PROMPT: &str = "You are reviewing a worktree in read-only mode. Focus on architectural issues, risky changes, dead code, dependency impact, missing tests, and merge conflict risk. Do not edit files. Return a concise Korean review with findings ordered by severity and concrete file references when available.";
 const WORKTREE_CLEANUP_PROMPT: &str = "Review the listed local worktree cleanup candidates. Identify which items are safe to delete and explain the evidence for each recommendation. Use a conservative rule: stale means 2+ days with no activity, merged branches are safer than unmerged stale branches, protected/current/base branches must stay, and destructive cleanup needs human confirmation. Return concise bullets with keep/delete/review labels.";
@@ -410,9 +416,10 @@ fn is_ignored_dir(name: &str) -> bool {
 /// `.agents/skills`는 도구 간 공유 발견 dir이라 P0부터 **Codex로 태깅**(upstream codex 귀속).
 /// ⚑ Copilot 추가 시 `.agents/skills`는 공유되므로 **귀속 재검토 필요**.
 ///
-/// DB-aware 합성 ROOTS(C6 단일 출처): [env-resolved 도구 루트] + [레포-로컬 루트]. 전 소비자
-/// (스캔·detect·path-guard)가 이 함수를 통해 같은 슬라이스를 받는다. 레포 조회 실패는 graceful
-/// (env 루트만으로 degrade) — 읽기 전용이라 안전. (사용자 설정 임의 루트는 PR3.)
+/// DB-aware 합성 ROOTS(C6 단일 출처): [env-resolved 도구 루트] + [레포-로컬 루트] + [사용자 설정 임의
+/// 루트(P1.5 #3)]. 전 소비자(스캔·detect·path-guard)가 이 함수를 통해 같은 슬라이스를 받는다 — 사용자
+/// 루트도 자동으로 path-guard(C1)에 포함된다(개별 커맨드에 별도 주입 없음). 레포/사용자 루트 조회 실패는
+/// graceful(가능분만으로 degrade) — 읽기 전용이라 안전.
 async fn skill_roots_db(db: &Db) -> Vec<SkillRoot> {
     let mut roots = resolve_skill_roots(&SkillRootEnv::from_process());
     match fetch_all_repos(db).await {
@@ -421,7 +428,71 @@ async fn skill_roots_db(db: &Db) -> Vec<SkillRoot> {
             tracing::debug!(target: "skills.roots", error = %e, "repo roots unavailable; env-only")
         }
     }
+    match read_user_skill_roots(db).await {
+        Ok(user) => roots.extend(user_skill_roots(&user)),
+        Err(e) => {
+            tracing::debug!(target: "skills.roots", error = %e, "user roots unavailable; skipping")
+        }
+    }
     roots
+}
+
+/// `app_config`에서 사용자 설정 루트를 읽어 역직렬화한다(미설정/빈 값이면 빈 vec). DB read·역직렬화
+/// 실패는 호출자가 graceful 처리(skill_roots_db) 또는 에러 노출(get 커맨드)한다.
+async fn read_user_skill_roots(db: &Db) -> Result<Vec<UserSkillRoot>, AppError> {
+    let raw = get_config(db, KEY_USER_SKILL_ROOTS)
+        .await
+        .map_err(AppError::from)?;
+    match raw.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(Vec::new()),
+        Some(json) => serde_json::from_str::<Vec<UserSkillRoot>>(json).map_err(|e| {
+            AppError::terminal(
+                "skills.user_roots_parse",
+                format!("사용자 스킬 루트 설정을 읽지 못했습니다: {e}"),
+            )
+        }),
+    }
+}
+
+/// 사용자 입력 루트 검증·정규화(트림 + **절대경로 강제** + dedup). 비절대/빈 경로는 거부한다(path-guard가
+/// 의미 있으려면 절대 필요). 존재하지 않는 dir은 허용(안전망). 커맨드와 테스트가 공유하는 단일 검증 출처.
+#[allow(clippy::result_large_err)] // 단일 AppError envelope(레포 전역 규약) — 모듈 관용과 동일.
+fn normalize_user_skill_roots(roots: Vec<UserSkillRoot>) -> Result<Vec<UserSkillRoot>, AppError> {
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut cleaned: Vec<UserSkillRoot> = Vec::new();
+    for r in roots {
+        let path = r.path.trim().to_string();
+        if path.is_empty() {
+            return Err(AppError::validation(
+                "skills.user_root_empty",
+                "스킬 루트 경로가 비었습니다.",
+            ));
+        }
+        if !Path::new(&path).is_absolute() {
+            return Err(AppError::validation(
+                "skills.user_root_relative",
+                "스킬 루트는 절대 경로여야 합니다(상대 경로는 허용되지 않습니다).",
+            ));
+        }
+        if seen.insert(path.clone()) {
+            cleaned.push(UserSkillRoot { path });
+        }
+    }
+    Ok(cleaned)
+}
+
+/// 사용자 루트 → `SkillRoot`(provider=Other, recursive, 도구 루트와 동일 depth cap). 빈/공백 경로는
+/// 스킵한다(env/repo 루트와 동일 정책). provider는 루트별 영속하지 않고 여기서 Other로 합성한다.
+fn user_skill_roots(roots: &[UserSkillRoot]) -> Vec<SkillRoot> {
+    roots
+        .iter()
+        .filter_map(|r| {
+            let p = r.path.trim();
+            (!p.is_empty()).then(|| {
+                SkillRoot::recursive(SkillProvider::Other, PathBuf::from(p), RECURSIVE_MAX_DEPTH)
+            })
+        })
+        .collect()
 }
 
 /// 루트 resolution 입력(테스트는 직접 주입 → hermetic, 프로세스 env 전역 변이 없음). 프로세스 env를
@@ -548,6 +619,38 @@ pub async fn detect_skill_environments(
     Ok(detect_skill_environments_core(
         &skill_roots_db(db.inner()).await,
     ))
+}
+
+/// 사용자 설정 임의 스킬 루트 조회(P1.5 #3). `app_config`에서 JSON 배열을 읽는다 — 미설정/빈 값이면
+/// 빈 vec. 읽기 전용(외부 dir 무쓰기). 로그는 count만(C7 — 절대 경로 금지).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_skill_user_roots(db: State<'_, Db>) -> Result<Vec<UserSkillRoot>, AppError> {
+    read_user_skill_roots(db.inner()).await
+}
+
+/// 사용자 설정 임의 스킬 루트 저장(P1.5 #3). 각 경로는 **절대경로**여야 한다(상대경로 거부 — path-guard가
+/// 의미 있으려면 필요). 존재하지 않는 dir은 허용(안전망: 곧 만들 dir). 동일 경로는 dedup. JSON 배열로
+/// `app_config`에 영속한다(스키마 변경 없음). 외부 dir에 쓰지 않는다(설정만 저장 — 쓰기/설치는 Phase G).
+#[tauri::command]
+#[specta::specta]
+pub async fn set_skill_user_roots(
+    db: State<'_, Db>,
+    roots: Vec<UserSkillRoot>,
+) -> Result<(), AppError> {
+    let cleaned = normalize_user_skill_roots(roots)?;
+    let json = serde_json::to_string(&cleaned).map_err(|e| {
+        AppError::terminal(
+            "skills.user_roots_serialize",
+            format!("사용자 스킬 루트를 직렬화하지 못했습니다: {e}"),
+        )
+    })?;
+    set_config(db.inner(), KEY_USER_SKILL_ROOTS, &json)
+        .await
+        .map_err(AppError::from)?;
+    // no-PII(C7): count만 — 사용자 절대 경로는 로그 금지.
+    tracing::debug!(target: "skills.roots", count = cleaned.len(), "saved user skill roots");
+    Ok(())
 }
 
 /// SKILL.md의 YAML frontmatter에서 name/description을 얕게 파싱한다(외부 의존 없이 라인 스캔).
@@ -1488,6 +1591,94 @@ mod tests {
         assert!(
             ensure_within_skills_dir_roots("/etc/passwd", &roots).is_err(),
             "루트 밖 경로 거부"
+        );
+    }
+
+    // ── P1.5 #3: 사용자 설정 임의 루트 테스트 ──
+
+    /// 커맨드 본문과 동일 경로(normalize → serialize → set_config)로 영속하는 테스트 헬퍼(State 없이).
+    async fn set_user_roots_core(db: &Db, roots: Vec<UserSkillRoot>) -> Result<(), AppError> {
+        let cleaned = normalize_user_skill_roots(roots)?;
+        let json = serde_json::to_string(&cleaned).unwrap();
+        set_config(db, KEY_USER_SKILL_ROOTS, &json)
+            .await
+            .map_err(AppError::from)
+    }
+
+    fn root(path: &str) -> UserSkillRoot {
+        UserSkillRoot {
+            path: path.to_string(),
+        }
+    }
+
+    /// get은 미설정 시 빈 vec, set 후 round-trip(dedup 포함).
+    #[tokio::test]
+    async fn user_roots_get_empty_then_roundtrips() {
+        let db = fresh_db().await;
+        // 미설정 → 빈 vec.
+        assert!(
+            read_user_skill_roots(&db).await.unwrap().is_empty(),
+            "미설정이면 빈 vec"
+        );
+
+        // set(중복 포함) → dedup된 round-trip.
+        set_user_roots_core(
+            &db,
+            vec![root("/abs/one"), root("/abs/two"), root("/abs/one")],
+        )
+        .await
+        .unwrap();
+        let got = read_user_skill_roots(&db).await.unwrap();
+        let paths: Vec<_> = got.iter().map(|r| r.path.as_str()).collect();
+        assert_eq!(paths, vec!["/abs/one", "/abs/two"], "dedup된 round-trip");
+    }
+
+    /// set은 상대 경로를 거부한다(path-guard가 의미 있으려면 절대 필요).
+    #[tokio::test]
+    async fn user_roots_set_rejects_relative_path() {
+        let db = fresh_db().await;
+        let err = set_user_roots_core(&db, vec![root("relative/skills")]).await;
+        assert!(err.is_err(), "상대 경로는 거부");
+        // 거부 시 아무것도 영속되지 않았다(여전히 빈 vec).
+        assert!(read_user_skill_roots(&db).await.unwrap().is_empty());
+    }
+
+    /// 사용자 루트가 `skill_roots_db` 집계에 provider=Other로 포함되고, 스캔이 그 안의 중첩 스킬을
+    /// 재귀로 발견한다(env 루트와 동일 메커니즘). path-guard(C1)도 그 루트를 자동 수용한다.
+    #[tokio::test]
+    async fn user_root_aggregated_as_other_and_scanned() {
+        let db = fresh_db().await;
+        let dir = TempDir::new().unwrap();
+        // <root>/<cat>/<skill>/SKILL.md (중첩 — 재귀 발견 대상).
+        let nested = dir.path().join("cat/my-user-skill");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("SKILL.md"), "---\nname: user-skill\n---\n").unwrap();
+
+        let abs = dir.path().to_string_lossy().into_owned();
+        set_user_roots_core(&db, vec![root(&abs)]).await.unwrap();
+
+        // 집계 ROOTS에 provider=Other인 사용자 루트가 포함된다.
+        let roots = skill_roots_db(&db).await;
+        let user = roots
+            .iter()
+            .find(|r| r.path == dir.path())
+            .expect("사용자 루트가 집계에 포함");
+        assert_eq!(user.provider, SkillProvider::Other, "provider=Other 합성");
+        assert!(user.recursive, "사용자 루트는 재귀");
+
+        // 스캔이 중첩 사용자 스킬을 발견한다(provider=Other 태깅).
+        let scanned = scan_external_skills_core(&roots);
+        let found = scanned
+            .iter()
+            .find(|s| s.name == "user-skill")
+            .expect("중첩 사용자 스킬 발견");
+        assert_eq!(found.provider, SkillProvider::Other);
+
+        // path-guard(C1)가 그 루트 하위 SKILL.md를 자동 수용한다(별도 주입 없이 슬라이스로).
+        let skill_md = nested.join("SKILL.md").to_string_lossy().into_owned();
+        assert!(
+            ensure_within_skills_dir_roots(&skill_md, &roots).is_ok(),
+            "사용자 루트 하위 경로 수용"
         );
     }
 }

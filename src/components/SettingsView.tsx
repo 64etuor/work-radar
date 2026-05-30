@@ -5,6 +5,7 @@ import {
   Bot,
   Briefcase,
   FolderOpen,
+  FolderTree,
   Keyboard,
   Link2,
   Newspaper,
@@ -38,11 +39,13 @@ import { NewsSourceSettings } from "./settings/NewsSourceSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 import { SectionLabel } from "./settings/SettingsKit";
+import { SkillRootsSettings } from "./settings/SkillRootsSettings";
 
 type SettingsCategory =
   | "projects"
   | "agents"
   | "shortcuts"
+  | "skill-roots"
   | "integrations"
   | "notifications"
   | "news"
@@ -72,6 +75,12 @@ const CATEGORIES: {
     label: "단축키",
     icon: Keyboard,
     blurb: "뷰 전환 단축키와 키맵을 설정합니다.",
+  },
+  {
+    id: "skill-roots",
+    label: "스킬 루트",
+    icon: FolderTree,
+    blurb: "기본 감지 위치 밖의 스킬 디렉터리를 직접 등록합니다(절대 경로).",
   },
   {
     id: "integrations",
@@ -199,6 +208,7 @@ export function SettingsView() {
             )}
             {category === "agents" && <AgentsPane onToast={pushSuccess} />}
             {category === "shortcuts" && <NavigationSettings onToast={pushSuccess} />}
+            {category === "skill-roots" && <SkillRootsSettings onToast={pushSuccess} />}
             {category === "integrations" && (
               <IntegrationsPane list={list} pushSuccess={pushSuccess} />
             )}

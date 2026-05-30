@@ -86,6 +86,17 @@ pub struct SkillEnvironment {
     pub root_path: String,
 }
 
+/// 사용자가 직접 등록한 임의 스킬 루트(P1.5 #3 — 위치-축 안전망). 우리가 하드코딩하지 않은 디렉터리를
+/// 사용자가 명시적으로 추가한다. `app_config`에 JSON 배열로 영속된다(스키마 변경 없음 — Phase 3만 마이그
+/// 레이션). provider는 루트별 영속하지 않고 집계 시 `SkillProvider::Other`로 합성한다. 경로는 절대경로만
+/// (path-guard가 의미 있으려면 절대 필요) — 아직 존재하지 않는 dir도 허용한다(안전망: 곧 만들 dir).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSkillRoot {
+    /// 스킬 루트 절대 경로(스캔/path-guard 대상). 비절대/공백은 set 시 거부한다.
+    pub path: String,
+}
+
 /// 인앱 프롬프트 생성 입력(레지스트리에 새 편집 가능 템플릿 추가). binding은 선택(미바인딩 템플릿도 가능).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

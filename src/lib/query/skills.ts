@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands, type CreateSkillInput, type Skill, type SkillEnvironment } from "@/bindings";
+import {
+  commands,
+  type CreateSkillInput,
+  type Skill,
+  type SkillEnvironment,
+  type UserSkillRoot,
+} from "@/bindings";
 
 import { unwrap } from "./client";
 
@@ -68,6 +74,31 @@ export function useExternalSkillContent(path: string | null) {
     queryFn: () => unwrap(commands.readExternalSkill(path as string)),
     enabled: !!path,
     staleTime: 5_000,
+  });
+}
+
+/** 사용자 설정 임의 스킬 루트(P1.5 #3 — 위치-축 안전망). 미설정 시 빈 배열. */
+export function useSkillUserRoots() {
+  return useQuery<UserSkillRoot[]>({
+    queryKey: ["skillUserRoots"],
+    queryFn: () => unwrap(commands.getSkillUserRoots()),
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * 사용자 설정 임의 스킬 루트 저장. 각 경로는 절대경로여야 한다(상대 경로는 AppError로 거부).
+ * 성공 시 사용자 루트 + 스킬 목록/환경을 무효화(새 루트가 스캔에 즉시 반영되도록).
+ */
+export function useSetSkillUserRoots() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (roots: UserSkillRoot[]) => unwrap(commands.setSkillUserRoots(roots)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["skillUserRoots"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skillEnvironments"] });
+    },
   });
 }
 
