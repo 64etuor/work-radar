@@ -102,6 +102,20 @@ export function useSetSkillUserRoots() {
   });
 }
 
+/**
+ * 스킬 태그 통째 교체(set 의미 — Phase 3 #12). skillKey = 통합 Skill.id(인앱=행 id, 외부='ext:'+경로).
+ * 인앱/외부 모두 태깅 가능하며 **외부는 로컬 SQLite만 바뀐다(디스크 파일 무변경)**. 사람 태깅 전용(#1).
+ * 성공 시 목록 무효화(태그/필터 즉시 반영).
+ */
+export function useSetSkillTags() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { skillKey: string; tags: string[] }) =>
+      unwrap(commands.setSkillTags(args.skillKey, args.tags)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
 /** 외부 스킬 파일 쓰기(사용자 명시 편집 — 자기 파일). 성공 시 내용/목록 무효화. */
 export function useWriteExternalSkill() {
   const qc = useQueryClient();

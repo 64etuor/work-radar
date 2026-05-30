@@ -196,11 +196,42 @@ async fn list_skills_core(db: &Db, roots: &[SkillRoot]) -> Result<Vec<Skill>, Ap
             fast_mode: false,
             source_path: Some(ex.path),
             provider: Some(ex.provider),
+            tags: Vec::new(),
             created_at: String::new(),
             updated_at: String::new(),
         });
     }
+
+    // 태그 일괄 로드(통합 Skill.id별 — 인앱/외부 공통). 태그가 없는 DB(마이그레이션 직후)나 빈 표여도
+    // 빈 맵이라 무영향. 태그 조회 실패는 치명적이지 않으므로 빈 태그로 graceful degrade(목록은 보존).
+    let tags_by_key = load_tags_by_key(db).await;
+    for s in &mut skills {
+        if let Some(ts) = tags_by_key.get(&s.id) {
+            s.tags = ts.clone();
+        }
+    }
     Ok(skills)
+}
+
+/// `skill_tags`를 통합 Skill.id별로 묶어 돌려준다(태그 이름 오름차순). 조회 실패는 빈 맵으로 degrade
+/// — 태그는 표시/필터 메타라 목록 자체를 막지 않는다(C6 graceful).
+async fn load_tags_by_key(db: &Db) -> std::collections::HashMap<String, Vec<String>> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT skill_key, tag FROM skill_tags ORDER BY tag",
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_else(|e| {
+        // 태그는 비핵심 메타라 목록을 막지 않는다 — degrade하되 원인은 남긴다(skill_roots_db 대칭).
+        tracing::debug!(target: "skills.tags", error = %e, "tag load failed; degrading to empty");
+        Vec::new()
+    });
+    let mut by_key: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for (key, tag) in rows {
+        by_key.entry(key).or_default().push(tag);
+    }
+    by_key
 }
 
 /// 인앱 스킬 수정(prompt/name/enabled/binding). 외부 스킬(id="ext:…")은 DB 행이 아니라 수정 불가 —
@@ -320,6 +351,83 @@ pub async fn delete_skill(db: State<'_, Db>, id: String) -> Result<(), AppError>
             "인앱 스킬을 찾을 수 없습니다.",
         ));
     }
+    // 행 삭제 후 그 키의 태그도 정리(orphan 방지). 외부 키는 무관(인앱 id만 매칭). 별도 statement라
+    // 비원자적이지만 orphan 태그는 매칭 스킬이 없어 무해하므로 best-effort로 둔다(삭제 자체는 성공 처리).
+    let _ = sqlx::query("DELETE FROM skill_tags WHERE skill_key = ?1")
+        .bind(&id)
+        .execute(db.inner())
+        .await;
+    Ok(())
+}
+
+/// 통합 Skill.id 키의 태그를 통째로 교체한다(set 의미). 인앱(행 id)·외부(`ext:`+경로) 모두 키잉
+/// 가능하며 **외부도 태그할 수 있다 — 로컬 SQLite만 바뀌고 디스크 SKILL.md는 절대 쓰지 않는다**
+/// (외부 읽기 전용 불변, #7). 태그는 trim·비어있지 않음·dedup으로 정규화하고 길이를 제한한다. 사람
+/// 태깅 전용(#1 — 자동 분류 경로 없음). 빈 키는 거부한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_skill_tags(
+    db: State<'_, Db>,
+    skill_key: String,
+    tags: Vec<String>,
+) -> Result<(), AppError> {
+    set_skill_tags_core(db.inner(), &skill_key, tags).await
+}
+
+/// 사용자 태그 라벨 최대 길이(문자 수). 과도한 라벨(붙여넣기 사고 등)을 거부하는 가드.
+const MAX_TAG_LEN: usize = 64;
+
+/// 태그 정규화: trim → 빈 값 제거 → 길이 가드 → dedup(입력 순서 보존). 검증 실패는 AppError.
+#[allow(clippy::result_large_err)] // 단일 AppError envelope(레포 전역 규약).
+fn normalize_tags(tags: Vec<String>) -> Result<Vec<String>, AppError> {
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for t in tags {
+        let t = t.trim().to_string();
+        if t.is_empty() {
+            continue;
+        }
+        if t.chars().count() > MAX_TAG_LEN {
+            return Err(AppError::validation(
+                "skills.tag_too_long",
+                format!("태그가 너무 깁니다(최대 {MAX_TAG_LEN}자)."),
+            ));
+        }
+        if seen.insert(t.clone()) {
+            out.push(t);
+        }
+    }
+    Ok(out)
+}
+
+/// `set_skill_tags`의 코어(State 래퍼 없이 직접 호출 — hermetic 테스트). 기존 태그를 전부 지우고
+/// 정규화된 태그를 다시 넣는다(트랜잭션). 빈 태그 목록이면 그 키의 태그를 모두 제거한다.
+async fn set_skill_tags_core(db: &Db, skill_key: &str, tags: Vec<String>) -> Result<(), AppError> {
+    let key = skill_key.trim();
+    if key.is_empty() {
+        return Err(AppError::validation(
+            "skills.tag_key_empty",
+            "스킬 키가 비었습니다.",
+        ));
+    }
+    let cleaned = normalize_tags(tags)?;
+    let mut tx = db.begin().await.map_err(AppError::from)?;
+    sqlx::query("DELETE FROM skill_tags WHERE skill_key = ?1")
+        .bind(key)
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::from)?;
+    for tag in &cleaned {
+        sqlx::query("INSERT INTO skill_tags (skill_key, tag) VALUES (?1, ?2)")
+            .bind(key)
+            .bind(tag)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+    }
+    tx.commit().await.map_err(AppError::from)?;
+    // no-PII(C7): 키/태그 본문은 로그 금지 — 개수만.
+    tracing::debug!(target: "skills.tags", count = cleaned.len(), "set skill tags");
     Ok(())
 }
 
@@ -1487,6 +1595,11 @@ mod tests {
         if res.rows_affected() == 0 {
             return Err("없음".into());
         }
+        // 명령 경로와 동일하게 태그도 정리(orphan 방지).
+        let _ = sqlx::query("DELETE FROM skill_tags WHERE skill_key = ?1")
+            .bind(id)
+            .execute(db)
+            .await;
         Ok(())
     }
 
@@ -1680,5 +1793,137 @@ mod tests {
             ensure_within_skills_dir_roots(&skill_md, &roots).is_ok(),
             "사용자 루트 하위 경로 수용"
         );
+    }
+
+    // ── Phase 3 #12: 태그 ──────────────────────────────────────────────────────────────
+
+    /// set_skill_tags_core: 정규화(trim/빈값 제거/dedup) + replace 의미 + 빈 목록은 전체 제거.
+    #[tokio::test]
+    async fn set_skill_tags_normalizes_and_replaces() {
+        let db = fresh_db().await;
+        let key = "skill_batch_enrich";
+
+        // trim + 빈값 제거 + dedup, 입력 순서 보존.
+        set_skill_tags_core(
+            &db,
+            key,
+            vec![" a ".into(), "b".into(), "".into(), "a".into()],
+        )
+        .await
+        .unwrap();
+        let got = load_tags_by_key(&db).await;
+        assert_eq!(got.get(key).cloned().unwrap_or_default(), vec!["a", "b"]);
+
+        // replace 의미: 다시 set하면 기존을 대체(누적 아님).
+        set_skill_tags_core(&db, key, vec!["c".into()])
+            .await
+            .unwrap();
+        let got = load_tags_by_key(&db).await;
+        assert_eq!(got.get(key).cloned().unwrap_or_default(), vec!["c"]);
+
+        // 빈 목록 → 전체 제거.
+        set_skill_tags_core(&db, key, vec![]).await.unwrap();
+        let got = load_tags_by_key(&db).await;
+        assert!(!got.contains_key(key), "빈 목록은 키의 태그를 모두 제거");
+    }
+
+    /// set_skill_tags_core: 빈 키 거부, 과도 길이 태그 거부(검증 가드).
+    #[tokio::test]
+    async fn set_skill_tags_rejects_bad_input() {
+        let db = fresh_db().await;
+        assert!(
+            set_skill_tags_core(&db, "  ", vec!["x".into()])
+                .await
+                .is_err(),
+            "빈 키 거부"
+        );
+        let long = "z".repeat(MAX_TAG_LEN + 1);
+        assert!(
+            set_skill_tags_core(&db, "skill_x", vec![long])
+                .await
+                .is_err(),
+            "과도 길이 태그 거부"
+        );
+    }
+
+    /// list_skills_core가 인앱(행 id)·외부(`ext:`+경로) 태그를 둘 다 채운다.
+    #[tokio::test]
+    async fn list_skills_core_populates_tags_for_both_kinds() {
+        let db = fresh_db().await;
+        seed_in_app_skills(&db).await.unwrap();
+
+        let claude = TempDir::new().unwrap();
+        make_skill(
+            claude.path(),
+            "alpha",
+            "---\nname: alpha\ndescription: A\n---\n",
+        );
+        let roots = vec![SkillRoot::flat(
+            SkillProvider::Claude,
+            claude.path().to_path_buf(),
+        )];
+
+        // 인앱 키 태깅.
+        set_skill_tags_core(&db, "skill_batch_enrich", vec!["fav".into()])
+            .await
+            .unwrap();
+        // 외부 키 태깅(= list_skills 합성 id와 동일 규칙).
+        let ext_path = claude.path().join("alpha").join("SKILL.md");
+        let ext_key = format!("ext:{}", ext_path.to_string_lossy());
+        set_skill_tags_core(&db, &ext_key, vec!["util".into()])
+            .await
+            .unwrap();
+
+        let raw: Vec<(String, String)> = sqlx::query_as("SELECT skill_key, tag FROM skill_tags")
+            .fetch_all(&db)
+            .await
+            .unwrap();
+        eprintln!("DBG ext_key={ext_key}");
+        eprintln!("DBG raw_rows={raw:?}");
+        let all = list_skills_core(&db, &roots).await.unwrap();
+        for s in &all {
+            eprintln!("DBG skill id={} kind={} tags={:?}", s.id, s.kind, s.tags);
+        }
+        let in_app = all
+            .iter()
+            .find(|s| s.binding.as_deref() == Some("batch_enrich"))
+            .unwrap();
+        assert_eq!(in_app.tags, vec!["fav"], "인앱 태그 채움");
+        let external = all.iter().find(|s| s.kind == "external").unwrap();
+        assert_eq!(external.tags, vec!["util"], "외부 태그 채움");
+    }
+
+    /// 외부 스킬 태깅은 **로컬 SQLite만** 바꾼다 — 디스크 SKILL.md 파일은 무변경(외부 읽기 전용 #7).
+    #[tokio::test]
+    async fn tagging_external_does_not_touch_file() {
+        let db = fresh_db().await;
+        let claude = TempDir::new().unwrap();
+        let content = "---\nname: alpha\ndescription: A\n---\n# 본문\n";
+        make_skill(claude.path(), "alpha", content);
+        let ext_path = claude.path().join("alpha").join("SKILL.md");
+        let ext_key = format!("ext:{}", ext_path.to_string_lossy());
+
+        let before = std::fs::read_to_string(&ext_path).unwrap();
+        set_skill_tags_core(&db, &ext_key, vec!["tagged".into()])
+            .await
+            .unwrap();
+        let after = std::fs::read_to_string(&ext_path).unwrap();
+        assert_eq!(before, after, "외부 태깅은 디스크 파일을 변경하지 않는다");
+        assert_eq!(before, content);
+    }
+
+    /// 인앱 스킬 삭제 시 그 키의 태그도 정리된다(orphan 방지).
+    #[tokio::test]
+    async fn delete_in_app_skill_cleans_its_tags() {
+        let db = fresh_db().await;
+        let s = create_skill_core(&db, "내 템플릿", "지침", None)
+            .await
+            .unwrap();
+        set_skill_tags_core(&db, &s.id, vec!["t1".into()])
+            .await
+            .unwrap();
+        delete_skill_core(&db, &s.id).await.unwrap();
+        let got = load_tags_by_key(&db).await;
+        assert!(!got.contains_key(&s.id), "삭제된 인앱 스킬의 태그 정리");
     }
 }

@@ -1,0 +1,104 @@
+/* 스킬 태그 UI(Phase 3 #12) — SkillsView 동반 스타일. 색은 var(--skl-*) 우선, 미정의 시 폴백.
+   Cohere white editorial: 라운드 pill, muted 톤, 활성은 전경/배경 반전. */
+
+/* 태그 필터 바 */
+.skl-tagbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--skl-border, rgba(0, 0, 0, 0.1));
+}
+
+.skl-tagpill {
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--skl-border, rgba(0, 0, 0, 0.1));
+  background: transparent;
+  color: var(--skl-muted, #6b7280);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.skl-tagpill:hover {
+  background: var(--skl-hover, rgba(0, 0, 0, 0.04));
+}
+
+.skl-tagpill.active {
+  background: var(--skl-fg, #111827);
+  color: var(--skl-bg, #ffffff);
+  border-color: var(--skl-fg, #111827);
+}
+
+/* 카드 태그 칩(읽기 전용) */
+.skl-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.skl-card-tag {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--skl-chip-bg, rgba(0, 0, 0, 0.05));
+  color: var(--skl-muted, #6b7280);
+}
+
+/* Sheet 안 태그 편집기 */
+.skl-tags-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.skl-tags-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--skl-muted, #6b7280);
+}
+
+.skl-tags-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.skl-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--skl-border, rgba(0, 0, 0, 0.1));
+  background: transparent;
+  color: var(--skl-fg, #111827);
+  cursor: pointer;
+}
+
+.skl-tag-chip:hover {
+  background: var(--skl-hover, rgba(0, 0, 0, 0.04));
+}
+
+.skl-tag-input {
+  min-width: 90px;
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  outline: none;
+}

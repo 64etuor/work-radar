@@ -245,6 +245,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_skill_user_roots,
         commands::read_external_skill,
         commands::write_external_skill,
+        commands::set_skill_tags,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,

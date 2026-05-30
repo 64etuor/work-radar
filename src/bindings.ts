@@ -525,6 +525,13 @@ export const commands = {
 	 */
 	writeExternalSkill: (path: string, content: string) => typedError<null, AppError>(__TAURI_INVOKE("write_external_skill", { path, content })),
 	/**
+	 *  통합 Skill.id 키의 태그를 통째로 교체한다(set 의미). 인앱(행 id)·외부(`ext:`+경로) 모두 키잉
+	 *  가능하며 **외부도 태그할 수 있다 — 로컬 SQLite만 바뀌고 디스크 SKILL.md는 절대 쓰지 않는다**
+	 *  (외부 읽기 전용 불변, #7). 태그는 trim·비어있지 않음·dedup으로 정규화하고 길이를 제한한다. 사람
+	 *  태깅 전용(#1 — 자동 분류 경로 없음). 빈 키는 거부한다.
+	 */
+	setSkillTags: (skillKey: string, tags: string[]) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_tags", { skillKey, tags })),
+	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.
 	 */
@@ -1525,6 +1532,12 @@ export type Skill = {
 	 *  행은 `list_skills`가 합성 시 직접 세팅한다(Decode/Type 불필요).
 	 */
 	provider: SkillProvider | null,
+	/**
+	 *  사용자 태그(로컬 SQLite `skill_tags` — 인앱/외부 공통, Phase 3 #12). `skills` 테이블엔 컬럼이
+	 *  없어(다대다 매핑은 별표) FromRow에서 `#[sqlx(skip)]`로 항상 Default(빈 vec)이고, `list_skills`가
+	 *  합성 시 통합 id(`ext:` 접두 포함)로 일괄 채운다. 사람 태깅 전용(#1 — 자동 분류 없음).
+	 */
+	tags: string[],
 	createdAt: string,
 	updatedAt: string,
 };

@@ -1,4 +1,5 @@
 import "./SkillsView.css";
+import "./SkillsTags.css";
 
 import {
   Blocks,
@@ -10,6 +11,7 @@ import {
   Save,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -32,6 +34,7 @@ import {
   useCreateSkill,
   useDeleteSkill,
   useExternalSkillContent,
+  useSetSkillTags,
   useSkillEnvironments,
   useSkills,
   useUpdateSkill,
@@ -44,6 +47,7 @@ import {
   reorderEnv,
   type SkillEnvNavItem,
 } from "@/lib/skillEnvNav";
+import { collectTags, matchesTag, UNTAGGED } from "@/lib/skillTags";
 import { useStickyToggle } from "@/lib/useStickyToggle";
 import { useUIStore } from "@/store";
 
@@ -82,6 +86,8 @@ export function SkillsView() {
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
   // 도움말 다이얼로그 열림 — 스킬 피처 로컬 상태(전역 store 비대상).
   const [helpOpen, setHelpOpen] = useState(false);
+  // 태그 필터(#12): null=전체, UNTAGGED=태그 없음, 그 외=해당 태그. 로컬 표시 상태(외부 불변).
+  const [activeTag, setActiveTag] = useState<string | null>(null);
 
   // 환경 사이드바: 활성 환경(필터) + 로컬 표시 순서(드래그 재정렬) + 진행 중 드래그 id.
   const [activeEnvId, setActiveEnvId] = useState<string>("all");
@@ -132,8 +138,18 @@ export function SkillsView() {
     () => (activeEnv ? filtered.filter(activeEnv.match) : filtered),
     [filtered, activeEnv],
   );
-  const segments = useMemo(() => segmentSkills(envFiltered), [envFiltered]);
-  const total = envFiltered.length;
+  // 태그 필터(#12): pill 소스는 전체 목록(검색/환경 무관)에서 모아 안정적으로 유지하고, 본문은
+  // 환경+태그를 모두 적용한 결과를 쓴다. 활성 태그가 더 이상 존재하지 않으면 자동으로 전체로 복귀.
+  const allTags = useMemo(() => collectTags(list), [list]);
+  if (activeTag !== null && activeTag !== UNTAGGED && !allTags.includes(activeTag)) {
+    setActiveTag(null);
+  }
+  const tagFiltered = useMemo(
+    () => envFiltered.filter((s) => matchesTag(s, activeTag)),
+    [envFiltered, activeTag],
+  );
+  const segments = useMemo(() => segmentSkills(tagFiltered), [tagFiltered]);
+  const total = tagFiltered.length;
 
   const onEnvDrop = (targetId: string) => {
     if (!dragId) return;
@@ -214,6 +230,38 @@ export function SkillsView() {
           인앱 프롬프트 추가
         </Button>
       </div>
+
+      {allTags.length > 0 && (
+        <div className="skl-tagbar" role="group" aria-label="태그 필터">
+          <button
+            type="button"
+            className={cn("skl-tagpill", activeTag === null && "active")}
+            aria-pressed={activeTag === null}
+            onClick={() => setActiveTag(null)}
+          >
+            전체
+          </button>
+          {allTags.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={cn("skl-tagpill", activeTag === t && "active")}
+              aria-pressed={activeTag === t}
+              onClick={() => setActiveTag(activeTag === t ? null : t)}
+            >
+              {t}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={cn("skl-tagpill", activeTag === UNTAGGED && "active")}
+            aria-pressed={activeTag === UNTAGGED}
+            onClick={() => setActiveTag(activeTag === UNTAGGED ? null : UNTAGGED)}
+          >
+            태그 없음
+          </button>
+        </div>
+      )}
 
       <div className="skl-main">
         <nav className="skl-sidebar" aria-label="스킬 환경">
@@ -434,7 +482,69 @@ function SkillCard({
       </span>
       {sub && <span className="skl-card-sub">{sub}</span>}
       {desc && <span className="skl-card-desc">{desc}</span>}
+      {skill.tags.length > 0 && (
+        <span className="skl-card-tags">
+          {skill.tags.map((t) => (
+            <span key={t} className="skl-card-tag">
+              {t}
+            </span>
+          ))}
+        </span>
+      )}
     </button>
+  );
+}
+
+/** 스킬 태그 편집기(인앱/외부 공통 — Sheet 안). 칩 클릭=제거, 입력+Enter=추가. set 의미로 전체 교체.
+ * 외부 스킬도 태그 가능(로컬 SQLite만 — 디스크 파일 무변경). 사람 태깅 전용(#1 — 자동 분류 없음). */
+function SkillTagsEditor({ skill }: { skill: Skill }) {
+  const setTags = useSetSkillTags();
+  const [input, setInput] = useState("");
+  const tags = skill.tags;
+
+  const commit = (next: string[]) => {
+    if (setTags.isPending) return;
+    setTags.mutate({ skillKey: skill.id, tags: next });
+  };
+  const add = () => {
+    const t = input.trim();
+    setInput("");
+    if (!t || tags.includes(t)) return;
+    commit([...tags, t]);
+  };
+  const remove = (t: string) => commit(tags.filter((x) => x !== t));
+
+  return (
+    <div className="skl-tags-edit">
+      <span className="skl-tags-label">태그</span>
+      <div className="skl-tags-chips">
+        {tags.map((t) => (
+          <button
+            key={t}
+            type="button"
+            className="skl-tag-chip"
+            onClick={() => remove(t)}
+            aria-label={`태그 ${t} 제거`}
+          >
+            {t}
+            <X className="size-3" />
+          </button>
+        ))}
+        <input
+          className="skl-tag-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="태그 추가"
+          aria-label="태그 추가"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -539,6 +649,8 @@ function InAppEditor({ skill }: { skill: Skill }) {
         </Button>
         {note && <span className="skl-note">{note}</span>}
       </div>
+
+      <SkillTagsEditor skill={skill} />
     </div>
   );
 }
@@ -598,6 +710,8 @@ function ExternalViewer({ skill }: { skill: Skill }) {
 
       <div className="skl-bind-line skl-path">{path}</div>
       {skill.prompt && <div className="skl-desc">{skill.prompt}</div>}
+
+      <SkillTagsEditor skill={skill} />
 
       {content.isLoading ? (
         <div className="skl-empty-sm">불러오는 중…</div>

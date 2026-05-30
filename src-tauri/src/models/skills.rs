@@ -50,6 +50,11 @@ pub struct Skill {
     /// 행은 `list_skills`가 합성 시 직접 세팅한다(Decode/Type 불필요).
     #[sqlx(skip)]
     pub provider: Option<SkillProvider>,
+    /// 사용자 태그(로컬 SQLite `skill_tags` — 인앱/외부 공통, Phase 3 #12). `skills` 테이블엔 컬럼이
+    /// 없어(다대다 매핑은 별표) FromRow에서 `#[sqlx(skip)]`로 항상 Default(빈 vec)이고, `list_skills`가
+    /// 합성 시 통합 id(`ext:` 접두 포함)로 일괄 채운다. 사람 태깅 전용(#1 — 자동 분류 없음).
+    #[sqlx(skip)]
+    pub tags: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }
