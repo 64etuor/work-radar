@@ -43,6 +43,7 @@ import {
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
+import { skillCardBadges } from "@/lib/skillBadges";
 import {
   addTagToSkill,
   batchMutableTargets,
@@ -634,6 +635,7 @@ function SkillCard({
   const Icon = isInApp ? Blocks : FileText;
   const desc = (skill.prompt ?? "").trim();
   const sub = isInApp ? skill.binding : skill.sourcePath ? compactPath(skill.sourcePath) : null;
+  const badges = skillCardBadges(skill);
 
   return (
     <button
@@ -644,7 +646,13 @@ function SkillCard({
       <span className="skl-card-top">
         <Icon className="skl-card-ico size-4" />
         <span className="skl-card-name">{skill.name}</span>
-        {isInApp && !skill.enabled && <span className="skl-card-off">꺼짐</span>}
+        <span className="skl-card-badges">
+          {badges.map((b) => (
+            <span key={b.key} className={cn("skl-badge", `skl-badge-${b.tone}`)}>
+              {b.label}
+            </span>
+          ))}
+        </span>
       </span>
       {sub && <span className="skl-card-sub">{sub}</span>}
       {desc && <span className="skl-card-desc">{desc}</span>}

@@ -211,13 +211,29 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.skl-card-off {
+/* 카드 상태 배지(#10): kind(인앱/외부) · provider(외부만) · off(비활성). skillBadges가 정본. */
+.skl-card-badges {
+  display: inline-flex;
   flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+.skl-badge {
   font: 400 10px var(--font-mono);
-  color: var(--color-wr-subtle);
+  line-height: 1.4;
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-pill);
   padding: 1px 6px;
+  white-space: nowrap;
+}
+.skl-badge-kind {
+  color: var(--color-wr-muted);
+}
+.skl-badge-provider {
+  color: var(--color-wr-subtle);
+}
+.skl-badge-off {
+  color: var(--color-wr-subtle);
 }
 .skl-card-sub {
   font: 400 11px var(--font-mono);
