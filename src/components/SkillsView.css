@@ -94,6 +94,12 @@
     background 0.12s ease,
     border-color 0.12s ease;
 }
+.skl-env[draggable="true"] {
+  cursor: grab;
+}
+.skl-env[draggable="true"]:active {
+  cursor: grabbing;
+}
 .skl-env:hover {
   background: var(--color-wr-surface);
 }
