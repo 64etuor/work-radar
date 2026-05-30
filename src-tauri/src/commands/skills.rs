@@ -13,6 +13,11 @@
 //!
 //! 토큰/비밀은 다루지 않는다(프롬프트 템플릿은 비밀 아님). 외부 스킬 파일을 *실행*하지 않는다 — 읽기/
 //! (선택) 사용자 명시 편집만.
+//!
+//! ADR-0006 (풀 매니저 채택): 위 "외부 스킬 = 디스크 SSOT / 외부 dir 무쓰기 / ~/.claude 단일 스캔"은
+//! **Phase A–F 범위**다. Phase G부터 멀티루트 스캔(claude/codex/openclaw) → 중앙 라이브러리 SSOT +
+//! 외부 dir 설치/sync를 ADR-0006 레일(사용자 발동·가역·audit / Rust+keychain+bounded)로 도입한다.
+//! **비실행 및 #1/#2(스킬 설치/sync ≠ 잡 자동실행)는 G에서도 불변.** 정본: docs/adr/0006-skills-registry-full-manager.md.
 
 use tauri::State;
 

@@ -15,6 +15,12 @@ Codex 출력이 Notion/GitHub를 직접 mutate하지 못한다. 사람이 accept
 Today 승격(`target:"today"`)은 로컬 SQLite 액션이라 Acceptance 불요(외부 변경 아님).
 캘린더 이벤트 생성은 사용자 폼=사람 결정이므로 acceptance 대기 제거(Phase 19 결정).
 
+> **스킬 매니저(ADR-0006) 경계.** 스킬 _파일_ 설치/동기화(중앙 라이브러리 → 로컬 에이전트 dir,
+> `~/.{claude,codex,openclaw}/skills`)는 **사용자 발동 파일 작업**으로, 이 INVARIANT의 "codex 출력이
+> 외부 서비스를 mutate" 대상이 아니다(사용자 액션 = 사람 결정). 단 **가역(uninstall=원상복구)·audit
+> 필수**. 여전히 불변: 스킬을 설치/동기화해도 **codex 잡은 gated→Acceptance** — 스킬 파일 관리 ≠ 잡
+> 실행(#1/#2). 정본: `docs/adr/0006-skills-registry-full-manager.md`.
+
 ## 3. 신호는 dedup upsert (append 아님)
 
 system/PR/Hermes 신호는 안정적 `dedupKey`로 중복 생성을 막고, 원인이 해소되면
@@ -50,6 +56,10 @@ Q1으로 사람에게 escalate. 전부-실패 분류 보존(transient vs termina
 
 Notion = 백로그/안건 *내용*의 SSOT. 로컬 SQLite = 매트릭스 상태·신호·승격 이력·
 에이전트 잡의 SSOT. 로컬 미러는 read cache + write-through일 뿐.
+
+> **스킬 매니저(ADR-0006) SSOT.** 중앙 라이브러리 = **managed 스킬의 SSOT**. 발견된(discovered)
+> 외부 스킬은 import 전까지 **디스크-SSOT(읽기 전용)** — import 시 중앙레포로 복사되고 이후 중앙이
+> SSOT. 양방향 sync(Phase G3)는 중앙 ↔ 프로젝트/에이전트 dir. 정본: `docs/adr/0006-skills-registry-full-manager.md`.
 
 ---
 

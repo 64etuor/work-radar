@@ -1,44 +1,283 @@
-# 스킬 레지스트리 — skills-manager UX 이식 (feature-by-feature)
+# 스킬 레지스트리 — skills-manager UX 이식 (phase 단위)
 
-작성 2026-05-29. 브랜치 `feat/skills-mgr-migration` (worktree). 기준 `dev`.
+작성 2026-05-29. 개정 2026-05-30(A–F 기능 선택 반영, PR 단위 → Phase 단위 재구성).
+브랜치 `feat/skills-mgr-migration` (worktree). 기준 `dev`.
 
 ## 배경
 
 현 `SkillsView`(스킬 레지스트리, Phase 20 #21)는 2-pane(좌 세그먼트 리스트 + 우 편집
-패널)에 raw `<pre>` 뷰어로, UX가 빈약하다. 오픈소스 [skills-manager](https://github.com/xingkongliang/skills-manager)
-(Tauri+React 스킬 관리 GUI)의 **프레젠테이션 레이어**를 차용해 단계별로 교체한다.
+패널)에 raw `<pre>` 뷰어로, UX가 빈약하고 **`~/.claude`만 스캔**한다(Codex 34개·Hermes
+스킬을 통째로 못 본다). 오픈소스 [skills-manager](https://github.com/xingkongliang/skills-manager)
+(Tauri+React 스킬 관리 GUI)의 기능을 골라 단계별로 차용한다.
 
 **디자인 컨셉은 work-radar(Cohere white editorial, Tailwind v4 `@theme` `--color-wr-*`,
 shadcn) 유지.** skills-manager의 클래스/토큰은 work-radar 토큰으로 매핑한다.
 
 ## 차용 원칙 / 레일
 
-work-radar의 데이터 모델·커맨드·INVARIANT는 **그대로 둔다**. skills-manager의 *표현*만 가져온다.
+work-radar의 데이터 모델·커맨드·INVARIANT는 **그대로 둔다**. skills-manager의 *기능/표현*만 가져온다.
 
-- 외부 스킬(`~/.claude/skills/*/SKILL.md`)은 **디스크 SSOT, 읽기/편집 전용, 실행 없음**(#1/#2).
-- 인앱 프롬프트 편집은 codex **제안 내용**만 바꾼다(잡은 여전히 gated + Acceptance). 자동적용 경로 없음.
-- `Skill`에 `project_id` 없음(#7) — project vs global은 **표시 순서**일 뿐.
+**불변 (전 Phase — A–F·G 공통):**
 
-### 차용하지 않음 (deferred — ADR 필요)
+- 외부 스킬 파일은 **실행하지 않는다**(#1/#2). 스킬/인앱 프롬프트는 codex 잡을 **자동 실행/적용하지
+  않는다** — 잡은 여전히 gated + Acceptance. 스킬 _파일_ 관리(설치/sync) ≠ 잡 실행.
+- 인앱 프롬프트 편집은 codex **제안 내용**만 바꾼다. 자동적용 경로 없음.
+- 외부 네트워크는 Rust + keychain + bounded retry. 로그에 시크릿/PII 금지.
 
-skills-manager의 **핵심 모델**(중앙 라이브러리 `~/.skills-manager` → 멀티툴 symlink/copy 동기화,
-마켓플레이스/git 설치, 프리셋)은 위 레일(비실행·디스크 SSOT·외부 네트워크는 Rust)과 정면 충돌한다.
-이번 마이그레이션 범위 밖. 도입하려면 별도 ADR + 결정 레일 리뷰.
+**Phase A–F 한정 (G에서 ADR-0006으로 개정):**
 
-## 증분 (PR 단위 — 한 PR=한 관심사)
+- 외부 스킬(`~/.{claude,codex,openclaw}/skills/*/SKILL.md`)은 **디스크 SSOT, 읽기/편집 전용**, 외부
+  dir **무쓰기**. 스캔은 **frontmatter-only(전체 콘텐츠 해싱 도입 금지 — skills-manager 느림 원인)**.
+- `Skill`에 `project_id` 없음(#7) — project vs global은 **표시 순서/그룹**일 뿐.
 
-- **PR 1 — 프레젠테이션 스왑 (백엔드 무변경).** 2-pane → 헤더(타이틀·카운트·검색·grid/list
-  토글·추가) + **카드 그리드/리스트** + **슬라이드오버 Sheet**(편집기/뷰어 호스팅). 상태 배지는
-  기존 데이터만으로(enabled·kind·binding·provider). `ui/sheet.tsx` 신규(radix Dialog 기반,
-  overlay-stack 마커). **레일 무위반.**
-- **PR 2 — 마크다운 렌더.** 외부 `SKILL.md`를 Sheet에서 렌더(현재 raw `<pre>`). 마크다운 렌더러
-  의존성 결정 필요. 읽기 전용 표시.
-- **PR 3 — 태그 + 필터.** 유일한 스키마 변경: `skill_tags` 매핑(인앱=skill id, 외부=source_path)
-  마이그레이션 + set/list 커맨드 + `bindings.ts` 재생성. 태그 필터 pill + Untagged.
-- **PR 4 — Diff 뷰어.** 커스터마이즈된 인앱 프롬프트를 코드 상수 폴백과 diff + reset-to-default.
-  skills-manager의 sync-diff UX를 work-radar 폴백 모델에 접지.
+**Phase G (ADR-0006 — `docs/adr/0006-skills-registry-full-manager.md`):** 중앙 라이브러리 SSOT,
+외부 dir 쓰기/설치/sync(사용자 발동·가역·audit), 네트워크 설치, opt-in·bounded auto-update를 도입.
+위 "불변"은 G에서도 유지.
 
-## PR 1 상세
+## 기능 선택 (A–F 전부) → Phase 매핑
+
+사용자 선택: A–F 전부 차용. INVARIANT 충돌 항목은 **ADR-0006(풀 매니저 채택)**으로 레일을 재설정해
+Phase G1–G3에서 구현한다. 표식: ✅ 레일 안전 · ⚠️ 각색 필요 · 🟢 ADR-0006으로 채택(레일 재설정) · 📌 PR1 완료.
+
+| #   | 기능                                        | 표식 | Phase |
+| --- | ------------------------------------------- | ---- | ----- |
+| 1   | 멀티루트 스캔(claude/codex/openclaw/agents) | ✅   | P0    |
+| 3   | 재귀 스캔(중첩 카테고리)                    | ✅   | P0    |
+| 2   | 환경 감지 사이드바 + All 집계 + 카운트      | ✅   | P1    |
+| 14  | 사이드바 드래그 재정렬(로컬 순서)           | ✅   | P1    |
+| 5   | 카드 그리드 ↔ 리스트 토글                   | 📌   | P2    |
+| 6   | 슬라이드오버 Sheet 상세                     | 📌   | P2    |
+| 7   | SKILL.md 마크다운 렌더                      | ✅   | P2    |
+| 8   | 커맨드 팔레트 → 스킬 점프                   | ✅   | P2    |
+| 11  | 도움말 다이얼로그(Help)                     | ✅   | P2    |
+| 12  | 태그 + 태그 필터 (유일 스키마 변경)         | ✅   | P3    |
+| 9   | 다중 선택 툴바 + 배치(인앱 한정)            | ⚠️   | P3    |
+| 10  | 상태 인디케이터(work-radar 의미로 재정의)   | ⚠️   | P3    |
+| 18  | Diff 뷰어(인앱 커스터마이즈 vs 폴백)        | ✅   | P4    |
+| 19  | 외부 파일 편집(이미 존재 — Sheet 통합)      | ✅   | P4    |
+| 4   | 콘텐츠 지문 dedup(도구 간 동일 스킬 그룹화) | ⚠️   | P5    |
+| 20  | skills.sh 마켓플레이스 설치(네트워크)       | 🟢   | G1    |
+| 21  | git 레포에서 스킬 설치                      | 🟢   | G1    |
+| 23  | git 백업 / 복구                             | 🟢   | G1    |
+| 24  | 스킬 auto-updater(백그라운드 git pull)      | 🟢   | G1    |
+| 13  | 프리셋 = 에이전트 dir에 설치/심링크         | 🟢   | G2    |
+| 15  | 에이전트별 enable/disable = 심링크 토글     | 🟢   | G2    |
+| 16  | 프로젝트 워크스페이스 추가/보기             | 🟢   | G3    |
+| 17  | 프로젝트 sync 헬스 배지                     | 🟢   | G3    |
+| 22  | 양방향 sync 엔진(프로젝트↔중앙레포)         | 🟢   | G3    |
+
+> G(13·15·16·17·20–24)는 skills-manager의 **"패키지 매니저" 절반**이다. **ADR-0006(풀 매니저 채택,
+> accepted 2026-05-30)**으로 레일을 재설정해 구현한다 — 외부 dir 쓰기는 사용자 발동·가역·감사,
+> 네트워크/업데이트는 Rust+keychain+bounded, 그리고 **잡 자동실행 금지(#1/#2)는 유지**. 상세: `docs/adr/0006-skills-registry-full-manager.md`.
+
+---
+
+## Phase 0 — 백엔드 스캔 토대 (✅ rail-safe, 선행)
+
+**의존**: 없음. 이후 전 Phase의 토대.
+
+> **상태: ralplan 컨센서스 APPROVE (2026-05-30, 2 iterations · Planner→Architect→Critic).** 아래는
+> 합의된 스펙. 실행 승인 대기(`pending approval`).
+
+### 루트 단일 진실원 (C6)
+
+스캔·path-guard(·후속 P1 detect)가 **공유하는 단 하나의 정의**:
+`ROOTS: &[(SkillProvider, PathBuf, recursive: bool)]` =
+
+- `(Claude, ~/.claude/skills, false)`
+- `(Codex, ~/.codex/skills, false)`
+- `(Codex, ~/.agents/skills, false)` — 공유 발견 dir, P0에선 **Codex로 태깅**(upstream codex 귀속
+  `tool_adapters.rs:189`). ⚑ Copilot 추가 시 `.agents/skills`는 공유 → **P1에서 귀속 재검토**.
+- `(Openclaw, ~/.openclaw/skills, false)`
+  **Hermes는 P0에서 의도적 제외**(경로 미확인). `recursive`는 컬럼만 두고 P0 전부 false.
+
+### Deliverables
+
+1. **Provider 타입**: 신규 `enum SkillProvider { Claude, Codex, Openclaw, Hermes, Other }`
+   (`#[derive(Type,Serialize,Deserialize)]` + `rename_all="lowercase"` → TS union). **기존 `Provider{Github,Local}`
+   (project.rs:66)와 별개 — 이름 충돌 금지**(C2). `provider`를 `list_skills`가 합성하는 **`Skill`** 구조체에
+   탑재(프런트 계약 = `Skill.provider`; `ExternalSkill`도 내부적으로 보유 가능).
+2. **멀티루트 스캔**: `scan_external_skills_core(roots: &[(SkillProvider, PathBuf, bool)]) -> Vec<ExternalSkill>`로
+   리팩터(roots **주입** → hermetic 테스트). `#[command]` 래퍼가 실제 $HOME ROOTS를 해석해 호출. 각 루트
+   frontmatter-only(**해싱 금지 — sha2/walkdir/hash_directory P0 진입 금지**), `is_dir() || is_symlink()` 수용
+   (심링크 스킬 dir 미드롭), 루트의 provider로 태깅.
+3. **부분실패 정책 (C6)**: per-root skip-and-continue — 읽기 불가/부재 루트는 스킵, 나머지 루트 스킬 반환,
+   전체 스캔 에러 없음.
+4. **path-guard 확장 (C1 — critical)**: `ensure_within_skills_dir`를 일반화 — `(.. 컴포넌트 없음) AND
+(basename==SKILL.md) AND (ROOTS 중 하나로 starts_with)`. 단일 `claude_skills_dir()` 하드코딩 대체. 스캔과
+   가드는 **동일 ROOTS** 소비.
+5. **no-PII 로깅 (C7)**: 스캔 로그는 count + provider만 — 절대 경로/frontmatter 본문 금지. grep 가능.
+6. **`bindings.ts` 재생성**(SkillProvider union + Skill.provider). drift = 0 CI 게이트.
+
+### P0에서 명시적으로 DEFER
+
+- `detect_skill_environments` → **P1**(P0 소비자 없음; 동일 ROOTS + provider 태깅 list_skills에서 도출). (C4)
+- 재귀 발견 + Hermes 루트/경로 → **후속 노트** "Hermes recursion — 경로 확정 시"; 재귀 코드 P0 미반입(데드코드 금지). (C5)
+- 도구 간 dedup → **P5**. P0는 동일 스킬을 두 루트에서 별도 provider 행으로 표시 가능(P5 전까지 허용).
+
+### Done-criteria — hermetic CI + 수동 스모크
+
+- **Hermetic 단위테스트(tempdir, 실제 ~/.claude 비의존)**: ①루트별 provider 분류 ②부재 graceful
+  ③부분실패(읽기가능+불가 → 가능분 반환·무에러) ④심링크 스킬 dir 발견 ⑤멀티루트 frontmatter 파싱
+  ⑥path-guard 루트별(in-root 허용 / `<root>/../../tmp/SKILL.md` 거부 / 전 루트 밖 거부 / 非SKILL.md 거부).
+- **통합**: `list_skills`가 인앱(DB)+멀티루트 외부 병합, 각 외부 행에 provider.
+- **수동 스모크(CI 게이트 아님, C8)**: 이 머신에서 codex provider="codex" 약 34개, claude 약 71개.
+- **게이트**: `cargo test` green · `clippy --all-targets -D warnings` · `fmt --check` ·
+  `git diff --exit-code src/bindings.ts` · `pnpm typecheck` · grep(P0 diff에 `hash_directory`/`sha2`/
+  `content_hash` 부재 · 스캔 로그에 경로/frontmatter 부재).
+
+## Phase 1 — 환경 감지 사이드바 (✅ rail-safe)
+
+**의존**: P0.
+
+### Deliverables
+
+- **`detect_skill_environments` 커맨드**(P0에서 이관 — C4): 동일 ROOTS 테이블 + provider 태깅된
+  `list_skills`에서 도출. 환경별 `{provider, present, skill_count}` 반환. 사이드바가 유일 소비자라 여기서 신설.
+- SkillsView에 **좌측 env 사이드바**(#2): skills-manager `Sidebar.tsx`의 그룹 구조 차용 →
+  **"All"(집계) + 감지된 환경 그룹만**(detect dir 존재 시에만 렌더; OpenClaw 없으면 섹션 X).
+- 환경별 **카운트 배지** = `enabled/total`(기존 `segmentSkills`의 health 재사용).
+- 사이드바 선택 → 메인(P2 카드)이 그 환경으로 필터. "All" = 전 환경 집계.
+- 프런트 `providerOf()` 경로추론 **제거** → P0의 백엔드 `provider` 사용.
+- **드래그 재정렬**(#14): 사이드바 항목 로컬 순서(localStorage), 외부 상태 변경 없음.
+
+### Done-criteria
+
+- 설치된 환경만 사이드바에 노출(스모크: `~/.openclaw` 없음 → Lobster 그룹 미노출).
+- Claude/Codex 카운트 정확, All 집계 = 합.
+- `pnpm typecheck`/`lint`/`vitest run` green.
+
+## Phase 2 — 표현 (📌 PR1 일부 완료 + ✅ 추가)
+
+**의존**: P1. **PR1(카드 그리드/리스트 + Sheet, #5·#6)은 완료**(@9161f1d, 아래 부록). 나머지 추가.
+
+### Deliverables
+
+- **마크다운 렌더**(#7): 외부 `SKILL.md`를 Sheet에서 렌더(현재 raw `<pre>`). 렌더러 의존성 결정 필요
+  (경량 우선). 읽기 전용 표시 — 편집 모드는 P4의 textarea 유지.
+- **커맨드 팔레트 점프**(#8): 기존 `pendingSkillId`(store) 경로 확장 — 팔레트에서 스킬명 검색 →
+  해당 스킬 선택/Sheet open. 자동 실행 없음(#1).
+- **도움말 다이얼로그**(#11): 단축키/스킬 모델 설명. overlay-stack 마커 준수.
+
+### Done-criteria
+
+- 외부 SKILL.md가 마크다운으로 렌더(코드블록/리스트/링크 확인).
+- 팔레트 → 스킬 점프 동작, Esc 계약(아래 부록) 유지.
+- Esc 스모크(cmux/Playwright) 통과 — 창 hide 미호출.
+
+## Phase 3 — 정리 / 분류 (✅ 태그 + ⚠️ 배치/상태)
+
+**의존**: P2. **유일한 스키마 변경 Phase.**
+
+### Deliverables
+
+- **태그 + 필터**(#12): `skill_tags` 매핑(인앱=skill id, 외부=source_path) 마이그레이션 + set/list
+  커맨드 + `bindings.ts` 재생성. 태그 필터 pill + Untagged. (data-layer-conventions 준수.)
+- **다중 선택 툴바**(#9, ⚠️): 여러 스킬 선택 → 배치 토글/태그/삭제. **외부 스킬은 읽기 전용이라 배치
+  대상에서 제외**(인앱 프롬프트 한정). 외부는 선택 시 태그만 허용(파일 무변경).
+- **상태 인디케이터**(#10, ⚠️): skills-manager의 sync 점(diverged/in-sync)은 **도입 안 함**(work-radar엔
+  sync 모델 없음). work-radar 의미로 재정의: `enabled/off` · `kind`(인앱/외부) · `provider` 배지만.
+
+### Done-criteria
+
+- 태그 set/list + 필터 동작, 마이그레이션 idempotent, bindings drift 0.
+- 배치 작업이 인앱에만 적용(외부 파일 무변경 — 테스트로 가드).
+- `cargo test` + 프런트 게이트 green.
+
+## Phase 4 — 편집 / Diff (✅ rail-safe, 각색)
+
+**의존**: P2.
+
+### Deliverables
+
+- **Diff 뷰어**(#18): 커스터마이즈된 인앱 프롬프트를 **코드 상수 폴백과 diff** + **reset-to-default**.
+  skills-manager의 sync-diff UX를 work-radar 폴백 모델(`fallback_prompt`)에 접지. 외부 스킬엔 미적용.
+- **외부 파일 편집 통합**(#19): 이미 존재(`write_external_skill`, 경로 가드). Sheet UI에 자연스럽게 통합.
+
+### Done-criteria
+
+- 편집된 인앱 프롬프트의 diff 표시 + 기본 복원 동작(복원 = prompt를 코드 상수로).
+- 외부 편집 경로 가드(`ensure_within_skills_dir`) 유지 — 다중 루트로 확장 시에도 탈출 차단.
+
+## Phase 5 — 콘텐츠 dedup (⚠️ 각색 필수)
+
+**의존**: P0.
+
+### Deliverables
+
+- **도구 간 동일 스킬 그룹화**(#4): claude·codex에 같은 스킬이 있으면 한 카드로 묶고 "위치 N곳" 표시
+  (skills-manager `group_discovered` 개념).
+- **단, eager 전체-콘텐츠 해싱 금지**(skills-manager 느림 원인). 대안:
+  `(path, mtime, size)` 캐시로 변경분만 재해싱하거나, 지문을 **lazy/백그라운드**로 계산(목록은 즉시).
+  지문 자체도 전체 내용 대신 `SKILL.md` + 파일목록 + mtime으로 경량화 검토.
+
+### Done-criteria
+
+- claude/codex의 동일 스킬이 하나로 그룹화 + 출처 표시.
+- 스캔 latency 회귀 **없음**(캐시 hit 시 재해싱 안 함) — before/after 측정 기록.
+
+## Phase G — 풀 매니저 (🟢 ADR-0006 accepted 2026-05-30)
+
+> 더 이상 게이트가 아니다. **ADR-0006**(`docs/adr/0006-skills-registry-full-manager.md`)이 레일을
+> 재설정해 채택했다. 전 Phase 공통 레일(잡 자동실행 금지 #1/#2 · keychain · 로그 시크릿 금지)은 유지하고,
+> 외부 dir 쓰기/네트워크/업데이트는 ADR-0006의 4개 레일(사용자 발동·가역·감사 / Rust+keychain+bounded /
+> opt-in·무한poll 금지 / 자동실행 금지) 안에서만 구현한다. **선행 follow-up: `decision-rails.md` ·
+> `AGENTS.md` INVARIANT 문구를 ADR-0006에 맞춰 개정**(별도 PR, reviewer 패스).
+
+**의존**: P0(스캔)·P1(네비). 중앙 라이브러리가 토대라 G1 → G2 → G3 순.
+
+### Phase G1 — 중앙 라이브러리 + 네트워크 설치/백업/업데이트
+
+- **중앙 라이브러리**(skills-manager `core/central_repo` 대응): work-radar 소유 managed 스킬 스토어.
+  import(발견 외부 스킬 → 중앙레포 복사, 그 시점부터 중앙이 SSOT). (ADR-0006 레일 2)
+- **네트워크 설치**(#20 skills.sh / #21 git, `installer`·`git_fetcher`·`skillssh_api`): Rust 경유 +
+  keychain + bounded retry(backoff+jitter+terminal failure). 토큰 렌더러 비노출. (레일 3)
+- **git 백업/복구**(#23, `git_backup`): 중앙 라이브러리 백업. 가역.
+- **auto-updater**(#24, `skill_auto_updater`): opt-in + bounded + **fetch까지만, 자동 적용/실행 없음**. (레일 4)
+- **audit_log** 도입: 모든 외부 쓰기/네트워크/sync 기록.
+
+**Done**: import round-trip(외부→중앙→복원); 네트워크 설치 bounded(무한 retry 없음 — 테스트);
+auto-update가 잡/스킬 자동실행 안 함(#1/#2 가드 테스트 유지); 모든 쓰기 audit 기록.
+
+### Phase G2 — 외부 dir 적용 (설치/심링크) + 프리셋
+
+- **외부 dir 쓰기**(#15 에이전트별 enable/disable = 심링크/복사, `tool_adapters` 설치 경로):
+  중앙 managed 스킬을 `~/.{claude,codex,openclaw}/skills`에 적용. **사용자 발동 · 가역(uninstall=원상복구,
+  사용자 파일 무손상) · audit 기록**. config/secret 파일 비대상. (레일 1)
+- **프리셋**(#13, `presets`): 스킬 번들을 환경에 일괄 적용/해제. 적용도 위 레일 1 하.
+
+**Done**: install→uninstall이 외부 dir 원상복구(심링크 제거, 사용자 SKILL.md 무손상 — 테스트);
+모든 적용/해제 audit 기록; 잡 자동실행 불변(#1/#2).
+
+### Phase G3 — 프로젝트 워크스페이스 + 양방향 sync
+
+- **프로젝트 워크스페이스**(#16, `projects`·`project_scanner`): 프로젝트별 스킬 보기/관리.
+- **양방향 sync 엔진**(#22, `sync_engine`·`sync_metadata`): 중앙레포 ↔ 프로젝트/에이전트 dir.
+  diverged/newer 감지. (ADR-0006으로 중앙레포 SSOT 채택했으므로 성립.)
+- **sync 헬스 배지**(#17): P1 사이드바에 sync 상태 점 추가(diverged/in-sync) — 이제 의미 있음.
+
+**Done**: 양방향 sync round-trip(중앙↔프로젝트 변경 반영); diverged 감지 정확; 충돌 시 사용자 확인
+(비가역 덮어쓰기 없음); audit 기록.
+
+---
+
+## 진행 순서 / 의존
+
+```
+P0(스캔 토대) ─┬─ P1(env 네비) ── P2(표현) ──┬─ P3(태그/배치)
+               │                              └─ P4(편집/Diff)
+               └─ P5(dedup)
+P0·P1 완료 후 ── G1(중앙 라이브러리+설치/백업/업데이트) ── G2(외부 dir 적용) ── G3(프로젝트+sync)
+                 (ADR-0006 accepted — decision-rails/AGENTS INVARIANT 개정 follow-up 선행)
+```
+
+한 PR = 한 관심사. Phase 내 여러 PR 가능. dev push만, main은 PR-only(git-conventions).
+
+---
+
+## 부록 — PR 1 상세 (완료, @9161f1d)
+
+> Phase 2의 카드/Sheet(#5·#6)에 해당. 백엔드 무변경 표현 스왑. 아래는 당시 실측 기록(보존).
 
 ### 변경 파일
 
@@ -46,24 +285,22 @@ skills-manager의 **핵심 모델**(중앙 라이브러리 `~/.skills-manager` �
   동일하게 `data-wr-overlay-open` 정적 마커 + `Close` + `SheetTitle`. controlled(트리거 없음) 사용.
 - `src/components/SkillsView.tsx` — 2-pane → 헤더+카드+Sheet. `segmentSkills`/`providerOf`/
   `InAppEditor`/`ExternalViewer`/`CreatePanel` 로직은 보존, 컨테이너만 교체.
-- `src/components/SkillsView.css` — 사이드바/row 클래스 제거, 카드/툴바/섹션 클래스 추가
-  (`--color-wr-*` 토큰). 편집기 클래스는 보존.
+  (※ P1에서 `providerOf`는 백엔드 provider로 대체 예정.)
+- `src/components/SkillsView.css` — 사이드바/row 클래스 제거, 카드/툴바/섹션 클래스 추가.
+  (※ P1에서 env 사이드바 클래스 재도입.)
 
 ### Esc 계약 (hard gate) — 실측 결과
 
 - Sheet는 **프로그램적(controlled `open`)** — `DialogTrigger` 없음.
 - **실측 발견**: radix는 document에 capture-phase Esc 리스너를 달아 close 시 Content를 즉시
-  unmount → window 버블 시점엔 `data-wr-overlay-open` 마커가 이미 사라진다(overlay-stack 결정의
-  "마커가 native Esc 버블까지 생존" 전제가 이 radix+React 버전에선 성립 안 함). SkillsView는 비-board라
+  unmount → window 버블 시점엔 `data-wr-overlay-open` 마커가 이미 사라진다. SkillsView는 비-board라
   창은 안 숨고 board로 bounce했을 뿐 — 재사용 시 board에서 창 hide 위험.
 - **수정**: `SheetContent`에 `onEscapeKeyDown={(e)=>e.stopPropagation()}` — radix가 시트 닫는 건
   그대로, Esc가 window까지 못 가게 막아 타이밍-독립적으로 안전.
 
 ### 검증 (실행 결과)
 
-- `pnpm typecheck` 0 · `pnpm lint` 0 errors(2 pre-existing warning) · `pnpm vitest run` 194 pass
-  (`skillGrouping`/`overlay-stack` 포함). ✅
-- **Esc 스모크(Playwright, vite :1430 + Tauri 스텁 주입)**: 팔레트→스킬 뷰→"인앱 프롬프트 추가"로
-  Sheet open(마커 present) → Escape → 시트 닫힘 + `hideCalls===[]`(창 hide 미호출) + 스킬 뷰 유지
-  (bounce 없음) + window 핸들러 Esc 미수신. ✅
-- INVARIANT #1/#2/#7 무위반 — 별도 critic 패스 ACCEPT-WITH-RESERVATIONS → 2건(drag-region·스모크) 해소. ✅
+- `pnpm typecheck` 0 · `pnpm lint` 0 errors(2 pre-existing warning) · `pnpm vitest run` 194 pass. ✅
+- **Esc 스모크(Playwright, vite :1430 + Tauri 스텁)**: 팔레트→스킬 뷰→"인앱 프롬프트 추가"로
+  Sheet open(마커 present) → Escape → 시트 닫힘 + `hideCalls===[]` + 스킬 뷰 유지(bounce 없음). ✅
+- INVARIANT #1/#2/#7 무위반 — critic ACCEPT-WITH-RESERVATIONS → 2건 해소. ✅

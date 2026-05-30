@@ -43,8 +43,14 @@ work-radar는 **단일 패키지** Tauri 데스크톱 앱(Rust + Vite/React). �
 다음은 **모든 도메인**에 적용되는 불변. 도메인별 추가 규율은 area 문서에 있다.
 
 - **외부 토큰은 OS keychain.** SQLite 평문/프런트 저장 금지(`keyring`, project별 분리).
-- **외부 네트워크 호출(Notion/GitHub/Calendar/RSS)은 Rust에.** 렌더러에 토큰 노출 금지.
-  상세: `docs/areas/ipc-conventions.md`.
+- **외부 네트워크 호출(Notion/GitHub/Calendar/RSS, 스킬 설치=skills.sh/git)은 Rust에.** 렌더러에
+  토큰 노출 금지. 상세: `docs/areas/ipc-conventions.md`.
+- **스킬 매니저 외부 dir 쓰기(ADR-0006).** 중앙 라이브러리 ↔ 로컬 에이전트 스킬 dir
+  (`~/.{claude,codex,openclaw}/skills`) 설치/심링크/sync는 **허용**하되 **사용자 발동 · 가역
+  (uninstall=원상복구, 사용자 파일 무손상) · `audit_log` 기록**. config/secret 파일 비대상.
+  네트워크/auto-update는 keychain + bounded retry, auto-update는 opt-in·fetch까지만(자동 실행 없음).
+  스킬 _파일_ 관리는 codex 잡 자동실행과 무관 — 잡은 여전히 gated→Acceptance(#1/#2 유지).
+  정본: `docs/adr/0006-skills-registry-full-manager.md`.
 - **IPC = tauri-specta 생성 타입(`src/bindings.ts`).** 수기 TS IPC 타입 금지.
   `bindings.ts` drift = CI 게이트.
 - **bounded retry only.** 무한 retry/poll 금지. backoff + jitter + terminal failure 노출.
