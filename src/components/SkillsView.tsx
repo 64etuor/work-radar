@@ -20,12 +20,33 @@ import {
   useCreateSkill,
   useDeleteSkill,
   useExternalSkillContent,
+  useSkillEnvironments,
   useSkills,
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
+import {
+  applyEnvOrder,
+  buildSkillEnvNav,
+  envCounts,
+  reorderEnv,
+  type SkillEnvNavItem,
+} from "@/lib/skillEnvNav";
 import { useStickyToggle } from "@/lib/useStickyToggle";
 import { useUIStore } from "@/store";
+
+const ENV_ORDER_KEY = "wr:skills:env-order";
+
+/** 환경 사이드바 표시 순서(id 배열)를 localStorage에 유지. 외부 상태 불변(#14 로컬 표시 순서). */
+function loadEnvOrder(): string[] {
+  try {
+    const raw = localStorage.getItem(ENV_ORDER_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * 스킬 공유 레지스트리 뷰 (Phase 20 #21). 인앱 에이전트 프롬프트(편집 가능 잡 템플릿)와 외부
@@ -41,11 +62,25 @@ import { useUIStore } from "@/store";
 export function SkillsView() {
   const { pendingSkillId, clearPendingSkill } = useUIStore();
   const skills = useSkills();
+  const environments = useSkillEnvironments();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
+
+  // 환경 사이드바: 활성 환경(필터) + 로컬 표시 순서(드래그 재정렬) + 진행 중 드래그 id.
+  const [activeEnvId, setActiveEnvId] = useState<string>("all");
+  const [envOrder, setEnvOrderState] = useState<string[]>(loadEnvOrder);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const setEnvOrder = (next: string[]) => {
+    setEnvOrderState(next);
+    try {
+      localStorage.setItem(ENV_ORDER_KEY, JSON.stringify(next));
+    } catch {
+      /* private mode 등 — 무시 */
+    }
+  };
 
   // 팔레트에서 스킬을 고르면 그 스킬을 선택(보기/편집)한다 — 한 번만 소비.
   // 동일 선택 핸들러(selectedId) 경로라 자동 실행은 없다(INVARIANT #1).
@@ -71,8 +106,27 @@ export function SkillsView() {
       [s.name, s.binding, s.sourcePath, s.kind].filter(Boolean).join(" ").toLowerCase().includes(q),
     );
   }, [list, search]);
-  const segments = useMemo(() => segmentSkills(filtered), [filtered]);
-  const total = filtered.length;
+
+  // 사이드바 항목은 전체 목록(검색 무관)에서 빌드해 검색 중에도 환경이 사라지지 않게 한다.
+  // 카운트/본문은 검색 적용된 filtered를 쓴다.
+  const envNav = useMemo(
+    () => applyEnvOrder(buildSkillEnvNav(list, environments.data), envOrder),
+    [list, environments.data, envOrder],
+  );
+  const activeEnv = envNav.find((i) => i.id === activeEnvId) ?? envNav[0];
+  const envFiltered = useMemo(
+    () => (activeEnv ? filtered.filter(activeEnv.match) : filtered),
+    [filtered, activeEnv],
+  );
+  const segments = useMemo(() => segmentSkills(envFiltered), [envFiltered]);
+  const total = envFiltered.length;
+
+  const onEnvDrop = (targetId: string) => {
+    if (!dragId) return;
+    const movableIds = envNav.filter((i) => !i.pinned).map((i) => i.id);
+    setEnvOrder(reorderEnv(movableIds, dragId, targetId));
+    setDragId(null);
+  };
 
   const selected = list.find((s) => s.id === selectedId) ?? null;
   const sheetOpen = adding || !!selected;
@@ -137,41 +191,57 @@ export function SkillsView() {
         </Button>
       </div>
 
-      <div className="skl-body">
-        {skills.isError && (
-          <div className="skl-note err">
-            레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
-          </div>
-        )}
-        {!skills.isError && total === 0 && (
-          <div className="skl-empty">
-            {search.trim()
-              ? "검색 결과가 없습니다."
-              : "스킬이 없습니다. 인앱 프롬프트를 추가하거나 ~/.claude/skills에 스킬을 두세요."}
-          </div>
-        )}
-        {segments.map((segment) => (
-          <section key={segment.key} className="skl-section">
-            <div className="skl-group-label">
-              {segment.label}
-              <span>{segment.health}</span>
+      <div className="skl-main">
+        <nav className="skl-sidebar" aria-label="스킬 환경">
+          {envNav.map((item) => (
+            <EnvNavButton
+              key={item.id}
+              item={item}
+              count={envCounts(item, filtered)}
+              active={(activeEnv?.id ?? "all") === item.id}
+              onSelect={() => setActiveEnvId(item.id)}
+              onDragStart={() => setDragId(item.id)}
+              onDropItem={() => onEnvDrop(item.id)}
+            />
+          ))}
+        </nav>
+
+        <div className="skl-body">
+          {skills.isError && (
+            <div className="skl-note err">
+              레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
             </div>
-            <div className={cn("skl-cards", listView ? "list" : "grid")}>
-              {segment.skills.map((s) => (
-                <SkillCard
-                  key={s.id}
-                  skill={s}
-                  listView={listView}
-                  active={s.id === selectedId}
-                  onSelect={() => {
-                    setSelectedId(s.id);
-                    setAdding(false);
-                  }}
-                />
-              ))}
+          )}
+          {!skills.isError && total === 0 && (
+            <div className="skl-empty">
+              {search.trim()
+                ? "검색 결과가 없습니다."
+                : "이 환경에 스킬이 없습니다. 인앱 프롬프트를 추가하거나 ~/.claude/skills에 스킬을 두세요."}
             </div>
-          </section>
-        ))}
+          )}
+          {segments.map((segment) => (
+            <section key={segment.key} className="skl-section">
+              <div className="skl-group-label">
+                {segment.label}
+                <span>{segment.health}</span>
+              </div>
+              <div className={cn("skl-cards", listView ? "list" : "grid")}>
+                {segment.skills.map((s) => (
+                  <SkillCard
+                    key={s.id}
+                    skill={s}
+                    listView={listView}
+                    active={s.id === selectedId}
+                    onSelect={() => {
+                      setSelectedId(s.id);
+                      setAdding(false);
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={(o) => !o && closeSheet()}>
@@ -206,14 +276,8 @@ export function SkillsView() {
   );
 }
 
-function providerOf(skill: Skill): "codex" | "claude" | "other" | "project" {
-  if (skill.kind === "in_app_prompt") return "project";
-  const path = (skill.sourcePath ?? "").toLowerCase();
-  if (path.includes(".codex")) return "codex";
-  if (path.includes(".claude")) return "claude";
-  return "other";
-}
-
+/** 본문 카드 섹션 분류. 외부 스킬 귀속은 백엔드 `Skill.provider`(P0)를 직접 쓴다 — 경로추론(구
+ * `providerOf`) 폐기. in-app은 binding 유무로 Global/Project를 나눈다(provider=null). */
 function segmentSkills(skills: Skill[]) {
   const defs = [
     {
@@ -222,24 +286,34 @@ function segmentSkills(skills: Skill[]) {
       match: (s: Skill) => s.kind === "in_app_prompt" && !s.binding,
     },
     {
-      key: "external-codex",
-      label: "External Skills · Codex",
-      match: (s: Skill) => providerOf(s) === "codex",
+      key: "project",
+      label: "Project Skills",
+      match: (s: Skill) => s.kind === "in_app_prompt" && !!s.binding,
     },
     {
       key: "external-claude",
       label: "External Skills · Claude",
-      match: (s: Skill) => providerOf(s) === "claude",
+      match: (s: Skill) => s.provider === "claude",
+    },
+    {
+      key: "external-codex",
+      label: "External Skills · Codex",
+      match: (s: Skill) => s.provider === "codex",
+    },
+    {
+      key: "external-openclaw",
+      label: "External Skills · OpenClaw",
+      match: (s: Skill) => s.provider === "openclaw",
+    },
+    {
+      key: "external-hermes",
+      label: "External Skills · Hermes",
+      match: (s: Skill) => s.provider === "hermes",
     },
     {
       key: "external-other",
       label: "External Skills · Other",
-      match: (s: Skill) => providerOf(s) === "other",
-    },
-    {
-      key: "project",
-      label: "Project Skills",
-      match: (s: Skill) => s.kind === "in_app_prompt" && !!s.binding,
+      match: (s: Skill) => s.provider === "other",
     },
   ];
   return defs
@@ -253,6 +327,50 @@ function segmentSkills(skills: Skill[]) {
       };
     })
     .filter((seg) => seg.skills.length > 0);
+}
+
+/** 좌측 환경 사이드바 한 항목(필터 버튼 + enabled/total 배지). "전체"를 제외하면 드래그로 재정렬 가능
+ * (로컬 표시 순서 — 외부 상태 불변, #14). */
+function EnvNavButton({
+  item,
+  count,
+  active,
+  onSelect,
+  onDragStart,
+  onDropItem,
+}: {
+  item: SkillEnvNavItem;
+  count: { enabled: number; total: number };
+  active: boolean;
+  onSelect: () => void;
+  onDragStart: () => void;
+  onDropItem: () => void;
+}) {
+  const draggable = !item.pinned;
+  return (
+    <button
+      type="button"
+      className={cn("skl-env", active && "active")}
+      aria-pressed={active}
+      onClick={onSelect}
+      draggable={draggable}
+      onDragStart={draggable ? onDragStart : undefined}
+      onDragOver={draggable ? (e) => e.preventDefault() : undefined}
+      onDrop={
+        draggable
+          ? (e) => {
+              e.preventDefault();
+              onDropItem();
+            }
+          : undefined
+      }
+    >
+      <span className="skl-env-label">{item.label}</span>
+      <span className="skl-env-count">
+        {count.enabled}/{count.total}
+      </span>
+    </button>
+  );
 }
 
 /** /Users/<me> 접두를 ~로 축약(외부 스킬 경로 표시용). */

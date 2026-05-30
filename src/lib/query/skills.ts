@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands, type CreateSkillInput, type Skill } from "@/bindings";
+import { commands, type CreateSkillInput, type Skill, type SkillEnvironment } from "@/bindings";
 
 import { unwrap } from "./client";
 
@@ -13,6 +13,15 @@ export function useSkills() {
   return useQuery<Skill[]>({
     queryKey: ["skills"],
     queryFn: () => unwrap(commands.listSkills()),
+    staleTime: 10_000,
+  });
+}
+
+/** 감지된 스킬 환경(provider별 present/count/root). 좌측 env 사이드바가 "설치된 환경만" 렌더하는 데 쓴다. */
+export function useSkillEnvironments() {
+  return useQuery<SkillEnvironment[]>({
+    queryKey: ["skillEnvironments"],
+    queryFn: () => unwrap(commands.detectSkillEnvironments()),
     staleTime: 10_000,
   });
 }

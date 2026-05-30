@@ -59,6 +59,61 @@
   margin-left: auto;
 }
 
+/* ── 본문 영역(좌 env 사이드바 + 우 카드 본문) ── */
+.skl-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── 좌측 환경 사이드바(All + 인앱 + 감지된 외부 provider) ── */
+.skl-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 184px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 14px 10px;
+  border-right: 1px solid var(--color-wr-border-light);
+}
+.skl-env {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-wr-fg);
+  cursor: pointer;
+  padding: 6px 10px;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.skl-env:hover {
+  background: var(--color-wr-surface);
+}
+.skl-env.active {
+  background: var(--color-wr-surface);
+  border-color: var(--color-wr-border);
+}
+.skl-env-label {
+  min-width: 0;
+  font: 500 13px var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skl-env-count {
+  flex-shrink: 0;
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-muted);
+}
+
 /* ── 본문(스크롤 컨테이너) ── */
 .skl-body {
   flex: 1;
