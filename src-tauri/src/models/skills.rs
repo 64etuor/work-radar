@@ -69,6 +69,23 @@ pub struct ExternalSkill {
     pub provider: SkillProvider,
 }
 
+/// 환경(provider) 감지 결과 한 건 — 사이드바가 "설치된 환경만" 렌더하는 데 쓴다(P1). 동일 provider의
+/// 여러 ROOTS(예: Codex = `.codex` + `.agents`)는 하나로 집계한다: `present`=루트 중 하나라도 존재,
+/// `skill_count`=합. `root_path`는 표시 전용(주 루트) — **로그엔 절대 싣지 않는다(C7)**. DB 비영속(매
+/// 호출 디스크 스캔). 읽기 전용 — 외부 dir에 쓰지 않는다(외부 쓰기는 Phase G).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillEnvironment {
+    /// 환경(스캔 루트 귀속 도구).
+    pub provider: SkillProvider,
+    /// 이 provider의 루트 중 하나라도 디스크에 존재하면 true(사이드바 렌더 조건).
+    pub present: bool,
+    /// 이 provider에서 발견한 스킬 수(specta는 i64 미지원 → i32; 스킬 수는 작다).
+    pub skill_count: i32,
+    /// 주 루트 절대경로(표시 전용 — 로그 금지). 동일 provider 다중 루트면 첫 루트.
+    pub root_path: String,
+}
+
 /// 인앱 프롬프트 생성 입력(레지스트리에 새 편집 가능 템플릿 추가). binding은 선택(미바인딩 템플릿도 가능).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

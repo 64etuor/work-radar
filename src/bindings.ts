@@ -501,6 +501,11 @@ export const commands = {
 	 *  읽기 전용 브라우즈. 부재 루트는 스킵(graceful degrade) — 항상 가능분을 반환한다.
 	 */
 	scanExternalSkills: () => typedError<ExternalSkill[], AppError>(__TAURI_INVOKE("scan_external_skills")),
+	/**
+	 *  환경 감지: 설치된(존재하는) 스킬 환경 + provider별 스킬 수를 돌려준다(P1 사이드바 전용 소비자).
+	 *  동일 ROOTS(`skill_roots`) 소비 — 두 번째 루트 정의 없음(C6). 읽기 전용.
+	 */
+	detectSkillEnvironments: () => typedError<SkillEnvironment[], AppError>(__TAURI_INVOKE("detect_skill_environments")),
 	/**  외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관. */
 	readExternalSkill: (path: string) => typedError<string, AppError>(__TAURI_INVOKE("read_external_skill", { path })),
 	/**
@@ -1511,6 +1516,23 @@ export type Skill = {
 	provider: SkillProvider | null,
 	createdAt: string,
 	updatedAt: string,
+};
+
+/**
+ *  환경(provider) 감지 결과 한 건 — 사이드바가 "설치된 환경만" 렌더하는 데 쓴다(P1). 동일 provider의
+ *  여러 ROOTS(예: Codex = `.codex` + `.agents`)는 하나로 집계한다: `present`=루트 중 하나라도 존재,
+ *  `skill_count`=합. `root_path`는 표시 전용(주 루트) — **로그엔 절대 싣지 않는다(C7)**. DB 비영속(매
+ *  호출 디스크 스캔). 읽기 전용 — 외부 dir에 쓰지 않는다(외부 쓰기는 Phase G).
+ */
+export type SkillEnvironment = {
+	/**  환경(스캔 루트 귀속 도구). */
+	provider: SkillProvider,
+	/**  이 provider의 루트 중 하나라도 디스크에 존재하면 true(사이드바 렌더 조건). */
+	present: boolean,
+	/**  이 provider에서 발견한 스킬 수(specta는 i64 미지원 → i32; 스킬 수는 작다). */
+	skillCount: number,
+	/**  주 루트 절대경로(표시 전용 — 로그 금지). 동일 provider 다중 루트면 첫 루트. */
+	rootPath: string,
 };
 
 /**

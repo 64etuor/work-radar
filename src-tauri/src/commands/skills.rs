@@ -25,7 +25,7 @@ use tauri::State;
 use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHECK_PROMPT};
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{CreateSkillInput, ExternalSkill, Skill, SkillProvider};
+use crate::models::{CreateSkillInput, ExternalSkill, Skill, SkillEnvironment, SkillProvider};
 use std::path::PathBuf;
 
 /// 인앱 프롬프트 binding 키(잡 트리거가 lookup에 쓰는 식별자). 하드코딩 프롬프트와 1:1.
@@ -316,23 +316,126 @@ pub async fn delete_skill(db: State<'_, Db>, id: String) -> Result<(), AppError>
     Ok(())
 }
 
-/// 스캔·path-guard(·후속 P1 detect)가 **공유하는 단 하나의 루트 정의**(C6). 각 항목은
-/// `(provider, 절대경로, recursive)`. `recursive`는 컬럼만 두고 P0는 전부 false(재귀 미반입).
-/// HOME 미설정이면 빈 목록(전부 graceful — 스캔 0건, 가드는 모든 경로 거부).
+/// 스캔·path-guard·detect가 **공유하는 단 하나의 루트 정의**(C6). 각 항목은 `(provider, 절대경로,
+/// recursive)`. `recursive`는 컬럼만 두고 P1까지 전부 false(재귀는 P1.5). P0는 정적 상수였으나
+/// **P1에서 env-aware resolution으로 진화** — 루트 *위치*가 우리 상수와 다르면 트리째 못 보던 문제를
+/// 닫는다(`resolve_skill_roots`). C6 단일 출처는 유지: 정적 상수 → resolve 결과를 돌려준다.
 ///
-/// `.agents/skills`는 도구 간 공유 발견 dir이라 P0에선 **Codex로 태깅**(upstream codex 귀속).
-/// ⚑ Copilot 추가 시 `.agents/skills`는 공유되므로 **P1에서 귀속 재검토**. Hermes는 경로 미확인이라 제외.
+/// `.agents/skills`는 도구 간 공유 발견 dir이라 P0부터 **Codex로 태깅**(upstream codex 귀속).
+/// ⚑ Copilot 추가 시 `.agents/skills`는 공유되므로 **귀속 재검토 필요**. Hermes 루트는 P1.5에서 추가.
 fn skill_roots() -> Vec<(SkillProvider, PathBuf, bool)> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+    resolve_skill_roots(&SkillRootEnv::from_process())
+}
+
+/// 루트 resolution 입력(테스트는 직접 주입 → hermetic, 프로세스 env 전역 변이 없음). 프로세스 env를
+/// 한 번에 캡처한다.
+struct SkillRootEnv {
+    home: Option<PathBuf>,
+    claude_config_dir: Option<PathBuf>,
+    codex_home: Option<PathBuf>,
+    xdg_config_home: Option<PathBuf>,
+}
+
+impl SkillRootEnv {
+    fn from_process() -> Self {
+        let var = |k: &str| std::env::var_os(k).map(PathBuf::from);
+        Self {
+            home: var("HOME"),
+            claude_config_dir: var("CLAUDE_CONFIG_DIR"),
+            codex_home: var("CODEX_HOME"),
+            xdg_config_home: var("XDG_CONFIG_HOME"),
+        }
+    }
+}
+
+/// env → 루트 경로 목록 해석(C6 단일 출처). 도구별 우선순위:
+/// 1. **명시 override env**(`CLAUDE_CONFIG_DIR`/`CODEX_HOME`)가 set이면 존재 무관 그 위치(`<dir>/skills`)
+///    — 사용자가 명시적으로 가리킨 곳이므로 존재를 따지지 않는다(스캔은 graceful).
+/// 2. `XDG_CONFIG_HOME/<name>/skills`가 **존재하면** 그 경로 — 미존재 XDG 후보는 폴백한다(Linux에서
+///    XDG_CONFIG_HOME 상존이 dotfile을 가로채지 않도록 **존재 게이트**).
+/// 3. 표준 dotfile `~/.<dotfile>/skills` 폴백(언제나 안정적 가드 루트).
+///
+/// HOME 미설정이면 빈 목록(전부 graceful — 스캔 0건, 가드는 모든 경로 거부).
+fn resolve_skill_roots(env: &SkillRootEnv) -> Vec<(SkillProvider, PathBuf, bool)> {
+    let Some(home) = env.home.clone() else {
         return Vec::new();
     };
-    let skills_of = |dir: &str| home.join(dir).join("skills");
+    let resolve = |override_dir: Option<&PathBuf>, xdg_name: &str, dotfile: &str| -> PathBuf {
+        if let Some(dir) = override_dir {
+            return dir.join("skills");
+        }
+        if let Some(xdg) = &env.xdg_config_home {
+            let cand = xdg.join(xdg_name).join("skills");
+            if cand.is_dir() {
+                return cand;
+            }
+        }
+        home.join(dotfile).join("skills")
+    };
     vec![
-        (SkillProvider::Claude, skills_of(".claude"), false),
-        (SkillProvider::Codex, skills_of(".codex"), false),
-        (SkillProvider::Codex, skills_of(".agents"), false),
-        (SkillProvider::Openclaw, skills_of(".openclaw"), false),
+        (
+            SkillProvider::Claude,
+            resolve(env.claude_config_dir.as_ref(), "claude", ".claude"),
+            false,
+        ),
+        (
+            SkillProvider::Codex,
+            resolve(env.codex_home.as_ref(), "codex", ".codex"),
+            false,
+        ),
+        // `.agents`는 도구 간 공유 발견 dir(Codex 태깅). 전용 override env 없음.
+        (
+            SkillProvider::Codex,
+            resolve(None, "agents", ".agents"),
+            false,
+        ),
+        (
+            SkillProvider::Openclaw,
+            resolve(None, "openclaw", ".openclaw"),
+            false,
+        ),
     ]
+}
+
+/// 환경(provider)별 감지 집계(C6 동일 ROOTS 소비). 동일 provider의 여러 루트(Codex=`.codex`+`.agents`)는
+/// 하나로 집계: `present`=루트 중 하나라도 존재, `skill_count`=합, `root_path`=첫(주) 루트. provider
+/// 출현 순서를 보존한다. 읽기 전용 — 외부 dir 무쓰기.
+pub(crate) fn detect_skill_environments_core(
+    roots: &[(SkillProvider, PathBuf, bool)],
+) -> Vec<SkillEnvironment> {
+    let scanned = scan_external_skills_core(roots);
+    // provider 첫 출현 순서로 누적(주 루트=첫 루트). present는 루트별 OR 집계.
+    let mut envs: Vec<SkillEnvironment> = Vec::new();
+    for (provider, root, _recursive) in roots {
+        let exists = std::fs::metadata(root).map(|m| m.is_dir()).unwrap_or(false);
+        match envs.iter_mut().find(|e| e.provider == *provider) {
+            Some(e) => e.present = e.present || exists,
+            None => envs.push(SkillEnvironment {
+                provider: *provider,
+                present: exists,
+                skill_count: 0,
+                root_path: root.to_string_lossy().into_owned(),
+            }),
+        }
+    }
+    for s in &scanned {
+        if let Some(e) = envs.iter_mut().find(|e| e.provider == s.provider) {
+            e.skill_count += 1;
+        }
+    }
+    // no-PII(C7): provider+present+count만 — root_path(절대경로)는 로그 금지.
+    for e in &envs {
+        tracing::debug!(target: "skills.detect", provider = ?e.provider, present = e.present, count = e.skill_count, "detected skill environment");
+    }
+    envs
+}
+
+/// 환경 감지: 설치된(존재하는) 스킬 환경 + provider별 스킬 수를 돌려준다(P1 사이드바 전용 소비자).
+/// 동일 ROOTS(`skill_roots`) 소비 — 두 번째 루트 정의 없음(C6). 읽기 전용.
+#[tauri::command]
+#[specta::specta]
+pub async fn detect_skill_environments() -> Result<Vec<SkillEnvironment>, AppError> {
+    Ok(detect_skill_environments_core(&skill_roots()))
 }
 
 /// SKILL.md의 YAML frontmatter에서 name/description을 얕게 파싱한다(외부 의존 없이 라인 스캔).
@@ -784,6 +887,121 @@ mod tests {
                 .is_err()
         );
         assert!(delete_skill_core(&db, "ext:/x/SKILL.md").await.is_err());
+    }
+
+    /// 루트 resolution(C6 단일 출처, P1): 명시 override env가 최우선(존재 무관). override 없는 도구는
+    /// dotfile 폴백. HOME 미설정이면 빈 목록.
+    #[test]
+    fn resolve_explicit_override_wins_else_dotfile() {
+        let codex = TempDir::new().unwrap();
+        let home = TempDir::new().unwrap();
+        let env = SkillRootEnv {
+            home: Some(home.path().to_path_buf()),
+            claude_config_dir: None,
+            codex_home: Some(codex.path().to_path_buf()),
+            xdg_config_home: None,
+        };
+        let roots = resolve_skill_roots(&env);
+        // CODEX_HOME set → `<CODEX_HOME>/skills`(존재 무관, 첫 Codex 루트).
+        let codex_root = roots
+            .iter()
+            .find(|(p, _, _)| *p == SkillProvider::Codex)
+            .unwrap();
+        assert_eq!(codex_root.1, codex.path().join("skills"));
+        // claude override 없음 → dotfile 폴백.
+        let claude_root = roots
+            .iter()
+            .find(|(p, _, _)| *p == SkillProvider::Claude)
+            .unwrap();
+        assert_eq!(claude_root.1, home.path().join(".claude").join("skills"));
+    }
+
+    /// XDG 후보는 **존재할 때만** 채택(미존재 XDG는 dotfile 폴백 — Linux XDG 상존이 dotfile을 가로채지
+    /// 않도록 존재 게이트).
+    #[test]
+    fn resolve_uses_existing_xdg_then_dotfile_fallback() {
+        let xdg = TempDir::new().unwrap();
+        let home = TempDir::new().unwrap();
+        // XDG codex/skills 존재 → 채택. claude는 XDG 후보 미존재 → dotfile.
+        std::fs::create_dir_all(xdg.path().join("codex").join("skills")).unwrap();
+        let env = SkillRootEnv {
+            home: Some(home.path().to_path_buf()),
+            claude_config_dir: None,
+            codex_home: None,
+            xdg_config_home: Some(xdg.path().to_path_buf()),
+        };
+        let roots = resolve_skill_roots(&env);
+        let codex_root = roots
+            .iter()
+            .find(|(p, _, _)| *p == SkillProvider::Codex)
+            .unwrap();
+        assert_eq!(codex_root.1, xdg.path().join("codex").join("skills"));
+        let claude_root = roots
+            .iter()
+            .find(|(p, _, _)| *p == SkillProvider::Claude)
+            .unwrap();
+        assert_eq!(claude_root.1, home.path().join(".claude").join("skills"));
+    }
+
+    /// HOME 미설정 → 빈 목록(graceful: 스캔 0건, 가드 전부 거부).
+    #[test]
+    fn resolve_no_home_is_empty() {
+        let env = SkillRootEnv {
+            home: None,
+            claude_config_dir: None,
+            codex_home: None,
+            xdg_config_home: None,
+        };
+        assert!(resolve_skill_roots(&env).is_empty());
+    }
+
+    /// detect: provider별 집계(Codex=`.codex`+`.agents` 합산) + present(부재 루트 false) + 주 루트 root_path
+    /// + provider 출현 순서 보존.
+    #[test]
+    fn detect_aggregates_per_provider_present_and_counts() {
+        let claude = TempDir::new().unwrap();
+        let codex = TempDir::new().unwrap();
+        let agents = TempDir::new().unwrap();
+        make_skill(claude.path(), "a", "---\nname: a\n---\n");
+        make_skill(codex.path(), "b", "---\nname: b\n---\n");
+        make_skill(agents.path(), "c", "---\nname: c\n---\n");
+        let absent = codex.path().join("nope-openclaw");
+
+        let roots = vec![
+            (SkillProvider::Claude, claude.path().to_path_buf(), false),
+            (SkillProvider::Codex, codex.path().to_path_buf(), false),
+            (SkillProvider::Codex, agents.path().to_path_buf(), false),
+            (SkillProvider::Openclaw, absent, false),
+        ];
+        let envs = detect_skill_environments_core(&roots);
+
+        // provider 출현 순서 보존 + Codex 한 줄로 집계.
+        assert_eq!(
+            envs.iter().map(|e| e.provider).collect::<Vec<_>>(),
+            vec![
+                SkillProvider::Claude,
+                SkillProvider::Codex,
+                SkillProvider::Openclaw
+            ],
+        );
+        let by = |p: SkillProvider| envs.iter().find(|e| e.provider == p).unwrap();
+        assert_eq!(by(SkillProvider::Claude).skill_count, 1);
+        assert_eq!(
+            by(SkillProvider::Codex).skill_count,
+            2,
+            ".codex + .agents 합산"
+        );
+        assert!(by(SkillProvider::Claude).present);
+        assert!(by(SkillProvider::Codex).present);
+        assert!(
+            !by(SkillProvider::Openclaw).present,
+            "부재 루트 → present=false"
+        );
+        // root_path = 주 루트(첫 Codex = `.codex` 대응).
+        assert_eq!(
+            by(SkillProvider::Codex).root_path,
+            codex.path().to_string_lossy().into_owned(),
+        );
     }
 
     /// frontmatter 파서: name/description 추출 + 따옴표 제거 + 비-frontmatter는 빈 값.
