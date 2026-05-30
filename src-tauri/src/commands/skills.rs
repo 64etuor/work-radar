@@ -26,7 +26,8 @@ use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHEC
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{CreateSkillInput, ExternalSkill, Skill, SkillEnvironment, SkillProvider};
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 /// 인앱 프롬프트 binding 키(잡 트리거가 lookup에 쓰는 식별자). 하드코딩 프롬프트와 1:1.
 pub(crate) const BINDING_BATCH_ENRICH: &str = "batch_enrich";
@@ -160,10 +161,7 @@ pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, AppError> {
 }
 
 /// `list_skills`의 코어(roots 주입 → hermetic 테스트). 인앱 DB 행 + ROOTS 외부 스캔을 병합한다.
-async fn list_skills_core(
-    db: &Db,
-    roots: &[(SkillProvider, PathBuf, bool)],
-) -> Result<Vec<Skill>, AppError> {
+async fn list_skills_core(db: &Db, roots: &[SkillRoot]) -> Result<Vec<Skill>, AppError> {
     // 인앱(편집 가능 잡 템플릿) — DB SSOT. provider 컬럼은 없어 FromRow가 None을 채운다(#[sqlx(skip)]).
     let mut skills: Vec<Skill> = sqlx::query_as::<_, Skill>(
         "SELECT id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at \
@@ -316,14 +314,61 @@ pub async fn delete_skill(db: State<'_, Db>, id: String) -> Result<(), AppError>
     Ok(())
 }
 
-/// 스캔·path-guard·detect가 **공유하는 단 하나의 루트 정의**(C6). 각 항목은 `(provider, 절대경로,
-/// recursive)`. `recursive`는 컬럼만 두고 P1까지 전부 false(재귀는 P1.5). P0는 정적 상수였으나
-/// **P1에서 env-aware resolution으로 진화** — 루트 *위치*가 우리 상수와 다르면 트리째 못 보던 문제를
-/// 닫는다(`resolve_skill_roots`). C6 단일 출처는 유지: 정적 상수 → resolve 결과를 돌려준다.
+/// 재귀 루트의 깊이 캡(루트 기준). 실측(2026-05-30): hermes 스킬 최심 = depth 3, claude 중첩 = depth 2.
+/// 4는 카테고리/그룹 중첩에 충분한 헤드룸이면서, 거대 트리(레포 등)에서 무한 하강을 막는 상한이다
+/// (node_modules 등은 `is_ignored_dir`로 별도 차단, 리프 규칙으로 보통 더 일찍 멈춤).
+const RECURSIVE_MAX_DEPTH: usize = 4;
+
+/// 스캔·path-guard·detect가 **공유하는 단 하나의 루트 정의**(C6). P0=`(provider, path, recursive)`
+/// 3-튜플이었으나 P1.5에서 깊이 메타(`max_depth`)를 더해 구조체로. `recursive`=true면 바운디드 재귀로
+/// 중첩 카테고리 스킬까지 발견한다(아래 `scan_root`). ignore 리스트는 전 루트 동일(`is_ignored_dir`)이라
+/// per-root 필드 대신 공유 술어로 둔다(YAGNI — 향후 per-root override가 필요하면 구조체라 비파괴 추가).
+#[derive(Debug, Clone)]
+pub(crate) struct SkillRoot {
+    pub provider: SkillProvider,
+    pub path: PathBuf,
+    /// true면 리프 규칙 기반 바운디드 재귀, false면 직속 자식만(P0 동작).
+    pub recursive: bool,
+    /// recursive일 때 루트 기준 최대 하강 깊이(리프 규칙으로 보통 더 일찍 멈춤). 비재귀는 1.
+    pub max_depth: usize,
+}
+
+impl SkillRoot {
+    /// 비재귀 루트(직속 자식만 — P0 동작). 현재 테스트 전용.
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn flat(provider: SkillProvider, path: PathBuf) -> Self {
+        Self {
+            provider,
+            path,
+            recursive: false,
+            max_depth: 1,
+        }
+    }
+
+    /// 바운디드 재귀 루트.
+    fn recursive(provider: SkillProvider, path: PathBuf, max_depth: usize) -> Self {
+        Self {
+            provider,
+            path,
+            recursive: true,
+            max_depth,
+        }
+    }
+}
+
+/// 재귀 하강 시 건너뛸 디렉터리 이름: 숨김 dir(`.git`/`.venv`/벤더된 에이전트 dotfile 등) + 표준
+/// 빌드/벤더 dir. 특히 레포-로컬 루트(P1.5 #4)에서 거대 트리(node_modules 등) 폭주를 막는다. 루트 자체는
+/// 명시 경로라 이 술어의 대상이 아니다(하강 중 하위 dir에만 적용).
+fn is_ignored_dir(name: &str) -> bool {
+    name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "vendor")
+}
+
+/// 스캔·path-guard·detect가 공유하는 ROOTS(C6 단일 출처). 정적 상수 → P1 env-aware resolution →
+/// P1.5에서 재귀 + Hermes 루트로 진화. C6 단일 출처는 유지: 한 함수가 전 소비자에 같은 슬라이스를 준다.
 ///
 /// `.agents/skills`는 도구 간 공유 발견 dir이라 P0부터 **Codex로 태깅**(upstream codex 귀속).
-/// ⚑ Copilot 추가 시 `.agents/skills`는 공유되므로 **귀속 재검토 필요**. Hermes 루트는 P1.5에서 추가.
-fn skill_roots() -> Vec<(SkillProvider, PathBuf, bool)> {
+/// ⚑ Copilot 추가 시 `.agents/skills`는 공유되므로 **귀속 재검토 필요**.
+fn skill_roots() -> Vec<SkillRoot> {
     resolve_skill_roots(&SkillRootEnv::from_process())
 }
 
@@ -356,7 +401,11 @@ impl SkillRootEnv {
 /// 3. 표준 dotfile `~/.<dotfile>/skills` 폴백(언제나 안정적 가드 루트).
 ///
 /// HOME 미설정이면 빈 목록(전부 graceful — 스캔 0건, 가드는 모든 경로 거부).
-fn resolve_skill_roots(env: &SkillRootEnv) -> Vec<(SkillProvider, PathBuf, bool)> {
+///
+/// **P1.5**: 도구 루트는 전부 `recursive=true`(중첩 카테고리 스킬 발견). Hermes 루트(`~/.hermes/skills`)
+/// 추가. skm 자체 스토어(`~/.skills-manager/skills`)는 여기서 합성하지 않아 ROOTS에서 자동 제외된다
+/// (대량 중복 방지 — 정본 Phase 1.5 #6).
+fn resolve_skill_roots(env: &SkillRootEnv) -> Vec<SkillRoot> {
     let Some(home) = env.home.clone() else {
         return Vec::new();
     };
@@ -373,26 +422,33 @@ fn resolve_skill_roots(env: &SkillRootEnv) -> Vec<(SkillProvider, PathBuf, bool)
         home.join(dotfile).join("skills")
     };
     vec![
-        (
+        SkillRoot::recursive(
             SkillProvider::Claude,
             resolve(env.claude_config_dir.as_ref(), "claude", ".claude"),
-            false,
+            RECURSIVE_MAX_DEPTH,
         ),
-        (
+        SkillRoot::recursive(
             SkillProvider::Codex,
             resolve(env.codex_home.as_ref(), "codex", ".codex"),
-            false,
+            RECURSIVE_MAX_DEPTH,
         ),
         // `.agents`는 도구 간 공유 발견 dir(Codex 태깅). 전용 override env 없음.
-        (
+        SkillRoot::recursive(
             SkillProvider::Codex,
             resolve(None, "agents", ".agents"),
-            false,
+            RECURSIVE_MAX_DEPTH,
         ),
-        (
+        SkillRoot::recursive(
             SkillProvider::Openclaw,
             resolve(None, "openclaw", ".openclaw"),
-            false,
+            RECURSIVE_MAX_DEPTH,
+        ),
+        // Hermes(P1.5): 대부분 카테고리 중첩(`<root>/<cat>/<skill>/SKILL.md`, 실측 depth 2~3). 전용
+        // override env 없음 → dotfile만.
+        SkillRoot::recursive(
+            SkillProvider::Hermes,
+            home.join(".hermes").join("skills"),
+            RECURSIVE_MAX_DEPTH,
         ),
     ]
 }
@@ -400,21 +456,21 @@ fn resolve_skill_roots(env: &SkillRootEnv) -> Vec<(SkillProvider, PathBuf, bool)
 /// 환경(provider)별 감지 집계(C6 동일 ROOTS 소비). 동일 provider의 여러 루트(Codex=`.codex`+`.agents`)는
 /// 하나로 집계: `present`=루트 중 하나라도 존재, `skill_count`=합, `root_path`=첫(주) 루트. provider
 /// 출현 순서를 보존한다. 읽기 전용 — 외부 dir 무쓰기.
-pub(crate) fn detect_skill_environments_core(
-    roots: &[(SkillProvider, PathBuf, bool)],
-) -> Vec<SkillEnvironment> {
+pub(crate) fn detect_skill_environments_core(roots: &[SkillRoot]) -> Vec<SkillEnvironment> {
     let scanned = scan_external_skills_core(roots);
     // provider 첫 출현 순서로 누적(주 루트=첫 루트). present는 루트별 OR 집계.
     let mut envs: Vec<SkillEnvironment> = Vec::new();
-    for (provider, root, _recursive) in roots {
-        let exists = std::fs::metadata(root).map(|m| m.is_dir()).unwrap_or(false);
-        match envs.iter_mut().find(|e| e.provider == *provider) {
+    for root in roots {
+        let exists = std::fs::metadata(&root.path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false);
+        match envs.iter_mut().find(|e| e.provider == root.provider) {
             Some(e) => e.present = e.present || exists,
             None => envs.push(SkillEnvironment {
-                provider: *provider,
+                provider: root.provider,
                 present: exists,
                 skill_count: 0,
-                root_path: root.to_string_lossy().into_owned(),
+                root_path: root.path.to_string_lossy().into_owned(),
             }),
         }
     }
@@ -477,35 +533,61 @@ fn unquote(s: &str) -> String {
     }
 }
 
-/// ROOTS 각 `*/SKILL.md`를 스캔해 frontmatter(name/description) + provider + 경로를 모은다(읽기 전용).
+/// ROOTS의 `SKILL.md`를 스캔해 frontmatter(name/description) + provider + 경로를 모은다(읽기 전용).
 /// roots **주입**(테스트는 tempdir roots → hermetic). 콘텐츠 해싱 없음(frontmatter-only). 파일은
 /// 실행하지 않는다.
 ///
-/// 부분실패 정책(C6): per-root **skip-and-continue** — 부재/읽기불가 루트는 스킵하고 나머지 루트의
-/// 스킬을 반환한다(전체 스캔 에러 없음). 디렉터리 엔트리는 `is_dir() || is_symlink()`를 수용해
-/// 심링크로 설치된 스킬 dir을 미드롭한다.
-pub(crate) fn scan_external_skills_core(
-    roots: &[(SkillProvider, PathBuf, bool)],
-) -> Vec<ExternalSkill> {
+/// **P1.5 깊이**: `recursive=true` 루트는 바운디드 재귀로 중첩 카테고리 스킬(`<root>/<cat>/<skill>/`)까지
+/// 발견한다 — 리프 규칙(SKILL.md를 가진 dir에서 하강 중단), `max_depth` 캡, `is_ignored_dir` 스킵,
+/// 재귀 하강 중 심링크 미추적 + visited 사이클 가드(상세: `scan_root`).
+///
+/// 부분실패 정책(C6): per-root **skip-and-continue** — 부재/읽기불가 루트(또는 하위 dir)는 스킵하고
+/// 나머지를 반환한다(전체 스캔 에러 없음).
+pub(crate) fn scan_external_skills_core(roots: &[SkillRoot]) -> Vec<ExternalSkill> {
     let mut out: Vec<ExternalSkill> = Vec::new();
-    for (provider, root, _recursive) in roots {
-        let Ok(entries) = std::fs::read_dir(root) else {
-            continue; // 부재/읽기불가 루트는 스킵(graceful).
-        };
-        let mut root_count = 0usize;
-        for entry in entries.flatten() {
-            let dir = entry.path();
-            // is_dir()는 심링크를 따라가므로 심링크→dir은 통과하고, 깨진/비-dir 심링크는 SKILL.md 읽기에서
-            // 자연 스킵된다. 명시적으로 is_symlink()도 수용해 의도를 드러낸다.
-            if !(dir.is_dir() || dir.is_symlink()) {
-                continue;
-            }
-            let skill_md = dir.join("SKILL.md");
-            let Ok(content) = std::fs::read_to_string(&skill_md) else {
-                continue; // SKILL.md 없는 디렉터리는 스킬 아님.
-            };
+    for root in roots {
+        let before = out.len();
+        let mut visited: HashSet<PathBuf> = HashSet::new();
+        scan_root(root.provider, &root.path, 1, root, &mut visited, &mut out);
+        // no-PII(C7): provider+count만 기록 — 절대 경로/frontmatter 본문 금지.
+        let root_count = out.len() - before;
+        tracing::debug!(target: "skills.scan", provider = ?root.provider, count = root_count, "scanned skill root");
+    }
+    out.sort_by_key(|a| a.name.to_lowercase());
+    out
+}
+
+/// `dir`의 직속 자식을 검사한다(`child_depth` = 그 자식들의 루트 기준 깊이). SKILL.md를 가진 자식 =
+/// 스킬(**리프 규칙** — 기록 후 그 하위로 하강하지 않아 이중 카운트·무한 하강을 막는다). 그 외 자식은
+/// `root.recursive`일 때만, 아래 가드 하에 재귀한다:
+///  - **depth cap**: `child_depth >= max_depth`면 더 하강하지 않는다.
+///  - **심링크 미추적**: 재귀 하강 중 심링크 dir은 따라가지 않는다(사이클 차단). 단 최상위/중간의 심링크
+///    *스킬* dir는 위 리프 검사(`read_to_string`이 심링크를 따라감)에서 이미 수용된다(P0 동작 보존).
+///  - **ignore**: `is_ignored_dir`(숨김 + node_modules/target/dist/vendor) — 레포 거대 트리 방어.
+///  - **visited 사이클 가드**: 정규화 실경로 방문 셋(심링크 차단의 방어적 보강).
+fn scan_root(
+    provider: SkillProvider,
+    dir: &Path,
+    child_depth: usize,
+    root: &SkillRoot,
+    visited: &mut HashSet<PathBuf>,
+    out: &mut Vec<ExternalSkill>,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return; // 부재/읽기불가 — graceful skip.
+    };
+    for entry in entries.flatten() {
+        let child = entry.path();
+        // is_dir()는 심링크를 따라가므로 심링크→dir도 통과하고, 깨진/비-dir 심링크는 SKILL.md 읽기에서
+        // 자연 스킵된다. 명시적으로 is_symlink()도 수용해 의도를 드러낸다.
+        if !(child.is_dir() || child.is_symlink()) {
+            continue;
+        }
+        // 리프 규칙: SKILL.md를 가진 dir은 스킬 — 기록하고 하강하지 않는다.
+        let skill_md = child.join("SKILL.md");
+        if let Ok(content) = std::fs::read_to_string(&skill_md) {
             let (name, description) = parse_frontmatter(&content);
-            let dir_name = dir
+            let dir_name = child
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("(unknown)")
@@ -514,15 +596,29 @@ pub(crate) fn scan_external_skills_core(
                 name: name.unwrap_or(dir_name),
                 description: description.unwrap_or_default(),
                 path: skill_md.to_string_lossy().into_owned(),
-                provider: *provider,
+                provider,
             });
-            root_count += 1;
+            continue;
         }
-        // no-PII(C7): provider+count만 기록 — 절대 경로/frontmatter 본문 금지.
-        tracing::debug!(target: "skills.scan", provider = ?provider, count = root_count, "scanned skill root");
+        // 스킬 아님 — recursive 루트에서만 바운디드 하강.
+        if !root.recursive || child_depth >= root.max_depth {
+            continue;
+        }
+        // 재귀 하강 중 심링크는 따라가지 않는다(사이클 차단; 최상위 심링크 스킬 dir는 위 리프에서 수용).
+        if child.is_symlink() {
+            continue;
+        }
+        let name = child.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if is_ignored_dir(name) {
+            continue;
+        }
+        // visited 사이클 가드(실경로 정규화 실패 시 원본 경로로 폴백).
+        let canon = std::fs::canonicalize(&child).unwrap_or_else(|_| child.clone());
+        if !visited.insert(canon) {
+            continue;
+        }
+        scan_root(provider, &child, child_depth + 1, root, visited, out);
     }
-    out.sort_by_key(|a| a.name.to_lowercase());
-    out
 }
 
 /// 외부 스킬 멀티루트 스캔(ROOTS의 `*/SKILL.md` frontmatter → name/description/path/provider).
@@ -565,10 +661,7 @@ fn ensure_within_skills_dir(path: &str) -> Result<(), String> {
 
 /// 일반화된 path-guard(C1): `(.. 컴포넌트 없음) AND (basename==SKILL.md) AND (ROOTS 중 하나로 starts_with)`.
 /// roots 주입으로 테스트 hermetic. roots가 비면(HOME 없음) 모든 경로 거부(안전).
-fn ensure_within_skills_dir_roots(
-    path: &str,
-    roots: &[(SkillProvider, PathBuf, bool)],
-) -> Result<(), String> {
+fn ensure_within_skills_dir_roots(path: &str, roots: &[SkillRoot]) -> Result<(), String> {
     let p = std::path::Path::new(path);
     // 디렉터리 탈출 방지: `..` 컴포넌트 거부. starts_with는 `..`를 해소하지 않아
     // `<root>/../../tmp/SKILL.md`처럼 root 접두를 공유하면서 탈출하는 경로가 통과하므로 별도 차단.
@@ -578,7 +671,7 @@ fn ensure_within_skills_dir_roots(
     if p.file_name().and_then(|n| n.to_str()) != Some("SKILL.md") {
         return Err("SKILL.md 파일만 읽고 쓸 수 있습니다.".into());
     }
-    if !roots.iter().any(|(_, root, _)| p.starts_with(root)) {
+    if !roots.iter().any(|r| p.starts_with(&r.path)) {
         return Err("스킬 루트 밖의 경로는 접근할 수 없습니다.".into());
     }
     Ok(())
@@ -622,9 +715,9 @@ mod tests {
         let absent = codex.path().join("nope");
 
         let roots = vec![
-            (SkillProvider::Claude, claude.path().to_path_buf(), false),
-            (SkillProvider::Codex, codex.path().to_path_buf(), false),
-            (SkillProvider::Openclaw, absent, false),
+            SkillRoot::flat(SkillProvider::Claude, claude.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Codex, codex.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Openclaw, absent),
         ];
         let out = scan_external_skills_core(&roots);
 
@@ -651,8 +744,8 @@ mod tests {
         std::fs::write(&file_root, "x").unwrap();
 
         let roots = vec![
-            (SkillProvider::Claude, good.path().to_path_buf(), false),
-            (SkillProvider::Codex, file_root, false),
+            SkillRoot::flat(SkillProvider::Claude, good.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Codex, file_root),
         ];
         let out = scan_external_skills_core(&roots);
         assert_eq!(out.len(), 1, "읽기 불가 루트는 스킵하고 가능분만 반환");
@@ -676,7 +769,10 @@ mod tests {
         let root = TempDir::new().unwrap();
         std::os::unix::fs::symlink(&real, root.path().join("linked-skill")).unwrap();
 
-        let roots = vec![(SkillProvider::Claude, root.path().to_path_buf(), false)];
+        let roots = vec![SkillRoot::flat(
+            SkillProvider::Claude,
+            root.path().to_path_buf(),
+        )];
         let out = scan_external_skills_core(&roots);
         assert_eq!(out.len(), 1, "심링크된 스킬 dir을 발견해야 함");
         assert_eq!(out[0].name, "linked");
@@ -696,8 +792,8 @@ mod tests {
         let claude = TempDir::new().unwrap();
         let codex = TempDir::new().unwrap();
         let roots = vec![
-            (SkillProvider::Claude, claude.path().to_path_buf(), false),
-            (SkillProvider::Codex, codex.path().to_path_buf(), false),
+            SkillRoot::flat(SkillProvider::Claude, claude.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Codex, codex.path().to_path_buf()),
         ];
         let g = |p: &str| ensure_within_skills_dir_roots(p, &roots);
 
@@ -747,8 +843,8 @@ mod tests {
             "---\nname: gamma\ndescription: G\n---\n",
         );
         let roots = vec![
-            (SkillProvider::Claude, claude.path().to_path_buf(), false),
-            (SkillProvider::Codex, codex.path().to_path_buf(), false),
+            SkillRoot::flat(SkillProvider::Claude, claude.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Codex, codex.path().to_path_buf()),
         ];
 
         let all = list_skills_core(&db, &roots).await.unwrap();
@@ -905,15 +1001,15 @@ mod tests {
         // CODEX_HOME set → `<CODEX_HOME>/skills`(존재 무관, 첫 Codex 루트).
         let codex_root = roots
             .iter()
-            .find(|(p, _, _)| *p == SkillProvider::Codex)
+            .find(|r| r.provider == SkillProvider::Codex)
             .unwrap();
-        assert_eq!(codex_root.1, codex.path().join("skills"));
+        assert_eq!(codex_root.path, codex.path().join("skills"));
         // claude override 없음 → dotfile 폴백.
         let claude_root = roots
             .iter()
-            .find(|(p, _, _)| *p == SkillProvider::Claude)
+            .find(|r| r.provider == SkillProvider::Claude)
             .unwrap();
-        assert_eq!(claude_root.1, home.path().join(".claude").join("skills"));
+        assert_eq!(claude_root.path, home.path().join(".claude").join("skills"));
     }
 
     /// XDG 후보는 **존재할 때만** 채택(미존재 XDG는 dotfile 폴백 — Linux XDG 상존이 dotfile을 가로채지
@@ -933,14 +1029,14 @@ mod tests {
         let roots = resolve_skill_roots(&env);
         let codex_root = roots
             .iter()
-            .find(|(p, _, _)| *p == SkillProvider::Codex)
+            .find(|r| r.provider == SkillProvider::Codex)
             .unwrap();
-        assert_eq!(codex_root.1, xdg.path().join("codex").join("skills"));
+        assert_eq!(codex_root.path, xdg.path().join("codex").join("skills"));
         let claude_root = roots
             .iter()
-            .find(|(p, _, _)| *p == SkillProvider::Claude)
+            .find(|r| r.provider == SkillProvider::Claude)
             .unwrap();
-        assert_eq!(claude_root.1, home.path().join(".claude").join("skills"));
+        assert_eq!(claude_root.path, home.path().join(".claude").join("skills"));
     }
 
     /// HOME 미설정 → 빈 목록(graceful: 스캔 0건, 가드 전부 거부).
@@ -968,10 +1064,10 @@ mod tests {
         let absent = codex.path().join("nope-openclaw");
 
         let roots = vec![
-            (SkillProvider::Claude, claude.path().to_path_buf(), false),
-            (SkillProvider::Codex, codex.path().to_path_buf(), false),
-            (SkillProvider::Codex, agents.path().to_path_buf(), false),
-            (SkillProvider::Openclaw, absent, false),
+            SkillRoot::flat(SkillProvider::Claude, claude.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Codex, codex.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Codex, agents.path().to_path_buf()),
+            SkillRoot::flat(SkillProvider::Openclaw, absent),
         ];
         let envs = detect_skill_environments_core(&roots);
 
@@ -1015,6 +1111,151 @@ mod tests {
         // frontmatter 없으면 둘 다 None.
         let (n2, d2) = parse_frontmatter("# 그냥 본문\nname: 안 셈\n");
         assert!(n2.is_none() && d2.is_none());
+    }
+
+    // ── P1.5: 바운디드 재귀(깊이) ──────────────────────────────────────────────────────
+
+    /// 재귀(P1.5 깊이): 중첩 카테고리 스킬을 발견하고, 리프 규칙으로 스킬 dir 하위는 하강하지 않는다.
+    #[test]
+    fn scan_recursive_finds_nested_and_leaf_rule_stops_descent() {
+        let root = TempDir::new().unwrap();
+        // 평면 스킬(depth1).
+        make_skill(root.path(), "flat-skill", "---\nname: flat\n---\n");
+        // 카테고리 중첩 스킬(depth2): <root>/cat/nested/SKILL.md.
+        make_skill(
+            &root.path().join("cat"),
+            "nested",
+            "---\nname: nested\n---\n",
+        );
+        // 리프 규칙: 스킬 dir 안에 또 SKILL.md가 있어도 그 하위는 안 본다(이중 카운트 방지).
+        make_skill(
+            &root.path().join("flat-skill"),
+            "inner",
+            "---\nname: inner\n---\n",
+        );
+
+        let roots = vec![SkillRoot::recursive(
+            SkillProvider::Claude,
+            root.path().to_path_buf(),
+            4,
+        )];
+        let out = scan_external_skills_core(&roots);
+        let names: Vec<&str> = out.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"flat"), "평면 스킬 발견");
+        assert!(names.contains(&"nested"), "중첩 스킬 재귀 발견");
+        assert!(
+            !names.contains(&"inner"),
+            "리프 규칙: 스킬 dir 하위는 미하강"
+        );
+        assert_eq!(out.len(), 2);
+    }
+
+    /// 재귀 안전: ignore 디렉터리(node_modules/숨김)는 스킵하고 `max_depth`를 초과하면 하강하지 않는다.
+    #[test]
+    fn scan_recursive_skips_ignored_dirs_and_respects_depth_cap() {
+        let root = TempDir::new().unwrap();
+        // ignore 대상: node_modules / 숨김 dir 안의 스킬은 무시.
+        make_skill(
+            &root.path().join("node_modules"),
+            "junk",
+            "---\nname: junk\n---\n",
+        );
+        make_skill(&root.path().join(".hidden"), "hid", "---\nname: hid\n---\n");
+        // depth cap: max_depth=2면 depth3 스킬(<root>/a/b/deep)은 미발견.
+        make_skill(
+            &root.path().join("a").join("b"),
+            "deep",
+            "---\nname: deep\n---\n",
+        );
+        // depth2 스킬은 발견.
+        make_skill(&root.path().join("c"), "ok2", "---\nname: ok2\n---\n");
+
+        let roots = vec![SkillRoot::recursive(
+            SkillProvider::Claude,
+            root.path().to_path_buf(),
+            2,
+        )];
+        let out = scan_external_skills_core(&roots);
+        let names: Vec<&str> = out.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"ok2"), "depth2(=max) 스킬 발견");
+        assert!(!names.contains(&"deep"), "depth3 > max_depth 미발견");
+        assert!(!names.contains(&"junk"), "node_modules 무시");
+        assert!(!names.contains(&"hid"), "숨김 dir 무시");
+        assert_eq!(out.len(), 1);
+    }
+
+    /// 비재귀 루트는 중첩을 발견하지 않는다(P0 동작 회귀 보호).
+    #[test]
+    fn scan_non_recursive_ignores_nested() {
+        let root = TempDir::new().unwrap();
+        make_skill(root.path(), "top", "---\nname: top\n---\n");
+        make_skill(
+            &root.path().join("cat"),
+            "nested",
+            "---\nname: nested\n---\n",
+        );
+
+        let roots = vec![SkillRoot::flat(
+            SkillProvider::Claude,
+            root.path().to_path_buf(),
+        )];
+        let out = scan_external_skills_core(&roots);
+        let names: Vec<&str> = out.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"top"));
+        assert!(
+            !names.contains(&"nested"),
+            "비재귀 루트는 중첩 미발견(P0 동작)"
+        );
+    }
+
+    /// 심링크 사이클(조상으로 되돌아가는 심링크)이 있어도 무한 루프 없이 종료하고 실제 스킬은 발견한다.
+    #[cfg(unix)]
+    #[test]
+    fn scan_recursive_symlink_cycle_does_not_loop() {
+        let root = TempDir::new().unwrap();
+        make_skill(&root.path().join("cat"), "real", "---\nname: real\n---\n");
+        // 사이클: <root>/cat/loop -> <root>(조상).
+        std::os::unix::fs::symlink(root.path(), root.path().join("cat").join("loop")).unwrap();
+
+        let roots = vec![SkillRoot::recursive(
+            SkillProvider::Claude,
+            root.path().to_path_buf(),
+            4,
+        )];
+        let out = scan_external_skills_core(&roots);
+        assert!(
+            out.iter().any(|s| s.name == "real"),
+            "실제 스킬 발견(무한 루프 없음)"
+        );
+    }
+
+    /// 루트 resolution(P1.5): Hermes 재귀 루트가 포함되고, 도구 루트도 재귀이며, skm 자체 스토어는 제외.
+    #[test]
+    fn resolve_includes_hermes_recursive_and_excludes_skills_manager() {
+        let home = TempDir::new().unwrap();
+        let env = SkillRootEnv {
+            home: Some(home.path().to_path_buf()),
+            claude_config_dir: None,
+            codex_home: None,
+            xdg_config_home: None,
+        };
+        let roots = resolve_skill_roots(&env);
+
+        let hermes = roots
+            .iter()
+            .find(|r| r.provider == SkillProvider::Hermes)
+            .expect("Hermes 루트 존재");
+        assert_eq!(hermes.path, home.path().join(".hermes").join("skills"));
+        assert!(hermes.recursive, "Hermes는 재귀");
+        // 도구 루트도 P1.5에서 전부 재귀.
+        assert!(roots.iter().all(|r| r.recursive), "모든 루트 재귀");
+        // skm 자체 스토어는 ROOTS에서 제외(대량 중복 방지 — Phase 1.5 #6).
+        assert!(
+            roots
+                .iter()
+                .all(|r| !r.path.to_string_lossy().contains(".skills-manager")),
+            "skm 스토어 제외"
+        );
     }
 
     // ── 테스트 코어(State 래퍼 없이 직접 호출) ──
