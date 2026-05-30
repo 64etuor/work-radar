@@ -1,5 +1,6 @@
 //! 스킬 공유 레지스트리 (Phase 20 #21). 인앱 에이전트 프롬프트(편집 가능 잡 템플릿)와 외부
-//! Claude/Codex 스킬(~/.claude/skills/*/SKILL.md)을 한 레지스트리에서 보기/편집/추가/토글한다.
+//! Claude/Codex/Openclaw 스킬(`~/.{claude,codex,agents,openclaw}/skills/*/SKILL.md`)을 한
+//! 레지스트리에서 보기/편집/추가/토글한다(P0: 멀티루트 frontmatter 스캔, 읽기 전용).
 //!
 //! INVARIANT #1/#2 (구조적 보호):
 //!  - 인앱 프롬프트 편집은 codex가 내는 *제안 내용*만 바꾼다. 잡 트리거는 binding으로 활성 프롬프트를
@@ -9,22 +10,23 @@
 //!  - 레지스트리가 비어 있거나 행이 비활성이면 잡 lookup은 코드 상수로 **폴백**한다(기본 동작 불변).
 //!
 //! INVARIANT #7: 인앱 프롬프트는 로컬 SQLite SSOT. 외부 스킬은 디스크가 SSOT이고 표는 캐시하지 않는다
-//! (매 스캔마다 ~/.claude/skills에서 frontmatter를 읽는다).
+//! (매 스캔마다 ROOTS의 각 `*/SKILL.md`에서 frontmatter만 읽는다 — 콘텐츠 해싱 없음).
 //!
 //! 토큰/비밀은 다루지 않는다(프롬프트 템플릿은 비밀 아님). 외부 스킬 파일을 *실행*하지 않는다 — 읽기/
-//! (선택) 사용자 명시 편집만.
+//! (선택) 사용자 명시 편집만. 스캔 로그는 provider+count만 — 절대 경로/frontmatter 본문 금지(C7).
 //!
-//! ADR-0006 (풀 매니저 채택): 위 "외부 스킬 = 디스크 SSOT / 외부 dir 무쓰기 / ~/.claude 단일 스캔"은
-//! **Phase A–F 범위**다. Phase G부터 멀티루트 스캔(claude/codex/openclaw) → 중앙 라이브러리 SSOT +
-//! 외부 dir 설치/sync를 ADR-0006 레일(사용자 발동·가역·audit / Rust+keychain+bounded)로 도입한다.
-//! **비실행 및 #1/#2(스킬 설치/sync ≠ 잡 자동실행)는 G에서도 불변.** 정본: docs/adr/0006-skills-registry-full-manager.md.
+//! ADR-0006 (풀 매니저 채택): P0는 멀티루트 frontmatter 스캔(claude/codex/openclaw)까지 — **읽기 전용·
+//! 외부 dir 무쓰기**(viewer 절반). Phase G부터 중앙 라이브러리 SSOT + 외부 dir 설치/sync를 ADR-0006
+//! 레일(사용자 발동·가역·audit / Rust+keychain+bounded)로 도입한다. **비실행 및 #1/#2(스킬 설치/sync ≠
+//! 잡 자동실행)는 G에서도 불변.** 정본: docs/adr/0006-skills-registry-full-manager.md.
 
 use tauri::State;
 
 use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHECK_PROMPT};
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{CreateSkillInput, ExternalSkill, Skill};
+use crate::models::{CreateSkillInput, ExternalSkill, Skill, SkillProvider};
+use std::path::PathBuf;
 
 /// 인앱 프롬프트 binding 키(잡 트리거가 lookup에 쓰는 식별자). 하드코딩 프롬프트와 1:1.
 pub(crate) const BINDING_BATCH_ENRICH: &str = "batch_enrich";
@@ -149,38 +151,47 @@ pub(crate) async fn resolve_agent_prompt_runtime(
 }
 
 /// 레지스트리 목록: 인앱 프롬프트 + (디스크 스캔한) 외부 스킬을 합쳐 돌려준다. 인앱은 DB에서, 외부는
-/// ~/.claude/skills를 스캔해 ExternalSkill→Skill(kind="external")로 합성한다(영속 안 함 — 디스크 SSOT).
+/// ROOTS(claude/codex/agents/openclaw)를 스캔해 ExternalSkill→Skill(kind="external", provider 태깅)으로
+/// 합성한다(영속 안 함 — 디스크 SSOT).
 #[tauri::command]
 #[specta::specta]
 pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, AppError> {
-    // 인앱(편집 가능 잡 템플릿) — DB SSOT.
+    list_skills_core(db.inner(), &skill_roots()).await
+}
+
+/// `list_skills`의 코어(roots 주입 → hermetic 테스트). 인앱 DB 행 + ROOTS 외부 스캔을 병합한다.
+async fn list_skills_core(
+    db: &Db,
+    roots: &[(SkillProvider, PathBuf, bool)],
+) -> Result<Vec<Skill>, AppError> {
+    // 인앱(편집 가능 잡 템플릿) — DB SSOT. provider 컬럼은 없어 FromRow가 None을 채운다(#[sqlx(skip)]).
     let mut skills: Vec<Skill> = sqlx::query_as::<_, Skill>(
         "SELECT id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at \
          FROM skills WHERE kind = 'in_app_prompt' ORDER BY binding, name",
     )
-    .fetch_all(db.inner())
+    .fetch_all(db)
     .await
     .map_err(AppError::from)?;
 
-    // 외부(디스크 스킬) — 스캔해서 합성 행으로 덧붙인다(영속 안 함). 스캔 실패는 인앱만 반환(graceful).
-    if let Ok(externals) = scan_external_skills_core() {
-        for ex in externals {
-            skills.push(Skill {
-                id: format!("ext:{}", ex.path),
-                name: ex.name,
-                kind: "external".into(),
-                prompt: Some(ex.description),
-                binding: None,
-                rail: None,
-                enabled: true,
-                model: None,
-                reasoning_effort: None,
-                fast_mode: false,
-                source_path: Some(ex.path),
-                created_at: String::new(),
-                updated_at: String::new(),
-            });
-        }
+    // 외부(디스크 스킬) — 멀티루트 스캔해서 합성 행으로 덧붙인다(영속 안 함). 부재/읽기불가 루트는
+    // per-root skip(무에러)이라 항상 가능분을 반환한다.
+    for ex in scan_external_skills_core(roots) {
+        skills.push(Skill {
+            id: format!("ext:{}", ex.path),
+            name: ex.name,
+            kind: "external".into(),
+            prompt: Some(ex.description),
+            binding: None,
+            rail: None,
+            enabled: true,
+            model: None,
+            reasoning_effort: None,
+            fast_mode: false,
+            source_path: Some(ex.path),
+            provider: Some(ex.provider),
+            created_at: String::new(),
+            updated_at: String::new(),
+        });
     }
     Ok(skills)
 }
@@ -305,9 +316,23 @@ pub async fn delete_skill(db: State<'_, Db>, id: String) -> Result<(), AppError>
     Ok(())
 }
 
-/// ~/.claude/skills 디렉터리 경로(HOME 기반). HOME 미설정이면 None.
-fn claude_skills_dir() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".claude").join("skills"))
+/// 스캔·path-guard(·후속 P1 detect)가 **공유하는 단 하나의 루트 정의**(C6). 각 항목은
+/// `(provider, 절대경로, recursive)`. `recursive`는 컬럼만 두고 P0는 전부 false(재귀 미반입).
+/// HOME 미설정이면 빈 목록(전부 graceful — 스캔 0건, 가드는 모든 경로 거부).
+///
+/// `.agents/skills`는 도구 간 공유 발견 dir이라 P0에선 **Codex로 태깅**(upstream codex 귀속).
+/// ⚑ Copilot 추가 시 `.agents/skills`는 공유되므로 **P1에서 귀속 재검토**. Hermes는 경로 미확인이라 제외.
+fn skill_roots() -> Vec<(SkillProvider, PathBuf, bool)> {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return Vec::new();
+    };
+    let skills_of = |dir: &str| home.join(dir).join("skills");
+    vec![
+        (SkillProvider::Claude, skills_of(".claude"), false),
+        (SkillProvider::Codex, skills_of(".codex"), false),
+        (SkillProvider::Codex, skills_of(".agents"), false),
+        (SkillProvider::Openclaw, skills_of(".openclaw"), false),
+    ]
 }
 
 /// SKILL.md의 YAML frontmatter에서 name/description을 얕게 파싱한다(외부 의존 없이 라인 스캔).
@@ -349,47 +374,60 @@ fn unquote(s: &str) -> String {
     }
 }
 
-/// ~/.claude/skills/*/SKILL.md를 스캔해 frontmatter(name/description) + 경로를 모은다(읽기 전용).
-/// 디렉터리 부재/HOME 미설정이면 빈 목록(graceful). 파일 자체는 실행하지 않는다.
-pub(crate) fn scan_external_skills_core() -> Result<Vec<ExternalSkill>, String> {
-    let Some(root) = claude_skills_dir() else {
-        return Ok(Vec::new());
-    };
-    let Ok(entries) = std::fs::read_dir(&root) else {
-        return Ok(Vec::new()); // 디렉터리 없음 = 외부 스킬 없음(graceful).
-    };
+/// ROOTS 각 `*/SKILL.md`를 스캔해 frontmatter(name/description) + provider + 경로를 모은다(읽기 전용).
+/// roots **주입**(테스트는 tempdir roots → hermetic). 콘텐츠 해싱 없음(frontmatter-only). 파일은
+/// 실행하지 않는다.
+///
+/// 부분실패 정책(C6): per-root **skip-and-continue** — 부재/읽기불가 루트는 스킵하고 나머지 루트의
+/// 스킬을 반환한다(전체 스캔 에러 없음). 디렉터리 엔트리는 `is_dir() || is_symlink()`를 수용해
+/// 심링크로 설치된 스킬 dir을 미드롭한다.
+pub(crate) fn scan_external_skills_core(
+    roots: &[(SkillProvider, PathBuf, bool)],
+) -> Vec<ExternalSkill> {
     let mut out: Vec<ExternalSkill> = Vec::new();
-    for entry in entries.flatten() {
-        let dir = entry.path();
-        if !dir.is_dir() {
-            continue;
-        }
-        let skill_md = dir.join("SKILL.md");
-        let Ok(content) = std::fs::read_to_string(&skill_md) else {
-            continue; // SKILL.md 없는 디렉터리는 스킬 아님.
+    for (provider, root, _recursive) in roots {
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue; // 부재/읽기불가 루트는 스킵(graceful).
         };
-        let (name, description) = parse_frontmatter(&content);
-        let dir_name = dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("(unknown)")
-            .to_string();
-        out.push(ExternalSkill {
-            name: name.unwrap_or(dir_name),
-            description: description.unwrap_or_default(),
-            path: skill_md.to_string_lossy().into_owned(),
-        });
+        let mut root_count = 0usize;
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            // is_dir()는 심링크를 따라가므로 심링크→dir은 통과하고, 깨진/비-dir 심링크는 SKILL.md 읽기에서
+            // 자연 스킵된다. 명시적으로 is_symlink()도 수용해 의도를 드러낸다.
+            if !(dir.is_dir() || dir.is_symlink()) {
+                continue;
+            }
+            let skill_md = dir.join("SKILL.md");
+            let Ok(content) = std::fs::read_to_string(&skill_md) else {
+                continue; // SKILL.md 없는 디렉터리는 스킬 아님.
+            };
+            let (name, description) = parse_frontmatter(&content);
+            let dir_name = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("(unknown)")
+                .to_string();
+            out.push(ExternalSkill {
+                name: name.unwrap_or(dir_name),
+                description: description.unwrap_or_default(),
+                path: skill_md.to_string_lossy().into_owned(),
+                provider: *provider,
+            });
+            root_count += 1;
+        }
+        // no-PII(C7): provider+count만 기록 — 절대 경로/frontmatter 본문 금지.
+        tracing::debug!(target: "skills.scan", provider = ?provider, count = root_count, "scanned skill root");
     }
     out.sort_by_key(|a| a.name.to_lowercase());
-    Ok(out)
+    out
 }
 
-/// 외부 Claude/Codex 스킬 스캔(~/.claude/skills/*/SKILL.md frontmatter → name/description/path).
-/// 읽기 전용 브라우즈. 디렉터리 부재면 빈 목록(graceful degrade).
+/// 외부 스킬 멀티루트 스캔(ROOTS의 `*/SKILL.md` frontmatter → name/description/path/provider).
+/// 읽기 전용 브라우즈. 부재 루트는 스킵(graceful degrade) — 항상 가능분을 반환한다.
 #[tauri::command]
 #[specta::specta]
 pub async fn scan_external_skills() -> Result<Vec<ExternalSkill>, AppError> {
-    scan_external_skills_core().map_err(|e| AppError::terminal("skills.scan_failed", e))
+    Ok(scan_external_skills_core(&skill_roots()))
 }
 
 /// 외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관.
@@ -416,20 +454,29 @@ pub async fn write_external_skill(path: String, content: String) -> Result<(), A
     })
 }
 
-/// 경로가 ~/.claude/skills 안에 있고 SKILL.md인지 검증(디렉터리 탈출/임의 파일 접근 방지).
+/// 경로가 ROOTS 중 하나 안에 있고 SKILL.md인지 검증(C1 — 디렉터리 탈출/임의 파일 접근 방지).
+/// 스캔과 가드는 **동일 ROOTS**를 소비한다. `#[command]` 경계용 래퍼(실제 $HOME ROOTS).
 fn ensure_within_skills_dir(path: &str) -> Result<(), String> {
-    let root = claude_skills_dir().ok_or("HOME을 찾을 수 없습니다.")?;
+    ensure_within_skills_dir_roots(path, &skill_roots())
+}
+
+/// 일반화된 path-guard(C1): `(.. 컴포넌트 없음) AND (basename==SKILL.md) AND (ROOTS 중 하나로 starts_with)`.
+/// roots 주입으로 테스트 hermetic. roots가 비면(HOME 없음) 모든 경로 거부(안전).
+fn ensure_within_skills_dir_roots(
+    path: &str,
+    roots: &[(SkillProvider, PathBuf, bool)],
+) -> Result<(), String> {
     let p = std::path::Path::new(path);
     // 디렉터리 탈출 방지: `..` 컴포넌트 거부. starts_with는 `..`를 해소하지 않아
-    // `.../skills/../../tmp/SKILL.md`처럼 root 접두를 공유하면서 탈출하는 경로가 통과하므로 별도 차단.
+    // `<root>/../../tmp/SKILL.md`처럼 root 접두를 공유하면서 탈출하는 경로가 통과하므로 별도 차단.
     if p.components().any(|c| c == std::path::Component::ParentDir) {
         return Err("경로에 '..'를 쓸 수 없습니다.".into());
     }
-    if !p.starts_with(&root) {
-        return Err("~/.claude/skills 밖의 경로는 접근할 수 없습니다.".into());
-    }
     if p.file_name().and_then(|n| n.to_str()) != Some("SKILL.md") {
         return Err("SKILL.md 파일만 읽고 쓸 수 있습니다.".into());
+    }
+    if !roots.iter().any(|(_, root, _)| p.starts_with(root)) {
+        return Err("스킬 루트 밖의 경로는 접근할 수 없습니다.".into());
     }
     Ok(())
 }
@@ -438,28 +485,184 @@ fn ensure_within_skills_dir(path: &str) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::fresh_db;
+    use tempfile::TempDir;
 
-    /// 디렉터리 탈출 방지: root 접두를 공유하지만 `..`로 탈출하는 경로는 거부, 정상 경로는 허용.
+    /// tempdir 루트에 `<root>/<dir>/SKILL.md`를 frontmatter와 함께 만든다(hermetic 헬퍼).
+    fn make_skill(root: &std::path::Path, dir: &str, frontmatter: &str) {
+        let d = root.join(dir);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("SKILL.md"), frontmatter).unwrap();
+    }
+
+    /// 멀티루트 스캔: 루트별 provider 분류 + frontmatter(name/description) 파싱 + 부재 루트 graceful +
+    /// 이름 정렬. (`.agents`는 Codex 태깅과 동일한 provider 매핑을 ROOTS가 책임지므로 여기선 직접 주입.)
     #[test]
-    fn ensure_within_skills_dir_rejects_prefix_sharing_traversal() {
-        let Some(root) = claude_skills_dir() else {
-            return; // HOME 없으면 skip
-        };
-        let escape = root.join("..").join("..").join("tmp").join("SKILL.md");
-        assert!(
-            ensure_within_skills_dir(escape.to_str().unwrap()).is_err(),
-            "prefix 공유 traversal은 거부되어야 함: {escape:?}"
+    fn scan_tags_provider_parses_frontmatter_and_skips_absent_root() {
+        let claude = TempDir::new().unwrap();
+        let codex = TempDir::new().unwrap();
+        make_skill(
+            claude.path(),
+            "alpha",
+            "---\nname: alpha\ndescription: \"클로드 스킬 A\"\n---\n# 본문\n",
         );
-        let ok = root.join("my-skill").join("SKILL.md");
-        assert!(
-            ensure_within_skills_dir(ok.to_str().unwrap()).is_ok(),
-            "정상 skills 경로는 허용되어야 함"
+        make_skill(
+            claude.path(),
+            "beta",
+            "---\nname: beta\ndescription: B\n---\n",
         );
-        // 밖 경로·잘못된 파일명도 여전히 거부.
-        assert!(ensure_within_skills_dir("/etc/passwd").is_err());
-        assert!(
-            ensure_within_skills_dir(root.join("x").join("notes.md").to_str().unwrap()).is_err()
+        make_skill(
+            codex.path(),
+            "gamma",
+            "---\nname: gamma\ndescription: G\n---\n",
         );
+        // 존재하지 않는 openclaw 루트 — per-root skip(무에러).
+        let absent = codex.path().join("nope");
+
+        let roots = vec![
+            (SkillProvider::Claude, claude.path().to_path_buf(), false),
+            (SkillProvider::Codex, codex.path().to_path_buf(), false),
+            (SkillProvider::Openclaw, absent, false),
+        ];
+        let out = scan_external_skills_core(&roots);
+
+        // 부재 루트 스킵 → 3건, 이름 오름차순 정렬.
+        assert_eq!(
+            out.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            vec!["alpha", "beta", "gamma"],
+        );
+        let by = |n: &str| out.iter().find(|s| s.name == n).unwrap();
+        assert_eq!(by("alpha").provider, SkillProvider::Claude);
+        assert_eq!(by("alpha").description, "클로드 스킬 A");
+        assert_eq!(by("beta").provider, SkillProvider::Claude);
+        assert_eq!(by("gamma").provider, SkillProvider::Codex);
+        assert_eq!(by("gamma").description, "G");
+    }
+
+    /// 부분실패(C6): 읽기 가능 루트 + 읽기 불가 루트(파일=read_dir 실패) → 가능분만 반환·무에러.
+    #[test]
+    fn scan_skips_unreadable_root_returns_rest() {
+        let good = TempDir::new().unwrap();
+        make_skill(good.path(), "alpha", "---\nname: alpha\n---\n");
+        // 루트 경로가 디렉터리가 아니라 파일이면 read_dir 실패 → 스킵.
+        let file_root = good.path().join("not-a-dir");
+        std::fs::write(&file_root, "x").unwrap();
+
+        let roots = vec![
+            (SkillProvider::Claude, good.path().to_path_buf(), false),
+            (SkillProvider::Codex, file_root, false),
+        ];
+        let out = scan_external_skills_core(&roots);
+        assert_eq!(out.len(), 1, "읽기 불가 루트는 스킵하고 가능분만 반환");
+        assert_eq!(out[0].name, "alpha");
+        assert_eq!(out[0].provider, SkillProvider::Claude);
+    }
+
+    /// 심링크로 설치된 스킬 dir도 발견한다(`is_dir() || is_symlink()`).
+    #[cfg(unix)]
+    #[test]
+    fn scan_discovers_symlinked_skill_dir() {
+        let target = TempDir::new().unwrap();
+        let real = target.path().join("real-skill");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::write(
+            real.join("SKILL.md"),
+            "---\nname: linked\ndescription: L\n---\n",
+        )
+        .unwrap();
+
+        let root = TempDir::new().unwrap();
+        std::os::unix::fs::symlink(&real, root.path().join("linked-skill")).unwrap();
+
+        let roots = vec![(SkillProvider::Claude, root.path().to_path_buf(), false)];
+        let out = scan_external_skills_core(&roots);
+        assert_eq!(out.len(), 1, "심링크된 스킬 dir을 발견해야 함");
+        assert_eq!(out[0].name, "linked");
+        assert_eq!(out[0].provider, SkillProvider::Claude);
+    }
+
+    /// 빈 ROOTS는 빈 결과(HOME 없음 graceful).
+    #[test]
+    fn scan_empty_roots_is_empty() {
+        assert!(scan_external_skills_core(&[]).is_empty());
+    }
+
+    /// path-guard 루트별(C1): in-root 허용(각 루트) / `<root>/../../tmp/SKILL.md` 거부 / 전 루트 밖 거부 /
+    /// 非SKILL.md 거부 / 빈 roots는 모든 경로 거부.
+    #[test]
+    fn path_guard_per_root() {
+        let claude = TempDir::new().unwrap();
+        let codex = TempDir::new().unwrap();
+        let roots = vec![
+            (SkillProvider::Claude, claude.path().to_path_buf(), false),
+            (SkillProvider::Codex, codex.path().to_path_buf(), false),
+        ];
+        let g = |p: &str| ensure_within_skills_dir_roots(p, &roots);
+
+        // in-root 허용(두 루트 각각).
+        let ok_claude = claude.path().join("s").join("SKILL.md");
+        assert!(g(ok_claude.to_str().unwrap()).is_ok());
+        let ok_codex = codex.path().join("s").join("SKILL.md");
+        assert!(g(ok_codex.to_str().unwrap()).is_ok());
+
+        // `<root>/../../tmp/SKILL.md` 거부(.. 탈출).
+        let escape = claude
+            .path()
+            .join("..")
+            .join("..")
+            .join("tmp")
+            .join("SKILL.md");
+        assert!(
+            g(escape.to_str().unwrap()).is_err(),
+            "prefix 공유 traversal 거부"
+        );
+
+        // 전 루트 밖 거부 + 非SKILL.md 거부.
+        assert!(g("/etc/passwd").is_err());
+        let not_skill = claude.path().join("s").join("notes.md");
+        assert!(g(not_skill.to_str().unwrap()).is_err());
+
+        // roots 비면 모든 경로 거부(HOME 없음 안전).
+        assert!(ensure_within_skills_dir_roots(ok_claude.to_str().unwrap(), &[]).is_err());
+    }
+
+    /// 통합: `list_skills_core` = 인앱(DB) + 멀티루트 외부 병합, 외부 행에 provider, 인앱 행은 provider=None.
+    #[tokio::test]
+    async fn list_skills_core_merges_in_app_and_external_with_provider() {
+        let db = fresh_db().await;
+        seed_in_app_skills(&db).await.unwrap();
+
+        let claude = TempDir::new().unwrap();
+        let codex = TempDir::new().unwrap();
+        make_skill(
+            claude.path(),
+            "alpha",
+            "---\nname: alpha\ndescription: A\n---\n",
+        );
+        make_skill(
+            codex.path(),
+            "gamma",
+            "---\nname: gamma\ndescription: G\n---\n",
+        );
+        let roots = vec![
+            (SkillProvider::Claude, claude.path().to_path_buf(), false),
+            (SkillProvider::Codex, codex.path().to_path_buf(), false),
+        ];
+
+        let all = list_skills_core(&db, &roots).await.unwrap();
+        let in_app: Vec<_> = all.iter().filter(|s| s.kind == "in_app_prompt").collect();
+        let external: Vec<_> = all.iter().filter(|s| s.kind == "external").collect();
+
+        assert_eq!(in_app.len(), seed_defs().len(), "인앱 시드 전부 병합");
+        assert!(
+            in_app.iter().all(|s| s.provider.is_none()),
+            "인앱 행은 provider=None"
+        );
+
+        assert_eq!(external.len(), 2, "외부 두 루트 병합");
+        let ext = |n: &str| external.iter().find(|s| s.name == n).unwrap();
+        assert_eq!(ext("alpha").provider, Some(SkillProvider::Claude));
+        assert_eq!(ext("gamma").provider, Some(SkillProvider::Codex));
+        assert!(ext("alpha").id.starts_with("ext:"));
     }
 
     /// 시드: 인앱 프롬프트가 들어가고, 시드 프롬프트 = 코드 상수와 동일(기본 동작 보존)이며 멱등.
@@ -594,21 +797,6 @@ mod tests {
         // frontmatter 없으면 둘 다 None.
         let (n2, d2) = parse_frontmatter("# 그냥 본문\nname: 안 셈\n");
         assert!(n2.is_none() && d2.is_none());
-    }
-
-    /// 경로 가드: ~/.claude/skills 밖 또는 SKILL.md 아닌 파일은 거부(디렉터리 탈출 방지).
-    #[test]
-    fn skills_dir_guard() {
-        // HOME이 있어야 가드가 의미. CI/로컬 모두 HOME 존재 가정(없으면 Err로 안전).
-        if let Some(root) = claude_skills_dir() {
-            let ok = root.join("foo").join("SKILL.md");
-            assert!(ensure_within_skills_dir(ok.to_str().unwrap()).is_ok());
-            // 밖의 경로 거부.
-            assert!(ensure_within_skills_dir("/etc/passwd").is_err());
-            // SKILL.md 아님 거부.
-            let bad = root.join("foo").join("secret.txt");
-            assert!(ensure_within_skills_dir(bad.to_str().unwrap()).is_err());
-        }
     }
 
     // ── 테스트 코어(State 래퍼 없이 직접 호출) ──

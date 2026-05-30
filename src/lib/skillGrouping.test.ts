@@ -18,6 +18,7 @@ function mk(over: Partial<Skill> & { id: string; name: string }): Skill {
     reasoningEffort: null,
     fastMode: false,
     sourcePath: null,
+    provider: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     ...over,

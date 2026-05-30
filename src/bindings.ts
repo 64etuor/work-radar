@@ -476,7 +476,8 @@ export const commands = {
 	detectHermesChatId: (botToken: string | null) => typedError<DetectedChat, AppError>(__TAURI_INVOKE("detect_hermes_chat_id", { botToken })),
 	/**
 	 *  레지스트리 목록: 인앱 프롬프트 + (디스크 스캔한) 외부 스킬을 합쳐 돌려준다. 인앱은 DB에서, 외부는
-	 *  ~/.claude/skills를 스캔해 ExternalSkill→Skill(kind="external")로 합성한다(영속 안 함 — 디스크 SSOT).
+	 *  ROOTS(claude/codex/agents/openclaw)를 스캔해 ExternalSkill→Skill(kind="external", provider 태깅)으로
+	 *  합성한다(영속 안 함 — 디스크 SSOT).
 	 */
 	listSkills: () => typedError<Skill[], AppError>(__TAURI_INVOKE("list_skills")),
 	/**
@@ -496,8 +497,8 @@ export const commands = {
 	 */
 	deleteSkill: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_skill", { id })),
 	/**
-	 *  외부 Claude/Codex 스킬 스캔(~/.claude/skills/*\/SKILL.md frontmatter → name/description/path).
-	 *  읽기 전용 브라우즈. 디렉터리 부재면 빈 목록(graceful degrade).
+	 *  외부 스킬 멀티루트 스캔(ROOTS의 `*\/SKILL.md` frontmatter → name/description/path/provider).
+	 *  읽기 전용 브라우즈. 부재 루트는 스킵(graceful degrade) — 항상 가능분을 반환한다.
 	 */
 	scanExternalSkills: () => typedError<ExternalSkill[], AppError>(__TAURI_INVOKE("scan_external_skills")),
 	/**  외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관. */
@@ -989,6 +990,8 @@ export type ExternalSkill = {
 	description: string,
 	/**  SKILL.md 파일 절대 경로(내용 열람·편집 대상). */
 	path: string,
+	/**  이 스킬을 발견한 스캔 루트의 제공 도구(`list_skills`가 `Skill.provider`로 전달). */
+	provider: SkillProvider,
 };
 
 /**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
@@ -1500,9 +1503,22 @@ export type Skill = {
 	fastMode: boolean,
 	/**  external: SKILL.md 디렉터리/파일 경로. in_app: None. */
 	sourcePath: string | null,
+	/**
+	 *  external: 스킬을 발견한 제공 도구(스캔 루트 귀속). in_app: None. DB `skills` 테이블엔 컬럼이
+	 *  없어(외부는 디스크 SSOT·비영속) FromRow에서 `#[sqlx(skip)]`로 항상 Default(None)을 쓰고, 외부
+	 *  행은 `list_skills`가 합성 시 직접 세팅한다(Decode/Type 불필요).
+	 */
+	provider: SkillProvider | null,
 	createdAt: string,
 	updatedAt: string,
 };
+
+/**
+ *  외부 스킬을 발견한 제공 도구(스캔 루트의 귀속). `project.rs`의 `Provider{Github,Local}`(레포
+ *  제공자)와는 **별개 타입** — 이름 충돌 금지(C2). specta가 TS union `"claude"|"codex"|...`로 방출해
+ *  프런트의 경로추론(`providerOf`)을 대체한다. `.agents/skills`는 P0에서 Codex로 태깅한다.
+ */
+export type SkillProvider = "claude" | "codex" | "openclaw" | "hermes" | "other";
 
 export type SortMode = "recent" | "comments" | "mixed";
 

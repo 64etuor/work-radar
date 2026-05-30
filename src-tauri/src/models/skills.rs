@@ -7,6 +7,19 @@ use specta::Type;
 // 레지스트리에서 본다. INVARIANT #1/#2: 프롬프트 편집은 codex 제안 *내용*만 바꾼다 — 잡은 여전히
 // 제안 레일 + Acceptance 게이트를 거치고 accept는 suggested_*/proposal만 쓴다(스킬 자동 실행 없음).
 
+/// 외부 스킬을 발견한 제공 도구(스캔 루트의 귀속). `project.rs`의 `Provider{Github,Local}`(레포
+/// 제공자)와는 **별개 타입** — 이름 충돌 금지(C2). specta가 TS union `"claude"|"codex"|...`로 방출해
+/// 프런트의 경로추론(`providerOf`)을 대체한다. `.agents/skills`는 P0에서 Codex로 태깅한다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum SkillProvider {
+    Claude,
+    Codex,
+    Openclaw,
+    Hermes,
+    Other,
+}
+
 /// 레지스트리 한 행. kind="in_app_prompt"면 prompt/binding이 의미 있고(편집 가능 잡 템플릿),
 /// kind="external"이면 source_path/prompt(=디스크에서 읽은 description)가 의미 있다(읽기 전용 브라우즈).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
@@ -32,6 +45,11 @@ pub struct Skill {
     pub fast_mode: bool,
     /// external: SKILL.md 디렉터리/파일 경로. in_app: None.
     pub source_path: Option<String>,
+    /// external: 스킬을 발견한 제공 도구(스캔 루트 귀속). in_app: None. DB `skills` 테이블엔 컬럼이
+    /// 없어(외부는 디스크 SSOT·비영속) FromRow에서 `#[sqlx(skip)]`로 항상 Default(None)을 쓰고, 외부
+    /// 행은 `list_skills`가 합성 시 직접 세팅한다(Decode/Type 불필요).
+    #[sqlx(skip)]
+    pub provider: Option<SkillProvider>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -47,6 +65,8 @@ pub struct ExternalSkill {
     pub description: String,
     /// SKILL.md 파일 절대 경로(내용 열람·편집 대상).
     pub path: String,
+    /// 이 스킬을 발견한 스캔 루트의 제공 도구(`list_skills`가 `Skill.provider`로 전달).
+    pub provider: SkillProvider,
 }
 
 /// 인앱 프롬프트 생성 입력(레지스트리에 새 편집 가능 템플릿 추가). binding은 선택(미바인딩 템플릿도 가능).
