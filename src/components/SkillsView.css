@@ -400,3 +400,11 @@
 .skl-note.err {
   color: var(--color-wr-danger);
 }
+
+/* 도움말 다이얼로그(SkillsHelpDialog) — shadcn DialogContent 위. 본문은 .skl-markdown 재사용. */
+.skl-help {
+  max-width: 560px;
+}
+.skl-help .skl-markdown {
+  max-height: min(60vh, 520px);
+}

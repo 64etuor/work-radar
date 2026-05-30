@@ -1,10 +1,21 @@
 import "./SkillsView.css";
 
-import { Blocks, FileText, LayoutGrid, List, Plus, Save, Search, Trash2 } from "lucide-react";
+import {
+  Blocks,
+  CircleHelp,
+  FileText,
+  LayoutGrid,
+  List,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { Skill } from "@/bindings";
 import { SkillMarkdown } from "@/components/SkillMarkdown";
+import { SkillsHelpDialog } from "@/components/SkillsHelpDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
@@ -69,6 +80,8 @@ export function SkillsView() {
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
+  // 도움말 다이얼로그 열림 — 스킬 피처 로컬 상태(전역 store 비대상).
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // 환경 사이드바: 활성 환경(필터) + 로컬 표시 순서(드래그 재정렬) + 진행 중 드래그 id.
   const [activeEnvId, setActiveEnvId] = useState<string>("all");
@@ -181,6 +194,16 @@ export function SkillsView() {
         <Button
           variant="outline"
           size="sm"
+          className="rounded-full px-2.5"
+          aria-label="도움말"
+          onClick={() => setHelpOpen(true)}
+        >
+          <CircleHelp className="size-4" />
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
           className="gap-1.5 rounded-full"
           onClick={() => {
             setAdding(true);
@@ -273,6 +296,8 @@ export function SkillsView() {
           </SheetContent>
         )}
       </Sheet>
+
+      <SkillsHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }
