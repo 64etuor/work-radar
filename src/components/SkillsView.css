@@ -408,3 +408,67 @@
 .skl-help .skl-markdown {
   max-height: min(60vh, 520px);
 }
+
+/* ── 다중 선택 배치 툴바(#9) ── */
+.skl-batchbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+  background: var(--color-wr-surface);
+}
+.skl-batch-count {
+  font: 600 12px var(--font-sans);
+  color: var(--color-wr-fg);
+}
+.skl-batch-note {
+  font-weight: 400;
+  color: var(--color-wr-subtle);
+}
+.skl-batch-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-pill);
+  padding: 2px 4px 2px 10px;
+  color: var(--color-wr-subtle);
+}
+.skl-batch-tag input {
+  min-width: 0;
+  width: 110px;
+  border: 0;
+  background: transparent;
+  color: var(--color-wr-fg);
+  font: 400 12px var(--font-sans);
+  outline: none;
+}
+
+/* 카드 선택 래퍼: 좌측 체크박스 + 카드(flex:1). grid/list 공통. */
+.skl-card-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.skl-card-wrap .skl-card {
+  flex: 1;
+  min-width: 0;
+}
+.skl-card-check {
+  flex-shrink: 0;
+  margin-top: 14px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-wr-accent);
+  cursor: pointer;
+}
+.skl-cards.list .skl-card-check {
+  margin-top: 12px;
+}
+.skl-card-wrap.selected .skl-card {
+  border-color: var(--color-wr-accent);
+  background: var(--color-wr-surface);
+}

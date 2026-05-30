@@ -10,6 +10,9 @@ import {
   Plus,
   Save,
   Search,
+  Tag,
+  ToggleLeft,
+  ToggleRight,
   Trash2,
   X,
 } from "lucide-react";
@@ -40,6 +43,12 @@ import {
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
+import {
+  addTagToSkill,
+  batchMutableTargets,
+  batchTaggableTargets,
+  selectedSkills,
+} from "@/lib/skillBatch";
 import {
   applyEnvOrder,
   buildSkillEnvNav,
@@ -88,6 +97,13 @@ export function SkillsView() {
   const [helpOpen, setHelpOpen] = useState(false);
   // 태그 필터(#12): null=전체, UNTAGGED=태그 없음, 그 외=해당 태그. 로컬 표시 상태(외부 불변).
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  // 다중 선택(#9): 선택된 통합 Skill.id 집합 + 배치 태그 입력. 외부 스킬은 토글/삭제 비대상(skillBatch).
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [batchTag, setBatchTag] = useState("");
+  const [batchNote, setBatchNote] = useState<string | null>(null);
+  const batchUpdate = useUpdateSkill();
+  const batchDelete = useDeleteSkill();
+  const batchSetTags = useSetSkillTags();
 
   // 환경 사이드바: 활성 환경(필터) + 로컬 표시 순서(드래그 재정렬) + 진행 중 드래그 id.
   const [activeEnvId, setActiveEnvId] = useState<string>("all");
@@ -163,6 +179,70 @@ export function SkillsView() {
   const closeSheet = () => {
     setAdding(false);
     setSelectedId(null);
+  };
+
+  // 다중 선택(#9): 토글/삭제는 인앱만(외부 제외), 태깅은 선택 전체(외부=로컬 SQLite만). skillBatch가 정본.
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setBatchNote(null);
+  };
+  const selCount = selectedSkills(list, selectedIds).length;
+  const mutableTargets = batchMutableTargets(list, selectedIds);
+  const taggableTargets = batchTaggableTargets(list, selectedIds);
+  const batchBusy = batchUpdate.isPending || batchDelete.isPending || batchSetTags.isPending;
+
+  // 배치 결과 정리: 성공한 항목만 선택 해제하고(실패는 재시도 가능하게 선택 유지), 실패 수를 노출한다.
+  // 무효화(onSuccess)가 진실을 다시 가져오므로 부분 실패해도 표시는 일관된다.
+  const finishBatch = (targets: Skill[], results: PromiseSettledResult<unknown>[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      targets.forEach((t, i) => {
+        if (results[i]?.status === "fulfilled") next.delete(t.id);
+      });
+      return next;
+    });
+    const failed = results.filter((r) => r.status === "rejected").length;
+    setBatchNote(failed > 0 ? `${failed}개 실패 — 다시 시도하세요` : null);
+  };
+
+  const batchToggle = (enabled: boolean) => {
+    if (batchBusy) return;
+    setBatchNote(null);
+    const targets = mutableTargets;
+    Promise.allSettled(targets.map((s) => batchUpdate.mutateAsync({ id: s.id, enabled }))).then(
+      (results) => finishBatch(targets, results),
+    );
+  };
+  const batchAddTag = () => {
+    const t = batchTag.trim();
+    if (!t || batchBusy) return;
+    setBatchTag("");
+    setBatchNote(null);
+    const targets = taggableTargets;
+    Promise.allSettled(
+      targets.map((s) => batchSetTags.mutateAsync({ skillKey: s.id, tags: addTagToSkill(s, t) })),
+    ).then((results) => finishBatch(targets, results));
+  };
+  const batchRemove = () => {
+    if (batchBusy || mutableTargets.length === 0) return;
+    if (
+      !window.confirm(
+        `선택한 인앱 프롬프트 ${mutableTargets.length}개를 삭제할까요? (외부 스킬은 제외)`,
+      )
+    )
+      return;
+    setBatchNote(null);
+    const targets = mutableTargets;
+    Promise.allSettled(targets.map((s) => batchDelete.mutateAsync(s.id))).then((results) =>
+      finishBatch(targets, results),
+    );
   };
 
   return (
@@ -263,6 +343,81 @@ export function SkillsView() {
         </div>
       )}
 
+      {selCount > 0 && (
+        <div className="skl-batchbar" role="toolbar" aria-label="선택 작업">
+          <span className="skl-batch-count">
+            {selCount}개 선택
+            {mutableTargets.length < selCount && (
+              <span className="skl-batch-note"> · 인앱 {mutableTargets.length}</span>
+            )}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            disabled={mutableTargets.length === 0 || batchBusy}
+            onClick={() => batchToggle(true)}
+          >
+            <ToggleRight className="size-4" />
+            모두 켜기
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            disabled={mutableTargets.length === 0 || batchBusy}
+            onClick={() => batchToggle(false)}
+          >
+            <ToggleLeft className="size-4" />
+            모두 끄기
+          </Button>
+          <div className="skl-batch-tag">
+            <Tag className="size-3.5" />
+            <input
+              value={batchTag}
+              onChange={(e) => setBatchTag(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  batchAddTag();
+                }
+              }}
+              placeholder="태그 추가"
+              aria-label="선택 항목에 태그 추가"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+              disabled={!batchTag.trim() || batchBusy}
+              onClick={batchAddTag}
+            >
+              추가
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            disabled={mutableTargets.length === 0 || batchBusy}
+            onClick={batchRemove}
+          >
+            <Trash2 className="size-4" />
+            삭제
+          </Button>
+          {batchNote && <span className="skl-note err skl-batch-note-err">{batchNote}</span>}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto gap-1.5 rounded-full"
+            onClick={clearSelection}
+          >
+            <X className="size-4" />
+            선택 해제
+          </Button>
+        </div>
+      )}
+
       <div className="skl-main">
         <nav className="skl-sidebar" aria-label="스킬 환경">
           {envNav.map((item) => (
@@ -299,16 +454,27 @@ export function SkillsView() {
               </div>
               <div className={cn("skl-cards", listView ? "list" : "grid")}>
                 {segment.skills.map((s) => (
-                  <SkillCard
+                  <div
                     key={s.id}
-                    skill={s}
-                    listView={listView}
-                    active={s.id === selectedId}
-                    onSelect={() => {
-                      setSelectedId(s.id);
-                      setAdding(false);
-                    }}
-                  />
+                    className={cn("skl-card-wrap", selectedIds.has(s.id) && "selected")}
+                  >
+                    <input
+                      type="checkbox"
+                      className="skl-card-check"
+                      checked={selectedIds.has(s.id)}
+                      onChange={() => toggleSelect(s.id)}
+                      aria-label={`${s.name} 선택`}
+                    />
+                    <SkillCard
+                      skill={s}
+                      listView={listView}
+                      active={s.id === selectedId}
+                      onSelect={() => {
+                        setSelectedId(s.id);
+                        setAdding(false);
+                      }}
+                    />
+                  </div>
                 ))}
               </div>
             </section>
