@@ -4,6 +4,7 @@ import { Blocks, FileText, LayoutGrid, List, Plus, Save, Search, Trash2 } from "
 import { useEffect, useMemo, useState } from "react";
 
 import type { Skill } from "@/bindings";
+import { SkillMarkdown } from "@/components/SkillMarkdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
@@ -588,7 +589,7 @@ function ExternalViewer({ skill }: { skill: Skill }) {
           aria-label="외부 스킬 파일"
         />
       ) : (
-        <pre className="skl-pre">{body}</pre>
+        <SkillMarkdown body={body} />
       )}
 
       {note && <div className="skl-note">{note}</div>}
