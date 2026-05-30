@@ -1104,6 +1104,37 @@ mod tests {
         assert!(ensure_within_skills_dir_roots(ok_claude.to_str().unwrap(), &[]).is_err());
     }
 
+    /// #19 회귀 잠금: 외부 편집 경로 가드가 **사용자 설정 루트**(P1.5 위치-축 안전망)로 확장돼도 탈출을
+    /// 막는다. `write/read_external_skill`은 `skill_roots_db`(env+repo+user 합성)를 소비하고, 사용자 루트는
+    /// `user_skill_roots`로 `SkillRoot`가 된다 — 그 변환 결과로 가드를 잠가 다중 루트 추가가 탈출을 열지
+    /// 않음을 증명한다(repo-local 가드 테스트와 동일 방식 — env 비의존 hermetic).
+    #[test]
+    fn path_guard_locks_user_configured_root() {
+        let user_dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let roots = user_skill_roots(&[UserSkillRoot {
+            path: user_dir.path().to_string_lossy().into_owned(),
+        }]);
+        assert_eq!(roots.len(), 1, "사용자 루트 1개가 SkillRoot로 변환");
+        let g = |p: &str| ensure_within_skills_dir_roots(p, &roots);
+
+        // 사용자 루트 안의 SKILL.md는 허용(자기 파일 편집).
+        let ok = user_dir.path().join("my-skill").join("SKILL.md");
+        assert!(
+            g(ok.to_str().unwrap()).is_ok(),
+            "사용자 루트 안 SKILL.md 허용"
+        );
+        // 사용자 루트 **밖**은 거부(다중 루트여도 탈출 차단 — done-criteria #2).
+        let bad = outside.path().join("evil").join("SKILL.md");
+        assert!(g(bad.to_str().unwrap()).is_err(), "사용자 루트 밖 거부");
+        // `..` traversal은 사용자 루트 접두를 공유해도 거부.
+        let escape = user_dir.path().join("..").join("evil").join("SKILL.md");
+        assert!(g(escape.to_str().unwrap()).is_err(), ".. 탈출 거부");
+        // 非 SKILL.md 거부(임의 파일 쓰기 차단).
+        let not_skill = user_dir.path().join("x").join("notes.md");
+        assert!(g(not_skill.to_str().unwrap()).is_err(), "SKILL.md만 허용");
+    }
+
     /// 통합: `list_skills_core` = 인앱(DB) + 멀티루트 외부 병합, 외부 행에 provider, 인앱 행은 provider=None.
     #[tokio::test]
     async fn list_skills_core_merges_in_app_and_external_with_provider() {
