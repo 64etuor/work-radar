@@ -228,6 +228,16 @@ pub async fn set_project_default_write_calendar(
 
 // ── Repos (project별 멀티 레포) ───────────────────────────────────────────────
 
+/// 전체 Repo 목록 (모든 project). 스킬 루트 합성(레포-로컬 에이전트 스킬 dir, P1.5 #4)이 소비한다 —
+/// project 경계 없이 enabled Local 레포 전부를 스캔/path-guard 루트로 쓴다. 읽기 전용.
+pub(crate) async fn fetch_all_repos(db: &Db) -> Result<Vec<Repo>, sqlx::Error> {
+    sqlx::query_as::<_, Repo>(&format!(
+        "SELECT {REPO_COLS} FROM repos ORDER BY created_at"
+    ))
+    .fetch_all(db)
+    .await
+}
+
 pub(crate) async fn fetch_repos(db: &Db, project_id: &str) -> Result<Vec<Repo>, sqlx::Error> {
     sqlx::query_as::<_, Repo>(&format!(
         "SELECT {REPO_COLS} FROM repos WHERE project_id = ?1 ORDER BY created_at"

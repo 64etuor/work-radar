@@ -23,9 +23,12 @@
 use tauri::State;
 
 use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHECK_PROMPT};
+use crate::commands::projects::fetch_all_repos;
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{CreateSkillInput, ExternalSkill, Skill, SkillEnvironment, SkillProvider};
+use crate::models::{
+    CreateSkillInput, ExternalSkill, Provider, Repo, Skill, SkillEnvironment, SkillProvider,
+};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -157,7 +160,7 @@ pub(crate) async fn resolve_agent_prompt_runtime(
 #[tauri::command]
 #[specta::specta]
 pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, AppError> {
-    list_skills_core(db.inner(), &skill_roots()).await
+    list_skills_core(db.inner(), &skill_roots_db(db.inner()).await).await
 }
 
 /// `list_skills`의 코어(roots 주입 → hermetic 테스트). 인앱 DB 행 + ROOTS 외부 스캔을 병합한다.
@@ -356,6 +359,44 @@ impl SkillRoot {
     }
 }
 
+/// 레포-로컬 에이전트 스킬 dir 규칙(글로벌과 동일): `<repo>/.claude/skills`→Claude,
+/// `.codex/skills`→Codex, `.agents/skills`→Codex(공유 agents dir). 각 루트는 recursive
+/// (레포 거대 트리 방어: ignore + depth cap).
+const REPO_SKILL_DIRS: [(&str, SkillProvider); 3] = [
+    (".claude/skills", SkillProvider::Claude),
+    (".codex/skills", SkillProvider::Codex),
+    (".agents/skills", SkillProvider::Codex),
+];
+
+/// 레포-로컬 루트 합성(P1.5 #4): `provider=Local` + 비어있지 않은 `local_path` + `enabled`인 레포의
+/// 에이전트 스킬 dir를 재귀 루트로. `Provider::Github`(remote-only, 로컬 체크아웃 없음)·비활성·빈 경로는
+/// 제외. 존재하지 않는 dir도 합성한다(스캔이 graceful skip — env 루트와 동일 정책). 재귀+ignore 필수.
+fn repo_skill_roots(repos: &[Repo]) -> Vec<SkillRoot> {
+    let mut out = Vec::new();
+    for repo in repos {
+        if repo.provider != Provider::Local || !repo.enabled {
+            continue;
+        }
+        let Some(base) = repo
+            .local_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(PathBuf::from)
+        else {
+            continue;
+        };
+        for (sub, provider) in REPO_SKILL_DIRS {
+            out.push(SkillRoot::recursive(
+                provider,
+                base.join(sub),
+                RECURSIVE_MAX_DEPTH,
+            ));
+        }
+    }
+    out
+}
+
 /// 재귀 하강 시 건너뛸 디렉터리 이름: 숨김 dir(`.git`/`.venv`/벤더된 에이전트 dotfile 등) + 표준
 /// 빌드/벤더 dir. 특히 레포-로컬 루트(P1.5 #4)에서 거대 트리(node_modules 등) 폭주를 막는다. 루트 자체는
 /// 명시 경로라 이 술어의 대상이 아니다(하강 중 하위 dir에만 적용).
@@ -368,8 +409,19 @@ fn is_ignored_dir(name: &str) -> bool {
 ///
 /// `.agents/skills`는 도구 간 공유 발견 dir이라 P0부터 **Codex로 태깅**(upstream codex 귀속).
 /// ⚑ Copilot 추가 시 `.agents/skills`는 공유되므로 **귀속 재검토 필요**.
-fn skill_roots() -> Vec<SkillRoot> {
-    resolve_skill_roots(&SkillRootEnv::from_process())
+///
+/// DB-aware 합성 ROOTS(C6 단일 출처): [env-resolved 도구 루트] + [레포-로컬 루트]. 전 소비자
+/// (스캔·detect·path-guard)가 이 함수를 통해 같은 슬라이스를 받는다. 레포 조회 실패는 graceful
+/// (env 루트만으로 degrade) — 읽기 전용이라 안전. (사용자 설정 임의 루트는 PR3.)
+async fn skill_roots_db(db: &Db) -> Vec<SkillRoot> {
+    let mut roots = resolve_skill_roots(&SkillRootEnv::from_process());
+    match fetch_all_repos(db).await {
+        Ok(repos) => roots.extend(repo_skill_roots(&repos)),
+        Err(e) => {
+            tracing::debug!(target: "skills.roots", error = %e, "repo roots unavailable; env-only")
+        }
+    }
+    roots
 }
 
 /// 루트 resolution 입력(테스트는 직접 주입 → hermetic, 프로세스 env 전역 변이 없음). 프로세스 env를
@@ -490,8 +542,12 @@ pub(crate) fn detect_skill_environments_core(roots: &[SkillRoot]) -> Vec<SkillEn
 /// 동일 ROOTS(`skill_roots`) 소비 — 두 번째 루트 정의 없음(C6). 읽기 전용.
 #[tauri::command]
 #[specta::specta]
-pub async fn detect_skill_environments() -> Result<Vec<SkillEnvironment>, AppError> {
-    Ok(detect_skill_environments_core(&skill_roots()))
+pub async fn detect_skill_environments(
+    db: State<'_, Db>,
+) -> Result<Vec<SkillEnvironment>, AppError> {
+    Ok(detect_skill_environments_core(
+        &skill_roots_db(db.inner()).await,
+    ))
 }
 
 /// SKILL.md의 YAML frontmatter에서 name/description을 얕게 파싱한다(외부 의존 없이 라인 스캔).
@@ -625,15 +681,17 @@ fn scan_root(
 /// 읽기 전용 브라우즈. 부재 루트는 스킵(graceful degrade) — 항상 가능분을 반환한다.
 #[tauri::command]
 #[specta::specta]
-pub async fn scan_external_skills() -> Result<Vec<ExternalSkill>, AppError> {
-    Ok(scan_external_skills_core(&skill_roots()))
+pub async fn scan_external_skills(db: State<'_, Db>) -> Result<Vec<ExternalSkill>, AppError> {
+    Ok(scan_external_skills_core(&skill_roots_db(db.inner()).await))
 }
 
 /// 외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관.
 #[tauri::command]
 #[specta::specta]
-pub async fn read_external_skill(path: String) -> Result<String, AppError> {
-    ensure_within_skills_dir(&path).map_err(|e| AppError::validation("skills.path_guard", e))?;
+pub async fn read_external_skill(db: State<'_, Db>, path: String) -> Result<String, AppError> {
+    let roots = skill_roots_db(db.inner()).await;
+    ensure_within_skills_dir_roots(&path, &roots)
+        .map_err(|e| AppError::validation("skills.path_guard", e))?;
     std::fs::read_to_string(&path).map_err(|e| {
         AppError::terminal("skills.read_failed", format!("파일을 읽지 못했습니다: {e}"))
     })
@@ -643,20 +701,20 @@ pub async fn read_external_skill(path: String) -> Result<String, AppError> {
 /// 실행하지 않는다(쓰기만). 외부 스킬을 work-radar가 자동 적용/실행하는 경로는 없다.
 #[tauri::command]
 #[specta::specta]
-pub async fn write_external_skill(path: String, content: String) -> Result<(), AppError> {
-    ensure_within_skills_dir(&path).map_err(|e| AppError::validation("skills.path_guard", e))?;
+pub async fn write_external_skill(
+    db: State<'_, Db>,
+    path: String,
+    content: String,
+) -> Result<(), AppError> {
+    let roots = skill_roots_db(db.inner()).await;
+    ensure_within_skills_dir_roots(&path, &roots)
+        .map_err(|e| AppError::validation("skills.path_guard", e))?;
     std::fs::write(&path, content).map_err(|e| {
         AppError::terminal(
             "skills.write_failed",
             format!("파일을 쓰지 못했습니다: {e}"),
         )
     })
-}
-
-/// 경로가 ROOTS 중 하나 안에 있고 SKILL.md인지 검증(C1 — 디렉터리 탈출/임의 파일 접근 방지).
-/// 스캔과 가드는 **동일 ROOTS**를 소비한다. `#[command]` 경계용 래퍼(실제 $HOME ROOTS).
-fn ensure_within_skills_dir(path: &str) -> Result<(), String> {
-    ensure_within_skills_dir_roots(path, &skill_roots())
 }
 
 /// 일반화된 path-guard(C1): `(.. 컴포넌트 없음) AND (basename==SKILL.md) AND (ROOTS 중 하나로 starts_with)`.
@@ -1327,5 +1385,109 @@ mod tests {
             return Err("없음".into());
         }
         Ok(())
+    }
+
+    // ── P1.5 #4: 레포-로컬 루트(DB-aware) 테스트 ──
+
+    /// 테스트용 Repo 빌더(필드 전부 채움 — dummy 메타).
+    fn make_repo(provider: Provider, local_path: Option<&str>, enabled: bool) -> Repo {
+        Repo {
+            id: "repo-id".into(),
+            project_id: "proj-id".into(),
+            provider,
+            remote_url: None,
+            local_path: local_path.map(str::to_string),
+            default_branch: "main".into(),
+            enabled,
+            created_at: "2026-05-30T00:00:00Z".into(),
+        }
+    }
+
+    /// 레포-로컬 합성: enabled Local 레포만 3루트(provider 매핑+recursive), Github/비활성/빈경로 제외.
+    #[test]
+    fn repo_skill_roots_synthesizes_local_excludes_github_disabled_empty() {
+        let base = "/tmp/my-repo";
+        let repos = vec![
+            // (a) enabled Local → 3 roots.
+            make_repo(Provider::Local, Some(base), true),
+            // (b) Github → 0 roots(remote-only).
+            make_repo(Provider::Github, Some("/tmp/gh-repo"), true),
+            // (c) disabled Local → 0 roots.
+            make_repo(Provider::Local, Some("/tmp/disabled"), false),
+            // (d) 빈/공백/None local_path → 0 roots.
+            make_repo(Provider::Local, Some("  "), true),
+            make_repo(Provider::Local, None, true),
+        ];
+        let roots = repo_skill_roots(&repos);
+        assert_eq!(roots.len(), 3, "enabled Local 레포 하나만 3루트 합성");
+
+        let basep = PathBuf::from(base);
+        let by_path = |sub: &str| {
+            roots
+                .iter()
+                .find(|r| r.path == basep.join(sub))
+                .unwrap_or_else(|| panic!("루트 {sub} 없음"))
+        };
+        let claude = by_path(".claude/skills");
+        assert_eq!(claude.provider, SkillProvider::Claude);
+        let codex = by_path(".codex/skills");
+        assert_eq!(codex.provider, SkillProvider::Codex);
+        let agents = by_path(".agents/skills");
+        assert_eq!(
+            agents.provider,
+            SkillProvider::Codex,
+            ".agents는 Codex 태깅"
+        );
+
+        for r in &roots {
+            assert!(r.recursive, "레포 루트는 재귀");
+            assert_eq!(
+                r.max_depth, RECURSIVE_MAX_DEPTH,
+                "depth cap = 글로벌과 동일"
+            );
+        }
+    }
+
+    /// 레포 루트 재귀 스캔: 중첩 스킬 발견 + node_modules 무시(거대 트리 방어).
+    #[test]
+    fn repo_root_recursive_finds_nested_and_ignores_node_modules() {
+        let base = TempDir::new().unwrap();
+        // 중첩 스킬: <base>/.claude/skills/<cat>/<skill>/SKILL.md
+        let nested = base.path().join(".claude/skills/cat/my-skill");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("SKILL.md"), "---\nname: nested-repo\n---\n").unwrap();
+        // 디코이: node_modules 하위(무시 대상).
+        let decoy = base.path().join(".claude/skills/node_modules/x");
+        std::fs::create_dir_all(&decoy).unwrap();
+        std::fs::write(decoy.join("SKILL.md"), "---\nname: decoy\n---\n").unwrap();
+
+        let local = make_repo(Provider::Local, base.path().to_str(), true);
+        let out = scan_external_skills_core(&repo_skill_roots(&[local]));
+        let names: Vec<_> = out.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"nested-repo"), "중첩 레포 스킬 발견");
+        assert!(!names.contains(&"decoy"), "node_modules는 무시");
+    }
+
+    /// path-guard(C1)가 레포-로컬 스킬 경로를 수용(env 루트와 동일 가드).
+    #[test]
+    fn path_guard_accepts_repo_local_skill() {
+        let base = TempDir::new().unwrap();
+        let local = make_repo(Provider::Local, base.path().to_str(), true);
+        let roots = repo_skill_roots(&[local]);
+
+        let ok = base
+            .path()
+            .join(".claude/skills/foo/SKILL.md")
+            .to_string_lossy()
+            .into_owned();
+        assert!(
+            ensure_within_skills_dir_roots(&ok, &roots).is_ok(),
+            "레포-로컬 스킬 경로 수용"
+        );
+        // 레포 루트 밖은 거부.
+        assert!(
+            ensure_within_skills_dir_roots("/etc/passwd", &roots).is_err(),
+            "루트 밖 경로 거부"
+        );
     }
 }
