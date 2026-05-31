@@ -6,6 +6,14 @@ import {
   proposeDecision, requestReview, approve, reject, conflicts, why, history,
 } from "../decision/handlers.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
+import { spawn as nodeSpawn } from "node:child_process";
+import {
+  liveReview,
+  defaultReviewPrompt,
+  parseVerdict,
+  type SpawnLike,
+  type ChildLike,
+} from "../decision/liveReviewer.ts";
 
 const WORKSPACE =
   process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
@@ -47,15 +55,44 @@ server.registerTool(
   },
 );
 
-// 작성자(author) 모델 / 리뷰어 모델은 env로 주입. 라이브 모델 호출(다른 모델 적대 검토)은
-// P2a 범위 밖(별도 follow-up) — 여기서는 플레이스홀더 리뷰어로 게이트 흐름만 실증한다.
 const AUTHOR_MODEL = process.env.BOULE_AUTHOR_MODEL ?? "claude";
 const REVIEWER_MODEL = process.env.BOULE_REVIEWER_MODEL ?? "external-stub";
+
 const placeholderReview: ReviewFn = async (req) => ({
   verdict: "concerns",
-  rationale: `[placeholder reviewer — live different-model wiring deferred] reviewed "${req.title}".`,
+  rationale: `[placeholder reviewer — set BOULE_REVIEWER_MODE=live to wire a real model] reviewed "${req.title}".`,
   reviewerModel: REVIEWER_MODEL,
 });
+
+// 비결정(서브프로세스/타이머/Math.random)은 이 경계에서만 주입. 기본 = stub(결정적·CI 무변경).
+// BOULE_REVIEWER_MODE=live 일 때만 작성자와 다른 모델 CLI를 bounded retry로 호출.
+function buildReviewer(): ReviewFn {
+  if (process.env.BOULE_REVIEWER_MODE !== "live") return placeholderReview;
+  const command = process.env.BOULE_REVIEWER_CMD ?? "codex";
+  const reviewerModel = process.env.BOULE_REVIEWER_MODEL ?? command;
+  const argsTemplate = (process.env.BOULE_REVIEWER_ARGS ?? "exec").split(" ").filter(Boolean);
+  const realSpawn: SpawnLike = (cmd, args) => nodeSpawn(cmd, args) as unknown as ChildLike;
+  return liveReview({
+    spawn: realSpawn,
+    command,
+    buildArgs: () => argsTemplate, // prompt is fed via stdin, not argv
+    buildPrompt: defaultReviewPrompt,
+    reviewerModel,
+    parse: parseVerdict,
+    timeoutMs: Number(process.env.BOULE_REVIEWER_TIMEOUT_MS ?? 120000),
+    maxAttempts: Number(process.env.BOULE_REVIEWER_MAX_ATTEMPTS ?? 2),
+    backoffMs: 500,
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    setTimer: (cb, ms) => {
+      const t = setTimeout(cb, ms);
+      return () => clearTimeout(t);
+    },
+    rand: Math.random,
+    log: (line) => process.stderr.write(`${line}\n`), // PII-safe (size/attempt/exit only)
+  });
+}
+
+const reviewFn = buildReviewer();
 
 server.registerTool(
   "propose_decision",
@@ -76,7 +113,7 @@ server.registerTool(
     inputSchema: { decisionId: z.string() },
   },
   async ({ decisionId }) => {
-    const r = await requestReview(WORKSPACE, { decisionId, authorModel: AUTHOR_MODEL }, placeholderReview, nowFn(), randFn());
+    const r = await requestReview(WORKSPACE, { decisionId, authorModel: AUTHOR_MODEL }, reviewFn, nowFn(), randFn());
     return { content: [{ type: "text", text: `review recorded: ${r.verdict} (${r.reviewEventId})` }] };
   },
 );
