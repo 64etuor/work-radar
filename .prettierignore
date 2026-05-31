@@ -20,5 +20,8 @@ src-tauri/
 .superpowers/
 output/
 
+# 자립형 거버넌스 사이드카 (자체 tooling, 앱 빌드 그래프 밖)
+governance/
+
 # 락파일
 pnpm-lock.yaml

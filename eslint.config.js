@@ -21,6 +21,8 @@ export default tseslint.config(
       ".gstack/**",
       ".omc/**",
       ".playwright-mcp/**",
+      // 자립형 거버넌스 사이드카 (자체 tsconfig/vitest, 앱 빌드 그래프 밖)
+      "governance/**",
     ],
   },
   js.configs.recommended,
