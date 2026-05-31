@@ -22,6 +22,7 @@ type Behavior =
   | { kind: "ok"; stdout: string }
   | { kind: "exit"; code: number }
   | { kind: "spawnError"; message: string }
+  | { kind: "asyncError"; message: string }
   | { kind: "hang" };
 
 /** Self-driving fake spawn: on stdin.end() it emits the scripted behavior on a microtask. */
@@ -50,6 +51,8 @@ function scriptedSpawn(behaviors: Behavior[]) {
               cbs.close.forEach((f) => f(0));
             } else if (b.kind === "exit") {
               cbs.close.forEach((f) => f(b.code));
+            } else if (b.kind === "asyncError") {
+              cbs.error.forEach((f) => f(new Error(b.message)));
             } // hang: emit nothing
           }),
       },
@@ -93,6 +96,11 @@ describe("parseVerdict", () => {
   });
   it("throws when no json object is present", () => {
     expect(() => parseVerdict("just prose")).toThrow();
+  });
+  it("handles pathological no-closing-brace input fast (ReDoS guard)", () => {
+    const t0 = Date.now();
+    expect(() => parseVerdict("{".repeat(100000))).toThrow(/no JSON object/i);
+    expect(Date.now() - t0).toBeLessThan(1000); // index-based scan is O(n); the old greedy regex took ~14s
   });
 });
 
@@ -147,6 +155,12 @@ describe("liveReview", () => {
       liveReview(deps({ spawn: s.spawn, setTimer: immediate, maxAttempts: 2 }))(REQ),
     ).rejects.toThrow(/exhausted/i);
     expect(s.killed).toEqual([true, true]);
+  });
+
+  it("retries on an async spawn error (child 'error' event) then throws", async () => {
+    const s = scriptedSpawn([{ kind: "asyncError", message: "ENOENT" }]);
+    await expect(liveReview(deps({ spawn: s.spawn, maxAttempts: 2 }))(REQ)).rejects.toThrow(/exhausted/i);
+    expect(s.calls()).toBe(2);
   });
 
   it("retries on unparseable output then throws", async () => {

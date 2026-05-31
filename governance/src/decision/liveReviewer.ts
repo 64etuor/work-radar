@@ -38,13 +38,15 @@ export function defaultReviewPrompt(req: ReviewRequest): string {
 /** Extract {verdict, rationale} from reviewer stdout. Prefers a ```json fence, falls
  *  back to the first {...}. Throws if absent or the verdict is not in the enum. */
 export function parseVerdict(stdout: string): { verdict: ReviewResult["verdict"]; rationale: string } {
-  const fence = stdout.match(/```json\s*([\s\S]*?)```/i);
-  const scope = fence ? fence[1] : stdout;
-  const obj = scope.match(/\{[\s\S]*\}/);
-  if (!obj) throw new Error("reviewer output contains no JSON object");
+  const capped = stdout.slice(0, 64_000); // bound all scanning (ReDoS-safe)
+  const fence = capped.match(/```json\s*([\s\S]*?)```/i);
+  const scope = fence ? fence[1] : capped;
+  const start = scope.indexOf("{");
+  const end = scope.lastIndexOf("}");
+  if (start === -1 || end <= start) throw new Error("reviewer output contains no JSON object");
   let parsed: unknown;
   try {
-    parsed = JSON.parse(obj[0]);
+    parsed = JSON.parse(scope.slice(start, end + 1));
   } catch {
     throw new Error("reviewer output JSON parse failed");
   }
