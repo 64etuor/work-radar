@@ -59,3 +59,6 @@ pub(crate) use seed::{
     FAST_CODEX_MODEL,
 };
 pub use tags::set_skill_tags;
+pub use updater::{
+    apply_skill_update, check_skill_updates, list_skill_update_status, set_skill_auto_update,
+};

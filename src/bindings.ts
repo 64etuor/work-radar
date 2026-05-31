@@ -538,6 +538,10 @@ export const commands = {
 	backupSkillLibrary: () => typedError<BackupMeta, AppError>(__TAURI_INVOKE("backup_skill_library")),
 	listSkillBackups: () => typedError<BackupMeta[], AppError>(__TAURI_INVOKE("list_skill_backups")),
 	restoreSkillLibrary: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("restore_skill_library", { id })),
+	listSkillUpdateStatus: () => typedError<UpdateStatus[], AppError>(__TAURI_INVOKE("list_skill_update_status")),
+	checkSkillUpdates: () => typedError<UpdateStatus[], AppError>(__TAURI_INVOKE("check_skill_updates")),
+	setSkillAutoUpdate: (provider: string, name: string, enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_auto_update", { provider, name, enabled })),
+	applySkillUpdate: (provider: string, name: string) => typedError<Skill, AppError>(__TAURI_INVOKE("apply_skill_update", { provider, name })),
 	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.
@@ -1777,6 +1781,18 @@ export type UpdateRoutineInput = {
 	monthlyNthWeek: number | null,
 	/**  이벤트 길이(분). None=기본 30분 fallback (sync 시). */
 	durationMin: number | null,
+};
+
+/**  한 managed 스킬의 업데이트 상태(provenance 파생 — 네트워크 비취급). 뱃지/토글/적용 UI가 쓴다. */
+export type UpdateStatus = {
+	provider: string,
+	name: string,
+	installedCommit: string,
+	stagedCommit: string | null,
+	autoUpdate: boolean,
+	lastCheckedAt: string | null,
+	/**  staging에 installed와 다른 commit가 받아져 있으면 true(적용 가능). */
+	updateAvailable: boolean,
 };
 
 /**

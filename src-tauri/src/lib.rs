@@ -260,6 +260,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::backup::backup_skill_library,
         skills::backup::list_skill_backups,
         skills::backup::restore_skill_library,
+        // 스킬 auto-updater (G1.5-PR3, ADR-0006 레일 ④) — opt-in·bounded·fetch-only. 잡 spawn 없음(#1/#2).
+        skills::updater::list_skill_update_status,
+        skills::updater::check_skill_updates,
+        skills::updater::set_skill_auto_update,
+        skills::updater::apply_skill_update,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,

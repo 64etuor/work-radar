@@ -12,12 +12,20 @@ use specta::Type;
 use sqlx::SqlitePool;
 use std::path::{Path, PathBuf};
 
+use tauri::{Manager, State};
+
+use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{Skill, SkillProvider};
 use crate::skills::audit_log::audit;
-use crate::skills::central_repo::import_to_central;
+use crate::skills::central_repo::{import_to_central, sanitize_segment};
+use crate::skills::installer::commit_from_top_level;
+use crate::skills::remote::{extract_tarball, fetch_tarball_bytes, parse_source};
 use crate::skills::scan::parse_frontmatter;
-use crate::skills::source::{get_skill_source, promote_staged_commit, SkillSource};
+use crate::skills::source::{
+    get_skill_source, list_all_sources, promote_staged_commit, record_update_check, set_auto_update,
+    SkillSource,
+};
 
 /// 한 managed 스킬의 업데이트 상태(provenance 파생 — 네트워크 비취급). 뱃지/토글/적용 UI가 쓴다.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -165,6 +173,170 @@ pub(crate) async fn apply_update_core(
         created_at: String::new(),
         updated_at: String::new(),
     })
+}
+
+/// app_data_dir 하위 경로 헬퍼(import/installer/backup과 동일 관례).
+fn central_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| {
+            AppError::terminal(
+                "skills.app_data_dir",
+                format!("앱 데이터 경로 해석 실패: {e}"),
+            )
+        })?
+        .join("skills-library"))
+}
+fn staging_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| {
+            AppError::terminal(
+                "skills.app_data_dir",
+                format!("앱 데이터 경로 해석 실패: {e}"),
+            )
+        })?
+        .join("skills-staging"))
+}
+fn backups_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| {
+            AppError::terminal(
+                "skills.app_data_dir",
+                format!("앱 데이터 경로 해석 실패: {e}"),
+            )
+        })?
+        .join("skills-backups"))
+}
+/// 백업 스냅샷 dir 이름용 UTC id(backup과 동일 포맷). 정렬·fs 안전.
+fn new_id() -> String {
+    chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string()
+}
+/// last_checked_at용 ISO8601 UTC.
+fn now_iso() -> String {
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+/// 한 source 업스트림 확인 + (새 commit이면) staging. 네트워크(bounded fetch). 공개 우선 token=None.
+/// PR1 `fetch_tarball_bytes`가 bounded retry + 에러 분류 + 본문/토큰 무로깅을 책임진다(재사용).
+async fn check_one(
+    pool: &SqlitePool,
+    staging_root: &Path,
+    source: &SkillSource,
+) -> Result<(), AppError> {
+    let parsed = parse_source(&source.source_url).ok_or_else(|| {
+        AppError::terminal(
+            "skills.update.bad_source",
+            format!("출처 URL 파싱 실패: {}", source.source_url),
+        )
+    })?;
+    let gz = fetch_tarball_bytes(&parsed, None).await?;
+    let (tmp, top) = extract_tarball(&gz)?;
+    let upstream = commit_from_top_level(&top);
+    let checked = now_iso();
+
+    if upstream == source.installed_commit {
+        // 최신 — staging 비움(이전에 staged였다면 해소) + 확인 시각만.
+        record_update_check(pool, &source.provider, &source.name, None, &checked).await?;
+        return Ok(());
+    }
+
+    // 새 버전 — content dir(subpath) 해석 후 staging. subpath 세그먼트는 sanitize로 탈출 방지.
+    let mut content_dir = tmp.path().join(&top);
+    if let Some(sub) = &parsed.subpath {
+        for seg in sub.split('/').filter(|s| !s.is_empty()) {
+            content_dir = content_dir.join(sanitize_segment(seg));
+        }
+    }
+    if !content_dir.join("SKILL.md").is_file() {
+        return Err(AppError::not_found(
+            "skills.update.subpath_missing",
+            "업데이트 콘텐츠를 찾을 수 없습니다.".to_string(),
+        ));
+    }
+    let staged_dest = stage_from_dir(staging_root, &source.provider, &source.name, &content_dir)?;
+    record_update_check(pool, &source.provider, &source.name, Some(&upstream), &checked).await?;
+    audit(
+        pool,
+        "update_stage",
+        "managed_skill",
+        &staged_dest.to_string_lossy(),
+        Some(&source.source_url),
+        Some(&format!("commit={upstream}")),
+    )
+    .await?;
+    Ok(())
+}
+
+/// 추적 중인 모든 managed 스킬의 업스트림 확인(한 패스, 각 bounded). 부분 실패는 건너뛰고 계속.
+pub(crate) async fn check_all_core(
+    pool: &SqlitePool,
+    staging_root: &Path,
+) -> Result<Vec<UpdateStatus>, AppError> {
+    for source in list_all_sources(pool).await? {
+        // 한 스킬 실패가 나머지 확인을 막지 않게 — 개별 실패는 삼키고 계속(상태는 미갱신으로 남음).
+        let _ = check_one(pool, staging_root, &source).await;
+    }
+    // 갱신된 provenance에서 상태 재구성.
+    Ok(list_all_sources(pool)
+        .await?
+        .iter()
+        .map(status_from_source)
+        .collect())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_skill_update_status(db: State<'_, Db>) -> Result<Vec<UpdateStatus>, AppError> {
+    Ok(list_all_sources(db.inner())
+        .await?
+        .iter()
+        .map(status_from_source)
+        .collect())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn check_skill_updates(
+    db: State<'_, Db>,
+    app: tauri::AppHandle,
+) -> Result<Vec<UpdateStatus>, AppError> {
+    check_all_core(db.inner(), &staging_root(&app)?).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_skill_auto_update(
+    db: State<'_, Db>,
+    provider: String,
+    name: String,
+    enabled: bool,
+) -> Result<(), AppError> {
+    set_auto_update(db.inner(), &provider, &name, enabled).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn apply_skill_update(
+    db: State<'_, Db>,
+    app: tauri::AppHandle,
+    provider: String,
+    name: String,
+) -> Result<Skill, AppError> {
+    apply_update_core(
+        db.inner(),
+        &central_root(&app)?,
+        &staging_root(&app)?,
+        &backups_root(&app)?,
+        &provider,
+        &name,
+        &new_id(),
+    )
+    .await
 }
 
 #[cfg(test)]
