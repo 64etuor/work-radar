@@ -196,6 +196,70 @@ export function useRestoreSkillLibrary() {
   });
 }
 
+/** 추적 managed 스킬의 업데이트 상태(provenance — 네트워크 비취급). 뱃지/토글/적용 UI가 쓴다. */
+export function useSkillUpdateStatus() {
+  return useQuery({
+    queryKey: ["skillUpdateStatus"],
+    queryFn: () => unwrap(commands.listSkillUpdateStatus()),
+    staleTime: 5_000,
+  });
+}
+
+/** per-skill auto-update opt-in 토글. 성공 시 상태 무효화. */
+export function useSetSkillAutoUpdate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { provider: SkillProvider; name: string; enabled: boolean }) =>
+      unwrap(commands.setSkillAutoUpdate(args.provider, args.name, args.enabled)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skillUpdateStatus"] }),
+  });
+}
+
+/**
+ * 추적 스킬 전체 업스트림 확인(한 패스, bounded). 네트워크 fetch는 전부 Rust(렌더러 토큰 비노출).
+ * 새 버전은 staging만 — 자동 적용/실행 없음(#1/#2). 성공 시 상태 무효화.
+ */
+export function useCheckSkillUpdates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.checkSkillUpdates()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skillUpdateStatus"] }),
+  });
+}
+
+/**
+ * staged 업데이트 적용(사전 전체 백업 후 교체 — 가역). 잡 spawn 없음(#1/#2 — 파일 복사 + DB).
+ * 성공 시 스킬 목록 + 업데이트 상태 + 백업 목록 무효화.
+ */
+export function useApplySkillUpdate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { provider: SkillProvider; name: string }) =>
+      unwrap(commands.applySkillUpdate(args.provider, args.name)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skillUpdateStatus"] });
+      qc.invalidateQueries({ queryKey: ["skillBackups"] });
+    },
+  });
+}
+
+/** on-launch 자동 확인 글로벌 setting(opt-in, 기본 꺼짐). 한 bounded 패스만 — 자동 적용 없음. */
+export function useSkillUpdateOnLaunch() {
+  return useQuery({
+    queryKey: ["skillUpdateOnLaunch"],
+    queryFn: () => unwrap(commands.getSkillUpdateOnLaunch()),
+    staleTime: 30_000,
+  });
+}
+export function useSetSkillUpdateOnLaunch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => unwrap(commands.setSkillUpdateOnLaunch(enabled)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skillUpdateOnLaunch"] }),
+  });
+}
+
 /** 외부 스킬 파일 쓰기(사용자 명시 편집 — 자기 파일). 성공 시 내용/목록 무효화. */
 export function useWriteExternalSkill() {
   const qc = useQueryClient();

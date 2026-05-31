@@ -13,6 +13,7 @@ import {
   Library,
   List,
   Plus,
+  RefreshCw,
   RotateCcw,
   Save,
   Search,
@@ -27,6 +28,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Skill, SkillProvider } from "@/bindings";
 import { SkillMarkdown } from "@/components/SkillMarkdown";
 import { SkillsHelpDialog } from "@/components/SkillsHelpDialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
@@ -38,10 +40,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { type DiffLine, diffStats, lineDiff } from "@/lib/lineDiff";
 import {
+  useApplySkillUpdate,
   useBackupSkillLibrary,
+  useCheckSkillUpdates,
   useCreateSkill,
   useDeleteSkill,
   useExternalSkillContent,
@@ -49,10 +54,14 @@ import {
   useInstallSkillFromGit,
   useRemoveManagedSkill,
   useRestoreSkillLibrary,
+  useSetSkillAutoUpdate,
   useSetSkillTags,
+  useSetSkillUpdateOnLaunch,
   useSkillBackups,
   useSkillEnvironments,
   useSkills,
+  useSkillUpdateOnLaunch,
+  useSkillUpdateStatus,
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
@@ -115,6 +124,8 @@ export function SkillsView() {
   const [installing, setInstalling] = useState(false);
   // 백업/복원 패널 열림 — 다른 패널과 배타. 로컬 파일 스냅샷·감사(잡 비취급, #1/#2).
   const [backupOpen, setBackupOpen] = useState(false);
+  // 업데이트 패널 열림 — 확인/토글/적용/런치설정. fetch-only·staging만(적용은 사용자 발동, #1/#2).
+  const [updateOpen, setUpdateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
   // 도움말 다이얼로그 열림 — 스킬 피처 로컬 상태(전역 store 비대상).
@@ -210,11 +221,12 @@ export function SkillsView() {
     const g = grouped.find((grp) => grp.memberIds.includes(selected.id));
     return g && g.locations.length > 1 ? g.locations : [];
   }, [grouped, selected]);
-  const sheetOpen = adding || installing || backupOpen || !!selected;
+  const sheetOpen = adding || installing || backupOpen || updateOpen || !!selected;
   const closeSheet = () => {
     setAdding(false);
     setInstalling(false);
     setBackupOpen(false);
+    setUpdateOpen(false);
     setSelectedId(null);
   };
 
@@ -380,6 +392,22 @@ export function SkillsView() {
         >
           <Archive className="size-4" />
           백업/복원
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => {
+            setUpdateOpen(true);
+            setAdding(false);
+            setInstalling(false);
+            setBackupOpen(false);
+            setSelectedId(null);
+          }}
+        >
+          <RefreshCw className="size-4" />
+          업데이트
         </Button>
       </div>
 
@@ -566,7 +594,9 @@ export function SkillsView() {
                   ? "URL에서 설치"
                   : backupOpen
                     ? "백업 / 복원"
-                    : selected?.kind === "external"
+                    : updateOpen
+                      ? "업데이트"
+                      : selected?.kind === "external"
                     ? "외부 스킬"
                     : selected?.kind === "managed"
                       ? "라이브러리 스킬"
@@ -608,6 +638,8 @@ export function SkillsView() {
                 />
               ) : backupOpen ? (
                 <BackupPanel onDone={() => closeSheet()} />
+              ) : updateOpen ? (
+                <UpdatePanel onDone={() => closeSheet()} />
               ) : selected?.kind === "in_app_prompt" ? (
                 <InAppEditor key={selected.id} skill={selected} />
               ) : selected?.kind === "external" ? (
@@ -1436,6 +1468,128 @@ function BackupPanel({ onDone }: { onDone: () => void }) {
           </li>
         ))}
         {backups.data?.length === 0 && <li className="skl-desc">아직 백업이 없습니다.</li>}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * 업데이트 패널(G1.5-PR3). 추적 스킬의 업스트림을 확인(fetch-only·bounded·staging만)하고, 새 버전을
+ * 적용(사전 전체 백업 후 교체 — 가역)하며, per-skill auto-update와 on-launch opt-in을 토글한다. 적용
+ * confirm은 **인라인 2단계**(중첩 Dialog 회피 → Sheet Esc 계약 무영향). 자동 실행/적용 없음(#1/#2).
+ */
+function UpdatePanel({ onDone }: { onDone: () => void }) {
+  const status = useSkillUpdateStatus();
+  const check = useCheckSkillUpdates();
+  const setAuto = useSetSkillAutoUpdate();
+  const apply = useApplySkillUpdate();
+  const onLaunch = useSkillUpdateOnLaunch();
+  const setOnLaunch = useSetSkillUpdateOnLaunch();
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const doCheck = () => {
+    if (check.isPending) return;
+    setNote(null);
+    check.mutate(undefined, {
+      onSuccess: (rows) => {
+        const n = rows.filter((r) => r.updateAvailable).length;
+        setNote(n > 0 ? `${n}개 업데이트 가능` : "모두 최신입니다");
+      },
+      onError: (e) => setNote(`확인 실패: ${(e as Error).message}`),
+    });
+  };
+
+  const doApply = (provider: SkillProvider, name: string) => {
+    if (apply.isPending) return;
+    setNote(null);
+    apply.mutate(
+      { provider, name },
+      {
+        onSuccess: () => setConfirmKey(null),
+        onError: (e) => setNote(`적용 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  const rows = status.data ?? [];
+  return (
+    <div className="skl-edit">
+      <p className="skl-desc">
+        설치한 스킬의 업스트림을 확인합니다. 네트워크는 Rust에서 bounded로 처리되고, 새 버전은
+        staging에만 받아둡니다 — 적용은 아래에서 직접 누를 때만 일어나며 자동 실행은 없습니다.
+      </p>
+      <div className="skl-actions">
+        <Button className="gap-1.5 rounded-full" onClick={doCheck} disabled={check.isPending}>
+          <RefreshCw className="size-4" />
+          {check.isPending ? "확인 중…" : "지금 확인"}
+        </Button>
+        <Button variant="outline" className="rounded-full" onClick={onDone}>
+          닫기
+        </Button>
+      </div>
+      <label className="skl-update-launch">
+        <Switch checked={!!onLaunch.data} onCheckedChange={(v) => setOnLaunch.mutate(v)} />
+        <span className="skl-desc">앱 시작 시 자동 확인(opt-in · 한 번만 · 자동 적용 안 함)</span>
+      </label>
+      {note && <span className="skl-note">{note}</span>}
+
+      <ul className="skl-backup-list">
+        {rows.map((r) => {
+          const key = `${r.provider}:${r.name}`;
+          return (
+            <li key={key} className="skl-backup-row">
+              <span className="font-mono">{r.name}</span>
+              <div className="skl-update-ctl">
+                {r.updateAvailable && <Badge variant="default">업데이트 가능</Badge>}
+                <label className="skl-update-toggle">
+                  <Switch
+                    checked={r.autoUpdate}
+                    onCheckedChange={(v) =>
+                      setAuto.mutate({
+                        provider: r.provider as SkillProvider,
+                        name: r.name,
+                        enabled: v,
+                      })
+                    }
+                  />
+                  <span className="skl-desc">자동</span>
+                </label>
+                {r.updateAvailable &&
+                  (confirmKey === key ? (
+                    <>
+                      <Button
+                        size="sm"
+                        className="rounded-full"
+                        disabled={apply.isPending}
+                        onClick={() => doApply(r.provider as SkillProvider, r.name)}
+                      >
+                        {apply.isPending ? "적용 중…" : "정말 적용"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => setConfirmKey(null)}
+                      >
+                        취소
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => setConfirmKey(key)}
+                    >
+                      적용…
+                    </Button>
+                  ))}
+              </div>
+            </li>
+          );
+        })}
+        {rows.length === 0 && <li className="skl-desc">설치된(추적 중인) 스킬이 없습니다.</li>}
       </ul>
     </div>
   );

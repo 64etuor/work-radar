@@ -470,6 +470,26 @@
   margin-left: auto;
 }
 
+/* 업데이트 패널(G1.5-PR3) — on-launch opt-in 토글 줄 + 행 우측 컨트롤 클러스터(뱃지/자동/적용). */
+.skl-update-launch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  cursor: pointer;
+}
+.skl-update-ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.skl-update-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
 /* 도움말 다이얼로그(SkillsHelpDialog) — shadcn DialogContent 위. 본문은 .skl-markdown 재사용. */
 .skl-help {
   max-width: 560px;
