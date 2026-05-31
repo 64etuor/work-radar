@@ -1,8 +1,8 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { generateId } from "../event/id.js";
-import { writeEvent } from "../event/writeEvent.js";
-import type { GovEvent } from "../event/event.js";
+import { generateId } from "../event/id.ts";
+import { writeEvent } from "../event/writeEvent.ts";
+import type { GovEvent } from "../event/event.ts";
 
 export interface CreateTaskInput { description: string; }
 export interface CreateTaskResult { id: string; path: string; }

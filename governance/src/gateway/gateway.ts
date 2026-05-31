@@ -1,5 +1,5 @@
-import { generateId } from "../event/id.js";
-import type { EventSource, EventType, GovEvent } from "../event/event.js";
+import { generateId } from "../event/id.ts";
+import type { EventSource, EventType, GovEvent } from "../event/event.ts";
 
 export interface RawActivity {
   kind: "git_commit" | "pr_merged" | "adr_added" | "decisions_line" | "hermes_command";

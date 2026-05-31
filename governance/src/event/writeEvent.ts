@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { stampUtc } from "./id.js";
-import { serializeEvent, type GovEvent } from "./event.js";
+import { stampUtc } from "./id.ts";
+import { serializeEvent, type GovEvent } from "./event.ts";
 
 /** Append-only write: events/YYYY-MM-DD/HH-MM-SS_<type>.md. Immutable (wx). */
 export async function writeEvent(workspaceDir: string, evt: GovEvent, now: Date): Promise<string> {

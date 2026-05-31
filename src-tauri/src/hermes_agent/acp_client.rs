@@ -197,8 +197,16 @@ impl AcpSession {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "/tmp".to_string());
 
+        // A안 (Boule, spec §5.0): opt-in inject the governance MCP server into the
+        // ACP `session/new` payload so Hermes loads it. Unset env → `[]` (today's
+        // behaviour, no-op). Internal ACP payload → bindings.ts/specta unaffected (#4).
+        let mcp_servers = governance_mcp_servers_from_env();
         let new_resp = session
-            .request("session/new", json!({ "cwd": cwd, "mcpServers": [] }), 10)
+            .request(
+                "session/new",
+                json!({ "cwd": cwd, "mcpServers": mcp_servers }),
+                10,
+            )
             .await?;
 
         let session_id = new_resp
@@ -283,6 +291,54 @@ impl AcpSession {
         // stdin_tx drops with self, which closes the mpsc channel → writer task exits.
         self.pending.lock().await.clear();
     }
+}
+
+/// Read Boule opt-in env and build the `session/new` `mcpServers` array (A안).
+///
+/// `BOULE_GOVERNANCE_DIR` is the opt-in gate; `BOULE_NODE` optionally overrides
+/// the node binary (absolute path) for GUI launches where PATH may lack node.
+fn governance_mcp_servers_from_env() -> Vec<Json> {
+    let dir = std::env::var("BOULE_GOVERNANCE_DIR").ok();
+    let node = std::env::var("BOULE_NODE")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "node".to_string());
+    governance_mcp_servers(dir.as_deref(), &node)
+}
+
+/// Pure builder: governance dir (opt-in) → ACP stdio MCP descriptor(s).
+///
+/// - `dir` unset/empty → `vec![]` (identical to pre-A안 behaviour, no-op).
+/// - `dir` set but `<dir>/src/mcp/server.ts` missing → `warn!` (path only) + `vec![]`
+///   (graceful degrade, no retry — INVARIANT #5).
+/// - otherwise → one `McpServerStdio` descriptor. Note ACP `env` is a **list**
+///   `[{name,value}]` (differs from hermes config.yaml's dict — spec §5.0).
+///
+/// `dir`/`node` are injected (not read from env here) so this stays unit-testable.
+fn governance_mcp_servers(dir: Option<&str>, node: &str) -> Vec<Json> {
+    let Some(dir) = dir.filter(|d| !d.is_empty()) else {
+        return vec![];
+    };
+    let server_ts = std::path::Path::new(dir).join("src/mcp/server.ts");
+    if !server_ts.exists() {
+        tracing::warn!(
+            target: "boule.governance",
+            governance_dir = %dir,
+            "BOULE_GOVERNANCE_DIR set but src/mcp/server.ts missing; skipping MCP load"
+        );
+        return vec![];
+    }
+    let server_ts = server_ts.to_string_lossy().into_owned();
+    let workspace = std::path::Path::new(dir)
+        .join("workspace")
+        .to_string_lossy()
+        .into_owned();
+    vec![json!({
+        "name": "boule-governance",
+        "command": node,
+        "args": ["--experimental-strip-types", server_ts],
+        "env": [{ "name": "BOULE_WORKSPACE", "value": workspace }],
+    })]
 }
 
 /// Emit a Tauri event with `tabId` injected at the top level of payload.
@@ -416,5 +472,50 @@ async fn dispatch_incoming(
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn governance_mcp_servers_empty_when_dir_unset_or_blank() {
+        assert!(governance_mcp_servers(None, "node").is_empty());
+        assert!(governance_mcp_servers(Some(""), "node").is_empty());
+    }
+
+    #[test]
+    fn governance_mcp_servers_empty_when_server_missing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path().to_string_lossy().into_owned();
+        // No src/mcp/server.ts created → graceful degrade to empty.
+        assert!(governance_mcp_servers(Some(&dir), "node").is_empty());
+    }
+
+    #[test]
+    fn governance_mcp_servers_one_entry_when_server_present() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mcp_dir = tmp.path().join("src").join("mcp");
+        std::fs::create_dir_all(&mcp_dir).expect("mkdir");
+        std::fs::write(mcp_dir.join("server.ts"), "// stub").expect("write");
+        let dir = tmp.path().to_string_lossy().into_owned();
+
+        let servers = governance_mcp_servers(Some(&dir), "/abs/node");
+        assert_eq!(servers.len(), 1);
+        let s = &servers[0];
+        assert_eq!(s["name"], "boule-governance");
+        assert_eq!(s["command"], "/abs/node");
+        assert_eq!(s["args"][0], "--experimental-strip-types");
+        assert!(s["args"][1]
+            .as_str()
+            .expect("args[1] str")
+            .ends_with("src/mcp/server.ts"));
+        // ACP env MUST be a list of {name,value} (not a dict) — spec §5.0.
+        assert_eq!(s["env"][0]["name"], "BOULE_WORKSPACE");
+        assert!(s["env"][0]["value"]
+            .as_str()
+            .expect("env value str")
+            .ends_with("workspace"));
     }
 }
