@@ -16,4 +16,14 @@ describe("normalizeModelId", () => {
   it("collapses internal whitespace", () => {
     expect(normalizeModelId("gpt  4o")).toBe("gpt 4o");
   });
+  it("is idempotent (normalize(normalize(x)) === normalize(x))", () => {
+    const cases = ["Claude:latest", "anthropic:claude:latest", "claude-opus-4-8", "gpt-4o"];
+    for (const c of cases) {
+      expect(normalizeModelId(normalizeModelId(c))).toBe(normalizeModelId(c));
+    }
+  });
+  it("strips a trailing bare separator", () => {
+    expect(normalizeModelId("claude:")).toBe("claude");
+    expect(normalizeModelId("codex@")).toBe("codex");
+  });
 });
