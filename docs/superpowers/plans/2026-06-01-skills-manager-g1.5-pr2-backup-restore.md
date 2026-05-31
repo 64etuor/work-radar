@@ -824,7 +824,7 @@ git commit -m "feat(skills): backup/restore panel UI (G1.5-PR2 step 4)"
 
 ---
 
-## Task 5: Full gates, breadcrumb, push, wire-verify
+## Task 5: Full gates, breadcrumb, critic, commit (NO push)
 
 **Files:**
 - Modify: `docs/decisions.md` (append one-line breadcrumb)
@@ -855,7 +855,7 @@ Append one line at the bottom of `docs/decisions.md`:
 
 - [ ] **Step 3: Independent critic review (NO self-approve)**
 
-Dispatch an independent opus `critic` (or `code-reviewer`) over the full PR diff (`git diff af40077..HEAD` scope, or `origin/dev..HEAD`). Provide: this plan, the spec §4/§9/§10, and INVARIANTS (`docs/areas/decision-rails.md`). The critic must confirm: (a) #1/#2 — no job spawn anywhere in the new path; (b) reversibility — pre-restore safety snapshot present + restore is undoable; (c) audit completeness — backup + restore both write audit rows; (d) no secrets in audit detail/logs; (e) no token crosses IPC (none used here); (f) i32/specta-safe types (`BackupMeta` uses i32/f64/String); (g) bindings drift = exactly the 3 commands + type. Do not proceed to push until the critic returns ACCEPT.
+Dispatch an independent opus `critic` (or `code-reviewer`) over the full PR diff (`git diff af40077..HEAD` scope, or `origin/dev..HEAD`). Provide: this plan, the spec §4/§9/§10, and INVARIANTS (`docs/areas/decision-rails.md`). The critic must confirm: (a) #1/#2 — no job spawn anywhere in the new path; (b) reversibility — pre-restore safety snapshot present + restore is undoable; (c) audit completeness — backup + restore both write audit rows; (d) no secrets in audit detail/logs; (e) no token crosses IPC (none used here); (f) i32/specta-safe types (`BackupMeta` uses i32/f64/String); (g) bindings drift = exactly the 3 commands + type. Do not proceed to commit until the critic returns ACCEPT.
 
 - [ ] **Step 4: Commit the breadcrumb**
 
@@ -865,16 +865,17 @@ git add docs/decisions.md
 git commit -m "docs(decisions): G1.5-PR2 breadcrumb (백업/복원)"
 ```
 
-- [ ] **Step 5: Push to dev + wire-verify**
+- [ ] **Step 5: Leave the branch UNPUSHED — report local commit SHA only**
+
+**Do NOT push.** Push happens only when the user explicitly asks for it, as a separate step. After committing, report the local HEAD SHA and confirm the branch is ahead of `origin/dev`:
 
 ```bash
 cd /Users/davidpark/private_project/work-radar/.claude/worktrees/skills-mgr-migration
-git push origin HEAD:dev
 L=$(/usr/bin/git rev-parse HEAD); R=$(/usr/bin/git ls-remote origin refs/heads/dev | cut -f1)
-[ "$L" = "$R" ] && echo "WIRE_MATCH" || echo "WIRE_DIFF L=$L R=$R"
-echo "AHEAD=$(/usr/bin/git rev-list --count origin/dev..HEAD)"   # expect 0 after fetch, or compare to pushed R
+echo "LOCAL_HEAD=$L"; echo "REMOTE_DEV=$R"
+[ "$L" = "$R" ] && echo "STATE=PUSHED" || echo "STATE=UNPUSHED(ahead $(/usr/bin/git rev-list --count $R..HEAD))"
 ```
-Expected: `WIRE_MATCH` (local HEAD == remote dev). This is the only acceptance of "pushed" — confabulated hashes are not trusted; the shell computes the equality.
+Expected: `STATE=UNPUSHED` (local commits ahead of remote dev). When the user later asks to push, run `git push origin HEAD:dev` and then shell-compute `ls-remote(wire) == HEAD` (confabulated hashes are not trusted).
 
 ---
 
@@ -902,4 +903,4 @@ Expected: `WIRE_MATCH` (local HEAD == remote dev). This is the only acceptance o
 
 ## Execution Handoff
 
-This is a per-PR plan inside the autonomous G1.5 phase loop. Recommended execution: **inline (executing-plans)** in this session — the worktree tool channel is degraded (delayed/duplicated output, confabulated hashes), so single-context execution with shell-computed verification tokens and a separate critic pass is safer than subagent fan-out here. Per-PR loop end state = independent opus critic ACCEPT → push dev → shell-computed `ls-remote(wire) == HEAD`.
+This is a per-PR plan inside the autonomous G1.5 phase loop. Recommended execution: **inline (executing-plans)** in this session — the worktree tool channel is degraded (delayed/duplicated output, confabulated hashes), so single-context execution with shell-computed verification tokens and a separate critic pass is safer than subagent fan-out here. Per-PR loop end state = independent opus critic ACCEPT → commit locally → **leave UNPUSHED**. Push is a separate step taken only when the user explicitly requests it (then shell-compute `ls-remote(wire) == HEAD`).
