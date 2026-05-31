@@ -72,6 +72,13 @@ feed-rs = "2.3.1"
 rand = "0.10.1"
 uuid = { version = "1", features = ["v4"] }
 
+# 스킬 네트워크 설치(G1.5): GitHub tarball(.tar.gz)을 받아 안전 추출. flate2 기본 백엔드는
+# 순수 Rust miniz_oxide(시스템 zlib/openssl 의존 없음 — rustls 일관). tempfile은 추출 임시 dir에
+# 런타임으로 쓰이므로 dev가 아닌 정식 의존성으로 둔다.
+flate2 = "1"
+tar = "0.4"
+tempfile = "3"
+
 [dev-dependencies]
 # 로테이션 단위 테스트용 임시 디렉터리.
 tempfile = "3"

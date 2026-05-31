@@ -252,6 +252,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // 중앙 라이브러리 import/remove (G1-PR3, ADR-0006 레일 ①②) — 가역·감사. 잡 spawn 없음(#1/#2).
         skills::import::import_external_skill,
         skills::import::remove_managed_skill,
+        // 스킬 네트워크 설치 (G1.5-PR1, ADR-0006 레일 ③) — GitHub tarball → 중앙 라이브러리.
+        // bounded fetch + keychain(공개 repo는 토큰 불요) + audit. 잡 spawn 없음(#1/#2).
+        skills::installer::install_skill_from_git,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,

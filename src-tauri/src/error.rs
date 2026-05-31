@@ -174,6 +174,18 @@ impl From<crate::github::GithubError> for AppError {
     }
 }
 
+impl From<crate::skills::remote::RemoteFetchError> for AppError {
+    fn from(e: crate::skills::remote::RemoteFetchError) -> Self {
+        use crate::skills::remote::RemoteFetchError as E;
+        match e {
+            E::Transient(m) => AppError::transient("skills.install.transient", m),
+            E::NotFound(m) => AppError::not_found("skills.install.not_found", m),
+            E::Forbidden(m) => AppError::forbidden("skills.install.forbidden", m),
+            E::Terminal(m) => AppError::terminal("skills.install.terminal", m),
+        }
+    }
+}
+
 impl From<crate::calendar::CalendarError> for AppError {
     fn from(e: crate::calendar::CalendarError) -> Self {
         use crate::calendar::CalendarError as E;

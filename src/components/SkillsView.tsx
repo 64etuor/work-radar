@@ -4,6 +4,7 @@ import "./SkillsTags.css";
 import {
   Blocks,
   CircleHelp,
+  Download,
   FileText,
   FolderInput,
   GitCompare,
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Skill } from "@/bindings";
+import type { Skill, SkillProvider } from "@/bindings";
 import { SkillMarkdown } from "@/components/SkillMarkdown";
 import { SkillsHelpDialog } from "@/components/SkillsHelpDialog";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ import {
   useDeleteSkill,
   useExternalSkillContent,
   useImportExternalSkill,
+  useInstallSkillFromGit,
   useRemoveManagedSkill,
   useSetSkillTags,
   useSkillEnvironments,
@@ -105,6 +107,8 @@ export function SkillsView() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // URL(GitHub) 설치 패널 열림 — adding과 배타. 외부 상태 불변(파일 복사·감사, #1/#2).
+  const [installing, setInstalling] = useState(false);
   const [search, setSearch] = useState("");
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
   // 도움말 다이얼로그 열림 — 스킬 피처 로컬 상태(전역 store 비대상).
@@ -200,9 +204,10 @@ export function SkillsView() {
     const g = grouped.find((grp) => grp.memberIds.includes(selected.id));
     return g && g.locations.length > 1 ? g.locations : [];
   }, [grouped, selected]);
-  const sheetOpen = adding || !!selected;
+  const sheetOpen = adding || installing || !!selected;
   const closeSheet = () => {
     setAdding(false);
+    setInstalling(false);
     setSelectedId(null);
   };
 
@@ -333,11 +338,26 @@ export function SkillsView() {
           className="gap-1.5 rounded-full"
           onClick={() => {
             setAdding(true);
+            setInstalling(false);
             setSelectedId(null);
           }}
         >
           <Plus className="size-4" />
           인앱 프롬프트 추가
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => {
+            setInstalling(true);
+            setAdding(false);
+            setSelectedId(null);
+          }}
+        >
+          <Download className="size-4" />
+          URL로 설치
         </Button>
       </div>
 
@@ -520,11 +540,13 @@ export function SkillsView() {
             <SheetTitle className="skl-sheet-kind">
               {adding
                 ? "인앱 프롬프트 추가"
-                : selected?.kind === "external"
-                  ? "외부 스킬"
-                  : selected?.kind === "managed"
-                    ? "라이브러리 스킬"
-                    : "인앱 프롬프트"}
+                : installing
+                  ? "URL에서 설치"
+                  : selected?.kind === "external"
+                    ? "외부 스킬"
+                    : selected?.kind === "managed"
+                      ? "라이브러리 스킬"
+                      : "인앱 프롬프트"}
             </SheetTitle>
             {!adding && selectedGroup.length > 1 && (
               <div className="skl-sheet-switch" role="group" aria-label="위치 전환">
@@ -548,6 +570,14 @@ export function SkillsView() {
                 <CreatePanel
                   onDone={(id) => {
                     setAdding(false);
+                    if (id) setSelectedId(id);
+                    else closeSheet();
+                  }}
+                />
+              ) : installing ? (
+                <InstallPanel
+                  onDone={(id) => {
+                    setInstalling(false);
                     if (id) setSelectedId(id);
                     else closeSheet();
                   }}
@@ -1215,6 +1245,74 @@ function CreatePanel({ onDone }: { onDone: (id: string | null) => void }) {
         >
           <Plus className="size-4" />
           {create.isPending ? "추가 중…" : "추가"}
+        </Button>
+        <Button variant="outline" className="rounded-full" onClick={() => onDone(null)}>
+          취소
+        </Button>
+        {note && <span className="skl-note">{note}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** GitHub URL에서 스킬 설치 패널(G1.5-PR1, ADR-0006 레일 ③). URL + provider 선택 → 중앙 라이브러리로
+ * 설치(가역·감사). 네트워크/토큰은 Rust(렌더러 비노출). 공개 repo 우선 — 비공개 인증은 후속 라운드.
+ * 자동 실행 없음(#1/#2 — tarball 받아 파일 복사일 뿐). */
+function InstallPanel({ onDone }: { onDone: (id: string | null) => void }) {
+  const install = useInstallSkillFromGit();
+  const [url, setUrl] = useState("");
+  const [provider, setProvider] = useState<SkillProvider>("claude");
+  const [note, setNote] = useState<string | null>(null);
+
+  const submit = () => {
+    const u = url.trim();
+    if (!u || install.isPending) return;
+    setNote(null);
+    install.mutate(
+      { url: u, provider },
+      {
+        onSuccess: (s) => onDone(s.id),
+        onError: (e) => setNote(`설치 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  return (
+    <div className="skl-edit">
+      <div className="skl-edit-top">
+        <Input
+          className="flex-1 font-mono"
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="github.com/owner/repo[@ref][#subpath]"
+          aria-label="설치할 GitHub repo URL"
+        />
+        <Select value={provider} onValueChange={(v) => setProvider(v as SkillProvider)}>
+          <SelectTrigger className="w-auto min-w-[120px]" aria-label="대상 provider">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="claude">Claude</SelectItem>
+            <SelectItem value="codex">Codex</SelectItem>
+            <SelectItem value="openclaw">OpenClaw</SelectItem>
+            <SelectItem value="hermes">Hermes</SelectItem>
+            <SelectItem value="other">기타</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="skl-desc">
+        공개 GitHub repo의 스킬을 라이브러리로 설치합니다. 네트워크 호출은 Rust에서 bounded로
+        처리되고 모든 쓰기는 감사됩니다. 스킬은 설치만 되며 자동 실행되지 않습니다.
+      </p>
+      <div className="skl-actions">
+        <Button
+          className="gap-1.5 rounded-full"
+          onClick={submit}
+          disabled={!url.trim() || install.isPending}
+        >
+          <Download className="size-4" />
+          {install.isPending ? "설치 중…" : "설치"}
         </Button>
         <Button variant="outline" className="rounded-full" onClick={() => onDone(null)}>
           취소

@@ -144,6 +144,20 @@ export function useRemoveManagedSkill() {
   });
 }
 
+/**
+ * GitHub repo URL에서 스킬을 work-radar 중앙 라이브러리로 설치(ADR-0006 레일 ③ — bounded·감사).
+ * 네트워크 fetch/토큰은 전부 Rust에 있다(렌더러 토큰 비노출). 이번 라운드는 공개 repo 우선.
+ * 잡을 spawn하지 않는다(#1/#2 — tarball 받아 파일 복사). 성공 시 목록 무효화 → managed로 노출.
+ */
+export function useInstallSkillFromGit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { url: string; provider: SkillProvider }) =>
+      unwrap(commands.installSkillFromGit(args.url, args.provider)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
 /** 외부 스킬 파일 쓰기(사용자 명시 편집 — 자기 파일). 성공 시 내용/목록 무효화. */
 export function useWriteExternalSkill() {
   const qc = useQueryClient();

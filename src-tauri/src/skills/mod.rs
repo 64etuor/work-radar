@@ -27,9 +27,12 @@
 pub mod audit_log;
 pub mod central_repo;
 pub mod import;
+pub mod installer;
 pub mod registry;
+pub mod remote;
 pub mod scan;
 pub mod seed;
+pub mod source;
 pub mod tags;
 
 #[cfg(test)]
@@ -47,6 +50,7 @@ pub use seed::{resolve_prompt, seed_in_app_skills};
 // 통해 이 심볼들로 해석된다.
 pub use audit_log::list_skill_audit;
 pub use import::{import_external_skill, remove_managed_skill};
+pub use installer::install_skill_from_git;
 pub(crate) use seed::{
     resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH, BINDING_CI_TRIAGE, BINDING_PR_SELFCHECK,
     FAST_CODEX_MODEL,
