@@ -110,3 +110,27 @@ pub(crate) async fn get_skill_source(
         last_checked_at: r.9,
     }))
 }
+
+/// 모든 provenance 행의 `(provider, name)` 키. 복원 후 고아 행 화해(reconcile)에 쓴다.
+pub(crate) async fn all_skill_source_keys(
+    pool: &SqlitePool,
+) -> Result<Vec<(String, String)>, AppError> {
+    let rows = sqlx::query_as::<_, (String, String)>("SELECT provider, name FROM skill_source")
+        .fetch_all(pool)
+        .await?;
+    Ok(rows)
+}
+
+/// `(provider, name)` provenance 행 삭제(복원으로 사라진 managed 스킬의 고아 메타 정리).
+pub(crate) async fn delete_skill_source(
+    pool: &SqlitePool,
+    provider: &str,
+    name: &str,
+) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM skill_source WHERE provider = ? AND name = ?")
+        .bind(provider)
+        .bind(name)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

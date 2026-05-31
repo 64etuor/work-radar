@@ -535,6 +535,9 @@ export const commands = {
 	importExternalSkill: (path: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("import_external_skill", { path, provider })),
 	removeManagedSkill: (provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_managed_skill", { provider, name })),
 	installSkillFromGit: (url: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("install_skill_from_git", { url, provider })),
+	backupSkillLibrary: () => typedError<BackupMeta, AppError>(__TAURI_INVOKE("backup_skill_library")),
+	listSkillBackups: () => typedError<BackupMeta[], AppError>(__TAURI_INVOKE("list_skill_backups")),
+	restoreSkillLibrary: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("restore_skill_library", { id })),
 	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.
@@ -680,6 +683,17 @@ export type AppError = {
 
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
+
+/**
+ *  백업 스냅샷 1건의 메타. specta는 i64(BigInt) export 금지 → 개수는 i32, 바이트는 f64
+ *  (JS number — 2^53까지 정수 정확, 스킬 텍스트 트리엔 충분). id = 스냅샷 디렉터리명(UTC 타임스탬프).
+ */
+export type BackupMeta = {
+	id: string,
+	createdAt: string,
+	skillCount: number,
+	bytes: number | null,
+};
 
 /**
  *  배치 enrich 한 카드 제안 (Phase 15 #4). codex가 카드별로 낸 suggested 힌트.

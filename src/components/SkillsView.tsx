@@ -2,6 +2,7 @@ import "./SkillsView.css";
 import "./SkillsTags.css";
 
 import {
+  Archive,
   Blocks,
   CircleHelp,
   Download,
@@ -40,13 +41,16 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { type DiffLine, diffStats, lineDiff } from "@/lib/lineDiff";
 import {
+  useBackupSkillLibrary,
   useCreateSkill,
   useDeleteSkill,
   useExternalSkillContent,
   useImportExternalSkill,
   useInstallSkillFromGit,
   useRemoveManagedSkill,
+  useRestoreSkillLibrary,
   useSetSkillTags,
+  useSkillBackups,
   useSkillEnvironments,
   useSkills,
   useUpdateSkill,
@@ -109,6 +113,8 @@ export function SkillsView() {
   const [adding, setAdding] = useState(false);
   // URL(GitHub) 설치 패널 열림 — adding과 배타. 외부 상태 불변(파일 복사·감사, #1/#2).
   const [installing, setInstalling] = useState(false);
+  // 백업/복원 패널 열림 — 다른 패널과 배타. 로컬 파일 스냅샷·감사(잡 비취급, #1/#2).
+  const [backupOpen, setBackupOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
   // 도움말 다이얼로그 열림 — 스킬 피처 로컬 상태(전역 store 비대상).
@@ -204,10 +210,11 @@ export function SkillsView() {
     const g = grouped.find((grp) => grp.memberIds.includes(selected.id));
     return g && g.locations.length > 1 ? g.locations : [];
   }, [grouped, selected]);
-  const sheetOpen = adding || installing || !!selected;
+  const sheetOpen = adding || installing || backupOpen || !!selected;
   const closeSheet = () => {
     setAdding(false);
     setInstalling(false);
+    setBackupOpen(false);
     setSelectedId(null);
   };
 
@@ -358,6 +365,21 @@ export function SkillsView() {
         >
           <Download className="size-4" />
           URL로 설치
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => {
+            setBackupOpen(true);
+            setAdding(false);
+            setInstalling(false);
+            setSelectedId(null);
+          }}
+        >
+          <Archive className="size-4" />
+          백업/복원
         </Button>
       </div>
 
@@ -542,7 +564,9 @@ export function SkillsView() {
                 ? "인앱 프롬프트 추가"
                 : installing
                   ? "URL에서 설치"
-                  : selected?.kind === "external"
+                  : backupOpen
+                    ? "백업 / 복원"
+                    : selected?.kind === "external"
                     ? "외부 스킬"
                     : selected?.kind === "managed"
                       ? "라이브러리 스킬"
@@ -582,6 +606,8 @@ export function SkillsView() {
                     else closeSheet();
                   }}
                 />
+              ) : backupOpen ? (
+                <BackupPanel onDone={() => closeSheet()} />
               ) : selected?.kind === "in_app_prompt" ? (
                 <InAppEditor key={selected.id} skill={selected} />
               ) : selected?.kind === "external" ? (
@@ -1319,6 +1345,98 @@ function InstallPanel({ onDone }: { onDone: (id: string | null) => void }) {
         </Button>
         {note && <span className="skl-note">{note}</span>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 백업/복원 패널(G1.5-PR2). 중앙 라이브러리 전체를 타임스탬프 스냅샷으로 백업하고, 스냅샷으로 복원한다.
+ * 복원 confirm은 **인라인 2단계**(중첩 Dialog 회피 → Sheet overlay-stack / Esc 계약 무영향). 모든 작업은
+ * 로컬 파일 복사 + 감사(잡 비취급 — #1/#2). 복원은 직전 상태를 사전 안전 스냅샷으로 보존하므로 가역.
+ */
+function BackupPanel({ onDone }: { onDone: () => void }) {
+  const backups = useSkillBackups();
+  const backup = useBackupSkillLibrary();
+  const restore = useRestoreSkillLibrary();
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const doBackup = () => {
+    if (backup.isPending) return;
+    setNote(null);
+    backup.mutate(undefined, {
+      onSuccess: (m) => setNote(`백업 완료: ${m.skillCount}개 스킬 (${m.id})`),
+      onError: (e) => setNote(`백업 실패: ${(e as Error).message}`),
+    });
+  };
+
+  const doRestore = (id: string) => {
+    if (restore.isPending) return;
+    setNote(null);
+    restore.mutate(id, {
+      onSuccess: () => {
+        setConfirmId(null);
+        onDone();
+      },
+      onError: (e) => setNote(`복원 실패: ${(e as Error).message}`),
+    });
+  };
+
+  return (
+    <div className="skl-edit">
+      <p className="skl-desc">
+        중앙 라이브러리 전체를 타임스탬프 스냅샷으로 백업합니다. 복원은 직전 상태를 안전 스냅샷으로
+        보존한 뒤 교체하므로 되돌릴 수 있습니다. 모든 작업은 로컬 파일 복사이며 감사됩니다.
+      </p>
+      <div className="skl-actions">
+        <Button className="gap-1.5 rounded-full" onClick={doBackup} disabled={backup.isPending}>
+          <Archive className="size-4" />
+          {backup.isPending ? "백업 중…" : "지금 백업"}
+        </Button>
+        <Button variant="outline" className="rounded-full" onClick={onDone}>
+          닫기
+        </Button>
+      </div>
+      {note && <span className="skl-note">{note}</span>}
+
+      <ul className="skl-backup-list">
+        {(backups.data ?? []).map((b) => (
+          <li key={b.id} className="skl-backup-row">
+            <span className="font-mono">{b.createdAt}</span>
+            <span className="skl-desc">{b.skillCount}개 스킬</span>
+            {confirmId === b.id ? (
+              <span className="skl-actions">
+                <Button
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => doRestore(b.id)}
+                  disabled={restore.isPending}
+                >
+                  {restore.isPending ? "복원 중…" : "정말 복원"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => setConfirmId(null)}
+                >
+                  취소
+                </Button>
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setConfirmId(b.id)}
+              >
+                복원…
+              </Button>
+            )}
+          </li>
+        ))}
+        {backups.data?.length === 0 && <li className="skl-desc">아직 백업이 없습니다.</li>}
+      </ul>
     </div>
   );
 }

@@ -91,7 +91,7 @@ pub(crate) fn remove_from_central(
 
 /// 디렉터리 재귀 복사(파일 + 서브디렉터리). 심링크는 따라가지 않고 건너뛴다(외부 dir 안전 — 복사가
 /// 외부 트리 밖으로 새지 않음).
-fn copy_dir_shallow(src: &Path, dest: &Path) -> Result<(), AppError> {
+pub(crate) fn copy_dir_shallow(src: &Path, dest: &Path) -> Result<(), AppError> {
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let ft = entry.file_type()?;

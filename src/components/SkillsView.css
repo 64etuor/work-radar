@@ -448,6 +448,28 @@
   color: var(--color-wr-danger);
 }
 
+/* 백업/복원 패널(G1.5-PR2) — 스냅샷 목록. 행 = 시각 + 개수 + 복원 액션. */
+.skl-backup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  list-style: none;
+  padding: 0;
+}
+.skl-backup-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: 10px;
+}
+/* 마지막 자식(복원 버튼 또는 confirm 액션 그룹)을 우측으로 민다 — 두 상태 모두 동작. */
+.skl-backup-row > :last-child {
+  margin-left: auto;
+}
+
 /* 도움말 다이얼로그(SkillsHelpDialog) — shadcn DialogContent 위. 본문은 .skl-markdown 재사용. */
 .skl-help {
   max-width: 560px;

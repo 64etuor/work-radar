@@ -158,6 +158,44 @@ export function useInstallSkillFromGit() {
   });
 }
 
+/**
+ * 중앙 라이브러리 백업 스냅샷 목록(최신 먼저). 백업/복원 패널이 연다.
+ */
+export function useSkillBackups() {
+  return useQuery({
+    queryKey: ["skillBackups"],
+    queryFn: () => unwrap(commands.listSkillBackups()),
+    staleTime: 5_000,
+  });
+}
+
+/**
+ * 중앙 라이브러리 전체를 타임스탬프 스냅샷으로 백업(ADR-0006 가역성 레일 — 파일 복사 + 감사, 잡 비취급).
+ * 성공 시 백업 목록 무효화.
+ */
+export function useBackupSkillLibrary() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.backupSkillLibrary()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skillBackups"] }),
+  });
+}
+
+/**
+ * 선택한 스냅샷으로 중앙 라이브러리 복원. **복원 직전 상태가 사전 안전 스냅샷으로 보존**되어 복원
+ * 자체도 가역이다. provenance 고아 행은 정리된다. 성공 시 스킬 목록 + 백업 목록 무효화.
+ */
+export function useRestoreSkillLibrary() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.restoreSkillLibrary(id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skillBackups"] });
+    },
+  });
+}
+
 /** 외부 스킬 파일 쓰기(사용자 명시 편집 — 자기 파일). 성공 시 내용/목록 무효화. */
 export function useWriteExternalSkill() {
   const qc = useQueryClient();

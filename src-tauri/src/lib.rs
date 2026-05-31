@@ -255,6 +255,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // 스킬 네트워크 설치 (G1.5-PR1, ADR-0006 레일 ③) — GitHub tarball → 중앙 라이브러리.
         // bounded fetch + keychain(공개 repo는 토큰 불요) + audit. 잡 spawn 없음(#1/#2).
         skills::installer::install_skill_from_git,
+        // 스킬 라이브러리 백업/복원 (G1.5-PR2, ADR-0006 가역성 레일) — 온디스크 스냅샷.
+        // 복원은 사전 안전 스냅샷 후 교체 + provenance 화해. 파일 복사 + DB뿐(잡 spawn 없음, #1/#2).
+        skills::backup::backup_skill_library,
+        skills::backup::list_skill_backups,
+        skills::backup::restore_skill_library,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,
