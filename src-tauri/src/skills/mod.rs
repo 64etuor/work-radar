@@ -35,6 +35,7 @@ pub mod scan;
 pub mod seed;
 pub mod source;
 pub mod tags;
+pub mod updater;
 
 #[cfg(test)]
 mod tests;

@@ -123,7 +123,8 @@ pub(crate) async fn install_from_dir(
 }
 
 /// GitHub tarball 최상위 dir(`owner-repo-<sha>`)에서 resolved commit SHA 추출. 끝 SHA가 없으면 전체 이름.
-fn commit_from_top_level(top: &str) -> String {
+/// G1.5-PR3 updater(check)가 동일 추출을 재사용 → `pub(crate)`.
+pub(crate) fn commit_from_top_level(top: &str) -> String {
     top.rsplit('-').next().unwrap_or(top).to_string()
 }
 

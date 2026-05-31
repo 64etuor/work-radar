@@ -66,8 +66,7 @@ pub(crate) async fn upsert_skill_source(
     Ok(())
 }
 
-/// `(provider, name)` provenance 행 조회(없으면 None).
-#[cfg_attr(not(test), allow(dead_code))] // G1.5-PR3(updater)가 프로덕션 첫 호출자. PR1은 테스트에서 사용.
+/// `(provider, name)` provenance 행 조회(없으면 None). G1.5-PR3 updater(apply)가 프로덕션 첫 호출자.
 pub(crate) async fn get_skill_source(
     pool: &SqlitePool,
     provider: &str,
