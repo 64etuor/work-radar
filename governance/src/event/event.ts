@@ -8,10 +8,14 @@ export type EventType =
   | "agent_run_completed"
   | "decision_recorded"
   | "decision_proposed"
+  | "decision_review_recorded" // P2a: External Reviewer wrote a review for a decision
+  | "decision_approved"        // P2a: human gate passed (actor=user)
+  | "decision_rejected"        // P2a: human gate rejected (actor=user)
   | "task_created";
 
 export type EventSource =
-  | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system";
+  | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"
+  | "reviewer"; // P2a: External Reviewer agent
 
 export interface EventFrontmatter {
   id: string;
