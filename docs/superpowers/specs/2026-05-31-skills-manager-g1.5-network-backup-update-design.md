@@ -35,14 +35,16 @@ auto-applying or auto-running skills/jobs (**permanent** — INVARIANT #1/#2).
   calls are bounded (exponential backoff + jitter, terminal failure surfaced). Errors self-classify.
 - `src-tauri/src/keychain.rs::{get,set,has,delete}_token(credential_ref, TokenKind)` — GitHub token for
   private-repo fetches. **Tokens never cross the IPC boundary.**
-- `src-tauri/src/error.rs` `AppError` — single envelope; `Transient`/`Terminal`/`NotFound`/`Forbidden`/
-  `Validation`/`Unexpected`. New domain errors get one `From` arm each.
+- `src-tauri/src/error.rs` `AppError` — single envelope; `ErrorKind` = `Transient`/`Terminal`/`NotFound`/
+  `Forbidden`/`Cancelled` (constructors `transient`/`terminal`/`not_found`/`forbidden`). New domain errors
+  get one `From` arm each.
 - `src-tauri/src/skills/central_repo.rs` — `skills-library/<provider>/<name>/` layout + `sanitize_segment`
   path-traversal defense (reused for tar extraction).
 - `src-tauri/src/skills/import.rs` — `import_external_skill(path, provider)` copy-into-central + suppress
   discovered + audit. **Network install reuses this pipeline verbatim** with a temp dir as the source.
-- `src-tauri/src/skills/audit_log.rs::audit(pool, action, target_kind, target_ref, source_ref, detail)` —
-  extended with new actions; **path/size/action only, no secrets**.
+- `src-tauri/src/skills/audit_log.rs::audit(&app, action, target_kind, target_ref, source_ref, detail)` —
+  (takes `AppHandle`, reads the `Db` pool from managed state) extended with new actions; **path/size/action
+  only, no secrets**.
 - `src-tauri/src/skills/registry.rs` — managed-supersedes-discovered identity (name+provider).
 
 New deps (both pure-Rust, lightweight, no system/openssl impact): **`flate2`** + **`tar`** for `.tar.gz`
