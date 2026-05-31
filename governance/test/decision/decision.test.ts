@@ -25,12 +25,38 @@ describe("deriveDecisionState", () => {
     expect(s.title).toBe("Adopt X");
   });
 
-  it("reviewed after a review event, still no verdict", () => {
-    const s = deriveDecisionState(proposal, [evt("decision_review_recorded", { source: "reviewer", actor: "external-reviewer" })]);
+  it("reviewed after a distinct-model review event, still no verdict", () => {
+    const s = deriveDecisionState(proposal, [
+      evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: ["author_model:claude"] }),
+    ]);
     expect(s.phase).toBe("reviewed");
     expect(s.reviewed).toBe(true);
     expect(s.reviewCount).toBe(1);
     expect(s.verdict).toBeNull();
+  });
+
+  it("does NOT count a forged same-model review (reviewer == author)", () => {
+    const s = deriveDecisionState(proposal, [
+      evt("decision_review_recorded", { source: "reviewer", actor: "claude", tags: ["author_model:claude"] }),
+    ]);
+    expect(s.phase).toBe("proposed");
+    expect(s.reviewed).toBe(false);
+    expect(s.reviewCount).toBe(0);
+  });
+
+  it("does NOT count a review missing the author_model tag (fail-closed)", () => {
+    const s = deriveDecisionState(proposal, [
+      evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: [] }),
+    ]);
+    expect(s.reviewed).toBe(false);
+    expect(s.reviewCount).toBe(0);
+  });
+
+  it("normalizes models when comparing (Claude:latest == claude → not counted)", () => {
+    const s = deriveDecisionState(proposal, [
+      evt("decision_review_recorded", { source: "reviewer", actor: "Claude:latest", tags: ["author_model:claude"] }),
+    ]);
+    expect(s.reviewCount).toBe(0); // raw compare would have counted; normalize catches the drift
   });
 
   it("approved when an approval event exists", () => {
