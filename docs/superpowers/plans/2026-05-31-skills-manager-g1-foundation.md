@@ -31,23 +31,38 @@
 
 ### File structure (target)
 
+> **Refinement vs spec §2 (verified against the real file):** the 118-line **model stays in `crate::models::skills`** — do NOT move it. It is part of `crate::models` (it uses `super::AgentReasoningEffort` and is imported crate-wide via `use crate::models::{Skill, …}`); moving it would touch every import site for zero benefit. The 89KB problem is the **command** file only. So PR1 splits `commands/skills.rs` and the new `skills/` modules import the model via `use crate::models::{…}`. (Names below are the **actual** symbols in `commands/skills.rs`, confirmed by reading it.)
+
 ```
-src-tauri/src/skills/
-  mod.rs        — module decls + re-exports; the #[tauri::command] fns stay pub and are re-exported
-  model.rs      — moved from src-tauri/src/models/skills.rs (Skill, ExternalSkill, SkillProvider, SkillEnvironment, UserSkillRoot, SkillRoot, CreateSkillInput)
-  seed.rs       — SEED_DEFS const, seed_in_app_skills, resolve_prompt
-  scan.rs       — RECURSIVE_MAX_DEPTH, parse_external_skill, skill_id_from_path, resolve_skill_roots, ensure_within_skills_dir_roots, detect_skill_environments, get_skill_user_roots, set_skill_user_roots, skill_roots_db, fetch_all_repos, dotfile_root, scan_external_skills, read_external_skill, write_external_skill, scan_external_skills_core
-  tags.rs       — set_skill_tags, load_tags_by_key, normalize_tags
-  registry.rs   — list_skills, update_skill, create_skill, delete_skill, list_skills_core
+src-tauri/src/skills/               (NEW — split out of commands/skills.rs; model NOT moved)
+  mod.rs        — `pub mod` decls + re-exports of the #[tauri::command] fns (kept pub)
+  seed.rs       — binding consts (BINDING_*), FAST_CODEX_MODEL, WORKTREE_REVIEW_PROMPT,
+                  WORKTREE_CLEANUP_PROMPT, KEY_USER_SKILL_ROOTS, seed_defs(), fallback_prompt(),
+                  seed_in_app_skills(), resolve_prompt(), resolve_agent_prompt_runtime()
+  scan.rs       — RECURSIVE_MAX_DEPTH; SkillRoot (struct + flat()/recursive() impls);
+                  REPO_SKILL_DIRS, repo_skill_roots(), is_ignored_dir(); SkillRootEnv (+ from_process());
+                  resolve_skill_roots(), skill_roots_db(), read_user_skill_roots(),
+                  normalize_user_skill_roots(), user_skill_roots(); parse_frontmatter(), unquote(),
+                  skill_id_from_path(), scan_external_skills_core(), scan_root();
+                  detect_skill_environments_core(); commands: detect_skill_environments,
+                  get_skill_user_roots, set_skill_user_roots, scan_external_skills,
+                  read_external_skill, write_external_skill; ensure_within_skills_dir_roots()
+  tags.rs       — MAX_TAG_LEN, normalize_tags(), set_skill_tags_core(); command: set_skill_tags
+  registry.rs   — list_skills_core(), load_tags_by_key(); commands: list_skills, update_skill,
+                  create_skill, delete_skill (and the UpdateSkillInput type if it is defined in
+                  commands/skills.rs — check; if it lives in models, leave it there)
 ```
 
-> The current `#[cfg(test)] mod tests` block at the end of `commands/skills.rs` moves **with the functions it exercises** (split per module: scan tests → `scan.rs`, tag tests → `tags.rs`, registry/diff/import-guard tests → `registry.rs`). Keep every existing test; do not rename or delete any.
+> `fetch_all_repos` is **not** moved — it lives in `crate::commands::projects`; scan.rs keeps importing it via `use crate::commands::projects::fetch_all_repos`.
+> `skill_id_from_path` is used in `list_skills_core` (registry) and defined among the scan helpers — make it `pub(crate)` in scan.rs so registry can call it.
+> The current `#[cfg(test)] mod tests` block at the end of `commands/skills.rs` moves **with the functions it exercises** (scan/root/path-guard/frontmatter tests → `scan.rs`; tag tests → `tags.rs`; list/crud/resolve/fallback tests → `registry.rs`; resolve/seed tests → `seed.rs`). Keep every existing test; do not rename or delete any. Test-only helpers (`create_skill_core`/`update_skill_core`/`delete_skill_core`/`set_user_roots_core`/`make_skill`/`make_repo`/`root`) move with their tests.
 
 **Files:**
 
-- Create: `src-tauri/src/skills/mod.rs`, `skills/model.rs`, `skills/seed.rs`, `skills/scan.rs`, `skills/tags.rs`, `skills/registry.rs`
-- Delete: `src-tauri/src/commands/skills.rs`, `src-tauri/src/models/skills.rs`
-- Modify: `src-tauri/src/commands/mod.rs` (or wherever `pub mod skills;` lives), `src-tauri/src/models/mod.rs`, `src-tauri/src/lib.rs` (command registration paths), and any `use crate::commands::skills::…` / `use crate::models::skills::…` import sites across the crate.
+- Create: `src-tauri/src/skills/mod.rs`, `skills/seed.rs`, `skills/scan.rs`, `skills/tags.rs`, `skills/registry.rs`
+- Delete: `src-tauri/src/commands/skills.rs` (its content is split into the four files above)
+- Keep (do NOT move): `src-tauri/src/models/skills.rs` and `src-tauri/src/models/mod.rs` — the model stays in `crate::models`.
+- Modify: `src-tauri/src/commands/mod.rs` (remove `pub mod skills;`), `src-tauri/src/lib.rs` (add `pub mod skills;` at crate root + change command registration paths `commands::skills::X` → `skills::X`), and any `use crate::commands::skills::…` import sites across the crate (grep below). `use crate::models::…` sites are unchanged.
 
 - [ ] **Step 1: Capture the green baseline (so the refactor can be proven behavior-neutral)**
 
@@ -64,13 +79,13 @@ Expected: all green. Write the numbers down — they must be unchanged at Step 7
 
 The earlier survey was partial. Before moving anything, open `src-tauri/src/commands/skills.rs` and `src-tauri/src/models/skills.rs` and confirm: (a) the full `use` header, (b) every symbol from the File-structure map exists at the listed name, (c) which test fns reference which functions. If a symbol differs, update the map — do not invent.
 
-- [ ] **Step 3: Create `skills/model.rs` from `models/skills.rs`**
+- [ ] **Step 3: (model is NOT moved — skip)**
 
-Move the file content verbatim into `src-tauri/src/skills/model.rs`. Keep all `#[derive(... specta::Type ...)]`, `#[serde(...)]`, and `#[sqlx(skip)]` attributes exactly. Do not change field names or types.
+The model stays in `crate::models::skills`. The new `skills/` modules import it via `use crate::models::{Skill, ExternalSkill, SkillProvider, SkillEnvironment, UserSkillRoot, CreateSkillInput, Provider, Repo}` (mirror the exact `use crate::models::{…}` list currently at the top of `commands/skills.rs`).
 
 - [ ] **Step 4: Create the four logic modules by moving functions verbatim**
 
-For each of `seed.rs`, `scan.rs`, `tags.rs`, `registry.rs`: move the functions listed in the File-structure map **byte-for-byte**. Add a per-file `use` header importing exactly what that file references (e.g. `use crate::db::Db; use crate::error::AppError; use crate::skills::model::{…}; use sqlx::SqlitePool; use tauri::State;`). Functions that were file-private (`fn` without `pub`) but are now called across modules become `pub(crate)` — list to check: `parse_external_skill`, `skill_id_from_path`, `resolve_skill_roots`, `ensure_within_skills_dir_roots`, `skill_roots_db`, `fetch_all_repos`, `dotfile_root`, `scan_external_skills_core`, `load_tags_by_key`, `normalize_tags`, `list_skills_core`, `SEED_DEFS`, `resolve_prompt`, `RECURSIVE_MAX_DEPTH`. Move each `#[cfg(test)] mod tests` fn next to the code it tests (one `#[cfg(test)] mod tests` block per module).
+For each of `seed.rs`, `scan.rs`, `tags.rs`, `registry.rs`: move the functions listed in the File-structure map **byte-for-byte**. Add a per-file `use` header importing exactly what that file references (start from the current `commands/skills.rs` header: `use tauri::State; use crate::db::Db; use crate::error::AppError; use crate::models::{…}; use std::path::{Path, PathBuf};` plus `use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHECK_PROMPT};` in seed.rs, `use crate::commands::nav::{get_config, set_config};` + `use crate::commands::projects::fetch_all_repos;` in scan.rs). Cross-module callees become `pub(crate)` — confirmed list: `seed_defs`, `fallback_prompt`, `resolve_prompt`, `resolve_agent_prompt_runtime`, the `BINDING_*` consts, `FAST_CODEX_MODEL` (seed.rs); `RECURSIVE_MAX_DEPTH`, `SkillRoot`, `skill_roots_db`, `resolve_skill_roots`, `parse_frontmatter`, `skill_id_from_path`, `scan_external_skills_core`, `ensure_within_skills_dir_roots`, `detect_skill_environments_core` (scan.rs); `normalize_tags`, `set_skill_tags_core`, `load_tags_by_key`, `list_skills_core` (tags/registry). Move each `#[cfg(test)] mod tests` fn next to the code it tests (one `#[cfg(test)] mod tests` block per module). NOTE: the in-source ordering means a single grep pass after the move (`cargo build`) will name every still-private symbol that needs widening — fix them iteratively until it compiles.
 
 - [ ] **Step 5: Write `skills/mod.rs` (decls + re-exports)**
 
@@ -78,7 +93,6 @@ For each of `seed.rs`, `scan.rs`, `tags.rs`, `registry.rs`: move the functions l
 //! 스킬 레지스트리 — 뷰어(A–F) + 풀 매니저(G, ADR-0006). 모듈 분할(G1-PR1, 무행동변경).
 //! 레일(불변): 외부 토큰 keychain, 로그 시크릿 금지, codex 잡 자동실행 금지(#1/#2),
 //! 외부 파일은 사용자 명시 액션으로만 쓰기(경로 가드).
-pub mod model;
 pub mod registry;
 pub mod scan;
 pub mod seed;
@@ -90,7 +104,7 @@ pub use scan::{
     detect_skill_environments, get_skill_user_roots, read_external_skill, scan_external_skills,
     set_skill_user_roots, write_external_skill,
 };
-pub use seed::{resolve_prompt, seed_in_app_skills};
+pub use seed::{resolve_agent_prompt_runtime, resolve_prompt, seed_in_app_skills};
 pub use tags::set_skill_tags;
 ```
 
@@ -317,10 +331,10 @@ L=$(/usr/bin/git rev-parse HEAD); R=$(/usr/bin/git ls-remote origin refs/heads/d
 
 - Central store root: `central_root(app) = app.path().app_data_dir()?.join("skills-library")`.
 - A managed skill lives at `central_root/<provider>/<name>/` and always contains `SKILL.md` (+ any sibling files copied from source).
-- In `list_skills`, a managed skill is a `Skill` with `kind = "managed"`, `provider = Some(<provider>)`, `id = format!("managed:{}", <central SKILL.md abs path>)`, `enabled = true`, `title`/`body` parsed like an external skill (reuse `scan::parse_external_skill`). It also reuses the external display fields (`source_path` = central SKILL.md path).
-- **Suppression:** when a managed skill exists with the same `(name, provider)` as a discovered external skill, the discovered one is omitted from `list_skills`. Reuse the P5 identity = name (frontmatter name, case/trim-insensitive) + provider — the same keying `src/lib/skillDedup.ts:groupCrossToolSkills` uses on the frontend.
+- In `list_skills`, a managed skill is a `Skill` built **exactly like the external branch of `list_skills_core`** (confirmed shape, registry.rs ~L196–213): `kind = "managed"`, `provider = Some(<provider>)`, `id = format!("managed:{}", <central SKILL.md abs path>)`, `prompt = Some(description)`, `binding = None`, `rail = None`, `enabled = true`, `model = None`, `reasoning_effort = None`, `fast_mode = false`, `source_path = Some(<central SKILL.md path>)`, `tags = Vec::new()` (then filled by `load_tags_by_key` like others), `fallback_prompt = None`, `created_at`/`updated_at = String::new()`, `name`/`description` from `parse_frontmatter`.
+- **Suppression:** when a managed skill exists with the same `(name, provider)` as a discovered external skill, the discovered one is omitted from `list_skills`. Build a `HashSet<(String /*name lower+trim*/, SkillProvider)>` from managed skills and skip discovered externals whose `(name, provider)` is in it. This mirrors the P5 frontend identity in `src/lib/skillDedup.ts:groupCrossToolSkills` (name, case/trim-insensitive).
 
-> Before coding, open `skills/registry.rs:list_skills_core` and `skills/scan.rs:parse_external_skill` to confirm how external skills are currently turned into `Skill` and what the external display fields are named. Match that exactly; the `kind="managed"` path mirrors `kind="external"`.
+> Building block (confirmed real names): there is **no** `parse_external_skill` function. To turn a single `SKILL.md` into name/description, read the file and call `parse_frontmatter(&content) -> (Option<String>, Option<String>)` (scan.rs ~L777; name falls back to the dir name, description to ""). The external→`Skill` construction lives inline in `list_skills_core` (registry.rs) — the managed branch copies that struct literal with `kind="managed"`.
 
 - [ ] **Step 1: Failing test — central copy + remove round-trip (hermetic)**
 
@@ -460,9 +474,9 @@ async fn import_core_copies_and_audits() {
 use crate::db::Db;
 use crate::error::AppError;
 use crate::skills::audit_log::audit;
-use crate::skills::central_repo::{import_to_central, remove_from_central};
-use crate::skills::model::Skill;
-use crate::skills::scan::parse_external_skill; // reuse external→Skill parsing
+use crate::skills::central_repo::{central_skill_dir, import_to_central, remove_from_central};
+use crate::models::{Skill, SkillProvider};
+use crate::skills::scan::parse_frontmatter; // (Option<name>, Option<description>)
 use sqlx::SqlitePool;
 use std::path::Path;
 use tauri::{Manager, State};
@@ -472,53 +486,92 @@ pub(crate) async fn import_external_skill_core(
     pool: &SqlitePool,
     central_root: &Path,
     ext_skill_md: &Path,
-    provider: &str,
+    provider: SkillProvider,
 ) -> Result<Skill, AppError> {
-    let src_dir = ext_skill_md.parent().ok_or_else(|| AppError::invalid("bad skill path"))?;
-    // name = frontmatter name (parse_external_skill가 채움) 또는 dir 이름 폴백
-    let parsed = parse_external_skill(ext_skill_md, provider)
-        .ok_or_else(|| AppError::invalid("not a valid SKILL.md"))?;
-    let name = skill_dir_name(&parsed, src_dir);
-    let dest = import_to_central(central_root, provider, &name, src_dir)?;
+    let src_dir = ext_skill_md
+        .parent()
+        .ok_or_else(|| AppError::validation("skills.import", "bad skill path"))?;
+    let content = std::fs::read_to_string(ext_skill_md)
+        .map_err(|e| AppError::terminal("skills.import_read", format!("SKILL.md 읽기 실패: {e}")))?;
+    let (fm_name, fm_desc) = parse_frontmatter(&content);
+    // name = frontmatter name 또는 src dir 이름 폴백(경로 세그먼트로 안전화).
+    let name = sanitize_segment(&fm_name.unwrap_or_else(|| dir_name(src_dir)));
+    let provider_str = provider_segment(provider); // "claude"/"codex"/...
+    let dest = import_to_central(central_root, provider_str, &name, src_dir)?;
     let detail = format!("files={}", count_files(&dest));
-    audit(pool, "import", "managed_skill",
-          &dest.to_string_lossy(),
-          Some(&ext_skill_md.to_string_lossy()),
-          Some(&detail)).await?;
-    // managed Skill 생성: external 파싱 결과를 kind="managed" + managed id로 재포장.
-    Ok(managed_skill_from(&dest, provider, &parsed))
+    audit(
+        pool,
+        "import",
+        "managed_skill",
+        &dest.to_string_lossy(),
+        Some(&ext_skill_md.to_string_lossy()),
+        Some(&detail),
+    )
+    .await?;
+    // managed Skill 생성: list_skills_core의 external 분기 struct 리터럴을 kind="managed"로 복제.
+    let md_path = dest.join("SKILL.md");
+    Ok(Skill {
+        id: format!("managed:{}", md_path.to_string_lossy()),
+        name,
+        kind: "managed".into(),
+        prompt: Some(fm_desc.unwrap_or_default()),
+        binding: None,
+        rail: None,
+        enabled: true,
+        model: None,
+        reasoning_effort: None,
+        fast_mode: false,
+        source_path: Some(md_path.to_string_lossy().into_owned()),
+        provider: Some(provider),
+        tags: Vec::new(),
+        fallback_prompt: None,
+        created_at: String::new(),
+        updated_at: String::new(),
+    })
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn import_external_skill(db: State<'_, Db>, app: tauri::AppHandle, path: String, provider: String) -> Result<Skill, AppError> {
+pub async fn import_external_skill(
+    db: State<'_, Db>,
+    app: tauri::AppHandle,
+    path: String,
+    provider: SkillProvider,
+) -> Result<Skill, AppError> {
     let central = app.path().app_data_dir()?.join("skills-library");
-    import_external_skill_core(&db, &central, Path::new(&path), &provider).await
+    import_external_skill_core(&db, &central, Path::new(&path), provider).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn remove_managed_skill(db: State<'_, Db>, app: tauri::AppHandle, provider: String, name: String) -> Result<(), AppError> {
+pub async fn remove_managed_skill(
+    db: State<'_, Db>,
+    app: tauri::AppHandle,
+    provider: SkillProvider,
+    name: String,
+) -> Result<(), AppError> {
     let central = app.path().app_data_dir()?.join("skills-library");
-    let dest = crate::skills::central_repo::central_skill_dir(&central, &provider, &name);
-    remove_from_central(&central, &provider, &name)?;
+    let provider_str = provider_segment(provider);
+    let dest = central_skill_dir(&central, provider_str, &name);
+    remove_from_central(&central, provider_str, &name)?;
     audit(&db, "remove", "managed_skill", &dest.to_string_lossy(), None, None).await
 }
 ```
 
-> Helpers to write in `import.rs`: `skill_dir_name(parsed, src_dir)` (frontmatter name → fallback to `src_dir` file_name, sanitized to a safe path segment — no `/`, `..`), `count_files(dir)` (shallow count for the audit detail), `managed_skill_from(dest, provider, parsed)` (build `Skill { kind:"managed", id: format!("managed:{}", dest.join("SKILL.md").to_string_lossy()), provider: Some(provider_enum), enabled:true, .. }` mirroring how `parse_external_skill` fills the external `Skill`). Confirm the exact `Skill` external-field names from `model.rs`/`scan.rs` and match them. If `AppError::invalid` isn't the constructor name, use the real one from `error.rs`.
+> Helpers to write in `import.rs`: `dir_name(p: &Path) -> String` (`p.file_name()` lossy, fallback `"skill"`); `sanitize_segment(s: &str) -> String` (trim + strip `/`, `\`, `..` → one safe path segment so import can never escape `<central>/<provider>/`); `provider_segment(p: SkillProvider) -> &'static str` (match → `"claude"|"codex"|"openclaw"|"hermes"|"other"`, matching `#[serde(rename_all="lowercase")]` on `SkillProvider`); `count_files(dir: &Path) -> usize` (shallow file count for the audit detail — never reads contents). Confirmed real error constructors (from `commands/skills.rs`): `AppError::validation(code, msg)` and `AppError::terminal(code, msg)` — use those (NOT `AppError::Validation`). The managed `Skill` literal is the one in the §contract above (copied from `list_skills_core`'s external branch).
 
 - [ ] **Step 7: Implement managed inclusion + discovered suppression in `registry.rs`**
 
 In `list_skills_core`, after assembling in-app + discovered-external skills, also scan the central store and merge:
 
 ```rust
-// managed 스킬 스캔(중앙 라이브러리 = managed SSOT). app_data_dir 비의존 코어를 위해
-// central_root를 인자로 받는 list_skills_core 변형을 두거나, 기존 시그니처가 State만 받으면
-// 커맨드 list_skills에서 central_root를 구해 helper에 넘긴다.
-// 1) central_root/<provider>/<name>/SKILL.md 들을 parse_external_skill로 읽어 kind="managed"로.
-// 2) managed (name, provider) 집합을 만든다.
-// 3) discovered external 중 (name, provider)가 managed 집합에 있으면 결과에서 제외(suppress).
+// managed 스킬 스캔(중앙 라이브러리 = managed SSOT). list_skills_core는 현재 (db, &[SkillRoot])를
+// 받으므로, central_root를 받는 inner를 추가: list_skills_core_with(db, roots, central_root).
+// 커맨드 list_skills는 app_data_dir/skills-library를 구해 inner에 넘긴다(테스트는 tempdir 전달).
+// 1) central_root/<provider>/<name>/SKILL.md 마다: read_to_string → parse_frontmatter(&content)
+//    → kind="managed" Skill 리터럴(위 §contract 그대로) push. (없으면 managed 0개 = no-op.)
+// 2) managed_keys: HashSet<(name.trim().to_lowercase(), provider)> 구성.
+// 3) external 분기에서 (name,provider)가 managed_keys에 있으면 push 스킵(suppress).
 ```
 
 Write a hermetic test in `registry.rs`: create one external skill + import it into a tempdir central, then assert `list_skills_core_with_roots(...)` returns exactly one entry for that (name, provider) and its `kind == "managed"`.
@@ -580,4 +633,4 @@ Append `docs/decisions.md` breadcrumb. G1 foundation complete → next round is 
 
 **Type consistency:** `import_to_central`/`remove_from_central`/`central_skill_dir` (central_repo) ↔ used identically in import.rs. `audit()`/`list_skill_audit_core`/`SkillAuditEntry` consistent PR2↔PR3. `import_external_skill_core` ↔ command `import_external_skill`. Managed `Skill { kind:"managed", id:"managed:"+path }` consistent across PR3 Steps 6/7/9.
 
-**Known risk flagged honestly:** exact external→`Skill` field names in `parse_external_skill`/`model.rs` could not be fully read (tool phantom snapshots); every place that depends on them carries a "confirm and match exactly" instruction rather than a fabricated name.
+**Verified against source (2026-05-31):** the symbol map, the external→`Skill` literal (registry.rs `list_skills_core` L196–213), `parse_frontmatter`/`scan_root`/`scan_external_skills_core`/`ensure_within_skills_dir_roots`, and the real error constructors (`AppError::validation(code,msg)` / `AppError::terminal(code,msg)`) were all read from `commands/skills.rs` and the plan corrected to match (no `parse_external_skill` — it doesn't exist; model stays in `crate::models`). Remaining "confirm" notes (UpdateSkillInput location, `From<std::io::Error>` presence, exact `commands::skills::` import sites) are genuine local checks, not fabricated names. NOTE: this worktree's Read/Edit tools intermittently returned stale/hallucinated snapshots during authoring — the executor should trust `cargo build` errors over any single file read, and re-verify with plain `git`/`grep` if a read looks off.
