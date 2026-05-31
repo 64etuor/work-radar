@@ -5,8 +5,10 @@ import {
   Blocks,
   CircleHelp,
   FileText,
+  FolderInput,
   GitCompare,
   LayoutGrid,
+  Library,
   List,
   Plus,
   RotateCcw,
@@ -40,6 +42,8 @@ import {
   useCreateSkill,
   useDeleteSkill,
   useExternalSkillContent,
+  useImportExternalSkill,
+  useRemoveManagedSkill,
   useSetSkillTags,
   useSkillEnvironments,
   useSkills,
@@ -518,7 +522,9 @@ export function SkillsView() {
                 ? "인앱 프롬프트 추가"
                 : selected?.kind === "external"
                   ? "외부 스킬"
-                  : "인앱 프롬프트"}
+                  : selected?.kind === "managed"
+                    ? "라이브러리 스킬"
+                    : "인앱 프롬프트"}
             </SheetTitle>
             {!adding && selectedGroup.length > 1 && (
               <div className="skl-sheet-switch" role="group" aria-label="위치 전환">
@@ -549,7 +555,9 @@ export function SkillsView() {
               ) : selected?.kind === "in_app_prompt" ? (
                 <InAppEditor key={selected.id} skill={selected} />
               ) : selected?.kind === "external" ? (
-                <ExternalViewer key={selected.id} skill={selected} />
+                <ExternalViewer key={selected.id} skill={selected} onImported={closeSheet} />
+              ) : selected?.kind === "managed" ? (
+                <ManagedViewer key={selected.id} skill={selected} onRemoved={closeSheet} />
               ) : null}
             </div>
           </SheetContent>
@@ -975,11 +983,13 @@ function InAppEditor({ skill }: { skill: Skill }) {
   );
 }
 
-/** 외부 스킬 뷰어(SKILL.md 내용). 사용자 명시 편집 가능(자기 파일). 실행은 절대 없음. */
-function ExternalViewer({ skill }: { skill: Skill }) {
+/** 외부 스킬 뷰어(SKILL.md 내용). 사용자 명시 편집 가능(자기 파일). 실행은 절대 없음.
+ * "라이브러리로 import"는 이 스킬을 work-radar 중앙 라이브러리로 복사한다(가역·감사 — 레일 ①②). */
+function ExternalViewer({ skill, onImported }: { skill: Skill; onImported: () => void }) {
   const path = skill.sourcePath ?? null;
   const content = useExternalSkillContent(path);
   const write = useWriteExternalSkill();
+  const importSkill = useImportExternalSkill();
 
   const [draft, setDraft] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -987,6 +997,7 @@ function ExternalViewer({ skill }: { skill: Skill }) {
 
   const body = content.data ?? "";
   const dirty = editing && draft !== null && draft !== body;
+  const canImport = !!path && !!skill.provider;
 
   const startEdit = () => {
     setDraft(body);
@@ -1008,14 +1019,42 @@ function ExternalViewer({ skill }: { skill: Skill }) {
     );
   };
 
+  // 라이브러리로 import: 외부 파일은 읽기만 하고 중앙으로 복사(원본 무손상). 성공 시 목록이 갱신되며
+  // 이 발견본은 managed로 대체(억제)되므로 Sheet를 닫는다. 자동 실행 없음(#1/#2 — 파일 복사일 뿐).
+  const importToLibrary = () => {
+    if (!path || !skill.provider || importSkill.isPending) return;
+    setNote(null);
+    importSkill.mutate(
+      { path, provider: skill.provider },
+      {
+        onSuccess: onImported,
+        onError: (e) => setNote(`import 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+
   return (
     <div className="skl-edit">
       <div className="skl-edit-top">
         <span className="skl-name-static">{skill.name}</span>
         {!editing ? (
-          <Button className="rounded-full" onClick={startEdit}>
-            파일 편집
-          </Button>
+          <>
+            {canImport && (
+              <Button
+                variant="outline"
+                className="gap-1.5 rounded-full"
+                onClick={importToLibrary}
+                disabled={importSkill.isPending}
+                title="이 스킬을 work-radar 라이브러리로 복사(가역·감사)"
+              >
+                <FolderInput className="size-4" />
+                {importSkill.isPending ? "import 중…" : "라이브러리로 import"}
+              </Button>
+            )}
+            <Button className="rounded-full" onClick={startEdit}>
+              파일 편집
+            </Button>
+          </>
         ) : (
           <Button
             className="gap-1.5 rounded-full"
@@ -1050,6 +1089,60 @@ function ExternalViewer({ skill }: { skill: Skill }) {
       ) : (
         <SkillMarkdown body={body} />
       )}
+
+      {note && <div className="skl-note">{note}</div>}
+    </div>
+  );
+}
+
+/** 라이브러리(managed) 스킬 뷰어 — work-radar가 소유한 중앙 라이브러리 스킬(G1-PR3). 메타데이터 + 제거.
+ * 중앙 파일 내용 뷰어는 G1 비대상(readExternalSkill 가드가 외부 루트 전용 — 중앙 경로 비대상). "라이브러리
+ * 에서 제거"는 중앙 복사본만 지운다(외부 원본 무손상, 감사 — 레일 ①②). 자동 실행 없음(#1/#2). */
+function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: () => void }) {
+  const remove = useRemoveManagedSkill();
+  const [note, setNote] = useState<string | null>(null);
+  const desc = (skill.prompt ?? "").trim();
+
+  const removeFromLibrary = () => {
+    if (!skill.provider || remove.isPending) return;
+    if (
+      !window.confirm(
+        `'${skill.name}'을(를) 라이브러리에서 제거할까요? (원본 외부 파일은 그대로 유지됩니다)`,
+      )
+    )
+      return;
+    setNote(null);
+    remove.mutate(
+      { provider: skill.provider, name: skill.name },
+      {
+        onSuccess: onRemoved,
+        onError: (e) => setNote(`제거 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  return (
+    <div className="skl-edit">
+      <div className="skl-edit-top">
+        <span className="skl-name-static">{skill.name}</span>
+        <Button
+          variant="outline"
+          className="gap-1.5 rounded-full"
+          onClick={removeFromLibrary}
+          disabled={!skill.provider || remove.isPending}
+        >
+          <Trash2 className="size-4" />
+          {remove.isPending ? "제거 중…" : "라이브러리에서 제거"}
+        </Button>
+      </div>
+
+      <div className="skl-bind-line">
+        <Library className="mr-1 inline size-3.5 align-text-bottom" />
+        라이브러리 관리 중 · 출처 {providerLabel(skill.provider)}
+      </div>
+      {desc && <div className="skl-desc">{desc}</div>}
+
+      <SkillTagsEditor skill={skill} />
 
       {note && <div className="skl-note">{note}</div>}
     </div>

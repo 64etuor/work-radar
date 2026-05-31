@@ -31,13 +31,17 @@ export function providerLabel(provider: string | null): string {
 }
 
 /**
- * 한 스킬의 카드 배지 목록(순서: kind → provider → off). 인앱은 provider 없음, 외부만 provider 표시.
- * enabled면 off 배지 없음(부재 = 켜짐 — 미니멀 유지).
+ * 한 스킬의 카드 배지 목록(순서: kind → provider → off). 인앱은 provider 없음, 외부/managed는 provider
+ * 표시. managed(G1-PR3, 중앙 라이브러리로 import된 스킬)는 kind 배지가 "라이브러리"다(work-radar 소유 —
+ * "외부"와 구분). enabled면 off 배지 없음(부재 = 켜짐 — 미니멀 유지).
  */
 export function skillCardBadges(skill: Skill): SkillBadge[] {
   const badges: SkillBadge[] = [];
   const isInApp = skill.kind === "in_app_prompt";
-  badges.push({ key: "kind", label: isInApp ? "인앱" : "외부", tone: "kind" });
+  const isManaged = skill.kind === "managed";
+  const kindLabel = isInApp ? "인앱" : isManaged ? "라이브러리" : "외부";
+  badges.push({ key: "kind", label: kindLabel, tone: "kind" });
+  // 외부·managed 모두 출처 provider를 보여준다(managed는 import 출처). 인앱은 provider 없음.
   if (!isInApp && skill.provider) {
     badges.push({
       key: "provider",

@@ -1068,3 +1068,53 @@ async fn delete_in_app_skill_cleans_its_tags() {
     let got = load_tags_by_key(&db).await;
     assert!(!got.contains_key(&s.id), "삭제된 인앱 스킬의 태그 정리");
 }
+
+/// G1-PR3: 외부 스킬을 중앙 라이브러리로 import하면 `list_skills`가 managed 한 건만 노출하고 같은
+/// (name, provider)의 발견 외부본은 억제한다(레일 ② — 중앙 복사본이 발견본을 대체).
+#[tokio::test]
+async fn managed_supersedes_discovered_in_list_skills() {
+    let db = fresh_db().await;
+    let ext_root = TempDir::new().unwrap();
+    let central = TempDir::new().unwrap();
+    // 발견 외부 스킬: <ext_root>/foo/SKILL.md (claude 루트로 스캔).
+    make_skill(
+        ext_root.path(),
+        "foo",
+        "---\nname: foo\ndescription: 외부 foo\n---\n# body\n",
+    );
+
+    // 중앙으로 import(외부는 읽기만 — 무손상).
+    let imported = crate::skills::import::import_external_skill_core(
+        &db,
+        central.path(),
+        &ext_root.path().join("foo/SKILL.md"),
+        SkillProvider::Claude,
+    )
+    .await
+    .expect("import");
+    assert_eq!(imported.kind, "managed");
+
+    let roots = vec![SkillRoot::flat(
+        SkillProvider::Claude,
+        ext_root.path().to_path_buf(),
+    )];
+    let listed = list_skills_core_with(&db, &roots, Some(central.path()))
+        .await
+        .expect("list");
+
+    // foo는 정확히 한 건, managed로만(발견본 억제). 외부 파일은 그대로.
+    let foos: Vec<&Skill> = listed.iter().filter(|s| s.name == "foo").collect();
+    assert_eq!(foos.len(), 1, "managed가 발견본을 억제해 한 건이어야 한다");
+    assert_eq!(foos[0].kind, "managed");
+    assert_eq!(foos[0].provider, Some(SkillProvider::Claude));
+    assert!(
+        ext_root.path().join("foo/SKILL.md").exists(),
+        "외부 파일 무손상(레일 ②)"
+    );
+
+    // central_root=None이면 managed 미포함 → 발견 외부본이 그대로 보인다(기존 코어 동작 보존).
+    let without_central = list_skills_core(&db, &roots).await.expect("list none");
+    let foos_disc: Vec<&Skill> = without_central.iter().filter(|s| s.name == "foo").collect();
+    assert_eq!(foos_disc.len(), 1);
+    assert_eq!(foos_disc[0].kind, "external");
+}

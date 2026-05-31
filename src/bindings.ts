@@ -532,6 +532,8 @@ export const commands = {
 	 */
 	setSkillTags: (skillKey: string, tags: string[]) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_tags", { skillKey, tags })),
 	listSkillAudit: () => typedError<SkillAuditEntry[], AppError>(__TAURI_INVOKE("list_skill_audit")),
+	importExternalSkill: (path: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("import_external_skill", { path, provider })),
+	removeManagedSkill: (provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_managed_skill", { provider, name })),
 	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.

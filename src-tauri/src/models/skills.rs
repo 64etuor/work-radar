@@ -10,7 +10,9 @@ use specta::Type;
 /// 외부 스킬을 발견한 제공 도구(스캔 루트의 귀속). `project.rs`의 `Provider{Github,Local}`(레포
 /// 제공자)와는 **별개 타입** — 이름 충돌 금지(C2). specta가 TS union `"claude"|"codex"|...`로 방출해
 /// 프런트의 경로추론(`providerOf`)을 대체한다. `.agents/skills`는 P0에서 Codex로 태깅한다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+// Hash: managed↔discovered 억제(list_skills)에서 `(name, provider)` HashSet 키로 쓴다(G1-PR3). 순수
+// 추가 derive — serde/specta(Type) 방출엔 영향 없다(bindings drift 0).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum SkillProvider {
     Claude,

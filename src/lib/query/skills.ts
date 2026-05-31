@@ -5,6 +5,7 @@ import {
   type CreateSkillInput,
   type Skill,
   type SkillEnvironment,
+  type SkillProvider,
   type UserSkillRoot,
 } from "@/bindings";
 
@@ -112,6 +113,33 @@ export function useSetSkillTags() {
   return useMutation({
     mutationFn: (args: { skillKey: string; tags: string[] }) =>
       unwrap(commands.setSkillTags(args.skillKey, args.tags)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+/**
+ * 발견된 외부 스킬을 work-radar 중앙 라이브러리로 import(ADR-0006 레일 ①② — 가역·감사). 외부 파일은
+ * 읽기만 하고 중앙으로 복사한다(원본 무손상). 잡을 spawn하지 않는다(#1/#2 — 단순 파일 복사). 성공 시
+ * 목록 무효화 → managed가 같은 (name, provider)의 발견본을 억제(중앙 복사본이 대체).
+ */
+export function useImportExternalSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { path: string; provider: SkillProvider }) =>
+      unwrap(commands.importExternalSkill(args.path, args.provider)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+/**
+ * 중앙 라이브러리에서 managed 스킬 제거(가역의 반대편 — 중앙 복사본만 삭제, 외부 원본은 건드리지
+ * 않는다). 모든 쓰기는 감사(레일 ①). 성공 시 목록 무효화 → 억제 해제되어 발견 외부본이 다시 보인다.
+ */
+export function useRemoveManagedSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { provider: SkillProvider; name: string }) =>
+      unwrap(commands.removeManagedSkill(args.provider, args.name)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
   });
 }

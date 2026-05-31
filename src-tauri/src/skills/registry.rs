@@ -2,13 +2,18 @@
 //! 인앱 프롬프트 create/update/delete. 외부 스킬은 레지스트리에서 수정/삭제 불가(파일 사용자 소유).
 //! 로직 불변 — `commands/skills.rs`에서 그대로 이동.
 
-use tauri::State;
+use std::path::Path;
+
+use tauri::{Manager, State};
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{CreateSkillInput, Skill};
+use crate::models::{CreateSkillInput, Skill, SkillProvider};
 
-use crate::skills::scan::{scan_external_skills_core, skill_roots_db, SkillRoot};
+use crate::skills::central_repo::list_managed_dirs;
+use crate::skills::scan::{
+    parse_frontmatter, scan_external_skills_core, skill_roots_db, SkillRoot,
+};
 use crate::skills::seed::fallback_prompt;
 
 /// 레지스트리 목록: 인앱 프롬프트 + (디스크 스캔한) 외부 스킬을 합쳐 돌려준다. 인앱은 DB에서, 외부는
@@ -16,12 +21,42 @@ use crate::skills::seed::fallback_prompt;
 /// 합성한다(영속 안 함 — 디스크 SSOT).
 #[tauri::command]
 #[specta::specta]
-pub async fn list_skills(db: State<'_, Db>) -> Result<Vec<Skill>, AppError> {
-    list_skills_core(db.inner(), &skill_roots_db(db.inner()).await).await
+pub async fn list_skills(db: State<'_, Db>, app: tauri::AppHandle) -> Result<Vec<Skill>, AppError> {
+    // 중앙 라이브러리(managed SSOT) 루트. State/AppHandle은 tauri-specta가 TS 시그니처에서 제거하므로
+    // `listSkills`의 바인딩은 인자 없이 그대로(드리프트 0).
+    let central = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| {
+            AppError::terminal(
+                "skills.app_data_dir",
+                format!("앱 데이터 경로 해석 실패: {e}"),
+            )
+        })?
+        .join("skills-library");
+    list_skills_core_with(
+        db.inner(),
+        &skill_roots_db(db.inner()).await,
+        Some(central.as_path()),
+    )
+    .await
 }
 
-/// `list_skills`의 코어(roots 주입 → hermetic 테스트). 인앱 DB 행 + ROOTS 외부 스캔을 병합한다.
+/// `list_skills`의 코어(roots 주입 → hermetic 테스트). 중앙 라이브러리 없이(=None) 인앱+외부만 병합한다.
+/// PR1부터의 호출부(테스트) 호환을 위해 시그니처 유지 — `list_skills_core_with`에 위임한다. 프로덕션
+/// 경로(`list_skills` 커맨드)는 `_with`를 직접 부르므로 비테스트 빌드에선 미사용(scan/seed 관례).
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn list_skills_core(db: &Db, roots: &[SkillRoot]) -> Result<Vec<Skill>, AppError> {
+    list_skills_core_with(db, roots, None).await
+}
+
+/// 코어 + 중앙 라이브러리(managed) 병합. `central_root=Some`이면 managed 스킬을 포함하고, 같은
+/// `(name, provider)`의 **발견 외부 스킬을 억제**한다(레일 ② — import한 중앙 복사본이 발견본을 대체).
+pub(crate) async fn list_skills_core_with(
+    db: &Db,
+    roots: &[SkillRoot],
+    central_root: Option<&Path>,
+) -> Result<Vec<Skill>, AppError> {
     // 인앱(편집 가능 잡 템플릿) — DB SSOT. provider 컬럼은 없어 FromRow가 None을 채운다(#[sqlx(skip)]).
     let mut skills: Vec<Skill> = sqlx::query_as::<_, Skill>(
         "SELECT id, name, kind, prompt, binding, rail, enabled, model, reasoning_effort, fast_mode, source_path, created_at, updated_at \
@@ -41,9 +76,51 @@ pub(crate) async fn list_skills_core(db: &Db, roots: &[SkillRoot]) -> Result<Vec
             .map(str::to_string);
     }
 
+    // managed(중앙 라이브러리 = SSOT). central_root/<provider>/<name>/SKILL.md마다 frontmatter를 읽어
+    // kind="managed" Skill을 합성하고, 억제용 (name, provider) 키를 모은다. 읽기불가 SKILL.md는 skip
+    // (graceful). central_root=None이면 managed 0개(no-op) — 기존 코어 동작 보존.
+    let mut managed_keys: std::collections::HashSet<(String, SkillProvider)> =
+        std::collections::HashSet::new();
+    if let Some(central) = central_root {
+        for (provider, dir) in list_managed_dirs(central) {
+            let md = dir.join("SKILL.md");
+            let Ok(content) = std::fs::read_to_string(&md) else {
+                continue;
+            };
+            let (fm_name, fm_desc) = parse_frontmatter(&content);
+            let name = fm_name.unwrap_or_else(|| {
+                dir.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            });
+            managed_keys.insert((name.trim().to_lowercase(), provider));
+            skills.push(Skill {
+                id: format!("managed:{}", md.to_string_lossy()),
+                name,
+                kind: "managed".into(),
+                prompt: Some(fm_desc.unwrap_or_default()),
+                binding: None,
+                rail: None,
+                enabled: true,
+                model: None,
+                reasoning_effort: None,
+                fast_mode: false,
+                source_path: Some(md.to_string_lossy().into_owned()),
+                provider: Some(provider),
+                tags: Vec::new(),
+                fallback_prompt: None,
+                created_at: String::new(),
+                updated_at: String::new(),
+            });
+        }
+    }
+
     // 외부(디스크 스킬) — 멀티루트 스캔해서 합성 행으로 덧붙인다(영속 안 함). 부재/읽기불가 루트는
-    // per-root skip(무에러)이라 항상 가능분을 반환한다.
+    // per-root skip(무에러). 같은 (name, provider)의 managed가 있으면 **억제**(중앙 복사본이 대체본).
     for ex in scan_external_skills_core(roots) {
+        if managed_keys.contains(&(ex.name.trim().to_lowercase(), ex.provider)) {
+            continue;
+        }
         skills.push(Skill {
             id: format!("ext:{}", ex.path),
             name: ex.name,
@@ -64,8 +141,8 @@ pub(crate) async fn list_skills_core(db: &Db, roots: &[SkillRoot]) -> Result<Vec
         });
     }
 
-    // 태그 일괄 로드(통합 Skill.id별 — 인앱/외부 공통). 태그가 없는 DB(마이그레이션 직후)나 빈 표여도
-    // 빈 맵이라 무영향. 태그 조회 실패는 치명적이지 않으므로 빈 태그로 graceful degrade(목록은 보존).
+    // 태그 일괄 로드(통합 Skill.id별 — 인앱/외부/managed 공통). 태그가 없는 DB(마이그레이션 직후)나 빈
+    // 표여도 빈 맵이라 무영향. 태그 조회 실패는 치명적이지 않으므로 빈 태그로 graceful degrade(목록 보존).
     let tags_by_key = load_tags_by_key(db).await;
     for s in &mut skills {
         if let Some(ts) = tags_by_key.get(&s.id) {

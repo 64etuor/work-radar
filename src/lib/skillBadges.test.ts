@@ -5,7 +5,11 @@ import type { Skill } from "@/bindings";
 import { skillCardBadges } from "./skillBadges";
 
 /** 테스트용 최소 Skill(배지와 무관한 필드는 캐스트로 채운다). */
-function skill(kind: "in_app_prompt" | "external", enabled: boolean, provider?: string): Skill {
+function skill(
+  kind: "in_app_prompt" | "external" | "managed",
+  enabled: boolean,
+  provider?: string,
+): Skill {
   return { id: "x", name: "x", kind, enabled, provider, tags: [] } as unknown as Skill;
 }
 
@@ -44,5 +48,20 @@ describe("skillCardBadges", () => {
   it("미지의 provider: 원문 라벨 폴백", () => {
     const b = skillCardBadges(skill("external", true, "mystery"));
     expect(b.find((x) => x.key === "provider")?.label).toBe("mystery");
+  });
+
+  it("managed 활성: kind='라이브러리' + provider(외부와 구분)", () => {
+    expect(skillCardBadges(skill("managed", true, "claude"))).toEqual([
+      { key: "kind", label: "라이브러리", tone: "kind" },
+      { key: "provider", label: "Claude", tone: "provider" },
+    ]);
+  });
+
+  it("managed 비활성: kind + provider + off (순서 보존)", () => {
+    expect(skillCardBadges(skill("managed", false, "codex")).map((x) => x.key)).toEqual([
+      "kind",
+      "provider",
+      "off",
+    ]);
   });
 });

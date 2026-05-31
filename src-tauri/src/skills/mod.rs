@@ -25,6 +25,8 @@
 //! 모델(`Skill` 등)은 옮기지 않고 `crate::models`에 그대로 둔다.
 
 pub mod audit_log;
+pub mod central_repo;
+pub mod import;
 pub mod registry;
 pub mod scan;
 pub mod seed;
@@ -44,6 +46,7 @@ pub use seed::{resolve_prompt, seed_in_app_skills};
 // `crate::commands::skills::X`(에이전트 모듈/agents_config) 경로가 `pub use crate::skills;` alias를
 // 통해 이 심볼들로 해석된다.
 pub use audit_log::list_skill_audit;
+pub use import::{import_external_skill, remove_managed_skill};
 pub(crate) use seed::{
     resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH, BINDING_CI_TRIAGE, BINDING_PR_SELFCHECK,
     FAST_CODEX_MODEL,
