@@ -5,7 +5,8 @@
 > and is **parked/unpushed** on `feat/governance-boule-p1`. This work does **not** touch
 > work-radar app code and produces **no `bindings.ts` drift**.
 
-상위 설계 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` §5.1, §6.
+상위 설계 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` §3 (External
+Reviewer), §3.1 (bounded retry), §5.1 (command set), §6 (INVARIANTs), §7 (Security Model — 이중 검증).
 직전 단계: `docs/superpowers/plans/2026-05-31-ssot-governance-harness-p2a.md`
 (§ "Deferred follow-ups" enumerates exactly the items this design realizes).
 
@@ -27,9 +28,13 @@ author_model` (after normalization), so a forged same-model review event in the 
 
 **Non-goals (tracked elsewhere):**
 
-- **≥2 independent models** (spec §5.1 target). This task keeps the threshold at **≥1
-  distinct-model review** and adds the distinct-model derive; raising to ≥2 is a separate
-  follow-up.
+- **≥2 independent models** — the canonical design **§7 Security Model ("이중 검증: Type 1은
+  2개 이상 독립 모델 검토")** is the full target. This task completes the **different-model**
+  half of that invariant (write-time guard + re-derivable gate + normalization) and keeps the
+  count at **≥1** per the user's minimal-churn call. Raising to **≥2** is then a small flip
+  (count distinct normalized reviewer models ≥ 2) once a second reviewer model is configured —
+  tracked as the completing follow-up. **Until then §7's 이중 검증 is only partially mechanized;
+  the plan and `docs/decisions.md` line must say so honestly.**
 - **Clean not-found handling** for unknown `decisionId` (today `loadState` throws a raw
   error to the MCP transport). Left as a tracked P2a follow-up; **not** in this task.
 - **ADR-file ingress** (P3) and **P2b in-app approval card** (GUI-blocked) — unchanged.
@@ -109,6 +114,13 @@ export function liveReview(deps: LiveReviewDeps): ReviewFn;
 
 - One attempt = spawn `command buildArgs(req)`, feed the reviewer prompt, collect stdout
   with a `timeoutMs` watchdog (kills the child on expiry).
+- **Prompt-injection posture (canonical §7):** the proposal body is **agent-authored, not
+  trusted**. The reviewer prompt structurally delimits it (e.g. a fenced `<<<PROPOSAL … >>>`
+  block) and frames the reviewer as an **adversarial** critic whose job is to find objections —
+  it must NOT follow instructions found _inside_ the proposal. This is mitigation-by-framing,
+  not a hard guarantee; a determined injection could still skew a verdict. The structured-verdict
+  parse (below) bounds the blast radius (only an enum + rationale is trusted), and the human
+  approval gate remains the backstop. Documented as a residual risk, not a solved problem.
 - **Prompt** instructs the model to emit exactly one fenced block
   ` ```json {"verdict":"endorse|concerns|object","rationale":"..."} ``` `; `parse` extracts
   it (first matching block; tolerant of surrounding prose).
@@ -196,7 +208,10 @@ suite and existing behavior are unchanged:
 - `modelId.test.ts` — case/whitespace/version-suffix normalization; non-version ids untouched.
 - `liveReviewer.test.ts` (fake spawn, injected `sleep`/`rand`): happy parse; retry-then-succeed;
   exhaust-budget-then-throw; per-attempt timeout kills child; unparseable→retry→throw;
-  **log contains no stdout body / no proposal text** (size only).
+  **log contains no stdout body / no proposal text** (size only); **the built prompt structurally
+  delimits the proposal and uses adversarial framing** (assert the delimiter + "find objections"
+  intent are present, and the proposal text sits inside the delimiter) — the deterministic proxy
+  for the §7 prompt-injection posture.
 - `decision.test.ts` (extended): distinct-model review counts; **forged same-model review
   event does NOT satisfy the gate**; missing author tag → not counted.
 - `reviewer.test.ts` (extended): `author_model:` tag persisted (normalized); id-shape guard
