@@ -4,6 +4,9 @@ import matter from "gray-matter";
 import { generateId } from "../event/id.ts";
 import { writeEvent } from "../event/writeEvent.ts";
 import type { GovEvent } from "../event/event.ts";
+import { normalizeModelId } from "./modelId.ts";
+
+const DECISION_ID_RE = /^evt_\d{8}_\d{6}_[0-9a-f]{4}$/;
 
 export interface ReviewRequest {
   decisionId: string;
@@ -37,10 +40,14 @@ export async function recordReview(
   now: Date,
   rand: number,
 ): Promise<RecordReviewResult> {
+  if (!DECISION_ID_RE.test(req.decisionId)) {
+    // MINOR d: refuse before any reviews/<id>.md path is built (path-traversal defense-in-depth)
+    throw new Error(`invalid decisionId shape: ${JSON.stringify(req.decisionId)}`);
+  }
   const result = await reviewFn(req);
-  if (result.reviewerModel.trim() === req.authorModel.trim()) {
+  if (normalizeModelId(result.reviewerModel) === normalizeModelId(req.authorModel)) {
     throw new Error(
-      `external review must use a different model than the author (got "${result.reviewerModel}" for both)`,
+      `external review must use a different model than the author (got "${result.reviewerModel}" vs author "${req.authorModel}")`,
     );
   }
 
@@ -61,7 +68,12 @@ export async function recordReview(
       type: "decision_review_recorded",
       source: "reviewer",
       actor: result.reviewerModel,
-      tags: ["decision", "review", `verdict:${result.verdict}`],
+      tags: [
+        "decision",
+        "review",
+        `verdict:${result.verdict}`,
+        `author_model:${normalizeModelId(req.authorModel)}`, // re-derivable half of the (author,reviewer) pair
+      ],
       related_to: [req.decisionId],
     },
     body: `External review (${result.reviewerModel}) of ${req.decisionId}: ${result.verdict}`,
