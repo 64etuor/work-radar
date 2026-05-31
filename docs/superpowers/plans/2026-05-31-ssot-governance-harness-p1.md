@@ -12,6 +12,26 @@
 
 ---
 
+## ⏸️ 진행 상태 (2026-05-31 재조정 — git이 정본)
+
+> **이 배너가 아래 체크박스/코드블록보다 우선한다.** 브랜치 `feat/governance-boule-p1`
+> (메인 트리, **파킹·미푸시**, `7ea3b17` 위 4커밋). 아래는 커밋된 현실:
+>
+> - **DONE & 커밋**: Task 0–5 (`0aed941` P1 skeleton) + Task 6 Step 1·2·3·5·6 (`583e4b4`).
+>   재조정 세션에서 재검증: governance vitest 16 pass·tsc 0, cargo fmt/clippy(`--all-targets -D warnings`)/test(`acp_client` 3 pass·428 intact) green, `bindings.ts` drift 0.
+> - **잔여(필수 done) = 단 하나**: **Task 6 Step 4** 인앱 Hermes 로드 스모크 — 데스크톱 GUI 필요 →
+>   인터랙티브 세션 대기. 통과 후 **Task 7**(통합 검증 + done-line 기록 + 커밋)을 진행.
+> - **함정(이미 해소 — 본문 코드블록보다 이 노트가 우선)**: ① governance `src/**` 로컬 import는
+>   **`.ts` 확장자** 사용(Node 24.9 `--experimental-strip-types`가 `.js`→`.ts` 미해소) + tsconfig
+>   `allowImportingTsExtensions`; 테스트는 `.js` 유지(vitest 리졸버). ② 설치는
+>   **`pnpm install --ignore-workspace`**(루트 `pnpm-workspace.yaml`가 governance를 멤버 아님으로
+>   가림; `pnpm add`는 `@types/node`→`undici-types` trustPolicy로 차단 → package.json 수기 후 install).
+>   ③ zod `^4.0.0`(해소 4.4.3). 상세=`docs/decisions.md` "Task 6 — MCP stdio 서버" 엔트리.
+> - **A안 확정**: work-radar `acp_client.rs`가 ACP `session/new`에 stdio 디스크립터 opt-in 주입.
+>   옛 "hermes mcp add(B안)" 가정은 폐기 — README 문서화만(Step 5).
+
+---
+
 ## File Structure (P1)
 
 ```
@@ -62,7 +82,7 @@ governance/
 - Create: `governance/workspace/agents/gateway.md`
 - Create: `governance/workspace/interfaces/MCP.md`
 
-- [ ] **Step 1: package.json**
+- [x] **Step 1: package.json**
 
 ```json
 {
@@ -87,7 +107,7 @@ governance/
 }
 ```
 
-- [ ] **Step 2: tsconfig.json**
+- [x] **Step 2: tsconfig.json**
 
 ```json
 {
@@ -105,7 +125,7 @@ governance/
 }
 ```
 
-- [ ] **Step 3: vitest.config.ts**
+- [x] **Step 3: vitest.config.ts**
 
 ```ts
 import { defineConfig } from "vitest/config";
@@ -115,14 +135,14 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: .gitignore**
+- [x] **Step 4: .gitignore**
 
 ```
 node_modules/
 dist/
 ```
 
-- [ ] **Step 5: workspace skeleton + .gitkeep**
+- [x] **Step 5: workspace skeleton + .gitkeep**
 
 Create empty `.gitkeep` in: `workspace/events/`, `workspace/patterns/active/`, `workspace/patterns/archived/`, `workspace/hypotheses/testing/`, `workspace/hypotheses/archived/`, `workspace/reviews/`, `workspace/state/`.
 
@@ -146,7 +166,7 @@ L3 Decisions / L4 Principles는 여기 복제하지 않는다 — 정본은
 `docs/adr/` + `docs/decisions.md` + `docs/areas/decision-rails.md`. 어댑터(P2/P3)가 인덱싱.
 ```
 
-- [ ] **Step 6: gateway agent 명세서** (`workspace/agents/gateway.md`)
+- [x] **Step 6: gateway agent 명세서** (`workspace/agents/gateway.md`)
 
 ```markdown
 ---
@@ -182,7 +202,7 @@ model: (저~중 비용)
 - 기존 event를 수정하지 않는다 (변경=새 event).
 ```
 
-- [ ] **Step 7: MCP 인터페이스 명세** (`workspace/interfaces/MCP.md`)
+- [x] **Step 7: MCP 인터페이스 명세** (`workspace/interfaces/MCP.md`)
 
 ```markdown
 # Governance MCP — 명령/도구 (P1 범위)
@@ -200,7 +220,7 @@ Hermes ACP 세션이 이 MCP 서버를 로드 → 명령이 `available_commands`
 - `ask_user(options)` / `send_file(path)` (§6.3), `approve`/`reject`/`why`/`history`/`conflicts`.
 ```
 
-- [ ] **Step 8: install + commit**
+- [x] **Step 8: install + commit**
 
 ```bash
 pnpm --dir governance install
@@ -219,7 +239,7 @@ Expected: `governance/node_modules` 생성, install 성공.
 - Create: `governance/src/event/id.ts`
 - Test: `governance/test/event/id.test.ts`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -246,12 +266,12 @@ describe("generateId", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm --dir governance test -- id`
 Expected: FAIL ("Cannot find module .../event/id.js" 또는 generateId undefined).
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 ```ts
 const HEX = "0123456789abcdef";
@@ -279,12 +299,12 @@ export function generateId(prefix: LayerPrefix, now: Date, rand: number): string
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `pnpm --dir governance test -- id`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add governance/src/event/id.ts governance/test/event/id.test.ts
@@ -300,7 +320,7 @@ git commit -m "feat(governance): deterministic SSOT id generation"
 - Create: `governance/src/event/event.ts`
 - Test: `governance/test/event/event.test.ts`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -338,12 +358,12 @@ describe("serialize/parse round-trip", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm --dir governance test -- event/event`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 ```ts
 import matter from "gray-matter";
@@ -405,12 +425,12 @@ export function parseEvent(raw: string): GovEvent {
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `pnpm --dir governance test -- event/event`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add governance/src/event/event.ts governance/test/event/event.test.ts
@@ -426,7 +446,7 @@ git commit -m "feat(governance): event frontmatter serialize/parse with required
 - Create: `governance/src/event/writeEvent.ts`
 - Test: `governance/test/event/writeEvent.test.ts`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 ```ts
 import { describe, it, expect, beforeEach } from "vitest";
@@ -470,12 +490,12 @@ describe("writeEvent", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm --dir governance test -- writeEvent`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 ```ts
 import { mkdir, writeFile } from "node:fs/promises";
@@ -496,12 +516,12 @@ export async function writeEvent(workspaceDir: string, evt: GovEvent, now: Date)
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `pnpm --dir governance test -- writeEvent`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add governance/src/event/writeEvent.ts governance/test/event/writeEvent.test.ts
@@ -517,7 +537,7 @@ git commit -m "feat(governance): append-only immutable event writer"
 - Create: `governance/src/gateway/gateway.ts`
 - Test: `governance/test/gateway/gateway.test.ts`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -565,12 +585,12 @@ describe("isType1Candidate", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm --dir governance test -- gateway`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 ```ts
 import { generateId } from "../event/id.js";
@@ -615,12 +635,12 @@ export function isType1Candidate(evt: GovEvent): boolean {
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `pnpm --dir governance test -- gateway`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add governance/src/gateway/gateway.ts governance/test/gateway/gateway.test.ts
@@ -636,7 +656,7 @@ git commit -m "feat(governance): gateway activity→event normalization + type1 
 - Create: `governance/src/mcp/handlers.ts`
 - Test: `governance/test/mcp/handlers.test.ts`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 ```ts
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -680,12 +700,12 @@ describe("observations", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm --dir governance test -- handlers`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: 최소 구현**
+- [x] **Step 3: 최소 구현**
 
 ```ts
 import { readdir } from "node:fs/promises";
@@ -760,12 +780,12 @@ export async function observations(_workspaceDir: string): Promise<ObservationsR
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `pnpm --dir governance test -- handlers`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add governance/src/mcp/handlers.ts governance/test/mcp/handlers.test.ts
@@ -794,13 +814,13 @@ git commit -m "feat(governance): MCP handlers create_task/status/observations"
 > work-radar Rust 변경이 들어가므로 `docs/areas/ipc-conventions.md`(hermes_agent) 규율 적용:
 > AppError envelope, `cargo fmt`/`clippy -D warnings`/`cargo test`. bindings drift 0(내부 ACP).
 
-- [ ] **Step 1: 서버 구현**
+- [x] **Step 1: 서버 구현**
 
 ```ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { createTask, status, observations } from "./handlers.js";
+import { createTask, status, observations } from "./handlers.ts"; // 개정(커밋된 정본): strip-types가 .js→.ts 미해소 → 로컬 import는 .ts 명시
 
 const WORKSPACE =
   process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
@@ -845,20 +865,23 @@ server.registerTool(
 await server.connect(new StdioServerTransport());
 ```
 
-> **zod 의존성:** 실측 결과 미설치 → Step 2에서 `pnpm --dir governance add zod`.
+> **zod 의존성(개정 — 실제 경로):** `pnpm add`는 무관 `@types/node`→`undici-types` trustPolicy
+> 다운그레이드로 **차단** → `package.json`에 수기 추가 후 `pnpm install --ignore-workspace`.
+> 커밋된 버전 zod `^4.0.0`(해소 4.4.3, SDK peer `^3.25 || ^4.0`).
 > SDK 1.29 정확한 `registerTool` config 시그니처는 구현 시
 > `node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.d.ts:150`로 최종 대조.
 
-- [ ] **Step 2: zod 설치 + 서버 부팅 스모크**
+- [x] **Step 2: zod 설치 + 서버 부팅 스모크**
 
 ```bash
-pnpm --dir governance add zod          # 실측: 미설치 상태
+# 개정: pnpm add는 trustPolicy 차단 → package.json 수기 추가 후 아래 install
+(cd governance && pnpm install --ignore-workspace)   # 루트 pnpm-workspace.yaml가 governance를 가림
 ```
 
 Run: `BOULE_WORKSPACE=$(mktemp -d) node --experimental-strip-types governance/src/mcp/server.ts < /dev/null`
 Expected: 즉시 throw 없이 기동(빈 stdin이면 핸드셰이크 대기), Ctrl-C 종료. (전제: 이 머신 Node v24.9.0에서 strip-types 동작 확인됨 — 별도 빌드 스텝 불요.)
 
-- [ ] **Step 3: work-radar A안 주입 — `acp_client.rs` (opt-in 경로해소)**
+- [x] **Step 3: work-radar A안 주입 — `acp_client.rs` (opt-in 경로해소)**
 
 work-radar가 `session/new`의 `mcpServers`(현 `[]`)에 governance stdio 디스크립터를
 주입한다. **단일책임 헬퍼**로 분리(env in → 배열 out, 테스트 가능):
@@ -893,7 +916,7 @@ work-radar가 `session/new`의 `mcpServers`(현 `[]`)에 governance stdio 디스
 (MCP inspector)는 앱 없이 돌리는 진단용 보조 검증.
 관찰 결과를 `docs/decisions.md`에 한 줄(Type 2): "Boule MCP ↔ Hermes A안 로드 = <성공/관찰>".
 
-- [ ] **Step 5: B안 문서화 + README**
+- [x] **Step 5: B안 문서화 + README**
 
 `governance/README.md`에 두 로드 경로 기록:
 
@@ -901,7 +924,7 @@ work-radar가 `session/new`의 `mcpServers`(현 `[]`)에 governance stdio 디스
 - B안(독립 hermes/cron): `~/.hermes/config.yaml` `mcp_servers:` 딕셔너리 예시
   (`command`/`args`/`env`/`transport: stdio`/`tools.include`), `mcp_reload_confirm` 게이트 주의.
 
-- [ ] **Step 6: 검증 + commit**
+- [x] **Step 6: 검증 + commit**
 
 work-radar Rust: `export PATH="$HOME/.cargo/bin:$PATH"` 후
 `cargo fmt --check` + `cargo clippy --all-targets -- -D warnings` + `cargo test`(헬퍼).
