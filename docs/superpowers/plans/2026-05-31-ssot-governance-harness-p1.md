@@ -774,14 +774,25 @@ git commit -m "feat(governance): MCP handlers create_task/status/observations"
 
 ---
 
-## Task 6: MCP 서버 wiring + Hermes 로드 검증 (`mcp/server.ts`)
+## Task 6: MCP 서버 wiring + work-radar A안 로드 (`mcp/server.ts` + `acp_client.rs`)
+
+> **개정(2026-05-31, A안 — spec §5.0):** Hermes 로드 경로 설계 확정(스키마·주입점은
+> `acp_client.rs` `new_session`에서 소스 확인; live smoke는 Step 4). work-radar가
+> ACP `session/new`에 이미 `mcpServers`를 보내므로(`acp_client.rs`, 현 `[]`),
+> governance 로드 = work-radar가 그 배열에 stdio 디스크립터를 **opt-in 주입**(env
+> `BOULE_GOVERNANCE_DIR`). 사용자 config 무변경·`bindings.ts` 무관(내부 ACP 페이로드).
+> 원안 Step 3의 "hermes mcp add → ~/.hermes/config.yaml"(B안)은 독립 hermes/cron용으로
+> README 문서화만 한다(P1 코드 대상 아님).
 
 **Files:**
 
-- Create: `governance/src/mcp/server.ts`
-- Modify: `governance/README.md` (Hermes 로드 방법 문서화)
+- Create: `governance/src/mcp/server.ts` (stdio wiring, `registerTool` + zod)
+- Modify: `src-tauri/src/hermes_agent/acp_client.rs` (A안 mcpServers 주입) + 단일책임 헬퍼
+- Modify: `governance/package.json` (zod 의존성), `governance/README.md` (A/B 로드 문서)
 
-> 이 태스크는 stdio 서버 wiring(얇은 통합) + **수동 스모크**. 유닛 테스트는 Task 5가 커버.
+> 이 태스크는 server.ts wiring + work-radar A안 주입 + **스모크**. 핸들러 유닛은 Task 5가 커버.
+> work-radar Rust 변경이 들어가므로 `docs/areas/ipc-conventions.md`(hermes_agent) 규율 적용:
+> AppError envelope, `cargo fmt`/`clippy -D warnings`/`cargo test`. bindings drift 0(내부 ACP).
 
 - [ ] **Step 1: 서버 구현**
 
@@ -798,50 +809,108 @@ const WORKSPACE =
 const nowFn = () => new Date();
 const randFn = () => Math.random();
 
+// SDK 1.29(실측): server.tool()은 deprecated → registerTool(name, config, cb).
 const server = new McpServer({ name: "boule-governance", version: "0.0.1" });
 
-server.tool("create_task", { description: z.string() }, async ({ description }) => {
-  const r = await createTask(WORKSPACE, { description }, nowFn(), randFn());
-  return { content: [{ type: "text", text: `task recorded: ${r.id}` }] };
-});
+server.registerTool(
+  "create_task",
+  {
+    description: "할 일을 L0 task_created 이벤트로 기록",
+    inputSchema: { description: z.string() },
+  },
+  async ({ description }) => {
+    const r = await createTask(WORKSPACE, { description }, nowFn(), randFn());
+    return { content: [{ type: "text", text: `task recorded: ${r.id}` }] };
+  },
+);
 
-server.tool("status", {}, async () => {
-  const s = await status(WORKSPACE);
-  return { content: [{ type: "text", text: `events: ${s.eventCount}` }] };
-});
+server.registerTool(
+  "status",
+  { description: "기록된 이벤트 수 요약", inputSchema: {} },
+  async () => {
+    const s = await status(WORKSPACE);
+    return { content: [{ type: "text", text: `events: ${s.eventCount}` }] };
+  },
+);
 
-server.tool("observations", {}, async () => {
-  const o = await observations(WORKSPACE);
-  return { content: [{ type: "text", text: `active patterns: ${o.patterns.length}` }] };
-});
+server.registerTool(
+  "observations",
+  { description: "활성 패턴 목록(P1: 빈 목록)", inputSchema: {} },
+  async () => {
+    const o = await observations(WORKSPACE);
+    return { content: [{ type: "text", text: `active patterns: ${o.patterns.length}` }] };
+  },
+);
 
 await server.connect(new StdioServerTransport());
 ```
 
-> `zod`가 `@modelcontextprotocol/sdk` 의존성에 포함 안 되면 `pnpm --dir governance add zod`.
+> **zod 의존성:** 실측 결과 미설치 → Step 2에서 `pnpm --dir governance add zod`.
+> SDK 1.29 정확한 `registerTool` config 시그니처는 구현 시
+> `node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.d.ts:150`로 최종 대조.
 
-- [ ] **Step 2: 서버 부팅 스모크**
-
-Run: `BOULE_WORKSPACE=$(mktemp -d) node --experimental-strip-types governance/src/mcp/server.ts < /dev/null`
-Expected: 즉시 에러 없이 기동(빈 stdin이면 핸드셰이크 대기). Ctrl-C로 종료. 부팅 시 throw 없으면 통과.
-
-- [ ] **Step 3: Hermes 로드 경로 실측 (Risk 해소)**
-
-Nous Hermes Agent CLI(ACP)가 외부 MCP 서버를 로드하는 방식을 실측한다(spec §11 open question):
-
-- `hermes` MCP 설정 파일/플래그 확인 (`hermes --help`, `~/.hermes/` config).
-- governance MCP를 등록 → `hermes acp` 세션에서 `available_commands`에 `create_task` 등장하는지 확인.
-- **안 되면** spec §5.2 폴백(work-radar 네이티브 IPC 인터셉트)로 전환 — 별도 plan으로 분기.
-
-관찰 결과를 `docs/decisions.md`에 한 줄 기록(Type 2): "Boule MCP ↔ Hermes 로드 = <성공/폴백>".
-
-- [ ] **Step 4: README 업데이트 + commit**
-
-`governance/README.md`에 "Hermes에 MCP 로드하기" 섹션 추가(실측 결과 반영).
+- [ ] **Step 2: zod 설치 + 서버 부팅 스모크**
 
 ```bash
-git add governance/src/mcp/server.ts governance/README.md docs/decisions.md
-git commit -m "feat(governance): stdio MCP server + Hermes load verification"
+pnpm --dir governance add zod          # 실측: 미설치 상태
+```
+
+Run: `BOULE_WORKSPACE=$(mktemp -d) node --experimental-strip-types governance/src/mcp/server.ts < /dev/null`
+Expected: 즉시 throw 없이 기동(빈 stdin이면 핸드셰이크 대기), Ctrl-C 종료. (전제: 이 머신 Node v24.9.0에서 strip-types 동작 확인됨 — 별도 빌드 스텝 불요.)
+
+- [ ] **Step 3: work-radar A안 주입 — `acp_client.rs` (opt-in 경로해소)**
+
+work-radar가 `session/new`의 `mcpServers`(현 `[]`)에 governance stdio 디스크립터를
+주입한다. **단일책임 헬퍼**로 분리(env in → 배열 out, 테스트 가능):
+
+- **opt-in 게이트:** `std::env::var("BOULE_GOVERNANCE_DIR")`.
+  - 미설정/빈값 → `[]` 반환(= 오늘과 동일, 무부작용).
+  - 설정됐으나 `<dir>/src/mcp/server.ts` 부재 → `warn!`(경로만) 후 `[]` 반환
+    (graceful degrade, retry 없음 — INVARIANT #5).
+- **디스크립터(ACP `McpServerStdio` 형):**
+  ```jsonc
+  {
+    "name": "boule-governance",
+    "command": "<node>", // 아래 node 해소
+    "args": ["--experimental-strip-types", "<dir>/src/mcp/server.ts"],
+    "env": [{ "name": "BOULE_WORKSPACE", "value": "<dir>/workspace" }],
+  }
+  ```
+  주의: ACP env는 **리스트 `[{name,value}]`** (config.yaml의 딕셔너리와 다름 — spec §5.0).
+- **node 바이너리 해소:** 기본 `"node"`(PATH 의존). `pnpm tauri dev`(터미널 기동)에선
+  PATH에 node 존재 → OK. **Finder/GUI 기동은 PATH 누락 가능** → 선택적 `BOULE_NODE`(절대경로)
+  override, 미설정 시 `"node"`. P1 검증은 터미널 기동 기준(알려진 제약 — README 명시).
+- **레일:** 토큰/시크릿 없음(로컬 markdown), 네트워크 없음, 가역(env 해제=원복),
+  로그는 경로·카운트만(본문 금지). `session/new`은 내부 ACP → `bindings.ts`/specta 무관(#4 비대상).
+- **테스트(Rust):** 헬퍼 단위 — (a) env 미설정→빈 vec, (b) 설정+server.ts 존재→1엔트리
+  (필드 검증), (c) 설정+부재→빈 vec. 디렉토리는 tempdir로 주입.
+
+- [ ] **Step 4: 로드 스모크 — `available_commands` 등장 확인**
+
+`BOULE_GOVERNANCE_DIR=<repo>/governance pnpm tauri dev`로 work-radar 기동 → Hermes
+패널 `/` 입력 → `create_task`·`status`·`observations`가 `HermesSlashMenu`에 등장하는지
+확인 — **in-app 등장이 필수 done-criterion**(A안 통합 실증). server.ts 단독 `tools/list`
+(MCP inspector)는 앱 없이 돌리는 진단용 보조 검증.
+관찰 결과를 `docs/decisions.md`에 한 줄(Type 2): "Boule MCP ↔ Hermes A안 로드 = <성공/관찰>".
+
+- [ ] **Step 5: B안 문서화 + README**
+
+`governance/README.md`에 두 로드 경로 기록:
+
+- A안(work-radar, 기본): `BOULE_GOVERNANCE_DIR` 설정 → 자동 주입(+ `BOULE_NODE` GUI 제약).
+- B안(독립 hermes/cron): `~/.hermes/config.yaml` `mcp_servers:` 딕셔너리 예시
+  (`command`/`args`/`env`/`transport: stdio`/`tools.include`), `mcp_reload_confirm` 게이트 주의.
+
+- [ ] **Step 6: 검증 + commit**
+
+work-radar Rust: `export PATH="$HOME/.cargo/bin:$PATH"` 후
+`cargo fmt --check` + `cargo clippy --all-targets -- -D warnings` + `cargo test`(헬퍼).
+governance: `pnpm --dir governance test` + `pnpm --dir governance exec tsc --noEmit`.
+
+```bash
+git add governance/src/mcp/server.ts governance/package.json governance/README.md \
+        src-tauri/src/hermes_agent/acp_client.rs docs/decisions.md
+git commit -m "feat(governance): stdio MCP server (registerTool) + work-radar A안 opt-in 로드"
 ```
 
 ---
@@ -918,7 +987,7 @@ git commit -m "chore(governance): record P1 skeleton done-criteria"
 - ✅ #1 자동화→결정레일 침투 없음: P1은 event 기록만, 결정/원칙 쓰기 없음.
 - ✅ #2 keychain: P1 토큰 없음(로컬 markdown). Postgres는 P3.
 - ✅ #3 외부 네트워크 Rust: P1 governance는 로컬 파일 IO만.
-- ✅ #4 IPC specta: P1은 work-radar IPC 변경 없음(MCP는 별도 프로세스). Hermes 카드 IPC는 P2.
+- ✅ #4 IPC specta: A안 P1은 `acp_client` `session/new` mcpServers 주입(내부 ACP 페이로드, Tauri 커맨드 아님) → `bindings.ts`/specta 무관. Hermes ask_user 카드 IPC는 P2.
 - ✅ #5 bounded retry: P1 무한 루프 없음.
 - ✅ #6 SQLite 마이그레이션: P1 앱 DB 무변경.
 - ✅ #7 DESIGN.md: P1 UI 변경 없음.

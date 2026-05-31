@@ -162,6 +162,33 @@ harness 6-패턴 어휘로 팀 구조화:
 
 ## 5. Interface — Governance MCP + Hermes 패널 (Telegram 대체)
 
+### 5.0 MCP 로드 메커니즘 (설계 확정 — 2026-05-31, open question §11)
+
+work-radar는 Hermes를 ACP 서브프로세스로 띄우며 `session/new` 요청에 이미
+`mcpServers` 배열을 전달한다(`src-tauri/src/hermes_agent/acp_client.rs`, 현재 `[]`
+하드코딩). 따라서 governance MCP 로드 = **work-radar가 이 배열에 stdio 디스크립터를
+주입**하는 일이며, 사용자 config(`~/.hermes/config.yaml`) 변경이 아니다.
+
+- **A안(채택, P1):** acp_client가 `mcpServers`에 boule-governance 엔트리 주입.
+  ACP 스키마 `McpServerStdio{ name, command, args, env:[{name,value}] }`
+  (Hermes `acp.schema`; Hermes가 내부 config로 변환→`register_mcp_servers()`).
+  - command=`node`, args=`["--experimental-strip-types", "<dir>/src/mcp/server.ts"]`,
+    env=`[{name:"BOULE_WORKSPACE", value:"<dir>/workspace"}]`.
+  - **opt-in 게이트:** 환경변수 `BOULE_GOVERNANCE_DIR`가 가리키는 governance 디렉토리.
+    미설정/부재 시 주입 안 함(`[]` 유지 = 오늘과 동일 동작) → 가역·무부작용.
+  - **bindings 무관:** `session/new`은 내부 ACP 페이로드지 Tauri 커맨드가 아님 →
+    `bindings.ts`/specta 변경 없음(INVARIANT #4 비대상). ask_user 카드(P2)만 specta.
+- **B안(독립/cron용, 문서화만):** `~/.hermes/config.yaml`의 `mcp_servers:` 딕셔너리
+  (`{command, args, env:{}, transport, tools.include}`, `mcp_reload_confirm` 게이트).
+  work-radar 밖에서 Hermes를 직접 쓸 때의 경로 — README에 기록, P1 코드 대상 아님.
+
+상세 경로해소·런타임 주의(GUI-launch PATH, node 바이너리)는 P1 plan Task 6.
+
+> **검증 상태:** 스키마·주입점은 소스로 확인 — `acp_client.rs`의 `new_session(cwd)`이
+> `session/new` params에 `"mcpServers": []`를 보냄(현 하드코딩, 직접 확인). ACP
+> `McpServerStdio` 스키마는 Hermes `tests/acp/test_mcp_e2e.py`로 확인. **단 live load
+> smoke**(Hermes 슬래시 메뉴에 governance 명령 등장)는 **미실행** — Task 6 Step 4에서 검증.
+
 ### 5.1 Governance MCP 서버 (`services/mcp/`)
 
 문서 §6.2 명령셋 + §6.3 두 도구를 MCP 도구로 노출:
@@ -175,7 +202,7 @@ harness 6-패턴 어휘로 팀 구조화:
 work-radar의 기존 Hermes ACP 플로팅 패널(`src-tauri/src/hermes_agent/`,
 `HermesView.tsx`)을 재사용:
 
-- Hermes acp 세션이 Governance MCP를 로드 → governance 명령이 ACP
+- Hermes acp 세션이 Governance MCP를 로드(§5.0 A안) → governance 명령이 ACP
   `available_commands`로 자동 등장 → `HermesSlashMenu`에 노출.
 - **승인 게이트 = 인터랙티브 카드**: 문서의 "tappable buttons"를 패널 내 shadcn
   버튼으로 렌더. 신규 이벤트 `hermes-agent:ask-user { options }` + 응답 IPC
@@ -193,15 +220,15 @@ drift = CI 게이트.
 
 ## 6. INVARIANT Compliance (decision-rails — 리뷰 바)
 
-| #   | INVARIANT                    | 준수 방법                                                                                                                               |
-| --- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 자동화 → 결정 레일 침투 금지 | 에이전트는 **제안만**(draft event / PR). Type 1·Principle은 **항상** 사람 게이트. 아키텍처의 자체 게이트가 invariant를 *기계화*해 강화. |
-| 2   | 외부 토큰 keychain           | Postgres 자격증명 keyring 경유. Telegram 토큰 자체가 없음. Hermes는 자기 auth 관리.                                                     |
-| 3   | 외부 네트워크 Rust           | governance 서비스는 로컬(버스/Postgres). git/PR은 기존 `github.rs` 경로. 렌더러 토큰 노출 없음.                                         |
-| 4   | IPC = specta 생성            | 신규 work-radar 커맨드/이벤트 specta annotated, bindings drift CI 게이트.                                                               |
-| 5   | bounded retry                | 런너 backoff+jitter+terminal failure 노출, 무한 poll 금지.                                                                              |
-| 6   | SQLite 마이그레이션만        | governance는 **별도 Postgres** — 앱 sqlite 무변경(ad-hoc ALTER 없음).                                                                   |
-| 7   | 시각 디자인 DESIGN.md        | Hermes 패널 추가 UI는 shadcn 위 + Tailwind v4 토큰.                                                                                     |
+| #   | INVARIANT                    | 준수 방법                                                                                                                                                  |
+| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 자동화 → 결정 레일 침투 금지 | 에이전트는 **제안만**(draft event / PR). Type 1·Principle은 **항상** 사람 게이트. 아키텍처의 자체 게이트가 invariant를 *기계화*해 강화.                    |
+| 2   | 외부 토큰 keychain           | Postgres 자격증명 keyring 경유. Telegram 토큰 자체가 없음. Hermes는 자기 auth 관리.                                                                        |
+| 3   | 외부 네트워크 Rust           | governance 서비스는 로컬(버스/Postgres). git/PR은 기존 `github.rs` 경로. 렌더러 토큰 노출 없음.                                                            |
+| 4   | IPC = specta 생성            | P1 A안 주입은 내부 ACP `session/new` 페이로드(Tauri 커맨드 아님)→bindings 무관. P2 ask_user 카드의 신규 커맨드/이벤트만 specta annotated, drift CI 게이트. |
+| 5   | bounded retry                | 런너 backoff+jitter+terminal failure 노출, 무한 poll 금지.                                                                                                 |
+| 6   | SQLite 마이그레이션만        | governance는 **별도 Postgres** — 앱 sqlite 무변경(ad-hoc ALTER 없음).                                                                                      |
+| 7   | 시각 디자인 DESIGN.md        | Hermes 패널 추가 UI는 shadcn 위 + Tailwind v4 토큰.                                                                                                        |
 
 INVARIANT 검증은 **별도 reviewer 패스**(critic/code-reviewer) — self-approve 금지.
 
@@ -269,14 +296,15 @@ INVARIANT 검증은 **별도 reviewer 패스**(critic/code-reviewer) — self-ap
 
 - **사이드카 운영 부담**: Postgres+버스+스케줄러 상시 가동. 풀 인프라 선택의 비용 —
   P1에서는 인덱스 없이 markdown만으로 시작, P3에서 Postgres 도입(점진).
-- **Hermes MCP 로딩 경로**: Nous Hermes Agent CLI(ACP)가 외부 MCP 서버를 어떻게
-  로드/노출하는지 P1 진입 시 실측 필요(acp `available_commands`로 governance 명령이
-  뜨는지). 안 되면 5.2 폴백 = 네이티브 IPC 인터셉트(브레인스토밍 대안 옵션).
+- **Hermes MCP 로딩 경로 — 설계 확정(2026-05-31, §5.0; live smoke는 Task6 Step4):** work-radar가 `session/new`에
+  `mcpServers`를 이미 보냄(`acp_client.rs`, 현 `[]`) → A안으로 stdio 디스크립터 주입
+  (opt-in `BOULE_GOVERNANCE_DIR`). 사용자 config 무변경·bindings 무관. 폴백(네이티브
+  IPC 인터셉트)은 불필요. B안(config.yaml `mcp_servers`)은 독립 hermes용으로 문서화.
 - **decision-rails 쓰기 충돌**: Meta Observer PR이 사람 편집과 경합 가능 → PR-only +
   사람 승인으로 직렬화.
 - **이중 정본 드리프트**: L3/L4 어댑터가 adr/decisions.md/decision-rails를 인덱싱하되
   쓰기는 PR-only — markdown이 항상 정본, Postgres는 파생.
-- **work-radar 빌드 영향 0 보장**: governance/는 Tauri/Vite 빌드 그래프 밖. CI에 별도
+- **work-radar 빌드 영향**: governance/는 Tauri/Vite 빌드 그래프 밖(영향 0). 단 A안(§5.0)은 `acp_client.rs`에 소규모 in-tree 델타(gated·bindings 무관) 추가. CI에 별도
   레인(또는 제외) 명시.
 
 ---
