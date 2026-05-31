@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 use tauri::{Manager, State};
 
+use crate::commands::nav::{get_config, set_config};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{Skill, SkillProvider};
@@ -23,9 +24,12 @@ use crate::skills::installer::commit_from_top_level;
 use crate::skills::remote::{extract_tarball, fetch_tarball_bytes, parse_source};
 use crate::skills::scan::parse_frontmatter;
 use crate::skills::source::{
-    get_skill_source, list_all_sources, promote_staged_commit, record_update_check, set_auto_update,
-    SkillSource,
+    auto_update_keys, get_skill_source, list_all_sources, promote_staged_commit,
+    record_update_check, set_auto_update, SkillSource,
 };
+
+/// on-launch 자동 확인 글로벌 setting의 app_config 키(opt-in, 기본 꺼짐).
+const KEY_UPDATE_ON_LAUNCH: &str = "skills.auto_update_on_launch";
 
 /// 한 managed 스킬의 업데이트 상태(provenance 파생 — 네트워크 비취급). 뱃지/토글/적용 UI가 쓴다.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -339,6 +343,41 @@ pub async fn apply_skill_update(
     .await
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn get_skill_update_on_launch(db: State<'_, Db>) -> Result<bool, AppError> {
+    Ok(get_config(db.inner(), KEY_UPDATE_ON_LAUNCH).await?.as_deref() == Some("1"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_skill_update_on_launch(db: State<'_, Db>, enabled: bool) -> Result<(), AppError> {
+    set_config(
+        db.inner(),
+        KEY_UPDATE_ON_LAUNCH,
+        if enabled { "1" } else { "0" },
+    )
+    .await?;
+    Ok(())
+}
+
+/// on-launch 한 패스: 글로벌 setting이 켜졌을 때만, auto_update=1 스킬을 **각 한 번** 확인(폴 루프 아님).
+/// 부팅 비차단(개별 실패 무시). setting이 꺼져 있으면 네트워크를 전혀 건드리지 않는다(early return).
+pub(crate) async fn run_launch_check(
+    pool: &SqlitePool,
+    staging_root: &Path,
+) -> Result<(), AppError> {
+    if get_config(pool, KEY_UPDATE_ON_LAUNCH).await?.as_deref() != Some("1") {
+        return Ok(()); // opt-in 꺼짐 → no-op(네트워크 0).
+    }
+    for (provider, name) in auto_update_keys(pool).await? {
+        if let Ok(Some(source)) = get_skill_source(pool, &provider, &name).await {
+            let _ = check_one(pool, staging_root, &source).await; // 개별 실패 무시(부분 진행).
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,5 +533,35 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(err.kind, crate::error::ErrorKind::NotFound); // staged 없음
+    }
+
+    #[tokio::test]
+    async fn launch_check_noops_when_flag_off() {
+        // opt-in 꺼짐(기본) → auto_update 스킬이 있어도 네트워크/확인을 전혀 하지 않는다.
+        let pool = fresh_db().await;
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("skills-staging");
+        upsert_skill_source(
+            &pool,
+            NewSkillSource {
+                provider: "claude",
+                name: "foo",
+                source_url: "github.com/o/r",
+                source_ref: None,
+                subpath: None,
+                installed_commit: "c1",
+            },
+        )
+        .await
+        .unwrap();
+        set_auto_update(&pool, "claude", "foo", true).await.unwrap();
+
+        // 플래그 미설정(꺼짐) → 즉시 Ok, last_checked_at 미갱신(확인 안 함 = 네트워크 0).
+        run_launch_check(&pool, &staging).await.expect("noop ok");
+        let s = get_skill_source(&pool, "claude", "foo")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(s.last_checked_at, None);
     }
 }

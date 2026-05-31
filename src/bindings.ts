@@ -542,6 +542,8 @@ export const commands = {
 	checkSkillUpdates: () => typedError<UpdateStatus[], AppError>(__TAURI_INVOKE("check_skill_updates")),
 	setSkillAutoUpdate: (provider: string, name: string, enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_auto_update", { provider, name, enabled })),
 	applySkillUpdate: (provider: string, name: string) => typedError<Skill, AppError>(__TAURI_INVOKE("apply_skill_update", { provider, name })),
+	getSkillUpdateOnLaunch: () => typedError<boolean, AppError>(__TAURI_INVOKE("get_skill_update_on_launch")),
+	setSkillUpdateOnLaunch: (enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_update_on_launch", { enabled })),
 	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.

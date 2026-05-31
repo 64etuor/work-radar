@@ -265,6 +265,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::updater::check_skill_updates,
         skills::updater::set_skill_auto_update,
         skills::updater::apply_skill_update,
+        skills::updater::get_skill_update_on_launch,
+        skills::updater::set_skill_update_on_launch,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,
@@ -473,6 +475,23 @@ pub fn run() {
             app.manage(notify.clone());
             let news_db: db::Db = app.state::<db::Db>().inner().clone();
             news::fetcher::spawn_loop(news_db, app.handle().clone(), notify);
+
+            // 스킬 on-launch 업데이트 확인(G1.5-PR3, ADR-0006 레일 ④): opt-in setting이 켜졌을 때만
+            // auto_update 스킬을 **각 한 번** 확인(폴 루프 아님 · bounded fetch). 설치/실행 자동화 0(#1/#2 —
+            // staging만, 적용은 사용자 발동). 실패는 로그만 — 부팅 비차단.
+            let upd_db: db::Db = app.state::<db::Db>().inner().clone();
+            let upd_staging = app
+                .path()
+                .app_data_dir()
+                .map(|d| d.join("skills-staging"))
+                .ok();
+            tauri::async_runtime::spawn(async move {
+                if let Some(staging) = upd_staging {
+                    if let Err(e) = skills::updater::run_launch_check(&upd_db, &staging).await {
+                        tracing::warn!(error = %e, "skills on-launch update check failed");
+                    }
+                }
+            });
 
             Ok(())
         })

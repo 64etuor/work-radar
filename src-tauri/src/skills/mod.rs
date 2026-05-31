@@ -60,5 +60,6 @@ pub(crate) use seed::{
 };
 pub use tags::set_skill_tags;
 pub use updater::{
-    apply_skill_update, check_skill_updates, list_skill_update_status, set_skill_auto_update,
+    apply_skill_update, check_skill_updates, get_skill_update_on_launch, list_skill_update_status,
+    set_skill_auto_update, set_skill_update_on_launch,
 };
