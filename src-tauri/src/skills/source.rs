@@ -134,3 +134,192 @@ pub(crate) async fn delete_skill_source(
         .await?;
     Ok(())
 }
+
+/// per-skill auto-update opt-in 토글(G1.5-PR3).
+pub(crate) async fn set_auto_update(
+    pool: &SqlitePool,
+    provider: &str,
+    name: &str,
+    enabled: bool,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE skill_source SET auto_update = ?, updated_at = datetime('now') \
+         WHERE provider = ? AND name = ?",
+    )
+    .bind(enabled as i32)
+    .bind(provider)
+    .bind(name)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 업데이트 확인 결과 기록: staged_commit(None=최신/비움, Some=새 버전 staging) + last_checked_at.
+pub(crate) async fn record_update_check(
+    pool: &SqlitePool,
+    provider: &str,
+    name: &str,
+    staged: Option<&str>,
+    checked_at: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE skill_source SET staged_commit = ?, last_checked_at = ?, updated_at = datetime('now') \
+         WHERE provider = ? AND name = ?",
+    )
+    .bind(staged)
+    .bind(checked_at)
+    .bind(provider)
+    .bind(name)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// apply: installed_commit를 새 값으로 승격 + staged_commit 비움.
+pub(crate) async fn promote_staged_commit(
+    pool: &SqlitePool,
+    provider: &str,
+    name: &str,
+    new_installed: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE skill_source SET installed_commit = ?, staged_commit = NULL, updated_at = datetime('now') \
+         WHERE provider = ? AND name = ?",
+    )
+    .bind(new_installed)
+    .bind(provider)
+    .bind(name)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// auto_update=1인 (provider, name) 키(on-launch 대상).
+pub(crate) async fn auto_update_keys(pool: &SqlitePool) -> Result<Vec<(String, String)>, AppError> {
+    let rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT provider, name FROM skill_source WHERE auto_update = 1 ORDER BY provider, name",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// 모든 provenance 행(상태 표시 + check-all 대상). `get_skill_source`의 select 컬럼/매핑을 재사용.
+pub(crate) async fn list_all_sources(pool: &SqlitePool) -> Result<Vec<SkillSource>, AppError> {
+    let rows = sqlx::query_as::<
+        _,
+        (
+            i32,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            String,
+            i64,
+            Option<String>,
+            Option<String>,
+        ),
+    >(
+        "SELECT id, provider, name, source_url, source_ref, subpath, installed_commit, \
+                auto_update, staged_commit, last_checked_at FROM skill_source \
+         ORDER BY provider, name",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| SkillSource {
+            id: r.0,
+            provider: r.1,
+            name: r.2,
+            source_url: r.3,
+            source_ref: r.4,
+            subpath: r.5,
+            installed_commit: r.6,
+            auto_update: r.7 != 0,
+            staged_commit: r.8,
+            last_checked_at: r.9,
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::shared::test_support::fresh_db;
+
+    async fn seed(pool: &SqlitePool, name: &str, commit: &str) {
+        upsert_skill_source(
+            pool,
+            NewSkillSource {
+                provider: "claude",
+                name,
+                source_url: "github.com/o/r",
+                source_ref: None,
+                subpath: None,
+                installed_commit: commit,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn auto_update_toggle_and_keys() {
+        let pool = fresh_db().await;
+        seed(&pool, "foo", "c1").await;
+        seed(&pool, "bar", "c1").await;
+        set_auto_update(&pool, "claude", "foo", true).await.unwrap();
+        let keys = auto_update_keys(&pool).await.unwrap();
+        assert_eq!(keys, vec![("claude".to_string(), "foo".to_string())]); // bar opt-out
+        set_auto_update(&pool, "claude", "foo", false).await.unwrap();
+        assert!(auto_update_keys(&pool).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn record_check_then_promote() {
+        let pool = fresh_db().await;
+        seed(&pool, "foo", "c1").await;
+        record_update_check(&pool, "claude", "foo", Some("c2"), "2026-06-01T00:00:00Z")
+            .await
+            .unwrap();
+        let s = get_skill_source(&pool, "claude", "foo")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(s.staged_commit.as_deref(), Some("c2"));
+        assert_eq!(s.last_checked_at.as_deref(), Some("2026-06-01T00:00:00Z"));
+        assert_eq!(s.installed_commit, "c1"); // 아직 적용 전
+
+        promote_staged_commit(&pool, "claude", "foo", "c2")
+            .await
+            .unwrap();
+        let s = get_skill_source(&pool, "claude", "foo")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(s.installed_commit, "c2"); // 승격됨
+        assert_eq!(s.staged_commit, None); // staging 비움
+
+        // "최신" 확인(같은 commit) → staged None 기록.
+        record_update_check(&pool, "claude", "foo", None, "2026-06-01T01:00:00Z")
+            .await
+            .unwrap();
+        let s = get_skill_source(&pool, "claude", "foo")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(s.staged_commit, None);
+        assert_eq!(s.last_checked_at.as_deref(), Some("2026-06-01T01:00:00Z"));
+    }
+
+    #[tokio::test]
+    async fn list_all_sources_returns_rows() {
+        let pool = fresh_db().await;
+        seed(&pool, "foo", "c1").await;
+        seed(&pool, "bar", "c1").await;
+        let all = list_all_sources(&pool).await.unwrap();
+        assert_eq!(all.len(), 2);
+    }
+}
