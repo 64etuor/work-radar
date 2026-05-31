@@ -247,6 +247,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::scan::read_external_skill,
         skills::scan::write_external_skill,
         skills::tags::set_skill_tags,
+        // 스킬 매니저 감사 로그 (G1, ADR-0006 레일 ①) — append-only 읽기.
+        skills::audit_log::list_skill_audit,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,

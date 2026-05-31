@@ -531,6 +531,7 @@ export const commands = {
 	 *  태깅 전용(#1 — 자동 분류 경로 없음). 빈 키는 거부한다.
 	 */
 	setSkillTags: (skillKey: string, tags: string[]) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_tags", { skillKey, tags })),
+	listSkillAudit: () => typedError<SkillAuditEntry[], AppError>(__TAURI_INVOKE("list_skill_audit")),
 	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.
@@ -1546,6 +1547,20 @@ export type Skill = {
 	fallbackPrompt: string | null,
 	createdAt: string,
 	updatedAt: string,
+};
+
+/**
+ *  감사 로그 1행. snake_case 컬럼은 `sqlx::FromRow`가 필드명으로 매핑하고, 프런트로는
+ *  `serde(rename_all = "camelCase")`로 직렬화한다(`Skill`과 동일 관례).
+ */
+export type SkillAuditEntry = {
+	id: number,
+	action: string,
+	targetKind: string,
+	targetRef: string,
+	sourceRef: string | null,
+	detail: string | null,
+	createdAt: string,
 };
 
 /**
