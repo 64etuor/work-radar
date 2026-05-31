@@ -46,13 +46,19 @@ import {
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
-import { skillCardBadges } from "@/lib/skillBadges";
+import { providerLabel, skillCardBadges } from "@/lib/skillBadges";
 import {
   addTagToSkill,
   batchMutableTargets,
   batchTaggableTargets,
   selectedSkills,
 } from "@/lib/skillBatch";
+import {
+  groupCrossToolSkills,
+  type GroupedSkill,
+  groupProviders,
+  type SkillLocation,
+} from "@/lib/skillDedup";
 import {
   applyEnvOrder,
   buildSkillEnvNav,
@@ -168,7 +174,10 @@ export function SkillsView() {
     () => envFiltered.filter((s) => matchesTag(s, activeTag)),
     [envFiltered, activeTag],
   );
-  const segments = useMemo(() => segmentSkills(tagFiltered), [tagFiltered]);
+  // 도구 간 동일 스킬 그룹화(#4): 외부 스킬을 이름으로 묶어 한 카드로 표시한다(해싱/IO 없음 — 스캔
+  // latency 무영향). segmentSkills는 그룹 단위로 섹션을 나눈다.
+  const grouped = useMemo(() => groupCrossToolSkills(tagFiltered), [tagFiltered]);
+  const segments = useMemo(() => segmentSkills(grouped), [grouped]);
   const total = tagFiltered.length;
 
   const onEnvDrop = (targetId: string) => {
@@ -179,6 +188,14 @@ export function SkillsView() {
   };
 
   const selected = list.find((s) => s.id === selectedId) ?? null;
+  // 열린 외부 스킬이 도구 간 그룹의 일원이면 그 그룹의 위치들을 모아 Sheet 상단 전환 칩을 만든다.
+  // 카드와 같은 `grouped`(필터 적용본)에서 찾으므로 카드 "N곳" 배지와 전환 칩 개수가 항상 일치한다.
+  // 위치 선택 = selectedId 교체(기존 보기/편집 흐름 재사용 — 자동 실행 없음).
+  const selectedGroup = useMemo<SkillLocation[]>(() => {
+    if (!selected || selected.kind !== "external") return [];
+    const g = grouped.find((grp) => grp.memberIds.includes(selected.id));
+    return g && g.locations.length > 1 ? g.locations : [];
+  }, [grouped, selected]);
   const sheetOpen = adding || !!selected;
   const closeSheet = () => {
     setAdding(false);
@@ -186,11 +203,16 @@ export function SkillsView() {
   };
 
   // 다중 선택(#9): 토글/삭제는 인앱만(외부 제외), 태깅은 선택 전체(외부=로컬 SQLite만). skillBatch가 정본.
-  const toggleSelect = (id: string) =>
+  // 그룹 카드 체크박스(#4): 멤버 전체를 한 번에 켜고/끈다. 모두 선택돼 있으면 해제, 아니면 전체 선택.
+  // 배치 로직(selectedIds → list)은 그대로 — 외부 멤버는 토글/삭제에서 자동 제외, 태깅엔 포함된다.
+  const toggleSelectGroup = (ids: string[]) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const allSelected = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      }
       return next;
     });
   const clearSelection = () => {
@@ -457,29 +479,31 @@ export function SkillsView() {
                 <span>{segment.health}</span>
               </div>
               <div className={cn("skl-cards", listView ? "list" : "grid")}>
-                {segment.skills.map((s) => (
-                  <div
-                    key={s.id}
-                    className={cn("skl-card-wrap", selectedIds.has(s.id) && "selected")}
-                  >
-                    <input
-                      type="checkbox"
-                      className="skl-card-check"
-                      checked={selectedIds.has(s.id)}
-                      onChange={() => toggleSelect(s.id)}
-                      aria-label={`${s.name} 선택`}
-                    />
-                    <SkillCard
-                      skill={s}
-                      listView={listView}
-                      active={s.id === selectedId}
-                      onSelect={() => {
-                        setSelectedId(s.id);
-                        setAdding(false);
-                      }}
-                    />
-                  </div>
-                ))}
+                {segment.groups.map((g) => {
+                  const s = g.skill;
+                  const groupSelected = g.memberIds.every((id) => selectedIds.has(id));
+                  return (
+                    <div key={s.id} className={cn("skl-card-wrap", groupSelected && "selected")}>
+                      <input
+                        type="checkbox"
+                        className="skl-card-check"
+                        checked={groupSelected}
+                        onChange={() => toggleSelectGroup(g.memberIds)}
+                        aria-label={`${s.name} 선택`}
+                      />
+                      <SkillCard
+                        skill={s}
+                        locations={g.locations}
+                        listView={listView}
+                        active={s.id === selectedId}
+                        onSelect={() => {
+                          setSelectedId(s.id);
+                          setAdding(false);
+                        }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </section>
           ))}
@@ -496,6 +520,23 @@ export function SkillsView() {
                   ? "외부 스킬"
                   : "인앱 프롬프트"}
             </SheetTitle>
+            {!adding && selectedGroup.length > 1 && (
+              <div className="skl-sheet-switch" role="group" aria-label="위치 전환">
+                <span className="skl-sheet-switch-label">{selectedGroup.length}곳</span>
+                {selectedGroup.map((loc) => (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    className={cn("skl-sheet-switch-chip", loc.id === selectedId && "active")}
+                    aria-pressed={loc.id === selectedId}
+                    title={loc.sourcePath ?? undefined}
+                    onClick={() => setSelectedId(loc.id)}
+                  >
+                    {providerLabel(loc.provider)}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="skl-sheet-body">
               {adding ? (
                 <CreatePanel
@@ -520,57 +561,65 @@ export function SkillsView() {
   );
 }
 
-/** 본문 카드 섹션 분류. 외부 스킬 귀속은 백엔드 `Skill.provider`(P0)를 직접 쓴다 — 경로추론(구
- * `providerOf`) 폐기. in-app은 binding 유무로 Global/Project를 나눈다(provider=null). */
-function segmentSkills(skills: Skill[]) {
+/** 본문 카드 섹션 분류(그룹 단위). 도구 간 동일 스킬(2곳 이상)은 맨 위 "공유 스킬" 섹션으로 모으고,
+ * 단일 위치 스킬만 기존 provider 섹션에 둔다(#4). 외부 귀속은 백엔드 `Skill.provider`(P0)를 직접 쓴다
+ * — 경로추론(구 `providerOf`) 폐기. in-app은 binding 유무로 Global/Project를 나눈다(항상 단일 위치). */
+function segmentSkills(groups: GroupedSkill[]) {
+  const single = (g: GroupedSkill) => g.locations.length === 1;
   const defs = [
+    {
+      key: "shared",
+      label: "공유 스킬 (여러 도구)",
+      match: (g: GroupedSkill) => g.locations.length > 1,
+    },
     {
       key: "global",
       label: "Global Skills",
-      match: (s: Skill) => s.kind === "in_app_prompt" && !s.binding,
+      match: (g: GroupedSkill) => single(g) && g.skill.kind === "in_app_prompt" && !g.skill.binding,
     },
     {
       key: "project",
       label: "Project Skills",
-      match: (s: Skill) => s.kind === "in_app_prompt" && !!s.binding,
+      match: (g: GroupedSkill) =>
+        single(g) && g.skill.kind === "in_app_prompt" && !!g.skill.binding,
     },
     {
       key: "external-claude",
       label: "External Skills · Claude",
-      match: (s: Skill) => s.provider === "claude",
+      match: (g: GroupedSkill) => single(g) && g.skill.provider === "claude",
     },
     {
       key: "external-codex",
       label: "External Skills · Codex",
-      match: (s: Skill) => s.provider === "codex",
+      match: (g: GroupedSkill) => single(g) && g.skill.provider === "codex",
     },
     {
       key: "external-openclaw",
       label: "External Skills · OpenClaw",
-      match: (s: Skill) => s.provider === "openclaw",
+      match: (g: GroupedSkill) => single(g) && g.skill.provider === "openclaw",
     },
     {
       key: "external-hermes",
       label: "External Skills · Hermes",
-      match: (s: Skill) => s.provider === "hermes",
+      match: (g: GroupedSkill) => single(g) && g.skill.provider === "hermes",
     },
     {
       key: "external-other",
       label: "External Skills · Other",
-      match: (s: Skill) => s.provider === "other",
+      match: (g: GroupedSkill) => single(g) && g.skill.provider === "other",
     },
   ];
   return defs
     .map((def) => {
-      const group = skills.filter(def.match);
+      const group = groups.filter(def.match);
       return {
         key: def.key,
         label: def.label,
-        health: `${group.filter((s) => s.enabled).length}/${group.length}`,
-        skills: group.sort((a, b) => a.name.localeCompare(b.name)),
+        health: `${group.filter((g) => g.skill.enabled).length}/${group.length}`,
+        groups: group.sort((a, b) => a.skill.name.localeCompare(b.skill.name)),
       };
     })
-    .filter((seg) => seg.skills.length > 0);
+    .filter((seg) => seg.groups.length > 0);
 }
 
 /** 좌측 환경 사이드바 한 항목(필터 버튼 + enabled/total 배지). "전체"를 제외하면 드래그로 재정렬 가능
@@ -622,14 +671,17 @@ function compactPath(path: string): string {
   return path.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
 }
 
-/** 레지스트리 카드(인앱/외부 공통). 클릭하면 Sheet로 보기/편집. grid/list 두 변형. */
+/** 레지스트리 카드(인앱/외부 공통). 클릭하면 Sheet로 보기/편집. grid/list 두 변형. 도구 간 그룹
+ * 카드(`locations.length > 1`)는 단일 provider 배지 대신 "N곳" + 출처 칩(중복 제거)을 보여준다(#4). */
 function SkillCard({
   skill,
+  locations,
   listView,
   active,
   onSelect,
 }: {
   skill: Skill;
+  locations: SkillLocation[];
   listView: boolean;
   active: boolean;
   onSelect: () => void;
@@ -638,7 +690,12 @@ function SkillCard({
   const Icon = isInApp ? Blocks : FileText;
   const desc = (skill.prompt ?? "").trim();
   const sub = isInApp ? skill.binding : skill.sourcePath ? compactPath(skill.sourcePath) : null;
-  const badges = skillCardBadges(skill);
+  const grouped = locations.length > 1;
+  // 그룹 카드는 대표의 단일 provider 배지를 빼고(아래에서 출처 칩으로 대체) kind/off만 남긴다.
+  const badges = grouped
+    ? skillCardBadges(skill).filter((b) => b.tone !== "provider")
+    : skillCardBadges(skill);
+  const providers = grouped ? groupProviders(locations) : [];
 
   return (
     <button
@@ -655,6 +712,16 @@ function SkillCard({
               {b.label}
             </span>
           ))}
+          {grouped && (
+            <>
+              <span className="skl-badge skl-badge-locs">{locations.length}곳</span>
+              {providers.map((p) => (
+                <span key={p} className="skl-badge skl-badge-provider">
+                  {providerLabel(p)}
+                </span>
+              ))}
+            </>
+          )}
         </span>
       </span>
       {sub && <span className="skl-card-sub">{sub}</span>}

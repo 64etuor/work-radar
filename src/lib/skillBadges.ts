@@ -25,6 +25,11 @@ const PROVIDER_LABELS: Record<string, string> = {
   other: "기타",
 };
 
+/** provider enum → 표시 라벨(미지의 값은 원문). 카드 출처 칩·Sheet 위치 전환에서 공유한다. */
+export function providerLabel(provider: string | null): string {
+  return provider ? (PROVIDER_LABELS[provider] ?? provider) : "기타";
+}
+
 /**
  * 한 스킬의 카드 배지 목록(순서: kind → provider → off). 인앱은 provider 없음, 외부만 provider 표시.
  * enabled면 off 배지 없음(부재 = 켜짐 — 미니멀 유지).
@@ -36,7 +41,7 @@ export function skillCardBadges(skill: Skill): SkillBadge[] {
   if (!isInApp && skill.provider) {
     badges.push({
       key: "provider",
-      label: PROVIDER_LABELS[skill.provider] ?? skill.provider,
+      label: providerLabel(skill.provider),
       tone: "provider",
     });
   }

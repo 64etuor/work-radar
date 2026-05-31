@@ -235,6 +235,11 @@
 .skl-badge-off {
   color: var(--color-wr-subtle);
 }
+/* 도구 간 그룹 카드(#4): "N곳" 위치 수 배지. 뒤따르는 provider 칩은 .skl-badge-provider 재사용. */
+.skl-badge-locs {
+  color: var(--color-wr-muted);
+  font-weight: 500;
+}
 .skl-card-sub {
   font: 400 11px var(--font-mono);
   color: var(--color-wr-subtle);
@@ -279,6 +284,32 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-wr-subtle);
+}
+/* 도구 간 그룹 스킬의 위치 전환 칩(#4) — 같은 스킬을 다른 도구/루트에서 보기. */
+.skl-sheet-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 22px 0;
+}
+.skl-sheet-switch-label {
+  font: 400 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.skl-sheet-switch-chip {
+  font: 400 11px var(--font-mono);
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  color: var(--color-wr-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.skl-sheet-switch-chip.active {
+  border-color: var(--color-wr-border);
+  color: var(--color-wr-fg);
+  background: var(--color-wr-surface);
 }
 .skl-sheet-body {
   flex: 1;
