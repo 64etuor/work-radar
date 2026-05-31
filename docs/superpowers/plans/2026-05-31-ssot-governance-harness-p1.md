@@ -15,12 +15,17 @@
 ## ⏸️ 진행 상태 (2026-05-31 재조정 — git이 정본)
 
 > **이 배너가 아래 체크박스/코드블록보다 우선한다.** 브랜치 `feat/governance-boule-p1`
-> (메인 트리, **파킹·미푸시**, `7ea3b17` 위 4커밋). 아래는 커밋된 현실:
+> (메인 트리, **파킹·미푸시**, `7ea3b17` 위 커밋들). 아래는 커밋된 현실:
 >
 > - **DONE & 커밋**: Task 0–5 (`0aed941` P1 skeleton) + Task 6 Step 1·2·3·5·6 (`583e4b4`).
 >   재조정 세션에서 재검증: governance vitest 16 pass·tsc 0, cargo fmt/clippy(`--all-targets -D warnings`)/test(`acp_client` 3 pass·428 intact) green, `bindings.ts` drift 0.
-> - **잔여(필수 done) = 단 하나**: **Task 6 Step 4** 인앱 Hermes 로드 스모크 — 데스크톱 GUI 필요 →
->   인터랙티브 세션 대기. 통과 후 **Task 7**(통합 검증 + done-line 기록 + 커밋)을 진행.
+> - **DONE & 커밋**: Task 7 통합 검증(Step 1–3) — governance vitest 16 pass(id3/event3/writeEvent2/gateway5/handlers3)·tsc 0·루트 `pnpm typecheck` 0(governance 격리). 추가로 **헤드리스 MCP 핸드셰이크 실증**(stdio JSON-RPC: initialize + tools/list→`create_task`·`status`·`observations` + `status` 호출→`events: 0`). done-line 기록(`docs/decisions.md`).
+> - **잔여(필수 done) = 단 하나, DEFERRED**: **Task 6 Step 4** 인앱 Hermes 로드 스모크 —
+>   데스크톱 GUI 필요. 시도했으나 **선재(先在) 개발 DB 마이그레이션 skew로 차단**: dev 빌드는
+>   `$TMPDIR/work-radar-dev/work-radar.db`를 쓰는데 이 DB가 dev/skills 트랙(`origin/dev`, `0038_skill_tags.sql`)이
+>   적용한 head 39라, 0037에서 멈춘 이 브랜치는 init 시 `Migrate(VersionMissing(38))` 패닉.
+>   **Boule 결함 아님**(env skew). 사용자 결정: 스모크 없이 진행. 해소 경로=공유 dev DB를
+>   옆으로 치우고 재기동 / 브랜치에 0038+ 반영 / DB 경로 env override 추가 중 택1(전부 공유상태·파킹브랜치 영향 → 별도 결정).
 > - **함정(이미 해소 — 본문 코드블록보다 이 노트가 우선)**: ① governance `src/**` 로컬 import는
 >   **`.ts` 확장자** 사용(Node 24.9 `--experimental-strip-types`가 `.js`→`.ts` 미해소) + tsconfig
 >   `allowImportingTsExtensions`; 테스트는 `.js` 유지(vitest 리졸버). ② 설치는
@@ -908,7 +913,7 @@ work-radar가 `session/new`의 `mcpServers`(현 `[]`)에 governance stdio 디스
 - **테스트(Rust):** 헬퍼 단위 — (a) env 미설정→빈 vec, (b) 설정+server.ts 존재→1엔트리
   (필드 검증), (c) 설정+부재→빈 vec. 디렉토리는 tempdir로 주입.
 
-- [ ] **Step 4: 로드 스모크 — `available_commands` 등장 확인**
+- [ ] **Step 4: 로드 스모크 — `available_commands` 등장 확인** ⏸️ DEFERRED(상단 배너 참조 — dev DB skew 차단 + 사용자 "스모크 없이 진행")
 
 `BOULE_GOVERNANCE_DIR=<repo>/governance pnpm tauri dev`로 work-radar 기동 → Hermes
 패널 `/` 입력 → `create_task`·`status`·`observations`가 `HermesSlashMenu`에 등장하는지
@@ -942,26 +947,30 @@ git commit -m "feat(governance): stdio MCP server (registerTool) + work-radar A�
 
 **Files:** (없음 — 검증 전용)
 
-- [ ] **Step 1: 전체 테스트**
+- [x] **Step 1: 전체 테스트**
 
 Run: `pnpm --dir governance test`
 Expected: 모든 테스트 PASS (id 3, event 3, writeEvent 2, gateway 5, handlers 3).
+관찰: **16 pass**(정확히 id3/event3/writeEvent2/gateway5/handlers3), exit 0.
 
-- [ ] **Step 2: 타입체크**
+- [x] **Step 2: 타입체크**
 
 Run: `pnpm --dir governance exec tsc --noEmit`
-Expected: 에러 0.
+Expected: 에러 0. 관찰: exit 0.
 
-- [ ] **Step 3: 앱 빌드 격리 확인 (spec §11)**
+- [x] **Step 3: 앱 빌드 격리 확인 (spec §11)**
 
 Run: `pnpm typecheck` (work-radar 루트)
 Expected: `governance/`가 앱 typecheck 그래프에 안 잡힘(에러 0, governance 파일 미포함). 만약 루트 tsconfig가 governance를 포함하면 `exclude`에 `governance` 추가 후 재확인.
+관찰: 루트 typecheck exit 0(루트 tsconfig `include:["src"]` → governance 미포함, 추가 exclude 불요).
 
-- [ ] **Step 4: P1 done-criteria 관찰 기록**
+- [x] **Step 4: P1 done-criteria 관찰 기록**
 
-`docs/decisions.md`에 한 줄: "Boule P1 골격 완료 — 레포 활동→L0 event 일관 기록, MCP create_task/status 동작. (date)".
+`docs/decisions.md`에 한 줄 기록(2026-05-31). **단, 인앱 GUI 스모크(Task 6 Step 4) 미실행이라
+"P1 골격 완료"를 무조건부로 쓰지 않고**, 통과한 통합검증 + 헤드리스 MCP 실증을 기록하고
+인앱 로드 실증은 **deferred(잔여 done)** 로 명시("could not run ≠ passed").
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 git add docs/decisions.md
