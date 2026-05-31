@@ -32,6 +32,7 @@ mod retry;
 mod routines;
 mod scheduler;
 mod shortcut;
+pub mod skills;
 mod tray;
 mod urgency;
 
@@ -235,17 +236,17 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_hermes_messages,
         commands::detect_hermes_chat_id,
         // 스킬 공유 레지스트리 (Phase 20 #21) — 인앱 프롬프트 + 외부 Claude/Codex 스킬.
-        commands::list_skills,
-        commands::update_skill,
-        commands::create_skill,
-        commands::delete_skill,
-        commands::scan_external_skills,
-        commands::detect_skill_environments,
-        commands::get_skill_user_roots,
-        commands::set_skill_user_roots,
-        commands::read_external_skill,
-        commands::write_external_skill,
-        commands::set_skill_tags,
+        skills::registry::list_skills,
+        skills::registry::update_skill,
+        skills::registry::create_skill,
+        skills::registry::delete_skill,
+        skills::scan::scan_external_skills,
+        skills::scan::detect_skill_environments,
+        skills::scan::get_skill_user_roots,
+        skills::scan::set_skill_user_roots,
+        skills::scan::read_external_skill,
+        skills::scan::write_external_skill,
+        skills::tags::set_skill_tags,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,
@@ -360,7 +361,7 @@ pub fn run() {
             // 스킬 레지스트리 시드(Phase 20 #21): 인앱 프롬프트를 코드 상수에서 멱등 시드한다.
             // 시드 프롬프트 = 코드 상수라 잡 lookup이 시드 행을 써도 기본 동작 불변. 실패는 무시
             // (잡 트리거가 코드 상수로 폴백하므로 graceful — 레지스트리 없이도 오늘과 동일 동작).
-            let _ = tauri::async_runtime::block_on(commands::skills::seed_in_app_skills(&pool));
+            let _ = tauri::async_runtime::block_on(skills::seed_in_app_skills(&pool));
             let recovered = tauri::async_runtime::block_on(
                 commands::agent_run_store::recover_interrupted_runs(&pool),
             )

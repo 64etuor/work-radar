@@ -29,7 +29,6 @@ pub mod routines;
 pub mod scheduler;
 pub mod signal_store;
 pub mod signals;
-pub mod skills;
 pub mod sprint;
 pub mod timeline_notes;
 pub mod today;
@@ -53,7 +52,11 @@ pub use retro::*;
 pub use routines::*;
 pub use scheduler::*;
 pub use signals::*;
-pub use skills::*;
+// skills 모듈은 크레이트 루트(`crate::skills`)로 이동했다(G1-PR1). 기존 `commands::skills::X`
+// 경로(에이전트 모듈/agents_config의 plain fn·const import)가 유지되도록 alias 재export 한다.
+// `#[tauri::command]` 매크로의 hidden 심볼은 glob/alias로 넘어가지 않으므로(E0433), 커맨드 등록은
+// lib.rs에서 `skills::X`로 직접 가리킨다.
+pub use crate::skills;
 pub use sprint::*;
 pub use timeline_notes::*;
 pub use today::*;
