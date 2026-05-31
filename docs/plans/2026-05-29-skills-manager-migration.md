@@ -287,18 +287,39 @@ skm은 (a) 매 스캔 **전 파일 SHA256 + 싱글스레드 + 무캐시**라 느
 
 **의존**: P0(스캔)·P1(네비). 중앙 라이브러리가 토대라 G1 → G2 → G3 순.
 
-### Phase G1 — 중앙 라이브러리 + 네트워크 설치/백업/업데이트
+### Phase G1 — foundation: 중앙 라이브러리 + import + audit_log
 
-- **중앙 라이브러리**(skills-manager `core/central_repo` 대응): work-radar 소유 managed 스킬 스토어.
-  import(발견 외부 스킬 → 중앙레포 복사, 그 시점부터 중앙이 SSOT). (ADR-0006 레일 2)
+> **분해(2026-05-31)**: 원안 G1의 5 deliverable 중 **foundation 3개**(중앙 라이브러리·import·
+> audit_log)만 이 라운드. 네트워크/백업/auto-update는 **G1.5**로 분리(아래). 사유: 이 셋이 ADR-0006
+> 레일 ①②의 토대이고 G2/G3가 그 위에 서므로 먼저 dev에서 검증한다. 네트워크/keychain 표면은
+> foundation + 모듈 구조가 입증된 뒤 별 라운드로. 상세 설계: `docs/superpowers/specs/2026-05-31-skills-manager-g1-foundation-design.md`.
+
+- **리팩터-first(무행동변경)**: 단일 `commands/skills.rs`(~89KB) → `src-tauri/src/skills/` 모듈 dir
+  (`model`·`seed`·`scan`·`tags`·`registry` + G1 신설 `central_repo`·`import`·`audit_log`). IPC 무변경 = bindings drift 0.
+- **중앙 라이브러리**(skills-manager `core/central_repo` 대응): work-radar 소유 managed 스킬 스토어
+  (`app_data_dir()/skills-library/<provider>/<name>/`). import(발견 외부 스킬 → 중앙레포 복사,
+  그 시점부터 중앙이 SSOT). (ADR-0006 레일 2)
+- **import round-trip(가역)**: `import_external_skill`(외부→중앙 복사) + `remove_managed_skill`
+  (중앙 복사본만 삭제 — 외부 파일 무변경). import된 스킬은 **managed**로 표시하고 매칭되는 discovered
+  엔트리는 **suppress**(identity = name+provider, P5 `groupCrossToolSkills` 재사용).
+- **audit_log** 도입(마이그레이션 `0039_skill_audit_log.sql`): 모든 managed 쓰기 기록. 경로/action/크기만
+  (로그 시크릿 금지). 읽기 커맨드 `list_skill_audit`.
+
+**Done**: import round-trip(외부→중앙→복원) hermetic; managed가 discovered suppress(중복 카드 0);
+모든 managed 쓰기 audit 기록; import이 잡/스킬 자동실행 안 함(#1/#2 가드 테스트 유지); bindings drift 0
+(리팩터 PR) + 의도분(audit/import 커맨드).
+
+### Phase G1.5 — 네트워크 설치 + git 백업 + auto-updater
+
+> G1 foundation(중앙 라이브러리)이 토대. 네트워크/keychain/git 표면을 한 라운드로 모은다.
+
 - **네트워크 설치**(#20 skills.sh / #21 git, `installer`·`git_fetcher`·`skillssh_api`): Rust 경유 +
   keychain + bounded retry(backoff+jitter+terminal failure). 토큰 렌더러 비노출. (레일 3)
 - **git 백업/복구**(#23, `git_backup`): 중앙 라이브러리 백업. 가역.
 - **auto-updater**(#24, `skill_auto_updater`): opt-in + bounded + **fetch까지만, 자동 적용/실행 없음**. (레일 4)
-- **audit_log** 도입: 모든 외부 쓰기/네트워크/sync 기록.
 
-**Done**: import round-trip(외부→중앙→복원); 네트워크 설치 bounded(무한 retry 없음 — 테스트);
-auto-update가 잡/스킬 자동실행 안 함(#1/#2 가드 테스트 유지); 모든 쓰기 audit 기록.
+**Done**: 네트워크 설치 bounded(무한 retry 없음 — 테스트); auto-update가 잡/스킬 자동실행 안 함
+(#1/#2 가드 테스트 유지); 모든 네트워크/쓰기 audit 기록.
 
 ### Phase G2 — 외부 dir 적용 (설치/심링크) + 프리셋
 
@@ -328,8 +349,8 @@ auto-update가 잡/스킬 자동실행 안 함(#1/#2 가드 테스트 유지); �
 P0(스캔 토대·평면) ─ P1(env-resolution 네비) ─ P1.5(재귀+Hermes+레포/사용자 루트) ─┬─ P2(표현) ─┬─ P3
                                                                                     │            └─ P4
                                                                                     └─ P5(dedup)
-P0·P1 완료 후 ── G1(중앙 라이브러리+설치/백업/업데이트) ── G2(외부 dir 적용) ── G3(프로젝트+sync)
-                 (ADR-0006 accepted — decision-rails/AGENTS INVARIANT 개정 follow-up 선행)
+P0·P1 완료 후 ── G1(중앙 라이브러리+import+audit) ── G1.5(네트워크 설치+백업+update) ── G2(외부 dir 적용) ── G3(프로젝트+sync)
+                 (ADR-0006 accepted + decision-rails/AGENTS INVARIANT 개정 완료 @f752815 — 별도 prerequisite PR 불요)
 ```
 
 > **P1.5 = 스캔 완성도(위치+깊이)**. P0는 평면·하드코딩-루트 토대였고, 사용자가 Hermes/중첩 누락을 발견해
