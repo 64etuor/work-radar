@@ -272,7 +272,9 @@ mod tests {
         set_auto_update(&pool, "claude", "foo", true).await.unwrap();
         let keys = auto_update_keys(&pool).await.unwrap();
         assert_eq!(keys, vec![("claude".to_string(), "foo".to_string())]); // bar opt-out
-        set_auto_update(&pool, "claude", "foo", false).await.unwrap();
+        set_auto_update(&pool, "claude", "foo", false)
+            .await
+            .unwrap();
         assert!(auto_update_keys(&pool).await.unwrap().is_empty());
     }
 

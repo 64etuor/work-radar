@@ -102,12 +102,14 @@ pub(crate) async fn apply_update_core(
     name: &str,
     backup_id: &str,
 ) -> Result<Skill, AppError> {
-    let source = get_skill_source(pool, provider, name).await?.ok_or_else(|| {
-        AppError::not_found(
-            "skills.update.no_source",
-            "업데이트 출처 정보가 없습니다.".to_string(),
-        )
-    })?;
+    let source = get_skill_source(pool, provider, name)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "skills.update.no_source",
+                "업데이트 출처 정보가 없습니다.".to_string(),
+            )
+        })?;
     let staged = source.staged_commit.clone().ok_or_else(|| {
         AppError::not_found(
             "skills.update.nothing_staged",
@@ -263,7 +265,14 @@ async fn check_one(
         ));
     }
     let staged_dest = stage_from_dir(staging_root, &source.provider, &source.name, &content_dir)?;
-    record_update_check(pool, &source.provider, &source.name, Some(&upstream), &checked).await?;
+    record_update_check(
+        pool,
+        &source.provider,
+        &source.name,
+        Some(&upstream),
+        &checked,
+    )
+    .await?;
     audit(
         pool,
         "update_stage",
@@ -346,7 +355,10 @@ pub async fn apply_skill_update(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_skill_update_on_launch(db: State<'_, Db>) -> Result<bool, AppError> {
-    Ok(get_config(db.inner(), KEY_UPDATE_ON_LAUNCH).await?.as_deref() == Some("1"))
+    Ok(get_config(db.inner(), KEY_UPDATE_ON_LAUNCH)
+        .await?
+        .as_deref()
+        == Some("1"))
 }
 
 #[tauri::command]
