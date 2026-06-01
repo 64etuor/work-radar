@@ -113,4 +113,26 @@ describe("summarizeBatch — 결과 한 줄 요약", () => {
     ];
     expect(summarizeBatch(r)).toBe("2 적용 · 1 충돌(스킵)");
   });
+
+  it("출력 순서는 입력 순서와 무관하게 고정(canonical label 순서)", () => {
+    // 입력은 역순(error→applied)이지만 출력은 canonical 순서(applied가 먼저).
+    const r: BatchItemResult[] = [
+      { provider: "claude", name: "a", outcome: "error", message: null },
+      { provider: "claude", name: "b", outcome: "applied", message: null },
+    ];
+    expect(summarizeBatch(r)).toBe("1 적용 · 1 오류");
+  });
+
+  it("같은 결과 집합은 입력 순서가 달라도 동일 요약(결정적)", () => {
+    const mk = (outcome: BatchItemResult["outcome"]): BatchItemResult => ({
+      provider: "claude",
+      name: outcome,
+      outcome,
+      message: null,
+    });
+    const a = summarizeBatch([mk("collision"), mk("applied"), mk("removed")]);
+    const b = summarizeBatch([mk("removed"), mk("collision"), mk("applied")]);
+    expect(a).toBe(b);
+    expect(a).toBe("1 적용 · 1 해제 · 1 충돌(스킵)");
+  });
 });

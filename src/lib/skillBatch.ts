@@ -53,7 +53,10 @@ export function summarizeBatch(results: BatchItemResult[]): string | null {
   };
   const counts = new Map<string, number>();
   for (const r of results) counts.set(r.outcome, (counts.get(r.outcome) ?? 0) + 1);
-  return [...counts.entries()]
-    .map(([k, n]) => `${n} ${label[k as BatchItemResult["outcome"]]}`)
+  // 출력 순서를 label 선언 순서로 고정 — 입력 순서에 비의존(같은 결과 집합 → 항상 같은 요약).
+  // label은 Record<outcome,…>라 모든 outcome을 망라(새 variant 추가 시 컴파일 에러로 강제).
+  return (Object.keys(label) as BatchItemResult["outcome"][])
+    .filter((o) => (counts.get(o) ?? 0) > 0)
+    .map((o) => `${counts.get(o)} ${label[o]}`)
     .join(" · ");
 }
