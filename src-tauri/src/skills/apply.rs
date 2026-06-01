@@ -297,7 +297,7 @@ pub(crate) async fn unapply_batch_core(
 }
 
 /// 앱 데이터 경로 아래 중앙 라이브러리 루트(`app_data_dir/skills-library`). import.rs와 동일.
-fn central_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+pub(crate) fn central_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
     Ok(app
         .path()
         .app_data_dir()

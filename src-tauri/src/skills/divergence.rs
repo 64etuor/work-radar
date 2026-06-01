@@ -9,8 +9,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::models::{DivergenceStatus, SkillDivergence, SkillProvider};
+use tauri::State;
+
+use crate::commands::projects::fetch_all_repos;
+use crate::db::Db;
+use crate::error::AppError;
+use crate::models::{DivergenceStatus, Repo, SkillDivergence, SkillProvider};
 use crate::skills::central_repo::{central_skill_dir, provider_segment, sanitize_segment};
+use crate::skills::scan::{repo_skill_roots, scan_external_skills_core};
 
 /// 트리 비교용 항목 표현(파일 내용 / 심링크 타깃 / 디렉터리 마커).
 #[derive(PartialEq, Eq)]
@@ -104,6 +110,48 @@ pub(crate) fn detect_divergence_core(
         });
     }
     out
+}
+
+/// PR1과 동일한 repo→roots→scan 프리미티브로 프로젝트 멤버를 수집(경로 의미 단일 출처 C6).
+/// `repo_skill_roots`가 이미 `Provider::Local && enabled && non-empty local_path` 필터다.
+pub(crate) fn collect_project_members(repos: &[Repo]) -> Vec<ProjectMember> {
+    let mut out = Vec::new();
+    for repo in repos {
+        let roots = repo_skill_roots(std::slice::from_ref(repo));
+        if roots.is_empty() {
+            continue;
+        }
+        for skill in scan_external_skills_core(&roots) {
+            // scan_external_skills_core는 `path = <skill_dir>/SKILL.md` 를 보장(scan.rs).
+            let dir_path = Path::new(&skill.path)
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from(&skill.path));
+            out.push(ProjectMember {
+                repo_id: repo.id.clone(),
+                provider: skill.provider,
+                name: skill.name,
+                member_path: skill.path,
+                dir_path,
+            });
+        }
+    }
+    out
+}
+
+/// 프로젝트 스킬 드리프트 목록(G3-PR2, #22 부분 — 감지 전용). 읽기 전용: 외부 dir 쓰기/네트워크/잡
+/// spawn 없음(#1/#2/#7). 레포 DB read 실패는 노출(PR1 list_skill_workspaces와 동일 — 조용한 degrade
+/// 금지). 코어는 infallible(건별 보수적).
+#[tauri::command]
+#[specta::specta]
+pub async fn list_skill_divergences(
+    db: State<'_, Db>,
+    app: tauri::AppHandle,
+) -> Result<Vec<SkillDivergence>, AppError> {
+    let repos = fetch_all_repos(db.inner()).await.map_err(AppError::from)?;
+    let central = crate::skills::apply::central_root(&app)?;
+    let members = collect_project_members(&repos);
+    Ok(detect_divergence_core(&central, &members))
 }
 
 #[cfg(test)]

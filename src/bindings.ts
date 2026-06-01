@@ -545,6 +545,12 @@ export const commands = {
 	listAppliedSkills: () => typedError<AppliedSkill[], AppError>(__TAURI_INVOKE("list_applied_skills")),
 	applyManagedSkills: (items: SkillRef[]) => typedError<BatchItemResult[], AppError>(__TAURI_INVOKE("apply_managed_skills", { items })),
 	unapplyManagedSkills: (items: SkillRef[]) => typedError<BatchItemResult[], AppError>(__TAURI_INVOKE("unapply_managed_skills", { items })),
+	/**
+	 *  프로젝트 스킬 드리프트 목록(G3-PR2, #22 부분 — 감지 전용). 읽기 전용: 외부 dir 쓰기/네트워크/잡
+	 *  spawn 없음(#1/#2/#7). 레포 DB read 실패는 노출(PR1 list_skill_workspaces와 동일 — 조용한 degrade
+	 *  금지). 코어는 infallible(건별 보수적).
+	 */
+	listSkillDivergences: () => typedError<SkillDivergence[], AppError>(__TAURI_INVOKE("list_skill_divergences")),
 	installSkillFromGit: (url: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("install_skill_from_git", { url, provider })),
 	backupSkillLibrary: () => typedError<BackupMeta, AppError>(__TAURI_INVOKE("backup_skill_library")),
 	listSkillBackups: () => typedError<BackupMeta[], AppError>(__TAURI_INVOKE("list_skill_backups")),
@@ -1030,6 +1036,9 @@ export type DiffMode =
 "vs_base" | 
 /**  임의 두 ref 직접 비교 (`git diff <base> <head>`). */
 "branch_branch";
+
+/**  2-way 드리프트 상태(베이스라인 없음 — 누가 편집했는지는 표시 안 함). snake_case 방출. */
+export type DivergenceStatus = "in_sync" | "diverged";
 
 /**  잡 실행 엔진. agent_runs.engine CHECK과 동일. */
 export type Engine = "codex" | "hermes" | "claude";
@@ -1618,6 +1627,23 @@ export type SkillAuditEntry = {
 	sourceRef: string | null,
 	detail: string | null,
 	createdAt: string,
+};
+
+/**
+ *  프로젝트 vendored 카피의 중앙 라이브러리 대비 드리프트 1건(G3-PR2, #22 부분). 디스크 유도·비영속
+ *  (#7). 읽기 전용. `member_path`는 표시·매칭 전용 — 로그 금지(C7).
+ */
+export type SkillDivergence = {
+	/**  repos.id — 워크스페이스 귀속(String이라 specta i64 이슈 없음). */
+	repoId: string,
+	/**  멤버 스킬의 provider(스캔 루트 귀속). */
+	provider: SkillProvider,
+	/**  표시 이름(frontmatter name 우선, dir 폴백) — registry/PR1과 동일 도출. */
+	name: string,
+	/**  PR1 `SkillWorkspace.member_paths` 와 **동일 문자열**(스킬 SKILL.md 경로) — FE Set-lookup용(C6). */
+	memberPath: string,
+	/**  비교 결과. */
+	status: DivergenceStatus,
 };
 
 /**
