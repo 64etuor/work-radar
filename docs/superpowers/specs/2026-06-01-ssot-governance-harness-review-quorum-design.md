@@ -167,6 +167,12 @@ empty (governance is outside the Tauri binding graph, so always empty — assert
 - Per-model command/args overrides (`BOULE_REVIEWER_CMD_<model>`).
 - Real codex LIVE smoke (tracked separately as the "sandboxed LIVE smoke" candidate).
 - In-app GUI / specta bindings (governance sidecar has no bindings surface).
+- **Transport channels (Telegram/Slack).** The governance sidecar speaks only MCP over
+  stdio (`server.ts:177`) and has zero transport coupling — Hermes is the bridge that
+  invokes the MCP tools, so the quorum/distinct-model gate is orthogonal to which chat
+  channel a human used. Recording the approval `actor`'s channel of origin (currently
+  hardcoded `"user"`, `handlers.ts:61`) is an audit-trail concern for the Hermes bridge
+  layer, tracked as a separate follow-up.
 
 ## Risks / rollback
 
