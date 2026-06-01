@@ -18,6 +18,12 @@ use crate::retry::{with_retry, Retryable};
 pub(crate) const FETCH_MAX_ATTEMPTS: u32 = 3;
 const FETCH_BASE_DELAY_MS: u64 = 200;
 
+/// 압축 해제 총량 상한(decompression/tar-bomb 가드, bounded INVARIANT). 실제 스킬 repo는 이보다
+/// 훨씬 작다 — bomb(수 KB → 수 GB)만 차단된다. 쿼터가 아니라 안전 가드.
+pub(crate) const MAX_TOTAL_UNCOMPRESSED_BYTES: u64 = 256 * 1024 * 1024;
+/// 아카이브 엔트리(파일+디렉터리) 개수 상한(수백만 tiny 엔트리 가드).
+pub(crate) const MAX_ARCHIVE_ENTRIES: usize = 100_000;
+
 /// 파싱된 GitHub 소스 ref.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteSource {
@@ -122,7 +128,21 @@ pub(crate) fn safe_relative(path: &Path) -> Option<PathBuf> {
 /// gzip tarball을 새 temp dir로 추출. 경로 탈출(tar-slip)을 막기 위해 모든 엔트리 경로의 컴포넌트가
 /// `Normal`이어야 한다(`..`/절대경로/prefix는 거부). `(TempDir, 최상위_dir_이름)`을 돌려준다 —
 /// GitHub tarball은 모든 내용을 단일 `owner-repo-<sha>/` dir로 감싼다.
+///
+/// 압축 해제 총량/엔트리 개수는 [`MAX_TOTAL_UNCOMPRESSED_BYTES`]/[`MAX_ARCHIVE_ENTRIES`]로 bound한다
+/// (decompression/tar-bomb 가드). 상한 주입형 코어는 [`extract_tarball_capped`].
 pub fn extract_tarball(gz_bytes: &[u8]) -> Result<(TempDir, String), RemoteFetchError> {
+    extract_tarball_capped(gz_bytes, MAX_TOTAL_UNCOMPRESSED_BYTES, MAX_ARCHIVE_ENTRIES)
+}
+
+/// [`extract_tarball`]의 상한 주입형 코어. `max_total_bytes`는 전체 압축 해제 바이트 합,
+/// `max_entries`는 엔트리(파일+디렉터리) 개수의 상한이다. 어느 쪽이든 넘으면 `Terminal`로 거부하며,
+/// 파일 버퍼는 남은 예산+1로 bound해 피크 메모리도 상한 이내로 유지한다(bomb가 메모리/디스크 고갈 불가).
+pub(crate) fn extract_tarball_capped(
+    gz_bytes: &[u8],
+    max_total_bytes: u64,
+    max_entries: usize,
+) -> Result<(TempDir, String), RemoteFetchError> {
     use flate2::read::GzDecoder;
 
     let tmp = TempDir::new().map_err(|e| RemoteFetchError::Terminal(format!("temp dir: {e}")))?;
@@ -130,6 +150,8 @@ pub fn extract_tarball(gz_bytes: &[u8]) -> Result<(TempDir, String), RemoteFetch
 
     let mut archive = tar::Archive::new(GzDecoder::new(gz_bytes));
     let mut top_level: Option<String> = None;
+    let mut total_bytes: u64 = 0;
+    let mut entry_count: usize = 0;
 
     let entries = archive
         .entries()
@@ -137,6 +159,15 @@ pub fn extract_tarball(gz_bytes: &[u8]) -> Result<(TempDir, String), RemoteFetch
     for entry in entries {
         let mut entry =
             entry.map_err(|e| RemoteFetchError::Terminal(format!("archive entry: {e}")))?;
+
+        // 엔트리 개수 가드: 수백만 tiny 엔트리로 디스크/inode를 고갈시키는 것을 막는다.
+        entry_count += 1;
+        if entry_count > max_entries {
+            return Err(RemoteFetchError::Terminal(format!(
+                "too many archive entries (> {max_entries})"
+            )));
+        }
+
         let is_dir = entry.header().entry_type().is_dir();
         let path = entry
             .path()
@@ -167,10 +198,21 @@ pub fn extract_tarball(gz_bytes: &[u8]) -> Result<(TempDir, String), RemoteFetch
                 std::fs::create_dir_all(parent)
                     .map_err(|e| RemoteFetchError::Terminal(format!("mkdir: {e}")))?;
             }
+            // 크기 가드: 남은 예산+1까지만 읽어 버퍼 할당을 bound(피크 메모리 ≤ 상한). 초과면 거부.
+            // `total_bytes <= max_total_bytes` 불변(아래 검사 후에만 증가)이라 빼기는 underflow 없음.
+            // `saturating_add`는 거대 cap 주입 시 `remaining+1` u64 overflow 방지(belt-and-suspenders).
+            let remaining = max_total_bytes - total_bytes;
             let mut buf = Vec::new();
-            entry
+            (&mut entry)
+                .take(remaining.saturating_add(1))
                 .read_to_end(&mut buf)
                 .map_err(|e| RemoteFetchError::Terminal(format!("read entry: {e}")))?;
+            if buf.len() as u64 > remaining {
+                return Err(RemoteFetchError::Terminal(format!(
+                    "archive too large (uncompressed > {max_total_bytes} bytes)"
+                )));
+            }
+            total_bytes += buf.len() as u64;
             std::fs::write(&dest, &buf)
                 .map_err(|e| RemoteFetchError::Terminal(format!("write entry: {e}")))?;
         }

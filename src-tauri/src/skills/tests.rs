@@ -1250,6 +1250,50 @@ fn extract_tarball_rejects_tar_slip() {
 }
 
 #[test]
+fn extract_tarball_capped_allows_within_caps() {
+    use crate::skills::remote::extract_tarball_capped;
+    // 작은 상한이라도 한도 내 아카이브는 정상 추출(가드가 정상 경로를 막지 않음).
+    let gz = make_targz(&[
+        ("owner-repo-abc123/SKILL.md", b"---\nname: x\n---\nbody"),
+        ("owner-repo-abc123/extra.txt", b"hi"),
+    ]);
+    let (tmp, top) =
+        extract_tarball_capped(&gz, 4096, 100).expect("한도 내 아카이브는 추출되어야 한다");
+    assert_eq!(top, "owner-repo-abc123");
+    assert!(tmp.path().join("owner-repo-abc123/SKILL.md").is_file());
+}
+
+#[test]
+fn extract_tarball_capped_rejects_oversize_total() {
+    use crate::skills::remote::{extract_tarball_capped, RemoteFetchError};
+    // 압축 해제 총량이 상한을 넘으면 거부(decompression bomb 가드). 0 바이트는 잘 압축되므로
+    // 작은 gz로 큰 압축 해제 크기를 만들 수 있다 — bomb의 본질.
+    let big = vec![0u8; 4096];
+    let gz = make_targz(&[("owner-repo-abc123/big.bin", &big)]);
+    let res = extract_tarball_capped(&gz, 1024, 100);
+    assert!(
+        matches!(res, Err(RemoteFetchError::Terminal(_))),
+        "총량 상한 초과는 Terminal로 거부해야 한다, got {res:?}"
+    );
+}
+
+#[test]
+fn extract_tarball_capped_rejects_too_many_entries() {
+    use crate::skills::remote::{extract_tarball_capped, RemoteFetchError};
+    // 엔트리 개수가 상한을 넘으면 거부(수백만 tiny 엔트리 가드).
+    let entries: Vec<(String, &[u8])> = (0..10)
+        .map(|i| (format!("owner-repo-abc123/f{i}.txt"), b"x" as &[u8]))
+        .collect();
+    let borrowed: Vec<(&str, &[u8])> = entries.iter().map(|(p, c)| (p.as_str(), *c)).collect();
+    let gz = make_targz(&borrowed);
+    let res = extract_tarball_capped(&gz, 1_000_000, 3);
+    assert!(
+        matches!(res, Err(RemoteFetchError::Terminal(_))),
+        "엔트리 개수 상한 초과는 Terminal로 거부해야 한다, got {res:?}"
+    );
+}
+
+#[test]
 fn remote_fetch_error_classification() {
     use crate::error::{AppError, ErrorKind};
     use crate::retry::Retryable;
