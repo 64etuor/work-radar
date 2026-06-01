@@ -5,6 +5,7 @@ import {
   commands,
   type CreateSkillInput,
   type Skill,
+  type SkillDivergence,
   type SkillEnvironment,
   type SkillProvider,
   type SkillRef,
@@ -32,6 +33,14 @@ export function useSkillWorkspaces() {
   return useQuery<SkillWorkspace[]>({
     queryKey: ["skillWorkspaces"],
     queryFn: () => unwrap(commands.listSkillWorkspaces()),
+  });
+}
+
+/** 프로젝트 워크스페이스 멤버 스킬의 divergence 상태(G3-PR2, #17). 백엔드 divergence.rs가 경로/매칭의 단일 출처. */
+export function useSkillDivergences() {
+  return useQuery<SkillDivergence[]>({
+    queryKey: ["skillDivergences"],
+    queryFn: () => unwrap(commands.listSkillDivergences()),
   });
 }
 

@@ -1,4 +1,10 @@
-import type { Skill, SkillEnvironment, SkillProvider, SkillWorkspace } from "@/bindings";
+import type {
+  Skill,
+  SkillDivergence,
+  SkillEnvironment,
+  SkillProvider,
+  SkillWorkspace,
+} from "@/bindings";
 
 /**
  * 스킬 레지스트리 좌측 **환경 사이드바**의 순수 로직 (P1, #2/#14). SkillsView가 소비한다.
@@ -133,4 +139,16 @@ export function reorderEnv(movableIds: string[], dragId: string, targetId: strin
   next.splice(from, 1);
   next.splice(to, 0, dragId);
   return next;
+}
+
+/**
+ * Diverged 멤버 스킬의 `memberPath` Set. 카드 렌더가 `skill.sourcePath` 로 O(1) lookup 한다 —
+ * 프런트 경로추론 없음(C6, divergence.rs가 경로/매칭의 단일 출처). `in_sync`/미수록은 마커 없음.
+ */
+export function buildDivergedPathSet(divergences: SkillDivergence[] | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const d of divergences ?? []) {
+    if (d.status === "diverged") out.add(d.memberPath);
+  }
+  return out;
 }

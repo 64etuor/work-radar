@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { Skill, SkillEnvironment, SkillWorkspace } from "@/bindings";
+import type { Skill, SkillDivergence, SkillEnvironment, SkillWorkspace } from "@/bindings";
 import {
   applyEnvOrder,
+  buildDivergedPathSet,
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
   envCounts,
@@ -162,5 +163,28 @@ describe("buildSkillWorkspaceNav", () => {
   it("returns empty for undefined/empty workspaces", () => {
     expect(buildSkillWorkspaceNav(undefined)).toEqual([]);
     expect(buildSkillWorkspaceNav([])).toEqual([]);
+  });
+});
+
+describe("buildDivergedPathSet", () => {
+  const rows: SkillDivergence[] = [
+    {
+      repoId: "r1",
+      provider: "claude",
+      name: "a",
+      memberPath: "/p/a/SKILL.md",
+      status: "diverged",
+    },
+    { repoId: "r1", provider: "claude", name: "b", memberPath: "/p/b/SKILL.md", status: "in_sync" },
+  ];
+
+  it("includes only diverged memberPaths", () => {
+    const set = buildDivergedPathSet(rows);
+    expect(set.has("/p/a/SKILL.md")).toBe(true);
+    expect(set.has("/p/b/SKILL.md")).toBe(false);
+  });
+
+  it("returns an empty set for undefined", () => {
+    expect(buildDivergedPathSet(undefined).size).toBe(0);
   });
 });
