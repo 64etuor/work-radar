@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseQuorum, parseReviewerModels } from "../../src/mcp/config.js";
+import { parseQuorum, parseReviewerArgs, parseReviewerModels } from "../../src/mcp/config.js";
 
 describe("parseQuorum", () => {
   it("parses a positive integer", () => {
@@ -20,5 +20,29 @@ describe("parseReviewerModels", () => {
   it("falls back to the singular model when the list is unset/empty", () => {
     expect(parseReviewerModels(undefined, "external-stub")).toEqual(["external-stub"]);
     expect(parseReviewerModels("  ,  ", "external-stub")).toEqual(["external-stub"]);
+  });
+});
+
+describe("parseReviewerArgs", () => {
+  it("defaults to a read-only, repo-agnostic, ephemeral codex exec (safe-by-default)", () => {
+    for (const v of [undefined, "", "   "]) {
+      expect(parseReviewerArgs(v)).toEqual([
+        "exec",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+        "--ephemeral",
+      ]);
+    }
+  });
+  it("honors an explicit override verbatim (operator opts into their own sandbox)", () => {
+    expect(parseReviewerArgs("exec --sandbox workspace-write")).toEqual([
+      "exec",
+      "--sandbox",
+      "workspace-write",
+    ]);
+  });
+  it("collapses extra whitespace between tokens", () => {
+    expect(parseReviewerArgs("exec   --json")).toEqual(["exec", "--json"]);
   });
 });

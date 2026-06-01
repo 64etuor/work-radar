@@ -14,7 +14,7 @@ import {
   type SpawnLike,
   type ChildLike,
 } from "../decision/liveReviewer.ts";
-import { parseQuorum, parseReviewerModels } from "./config.ts";
+import { parseQuorum, parseReviewerArgs, parseReviewerModels } from "./config.ts";
 import type { ReviewerEntry } from "../decision/reviewer.ts";
 import { normalizeModelId } from "../decision/modelId.ts";
 
@@ -74,7 +74,7 @@ function placeholderReviewFor(model: string): ReviewFn {
 
 function liveReviewFor(model: string): ReviewFn {
   const command = process.env.BOULE_REVIEWER_CMD ?? "codex";
-  const argsTemplate = (process.env.BOULE_REVIEWER_ARGS ?? "exec").split(" ").filter(Boolean);
+  const argsTemplate = parseReviewerArgs(process.env.BOULE_REVIEWER_ARGS);
   const realSpawn: SpawnLike = (cmd, args) => nodeSpawn(cmd, args) as unknown as ChildLike;
   return liveReview({
     spawn: realSpawn,
