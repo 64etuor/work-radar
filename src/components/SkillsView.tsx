@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Skill, SkillProvider } from "@/bindings";
+import type { Skill, SkillProvider, SkillRef } from "@/bindings";
 import { SkillMarkdown } from "@/components/SkillMarkdown";
 import { SkillsHelpDialog } from "@/components/SkillsHelpDialog";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,7 @@ import { type DiffLine, diffStats, lineDiff } from "@/lib/lineDiff";
 import {
   useAppliedSkills,
   useApplyManagedSkill,
+  useApplyManagedSkills,
   useApplySkillUpdate,
   useBackupSkillLibrary,
   useCheckSkillUpdates,
@@ -67,15 +68,18 @@ import {
   useSkillUpdateOnLaunch,
   useSkillUpdateStatus,
   useUnapplyManagedSkill,
+  useUnapplyManagedSkills,
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
 import { providerLabel, skillCardBadges } from "@/lib/skillBadges";
 import {
   addTagToSkill,
+  batchApplyTargets,
   batchMutableTargets,
   batchTaggableTargets,
   selectedSkills,
+  summarizeBatch,
 } from "@/lib/skillBatch";
 import {
   groupCrossToolSkills,
@@ -141,6 +145,8 @@ export function SkillsView() {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [batchTag, setBatchTag] = useState("");
   const [batchNote, setBatchNote] = useState<string | null>(null);
+  // 배치 노트가 오류 스타일(빨강)인지 — 기본 true(실패 메시지가 다수). 적용/해제 성공 요약만 false(중립).
+  const [batchNoteErr, setBatchNoteErr] = useState(true);
   const batchUpdate = useUpdateSkill();
   const batchDelete = useDeleteSkill();
   const batchSetTags = useSetSkillTags();
@@ -251,6 +257,7 @@ export function SkillsView() {
   const clearSelection = () => {
     setSelectedIds(new Set());
     setBatchNote(null);
+    setBatchNoteErr(true);
   };
   const selCount = selectedSkills(list, selectedIds).length;
   const mutableTargets = batchMutableTargets(list, selectedIds);
@@ -269,6 +276,7 @@ export function SkillsView() {
     });
     const failed = results.filter((r) => r.status === "rejected").length;
     setBatchNote(failed > 0 ? `${failed}개 실패 — 다시 시도하세요` : null);
+    setBatchNoteErr(true); // 토글/태그/삭제 배치 노트는 항상 오류 스타일(실패 메시지).
   };
 
   const batchToggle = (enabled: boolean) => {
@@ -302,6 +310,36 @@ export function SkillsView() {
     Promise.allSettled(targets.map((s) => batchDelete.mutateAsync(s.id))).then((results) =>
       finishBatch(targets, results),
     );
+  };
+
+  // 배치 적용/해제(G2-PR2, ADR-0006 레일 ①) — managed 스킬만 대상(외부/인앱 제외). 백엔드가
+  // best-effort 처리하고 항목별 결과를 돌려준다. 충돌은 덮어쓰지 않고 스킵된다.
+  const applyBatch = useApplyManagedSkills();
+  const unapplyBatch = useUnapplyManagedSkills();
+  const applyTargets = batchApplyTargets(list, selectedIds);
+  const batchApplyBusy = applyBatch.isPending || unapplyBatch.isPending;
+
+  const toRefs = (skills: typeof applyTargets): SkillRef[] =>
+    // batchApplyTargets가 provider != null만 통과시키므로 여기서 provider는 항상 존재한다.
+    skills.map((s) => ({ provider: s.provider as SkillProvider, name: s.name }));
+
+  const runBatchApply = (remove: boolean) => {
+    if (batchApplyBusy || applyTargets.length === 0) return;
+    setBatchNote(null);
+    const refs = toRefs(applyTargets);
+    const mut = remove ? unapplyBatch : applyBatch;
+    mut.mutate(refs, {
+      // clearSelection()이 batchNote/Err를 리셋하므로 요약·중립 플래그는 선택 해제 *후*에 설정한다.
+      onSuccess: (results) => {
+        clearSelection();
+        setBatchNote(summarizeBatch(results));
+        setBatchNoteErr(false); // 적용/해제 결과 요약은 중립(정보) 스타일.
+      },
+      onError: () => {
+        setBatchNote("배치 적용에 실패했습니다");
+        setBatchNoteErr(true);
+      },
+    });
   };
 
   return (
@@ -476,6 +514,32 @@ export function SkillsView() {
             <ToggleLeft className="size-4" />
             모두 끄기
           </Button>
+          {applyTargets.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 rounded-full"
+                disabled={batchApplyBusy}
+                onClick={() => runBatchApply(false)}
+                aria-label="선택한 라이브러리 스킬 적용"
+              >
+                <Link2 className="size-4" />
+                {applyBatch.isPending ? "적용 중…" : `선택 적용 (${applyTargets.length})`}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 rounded-full"
+                disabled={batchApplyBusy}
+                onClick={() => runBatchApply(true)}
+                aria-label="선택한 라이브러리 스킬 적용 해제"
+              >
+                <Unlink className="size-4" />
+                {unapplyBatch.isPending ? "해제 중…" : `적용 해제 (${applyTargets.length})`}
+              </Button>
+            </>
+          )}
           <div className="skl-batch-tag">
             <Tag className="size-3.5" />
             <input
@@ -510,7 +574,11 @@ export function SkillsView() {
             <Trash2 className="size-4" />
             삭제
           </Button>
-          {batchNote && <span className="skl-note err skl-batch-note-err">{batchNote}</span>}
+          {batchNote && (
+            <span className={cn("skl-note skl-batch-note-err", batchNoteErr && "err")}>
+              {batchNote}
+            </span>
+          )}
           <Button
             variant="ghost"
             size="sm"

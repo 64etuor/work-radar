@@ -1,4 +1,4 @@
-import type { Skill } from "@/bindings";
+import type { BatchItemResult, Skill } from "@/bindings";
 
 /**
  * 다중 선택 배치 작업 헬퍼(Phase 3 #9) — **순수 함수**(부수효과 없음, vitest 대상).
@@ -32,4 +32,28 @@ export function batchTaggableTargets(skills: Skill[], selected: ReadonlySet<stri
 /** 한 태그를 추가했을 때 그 스킬의 새 태그 집합(이미 있으면 그대로 — 멱등). `set_skill_tags`에 넘긴다. */
 export function addTagToSkill(skill: Skill, tag: string): string[] {
   return skill.tags.includes(tag) ? skill.tags : [...skill.tags, tag];
+}
+
+/** 배치 적용/해제 대상 = 선택 중 managed 스킬이며 provider가 있는 것만(외부/인앱/무provider 제외). */
+export function batchApplyTargets(skills: Skill[], selected: ReadonlySet<string>): Skill[] {
+  return selectedSkills(skills, selected).filter((s) => s.kind === "managed" && s.provider != null);
+}
+
+/** best-effort 배치 결과를 사람용 한 줄 요약으로. 0건 카테고리는 생략. 빈 결과 → null. */
+export function summarizeBatch(results: BatchItemResult[]): string | null {
+  if (results.length === 0) return null;
+  const label: Record<BatchItemResult["outcome"], string> = {
+    applied: "적용",
+    removed: "해제",
+    collision: "충돌(스킵)",
+    no_source: "소스 없음",
+    not_ours: "외부 파일(스킵)",
+    unsupported_provider: "미지원",
+    error: "오류",
+  };
+  const counts = new Map<string, number>();
+  for (const r of results) counts.set(r.outcome, (counts.get(r.outcome) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([k, n]) => `${n} ${label[k as BatchItemResult["outcome"]]}`)
+    .join(" · ");
 }

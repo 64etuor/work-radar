@@ -7,6 +7,7 @@ import {
   type Skill,
   type SkillEnvironment,
   type SkillProvider,
+  type SkillRef,
   type UserSkillRoot,
 } from "@/bindings";
 
@@ -179,6 +180,30 @@ export function useUnapplyManagedSkill() {
   return useMutation({
     mutationFn: (args: { provider: SkillProvider; name: string }) =>
       unwrap(commands.unapplyManagedSkill(args.provider, args.name)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills", "applied"] }),
+  });
+}
+
+/**
+ * 여러 managed 스킬을 한 번에 적용(G2-PR2, ADR-0006 레일 ①). best-effort — 항목별 결과를
+ * `BatchItemResult[]`로 돌려준다(중도 중단 없음). 충돌은 덮어쓰지 않고 스킵. 성공 시 적용 목록 무효화.
+ */
+export function useApplyManagedSkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (items: SkillRef[]) => unwrap(commands.applyManagedSkills(items)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills", "applied"] }),
+  });
+}
+
+/**
+ * 여러 managed 스킬을 한 번에 해제(우리 심링크만 제거 — 사용자 파일 무손상). best-effort —
+ * 항목별 `BatchItemResult[]`. 성공 시 적용 목록 무효화.
+ */
+export function useUnapplyManagedSkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (items: SkillRef[]) => unwrap(commands.unapplyManagedSkills(items)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills", "applied"] }),
   });
 }

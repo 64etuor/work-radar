@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { Skill } from "@/bindings";
+import type { BatchItemResult, Skill } from "@/bindings";
 
 import {
   addTagToSkill,
+  batchApplyTargets,
   batchMutableTargets,
   batchTaggableTargets,
   isBatchMutable,
   selectedSkills,
+  summarizeBatch,
 } from "./skillBatch";
 
 /** 테스트용 최소 Skill(배치 분류와 무관한 필드는 캐스트로 채운다). */
@@ -66,5 +68,49 @@ describe("addTagToSkill — 멱등", () => {
 
   it("이미 있으면 그대로(중복 방지)", () => {
     expect(addTagToSkill(extD, "fav")).toEqual(["fav"]);
+  });
+});
+
+/** kind/provider까지 채우는 배치-적용용 최소 Skill 팩토리(나머지 필드는 캐스트로 채운다). */
+const mk = (over: Partial<Skill>): Skill =>
+  ({
+    id: "x",
+    name: "n",
+    kind: "managed",
+    provider: "claude",
+    tags: [],
+    ...over,
+  }) as unknown as Skill;
+
+describe("batchApplyTargets — managed + provider만", () => {
+  it("provider가 있는 managed 스킬만 남긴다", () => {
+    const skills = [
+      mk({ id: "a", kind: "managed", provider: "claude" }),
+      mk({ id: "b", kind: "external", provider: "codex" }),
+      mk({ id: "c", kind: "in_app_prompt", provider: null }),
+      mk({ id: "d", kind: "managed", provider: null }),
+    ];
+    const got = batchApplyTargets(skills, new Set(["a", "b", "c", "d"]));
+    expect(got.map((s) => s.id)).toEqual(["a"]);
+  });
+
+  it("선택에 없는 항목은 제외", () => {
+    const skills = [mk({ id: "a", kind: "managed", provider: "claude" })];
+    expect(batchApplyTargets(skills, new Set())).toEqual([]);
+  });
+});
+
+describe("summarizeBatch — 결과 한 줄 요약", () => {
+  it("빈 결과는 null", () => {
+    expect(summarizeBatch([])).toBeNull();
+  });
+
+  it("결과를 카테고리별로 집계", () => {
+    const r: BatchItemResult[] = [
+      { provider: "claude", name: "a", outcome: "applied", message: null },
+      { provider: "claude", name: "b", outcome: "applied", message: null },
+      { provider: "claude", name: "c", outcome: "collision", message: null },
+    ];
+    expect(summarizeBatch(r)).toBe("2 적용 · 1 충돌(스킵)");
   });
 });
