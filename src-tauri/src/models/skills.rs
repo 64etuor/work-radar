@@ -109,6 +109,26 @@ pub struct UserSkillRoot {
     pub path: String,
 }
 
+/// 프로젝트 워크스페이스 한 건 = enabled Local 레포 1개의 스킬 집계(G3-PR1, #16). DB 비영속(매 호출
+/// 디스크 스캔, INVARIANT #7). 읽기 전용 — 외부 dir에 쓰지 않는다. `root_path`는 표시 전용 — **로그
+/// 금지(C7)**. `enabled_count`는 두지 않는다: 외부 스킬은 `list_skills`가 항상 enabled로 합성하므로
+/// 항상 `skill_count`와 같다(중복).
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillWorkspace {
+    /// repos.id — 표시/네비 id용(String이라 specta i64 이슈 없음).
+    pub repo_id: String,
+    /// local_path의 basename(표시 전용). 추출 불가 시 전체 경로.
+    pub label: String,
+    /// local_path(표시 전용 — 로그 금지).
+    pub root_path: String,
+    /// 이 레포 스킬 dir들에서 발견한 스킬 수(specta i64 미지원 → i32).
+    pub skill_count: i32,
+    /// 각 멤버 스킬의 source_path(절대경로) — FE가 Set lookup으로 필터(프런트 경로추론 회피).
+    pub member_paths: Vec<String>,
+}
+
 /// 인앱 프롬프트 생성 입력(레지스트리에 새 편집 가능 템플릿 추가). binding은 선택(미바인딩 템플릿도 가능).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

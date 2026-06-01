@@ -9,7 +9,7 @@ use crate::commands::projects::fetch_all_repos;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    ExternalSkill, Provider, Repo, SkillEnvironment, SkillProvider, UserSkillRoot,
+    ExternalSkill, Provider, Repo, SkillEnvironment, SkillProvider, SkillWorkspace, UserSkillRoot,
 };
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -295,6 +295,47 @@ pub(crate) fn primary_external_root(provider: SkillProvider) -> Option<PathBuf> 
         .into_iter()
         .find(|(p, _)| crate::skills::central_repo::provider_segment(*p) == want)
         .map(|(_, path)| path)
+}
+
+/// enabled Local 레포별 프로젝트 워크스페이스 집계(G3-PR1, #16). 읽기 전용·infallible — 루트 해석과
+/// 스캔은 기존 `repo_skill_roots`/`scan_external_skills_core`를 재사용해 경로 의미의 단일 출처(C6)를
+/// 유지한다. `repo_skill_roots`가 이미 `Provider::Local && enabled && non-empty local_path` 필터라
+/// 비대상 레포는 빈 roots → 스킵. 스킬 0개 레포는 결과에서 제외(뷰 전용 PR에서 빈 프로젝트는 노이즈).
+/// scan_external_skills_core가 IO 오류를 삼키고 빈 결과를 반환하므로 절대 패닉하지 않는다.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn list_skill_workspaces_core(repos: &[Repo]) -> Vec<SkillWorkspace> {
+    let mut out: Vec<SkillWorkspace> = Vec::new();
+    for repo in repos {
+        let roots = repo_skill_roots(std::slice::from_ref(repo));
+        if roots.is_empty() {
+            continue; // Github/비활성/빈 경로 레포
+        }
+        let skills = scan_external_skills_core(&roots);
+        if skills.is_empty() {
+            continue; // 스킬 0개 → 워크스페이스 미생성
+        }
+        let local_path = repo
+            .local_path
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .to_string();
+        let label = Path::new(&local_path)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| local_path.clone());
+        let member_paths: Vec<String> = skills.iter().map(|s| s.path.clone()).collect();
+        out.push(SkillWorkspace {
+            repo_id: repo.id.clone(),
+            label,
+            root_path: local_path,
+            skill_count: member_paths.len() as i32,
+            member_paths,
+        });
+    }
+    out
 }
 
 /// 환경(provider)별 감지 집계(C6 동일 ROOTS 소비). 동일 provider의 여러 루트(Codex=`.codex`+`.agents`)는
