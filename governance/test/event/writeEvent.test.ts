@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,5 +27,35 @@ describe("writeEvent", () => {
     await writeEvent(ws, evt, now);
     await expect(writeEvent(ws, evt, now)).rejects.toThrow(/EEXIST|exist/i);
     await rm(ws, { recursive: true, force: true });
+  });
+});
+
+describe("writeEvent options", () => {
+  const harvestEvt: GovEvent = {
+    frontmatter: { id: "evt_x", type: "commit_recorded", source: "git", actor: "alice", tags: [] },
+    body: "did a thing",
+  };
+  const at = new Date(Date.UTC(2026, 5, 1, 9, 8, 7));
+
+  let ws: string;
+  beforeEach(async () => { ws = await mkdtemp(join(tmpdir(), "boule-we-")); });
+  afterEach(async () => { await rm(ws, { recursive: true, force: true }); });
+
+  it("appends a disambiguator suffix to the filename", async () => {
+    const p = await writeEvent(ws, harvestEvt, at, { disambiguator: "a1b2c3d" });
+    expect(p.endsWith("09-08-07_commit_recorded_a1b2c3d.md")).toBe(true);
+    expect(p).toContain("/events/2026-06-01/");
+  });
+
+  it("routes to an undated day bucket when dayBucket is set", async () => {
+    const p = await writeEvent(ws, harvestEvt, new Date(0), { disambiguator: "deadbee", dayBucket: "undated" });
+    expect(p).toContain("/events/undated/");
+    expect(p.endsWith("00-00-00_commit_recorded_deadbee.md")).toBe(true);
+  });
+
+  it("is unchanged with no opts (back-compat) and immutable on re-write", async () => {
+    const p = await writeEvent(ws, harvestEvt, at);
+    expect(p.endsWith("09-08-07_commit_recorded.md")).toBe(true);
+    await expect(writeEvent(ws, harvestEvt, at)).rejects.toMatchObject({ code: "EEXIST" });
   });
 });
