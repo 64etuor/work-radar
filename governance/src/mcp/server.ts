@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { resolve } from "node:path";
+import { buildIndex, nodeIndexFs } from "../index/build.ts";
+import { formatPrinciples, formatDecisions, formatDecision } from "../index/format.ts";
 import { createTask, status, observations } from "./handlers.ts";
 import {
   proposeDecision, requestReview, approve, reject, conflicts, why, history,
@@ -25,6 +28,11 @@ import { normalizeModelId } from "../decision/modelId.ts";
 
 const WORKSPACE =
   process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
+
+// Repo root holds the canonical L3/L4 markdown (docs/adr, docs/decisions.md,
+// docs/areas/decision-rails.md). Default: two levels up from the workspace
+// (<repo>/governance/workspace → <repo>). Overridable for tests/relocation.
+const REPO_ROOT = process.env.BOULE_REPO_ROOT ?? resolve(WORKSPACE, "..", "..");
 
 // 비결정 입력은 서버 경계에서만 (핸들러는 순수 유지)
 const nowFn = () => new Date();
@@ -60,6 +68,33 @@ server.registerTool(
   async () => {
     const o = await observations(WORKSPACE);
     return { content: [{ type: "text", text: `active patterns: ${o.patterns.length}` }] };
+  },
+);
+
+server.registerTool(
+  "principles",
+  { description: "결정 원칙(decision-rails INVARIANTs) 목록", inputSchema: {} },
+  async () => {
+    const index = await buildIndex(REPO_ROOT, nodeIndexFs);
+    return { content: [{ type: "text", text: formatPrinciples(index) }] };
+  },
+);
+
+server.registerTool(
+  "decisions",
+  { description: "ADR + decisions.md 결정 목록", inputSchema: {} },
+  async () => {
+    const index = await buildIndex(REPO_ROOT, nodeIndexFs);
+    return { content: [{ type: "text", text: formatDecisions(index) }] };
+  },
+);
+
+server.registerTool(
+  "decision",
+  { description: "단일 결정 상세 + 참조 그래프(supersedes/refs)", inputSchema: { id: z.string() } },
+  async ({ id }) => {
+    const index = await buildIndex(REPO_ROOT, nodeIndexFs);
+    return { content: [{ type: "text", text: formatDecision(index.getDecision(id), id) }] };
   },
 );
 
