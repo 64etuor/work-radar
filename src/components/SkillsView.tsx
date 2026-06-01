@@ -20,6 +20,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  ScrollText,
   Search,
   Tag,
   ToggleLeft,
@@ -67,6 +68,7 @@ import {
   useSetSkillAutoUpdate,
   useSetSkillTags,
   useSetSkillUpdateOnLaunch,
+  useSkillAudit,
   useSkillBackups,
   useSkillDiff,
   useSkillDivergences,
@@ -151,6 +153,8 @@ export function SkillsView() {
   const [backupOpen, setBackupOpen] = useState(false);
   // 업데이트 패널 열림 — 확인/토글/적용/런치설정. fetch-only·staging만(적용은 사용자 발동, #1/#2).
   const [updateOpen, setUpdateOpen] = useState(false);
+  // 감사 로그 패널 열림 — 읽기 전용(append-only skill_audit_log 뷰어, 쓰기/잡 비취급, #1/#2).
+  const [auditOpen, setAuditOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
   // 도움말 다이얼로그 열림 — 스킬 피처 로컬 상태(전역 store 비대상).
@@ -256,12 +260,13 @@ export function SkillsView() {
     const g = grouped.find((grp) => grp.memberIds.includes(selected.id));
     return g && g.locations.length > 1 ? g.locations : [];
   }, [grouped, selected]);
-  const sheetOpen = adding || installing || backupOpen || updateOpen || !!selected;
+  const sheetOpen = adding || installing || backupOpen || updateOpen || auditOpen || !!selected;
   const closeSheet = () => {
     setAdding(false);
     setInstalling(false);
     setBackupOpen(false);
     setUpdateOpen(false);
+    setAuditOpen(false);
     setSelectedId(null);
   };
 
@@ -475,6 +480,23 @@ export function SkillsView() {
         >
           <RefreshCw className="size-4" />
           업데이트
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => {
+            setAuditOpen(true);
+            setAdding(false);
+            setInstalling(false);
+            setBackupOpen(false);
+            setUpdateOpen(false);
+            setSelectedId(null);
+          }}
+        >
+          <ScrollText className="size-4" />
+          감사 로그
         </Button>
       </div>
 
@@ -724,11 +746,13 @@ export function SkillsView() {
                     ? "백업 / 복원"
                     : updateOpen
                       ? "업데이트"
-                      : selected?.kind === "external"
-                        ? "외부 스킬"
-                        : selected?.kind === "managed"
-                          ? "라이브러리 스킬"
-                          : "인앱 프롬프트"}
+                      : auditOpen
+                        ? "감사 로그"
+                        : selected?.kind === "external"
+                          ? "외부 스킬"
+                          : selected?.kind === "managed"
+                            ? "라이브러리 스킬"
+                            : "인앱 프롬프트"}
             </SheetTitle>
             {!adding && selectedGroup.length > 1 && (
               <div className="skl-sheet-switch" role="group" aria-label="위치 전환">
@@ -768,6 +792,8 @@ export function SkillsView() {
                 <BackupPanel onDone={() => closeSheet()} />
               ) : updateOpen ? (
                 <UpdatePanel onDone={() => closeSheet()} />
+              ) : auditOpen ? (
+                <AuditPanel onDone={() => closeSheet()} />
               ) : selected?.kind === "in_app_prompt" ? (
                 <InAppEditor key={selected.id} skill={selected} />
               ) : selected?.kind === "external" ? (
@@ -1891,6 +1917,47 @@ function BackupPanel({ onDone }: { onDone: () => void }) {
           </li>
         ))}
         {backups.data?.length === 0 && <li className="skl-desc">아직 백업이 없습니다.</li>}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * 감사 로그 뷰어(G1, ADR-0006 레일 ①). append-only `skill_audit_log`를 최근 먼저 표시한다. 읽기 전용 —
+ * 중앙 라이브러리에 대한 모든 쓰기(설치·제거·복사·동기화·업데이트) 이력. 자동 실행/적용 없음(#1/#2).
+ */
+function AuditPanel({ onDone }: { onDone: () => void }) {
+  const audit = useSkillAudit();
+  const rows = audit.data ?? [];
+  return (
+    <div className="skl-edit">
+      <p className="skl-desc">
+        중앙 라이브러리에 대한 모든 쓰기(설치·제거·복사·동기화·업데이트)를 최근 순으로 기록한
+        append-only 감사 로그입니다. 읽기 전용입니다.
+      </p>
+      <div className="skl-actions">
+        <Button variant="outline" className="rounded-full" onClick={onDone}>
+          닫기
+        </Button>
+      </div>
+      {audit.isError && (
+        <span className="skl-note err">
+          감사 로그를 불러오지 못했습니다: {(audit.error as Error).message}
+        </span>
+      )}
+      <ul className="skl-audit-list">
+        {rows.map((e) => (
+          <li key={e.id} className="skl-audit-row">
+            <span className="skl-audit-action">{e.action}</span>
+            <span className="skl-desc">{e.targetKind}</span>
+            <span className="skl-audit-target font-mono" title={e.targetRef}>
+              {e.targetRef}
+            </span>
+            {e.detail && <span className="skl-desc">{e.detail}</span>}
+            <span className="skl-audit-time font-mono">{e.createdAt}</span>
+          </li>
+        ))}
+        {rows.length === 0 && !audit.isError && <li className="skl-desc">아직 기록이 없습니다.</li>}
       </ul>
     </div>
   );

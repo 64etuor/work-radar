@@ -552,6 +552,40 @@
   margin-left: auto;
 }
 
+/* 감사 로그 뷰어(읽기 전용) — 최근 먼저 한 줄/엔트리. action 강조 + target 말줄임 + 시각 우측. */
+.skl-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  list-style: none;
+  padding: 0;
+}
+.skl-audit-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.skl-audit-action {
+  font-weight: 600;
+}
+.skl-audit-target {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skl-audit-time {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--color-wr-muted);
+}
+
 /* 업데이트 패널(G1.5-PR3) — on-launch opt-in 토글 줄 + 행 우측 컨트롤 클러스터(뱃지/자동/적용). */
 .skl-update-launch {
   display: flex;

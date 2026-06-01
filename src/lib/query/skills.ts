@@ -339,6 +339,18 @@ export function useSkillBackups() {
 }
 
 /**
+ * 스킬 매니저 감사 로그(G1, ADR-0006 레일 ①). append-only skill_audit_log를 최근 먼저 읽는다.
+ * 읽기 전용 — 중앙 라이브러리 쓰기 이력(설치/제거/복사/동기화/업데이트). 자동 실행 없음(#1/#2).
+ */
+export function useSkillAudit() {
+  return useQuery({
+    queryKey: ["skillAudit"],
+    queryFn: () => unwrap(commands.listSkillAudit()),
+    staleTime: 5_000,
+  });
+}
+
+/**
  * 중앙 라이브러리 전체를 타임스탬프 스냅샷으로 백업(ADR-0006 가역성 레일 — 파일 복사 + 감사, 잡 비취급).
  * 성공 시 백업 목록 무효화.
  */
