@@ -22,6 +22,7 @@ use crate::skills::audit_log::audit;
 use crate::skills::central_repo::{
     central_skill_dir, list_managed_dirs, provider_segment, sanitize_segment,
 };
+use crate::skills::scan::parse_frontmatter;
 
 /// 적용된 managed 스킬 1건(디스크에서 유도). PK 미노출 → specta 안전(i64 이슈 없음).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -155,21 +156,28 @@ pub(crate) fn list_applied_core(
 ) -> Vec<AppliedSkill> {
     let mut out = Vec::new();
     for (provider, central_dir) in list_managed_dirs(central_root) {
-        let name = central_dir
+        // 링크 경로는 sanitized 세그먼트(= central dir 이름, apply_core가 만든 링크 이름과 동일).
+        let seg = central_dir
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
+        // 표시 이름은 registry.rs managed 합성과 **동일하게** 도출(frontmatter name 우선, dir 폴백) →
+        // FE가 통합 Skill.name으로 매칭할 수 있게 한다(sanitized 세그먼트 ≠ 표시 이름 mismatch 방지).
+        let display_name = std::fs::read_to_string(central_dir.join("SKILL.md"))
+            .ok()
+            .and_then(|c| parse_frontmatter(&c).0)
+            .unwrap_or_else(|| seg.clone());
         let Some((_, ext_root)) = roots
             .iter()
             .find(|(p, _)| provider_segment(*p) == provider_segment(provider))
         else {
             continue; // 이 provider의 외부 루트 미해석 → 스킵.
         };
-        let link = ext_root.join(&name);
+        let link = ext_root.join(&seg);
         if is_our_symlink(&link, &central_dir) {
             out.push(AppliedSkill {
                 provider,
-                name,
+                name: display_name,
                 external_path: link.to_string_lossy().into_owned(),
             });
         }
@@ -248,7 +256,12 @@ mod tests {
         std::fs::create_dir_all(&ext).unwrap();
         let src = central.join("claude").join(name);
         std::fs::create_dir_all(&src).unwrap();
-        std::fs::write(src.join("SKILL.md"), "---\nname: x\n---\nbody").unwrap();
+        // frontmatter name = dir 이름(현실적 공통 케이스: sanitize가 항등). 표시 이름 도출 검증과 일치.
+        std::fs::write(
+            src.join("SKILL.md"),
+            format!("---\nname: {name}\n---\nbody"),
+        )
+        .unwrap();
         (tmp, central, ext, src)
     }
 
@@ -420,5 +433,28 @@ mod tests {
         assert_eq!(applied.len(), 1);
         assert_eq!(applied[0].name, "foo");
         assert_eq!(applied[0].external_path, ext.join("foo").to_string_lossy());
+    }
+
+    #[test]
+    fn list_applied_returns_display_name_when_dir_segment_sanitized() {
+        // critic MAJOR 회귀 가드: central dir 세그먼트(sanitized) ≠ frontmatter 표시 이름일 때
+        // AppliedSkill.name은 **표시 이름**(registry.rs Skill.name과 동일)을 돌려줘야 FE가 매칭한다.
+        let tmp = tempfile::tempdir().unwrap();
+        let central = tmp.path().join("skills-library");
+        let ext = tmp.path().join("ext/skills");
+        std::fs::create_dir_all(&ext).unwrap();
+        // sanitize_segment("a/b skill") = "a_b skill" (/ → _) — dir 세그먼트와 표시 이름이 갈린다.
+        let seg = sanitize_segment("a/b skill");
+        assert_ne!(seg, "a/b skill"); // 전제: 정말 갈리는지 확인.
+        let src = central.join("claude").join(&seg);
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("SKILL.md"), "---\nname: a/b skill\n---\nbody").unwrap();
+        make_symlink(&src, &ext.join(&seg)).unwrap();
+
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        let applied = list_applied_core(&central, &roots);
+        assert_eq!(applied.len(), 1);
+        assert_eq!(applied[0].name, "a/b skill"); // 표시 이름(frontmatter), not "a_b skill".
+        assert_eq!(applied[0].external_path, ext.join(&seg).to_string_lossy()); // 링크는 sanitized.
     }
 }
