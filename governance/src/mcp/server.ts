@@ -14,7 +14,12 @@ import {
   type SpawnLike,
   type ChildLike,
 } from "../decision/liveReviewer.ts";
-import { parseQuorum, parseReviewerArgs, parseReviewerModels } from "./config.ts";
+import {
+  parseQuorum,
+  parseReviewerModels,
+  resolveReviewerCommand,
+  quorumCollisionWarning,
+} from "./config.ts";
 import type { ReviewerEntry } from "../decision/reviewer.ts";
 import { normalizeModelId } from "../decision/modelId.ts";
 
@@ -73,8 +78,9 @@ function placeholderReviewFor(model: string): ReviewFn {
 }
 
 function liveReviewFor(model: string): ReviewFn {
-  const command = process.env.BOULE_REVIEWER_CMD ?? "codex";
-  const argsTemplate = parseReviewerArgs(process.env.BOULE_REVIEWER_ARGS);
+  // Per-model CMD/ARGS resolution (falls back to the globals, then a safe read-only default),
+  // so a ≥2 distinct-model live quorum runs genuinely different binaries — not one CLI relabeled.
+  const { command, args: argsTemplate } = resolveReviewerCommand(model, process.env);
   const realSpawn: SpawnLike = (cmd, args) => nodeSpawn(cmd, args) as unknown as ChildLike;
   return liveReview({
     spawn: realSpawn,
@@ -98,16 +104,24 @@ function liveReviewFor(model: string): ReviewFn {
 
 // 비결정(서브프로세스/타이머/Math.random)은 이 경계에서만 주입. 기본 = stub(결정적·CI 무변경).
 // BOULE_REVIEWER_MODE=live 일 때만 작성자와 다른 모델 CLI를 bounded retry로 호출.
-// 모든 모델은 같은 CMD를 공유하고 reviewerModel 라벨로 구분(per-model CMD override는 범위 밖).
+// 각 모델은 resolveReviewerCommand로 자기 CMD/ARGS를 해석(per-model override → 전역 → 안전 기본).
+const LIVE = process.env.BOULE_REVIEWER_MODE === "live";
+
 function buildReviewers(): ReviewerEntry[] {
-  const live = process.env.BOULE_REVIEWER_MODE === "live";
   return REVIEWER_MODELS.map((model) => ({
     model,
-    fn: live ? liveReviewFor(model) : placeholderReviewFor(model),
+    fn: LIVE ? liveReviewFor(model) : placeholderReviewFor(model),
   }));
 }
 
 const reviewers = buildReviewers();
+
+// Genuine-quorum advisory (warn-but-continue): live + quorum≥2 인데 라벨들이 동일 (cmd,args)로
+// 붕괴해 distinct reviewer가 quorum 미만이면 가짜 quorum. PII-safe(라벨만)로 경고하고 그대로 기동.
+const quorumWarning = LIVE
+  ? quorumCollisionWarning(REVIEWER_MODELS, process.env, QUORUM)
+  : null;
+if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 
 server.registerTool(
   "propose_decision",
@@ -141,6 +155,8 @@ server.registerTool(
     ];
     if (res.skipped.length) parts.push(`skipped: ${res.skipped.map((s) => s.reviewerModel).join(",")}`);
     if (res.failures.length) parts.push(`failed: ${res.failures.map((f) => f.reviewerModel).join(",")}`);
+    // Surface a silent fake-quorum right where the operator reads the distinct-model count.
+    if (quorumWarning) parts.push(quorumWarning);
     return { content: [{ type: "text", text: parts.join(" | ") }] };
   },
 );
