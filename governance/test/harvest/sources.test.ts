@@ -63,6 +63,6 @@ describe("decisionItem", () => {
     expect(it_.type).toBe("decision_recorded");
     expect(it_.source).toBe("decisions_doc");
     expect(it_.dayBucket).toBe("undated");
-    expect(it_.disambiguator).toBe(sha256hex(key).slice(0, 7));
+    expect(it_.disambiguator).toBe(sha256hex(key)); // full hash, not a 7-hex prefix
   });
 });

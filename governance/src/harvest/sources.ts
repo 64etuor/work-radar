@@ -60,6 +60,11 @@ export function decisionItem(row: DecisionRow): HarvestItem {
     refs: row.refs.length ? row.refs : undefined,
     stampAt: EPOCH,
     dayBucket: "undated",
-    disambiguator: sha256hex(key).slice(0, 7),
+    // Full hash, not a 7-hex prefix: undated decisions all share the same
+    // `undated/00-00-00_decision_recorded_*` path, so the disambiguator is the
+    // sole filename key. Using the full sha256 makes filename-uniqueness equal
+    // id-uniqueness — a re-harvest skips iff the bullet is a true duplicate,
+    // never on a 28-bit prefix collision of two distinct bullets.
+    disambiguator: sha256hex(key),
   };
 }

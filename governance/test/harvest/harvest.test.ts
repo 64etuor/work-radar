@@ -72,4 +72,20 @@ describe("makeWriteOne (real fs)", () => {
     expect(second.skipped).toBe(4);
     expect((await status(ws)).eventCount).toBe(4); // no duplicates
   });
+
+  it("gives two distinct undated decisions distinct files (no prefix-collision drop)", async () => {
+    const distinct: DecisionRow[] = [
+      { id: "DL-001", kind: "decision-log", title: "First distinct tradeoff", status: undefined,
+        date: undefined, tags: [], supersedes: [], refs: [], excerpt: "", sourcePath: "docs/decisions.md" },
+      { id: "DL-002", kind: "decision-log", title: "Second distinct tradeoff", status: undefined,
+        date: undefined, tags: [], supersedes: [], refs: [], excerpt: "", sourcePath: "docs/decisions.md" },
+    ];
+    const s = await harvest({
+      gitLog: async () => { throw new Error("no git"); },
+      loadDecisionRows: async () => distinct,
+      writeOne: makeWriteOne(ws),
+    });
+    expect(s.written).toBe(2); // both written — distinct content must not collapse to one file
+    expect((await status(ws)).eventCount).toBe(2);
+  });
 });
