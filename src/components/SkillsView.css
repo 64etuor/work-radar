@@ -476,6 +476,48 @@
   color: var(--color-wr-danger);
 }
 
+/* divergence 해소 컨트롤(G3-PR2c) — 인라인 diff + pull/push. 중첩 overlay 없음(Esc 계약). */
+.skl-vendor-resolve {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  min-width: 0;
+}
+.skl-vendor-resolve-body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-surface);
+}
+.skl-vendor-resolve-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.skl-vendor-diff-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+.skl-vendor-diff-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.skl-vendor-diff-fname {
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+
 /* 백업/복원 패널(G1.5-PR2) — 스냅샷 목록. 행 = 시각 + 개수 + 복원 액션. */
 .skl-backup-list {
   display: flex;

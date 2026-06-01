@@ -5,6 +5,7 @@ import {
   commands,
   type CreateSkillInput,
   type Skill,
+  type SkillDiff,
   type SkillDivergence,
   type SkillEnvironment,
   type SkillProvider,
@@ -257,6 +258,57 @@ export function useUnvendorSkillFromProject() {
       qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
       qc.invalidateQueries({ queryKey: ["skillDivergences"] });
       qc.invalidateQueries({ queryKey: ["skills"] });
+    },
+  });
+}
+
+/**
+ * 프로젝트 카피 ↔ 중앙 라이브러리 트리 차이(G3-PR2c, #22 — 표시 전용). 사용자가 "해소…"를 펼칠 때만
+ * fetch(`enabled`). 백엔드 resolve.rs가 added/removed/changed의 단일 출처(C6 — 프런트 경로추론 없음).
+ */
+export function useSkillDiff(
+  args: { repoId: string; provider: SkillProvider; name: string },
+  enabled: boolean,
+) {
+  return useQuery<SkillDiff>({
+    queryKey: ["skillDiff", args.repoId, args.provider, args.name],
+    queryFn: () => unwrap(commands.listSkillDiff(args.repoId, args.provider, args.name)),
+    enabled,
+    staleTime: 0,
+  });
+}
+
+/**
+ * 중앙 내용으로 프로젝트 카피 덮어쓰기(G3-PR2c, 레일 ① — pull). 프로젝트 편집을 버린다(git-tracked
+ * 카피라 git이 undo). 성공 시 divergence + 워크스페이스 + 스킬 목록 무효화.
+ */
+export function usePullDivergence() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
+      unwrap(commands.pullDivergence(args.repoId, args.provider, args.name)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
+      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+    },
+  });
+}
+
+/**
+ * 프로젝트 편집을 중앙에 반영(G3-PR2c, 레일 ① — push). 중앙 덮어쓰기 전에 backup 스냅샷으로 떠 가역.
+ * 성공 시 divergence + 워크스페이스 + 스킬 목록 + 백업 목록(스냅샷 생성) 무효화.
+ */
+export function usePushDivergence() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
+      unwrap(commands.pushDivergence(args.repoId, args.provider, args.name)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
+      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skillBackups"] });
     },
   });
 }
