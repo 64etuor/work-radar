@@ -272,6 +272,31 @@ pub(crate) fn resolve_skill_roots(env: &SkillRootEnv) -> Vec<SkillRoot> {
     ]
 }
 
+/// 프로세스 env로 해석한 provider별 (대표) 외부 스킬 루트. provider 첫 출현만 유지
+/// (Codex의 `.codex`가 `.agents`보다 먼저 → 대표는 `.codex/skills`). G2 적용/목록 글루.
+pub(crate) fn apply_roots() -> Vec<(SkillProvider, PathBuf)> {
+    let mut seen: Vec<&'static str> = Vec::new();
+    let mut out: Vec<(SkillProvider, PathBuf)> = Vec::new();
+    for r in resolve_skill_roots(&SkillRootEnv::from_process()) {
+        let seg = crate::skills::central_repo::provider_segment(r.provider);
+        if seen.contains(&seg) {
+            continue;
+        }
+        seen.push(seg);
+        out.push((r.provider, r.path));
+    }
+    out
+}
+
+/// 단일 provider의 대표 외부 루트(없으면 None — 적용 미지원 provider).
+pub(crate) fn primary_external_root(provider: SkillProvider) -> Option<PathBuf> {
+    let want = crate::skills::central_repo::provider_segment(provider);
+    apply_roots()
+        .into_iter()
+        .find(|(p, _)| crate::skills::central_repo::provider_segment(*p) == want)
+        .map(|(_, path)| path)
+}
+
 /// 환경(provider)별 감지 집계(C6 동일 ROOTS 소비). 동일 provider의 여러 루트(Codex=`.codex`+`.agents`)는
 /// 하나로 집계: `present`=루트 중 하나라도 존재, `skill_count`=합, `root_path`=첫(주) 루트. provider
 /// 출현 순서를 보존한다. 읽기 전용 — 외부 dir 무쓰기.

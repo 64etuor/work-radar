@@ -534,6 +534,9 @@ export const commands = {
 	listSkillAudit: () => typedError<SkillAuditEntry[], AppError>(__TAURI_INVOKE("list_skill_audit")),
 	importExternalSkill: (path: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("import_external_skill", { path, provider })),
 	removeManagedSkill: (provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_managed_skill", { provider, name })),
+	applyManagedSkill: (provider: SkillProvider, name: string) => typedError<string, AppError>(__TAURI_INVOKE("apply_managed_skill", { provider, name })),
+	unapplyManagedSkill: (provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("unapply_managed_skill", { provider, name })),
+	listAppliedSkills: () => typedError<AppliedSkill[], AppError>(__TAURI_INVOKE("list_applied_skills")),
 	installSkillFromGit: (url: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("install_skill_from_git", { url, provider })),
 	backupSkillLibrary: () => typedError<BackupMeta, AppError>(__TAURI_INVOKE("backup_skill_library")),
 	listSkillBackups: () => typedError<BackupMeta[], AppError>(__TAURI_INVOKE("list_skill_backups")),
@@ -685,6 +688,13 @@ export type AppError = {
 	/**  kind에서 파생(Transient → true). */
 	retryable: boolean,
 	action: ErrorAction | null,
+};
+
+/**  적용된 managed 스킬 1건(디스크에서 유도). PK 미노출 → specta 안전(i64 이슈 없음). */
+export type AppliedSkill = {
+	provider: SkillProvider,
+	name: string,
+	externalPath: string,
 };
 
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */

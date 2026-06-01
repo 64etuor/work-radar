@@ -24,6 +24,7 @@
 //! 로직/시그니처/IPC 표면 불변 — 순수 이동 + 모듈 간 호출에 필요한 만큼만 `pub(crate)` 가시성 확대.
 //! 모델(`Skill` 등)은 옮기지 않고 `crate::models`에 그대로 둔다.
 
+pub mod apply;
 pub mod audit_log;
 pub mod backup;
 pub mod central_repo;
@@ -50,6 +51,7 @@ pub use seed::{resolve_prompt, seed_in_app_skills};
 // 아래는 seed에서 `pub(crate)`라 외부로 re-export 불가(E0364) — 크레이트 내부용 alias만.
 // `crate::commands::skills::X`(에이전트 모듈/agents_config) 경로가 `pub use crate::skills;` alias를
 // 통해 이 심볼들로 해석된다.
+pub use apply::{apply_managed_skill, list_applied_skills, unapply_managed_skill};
 pub use audit_log::list_skill_audit;
 pub use backup::{backup_skill_library, list_skill_backups, restore_skill_library};
 pub use import::{import_external_skill, remove_managed_skill};
