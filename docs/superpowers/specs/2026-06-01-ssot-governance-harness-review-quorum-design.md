@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-01
 - **Branch:** `feat/governance-boule-p1`
-- **Status:** design / approved (pending spec review)
+- **Status:** implemented
 - **Builds on:** `2026-05-31-ssot-governance-harness-live-reviewer-design.md` (live External Reviewer wiring, DONE @ `08d20cd`)
 - **Area:** `governance/` Node/TS sidecar (outside the Tauri/Vite build graph)
 
