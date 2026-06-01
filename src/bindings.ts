@@ -62,8 +62,6 @@ export const commands = {
 	deleteSignal: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_signal", { id })),
 	/**  개인/업무 분류 수정. 사람의 manual override이며 quadrant 결정 레일과 독립이다. */
 	setSignalKind: (id: string, kind: "personal" | "work" | null) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_kind", { id, kind })),
-	/**  Life Wheel multi-select 수정. 첫 번째 항목은 기존 primary `area` 필드에도 동기화한다. */
-	setSignalAreaTags: (id: string, areas: AreaTag[]) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_area_tags", { id, areas })),
 	/**  Life Wheel 수동 선택. 커스텀 tag key도 허용하되 설정에 존재하는 enabled tag만 저장한다. */
 	setSignalAreaTagKey: (id: string, tagKey: string | null) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_area_tag_key", { id, tagKey })),
 	/**  Life Wheel 팔레트 설정 조회. 기본 taxonomy는 유지하되 사용자가 색/노출/커스텀 태그를 편집한다. */
@@ -432,7 +430,6 @@ export const commands = {
 	hermesAgentSend: (tabId: string, text: string, imagePaths: string[]) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_send", { tabId, text, imagePaths })),
 	hermesAgentCancel: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_cancel", { tabId })),
 	hermesAgentCloseTab: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_close_tab", { tabId })),
-	hermesAgentStop: () => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_stop")),
 	hermesSavePastedImage: (bytes: number[], ext: string) => typedError<string, AppError>(__TAURI_INVOKE("hermes_save_pasted_image", { bytes, ext })),
 	/**  저장된 Hermes 패널 토글 핫키 조회. 미설정 시 기본값("Cmd+Shift+Space"). */
 	hermesGetToggleHotkey: () => typedError<string, AppError>(__TAURI_INVOKE("hermes_get_toggle_hotkey")),
@@ -496,11 +493,6 @@ export const commands = {
 	 *  폴백(코드 상수)으로 돌아가므로 안전(기본 동작 보존). 외부 id는 거부.
 	 */
 	deleteSkill: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_skill", { id })),
-	/**
-	 *  외부 스킬 멀티루트 스캔(ROOTS의 `*\/SKILL.md` frontmatter → name/description/path/provider).
-	 *  읽기 전용 브라우즈. 부재 루트는 스킵(graceful degrade) — 항상 가능분을 반환한다.
-	 */
-	scanExternalSkills: () => typedError<ExternalSkill[], AppError>(__TAURI_INVOKE("scan_external_skills")),
 	/**
 	 *  환경 감지: 설치된(존재하는) 스킬 환경 + provider별 스킬 수를 돌려준다(P1 사이드바 전용 소비자).
 	 *  동일 ROOTS(`skill_roots`) 소비 — 두 번째 루트 정의 없음(C6). 읽기 전용.
@@ -1097,21 +1089,6 @@ export type ErrorKind =
 "validation" | 
 /**  버그/불변식 위반 — 로그 + 버그리포트 유도. */
 "unexpected";
-
-/**
- *  외부 스킬 스캔 결과 한 건(~/.claude/skills/<dir>/SKILL.md frontmatter). 디스크가 SSOT이므로
- *  DB에 영속하지 않고 매 스캔마다 읽는다(읽기 전용 브라우즈 + 선택적 내용 열람).
- */
-export type ExternalSkill = {
-	/**  frontmatter name(없으면 디렉터리명). */
-	name: string,
-	/**  frontmatter description(없으면 빈 문자열). */
-	description: string,
-	/**  SKILL.md 파일 절대 경로(내용 열람·편집 대상). */
-	path: string,
-	/**  이 스킬을 발견한 스캔 루트의 제공 도구(`list_skills`가 `Skill.provider`로 전달). */
-	provider: SkillProvider,
-};
 
 /**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
 export type FileChange = "M" | "A" | "D" | "R";

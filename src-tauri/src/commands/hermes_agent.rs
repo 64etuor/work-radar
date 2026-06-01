@@ -272,19 +272,6 @@ pub async fn hermes_agent_close_tab(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn hermes_agent_stop(holder: State<'_, HermesAgentHolder>) -> Result<(), AppError> {
-    let drained: Vec<AcpSession> = {
-        let mut map = holder.write().await;
-        map.drain().map(|(_, v)| v).collect()
-    };
-    for s in drained {
-        s.kill().await;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
 pub async fn hermes_save_pasted_image(bytes: Vec<u8>, ext: String) -> Result<String, AppError> {
     let safe_ext = match ext.to_ascii_lowercase().as_str() {
         "png" | "jpg" | "jpeg" | "gif" | "webp" => ext.to_ascii_lowercase(),

@@ -47,8 +47,8 @@ mod tests;
 // 기존 호출부(lib.rs collect_commands!, 다른 모듈)가 경로 변경 없이 쓰도록 커맨드/헬퍼 re-export.
 pub use registry::{create_skill, delete_skill, list_skills, update_skill};
 pub use scan::{
-    detect_skill_environments, get_skill_user_roots, read_external_skill, scan_external_skills,
-    set_skill_user_roots, write_external_skill,
+    detect_skill_environments, get_skill_user_roots, read_external_skill, set_skill_user_roots,
+    write_external_skill,
 };
 pub use seed::{resolve_prompt, seed_in_app_skills};
 // 아래는 seed에서 `pub(crate)`라 외부로 re-export 불가(E0364) — 크레이트 내부용 alias만.

@@ -5,7 +5,7 @@ use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    AreaTag, CreateSignalInput, Kind, LifeWheelTagConfig, Promotion, PromotionTarget, Quadrant,
+    CreateSignalInput, Kind, LifeWheelTagConfig, Promotion, PromotionTarget, Quadrant,
     SignalStatus, WorkSignal,
 };
 
@@ -101,17 +101,6 @@ pub async fn set_signal_kind(
     kind: Option<Kind>,
 ) -> Result<WorkSignal, AppError> {
     Ok(signal_store::set_signal_kind(db.inner(), &id, kind).await?)
-}
-
-/// Life Wheel multi-select 수정. 첫 번째 항목은 기존 primary `area` 필드에도 동기화한다.
-#[tauri::command]
-#[specta::specta]
-pub async fn set_signal_area_tags(
-    db: State<'_, Db>,
-    id: String,
-    areas: Vec<AreaTag>,
-) -> Result<WorkSignal, AppError> {
-    Ok(signal_store::set_signal_area_tags(db.inner(), &id, &areas).await?)
 }
 
 const KEY_LIFE_WHEEL_TAGS: &str = "life_wheel.tags";

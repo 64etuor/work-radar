@@ -563,14 +563,6 @@ fn scan_root(
     }
 }
 
-/// 외부 스킬 멀티루트 스캔(ROOTS의 `*/SKILL.md` frontmatter → name/description/path/provider).
-/// 읽기 전용 브라우즈. 부재 루트는 스킵(graceful degrade) — 항상 가능분을 반환한다.
-#[tauri::command]
-#[specta::specta]
-pub async fn scan_external_skills(db: State<'_, Db>) -> Result<Vec<ExternalSkill>, AppError> {
-    Ok(scan_external_skills_core(&skill_roots_db(db.inner()).await))
-}
-
 /// 외부 스킬 파일 내용 읽기(~/.claude/skills 하위 SKILL.md만). 디렉터리 탈출 방지(가드). 토큰 무관.
 #[tauri::command]
 #[specta::specta]

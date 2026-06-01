@@ -74,7 +74,6 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::update_signal_title,
         commands::delete_signal,
         commands::set_signal_kind,
-        commands::set_signal_area_tags,
         commands::set_signal_area_tag_key,
         commands::get_life_wheel_tags,
         commands::set_life_wheel_tags,
@@ -221,7 +220,6 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::hermes_agent::hermes_agent_send,
         commands::hermes_agent::hermes_agent_cancel,
         commands::hermes_agent::hermes_agent_close_tab,
-        commands::hermes_agent::hermes_agent_stop,
         // Hermes 임시 이미지 저장 (feat/hermes-floating C4).
         commands::hermes_agent::hermes_save_pasted_image,
         // Hermes 글로벌 토글 핫키 (feat/hermes-floating A2).
@@ -240,7 +238,6 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::registry::update_skill,
         skills::registry::create_skill,
         skills::registry::delete_skill,
-        skills::scan::scan_external_skills,
         skills::scan::detect_skill_environments,
         skills::scan::list_skill_workspaces,
         skills::scan::get_skill_user_roots,

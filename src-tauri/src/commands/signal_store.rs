@@ -586,34 +586,6 @@ pub(crate) async fn set_signal_area(
     .await
 }
 
-/// Life Wheel multi-select 확정/수정. 첫 번째 tag는 기존 `area` primary 필드에 동기화한다.
-pub(crate) async fn set_signal_area_tags(
-    db: &Db,
-    id: &str,
-    areas: &[AreaTag],
-) -> Result<WorkSignal, sqlx::Error> {
-    let primary = areas.first().copied();
-    let json = if areas.is_empty() {
-        None
-    } else {
-        let body = areas
-            .iter()
-            .map(|a| format!(r#""{}""#, a.as_key()))
-            .collect::<Vec<_>>()
-            .join(",");
-        Some(format!("[{body}]"))
-    };
-    sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET area = ?2, area_tags = ?3, updated_at = datetime('now') \
-         WHERE id = ?1 RETURNING {SIGNAL_COLS}"
-    ))
-    .bind(id)
-    .bind(primary)
-    .bind(json)
-    .fetch_one(db)
-    .await
-}
-
 /// Life Wheel 수동 선택. 커스텀 tag key는 `area_tags`에 보존하고, legacy `area` primary는
 /// 닫힌 enum에 해당하는 기본 태그일 때만 동기화한다.
 pub(crate) async fn set_signal_area_tag_key(
