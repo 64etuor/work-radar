@@ -18,17 +18,18 @@ use crate::models::{DivergenceStatus, Repo, SkillDivergence, SkillProvider};
 use crate::skills::central_repo::{central_skill_dir, provider_segment, sanitize_segment};
 use crate::skills::scan::{repo_skill_roots, scan_external_skills_core};
 
-/// 트리 비교용 항목 표현(파일 내용 / 심링크 타깃 / 디렉터리 마커).
+/// 트리 비교용 항목 표현(파일 내용 / 심링크 타깃 / 디렉터리 마커). G3-PR2c diff가 두 트리 맵을
+/// 비교해 added/removed/changed를 도출 → pub(crate).
 #[derive(PartialEq, Eq)]
-enum TreeEntry {
+pub(crate) enum TreeEntry {
     File(Vec<u8>),
     Symlink(PathBuf),
     Dir,
 }
 
 /// `root` 아래를 재귀 수집해 (상대경로 → 항목) 맵을 만든다. 심링크는 따라가지 않는다(트리 밖 비교
-/// 차단). IO 오류는 None(호출자가 Diverged로 매핑 — 보수적).
-fn collect_tree(root: &Path) -> Option<BTreeMap<PathBuf, TreeEntry>> {
+/// 차단). IO 오류는 None(호출자가 Diverged로 매핑 — 보수적). G3-PR2c diff_core가 재사용 → pub(crate).
+pub(crate) fn collect_tree(root: &Path) -> Option<BTreeMap<PathBuf, TreeEntry>> {
     let mut map = BTreeMap::new();
     walk_tree(root, root, &mut map)?;
     Some(map)

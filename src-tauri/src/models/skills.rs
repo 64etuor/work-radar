@@ -153,6 +153,29 @@ pub enum DivergenceStatus {
     Diverged,
 }
 
+/// 프로젝트 카피 ↔ 중앙 라이브러리 트리 차이(G3-PR2c, #22 — **표시 전용**). 디스크 유도·비영속(#7).
+/// `rel_path`는 표시·매칭 전용 — 로그 금지(C7). 텍스트는 UTF-8 lossy(바이너리 aux는 깨질 수 있으나
+/// 표시 전용 — pull/push는 바이트 단위 복사라 무손실). added=프로젝트에만, removed=중앙에만.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDiff {
+    /// 프로젝트 카피에만 있는 상대경로(중앙 대비 추가됨).
+    pub added: Vec<String>,
+    /// 중앙에만 있는 상대경로(프로젝트가 지움).
+    pub removed: Vec<String>,
+    /// 양쪽에 있으나 내용이 다른 항목.
+    pub changed: Vec<ChangedFile>,
+}
+
+/// `SkillDiff`의 변경된 파일 1건(중앙 텍스트 vs 프로젝트 텍스트 — FE lineDiff 입력).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangedFile {
+    pub rel_path: String,
+    pub central_text: String,
+    pub project_text: String,
+}
+
 /// 인앱 프롬프트 생성 입력(레지스트리에 새 편집 가능 템플릿 추가). binding은 선택(미바인딩 템플릿도 가능).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

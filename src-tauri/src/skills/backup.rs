@@ -201,7 +201,8 @@ fn central_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
 }
 
 /// 백업 루트(`app_data_dir/skills-backups`). skills-library와 형제(중첩 아님 → 백업이 자기 자신을 안 먹는다).
-fn backups_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+/// G3-PR2c push_divergence가 중앙 덮어쓰기 전 사전 스냅샷에 재사용 → pub(crate).
+pub(crate) fn backups_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
     Ok(app
         .path()
         .app_data_dir()
@@ -215,7 +216,8 @@ fn backups_root(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
 }
 
 /// 스냅샷 dir 이름용 UTC 타임스탬프 id: `YYYYMMDDThhmmssZ`(정렬 가능·fs 안전). chrono clock 사용.
-fn new_snapshot_id() -> String {
+/// G3-PR2c push_divergence가 사전 스냅샷 id 생성에 재사용 → pub(crate).
+pub(crate) fn new_snapshot_id() -> String {
     chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string()
 }
 

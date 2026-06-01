@@ -558,6 +558,21 @@ export const commands = {
 	vendorSkillToProject: (repoId: string, provider: SkillProvider, name: string) => typedError<string, AppError>(__TAURI_INVOKE("vendor_skill_to_project", { repoId, provider, name })),
 	/**  프로젝트에서 vendored 카피 제거 — 중앙과 InSync일 때만(사용자 편집 무손실). 가역의 반대편(레일 ①). */
 	unvendorSkillFromProject: (repoId: string, provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("unvendor_skill_from_project", { repoId, provider, name })),
+	/**
+	 *  프로젝트 카피 ↔ 중앙 트리 차이(G3-PR2c, #22 — 표시 전용). 읽기 전용: 외부 dir 쓰기/네트워크/잡
+	 *  spawn 없음(#1/#2/#7).
+	 */
+	listSkillDiff: (repoId: string, provider: SkillProvider, name: string) => typedError<SkillDiff, AppError>(__TAURI_INVOKE("list_skill_diff", { repoId, provider, name })),
+	/**
+	 *  중앙 내용으로 프로젝트 카피 덮어쓰기(G3-PR2c, 레일 ① — 사용자 발동·가역·감사). 프로젝트 편집을
+	 *  버린다(git-tracked 카피라 사용자 git이 undo). 잡 spawn 없음(#1/#2 — 파일 복사).
+	 */
+	pullDivergence: (repoId: string, provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("pull_divergence", { repoId, provider, name })),
+	/**
+	 *  프로젝트 편집을 중앙에 반영(G3-PR2c, 레일 ① — 사용자 발동·가역·감사). 중앙을 덮어쓰기 전에 backup
+	 *  스냅샷으로 떠 가역(중앙은 git-untracked). 잡 spawn 없음(#1/#2 — 파일 복사 + 스냅샷).
+	 */
+	pushDivergence: (repoId: string, provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("push_divergence", { repoId, provider, name })),
 	installSkillFromGit: (url: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("install_skill_from_git", { url, provider })),
 	backupSkillLibrary: () => typedError<BackupMeta, AppError>(__TAURI_INVOKE("backup_skill_library")),
 	listSkillBackups: () => typedError<BackupMeta[], AppError>(__TAURI_INVOKE("list_skill_backups")),
@@ -807,6 +822,13 @@ export type CalendarListItem = {
 	summary: string,
 	primary: boolean,
 	selected: boolean,
+};
+
+/**  `SkillDiff`의 변경된 파일 1건(중앙 텍스트 vs 프로젝트 텍스트 — FE lineDiff 입력). */
+export type ChangedFile = {
+	relPath: string,
+	centralText: string,
+	projectText: string,
 };
 
 /**  PR의 CI 상태 (check-runs conclusion 집계). `None` = 체크 없음. */
@@ -1634,6 +1656,20 @@ export type SkillAuditEntry = {
 	sourceRef: string | null,
 	detail: string | null,
 	createdAt: string,
+};
+
+/**
+ *  프로젝트 카피 ↔ 중앙 라이브러리 트리 차이(G3-PR2c, #22 — **표시 전용**). 디스크 유도·비영속(#7).
+ *  `rel_path`는 표시·매칭 전용 — 로그 금지(C7). 텍스트는 UTF-8 lossy(바이너리 aux는 깨질 수 있으나
+ *  표시 전용 — pull/push는 바이트 단위 복사라 무손실). added=프로젝트에만, removed=중앙에만.
+ */
+export type SkillDiff = {
+	/**  프로젝트 카피에만 있는 상대경로(중앙 대비 추가됨). */
+	added: string[],
+	/**  중앙에만 있는 상대경로(프로젝트가 지움). */
+	removed: string[],
+	/**  양쪽에 있으나 내용이 다른 항목. */
+	changed: ChangedFile[],
 };
 
 /**

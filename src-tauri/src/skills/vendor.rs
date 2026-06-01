@@ -135,8 +135,9 @@ pub(crate) async fn unvendor_core(
 }
 
 /// repo_id → 프로젝트 vendoring 루트(`<local_path>/<vendor_subdir>`). Local+enabled+비어있지 않은
-/// local_path 아니면 no_repo. vendor_subdir 없는 provider면 unsupported_provider.
-fn vendorable_repo_root(
+/// local_path 아니면 no_repo. vendor_subdir 없는 provider면 unsupported_provider. G3-PR2c
+/// resolve.rs(diff/pull/push)가 같은 프로젝트 dir 도출에 재사용 → pub(crate).
+pub(crate) fn vendorable_repo_root(
     repos: &[Repo],
     repo_id: &str,
     provider: SkillProvider,

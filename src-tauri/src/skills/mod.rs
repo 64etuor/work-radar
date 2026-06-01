@@ -33,6 +33,7 @@ pub mod import;
 pub mod installer;
 pub mod registry;
 pub mod remote;
+pub mod resolve;
 pub mod scan;
 pub mod seed;
 pub mod source;
@@ -61,6 +62,7 @@ pub use audit_log::list_skill_audit;
 pub use backup::{backup_skill_library, list_skill_backups, restore_skill_library};
 pub use import::{import_external_skill, remove_managed_skill};
 pub use installer::install_skill_from_git;
+pub use resolve::{list_skill_diff, pull_divergence, push_divergence};
 pub(crate) use seed::{
     resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH, BINDING_CI_TRIAGE, BINDING_PR_SELFCHECK,
     FAST_CODEX_MODEL,

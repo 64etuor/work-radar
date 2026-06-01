@@ -264,6 +264,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // 복사 / InSync일 때만 제거. 파일 복사뿐(잡 spawn 없음, #1/#2; 표/마이그레이션 없음, #7).
         skills::vendor::vendor_skill_to_project,
         skills::vendor::unvendor_skill_from_project,
+        // 프로젝트 divergence 해소 (G3-PR2c, ADR-0006 레일 ① — #22 write). diverged 카피를 pull(중앙→
+        // 프로젝트)/push(프로젝트→중앙, 사전 백업으로 가역)로 해소. diff는 표시 전용. 잡 spawn 없음(#1/#2).
+        skills::resolve::list_skill_diff,
+        skills::resolve::pull_divergence,
+        skills::resolve::push_divergence,
         // 스킬 네트워크 설치 (G1.5-PR1, ADR-0006 레일 ③) — GitHub tarball → 중앙 라이브러리.
         // bounded fetch + keychain(공개 repo는 토큰 불요) + audit. 잡 spawn 없음(#1/#2).
         skills::installer::install_skill_from_git,
