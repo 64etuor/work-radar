@@ -551,6 +551,13 @@ export const commands = {
 	 *  금지). 코어는 infallible(건별 보수적).
 	 */
 	listSkillDivergences: () => typedError<SkillDivergence[], AppError>(__TAURI_INVOKE("list_skill_divergences")),
+	/**
+	 *  managed 스킬을 프로젝트 스킬 dir에 복사(G3-PR2b, ADR-0006 레일 ① — 사용자 발동·가역·감사). 잡 spawn
+	 *  없음(#1/#2 — 파일 복사). 충돌은 덮어쓰지 않는다. 반환 = 복사된 dir 경로.
+	 */
+	vendorSkillToProject: (repoId: string, provider: SkillProvider, name: string) => typedError<string, AppError>(__TAURI_INVOKE("vendor_skill_to_project", { repoId, provider, name })),
+	/**  프로젝트에서 vendored 카피 제거 — 중앙과 InSync일 때만(사용자 편집 무손실). 가역의 반대편(레일 ①). */
+	unvendorSkillFromProject: (repoId: string, provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("unvendor_skill_from_project", { repoId, provider, name })),
 	installSkillFromGit: (url: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("install_skill_from_git", { url, provider })),
 	backupSkillLibrary: () => typedError<BackupMeta, AppError>(__TAURI_INVOKE("backup_skill_library")),
 	listSkillBackups: () => typedError<BackupMeta[], AppError>(__TAURI_INVOKE("list_skill_backups")),

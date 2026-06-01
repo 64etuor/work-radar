@@ -38,6 +38,7 @@ pub mod seed;
 pub mod source;
 pub mod tags;
 pub mod updater;
+pub mod vendor;
 
 #[cfg(test)]
 mod tests;
@@ -69,3 +70,4 @@ pub use updater::{
     apply_skill_update, check_skill_updates, get_skill_update_on_launch, list_skill_update_status,
     set_skill_auto_update, set_skill_update_on_launch,
 };
+pub use vendor::{unvendor_skill_from_project, vendor_skill_to_project};

@@ -260,6 +260,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::apply::apply_managed_skills,
         skills::apply::unapply_managed_skills,
         skills::divergence::list_skill_divergences,
+        // 프로젝트 카피 vendoring (G3-PR2b, ADR-0006 레일 ① — 복사·가역·감사). 중앙 → 프로젝트 dir
+        // 복사 / InSync일 때만 제거. 파일 복사뿐(잡 spawn 없음, #1/#2; 표/마이그레이션 없음, #7).
+        skills::vendor::vendor_skill_to_project,
+        skills::vendor::unvendor_skill_from_project,
         // 스킬 네트워크 설치 (G1.5-PR1, ADR-0006 레일 ③) — GitHub tarball → 중앙 라이브러리.
         // bounded fetch + keychain(공개 repo는 토큰 불요) + audit. 잡 spawn 없음(#1/#2).
         skills::installer::install_skill_from_git,
