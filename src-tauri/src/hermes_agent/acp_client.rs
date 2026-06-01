@@ -424,8 +424,6 @@ pub(crate) fn parse_permission_request(val: &Json) -> Option<AskUser> {
 /// Build the JSON-RPC **response** body for an ask-user request. Echoes `request_id`
 /// preserving its original JSON type (numeric string → number). `cancelled` sends the
 /// ACP `cancelled` outcome (so a dismissed card never hangs the agent).
-// Used by hermes_ask_user_respond command (Task 3); suppress until then.
-#[allow(dead_code)]
 pub(crate) fn build_ask_user_response(
     request_id: &str,
     option_id: &str,
