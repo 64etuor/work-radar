@@ -224,12 +224,9 @@ pub enum DivergenceStatus {
 
 - [ ] **Step 2: Write the failing test for `detect_divergence_core`**
 
-In `src-tauri/src/skills/divergence.rs`, inside `mod tests`, add a helper to build a fake central skill and these four tests:
+In `src-tauri/src/skills/divergence.rs`, inside `mod tests` (which already has `use super::*;`, so no new `use` lines are needed — `ProjectMember`, `DivergenceStatus`, `SkillProvider`, `detect_divergence_core` all resolve through it once Step 4 lands), add a helper to build a fake central skill and these four tests:
 
 ```rust
-    use super::ProjectMember;
-    use crate::models::{DivergenceStatus, SkillProvider};
-
     /// 중앙 managed 스킬 dir 생성(`<central>/<provider>/<name>/SKILL.md` + 본문).
     fn make_central(central: &Path, provider: &str, name: &str, body: &str) -> PathBuf {
         let dir = central.join(provider).join(name);
