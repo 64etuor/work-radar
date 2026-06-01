@@ -11,6 +11,7 @@ import {
   GitCompare,
   LayoutGrid,
   Library,
+  Link2,
   List,
   Plus,
   RefreshCw,
@@ -21,6 +22,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Trash2,
+  Unlink,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -44,6 +46,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { type DiffLine, diffStats, lineDiff } from "@/lib/lineDiff";
 import {
+  useAppliedSkills,
+  useApplyManagedSkill,
   useApplySkillUpdate,
   useBackupSkillLibrary,
   useCheckSkillUpdates,
@@ -62,6 +66,7 @@ import {
   useSkills,
   useSkillUpdateOnLaunch,
   useSkillUpdateStatus,
+  useUnapplyManagedSkill,
   useUpdateSkill,
   useWriteExternalSkill,
 } from "@/lib/query";
@@ -597,10 +602,10 @@ export function SkillsView() {
                     : updateOpen
                       ? "업데이트"
                       : selected?.kind === "external"
-                    ? "외부 스킬"
-                    : selected?.kind === "managed"
-                      ? "라이브러리 스킬"
-                      : "인앱 프롬프트"}
+                        ? "외부 스킬"
+                        : selected?.kind === "managed"
+                          ? "라이브러리 스킬"
+                          : "인앱 프롬프트"}
             </SheetTitle>
             {!adding && selectedGroup.length > 1 && (
               <div className="skl-sheet-switch" role="group" aria-label="위치 전환">
@@ -1188,8 +1193,18 @@ function ExternalViewer({ skill, onImported }: { skill: Skill; onImported: () =>
  * 에서 제거"는 중앙 복사본만 지운다(외부 원본 무손상, 감사 — 레일 ①②). 자동 실행 없음(#1/#2). */
 function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: () => void }) {
   const remove = useRemoveManagedSkill();
+  const applied = useAppliedSkills();
+  const apply = useApplyManagedSkill();
+  const unapply = useUnapplyManagedSkill();
   const [note, setNote] = useState<string | null>(null);
   const desc = (skill.prompt ?? "").trim();
+
+  // 적용 상태는 디스크 심링크에서 유도(레일 ①, INVARIANT #7) — provider+name으로 매칭.
+  const appliedEntry = (applied.data ?? []).find(
+    (a) => a.provider === skill.provider && a.name === skill.name,
+  );
+  const isApplied = !!appliedEntry;
+  const applyBusy = apply.isPending || unapply.isPending;
 
   const removeFromLibrary = () => {
     if (!skill.provider || remove.isPending) return;
@@ -1205,6 +1220,30 @@ function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: () => vo
       {
         onSuccess: onRemoved,
         onError: (e) => setNote(`제거 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  const applyToAgent = () => {
+    if (!skill.provider || applyBusy) return;
+    setNote(null);
+    apply.mutate(
+      { provider: skill.provider, name: skill.name },
+      {
+        onSuccess: (path) => setNote(`적용됨 → ${path}`),
+        onError: (e) => setNote(`적용 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  const unapplyFromAgent = () => {
+    if (!skill.provider || applyBusy) return;
+    setNote(null);
+    unapply.mutate(
+      { provider: skill.provider, name: skill.name },
+      {
+        onSuccess: () => setNote("적용 해제됨 (심링크 제거 · 사용자 파일 무손상)"),
+        onError: (e) => setNote(`해제 실패: ${(e as Error).message}`),
       },
     );
   };
@@ -1227,8 +1266,34 @@ function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: () => vo
       <div className="skl-bind-line">
         <Library className="mr-1 inline size-3.5 align-text-bottom" />
         라이브러리 관리 중 · 출처 {providerLabel(skill.provider)}
+        {isApplied && " · 에이전트에 적용됨"}
       </div>
       {desc && <div className="skl-desc">{desc}</div>}
+
+      {/* 에이전트 dir 적용/해제(G2-PR1, ADR-0006 레일 ① — 심링크, 가역·감사). 인라인 — Dialog 없음. */}
+      <div className="skl-actions">
+        {isApplied ? (
+          <Button
+            variant="outline"
+            className="gap-1.5 rounded-full"
+            onClick={unapplyFromAgent}
+            disabled={!skill.provider || applyBusy}
+          >
+            <Unlink className="size-4" />
+            {unapply.isPending ? "해제 중…" : "적용 해제"}
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            className="gap-1.5 rounded-full"
+            onClick={applyToAgent}
+            disabled={!skill.provider || applyBusy}
+          >
+            <Link2 className="size-4" />
+            {apply.isPending ? "적용 중…" : `${providerLabel(skill.provider)}에 적용`}
+          </Button>
+        )}
+      </div>
 
       <SkillTagsEditor skill={skill} />
 

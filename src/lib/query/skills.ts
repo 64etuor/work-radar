@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  type AppliedSkill,
   commands,
   type CreateSkillInput,
   type Skill,
@@ -141,6 +142,44 @@ export function useRemoveManagedSkill() {
     mutationFn: (args: { provider: SkillProvider; name: string }) =>
       unwrap(commands.removeManagedSkill(args.provider, args.name)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+/**
+ * 외부 에이전트 dir에 적용된 managed 스킬 목록(G2-PR1, ADR-0006 레일 ①). 디스크 심링크에서 유도 —
+ * 별도 표/캐시 없음(INVARIANT #7). 적용/해제 버튼이 현재 상태를 읽는 데 쓴다.
+ */
+export function useAppliedSkills() {
+  return useQuery<AppliedSkill[]>({
+    queryKey: ["skills", "applied"],
+    queryFn: () => unwrap(commands.listAppliedSkills()),
+    staleTime: 5_000,
+  });
+}
+
+/**
+ * managed 스킬을 에이전트 dir(`~/.<agent>/skills/<name>`)에 **심링크로 적용**(사용자 발동·가역·감사).
+ * 충돌(다른 파일 존재)은 거부하고 덮어쓰지 않는다. 잡 spawn 없음(#1/#2 — 파일 I/O뿐). 성공 시 적용 목록 무효화.
+ */
+export function useApplyManagedSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { provider: SkillProvider; name: string }) =>
+      unwrap(commands.applyManagedSkill(args.provider, args.name)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills", "applied"] }),
+  });
+}
+
+/**
+ * 적용 해제 — **우리가 만든 심링크만** 제거하고 사용자 파일/실제 dir은 건드리지 않는다(가역의 반대편).
+ * 모든 해제는 감사(레일 ①). 성공 시 적용 목록 무효화.
+ */
+export function useUnapplyManagedSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { provider: SkillProvider; name: string }) =>
+      unwrap(commands.unapplyManagedSkill(args.provider, args.name)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills", "applied"] }),
   });
 }
 
