@@ -1,10 +1,16 @@
 import type { DecisionRow } from "./types.ts";
 import { dedupe, extractRefs, truncate } from "./text.ts";
 
-const BULLET = /^- \*\*(.+?)\*\*:\s*(.*)$/;
-const DATE_SUFFIX = /\((\d{4}-\d{2}-\d{2})\)\s*$/;
+// Every decision-log entry is a top-level bullet that opens with a bold title span:
+// `- **<title>** <rest>`. Real entries vary after the bold — `: rest`, `. rest`,
+// ` (qualifier): rest` — and the `(YYYY-MM-DD)` date (when present) sits inside the
+// bold, sometimes with a trailing period. So capture the first bold span as the title
+// and treat everything after it as the remainder, rather than requiring a `:`.
+const BULLET = /^- \*\*(.+?)\*\*\s*(.*)$/;
+// Date at the end of the bold span, tolerating a trailing period (`(2026-05-27).`).
+const DATE_SUFFIX = /\((\d{4}-\d{2}-\d{2})\)\.?\s*$/;
 
-/** Parse `docs/decisions.md` top-level `- **<title>(<date>)**: <rest>` bullets.
+/** Parse `docs/decisions.md` top-level `- **<title>** <rest>` bullets.
  *  Each match is one row; ids are file-order ordinals (DL-NNN) since the log has
  *  no formal ids and is append-only. Non-matching lines are ignored. */
 export function parseDecisionLog(content: string, sourcePath: string): DecisionRow[] {
@@ -15,12 +21,15 @@ export function parseDecisionLog(content: string, sourcePath: string): DecisionR
     if (!m) continue;
     ordinal++;
     const bold = m[1].trim();
-    const rest = m[2];
     const dm = DATE_SUFFIX.exec(bold);
+    // Title = the bold span minus a trailing `(date)` and any trailing punctuation.
+    const title = (dm ? bold.slice(0, dm.index) : bold).replace(/[.\s]+$/, "").trim();
+    // Remainder minus a leading separator (`:`/`.`/space) left over from the bold.
+    const rest = m[2].replace(/^[:.\s]+/, "").trim();
     rows.push({
       id: `DL-${String(ordinal).padStart(3, "0")}`,
       kind: "decision-log",
-      title: dm ? bold.slice(0, dm.index).trim() : bold,
+      title,
       status: undefined,
       date: dm ? dm[1] : undefined,
       tags: [],

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildIndex, nodeIndexFs } from "../../src/index/build.js";
 import { formatDecisions, formatPrinciples } from "../../src/index/format.js";
@@ -17,5 +18,15 @@ describe("buildIndex against the real repo L3/L4 corpus", () => {
     // formatters produce non-empty text over the real corpus
     expect(formatDecisions(index)).toContain("ADR-0001");
     expect(formatPrinciples(index)).toContain("INVARIANT-1");
+  });
+
+  it("captures every top-level decision-log bullet (no silent drop)", async () => {
+    const index = await buildIndex(REPO_ROOT, nodeIndexFs);
+    const decisionsMd = await readFile(resolve(REPO_ROOT, "docs", "decisions.md"), "utf8");
+    // Every top-level `- **…` bullet is a decision-log entry; none may be dropped.
+    const bulletCount = (decisionsMd.match(/^- \*\*/gm) ?? []).length;
+    const dlRows = index.listDecisions().filter((d) => d.kind === "decision-log");
+    expect(bulletCount).toBeGreaterThan(100); // sanity: the real log is large
+    expect(dlRows.length).toBe(bulletCount); // capture all, not a 35% subset
   });
 });
