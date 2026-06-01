@@ -36,7 +36,7 @@ export function useSkillWorkspaces() {
   });
 }
 
-/** 프로젝트 워크스페이스 멤버 스킬의 divergence 상태(G3-PR2, #17). 백엔드 divergence.rs가 경로/매칭의 단일 출처. */
+/** 프로젝트 워크스페이스 멤버 스킬의 divergence 상태(G3-PR2, #22 감지 슬라이스). 백엔드 divergence.rs가 경로/매칭의 단일 출처. */
 export function useSkillDivergences() {
   return useQuery<SkillDivergence[]>({
     queryKey: ["skillDivergences"],

@@ -655,7 +655,9 @@ export function SkillsView() {
                   const groupSelected = g.memberIds.every((id) => selectedIds.has(id));
                   return (
                     <div key={s.id} className={cn("skl-card-wrap", groupSelected && "selected")}>
-                      {s.sourcePath != null && divergedPaths.has(s.sourcePath) && (
+                      {g.locations.some(
+                        (l) => l.sourcePath != null && divergedPaths.has(l.sourcePath),
+                      ) && (
                         <span className="skl-card-diverged" title="중앙 라이브러리와 다름">
                           ·다름
                         </span>
