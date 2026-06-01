@@ -67,6 +67,7 @@ import {
   useSkills,
   useSkillUpdateOnLaunch,
   useSkillUpdateStatus,
+  useSkillWorkspaces,
   useUnapplyManagedSkill,
   useUnapplyManagedSkills,
   useUpdateSkill,
@@ -90,6 +91,7 @@ import {
 import {
   applyEnvOrder,
   buildSkillEnvNav,
+  buildSkillWorkspaceNav,
   envCounts,
   reorderEnv,
   type SkillEnvNavItem,
@@ -126,6 +128,7 @@ export function SkillsView() {
   const { pendingSkillId, clearPendingSkill } = useUIStore();
   const skills = useSkills();
   const environments = useSkillEnvironments();
+  const workspaces = useSkillWorkspaces();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -195,7 +198,8 @@ export function SkillsView() {
     () => applyEnvOrder(buildSkillEnvNav(list, environments.data), envOrder),
     [list, environments.data, envOrder],
   );
-  const activeEnv = envNav.find((i) => i.id === activeEnvId) ?? envNav[0];
+  const workspaceNav = useMemo(() => buildSkillWorkspaceNav(workspaces.data), [workspaces.data]);
+  const activeEnv = [...envNav, ...workspaceNav].find((i) => i.id === activeEnvId) ?? envNav[0];
   const envFiltered = useMemo(
     () => (activeEnv ? filtered.filter(activeEnv.match) : filtered),
     [filtered, activeEnv],
@@ -604,6 +608,22 @@ export function SkillsView() {
               onDropItem={() => onEnvDrop(item.id)}
             />
           ))}
+          {workspaceNav.length > 0 && (
+            <>
+              <div className="skl-group-label skl-sidebar-group">프로젝트</div>
+              {workspaceNav.map((item) => (
+                <EnvNavButton
+                  key={item.id}
+                  item={item}
+                  count={envCounts(item, filtered)}
+                  active={(activeEnv?.id ?? "all") === item.id}
+                  onSelect={() => setActiveEnvId(item.id)}
+                  onDragStart={() => {}}
+                  onDropItem={() => {}}
+                />
+              ))}
+            </>
+          )}
         </nav>
 
         <div className="skl-body">
