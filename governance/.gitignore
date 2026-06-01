@@ -1,2 +1,10 @@
 node_modules/
 dist/
+
+# Runtime-generated workspace artifacts. The tracked .gitkeep files preserve the
+# directory structure; generated event/review files are runtime output, not source
+# (a server run or headless smoke test must not litter the tree).
+workspace/events/**
+!workspace/events/.gitkeep
+workspace/reviews/**
+!workspace/reviews/.gitkeep
