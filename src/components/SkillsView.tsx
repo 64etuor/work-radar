@@ -5,6 +5,7 @@ import {
   Archive,
   Blocks,
   CircleHelp,
+  Copy,
   Download,
   FileText,
   FolderInput,
@@ -71,7 +72,9 @@ import {
   useSkillWorkspaces,
   useUnapplyManagedSkill,
   useUnapplyManagedSkills,
+  useUnvendorSkillFromProject,
   useUpdateSkill,
+  useVendorSkillToProject,
   useWriteExternalSkill,
 } from "@/lib/query";
 import { providerLabel, skillCardBadges } from "@/lib/skillBadges";
@@ -94,6 +97,7 @@ import {
   buildDivergedPathSet,
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
+  buildVendorTargets,
   envCounts,
   reorderEnv,
   type SkillEnvNavItem,
@@ -1287,6 +1291,88 @@ function ExternalViewer({ skill, onImported }: { skill: Skill; onImported: () =>
   );
 }
 
+/** managed 스킬을 프로젝트 스킬 dir에 복사/해제(G3-PR2b, ADR-0006 레일 ① — 복사·가역·감사). vendorable
+ *  프로젝트별 현재 상태: absent→복사, in_sync→복사 해제, diverged→변경됨(해소는 PR2c). 상태는
+ *  divergences가 단일 출처(C6). vendorable provider(claude/codex) 아니거나 대상 프로젝트 없으면 숨김. */
+function VendorPanel({ skill }: { skill: Skill }) {
+  const workspaces = useSkillWorkspaces();
+  const divergences = useSkillDivergences();
+  const vendor = useVendorSkillToProject();
+  const unvendor = useUnvendorSkillFromProject();
+  const [note, setNote] = useState<string | null>(null);
+  const targets = useMemo(
+    () => buildVendorTargets(skill, workspaces.data, divergences.data),
+    [skill, workspaces.data, divergences.data],
+  );
+  if (!skill.provider || targets.length === 0) return null;
+  const provider = skill.provider;
+  const busy = vendor.isPending || unvendor.isPending;
+
+  const doVendor = (repoId: string) => {
+    if (busy) return;
+    setNote(null);
+    vendor.mutate(
+      { repoId, provider, name: skill.name },
+      {
+        onSuccess: (path) => setNote(`복사됨 → ${path}`),
+        onError: (e) => setNote(`복사 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+  const doUnvendor = (repoId: string) => {
+    if (busy) return;
+    setNote(null);
+    unvendor.mutate(
+      { repoId, provider, name: skill.name },
+      {
+        onSuccess: () => setNote("복사 해제됨 (프로젝트 카피 제거 · 중앙 무손상)"),
+        onError: (e) => setNote(`해제 실패: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  return (
+    <div className="skl-vendor">
+      <div className="skl-vendor-label">프로젝트에 복사</div>
+      {targets.map((t) => (
+        <div key={t.repoId} className="skl-vendor-row">
+          <span className="skl-vendor-proj" title={t.repoId}>
+            {t.label}
+          </span>
+          {t.state === "absent" && (
+            <Button
+              variant="outline"
+              className="gap-1.5 rounded-full"
+              onClick={() => doVendor(t.repoId)}
+              disabled={busy}
+            >
+              <Copy className="size-4" />
+              복사
+            </Button>
+          )}
+          {t.state === "in_sync" && (
+            <Button
+              variant="outline"
+              className="gap-1.5 rounded-full"
+              onClick={() => doUnvendor(t.repoId)}
+              disabled={busy}
+            >
+              <Unlink className="size-4" />
+              복사 해제
+            </Button>
+          )}
+          {t.state === "diverged" && (
+            <span className="skl-vendor-diverged" title="중앙과 다름 — 해소는 곧(PR2c)">
+              변경됨
+            </span>
+          )}
+        </div>
+      ))}
+      {note && <div className="skl-note">{note}</div>}
+    </div>
+  );
+}
+
 /** 라이브러리(managed) 스킬 뷰어 — work-radar가 소유한 중앙 라이브러리 스킬(G1-PR3). 메타데이터 + 제거.
  * 중앙 파일 내용 뷰어는 G1 비대상(readExternalSkill 가드가 외부 루트 전용 — 중앙 경로 비대상). "라이브러리
  * 에서 제거"는 중앙 복사본만 지운다(외부 원본 무손상, 감사 — 레일 ①②). 자동 실행 없음(#1/#2). */
@@ -1393,6 +1479,8 @@ function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: () => vo
           </Button>
         )}
       </div>
+
+      <VendorPanel skill={skill} />
 
       <SkillTagsEditor skill={skill} />
 

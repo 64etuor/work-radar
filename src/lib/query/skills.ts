@@ -227,6 +227,41 @@ export function useUnapplyManagedSkills() {
 }
 
 /**
+ * managed 스킬을 프로젝트 스킬 dir에 복사(G3-PR2b, ADR-0006 레일 ① — 복사·가역·감사). 잡 spawn 없음.
+ * 성공 시 워크스페이스 + divergence + 스킬 목록 무효화(새 카피가 멤버 + 마커로 즉시 반영 — PR2 유예된
+ * invalidation을 여기서 해소).
+ */
+export function useVendorSkillToProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
+      unwrap(commands.vendorSkillToProject(args.repoId, args.provider, args.name)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
+      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+    },
+  });
+}
+
+/**
+ * 프로젝트 vendored 카피 제거 — 중앙과 InSync일 때만(사용자 편집 무손실). 성공 시 워크스페이스 +
+ * divergence + 스킬 목록 무효화.
+ */
+export function useUnvendorSkillFromProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
+      unwrap(commands.unvendorSkillFromProject(args.repoId, args.provider, args.name)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
+      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+    },
+  });
+}
+
+/**
  * GitHub repo URL에서 스킬을 work-radar 중앙 라이브러리로 설치(ADR-0006 레일 ③ — bounded·감사).
  * 네트워크 fetch/토큰은 전부 Rust에 있다(렌더러 토큰 비노출). 이번 라운드는 공개 repo 우선.
  * 잡을 spawn하지 않는다(#1/#2 — tarball 받아 파일 복사). 성공 시 목록 무효화 → managed로 노출.

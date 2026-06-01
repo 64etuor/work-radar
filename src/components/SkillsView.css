@@ -448,6 +448,34 @@
   color: var(--color-wr-danger);
 }
 
+/* 프로젝트 카피 vendoring 패널(G3-PR2b) — managed 시트 내, vendorable 프로젝트별 복사/해제 액션. */
+.skl-vendor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.skl-vendor-label {
+  font: 600 12px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+.skl-vendor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.skl-vendor-proj {
+  overflow: hidden;
+  font: 400 13px var(--font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skl-vendor-diverged {
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-danger);
+}
+
 /* 백업/복원 패널(G1.5-PR2) — 스냅샷 목록. 행 = 시각 + 개수 + 복원 액션. */
 .skl-backup-list {
   display: flex;

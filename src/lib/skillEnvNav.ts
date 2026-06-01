@@ -155,7 +155,10 @@ export function buildDivergedPathSet(divergences: SkillDivergence[] | undefined)
 
 /** vendoring 대상 provider(프로젝트 dir 관례 있는 것 — 백엔드 scan::vendor_subdir의 FE 트윈). 백엔드가
  *  authoritative이며 그 외 provider는 unsupported_provider로 거부한다. */
-const VENDORABLE_PROVIDERS: ReadonlySet<SkillProvider> = new Set<SkillProvider>(["claude", "codex"]);
+const VENDORABLE_PROVIDERS: ReadonlySet<SkillProvider> = new Set<SkillProvider>([
+  "claude",
+  "codex",
+]);
 
 export type VendorState = "absent" | "in_sync" | "diverged";
 export interface VendorTarget {
