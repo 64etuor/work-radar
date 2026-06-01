@@ -424,6 +424,8 @@ pub(crate) fn parse_permission_request(val: &Json) -> Option<AskUser> {
 /// Build the JSON-RPC **response** body for an ask-user request. Echoes `request_id`
 /// preserving its original JSON type (numeric string → number). `cancelled` sends the
 /// ACP `cancelled` outcome (so a dismissed card never hangs the agent).
+// Used by hermes_ask_user_respond command (Task 3); suppress until then.
+#[allow(dead_code)]
 pub(crate) fn build_ask_user_response(
     request_id: &str,
     option_id: &str,
@@ -471,8 +473,31 @@ async fn dispatch_incoming(
     };
     let params = val.get("params").cloned().unwrap_or(Json::Null);
 
-    // Only handle session/update; agent-initiated requests (fs/*, terminal/*, session/request_permission)
-    // are not yet implemented — silently ignore to avoid error spam.
+    // Inbound agent *request*: the agent asks the user to choose (ACP
+    // session/request_permission). Today other agent requests (fs/*, terminal/*) are
+    // still silently ignored — out of scope. We translate this one into the bespoke
+    // generic ask-user event; the user's choice returns via hermes_ask_user_respond.
+    if let Some(ask) = parse_permission_request(&val) {
+        let options: Vec<Json> = ask
+            .options
+            .iter()
+            .map(|o| json!({ "id": o.id, "label": o.label }))
+            .collect();
+        emit_with_tab(
+            app,
+            tab_id,
+            "hermes-agent:ask-user",
+            json!({
+                "requestId": ask.request_id,
+                "toolName": ask.tool_name,
+                "options": options,
+            }),
+        );
+        return;
+    }
+
+    // session/request_permission is handled above; remaining agent-initiated requests
+    // (fs/*, terminal/*) are not yet implemented — silently ignore to avoid error spam.
     if method == "session/update" {
         // Shape: params.sessionId + params.update.{sessionUpdate, ...fields}
         let update = params.get("update").cloned().unwrap_or(Json::Null);
