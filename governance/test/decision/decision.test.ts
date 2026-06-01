@@ -73,4 +73,52 @@ describe("deriveDecisionState", () => {
     expect(s.phase).toBe("rejected");
     expect(s.verdict).toBe("rejected");
   });
+
+  it("counts DISTINCT reviewer models, not events (two same-model reviews → 1)", () => {
+    const s = deriveDecisionState(proposal, [
+      evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: ["author_model:claude"] }),
+      evt("decision_review_recorded", { source: "reviewer", actor: "Codex:latest", tags: ["author_model:claude"] }),
+    ]);
+    expect(s.reviewCount).toBe(1); // codex == Codex:latest after normalize
+  });
+
+  it("counts two DISTINCT models as 2", () => {
+    const s = deriveDecisionState(proposal, [
+      evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: ["author_model:claude"] }),
+      evt("decision_review_recorded", { source: "reviewer", actor: "gemini", tags: ["author_model:claude"] }),
+    ]);
+    expect(s.reviewCount).toBe(2);
+  });
+
+  it("quorum 2: one distinct review stays 'proposed' (not reviewed)", () => {
+    const s = deriveDecisionState(
+      proposal,
+      [evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: ["author_model:claude"] })],
+      2,
+    );
+    expect(s.phase).toBe("proposed");
+    expect(s.reviewed).toBe(false);
+    expect(s.reviewCount).toBe(1);
+  });
+
+  it("quorum 2: two distinct reviews → 'reviewed'", () => {
+    const s = deriveDecisionState(
+      proposal,
+      [
+        evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: ["author_model:claude"] }),
+        evt("decision_review_recorded", { source: "reviewer", actor: "gemini", tags: ["author_model:claude"] }),
+      ],
+      2,
+    );
+    expect(s.phase).toBe("reviewed");
+    expect(s.reviewed).toBe(true);
+    expect(s.reviewCount).toBe(2);
+  });
+
+  it("default quorum is 1 (omitted arg behaves as today)", () => {
+    const s = deriveDecisionState(proposal, [
+      evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: ["author_model:claude"] }),
+    ]);
+    expect(s.reviewed).toBe(true);
+  });
 });

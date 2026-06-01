@@ -19,18 +19,29 @@ function reviewAuthorModel(e: GovEvent): string | null {
 }
 
 /** Pure fold: a proposal event + its related lifecycle events → gate-state.
- *  `related` = events whose related_to includes the proposal id (any order). */
-export function deriveDecisionState(proposal: GovEvent, related: GovEvent[]): DecisionState {
+ *  `related` = events whose related_to includes the proposal id (any order).
+ *  @param quorum minimum number of DISTINCT reviewer models required to reach `reviewed`;
+ *    callers must pass >= 1. The server boundary clamps untrusted input — this fold does not
+ *    (a quorum of 0 would make the gate vacuously true). */
+export function deriveDecisionState(
+  proposal: GovEvent,
+  related: GovEvent[],
+  quorum = 1,
+): DecisionState {
   const decisionId = proposal.frontmatter.id;
   const title = proposal.body.split("\n", 1)[0]?.trim() || decisionId;
-  // MINOR b: count a review ONLY when its recorded reviewer_model ≠ author_model (normalized).
-  // A forged same-model review event, or one missing the author tag, does not satisfy the gate.
-  const reviewCount = related.filter((e) => {
-    if (e.frontmatter.type !== "decision_review_recorded") return false;
+  // §7: count DISTINCT normalized reviewer models (not events). A review qualifies only
+  // when its recorded reviewer model ≠ author_model (normalized); a forged same-model
+  // event, or one missing the author tag, does not satisfy the gate (fail-closed).
+  const distinctModels = new Set<string>();
+  for (const e of related) {
+    if (e.frontmatter.type !== "decision_review_recorded") continue;
     const author = reviewAuthorModel(e);
-    if (author === null) return false; // fail-closed
-    return normalizeModelId(e.frontmatter.actor) !== normalizeModelId(author);
-  }).length;
+    if (author === null) continue; // fail-closed
+    const reviewer = normalizeModelId(e.frontmatter.actor);
+    if (reviewer !== normalizeModelId(author)) distinctModels.add(reviewer);
+  }
+  const reviewCount = distinctModels.size;
   const rejected = related.some((e) => e.frontmatter.type === "decision_rejected");
   const approved = related.some((e) => e.frontmatter.type === "decision_approved");
 
@@ -42,12 +53,12 @@ export function deriveDecisionState(proposal: GovEvent, related: GovEvent[]): De
   } else if (approved) {
     phase = "approved";
     verdict = "approved";
-  } else if (reviewCount >= 1) {
+  } else if (reviewCount >= quorum) {
     phase = "reviewed";
     verdict = null;
   } else {
     phase = "proposed";
     verdict = null;
   }
-  return { decisionId, title, phase, reviewCount, reviewed: reviewCount >= 1, verdict };
+  return { decisionId, title, phase, reviewCount, reviewed: reviewCount >= quorum, verdict };
 }
