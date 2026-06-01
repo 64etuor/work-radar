@@ -33,11 +33,15 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: () => Promise.resolve(() => {}),
 }));
 
+import { EMPTY_TABS_STATE } from "./useHermesTabs";
 import { useHermesTabsStore } from "./useHermesTabsStore";
 
 describe("respondAsk thunk", () => {
   beforeEach(() => {
     hermesAskUserRespond.mockClear();
+    // Reset the singleton store to a clean state (fresh Map) so tabs from other
+    // tests/files can't leak in and make these assertions order-dependent.
+    useHermesTabsStore.setState({ ...EMPTY_TABS_STATE, tabs: new Map() });
     // seed a tab + an ask message
     const d = useHermesTabsStore.getState()._dispatch;
     d({ type: "open-tab", tabId: "a", defaultName: "A" });

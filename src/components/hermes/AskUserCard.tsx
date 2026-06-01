@@ -23,7 +23,11 @@ export function AskUserCard({ message, onRespond }: Props) {
       {message.toolName && (
         <p className="text-muted-foreground mb-2 font-mono text-xs">{message.toolName}</p>
       )}
-      <div className="flex flex-col gap-1.5">
+      <div
+        role="group"
+        aria-label={message.toolName ?? "에이전트 선택 요청"}
+        className="flex flex-col gap-1.5"
+      >
         {message.options.map((o) => {
           const chosen = resolved === o.id;
           return (
@@ -31,7 +35,7 @@ export function AskUserCard({ message, onRespond }: Props) {
               key={o.id}
               type="button"
               variant={chosen ? "default" : "outline"}
-              aria-pressed={chosen || undefined}
+              aria-pressed={isResolved ? chosen : undefined}
               disabled={isResolved}
               className={cn("justify-start", chosen && "font-medium")}
               onClick={() => onRespond(o.id, false)}

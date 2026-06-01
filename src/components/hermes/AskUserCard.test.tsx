@@ -34,6 +34,21 @@ describe("AskUserCard", () => {
     expect(html).toContain('disabled=""');
     // chosen option is flagged for the user (aria-pressed truthy)
     expect(html).toContain('aria-pressed="true"');
+    // unchosen options are explicitly not-pressed once resolved (not omitted)
+    expect(html).toContain('aria-pressed="false"');
+  });
+
+  it("groups the options with an accessible role+label", () => {
+    const html = renderToStaticMarkup(<AskUserCard message={base} onRespond={() => {}} />);
+    expect(html).toContain('role="group"');
+    expect(html).toContain('aria-label="Write foo.txt"');
+  });
+
+  it("falls back to a generic group label when toolName is absent", () => {
+    const html = renderToStaticMarkup(
+      <AskUserCard message={{ ...base, toolName: undefined }} onRespond={() => {}} />,
+    );
+    expect(html).toContain('aria-label="에이전트 선택 요청"');
   });
 
   it("renders a cancelled state when resolved='cancelled'", () => {

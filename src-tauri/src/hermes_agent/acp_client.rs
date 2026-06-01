@@ -368,8 +368,10 @@ pub(crate) struct AskUserOption {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AskUser {
-    /// Original JSON-RPC request id, stringified (specta forbids i64/u64; echoed back
-    /// with its original JSON type by `build_ask_user_response`).
+    /// Original JSON-RPC request id as an opaque JSON-serialized token (specta forbids
+    /// i64/u64 crossing the IPC boundary). `build_ask_user_response` recovers the id's
+    /// exact original JSON type from this token, so a numeric string ("7") stays a
+    /// string and a number (7) stays a number — the frontend never inspects it.
     pub request_id: String,
     pub tool_name: Option<String>,
     pub options: Vec<AskUserOption>,
@@ -384,9 +386,10 @@ pub(crate) fn parse_permission_request(val: &Json) -> Option<AskUser> {
     if val.get("method").and_then(|v| v.as_str()) != Some("session/request_permission") {
         return None;
     }
+    // Serialize the id to its JSON text so its exact type survives the round-trip
+    // (number 7 → "7", string "7" → "\"7\""); `build_ask_user_response` reverses this.
     let request_id = match val.get("id")? {
-        Json::Number(n) => n.to_string(),
-        Json::String(s) => s.clone(),
+        id @ (Json::Number(_) | Json::String(_)) => serde_json::to_string(id).ok()?,
         _ => return None,
     };
     let params = val.get("params")?;
@@ -421,18 +424,21 @@ pub(crate) fn parse_permission_request(val: &Json) -> Option<AskUser> {
     })
 }
 
-/// Build the JSON-RPC **response** body for an ask-user request. Echoes `request_id`
-/// preserving its original JSON type (numeric string → number). `cancelled` sends the
-/// ACP `cancelled` outcome (so a dismissed card never hangs the agent).
+/// Build the JSON-RPC **response** body for an ask-user request. The `request_id` token
+/// is the JSON-serialized original id (see `parse_permission_request`), so it is parsed
+/// back to recover the id's exact JSON type — a numeric string stays a string, a number
+/// stays a number. A token that isn't valid JSON (or not a string/number) falls back to
+/// a string id (defensive). `cancelled` sends the ACP `cancelled` outcome (so a dismissed
+/// card never hangs the agent).
 pub(crate) fn build_ask_user_response(
     request_id: &str,
     option_id: &str,
     cancelled: bool,
 ) -> Vec<u8> {
-    let id = match request_id.parse::<i64>() {
-        Ok(n) => json!(n),
-        Err(_) => json!(request_id),
-    };
+    let id = serde_json::from_str::<Json>(request_id)
+        .ok()
+        .filter(|v| v.is_number() || v.is_string())
+        .unwrap_or_else(|| json!(request_id));
     let outcome = if cancelled {
         json!({ "outcome": "cancelled" })
     } else {
@@ -666,7 +672,7 @@ mod tests {
             ] }
         });
         let ask = parse_permission_request(&val).expect("should parse");
-        assert_eq!(ask.request_id, "abc"); // string id preserved verbatim
+        assert_eq!(ask.request_id, "\"abc\""); // string id → JSON-serialized token (quoted)
         assert_eq!(ask.tool_name, None);
         assert_eq!(ask.options.len(), 1);
         assert_eq!(
@@ -713,5 +719,35 @@ mod tests {
         assert_eq!(v["id"], json!("abc")); // non-numeric id stays a string
         assert_eq!(v["result"]["outcome"]["outcome"], "cancelled");
         assert!(v["result"]["outcome"].get("optionId").is_none());
+    }
+
+    /// Round-trip a JSON *number* id through parse → build: must stay a number.
+    #[test]
+    fn ask_user_id_roundtrip_preserves_number_as_number() {
+        let val = json!({
+            "id": 7,
+            "method": "session/request_permission",
+            "params": { "options": [{ "optionId": "ok", "name": "OK" }] }
+        });
+        let ask = parse_permission_request(&val).expect("should parse");
+        let bytes = build_ask_user_response(&ask.request_id, "ok", false);
+        let v: Json = serde_json::from_slice(&bytes).expect("valid json");
+        assert_eq!(v["id"], json!(7));
+    }
+
+    /// Round-trip a numeric *string* id ("7") through parse → build: must stay a
+    /// string. JSON-RPC requires the response id to equal the request id including
+    /// its type, so coercing "7" → 7 would break correlation for such an agent.
+    #[test]
+    fn ask_user_id_roundtrip_preserves_numeric_string_as_string() {
+        let val = json!({
+            "id": "7",
+            "method": "session/request_permission",
+            "params": { "options": [{ "optionId": "ok", "name": "OK" }] }
+        });
+        let ask = parse_permission_request(&val).expect("should parse");
+        let bytes = build_ask_user_response(&ask.request_id, "ok", false);
+        let v: Json = serde_json::from_slice(&bytes).expect("valid json");
+        assert_eq!(v["id"], json!("7")); // stays a STRING, not coerced to number 7
     }
 }
