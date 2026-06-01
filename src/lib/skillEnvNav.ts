@@ -45,6 +45,9 @@ export interface SkillEnvNavItem {
   match: (s: Skill) => boolean;
   /** true면 드래그 재정렬에서 제외(고정). "전체"만 고정. */
   pinned: boolean;
+  /** 워크스페이스 항목의 repos.id(#17 헬스 lookup 키). env/provider 항목은 없음 — id에서 역추론하지
+   *  않도록 빌더가 직접 부여(C6: 키 단일 출처). */
+  repoId?: string;
 }
 
 /**
@@ -97,6 +100,7 @@ export function buildSkillWorkspaceNav(
       label: w.label,
       match: (s: Skill) => s.sourcePath != null && members.has(s.sourcePath),
       pinned: true,
+      repoId: w.repoId,
     };
   });
 }
@@ -149,6 +153,22 @@ export function buildDivergedPathSet(divergences: SkillDivergence[] | undefined)
   const out = new Set<string>();
   for (const d of divergences ?? []) {
     if (d.status === "diverged") out.add(d.memberPath);
+  }
+  return out;
+}
+
+/**
+ * repoId → diverged 멤버 수(G3-PR3, #17 — 표시 전용 sync 헬스 rollup). divergences가 상태 단일
+ * 출처(C6 — `status`는 divergence.rs 판정, FE는 그룹·카운트만·경로추론 없음). `in_sync`/미수록은
+ * 카운트하지 않는다(정상=무배지). `buildDivergedPathSet`의 카운트 트윈. 전체 합계는 호출부에서
+ * `[...health.values()].reduce(...)`.
+ */
+export function buildWorkspaceHealth(
+  divergences: SkillDivergence[] | undefined,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const d of divergences ?? []) {
+    if (d.status === "diverged") out.set(d.repoId, (out.get(d.repoId) ?? 0) + 1);
   }
   return out;
 }

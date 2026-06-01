@@ -119,6 +119,18 @@
   font: 500 11px var(--font-mono);
   color: var(--color-wr-muted);
 }
+/* sync 헬스 배지(#17) — 워크스페이스/섹션 라벨의 diverged 카운트. danger 톤, count 옆에 우측 클러스터. */
+.skl-env-diverged {
+  flex-shrink: 0;
+  margin-left: auto;
+  font: 600 11px var(--font-mono);
+  color: var(--color-wr-danger);
+  text-transform: none;
+}
+/* `.skl-group-label span`(muted)보다 우선 — 섹션 라벨 aggregate 배지도 danger 유지. */
+.skl-group-label .skl-env-diverged {
+  color: var(--color-wr-danger);
+}
 
 /* ── 본문(스크롤 컨테이너) ── */
 .skl-body {

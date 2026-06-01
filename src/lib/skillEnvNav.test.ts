@@ -13,6 +13,7 @@ import {
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
   buildVendorTargets,
+  buildWorkspaceHealth,
   envCounts,
   reorderEnv,
   SKILL_PROVIDER_LABEL,
@@ -153,6 +154,7 @@ describe("buildSkillWorkspaceNav", () => {
     expect(nav[0].id).toBe("workspace:r1");
     expect(nav[0].label).toBe("alpha");
     expect(nav[0].pinned).toBe(true);
+    expect(nav[0].repoId).toBe("r1"); // #17 헬스 lookup 키 — id 역추론 없이 직접 부여.
   });
 
   it("match uses memberPaths Set on sourcePath", () => {
@@ -227,5 +229,34 @@ describe("buildVendorTargets", () => {
   it("returns empty for a non-managed skill", () => {
     const ext = mk({ id: "ext:/x", name: "foo", kind: "external", provider: "claude" });
     expect(buildVendorTargets(ext, [ws("r1", "Alpha", [])], [])).toEqual([]);
+  });
+});
+
+describe("buildWorkspaceHealth", () => {
+  const div = (repoId: string, name: string, status: "in_sync" | "diverged"): SkillDivergence => ({
+    repoId,
+    provider: "claude",
+    name,
+    memberPath: `/p/${repoId}/${name}/SKILL.md`,
+    status,
+  });
+
+  it("counts diverged members per repoId, excluding in_sync", () => {
+    const health = buildWorkspaceHealth([
+      div("r1", "a", "diverged"),
+      div("r1", "b", "diverged"),
+      div("r1", "c", "in_sync"), // 제외
+      div("r2", "d", "diverged"),
+      div("r3", "e", "in_sync"), // r3은 맵에 없음
+    ]);
+    expect(health.get("r1")).toBe(2);
+    expect(health.get("r2")).toBe(1);
+    expect(health.has("r3")).toBe(false);
+    expect([...health.values()].reduce((a, b) => a + b, 0)).toBe(3); // 전체 합계
+  });
+
+  it("returns an empty map for undefined/empty", () => {
+    expect(buildWorkspaceHealth(undefined).size).toBe(0);
+    expect(buildWorkspaceHealth([]).size).toBe(0);
   });
 });

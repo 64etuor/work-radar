@@ -103,6 +103,7 @@ import {
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
   buildVendorTargets,
+  buildWorkspaceHealth,
   envCounts,
   reorderEnv,
   type SkillEnvNavItem,
@@ -212,6 +213,12 @@ export function SkillsView() {
   );
   const workspaceNav = useMemo(() => buildSkillWorkspaceNav(workspaces.data), [workspaces.data]);
   const divergedPaths = useMemo(() => buildDivergedPathSet(divergences.data), [divergences.data]);
+  // 사이드바 sync 헬스(#17): 워크스페이스별 diverged 멤버 수(repoId 키). divergences가 단일 출처(C6).
+  const workspaceHealth = useMemo(() => buildWorkspaceHealth(divergences.data), [divergences.data]);
+  const totalDiverged = useMemo(
+    () => [...workspaceHealth.values()].reduce((a, b) => a + b, 0),
+    [workspaceHealth],
+  );
   const activeEnv = [...envNav, ...workspaceNav].find((i) => i.id === activeEnvId) ?? envNav[0];
   const envFiltered = useMemo(
     () => (activeEnv ? filtered.filter(activeEnv.match) : filtered),
@@ -623,12 +630,20 @@ export function SkillsView() {
           ))}
           {workspaceNav.length > 0 && (
             <>
-              <div className="skl-group-label skl-sidebar-group">프로젝트</div>
+              <div className="skl-group-label skl-sidebar-group">
+                프로젝트
+                {totalDiverged > 0 && (
+                  <span className="skl-env-diverged" title={`중앙과 다른 카피 ${totalDiverged}개`}>
+                    {totalDiverged} 다름
+                  </span>
+                )}
+              </div>
               {workspaceNav.map((item) => (
                 <EnvNavButton
                   key={item.id}
                   item={item}
                   count={envCounts(item, filtered)}
+                  diverged={item.repoId ? workspaceHealth.get(item.repoId) : undefined}
                   active={(activeEnv?.id ?? "all") === item.id}
                   onSelect={() => setActiveEnvId(item.id)}
                   onDragStart={() => {}}
@@ -840,6 +855,7 @@ function EnvNavButton({
   onSelect,
   onDragStart,
   onDropItem,
+  diverged,
 }: {
   item: SkillEnvNavItem;
   count: { enabled: number; total: number };
@@ -847,6 +863,8 @@ function EnvNavButton({
   onSelect: () => void;
   onDragStart: () => void;
   onDropItem: () => void;
+  /** 이 워크스페이스의 diverged 멤버 수(#17 헬스 배지). >0일 때만 배지 렌더. env 항목은 미전달. */
+  diverged?: number;
 }) {
   const draggable = !item.pinned;
   return (
@@ -868,6 +886,11 @@ function EnvNavButton({
       }
     >
       <span className="skl-env-label">{item.label}</span>
+      {diverged != null && diverged > 0 && (
+        <span className="skl-env-diverged" title={`중앙과 다른 카피 ${diverged}개`}>
+          {diverged} 다름
+        </span>
+      )}
       <span className="skl-env-count">
         {count.enabled}/{count.total}
       </span>
