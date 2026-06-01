@@ -507,6 +507,12 @@ export const commands = {
 	 */
 	detectSkillEnvironments: () => typedError<SkillEnvironment[], AppError>(__TAURI_INVOKE("detect_skill_environments")),
 	/**
+	 *  프로젝트 워크스페이스 목록(G3-PR1, #16). enabled Local 레포의 스킬을 프로젝트별로 집계해 돌려준다.
+	 *  읽기 전용 — 외부 dir 쓰기/네트워크/잡 spawn 없음(#1/#2/#7). 레포 DB read 실패는 노출(포그라운드
+	 *  조회라 조용한 degrade로 실패를 "프로젝트 없음"으로 숨기지 않는다).
+	 */
+	listSkillWorkspaces: () => typedError<SkillWorkspace[], AppError>(__TAURI_INVOKE("list_skill_workspaces")),
+	/**
 	 *  사용자 설정 임의 스킬 루트 조회(P1.5 #3). `app_config`에서 JSON 배열을 읽는다 — 미설정/빈 값이면
 	 *  빈 vec. 읽기 전용(외부 dir 무쓰기). 로그는 count만(C7 — 절대 경로 금지).
 	 */
@@ -1642,6 +1648,25 @@ export type SkillProvider = "claude" | "codex" | "openclaw" | "hermes" | "other"
 export type SkillRef = {
 	provider: SkillProvider,
 	name: string,
+};
+
+/**
+ *  프로젝트 워크스페이스 한 건 = enabled Local 레포 1개의 스킬 집계(G3-PR1, #16). DB 비영속(매 호출
+ *  디스크 스캔, INVARIANT #7). 읽기 전용 — 외부 dir에 쓰지 않는다. `root_path`는 표시 전용 — **로그
+ *  금지(C7)**. `enabled_count`는 두지 않는다: 외부 스킬은 `list_skills`가 항상 enabled로 합성하므로
+ *  항상 `skill_count`와 같다(중복).
+ */
+export type SkillWorkspace = {
+	/**  repos.id — 표시/네비 id용(String이라 specta i64 이슈 없음). */
+	repoId: string,
+	/**  local_path의 basename(표시 전용). 추출 불가 시 전체 경로. */
+	label: string,
+	/**  local_path(표시 전용 — 로그 금지). */
+	rootPath: string,
+	/**  이 레포 스킬 dir들에서 발견한 스킬 수(specta i64 미지원 → i32). */
+	skillCount: number,
+	/**  각 멤버 스킬의 source_path(절대경로) — FE가 Set lookup으로 필터(프런트 경로추론 회피). */
+	memberPaths: string[],
 };
 
 export type SortMode = "recent" | "comments" | "mixed";

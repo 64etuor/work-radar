@@ -113,7 +113,6 @@ pub struct UserSkillRoot {
 /// 디스크 스캔, INVARIANT #7). 읽기 전용 — 외부 dir에 쓰지 않는다. `root_path`는 표시 전용 — **로그
 /// 금지(C7)**. `enabled_count`는 두지 않는다: 외부 스킬은 `list_skills`가 항상 enabled로 합성하므로
 /// 항상 `skill_count`와 같다(중복).
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillWorkspace {

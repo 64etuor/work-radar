@@ -242,6 +242,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::registry::delete_skill,
         skills::scan::scan_external_skills,
         skills::scan::detect_skill_environments,
+        skills::scan::list_skill_workspaces,
         skills::scan::get_skill_user_roots,
         skills::scan::set_skill_user_roots,
         skills::scan::read_external_skill,

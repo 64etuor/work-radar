@@ -302,7 +302,6 @@ pub(crate) fn primary_external_root(provider: SkillProvider) -> Option<PathBuf> 
 /// 유지한다. `repo_skill_roots`가 이미 `Provider::Local && enabled && non-empty local_path` 필터라
 /// 비대상 레포는 빈 roots → 스킵. 스킬 0개 레포는 결과에서 제외(뷰 전용 PR에서 빈 프로젝트는 노이즈).
 /// scan_external_skills_core가 IO 오류를 삼키고 빈 결과를 반환하므로 절대 패닉하지 않는다.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn list_skill_workspaces_core(repos: &[Repo]) -> Vec<SkillWorkspace> {
     let mut out: Vec<SkillWorkspace> = Vec::new();
     for repo in repos {
@@ -336,6 +335,16 @@ pub(crate) fn list_skill_workspaces_core(repos: &[Repo]) -> Vec<SkillWorkspace> 
         });
     }
     out
+}
+
+/// 프로젝트 워크스페이스 목록(G3-PR1, #16). enabled Local 레포의 스킬을 프로젝트별로 집계해 돌려준다.
+/// 읽기 전용 — 외부 dir 쓰기/네트워크/잡 spawn 없음(#1/#2/#7). 레포 DB read 실패는 노출(포그라운드
+/// 조회라 조용한 degrade로 실패를 "프로젝트 없음"으로 숨기지 않는다).
+#[tauri::command]
+#[specta::specta]
+pub async fn list_skill_workspaces(db: State<'_, Db>) -> Result<Vec<SkillWorkspace>, AppError> {
+    let repos = fetch_all_repos(db.inner()).await.map_err(AppError::from)?;
+    Ok(list_skill_workspaces_core(&repos))
 }
 
 /// 환경(provider)별 감지 집계(C6 동일 ROOTS 소비). 동일 provider의 여러 루트(Codex=`.codex`+`.agents`)는
