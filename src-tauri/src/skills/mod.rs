@@ -28,6 +28,7 @@ pub mod apply;
 pub mod audit_log;
 pub mod backup;
 pub mod central_repo;
+pub mod divergence;
 pub mod import;
 pub mod installer;
 pub mod registry;
