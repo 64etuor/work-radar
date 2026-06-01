@@ -61,7 +61,8 @@ re-exported like `apply`).
   (recursive tree copy) — from `central_repo`.
 - **`trees_equal`** — from `divergence.rs`; promote private `fn` → `pub(crate)` so
   un-vendor reuses the exact byte-compare PR2 uses (DRY; one definition of "InSync").
-- `audit` — from `audit_log` (detail = `files=N` only, like `import.rs`; never log paths/body — C7).
+- `audit` — from `audit_log` (detail = a mechanism tag `"copy"` only, paralleling
+  `apply.rs`'s `"symlink"`; never log paths/body — C7).
 - `fetch_all_repos` + `Repo` + `Provider` — from `commands::projects` / `models`.
 - `central_root(app)` — from `apply.rs` (already `pub(crate)`).
 
@@ -113,7 +114,7 @@ pub(crate) async fn vendor_core(
    - else (real dir): `trees_equal(dst, src)` ? **idempotent** `Ok(dst)` (no copy, no audit)
      : `collision` (diverged/foreign — never overwrite).
 4. `create_dir_all(project_skill_root)`; `create_dir_all(dst)`; `copy_dir_shallow(src, dst)`.
-5. `audit("vendor", "project_dir", dst, Some(src), Some("files=N"))`.
+5. `audit("vendor", "project_dir", dst, Some(src), Some("copy"))`.
 6. `Ok(dst)`.
 
 ```rust
@@ -243,7 +244,7 @@ no headline badge (that's #17 / PR3).
   (every copy/remove). Only skill dirs targeted — no config/secret files. ✓
 - **#1/#2** — no job spawn; file copy/remove only. ✓
 - **#7** — disk-derived; no new table, no migration. ✓
-- **C7** — paths display/match only; audit detail = `files=N` (never body/path). ✓
+- **C7** — paths display/match only; audit detail = mechanism tag `"copy"` (never body/path). ✓
 - **C6** — project dir convention single-sourced in `scan.rs` (`vendor_subdir` mirrors
   `REPO_SKILL_DIRS`); FE matches by `divergences`, no path inference. ✓
 - **bindings** — additive only (+2 commands, 0 types). ✓

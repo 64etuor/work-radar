@@ -70,6 +70,10 @@ pub(crate) async fn vendor_core(
             format!("프로젝트 dir 생성 실패: {e}"),
         )
     })?;
+    // 중앙 라이브러리는 **구성상 심링크가 없다**: 모든 central 라이터(import_to_central·installer·
+    // updater·backup 복원)가 심링크를 건너뛰는 copy_dir_shallow를 거친다. 따라서 카피(copy_dir_shallow는
+    // 심링크 스킵)와 InSync 판정(trees_equal은 심링크 타깃 기록)이 항상 일치 → 갓-vendored 카피는 즉시
+    // InSync다(unvendor 가역성 보존). 향후 심링크를 보존하는 central 라이터를 추가하면 이 가정을 재검토할 것.
     copy_dir_shallow(&src, &dst)?;
     audit(
         pool,
@@ -292,6 +296,22 @@ mod tests {
             std::fs::read_to_string(proj_root.join("foo/SKILL.md")).unwrap(),
             "USER-EDIT" // 무손상.
         );
+    }
+
+    #[tokio::test]
+    async fn vendor_collision_on_preexisting_empty_dir() {
+        // 빈 실제 dir이 대상에 미리 있으면 trees_equal(empty, src+SKILL.md)=false → 충돌(덮어쓰지 않음).
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let tmp = tempfile::tempdir().unwrap();
+        let central = tmp.path().join("skills-library");
+        make_central(&central, "claude", "foo", "BODY");
+        let proj_root = tmp.path().join("proj/.claude/skills");
+        std::fs::create_dir_all(proj_root.join("foo")).unwrap(); // 빈 dir.
+        let err = vendor_core(&pool, &central, &proj_root, SkillProvider::Claude, "foo")
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, CODE_COLLISION);
+        assert!(!proj_root.join("foo/SKILL.md").exists()); // 복사되지 않음(덮어쓰기 없음).
     }
 
     #[tokio::test]
