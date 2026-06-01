@@ -958,7 +958,9 @@ git commit -m "docs(governance): record P2b ask-user card done-criteria"
 - **거버넌스 `ask_user`/`send_file` MCP 도구**(스펙 §5.1) — 결정 게이트가 이 카드 표면 위에 올라타려면 governance MCP 가 ACP permission/elicitation 으로 사용자 프롬프트를 발화해야 한다. 별도 plan.
 - **라이브 end-to-end + 인앱 GUI 스모크** — dev-DB 마이그레이션 skew(`VersionMissing(38)`) 선결 필요(공유 dev DB 옆치우기 / DB 경로 env override / 0038+ 반영 중 택1). 해소 후 `BOULE_GOVERNANCE_DIR` opt-in 로드 + 카드 라운드트립 관찰.
 - **ACP 옵션 스키마 확정** — `{optionId, name, kind}` 가정. 라이브 스모크 또는 Hermes 소스 확인으로 검증되면 `parse_permission_request`의 관대 처리를 좁힐 수 있다.
-- **다중 동시 ask / 타임아웃 / 탭 종료 시 자동 cancel** — 현재는 단발·낙관적. 동시 카드나 미응답 정리는 correlation store 도입 시(설계 Approach 3).
+- **요청 id 타입 보존(critic MINOR #1, 의도적 deferred)** — `parse_permission_request`가 `Json::Number(7)`과 `Json::String("7")`를 동일 `"7"`로 stringify → `build_ask_user_response`의 `parse::<i64>()`가 둘 다 JSON **number** `7`로 echo. 에이전트가 **숫자 문자열** JSON-RPC id를 쓰고 응답을 정확 JSON 타입으로 매칭하면 그 프롬프트만 correlate 실패(hang). 실 ACP 에이전트는 정수/UUID id가 압도적(둘 다 정상 round-trip) → 트리거 희귀·즉시 감지·status quo 대비 무회귀라 ACP 스키마 확정과 함께 deferred. 픽스 시 타입 판별자(prefix 또는 numeric 플래그) 운반 + numeric-string round-trip 가드 테스트 추가.
+- **다중 동시 ask / 타임아웃 / 탭 종료 시 자동 cancel** — 현재는 단발·낙관적. 동시 카드나 미응답 정리는 correlation store 도입 시(설계 Approach 3). (탭 종료는 에이전트 프로세스를 kill하므로 대기자 없음 — no-hang 유지.)
+- **테스트/a11y hygiene(critic MINOR, 비차단)** — ⓐ `useHermesTabsStore.respondAsk.test.ts`의 `beforeEach`가 zustand 스토어를 리셋하지 않음(상태 누적, `find`로 통과 — 향후 테스트 추가 시 리셋 권장). ⓑ `AskUserCard` 옵션은 `aria-pressed={chosen || undefined}`로 미선택 시 `aria-pressed="false"` 생략 + 옵션 컨테이너 `role="group"` 없음(라디오류 단일선택엔 유효하나 SR 컨텍스트 개선 여지).
 
 ---
 
