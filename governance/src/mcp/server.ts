@@ -3,6 +3,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { resolve } from "node:path";
 import { buildIndex, nodeIndexFs } from "../index/build.ts";
+import { harvest, makeWriteOne } from "../harvest/harvest.ts";
+import { realGitLog } from "../harvest/gitLog.ts";
+import type { DecisionRow } from "../index/types.ts";
 import { formatPrinciples, formatDecisions, formatDecision } from "../index/format.ts";
 import { createTask, status, observations } from "./handlers.ts";
 import {
@@ -95,6 +98,27 @@ server.registerTool(
   async ({ id }) => {
     const index = await buildIndex(REPO_ROOT, nodeIndexFs);
     return { content: [{ type: "text", text: formatDecision(index.getDecision(id), id) }] };
+  },
+);
+
+server.registerTool(
+  "harvest",
+  {
+    description: "레포 활동(git log / decisions.md / ADR)을 L0 이벤트로 멱등 수집",
+    inputSchema: {},
+  },
+  async () => {
+    const summary = await harvest({
+      gitLog: () => realGitLog(REPO_ROOT),
+      loadDecisionRows: async () =>
+        (await buildIndex(REPO_ROOT, nodeIndexFs)).decisions as readonly DecisionRow[],
+      writeOne: makeWriteOne(WORKSPACE),
+    });
+    return {
+      content: [
+        { type: "text", text: `harvested: ${summary.written} new, ${summary.skipped} already-seen` },
+      ],
+    };
   },
 );
 
