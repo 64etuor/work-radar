@@ -152,3 +152,41 @@ export function buildDivergedPathSet(divergences: SkillDivergence[] | undefined)
   }
   return out;
 }
+
+/** vendoring 대상 provider(프로젝트 dir 관례 있는 것 — 백엔드 scan::vendor_subdir의 FE 트윈). 백엔드가
+ *  authoritative이며 그 외 provider는 unsupported_provider로 거부한다. */
+const VENDORABLE_PROVIDERS: ReadonlySet<SkillProvider> = new Set<SkillProvider>(["claude", "codex"]);
+
+export type VendorState = "absent" | "in_sync" | "diverged";
+export interface VendorTarget {
+  repoId: string;
+  label: string;
+  state: VendorState;
+}
+
+/**
+ * managed 스킬 (provider,name)에 대해 vendorable 프로젝트(워크스페이스)별 vendor 상태를 도출(G3-PR2b).
+ * 상태의 단일 출처는 divergences(repoId+provider+name → status) — 프런트 경로추론 없음(C6). divergence
+ * 목록에 없는 워크스페이스 = absent. managed가 아니거나 provider가 vendorable이 아니면 빈 배열(패널 숨김).
+ */
+export function buildVendorTargets(
+  skill: Skill,
+  workspaces: SkillWorkspace[] | undefined,
+  divergences: SkillDivergence[] | undefined,
+): VendorTarget[] {
+  if (skill.kind !== "managed" || !skill.provider || !VENDORABLE_PROVIDERS.has(skill.provider)) {
+    return [];
+  }
+  const { provider, name } = skill;
+  const stateByRepo = new Map<string, VendorState>();
+  for (const d of divergences ?? []) {
+    if (d.provider === provider && d.name === name) {
+      stateByRepo.set(d.repoId, d.status === "diverged" ? "diverged" : "in_sync");
+    }
+  }
+  return (workspaces ?? []).map((w) => ({
+    repoId: w.repoId,
+    label: w.label,
+    state: stateByRepo.get(w.repoId) ?? "absent",
+  }));
+}

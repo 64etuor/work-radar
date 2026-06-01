@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { Skill, SkillDivergence, SkillEnvironment, SkillWorkspace } from "@/bindings";
+import type {
+  Skill,
+  SkillDivergence,
+  SkillEnvironment,
+  SkillProvider,
+  SkillWorkspace,
+} from "@/bindings";
 import {
   applyEnvOrder,
   buildDivergedPathSet,
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
+  buildVendorTargets,
   envCounts,
   reorderEnv,
   SKILL_PROVIDER_LABEL,
@@ -186,5 +193,39 @@ describe("buildDivergedPathSet", () => {
 
   it("returns an empty set for undefined", () => {
     expect(buildDivergedPathSet(undefined).size).toBe(0);
+  });
+});
+
+describe("buildVendorTargets", () => {
+  const div = (
+    repoId: string,
+    provider: SkillProvider,
+    name: string,
+    status: "in_sync" | "diverged",
+  ): SkillDivergence => ({ repoId, provider, name, memberPath: `/p/${name}/SKILL.md`, status });
+
+  it("maps absent/in_sync/diverged per workspace from divergences", () => {
+    const skill = mk({ id: "managed:foo", name: "foo", kind: "managed", provider: "claude" });
+    const workspaces = [ws("r1", "Alpha", []), ws("r2", "Beta", []), ws("r3", "Gamma", [])];
+    const divs = [
+      div("r1", "claude", "foo", "in_sync"),
+      div("r2", "claude", "foo", "diverged"),
+      div("r3", "claude", "bar", "in_sync"), // 다른 스킬 → r3은 absent
+    ];
+    expect(buildVendorTargets(skill, workspaces, divs)).toEqual([
+      { repoId: "r1", label: "Alpha", state: "in_sync" },
+      { repoId: "r2", label: "Beta", state: "diverged" },
+      { repoId: "r3", label: "Gamma", state: "absent" },
+    ]);
+  });
+
+  it("returns empty for a non-vendorable provider", () => {
+    const skill = mk({ id: "managed:foo", name: "foo", kind: "managed", provider: "hermes" });
+    expect(buildVendorTargets(skill, [ws("r1", "Alpha", [])], [])).toEqual([]);
+  });
+
+  it("returns empty for a non-managed skill", () => {
+    const ext = mk({ id: "ext:/x", name: "foo", kind: "external", provider: "claude" });
+    expect(buildVendorTargets(ext, [ws("r1", "Alpha", [])], [])).toEqual([]);
   });
 });
