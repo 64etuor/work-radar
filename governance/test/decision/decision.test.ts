@@ -121,4 +121,13 @@ describe("deriveDecisionState", () => {
     ]);
     expect(s.reviewed).toBe(true);
   });
+
+  it("fail-closed: a review event with non-array tags is not counted (no crash)", () => {
+    const bad = evt("decision_review_recorded", { source: "reviewer", actor: "codex" });
+    // simulate a corrupt/hand-edited event whose tags is not an array
+    (bad.frontmatter as { tags: unknown }).tags = "author_model:claude";
+    const s = deriveDecisionState(proposal, [bad]);
+    expect(s.reviewCount).toBe(0);
+    expect(s.reviewed).toBe(false);
+  });
 });

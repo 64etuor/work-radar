@@ -16,6 +16,7 @@ import {
 } from "../decision/liveReviewer.ts";
 import { parseQuorum, parseReviewerModels } from "./config.ts";
 import type { ReviewerEntry } from "../decision/reviewer.ts";
+import { normalizeModelId } from "../decision/modelId.ts";
 
 const WORKSPACE =
   process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
@@ -134,7 +135,10 @@ server.registerTool(
       nowFn(),
       randFn(),
     );
-    const parts = [`recorded: ${res.recorded.length}/${reviewers.length} (quorum ${QUORUM})`];
+    const distinctModels = new Set(res.recorded.map((r) => normalizeModelId(r.reviewerModel))).size;
+    const parts = [
+      `recorded: ${res.recorded.length} from ${reviewers.length} reviewer(s); distinct models: ${distinctModels}/${QUORUM} (quorum)`,
+    ];
     if (res.skipped.length) parts.push(`skipped: ${res.skipped.map((s) => s.reviewerModel).join(",")}`);
     if (res.failures.length) parts.push(`failed: ${res.failures.map((f) => f.reviewerModel).join(",")}`);
     return { content: [{ type: "text", text: parts.join(" | ") }] };

@@ -12,9 +12,13 @@ export interface DecisionState {
   verdict: "approved" | "rejected" | null;
 }
 
-/** Read the normalized author model recorded on a review event (tag `author_model:<id>`). */
+/** Read the normalized author model recorded on a review event (tag `author_model:<id>`).
+ *  Fail-closed: a malformed event whose `tags` is not an array yields null (not counted),
+ *  rather than throwing out of the fold and crashing the read commands. */
 function reviewAuthorModel(e: GovEvent): string | null {
-  const tag = e.frontmatter.tags.find((t) => t.startsWith("author_model:"));
+  const tags = e.frontmatter.tags;
+  if (!Array.isArray(tags)) return null;
+  const tag = tags.find((t) => t.startsWith("author_model:"));
   return tag ? tag.slice("author_model:".length) : null;
 }
 

@@ -29,6 +29,7 @@ export interface RecordReviewResult {
   reviewEventId: string;
   reviewPath: string;
   verdict: ReviewResult["verdict"];
+  reviewerModel: string;
 }
 
 /** Run the injected reviewer, persist the review artifact, and append a linked
@@ -80,7 +81,7 @@ export async function recordReview(
   };
   await writeEvent(workspaceDir, evt, now);
 
-  return { reviewEventId: evt.frontmatter.id, reviewPath, verdict: result.verdict };
+  return { reviewEventId: evt.frontmatter.id, reviewPath, verdict: result.verdict, reviewerModel: result.reviewerModel };
 }
 
 /** A named reviewer: the model label + its injected ReviewFn closure. */
