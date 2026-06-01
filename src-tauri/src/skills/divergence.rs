@@ -122,11 +122,12 @@ pub(crate) fn collect_project_members(repos: &[Repo]) -> Vec<ProjectMember> {
             continue;
         }
         for skill in scan_external_skills_core(&roots) {
-            // scan_external_skills_core는 `path = <skill_dir>/SKILL.md` 를 보장(scan.rs).
+            // scan_external_skills_core는 `path = <skill_dir>/SKILL.md` 를 보장(scan.rs) → parent는 항상
+            // 존재. 도달 불가한 None은 빈 경로로 방어적 degrade(비교 시 read_dir 실패 → Diverged).
             let dir_path = Path::new(&skill.path)
                 .parent()
                 .map(Path::to_path_buf)
-                .unwrap_or_else(|| PathBuf::from(&skill.path));
+                .unwrap_or_default();
             out.push(ProjectMember {
                 repo_id: repo.id.clone(),
                 provider: skill.provider,
