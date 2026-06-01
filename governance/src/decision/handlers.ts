@@ -124,6 +124,64 @@ export async function reject(workspaceDir: string, input: { decisionId: string }
   return { ok: true, reason: gate.reason, eventId: evt.frontmatter.id };
 }
 
+export interface ChooseInput { decisionId: string; blockedEventId: string; optionToken: string; }
+export interface ChooseResult { ok: boolean; reason: string; eventId?: string; chosenOption?: string; }
+
+/** /choose — human-gated Type 0 resolution. Deliberately NOT review-gated: a tapped option
+ *  is a human direction-pick, not a Type-1 ADR approval (canApprove is for the latter).
+ *  Pins actor:"user". Idempotent: a redelivered tap on an already-terminal decision is a
+ *  friendly no-op (no second decision_chosen), which protects against Telegram redelivery.
+ *
+ *  Binding guard: the (decisionId, blockedEventId, optionToken) triple must be internally
+ *  consistent — blockedEventId must be a decision_blocked event of THIS decision, and
+ *  optionToken must be one this escalation actually minted. This makes the spec's
+ *  "fully-bound token" guarantee enforced in code, not merely in the string format, so a
+ *  mismatched/fabricated tap cannot record a bogus option against a real decision. (It does
+ *  NOT by itself stop the escalating agent from learning the triple — `choose` must stay
+ *  bridge/human-only; the transport split that enforces "only a human tap calls choose"
+ *  lands in slice 1B.) */
+export async function chooseOption(
+  workspaceDir: string,
+  input: ChooseInput,
+  now: Date,
+  rand: number,
+): Promise<ChooseResult> {
+  const all = await readAllEvents(workspaceDir);
+  const grp = eventsForDecision(all, input.decisionId);
+  if (!grp.proposal) return { ok: false, reason: `unknown decision: ${input.decisionId}` };
+  const blocked = all.find(
+    (e) => e.frontmatter.id === input.blockedEventId && e.frontmatter.type === "decision_blocked",
+  );
+  if (!blocked || !(blocked.frontmatter.related_to ?? []).includes(input.decisionId)) {
+    return { ok: false, reason: "blocked event does not belong to this decision" };
+  }
+  let mintedTokens: string[] = [];
+  try {
+    const body = JSON.parse(blocked.body) as { options?: { token?: unknown }[] };
+    mintedTokens = (body.options ?? [])
+      .map((o) => o.token)
+      .filter((t): t is string => typeof t === "string");
+  } catch {
+    mintedTokens = [];
+  }
+  if (!mintedTokens.includes(input.optionToken)) {
+    return { ok: false, reason: `unknown option token: ${input.optionToken}` };
+  }
+  const state = deriveDecisionState(grp.proposal, grp.related);
+  if (state.verdict) return { ok: false, reason: `decision already ${state.verdict}` };
+  const evt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", now, rand),
+      type: "decision_chosen", source: "hermes", actor: "user",
+      tags: ["decision", "type0", `option:${input.optionToken}`],
+      related_to: [input.decisionId, input.blockedEventId],
+    },
+    body: `Human chose ${input.optionToken} for ${input.decisionId}`,
+  };
+  await writeEvent(workspaceDir, evt, now);
+  return { ok: true, reason: "chosen", eventId: evt.frontmatter.id, chosenOption: input.optionToken };
+}
+
 export interface PendingDecision { decisionId: string; title: string; phase: DecisionState["phase"]; gate: string; }
 
 /** /conflicts — decisions still awaiting a gate (proposed = needs review, reviewed = needs human). */

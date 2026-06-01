@@ -9,8 +9,9 @@ import type { DecisionRow } from "../index/types.ts";
 import { formatPrinciples, formatDecisions, formatDecision } from "../index/format.ts";
 import { createTask, status, observations } from "./handlers.ts";
 import {
-  proposeDecision, requestReview, approve, reject, conflicts, why, history,
+  proposeDecision, requestReview, approve, reject, conflicts, why, history, chooseOption,
 } from "../decision/handlers.ts";
+import { escalate } from "../escalate/escalate.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import {
@@ -273,6 +274,51 @@ server.registerTool(
     const t = await history(WORKSPACE, { decisionId }, QUORUM);
     const text = `${t.title} [${t.phase}]\n` + t.chain.map((c) => `  ${c.type} (${c.actor}): ${c.summary}`).join("\n");
     return { content: [{ type: "text", text }] };
+  },
+);
+
+// v2 slice1 — escalation round-trip. AGENT-VISIBLE: a running session may escalate a fork.
+server.registerTool(
+  "escalate",
+  {
+    description: "Type 0 에스컬레이션 방출 (decision_proposed + decision_blocked) — append-only, verdict 없음",
+    inputSchema: {
+      question: z.string(),
+      options: z.array(z.object({ label: z.string() })).min(2),
+      ambiguity_kind: z.string().optional(),
+    },
+  },
+  async ({ question, options, ambiguity_kind }) => {
+    const r = await escalate(
+      WORKSPACE,
+      { question, options, ambiguityKind: ambiguity_kind as never },
+      nowFn(),
+      randFn(),
+    );
+    return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }] };
+  },
+);
+
+// v2 slice1 — BRIDGE/HUMAN-ONLY: only the Telegram bridge calls this, on an exact token match.
+// Human-gated (actor:user) but NOT review-gated — a Type 0 tap is a direction-pick, not an ADR approval.
+server.registerTool(
+  "choose",
+  {
+    description: "Type 0 해소 — 사람이 고른 옵션을 decision_chosen(actor:user)으로 기록",
+    inputSchema: {
+      decision_id: z.string(),
+      blocked_event_id: z.string(),
+      option_token: z.string(),
+    },
+  },
+  async ({ decision_id, blocked_event_id, option_token }) => {
+    const r = await chooseOption(
+      WORKSPACE,
+      { decisionId: decision_id, blockedEventId: blocked_event_id, optionToken: option_token },
+      nowFn(),
+      randFn(),
+    );
+    return { content: [{ type: "text", text: r.ok ? `chosen: ${r.chosenOption} for ${decision_id}` : `NO-OP: ${r.reason}` }] };
   },
 );
 

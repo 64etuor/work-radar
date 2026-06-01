@@ -11,6 +11,8 @@ export type EventType =
   | "decision_review_recorded" // P2a: External Reviewer wrote a review for a decision
   | "decision_approved"        // P2a: human gate passed (actor=user)
   | "decision_rejected"        // P2a: human gate rejected (actor=user)
+  | "decision_blocked"         // v2 slice1: Type 0 escalation — a fork that needs a human (source=agent_run|hermes)
+  | "decision_chosen"          // v2 slice1: human picked an option for a Type 0 (actor=user, NOT review-gated)
   | "task_created";
 
 export type EventSource =

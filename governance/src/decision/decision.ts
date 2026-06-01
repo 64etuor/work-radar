@@ -1,7 +1,7 @@
 import type { GovEvent } from "../event/event.ts";
 import { normalizeModelId } from "./modelId.ts";
 
-export type DecisionPhase = "proposed" | "reviewed" | "approved" | "rejected";
+export type DecisionPhase = "proposed" | "reviewed" | "approved" | "rejected" | "chosen";
 
 export interface DecisionState {
   decisionId: string;
@@ -9,7 +9,8 @@ export interface DecisionState {
   phase: DecisionPhase;
   reviewCount: number;
   reviewed: boolean;
-  verdict: "approved" | "rejected" | null;
+  verdict: "approved" | "rejected" | "chosen" | null;
+  chosenOption?: string;
 }
 
 /** Read the normalized author model recorded on a review event (tag `author_model:<id>`).
@@ -20,6 +21,14 @@ function reviewAuthorModel(e: GovEvent): string | null {
   if (!Array.isArray(tags)) return null;
   const tag = tags.find((t) => t.startsWith("author_model:"));
   return tag ? tag.slice("author_model:".length) : null;
+}
+
+/** The option token a decision_chosen recorded (tag `option:<token>`), or null. */
+function chosenOptionOf(e: GovEvent): string | null {
+  const tags = e.frontmatter.tags;
+  if (!Array.isArray(tags)) return null;
+  const tag = tags.find((t) => t.startsWith("option:"));
+  return tag ? tag.slice("option:".length) : null;
 }
 
 /** Pure fold: a proposal event + its related lifecycle events → gate-state.
@@ -48,15 +57,21 @@ export function deriveDecisionState(
   const reviewCount = distinctModels.size;
   const rejected = related.some((e) => e.frontmatter.type === "decision_rejected");
   const approved = related.some((e) => e.frontmatter.type === "decision_approved");
+  const chosenEvt = related.find((e) => e.frontmatter.type === "decision_chosen");
 
   let phase: DecisionPhase;
   let verdict: DecisionState["verdict"];
+  let chosenOption: string | undefined;
   if (rejected) {
     phase = "rejected";
     verdict = "rejected";
   } else if (approved) {
     phase = "approved";
     verdict = "approved";
+  } else if (chosenEvt) {
+    phase = "chosen";
+    verdict = "chosen";
+    chosenOption = chosenOptionOf(chosenEvt) ?? undefined;
   } else if (reviewCount >= quorum) {
     phase = "reviewed";
     verdict = null;
@@ -64,5 +79,5 @@ export function deriveDecisionState(
     phase = "proposed";
     verdict = null;
   }
-  return { decisionId, title, phase, reviewCount, reviewed: reviewCount >= quorum, verdict };
+  return { decisionId, title, phase, reviewCount, reviewed: reviewCount >= quorum, verdict, chosenOption };
 }

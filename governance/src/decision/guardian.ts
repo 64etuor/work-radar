@@ -28,5 +28,6 @@ export function gateLabel(s: DecisionState): string {
     case "reviewed": return "awaiting human approval";
     case "approved": return "approved";
     case "rejected": return "rejected";
+    case "chosen": return "resolved (Type 0 option chosen)";
   }
 }
