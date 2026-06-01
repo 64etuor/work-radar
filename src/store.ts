@@ -84,6 +84,8 @@ interface UIState {
   settingsIntent: SettingsIntent;
   /** 팔레트에서 고른 스킬 id (한 번 소비). SkillsView가 읽어 선택 후 clear. */
   pendingSkillId: string | null;
+  /** 팔레트 검색에서 고른 시그널 id (한 번 소비). CaptureBoard가 읽어 선택 후 clear. */
+  pendingSignalId: string | null;
   /** 앱 테마(light/dark). 표시 전용 — 결정 레일과 무관. */
   theme: Theme;
   /** 테마 토글(+ localStorage 영속). */
@@ -100,6 +102,10 @@ interface UIState {
   goToSkill: (skillId: string) => void;
   /** pendingSkillId 소비 후 clear (한 번만 적용). */
   clearPendingSkill: () => void;
+  /** 팔레트 검색에서 시그널 선택 → 보드로 이동하며 그 카드를 포커스(선택). 자동 실행 아님. */
+  goToSignal: (signalId: string) => void;
+  /** pendingSignalId 소비 후 clear (한 번만 적용). */
+  clearPendingSignal: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -114,6 +120,7 @@ export const useUIStore = create<UIState>((set) => ({
   setOpenAgentRunId: (openAgentRunId) => set({ openAgentRunId }),
   settingsIntent: "open",
   pendingSkillId: null,
+  pendingSignalId: null,
   theme: initialTheme(),
   toggleTheme: () =>
     set((s) => {
@@ -147,4 +154,6 @@ export const useUIStore = create<UIState>((set) => ({
   goTo: (view, intent = "open") => set({ view, settingsIntent: intent, paletteOpen: false }),
   goToSkill: (skillId) => set({ view: "skills", pendingSkillId: skillId, paletteOpen: false }),
   clearPendingSkill: () => set({ pendingSkillId: null }),
+  goToSignal: (signalId) => set({ view: "board", pendingSignalId: signalId, paletteOpen: false }),
+  clearPendingSignal: () => set({ pendingSignalId: null }),
 }));

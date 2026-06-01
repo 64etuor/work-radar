@@ -19,6 +19,20 @@ export function useSignals() {
   });
 }
 
+/**
+ * FTS5 전역 시그널 검색(제목/본문). 백엔드가 빈 쿼리에 빈 결과를 주므로, 2자 미만은 아예
+ * 비활성(불필요한 fetch 회피). 읽기 전용 — 팔레트 검색 결과 그룹이 소비한다.
+ */
+export function useSearchSignals(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ["signalSearch", q],
+    queryFn: () => unwrap(commands.searchSignals(q)),
+    enabled: q.length >= 2,
+    staleTime: 5_000,
+  });
+}
+
 /** 한 줄 braindump → 미분류 카드 생성 (항상 unclassified, dedup). */
 export function useCreateSignal() {
   const inv = useInvalidate();

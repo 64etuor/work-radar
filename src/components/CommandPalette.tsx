@@ -1,7 +1,7 @@
 import "./CommandPalette.css";
 
 import { Blocks, FileText, FolderPlus, GitBranchPlus } from "lucide-react";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 
 import { KindBadge } from "@/components/board/LifeWheelPalette";
 import {
@@ -14,7 +14,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { NAV_GROUP_LABELS, navItemsByGroup } from "@/lib/nav";
-import { useNavKeymap, useProjects, useSkills } from "@/lib/query";
+import { useNavKeymap, useProjects, useSearchSignals, useSkills } from "@/lib/query";
 import { skillSearchValue } from "@/lib/skillGrouping";
 import { useUIStore } from "@/store";
 
@@ -25,12 +25,17 @@ import { useUIStore } from "@/store";
  * 오버레이 backdrop 클릭 또는 Esc로 닫힌다(닫힘은 App 셸이 처리).
  */
 export function CommandPalette() {
-  const { goTo, goToSkill, setPaletteOpen } = useUIStore();
+  const { goTo, goToSkill, goToSignal, setPaletteOpen } = useUIStore();
   const projects = useProjects();
   const keymap = useNavKeymap();
   // SkillsView와 동일 쿼리(["skills"]) — react-query가 키로 dedup하므로 중복 fetch 없음.
   const skills = useSkills();
   const [query, setQuery] = useState("");
+  // 시그널은 전체 이력(아카이브 포함)이 많을 수 있어 클라이언트 필터 대신 서버 FTS를 쓴다.
+  // 입력은 useDeferredValue로 디바운스 — 키 입력마다 FTS를 때리지 않는다.
+  const deferredQuery = useDeferredValue(query);
+  const signalResults = useSearchSignals(deferredQuery);
+  const visibleSignals = (signalResults.data ?? []).slice(0, 8);
 
   const groups = navItemsByGroup();
   const normalizedQuery = query.trim().toLowerCase();
@@ -150,6 +155,30 @@ export function CommandPalette() {
               </CommandGroup>
             )}
 
+            {visibleSignals.length > 0 && (
+              <CommandGroup heading="시그널 검색 결과">
+                {visibleSignals.map((s) => (
+                  <CommandItem
+                    key={s.id}
+                    // value에 입력 쿼리를 넣어 cmdk 클라이언트 필터가 백엔드 FTS 히트를 버리지
+                    // 않게 한다(본문 매칭이면 제목엔 쿼리가 없을 수 있음). 선택 = 보드로 이동+
+                    // 포커스(선택). 자동 실행 없음(INVARIANT #1).
+                    value={`signal ${query} ${s.title} ${s.id}`}
+                    onSelect={() => runCommand(`Signal: ${s.title}`, () => goToSignal(s.id))}
+                  >
+                    <FileText className="text-wr-subtle size-4" />
+                    <span className="truncate">{s.title}</span>
+                    {s.kind && (
+                      <KindBadge
+                        kind={s.kind}
+                        className="ml-2 h-4 px-1.5 py-0 text-[10px] leading-none"
+                      />
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+
             <CommandGroup heading="추가">
               <CommandItem
                 value="add project 프로젝트 추가"
@@ -214,6 +243,7 @@ function actionForRecent(
   if (label === "프로젝트 추가") return () => goTo("settings", "add_project");
   if (label === "레포 추가") return () => goTo("settings", "add_repo");
   if (label.startsWith("Skill: ")) return () => goTo("skills");
+  if (label.startsWith("Signal: ")) return () => goTo("board");
   if (label.startsWith("Project: ")) return () => goTo("settings", "open");
   const match = Object.values(navItemsByGroup())
     .flatMap((group) => group.items)

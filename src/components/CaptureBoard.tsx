@@ -59,6 +59,7 @@ import {
 } from "@/lib/query";
 import { IpcError } from "@/lib/query/client";
 import { useToastStore } from "@/lib/toast";
+import { usePendingSignalFocus } from "@/lib/usePendingSignalFocus";
 import { useUIStore } from "@/store";
 
 const PROMOTION_TARGET: Record<"backlog" | "agenda", PromotionTarget> = {
@@ -129,6 +130,8 @@ export function CaptureBoard() {
   const routines = useMemo(() => routinesQ.data ?? [], [routinesQ.data]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 팔레트 시그널 검색(goToSignal) → 그 카드를 선택(포커스). 보드 비가시 시그널이면 무해한 no-op.
+  usePendingSignalFocus(setSelectedId);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
