@@ -1,6 +1,8 @@
 # Boule v2 First Slice — 1A (TS sidecar) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+
+**STATUS: ✅ COMPLETE (2026-06-01).** Implemented holistically (not the literal per-task commits below) and committed as `74b51b6` (code) + `ba086cb` (docs) on `feat/governance-boule-p1`, unpushed. vitest **150** pass, tsc clean, headless MCP round-trip observed, independent opus critic **round-2 ACCEPT** (round-1 MAJOR M1 = `chooseOption` binding-guard, fixed + 2 regression tests). Drift = `governance/**` + docs only. Done-line: tail of `docs/decisions.md`. **Next = Slice 1B** (Python `~/.hermes` fabric bridge — separate plan, touches the live fabric). The per-task checkboxes below are marked done to reflect the shipped work; commit granularity differed (2 cohesive commits, not one per task).
 
 **Goal:** Build the headless TypeScript half of the v2 escalation round-trip — an `escalate(question, options[])` MCP command that mints a Type 0 `decision_proposed` + `decision_blocked`, and a human-gated `choose` command that resolves it via a new `decision_chosen` event — with zero changes to the live `~/.hermes` fabric.
 
@@ -38,7 +40,7 @@
 
 - Modify: `src/event/event.ts:3-14`
 
-- [ ] **Step 1: Add the union members**
+- [x] **Step 1: Add the union members**
 
 In `src/event/event.ts`, change the `EventType` union to add the two new types after `decision_rejected`:
 
@@ -59,12 +61,12 @@ export type EventType =
   | "task_created";
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `pnpm exec tsc --noEmit`
 Expected: PASS (no usages yet; union widening is safe).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -81,7 +83,7 @@ git commit -m "feat(governance): add decision_blocked + decision_chosen event ty
 - Create: `src/escalate/token.ts`
 - Test: `test/escalate/token.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/escalate/token.test.ts`:
 
@@ -125,12 +127,12 @@ describe("governance option token", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- token`
 Expected: FAIL — `Cannot find module ".../src/escalate/token.ts"`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/escalate/token.ts`:
 
@@ -173,12 +175,12 @@ export function isGovernanceReply(text: string): boolean {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test -- token`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -195,7 +197,7 @@ git commit -m "feat(governance): opaque exact-match option token for v2 escalati
 - Modify: `src/decision/decision.ts`
 - Test: `test/decision/decision.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/decision/decision.test.ts` (reuse the file's existing `GovEvent` builders/imports; if it has a local `mk`/`evt` helper, use it — otherwise inline the literals as below):
 
@@ -254,12 +256,12 @@ describe("deriveDecisionState — Type 0 chosen", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- decision`
 Expected: FAIL — `s.phase` is `"proposed"` not `"chosen"` (and `chosenOption` undefined) for the chosen case.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `src/decision/decision.ts`:
 
@@ -329,12 +331,12 @@ return {
 };
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm test -- decision`
 Expected: PASS (existing decision tests + the 3 new ones). The widened verdict union is backward-compatible.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -351,7 +353,7 @@ git commit -m "feat(governance): deriveDecisionState terminal chosen state for T
 - Modify: `src/decision/handlers.ts`
 - Test: `test/mcp/handlers.test.ts` (or a new `test/decision/choose.test.ts` — keep it next to the other handler tests)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/decision/choose.test.ts`:
 
@@ -429,14 +431,14 @@ describe("chooseOption — Type 0 human resolution", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- choose`
 Expected: FAIL — `escalate` and `chooseOption` are not exported yet (`escalate` lands in Task 5; this test will fully pass only after Task 5 — that is expected for subagent-driven order. If running strictly task-by-task, stub-import will fail at module resolution).
 
 > Note for the implementer: Task 4 and Task 5 are co-dependent (the test exercises both). Implement Task 4's `chooseOption` now; the test goes green at the end of Task 5. Verify Task 4 in isolation with the unit assertion in Step 4 if you want an intermediate green.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `src/decision/handlers.ts`, add after `reject()` (it reuses the file's existing `loadState`, `generateId`, `writeEvent`, `GovEvent`):
 
@@ -486,12 +488,12 @@ export async function chooseOption(
 }
 ```
 
-- [ ] **Step 4: Run tests (after Task 5 lands escalate)**
+- [x] **Step 4: Run tests (after Task 5 lands escalate)**
 
 Run: `pnpm test -- choose`
 Expected: PASS (2 tests). If running before Task 5, instead assert chooseOption against a hand-written proposal+blocked pair, or proceed to Task 5 and run then.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -508,7 +510,7 @@ git commit -m "feat(governance): chooseOption — human-gated idempotent Type 0 
 - Create: `src/escalate/escalate.ts`
 - Test: `test/escalate/escalate.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/escalate/escalate.test.ts`:
 
@@ -581,12 +583,12 @@ describe("escalate — Type 0 emission", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- escalate`
 Expected: FAIL — `Cannot find module ".../src/escalate/escalate.ts"`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/escalate/escalate.ts`:
 
@@ -704,12 +706,12 @@ export async function escalate(
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm test -- escalate choose`
 Expected: PASS (escalate: 2; choose: 2 — Task 4's test goes green now that escalate exists).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -725,7 +727,7 @@ git commit -m "feat(governance): escalate orchestrator — Type 0 decision_block
 
 - Modify: `src/mcp/server.ts`
 
-- [ ] **Step 1: Register the two tools**
+- [x] **Step 1: Register the two tools**
 
 In `src/mcp/server.ts`, add imports near the other handler imports:
 
@@ -791,21 +793,21 @@ server.registerTool(
 );
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `pnpm exec tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 3: Full headless suite**
+- [x] **Step 3: Full headless suite**
 
 Run: `pnpm test`
 Expected: PASS — prior 137 + the new escalate/choose/token/decision tests (target ≈ 145+).
 
-- [ ] **Step 4: Headless MCP round-trip (manual proof of the TS half)**
+- [x] **Step 4: Headless MCP round-trip (manual proof of the TS half)**
 
 Drive the real stdio server with a temporary `.mjs` driver inside `governance/` (the established pattern — /tmp fails node_modules resolution; delete the driver after). The driver should, against the MCP SDK client: `tools/list` (assert `escalate` + `choose` present) → call `escalate` (assert it returns `decisionId`/`blockedEventId`/two bound tokens) → parse one option's `reply` token → call `choose` with its fields → call `why <decisionId>` (assert `phase: "chosen"` and a `decision_chosen` actor:user in the chain). Capture the transcript, then `rm` the driver. Record the observed output in the done-line. If the round-trip cannot be driven, say so explicitly ("could not run") — do not claim it passed.
 
-- [ ] **Step 5: Confirm no drift outside governance/**
+- [x] **Step 5: Confirm no drift outside governance/**
 
 Run:
 
@@ -816,7 +818,7 @@ git -C /Users/davidpark/private_project/work-radar diff --stat HEAD~6 -- ':(excl
 
 Expected: changes confined to `governance/**` + `docs/**`. No `src/`, `src-tauri/`, `bindings.ts`, or migration changes (INVARIANT #4 — bindings drift 0; the MCP is stdio, not Tauri IPC).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -828,12 +830,12 @@ git commit -m "feat(governance): register escalate + choose MCP tools (v2 slice1
 
 ## Done criteria (1A)
 
-- [ ] `decision_blocked` + `decision_chosen` in `EventType`; `escalate` + `choose` MCP tools registered.
-- [ ] `escalate(question, options[])` mints a Type 0 `decision_proposed` + `decision_blocked` with one fully-bound (`BOULE:<blocked>:<decision>:<opt>`) exact-match token per option.
-- [ ] `choose` lands a human-gated (`actor:"user"`), NOT review-gated `decision_chosen`; `deriveDecisionState` → terminal `chosen`; redelivered tap is an idempotent no-op.
-- [ ] `pnpm test` green (≈145+), `pnpm exec tsc --noEmit` clean, headless MCP round-trip observed (escalate → choose → `why` chain), bindings drift 0, no app/Rust/migration changes.
-- [ ] Independent **critic (opus, separate pass)** ACCEPT — explicitly checks: Python/agent has no write-path to a verdict (only `choose` writes `decision_chosen`, pinned actor:user); token is exact-match only; no auto-default/unbounded loop; double-tap idempotent.
-- [ ] Commit only — **do NOT push** (Boule parked). `docs/decisions.md` done-line breadcrumb.
+- [x] `decision_blocked` + `decision_chosen` in `EventType`; `escalate` + `choose` MCP tools registered.
+- [x] `escalate(question, options[])` mints a Type 0 `decision_proposed` + `decision_blocked` with one fully-bound (`BOULE:<blocked>:<decision>:<opt>`) exact-match token per option.
+- [x] `choose` lands a human-gated (`actor:"user"`), NOT review-gated `decision_chosen`; `deriveDecisionState` → terminal `chosen`; redelivered tap is an idempotent no-op.
+- [x] `pnpm test` green (≈145+), `pnpm exec tsc --noEmit` clean, headless MCP round-trip observed (escalate → choose → `why` chain), bindings drift 0, no app/Rust/migration changes.
+- [x] Independent **critic (opus, separate pass)** ACCEPT — explicitly checks: Python/agent has no write-path to a verdict (only `choose` writes `decision_chosen`, pinned actor:user); token is exact-match only; no auto-default/unbounded loop; double-tap idempotent.
+- [x] Commit only — **do NOT push** (Boule parked). `docs/decisions.md` done-line breadcrumb.
 
 ## Deferred to Slice 1B (separate plan — touches the LIVE ~/.hermes fabric)
 
