@@ -128,6 +128,31 @@ pub struct SkillWorkspace {
     pub member_paths: Vec<String>,
 }
 
+/// 프로젝트 vendored 카피의 중앙 라이브러리 대비 드리프트 1건(G3-PR2, #22 부분). 디스크 유도·비영속
+/// (#7). 읽기 전용. `member_path`는 표시·매칭 전용 — 로그 금지(C7).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDivergence {
+    /// repos.id — 워크스페이스 귀속(String이라 specta i64 이슈 없음).
+    pub repo_id: String,
+    /// 멤버 스킬의 provider(스캔 루트 귀속).
+    pub provider: SkillProvider,
+    /// 표시 이름(frontmatter name 우선, dir 폴백) — registry/PR1과 동일 도출.
+    pub name: String,
+    /// PR1 `SkillWorkspace.member_paths` 와 **동일 문자열**(스킬 SKILL.md 경로) — FE Set-lookup용(C6).
+    pub member_path: String,
+    /// 비교 결과.
+    pub status: DivergenceStatus,
+}
+
+/// 2-way 드리프트 상태(베이스라인 없음 — 누가 편집했는지는 표시 안 함). snake_case 방출.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DivergenceStatus {
+    InSync,
+    Diverged,
+}
+
 /// 인앱 프롬프트 생성 입력(레지스트리에 새 편집 가능 템플릿 추가). binding은 선택(미바인딩 템플릿도 가능).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

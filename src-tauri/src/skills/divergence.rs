@@ -9,6 +9,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::models::{DivergenceStatus, SkillDivergence, SkillProvider};
+use crate::skills::central_repo::{central_skill_dir, provider_segment, sanitize_segment};
+
 /// 트리 비교용 항목 표현(파일 내용 / 심링크 타깃 / 디렉터리 마커).
 #[derive(PartialEq, Eq)]
 enum TreeEntry {
@@ -51,6 +54,56 @@ fn trees_equal(a: &Path, b: &Path) -> bool {
         (Some(ta), Some(tb)) => ta == tb,
         _ => false,
     }
+}
+
+/// 감지 코어 입력 1건 — 명령 레이어가 PR1 스캔 결과에서 도출(IPC 미경계 → Type 불필요).
+pub(crate) struct ProjectMember {
+    pub repo_id: String,
+    pub provider: SkillProvider,
+    pub name: String,
+    pub member_path: String, // 스킬 SKILL.md 경로(PR1 member_paths 엔트리).
+    pub dir_path: PathBuf,   // 비교 대상 스킬 디렉터리(member_path의 부모).
+}
+
+/// 코어: 각 프로젝트 멤버가 중앙 managed 카피와 드리프트했는지 판정(앱 핸들 비의존 → hermetic).
+/// 심링크 멤버(드리프트 불가) / 중앙 미매칭(managed 아님)은 결과에서 제외한다. infallible.
+pub(crate) fn detect_divergence_core(
+    central_root: &Path,
+    members: &[ProjectMember],
+) -> Vec<SkillDivergence> {
+    let mut out = Vec::new();
+    for m in members {
+        // 1. 멤버 dir이 심링크면 vendored 카피 아님 → 제외(부재/접근불가도 제외).
+        let Ok(meta) = std::fs::symlink_metadata(&m.dir_path) else {
+            continue;
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        // 2. 중앙 managed 매칭? (provider, name) → central dir에 SKILL.md 존재해야 후보.
+        let central_dir = central_skill_dir(
+            central_root,
+            provider_segment(m.provider),
+            &sanitize_segment(&m.name),
+        );
+        if !central_dir.join("SKILL.md").is_file() {
+            continue;
+        }
+        // 3. 트리 비교(읽기 오류 → Diverged, 보수적).
+        let status = if trees_equal(&m.dir_path, &central_dir) {
+            DivergenceStatus::InSync
+        } else {
+            DivergenceStatus::Diverged
+        };
+        out.push(SkillDivergence {
+            repo_id: m.repo_id.clone(),
+            provider: m.provider,
+            name: m.name.clone(),
+            member_path: m.member_path.clone(),
+            status,
+        });
+    }
+    out
 }
 
 #[cfg(test)]
@@ -104,6 +157,76 @@ mod tests {
         write(&a.join("gone.txt"), "y");
         write(&b.join("SKILL.md"), "same");
         assert!(!trees_equal(&a, &b));
+    }
+
+    /// 중앙 managed 스킬 dir 생성(`<central>/<provider>/<name>/SKILL.md` + 본문).
+    fn make_central(central: &Path, provider: &str, name: &str, body: &str) -> PathBuf {
+        let dir = central.join(provider).join(name);
+        write(&dir.join("SKILL.md"), body);
+        dir
+    }
+
+    fn member(repo: &str, name: &str, dir: &Path) -> ProjectMember {
+        ProjectMember {
+            repo_id: repo.to_string(),
+            provider: SkillProvider::Claude,
+            name: name.to_string(),
+            member_path: dir.join("SKILL.md").to_string_lossy().into_owned(),
+            dir_path: dir.to_path_buf(),
+        }
+    }
+
+    #[test]
+    fn detect_reports_in_sync_for_identical_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let central = tmp.path().join("skills-library");
+        make_central(&central, "claude", "foo", "BODY");
+        let proj = tmp.path().join("proj/.claude/skills/foo");
+        write(&proj.join("SKILL.md"), "BODY");
+
+        let out = detect_divergence_core(&central, &[member("r1", "foo", &proj)]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].status, DivergenceStatus::InSync);
+        assert_eq!(out[0].member_path, proj.join("SKILL.md").to_string_lossy());
+    }
+
+    #[test]
+    fn detect_reports_diverged_for_edited_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let central = tmp.path().join("skills-library");
+        make_central(&central, "claude", "foo", "CENTRAL");
+        let proj = tmp.path().join("proj/.claude/skills/foo");
+        write(&proj.join("SKILL.md"), "EDITED");
+
+        let out = detect_divergence_core(&central, &[member("r1", "foo", &proj)]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].status, DivergenceStatus::Diverged);
+    }
+
+    #[test]
+    fn detect_omits_symlinked_member() {
+        let tmp = tempfile::tempdir().unwrap();
+        let central = tmp.path().join("skills-library");
+        let central_dir = make_central(&central, "claude", "foo", "BODY");
+        // 프로젝트 멤버가 중앙으로 가는 심링크 → 카피 아님 → 제외.
+        let proj_parent = tmp.path().join("proj/.claude/skills");
+        std::fs::create_dir_all(&proj_parent).unwrap();
+        let link = proj_parent.join("foo");
+        std::os::unix::fs::symlink(&central_dir, &link).unwrap();
+
+        let out = detect_divergence_core(&central, &[member("r1", "foo", &link)]);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn detect_omits_member_with_no_central_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        let central = tmp.path().join("skills-library"); // 비어 있음
+        let proj = tmp.path().join("proj/.claude/skills/orphan");
+        write(&proj.join("SKILL.md"), "BODY");
+
+        let out = detect_divergence_core(&central, &[member("r1", "orphan", &proj)]);
+        assert!(out.is_empty());
     }
 
     #[test]
