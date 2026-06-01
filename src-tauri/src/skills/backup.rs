@@ -48,17 +48,21 @@ fn dir_size_bytes(root: &Path) -> u64 {
 }
 
 /// `id`에서 ISO8601 표시 문자열 파생(폴백: id 그대로). `20260601T123045Z` → `2026-06-01T12:30:45Z`.
+/// 같은 초 분리 suffix(`-2`…)는 표시에서 무시하고 베이스 타임스탬프만 포맷한다(베이스 stamp엔 `-` 없음).
 fn created_at_from_id(id: &str) -> String {
-    let b = id.as_bytes();
-    if id.len() == 16 && id.ends_with('Z') && b[8] == b'T' {
+    let base = id.split_once('-').map_or(id, |(head, _)| head);
+    let b = base.as_bytes();
+    // is_ascii는 모든 바이트 인덱스가 char 경계임을 보장 → 아래 슬라이싱 패닉 방지(디스크에서 읽은
+    // 임의 dir 이름이 16바이트 멀티바이트일 수 있다). 앱 생성 id는 항상 ASCII라 정상 경로엔 무영향.
+    if base.len() == 16 && base.is_ascii() && base.ends_with('Z') && b[8] == b'T' {
         format!(
             "{}-{}-{}T{}:{}:{}Z",
-            &id[0..4],
-            &id[4..6],
-            &id[6..8],
-            &id[9..11],
-            &id[11..13],
-            &id[13..15],
+            &base[0..4],
+            &base[4..6],
+            &base[6..8],
+            &base[9..11],
+            &base[11..13],
+            &base[13..15],
         )
     } else {
         id.to_string()
@@ -76,19 +80,44 @@ fn meta_for_snapshot(snapshot_root: &Path, id: &str) -> BackupMeta {
     }
 }
 
-/// 중앙 라이브러리 트리를 `<backups_root>/<id>/`로 복사한다. central 부재면 빈 스냅샷 dir만 만든다.
-/// 심링크는 따르지 않는다(central_repo::copy_dir_shallow 계약 — 스냅샷이 트리 밖으로 새지 않음).
-fn snapshot_into(central_root: &Path, backups_root: &Path, id: &str) -> Result<PathBuf, AppError> {
-    let seg = sanitize_segment(id); // id는 코드 생성이지만 경로 세그먼트 안전 보장(방어적).
-    let dest = backups_root.join(&seg);
-    if dest.exists() {
-        std::fs::remove_dir_all(&dest)?; // 같은 초에 두 번 호출돼도 멱등.
+/// 같은 초 충돌 시 id 분리 상한(이 이상 같은 초 스냅샷은 비현실적 — bounded 가드).
+const MAX_SNAPSHOT_DISAMBIG: u32 = 10_000;
+
+/// `<backups_root>/<base_id>`가 비어 있으면 그대로, 충돌하면 `<base_id>-2`, `-3` … 으로 **비어 있는** id를
+/// 고른다. `new_snapshot_id()`는 초 단위라 같은 초에 두 번 백업하면 id가 겹치는데, 기존 스냅샷을
+/// **덮어쓰지 않도록**(가역 레일 — 안전 스냅샷/백업 손실 방지) 분리한다. 반환: (대상 경로, 실제 id).
+fn unique_snapshot_dest(backups_root: &Path, base_id: &str) -> (PathBuf, String) {
+    let first = backups_root.join(sanitize_segment(base_id));
+    if !first.exists() {
+        return (first, base_id.to_string());
     }
+    for n in 2..=MAX_SNAPSHOT_DISAMBIG {
+        let candidate = format!("{base_id}-{n}");
+        let dest = backups_root.join(sanitize_segment(&candidate));
+        if !dest.exists() {
+            return (dest, candidate);
+        }
+    }
+    // 도달 불가(같은 초 1만 스냅샷). 마지막 후보로 폴백.
+    let candidate = format!("{base_id}-{MAX_SNAPSHOT_DISAMBIG}");
+    let dest = backups_root.join(sanitize_segment(&candidate));
+    (dest, candidate)
+}
+
+/// 중앙 라이브러리 트리를 `<backups_root>/<id>/`로 복사한다. central 부재면 빈 스냅샷 dir만 만든다.
+/// 같은 초 id 충돌은 `-N` suffix로 분리해 기존 스냅샷을 덮어쓰지 않는다(반환된 실제 id를 메타/audit에 기록).
+/// 심링크는 따르지 않는다(central_repo::copy_dir_shallow 계약 — 스냅샷이 트리 밖으로 새지 않음).
+fn snapshot_into(
+    central_root: &Path,
+    backups_root: &Path,
+    id: &str,
+) -> Result<(PathBuf, String), AppError> {
+    let (dest, actual_id) = unique_snapshot_dest(backups_root, id);
     std::fs::create_dir_all(&dest)?;
     if central_root.is_dir() {
         copy_dir_shallow(central_root, &dest)?;
     }
-    Ok(dest)
+    Ok((dest, actual_id))
 }
 
 /// core: 스냅샷 + audit. 테스트 가능(앱 핸들 비의존). `id`는 호출자(커맨드)가 UTC로 생성해 주입한다
@@ -99,8 +128,8 @@ pub(crate) async fn backup_library_core(
     backups_root: &Path,
     id: &str,
 ) -> Result<BackupMeta, AppError> {
-    let dest = snapshot_into(central_root, backups_root, id)?;
-    let meta = meta_for_snapshot(&dest, id);
+    let (dest, actual_id) = snapshot_into(central_root, backups_root, id)?;
+    let meta = meta_for_snapshot(&dest, &actual_id);
     let detail = format!("skills={}", meta.skill_count); // 비밀-free: 개수만.
     audit(
         pool,
@@ -153,7 +182,8 @@ pub(crate) async fn restore_library_core(
     }
 
     // 2) 사전 안전 스냅샷(복원 직전 상태). 이게 있어야 복원이 그 자체로 가역.
-    snapshot_into(central_root, backups_root, safety_id)?;
+    //    같은 초 충돌 시 분리된 실제 id를 audit에 기록(덮어쓰기 없음).
+    let (_, actual_safety_id) = snapshot_into(central_root, backups_root, safety_id)?;
 
     // 3) central 교체: 기존 트리 제거 후 스냅샷 내용 복사.
     if central_root.exists() {
@@ -173,7 +203,7 @@ pub(crate) async fn restore_library_core(
     }
 
     // 5) audit. detail은 비밀-free: 스냅샷 id + 안전 스냅샷 id + prune 수.
-    let detail = format!("from={snapshot_id},safety={safety_id},pruned={pruned}");
+    let detail = format!("from={snapshot_id},safety={actual_safety_id},pruned={pruned}");
     audit(
         pool,
         "restore",
@@ -400,5 +430,82 @@ mod tests {
         assert_eq!(err.kind, crate::error::ErrorKind::NotFound);
         // central은 그대로(존재하지 않는 스냅샷으로 덮어쓰지 않는다).
         assert!(central.join("claude/foo/SKILL.md").exists());
+    }
+
+    #[test]
+    fn created_at_from_id_is_panic_safe_on_non_timestamp_ids() {
+        // 정상 타임스탬프는 포맷, suffix는 무시. 디스크에서 온 임의/멀티바이트 dir 이름은
+        // 슬라이싱 패닉 없이 raw로 폴백(list_backups_core가 임의 이름을 읽으므로 방어적).
+        assert_eq!(
+            created_at_from_id("20260601T120000Z"),
+            "2026-06-01T12:00:00Z"
+        );
+        assert_eq!(
+            created_at_from_id("20260601T120000Z-2"),
+            "2026-06-01T12:00:00Z"
+        );
+        assert_eq!(created_at_from_id("does-not-exist"), "does-not-exist");
+        // 16바이트지만 멀티바이트 char가 슬라이스 인덱스를 가로지르는 케이스 → 패닉 없이 raw.
+        let weird = "200é101T234567Z"; // 'é' = 2바이트 → 총 16바이트.
+        assert_eq!(weird.len(), 16);
+        assert_eq!(created_at_from_id(weird), weird);
+    }
+
+    #[test]
+    fn unique_snapshot_dest_disambiguates_collisions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("skills-backups");
+        std::fs::create_dir_all(&root).unwrap();
+
+        let (_, id0) = unique_snapshot_dest(&root, "X");
+        assert_eq!(id0, "X"); // 비어 있으면 그대로.
+        std::fs::create_dir_all(root.join("X")).unwrap();
+
+        let (_, id1) = unique_snapshot_dest(&root, "X");
+        assert_eq!(id1, "X-2"); // 충돌 → -2.
+        std::fs::create_dir_all(root.join("X-2")).unwrap();
+
+        let (_, id2) = unique_snapshot_dest(&root, "X");
+        assert_eq!(id2, "X-3"); // 다음 충돌 → -3.
+    }
+
+    #[tokio::test]
+    async fn backup_same_id_does_not_overwrite_prior_snapshot() {
+        // 같은 초(같은 id)에 두 번 백업해도 기존 스냅샷을 덮어쓰지 않는다(가역 — 백업 손실 방지).
+        let pool = fresh_db().await;
+        let tmp = tempfile::tempdir().unwrap();
+        let central = tmp.path().join("skills-library");
+        let backups = tmp.path().join("skills-backups");
+
+        make_managed(&central, "claude", "foo", "---\nname: foo\n---\nV1");
+        let m1 = backup_library_core(&pool, &central, &backups, "20260601T120000Z")
+            .await
+            .expect("backup v1");
+
+        // central 내용 변경 후 같은 id로 재백업.
+        make_managed(&central, "claude", "foo", "---\nname: foo\n---\nV2");
+        let m2 = backup_library_core(&pool, &central, &backups, "20260601T120000Z")
+            .await
+            .expect("backup v2");
+
+        assert_eq!(m1.id, "20260601T120000Z");
+        assert_eq!(m2.id, "20260601T120000Z-2"); // 분리됨(덮어쓰기 아님).
+        assert_eq!(m2.created_at, "2026-06-01T12:00:00Z"); // suffix는 표시에서 무시.
+
+        // 두 스냅샷 모두 보존 + 각자 내용 유지(V1 무손실).
+        assert_eq!(
+            std::fs::read_to_string(backups.join("20260601T120000Z/claude/foo/SKILL.md")).unwrap(),
+            "---\nname: foo\n---\nV1"
+        );
+        assert_eq!(
+            std::fs::read_to_string(backups.join("20260601T120000Z-2/claude/foo/SKILL.md"))
+                .unwrap(),
+            "---\nname: foo\n---\nV2"
+        );
+
+        // list는 둘 다 보여주고 최신(-2) 먼저.
+        let listed = list_backups_core(&backups).expect("list");
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, "20260601T120000Z-2");
     }
 }
