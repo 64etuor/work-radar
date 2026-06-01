@@ -358,6 +358,90 @@ fn emit_with_tab(app: &AppHandle, tab_id: &str, event: &str, payload: Json) {
     let _ = app.emit(event, Json::Object(obj));
 }
 
+/// Normalized "ask the user" payload emitted to the frontend (bespoke generic shape;
+/// ACP semantics never cross the IPC boundary).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct AskUserOption {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct AskUser {
+    /// Original JSON-RPC request id, stringified (specta forbids i64/u64; echoed back
+    /// with its original JSON type by `build_ask_user_response`).
+    pub request_id: String,
+    pub tool_name: Option<String>,
+    pub options: Vec<AskUserOption>,
+}
+
+/// Translate an inbound ACP `session/request_permission` request frame into an `AskUser`.
+/// Returns `None` for any other method, a frame without an id (a notification), or one
+/// with no usable options. Tolerant: options missing `optionId` are skipped; a missing
+/// `name` falls back to the `optionId` as the label (graceful degrade — the exact ACP
+/// option schema is unverified pending the deferred live smoke).
+pub(crate) fn parse_permission_request(val: &Json) -> Option<AskUser> {
+    if val.get("method").and_then(|v| v.as_str()) != Some("session/request_permission") {
+        return None;
+    }
+    let request_id = match val.get("id")? {
+        Json::Number(n) => n.to_string(),
+        Json::String(s) => s.clone(),
+        _ => return None,
+    };
+    let params = val.get("params")?;
+    let raw_options = params.get("options")?.as_array()?;
+    let mut options = Vec::new();
+    for opt in raw_options {
+        let Some(option_id) = opt.get("optionId").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let label = opt
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(option_id)
+            .to_string();
+        options.push(AskUserOption {
+            id: option_id.to_string(),
+            label,
+        });
+    }
+    if options.is_empty() {
+        return None;
+    }
+    let tool_name = params
+        .get("toolCall")
+        .and_then(|tc| tc.get("title"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    Some(AskUser {
+        request_id,
+        tool_name,
+        options,
+    })
+}
+
+/// Build the JSON-RPC **response** body for an ask-user request. Echoes `request_id`
+/// preserving its original JSON type (numeric string → number). `cancelled` sends the
+/// ACP `cancelled` outcome (so a dismissed card never hangs the agent).
+pub(crate) fn build_ask_user_response(
+    request_id: &str,
+    option_id: &str,
+    cancelled: bool,
+) -> Vec<u8> {
+    let id = match request_id.parse::<i64>() {
+        Ok(n) => json!(n),
+        Err(_) => json!(request_id),
+    };
+    let outcome = if cancelled {
+        json!({ "outcome": "cancelled" })
+    } else {
+        json!({ "outcome": "selected", "optionId": option_id })
+    };
+    let resp = json!({ "jsonrpc": "2.0", "id": id, "result": { "outcome": outcome } });
+    serde_json::to_vec(&resp).unwrap_or_default()
+}
+
 #[allow(dead_code)]
 /// Dispatch one incoming NDJSON frame.
 ///
@@ -517,5 +601,94 @@ mod tests {
             .as_str()
             .expect("env value str")
             .ends_with("workspace"));
+    }
+
+    #[test]
+    fn parse_permission_request_normalizes_a_well_formed_frame() {
+        let val = json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "session/request_permission",
+            "params": {
+                "sessionId": "s1",
+                "toolCall": { "title": "Write file foo.txt" },
+                "options": [
+                    { "optionId": "allow", "name": "Allow", "kind": "allow_once" },
+                    { "optionId": "reject", "name": "Reject", "kind": "reject_once" }
+                ]
+            }
+        });
+        let ask = parse_permission_request(&val).expect("should parse");
+        assert_eq!(ask.request_id, "7");
+        assert_eq!(ask.tool_name.as_deref(), Some("Write file foo.txt"));
+        assert_eq!(ask.options.len(), 2);
+        assert_eq!(
+            ask.options[0],
+            AskUserOption {
+                id: "allow".into(),
+                label: "Allow".into()
+            }
+        );
+        assert_eq!(ask.options[1].id, "reject");
+    }
+
+    #[test]
+    fn parse_permission_request_label_falls_back_to_option_id_and_skips_malformed() {
+        let val = json!({
+            "id": "abc",
+            "method": "session/request_permission",
+            "params": { "options": [
+                { "optionId": "ok" },               // no name → label = optionId
+                { "name": "no id here" }             // no optionId → skipped
+            ] }
+        });
+        let ask = parse_permission_request(&val).expect("should parse");
+        assert_eq!(ask.request_id, "abc"); // string id preserved verbatim
+        assert_eq!(ask.tool_name, None);
+        assert_eq!(ask.options.len(), 1);
+        assert_eq!(
+            ask.options[0],
+            AskUserOption {
+                id: "ok".into(),
+                label: "ok".into()
+            }
+        );
+    }
+
+    #[test]
+    fn parse_permission_request_returns_none_for_irrelevant_or_empty() {
+        // wrong method
+        assert!(parse_permission_request(&json!({
+            "id": 1, "method": "session/update", "params": {}
+        }))
+        .is_none());
+        // missing id (a notification, not a request)
+        assert!(parse_permission_request(&json!({
+            "method": "session/request_permission", "params": { "options": [{"optionId":"x"}] }
+        }))
+        .is_none());
+        // no usable options
+        assert!(parse_permission_request(&json!({
+            "id": 2, "method": "session/request_permission", "params": { "options": [] }
+        }))
+        .is_none());
+    }
+
+    #[test]
+    fn build_ask_user_response_selected_echoes_numeric_id() {
+        let bytes = build_ask_user_response("7", "allow", false);
+        let v: Json = serde_json::from_slice(&bytes).expect("valid json");
+        assert_eq!(v["id"], json!(7)); // numeric id echoed as a number
+        assert_eq!(v["result"]["outcome"]["outcome"], "selected");
+        assert_eq!(v["result"]["outcome"]["optionId"], "allow");
+    }
+
+    #[test]
+    fn build_ask_user_response_cancelled_omits_option_and_keeps_string_id() {
+        let bytes = build_ask_user_response("abc", "ignored", true);
+        let v: Json = serde_json::from_slice(&bytes).expect("valid json");
+        assert_eq!(v["id"], json!("abc")); // non-numeric id stays a string
+        assert_eq!(v["result"]["outcome"]["outcome"], "cancelled");
+        assert!(v["result"]["outcome"].get("optionId").is_none());
     }
 }
