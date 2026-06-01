@@ -8,6 +8,7 @@ import {
   type SkillEnvironment,
   type SkillProvider,
   type SkillRef,
+  type SkillWorkspace,
   type UserSkillRoot,
 } from "@/bindings";
 
@@ -23,6 +24,14 @@ export function useSkills() {
     queryKey: ["skills"],
     queryFn: () => unwrap(commands.listSkills()),
     staleTime: 10_000,
+  });
+}
+
+/** 프로젝트 워크스페이스 목록(G3-PR1, #16). 백엔드 scan이 memberPaths를 계산해 돌려준다. */
+export function useSkillWorkspaces() {
+  return useQuery<SkillWorkspace[]>({
+    queryKey: ["skillWorkspaces"],
+    queryFn: () => unwrap(commands.listSkillWorkspaces()),
   });
 }
 

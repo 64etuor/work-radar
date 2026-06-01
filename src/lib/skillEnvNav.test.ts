@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { Skill, SkillEnvironment } from "@/bindings";
+import type { Skill, SkillEnvironment, SkillWorkspace } from "@/bindings";
 import {
   applyEnvOrder,
   buildSkillEnvNav,
+  buildSkillWorkspaceNav,
   envCounts,
   reorderEnv,
   SKILL_PROVIDER_LABEL,
@@ -124,5 +125,42 @@ describe("envCounts", () => {
     expect(envCounts(codex, skills)).toEqual({ enabled: 1, total: 2 });
     const all = nav.find((i) => i.id === "all")!;
     expect(envCounts(all, skills)).toEqual({ enabled: 2, total: 3 });
+  });
+});
+
+const ws = (repoId: string, label: string, memberPaths: string[]): SkillWorkspace => ({
+  repoId,
+  label,
+  rootPath: `/repos/${label}`,
+  skillCount: memberPaths.length,
+  memberPaths,
+});
+
+describe("buildSkillWorkspaceNav", () => {
+  it("builds workspace nav items with workspace: ids and labels", () => {
+    const nav = buildSkillWorkspaceNav([
+      ws("r1", "alpha", ["/repos/alpha/.claude/skills/x/SKILL.md"]),
+    ]);
+    expect(nav).toHaveLength(1);
+    expect(nav[0].id).toBe("workspace:r1");
+    expect(nav[0].label).toBe("alpha");
+    expect(nav[0].pinned).toBe(true);
+  });
+
+  it("match uses memberPaths Set on sourcePath", () => {
+    const p = "/repos/alpha/.claude/skills/x/SKILL.md";
+    const nav = buildSkillWorkspaceNav([ws("r1", "alpha", [p])]);
+    expect(nav[0].match(mk({ id: "x", name: "x", kind: "external", sourcePath: p }))).toBe(true);
+    expect(
+      nav[0].match(mk({ id: "y", name: "y", kind: "external", sourcePath: "/other/SKILL.md" })),
+    ).toBe(false);
+    expect(nav[0].match(mk({ id: "z", name: "z", kind: "external", sourcePath: null }))).toBe(
+      false,
+    );
+  });
+
+  it("returns empty for undefined/empty workspaces", () => {
+    expect(buildSkillWorkspaceNav(undefined)).toEqual([]);
+    expect(buildSkillWorkspaceNav([])).toEqual([]);
   });
 });

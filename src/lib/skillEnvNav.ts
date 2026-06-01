@@ -1,4 +1,4 @@
-import type { Skill, SkillEnvironment, SkillProvider } from "@/bindings";
+import type { Skill, SkillEnvironment, SkillProvider, SkillWorkspace } from "@/bindings";
 
 /**
  * 스킬 레지스트리 좌측 **환경 사이드바**의 순수 로직 (P1, #2/#14). SkillsView가 소비한다.
@@ -30,7 +30,7 @@ export const SKILL_PROVIDER_ORDER: SkillProvider[] = [
   "other",
 ];
 
-export type SkillEnvNavId = "all" | "in_app" | `provider:${SkillProvider}`;
+export type SkillEnvNavId = "all" | "in_app" | `provider:${SkillProvider}` | `workspace:${string}`;
 
 export interface SkillEnvNavItem {
   id: SkillEnvNavId;
@@ -74,6 +74,25 @@ export function buildSkillEnvNav(
     });
   }
   return items;
+}
+
+/**
+ * 프로젝트 워크스페이스 사이드바 항목(G3-PR1, #16). 백엔드 `list_skill_workspaces`가 준 멤버십
+ * (`memberPaths`)을 Set으로 lookup해 필터한다 — **프런트 경로추론 없음**(scan.rs가 단일 출처). 환경
+ * provider 항목과 달리 별도 "프로젝트" 섹션에 렌더되며 드래그 재정렬 대상이 아니다(`pinned: true`).
+ */
+export function buildSkillWorkspaceNav(
+  workspaces: SkillWorkspace[] | undefined,
+): SkillEnvNavItem[] {
+  return (workspaces ?? []).map((w) => {
+    const members = new Set(w.memberPaths);
+    return {
+      id: `workspace:${w.repoId}` as SkillEnvNavId,
+      label: w.label,
+      match: (s: Skill) => s.sourcePath != null && members.has(s.sourcePath),
+      pinned: true,
+    };
+  });
 }
 
 /**
