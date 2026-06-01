@@ -2,8 +2,8 @@
  * Today×Timeline pending_calendar_writes 큐 관찰/제어 hooks(PR 5 Task 5).
  *
  * - `usePendingWrites`: 큐 스냅샷(폴링 2s, 디바운스/staged 표시용).
- * - `useCommitStaged`: cross-cal Acceptance 게이트(staged=true 행을 풀어 워커가 즉시 가져감).
- * - `useCancelPending`: 한 행 취소(외부 호출 없음 — UI 롤백 전용).
+ * - `useCommitStagedWrites`: cross-cal Acceptance 게이트(staged=true 행을 풀어 워커가 즉시 가져감).
+ * - `useCancelPendingWrites`: staged 행 취소(외부 호출 없음 — cross-cal 이동 롤백).
  *
  * INVARIANT: 외부 네트워크 호출은 워커에만 — 본 hooks는 큐 SQL과 이벤트만 본다.
  */
@@ -50,6 +50,16 @@ export function useCommitStagedWrites() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids: number[]) => unwrap(commands.commitStagedWrites(ids)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pendingWrites"] }),
+  });
+}
+
+/** staged=true 행들을 큐에서 제거(외부 호출 없음 — cross-cal 이동 롤백, Acceptance 반대편). */
+export function useCancelPendingWrites() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) =>
+      Promise.all(ids.map((id) => unwrap(commands.cancelPendingWrite(id)))).then(() => undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pendingWrites"] }),
   });
 }

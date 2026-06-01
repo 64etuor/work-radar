@@ -6,22 +6,30 @@
  * 워커가 즉시 가져가게 한다(INVARIANT #2 — 사용자 Acceptance 게이트).
  */
 import { Button } from "@/components/ui/button";
-import { isStaged, useCommitStagedWrites, usePendingWrites } from "@/lib/query/calendarSync";
+import {
+  isStaged,
+  useCancelPendingWrites,
+  useCommitStagedWrites,
+  usePendingWrites,
+} from "@/lib/query/calendarSync";
 
 export function StagedBadge() {
   const pending = usePendingWrites();
   const commit = useCommitStagedWrites();
+  const cancel = useCancelPendingWrites();
   const staged = (pending.data ?? []).filter(isStaged);
   if (staged.length === 0) return null;
+
+  const busy = commit.isPending || cancel.isPending;
+  const ids = staged.map((s) => s.id);
 
   return (
     <div className="today-staged" role="status" aria-live="polite">
       <span className="today-staged-text">변경 {staged.length}건 대기 중</span>
-      <Button
-        size="sm"
-        disabled={commit.isPending}
-        onClick={() => commit.mutate(staged.map((s) => s.id))}
-      >
+      <Button size="sm" variant="ghost" disabled={busy} onClick={() => cancel.mutate(ids)}>
+        {cancel.isPending ? "취소 중…" : "취소"}
+      </Button>
+      <Button size="sm" disabled={busy} onClick={() => commit.mutate(ids)}>
         {commit.isPending ? "적용 중…" : "적용"}
       </Button>
     </div>
