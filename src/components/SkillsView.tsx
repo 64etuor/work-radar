@@ -63,6 +63,7 @@ import {
   useSetSkillTags,
   useSetSkillUpdateOnLaunch,
   useSkillBackups,
+  useSkillDivergences,
   useSkillEnvironments,
   useSkills,
   useSkillUpdateOnLaunch,
@@ -90,6 +91,7 @@ import {
 } from "@/lib/skillDedup";
 import {
   applyEnvOrder,
+  buildDivergedPathSet,
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
   envCounts,
@@ -129,6 +131,7 @@ export function SkillsView() {
   const skills = useSkills();
   const environments = useSkillEnvironments();
   const workspaces = useSkillWorkspaces();
+  const divergences = useSkillDivergences();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -199,6 +202,7 @@ export function SkillsView() {
     [list, environments.data, envOrder],
   );
   const workspaceNav = useMemo(() => buildSkillWorkspaceNav(workspaces.data), [workspaces.data]);
+  const divergedPaths = useMemo(() => buildDivergedPathSet(divergences.data), [divergences.data]);
   const activeEnv = [...envNav, ...workspaceNav].find((i) => i.id === activeEnvId) ?? envNav[0];
   const envFiltered = useMemo(
     () => (activeEnv ? filtered.filter(activeEnv.match) : filtered),
@@ -651,6 +655,11 @@ export function SkillsView() {
                   const groupSelected = g.memberIds.every((id) => selectedIds.has(id));
                   return (
                     <div key={s.id} className={cn("skl-card-wrap", groupSelected && "selected")}>
+                      {s.sourcePath != null && divergedPaths.has(s.sourcePath) && (
+                        <span className="skl-card-diverged" title="중앙 라이브러리와 다름">
+                          ·다름
+                        </span>
+                      )}
                       <input
                         type="checkbox"
                         className="skl-card-check"
