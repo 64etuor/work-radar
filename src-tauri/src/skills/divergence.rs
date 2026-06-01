@@ -54,8 +54,8 @@ fn walk_tree(root: &Path, dir: &Path, map: &mut BTreeMap<PathBuf, TreeEntry>) ->
 }
 
 /// 두 스킬 디렉터리 트리가 동일한지(상대경로 집합 + 파일별 바이트 + 심링크 타깃). 한쪽이라도 읽기
-/// 실패면 false(보수적).
-fn trees_equal(a: &Path, b: &Path) -> bool {
+/// 실패면 false(보수적). G3-PR2b vendor의 InSync 안전 게이트가 재사용 → pub(crate).
+pub(crate) fn trees_equal(a: &Path, b: &Path) -> bool {
     match (collect_tree(a), collect_tree(b)) {
         (Some(ta), Some(tb)) => ta == tb,
         _ => false,

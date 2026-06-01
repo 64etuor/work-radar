@@ -97,6 +97,18 @@ pub(crate) fn repo_skill_roots(repos: &[Repo]) -> Vec<SkillRoot> {
     out
 }
 
+/// 프로젝트 vendoring 대상 서브디렉터리(REPO_SKILL_DIRS의 대표 매핑). claude→`.claude/skills`,
+/// codex→`.codex/skills`. 그 외 provider는 프로젝트 dir 관례가 없어 None(vendoring 미지원). C6: 프로젝트
+/// dir 관례 단일 출처. vendoring한 카피가 repo_skill_roots 스캔 + divergence 감지에 즉시 보이도록 같은
+/// 관례를 쓴다(아래 vendor_subdir_tests가 REPO_SKILL_DIRS와 동치를 가드).
+pub(crate) fn vendor_subdir(provider: SkillProvider) -> Option<&'static str> {
+    match provider {
+        SkillProvider::Claude => Some(".claude/skills"),
+        SkillProvider::Codex => Some(".codex/skills"),
+        SkillProvider::Openclaw | SkillProvider::Hermes | SkillProvider::Other => None,
+    }
+}
+
 /// 재귀 하강 시 건너뛸 디렉터리 이름: 숨김 dir(`.git`/`.venv`/벤더된 에이전트 dotfile 등) + 표준
 /// 빌드/벤더 dir. 특히 레포-로컬 루트(P1.5 #4)에서 거대 트리(node_modules 등) 폭주를 막는다. 루트 자체는
 /// 명시 경로라 이 술어의 대상이 아니다(하강 중 하위 dir에만 적용).
@@ -610,4 +622,27 @@ pub(crate) fn ensure_within_skills_dir_roots(
         return Err("스킬 루트 밖의 경로는 접근할 수 없습니다.".into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod vendor_subdir_tests {
+    use super::*;
+
+    #[test]
+    fn vendor_subdir_agrees_with_repo_skill_dirs() {
+        // vendorable provider의 subdir은 REPO_SKILL_DIRS에 같은 provider로 존재해야 한다(C6 동치).
+        for p in [SkillProvider::Claude, SkillProvider::Codex] {
+            let sub = vendor_subdir(p).expect("claude/codex는 vendorable");
+            assert!(
+                REPO_SKILL_DIRS
+                    .iter()
+                    .any(|(d, prov)| *d == sub && *prov == p),
+                "vendor_subdir({p:?})={sub} 는 같은 provider의 REPO_SKILL_DIRS 항목이어야 한다"
+            );
+        }
+        // 비-vendorable provider는 None.
+        assert_eq!(vendor_subdir(SkillProvider::Openclaw), None);
+        assert_eq!(vendor_subdir(SkillProvider::Hermes), None);
+        assert_eq!(vendor_subdir(SkillProvider::Other), None);
+    }
 }
