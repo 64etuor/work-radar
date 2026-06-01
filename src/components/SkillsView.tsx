@@ -29,7 +29,7 @@ import {
   Unlink,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { Skill, SkillDiff, SkillProvider, SkillRef } from "@/bindings";
 import { SkillMarkdown } from "@/components/SkillMarkdown";
@@ -111,6 +111,7 @@ import {
   type SkillEnvNavItem,
 } from "@/lib/skillEnvNav";
 import { collectTags, matchesTag, UNTAGGED } from "@/lib/skillTags";
+import { usePendingFocus } from "@/lib/usePendingFocus";
 import { useStickyToggle } from "@/lib/useStickyToggle";
 import { useUIStore } from "@/store";
 
@@ -184,21 +185,12 @@ export function SkillsView() {
     }
   };
 
-  // 팔레트에서 스킬을 고르면 그 스킬을 선택(보기/편집)한다 — 한 번만 소비.
-  // 동일 선택 핸들러(selectedId) 경로라 자동 실행은 없다(INVARIANT #1).
-  // setState는 prev-compare로 render에서 적용 (set-state-in-effect 회피),
-  // store clear는 진짜 side-effect라 effect 유지.
-  const [prevPending, setPrevPending] = useState(pendingSkillId);
-  if (pendingSkillId !== prevPending) {
-    setPrevPending(pendingSkillId);
-    if (pendingSkillId) {
-      setSelectedId(pendingSkillId);
-      setAdding(false);
-    }
-  }
-  useEffect(() => {
-    if (pendingSkillId) clearPendingSkill();
-  }, [pendingSkillId, clearPendingSkill]);
+  // 팔레트에서 스킬을 고르면 그 스킬을 선택(보기/편집)한다 — 한 번만 소비(공유 훅 usePendingFocus,
+  // 시그널 딥링크와 동일 패턴). 동일 선택 핸들러(selectedId) 경로라 자동 실행은 없다(INVARIANT #1).
+  usePendingFocus(pendingSkillId, clearPendingSkill, (id) => {
+    setSelectedId(id);
+    setAdding(false);
+  });
 
   const list = useMemo(() => skills.data ?? [], [skills.data]);
   const filtered = useMemo(() => {
