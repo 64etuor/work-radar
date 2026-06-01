@@ -67,6 +67,20 @@ pub(crate) fn staging_skill_dir(staging_root: &Path, provider: &str, name: &str)
     staging_root.join(provider).join(name)
 }
 
+/// staging의 `<provider>/<name>` dir를 제거한다(있으면). 멱등 — 부재 시 no-op.
+/// "최신" 확인 시 이전에 받아둔 stale staging 해소, apply 후 정리에서 공유한다.
+pub(crate) fn clear_staging_dir(
+    staging_root: &Path,
+    provider: &str,
+    name: &str,
+) -> std::io::Result<()> {
+    let dir = staging_skill_dir(staging_root, provider, name);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)?;
+    }
+    Ok(())
+}
+
 /// content_dir(검증된 SKILL.md 포함)를 staging/<provider>/<name>/로 복사. 재호출 멱등(기존 제거 후 복사).
 /// 심링크는 따르지 않는다(central_repo::import_to_central 계약 재사용). 테스트 가능(앱 핸들 비의존).
 pub(crate) fn stage_from_dir(
@@ -133,10 +147,8 @@ pub(crate) async fn apply_update_core(
     // ④ commit 승격 + staged 비움.
     promote_staged_commit(pool, provider, name, &staged).await?;
 
-    // ⑤ staging 정리.
-    if staged_dir.exists() {
-        std::fs::remove_dir_all(&staged_dir)?;
-    }
+    // ⑤ staging 정리(check_one "최신" 정리와 동일 헬퍼 — staged_dir == staging_skill_dir(...)).
+    clear_staging_dir(staging_root, provider, name)?;
 
     // ⑥ audit(비밀-free: 파일 수 + commit).
     let detail = format!("files={},commit={}", count_files(&dest), staged);
@@ -246,7 +258,9 @@ async fn check_one(
     let checked = now_iso();
 
     if upstream == source.installed_commit {
-        // 최신 — staging 비움(이전에 staged였다면 해소) + 확인 시각만.
+        // 최신 — 이전에 staged였다면 staging 정리. 디스크 먼저→DB 순서라 제거 실패 시에도
+        // (디스크 dir + DB staged) 둘 다 그대로 남아 다음 패스에서 일관되게 재시도된다.
+        clear_staging_dir(staging_root, &source.provider, &source.name)?;
         record_update_check(pool, &source.provider, &source.name, None, &checked).await?;
         return Ok(());
     }
@@ -436,6 +450,28 @@ mod tests {
             std::fs::read_to_string(dest.join("SKILL.md")).unwrap(),
             "---\nname: foo\n---\nNEWER"
         );
+    }
+
+    #[test]
+    fn clear_staging_dir_removes_existing() {
+        // "최신" 확인 시 이전에 staged된 dir를 디스크에서 제거(DB staged 비움과 짝).
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("skills-staging");
+        let dir = staging_skill_dir(&staging, "claude", "foo");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SKILL.md"), "---\nname: foo\n---\nx").unwrap();
+        assert!(dir.exists());
+
+        clear_staging_dir(&staging, "claude", "foo").unwrap();
+        assert!(!dir.exists(), "stale staging dir는 제거되어야 한다");
+    }
+
+    #[test]
+    fn clear_staging_dir_is_noop_when_absent() {
+        // 부재 dir 제거는 멱등 no-op(에러 없음) — staged 적 없는 스킬도 안전.
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("skills-staging");
+        clear_staging_dir(&staging, "claude", "missing").unwrap();
     }
 
     #[tokio::test]
