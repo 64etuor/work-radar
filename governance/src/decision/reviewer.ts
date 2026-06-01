@@ -82,3 +82,26 @@ export async function recordReview(
 
   return { reviewEventId: evt.frontmatter.id, reviewPath, verdict: result.verdict };
 }
+
+/** A named reviewer: the model label + its injected ReviewFn closure. */
+export interface ReviewerEntry {
+  model: string;
+  fn: ReviewFn;
+}
+
+export interface ReviewFailure {
+  reviewerModel: string;
+  error: string;
+}
+
+export interface ReviewSkip {
+  reviewerModel: string;
+  reason: string;
+}
+
+/** Aggregate outcome of running a reviewer batch for one decision. */
+export interface RequestReviewResult {
+  recorded: RecordReviewResult[];
+  failures: ReviewFailure[];
+  skipped: ReviewSkip[];
+}

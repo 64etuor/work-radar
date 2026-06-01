@@ -113,8 +113,19 @@ server.registerTool(
     inputSchema: { decisionId: z.string() },
   },
   async ({ decisionId }) => {
-    const r = await requestReview(WORKSPACE, { decisionId, authorModel: AUTHOR_MODEL }, reviewFn, nowFn(), randFn());
-    return { content: [{ type: "text", text: `review recorded: ${r.verdict} (${r.reviewEventId})` }] };
+    const res = await requestReview(
+      WORKSPACE,
+      { decisionId, authorModel: AUTHOR_MODEL },
+      [{ model: REVIEWER_MODEL, fn: reviewFn }],
+      nowFn(),
+      randFn(),
+    );
+    const ok = res.recorded[0];
+    const text = ok
+      ? `review recorded: ${ok.verdict} (${ok.reviewEventId})`
+      : `no review recorded — failures: ${res.failures.length}, skipped: ${res.skipped.length}` +
+        (res.failures[0] ? ` (${res.failures[0].reviewerModel}: ${res.failures[0].error})` : "");
+    return { content: [{ type: "text", text }] };
   },
 );
 
