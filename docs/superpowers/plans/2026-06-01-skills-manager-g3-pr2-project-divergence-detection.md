@@ -63,8 +63,6 @@ Create `src-tauri/src/skills/divergence.rs`:
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::skills::central_repo::{central_skill_dir, provider_segment, sanitize_segment};
-
 /// 트리 비교용 항목 표현(파일 내용 / 심링크 타깃 / 디렉터리 마커).
 #[derive(PartialEq, Eq)]
 enum TreeEntry {
@@ -310,10 +308,11 @@ Expected: FAIL to compile — `ProjectMember`, `detect_divergence_core` not foun
 
 - [ ] **Step 4: Implement `ProjectMember` + `detect_divergence_core`**
 
-In `src-tauri/src/skills/divergence.rs`, add above the `#[cfg(test)]` block. First extend the imports at the top of the file:
+In `src-tauri/src/skills/divergence.rs`, add above the `#[cfg(test)]` block. First add these imports at the top of the file (below the existing `use std::...` lines):
 
 ```rust
 use crate::models::{DivergenceStatus, SkillDivergence, SkillProvider};
+use crate::skills::central_repo::{central_skill_dir, provider_segment, sanitize_segment};
 ```
 
 Then add the member struct and core:
