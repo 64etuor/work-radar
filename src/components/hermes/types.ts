@@ -10,7 +10,17 @@ export type HermesMessage =
       ts: number;
       done: boolean;
     }
-  | { id: string; role: "system"; text: string; level: "info" | "warn" | "error"; ts: number };
+  | { id: string; role: "system"; text: string; level: "info" | "warn" | "error"; ts: number }
+  | {
+      id: string;
+      role: "ask";
+      requestId: string;
+      toolName?: string;
+      options: { id: string; label: string }[];
+      /** chosen optionId, "cancelled", or undefined while pending */
+      resolved?: string;
+      ts: number;
+    };
 
 export type SessionStatus = "idle" | "starting" | "ready" | "error";
 

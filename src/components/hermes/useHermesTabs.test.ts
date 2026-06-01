@@ -138,4 +138,44 @@ describe("tabsReducer", () => {
     s = tabsReducer(s, { type: "open-tab", tabId: "b", defaultName: "Hermes 2" });
     expect(pickDefaultName(s)).toBe("Hermes 3");
   });
+
+  it("ask-user appends a role:ask message scoped to the target tab", () => {
+    let s = tabsReducer(EMPTY_TABS_STATE, { type: "open-tab", tabId: "a", defaultName: "A" });
+    s = tabsReducer(s, { type: "open-tab", tabId: "b", defaultName: "B" });
+    s = tabsReducer(s, {
+      type: "ask-user",
+      tabId: "a",
+      requestId: "7",
+      toolName: "Write foo",
+      options: [
+        { id: "allow", label: "Allow" },
+        { id: "reject", label: "Reject" },
+      ],
+    });
+    const ma = s.tabs.get("a")!.messages;
+    const mb = s.tabs.get("b")!.messages;
+    expect(mb.length).toBe(0);
+    expect(ma.length).toBe(1);
+    const card = ma[0];
+    expect(card.role).toBe("ask");
+    if (card.role === "ask") {
+      expect(card.requestId).toBe("7");
+      expect(card.options.map((o) => o.id)).toEqual(["allow", "reject"]);
+      expect(card.resolved).toBeUndefined();
+    }
+  });
+
+  it("ask-resolve marks the matching ask message resolved by requestId", () => {
+    let s = tabsReducer(EMPTY_TABS_STATE, { type: "open-tab", tabId: "a", defaultName: "A" });
+    s = tabsReducer(s, {
+      type: "ask-user",
+      tabId: "a",
+      requestId: "7",
+      options: [{ id: "allow", label: "Allow" }],
+    });
+    s = tabsReducer(s, { type: "ask-resolve", tabId: "a", requestId: "7", choice: "allow" });
+    const card = s.tabs.get("a")!.messages[0];
+    expect(card.role).toBe("ask");
+    if (card.role === "ask") expect(card.resolved).toBe("allow");
+  });
 });
