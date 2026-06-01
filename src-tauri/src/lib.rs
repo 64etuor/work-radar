@@ -256,6 +256,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::apply::apply_managed_skill,
         skills::apply::unapply_managed_skill,
         skills::apply::list_applied_skills,
+        skills::apply::apply_managed_skills,
+        skills::apply::unapply_managed_skills,
         // 스킬 네트워크 설치 (G1.5-PR1, ADR-0006 레일 ③) — GitHub tarball → 중앙 라이브러리.
         // bounded fetch + keychain(공개 repo는 토큰 불요) + audit. 잡 spawn 없음(#1/#2).
         skills::installer::install_skill_from_git,

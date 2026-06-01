@@ -537,6 +537,8 @@ export const commands = {
 	applyManagedSkill: (provider: SkillProvider, name: string) => typedError<string, AppError>(__TAURI_INVOKE("apply_managed_skill", { provider, name })),
 	unapplyManagedSkill: (provider: SkillProvider, name: string) => typedError<null, AppError>(__TAURI_INVOKE("unapply_managed_skill", { provider, name })),
 	listAppliedSkills: () => typedError<AppliedSkill[], AppError>(__TAURI_INVOKE("list_applied_skills")),
+	applyManagedSkills: (items: SkillRef[]) => typedError<BatchItemResult[], AppError>(__TAURI_INVOKE("apply_managed_skills", { items })),
+	unapplyManagedSkills: (items: SkillRef[]) => typedError<BatchItemResult[], AppError>(__TAURI_INVOKE("unapply_managed_skills", { items })),
 	installSkillFromGit: (url: string, provider: SkillProvider) => typedError<Skill, AppError>(__TAURI_INVOKE("install_skill_from_git", { url, provider })),
 	backupSkillLibrary: () => typedError<BackupMeta, AppError>(__TAURI_INVOKE("backup_skill_library")),
 	listSkillBackups: () => typedError<BackupMeta[], AppError>(__TAURI_INVOKE("list_skill_backups")),
@@ -739,6 +741,22 @@ export type BatchEnrichProposal = {
 	/**  형식/세트/존재 검증에서 제외된 카드 수(부분 실패 격리). */
 	skipped: number,
 };
+
+/**  배치 항목 1건의 결과(건별 보고, best-effort). */
+export type BatchItemResult = {
+	provider: SkillProvider,
+	name: string,
+	outcome: BatchOutcome,
+	/**  error/충돌 등 사람용 상세(성공 시 None). */
+	message: string | null,
+};
+
+/**
+ *  배치 항목 결과 분류(apply/unapply 공유 — 방향별 발생 값이 다름).
+ *  `Applied`=신규 OR 멱등(이미 우리 것), `Removed`=제거 OR 이미 부재 — post-state 동일이라 통합.
+ *  안전-critical 스킵(`Collision`/`NotOurs`)은 별도 값으로 가시 유지.
+ */
+export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "not_ours" | "unsupported_provider" | "error";
 
 /**
  *  오늘 캘린더 이벤트 한 건 (ambient — DB 영속 없이 매 호출 fresh fetch, PR Radar 선례). Phase 10b.
@@ -1619,6 +1637,12 @@ export type SkillEnvironment = {
  *  프런트의 경로추론(`providerOf`)을 대체한다. `.agents/skills`는 P0에서 Codex로 태깅한다.
  */
 export type SkillProvider = "claude" | "codex" | "openclaw" | "hermes" | "other";
+
+/**  배치 입력 항목 1건(managed 스킬 참조). PK 미노출 → specta 안전. */
+export type SkillRef = {
+	provider: SkillProvider,
+	name: string,
+};
 
 export type SortMode = "recent" | "comments" | "mixed";
 

@@ -33,6 +33,45 @@ pub struct AppliedSkill {
     pub external_path: String,
 }
 
+/// G2-PR1 단일 코어가 내는 에러 코드 — 단일/배치가 함께 참조(DRY, 문자열 산재 방지).
+pub(crate) const CODE_NO_SOURCE: &str = "skills.apply.no_source";
+pub(crate) const CODE_COLLISION: &str = "skills.apply.collision";
+pub(crate) const CODE_NOT_OURS: &str = "skills.apply.not_ours";
+
+/// 배치 입력 항목 1건(managed 스킬 참조). PK 미노출 → specta 안전.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillRef {
+    pub provider: SkillProvider,
+    pub name: String,
+}
+
+/// 배치 항목 1건의 결과(건별 보고, best-effort).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchItemResult {
+    pub provider: SkillProvider,
+    pub name: String,
+    pub outcome: BatchOutcome,
+    /// error/충돌 등 사람용 상세(성공 시 None).
+    pub message: Option<String>,
+}
+
+/// 배치 항목 결과 분류(apply/unapply 공유 — 방향별 발생 값이 다름).
+/// `Applied`=신규 OR 멱등(이미 우리 것), `Removed`=제거 OR 이미 부재 — post-state 동일이라 통합.
+/// 안전-critical 스킵(`Collision`/`NotOurs`)은 별도 값으로 가시 유지.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchOutcome {
+    Applied,
+    Collision,
+    NoSource,
+    Removed,
+    NotOurs,
+    UnsupportedProvider,
+    Error,
+}
+
 /// 디렉터리 심링크 생성(크로스플랫폼). 주 타깃은 darwin(unix).
 #[cfg(unix)]
 fn make_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
@@ -82,7 +121,7 @@ pub(crate) async fn apply_core(
     let src = central_skill_dir(central_root, provider_str, &seg);
     if !src.join("SKILL.md").is_file() {
         return Err(AppError::not_found(
-            "skills.apply.no_source",
+            CODE_NO_SOURCE,
             "중앙 라이브러리에 해당 스킬이 없습니다.".to_string(),
         ));
     }
@@ -93,7 +132,7 @@ pub(crate) async fn apply_core(
             return Ok(link); // 멱등 no-op.
         }
         return Err(AppError::terminal(
-            "skills.apply.collision",
+            CODE_COLLISION,
             "대상 경로에 다른 파일/스킬이 이미 있습니다(덮어쓰지 않음).".to_string(),
         ));
     }
@@ -130,7 +169,7 @@ pub(crate) async fn unapply_core(
     }
     if !is_our_symlink(&link, &src) {
         return Err(AppError::terminal(
-            "skills.apply.not_ours",
+            CODE_NOT_OURS,
             "대상이 우리가 만든 심링크가 아닙니다(제거하지 않음).".to_string(),
         ));
     }
@@ -181,6 +220,78 @@ pub(crate) fn list_applied_core(
                 external_path: link.to_string_lossy().into_owned(),
             });
         }
+    }
+    out
+}
+
+/// `roots`에서 provider의 외부 루트를 찾는다(provider_segment 동치). 미지원이면 None.
+fn find_root(roots: &[(SkillProvider, PathBuf)], provider: SkillProvider) -> Option<&Path> {
+    let want = provider_segment(provider);
+    roots
+        .iter()
+        .find(|(p, _)| provider_segment(*p) == want)
+        .map(|(_, path)| path.as_path())
+}
+
+fn item_result(item: &SkillRef, outcome: BatchOutcome, message: Option<String>) -> BatchItemResult {
+    BatchItemResult {
+        provider: item.provider,
+        name: item.name.clone(),
+        outcome,
+        message,
+    }
+}
+
+/// core: 배치 적용. 각 항목을 독립 처리(best-effort) — 한 항목 실패가 배치를 중단시키지 않는다.
+/// 변이는 단일 `apply_core`에 위임하고 그 `Result`만 outcome으로 분류한다(변이 로직 단일 소스).
+pub(crate) async fn apply_batch_core(
+    pool: &SqlitePool,
+    central_root: &Path,
+    roots: &[(SkillProvider, PathBuf)],
+    items: &[SkillRef],
+) -> Vec<BatchItemResult> {
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        let res = match find_root(roots, item.provider) {
+            None => item_result(item, BatchOutcome::UnsupportedProvider, None),
+            Some(ext_root) => {
+                match apply_core(pool, central_root, ext_root, item.provider, &item.name).await {
+                    Ok(_) => item_result(item, BatchOutcome::Applied, None),
+                    Err(e) => match e.code.as_str() {
+                        CODE_COLLISION => item_result(item, BatchOutcome::Collision, None),
+                        CODE_NO_SOURCE => item_result(item, BatchOutcome::NoSource, None),
+                        _ => item_result(item, BatchOutcome::Error, Some(e.message)),
+                    },
+                }
+            }
+        };
+        out.push(res);
+    }
+    out
+}
+
+/// core: 배치 해제. 각 항목 독립(best-effort). 우리 심링크만 제거(단일 `unapply_core` 위임).
+pub(crate) async fn unapply_batch_core(
+    pool: &SqlitePool,
+    central_root: &Path,
+    roots: &[(SkillProvider, PathBuf)],
+    items: &[SkillRef],
+) -> Vec<BatchItemResult> {
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        let res = match find_root(roots, item.provider) {
+            None => item_result(item, BatchOutcome::UnsupportedProvider, None),
+            Some(ext_root) => {
+                match unapply_core(pool, central_root, ext_root, item.provider, &item.name).await {
+                    Ok(()) => item_result(item, BatchOutcome::Removed, None),
+                    Err(e) => match e.code.as_str() {
+                        CODE_NOT_OURS => item_result(item, BatchOutcome::NotOurs, None),
+                        _ => item_result(item, BatchOutcome::Error, Some(e.message)),
+                    },
+                }
+            }
+        };
+        out.push(res);
     }
     out
 }
@@ -242,6 +353,30 @@ pub async fn list_applied_skills(app: tauri::AppHandle) -> Result<Vec<AppliedSki
     let central = central_root(&app)?;
     let roots = crate::skills::scan::apply_roots();
     Ok(list_applied_core(&central, &roots))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn apply_managed_skills(
+    db: State<'_, Db>,
+    app: tauri::AppHandle,
+    items: Vec<SkillRef>,
+) -> Result<Vec<BatchItemResult>, AppError> {
+    let central = central_root(&app)?;
+    let roots = crate::skills::scan::apply_roots();
+    Ok(apply_batch_core(&db, &central, &roots, &items).await)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn unapply_managed_skills(
+    db: State<'_, Db>,
+    app: tauri::AppHandle,
+    items: Vec<SkillRef>,
+) -> Result<Vec<BatchItemResult>, AppError> {
+    let central = central_root(&app)?;
+    let roots = crate::skills::scan::apply_roots();
+    Ok(unapply_batch_core(&db, &central, &roots, &items).await)
 }
 
 #[cfg(test)]
@@ -456,5 +591,193 @@ mod tests {
         assert_eq!(applied.len(), 1);
         assert_eq!(applied[0].name, "a/b skill"); // 표시 이름(frontmatter), not "a_b skill".
         assert_eq!(applied[0].external_path, ext.join(&seg).to_string_lossy()); // 링크는 sanitized.
+    }
+
+    // ---- G2-PR2 batch cores ----
+
+    /// central에 managed 스킬 `name` 하나 더 만든다(claude provider). scaffold가 만든 central 재사용.
+    fn add_central_skill(central: &Path, name: &str) {
+        let src = central.join("claude").join(name);
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            src.join("SKILL.md"),
+            format!("---\nname: {name}\n---\n# {name}\n"),
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn apply_batch_all_valid_applies_each_and_audits() {
+        let (_tmp, central, ext, _src) = scaffold("alpha"); // central/claude/alpha + ext claude root
+        add_central_skill(&central, "beta");
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        let items = vec![
+            SkillRef {
+                provider: SkillProvider::Claude,
+                name: "alpha".into(),
+            },
+            SkillRef {
+                provider: SkillProvider::Claude,
+                name: "beta".into(),
+            },
+        ];
+        let out = apply_batch_core(&pool, &central, &roots, &items).await;
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|r| r.outcome == BatchOutcome::Applied));
+        assert!(ext.join("alpha").exists() && ext.join("beta").exists());
+        let n: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM skill_audit_log WHERE action='apply'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(n, 2);
+    }
+
+    #[tokio::test]
+    async fn apply_batch_mixed_is_best_effort() {
+        let (_tmp, central, ext, _src) = scaffold("alpha");
+        // 충돌 타깃: ext에 실제 파일을 미리 둔다(우리 심링크 아님).
+        std::fs::write(ext.join("blocked"), b"foreign").unwrap();
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        // "blocked"는 central에 소스가 없으면 no_source가 먼저다. 충돌을 보려면 central에도 있어야 한다.
+        add_central_skill(&central, "blocked");
+        let items = vec![
+            SkillRef {
+                provider: SkillProvider::Claude,
+                name: "alpha".into(),
+            }, // valid → Applied
+            SkillRef {
+                provider: SkillProvider::Claude,
+                name: "blocked".into(),
+            }, // collision
+            SkillRef {
+                provider: SkillProvider::Claude,
+                name: "ghost".into(),
+            }, // no central → NoSource
+        ];
+        let out = apply_batch_core(&pool, &central, &roots, &items).await;
+        assert_eq!(out[0].outcome, BatchOutcome::Applied);
+        assert_eq!(out[1].outcome, BatchOutcome::Collision);
+        assert_eq!(out[2].outcome, BatchOutcome::NoSource);
+        // 유효 항목은 그대로 적용됨(중단 안 함). 외부 파일 무손상.
+        assert!(ext.join("alpha").exists());
+        assert_eq!(std::fs::read(ext.join("blocked")).unwrap(), b"foreign");
+    }
+
+    #[tokio::test]
+    async fn apply_batch_idempotent_no_extra_audit() {
+        let (_tmp, central, ext, _src) = scaffold("alpha");
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        let items = vec![SkillRef {
+            provider: SkillProvider::Claude,
+            name: "alpha".into(),
+        }];
+        let _ = apply_batch_core(&pool, &central, &roots, &items).await; // 1st: Applied + audit
+        let out = apply_batch_core(&pool, &central, &roots, &items).await; // 2nd: idempotent
+        assert_eq!(out[0].outcome, BatchOutcome::Applied);
+        let n: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM skill_audit_log WHERE action='apply'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(n, 1, "멱등 재적용은 새 audit 행을 만들지 않는다");
+    }
+
+    #[tokio::test]
+    async fn apply_batch_unsupported_provider_skips_only_that_item() {
+        let (_tmp, central, ext, _src) = scaffold("alpha");
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let roots = vec![(SkillProvider::Claude, ext.clone())]; // Other는 roots에 없음
+        let items = vec![
+            SkillRef {
+                provider: SkillProvider::Claude,
+                name: "alpha".into(),
+            },
+            SkillRef {
+                provider: SkillProvider::Other,
+                name: "alpha".into(),
+            },
+        ];
+        let out = apply_batch_core(&pool, &central, &roots, &items).await;
+        assert_eq!(out[0].outcome, BatchOutcome::Applied);
+        assert_eq!(out[1].outcome, BatchOutcome::UnsupportedProvider);
+    }
+
+    #[tokio::test]
+    async fn apply_batch_empty_is_empty_ok() {
+        let (_tmp, central, ext, _src) = scaffold("alpha");
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        let out = apply_batch_core(&pool, &central, &roots, &[]).await;
+        assert!(out.is_empty());
+    }
+
+    #[tokio::test]
+    async fn unapply_batch_removes_ours_and_refuses_foreign() {
+        let (_tmp, central, ext, _src) = scaffold("alpha");
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        // alpha: 우리 심링크로 먼저 적용.
+        let applied = apply_batch_core(
+            &pool,
+            &central,
+            &roots,
+            &[SkillRef {
+                provider: SkillProvider::Claude,
+                name: "alpha".into(),
+            }],
+        )
+        .await;
+        assert_eq!(applied[0].outcome, BatchOutcome::Applied);
+        // foreign: ext에 외부 실제 dir(우리 것 아님).
+        std::fs::create_dir_all(ext.join("foreign")).unwrap();
+        add_central_skill(&central, "foreign"); // central에도 있어 not_ours 경로 도달(no_source 아님)
+                                                // absent: 아무것도 없는 이름.
+        let out = unapply_batch_core(
+            &pool,
+            &central,
+            &roots,
+            &[
+                SkillRef {
+                    provider: SkillProvider::Claude,
+                    name: "alpha".into(),
+                },
+                SkillRef {
+                    provider: SkillProvider::Claude,
+                    name: "foreign".into(),
+                },
+                SkillRef {
+                    provider: SkillProvider::Claude,
+                    name: "absent".into(),
+                },
+            ],
+        )
+        .await;
+        assert_eq!(out[0].outcome, BatchOutcome::Removed);
+        assert_eq!(out[1].outcome, BatchOutcome::NotOurs);
+        assert_eq!(out[2].outcome, BatchOutcome::Removed); // 부재 = 멱등 no-op
+        assert!(!ext.join("alpha").exists(), "우리 심링크 제거됨");
+        assert!(ext.join("foreign").is_dir(), "외부 dir 무손상");
+    }
+
+    #[tokio::test]
+    async fn unapply_batch_unsupported_provider() {
+        let (_tmp, central, ext, _src) = scaffold("alpha");
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        let out = unapply_batch_core(
+            &pool,
+            &central,
+            &roots,
+            &[SkillRef {
+                provider: SkillProvider::Other,
+                name: "alpha".into(),
+            }],
+        )
+        .await;
+        assert_eq!(out[0].outcome, BatchOutcome::UnsupportedProvider);
     }
 }
