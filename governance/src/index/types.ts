@@ -26,9 +26,7 @@ export interface DecisionEntry {
 }
 
 export interface GovernanceIndex {
-  decisions: DecisionRow[];
-  principles: PrincipleRow[];
+  decisions: readonly DecisionRow[];
+  principles: readonly PrincipleRow[];
   getDecision(id: string): DecisionEntry | null;
-  listDecisions(): DecisionRow[];
-  listPrinciples(): PrincipleRow[];
 }

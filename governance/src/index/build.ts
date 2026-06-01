@@ -71,8 +71,6 @@ export async function buildIndex(repoRoot: string, fs: IndexFs): Promise<Governa
   return {
     decisions,
     principles,
-    listDecisions: () => decisions,
-    listPrinciples: () => principles,
     getDecision: (id) => {
       const row = byId.get(id);
       if (!row) return null;

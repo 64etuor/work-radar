@@ -35,12 +35,12 @@ describe("buildIndex", () => {
 
     const index = await buildIndex(ROOT, fs);
 
-    const ids = index.listDecisions().map((d) => d.id);
+    const ids = index.decisions.map((d) => d.id);
     expect(ids).toContain("ADR-0001");
     expect(ids).toContain("ADR-0002");
     expect(ids).toContain("DL-001");
     expect(ids).not.toContain("ADR-0000"); // template skipped
-    expect(index.listPrinciples().map((p) => p.id)).toEqual(["INVARIANT-1"]);
+    expect(index.principles.map((p) => p.id)).toEqual(["INVARIANT-1"]);
 
     const a1 = index.getDecision("ADR-0001")!;
     expect(a1.supersededBy).toEqual(["ADR-0002"]); // inverse of ADR-0002.supersedes
@@ -50,7 +50,7 @@ describe("buildIndex", () => {
 
   it("degrades gracefully when sources are missing", async () => {
     const index = await buildIndex(ROOT, memFs({}));
-    expect(index.listDecisions()).toEqual([]);
-    expect(index.listPrinciples()).toEqual([]);
+    expect(index.decisions).toEqual([]);
+    expect(index.principles).toEqual([]);
   });
 });

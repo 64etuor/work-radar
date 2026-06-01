@@ -3,14 +3,7 @@ import { formatDecision, formatDecisions, formatPrinciples } from "../../src/ind
 import type { DecisionEntry, GovernanceIndex } from "../../src/index/types.js";
 
 function fakeIndex(over: Partial<GovernanceIndex>): GovernanceIndex {
-  return {
-    decisions: [],
-    principles: [],
-    listDecisions: () => over.decisions ?? [],
-    listPrinciples: () => over.principles ?? [],
-    getDecision: () => null,
-    ...over,
-  };
+  return { decisions: [], principles: [], getDecision: () => null, ...over };
 }
 
 describe("formatPrinciples", () => {

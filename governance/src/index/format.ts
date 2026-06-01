@@ -1,13 +1,13 @@
 import type { DecisionEntry, GovernanceIndex } from "./types.ts";
 
 export function formatPrinciples(index: GovernanceIndex): string {
-  const ps = index.listPrinciples();
+  const ps = index.principles;
   if (!ps.length) return "no principles found";
   return ps.map((p) => `${p.id} — ${p.title}`).join("\n");
 }
 
 export function formatDecisions(index: GovernanceIndex): string {
-  const ds = index.listDecisions();
+  const ds = index.decisions;
   if (!ds.length) return "no decisions found";
   return ds.map((d) => `${d.id}${d.status ? ` [${d.status}]` : ""} — ${d.title}`).join("\n");
 }
