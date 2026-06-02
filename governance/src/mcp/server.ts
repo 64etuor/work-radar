@@ -8,6 +8,7 @@ import { realGitLog } from "../harvest/gitLog.ts";
 import type { DecisionRow } from "../index/types.ts";
 import { formatPrinciples, formatDecisions, formatDecision } from "../index/format.ts";
 import { createTask, status, observations } from "./handlers.ts";
+import { startTask, blockTask, completeTask, cancelTask, listTasks, taskTrail } from "../task/handlers.ts";
 import {
   proposeDecision, requestReview, approve, reject, conflicts, why, history, chooseOption,
 } from "../decision/handlers.ts";
@@ -70,6 +71,62 @@ server.registerTool(
   async ({ description }) => {
     const r = await createTask(WORKSPACE, { description }, nowFn(), randFn());
     return { content: [{ type: "text", text: `task recorded: ${r.id}` }] };
+  },
+);
+
+server.registerTool(
+  "start_task",
+  { description: "task를 active로 전이 (ready/blocked→active)", inputSchema: { taskId: z.string() } },
+  async ({ taskId }) => {
+    const r = await startTask(WORKSPACE, { taskId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `started: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "block_task",
+  { description: "task를 blocked로 전이 (사유 기록)", inputSchema: { taskId: z.string(), reason: z.string() } },
+  async ({ taskId, reason }) => {
+    const r = await blockTask(WORKSPACE, { taskId, reason }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "complete_task",
+  { description: "task를 done으로 전이 (미해소 decision_blocked 있으면 거부)", inputSchema: { taskId: z.string() } },
+  async ({ taskId }) => {
+    const r = await completeTask(WORKSPACE, { taskId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "cancel_task",
+  { description: "task를 cancelled로 전이 (terminal)", inputSchema: { taskId: z.string() } },
+  async ({ taskId }) => {
+    const r = await cancelTask(WORKSPACE, { taskId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `cancelled: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "tasks",
+  { description: "비종료(non-terminal) task 목록", inputSchema: {} },
+  async () => {
+    const list = await listTasks(WORKSPACE);
+    const text = list.length ? list.map((t) => `${t.taskId} [${t.phase}] ${t.title}`).join("\n") : "(no open tasks)";
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerTool(
+  "task",
+  { description: "task 상태 + audit chain", inputSchema: { taskId: z.string() } },
+  async ({ taskId }) => {
+    const t = await taskTrail(WORKSPACE, { taskId });
+    const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
+    return { content: [{ type: "text", text: `${t.taskId} [${t.phase}] ${t.title}\n${chain}` }] };
   },
 );
 
