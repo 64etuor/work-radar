@@ -1,0 +1,32 @@
+---
+id: pat_scope_17116a30
+kind: commit_scope_hotspot
+scope: governance
+evidence_count: 66
+confidence: 1
+status: candidate
+generated_by: pattern-detector
+---
+Commit scope `governance` recurred 66 times in the L0 corpus.
+
+Evidence (first 20 of 66):
+- evt_commit_032e47246e71eb079fb3c8d63b81a7a294660c15
+- evt_commit_03ac74d9054c084eb60cbcf007d442e12798d166
+- evt_commit_0610dbe77d54a3f29347d4a253411440239f8386
+- evt_commit_08d20cd243a426444e2eb40cd7e770577424f431
+- evt_commit_0a4a7c08933944e5362bd8b547879ac6c1370e95
+- evt_commit_0aed941ba53532288a31af20b1acd945deb98421
+- evt_commit_0fc0df0f68dbc39d9449e1551cf0bb62d2a2f436
+- evt_commit_1382059826483307708271494a87859825a391b5
+- evt_commit_177d58d4e57a72663d3b42bbb3e459c254c15e3b
+- evt_commit_17c4769ee92624a4b8ac95a50705b50f00a1d6ee
+- evt_commit_2560edc771be8bf033d9bfaed83451cc4c5209f7
+- evt_commit_2ec3a9cd481117acd7fbe356efa651f01a42c2c4
+- evt_commit_3301f18cf08d606ceaf002cb9cad7081bec95ef1
+- evt_commit_37545cc16b30f42d5b6f83815aeffb8c4c4bad24
+- evt_commit_3c5750fa0288f419d00cc9a786893decea610a89
+- evt_commit_3f503da9421a3e30aaf5ad9428db62617d357af5
+- evt_commit_4048b1c65c5a3644db3b9c38af87b4b25d287fbf
+- evt_commit_420208ee77cc3934c25d623e5b7be8bf30dba71e
+- evt_commit_421c20b84f53d1e9eb81dd94a051935763b2331e
+- evt_commit_43292a6c5671ade1d849ebd376f71e287a390050

@@ -1,0 +1,31 @@
+---
+id: pat_scope_0bb4245c
+kind: commit_scope_hotspot
+scope: plan
+evidence_count: 19
+confidence: 0.38
+status: candidate
+generated_by: pattern-detector
+---
+Commit scope `plan` recurred 19 times in the L0 corpus.
+
+Evidence (first 19 of 19):
+- evt_commit_0690b7b19a0914bed61c807171e09ba46b386e46
+- evt_commit_174e72441a90c35e31238821bd26f2c70bb5e4fc
+- evt_commit_18a184e6fb03ce33173b9d211940593750beb0eb
+- evt_commit_2744fbe65869e8d3c3c27dfcda92caccd5c62f78
+- evt_commit_3bde439f6d8f86a3f0aad3bf96b80c1f0a9c481a
+- evt_commit_440f16d46312357417d2eb64a0b237063806687a
+- evt_commit_48986c696dde3d84760c7ff29cb6db466dccc3a9
+- evt_commit_4a29d1bc563d09c2a29594d14e3dab1bc2121d05
+- evt_commit_4bfdeed90164c340860f73db883ce8016d54d7a9
+- evt_commit_4d9c20291f6f2f4ca7c458417387f3303beb24a0
+- evt_commit_56b026053bf537e740bc57e0e4bb40dd78f4996e
+- evt_commit_83c566c9900c2bfe4592d986f7a020042aa37119
+- evt_commit_a020db37b400b0a3dd7905484e90cc1043d78963
+- evt_commit_a966df9c16f82cf41acdba4d29726a9536806195
+- evt_commit_c7b28142a04c4d9546da8074e0b4d6b175da598a
+- evt_commit_d12a785a37a1a7300c28b544a0b72392a516c2a2
+- evt_commit_d4bc55337b0410fc98eb89c1839f09195cfe8772
+- evt_commit_e62dc412d446372f556c8bd760bf5b5b0f106311
+- evt_commit_f59ccdd3a595c429cef34f8a97325e2b1703b8dd

@@ -1,0 +1,32 @@
+---
+id: pat_scope_2a9ada0f
+kind: commit_scope_hotspot
+scope: today
+evidence_count: 48
+confidence: 0.96
+status: candidate
+generated_by: pattern-detector
+---
+Commit scope `today` recurred 48 times in the L0 corpus.
+
+Evidence (first 20 of 48):
+- evt_commit_0156274875c0af265b6cec6606b0fc48e17237ed
+- evt_commit_02caf2141662527a3225ace255e9952bcc38e304
+- evt_commit_0f24eaec74ffbb3349bbdea4428fa518d13666b6
+- evt_commit_104722e5fcdcd71ecceb0a75d9ac0fcfdfef1683
+- evt_commit_1449901f18e2a4ce921418406fcd5c5bfa522390
+- evt_commit_15175955507a01d003a24638ac4c3ea24d029cee
+- evt_commit_15c08ccbc2be0d31e23233ef39f5997e09e39263
+- evt_commit_16ba559f11412c3daae8074acdbdf53138c12e86
+- evt_commit_1ae8f5de7572ad7fd514e7217af427537a4fa367
+- evt_commit_272b431b2143144736a5af401dcd1dc2c8f59584
+- evt_commit_28a132010be1974f70cec6941fc6a271d0b4f455
+- evt_commit_320802dddab9593b3f6b3ac854138af10021834c
+- evt_commit_3b69e3dbc308b1347fd6843da7af46d25e658c99
+- evt_commit_41c1f6959d1160cb6dfe24aa3a739ba0f778e8ce
+- evt_commit_43f1167978266e58e15eb1feb5602ac74e9cf542
+- evt_commit_45202d00220a668218f0954ed1db248fde4d5d52
+- evt_commit_59d7423ed16853c842cac21dd12a1a2aef39d0bf
+- evt_commit_60eb722342aedcfa0eb223fd3feb1470e6b770fa
+- evt_commit_6b463302bedec892dc2ea1898349b67451658a96
+- evt_commit_6ee7fbdfa46379b58345b6018c1e0aaff8111ded

@@ -1,0 +1,28 @@
+---
+id: pat_scope_1185ccb2
+kind: commit_scope_hotspot
+scope: skills
+evidence_count: 16
+confidence: 0.32
+status: candidate
+generated_by: pattern-detector
+---
+Commit scope `skills` recurred 16 times in the L0 corpus.
+
+Evidence (first 16 of 16):
+- evt_commit_35afed2b9a37b12801d3d944a8213a65889cbf67
+- evt_commit_58ad9e87d52e2981cd0da482d7f3045df07536c4
+- evt_commit_7906d7d5b25309fcd2e6e59106a115d098f5245d
+- evt_commit_7ea3b17ddd5c75d8dadb4d6ad59fd68520d6ef01
+- evt_commit_87386891decea8654f5d40213afb11a919babf01
+- evt_commit_8deabce774e87aa4fb0e614949a29119fcaa8b2b
+- evt_commit_a53449ac1a170f16c4efb0e911e9098f7d4ae3e4
+- evt_commit_b7dd89f912f02344ae5578af36159daaf45c5591
+- evt_commit_cc26c67140d749a43451ce1ac1d6bd6a123bc126
+- evt_commit_e6c7be14eb1317107d49546eb08099b5d5bad86c
+- evt_commit_ea678a7f7f2c71412f502ada300ee0c839aef4f0
+- evt_commit_eac9d6202b336f39f8210c6eaba0280114417bb5
+- evt_commit_f5921c1e8dd25378a8e544f6c81c6d6bcd14281e
+- evt_commit_f6b5b5710041055a176b2cf0616a997bff552b3c
+- evt_commit_f752815908b1f1323ebfa903319389d2aa71886e
+- evt_commit_fe6c8dc42a6986bf6640935701fbd863e4e25838

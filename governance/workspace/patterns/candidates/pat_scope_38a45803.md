@@ -1,0 +1,32 @@
+---
+id: pat_scope_38a45803
+kind: commit_scope_hotspot
+scope: hermes
+evidence_count: 57
+confidence: 1
+status: candidate
+generated_by: pattern-detector
+---
+Commit scope `hermes` recurred 57 times in the L0 corpus.
+
+Evidence (first 20 of 57):
+- evt_commit_03921cdcc28116af38caa23f8e41c465a29f3488
+- evt_commit_0cb86adce709b88c8f72aa8f004d1b746f92eb6d
+- evt_commit_178975e34474d294f07af484f04a937e0ebee2b5
+- evt_commit_1c1a2a7bd34c4f8ba3e4ee360d61682f244277c9
+- evt_commit_1dfeefbeeae32dd360e678c65f9724e7a3dd8a25
+- evt_commit_20291190861d020df086ba7972f75e0ba51b0ff3
+- evt_commit_2e190ae9407f30596ae53a8674414cfebae7018f
+- evt_commit_33cb613bfb587ee4f20a80aebdb709fbf74471f8
+- evt_commit_3474424e80ab2e89cb84589e7e6d2c05132211c4
+- evt_commit_3ae7801f9e5f4d05c2efe12f1090eafd581bf88b
+- evt_commit_3e54c11ae7a24679f84e591eaddfb75f96ca32ef
+- evt_commit_44d14c41fd3a8935628ba95eaa222e86cf867230
+- evt_commit_45d947709048f86f9732b66297d9a0c215427c28
+- evt_commit_4875867e8ec8ea06e01f4c7afa825a9f7fbdc788
+- evt_commit_4fea422badf0d38a2c74508d4d063721950d8acc
+- evt_commit_5237dff89d34c51e901d8d23b97af53a986f983b
+- evt_commit_552c677d4ba4914f721bcf620167a97c6bdd9aca
+- evt_commit_5846ef4cd9f1a5fee06787f2d5a5ed9d58319eab
+- evt_commit_58a9b2c2a8fd8abd7e64a0fac1b7307cd1b0c786
+- evt_commit_5e03c5b05c452aebe86e7c62241850c173cd79fb
