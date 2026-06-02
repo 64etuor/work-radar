@@ -20,6 +20,11 @@ import {
 } from "../decision/handlers.ts";
 import { escalate } from "../escalate/escalate.ts";
 import { pendingEscalations } from "../escalate/pending.ts";
+import { conductPlan, conductorStatus } from "../conductor/handlers.ts";
+import { stubAdapter, makeLiveAdapter, type ConductorAdapter, type SpawnSyncLike } from "../conductor/adapter.ts";
+import { spawnSync as nodeSpawnSync } from "node:child_process";
+import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
+import { parseConductorConfig } from "./config.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import {
@@ -54,6 +59,16 @@ const REPO_ROOT = process.env.BOULE_REPO_ROOT ?? resolve(WORKSPACE, "..", "..");
 // 비결정 입력은 서버 경계에서만 (핸들러는 순수 유지)
 const nowFn = () => new Date();
 const randFn = () => Math.random();
+
+// Session-role gate (Phase C structural INVARIANT #1). A Conductor-spawned *executor* session
+// (BOULE_SESSION_ROLE=executor) must NOT be able to resolve a governance verdict — so the
+// human-gate tools (approve/reject/choose/accept_plan/accept_spec) are NOT registered for it.
+// It can still `escalate` (mints no verdict) and drive its own task. This makes "a spawned
+// session reaches governance only via escalate" structural (tool absent), not prompt-advisory.
+// Normalized (trim+lowercase) so role drift ("Executor", "executor ") still disables verdicts
+// — the SAFE direction. No env ⇒ "" ⇒ verdicts ON (correct human-operator default).
+const SESSION_ROLE = (process.env.BOULE_SESSION_ROLE ?? "").trim().toLowerCase();
+const SESSION_ALLOWS_VERDICTS = SESSION_ROLE !== "executor";
 
 // Pattern detector knobs (env, safe defaults: minEvidence=5, confFull=50).
 const PATTERN_CFG = parsePatternConfig(process.env);
@@ -151,7 +166,10 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+// verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
+if (SESSION_ALLOWS_VERDICTS)
+  // prettier-ignore
+  server.registerTool(
   "accept_plan",
   { description: "사람 게이트: plan을 active로 (draft/needs_revision→active, actor=user)", inputSchema: { planId: z.string() } },
   async ({ planId }) => {
@@ -231,7 +249,10 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+// verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
+if (SESSION_ALLOWS_VERDICTS)
+  // prettier-ignore
+  server.registerTool(
   "accept_spec",
   { description: "사람 게이트: spec을 accepted로 (draft→accepted, actor=user)", inputSchema: { specId: z.string() } },
   async ({ specId }) => {
@@ -450,6 +471,28 @@ const quorumWarning = LIVE
   : null;
 if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 
+// ── Phase C: Conductor adapter ────────────────────────────────────────────────
+// 기본 = stub(결정적·git/cmux/fs 무접근 → CI 무변경). BOULE_CONDUCTOR_MODE=live 일 때만
+// 실제 git worktree + cmux 어댑터. 비결정(spawnSync/fs)은 이 경계에서만 주입(liveReviewer와 동형).
+const CONDUCTOR_CFG = parseConductorConfig(process.env);
+function buildConductorAdapter(): ConductorAdapter {
+  if (!CONDUCTOR_CFG.live) return stubAdapter;
+  const realSpawnSync: SpawnSyncLike = (cmd, args) => {
+    const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
+    return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+  };
+  return makeLiveAdapter({
+    spawn: realSpawnSync,
+    fs: { mkdir: (p, o) => fsMkdir(p, o), writeFile: (p, d) => fsWriteFile(p, d) },
+    repoRoot: REPO_ROOT,
+    worktreesRoot: CONDUCTOR_CFG.worktreesRoot,
+    cmuxCmd: CONDUCTOR_CFG.cmuxCmd,
+    governanceWorkspace: WORKSPACE, // spawned session's escalate writes back here
+    log: (line) => process.stderr.write(`${line}\n`), // PII-safe (명령명+status만)
+  });
+}
+const conductorAdapter = buildConductorAdapter();
+
 server.registerTool(
   "propose_decision",
   {
@@ -488,7 +531,10 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+// verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
+if (SESSION_ALLOWS_VERDICTS)
+  // prettier-ignore
+  server.registerTool(
   "approve",
   {
     description: "결정 사람 승인(게이트) — 외부검토 없으면 거부",
@@ -500,7 +546,10 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+// verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
+if (SESSION_ALLOWS_VERDICTS)
+  // prettier-ignore
+  server.registerTool(
   "reject",
   {
     description: "결정 사람 반려(게이트)",
@@ -554,9 +603,10 @@ server.registerTool(
       options: z.array(z.object({ label: z.string() })).min(2),
       ambiguity_kind: z.string().optional(),
       agent_recommendation: z.string().optional(),
+      related_task_id: z.string().optional(),
     },
   },
-  async ({ question, options, ambiguity_kind, agent_recommendation }) => {
+  async ({ question, options, ambiguity_kind, agent_recommendation, related_task_id }) => {
     const r = await escalate(
       WORKSPACE,
       {
@@ -564,6 +614,7 @@ server.registerTool(
         options,
         ambiguityKind: ambiguity_kind as never,
         agentRecommendation: agent_recommendation,
+        relatedTaskId: related_task_id,
       },
       nowFn(),
       randFn(),
@@ -588,7 +639,10 @@ server.registerTool(
 
 // v2 slice1 — BRIDGE/HUMAN-ONLY: only the Telegram bridge calls this, on an exact token match.
 // Human-gated (actor:user) but NOT review-gated — a Type 0 tap is a direction-pick, not an ADR approval.
-server.registerTool(
+// verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
+if (SESSION_ALLOWS_VERDICTS)
+  // prettier-ignore
+  server.registerTool(
   "choose",
   {
     description: "Type 0 해소 — 사람이 고른 옵션을 decision_chosen(actor:user)으로 기록",
@@ -606,6 +660,49 @@ server.registerTool(
       randFn(),
     );
     return { content: [{ type: "text", text: r.ok ? `chosen: ${r.chosenOption} for ${decision_id}` : `NO-OP: ${r.reason}` }] };
+  },
+);
+
+// ── Phase C: Conductor (dispatcher, NOT decider) ──────────────────────────────
+// conduct_plan = the ONLY write (advance ≤1 step). conductor_status = read-only render.
+// NO conductor_approve/conductor_resolve — resolution flows only through human-gated choose/approve.
+server.registerTool(
+  "conduct_plan",
+  {
+    description: "사람이 accept한 plan을 1스텝 전진 (task mint + 격리 cmux 세션 spawn). active 아니거나 halt/done/in-flight면 거부 (verdict 없음)",
+    inputSchema: { planId: z.string() },
+  },
+  async ({ planId }) => {
+    const r = await conductPlan(WORKSPACE, { planId }, { adapter: conductorAdapter }, nowFn(), randFn());
+    if (!r.ok) return { content: [{ type: "text", text: `REFUSED: ${r.reason}` }] };
+    const a = r.advanced!;
+    return {
+      content: [
+        {
+          type: "text",
+          text: `advanced step ${a.stepIndex}: task=${a.taskId} surface=${a.surface} worktree=${a.worktreePath} envelopeHash=${a.envelopeHash}`,
+        },
+      ],
+    };
+  },
+);
+
+server.registerTool(
+  "conductor_status",
+  {
+    description: "Conductor 투영 read-only 렌더 (steps × 바인딩된 task 상태 × halt) — 쓰기 없음",
+    inputSchema: { planId: z.string() },
+  },
+  async ({ planId }) => {
+    const s = await conductorStatus(WORKSPACE, { planId });
+    const head = `${s.planId} [${s.planPhase}] cursor=${s.cursor ?? "-"} halted=${s.halted} done=${s.done}`;
+    const lines = s.steps.map(
+      (st) =>
+        `  ${st.stepIndex}. ${st.text} → ${st.taskId ?? "(unmaterialized)"}` +
+        (st.taskPhase ? ` [${st.taskPhase}]` : "") +
+        (st.halted ? " HALTED" : ""),
+    );
+    return { content: [{ type: "text", text: [head, ...lines].join("\n") }] };
   },
 );
 

@@ -26,7 +26,9 @@ export type EventType =
   | "plan_superseded"   // v3 Phase B: plan replaced by a newer plan (terminal)
   | "spec_proposed"     // v3 Phase B2: a spec is drafted (actor=author, propose-only)
   | "spec_accepted"     // v3 Phase B2: human gate — draft → accepted (actor=user)
-  | "spec_archived";    // v3 Phase B2: spec → archived (terminal)
+  | "spec_archived"     // v3 Phase B2: spec → archived (terminal)
+  | "step_bound"        // v3 Phase C: Conductor binds a plan step index ↔ a task (actor=conductor); NO verdict
+  | "session_spawned";  // v3 Phase C: Conductor records one cmux session spawn for a task (actor=conductor); NO verdict
 
 export type EventSource =
   | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"

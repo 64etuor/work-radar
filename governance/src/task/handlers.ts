@@ -32,8 +32,9 @@ async function writeLifecycle(
 }
 
 /** True if a decision_blocked related to this task escalates a decision with NO verdict yet.
- *  Conservative: a block whose decision proposal cannot be found counts as open. */
-function hasOpenBlock(all: GovEvent[], taskId: string): boolean {
+ *  Conservative: a block whose decision proposal cannot be found counts as open.
+ *  Exported so the v3 Conductor's halt projection REUSES this exact coupling (not a duplicate). */
+export function hasOpenBlock(all: GovEvent[], taskId: string): boolean {
   const blocks = all.filter(
     (e) => e.frontmatter.type === "decision_blocked" && (e.frontmatter.related_to ?? []).includes(taskId),
   );

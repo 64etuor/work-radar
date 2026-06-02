@@ -112,6 +112,46 @@ export function parsePositiveInt(raw: string | undefined, dflt: number): number 
   return Number.isFinite(n) && n >= 1 ? n : dflt;
 }
 
+/** v3 Phase C Conductor knobs (design §6). Safe defaults keep CI deterministic: mode!=="live"
+ *  ⇒ the stub adapter (no git/cmux/fs). Only an explicit BOULE_CONDUCTOR_MODE=live arms the
+ *  real cmux adapter. Mirrors the BOULE_REVIEWER_MODE stub-vs-live gating. */
+export interface ConductorConfig {
+  /** true only when BOULE_CONDUCTOR_MODE==="live" — otherwise the deterministic stub. */
+  live: boolean;
+  /** the cmux binary (defaults to the app bin name); used only by the live adapter. */
+  cmuxCmd: string;
+  /** gitignored root for per-step worktrees (NEVER the user tree); used only by the live adapter. */
+  worktreesRoot: string;
+}
+
+/** Parse BOULE_CONDUCTOR_MODE: "live" (case-insensitive, trimmed) arms the real adapter; anything
+ *  else (unset/junk) → stub. Fail-closed: an unrecognized value never accidentally goes live. */
+export function parseConductorMode(raw: string | undefined): boolean {
+  return (raw ?? "").trim().toLowerCase() === "live";
+}
+
+/** Parse BOULE_CONDUCTOR_CMUX_CMD → the cmux binary; blank/unset → "cmux". */
+export function parseConductorCmuxCmd(raw: string | undefined): string {
+  const v = (raw ?? "").trim();
+  return v || "cmux";
+}
+
+/** Parse BOULE_CONDUCTOR_WORKTREES_ROOT → the gitignored worktrees root; blank/unset →
+ *  ".boule-worktrees" (the gitignored default; never the user tree). */
+export function parseConductorWorktreesRoot(raw: string | undefined): string {
+  const v = (raw ?? "").trim();
+  return v || ".boule-worktrees";
+}
+
+/** Assemble the Conductor config from env (all safe defaults). */
+export function parseConductorConfig(env: Record<string, string | undefined>): ConductorConfig {
+  return {
+    live: parseConductorMode(env.BOULE_CONDUCTOR_MODE),
+    cmuxCmd: parseConductorCmuxCmd(env.BOULE_CONDUCTOR_CMUX_CMD),
+    worktreesRoot: parseConductorWorktreesRoot(env.BOULE_CONDUCTOR_WORKTREES_ROOT),
+  };
+}
+
 export interface PatternConfig {
   minEvidence: number;
   confFull: number;

@@ -66,6 +66,36 @@ describe("escalate — Type 0 emission", () => {
     ).rejects.toThrow(/label/i);
   });
 
+  it("v3 Phase C: relatedTaskId lands in the decision_blocked related_to (alongside decisionId)", async () => {
+    const r = await escalate(
+      ws,
+      {
+        question: "DB?",
+        options: [{ label: "sqlite" }, { label: "postgres" }],
+        actor: "stub-0",
+        relatedTaskId: "evt_task_xyz",
+      },
+      new Date("2026-06-01T10:00:00Z"),
+      0.5,
+    );
+    const grp = eventsForDecision(await readAllEvents(ws), r.decisionId);
+    const blocked = grp.related.find((e) => e.frontmatter.type === "decision_blocked")!;
+    expect(blocked.frontmatter.related_to).toContain(r.decisionId);
+    expect(blocked.frontmatter.related_to).toContain("evt_task_xyz");
+  });
+
+  it("v3 Phase C: omitting relatedTaskId leaves related_to = [decisionId] only (backward-compatible)", async () => {
+    const r = await escalate(
+      ws,
+      { question: "DB?", options: [{ label: "a" }, { label: "b" }] },
+      new Date("2026-06-01T10:00:00Z"),
+      0.5,
+    );
+    const grp = eventsForDecision(await readAllEvents(ws), r.decisionId);
+    const blocked = grp.related.find((e) => e.frontmatter.type === "decision_blocked")!;
+    expect(blocked.frontmatter.related_to).toEqual([r.decisionId]);
+  });
+
   it("threads an optional per-option description through to the pending payload", async () => {
     await escalate(
       ws,

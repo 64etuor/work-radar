@@ -39,6 +39,10 @@ export interface EscalateInput {
   actor?: string;
   /** Override the escalation TTL (hours). Defaults to DEFAULT_ESCALATION_TTL_HOURS. */
   ttlHours?: number;
+  /** v3 Phase C: the task id of a Conductor-spawned session that hits a Type-1 boundary. When set,
+   *  the decision_blocked binds BOTH the decisionId AND this taskId in related_to, so Phase-A's
+   *  hasOpenBlock + canComplete guard refuses task completion over the open fork (free INVARIANT #1). */
+  relatedTaskId?: string;
 }
 
 export interface EscalateOptionOut {
@@ -99,7 +103,9 @@ export async function escalate(
       source,
       actor,
       expires,
-      related_to: [decisionId],
+      // related_to binds the decision and, when a Conductor-spawned session escalates, ALSO the
+      // task — so Phase-A canComplete refuses to complete that task over the open block.
+      related_to: input.relatedTaskId ? [decisionId, input.relatedTaskId] : [decisionId],
       tags: [
         "escalation",
         `ambiguity:${input.ambiguityKind ?? "unknown"}`,
