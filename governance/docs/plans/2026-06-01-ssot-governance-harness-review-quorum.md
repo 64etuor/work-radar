@@ -1,5 +1,9 @@
 # Review Quorum (§7 ≥2 distinct-model) Implementation Plan
 
+> **Status:** ✅ DONE — 아래 step 체크박스는 back-fill 안 함(이 트랙 관행). 완료 증거 정본: [INDEX](../INDEX.md) + `docs/decisions.md` breadcrumb.
+>
+> 체크박스 = 빌드 시점 기록(사람용). 런타임 task 상태는 이벤트 파생(오케스트레이터 정본) — `governance/workspace/HARNESS.md` §3.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Complete governance design §7 — make the decision gate require a configurable

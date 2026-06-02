@@ -1,5 +1,9 @@
 # Boule v2 First Slice — 1A (TS sidecar) Implementation Plan
 
+> **Status:** ✅ DONE — 아래 step 체크박스는 back-fill 안 함(이 트랙 관행). 완료 증거 정본: [INDEX](../INDEX.md) + `docs/decisions.md` breadcrumb.
+>
+> 체크박스 = 빌드 시점 기록(사람용). 런타임 task 상태는 이벤트 파생(오케스트레이터 정본) — `governance/workspace/HARNESS.md` §3.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **STATUS: ✅ COMPLETE (2026-06-01).** Implemented holistically (not the literal per-task commits below) and committed as `74b51b6` (code) + `ba086cb` (docs) on `feat/governance-boule-p1`, unpushed. vitest **150** pass, tsc clean, headless MCP round-trip observed, independent opus critic **round-2 ACCEPT** (round-1 MAJOR M1 = `chooseOption` binding-guard, fixed + 2 regression tests). Drift = `governance/**` + docs only. Done-line: tail of `docs/decisions.md`. **Next = Slice 1B** (Python `~/.hermes` fabric bridge — separate plan, touches the live fabric). The per-task checkboxes below are marked done to reflect the shipped work; commit granularity differed (2 cohesive commits, not one per task).

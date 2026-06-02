@@ -1,5 +1,9 @@
 # Boule v3 Phase A — Task Lifecycle SSOT Implementation Plan
 
+> **Status:** ✅ DONE (2026-06-02) — commits `f4e7a3c..83aa965`, opus critic ACCEPT, vitest 214. 완료 정본: [INDEX](../INDEX.md) + `docs/decisions.md`.
+>
+> 체크박스 = 빌드 시점 기록(사람용). 런타임 task 상태는 이벤트 파생(오케스트레이터 정본) — `governance/workspace/HARNESS.md` §3.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make a Task a first-class, event-sourced execution-plane object with a lifecycle state machine derived purely from L0 events — observable by the (future) orchestrator, with status that is never hand-edited.
@@ -41,7 +45,7 @@ Tests (mirror `test/decision/`): `test/task/{task,guards,handlers,project}.test.
 
 **Orchestrator-observable done-criterion:** the four lifecycle event types exist in the union so they can be written/read by the fold.
 
-- [ ] **Step 1: Add the four lifecycle types to the union**
+- [x] **Step 1: Add the four lifecycle types to the union**
 
 In `src/event/event.ts`, the `EventType` union currently ends with `| "task_created";`. Replace that final line with:
 
@@ -53,12 +57,12 @@ In `src/event/event.ts`, the `EventType` union currently ends with `| "task_crea
   | "task_cancelled";   // v3 Phase A: task → cancelled (terminal)
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `pnpm --dir governance exec tsc --noEmit`
 Expected: exits 0 (no output).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add governance/src/event/event.ts
@@ -75,7 +79,7 @@ git commit -m "feat(governance): add task lifecycle event types (Phase A)"
 
 **Orchestrator-observable done-criterion:** `deriveTaskState(created, related)` returns `phase` ∈ {ready, active, blocked, done, cancelled}, derived purely from events; the orchestrator reads this, not a checkbox.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/task/task.test.ts`:
 
@@ -123,12 +127,12 @@ describe("deriveTaskState", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --dir governance exec vitest run test/task/task.test.ts`
 Expected: FAIL — cannot find module `../../src/task/task.js`.
 
-- [ ] **Step 3: Write `src/task/task.ts`**
+- [x] **Step 3: Write `src/task/task.ts`**
 
 ```ts
 import type { GovEvent } from "../event/event.ts";
@@ -180,12 +184,12 @@ export function tasksOf(all: GovEvent[]): GovEvent[] {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --dir governance exec vitest run test/task/task.test.ts`
 Expected: PASS (8 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add governance/src/task/task.ts governance/test/task/task.test.ts
@@ -202,7 +206,7 @@ git commit -m "feat(governance): deriveTaskState pure fold (Phase A)"
 
 **Orchestrator-observable done-criterion:** `canComplete` returns `{ok:false}` when a task sits on an open `decision_blocked` — the structural guarantee that a task cannot be "done" over an unanswered Type-0 fork.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/task/guards.test.ts`:
 
@@ -233,12 +237,12 @@ describe("task guards", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --dir governance exec vitest run test/task/guards.test.ts`
 Expected: FAIL — cannot find module `../../src/task/guards.js`.
 
-- [ ] **Step 3: Write `src/task/guards.ts`**
+- [x] **Step 3: Write `src/task/guards.ts`**
 
 ```ts
 import type { TaskState } from "./task.ts";
@@ -270,12 +274,12 @@ export function canCancel(s: TaskState): TaskGate {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --dir governance exec vitest run test/task/guards.test.ts`
 Expected: PASS (9 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add governance/src/task/guards.ts governance/test/task/guards.test.ts
@@ -292,7 +296,7 @@ git commit -m "feat(governance): task lifecycle guards + open-block coupling (Ph
 
 **Orchestrator-observable done-criterion:** each command writes exactly one immutable lifecycle event with `related_to:[taskId]` and **no `decision_*` event**; `complete_task` is refused (writes nothing) while a related `decision_blocked` is unresolved.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/task/handlers.test.ts`:
 
@@ -355,12 +359,12 @@ describe("task handlers", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --dir governance exec vitest run test/task/handlers.test.ts`
 Expected: FAIL — cannot find module `../../src/task/handlers.js`.
 
-- [ ] **Step 3: Write `src/task/handlers.ts`**
+- [x] **Step 3: Write `src/task/handlers.ts`**
 
 ```ts
 import { generateId } from "../event/id.ts";
@@ -481,12 +485,12 @@ export async function taskTrail(workspaceDir: string, input: { taskId: string })
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --dir governance exec vitest run test/task/handlers.test.ts`
 Expected: PASS (4 tests). The INVARIANT-#1 test proves `complete_task` is refused and writes no `task_completed`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add governance/src/task/handlers.ts governance/test/task/handlers.test.ts
@@ -504,7 +508,7 @@ git commit -m "feat(governance): task lifecycle handlers + open-block refusal (P
 
 **Orchestrator-observable done-criterion:** wiping `state/` and re-running `renderTasks` reproduces a byte-identical `state/tasks.json` — proving the projection is a pure function of the event log (derived, never authored).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/task/project.test.ts`:
 
@@ -567,12 +571,12 @@ describe("task projector", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --dir governance exec vitest run test/task/project.test.ts`
 Expected: FAIL — cannot find module `../../src/task/project.js`.
 
-- [ ] **Step 3: Write `src/task/project.ts`**
+- [x] **Step 3: Write `src/task/project.ts`**
 
 ```ts
 import { mkdir, writeFile } from "node:fs/promises";
@@ -603,12 +607,12 @@ export async function renderTasks(workspaceDir: string): Promise<string> {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --dir governance exec vitest run test/task/project.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Gitignore the derived projection**
+- [x] **Step 5: Gitignore the derived projection**
 
 In `governance/.gitignore`, add below the existing derived-dirs block:
 
@@ -617,7 +621,7 @@ In `governance/.gitignore`, add below the existing derived-dirs block:
 workspace/state/*.json
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add governance/src/task/project.ts governance/test/task/project.test.ts governance/.gitignore
@@ -633,7 +637,7 @@ git commit -m "feat(governance): pure task projector + keystone property test (P
 
 **Orchestrator-observable done-criterion:** a headless MCP round-trip drives `create_task → start_task → complete_task` and `task`/`tasks` reflect the derived phase — the surface the orchestrator (Phase E) will call.
 
-- [ ] **Step 1: Add imports**
+- [x] **Step 1: Add imports**
 
 In `src/mcp/server.ts`, after the existing `import { createTask, status, observations } from "./handlers.ts";` (line 10), add:
 
@@ -641,7 +645,7 @@ In `src/mcp/server.ts`, after the existing `import { createTask, status, observa
 import { startTask, blockTask, completeTask, cancelTask, listTasks, taskTrail } from "../task/handlers.ts";
 ```
 
-- [ ] **Step 2: Register the six tools**
+- [x] **Step 2: Register the six tools**
 
 Immediately after the existing `create_task` `registerTool(...)` block (ends ~line 74), insert:
 
@@ -703,12 +707,12 @@ server.registerTool(
 );
 ```
 
-- [ ] **Step 3: Typecheck + full test suite (no regressions)**
+- [x] **Step 3: Typecheck + full test suite (no regressions)**
 
 Run: `pnpm --dir governance exec tsc --noEmit && pnpm --dir governance test`
 Expected: tsc 0; vitest all green (prior suite + new task tests).
 
-- [ ] **Step 4: Headless MCP round-trip smoke**
+- [x] **Step 4: Headless MCP round-trip smoke**
 
 Run (drives the real stdio server end-to-end via the one-shot client used by the bridge):
 
@@ -725,7 +729,7 @@ Expected: `task` prints phase `[done]` with chain `task_created → task_started
 (If `bridge/boule-mcp.mjs` arg-passing differs, fall back to an inline `@modelcontextprotocol/sdk` Client over `StdioClientTransport` spawning `node --experimental-strip-types src/mcp/server.ts` — same handshake the P1/P2a smokes used.)
 Then clean the smoke events: `git status` shows only gitignored `workspace/events/**` additions (no tracked changes).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add governance/src/mcp/server.ts
@@ -741,17 +745,17 @@ git commit -m "feat(governance): register task lifecycle MCP commands (Phase A)"
 
 **Orchestrator-observable done-criterion:** all Phase-A done-criteria from the design (§7.5) are green with observed evidence; no `bindings.ts` drift; app/Rust/migrations untouched.
 
-- [ ] **Step 1: Run the full governance suite + typecheck**
+- [x] **Step 1: Run the full governance suite + typecheck**
 
 Run: `pnpm --dir governance test && pnpm --dir governance exec tsc --noEmit`
 Expected: all vitest green (record the count), tsc 0.
 
-- [ ] **Step 2: Confirm no work-radar app surface changed (INVARIANT #4/#6)**
+- [x] **Step 2: Confirm no work-radar app surface changed (INVARIANT #4/#6)**
 
 Run: `git diff --stat origin/dev -- src/bindings.ts src-tauri/ src/`
 Expected: empty (governance is outside the Tauri build graph; MCP is stdio, not Tauri IPC).
 
-- [ ] **Step 3: Verify the five design done-criteria (§7.5) with evidence**
+- [x] **Step 3: Verify the five design done-criteria (§7.5) with evidence**
 
 Confirm each, citing the test that proves it:
 - (1) create→start→complete = 3 events, phases advance → `handlers.test.ts` "create → start → complete".
@@ -760,11 +764,11 @@ Confirm each, citing the test that proves it:
 - (4) task commands write no `decision_*` → `handlers.test.ts` "NEGATIVE".
 - (5) vitest green; no Postgres; no `bindings.ts` change → Steps 1–2.
 
-- [ ] **Step 4: Append the decisions.md breadcrumb**
+- [x] **Step 4: Append the decisions.md breadcrumb**
 
 Add one line (Type 2 Phase log) to `docs/decisions.md`, citing this plan and the evidence (vitest count, the 4 keystone/negative/invariant tests, bindings drift 0). Follow the existing entry style.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/decisions.md
