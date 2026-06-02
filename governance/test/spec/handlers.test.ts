@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { proposeSpec, acceptSpec, archiveSpec, listSpecs, specTrail } from "../../src/spec/handlers.js";
+import { proposePlan } from "../../src/plan/handlers.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
 
 let dir: string;
@@ -84,5 +85,17 @@ describe("spec handlers — author + lifecycle", () => {
     await archiveSpec(dir, { specId: b.specId }, at(2), 0.3);
     const open = await listSpecs(dir);
     expect(open.map((sp) => sp.specId)).toEqual([a.specId]);
+  });
+
+  it("a plan linked to a spec is surfaced in specTrail.plans, NOT leaked into the lifecycle chain", async () => {
+    const { specId } = await proposeSpec(dir, { title: "Feature", summary: "s" }, at(0), 0.1);
+    await acceptSpec(dir, { specId }, at(1), 0.2);
+    const { planId } = await proposePlan(dir, { specId, intent: "Decompose", steps: ["a"] }, at(2), 0.3);
+    const t = await specTrail(dir, { specId });
+    // chain stays spec-lifecycle only (no plan_proposed leak)
+    expect(t.chain.map((c) => c.type)).toEqual(["spec_proposed", "spec_accepted"]);
+    expect(t.chain.some((c) => c.type.startsWith("plan_"))).toBe(false);
+    // the link is surfaced separately
+    expect(t.plans).toEqual([planId]);
   });
 });

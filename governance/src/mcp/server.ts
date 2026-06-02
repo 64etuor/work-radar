@@ -157,11 +157,11 @@ server.registerTool(
 server.registerTool(
   "propose_plan",
   {
-    description: "Planner: intent + 단계 목록을 draft plan_proposed 이벤트 하나로 기록 (propose-only)",
-    inputSchema: { intent: z.string(), steps: z.array(z.string()) },
+    description: "Planner: intent + 단계 목록을 draft plan_proposed 이벤트 하나로 기록 (propose-only). specId=연결할 spec(선택)",
+    inputSchema: { intent: z.string(), steps: z.array(z.string()), specId: z.string().optional() },
   },
-  async ({ intent, steps }) => {
-    const r = await proposePlan(WORKSPACE, { intent, steps }, nowFn(), randFn());
+  async ({ intent, steps, specId }) => {
+    const r = await proposePlan(WORKSPACE, { intent, steps, specId }, nowFn(), randFn());
     return { content: [{ type: "text", text: `plan proposed (draft): ${r.planId}` }] };
   },
 );
@@ -230,8 +230,9 @@ server.registerTool(
   async ({ planId }) => {
     const t = await planTrail(WORKSPACE, { planId });
     const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
+    const sp = t.specId ? `\n  spec: ${t.specId}` : "";
     const sup = t.supersededBy ? `\n  superseded-by: ${t.supersededBy}` : "";
-    return { content: [{ type: "text", text: `${t.planId} [${t.phase}] ${t.title}${sup}\n${chain}` }] };
+    return { content: [{ type: "text", text: `${t.planId} [${t.phase}] ${t.title}${sp}${sup}\n${chain}` }] };
   },
 );
 
@@ -287,7 +288,8 @@ server.registerTool(
   async ({ specId }) => {
     const t = await specTrail(WORKSPACE, { specId });
     const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
-    return { content: [{ type: "text", text: `${t.specId} [${t.phase}] ${t.title}\n${chain}` }] };
+    const plans = t.plans.length ? `\n  plans: ${t.plans.join(", ")}` : "";
+    return { content: [{ type: "text", text: `${t.specId} [${t.phase}] ${t.title}${plans}\n${chain}` }] };
   },
 );
 

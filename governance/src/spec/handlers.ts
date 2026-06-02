@@ -91,7 +91,7 @@ export async function listSpecs(workspaceDir: string): Promise<SpecSummary[]> {
 }
 
 export interface SpecTrailEntry { id: string; type: GovEvent["frontmatter"]["type"]; actor: string; summary: string; }
-export interface SpecTrail { specId: string; title: string; phase: SpecState["phase"]; chain: SpecTrailEntry[]; }
+export interface SpecTrail { specId: string; title: string; phase: SpecState["phase"]; plans: string[]; chain: SpecTrailEntry[]; }
 
 /** spec <id> — full chronological trail. */
 export async function specTrail(workspaceDir: string, input: { specId: string }): Promise<SpecTrail> {
@@ -99,9 +99,14 @@ export async function specTrail(workspaceDir: string, input: { specId: string })
   const grp = eventsForDecision(all, input.specId);
   if (!grp.proposal || grp.proposal.frontmatter.type !== "spec_proposed") throw new Error(`unknown spec: ${input.specId}`);
   const s = deriveSpecState(grp.proposal, grp.related);
-  const chain: SpecTrailEntry[] = [grp.proposal, ...grp.related].map((e) => ({
+  const specRelated = grp.related.filter((e) => e.frontmatter.type.startsWith("spec_"));
+  const chain: SpecTrailEntry[] = [grp.proposal, ...specRelated].map((e) => ({
     id: e.frontmatter.id, type: e.frontmatter.type, actor: e.frontmatter.actor,
     summary: e.body.split("\n", 1)[0] ?? "",
   }));
-  return { specId: s.specId, title: s.title, phase: s.phase, chain };
+  const plans = all
+    .filter((e) => e.frontmatter.type === "plan_proposed" && (e.frontmatter.related_to ?? []).includes(input.specId))
+    .map((e) => e.frontmatter.id)
+    .sort((a, b) => a.localeCompare(b));
+  return { specId: s.specId, title: s.title, phase: s.phase, plans, chain };
 }

@@ -32,7 +32,7 @@ async function writeLifecycle(
   return evt.frontmatter.id;
 }
 
-export interface ProposePlanInput { intent: string; steps: string[]; }
+export interface ProposePlanInput { intent: string; steps: string[]; specId?: string; }
 export interface ProposePlanResult { planId: string; }
 
 /** Planner — consumes a "load feature X" intent, emits EXACTLY ONE plan_proposed (draft).
@@ -46,11 +46,13 @@ export async function proposePlan(
   const steps = (input.steps ?? []).map((s) => s.trim()).filter(Boolean);
   if (steps.length === 0) throw new Error("plan must have at least one step");
   const body = `${intent}\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
+  const specId = input.specId?.trim();
   const evt: GovEvent = {
     frontmatter: {
       id: generateId("evt", now, rand),
       type: "plan_proposed", source: "hermes", actor: "planner",
       tags: ["plan"],
+      ...(specId ? { related_to: [specId] } : {}),
     },
     body,
   };
@@ -135,7 +137,7 @@ export async function listPlans(workspaceDir: string): Promise<PlanSummary[]> {
 }
 
 export interface PlanTrailEntry { id: string; type: GovEvent["frontmatter"]["type"]; actor: string; summary: string; }
-export interface PlanTrail { planId: string; title: string; phase: PlanState["phase"]; supersededBy: string | null; chain: PlanTrailEntry[]; }
+export interface PlanTrail { planId: string; title: string; phase: PlanState["phase"]; specId: string | null; supersededBy: string | null; chain: PlanTrailEntry[]; }
 
 /** plan <id> — full chronological trail. */
 export async function planTrail(workspaceDir: string, input: { planId: string }): Promise<PlanTrail> {
@@ -149,5 +151,6 @@ export async function planTrail(workspaceDir: string, input: { planId: string })
   }));
   const supersededEvt = grp.related.find((e) => e.frontmatter.type === "plan_superseded");
   const supersededBy = supersededEvt?.frontmatter.supersededBy ?? null;
-  return { planId: s.planId, title: s.title, phase: s.phase, supersededBy, chain };
+  const specId = (grp.proposal.frontmatter.related_to ?? [])[0] ?? null;
+  return { planId: s.planId, title: s.title, phase: s.phase, specId, supersededBy, chain };
 }

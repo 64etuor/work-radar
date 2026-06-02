@@ -117,4 +117,19 @@ describe("plan handlers — Planner + lifecycle", () => {
     expect(r.reason).toMatch(/supersededBy|required/i);
     expect((await readAllEvents(dir)).some((e) => e.frontmatter.type === "plan_superseded")).toBe(false);
   });
+
+  it("plan links to a spec when specId given (related_to:[specId]); standalone otherwise", async () => {
+    const specId = "evt_spec_x";
+    const { planId } = await proposePlan(dir, { specId, intent: "Decompose X", steps: ["a", "b"] }, at(0), 0.1);
+    const all = await readAllEvents(dir);
+    const proposal = all.find((e) => e.frontmatter.id === planId)!;
+    expect(proposal.frontmatter.type).toBe("plan_proposed");
+    expect(proposal.frontmatter.related_to).toEqual([specId]);
+    expect((await planTrail(dir, { planId })).specId).toBe(specId);
+
+    const { planId: solo } = await proposePlan(dir, { intent: "no spec", steps: ["a"] }, at(1), 0.2);
+    const soloProposal = (await readAllEvents(dir)).find((e) => e.frontmatter.id === solo)!;
+    expect(soloProposal.frontmatter.related_to).toBeUndefined();
+    expect((await planTrail(dir, { planId: solo })).specId).toBeNull();
+  });
 });
