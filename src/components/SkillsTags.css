@@ -1,4 +1,4 @@
-/* 스킬 태그 UI(Phase 3 #12) — SkillsView 동반 스타일. 색은 var(--skl-*) 우선, 미정의 시 폴백.
+/* 스킬 태그 UI(Phase 3 #12) — SkillsView 동반 스타일. 색은 work-radar 팔레트 토큰(--color-wr-*, 라이트/다크 대응).
    Cohere white editorial: 라운드 pill, muted 톤, 활성은 전경/배경 반전. */
 
 /* 태그 필터 바 */
