@@ -8,3 +8,9 @@ workspace/events/**
 !workspace/events/.gitkeep
 workspace/reviews/**
 !workspace/reviews/.gitkeep
+
+# 1B outbound bridge runtime state (sent-markers, cursors)
+workspace/.bridge/
+
+# Python bytecode from the bridge scripts/tests
+bridge/__pycache__/
