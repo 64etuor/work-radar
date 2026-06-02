@@ -8,9 +8,9 @@
 
 **Tech Stack:** TypeScript (ESM, NodeNext, `allowImportingTsExtensions`), Node ≥18, `gray-matter`, `vitest`, pnpm. Standalone `governance/` sidecar — outside the Tauri/Vite build graph.
 
-정본 설계: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-live-reviewer-design.md`.
-상위 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` §3/§5.1/§6/§7.
-직전 단계: `docs/superpowers/plans/2026-05-31-ssot-governance-harness-p2a.md`.
+정본 설계: `governance/docs/design/2026-05-31-ssot-governance-harness-live-reviewer-design.md`.
+상위 정본: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` §3/§5.1/§6/§7.
+직전 단계: `governance/docs/plans/2026-05-31-ssot-governance-harness-p2a.md`.
 
 ---
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (Node 24 `--experimental-strip-types`), `gray-matter` (already a dependency, used by `event.ts`), `zod` 4.4.3 (MCP input schemas), `vitest`.
 
-**Spec:** `docs/superpowers/specs/2026-06-01-ssot-governance-harness-decision-ingress-design.md`
+**Spec:** `governance/docs/design/2026-06-01-ssot-governance-harness-decision-ingress-design.md`
 
 ---
 

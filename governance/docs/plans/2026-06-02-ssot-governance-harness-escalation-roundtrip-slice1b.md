@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (Node `--experimental-strip-types`), vitest 2, MCP SDK 1.29 (Client + `StdioClientTransport`), Python 3.13 (stdlib only — `json`/`subprocess`/`pathlib`/`urllib`), pytest.
 
-**Spec:** `docs/superpowers/specs/2026-06-01-ssot-governance-harness-escalation-roundtrip-slice1.md` — **read the 2026-06-02 Addendum (§A1–A4)**: it is the binding current-fabric reference (outbound is now a NormalizedEvent; sink lives at `~/.claude/hooks/`; choose = MCP stdio one-shot; tap = text-reply token; live smoke = user-run).
+**Spec:** `governance/docs/design/2026-06-01-ssot-governance-harness-escalation-roundtrip-slice1.md` — **read the 2026-06-02 Addendum (§A1–A4)**: it is the binding current-fabric reference (outbound is now a NormalizedEvent; sink lives at `~/.claude/hooks/`; choose = MCP stdio one-shot; tap = text-reply token; live smoke = user-run).
 
 ---
 

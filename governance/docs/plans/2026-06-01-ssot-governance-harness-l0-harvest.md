@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node 24 (`--experimental-strip-types`), TypeScript (`.ts` runtime imports / `.js` test imports), vitest, `gray-matter` (via reused Slice-1 parsers), `node:crypto`, `node:child_process`. No new dependency, no DB, no network beyond local `git`.
 
-**Spec:** `docs/superpowers/specs/2026-06-01-ssot-governance-harness-l0-harvest-design.md`
+**Spec:** `governance/docs/design/2026-06-01-ssot-governance-harness-l0-harvest-design.md`
 
 **Working directory for all commands:** `governance/` (run `pnpm test` / `pnpm exec tsc --noEmit` from there).
 

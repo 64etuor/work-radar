@@ -94,8 +94,8 @@ work-radar를 *어떻게 만드는가*(결정/패턴/원칙/실행)를 관장하
 
 ## 10. 설계/계획 인덱스 (정본 문서)
 
-- v1 설계: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md`
-- v2 설계(HITL plan→exec→escalation): `docs/superpowers/specs/2026-06-01-ssot-governance-harness-hitl-plan-loop-design.md`
-- **v3 설계(Orchestrator Control Plane)**: `docs/superpowers/specs/2026-06-02-boule-v3-orchestrator-control-plane-design.md`
+- v1 설계: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md`
+- v2 설계(HITL plan→exec→escalation): `governance/docs/design/2026-06-01-ssot-governance-harness-hitl-plan-loop-design.md`
+- **v3 설계(Orchestrator Control Plane)**: `governance/docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md`
 - 전체 거버넌스 spec/plan 목록: `governance/docs/INDEX.md`
 - 7 INVARIANT 정본: `docs/areas/decision-rails.md`

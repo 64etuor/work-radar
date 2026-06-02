@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript(ESM, NodeNext) + Node ≥18, `@modelcontextprotocol/sdk` 1.29 (`registerTool` + zod 4.4.3), `gray-matter`, `vitest`, pnpm. Same standalone `governance/` sidecar as P1 (outside the Tauri/Vite build graph).
 
-상위 설계 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` §1.2, §5.1, §6. P1 정본: `docs/superpowers/plans/2026-05-31-ssot-governance-harness-p1.md`.
+상위 설계 정본: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` §1.2, §5.1, §6. P1 정본: `governance/docs/plans/2026-05-31-ssot-governance-harness-p1.md`.
 
 ---
 

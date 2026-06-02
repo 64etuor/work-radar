@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (ESM, `type: module`), Node 20 strip-types, `gray-matter` (frontmatter), `zod` (MCP schemas), `vitest` 2.0. Source imports use the `.ts` extension; **test imports use the `.js` extension** (repo strip-types convention — do not deviate). All commands run from `governance/`.
 
-**Spec:** `docs/superpowers/specs/2026-06-02-pattern-detector-l0-l1-design.md`
+**Spec:** `governance/docs/design/2026-06-02-pattern-detector-l0-l1-design.md`
 
 ---
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript(ESM) + Node ≥18, `@modelcontextprotocol/sdk`, `gray-matter`(frontmatter), `vitest`(work-radar 정합), pnpm.
 
-상위 설계 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md`.
+상위 설계 정본: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md`.
 
 ---
 

@@ -5,9 +5,9 @@
 > and is **parked/unpushed** on `feat/governance-boule-p1`. This work does **not** touch
 > work-radar app code and produces **no `bindings.ts` drift**.
 
-상위 설계 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` §3 (External
+상위 설계 정본: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` §3 (External
 Reviewer), §3.1 (bounded retry), §5.1 (command set), §6 (INVARIANTs), §7 (Security Model — 이중 검증).
-직전 단계: `docs/superpowers/plans/2026-05-31-ssot-governance-harness-p2a.md`
+직전 단계: `governance/docs/plans/2026-05-31-ssot-governance-harness-p2a.md`
 (§ "Deferred follow-ups" enumerates exactly the items this design realizes).
 
 ---

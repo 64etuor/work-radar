@@ -3,11 +3,15 @@
 work-radar 레포 안의 self-contained 사이드카(Tauri/Vite 빌드 그래프 밖). markdown이
 SSOT(`workspace/`), 인덱스(Postgres)는 P3에서 도입. P1은 순수 markdown + Node 서비스.
 
-상위 설계 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md`.
+설계/계획 전체 인덱스: **`docs/INDEX.md`** (단일 진입점). 최신 마스터 설계 =
+`docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` (v3 Orchestrator
+Control Plane). 운영 규율 = `workspace/HARNESS.md`.
 
 ## 구조
 
-- `workspace/` — git-tracked SSOT (events/patterns/hypotheses/reviews/state/agents/interfaces)
+- `docs/` — 이 하네스의 설계/계획 문서 (`design/` spec · `plans/` plan · `INDEX.md` 카탈로그)
+- `workspace/` — git-tracked SSOT. 인식론 L0–L4(events/patterns/hypotheses) + 실행 평면
+  (specs/plans/tasks/sessions/handoffs/orchestrator) + reviews/state/agents/interfaces. 규율=`workspace/HARNESS.md`
 - `src/event/` — SSOT 직렬화 (id, frontmatter, append-only write)
 - `src/gateway/` — 레포 활동 → 정규화 L0 event
 - `src/mcp/` — Governance MCP 인터페이스 (handlers + stdio server)

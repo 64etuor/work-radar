@@ -10,7 +10,7 @@
 
 **Tech Stack:** TypeScript (Node strip-types), vitest 2, MCP SDK 1.29 (`registerTool`), zod 4.4.3.
 
-**Spec:** `docs/superpowers/specs/2026-06-01-ssot-governance-harness-escalation-roundtrip-slice1.md`
+**Spec:** `governance/docs/design/2026-06-01-ssot-governance-harness-escalation-roundtrip-slice1.md`
 
 **Conventions (footguns — read before coding):**
 

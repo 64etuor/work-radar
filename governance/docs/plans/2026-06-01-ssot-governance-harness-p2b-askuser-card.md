@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (tauri 2, tauri-specta, serde_json, tokio mpsc), TypeScript/React (zustand reducer, shadcn/ui Button, Tailwind v4), vitest (node env — `renderToStaticMarkup`, no jsdom/RTL).
 
-상위 설계 정본: `docs/superpowers/specs/2026-06-01-ssot-governance-harness-p2b-askuser-card-design.md`.
+상위 설계 정본: `governance/docs/design/2026-06-01-ssot-governance-harness-p2b-askuser-card-design.md`.
 명령 정본: `docs/reference/commands.md`. IPC 규율: `docs/areas/ipc-conventions.md`. 카드=shadcn: `docs/areas/shadcn-migration.md` + `DESIGN.md`.
 
 ---

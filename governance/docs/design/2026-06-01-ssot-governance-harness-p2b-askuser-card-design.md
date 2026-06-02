@@ -5,8 +5,8 @@
 > ACP-permission passthrough); live end-to-end + governance `ask_user` MCP tool + in-app GUI smoke
 > are **deferred** (the latter blocked by the dev-DB migration skew `VersionMissing(38)`).
 
-상위 설계 정본: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` §5.2/§5.3.
-P2a(결정 거버넌스 코어) 정본: `docs/superpowers/plans/2026-05-31-ssot-governance-harness-p2a.md`
+상위 설계 정본: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` §5.2/§5.3.
+P2a(결정 거버넌스 코어) 정본: `governance/docs/plans/2026-05-31-ssot-governance-harness-p2a.md`
 (P2b를 deferred follow-up으로 명시).
 
 ---

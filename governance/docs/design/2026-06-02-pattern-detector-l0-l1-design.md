@@ -3,7 +3,7 @@
 - **Date**: 2026-06-02
 - **Status**: design (approved, pre-plan)
 - **Branch**: `feat/governance-boule-p1` (PARKED, unpushed — commit only, never push without explicit request)
-- **Parent design**: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` (§2.1 pattern format, §3 Pattern Detector agent, §4.2 adaptation loop, §8 P3)
+- **Parent design**: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` (§2.1 pattern format, §3 Pattern Detector agent, §4.2 adaptation loop, §8 P3)
 - **Sibling slices**: `2026-06-01-…-decision-ingress-design.md` (P3 Slice 1, read-only L3/L4 ingress) · `2026-06-01-…-l0-harvest-design.md` (P3 Slice 2a, fills the L0 corpus this slice reads)
 
 ## 1. Problem & Context

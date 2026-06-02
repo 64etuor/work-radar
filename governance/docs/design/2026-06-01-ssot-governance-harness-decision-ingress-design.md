@@ -3,7 +3,7 @@
 - **Date**: 2026-06-01
 - **Status**: design (approved, pre-plan)
 - **Branch**: `feat/governance-boule-p1` (PARKED, unpushed — commit only, never push without explicit request)
-- **Parent design**: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` (§2.2 Decisions/Principles 어댑터, §5.1 command set)
+- **Parent design**: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` (§2.2 Decisions/Principles 어댑터, §5.1 command set)
 
 ## 1. Problem & Context
 

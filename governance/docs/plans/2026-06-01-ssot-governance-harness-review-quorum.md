@@ -17,7 +17,7 @@ existing behavior, the stub round-trip, and CI unchanged.
 `@modelcontextprotocol/sdk`. Governance is a standalone sidecar **outside** the Tauri/Vite
 build graph.
 
-**Spec:** `docs/superpowers/specs/2026-06-01-ssot-governance-harness-review-quorum-design.md`
+**Spec:** `governance/docs/design/2026-06-01-ssot-governance-harness-review-quorum-design.md`
 
 ---
 
@@ -701,7 +701,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `docs/decisions.md` (append one line)
-- Modify: `docs/superpowers/specs/2026-06-01-ssot-governance-harness-review-quorum-design.md` (status)
+- Modify: `governance/docs/design/2026-06-01-ssot-governance-harness-review-quorum-design.md` (status)
 
 - [ ] **Step 1: Append a breadcrumb to `docs/decisions.md`** (match the existing one-line append style; check the last few lines first and mirror their format). Content:
 
@@ -718,7 +718,7 @@ Expected: full suite green; tsc exit 0.
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
-git add docs/decisions.md docs/superpowers/specs/2026-06-01-ssot-governance-harness-review-quorum-design.md
+git add docs/decisions.md governance/docs/design/2026-06-01-ssot-governance-harness-review-quorum-design.md
 git commit -m "docs(governance): record §7 review-quorum decision + mark spec implemented
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"

@@ -3,7 +3,7 @@
 - **Date**: 2026-06-01
 - **Status**: design (architecture agreed on 3 forks; one seam open) — pre-plan, parked
 - **Branch**: `feat/governance-boule-p1` (PARKED, unpushed — commit only, never push without explicit request)
-- **Parent design**: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` (5-layer model, 7 agents, §5 interface, §6 INVARIANTs)
+- **Parent design**: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` (5-layer model, 7 agents, §5 interface, §6 INVARIANTs)
 - **Provenance**: synthesized from a **two-model architecture consult** — `codex exec` (gpt-5.5) + an opus architect agent — both grounded in the real layer model, the mechanized Type-1 gate (`canApprove`), the append-only event store, and the user's live Telegram/cmux Hermes fabric (`~/.hermes/WORKLOG.md`). The two converged on the spine and diverged on one axis (plan representation); the user resolved all open forks (below).
 
 ## 1. Problem & Context

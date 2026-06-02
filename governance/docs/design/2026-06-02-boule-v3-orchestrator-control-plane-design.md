@@ -4,8 +4,8 @@
 - **Status**: design (architecture agreed; master plan + per-phase forks below) — pre-plan, parked
 - **Branch**: `feat/governance-boule-p1` (PARKED, unpushed — commit only, never push without explicit request)
 - **Parent designs**:
-  - `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` (v1 — 5-layer SSOT, 7 agents, MCP, INVARIANTs)
-  - `docs/superpowers/specs/2026-06-01-ssot-governance-harness-hitl-plan-loop-design.md` (v2 — HITL control plane, Planner/Conductor, escalation, autonomy envelope)
+  - `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` (v1 — 5-layer SSOT, 7 agents, MCP, INVARIANTs)
+  - `governance/docs/design/2026-06-01-ssot-governance-harness-hitl-plan-loop-design.md` (v2 — HITL control plane, Planner/Conductor, escalation, autonomy envelope)
 - **Provenance**: synthesized from a **two-model architecture consult run this session** — `codex exec` (codex-cli 0.135.0) + an opus architect agent — both grounded by reading the real code (`deriveDecisionState`, `canApprove`/`approve`, `chooseOption`, `buildIndex`, the `EventType` union, the current `governance/workspace/` layout) and the v1/v2 designs. They converged tightly on the spine; their divergences and the user's resolutions are recorded inline. Consult brief: `/tmp/boule-v3-consult/brief.md` (ephemeral).
 
 > Working name **Boule** (아테네 평의회). 이름은 bikeshed — 자유 변경.

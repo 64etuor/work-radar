@@ -3,7 +3,7 @@
 - **Date**: 2026-06-01
 - **Status**: spec (forks resolved; ready to plan) — PARKED branch, commit-only
 - **Branch**: `feat/governance-boule-p1`
-- **Parent design**: `docs/superpowers/specs/2026-06-01-ssot-governance-harness-hitl-plan-loop-design.md` (the v2 architecture; this spec implements its §5 first slice only)
+- **Parent design**: `governance/docs/design/2026-06-01-ssot-governance-harness-hitl-plan-loop-design.md` (the v2 architecture; this spec implements its §5 first slice only)
 - **Provenance**: forks resolved by a **two-model consult** (codex gpt-5.5 repo-sandboxed + opus architect that read the live `~/.hermes` fabric). Both independently picked **(a) bounded adapter** and both flagged the same INVARIANT-#1 risk (the inbound half) and the same first-slice code gaps. User confirmed both decisions 2026-06-01.
 
 ## 1. Goal (the smallest provable round-trip)

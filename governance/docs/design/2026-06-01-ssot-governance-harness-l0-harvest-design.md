@@ -3,8 +3,8 @@
 - **Date**: 2026-06-01
 - **Status**: design (approved, pre-plan)
 - **Branch**: `feat/governance-boule-p1` (PARKED, unpushed — commit only, never push without explicit request)
-- **Parent design**: `docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md` (§1.1 L0 event sources, §3 Gateway, §8 P3)
-- **Sibling slice**: `docs/superpowers/specs/2026-06-01-ssot-governance-harness-decision-ingress-design.md` (P3 Slice 1 — L3/L4 read-only ingress; this slice reuses its parsers)
+- **Parent design**: `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` (§1.1 L0 event sources, §3 Gateway, §8 P3)
+- **Sibling slice**: `governance/docs/design/2026-06-01-ssot-governance-harness-decision-ingress-design.md` (P3 Slice 1 — L3/L4 read-only ingress; this slice reuses its parsers)
 
 ## 1. Problem & Context
 

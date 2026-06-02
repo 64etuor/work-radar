@@ -100,9 +100,9 @@ once the dev-DB migration skew is resolved (`WORK_RADAR_DEV_DB` override, same c
 ## More Information
 
 - Related: P2b card design
-  (`docs/superpowers/specs/2026-06-01-ssot-governance-harness-p2b-askuser-card-design.md`),
+  (`governance/docs/design/2026-06-01-ssot-governance-harness-p2b-askuser-card-design.md`),
   main harness design §5.1/§5.2
-  (`docs/superpowers/specs/2026-05-31-ssot-governance-harness-design.md`).
+  (`governance/docs/design/2026-05-31-ssot-governance-harness-design.md`).
 - Investigation + dev-DB skew fix spec:
-  `docs/superpowers/specs/2026-06-01-ssot-governance-harness-approval-finding-devdb-skew-design.md`.
+  `governance/docs/design/2026-06-01-ssot-governance-harness-approval-finding-devdb-skew-design.md`.
 - Key files: `governance/src/mcp/server.ts`, `src-tauri/src/hermes_agent/acp_client.rs`.
