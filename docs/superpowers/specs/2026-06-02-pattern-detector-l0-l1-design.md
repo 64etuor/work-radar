@@ -75,8 +75,9 @@ set of `(kind, canonicalKey)` already curated by a human, fed into `detectPatter
    - skip if `(kind="commit_scope_hotspot", canonicalKey)` ∈ `curatedKeys` (already curated by a
      human in `active/` or `archived/` — the detector never resurrects a curated or dismissed scope);
    - else emit `CandidatePattern { kind: "commit_scope_hotspot", scope: canonicalKey, evidenceCount, confidence, evidenceEventIds }`.
-   - `confidence = min(1, evidenceCount / confFull)` — a transparent, documented function of the
-     count (not a magic constant).
+   - `confidence = min(1, evidenceCount / confFull)`, **clamped to 1 and rounded to 2 decimals** —
+     a transparent, documented function of the count (not a magic constant). Rounding keeps the
+     frontmatter byte-stable so idempotent re-runs don't churn on float noise.
 5. Return sorted by `scope` (stable, byte-deterministic ordering). Pure in / pure out.
 
 **Config knobs** (env, fail-closed clamps — mirrors `BOULE_REVIEW_QUORUM` in `src/mcp/config.ts`):
@@ -94,6 +95,11 @@ Decision (non-commit) events carry no structural grouping key yet (`tags` empty,
 > or `patterns/archived/` (those are human-owned), nor any path outside `patterns/candidates/`. This
 > is narrower than the master design's "writes `patterns/` only" and is enforced in `makeWritePattern`
 > (it joins paths under a fixed `candidates/` base) and asserted by a test.
+>
+> **Symmetric read-path guard:** the `pattern <id>` MCP tool takes an untrusted `id`. `getPattern`
+> must validate the id shape (`^[A-Za-z0-9_]+$` — no `.`/path separators) **before** joining it into
+> a path, so a `../`-laden id cannot read `.md` files outside the patterns tree. Asserted by a
+> traversal-rejection test.
 
 `patterns/active/` and `patterns/archived/` remain human-owned; `candidates/` is plural for
 consistency with them.

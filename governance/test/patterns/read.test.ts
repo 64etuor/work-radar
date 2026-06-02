@@ -72,4 +72,12 @@ describe("listPatterns / getPattern", () => {
     expect(got?.body).toContain("BODY-TEXT");
     expect(await getPattern(ws, "pat_scope_missing0")).toBeNull();
   });
+
+  it("rejects a path-traversal id instead of reading files outside patterns/", async () => {
+    // Plant a frontmatter .md OUTSIDE patterns/ (directly under the workspace root).
+    await writeFile(join(ws, "secret.md"), "---\nkind: secret\nscope: LEAK\n---\nout-of-tree\n", "utf8");
+    // ws/patterns/candidates + ../../secret.md → ws/secret.md if traversal is allowed.
+    expect(await getPattern(ws, "../../secret")).toBeNull();
+    expect(await getPattern(ws, "../../../../../../../../etc/passwd")).toBeNull();
+  });
 });

@@ -66,11 +66,18 @@ export async function listPatterns(workspaceDir: string): Promise<PatternView[]>
   return out;
 }
 
-/** Find one pattern by id across candidates/active/archived; null if absent. */
+/** Safe pattern-id shape: alphanumerics + underscore only. Rejects any id with a path
+ *  separator or `.` (so `../` traversal can never escape the patterns/ tree). Covers the
+ *  current `pat_scope_<8hex>` ids and any future `<prefix>_<...>` alnum/underscore id. */
+const SAFE_ID = /^[A-Za-z0-9_]+$/;
+
+/** Find one pattern by id across candidates/active/archived; null if absent or unsafe.
+ *  SECURITY: `id` is an untrusted MCP arg — validate before joining it into a path. */
 export async function getPattern(
   workspaceDir: string,
   id: string,
 ): Promise<{ frontmatter: Record<string, unknown>; body: string } | null> {
+  if (!SAFE_ID.test(id)) return null; // path-traversal / out-of-tree read guard
   for (const sub of SUBDIRS) {
     const file = join(workspaceDir, "patterns", sub, `${id}.md`);
     try {
