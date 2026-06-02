@@ -12,8 +12,12 @@ export interface PlanState {
 /** Pure fold: a plan_proposed event + its related lifecycle events → phase.
  *  `related` = events whose related_to includes the plan id (any order).
  *  Precedence: archived > superseded > completed (terminal markers); otherwise the LATEST
- *  accepted/revised transition wins (active vs needs_revision). Event ids are chronological
- *  (generateId stamps UTC time). Ignores every event type it does not own (god-fold ban). */
+ *  accepted/revised transition wins (active vs needs_revision) by the id tiebreak. ORDERING
+ *  CONTRACT (Boule, docs/decisions.md): event ids (prefix_YYYYMMDD_HHMMSS_<4hex-random>) are
+ *  display/tiebreak-only — the random suffix is NOT monotonic within a second, so causality is
+ *  carried by explicit references, never id-order. Two same-second accepted/revised transitions
+ *  on one plan do not occur in practice (human-paced), so this tiebreak is a benign display
+ *  nicety, not load-bearing. Ignores every event type it does not own (god-fold ban). */
 export function derivePlanState(created: GovEvent, related: GovEvent[]): PlanState {
   const planId = created.frontmatter.id;
   const title = created.body.split("\n", 1)[0]?.trim() || planId;

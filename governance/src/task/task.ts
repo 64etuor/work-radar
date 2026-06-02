@@ -11,8 +11,12 @@ export interface TaskState {
 
 /** Pure fold: a task_created event + its related lifecycle events → phase.
  *  `related` = events whose related_to includes the task id (any order).
- *  Precedence: cancelled > done; otherwise the LATEST started/blocked transition wins
- *  (event ids are chronological — generateId stamps UTC time). */
+ *  Precedence: cancelled > done; otherwise the LATEST started/blocked transition wins by the
+ *  id tiebreak. ORDERING CONTRACT (Boule, docs/decisions.md): event ids
+ *  (prefix_YYYYMMDD_HHMMSS_<4hex-random>) are display/tiebreak-only — the random suffix is NOT
+ *  monotonic within a second, so causality is carried by explicit references, never id-order.
+ *  Two same-second started/blocked transitions on one task stream do not occur in practice
+ *  (human-paced), so this tiebreak is a benign display nicety, not load-bearing. */
 export function deriveTaskState(created: GovEvent, related: GovEvent[]): TaskState {
   const taskId = created.frontmatter.id;
   const title = created.body.split("\n", 1)[0]?.trim() || taskId;
