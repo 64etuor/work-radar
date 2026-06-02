@@ -13,7 +13,11 @@ export type EventType =
   | "decision_rejected"        // P2a: human gate rejected (actor=user)
   | "decision_blocked"         // v2 slice1: Type 0 escalation — a fork that needs a human (source=agent_run|hermes)
   | "decision_chosen"          // v2 slice1: human picked an option for a Type 0 (actor=user, NOT review-gated)
-  | "task_created";
+  | "task_created"
+  | "task_started"      // v3 Phase A: task ready/blocked → active
+  | "task_blocked"      // v3 Phase A: task active → blocked (carries reason)
+  | "task_completed"    // v3 Phase A: task active → done (guarded: no open decision_blocked)
+  | "task_cancelled";   // v3 Phase A: task → cancelled (terminal)
 
 export type EventSource =
   | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"
