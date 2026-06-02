@@ -83,3 +83,36 @@ Planner, Conductor + cmux spawning, autonomy-envelope schema, full Type-1-via-Gu
 - **1A**: governance `vitest` (new: EventType, chooseOption handler, escalate, token mint/validate, double-tap no-op, deriveDecisionState terminal) + `tsc` 0 + headless stub-MCP round-trip (escalate → choose → `decision_chosen` lands → `why` chain) + bindings drift 0 + no app/Rust/migration changes.
 - **1B**: the one characterization test (3 branches) + a **live phone round-trip smoke** (escalate from a terminal → card arrives in the `{workspace} — {task}` topic → tap → `decision_chosen` actor:user lands → `why <id>` prints the chain). State explicitly if the live smoke could not run.
 - Independent **critic (opus, separate pass)** ACCEPT before "done". Commit only; **do not push** (Boule parked).
+
+---
+
+## Addendum (2026-06-02) — current-fabric corrections for Slice 1B
+
+The §3/§5 fabric references were written from the two-model consult on 2026-06-01. Re-reading the **live** `~/.hermes` + `~/.claude/hooks` fabric on 2026-06-02 (before planning 1B) surfaced one contract change and several anchor confirmations. This addendum is the binding reference for the 1B plan; §3/§5 above stay as the original design intent.
+
+### A1. Outbound sink contract CHANGED (same-day SSOT refactor)
+
+§3 said the adapter pipes "a normalized payload into the existing sink `cmux_notify_telegram.py:main` (it already reads stdin)". That sink:
+
+- **Lives at `~/.claude/hooks/cmux_notify_telegram.py`**, not under `~/.hermes/` as §3 implies. The fabric spans two trees: inbound platform handler in `~/.hermes/hermes-agent/gateway/`, outbound notify sinks in `~/.claude/hooks/`.
+- **No longer takes a free-form payload.** A 2026-06-01 SSOT refactor introduced `~/.claude/hooks/cmux_event_core.py` (a NormalizedEvent normalizer). The sink now reads a **NormalizedEvent dict** on stdin and **returns 0 (no-op) unless `routable` is truthy**. Fields the sink consumes: `routable`, `key` (forum-topic identity), `title`, `detail`, and (for the topic name) `workspace_title` + `pane_name`; it also persists `surface`/`cwd`/`session_id` into the registry.
+- **Anchors re-verified at 2026-06-02:** `main` reads stdin at `:173`, `_ensure_topic` at `:100`, `sendMessage` at `:212`. The line numbers held; the **payload shape** is what changed.
+- **`--dry-run`** prints the rendered send payload instead of calling Telegram — the headless proof path for the outbound half (no real send).
+
+**Consequence for 1B:** the outbound adapter must hand-build a NormalizedEvent dict (not reuse `cmux_event_core.build()`, which is shaped for Claude hook events — `TITLES`/transcript/screen derivation — and is a misfit for a governance escalation). The adapter sets at minimum `routable:true`, a stable `key`, `title` (the question), `detail` (each option rendered with its exact `BOULE:<blocked>:<decision>:<opt>` reply token), and `workspace_title`/`pane_name` for the topic name.
+
+### A2. Inbound anchor — CONFIRMED accurate
+
+`platforms/telegram.py:_handle_text_message` (def `:4950`) imports `try_forward` at `:4965` and calls it at `:4968`, inside a `try/except` (`:4964`–`:4972`) that blind-forwards every recognized topic reply into the cmux pane. The governance guard is prepended **before** that call. `cmux_topic_router.py` exposes `resolve_surface` (`:34`, registry lookup over `~/.claude/cmux-telegram-topics.json` + the completed registry) and `try_forward` (`:77`). The §3 inbound design stands.
+
+### A3. Resolved seams (decisions confirmed 2026-06-02)
+
+1. **`choose` invocation = MCP stdio one-shot.** The inbound `try_governance_reply` invokes the gated MCP `choose` by spawning the governance server (`node --experimental-strip-types src/mcp/server.ts`) with `BOULE_WORKSPACE` set, doing a bounded `tools/call choose {decision_id, blocked_event_id, option_token}`, and exiting. This keeps "Python may ONLY invoke the gated MCP tool" (§4) true via a single audited write-path — no second entrypoint to the gate, no Python-side event write.
+2. **WORKSPACE binding.** The MCP server resolves its events dir as `BOULE_WORKSPACE ?? governance/workspace` (`server.ts:33`). The outbound adapter (reading `decision_blocked`) and the inbound one-shot (calling `choose`) MUST target the **same** `BOULE_WORKSPACE`. The 1B plan pins one value and uses it on both ends + in the live-smoke runbook.
+3. **Tap = a text reply carrying the token, NOT an inline keyboard.** Consistent with the §3 inbound path being `_handle_text_message` (text), and keeps the fabric change minimal (no `reply_markup` on the sink, no `callback_query` handler). Inline-keyboard buttons are deferred polish.
+4. **Topic routing default.** If the `decision_blocked` event carries a session id, reuse that session's topic (`key=session:<id>`) so the card lands in the operator's `{workspace} — {task}` topic; otherwise a dedicated `key=boule:<decisionId>` topic named `Boule — <question>`. The 1B terminal-escalate smoke (no session) lands in a dedicated Boule topic.
+5. **Outbound idempotency.** A gitignored sent-marker file under `BOULE_WORKSPACE` (e.g. `.bridge/telegram-sent.json`) keyed by `blocked_event_id`; already-sent ids are skipped; `--limit N` bounds the batch (INVARIANT #5, no daemon).
+
+### A4. Live smoke ownership
+
+The phone round-trip necessarily touches the user's daily-driver fabric. **The user runs it from a copy-pasteable runbook in the 1B plan**; the agent provides the runbook and verifies the resulting `decision_chosen` (actor:user) + `why <id>` chain from the event files. The agent does **not** edit the live fabric or originate Telegram traffic during planning. (The `telegram.py` + new `gateway/governance_bridge.py` edits are described in the plan and applied only after the user approves the plan.)
