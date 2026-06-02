@@ -23,7 +23,10 @@ export type EventType =
   | "plan_revised"      // v3 Phase B: active → needs_revision (revision requested, carries reason)
   | "plan_completed"    // v3 Phase B: plan → completed (terminal)
   | "plan_archived"     // v3 Phase B: plan → archived (terminal)
-  | "plan_superseded";  // v3 Phase B: plan replaced by a newer plan (terminal)
+  | "plan_superseded"   // v3 Phase B: plan replaced by a newer plan (terminal)
+  | "spec_proposed"     // v3 Phase B2: a spec is drafted (actor=author, propose-only)
+  | "spec_accepted"     // v3 Phase B2: human gate — draft → accepted (actor=user)
+  | "spec_archived";    // v3 Phase B2: spec → archived (terminal)
 
 export type EventSource =
   | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"
