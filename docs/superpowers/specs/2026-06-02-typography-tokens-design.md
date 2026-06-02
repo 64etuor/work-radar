@@ -1,7 +1,7 @@
 # Typography Tokens — Semantic `typo-*` Utilities (Design Spec)
 
 - **Date:** 2026-06-02
-- **Status:** Approved design — implementation deferred to next session (plan-only push).
+- **Status:** Approved design — implementation in progress on `feat/typography-tokens` (2026-06-02). Role table finalized from inventory (below).
 - **Scope:** Codify the DESIGN.md typography table as code (token layer + semantic utilities), reconcile the documented-vs-code drift, adopt incrementally. **Separate concern** from the just-shipped settings fix (`88294cc`/`88bd918`).
 - **Trigger:** User noticed the project-card title style (`text-[17px] leading-tight font-semibold tracking-[-0.01em]`) is an arbitrary value triplicated across `ProjectCard` (input+span) and `AddProjectForm` (`CardTitle`), and asked whether to introduce design tokens.
 
@@ -54,22 +54,28 @@ src/components/ui/typography.tsx  # OPTIONAL <Text>/<Heading> wrappers (priority
 
 Usage: `<span className="typo-title-md">{project.name}</span>` (color stays a separate token util, e.g. `text-foreground` — typography utilities set type only, never color).
 
-### Seed role set (PROVISIONAL — finalized by inventory in Task 1)
+### Role set (CONFIRMED by Task-1 inventory, 2026-06-02)
 
-Derived from the usage histogram + sampled combos. Exact (weight/line/tracking) per role pinned by the Task-1 inventory; names follow the user's `<role>-<size>` convention.
+Inventory of `src/**`: size histogram `text-[13px]`×32, `[11px]`×25, `[12px]`×24, `[10px]`×8, `[15px]`×4, `[17px]`×3, `[9px]`×2, `[22px]`×1, `[44px]`×1; tracking `0.12em`×4 / `-0.01em`×3 / `0.1em`×2 / `-0.02em`×1; leading `relaxed`×7 / `none`×7 / `tight`×4 / `6`×3 / `snug`×2 / `5`×1; weights `medium`×42 / `semibold`×35 / `bold`×2.
 
-| Utility            |  px |  weight |   line | tracking | Maps to (current)                                     |
-| ------------------ | --: | ------: | -----: | -------: | ----------------------------------------------------- |
-| `typo-title-md`    |  17 |     600 |   1.25 |  -0.01em | project card titles (anchor; **0 visual change**)     |
-| `typo-title-sm`    |  15 |     600 |  tight |  -0.01em | smaller titles (TBD by inventory)                     |
-| `typo-body-md`     |  13 |     400 | normal |        0 | dominant body (13px bare)                             |
-| `typo-body-strong` |  13 | 500/600 | normal |        0 | 13px medium/semibold variants                         |
-| `typo-label-sm`    |  12 |     500 | normal |        0 | form labels / compact UI                              |
-| `typo-caption-sm`  |  11 |     400 |   snug |        0 | metadata / captions                                   |
-| `typo-mono-label`  |  11 |     600 | normal |   0.12em | uppercase mono `SectionLabel` (`font-mono uppercase`) |
-| `typo-micro`       |  10 |     400 | normal |        0 | microcopy                                             |
+**Decisions from inventory:**
 
-> The `font-mono` family stays an explicit class alongside `typo-mono-label` (or the utility includes `font-family: var(--font-mono)`). Decided in Task 1.
+- **`typo-title-md` (anchor) is exact-confirmed.** All 3 `text-[17px]` sites resolve to `text-[17px] leading-tight font-semibold tracking-[-0.01em]` (Tailwind `leading-tight`=1.25, `font-semibold`=600). The token is pinned to **17 / 600 / 1.25 / -0.01em** so the first adoption is a zero-visual-change swap.
+- **`typo-mono-label` is exact-confirmed** against `SectionLabel` (`SettingsKit.tsx:10` = `font-mono text-[11px] font-semibold tracking-[0.12em] uppercase`). The utility **bundles `font-family: var(--font-mono)` + `text-transform: uppercase`** (open question resolved: include them — `SectionLabel` always pairs them).
+- **The other six roles are the codified forward vocabulary** mapped by size to the dominant bare-usage buckets (13px body, 12px/11px small text, 10px micro). They are applied incrementally; nothing besides the title role migrates in this PR, so their canonical weights are forward design choices (no current-site regression). No seed role was dropped — the set is small (8), coherent, and 1:1 with the DESIGN.md §App Surface Type table.
+
+| Utility            |  px | weight | line | tracking | Maps to (current)                                                  |
+| ------------------ | --: | -----: | ---: | -------: | ------------------------------------------------------------------ |
+| `typo-title-md`    |  17 |    600 | 1.25 |  -0.01em | project card titles (anchor; **0 visual change**, 3 sites)         |
+| `typo-title-sm`    |  15 |    600 |  1.3 |  -0.01em | secondary titles (forward)                                         |
+| `typo-body-md`     |  13 |    400 |  1.4 |        0 | dominant body (13px bare, ~12 sites)                               |
+| `typo-body-strong` |  13 |    600 |  1.4 |        0 | emphasized 13px (semibold, ~5 sites)                               |
+| `typo-label-sm`    |  12 |    500 |  1.4 |        0 | form labels / compact UI (forward)                                 |
+| `typo-caption-sm`  |  11 |    400 |  1.4 |        0 | metadata / captions (11px bare, ~17 sites)                         |
+| `typo-mono-label`  |  11 |    600 |  1.4 |   0.12em | uppercase mono `SectionLabel` (`font-mono` + `uppercase` bundled)  |
+| `typo-micro`       |  10 |    400 |  1.4 |        0 | microcopy (10px, ~8 sites)                                         |
+
+**Open questions resolved:** (1) role set above; (2) `typo-mono-label` bundles `font-family: var(--font-mono)`; (3) defer `<Text>`/`<Heading>` wrappers (Task 8, priority 3); (4) AI rules live in a new `docs/areas/typography.md` routed by `area-map.md` (not AGENTS.md).
 
 ## First adoption (proof, in the typography PR)
 
@@ -107,9 +113,9 @@ Replace the triplicated title style with `typo-title-md`:
 - Tailwind v4.3 `@utility` compiles and the classes are emitted (grep the built CSS or a focused build).
 - Separate critic pass (self-approve forbidden).
 
-## Open questions for the plan
+## Open questions — RESOLVED (Task 1, 2026-06-02)
 
-1. Final role set + exact (weight/line/tracking) per role — from the Task-1 inventory.
-2. Whether `typo-mono-label` bundles `font-family: var(--font-mono)` or leaves `font-mono` explicit.
-3. Whether to ship the optional `<Text>`/`<Heading>` wrappers now or defer (lean: defer — priority 3).
-4. Where the AI rules live (AGENTS.md "Implementation Rules" vs a new `docs/areas/typography.md` routed by `area-map.md`).
+1. **Role set + exact values** — finalized in "Role set (CONFIRMED)" above; `typo-title-md` and `typo-mono-label` are exact-confirmed against current sites, the other six are the forward vocabulary mapped by size.
+2. **`typo-mono-label`** — bundles `font-family: var(--font-mono)` + `text-transform: uppercase` (`SectionLabel` always pairs them).
+3. **`<Text>`/`<Heading>` wrappers** — deferred (Task 8, priority 3).
+4. **AI rules location** — new `docs/areas/typography.md` routed by `area-map.md`.
