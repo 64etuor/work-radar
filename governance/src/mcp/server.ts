@@ -10,6 +10,9 @@ import { formatPrinciples, formatDecisions, formatDecision } from "../index/form
 import { createTask, status, observations } from "./handlers.ts";
 import { startTask, blockTask, completeTask, cancelTask, listTasks, taskTrail } from "../task/handlers.ts";
 import {
+  proposePlan, acceptPlan, revisePlan, completePlan, archivePlan, supersedePlan, listPlans, planTrail,
+} from "../plan/handlers.ts";
+import {
   proposeDecision, requestReview, approve, reject, conflicts, why, history, chooseOption,
 } from "../decision/handlers.ts";
 import { escalate } from "../escalate/escalate.ts";
@@ -127,6 +130,86 @@ server.registerTool(
     const t = await taskTrail(WORKSPACE, { taskId });
     const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
     return { content: [{ type: "text", text: `${t.taskId} [${t.phase}] ${t.title}\n${chain}` }] };
+  },
+);
+
+// ── Phase B: Plan lifecycle + Planner ────────────────────────────────────────
+// propose_plan = the Planner (propose-only). accept_plan = the human gate. The Planner has
+// no tool that accepts a plan → INVARIANT #1 self-approval impossibility is structural.
+server.registerTool(
+  "propose_plan",
+  {
+    description: "Planner: intent + 단계 목록을 draft plan_proposed 이벤트 하나로 기록 (propose-only)",
+    inputSchema: { intent: z.string(), steps: z.array(z.string()) },
+  },
+  async ({ intent, steps }) => {
+    const r = await proposePlan(WORKSPACE, { intent, steps }, nowFn(), randFn());
+    return { content: [{ type: "text", text: `plan proposed (draft): ${r.planId}` }] };
+  },
+);
+
+server.registerTool(
+  "accept_plan",
+  { description: "사람 게이트: plan을 active로 (draft/needs_revision→active, actor=user)", inputSchema: { planId: z.string() } },
+  async ({ planId }) => {
+    const r = await acceptPlan(WORKSPACE, { planId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `accepted: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "revise_plan",
+  { description: "plan을 needs_revision으로 (active→needs_revision, 사유 기록)", inputSchema: { planId: z.string(), reason: z.string() } },
+  async ({ planId, reason }) => {
+    const r = await revisePlan(WORKSPACE, { planId, reason }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `revision requested: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "complete_plan",
+  { description: "plan을 completed로 (active→completed, terminal)", inputSchema: { planId: z.string() } },
+  async ({ planId }) => {
+    const r = await completePlan(WORKSPACE, { planId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "archive_plan",
+  { description: "plan을 archived로 (terminal)", inputSchema: { planId: z.string() } },
+  async ({ planId }) => {
+    const r = await archivePlan(WORKSPACE, { planId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `archived: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "supersede_plan",
+  { description: "plan을 superseded로 (새 plan이 대체, terminal)", inputSchema: { planId: z.string() } },
+  async ({ planId }) => {
+    const r = await supersedePlan(WORKSPACE, { planId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `superseded: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "plans",
+  { description: "비종료(non-terminal) plan 목록", inputSchema: {} },
+  async () => {
+    const list = await listPlans(WORKSPACE);
+    const text = list.length ? list.map((p) => `${p.planId} [${p.phase}] ${p.title}`).join("\n") : "(no open plans)";
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerTool(
+  "plan",
+  { description: "plan 상태 + audit chain", inputSchema: { planId: z.string() } },
+  async ({ planId }) => {
+    const t = await planTrail(WORKSPACE, { planId });
+    const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
+    return { content: [{ type: "text", text: `${t.planId} [${t.phase}] ${t.title}\n${chain}` }] };
   },
 );
 

@@ -17,7 +17,13 @@ export type EventType =
   | "task_started"      // v3 Phase A: task ready/blocked → active
   | "task_blocked"      // v3 Phase A: task active → blocked (carries reason)
   | "task_completed"    // v3 Phase A: task active → done (guarded: no open decision_blocked)
-  | "task_cancelled";   // v3 Phase A: task → cancelled (terminal)
+  | "task_cancelled"    // v3 Phase A: task → cancelled (terminal)
+  | "plan_proposed"     // v3 Phase B: Planner emits one draft plan (actor=planner, propose-only)
+  | "plan_accepted"     // v3 Phase B: human gate — draft/needs_revision → active (actor=user)
+  | "plan_revised"      // v3 Phase B: active → needs_revision (revision requested, carries reason)
+  | "plan_completed"    // v3 Phase B: plan → completed (terminal)
+  | "plan_archived"     // v3 Phase B: plan → archived (terminal)
+  | "plan_superseded";  // v3 Phase B: plan replaced by a newer plan (terminal)
 
 export type EventSource =
   | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"
