@@ -22,9 +22,17 @@ import { escalate } from "../escalate/escalate.ts";
 import { pendingEscalations } from "../escalate/pending.ts";
 import { conductPlan, conductorStatus } from "../conductor/handlers.ts";
 import { stubAdapter, makeLiveAdapter, type ConductorAdapter, type SpawnSyncLike } from "../conductor/adapter.ts";
+import {
+  requestSessionOpen, markWaiting, markBlocked, recordPressure, requestCheckpoint,
+  markHandoffReady, requestSessionClose, closeSession, listSessions, sessionTrail,
+} from "../session/handlers.ts";
+import {
+  observeSessions, makeLiveAdapter as makeObserverLiveAdapter, stubAdapter as observerStubAdapter,
+  type ObserverAdapter, type SpawnResultLike as ObserverSpawnResultLike,
+} from "../session/observer.ts";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
-import { parseConductorConfig } from "./config.ts";
+import { parseConductorConfig, parseObserverConfig } from "./config.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import {
@@ -496,6 +504,25 @@ function buildConductorAdapter(): ConductorAdapter {
 }
 const conductorAdapter = buildConductorAdapter();
 
+// ── Phase D: Observer adapter ─────────────────────────────────────────────────
+// 기본 = no-op(stub·cmux 무접근). BOULE_OBSERVER_MODE=live 일 때만 실제 `cmux list` 어댑터.
+// 비-live에서는 observe_sessions가 reconcile하지 않는다(빈 surface 집합에 대해 모든 known
+// 세션을 crash 처리하는 footgun 방지). 비결정(spawnSync)은 이 경계에서만 주입.
+const OBSERVER_CFG = parseObserverConfig(process.env);
+function buildObserverAdapter(): ObserverAdapter {
+  if (!OBSERVER_CFG.live) return observerStubAdapter;
+  const realSpawnSync = (cmd: string, args: string[]): ObserverSpawnResultLike => {
+    const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
+    return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+  };
+  return makeObserverLiveAdapter({
+    spawn: realSpawnSync,
+    cmuxCmd: OBSERVER_CFG.cmuxCmd,
+    log: (line) => process.stderr.write(`${line}\n`), // PII-safe (명령명+status+count만)
+  });
+}
+const observerAdapter = buildObserverAdapter();
+
 server.registerTool(
   "propose_decision",
   {
@@ -706,6 +733,121 @@ server.registerTool(
         (st.halted ? " HALTED" : ""),
     );
     return { content: [{ type: "text", text: [head, ...lines].join("\n") }] };
+  },
+);
+
+// ── Phase D: Session Registry + cmux Observer ─────────────────────────────────
+// 전부 verdict-free → SESSION_ALLOWS_VERDICTS 게이트 비대상(approve/choose류 아님).
+// observe_sessions만 BOULE_OBSERVER_MODE=live에서 reconcile; 그 외엔 무동작 notice.
+server.registerTool(
+  "sessions",
+  { description: "비종료(non-terminal) session 목록 (read-only)", inputSchema: {} },
+  async () => {
+    const list = await listSessions(WORKSPACE);
+    const text = list.length
+      ? list.map((s) => `${s.sessionId} [${s.phase}] ${s.ownership} surface=${s.surface ?? "-"}`).join("\n")
+      : "(no open sessions)";
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerTool(
+  "session",
+  { description: "session 상태 + audit chain (read-only)", inputSchema: { sessionId: z.string() } },
+  async ({ sessionId }) => {
+    const t = await sessionTrail(WORKSPACE, { sessionId });
+    const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
+    return { content: [{ type: "text", text: `${t.sessionId} [${t.phase}] ${t.ownership} surface=${t.surface ?? "-"}\n${chain}` }] };
+  },
+);
+
+server.registerTool(
+  "observe_sessions",
+  {
+    description:
+      "라이브 cmux surface를 읽어 registry와 reconcile (observe/crash/recover/orphan-open) — 상태 변화시에만 1세션당 ≤1 이벤트. session_closed 절대 안 씀(no-auto-close). BOULE_OBSERVER_MODE=live 필요",
+    inputSchema: {},
+  },
+  async () => {
+    if (!OBSERVER_CFG.live)
+      return { content: [{ type: "text", text: "observer stub: BOULE_OBSERVER_MODE!=live → cmux 미접근, reconcile 생략" }] };
+    const s = await observeSessions(WORKSPACE, { adapter: observerAdapter }, nowFn(), randFn());
+    return { content: [{ type: "text", text: `observed=${s.observed} crashed=${s.crashed} recovered=${s.recovered} opened=${s.opened}` }] };
+  },
+);
+
+server.registerTool(
+  "request_session_open",
+  {
+    description: "planned 세션을 births (session_open_requested). ownership=user_owned|external_owned(기본 user_owned), surface 선택",
+    inputSchema: { ownership: z.enum(["user_owned", "external_owned"]).optional(), surface: z.string().optional() },
+  },
+  async ({ ownership, surface }) => {
+    const r = await requestSessionOpen(WORKSPACE, { ownership, surface }, nowFn(), randFn());
+    return { content: [{ type: "text", text: `session requested (planned): ${r.sessionId}` }] };
+  },
+);
+
+server.registerTool(
+  "mark_session_waiting",
+  { description: "session을 waiting으로 기록 (verdict 없음)", inputSchema: { sessionId: z.string() } },
+  async ({ sessionId }) => {
+    const r = await markWaiting(WORKSPACE, { sessionId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `waiting: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "mark_session_blocked",
+  { description: "session을 blocked로 기록 (사유)", inputSchema: { sessionId: z.string(), reason: z.string() } },
+  async ({ sessionId, reason }) => {
+    const r = await markBlocked(WORKSPACE, { sessionId, reason }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "record_context_pressure",
+  { description: "context pressure level 기록 (high|critical만 phase 전진)", inputSchema: { sessionId: z.string(), level: z.enum(["low", "medium", "high", "critical"]) } },
+  async ({ sessionId, level }) => {
+    const r = await recordPressure(WORKSPACE, { sessionId, level }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `pressure(${level}): ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "request_checkpoint",
+  { description: "session checkpoint 요청 기록", inputSchema: { sessionId: z.string() } },
+  async ({ sessionId }) => {
+    const r = await requestCheckpoint(WORKSPACE, { sessionId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `checkpoint requested: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "mark_handoff_ready",
+  { description: "session handoff ready 기록", inputSchema: { sessionId: z.string() } },
+  async ({ sessionId }) => {
+    const r = await markHandoffReady(WORKSPACE, { sessionId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `handoff ready: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "request_session_close",
+  { description: "session close 요청 (→ closing; close_session의 게이트)", inputSchema: { sessionId: z.string() } },
+  async ({ sessionId }) => {
+    const r = await requestSessionClose(WORKSPACE, { sessionId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `close requested: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+server.registerTool(
+  "close_session",
+  { description: "session을 closed로 (terminal) — session_close_requested 이후에만. 유일한 session_closed 경로", inputSchema: { sessionId: z.string() } },
+  async ({ sessionId }) => {
+    const r = await closeSession(WORKSPACE, { sessionId }, nowFn(), randFn());
+    return { content: [{ type: "text", text: r.ok ? `closed: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
   },
 );
 

@@ -152,6 +152,31 @@ export function parseConductorConfig(env: Record<string, string | undefined>): C
   };
 }
 
+/** v3 Phase D Observer knobs (design §5). Safe defaults keep CI deterministic: mode!=="live" ⇒
+ *  the server does NOT reconcile (the stub touches no cmux). Only an explicit
+ *  BOULE_OBSERVER_MODE=live arms the real `cmux list` adapter. Mirrors the Conductor gating. */
+export interface ObserverConfig {
+  /** true only when BOULE_OBSERVER_MODE==="live" — otherwise observe_sessions is a no-op notice. */
+  live: boolean;
+  /** the cmux binary (defaults to the app bin name); used only by the live adapter. */
+  cmuxCmd: string;
+}
+
+/** Parse BOULE_OBSERVER_MODE: "live" (case-insensitive, trimmed) arms the real adapter; anything
+ *  else (unset/junk) → stub. Fail-closed: an unrecognized value never accidentally goes live. */
+export function parseObserverMode(raw: string | undefined): boolean {
+  return (raw ?? "").trim().toLowerCase() === "live";
+}
+
+/** Assemble the Observer config from env (all safe defaults; reuses the conductor cmux-cmd
+ *  parser since both name the same binary). */
+export function parseObserverConfig(env: Record<string, string | undefined>): ObserverConfig {
+  return {
+    live: parseObserverMode(env.BOULE_OBSERVER_MODE),
+    cmuxCmd: parseConductorCmuxCmd(env.BOULE_OBSERVER_CMUX_CMD),
+  };
+}
+
 export interface PatternConfig {
   minEvidence: number;
   confFull: number;

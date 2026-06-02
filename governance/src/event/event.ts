@@ -28,7 +28,21 @@ export type EventType =
   | "spec_accepted"     // v3 Phase B2: human gate — draft → accepted (actor=user)
   | "spec_archived"     // v3 Phase B2: spec → archived (terminal)
   | "step_bound"        // v3 Phase C: Conductor binds a plan step index ↔ a task (actor=conductor); NO verdict
-  | "session_spawned";  // v3 Phase C: Conductor records one cmux session spawn for a task (actor=conductor); NO verdict
+  | "session_spawned"   // v3 Phase C: Conductor records one cmux session spawn for a task (actor=conductor); NO verdict
+  // v3 Phase D: Session Registry + cmux Observer — ALL verdict-free (source: system|hermes|agent_run).
+  // A session's id = its birth event id (session_open_requested|session_opened|session_spawned).
+  | "session_open_requested"            // born planned (request to open; carries optional ownership/surface)
+  | "session_opened"                    // born opening (orphan auto-register = external_owned; else user_owned)
+  | "session_observed"                  // observer saw the surface alive → active
+  | "session_waiting"                   // session is waiting (idle/blocked-on-human)
+  | "session_blocked"                   // session is blocked (carries reason)
+  | "session_context_pressure_changed"  // context pressure level changed (body .level low|medium|high|critical)
+  | "session_checkpoint_requested"      // a checkpoint was requested (pre-handoff)
+  | "session_handoff_ready"             // handoff artifact is ready
+  | "session_close_requested"           // close requested → closing (gate for close_session)
+  | "session_closed"                    // session closed (terminal) — ONLY via close_session, never the observer
+  | "session_crashed"                   // observer saw a known surface disappear (NOT a close)
+  | "session_recovered";                // observer saw a crashed surface return → recovering
 
 export type EventSource =
   | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"
