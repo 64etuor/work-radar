@@ -1492,18 +1492,26 @@ fn workspaces_exclude_github_disabled_empty() {
     assert_eq!(out.len(), 1, "enabled Local + 스킬 있는 레포만");
 }
 
-/// 빈 워크스페이스 제외: 스킬 0개 레포(스킬 dir 없음/존재하지 않는 경로 포함)는 결과에서 빠진다.
+/// 0-스킬 enabled Local 레포(스킬 dir 없음/부재 경로 포함)도 vendor 타깃으로 워크스페이스에 포함된다
+/// (G3 fast-follow: 등록만 하고 스킬이 아직 없는 프로젝트로 첫 스킬을 vendor 할 수 있게). skill_count=0·
+/// member_paths 빈 채 노출 — 패닉 없이 graceful.
 #[test]
-fn workspaces_exclude_empty_repos() {
+fn workspaces_include_zero_skill_repos_as_vendor_targets() {
     let empty = TempDir::new().unwrap(); // 스킬 dir 없음
     let repos = vec![
         make_repo(Provider::Local, empty.path().to_str(), true),
         make_repo(Provider::Local, Some("/no/such/path/xyz"), true), // 부재 경로 → 스캔 빈 결과
     ];
     let out = list_skill_workspaces_core(&repos);
+    assert_eq!(
+        out.len(),
+        2,
+        "0-스킬 enabled Local 레포도 포함(vendor 타깃)"
+    );
     assert!(
-        out.is_empty(),
-        "스킬 0개 레포는 워크스페이스 미생성(패닉 없이 graceful)"
+        out.iter()
+            .all(|w| w.skill_count == 0 && w.member_paths.is_empty()),
+        "스킬 0개 → skill_count=0·member_paths 빈 채 노출"
     );
 }
 

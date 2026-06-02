@@ -312,8 +312,9 @@ pub(crate) fn primary_external_root(provider: SkillProvider) -> Option<PathBuf> 
 /// enabled Local 레포별 프로젝트 워크스페이스 집계(G3-PR1, #16). 읽기 전용·infallible — 루트 해석과
 /// 스캔은 기존 `repo_skill_roots`/`scan_external_skills_core`를 재사용해 경로 의미의 단일 출처(C6)를
 /// 유지한다. `repo_skill_roots`가 이미 `Provider::Local && enabled && non-empty local_path` 필터라
-/// 비대상 레포는 빈 roots → 스킵. 스킬 0개 레포는 결과에서 제외(뷰 전용 PR에서 빈 프로젝트는 노이즈).
-/// scan_external_skills_core가 IO 오류를 삼키고 빈 결과를 반환하므로 절대 패닉하지 않는다.
+/// 비대상 레포는 빈 roots → 스킵. **스킬 0개 enabled Local 레포도 포함**(G3 fast-follow): 등록만 하고
+/// 스킬이 아직 없는 프로젝트로 첫 스킬을 vendor 할 수 있도록 vendor 타깃으로 노출한다(skill_count=0·
+/// member_paths 빈 채). scan_external_skills_core가 IO 오류를 삼키고 빈 결과를 반환하므로 절대 패닉하지 않는다.
 pub(crate) fn list_skill_workspaces_core(repos: &[Repo]) -> Vec<SkillWorkspace> {
     let mut out: Vec<SkillWorkspace> = Vec::new();
     for repo in repos {
@@ -322,9 +323,6 @@ pub(crate) fn list_skill_workspaces_core(repos: &[Repo]) -> Vec<SkillWorkspace> 
             continue; // Github/비활성/빈 경로 레포
         }
         let skills = scan_external_skills_core(&roots);
-        if skills.is_empty() {
-            continue; // 스킬 0개 → 워크스페이스 미생성
-        }
         let local_path = repo
             .local_path
             .as_deref()
