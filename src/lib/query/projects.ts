@@ -4,6 +4,7 @@ import {
   commands,
   type CreateProjectInput,
   type CreateRepoInput,
+  type ProjectKind,
   type SetProjectCalendarColorInput,
   type SetProjectDefaultWriteCalendarInput,
 } from "@/bindings";
@@ -32,6 +33,33 @@ export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateProjectInput) => unwrap(commands.createProject(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  });
+}
+
+/**
+ * 기존 프로젝트 이름 편집. 단일 컬럼 갱신이라 kind 토글과 독립 — 두 편집이 겹쳐도 서로
+ * 덮어쓰지 않는다(lost-update 방지). 생성 후 사용자 편집 경로.
+ */
+export function useSetProjectName() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, name }: { projectId: string; name: string }) =>
+      unwrap(commands.setProjectName(projectId, name)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  });
+}
+
+/**
+ * 기존 프로젝트 종류(개인↔업무) 편집. 단일 컬럼 갱신이라 이름 편집과 독립.
+ * kind 전환은 라우팅 카테고리만 이동 — 기존 신호는 자신의 kind를 보유하므로 재태깅하지 않는다.
+ * CaptureBoard의 kind→프로젝트 라우팅은 projects 쿼리에서 라이브 산출되므로 ["projects"] 무효화로 충분.
+ */
+export function useSetProjectKind() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, kind }: { projectId: string; kind: ProjectKind }) =>
+      unwrap(commands.setProjectKind(projectId, kind)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   });
 }

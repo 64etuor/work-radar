@@ -4,7 +4,7 @@ use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    CreateProjectInput, CreateRepoInput, Project, Repo, SetProjectCalendarColorInput,
+    CreateProjectInput, CreateRepoInput, Project, ProjectKind, Repo, SetProjectCalendarColorInput,
     SetProjectDefaultWriteCalendarInput, WorkSignal,
 };
 use crate::notion::normalize_notion_db_id;
@@ -88,6 +88,70 @@ pub async fn create_project(
             other => AppError::from(other),
         }
     })
+}
+
+/// 기존 프로젝트 이름 변경(`set_project_calendar_color` 미러). trim 후 빈 값 거부.
+/// 단일 컬럼 UPDATE — kind 토글과 독립이라 두 편집이 겹쳐도 서로 덮어쓰지 않는다(lost-update 방지).
+/// 알 수 없는 id는 `projects.not_found`.
+pub(crate) async fn set_project_name_core(
+    db: &Db,
+    project_id: &str,
+    name: &str,
+) -> Result<Project, AppError> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppError::validation(
+            "projects.invalid_input",
+            "empty project name",
+        ));
+    }
+    sqlx::query_as::<_, Project>(&format!(
+        "UPDATE projects SET name = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {PROJECT_COLS}"
+    ))
+    .bind(project_id)
+    .bind(name)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_project_name(
+    db: State<'_, Db>,
+    project_id: String,
+    name: String,
+) -> Result<Project, AppError> {
+    set_project_name_core(db.inner(), &project_id, &name).await
+}
+
+/// 기존 프로젝트 종류(개인/업무) 변경. 단일 컬럼 UPDATE — 이름 편집과 독립.
+/// `kind` 변경은 라우팅 카테고리만 이동시킬 뿐 기존 신호를 재태깅하지 않는다(신호는 자신의 kind를 보유).
+pub(crate) async fn set_project_kind_core(
+    db: &Db,
+    project_id: &str,
+    kind: ProjectKind,
+) -> Result<Project, AppError> {
+    sqlx::query_as::<_, Project>(&format!(
+        "UPDATE projects SET kind = ?2, updated_at = datetime('now') \
+         WHERE id = ?1 RETURNING {PROJECT_COLS}"
+    ))
+    .bind(project_id)
+    .bind(kind)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_project_kind(
+    db: State<'_, Db>,
+    project_id: String,
+    kind: ProjectKind,
+) -> Result<Project, AppError> {
+    set_project_kind_core(db.inner(), &project_id, kind).await
 }
 
 // 정본 = DESIGN.md §Colors. Life Wheel과 동일한 brand-aligned 패밀리 —
@@ -366,6 +430,50 @@ mod tests {
         .await
         .unwrap();
         assert!(reset.calendar_color.is_none());
+    }
+
+    /// 이름/kind per-field 편집: trim·공백거부·전환·미존재 id + 두 편집의 독립성(lost-update 방지).
+    #[tokio::test]
+    async fn set_project_name_and_kind_are_independent() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("Mirroless 오타", ProjectKind::Work))
+            .await
+            .unwrap();
+
+        // 1) 이름 변경(trim) — kind는 건드리지 않는다.
+        let renamed = set_project_name_core(&db, &proj.id, "  Mirrorless  ")
+            .await
+            .unwrap();
+        assert_eq!(renamed.name, "Mirrorless");
+        assert!(matches!(renamed.kind, ProjectKind::Work), "kind 불변");
+        assert_eq!(renamed.id, proj.id, "id 불변");
+
+        // 2) kind 전환(업무→개인) — 이름은 건드리지 않는다.
+        let switched = set_project_kind_core(&db, &proj.id, ProjectKind::Personal)
+            .await
+            .unwrap();
+        assert!(matches!(switched.kind, ProjectKind::Personal));
+        assert_eq!(switched.name, "Mirrorless", "이름 불변(독립 컬럼)");
+
+        // 3) 공백-only 이름 거부 — kind 변경은 보존된다(컬럼 분리).
+        let blank = set_project_name_core(&db, &proj.id, "   ")
+            .await
+            .unwrap_err();
+        assert_eq!(blank.code, "projects.invalid_input");
+        let after = fetch_projects(&db).await.unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].name, "Mirrorless");
+        assert!(matches!(after[0].kind, ProjectKind::Personal));
+
+        // 4) 알 수 없는 id → 두 커맨드 모두 projects.not_found.
+        let miss_name = set_project_name_core(&db, "does-not-exist", "x")
+            .await
+            .unwrap_err();
+        assert_eq!(miss_name.code, "projects.not_found");
+        let miss_kind = set_project_kind_core(&db, "does-not-exist", ProjectKind::Work)
+            .await
+            .unwrap_err();
+        assert_eq!(miss_kind.code, "projects.not_found");
     }
 
     #[tokio::test]

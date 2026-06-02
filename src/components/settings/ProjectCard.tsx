@@ -1,11 +1,11 @@
 import { CircleUserRound, FolderGit2, FolderOpen, Github, KeyRound, Plus } from "lucide-react";
-import { useState } from "react";
+import { type KeyboardEvent, useState } from "react";
 
-import type { Project, PromotionTarget } from "@/bindings";
-import { KindBadge } from "@/components/board/LifeWheelPalette";
+import type { Project, ProjectKind, PromotionTarget } from "@/bindings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
 import {
   calendarColorStyle,
@@ -17,13 +17,15 @@ import {
   useProjectTokenStatus,
   useRepos,
   useSetProjectCalendarColor,
+  useSetProjectKind,
+  useSetProjectName,
   useTestNotionConnection,
 } from "@/lib/query";
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 
 import { AddRepoForm } from "./AddRepoForm";
 import { GoogleAccountBlock } from "./GoogleAccountBlock";
-import { SectionLabel } from "./SettingsKit";
+import { SectionLabel, Segmented } from "./SettingsKit";
 import { TokenRow } from "./TokenRow";
 
 /** Notion DB 연결 테스트 버튼 + 인라인 결과. */
@@ -185,6 +187,103 @@ function ProjectCalendarColorControl({
   );
 }
 
+/**
+ * 프로젝트 이름(더블클릭 인라인 편집) + 종류(개인/업무 Segmented 즉시 전환).
+ * 이름: Enter/blur 저장, Esc 취소(셸 window-level Esc로 버블 방지), 공백 이름 거부.
+ * kind: 토글 즉시 mutate — 라우팅 카테고리만 이동(기존 신호 재태깅 없음).
+ */
+function ProjectIdentityEditor({
+  project,
+  onToast,
+}: {
+  project: Project;
+  onToast: (msg: string) => void;
+}) {
+  const setName = useSetProjectName();
+  const setKind = useSetProjectKind();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(project.name);
+
+  const beginEdit = () => {
+    setDraft(project.name);
+    setEditing(true);
+  };
+
+  // 이름·kind는 각각 단일 컬럼만 갱신하는 독립 커맨드 → 교차 필드(stale prop)를 읽지 않는다(lost-update 방지).
+  const commitName = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return; // 빈 이름 거부 — 편집 모드 유지(테두리 경고).
+    if (trimmed === project.name) {
+      setEditing(false);
+      return;
+    }
+    setName.mutate(
+      { projectId: project.id, name: trimmed },
+      {
+        onSuccess: () => setEditing(false),
+        onError: () => onToast("이름 저장 실패"),
+      },
+    );
+  };
+
+  const onNameKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitName();
+    } else if (e.key === "Escape") {
+      e.stopPropagation(); // App 셸 window-level Esc(보드 복귀/창 숨김)로 버블 방지.
+      setEditing(false);
+    }
+  };
+
+  const changeKind = (kind: ProjectKind) => {
+    if (kind === project.kind) return;
+    setKind.mutate({ projectId: project.id, kind }, { onError: () => onToast("종류 저장 실패") });
+  };
+
+  const empty = !draft.trim();
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {editing ? (
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onNameKeyDown}
+          onBlur={commitName}
+          onFocus={(e) => e.currentTarget.select()}
+          autoFocus
+          disabled={setName.isPending}
+          aria-invalid={empty || undefined}
+          aria-label="프로젝트 이름"
+          className={cn(
+            "h-auto min-w-0 flex-1 border-0 border-b bg-transparent px-0 py-0 outline-none",
+            "text-[17px] leading-tight font-semibold tracking-[-0.01em] disabled:opacity-50",
+            empty ? "border-destructive" : "border-input focus:border-ring focus:border-b-2",
+          )}
+        />
+      ) : (
+        <span
+          className="cursor-text truncate text-[17px] leading-tight font-semibold tracking-[-0.01em]"
+          onDoubleClick={beginEdit}
+          title="더블클릭하여 이름 편집"
+        >
+          {project.name}
+        </span>
+      )}
+      <Segmented
+        value={project.kind}
+        onChange={changeKind}
+        options={[
+          { value: "personal", label: "개인" },
+          { value: "work", label: "업무" },
+        ]}
+        size="sm"
+      />
+    </div>
+  );
+}
+
 /** 프로젝트 한 장: 토큰(Notion/GitHub) + Notion DB + Google 계정 + 레포. */
 export function ProjectCard({
   project,
@@ -204,12 +303,7 @@ export function ProjectCard({
           <FolderOpen className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-[17px] leading-tight font-semibold tracking-[-0.01em]">
-              {project.name}
-            </span>
-            <KindBadge kind={project.kind} className="px-2.5 py-0.5 text-xs" />
-          </div>
+          <ProjectIdentityEditor project={project} onToast={onToast} />
           <p className="text-muted-foreground mt-1 text-xs leading-5">
             토큰은 OS keychain에 저장하고, Notion/GitHub/Google 계정 연결은 이 프로젝트 범위에서만
             사용합니다.
