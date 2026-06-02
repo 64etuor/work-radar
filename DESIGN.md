@@ -104,6 +104,23 @@ Cohere does not use gradients as a generic UI fill. Gradients and color fields a
 - Use uppercase mono labels for category and system markers, especially on product and research pages.
 - Editorial pages can use coral chips and blue links, but the base typography remains black and measured.
 
+### App Surface Type (work-radar shell)
+
+The dense desktop shell runs **tighter and heavier** than the marketing scale above — this is intentional editorial density for an information-dense command surface, and it overrides the "avoid heavy bold" principle _for app-shell UI only_ (marketing/display type still follows the Hierarchy table above). These roles are codified as `typo-*` utilities in `src/styles/typography.css`, whose values reference `--text-*`/`--leading-*`/`--tracking-*` tokens in `src/styles/tokens.css`.
+
+| Utility            |  px | weight | line | tracking | Use                                           |
+| ------------------ | --: | -----: | ---: | -------: | --------------------------------------------- |
+| `typo-title-md`    |  17 |    600 | 1.25 |  -0.01em | Card/section titles (project cards).          |
+| `typo-title-sm`    |  15 |    600 |  1.3 |  -0.01em | Secondary titles.                             |
+| `typo-body-md`     |  13 |    400 |  1.4 |        0 | Default dense body.                           |
+| `typo-body-strong` |  13 |    600 |  1.4 |        0 | Emphasized body / inline headers.             |
+| `typo-label-sm`    |  12 |    500 |  1.4 |        0 | Form labels, compact UI.                      |
+| `typo-caption-sm`  |  11 |    400 |  1.4 |        0 | Metadata, captions.                           |
+| `typo-mono-label`  |  11 |    600 |  1.4 |   0.12em | Uppercase mono section markers (`font-mono`). |
+| `typo-micro`       |  10 |    400 |  1.4 |        0 | Microcopy, footers.                           |
+
+Rule: author with the `typo-*` utility, never re-combine raw `text-/font-/leading-/tracking-` for these roles. `typo-*` sets type only; pair with a color utility (`text-foreground`, `text-muted-foreground`, …). See `docs/areas/typography.md`.
+
 ## Layout
 
 ### Spacing System
