@@ -12,6 +12,7 @@ import {
   proposeDecision, requestReview, approve, reject, conflicts, why, history, chooseOption,
 } from "../decision/handlers.ts";
 import { escalate } from "../escalate/escalate.ts";
+import { pendingEscalations } from "../escalate/pending.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import {
@@ -296,6 +297,20 @@ server.registerTool(
       randFn(),
     );
     return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }] };
+  },
+);
+
+// v2 slice1B — READ-ONLY: the outbound Telegram adapter reads pending escalations from here
+// (no markdown parsing in Python; the token format stays in TS).
+server.registerTool(
+  "pending_escalations",
+  {
+    description: "미해소 Type 0 에스컬레이션 목록 (decision_blocked, verdict 없음) — read-only, bridge용",
+    inputSchema: {},
+  },
+  async () => {
+    const list = await pendingEscalations(WORKSPACE);
+    return { content: [{ type: "text", text: JSON.stringify(list) }] };
   },
 );
 
