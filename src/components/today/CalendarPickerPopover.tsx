@@ -88,7 +88,7 @@ export function CalendarPickerPopover({ open, anchor, signalProjectId, onPick, o
               key={c.id}
               type="button"
               className={`w-full rounded px-2 py-1 text-left text-xs transition-colors ${
-                active ? "bg-wr-accent-soft" : "hover:bg-wr-bg-soft"
+                active ? "bg-wr-accent-soft" : "hover:bg-hover"
               }`}
               onClick={() => setPicked(c.id)}
             >
