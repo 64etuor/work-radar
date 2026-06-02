@@ -23,3 +23,6 @@ workspace/.bridge/
 
 # Python bytecode from the bridge scripts/tests
 bridge/__pycache__/
+
+# Derived task projection (rebuildable from events via renderTasks)
+workspace/state/*.json
