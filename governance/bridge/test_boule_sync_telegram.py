@@ -38,6 +38,39 @@ class BuildNormalizedEvent(unittest.TestCase):
         self.assertEqual(ne["workspace_title"], "Boule")
 
 
+class RenderDetail(unittest.TestCase):
+    """Compact format: numbered option + its full reply token on ONE line, no blank lines
+    between options, recommendation inline. The reply token stays the exact 4-field string
+    (the inbound interceptor matches it by equality), so it must survive verbatim."""
+
+    def test_token_is_on_same_line_as_numbered_label(self):
+        detail = bridge._render_detail(_esc())
+        self.assertIn("1) sqlite  BOULE:evt_b:evt_d:opt0", detail)
+        self.assertIn("2) postgres  BOULE:evt_b:evt_d:opt1", detail)
+
+    def test_no_blank_lines_between_options(self):
+        esc = _esc()
+        esc["agentRecommendation"] = "sqlite"
+        body = bridge._render_detail(esc).splitlines()
+        opt_idx = [i for i, ln in enumerate(body) if ln.startswith(("1)", "2)"))]
+        self.assertEqual(opt_idx, [3, 4])  # contiguous: question, blank, prompt, opt1, opt2
+        self.assertEqual(body[-1], "(추천: sqlite)")
+
+    def test_omits_recommendation_line_when_absent(self):
+        self.assertNotIn("추천", bridge._render_detail(_esc()))
+
+    def test_renders_description_as_indented_subline_when_present(self):
+        esc = _esc()
+        esc["options"][0]["description"] = "단일 파일, 가벼움"
+        detail = bridge._render_detail(esc)
+        self.assertIn("1) sqlite  BOULE:evt_b:evt_d:opt0\n   단일 파일, 가벼움", detail)
+
+    def test_omits_description_subline_when_absent_or_blank(self):
+        esc = _esc()
+        esc["options"][1]["description"] = "   "  # whitespace-only → omitted
+        self.assertNotIn("\n   ", bridge._render_detail(esc))
+
+
 class Dedup(unittest.TestCase):
     def test_already_sent_blocked_ids_are_skipped(self):
         with tempfile.TemporaryDirectory() as d:

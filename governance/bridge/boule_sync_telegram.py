@@ -114,14 +114,15 @@ def select_unsent(pending: list[dict[str, Any]], sent: dict[str, Any], *, limit:
 
 
 def _render_detail(esc: dict[str, Any]) -> str:
-    lines = [esc.get("question", ""), "", "고른 항목의 코드만 그대로 답장하세요:"]
-    for o in esc.get("options", []):
-        lines.append("")
-        lines.append(f"[{o.get('token')}] {o.get('label')}")
-        lines.append(o.get("reply", ""))
+    lines = [esc.get("question", ""), "", "아래 코드 한 줄을 그대로 답장:"]
+    for i, o in enumerate(esc.get("options", [])):
+        lines.append(f"{i + 1}) {o.get('label')}  {o.get('reply', '')}")
+        desc = (o.get("description") or "").strip()
+        if desc:
+            lines.append(f"   {desc}")
     rec = esc.get("agentRecommendation")
     if rec:
-        lines += ["", f"(추천: {rec})"]
+        lines.append(f"(추천: {rec})")
     return "\n".join(lines)
 
 
