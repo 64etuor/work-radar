@@ -972,6 +972,7 @@ function SkillCard({
   return (
     <button
       type="button"
+      aria-pressed={active}
       className={cn("skl-card", listView ? "list" : "grid", active && "active")}
       onClick={onSelect}
     >
