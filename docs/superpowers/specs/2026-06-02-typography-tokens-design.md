@@ -81,10 +81,10 @@ Inventory of `src/**`: size histogram `text-[13px]`×32, `[11px]`×25, `[12px]`�
 
 Replace the triplicated title style with `typo-title-md`:
 
-- `src/components/settings/ProjectCard.tsx` — the inline `<input>` (edit mode) and the `<span>` (view mode).
-- `src/components/settings/AddProjectForm.tsx:67` — the `<CardTitle>`.
+- `src/components/settings/ProjectCard.tsx` — the inline `<input>` (edit mode) and the `<span>` (view mode). **ADOPTED** — neither site carries a conflicting base type utility, so the recipe applies fully (17px / 600 / 1.25 / -0.01em).
+- `src/components/settings/AddProjectForm.tsx` — the `<CardTitle>`. **DEFERRED** (incremental): shadcn `CardTitle`'s base `text-base leading-none` is emitted *after* our `@utility typo-title-md` in the compiled cascade (verified via dist byte offsets: `typo-title-md`≈31835 < `text-base`≈32111 < `leading-none`≈33113), so the base would override the recipe to 16px/lh-1 — a regression. Left on its original arbitrary classes with a code comment; migrate when CardTitle's base type is reconciled.
 
-`typo-title-md` is defined to equal the **current computed values** (17px / 600 / line-height 1.25 / -0.01em), so this is a **zero-visual-change** swap — verified by computing the resolved CSS, not by eyeballing.
+`typo-title-md` is defined to equal the **current computed values** (17px / 600 / line-height 1.25 / -0.01em), so the two adopted swaps are **zero-visual-change** — verified by computing the resolved CSS cascade (dist offsets above), not by eyeballing.
 
 ## AI authoring rules (added to AGENTS.md or a `docs/areas/` doc)
 

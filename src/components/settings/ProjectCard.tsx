@@ -258,13 +258,13 @@ function ProjectIdentityEditor({
           aria-label="프로젝트 이름"
           className={cn(
             "h-auto min-w-0 flex-1 border-0 border-b bg-transparent px-0 py-0 outline-none",
-            "text-[17px] leading-tight font-semibold tracking-[-0.01em] disabled:opacity-50",
+            "typo-title-md disabled:opacity-50",
             empty ? "border-destructive" : "border-input focus:border-ring focus:border-b-2",
           )}
         />
       ) : (
         <span
-          className="cursor-text truncate text-[17px] leading-tight font-semibold tracking-[-0.01em]"
+          className="typo-title-md cursor-text truncate"
           onDoubleClick={beginEdit}
           title="더블클릭하여 이름 편집"
         >

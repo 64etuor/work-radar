@@ -64,6 +64,9 @@ export function AddProjectForm({
     <Card className="overflow-hidden rounded-2xl">
       <CardHeader className="border-border border-b p-5">
         <SectionLabel>프로젝트 추가</SectionLabel>
+        {/* typo-title-md deferred here: shadcn CardTitle's base `text-base leading-none` sorts
+            AFTER our @utility in the compiled cascade and would override it to 16px/lh-1. Migrate
+            when CardTitle's base type is reconciled. See docs/areas/typography.md (incremental). */}
         <CardTitle className="mt-1 text-[17px] leading-tight tracking-[-0.01em]">
           새 프로젝트
         </CardTitle>
