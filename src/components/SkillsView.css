@@ -26,6 +26,7 @@
 }
 .skl-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 0 18px 12px;
@@ -36,6 +37,7 @@
   align-items: center;
   gap: 7px;
   flex: 1;
+  min-width: 160px;
   max-width: 320px;
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-sm);
