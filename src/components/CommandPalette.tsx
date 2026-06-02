@@ -25,7 +25,12 @@ import { useUIStore } from "@/store";
  * 오버레이 backdrop 클릭 또는 Esc로 닫힌다(닫힘은 App 셸이 처리).
  */
 export function CommandPalette() {
-  const { goTo, goToSkill, goToSignal, setPaletteOpen } = useUIStore();
+  const { goTo, goToSkill, goToSignal, setPaletteOpen, setInboxOpen } = useUIStore();
+  // Inbox는 뷰가 아니라 에이전트 바 트레이 — 팔레트를 닫고 트레이를 연다(goTo 대체).
+  const openInbox = () => {
+    setPaletteOpen(false);
+    setInboxOpen(true);
+  };
   const projects = useProjects();
   const keymap = useNavKeymap();
   // SkillsView와 동일 쿼리(["skills"]) — react-query가 키로 dedup하므로 중복 fetch 없음.
@@ -49,7 +54,7 @@ export function CommandPalette() {
         .slice(0, 8)
     : [];
   const recentActions = recentCommands()
-    .map((label) => ({ label, action: actionForRecent(label, goTo) }))
+    .map((label) => ({ label, action: actionForRecent(label, goTo, openInbox) }))
     .filter((item): item is { label: string; action: () => void } => !!item.action);
 
   const runCommand = (label: string, action: () => void) => {
@@ -97,7 +102,7 @@ export function CommandPalette() {
             <CommandGroup heading="추천 액션">
               <CommandItem
                 value="inbox unread alert 알림"
-                onSelect={() => runCommand("Inbox", () => goTo("inbox"))}
+                onSelect={() => runCommand("Inbox", openInbox)}
               >
                 <Blocks className="text-wr-subtle size-4" />
                 <span>Inbox 확인</span>
@@ -237,8 +242,9 @@ function recentCommands(): string[] {
 function actionForRecent(
   label: string,
   goTo: ReturnType<typeof useUIStore.getState>["goTo"],
+  openInbox: () => void,
 ): (() => void) | null {
-  if (label === "Inbox") return () => goTo("inbox");
+  if (label === "Inbox") return openInbox;
   if (label === "PR Radar") return () => goTo("radar");
   if (label === "프로젝트 추가") return () => goTo("settings", "add_project");
   if (label === "레포 추가") return () => goTo("settings", "add_repo");

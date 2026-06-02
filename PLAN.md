@@ -301,6 +301,11 @@ paste는 fallback.
 
 ### Phase 15 — Capture / Inbox UX
 
+> **Note(2026-06-02):** Inbox는 라우팅 페이지가 아니라 **에이전트 바 벨 버튼 Popover 트레이**(source별
+> 아코디언)다. 소스 로스터는 고정하지 않고 **점진 추가**한다(현재 PR Radar + notification mirror).
+> agent-failure/AI-escalation/reminder 등을 inbox에 producer로 넣는 것은 계획 범위 아님(필요 시 사용자가
+> 점진 추가). 설계 정본: `docs/superpowers/specs/2026-06-02-inbox-accordion-tray-design.md`.
+
 **Goal:** 미분류 전체 일괄 enrich + 브레인덤프 편집/삭제.
 **Deliverables:** (4) `trigger_enrich_all` 단일 codex 배치 잡(suggested-only, 부분 실패 격리, Acceptance 게이트) +
 "전체 제안 실행" 버튼 · (5) `update_signal_title`(dedup 갱신)+`delete_signal`(하드, archive와 구분).

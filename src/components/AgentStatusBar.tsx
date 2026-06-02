@@ -16,7 +16,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentRunView, AgentStatus, Engine } from "@/bindings";
 import { useHermesTabsStore } from "@/components/hermes/useHermesTabsStore";
+import { InboxTray } from "@/components/inbox/InboxTray";
 import { isActiveJobStatus, isFinishedJobStatus } from "@/components/jobs/jobsConstants";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { type BoxState, overflowSplit, progressRatio } from "@/lib/agentBar";
 import { useAgentRuns, useInboxCounts } from "@/lib/query";
 import { useAgentNames, useSetAgentName } from "@/lib/query/agentsConfig";
@@ -128,6 +130,8 @@ function runToBox(run: AgentRunView): SessionBox {
 export function AgentStatusBar() {
   const { goTo, setCalendarOpen } = useUIStore();
   const setOpenAgentRunId = useUIStore((s) => s.setOpenAgentRunId);
+  const inboxOpen = useUIStore((s) => s.inboxOpen);
+  const setInboxOpen = useUIStore((s) => s.setInboxOpen);
   const runs = useAgentRuns();
   const inboxCounts = useInboxCounts();
   const list = useMemo(() => runs.data ?? [], [runs.data]);
@@ -300,6 +304,7 @@ export function AgentStatusBar() {
   // 캘린더 트리거 — 바 최우측 상주 아이콘(단축키 ⌘⇧C와 동일 전역 토글). 어느 뷰에서나.
   const calendarBtn = (
     <button
+      key="asb-cal"
       type="button"
       className="asb-cal"
       onClick={() => setCalendarOpen(true)}
@@ -310,17 +315,31 @@ export function AgentStatusBar() {
     </button>
   );
   const unreadInbox = inboxCounts.data?.unread ?? 0;
+  // 벨 = Popover 트리거 → Inbox 트레이 아코디언(뷰 이동 아님). 컨트롤드 open(store)로 팔레트/단축키도 토글.
+  // Popover Content는 overlay-stack 마커(data-wr-overlay-open) + radix Esc 닫기·트리거 포커스 복원을 내장.
   const inboxBtn = (
-    <button
-      type="button"
-      className="asb-inbox"
-      onClick={() => goTo("inbox")}
-      title={unreadInbox > 0 ? `Inbox unread ${unreadInbox}` : "Inbox"}
-      aria-label={unreadInbox > 0 ? `Inbox unread ${unreadInbox}` : "Inbox 열기"}
-    >
-      <Inbox size={15} strokeWidth={1.5} />
-      {unreadInbox > 0 && <span className="asb-badge">{unreadInbox}</span>}
-    </button>
+    // 안정 key: 빈/비빈 상태 두 return 분기에서 React가 위치가 아니라 key로 매칭 → boxes 0↔N 전이에도
+    // Popover 인스턴스(트레이 open 상태) 보존(remount로 트레이가 닫히는 회귀 차단).
+    <Popover key="asb-inbox" open={inboxOpen} onOpenChange={setInboxOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="asb-inbox"
+          title={unreadInbox > 0 ? `Inbox unread ${unreadInbox}` : "Inbox"}
+          aria-label={unreadInbox > 0 ? `Inbox unread ${unreadInbox}` : "Inbox 열기"}
+        >
+          <Inbox size={15} strokeWidth={1.5} />
+          {unreadInbox > 0 && <span className="asb-badge">{unreadInbox}</span>}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="w-[360px] p-0 shadow-[0_8px_22px_rgba(15,20,40,0.12)]"
+      >
+        <InboxTray onClose={() => setInboxOpen(false)} />
+      </PopoverContent>
+    </Popover>
   );
 
   // ⊕ 칩 — hermes 박스 그룹 우측, cap 미달 시만 표시. 표시 전용(INVARIANT #1).

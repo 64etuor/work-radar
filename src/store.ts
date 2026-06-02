@@ -4,7 +4,6 @@ import { create } from "zustand";
 export type View =
   | "board"
   | "today"
-  | "inbox"
   | "weekly"
   | "retro"
   | "routines"
@@ -75,6 +74,9 @@ interface UIState {
   /** 캘린더 드로어 열림(전역) — 에이전트 바 우측 아이콘/단축키로 토글, 어느 뷰에서나. 표시 전용. */
   calendarOpen: boolean;
   setCalendarOpen: (open: boolean) => void;
+  /** Inbox 트레이 열림(전역) — 에이전트 바 벨 버튼 Popover로 펼침, 어느 뷰에서나. 표시 전용(INVARIANT #1). */
+  inboxOpen: boolean;
+  setInboxOpen: (open: boolean) => void;
   /** 전역 에이전트 결과 모달 — 현재 열린 agent_runs row id (없으면 null).
    * 에이전트 바 박스를 클릭하면 set. 모달이 닫히면 null + 종료 잡이면 ack.
    * 자동 오픈 금지(INVARIANT #1 표시 전용 — 사람이 클릭해야 결과를 본다). */
@@ -116,6 +118,8 @@ export const useUIStore = create<UIState>((set) => ({
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   calendarOpen: false,
   setCalendarOpen: (calendarOpen) => set({ calendarOpen }),
+  inboxOpen: false,
+  setInboxOpen: (inboxOpen) => set({ inboxOpen }),
   openAgentRunId: null,
   setOpenAgentRunId: (openAgentRunId) => set({ openAgentRunId }),
   settingsIntent: "open",

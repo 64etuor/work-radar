@@ -6,7 +6,6 @@ import {
   GitCompare,
   GitPullRequest,
   History,
-  Inbox,
   LayoutGrid,
   type LucideIcon,
   Repeat,
@@ -21,7 +20,7 @@ import type { View } from "@/store";
  * 이 한 곳을 소비한다 — 뷰 목록/라벨/기본 단축키가 흩어지지 않게(중복 제거).
  *
  * 그룹핑(consolidation): 네비를 의미 단위로 묶는다 — 실제 capability 삭제는 없다(보수적).
- *   운영(operate)  : board / today / inbox — 매일 쓰는 결정·실행 표면
+ *   운영(operate)  : board / today — 매일 쓰는 결정·실행 표면 (Inbox는 에이전트 바 트레이로 이전 — EXTRA_ACTIONS)
  *   리뷰(review)   : weekly / retro / routines    — 돌아보기·집계
  *   코드(code)     : radar / worktree / jobs      — PR·워크트리·에이전트 잡
  *   외부(connect)  : skills                       — 스킬 레지스트리
@@ -68,14 +67,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: CalendarCheck,
     group: "operate",
     defaultShortcut: "Cmd+2",
-  },
-  {
-    view: "inbox",
-    label: "Inbox",
-    search: "inbox 알림 인박스 alert notification escalation 운영 메모리",
-    icon: Inbox,
-    group: "operate",
-    defaultShortcut: "Cmd+3",
   },
   {
     view: "weekly",
@@ -161,12 +152,15 @@ export interface ExtraAction {
   /** keymap 키(view와 겹치지 않는 액션 식별자). */
   key: string;
   label: string;
-  defaultShortcut: string;
+  /** 기본 단축키(없으면 미할당 — 설정 키맵에서 바인딩). */
+  defaultShortcut?: string;
 }
 
-/** 캘린더 등 view-비귀속 단축키. App의 onAction이 key로 분기해 처리한다. */
+/** 캘린더·Inbox 등 view-비귀속 단축키. App의 onAction이 key로 분기해 처리한다. */
 export const EXTRA_ACTIONS: ExtraAction[] = [
   { key: "calendar", label: "캘린더 열기/닫기", defaultShortcut: "Cmd+Shift+C" },
+  // Inbox 트레이 토글 — 기본 단축키 없음(⌘⇧I는 WebView 개발자도구 바인딩이라 충돌 회피; 설정에서 바인딩).
+  { key: "inbox", label: "Inbox 열기/닫기" },
 ];
 
 /** 기본 keymap(action → shortcut). 저장된 keymap이 없을 때 폴백. view + EXTRA_ACTIONS. */

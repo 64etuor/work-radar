@@ -36,11 +36,18 @@ describe("defaultKeymap", () => {
   it("defaultShortcut이 있는 view와 extra action만 매핑한다", () => {
     const km = defaultKeymap();
     const withShortcut = NAV_ITEMS.filter((n) => n.defaultShortcut);
+    const extraWithShortcut = EXTRA_ACTIONS.filter((a) => a.defaultShortcut);
     // knob 엔트리 5개(knob_left/right/up/down + knob_trigger)가 추가됨.
     const knobCount = KNOB_DIRECTIONS.length + 1; // 4방향 + 트리거
-    expect(Object.keys(km)).toHaveLength(withShortcut.length + EXTRA_ACTIONS.length + knobCount);
+    expect(Object.keys(km)).toHaveLength(
+      withShortcut.length + extraWithShortcut.length + knobCount,
+    );
     for (const n of withShortcut) expect(km[n.view]).toBe(n.defaultShortcut);
-    for (const a of EXTRA_ACTIONS) expect(km[a.key]).toBe(a.defaultShortcut);
+    for (const a of extraWithShortcut) expect(km[a.key]).toBe(a.defaultShortcut);
+    // defaultShortcut 없는 extra action(예: inbox 트레이)은 keymap 미할당 — 설정에서 바인딩.
+    for (const a of EXTRA_ACTIONS.filter((a) => !a.defaultShortcut)) {
+      expect(km[a.key]).toBeUndefined();
+    }
   });
 
   it("조합 단축키 기본값을 보존한다 (board = 'Cmd+1')", () => {

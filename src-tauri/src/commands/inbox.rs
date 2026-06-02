@@ -1,8 +1,9 @@
 //! Unified Inbox store + IPC commands.
 //!
-//! Inbox is local operational memory: alerts, AI escalations, workflow failures,
-//! review requests, reminders, and native-notification mirrors. It does not
-//! mutate external systems or matrix decisions.
+//! Inbox is local operational memory: user-visible alerts and native-notification
+//! mirrors, surfaced as an agent-bar tray (not a routed page). Sources are added
+//! incrementally — currently PR Radar alerts + notification mirror; there is no fixed
+//! source roster. It does not mutate external systems or matrix decisions (INVARIANT #1).
 
 use tauri::State;
 

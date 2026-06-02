@@ -10,7 +10,6 @@ import { CmdKnob } from "@/components/CmdKnob";
 import { CommandPalette } from "@/components/CommandPalette";
 import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
 import HermesView from "@/components/HermesView";
-import { InboxView } from "@/components/InboxView";
 import { JobsView } from "@/components/jobs/JobsView";
 import { NewsTicker } from "@/components/news/NewsTicker";
 import { PrRadarView } from "@/components/PrRadarView";
@@ -43,7 +42,6 @@ const VIEW_SLIDE_CLEANUP_MS = 460;
 function renderView(renderedView: View) {
   if (renderedView === "settings") return <SettingsView />;
   if (renderedView === "today") return <TodayView />;
-  if (renderedView === "inbox") return <InboxView />;
   if (renderedView === "weekly") return <WeeklyView />;
   if (renderedView === "retro") return <RetroView />;
   if (renderedView === "routines") return <RoutineTrackingView />;
@@ -65,8 +63,18 @@ export default function App() {
   // share the same store state without duplicate listener registrations.
   useHermesTabsBootstrap();
 
-  const { view, paletteOpen, setPaletteOpen, goTo, theme, font, calendarOpen, setCalendarOpen } =
-    useUIStore();
+  const {
+    view,
+    paletteOpen,
+    setPaletteOpen,
+    goTo,
+    theme,
+    font,
+    calendarOpen,
+    setCalendarOpen,
+    inboxOpen,
+    setInboxOpen,
+  } = useUIStore();
   const [viewSnapshot, setViewSnapshot] = useState<ViewSnapshot | null>(null);
   const viewSnapshotIdRef = useRef(0);
   const transitionRunningRef = useRef(false);
@@ -130,6 +138,7 @@ export default function App() {
     !paletteOpen,
     (action) => {
       if (action === "calendar") setCalendarOpen(!calendarOpen);
+      else if (action === "inbox") setInboxOpen(!inboxOpen);
       else navigateView(action as View, "neutral");
     },
     (dir) => {
