@@ -759,3 +759,18 @@
 .skl-diff-equal {
   color: var(--color-wr-muted);
 }
+
+/* ── 키보드 포커스(a11y) — 디자인 시스템 관례(.asb-box/.tl-block) 일치, 가시 ring.
+   검색/배치-태그 input은 outline:none이라 컨테이너가 focus-within으로 대신 표시한다. ── */
+.skl-search:focus-within,
+.skl-batch-tag:focus-within {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 1px;
+}
+.skl-env:focus-visible,
+.skl-card:focus-visible,
+.skl-sheet-switch-chip:focus-visible,
+.skl-card-check:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 2px;
+}

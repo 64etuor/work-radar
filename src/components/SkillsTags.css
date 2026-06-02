@@ -102,3 +102,11 @@
   color: inherit;
   outline: none;
 }
+
+/* 키보드 포커스(a11y) — pill/chip/태그 input 가시 ring(디자인 시스템 관례 일치). */
+.skl-tagpill:focus-visible,
+.skl-tag-chip:focus-visible,
+.skl-tag-input:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 2px;
+}
