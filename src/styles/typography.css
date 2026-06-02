@@ -1,0 +1,64 @@
+/*
+ * App Surface typography recipes (DESIGN.md §App Surface Type).
+ * One @utility per role = size+weight+line+tracking bundled, referencing tokens.css @theme vars.
+ * Authoring rule: use these; never hand-combine raw text-/font-/leading-/tracking- for these roles.
+ * typo-* sets type only — pair with a color utility (text-foreground, …). See docs/areas/typography.md.
+ */
+
+@utility typo-title-md {
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-title-md);
+}
+
+@utility typo-title-sm {
+  font-size: var(--text-title-sm);
+  line-height: var(--leading-title-sm);
+  font-weight: 600;
+  letter-spacing: var(--tracking-title-sm);
+}
+
+@utility typo-body-md {
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+  font-weight: 400;
+  letter-spacing: var(--tracking-body-md);
+}
+
+@utility typo-body-strong {
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-body-md);
+}
+
+@utility typo-label-sm {
+  font-size: var(--text-label-sm);
+  line-height: var(--leading-label-sm);
+  font-weight: 500;
+  letter-spacing: var(--tracking-label-sm);
+}
+
+@utility typo-caption-sm {
+  font-size: var(--text-caption-sm);
+  line-height: var(--leading-caption-sm);
+  font-weight: 400;
+  letter-spacing: var(--tracking-caption-sm);
+}
+
+@utility typo-mono-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption-sm);
+  line-height: var(--leading-caption-sm);
+  font-weight: 600;
+  letter-spacing: var(--tracking-mono-label);
+  text-transform: uppercase;
+}
+
+@utility typo-micro {
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+  font-weight: 400;
+  letter-spacing: var(--tracking-micro);
+}
