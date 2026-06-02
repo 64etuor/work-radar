@@ -57,7 +57,17 @@ export function HotkeyCapture({ value, onChange, label, description }: HotkeyCap
           aria-label={label ? `${label} 핫키 캡처` : "핫키 캡처"}
           title={recording ? "단축키를 누르세요 (Esc = 취소)" : "클릭 후 단축키 입력"}
         >
-          {recording ? "🔴 단축키를 누르세요…" : value || "캡처하려면 클릭"}
+          {recording ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="size-2 shrink-0 rounded-full bg-[color:var(--destructive)]"
+              />
+              단축키를 누르세요…
+            </span>
+          ) : (
+            value || "캡처하려면 클릭"
+          )}
         </button>
       </div>
       {description && <p className="text-muted-foreground text-xs">{description}</p>}
