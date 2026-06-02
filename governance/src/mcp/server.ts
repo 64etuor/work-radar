@@ -207,9 +207,9 @@ server.registerTool(
 
 server.registerTool(
   "supersede_plan",
-  { description: "plan을 superseded로 (새 plan이 대체, terminal)", inputSchema: { planId: z.string() } },
-  async ({ planId }) => {
-    const r = await supersedePlan(WORKSPACE, { planId }, nowFn(), randFn());
+  { description: "plan을 superseded로 (새 plan이 대체, terminal). supersededBy=대체하는 새 plan id (필수)", inputSchema: { planId: z.string(), supersededBy: z.string() } },
+  async ({ planId, supersededBy }) => {
+    const r = await supersedePlan(WORKSPACE, { planId, supersededBy }, nowFn(), randFn());
     return { content: [{ type: "text", text: r.ok ? `superseded: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
   },
 );
@@ -230,7 +230,8 @@ server.registerTool(
   async ({ planId }) => {
     const t = await planTrail(WORKSPACE, { planId });
     const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
-    return { content: [{ type: "text", text: `${t.planId} [${t.phase}] ${t.title}\n${chain}` }] };
+    const sup = t.supersededBy ? `\n  superseded-by: ${t.supersededBy}` : "";
+    return { content: [{ type: "text", text: `${t.planId} [${t.phase}] ${t.title}${sup}\n${chain}` }] };
   },
 );
 

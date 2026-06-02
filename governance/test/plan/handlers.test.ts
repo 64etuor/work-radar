@@ -92,9 +92,29 @@ describe("plan handlers — Planner + lifecycle", () => {
     expect(open.map((p) => p.planId)).toEqual([a.planId]);
   });
 
-  it("supersede moves a draft to superseded (terminal)", async () => {
+  it("supersede records the replacing plan id (reconstructable lineage) + marks terminal", async () => {
     const { planId } = await proposePlan(dir, { intent: "X", steps: ["a"] }, at(0), 0.1);
-    expect((await supersedePlan(dir, { planId }, at(1), 0.2)).ok).toBe(true);
-    expect((await planTrail(dir, { planId })).phase).toBe("superseded");
+    const { planId: newer } = await proposePlan(dir, { intent: "X v2", steps: ["a", "b"] }, at(1), 0.2);
+    const r = await supersedePlan(dir, { planId, supersededBy: newer }, at(2), 0.3);
+    expect(r.ok).toBe(true);
+    const t = await planTrail(dir, { planId });
+    expect(t.phase).toBe("superseded");
+    expect(t.supersededBy).toBe(newer);
+    // the plan_superseded event carries the ref in frontmatter, NOT in related_to
+    const all = await readAllEvents(dir);
+    const supEvt = all.find((e) => e.frontmatter.type === "plan_superseded")!;
+    expect(supEvt.frontmatter.supersededBy).toBe(newer);
+    expect(supEvt.frontmatter.related_to).toEqual([planId]);
+    // the NEWER plan is NOT polluted — stays non-terminal (draft), no supersededBy
+    expect((await planTrail(dir, { planId: newer })).phase).toBe("draft");
+    expect((await planTrail(dir, { planId: newer })).supersededBy).toBeNull();
+  });
+
+  it("supersede is REFUSED without a replacing plan id, and writes nothing", async () => {
+    const { planId } = await proposePlan(dir, { intent: "X", steps: ["a"] }, at(0), 0.1);
+    const r = await supersedePlan(dir, { planId, supersededBy: "" }, at(1), 0.2);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/supersededBy|required/i);
+    expect((await readAllEvents(dir)).some((e) => e.frontmatter.type === "plan_superseded")).toBe(false);
   });
 });

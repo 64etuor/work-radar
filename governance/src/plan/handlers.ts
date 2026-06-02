@@ -94,13 +94,30 @@ export async function archivePlan(workspaceDir: string, input: { planId: string 
   return { ok: true, reason: gate.reason, eventId };
 }
 
-/** supersede_plan — any non-terminal → superseded (terminal). */
-export async function supersedePlan(workspaceDir: string, input: { planId: string }, now: Date, rand: number): Promise<PlanGateResult> {
+/** supersede_plan — any non-terminal → superseded (terminal). REQUIRES the replacing plan id so
+ *  the supersession lineage is reconstructable from events. The ref is recorded as `supersededBy`
+ *  on the plan_superseded event's frontmatter (NOT in related_to: related_to stays [oldPlanId] so
+ *  the event is scoped to the OLD plan; the new id in related_to would wrongly mark the new plan
+ *  superseded). Existence of the replacing plan is NOT validated here (dangling ref tolerated;
+ *  owner follow-up). */
+export async function supersedePlan(
+  workspaceDir: string, input: { planId: string; supersededBy: string }, now: Date, rand: number,
+): Promise<PlanGateResult> {
+  const supersededBy = input.supersededBy?.trim();
+  if (!supersededBy) return { ok: false, reason: "supersededBy (replacing plan id) is required" };
   const { state } = await loadPlan(workspaceDir, input.planId);
   const gate = canSupersede(state);
   if (!gate.ok) return { ok: false, reason: gate.reason };
-  const eventId = await writeLifecycle(workspaceDir, "plan_superseded", input.planId, `Superseded ${input.planId}`, now, rand);
-  return { ok: true, reason: gate.reason, eventId };
+  const id = generateId("evt", now, rand);
+  const evt: GovEvent = {
+    frontmatter: {
+      id, type: "plan_superseded", source: "hermes", actor: "user",
+      tags: ["plan"], related_to: [input.planId], supersededBy,
+    },
+    body: `Superseded ${input.planId} by ${supersededBy}`,
+  };
+  await writeEvent(workspaceDir, evt, now);
+  return { ok: true, reason: gate.reason, eventId: id };
 }
 
 export interface PlanSummary { planId: string; title: string; phase: PlanState["phase"]; }
@@ -118,7 +135,7 @@ export async function listPlans(workspaceDir: string): Promise<PlanSummary[]> {
 }
 
 export interface PlanTrailEntry { id: string; type: GovEvent["frontmatter"]["type"]; actor: string; summary: string; }
-export interface PlanTrail { planId: string; title: string; phase: PlanState["phase"]; chain: PlanTrailEntry[]; }
+export interface PlanTrail { planId: string; title: string; phase: PlanState["phase"]; supersededBy: string | null; chain: PlanTrailEntry[]; }
 
 /** plan <id> — full chronological trail. */
 export async function planTrail(workspaceDir: string, input: { planId: string }): Promise<PlanTrail> {
@@ -130,5 +147,7 @@ export async function planTrail(workspaceDir: string, input: { planId: string })
     id: e.frontmatter.id, type: e.frontmatter.type, actor: e.frontmatter.actor,
     summary: e.body.split("\n", 1)[0] ?? "",
   }));
-  return { planId: s.planId, title: s.title, phase: s.phase, chain };
+  const supersededEvt = grp.related.find((e) => e.frontmatter.type === "plan_superseded");
+  const supersededBy = supersededEvt?.frontmatter.supersededBy ?? null;
+  return { planId: s.planId, title: s.title, phase: s.phase, supersededBy, chain };
 }

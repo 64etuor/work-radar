@@ -41,6 +41,7 @@ export interface EventFrontmatter {
   actor: string;
   tags: string[];
   related_to?: string[];
+  supersededBy?: string;   // v3: plan_superseded → the replacing plan id (supersession lineage ref)
   confidence?: number;
   expires?: string;
 }
