@@ -2,6 +2,7 @@ import { sha256hex } from "../event/id.ts";
 import type { GovEvent } from "../event/event.ts";
 import { KIND, type CandidatePattern } from "./types.ts";
 import { parseScope } from "./scope.ts";
+import type { WriteOutcome } from "./write.ts";
 
 export interface DetectOptions {
   minEvidence: number; // emit only scopes with >= this many commits
@@ -66,4 +67,43 @@ export function detectPatterns(
   }
   patterns.sort((a, b) => a.scope.localeCompare(b.scope));
   return { patterns, droppedNoScope, scopesConsidered: groups.size };
+}
+
+export interface DetectDeps {
+  readEvents: () => Promise<readonly GovEvent[]>;
+  loadCuratedKeys: () => Promise<ReadonlySet<string>>;
+  writePattern: (p: CandidatePattern) => Promise<WriteOutcome>;
+  options: DetectOptions;
+}
+
+export interface DetectSummary {
+  written: number;
+  skipped: number;
+  candidates: number;
+  droppedNoScope: number;
+  scopesConsidered: number;
+}
+
+/** Orchestrate read → detect → write. Fail-soft on read (mirrors harvest). */
+export async function runDetect(deps: DetectDeps): Promise<DetectSummary> {
+  let events: readonly GovEvent[] = [];
+  try {
+    events = await deps.readEvents();
+  } catch {
+    events = [];
+  }
+  let curated: ReadonlySet<string> = new Set<string>();
+  try {
+    curated = await deps.loadCuratedKeys();
+  } catch {
+    curated = new Set<string>();
+  }
+  const { patterns, droppedNoScope, scopesConsidered } = detectPatterns(events, curated, deps.options);
+  let written = 0;
+  let skipped = 0;
+  for (const p of patterns) {
+    if ((await deps.writePattern(p)) === "written") written++;
+    else skipped++;
+  }
+  return { written, skipped, candidates: patterns.length, droppedNoScope, scopesConsidered };
 }

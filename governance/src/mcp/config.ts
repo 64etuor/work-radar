@@ -105,3 +105,24 @@ export function quorumCollisionWarning(
     `these labels share a reviewer command: [${colliding.join("; ")}]`
   );
 }
+
+/** Parse a positive integer env value; junk / <1 / unset → dflt. (Fail-closed clamp.) */
+export function parsePositiveInt(raw: string | undefined, dflt: number): number {
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) && n >= 1 ? n : dflt;
+}
+
+export interface PatternConfig {
+  minEvidence: number;
+  confFull: number;
+  evidenceCap: number;
+}
+
+/** Pattern detector knobs from env (safe defaults; evidenceCap is a fixed display cap). */
+export function parsePatternConfig(env: Record<string, string | undefined>): PatternConfig {
+  return {
+    minEvidence: parsePositiveInt(env.BOULE_PATTERN_MIN_EVIDENCE, 5),
+    confFull: parsePositiveInt(env.BOULE_PATTERN_CONF_FULL, 50),
+    evidenceCap: 20,
+  };
+}
