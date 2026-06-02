@@ -1,7 +1,10 @@
 import json
+import os
 import pathlib
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import boule_sync_telegram as bridge
 
@@ -49,6 +52,69 @@ class Dedup(unittest.TestCase):
     def test_limit_bounds_the_batch(self):
         batch = [_esc(blocked_id=f"evt_{i}") for i in range(5)]
         self.assertEqual(len(bridge.select_unsent(batch, {}, limit=2)), 2)
+
+
+class SendModeGuard(unittest.TestCase):
+    """A real send must be explicit (--live) AND target a persistent workspace; everything
+    else stays dry-run. This is what stops a smoke/test workspace reaching the live sink."""
+
+    REPO_WS = pathlib.Path(__file__).resolve().parent  # persistent: not under a temp root
+
+    def test_default_no_flags_is_dry_run(self):
+        self.assertTrue(bridge.resolve_send_mode(live=False, dry_run=False, workspace=self.REPO_WS))
+
+    def test_explicit_dry_run_stays_dry_run(self):
+        self.assertTrue(bridge.resolve_send_mode(live=False, dry_run=True, workspace=self.REPO_WS))
+
+    def test_live_on_persistent_workspace_sends(self):
+        self.assertFalse(bridge.resolve_send_mode(live=True, dry_run=False, workspace=self.REPO_WS))
+
+    def test_live_on_throwaway_workspace_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(SystemExit):
+                bridge.resolve_send_mode(live=True, dry_run=False, workspace=pathlib.Path(d))
+
+    def test_live_and_dry_run_are_mutually_exclusive(self):
+        with self.assertRaises(SystemExit):
+            bridge.resolve_send_mode(live=True, dry_run=True, workspace=self.REPO_WS)
+
+    def test_is_ephemeral_workspace_detects_tmp_vs_repo(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertTrue(bridge.is_ephemeral_workspace(pathlib.Path(d)))
+        self.assertFalse(bridge.is_ephemeral_workspace(self.REPO_WS))
+
+
+class MainWiring(unittest.TestCase):
+    """Pins that main() routes the COMPUTED send-mode into post_to_sink — not the raw
+    a.dry_run. resolve_send_mode being correct is worthless if main() ignores it; a future
+    edit reintroducing a.dry_run at the sink call site would leak past every other test."""
+
+    REPO_WS = pathlib.Path(__file__).resolve().parent  # persistent: --live is allowed here
+
+    def _captured_dry_run(self, argv):
+        captured = {}
+
+        def fake_post(ne, *, dry_run):
+            captured.setdefault("dry_run", dry_run)
+            return True
+
+        with mock.patch.object(sys, "argv", argv), mock.patch.dict(
+            os.environ, {"BOULE_WORKSPACE": str(self.REPO_WS)}
+        ), mock.patch.object(bridge, "fetch_pending", lambda ws: [_esc()]), mock.patch.object(
+            bridge, "load_sent", lambda p: {}
+        ), mock.patch.object(
+            bridge, "save_sent", lambda p, d: None
+        ), mock.patch.object(
+            bridge, "post_to_sink", fake_post
+        ):
+            bridge.main()
+        return captured["dry_run"]
+
+    def test_live_flag_reaches_sink_as_send(self):
+        self.assertFalse(self._captured_dry_run(["boule_sync_telegram", "--live"]))
+
+    def test_no_flags_reaches_sink_as_dry_run(self):
+        self.assertTrue(self._captured_dry_run(["boule_sync_telegram"]))
 
 
 if __name__ == "__main__":

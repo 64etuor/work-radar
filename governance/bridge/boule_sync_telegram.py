@@ -8,8 +8,13 @@ blocked-event id is sent at most once (sent-marker file). Bounded by --limit; no
 daemon, no poll loop (INVARIANT #5). This script imports NO network client — the
 sink (~/.claude/hooks/cmux_notify_telegram.py) owns the only network call (#3).
 
+Safe-by-default: a real send requires the explicit --live flag AND a persistent
+workspace. With no flag (or --dry-run) nothing leaves the machine; --live against a
+temp/throwaway workspace is refused — so a smoke/test run from a temp workspace can
+never reach the real chat (a deliberate --live from a persistent path still sends).
+
 Usage:
-  BOULE_WORKSPACE=/path/to/workspace python3 boule_sync_telegram.py [--limit N] [--dry-run]
+  BOULE_WORKSPACE=/path/to/workspace python3 boule_sync_telegram.py [--limit N] [--dry-run | --live]
 """
 from __future__ import annotations
 
@@ -41,6 +46,38 @@ def _workspace() -> pathlib.Path:
 
 def marker_path(workspace: pathlib.Path) -> pathlib.Path:
     return workspace / ".bridge" / "telegram-sent.json"
+
+
+# Temp/throwaway roots. A --live send is refused when BOULE_WORKSPACE resolves under one
+# of these, so a smoke/test workspace can never reach the real Telegram sink.
+_EPHEMERAL_ROOTS = ("/tmp", "/private/tmp", "/var/folders")
+
+
+def is_ephemeral_workspace(workspace: pathlib.Path) -> bool:
+    """True when the workspace lives in a temp/throwaway location (smoke/test runs)."""
+    resolved = workspace.resolve()
+    roots = [r for r in (os.environ.get("TMPDIR"), *_EPHEMERAL_ROOTS) if r]
+    return any(resolved.is_relative_to(pathlib.Path(r).resolve()) for r in roots)
+
+
+def resolve_send_mode(*, live: bool, dry_run: bool, workspace: pathlib.Path) -> bool:
+    """Decide whether this run is dry-run (True = do NOT touch the live sink).
+
+    Safe-by-default: a real send happens ONLY with explicit --live AND a persistent
+    workspace. No flag → dry-run; --live on a temp/throwaway workspace is refused. This
+    enforces the slice1b plan (headless/agent runs are --dry-run only; the live phone
+    smoke is a deliberate user-run), so a test escalation cannot leak to the real chat.
+    """
+    if live and dry_run:
+        raise SystemExit("--live and --dry-run are mutually exclusive")
+    if not live:
+        return True
+    if is_ephemeral_workspace(workspace):
+        raise SystemExit(
+            f"refusing --live send: BOULE_WORKSPACE={workspace} is a temp/throwaway location. "
+            "Live sends require a persistent workspace; smoke/test runs must stay dry-run."
+        )
+    return False
 
 
 def load_sent(path: pathlib.Path) -> dict[str, Any]:
@@ -127,10 +164,14 @@ def post_to_sink(ne: dict[str, Any], *, dry_run: bool) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=10)
-    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the sink payload; never send (this is the default)")
+    ap.add_argument("--live", action="store_true",
+                    help="actually send to the Telegram sink (opt-in; refused for temp workspaces)")
     a = ap.parse_args()
 
     workspace = _workspace()
+    dry_run = resolve_send_mode(live=a.live, dry_run=a.dry_run, workspace=workspace)
     sent_file = marker_path(workspace)
     sent = load_sent(sent_file)
     batch = select_unsent(fetch_pending(workspace), sent, limit=a.limit)
@@ -139,14 +180,14 @@ def main() -> int:
         return 0
     for esc in batch:
         ne = build_normalized_event(esc)
-        if post_to_sink(ne, dry_run=a.dry_run):
-            if not a.dry_run:  # dry-run never records markers → repeatable
+        if post_to_sink(ne, dry_run=dry_run):
+            if not dry_run:  # dry-run never records markers → repeatable
                 sent[esc["blockedEventId"]] = {"sent_at": _utc(), "topic_key": ne["key"]}
         else:
             print(f"WARN: sink rejected escalation {esc.get('blockedEventId')}", file=sys.stderr)
-    if not a.dry_run:
+    if not dry_run:
         save_sent(sent_file, sent)
-    print(f"processed {len(batch)} escalation(s){' (dry-run)' if a.dry_run else ''}")
+    print(f"processed {len(batch)} escalation(s){' (dry-run)' if dry_run else ''}")
     return 0
 
 
