@@ -287,12 +287,18 @@ server.registerTool(
       question: z.string(),
       options: z.array(z.object({ label: z.string() })).min(2),
       ambiguity_kind: z.string().optional(),
+      agent_recommendation: z.string().optional(),
     },
   },
-  async ({ question, options, ambiguity_kind }) => {
+  async ({ question, options, ambiguity_kind, agent_recommendation }) => {
     const r = await escalate(
       WORKSPACE,
-      { question, options, ambiguityKind: ambiguity_kind as never },
+      {
+        question,
+        options,
+        ambiguityKind: ambiguity_kind as never,
+        agentRecommendation: agent_recommendation,
+      },
       nowFn(),
       randFn(),
     );

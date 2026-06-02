@@ -60,4 +60,18 @@ describe("pendingEscalations", () => {
     );
     expect((await pendingEscalations(ws))[0].sessionId).toBeNull();
   });
+
+  it("surfaces the agent recommendation when one was given (null otherwise)", async () => {
+    await escalate(
+      ws,
+      {
+        question: "rec?",
+        options: [{ label: "a" }, { label: "b" }],
+        agentRecommendation: "prefer a",
+      },
+      new Date("2026-06-02T10:00:00Z"),
+      0.5,
+    );
+    expect((await pendingEscalations(ws))[0].agentRecommendation).toBe("prefer a");
+  });
 });
