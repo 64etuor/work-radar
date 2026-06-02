@@ -8,7 +8,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--skl-border, rgba(0, 0, 0, 0.1));
+  border-bottom: 1px solid var(--color-wr-border-light);
 }
 
 .skl-tagpill {
@@ -16,9 +16,9 @@
   line-height: 1;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--skl-border, rgba(0, 0, 0, 0.1));
+  border: 1px solid var(--color-wr-border-light);
   background: transparent;
-  color: var(--skl-muted, #6b7280);
+  color: var(--color-wr-muted);
   cursor: pointer;
   transition:
     background 0.12s ease,
@@ -27,13 +27,13 @@
 }
 
 .skl-tagpill:hover {
-  background: var(--skl-hover, rgba(0, 0, 0, 0.04));
+  background: var(--color-wr-surface);
 }
 
 .skl-tagpill.active {
-  background: var(--skl-fg, #111827);
-  color: var(--skl-bg, #ffffff);
-  border-color: var(--skl-fg, #111827);
+  background: var(--color-wr-fg);
+  color: var(--color-wr-bg);
+  border-color: var(--color-wr-fg);
 }
 
 /* 카드 태그 칩(읽기 전용) */
@@ -49,8 +49,8 @@
   line-height: 1;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--skl-chip-bg, rgba(0, 0, 0, 0.05));
-  color: var(--skl-muted, #6b7280);
+  background: var(--color-wr-surface);
+  color: var(--color-wr-muted);
 }
 
 /* Sheet 안 태그 편집기 */
@@ -64,7 +64,7 @@
 .skl-tags-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--skl-muted, #6b7280);
+  color: var(--color-wr-muted);
 }
 
 .skl-tags-chips {
@@ -82,14 +82,14 @@
   line-height: 1;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid var(--skl-border, rgba(0, 0, 0, 0.1));
+  border: 1px solid var(--color-wr-border-light);
   background: transparent;
-  color: var(--skl-fg, #111827);
+  color: var(--color-wr-fg);
   cursor: pointer;
 }
 
 .skl-tag-chip:hover {
-  background: var(--skl-hover, rgba(0, 0, 0, 0.04));
+  background: var(--color-wr-surface);
 }
 
 .skl-tag-input {
