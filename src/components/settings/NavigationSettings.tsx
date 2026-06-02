@@ -1,3 +1,4 @@
+import { AlertTriangle } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -168,9 +169,12 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
       </div>
 
       {hasDup && (
-        <p className="text-xs text-[color:var(--destructive)]">
-          ⚠ 중복된 단축키가 있습니다(빨강 표시). 저장은 되지만 같은 키에 여러 메뉴가 묶이면
-          마지막으로 매칭된 항목만 동작할 수 있습니다.
+        <p className="flex items-start gap-1.5 text-xs text-[color:var(--destructive)]">
+          <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            중복된 단축키가 있습니다(빨강 표시). 저장은 되지만 같은 키에 여러 메뉴가 묶이면
+            마지막으로 매칭된 항목만 동작할 수 있습니다.
+          </span>
         </p>
       )}
 
@@ -280,7 +284,17 @@ function ViewKeymapCapture({
           recording ? "조합 단축키를 누르세요 (Esc = 취소)" : "클릭 후 조합 단축키 입력 (예: Cmd+1)"
         }
       >
-        {recording ? "🔴 단축키를 누르세요…" : value || "—"}
+        {recording ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full bg-[color:var(--destructive)]"
+            />
+            단축키를 누르세요…
+          </span>
+        ) : (
+          value || "—"
+        )}
       </button>
       {value && !recording && (
         <button
