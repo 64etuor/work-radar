@@ -40,6 +40,10 @@ work-radar를 *어떻게 만드는가*(결정/패턴/원칙/실행)를 관장하
 - **Spec 본문은 사람이 저술**(`specs/`, ADR 본문과 동일 성격) — 산문은 event-source 하지 않고
   *lifecycle*(`spec_drafted`→`spec_accepted`)만 이벤트.
 - projector는 순수·total·I/O 0·**이벤트 방출 0**. 이벤트를 방출하는 projector = 아키텍처 냄새 → 리뷰 실패.
+- **체크박스 vs 상태 머신 (혼동 금지):** 구현 플랜(`docs/plans/*.md`)의 `- [ ]` 체크박스는
+  **사람의 빌드 추적용** — 오케스트레이터는 이것을 읽지 않는다. 오케스트레이터가 이해하는
+  "완료"는 **`task_completed` 등의 이벤트 → fold된 `phase`**다. 런타임 진척은 항상 이벤트가 정본;
+  체크박스를 오케스트레이터 입력으로 쓰면 이 keystone invariant 위반.
 
 ## 4. 승인 불가능 by-construction (INVARIANT #1 기계화)
 
