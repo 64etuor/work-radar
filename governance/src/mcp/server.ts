@@ -27,9 +27,14 @@ import {
   parseReviewerModels,
   resolveReviewerCommand,
   quorumCollisionWarning,
+  parsePatternConfig,
 } from "./config.ts";
 import type { ReviewerEntry } from "../decision/reviewer.ts";
 import { normalizeModelId } from "../decision/modelId.ts";
+import { runDetect } from "../patterns/detect.ts";
+import { makeWritePattern } from "../patterns/write.ts";
+import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
+import { readAllEvents } from "../decision/readEvents.ts";
 
 const WORKSPACE =
   process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
@@ -42,6 +47,16 @@ const REPO_ROOT = process.env.BOULE_REPO_ROOT ?? resolve(WORKSPACE, "..", "..");
 // 비결정 입력은 서버 경계에서만 (핸들러는 순수 유지)
 const nowFn = () => new Date();
 const randFn = () => Math.random();
+
+// Pattern detector knobs (env, safe defaults: minEvidence=5, confFull=50).
+const PATTERN_CFG = parsePatternConfig(process.env);
+
+/** Render a pattern's frontmatter as plain lines (no YAML re-serialization) for the detail view. */
+function renderFrontmatter(fm: Record<string, unknown>): string {
+  return Object.entries(fm)
+    .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+    .join("\n");
+}
 
 // SDK 1.29(실측): server.tool()은 deprecated → registerTool(name, config, cb).
 const server = new McpServer({ name: "boule-governance", version: "0.0.1" });
@@ -121,6 +136,61 @@ server.registerTool(
         { type: "text", text: `harvested: ${summary.written} new, ${summary.skipped} already-seen` },
       ],
     };
+  },
+);
+
+server.registerTool(
+  "detect",
+  {
+    description:
+      "L0 코퍼스를 스캔해 commit scope hotspot 후보 패턴을 patterns/candidates/에 멱등 기록 (read→detect→write)",
+    inputSchema: {},
+  },
+  async () => {
+    const summary = await runDetect({
+      readEvents: () => readAllEvents(WORKSPACE),
+      loadCuratedKeys: () => loadCuratedKeys(WORKSPACE),
+      writePattern: makeWritePattern(WORKSPACE, { evidenceCap: PATTERN_CFG.evidenceCap }),
+      options: PATTERN_CFG,
+    });
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            `detected: ${summary.written} new, ${summary.skipped} unchanged, ` +
+            `${summary.candidates} candidate(s) | dropped(no-scope): ${summary.droppedNoScope} | ` +
+            `scopes considered: ${summary.scopesConsidered}`,
+        },
+      ],
+    };
+  },
+);
+
+server.registerTool(
+  "patterns",
+  { description: "후보 패턴 목록 (read-only)", inputSchema: {} },
+  async () => {
+    const list = await listPatterns(WORKSPACE);
+    const text = list.length
+      ? list
+          .map(
+            (p) =>
+              `- ${p.id} ${p.kind} scope=${p.scope} evidence=${p.evidence_count} conf=${p.confidence} [${p.status}]`,
+          )
+          .join("\n")
+      : "no candidate patterns";
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerTool(
+  "pattern",
+  { description: "단일 패턴 상세 + 근거 이벤트 (read-only)", inputSchema: { id: z.string() } },
+  async ({ id }) => {
+    const p = await getPattern(WORKSPACE, id);
+    const text = p ? `${renderFrontmatter(p.frontmatter)}\n\n${p.body}` : `not found: ${id}`;
+    return { content: [{ type: "text", text }] };
   },
 );
 
