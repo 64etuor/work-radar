@@ -297,8 +297,8 @@ function ProjectsPane({
               <Plus className="size-4" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[13px] font-semibold">새 프로젝트</span>
-              <span className="text-muted-foreground mt-0.5 block text-[11px]">
+              <span className="typo-body-strong block">새 프로젝트</span>
+              <span className="text-muted-foreground typo-caption-sm mt-0.5 block">
                 개인/업무 프로젝트 추가
               </span>
             </span>
@@ -370,8 +370,8 @@ function ProjectSelectTile({
         <Icon className="size-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold">{project.name}</span>
-        <span className="mt-0.5 flex items-center gap-1.5 text-[11px]">
+        <span className="typo-body-strong block truncate">{project.name}</span>
+        <span className="typo-caption-sm mt-0.5 flex items-center gap-1.5">
           <KindBadge kind={project.kind} className="h-4 px-1.5 py-0 text-[10px] leading-none" />
           {hasNotion && (
             <>

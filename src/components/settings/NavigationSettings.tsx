@@ -155,7 +155,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         <div className="flex flex-col gap-1">
           {KEYMAP_ROWS.map((row) => (
             <div key={row.key} className="flex items-center gap-3 py-1">
-              <span className="text-foreground w-28 shrink-0 text-[13px]">{row.label}</span>
+              <span className="text-foreground typo-body-md w-28 shrink-0">{row.label}</span>
               <ViewKeymapCapture
                 value={kmDraft[row.key] ?? ""}
                 onChange={(v) => setKmDraft((prev) => ({ ...prev, [row.key]: v }))}
@@ -178,7 +178,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
       <div className="flex flex-col gap-1.5">
         <SectionLabel>조이스틱 (호출 키 hold → 커서에 등장, 방향으로 밀어 실행)</SectionLabel>
         <div className="flex items-center gap-3 py-1">
-          <span className="text-foreground w-28 shrink-0 text-[13px]">호출 키</span>
+          <span className="text-foreground typo-body-md w-28 shrink-0">호출 키</span>
           <TriggerPicker
             value={kmDraft[KNOB_TRIGGER_KEY] ?? ""}
             onChange={(v) => setKmDraft((prev) => ({ ...prev, [KNOB_TRIGGER_KEY]: v }))}
@@ -186,7 +186,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         </div>
         {KNOB_DIRECTIONS.map((d) => (
           <div key={d.key} className="flex items-center gap-3 py-1">
-            <span className="text-foreground w-28 shrink-0 text-[13px]">{d.label}</span>
+            <span className="text-foreground typo-body-md w-28 shrink-0">{d.label}</span>
             <ViewKeymapCapture
               value={kmDraft[d.key] ?? ""}
               onChange={(v) => setKmDraft((prev) => ({ ...prev, [d.key]: v }))}

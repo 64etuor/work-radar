@@ -4,16 +4,7 @@ import { cn } from "@/components/ui/cn";
 
 /** 섹션 라벨 — 작은 mono uppercase, 절제된 위계. */
 export function SectionLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn(
-        "text-subtle font-mono text-[11px] font-semibold tracking-[0.12em] uppercase",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn("text-subtle typo-mono-label", className)}>{children}</div>;
 }
 
 /** 폼 필드 — 라벨 위, 보조 설명 아래. */

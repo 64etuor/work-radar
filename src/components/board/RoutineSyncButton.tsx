@@ -86,7 +86,7 @@ export function RoutineSyncButton({ routine, projects, onEnable, onDisable, onMo
             </div>
             {moveCandidates.length > 0 && (
               <div className="space-y-1 pt-1">
-                <div className="text-muted-foreground text-[11px]">다른 캘린더로 이동</div>
+                <div className="text-muted-foreground typo-caption-sm">다른 캘린더로 이동</div>
                 {moveCandidates.map((c) => (
                   <button
                     key={`${c.projectId}:${c.id}`}

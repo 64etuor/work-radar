@@ -136,7 +136,7 @@ export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void
                       htmlFor={`news-src-${src.id}`}
                       className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5"
                     >
-                      <span className="text-foreground text-[13px]">{src.label}</span>
+                      <span className="text-foreground typo-body-md">{src.label}</span>
                       <Switch
                         id={`news-src-${src.id}`}
                         checked={src.enabled}
@@ -299,9 +299,7 @@ function OptionRow({
       <div className="min-w-0">
         <div className="text-foreground text-[13px] font-medium">{label}</div>
         {hint && (
-          <div className="text-muted-foreground mt-0.5 truncate text-[11px] leading-snug">
-            {hint}
-          </div>
+          <div className="text-muted-foreground typo-caption-sm mt-0.5 truncate">{hint}</div>
         )}
       </div>
       <div className="shrink-0">{children}</div>
@@ -325,7 +323,7 @@ function NewsMarqueeSpeedField({
     <div className="flex flex-col gap-2.5">
       <div className="flex items-start justify-between gap-3">
         <div className="text-foreground text-[13px] font-medium">마퀴 속도</div>
-        <div className="text-muted-foreground max-w-[28rem] text-right text-[11px] leading-snug">
+        <div className="text-muted-foreground typo-caption-sm max-w-[28rem] text-right">
           뉴스가 흘러가는 체감 속도입니다. 기본은 보통.
         </div>
       </div>

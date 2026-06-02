@@ -143,7 +143,7 @@ export function AgentsPane({ onToast }: { onToast: (msg: string) => void }) {
       </div>
 
       {modelCatalog.data && (
-        <p className="text-muted-foreground text-[11px]">
+        <p className="text-muted-foreground typo-caption-sm">
           모델 목록: {modelCatalog.data.source} · {modelCatalog.data.cachedAt}
         </p>
       )}
@@ -289,7 +289,7 @@ function AgentPromptConfigRow({
           {update.isPending ? "저장 중…" : "저장"}
         </Button>
       </div>
-      <p className="text-muted-foreground mt-1 text-[11px]">
+      <p className="text-muted-foreground typo-caption-sm mt-1">
         모델 공란은 기본 모델을 상속합니다. fast는 모델 공란일 때 <code>gpt-5.3-codex-spark</code>로
         실행합니다.
       </p>
