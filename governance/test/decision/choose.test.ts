@@ -61,8 +61,31 @@ describe("chooseOption — Type 0 human resolution", () => {
     );
     expect(second.ok).toBe(false);
     expect(second.reason).toMatch(/already chosen/);
+    expect(second.reason).toMatch(/opt0/); // names the option that actually won
+    expect(second.chosenOption).toBe("opt0");
     const trail = await why(ws, { decisionId: esc.decisionId });
     expect(trail.chain.filter((c) => c.type === "decision_chosen")).toHaveLength(1);
+  });
+
+  it("re-tapping the SAME option (redelivery) is a friendly idempotent ok, not an error", async () => {
+    const esc = await escalate(
+      ws,
+      { question: "q?", options: [{ label: "a" }, { label: "b" }] },
+      new Date("2026-06-01T10:00:00Z"),
+      0.5,
+    );
+    const tap = { decisionId: esc.decisionId, blockedEventId: esc.blockedEventId, optionToken: "opt0" };
+    const first = await chooseOption(ws, tap, new Date("2026-06-01T10:05:00Z"), 0.5);
+    expect(first.ok).toBe(true);
+    expect(first.idempotent ?? false).toBe(false); // the fresh choice is not idempotent
+
+    const redelivered = await chooseOption(ws, tap, new Date("2026-06-01T10:05:30Z"), 0.5);
+    expect(redelivered.ok).toBe(true); // friendly, NOT an "already chosen" error
+    expect(redelivered.idempotent).toBe(true);
+    expect(redelivered.chosenOption).toBe("opt0");
+
+    const trail = await why(ws, { decisionId: esc.decisionId });
+    expect(trail.chain.filter((c) => c.type === "decision_chosen")).toHaveLength(1); // still no 2nd event
   });
 
   it("refuses a tap whose blockedEventId or option does not belong to the decision (binding guard)", async () => {

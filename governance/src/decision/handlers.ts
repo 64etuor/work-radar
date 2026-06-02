@@ -125,7 +125,7 @@ export async function reject(workspaceDir: string, input: { decisionId: string }
 }
 
 export interface ChooseInput { decisionId: string; blockedEventId: string; optionToken: string; }
-export interface ChooseResult { ok: boolean; reason: string; eventId?: string; chosenOption?: string; }
+export interface ChooseResult { ok: boolean; reason: string; eventId?: string; chosenOption?: string; idempotent?: boolean; }
 
 /** /choose — human-gated Type 0 resolution. Deliberately NOT review-gated: a tapped option
  *  is a human direction-pick, not a Type-1 ADR approval (canApprove is for the latter).
@@ -168,7 +168,23 @@ export async function chooseOption(
     return { ok: false, reason: `unknown option token: ${input.optionToken}` };
   }
   const state = deriveDecisionState(grp.proposal, grp.related);
-  if (state.verdict) return { ok: false, reason: `decision already ${state.verdict}` };
+  if (state.verdict) {
+    const chosenEvt = grp.related.find((e) => e.frontmatter.type === "decision_chosen");
+    const winning = chosenEvt?.frontmatter.tags?.find((t) => t.startsWith("option:"))?.slice("option:".length);
+    // Same option redelivered (e.g. a Telegram resend of the winning tap) is benign: ack it
+    // as a friendly idempotent no-op instead of a confusing error, and write NO second event.
+    if (state.verdict === "chosen" && winning === input.optionToken) {
+      return {
+        ok: true,
+        reason: "already chosen (idempotent redelivery)",
+        idempotent: true,
+        chosenOption: winning,
+        eventId: chosenEvt?.frontmatter.id,
+      };
+    }
+    // A different option after resolution is a genuine late conflict — reject and name the winner.
+    return { ok: false, reason: `decision already ${state.verdict}${winning ? ` as ${winning}` : ""}`, chosenOption: winning };
+  }
   const evt: GovEvent = {
     frontmatter: {
       id: generateId("evt", now, rand),
