@@ -43,7 +43,7 @@
 
 | Phase | 슬라이스 | Depends-on | Spec/Plan |
 | --- | --- | --- | --- |
-| **A** | Task lifecycle SSOT (fold+가드+projector+property test) | BUILT substrate | `plans/2026-06-02-boule-v3-phase-a-task-lifecycle.md` 🆕 |
+| **A** | Task lifecycle SSOT (fold+가드+projector+property test) | BUILT substrate | `plans/2026-06-02-boule-v3-phase-a-task-lifecycle.md` ✅ DONE (critic ACCEPT) |
 | **B** | Spec/Plan event-sourcing + Planner | A | (예정) |
 | **C** | Conductor + autonomy-envelope (cmux spawn) | B + escalation spine | (예정) |
 | **D** | Session Registry + cmux Observer | C | (예정) |
