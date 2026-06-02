@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canStart, canComplete, canCancel } from "../../src/task/guards.js";
+import { canStart, canBlock, canComplete, canCancel } from "../../src/task/guards.js";
 import type { TaskState } from "../../src/task/task.js";
 
 const st = (phase: TaskState["phase"], verdict: TaskState["verdict"] = null): TaskState =>
@@ -18,6 +18,10 @@ describe("task guards", () => {
     expect(g.reason).toMatch(/decision_blocked|escalation/i);
   });
   it("canComplete: ready → refused (must be active)", () => expect(canComplete(st("ready"), false).ok).toBe(false));
+
+  it("canBlock: active → ok", () => expect(canBlock(st("active")).ok).toBe(true));
+  it("canBlock: ready → refused (must be active)", () => expect(canBlock(st("ready")).ok).toBe(false));
+  it("canBlock: done → refused", () => expect(canBlock(st("done", "done")).ok).toBe(false));
 
   it("canCancel: active → ok", () => expect(canCancel(st("active")).ok).toBe(true));
   it("canCancel: done → refused (terminal)", () => expect(canCancel(st("done", "done")).ok).toBe(false));

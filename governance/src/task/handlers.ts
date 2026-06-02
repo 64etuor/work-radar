@@ -4,7 +4,7 @@ import type { GovEvent, EventType } from "../event/event.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { deriveDecisionState } from "../decision/decision.ts";
 import { deriveTaskState, tasksOf, type TaskState } from "./task.ts";
-import { canStart, canComplete, canCancel } from "./guards.ts";
+import { canStart, canBlock, canComplete, canCancel } from "./guards.ts";
 
 export interface TaskGateResult { ok: boolean; reason: string; eventId?: string; }
 
@@ -62,9 +62,10 @@ export async function startTask(workspaceDir: string, input: { taskId: string },
 /** block_task — active → blocked (records reason). */
 export async function blockTask(workspaceDir: string, input: { taskId: string; reason: string }, now: Date, rand: number): Promise<TaskGateResult> {
   const { state } = await loadTask(workspaceDir, input.taskId);
-  if (state.verdict) return { ok: false, reason: `task already ${state.verdict}` };
+  const gate = canBlock(state);
+  if (!gate.ok) return { ok: false, reason: gate.reason };
   const eventId = await writeLifecycle(workspaceDir, "task_blocked", input.taskId, `Blocked ${input.taskId}: ${input.reason}`, now, rand);
-  return { ok: true, reason: "blocked", eventId };
+  return { ok: true, reason: gate.reason, eventId };
 }
 
 /** complete_task — active → done. Guarded by canComplete (incl. open-block coupling). */

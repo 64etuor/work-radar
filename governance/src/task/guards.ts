@@ -20,6 +20,14 @@ export function canComplete(s: TaskState, hasOpenBlock: boolean): TaskGate {
   return { ok: true, reason: "completing" };
 }
 
+/** Block is allowed ONLY from active (the design state machine: active ──block──▶ blocked).
+ *  A ready/terminal task cannot be blocked. */
+export function canBlock(s: TaskState): TaskGate {
+  if (s.verdict) return { ok: false, reason: `task already ${s.verdict}` };
+  if (s.phase !== "active") return { ok: false, reason: `task must be active to block (is ${s.phase})` };
+  return { ok: true, reason: "blocking" };
+}
+
 /** Cancel is allowed at any non-terminal phase. */
 export function canCancel(s: TaskState): TaskGate {
   if (s.verdict) return { ok: false, reason: `task already ${s.verdict}` };

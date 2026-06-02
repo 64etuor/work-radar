@@ -45,6 +45,13 @@ describe("task handlers", () => {
     expect(all.some((e) => e.frontmatter.type === "task_completed")).toBe(false);
   });
 
+  it("block_task is REFUSED on a ready (never-started) task", async () => {
+    const { id } = await createTask(dir, { description: "t" }, at(0), 0.1);
+    const r = await blockTask(dir, { taskId: id, reason: "early" }, at(1), 0.2);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/active/i);
+  });
+
   it("listTasks omits terminal tasks", async () => {
     const a = await createTask(dir, { description: "alive" }, at(0), 0.1);
     const b = await createTask(dir, { description: "gone" }, at(1), 0.2);
