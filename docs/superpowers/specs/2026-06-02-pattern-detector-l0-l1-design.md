@@ -63,10 +63,14 @@ set of `(kind, canonicalKey)` already curated by a human, fed into `detectPatter
 
 1. Filter to `event.frontmatter.type === "commit_recorded"`.
 2. For each, `parseScope(body)` using regex `^(\w+)(?:\(([^)]+)\))?(!)?:` over the first line —
-   take the scope capture group. **Commits with no parseable scope are dropped** and counted (the
+   take the scope capture group. **Commits with no parseable scope are dropped** — this includes a
+   bare `fix:` (no parentheses) **and an empty/whitespace-only `feat():` scope** — and counted (the
    `detect` result reports `droppedNoScope` — no silent caps).
-3. Compute the **canonical key**: `canonicalKey = scope.trim().toLowerCase()`. Group surviving
-   events by `canonicalKey` (case/whitespace variants of the same scope merge rather than split).
+3. **Normalize** each surviving scope to its **canonical key**: `canonicalKey = scope.trim().toLowerCase()`
+   (trim **then** lowercase; an empty result is impossible here because empty scopes were already
+   dropped in step 2). Group events by `canonicalKey` (case/whitespace variants of the same scope
+   merge rather than split). This same normalization is applied when reading `active/`/`archived/`
+   so curated-pair matching is exact.
 4. For each group with `evidence_count ≥ minEvidence`:
    - skip if `(kind="commit_scope_hotspot", canonicalKey)` ∈ `curatedKeys` (already curated by a
      human in `active/` or `archived/` — the detector never resurrects a curated or dismissed scope);
