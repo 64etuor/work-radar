@@ -17,8 +17,16 @@ export type AmbiguityKind =
 export type BlockedOn = "human" | "external-review" | "repo-state" | "credential" | "policy";
 export type MinimumGate = "none" | "human" | "external-review" | "type1-guardian";
 
+/** Default escalation time-to-live. Past this, pendingEscalations stops surfacing it so the
+ *  bridge no longer re-sends — bounded by design (INVARIANT #5). It mints NO terminal event;
+ *  the decision stays open in the store and a human can still resolve it directly. */
+export const DEFAULT_ESCALATION_TTL_HOURS = 72;
+
 export interface EscalateOption {
   label: string;
+  /** Optional one-line context shown under the label so a human can decide without
+   *  guessing what the bare label means. */
+  description?: string;
 }
 export interface EscalateInput {
   question: string;
@@ -29,12 +37,15 @@ export interface EscalateInput {
   agentRecommendation?: string;
   /** The cmux session id when a running session escalates; defaults to "user" for a manual escalate. */
   actor?: string;
+  /** Override the escalation TTL (hours). Defaults to DEFAULT_ESCALATION_TTL_HOURS. */
+  ttlHours?: number;
 }
 
 export interface EscalateOptionOut {
   token: string;
   label: string;
   reply: string;
+  description?: string;
 }
 export interface EscalateResult {
   decisionId: string; // evt_* id of the Type 0 decision_proposed
@@ -52,6 +63,9 @@ export async function escalate(
   rand: number,
 ): Promise<EscalateResult> {
   if (input.options.length < 2) throw new Error("escalate requires at least two options");
+  if (!input.question.trim()) throw new Error("escalate requires a non-empty question");
+  if (input.options.some((o) => !o.label.trim()))
+    throw new Error("escalate requires a non-empty label for every option");
   const actor = input.actor ?? "user";
   const source = actor === "user" ? "hermes" : "agent_run";
 
@@ -67,9 +81,16 @@ export async function escalate(
   //    fully-bound token per option. The token binds the reply to BOTH event ids.
   const blockedNow = new Date(now.getTime() + 1000);
   const blockedId = generateId("evt", blockedNow, rand);
+  const ttlHours = input.ttlHours ?? DEFAULT_ESCALATION_TTL_HOURS;
+  const expires = new Date(blockedNow.getTime() + ttlHours * 3_600_000).toISOString();
   const options: EscalateOptionOut[] = input.options.map((o, i) => {
     const optionToken = `opt${i}`;
-    return { token: optionToken, label: o.label, reply: mintToken(blockedId, decisionId, optionToken) };
+    return {
+      token: optionToken,
+      label: o.label,
+      reply: mintToken(blockedId, decisionId, optionToken),
+      description: o.description,
+    };
   });
   const blocked: GovEvent = {
     frontmatter: {
@@ -77,6 +98,7 @@ export async function escalate(
       type: "decision_blocked",
       source,
       actor,
+      expires,
       related_to: [decisionId],
       tags: [
         "escalation",
@@ -88,7 +110,7 @@ export async function escalate(
     body: JSON.stringify(
       {
         question: input.question,
-        options: options.map((o) => ({ token: o.token, label: o.label, reply: o.reply })),
+        options: options.map((o) => ({ token: o.token, label: o.label, reply: o.reply, description: o.description })),
         agent_recommendation: input.agentRecommendation ?? null,
       },
       null,

@@ -5,6 +5,7 @@ export interface PendingOption {
   token: string;
   label: string;
   reply: string;
+  description?: string;
 }
 export interface PendingEscalation {
   decisionId: string;
@@ -19,11 +20,16 @@ export interface PendingEscalation {
 /** Read-only: every decision_blocked whose decision is NOT yet terminal (no verdict),
  *  rendered with its bound reply tokens. The Python outbound adapter consumes this so the
  *  token format + resolution logic live only here (SSOT); Python parses no markdown. */
-export async function pendingEscalations(workspaceDir: string): Promise<PendingEscalation[]> {
+export async function pendingEscalations(
+  workspaceDir: string,
+  now: Date = new Date(),
+): Promise<PendingEscalation[]> {
   const all = await readAllEvents(workspaceDir);
   const out: PendingEscalation[] = [];
   for (const b of all) {
     if (b.frontmatter.type !== "decision_blocked") continue;
+    const expires = b.frontmatter.expires;
+    if (expires && new Date(expires).getTime() <= now.getTime()) continue; // past TTL → stop re-sending
     const decisionId = (b.frontmatter.related_to ?? [])[0];
     if (!decisionId) continue;
     const grp = eventsForDecision(all, decisionId);

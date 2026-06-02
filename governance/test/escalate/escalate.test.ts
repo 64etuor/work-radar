@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { escalate } from "../../src/escalate/escalate.js";
 import { readAllEvents, eventsForDecision } from "../../src/decision/readEvents.js";
 import { parseToken } from "../../src/escalate/token.js";
+import { pendingEscalations } from "../../src/escalate/pending.js";
 
 let ws: string;
 beforeEach(async () => {
@@ -50,5 +51,37 @@ describe("escalate — Type 0 emission", () => {
     await expect(
       escalate(ws, { question: "q?", options: [{ label: "only" }] }, new Date("2026-06-01T10:00:00Z"), 0.5),
     ).rejects.toThrow(/two options/);
+  });
+
+  it("rejects an empty or whitespace-only question — no contentless decision card", async () => {
+    const opts = [{ label: "sqlite" }, { label: "postgres" }];
+    const t = new Date("2026-06-01T10:00:00Z");
+    await expect(escalate(ws, { question: "", options: opts }, t, 0.5)).rejects.toThrow(/question/i);
+    await expect(escalate(ws, { question: "   ", options: opts }, t, 0.5)).rejects.toThrow(/question/i);
+  });
+
+  it("rejects an option with an empty or whitespace-only label", async () => {
+    await expect(
+      escalate(ws, { question: "DB?", options: [{ label: "sqlite" }, { label: "  " }] }, new Date("2026-06-01T10:00:00Z"), 0.5),
+    ).rejects.toThrow(/label/i);
+  });
+
+  it("threads an optional per-option description through to the pending payload", async () => {
+    await escalate(
+      ws,
+      {
+        question: "DB?",
+        options: [
+          { label: "sqlite", description: "단일 파일, 가벼움" },
+          { label: "postgres" }, // no description — must stay undefined, not crash
+        ],
+      },
+      new Date("2026-06-01T10:00:00Z"),
+      0.5,
+    );
+    const pend = await pendingEscalations(ws);
+    expect(pend).toHaveLength(1);
+    expect(pend[0].options[0].description).toBe("단일 파일, 가벼움");
+    expect(pend[0].options[1].description ?? null).toBeNull();
   });
 });

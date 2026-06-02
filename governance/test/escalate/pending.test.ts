@@ -61,6 +61,20 @@ describe("pendingEscalations", () => {
     expect((await pendingEscalations(ws))[0].sessionId).toBeNull();
   });
 
+  it("omits an escalation once past its TTL (bounded — no nagging forever, INVARIANT #5)", async () => {
+    const created = new Date("2026-06-02T10:00:00Z");
+    await escalate(
+      ws,
+      { question: "stale?", options: [{ label: "a" }, { label: "b" }], ttlHours: 24 },
+      created,
+      0.5,
+    );
+    // 23h later — still within TTL → pending
+    expect(await pendingEscalations(ws, new Date("2026-06-03T09:00:00Z"))).toHaveLength(1);
+    // 48h later — past TTL → omitted (decision stays in the store; it just stops being re-sent)
+    expect(await pendingEscalations(ws, new Date("2026-06-04T10:00:00Z"))).toHaveLength(0);
+  });
+
   it("surfaces the agent recommendation when one was given (null otherwise)", async () => {
     await escalate(
       ws,
