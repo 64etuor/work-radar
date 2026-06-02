@@ -91,7 +91,7 @@ export function RoutineSyncButton({ routine, projects, onEnable, onDisable, onMo
                   <button
                     key={`${c.projectId}:${c.id}`}
                     type="button"
-                    className="hover:bg-wr-bg-soft w-full rounded px-2 py-1 text-left text-xs transition-colors"
+                    className="hover:bg-hover w-full rounded px-2 py-1 text-left text-xs transition-colors"
                     disabled={busy}
                     onClick={() => {
                       // 이동 = 옛 Google 이벤트 삭제 + 새로 생성. 위치·참석자 등 Google에서 직접
@@ -139,7 +139,7 @@ export function RoutineSyncButton({ routine, projects, onEnable, onDisable, onMo
             <button
               key={`${c.projectId}:${c.id}`}
               type="button"
-              className="hover:bg-wr-bg-soft w-full rounded px-2 py-1 text-left text-xs transition-colors"
+              className="hover:bg-hover w-full rounded px-2 py-1 text-left text-xs transition-colors"
               disabled={busy}
               onClick={() => {
                 onEnable(routine.id, c.projectId, c.id);
