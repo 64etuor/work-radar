@@ -101,6 +101,7 @@ import {
 } from "@/lib/skillDedup";
 import {
   applyEnvOrder,
+  buildDivergedLocationLabels,
   buildDivergedPathSet,
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
@@ -209,6 +210,11 @@ export function SkillsView() {
   );
   const workspaceNav = useMemo(() => buildSkillWorkspaceNav(workspaces.data), [workspaces.data]);
   const divergedPaths = useMemo(() => buildDivergedPathSet(divergences.data), [divergences.data]);
+  // per-location 귀속(#6 ff): diverged memberPath → 프로젝트 라벨. 카드 마커가 "어느 프로젝트가 다른지" 표기.
+  const locationLabels = useMemo(
+    () => buildDivergedLocationLabels(divergences.data, workspaces.data),
+    [divergences.data, workspaces.data],
+  );
   // 사이드바 sync 헬스(#17): 워크스페이스별 diverged 멤버 수(repoId 키). divergences가 단일 출처(C6).
   const workspaceHealth = useMemo(() => buildWorkspaceHealth(divergences.data), [divergences.data]);
   const totalDiverged = useMemo(
@@ -693,13 +699,29 @@ export function SkillsView() {
                   const groupSelected = g.memberIds.every((id) => selectedIds.has(id));
                   return (
                     <div key={s.id} className={cn("skl-card-wrap", groupSelected && "selected")}>
-                      {g.locations.some(
-                        (l) => l.sourcePath != null && divergedPaths.has(l.sourcePath),
-                      ) && (
-                        <span className="skl-card-diverged" title="중앙 라이브러리와 다름">
-                          ·다름
-                        </span>
-                      )}
+                      {(() => {
+                        // diverged location들을 프로젝트 라벨로 귀속(#6 ff). divergedPaths=멤버십 판정,
+                        // locationLabels=이름. 둘 다 divergences 단일 출처라 키 집합 동일.
+                        const names = [
+                          ...new Set(
+                            g.locations
+                              .filter(
+                                (l) => l.sourcePath != null && divergedPaths.has(l.sourcePath),
+                              )
+                              .map((l) => locationLabels.get(l.sourcePath as string))
+                              .filter((v): v is string => v != null),
+                          ),
+                        ];
+                        if (names.length === 0) return null;
+                        return (
+                          <span
+                            className="skl-card-diverged"
+                            title={`중앙과 다름: ${names.join(", ")}`}
+                          >
+                            {names.length === 1 ? `·다름 (${names[0]})` : `·다름 (${names.length})`}
+                          </span>
+                        );
+                      })()}
                       <input
                         type="checkbox"
                         className="skl-card-check"

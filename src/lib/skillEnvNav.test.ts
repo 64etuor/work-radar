@@ -9,6 +9,7 @@ import type {
 } from "@/bindings";
 import {
   applyEnvOrder,
+  buildDivergedLocationLabels,
   buildDivergedPathSet,
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
@@ -258,5 +259,36 @@ describe("buildWorkspaceHealth", () => {
   it("returns an empty map for undefined/empty", () => {
     expect(buildWorkspaceHealth(undefined).size).toBe(0);
     expect(buildWorkspaceHealth([]).size).toBe(0);
+  });
+});
+
+describe("buildDivergedLocationLabels", () => {
+  const div = (
+    repoId: string,
+    memberPath: string,
+    status: "in_sync" | "diverged",
+  ): SkillDivergence => ({ repoId, provider: "claude", name: "foo", memberPath, status });
+
+  it("maps diverged memberPath → workspace label by repoId, excluding in_sync", () => {
+    const workspaces = [ws("r1", "Alpha", []), ws("r2", "Beta", [])];
+    const divs = [
+      div("r1", "/repos/Alpha/.claude/skills/foo/SKILL.md", "diverged"),
+      div("r2", "/repos/Beta/.codex/skills/foo/SKILL.md", "diverged"),
+      div("r1", "/repos/Alpha/.claude/skills/bar/SKILL.md", "in_sync"), // 제외
+    ];
+    const labels = buildDivergedLocationLabels(divs, workspaces);
+    expect(labels.get("/repos/Alpha/.claude/skills/foo/SKILL.md")).toBe("Alpha");
+    expect(labels.get("/repos/Beta/.codex/skills/foo/SKILL.md")).toBe("Beta");
+    expect(labels.has("/repos/Alpha/.claude/skills/bar/SKILL.md")).toBe(false); // in_sync 미수록
+    expect(labels.size).toBe(2);
+  });
+
+  it("falls back to repoId when no workspace label matches", () => {
+    const labels = buildDivergedLocationLabels([div("rX", "/p/x/SKILL.md", "diverged")], []);
+    expect(labels.get("/p/x/SKILL.md")).toBe("rX");
+  });
+
+  it("returns an empty map for undefined inputs", () => {
+    expect(buildDivergedLocationLabels(undefined, undefined).size).toBe(0);
   });
 });

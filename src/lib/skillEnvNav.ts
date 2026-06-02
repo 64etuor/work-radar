@@ -158,6 +158,27 @@ export function buildDivergedPathSet(divergences: SkillDivergence[] | undefined)
 }
 
 /**
+ * Diverged 멤버의 `memberPath` → 프로젝트 라벨 맵(G3 fast-follow #6 — per-location divergence 귀속).
+ * 카드 마커가 바이너리 "·다름" 대신 **어느 프로젝트가 diverged인지** 표기하는 데 쓴다. status는 백엔드
+ * `divergence.rs`가 단일 출처(C6) — FE는 `repoId`로 `workspaces` 라벨을 조인할 뿐(경로추론 없음). 라벨
+ * 미발견(이론상 없음 — 모든 Local repo가 워크스페이스)은 `repoId` 폴백. `in_sync`/미수록은 맵에 없음.
+ * undefined → 빈 맵.
+ */
+export function buildDivergedLocationLabels(
+  divergences: SkillDivergence[] | undefined,
+  workspaces: SkillWorkspace[] | undefined,
+): Map<string, string> {
+  const labelByRepo = new Map<string, string>();
+  for (const w of workspaces ?? []) labelByRepo.set(w.repoId, w.label);
+  const out = new Map<string, string>();
+  for (const d of divergences ?? []) {
+    if (d.status !== "diverged") continue;
+    out.set(d.memberPath, labelByRepo.get(d.repoId) ?? d.repoId);
+  }
+  return out;
+}
+
+/**
  * repoId → diverged 멤버 수(G3-PR3, #17 — 표시 전용 sync 헬스 rollup). divergences가 상태 단일
  * 출처(C6 — `status`는 divergence.rs 판정, FE는 그룹·카운트만·경로추론 없음). `in_sync`/미수록은
  * 카운트하지 않는다(정상=무배지). `buildDivergedPathSet`의 카운트 트윈. 전체 합계는 호출부에서
