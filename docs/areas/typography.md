@@ -15,6 +15,13 @@
 
 `@utility typo-*`는 컴파일된 CSS에서 일부 빌트인 유틸리티(예: `text-base`, `leading-none`)보다 **앞에** 정렬될 수 있다. 동일 specificity에서는 뒤에 온 규칙이 이긴다 → 기본 타입 클래스를 가진 shadcn 프리미티브(예: `CardTitle`의 `text-base leading-none`) 위에 `typo-*`만 얹으면 **기본 클래스가 typo를 덮어쓸 수 있다**. 채택 전 **계산된 값(브라우저 DevTools / 해석된 cascade)으로 실제 적용을 확인**하라 — 이것이 정본 검증법. (dist CSS 바이트 오프셋 비교는 빌드마다 위치가 바뀌어 fragile하므로 1회성 진단으로만.) 충돌하는 사이트는 기본 타입이 정리될 때까지 arbitrary 클래스로 두고 점진 이관한다(`AddProjectForm`의 `CardTitle`이 그 예 — defer됨).
 
+**(2026-06-03 업데이트) `cn()` 경유 시 해소됨.** `cn()`(= `twMergeTypo`)이 `typo-*`를 font-size/
+leading/font-weight/tracking/font-family 충돌 그룹으로 인식하므로, `cn("text-base …", "typo-title-md")`는
+`typo-title-md`가 이긴다(빌트인 strip, 컴파일 cascade 순서 무관). 따라서 `cn`을 통해 className을 합치는
+프리미티브/소비처는 `typo-*`를 그냥 얹으면 적용된다. ⚠️단 `cn` **밖**에서 raw 문자열로 직접 결합한
+경우(`class="text-base typo-title-md"`)는 여전히 merge가 적용되지 않아 cascade에 의존 — `cn` 사용 권장.
+정본 동작: `src/lib/tw.ts` + `src/lib/tw.test.ts`.
+
 ## 채택 상태 (전면 채택 완료 — 2026-06-02)
 
 시맨틱 텍스트 요소(span/div/p/label 등 경쟁 base 타입 클래스가 없는 콘텐츠 텍스트)는 **전부
