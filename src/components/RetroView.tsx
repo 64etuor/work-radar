@@ -186,7 +186,7 @@ function RetroTab() {
                       <button
                         type="button"
                         className={cn("rt-tag-btn regret", s.regret && "on")}
-                        title="하지말걸 ⚠️"
+                        title="하지말걸"
                         disabled={setRegret.isPending}
                         onClick={() => setRegret.mutate({ id: s.id, value: !s.regret })}
                       >
