@@ -29,6 +29,7 @@ export interface HydrationBundle {
   currentTask: string;
   latestHandoff: string;
   recentEvents: { id: string; type: string }[];
+  indexNeighbors: IndexNeighbor[]; // 1-hop graph context (Phase F index) for the handed-off session
   gitSummary: GitSummary;
   knownRisks: string[];
   nextExactSteps: string;
@@ -84,6 +85,7 @@ export function assembleBundle(inp: AssembleInputs): { bundle: HydrationBundle; 
     currentTask: inp.currentTask,
     latestHandoff: inp.handoffBody,
     recentEvents,
+    indexNeighbors: inp.indexNeighbors,
     gitSummary: inp.gitSummary,
     knownRisks: knownRisksText ? knownRisksText.split("\n").filter((l) => l.trim()) : [],
     nextExactSteps: sectionContent(inp.handoffBody, "Next exact steps"),
@@ -102,6 +104,7 @@ export function assembleBundle(inp: AssembleInputs): { bundle: HydrationBundle; 
     `\n## Open blockers (MUST resolve via human gate — do not assume)\n${bundle.openBlockers.map((b) => `- ${b.decisionId}: ${b.summary}`).join("\n") || "(none)"}`,
     `\n## Next exact steps\n${bundle.nextExactSteps}`,
     `\n## Known risks (do not do)\n${bundle.knownRisks.map((r) => `- ${r}`).join("\n") || "(none)"}`,
+    `\n## Related (index 1-hop)\n${bundle.indexNeighbors.map((n) => `- ${n.node_id} ${n.title}`).join("\n") || "(none)"}`,
     `\n## Git\n${bundle.gitSummary.status}\n${bundle.gitSummary.diffstat}`,
     `\n## Recent events\n${bundle.recentEvents.map((e) => `- ${e.id} ${e.type}`).join("\n") || "(none)"}`,
   ].join("\n");

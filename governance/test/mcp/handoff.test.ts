@@ -17,17 +17,21 @@ beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), "boule-mcp-handoff-"
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
 describe("Phase G command surface (INVARIANT #1)", () => {
-  it("the full handoff+hydrate path writes ZERO decision_/task_/session_ events", async () => {
+  it("the full handoff+hydrate path — incl. the invalid/re-draft branch — writes ZERO decision_/task_/session_ events", async () => {
     const { handoffId } = await requestHandoff(dir, { sessionId: "evt_s1" }, at(0), 0.1);
-    await draftHandoff(dir, { handoffId, body: complete }, at(1), 0.2);
-    await runValidateHandoff(dir, { handoffId }, at(2), 0.3);
-    await hydrate(dir, { handoffId }, deps, at(3), 0.4);
+    await draftHandoff(dir, { handoffId, body: "## Mission\nincomplete" }, at(1), 0.2);
+    await runValidateHandoff(dir, { handoffId }, at(2), 0.3); // → handoff_invalid
+    await draftHandoff(dir, { handoffId, body: complete }, at(3), 0.4); // re-draft → validating
+    await runValidateHandoff(dir, { handoffId }, at(4), 0.5); // → handoff_validated/pending
+    await hydrate(dir, { handoffId }, deps, at(5), 0.6);
 
     const all = await readAllEvents(dir);
     const forbidden = all.filter((e) =>
       /^(decision_|task_|session_)/.test(e.frontmatter.type),
     );
     expect(forbidden).toEqual([]);
+    // exactly one handoff_consumed, ever.
+    expect(all.filter((e) => e.frontmatter.type === "handoff_consumed")).toHaveLength(1);
   });
 
   it("context_pressure is read-only (computing it writes nothing)", async () => {

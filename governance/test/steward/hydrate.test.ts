@@ -16,11 +16,13 @@ const base: AssembleInputs = {
 };
 
 describe("assembleBundle", () => {
-  it("returns a structured bundle and a rendered markdown string", () => {
+  it("returns a structured bundle and a rendered markdown string, surfacing index neighbors", () => {
     const { bundle, markdown } = assembleBundle(base);
     expect(bundle.spec).toBe("spec: build X");
+    expect(bundle.indexNeighbors).toEqual([{ node_id: "task:evt_t1", title: "step 2" }]);
     expect(markdown).toContain("# Hydration Bundle");
     expect(markdown).toContain("run build");
+    expect(markdown).toContain("task:evt_t1"); // 1-hop graph context rendered (no dead read)
   });
 
   it("LAUNDERING-PREVENTION: carries ONLY open decision_blocked (resolved excluded), surfaces it in markdown, no authority field", () => {
