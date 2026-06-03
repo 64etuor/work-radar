@@ -1,7 +1,7 @@
 # SSOT Governance Harness — Boule v3 Phase I: Narrow opt-in Type-2 Auto (design)
 
 - **Date**: 2026-06-03
-- **Status**: design (pre-plan, parked) — 🆕 authored + self-reviewed this session, awaiting separate plan-critic. **SPEC ONLY — no implementation code, no push/merge/delete/deploy, no permission/credential approval until explicit user go.**
+- **Status**: design (pre-plan, parked) — 🆕 authored + self-reviewed, then **plan-critic (opus, separate pass) = ACCEPT-WITH-MINORS, 0 blockers** (2026-06-03); **rev. 2** folds the critic's M1 (event-set provenance), M2 (emit-order / partial-failure dedup poisoning), M3 (G3 reason precedence) + gaps into the text below. **SPEC ONLY — no implementation code, no push/merge/delete/deploy, no permission/credential approval until explicit user go.**
 - **Branch**: `feat/boule-v3-phase-d` (PARKED, unpushed)
 - **Master design**: `governance/docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` (§4 orchestrator-by-construction, §4.2 human gates, §4.3 anemic auto, §4.4 failure modes→mitigation, §4.5 command-surface separation, §4.6 new decision rail, §10 row I, §11 dispatch event set)
 - **Depends-on**: Phase **C** envelope+conductor (✅ the bounded executor this phase dispatches) · Phase **E** (✅ orchestrator read half) · Phase **G** (✅ continuity). Reuses A–G folds.
@@ -48,8 +48,9 @@ The structural proof (not policy, not prompt):
    re-checks this (G1) so a non-accepted plan is a *recorded, explained* `action_denied(plan_not_accepted)`,
    never a silent spawn. **No scope expansion**: auto touches only what a human already approved.
 3. **Opt-in flag gates dispatch, not approval — separate code (master §4.4#3).** `BOULE_AUTO_MODE` enables
-   only the dispatch loop; it is **not** a parameter to `canApprove`/`canComplete`/`canAdvance` (pure
-   functions, no mode arg — verified as-built). A negative test asserts: with `BOULE_AUTO_MODE=type2`,
+   only the dispatch loop; it is **not** a parameter to `canApprove` / `canComplete` (neither the plan-level
+   `plan/guards.ts` nor the task-level `task/guards.ts(state, hasOpenBlock)` variant) / `canAdvance` (pure
+   functions, **no mode arg** — verified as-built). A negative test asserts: with `BOULE_AUTO_MODE=type2`,
    `approve` of an unreviewed Type-1 **still refuses**. "Auto" is a dispatch property, never an approval one.
 4. **Halt-on-block is inherited, timeout-free.** `conduct_plan`'s `canAdvance` refuses while any step has
    an open `decision_blocked`, with **no timeout/default/skip** (Phase C §4, verified). A Type-1 boundary
@@ -91,6 +92,11 @@ The structural proof (not policy, not prompt):
 - No UI, no `bindings.ts`, no app SQLite/migration, no Postgres dependency.
 - No `instruction_sent`/`instruction_rejected_by_policy`/`projection_rebuilt` events (master §11 lists them; slice 1 uses the minimal subset §4 and defers the rest).
 - No hardened in-worktree path-glob pre-write enforcement (stays advisory, §0.2.7).
+- No special handling of a plan that re-enters `active` via `needs_revision → plan_accepted` with **edited
+  step indices**. The conductor cursor and `step_bound` events key off step *index*; a re-accepted plan
+  whose steps shifted is an **inherited Phase-C/conductor semantics concern**, not introduced here — the
+  dispatcher fires on whatever `deriveConductorState` reports. Flagged as out-of-scope; if it bites, the fix
+  belongs in the conductor's step-identity model, not the dispatcher.
 
 ---
 
@@ -116,8 +122,8 @@ INVARIANT verification is a **separate critic pass** (opus) — self-approve for
 events/*.md ──readAllEvents──▶ GovEvent[]
       │
       ▼
-projectPlans(events)  +  deriveConductorState(plan, events)   ← PURE reads (Phase B/C), no emit
-      │   active plans              per-plan: { cursor, halted, done }
+filter plan_proposed events ──▶ deriveConductorState(planProposed, all)   ← PURE reads (Phase B/C), no emit
+      │   candidate plans          per-plan: { planId, planPhase, cursor, halted, done }
       ▼
 evaluateAutoDispatch(plan, conductorState, mode)              ← PURE Safety Gate (deny-by-default, §3)
       │   { decision: "allow", action:{conduct_plan,planId} } | { decision:"deny", reason }
@@ -135,11 +141,18 @@ auto_status / dispatch_log (read-only)                        ← list instructi
 
 - **Two pure cores + one IO shell** (mirrors E/G rhythm). `evaluateAutoDispatch` is a **pure total
   function** (no I/O, no emit) → fully table-testable. Emission happens only in `auto_dispatch`.
-- **The dispatcher composes, it does not re-implement.** It reuses `projectPlans`/`derivePlanState`,
-  `deriveConductorState`, and `conductPlan` unchanged (god-fold ban, master §8). It owns no fold, no spawn.
+- **The dispatcher composes, it does not re-implement.** It reuses `deriveConductorState` (which itself
+  delegates to `derivePlanState`) and `conductPlan` unchanged (god-fold ban, master §8). It owns no fold,
+  no spawn.
 - **`conduct_plan` is the only action.** Its preconditions (plan `active` = human-accepted; halt while
   blocked; one-step-per-call) *are* the safety; the gate re-checks them so a denial is **explained**
   (recorded `action_denied`) rather than swallowed by `conduct_plan` returning `ok:false`.
+- **`action_denied` (gate path) and `orchestrator_action_failed` (execute path) are mutually exclusive per
+  `(planId, stepIndex)`.** A `deny` short-circuits *before* `conductPlan` is called → `action_denied` only.
+  An `allow` calls `conductPlan`; it can still return `ok:false` **only on a TOCTOU race** — events changed
+  between the dispatcher's read and `conductPlan`'s own re-read (e.g. a human blocked the step in the gap).
+  That is the `orchestrator_action_failed(reason)` path, carrying `conductPlan`'s own `gate.reason`. The
+  two never co-occur for the same step in one pass.
 
 ### 2.1 New module `src/orchestrator/dispatch/` (proposed)
 
@@ -161,11 +174,19 @@ type AutoDispatchVerdict =
 type AutoDenyReason = "mode_off" | "plan_not_accepted" | "halted" | "in_flight" | "done";
 
 interface AutoDispatchInput {
-  plan: PlanState;                 // a candidate plan (projectPlans)
-  conductor: ConductorState;       // deriveConductorState(plan, events): { cursor, halted, done, ... }
+  conductor: ConductorState;       // deriveConductorState(planProposed, allEvents) — verified signature.
+                                   // ConductorState ALREADY carries { planId, planPhase, cursor, halted, done }
+                                   // (conductor.ts), so NO separate PlanState input is needed: G1 reads
+                                   // conductor.planPhase. This is the as-built shape, not the first draft's.
   mode: "off" | "type2";           // parsed from BOULE_AUTO_MODE (default off)
 }
 ```
+
+> **As-built signature note (fidelity).** `deriveConductorState(planProposed: GovEvent, allEvents: GovEvent[])`
+> takes the `plan_proposed` event and the full event list, and derives `planPhase` internally via the
+> human-gated `derivePlanState`. So the dispatcher enumerates candidate plans by **filtering
+> `readAllEvents` for `plan_proposed` events** (no separate `projectPlans` call needed for the gate), maps
+> each to `deriveConductorState`, and feeds the resulting `ConductorState` straight into the gate.
 
 ---
 
@@ -178,9 +199,25 @@ audit) instead of letting `conduct_plan` silently no-op.
 | # | condition | deny reason | rationale |
 | --- | --- | --- | --- |
 | G0 | `mode === "type2"` | `mode_off` | opt-in; `off` ⇒ deny (anemic auto, deny-by-default at the mode level). |
-| G1 | `plan.phase === "active"` | `plan_not_accepted` | `active` ⇔ a human ran `plan_accepted` (master §4.2). No scope expansion beyond approved work. |
+| G1 | `conductor.planPhase === "active"` | `plan_not_accepted` | `active` ⇔ a human ran `plan_accepted` (master §4.2; `planPhase` is derived inside `deriveConductorState` via the human-gated `derivePlanState`). No scope expansion beyond approved work. |
 | G2 | `conductor.halted === false` | `halted` | never advance over an open `decision_blocked` (INVARIANT #1; timeout-free). |
 | G3 | `conductor.done === false` AND `conductor.cursor !== null` | `done` / `in_flight` | there is a ready next step (not all-terminal `done`; not an in-flight `active` step ⇒ `cursor===null`). |
+
+**G3 reason precedence (must be implemented as two ordered checks — `done` wins; M3).** Because a `done`
+plan *also* has `cursor===null` (`conductor.ts` skips the cursor loop once every step is terminal, exactly
+as it does when `halted`), the allow-condition `done===false AND cursor!==null` is the discriminator but
+does **not** tell the implementer which deny reason to emit. Pin it explicitly:
+
+```ts
+// after G0 (mode), G1 (active), G2 (halted) have each passed:
+if (conductor.done) return deny("done");          // every step terminal — wins over in_flight
+if (conductor.cursor === null) return deny("in_flight");  // a prior step is active (not done, not halted)
+return allow({ kind: "conduct_plan", planId: plan.planId, stepIndex: conductor.cursor });
+```
+
+The order **mirrors `canAdvance`'s precedence** (`guards.ts`: active → halted → done → cursor-null), so the
+gate is a faithful re-statement, not a parallel reimplementation. Done-criterion #5 asserts both reasons are
+observed distinctly, so a wrong order (emitting `in_flight` for a fully-`done` plan) is a test failure.
 
 `allow` ⇒ `action = { kind:"conduct_plan", planId: plan.planId, stepIndex: conductor.cursor }`. Every
 `deny` carries its machine reason for the `action_denied` body and the audit/replay surface.
@@ -208,16 +245,43 @@ body = canonical JSON `{ planId, stepIndex, reason? }`.
 `instruction_sent` collapses into `instruction_planned`+`executed`; `_rejected_by_policy` ≡ `action_denied`;
 `projection_rebuilt` is a Phase-F index concern.)
 
-**Dedup (clone of Phase E `suggest`):** key an `instruction_planned`/`action_denied` by `(planId, stepIndex)`.
-A second `auto_dispatch` pass with no state change emits **0** new events for an already-dispatched-or-denied
-`(plan, step)`. Per-emission `now + i*1000` offset → distinct ordered ids.
+> **Provenance / sole-producer (M1).** Master §11 nominally filed `instruction_planned` /
+> `orchestrator_action_executed` / `orchestrator_action_failed` / `action_denied` under **Phase E**
+> orchestration — but Phase E (as-built) emits only `orchestrator_suggestion_created` and **none of these
+> four**. Phase I is therefore the **first and (in slice 1) sole producer** of all four. This matters for
+> fork **F2** (suggestion-mediated dispatch): if a future Phase-E `plan_step_ready` rule also mints
+> `instruction_planned`, the two producers **must share the `(planId, stepIndex)` body schema and dedup
+> key**, or the dedup set splits and double-dispatches. F2 is therefore gated on reusing this exact body
+> contract, not inventing a parallel one.
+
+**Dedup keyed off *materialization*, not the intent event (M2).** The dispatch dedup key is
+`(planId, stepIndex)` (clone of Phase E `suggest`'s `(rule, subject)`), but a step counts as
+"already dispatched" **iff the conductor materialized it** — i.e. a `step_bound` event exists for
+`(planId, stepIndex)` — **not** merely because an `instruction_planned` was written. This closes the
+partial-failure poisoning hole below. `action_denied` is deduped on its own `(planId, stepIndex, reason)`
+so repeated identical denials don't flood, but a `deny` never blocks a later legitimate `allow` for the
+same step (denies are not in the dispatch dedup set). A second `auto_dispatch` pass with no state change
+therefore emits **0** new `instruction_planned`/`*executed` for an already-materialized step. Per-emission
+`now + i*1000` offset → distinct ordered ids; `writeEvent` is `flag:"wx"` (fail-if-exists, verified), so a
+same-second second pass surfaces as a *caught* write failure, never silent corruption.
 `DispatchSummary { executed: number; failed: number; denied: number; skipped: number }`.
 
-> **Natural idempotency reinforcement:** after a successful dispatch, the plan's step is `active`
-> (in-flight) ⇒ `cursor===null` ⇒ G3 denies `in_flight` on the next pass; combined with the
-> `(planId, stepIndex)` dedup, a re-run advances nothing. After the step completes, the cursor moves to a
-> *new* stepIndex ⇒ a new dispatch key. **Re-arm limitation (documented):** a step that recurs at the same
-> index is not re-dispatched — a dispatch lifecycle is deferred (mirrors E's deferred suggestion lifecycle).
+> **Emit order + partial-failure recovery (M2).** `auto_dispatch` emits `instruction_planned` (intent)
+> *before* calling `conductPlan`. If the process dies after the intent write but before `conductPlan`
+> materializes the step (no `step_bound` yet), the step is **not** poisoned: the next pass keys dedup off
+> `step_bound` (absent) ⇒ G3 still allows (cursor unmoved, not halted) ⇒ it **re-dispatches**. The only
+> residue is a duplicate, harmless `instruction_planned` intent marker (distinct timestamped id). The
+> recognized stuck-state is the *opposite* — were dedup keyed off `instruction_planned`, a crash there
+> would strand the step forever; keying off materialization avoids that. (Detection if anything still
+> looks wrong: `conductor_status` shows the live cursor; the live conductor path is itself gated behind
+> `BOULE_CONDUCTOR_MODE=live` + user-run smoke, so blast radius is one plan, human-recoverable.)
+>
+> **Natural idempotency reinforcement:** after a successful dispatch, the materialized step's task is
+> `task_started` ⇒ phase `active` (in-flight) ⇒ `deriveConductorState` sets `cursor===null` ⇒ G3 denies
+> `in_flight` on the next pass; combined with the `step_bound` dedup, a re-run advances nothing. After the
+> step completes, the cursor moves to a *new* stepIndex ⇒ a new dispatch key. **Re-arm limitation
+> (documented):** a step that recurs at the same index is not re-dispatched — a dispatch lifecycle is
+> deferred (mirrors E's deferred suggestion lifecycle).
 
 ---
 
@@ -246,11 +310,16 @@ A second `auto_dispatch` pass with no state change emits **0** new events for an
    `active` + not-halted + ready-cursor plan → allow).
 3. **`autoDispatch` IO shell** — read→evaluate→dedup→emit trail→`conductPlan` (inject `ConductorAdapter`
    stub). Tests: one advanceable accepted plan → `instruction_planned`+`orchestrator_action_executed` + the
-   conductor stub spawned step 1; idempotency (pass2 emits 0 for the same step); denied plan → `action_denied(reason)`.
+   conductor stub spawned step 1; idempotency (pass2 emits 0 for the same step); denied plan →
+   `action_denied(reason)`; **materialization-dedup (M2): an `instruction_planned` present but NO `step_bound`
+   for `(planId, stepIndex)` ⇒ pass2 re-dispatches** (dedup keys off `step_bound`, not the intent event);
+   `done` vs `in_flight` deny reasons are emitted distinctly (M3 precedence).
 4. **Negative tests (the real #1 guard)** — `auto_dispatch` writes **0** `decision_*`; with
    `BOULE_AUTO_MODE=type2`, `canApprove`/`approve` of an unreviewed Type-1 still refuses (flag ≠ approval
    gate); a Type-1 escalation from the spawned step leaves a `decision_blocked`, and the next pass emits
-   `action_denied(halted)` and advances nothing (no auto-resolve, no timeout).
+   `action_denied(halted)` and advances nothing (no auto-resolve, no timeout); **`mode==='off'`
+   early-return writes 0 events of *any* type (not even `action_denied`)** — asserts the deny-by-default
+   mode gate emits nothing because nothing was evaluated (§5).
 5. **`listDispatchLog` + MCP wiring** — `auto_dispatch`/`auto_status` tools; opt-in refusal path; config
    parse; drift gates (`bindings.ts` byte-unchanged).
 
@@ -286,6 +355,7 @@ Pure cores (`evaluateAutoDispatch`) unit-tested exhaustively; the IO shell is th
 | **Classification drift (Type-1 advanced as Type-2, §4.4#2)** | Auto never *classifies* or *approves* — it only advances approved plans; any Type-1 inside the work surfaces as the spawned session's `decision_blocked` (halt), never an auto-verdict. |
 | **Daemon creep / runaway loop (INVARIANT #5)** | On-demand single pass; ≤1 dispatch per plan; `(planId,stepIndex)` dedup; no poll/watcher. |
 | **Advisory path-globs let a spawned model edit outside its glob (inherited Phase C residual)** | Stated plainly (§0.2.7); structural safety = worktree isolation + verdict-tool absence + halt-on-block. Hardening = fork F1. |
+| **Escalation-obedience residual: a spawned model fails to `escalate` a Type-1 it should have (the §0.1#4 / "classification drift" halt depends on the model emitting `decision_blocked`)** | Same advisory class as the path-glob residual — the *prompt contract* (`escalateOnAnyBoundaryCrossing=true`) is not structural. The **structural backstop** is verdict-tool absence: the executor-role session is denied the approve/reject/choose tools (`SESSION_DENIED_TOOLS`, Phase C role-gate), so even a non-escalating model **cannot self-approve** — it can only do in-envelope work or stall. Stated plainly, not hidden. |
 | **Dispatch event flood** | `(planId,stepIndex)` dedup (Phase E mirror); idempotency test #7. |
 | **bindings.ts / migration drift** | stdio MCP, no UI; byte-diff gates #9. |
 
