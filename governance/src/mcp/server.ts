@@ -55,6 +55,8 @@ import { runDetect } from "../patterns/detect.ts";
 import { makeWritePattern } from "../patterns/write.ts";
 import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
+import { suggest } from "../orchestrator/suggest.ts";
+import { listSuggestions } from "../orchestrator/project.ts";
 
 const WORKSPACE =
   process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
@@ -848,6 +850,28 @@ server.registerTool(
   async ({ sessionId }) => {
     const r = await closeSession(WORKSPACE, { sessionId }, nowFn(), randFn());
     return { content: [{ type: "text", text: r.ok ? `closed: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+  },
+);
+
+// v3 Phase E — Orchestrator read-half. suggest mints NO verdict (suggestion-class only), so it is
+// registered unconditionally like observe_sessions. It touches no cmux/network — folds only.
+server.registerTool(
+  "suggest",
+  { description: "교차-fold 관찰 → advisory 제안 방출 (orchestrator_suggestion_created만; on-demand 1패스)", inputSchema: {} },
+  async () => {
+    const r = await suggest(WORKSPACE, nowFn(), randFn());
+    return { content: [{ type: "text", text: `suggestions created ${r.created} / skipped ${r.skipped}` }] };
+  },
+);
+server.registerTool(
+  "suggestions",
+  { description: "open orchestrator 제안 목록 (read-only)", inputSchema: {} },
+  async () => {
+    const list = await listSuggestions(WORKSPACE);
+    const text = list.length
+      ? list.map((s) => `${s.id} [${s.rule}] ${s.subjectType}=${s.subject} ${s.detail}`).join("\n")
+      : "(no open suggestions)";
+    return { content: [{ type: "text", text }] };
   },
 );
 
