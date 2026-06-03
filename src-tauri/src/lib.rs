@@ -19,6 +19,7 @@ mod commands;
 mod db;
 mod error;
 mod git;
+mod governance;
 mod github;
 mod hermes_agent;
 mod jobs;
