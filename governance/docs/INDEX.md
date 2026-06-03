@@ -37,17 +37,18 @@
 | 06-01 | **L0 Harvest** (P3 Slice 2a — content-addressed 멱등 harvest) | `design/2026-06-01-ssot-governance-harness-l0-harvest-design.md` | `plans/2026-06-01-ssot-governance-harness-l0-harvest.md` | ✅ |
 | 06-02 | **Pattern Detector L0→L1** (인메모리 유사도 후보 패턴) | `design/2026-06-02-pattern-detector-l0-l1-design.md` | `plans/2026-06-02-pattern-detector-l0-l1.md` | ✅ |
 
-## v3 마스터 Phase (계획 예정 — 각 Phase는 자체 spec+plan)
+## v3 마스터 Phase (A–D ✅ 구축·로컬커밋 / E–I 계획 예정 — 각 Phase는 자체 spec+plan)
 
 정본: `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §10.
+진행: **A→D 완료**(전부 opus critic ACCEPT, 로컬 커밋, **미푸시/PARKED**). 다음 critical-path = **E**.
 
 | Phase | 슬라이스 | Depends-on | Spec/Plan |
 | --- | --- | --- | --- |
-| **A** | Task lifecycle SSOT (fold+가드+projector+property test) | BUILT substrate | `plans/2026-06-02-boule-v3-phase-a-task-lifecycle.md` ✅ DONE (critic ACCEPT) |
-| **B** | Spec/Plan event-sourcing + Planner | A | (예정) |
-| **C** | Conductor + autonomy-envelope (cmux spawn) | B + escalation spine | (예정) |
-| **D** | Session Registry + cmux Observer | C | (예정) |
-| **E** | Orchestrator projector (observe/suggest) | A,B,C,D | (예정) |
+| **A** | Task lifecycle SSOT (fold+가드+projector+property test) | BUILT substrate | `plans/2026-06-02-boule-v3-phase-a-task-lifecycle.md` ✅ DONE (critic ACCEPT, vitest 214) |
+| **B** | Spec/Plan event-sourcing + Planner | A | `plans/2026-06-02-boule-v3-phase-b-plan-lifecycle-planner.md` (`40ab6eb`) + `plans/2026-06-02-boule-v3-phase-b2-spec-lifecycle.md` (`6d61af6`) ✅ DONE (critic ACCEPT, vitest 242→263) |
+| **C** | Conductor + autonomy-envelope (cmux spawn) | B + escalation spine | `plans/2026-06-02-boule-v3-phase-c-conductor.md` (`e040394`) ✅ DONE (critic round-2 ACCEPT, vitest 301) |
+| **D** | Session Registry + cmux Observer | C | `plans/2026-06-03-boule-v3-phase-d-session-registry.md` (`2d98134`) + live-adapter fix `plans/2026-06-03-boule-v3-phase-d-observer-live-adapter-fix.md` (`e9cd18d`) ✅ DONE (critic ACCEPT, vitest 354; live `cmux tree --all --json` smoke green) |
+| **E** | Orchestrator projector (observe/suggest) | A,B,C,D | (예정 — 다음 critical-path 후보) |
 | **F** | Postgres+pgvector 그래프 인덱스 | E | (예정) |
 | **G** | Context Steward / Handoff | E | (예정) |
 | **H** | Control Room UI (specta) | E,F,G | (예정) |
