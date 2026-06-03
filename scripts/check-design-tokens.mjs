@@ -84,3 +84,18 @@ export function evaluate(violations, baselineFps) {
   const stale = [...baseline].filter((fp) => !currentFps.has(fp)).sort();
   return { newViolations, stale };
 }
+
+export function checkDesignTokens(root, baselineFps) {
+  const violations = collectViolations(root);
+  const { newViolations, stale } = evaluate(violations, baselineFps);
+  const failures = [];
+  for (const v of newViolations) {
+    failures.push(`[${v.rule}] ${v.file}:${v.line}  ${v.token}  — ${v.snippet}`);
+  }
+  if (stale.length) {
+    failures.push(
+      `stale baseline (${stale.length}): 코드에 없는 항목 — --update-baseline로 줄이세요: ${stale.join(", ")}`,
+    );
+  }
+  return failures;
+}

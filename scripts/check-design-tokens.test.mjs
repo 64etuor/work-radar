@@ -80,3 +80,22 @@ test("evaluate: new violation fails, baselined passes, stale fails", () => {
   assert.deepEqual(newViolations.map(fingerprint), ["R3|src/b.tsx|leading-[22px]"]);
   assert.deepEqual(stale, ["R3|src/gone.tsx|tracking-[1px]"]);
 });
+
+import { checkDesignTokens } from "./check-design-tokens.mjs";
+
+test("checkDesignTokens returns human failures for new violations + stale", async () => {
+  const root = await makeFixture({
+    "src/a.tsx": 'export const A = () => <span className="text-[15px]">x</span>;\n',
+  });
+  const failures = await checkDesignTokens(root, ["R3|src/gone.tsx|text-[9px]"]);
+  const joined = failures.join("\n");
+  assert.match(joined, /\[R3\] src\/a\.tsx:1.*text-\[15px\]/);
+  assert.match(joined, /stale baseline/);
+});
+
+test("checkDesignTokens passes when all violations are baselined", async () => {
+  const root = await makeFixture({
+    "src/a.tsx": 'export const A = () => <span className="text-[15px]">x</span>;\n',
+  });
+  assert.deepEqual(await checkDesignTokens(root, ["R3|src/a.tsx|text-[15px]"]), []);
+});
