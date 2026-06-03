@@ -26,3 +26,6 @@ bridge/__pycache__/
 
 # Derived task projection (rebuildable from events via renderTasks)
 workspace/state/*.json
+
+# Derived graph index (PGlite) — rebuildable from events via rebuild_index
+workspace/index/
