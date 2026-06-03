@@ -2,7 +2,7 @@
 //! There is NO write path to the governance event log in this module (INVARIANT #1, structural).
 
 // 본 모듈의 모든 reader/helper는 Result<_, AppError>로 통일(단일 envelope, 레포 전역 규약)
-// → 모듈 단위 result_large_err 허용(routines/google_sync.rs와 동일 관용).
+// → 모듈 단위 result_large_err 허용(commands/routines/google_sync.rs와 동일 관용).
 #![allow(clippy::result_large_err)]
 
 use crate::error::AppError;
