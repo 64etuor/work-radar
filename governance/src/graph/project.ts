@@ -1,6 +1,12 @@
 import { serializeEvent, type EventType, type GovEvent } from "../event/event.ts";
 import { sha256hex } from "../event/id.ts";
-import type { EventRow, NodeType } from "./types.ts";
+import { projectTasks } from "../task/project.ts";
+import { projectPlans } from "../plan/project.ts";
+import { projectSessions } from "../session/project.ts";
+import { projectSpecs } from "../spec/project.ts";
+import { deriveDecisionState } from "../decision/decision.ts";
+import { proposalsOf, eventsForDecision } from "../decision/readEvents.ts";
+import type { EventRow, NodeRow, NodeType } from "./types.ts";
 
 /** Which graph subject a given event type belongs to (null = no node subject in this cut). */
 const SUBJECT_TYPE_OF: Partial<Record<EventType, NodeType>> = {
@@ -73,4 +79,22 @@ export function toEventRows(events: GovEvent[]): EventRow[] {
       },
     };
   });
+}
+
+function node(type: NodeType, canonicalId: string, title: string, state: Record<string, unknown>): NodeRow {
+  return { node_id: `${type}:${canonicalId}`, node_type: type, canonical_id: canonicalId, title, state_jsonb: state };
+}
+
+/** Reuse the existing per-axis folds (god-fold ban, master §8). One node per live subject. */
+export function toNodeRows(events: GovEvent[]): NodeRow[] {
+  const rows: NodeRow[] = [];
+  for (const s of projectTasks(events)) rows.push(node("task", s.taskId, s.title, { phase: s.phase, verdict: s.verdict }));
+  for (const s of projectPlans(events)) rows.push(node("plan", s.planId, s.title, { phase: s.phase }));
+  for (const s of projectSessions(events)) rows.push(node("session", s.sessionId, s.sessionId, { phase: s.phase, ownership: s.ownership, taskId: s.taskId }));
+  for (const s of projectSpecs(events)) rows.push(node("spec", s.specId, s.title, { phase: s.phase }));
+  for (const p of proposalsOf(events)) {
+    const s = deriveDecisionState(p, eventsForDecision(events, p.frontmatter.id).related, 1);
+    rows.push(node("decision", s.decisionId, s.title, { phase: s.phase, verdict: s.verdict }));
+  }
+  return rows;
 }

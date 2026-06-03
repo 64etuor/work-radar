@@ -46,3 +46,22 @@ describe("toEventRows", () => {
     expect(taskRow.authority_decision_id).toBe("dec_1");
   });
 });
+
+import { toNodeRows } from "../../src/graph/project.js";
+
+describe("toNodeRows", () => {
+  it("emits one node per subject across axes, reusing the folds", () => {
+    const events: GovEvent[] = [
+      evt({ id: "t1", type: "task_created" }, "Task one"),
+      evt({ id: "ts1", type: "task_started", related_to: ["t1"] }),
+      evt({ id: "p1", type: "plan_proposed" }, "Plan one"),
+      evt({ id: "sp1", type: "spec_proposed" }, "Spec one"),
+    ];
+    const nodes = toNodeRows(events);
+    const task = nodes.find((n) => n.node_id === "task:t1")!;
+    expect(task.node_type).toBe("task");
+    expect(task.title).toBe("Task one");
+    expect(task.state_jsonb.phase).toBe("active");
+    expect(nodes.map((n) => n.node_id).sort()).toEqual(["plan:p1", "spec:sp1", "task:t1"]);
+  });
+});
