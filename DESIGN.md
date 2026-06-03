@@ -220,14 +220,15 @@ Cohere is mostly flat. Depth comes from surface alternation, media contrast, rou
 
 Six shadow tokens implement the elevation levels above. Raw values are defined in `src/styles/tokens.css`; always reference the token, never write the raw shadow inline.
 
-| Token                  | Value                              | Use                                             |
-| ---------------------- | ---------------------------------- | ----------------------------------------------- |
-| `--wr-shadow-hairline` | `0 1px 0 rgb(10 14 30 / 0.02)`     | Subtlest separation — sticky headers, row rules |
-| `--wr-shadow-sm`       | `0 8px 22px rgb(10 14 30 / 0.08)`  | Card lift — postit-card, capture-panel          |
-| `--wr-shadow-md`       | `0 14px 32px rgb(10 14 30 / 0.12)` | Floating panels, drawers                        |
-| `--wr-shadow-lg`       | `0 24px 60px rgb(10 14 30 / 0.18)` | Modals, full overlay sheets                     |
-| `--wr-shadow-overlay`  | `0 24px 60px rgb(10 14 30 / 0.28)` | Command palette, highest-elevation overlays     |
-| `--wr-shadow-toast`    | `0 2px 8px rgb(10 14 30 / 0.12)`   | Toast notifications (intentionally compact)     |
+| Token                      | Value                              | Use                                                                                              |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `--wr-shadow-hairline`     | `0 1px 0 rgb(10 14 30 / 0.02)`     | Subtlest separation — sticky headers, row rules                                                  |
+| `--wr-shadow-sm`           | `0 8px 22px rgb(10 14 30 / 0.08)`  | Card lift — postit-card, capture-panel                                                           |
+| `--wr-shadow-md`           | `0 14px 32px rgb(10 14 30 / 0.12)` | Floating panels, drawers                                                                         |
+| `--wr-shadow-lg`           | `0 24px 60px rgb(10 14 30 / 0.18)` | Modals, full overlay sheets                                                                      |
+| `--wr-shadow-overlay`      | `0 24px 60px rgb(10 14 30 / 0.28)` | Command palette, highest-elevation overlays                                                      |
+| `--wr-shadow-toast`        | `0 2px 8px rgb(10 14 30 / 0.12)`   | Toast notifications (intentionally compact)                                                      |
+| `--overlay` / `bg-overlay` | `rgb(0 0 0 / 0.4)`                 | 모달/시트 스크림 dim (dialog/sheet overlay). 다크 별도 오버라이드 시 `.dark { --overlay }` 추가. |
 
 > **Rule:** "무거운 그림자 금지" (no heavy shadows) means staying at `--wr-shadow-sm` or below for persistent app-shell surfaces. `--wr-shadow-md` and above are reserved for transient overlays.
 
