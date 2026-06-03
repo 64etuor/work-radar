@@ -43,6 +43,14 @@ export type EventType =
   | "session_closed"                    // session closed (terminal) — ONLY via close_session, never the observer
   | "session_crashed"                   // observer saw a known surface disappear (NOT a close)
   | "session_recovered"                 // observer saw a crashed surface return → recovering
+  // v3 Phase G: Handoff continuity axis. verdict-free (source: system|hermes|agent_run). A
+  // handoff's id = its birth event id (handoff_requested). consume is the ONLY new write beyond
+  // the lifecycle records; the Context Steward itself emits nothing (advisory).
+  | "handoff_requested"   // born `requested` (a handoff is opened for a session)
+  | "handoff_drafted"     // a draft markdown body submitted → `validating`
+  | "handoff_validated"   // structural check passed → `pending`
+  | "handoff_invalid"     // structural check failed (carries missing[]) → `invalid` (re-draft)
+  | "handoff_consumed"    // a fresh session hydrated from the bundle (terminal)
   // v3 Phase E: Orchestrator emits an advisory suggestion. suggestion-class — source/actor=system,
   // NO verdict. The ONLY new write permission in Phase E (master §4.1); dispatch events → Phase I.
   | "orchestrator_suggestion_created";
