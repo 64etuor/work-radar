@@ -62,9 +62,55 @@ What makes the system distinctive is the mix of austere black-and-white UI with 
 
 ### Semantic
 
-- **Focus Blue** (`#4c6ee6`): Keyboard focus and ring color.
+- **Focus Blue** (`#4c6ee6`): Keyboard focus and ring color (`--color-wr-focus` / `--ring`).
 - **Form Focus Violet** (`#9b60aa`): Focus border for text inputs.
-- **Error Red** (`#b30000`): Extracted ring/shadow color associated with validation-like states.
+- **Error Red** (`#b30000`): Danger/error text (`--color-wr-danger`). Aligned with `--color-today-debt-urgent` and `--color-wr-diff-del-fg` so all error-severity signals share one token.
+
+### Agent Status Colors
+
+- **Status Working** (`#16a34a`, `--color-wr-status-working`): Agent active/running indicator (green).
+- **Status Waiting** (`#eab308`, `--color-wr-status-waiting`): Agent awaiting input (yellow).
+
+> **a11y rule:** Never use these colors alone to convey meaning. Always pair with a text/icon label (e.g., "working" · "waiting"). Color-only status is forbidden per the global design rule.
+
+### Today & Timeline Colors
+
+Semantic tokens for the Today view and timeline surface (`--color-today-*`). Previously inlined as hex literals in `todayBlocks.ts`; now tokenized for light/dark consistency.
+
+| Token                              | Value     | Use                                        |
+| ---------------------------------- | --------- | ------------------------------------------ |
+| `--color-today-signal`             | `#4c6ee6` | Today signal accent (= Focus Blue)         |
+| `--color-today-routine`            | `#5a8a78` | Sage — routine block marker                |
+| `--color-today-debt-urgent`        | `#b30000` | Error Red — overdue urgent (= wr-danger)   |
+| `--color-today-debt-urgent-border` | `#e0b4a8` | Overdue urgent border (= wr-danger-border) |
+| `--color-today-debt-warn`          | `#a89175` | Warm stone — overdue warning               |
+| `--color-today-debt-warn-border`   | `#d8c8b5` | Overdue warning border                     |
+| `--color-today-now-line`           | `#ff7759` | Coral — current-time indicator line        |
+| `--color-event-fallback`           | `#93939f` | Muted Slate — event with no project color  |
+
+### Diff / Worktree Colors
+
+Tokens for the skills/worktree diff view. Light values in `@theme`; dark overrides in `.dark`.
+
+| Token                     | Light value | Dark value | Use                   |
+| ------------------------- | ----------- | ---------- | --------------------- |
+| `--color-wr-diff-add-bg`  | `#e6f4ec`   | `#16312a`  | Added-line background |
+| `--color-wr-diff-add-fg`  | `#1d7a4d`   | `#5fb89e`  | Added-line text       |
+| `--color-wr-diff-del-fg`  | `#b30000`   | `#ff6b6b`  | Deleted-line text     |
+| `--color-wr-diff-hunk-fg` | `#1863dc`   | `#6b9bf0`  | Hunk-header text      |
+
+### Component Token Overrides
+
+Fine-grained tokens that keep component-specific values out of magic numbers in JSX/CSS:
+
+| Token                      | Value     | Rationale                                                                                      |
+| -------------------------- | --------- | ---------------------------------------------------------------------------------------------- |
+| `--color-wr-sticky-border` | `#c9c7c0` | Left accent border on sticky/postit notes — warm gray that reads on white canvas               |
+| `--wr-graph-node-size`     | `10px`    | Commit-graph node diameter (bespoke — graph owns lane hues)                                    |
+| `--wr-graph-line-width`    | `2px`     | Commit-graph lane line width                                                                   |
+| `--wr-diff-line-pad-x`     | `10px`    | Horizontal padding inside diff line rows                                                       |
+| `--color-wr-on-dark-btn`   | `#ffffff` | Text on near-black buttons (inverts to dark in `.dark` because button background also inverts) |
+| `--color-wr-on-coral-btn`  | `#ffffff` | Text on coral/green buttons (does not invert — button background does not invert in dark mode) |
 
 ### Gradient System
 
@@ -79,7 +125,9 @@ Cohere does not use gradients as a generic UI fill. Gradients and color fields a
 - **Technical labels**: `CohereMono`, falling back to `Arial`, `ui-sans-serif`, and `system-ui`.
 - **Icons**: Cohere uses custom icon fonts and thin-line geometric illustrations.
 
-### Hierarchy
+### Hierarchy (Marketing / Web Surfaces Only)
+
+> **Scope:** This scale applies to **marketing and web/landing surfaces only** (announcement bars, hero sections, blog, research pages, product bands). It is **not implemented** as `typo-*` utilities and does **not apply** to the desktop app shell. For the app shell (capture board, agent bar, settings, etc.), use the **App Surface Type** table below — that is the canonical scale with `@utility` implementations.
 
 | Role            | Font       | Size | Weight | Line Height | Letter Spacing | Notes                                   |
 | --------------- | ---------- | ---: | -----: | ----------: | -------------: | --------------------------------------- |
@@ -108,16 +156,16 @@ Cohere does not use gradients as a generic UI fill. Gradients and color fields a
 
 The dense desktop shell runs **tighter and heavier** than the marketing scale above — this is intentional editorial density for an information-dense command surface, and it overrides the "avoid heavy bold" principle _for app-shell UI only_ (marketing/display type still follows the Hierarchy table above). These roles are codified as `typo-*` utilities in `src/styles/typography.css`, whose values reference `--text-*`/`--leading-*`/`--tracking-*` tokens in `src/styles/tokens.css`.
 
-| Utility            |  px | weight | line | tracking | Use                                           |
-| ------------------ | --: | -----: | ---: | -------: | --------------------------------------------- |
-| `typo-title-md`    |  17 |    600 | 1.25 |  -0.01em | Card/section titles (project cards).          |
-| `typo-title-sm`    |  15 |    600 |  1.3 |  -0.01em | Secondary titles.                             |
-| `typo-body-md`     |  13 |    400 |  1.4 |        0 | Default dense body.                           |
-| `typo-body-strong` |  13 |    600 |  1.4 |        0 | Emphasized body / inline headers.             |
-| `typo-label-sm`    |  12 |    500 |  1.4 |        0 | Form labels, compact UI.                      |
-| `typo-caption-sm`  |  11 |    400 |  1.4 |        0 | Metadata, captions.                           |
-| `typo-mono-label`  |  11 |    600 |  1.4 |   0.12em | Uppercase mono section markers (`font-mono`). |
-| `typo-micro`       |  10 |    400 |  1.4 |        0 | Microcopy, footers.                           |
+| Utility            |  px | weight | line | tracking | Use                                                                                   |
+| ------------------ | --: | -----: | ---: | -------: | ------------------------------------------------------------------------------------- |
+| `typo-title-md`    |  17 |    600 | 1.25 |  -0.01em | Card/section titles (project cards).                                                  |
+| `typo-title-sm`    |  15 |    600 |  1.3 |  -0.01em | Secondary titles.                                                                     |
+| `typo-body-md`     |  13 |    400 |  1.4 |        0 | Default dense body.                                                                   |
+| `typo-body-strong` |  13 |    600 |  1.4 |        0 | Emphasized body / inline headers.                                                     |
+| `typo-label-sm`    |  12 |    500 |  1.4 |        0 | Form labels, compact UI.                                                              |
+| `typo-caption-sm`  |  11 |    400 |  1.4 |        0 | Metadata, captions.                                                                   |
+| `typo-mono-label`  |  11 |    600 |  1.4 |   0.12em | Uppercase mono section markers (`font-mono`). Size = `var(--text-caption-sm)` = 11px. |
+| `typo-micro`       |  10 |    400 |  1.4 |        0 | Microcopy, footers.                                                                   |
 
 Rule: author with the `typo-*` utility, never re-combine raw `text-/font-/leading-/tracking-` for these roles. `typo-*` sets type only; pair with a color utility (`text-foreground`, `text-muted-foreground`, …). See `docs/areas/typography.md`.
 
@@ -125,7 +173,22 @@ Rule: author with the `typo-*` utility, never re-combine raw `text-/font-/leadin
 
 ### Spacing System
 
-The system uses an 8px base with many one-off alignment values: `2px`, `6px`, `8px`, `10px`, `12px`, `16px`, `20px`, `22px`, `24px`, `28px`, `32px`, `36px`, `40px`, `56px`, `60px`, `64px`, and `80px`.
+The system uses an **8px density base**. Compact operational UI (app shell rows, agent boxes, capture-board cells) uses the `--wr-density-*` token scale. Larger structural spacing (section padding, hero breathing room) uses Tailwind's standard scale inline where unavoidable.
+
+#### Density Token Scale (`--wr-density-*`)
+
+These tokens govern tight operational rhythm in the app shell — row gaps, inner padding, icon gutters:
+
+| Token              | Value | Typical use                              |
+| ------------------ | ----: | ---------------------------------------- |
+| `--wr-density-2xs` |   2px | Micro gaps (icon-to-label, dot margins)  |
+| `--wr-density-xs`  |   4px | Compact icon padding, tight row insets   |
+| `--wr-density-sm`  |   6px | Row vertical padding, chip inner spacing |
+| `--wr-density-md`  |   8px | Default gap unit (baseline)              |
+| `--wr-density-lg`  |  12px | Section inner gaps, card padding base    |
+| `--wr-density-xl`  |  16px | Card padding, panel inner margins        |
+
+One-off structural values (marketing/landing surfaces) remain inline where unavoidable: `20px`, `22px`, `24px`, `28px`, `32px`, `36px`, `40px`, `56px`, `60px`, `64px`, `80px`. These are not tokenized — prefer the density scale or Tailwind defaults for new app-shell work.
 
 Large sections rely on dramatic vertical breathing room. The home page places a trust-logo strip far below the hero media. Product pages often hold dark panels inside fields of empty white space, then transition to dense forms or footers only near the end.
 
@@ -153,6 +216,34 @@ Cohere is mostly flat. Depth comes from surface alternation, media contrast, rou
 | Media Lift         | Rounded image or video over contrasting section color | Hero photo cards, product videos, CTA imagery         |
 | Dark Product Field | Deep green or navy full-width band                    | Command, North, financial services, security sections |
 
+### Shadow Token Scale (`--wr-shadow-*`)
+
+Six shadow tokens implement the elevation levels above. Raw values are defined in `src/styles/tokens.css`; always reference the token, never write the raw shadow inline.
+
+| Token                  | Value                              | Use                                             |
+| ---------------------- | ---------------------------------- | ----------------------------------------------- |
+| `--wr-shadow-hairline` | `0 1px 0 rgb(10 14 30 / 0.02)`     | Subtlest separation — sticky headers, row rules |
+| `--wr-shadow-sm`       | `0 8px 22px rgb(10 14 30 / 0.08)`  | Card lift — postit-card, capture-panel          |
+| `--wr-shadow-md`       | `0 14px 32px rgb(10 14 30 / 0.12)` | Floating panels, drawers                        |
+| `--wr-shadow-lg`       | `0 24px 60px rgb(10 14 30 / 0.18)` | Modals, full overlay sheets                     |
+| `--wr-shadow-overlay`  | `0 24px 60px rgb(10 14 30 / 0.28)` | Command palette, highest-elevation overlays     |
+| `--wr-shadow-toast`    | `0 2px 8px rgb(10 14 30 / 0.12)`   | Toast notifications (intentionally compact)     |
+
+> **Rule:** "무거운 그림자 금지" (no heavy shadows) means staying at `--wr-shadow-sm` or below for persistent app-shell surfaces. `--wr-shadow-md` and above are reserved for transient overlays.
+
+### Z-Index Scale (`--wr-z-*`)
+
+Layer hierarchy for shared CSS. Use these before reaching for ad-hoc `z-*` values:
+
+| Token            | Value | Layer                                              |
+| ---------------- | ----: | -------------------------------------------------- |
+| `--wr-z-base`    |     0 | Default document flow                              |
+| `--wr-z-raised`  |     2 | Inline raised elements (sticky note actions, etc.) |
+| `--wr-z-popover` |    40 | Popovers, dropdowns, tooltips                      |
+| `--wr-z-command` |    90 | Cmd+K command palette                              |
+| `--wr-z-drawer`  |    96 | Calendar drawer, side sheets                       |
+| `--wr-z-toast`   |   200 | Toast notifications (always on top)                |
+
 ## Shapes
 
 ### Radius Scale
@@ -170,6 +261,32 @@ Cohere is mostly flat. Depth comes from surface alternation, media contrast, rou
 ### Image Treatment
 
 Images are not decorative backdrops for text except in CTA bands. Most imagery sits as rounded cards with visible corners: product videos, enterprise photography, article thumbnails, and abstract 3D renders. The dominant radii are 8px and 22px.
+
+## Motion
+
+> **Principle:** "과한 모션 금지" — no excessive motion. Work Radar is a persistent utility surface; transitions must feel immediate and controlled, not decorative. All `transition` / `animation` durations and easings must reference the tokens below.
+>
+> **Exceptions:** MatrixCanvas card drag (physics-tuned values) and the `cb-pop` spring animation are intentionally bespoke and do not use these tokens.
+
+### Duration Tokens (`--wr-motion-*`)
+
+| Token                | Value   | Use                                          |
+| -------------------- | ------- | -------------------------------------------- |
+| `--wr-motion-fast`   | `0.12s` | Hover states, toggles, quick feedback        |
+| `--wr-motion-base`   | `0.18s` | View transitions, standard element changes   |
+| `--wr-motion-slow`   | `0.28s` | Slide-in popovers, slower reveal transitions |
+| `--wr-motion-panel`  | `0.22s` | Modal, palette, and toast appearance         |
+| `--wr-motion-drawer` | `0.32s` | Drawer / sheet appearance                    |
+| `--wr-motion-space`  | `0.42s` | Screen / workspace-level transitions         |
+
+### Easing Tokens (`--wr-ease-*`)
+
+| Token              | Value                            | Use                                                      |
+| ------------------ | -------------------------------- | -------------------------------------------------------- |
+| `--wr-ease-out`    | `cubic-bezier(0.16, 1, 0.3, 1)`  | Standard material deceleration (default)                 |
+| `--wr-ease-in`     | `cubic-bezier(0.7, 0, 0.84, 0)`  | Fast exit / dismissal                                    |
+| `--wr-ease-spring` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | Standard spring curve (capture-panel pop)                |
+| `--wr-ease-space`  | `cubic-bezier(0.22, 1, 0.36, 1)` | macOS Spaces-like deceleration for workspace transitions |
 
 ## Components
 
@@ -256,6 +373,16 @@ Dark footer subscription block with coral "AI moves fast" label, white headline,
 > 데스크톱 앱의 핵심 인터랙션. Cohere 토큰을 그대로 쓰되, 마케팅 컴포넌트가 아닌
 > **상주 유틸 표면**이다. 인터랙션 레퍼런스 구현: `docs/prototypes/capture-board.html`.
 
+### 캡처 보드 반지름 토큰 (`--cb-r-*`)
+
+캡처 보드와 InboxColumn 등 같은 시각 시스템을 공유하는 컴포넌트에 적용되는 전역 토큰. `src/styles/tokens.css`에 정의됨.
+
+| Token       | Value | Use                                               |
+| ----------- | ----: | ------------------------------------------------- |
+| `--cb-r-sm` |   8px | 카드/well 소형 반지름 (postit-card 등)            |
+| `--cb-r-md` |  12px | 중형 패널 반지름 (InboxColumn, 섹션 카드)         |
+| `--cb-r-lg` |  16px | 대형 패널 반지름 (capture-panel, today-rail 외곽) |
+
 ### 컨셉
 
 캡처 보드는 **앱 창 전체를 채우는 불투명 보드**다(현행 단일 창 유지; Tauri 투명 데스크톱
@@ -267,8 +394,8 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 
 - **`postit-card`** — 흰색 카드(`#fff`), 1px `border-light` 보더, 좌측 4px 사분면 악센트 바,
   radius `sm`(8–10px). 흰 캔버스 위 카드 분리를 위해 **절제된 Media Lift 그림자**만 허용
-  (`0 8px 22px rgba(15,20,40,.12)`; Cohere "무거운 그림자 금지"의 한정 예외).
-  본문은 Body(14px), **하단에 생성일**(Mono Micro). 우상단 `⋯` 액션 버튼(hover/선택 시 노출).
+  (`--wr-shadow-sm` = `0 8px 22px rgb(10 14 30 / 0.08)`; Cohere "무거운 그림자 금지"의 한정 예외).
+  본문은 `typo-body-md`(13px), **하단에 생성일**(`typo-mono-label` 또는 `typo-micro`). 우상단 `⋯` 액션 버튼(hover/선택 시 노출).
 - **`quadrant-guide`** — 2×2 셀. 얇은 hairline 룰(`--hair`/`border-light`, 흰 캔버스 기준),
   코너 라운드 `lg`(22px). 라벨 = Mono(EN, 예 `Q1 · DO NOW`) + Body(KO, `긴급 · 중요`) +
   사분면 도트. **색만으로 의미 전달 금지 — 항상 라벨 병기.**
@@ -349,8 +476,8 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 - **`agent-box`**: 1px `border-light`, radius `sm`(8px). 구성:
   - thin-line **engine 아이콘**(codex=terminal · hermes=paper-plane · claude=sparkle).
   - **편집 가능 이름**(Body 14px). 더블클릭/편집아이콘 → 인라인 input, Focus Blue(`#4c6ee6`) 링.
-  - **상태 = 색 dot + Mono 마이크로 라벨 병기**(idle=Muted Slate · working=Action Blue · error=Error Red).
-    **색만으로 의미 금지**(DESIGN 전역 규칙).
+  - **상태 = 색 dot + Mono 마이크로 라벨 병기**(idle=Muted Slate `--color-wr-subtle` · working=`--color-wr-status-working` `#16a34a` · error=Error Red `--color-wr-danger`).
+    **색만으로 의미 금지**(DESIGN 전역 규칙 — 항상 텍스트/아이콘 라벨 병기).
   - **진행 백필**: working 시 박스를 좌→우로 채우는 옅은 wash(과한 그림자/그라데이션 금지).
   - **너비 = 경과 시간 기반**: idle=초기(~96px), 길어질수록 증가, **상한 ~240px**(bounded).
 - **hermes·cmux 세션 각 1박스**(세션 enumerate). **개수 상한 8 + '+N' 오버플로 칩**
@@ -440,3 +567,4 @@ Primary CTAs and pills meet comfortable touch sizing through 12px-24px padding a
 - Exact proprietary font files are not bundled; use the documented fallbacks when implementing externally.
 - Mobile screenshots were not regenerated in this public update, so mobile behavior is documented from the desktop system and existing responsive patterns.
 - Some live pages lazy-load content blocks late; blank testimonial placeholders are documented as placeholder skeleton surfaces rather than filled testimonial cards.
+- **Deferred (Finding #16):** `src/styles/typography.css` currently has no inline comments mapping each `@utility` to its token sources. Adding those comments is a doc improvement inside a `src/` file and is out of scope for this doc-only pass. Follow-up: add `/* --text-caption-sm = 11px */`-style annotations to `typography.css` in a future src-only commit.
