@@ -6,7 +6,7 @@ import { projectSessions } from "../session/project.ts";
 import { projectSpecs } from "../spec/project.ts";
 import { deriveDecisionState } from "../decision/decision.ts";
 import { proposalsOf, eventsForDecision } from "../decision/readEvents.ts";
-import type { EventRow, NodeRow, NodeType } from "./types.ts";
+import type { EdgeRow, EdgeType, EventRow, NodeRow, NodeType } from "./types.ts";
 
 /** Which graph subject a given event type belongs to (null = no node subject in this cut). */
 const SUBJECT_TYPE_OF: Partial<Record<EventType, NodeType>> = {
@@ -97,4 +97,43 @@ export function toNodeRows(events: GovEvent[]): NodeRow[] {
     rows.push(node("decision", s.decisionId, s.title, { phase: s.phase, verdict: s.verdict }));
   }
   return rows;
+}
+
+/** Derive reference edges from event relations. Endpoints must resolve to emitted nodes
+ *  (except refs, which retain a possibly-dangling raw target — never silently dropped). */
+export function toEdgeRows(events: GovEvent[], nodes: NodeRow[]): EdgeRow[] {
+  const byCanon = new Map<string, NodeRow>();
+  for (const n of nodes) byCanon.set(n.canonical_id, n);
+  const edges: EdgeRow[] = [];
+  const push = (from: string, to: string, type: EdgeType, src: string) =>
+    edges.push({ edge_id: sha256hex(`${from}|${type}|${to}|${src}`), from_node_id: from, to_node_id: to, edge_type: type, source_event_id: src });
+
+  for (const e of events) {
+    const fm = e.frontmatter;
+
+    // step_bound binds two existing nodes but mints no subject node of its own (§3.2).
+    if (fm.type === "step_bound") {
+      const targets = (fm.related_to ?? []).map((r) => byCanon.get(r)).filter((n): n is NodeRow => !!n);
+      const task = targets.find((n) => n.node_type === "task");
+      const plan = targets.find((n) => n.node_type === "plan");
+      if (task && plan) push(task.node_id, plan.node_id, "step_of", fm.id);
+      continue;
+    }
+
+    const subj = subjectOf(e);
+    const fromNode = subj.type && subj.id ? byCanon.get(subj.id) : undefined;
+    if (!fromNode) continue; // no resolvable subject → no edge endpoint in this cut
+    const from = fromNode.node_id;
+
+    if (fm.supersededBy) {
+      const target = byCanon.get(fm.supersededBy);
+      push(from, target ? target.node_id : fm.supersededBy, "supersedes", fm.id);
+    }
+    for (const r of subj.relations) {
+      const target = byCanon.get(r);
+      const type: EdgeType = fm.type === "decision_blocked" ? "blocks" : target ? "related_to" : "refs";
+      push(from, target ? target.node_id : r, type, fm.id);
+    }
+  }
+  return edges;
 }

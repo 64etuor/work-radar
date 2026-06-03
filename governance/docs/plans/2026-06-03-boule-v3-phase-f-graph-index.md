@@ -457,7 +457,9 @@ describe("toEdgeRows", () => {
     evt({ id: "p2", type: "plan_proposed" }, "Plan two"),
     evt({ id: "sup1", type: "plan_superseded", related_to: ["p1"], supersededBy: "p2" }),
     evt({ id: "sb1", type: "step_bound", related_to: ["p1", "t1"] }),
-    evt({ id: "db1", type: "decision_blocked", related_to: ["t1"] }, "Blocked fork"),
+    // Real escalate.ts shape: decision_blocked related_to = [decisionId, taskId]; decision node = the proposal.
+    evt({ id: "dec1", type: "decision_proposed" }, "Decision one"),
+    evt({ id: "db1", type: "decision_blocked", related_to: ["dec1", "t1"] }, "Blocked fork"),
   ];
   const nodes = toNodeRows(events);
   const edges = toEdgeRows(events, nodes);
@@ -470,8 +472,8 @@ describe("toEdgeRows", () => {
   it("emits step_of from task to plan for a step_bound", () => {
     expect(has("step_of", "task:t1", "plan:p1")).toBe(true);
   });
-  it("emits blocks from the decision subject to the blocked task", () => {
-    expect(has("blocks", "decision:db1", "task:t1")).toBe(true);
+  it("emits blocks from the decision proposal to the blocked task", () => {
+    expect(has("blocks", "decision:dec1", "task:t1")).toBe(true);
   });
   it("produces deterministic edge ids (stable across reruns)", () => {
     expect(toEdgeRows(events, nodes).map((e) => e.edge_id)).toEqual(edges.map((e) => e.edge_id));
