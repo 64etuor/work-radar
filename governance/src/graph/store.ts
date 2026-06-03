@@ -24,6 +24,12 @@ function fromEventDb(r: EventRowDb): EventRow {
 /** Open an embedded PGlite store. ":memory:" is a SENTINEL → PGlite's no-arg in-memory mode
  *  (NOT a path; PGlite's own ephemeral URI is `memory://`). Any other value is a data dir. */
 export async function openStore(loc: string): Promise<GraphStore> {
+  if (loc !== ":memory:") {
+    // PGlite's nodefs mkdirs the leaf data dir but NOT its parents → pre-create them.
+    const { mkdir } = await import("node:fs/promises");
+    const { dirname } = await import("node:path");
+    await mkdir(dirname(loc), { recursive: true });
+  }
   const db = loc === ":memory:" ? new PGlite() : new PGlite(loc);
   await db.exec(DDL);
 

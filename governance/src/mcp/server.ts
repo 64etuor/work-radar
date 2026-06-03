@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { buildIndex, nodeIndexFs } from "../index/build.ts";
 import { harvest, makeWriteOne } from "../harvest/harvest.ts";
 import { realGitLog } from "../harvest/gitLog.ts";
@@ -57,6 +57,8 @@ import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
+import { openStore } from "../graph/store.ts";
+import { rebuildIndex } from "../graph/ingest.ts";
 
 const WORKSPACE =
   process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
@@ -872,6 +874,54 @@ server.registerTool(
       ? list.map((s) => `${s.id} [${s.rule}] ${s.subjectType}=${s.subject} ${s.detail}`).join("\n")
       : "(no open suggestions)";
     return { content: [{ type: "text", text }] };
+  },
+);
+
+// v3 Phase F — Postgres+pgvector derived graph index (events+nodes+edges via embedded PGlite).
+// Read/rebuild only — NO approve/choose/decision_* surface (master §4.5). One store, opened once.
+const graphStore = await openStore(join(WORKSPACE, "index", "pglite"));
+
+server.registerTool(
+  "rebuild_index",
+  { description: "L0 마크다운 이벤트 → 파생 그래프 인덱스(events+nodes+edges) 멱등 재구축", inputSchema: {} },
+  async () => {
+    const st = await rebuildIndex(WORKSPACE, graphStore);
+    return {
+      content: [
+        { type: "text", text: `index rebuilt: ${st.events} events, ${st.nodes} nodes, ${st.edges} edges (checksum ${st.checksum.slice(0, 8)})` },
+      ],
+    };
+  },
+);
+
+server.registerTool(
+  "index_status",
+  { description: "그래프 인덱스 행 수 + 투영 checksum", inputSchema: {} },
+  async () => {
+    const st = await graphStore.status();
+    const text =
+      st.events === 0 && st.nodes === 0
+        ? "index not built (run rebuild_index)"
+        : `events ${st.events} · nodes ${st.nodes} · edges ${st.edges} · checksum ${st.checksum.slice(0, 8)}`;
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerTool(
+  "graph_node",
+  { description: "노드 1개 조회 (node_id = `type:canonical_id`)", inputSchema: { id: z.string() } },
+  async ({ id }) => {
+    const n = await graphStore.getNode(id);
+    return { content: [{ type: "text", text: n ? JSON.stringify(n, null, 2) : `unknown node: ${id}` }] };
+  },
+);
+
+server.registerTool(
+  "graph_neighbors",
+  { description: "노드 + 1-hop 인접 엣지/노드", inputSchema: { id: z.string() } },
+  async ({ id }) => {
+    const nb = await graphStore.getNeighbors(id);
+    return { content: [{ type: "text", text: nb ? JSON.stringify(nb, null, 2) : `unknown node: ${id}` }] };
   },
 );
 

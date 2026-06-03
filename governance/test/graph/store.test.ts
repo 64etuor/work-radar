@@ -54,4 +54,16 @@ describe("graph store (PGlite :memory:)", () => {
     expect(existsSync(":memory:")).toBe(false); // sentinel must NOT be forwarded to PGlite as a path
     await store.close();
   });
+
+  it("file-backed open creates missing parent dirs (PGlite mkdirs only the leaf)", async () => {
+    const { mkdtemp } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const base = await mkdtemp(join(tmpdir(), "boule-f-store-"));
+    const loc = join(base, "index", "pglite"); // parent "index" does NOT exist yet
+    const store = await openStore(loc);
+    await store.rebuild(projectGraph(events));
+    expect((await store.status()).nodes).toBe(projectGraph(events).nodes.length);
+    await store.close();
+  });
 });
