@@ -14,6 +14,8 @@
     "format:check": "prettier --check .",
     "check:frontend-ownership": "node scripts/check-frontend-ownership.mjs",
     "check:classname-regression": "node scripts/check-classname-regression.mjs",
+    "check:design-tokens": "node scripts/check-design-tokens.mjs",
+    "test:design-tokens": "node --test scripts/check-design-tokens.test.mjs",
     "test:frontend-ownership": "node --test scripts/check-frontend-ownership.test.mjs",
     "test": "vitest run",
     "tauri": "bash scripts/tauri-wrapper.sh",

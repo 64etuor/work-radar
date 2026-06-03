@@ -2,8 +2,9 @@
 // 디자인 품질 게이트 — arbitrary 타이포(R3)·off-token 색(R2)·이모지 상태마커(R1) 드리프트 가드.
 // 정본: docs/superpowers/specs/2026-06-03-design-quality-gate-design.md
 // 패턴: scripts/check-frontend-ownership.mjs (순수 함수 + CLI + node --test).
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOTS = ["src"];
 const EXTS = new Set([".tsx", ".ts", ".jsx", ".js"]);
@@ -98,4 +99,43 @@ export function checkDesignTokens(root, baselineFps) {
     );
   }
   return failures;
+}
+
+const BASELINE_PATH = "scripts/design-gate-baseline.json";
+
+function readBaseline(root) {
+  try {
+    return JSON.parse(readFileSync(join(root, BASELINE_PATH), "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function main() {
+  const root = process.cwd();
+  if (process.argv.slice(2).includes("--update-baseline")) {
+    const fps = [...new Set(collectViolations(root).map(fingerprint))].sort();
+    const prev = readBaseline(root);
+    writeFileSync(join(root, BASELINE_PATH), JSON.stringify(fps, null, 2) + "\n");
+    console.log(`design-gate: baseline ${prev.length} → ${fps.length}`);
+    return;
+  }
+  const failures = checkDesignTokens(root, readBaseline(root));
+  if (failures.length === 0) {
+    console.log("design-tokens: ok");
+    return;
+  }
+  console.error(`design-tokens: ${failures.length} issue(s)`);
+  console.error(
+    "  R1=상태이모지 R2=off-token색 R3=arbitrary타이포 → typo-* / --color-wr-* / lucide로 대체.",
+  );
+  console.error(
+    "  의도적 전환부채면 `pnpm check:design-tokens --update-baseline`, 영구 예외면 IGNORE 검토.",
+  );
+  for (const f of failures) console.error("  " + f);
+  process.exit(1);
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
 }
