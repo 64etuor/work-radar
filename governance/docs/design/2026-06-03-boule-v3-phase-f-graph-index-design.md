@@ -193,6 +193,14 @@ rebuild produces identical ids (idempotency). Edges whose endpoints don't both r
 `refs` with a possibly-dangling `to` recorded as the raw id string — documented, so the graph never
 silently loses a reference.
 
+> **Known limitation (orphan `decision_blocked`):** a `blocks` edge needs its **from**-node (the
+> decision) to resolve. In the live harness `escalate()` always co-mints `decision_proposed` +
+> `decision_blocked` (`src/escalate/escalate.ts`), so the decision node exists and the edge resolves.
+> If a `decision_blocked` were ever ingested *without* a preceding proposal, no decision node exists
+> and the `blocks` edge is **dropped** (not degraded to `refs`, because there is no from-endpoint to
+> anchor). This is the one accepted gap in the no-silent-loss rule; it cannot occur via the current
+> producer. Revisit if a standalone `decision_blocked` producer is ever added.
+
 ### 3.5 Determinism
 
 `projectGraph` sorts all output rows by PK before returning (events by `event_id`, nodes by `node_id`,

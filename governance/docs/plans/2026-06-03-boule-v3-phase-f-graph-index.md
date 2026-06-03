@@ -6,7 +6,7 @@
 
 **Architecture:** A pure `projectGraph(events) → {events, nodes, edges}` reuses the existing per-axis folds (`projectTasks/Plans/Sessions/Specs` + `deriveDecisionState`); PGlite is dumb persistence/query. Rebuild = `TRUNCATE; bulk-insert` in one txn. Markdown is canonical; the index is a derived cache; embeddings/pgvector + `approvals`/`session_observations` are deferred.
 
-**Tech Stack:** Node 24 strip-types TS (source imports `.ts`, tests import `.js`), vitest 2, zod 4, `@electric-sql/pglite` (new), MCP SDK 1.29 (`server.registerTool`).
+**Tech Stack:** Node 24+ strip-types TS (this worktree runs v26; `--experimental-strip-types`; source imports `.ts`, tests import `.js`), vitest 2, zod 4, `@electric-sql/pglite` (new), MCP SDK 1.29 (`server.registerTool`).
 
 **Spec:** `governance/docs/design/2026-06-03-boule-v3-phase-f-graph-index-design.md`
 
@@ -530,7 +530,7 @@ export function toEdgeRows(events: GovEvent[], nodes: NodeRow[]): EdgeRow[] {
   return edges;
 }
 ```
-> `decision_blocked` is a lifecycle decision event: its subject anchor is `related_to[0]` (the decision id) and `subj.relations` holds the blocked task/plan ids → `blocks` edges from the decision node. (For a `decision_blocked` whose own id is the subject — i.e. no decision proposal precedes it — `subjectOf` still anchors via `related_to[0]`; ensure fixtures match the real harness shape during the smoke task.)
+> `decision_blocked` is a lifecycle decision event with `related_to = [decisionId, taskId]` (verified in `src/escalate/escalate.ts`): `subjectOf` anchors to `related_to[0]` (the decision) and `subj.relations = [taskId]` → a `blocks` edge from the decision node to the task. `escalate()` always co-mints `decision_proposed` + `decision_blocked`, so the decision node always exists and the edge resolves. **Orphan case** (a `decision_blocked` with no preceding proposal → no from-node): the `blocks` edge is dropped (spec §3.4 "Known limitation"); it cannot occur via the current producer. The Task 7 multi-axis fixture asserts the resolved case end-to-end.
 
 - [ ] **Step 4: Run tests to confirm pass**
 
@@ -706,10 +706,20 @@ describe("graph store (PGlite :memory:)", () => {
   it("serves getNode and getNeighbors", async () => {
     const store = await openStore(":memory:");
     await store.rebuild(projectGraph(events));
-    expect((await store.getNode("task:t1"))?.title).toBe("Task one");
+    const t1 = await store.getNode("task:t1");
+    expect(t1?.title).toBe("Task one");
+    expect(t1?.state_jsonb.phase).toBe("active"); // state_jsonb survives the DB round-trip field-for-field
     expect(await store.getNode("task:missing")).toBeNull();
     const nb = await store.getNeighbors("task:t1");
     expect(nb?.node.node_id).toBe("task:t1");
+    await store.close();
+  });
+
+  it("the :memory: sentinel creates no on-disk dir (truly ephemeral)", async () => {
+    const { existsSync } = await import("node:fs");
+    const store = await openStore(":memory:");
+    await store.rebuild(projectGraph(events));
+    expect(existsSync(":memory:")).toBe(false); // sentinel must NOT be forwarded to PGlite as a path
     await store.close();
   });
 });
@@ -729,7 +739,8 @@ import { DDL } from "./schema.ts";
 import { checksumProjection } from "./checksum.ts";
 import type { EdgeRow, GraphProjection, GraphStore, IndexStatus, NodeRow } from "./types.ts";
 
-/** Open an embedded PGlite store. ":memory:" (tests) → ephemeral; else a data dir. */
+/** Open an embedded PGlite store. ":memory:" is a SENTINEL → PGlite's no-arg in-memory mode
+ *  (NOT a path; PGlite's own ephemeral URI is `memory://`). Any other value is a data dir. */
 export async function openStore(loc: string): Promise<GraphStore> {
   const db = loc === ":memory:" ? new PGlite() : new PGlite(loc);
   await db.exec(DDL);
@@ -857,6 +868,7 @@ import { rebuildIndex } from "../../src/graph/ingest.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
 import { projectGraph } from "../../src/graph/project.js";
 import { checksumProjection } from "../../src/graph/checksum.js";
+import type { GovEvent } from "../../src/event/event.js";
 
 async function seedWorkspace(): Promise<string> {
   const ws = await mkdtemp(join(tmpdir(), "boule-f-"));
@@ -885,6 +897,44 @@ describe("rebuild equivalence (DB == markdown-derived projection)", () => {
     const a = await rebuildIndex(ws, store);
     const b = await rebuildIndex(ws, store);
     expect(b.checksum).toBe(a.checksum);
+    await store.close();
+  });
+
+  // The real workspace may have ~0 events; this synthetic fixture exercises EVERY node + edge
+  // type through projection AND DB persistence so the keystone is not proven on tasks alone.
+  it("covers every node and edge type end-to-end (multi-axis fixture)", async () => {
+    const f = (id: string, type: string, related?: string[], supersededBy?: string): GovEvent => ({
+      frontmatter: {
+        id, type: type as GovEvent["frontmatter"]["type"], source: "hermes", actor: "u", tags: [],
+        ...(related ? { related_to: related } : {}), ...(supersededBy ? { supersededBy } : {}),
+      },
+      body: `Title ${id}`,
+    });
+    const events: GovEvent[] = [
+      f("dec1", "decision_proposed"),
+      f("db1", "decision_blocked", ["dec1", "t1"]),   // blocks: decision:dec1 → task:t1
+      f("t1", "task_created"),
+      f("p1", "plan_proposed"),
+      f("p2", "plan_proposed"),
+      f("sup1", "plan_superseded", ["p1"], "p2"),       // supersedes: plan:p1 → plan:p2
+      f("sb1", "step_bound", ["p1", "t1"]),             // step_of: task:t1 → plan:p1
+      f("sp1", "spec_proposed"),
+      f("ses1", "session_spawned", ["t1", "ghost_x"]),  // related_to: session→task:t1 ; refs: session→ghost_x
+    ];
+    const proj = projectGraph(events);
+    expect(new Set(proj.nodes.map((n) => n.node_type))).toEqual(
+      new Set(["decision", "task", "plan", "spec", "session"]),
+    );
+    expect(new Set(proj.edges.map((e) => e.edge_type))).toEqual(
+      new Set(["blocks", "supersedes", "step_of", "related_to", "refs"]),
+    );
+
+    const store = await openStore(":memory:");
+    await store.rebuild(proj);
+    const first = (await store.status()).checksum;
+    await store.rebuild(projectGraph(events)); // idempotent + DB == pure projection
+    expect((await store.status()).checksum).toBe(first);
+    expect((await store.status()).checksum).toBe(checksumProjection(proj));
     await store.close();
   });
 });
@@ -1088,6 +1138,20 @@ After Task 9, **do not declare done.** Request a **separate critic pass** (opus,
 - INVARIANTs #1/#4/#5/#6 specifically (read-only L0, bindings unchanged, no polling loop/bounded, app DB untouched).
 
 Only on critic **ACCEPT (0 blockers)** is Phase F done. Then update memory and report. **Never push/merge** without explicit user request — the branch stays PARKED.
+
+---
+
+## Plan-level critic (2026-06-03 — completed before implementation)
+
+A separate opus critic reviewed this spec + plan against the as-built code: **ACCEPT-WITH-NITS, 0
+blockers**. It independently verified every reused signature (`projectTasks/Plans/Sessions/Specs`,
+`deriveDecisionState`, `proposalsOf`/`eventsForDecision`), the `decision_blocked` `related_to=[decisionId, taskId]`
+shape (`src/escalate/escalate.ts`), `SessionState` having no `title`, the top-level-async MCP server,
+the `.js` test convention, and INVARIANTs #1/#4/#5/#6. Nits folded in here: (a) PGlite `:memory:`
+sentinel documented + ephemerality assertion added (Task 6); (b) orphan-`decision_blocked` `blocks`-edge
+drop documented (spec §3.4, Task 4); (c) multi-axis fixture exercising **every** node + edge type added
+(Task 7); (d) `state_jsonb` round-trip assertion added (Task 6); (e) Node version label corrected.
+**This is the PLAN critic — the Task 9 STOP gate still requires a SEPARATE critic on the implemented diff.**
 
 ---
 
