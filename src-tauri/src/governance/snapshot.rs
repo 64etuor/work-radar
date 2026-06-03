@@ -1,6 +1,10 @@
 //! Reads governance/workspace/state/*.json (gitignored runtime caches, rebuildable from events).
 //! There is NO write path to the governance event log in this module (INVARIANT #1, structural).
 
+// 본 모듈의 모든 reader/helper는 Result<_, AppError>로 통일(단일 envelope, 레포 전역 규약)
+// → 모듈 단위 result_large_err 허용(routines/google_sync.rs와 동일 관용).
+#![allow(clippy::result_large_err)]
+
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -23,82 +27,95 @@ pub fn resolve_governance_state_dir(workspace_override: Option<String>) -> PathB
 }
 
 // ── Phase enums (mirror governance fold types; Unknown = drift-resilient fallback) ──
+//
+// NOTE on the `Unknown` fallback: serde's `#[serde(other)]` would be the obvious
+// way to get drift-resilient deserialization, but specta rc.25's TypeScript
+// formatter rejects `#[serde(other)]` on an externally-tagged (bare-string) enum
+// ("requires a tagged enum representation"). Tagging would change the JSON shape
+// from bare `"active"` strings to objects, breaking the governance `render*`
+// output contract and the FE `statusTone` string-literal switch. So each enum
+// keeps the bare-string contract (`Serialize` + `specta::Type` emit a plain
+// string union incl. `"unknown"`) and implements a manual `Deserialize` that maps
+// any unrecognized string to `Unknown`. The `phase_enum!` macro factors out that
+// shared deserialize-with-fallback logic across the six enums.
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskPhase {
-    Ready,
-    Active,
-    Blocked,
-    Done,
-    Cancelled,
-    #[serde(other)]
-    Unknown,
+macro_rules! phase_enum {
+    ($(#[$meta:meta])* $name:ident { $($variant:ident => $wire:literal),+ $(,)? }) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+        #[serde(rename_all = "snake_case")]
+        pub enum $name {
+            $($variant,)+
+            /// Drift-resilient fallback: any wire value not in the known set.
+            Unknown,
+        }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let raw = String::deserialize(deserializer)?;
+                Ok(match raw.as_str() {
+                    $($wire => $name::$variant,)+
+                    _ => $name::Unknown,
+                })
+            }
+        }
+    };
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "snake_case")]
-pub enum PlanPhase {
-    Draft,
-    Active,
-    NeedsRevision,
-    Completed,
-    Archived,
-    Superseded,
-    #[serde(other)]
-    Unknown,
-}
+phase_enum!(TaskPhase {
+    Ready => "ready",
+    Active => "active",
+    Blocked => "blocked",
+    Done => "done",
+    Cancelled => "cancelled",
+});
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "snake_case")]
-pub enum SpecPhase {
-    Draft,
-    Accepted,
-    Archived,
-    #[serde(other)]
-    Unknown,
-}
+phase_enum!(PlanPhase {
+    Draft => "draft",
+    Active => "active",
+    NeedsRevision => "needs_revision",
+    Completed => "completed",
+    Archived => "archived",
+    Superseded => "superseded",
+});
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionPhase {
-    Planned,
-    Opening,
-    Active,
-    Waiting,
-    Blocked,
-    ContextPressureHigh,
-    CheckpointRequested,
-    HandoffReady,
-    Closing,
-    Closed,
-    Crashed,
-    Recovering,
-    #[serde(other)]
-    Unknown,
-}
+phase_enum!(SpecPhase {
+    Draft => "draft",
+    Accepted => "accepted",
+    Archived => "archived",
+});
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "snake_case")]
-pub enum HandoffPhase {
-    Requested,
-    Validating,
-    Pending,
-    Invalid,
-    Consumed,
-    #[serde(other)]
-    Unknown,
-}
+phase_enum!(SessionPhase {
+    Planned => "planned",
+    Opening => "opening",
+    Active => "active",
+    Waiting => "waiting",
+    Blocked => "blocked",
+    ContextPressureHigh => "context_pressure_high",
+    CheckpointRequested => "checkpoint_requested",
+    HandoffReady => "handoff_ready",
+    Closing => "closing",
+    Closed => "closed",
+    Crashed => "crashed",
+    Recovering => "recovering",
+});
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "snake_case")]
-pub enum Ownership {
-    UserOwned,
-    OrchestratorOwned,
-    ExternalOwned,
-    #[serde(other)]
-    Unknown,
-}
+phase_enum!(HandoffPhase {
+    Requested => "requested",
+    Validating => "validating",
+    Pending => "pending",
+    Invalid => "invalid",
+    Consumed => "consumed",
+});
+
+phase_enum!(Ownership {
+    UserOwned => "user_owned",
+    OrchestratorOwned => "orchestrator_owned",
+    ExternalOwned => "external_owned",
+});
 
 // ── Row structs (camelCase JSON keys mirror the governance render* output) ──
 
@@ -212,7 +229,7 @@ where
         }
     };
     if let Ok(modified) = meta.modified() {
-        if newest.map_or(true, |n| modified > n) {
+        if newest.is_none_or(|n| modified > n) {
             *newest = Some(modified);
         }
     }

@@ -19,8 +19,8 @@ mod commands;
 mod db;
 mod error;
 mod git;
-mod governance;
 mod github;
+mod governance;
 mod hermes_agent;
 mod jobs;
 mod keychain;
@@ -269,6 +269,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_timeline_notes_for_date,
         commands::upsert_timeline_note,
         commands::delete_timeline_note,
+        // Boule governance Control Room (Phase H) — read-only derived-state snapshot.
+        commands::get_control_room_snapshot,
     ])
 }
 
