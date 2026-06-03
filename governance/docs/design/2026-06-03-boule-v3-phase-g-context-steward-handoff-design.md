@@ -58,7 +58,10 @@ pure-core-under-IO-shell, mirroring the A/E/F rhythm:
 `archived` lifecycle / any `handoff_archived` event · Steward auto-emitting `session_context_pressure_changed`
 or any session-axis event · pgvector/embedding-ranked bundle selection (1-hop index reads only) · persisting
 the hydration bundle as a durable file · any UI (Phase H) · any new decision/task/session event type ·
-any write to the decision rail · any `bindings.ts` / app-SQLite / migration change.
+any write to the decision rail · any `bindings.ts` / app-SQLite / migration change · **sourcing the real
+per-session `AutonomyEnvelope`** into the bundle (see §4.2 — deferred this slice; the bundle carries an
+envelope **field**, but folding/reading the concrete prior envelope from `.boule/envelope.json` or a
+`session_spawned`/`step_bound` event is a later slice).
 
 ---
 
@@ -147,8 +150,13 @@ ContextPressure = { level: "low"|"medium"|"high"|"critical", score: 0..1, compon
 - **Event-derived signals** reuse existing folds: `unresolvedDecisions` = count of open `decision_blocked`
   (reuse `hasOpenBlock`-style logic); `planStepDistanceToSafeBoundary` from plan/task folds;
   `lastHandoffAgeMs` from handoff births (∞ / capped when none).
-- **Weighting:** a fixed, documented weight vector; each component normalized to `0..1`; `score` = clamped
-  weighted sum. **Thresholds (§9):** `low < 0.50`, `medium < 0.70`, `high < 0.85`, `critical ≥ 0.85`.
+- **Weighting:** a fixed, documented weight vector (plan Task 6) summing to 1.0; each component normalized
+  to `0..1`; `score` = clamped weighted sum. **Thresholds (§9):** `low < 0.50`, `medium < 0.70`,
+  `high < 0.85`, `critical ≥ 0.85`.
+- **By design, maxed runtime signals alone reach `high` (~0.75), not `critical`.** Reaching `critical`
+  requires the event-derived signals (unresolved decisions / in-flight work) to corroborate: a full context
+  window with *no unresolved governance-relevant work* can still stop cleanly → "high", not "critical." The
+  plan's saturated fixture therefore maxes **both** runtime signals **and** the event log (→ score 1.0).
 - **Advisory only:** returns the level; **emits nothing**. `wall_clock`/`now` is supplied by the caller
   (Boule scripts forbid `Date.now()`); the function is a pure total function of its inputs → fully testable.
 
@@ -181,10 +189,14 @@ view of the same data.
 
 ### 4.2 Laundering-prevention (§4.4#5) — asserted in the pure core
 
-The bundle **MUST** include all open `decision_blocked` items and the **autonomy envelope** carried by the
-handoff, and **MUST NOT** contain any permission-granting / authority-expanding field. This is a **property
-test** on `assembleBundle`, not prose: given a log with an open blocker, the assembled bundle surfaces it;
-the bundle type has no "grant"/"approve"/"allow" field.
+The bundle **MUST** include all open `decision_blocked` items and **MUST NOT** contain any
+permission-granting / authority-expanding field. The bundle also carries an `autonomyEnvelope` **field**
+(so authority is *named, not expanded*); **sourcing the concrete prior per-session envelope is deferred**
+(§0.2) — this slice carries a placeholder envelope string, which still satisfies the laundering ban (no
+field can *expand* authority) without yet claiming to *forward* the exact prior constraints. This is a
+**property test** on `assembleBundle`, not prose: given a log with one resolved + one open blocker, the
+assembled bundle surfaces **only the open** one (and its rendered markdown lists it); the bundle type has
+no "grant"/"approve"/"allow"/"permit"/"authori…" field.
 
 ### 4.3 IO shell
 
@@ -233,14 +245,15 @@ on an already-`pending`/`consumed` handoff is a no-op/explicit error, not a dupl
 
 - A `request → draft(incomplete) → validate(invalid, missing[]) → draft(complete) → validate(pending) →
   hydrate(consumed)` round-trip passes headlessly in vitest; `handoff_status` reflects each phase.
-- `computeContextPressure` returns `critical` for a saturated-signal fixture and `low` for an idle one;
-  thresholds match §9; emits nothing.
-- `assembleBundle` property test: open `decision_blocked` appears in the bundle; bundle type has no
-  authority-granting field.
+- `computeContextPressure` returns `critical` for a fully-saturated fixture (runtime **and** log maxed →
+  score 1.0) and `low` for an idle one; a recent handoff lowers the `lastHandoffAge` component; thresholds
+  match §9; emits nothing.
+- `assembleBundle` property test: given one resolved + one open `decision_blocked`, **only the open** one
+  appears in the bundle and its rendered markdown; bundle type has no authority-granting field.
 - **Negative test:** the whole Phase G path writes **0** `decision_*`/`task_*`/`session_*` events; only
-  `hydrate` writes (one `handoff_consumed`).
-- Gates: `pnpm exec tsc --noEmit` = 0 · `pnpm exec vitest run` green (+~25) · `git diff <base>..HEAD --
-  src/bindings.ts` empty · `git diff <base>..HEAD -- src-tauri/migrations` empty.
+  `hydrate` writes (one `handoff_consumed`); a second `hydrate` on a consumed handoff writes **0** new events.
+- Gates: `pnpm exec tsc --noEmit` = 0 · `pnpm exec vitest run` green (record the real count) · `git diff
+  <base>..HEAD -- src/bindings.ts` empty · `git diff <base>..HEAD -- src-tauri/migrations` empty.
 - **Separate impl-critic (opus) ACCEPT 0 blockers** — self-approve forbidden.
 
 ---

@@ -722,7 +722,18 @@ import type { GovEvent } from "../../src/event/event.js";
 
 const now = new Date(Date.UTC(2026, 5, 3, 14, 0, 0));
 const idle: RuntimeSignals = { estimatedTokenRatio: 0, turnCount: 0, wallClockMs: 0, filesTouched: 0 };
-const saturated: RuntimeSignals = { estimatedTokenRatio: 1, turnCount: 200, wallClockMs: 7_200_000, filesTouched: 100 };
+const saturatedRt: RuntimeSignals = { estimatedTokenRatio: 1, turnCount: 200, wallClockMs: 7_200_000, filesTouched: 100 };
+
+const ev = (id: string, type: GovEvent["frontmatter"]["type"], related?: string[]): GovEvent => ({
+  frontmatter: { id, type, source: "agent_run", actor: "a", tags: [], related_to: related }, body: "",
+});
+// Maxed log: 5 unresolved decision_blocked + 5 in-flight tasks (started, not terminal) → BOTH
+// event-derived components saturate (each normalizes /5). No handoff → lastHandoffAge maxed too.
+const maxedLog: GovEvent[] = [
+  ...Array.from({ length: 5 }, (_, i) => ev(`evt_db_${i}`, "decision_blocked", [`evt_dp_${i}`])),
+  ...Array.from({ length: 5 }, (_, i) => ev(`evt_t_${i}`, "task_created")),
+  ...Array.from({ length: 5 }, (_, i) => ev(`evt_ts_${i}`, "task_started", [`evt_t_${i}`])),
+];
 
 describe("computeContextPressure", () => {
   it("idle signals + empty log → low", () => {
@@ -730,10 +741,20 @@ describe("computeContextPressure", () => {
     expect(r.level).toBe("low");
     expect(r.score).toBeLessThan(0.5);
   });
-  it("saturated signals → critical", () => {
-    const r = computeContextPressure(saturated, [], now);
+  it("fully saturated (runtime + maxed log) → critical, score 1.0", () => {
+    const r = computeContextPressure(saturatedRt, maxedLog, now);
     expect(r.level).toBe("critical");
     expect(r.score).toBeGreaterThanOrEqual(0.85);
+  });
+  it("maxed runtime ALONE (empty log) is `high`, not `critical` (event-derived must corroborate)", () => {
+    const r = computeContextPressure(saturatedRt, [], now);
+    expect(r.level).toBe("high"); // by design: ~0.75 — see design §3
+  });
+  it("a recent handoff lowers the lastHandoffAge component", () => {
+    const recent = ev("evt_20260603_135900_0001", "handoff_requested", ["evt_s1"]); // 1 min before `now`
+    const withRecent = computeContextPressure(idle, [recent], now);
+    const without = computeContextPressure(idle, [], now);
+    expect(withRecent.components.lastHandoffAgeMs).toBeLessThan(without.components.lastHandoffAgeMs);
   });
   it("an open decision_blocked raises the unresolvedDecisions component", () => {
     const log: GovEvent[] = [
@@ -930,16 +951,21 @@ describe("assembleBundle", () => {
     expect(markdown).toContain("run build");
   });
 
-  it("LAUNDERING-PREVENTION: carries open decision_blocked items + envelope, no authority field", () => {
+  it("LAUNDERING-PREVENTION: carries ONLY open decision_blocked (resolved excluded), surfaces it in markdown, no authority field", () => {
     const log: GovEvent[] = [
-      { frontmatter: { id: "evt_dp", type: "decision_proposed", source: "agent_run", actor: "a", tags: [] }, body: "fork: A or B" },
-      { frontmatter: { id: "evt_db", type: "decision_blocked", source: "agent_run", actor: "a", tags: [], related_to: ["evt_dp"] }, body: "needs human" },
+      // RESOLVED fork (blocked → chosen) → must NOT survive into the bundle.
+      { frontmatter: { id: "evt_dp_r", type: "decision_proposed", source: "agent_run", actor: "a", tags: [] }, body: "resolved fork" },
+      { frontmatter: { id: "evt_db_r", type: "decision_blocked", source: "agent_run", actor: "a", tags: [], related_to: ["evt_dp_r"] }, body: "resolved blocker" },
+      { frontmatter: { id: "evt_ch", type: "decision_chosen", source: "hermes", actor: "user", tags: [], related_to: ["evt_dp_r"] }, body: "picked A" },
+      // STILL-OPEN fork → MUST survive (laundering ban).
+      { frontmatter: { id: "evt_dp_o", type: "decision_proposed", source: "agent_run", actor: "a", tags: [] }, body: "open fork" },
+      { frontmatter: { id: "evt_db_o", type: "decision_blocked", source: "agent_run", actor: "a", tags: [], related_to: ["evt_dp_o"] }, body: "needs human now" },
     ];
-    const { bundle } = assembleBundle({ ...base, log });
-    expect(bundle.openBlockers.length).toBe(1);
-    expect(bundle.openBlockers[0].decisionId).toBe("evt_dp");
-    expect(bundle.autonomyEnvelope).toBe("read-only; no network");
-    // No authority-granting field may exist on the bundle.
+    const { bundle, markdown } = assembleBundle({ ...base, log });
+    expect(bundle.openBlockers.map((b) => b.decisionId)).toEqual(["evt_dp_o"]); // resolved one excluded
+    expect(markdown).toContain("evt_dp_o"); // open blocker surfaced in the rendered bundle
+    expect(bundle.autonomyEnvelope).toBe("read-only; no network"); // envelope field echoed (placeholder this slice)
+    // No authority-granting field may exist on the bundle (laundering ban — informs, never empowers).
     const forbidden = /grant|approve|allow|permit|authori/i;
     expect(Object.keys(bundle).some((k) => forbidden.test(k))).toBe(false);
   });
@@ -1126,6 +1152,13 @@ describe("hydrate IO shell", () => {
     expect(r.markdown).toContain("# Hydration Bundle");
     expect((await handoffTrail(dir, { handoffId })).phase).toBe("consumed");
 
+    // Idempotent / no double-spend: a second hydrate on a now-consumed handoff writes ZERO new
+    // events (INVARIANT #1 — exactly one handoff_consumed, ever).
+    const countAfter = (await readAllEvents(dir)).length;
+    const second = await hydrate(dir, { handoffId }, deps, at(4), 0.5);
+    expect(second.ok).toBe(false);
+    expect((await readAllEvents(dir)).length).toBe(countAfter);
+
     // INVARIANT #1: the whole path wrote only handoff_* events.
     const all = await readAllEvents(dir);
     expect(all.every((e) => e.frontmatter.type.startsWith("handoff_"))).toBe(true);
@@ -1210,7 +1243,10 @@ export async function hydrate(
     currentTask: currentTask ? `${currentTask.taskId} [${currentTask.phase}] ${currentTask.title}` : "(none)",
     indexNeighbors: neighbors,
     gitSummary: await deps.gitSummary(),
-    autonomyEnvelope: "carried from session; not expandable by hydration",
+    // PLACEHOLDER envelope (design §0.2/§4.2): sourcing the real per-session AutonomyEnvelope
+    // (.boule/envelope.json / a session_spawned fold) is DEFERRED. A placeholder still satisfies the
+    // laundering ban (no bundle field can EXPAND authority); it does not yet FORWARD prior constraints.
+    autonomyEnvelope: "(placeholder — real per-session envelope carry deferred; see design §0.2)",
   });
 
   const consumed = await consumeHandoff(workspaceDir, { handoffId: input.handoffId }, now, rand);
@@ -1303,10 +1339,9 @@ import {
 } from "../handoff/handlers.ts";
 import { hydrate, type HydrateDeps } from "../steward/hydrateIo.ts";
 import { computeContextPressure, type RuntimeSignals } from "../steward/pressure.ts";
-import { buildIndex as buildPrincipleIndex, nodeIndexFs as principleFs } from "../index/build.ts";
 ```
 
-> `buildIndex`/`nodeIndexFs` are already imported for the `principles` tool — REUSE the existing imports; do NOT add the aliased line above if it duplicates. Use the already-imported `buildIndex(REPO_ROOT, nodeIndexFs)` to source principles.
+> `buildIndex`/`nodeIndexFs` are ALREADY imported at `server.ts:5` for the `principles` tool — REUSE them; do NOT add a duplicate/aliased import. The `hydrate` deps below call the already-imported `buildIndex(REPO_ROOT, nodeIndexFs)`.
 
 Register after the Phase F `graph_neighbors` block (before `await server.connect`):
 
@@ -1359,7 +1394,9 @@ server.registerTool(
       },
       principles: async () => {
         const index = await buildIndex(REPO_ROOT, nodeIndexFs);
-        return index.principles.map((p) => (typeof p === "string" ? p : JSON.stringify(p)));
+        // PrincipleRow = { id, number, title, body, sourcePath } (src/index/types.ts) — emit readable
+        // "INVARIANT-1: <title>" lines, NOT JSON blobs.
+        return index.principles.map((p) => `${p.id}: ${p.title}`);
       },
     };
     const r = await hydrate(WORKSPACE, { handoffId }, deps, nowFn(), randFn());
@@ -1399,7 +1436,7 @@ server.registerTool(
 );
 ```
 
-> The `principles` index field shape: confirm `index.principles` exists on the object returned by `buildIndex` (it's used by `formatPrinciples`). If the public accessor differs (e.g. `index.getPrinciples()`), use that — check `src/index/build.ts` / `src/index/format.ts` before implementing. This is a render-only detail; it does not change behavior or events.
+> The `principles` accessor is confirmed: `buildIndex(...)` returns an object with `principles: readonly PrincipleRow[]` and `PrincipleRow = { id, number, title, body, sourcePath }` (`src/index/types.ts:14`, used by `formatPrinciples`). Render-only detail; no behavior/event change.
 
 - [ ] **Step 4: Run the full gate suite**
 
@@ -1407,7 +1444,7 @@ server.registerTool(
 pnpm exec tsc --noEmit
 pnpm exec vitest run
 ```
-Expected: tsc 0 errors; all tests pass (prior baseline 394 + the new Phase G tests).
+Expected: tsc 0 errors; all tests pass (prior baseline + the new Phase G tests). Record the ACTUAL `vitest run` count at implementation time — do not assert a hardcoded number.
 
 - [ ] **Step 5: Drift gates (INVARIANT #4/#6) + commit**
 
@@ -1449,5 +1486,6 @@ Then mark Phase G ✅ DONE in `governance/docs/INDEX.md` (master table row G + a
 ## Self-Review (plan vs. spec)
 
 - **Spec coverage:** (A) handoff lifecycle SSOT → Tasks 1–5; (B) hydration bundle → Tasks 7–8 (+ MCP T9); (C) pressure scoring → Task 6. Validation gates (auto-structural) → Task 3+4. Consume-on-hydrate → Task 8. Advisory-only pressure → Task 6 + T9 read-only `context_pressure`. Laundering-prevention → Task 7 property test. Negative INVARIANT #1 → Task 9. Drift gates → Task 9 + Final. All §0.1 decisions and §0.2 non-goals respected (no archived event, no second pressure writer, no persisted bundle, no UI).
-- **Placeholder scan:** none — every step carries real code. The two `> NOTE` callouts (plan `PlanState`/`index.principles` field names) are explicit "confirm exact accessor in the named file" checks, not deferred work; they cannot change behavior or events.
+- **Placeholder scan:** none — every step carries real code. Both accessor callouts (`PlanState.planId/title/phase`, `index.principles: PrincipleRow[]`) are now **verified against the tree**, not open questions.
+- **Plan-critic revisions (separate opus pass, applied):** (1) BLOCKER — Task 6 saturated fixture maxes runtime **and** the event log so `critical` (score 1.0) is reachable; added a "runtime-alone = high" test + a `lastHandoffAge` decay test; design §3 documents the runtime-only ceiling. (2) MAJOR — real per-session `AutonomyEnvelope` sourcing is explicitly **deferred** (design §0.2/§4.2); the bundle carries an honest placeholder field; the laundering ban (no field expands authority) still holds. (3) MAJOR — Task 7 laundering test now asserts resolved-vs-open exclusion + markdown surfacing. (4) MINORs — removed the aliased duplicate import; principles render as `id: title` (not JSON); added an idempotent double-`hydrate` zero-new-events assertion; baseline test count is recorded at run time, not hardcoded.
 - **Type consistency:** `HandoffState`/`HandoffPhase` (T2) reused by guards (T4), project (T5), hydrate (T7/T8). `runValidateHandoff` (not `validateHandoffCmd`) used consistently in T4/T9. `computeContextPressure(rt, log, now)` signature identical in T6/T8/T9. `HydrateDeps`/`AssembleInputs` field names match across T7/T8/T9. `requestHandoff` returns `{ handoffId }` everywhere.
