@@ -24,8 +24,6 @@
   "R3|src/components/jobs/ProposalError.tsx|text-[12px]",
   "R3|src/components/jobs/SelfCheckPanel.tsx|text-[12px]",
   "R3|src/components/jobs/TriagePanel.tsx|text-[12px]",
-  "R3|src/components/settings/AddProjectForm.tsx|text-[17px]",
-  "R3|src/components/settings/AddProjectForm.tsx|tracking-[-0.01em]",
   "R3|src/components/settings/AgentsPane.tsx|text-[11px]",
   "R3|src/components/settings/GoogleAccountBlock.tsx|text-[10px]",
   "R3|src/components/settings/NewsSourceSettings.tsx|text-[11px]",
