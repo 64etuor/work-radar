@@ -10,3 +10,4 @@ pnpm exec lint-staged
 pnpm typecheck
 pnpm check:frontend-ownership
 pnpm check:classname-regression
+pnpm check:design-tokens

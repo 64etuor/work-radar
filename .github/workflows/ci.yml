@@ -98,6 +98,15 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Frontend guards
+        run: |
+          pnpm check:frontend-ownership
+          pnpm check:classname-regression
+          pnpm check:design-tokens
+
+      - name: Design gate unit tests
+        run: pnpm test:design-tokens
+
       - name: Test
         run: pnpm test
 
