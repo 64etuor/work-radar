@@ -87,7 +87,7 @@ test("checkDesignTokens returns human failures for new violations + stale", asyn
   const root = await makeFixture({
     "src/a.tsx": 'export const A = () => <span className="text-[15px]">x</span>;\n',
   });
-  const failures = await checkDesignTokens(root, ["R3|src/gone.tsx|text-[9px]"]);
+  const failures = checkDesignTokens(root, ["R3|src/gone.tsx|text-[9px]"]);
   const joined = failures.join("\n");
   assert.match(joined, /\[R3\] src\/a\.tsx:1.*text-\[15px\]/);
   assert.match(joined, /stale baseline/);
@@ -97,5 +97,35 @@ test("checkDesignTokens passes when all violations are baselined", async () => {
   const root = await makeFixture({
     "src/a.tsx": 'export const A = () => <span className="text-[15px]">x</span>;\n',
   });
-  assert.deepEqual(await checkDesignTokens(root, ["R3|src/a.tsx|text-[15px]"]), []);
+  assert.deepEqual(checkDesignTokens(root, ["R3|src/a.tsx|text-[15px]"]), []);
+});
+
+test("R1 catches the warning emoji incl. the VS16 (⚠️) form", async () => {
+  const root = await makeFixture({
+    "src/w.tsx": 'export const W = () => <button title="하지말걸 ⚠️">x</button>;\n',
+  });
+  const v = collectViolations(root);
+  assert.deepEqual(rules(v.filter((x) => x.rule === "R1")), ["R1:⚠"]);
+});
+
+test("comment lines are not scanned (generated doc-comment emoji/colors ignored)", async () => {
+  const root = await makeFixture({
+    "src/k.ts": [
+      "/** 회고 태그 ⚠️ — text-black bg-[#fff] 라고 적힌 주석. */",
+      "// also ⚠️ text-[15px] in a line comment",
+      "export const K = 1;",
+    ].join("\n"),
+  });
+  assert.deepEqual(collectViolations(root), []);
+});
+
+test("token-scoped IGNORE suppresses the scrim token but not other colors in same file", async () => {
+  // dialog.tsx의 bg-black은 IGNORE(스크림)지만 같은 파일의 text-white는 여전히 잡힌다.
+  const root = await makeFixture({
+    "src/components/ui/dialog.tsx":
+      'export const D = () => <div className="bg-black/40 text-white">x</div>;\n',
+  });
+  assert.deepEqual(rules(collectViolations(root).filter((x) => x.rule === "R2")), [
+    "R2:text-white",
+  ]);
 });

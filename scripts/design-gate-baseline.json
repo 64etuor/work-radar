@@ -1,6 +1,5 @@
 [
-  "R2|src/components/ui/dialog.tsx|bg-black",
-  "R2|src/components/ui/sheet.tsx|bg-black",
+  "R1|src/components/RetroView.tsx|⚠",
   "R3|src/components/CommandPalette.tsx|text-[10px]",
   "R3|src/components/ErrorBoundary.tsx|text-[13px]",
   "R3|src/components/PrRadarView.tsx|text-[11px]",

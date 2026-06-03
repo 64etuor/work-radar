@@ -11,19 +11,35 @@ const EXTS = new Set([".tsx", ".ts", ".jsx", ".js"]);
 const SKIP = new Set(["node_modules", "dist", "build", "target", ".next"]);
 
 // R1: 상태마커 이모지 blocklist(상태 의미 한정 — 전체 이모지 금지 아님).
-const STATUS_EMOJI = ["🔴", "🟢", "🟡", "🟠", "🔵", "⚪", "⚫", "✅", "❌"];
+// "⚠"는 base codepoint(U+26A0)만 넣어도 VS16 형태(⚠️ = U+26A0 U+FE0F)를 substring으로 함께 잡는다.
+const STATUS_EMOJI = ["🔴", "🟢", "🟡", "🟠", "🔵", "⚪", "⚫", "✅", "❌", "⚠"];
 // R2: 토큰 대체 가능한 raw 색 유틸 + arbitrary hex 클래스.
 const RAW_COLOR_RE = /\b(bg-white|text-white|bg-black|text-black)\b/g;
 const HEX_CLASS_RE = /\b(?:text|bg|border|ring|fill|stroke)-\[#[0-9a-fA-F]{3,8}\]/g;
 // R3: arbitrary 타이포 축. text-[<len>]는 단위(px/rem/em) 필수 → text-[#color]는 안 잡힘(=R2).
 const ARB_TYPO_RE = /\b(?:text-\[[0-9.]+(?:px|rem|em)\]|leading-\[[^\]]+\]|tracking-\[[^\]]+\])/g;
 
-// 영구 예외(전환 부채 아님). { rule, pathIncludes, reason } — 사유 주석 필수.
-// 도입 시점엔 비어 있음(shiki는 named theme 'github-light' → src hex 0).
-const IGNORE = [];
+// 영구 예외(전환 부채 아님 — ratchet baseline이 아니라 여기에 둔다). 사유 필수.
+// token 지정 시 그 토큰만 정밀 매칭(같은 파일의 미래 위반은 계속 잡힘).
+const IGNORE = [
+  // 모달/시트 오버레이 스크림 bg-black/40. 대응 토큰(bg-overlay 등) 부재로 영구.
+  // 토큰 도입 시 제거하고 스크림을 토큰화하는 게 옳다(P3 후보). 그때까지 의도적 off-token.
+  { rule: "R2", pathIncludes: "components/ui/dialog.tsx", token: "bg-black" },
+  { rule: "R2", pathIncludes: "components/ui/sheet.tsx", token: "bg-black" },
+];
 
-function isIgnored(rule, relFile) {
-  return IGNORE.some((e) => e.rule === rule && relFile.includes(e.pathIncludes));
+function isIgnored(rule, relFile, token) {
+  return IGNORE.some(
+    (e) =>
+      e.rule === rule &&
+      relFile.includes(e.pathIncludes) &&
+      (e.token === undefined || e.token === token),
+  );
+}
+
+// 주석 줄은 렌더되는 UI가 아니므로 스캔 제외(생성된 bindings.ts 등의 doc-comment 이모지/색 false-positive 회피).
+function isCommentLine(trimmed) {
+  return trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*");
 }
 
 function walk(dir, out = []) {
@@ -40,7 +56,7 @@ function pushMatches(re, rule, line, relFile, ln, out) {
   re.lastIndex = 0;
   let m;
   while ((m = re.exec(line))) {
-    if (isIgnored(rule, relFile)) continue;
+    if (isIgnored(rule, relFile, m[0])) continue;
     out.push({ rule, file: relFile, line: ln, token: m[0], snippet: line.trim() });
   }
 }
@@ -60,8 +76,9 @@ export function collectViolations(root) {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const ln = i + 1;
+        if (isCommentLine(line.trim())) continue;
         for (const e of STATUS_EMOJI) {
-          if (line.includes(e) && !isIgnored("R1", relFile)) {
+          if (line.includes(e) && !isIgnored("R1", relFile, e)) {
             out.push({ rule: "R1", file: relFile, line: ln, token: e, snippet: line.trim() });
           }
         }
