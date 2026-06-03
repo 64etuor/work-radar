@@ -154,7 +154,7 @@ export function parseConductorConfig(env: Record<string, string | undefined>): C
 
 /** v3 Phase D Observer knobs (design §5). Safe defaults keep CI deterministic: mode!=="live" ⇒
  *  the server does NOT reconcile (the stub touches no cmux). Only an explicit
- *  BOULE_OBSERVER_MODE=live arms the real `cmux list` adapter. Mirrors the Conductor gating. */
+ *  BOULE_OBSERVER_MODE=live arms the real `cmux tree --all --json` adapter. Mirrors the Conductor gating. */
 export interface ObserverConfig {
   /** true only when BOULE_OBSERVER_MODE==="live" — otherwise observe_sessions is a no-op notice. */
   live: boolean;

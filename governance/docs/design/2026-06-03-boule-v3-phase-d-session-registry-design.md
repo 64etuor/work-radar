@@ -126,7 +126,7 @@ export interface ObserverAdapter {
   listSurfaces(): Promise<LiveSurface[]>;
 }
 export const stubAdapter: ObserverAdapter; // deterministic, injected list; touches no cmux
-export function makeLiveAdapter(deps): ObserverAdapter; // behind BOULE_OBSERVER_MODE=live → `cmux list`
+export function makeLiveAdapter(deps): ObserverAdapter; // behind BOULE_OBSERVER_MODE=live → `cmux tree --all --json` (terminal surfaces only)
 ```
 
 `observe_sessions` reconciles the live surface set against the derived registry and emits **only on
@@ -149,7 +149,7 @@ indexed by surface.
 - **The observer NEVER emits `session_closed`** (master §18.3 no-auto-close). Structural: the
   observer code path has zero `session_closed` write; negative test asserts it.
 - One reconcile pass emits **at most one** transition per session.
-- Non-determinism (`cmux list` spawn) injected at the `server.ts` boundary, default stub (CI
+- Non-determinism (`cmux tree --all --json` spawn) injected at the `server.ts` boundary, default stub (CI
   touches no cmux), exactly like the Conductor adapter.
 
 ---
@@ -225,19 +225,23 @@ Already gitignored (`workspace/sessions/**/*.md`, `workspace/state/*.json`). Pro
 8. **stub determinism**: vitest green; `BOULE_OBSERVER_MODE` unset ⇒ no cmux touched; no
    `bindings.ts`; no Postgres.
 
-- **Live (AI-run 2026-06-03 — reconcile LOGIC GREEN 7/7, live adapter BLOCKED):** validated the
+- **Live (AI-run 2026-06-03 — reconcile LOGIC GREEN 7/7, live adapter RESOLVED):** validated the
   reconcile against REAL cmux surfaces — a known session bound to a real surface → `session_observed`
   (active), exactly one across two observes (heartbeat-on-change), a fresh unmanaged surface → one
   `session_opened` `external_owned` + idempotent on re-observe, the surface removed → `session_crashed`.
   All transitions came from `observeSessions` reconciling real `cmux tree --all` surfaces.
-  - ⚠️ **BLOCKER (live adapter only, not the logic):** `makeLiveAdapter` runs **`cmux list`**, which
-    real cmux does NOT have (`cmux list` → status 1 "Unknown command" → the adapter throws). Real
-    cmux enumerates surfaces via **`cmux tree --all`** / `list-panels` / `list-pane-surfaces`, with
-    refs of the form `surface:N`. So `BOULE_OBSERVER_MODE=live` is **broken out-of-box** until the
-    adapter's command + `parseSurfaces` are fixed (e.g. run `cmux tree --all`, extract `surface:\d+`).
-    The `makeLiveAdapter` unit test used a **fake spawn asserting `["list"]`**, so it never exercised
-    real cmux and masked this. **Fix is deferred** (own small change + a separate critic pass + an
-    updated/real-shaped adapter test); the Phase D reconcile logic itself needs no change.
+  - ✅ **RESOLVED (2026-06-03):** `makeLiveAdapter` previously ran the invented **`cmux list`** command
+    (real cmux exits status 1 "Unknown command" → adapter throws); a fake-spawn unit test asserting
+    `["list"]` masked the bug. The adapter now runs **`cmux tree --all --json`** and walks
+    `windows[].workspaces[].panes[].surfaces[].ref` keeping only `type === "terminal"` surface refs
+    (Boule sessions are terminal agents; browser surfaces are excluded). `parseSurfaces` is defensive:
+    malformed/empty stdout → `[]`; results are deduped, order-stable by first appearance. Fix plan:
+    `governance/docs/plans/2026-06-03-boule-v3-phase-d-observer-live-adapter-fix.md`.
+  - **Reconciliation precondition (Phase-C follow-up, NOT in scope here):** the live surface set
+    uses `surface:N` cmux refs. A Phase-C `session_spawned` session reconciles correctly only if its
+    stored `surface` field (sourced from `cmux new-workspace` stdout in conductor `adapter.ts`) is
+    also a `surface:N` ref. Verifying and normalizing the conductor's `new-workspace` output to the
+    `surface:N` form is a separate Phase-C concern and is intentionally left out of this change.
 
 ---
 

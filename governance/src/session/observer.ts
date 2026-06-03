@@ -15,7 +15,7 @@ export interface LiveSurface {
 }
 
 /** DI seam for the read-only half of observe: enumerating live cmux surfaces. The default
- *  stubAdapter touches NO cmux (returns []); the live adapter runs `cmux list` behind
+ *  stubAdapter touches NO cmux (returns []); the live adapter runs `cmux tree --all --json` behind
  *  BOULE_OBSERVER_MODE=live (mirrors ConductorAdapter). */
 export interface ObserverAdapter {
   listSurfaces(): Promise<LiveSurface[]>;
@@ -52,27 +52,58 @@ class CommandError extends Error {
   }
 }
 
-/** Parse `cmux list` stdout into surfaces: one surface id per non-empty trimmed line. */
-export function parseSurfaces(stdout: string): LiveSurface[] {
-  return stdout
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-    .map((surface) => ({ surface }));
+/** A surface node inside `cmux tree --json`. Only the fields we read are typed; everything is
+ *  treated as unknown and guarded (the CLI may add fields). */
+interface CmuxSurfaceNode {
+  ref?: unknown;
+  type?: unknown;
 }
 
-/** Build a live adapter that runs a real, bounded (one-shot, no retry loop) `cmux list` and
- *  surfaces a terminal failure (design §5). Non-determinism (spawn) is injected, so the unit test
- *  asserts the exact command with a fake spawn — no real process. */
+/** Parse `cmux tree --all --json` stdout into the set of LIVE TERMINAL surfaces. Walks
+ *  windows[].workspaces[].panes[].surfaces[], keeping each surface whose `type === "terminal"`
+ *  (Boule sessions are terminal agents — browser surfaces are not sessions). Deduped, order-stable
+ *  by first appearance. Returns [] on malformed/empty stdout (defensive — the adapter still throws
+ *  on a non-zero exit; a 0-exit with junk stdout simply yields no surfaces). */
+export function parseSurfaces(stdout: string): LiveSurface[] {
+  let tree: unknown;
+  try {
+    tree = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  const out = new Set<string>();
+  const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const rec = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
+
+  for (const w of asArray(rec(tree).windows)) {
+    for (const ws of asArray(rec(w).workspaces)) {
+      for (const p of asArray(rec(ws).panes)) {
+        for (const s of asArray(rec(p).surfaces)) {
+          const node = s as CmuxSurfaceNode;
+          if (typeof node.ref === "string" && node.ref.length > 0 && node.type === "terminal") {
+            out.add(node.ref);
+          }
+        }
+      }
+    }
+  }
+  return [...out].map((surface) => ({ surface }));
+}
+
+/** Build a live adapter that runs a real, bounded (one-shot, no retry loop) `cmux tree --all --json`
+ *  and surfaces a terminal failure (design §5). Enumerates every live terminal surface across all
+ *  windows/workspaces. Non-determinism (spawn) is injected, so the unit test asserts the exact
+ *  command with a fake spawn — no real process. */
 export function makeLiveAdapter(deps: ObserverLiveDeps): ObserverAdapter {
   return {
     async listSurfaces() {
-      const res = deps.spawn(deps.cmuxCmd, ["list"]);
+      const res = deps.spawn(deps.cmuxCmd, ["tree", "--all", "--json"]);
       const surfaces = res.status === 0 ? parseSurfaces(res.stdout) : [];
       deps.log?.(
-        `observer exec ${deps.cmuxCmd} list status=${res.status ?? "null"} surfaces=${surfaces.length}`,
+        `observer exec ${deps.cmuxCmd} tree --all --json status=${res.status ?? "null"} surfaces=${surfaces.length}`,
       );
-      if (res.status !== 0) throw new CommandError(`${deps.cmuxCmd} list`, res.status, res.stderr);
+      if (res.status !== 0)
+        throw new CommandError(`${deps.cmuxCmd} tree --all --json`, res.status, res.stderr);
       return surfaces;
     },
   };

@@ -114,17 +114,56 @@ describe("observeSessions — orphan auto-open (done-criteria #4)", () => {
   });
 });
 
-describe("makeLiveAdapter — cmux list command (injected fake spawn, no real process)", () => {
-  it("runs `cmux list` and parses surfaces from stdout", async () => {
+describe("makeLiveAdapter — cmux tree enumeration (injected fake spawn, no real process)", () => {
+  // A minimal but real-shaped `cmux tree --all --json` payload: two terminal surfaces across two
+  // workspaces, plus one browser surface that MUST be excluded, plus the top-level active/caller
+  // refs that point back into the tree (must NOT double-count).
+  const TREE_JSON = JSON.stringify({
+    active: { surface_ref: "surface:24" },
+    caller: { surface_ref: "surface:29" },
+    windows: [
+      {
+        ref: "window:1",
+        workspaces: [
+          {
+            ref: "workspace:5",
+            panes: [
+              {
+                ref: "pane:7",
+                surface_refs: ["surface:7"],
+                surfaces: [{ ref: "surface:7", type: "terminal", title: "✳ Claude Code" }],
+              },
+            ],
+          },
+          {
+            ref: "workspace:12",
+            panes: [
+              {
+                ref: "pane:26",
+                surface_refs: ["surface:29", "surface:30"],
+                surfaces: [
+                  { ref: "surface:29", type: "terminal", title: "agent" },
+                  { ref: "surface:30", type: "browser", title: "docs", url: "https://x" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  it("runs `cmux tree --all --json` and parses terminal surface refs from stdout", async () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const fakeSpawn = (cmd: string, args: string[]): SpawnResultLike => {
       calls.push({ cmd, args });
-      return { status: 0, stdout: "7\n9\n\n12\n", stderr: "" };
+      return { status: 0, stdout: TREE_JSON, stderr: "" };
     };
     const adapter = makeLiveAdapter({ spawn: fakeSpawn, cmuxCmd: "cmux" });
     const surfaces = await adapter.listSurfaces();
-    expect(calls).toEqual([{ cmd: "cmux", args: ["list"] }]);
-    expect(surfaces.map((s) => s.surface)).toEqual(["7", "9", "12"]);
+    expect(calls).toEqual([{ cmd: "cmux", args: ["tree", "--all", "--json"] }]);
+    // surface:30 is a browser surface → excluded; surface:7 and surface:29 are terminals.
+    expect(surfaces.map((s) => s.surface).sort()).toEqual(["surface:29", "surface:7"]);
   });
 
   it("surfaces a terminal failure when cmux exits non-zero (no retry loop)", async () => {
@@ -133,7 +172,15 @@ describe("makeLiveAdapter — cmux list command (injected fake spawn, no real pr
     await expect(adapter.listSurfaces()).rejects.toThrow(/failed/i);
   });
 
-  it("parseSurfaces ignores blank lines + trims", () => {
-    expect(parseSurfaces(" a \n\n b\n").map((s) => s.surface)).toEqual(["a", "b"]);
+  it("parseSurfaces returns [] on non-JSON / empty stdout (defensive)", () => {
+    expect(parseSurfaces("")).toEqual([]);
+    expect(parseSurfaces("not json")).toEqual([]);
+  });
+
+  it("parseSurfaces walks windows→workspaces→panes→surfaces, terminal-only, deduped", () => {
+    expect(parseSurfaces(TREE_JSON).map((s) => s.surface).sort()).toEqual([
+      "surface:29",
+      "surface:7",
+    ]);
   });
 });

@@ -505,7 +505,7 @@ function buildConductorAdapter(): ConductorAdapter {
 const conductorAdapter = buildConductorAdapter();
 
 // ── Phase D: Observer adapter ─────────────────────────────────────────────────
-// 기본 = no-op(stub·cmux 무접근). BOULE_OBSERVER_MODE=live 일 때만 실제 `cmux list` 어댑터.
+// 기본 = no-op(stub·cmux 무접근). BOULE_OBSERVER_MODE=live 일 때만 실제 `cmux tree --all --json` 어댑터.
 // 비-live에서는 observe_sessions가 reconcile하지 않는다(빈 surface 집합에 대해 모든 known
 // 세션을 crash 처리하는 footgun 방지). 비결정(spawnSync)은 이 경계에서만 주입.
 const OBSERVER_CFG = parseObserverConfig(process.env);
