@@ -38,27 +38,31 @@ Policy Evaluator**만 구축한다. 실행 절반(Scheduler · Session Manager �
 로그에서 byte-identical 재구성된다(keystone invariant, master §2.2).
 
 ```
+TaskView { state: TaskState; hasOpenBlock: boolean }   // hasOpenBlock = task/handlers.hasOpenBlock(all, taskId)
+
 OrchestratorView {
-  tasks:    TaskState[]       // projectTasks(all)
+  tasks:    TaskView[]        // projectTasks(all) + per-task hasOpenBlock
   plans:    PlanState[]       // projectPlans(all)
   sessions: SessionState[]    // projectSessions(all)
-  openBlockedDecisions: { decisionId: string; relatedTo: string[] }[]
-                              // 미해소 decision_blocked (decision_chosen/approved/rejected 없는 것)
 }
 ```
 
+> **as-built 주(2026-06-03):** open-blocked-decision은 별도 `openBlockedDecisions[]` 컬렉션이 아니라
+> **task별 `hasOpenBlock: boolean`**으로 들고 있다(5규칙은 "이 task에 열린 block이 있나?"만 묻고 decision
+> id 리스트가 필요 없다). decision id 리스트가 필요한 다음 슬라이스(UI/규칙)에서 view를 확장한다.
+
 - task↔session 바인딩은 `SessionState.taskId`로 읽는다(Phase C spawn `related_to[0]`, Phase D 그대로).
-- "미해소 decision_blocked" = `decision_blocked` 이벤트 중, 같은 decision id에 대한
-  `decision_chosen`/`decision_approved`/`decision_rejected`가 **없는** 것. 기존
-  `deriveDecisionState` fold를 재사용해 판정(god-fold 금지 — Orchestrator는 결정 fold를 **읽기만**).
+- "미해소 decision_blocked" 판정은 **기존 `task/handlers.hasOpenBlock(all, taskId)`를 재사용**한다
+  (Phase A `canComplete`의 INVARIANT #1 결합과 동일 함수 — 중복 fold 아님). `hasOpenBlock`은 내부에서
+  `deriveDecisionState`로 verdict 없는 `decision_blocked`만 open으로 본다(god-fold 금지 — Orchestrator는 결정 fold를 **읽기만**).
 
 ## 2. 컴포넌트 (신규 `src/orchestrator/`)
 
 | 파일 | export | 역할 | 순수성 |
 | --- | --- | --- | --- |
-| `view.ts` | `projectOrchestratorView(all: GovEvent[]): OrchestratorView` | 기존 fold + open-blocked-decision join | **순수** (I/O·emit 0) |
+| `view.ts` | `projectOrchestratorView(all: GovEvent[]): OrchestratorView` | 기존 fold + per-task `hasOpenBlock` join | **순수** (I/O·emit 0) |
 | `policy.ts` | `evaluateSuggestions(view: OrchestratorView): SuggestionCandidate[]` | §3의 5개 규칙. table-driven, 결정적 정렬(`(ruleId, subjectId)` localeCompare) | **순수** (I/O·emit 0) |
-| `suggest.ts` | `suggest(workspaceDir, deps?, now, rand): Promise<SuggestSummary>` | read→view→evaluate→dedup→`orchestrator_suggestion_created`만 at-most-one emit. observer.ts 미러 | 비순수(경계 1곳) |
+| `suggest.ts` | `suggest(workspaceDir, now, rand): Promise<SuggestSummary>` | read→view→evaluate→dedup→`orchestrator_suggestion_created`만 at-most-one emit. observer.ts 미러 | 비순수(경계 1곳) |
 | `project.ts` | `renderOrchestrator(workspaceDir): Promise<string>` · `listSuggestions(workspaceDir): Promise<OpenSuggestion[]>` | `state/orchestrator-view.json` 렌더(keystone 테스트 대상) + open suggestion 리스트 | 렌더/read만 |
 
 `SuggestionCandidate { ruleId: RuleId; subjectId: string; subjectType: "session"|"task"; detail: string }`
