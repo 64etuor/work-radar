@@ -203,6 +203,7 @@
   --ring: #4c6ee6;
   --hover: #f6f5f2;
   --success: #003c33;
+  --overlay: rgb(0 0 0 / 0.4); /* 모달/시트 스크림 dim — 기존 bg-black/40과 값 동일 */
 }
 
 .dark {
@@ -289,4 +290,5 @@
   --color-ring: var(--ring);
   --color-hover: var(--hover);
   --color-success: var(--success);
+  --color-overlay: var(--overlay);
 }
