@@ -28,3 +28,15 @@ describe("trimOrNull", () => {
     expect(trimOrNull("")).toBeNull();
   });
 });
+
+describe("cn — typo-* resolution via shared twMergeTypo", () => {
+  it("typo-* wins over built-in type classes", () => {
+    expect(cn("text-base leading-none font-semibold", "typo-title-md")).toBe("typo-title-md");
+  });
+
+  it("color + typo coexist", () => {
+    expect(cn("text-muted-foreground", "typo-caption-sm")).toBe(
+      "text-muted-foreground typo-caption-sm",
+    );
+  });
+});
