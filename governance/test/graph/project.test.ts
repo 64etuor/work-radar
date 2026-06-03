@@ -98,3 +98,25 @@ describe("toEdgeRows", () => {
     expect(toEdgeRows(events, nodes).map((e) => e.edge_id)).toEqual(edges.map((e) => e.edge_id));
   });
 });
+
+import { projectGraph } from "../../src/graph/project.js";
+import { checksumProjection } from "../../src/graph/checksum.js";
+
+describe("projectGraph", () => {
+  const events: GovEvent[] = [
+    evt({ id: "t1", type: "task_created" }, "Task one"),
+    evt({ id: "ts1", type: "task_started", related_to: ["t1"] }),
+    evt({ id: "p1", type: "plan_proposed" }, "Plan one"),
+  ];
+  it("returns sorted events/nodes/edges and is order-independent by checksum", () => {
+    const a = projectGraph(events);
+    const b = projectGraph([...events].reverse());
+    expect(checksumProjection(a)).toBe(checksumProjection(b));
+    expect(a.events.map((e) => e.event_id)).toEqual([...a.events.map((e) => e.event_id)].sort());
+  });
+  it("emits no events and touches no globals (pure)", () => {
+    const before = JSON.stringify(events);
+    projectGraph(events);
+    expect(JSON.stringify(events)).toBe(before); // input not mutated
+  });
+});

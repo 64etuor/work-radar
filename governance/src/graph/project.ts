@@ -6,7 +6,7 @@ import { projectSessions } from "../session/project.ts";
 import { projectSpecs } from "../spec/project.ts";
 import { deriveDecisionState } from "../decision/decision.ts";
 import { proposalsOf, eventsForDecision } from "../decision/readEvents.ts";
-import type { EdgeRow, EdgeType, EventRow, NodeRow, NodeType } from "./types.ts";
+import type { EdgeRow, EdgeType, EventRow, GraphProjection, NodeRow, NodeType } from "./types.ts";
 
 /** Which graph subject a given event type belongs to (null = no node subject in this cut). */
 const SUBJECT_TYPE_OF: Partial<Record<EventType, NodeType>> = {
@@ -136,4 +136,15 @@ export function toEdgeRows(events: GovEvent[], nodes: NodeRow[]): EdgeRow[] {
     }
   }
   return edges;
+}
+
+/** PURE: events → derived graph projection. Reuses per-axis folds; no I/O, emits no events.
+ *  Output rows are PK-sorted so the projection (and its checksum) is order-independent. */
+export function projectGraph(events: GovEvent[]): GraphProjection {
+  const nodes = toNodeRows(events);
+  return {
+    events: toEventRows(events).sort((a, b) => a.event_id.localeCompare(b.event_id)),
+    nodes: nodes.sort((a, b) => a.node_id.localeCompare(b.node_id)),
+    edges: toEdgeRows(events, nodes).sort((a, b) => a.edge_id.localeCompare(b.edge_id)),
+  };
 }
