@@ -42,7 +42,10 @@ export type EventType =
   | "session_close_requested"           // close requested → closing (gate for close_session)
   | "session_closed"                    // session closed (terminal) — ONLY via close_session, never the observer
   | "session_crashed"                   // observer saw a known surface disappear (NOT a close)
-  | "session_recovered";                // observer saw a crashed surface return → recovering
+  | "session_recovered"                 // observer saw a crashed surface return → recovering
+  // v3 Phase E: Orchestrator emits an advisory suggestion. suggestion-class — source/actor=system,
+  // NO verdict. The ONLY new write permission in Phase E (master §4.1); dispatch events → Phase I.
+  | "orchestrator_suggestion_created";
 
 export type EventSource =
   | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"
