@@ -225,8 +225,19 @@ Already gitignored (`workspace/sessions/**/*.md`, `workspace/state/*.json`). Pro
 8. **stub determinism**: vitest green; `BOULE_OBSERVER_MODE` unset ⇒ no cmux touched; no
    `bindings.ts`; no Postgres.
 
-- **Live (user-run)**: `BOULE_OBSERVER_MODE=live`; spawn a real cmux session, `observe_sessions`
-  heartbeats it; kill it → `session_crashed`; open an unmanaged surface → orphan `external_owned`.
+- **Live (AI-run 2026-06-03 — reconcile LOGIC GREEN 7/7, live adapter BLOCKED):** validated the
+  reconcile against REAL cmux surfaces — a known session bound to a real surface → `session_observed`
+  (active), exactly one across two observes (heartbeat-on-change), a fresh unmanaged surface → one
+  `session_opened` `external_owned` + idempotent on re-observe, the surface removed → `session_crashed`.
+  All transitions came from `observeSessions` reconciling real `cmux tree --all` surfaces.
+  - ⚠️ **BLOCKER (live adapter only, not the logic):** `makeLiveAdapter` runs **`cmux list`**, which
+    real cmux does NOT have (`cmux list` → status 1 "Unknown command" → the adapter throws). Real
+    cmux enumerates surfaces via **`cmux tree --all`** / `list-panels` / `list-pane-surfaces`, with
+    refs of the form `surface:N`. So `BOULE_OBSERVER_MODE=live` is **broken out-of-box** until the
+    adapter's command + `parseSurfaces` are fixed (e.g. run `cmux tree --all`, extract `surface:\d+`).
+    The `makeLiveAdapter` unit test used a **fake spawn asserting `["list"]`**, so it never exercised
+    real cmux and masked this. **Fix is deferred** (own small change + a separate critic pass + an
+    updated/real-shaped adapter test); the Phase D reconcile logic itself needs no change.
 
 ---
 
