@@ -72,3 +72,15 @@ export function collectViolations(root) {
   }
   return out;
 }
+
+export function fingerprint(v) {
+  return `${v.rule}|${v.file}|${v.token}`;
+}
+
+export function evaluate(violations, baselineFps) {
+  const baseline = new Set(baselineFps);
+  const currentFps = new Set(violations.map(fingerprint));
+  const newViolations = violations.filter((v) => !baseline.has(fingerprint(v)));
+  const stale = [...baseline].filter((fp) => !currentFps.has(fp)).sort();
+  return { newViolations, stale };
+}

@@ -59,3 +59,24 @@ test("R2 detects raw color utils and hex classes", async () => {
   const v = collectViolations(root);
   assert.deepEqual(rules(v.filter((x) => x.rule === "R2")), ["R2:bg-[#ffffff]", "R2:text-black"]);
 });
+
+import { evaluate, fingerprint } from "./check-design-tokens.mjs";
+
+test("fingerprint excludes line number, keys on rule|file|token", () => {
+  assert.equal(
+    fingerprint({ rule: "R3", file: "src/a.tsx", line: 9, token: "text-[15px]" }),
+    "R3|src/a.tsx|text-[15px]",
+  );
+});
+
+test("evaluate: new violation fails, baselined passes, stale fails", () => {
+  const v = [
+    { rule: "R3", file: "src/a.tsx", line: 1, token: "text-[15px]" },
+    { rule: "R3", file: "src/b.tsx", line: 2, token: "leading-[22px]" },
+  ];
+  // a.tsx baselined, b.tsx is new, plus a stale entry no longer present.
+  const baseline = ["R3|src/a.tsx|text-[15px]", "R3|src/gone.tsx|tracking-[1px]"];
+  const { newViolations, stale } = evaluate(v, baseline);
+  assert.deepEqual(newViolations.map(fingerprint), ["R3|src/b.tsx|leading-[22px]"]);
+  assert.deepEqual(stale, ["R3|src/gone.tsx|tracking-[1px]"]);
+});
