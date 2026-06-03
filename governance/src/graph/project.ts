@@ -89,7 +89,7 @@ function node(type: NodeType, canonicalId: string, title: string, state: Record<
 export function toNodeRows(events: GovEvent[]): NodeRow[] {
   const rows: NodeRow[] = [];
   for (const s of projectTasks(events)) rows.push(node("task", s.taskId, s.title, { phase: s.phase, verdict: s.verdict }));
-  for (const s of projectPlans(events)) rows.push(node("plan", s.planId, s.title, { phase: s.phase }));
+  for (const s of projectPlans(events)) rows.push(node("plan", s.planId, s.title, { phase: s.phase, verdict: s.verdict }));
   for (const s of projectSessions(events)) rows.push(node("session", s.sessionId, s.sessionId, { phase: s.phase, ownership: s.ownership, taskId: s.taskId }));
   for (const s of projectSpecs(events)) rows.push(node("spec", s.specId, s.title, { phase: s.phase }));
   for (const p of proposalsOf(events)) {
