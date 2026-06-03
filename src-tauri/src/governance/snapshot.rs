@@ -22,9 +22,305 @@ pub fn resolve_governance_state_dir(workspace_override: Option<String>) -> PathB
         .join(STATE_SUBDIR)
 }
 
+// ── Phase enums (mirror governance fold types; Unknown = drift-resilient fallback) ──
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskPhase {
+    Ready,
+    Active,
+    Blocked,
+    Done,
+    Cancelled,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanPhase {
+    Draft,
+    Active,
+    NeedsRevision,
+    Completed,
+    Archived,
+    Superseded,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SpecPhase {
+    Draft,
+    Accepted,
+    Archived,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionPhase {
+    Planned,
+    Opening,
+    Active,
+    Waiting,
+    Blocked,
+    ContextPressureHigh,
+    CheckpointRequested,
+    HandoffReady,
+    Closing,
+    Closed,
+    Crashed,
+    Recovering,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum HandoffPhase {
+    Requested,
+    Validating,
+    Pending,
+    Invalid,
+    Consumed,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum Ownership {
+    UserOwned,
+    OrchestratorOwned,
+    ExternalOwned,
+    #[serde(other)]
+    Unknown,
+}
+
+// ── Row structs (camelCase JSON keys mirror the governance render* output) ──
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRow {
+    pub task_id: String,
+    pub title: String,
+    pub phase: TaskPhase,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanRow {
+    pub plan_id: String,
+    pub title: String,
+    pub phase: PlanPhase,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecRow {
+    pub spec_id: String,
+    pub title: String,
+    pub phase: SpecPhase,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRow {
+    pub session_id: String,
+    pub surface: Option<String>,
+    pub ownership: Ownership,
+    pub task_id: Option<String>,
+    pub phase: SessionPhase,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoffRow {
+    pub handoff_id: String,
+    pub session_id: String,
+    pub phase: HandoffPhase,
+}
+
+// orchestrator-view.json (slim sessions: no surface)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestratorTaskRow {
+    pub task_id: String,
+    pub phase: TaskPhase,
+    pub has_open_block: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestratorPlanRow {
+    pub plan_id: String,
+    pub phase: PlanPhase,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestratorSessionRow {
+    pub session_id: String,
+    pub phase: SessionPhase,
+    pub ownership: Ownership,
+    pub task_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestratorView {
+    pub tasks: Vec<OrchestratorTaskRow>,
+    pub plans: Vec<OrchestratorPlanRow>,
+    pub sessions: Vec<OrchestratorSessionRow>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlRoomSnapshot {
+    /// RFC3339 newest state-file mtime; None if nothing has been projected yet.
+    pub generated_at: Option<String>,
+    pub tasks: Vec<TaskRow>,
+    pub plans: Vec<PlanRow>,
+    pub specs: Vec<SpecRow>,
+    pub sessions: Vec<SessionRow>,
+    pub handoffs: Vec<HandoffRow>,
+    pub orchestrator: OrchestratorView,
+}
+
+/// Read one axis file. Absent ⇒ `T::default()` (axis not yet projected). Corrupt ⇒ terminal error.
+/// Records the file's mtime into `newest` when present.
+fn read_axis<T>(
+    state_dir: &Path,
+    file: &str,
+    newest: &mut Option<std::time::SystemTime>,
+) -> Result<T, AppError>
+where
+    T: serde::de::DeserializeOwned + Default,
+{
+    let path = state_dir.join(file);
+    let meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(T::default()),
+        Err(e) => {
+            return Err(AppError::terminal(
+                "governance.stat_failed",
+                format!("{file}: {e}"),
+            ))
+        }
+    };
+    if let Ok(modified) = meta.modified() {
+        if newest.map_or(true, |n| modified > n) {
+            *newest = Some(modified);
+        }
+    }
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| AppError::terminal("governance.read_failed", format!("{file}: {e}")))?;
+    serde_json::from_str::<T>(&raw)
+        .map_err(|e| AppError::terminal("governance.parse_failed", format!("{file}: {e}")))
+}
+
+/// Read all six derived projection files into a single read-only snapshot.
+pub fn read_snapshot(state_dir: &Path) -> Result<ControlRoomSnapshot, AppError> {
+    let mut newest: Option<std::time::SystemTime> = None;
+    let tasks = read_axis::<Vec<TaskRow>>(state_dir, "tasks.json", &mut newest)?;
+    let plans = read_axis::<Vec<PlanRow>>(state_dir, "plans.json", &mut newest)?;
+    let specs = read_axis::<Vec<SpecRow>>(state_dir, "specs.json", &mut newest)?;
+    let sessions = read_axis::<Vec<SessionRow>>(state_dir, "sessions.json", &mut newest)?;
+    let handoffs = read_axis::<Vec<HandoffRow>>(state_dir, "handoffs.json", &mut newest)?;
+    let orchestrator =
+        read_axis::<OrchestratorView>(state_dir, "orchestrator-view.json", &mut newest)?;
+    let generated_at = newest.map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339());
+    Ok(ControlRoomSnapshot {
+        generated_at,
+        tasks,
+        plans,
+        specs,
+        sessions,
+        handoffs,
+        orchestrator,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    fn write(dir: &Path, file: &str, body: &str) {
+        fs::write(dir.join(file), body).unwrap();
+    }
+
+    #[test]
+    fn reads_present_axes_and_treats_absent_as_empty() {
+        let tmp = std::env::temp_dir().join(format!("cr-snap-{}", std::process::id()));
+        fs::create_dir_all(&tmp).unwrap();
+        write(
+            &tmp,
+            "tasks.json",
+            r#"[{"taskId":"t1","title":"T","phase":"active"}]"#,
+        );
+        // sessions.json: full shape incl. a NON-null surface (round-trips Option<String>).
+        write(
+            &tmp,
+            "sessions.json",
+            r#"[{"sessionId":"s1","surface":"cmux:42","ownership":"user_owned","taskId":"t1","phase":"active"}]"#,
+        );
+        // orchestrator-view.json: SLIM sessions (no surface) — exercises OrchestratorSessionRow.
+        write(
+            &tmp,
+            "orchestrator-view.json",
+            r#"{"tasks":[{"taskId":"t1","phase":"active","hasOpenBlock":true}],"plans":[],"sessions":[{"sessionId":"s1","phase":"active","ownership":"user_owned","taskId":"t1"}]}"#,
+        );
+        // plans/specs/handoffs.json intentionally absent.
+
+        let snap = read_snapshot(&tmp).unwrap();
+        assert_eq!(snap.tasks.len(), 1);
+        assert_eq!(snap.tasks[0].phase, TaskPhase::Active);
+        assert_eq!(snap.sessions[0].surface.as_deref(), Some("cmux:42"));
+        assert_eq!(snap.sessions[0].ownership, Ownership::UserOwned);
+        assert_eq!(snap.orchestrator.sessions[0].session_id, "s1");
+        assert!(snap.orchestrator.tasks[0].has_open_block);
+        assert!(snap.plans.is_empty() && snap.specs.is_empty() && snap.handoffs.is_empty());
+        assert!(snap.generated_at.is_some());
+        fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn none_present_yields_empty_snapshot_with_null_generated_at() {
+        let tmp = std::env::temp_dir().join(format!("cr-snap-empty-{}", std::process::id()));
+        fs::create_dir_all(&tmp).unwrap();
+        let snap = read_snapshot(&tmp).unwrap();
+        assert!(snap.tasks.is_empty());
+        assert_eq!(snap.generated_at, None);
+        fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn corrupt_file_is_terminal_error() {
+        let tmp = std::env::temp_dir().join(format!("cr-snap-bad-{}", std::process::id()));
+        fs::create_dir_all(&tmp).unwrap();
+        write(&tmp, "tasks.json", "{ not json");
+        let err = read_snapshot(&tmp).unwrap_err();
+        assert_eq!(err.code, "governance.parse_failed");
+        fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn unknown_phase_degrades_not_errors() {
+        let tmp = std::env::temp_dir().join(format!("cr-snap-unk-{}", std::process::id()));
+        fs::create_dir_all(&tmp).unwrap();
+        write(
+            &tmp,
+            "tasks.json",
+            r#"[{"taskId":"t1","title":"T","phase":"frobnicated"}]"#,
+        );
+        let snap = read_snapshot(&tmp).unwrap();
+        assert_eq!(snap.tasks[0].phase, TaskPhase::Unknown);
+        fs::remove_dir_all(&tmp).ok();
+    }
 
     #[test]
     fn resolve_uses_override_when_set() {
