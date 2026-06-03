@@ -21,15 +21,11 @@ const ARB_TYPO_RE = /\b(?:text-\[[0-9.]+(?:px|rem|em)\]|leading-\[[^\]]+\]|track
 
 // 영구 예외(전환 부채 아님 — ratchet baseline이 아니라 여기에 둔다). 사유 필수.
 // token 지정 시 그 토큰만 정밀 매칭(같은 파일의 미래 위반은 계속 잡힘).
-const IGNORE = [
-  // 모달/시트 오버레이 스크림 bg-black/40. 대응 토큰(bg-overlay 등) 부재로 영구.
-  // 토큰 도입 시 제거하고 스크림을 토큰화하는 게 옳다(P3 후보). 그때까지 의도적 off-token.
-  { rule: "R2", pathIncludes: "components/ui/dialog.tsx", token: "bg-black" },
-  { rule: "R2", pathIncludes: "components/ui/sheet.tsx", token: "bg-black" },
-];
+// 현재 영구 예외 없음 — 스크림은 P3에서 --overlay 토큰으로 전환됨.
+const IGNORE = [];
 
-function isIgnored(rule, relFile, token) {
-  return IGNORE.some(
+function isIgnored(rule, relFile, token, ignore = IGNORE) {
+  return ignore.some(
     (e) =>
       e.rule === rule &&
       relFile.includes(e.pathIncludes) &&
@@ -52,16 +48,16 @@ function walk(dir, out = []) {
   return out;
 }
 
-function pushMatches(re, rule, line, relFile, ln, out) {
+function pushMatches(re, rule, line, relFile, ln, out, ignore) {
   re.lastIndex = 0;
   let m;
   while ((m = re.exec(line))) {
-    if (isIgnored(rule, relFile, m[0])) continue;
+    if (isIgnored(rule, relFile, m[0], ignore)) continue;
     out.push({ rule, file: relFile, line: ln, token: m[0], snippet: line.trim() });
   }
 }
 
-export function collectViolations(root) {
+export function collectViolations(root, ignore = IGNORE) {
   const out = [];
   for (const r of ROOTS) {
     let files;
@@ -78,13 +74,13 @@ export function collectViolations(root) {
         const ln = i + 1;
         if (isCommentLine(line.trim())) continue;
         for (const e of STATUS_EMOJI) {
-          if (line.includes(e) && !isIgnored("R1", relFile, e)) {
+          if (line.includes(e) && !isIgnored("R1", relFile, e, ignore)) {
             out.push({ rule: "R1", file: relFile, line: ln, token: e, snippet: line.trim() });
           }
         }
-        pushMatches(RAW_COLOR_RE, "R2", line, relFile, ln, out);
-        pushMatches(HEX_CLASS_RE, "R2", line, relFile, ln, out);
-        pushMatches(ARB_TYPO_RE, "R3", line, relFile, ln, out);
+        pushMatches(RAW_COLOR_RE, "R2", line, relFile, ln, out, ignore);
+        pushMatches(HEX_CLASS_RE, "R2", line, relFile, ln, out, ignore);
+        pushMatches(ARB_TYPO_RE, "R3", line, relFile, ln, out, ignore);
       }
     }
   }
