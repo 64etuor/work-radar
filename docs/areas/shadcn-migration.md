@@ -118,3 +118,4 @@ write 시 `v === NONE ? null : v` 매핑. value가 항상 non-null이면 placeho
 - `docs/plans/2026-05-24-shadcn-app-wide-migration.md` — 전체 플랜
 - `docs/decisions.md` — Wave 0/0.5/1~5 결정 entries
 - `src/components/ui/overlay-stack.ts` + `overlay-stack.test.ts` — Esc 계약 단위테스트
+- `scripts/check-design-tokens.mjs` — off-token 색/이모지/arbitrary 타이포 가드(R1/R2/R3)

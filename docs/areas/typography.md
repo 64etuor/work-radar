@@ -30,4 +30,11 @@
   의도적이거나 매칭 role 없음.
 - **role 없는 1회성 크기**(`44px`/`22px`/`9px`, `13px+font-medium` 라벨 등): 표에 역할이 없으면 arbitrary 유지.
 
-lint/CI 강제는 범위 밖(향후 follow-up 가능).
+## 강제 (design quality gate)
+
+`scripts/check-design-tokens.mjs`가 R1(상태이모지)·R2(off-token 색)·R3(arbitrary 타이포)를
+pre-commit + CI에서 강제한다. R3의 의도적 예외(컨트롤 프리미티브 등 전환 부채)는
+`scripts/design-gate-baseline.json` **ratchet baseline**으로 추적 — 신규 위반만 차단되고
+baseline은 단조 감소만 한다(`--update-baseline`이 유일한 증가 경로, diff로 리뷰). 영구
+off-brand 예외는 스크립트 상단 `IGNORE` 상수에 사유와 함께 둔다. 정본:
+`docs/superpowers/specs/2026-06-03-design-quality-gate-design.md`.
