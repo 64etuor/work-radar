@@ -37,10 +37,10 @@
 | 06-01 | **L0 Harvest** (P3 Slice 2a — content-addressed 멱등 harvest) | `design/2026-06-01-ssot-governance-harness-l0-harvest-design.md` | `plans/2026-06-01-ssot-governance-harness-l0-harvest.md` | ✅ |
 | 06-02 | **Pattern Detector L0→L1** (인메모리 유사도 후보 패턴) | `design/2026-06-02-pattern-detector-l0-l1-design.md` | `plans/2026-06-02-pattern-detector-l0-l1.md` | ✅ |
 
-## v3 마스터 Phase (A–E ✅ 구축·로컬커밋 / F–I 계획 예정 — 각 Phase는 자체 spec+plan)
+## v3 마스터 Phase (A–F ✅ 구축·로컬커밋 / G–I 계획 예정 — 각 Phase는 자체 spec+plan)
 
 정본: `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §10.
-진행: **A→E 완료**(전부 opus critic ACCEPT, 로컬 커밋, **미푸시/PARKED**). 다음 critical-path = **F**(또는 **G**).
+진행: **A→F 완료**(전부 opus critic ACCEPT, 로컬 커밋, **미푸시/PARKED**). 다음 critical-path = **G**(또는 **H**).
 
 | Phase | 슬라이스 | Depends-on | Spec/Plan |
 | --- | --- | --- | --- |
@@ -49,7 +49,7 @@
 | **C** | Conductor + autonomy-envelope (cmux spawn) | B + escalation spine | `plans/2026-06-02-boule-v3-phase-c-conductor.md` (`e040394`) ✅ DONE (critic round-2 ACCEPT, vitest 301) |
 | **D** | Session Registry + cmux Observer | C | `plans/2026-06-03-boule-v3-phase-d-session-registry.md` (`2d98134`) + live-adapter fix `plans/2026-06-03-boule-v3-phase-d-observer-live-adapter-fix.md` (`e9cd18d`) ✅ DONE (critic ACCEPT, vitest 354; live `cmux tree --all --json` smoke green) |
 | **E** | Orchestrator projector (observe/suggest) | A,B,C,D | `design/2026-06-03-boule-v3-phase-e-orchestrator-projector-design.md` + `plans/2026-06-03-boule-v3-phase-e-orchestrator-projector.md` (`d0bd978`) ✅ DONE (spec-compliant + opus critic ACCEPT 0B, vitest 371; 1 new event type `orchestrator_suggestion_created`, no decision_*/task_*/session_* write-path, bindings.ts byte-unchanged) |
-| **F** | Postgres+pgvector 그래프 인덱스 | E | (예정) |
+| **F** | Postgres+pgvector 그래프 인덱스 (events+nodes+edges, 임베딩 deferred) | E | `design/2026-06-03-boule-v3-phase-f-graph-index-design.md` + `plans/2026-06-03-boule-v3-phase-f-graph-index.md` (`dc09f3a`) ✅ DONE (plan-critic + 별도 impl-critic 둘 다 opus ACCEPT 0B; vitest 394/+23; embedded PGlite 0.5.1, pure projectGraph reuses per-axis folds, rebuild 멱등·checksum DB==projection, read-only 0 L0 write-path[negative=content-stable], bindings.ts byte-unchanged, app sqlite untouched; pgvector·approvals·session_observations deferred) |
 | **G** | Context Steward / Handoff | E | (예정) |
 | **H** | Control Room UI (specta) | E,F,G | (예정) |
 | **I** | 좁은 opt-in auto (Type-2만) | E,G + envelope(C) | (예정) |
@@ -61,4 +61,4 @@
 | P4 가설 검증 | Hypothesis Tester | ❌ 미구축 |
 | P5 메타 관찰 | Meta Observer | ❌ 미구축 |
 | P6 망각·정합성 | Archive Pruner | ❌ 미구축 |
-| P3 Postgres/pgvector | (인덱스) | ⏸ 의도적 연기 → v3 Phase F |
+| P3 Postgres/pgvector | (인덱스) | ✅ v3 Phase F first cut DONE (events+nodes+edges, PGlite; pgvector 임베딩만 잔여) |
