@@ -8,6 +8,7 @@ import { CalendarDrawer } from "@/components/board/CalendarDrawer";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CmdKnob } from "@/components/CmdKnob";
 import { CommandPalette } from "@/components/CommandPalette";
+import ControlRoomView from "@/components/control-room/ControlRoomView";
 import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
 import HermesView from "@/components/HermesView";
 import { InboxView } from "@/components/InboxView";
@@ -51,6 +52,7 @@ function renderView(renderedView: View) {
   if (renderedView === "worktree") return <WorktreeView />;
   if (renderedView === "jobs") return <JobsView />;
   if (renderedView === "skills") return <SkillsView />;
+  if (renderedView === "control-room") return <ControlRoomView />;
   return <CaptureBoard />;
 }
 

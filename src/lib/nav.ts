@@ -3,6 +3,7 @@ import {
   Bot,
   CalendarCheck,
   CalendarRange,
+  Gauge,
   GitCompare,
   GitPullRequest,
   History,
@@ -130,6 +131,13 @@ export const NAV_ITEMS: NavItem[] = [
     label: "스킬 레지스트리",
     search: "skills 스킬 레지스트리 프롬프트 에이전트 claude codex 외부 스킬 편집",
     icon: Blocks,
+    group: "connect",
+  },
+  {
+    view: "control-room",
+    label: "컨트롤 룸",
+    search: "control room 컨트롤룸 거버넌스 boule governance orchestrator 세션 핸드오프 task plan",
+    icon: Gauge,
     group: "connect",
   },
   {
