@@ -1,5 +1,5 @@
 //! External Action Gate IPC. 승인/거절/조회. 승인 시 `ExternalActionRouter`가 kind별 실 커넥터로
-//! dispatch한다(Noop=외부 호출 0, GitHub/Notion=Rust 커넥터·keychain·bounded retry).
+//! dispatch한다(Noop=외부 호출 0; 그 외 커넥터=Rust·action.project_ref로만 토큰 resolve·keychain·bounded retry).
 
 use crate::calendar::{execute_calendar_action, HttpCalendarProvider};
 use crate::commands::approval_grant::HumanApproval;

@@ -1,4 +1,4 @@
-import { Calendar, Check, Github, X } from "lucide-react";
+import { Calendar, Check, Github, type LucideIcon, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,18 @@ import {
   isExternalWriteKind,
   serviceOf,
 } from "./pendingActions";
+
+// 서비스(kind 앞 세그먼트) → lucide 아이콘. 새 커넥터는 여기 한 곳만 추가한다(조건 분기 누적 방지).
+// Notion은 lucide 브랜드 글리프가 없어 의도적으로 비워둔다(아이콘 없이 라벨만).
+const SERVICE_ICONS: Partial<Record<string, LucideIcon>> = {
+  github: Github,
+  calendar: Calendar,
+};
+
+function ServiceIcon({ kind }: { kind: string }) {
+  const Icon = SERVICE_ICONS[serviceOf(kind) ?? ""];
+  return Icon ? <Icon className="text-muted-foreground size-3.5 shrink-0" aria-hidden /> : null;
+}
 
 export function PendingActionsPanel() {
   const { data: actions = [] } = usePendingActions();
@@ -34,12 +46,7 @@ export function PendingActionsPanel() {
             >
               <div className="min-w-0">
                 <p className="typo-title-sm flex items-center gap-1.5">
-                  {serviceOf(a.kind) === "github" ? (
-                    <Github className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
-                  ) : null}
-                  {serviceOf(a.kind) === "calendar" ? (
-                    <Calendar className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
-                  ) : null}
+                  <ServiceIcon kind={a.kind} />
                   {formatActionKind(a.kind)}
                 </p>
                 {a.preview ? (
