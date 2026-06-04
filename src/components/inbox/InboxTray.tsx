@@ -28,6 +28,8 @@ import {
 } from "@/lib/query";
 import { useUIStore } from "@/store";
 
+import { PendingActionsPanel } from "./PendingActionsPanel";
+
 const SEVERITY_ICON: Record<string, ComponentType<{ className?: string }>> = {
   critical: CircleAlert,
   warning: TriangleAlert,
@@ -75,6 +77,7 @@ export function InboxTray({ onClose }: { onClose: () => void }) {
       </header>
 
       <div className="inbox-tray-body">
+        <PendingActionsPanel />
         {items.isLoading && <InboxSkeleton />}
         {items.isError && (
           <div className="inbox-tray-empty err">
