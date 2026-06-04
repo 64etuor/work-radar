@@ -1041,7 +1041,7 @@ server.registerTool(
   },
 );
 
-// v3 Phase F — Postgres+pgvector derived graph index (events+nodes+edges via embedded PGlite).
+// v3 Phase F — derived graph index (events+nodes+edges via embedded PGlite by default).
 // Read/rebuild only — NO approve/choose/decision_* surface (master §4.5). One store, opened once.
 const graphStore = await openConfiguredGraphStore({ workspaceDir: WORKSPACE });
 
