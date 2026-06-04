@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "../../src/graph/store.js";
@@ -37,6 +37,28 @@ describe("incremental graph upsert", () => {
     const rebuildStatus = await rebuildIndex(ws, rebuilt);
 
     expect(incrementalStatus).toEqual(rebuildStatus);
+
+    await incremental.close();
+    await rebuilt.close();
+  });
+
+  it("removes rows that disappear from the markdown corpus", async () => {
+    const ws = await seedWorkspace();
+    const taskId = "evt_20260603_101500_0001";
+    const startedId = "evt_20260603_101600_0002";
+    await seedEvent(ws, taskId, "task_created");
+    await seedEvent(ws, startedId, "task_started", [taskId]);
+
+    const incremental = await openStore(":memory:");
+    const rebuilt = await openStore(":memory:");
+    await upsertIndex(ws, incremental);
+    await rm(join(ws, "events", "2026-06-03", `${startedId}.md`));
+
+    const incrementalStatus = await upsertIndex(ws, incremental);
+    const rebuildStatus = await rebuildIndex(ws, rebuilt);
+
+    expect(incrementalStatus).toEqual(rebuildStatus);
+    expect((await incremental.getNode(`task:${taskId}`))?.state_jsonb.phase).toBe("ready");
 
     await incremental.close();
     await rebuilt.close();

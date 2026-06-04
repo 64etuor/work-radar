@@ -9,6 +9,14 @@ interface EventRowDb {
   actor: string; source: string; subject_type: string | null; subject_id: string | null;
   authority_decision_id: string | null; payload_jsonb: unknown;
 }
+type QueryTx = { query<T = unknown>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> };
+
+const UPSERT_EVENT_SQL =
+  "INSERT INTO events (event_id,content_hash,event_type,occurred_at,actor,source,subject_type,subject_id,authority_decision_id,payload_jsonb) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (event_id) DO UPDATE SET content_hash=EXCLUDED.content_hash,event_type=EXCLUDED.event_type,occurred_at=EXCLUDED.occurred_at,actor=EXCLUDED.actor,source=EXCLUDED.source,subject_type=EXCLUDED.subject_type,subject_id=EXCLUDED.subject_id,authority_decision_id=EXCLUDED.authority_decision_id,payload_jsonb=EXCLUDED.payload_jsonb";
+const UPSERT_NODE_SQL =
+  "INSERT INTO nodes (node_id,node_type,canonical_id,title,state_jsonb) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (node_id) DO UPDATE SET node_type=EXCLUDED.node_type,canonical_id=EXCLUDED.canonical_id,title=EXCLUDED.title,state_jsonb=EXCLUDED.state_jsonb";
+const UPSERT_EDGE_SQL =
+  "INSERT INTO edges (edge_id,from_node_id,to_node_id,edge_type,source_event_id) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (edge_id) DO UPDATE SET from_node_id=EXCLUDED.from_node_id,to_node_id=EXCLUDED.to_node_id,edge_type=EXCLUDED.edge_type,source_event_id=EXCLUDED.source_event_id";
 
 /** PGlite returns JSONB as a parsed object; tolerate a string just in case. */
 function asObj(v: unknown): Record<string, unknown> {
@@ -79,36 +87,28 @@ export async function openStore(loc: string): Promise<GraphStore> {
   };
 }
 
-async function insertOrUpdateProjection(
-  tx: { query<T = unknown>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> },
-  p: GraphProjection,
-): Promise<void> {
+async function insertOrUpdateProjection(tx: QueryTx, p: GraphProjection): Promise<void> {
   for (const e of p.events) {
     await tx.query(
-      "INSERT INTO events (event_id,content_hash,event_type,occurred_at,actor,source,subject_type,subject_id,authority_decision_id,payload_jsonb) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (event_id) DO UPDATE SET content_hash=EXCLUDED.content_hash,event_type=EXCLUDED.event_type,occurred_at=EXCLUDED.occurred_at,actor=EXCLUDED.actor,source=EXCLUDED.source,subject_type=EXCLUDED.subject_type,subject_id=EXCLUDED.subject_id,authority_decision_id=EXCLUDED.authority_decision_id,payload_jsonb=EXCLUDED.payload_jsonb",
+      UPSERT_EVENT_SQL,
       [e.event_id, e.content_hash, e.event_type, e.occurred_at, e.actor, e.source, e.subject_type, e.subject_id, e.authority_decision_id, JSON.stringify(e.payload_jsonb)],
     );
   }
   for (const n of p.nodes) {
     await tx.query(
-      "INSERT INTO nodes (node_id,node_type,canonical_id,title,state_jsonb) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (node_id) DO UPDATE SET node_type=EXCLUDED.node_type,canonical_id=EXCLUDED.canonical_id,title=EXCLUDED.title,state_jsonb=EXCLUDED.state_jsonb",
+      UPSERT_NODE_SQL,
       [n.node_id, n.node_type, n.canonical_id, n.title, JSON.stringify(n.state_jsonb)],
     );
   }
   for (const g of p.edges) {
     await tx.query(
-      "INSERT INTO edges (edge_id,from_node_id,to_node_id,edge_type,source_event_id) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (edge_id) DO UPDATE SET from_node_id=EXCLUDED.from_node_id,to_node_id=EXCLUDED.to_node_id,edge_type=EXCLUDED.edge_type,source_event_id=EXCLUDED.source_event_id",
+      UPSERT_EDGE_SQL,
       [g.edge_id, g.from_node_id, g.to_node_id, g.edge_type, g.source_event_id],
     );
   }
 }
 
-async function deleteMissing(
-  tx: { query<T = unknown>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> },
-  table: string,
-  column: string,
-  ids: string[],
-): Promise<void> {
+async function deleteMissing(tx: QueryTx, table: string, column: string, ids: string[]): Promise<void> {
   if (ids.length === 0) {
     await tx.query(`DELETE FROM ${table}`);
     return;

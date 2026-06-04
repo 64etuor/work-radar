@@ -81,10 +81,10 @@ describe("classifyEventRetention", () => {
 describe("classifyPatternRetention", () => {
   it("marks stale candidate overflow patterns but retains curated and count-floor patterns", () => {
     const rows = [
-      { id: "pat_old_a", kind: "commit_scope_hotspot", scope: "governance", status: "candidate", createdAt: "2026-05-01", evidenceCount: 3 },
-      { id: "pat_old_b", kind: "commit_scope_hotspot", scope: "governance", status: "candidate", createdAt: "2026-05-02", evidenceCount: 4 },
-      { id: "pat_old_c", kind: "commit_scope_hotspot", scope: "governance", status: "candidate", createdAt: "2026-05-03", evidenceCount: 5 },
-      { id: "pat_active", kind: "commit_scope_hotspot", scope: "governance", status: "active", createdAt: "2026-05-01", evidenceCount: 99 },
+      { id: "pat_old_a", kind: "commit_scope_hotspot", scope: "governance", status: "candidate", createdAt: "2026-05-01" },
+      { id: "pat_old_b", kind: "commit_scope_hotspot", scope: "governance", status: "candidate", createdAt: "2026-05-02" },
+      { id: "pat_old_c", kind: "commit_scope_hotspot", scope: "governance", status: "candidate", createdAt: "2026-05-03" },
+      { id: "pat_active", kind: "commit_scope_hotspot", scope: "governance", status: "active", createdAt: "2026-05-01" },
     ];
 
     const out = classifyPatternRetention(rows, policy);

@@ -24,7 +24,6 @@ export interface PatternRetentionInput {
   scope: string;
   status: string;
   createdAt: string | null;
-  evidenceCount: number;
 }
 
 export interface ArchivePolicyStatus {
@@ -118,13 +117,15 @@ export async function readArchivePolicyStatus(
 ): Promise<ArchivePolicyStatus> {
   const events = classifyEventRetention(await readAllEvents(workspaceDir), policy);
   const patterns = classifyPatternRetention(await readPatterns(workspaceDir), policy);
+  const eventSummary = summarize(events);
+  const patternSummary = summarize(patterns);
   return {
     policy,
     summary: {
-      staleEvents: events.filter((row) => row.classification === "stale").length,
-      retainedEvents: events.filter((row) => row.classification === "retain").length,
-      stalePatterns: patterns.filter((row) => row.classification === "stale").length,
-      retainedPatterns: patterns.filter((row) => row.classification === "retain").length,
+      staleEvents: eventSummary.stale,
+      retainedEvents: eventSummary.retain,
+      stalePatterns: patternSummary.stale,
+      retainedPatterns: patternSummary.retain,
     },
     events,
     patterns,
@@ -152,7 +153,6 @@ async function readPatterns(workspaceDir: string): Promise<PatternRetentionInput
           scope: String(data.scope ?? "").trim().toLowerCase(),
           status,
           createdAt: typeof data.created_at === "string" ? data.created_at : null,
-          evidenceCount: Number(data.evidence_count ?? 0),
         });
       } catch {
         // malformed pattern files are ignored by read-only policy status.
@@ -166,9 +166,18 @@ function keepNewestBy<T>(rows: T[], key: (row: T) => string, count: number): T[]
   const groups = new Map<string, T[]>();
   for (const row of rows) {
     const k = key(row);
-    groups.set(k, [...(groups.get(k) ?? []), row]);
+    const group = groups.get(k);
+    if (group) group.push(row);
+    else groups.set(k, [row]);
   }
   return [...groups.values()].flatMap((group) => group.slice(-Math.max(0, count)));
+}
+
+function summarize(rows: RetentionRow[]): Record<RetentionRow["classification"], number> {
+  return {
+    retain: rows.filter((row) => row.classification === "retain").length,
+    stale: rows.filter((row) => row.classification === "stale").length,
+  };
 }
 
 function eventDate(id: string): string | null {
