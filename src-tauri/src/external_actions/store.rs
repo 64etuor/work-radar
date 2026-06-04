@@ -3,7 +3,7 @@
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::external_actions::{audit, Acceptance, ExecOutcome, ExternalAction, ExternalConnector};
+use crate::external_actions::{audit, Acceptance, ExternalAction, ExternalConnector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -156,6 +156,7 @@ pub(crate) async fn status(pool: &Db, action_id: &str) -> Result<Option<String>,
 mod tests {
     use super::*;
     use crate::commands::shared::test_support::fresh_db;
+    use crate::external_actions::ExecOutcome;
 
     struct MockConnector {
         outcome: ExecOutcome,
@@ -176,9 +177,15 @@ mod tests {
         let action = ExternalAction::Noop {
             note: "hello".into(),
         };
-        let id = enqueue(&pool, &action, Some("proj1"), Some("noop hello"), "mcp:test")
-            .await
-            .unwrap();
+        let id = enqueue(
+            &pool,
+            &action,
+            Some("proj1"),
+            Some("noop hello"),
+            "mcp:test",
+        )
+        .await
+        .unwrap();
         let pending = list_pending(&pool).await.unwrap();
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].id, id);

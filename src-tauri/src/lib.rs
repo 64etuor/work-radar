@@ -286,6 +286,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::updater::apply_skill_update,
         skills::updater::get_skill_update_on_launch,
         skills::updater::set_skill_update_on_launch,
+        // 외부 액션 게이트 (External Action Gate Phase 0, INVARIANT #1/#2) — 단일 초크포인트 큐.
+        // 승인 경로만 Acceptance를 mint하고 커넥터에 dispatch(Phase 0는 NoopConnector, 외부 호출 0).
+        commands::external_actions::list_pending_actions,
+        commands::external_actions::approve_external_action,
+        commands::external_actions::reject_external_action,
+        commands::external_actions::external_action_status,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,

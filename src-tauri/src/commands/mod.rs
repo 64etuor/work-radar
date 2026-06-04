@@ -14,6 +14,7 @@ pub mod agents_config;
 pub mod calendar;
 pub mod calendar_sync;
 pub mod cmux;
+pub mod external_actions;
 pub mod governance;
 pub mod hermes;
 pub mod hermes_agent;

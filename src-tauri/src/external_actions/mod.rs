@@ -32,6 +32,10 @@ impl ExternalAction {
 /// 커넥터 `execute`가 이 참조를 요구 → 승인 없이 실행 호출이 타입상 불가능.
 #[derive(Debug)]
 pub struct Acceptance {
+    // action_id는 승인된 액션 식별자를 토큰에 묶어 운반한다(감사 상관/검증용). Phase 0는
+    // NoopConnector가 읽지 않지만 Phase 2~5 실 커넥터가 `gate.action_id()`로 읽는다 →
+    // 프로덕션 빌드에선 아직 미사용이라 not(test) dead_code 허용(audit_log.rs 관례).
+    #[cfg_attr(not(test), allow(dead_code))]
     action_id: String,
 }
 
@@ -40,6 +44,8 @@ impl Acceptance {
     pub(crate) fn mint(action_id: String) -> Self {
         Acceptance { action_id }
     }
+    /// 승인된 액션 id. Phase 2~5 커넥터가 외부 호출 상관/멱등에 사용.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn action_id(&self) -> &str {
         &self.action_id
     }
