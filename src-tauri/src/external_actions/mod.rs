@@ -36,6 +36,15 @@ pub enum ExternalAction {
     /// 커넥터가 정규화), `title`=페이지 제목. 사람-origin 카드 승격(`promote_to_notion`)은 기존 경로
     /// 유지 — 이 변형은 외부 에이전트 제안만 게이트로 흘린다(spec §4 이중 경로).
     NotionCreatePage { db_id: String, title: String },
+    /// Google Calendar 이벤트 생성(Phase 4 write, AI-origin). 사람-폼 제출은 기존 pending_calendar_writes 경로 유지(spec §4 이중 경로). calendar_id=대상 캘린더, start/end=RFC3339(timed) 또는 YYYY-MM-DD(all_day).
+    CalendarCreateEvent {
+        calendar_id: String,
+        title: String,
+        start: String,
+        end: String,
+        all_day: bool,
+        description: Option<String>,
+    },
 }
 
 impl ExternalAction {
@@ -46,6 +55,7 @@ impl ExternalAction {
             ExternalAction::GithubIssueComment { .. } => "github.issue_comment",
             ExternalAction::GithubCreateIssue { .. } => "github.create_issue",
             ExternalAction::NotionCreatePage { .. } => "notion.create_page",
+            ExternalAction::CalendarCreateEvent { .. } => "calendar.create_event",
         }
     }
 }
@@ -72,5 +82,14 @@ mod token_tests {
             title: "t".into(),
         };
         assert_eq!(n.kind_str(), "notion.create_page");
+        let c = ExternalAction::CalendarCreateEvent {
+            calendar_id: "primary".into(),
+            title: "t".into(),
+            start: "2026-06-04T09:00:00+09:00".into(),
+            end: "2026-06-04T10:00:00+09:00".into(),
+            all_day: false,
+            description: None,
+        };
+        assert_eq!(c.kind_str(), "calendar.create_event");
     }
 }

@@ -44,6 +44,7 @@ describe("pendingActions", () => {
   it("extracts the service segment (null for non-dotted kinds)", () => {
     expect(serviceOf("github.issue_comment")).toBe("github");
     expect(serviceOf("notion.create_page")).toBe("notion");
+    expect(serviceOf("calendar.create_event")).toBe("calendar");
     expect(serviceOf("noop")).toBeNull();
   });
 });

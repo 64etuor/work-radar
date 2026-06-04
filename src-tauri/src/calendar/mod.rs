@@ -55,6 +55,8 @@ pub use parse::{
 pub use windows::{local_offset, range_window, today_window};
 #[allow(unused_imports)]
 pub use write::{build_event_payload, parse_created_event, CreateEventInput};
+// External Action Gate(Phase 4) dispatch — commands::external_actions 라우터가 호출.
+pub(crate) use write::execute_calendar_action;
 
 // ── CalendarError ─────────────────────────────────────────────────────────────────
 
@@ -125,6 +127,24 @@ pub trait CalendarProvider {
         calendar_id: &str,
         input: &CreateEventInput,
     ) -> impl std::future::Future<Output = Result<(String, Option<String>), CalendarError>> + Send;
+
+    /// 이벤트 생성 — **단일 시도(재시도 없음)**. External Action Gate(AI-origin, Phase 4) 전용.
+    /// events.insert는 멱등하지 않다 — 요청이 Google에 도달한 뒤 응답만 유실되면(transport drop=
+    /// transient) `create_event`의 bounded retry가 **중복 이벤트**를 만든다. 게이트 idempotency_key는
+    /// *제안* dedup이지 API 콜 dedup이 아니다(github WRITE_MAX_ATTEMPTS=1 선례). 그래서 gate write는
+    /// 재시도 대신 실패를 노출해 사용자가 재제안하게 한다. 사람-폼 경로는 `create_event` 그대로(무변경).
+    ///
+    /// 기본 구현은 `create_event`로 위임한다 — **실 HTTP provider(HttpCalendarProvider)는 단일-시도
+    /// POST로 override**해야 한다(중복 write 방지). 기본 위임은 retry가 무의미한 테스트 fake 전용이다.
+    fn create_event_once(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        input: &CreateEventInput,
+    ) -> impl std::future::Future<Output = Result<(String, Option<String>), CalendarError>> + Send
+    {
+        self.create_event(access_token, calendar_id, input)
+    }
 
     /// 기존 이벤트 부분 갱신(Today×Timeline PR 2). patch 페이로드는 시작/지속시간/제목 등 변경분만.
     /// bounded retry. 사용자 폼/타임라인 드래그 = 사람 결정 — Acceptance 게이트 불요(#2).

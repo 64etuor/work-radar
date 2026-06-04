@@ -1,4 +1,4 @@
-import { Check, Github, X } from "lucide-react";
+import { Calendar, Check, Github, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,9 @@ export function PendingActionsPanel() {
                 <p className="typo-title-sm flex items-center gap-1.5">
                   {serviceOf(a.kind) === "github" ? (
                     <Github className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+                  ) : null}
+                  {serviceOf(a.kind) === "calendar" ? (
+                    <Calendar className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
                   ) : null}
                   {formatActionKind(a.kind)}
                 </p>

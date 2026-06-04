@@ -1,6 +1,7 @@
 //! External Action Gate IPC. 승인/거절/조회. 승인 시 `ExternalActionRouter`가 kind별 실 커넥터로
 //! dispatch한다(Noop=외부 호출 0, GitHub/Notion=Rust 커넥터·keychain·bounded retry).
 
+use crate::calendar::{execute_calendar_action, HttpCalendarProvider};
 use crate::commands::approval_grant::HumanApproval;
 use crate::db::Db;
 use crate::error::AppError;
@@ -36,6 +37,11 @@ impl ExternalConnector for ExternalActionRouter<'_> {
                 let (writer, token) = self.notion_writer(gate.action_id()).await?;
                 execute_notion_action(&writer, &token, action).await
             }
+            ExternalAction::CalendarCreateEvent { .. } => {
+                // 동일 규율 — action의 project_ref(credential_ref)로만 Calendar access token resolve.
+                let access = self.calendar_access(gate.action_id()).await?;
+                execute_calendar_action(&HttpCalendarProvider::new()?, &access, action).await
+            }
         }
     }
 }
@@ -67,6 +73,22 @@ impl ExternalActionRouter<'_> {
     async fn notion_writer(&self, action_id: &str) -> Result<(HttpNotionWriter, String), AppError> {
         let token = notion_token_for_cref(&self.cref_for_action(action_id).await?)?;
         Ok((HttpNotionWriter::new()?, token))
+    }
+
+    /// action의 cref로 Google Calendar access token을 resolve한다(refresh 재발급). cref→token 레시피는
+    /// 기존 사람-폼 read/write 경로와 공유하는 단일 `calendar::access_token_for_cref`에 위임한다. 토큰은
+    /// keychain에서만, 본문 미노출. 미연결(creds/refresh 없음)은 not_connected로 노출.
+    async fn calendar_access(&self, action_id: &str) -> Result<String, AppError> {
+        let cref = self.cref_for_action(action_id).await?;
+        crate::commands::calendar::access_token_for_cref(&cref)
+            .await
+            .map_err(|e| AppError::terminal("calendar.access_token", e))?
+            .ok_or_else(|| {
+                AppError::not_found(
+                    "calendar.not_connected",
+                    "미연결 — 먼저 Google Calendar를 연결하세요",
+                )
+            })
     }
 }
 
