@@ -18,7 +18,7 @@
 | --- | --- | --- | --- |
 | **v1** | `design/2026-05-31-ssot-governance-harness-design.md` | 5계층 SSOT(L0–L4) + 7 propose-only 에이전트 + MCP + INVARIANT 매핑. 이식 기반 설계. | ✅ 기반 |
 | **v2** | `design/2026-06-01-ssot-governance-harness-hitl-plan-loop-design.md` | HITL 컨트롤 플레인 + Plan→Execution→Escalation. Planner/Conductor, `decision_blocked`, autonomy envelope, two-surface HITL. | 🅿️ 설계(스파인 일부 구축) |
-| **v3** | `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` | Orchestrator Control Plane: 실행 평면(Spec/Plan/Task/Session/Handoff) + Session Registry + Orchestrator 상태머신 + Context Steward + Control Room. 마스터 Phase A–I. | 🆕 설계 |
+| **v3** | `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` | Orchestrator Control Plane: 실행 평면(Spec/Plan/Task/Session/Handoff) + Session Registry + Orchestrator 상태머신 + Context Steward + Control Room. **단일 정본** — per-phase 설계 9개를 §7 Phase Ledger로 흡수(2026-06-04). A–H Slice 1 dev 랜딩, I parked. | ✅ on dev (단일 참조) |
 
 ## 구현 슬라이스 (Spec ↔ Plan 쌍, 시간순)
 
@@ -36,24 +36,27 @@
 | 06-01 | **Decision Ingress** (P3 Slice 1 — ADR/decisions 인메모리 파서) | `design/2026-06-01-ssot-governance-harness-decision-ingress-design.md` | `plans/2026-06-01-ssot-governance-harness-decision-ingress.md` | ✅ |
 | 06-01 | **L0 Harvest** (P3 Slice 2a — content-addressed 멱등 harvest) | `design/2026-06-01-ssot-governance-harness-l0-harvest-design.md` | `plans/2026-06-01-ssot-governance-harness-l0-harvest.md` | ✅ |
 | 06-02 | **Pattern Detector L0→L1** (인메모리 유사도 후보 패턴) | `design/2026-06-02-pattern-detector-l0-l1-design.md` | `plans/2026-06-02-pattern-detector-l0-l1.md` | ✅ |
-| 06-03 | **Phase G Context Steward / Handoff** (handoff 축 + 순수 pressure + hydration) | `design/2026-06-03-boule-v3-phase-g-context-steward-handoff-design.md` | `plans/2026-06-03-boule-v3-phase-g-context-steward-handoff.md` | ✅ |
+| 06-03 | **Phase G Context Steward / Handoff** (handoff 축 + 순수 pressure + hydration) | v3 마스터 §7 (Phase G) | `plans/2026-06-03-boule-v3-phase-g-context-steward-handoff.md` | ✅ |
 
-## v3 마스터 Phase (A–G ✅ 구축·로컬커밋 / H–I 계획 예정 — 각 Phase는 자체 spec+plan)
+## v3 마스터 Phase (A–H Slice 1 ✅ on dev / I 설계·parked)
 
-정본: `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §10.
-진행: **A→G 완료**(전부 opus critic ACCEPT, 로컬 커밋, **미푸시/PARKED**). 다음 critical-path = **H**(또는 **I**).
+**정본 = 단일 문서:** `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md`
+— per-phase 설계 9개를 **§7 Phase Ledger로 흡수**(2026-06-04 통합, 삭제분은 git 히스토리). 각 Phase의 상세 as-built
+설계는 마스터 §7, 상세 구현 플랜만 `plans/`에 별도. 진행: **A–H Slice 1 = dev 랜딩(`2a5a9db`)**(전부 opus
+critic ACCEPT). **I = 설계+plan(critic ACCEPT)·구현 PARKED**(빌드는 명시적 build-it 후에만).
 
-| Phase | 슬라이스 | Depends-on | Spec/Plan |
+| Phase | 슬라이스 | 상태 | Plan |
 | --- | --- | --- | --- |
-| **A** | Task lifecycle SSOT (fold+가드+projector+property test) | BUILT substrate | `plans/2026-06-02-boule-v3-phase-a-task-lifecycle.md` ✅ DONE (critic ACCEPT, vitest 214) |
-| **B** | Spec/Plan event-sourcing + Planner | A | `plans/2026-06-02-boule-v3-phase-b-plan-lifecycle-planner.md` (`40ab6eb`) + `plans/2026-06-02-boule-v3-phase-b2-spec-lifecycle.md` (`6d61af6`) ✅ DONE (critic ACCEPT, vitest 242→263) |
-| **C** | Conductor + autonomy-envelope (cmux spawn) | B + escalation spine | `plans/2026-06-02-boule-v3-phase-c-conductor.md` (`e040394`) ✅ DONE (critic round-2 ACCEPT, vitest 301) |
-| **D** | Session Registry + cmux Observer | C | `plans/2026-06-03-boule-v3-phase-d-session-registry.md` (`2d98134`) + live-adapter fix `plans/2026-06-03-boule-v3-phase-d-observer-live-adapter-fix.md` (`e9cd18d`) ✅ DONE (critic ACCEPT, vitest 354; live `cmux tree --all --json` smoke green) |
-| **E** | Orchestrator projector (observe/suggest) | A,B,C,D | `design/2026-06-03-boule-v3-phase-e-orchestrator-projector-design.md` + `plans/2026-06-03-boule-v3-phase-e-orchestrator-projector.md` (`d0bd978`) ✅ DONE (spec-compliant + opus critic ACCEPT 0B, vitest 371; 1 new event type `orchestrator_suggestion_created`, no decision_*/task_*/session_* write-path, bindings.ts byte-unchanged) |
-| **F** | Postgres+pgvector 그래프 인덱스 (events+nodes+edges, 임베딩 deferred) | E | `design/2026-06-03-boule-v3-phase-f-graph-index-design.md` + `plans/2026-06-03-boule-v3-phase-f-graph-index.md` (`dc09f3a`) ✅ DONE (plan-critic + 별도 impl-critic 둘 다 opus ACCEPT 0B; vitest 394/+23; embedded PGlite 0.5.1, pure projectGraph reuses per-axis folds, rebuild 멱등·checksum DB==projection, read-only 0 L0 write-path[negative=content-stable], bindings.ts byte-unchanged, app sqlite untouched; pgvector·approvals·session_observations deferred) |
-| **G** | Context Steward / Handoff | E | `design/2026-06-03-boule-v3-phase-g-context-steward-handoff-design.md` + `plans/2026-06-03-boule-v3-phase-g-context-steward-handoff.md` (`29a423e`) ✅ DONE (plan-critic REVISE→fix `29a423e` + 별도 impl-critic 둘 다 opus ACCEPT 0B; vitest 418/+24, tsc 0, drift bindings.ts/migrations 0, boot smoke clean; handoff_* 축[fold·7-section validate·projector] + 순수 advisory computeContextPressure[observer/hermes=SSOT writer 유지, 0 emit] + 순수 assembleBundle[laundering-prevention: open decision_blocked carried·resolved excluded·no authority field]; INVARIANT #1 negative=0 decision/task/session writes, hydrate만 1 handoff_consumed; archived 이벤트·실 per-session envelope sourcing deferred §0.2) |
-| **H** | Control Room UI (specta) | E,F,G | `design/2026-06-03-boule-v3-phase-h-control-room-ui-design.md` + `plans/2026-06-03-boule-v3-phase-h-control-room-ui.md` (`83dddef..a47cdd3`) ✅ **Slice 1 DONE** (plan-critic + 별도 impl-critic 둘 다 opus ACCEPT 0B). Read-only file-read bridge: Rust reads `state/*.json`→specta `ControlRoomSnapshot`(`get_control_room_snapshot`), no write/emit path(INVARIANT #1 구조적), `bindings.ts` 재생성·drift 0(#4), 앱 sqlite/migration 무변경(#6), shadcn+lucide+wr 토큰(#7, 단일 문서화 `--cr-pressure` hex 예외). 4 패널(System Overview·Session Board·Handoff Queue·Work Lists). 게이트: cargo test **448**·clippy 0·fmt clean / typecheck 0·lint 0err(2 baseline)·vitest **238**. 신규: `phase_enum!` 매크로(bare-string drift-resilient `Unknown` deser; specta rc.25가 `#[serde(other)]` 거부). **잔여=라이브 `tauri dev` GUI 부팅 스모크(에이전트 불가→사용자/cmux)**. deferred=graph viz(PGlite→JSON export 필요)·timeline/replay·approval 패널(Hermes 카드 재사용)·rebuild 트리거·release 경로해결(F1)·stamp staleTime drift(impl-critic minor#2). **PARKED/미푸시** |
-| **I** | 좁은 opt-in auto (Type-2만) | E,G + envelope(C) | `design/2026-06-03-boule-v3-phase-i-narrow-auto-design.md` (rev.2) + `plans/2026-06-03-boule-v3-phase-i-narrow-auto.md` (`9c29824`) — **spec+plan COMMITTED**; plan-critic ACCEPT-with-minors(M1 sole-producer/F2·M2 dedup-off-`step_bound`-materialization·M3 G3 `done`-before-`in_flight` 반영) + 별도 read-only re-critic **ACCEPT 0 blockers**; **구현 미착수 / PARKED**. Slice 1 = opt-in(`BOULE_AUTO_MODE=type2`) on-demand `auto_dispatch`가 **human-accepted plan**을 Phase-C `conduct_plan`로 자동 1-step 진행(deny-by-default Safety Gate·dispatch 감사 trail). 0 `decision_*` write(구조적 #1·negative test)·timeout/default 0·Type-1 halt 유지·headless stdio(bindings 무변경). 신규 4 이벤트(`instruction_planned`/`orchestrator_action_executed`/`_failed`/`action_denied`). **빌드는 명시적 build-it 후에만** (autonomy-boundary). |
+| **A** | Task lifecycle SSOT | ✅ on dev | `plans/2026-06-02-boule-v3-phase-a-task-lifecycle.md` |
+| **B** | Plan event-sourcing + Planner | ✅ on dev | `plans/2026-06-02-boule-v3-phase-b-plan-lifecycle-planner.md` |
+| **B2** | Spec lifecycle | ✅ on dev | `plans/2026-06-02-boule-v3-phase-b2-spec-lifecycle.md` |
+| **C** | Conductor + autonomy-envelope | ✅ on dev | `plans/2026-06-02-boule-v3-phase-c-conductor.md` (+ `...-phase-c-live-smoke-runbook.md`) |
+| **D** | Session Registry + cmux Observer | ✅ on dev | `plans/2026-06-03-boule-v3-phase-d-session-registry.md` (+ `...-observer-live-adapter-fix.md`) |
+| **E** | Orchestrator projector (observe/suggest) | ✅ on dev | `plans/2026-06-03-boule-v3-phase-e-orchestrator-projector.md` |
+| **F** | Graph index (PGlite; events+nodes+edges) | ✅ on dev (pgvector deferred) | `plans/2026-06-03-boule-v3-phase-f-graph-index.md` |
+| **G** | Context Steward / Handoff | ✅ on dev (vitest 418) | `plans/2026-06-03-boule-v3-phase-g-context-steward-handoff.md` |
+| **H** | Control Room UI (Slice 1) | ✅ Slice 1 on dev (라이브 GUI smoke 잔여) | `plans/2026-06-03-boule-v3-phase-h-control-room-ui.md` |
+| **I** | 좁은 opt-in auto (Type-2) | 📍 설계+plan ACCEPT · **구현 PARKED** | `plans/2026-06-03-boule-v3-phase-i-narrow-auto.md` |
 
 ## v1 잔여 (v3 critical path와 독립 — 언제든 마감 가능)
 
