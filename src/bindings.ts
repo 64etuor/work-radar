@@ -583,6 +583,10 @@ export const commands = {
 	applySkillUpdate: (provider: string, name: string) => typedError<Skill, AppError>(__TAURI_INVOKE("apply_skill_update", { provider, name })),
 	getSkillUpdateOnLaunch: () => typedError<boolean, AppError>(__TAURI_INVOKE("get_skill_update_on_launch")),
 	setSkillUpdateOnLaunch: (enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_skill_update_on_launch", { enabled })),
+	listPendingActions: () => typedError<PendingAction[], AppError>(__TAURI_INVOKE("list_pending_actions")),
+	approveExternalAction: (actionId: string) => typedError<string, AppError>(__TAURI_INVOKE("approve_external_action", { actionId })),
+	rejectExternalAction: (actionId: string) => typedError<null, AppError>(__TAURI_INVOKE("reject_external_action", { actionId })),
+	externalActionStatus: (actionId: string) => typedError<string | null, AppError>(__TAURI_INVOKE("external_action_status", { actionId })),
 	/**
 	 *  프런트에서 발생한 에러(JS 예외/렌더 크래시)를 백엔드 로그로 흘린다.
 	 *  백엔드-originated 에러는 AppError가 이미 로그하므로 프런트가 다시 호출하지 않는다.
@@ -1329,6 +1333,16 @@ export type OrchestratorView = {
 export type Ownership = "user_owned" | "orchestrator_owned" | "external_owned" | 
 /**  Drift-resilient fallback: any wire value not in the known set. */
 "unknown";
+
+export type PendingAction = {
+	id: string,
+	kind: string,
+	projectRef: string | null,
+	preview: string | null,
+	origin: string,
+	status: string,
+	createdAt: string,
+};
 
 /**
  *  pending_calendar_writes 행. payload_json은 op별 자유 형태(create=title/start/duration_min,
