@@ -477,6 +477,10 @@ Expected: 전부 green. cargo test = Phase0(559) + 신규 mcp/trybuild 테스트
 - **Phase 2~5(GitHub/Notion/Calendar/Gmail 쓰기)**: 각 커넥터 + `ExternalAction` 실 변형 + 실 write 툴(mcp/mod.rs에 추가) + 승인 패널 preview. **2~5는 0/1 위에서 서로 독립 → codex:1 + claude:1 병렬 디스패치 가능.** Phase 2 선결: `executing` crash-orphan reaper + 실패 사유 audit detail + FE `"failed"` 노출(Phase 0 critic/quality follow-up, Phase 0 플랜 §Phase 2에 기록).
 - Hermes ACP 자동 등록 빌더(`governance_mcp_servers` 패턴) — 선택적 follow-up.
 
+**Phase 2 전제(Phase 1 critic이 명시 연기 요구 — 첫 실 커넥터 write 툴 전 필수):**
+- **§2 approve/reject 경화(crit §2 crux).** `store::{approve,reject}`가 현재 `pub(crate)`라 같은 crate mcp 모듈이 호출하면 사람 게이트 우회 가능(현재는 review+문서로만 금지, mcp는 호출 0 검증됨). 첫 실 커넥터가 외부를 mutate하기 전에 approve/reject를 `gate` 서브모듈로 옮겨 **타입-월화**(mint와 동일) + trybuild 확장.
+- **`#[serde(deny_unknown_fields)]` + schema-snapshot 테스트(conventions §2/§8).** deny_unknown_fields는 Phase 1에서 param 2개에 적용함(`mcp/mod.rs`); **schema-snapshot 테스트**(생성된 JSON Schema에 `additionalProperties:false` 고정 + 툴 표면 drift 가드)는 실 write 툴이 늘어나는 Phase 2에서 추가. idempotency 키/인덱스도 같은 게이트.
+
 **Phase 1 quality 리뷰 follow-up(추적):**
 - **(Minor) `store::list_pending` LIMIT** — 현재 무제한 `SELECT`. Phase 1엔 사람-게이트 큐라 작아 무해하나, Phase 2~5에서 자동 proposer가 늘면 MCP 단일 응답이 unbounded가 될 수 있음 → `LIMIT`(예: 200) 추가. store.rs(Phase 0 코드) + FE list_pending 동시 영향이라 Phase 2 착수 시 함께.
 - **(Minor) trybuild `.stderr` regen** — `tests/compile_fail/mint_outside.stderr`의 E0624 메시지 prose는 rustc 버전에 따라 문구가 바뀔 수 있음(에러 *코드*는 안정). 툴체인 bump 시 빨강은 회귀가 아니라 `TRYBUILD=overwrite`로 재생성 대상 — 그 사실을 테스트 주석/decisions에 남김.
