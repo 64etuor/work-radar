@@ -10,6 +10,13 @@
 
 **Spec:** v1 design `governance/docs/design/2026-05-31-ssot-governance-harness-design.md` §2.1, §3, §8 P4. P4 done criterion: at least one hypothesis is verified/refuted and can feed later decision/principle work.
 
+**Continuation rule:** A commit is a checkpoint, not a stop condition. After this slice passes full
+verification and critic ACCEPT, immediately continue to the next local-implementable governance slice
+from `governance/docs/INDEX.md`. If that next slice has no implementation plan, write the plan, run a
+short plan critic if the slice changes automation/security/decision boundaries, then execute it in the
+same session. Stop only for an explicit user stop, a repeated blocker, or work that requires push/merge/
+deploy/live GUI/cmux/user credentials.
+
 ---
 
 ## Scope
@@ -245,7 +252,7 @@ cd governance && pnpm exec vitest run test/mcp/hypotheses.test.ts
 
 Expected: PASS.
 
-## Task 5: Full Verification, Docs, Critic
+## Task 5: Full Verification, Docs, Critic, Commit
 
 **Step 1: Full governance gates**
 
@@ -275,14 +282,82 @@ Update `governance/docs/INDEX.md` P4 row with observed test count and status onl
 
 Run an external critic against the diff and v1 P4 requirements. Required verdict before marking P4 done: ACCEPT or ACCEPT-with-minors, 0 blockers.
 
-**Step 5: Commit**
+**Step 5: Commit checkpoint**
 
-Commit locally only:
+Commit the completed slice:
 
 ```bash
 git add governance/src/hypotheses governance/test/hypotheses governance/test/mcp/hypotheses.test.ts governance/src/mcp/server.ts governance/docs/INDEX.md
 git commit -m "feat(governance): add P4 hypothesis tester slice"
 ```
+
+This commit is required and allowed. Do not treat it as the end of the goal.
+
+## Task 6: Continue Immediately to the Next Slice
+
+**Purpose:** Prevent the previous failure mode where the agent stopped after a successful critic/commit
+or after writing the next plan.
+
+**Step 1: Re-read the current index**
+
+Run:
+
+```bash
+sed -n '1,140p' governance/docs/INDEX.md
+```
+
+Pick the next row that is both:
+
+- not DONE, and
+- local-implementable without push/merge/deploy/live GUI/cmux/user credentials.
+
+Expected after P4 Slice 1: likely P5 Meta Observer or P6 Archive Pruner, unless P4 follow-up is the next
+documented critical path.
+
+**Step 2: If the next slice has no plan, create it and keep going**
+
+Create the next plan under `governance/docs/plans/YYYY-MM-DD-<topic>.md` and link it from
+`governance/docs/INDEX.md`.
+
+Required plan properties:
+
+- TDD tasks with RED/GREEN commands.
+- Full verification command.
+- Critic requirement if automation/security/decision-rail behavior changes.
+- A **Continuation rule** equivalent to this section.
+
+Commit the plan:
+
+```bash
+git add governance/docs/INDEX.md governance/docs/plans/<new-plan>.md
+git commit -m "docs(governance): plan <next slice>"
+```
+
+Then immediately execute that plan. Do not stop at the planning commit.
+
+**Step 3: If the next slice already has a plan, execute it**
+
+Use `superpowers:executing-plans`. Follow the plan task-by-task:
+
+- write failing tests first,
+- verify RED,
+- implement minimal code,
+- verify GREEN,
+- run full suite,
+- run critic if required,
+- commit,
+- return to Task 6 Step 1.
+
+**Step 4: Stop conditions**
+
+Stop only when one of these is true:
+
+- the user explicitly says stop/pause/status-only,
+- three consecutive attempts hit the same blocker,
+- the remaining next action requires push/merge/delete/deploy/live GUI/cmux/user credentials,
+- the index has no remaining local-implementable slice.
+
+When stopping, report the exact blocker or external residual and the last successful commit hash.
 
 ## Deferred
 
