@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { Check, Github, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -7,7 +7,12 @@ import {
   useRejectExternalAction,
 } from "@/lib/query/pendingActions";
 
-import { formatActionKind, groupPendingByOrigin, isExternalWriteKind } from "./pendingActions";
+import {
+  formatActionKind,
+  groupPendingByOrigin,
+  isExternalWriteKind,
+  serviceOf,
+} from "./pendingActions";
 
 export function PendingActionsPanel() {
   const { data: actions = [] } = usePendingActions();
@@ -28,9 +33,16 @@ export function PendingActionsPanel() {
               className="border-border flex items-start justify-between gap-2 rounded-md border p-2"
             >
               <div className="min-w-0">
-                <p className="typo-title-sm">{formatActionKind(a.kind)}</p>
+                <p className="typo-title-sm flex items-center gap-1.5">
+                  {serviceOf(a.kind) === "github" ? (
+                    <Github className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+                  ) : null}
+                  {formatActionKind(a.kind)}
+                </p>
                 {a.preview ? (
-                  <p className="text-muted-foreground typo-caption-sm truncate">{a.preview}</p>
+                  // 외부 쓰기 대상(repo#issue / [개인·업무: 프로젝트])을 **잘리지 않게** 보여준다 —
+                  // 승인 = 외부 mutation이므로 사람이 무엇에 행위하는지 전부 봐야 한다(truncate 금지).
+                  <p className="text-muted-foreground typo-caption-sm break-words">{a.preview}</p>
                 ) : null}
                 {isExternalWriteKind(a.kind) ? (
                   // 잔여 위험(#5): POST 도달 후 응답 유실 → failed 표시 → 재승인이 중복 외부 쓰기일 수

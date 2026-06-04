@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { PendingAction } from "../../bindings";
-import { formatActionKind, groupPendingByOrigin, isExternalWriteKind } from "./pendingActions";
+import {
+  formatActionKind,
+  groupPendingByOrigin,
+  isExternalWriteKind,
+  serviceOf,
+} from "./pendingActions";
 
 const mk = (over: Partial<PendingAction>): PendingAction => ({
   id: "1",
@@ -34,5 +39,11 @@ describe("pendingActions", () => {
     expect(isExternalWriteKind("github.issue_comment")).toBe(true);
     expect(isExternalWriteKind("github.create_issue")).toBe(true);
     expect(isExternalWriteKind("noop")).toBe(false);
+  });
+
+  it("extracts the service segment (null for non-dotted kinds)", () => {
+    expect(serviceOf("github.issue_comment")).toBe("github");
+    expect(serviceOf("notion.create_page")).toBe("notion");
+    expect(serviceOf("noop")).toBeNull();
   });
 });

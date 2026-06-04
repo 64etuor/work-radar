@@ -20,6 +20,16 @@ export function isExternalWriteKind(kind: string): boolean {
   return kind.includes(".");
 }
 
+/**
+ * 액션 kind의 서비스 세그먼트("github" / "notion" / …)를 반환한다. 점 없는 kind(noop 등)는 null.
+ * 승인 패널이 서비스별 아이콘/배지를 고를 때 쓴다(순수 — 테스트 가능). `formatActionKind`와 동일한
+ * 분해 규칙(첫 dot 앞 = 서비스)을 공유한다.
+ */
+export function serviceOf(kind: string): string | null {
+  const [service, ...rest] = kind.split(".");
+  return rest.length === 0 ? null : service;
+}
+
 /** "github.comment" → "GitHub · comment". 점 없는 kind는 그대로. */
 export function formatActionKind(kind: string): string {
   const [service, ...rest] = kind.split(".");
