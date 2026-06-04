@@ -6,9 +6,7 @@ use crate::db::Db;
 use crate::error::AppError;
 use crate::external_actions::store::{self, PendingAction};
 use crate::external_actions::{Acceptance, ExecOutcome, ExternalAction, ExternalConnector};
-use crate::github::{execute_github_action, HttpPrProvider};
-use crate::keychain;
-use crate::models::TokenKind;
+use crate::github::{execute_github_action, github_provider_for_cref, HttpPrProvider};
 use tauri::State;
 
 /// 승인된 액션을 kind별 실 커넥터로 dispatch하는 실행 seam. **Phase 2~5 커넥터는 여기 match에
@@ -38,7 +36,8 @@ impl ExternalConnector for ExternalActionRouter<'_> {
 
 impl ExternalActionRouter<'_> {
     /// action의 project_ref(credential_ref)로 GitHub 토큰을 resolve해 writer를 만든다.
-    /// 토큰은 keychain에서만 읽고 본문은 노출하지 않는다(렌더러/로그 금지).
+    /// 토큰은 keychain에서만 읽고 본문은 노출하지 않는다(렌더러/로그 금지). cref→client 레시피는
+    /// `pr_radar`(read)와 공유하는 단일 `github_provider_for_cref`에 위임한다(#13).
     async fn github_writer(&self, action_id: &str) -> Result<HttpPrProvider, AppError> {
         let cref = store::project_ref_for(self.db, action_id)
             .await?
@@ -48,13 +47,7 @@ impl ExternalActionRouter<'_> {
                     "GitHub 액션에 대상 프로젝트(project_ref)가 없습니다",
                 )
             })?;
-        let token = keychain::get_token(&cref, TokenKind::Github)?.ok_or_else(|| {
-            AppError::not_found(
-                "external_action.github_token_missing",
-                "GitHub 토큰이 없습니다(설정에서 저장 필요)",
-            )
-        })?;
-        Ok(HttpPrProvider::new(&token)?)
+        github_provider_for_cref(&cref)
     }
 }
 

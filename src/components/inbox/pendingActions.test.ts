@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PendingAction } from "../../bindings";
-import { formatActionKind, groupPendingByOrigin } from "./pendingActions";
+import { formatActionKind, groupPendingByOrigin, isExternalWriteKind } from "./pendingActions";
 
 const mk = (over: Partial<PendingAction>): PendingAction => ({
   id: "1",
@@ -28,5 +28,11 @@ describe("pendingActions", () => {
   it("formats action kind for display", () => {
     expect(formatActionKind("github.comment")).toBe("GitHub · comment");
     expect(formatActionKind("noop")).toBe("noop");
+  });
+
+  it("flags external write kinds (dot) but not noop", () => {
+    expect(isExternalWriteKind("github.issue_comment")).toBe(true);
+    expect(isExternalWriteKind("github.create_issue")).toBe(true);
+    expect(isExternalWriteKind("noop")).toBe(false);
   });
 });

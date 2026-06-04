@@ -144,25 +144,44 @@ async fn active_action_for_key(pool: &Db, key: &str) -> Result<Option<String>, A
     Ok(id)
 }
 
-/// 승인 대기 큐(오래된 것 먼저 = FIFO). payload/result는 노출 안 함(메타만).
-/// `LIMIT 200` = bounded 응답. Phase 2~5 자동 proposer가 늘어도 MCP/FE 단일 응답이 무한히
-/// 커지지 않게 막는 안전 상한(사람-게이트 큐는 통상 이보다 작다). 초과분은 다음 조회에서 노출.
+/// 승인 대기 응답 상한. Phase 2~5 자동 proposer가 늘어도 MCP/FE 단일 응답이 무한히 커지지 않게
+/// 막는 안전 상한(사람-게이트 큐는 통상 이보다 작다). FIFO라 상한 초과 시 잘리는 건 **가장 최근 제안**.
+const PENDING_LIMIT: i64 = 200;
+
+/// 승인 대기 큐(오래된 것 먼저 = FIFO). payload/result는 노출 안 함(메타만). IPC 표면 backward-compat용
+/// 얇은 래퍼 — truncation 신호가 필요한 호출자(MCP 폴링 에이전트)는 `list_pending_with_total`을 쓴다.
 pub(crate) async fn list_pending(pool: &Db) -> Result<Vec<PendingAction>, AppError> {
+    Ok(list_pending_with_total(pool).await?.0)
+}
+
+/// `list_pending` + 전체 대기 건수. 반환=(상한까지의 행, 상한 적용 전 전체 건수). 호출자가
+/// `total > rows.len()`로 **truncation을 명시 신호**할 수 있게 한다(#7: LIMIT이 가장 최근 제안을
+/// 무신호로 숨기던 문제 — 폴링 에이전트가 "더 있음"을 알 수 있게).
+pub(crate) async fn list_pending_with_total(
+    pool: &Db,
+) -> Result<(Vec<PendingAction>, u32), AppError> {
     let rows = sqlx::query_as::<_, PendingAction>(
         "SELECT id, kind, project_ref, preview, origin, status, created_at \
          FROM external_actions WHERE status = 'awaiting_approval' \
-         ORDER BY created_at ASC, id ASC LIMIT 200",
+         ORDER BY created_at ASC, id ASC LIMIT ?1",
     )
+    .bind(PENDING_LIMIT)
     .fetch_all(pool)
     .await?;
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM external_actions WHERE status = 'awaiting_approval'",
+    )
+    .fetch_one(pool)
+    .await?;
     // 상한 도달 시 PII-free 카운트만 경고 — FIFO라 잘리는 건 가장 최근 제안. 무신호 truncation 방지.
-    if rows.len() == 200 {
+    if total > PENDING_LIMIT {
         tracing::warn!(
-            count = rows.len(),
-            "external_actions pending queue hit LIMIT 200; newest proposals truncated from this response"
+            shown = rows.len(),
+            total,
+            "external_actions pending queue exceeds LIMIT; newest proposals truncated from this response"
         );
     }
-    Ok(rows)
+    Ok((rows, total as u32))
 }
 
 /// 승인: awaiting_approval → executing(CAS 가드) → 커넥터 dispatch → succeeded|failed.
@@ -206,25 +225,56 @@ pub(crate) async fn approve<C: ExternalConnector>(
     match connector.execute(&action, &gate).await {
         Ok(outcome) => {
             let result = serde_json::to_string(&outcome).ok();
-            sqlx::query(
-                "UPDATE external_actions SET status = 'succeeded', result = ?2 WHERE id = ?1",
+            // **불변(#3/#10): 완료된 외부 mutation은 절대 'failed'로 보고되지 않는다.**
+            // ① 상태 플립 *전에* "executed"(external_ref 포함)를 durable하게 감사한다 — 이후 상태
+            //    UPDATE가 실패하거나 동시 reaper가 이 행을 건드려도, 감사에 "쓰기 발생"이 남아
+            //    reaper가 failed가 아니라 succeeded로 reconcile할 수 있다.
+            let detail = match (&outcome.external_ref, outcome.bytes) {
+                (Some(r), Some(b)) => format!("ref={r},bytes={b}"),
+                (Some(r), None) => format!("ref={r}"),
+                (None, Some(b)) => format!("bytes={b}"),
+                (None, None) => String::new(),
+            };
+            audit::audit(pool, action_id, "executed", Some(&detail)).await?;
+            // ② 상태-가드 finalize: executing에서만 succeeded로. 0행이면 동시 reaper가 그새 이
+            //    행을 뒤집은 것 — 쓰기는 이미 성공했으므로 succeeded를 강제(reconcile)한다.
+            let moved = sqlx::query(
+                "UPDATE external_actions SET status = 'succeeded', result = ?2 \
+                 WHERE id = ?1 AND status = 'executing'",
             )
             .bind(action_id)
-            .bind(result)
+            .bind(&result)
             .execute(pool)
-            .await?;
-            let detail = outcome
-                .bytes
-                .map(|b| format!("bytes={b}"))
-                .unwrap_or_default();
-            audit::audit(pool, action_id, "executed", Some(&detail)).await?;
+            .await?
+            .rows_affected();
+            if moved == 0 {
+                sqlx::query(
+                    "UPDATE external_actions SET status = 'succeeded', result = ?2 WHERE id = ?1",
+                )
+                .bind(action_id)
+                .bind(&result)
+                .execute(pool)
+                .await?;
+                audit::audit(
+                    pool,
+                    action_id,
+                    "reconciled",
+                    Some("write_succeeded_after_reap"),
+                )
+                .await?;
+            }
             Ok("succeeded".into())
         }
         Err(e) => {
-            sqlx::query("UPDATE external_actions SET status = 'failed' WHERE id = ?1")
-                .bind(action_id)
-                .execute(pool)
-                .await?;
+            // 상태-가드 failure: executing에서만 failed로. 0행이면 reaper가 이미 failed로 처리한
+            // 것(둘 다 failed에 동의) — 덮어쓰지 않는다(reconcile된 succeeded를 클로버하지 않게).
+            sqlx::query(
+                "UPDATE external_actions SET status = 'failed' \
+                 WHERE id = ?1 AND status = 'executing'",
+            )
+            .bind(action_id)
+            .execute(pool)
+            .await?;
             // 실패 사유를 감사에 보존하되 **PII-free**: AppError.code만(예: "github.rate_limited").
             // message/payload 본문은 절대 넣지 않는다(로그 PII 금지 INVARIANT). 실패는 액션
             // 상태로 surface하되 호출 자체는 Ok(상태머신 진행) — IPC 반환 "failed"를 FE가 노출.
@@ -259,27 +309,83 @@ pub(crate) async fn reject(
     Ok(())
 }
 
-/// 시동 시 crash-orphan 회수: 이전 프로세스에서 `executing` 중 크래시한 액션은 재개 불가하므로
-/// `failed`로 표시하고 감사한다(`agent_run_store::recover_interrupted_runs` 관례). 부수효과로
-/// 부분 유니크 인덱스(0042)에서 그 idempotency_key가 풀려, 좀비가 키를 영구히 잠그는 일을 막는다.
-/// 반환=회수된 액션 수. 외부 호출 0(상태머신 정리만).
+/// `executing`이 lease(`STALE_EXECUTING_SECS`)보다 오래된 액션만 좀비로 본다. 그보다 최근이면
+/// 동시 형제 프로세스(공유 dev DB / 더블런치)의 **genuinely-live** 액션일 수 있어 reaper가 건드리지
+/// 않는다(#10). 쓰기는 bounded retry로 초 단위에 끝나므로 이 lease는 매우 여유 있다.
+const STALE_EXECUTING_SECS: i64 = 300;
+
+/// 시동 시 crash-orphan 회수. `executing` 좀비를 정리하되 두 가지를 지킨다:
+///
+/// - **#3 reconcile:** 이미 "executed" 감사가 있는 행은 외부 쓰기가 성공한 것 → `failed`가 아니라
+///   `succeeded`로 reconcile한다(완료된 mutation을 절대 실패로 보고하지 않는다는 불변).
+/// - **#10 lease 가드:** `decided_at`(없으면 `created_at`)이 lease 안에 있는 행은 동시 형제
+///   프로세스의 live 액션일 수 있어 건드리지 않는다(공유 dev DB / 더블런치).
+///
+/// 나머지(오래된 mid-execution 크래시)만 `failed`. 상태 전이는 모두 `status='executing'` 가드로
+/// 동시 finalize와 클로버하지 않는다. 부수효과로 부분 유니크 인덱스(0042)에서 idempotency_key가 풀려
+/// 좀비가 키를 영구히 잠그는 일을 막는다. 반환=회수(failed+reconciled)된 액션 수. 외부 호출 0.
 pub(crate) async fn recover_interrupted_actions(pool: &Db) -> Result<u64, AppError> {
-    // UPDATE ... RETURNING으로 회수 대상 id를 받아 건별 감사(append-only). SQLite 3.35+.
+    recover_interrupted_actions_inner(pool, STALE_EXECUTING_SECS).await
+}
+
+/// lease 임계값을 받는 테스트 가능 코어. `stale_secs` 이전에 decided/created된 `executing` 행만 대상.
+async fn recover_interrupted_actions_inner(pool: &Db, stale_secs: i64) -> Result<u64, AppError> {
+    let threshold = format!("-{} seconds", stale_secs.max(1));
+    // lease를 넘긴 stale executing 행 id만 수집(최근 = 형제 live일 수 있어 제외).
     let ids: Vec<String> = sqlx::query_scalar(
-        "UPDATE external_actions SET status = 'failed' WHERE status = 'executing' RETURNING id",
+        "SELECT id FROM external_actions \
+         WHERE status = 'executing' \
+           AND COALESCE(decided_at, created_at) < datetime('now', ?1)",
     )
+    .bind(&threshold)
     .fetch_all(pool)
     .await?;
+
+    let mut handled = 0u64;
     for id in &ids {
-        audit::audit(
-            pool,
-            id,
-            "failed",
-            Some("recovered=app_restart_mid_execution"),
+        // 외부 쓰기가 실제로 끝났는지 = "executed" 감사 유무. 있으면 finalize만 못 박힌 것이니
+        // succeeded로 reconcile(완료된 쓰기를 실패로 보고하지 않음). 없으면 진짜 mid-execution 크래시.
+        let executed: Option<i32> = sqlx::query_scalar(
+            "SELECT 1 FROM external_action_audit WHERE action_id = ?1 AND event = 'executed' LIMIT 1",
         )
+        .bind(id)
+        .fetch_optional(pool)
         .await?;
+        if executed.is_some() {
+            let moved = sqlx::query(
+                "UPDATE external_actions SET status = 'succeeded' \
+                 WHERE id = ?1 AND status = 'executing'",
+            )
+            .bind(id)
+            .execute(pool)
+            .await?
+            .rows_affected();
+            if moved > 0 {
+                audit::audit(pool, id, "reconciled", Some("write_succeeded_before_crash")).await?;
+                handled += 1;
+            }
+        } else {
+            let moved = sqlx::query(
+                "UPDATE external_actions SET status = 'failed' \
+                 WHERE id = ?1 AND status = 'executing'",
+            )
+            .bind(id)
+            .execute(pool)
+            .await?
+            .rows_affected();
+            if moved > 0 {
+                audit::audit(
+                    pool,
+                    id,
+                    "failed",
+                    Some("recovered=app_restart_mid_execution"),
+                )
+                .await?;
+                handled += 1;
+            }
+        }
     }
-    Ok(ids.len() as u64)
+    Ok(handled)
 }
 
 /// 단건 상태 폴링(MCP wr_action_status용). 없으면 None.
@@ -498,14 +604,18 @@ mod tests {
         let pool = fresh_db().await;
         let action = ExternalAction::Noop { note: "x".into() };
         // 'executing' 좀비를 직접 만든다(크래시 시뮬레이션): enqueue 후 수동으로 executing 전이.
+        // decided_at을 lease 밖(과거)으로 백데이트 = 이전 프로세스의 진짜 crash-orphan 모사.
         let id = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k1"))
             .await
             .unwrap();
-        sqlx::query("UPDATE external_actions SET status = 'executing' WHERE id = ?1")
-            .bind(&id)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "UPDATE external_actions SET status = 'executing', \
+             decided_at = datetime('now', '-1 hour') WHERE id = ?1",
+        )
+        .bind(&id)
+        .execute(&pool)
+        .await
+        .unwrap();
         // 회수 전: 같은 키는 활성(executing)이라 dedup으로 잠겨 있다.
         assert_eq!(
             active_action_for_key(&pool, "k1").await.unwrap().as_deref(),
@@ -599,6 +709,167 @@ mod tests {
         assert_eq!(
             status(&pool, &id2).await.unwrap().as_deref(),
             Some("awaiting_approval")
+        );
+    }
+
+    /// 커넥터가 외부 쓰기에 성공했지만, finalize 직전 동시 reaper가 이 행을 'failed'로 뒤집은 상황.
+    /// approve는 상태-가드 UPDATE가 0행임을 감지하고 succeeded로 **reconcile**한다 — 완료된 외부
+    /// mutation은 절대 failed로 보고되지 않는다(#3/#10 불변).
+    struct ReapDuringExecConnector {
+        pool: Db,
+    }
+    impl ExternalConnector for ReapDuringExecConnector {
+        async fn execute(
+            &self,
+            _action: &ExternalAction,
+            gate: &Acceptance,
+        ) -> Result<ExecOutcome, AppError> {
+            // 외부 쓰기는 성공. 그 사이 동시 reaper(형제 프로세스 등)가 이 executing 행을 뒤집음.
+            sqlx::query("UPDATE external_actions SET status = 'failed' WHERE id = ?1")
+                .bind(gate.action_id())
+                .execute(&self.pool)
+                .await
+                .unwrap();
+            Ok(ExecOutcome {
+                external_ref: Some("ext/ref/1".into()),
+                bytes: Some(3),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn approve_reconciles_succeeded_when_row_flipped_during_execution() {
+        let pool = fresh_db().await;
+        let id = enqueue(
+            &pool,
+            &ExternalAction::Noop { note: "x".into() },
+            None,
+            None,
+            "mcp:t",
+        )
+        .await
+        .unwrap();
+        let conn = ReapDuringExecConnector { pool: pool.clone() };
+        let res = approve(&pool, &id, &conn, &HumanApproval::for_test())
+            .await
+            .unwrap();
+        // 행이 그새 failed로 뒤집혔어도 최종 결과는 succeeded(reconcile).
+        assert_eq!(res, "succeeded");
+        assert_eq!(
+            status(&pool, &id).await.unwrap().as_deref(),
+            Some("succeeded")
+        );
+        // 감사: executed(상태 플립 전) + reconciled 둘 다 존재. failed는 없다.
+        let events: Vec<String> = audit::list_audit_core(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|a| a.event)
+            .collect();
+        assert!(events.contains(&"executed".to_string()));
+        assert!(events.contains(&"reconciled".to_string()));
+        assert!(
+            !events.contains(&"failed".to_string()),
+            "완료된 외부 쓰기는 failed로 기록되지 않는다"
+        );
+    }
+
+    #[tokio::test]
+    async fn reaper_reconciles_executed_zombie_to_succeeded() {
+        let pool = fresh_db().await;
+        let id = enqueue(
+            &pool,
+            &ExternalAction::Noop { note: "x".into() },
+            None,
+            None,
+            "mcp:t",
+        )
+        .await
+        .unwrap();
+        // executing 좀비 + lease 밖(과거) + 이미 "executed" 감사(외부 쓰기 성공 후 finalize 못 박힘).
+        sqlx::query(
+            "UPDATE external_actions SET status = 'executing', \
+             decided_at = datetime('now', '-1 hour') WHERE id = ?1",
+        )
+        .bind(&id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        audit::audit(&pool, &id, "executed", Some("ref=ext/1"))
+            .await
+            .unwrap();
+
+        let n = recover_interrupted_actions(&pool).await.unwrap();
+        assert_eq!(n, 1);
+        // failed가 아니라 succeeded로 reconcile.
+        assert_eq!(
+            status(&pool, &id).await.unwrap().as_deref(),
+            Some("succeeded")
+        );
+        let events: Vec<String> = audit::list_audit_core(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|a| a.event)
+            .collect();
+        assert!(events.contains(&"reconciled".to_string()));
+        assert!(!events.contains(&"failed".to_string()));
+    }
+
+    #[tokio::test]
+    async fn reaper_skips_recent_executing_lease_guard() {
+        let pool = fresh_db().await;
+        let id = enqueue(
+            &pool,
+            &ExternalAction::Noop { note: "x".into() },
+            None,
+            None,
+            "mcp:t",
+        )
+        .await
+        .unwrap();
+        // 방금 executing으로 전이(decided_at=now) = 동시 형제 프로세스의 live 액션일 수 있음.
+        sqlx::query(
+            "UPDATE external_actions SET status = 'executing', \
+             decided_at = datetime('now') WHERE id = ?1",
+        )
+        .bind(&id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        // lease(300s) 안이라 reaper가 건드리지 않는다.
+        let n = recover_interrupted_actions(&pool).await.unwrap();
+        assert_eq!(n, 0);
+        assert_eq!(
+            status(&pool, &id).await.unwrap().as_deref(),
+            Some("executing")
+        );
+    }
+
+    #[tokio::test]
+    async fn list_pending_with_total_signals_truncation() {
+        let pool = fresh_db().await;
+        // 상한(200)을 1건 초과 — 전체 201, 반환 행은 200으로 capped, total로 truncation 신호 가능.
+        for i in 0..(PENDING_LIMIT + 1) {
+            sqlx::query(
+                "INSERT INTO external_actions (id, kind, payload, origin, status) \
+                 VALUES (lower(hex(randomblob(16))), 'noop', '{}', ?1, 'awaiting_approval')",
+            )
+            .bind(format!("mcp:bulk:{i}"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let (rows, total) = list_pending_with_total(&pool).await.unwrap();
+        assert_eq!(rows.len(), PENDING_LIMIT as usize, "행은 상한까지만");
+        assert_eq!(
+            total,
+            (PENDING_LIMIT + 1) as u32,
+            "total은 상한 적용 전 전체"
+        );
+        assert!(
+            total as usize > rows.len(),
+            "truncated 신호 = total > 반환 행 수"
         );
     }
 }

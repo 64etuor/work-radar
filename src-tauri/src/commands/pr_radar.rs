@@ -5,9 +5,8 @@ use crate::commands::tokens::project_credential_ref;
 use crate::commands::{inbox, signal_store};
 use crate::db::Db;
 use crate::error::AppError;
-use crate::github::{HttpPrProvider, PrProvider, RawPr, RawPrState};
-use crate::keychain;
-use crate::models::{CiStatus, PrRadarItem, PrRadarSettings, ReadinessBucket, TokenKind};
+use crate::github::{github_provider_for_cref, PrProvider, RawPr, RawPrState};
+use crate::models::{CiStatus, PrRadarItem, PrRadarSettings, ReadinessBucket};
 use crate::retry::Retryable;
 
 // ── PR Radar (Phase 4, read 레일) ──────────────────────────────────────────────
@@ -322,13 +321,8 @@ pub async fn refresh_pr_radar(
     let cref = project_credential_ref(db.inner(), &project_id)
         .await
         .map_err(|e| AppError::terminal("pr_radar.project_not_found", e))?;
-    let token = keychain::get_token(&cref, TokenKind::Github)?.ok_or_else(|| {
-        AppError::not_found(
-            "pr_radar.token_missing",
-            "GitHub 토큰이 없음(설정에서 토큰 저장 필요)",
-        )
-    })?;
-    let provider = HttpPrProvider::new(&token)?;
+    // cref→client 레시피는 external_actions write 라우터와 공유(#13). 토큰 없음 = github.token_missing.
+    let provider = github_provider_for_cref(&cref)?;
     let settings = current_settings(db.inner()).await;
     sync_pr_radar(
         db.inner(),

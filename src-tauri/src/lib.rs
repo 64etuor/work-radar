@@ -446,7 +446,9 @@ pub fn run() {
             }
 
             // External Action Gate crash-orphan 회수: 이전 프로세스가 커넥터 실행('executing') 중
-            // 죽은 액션을 failed로 정리한다(idempotency_key 잠금도 해제). 외부 호출 0.
+            // 죽은 액션을 정리한다(idempotency_key 잠금 해제). lease(decided_at) 가드로 동시 형제
+            // 프로세스의 live 액션은 건드리지 않고, "executed" 감사가 있으면(쓰기 성공 후 finalize
+            // 못 박힘) failed가 아니라 succeeded로 reconcile한다(store::recover_interrupted_actions). 외부 호출 0.
             let recovered_actions = tauri::async_runtime::block_on(
                 external_actions::store::recover_interrupted_actions(&pool),
             )

@@ -43,6 +43,22 @@ pub async fn run_mcp_stdio() -> Result<(), Box<dyn std::error::Error>> {
 
     // 앱과 동일한 connect + 마이그레이션 함수(idempotent).
     let db = crate::db::init_db(&db_path).await?;
+
+    // External Action Gate crash-orphan 회수(#8): reaper는 GUI Tauri setup 클로저에서만 돌았는데,
+    // 이 mcp-stdio 경로는 그 전에 반환하므로 GUI 크래시가 남긴 좀비 'executing' 행이 idempotency_key를
+    // 영구 잠가 MCP 제안자가 dedup으로 막힐 수 있다. 여기서도 idempotent하게 한 번 돌린다. lease 가드가
+    // 동시 형제(live GUI 인스턴스)의 액션은 건드리지 않는다(store::recover_interrupted_actions, GOAL 2).
+    match crate::external_actions::store::recover_interrupted_actions(&db).await {
+        Ok(n) if n > 0 => {
+            eprintln!("[work-radar mcp-stdio] recovered {n} interrupted external action(s)")
+        }
+        Ok(_) => {}
+        Err(e) => eprintln!(
+            "[work-radar mcp-stdio] external-action reaper error: code={}",
+            e.code
+        ),
+    }
+
     let server = WrServer { db };
 
     // stdio() = (Stdin, Stdout). stdout은 MCP 전용 — 위 모듈 doc 참조.

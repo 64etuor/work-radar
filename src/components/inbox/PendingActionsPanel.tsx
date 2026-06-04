@@ -7,7 +7,7 @@ import {
   useRejectExternalAction,
 } from "@/lib/query/pendingActions";
 
-import { formatActionKind, groupPendingByOrigin } from "./pendingActions";
+import { formatActionKind, groupPendingByOrigin, isExternalWriteKind } from "./pendingActions";
 
 export function PendingActionsPanel() {
   const { data: actions = [] } = usePendingActions();
@@ -31,6 +31,14 @@ export function PendingActionsPanel() {
                 <p className="typo-title-sm">{formatActionKind(a.kind)}</p>
                 {a.preview ? (
                   <p className="text-muted-foreground typo-caption-sm truncate">{a.preview}</p>
+                ) : null}
+                {isExternalWriteKind(a.kind) ? (
+                  // 잔여 위험(#5): POST 도달 후 응답 유실 → failed 표시 → 재승인이 중복 외부 쓰기일 수
+                  // 있다. idempotency_key는 제안 dedup이지 API 효과 dedup이 아니므로 사람에게 명시한다.
+                  <p className="text-muted-foreground typo-caption-sm">
+                    전송 후 응답이 유실되면 재승인이 중복 쓰기일 수 있어요 — 승인 전 대상에서
+                    확인하세요.
+                  </p>
                 ) : null}
               </div>
               <div className="flex shrink-0 gap-1">
