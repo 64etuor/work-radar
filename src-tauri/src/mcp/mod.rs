@@ -92,6 +92,19 @@ pub struct GithubCreateIssueParams {
     pub body: String,
 }
 
+/// Notion 페이지 생성 제안 파라미터(`wr_notion_create_page`). project_id만 받아 서버가 검증한다(#11).
+/// db_id는 원시 ID/URL을 허용한다 — 커넥터가 정규화한다(repo와 동일하게 *내용*이지 자격증명 아님).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct NotionCreatePageParams {
+    /// 대상 프로젝트 id(`wr_list_projects`로 조회). 토큰 격리/identity 결정의 단일 입력.
+    pub project_id: String,
+    /// 대상 Notion 데이터베이스 ID 또는 공유 URL(커넥터가 dashed UUID로 정규화).
+    pub db_id: String,
+    /// 페이지 제목.
+    pub title: String,
+}
+
 /// 제안 생성 파라미터(`wr_propose_noop`). preview=승인 패널 표시용 사람-친화 요약.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
@@ -190,7 +203,7 @@ impl WrServer {
             issue_number: p.issue_number,
             body: p.body,
         };
-        self.enqueue_github_write(&p.project_id, action, &summary)
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
             .await
     }
 
@@ -209,7 +222,27 @@ impl WrServer {
             title: p.title,
             body: p.body,
         };
-        self.enqueue_github_write(&p.project_id, action, &summary)
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
+            .await
+    }
+
+    /// Notion DB에 페이지 생성을 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
+    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다. 사람-origin
+    /// 카드 승격(앱 내부)과는 별개 경로다(spec §4 이중 경로 — 이건 외부 에이전트 제안용).
+    #[tool(
+        name = "wr_notion_create_page",
+        description = "Propose creating a Notion page in the given database for the given project (project_id is validated against the projects table; db_id accepts a raw ID or share URL). Returns an action_id awaiting user approval; does NOT execute."
+    )]
+    pub async fn notion_create_page(
+        &self,
+        Parameters(p): Parameters<NotionCreatePageParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let summary = format!("Notion 페이지 생성: {}", p.title);
+        let action = ExternalAction::NotionCreatePage {
+            db_id: p.db_id,
+            title: p.title,
+        };
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
             .await
     }
 
@@ -265,9 +298,10 @@ impl WrServer {
 }
 
 impl WrServer {
-    /// GitHub write 제안의 공통 경로: project_id 검증(#11) → preview 합성(대상 identity 노출) →
-    /// 안정 멱등 키로 enqueue. **실행하지 않는다**(store::enqueue_with_idempotency만 — 승인 후 커넥터).
-    async fn enqueue_github_write(
+    /// 외부 write 제안의 공통 경로(서비스 무관 — GitHub/Notion/… 공유): project_id 검증(#11) →
+    /// preview 합성(대상 identity 노출) → 안정 멱등 키로 enqueue. **실행하지 않는다**
+    /// (store::enqueue_with_idempotency만 — 승인 후 Rust 커넥터가 실행). Phase 2~5 write 툴이 공유한다.
+    async fn enqueue_write_proposal(
         &self,
         project_id: &str,
         action: ExternalAction,
@@ -277,7 +311,7 @@ impl WrServer {
         // credential_ref를 절대 신뢰하지 않는다(#11 auth-isolation injection을 구성적으로 차단).
         let project = projects::fetch_project(&self.db, project_id)
             .await
-            .map_err(|e| db_tool_error("wr_github_write", &AppError::from(e)))?
+            .map_err(|e| db_tool_error("wr_write_proposal", &AppError::from(e)))?
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_params(format!("unknown project_id: {project_id}"), None)
             })?;
@@ -290,7 +324,7 @@ impl WrServer {
         let preview = format!("[{kind_label}: {}] {op_summary}", project.name);
         // 멱등 키는 제안 *내용*에서 파생한 안정값이어야 한다(시도별 UUID 금지 — dedup 무력화).
         let key = stable_idem_key(&action, project_id)
-            .map_err(|e| db_tool_error("wr_github_write", &e))?;
+            .map_err(|e| db_tool_error("wr_write_proposal", &e))?;
         let id = store::enqueue_with_idempotency(
             &self.db,
             &action,
@@ -300,7 +334,7 @@ impl WrServer {
             Some(&key),
         )
         .await
-        .map_err(|e| db_tool_error("wr_github_write", &e))?;
+        .map_err(|e| db_tool_error("wr_write_proposal", &e))?;
         Ok(Json(ProposeResult {
             action_id: id,
             status: "awaiting_approval".into(),
@@ -434,11 +468,67 @@ mod write_tool_tests {
         assert_ne!(a.0.action_id, b.0.action_id);
         assert_eq!(store::list_pending(&db).await.unwrap().len(), 2);
     }
+
+    /// Notion: 알 수 없는 project_id → 거부 + enqueue 0(#11, GitHub와 동일한 격리 계약).
+    #[tokio::test]
+    async fn notion_create_page_rejects_unknown_project_and_enqueues_nothing() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let res = server
+            .notion_create_page(Parameters(NotionCreatePageParams {
+                project_id: "does-not-exist".into(),
+                db_id: "1234567890abcdef1234567890abcdef".into(),
+                title: "할 일".into(),
+            }))
+            .await;
+        assert!(res.is_err(), "unknown project_id는 거부");
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "거부 시 enqueue 0"
+        );
+    }
+
+    /// Notion: 유효한 project_id → 그 프로젝트 credential_ref로 enqueue되고, 동일 제안은 dedup(큐 1건).
+    #[tokio::test]
+    async fn notion_create_page_enqueues_with_cref_and_dedups() {
+        let db = fresh_db().await;
+        let project = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let server = WrServer { db: db.clone() };
+        let params = || NotionCreatePageParams {
+            project_id: project.id.clone(),
+            db_id: "1234567890abcdef1234567890abcdef".into(),
+            title: "할 일".into(),
+        };
+        let first = server
+            .notion_create_page(Parameters(params()))
+            .await
+            .unwrap();
+        let id1 = first.0.action_id.clone();
+        assert_eq!(first.0.status, "awaiting_approval");
+        assert_eq!(
+            store::project_ref_for(&db, &id1).await.unwrap().as_deref(),
+            Some(project.credential_ref.as_str())
+        );
+        let second = server
+            .notion_create_page(Parameters(params()))
+            .await
+            .unwrap();
+        assert_eq!(
+            second.0.action_id, id1,
+            "동일 내용 = 동일 멱등 키 = 같은 id"
+        );
+        assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
+    }
 }
 
 #[cfg(test)]
 mod schema_tests {
-    use super::{ActionIdParams, GithubCommentParams, GithubCreateIssueParams, ProposeNoopParams};
+    use super::{
+        ActionIdParams, GithubCommentParams, GithubCreateIssueParams, NotionCreatePageParams,
+        ProposeNoopParams,
+    };
     use std::collections::BTreeSet;
 
     fn prop_names(v: &serde_json::Value) -> BTreeSet<String> {
@@ -527,6 +617,24 @@ mod schema_tests {
             required_fields(&v),
             expect(&["project_id", "repo", "title", "body"])
         );
+        assert!(!prop_names(&v).contains("project_ref"));
+        assert!(!prop_names(&v).contains("credential_ref"));
+    }
+
+    #[test]
+    fn notion_create_page_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(NotionCreatePageParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "NotionCreatePageParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(prop_names(&v), expect(&["project_id", "db_id", "title"]));
+        assert_eq!(
+            required_fields(&v),
+            expect(&["project_id", "db_id", "title"])
+        );
+        // proposer는 raw project_ref/credential_ref를 줄 수 없다(#11) — 표면에 없음을 고정.
         assert!(!prop_names(&v).contains("project_ref"));
         assert!(!prop_names(&v).contains("credential_ref"));
     }

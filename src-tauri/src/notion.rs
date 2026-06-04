@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
 
+use crate::external_actions::ExecOutcome;
 use crate::retry::{with_retry, Retryable};
 
 const NOTION_BASE: &str = "https://api.notion.com/v1";
@@ -366,6 +367,65 @@ pub fn notion_deep_link(url: &str) -> String {
     }
 }
 
+// ── External Action Gate: Notion WRITE 커넥터(Phase 3, AI-origin) ─────────────────
+// 제안은 MCP/사용자가 만들고, 실행은 승인 후 여기서만(Rust·토큰 keychain·bounded retry·rate limit).
+// 사람-origin 카드 승격(`commands::notion::promote_to_notion`)은 **기존 경로 유지** — 이 커넥터는
+// 외부 에이전트 제안(external_actions 큐)만 흘린다(spec §4 이중 경로: AI-origin=gate / human=기존 큐).
+// 기존 `NotionWriter`/`HttpNotionWriter`/`create_page`를 그대로 재사용한다(rate limiter·title 속성
+// 발견·bounded retry 무상 획득). GitHub 커넥터와 비대칭 2종: writer가 토큰을 보유하지 않고(인자로
+// 받음), 반환이 `CreatedPage`(게이트 `ExecOutcome` 아님)다 — 그래서 토큰 resolve + outcome 매핑이 필요.
+
+/// cref(=project credential_ref)로 keychain Notion 토큰을 읽는다. **write(gate 라우터)와 read 경로가
+/// 공유하는 단일 토큰 resolve 레시피** — 토큰 본문은 여기서만 쓰이고 노출/로그되지 않는다(INVARIANT #7).
+/// 에러 코드는 `commands::notion`의 기존 `notion.token_missing`과 통일(drift 방지).
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(github_provider_for_cref 등과 동일).
+#[allow(clippy::result_large_err)]
+pub fn notion_token_for_cref(cref: &str) -> Result<String, crate::error::AppError> {
+    use crate::error::AppError;
+    crate::keychain::get_token(cref, crate::models::TokenKind::Notion)?.ok_or_else(|| {
+        AppError::not_found(
+            "notion.token_missing",
+            "Notion 토큰이 없습니다(설정에서 저장 필요)",
+        )
+    })
+}
+
+/// 승인된 Notion 액션을 적절한 writer 메서드로 dispatch한다. 키체인은 호출 측(라우터)이 resolve해
+/// `token`으로 넘긴다 — 여기선 db_id 정규화 + writer 호출 + outcome 매핑만(테스트는 mock writer로
+/// 네트워크 없이 라우팅 검증). 비-Notion 액션은 호출 측 라우터가 거르지만 방어적으로 거부한다.
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(execute_github_action 등과 동일).
+#[allow(clippy::result_large_err)]
+pub(crate) async fn execute_notion_action<W: NotionWriter>(
+    writer: &W,
+    token: &str,
+    action: &crate::external_actions::ExternalAction,
+) -> Result<ExecOutcome, crate::error::AppError> {
+    use crate::external_actions::ExternalAction;
+    match action {
+        ExternalAction::NotionCreatePage { db_id, title } => {
+            // proposer가 준 원시 db_id/URL을 표준 dashed UUID로 정규화한다(뷰 링크·슬러그 방어).
+            // 형식 불일치는 외부 호출 전에 validation 에러로 거른다.
+            let normalized = normalize_notion_db_id(db_id)
+                .map_err(|m| crate::error::AppError::validation("notion.db_id_invalid", m))?;
+            let page = writer.create_page(token, &normalized, title).await?;
+            // CreatedPage는 사람-origin 경로(딥링크)와 공유하는 고유 도메인 타입이라 게이트 경계에서
+            // ExecOutcome로 매핑한다(GitHub #12와 달리 ExecOutcome의 평행 복제가 아님 — 별도 소비자가
+            // 있는 타입이므로 1회 경계 매핑이 옳다). **external_ref=page.id**(콘텐츠-free 식별자):
+            // page.url은 `…/<제목-슬러그>-<id>` 형태라 제목(사용자 콘텐츠)이 새는데, external_ref는
+            // audit `detail`(`ref=…`)과 result 컬럼에 들어가고 그 계약은 "식별자만, 본문 금지"(gate.rs
+            // ExecOutcome 닥 + audit.rs 시크릿-free 계약, INVARIANT #7)다. id(dashed UUID)는 그 예시.
+            Ok(ExecOutcome {
+                external_ref: Some(page.id),
+                bytes: Some(title.len() as i64),
+            })
+        }
+        other => Err(crate::error::AppError::unexpected(
+            "notion.dispatch.kind",
+            format!("Notion 커넥터가 처리할 수 없는 액션: {}", other.kind_str()),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -546,5 +606,80 @@ mod tests {
 
         let no_title = serde_json::json!({ "properties": { "x": { "type": "select" } } });
         assert!(find_title_prop(&no_title).is_none());
+    }
+}
+
+#[cfg(test)]
+mod write_dispatch_tests {
+    use super::*;
+    use crate::external_actions::ExternalAction;
+    use std::sync::Mutex;
+
+    /// 네트워크 없는 mock Notion writer — 호출 인자를 기록해 dispatch 라우팅/정규화를 검증한다.
+    #[derive(Default)]
+    struct MockNotionWriter {
+        calls: Mutex<Vec<(String, String, String)>>, // (token, db_id, title)
+    }
+    impl NotionWriter for MockNotionWriter {
+        async fn create_page(
+            &self,
+            token: &str,
+            db_id: &str,
+            title: &str,
+        ) -> Result<CreatedPage, NotionError> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((token.into(), db_id.into(), title.into()));
+            // id와 url을 일부러 다르게 둔다 — external_ref가 (제목 슬러그가 새는) url이 아니라
+            // 콘텐츠-free id를 담는지 검증하기 위해.
+            Ok(CreatedPage {
+                id: "page-id-1".into(),
+                url: "https://www.notion.so/My-Title-page-id-1".into(),
+            })
+        }
+    }
+
+    /// NotionCreatePage → writer.create_page로 라우팅되고, 원시 db_id가 dashed UUID로 정규화되어
+    /// 전달되며, outcome.external_ref가 **콘텐츠-free page id**(url 슬러그 아님)다.
+    #[tokio::test]
+    async fn dispatch_routes_create_page_with_normalized_db_id() {
+        let w = MockNotionWriter::default();
+        let action = ExternalAction::NotionCreatePage {
+            db_id: "1234567890abcdef1234567890abcdef".into(), // 원시 32-hex
+            title: "할 일".into(),
+        };
+        let out = execute_notion_action(&w, "tok", &action).await.unwrap();
+        // 감사 계약(식별자만, 본문 금지): url 슬러그가 아니라 page.id를 external_ref로 쓴다.
+        assert_eq!(out.external_ref.as_deref(), Some("page-id-1"));
+        assert_eq!(
+            w.calls.lock().unwrap().as_slice(),
+            &[(
+                "tok".to_string(),
+                "12345678-90ab-cdef-1234-567890abcdef".to_string(), // 정규화됨
+                "할 일".to_string()
+            )]
+        );
+    }
+
+    /// 형식이 깨진 db_id는 외부 호출 전에 validation 에러로 거른다(writer 미호출).
+    #[tokio::test]
+    async fn dispatch_rejects_invalid_db_id_before_write() {
+        let w = MockNotionWriter::default();
+        let action = ExternalAction::NotionCreatePage {
+            db_id: "not-a-db".into(),
+            title: "t".into(),
+        };
+        let r = execute_notion_action(&w, "tok", &action).await;
+        assert!(r.is_err(), "잘못된 db_id는 거부");
+        assert!(w.calls.lock().unwrap().is_empty(), "거부 시 write 0");
+    }
+
+    /// 비-Notion 액션은 방어적으로 거부한다(라우터가 먼저 거르지만 이중 방어).
+    #[tokio::test]
+    async fn dispatch_rejects_non_notion_action() {
+        let w = MockNotionWriter::default();
+        let action = ExternalAction::Noop { note: "x".into() };
+        assert!(execute_notion_action(&w, "tok", &action).await.is_err());
     }
 }

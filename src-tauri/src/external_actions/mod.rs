@@ -32,6 +32,10 @@ pub enum ExternalAction {
         title: String,
         body: String,
     },
+    /// Notion DB에 페이지 생성(Phase 3 write, AI-origin). `db_id`=대상 데이터베이스(원시 ID/URL —
+    /// 커넥터가 정규화), `title`=페이지 제목. 사람-origin 카드 승격(`promote_to_notion`)은 기존 경로
+    /// 유지 — 이 변형은 외부 에이전트 제안만 게이트로 흘린다(spec §4 이중 경로).
+    NotionCreatePage { db_id: String, title: String },
 }
 
 impl ExternalAction {
@@ -41,6 +45,7 @@ impl ExternalAction {
             ExternalAction::Noop { .. } => "noop",
             ExternalAction::GithubIssueComment { .. } => "github.issue_comment",
             ExternalAction::GithubCreateIssue { .. } => "github.create_issue",
+            ExternalAction::NotionCreatePage { .. } => "notion.create_page",
         }
     }
 }
@@ -62,5 +67,10 @@ mod token_tests {
     fn external_action_kind_str_is_stable() {
         let a = ExternalAction::Noop { note: "x".into() };
         assert_eq!(a.kind_str(), "noop");
+        let n = ExternalAction::NotionCreatePage {
+            db_id: "db".into(),
+            title: "t".into(),
+        };
+        assert_eq!(n.kind_str(), "notion.create_page");
     }
 }
