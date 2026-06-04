@@ -21,5 +21,6 @@ export function formatActionKind(kind: string): string {
     gmail: "Gmail",
     calendar: "Calendar",
   };
+  // 미매핑 서비스는 raw `service · kind` 라벨로 폴스루 — 새 커넥터 추가 전에도 깨지지 않게(의도, 버그 아님).
   return `${label[service] ?? service} · ${rest.join(".")}`;
 }

@@ -1,30 +1,18 @@
 import { Check, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
 
-import { commands, type PendingAction } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import {
+  useApproveExternalAction,
+  usePendingActions,
+  useRejectExternalAction,
+} from "@/lib/query/pendingActions";
 
 import { formatActionKind, groupPendingByOrigin } from "./pendingActions";
 
 export function PendingActionsPanel() {
-  const [actions, setActions] = useState<PendingAction[]>([]);
-  const load = useCallback(async () => {
-    const res = await commands.listPendingActions();
-    if (res.status === "ok") setActions(res.data);
-  }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const decide = useCallback(
-    async (id: string, approve: boolean) => {
-      const res = approve
-        ? await commands.approveExternalAction(id)
-        : await commands.rejectExternalAction(id);
-      if (res.status === "ok") await load();
-    },
-    [load],
-  );
+  const { data: actions = [] } = usePendingActions();
+  const approve = useApproveExternalAction();
+  const reject = useRejectExternalAction();
 
   if (actions.length === 0) return null;
   const groups = [...groupPendingByOrigin(actions).entries()];
@@ -51,7 +39,7 @@ export function PendingActionsPanel() {
                   variant="ghost"
                   aria-label="승인"
                   className="size-7 p-0"
-                  onClick={() => void decide(a.id, true)}
+                  onClick={() => approve.mutate(a.id)}
                 >
                   <Check className="size-4" />
                 </Button>
@@ -60,7 +48,7 @@ export function PendingActionsPanel() {
                   variant="ghost"
                   aria-label="거절"
                   className="size-7 p-0"
-                  onClick={() => void decide(a.id, false)}
+                  onClick={() => reject.mutate(a.id)}
                 >
                   <X className="size-4" />
                 </Button>
