@@ -15,6 +15,13 @@ Codex 출력이 Notion/GitHub를 직접 mutate하지 못한다. 사람이 accept
 Today 승격(`target:"today"`)은 로컬 SQLite 액션이라 Acceptance 불요(외부 변경 아님).
 캘린더 이벤트 생성은 사용자 폼=사람 결정이므로 acceptance 대기 제거(Phase 19 결정).
 
+> **MCP 서버 경계.** 외부 AI가 spawn하는 `work-radar --mcp-stdio` MCP 서버는 #1/#2를
+> MCP 표면에서 mechanize한다 — write 툴은 `store::enqueue`(proposal)만 호출. `Acceptance::mint`은
+> `pub(in crate::external_actions)` 타입-월 + trybuild로 mcp에서 컴파일-차단(토큰 위조 불가).
+> `store::{approve,reject}`는 현재 `pub(crate)`라 컴파일이 아닌 **durable 규칙으로 금지**(mcp는
+> 호출 안 함; 경화는 mcp-server-conventions §핵심불변). AI는 토큰을 쥐지 않고 실행도 안 한다 —
+> 제안만. 정본: `docs/areas/mcp-server-conventions.md`.
+
 > **스킬 매니저(ADR-0006) 경계.** 스킬 _파일_ 설치/동기화(중앙 라이브러리 → 로컬 에이전트 dir,
 > `~/.{claude,codex,openclaw}/skills`)는 **사용자 발동 파일 작업**으로, 이 INVARIANT의 "codex 출력이
 > 외부 서비스를 mutate" 대상이 아니다(사용자 액션 = 사람 결정). 단 **가역(uninstall=원상복구)·audit

@@ -14,6 +14,7 @@
 빠른 라우팅(상세는 area-map):
 
 - `src-tauri/src/commands/**` → `docs/areas/ipc-conventions.md`
+- `src-tauri/src/mcp/**` 또는 `--mcp-stdio` → `docs/areas/mcp-server-conventions.md`
 - `src-tauri/migrations/**` 또는 `src-tauri/src/db.rs` → `docs/areas/data-layer-conventions.md`
 - `src-tauri/src/news/**` → `docs/areas/news-feature.md`
 - `src/components/board/**` → `docs/areas/frontend-board.md` + `DESIGN.md` §App Surface
