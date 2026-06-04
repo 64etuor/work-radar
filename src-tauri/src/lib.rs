@@ -358,6 +358,19 @@ impl scheduler::Notifier for AppNotifier {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // External Action Gate Phase 1: `--mcp-stdio`면 GUI/tauri/tracing 부팅을 **전혀 타지 않고**
+    // 앱과 동일 DB를 연 stdio MCP 서버를 구동한다. stdout은 MCP 프로토콜 전용(로깅 오염 금지 —
+    // 이 분기는 logging::init_tracing을 호출하지 않고 진단은 stderr로만). 자체 tokio 런타임을
+    // 세운다(이 함수는 #[tokio::main]이 아니므로 중첩 런타임 위험 없음).
+    if std::env::args().any(|a| a == "--mcp-stdio") {
+        let rt = tokio::runtime::Runtime::new().expect("create tokio runtime for mcp-stdio");
+        if let Err(e) = rt.block_on(crate::mcp::run::run_mcp_stdio()) {
+            eprintln!("mcp-stdio error: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     let specta_builder = tauri_specta_builder();
 
     // 디버그 빌드에서만 TS 바인딩을 프런트 소스로 export.
@@ -537,10 +550,15 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+/// Bundle identifier (mirrors `tauri.conf.json` `identifier`). tauri의 `app_data_dir()`는
+/// `dirs::data_dir()/<identifier>`이므로, `--mcp-stdio` 헤드리스 모드가 GUI 부팅 없이 동일
+/// 경로를 재현할 때 이 const를 쓴다(`mcp::run`). conf와 동기화 — 변경 시 둘 다 갱신.
+pub(crate) const APP_BUNDLE_IDENTIFIER: &str = "co.kr.mirrorless.workradar";
+
 /// Resolve the SQLite path. The dev override (`WORK_RADAR_DEV_DB`) is honored ONLY for dev
 /// builds — a release build always uses the app-data prod SSOT, never an env-supplied path
 /// (safety). An empty override is treated as unset. Unset → today's isolated temp dev DB.
-fn resolve_db_path(
+pub(crate) fn resolve_db_path(
     is_dev: bool,
     dev_override: Option<&str>,
     temp_dir: &std::path::Path,

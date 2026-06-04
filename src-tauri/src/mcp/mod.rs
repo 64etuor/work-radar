@@ -8,6 +8,8 @@
 //! 승인/실행은 work-radar GUI(같은 DB의 승인 패널)와 Rust 커넥터(Phase 2~5)가 담당한다.
 //! 이 모듈은 실 외부 호출을 **하지 않는다**(Phase 1 외부 호출 0).
 
+pub mod run;
+
 use crate::db::Db;
 use crate::external_actions::store;
 use rmcp::handler::server::wrapper::Json;

@@ -6738,6 +6738,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
+ "dirs",
  "feed-rs",
  "flate2",
  "getrandom 0.2.17",
