@@ -18,7 +18,10 @@ mod calendar;
 mod commands;
 mod db;
 mod error;
-mod external_actions;
+// Phase 1: integration test(tests/compile_fail)가 `Acceptance` 타입을 보고 `mint` visibility를
+// 검증하려면 모듈이 crate 밖에서 보여야 한다(타입은 이미 pub). mint은 `pub(in ...)`로 잠겨 있어
+// 노출돼도 위조 불가 — compile-fail 테스트가 그걸 증명한다.
+pub mod external_actions;
 mod git;
 mod github;
 mod governance;

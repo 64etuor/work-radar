@@ -84,6 +84,9 @@ tempfile = "3"
 tempfile = "3"
 # tokio::time::pause/advance/start_paused — fetcher 단위 테스트에서 시간 제어.
 tokio = { version = "1", features = ["test-util"] }
+# compile-fail 테스트(Task 1.0): external_actions 밖에서 `Acceptance::mint` 호출이
+# 컴파일 실패함을 잠근다 — MCP 모듈이 같은 crate라도 토큰 위조 불가(type-wall 증명).
+trybuild = "1"
 
 [features]
 # default Tauri custom-protocol toggle used by `tauri build`.
