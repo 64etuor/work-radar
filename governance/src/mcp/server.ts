@@ -62,6 +62,7 @@ import {
   runHypothesisTester,
 } from "../hypotheses/tester.ts";
 import { buildMetaObservation } from "../meta/observer.ts";
+import { archiveStatus, runArchivePruner } from "../archive/pruner.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
@@ -777,6 +778,33 @@ if (SESSION_ALLOWS_VERDICTS)
       randFn(),
     );
     return { content: [{ type: "text", text: r.ok ? `chosen: ${r.chosenOption} for ${decision_id}` : `NO-OP: ${r.reason}` }] };
+  },
+);
+
+// ── P6: Archive Pruner ────────────────────────────────────────────────────────
+// Hypothesis-only local archive pass. No verdict tools and no writes outside hypotheses.
+server.registerTool(
+  "archive_prune",
+  {
+    description: "P6 local Archive Pruner: terminal/expired hypotheses testing→archived one-pass move",
+    inputSchema: {},
+  },
+  async () => {
+    const today = nowFn().toISOString().slice(0, 10);
+    const summary = await runArchivePruner(WORKSPACE, today);
+    return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
+  },
+);
+
+server.registerTool(
+  "archive_status",
+  {
+    description: "P6 Archive Pruner read-only hypothesis archive counts",
+    inputSchema: {},
+  },
+  async () => {
+    const status = await archiveStatus(WORKSPACE);
+    return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
   },
 );
 
