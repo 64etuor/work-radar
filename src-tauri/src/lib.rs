@@ -18,6 +18,7 @@ mod calendar;
 mod commands;
 mod db;
 mod error;
+mod external_actions;
 mod git;
 mod github;
 mod governance;
