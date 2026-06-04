@@ -31,6 +31,56 @@ Commit scope hotspot should persist.
     });
   });
 
+  it("rejects malformed expires dates", () => {
+    expect(() =>
+      parseHypothesisMarkdown(`---
+id: hyp_12345678
+from_pattern: pat_scope_abcdef12
+kind: commit_scope_hotspot_persists
+scope: governance
+status: testing
+test_method: current_l0_scope_count
+baseline: 5
+threshold: 5
+expires: not-a-date
+---
+body
+`),
+    ).toThrow(/expires/);
+
+    expect(() =>
+      parseHypothesisMarkdown(`---
+id: hyp_12345678
+from_pattern: pat_scope_abcdef12
+kind: commit_scope_hotspot_persists
+scope: governance
+status: testing
+test_method: current_l0_scope_count
+baseline: 5
+threshold: 5
+expires: 2026-6-4
+---
+body
+`),
+    ).toThrow(/expires/);
+
+    expect(() =>
+      parseHypothesisMarkdown(`---
+id: hyp_12345678
+from_pattern: pat_scope_abcdef12
+kind: commit_scope_hotspot_persists
+scope: governance
+status: testing
+test_method: current_l0_scope_count
+baseline: 5
+threshold: 5
+expires: 2026-06-04T12:00:00Z
+---
+body
+`),
+    ).toThrow(/expires/);
+  });
+
   it("classifies terminal statuses", () => {
     expect(isTerminalHypothesisStatus("verified")).toBe(true);
     expect(isTerminalHypothesisStatus("refuted")).toBe(true);

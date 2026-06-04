@@ -147,11 +147,13 @@ export async function readSupportedPatterns(workspaceDir: string): Promise<Suppo
         if (data.kind !== "commit_scope_hotspot") continue;
         const id = String(data.id ?? file.replace(/\.md$/, ""));
         if (!SAFE_ID.test(id)) continue;
+        const evidenceCount = data.evidence_count;
+        if (!Number.isInteger(evidenceCount) || evidenceCount <= 0) continue;
         patterns.push({
           id,
           kind: "commit_scope_hotspot",
           scope: String(data.scope ?? "").trim().toLowerCase(),
-          evidenceCount: Number(data.evidence_count ?? 0),
+          evidenceCount,
         });
       } catch {
         // malformed pattern -> skip
@@ -159,7 +161,7 @@ export async function readSupportedPatterns(workspaceDir: string): Promise<Suppo
     }
   }
   return patterns
-    .filter((pattern) => pattern.scope.length > 0 && Number.isFinite(pattern.evidenceCount))
+    .filter((pattern) => pattern.scope.length > 0)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 

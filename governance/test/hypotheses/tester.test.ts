@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import matter from "gray-matter";
 import type { GovEvent } from "../../src/event/event.ts";
 import type { HypothesisRecord } from "../../src/hypotheses/types.ts";
 import {
   evaluateHypothesis,
   hypothesisFromPattern,
   hypothesisId,
+  readSupportedPatterns,
   runHypothesisTester,
   type SupportedPattern,
 } from "../../src/hypotheses/tester.ts";
@@ -94,5 +99,45 @@ describe("runHypothesisTester", () => {
 
     expect(summary).toEqual({ proposed: 1, verified: 1, refuted: 0, skipped: 0 });
     expect(writes.map((record) => record.status)).toEqual(["testing", "verified"]);
+  });
+});
+
+describe("readSupportedPatterns", () => {
+  it("ignores patterns without a positive integer evidence_count", async () => {
+    const ws = await mkdtemp(join(tmpdir(), "boule-pattern-evidence-"));
+    try {
+      const dir = join(ws, "patterns", "candidates");
+      await mkdir(dir, { recursive: true });
+      for (const [id, evidenceCount] of [
+        ["pat_missing", undefined],
+        ["pat_zero", 0],
+        ["pat_negative", -1],
+        ["pat_decimal", 1.5],
+        ["pat_boolean", true],
+        ["pat_string", "5"],
+        ["pat_valid", 5],
+      ] as const) {
+        const data: Record<string, unknown> = {
+          id,
+          kind: "commit_scope_hotspot",
+          scope: id.replace("pat_", ""),
+          confidence: 0.5,
+          status: "candidate",
+        };
+        if (evidenceCount !== undefined) data.evidence_count = evidenceCount;
+        await writeFile(join(dir, `${id}.md`), matter.stringify("pattern\n", data), "utf8");
+      }
+
+      expect(await readSupportedPatterns(ws)).toEqual([
+        {
+          id: "pat_valid",
+          kind: "commit_scope_hotspot",
+          scope: "valid",
+          evidenceCount: 5,
+        },
+      ]);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
   });
 });
