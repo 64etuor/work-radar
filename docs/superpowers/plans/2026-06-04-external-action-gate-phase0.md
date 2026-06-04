@@ -889,7 +889,12 @@ git ls-remote origin refs/heads/feat/external-action-gate-mcp  # 와이어 검�
 각 Phase = 별도 플랜 + 별도 PR. **2~5는 0/1 위에서 서로 독립 → codex:1 + claude:1 병렬 디스패치(워크트리 격리).**
 
 - **Phase 1 — MCP 서버(proposal-only).** 앱 내장 stdio MCP, read 툴 + write 툴(`store::enqueue` 호출만), `wr_action_status`. NoopConnector 라우팅을 kind별 디스패치 테이블로 교체할 준비(아직 mock). 헤드리스 MCP 라운드트립 테스트.
+  - **선결 조건(Phase 0 critic Minor #1, 같은 crate에 MCP 서버 들어오기 전 필수):** `Acceptance` + `ExternalConnector::execute`를 private 서브모듈(`external_actions::gate`)로 옮겨 `mint`를 모듈-private `fn`으로 강등 → `store::approve`만 토큰을 mint 가능. out-of-module `mint`/직접 `execute`가 컴파일 실패함을 `trybuild` compile-fail 테스트로 잠금(현재 `pub(crate)`는 grep-attested일 뿐 type-wall 아님).
 - **Phase 2 — GitHub WRITE.** `github.rs`에 create_comment/issue/pr(bounded retry, keychain) + `GithubConnector` impl + `ExternalAction::Github*` 변형 + MCP 툴 3 + preview 렌더.
+  - **선결 조건(Phase 0 quality 리뷰가 적발, 실 커넥터 착수 전 필수):**
+    1. **`executing` crash-orphan reaper.** approve가 CAS→`executing` 후 `connector.execute().await`(실 네트워크) 중 프로세스 죽으면 행이 `executing`에 영구 고착(큐에도 없고 재개도 안 됨). 앱 시작 시 `executing`→`failed` 스윕을 `agent_run_store::recover_interrupted_runs` 관례대로 추가. (Phase 0는 NoopConnector라 무해 — 그래서 Phase 0 결함 아님.)
+    2. **실패 사유 보존.** `store.rs` approve의 `Err(e)` arm이 현재 `let _ = e;`로 커넥터 에러를 통째 버림. 실 커넥터에선 rate-limited/auth-expired/404 구분이 사용자에게 필요 → `failed` audit `detail`에 **PII-free 에러 코드**(예: `e.code()`)를 기록하도록 교체.
+    3. **FE 실패 노출(critic Minor #2).** `approve`는 커넥터 실패 시 `Ok("failed")`를 반환하는데(IPC 에러 아님), `useApproveExternalAction` 훅이 반환 문자열을 무시 → 사용자에게 실패 신호 없이 행이 조용히 사라짐. Phase 0엔 NoopConnector라 도달 불가하나, 실 커넥터 착수 시 훅이 `"failed"` 반환을 검사해 `pushError`로 노출하도록 보강(AGENTS "terminal failure 노출").
 - **Phase 3 — Notion WRITE 확장.** 속성/코멘트/페이지 생성 + `NotionConnector` + 변형 + 툴 + preview.
 - **Phase 4 — Calendar WRITE(AI 제안).** AI-origin=external_actions / human-form=기존 `pending_calendar_writes`(이중 게이트 금지). `CalendarConnector` + 변형 + 툴.
 - **Phase 5 — Gmail 신규.** `TokenKind::Gmail` + OAuth(calendar/oauth.rs 재사용) + read/send 커넥터(send=gated) + 변형 + 툴. 최소 scope opt-in.

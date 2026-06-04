@@ -95,8 +95,13 @@ pub trait ExternalConnector {
 }
 ```
 
-`Acceptance`는 승인 경로(`approve_external_action` IPC)에서만 생성되는 토큰 타입
-(생성자 private) → 타입 시스템이 INVARIANT #2를 강제. id PK는 항상 `i32`(specta i64 금지).
+`Acceptance`는 승인 경로(`store::approve`)에서만 mint되는 토큰 타입 → 타입 시스템이
+INVARIANT #2를 강제. **구현 노트(Phase 0):** `mint`는 `pub(crate)`라 Phase 0엔 호출처가
+`store::approve` 단 한 곳(grep 검증)으로 airtight하나, "생성자 private"는 아직 완전한
+타입-월(type-wall)이 아니다. **Phase 1 진입 시 경화:** `Acceptance` + `ExternalConnector::execute`를
+private 서브모듈(`external_actions::gate`)로 옮겨 `mint`를 모듈-private `fn`으로 만들고,
+out-of-module `mint`/직접 `execute` 호출이 컴파일 실패함을 `trybuild` compile-fail 테스트로
+잠근다 — 같은 crate에 MCP 서버가 들어오기 전에. id PK는 항상 `i32`(specta i64 금지).
 
 ## MCP Surface (§3)
 
