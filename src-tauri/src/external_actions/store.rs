@@ -190,9 +190,10 @@ pub(crate) async fn approve<C: ExternalConnector>(
                 .bind(action_id)
                 .execute(pool)
                 .await?;
-            audit::audit(pool, action_id, "failed", None).await?;
-            // 실패는 액션 상태로 surface하되 호출 자체는 Ok(상태머신 진행). 에러는 audit로.
-            let _ = e;
+            // 실패 사유를 감사에 보존하되 **PII-free**: AppError.code만(예: "github.rate_limited").
+            // message/payload 본문은 절대 넣지 않는다(로그 PII 금지 INVARIANT). 실패는 액션
+            // 상태로 surface하되 호출 자체는 Ok(상태머신 진행) — IPC 반환 "failed"를 FE가 노출.
+            audit::audit(pool, action_id, "failed", Some(&format!("code={}", e.code))).await?;
             Ok("failed".into())
         }
     }
@@ -221,6 +222,29 @@ pub(crate) async fn reject(
     }
     audit::audit(pool, action_id, "rejected", None).await?;
     Ok(())
+}
+
+/// 시동 시 crash-orphan 회수: 이전 프로세스에서 `executing` 중 크래시한 액션은 재개 불가하므로
+/// `failed`로 표시하고 감사한다(`agent_run_store::recover_interrupted_runs` 관례). 부수효과로
+/// 부분 유니크 인덱스(0042)에서 그 idempotency_key가 풀려, 좀비가 키를 영구히 잠그는 일을 막는다.
+/// 반환=회수된 액션 수. 외부 호출 0(상태머신 정리만).
+pub(crate) async fn recover_interrupted_actions(pool: &Db) -> Result<u64, AppError> {
+    // UPDATE ... RETURNING으로 회수 대상 id를 받아 건별 감사(append-only). SQLite 3.35+.
+    let ids: Vec<String> = sqlx::query_scalar(
+        "UPDATE external_actions SET status = 'failed' WHERE status = 'executing' RETURNING id",
+    )
+    .fetch_all(pool)
+    .await?;
+    for id in &ids {
+        audit::audit(
+            pool,
+            id,
+            "failed",
+            Some("recovered=app_restart_mid_execution"),
+        )
+        .await?;
+    }
+    Ok(ids.len() as u64)
 }
 
 /// 단건 상태 폴링(MCP wr_action_status용). 없으면 None.
@@ -407,14 +431,56 @@ mod tests {
         assert_eq!(status(&pool, &id).await.unwrap().as_deref(), Some("failed"));
         // 실패한 액션은 더 이상 대기 큐에 없음.
         assert!(list_pending(&pool).await.unwrap().is_empty());
-        // 감사에 failed 1건 기록(approved도 남지만 핵심은 failed).
-        let events: Vec<String> = audit::list_audit_core(&pool)
+        // 감사에 failed 1건 + 실패 사유 code를 PII-free로 보존(message 본문 아님).
+        let aud = audit::list_audit_core(&pool).await.unwrap();
+        let failed = aud
+            .iter()
+            .find(|a| a.event == "failed")
+            .expect("failed audit entry");
+        assert_eq!(
+            failed.detail.as_deref(),
+            Some("code=external_action.test_fail")
+        );
+    }
+
+    #[tokio::test]
+    async fn recover_interrupted_actions_marks_executing_failed_and_frees_key() {
+        let pool = fresh_db().await;
+        let action = ExternalAction::Noop { note: "x".into() };
+        // 'executing' 좀비를 직접 만든다(크래시 시뮬레이션): enqueue 후 수동으로 executing 전이.
+        let id = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k1"))
             .await
-            .unwrap()
-            .into_iter()
-            .map(|a| a.event)
-            .collect();
-        assert!(events.contains(&"failed".to_string()));
+            .unwrap();
+        sqlx::query("UPDATE external_actions SET status = 'executing' WHERE id = ?1")
+            .bind(&id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        // 회수 전: 같은 키는 활성(executing)이라 dedup으로 잠겨 있다.
+        assert_eq!(
+            active_action_for_key(&pool, "k1").await.unwrap().as_deref(),
+            Some(id.as_str())
+        );
+
+        let n = recover_interrupted_actions(&pool).await.unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(status(&pool, &id).await.unwrap().as_deref(), Some("failed"));
+        // 회수 후: 키가 풀려 같은 키로 새 제안이 가능(좀비가 키를 영구 잠그지 않음).
+        assert_eq!(active_action_for_key(&pool, "k1").await.unwrap(), None);
+        let id2 = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k1"))
+            .await
+            .unwrap();
+        assert_ne!(id, id2);
+        // 회수가 failed 감사를 남긴다(사유 detail 포함).
+        let aud = audit::list_audit_core(&pool).await.unwrap();
+        let failed = aud
+            .iter()
+            .find(|a| a.event == "failed" && a.action_id == id)
+            .expect("recovery failed audit");
+        assert_eq!(
+            failed.detail.as_deref(),
+            Some("recovered=app_restart_mid_execution")
+        );
     }
 
     #[tokio::test]

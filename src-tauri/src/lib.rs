@@ -445,6 +445,20 @@ pub fn run() {
                 );
             }
 
+            // External Action Gate crash-orphan 회수: 이전 프로세스가 커넥터 실행('executing') 중
+            // 죽은 액션을 failed로 정리한다(idempotency_key 잠금도 해제). 외부 호출 0.
+            let recovered_actions = tauri::async_runtime::block_on(
+                external_actions::store::recover_interrupted_actions(&pool),
+            )
+            .unwrap_or(0);
+            if recovered_actions > 0 {
+                tracing::warn!(
+                    code = "external_actions.recovered_interrupted",
+                    count = recovered_actions,
+                    "interrupted external actions recovered on startup"
+                );
+            }
+
             // 잡 큐 매니저(Phase 7): codex 경로 해석(graceful degrade) + worktree/로그 디렉터리 +
             // 동시성 1. INVARIANT #5/#6은 jobs.rs/agent.rs에서 강제.
             let codex_bin = tauri::async_runtime::block_on(agent::resolve_codex_bin());
