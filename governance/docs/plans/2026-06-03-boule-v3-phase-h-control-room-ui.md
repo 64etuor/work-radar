@@ -1146,6 +1146,58 @@ git commit -m "docs(governance): Phase H Slice 1 ✅ DONE (control-room read-onl
 
 ## Self-Review (run before execution)
 
+## Continuation GUI-Smoke Preflight (user/cmux-run)
+
+Control Room Slice 1 is a native Tauri/WKWebView smoke, so an unattached agent must not claim it passed. The
+operator runs this from a real shell and visually verifies the app window.
+
+### Required environment
+
+```bash
+cd /Users/davidpark/private_project/work-radar
+export PATH="$HOME/.cargo/bin:$PATH"
+export WORK_RADAR_GOVERNANCE_WORKSPACE="$PWD/governance/workspace"
+```
+
+Optional dev-DB isolation if this branch trails app migrations or the local app DB is dirty:
+
+```bash
+export WORK_RADAR_DEV_DB="$(mktemp -d)/work-radar-dev.sqlite"
+```
+
+### Preflight checks
+
+```bash
+test -d "$WORK_RADAR_GOVERNANCE_WORKSPACE/state" || mkdir -p "$WORK_RADAR_GOVERNANCE_WORKSPACE/state"
+pnpm typecheck
+pnpm vitest run src/lib/controlRoom.test.ts
+cargo test --manifest-path src-tauri/Cargo.toml governance::snapshot
+git diff --stat -- src/bindings.ts src-tauri/migrations
+```
+
+Expected: frontend typecheck passes, Control Room helper tests pass, Rust snapshot tests pass, and bindings/migrations
+diff is empty. If `cargo` is not found, fix PATH first. If the app panics with `Migrate(VersionMissing)`, use
+`WORK_RADAR_DEV_DB` or rebase migrations; that is dev DB skew, not a Control Room regression.
+
+### GUI run
+
+```bash
+pnpm tauri dev
+```
+
+Expected visual result: app boots, `Cmd+K` can navigate to `컨트롤 룸`, and the Control Room renders the four Slice 1
+panels: System Overview, Agent Session Board, Handoff Queue, and Work Lists. Empty governance state should render
+empty states, not crash. If seeded `state/*.json` exists, rows should match those files.
+
+### Failure triage
+
+- Blank or missing view: confirm `control-room` exists in `src/store.ts`, `src/lib/nav.ts`, and `src/App.tsx`.
+- Snapshot error: inspect corrupt JSON under `$WORK_RADAR_GOVERNANCE_WORKSPACE/state`; absent files are allowed,
+  corrupt files are terminal errors by design.
+- Stale `generatedAt`: inspect file mtimes in `state/`; auto-refresh remains deferred.
+- No graph panel: expected for Slice 1; graph viz still needs governance-side JSON export from the PGlite index.
+- Approval/decision queue absent: expected for Slice 1; approval panel is deferred and must not bypass Hermes gates.
+
 **1. Spec coverage:**
 - Read-only file-read bridge (spec §0.1/§2) → Tasks 1–3. ✓
 - Graceful absent/corrupt/stale + `generatedAt` (spec §0.2.4) → Task 2 tests. ✓

@@ -845,6 +845,72 @@ Update `governance/docs/INDEX.md` Phase I row → ✅ Slice 1 DONE with the real
 
 ## Self-Review (run before execution)
 
+## Continuation Live-Smoke Preflight (user/cmux-run)
+
+This slice is locally implemented, but the live cmux path remains an external residual. Do not run this from an
+unattached agent surface. The operator should run it from a real shell with cmux available.
+
+### Required environment
+
+```bash
+cd /Users/davidpark/private_project/work-radar
+export BOULE_WORKSPACE="$PWD/governance/workspace"
+export BOULE_AUTO_MODE=type2
+export BOULE_CONDUCTOR_MODE=live
+```
+
+Optional, only when testing a disposable workspace:
+
+```bash
+export BOULE_WORKSPACE="$(mktemp -d)/workspace"
+mkdir -p "$BOULE_WORKSPACE/events"
+```
+
+### Preflight checks
+
+```bash
+cmux --version
+cmux tree --all --json >/tmp/boule-cmux-tree.json
+test -d "$BOULE_WORKSPACE/events"
+cd governance
+pnpm exec tsc --noEmit
+pnpm exec vitest run test/orchestrator/dispatch test/conductor
+```
+
+Expected: cmux commands return 0, the workspace has an `events/` directory, TypeScript passes, and the targeted
+dispatch/conductor tests pass. If `cmux tree --all --json` fails, stop and fix cmux/socket state first; do not
+interpret later `auto_dispatch` refusal as an orchestrator bug.
+
+### Live run
+
+1. Create or choose a human-accepted active plan with at least two steps.
+2. Start the MCP server with the env above:
+
+   ```bash
+   node --experimental-strip-types governance/src/mcp/server.ts
+   ```
+
+3. From the attached MCP client, call `auto_dispatch` once.
+
+Expected first output: `dispatched: 1 executed, 0 failed, 0 denied, ... skipped` and a new cmux workspace/session
+for the first materialized step.
+
+4. Force a Type-1 boundary from the spawned session by emitting a `decision_blocked` through the existing
+   escalation path, then call `auto_dispatch` again.
+
+Expected second output: `denied` increments for the halted plan; no next-step task/session is minted until the
+human gate resolves the decision.
+
+### Failure triage
+
+- `auto disabled`: `BOULE_AUTO_MODE` was not exactly `type2` after trim/case normalization.
+- `failed` increments: inspect the matching `dispatch_log` row and the conductor result; this is not a verdict
+  and should not be auto-resolved.
+- `denied: halted`: expected for open Type-1 escalation; resolve through `choose`/human gate, then rerun.
+- cmux spawn errors: verify `BOULE_CONDUCTOR_MODE=live`, cmux socket health, and worktree permissions.
+- Duplicate/no-op dispatch: check for an existing `step_bound` materialization for the same plan step; dedup is
+  keyed off materialization, not `instruction_planned`.
+
 **1. Spec coverage:**
 - Opt-in `BOULE_AUTO_MODE=type2` deny-by-default (spec §0.2.4/§5) → Task 3 + Task 4 off-mode refusal. ✓
 - Drive off conductor-advanceability, not E suggestions (spec §0.2.1) → Task 4 iterates `plansOf` + `deriveConductorState`. ✓

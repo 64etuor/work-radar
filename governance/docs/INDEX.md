@@ -55,8 +55,8 @@ critic ACCEPT). **I = 설계+plan(critic ACCEPT)·구현 PARKED**(빌드는 명�
 | **E** | Orchestrator projector (observe/suggest) | ✅ on dev | `plans/2026-06-03-boule-v3-phase-e-orchestrator-projector.md` |
 | **F** | Graph index (PGlite; events+nodes+edges) | ✅ on dev + incremental upsert follow-up DONE locally (checksum-equivalent to rebuild; pgvector deferred) | `plans/2026-06-03-boule-v3-phase-f-graph-index.md` |
 | **G** | Context Steward / Handoff | ✅ on dev (vitest 418) | `plans/2026-06-03-boule-v3-phase-g-context-steward-handoff.md` |
-| **H** | Control Room UI (Slice 1) | ✅ Slice 1 on dev (라이브 GUI smoke 잔여) | `plans/2026-06-03-boule-v3-phase-h-control-room-ui.md` |
-| **I** | 좁은 opt-in auto (Type-2) | ✅ Slice 1 DONE locally: `auto_dispatch`/`dispatch_log`, 4 dispatch events, impl-critic ACCEPT 0 blockers (`.omx/artifacts/claude-boule-phase-i-critic-20260604T054201Z.md`), governance `tsc --noEmit` 0 + vitest 441, bindings/migrations drift 0. Live cmux smoke remains user-run. | `plans/2026-06-03-boule-v3-phase-i-narrow-auto.md` |
+| **H** | Control Room UI (Slice 1) | ✅ Slice 1 on dev + continuation runbook hardened locally (explicit GUI preflight/env/expected panels/triage; live GUI smoke remains user-run) | `plans/2026-06-03-boule-v3-phase-h-control-room-ui.md` |
+| **I** | 좁은 opt-in auto (Type-2) | ✅ Slice 1 DONE locally + continuation runbook hardened locally: `auto_dispatch`/`dispatch_log`, 4 dispatch events, explicit cmux preflight/env/expected outputs/triage. Live cmux smoke remains user-run. | `plans/2026-06-03-boule-v3-phase-i-narrow-auto.md` |
 
 ## v1 잔여 (v3 critical path와 독립 — 언제든 마감 가능)
 
@@ -81,5 +81,5 @@ human-approved PR, push/merge/delete/deploy가 필요한 작업은 external resi
 | 1 | P6 Slice 2 — stale pattern/event policy | local | ✅ done locally (read-only classifier + MCP status; no deletion/move) |
 | 2 | P5 Slice 2 — Meta Observer draft hardening | local | ✅ done locally (review-ready draft; propose-only preserved) |
 | 3 | Phase F follow-up — PGlite incremental graph upsert | local, higher blast radius | ✅ done locally (upsert checksum == rebuild) |
-| 4 | Phase I/H live smoke preflight + runbook hardening | local preflight only | 🆕 next |
+| 4 | Phase I/H live smoke preflight + runbook hardening | local preflight only | ✅ done locally (operator runbooks hardened; no live cmux/GUI run) |
 | external | P5 human PR, live cmux/GUI smoke, real Postgres/keyring, pgvector, long-running schedule | needs user/live surface | external residual |
