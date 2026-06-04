@@ -158,3 +158,58 @@ fn db_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
     );
     rmcp::ErrorData::internal_error(format!("db error ({})", e.code), None)
 }
+
+#[cfg(test)]
+mod schema_tests {
+    use super::{ActionIdParams, ProposeNoopParams};
+    use std::collections::BTreeSet;
+
+    fn prop_names(v: &serde_json::Value) -> BTreeSet<String> {
+        v["properties"]
+            .as_object()
+            .map(|o| o.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    fn required_fields(v: &serde_json::Value) -> BTreeSet<String> {
+        v["required"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn expect(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    // write/read 툴 입력 DTO가 **닫힌 스키마**(additionalProperties:false = deny_unknown_fields)임을
+    // 고정하고, 필드/required 표면 drift를 잠근다(mcp-server-conventions §2/§8). Phase 2~5에서 실
+    // write 툴 param이 늘면 여기에 케이스를 추가해 같은 계약(unknown-field 거부 + 표면 고정)을 강제한다.
+    #[test]
+    fn propose_noop_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(ProposeNoopParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "ProposeNoopParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(prop_names(&v), expect(&["note", "preview"]));
+        assert_eq!(required_fields(&v), expect(&["note", "preview"]));
+    }
+
+    #[test]
+    fn action_id_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(ActionIdParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "ActionIdParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(prop_names(&v), expect(&["action_id"]));
+        assert_eq!(required_fields(&v), expect(&["action_id"]));
+    }
+}

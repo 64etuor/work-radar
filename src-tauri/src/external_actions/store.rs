@@ -34,11 +34,37 @@ pub(crate) async fn enqueue(
     preview: Option<&str>,
     origin: &str,
 ) -> Result<String, AppError> {
+    enqueue_with_idempotency(pool, action, project_ref, preview, origin, None).await
+}
+
+/// enqueue + 멱등 키. `idempotency_key`가 Some이고 동일 키의 **활성**(awaiting_approval|executing)
+/// 제안이 이미 있으면 새로 만들지 않고 그 id를 반환한다(중복 pending/이중 승인 방지). 터미널 도달
+/// 후 같은 키 재제안은 새 행으로 허용(부분 유니크 인덱스 0042). key=None이면 dedup 없음(기존 동작).
+/// Phase 2~5 MCP write 툴의 재시도 안전성을 위한 seam — Phase 1 noop 경로는 None으로 호출한다.
+///
+/// **호출자 계약:** 키는 제안 *내용*에서 파생한 **안정적**(stable) 값이어야 한다 — 같은 외부 쓰기의
+/// 재시도가 같은 키를 내야 dedup이 동작한다. 시도마다 새 UUID를 주면 dedup이 절대 걸리지 않는다.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) async fn enqueue_with_idempotency(
+    pool: &Db,
+    action: &ExternalAction,
+    project_ref: Option<&str>,
+    preview: Option<&str>,
+    origin: &str,
+    idempotency_key: Option<&str>,
+) -> Result<String, AppError> {
+    // 빠른 경로: 활성 동일 키가 이미 있으면 그 id 반환(새 enqueue/audit 없음 = 멱등).
+    if let Some(key) = idempotency_key {
+        if let Some(id) = active_action_for_key(pool, key).await? {
+            return Ok(id);
+        }
+    }
     let payload = serde_json::to_string(action)
         .map_err(|e| AppError::unexpected("external_action.serialize", e.to_string()))?;
-    let id: String = sqlx::query_scalar(
-        "INSERT INTO external_actions (id, kind, project_ref, payload, preview, origin, status) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, 'awaiting_approval') \
+    let inserted: Result<String, sqlx::Error> = sqlx::query_scalar(
+        "INSERT INTO external_actions \
+         (id, kind, project_ref, payload, preview, origin, status, idempotency_key) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, 'awaiting_approval', ?6) \
          RETURNING id",
     )
     .bind(action.kind_str())
@@ -46,20 +72,61 @@ pub(crate) async fn enqueue(
     .bind(payload)
     .bind(preview)
     .bind(origin)
+    .bind(idempotency_key)
     .fetch_one(pool)
-    .await?;
+    .await;
+
+    let id = match inserted {
+        Ok(id) => id,
+        Err(e) => {
+            // 동시 동일-키 제안이 부분 유니크 인덱스를 먼저 채운 경쟁(race) → 에러 대신 멱등 반환.
+            if let Some(key) = idempotency_key {
+                if e.as_database_error()
+                    .is_some_and(|d| d.is_unique_violation())
+                {
+                    if let Some(id) = active_action_for_key(pool, key).await? {
+                        return Ok(id);
+                    }
+                }
+            }
+            return Err(e.into());
+        }
+    };
     audit::audit(pool, &id, "enqueued", Some(action.kind_str())).await?;
     Ok(id)
 }
 
+/// 활성(awaiting_approval|executing) 동일 idempotency_key 액션 id(있으면). dedup 조회 전용.
+async fn active_action_for_key(pool: &Db, key: &str) -> Result<Option<String>, AppError> {
+    let id: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM external_actions \
+         WHERE idempotency_key = ?1 AND status IN ('awaiting_approval', 'executing') \
+         LIMIT 1",
+    )
+    .bind(key)
+    .fetch_optional(pool)
+    .await?;
+    Ok(id)
+}
+
 /// 승인 대기 큐(오래된 것 먼저 = FIFO). payload/result는 노출 안 함(메타만).
+/// `LIMIT 200` = bounded 응답. Phase 2~5 자동 proposer가 늘어도 MCP/FE 단일 응답이 무한히
+/// 커지지 않게 막는 안전 상한(사람-게이트 큐는 통상 이보다 작다). 초과분은 다음 조회에서 노출.
 pub(crate) async fn list_pending(pool: &Db) -> Result<Vec<PendingAction>, AppError> {
     let rows = sqlx::query_as::<_, PendingAction>(
         "SELECT id, kind, project_ref, preview, origin, status, created_at \
-         FROM external_actions WHERE status = 'awaiting_approval' ORDER BY created_at ASC, id ASC",
+         FROM external_actions WHERE status = 'awaiting_approval' \
+         ORDER BY created_at ASC, id ASC LIMIT 200",
     )
     .fetch_all(pool)
     .await?;
+    // 상한 도달 시 PII-free 카운트만 경고 — FIFO라 잘리는 건 가장 최근 제안. 무신호 truncation 방지.
+    if rows.len() == 200 {
+        tracing::warn!(
+            count = rows.len(),
+            "external_actions pending queue hit LIMIT 200; newest proposals truncated from this response"
+        );
+    }
     Ok(rows)
 }
 
@@ -366,5 +433,56 @@ mod tests {
             .await
             .is_err());
         assert_eq!(status(&pool, "no-such-id").await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn idempotent_enqueue_dedups_active_proposal() {
+        let pool = fresh_db().await;
+        let action = ExternalAction::Noop { note: "x".into() };
+        let id1 = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k1"))
+            .await
+            .unwrap();
+        // 동일 키 재제안 → 새 행 없이 같은 id 반환(멱등).
+        let id2 = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k1"))
+            .await
+            .unwrap();
+        assert_eq!(id1, id2);
+        // 대기 큐엔 1건만, enqueued 감사도 1건만(두 번째는 enqueue 안 함).
+        assert_eq!(list_pending(&pool).await.unwrap().len(), 1);
+        let enqueued = audit::list_audit_core(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|a| a.event == "enqueued")
+            .count();
+        assert_eq!(enqueued, 1);
+        // 다른 키는 별도 행.
+        let id3 = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k2"))
+            .await
+            .unwrap();
+        assert_ne!(id1, id3);
+        assert_eq!(list_pending(&pool).await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn idempotency_key_reusable_after_terminal() {
+        let pool = fresh_db().await;
+        let action = ExternalAction::Noop { note: "x".into() };
+        let id1 = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k1"))
+            .await
+            .unwrap();
+        // 거절로 터미널 도달 → 같은 키가 부분 유니크 인덱스에서 빠진다.
+        reject(&pool, &id1, &HumanApproval::for_test())
+            .await
+            .unwrap();
+        // 같은 키 재제안은 이제 새 행으로 허용(정당한 재시도 막지 않음).
+        let id2 = enqueue_with_idempotency(&pool, &action, None, None, "mcp:t", Some("k1"))
+            .await
+            .unwrap();
+        assert_ne!(id1, id2);
+        assert_eq!(
+            status(&pool, &id2).await.unwrap().as_deref(),
+            Some("awaiting_approval")
+        );
     }
 }
