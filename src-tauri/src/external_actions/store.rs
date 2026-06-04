@@ -53,15 +53,69 @@ pub(crate) async fn enqueue_with_idempotency(
     origin: &str,
     idempotency_key: Option<&str>,
 ) -> Result<String, AppError> {
-    // 빠른 경로: 활성 동일 키가 이미 있으면 그 id 반환(새 enqueue/audit 없음 = 멱등).
+    let payload = serde_json::to_string(action)
+        .map_err(|e| AppError::unexpected("external_action.serialize", e.to_string()))?;
+
+    // dedup + 동시 동일-키 경쟁(부분 유니크 인덱스 0042 위반)을 bounded 루프로 흡수한다. 각 시도:
+    // 활성 동일 키가 있으면 그 id 반환(멱등); 없으면 INSERT; 유니크 위반이면 다음 바퀴가
+    // (a) 경쟁 승자에 dedup, 또는 (b) 승자가 그새 터미널로 빠졌으면 새 행 INSERT로 해소한다.
+    // (이전 구현은 (b)에서 raw 유니크 에러를 노출 — 정당한 재제안인데 불투명 실패였다. #2 수정.)
+    const MAX_TRIES: u32 = 3;
+    for _ in 0..MAX_TRIES {
+        if let Some(key) = idempotency_key {
+            if let Some(id) = active_action_for_key(pool, key).await? {
+                return Ok(id);
+            }
+        }
+        match insert_external_action(
+            pool,
+            action,
+            &payload,
+            project_ref,
+            preview,
+            origin,
+            idempotency_key,
+        )
+        .await
+        {
+            Ok(id) => {
+                audit::audit(pool, &id, "enqueued", Some(action.kind_str())).await?;
+                return Ok(id);
+            }
+            // 동시 동일-키 경쟁 → 다음 바퀴가 dedup/재삽입으로 해소. key=None이면 위반 불가.
+            Err(e) if idempotency_key.is_some() && is_unique_violation(&e) => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    // 지속 경쟁(드묾): 마지막으로 활성 키를 한 번 더 확인해 멱등 반환, 아니면 retryable로 노출.
     if let Some(key) = idempotency_key {
         if let Some(id) = active_action_for_key(pool, key).await? {
             return Ok(id);
         }
     }
-    let payload = serde_json::to_string(action)
-        .map_err(|e| AppError::unexpected("external_action.serialize", e.to_string()))?;
-    let inserted: Result<String, sqlx::Error> = sqlx::query_scalar(
+    Err(AppError::transient(
+        "external_action.enqueue_contended",
+        "동시 제안 경쟁으로 enqueue를 마치지 못했습니다(재시도 가능)",
+    ))
+}
+
+/// sqlx 에러가 유니크 제약 위반인지(부분 유니크 인덱스 경쟁 판정).
+fn is_unique_violation(e: &sqlx::Error) -> bool {
+    e.as_database_error()
+        .is_some_and(|d| d.is_unique_violation())
+}
+
+/// external_actions 1행 INSERT(상태 awaiting_approval). 유니크 위반은 호출자가 경쟁으로 처리.
+async fn insert_external_action(
+    pool: &Db,
+    action: &ExternalAction,
+    payload: &str,
+    project_ref: Option<&str>,
+    preview: Option<&str>,
+    origin: &str,
+    idempotency_key: Option<&str>,
+) -> Result<String, sqlx::Error> {
+    sqlx::query_scalar(
         "INSERT INTO external_actions \
          (id, kind, project_ref, payload, preview, origin, status, idempotency_key) \
          VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, 'awaiting_approval', ?6) \
@@ -74,26 +128,7 @@ pub(crate) async fn enqueue_with_idempotency(
     .bind(origin)
     .bind(idempotency_key)
     .fetch_one(pool)
-    .await;
-
-    let id = match inserted {
-        Ok(id) => id,
-        Err(e) => {
-            // 동시 동일-키 제안이 부분 유니크 인덱스를 먼저 채운 경쟁(race) → 에러 대신 멱등 반환.
-            if let Some(key) = idempotency_key {
-                if e.as_database_error()
-                    .is_some_and(|d| d.is_unique_violation())
-                {
-                    if let Some(id) = active_action_for_key(pool, key).await? {
-                        return Ok(id);
-                    }
-                }
-            }
-            return Err(e.into());
-        }
-    };
-    audit::audit(pool, &id, "enqueued", Some(action.kind_str())).await?;
-    Ok(id)
+    .await
 }
 
 /// 활성(awaiting_approval|executing) 동일 idempotency_key 액션 id(있으면). dedup 조회 전용.
@@ -258,7 +293,7 @@ pub(crate) async fn status(pool: &Db, action_id: &str) -> Result<Option<String>,
 
 /// 액션의 `project_ref`(=credential_ref) 조회 — 커넥터가 토큰을 **그 프로젝트로만** resolve하기
 /// 위해 사용(전역 토큰 금지, 개인/업무 격리). 행/값 없으면 None. `Acceptance::action_id()`로 호출.
-#[cfg_attr(not(test), allow(dead_code))]
+/// (라우터가 비-test 빌드에서 호출하므로 dead_code allow 불필요 — 실사용 심볼.)
 pub(crate) async fn project_ref_for(
     pool: &Db,
     action_id: &str,
