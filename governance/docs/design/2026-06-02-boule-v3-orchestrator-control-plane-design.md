@@ -371,6 +371,12 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
 
 점진 도입 — 막히는 지점에서만 다음 계층. 각 Phase는 별도 spec + plan + critic ACCEPT(별도 패스, self-approve 금지) 후 다음.
 
+**Continuation queue:** post-P4/P5/P6 다음 실행 순서는
+`governance/docs/plans/2026-06-04-governance-continuation-master-plan.md`가 정본이다. 현재 우선순위는
+P6 stale pattern/event policy → P5 draft hardening → Phase F incremental PGlite upsert → Phase I/H live-smoke
+preflight/runbook이다. 실제 live cmux/gui, human-approved PR, real Postgres/keyring, pgvector, long-running
+scheduling은 external residual로 둔다.
+
 ---
 
 ## 10. 확장 이벤트 타입셋 (Phase별 점증)
