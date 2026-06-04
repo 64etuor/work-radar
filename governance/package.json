@@ -1,0 +1,27 @@
+{
+  "name": "@work-radar/governance",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Boule — SSOT governance harness sidecar for work-radar (P1 skeleton)",
+  "scripts": {
+    "test": "vitest run",
+    "mcp": "node --experimental-strip-types src/mcp/server.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "gray-matter": "^4.0.3",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

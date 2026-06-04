@@ -1,0 +1,83 @@
+/*
+ * Control Room scoped tokens. Maps the master §12 status tones onto global
+ * --color-wr-* design tokens where they exist (status-working/action-blue/
+ * status-waiting/coral/subtle); --cr-pressure has no global orange token yet,
+ * so it uses a documented local fallback hex. No raw hex outside this block.
+ */
+.cr-view {
+  --cr-done: var(--color-wr-status-working, #16a34a);
+  --cr-active: var(--color-wr-action-blue, #1863dc);
+  --cr-waiting: var(--color-wr-status-waiting, #eab308);
+  --cr-pressure: #c2590f; /* local: no global orange token (deferred) */
+  --cr-blocked: var(--color-wr-coral, #ff7759);
+  --cr-muted: var(--color-wr-subtle, #93939f);
+
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.cr-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.cr-stamp {
+  color: var(--cr-muted);
+  font-size: 0.8125rem;
+}
+
+.cr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+
+.cr-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+.cr-dot[data-tone="done"] {
+  background: var(--cr-done);
+}
+.cr-dot[data-tone="active"] {
+  background: var(--cr-active);
+}
+.cr-dot[data-tone="waiting"] {
+  background: var(--cr-waiting);
+}
+.cr-dot[data-tone="pressure"] {
+  background: var(--cr-pressure);
+}
+.cr-dot[data-tone="blocked"] {
+  background: var(--cr-blocked);
+}
+.cr-dot[data-tone="muted"] {
+  background: var(--cr-muted);
+}
+
+.cr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  font-size: 0.875rem;
+}
+.cr-id {
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-muted);
+}
+.cr-empty {
+  color: var(--cr-muted);
+  font-size: 0.8125rem;
+  padding: 0.5rem 0;
+}

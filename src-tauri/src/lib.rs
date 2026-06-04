@@ -20,6 +20,7 @@ mod db;
 mod error;
 mod git;
 mod github;
+mod governance;
 mod hermes_agent;
 mod jobs;
 mod keychain;
@@ -222,6 +223,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::hermes_agent::hermes_agent_send,
         commands::hermes_agent::hermes_agent_cancel,
         commands::hermes_agent::hermes_agent_close_tab,
+        commands::hermes_agent::hermes_ask_user_respond,
         // Hermes 임시 이미지 저장 (feat/hermes-floating C4).
         commands::hermes_agent::hermes_save_pasted_image,
         // Hermes 글로벌 토글 핫키 (feat/hermes-floating A2).
@@ -305,6 +307,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_timeline_notes_for_date,
         commands::upsert_timeline_note,
         commands::delete_timeline_note,
+        // Boule governance Control Room (Phase H) — read-only derived-state snapshot.
+        commands::get_control_room_snapshot,
     ])
 }
 
@@ -379,16 +383,19 @@ pub fn run() {
             // 실 prod DB를 절대 건드리지 않도록** OS temp의 격리된 dev DB를 쓴다(랜덤 아님 → dev 런 간
             // 지속). `cargo tauri dev`는 debug 빌드라 `debug_assertions`로 깔끔히 분기된다.
             let is_dev = cfg!(debug_assertions);
-            let db_path = if is_dev {
-                std::env::temp_dir()
-                    .join("work-radar-dev")
-                    .join("work-radar.db")
-            } else {
-                app_data.join("work-radar.db")
-            };
+            // dev-only override (WORK_RADAR_DEV_DB) isolates a branch's dev DB from the shared
+            // temp dev DB — e.g. when a sibling branch has migrated it past this binary's head.
+            let dev_override = std::env::var("WORK_RADAR_DEV_DB").ok();
+            let db_path = resolve_db_path(
+                is_dev,
+                dev_override.as_deref(),
+                &std::env::temp_dir(),
+                &app_data,
+            );
             tracing::info!(
                 code = "db.path_selected",
                 dev = is_dev,
+                overridden = is_dev && dev_override.as_deref().is_some_and(|s| !s.is_empty()),
                 "database path selected"
             );
             let pool = tauri::async_runtime::block_on(db::init_db(&db_path))
@@ -515,11 +522,67 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+/// Resolve the SQLite path. The dev override (`WORK_RADAR_DEV_DB`) is honored ONLY for dev
+/// builds — a release build always uses the app-data prod SSOT, never an env-supplied path
+/// (safety). An empty override is treated as unset. Unset → today's isolated temp dev DB.
+fn resolve_db_path(
+    is_dev: bool,
+    dev_override: Option<&str>,
+    temp_dir: &std::path::Path,
+    app_data: &std::path::Path,
+) -> std::path::PathBuf {
+    if is_dev {
+        if let Some(ov) = dev_override.filter(|s| !s.is_empty()) {
+            return std::path::PathBuf::from(ov);
+        }
+        return temp_dir.join("work-radar-dev").join("work-radar.db");
+    }
+    app_data.join("work-radar.db")
+}
+
 #[cfg(test)]
 mod bindings_export {
     /// `cargo test`가 src/bindings.ts를 생성한다. (프런트 빌드 전 바인딩 보장)
     #[test]
     fn export_typescript_bindings() {
         super::export_bindings(&super::tauri_specta_builder());
+    }
+}
+
+#[cfg(test)]
+mod db_path_tests {
+    use super::resolve_db_path;
+    use std::path::{Path, PathBuf};
+
+    fn temp() -> PathBuf {
+        Path::new("/tmp/td").to_path_buf()
+    }
+    fn app_data() -> PathBuf {
+        Path::new("/app/data").to_path_buf()
+    }
+
+    #[test]
+    fn dev_with_override_uses_override_path() {
+        let got = resolve_db_path(true, Some("/x/y.db"), &temp(), &app_data());
+        assert_eq!(got, PathBuf::from("/x/y.db"));
+    }
+
+    #[test]
+    fn dev_with_empty_override_falls_back_to_default_temp_path() {
+        let got = resolve_db_path(true, Some(""), &temp(), &app_data());
+        assert_eq!(got, PathBuf::from("/tmp/td/work-radar-dev/work-radar.db"));
+    }
+
+    #[test]
+    fn dev_without_override_uses_default_temp_path() {
+        let got = resolve_db_path(true, None, &temp(), &app_data());
+        assert_eq!(got, PathBuf::from("/tmp/td/work-radar-dev/work-radar.db"));
+    }
+
+    #[test]
+    fn release_ignores_override_and_uses_prod_ssot() {
+        // Safety: a release build must never be redirected by env to a non-prod DB.
+        let got = resolve_db_path(false, Some("/x/y.db"), &temp(), &app_data());
+        assert_eq!(got, PathBuf::from("/app/data/work-radar.db"));
     }
 }

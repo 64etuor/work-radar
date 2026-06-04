@@ -254,6 +254,37 @@ pub async fn hermes_agent_cancel(
     Ok(())
 }
 
+/// Route the user's ask-user card choice back to the agent as a JSON-RPC response,
+/// echoing the original request id. `cancelled=true` sends the ACP `cancelled` outcome
+/// (dismissed card → agent unblocks rather than hangs). Missing session = graceful no-op.
+#[tauri::command]
+#[specta::specta]
+pub async fn hermes_ask_user_respond(
+    holder: State<'_, HermesAgentHolder>,
+    tab_id: String,
+    request_id: String,
+    option_id: String,
+    cancelled: bool,
+) -> Result<(), AppError> {
+    let stdin_tx = {
+        let map = holder.read().await;
+        map.get(&tab_id).map(|s| s.stdin_tx.clone())
+    };
+    if let Some(stdin_tx) = stdin_tx {
+        let body = crate::hermes_agent::acp_client::build_ask_user_response(
+            &request_id,
+            &option_id,
+            cancelled,
+        );
+        let frame = crate::hermes_agent::frame::encode_frame(&body);
+        stdin_tx
+            .send(frame)
+            .await
+            .map_err(|_| AppError::unexpected("hermes.acp.protocol", "stdin closed"))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn hermes_agent_close_tab(

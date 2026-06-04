@@ -29,6 +29,7 @@ export default function HermesView() {
   const send = useHermesTabsStore((s) => s.send);
   const cancel = useHermesTabsStore((s) => s.cancel);
   const restart = useHermesTabsStore((s) => s.restart);
+  const respondAsk = useHermesTabsStore((s) => s.respondAsk);
 
   return (
     <HermesPanel
@@ -47,7 +48,12 @@ export default function HermesView() {
     >
       {activeTab ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <HermesChatLog messages={activeTab.messages} />
+          <HermesChatLog
+            messages={activeTab.messages}
+            onRespond={(requestId, optionId, cancelled) =>
+              void respondAsk(activeTab.id, requestId, optionId, cancelled)
+            }
+          />
           <HermesChatInput
             onSend={(text, images) => void send(activeTab.id, text, images)}
             onCancel={() => void cancel(activeTab.id)}

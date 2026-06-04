@@ -7,11 +7,13 @@ import remarkGfm from "remark-gfm";
 import hermesOrbUrl from "@/assets/hermes-orb.json?url";
 import { cn } from "@/lib/utils";
 
+import { AskUserCard } from "./AskUserCard";
 import type { HermesMessage, ToolCallSummary } from "./types";
 import { useTypewriter } from "./useTypewriter";
 
 interface Props {
   messages: HermesMessage[];
+  onRespond: (requestId: string, optionId: string, cancelled: boolean) => void;
 }
 
 /** Tool pill title with typewriter reveal. */
@@ -133,7 +135,7 @@ function EmptyHermesMark({ exiting }: { exiting: boolean }) {
 /** 워드마크 펄스+페이드아웃 지속 시간(ms) — motion.css `.hermes-wordmark.is-exiting` 와 일치. */
 const EMPTY_EXIT_MS = 220;
 
-export function HermesChatLog({ messages }: Props) {
+export function HermesChatLog({ messages, onRespond }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
 
@@ -210,6 +212,12 @@ export function HermesChatLog({ messages }: Props) {
                 >
                   {m.text}
                 </p>
+              )}
+              {m.role === "ask" && (
+                <AskUserCard
+                  message={m}
+                  onRespond={(optionId, cancelled) => onRespond(m.requestId, optionId, cancelled)}
+                />
               )}
             </div>
           );

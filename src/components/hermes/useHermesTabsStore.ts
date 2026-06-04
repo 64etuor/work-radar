@@ -39,6 +39,14 @@ interface HermesTabsActions {
   send: (tabId: TabId, text: string, images?: string[]) => Promise<void>;
   cancel: (tabId: TabId) => Promise<void>;
   restart: (tabId: TabId) => Promise<void>;
+  /** Route an ask-user card choice to the agent + optimistically mark resolved.
+   *  cancelled=true → dismiss (sends ACP cancelled outcome). */
+  respondAsk: (
+    tabId: TabId,
+    requestId: string,
+    optionId: string,
+    cancelled: boolean,
+  ) => Promise<void>;
   /** Internal — used by bootstrap. Not for external callers. */
   _dispatch: (action: Parameters<typeof tabsReducer>[1]) => void;
 }
@@ -135,6 +143,22 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
         await unwrap(commands.hermesAgentOpenTab(tabId));
       } catch {
         // ignore
+      }
+    },
+
+    respondAsk: async (tabId, requestId, optionId, cancelled) => {
+      const choice = cancelled ? "cancelled" : optionId;
+      // Optimistic: mark resolved immediately so the card disables on tap.
+      dispatch({ type: "ask-resolve", tabId, requestId, choice });
+      try {
+        await unwrap(commands.hermesAskUserRespond(tabId, requestId, optionId, cancelled));
+      } catch (e) {
+        dispatch({
+          type: "system",
+          tabId,
+          text: `응답 송신 실패: ${(e as Error).message}`,
+          level: "error",
+        });
       }
     },
   };
@@ -263,6 +287,21 @@ export function useHermesTabsBootstrap() {
           tabId: e.payload.tabId,
           text: `Hermes 오류: ${e.payload.message}`,
           level: "error",
+        });
+      });
+
+      await setup<{
+        requestId?: string;
+        toolName?: string;
+        options?: { id: string; label: string }[];
+      }>("hermes-agent:ask-user", (e) => {
+        if (!e.payload.tabId || !e.payload.requestId) return;
+        dispatch({
+          type: "ask-user",
+          tabId: e.payload.tabId,
+          requestId: e.payload.requestId,
+          toolName: e.payload.toolName,
+          options: e.payload.options ?? [],
         });
       });
     })();

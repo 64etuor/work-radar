@@ -432,6 +432,12 @@ export const commands = {
 	hermesAgentSend: (tabId: string, text: string, imagePaths: string[]) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_send", { tabId, text, imagePaths })),
 	hermesAgentCancel: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_cancel", { tabId })),
 	hermesAgentCloseTab: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_close_tab", { tabId })),
+	/**
+	 *  Route the user's ask-user card choice back to the agent as a JSON-RPC response,
+	 *  echoing the original request id. `cancelled=true` sends the ACP `cancelled` outcome
+	 *  (dismissed card → agent unblocks rather than hangs). Missing session = graceful no-op.
+	 */
+	hermesAskUserRespond: (tabId: string, requestId: string, optionId: string, cancelled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("hermes_ask_user_respond", { tabId, requestId, optionId, cancelled })),
 	hermesSavePastedImage: (bytes: number[], ext: string) => typedError<string, AppError>(__TAURI_INVOKE("hermes_save_pasted_image", { bytes, ext })),
 	/**  저장된 Hermes 패널 토글 핫키 조회. 미설정 시 기본값("Cmd+Shift+Space"). */
 	hermesGetToggleHotkey: () => typedError<string, AppError>(__TAURI_INVOKE("hermes_get_toggle_hotkey")),
@@ -629,6 +635,11 @@ export const commands = {
 } | null, AppError>(__TAURI_INVOKE("upsert_timeline_note", { targetKind, targetId, date, body })),
 	/**  메모 명시적 삭제(빈 body upsert와 동등하지만 의도 분리용). */
 	deleteTimelineNote: (targetKind: TimelineNoteTarget, targetId: string, date: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_timeline_note", { targetKind, targetId, date })),
+	/**
+	 *  Read the latest derived governance projections. Absent axes return empty;
+	 *  `generatedAt` is null until the harness has projected at least once.
+	 */
+	getControlRoomSnapshot: () => typedError<ControlRoomSnapshot, AppError>(__TAURI_INVOKE("get_control_room_snapshot")),
 };
 
 /* Types */
@@ -939,6 +950,17 @@ export type CommitGraphEntry = {
 /**  base...HEAD 커밋 그래프 한 커밋의 방향. right=head 전용, left=base 전용. */
 export type CommitSide = "left" | "right";
 
+export type ControlRoomSnapshot = {
+	/**  RFC3339 newest state-file mtime; None if nothing has been projected yet. */
+	generatedAt: string | null,
+	tasks: TaskRow[],
+	plans: PlanRow[],
+	specs: SpecRow[],
+	sessions: SessionRow[],
+	handoffs: HandoffRow[],
+	orchestrator: OrchestratorView,
+};
+
 /**
  *  카드 → 캘린더 이벤트 생성 입력 (직접 모달, Phase 19). 사용자 폼 = 사람 결정이라 Acceptance 게이트
  *  불요(#2 — 게이트는 자동화의 외부 mutate 차단용). 토큰/외부 ID 미포함. start/end는 RFC3339(timed)
@@ -1114,6 +1136,16 @@ export type GoogleCalendarStatus = {
 	detail: string,
 };
 
+export type HandoffPhase = "requested" | "validating" | "pending" | "invalid" | "consumed" | 
+/**  Drift-resilient fallback: any wire value not in the known set. */
+"unknown";
+
+export type HandoffRow = {
+	handoffId: string,
+	sessionId: string,
+	phase: HandoffPhase,
+};
+
 /**  Hermes 브리지 연결 상태(graceful degrade 판정용). 봇 토큰 본문은 절대 미포함(INVARIANT). */
 export type HermesBridgeStatus = {
 	/**  봇 토큰이 keychain에 있고 chat_id가 설정됨(송수신 가능). */
@@ -1270,6 +1302,34 @@ export type NotificationPermission = {
 	granted: boolean,
 };
 
+export type OrchestratorPlanRow = {
+	planId: string,
+	phase: PlanPhase,
+};
+
+export type OrchestratorSessionRow = {
+	sessionId: string,
+	phase: SessionPhase,
+	ownership: Ownership,
+	taskId: string | null,
+};
+
+export type OrchestratorTaskRow = {
+	taskId: string,
+	phase: TaskPhase,
+	hasOpenBlock: boolean,
+};
+
+export type OrchestratorView = {
+	tasks: OrchestratorTaskRow[],
+	plans: OrchestratorPlanRow[],
+	sessions: OrchestratorSessionRow[],
+};
+
+export type Ownership = "user_owned" | "orchestrator_owned" | "external_owned" | 
+/**  Drift-resilient fallback: any wire value not in the known set. */
+"unknown";
+
 /**
  *  pending_calendar_writes 행. payload_json은 op별 자유 형태(create=title/start/duration_min,
  *  patch=start/duration_min, delete={}; staged=true는 워커가 skip — cross-cal Acceptance 게이트).
@@ -1296,6 +1356,16 @@ export type PingResult = {
 	ok: boolean,
 	/**  성공 시 식별 정보(예: GitHub login, Notion bot 이름), 실패 시 에러 메시지. */
 	detail: string,
+};
+
+export type PlanPhase = "draft" | "active" | "needs_revision" | "completed" | "archived" | "superseded" | 
+/**  Drift-resilient fallback: any wire value not in the known set. */
+"unknown";
+
+export type PlanRow = {
+	planId: string,
+	title: string,
+	phase: PlanPhase,
 };
 
 /**
@@ -1555,6 +1625,18 @@ export type SelfCheckItem = {
 	note: string | null,
 };
 
+export type SessionPhase = "planned" | "opening" | "active" | "waiting" | "blocked" | "context_pressure_high" | "checkpoint_requested" | "handoff_ready" | "closing" | "closed" | "crashed" | "recovering" | 
+/**  Drift-resilient fallback: any wire value not in the known set. */
+"unknown";
+
+export type SessionRow = {
+	sessionId: string,
+	surface: string | null,
+	ownership: Ownership,
+	taskId: string | null,
+	phase: SessionPhase,
+};
+
 /**  프로젝트별 캘린더 표시 색상 변경 입력. `color=NULL`은 기본 팔레트로 되돌림. */
 export type SetProjectCalendarColorInput = {
 	projectId: string,
@@ -1719,6 +1801,16 @@ export type SkillWorkspace = {
 
 export type SortMode = "recent" | "comments" | "mixed";
 
+export type SpecPhase = "draft" | "accepted" | "archived" | 
+/**  Drift-resilient fallback: any wire value not in the known set. */
+"unknown";
+
+export type SpecRow = {
+	specId: string,
+	title: string,
+	phase: SpecPhase,
+};
+
 /**
  *  단일 글로벌 스프린트 설정. 길이(interval_days) + 경계 앵커(요일 + 시각).
  *  다음 경계 = 이 앵커에 정렬한 뒤 interval_days 주기로 계산한다(절대 종료시각 미저장).
@@ -1748,6 +1840,16 @@ export type StageWriteRequest = {
 	op: WriteOp,
 	/**  같은 키는 (target_kind, target_id, kind) UNIQUE로 머지된다. UI는 디바운스용으로 자유 사용. */
 	idempotency_key: string,
+};
+
+export type TaskPhase = "ready" | "active" | "blocked" | "done" | "cancelled" | 
+/**  Drift-resilient fallback: any wire value not in the known set. */
+"unknown";
+
+export type TaskRow = {
+	taskId: string,
+	title: string,
+	phase: TaskPhase,
 };
 
 /**  timeline_notes 한 행. body는 사용자 입력(공백 trim은 IPC 경계에서). */

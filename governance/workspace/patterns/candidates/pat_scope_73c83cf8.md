@@ -1,0 +1,32 @@
+---
+id: pat_scope_73c83cf8
+kind: commit_scope_hotspot
+scope: ui
+evidence_count: 35
+confidence: 0.7
+status: candidate
+generated_by: pattern-detector
+---
+Commit scope `ui` recurred 35 times in the L0 corpus.
+
+Evidence (first 20 of 35):
+- evt_commit_04d976ba872b0dbe9ee28eb2eb7e4b0ee5594501
+- evt_commit_144c7d0188da55189bfea2fe4b6bcd8d71c967b4
+- evt_commit_1a543c4599604c861acb59656d7deffb043875f2
+- evt_commit_209fe9ba4378658e4d8ddc28663e93c6067bc568
+- evt_commit_286d41eec61788eac838313bd566dd66f885486e
+- evt_commit_2cbdb3c78c9e64467a1c26196ca604d2a3c15bc9
+- evt_commit_2ce306e66c95fbb270aad35a669f5e347dc08deb
+- evt_commit_2ddf39d072a6a5239e7caa5b1706cc7f29361d5e
+- evt_commit_35094c28bfa6a85af0c77212436e8f2b67e2a77f
+- evt_commit_356fe52b64caa6f719dc6db1716a59b3e10e1dba
+- evt_commit_44c21acacabe83c5379fe8ff83f83c52cd363e2e
+- evt_commit_492b0f5981341b28bdf24853038c823a4b1d6a24
+- evt_commit_4ea7b2f05d26124f170117fddaee5753b25a02f1
+- evt_commit_58a7cf8f2a856035b8be3d8b471be2fb26df50bf
+- evt_commit_5a0c79edbdb170a0cd76ab561f810b3960f285be
+- evt_commit_5f40ae9f96be0fc50e411bd5224953a0f1233e74
+- evt_commit_657cc98c58125a02071cae939cce276397cbfd91
+- evt_commit_6bf02a1691938742dc056f12b896ff0f8be2b809
+- evt_commit_70dd135261e2446975cd83aa96deafa26343de21
+- evt_commit_8106923f54fa2d9318ec6773412517313228b8a1

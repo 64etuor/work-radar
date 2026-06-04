@@ -1,0 +1,31 @@
+node_modules/
+dist/
+
+# Runtime-generated workspace artifacts. The tracked .gitkeep files preserve the
+# directory structure; generated event/review files are runtime output, not source
+# (a server run or headless smoke test must not litter the tree).
+workspace/events/**
+!workspace/events/.gitkeep
+workspace/reviews/**
+!workspace/reviews/.gitkeep
+
+# Derived execution-plane projections — status is FOLDED from events, never authored
+# (see workspace/HARNESS.md keystone invariant). The .gitkeep files preserve the
+# status-subdir tree; generated <id>.md projection files are runtime output, not source.
+# specs/ and orchestrator/ are AUTHORED (Spec bodies, policy docs) and stay tracked.
+workspace/plans/**/*.md
+workspace/tasks/**/*.md
+workspace/sessions/**/*.md
+workspace/handoffs/**/*.md
+
+# 1B outbound bridge runtime state (sent-markers, cursors)
+workspace/.bridge/
+
+# Python bytecode from the bridge scripts/tests
+bridge/__pycache__/
+
+# Derived task projection (rebuildable from events via renderTasks)
+workspace/state/*.json
+
+# Derived graph index (PGlite) — rebuildable from events via rebuild_index
+workspace/index/

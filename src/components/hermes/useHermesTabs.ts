@@ -40,6 +40,14 @@ type Action =
   | { type: "agent-end"; tabId: TabId; status: "ok" | "cancelled" | "error"; error?: string }
   | { type: "system"; tabId: TabId; text: string; level: "info" | "warn" | "error" }
   | { type: "available-commands"; tabId: TabId; commands: AcpCommand[] }
+  | {
+      type: "ask-user";
+      tabId: TabId;
+      requestId: string;
+      toolName?: string;
+      options: { id: string; label: string }[];
+    }
+  | { type: "ask-resolve"; tabId: TabId; requestId: string; choice: string }
   | { type: "reset-tab"; tabId: TabId };
 
 export const uid = (): string =>
@@ -209,6 +217,26 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
 
     case "available-commands":
       return updateTab(state, a.tabId, (t) => ({ ...t, commandsList: a.commands }));
+
+    case "ask-user":
+      return updateTab(state, a.tabId, (t) =>
+        appendMessage(t, {
+          id: uid(),
+          role: "ask",
+          requestId: a.requestId,
+          toolName: a.toolName,
+          options: a.options,
+          ts: Date.now(),
+        }),
+      );
+
+    case "ask-resolve":
+      return updateTab(state, a.tabId, (t) => ({
+        ...t,
+        messages: t.messages.map((m) =>
+          m.role === "ask" && m.requestId === a.requestId ? { ...m, resolved: a.choice } : m,
+        ),
+      }));
 
     case "reset-tab":
       return updateTab(state, a.tabId, (t) => ({

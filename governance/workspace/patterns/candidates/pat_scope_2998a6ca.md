@@ -1,0 +1,32 @@
+---
+id: pat_scope_2998a6ca
+kind: commit_scope_hotspot
+scope: decisions
+evidence_count: 38
+confidence: 0.76
+status: candidate
+generated_by: pattern-detector
+---
+Commit scope `decisions` recurred 38 times in the L0 corpus.
+
+Evidence (first 20 of 38):
+- evt_commit_04b680163b2e2f38da9cfca1b0b7434dcfe9b890
+- evt_commit_06982f31799a0542c5b587fe1079550a69faac88
+- evt_commit_0bd53c6abaa182d84812f2c0be6dde3ec94c1831
+- evt_commit_16cfa6f6af9beffc73c1edd74b3d8ceac8646630
+- evt_commit_1b3f165834a23ac27053f4398da04a192b676c3a
+- evt_commit_2c138a683bb09b7d135fabc7dffd084388dfedc8
+- evt_commit_35f8517ff2436f9e32d767624458ba1e66aca56e
+- evt_commit_3dad63a9dc0dbe21c4f82684478c81faeb1a7276
+- evt_commit_4009a307066ecfac1c15b02ea9384cc3fe961c91
+- evt_commit_413582d7067f64d21068b841abdbe95b1796ed14
+- evt_commit_42d6edaf5771d42aa451f5272c953bda36a125e0
+- evt_commit_5341492f31374525a637e9180a13d8bfe5432383
+- evt_commit_5f59fbe0a94da61058a26b1866ba5dbe4949520c
+- evt_commit_62f9132b505ab8990560cf4d409d4b71dfb6a6be
+- evt_commit_6cb5c8094bbeadd241e2f0977fe283cd7bac71f3
+- evt_commit_6cf19388087c5e7fe694c60ac11d2fd088969093
+- evt_commit_77fc2f9368cbaaee52a3f58f2b1c5fde56f41443
+- evt_commit_78ce6df3aa3204535c21d5b24538cdfb411164df
+- evt_commit_8107d0ea0744a91488c42b6bfc1bae8ba9812ab5
+- evt_commit_831e41bd75688b68e3aa64c9acd365bf2a4076f2

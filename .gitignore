@@ -15,6 +15,9 @@ src-tauri/gen/schemas
 # OMC / Ralph session state
 .omc
 
+# Boule v3 Conductor live-mode per-step worktrees (gitignored; never the user tree)
+.boule-worktrees/
+
 # logs
 *.log
 logs
