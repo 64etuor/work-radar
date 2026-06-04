@@ -143,6 +143,13 @@ export function parseConductorWorktreesRoot(raw: string | undefined): string {
   return v || ".boule-worktrees";
 }
 
+/** Parse BOULE_AUTO_MODE. Only exact "type2" opts into the narrow Phase-I dispatch loop.
+ *  Anything else fails closed to off. This gates dispatch only; it is never passed to approval
+ *  gates such as canApprove/canComplete/canAdvance. */
+export function parseAutoMode(raw: string | undefined): "off" | "type2" {
+  return (raw ?? "").trim().toLowerCase() === "type2" ? "type2" : "off";
+}
+
 /** Assemble the Conductor config from env (all safe defaults). */
 export function parseConductorConfig(env: Record<string, string | undefined>): ConductorConfig {
   return {
