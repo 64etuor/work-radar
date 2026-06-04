@@ -65,7 +65,7 @@ critic ACCEPT). **I = 설계+plan(critic ACCEPT)·구현 PARKED**(빌드는 명�
 | P4 가설 검증 | Hypothesis Tester | ✅ Slice 1 DONE locally: deterministic markdown loop, 24 hypotheses proposed then 24 refuted in `workspace/hypotheses/testing` against currently empty/unharvested L0 corpus; synthetic integration covers verified path. governance `tsc --noEmit` 0 + vitest 451. Critic ACCEPT-with-minors 0 blockers. |
 | P4 Slice 1 계획 | Hypothesis Tester markdown loop | ✅ executed: `plans/2026-06-04-ssot-governance-harness-p4-hypothesis-tester.md` |
 | P5 메타 관찰 | Meta Observer | ✅ Slice 1 DONE locally: pure `meta_observe` proposal-draft renderer + MCP surface; governance `tsc --noEmit` 0 + vitest 456, bindings/migrations drift 0. Current workspace has no verified hypotheses, so live result is `hasProposal:false`; synthetic tests cover verified draft path and same-scope grouping. PR/human approval remains external residual. Critic ACCEPT-with-minors 0 blockers; grouping minor addressed before commit. Plan: `plans/2026-06-04-ssot-governance-harness-p5-meta-observer.md` |
-| P6 망각·정합성 | Archive Pruner | ✅ Slice 1 DONE locally: hypothesis-only `archive_prune`/`archive_status`; actual workspace pass moved 24 terminal hypotheses from testing→archived. governance `tsc --noEmit` 0 + vitest 462, bindings/migrations drift 0. Pattern/event stale policy and scheduling deferred. Critic ACCEPT-with-minors 0 blockers; `access` nit addressed before commit. Plan: `plans/2026-06-04-ssot-governance-harness-p6-archive-pruner.md` |
+| P6 망각·정합성 | Archive Pruner | ✅ Slice 2 DONE locally: Slice 1 hypothesis-only `archive_prune`/`archive_status` preserved; added deterministic read-only stale pattern/event policy (`archive_policy_status`) with age+count classification and 0 L0/pattern delete/move. governance targeted P6 tests green; full gate rerun pending this checkpoint. Long-running scheduler remains external residual. Plan: `plans/2026-06-04-ssot-governance-harness-p6-archive-pruner.md` |
 | P3 Postgres/pgvector | (인덱스) | ✅ v3 Phase F first cut DONE (events+nodes+edges, PGlite; pgvector 임베딩만 잔여) |
 
 ## 다음 실행 큐 (Continuation Master Plan)
@@ -78,8 +78,8 @@ human-approved PR, push/merge/delete/deploy가 필요한 작업은 external resi
 
 | 순서 | Slice | 실행 가능성 | 상태 |
 | --- | --- | --- | --- |
-| 1 | P6 Slice 2 — stale pattern/event policy | local | 🆕 next |
-| 2 | P5 Slice 2 — Meta Observer draft hardening | local | 🆕 queued |
+| 1 | P6 Slice 2 — stale pattern/event policy | local | ✅ done locally (read-only classifier + MCP status; no deletion/move) |
+| 2 | P5 Slice 2 — Meta Observer draft hardening | local | 🆕 next |
 | 3 | Phase F follow-up — PGlite incremental graph upsert | local, higher blast radius | 🆕 queued |
 | 4 | Phase I/H live smoke preflight + runbook hardening | local preflight only | 🆕 queued |
 | external | P5 human PR, live cmux/GUI smoke, real Postgres/keyring, pgvector, long-running schedule | needs user/live surface | external residual |

@@ -75,6 +75,7 @@ describe("archive MCP tool surface", () => {
     expect(source).toContain("// ── P6: Archive Pruner");
     expect(source).toContain('"archive_prune"');
     expect(source).toContain('"archive_status"');
+    expect(source).toContain('"archive_policy_status"');
 
     const p6Block = source.slice(
       source.indexOf("// ── P6: Archive Pruner"),
@@ -86,5 +87,7 @@ describe("archive MCP tool surface", () => {
     expect(p6Block).not.toContain("decision-rails");
     expect(p6Block).not.toContain("writeEvent");
     expect(p6Block).not.toContain("makeWritePattern");
+    expect(p6Block).not.toContain("unlink(");
+    expect(p6Block).not.toContain("writeFile(");
   });
 });

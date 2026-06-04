@@ -109,7 +109,7 @@ describe("escalate — Type 0 emission", () => {
       new Date("2026-06-01T10:00:00Z"),
       0.5,
     );
-    const pend = await pendingEscalations(ws);
+    const pend = await pendingEscalations(ws, new Date("2026-06-01T10:02:00Z"));
     expect(pend).toHaveLength(1);
     expect(pend[0].options[0].description).toBe("단일 파일, 가벼움");
     expect(pend[0].options[1].description ?? null).toBeNull();

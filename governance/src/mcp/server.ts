@@ -63,6 +63,7 @@ import {
 } from "../hypotheses/tester.ts";
 import { buildMetaObservation } from "../meta/observer.ts";
 import { archiveStatus, runArchivePruner } from "../archive/pruner.ts";
+import { defaultArchivePolicy, readArchivePolicyStatus } from "../archive/policy.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
@@ -804,6 +805,19 @@ server.registerTool(
   },
   async () => {
     const status = await archiveStatus(WORKSPACE);
+    return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
+  },
+);
+
+server.registerTool(
+  "archive_policy_status",
+  {
+    description: "P6 Archive Pruner read-only stale pattern/event policy status; deletes or moves nothing",
+    inputSchema: {},
+  },
+  async () => {
+    const today = nowFn().toISOString().slice(0, 10);
+    const status = await readArchivePolicyStatus(WORKSPACE, defaultArchivePolicy(today));
     return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
   },
 );
