@@ -63,6 +63,7 @@ critic ACCEPT). **I = 설계+plan(critic ACCEPT)·구현 PARKED**(빌드는 명�
 | 항목 | 에이전트 | 상태 |
 | --- | --- | --- |
 | P4 가설 검증 | Hypothesis Tester | ❌ 미구축 |
+| P4 Slice 1 계획 | Hypothesis Tester markdown loop | 🅿️ plan ready: `plans/2026-06-04-ssot-governance-harness-p4-hypothesis-tester.md` |
 | P5 메타 관찰 | Meta Observer | ❌ 미구축 |
 | P6 망각·정합성 | Archive Pruner | ❌ 미구축 |
 | P3 Postgres/pgvector | (인덱스) | ✅ v3 Phase F first cut DONE (events+nodes+edges, PGlite; pgvector 임베딩만 잔여) |
