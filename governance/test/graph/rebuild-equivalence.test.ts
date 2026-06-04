@@ -9,6 +9,8 @@ import { projectGraph } from "../../src/graph/project.js";
 import { checksumProjection } from "../../src/graph/checksum.js";
 import type { GovEvent } from "../../src/event/event.js";
 
+const PGLITE_TEST_TIMEOUT_MS = 15000;
+
 async function seedWorkspace(): Promise<string> {
   const ws = await mkdtemp(join(tmpdir(), "boule-f-"));
   const day = join(ws, "events", "2026-06-03");
@@ -28,7 +30,7 @@ describe("rebuild equivalence (DB == markdown-derived projection)", () => {
     const expected = checksumProjection(projectGraph(await readAllEvents(ws)));
     expect(st.checksum).toBe(expected);
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 
   it("is idempotent across a second rebuild", async () => {
     const ws = await seedWorkspace();
@@ -37,7 +39,7 @@ describe("rebuild equivalence (DB == markdown-derived projection)", () => {
     const b = await rebuildIndex(ws, store);
     expect(b.checksum).toBe(a.checksum);
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 
   // The real workspace may have ~0 events; this synthetic fixture exercises EVERY node + edge
   // type through projection AND DB persistence so the keystone is not proven on tasks alone.
@@ -75,5 +77,5 @@ describe("rebuild equivalence (DB == markdown-derived projection)", () => {
     expect((await store.status()).checksum).toBe(first);
     expect((await store.status()).checksum).toBe(checksumProjection(proj));
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 });

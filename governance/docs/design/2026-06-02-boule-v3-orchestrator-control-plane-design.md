@@ -179,6 +179,9 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
 - **멱등 ingest** (L0 harvest 패턴): 동일 content_hash = no-op. **재구축:** truncate → 결정적 fold →
   nodes/edges 재생성 → **투영 checksum을 markdown-렌더와 비교**(DB == pure projection).
 - **앱 SQLite와 완전 분리**(INVARIANT #6). Phase A–E는 인메모리 fold만(Postgres 의존 0).
+- **실서버 adapter/keyring 계약:** PGlite가 기본/test store이고, Postgres live mode는 명시 선택 +
+  `credential_ref` + keyring resolver + adapter opener가 모두 있어야 열린다. 누락 시 fail-closed; credential
+  본문은 env/SQLite/renderer에 두지 않는다. 실 DB smoke와 pgvector는 deferred.
 
 ---
 
@@ -291,10 +294,11 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
   - 순수 total `projectGraph(events)`가 per-axis fold 재사용(I/O·방출 0, god-fold 금지); PGlite는 dumb persistence.
   - rebuild = `TRUNCATE; bulk-insert` 단일 txn, 멱등(재실행→동일 checksum); `status()`가 DB-read 행에서 checksum 재계산 → **DB == pure projection**(keystone). 파생 캐시(정본 아님), 앱 SQLite와 별도 스토어.
   - follow-up incremental path: `upsertIndex` reads the same pure projection and syncs rows with `INSERT ... ON CONFLICT DO UPDATE` + stale-row delete inside one PGlite txn. Targeted test proves append-driven upsert checksum/status equals full rebuild.
+  - follow-up adapter/keyring contract: `openConfiguredGraphStore` keeps PGlite as default and requires explicit Postgres config + non-empty `credential_ref` + injected keyring resolver + injected Postgres opener before any live store can open. Missing pieces fail closed before DB/network work.
 - **Events/types added:** 없음 (read-only 투영).
 - **INVARIANT-#1/#6 mechanism:** #1 — read-only 파생 캐시, `decision_*`/L0 write-path 0; `projectGraph` 순수 + negative test가 ingest의 이벤트 파일 생성 0(content-stable) 검증. #6 — governance 인덱스는 **별도 PGlite 스토어**, 앱 SQLite/마이그레이션 무변경; `bindings.ts` byte-unchanged(#4).
-- **Code:** `governance/src/graph/{types,checksum,project,schema,store,ingest}.ts` + MCP `rebuild_index`/`index_status`/`graph_node`/`graph_neighbors`.
-- **Deferred:** pgvector 임베딩(코퍼스 driven), `approvals`·`session_observations` 테이블, 실 Postgres 서버 + keyring creds, Control Room consumer(H).
+- **Code:** `governance/src/graph/{types,checksum,project,schema,store,ingest,config}.ts` + MCP `rebuild_index`/`index_status`/`graph_node`/`graph_neighbors`.
+- **Deferred:** pgvector 임베딩(코퍼스 driven), `approvals`·`session_observations` 테이블, 실 keyring resolver + live Postgres smoke, Control Room consumer(H).
 
 ### Phase G — Context Steward / Handoff
 
@@ -399,11 +403,11 @@ scheduling은 external residual로 둔다.
 | #   | INVARIANT                    | Posture                                                                                                                                       |
 | --- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | 자동화 → 결정 레일 침투 금지 | 구조적: 모든 모듈/세션은 propose/block만; `decision_*` write-path 0; `approve`=`actor:user`+`canApprove`; timeout→blocked; phase별 negative test. |
-| 2   | 외부 토큰 keychain           | Telegram 자격증명은 `~/.hermes` fabric(레포 밖); (예정)Postgres creds keyring; Boule은 토큰 미보유.                                          |
+| 2   | 외부 토큰 keychain           | Telegram 자격증명은 `~/.hermes` fabric(레포 밖); Postgres는 keyring resolver 계약만 있고 live resolver/smoke deferred; Boule은 토큰 미보유. |
 | 3   | 외부 네트워크 Rust           | 네트워크 호출은 기존 Python fabric/`github.rs`; Boule(TS)·governance 서비스는 로컬 이벤트/PGlite.                                            |
 | 4   | IPC = specta 생성            | Governance MCP=stdio(비대상). Control Room(H) 신규 커맨드/타입만 specta, drift CI 게이트 0. A–G 변경 0.                                       |
 | 5   | bounded retry                | escalation=event-driven+human-gated; 사이드카 폴링 루프 없음; ingest/observe/recovery는 on-demand 단발 + bounded.                            |
-| 6   | SQLite 마이그레이션만        | governance=별도 PGlite(앱 sqlite 무변경). A–E는 DB 없음. spawn 세션은 worktree 격리.                                                         |
+| 6   | SQLite 마이그레이션만        | governance=별도 PGlite 기본 store + fail-closed Postgres adapter 계약(앱 sqlite 무변경). A–E는 DB 없음. spawn 세션은 worktree 격리.          |
 | 7   | 시각 디자인 DESIGN.md        | A~G UI 없음. Control Room(H)은 shadcn+lucide+Tailwind v4 토큰.                                                                                |
 
 INVARIANT 검증은 **별도 reviewer 패스**(critic) — self-approve 금지.

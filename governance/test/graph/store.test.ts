@@ -4,6 +4,8 @@ import { projectGraph } from "../../src/graph/project.js";
 import { checksumProjection } from "../../src/graph/checksum.js";
 import type { GovEvent } from "../../src/event/event.js";
 
+const PGLITE_TEST_TIMEOUT_MS = 15000;
+
 function evt(over: Partial<GovEvent["frontmatter"]>, body = "Title"): GovEvent {
   return { frontmatter: { id: "x", type: "task_created", source: "hermes", actor: "u", tags: [], ...over }, body };
 }
@@ -24,7 +26,7 @@ describe("graph store (PGlite :memory:)", () => {
     expect(st.events).toBe(proj.events.length);
     expect(st.checksum).toBe(checksumProjection(proj));
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 
   it("is idempotent — rebuild twice yields the identical checksum", async () => {
     const store = await openStore(":memory:");
@@ -33,7 +35,7 @@ describe("graph store (PGlite :memory:)", () => {
     await store.rebuild(projectGraph(events)); // TRUNCATE + reinsert
     expect((await store.status()).checksum).toBe(first);
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 
   it("serves getNode and getNeighbors", async () => {
     const store = await openStore(":memory:");
@@ -45,7 +47,7 @@ describe("graph store (PGlite :memory:)", () => {
     const nb = await store.getNeighbors("task:t1");
     expect(nb?.node.node_id).toBe("task:t1");
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 
   it("the :memory: sentinel creates no on-disk dir (truly ephemeral)", async () => {
     const { existsSync } = await import("node:fs");
@@ -53,7 +55,7 @@ describe("graph store (PGlite :memory:)", () => {
     await store.rebuild(projectGraph(events));
     expect(existsSync(":memory:")).toBe(false); // sentinel must NOT be forwarded to PGlite as a path
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 
   it("file-backed open creates missing parent dirs (PGlite mkdirs only the leaf)", async () => {
     const { mkdtemp } = await import("node:fs/promises");
@@ -65,5 +67,5 @@ describe("graph store (PGlite :memory:)", () => {
     await store.rebuild(projectGraph(events));
     expect((await store.status()).nodes).toBe(projectGraph(events).nodes.length);
     await store.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 });

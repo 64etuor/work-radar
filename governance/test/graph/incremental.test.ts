@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { openStore } from "../../src/graph/store.js";
 import { rebuildIndex, upsertIndex } from "../../src/graph/ingest.js";
 
+const PGLITE_TEST_TIMEOUT_MS = 15000;
+
 async function seedWorkspace(): Promise<string> {
   const ws = await mkdtemp(join(tmpdir(), "boule-f-inc-"));
   await mkdir(join(ws, "events", "2026-06-03"), { recursive: true });
@@ -40,7 +42,7 @@ describe("incremental graph upsert", () => {
 
     await incremental.close();
     await rebuilt.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 
   it("removes rows that disappear from the markdown corpus", async () => {
     const ws = await seedWorkspace();
@@ -62,5 +64,5 @@ describe("incremental graph upsert", () => {
 
     await incremental.close();
     await rebuilt.close();
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 });

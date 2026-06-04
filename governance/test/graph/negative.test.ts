@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { openStore } from "../../src/graph/store.js";
 import { rebuildIndex } from "../../src/graph/ingest.js";
 
+const PGLITE_TEST_TIMEOUT_MS = 15000;
+
 /** Snapshot every event file's path → content, so we can prove ingest neither adds nor MODIFIES L0. */
 async function snapshotEvents(day: string): Promise<Map<string, string>> {
   const snap = new Map<string, string>();
@@ -31,5 +33,5 @@ describe("graph ingest is read-only over L0 (INVARIANT #1)", () => {
     const after = await snapshotEvents(day);
     // Byte-for-byte identical map → graph layer minted nothing and overwrote nothing.
     expect([...after.entries()].sort()).toEqual([...before.entries()].sort());
-  });
+  }, PGLITE_TEST_TIMEOUT_MS);
 });

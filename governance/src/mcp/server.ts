@@ -69,7 +69,7 @@ import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
 import { autoDispatch } from "../orchestrator/dispatch/dispatch.ts";
 import { listDispatchLog } from "../orchestrator/dispatch/project.ts";
-import { openStore } from "../graph/store.ts";
+import { openConfiguredGraphStore } from "../graph/config.ts";
 import { rebuildIndex } from "../graph/ingest.ts";
 import {
   requestHandoff, draftHandoff, runValidateHandoff, listHandoffs,
@@ -1043,7 +1043,7 @@ server.registerTool(
 
 // v3 Phase F — Postgres+pgvector derived graph index (events+nodes+edges via embedded PGlite).
 // Read/rebuild only — NO approve/choose/decision_* surface (master §4.5). One store, opened once.
-const graphStore = await openStore(join(WORKSPACE, "index", "pglite"));
+const graphStore = await openConfiguredGraphStore({ workspaceDir: WORKSPACE });
 
 server.registerTool(
   "rebuild_index",

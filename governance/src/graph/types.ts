@@ -53,3 +53,14 @@ export interface GraphStore {
   getNeighbors(id: string): Promise<{ node: NodeRow; edges: EdgeRow[]; neighbors: NodeRow[] } | null>;
   close(): Promise<void>;
 }
+
+export type GraphStoreConfig =
+  | { kind: "pglite"; loc: string }
+  | { kind: "postgres"; connectionRef: string; credentialRef: string };
+
+export type GraphCredentialResolver = (credentialRef: string) => Promise<string | null>;
+
+export type GraphPostgresOpener = (input: {
+  connectionRef: string;
+  credential: string;
+}) => Promise<GraphStore>;
