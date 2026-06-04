@@ -16,7 +16,9 @@ mod api;
 mod cache;
 mod calendar;
 mod commands;
-mod db;
+// Phase 1: MCP 라운드트립 integration test(tests/mcp_roundtrip)가 `init_db`로 tempdir 풀을
+// 만들 수 있도록 crate 밖에서 보이게 한다(앱 마이그레이션 경로 재사용 — 하드코딩 금지).
+pub mod db;
 mod error;
 // Phase 1: integration test(tests/compile_fail)가 `Acceptance` 타입을 보고 `mint` visibility를
 // 검증하려면 모듈이 crate 밖에서 보여야 한다(타입은 이미 pub). mint은 `pub(in ...)`로 잠겨 있어
@@ -29,6 +31,9 @@ mod hermes_agent;
 mod jobs;
 mod keychain;
 mod logging;
+// 앱 내장 stdio MCP 서버(External Action Gate Phase 1, proposal-only). `--mcp-stdio` 플래그로 진입.
+// pub: integration test(tests/mcp_roundtrip)가 `work_radar_lib::mcp::WrServer`/툴을 호출한다.
+pub mod mcp;
 mod messenger;
 mod models;
 mod news;

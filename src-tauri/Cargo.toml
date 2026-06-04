@@ -78,6 +78,12 @@ uuid = { version = "1", features = ["v4"] }
 flate2 = "1"
 tar = "0.4"
 tempfile = "3"
+# 외부 AI 에이전트용 앱 내장 stdio MCP 서버(External Action Gate Phase 1, proposal-only).
+# server=핸들러/툴 라우터, transport-io=stdio() 트랜스포트, macros=#[tool_router]/#[tool].
+rmcp = { version = "1.7.0", features = ["server", "transport-io", "macros"] }
+# rmcp 1.7의 #[tool] 매크로가 입력/출력 DTO에 schemars 1.x JsonSchema를 요구한다(버전 일치 필수 —
+# schemars 0.x 파생은 rmcp 매크로와 타입 불일치로 컴파일 실패). rmcp 재수출 버전에 핀.
+schemars = "1.2.1"
 
 [dev-dependencies]
 # 로테이션 단위 테스트용 임시 디렉터리.
