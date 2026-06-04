@@ -54,6 +54,13 @@ import { normalizeModelId } from "../decision/modelId.ts";
 import { runDetect } from "../patterns/detect.ts";
 import { makeWritePattern } from "../patterns/write.ts";
 import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
+import { makeWriteHypothesis } from "../hypotheses/write.ts";
+import {
+  listHypotheses,
+  readSupportedPatterns,
+  readTestingHypotheses,
+  runHypothesisTester,
+} from "../hypotheses/tester.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
@@ -429,6 +436,51 @@ server.registerTool(
   async ({ id }) => {
     const p = await getPattern(WORKSPACE, id);
     const text = p ? `${renderFrontmatter(p.frontmatter)}\n\n${p.body}` : `not found: ${id}`;
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerTool(
+  "run_hypothesis_tester",
+  {
+    description:
+      "P4: candidate/active commit-scope hotspot patterns에서 testing hypotheses를 만들고 현재 L0으로 verified/refuted 평가 (hypotheses markdown only)",
+    inputSchema: {},
+  },
+  async () => {
+    const summary = await runHypothesisTester({
+      readEvents: () => readAllEvents(WORKSPACE),
+      readPatterns: () => readSupportedPatterns(WORKSPACE),
+      readTestingHypotheses: () => readTestingHypotheses(WORKSPACE),
+      writeHypothesis: makeWriteHypothesis(WORKSPACE),
+      now: nowFn,
+    });
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            `hypotheses: ${summary.proposed} proposed, ${summary.verified} verified, ` +
+            `${summary.refuted} refuted, ${summary.skipped} skipped`,
+        },
+      ],
+    };
+  },
+);
+
+server.registerTool(
+  "hypotheses",
+  { description: "P4 hypotheses 목록 (testing + terminal, read-only)", inputSchema: {} },
+  async () => {
+    const list = await listHypotheses(WORKSPACE);
+    const text = list.length
+      ? list
+          .map(
+            (h) =>
+              `- ${h.id} ${h.kind} scope=${h.scope} from=${h.from_pattern} threshold=${h.threshold} [${h.status}]`,
+          )
+          .join("\n")
+      : "no hypotheses";
     return { content: [{ type: "text", text }] };
   },
 );
