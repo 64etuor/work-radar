@@ -41,6 +41,7 @@ pub struct PendingList {
 
 /// 제안 생성 파라미터(`wr_propose_noop`). preview=승인 패널 표시용 사람-친화 요약.
 #[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
 pub struct ProposeNoopParams {
     /// 사람-친화 미리보기(승인 패널 표시용).
     pub preview: String,
@@ -57,6 +58,7 @@ pub struct ProposeResult {
 
 /// 단건 상태 조회 파라미터(`wr_action_status`).
 #[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
 pub struct ActionIdParams {
     pub action_id: String,
 }
