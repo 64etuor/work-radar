@@ -1,5 +1,6 @@
 //! External Action Gate IPC. 승인/거절/조회. Phase 0는 NoopConnector로 dispatch(외부 호출 0).
 
+use crate::commands::approval_grant::HumanApproval;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::external_actions::store::{self, PendingAction};
@@ -30,13 +31,20 @@ pub async fn approve_external_action(
     db: State<'_, Db>,
     action_id: String,
 ) -> Result<String, AppError> {
-    store::approve(db.inner(), &action_id, &NoopConnector).await
+    // 이 IPC가 사람 승인 경로 — 여기서만 HumanApproval을 발급해 store::approve에 넘긴다.
+    store::approve(
+        db.inner(),
+        &action_id,
+        &NoopConnector,
+        &HumanApproval::from_ipc(),
+    )
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn reject_external_action(db: State<'_, Db>, action_id: String) -> Result<(), AppError> {
-    store::reject(db.inner(), &action_id).await
+    store::reject(db.inner(), &action_id, &HumanApproval::from_ipc()).await
 }
 
 #[tauri::command]

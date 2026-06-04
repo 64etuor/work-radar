@@ -8,6 +8,9 @@
 
 pub mod shared;
 
+/// 사람-게이트 증거 토큰(External Action Gate approve/reject type-wall).
+pub mod approval_grant;
+
 pub mod agent_run_store;
 pub mod agents;
 pub mod agents_config;

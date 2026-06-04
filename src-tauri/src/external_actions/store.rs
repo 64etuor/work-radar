@@ -1,6 +1,10 @@
 //! external_actions 상태머신. 제안자→enqueue(awaiting_approval), 사용자→approve/reject.
 //! approve만 Acceptance를 mint하고 커넥터에 dispatch한다(INVARIANT #2).
 
+// ⚠️ 의도적 backward import(external_actions→commands). HumanApproval을 여기 gate 레이어로
+// 옮기지 말 것: 발급자가 `pub(in crate::external_actions)`가 되면 gate가 스스로 사람-승인 토큰을
+// 위조할 수 있어 wall이 약해진다. 토큰은 사람-IPC(commands)에만 두고, store는 "받아 통과"만 한다.
+use crate::commands::approval_grant::HumanApproval;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::external_actions::{audit, Acceptance, ExternalAction, ExternalConnector};
@@ -62,10 +66,14 @@ pub(crate) async fn list_pending(pool: &Db) -> Result<Vec<PendingAction>, AppErr
 /// 승인: awaiting_approval → executing(CAS 가드) → 커넥터 dispatch → succeeded|failed.
 /// **Acceptance는 여기서만 mint** — 커넥터 execute에 전달. 모든 전이를 감사.
 /// 반환=실행 결과 status 문자열("succeeded"|"failed"). CAS 실패(이미 결정됨) 시 검증 에러.
+///
+/// `_grant: &HumanApproval` = 사람 승인 IPC만 발급하는 증거 토큰(type-wall). 제안 생성자
+/// 모듈(`crate::mcp` 등)은 토큰을 만들 수 없어 이 함수 호출이 컴파일 불가 — 사람 게이트 우회 봉쇄.
 pub(crate) async fn approve<C: ExternalConnector>(
     pool: &Db,
     action_id: &str,
     connector: &C,
+    _grant: &HumanApproval,
 ) -> Result<String, AppError> {
     // CAS: awaiting_approval에서만 executing으로. 0행이면 이미 결정된 액션 → 가드.
     let moved = sqlx::query(
@@ -124,7 +132,12 @@ pub(crate) async fn approve<C: ExternalConnector>(
 }
 
 /// 거절: awaiting_approval → rejected(CAS). 외부 무변경. 0행이면 가드 에러.
-pub(crate) async fn reject(pool: &Db, action_id: &str) -> Result<(), AppError> {
+/// `_grant: &HumanApproval` = approve와 동일한 사람-게이트 type-wall(제안 모듈은 호출 불가).
+pub(crate) async fn reject(
+    pool: &Db,
+    action_id: &str,
+    _grant: &HumanApproval,
+) -> Result<(), AppError> {
     let moved = sqlx::query(
         "UPDATE external_actions SET status = 'rejected', decided_at = datetime('now') \
          WHERE id = ?1 AND status = 'awaiting_approval'",
@@ -155,6 +168,7 @@ pub(crate) async fn status(pool: &Db, action_id: &str) -> Result<Option<String>,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::approval_grant::HumanApproval;
     use crate::commands::shared::test_support::fresh_db;
     use crate::external_actions::ExecOutcome;
 
@@ -230,7 +244,9 @@ mod tests {
                 bytes: Some(12),
             },
         };
-        let res = approve(&pool, &id, &conn).await.unwrap();
+        let res = approve(&pool, &id, &conn, &HumanApproval::for_test())
+            .await
+            .unwrap();
         assert_eq!(res, "succeeded");
         assert_eq!(
             status(&pool, &id).await.unwrap().as_deref(),
@@ -264,9 +280,13 @@ mod tests {
         let conn = MockConnector {
             outcome: ExecOutcome::default(),
         };
-        approve(&pool, &id, &conn).await.unwrap();
+        approve(&pool, &id, &conn, &HumanApproval::for_test())
+            .await
+            .unwrap();
         // 두 번째 승인은 CAS 가드로 거부
-        assert!(approve(&pool, &id, &conn).await.is_err());
+        assert!(approve(&pool, &id, &conn, &HumanApproval::for_test())
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -281,7 +301,9 @@ mod tests {
         )
         .await
         .unwrap();
-        reject(&pool, &id).await.unwrap();
+        reject(&pool, &id, &HumanApproval::for_test())
+            .await
+            .unwrap();
         assert_eq!(
             status(&pool, &id).await.unwrap().as_deref(),
             Some("rejected")
@@ -291,7 +313,8 @@ mod tests {
             &id,
             &MockConnector {
                 outcome: ExecOutcome::default()
-            }
+            },
+            &HumanApproval::for_test()
         )
         .await
         .is_err());
@@ -310,7 +333,9 @@ mod tests {
         .await
         .unwrap();
         // 커넥터가 Err를 반환해도 approve 자체는 상태머신을 진행(Ok("failed")).
-        let res = approve(&pool, &id, &FailingConnector).await.unwrap();
+        let res = approve(&pool, &id, &FailingConnector, &HumanApproval::for_test())
+            .await
+            .unwrap();
         assert_eq!(res, "failed");
         assert_eq!(status(&pool, &id).await.unwrap().as_deref(), Some("failed"));
         // 실패한 액션은 더 이상 대기 큐에 없음.
@@ -332,8 +357,14 @@ mod tests {
             outcome: ExecOutcome::default(),
         };
         // approve/reject는 CAS 0행 → 검증 에러. status는 행 없음 → Ok(None).
-        assert!(approve(&pool, "no-such-id", &conn).await.is_err());
-        assert!(reject(&pool, "no-such-id").await.is_err());
+        assert!(
+            approve(&pool, "no-such-id", &conn, &HumanApproval::for_test())
+                .await
+                .is_err()
+        );
+        assert!(reject(&pool, "no-such-id", &HumanApproval::for_test())
+            .await
+            .is_err());
         assert_eq!(status(&pool, "no-such-id").await.unwrap(), None);
     }
 }

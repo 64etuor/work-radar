@@ -8,3 +8,14 @@ fn mint_is_unreachable_outside_module() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/mint_outside.rs");
 }
+
+/// `HumanApproval`(사람-게이트 증거 토큰)이 crate 밖에서 위조 불가함을 컴파일 레벨로 잠근다.
+///
+/// approve/reject가 이 토큰 참조를 요구하므로, 토큰을 만들 수 없는 호출자는 사람 게이트를
+/// 우회할 수 없다(`crate::mcp` 등 제안 모듈 포함 — commands 트리 밖). fixture가 crate-외부에서
+/// `from_ipc` 호출 → 컴파일 실패함을 검증한다(mint_outside와 동형 type-wall 회귀 가드).
+#[test]
+fn human_approval_is_unforgeable_outside_crate() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/forge_human_approval.rs");
+}
