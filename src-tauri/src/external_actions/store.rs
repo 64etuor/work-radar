@@ -24,9 +24,7 @@ pub struct PendingAction {
 }
 
 /// 제안 1건을 awaiting_approval로 enqueue. payload는 검증된 JSON 문자열(호출자 책임).
-/// 반환=새 action id. enqueued 감사 기록.
-// Phase 0는 IPC로 노출하지 않는다(제안자는 Phase 1 MCP 서버). 테스트에선 사용 → not(test) dead_code 허용.
-#[cfg_attr(not(test), allow(dead_code))]
+/// 반환=새 action id. enqueued 감사 기록. (MCP `wr_propose_noop`가 비-test에서 호출 → 실사용 심볼.)
 pub(crate) async fn enqueue(
     pool: &Db,
     action: &ExternalAction,
@@ -44,7 +42,7 @@ pub(crate) async fn enqueue(
 ///
 /// **호출자 계약:** 키는 제안 *내용*에서 파생한 **안정적**(stable) 값이어야 한다 — 같은 외부 쓰기의
 /// 재시도가 같은 키를 내야 dedup이 동작한다. 시도마다 새 UUID를 주면 dedup이 절대 걸리지 않는다.
-#[cfg_attr(not(test), allow(dead_code))]
+/// (MCP GitHub write 툴이 비-test에서 호출 → 실사용 심볼.)
 pub(crate) async fn enqueue_with_idempotency(
     pool: &Db,
     action: &ExternalAction,
@@ -351,38 +349,24 @@ async fn recover_interrupted_actions_inner(pool: &Db, stale_secs: i64) -> Result
         .bind(id)
         .fetch_optional(pool)
         .await?;
-        if executed.is_some() {
-            let moved = sqlx::query(
-                "UPDATE external_actions SET status = 'succeeded' \
-                 WHERE id = ?1 AND status = 'executing'",
-            )
-            .bind(id)
-            .execute(pool)
-            .await?
-            .rows_affected();
-            if moved > 0 {
-                audit::audit(pool, id, "reconciled", Some("write_succeeded_before_crash")).await?;
-                handled += 1;
-            }
+        let (target, event, detail) = if executed.is_some() {
+            ("succeeded", "reconciled", "write_succeeded_before_crash")
         } else {
-            let moved = sqlx::query(
-                "UPDATE external_actions SET status = 'failed' \
-                 WHERE id = ?1 AND status = 'executing'",
-            )
-            .bind(id)
-            .execute(pool)
-            .await?
-            .rows_affected();
-            if moved > 0 {
-                audit::audit(
-                    pool,
-                    id,
-                    "failed",
-                    Some("recovered=app_restart_mid_execution"),
-                )
-                .await?;
-                handled += 1;
-            }
+            ("failed", "failed", "recovered=app_restart_mid_execution")
+        };
+        // 상태 전이는 'executing' 가드로 동시 finalize와 클로버하지 않는다 — 0행이면 그새 finalize가
+        // 끝낸 것이니 건드리지 않고 감사도 남기지 않는다.
+        let moved = sqlx::query(
+            "UPDATE external_actions SET status = ?2 WHERE id = ?1 AND status = 'executing'",
+        )
+        .bind(id)
+        .bind(target)
+        .execute(pool)
+        .await?
+        .rows_affected();
+        if moved > 0 {
+            audit::audit(pool, id, event, Some(detail)).await?;
+            handled += 1;
         }
     }
     Ok(handled)
