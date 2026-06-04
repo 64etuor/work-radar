@@ -31,20 +31,27 @@ function renderDraft(hypotheses: readonly HypothesisView[]): string {
     const bullets = group
       .map(
         (hypothesis) =>
-          `- Source hypothesis: ${hypothesis.id}\n` +
-          `- Source pattern: ${hypothesis.from_pattern}\n` +
+          `### Evidence: ${hypothesis.id}\n\n` +
+          `- Source hypothesis id: ${hypothesis.id}\n` +
+          `- Source hypothesis link: hypotheses/testing/${hypothesis.id}.md\n` +
+          `- Source pattern id: ${hypothesis.from_pattern}\n` +
+          `- Source pattern link: patterns/candidates/${hypothesis.from_pattern}.md\n` +
           `- Baseline: ${hypothesis.baseline}\n` +
           `- Threshold: ${hypothesis.threshold}\n` +
           `- Test method: ${hypothesis.test_method}`,
       )
       .join("\n\n");
-    return `## Scope: ${scope}\n\n${bullets}`;
+    return `## Scope: ${scope}\n\nEvidence group: scope=${scope}, verified_hypotheses=${group.length}\n\n${bullets}`;
   });
 
   return `${[
     "# Principle proposal draft: recurring commit-scope hotspots",
     "This is a local Meta Observer draft. It does not edit decision rails, ADRs, or decision logs.",
     ...sections,
-    "## External residual\n\nConvert this draft into a human-reviewed PR before changing docs/areas/decision-rails.md.",
+    "## Limitations\n\n" +
+      "- This draft is generated only from verified local hypotheses currently visible to P5.\n" +
+      "- It does not prove the proposed principle is globally true across all projects or time.\n" +
+      "- It does not edit L3/L4 docs, create PRs, approve decisions, or change decision rails.",
+    "## External residual\n\nExternal residual: human-reviewed PR converting this draft into L3/L4 changes.",
   ].join("\n\n")}\n`;
 }

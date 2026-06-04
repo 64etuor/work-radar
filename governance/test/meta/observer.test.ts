@@ -48,29 +48,51 @@ describe("buildMetaObservation", () => {
 
       ## Scope: governance
 
-      - Source hypothesis: hyp_a
-      - Source pattern: pat_scope_a
+      Evidence group: scope=governance, verified_hypotheses=2
+
+      ### Evidence: hyp_a
+
+      - Source hypothesis id: hyp_a
+      - Source hypothesis link: hypotheses/testing/hyp_a.md
+      - Source pattern id: pat_scope_a
+      - Source pattern link: patterns/candidates/pat_scope_a.md
       - Baseline: 5
       - Threshold: 5
       - Test method: current_l0_scope_count
 
-      - Source hypothesis: hyp_c
-      - Source pattern: pat_scope_c
+      ### Evidence: hyp_c
+
+      - Source hypothesis id: hyp_c
+      - Source hypothesis link: hypotheses/testing/hyp_c.md
+      - Source pattern id: pat_scope_c
+      - Source pattern link: patterns/candidates/pat_scope_c.md
       - Baseline: 6
       - Threshold: 6
       - Test method: current_l0_scope_count
 
       ## Scope: shell
 
-      - Source hypothesis: hyp_b
-      - Source pattern: pat_scope_b
+      Evidence group: scope=shell, verified_hypotheses=1
+
+      ### Evidence: hyp_b
+
+      - Source hypothesis id: hyp_b
+      - Source hypothesis link: hypotheses/testing/hyp_b.md
+      - Source pattern id: pat_scope_b
+      - Source pattern link: patterns/candidates/pat_scope_b.md
       - Baseline: 7
       - Threshold: 7
       - Test method: current_l0_scope_count
 
+      ## Limitations
+
+      - This draft is generated only from verified local hypotheses currently visible to P5.
+      - It does not prove the proposed principle is globally true across all projects or time.
+      - It does not edit L3/L4 docs, create PRs, approve decisions, or change decision rails.
+
       ## External residual
 
-      Convert this draft into a human-reviewed PR before changing docs/areas/decision-rails.md.
+      External residual: human-reviewed PR converting this draft into L3/L4 changes.
       "
     `);
   });

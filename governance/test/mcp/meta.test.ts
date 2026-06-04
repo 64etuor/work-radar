@@ -46,6 +46,10 @@ describe("meta_observe MCP round-trip", () => {
     if (!result.hasProposal) throw new Error("expected proposal");
     expect(result.markdown).toContain("hyp_verified");
     expect(result.markdown).toContain("Scope: governance");
+    expect(result.markdown).toContain("Source hypothesis link: hypotheses/testing/hyp_verified.md");
+    expect(result.markdown).toContain("Source pattern link: patterns/candidates/pat_governance.md");
+    expect(result.markdown).toContain("## Limitations");
+    expect(result.markdown).toContain("External residual: human-reviewed PR converting this draft into L3/L4 changes.");
     expect(result.markdown).not.toContain("hyp_refuted");
   });
 });
