@@ -171,6 +171,21 @@ mod tests {
         }
     }
 
+    /// 커넥터 실패를 시뮬레이트 — approve의 Err 분기(상태=failed, audit=failed)를 검증.
+    struct FailingConnector;
+    impl ExternalConnector for FailingConnector {
+        async fn execute(
+            &self,
+            _action: &ExternalAction,
+            _gate: &Acceptance,
+        ) -> Result<ExecOutcome, AppError> {
+            Err(AppError::terminal(
+                "external_action.test_fail",
+                "커넥터 실패",
+            ))
+        }
+    }
+
     #[tokio::test]
     async fn enqueue_then_list_pending() {
         let pool = fresh_db().await;
@@ -280,5 +295,45 @@ mod tests {
         )
         .await
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn approve_with_failing_connector_marks_failed() {
+        let pool = fresh_db().await;
+        let id = enqueue(
+            &pool,
+            &ExternalAction::Noop { note: "x".into() },
+            None,
+            None,
+            "mcp:t",
+        )
+        .await
+        .unwrap();
+        // 커넥터가 Err를 반환해도 approve 자체는 상태머신을 진행(Ok("failed")).
+        let res = approve(&pool, &id, &FailingConnector).await.unwrap();
+        assert_eq!(res, "failed");
+        assert_eq!(status(&pool, &id).await.unwrap().as_deref(), Some("failed"));
+        // 실패한 액션은 더 이상 대기 큐에 없음.
+        assert!(list_pending(&pool).await.unwrap().is_empty());
+        // 감사에 failed 1건 기록(approved도 남지만 핵심은 failed).
+        let events: Vec<String> = audit::list_audit_core(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|a| a.event)
+            .collect();
+        assert!(events.contains(&"failed".to_string()));
+    }
+
+    #[tokio::test]
+    async fn nonexistent_id_is_guarded() {
+        let pool = fresh_db().await;
+        let conn = MockConnector {
+            outcome: ExecOutcome::default(),
+        };
+        // approve/reject는 CAS 0행 → 검증 에러. status는 행 없음 → Ok(None).
+        assert!(approve(&pool, "no-such-id", &conn).await.is_err());
+        assert!(reject(&pool, "no-such-id").await.is_err());
+        assert_eq!(status(&pool, "no-such-id").await.unwrap(), None);
     }
 }
