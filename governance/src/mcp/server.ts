@@ -61,6 +61,7 @@ import {
   readTestingHypotheses,
   runHypothesisTester,
 } from "../hypotheses/tester.ts";
+import { buildMetaObservation } from "../meta/observer.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
@@ -482,6 +483,28 @@ server.registerTool(
           .join("\n")
       : "no hypotheses";
     return { content: [{ type: "text", text }] };
+  },
+);
+
+// ── P5: Meta Observer ─────────────────────────────────────────────────────────
+// Local proposal draft only. No L3/L4 writes and no verdict tools.
+server.registerTool(
+  "meta_observe",
+  {
+    description:
+      "P5 local Meta Observer: verified hypotheses를 principle proposal draft로 렌더링만 함 (no file writes)",
+    inputSchema: {},
+  },
+  async () => {
+    const result = buildMetaObservation({ hypotheses: await listHypotheses(WORKSPACE) });
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
   },
 );
 
