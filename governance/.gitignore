@@ -17,6 +17,7 @@ workspace/plans/**/*.md
 workspace/tasks/**/*.md
 workspace/sessions/**/*.md
 workspace/handoffs/**/*.md
+workspace/hypotheses/**/*.md
 
 # 1B outbound bridge runtime state (sent-markers, cursors)
 workspace/.bridge/
