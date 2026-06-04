@@ -32,8 +32,12 @@ async fn propose_then_list_and_status() {
     let db = fresh_db().await;
     let server = WrServer { db };
 
-    // fresh DB → 대기 큐 비어 있음(공개 read 툴로 확인).
-    let before = server.list_pending_actions().await;
+    // fresh DB → 대기 큐 비어 있음(공개 read 툴로 확인). read 툴은 이제 Result를 반환(DB 에러
+    // surface) — happy path는 Ok.
+    let before = server
+        .list_pending_actions()
+        .await
+        .expect("list_pending_actions ok on fresh db");
     assert!(
         before.0.actions.is_empty(),
         "fresh DB should have no pending actions"
@@ -51,7 +55,10 @@ async fn propose_then_list_and_status() {
     assert_eq!(res.0.status, "awaiting_approval");
 
     // list_pending_actions가 새 제안을 메타로 반영(payload/토큰 노출 없음 — DTO에 그 필드 자체가 없음).
-    let pending = server.list_pending_actions().await;
+    let pending = server
+        .list_pending_actions()
+        .await
+        .expect("list_pending_actions ok");
     assert_eq!(pending.0.actions.len(), 1, "one pending action expected");
     let row = &pending.0.actions[0];
     assert_eq!(row.id, action_id);
@@ -64,14 +71,16 @@ async fn propose_then_list_and_status() {
         .action_status(Parameters(ActionIdParams {
             action_id: action_id.clone(),
         }))
-        .await;
+        .await
+        .expect("action_status ok");
     assert_eq!(st.0.status.as_deref(), Some("awaiting_approval"));
 
-    // 없는 id는 None(에러/패닉 아님).
+    // 없는 id는 status=None(정상 — Ok, 에러/패닉 아님). DB 에러만 Err로 surface된다.
     let missing = server
         .action_status(Parameters(ActionIdParams {
             action_id: "no-such-id".into(),
         }))
-        .await;
+        .await
+        .expect("action_status ok for unknown id");
     assert_eq!(missing.0.status, None);
 }

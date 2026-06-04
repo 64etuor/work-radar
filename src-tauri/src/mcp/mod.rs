@@ -70,14 +70,18 @@ pub struct ActionStatus {
 #[tool_router(server_handler)]
 impl WrServer {
     /// 승인 대기 외부 액션 목록(메타만). 토큰/payload 본문 미노출.
-    /// DB 에러는 빈 목록으로 graceful degrade(MCP 툴은 패닉 금지).
+    /// DB 에러는 **빈 목록으로 삼키지 않고** rmcp internal-error로 surface한다 — 폴링하는
+    /// 에이전트가 "실패"와 "비어 있음"을 구분할 수 있게(읽기 툴 비대칭 수정). 패닉은 여전히 금지.
+    /// surface/로그는 PII-free하게 AppError.code만 쓴다(message/payload 본문 금지).
     #[tool(
         name = "wr_list_pending_actions",
         description = "List external actions awaiting user approval (metadata only). Does NOT expose payloads or tokens."
     )]
-    pub async fn list_pending_actions(&self) -> Json<PendingList> {
-        let rows = store::list_pending(&self.db).await.unwrap_or_default();
-        Json(PendingList {
+    pub async fn list_pending_actions(&self) -> Result<Json<PendingList>, rmcp::ErrorData> {
+        let rows = store::list_pending(&self.db)
+            .await
+            .map_err(|e| db_tool_error("wr_list_pending_actions", &e))?;
+        Ok(Json(PendingList {
             actions: rows
                 .into_iter()
                 .map(|a| PendingActionDto {
@@ -87,7 +91,7 @@ impl WrServer {
                     status: a.status,
                 })
                 .collect(),
-        })
+        }))
     }
 
     /// 제안만 생성한다 — **실행 안 함**. 사용자 승인 후 Rust 커넥터가 실행(Phase 0 게이트).
@@ -108,15 +112,25 @@ impl WrServer {
                 action_id: id,
                 status: "awaiting_approval".into(),
             }),
-            Err(_) => Json(ProposeResult {
-                action_id: String::new(),
-                status: "error".into(),
-            }),
+            Err(e) => {
+                // 기존 계약(status:"error" + 빈 id) 유지(비회귀)하되, 삼킨 에러가 완전히 안 보이는
+                // 일이 없게 stderr에 PII-free 코드만 남긴다(stdout은 MCP 전용).
+                eprintln!(
+                    "[work-radar mcp-stdio] wr_propose_noop db error: code={} trace_id={}",
+                    e.code, e.trace_id
+                );
+                Json(ProposeResult {
+                    action_id: String::new(),
+                    status: "error".into(),
+                })
+            }
         }
     }
 
     /// 액션 승인/실행 상태 폴링(단건 — terminal 도달 시 종료는 클라이언트 책임, 무한 폴링 없음).
-    /// 없는 id는 status=None. DB 에러도 None으로 degrade(패닉 금지).
+    /// 없는 id는 status=None(정상). DB 에러는 **None으로 삼키지 않고** rmcp internal-error로
+    /// surface — 폴링 에이전트가 "조회 실패"와 "행 없음/미결정"을 구분할 수 있게(읽기 툴 비대칭 수정).
+    /// surface/로그는 PII-free하게 AppError.code만 쓴다.
     #[tool(
         name = "wr_action_status",
         description = "Poll the status of a proposed action by id (awaiting_approval | succeeded | failed | rejected)."
@@ -124,8 +138,21 @@ impl WrServer {
     pub async fn action_status(
         &self,
         Parameters(p): Parameters<ActionIdParams>,
-    ) -> Json<ActionStatus> {
-        let status = store::status(&self.db, &p.action_id).await.unwrap_or(None);
-        Json(ActionStatus { status })
+    ) -> Result<Json<ActionStatus>, rmcp::ErrorData> {
+        let status = store::status(&self.db, &p.action_id)
+            .await
+            .map_err(|e| db_tool_error("wr_action_status", &e))?;
+        Ok(Json(ActionStatus { status }))
     }
+}
+
+/// 읽기 툴의 DB 에러 → rmcp internal-error 매핑. **PII-free**: AppError.code만 노출/기록하고
+/// (예: "db.query") message/payload 본문은 절대 넣지 않는다. trace_id는 로그 상관용으로 stderr에만.
+/// stderr 기록(stdout 아님 — stdout은 MCP 프로토콜 전용)으로 삼킨 에러가 완전히 안 보이는 일은 없게 한다.
+fn db_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
+    eprintln!(
+        "[work-radar mcp-stdio] {tool} db error: code={} trace_id={}",
+        e.code, e.trace_id
+    );
+    rmcp::ErrorData::internal_error(format!("db error ({})", e.code), None)
 }
