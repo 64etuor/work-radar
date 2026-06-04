@@ -32,7 +32,7 @@ import {
 } from "../session/observer.ts";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
-import { parseConductorConfig, parseObserverConfig } from "./config.ts";
+import { parseAutoMode, parseConductorConfig, parseObserverConfig } from "./config.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import {
@@ -57,6 +57,8 @@ import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
+import { autoDispatch } from "../orchestrator/dispatch/dispatch.ts";
+import { listDispatchLog } from "../orchestrator/dispatch/project.ts";
 import { openStore } from "../graph/store.ts";
 import { rebuildIndex } from "../graph/ingest.ts";
 import {
@@ -495,6 +497,7 @@ if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 // 기본 = stub(결정적·git/cmux/fs 무접근 → CI 무변경). BOULE_CONDUCTOR_MODE=live 일 때만
 // 실제 git worktree + cmux 어댑터. 비결정(spawnSync/fs)은 이 경계에서만 주입(liveReviewer와 동형).
 const CONDUCTOR_CFG = parseConductorConfig(process.env);
+const AUTO_MODE = parseAutoMode(process.env.BOULE_AUTO_MODE);
 function buildConductorAdapter(): ConductorAdapter {
   if (!CONDUCTOR_CFG.live) return stubAdapter;
   const realSpawnSync: SpawnSyncLike = (cmd, args) => {
@@ -742,6 +745,45 @@ server.registerTool(
         (st.halted ? " HALTED" : ""),
     );
     return { content: [{ type: "text", text: [head, ...lines].join("\n") }] };
+  },
+);
+
+// ── Phase I: Narrow opt-in Type-2 auto dispatch ──────────────────────────────
+// One on-demand pass that can only fire conduct_plan for already-human-accepted plans.
+// It is verdict-free and writes no decision_* events.
+server.registerTool(
+  "auto_dispatch",
+  {
+    description:
+      "Phase I narrow opt-in Type-2 auto: one on-demand pass over human-accepted plans via conduct_plan. " +
+      "Refuses unless BOULE_AUTO_MODE=type2. Writes no decision_*.",
+    inputSchema: {},
+  },
+  async () => {
+    if (AUTO_MODE !== "type2") {
+      return { content: [{ type: "text", text: "auto disabled (set BOULE_AUTO_MODE=type2)" }] };
+    }
+    const s = await autoDispatch(WORKSPACE, { adapter: conductorAdapter }, AUTO_MODE, nowFn(), randFn());
+    return {
+      content: [
+        {
+          type: "text",
+          text: `dispatched: ${s.executed} executed, ${s.failed} failed, ${s.denied} denied, ${s.skipped} skipped`,
+        },
+      ],
+    };
+  },
+);
+
+server.registerTool(
+  "dispatch_log",
+  {
+    description: "Phase I read-only list of the auto-dispatch trail (instruction_planned + outcomes).",
+    inputSchema: {},
+  },
+  async () => {
+    const log = await listDispatchLog(WORKSPACE);
+    return { content: [{ type: "text", text: JSON.stringify(log, null, 2) }] };
   },
 );
 

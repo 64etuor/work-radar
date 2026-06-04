@@ -53,7 +53,13 @@ export type EventType =
   | "handoff_consumed"    // a fresh session hydrated from the bundle (terminal)
   // v3 Phase E: Orchestrator emits an advisory suggestion. suggestion-class — source/actor=system,
   // NO verdict. The ONLY new write permission in Phase E (master §4.1); dispatch events → Phase I.
-  | "orchestrator_suggestion_created";
+  | "orchestrator_suggestion_created"
+  // v3 Phase I: orchestrator execute half (narrow opt-in Type-2 auto). All four are
+  // verdict-free source/actor=system audit events. Dispatcher has no decision_* write-path.
+  | "instruction_planned"
+  | "orchestrator_action_executed"
+  | "orchestrator_action_failed"
+  | "action_denied";
 
 export type EventSource =
   | "git" | "github" | "agent_run" | "decisions_doc" | "adr" | "hermes" | "system"

@@ -9,6 +9,11 @@ Codex/규칙은 매트릭스 분류·승격 여부를 자동 확정하지 못한
 *힌트*일 뿐, 카드는 항상 `unclassified`로 진입한다. enrich/AI는 `suggestedArea`까지만
 제안하고 사람이 `area`로 확정/수정한다.
 
+> **Boule orchestrator dispatch rail.** Orchestrator/conductor/scheduler dispatch modules do not
+> have a `decision_*` write path. Type-1 boundaries reached by spawned work emit
+> `decision_blocked` and halt until a human resolves them; no timeout/default/self-resolve path.
+> Binding record: `docs/adr/0008-orchestrator-dispatch-decision-rail.md`.
+
 ## 2. 모든 외부 변경은 Acceptance 게이트
 
 Codex 출력이 Notion/GitHub를 직접 mutate하지 못한다. 사람이 accept해야 변경된다.

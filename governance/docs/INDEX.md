@@ -56,7 +56,7 @@ critic ACCEPT). **I = 설계+plan(critic ACCEPT)·구현 PARKED**(빌드는 명�
 | **F** | Graph index (PGlite; events+nodes+edges) | ✅ on dev (pgvector deferred) | `plans/2026-06-03-boule-v3-phase-f-graph-index.md` |
 | **G** | Context Steward / Handoff | ✅ on dev (vitest 418) | `plans/2026-06-03-boule-v3-phase-g-context-steward-handoff.md` |
 | **H** | Control Room UI (Slice 1) | ✅ Slice 1 on dev (라이브 GUI smoke 잔여) | `plans/2026-06-03-boule-v3-phase-h-control-room-ui.md` |
-| **I** | 좁은 opt-in auto (Type-2) | 📍 설계+plan ACCEPT · **구현 PARKED** | `plans/2026-06-03-boule-v3-phase-i-narrow-auto.md` |
+| **I** | 좁은 opt-in auto (Type-2) | ✅ Slice 1 DONE locally: `auto_dispatch`/`dispatch_log`, 4 dispatch events, impl-critic ACCEPT 0 blockers (`.omx/artifacts/claude-boule-phase-i-critic-20260604T054201Z.md`), governance `tsc --noEmit` 0 + vitest 441, bindings/migrations drift 0. Live cmux smoke remains user-run. | `plans/2026-06-03-boule-v3-phase-i-narrow-auto.md` |
 
 ## v1 잔여 (v3 critical path와 독립 — 언제든 마감 가능)
 

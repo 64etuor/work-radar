@@ -1,7 +1,7 @@
 # SSOT Governance Harness — Boule v3: Orchestrator Control Plane (consolidated design)
 
 - **Date**: 2026-06-02 (architecture) · **consolidated 2026-06-04**
-- **Status**: **Phases A–H Slice 1 BUILT and landed on `dev`** (governance line merge `2a5a9db`). **Phase I designed (spec rev.2 + plan, critic ACCEPT) but implementation PARKED.**
+- **Status**: **Phases A–H Slice 1 BUILT and landed on `dev`** (governance line merge `2a5a9db`). **Phase I Slice 1 DONE locally on `feat/boule-v3-phase-d` (impl-critic ACCEPT; live cmux smoke remains user-run).**
 - **Canonical**: **THIS file is the single v3 reference.** The per-phase design docs were folded in here (2026-06-04, §7 Phase Ledger); their detailed **implementation plans remain** in `governance/docs/plans/2026-06-0x-boule-v3-phase-*.md`. The v1/v2 design docs and pre-v3 slice specs are **historical** (kept in `design/`, see `INDEX.md`). Point AIs at this one file for v3 context.
 - **Parent designs (historical, folded)**:
   - `design/2026-05-31-ssot-governance-harness-design.md` (v1 — 5-layer SSOT, 7 agents, MCP, INVARIANTs)
@@ -329,20 +329,20 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
 
 ### Phase I — Narrow opt-in auto (Type-2 only)
 
-- **Status:** 📍 Designed (spec rev.2) + plan + plan/re-critic ACCEPT 0 blockers · **implementation PARKED (미빌드)** · **유일한 미빌드 Phase**
+- **Status:** ✅ Slice 1 DONE locally (2026-06-04) · impl-critic ACCEPT 0 blockers · no push/merge/deploy.
 - **Goal:** Orchestrator의 빈약한 *execute* half — opt-in·on-demand `auto_dispatch`가 사람-채택 plan을 Phase-C `conduct_plan`로 1스텝 자동 전진(deny-by-default, `decision_*` 0 mint).
 - **Depends-on:** E (read half), G (continuity) + envelope/conductor (C); A–G fold 재사용.
-- **Planned design (essence):**
+- **As-built design (essence):**
   - opt-in `BOULE_AUTO_MODE=type2`(기본 `off`); `off`⇒거부·방출 0(mode 레벨 deny-by-default).
   - on-demand 단일 패스 — `auto_dispatch`가 `active` plan을 순회해 ready한 것을 Phase-C `conduct_plan`로 **1스텝**(데몬/poll/watcher 없음, plan당 패스당 ≤1).
   - 순수 deny-by-default Safety Gate(`evaluateAutoDispatch`, G0–G3: mode→accepted→not-halted→ready-cursor)가 silent no-op 대신 설명된 `action_denied` 기록.
   - **conductor-advanceability**(사람-채택 plan) 기반, E 제안 기반 아님(E는 자문 유지; suggestion-mediated dispatch는 fork F2).
   - dispatch 감사 trail; dedup은 **materialization(`step_bound`)** 키(intent 이벤트 아님) → 부분실패가 스텝 poison 대신 재-dispatch(M2).
   - `decision_*` 0 write — 구조적(결정 핸들러 import 0) **+** negative test. timeout/default/skip 없음; Type-1 → spawn 세션 `decision_blocked` + 영속 halt. headless stdio MCP — UI 없음, `bindings.ts` byte-unchanged.
-- **Events/types added (planned):** `instruction_planned`·`orchestrator_action_executed`·`orchestrator_action_failed`·`action_denied` (verdict-free, `source/actor:"system"`).
+- **Events/types added:** `instruction_planned`·`orchestrator_action_executed`·`orchestrator_action_failed`·`action_denied` (verdict-free, `source/actor:"system"`).
 - **INVARIANT-#1 mechanism:** 4 독립 구조 가드 — (1) 결정 핸들러 import 0(verdict-tool 부재); (2) `active`⇔`plan_accepted`(actor user)로 사람-채택만; (3) opt-in 플래그는 dispatch를 게이트할 뿐 approval 아님 — `canApprove`/`canComplete`/`canAdvance`는 mode 인자 없음; (4) timeout-free 상속 halt-on-block.
-- **Implementation:** 미구현 — spec+plan만 커밋(`governance/src/orchestrator/dispatch/` 코드 없음). Build = TDD 5태스크(event types→순수 gate→config→IO shell→MCP wiring + 구조 negative) → 별도 impl-critic(opus) ACCEPT → 라이브 `BOULE_AUTO_MODE=type2`+`BOULE_CONDUCTOR_MODE=live` smoke(사용자).
-- **Deferred / next:** 빌드 자체(사용자 "build it" 게이트). forks: F1 hardened in-worktree path-glob; F2 suggestion-mediated dispatch(`(planId,stepIndex)` body 재사용); F4 Control Room dispatch 패널(H). ADR 후보: orchestrator/dispatcher 결정-레일(`decision_*` write-path 0)을 `docs/adr/` + `decision-rails.md` 한 줄로 승격.
+- **Implementation:** `governance/src/orchestrator/dispatch/{policy,dispatch,project}.ts`, `parseAutoMode`, `auto_dispatch`/`dispatch_log` MCP tools. TDD gates: targeted dispatch tests 23; full governance `tsc --noEmit` + `vitest` 441; `src/bindings.ts` and `src-tauri/migrations` drift 0. Impl-critic ACCEPT artifact: `.omx/artifacts/claude-boule-phase-i-critic-20260604T054201Z.md`. ADR: `docs/adr/0008-orchestrator-dispatch-decision-rail.md`.
+- **Deferred / next:** live `BOULE_AUTO_MODE=type2`+`BOULE_CONDUCTOR_MODE=live` smoke remains user/cmux-run. forks: F1 hardened in-worktree path-glob; F2 suggestion-mediated dispatch(`(planId,stepIndex)` body 재사용); F4 Control Room dispatch 패널(H).
 
 ---
 
@@ -367,7 +367,7 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
 | **F** | Graph index (PGlite; events+nodes+edges)             | E (corpus-driven) | **여기** | 없음     | ✅ on dev (pgvector deferred) |
 | **G** | Context Steward / Handoff continuity                 | E                 | —        | 없음     | ✅ on dev                     |
 | **H** | Control Room UI (4 패널, specta IPC)                 | E,F,G             | —        | **여기** | ✅ Slice 1 on dev (라이브 GUI smoke 잔여) |
-| **I** | 좁은 opt-in auto (Type-2·in-envelope만)             | E,G + envelope(C) | —        | —        | 📍 designed, **impl PARKED**  |
+| **I** | 좁은 opt-in auto (Type-2·in-envelope만)             | E,G + envelope(C) | —        | —        | ✅ Slice 1 DONE locally (live smoke 잔여) |
 
 점진 도입 — 막히는 지점에서만 다음 계층. 각 Phase는 별도 spec + plan + critic ACCEPT(별도 패스, self-approve 금지) 후 다음.
 
@@ -379,7 +379,7 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
 - **task(A):** `task_started`·`task_blocked`·`task_completed`·`task_cancelled`
 - **conductor(C):** `step_bound`·`session_spawned`
 - **session(D):** `session_open_requested`·`session_opened`·`session_observed`·`session_waiting`·`session_blocked`·`session_context_pressure_changed`·`session_checkpoint_requested`·`session_handoff_ready`·`session_close_requested`·`session_closed`·`session_crashed`·`session_recovered`
-- **orchestrator(E):** `orchestrator_suggestion_created`
+- **orchestrator(E/I):** `orchestrator_suggestion_created`; `instruction_planned`·`orchestrator_action_executed`·`orchestrator_action_failed`·`action_denied`
 - **handoff(G):** `handoff_requested`·`handoff_drafted`·`handoff_validated`·`handoff_invalid`·`handoff_consumed`
 - **auto-dispatch(I, planned):** `instruction_planned`·`orchestrator_action_executed`·`orchestrator_action_failed`·`action_denied`
 
