@@ -9,3 +9,11 @@ export async function rebuildIndex(workspaceDir: string, store: GraphStore): Pro
   await store.rebuild(projectGraph(events));
   return store.status();
 }
+
+/** Incremental sync: load markdown events → pure projection → store.upsert. This keeps the
+ *  PGlite cache equivalent to rebuild without TRUNCATE, and still writes ZERO L0 events. */
+export async function upsertIndex(workspaceDir: string, store: GraphStore): Promise<IndexStatus> {
+  const events = await readAllEvents(workspaceDir);
+  await store.upsert(projectGraph(events));
+  return store.status();
+}

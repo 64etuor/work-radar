@@ -53,7 +53,7 @@ critic ACCEPT). **I = 설계+plan(critic ACCEPT)·구현 PARKED**(빌드는 명�
 | **C** | Conductor + autonomy-envelope | ✅ on dev | `plans/2026-06-02-boule-v3-phase-c-conductor.md` (+ `...-phase-c-live-smoke-runbook.md`) |
 | **D** | Session Registry + cmux Observer | ✅ on dev | `plans/2026-06-03-boule-v3-phase-d-session-registry.md` (+ `...-observer-live-adapter-fix.md`) |
 | **E** | Orchestrator projector (observe/suggest) | ✅ on dev | `plans/2026-06-03-boule-v3-phase-e-orchestrator-projector.md` |
-| **F** | Graph index (PGlite; events+nodes+edges) | ✅ on dev (pgvector deferred) | `plans/2026-06-03-boule-v3-phase-f-graph-index.md` |
+| **F** | Graph index (PGlite; events+nodes+edges) | ✅ on dev + incremental upsert follow-up DONE locally (checksum-equivalent to rebuild; pgvector deferred) | `plans/2026-06-03-boule-v3-phase-f-graph-index.md` |
 | **G** | Context Steward / Handoff | ✅ on dev (vitest 418) | `plans/2026-06-03-boule-v3-phase-g-context-steward-handoff.md` |
 | **H** | Control Room UI (Slice 1) | ✅ Slice 1 on dev (라이브 GUI smoke 잔여) | `plans/2026-06-03-boule-v3-phase-h-control-room-ui.md` |
 | **I** | 좁은 opt-in auto (Type-2) | ✅ Slice 1 DONE locally: `auto_dispatch`/`dispatch_log`, 4 dispatch events, impl-critic ACCEPT 0 blockers (`.omx/artifacts/claude-boule-phase-i-critic-20260604T054201Z.md`), governance `tsc --noEmit` 0 + vitest 441, bindings/migrations drift 0. Live cmux smoke remains user-run. | `plans/2026-06-03-boule-v3-phase-i-narrow-auto.md` |
@@ -66,7 +66,7 @@ critic ACCEPT). **I = 설계+plan(critic ACCEPT)·구현 PARKED**(빌드는 명�
 | P4 Slice 1 계획 | Hypothesis Tester markdown loop | ✅ executed: `plans/2026-06-04-ssot-governance-harness-p4-hypothesis-tester.md` |
 | P5 메타 관찰 | Meta Observer | ✅ Slice 2 DONE locally: pure `meta_observe` proposal-draft renderer now includes stable source ids/relative links, grouped evidence counts, limitations, and exact external residual for human-reviewed PR conversion. Static MCP block still proves no verdict/write surface. Plan: `plans/2026-06-04-ssot-governance-harness-p5-meta-observer.md` |
 | P6 망각·정합성 | Archive Pruner | ✅ Slice 2 DONE locally: Slice 1 hypothesis-only `archive_prune`/`archive_status` preserved; added deterministic read-only stale pattern/event policy (`archive_policy_status`) with age+count classification and 0 L0/pattern delete/move. governance targeted P6 tests green; full gate rerun pending this checkpoint. Long-running scheduler remains external residual. Plan: `plans/2026-06-04-ssot-governance-harness-p6-archive-pruner.md` |
-| P3 Postgres/pgvector | (인덱스) | ✅ v3 Phase F first cut DONE (events+nodes+edges, PGlite; pgvector 임베딩만 잔여) |
+| P3 Postgres/pgvector | (인덱스) | ✅ v3 Phase F follow-up DONE locally: PGlite `upsertIndex` sync path matches full rebuild checksum after appends; real Postgres/keyring and pgvector embeddings remain external/deferred. |
 
 ## 다음 실행 큐 (Continuation Master Plan)
 
@@ -80,6 +80,6 @@ human-approved PR, push/merge/delete/deploy가 필요한 작업은 external resi
 | --- | --- | --- | --- |
 | 1 | P6 Slice 2 — stale pattern/event policy | local | ✅ done locally (read-only classifier + MCP status; no deletion/move) |
 | 2 | P5 Slice 2 — Meta Observer draft hardening | local | ✅ done locally (review-ready draft; propose-only preserved) |
-| 3 | Phase F follow-up — PGlite incremental graph upsert | local, higher blast radius | 🆕 next |
-| 4 | Phase I/H live smoke preflight + runbook hardening | local preflight only | 🆕 queued |
+| 3 | Phase F follow-up — PGlite incremental graph upsert | local, higher blast radius | ✅ done locally (upsert checksum == rebuild) |
+| 4 | Phase I/H live smoke preflight + runbook hardening | local preflight only | 🆕 next |
 | external | P5 human PR, live cmux/GUI smoke, real Postgres/keyring, pgvector, long-running schedule | needs user/live surface | external residual |

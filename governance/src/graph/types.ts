@@ -47,6 +47,7 @@ export interface IndexStatus {
 
 export interface GraphStore {
   rebuild(p: GraphProjection): Promise<void>;
+  upsert(p: GraphProjection): Promise<void>;
   status(): Promise<IndexStatus>;
   getNode(id: string): Promise<NodeRow | null>;
   getNeighbors(id: string): Promise<{ node: NodeRow; edges: EdgeRow[]; neighbors: NodeRow[] } | null>;

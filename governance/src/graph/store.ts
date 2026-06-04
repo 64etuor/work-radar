@@ -48,24 +48,15 @@ export async function openStore(loc: string): Promise<GraphStore> {
     async rebuild(p: GraphProjection) {
       await db.transaction(async (tx) => {
         await tx.exec("TRUNCATE events; TRUNCATE nodes; TRUNCATE edges;");
-        for (const e of p.events) {
-          await tx.query(
-            "INSERT INTO events (event_id,content_hash,event_type,occurred_at,actor,source,subject_type,subject_id,authority_decision_id,payload_jsonb) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
-            [e.event_id, e.content_hash, e.event_type, e.occurred_at, e.actor, e.source, e.subject_type, e.subject_id, e.authority_decision_id, JSON.stringify(e.payload_jsonb)],
-          );
-        }
-        for (const n of p.nodes) {
-          await tx.query(
-            "INSERT INTO nodes (node_id,node_type,canonical_id,title,state_jsonb) VALUES ($1,$2,$3,$4,$5)",
-            [n.node_id, n.node_type, n.canonical_id, n.title, JSON.stringify(n.state_jsonb)],
-          );
-        }
-        for (const g of p.edges) {
-          await tx.query(
-            "INSERT INTO edges (edge_id,from_node_id,to_node_id,edge_type,source_event_id) VALUES ($1,$2,$3,$4,$5)",
-            [g.edge_id, g.from_node_id, g.to_node_id, g.edge_type, g.source_event_id],
-          );
-        }
+        await insertOrUpdateProjection(tx, p);
+      });
+    },
+    async upsert(p: GraphProjection) {
+      await db.transaction(async (tx) => {
+        await insertOrUpdateProjection(tx, p);
+        await deleteMissing(tx, "edges", "edge_id", p.edges.map((g) => g.edge_id));
+        await deleteMissing(tx, "nodes", "node_id", p.nodes.map((n) => n.node_id));
+        await deleteMissing(tx, "events", "event_id", p.events.map((e) => e.event_id));
       });
     },
     async status(): Promise<IndexStatus> {
@@ -86,4 +77,41 @@ export async function openStore(loc: string): Promise<GraphStore> {
     },
     async close() { await db.close(); },
   };
+}
+
+async function insertOrUpdateProjection(
+  tx: { query<T = unknown>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> },
+  p: GraphProjection,
+): Promise<void> {
+  for (const e of p.events) {
+    await tx.query(
+      "INSERT INTO events (event_id,content_hash,event_type,occurred_at,actor,source,subject_type,subject_id,authority_decision_id,payload_jsonb) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (event_id) DO UPDATE SET content_hash=EXCLUDED.content_hash,event_type=EXCLUDED.event_type,occurred_at=EXCLUDED.occurred_at,actor=EXCLUDED.actor,source=EXCLUDED.source,subject_type=EXCLUDED.subject_type,subject_id=EXCLUDED.subject_id,authority_decision_id=EXCLUDED.authority_decision_id,payload_jsonb=EXCLUDED.payload_jsonb",
+      [e.event_id, e.content_hash, e.event_type, e.occurred_at, e.actor, e.source, e.subject_type, e.subject_id, e.authority_decision_id, JSON.stringify(e.payload_jsonb)],
+    );
+  }
+  for (const n of p.nodes) {
+    await tx.query(
+      "INSERT INTO nodes (node_id,node_type,canonical_id,title,state_jsonb) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (node_id) DO UPDATE SET node_type=EXCLUDED.node_type,canonical_id=EXCLUDED.canonical_id,title=EXCLUDED.title,state_jsonb=EXCLUDED.state_jsonb",
+      [n.node_id, n.node_type, n.canonical_id, n.title, JSON.stringify(n.state_jsonb)],
+    );
+  }
+  for (const g of p.edges) {
+    await tx.query(
+      "INSERT INTO edges (edge_id,from_node_id,to_node_id,edge_type,source_event_id) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (edge_id) DO UPDATE SET from_node_id=EXCLUDED.from_node_id,to_node_id=EXCLUDED.to_node_id,edge_type=EXCLUDED.edge_type,source_event_id=EXCLUDED.source_event_id",
+      [g.edge_id, g.from_node_id, g.to_node_id, g.edge_type, g.source_event_id],
+    );
+  }
+}
+
+async function deleteMissing(
+  tx: { query<T = unknown>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> },
+  table: string,
+  column: string,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) {
+    await tx.query(`DELETE FROM ${table}`);
+    return;
+  }
+  await tx.query(`DELETE FROM ${table} WHERE NOT (${column} = ANY($1))`, [ids]);
 }

@@ -290,10 +290,11 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
   - 테이블 `events`+`nodes`+`edges`; `EdgeRow` 투영이 `supersedes`/`step_of`/`blocks`/`related_to`/`refs` 커버(결정적 sha256 edge id).
   - 순수 total `projectGraph(events)`가 per-axis fold 재사용(I/O·방출 0, god-fold 금지); PGlite는 dumb persistence.
   - rebuild = `TRUNCATE; bulk-insert` 단일 txn, 멱등(재실행→동일 checksum); `status()`가 DB-read 행에서 checksum 재계산 → **DB == pure projection**(keystone). 파생 캐시(정본 아님), 앱 SQLite와 별도 스토어.
+  - follow-up incremental path: `upsertIndex` reads the same pure projection and syncs rows with `INSERT ... ON CONFLICT DO UPDATE` + stale-row delete inside one PGlite txn. Targeted test proves append-driven upsert checksum/status equals full rebuild.
 - **Events/types added:** 없음 (read-only 투영).
 - **INVARIANT-#1/#6 mechanism:** #1 — read-only 파생 캐시, `decision_*`/L0 write-path 0; `projectGraph` 순수 + negative test가 ingest의 이벤트 파일 생성 0(content-stable) 검증. #6 — governance 인덱스는 **별도 PGlite 스토어**, 앱 SQLite/마이그레이션 무변경; `bindings.ts` byte-unchanged(#4).
 - **Code:** `governance/src/graph/{types,checksum,project,schema,store,ingest}.ts` + MCP `rebuild_index`/`index_status`/`graph_node`/`graph_neighbors`.
-- **Deferred:** pgvector 임베딩(코퍼스 driven), `approvals`·`session_observations` 테이블, incremental upsert, 실 Postgres 서버 + keyring creds, Control Room consumer(H).
+- **Deferred:** pgvector 임베딩(코퍼스 driven), `approvals`·`session_observations` 테이블, 실 Postgres 서버 + keyring creds, Control Room consumer(H).
 
 ### Phase G — Context Steward / Handoff
 
@@ -364,7 +365,7 @@ edges(edge_id, from_node_id, to_node_id, edge_type ENUM(related_to|supersedes|re
 | **C** | Conductor + autonomy-envelope (cmux 1-step spawn)    | B + escalation    | 없음     | 없음     | ✅ on dev                     |
 | **D** | Session Registry + cmux Observer (read-only)         | C                 | 없음     | 없음     | ✅ on dev                     |
 | **E** | Orchestrator projector — observe/suggest only        | A,B,C,D           | 없음     | 없음     | ✅ on dev                     |
-| **F** | Graph index (PGlite; events+nodes+edges)             | E (corpus-driven) | **여기** | 없음     | ✅ on dev (pgvector deferred) |
+| **F** | Graph index (PGlite; events+nodes+edges)             | E (corpus-driven) | **여기** | 없음     | ✅ on dev + incremental upsert follow-up (pgvector deferred) |
 | **G** | Context Steward / Handoff continuity                 | E                 | —        | 없음     | ✅ on dev                     |
 | **H** | Control Room UI (4 패널, specta IPC)                 | E,F,G             | —        | **여기** | ✅ Slice 1 on dev (라이브 GUI smoke 잔여) |
 | **I** | 좁은 opt-in auto (Type-2·in-envelope만)             | E,G + envelope(C) | —        | —        | ✅ Slice 1 DONE locally (live smoke 잔여) |
