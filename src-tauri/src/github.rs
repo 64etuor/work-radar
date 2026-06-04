@@ -30,6 +30,11 @@ const PER_PAGE: u8 = 50;
 const MERGED_RECENT_DAYS: i64 = 14;
 /// PR diff 텍스트 상한(바이트). codex 컨텍스트 bound — 초과분은 잘라 표시(INVARIANT #5 정신).
 pub const MAX_PR_DIFF_BYTES: usize = 256 * 1024;
+/// 쓰기(POST) 재시도 횟수 = 1(재시도 안 함). 코멘트/이슈 생성은 **멱등하지 않다** — 요청이 GitHub에
+/// 도달한 뒤 응답만 유실되면(transport drop=transient 분류) 재시도가 **중복 외부 쓰기**(코멘트 2개)를
+/// 낸다. 게이트 idempotency_key는 *제안* dedup이지 API 콜 dedup이 아니다. 따라서 쓰기는 재시도 대신
+/// 실패를 노출해 사용자가 재제안하게 한다(중복 mutation보다 안전). read 경로는 MAX_ATTEMPTS 유지.
+const WRITE_MAX_ATTEMPTS: u32 = 1;
 
 /// 외부 fetch 실패 분류. Transient = 재시도 대상(네트워크·429·5xx),
 /// Terminal = 재시도 무의미(인증/권한/검증 등 4xx, 디코드 실패).
@@ -359,6 +364,120 @@ impl PrProvider for HttpPrProvider {
     }
 }
 
+// ── External Action Gate: GitHub WRITE 커넥터(Phase 2) ───────────────────────────
+// 제안은 MCP/사용자가 만들고, 실행은 승인 후 여기서만(Rust·토큰 keychain·bounded retry).
+// `GithubWriter`는 `PrProvider`(read)와 대칭 seam — mock impl로 네트워크 없이 dispatch 검증.
+
+/// 외부 쓰기 결과 메타(식별자/크기만 — 본문/시크릿 금지). 커넥터가 반환해 audit/result에 기록.
+pub struct GithubWriteOutcome {
+    /// 생성된 리소스 식별 URL(코멘트/이슈) — 식별자만.
+    pub external_ref: Option<String>,
+    /// 보낸 본문 크기 힌트(bytes). PII 아님.
+    pub bytes: Option<i64>,
+}
+
+/// GitHub 쓰기 seam. 실 impl=`HttpPrProvider`(octocrab), 테스트=mock.
+pub trait GithubWriter {
+    /// 이슈/PR(`owner/repo`, `issue_number`)에 코멘트를 단다(bounded retry).
+    fn create_issue_comment(
+        &self,
+        repo_full_name: &str,
+        issue_number: u64,
+        body: &str,
+    ) -> impl std::future::Future<Output = Result<GithubWriteOutcome, GithubError>> + Send;
+
+    /// 이슈를 생성한다(bounded retry).
+    fn create_issue(
+        &self,
+        repo_full_name: &str,
+        title: &str,
+        body: &str,
+    ) -> impl std::future::Future<Output = Result<GithubWriteOutcome, GithubError>> + Send;
+}
+
+impl GithubWriter for HttpPrProvider {
+    async fn create_issue_comment(
+        &self,
+        repo_full_name: &str,
+        issue_number: u64,
+        body: &str,
+    ) -> Result<GithubWriteOutcome, GithubError> {
+        let (owner, repo) = parse_owner_repo(repo_full_name).ok_or_else(|| {
+            GithubError::Terminal(format!("레포 형식 파싱 실패: {repo_full_name}"))
+        })?;
+        let comment = with_retry(WRITE_MAX_ATTEMPTS, BASE_DELAY, |_| async {
+            self.octo
+                .issues(owner.as_str(), repo.as_str())
+                .create_comment(issue_number, body)
+                .await
+                .map_err(|e| classify_octocrab(&e))
+        })
+        .await?;
+        Ok(GithubWriteOutcome {
+            external_ref: Some(comment.html_url.to_string()),
+            bytes: Some(body.len() as i64),
+        })
+    }
+
+    async fn create_issue(
+        &self,
+        repo_full_name: &str,
+        title: &str,
+        body: &str,
+    ) -> Result<GithubWriteOutcome, GithubError> {
+        let (owner, repo) = parse_owner_repo(repo_full_name).ok_or_else(|| {
+            GithubError::Terminal(format!("레포 형식 파싱 실패: {repo_full_name}"))
+        })?;
+        let issue = with_retry(WRITE_MAX_ATTEMPTS, BASE_DELAY, |_| async {
+            self.octo
+                .issues(owner.as_str(), repo.as_str())
+                .create(title)
+                .body(body)
+                .send()
+                .await
+                .map_err(|e| classify_octocrab(&e))
+        })
+        .await?;
+        Ok(GithubWriteOutcome {
+            external_ref: Some(issue.html_url.to_string()),
+            bytes: Some((title.len() + body.len()) as i64),
+        })
+    }
+}
+
+/// 승인된 GitHub 액션을 적절한 writer 메서드로 dispatch한다. 키체인/네트워크 없는 **순수 dispatch**
+/// (mock writer로 단위 테스트 가능). 비-GitHub 액션은 호출 측 라우터가 거르지만 방어적으로 거부한다.
+pub(crate) async fn execute_github_action<W: GithubWriter>(
+    writer: &W,
+    action: &crate::external_actions::ExternalAction,
+) -> Result<crate::external_actions::ExecOutcome, crate::error::AppError> {
+    use crate::external_actions::ExternalAction;
+    let outcome = match action {
+        ExternalAction::GithubIssueComment {
+            repo,
+            issue_number,
+            body,
+        } => {
+            writer
+                .create_issue_comment(repo, *issue_number, body)
+                .await?
+        }
+        ExternalAction::GithubCreateIssue { repo, title, body } => {
+            writer.create_issue(repo, title, body).await?
+        }
+        other => {
+            return Err(crate::error::AppError::unexpected(
+                "github.dispatch.kind",
+                format!("GitHub 커넥터가 처리할 수 없는 액션: {}", other.kind_str()),
+            ));
+        }
+    };
+    Ok(crate::external_actions::ExecOutcome {
+        external_ref: outcome.external_ref,
+        bytes: outcome.bytes,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,5 +579,93 @@ mod tests {
             Some(("64etuor".into(), "work-radar".into()))
         );
         assert_eq!(parse_owner_repo("not-a-repo"), None);
+    }
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+    use crate::external_actions::ExternalAction;
+    use std::sync::Mutex;
+
+    /// 네트워크 없는 mock writer — 호출 인자를 기록해 dispatch 라우팅을 검증한다.
+    #[derive(Default)]
+    struct MockWriter {
+        comment_calls: Mutex<Vec<(String, u64, String)>>,
+        issue_calls: Mutex<Vec<(String, String, String)>>,
+    }
+    impl GithubWriter for MockWriter {
+        async fn create_issue_comment(
+            &self,
+            repo: &str,
+            issue_number: u64,
+            body: &str,
+        ) -> Result<GithubWriteOutcome, GithubError> {
+            self.comment_calls
+                .lock()
+                .unwrap()
+                .push((repo.into(), issue_number, body.into()));
+            Ok(GithubWriteOutcome {
+                external_ref: Some("https://gh/comment/1".into()),
+                bytes: Some(body.len() as i64),
+            })
+        }
+        async fn create_issue(
+            &self,
+            repo: &str,
+            title: &str,
+            body: &str,
+        ) -> Result<GithubWriteOutcome, GithubError> {
+            self.issue_calls
+                .lock()
+                .unwrap()
+                .push((repo.into(), title.into(), body.into()));
+            Ok(GithubWriteOutcome {
+                external_ref: Some("https://gh/issue/2".into()),
+                bytes: Some((title.len() + body.len()) as i64),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn dispatch_routes_issue_comment_to_writer() {
+        let w = MockWriter::default();
+        let action = ExternalAction::GithubIssueComment {
+            repo: "o/r".into(),
+            issue_number: 7,
+            body: "hi".into(),
+        };
+        let out = execute_github_action(&w, &action).await.unwrap();
+        assert_eq!(out.external_ref.as_deref(), Some("https://gh/comment/1"));
+        assert_eq!(out.bytes, Some(2));
+        assert_eq!(
+            w.comment_calls.lock().unwrap().as_slice(),
+            &[("o/r".to_string(), 7u64, "hi".to_string())]
+        );
+        assert!(w.issue_calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn dispatch_routes_create_issue_to_writer() {
+        let w = MockWriter::default();
+        let action = ExternalAction::GithubCreateIssue {
+            repo: "o/r".into(),
+            title: "T".into(),
+            body: "B".into(),
+        };
+        let out = execute_github_action(&w, &action).await.unwrap();
+        assert_eq!(out.external_ref.as_deref(), Some("https://gh/issue/2"));
+        assert_eq!(
+            w.issue_calls.lock().unwrap().as_slice(),
+            &[("o/r".to_string(), "T".to_string(), "B".to_string())]
+        );
+        assert!(w.comment_calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn dispatch_rejects_non_github_action() {
+        let w = MockWriter::default();
+        let action = ExternalAction::Noop { note: "x".into() };
+        assert!(execute_github_action(&w, &action).await.is_err());
     }
 }

@@ -256,6 +256,21 @@ pub(crate) async fn status(pool: &Db, action_id: &str) -> Result<Option<String>,
     Ok(s)
 }
 
+/// 액션의 `project_ref`(=credential_ref) 조회 — 커넥터가 토큰을 **그 프로젝트로만** resolve하기
+/// 위해 사용(전역 토큰 금지, 개인/업무 격리). 행/값 없으면 None. `Acceptance::action_id()`로 호출.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) async fn project_ref_for(
+    pool: &Db,
+    action_id: &str,
+) -> Result<Option<String>, AppError> {
+    let r: Option<Option<String>> =
+        sqlx::query_scalar("SELECT project_ref FROM external_actions WHERE id = ?1")
+            .bind(action_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(r.flatten())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

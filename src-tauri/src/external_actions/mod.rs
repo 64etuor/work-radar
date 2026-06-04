@@ -20,13 +20,27 @@ use specta::Type;
 pub enum ExternalAction {
     /// Phase 0 라운드트립/테스트용 no-op. 커넥터 PR에서 실 변형으로 대체/확장.
     Noop { note: String },
+    /// GitHub 이슈/PR에 코멘트(Phase 2 write). `repo`="owner/repo", `issue_number`=이슈/PR 번호.
+    GithubIssueComment {
+        repo: String,
+        issue_number: u64,
+        body: String,
+    },
+    /// GitHub 이슈 생성(Phase 2 write).
+    GithubCreateIssue {
+        repo: String,
+        title: String,
+        body: String,
+    },
 }
 
 impl ExternalAction {
-    /// DB `kind` 컬럼 문자열(예: "noop", 후속 "github.comment").
+    /// DB `kind` 컬럼 문자열(dispatch/표시 라벨 — payload JSON의 serde 태그와는 별개).
     pub fn kind_str(&self) -> &'static str {
         match self {
             ExternalAction::Noop { .. } => "noop",
+            ExternalAction::GithubIssueComment { .. } => "github.issue_comment",
+            ExternalAction::GithubCreateIssue { .. } => "github.create_issue",
         }
     }
 }
