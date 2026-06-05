@@ -33,6 +33,22 @@ pub(crate) async fn execute_gmail_action<P: crate::gmail::GmailProvider>(
                     "제목이 비었습니다",
                 ));
             }
+            // build_raw_message의 doc은 수신자 주소 well-formedness를 게이트에 명시적으로 위임한다.
+            // 여기서 그 계약을 이행한다 — 단일 수신자만 지원하고 최소 형식 검증을 통과해야 한다.
+            // 정적 사유만 노출(INVARIANT #7): to를 메시지에 보간하지 않는다.
+            let to_trimmed = to.trim();
+            if to_trimmed.contains(',') {
+                return Err(AppError::validation(
+                    "gmail.multi_recipient",
+                    "수신자는 한 명만 지원합니다 (쉼표 불가)",
+                ));
+            }
+            if !is_plausible_email(to_trimmed) {
+                return Err(AppError::validation(
+                    "gmail.invalid_recipient",
+                    "수신자 이메일 형식이 올바르지 않습니다",
+                ));
+            }
             // US-002 빌더가 헤더 인젝션(\r\n 등)을 하드 거부하고 base64url raw를 만든다(GmailError→AppError).
             let raw = crate::gmail::build_raw_message(to, subject, body)?;
             // 비멱등 send → 단일 시도(send_message_once). 중복 발송 방지(WRITE_MAX_ATTEMPTS=1).
@@ -50,6 +66,22 @@ pub(crate) async fn execute_gmail_action<P: crate::gmail::GmailProvider>(
             format!("Gmail 커넥터가 처리할 수 없는 액션: {}", other.kind_str()),
         )),
     }
+}
+
+/// 최소·보수적 단일-수신자 이메일 형식 검증(순수). 일반 주소를 거부하지 않도록 느슨하게:
+/// `@`가 정확히 1개, local part 비어있지 않음, domain은 `.`을 포함하고 모든 label이 비어있지 않음.
+/// (전체 RFC 5322 검증이 아니다 — 명백히 잘못된 입력만 거른다. 쉼표=다중 수신자는 호출 측에서 선행 거부.)
+fn is_plausible_email(to: &str) -> bool {
+    let mut parts = to.split('@');
+    let (Some(local), Some(domain), None) = (parts.next(), parts.next(), parts.next()) else {
+        return false; // `@`가 정확히 1개가 아님
+    };
+    if local.is_empty() {
+        return false;
+    }
+    // domain은 최소 2개 label(점 1개 이상) + 각 label 비어있지 않음(선행/후행/연속 점 거부).
+    let labels: Vec<&str> = domain.split('.').collect();
+    labels.len() >= 2 && labels.iter().all(|l| !l.is_empty())
 }
 
 #[cfg(test)]
@@ -77,14 +109,6 @@ mod gmail_dispatch_tests {
         }
         async fn refresh_access(&self, _creds: &GmailCreds) -> Result<TokenResponse, GmailError> {
             unreachable!("dispatch 테스트는 refresh를 호출하지 않음")
-        }
-        async fn send_message(
-            &self,
-            _access_token: &str,
-            _raw: &str,
-        ) -> Result<String, GmailError> {
-            // gate dispatch는 비멱등이라 send_message(bounded retry)가 아니라 send_message_once를 써야 한다.
-            unreachable!("gate dispatch는 send_message_once를 써야 함(중복 발송 방지)")
         }
         async fn send_message_once(
             &self,
@@ -210,6 +234,65 @@ mod gmail_dispatch_tests {
         assert!(
             p.calls.lock().unwrap().is_empty(),
             "검증 실패 시 send 0(provider 미호출)"
+        );
+    }
+
+    /// is_plausible_email: 정상 주소는 통과, 명백히 잘못된 입력은 거부(보수적 — 일반 주소 비차단).
+    #[test]
+    fn is_plausible_email_cases() {
+        use super::is_plausible_email;
+        // 통과해야 하는 정상 주소들.
+        assert!(is_plausible_email("a@b.com"));
+        assert!(is_plausible_email("leak@x.test"));
+        assert!(is_plausible_email("user.name+tag@sub.example.co.kr"));
+        // 거부: @ 없음 / 0개·2개, local 비어있음, domain에 점 없음/빈 label.
+        assert!(!is_plausible_email("notanemail"));
+        assert!(!is_plausible_email("a@@b.com"));
+        assert!(!is_plausible_email("a@b@c.com"));
+        assert!(!is_plausible_email("@b.com"));
+        assert!(!is_plausible_email("a@bcom"));
+        assert!(!is_plausible_email("a@.com"));
+        assert!(!is_plausible_email("a@b."));
+        assert!(!is_plausible_email("a@b..com"));
+    }
+
+    /// 다중 수신자(쉼표)는 외부 호출 전에 거부 — 단일 수신자만 지원(provider 미호출). 정적 사유만.
+    #[tokio::test]
+    async fn dispatch_rejects_multi_recipient_before_send() {
+        let p = MockGmailProvider::default();
+        let action = ExternalAction::GmailSendEmail {
+            to: "a@b.com, c@d.com".into(),
+            subject: "subj".into(),
+            body: "b".into(),
+        };
+        let err = execute_gmail_action(&p, "tok", &action).await.unwrap_err();
+        assert_eq!(err.code, "gmail.multi_recipient");
+        assert!(
+            p.calls.lock().unwrap().is_empty(),
+            "거부 시 provider 미호출"
+        );
+    }
+
+    /// 형식이 잘못된 수신자는 외부 호출 전에 거부(provider 미호출). 수신자가 에러 메시지에 새지 않는다(#7).
+    #[tokio::test]
+    async fn dispatch_rejects_invalid_recipient_before_send_without_leak() {
+        let p = MockGmailProvider::default();
+        let action = ExternalAction::GmailSendEmail {
+            to: "notanemail".into(),
+            subject: "subj".into(),
+            body: "b".into(),
+        };
+        let err = execute_gmail_action(&p, "tok", &action).await.unwrap_err();
+        assert_eq!(err.code, "gmail.invalid_recipient");
+        // INVARIANT #7: 수신자 문자열이 정적 사유 메시지에 보간되면 안 된다.
+        assert!(
+            !err.message.contains("notanemail"),
+            "수신자가 에러 메시지에 새면 안 됨: {}",
+            err.message
+        );
+        assert!(
+            p.calls.lock().unwrap().is_empty(),
+            "거부 시 provider 미호출"
         );
     }
 

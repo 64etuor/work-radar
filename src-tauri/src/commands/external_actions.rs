@@ -102,9 +102,10 @@ impl ExternalActionRouter<'_> {
     /// 미연결(creds/refresh 없음)은 not_connected로 노출.
     async fn gmail_access(&self, action_id: &str) -> Result<String, AppError> {
         let cref = self.cref_for_action(action_id).await?;
+        // access_token_for_cref는 AppError를 직접 산출한다 — refresh-time ReconnectRequired가
+        // forbidden+'Gmail 재연결' nav로 보존되도록 `?`로 전파한다(generic terminal로 flatten 금지).
         crate::gmail::access_token_for_cref(&cref)
-            .await
-            .map_err(|e| AppError::terminal("gmail.access_token", e))?
+            .await?
             .ok_or_else(|| {
                 AppError::not_found("gmail.not_connected", "미연결 — 먼저 Gmail을 연결하세요")
             })

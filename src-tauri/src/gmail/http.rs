@@ -43,6 +43,20 @@ pub(super) fn classify_http(status: u16, body: &str) -> GmailError {
     }
 }
 
+/// 토큰 엔드포인트(exchange_code/refresh_access) 비-2xx 응답 분류. 순수.
+/// status 400 + body가 `invalid_grant`(refresh_token 취소/만료 신호)면 ReconnectRequired —
+/// 사용자가 Google에서 앱 접근을 취소하면 refresh가 400/invalid_grant로 오므로 재연결 유도가 필요하다.
+/// 그 외 비-2xx는 `classify_http`(429/5xx=Transient, 4xx=Terminal).
+/// **body는 분류용으로만 검사**한다 — 반환 메시지는 정적 문자열만(INVARIANT #7, body 미노출).
+/// send-path 403(rate-limit 가능)은 여기 대상이 아니다 — send는 `classify_http` 유지.
+pub(super) fn classify_token_error(status: u16, body: &str) -> GmailError {
+    if status == 400 && body.contains("invalid_grant") {
+        GmailError::ReconnectRequired("Gmail 재연결이 필요합니다 (자격 증명이 만료/취소됨)".into())
+    } else {
+        classify_http(status, body)
+    }
+}
+
 /// reqwest 전송 에러 → 분류. 네트워크/타임아웃은 일시적, 디코드 실패는 영구.
 pub(super) fn classify_reqwest(e: &reqwest::Error) -> GmailError {
     if e.is_decode() {
@@ -88,7 +102,9 @@ impl HttpGmailProvider {
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
         if !(200..300).contains(&status) {
-            return Err(classify_http(status, &body));
+            // 400 + invalid_grant → ReconnectRequired(재연결 nav), 그 외 → classify_http. body는
+            // 분류용으로만 검사하고 메시지엔 넣지 않는다(INVARIANT #7).
+            return Err(classify_token_error(status, &body));
         }
         let json: serde_json::Value = serde_json::from_str(&body)
             .map_err(|e| GmailError::Terminal(format!("token parse: {e}")))?;
@@ -153,16 +169,9 @@ impl GmailProvider for HttpGmailProvider {
         with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| self.post_token(&form)).await
     }
 
-    async fn send_message(&self, access_token: &str, raw: &str) -> Result<String, GmailError> {
-        with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
-            self.post_send(access_token, raw)
-        })
-        .await
-    }
-
     async fn send_message_once(&self, access_token: &str, raw: &str) -> Result<String, GmailError> {
-        // send_message와 동일하되 시도 횟수만 1(WRITE_MAX_ATTEMPTS). 비멱등 write 재시도 금지 근거는
-        // 트레잇 doc / WRITE_MAX_ATTEMPTS 주석 참조(중복 발송 차단).
+        // 시도 횟수 1(WRITE_MAX_ATTEMPTS) — 비멱등 write라 재시도 금지(중복 발송 차단). 근거는
+        // 트레잇 doc / WRITE_MAX_ATTEMPTS 주석 참조. bounded-retry send 변종은 의도적으로 없다.
         with_retry(WRITE_MAX_ATTEMPTS, BASE_DELAY, |_| {
             self.post_send(access_token, raw)
         })
@@ -207,6 +216,42 @@ mod tests {
             "send 4xx 응답 본문이 메시지에 새면 안 됨: {m}"
         );
         assert!(m.contains("HTTP 400"), "상태/크기만 노출: {m}");
+    }
+
+    /// 토큰-엔드포인트 에러 분류: 400+invalid_grant=ReconnectRequired, 그 외는 classify_http 위임.
+    /// ReconnectRequired 메시지에 body가 새지 않는다(INVARIANT #7 — 분류용으로만 검사).
+    #[test]
+    fn classify_token_error_reconnect_on_invalid_grant() {
+        // 400 + invalid_grant → ReconnectRequired + body 미노출.
+        let GmailError::ReconnectRequired(m) = classify_token_error(
+            400,
+            "{\"error\":\"invalid_grant\",\"leak\":\"DISTINCT_BODY_xyz\"}",
+        ) else {
+            panic!("400+invalid_grant → ReconnectRequired");
+        };
+        assert!(
+            !m.contains("DISTINCT_BODY_xyz") && !m.contains("invalid_grant"),
+            "응답 본문이 ReconnectRequired 메시지에 새면 안 됨: {m}"
+        );
+        // 400인데 invalid_grant 아님 → Terminal(classify_http).
+        assert!(matches!(
+            classify_token_error(400, "{\"error\":\"invalid_request\"}"),
+            GmailError::Terminal(_)
+        ));
+        // 401(invalid_grant 문자열 있어도 status 400 아님) → Terminal.
+        assert!(matches!(
+            classify_token_error(401, "invalid_grant"),
+            GmailError::Terminal(_)
+        ));
+        // 429/5xx → Transient(분류 위임).
+        assert!(matches!(
+            classify_token_error(429, "rate"),
+            GmailError::Transient(_)
+        ));
+        assert!(matches!(
+            classify_token_error(503, "down"),
+            GmailError::Transient(_)
+        ));
     }
 
     /// send 응답 id 파싱: 정상 추출 / id 누락=Terminal(본문 내용 미노출).

@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use super::oauth::parse_redirect_query;
+use super::oauth::{parse_redirect_error, parse_redirect_query};
 use super::GmailError;
 
 /// loopback redirect 대기 상한(bounded — 무한 대기 금지). 사용자 동의 시간 포함.
@@ -60,6 +60,15 @@ impl Loopback {
                     let _ = stream.write_all(SUCCESS_HTML.as_bytes()).await;
                     let _ = stream.flush().await;
                     return Ok::<_, GmailError>((code, state));
+                }
+                // OAuth error redirect(code 없이 ?error=access_denied 등)는 빠른 실패한다 — 180s
+                // timeout까지 매달리지 않는다. 브라우저엔 closing HTML을 주고 Terminal을 즉시 반환한다.
+                if parse_redirect_error(first_line).is_some() {
+                    let _ = stream.write_all(SUCCESS_HTML.as_bytes()).await;
+                    let _ = stream.flush().await;
+                    return Err(GmailError::Terminal(
+                        "Google 동의가 거부되었거나 실패했습니다 — 다시 시도하세요".into(),
+                    ));
                 }
                 let _ = stream.write_all(WAIT_HTML.as_bytes()).await;
                 let _ = stream.flush().await;

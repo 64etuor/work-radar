@@ -121,6 +121,27 @@ pub fn parse_redirect_query(request_line: &str) -> Option<(String, String)> {
     Some((code?, state?))
 }
 
+/// loopback GET 요청 첫 줄에서 OAuth `error` 파라미터를 뽑는다(동의 거부/실패 빠른 실패용). 순수.
+/// `code`가 있으면(정상 redirect) None — error 파라미터가 우연히 함께 와도 happy path를 깨지 않는다.
+/// `code`가 없고 `error`가 있을 때만 Some(error 값). 잡음(favicon 등)은 None.
+pub fn parse_redirect_error(request_line: &str) -> Option<String> {
+    let path = request_line.split_whitespace().nth(1)?;
+    let url = reqwest::Url::parse(&format!("http://127.0.0.1{path}")).ok()?;
+    let mut error = None;
+    let mut has_code = false;
+    for (k, v) in url.query_pairs() {
+        match k.as_ref() {
+            "code" => has_code = true,
+            "error" => error = Some(v.into_owned()),
+            _ => {}
+        }
+    }
+    if has_code {
+        return None;
+    }
+    error
+}
+
 /// Google 토큰 엔드포인트 응답(access_token/refresh_token/expires_in).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenResponse {
@@ -289,6 +310,28 @@ mod tests {
         assert_eq!(parse_redirect_query("GET /favicon.ico HTTP/1.1"), None);
     }
 
+    /// redirect error 파싱: error 있고 code 없음=Some, code 있음=None, 잡음=None(동의 거부 빠른 실패용).
+    #[test]
+    fn parse_redirect_error_cases() {
+        assert_eq!(
+            parse_redirect_error("GET /?error=access_denied&state=s HTTP/1.1"),
+            Some("access_denied".into())
+        );
+        // code가 있으면(정상 redirect) error 무시 → None(happy path 비차단).
+        assert_eq!(
+            parse_redirect_error("GET /?code=abc&state=s HTTP/1.1"),
+            None
+        );
+        // code + error 동시 → code 우선 None.
+        assert_eq!(
+            parse_redirect_error("GET /?code=abc&error=x&state=s HTTP/1.1"),
+            None
+        );
+        // 잡음(favicon)·error 없음 → None.
+        assert_eq!(parse_redirect_error("GET /favicon.ico HTTP/1.1"), None);
+        assert_eq!(parse_redirect_error("GET /?state=only HTTP/1.1"), None);
+    }
+
     /// 토큰 응답 파싱: 전체 / refresh 없음 / expires_in 기본값 / access_token 누락=Terminal(+스크럽).
     #[test]
     fn parse_token_response_cases() {
@@ -396,14 +439,14 @@ mod tests {
             self.refresh.clone()
         }
 
-        // OAuth 오케스트레이션(connect/refresh_core) 테스트는 send를 호출하지 않는다 — send_message는
-        // US-003에서 트레잇에 추가된 필수 메서드라 fake도 구현만 둔다(이 fake에선 미사용).
-        async fn send_message(
+        // OAuth 오케스트레이션(connect/refresh_core) 테스트는 send를 호출하지 않는다 —
+        // send_message_once는 트레잇 필수 메서드라 fake도 구현만 둔다(이 fake에선 미사용).
+        async fn send_message_once(
             &self,
             _access_token: &str,
             _raw: &str,
         ) -> Result<String, GmailError> {
-            Err(GmailError::Terminal("unused".into()))
+            unreachable!("connect/refresh fake는 send를 호출하지 않음")
         }
     }
 

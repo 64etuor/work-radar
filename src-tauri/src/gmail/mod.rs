@@ -29,15 +29,14 @@ use crate::retry::Retryable;
 
 pub use http::HttpGmailProvider;
 pub use loopback::{Loopback, LOOPBACK_TIMEOUT};
-// connect surface(commands/gmail.rs)·http provider·write가 이 surface를 소비한다. 일부 순수
-// 헬퍼(parse_redirect_query 등)는 loopback이 `oauth::` 경로로 직접 쓰므로 이 재export는 crate
-// 내부에서 안 쓰여 unused 경고가 나는데, 의도적 보존이므로 allow(calendar와 동일 패턴).
-#[allow(unused_imports)]
 pub use message::build_raw_message;
-#[allow(unused_imports)]
+// `gmail::`로 실제 소비되는 심볼만 재export한다(connect 커맨드 + 이 모듈 본문/트레잇 시그니처).
+// oauth 내부 전용(merge_refresh)이나 submodule이 `super::oauth::`로 직접 쓰는 헬퍼
+// (parse_redirect_query=loopback, parse_token_response=http, parse_redirect_error=loopback)는
+// 이 표면으로 끌어올리지 않는다(불필요 재export = 거짓 공개 API).
 pub use oauth::{
-    auth_url, connect_core, gen_code_verifier, gen_state, merge_refresh, parse_redirect_query,
-    parse_token_response, pkce_challenge, refresh_core, GmailCreds, TokenResponse,
+    auth_url, connect_core, gen_code_verifier, gen_state, pkce_challenge, refresh_core, GmailCreds,
+    TokenResponse,
 };
 pub(crate) use write::execute_gmail_action;
 
@@ -48,7 +47,9 @@ pub(crate) use write::execute_gmail_action;
 /// ReconnectRequired = 스코프 불일치·refresh 무효로 재연결이 필요한 경우(invalid_grant 등).
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum GmailError {
-    // Transient/ReconnectRequired는 US-003 HTTP provider가 응답 상태로 분류하며 구성한다.
+    // HTTP provider가 응답으로 분류한다: ReconnectRequired는 refresh-time `invalid_grant`(토큰
+    // 취소/만료, status 400+body 분류)에서, Transient는 429/5xx에서 구성된다(classify_token_error/
+    // classify_http). body는 분류용으로만 검사하며 메시지엔 넣지 않는다(INVARIANT #7).
     #[error("{0}")]
     Transient(String),
     #[error("{0}")]
@@ -86,29 +87,20 @@ pub trait GmailProvider {
         creds: &GmailCreds,
     ) -> impl std::future::Future<Output = Result<TokenResponse, GmailError>> + Send;
 
-    /// Gmail로 메시지 전송(bounded retry). `raw` = base64url RFC822(message.rs build_raw_message 산출).
-    /// 반환: Gmail 메시지 id(external_ref). 사람-경로 없음 — 전부 AI-origin 게이트 경유. bounded retry.
-    fn send_message(
-        &self,
-        access_token: &str,
-        raw: &str,
-    ) -> impl std::future::Future<Output = Result<String, GmailError>> + Send;
-
-    /// 전송 — **단일 시도(재시도 없음)**. External Action Gate(AI-origin) 전용.
+    /// 전송 — **단일 시도(재시도 없음)**. External Action Gate(AI-origin) 전용 · 유일한 send 표면.
     /// messages.send는 멱등하지 않다 — 요청이 Gmail에 도달한 뒤 응답만 유실되면(transport drop=
-    /// transient) `send_message`의 bounded retry가 **중복 발송**을 낸다(이메일은 캘린더 중복보다
-    /// 비대칭적으로 위험). 그래서 게이트 write는 재시도 대신 실패를 노출해 사용자가 재제안하게 한다
-    /// (calendar create_event_once / github WRITE_MAX_ATTEMPTS=1 선례).
+    /// transient) bounded retry는 **중복 발송**을 낸다(이메일은 캘린더 중복보다 비대칭적으로 위험).
+    /// 그래서 게이트 write는 재시도 대신 실패를 노출해 사용자가 재제안하게 한다(calendar
+    /// create_event_once / github WRITE_MAX_ATTEMPTS=1 선례).
     ///
-    /// 기본 구현은 `send_message`로 위임한다 — **실 HTTP provider(HttpGmailProvider)는 단일-시도
-    /// POST로 override**해야 한다(중복 발송 방지). 기본 위임은 retry가 무의미한 테스트 fake 전용이다.
+    /// `raw` = base64url RFC822(message.rs build_raw_message 산출). 반환: Gmail 메시지 id(external_ref).
+    /// 사람-경로 없음 — 전부 AI-origin 게이트 경유. **bounded-retry `send_message`는 존재하지 않는다**
+    /// (footgun 제거): 비멱등 send에 obvious-named retry 메서드를 두면 오용으로 중복 발송이 난다.
     fn send_message_once(
         &self,
         access_token: &str,
         raw: &str,
-    ) -> impl std::future::Future<Output = Result<String, GmailError>> + Send {
-        self.send_message(access_token, raw)
-    }
+    ) -> impl std::future::Future<Output = Result<String, GmailError>> + Send;
 }
 
 // ── cref → access token (gate 라우터가 소비, US-004) ───────────────────────────────
@@ -118,25 +110,29 @@ pub trait GmailProvider {
 /// 개인/업무 프로필 격리). `commands::calendar::access_token_for_cref`를 미러한다. 미연결(creds/refresh
 /// 없음)은 Ok(None) — 라우터가 not_connected로 노출. refresh_token 회전 시에만 keychain 갱신. 토큰
 /// 본문 미반환.
-pub(crate) async fn access_token_for_cref(cref: &str) -> Result<Option<String>, String> {
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(gate 경계 함수와 동일).
+#[allow(clippy::result_large_err)]
+pub(crate) async fn access_token_for_cref(
+    cref: &str,
+) -> Result<Option<String>, crate::error::AppError> {
     use crate::keychain;
     use crate::models::TokenKind;
 
-    let Some(blob) = keychain::get_token(cref, TokenKind::Gmail).map_err(|e| e.to_string())? else {
+    // 에러는 `?`로 전파한다 — keychain::get_token=keyring::Error(From<keyring::Error>),
+    // GmailCreds::from_blob/refresh_core=GmailError(From<GmailError>). refresh-time invalid_grant는
+    // ReconnectRequired→forbidden+'Gmail 재연결' nav로 UI에 그대로 도달한다(flatten 금지).
+    let Some(blob) = keychain::get_token(cref, TokenKind::Gmail)? else {
         return Ok(None);
     };
-    let creds = GmailCreds::from_blob(&blob).map_err(|e| e.to_string())?;
+    let creds = GmailCreds::from_blob(&blob)?;
     if !creds.has_refresh() {
         return Ok(None);
     }
-    let provider = HttpGmailProvider::new().map_err(|e| e.to_string())?;
+    let provider = HttpGmailProvider::new()?;
     let before = creds.refresh_token.clone();
-    let (access, updated) = refresh_core(&provider, creds)
-        .await
-        .map_err(|e| e.to_string())?;
+    let (access, updated) = refresh_core(&provider, creds).await?;
     if updated.refresh_token != before {
-        keychain::set_token(cref, TokenKind::Gmail, &updated.to_blob())
-            .map_err(|e| e.to_string())?;
+        keychain::set_token(cref, TokenKind::Gmail, &updated.to_blob())?;
     }
     Ok(Some(access))
 }
