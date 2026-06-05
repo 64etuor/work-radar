@@ -45,6 +45,13 @@ pub enum ExternalAction {
         all_day: bool,
         description: Option<String>,
     },
+    /// Gmail 발송(Phase 5 write, AI-origin). 사람-폼 경로 없음 — 전부 게이트 경유(단일 시도, 비멱등).
+    /// to=수신자, subject=제목, body=본문. 셋 다 keychain 토큰으로 Rust가 실행(렌더러 미노출).
+    GmailSendEmail {
+        to: String,
+        subject: String,
+        body: String,
+    },
 }
 
 impl ExternalAction {
@@ -56,6 +63,7 @@ impl ExternalAction {
             ExternalAction::GithubCreateIssue { .. } => "github.create_issue",
             ExternalAction::NotionCreatePage { .. } => "notion.create_page",
             ExternalAction::CalendarCreateEvent { .. } => "calendar.create_event",
+            ExternalAction::GmailSendEmail { .. } => "gmail.send",
         }
     }
 }
@@ -91,5 +99,11 @@ mod token_tests {
             description: None,
         };
         assert_eq!(c.kind_str(), "calendar.create_event");
+        let g = ExternalAction::GmailSendEmail {
+            to: "a@b.com".into(),
+            subject: "t".into(),
+            body: "b".into(),
+        };
+        assert_eq!(g.kind_str(), "gmail.send");
     }
 }

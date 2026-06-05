@@ -29,6 +29,7 @@
 mod http;
 mod message;
 mod oauth;
+mod write;
 
 use crate::retry::Retryable;
 
@@ -43,6 +44,7 @@ pub use oauth::{
     auth_url, connect_core, gen_code_verifier, gen_state, merge_refresh, parse_redirect_query,
     parse_token_response, pkce_challenge, refresh_core, GmailCreds, TokenResponse,
 };
+pub(crate) use write::execute_gmail_action;
 
 // ── GmailError ─────────────────────────────────────────────────────────────────
 
@@ -112,4 +114,34 @@ pub trait GmailProvider {
     ) -> impl std::future::Future<Output = Result<String, GmailError>> + Send {
         self.send_message(access_token, raw)
     }
+}
+
+// ── cref → access token (gate 라우터가 소비, US-004) ───────────────────────────────
+
+/// cref(=project credential_ref)로 Gmail access token을 확보한다(refresh_core 재발급, bounded).
+/// gate 라우터가 승인된 액션의 project_ref로만 토큰을 resolve하는 단일 레시피(전역/주변 토큰 금지 =
+/// 개인/업무 프로필 격리). `commands::calendar::access_token_for_cref`를 미러한다. 미연결(creds/refresh
+/// 없음)은 Ok(None) — 라우터가 not_connected로 노출. refresh_token 회전 시에만 keychain 갱신. 토큰
+/// 본문 미반환.
+pub(crate) async fn access_token_for_cref(cref: &str) -> Result<Option<String>, String> {
+    use crate::keychain;
+    use crate::models::TokenKind;
+
+    let Some(blob) = keychain::get_token(cref, TokenKind::Gmail).map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    let creds = GmailCreds::from_blob(&blob).map_err(|e| e.to_string())?;
+    if !creds.has_refresh() {
+        return Ok(None);
+    }
+    let provider = HttpGmailProvider::new().map_err(|e| e.to_string())?;
+    let before = creds.refresh_token.clone();
+    let (access, updated) = refresh_core(&provider, creds)
+        .await
+        .map_err(|e| e.to_string())?;
+    if updated.refresh_token != before {
+        keychain::set_token(cref, TokenKind::Gmail, &updated.to_blob())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(Some(access))
 }

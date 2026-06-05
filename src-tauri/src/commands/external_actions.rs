@@ -8,6 +8,7 @@ use crate::error::AppError;
 use crate::external_actions::store::{self, PendingAction};
 use crate::external_actions::{Acceptance, ExecOutcome, ExternalAction, ExternalConnector};
 use crate::github::{execute_github_action, github_provider_for_cref, HttpPrProvider};
+use crate::gmail::{execute_gmail_action, HttpGmailProvider};
 use crate::notion::{execute_notion_action, notion_token_for_cref, HttpNotionWriter};
 use tauri::State;
 
@@ -41,6 +42,11 @@ impl ExternalConnector for ExternalActionRouter<'_> {
                 // 동일 규율 — action의 project_ref(credential_ref)로만 Calendar access token resolve.
                 let access = self.calendar_access(gate.action_id()).await?;
                 execute_calendar_action(&HttpCalendarProvider::new()?, &access, action).await
+            }
+            ExternalAction::GmailSendEmail { .. } => {
+                // 동일 규율 — action의 project_ref(credential_ref)로만 Gmail access token resolve.
+                let access = self.gmail_access(gate.action_id()).await?;
+                execute_gmail_action(&HttpGmailProvider::new()?, &access, action).await
             }
         }
     }
@@ -88,6 +94,19 @@ impl ExternalActionRouter<'_> {
                     "calendar.not_connected",
                     "미연결 — 먼저 Google Calendar를 연결하세요",
                 )
+            })
+    }
+
+    /// action의 cref로 Gmail access token을 resolve한다(refresh 재발급). cref→token 레시피는
+    /// `gmail::access_token_for_cref`에 단일화한다(calendar 미러). 토큰은 keychain에서만, 본문 미노출.
+    /// 미연결(creds/refresh 없음)은 not_connected로 노출.
+    async fn gmail_access(&self, action_id: &str) -> Result<String, AppError> {
+        let cref = self.cref_for_action(action_id).await?;
+        crate::gmail::access_token_for_cref(&cref)
+            .await
+            .map_err(|e| AppError::terminal("gmail.access_token", e))?
+            .ok_or_else(|| {
+                AppError::not_found("gmail.not_connected", "미연결 — 먼저 Gmail을 연결하세요")
             })
     }
 }

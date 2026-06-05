@@ -206,6 +206,23 @@ impl From<crate::calendar::CalendarError> for AppError {
     }
 }
 
+impl From<crate::gmail::GmailError> for AppError {
+    fn from(e: crate::gmail::GmailError) -> Self {
+        use crate::gmail::GmailError as E;
+        match e {
+            E::Transient(m) => AppError::transient("gmail.transient", m),
+            E::Terminal(m) => AppError::terminal("gmail.terminal", m),
+            // 스코프 불일치·refresh 무효 재연결 필요 — 권한 계열 + 액션 힌트(설정으로 nav).
+            E::ReconnectRequired(m) => AppError::forbidden("gmail.reconnect_required", m)
+                .with_action(ErrorAction {
+                    label: "Gmail 재연결".into(),
+                    url: None,
+                    nav: Some("settings".into()),
+                }),
+        }
+    }
+}
+
 impl From<crate::messenger::MessengerError> for AppError {
     fn from(e: crate::messenger::MessengerError) -> Self {
         use crate::messenger::MessengerError as E;
