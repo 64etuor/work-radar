@@ -15,6 +15,11 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 const MAX_ATTEMPTS: u32 = 3;
 /// backoff 기준 지연(첫 재시도). 실제 base*2^n + jitter.
 const BASE_DELAY: Duration = Duration::from_millis(400);
+/// 쓰기(events.insert POST) 재시도 횟수 = 1(재시도 안 함). events.insert는 **멱등하지 않다** — 요청이
+/// Google에 도달한 뒤 응답만 유실되면(transport drop=transient) 재시도가 **중복 이벤트**를 낸다. 그래서
+/// AI-origin 게이트 write(`create_event_once`)는 재시도 대신 실패를 노출한다(github WRITE_MAX_ATTEMPTS=1
+/// 선례, INVARIANT #5 정신). 사람-폼 `create_event`는 기존대로 bounded retry(MAX_ATTEMPTS) 유지 — 무변경.
+const WRITE_MAX_ATTEMPTS: u32 = 1;
 
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 const CALENDAR_LIST_URL: &str = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
@@ -297,6 +302,25 @@ impl CalendarProvider for HttpCalendarProvider {
         );
         let payload = build_event_payload(input);
         let json = with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.post_json(&url, access_token, &payload)
+        })
+        .await?;
+        parse_created_event(&json)
+    }
+
+    async fn create_event_once(
+        &self,
+        access_token: &str,
+        calendar_id: &str,
+        input: &CreateEventInput,
+    ) -> Result<(String, Option<String>), CalendarError> {
+        // create_event와 동일하되 시도 횟수만 1(WRITE_MAX_ATTEMPTS). 비멱등 write 재시도 금지 근거는 트레잇 doc 참조.
+        let url = format!(
+            "{CALENDAR_API_BASE}/{}/events",
+            encode_path_segment(calendar_id)
+        );
+        let payload = build_event_payload(input);
+        let json = with_retry(WRITE_MAX_ATTEMPTS, BASE_DELAY, |_| {
             self.post_json(&url, access_token, &payload)
         })
         .await?;

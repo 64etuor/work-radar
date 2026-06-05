@@ -16,15 +16,25 @@ mod api;
 mod cache;
 mod calendar;
 mod commands;
-mod db;
+// Phase 1: MCP 라운드트립 integration test(tests/mcp_roundtrip)가 `init_db`로 tempdir 풀을
+// 만들 수 있도록 crate 밖에서 보이게 한다(앱 마이그레이션 경로 재사용 — 하드코딩 금지).
+pub mod db;
 mod error;
+// Phase 1: integration test(tests/compile_fail)가 `Acceptance` 타입을 보고 `mint` visibility를
+// 검증하려면 모듈이 crate 밖에서 보여야 한다(타입은 이미 pub). mint은 `pub(in ...)`로 잠겨 있어
+// 노출돼도 위조 불가 — compile-fail 테스트가 그걸 증명한다.
+pub mod external_actions;
 mod git;
 mod github;
+mod gmail;
 mod governance;
 mod hermes_agent;
 mod jobs;
 mod keychain;
 mod logging;
+// 앱 내장 stdio MCP 서버(External Action Gate Phase 1, proposal-only). `--mcp-stdio` 플래그로 진입.
+// pub: integration test(tests/mcp_roundtrip)가 `work_radar_lib::mcp::WrServer`/툴을 호출한다.
+pub mod mcp;
 mod messenger;
 mod models;
 mod news;
@@ -180,6 +190,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::google_calendar_status,
         commands::disconnect_google,
         commands::ping_google_calendar,
+        // Gmail OAuth 연결 (External Action Gate write 레일, Phase 5 US-006).
+        commands::set_gmail_oauth_client,
+        commands::start_gmail_oauth,
+        commands::cancel_gmail_oauth,
+        commands::gmail_status,
+        commands::disconnect_gmail,
         // Google Calendar 캘린더 선택 + 이벤트 (read 레일, Phase 10b).
         commands::list_google_calendars,
         commands::set_selected_calendars,
@@ -285,6 +301,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         skills::updater::apply_skill_update,
         skills::updater::get_skill_update_on_launch,
         skills::updater::set_skill_update_on_launch,
+        // 외부 액션 게이트 (External Action Gate Phase 0, INVARIANT #1/#2) — 단일 초크포인트 큐.
+        // 승인 경로만 Acceptance를 mint하고 커넥터에 dispatch(Phase 0는 NoopConnector, 외부 호출 0).
+        commands::external_actions::list_pending_actions,
+        commands::external_actions::approve_external_action,
+        commands::external_actions::reject_external_action,
+        commands::external_actions::external_action_status,
         // 에러 로그 (A7) — 로테이팅 파일 로그, 프런트 trace-id 연동.
         logging::log_app_error,
         logging::app_log_dir,
@@ -343,6 +365,19 @@ impl scheduler::Notifier for AppNotifier {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // External Action Gate Phase 1: `--mcp-stdio`면 GUI/tauri/tracing 부팅을 **전혀 타지 않고**
+    // 앱과 동일 DB를 연 stdio MCP 서버를 구동한다. stdout은 MCP 프로토콜 전용(로깅 오염 금지 —
+    // 이 분기는 logging::init_tracing을 호출하지 않고 진단은 stderr로만). 자체 tokio 런타임을
+    // 세운다(이 함수는 #[tokio::main]이 아니므로 중첩 런타임 위험 없음).
+    if std::env::args().any(|a| a == "--mcp-stdio") {
+        let rt = tokio::runtime::Runtime::new().expect("create tokio runtime for mcp-stdio");
+        if let Err(e) = rt.block_on(crate::mcp::run::run_mcp_stdio()) {
+            eprintln!("mcp-stdio error: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     let specta_builder = tauri_specta_builder();
 
     // 디버그 빌드에서만 TS 바인딩을 프런트 소스로 export.
@@ -414,6 +449,22 @@ pub fn run() {
                     code = "jobs.recovered_interrupted",
                     count = recovered,
                     "interrupted agent runs recovered on startup"
+                );
+            }
+
+            // External Action Gate crash-orphan 회수: 이전 프로세스가 커넥터 실행('executing') 중
+            // 죽은 액션을 정리한다(idempotency_key 잠금 해제). lease(decided_at) 가드로 동시 형제
+            // 프로세스의 live 액션은 건드리지 않고, "executed" 감사가 있으면(쓰기 성공 후 finalize
+            // 못 박힘) failed가 아니라 succeeded로 reconcile한다(store::recover_interrupted_actions). 외부 호출 0.
+            let recovered_actions = tauri::async_runtime::block_on(
+                external_actions::store::recover_interrupted_actions(&pool),
+            )
+            .unwrap_or(0);
+            if recovered_actions > 0 {
+                tracing::warn!(
+                    code = "external_actions.recovered_interrupted",
+                    count = recovered_actions,
+                    "interrupted external actions recovered on startup"
                 );
             }
 
@@ -522,10 +573,15 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+/// Bundle identifier (mirrors `tauri.conf.json` `identifier`). tauri의 `app_data_dir()`는
+/// `dirs::data_dir()/<identifier>`이므로, `--mcp-stdio` 헤드리스 모드가 GUI 부팅 없이 동일
+/// 경로를 재현할 때 이 const를 쓴다(`mcp::run`). conf와 동기화 — 변경 시 둘 다 갱신.
+pub(crate) const APP_BUNDLE_IDENTIFIER: &str = "co.kr.mirrorless.workradar";
+
 /// Resolve the SQLite path. The dev override (`WORK_RADAR_DEV_DB`) is honored ONLY for dev
 /// builds — a release build always uses the app-data prod SSOT, never an env-supplied path
 /// (safety). An empty override is treated as unset. Unset → today's isolated temp dev DB.
-fn resolve_db_path(
+pub(crate) fn resolve_db_path(
     is_dev: bool,
     dev_override: Option<&str>,
     temp_dir: &std::path::Path,

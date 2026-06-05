@@ -24,6 +24,7 @@ import {
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 
 import { AddRepoForm } from "./AddRepoForm";
+import { GmailBlock } from "./GmailBlock";
 import { GoogleAccountBlock } from "./GoogleAccountBlock";
 import { SectionLabel, Segmented } from "./SettingsKit";
 import { TokenRow } from "./TokenRow";
@@ -360,6 +361,7 @@ export function ProjectCard({
           </div>
           <ProjectCalendarColorControl project={project} onToast={onToast} />
           <GoogleAccountBlock projectId={project.id} onToast={onToast} />
+          <GmailBlock projectId={project.id} onToast={onToast} />
         </div>
 
         <div className="border-border bg-muted/15 flex flex-col gap-2.5 rounded-xl border p-4">

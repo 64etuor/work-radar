@@ -309,13 +309,17 @@ async fn load_selected_calendars(
     }
 }
 
-/// 프로젝트의 access token 확보(refresh로 재발급, bounded). 미연결/client 미입력이면 None.
-/// refresh_token이 회전된 경우에만 keychain을 갱신(고빈도 fetch에서 churn 최소화). 토큰 본문 미반환.
-pub(crate) async fn access_token_for(db: &Db, project_id: &str) -> Result<Option<String>, String> {
-    let cref = project_credential_ref(db, project_id).await?;
-    let Some(creds) = load_calendar_creds(db, project_id).await? else {
+/// cref(=project credential_ref)로 Google Calendar access token을 확보한다(refresh_core 재발급, bounded).
+/// gate 라우터와 기존 project_id 경로가 공유하는 단일 레시피. refresh_token 회전 시에만 keychain 갱신.
+/// 토큰 본문 미반환. (load_calendar_creds는 project_id를 받아 cref를 재유도하므로 시그니처를 바꾸지 않고
+/// 여기서 cref 키로 keychain blob을 직접 읽어 from_blob한다 — 사람 경로와 동치.)
+pub(crate) async fn access_token_for_cref(cref: &str) -> Result<Option<String>, String> {
+    let Some(blob) =
+        keychain::get_token(cref, TokenKind::GoogleCalendar).map_err(|e| e.to_string())?
+    else {
         return Ok(None);
     };
+    let creds = CalendarCreds::from_blob(&blob).map_err(|e| e.to_string())?;
     if !creds.has_refresh() {
         return Ok(None);
     }
@@ -325,10 +329,18 @@ pub(crate) async fn access_token_for(db: &Db, project_id: &str) -> Result<Option
         .await
         .map_err(|e| e.to_string())?;
     if updated.refresh_token != before {
-        keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())
+        keychain::set_token(cref, TokenKind::GoogleCalendar, &updated.to_blob())
             .map_err(|e| e.to_string())?;
     }
     Ok(Some(access))
+}
+
+/// 프로젝트의 access token 확보(refresh로 재발급, bounded). 미연결/client 미입력이면 None.
+/// refresh_token이 회전된 경우에만 keychain을 갱신(고빈도 fetch에서 churn 최소화). 토큰 본문 미반환.
+/// cref 유도 후 `access_token_for_cref`에 위임한다(gate 라우터와 단일 레시피 공유) — 동작 동일.
+pub(crate) async fn access_token_for(db: &Db, project_id: &str) -> Result<Option<String>, String> {
+    let cref = project_credential_ref(db, project_id).await?;
+    access_token_for_cref(&cref).await
 }
 
 /// calendarList 조회 + 저장된 선택 반영(selected 플래그). 미연결이면 Err(graceful degrade).

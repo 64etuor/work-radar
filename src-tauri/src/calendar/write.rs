@@ -76,6 +76,78 @@ pub fn parse_created_event(
     Ok((id, url))
 }
 
+// ── External Action Gate: Calendar 이벤트 생성 커넥터(Phase 4, AI-origin) ────────────
+// 제안은 MCP/사용자가 만들고, 실행은 승인 후 여기서만(Rust·토큰 keychain·단일 시도 write).
+// 사람-폼 제출(`commands::calendar::create_calendar_event` + pending_calendar_writes)은 **기존 경로
+// 유지** — 이 커넥터는 외부 에이전트 제안(external_actions 큐)만 흘린다(spec §4 이중 경로:
+// AI-origin=gate / human=기존 폼). notion.rs::execute_notion_action을 그대로 미러한다 — 단, calendar_id는
+// 별도 인자가 아니라 ACTION 변형(CalendarCreateEvent.calendar_id)에서 온다. write는 비멱등이라
+// `create_event_once`(단일 시도)로 호출해 중복 이벤트를 막는다(create_event의 bounded retry 아님).
+
+/// 승인된 Calendar 액션을 단일-시도 create로 dispatch한다. 토큰은 호출 측(라우터)이 cref로 resolve해
+/// `access_token`으로 넘긴다 — 여기선 입력 검증 + provider 호출 + outcome 매핑만(테스트는 mock provider로
+/// 네트워크 없이 라우팅 검증). calendar_id는 액션 변형이 보유한다(별도 인자 아님). 비-Calendar 액션은
+/// 호출 측 라우터가 거르지만 방어적으로 거부한다.
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(execute_notion_action 등과 동일).
+#[allow(clippy::result_large_err)]
+pub(crate) async fn execute_calendar_action<P: crate::calendar::CalendarProvider>(
+    provider: &P,
+    access_token: &str,
+    action: &crate::external_actions::ExternalAction,
+) -> Result<crate::external_actions::ExecOutcome, crate::error::AppError> {
+    use crate::error::AppError;
+    use crate::external_actions::{ExecOutcome, ExternalAction};
+    match action {
+        ExternalAction::CalendarCreateEvent {
+            calendar_id,
+            title,
+            start,
+            end,
+            all_day,
+            description,
+        } => {
+            // 사람-폼 경로(create_calendar_event)와 같은 코드/문구로 외부 호출 전에 검증한다.
+            if title.trim().is_empty() {
+                return Err(AppError::validation(
+                    "calendar.empty_title",
+                    "이벤트 제목이 비었습니다",
+                ));
+            }
+            if calendar_id.trim().is_empty() {
+                return Err(AppError::validation(
+                    "calendar.no_calendar_selected",
+                    "캘린더를 선택하세요",
+                ));
+            }
+            let input = CreateEventInput {
+                title: title.clone(),
+                start: start.clone(),
+                end: end.clone(),
+                all_day: *all_day,
+                description: description.clone().filter(|d| !d.is_empty()),
+                ..Default::default()
+            };
+            // 비멱등 write → 단일 시도(create_event_once). 중복 이벤트 방지(WRITE_MAX_ATTEMPTS=1).
+            let (id, _html_link) = provider
+                .create_event_once(access_token, calendar_id, &input)
+                .await?;
+            // external_ref=event id(콘텐츠-free). htmlLink는 제목 슬러그가 새어 audit `detail`/result에
+            // 들어가면 안 된다(INVARIANT #7 — 식별자만, 본문 금지). 그래서 id만 노출하고 htmlLink는 버린다.
+            Ok(ExecOutcome {
+                external_ref: Some(id),
+                bytes: Some(title.len() as i64),
+            })
+        }
+        other => Err(AppError::unexpected(
+            "calendar.dispatch.kind",
+            format!(
+                "Calendar 커넥터가 처리할 수 없는 액션: {}",
+                other.kind_str()
+            ),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +253,192 @@ mod tests {
             !m.contains("SECRET_xyz") && !m.contains("insufficientPermissions"),
             "본문 내용이 메시지에 노출되면 안 됨"
         );
+    }
+}
+
+#[cfg(test)]
+mod calendar_dispatch_tests {
+    use super::*;
+    use crate::calendar::{CalendarCreds, CalendarProvider, RawCalendar, RawEvent, TokenResponse};
+    use crate::external_actions::ExternalAction;
+    use std::sync::Mutex;
+
+    /// 네트워크 없는 mock Calendar provider — create_event_once 호출 인자를 기록해 dispatch 라우팅/검증을
+    /// 확인한다. id와 htmlLink를 일부러 다르게 둔다(id는 제목 슬러그가 아닌 콘텐츠-free 식별자).
+    #[derive(Default)]
+    struct MockCalendarProvider {
+        calls: Mutex<Vec<(String, String, CreateEventInput)>>, // (token, calendar_id, input)
+    }
+    impl CalendarProvider for MockCalendarProvider {
+        async fn exchange_code(
+            &self,
+            _creds: &CalendarCreds,
+            _code: &str,
+            _verifier: &str,
+            _redirect_uri: &str,
+        ) -> Result<TokenResponse, CalendarError> {
+            unreachable!("dispatch 테스트는 토큰 교환을 호출하지 않음")
+        }
+        async fn refresh_access(
+            &self,
+            _creds: &CalendarCreds,
+        ) -> Result<TokenResponse, CalendarError> {
+            unreachable!("dispatch 테스트는 refresh를 호출하지 않음")
+        }
+        async fn list_calendars(
+            &self,
+            _access_token: &str,
+        ) -> Result<Vec<RawCalendar>, CalendarError> {
+            unreachable!("dispatch 테스트는 list_calendars를 호출하지 않음")
+        }
+        async fn fetch_events(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _time_min: &str,
+            _time_max: &str,
+        ) -> Result<Vec<RawEvent>, CalendarError> {
+            unreachable!("dispatch 테스트는 fetch_events를 호출하지 않음")
+        }
+        async fn create_event(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _input: &CreateEventInput,
+        ) -> Result<(String, Option<String>), CalendarError> {
+            // gate dispatch는 비멱등이라 create_event(bounded retry)가 아니라 create_event_once를 써야 한다.
+            unreachable!("gate dispatch는 create_event_once를 써야 함(중복 write 방지)")
+        }
+        async fn create_event_once(
+            &self,
+            access_token: &str,
+            calendar_id: &str,
+            input: &CreateEventInput,
+        ) -> Result<(String, Option<String>), CalendarError> {
+            self.calls.lock().unwrap().push((
+                access_token.into(),
+                calendar_id.into(),
+                input.clone(),
+            ));
+            // id != 어떤 title 슬러그 — external_ref가 (제목이 새는) htmlLink가 아니라 id를 담는지 검증용.
+            Ok((
+                "evt-id-1".into(),
+                Some("https://calendar.google.com/My-Title-evt-id-1".into()),
+            ))
+        }
+        async fn patch_event(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _event_id: &str,
+            _patch: &serde_json::Value,
+        ) -> Result<(), CalendarError> {
+            unreachable!("dispatch 테스트는 patch_event를 호출하지 않음")
+        }
+        async fn delete_event(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _event_id: &str,
+        ) -> Result<(), CalendarError> {
+            unreachable!("dispatch 테스트는 delete_event를 호출하지 않음")
+        }
+    }
+
+    fn sample_action() -> ExternalAction {
+        ExternalAction::CalendarCreateEvent {
+            calendar_id: "primary".into(),
+            title: "디자인 리뷰".into(),
+            start: "2026-06-04T09:00:00+09:00".into(),
+            end: "2026-06-04T10:00:00+09:00".into(),
+            all_day: false,
+            description: Some("Q2 폴리시".into()),
+        }
+    }
+
+    /// CalendarCreateEvent → create_event_once로 라우팅되고 CreateEventInput이 올바르게 매핑되며,
+    /// outcome.external_ref가 **콘텐츠-free event id**(htmlLink 슬러그 아님)다.
+    #[tokio::test]
+    async fn dispatch_routes_create_event_with_input() {
+        let p = MockCalendarProvider::default();
+        let out = execute_calendar_action(&p, "tok", &sample_action())
+            .await
+            .unwrap();
+        // 감사 계약(식별자만, 본문 금지): htmlLink 슬러그가 아니라 event id를 external_ref로 쓴다.
+        assert_eq!(out.external_ref.as_deref(), Some("evt-id-1"));
+        assert_eq!(out.bytes, Some("디자인 리뷰".len() as i64));
+        let calls = p.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "정확히 1회 write(단일 시도)");
+        let (token, cal_id, input) = &calls[0];
+        assert_eq!(token, "tok");
+        assert_eq!(cal_id, "primary");
+        assert_eq!(
+            input,
+            &CreateEventInput {
+                title: "디자인 리뷰".into(),
+                start: "2026-06-04T09:00:00+09:00".into(),
+                end: "2026-06-04T10:00:00+09:00".into(),
+                all_day: false,
+                description: Some("Q2 폴리시".into()),
+                ..Default::default()
+            }
+        );
+    }
+
+    /// 빈 description은 None으로 정규화된다(빌더가 어차피 생략하지만 입력 단계에서도 거른다).
+    #[tokio::test]
+    async fn dispatch_normalizes_empty_description_to_none() {
+        let p = MockCalendarProvider::default();
+        let action = ExternalAction::CalendarCreateEvent {
+            calendar_id: "primary".into(),
+            title: "t".into(),
+            start: "2026-06-04".into(),
+            end: "2026-06-05".into(),
+            all_day: true,
+            description: Some("".into()),
+        };
+        execute_calendar_action(&p, "tok", &action).await.unwrap();
+        assert_eq!(p.calls.lock().unwrap()[0].2.description, None);
+    }
+
+    /// 빈 calendar_id/title은 외부 호출 전에 validation 에러로 거른다(provider 미호출).
+    #[tokio::test]
+    async fn dispatch_rejects_empty_calendar_id_or_title_before_write() {
+        let p = MockCalendarProvider::default();
+        let empty_title = ExternalAction::CalendarCreateEvent {
+            calendar_id: "primary".into(),
+            title: "  ".into(),
+            start: "s".into(),
+            end: "e".into(),
+            all_day: false,
+            description: None,
+        };
+        assert!(execute_calendar_action(&p, "tok", &empty_title)
+            .await
+            .is_err());
+        let empty_cal = ExternalAction::CalendarCreateEvent {
+            calendar_id: "".into(),
+            title: "t".into(),
+            start: "s".into(),
+            end: "e".into(),
+            all_day: false,
+            description: None,
+        };
+        assert!(execute_calendar_action(&p, "tok", &empty_cal)
+            .await
+            .is_err());
+        assert!(
+            p.calls.lock().unwrap().is_empty(),
+            "검증 실패 시 write 0(provider 미호출)"
+        );
+    }
+
+    /// 비-Calendar 액션은 방어적으로 거부한다(라우터가 먼저 거르지만 이중 방어).
+    #[tokio::test]
+    async fn dispatch_rejects_non_calendar_action() {
+        let p = MockCalendarProvider::default();
+        let action = ExternalAction::Noop { note: "x".into() };
+        assert!(execute_calendar_action(&p, "tok", &action).await.is_err());
+        assert!(p.calls.lock().unwrap().is_empty());
     }
 }

@@ -78,12 +78,26 @@ uuid = { version = "1", features = ["v4"] }
 flate2 = "1"
 tar = "0.4"
 tempfile = "3"
+# 외부 AI 에이전트용 앱 내장 stdio MCP 서버(External Action Gate Phase 1, proposal-only).
+# server=핸들러/툴 라우터, transport-io=stdio() 트랜스포트, macros=#[tool_router]/#[tool].
+rmcp = { version = "1.7.0", features = ["server", "transport-io", "macros"] }
+# rmcp 1.7의 #[tool] 매크로가 입력/출력 DTO에 schemars 1.x JsonSchema를 요구한다(버전 일치 필수 —
+# schemars 0.x 파생은 rmcp 매크로와 타입 불일치로 컴파일 실패). rmcp 재수출 버전에 핀.
+schemars = "1.2.1"
+# `--mcp-stdio` 모드는 GUI 부팅(=tauri AppHandle) 없이 앱과 **동일한** DB 경로를 열어야 한다.
+# tauri 2의 app_data_dir()는 내부적으로 `dirs::data_dir()/<bundle identifier>`이므로 동일 의미를
+# 헤드리스로 재현한다(하드코딩 경로 아님 — 식별자는 tauri.conf.json 미러 const). tauri가 이미
+# 트랜지티브로 끌어오는 크레이트라 빌드 비용 추가 없음.
+dirs = "6"
 
 [dev-dependencies]
 # 로테이션 단위 테스트용 임시 디렉터리.
 tempfile = "3"
 # tokio::time::pause/advance/start_paused — fetcher 단위 테스트에서 시간 제어.
 tokio = { version = "1", features = ["test-util"] }
+# compile-fail 테스트(Task 1.0): external_actions 밖에서 `Acceptance::mint` 호출이
+# 컴파일 실패함을 잠근다 — MCP 모듈이 같은 crate라도 토큰 위조 불가(type-wall 증명).
+trybuild = "1"
 
 [features]
 # default Tauri custom-protocol toggle used by `tauri build`.

@@ -5,6 +5,7 @@
 mod agent;
 mod automation;
 mod calendar;
+mod gmail;
 mod inbox;
 mod messenger;
 mod pending_write;
@@ -22,6 +23,7 @@ mod worktree;
 pub use agent::*;
 pub use automation::*;
 pub use calendar::*;
+pub use gmail::*;
 pub use inbox::*;
 pub use messenger::*;
 pub use pending_write::*;

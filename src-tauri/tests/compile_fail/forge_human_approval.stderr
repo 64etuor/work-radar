@@ -1,0 +1,22 @@
+error[E0603]: module `commands` is private
+ --> tests/compile_fail/forge_human_approval.rs:8:29
+  |
+8 |     let _ = work_radar_lib::commands::approval_grant::HumanApproval::from_ipc();
+  |                             ^^^^^^^^ private module   ------------- struct `HumanApproval` is not publicly re-exported
+  |
+note: the module `commands` is defined here
+ --> src/lib.rs
+  |
+  | mod commands;
+  | ^^^^^^^^^^^^
+
+error[E0624]: associated function `from_ipc` is private
+ --> tests/compile_fail/forge_human_approval.rs:8:70
+  |
+8 |     let _ = work_radar_lib::commands::approval_grant::HumanApproval::from_ipc();
+  |                                                                      ^^^^^^^^ private associated function
+  |
+ ::: src/commands/approval_grant.rs
+  |
+  |     pub(in crate::commands) fn from_ipc() -> Self {
+  |     --------------------------------------------- private associated function defined here

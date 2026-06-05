@@ -10,6 +10,8 @@ pub enum TokenKind {
     Github,
     /// Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a.
     GoogleCalendar,
+    /// Gmail send 자격증명 blob ({clientId, clientSecret, refreshToken}). send-only 스코프. Phase 5.
+    Gmail,
     /// Hermes 메신저 브리지 봇 토큰(Telegram Bot API류). 앱 레벨 단일 브리지(외부 Hermes 하나). Phase 20.
     HermesBridge,
 }
@@ -20,6 +22,7 @@ impl TokenKind {
             TokenKind::Notion => "notion",
             TokenKind::Github => "github",
             TokenKind::GoogleCalendar => "google_calendar",
+            TokenKind::Gmail => "gmail",
             TokenKind::HermesBridge => "hermes_bridge",
         }
     }

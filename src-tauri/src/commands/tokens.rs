@@ -104,6 +104,11 @@ pub async fn ping_project_token(
             ok: false,
             detail: "Google Calendar는 '연결' 흐름을 사용하세요".into(),
         },
+        // Gmail도 OAuth blob이라 단순 ping 대상이 아님 — 연결은 gmail 연결 흐름으로(US-006).
+        TokenKind::Gmail => PingResult {
+            ok: false,
+            detail: "Gmail은 '연결' 흐름을 사용하세요".into(),
+        },
         // HermesBridge는 앱 레벨 단일 브리지(project별 ping 대상 아님) — 상태는 hermes_bridge_status로.
         TokenKind::HermesBridge => PingResult {
             ok: false,

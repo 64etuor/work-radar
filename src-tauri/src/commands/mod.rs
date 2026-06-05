@@ -8,12 +8,17 @@
 
 pub mod shared;
 
+/// 사람-게이트 증거 토큰(External Action Gate approve/reject type-wall).
+pub mod approval_grant;
+
 pub mod agent_run_store;
 pub mod agents;
 pub mod agents_config;
 pub mod calendar;
 pub mod calendar_sync;
 pub mod cmux;
+pub mod external_actions;
+pub mod gmail;
 pub mod governance;
 pub mod hermes;
 pub mod hermes_agent;
@@ -41,6 +46,7 @@ pub use agents_config::*;
 pub use calendar::*;
 pub use calendar_sync::*;
 pub use cmux::*;
+pub use gmail::*;
 pub use governance::*;
 pub use hermes::*;
 pub use hermes_panel::*;

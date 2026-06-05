@@ -27,6 +27,20 @@ pub async fn list_projects(db: State<'_, Db>) -> Result<Vec<Project>, AppError> 
     Ok(fetch_projects(db.inner()).await?)
 }
 
+/// 단일 프로젝트 조회(id로). 없으면 None. External Action Gate write 툴이 제안자가 준 project_id의
+/// 실재성·소유 검증과 credential_ref/이름/kind 해석에 쓴다(#11: raw project_ref 신뢰 금지).
+pub(crate) async fn fetch_project(
+    db: &Db,
+    project_id: &str,
+) -> Result<Option<Project>, sqlx::Error> {
+    sqlx::query_as::<_, Project>(&format!(
+        "SELECT {PROJECT_COLS} FROM projects WHERE id = ?1"
+    ))
+    .bind(project_id)
+    .fetch_optional(db)
+    .await
+}
+
 /// Project SELECT/RETURNING 공통 컬럼.
 const PROJECT_COLS: &str = "id, name, kind, notion_backlog_db_id, notion_agenda_db_id, \
      google_calendar_ids, calendar_color, default_write_calendar_id, credential_ref, \

@@ -1,0 +1,911 @@
+//! work-radar 앱 내장 stdio MCP 서버(External Action Gate Phase 1, **proposal-only**).
+//!
+//! 외부 AI 에이전트(Claude Code / Codex / Hermes)가 `work-radar --mcp-stdio`로 spawn해 등록한다.
+//! - read 툴  = DB 조회(메타만 — 토큰/payload 본문 미노출).
+//! - write 툴 = `store::enqueue`만 호출(제안 생성). 커넥터 `execute`/`Acceptance::mint` 경로 **없음**
+//!   — 모듈 경계 + Task 1.0 토큰 type-wall(`pub(in crate::external_actions)`)로 컴파일 강제.
+//!
+//! 승인/실행은 work-radar GUI(같은 DB의 승인 패널)와 Rust 커넥터(Phase 2~5)가 담당한다.
+//! 이 모듈은 실 외부 호출을 **하지 않는다**(Phase 1 외부 호출 0).
+
+pub mod run;
+
+use crate::commands::projects;
+use crate::db::Db;
+use crate::error::AppError;
+use crate::external_actions::{store, ExternalAction};
+use crate::models::ProjectKind;
+use rmcp::handler::server::wrapper::{Json, Parameters};
+use rmcp::tool;
+use rmcp::tool_router;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+/// MCP 서버 상태 — 앱과 동일한 SQLite 풀을 보유(별도 DB 아님).
+#[derive(Clone)]
+pub struct WrServer {
+    pub db: Db,
+}
+
+/// 승인 대기 액션 1건(메타만). payload/result/토큰은 노출하지 않는다.
+#[derive(Serialize, JsonSchema)]
+pub struct PendingActionDto {
+    pub id: String,
+    pub kind: String,
+    pub origin: String,
+    pub status: String,
+}
+
+/// `wr_list_pending_actions` 반환 — 승인 대기 큐(메타 목록). `total`/`truncated`로 상한(LIMIT) 절단을
+/// **명시 신호**한다(#7): FIFO 정렬이라 절단되는 건 가장 최근 제안이므로, 폴링 에이전트가 `truncated`로
+/// "더 있음"을 알고 처리/재조회할 수 있다(무신호 truncation 방지).
+#[derive(Serialize, JsonSchema)]
+pub struct PendingList {
+    pub actions: Vec<PendingActionDto>,
+    /// 상한 적용 전 전체 대기 건수.
+    pub total: u32,
+    /// `actions`가 상한에 잘렸는지(`total > actions.len()`).
+    pub truncated: bool,
+}
+
+/// 프로젝트 1건(메타만 — credential_ref/토큰 미노출). write 툴이 어떤 project_id로 행위할지 고를 때 쓴다.
+#[derive(Serialize, JsonSchema)]
+pub struct ProjectDto {
+    pub id: String,
+    pub name: String,
+    /// "personal" | "work" — 개인/업무 identity 구분(승인 패널과 동일 라벨 기반).
+    pub kind: String,
+}
+
+/// `wr_list_projects` 반환 — 프로젝트 목록(메타만).
+#[derive(Serialize, JsonSchema)]
+pub struct ProjectList {
+    pub projects: Vec<ProjectDto>,
+}
+
+/// GitHub 코멘트 제안 파라미터(`wr_github_comment`). proposer는 **project_id만** 준다 — 서버가
+/// 실재성을 검증해 credential_ref를 해석한다(#11: raw project_ref/credential_ref 신뢰 금지).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct GithubCommentParams {
+    /// 대상 프로젝트 id(`wr_list_projects`로 조회). 토큰 격리/identity 결정의 단일 입력.
+    pub project_id: String,
+    /// "owner/repo".
+    pub repo: String,
+    /// 이슈/PR 번호.
+    pub issue_number: u64,
+    /// 코멘트 본문.
+    pub body: String,
+}
+
+/// GitHub 이슈 생성 제안 파라미터(`wr_github_create_issue`). project_id만 받아 서버가 검증한다(#11).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct GithubCreateIssueParams {
+    /// 대상 프로젝트 id(`wr_list_projects`로 조회).
+    pub project_id: String,
+    /// "owner/repo".
+    pub repo: String,
+    /// 이슈 제목.
+    pub title: String,
+    /// 이슈 본문.
+    pub body: String,
+}
+
+/// Notion 페이지 생성 제안 파라미터(`wr_notion_create_page`). project_id만 받아 서버가 검증한다(#11).
+/// db_id는 원시 ID/URL을 허용한다 — 커넥터가 정규화한다(repo와 동일하게 *내용*이지 자격증명 아님).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct NotionCreatePageParams {
+    /// 대상 프로젝트 id(`wr_list_projects`로 조회). 토큰 격리/identity 결정의 단일 입력.
+    pub project_id: String,
+    /// 대상 Notion 데이터베이스 ID 또는 공유 URL(커넥터가 dashed UUID로 정규화).
+    pub db_id: String,
+    /// 페이지 제목.
+    pub title: String,
+}
+
+/// Google Calendar 이벤트 생성 제안 파라미터(`wr_calendar_create_event`). project_id만 받아 서버가 검증한다(#11).
+/// start/end는 RFC3339(timed) 또는 YYYY-MM-DD(all_day) — *내용*이지 자격증명 아님(커넥터가 해석).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct CalendarCreateEventParams {
+    /// 대상 프로젝트 id(`wr_list_projects`로 조회). 토큰 격리/identity 결정의 단일 입력.
+    pub project_id: String,
+    /// 대상 캘린더 ID.
+    pub calendar_id: String,
+    /// 이벤트 제목.
+    pub title: String,
+    /// 시작 시각: RFC3339(timed) 또는 YYYY-MM-DD(all_day).
+    pub start: String,
+    /// 종료 시각: RFC3339(timed) 또는 YYYY-MM-DD(all_day).
+    pub end: String,
+    /// 종일 이벤트 여부.
+    pub all_day: bool,
+    /// 이벤트 설명(선택).
+    pub description: Option<String>,
+}
+
+/// Gmail 발송 제안 파라미터(`wr_gmail_send`). project_id만 받아 서버가 검증한다(#11).
+/// to/subject/body는 발송 *내용* — 자격증명 아님(승인 후 keychain 토큰으로 Rust가 실행).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct GmailSendParams {
+    /// 대상 프로젝트 id(`wr_list_projects`로 조회). 토큰 격리/identity 결정의 단일 입력.
+    pub project_id: String,
+    /// 수신자 이메일 주소.
+    pub to: String,
+    /// 메일 제목.
+    pub subject: String,
+    /// 메일 본문(빈 본문도 유효 — 비어있음 검증 없음).
+    pub body: String,
+}
+
+/// 제안 생성 파라미터(`wr_propose_noop`). preview=승인 패널 표시용 사람-친화 요약.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct ProposeNoopParams {
+    /// 사람-친화 미리보기(승인 패널 표시용).
+    pub preview: String,
+    /// 임의 메모(Noop payload).
+    pub note: String,
+}
+
+/// 제안 생성 결과 — action_id + 초기 상태(awaiting_approval). **실행 안 함**.
+#[derive(Serialize, JsonSchema)]
+pub struct ProposeResult {
+    pub action_id: String,
+    pub status: String,
+}
+
+/// 단건 상태 조회 파라미터(`wr_action_status`).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
+pub struct ActionIdParams {
+    pub action_id: String,
+}
+
+/// 단건 상태 조회 결과. 없으면 status=None.
+#[derive(Serialize, JsonSchema)]
+pub struct ActionStatus {
+    pub status: Option<String>,
+}
+
+#[tool_router(server_handler)]
+impl WrServer {
+    /// 승인 대기 외부 액션 목록(메타만). 토큰/payload 본문 미노출.
+    /// DB 에러는 **빈 목록으로 삼키지 않고** rmcp internal-error로 surface한다 — 폴링하는
+    /// 에이전트가 "실패"와 "비어 있음"을 구분할 수 있게(읽기 툴 비대칭 수정). 패닉은 여전히 금지.
+    /// surface/로그는 PII-free하게 AppError.code만 쓴다(message/payload 본문 금지).
+    #[tool(
+        name = "wr_list_pending_actions",
+        description = "List external actions awaiting user approval (metadata only). Does NOT expose payloads or tokens."
+    )]
+    pub async fn list_pending_actions(&self) -> Result<Json<PendingList>, rmcp::ErrorData> {
+        let (rows, total) = store::list_pending_with_total(&self.db)
+            .await
+            .map_err(|e| db_tool_error("wr_list_pending_actions", &e))?;
+        let truncated = total as usize > rows.len();
+        Ok(Json(PendingList {
+            actions: rows
+                .into_iter()
+                .map(|a| PendingActionDto {
+                    id: a.id,
+                    kind: a.kind,
+                    origin: a.origin,
+                    status: a.status,
+                })
+                .collect(),
+            total,
+            truncated,
+        }))
+    }
+
+    /// 프로젝트 목록(메타만 — credential_ref/토큰 미노출). write 툴이 어떤 identity(project_id)로
+    /// 행위할지 고를 때 쓴다. DB 에러는 빈 목록으로 삼키지 않고 rmcp internal-error로 surface한다.
+    #[tool(
+        name = "wr_list_projects",
+        description = "List projects (id, name, kind) to choose a target for write tools. Does NOT expose credentials or tokens."
+    )]
+    pub async fn list_projects(&self) -> Result<Json<ProjectList>, rmcp::ErrorData> {
+        let rows = projects::fetch_projects(&self.db)
+            .await
+            .map_err(|e| db_tool_error("wr_list_projects", &AppError::from(e)))?;
+        Ok(Json(ProjectList {
+            projects: rows
+                .into_iter()
+                .map(|p| ProjectDto {
+                    id: p.id,
+                    name: p.name,
+                    kind: project_kind_str(p.kind).to_string(),
+                })
+                .collect(),
+        }))
+    }
+
+    /// GitHub 이슈/PR 코멘트를 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
+    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다.
+    #[tool(
+        name = "wr_github_comment",
+        description = "Propose a GitHub issue/PR comment for the given project (project_id is validated against the projects table). Returns an action_id awaiting user approval; does NOT execute."
+    )]
+    pub async fn github_comment(
+        &self,
+        Parameters(p): Parameters<GithubCommentParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let summary = format!("GitHub {}#{} 코멘트", p.repo, p.issue_number);
+        let action = ExternalAction::GithubIssueComment {
+            repo: p.repo,
+            issue_number: p.issue_number,
+            body: p.body,
+        };
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
+            .await
+    }
+
+    /// GitHub 이슈 생성을 **제안만** 한다 — 실행 안 함. project_id를 검증해 credential_ref를 해석한다(#11).
+    #[tool(
+        name = "wr_github_create_issue",
+        description = "Propose creating a GitHub issue for the given project (project_id is validated against the projects table). Returns an action_id awaiting user approval; does NOT execute."
+    )]
+    pub async fn github_create_issue(
+        &self,
+        Parameters(p): Parameters<GithubCreateIssueParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let summary = format!("GitHub {} 이슈 생성: {}", p.repo, p.title);
+        let action = ExternalAction::GithubCreateIssue {
+            repo: p.repo,
+            title: p.title,
+            body: p.body,
+        };
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
+            .await
+    }
+
+    /// Notion DB에 페이지 생성을 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
+    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다. 사람-origin
+    /// 카드 승격(앱 내부)과는 별개 경로다(spec §4 이중 경로 — 이건 외부 에이전트 제안용).
+    #[tool(
+        name = "wr_notion_create_page",
+        description = "Propose creating a Notion page in the given database for the given project (project_id is validated against the projects table; db_id accepts a raw ID or share URL). Returns an action_id awaiting user approval; does NOT execute."
+    )]
+    pub async fn notion_create_page(
+        &self,
+        Parameters(p): Parameters<NotionCreatePageParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let summary = format!("Notion 페이지 생성: {}", p.title);
+        let action = ExternalAction::NotionCreatePage {
+            db_id: p.db_id,
+            title: p.title,
+        };
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
+            .await
+    }
+
+    /// Google Calendar 이벤트 생성을 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
+    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다. 사람-폼 제출
+    /// (앱 내부 pending_calendar_writes)과는 별개 경로다(spec §4 이중 경로 — 이건 외부 에이전트 제안용).
+    #[tool(
+        name = "wr_calendar_create_event",
+        description = "Propose creating a Google Calendar event for the given project (project_id is validated against the projects table; start/end accept RFC3339 or YYYY-MM-DD for all-day). Returns an action_id awaiting user approval; does NOT execute."
+    )]
+    pub async fn calendar_create_event(
+        &self,
+        Parameters(p): Parameters<CalendarCreateEventParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let summary = format!("Calendar 이벤트 생성: {}", p.title);
+        let action = ExternalAction::CalendarCreateEvent {
+            calendar_id: p.calendar_id,
+            title: p.title,
+            start: p.start,
+            end: p.end,
+            all_day: p.all_day,
+            description: p.description,
+        };
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
+            .await
+    }
+
+    /// Gmail 발송을 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
+    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다.
+    /// C1: op_summary에 수신자+제목을 담아 승인 패널 preview가 정확한 대상을 사람에게 노출한다
+    /// (chain-of-custody #2/#5). 수신자는 preview 컬럼에만 — audit detail(ref=…,bytes=…)에는 안 담긴다(US-004).
+    #[tool(
+        name = "wr_gmail_send",
+        description = "Propose sending a Gmail message for the given project (project_id is validated against the projects table). Returns an action_id awaiting user approval; does NOT execute."
+    )]
+    pub async fn gmail_send(
+        &self,
+        Parameters(p): Parameters<GmailSendParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let summary = format!("Gmail 발송 → {}: {}", p.to, p.subject);
+        let action = ExternalAction::GmailSendEmail {
+            to: p.to,
+            subject: p.subject,
+            body: p.body,
+        };
+        self.enqueue_write_proposal(&p.project_id, action, &summary)
+            .await
+    }
+
+    /// 제안만 생성한다 — **실행 안 함**. 사용자 승인 후 Rust 커넥터가 실행(Phase 0 게이트).
+    /// `store::enqueue`만 호출한다(execute/mint 경로 없음 — Task 1.0 type-wall로 컴파일 강제).
+    /// DB 에러는 action_id="" + status="error"로 surface(패닉 금지).
+    #[tool(
+        name = "wr_propose_noop",
+        description = "Propose a no-op external action (Phase 1 proposal-path demo). Returns an action_id awaiting user approval; does NOT execute."
+    )]
+    pub async fn propose_noop(
+        &self,
+        Parameters(p): Parameters<ProposeNoopParams>,
+    ) -> Json<ProposeResult> {
+        let action = ExternalAction::Noop { note: p.note };
+        match store::enqueue(&self.db, &action, None, Some(&p.preview), "mcp:client").await {
+            Ok(id) => Json(ProposeResult {
+                action_id: id,
+                status: "awaiting_approval".into(),
+            }),
+            Err(e) => {
+                // 기존 계약(status:"error" + 빈 id) 유지(비회귀)하되, 삼킨 에러가 완전히 안 보이는
+                // 일이 없게 stderr에 PII-free 코드만 남긴다(stdout은 MCP 전용).
+                eprintln!(
+                    "[work-radar mcp-stdio] wr_propose_noop db error: code={} trace_id={}",
+                    e.code, e.trace_id
+                );
+                Json(ProposeResult {
+                    action_id: String::new(),
+                    status: "error".into(),
+                })
+            }
+        }
+    }
+
+    /// 액션 승인/실행 상태 폴링(단건 — terminal 도달 시 종료는 클라이언트 책임, 무한 폴링 없음).
+    /// 없는 id는 status=None(정상). DB 에러는 **None으로 삼키지 않고** rmcp internal-error로
+    /// surface — 폴링 에이전트가 "조회 실패"와 "행 없음/미결정"을 구분할 수 있게(읽기 툴 비대칭 수정).
+    /// surface/로그는 PII-free하게 AppError.code만 쓴다.
+    #[tool(
+        name = "wr_action_status",
+        description = "Poll the status of a proposed action by id (awaiting_approval | succeeded | failed | rejected)."
+    )]
+    pub async fn action_status(
+        &self,
+        Parameters(p): Parameters<ActionIdParams>,
+    ) -> Result<Json<ActionStatus>, rmcp::ErrorData> {
+        let status = store::status(&self.db, &p.action_id)
+            .await
+            .map_err(|e| db_tool_error("wr_action_status", &e))?;
+        Ok(Json(ActionStatus { status }))
+    }
+}
+
+impl WrServer {
+    /// 외부 write 제안의 공통 경로(서비스 무관 — GitHub/Notion/… 공유): project_id 검증(#11) →
+    /// preview 합성(대상 identity 노출) → 안정 멱등 키로 enqueue. **실행하지 않는다**
+    /// (store::enqueue_with_idempotency만 — 승인 후 Rust 커넥터가 실행). Phase 2~5 write 툴이 공유한다.
+    async fn enqueue_write_proposal(
+        &self,
+        project_id: &str,
+        action: ExternalAction,
+        op_summary: &str,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        // project_id가 실재하는지 검증해 credential_ref를 해석한다 — proposer가 준 raw project_ref/
+        // credential_ref를 절대 신뢰하지 않는다(#11 auth-isolation injection을 구성적으로 차단).
+        let project = projects::fetch_project(&self.db, project_id)
+            .await
+            .map_err(|e| db_tool_error("wr_write_proposal", &AppError::from(e)))?
+            .ok_or_else(|| {
+                rmcp::ErrorData::invalid_params(format!("unknown project_id: {project_id}"), None)
+            })?;
+        // 승인 패널 preview에 대상 프로젝트(개인/업무 + 이름)를 노출 = 어떤 identity가 행위할지 사람이
+        // 보게 한다(#11 방어 심화). credential_ref/토큰은 절대 preview에 담지 않는다.
+        let kind_label = match project.kind {
+            ProjectKind::Personal => "개인",
+            ProjectKind::Work => "업무",
+        };
+        let preview = format!("[{kind_label}: {}] {op_summary}", project.name);
+        // 멱등 키는 제안 *내용*에서 파생한 안정값이어야 한다(시도별 UUID 금지 — dedup 무력화).
+        let key = stable_idem_key(&action, project_id)
+            .map_err(|e| db_tool_error("wr_write_proposal", &e))?;
+        let id = store::enqueue_with_idempotency(
+            &self.db,
+            &action,
+            Some(&project.credential_ref),
+            Some(&preview),
+            "mcp:client",
+            Some(&key),
+        )
+        .await
+        .map_err(|e| db_tool_error("wr_write_proposal", &e))?;
+        Ok(Json(ProposeResult {
+            action_id: id,
+            status: "awaiting_approval".into(),
+        }))
+    }
+}
+
+/// ProjectKind → 안정 라벨 문자열(MCP 표면 전용 — serde 태그와 동일 의미).
+fn project_kind_str(kind: ProjectKind) -> &'static str {
+    match kind {
+        ProjectKind::Personal => "personal",
+        ProjectKind::Work => "work",
+    }
+}
+
+/// 제안 *내용*에서 파생한 안정적 멱등 키 = sha256(project_id ‖ kind ‖ payload-json). 같은 외부 쓰기의
+/// 재시도는 같은 키를 내 dedup된다(시도별 UUID면 dedup이 절대 안 걸림 — enqueue_with_idempotency 계약).
+/// 직렬화 실패는 **에러로 전파**한다 — 빈 문자열 폴백은 서로 다른 액션의 키를 충돌시켜(무관 dedup) 위험.
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(pr_radar/google_sync 등과 동일).
+#[allow(clippy::result_large_err)]
+fn stable_idem_key(action: &ExternalAction, project_id: &str) -> Result<String, AppError> {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(project_id.as_bytes());
+    h.update([0u8]); // 필드 구분자(연접 모호성 방지).
+    h.update(action.kind_str().as_bytes());
+    h.update([0u8]);
+    // payload JSON은 struct 정의 순서라 결정적 — 같은 내용 = 같은 직렬화 = 같은 키.
+    let payload = serde_json::to_string(action)
+        .map_err(|e| AppError::unexpected("external_action.serialize", e.to_string()))?;
+    h.update(payload.as_bytes());
+    Ok(format!("{:x}", h.finalize()))
+}
+
+/// 읽기 툴의 DB 에러 → rmcp internal-error 매핑. **PII-free**: AppError.code만 노출/기록하고
+/// (예: "db.query") message/payload 본문은 절대 넣지 않는다. trace_id는 로그 상관용으로 stderr에만.
+/// stderr 기록(stdout 아님 — stdout은 MCP 프로토콜 전용)으로 삼킨 에러가 완전히 안 보이는 일은 없게 한다.
+fn db_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
+    eprintln!(
+        "[work-radar mcp-stdio] {tool} db error: code={} trace_id={}",
+        e.code, e.trace_id
+    );
+    rmcp::ErrorData::internal_error(format!("db error ({})", e.code), None)
+}
+
+#[cfg(test)]
+mod write_tool_tests {
+    use super::*;
+    use crate::commands::projects::insert_project;
+    use crate::commands::shared::test_support::{fresh_db, project_input};
+    use crate::models::ProjectKind;
+
+    /// 알 수 없는 project_id → 툴이 에러를 반환하고 **아무것도 enqueue하지 않는다**(#11).
+    #[tokio::test]
+    async fn github_comment_rejects_unknown_project_and_enqueues_nothing() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let res = server
+            .github_comment(Parameters(GithubCommentParams {
+                project_id: "does-not-exist".into(),
+                repo: "o/r".into(),
+                issue_number: 7,
+                body: "hi".into(),
+            }))
+            .await;
+        assert!(res.is_err(), "unknown project_id는 거부");
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "거부 시 enqueue 0"
+        );
+    }
+
+    /// 유효한 project_id → enqueue되고 project_ref가 그 프로젝트의 credential_ref로 설정된다.
+    /// 동일 제안 반복은 안정 멱등 키로 dedup(같은 action_id, 큐 1건).
+    #[tokio::test]
+    async fn github_comment_enqueues_with_cref_and_dedups() {
+        let db = fresh_db().await;
+        let project = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let server = WrServer { db: db.clone() };
+        let params = || GithubCommentParams {
+            project_id: project.id.clone(),
+            repo: "o/r".into(),
+            issue_number: 7,
+            body: "hi".into(),
+        };
+        let first = server.github_comment(Parameters(params())).await.unwrap();
+        let id1 = first.0.action_id.clone();
+        assert_eq!(first.0.status, "awaiting_approval");
+        // project_ref == 프로젝트 credential_ref(proposer가 준 raw 값이 아니라 서버가 해석).
+        assert_eq!(
+            store::project_ref_for(&db, &id1).await.unwrap().as_deref(),
+            Some(project.credential_ref.as_str())
+        );
+        // 동일 제안 재호출 → 안정 키로 dedup(같은 id, 큐 1건).
+        let second = server.github_comment(Parameters(params())).await.unwrap();
+        assert_eq!(
+            second.0.action_id, id1,
+            "동일 내용 = 동일 멱등 키 = 같은 id"
+        );
+        assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
+    }
+
+    /// 내용이 다르면(다른 이슈 번호) 다른 멱등 키 → 별도 행.
+    #[tokio::test]
+    async fn github_create_issue_distinct_content_distinct_key() {
+        let db = fresh_db().await;
+        let project = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let server = WrServer { db: db.clone() };
+        let a = server
+            .github_create_issue(Parameters(GithubCreateIssueParams {
+                project_id: project.id.clone(),
+                repo: "o/r".into(),
+                title: "A".into(),
+                body: "B".into(),
+            }))
+            .await
+            .unwrap();
+        let b = server
+            .github_create_issue(Parameters(GithubCreateIssueParams {
+                project_id: project.id.clone(),
+                repo: "o/r".into(),
+                title: "A2".into(),
+                body: "B".into(),
+            }))
+            .await
+            .unwrap();
+        assert_ne!(a.0.action_id, b.0.action_id);
+        assert_eq!(store::list_pending(&db).await.unwrap().len(), 2);
+    }
+
+    /// Notion: 알 수 없는 project_id → 거부 + enqueue 0(#11, GitHub와 동일한 격리 계약).
+    #[tokio::test]
+    async fn notion_create_page_rejects_unknown_project_and_enqueues_nothing() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let res = server
+            .notion_create_page(Parameters(NotionCreatePageParams {
+                project_id: "does-not-exist".into(),
+                db_id: "1234567890abcdef1234567890abcdef".into(),
+                title: "할 일".into(),
+            }))
+            .await;
+        assert!(res.is_err(), "unknown project_id는 거부");
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "거부 시 enqueue 0"
+        );
+    }
+
+    /// Notion: 유효한 project_id → 그 프로젝트 credential_ref로 enqueue되고, 동일 제안은 dedup(큐 1건).
+    #[tokio::test]
+    async fn notion_create_page_enqueues_with_cref_and_dedups() {
+        let db = fresh_db().await;
+        let project = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let server = WrServer { db: db.clone() };
+        let params = || NotionCreatePageParams {
+            project_id: project.id.clone(),
+            db_id: "1234567890abcdef1234567890abcdef".into(),
+            title: "할 일".into(),
+        };
+        let first = server
+            .notion_create_page(Parameters(params()))
+            .await
+            .unwrap();
+        let id1 = first.0.action_id.clone();
+        assert_eq!(first.0.status, "awaiting_approval");
+        assert_eq!(
+            store::project_ref_for(&db, &id1).await.unwrap().as_deref(),
+            Some(project.credential_ref.as_str())
+        );
+        let second = server
+            .notion_create_page(Parameters(params()))
+            .await
+            .unwrap();
+        assert_eq!(
+            second.0.action_id, id1,
+            "동일 내용 = 동일 멱등 키 = 같은 id"
+        );
+        assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
+    }
+
+    /// Calendar: 알 수 없는 project_id → 거부 + enqueue 0(#11, GitHub/Notion과 동일한 격리 계약).
+    #[tokio::test]
+    async fn calendar_create_event_rejects_unknown_project_and_enqueues_nothing() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let res = server
+            .calendar_create_event(Parameters(CalendarCreateEventParams {
+                project_id: "does-not-exist".into(),
+                calendar_id: "primary".into(),
+                title: "회의".into(),
+                start: "2026-06-04T10:00:00+09:00".into(),
+                end: "2026-06-04T11:00:00+09:00".into(),
+                all_day: false,
+                description: None,
+            }))
+            .await;
+        assert!(res.is_err(), "unknown project_id는 거부");
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "거부 시 enqueue 0"
+        );
+    }
+
+    /// Calendar: 유효한 project_id → 그 프로젝트 credential_ref로 CalendarCreateEvent가 enqueue되고,
+    /// 동일 제안은 안정 멱등 키로 dedup(같은 action_id, 큐 1건).
+    #[tokio::test]
+    async fn calendar_create_event_enqueues_with_cref_and_dedups() {
+        let db = fresh_db().await;
+        let project = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let server = WrServer { db: db.clone() };
+        let params = || CalendarCreateEventParams {
+            project_id: project.id.clone(),
+            calendar_id: "primary".into(),
+            title: "회의".into(),
+            start: "2026-06-04T10:00:00+09:00".into(),
+            end: "2026-06-04T11:00:00+09:00".into(),
+            all_day: false,
+            description: Some("주간 동기화".into()),
+        };
+        let first = server
+            .calendar_create_event(Parameters(params()))
+            .await
+            .unwrap();
+        let id1 = first.0.action_id.clone();
+        assert_eq!(first.0.status, "awaiting_approval");
+        // project_ref == 프로젝트 credential_ref(proposer가 준 raw 값이 아니라 서버가 해석).
+        assert_eq!(
+            store::project_ref_for(&db, &id1).await.unwrap().as_deref(),
+            Some(project.credential_ref.as_str())
+        );
+        // 동일 제안 재호출 → 안정 키로 dedup(같은 id, 큐 1건).
+        let second = server
+            .calendar_create_event(Parameters(params()))
+            .await
+            .unwrap();
+        assert_eq!(
+            second.0.action_id, id1,
+            "동일 내용 = 동일 멱등 키 = 같은 id"
+        );
+        assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
+    }
+
+    /// Gmail: 알 수 없는 project_id → 거부 + enqueue 0(#11, 다른 write 툴과 동일한 격리 계약).
+    #[tokio::test]
+    async fn gmail_send_rejects_unknown_project_and_enqueues_nothing() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let res = server
+            .gmail_send(Parameters(GmailSendParams {
+                project_id: "does-not-exist".into(),
+                to: "vip@client.test".into(),
+                subject: "안녕하세요".into(),
+                body: "본문".into(),
+            }))
+            .await;
+        assert!(res.is_err(), "unknown project_id는 거부");
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "거부 시 enqueue 0"
+        );
+    }
+
+    /// Gmail: 유효한 project_id → 그 프로젝트 credential_ref로 GmailSendEmail이 enqueue되고,
+    /// 동일 제안은 안정 멱등 키로 dedup(같은 action_id, 큐 1건). C1: preview 컬럼이 수신자+제목을 노출해야 한다.
+    #[tokio::test]
+    async fn gmail_send_enqueues_with_cref_and_dedups() {
+        let db = fresh_db().await;
+        let project = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let server = WrServer { db: db.clone() };
+        let params = || GmailSendParams {
+            project_id: project.id.clone(),
+            to: "vip@client.test".into(),
+            subject: "주간 보고".into(),
+            body: "본문".into(),
+        };
+        let first = server.gmail_send(Parameters(params())).await.unwrap();
+        let id1 = first.0.action_id.clone();
+        assert_eq!(first.0.status, "awaiting_approval");
+        // project_ref == 프로젝트 credential_ref(proposer가 준 raw 값이 아니라 서버가 해석).
+        assert_eq!(
+            store::project_ref_for(&db, &id1).await.unwrap().as_deref(),
+            Some(project.credential_ref.as_str())
+        );
+        // C1(chain-of-custody #2/#5): preview 컬럼은 승인자가 정확한 수신자+제목을 보도록 그 값을 담아야 한다.
+        // (수신자는 preview에만 — audit detail에는 ref/bytes만, US-004.)
+        let preview: Option<String> =
+            sqlx::query_scalar("SELECT preview FROM external_actions WHERE id = ?1")
+                .bind(&id1)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        let preview = preview.unwrap();
+        assert!(
+            preview.contains("vip@client.test"),
+            "preview는 수신자를 노출해야 함(C1): {preview}"
+        );
+        assert!(preview.contains("주간 보고"), "preview는 제목도 노출");
+        // 동일 제안 재호출 → 안정 키로 dedup(같은 id, 큐 1건).
+        let second = server.gmail_send(Parameters(params())).await.unwrap();
+        assert_eq!(
+            second.0.action_id, id1,
+            "동일 내용 = 동일 멱등 키 = 같은 id"
+        );
+        assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::{
+        ActionIdParams, CalendarCreateEventParams, GithubCommentParams, GithubCreateIssueParams,
+        GmailSendParams, NotionCreatePageParams, ProposeNoopParams,
+    };
+    use std::collections::BTreeSet;
+
+    fn prop_names(v: &serde_json::Value) -> BTreeSet<String> {
+        v["properties"]
+            .as_object()
+            .map(|o| o.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    fn required_fields(v: &serde_json::Value) -> BTreeSet<String> {
+        v["required"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn expect(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    // write/read 툴 입력 DTO가 **닫힌 스키마**(additionalProperties:false = deny_unknown_fields)임을
+    // 고정하고, 필드/required 표면 drift를 잠근다(mcp-server-conventions §2/§8). Phase 2~5에서 실
+    // write 툴 param이 늘면 여기에 케이스를 추가해 같은 계약(unknown-field 거부 + 표면 고정)을 강제한다.
+    #[test]
+    fn propose_noop_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(ProposeNoopParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "ProposeNoopParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(prop_names(&v), expect(&["note", "preview"]));
+        assert_eq!(required_fields(&v), expect(&["note", "preview"]));
+    }
+
+    #[test]
+    fn action_id_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(ActionIdParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "ActionIdParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(prop_names(&v), expect(&["action_id"]));
+        assert_eq!(required_fields(&v), expect(&["action_id"]));
+    }
+
+    #[test]
+    fn github_comment_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(GithubCommentParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "GithubCommentParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(
+            prop_names(&v),
+            expect(&["project_id", "repo", "issue_number", "body"])
+        );
+        assert_eq!(
+            required_fields(&v),
+            expect(&["project_id", "repo", "issue_number", "body"])
+        );
+        // proposer는 raw project_ref/credential_ref를 줄 수 없다(#11) — 표면에 없음을 고정.
+        assert!(!prop_names(&v).contains("project_ref"));
+        assert!(!prop_names(&v).contains("credential_ref"));
+    }
+
+    #[test]
+    fn github_create_issue_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(GithubCreateIssueParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "GithubCreateIssueParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(
+            prop_names(&v),
+            expect(&["project_id", "repo", "title", "body"])
+        );
+        assert_eq!(
+            required_fields(&v),
+            expect(&["project_id", "repo", "title", "body"])
+        );
+        assert!(!prop_names(&v).contains("project_ref"));
+        assert!(!prop_names(&v).contains("credential_ref"));
+    }
+
+    #[test]
+    fn notion_create_page_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(NotionCreatePageParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "NotionCreatePageParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(prop_names(&v), expect(&["project_id", "db_id", "title"]));
+        assert_eq!(
+            required_fields(&v),
+            expect(&["project_id", "db_id", "title"])
+        );
+        // proposer는 raw project_ref/credential_ref를 줄 수 없다(#11) — 표면에 없음을 고정.
+        assert!(!prop_names(&v).contains("project_ref"));
+        assert!(!prop_names(&v).contains("credential_ref"));
+    }
+
+    #[test]
+    fn calendar_create_event_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(CalendarCreateEventParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "CalendarCreateEventParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(
+            prop_names(&v),
+            expect(&[
+                "project_id",
+                "calendar_id",
+                "title",
+                "start",
+                "end",
+                "all_day",
+                "description",
+            ])
+        );
+        // description은 Option → required 아님; 나머지는 required.
+        assert_eq!(
+            required_fields(&v),
+            expect(&[
+                "project_id",
+                "calendar_id",
+                "title",
+                "start",
+                "end",
+                "all_day"
+            ])
+        );
+        // proposer는 raw project_ref/credential_ref를 줄 수 없다(#11) — 표면에 없음을 고정.
+        assert!(!prop_names(&v).contains("project_ref"));
+        assert!(!prop_names(&v).contains("credential_ref"));
+    }
+
+    #[test]
+    fn gmail_send_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(GmailSendParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "GmailSendParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(
+            prop_names(&v),
+            expect(&["project_id", "to", "subject", "body"])
+        );
+        assert_eq!(
+            required_fields(&v),
+            expect(&["project_id", "to", "subject", "body"])
+        );
+        // proposer는 raw project_ref/credential_ref를 줄 수 없다(#11) — 표면에 없음을 고정.
+        assert!(!prop_names(&v).contains("project_ref"));
+        assert!(!prop_names(&v).contains("credential_ref"));
+    }
+}

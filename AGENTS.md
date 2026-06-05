@@ -127,6 +127,7 @@ Area 문서:
 
 - `docs/areas/decision-rails.md` — 7 INVARIANTS (추출본 — PLAN.md §1 대체)
 - `docs/areas/ipc-conventions.md` — tauri-specta·keychain·bounded retry·외부 호출
+- `docs/areas/mcp-server-conventions.md` — `--mcp-stdio` MCP 서버 proposal-only 경계·툴 표면·입력/출력 안전·stdio 실행 경계
 - `docs/areas/data-layer-conventions.md` — sqlx·migrations·FTS5·dedup upsert·SSOT
 - `docs/areas/shadcn-migration.md` — Wave 1–5 규율, Esc 계약, overlay-stack
 - `docs/areas/frontend-board.md` — capture-board 5영역, drag 분류
