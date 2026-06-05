@@ -16,7 +16,7 @@ import { StatusDot } from "./SettingsKit";
 
 /**
  * 프로젝트별 Gmail 연결 (send-only — `gmail.send` 스코프). Google 계정 connect UI를 미러링하되
- * 캘린더 목록·ping 없음(Gmail은 발송 전용, 검증은 백엔드 refresh-ping).
+ * 캘린더 목록·별도 ping 없음(Gmail은 발송 전용 — 연결 검증은 OAuth connect의 refresh 성공으로 갈음).
  * INVARIANT: client_id/secret은 **로컬 입력 상태에만** 잠시 머물고 저장(IPC) 직후 비운다.
  * refresh_token/secret은 keychain에만. 미연결/네트워크 실패는 기능 비활성(graceful degrade).
  */

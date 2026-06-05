@@ -1,11 +1,11 @@
 //! 실 HTTP provider (reqwest, rustls) + 에러 분류(`classify_http`/`classify_reqwest`).
 //! bounded retry(`with_retry` + reqwest timeout). calendar/http.rs와 동일 패턴.
 //!
-//! 연결 라이브니스 검증(US-006 `ping`/`status` 커맨드가 소비)은 **`refresh_core` 토큰 갱신
-//! 라운드트립**으로 한다 — send-only 스코프(`gmail.send`)라 읽기/getProfile/메시지 리스트 API가
-//! 전혀 없고(읽기 스코프 0, PII 0), refresh 성공 = 자격증명·refresh_token 유효 신호로 충분하다.
-//! **이 모듈은 어떤 Gmail read 엔드포인트도 추가하지 않는다.** US-003은 provider 능력
-//! (send + single-attempt send)만 제공하며, 사용자-노출 `ping`/`status` 커맨드는 US-006에 산다.
+//! 연결 라이브니스 검증은 **`refresh_core` 토큰 갱신 라운드트립**으로 한다 — send-only 스코프
+//! (`gmail.send`)라 읽기/getProfile/메시지 리스트 API가 전혀 없고(읽기 스코프 0, PII 0), refresh
+//! 성공 = 자격증명·refresh_token 유효 신호로 충분하다. **이 모듈은 어떤 Gmail read 엔드포인트도
+//! 추가하지 않는다.** 별도 `ping` 커맨드는 없다(읽기 스코프를 끌어들일 위험 회피) — refresh는
+//! connect 흐름(`commands::gmail` connect)과 게이트의 `access_token_for_cref`가 소비한다.
 
 use std::time::Duration;
 

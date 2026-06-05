@@ -5,7 +5,8 @@ import { commands } from "@/bindings";
 import { unwrap } from "./client";
 
 // Phase 5: Gmail send(WRITE) 연결 설정. calendar.ts의 Google 계정 connect 훅을 미러링하되
-// send-only라 ping/calendars 없음(검증=백엔드 refresh-ping). 토큰 본문은 keychain(Rust) — 미노출.
+// send-only라 ping/calendars 훅 없음(연결 검증은 connect 시 refresh 성공으로 갈음). 토큰 본문은
+// keychain(Rust) — 미노출.
 
 /** 프로젝트별 Gmail 연결 상태(hasClient/connected/detail). 토큰/이메일 본문 미노출. */
 export function useGmailStatus(projectId: string) {
