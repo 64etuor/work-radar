@@ -1,7 +1,7 @@
 # Phase 5 — Gmail AI-origin connector (gated send)
 
-**Status: pending approval** (ralplan consensus artifact — planning only, no execution)
-**Track:** External Action Gate. Branch `feat/external-action-phase3` (tip `c533c0f`), worktree `.claude/worktrees/external-action-phase4`.
+**Status: done** — all 7 stories implemented + committed on `feat/external-action-phase3` (tip `4317ec2`, includes code-review follow-ups). Gates green (cargo 624 / clippy 0 / fmt / typecheck 0 / lint 0 err / vitest 320 / bindings drift 0); critic (opus, separate ctx) ACCEPT 0 blockers; deslop pass done. NOT pushed (user-explicit only). Remaining = live Google/Gmail OAuth + send smoke (user-only; agent cannot mint OAuth / click WKWebView).
+**Track:** External Action Gate. Branch `feat/external-action-phase3` (tip `4317ec2`), worktree `.claude/worktrees/external-action-phase4`.
 **Spec:** `docs/superpowers/specs/2026-06-04-external-action-gate-mcp-design.md` §4 (Phase 5).
 **Mirrors:** Phase 4 Calendar connector (`calendar/write.rs::execute_calendar_action`, `commands/external_actions.rs` router, `external_actions/mod.rs` enum). The **largest arm** — the only one needing a _new_ `TokenKind` + OAuth.
 **Revision 2** (post-architect): R1 MIME-injection story split out; R2 audit framing fixed; R3 getProfile→refresh-ping (send-only scope); R4 US-006 re-scoped to real connect surface; R5 CSRF-parity tripwire.
@@ -150,7 +150,7 @@ cargo test + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` +
 
 ## Completion bar
 
-All 7 stories `passes: true`; full gate suite green; **critic (opus, separate ctx) ACCEPT 0 blockers**; deslop pass; post-deslop regression green; commit (NO push — user-explicit only). Live Google/Gmail API + OAuth consent + WKWebView = user smoke (agent cannot).
+All 7 stories `passes: true` ✅; full gate suite green ✅ (cargo 624 / clippy 0 / fmt / typecheck 0 / lint 0 err / vitest 320 / drift 0); **critic (opus, separate ctx) ACCEPT 0 blockers** ✅; deslop pass ✅; post-deslop regression green ✅; commit done (`4317ec2`, NO push — user-explicit only) ✅. Live Google/Gmail API + OAuth consent + WKWebView = user smoke (agent cannot) — **deferred, outstanding**.
 
 ---
 
