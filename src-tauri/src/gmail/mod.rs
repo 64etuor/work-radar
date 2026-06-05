@@ -26,12 +26,15 @@
 // (테스트는 전부 구성·호출하므로 로직 자체는 cargo test로 검증됨.)
 #![allow(dead_code)]
 
+mod message;
 mod oauth;
 
 use crate::retry::Retryable;
 
 // US-002~006이 이 surface를 소비한다(mime/http/gate/mcp/connect). 현재 crate 내부에서
 // 아직 안 쓰여 unused 경고가 나는데, 의도적 보존이므로 allow(calendar와 동일 패턴).
+#[allow(unused_imports)]
+pub use message::build_raw_message;
 #[allow(unused_imports)]
 pub use oauth::{
     auth_url, connect_core, gen_code_verifier, gen_state, merge_refresh, parse_redirect_query,
