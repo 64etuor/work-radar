@@ -57,7 +57,7 @@ codex 잡 테이블을 확장하지 않고 **신규 테이블로 분리**):
 ```sql
 CREATE TABLE external_actions (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind          TEXT NOT NULL,   -- "github.comment" | "gmail.send" | "notion.update" | "calendar.create" ...
+  kind          TEXT NOT NULL,   -- 실제: "github.issue_comment" | "github.create_issue" | "notion.create_page" | "calendar.create_event" | "gmail.send"
   project_ref   TEXT,            -- credential_ref (토큰 격리)
   payload       TEXT NOT NULL,   -- 검증된 JSON (PII 가능 → 로컬 SQLite만, 로그 금지)
   preview       TEXT,            -- 사용자에게 보일 사람-친화 요약
@@ -80,12 +80,18 @@ CREATE TABLE external_action_audit (
 Rust 코어 타입:
 
 ```rust
+// 실제 구현 변형(struct-variant; 위 §3 "구현됨" 표와 1:1). 브레인스토밍기 newtype 스케치
+// (NotionUpdate(..) 등)에서 인라인 struct 변형으로 정착.
 pub enum ExternalAction {
-    NotionUpdate(NotionUpdatePayload),
-    GithubComment(GithubCommentPayload),
-    GithubCreatePr(GithubPrPayload),
-    GmailSend(GmailSendPayload),
-    CalendarCreate(CalendarEventPayload),
+    Noop { note: String },                  // Phase 0 라운드트립/테스트용 no-op
+    GithubIssueComment { repo: String, issue_number: u64, body: String },
+    GithubCreateIssue { repo: String, title: String, body: String },
+    NotionCreatePage { db_id: String, title: String },
+    CalendarCreateEvent {
+        calendar_id: String, title: String,
+        start: String, end: String, all_day: bool, description: Option<String>,
+    },
+    GmailSendEmail { to: String, subject: String, body: String },
     // 변형 추가 = 새 커넥터 비용 전부 (게이트/승인 UI/감사 공짜)
 }
 
@@ -108,14 +114,32 @@ out-of-module `mint`/직접 `execute` 호출이 컴파일 실패함을 `trybuild
 
 work-radar가 **앱 내장 stdio MCP 서버**를 노출. 외부 에이전트가 등록하면 툴이 보임.
 
-| 툴                                                                   | 유형  | 동작                | 반환                                      |
-| -------------------------------------------------------------------- | ----- | ------------------- | ----------------------------------------- |
-| `wr_list_projects`, `wr_read_signals`, `wr_pr_status`                | READ  | 캐시/조회           | 데이터                                    |
-| `wr_github_comment`, `wr_github_create_pr`, `wr_github_create_issue` | WRITE | enqueue             | `{action_id, status:"awaiting_approval"}` |
-| `wr_notion_update`, `wr_notion_create_page`                          | WRITE | enqueue             | action_id                                 |
-| `wr_gmail_send`, `wr_gmail_draft`                                    | WRITE | enqueue             | action_id                                 |
-| `wr_calendar_create`, `wr_calendar_move`                             | WRITE | enqueue             | action_id                                 |
-| `wr_action_status(action_id)`                                        | READ  | 승인/실행 상태 폴링 | status                                    |
+아래 표는 **구현 상태 정본**(`feat/external-action-phase3` @ `4317ec2` 기준). 원래 §3은
+브레인스토밍기 열망 카탈로그였고, 실행 시 **서비스당 대표 write 커넥터 1종**으로 의도적
+축소됐다 — 게이트 seam(enqueue→approve→dispatch→audit)이 일반화되어 있어 나머지 툴은
+변형/메서드 추가만으로 같은 seam에 붙는다(추가 게이트/승인 UI/감사 불요).
+
+**구현됨 (✅):**
+
+| 툴                                            | 유형  | 동작                | 반환                                      |
+| --------------------------------------------- | ----- | ------------------- | ----------------------------------------- |
+| `wr_list_projects`                            | READ  | 프로젝트 조회       | 데이터                                    |
+| `wr_list_pending_actions`                     | READ  | 대기 액션 목록      | `{actions, total, truncated}`             |
+| `wr_action_status(action_id)`                 | READ  | 승인/실행 상태 폴링 | status                                    |
+| `wr_github_comment`, `wr_github_create_issue` | WRITE | enqueue             | `{action_id, status:"awaiting_approval"}` |
+| `wr_notion_create_page`                       | WRITE | enqueue             | action_id                                 |
+| `wr_calendar_create_event`                    | WRITE | enqueue             | action_id                                 |
+| `wr_gmail_send`                               | WRITE | enqueue             | action_id                                 |
+
+**미구현 — 의도적 deferred (같은 seam에 변형 추가만 하면 됨):**
+
+| 툴                                 | 사유                                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| `wr_read_signals`, `wr_pr_status`  | 데이터 read 툴 — YAGNI, 게이트(write) MVP 범위 밖. 필요 시 read 툴로 추가.                |
+| `wr_github_create_pr`              | GitHub은 comment/issue 2종으로 seam 입증 — PR 생성은 후속 변형.                           |
+| `wr_notion_update`, notion comment | 새 `HttpNotionWriter` 메서드 + 새 Notion API 필요 (decisions.md 2026-06-04 Phase 3).      |
+| `wr_calendar_move`                 | create_event로 seam 입증 — 이동/삭제는 후속 변형.                                         |
+| `wr_gmail_draft`                   | send-only least-privilege로 드롭 — draft = read/compose 스코프 (decisions.md 2026-06-05). |
 
 계약:
 
@@ -141,10 +165,13 @@ critic(opus 별도 패스) ACCEPT → dev 푸시(사용자 명시 요청 시에�
   stdio MCP 서버, read 툴 + write 툴(enqueue만), `wr_action_status`. 헤드리스 MCP
   라운드트립 테스트(실 외부호출 0).
 - **Phase 2 — GitHub WRITE 승격. ✅ DONE** (`feat/external-action-phase3`, unpushed)
-  `github.rs` PrProvider에 `create_comment`/`create_issue`/`create_pr` 추가(bounded
-  retry, keychain). `ExternalConnector` impl. MCP 툴 3개 wire. 승인 패널 GitHub preview.
+  `github.rs` PrProvider에 `create_issue_comment`/`create_issue` 추가(bounded
+  retry, keychain). `ExternalConnector` impl. MCP 툴 2종 wire(`wr_github_comment`/
+  `wr_github_create_issue`). 승인 패널 GitHub preview. _`create_pr`는 §3 deferred
+  (seam은 2종으로 입증, PR 생성은 후속 변형)._
 - **Phase 3 — Notion WRITE 확장. ✅ DONE** (`feat/external-action-phase3`, unpushed)
-  속성 업데이트/코멘트/페이지 생성 확장 → 커넥터 impl → 툴 → preview.
+  **페이지 생성**(`wr_notion_create_page`) → 커넥터 impl → 툴 → preview. _속성
+  업데이트/코멘트는 §3 deferred(새 `HttpNotionWriter` 메서드 + 새 Notion API 필요)._
 - **Phase 4 — Calendar WRITE 확장(AI 제안). ✅ DONE** (`feat/external-action-phase3`, unpushed)
   AI 제안 이벤트는 `external_actions` 경유, **사용자 폼 제출은 기존
   `pending_calendar_writes` 경로 유지**. 이중 게이트 금지 — 두 경로의 단일화 경계를
