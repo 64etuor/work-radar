@@ -88,6 +88,11 @@ pub fn build_raw_message(to: &str, subject: &str, body: &str) -> Result<String, 
 
     // ── 3) RFC822 조립 (\r\n 줄끝, 헤더-본문 사이 빈 줄) ──
     // 최소 헤더 집합. From/Cc/Bcc 없음.
+    // 의도적 스코프 경계(US-004 게이트가 책임): `to`의 주소 형식 유효성(well-formedness)과
+    // 비-ASCII `to` 처리는 여기서 하지 않는다 — 이 빌더는 제어문자 인젝션 차단만 담당한다.
+    // 또한 헤더 줄 길이(RFC 5322 998바이트)와 긴 비-ASCII subject의 RFC 2047 encoded-word
+    // folding(75자/word)은 의식적으로 미적용 — 대상은 Gmail `users.messages.send` raw 경로(관대)이지
+    // 엄격한 SMTP MTA가 아니다. 엄격 MTA로 보내는 소비자가 생기면 그때 folding 추가.
     let message = format!(
         "MIME-Version: 1.0\r\n\
          To: {to}\r\n\
