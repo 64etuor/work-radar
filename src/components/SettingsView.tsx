@@ -14,7 +14,7 @@ import {
   Tags,
   User,
 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import type { Project } from "@/bindings";
 import { KindBadge } from "@/components/board/LifeWheelPalette";
@@ -29,6 +29,7 @@ import { useUIStore } from "@/store";
 import { AddProjectForm } from "./settings/AddProjectForm";
 import { AgentsPane } from "./settings/AgentsPane";
 import { AppearanceSettings } from "./settings/AppearanceSettings";
+import { GmailBlock } from "./settings/GmailBlock";
 import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
 import { HermesConnectionBlock } from "./settings/HermesConnectionBlock";
@@ -402,7 +403,10 @@ function IntegrationsPane({
           </div>
         )}
         {list.map((p) => (
-          <GoogleAccountBlock key={p.id} projectId={p.id} onToast={pushSuccess} />
+          <Fragment key={p.id}>
+            <GoogleAccountBlock projectId={p.id} onToast={pushSuccess} />
+            <GmailBlock projectId={p.id} onToast={pushSuccess} />
+          </Fragment>
         ))}
       </div>
 

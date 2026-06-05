@@ -1,4 +1,4 @@
-import { Calendar, Check, Github, type LucideIcon, X } from "lucide-react";
+import { Calendar, Check, Github, type LucideIcon, Mail, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import {
 const SERVICE_ICONS: Partial<Record<string, LucideIcon>> = {
   github: Github,
   calendar: Calendar,
+  gmail: Mail,
 };
 
 function ServiceIcon({ kind }: { kind: string }) {

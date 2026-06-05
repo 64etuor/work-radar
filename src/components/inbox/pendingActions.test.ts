@@ -32,6 +32,7 @@ describe("pendingActions", () => {
 
   it("formats action kind for display", () => {
     expect(formatActionKind("github.comment")).toBe("GitHub · comment");
+    expect(formatActionKind("gmail.send")).toBe("Gmail · send");
     expect(formatActionKind("noop")).toBe("noop");
   });
 
@@ -45,6 +46,7 @@ describe("pendingActions", () => {
     expect(serviceOf("github.issue_comment")).toBe("github");
     expect(serviceOf("notion.create_page")).toBe("notion");
     expect(serviceOf("calendar.create_event")).toBe("calendar");
+    expect(serviceOf("gmail.send")).toBe("gmail");
     expect(serviceOf("noop")).toBeNull();
   });
 });
