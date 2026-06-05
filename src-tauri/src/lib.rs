@@ -26,6 +26,7 @@ mod error;
 pub mod external_actions;
 mod git;
 mod github;
+mod gmail;
 mod governance;
 mod hermes_agent;
 mod jobs;

@@ -1893,6 +1893,8 @@ export type TodayOverview = {
 export type TokenKind = "notion" | "github" | 
 /**  Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a. */
 "google_calendar" | 
+/**  Gmail send 자격증명 blob ({clientId, clientSecret, refreshToken}). send-only 스코프. Phase 5. */
+"gmail" | 
 /**  Hermes 메신저 브리지 봇 토큰(Telegram Bot API류). 앱 레벨 단일 브리지(외부 Hermes 하나). Phase 20. */
 "hermes_bridge";
 
