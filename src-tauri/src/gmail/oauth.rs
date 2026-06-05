@@ -395,6 +395,16 @@ mod tests {
         async fn refresh_access(&self, _creds: &GmailCreds) -> Result<TokenResponse, GmailError> {
             self.refresh.clone()
         }
+
+        // OAuth 오케스트레이션(connect/refresh_core) 테스트는 send를 호출하지 않는다 — send_message는
+        // US-003에서 트레잇에 추가된 필수 메서드라 fake도 구현만 둔다(이 fake에선 미사용).
+        async fn send_message(
+            &self,
+            _access_token: &str,
+            _raw: &str,
+        ) -> Result<String, GmailError> {
+            Err(GmailError::Terminal("unused".into()))
+        }
     }
 
     fn client_only_creds() -> GmailCreds {

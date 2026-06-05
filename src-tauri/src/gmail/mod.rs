@@ -26,6 +26,7 @@
 // (테스트는 전부 구성·호출하므로 로직 자체는 cargo test로 검증됨.)
 #![allow(dead_code)]
 
+mod http;
 mod message;
 mod oauth;
 
@@ -33,6 +34,8 @@ use crate::retry::Retryable;
 
 // US-002~006이 이 surface를 소비한다(mime/http/gate/mcp/connect). 현재 crate 내부에서
 // 아직 안 쓰여 unused 경고가 나는데, 의도적 보존이므로 allow(calendar와 동일 패턴).
+#[allow(unused_imports)]
+pub use http::HttpGmailProvider;
 #[allow(unused_imports)]
 pub use message::build_raw_message;
 #[allow(unused_imports)]
@@ -85,4 +88,28 @@ pub trait GmailProvider {
         &self,
         creds: &GmailCreds,
     ) -> impl std::future::Future<Output = Result<TokenResponse, GmailError>> + Send;
+
+    /// Gmail로 메시지 전송(bounded retry). `raw` = base64url RFC822(message.rs build_raw_message 산출).
+    /// 반환: Gmail 메시지 id(external_ref). 사람-경로 없음 — 전부 AI-origin 게이트 경유. bounded retry.
+    fn send_message(
+        &self,
+        access_token: &str,
+        raw: &str,
+    ) -> impl std::future::Future<Output = Result<String, GmailError>> + Send;
+
+    /// 전송 — **단일 시도(재시도 없음)**. External Action Gate(AI-origin) 전용.
+    /// messages.send는 멱등하지 않다 — 요청이 Gmail에 도달한 뒤 응답만 유실되면(transport drop=
+    /// transient) `send_message`의 bounded retry가 **중복 발송**을 낸다(이메일은 캘린더 중복보다
+    /// 비대칭적으로 위험). 그래서 게이트 write는 재시도 대신 실패를 노출해 사용자가 재제안하게 한다
+    /// (calendar create_event_once / github WRITE_MAX_ATTEMPTS=1 선례).
+    ///
+    /// 기본 구현은 `send_message`로 위임한다 — **실 HTTP provider(HttpGmailProvider)는 단일-시도
+    /// POST로 override**해야 한다(중복 발송 방지). 기본 위임은 retry가 무의미한 테스트 fake 전용이다.
+    fn send_message_once(
+        &self,
+        access_token: &str,
+        raw: &str,
+    ) -> impl std::future::Future<Output = Result<String, GmailError>> + Send {
+        self.send_message(access_token, raw)
+    }
 }
