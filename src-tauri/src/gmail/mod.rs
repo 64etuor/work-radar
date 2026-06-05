@@ -6,10 +6,9 @@
 //! 통과한 뒤에야 Rust가 실제 송신한다(INVARIANT #2 — 자동화의 외부 mutate 차단). 외부 호출은
 //! bounded retry + graceful terminal failure.
 //!
-//! 모듈 레이아웃(현재 US-001):
-//!  - `oauth`   PKCE/auth_url/redirect 파싱 · GmailCreds blob · TokenResponse · connect/refresh_core
-//!
-//! 향후 슬라이스(US-002~006)가 mime/http/gate/mcp/connect 커맨드를 추가한다.
+//! 모듈 레이아웃:
+//!  - `oauth`    PKCE/auth_url/redirect 파싱 · GmailCreds blob · TokenResponse · connect/refresh_core
+//!  - `loopback` RFC 8252 loopback redirect 수신기 + LOOPBACK_TIMEOUT
 //!
 //! 핵심 규칙:
 //!  - bounded retry only (INVARIANT #5): 무한 retry/poll 금지.
@@ -20,23 +19,19 @@
 //! gmail은 자체 `GmailError`/`GmailProvider`를 소유한다(calendar/notion/github와 비공유) — Google OAuth는
 //! calendar와 토큰 흐름이 닮았지만 스코프·송신 관심사가 달라 모듈별로 분리(선례: github≠notion).
 
-// US-001은 OAuth foundation만 — 이 모듈의 pub surface(creds blob·순수 OAuth 헬퍼·connect/refresh_core·
-// GmailError·GmailProvider)는 US-002~006(mime/http/gate/mcp/connect)이 소비한다. 그 전까지는 crate
-// 내부에서 아무도 호출하지 않아 dead_code 경고가 전면 발생하므로, 이 슬라이스 한정으로 모듈 레벨 allow.
-// (테스트는 전부 구성·호출하므로 로직 자체는 cargo test로 검증됨.)
-#![allow(dead_code)]
-
 mod http;
+mod loopback;
 mod message;
 mod oauth;
 mod write;
 
 use crate::retry::Retryable;
 
-// US-002~006이 이 surface를 소비한다(mime/http/gate/mcp/connect). 현재 crate 내부에서
-// 아직 안 쓰여 unused 경고가 나는데, 의도적 보존이므로 allow(calendar와 동일 패턴).
-#[allow(unused_imports)]
 pub use http::HttpGmailProvider;
+pub use loopback::{Loopback, LOOPBACK_TIMEOUT};
+// connect surface(commands/gmail.rs)·http provider·write가 이 surface를 소비한다. 일부 순수
+// 헬퍼(parse_redirect_query 등)는 loopback이 `oauth::` 경로로 직접 쓰므로 이 재export는 crate
+// 내부에서 안 쓰여 unused 경고가 나는데, 의도적 보존이므로 allow(calendar와 동일 패턴).
 #[allow(unused_imports)]
 pub use message::build_raw_message;
 #[allow(unused_imports)]

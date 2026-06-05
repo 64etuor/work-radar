@@ -190,6 +190,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::google_calendar_status,
         commands::disconnect_google,
         commands::ping_google_calendar,
+        // Gmail OAuth 연결 (External Action Gate write 레일, Phase 5 US-006).
+        commands::set_gmail_oauth_client,
+        commands::start_gmail_oauth,
+        commands::cancel_gmail_oauth,
+        commands::gmail_status,
+        commands::disconnect_gmail,
         // Google Calendar 캘린더 선택 + 이벤트 (read 레일, Phase 10b).
         commands::list_google_calendars,
         commands::set_selected_calendars,
