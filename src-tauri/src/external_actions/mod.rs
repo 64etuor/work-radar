@@ -1,4 +1,4 @@
-//! External Action Gate (Phase 0). 모든 외부 mutation 제안의 단일 초크포인트.
+//! External Action Gate. 모든 외부 mutation 제안의 단일 초크포인트.
 //!
 //! INVARIANT #1/#2 기계화: 제안자(MCP/codex/hermes)는 `store::enqueue`로 proposal만 만들고,
 //! 실행은 사용자 승인 경로(`store::approve`)가 mint하는 `Acceptance` 토큰을 요구하는
@@ -13,12 +13,12 @@ pub use gate::{Acceptance, ExecOutcome, ExternalConnector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// 외부 액션 종류 + 검증된 payload. 변형 추가 = 새 커넥터 비용 전부.
-/// Phase 0는 enum 골격만 — payload 필드는 커넥터 PR(2~5)에서 채운다.
+/// 외부 액션 종류 + 검증된 payload. 변형 추가는 router arm, connector, preview/approval
+/// surfacing, idempotency regression을 함께 가져가야 한다.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub enum ExternalAction {
-    /// Phase 0 라운드트립/테스트용 no-op. 커넥터 PR에서 실 변형으로 대체/확장.
+    /// 라운드트립/테스트용 no-op. 실제 외부 쓰기는 아래 서비스별 변형이 담당한다.
     Noop { note: String },
     /// GitHub 이슈/PR에 코멘트(Phase 2 write). `repo`="owner/repo", `issue_number`=이슈/PR 번호.
     GithubIssueComment {
