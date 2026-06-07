@@ -1302,7 +1302,7 @@ function ExternalViewer({ skill, onImported }: { skill: Skill; onImported: () =>
   };
 
   return (
-    <div className="skl-edit">
+    <div className="skl-edit fill">
       <div className="skl-edit-top">
         <span className="skl-name-static">{skill.name}</span>
         {!editing ? (

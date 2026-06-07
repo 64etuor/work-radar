@@ -354,6 +354,10 @@
   background: var(--color-wr-surface);
 }
 .skl-sheet-body {
+  /* D3: flex 컬럼 — 마크다운 뷰어(.skl-edit.fill)만 높이를 채워 미리보기가 적응 스크롤한다.
+   * 다른 패널의 .skl-edit는 content-sized로 두고 시트 본문이 스크롤한다(긴 목록 안전). */
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -363,6 +367,11 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+/* D3: 마크다운 미리보기를 가진 뷰어만 시트 높이를 채운다 — 미리보기가 flex로 스크롤. */
+.skl-edit.fill {
+  flex: 1;
+  min-height: 0;
 }
 .skl-edit-top {
   display: flex;
@@ -403,8 +412,12 @@
   overflow-wrap: anywhere;
 }
 .skl-markdown {
+  /* D3: 미리보기는 가용 높이를 채우며 내부 스크롤한다(시트 본문 압박 안 함). 좁은/넓은 폭 모두
+   * 유동 폭 + prose max-width로 가독성 유지. 고정 max-height(480px) 제거 — flex 높이로 적응. */
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  max-height: 480px;
+  max-width: 72ch;
   overflow: auto;
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-md);
