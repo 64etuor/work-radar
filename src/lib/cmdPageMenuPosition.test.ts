@@ -41,4 +41,16 @@ describe("clampMenuPosition", () => {
     expect(p.placement).toBe("below");
     expect(p.top).toBe(52); // clamp: 120 - 60 - 8
   });
+
+  it("메뉴가 뷰포트보다 넓으면 음수 없이 margin으로 floor", () => {
+    // menu.w(900) > viewport.w(400) → maxLeft = max(margin, 400-900-8) = margin
+    const p = clampMenuPosition(
+      { x: 200, y: 400 },
+      { w: 400, h: 800 },
+      { w: 900, h: 60 },
+      MARGIN,
+      CLEAR,
+    );
+    expect(p.left).toBe(8); // 음수로 가지 않고 margin에 안착
+  });
 });

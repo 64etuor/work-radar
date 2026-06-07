@@ -58,6 +58,7 @@ export function CmdPageMenu({ origin }: { origin: { x: number; y: number } }) {
           <button
             key={item.view}
             type="button"
+            role="menuitem"
             className="cmd-page-menu-chip"
             data-active={active || undefined}
             aria-current={active ? "page" : undefined}
