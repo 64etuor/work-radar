@@ -48,7 +48,8 @@ type Action =
       options: { id: string; label: string }[];
     }
   | { type: "ask-resolve"; tabId: TabId; requestId: string; choice: string }
-  | { type: "reset-tab"; tabId: TabId };
+  | { type: "reset-tab"; tabId: TabId }
+  | { type: "load-messages"; tabId: TabId; messages: HermesMessage[] };
 
 export const uid = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -245,6 +246,9 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
         status: "idle",
         commandsList: [],
       }));
+
+    case "load-messages":
+      return updateTab(state, a.tabId, (t) => ({ ...t, messages: a.messages }));
   }
 }
 

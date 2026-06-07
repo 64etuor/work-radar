@@ -17,11 +17,11 @@ import { create } from "zustand";
 import { commands } from "@/bindings";
 import { unwrap } from "@/lib/query/client";
 
+import { autoTitleFrom, rowsToMessages, shouldAutoTitle } from "./sessionList";
 import type { AcpCommand, ToolCallSummary } from "./types";
 import {
   EMPTY_TABS_STATE,
   HERMES_TAB_CAP_FALLBACK,
-  pickDefaultName,
   type TabId,
   tabsReducer,
   type TabsState,
@@ -66,10 +66,10 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       const s = get();
       if (s.tabs.size >= s.cap) return null;
       const tabId = uid();
-      const defaultName = pickDefaultName(s);
       try {
         await unwrap(commands.hermesAgentOpenTab(tabId));
-        dispatch({ type: "open-tab", tabId, defaultName });
+        await unwrap(commands.hermesSessionCreate(tabId, "새 세션"));
+        dispatch({ type: "open-tab", tabId, defaultName: "새 세션" });
         return tabId;
       } catch (e) {
         const active = get().activeTabId;
@@ -77,7 +77,7 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
           dispatch({
             type: "system",
             tabId: active,
-            text: `탭 생성 실패: ${(e as Error).message}`,
+            text: `세션 생성 실패: ${(e as Error).message}`,
             level: "error",
           });
         }
@@ -89,11 +89,14 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       try {
         await unwrap(commands.hermesAgentCloseTab(tabId));
       } catch {
-        // best-effort
+        /* best-effort */
+      }
+      try {
+        await unwrap(commands.hermesSessionArchive(tabId));
+      } catch {
+        /* best-effort */
       }
       dispatch({ type: "close-tab", tabId });
-      // Invariant: 항상 1개 이상의 탭이 떠 있어야 한다 (사용자 결정).
-      // 마지막 탭이 닫혔으면 즉시 빈 탭 1개를 다시 만든다.
       if (get().tabs.size === 0) {
         await get().openTab();
       }
@@ -101,6 +104,14 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
 
     setActive: (tabId) => {
       dispatch({ type: "set-active", tabId });
+      const tab = get().tabs.get(tabId);
+      if (tab && tab.messages.length === 0) {
+        void commands.hermesSessionMessages(tabId).then((res) => {
+          if (res.status === "ok" && res.data.length > 0) {
+            dispatch({ type: "load-messages", tabId, messages: rowsToMessages(res.data) });
+          }
+        });
+      }
     },
 
     rename: (tabId, name) => {
@@ -111,6 +122,14 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       if (!text.trim() && images.length === 0) return;
       dispatch({ type: "user", tabId, text, images });
       dispatch({ type: "set-status", tabId, status: "starting" });
+      // 영속: user 메시지 + 자동 제목(첫 메시지일 때)
+      void unwrap(commands.hermesMessageAppend(tabId, "user", text, null)).catch(() => {});
+      const tab = get().tabs.get(tabId);
+      if (tab && shouldAutoTitle(tab.name) && text.trim()) {
+        const title = autoTitleFrom(text);
+        dispatch({ type: "rename", tabId, name: title });
+        void unwrap(commands.hermesSessionRename(tabId, title)).catch(() => {});
+      }
       try {
         await unwrap(commands.hermesAgentSend(tabId, text, images));
       } catch (e) {
@@ -205,14 +224,25 @@ export function useHermesTabsBootstrap() {
       cleanups.push(un);
     };
 
-    // Fetch cap from backend — SSOT lives in Rust.
-    void commands.hermesAgentCap().then((res) => {
-      if (!cancelled && res.status === "ok") {
-        dispatch({ type: "set-cap", cap: res.data });
+    // 부팅: DB에서 세션 목록 복원. 없으면 빈 세션 1개 생성.
+    void (async () => {
+      const res = await commands.hermesSessionsList();
+      if (cancelled) return;
+      if (res.status === "ok" && res.data.length > 0) {
+        for (const row of res.data) {
+          dispatch({ type: "open-tab", tabId: row.id, defaultName: row.name });
+        }
+        const firstId = res.data[0].id;
+        dispatch({ type: "set-active", tabId: firstId });
+        // 활성 세션 메시지 lazy-load
+        const msgs = await commands.hermesSessionMessages(firstId);
+        if (!cancelled && msgs.status === "ok") {
+          dispatch({ type: "load-messages", tabId: firstId, messages: rowsToMessages(msgs.data) });
+        }
+      } else {
+        await ensureDefaultTab();
       }
-      // After cap is known (or fallback 3), guarantee at least 1 tab exists.
-      void ensureDefaultTab();
-    });
+    })();
 
     void (async () => {
       await setup<{ kind?: string; text?: string }>("hermes-agent:chunk", (e) => {
@@ -254,13 +284,38 @@ export function useHermesTabsBootstrap() {
       await setup<{ status: "ok" | "cancelled" | "error"; error?: string }>(
         "hermes-agent:turn-end",
         (e) => {
-          if (!e.payload.tabId) return;
+          const tabId = e.payload.tabId;
+          if (!tabId) return;
           dispatch({
             type: "agent-end",
-            tabId: e.payload.tabId,
+            tabId,
             status: e.payload.status,
             error: e.payload.error,
           });
+          // 영속: 방금 닫힌 assistant 메시지 1개를 DB에 append.
+          const tab = useHermesTabsStore.getState().tabs.get(tabId);
+          if (tab) {
+            let lastContent: string | undefined;
+            let lastToolCalls: ToolCallSummary[] | undefined;
+            for (let i = tab.messages.length - 1; i >= 0; i--) {
+              const m = tab.messages[i];
+              if (m.role === "assistant") {
+                lastContent = m.chunks.join("");
+                lastToolCalls = m.toolCalls;
+                break;
+              }
+            }
+            if (lastContent !== undefined || lastToolCalls !== undefined) {
+              const content = lastContent ?? "";
+              const toolJson =
+                lastToolCalls && lastToolCalls.length ? JSON.stringify(lastToolCalls) : null;
+              if (content || toolJson) {
+                void unwrap(
+                  commands.hermesMessageAppend(tabId, "assistant", content, toolJson),
+                ).catch(() => {});
+              }
+            }
+          }
         },
       );
 
