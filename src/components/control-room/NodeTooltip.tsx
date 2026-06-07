@@ -1,8 +1,16 @@
 import { type GraphNode, NODE_W } from "../../lib/controlRoomGraph";
 
 export function NodeTooltip({ node }: { node: GraphNode }) {
+  // Rightmost (handoff) lane: anchor to the node's left so the card doesn't
+  // overflow the canvas edge.
+  const flip = node.lane === "handoff";
   return (
-    <div className="cr-tooltip" style={{ left: node.x + NODE_W + 10, top: node.y }} role="dialog">
+    <div
+      className="cr-tooltip"
+      data-flip={flip || undefined}
+      style={{ left: flip ? node.x - 10 : node.x + NODE_W + 10, top: node.y }}
+      role="dialog"
+    >
       <div className="cr-tooltip-lane">{node.lane}</div>
       <div className="cr-tooltip-title">{node.label}</div>
       <dl className="cr-tooltip-meta">

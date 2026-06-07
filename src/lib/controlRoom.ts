@@ -1,11 +1,4 @@
-import type {
-  HandoffPhase,
-  PlanPhase,
-  SessionPhase,
-  SessionRow,
-  SpecPhase,
-  TaskPhase,
-} from "../bindings";
+import type { HandoffPhase, PlanPhase, SessionPhase, SpecPhase, TaskPhase } from "../bindings";
 
 /** Master §12 node-status buckets, collapsed to the tones the UI renders. */
 export type StatusTone = "done" | "active" | "waiting" | "pressure" | "blocked" | "muted";
@@ -50,25 +43,6 @@ export function statusTone(phase: AnyPhase): StatusTone {
     default:
       return "muted";
   }
-}
-
-export interface SessionBuckets {
-  active: SessionRow[];
-  waiting: SessionRow[];
-  pressure: SessionRow[];
-  terminal: SessionRow[];
-}
-
-export function bucketSessions(sessions: SessionRow[]): SessionBuckets {
-  const out: SessionBuckets = { active: [], waiting: [], pressure: [], terminal: [] };
-  for (const s of sessions) {
-    const tone = statusTone(s.phase);
-    if (tone === "active") out.active.push(s);
-    else if (tone === "pressure") out.pressure.push(s);
-    else if (tone === "muted") out.terminal.push(s);
-    else out.waiting.push(s); // waiting + blocked share the "needs attention" column
-  }
-  return out;
 }
 
 /** Humanize the snapshot mtime. `nowMs` is injected so the function is pure/testable. */

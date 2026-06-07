@@ -227,6 +227,9 @@
   pointer-events: none;
   z-index: 10;
 }
+.cr-tooltip[data-flip] {
+  transform: translateX(-100%);
+}
 .cr-tooltip-lane {
   font-size: 10px;
   font-weight: 600;

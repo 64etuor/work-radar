@@ -42,10 +42,11 @@ export function Schematic({
   );
   const nodeById = useMemo(() => new Map(schematic.nodes.map((n) => [n.id, n])), [schematic.nodes]);
 
-  // Esc clears the pinned selection (local state only — not an overlay).
+  // Esc clears the pinned selection (local state only — not an overlay). No-op
+  // when nothing is selected so it never interferes when shown behind an overlay.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelected(null);
+      if (e.key === "Escape") setSelected((cur) => (cur === null ? cur : null));
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
