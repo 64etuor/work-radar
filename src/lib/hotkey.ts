@@ -107,3 +107,37 @@ export function parseHotkeySpec(spec: string): ParsedHotkey | null {
   const key = LABEL_TO_KEY[label] ?? (label.length === 1 ? label.toLowerCase() : label);
   return { key, ...mods };
 }
+
+/** spec 토큰 → 표시용 심볼. 매처/저장 포맷은 그대로 두고 표시(치트시트)만 변환. */
+const DISPLAY_SYMBOLS: Record<string, string> = {
+  Cmd: "⌘",
+  Meta: "⌘",
+  Ctrl: "⌃",
+  Control: "⌃",
+  Alt: "⌥",
+  Shift: "⇧",
+  Left: "←",
+  Right: "→",
+  Up: "↑",
+  Down: "↓",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backslash: "\\",
+  Semicolon: ";",
+  Backquote: "`",
+  Space: "␣",
+};
+
+/**
+ * "Cmd+Shift+K" → 표시용 "⌘⇧K"(순수). modifier는 심볼로, 그 외 라벨은 그대로 두고 구분자 없이 결합.
+ * 매핑 없는 토큰은 원문 유지. 빈 spec은 빈 문자열.
+ */
+export function formatHotkeySpec(spec: string): string {
+  return spec
+    .split("+")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => DISPLAY_SYMBOLS[p] ?? p)
+    .join("");
+}

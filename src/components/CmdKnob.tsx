@@ -3,6 +3,7 @@ import "./CmdKnob.css";
 import { useEffect, useRef, useState } from "react";
 
 import { CmdPageMenu } from "@/components/CmdPageMenu";
+import { CmdShortcutBar } from "@/components/CmdShortcutBar";
 import { armedDirection, clampToThrow, type KnobDir } from "@/lib/knobGeometry";
 import type { ViewMotion } from "@/lib/nav";
 import { useCmdKnob } from "@/lib/useCmdKnob";
@@ -124,6 +125,7 @@ export function CmdKnob({
         />
       </div>
       <CmdPageMenu origin={origin} onNavigate={onNavigate} />
+      <CmdShortcutBar />
     </>
   );
 }

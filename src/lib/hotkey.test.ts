@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { eventToHotkeySpec, parseHotkeySpec } from "./hotkey";
+import { eventToHotkeySpec, formatHotkeySpec, parseHotkeySpec } from "./hotkey";
+
+describe("formatHotkeySpec", () => {
+  it("modifier를 심볼로 바꾸고 구분자 없이 결합", () => {
+    expect(formatHotkeySpec("Cmd+1")).toBe("⌘1");
+    expect(formatHotkeySpec("Cmd+Shift+K")).toBe("⌘⇧K");
+    expect(formatHotkeySpec("Cmd+Left")).toBe("⌘←");
+    expect(formatHotkeySpec("Cmd+,")).toBe("⌘,");
+  });
+  it("빈 spec은 빈 문자열", () => {
+    expect(formatHotkeySpec("")).toBe("");
+  });
+});
 
 describe("parseHotkeySpec", () => {
   it("Cmd+Left → ArrowLeft + metaKey", () => {

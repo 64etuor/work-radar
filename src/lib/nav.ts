@@ -213,6 +213,29 @@ export function adjacentView(current: View, dir: -1 | 1): View {
   return NAV_ITEMS[next].view;
 }
 
+/** 설정된 단축키 한 줄(치트시트용). */
+export interface ShortcutHint {
+  key: string;
+  label: string;
+  spec: string;
+}
+
+/**
+ * keymap에서 **설정된(비어있지 않은)** nav/액션 단축키만 추린다(치트시트용). 순수 함수.
+ * 순서 = NAV_ITEMS → EXTRA_ACTIONS(설정 키맵 에디터와 동일 목록). knob 방향/트리거는 제외
+ * (조이스틱 자체 설정이라 단축키 치트시트 대상 아님).
+ */
+export function buildShortcutHints(keymap: Record<string, string> | undefined): ShortcutHint[] {
+  if (!keymap) return [];
+  const rows: { key: string; label: string }[] = [
+    ...NAV_ITEMS.map((n) => ({ key: n.view as string, label: n.label })),
+    ...EXTRA_ACTIONS.map((a) => ({ key: a.key, label: a.label })),
+  ];
+  return rows
+    .map((r) => ({ ...r, spec: (keymap[r.key] ?? "").trim() }))
+    .filter((r) => r.spec.length > 0);
+}
+
 /** 슬라이드 전환 방향(App의 navigateView가 받는 motion). NAV 순서 기준. */
 export type ViewMotion = "forward" | "back" | "neutral";
 

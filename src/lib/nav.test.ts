@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   adjacentView,
+  buildShortcutHints,
   defaultKeymap,
   EXTRA_ACTIONS,
   KNOB_DIRECTIONS,
@@ -85,6 +86,22 @@ describe("adjacentView", () => {
       expect(adjacentView(adjacentView(item.view, 1), -1)).toBe(item.view);
       expect(adjacentView(adjacentView(item.view, -1), 1)).toBe(item.view);
     }
+  });
+});
+
+describe("buildShortcutHints", () => {
+  it("keymap이 없으면 빈 배열", () => {
+    expect(buildShortcutHints(undefined)).toEqual([]);
+  });
+  it("설정된(비어있지 않은) 항목만, NAV→EXTRA 순서로 추린다", () => {
+    const hints = buildShortcutHints({ board: "Cmd+1", today: "", calendar: "Cmd+Shift+C" });
+    expect(hints).toEqual([
+      { key: "board", label: NAV_BY_VIEW.board.label, spec: "Cmd+1" },
+      { key: "calendar", label: "캘린더 열기/닫기", spec: "Cmd+Shift+C" },
+    ]);
+  });
+  it("공백만 있는 spec은 제외", () => {
+    expect(buildShortcutHints({ board: "   " })).toEqual([]);
   });
 });
 
