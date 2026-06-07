@@ -42,24 +42,23 @@ pub async fn set_project_token(
             "토큰이 비었습니다",
         ));
     }
-    // 저장 전 라이브 검증 — 잘못된/만료/권한 없는 토큰을 keychain에 넣지 않는다(import_notion_token 선례).
+    // 저장 전 라이브 검증 — **확실히 무효한 토큰(Invalid, 예: 401)만 차단**하고, 네트워크/일시 실패
+    // (Unreachable)는 통과시켜 오프라인/blip에 유효 토큰 저장을 막지 않는다(사후 Test ping으로 확인).
     // OAuth blob 종류(GoogleCalendar/Gmail/HermesBridge)는 단순 ping 대상이 아니라 검증 생략(별도 연결 흐름).
     match kind {
         TokenKind::Notion => {
-            let ping = api::ping_notion(token).await;
-            if !ping.ok {
-                return Err(AppError::terminal(
+            if api::probe_notion(token).await.outcome == api::ProbeOutcome::Invalid {
+                return Err(AppError::validation(
                     "tokens.notion_verify_failed",
-                    format!("Notion 토큰 검증 실패: {}", ping.detail),
+                    "Notion 토큰이 무효입니다(잘못되었거나 접근 불가)",
                 ));
             }
         }
         TokenKind::Github => {
-            let ping = api::ping_github(token).await;
-            if !ping.ok {
-                return Err(AppError::terminal(
+            if api::probe_github(token).await.outcome == api::ProbeOutcome::Invalid {
+                return Err(AppError::validation(
                     "tokens.github_verify_failed",
-                    format!("GitHub 토큰 검증 실패: {}", ping.detail),
+                    "GitHub 토큰이 무효입니다(잘못되었거나 접근 불가)",
                 ));
             }
         }
@@ -237,13 +236,11 @@ pub async fn import_github_token(db: State<'_, Db>, project_id: String) -> Resul
             "gh 토큰을 가져오지 못했습니다 — 'gh 로그인'을 먼저 진행하세요.",
         ));
     }
-    // 저장 전 라이브 검증(import_notion_token 선례 — 그쪽은 ping하는데 gh import만 빠져 있었다).
-    // 만료/무효 토큰을 keychain에 넣지 않는다.
-    let ping = api::ping_github(&token).await;
-    if !ping.ok {
-        return Err(AppError::terminal(
+    // 저장 전 라이브 검증(import_notion_token 선례). **확실히 무효(Invalid)만 차단** — 일시 실패는 통과.
+    if api::probe_github(&token).await.outcome == api::ProbeOutcome::Invalid {
+        return Err(AppError::validation(
             "tokens.github_verify_failed",
-            format!("GitHub 토큰 검증 실패: {}", ping.detail),
+            "GitHub 토큰이 무효입니다(잘못되었거나 접근 불가)",
         ));
     }
     let cref = project_credential_ref(db.inner(), &project_id)

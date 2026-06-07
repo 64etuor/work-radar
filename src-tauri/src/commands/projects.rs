@@ -340,12 +340,8 @@ pub(crate) async fn set_project_notion_db_ids_core(
         // 진짜 keychain 에러는 삼키지 않고 노출한다 — 잘못된 바인딩을 조용히 저장하지 않기 위해.
         match crate::notion::notion_token_for_cref(&cref) {
             Ok(token) => {
-                if let Some(id) = &backlog {
-                    crate::notion::probe_database(&token, id).await?;
-                }
-                if let Some(id) = &agenda {
-                    crate::notion::probe_database(&token, id).await?;
-                }
+                verify_notion_db_access(&token, backlog.as_deref()).await?;
+                verify_notion_db_access(&token, agenda.as_deref()).await?;
             }
             Err(e) if e.code == "notion.token_missing" => {}
             Err(e) => return Err(e),
@@ -362,6 +358,27 @@ pub(crate) async fn set_project_notion_db_ids_core(
     .fetch_optional(db)
     .await?
     .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))
+}
+
+/// 바인딩될 Notion DB id에 라이브 접근 검증. **확실히 접근 불가(잘못된 DB id/권한 = Terminal)만 차단**하고,
+/// 일시적 실패(네트워크/5xx = Transient)는 통과시켜 blip에 유효 편집(부분 해제 포함)을 막지 않는다.
+/// id가 None이면 통과(해제 경로).
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용.
+#[allow(clippy::result_large_err)]
+async fn verify_notion_db_access(token: &str, db_id: Option<&str>) -> Result<(), AppError> {
+    let Some(db_id) = db_id else {
+        return Ok(());
+    };
+    match crate::notion::probe_database(token, db_id).await {
+        Ok(_) => Ok(()),
+        // 일시적 실패(네트워크/5xx)만 통과 — blip에 유효 편집을 막지 않는다.
+        Err(crate::notion::NotionError::Transient(_)) => Ok(()),
+        // 그 외(NotFound/Forbidden/Terminal 등 = 확실히 접근 불가)는 차단.
+        Err(e) => Err(AppError::validation(
+            "projects.notion_db_inaccessible",
+            format!("Notion DB에 접근할 수 없습니다 — DB ID와 토큰 권한을 확인하세요 ({e})"),
+        )),
+    }
 }
 
 #[tauri::command]

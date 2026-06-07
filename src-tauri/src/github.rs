@@ -477,38 +477,36 @@ pub fn github_provider_for_cref(cref: &str) -> Result<HttpPrProvider, crate::err
     Ok(HttpPrProvider::new(&token)?)
 }
 
-/// 레포 접근 검증 실패 → 사용자 액션 가능한 AppError 매핑(순수 — 테스트 가능).
-/// Terminal(404/403/파싱 등 = 입력/권한 문제) → validation(`repos.inaccessible`),
-/// Transient(네트워크/429/5xx = 일시적) → terminal(`repos.access_check_failed`).
-pub fn map_repo_access_error(repo_full_name: &str, e: GithubError) -> crate::error::AppError {
-    use crate::error::AppError;
-    match e {
-        GithubError::Terminal(msg) => AppError::validation(
-            "repos.inaccessible",
-            format!(
-                "'{repo_full_name}' 레포에 접근할 수 없습니다 — URL과 GitHub 토큰 권한을 확인하세요 ({msg})"
-            ),
+/// 접근 불가(확실) → `repos.inaccessible` validation 에러(순수 — 테스트 가능).
+pub(crate) fn repo_inaccessible_error(repo_full_name: &str, msg: &str) -> crate::error::AppError {
+    crate::error::AppError::validation(
+        "repos.inaccessible",
+        format!(
+            "'{repo_full_name}' 레포에 접근할 수 없습니다 — URL과 GitHub 토큰 권한을 확인하세요 ({msg})"
         ),
-        GithubError::Transient(msg) => AppError::terminal(
-            "repos.access_check_failed",
-            format!("레포 접근 확인 실패(일시적) — 잠시 후 다시 시도하세요 ({msg})"),
-        ),
-    }
+    )
 }
 
-/// cref의 GitHub 토큰으로 레포 접근 가능성을 검증한다(추가 전 게이트). 토큰 없음=`github.token_missing`,
-/// 접근 불가=`repos.inaccessible`. Local 레포·빈 URL은 호출부(`create_repo`)가 먼저 거른다.
+/// cref의 GitHub 토큰으로 레포 접근 가능성을 검증한다(추가 전 게이트). 정책:
+///  - 토큰 미설정 → **검증 생략**(추가 허용; 토큰은 레포 추가 후 저장 가능 — Notion DB 바인딩과 동일 정책).
+///  - 확실히 접근 불가(404/403 등 Terminal) → `repos.inaccessible`로 차단.
+///  - 일시적 실패(429/5xx/네트워크 = Transient) → **통과**(확인 불가로 유효 레포를 거부하지 않음).
 // AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(github_provider_for_cref 등과 동일).
 #[allow(clippy::result_large_err)]
 pub async fn validate_github_repo_access(
     cref: &str,
     repo_full_name: &str,
 ) -> Result<(), crate::error::AppError> {
-    let provider = github_provider_for_cref(cref)?;
-    provider
-        .check_repo_access(repo_full_name)
-        .await
-        .map_err(|e| map_repo_access_error(repo_full_name, e))
+    let provider = match github_provider_for_cref(cref) {
+        Ok(p) => p,
+        Err(e) if e.code == "github.token_missing" => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    match provider.check_repo_access(repo_full_name).await {
+        Ok(()) => Ok(()),
+        Err(GithubError::Terminal(msg)) => Err(repo_inaccessible_error(repo_full_name, &msg)),
+        Err(GithubError::Transient(_)) => Ok(()),
+    }
 }
 
 /// 승인된 GitHub 액션을 적절한 writer 메서드로 dispatch한다. 키체인/네트워크 없는 **순수 dispatch**
@@ -645,14 +643,12 @@ mod tests {
         assert_eq!(parse_owner_repo("not-a-repo"), None);
     }
 
-    /// 레포 접근 검증 에러 매핑: Terminal=입력/권한(validation), Transient=일시적(terminal).
+    /// 접근 불가(Terminal) → repos.inaccessible validation 에러로 매핑.
     #[test]
-    fn map_repo_access_error_classifies() {
-        let term =
-            map_repo_access_error("o/r", GithubError::Terminal("HTTP 404: Not Found".into()));
-        assert_eq!(term.code, "repos.inaccessible");
-        let trans = map_repo_access_error("o/r", GithubError::Transient("net".into()));
-        assert_eq!(trans.code, "repos.access_check_failed");
+    fn repo_inaccessible_error_has_validation_code() {
+        let e = repo_inaccessible_error("o/r", "HTTP 404: Not Found");
+        assert_eq!(e.code, "repos.inaccessible");
+        assert!(e.message.contains("o/r"));
     }
 }
 

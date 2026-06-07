@@ -4,8 +4,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
+use std::sync::Arc;
 
 use tauri::State;
+use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 use crate::api;
@@ -51,23 +53,25 @@ pub async fn run_connection_audit(db: State<'_, Db>) -> Result<ConnectionAudit, 
 
     // 상한 병렬: 프로젝트를 AUDIT_CONCURRENCY 청크로 나눠 각 청크를 동시 검증(무상한 fan-out 방지).
     // 각 태스크는 pool/Project를 owned 복제로 받아 'static을 충족하고, 인덱스로 원래 순서를 복원한다.
-    let entries: Vec<(usize, Project)> = projects.iter().cloned().enumerate().collect();
+    // 상한 병렬: 단일 JoinSet + Semaphore(permit AUDIT_CONCURRENCY)로 동시성만 제한한다 — 청크 배리어가
+    // 없어 느린 ping이 다음 묶음을 막지 않는다(무상한 fan-out도 방지). 인덱스로 원래 순서를 복원한다.
+    let sem = Arc::new(Semaphore::new(AUDIT_CONCURRENCY));
+    let mut set: JoinSet<(usize, ProjectConnectionStatus, ServiceIdentities)> = JoinSet::new();
+    for (idx, proj) in projects.iter().cloned().enumerate() {
+        let pool = pool.clone();
+        let sem = sem.clone();
+        set.spawn(async move {
+            let _permit = sem.acquire_owned().await.ok();
+            let (status, idents) = audit_project(&pool, &proj).await;
+            (idx, status, idents)
+        });
+    }
     let mut results: Vec<Option<(ProjectConnectionStatus, ServiceIdentities)>> =
         (0..projects.len()).map(|_| None).collect();
-    for batch in entries.chunks(AUDIT_CONCURRENCY) {
-        let mut set: JoinSet<(usize, ProjectConnectionStatus, ServiceIdentities)> = JoinSet::new();
-        for (idx, proj) in batch.iter().cloned() {
-            let pool = pool.clone();
-            set.spawn(async move {
-                let (status, idents) = audit_project(&pool, &proj).await;
-                (idx, status, idents)
-            });
-        }
-        while let Some(res) = set.join_next().await {
-            // 태스크 패닉/취소(JoinError)는 best-effort로 그 프로젝트만 누락(audit_project은 패닉 경로 없음).
-            if let Ok((idx, status, idents)) = res {
-                results[idx] = Some((status, idents));
-            }
+    while let Some(res) = set.join_next().await {
+        // 태스크 패닉/취소(JoinError)는 best-effort로 그 프로젝트만 누락(audit_project은 패닉 경로 없음).
+        if let Ok((idx, status, idents)) = res {
+            results[idx] = Some((status, idents));
         }
     }
 
@@ -112,8 +116,8 @@ async fn audit_project(pool: &Db, p: &Project) -> (ProjectConnectionStatus, Serv
 
     let (github, github_login) = match keychain::get_token(cref, TokenKind::Github) {
         Ok(Some(tok)) => {
-            let (ok, detail, id) = api::probe_github(&tok).await;
-            (conn(ok, detail), id)
+            let p = api::probe_github(&tok).await;
+            (conn_from_probe(&p), p.identity)
         }
         Ok(None) => (ConnCheck::not_configured(), None),
         Err(e) => (ConnCheck::failed(format!("keychain: {e}")), None),
@@ -121,8 +125,8 @@ async fn audit_project(pool: &Db, p: &Project) -> (ProjectConnectionStatus, Serv
 
     let (notion, notion_bot, notion_token) = match keychain::get_token(cref, TokenKind::Notion) {
         Ok(Some(tok)) => {
-            let (ok, detail, id) = api::probe_notion(&tok).await;
-            (conn(ok, detail), id, Some(tok))
+            let p = api::probe_notion(&tok).await;
+            (conn_from_probe(&p), p.identity, Some(tok))
         }
         Ok(None) => (ConnCheck::not_configured(), None, None),
         Err(e) => (ConnCheck::failed(format!("keychain: {e}")), None, None),
@@ -177,11 +181,12 @@ async fn audit_project(pool: &Db, p: &Project) -> (ProjectConnectionStatus, Serv
     )
 }
 
-fn conn(ok: bool, detail: String) -> ConnCheck {
-    if ok {
-        ConnCheck::ok(detail)
+/// Probe 결과를 점검 화면용 ConnCheck로. Valid→Ok, Invalid/Unreachable→Failed(확인 불가 포함, detail에 사유).
+fn conn_from_probe(p: &api::Probe) -> ConnCheck {
+    if p.outcome == api::ProbeOutcome::Valid {
+        ConnCheck::ok(p.detail.clone())
     } else {
-        ConnCheck::failed(detail)
+        ConnCheck::failed(p.detail.clone())
     }
 }
 
@@ -300,22 +305,27 @@ pub(crate) fn find_notion_db_duplicates(projects: &[Project]) -> Vec<DuplicateGr
 }
 
 pub(crate) fn find_account_duplicates(idents: &[ServiceIdentities]) -> Vec<AccountDuplicate> {
-    let mut map: BTreeMap<(String, String), Vec<AuditProjectRef>> = BTreeMap::new();
+    // 키는 소문자 정규화 — 대소문자 차이로 같은 계정이 분리되어 개인/업무 분리 위반을 놓치지 않도록
+    // (repo_identity와 동일 정책). 표시용 identity는 최초 관측 원본을 보존한다.
+    // (login 변경/표시명 우연 일치 등 더 깊은 식별 정확도는 stable id가 필요 — 알려진 한계.)
+    let mut map: BTreeMap<(String, String), (String, Vec<AuditProjectRef>)> = BTreeMap::new();
     for si in idents {
         if let Some(login) = &si.github_login {
-            map.entry(("github".to_string(), login.clone()))
-                .or_default()
+            map.entry(("github".to_string(), login.to_lowercase()))
+                .or_insert_with(|| (login.clone(), Vec::new()))
+                .1
                 .push(si.project.clone());
         }
         if let Some(bot) = &si.notion_bot {
-            map.entry(("notion".to_string(), bot.clone()))
-                .or_default()
+            map.entry(("notion".to_string(), bot.to_lowercase()))
+                .or_insert_with(|| (bot.clone(), Vec::new()))
+                .1
                 .push(si.project.clone());
         }
     }
     map.into_iter()
-        .filter(|(_, ps)| ps.len() >= 2)
-        .map(|((service, identity), projects)| {
+        .filter(|(_, (_, ps))| ps.len() >= 2)
+        .map(|((service, _), (identity, projects))| {
             // 개인/업무 분리 핵심: 한 계정이 개인·업무 프로젝트에 모두 걸치면 강조 경고.
             let cross_kind = projects.iter().any(|p| p.kind == ProjectKind::Personal)
                 && projects.iter().any(|p| p.kind == ProjectKind::Work);
