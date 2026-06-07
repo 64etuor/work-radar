@@ -33,11 +33,12 @@ pub async fn hermes_agent_open_tab(
 pub async fn hermes_agent_send(
     app: AppHandle,
     holder: State<'_, HermesAgentHolder>,
+    db: State<'_, crate::db::Db>,
     tab_id: String,
     text: String,
     image_paths: Vec<String>,
 ) -> Result<(), AppError> {
-    // 1. Lazy spawn — if no child for this slot, spawn one. Re-check cap.
+    // 1. Lazy spawn — if no child for this slot, spawn one.
     let snapshot = {
         let map = holder.read().await;
         map.get(&tab_id).map(|s| {
@@ -51,14 +52,17 @@ pub async fn hermes_agent_send(
         })
     };
 
+    let mut spawned = false;
     let (session_id, transport, stdin_tx, pending, next_id) = match snapshot {
         Some(s) => s,
         None => {
+            spawned = true;
             // Spawn WITHOUT holding any lock so concurrent tabs don't serialise here.
             let session = AcpSession::spawn(app.clone(), tab_id.clone()).await?;
             let mut map = holder.write().await;
             if let Some(existing) = map.get(&tab_id) {
                 // Racing spawn won — use existing session, kill ours.
+                spawned = false;
                 let tup = (
                     existing.session_id.clone(),
                     existing.image_transport,
@@ -83,10 +87,34 @@ pub async fn hermes_agent_send(
         }
     };
 
+    // 재개: 방금 spawn한 세션이고 DB에 이전 히스토리가 있으면 최근 N개를 preamble로 prepend.
+    const REPLAY_LIMIT: i64 = 20;
+    let effective_text = if spawned {
+        let recent = crate::hermes_agent::session_store::recent_messages_inner(
+            db.inner(),
+            &tab_id,
+            REPLAY_LIMIT,
+        )
+        .await
+        .unwrap_or_default();
+        // 방금 FE가 append한 이번 user 메시지는 preamble에서 제외.
+        let ctx: Vec<_> = recent
+            .into_iter()
+            .filter(|r| !(r.role == "user" && r.content == text))
+            .collect();
+        if let Some(preamble) = crate::hermes_agent::session_store::build_replay_preamble(&ctx) {
+            format!("{preamble}---\n\n{text}")
+        } else {
+            text.clone()
+        }
+    } else {
+        text.clone()
+    };
+
     // 2. Build prompt blocks (same as before — image_paths handling).
     let mut prompt: Vec<serde_json::Value> = Vec::new();
-    if !text.is_empty() {
-        prompt.push(json!({ "type": "text", "text": text }));
+    if !effective_text.is_empty() {
+        prompt.push(json!({ "type": "text", "text": effective_text }));
     }
     for path in &image_paths {
         let block = match transport {

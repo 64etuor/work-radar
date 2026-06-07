@@ -159,6 +159,47 @@ pub(crate) async fn messages_inner(
     .await
 }
 
+/// 최근 `limit`개 메시지를 시간순(오래된→최신)으로 반환. preamble replay용.
+pub(crate) async fn recent_messages_inner(
+    db: &Db,
+    session_id: &str,
+    limit: i64,
+) -> Result<Vec<HermesMessageRow>, sqlx::Error> {
+    let mut rows: Vec<HermesMessageRow> = sqlx::query_as(
+        "SELECT id, session_id, seq, role, content, tool_json, created_at \
+         FROM hermes_message WHERE session_id = ?1 ORDER BY seq DESC LIMIT ?2",
+    )
+    .bind(session_id)
+    .bind(limit)
+    .fetch_all(db)
+    .await?;
+    rows.reverse(); // DESC로 뽑아 최신 limit개 확보 후 시간순으로 뒤집음
+    Ok(rows)
+}
+
+/// replay preamble 텍스트 빌더. 빈 입력이면 None(주입 안 함).
+pub(crate) fn build_replay_preamble(rows: &[HermesMessageRow]) -> Option<String> {
+    if rows.is_empty() {
+        return None;
+    }
+    let mut s = String::from(
+        "다음은 이 세션의 이전 대화 맥락입니다(앱 재시작으로 새 세션이 시작됨). \
+         이어서 답하세요.\n\n",
+    );
+    for r in rows {
+        let who = match r.role.as_str() {
+            "user" => "사용자",
+            "assistant" => "어시스턴트",
+            _ => continue, // system 등은 맥락에서 제외
+        };
+        s.push_str(who);
+        s.push_str(": ");
+        s.push_str(&r.content);
+        s.push_str("\n\n");
+    }
+    Some(s)
+}
+
 // ─ IPC 커맨드(얇은 위임) ───────────────────────────────────────────────
 
 #[tauri::command]
@@ -303,5 +344,43 @@ mod tests {
         delete_inner(&db, "s1").await.expect("delete");
         assert!(get_inner(&db, "s1").await.expect("get").is_none());
         assert_eq!(messages_inner(&db, "s1").await.expect("messages").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn recent_messages_bounded_and_ordered() {
+        let db = fresh_db().await;
+        create_inner(&db, "s1", "a").await.expect("create");
+        for i in 0..25 {
+            append_inner(&db, "s1", "user", &format!("m{i}"), None)
+                .await
+                .expect("append");
+        }
+        let recent = recent_messages_inner(&db, "s1", 20).await.expect("recent");
+        assert_eq!(recent.len(), 20);
+        // 시간순(오래된 → 최신) 이어야 preamble이 자연스럽다.
+        assert_eq!(recent.first().expect("first").content, "m5");
+        assert_eq!(recent.last().expect("last").content, "m24");
+    }
+
+    #[test]
+    fn preamble_renders_roles_and_is_empty_for_none() {
+        assert_eq!(build_replay_preamble(&[]), None);
+        let rows = vec![mk("user", "hi"), mk("assistant", "yo")];
+        let p = build_replay_preamble(&rows).expect("some");
+        assert!(p.contains("이전 대화"));
+        assert!(p.contains("hi"));
+        assert!(p.contains("yo"));
+    }
+
+    fn mk(role: &str, content: &str) -> HermesMessageRow {
+        HermesMessageRow {
+            id: 0,
+            session_id: "s".into(),
+            seq: 0,
+            role: role.into(),
+            content: content.into(),
+            tool_json: None,
+            created_at: String::new(),
+        }
     }
 }
