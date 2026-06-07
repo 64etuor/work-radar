@@ -235,7 +235,8 @@ fn repo_identity(r: &Repo) -> Option<String> {
             Some(format!("{owner}/{repo}").to_lowercase())
         }
         Provider::Local => {
-            let p = r.local_path.as_deref()?.trim();
+            // 후행 슬래시를 정규화해 "/a/b" 와 "/a/b/"를 같은 레포로 본다(중복 누락 방지).
+            let p = r.local_path.as_deref()?.trim().trim_end_matches('/');
             (!p.is_empty()).then(|| p.to_string())
         }
     }
@@ -399,6 +400,19 @@ mod tests {
         }
     }
 
+    fn local_repo(project_id: &str, path: &str) -> Repo {
+        Repo {
+            id: format!("repo-{project_id}-local"),
+            project_id: project_id.to_string(),
+            provider: Provider::Local,
+            remote_url: None,
+            local_path: Some(path.to_string()),
+            default_branch: "main".to_string(),
+            enabled: true,
+            created_at: "2026-06-07T00:00:00Z".to_string(),
+        }
+    }
+
     fn pref(id: &str, name: &str, kind: ProjectKind) -> AuditProjectRef {
         AuditProjectRef {
             id: id.to_string(),
@@ -423,6 +437,23 @@ mod tests {
         let groups = find_repo_duplicates(&repos, &projects);
         assert_eq!(groups.len(), 1, "한 그룹(acme/repo)만 중복");
         assert_eq!(groups[0].identity, "acme/repo");
+        assert_eq!(groups[0].projects.len(), 2);
+    }
+
+    #[test]
+    fn repo_duplicates_normalize_local_trailing_slash() {
+        let projects = vec![
+            project("p1", "개인", ProjectKind::Personal, None, None),
+            project("p2", "업무", ProjectKind::Work, None, None),
+        ];
+        // 같은 로컬 경로(후행 슬래시 차이) → 정규화 후 동일 identity로 중복 검출.
+        let repos = vec![
+            local_repo("p1", "/home/me/proj"),
+            local_repo("p2", "/home/me/proj/"),
+        ];
+        let groups = find_repo_duplicates(&repos, &projects);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].identity, "/home/me/proj");
         assert_eq!(groups[0].projects.len(), 2);
     }
 
