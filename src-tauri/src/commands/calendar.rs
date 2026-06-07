@@ -407,6 +407,14 @@ fn calendar_events_cache() -> &'static TtlCache<String, Vec<CalendarEvent>> {
     CACHE.get_or_init(|| TtlCache::new(Duration::from_secs(60), 256))
 }
 
+/// 표시 캐시 전체 무효화. 이벤트 색(project_color)은 fetch 시점에 박혀 캐시에 들어가므로,
+/// 프로젝트 캘린더 색 변경 시 다음 fetch가 새 색으로 재구성되도록 이 캐시를 비워야 한다
+/// (프런트 `["calendarEvents"]` 무효화만으론 refetch가 force_refresh=false라 stale 색을 다시 받음).
+/// 색 변경은 드문 사용자 액션이라 전체 무효화로 충분(키 단위 부분 무효화 불요).
+pub(crate) async fn invalidate_calendar_events_cache() {
+    calendar_events_cache().invalidate_all().await;
+}
+
 /// 캐시 키([time_min,time_max] 윈도우)로 선택 캘린더 이벤트를 단일 Google range 호출로 병합 반환.
 /// `fetch_calendar_events`(하루)와 `fetch_calendar_events_range`(임의 범위)가 공유하는 본체. 한 윈도우
 /// = 한 [time_min,time_max] 쌍 → 캘린더당 **단일 range 호출**(N일×1콜 아님 — 주/월도 단발). 프로젝트별

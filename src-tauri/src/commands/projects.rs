@@ -269,7 +269,11 @@ pub async fn set_project_calendar_color(
     db: State<'_, Db>,
     input: SetProjectCalendarColorInput,
 ) -> Result<Project, AppError> {
-    update_project_calendar_color(db.inner(), &input).await
+    let project = update_project_calendar_color(db.inner(), &input).await?;
+    // 이벤트 색은 fetch 시점에 캐시에 박히므로, 색 변경 후 표시 캐시를 비워 다음 fetch가 새 색으로
+    // 재구성되게 한다(프런트 ["calendarEvents"] 무효화만으론 Rust 60초 TTL이 stale 색을 반환).
+    crate::commands::calendar::invalidate_calendar_events_cache().await;
+    Ok(project)
 }
 
 /// 프로젝트별 "일정 생성 기본 캘린더" id 변경. Today×Timeline drop 시 사용된다 (spec §D9).
