@@ -66,6 +66,10 @@ export interface LiveAdapterDeps {
   /** The governance workspace the spawned session's escalate must write back to (so the
    *  Conductor sees its decision_blocked). Defaults to <repoRoot>/governance/workspace. */
   governanceWorkspace: string;
+  /** cmux workspace-group (sidebar folder) name. Each spawned session's workspace is grouped under
+   *  it — reused if the folder already exists, created otherwise — so a project's sessions stay
+   *  visually separated. Omitted ⇒ no grouping. The server defaults it to the repoRoot basename. */
+  projectLabel?: string;
   log?: (line: string) => void; // PII-safe (command names + status only)
 }
 
@@ -133,8 +137,14 @@ export function buildSessionCommand(
   const promptCat = `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"`;
   if (executor === "codex") {
     const serverPath = `${deps.repoRoot}/governance/src/mcp/server.ts`;
+    // approval_policy="never" lets the headless exec session call its MCP tools (complete_task /
+    // escalate) WITHOUT a per-call approval gate — under the default policy codex blocks the MCP
+    // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
+    // Autonomy stays sandboxed: --sandbox workspace-write confines writes to the worktree cwd; this
+    // is NEVER --dangerously-bypass-approvals-and-sandbox (which removes the sandbox).
     return (
-      `codex exec --sandbox workspace-write --skip-git-repo-check -C "${spec.worktreePath}" ` +
+      `codex exec --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
+      `-C "${spec.worktreePath}" ` +
       `-c 'mcp_servers.boule-governance.command="node"' ` +
       `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
       `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}"}' ` +
@@ -142,17 +152,95 @@ export function buildSessionCommand(
     );
   }
   const denied = SESSION_DENIED_TOOLS.map((t) => `"${t}"`).join(" ");
+  // bypassPermissions = unattended autonomy: without it the session blocks on the first Write/MCP
+  // permission prompt in a non-interactive pane → the loop never closes.
+  // ⚠ claude↔codex SANDBOX ASYMMETRY: bypassPermissions only removes approval prompts — it is NOT an
+  // OS filesystem sandbox. The worktree is merely claude's cwd, NOT an enforced boundary, so a
+  // misbehaving/prompt-injected claude session CAN write absolute paths outside it. (codex, below,
+  // gets real FS confinement via --sandbox workspace-write.) What holds for claude regardless of
+  // this flag: verdict isolation is STRUCTURAL (executor-role MCP omits verdict tools, plus
+  // --strict-mcp-config + the denylist), and external writes route through the External Action Gate
+  // (L4). OS-level FS confinement for claude is a deferred follow-up (plan §9.6).
+  // `--` terminates option parsing so the variadic `--disallowedTools <tools...>` cannot swallow
+  // the positional prompt (without it, claude launches with NO prompt and sits idle → loop hangs).
   return (
     `claude --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
+    `--permission-mode bypassPermissions ` +
     `--disallowedTools ${denied} ` +
-    `${promptCat}\n`
+    `-- ${promptCat}\n`
   );
 }
 
-/** Build a live adapter that runs real `git worktree add --detach` + `cmux new-workspace` +
- *  `cmux send`. Non-determinism (spawn/fs) is injected, so the unit test asserts the exact
- *  command sequence with a fake spawn — no real processes. Each command is bounded (one shot,
- *  no retry loop) and surfaces a terminal failure (design §6). */
+/** Extract the first `<kind>:<n>` ref from cmux stdout. cmux prints `OK <ref>` on success and
+ *  routes the legacy-alias deprecation notice to STDERR, so a regex over stdout is robust to both
+ *  the `OK ` prefix and any future notice drift. Throws (terminal failure) if the ref is absent. */
+export function parseCmuxRef(stdout: string, kind: "workspace" | "surface"): string {
+  const m = stdout.match(new RegExp(`${kind}:\\d+`));
+  if (!m) throw new Error(`conductor: no ${kind} ref in cmux output: ${stdout.slice(0, 120)}`);
+  return m[0];
+}
+
+/** First terminal surface ref inside a given workspace, parsed from `cmux tree --json`. A freshly
+ *  created workspace has exactly one pane/surface; we return its ref so the Observer (which
+ *  reconciles live sessions by SURFACE ref) can detect this session's crash (L2 stall safety).
+ *  Mirrors observer.ts parseSurfaces but scoped to one workspace. Throws if none is found. */
+export function firstTerminalSurface(treeJson: string, workspaceRef: string): string {
+  let tree: unknown;
+  try {
+    tree = JSON.parse(treeJson);
+  } catch {
+    throw new Error("conductor: cmux tree --json returned invalid JSON");
+  }
+  const rec = (x: unknown): Record<string, unknown> =>
+    x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+  const asArray = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
+  for (const w of asArray(rec(tree).windows)) {
+    for (const ws of asArray(rec(w).workspaces)) {
+      if (rec(ws).ref !== workspaceRef) continue;
+      for (const p of asArray(rec(ws).panes)) {
+        for (const s of asArray(rec(p).surfaces)) {
+          const node = rec(s);
+          if (typeof node.ref === "string" && node.ref.length > 0 && node.type === "terminal")
+            return node.ref;
+        }
+      }
+    }
+  }
+  throw new Error(`conductor: cmux tree has no terminal surface for ${workspaceRef}`);
+}
+
+/** Find an existing cmux workspace-group ref by name from `cmux workspace-group list --json`.
+ *  Returns null when absent or the JSON is unparseable (the caller then creates the group). */
+export function findGroupRef(listJson: string, name: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(listJson);
+  } catch {
+    return null;
+  }
+  const rec = (x: unknown): Record<string, unknown> =>
+    x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+  const groups = rec(parsed).groups;
+  if (!Array.isArray(groups)) return null;
+  for (const g of groups) {
+    const node = rec(g);
+    if (node.name === name && typeof node.ref === "string" && node.ref.length > 0) return node.ref;
+  }
+  return null;
+}
+
+/** Per-project cmux folder label = the repo dir's basename, so every session spawned for a given
+ *  designated local repo groups under one collapsible sidebar folder (personal vs work stay
+ *  visually separated). Trailing slashes trimmed; empty ⇒ the original string. */
+export function projectLabelFromRepoRoot(repoRoot: string): string {
+  const parts = repoRoot.replace(/\/+$/, "").split("/");
+  return parts[parts.length - 1] || repoRoot;
+}
+
+/** Build a live adapter that runs real `git worktree add --detach` + `cmux new-workspace --command`
+ *  + per-project `cmux workspace-group` + `cmux tree --json`. Non-determinism (spawn/fs) is injected,
+ *  so the unit test asserts the exact command sequence with a fake spawn — no real processes. Each
+ *  command is bounded (one shot, no retry loop) and surfaces a terminal failure (design §6). */
 export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
   const run = (command: string, args: string[]): SpawnResultLike => {
     const res = deps.spawn(command, args);
@@ -174,17 +262,62 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
     },
 
     async spawnSession(spec) {
-      // 1) open an isolated cmux workspace bound to the worktree cwd; capture surface from stdout.
-      const open = run(deps.cmuxCmd, ["new-workspace", "--cwd", spec.worktreePath]);
-      const surface = open.stdout.trim();
-      // 2) send the executor invocation (claude|codex). Both run against the SCOPED executor-role
-      //    MCP (verdict tools structurally absent), so a spawned session can escalate/complete_task
-      //    but cannot self-resolve (structural INVARIANT #1). See buildSessionCommand.
+      // The executor invocation (claude|codex). Both run against the SCOPED executor-role MCP
+      // (verdict tools structurally absent), so a spawned session can escalate/complete_task but
+      // cannot self-resolve (structural INVARIANT #1). See buildSessionCommand.
       const command = buildSessionCommand(spec.executor ?? "claude", spec, {
         repoRoot: deps.repoRoot,
         governanceWorkspace: deps.governanceWorkspace,
       });
-      run(deps.cmuxCmd, ["send", "--surface", surface, command]);
+      // Create the isolated workspace AND launch the executor atomically via --command. A
+      // BACKGROUND workspace runs --command immediately, but a separate `cmux send` to its surface
+      // fails ("Surface is not a terminal") until that workspace is made visible — so the session
+      // must be launched at creation, not sent afterward. cmux prints `OK workspace:N` on stdout
+      // (the legacy-alias notice goes to stderr).
+      const open = run(deps.cmuxCmd, [
+        "new-workspace",
+        "--cwd",
+        spec.worktreePath,
+        "--command",
+        command,
+      ]);
+      const workspaceRef = parseCmuxRef(open.stdout, "workspace");
+      // Group this workspace under a per-project cmux folder: reuse the folder if it already exists,
+      // else create it anchored on this workspace. Best-effort — the session is already launched, so
+      // a grouping failure (e.g. older cmux without workspace-group) must NOT break the loop.
+      if (deps.projectLabel) {
+        try {
+          const list = run(deps.cmuxCmd, ["workspace-group", "list", "--json"]);
+          const groupRef = findGroupRef(list.stdout, deps.projectLabel);
+          if (groupRef)
+            run(deps.cmuxCmd, [
+              "workspace-group",
+              "add",
+              "--group",
+              groupRef,
+              "--workspace",
+              workspaceRef,
+            ]);
+          else
+            run(deps.cmuxCmd, [
+              "workspace-group",
+              "create",
+              "--name",
+              deps.projectLabel,
+              "--from",
+              workspaceRef,
+            ]);
+        } catch (e) {
+          deps.log?.(
+            `conductor: workspace-group grouping skipped (best-effort): ${(e as Error).message.slice(0, 120)}`,
+          );
+        }
+      }
+      // Resolve the workspace's terminal surface so the Observer can reconcile this session by ref.
+      // Use `--all` (every window) to match the Observer's scope — the new workspace may land in a
+      // window outside the default view; firstTerminalSurface throws (terminal failure) if absent.
+      const tree = run(deps.cmuxCmd, ["tree", "--all", "--json"]);
+      const surface = firstTerminalSurface(tree.stdout, workspaceRef);
       return { surface };
     },
 

@@ -43,6 +43,7 @@ import { conductPlan, conductorStatus } from "../conductor/handlers.ts";
 import {
   stubAdapter,
   makeLiveAdapter,
+  projectLabelFromRepoRoot,
   type ConductorAdapter,
   type SpawnSyncLike,
 } from "../conductor/adapter.ts";
@@ -687,6 +688,8 @@ function buildConductorAdapter(): ConductorAdapter {
     worktreesRoot: CONDUCTOR_CFG.worktreesRoot,
     cmuxCmd: CONDUCTOR_CFG.cmuxCmd,
     governanceWorkspace: WORKSPACE, // spawned session's escalate writes back here
+    // per-project cmux folder (repoRoot basename) — sessions group under it; reuse-or-create.
+    projectLabel: projectLabelFromRepoRoot(REPO_ROOT),
     log: (line) => process.stderr.write(`${line}\n`), // PII-safe (명령명+status만)
   });
 }

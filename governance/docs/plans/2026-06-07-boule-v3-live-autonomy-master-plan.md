@@ -257,21 +257,52 @@ node: 테스트=node20(CI핀), 런타임 서버=node22+(`--experimental-strip-ty
 | Phase | 상태 | 증거 |
 | --- | --- | --- |
 | **L0** preflight | ✅ DONE | `src/live/preflight.ts` + 11 test + read-only `preflight` MCP, **e2e MCP smoke ready=true**(cmux resolved) |
-| **L1** claude 루프 닫힘 | ⏳ 코드 준비 / 라이브=사용자 | executor-role MCP 구조적 검증 존재; step-prompt 계약 존재; **라이브 단일스텝 spawn=runbook §3** |
+| **L1** claude 루프 닫힘 | ✅ DONE (라이브 관측 2026-06-07) | hello-loop 1스텝이 실제 cmux claude 세션으로 닫힘 — `LOOP_OK.md` + `task_completed` in SSOT (~30s, 2회 재현). 라이브 adapter 버그 **4건** 수정(아래 §9.7). 폴더-trust 전제=runbook §3.0 |
 | **L2** stall 표면화 | ✅ DONE | `src/orchestrator/stall.ts` `deriveStalledTasks` + 4 test + read-only `stalled_tasks` MCP |
-| **L3** codex peer executor | ✅ DONE (구조) / 라이브=사용자 | `ExecutorKind` 엔벨로프 + `buildSessionCommand` claude/codex 분기 + `BOULE_CONDUCTOR_EXECUTOR` + 7 test; **codex MCP 라운드트립=runbook §5** |
+| **L3** codex peer executor | ⚠️ 배선 라이브 검증 / 어드히어런스 후속 | codex가 `-c mcp_servers`로 executor MCP attach + `complete_task` **호출** 라이브 확인. `approval_policy="never"` 필수(기본 정책=headless exec에서 MCP 호출 차단→`complete_task (failed)` on PermissionRequest) — `buildSessionCommand` 반영(sandbox=workspace-write 유지). 단 gpt-5.5가 파일 작성 후 `complete_task`를 매번 부르진 않음(프롬프트 어드히어런스) → 신뢰성은 step-prompt 강화 또는 옵션 B 래퍼(exit→`task_completed`) 후속(§9.6) |
 | **L4** readiness gate | ✅ DONE | `src/live/readiness.ts` `evaluateReadiness` + 7 test + read-only `readiness` MCP (observer-live 필수); envelope 검증=구조적(ADR-0009) |
 | **L5** Control Room 라이브 | ⏳ 라이브=사용자 | Phase H 뷰 존재; `tauri dev` GUI 스모크 + handoff 라이브=사용자/cmux |
 | **L6** ADR/문서 | ✅ DONE | `docs/adr/0009-live-autonomy-executor-and-readiness.md` + 이 status + runbook |
 
-**남은 것 = 라이브 실행뿐** (에이전트 단독 불가): L1 단일스텝 → L2 멀티스텝/stall → L3 codex →
-L5 Control Room. 전부 `governance/docs/runbooks/2026-06-07-live-loop-smoke.md`로 실행 가능.
-신규 read-only MCP 진단 도구 3종(`preflight`/`readiness`/`stalled_tasks`)이 go/no-go를 결정적으로 알려준다.
+**L1 라이브 닫힘 입증 완료**(2026-06-07, cmux 네이티브 surface에서 에이전트가 직접 구동). L3 codex
+배선도 라이브 확인(어드히어런스만 후속). **남은 라이브** = L2 멀티스텝/stall 자동전진 + L5 Control
+Room GUI. 전부 `governance/docs/runbooks/2026-06-07-live-loop-smoke.md`로 실행 가능. 신규 read-only
+MCP 진단 도구 3종(`preflight`/`readiness`/`stalled_tasks`)이 go/no-go를 결정적으로 알려준다.
+
+## 9.5.1 라이브 어댑터 수정 (L1/L3 라이브 구동에서 발견 — never-run-live 결함)
+
+라이브 단일스텝을 실제 구동하니 `makeLiveAdapter`의 cmux 배관이 **유닛테스트(가짜 spawn)에서만
+통과하던** 결함 4건이 드러남. 전부 수정 + 실contract 테스트로 고정(`conductor/handlers.test.ts` 26 tests):
+
+1. **surface 파싱**: `new-workspace`는 `OK workspace:N`(공지=stderr)을 출력 → `stdout.trim()`은 surface가
+   아닌 workspace ref. 이제 `parseCmuxRef` + `cmux tree --json`에서 워크스페이스의 terminal **surface** resolve
+   (Observer가 surface ref로 reconcile하므로 필수).
+2. **백그라운드 surface는 send 불가**: 비가시 워크스페이스 surface는 `cmux send`가 "not a terminal"로 거부.
+   → `new-workspace --command <invocation>`로 **원자적 생성+실행**(별도 send 제거).
+3. **claude 프롬프트 누락**: variadic `--disallowedTools`가 위치 인자 prompt를 삼킴 → `--`로 옵션 파싱 종료.
+4. **claude unattended**: `--permission-mode bypassPermissions` 없으면 첫 권한 프롬프트에서 정지.
+   ⚠️ **claude↔codex 샌드박스 비대칭**: bypassPermissions는 승인 프롬프트만 제거할 뿐 **OS FS 샌드박스가
+   아니다**(worktree는 claude의 cwd일 뿐 강제 경계 아님 → 오작동/인젝션 세션이 worktree 밖 절대경로에
+   쓸 수 있음). codex만 `-c approval_policy="never"` + `--sandbox workspace-write`로 실제 FS 격리. claude의
+   **verdict 격리(executor-role MCP)·외부쓰기 게이트(L4)는 이 플래그와 무관하게 구조적으로 유지**되며,
+   claude의 OS-레벨 FS 봉쇄는 후속(§9.6). (※ §2의 "worktree=hard boundary"는 codex엔 성립, claude엔 advisory.)
+
+또한 **세션 워크스페이스를 프로젝트별 cmux 폴더(workspace-group)로 그룹화** — repoRoot basename 라벨로
+reuse-or-create(`findGroupRef`/`projectLabelFromRepoRoot`, best-effort=실패해도 루프 무영향). 라이브 재현:
+2회 실행이 같은 폴더를 재사용(세션만 추가).
 
 ## 9.6 남은 비결정 follow-up (별도 슬라이스)
 
 - per-step executor (plan-step 스키마에 executor 필드) — 현재 run-level만.
 - codex 무인 실행 network/external-write 하드닝 (`workspace-write`는 FS만 제한; 외부쓰기는 External Action Gate 경유).
+- **codex `complete_task` 어드히어런스**(§9.5 L3): 배선·approval은 라이브 OK지만 gpt-5.5가 작업 후 매번
+  `complete_task`를 부르진 않음 → step-prompt 강화(codex 변형) 또는 옵션 B 래퍼(`codex exec` exit success →
+  adapter/observer가 `task_completed` 대리 방출, 인앱 `agent.rs` 패턴) 중 택1.
+- **claude 세션 OS-레벨 FS 봉쇄**(§9.5.1 #4 비대칭): claude는 `bypassPermissions`에 FS 샌드박스가 없어
+  worktree 밖 절대경로 쓰기가 가능 — codex의 `--sandbox workspace-write`에 상응하는 confinement(외부 샌드박스/
+  컨테이너 또는 claude CLI 샌드박스 옵션) 필요. 현재는 operator 감독 + External Action Gate + verdict 격리로 완화.
+- **세션 worktree/폴더 reaping**: 종료된 세션의 `.boule-worktrees/*` git worktree + cmux workspace-group 멤버가
+  현재 누적 — 정리 루틴(observer crash 감지와 연계) 필요.
 - L5 Control Room에 stalled_tasks/readiness 패널 노출.
 
 ## 9. 비대상 (별도 트랙)

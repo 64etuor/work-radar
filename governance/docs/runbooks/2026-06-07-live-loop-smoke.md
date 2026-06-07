@@ -72,6 +72,29 @@ The success criterion is a real session that (a) creates the file in its worktre
 
 ## 3. L1 — First claude loop-closure (single step, live)
 
+### 3.0 Precondition — pre-trust the worktrees root (one-time, per machine)
+
+A spawned `claude` session in a **fresh** worktree hits the interactive **"trust this folder?"**
+dialog (even under `--permission-mode bypassPermissions` / `--dangerously-skip-permissions`), and a
+background cmux workspace cannot answer it → the session hangs and the loop never closes. Trust
+**cascades to children**, so pre-trust the (stable, gitignored) worktrees ROOT once. Trust is keyed
+by **realpath** (`/tmp`→`/private/tmp` on macOS):
+
+```bash
+python3 - "$BOULE_CONDUCTOR_WORKTREES_ROOT" <<'PY'
+import json, os, sys
+root = os.path.realpath(sys.argv[1])
+p = os.path.expanduser("~/.claude.json"); d = json.load(open(p))
+d.setdefault("projects", {})[root] = {"allowedTools": [], "hasTrustDialogAccepted": True}
+json.dump(d, open(p, "w"), indent=2); print("trusted", root)
+PY
+```
+
+Reversible: delete that `projects[<root>]` entry. This is an operator/environment precondition —
+governance does NOT mutate `~/.claude.json` itself (it stays decoupled from the claude CLI's config).
+
+### 3.1 Run
+
 Arm conductor live mode pointed at a dedicated governance workspace; accept a 1-step plan; conduct
 one step; observe the spawned claude session close the task.
 
@@ -105,8 +128,15 @@ absent (executor role strips them). Confirm via the session's tool list.
 
 ## 5. L3 — Codex peer executor
 
-Set the step/plan executor to `codex` (envelope `executor: "codex"`). `conduct_plan` spawns
-`codex exec` in the worktree instead of `claude`; loop closure verified the same way (§3).
+Set the step/plan executor to `codex` (envelope `executor: "codex"`, or `BOULE_CONDUCTOR_EXECUTOR=codex`).
+`conduct_plan` spawns `codex exec` in the worktree instead of `claude`; loop closure verified the same
+way (§3). Codex needs no folder-trust pre-seed (§3.0 is claude-only).
+
+**Codex MCP round-trip (C2-codex) — live-confirmed wiring:** codex attaches the executor-role MCP via
+`-c mcp_servers.boule-governance.{command,args,env}` (live: it lists `complete_task` and calls it). The
+call requires **`-c approval_policy="never"`** — under the default policy codex blocks the MCP tool call
+in headless `exec` (live failure: `complete_task (failed)` on a PermissionRequest). `buildSessionCommand`
+sets this; the `--sandbox workspace-write` confinement is kept (never `--dangerously-bypass-approvals-and-sandbox`).
 
 ## Minimal one-shot MCP client (node 22+)
 
