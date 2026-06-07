@@ -29,6 +29,25 @@ const SIGNAL_COLOR = "var(--color-today-signal)";
 const ROUTINE_COLOR = "var(--color-today-routine)";
 const EVENT_FALLBACK_COLOR = "var(--color-event-fallback)";
 
+/**
+ * Event 블록의 bare Google event id.
+ *
+ * 블록 id는 `event:${calendarId}:${eventId}` 복합키다(아래 `buildTodayBlocks`) — 같은 eventId가
+ * 여러 캘린더에 있을 때 블록이 합쳐지는 회귀를 막기 위함. 하지만 Google Calendar API write
+ * 타깃(`patch_event`/`delete_event`)에는 calendarId 접두사 없는 **순수** eventId가 필요하다.
+ * `event:` 접두사만 떼면 `${calendarId}:${eventId}`가 그대로 남아 events.patch가 404를 내므로
+ * (드래그/리사이즈 회귀), 여기서 bare id를 정확히 뽑는다. `linkedEventId`가 곧 bare id이니 우선
+ * 사용하고, 누락 시 복합키에서 알려진 `event:${calendarId}:` 접두사 길이만큼만 잘라낸다
+ * (eventId 자체가 ':'를 포함해도 안전).
+ */
+export function eventBlockApiId(block: {
+  id: string;
+  calendarId: string;
+  linkedEventId?: string;
+}): string {
+  return block.linkedEventId ?? block.id.slice(`event:${block.calendarId}:`.length);
+}
+
 function eventKey(calendarId: string | null | undefined, eventId: string | null | undefined) {
   return calendarId && eventId ? `${calendarId}\u0000${eventId}` : null;
 }

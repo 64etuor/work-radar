@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTodayBlocks } from "./todayBlocks";
+import { buildTodayBlocks, eventBlockApiId } from "./todayBlocks";
 
 const DATE = "2026-05-28";
 
@@ -207,5 +207,38 @@ describe("buildTodayBlocks", () => {
     ] as never[];
     const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
     expect(blocks).toHaveLength(0);
+  });
+});
+
+describe("eventBlockApiId", () => {
+  // 회귀: 복합 블록 id(`event:${calendarId}:${eventId}`)에서 `event:`만 떼면 calendarId가 남아
+  // Google events.patch가 404를 낸다(드래그/리사이즈가 롤백됨). bare eventId를 정확히 뽑아야 한다.
+  it("returns the bare google event id from a composite event block", () => {
+    expect(
+      eventBlockApiId({
+        id: "event:64etuor@gmail.com:6205deofmq46okqu42tgekmno0",
+        calendarId: "64etuor@gmail.com",
+        linkedEventId: "6205deofmq46okqu42tgekmno0",
+      }),
+    ).toBe("6205deofmq46okqu42tgekmno0");
+  });
+
+  it("falls back to stripping the composite prefix when linkedEventId is absent", () => {
+    expect(
+      eventBlockApiId({
+        id: "event:team@group.calendar.google.com:abc123",
+        calendarId: "team@group.calendar.google.com",
+      }),
+    ).toBe("abc123");
+  });
+
+  it("never leaves the calendarId prefix on the api id", () => {
+    const id = eventBlockApiId({
+      id: "event:cal-x:evt-y",
+      calendarId: "cal-x",
+    });
+    expect(id).toBe("evt-y");
+    expect(id).not.toContain("cal-x");
+    expect(id).not.toContain(":");
   });
 });

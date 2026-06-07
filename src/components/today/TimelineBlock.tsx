@@ -6,6 +6,7 @@ import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockSty
 import type { DragData } from "@/components/today/useTimelineDnd";
 import { cn } from "@/components/ui/cn";
 import type { LayoutBox } from "@/lib/timelineLayout";
+import { eventBlockApiId } from "@/lib/todayBlocks";
 
 type Props = {
   box: LayoutBox;
@@ -34,7 +35,7 @@ function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
     return {
       from: "canvas",
       blockKind: "event",
-      eventId: stripBlockPrefix(block.id, "event"),
+      eventId: eventBlockApiId(block),
       title: block.title,
       startISO: block.startISO,
       durationMin,
@@ -70,7 +71,7 @@ function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: n
       from: "canvas-resize",
       edge,
       blockKind: "event",
-      eventId: stripBlockPrefix(block.id, "event"),
+      eventId: eventBlockApiId(block),
       calendarId: block.calendarId,
       startISO: block.startISO,
       durationMin,
