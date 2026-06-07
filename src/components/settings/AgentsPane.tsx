@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import type { AgentPromptConfig, AgentReasoningEffort } from "@/bindings";
@@ -199,6 +200,7 @@ function AgentPromptConfigRow({
   );
   const [fastMode, setFastMode] = useState(config.fastMode);
   const [enabled, setEnabled] = useState(config.enabled);
+  const [promptOpen, setPromptOpen] = useState(false);
 
   const dirty =
     name !== config.name ||
@@ -241,12 +243,23 @@ function AgentPromptConfigRow({
           사용
         </div>
       </div>
-      <textarea
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        className="border-input bg-background text-foreground focus:ring-ring mt-2 min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs outline-none focus:ring-2"
-        aria-label={`${config.binding} 프롬프트`}
-      />
+      <button
+        type="button"
+        onClick={() => setPromptOpen((v) => !v)}
+        aria-expanded={promptOpen}
+        className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs"
+      >
+        <ChevronRight className={`size-3 transition-transform ${promptOpen ? "rotate-90" : ""}`} />
+        프롬프트 {promptOpen ? "접기" : "펼치기"}
+      </button>
+      {promptOpen && (
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          className="border-input bg-background text-foreground focus:ring-ring mt-2 min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs outline-none focus:ring-2"
+          aria-label={`${config.binding} 프롬프트`}
+        />
+      )}
       <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_150px_120px_auto]">
         <Input
           list={`codex-models-${config.id}`}
