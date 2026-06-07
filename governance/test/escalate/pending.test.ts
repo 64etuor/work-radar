@@ -23,7 +23,9 @@ describe("pendingEscalations", () => {
       new Date("2026-06-02T10:00:00Z"),
       0.5,
     );
-    const pending = await pendingEscalations(ws);
+    // within the 72h TTL of the 2026-06-02 escalation (pendingEscalations defaults `now` to
+    // wall-clock + filters expired blocks, so the test must pin time to stay deterministic).
+    const pending = await pendingEscalations(ws, new Date("2026-06-02T10:05:00Z"));
     expect(pending).toHaveLength(1);
     const p = pending[0];
     expect(p.decisionId).toBe(esc.decisionId);
@@ -48,7 +50,8 @@ describe("pendingEscalations", () => {
       new Date("2026-06-02T10:05:00Z"),
       0.5,
     );
-    expect(await pendingEscalations(ws)).toHaveLength(0);
+    // within TTL → proves removal is due to the choose, not TTL expiry.
+    expect(await pendingEscalations(ws, new Date("2026-06-02T10:06:00Z"))).toHaveLength(0);
   });
 
   it("surfaces the escalating session id (null for a manual/user escalate)", async () => {
@@ -58,7 +61,7 @@ describe("pendingEscalations", () => {
       new Date("2026-06-02T10:00:00Z"),
       0.5,
     );
-    expect((await pendingEscalations(ws))[0].sessionId).toBeNull();
+    expect((await pendingEscalations(ws, new Date("2026-06-02T10:05:00Z")))[0].sessionId).toBeNull();
   });
 
   it("omits an escalation once past its TTL (bounded — no nagging forever, INVARIANT #5)", async () => {
@@ -86,6 +89,8 @@ describe("pendingEscalations", () => {
       new Date("2026-06-02T10:00:00Z"),
       0.5,
     );
-    expect((await pendingEscalations(ws))[0].agentRecommendation).toBe("prefer a");
+    expect(
+      (await pendingEscalations(ws, new Date("2026-06-02T10:05:00Z")))[0].agentRecommendation,
+    ).toBe("prefer a");
   });
 });
