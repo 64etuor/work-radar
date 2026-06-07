@@ -83,7 +83,10 @@ export function HermesSidebar({
                 tabIndex={0}
                 onClick={() => onSelect(t.id)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") onSelect(t.id);
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelect(t.id);
+                  }
                 }}
                 className={`group mb-0.5 flex cursor-pointer flex-col gap-0.5 rounded-md px-2 py-1.5 text-left ${
                   active ? "bg-muted" : "hover:bg-muted/50"

@@ -1,4 +1,4 @@
-import type { HermesMessageRow, HermesSessionRow } from "@/bindings";
+import type { HermesMessageRow } from "@/bindings";
 
 import type { HermesMessage } from "./types";
 import type { TabState } from "./useHermesTabs";
@@ -66,11 +66,6 @@ export function filterByName<T extends { name: string }>(rows: T[], query: strin
   const q = query.trim().toLowerCase();
   if (!q) return rows;
   return rows.filter((r) => r.name.toLowerCase().includes(q));
-}
-
-/** 검색 필터 — 이름 부분일치(대소문자 무시). */
-export function filterSessions(rows: HermesSessionRow[], query: string): HermesSessionRow[] {
-  return filterByName(rows, query);
 }
 
 const PREVIEW_MAX = 48;
