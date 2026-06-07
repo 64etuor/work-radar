@@ -10,6 +10,7 @@ import {
   NAV_BY_VIEW,
   NAV_ITEMS,
   navItemsByGroup,
+  viewMotionBetween,
 } from "@/lib/nav";
 
 describe("navItemsByGroup", () => {
@@ -84,6 +85,20 @@ describe("adjacentView", () => {
       expect(adjacentView(adjacentView(item.view, 1), -1)).toBe(item.view);
       expect(adjacentView(adjacentView(item.view, -1), 1)).toBe(item.view);
     }
+  });
+});
+
+describe("viewMotionBetween", () => {
+  it("뒤 인덱스로 가면 forward", () => {
+    expect(viewMotionBetween("board", "today")).toBe("forward");
+    expect(viewMotionBetween("board", "settings")).toBe("forward");
+  });
+  it("앞 인덱스로 가면 back", () => {
+    expect(viewMotionBetween("settings", "board")).toBe("back");
+    expect(viewMotionBetween("today", "board")).toBe("back");
+  });
+  it("같은 뷰면 neutral", () => {
+    expect(viewMotionBetween("board", "board")).toBe("neutral");
   });
 });
 

@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 
 import { CmdPageMenu } from "@/components/CmdPageMenu";
 import { armedDirection, clampToThrow, type KnobDir } from "@/lib/knobGeometry";
+import type { ViewMotion } from "@/lib/nav";
 import { useCmdKnob } from "@/lib/useCmdKnob";
+import type { View } from "@/store";
 
 const THROW_RADIUS = 46; // px — 스틱 최대 편향
 const ARM_RATIO = 0.55; // 임계 = 반경 * 0.55
@@ -21,7 +23,12 @@ const CENTER: { x: number; y: number } = { x: 0, y: 0 };
  * 전역 mouse 리스너는 visible 세션당 1회만 구독한다(armed/fire 변동으로 재구독되면 드래그가
  * 끊긴다) — 핸들러가 읽어야 하는 최신값은 ref로 동기화한다(useViewShortcuts와 동일 idiom).
  */
-export function CmdKnob() {
+export function CmdKnob({
+  onNavigate,
+}: {
+  /** 페이지 메뉴 칩 클릭 시 슬라이드 전환(App의 navigateView). 레버 방향 발사는 dispatchHotkey 경로 유지. */
+  onNavigate: (view: View, motion: ViewMotion) => void;
+}) {
   const { visible, origin, dirEnabled, fire } = useCmdKnob();
   const [offset, setOffset] = useState(CENTER);
   const [armed, setArmed] = useState<KnobDir | null>(null);
@@ -116,7 +123,7 @@ export function CmdKnob() {
           aria-label="조이스틱 — 방향으로 밀어 단축키 실행"
         />
       </div>
-      <CmdPageMenu origin={origin} />
+      <CmdPageMenu origin={origin} onNavigate={onNavigate} />
     </>
   );
 }

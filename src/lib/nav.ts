@@ -212,3 +212,18 @@ export function adjacentView(current: View, dir: -1 | 1): View {
   const next = (idx + dir + n) % n;
   return NAV_ITEMS[next].view;
 }
+
+/** 슬라이드 전환 방향(App의 navigateView가 받는 motion). NAV 순서 기준. */
+export type ViewMotion = "forward" | "back" | "neutral";
+
+/**
+ * NAV_ITEMS 순서 기준으로 from→to 슬라이드 방향을 정한다(페이지 메뉴 클릭 전환용). 순수 함수.
+ * to가 from보다 뒤(인덱스 큼)면 forward, 앞이면 back, 같거나 미발견이면 neutral(슬라이드 없음).
+ * adjacentView의 wrap과 달리 여기선 인접 여부와 무관하게 순서만으로 방향을 정한다.
+ */
+export function viewMotionBetween(from: View, to: View): ViewMotion {
+  const fi = NAV_ITEMS.findIndex((n) => n.view === from);
+  const ti = NAV_ITEMS.findIndex((n) => n.view === to);
+  if (fi === -1 || ti === -1 || fi === ti) return "neutral";
+  return ti > fi ? "forward" : "back";
+}

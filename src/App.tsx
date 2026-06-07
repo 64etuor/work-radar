@@ -218,8 +218,9 @@ export default function App() {
       <HermesView />
       {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
       <ToastHost />
-      {/* 전역 오락실 조이스틱 — 트리거 hold 시 커서 위치에 등장(useCmdKnob). */}
-      <CmdKnob />
+      {/* 전역 오락실 조이스틱 — 트리거 hold 시 커서 위치에 등장(useCmdKnob). 페이지 메뉴 칩 클릭은
+          navigateView로 슬라이드 전환(레버 ←/→와 동일 효과). */}
+      <CmdKnob onNavigate={navigateView} />
     </div>
   );
 }

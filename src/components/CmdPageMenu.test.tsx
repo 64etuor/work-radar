@@ -7,14 +7,18 @@ import { CmdPageMenu } from "./CmdPageMenu";
 
 describe("CmdPageMenu", () => {
   it("모든 NAV_ITEMS 라벨을 칩으로 렌더한다", () => {
-    const html = renderToStaticMarkup(<CmdPageMenu origin={{ x: 0, y: 0 }} />);
+    const html = renderToStaticMarkup(
+      <CmdPageMenu origin={{ x: 0, y: 0 }} onNavigate={() => {}} />,
+    );
     for (const item of NAV_ITEMS) {
       expect(html).toContain(item.label);
     }
   });
 
   it("초기(측정 전)엔 visibility hidden으로 렌더한다(flash 방지)", () => {
-    const html = renderToStaticMarkup(<CmdPageMenu origin={{ x: 0, y: 0 }} />);
+    const html = renderToStaticMarkup(
+      <CmdPageMenu origin={{ x: 0, y: 0 }} onNavigate={() => {}} />,
+    );
     expect(html).toContain("visibility:hidden");
   });
 });
