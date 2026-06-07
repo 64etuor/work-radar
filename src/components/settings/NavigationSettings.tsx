@@ -1,6 +1,8 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
+import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { eventToHotkeySpec } from "@/lib/hotkey";
@@ -13,6 +15,7 @@ import {
   useSetGlobalHotkey,
   useSetNavKeymap,
 } from "@/lib/query";
+import { unwrap } from "@/lib/query/client";
 
 import { HotkeyCapture } from "./HotkeyCapture";
 import { SectionLabel } from "./SettingsKit";
@@ -37,6 +40,17 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
   const keymap = useNavKeymap();
   const setKeymap = useSetNavKeymap();
   const resetKeymap = useResetNavKeymap();
+
+  // Hermes 패널 토글 — OS 글로벌 단축키 (hermesGetToggleHotkey / hermesSetToggleHotkey).
+  const qc = useQueryClient();
+  const hermesHotkey = useQuery({
+    queryKey: ["hermes-toggle-hotkey"],
+    queryFn: async () => unwrap(commands.hermesGetToggleHotkey()),
+  });
+  const setHermesHotkey = useMutation({
+    mutationFn: async (spec: string) => unwrap(commands.hermesSetToggleHotkey(spec)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hermes-toggle-hotkey"] }),
+  });
 
   // 글로벌 핫키 — 캡처된 사람 읽을 수 있는 라벨 / 서버 저장 spec.
   const [hkSpec, setHkSpec] = useState("");
@@ -149,6 +163,20 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         캡처 버튼 클릭 후 원하는 단축키를 누르세요 (예: Ctrl+Space, Cmd+Shift+K). 변경 시 즉시
         재등록되며, 충돌 또는 지원하지 않는 키이면 이전 핫키를 유지합니다.
       </p>
+
+      {/* Hermes 패널 토글 — OS 글로벌 단축키 */}
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground min-w-[96px] text-xs">Hermes 패널 토글</span>
+        <HotkeyCapture
+          value={hermesHotkey.data ?? "Cmd+Shift+Space"}
+          onChange={(spec) => setHermesHotkey.mutate(spec)}
+        />
+      </div>
+      {setHermesHotkey.isError && (
+        <p className="text-xs text-[color:var(--destructive)]">
+          단축키 등록 실패 — 다른 앱이나 nav 단축키와 충돌일 수 있습니다.
+        </p>
+      )}
 
       {/* per-action keymap */}
       <div className="flex flex-col gap-1.5">
