@@ -433,6 +433,13 @@ export const commands = {
 	 */
 	hermesAgentCap: () => typedError<number, AppError>(__TAURI_INVOKE("hermes_agent_cap")),
 	hermesAgentSend: (tabId: string, text: string, imagePaths: string[]) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_send", { tabId, text, imagePaths })),
+	hermesSessionsList: () => typedError<HermesSessionRow[], AppError>(__TAURI_INVOKE("hermes_sessions_list")),
+	hermesSessionCreate: (id: string, name: string) => typedError<HermesSessionRow, AppError>(__TAURI_INVOKE("hermes_session_create", { id, name })),
+	hermesSessionRename: (id: string, name: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_session_rename", { id, name })),
+	hermesSessionArchive: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_session_archive", { id })),
+	hermesSessionDelete: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_session_delete", { id })),
+	hermesSessionMessages: (id: string) => typedError<HermesMessageRow[], AppError>(__TAURI_INVOKE("hermes_session_messages", { id })),
+	hermesMessageAppend: (sessionId: string, role: string, content: string, toolJson: string | null) => typedError<number, AppError>(__TAURI_INVOKE("hermes_message_append", { sessionId, role, content, toolJson })),
 	hermesAgentCancel: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_cancel", { tabId })),
 	hermesAgentCloseTab: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_close_tab", { tabId })),
 	/**
@@ -450,6 +457,38 @@ export const commands = {
 	 *  같은 값으로 저장해도 재등록은 항상 시도한다(retry path).
 	 */
 	hermesSetToggleHotkey: (spec: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_set_toggle_hotkey", { spec })),
+	/**
+	 *  브리지 설정: 봇 토큰 → keychain(반환 없음), chat_id → hermes_bridge 단일 행. 토큰 본문은 IPC
+	 *  인자로만 들어와 즉시 keychain으로 가고 절대 반환되지 않는다(INVARIANT). offset은 보존(재설정 시
+	 *  같은 봇이면 이미 소비한 update를 다시 받지 않게 — 새 행이면 0).
+	 */
+	setHermesBridge: (botToken: string, chatId: string) => typedError<null, AppError>(__TAURI_INVOKE("set_hermes_bridge", { botToken, chatId })),
+	/**  브리지 연결 상태(토큰 keychain 보유 + chat_id 설정). 봇 토큰 본문은 절대 미노출(INVARIANT). */
+	hermesBridgeStatus: () => typedError<HermesBridgeStatus, AppError>(__TAURI_INVOKE("hermes_bridge_status")),
+	/**  연결 해제: keychain 봇 토큰 삭제 + hermes_bridge 행 삭제(메시지 로그는 보존 — 열람 가치). 멱등. */
+	disconnectHermes: () => typedError<null, AppError>(__TAURI_INVOKE("disconnect_hermes")),
+	/**
+	 *  Hermes에게 메시지 전송(Telegram sendMessage). bounded retry·graceful terminal failure. 송신
+	 *  로그를 hermes_messages에 기록한다(제어 surface). 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
+	 */
+	sendHermesMessage: (text: string) => typedError<null, AppError>(__TAURI_INVOKE("send_hermes_message", { text })),
+	/**
+	 *  Hermes로부터 새 메시지를 **bounded 단발**로 수신(Telegram getUpdates). 무한 long-poll 아님 —
+	 *  한 호출 = 한 왕복(#5). 저장된 offset 이후 update를 받아 새 메시지를 hermes_messages에 기록하고
+	 *  (update_id UNIQUE로 멱등) offset을 전진 영속한다. 미설정이면 Err(graceful degrade). 봇 토큰 미노출.
+	 */
+	fetchHermesMessages: () => typedError<HermesFetchResult, AppError>(__TAURI_INVOKE("fetch_hermes_messages")),
+	/**  제어 surface용 메시지 로그(최신순, bounded). 송·수신 합쳐 최근 `limit`건. 봇 토큰 미포함. */
+	listHermesMessages: (limit: number) => typedError<HermesMessage[], AppError>(__TAURI_INVOKE("list_hermes_messages", { limit })),
+	/**
+	 *  getUpdates를 단발 호출해 실 사용자의 chat_id를 감지한다.
+	 * 
+	 *  - `bot_token`: 현재 입력 중인 토큰(Some & non-empty) ELSE keychain에서 읽음. 없으면 Err.
+	 *  - offset 0으로 조회하되 **영속 오프셋을 전진하지 않는다** — fetch_hermes_messages와 독립(#5).
+	 *  - from_is_bot=false인 가장 최신 후보를 반환. 봇 계정만 있으면 Err. 없으면 Err.
+	 *  - 봇 토큰은 절대 반환·로깅 안 됨(INVARIANT). chat_id+label만 노출.
+	 */
+	detectHermesChatId: (botToken: string | null) => typedError<DetectedChat, AppError>(__TAURI_INVOKE("detect_hermes_chat_id", { botToken })),
 	/**
 	 *  레지스트리 목록: 인앱 프롬프트 + (디스크 스캔한) 외부 스킬을 합쳐 돌려준다. 인앱은 DB에서, 외부는
 	 *  ROOTS(claude/codex/agents/openclaw)를 스캔해 ExternalSkill→Skill(kind="external", provider 태깅)으로
@@ -1093,6 +1132,17 @@ export type DebtPoint = {
 	prAttention: number,
 };
 
+/**
+ *  detect_hermes_chat_id 결과. getUpdates에서 감지된 실 사용자 chat.
+ *  봇 토큰 본문은 절대 미포함(INVARIANT) — chat_id + 라벨만 노출한다.
+ */
+export type DetectedChat = {
+	/**  감지된 chat.id (숫자 → 문자열). */
+	chatId: string,
+	/**  사람이 읽을 라벨(채팅 이름/username/first_name 폴백). */
+	label: string,
+};
+
 /**  diff 파일 목록 한 항목 (통계만 — 파일별 hunk는 지연 로드). specta i64/u64 금지 → adds/dels u32. */
 export type DiffFileSummary = {
 	path: string,
@@ -1200,12 +1250,54 @@ export type HandoffRow = {
 	phase: HandoffPhase,
 };
 
+/**  Hermes 브리지 연결 상태(graceful degrade 판정용). 봇 토큰 본문은 절대 미포함(INVARIANT). */
+export type HermesBridgeStatus = {
+	/**  봇 토큰이 keychain에 있고 chat_id가 설정됨(송수신 가능). */
+	configured: boolean,
+	/**  설정된 chat_id(비밀 아님 — 라우팅 대상 표시용). 미설정이면 None. */
+	chatId: string | null,
+	/**  사람이 읽을 상태 상세(토큰 본문 미포함). */
+	detail: string,
+};
+
 export type HermesDetectResult = {
 	installed: boolean,
 	version: string | null,
 	path: string | null,
 	acp_ready: boolean,
 	error: string | null,
+};
+
+/**
+ *  fetch_hermes_messages 결과(bounded 단발 getUpdates). 이번 호출에서 새로 받은 메시지 수.
+ *  메시지 본문은 별도 list_hermes_messages로 조회(제어 surface). specta i64/u64 금지 → u32.
+ */
+export type HermesFetchResult = {
+	/**  이번 bounded 호출에서 새로 수신·기록한 메시지 수. */
+	received: number,
+};
+
+/**
+ *  제어 surface(채팅형 뷰)에 표시할 메시지 한 건. 송신/수신 로그(hermes_messages)에서 도출.
+ *  토큰 미포함. direction = "sent"|"received".
+ */
+export type HermesMessage = {
+	id: string,
+	/**  "sent"(work-radar→Hermes) | "received"(Hermes→work-radar). */
+	direction: string,
+	text: string,
+	createdAt: string,
+};
+
+export type HermesMessageRow = {
+	/**  i64 → i32로 좁혀 IPC 노출(specta i64 금지). 실사용에서 메시지 id가 2^31을 넘지 않음. */
+	id: number,
+	session_id: string,
+	seq: number,
+	role: string,
+	content: string,
+	tool_json: string | null,
+	created_at: string,
 };
 
 /**
@@ -1218,6 +1310,17 @@ export type HermesPanelState = {
 	w: number | null,
 	h: number | null,
 	open: boolean,
+};
+
+export type HermesSessionRow = {
+	id: string,
+	name: string,
+	status: string,
+	cwd: string | null,
+	created_at: string,
+	updated_at: string,
+	last_active_at: string,
+	archived: number,
 };
 
 export type InboxCounts = {
@@ -1947,7 +2050,9 @@ export type TokenKind = "notion" | "github" |
 /**  Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a. */
 "google_calendar" | 
 /**  Gmail send 자격증명 blob ({clientId, clientSecret, refreshToken}). send-only 스코프. Phase 5. */
-"gmail";
+"gmail" | 
+/**  Hermes 메신저 브리지 봇 토큰(Telegram Bot API류). 앱 레벨 단일 브리지(외부 Hermes 하나). Phase 20. */
+"hermes_bridge";
 
 /**  토큰 존재 여부만 노출 (본문 미노출 — INVARIANT: 토큰 렌더러 노출 금지). */
 export type TokenStatus = {
