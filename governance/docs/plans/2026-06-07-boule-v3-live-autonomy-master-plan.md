@@ -248,6 +248,32 @@ L1이 단일 임계 게이트. L2/L3는 L1 후 병렬 가능(경로 분리: L2=d
 
 ---
 
+## 9.5 As-built status (2026-06-07, branch `plan/autonomous-orchestration`)
+
+deterministic 코어는 TDD+검증 완료, 라이브 스텝은 runbook(사용자/cmux). governance vitest
+**489 pass** (4 pre-existing `escalate/` 실패는 이 워크트리 fresh-install 한정, 범위 밖). 검증
+node: 테스트=node20(CI핀), 런타임 서버=node22+(`--experimental-strip-types`). **push 안 함.**
+
+| Phase | 상태 | 증거 |
+| --- | --- | --- |
+| **L0** preflight | ✅ DONE | `src/live/preflight.ts` + 11 test + read-only `preflight` MCP, **e2e MCP smoke ready=true**(cmux resolved) |
+| **L1** claude 루프 닫힘 | ⏳ 코드 준비 / 라이브=사용자 | executor-role MCP 구조적 검증 존재; step-prompt 계약 존재; **라이브 단일스텝 spawn=runbook §3** |
+| **L2** stall 표면화 | ✅ DONE | `src/orchestrator/stall.ts` `deriveStalledTasks` + 4 test + read-only `stalled_tasks` MCP |
+| **L3** codex peer executor | ✅ DONE (구조) / 라이브=사용자 | `ExecutorKind` 엔벨로프 + `buildSessionCommand` claude/codex 분기 + `BOULE_CONDUCTOR_EXECUTOR` + 7 test; **codex MCP 라운드트립=runbook §5** |
+| **L4** readiness gate | ✅ DONE | `src/live/readiness.ts` `evaluateReadiness` + 7 test + read-only `readiness` MCP (observer-live 필수); envelope 검증=구조적(ADR-0009) |
+| **L5** Control Room 라이브 | ⏳ 라이브=사용자 | Phase H 뷰 존재; `tauri dev` GUI 스모크 + handoff 라이브=사용자/cmux |
+| **L6** ADR/문서 | ✅ DONE | `docs/adr/0009-live-autonomy-executor-and-readiness.md` + 이 status + runbook |
+
+**남은 것 = 라이브 실행뿐** (에이전트 단독 불가): L1 단일스텝 → L2 멀티스텝/stall → L3 codex →
+L5 Control Room. 전부 `governance/docs/runbooks/2026-06-07-live-loop-smoke.md`로 실행 가능.
+신규 read-only MCP 진단 도구 3종(`preflight`/`readiness`/`stalled_tasks`)이 go/no-go를 결정적으로 알려준다.
+
+## 9.6 남은 비결정 follow-up (별도 슬라이스)
+
+- per-step executor (plan-step 스키마에 executor 필드) — 현재 run-level만.
+- codex 무인 실행 network/external-write 하드닝 (`workspace-write`는 FS만 제한; 외부쓰기는 External Action Gate 경유).
+- L5 Control Room에 stalled_tasks/readiness 패널 노출.
+
 ## 9. 비대상 (별도 트랙)
 
 - 인앱 codex 잡 러너(`src-tauri/src/agent.rs`, ~70%) 잔여: Phase 9c mismatch-draft 잡, Diff Viewer 통합, calendar/today 자동화 — **이 플랜 비대상**(사용자 확정 "보울 오케스트레이션만").
