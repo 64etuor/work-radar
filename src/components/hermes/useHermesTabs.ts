@@ -10,20 +10,14 @@ export interface TabState {
   commandsList: AcpCommand[];
 }
 
-// Cap is the backend's single source of truth (hermes_agent_cap IPC).
-// This fallback is used only before the first IPC response to avoid blocking UX.
-export const HERMES_TAB_CAP_FALLBACK = 3;
-
 export interface TabsState {
   tabs: Map<TabId, TabState>;
   activeTabId: TabId | null;
-  cap: number;
 }
 
 export const EMPTY_TABS_STATE: TabsState = {
   tabs: new Map(),
   activeTabId: null,
-  cap: HERMES_TAB_CAP_FALLBACK,
 };
 
 type Action =
@@ -32,7 +26,6 @@ type Action =
   | { type: "set-active"; tabId: TabId }
   | { type: "rename"; tabId: TabId; name: string }
   | { type: "set-status"; tabId: TabId; status: SessionStatus }
-  | { type: "set-cap"; cap: number }
   | { type: "user"; tabId: TabId; text: string; images: string[] }
   | { type: "agent-chunk"; tabId: TabId; text: string }
   | { type: "agent-tool"; tabId: TabId; tool: ToolCallSummary }
@@ -96,7 +89,6 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
       return {
         tabs: next,
         activeTabId: state.activeTabId ?? a.tabId,
-        cap: state.cap,
       };
     }
     case "close-tab": {
@@ -107,7 +99,7 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
       if (activeTabId === a.tabId) {
         activeTabId = next.size > 0 ? Array.from(next.keys())[0] : null;
       }
-      return { tabs: next, activeTabId, cap: state.cap };
+      return { tabs: next, activeTabId };
     }
     case "set-active":
       return state.tabs.has(a.tabId) ? { ...state, activeTabId: a.tabId } : state;
@@ -117,9 +109,6 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
 
     case "set-status":
       return updateTab(state, a.tabId, (t) => ({ ...t, status: a.status }));
-
-    case "set-cap":
-      return { ...state, cap: a.cap };
 
     case "user":
       return updateTab(state, a.tabId, (t) =>

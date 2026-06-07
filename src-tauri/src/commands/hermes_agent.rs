@@ -12,8 +12,6 @@ use tokio::sync::RwLock;
 pub type TabId = String;
 pub type HermesAgentHolder = Arc<RwLock<HashMap<TabId, AcpSession>>>;
 
-pub const HERMES_TAB_CAP: usize = 3;
-
 pub fn new_holder() -> HermesAgentHolder {
     Arc::new(RwLock::new(HashMap::new()))
 }
@@ -28,14 +26,6 @@ pub async fn hermes_agent_open_tab(
     // only on first `send` (lazy spawn). Cap is enforced at spawn time in `send`.
     // This command remains for explicit "tab will be used" signaling and future-proofing.
     Ok(())
-}
-
-/// Returns the maximum number of concurrent Hermes tabs. Single source of truth
-/// for the cap — frontend reads this at mount rather than duplicating the constant.
-#[tauri::command]
-#[specta::specta]
-pub async fn hermes_agent_cap() -> Result<u32, AppError> {
-    Ok(HERMES_TAB_CAP as u32)
 }
 
 #[tauri::command]
@@ -64,20 +54,8 @@ pub async fn hermes_agent_send(
     let (session_id, transport, stdin_tx, pending, next_id) = match snapshot {
         Some(s) => s,
         None => {
-            // Fast-fail cap pre-check under read lock (best-effort; avoids spawning when
-            // already at capacity without a racing opener).
-            {
-                let map = holder.read().await;
-                if !map.contains_key(&tab_id) && map.len() >= HERMES_TAB_CAP {
-                    return Err(AppError::unexpected(
-                        "hermes.tab.cap",
-                        format!("max {HERMES_TAB_CAP}"),
-                    ));
-                }
-            }
             // Spawn WITHOUT holding any lock so concurrent tabs don't serialise here.
             let session = AcpSession::spawn(app.clone(), tab_id.clone()).await?;
-            // Re-acquire write lock for insertion with race re-check.
             let mut map = holder.write().await;
             if let Some(existing) = map.get(&tab_id) {
                 // Racing spawn won — use existing session, kill ours.
@@ -91,13 +69,6 @@ pub async fn hermes_agent_send(
                 drop(map);
                 session.kill().await;
                 tup
-            } else if map.len() >= HERMES_TAB_CAP {
-                drop(map);
-                session.kill().await;
-                return Err(AppError::unexpected(
-                    "hermes.tab.cap",
-                    format!("max {HERMES_TAB_CAP}"),
-                ));
             } else {
                 let tup = (
                     session.session_id.clone(),

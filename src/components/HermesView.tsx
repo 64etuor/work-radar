@@ -22,8 +22,6 @@ function EmptyHermesState({ onCreateTab }: { onCreateTab: () => Promise<unknown>
 export default function HermesView() {
   const activeTab = useHermesTabsStore(selectActiveTab);
   const isStreaming = useHermesTabsStore(selectIsStreaming);
-  const tabsSize = useHermesTabsStore((s) => s.tabs.size);
-  const cap = useHermesTabsStore((s) => s.cap);
   const openTab = useHermesTabsStore((s) => s.openTab);
   const closeTab = useHermesTabsStore((s) => s.closeTab);
   const send = useHermesTabsStore((s) => s.send);
@@ -43,7 +41,6 @@ export default function HermesView() {
       onRestart={async () => {
         if (activeTab) await restart(activeTab.id);
       }}
-      canCreateTab={tabsSize < cap}
       activeTabId={activeTab?.id ?? null}
     >
       {activeTab ? (

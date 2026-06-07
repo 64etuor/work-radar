@@ -19,14 +19,7 @@ import { unwrap } from "@/lib/query/client";
 
 import { autoTitleFrom, rowsToMessages, shouldAutoTitle } from "./sessionList";
 import type { AcpCommand, ToolCallSummary } from "./types";
-import {
-  EMPTY_TABS_STATE,
-  HERMES_TAB_CAP_FALLBACK,
-  type TabId,
-  tabsReducer,
-  type TabsState,
-  uid,
-} from "./useHermesTabs";
+import { EMPTY_TABS_STATE, type TabId, tabsReducer, type TabsState, uid } from "./useHermesTabs";
 
 // ── Store shape ──────────────────────────────────────────────────────────────
 
@@ -63,8 +56,6 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
     _dispatch: dispatch,
 
     openTab: async () => {
-      const s = get();
-      if (s.tabs.size >= s.cap) return null;
       const tabId = uid();
       try {
         await unwrap(commands.hermesAgentOpenTab(tabId));
@@ -383,5 +374,9 @@ export function selectIsStreaming(s: TabsState): boolean {
   return !!last && last.role === "assistant" && !last.done;
 }
 
-// Re-export cap fallback so callers don't need to import from useHermesTabs directly.
-export { HERMES_TAB_CAP_FALLBACK };
+/** 동시 실행(슬롯 점유) 세션 수가 임계 이상인지. 백엔드 holder 크기와 1:1은 아니지만
+ *  FE가 추적하는 활성 탭 수의 근사로 충분(경고 전용, 차단 아님). */
+export const LIVE_SESSION_WARN_THRESHOLD = 8;
+export function selectShowResourceWarning(s: TabsState): boolean {
+  return s.tabs.size >= LIVE_SESSION_WARN_THRESHOLD;
+}

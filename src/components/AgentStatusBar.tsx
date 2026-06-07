@@ -138,7 +138,6 @@ export function AgentStatusBar() {
 
   // hermes multi-session tabs (표시 전용 INVARIANT #1 — store selector만, 결정 미사용).
   const hermesTabs = useHermesTabsStore((s) => s.tabs);
-  const hermesCap = useHermesTabsStore((s) => s.cap);
   const hermesOpenTab = useHermesTabsStore((s) => s.openTab);
   const hermesSetActive = useHermesTabsStore((s) => s.setActive);
   const hermesRename = useHermesTabsStore((s) => s.rename);
@@ -342,28 +341,27 @@ export function AgentStatusBar() {
     </Popover>
   );
 
-  // ⊕ 칩 — hermes 박스 그룹 우측, cap 미달 시만 표시. 표시 전용(INVARIANT #1).
+  // ⊕ 칩 — hermes 박스 그룹 우측. 표시 전용(INVARIANT #1).
   // 클릭 시 탭 생성 + 패널 열기(hermes:open) — 0탭 상태에서 패널 진입점 보장.
-  const hermesAddChip =
-    hermesTabs.size < hermesCap ? (
-      <button
-        type="button"
-        className="asb-add-chip"
-        aria-label="새 Hermes 탭"
-        title="새 Hermes 탭"
-        onClick={() => {
-          void (async () => {
-            const id = await hermesOpenTab();
-            if (id) {
-              hermesSetActive(id);
-              void emit("hermes:open");
-            }
-          })();
-        }}
-      >
-        <Plus size={12} strokeWidth={1.5} />
-      </button>
-    ) : null;
+  const hermesAddChip = (
+    <button
+      type="button"
+      className="asb-add-chip"
+      aria-label="새 Hermes 탭"
+      title="새 Hermes 탭"
+      onClick={() => {
+        void (async () => {
+          const id = await hermesOpenTab();
+          if (id) {
+            hermesSetActive(id);
+            void emit("hermes:open");
+          }
+        })();
+      }}
+    >
+      <Plus size={12} strokeWidth={1.5} />
+    </button>
+  );
 
   // ── 빈 상태: 조용한 단일 'Agents · idle' pill (박스 없음). ──────────────
   // Even with no boxes, show ⊕ chip so users can start their first Hermes tab.

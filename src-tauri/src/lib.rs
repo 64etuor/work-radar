@@ -234,7 +234,6 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         hermes_agent::detect::hermes_detect,
         // Hermes ACP IPC (multi-session tabs).
         commands::hermes_agent::hermes_agent_open_tab,
-        commands::hermes_agent::hermes_agent_cap,
         commands::hermes_agent::hermes_agent_send,
         hermes_agent::session_store::hermes_sessions_list,
         hermes_agent::session_store::hermes_session_create,

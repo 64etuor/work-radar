@@ -23,7 +23,6 @@ vi.mock("@/bindings", () => ({
     // openTab path may run during default-tab logic in other tests; stub the rest as no-ops.
     hermesAgentOpenTab: () => Promise.resolve({ status: "ok", data: null }),
     hermesAgentCloseTab: () => Promise.resolve({ status: "ok", data: null }),
-    hermesAgentCap: () => Promise.resolve({ status: "ok", data: 3 }),
   },
 }));
 

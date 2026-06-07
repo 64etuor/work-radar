@@ -20,7 +20,6 @@ export function HermesPanel({
   showHeaderTitle,
   onNewTab,
   onCloseActive,
-  canCreateTab,
   activeTabId,
 }: {
   children: React.ReactNode;
@@ -30,7 +29,6 @@ export function HermesPanel({
   showHeaderTitle?: boolean;
   onNewTab?: () => Promise<unknown>;
   onCloseActive?: () => Promise<unknown>;
-  canCreateTab?: boolean;
   activeTabId?: string | null;
 }) {
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
@@ -220,7 +218,6 @@ export function HermesPanel({
         showHeaderTitle={showHeaderTitle}
         onNewTab={onNewTab}
         onCloseActive={onCloseActive}
-        canCreateTab={canCreateTab}
         activeTabId={activeTabId}
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
@@ -251,7 +248,6 @@ function PanelHeader({
   showHeaderTitle,
   onNewTab,
   onCloseActive,
-  canCreateTab,
   activeTabId,
 }: BoundsProps & {
   onClose: () => void;
@@ -260,7 +256,6 @@ function PanelHeader({
   showHeaderTitle?: boolean;
   onNewTab?: () => Promise<unknown>;
   onCloseActive?: () => Promise<unknown>;
-  canCreateTab?: boolean;
   activeTabId?: string | null;
 }) {
   const dragRef = useRef<{
@@ -330,9 +325,8 @@ function PanelHeader({
             variant="ghost"
             className="hover:bg-muted/60 size-7 p-0"
             onClick={() => void onNewTab()}
-            disabled={canCreateTab === false}
-            aria-label="새 탭"
-            title={canCreateTab === false ? "최대 3개" : "새 탭"}
+            aria-label="새 세션"
+            title="새 세션"
           >
             <Plus className="size-3.5" />
           </Button>
