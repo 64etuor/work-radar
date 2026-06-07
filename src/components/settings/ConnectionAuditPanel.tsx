@@ -126,8 +126,10 @@ export function ConnectionAuditPanel({ onToast }: { onToast: (msg: string) => vo
           <ShieldCheck className="text-muted-foreground size-4" />
           <SectionLabel>연결 점검</SectionLabel>
           {summary && (
-            <span className="text-muted-foreground text-xs">
-              ✓ {summary.ok} · ✗ {summary.failed} · ⚠ {summary.warnings}
+            <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+              ✓ {summary.ok} · ✗ {summary.failed} ·
+              <AlertTriangle aria-hidden className="size-3" />
+              {summary.warnings}
             </span>
           )}
         </div>
