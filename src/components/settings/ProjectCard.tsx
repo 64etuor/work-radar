@@ -1,15 +1,17 @@
 import {
+  AlertTriangle,
   CircleUserRound,
   FolderGit2,
   FolderOpen,
   Github,
   KeyRound,
   Plus,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 
-import type { Project, ProjectKind, PromotionTarget } from "@/bindings";
+import type { BouleConfigSettings, Project, ProjectKind, PromotionTarget } from "@/bindings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,9 +24,11 @@ import {
   projectCalendarColors,
 } from "@/lib/projectCalendarColor";
 import {
+  useBouleConfig,
   useDeleteRepo,
   useProjectTokenStatus,
   useRepos,
+  useSetBouleConfig,
   useSetProjectCalendarColor,
   useSetProjectKind,
   useSetProjectName,
@@ -225,6 +229,96 @@ function RepoRow({
       >
         <Trash2 className="size-3.5" />
       </Button>
+    </div>
+  );
+}
+
+/** Per-repo Boule autonomy config (Slice 2) — edits the core knobs of a designated LOCAL repo's
+ *  `.boule/boule.config.json`. Settings-only: these tune POST-acceptance autonomy; accept_plan /
+ *  accept_spec stay HUMAN gates (INVARIANT #1). auto_plan/full OPEN that gate (test/dev) → warned. */
+function BouleConfigControls({
+  repoId,
+  onToast,
+}: {
+  repoId: string;
+  onToast: (msg: string) => void;
+}) {
+  const cfg = useBouleConfig(repoId);
+  const set = useSetBouleConfig();
+  const data = cfg.data;
+
+  // every knob change persists the full merged config (the write command requires all three).
+  const save = (
+    patch: Partial<Pick<BouleConfigSettings, "kind" | "autonomyLevel" | "reviewQuorum">>,
+  ) => {
+    if (!data) return;
+    set.mutate(
+      {
+        repoId,
+        kind: patch.kind ?? data.kind,
+        autonomyLevel: patch.autonomyLevel ?? data.autonomyLevel,
+        reviewQuorum: patch.reviewQuorum ?? data.reviewQuorum,
+      },
+      { onError: () => onToast("Boule 설정 저장 실패") },
+    );
+  };
+
+  if (cfg.isLoading || !data) return null;
+  const opensGate = data.autonomyLevel === "auto_plan" || data.autonomyLevel === "full";
+
+  return (
+    <div className="border-border ml-7 flex flex-col gap-2 rounded-lg border border-dashed px-3.5 py-2.5">
+      <div className="flex items-center gap-2">
+        <SlidersHorizontal className="text-muted-foreground size-3.5" />
+        <SectionLabel>Boule 자율</SectionLabel>
+        {!data.configExists && (
+          <span className="text-muted-foreground text-xs">기본값 (미설정)</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <Field label="종류">
+          <Segmented
+            size="sm"
+            value={data.kind}
+            onChange={(kind) => save({ kind })}
+            options={[
+              { value: "personal", label: "개인" },
+              { value: "work", label: "업무" },
+            ]}
+          />
+        </Field>
+        <Field label="자율 레벨">
+          <Segmented
+            size="sm"
+            value={data.autonomyLevel}
+            onChange={(autonomyLevel) => save({ autonomyLevel })}
+            options={[
+              { value: "manual", label: "manual" },
+              { value: "dispatch", label: "dispatch" },
+              { value: "auto_plan", label: "auto_plan" },
+              { value: "full", label: "full" },
+            ]}
+          />
+        </Field>
+        <Field label="리뷰 정족수">
+          <Segmented
+            size="sm"
+            value={String(data.reviewQuorum)}
+            onChange={(q) => save({ reviewQuorum: Number(q) })}
+            options={[
+              { value: "1", label: "1" },
+              { value: "2", label: "2" },
+              { value: "3", label: "3" },
+            ]}
+          />
+        </Field>
+      </div>
+      {opensGate && (
+        <div className="flex items-center gap-1.5 text-xs text-[color:var(--destructive)]">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          auto_plan/full은 AI가 plan/spec을 자동 수락 (INVARIANT #1 개방) — 테스트·개발 전용.
+        </div>
+      )}
     </div>
   );
 }
@@ -497,15 +591,17 @@ export function ProjectCard({
             </div>
           )}
           {repos.data?.map((r) => (
-            <RepoRow
-              key={r.id}
-              repoId={r.id}
-              projectId={project.id}
-              provider={r.provider}
-              loc={r.remoteUrl ?? r.localPath ?? "—"}
-              branch={r.defaultBranch}
-              onToast={onToast}
-            />
+            <div key={r.id} className="flex flex-col gap-2">
+              <RepoRow
+                repoId={r.id}
+                projectId={project.id}
+                provider={r.provider}
+                loc={r.remoteUrl ?? r.localPath ?? "—"}
+                branch={r.defaultBranch}
+                onToast={onToast}
+              />
+              {r.provider === "local" && <BouleConfigControls repoId={r.id} onToast={onToast} />}
+            </div>
           ))}
           <AddRepoForm projectId={project.id} onToast={onToast} />
         </div>

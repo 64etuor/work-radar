@@ -647,6 +647,17 @@ export const commands = {
 	 *  `generatedAt` is null until the harness has projected at least once.
 	 */
 	getControlRoomSnapshot: () => typedError<ControlRoomSnapshot, AppError>(__TAURI_INVOKE("get_control_room_snapshot")),
+	/**
+	 *  Read a designated LOCAL repo's Boule autonomy config (kind + autonomyLevel + reviewQuorum).
+	 *  Absent file ⇒ per-kind defaults (config_exists=false). Settings-only — no event write path.
+	 */
+	getBouleConfig: (repoId: string) => typedError<BouleConfigSettings, AppError>(__TAURI_INVOKE("get_boule_config", { repoId })),
+	/**
+	 *  Update a local repo's Boule autonomy config. Paths are resolved from the DB (never renderer-
+	 *  supplied); preserves fields this UI doesn't manage. ⚠ auto_plan/full OPEN INVARIANT #1's human
+	 *  gate (test/dev) — the UI warns; acceptance auto-fires actor:"system", never a forged human.
+	 */
+	setBouleConfig: (input: SetBouleConfigInput) => typedError<BouleConfigSettings, AppError>(__TAURI_INVOKE("set_boule_config", { input })),
 };
 
 /* Types */
@@ -821,6 +832,25 @@ export type BatchItemResult = {
  *  안전-critical 스킵(`Collision`/`NotOurs`)은 별도 값으로 가시 유지.
  */
 export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "not_ours" | "unsupported_provider" | "error";
+
+/**
+ *  Graduated autonomy level (mirrors governance `AutonomyLevel`). snake_case → the JSON enum
+ *  strings `manual|dispatch|auto_plan|full` the governance parser expects.
+ */
+export type BouleAutonomyLevel = "manual" | "dispatch" | "auto_plan" | "full";
+
+/**
+ *  The resolved view shown in Settings. When the config file is absent, `config_exists=false` and
+ *  the values are the per-kind defaults (so the UI renders a sensible starting point).
+ */
+export type BouleConfigSettings = {
+	repoId: string,
+	repoPath: string,
+	configExists: boolean,
+	kind: ProjectKind,
+	autonomyLevel: BouleAutonomyLevel,
+	reviewQuorum: number,
+};
 
 /**
  *  오늘 캘린더 이벤트 한 건 (ambient — DB 영속 없이 매 호출 fresh fetch, PR Radar 선례). Phase 10b.
@@ -1724,6 +1754,17 @@ export type SessionRow = {
 	ownership: Ownership,
 	taskId: string | null,
 	phase: SessionPhase,
+};
+
+/**
+ *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
+ *  repo's `local_path` from the DB (defense against a forged path).
+ */
+export type SetBouleConfigInput = {
+	repoId: string,
+	kind: ProjectKind,
+	autonomyLevel: BouleAutonomyLevel,
+	reviewQuorum: number,
 };
 
 /**  프로젝트별 캘린더 표시 색상 변경 입력. `color=NULL`은 기본 팔레트로 되돌림. */

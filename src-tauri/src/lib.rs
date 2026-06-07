@@ -331,6 +331,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::delete_timeline_note,
         // Boule governance Control Room (Phase H) — read-only derived-state snapshot.
         commands::get_control_room_snapshot,
+        // Boule per-repo autonomy config (Slice 2) — settings-editable boule.config.json knobs.
+        commands::get_boule_config,
+        commands::set_boule_config,
     ])
 }
 
