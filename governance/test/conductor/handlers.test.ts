@@ -279,6 +279,9 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     // repo has no governance/ dir) — this is the per-repo loop-closure fix.
     expect(mcpJson).toContain("/install/governance/src/mcp/server.ts");
     expect(mcpJson).not.toContain("/repo/governance/src/mcp/server.ts");
+    // BOULE_REPO_ROOT pins the executor's docs-reading tools to the TARGET repo (not the
+    // WORKSPACE-relative default which would point at <repo>/.boule).
+    expect(mcpJson).toContain('"BOULE_REPO_ROOT": "/repo"');
   });
 
   it("surfaces a terminal failure when git exits non-zero (no retry loop)", async () => {

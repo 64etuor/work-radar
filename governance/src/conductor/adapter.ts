@@ -95,7 +95,11 @@ export const SESSION_DENIED_TOOLS = [
 /** The scoped MCP config written into each session worktree. It launches boule with
  *  BOULE_SESSION_ROLE=executor (verdict tools structurally absent) pointed at the SAME
  *  governance workspace, so the session's escalate is visible to the Conductor. */
-export function sessionMcpConfig(serverEntrypoint: string, governanceWorkspace: string): string {
+export function sessionMcpConfig(
+  serverEntrypoint: string,
+  governanceWorkspace: string,
+  repoRoot: string,
+): string {
   return (
     JSON.stringify(
       {
@@ -103,7 +107,14 @@ export function sessionMcpConfig(serverEntrypoint: string, governanceWorkspace: 
           [BOULE_MCP_ALIAS]: {
             command: "node",
             args: ["--experimental-strip-types", serverEntrypoint],
-            env: { BOULE_SESSION_ROLE: "executor", BOULE_WORKSPACE: governanceWorkspace },
+            // BOULE_REPO_ROOT pins the executor session's server to the TARGET repo, so any
+            // docs-reading tool it touches (decisions/principles/harvest) reads <repo>/docs — NOT
+            // the WORKSPACE-relative default (resolve(WORKSPACE,"..","..") = <repo>/.boule, wrong).
+            env: {
+              BOULE_SESSION_ROLE: "executor",
+              BOULE_WORKSPACE: governanceWorkspace,
+              BOULE_REPO_ROOT: repoRoot,
+            },
           },
         },
       },
@@ -338,7 +349,7 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // Scoped executor-role MCP config — the structural backstop for session verdict isolation.
       await deps.fs.writeFile(
         `${bouleDir}/mcp.json`,
-        sessionMcpConfig(deps.serverEntrypoint, deps.governanceWorkspace),
+        sessionMcpConfig(deps.serverEntrypoint, deps.governanceWorkspace, deps.repoRoot),
       );
     },
   };
