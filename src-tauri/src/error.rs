@@ -212,13 +212,6 @@ impl From<crate::gmail::GmailError> for AppError {
         match e {
             E::Transient(m) => AppError::transient("gmail.transient", m),
             E::Terminal(m) => AppError::terminal("gmail.terminal", m),
-            // 스코프 불일치·refresh 무효 재연결 필요 — 권한 계열 + 액션 힌트(설정으로 nav).
-            E::ReconnectRequired(m) => AppError::forbidden("gmail.reconnect_required", m)
-                .with_action(ErrorAction {
-                    label: "Gmail 재연결".into(),
-                    url: None,
-                    nav: Some("settings".into()),
-                }),
         }
     }
 }

@@ -43,7 +43,6 @@ function ProjectRow({ p }: { p: ProjectConnectionStatus }) {
         <StateChip label="백로그 DB" check={p.notionBacklogDb} />
         <StateChip label="안건 DB" check={p.notionAgendaDb} />
         <StateChip label="Google" check={p.googleCalendar} />
-        <StateChip label="Gmail" check={p.gmail} />
       </div>
     </div>
   );

@@ -12,7 +12,6 @@ use tokio::task::JoinSet;
 
 use crate::api;
 use crate::commands::calendar::load_calendar_creds;
-use crate::commands::gmail::load_gmail_creds;
 use crate::commands::projects::{fetch_all_repos, fetch_projects};
 use crate::db::Db;
 use crate::error::AppError;
@@ -146,15 +145,6 @@ async fn audit_project(pool: &Db, p: &Project) -> (ProjectConnectionStatus, Serv
         })),
         Err(e) => ConnCheck::failed(format!("creds load: {e}")),
     };
-    let gmail = match load_gmail_creds(pool, &p.id).await {
-        Ok(c) => oauth_check(c.map(|c| {
-            (
-                !c.client_id.is_empty() && !c.client_secret.is_empty(),
-                c.has_refresh(),
-            )
-        })),
-        Err(e) => ConnCheck::failed(format!("creds load: {e}")),
-    };
 
     let project = AuditProjectRef {
         id: p.id.clone(),
@@ -171,7 +161,6 @@ async fn audit_project(pool: &Db, p: &Project) -> (ProjectConnectionStatus, Serv
             notion_backlog_db,
             notion_agenda_db,
             google_calendar,
-            gmail,
         },
         ServiceIdentities {
             project,

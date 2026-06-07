@@ -11,10 +11,13 @@ use sha2::{Digest, Sha256};
 use super::{CalendarError, CalendarProvider};
 
 const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
-/// full read+write 스코프 (calendarList + events 모두 커버). 기존 `calendar.events` 또는
-/// `calendar.readonly` 토큰은 calendarList.list를 허용하지 않아 403이 발생하므로 재연결 필요.
+/// Google 계정 통합 스코프: calendar full read+write **+ gmail.send**. 한 번의 동의로 캘린더와
+/// 메일 발송을 모두 부여해, 별도 Gmail 연결 없이 "Google 계정" 연결 하나로 둘 다 커버한다.
+/// (기존 calendar-only 토큰은 gmail.send가 없어 발송 시 403 → Google 계정 재연결 필요.)
+/// `gmail.send`는 Google restricted scope — 동의 화면에 미확인-앱 경고가 뜰 수 있다.
 /// write는 사용자 폼 제출(사람 결정)이라 Acceptance 게이트 불요 — 게이트는 자동화의 외부 mutate 차단용(#2).
-pub(super) const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
+pub(super) const CALENDAR_SCOPE: &str =
+    "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send";
 
 // ── 자격증명 blob (keychain 전용 — 절대 DTO/렌더러로 나가지 않는다) ──────────────────
 

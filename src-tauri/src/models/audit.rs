@@ -61,7 +61,6 @@ pub struct ProjectConnectionStatus {
     pub notion_backlog_db: ConnCheck,
     pub notion_agenda_db: ConnCheck,
     pub google_calendar: ConnCheck,
-    pub gmail: ConnCheck,
 }
 
 /// 경고 그룹에 등장하는 프로젝트 참조(개인/업무 구분 포함).

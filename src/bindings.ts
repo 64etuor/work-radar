@@ -340,33 +340,6 @@ export const commands = {
 	 *  "Test ping" 선례). 회전된 refresh_token은 merge로 보존 저장. 실 네트워크라 cargo test 아님(사용자 관찰).
 	 */
 	pingGoogleCalendar: (projectId: string) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_google_calendar", { projectId })),
-	/**
-	 *  OAuth client(client_id/secret)을 keychain blob에 저장(반환 없음). 같은 client면 refresh_token 보존,
-	 *  client가 바뀌면 refresh_token은 버린다(다른 client엔 무효 — 재연결 필요).
-	 * 
-	 *  R4 — Google OAuth client는 `gmail.send` 스코프가 활성화된 client여야 한다 — calendar client(calendar
-	 *  스코프만)와 별개 client를 등록할 것으로 기대한다(실 연결 스모크에서 사용자가 확인). 같은 GCP
-	 *  프로젝트에서 gmail.send를 추가 활성화해 재사용하는 것도 가능하나, 스코프 동의가 다르므로 재연결이
-	 *  필요하다.
-	 */
-	setGmailOauthClient: (projectId: string, clientId: string, clientSecret: string) => typedError<null, AppError>(__TAURI_INVOKE("set_gmail_oauth_client", { projectId, clientId, clientSecret })),
-	/**
-	 *  loopback + PKCE(S256) OAuth 실행 → refresh_token을 keychain blob에 저장. bounded(loopback timeout).
-	 *  client 미입력이면 Err(graceful degrade). 실 네트워크/브라우저라 cargo test 아님(사용자 관찰).
-	 */
-	startGmailOauth: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("start_gmail_oauth", { projectId })),
-	/**
-	 *  진행 중인 loopback OAuth 대기를 취소한다. 브라우저 창을 닫았거나 잘못 열었을 때 UI가 180초
-	 *  timeout을 기다리지 않고 재시도할 수 있게 한다.
-	 */
-	cancelGmailOauth: (projectId: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cancel_gmail_oauth", { projectId })),
-	/**
-	 *  연결 상태(client 입력됨 / refresh_token 보유). 토큰/이메일 본문 미노출(graceful degrade 판정용).
-	 *  로컬 keychain만 읽고 네트워크는 타지 않는다(calendar status 선례).
-	 */
-	gmailStatus: (projectId: string) => typedError<GmailStatus, AppError>(__TAURI_INVOKE("gmail_status", { projectId })),
-	/**  연결 해제: keychain blob 전체(client + refresh_token) 삭제. */
-	disconnectGmail: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("disconnect_gmail", { projectId })),
 	/**  calendarList 조회 + 저장된 선택 반영(selected 플래그). 미연결이면 Err(graceful degrade). */
 	listGoogleCalendars: (projectId: string) => typedError<CalendarListItem[], AppError>(__TAURI_INVOKE("list_google_calendars", { projectId })),
 	/**  선택 캘린더 목록을 저장(JSON [{id,summary}]). 빈 목록이면 fetch 결과 없음. */
@@ -1220,16 +1193,6 @@ export type FlushSummary = {
 	failed: number,
 };
 
-/**  프로젝트별 Gmail 연결 상태(graceful degrade 판정용). 토큰/이메일 본문 미포함 — 불리언 + 상세만. */
-export type GmailStatus = {
-	/**  OAuth client(client_id/secret)이 입력됨(연결 시도 가능). */
-	hasClient: boolean,
-	/**  refresh_token 보유(OAuth 연결 완료 — 발송 가능). */
-	connected: boolean,
-	/**  사람이 읽을 상태 상세(토큰/이메일 미포함). */
-	detail: string,
-};
-
 /**  프로젝트별 Google Calendar 연결 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
 export type GoogleCalendarStatus = {
 	/**  OAuth client(client_id/secret)이 입력됨 (연결 시도 가능). */
@@ -1573,7 +1536,6 @@ export type ProjectConnectionStatus = {
 	notionBacklogDb: ConnCheck,
 	notionAgendaDb: ConnCheck,
 	googleCalendar: ConnCheck,
-	gmail: ConnCheck,
 };
 
 /**  프로젝트 종류. 개인/업무는 별도 토큰·Notion 워크스페이스로 분리된다. */

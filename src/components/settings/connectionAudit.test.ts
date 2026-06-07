@@ -22,7 +22,6 @@ function proj(
     notionBacklogDb: none,
     notionAgendaDb: none,
     googleCalendar: none,
-    gmail: none,
     ...over,
   };
 }

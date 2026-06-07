@@ -25,7 +25,6 @@ export function summarize(audit: ConnectionAudit): AuditSummary {
     p.notionBacklogDb,
     p.notionAgendaDb,
     p.googleCalendar,
-    p.gmail,
   ]);
   return {
     ok: checks.filter((c) => c.state === "ok").length,

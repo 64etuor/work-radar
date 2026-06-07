@@ -88,7 +88,7 @@ fn is_plausible_email(to: &str) -> bool {
 mod gmail_dispatch_tests {
     use crate::external_actions::ExternalAction;
     use crate::gmail::execute_gmail_action;
-    use crate::gmail::{GmailCreds, GmailError, GmailProvider, TokenResponse};
+    use crate::gmail::{GmailError, GmailProvider};
     use std::sync::Mutex;
 
     /// 네트워크 없는 mock Gmail provider — send_message_once 호출 인자를 기록해 dispatch 라우팅/검증을
@@ -98,18 +98,6 @@ mod gmail_dispatch_tests {
         calls: Mutex<Vec<(String, String)>>, // (access_token, raw)
     }
     impl GmailProvider for MockGmailProvider {
-        async fn exchange_code(
-            &self,
-            _creds: &GmailCreds,
-            _code: &str,
-            _verifier: &str,
-            _redirect_uri: &str,
-        ) -> Result<TokenResponse, GmailError> {
-            unreachable!("dispatch 테스트는 토큰 교환을 호출하지 않음")
-        }
-        async fn refresh_access(&self, _creds: &GmailCreds) -> Result<TokenResponse, GmailError> {
-            unreachable!("dispatch 테스트는 refresh를 호출하지 않음")
-        }
         async fn send_message_once(
             &self,
             access_token: &str,

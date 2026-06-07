@@ -18,7 +18,7 @@ import { googleAccountOauthViewState } from "./googleAccountUx";
 import { SectionLabel, StatusDot } from "./SettingsKit";
 
 /**
- * 프로젝트별 Google 계정 연결 (현재 Calendar read+write — 캘린더 목록·이벤트 생성).
+ * 프로젝트별 Google 계정 연결 (Calendar read+write + Gmail 발송 — 한 동의로 통합).
  * INVARIANT: client_id/secret은 **로컬 입력 상태에만** 잠시 머물고 저장(IPC) 직후 비운다.
  * refresh_token/secret은 keychain에만. 미연결/네트워크 실패는 기능 비활성(graceful degrade).
  */

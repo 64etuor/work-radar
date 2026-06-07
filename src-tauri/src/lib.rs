@@ -194,12 +194,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::google_calendar_status,
         commands::disconnect_google,
         commands::ping_google_calendar,
-        // Gmail OAuth 연결 (External Action Gate write 레일, Phase 5 US-006).
-        commands::set_gmail_oauth_client,
-        commands::start_gmail_oauth,
-        commands::cancel_gmail_oauth,
-        commands::gmail_status,
-        commands::disconnect_gmail,
+        // Gmail 발송은 Google 계정 OAuth에 통합됨(별도 연결 커맨드 없음) — 토큰은 gmail.send 스코프를
+        // 포함한 통합 Google 토큰을 쓰고, 발송은 External Action Gate(`execute`)로만.
         // Google Calendar 캘린더 선택 + 이벤트 (read 레일, Phase 10b).
         commands::list_google_calendars,
         commands::set_selected_calendars,

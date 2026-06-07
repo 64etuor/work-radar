@@ -97,17 +97,19 @@ impl ExternalActionRouter<'_> {
             })
     }
 
-    /// action의 cref로 Gmail access token을 resolve한다(refresh 재발급). cref→token 레시피는
-    /// `gmail::access_token_for_cref`에 단일화한다(calendar 미러). 토큰은 keychain에서만, 본문 미노출.
-    /// 미연결(creds/refresh 없음)은 not_connected로 노출.
+    /// action의 cref로 Gmail 발송 access token을 resolve한다. Gmail은 Google 계정 OAuth에 통합되어
+    /// `gmail::access_token_for_cref`가 통합 Google 토큰(gmail.send 스코프 포함)을 발급한다 —
+    /// project_ref로만 resolve(전역/주변 토큰 금지). 토큰은 keychain에서만, 본문 미노출.
+    /// 미연결(Google 계정 미연결/refresh 없음)은 not_connected로 노출.
     async fn gmail_access(&self, action_id: &str) -> Result<String, AppError> {
         let cref = self.cref_for_action(action_id).await?;
-        // access_token_for_cref는 AppError를 직접 산출한다 — refresh-time ReconnectRequired가
-        // forbidden+'Gmail 재연결' nav로 보존되도록 `?`로 전파한다(generic terminal로 flatten 금지).
         crate::gmail::access_token_for_cref(&cref)
             .await?
             .ok_or_else(|| {
-                AppError::not_found("gmail.not_connected", "미연결 — 먼저 Gmail을 연결하세요")
+                AppError::not_found(
+                    "gmail.not_connected",
+                    "Google 계정 미연결 — 먼저 Google 계정을 연결하세요(메일 발송 권한 포함)",
+                )
             })
     }
 }
