@@ -162,6 +162,8 @@
   min-width: 0;
 }
 .sprint-lbl {
+  justify-self: center;
+  text-align: center;
   font: 500 10px var(--font-sans);
   color: var(--color-wr-subtle);
 }
