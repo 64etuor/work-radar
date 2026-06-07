@@ -17,7 +17,7 @@ export function HermesConnectionBlock() {
   });
 
   return (
-    <section className="space-y-3 rounded-lg border p-4">
+    <section className="border-border space-y-3 rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">Hermes 연결</h3>
         <Button variant="ghost" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>
