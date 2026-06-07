@@ -47,6 +47,8 @@ import {
   type SpawnSyncLike,
 } from "../conductor/adapter.ts";
 import { runPreflight } from "../live/preflight.ts";
+import { evaluateReadiness } from "../live/readiness.ts";
+import { listStalledTasks } from "../orchestrator/stall.ts";
 import {
   requestSessionOpen,
   markWaiting,
@@ -1028,6 +1030,66 @@ server.registerTool(
     return {
       content: [{ type: "text", text: [`preflight ready=${report.ready}`, ...lines].join("\n") }],
     };
+  },
+);
+
+// ── L2: Stalled tasks (read-only) ─────────────────────────────────────────────
+// Active/blocked tasks whose bound session has crashed — a silent stall the conductor would
+// otherwise wait on forever. Verdict-free; resolution stays human.
+server.registerTool(
+  "stalled_tasks",
+  {
+    description:
+      "L2 read-only — in-flight tasks whose bound session crashed (silent stalls). Writes nothing.",
+    inputSchema: {},
+  },
+  async () => {
+    const stalled = await listStalledTasks(WORKSPACE);
+    const text = stalled.length
+      ? stalled
+          .map((s) => `${s.taskId} [${s.taskPhase}] session=${s.sessionId} (${s.reason})`)
+          .join("\n")
+      : "(no stalled tasks)";
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+// ── L4: Unattended-readiness gate (read-only) ─────────────────────────────────
+// Stricter than preflight: promotes the live flags to required + refuses when stalls are open.
+server.registerTool(
+  "readiness",
+  {
+    description:
+      "L4 read-only — is it SAFE to run UNATTENDED? Requires preflight infra + conductor/observer live + " +
+      "auto=type2 + zero open stalls. Lists all blockers. Writes nothing.",
+    inputSchema: {},
+  },
+  async () => {
+    const realSpawnSync: SpawnSyncLike = (cmd, args) => {
+      const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
+      return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+    };
+    const probe = (cmd: string, args: string[]): boolean => {
+      try {
+        return realSpawnSync(cmd, args).status === 0;
+      } catch {
+        return false;
+      }
+    };
+    const cmuxCmd = CONDUCTOR_CFG.cmuxCmd;
+    const stalledCount = (await listStalledTasks(WORKSPACE)).length;
+    const report = evaluateReadiness({
+      signals: {
+        env: process.env,
+        cmuxBinaryOk: probe(cmuxCmd, ["--version"]),
+        gitWorktreeOk: probe("git", ["-C", REPO_ROOT, "worktree", "list"]),
+      },
+      stalledCount,
+    });
+    const body = report.ready
+      ? "readiness ready=true (safe for unattended dispatch)"
+      : ["readiness ready=false — blockers:", ...report.blockers.map((b) => `  ✗ ${b}`)].join("\n");
+    return { content: [{ type: "text", text: body }] };
   },
 );
 
