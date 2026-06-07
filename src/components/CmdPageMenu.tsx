@@ -51,8 +51,10 @@ export function CmdPageMenu({
       className="cmd-page-menu"
       data-placement={pos?.placement}
       style={
+        // left = 메뉴 가로 중심(origin.x clamp). 실제 중앙 정렬은 CSS translateX(-50%)가
+        // 렌더 폭 기준으로 수행 → 측정 오차와 무관하게 레버 중심에 정확히 맞춰진다.
         pos
-          ? { left: pos.left, top: pos.top, visibility: "visible" }
+          ? { left: pos.centerX, top: pos.top, visibility: "visible" }
           : { left: 0, top: 0, visibility: "hidden" }
       }
       role="menu"

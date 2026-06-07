@@ -8,19 +8,19 @@ const MARGIN = 8;
 const CLEAR = 70;
 
 describe("clampMenuPosition", () => {
-  it("origin.x를 중심으로 가로 정렬", () => {
+  it("공간이 충분하면 메뉴 중심 = 레버 origin.x", () => {
     const p = clampMenuPosition({ x: 500, y: 400 }, VP, MENU, MARGIN, CLEAR);
-    expect(p.left).toBe(400); // 500 - 200/2
+    expect(p.centerX).toBe(500);
   });
 
-  it("좌측 가장자리를 넘으면 margin으로 clamp", () => {
+  it("좌측 외곽이면 박스가 margin 안에 들도록 중심을 clamp(= margin + 폭/2)", () => {
     const p = clampMenuPosition({ x: 10, y: 400 }, VP, MENU, MARGIN, CLEAR);
-    expect(p.left).toBe(8);
+    expect(p.centerX).toBe(108); // 8 + 200/2 → 박스 [8, 208]
   });
 
-  it("우측 가장자리를 넘으면 (뷰포트폭 - 메뉴폭 - margin)으로 clamp", () => {
+  it("우측 외곽이면 중심을 clamp(= 뷰포트폭 - margin - 폭/2)", () => {
     const p = clampMenuPosition({ x: 990, y: 400 }, VP, MENU, MARGIN, CLEAR);
-    expect(p.left).toBe(792); // 1000 - 200 - 8
+    expect(p.centerX).toBe(892); // 1000 - 8 - 100 → 박스 [792, 992]
   });
 
   it("아래 공간이 충분하면 기본 below 배치(top = origin.y + clearance)", () => {
@@ -43,8 +43,8 @@ describe("clampMenuPosition", () => {
     expect(p.top).toBe(8); // 10 - 70 - 60 = -120 → clamp margin
   });
 
-  it("메뉴가 뷰포트보다 넓으면 음수 없이 margin으로 floor", () => {
-    // menu.w(900) > viewport.w(400) → maxLeft = max(margin, 400-900-8) = margin
+  it("메뉴가 뷰포트보다 넓으면 중심을 뷰포트 중앙으로(좌우 균등 오버플로)", () => {
+    // menu.w(900) > viewport.w(400) → minCenter(458) > maxCenter(-58) → 중앙
     const p = clampMenuPosition(
       { x: 200, y: 400 },
       { w: 400, h: 800 },
@@ -52,6 +52,6 @@ describe("clampMenuPosition", () => {
       MARGIN,
       CLEAR,
     );
-    expect(p.left).toBe(8); // 음수로 가지 않고 margin에 안착
+    expect(p.centerX).toBe(200); // 400 / 2
   });
 });

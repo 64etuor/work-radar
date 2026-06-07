@@ -15,7 +15,27 @@
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 8px 24px rgba(0, 0, 0, 0.14);
-  animation: cmd-knob-in var(--wr-motion-fast) var(--wr-ease-out) both;
+  /* left=메뉴 중심에 두고 translateX(-50%)로 렌더 폭 기준 정확히 중앙 정렬(측정 오차 무관). */
+  transform: translateX(-50%);
+  animation: cmd-page-menu-in var(--wr-motion-fast) var(--wr-ease-out) both;
+}
+
+/* 등장 애니메이션 — translateX(-50%)를 유지한 채 scale(전용 keyframe: 레버와 결합 제거). */
+@keyframes cmd-page-menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmd-page-menu {
+    animation: none;
+  }
 }
 
 .cmd-page-menu-chip {
