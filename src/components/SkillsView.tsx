@@ -376,18 +376,9 @@ export function SkillsView() {
         <span className="skl-count">{total}</span>
       </header>
 
-      {/* 상호작용 컨트롤은 drag-region 밖 별도 툴바에(InboxView 선례) — 드래그가 입력/클릭을 삼키지 않도록. */}
+      {/* 상호작용 컨트롤은 drag-region 밖 별도 툴바에(InboxView 선례) — 드래그가 입력/클릭을 삼키지 않도록.
+          검색 입력은 카드 리스트 페인 상단으로 이동(D1) — 아래 .skl-body 상단에 sticky로 둔다. */}
       <div className="skl-toolbar">
-        <div className="skl-search">
-          <Search className="size-3.5" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="스킬 검색"
-            aria-label="스킬 검색"
-          />
-        </div>
-
         <div className="skl-viewtoggle" role="group" aria-label="보기 전환">
           <Button
             variant={listView ? "outline" : "default"}
@@ -675,6 +666,18 @@ export function SkillsView() {
         </nav>
 
         <div className="skl-body">
+          {/* 검색은 리스트 페인 상단에 sticky(D1) — 카드가 스크롤돼도 항상 보인다. */}
+          <div className="skl-search-pane">
+            <div className="skl-search">
+              <Search className="size-3.5" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="스킬 검색"
+                aria-label="스킬 검색"
+              />
+            </div>
+          </div>
           {skills.isError && (
             <div className="skl-note err">
               레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
