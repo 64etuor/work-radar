@@ -42,6 +42,29 @@ pub async fn set_project_token(
             "토큰이 비었습니다",
         ));
     }
+    // 저장 전 라이브 검증 — 잘못된/만료/권한 없는 토큰을 keychain에 넣지 않는다(import_notion_token 선례).
+    // OAuth blob 종류(GoogleCalendar/Gmail/HermesBridge)는 단순 ping 대상이 아니라 검증 생략(별도 연결 흐름).
+    match kind {
+        TokenKind::Notion => {
+            let ping = api::ping_notion(token).await;
+            if !ping.ok {
+                return Err(AppError::terminal(
+                    "tokens.notion_verify_failed",
+                    format!("Notion 토큰 검증 실패: {}", ping.detail),
+                ));
+            }
+        }
+        TokenKind::Github => {
+            let ping = api::ping_github(token).await;
+            if !ping.ok {
+                return Err(AppError::terminal(
+                    "tokens.github_verify_failed",
+                    format!("GitHub 토큰 검증 실패: {}", ping.detail),
+                ));
+            }
+        }
+        TokenKind::GoogleCalendar | TokenKind::Gmail | TokenKind::HermesBridge => {}
+    }
     let cref = project_credential_ref(db.inner(), &project_id)
         .await
         .map_err(|e| AppError::terminal("tokens.project_not_found", e))?;
@@ -212,6 +235,15 @@ pub async fn import_github_token(db: State<'_, Db>, project_id: String) -> Resul
         return Err(AppError::terminal(
             "tokens.gh_import_failed",
             "gh 토큰을 가져오지 못했습니다 — 'gh 로그인'을 먼저 진행하세요.",
+        ));
+    }
+    // 저장 전 라이브 검증(import_notion_token 선례 — 그쪽은 ping하는데 gh import만 빠져 있었다).
+    // 만료/무효 토큰을 keychain에 넣지 않는다.
+    let ping = api::ping_github(&token).await;
+    if !ping.ok {
+        return Err(AppError::terminal(
+            "tokens.github_verify_failed",
+            format!("GitHub 토큰 검증 실패: {}", ping.detail),
         ));
     }
     let cref = project_credential_ref(db.inner(), &project_id)

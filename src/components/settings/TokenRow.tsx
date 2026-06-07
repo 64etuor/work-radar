@@ -61,6 +61,8 @@ export function TokenRow({
           setToken("");
           onToast(`${label} 토큰 저장됨 (keychain)`);
         },
+        // 저장 전 라이브 검증 실패(만료/무효 토큰)는 토큰을 비우지 않고 에러를 인라인 노출한다.
+        onError: () => onToast(`${label} 토큰 검증 실패`),
       },
     );
   };
@@ -139,9 +141,12 @@ export function TokenRow({
               onClick={save}
               disabled={!token.trim() || setTok.isPending}
             >
-              저장
+              {setTok.isPending ? "검증 중…" : "저장"}
             </Button>
           </div>
+        )}
+        {setTok.isError && (
+          <div className="mt-2 text-xs text-[color:var(--destructive)]">{String(setTok.error)}</div>
         )}
       </div>
 
