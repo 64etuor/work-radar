@@ -250,9 +250,11 @@ L1이 단일 임계 게이트. L2/L3는 L1 후 병렬 가능(경로 분리: L2=d
 
 ## 9.5 As-built status (2026-06-07, branch `plan/autonomous-orchestration`)
 
-deterministic 코어는 TDD+검증 완료, 라이브 스텝은 runbook(사용자/cmux). governance vitest
-**489 pass** (4 pre-existing `escalate/` 실패는 이 워크트리 fresh-install 한정, 범위 밖). 검증
-node: 테스트=node20(CI핀), 런타임 서버=node22+(`--experimental-strip-types`). **push 안 함.**
+deterministic 코어는 TDD+검증 완료, 라이브 스텝은 cmux 스킬로 **에이전트가 직접 라이브 구동**해 입증
+(2026-06-07). governance vitest **559 pass** (4 pre-existing `escalate/` 실패는 이 워크트리
+fresh-install 한정, 범위 밖). 검증 node: 테스트=node20(CI핀), 런타임 서버=node22+
+(`--experimental-strip-types`). **PUSHED + wire-verified** → `origin/plan/autonomous-orchestration`
+= `8307ad7` (사용자 승인 2026-06-07; origin/dev 대비 14 commits ahead, dev 미머지).
 
 | Phase | 상태 | 증거 |
 | --- | --- | --- |
@@ -272,7 +274,8 @@ node: 테스트=node20(CI핀), 런타임 서버=node22+(`--experimental-strip-ty
 ## 9.5.1 라이브 어댑터 수정 (L1/L3 + per-repo 라이브 구동에서 발견 — never-run-live 결함)
 
 라이브 단일스텝을 실제 구동하니 `makeLiveAdapter`의 cmux/MCP 배관이 **유닛테스트(가짜 spawn)에서만
-통과하던** 결함 5건이 드러남. 전부 수정 + 실contract 테스트로 고정(`conductor/handlers.test.ts`):
+통과하던** never-run-live 결함 5건(+후속 경로-정합성 1건 #6)이 드러남. 전부 수정 + 실contract
+테스트로 고정(`conductor/handlers.test.ts`):
 
 1. **surface 파싱**: `new-workspace`는 `OK workspace:N`(공지=stderr)을 출력 → `stdout.trim()`은 surface가
    아닌 workspace ref. 이제 `parseCmuxRef` + `cmux tree --json`에서 워크스페이스의 terminal **surface** resolve
@@ -305,6 +308,22 @@ reuse-or-create(`findGroupRef`/`projectLabelFromRepoRoot`, best-effort=실패해
 닫힘 + per-repo decisions ingest 확인. (이전엔 Slice 1 유닛테스트만; 이제 실 entrypoint 라이브.) 단 #5 수정
 전엔 per-repo 루프가 닫히지 못했음 — Slice 1을 처음 실제 구동해 발견.
 
+6. **executor 세션 `BOULE_REPO_ROOT` 정합성**(후속): 스폰된 executor 세션 `.boule/mcp.json` env가
+   `{SESSION_ROLE, WORKSPACE}`만 설정 → 그 세션이 docs-reading 툴 호출 시 `REPO_ROOT`가
+   `resolve(WORKSPACE,"..","..")`=`<repo>/.boule`(오류)로 기본값화. 현재 step-prompt가 executor를
+   complete_task/escalate로 한정해 무해하나 latent → `sessionMcpConfig`가 `BOULE_REPO_ROOT=<targetRepo>`
+   명시(`deps.repoRoot` 재사용). 회귀 테스트로 고정.
+
+## 9.5.2 추가 기능 (라이브 세션에서 파생, L0–L6 범위 밖 — 사용자 요청)
+
+| 기능 | 상태 | 정본 spec | 요지 |
+| --- | --- | --- | --- |
+| **프로젝트별 cmux 폴더** | ✅ DONE (라이브) | (이 플랜 §9.5.1) | 세션 워크스페이스를 repoRoot basename `workspace-group`로 reuse-or-create(best-effort). |
+| **Graduated autonomy** (`autonomyLevel`) | ✅ DONE (full-auto 라이브) | (boule.config 스키마) | `manual`(work 기본)<`dispatch`(personal 기본)<`auto_plan`(AI가 plan 자동수락)<`full`(+spec). **INVARIANT #1을 여는 유일 경로**, config 파일만으로 제어, test/dev. 하드닝: auto-accept=actor:system+`autonomy-auto` 태그(user 위조 X)·fail-closed→manual·acceptance-only(Type-1/stall은 full에서도 사람)·executor는 구조적 self-accept 불가(`auto_dispatch`가 executor 역할 미등록 + `SESSION_DENIED_TOOLS`)·autoMode는 level에서 파생(단일 소스). `src/orchestrator/autoAccept.ts` + preflight `autonomy_level` advisory + readiness `warnings` + `boule status`/`boule set --autonomy-level`. ⚠BREAKING: `overrides.autoMode` 제거. |
+| **`boule tick`** (bounded driver) | ✅ DONE (라이브, codex-consulted) | `docs/superpowers/specs/2026-06-07-boule-tick-bounded-driver-design.md` | **외부 박동 1회**(cron=시계, NOT 데몬; INVARIANT #5): readiness 게이트(L4)→halt/stall 게이트→autoAccept(level)→autoDispatch(≤`--max-steps`)→stable `TickOutcome`. `autoDispatch` `maxConducts` cap·`src/conductor/fromEnv.ts` adapter 빌더 공유·`src/orchestrator/tick.ts`·exit 0/10/1. cron 배선=operator. |
+
+> 이 둘은 원래 L0–L6 범위를 넘어선 사용자 요청 산물(테스트용 최고 자율 + 지속성 박동). 모두 opus critic 별도 ACCEPT.
+
 ## 9.6 남은 비결정 follow-up (별도 슬라이스)
 
 - per-step executor (plan-step 스키마에 executor 필드) — 현재 run-level만.
@@ -329,5 +348,28 @@ reuse-or-create(`findGroupRef`/`projectLabelFromRepoRoot`, best-effort=실패해
 - 인앱 codex 잡 러너(`src-tauri/src/agent.rs`, ~70%) 잔여: Phase 9c mismatch-draft 잡, Diff Viewer 통합, calendar/today 자동화 — **이 플랜 비대상**(사용자 확정 "보울 오케스트레이션만").
 - pgvector 임베딩, 실 Postgres 서버, 장기 스케줄러/데몬 — v3 external residual 유지.
 - 완전 무인(plan-accept 자동) — 설계상 비채택(§0.1).
+
+## 10. 문서 정합성 패스 (⏭ 다음 세션에 **결정** — 지금 결정하지 않음)
+
+거버넌스 문서가 여러 위치/명명으로 흩어져 AI가 "정본"을 혼동한다(메모리 경고 재현). 다음 세션 **첫 작업
+= 아래를 결정하고 한 번에 정리**. 지금은 결정/이동 금지 — 의사결정 항목만 고정.
+
+**A. 위치(home) 분산 — 결정: 거버넌스 문서의 단일 루트는?**
+- `governance/docs/{plans,design,runbooks,adr}` + `governance/docs/INDEX.md` (거버넌스 내부)
+- vs **repo-root** `docs/superpowers/specs/` (최근 spec 2건: per-repo, boule-tick) + `docs/adr/`(ADR-0009) + `docs/decisions.md`
+- ⇒ 같은 종류(spec/ADR)가 두 군데. **결정**: 거버넌스 spec/plan/design/ADR을 `governance/docs/` 아래로 통일할지, 아니면 repo 표준(`docs/...`)을 따를지.
+
+**B. 정본(canonical) 모호 — 결정: "현재 Boule 전체"의 단일 참조는?**
+- 3중 상위 문서: ① `governance/docs/design/2026-06-02-…orchestrator-control-plane-design.md` §7 Phase Ledger(A–I as-built) ② 이 라이브-자율 master plan(L0–L6 + §9.5.2) ③ per-feature spec들(superpowers/specs). **결정**: 하나를 INDEX 진입점으로 못 박고 나머지는 그 아래 포인터로.
+
+**C. 스테일 링크** — per-phase PLAN 파일들의 `Spec:/Design:` 헤더가 **삭제된** per-phase design 문서를 가리킴 → design §7로 repoint(메모리 기록).
+
+**D. `decisions.md` 공유** — repo-root `docs/decisions.md`에 app + 거버넌스 breadcrumb이 교차 기록. **결정**: 거버넌스 전용 decisions 로그 분리 vs 통합 유지.
+
+**E. 명명 규칙** — `YYYY-MM-DD-kebab.md`(spec/plan/runbook) vs `NNNN-kebab.md`(ADR) 혼재; 날짜 프리픽스 일관성. **결정**: 종류별 명명 컨벤션 1장으로.
+
+**F. 자기참조** — 이 §10/§9.5.2 자체가 doc-sprawl에 기여 → 정리 시 이 plan의 위치도 (A)/(B) 결정에 맞춰 재배치.
+
+산출물(다음 세션): 결정 1장(`docs/.../<date>-governance-doc-conventions.md` 또는 ADR) + INDEX 갱신 + C 링크 수리 + (필요시) 파일 이동(git mv, 히스토리 보존). 코드 무변경 — 순수 문서.
 </content>
 </invoke>
