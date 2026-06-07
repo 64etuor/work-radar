@@ -21,6 +21,8 @@ export function CmdPageMenu({ origin }: { origin: { x: number; y: number } }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<MenuPosition | null>(null);
 
+  // 마운트 후 메뉴 실측 크기로 위치 1회 계산(첫 프레임 flash 방지 위해 layout 단계에서 동기 측정→배치).
+  // origin은 세션당 고정이라 origin당 1회만 set.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;

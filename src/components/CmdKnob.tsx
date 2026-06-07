@@ -2,6 +2,7 @@ import "./CmdKnob.css";
 
 import { useEffect, useRef, useState } from "react";
 
+import { CmdPageMenu } from "@/components/CmdPageMenu";
 import { armedDirection, clampToThrow, type KnobDir } from "@/lib/knobGeometry";
 import { useCmdKnob } from "@/lib/useCmdKnob";
 
@@ -77,42 +78,45 @@ export function CmdKnob() {
   const tiltY = (shown.x / THROW_RADIUS) * TILT_DEG;
 
   return (
-    <div
-      className="cmd-knob"
-      style={{ left: origin.x, top: origin.y }}
-      role="presentation"
-      aria-hidden
-    >
-      <div className="cmd-knob-base">
-        {(Object.keys(GLYPH) as KnobDir[]).map((dir) => (
-          <span
-            key={dir}
-            className="cmd-knob-guide"
-            data-dir={dir}
-            data-enabled={dirEnabled[dir] || undefined}
-            data-armed={shownArmed === dir || undefined}
-          >
-            {GLYPH[dir]}
-          </span>
-        ))}
+    <>
+      <div
+        className="cmd-knob"
+        style={{ left: origin.x, top: origin.y }}
+        role="presentation"
+        aria-hidden
+      >
+        <div className="cmd-knob-base">
+          {(Object.keys(GLYPH) as KnobDir[]).map((dir) => (
+            <span
+              key={dir}
+              className="cmd-knob-guide"
+              data-dir={dir}
+              data-enabled={dirEnabled[dir] || undefined}
+              data-armed={shownArmed === dir || undefined}
+            >
+              {GLYPH[dir]}
+            </span>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="cmd-knob-stick"
+          data-dragging={dragging || undefined}
+          style={{
+            transform: `translate(-50%, -50%) translate(${shown.x}px, ${shown.y}px) perspective(220px) rotateX(${-tiltX}deg) rotateY(${tiltY}deg)`,
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            draggingRef.current = true;
+            armedRef.current = null;
+            setOffset(CENTER);
+            setArmed(null);
+            setDragging(true);
+          }}
+          aria-label="조이스틱 — 방향으로 밀어 단축키 실행"
+        />
       </div>
-      <button
-        type="button"
-        className="cmd-knob-stick"
-        data-dragging={dragging || undefined}
-        style={{
-          transform: `translate(-50%, -50%) translate(${shown.x}px, ${shown.y}px) perspective(220px) rotateX(${-tiltX}deg) rotateY(${tiltY}deg)`,
-        }}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          draggingRef.current = true;
-          armedRef.current = null;
-          setOffset(CENTER);
-          setArmed(null);
-          setDragging(true);
-        }}
-        aria-label="조이스틱 — 방향으로 밀어 단축키 실행"
-      />
-    </div>
+      <CmdPageMenu origin={origin} />
+    </>
   );
 }
