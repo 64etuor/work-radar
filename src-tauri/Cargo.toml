@@ -69,6 +69,9 @@ thiserror = "2"
 moka = { version = "0.12", features = ["future"] }
 async-trait = "0.1.89"
 feed-rs = "2.3.1"
+# 뉴스 피드 title/summary의 HTML 엔티티(`&amp;`, `&#39;`, 숫자 엔티티 등)를 ingest 시 1회
+# decode. React는 escape만 하고 decode는 안 해 literal로 노출되므로 저장 전에 정리한다.
+html-escape = "0.2.13"
 rand = "0.10.1"
 uuid = { version = "1", features = ["v4"] }
 

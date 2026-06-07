@@ -18,6 +18,13 @@ use crate::error::AppError;
 
 const DEFAULT_TAKE: usize = 30;
 
+/// 피드 title/summary는 종종 HTML 엔티티(`&amp;`, `&#39;`, `&#x27;`, 숫자 엔티티 등)를
+/// 그대로 담고 있다. React는 escape만 하고 decode는 안 하므로 ingest 시 한 번 decode해
+/// 저장 텍스트를 깨끗하게 만든다(렌더러가 아닌 ingest에서 1회). 이미 깨끗한 텍스트엔 no-op.
+fn decode_entities(s: &str) -> String {
+    html_escape::decode_html_entities(s).into_owned()
+}
+
 pub struct GenericRssSource {
     pub id: &'static str,
     pub label: &'static str,
@@ -68,7 +75,7 @@ impl NewsSource for GenericRssSource {
             .into_iter()
             .take(take)
             .filter_map(|e| {
-                let title = e.title.as_ref()?.content.clone();
+                let title = decode_entities(&e.title.as_ref()?.content);
                 let url = e.links.first()?.href.clone();
                 let external_id = e.id.clone();
                 // critic Critical: 둘 다 없으면 drop. Utc::now() 폴백 절대 금지.
@@ -185,9 +192,22 @@ async fn fetch_reddit_comment_count(client: &Client, url: &str) -> Result<Option
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_comments_href_from_html, RedditChild, RedditListing, RedditListingData,
-        RedditPostData,
+        decode_entities, extract_comments_href_from_html, RedditChild, RedditListing,
+        RedditListingData, RedditPostData,
     };
+
+    #[test]
+    fn decode_entities_unescapes_named_and_numeric() {
+        assert_eq!(
+            decode_entities("Rust &amp; C &#39;23 &#x2014; &quot;hi&quot;"),
+            "Rust & C '23 — \"hi\""
+        );
+    }
+
+    #[test]
+    fn decode_entities_is_noop_on_clean_text() {
+        assert_eq!(decode_entities("plain text"), "plain text");
+    }
 
     #[test]
     fn extracts_comments_href_from_inline_html() {
