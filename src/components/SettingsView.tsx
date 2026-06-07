@@ -29,6 +29,7 @@ import { useUIStore } from "@/store";
 import { AddProjectForm } from "./settings/AddProjectForm";
 import { AgentsPane } from "./settings/AgentsPane";
 import { AppearanceSettings } from "./settings/AppearanceSettings";
+import { ConnectionAuditPanel } from "./settings/ConnectionAuditPanel";
 import { GmailBlock } from "./settings/GmailBlock";
 import { GoogleAccountBlock } from "./settings/GoogleAccountBlock";
 import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
@@ -246,93 +247,96 @@ function ProjectsPane({
   const selectedProject = list.find((p) => p.id === selectedId);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
-      <Card className="self-start overflow-hidden rounded-2xl">
-        <div className="border-border flex items-center justify-between border-b px-4 py-3.5">
-          <div>
-            <SectionLabel>프로젝트</SectionLabel>
-            <p className="text-muted-foreground mt-1 text-xs">설정할 프로젝트를 선택하세요.</p>
+    <div className="flex flex-col gap-5">
+      <ConnectionAuditPanel onToast={pushSuccess} />
+      <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <Card className="self-start overflow-hidden rounded-2xl">
+          <div className="border-border flex items-center justify-between border-b px-4 py-3.5">
+            <div>
+              <SectionLabel>프로젝트</SectionLabel>
+              <p className="text-muted-foreground mt-1 text-xs">설정할 프로젝트를 선택하세요.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{list.length}</Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                className="size-7 rounded-full p-0"
+                aria-label="새 프로젝트"
+                title="새 프로젝트"
+                onClick={() => setSelectedProjectId(NEW_PROJECT_ID)}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{list.length}</Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              className="size-7 rounded-full p-0"
-              aria-label="새 프로젝트"
-              title="새 프로젝트"
+
+          {projects.isLoading && (
+            <div className="text-muted-foreground px-4 py-6 text-sm">불러오는 중…</div>
+          )}
+          {projects.isError && (
+            <div className="px-4 py-6 text-sm text-[color:var(--destructive)]">
+              프로젝트 로드 실패: {String(projects.error)}
+            </div>
+          )}
+          {projects.data && list.length === 0 && (
+            <div className="text-muted-foreground px-4 py-8 text-center text-sm">
+              아직 프로젝트가 없습니다. 오른쪽에서 첫 프로젝트를 추가하세요.
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5 p-2.5">
+            <button
+              type="button"
               onClick={() => setSelectedProjectId(NEW_PROJECT_ID)}
+              aria-pressed={isCreating}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl border border-dashed px-3 py-3 text-left transition-colors",
+                isCreating
+                  ? "border-border-strong bg-secondary text-foreground"
+                  : "border-border text-muted-foreground hover:bg-hover hover:text-foreground",
+              )}
             >
-              <Plus className="size-3.5" />
-            </Button>
-          </div>
-        </div>
-
-        {projects.isLoading && (
-          <div className="text-muted-foreground px-4 py-6 text-sm">불러오는 중…</div>
-        )}
-        {projects.isError && (
-          <div className="px-4 py-6 text-sm text-[color:var(--destructive)]">
-            프로젝트 로드 실패: {String(projects.error)}
-          </div>
-        )}
-        {projects.data && list.length === 0 && (
-          <div className="text-muted-foreground px-4 py-8 text-center text-sm">
-            아직 프로젝트가 없습니다. 오른쪽에서 첫 프로젝트를 추가하세요.
-          </div>
-        )}
-
-        <div className="flex flex-col gap-1.5 p-2.5">
-          <button
-            type="button"
-            onClick={() => setSelectedProjectId(NEW_PROJECT_ID)}
-            aria-pressed={isCreating}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-xl border border-dashed px-3 py-3 text-left transition-colors",
-              isCreating
-                ? "border-border-strong bg-secondary text-foreground"
-                : "border-border text-muted-foreground hover:bg-hover hover:text-foreground",
-            )}
-          >
-            <span className="border-border bg-card flex size-8 shrink-0 items-center justify-center rounded-lg border">
-              <Plus className="size-4" />
-            </span>
-            <span className="min-w-0">
-              <span className="typo-body-strong block">새 프로젝트</span>
-              <span className="text-muted-foreground typo-caption-sm mt-0.5 block">
-                개인/업무 프로젝트 추가
+              <span className="border-border bg-card flex size-8 shrink-0 items-center justify-center rounded-lg border">
+                <Plus className="size-4" />
               </span>
-            </span>
-          </button>
+              <span className="min-w-0">
+                <span className="typo-body-strong block">새 프로젝트</span>
+                <span className="text-muted-foreground typo-caption-sm mt-0.5 block">
+                  개인/업무 프로젝트 추가
+                </span>
+              </span>
+            </button>
 
-          {list.length > 0 &&
-            list.map((p) => (
-              <ProjectSelectTile
-                key={p.id}
-                project={p}
-                selected={p.id === selectedId}
-                onSelect={() => setSelectedProjectId(p.id)}
-              />
-            ))}
-        </div>
-      </Card>
-
-      <div className="min-w-0">
-        {isCreating ? (
-          <AddProjectForm
-            autoFocus={settingsIntent === "add_project"}
-            onCreated={(msg, projectId) => {
-              pushSuccess(msg);
-              setSelectedProjectId(projectId ?? null);
-            }}
-          />
-        ) : selectedProject ? (
-          <ProjectCard key={selectedProject.id} project={selectedProject} onToast={pushSuccess} />
-        ) : (
-          <div className="border-border text-muted-foreground rounded-2xl border border-dashed px-5 py-10 text-center text-sm">
-            프로젝트를 선택하면 토큰, Notion DB, Google 계정, 레포 설정을 볼 수 있습니다.
+            {list.length > 0 &&
+              list.map((p) => (
+                <ProjectSelectTile
+                  key={p.id}
+                  project={p}
+                  selected={p.id === selectedId}
+                  onSelect={() => setSelectedProjectId(p.id)}
+                />
+              ))}
           </div>
-        )}
+        </Card>
+
+        <div className="min-w-0">
+          {isCreating ? (
+            <AddProjectForm
+              autoFocus={settingsIntent === "add_project"}
+              onCreated={(msg, projectId) => {
+                pushSuccess(msg);
+                setSelectedProjectId(projectId ?? null);
+              }}
+            />
+          ) : selectedProject ? (
+            <ProjectCard key={selectedProject.id} project={selectedProject} onToast={pushSuccess} />
+          ) : (
+            <div className="border-border text-muted-foreground rounded-2xl border border-dashed px-5 py-10 text-center text-sm">
+              프로젝트를 선택하면 토큰, Notion DB, Google 계정, 레포 설정을 볼 수 있습니다.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

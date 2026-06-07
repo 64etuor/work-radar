@@ -1,6 +1,7 @@
 // 도메인별 query 훅 배럴. 기존 `@/lib/query` import 경로는 이 index로 해석된다(소비처 무변경).
 export * from "./agents";
 export * from "./agentsConfig";
+export * from "./audit";
 export * from "./calendar";
 export * from "./calendarSync";
 export * from "./client";
