@@ -76,6 +76,32 @@
   animation: wr-dialog-pop-in var(--wr-motion-panel) var(--wr-ease-out) both;
 }
 
+/* Hermes 플로팅 패널 — 위치 transform(inline)과 충돌하지 않도록 opacity 전용 페이드.
+ * open=fade-in / closed=fade-out(후 언마운트). duration 은 wr-motion-panel(0.22s)과 동일. */
+.hermes-panel-root[data-state="open"] {
+  animation: wr-fade-in var(--wr-motion-panel) var(--wr-ease-out) both;
+}
+.hermes-panel-root[data-state="closed"] {
+  animation: wr-fade-out var(--wr-motion-panel) var(--wr-ease-out) both;
+}
+
+@keyframes wr-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes wr-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes wr-space-old-forward {
   from {
     transform: translate3d(0, 0, 0);
@@ -457,7 +483,13 @@
   .wr-radial-effect-item,
   .hermes-border-light > span,
   .hermes-wordmark,
-  .hermes-header-title {
+  .hermes-header-title,
+  .hermes-panel-root[data-state="open"],
+  .hermes-panel-root[data-state="closed"] {
     animation: none;
+  }
+  /* 페이드를 끄더라도 닫힘 상태는 보이지 않게(언마운트 전 깜빡임 방지). */
+  .hermes-panel-root[data-state="closed"] {
+    opacity: 0;
   }
 }

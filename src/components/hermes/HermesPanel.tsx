@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { Plus, RotateCcw, Trash2, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { commands, type HermesPanelState } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -123,7 +123,47 @@ export function HermesPanel({
     return () => window.removeEventListener("resize", onResize);
   }, [state.x, state.y, state.w, state.h, setBounds]);
 
-  if (!state.open) return null;
+  // 마운트 컨트롤러: 닫힘 시 즉시 언마운트하지 않고 fade-out 동안 노드를 유지한다.
+  // open=true → 즉시 마운트(파생, setState 불필요) + data-state="open"(fade-in).
+  // open=false → data-state="closed"(fade-out). isClosing 동안 노드 유지 →
+  //   animationend(또는 폴백 타임아웃)에 isClosing 해제 → 언마운트.
+  // (reduced-motion 은 animation:none → animationend 미발생 → 타임아웃이 언마운트한다.)
+  const [isClosing, setIsClosing] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // open 직전 값 — true→false 전이에서만 fade-out 을 시작한다.
+  const prevOpenRef = useRef(state.open);
+
+  useEffect(() => {
+    const prevOpen = prevOpenRef.current;
+    prevOpenRef.current = state.open;
+    if (state.open) {
+      // 열림(혹은 닫는 중 재오픈): 진행 중 fade-out 타임아웃 취소.
+      // isClosing 은 render 가 state.open OR isClosing 으로 마운트를 결정하므로
+      // 굳이 여기서 끄지 않아도 무해하다(다음 닫힘 사이클이 재설정). setState-in-effect 회피.
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      return;
+    }
+    // 막 닫힌 경우에만 fade-out 시작(이미 닫혀 있던 마운트엔 no-op).
+    if (!prevOpen) return;
+    setIsClosing(true);
+    if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+    // wr-motion-panel(0.22s) + 여유. animationend 가 먼저 오면 그쪽에서 정리한다.
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setIsClosing(false);
+    }, 280);
+    return () => {
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [state.open]);
+
+  if (!state.open && !isClosing) return null;
 
   const x = state.x ?? 0;
   const y = state.y ?? 0;
@@ -136,12 +176,24 @@ export function HermesPanel({
       role="dialog"
       aria-label="Hermes"
       aria-modal="false"
+      data-state={state.open ? "open" : "closed"}
+      onAnimationEnd={(e) => {
+        // fade-out 종료 시 즉시 언마운트(타임아웃보다 우선). 자식 애니메이션은 무시.
+        if (e.target !== e.currentTarget) return;
+        if (!state.open) {
+          if (closeTimerRef.current !== null) {
+            clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = null;
+          }
+          setIsClosing(false);
+        }
+      }}
       style={{
         transform: `translate3d(${x}px, ${y}px, 0)`,
         width: w,
         height: h,
       }}
-      className="bg-background border-border fixed z-50 flex flex-col overflow-hidden rounded-lg border font-sans shadow-lg"
+      className="hermes-panel-root bg-background border-border fixed z-50 flex flex-col overflow-hidden rounded-lg border font-sans shadow-lg"
     >
       {/* 스트리밍 중에만 — 패널 4변을 시계방향으로 돌며 흐르는 light beam.
        * root가 rounded-lg + overflow-hidden 이라 코너서 자연 클립. */}
