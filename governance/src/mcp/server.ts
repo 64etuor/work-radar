@@ -74,10 +74,13 @@ import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
 import {
   parseAutoMode,
+  parseAutonomyLevel,
   parseConductorConfig,
   parseObserverConfig,
   parseEnvelopeDefaults,
 } from "./config.ts";
+import { autoAccept } from "../orchestrator/autoAccept.ts";
+import { autonomyAllows } from "../repo/config.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import {
@@ -672,7 +675,13 @@ if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 // 기본 = stub(결정적·git/cmux/fs 무접근 → CI 무변경). BOULE_CONDUCTOR_MODE=live 일 때만
 // 실제 git worktree + cmux 어댑터. 비결정(spawnSync/fs)은 이 경계에서만 주입(liveReviewer와 동형).
 const CONDUCTOR_CFG = parseConductorConfig(process.env);
-const AUTO_MODE = parseAutoMode(process.env.BOULE_AUTO_MODE);
+// Graduated autonomy (config-driven, fail-closed to manual). The level is the master knob: it gates
+// orchestrator auto-acceptance (auto_dispatch tool) AND derives dispatch — autonomyLevel>=dispatch
+// ⇒ AUTO_MODE type2 (an explicit BOULE_AUTO_MODE still works for the manual-level legacy path).
+const AUTONOMY_LEVEL = parseAutonomyLevel(process.env.BOULE_AUTONOMY_LEVEL);
+const AUTO_MODE = autonomyAllows.dispatch(AUTONOMY_LEVEL)
+  ? "type2"
+  : parseAutoMode(process.env.BOULE_AUTO_MODE);
 // Per-repo policy envelope defaults (set by the `boule` launcher from resolved policy). Unset ⇒ {}
 // ⇒ the conductor's built-in envelope defaults apply.
 const ENVELOPE_DEFAULTS = parseEnvelopeDefaults(process.env);
@@ -981,9 +990,13 @@ server.registerTool(
 );
 
 // ── Phase I: Narrow opt-in Type-2 auto dispatch ──────────────────────────────
-// One on-demand pass that can only fire conduct_plan for already-human-accepted plans.
-// It is verdict-free and writes no decision_* events.
-server.registerTool(
+// One on-demand pass that fires conduct_plan and (at autonomyLevel auto_plan/full) auto-accepts
+// proposed plans/specs. ORCHESTRATOR-ONLY: structurally NOT registered for an executor session
+// (mirrors accept_plan/accept_spec) + in SESSION_DENIED_TOOLS — so an executor can never auto-accept
+// its own plan. Verdict-free; writes no decision_*.
+if (SESSION_ALLOWS_VERDICTS)
+  // prettier-ignore
+  server.registerTool(
   "auto_dispatch",
   {
     description:
@@ -995,6 +1008,9 @@ server.registerTool(
     if (AUTO_MODE !== "type2") {
       return { content: [{ type: "text", text: "auto disabled (set BOULE_AUTO_MODE=type2)" }] };
     }
+    // INVARIANT #1 gate: ONLY when autonomyLevel opens it (auto_plan/full) does the orchestrator
+    // auto-accept proposed plans (full also specs). actor:"system", never forged as a human.
+    const accepted = await autoAccept(WORKSPACE, AUTONOMY_LEVEL, nowFn(), randFn());
     const s = await autoDispatch(
       WORKSPACE,
       {
@@ -1006,11 +1022,15 @@ server.registerTool(
       nowFn(),
       randFn(),
     );
+    const acc =
+      accepted.specsAccepted || accepted.plansAccepted
+        ? ` (auto-accepted ${accepted.specsAccepted} spec, ${accepted.plansAccepted} plan @${AUTONOMY_LEVEL})`
+        : "";
     return {
       content: [
         {
           type: "text",
-          text: `dispatched: ${s.executed} executed, ${s.failed} failed, ${s.denied} denied, ${s.skipped} skipped`,
+          text: `dispatched: ${s.executed} executed, ${s.failed} failed, ${s.denied} denied, ${s.skipped} skipped${acc}`,
         },
       ],
     };
@@ -1109,10 +1129,13 @@ server.registerTool(
       },
       stalledCount,
     });
-    const body = report.ready
+    const head = report.ready
       ? "readiness ready=true (safe for unattended dispatch)"
       : ["readiness ready=false — blockers:", ...report.blockers.map((b) => `  ✗ ${b}`)].join("\n");
-    return { content: [{ type: "text", text: body }] };
+    const warns = report.warnings.length
+      ? ["\nwarnings (non-blocking — opted in):", ...report.warnings.map((w) => `  ⚠ ${w}`)].join("\n")
+      : "";
+    return { content: [{ type: "text", text: head + warns }] };
   },
 );
 

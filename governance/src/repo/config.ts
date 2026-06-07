@@ -12,27 +12,54 @@ import {
 export type Kind = "personal" | "work";
 export type AutoMode = "off" | "type2";
 
+/** Graduated autonomy (INVARIANT #1 surface). Higher = more gates opened to the orchestrator.
+ *  - manual:    accept_spec + accept_plan are HUMAN; no auto-dispatch. (production-safe default)
+ *  - dispatch:  human accepts spec+plan; steps then auto-advance (= legacy autoMode type2).
+ *  - auto_plan: + the orchestrator AUTO-ACCEPTS proposed PLANS (human still accepts specs).
+ *  - full:      + the orchestrator AUTO-ACCEPTS proposed SPECS too (fully unattended ACCEPTANCE).
+ *  ⚠️ auto_plan/full OPEN INVARIANT #1's human gate — test/dev only. Even at `full`, Type-1
+ *  decisions + stalls STILL halt for a human (auto-accept is acceptance-only; it never resolves a
+ *  decision_blocked or recovers a stall), and a spawned EXECUTOR session still cannot self-accept
+ *  (verdict tools structurally absent). Auto-accepts are recorded actor:"system" + an autonomy
+ *  marker — never forged as a human approval. */
+export type AutonomyLevel = "manual" | "dispatch" | "auto_plan" | "full";
+const AUTONOMY_RANK: Record<AutonomyLevel, number> = {
+  manual: 0,
+  dispatch: 1,
+  auto_plan: 2,
+  full: 3,
+};
+/** true if `level` opens the named gate (monotonic). */
+export const autonomyAllows = {
+  dispatch: (l: AutonomyLevel) => AUTONOMY_RANK[l] >= AUTONOMY_RANK.dispatch,
+  autoAcceptPlan: (l: AutonomyLevel) => AUTONOMY_RANK[l] >= AUTONOMY_RANK.auto_plan,
+  autoAcceptSpec: (l: AutonomyLevel) => AUTONOMY_RANK[l] >= AUTONOMY_RANK.full,
+};
+
 /** Type-1 classes a spawned session must escalate (envelope.forbiddenDecisionClasses domain). */
 type DecisionClass = AutonomyEnvelope["forbiddenDecisionClasses"][number];
 
 export interface ResolvedPolicy {
   kind: Kind;
+  autonomyLevel: AutonomyLevel;
   autoMode: AutoMode;
   reviewQuorum: number;
   forbiddenDecisionClasses: DecisionClass[];
   allowedType2Actions: string[];
 }
 
-// Per-kind defaults. work = strict (manual conduct, ≥2 review, all classes escalate); personal =
+// Per-kind defaults. work = strict (manual gates, ≥2 review, all classes escalate); personal =
 // loose (auto-dispatch on, single review, narrower forbidden set + broader Type-2 autonomy).
-const WORK_DEFAULTS: Omit<ResolvedPolicy, "kind"> = {
-  autoMode: "off",
+// autoMode is DERIVED from autonomyLevel (manual→off, else→type2); the per-kind autonomy default is
+// the source of truth. auto_plan/full are NEVER a default — they are explicit opt-in (INVARIANT #1).
+const WORK_DEFAULTS: Omit<ResolvedPolicy, "kind" | "autoMode"> = {
+  autonomyLevel: "manual",
   reviewQuorum: 2,
   forbiddenDecisionClasses: DEFAULT_FORBIDDEN_DECISION_CLASSES,
   allowedType2Actions: ["edit", "test", "lint"],
 };
-const PERSONAL_DEFAULTS: Omit<ResolvedPolicy, "kind"> = {
-  autoMode: "type2",
+const PERSONAL_DEFAULTS: Omit<ResolvedPolicy, "kind" | "autoMode"> = {
+  autonomyLevel: "dispatch",
   reviewQuorum: 1,
   // drop product-behavior + dependency from the forbidden set ⇒ those become Type-2-autonomous.
   forbiddenDecisionClasses: [
@@ -57,7 +84,10 @@ const decisionClassSchema = z.enum([
 
 const overridesSchema = z
   .object({
-    autoMode: z.enum(["off", "type2"]).optional(),
+    // autonomyLevel is the SINGLE autonomy knob; autoMode is DERIVED from it (no separate override —
+    // that previously let status disagree with the server's effective mode). auto_plan/full open
+    // INVARIANT #1's human gate — settable per-repo (config-file-only) for test/dev; fail-closed.
+    autonomyLevel: z.enum(["manual", "dispatch", "auto_plan", "full"]).optional(),
     reviewQuorum: z.number().int().min(1).optional(),
     forbiddenDecisionClasses: z.array(decisionClassSchema).optional(),
     allowedType2Actions: z.array(z.string().min(1)).optional(),
@@ -87,9 +117,12 @@ export function parseBouleConfig(value: unknown): BouleConfig {
 export function resolvePolicy(config: BouleConfig): ResolvedPolicy {
   const base = config.kind === "work" ? WORK_DEFAULTS : PERSONAL_DEFAULTS;
   const o = config.overrides ?? {};
+  const autonomyLevel = o.autonomyLevel ?? base.autonomyLevel;
   return {
     kind: config.kind,
-    autoMode: o.autoMode ?? base.autoMode,
+    autonomyLevel,
+    // autoMode is DERIVED solely from the level (single source — status always matches the server).
+    autoMode: autonomyLevel === "manual" ? "off" : "type2",
     reviewQuorum: o.reviewQuorum ?? base.reviewQuorum,
     forbiddenDecisionClasses: o.forbiddenDecisionClasses ?? base.forbiddenDecisionClasses,
     allowedType2Actions: o.allowedType2Actions ?? base.allowedType2Actions,
@@ -141,6 +174,7 @@ export function policyEnv(
     BOULE_WORKSPACE: dirs.workspace,
     BOULE_REPO_ROOT: dirs.repoRoot,
     BOULE_CONDUCTOR_WORKTREES_ROOT: dirs.worktrees,
+    BOULE_AUTONOMY_LEVEL: policy.autonomyLevel,
     BOULE_AUTO_MODE: policy.autoMode,
     BOULE_REVIEW_QUORUM: String(policy.reviewQuorum),
     BOULE_ENVELOPE_FORBIDDEN_CLASSES: policy.forbiddenDecisionClasses.join(","),

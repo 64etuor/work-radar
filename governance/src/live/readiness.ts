@@ -1,5 +1,10 @@
 import { evaluatePreflight, type PreflightReport, type PreflightSignals } from "./preflight.ts";
-import { parseAutoMode, parseConductorMode, parseObserverMode } from "../mcp/config.ts";
+import {
+  parseAutoMode,
+  parseAutonomyLevel,
+  parseConductorMode,
+  parseObserverMode,
+} from "../mcp/config.ts";
 
 // L4 — Unattended-readiness gate (master plan 2026-06-07, Phase L4).
 //
@@ -32,6 +37,10 @@ export interface ReadinessReport {
   ready: boolean;
   /** human-readable blockers; empty ⇔ ready. */
   blockers: string[];
+  /** non-blocking posture warnings the operator should SEE before going unattended (e.g. an opened
+   *  INVARIANT #1 gate). These do NOT flip `ready` — the user opts into them by config — but they
+   *  must be surfaced on the live-go path, not just in `boule status`. */
+  warnings: string[];
   /** the underlying L0 preflight (infra detail). */
   preflight: PreflightReport;
 }
@@ -53,5 +62,14 @@ export function evaluateReadiness(input: ReadinessInput): ReadinessReport {
   if (input.stalledCount > 0)
     blockers.push(`${input.stalledCount} stalled task(s) — resolve before unattended dispatch`);
 
-  return { ready: blockers.length === 0, blockers, preflight };
+  // Non-blocking posture warning: an opened INVARIANT #1 gate is opt-in (does NOT block readiness),
+  // but the unattended-go path MUST surface it.
+  const warnings: string[] = [];
+  const autonomy = parseAutonomyLevel(env.BOULE_AUTONOMY_LEVEL);
+  if (autonomy === "auto_plan" || autonomy === "full")
+    warnings.push(
+      `BOULE_AUTONOMY_LEVEL=${autonomy} — INVARIANT #1 OPENED: AI auto-accepts ${autonomy === "full" ? "plan + spec" : "plan"} (test/dev only; Type-1 decisions + stalls still halt for a human)`,
+    );
+
+  return { ready: blockers.length === 0, blockers, warnings, preflight };
 }

@@ -19,6 +19,25 @@ const armed = (over: Partial<ReadinessInput> = {}): ReadinessInput => ({
   ...over,
 });
 
+describe("evaluateReadiness — autonomyLevel surfaced as a non-blocking warning (INVARIANT #1)", () => {
+  const withLevel = (lvl: string): ReadinessInput => ({
+    signals: { ...ARMED_SIGNALS, env: { ...ARMED_SIGNALS.env, BOULE_AUTONOMY_LEVEL: lvl } },
+    stalledCount: 0,
+  });
+  it("full/auto_plan surface a warning but do NOT block readiness (opt-in)", () => {
+    for (const lvl of ["full", "auto_plan"]) {
+      const r = evaluateReadiness(withLevel(lvl));
+      expect(r.ready).toBe(true); // opening the gate is opt-in, never a blocker
+      expect(r.warnings.join(" ")).toMatch(/INVARIANT #1 OPENED/);
+      expect(r.warnings.join(" ")).toContain(`BOULE_AUTONOMY_LEVEL=${lvl}`);
+    }
+  });
+  it("manual/dispatch (or unset) emit NO autonomy warning", () => {
+    expect(evaluateReadiness(withLevel("manual")).warnings).toHaveLength(0);
+    expect(evaluateReadiness(armed()).warnings).toHaveLength(0); // unset → manual
+  });
+});
+
 describe("evaluateReadiness — unattended gate (all blockers must clear)", () => {
   it("ready=true when infra ready, all live flags armed, and no stalls", () => {
     const r = evaluateReadiness(armed());

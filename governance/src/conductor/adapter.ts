@@ -90,6 +90,11 @@ export const SESSION_DENIED_TOOLS = [
   `mcp__${BOULE_MCP_ALIAS}__choose`,
   `mcp__${BOULE_MCP_ALIAS}__accept_plan`,
   `mcp__${BOULE_MCP_ALIAS}__accept_spec`,
+  // auto_dispatch is an ORCHESTRATOR tool: it can auto-accept plans/specs (autonomyLevel) and spawn
+  // sub-sessions. An executor session must never reach it — else it could open INVARIANT #1's gate
+  // for its own plan. Denied here (claude denylist) AND structurally unregistered for executor role
+  // in server.ts (mirrors accept_plan/accept_spec); the guarantee does not rely on env isolation.
+  `mcp__${BOULE_MCP_ALIAS}__auto_dispatch`,
 ];
 
 /** The scoped MCP config written into each session worktree. It launches boule with

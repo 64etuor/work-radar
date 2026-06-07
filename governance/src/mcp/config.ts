@@ -184,6 +184,16 @@ export function parseAutoMode(raw: string | undefined): "off" | "type2" {
   return (raw ?? "").trim().toLowerCase() === "type2" ? "type2" : "off";
 }
 
+/** Parse BOULE_AUTONOMY_LEVEL (config-driven graduated autonomy). Fail-closed: anything
+ *  unrecognized → "manual" (fully human-gated). auto_plan/full OPEN INVARIANT #1's acceptance gate,
+ *  so a typo/unknown value must NEVER accidentally land there. */
+export function parseAutonomyLevel(
+  raw: string | undefined,
+): "manual" | "dispatch" | "auto_plan" | "full" {
+  const v = (raw ?? "").trim().toLowerCase();
+  return v === "dispatch" || v === "auto_plan" || v === "full" ? v : "manual";
+}
+
 /** Assemble the Conductor config from env (all safe defaults). */
 export function parseConductorConfig(env: Record<string, string | undefined>): ConductorConfig {
   return {

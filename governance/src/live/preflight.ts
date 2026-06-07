@@ -1,4 +1,9 @@
-import { parseAutoMode, parseConductorConfig, parseObserverMode } from "../mcp/config.ts";
+import {
+  parseAutoMode,
+  parseAutonomyLevel,
+  parseConductorConfig,
+  parseObserverMode,
+} from "../mcp/config.ts";
 
 // L0 — Live-loop preflight (master plan 2026-06-07, Phase L0).
 //
@@ -59,6 +64,8 @@ export function evaluatePreflight(signals: PreflightSignals): PreflightReport {
   const cond = parseConductorConfig(env);
   const observerLive = parseObserverMode(env.BOULE_OBSERVER_MODE);
   const auto = parseAutoMode(env.BOULE_AUTO_MODE);
+  const autonomy = parseAutonomyLevel(env.BOULE_AUTONOMY_LEVEL);
+  const gateOpen = autonomy === "auto_plan" || autonomy === "full";
   const role = (env.BOULE_SESSION_ROLE ?? "").trim().toLowerCase();
 
   const checks: PreflightCheck[] = [
@@ -97,6 +104,14 @@ export function evaluatePreflight(signals: PreflightSignals): PreflightReport {
       auto === "type2",
       "advisory",
       `BOULE_AUTO_MODE=${env.BOULE_AUTO_MODE ?? "(unset)"} → ${auto} (set =type2 for unattended step advance)`,
+    ),
+    // ok ⇔ INVARIANT #1 gate CLOSED (manual/dispatch). auto_plan/full opens AI auto-accept of
+    // plan/spec — surfaced here (not just `boule status`) so the live-go path can't miss it.
+    check(
+      "autonomy_level",
+      !gateOpen,
+      "advisory",
+      `BOULE_AUTONOMY_LEVEL=${env.BOULE_AUTONOMY_LEVEL ?? "(unset)"} → ${autonomy}${gateOpen ? " ⚠ INVARIANT #1 OPENED — AI auto-accepts plan/spec (test/dev only)" : ""}`,
     ),
     // The ORCHESTRATING server must NOT be executor-role (that would strip its own verdict tools).
     // executor-role belongs only to Conductor-spawned sessions. ok ⇔ not executor here.

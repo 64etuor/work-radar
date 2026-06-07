@@ -51,6 +51,19 @@ describe("evaluatePreflight — required infra gates ready", () => {
     expect(r.ready).toBe(false);
     expect(checkById(r.checks, "git_worktree").ok).toBe(false);
   });
+
+  it("autonomy_level advisory surfaces an opened INVARIANT #1 gate (ok=false + ⚠), never gating ready", () => {
+    const open = evaluatePreflight({ ...ARMED, env: { ...ARMED.env, BOULE_AUTONOMY_LEVEL: "full" } });
+    const c = checkById(open.checks, "autonomy_level");
+    expect(c.level).toBe("advisory");
+    expect(c.ok).toBe(false); // gate OPEN draws the eye
+    expect(c.detail).toMatch(/INVARIANT #1 OPENED/);
+    expect(open.ready).toBe(true); // advisory never gates required-ready
+    // manual / unset → gate closed, ok=true, no warning text
+    const closed = checkById(evaluatePreflight(ARMED).checks, "autonomy_level");
+    expect(closed.ok).toBe(true);
+    expect(closed.detail).not.toMatch(/OPENED/);
+  });
 });
 
 describe("evaluatePreflight — flag posture is advisory (never blocks ready)", () => {

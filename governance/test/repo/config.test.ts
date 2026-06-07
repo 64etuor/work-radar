@@ -44,16 +44,18 @@ describe("parseBouleConfig — strict, fail-closed validation", () => {
 });
 
 describe("resolvePolicy — per-kind defaults + override precedence", () => {
-  it("work = strict defaults (auto off, quorum 2, full forbidden set)", () => {
+  it("work = strict defaults (manual autonomy → auto off, quorum 2, full forbidden set)", () => {
     const p = resolvePolicy(defaultConfig("work"));
+    expect(p.autonomyLevel).toBe("manual");
     expect(p.autoMode).toBe("off");
     expect(p.reviewQuorum).toBe(2);
     expect(p.forbiddenDecisionClasses).toContain("dependency");
     expect(p.forbiddenDecisionClasses).toContain("product-behavior");
   });
 
-  it("personal = loose defaults (auto type2, quorum 1, narrower forbidden set)", () => {
+  it("personal = loose defaults (dispatch autonomy → auto type2, quorum 1, narrower forbidden set)", () => {
     const p = resolvePolicy(defaultConfig("personal"));
+    expect(p.autonomyLevel).toBe("dispatch");
     expect(p.autoMode).toBe("type2");
     expect(p.reviewQuorum).toBe(1);
     expect(p.forbiddenDecisionClasses).not.toContain("dependency");
@@ -66,17 +68,35 @@ describe("resolvePolicy — per-kind defaults + override precedence", () => {
     const p = resolvePolicy({
       schemaVersion: 1,
       kind: "personal",
-      overrides: { autoMode: "off", reviewQuorum: 3 },
+      overrides: { autonomyLevel: "manual", reviewQuorum: 3 },
     });
-    expect(p.autoMode).toBe("off"); // overridden
+    expect(p.autonomyLevel).toBe("manual"); // overridden (personal default is dispatch)
+    expect(p.autoMode).toBe("off"); // derived from the manual level
     expect(p.reviewQuorum).toBe(3); // overridden
     expect(p.allowedType2Actions).toContain("refactor"); // untouched personal default
   });
 
   it("STRICT_FALLBACK_POLICY equals the work default (fail-closed direction)", () => {
     expect(STRICT_FALLBACK_POLICY.autoMode).toBe("off");
+    expect(STRICT_FALLBACK_POLICY.autonomyLevel).toBe("manual");
     expect(STRICT_FALLBACK_POLICY.reviewQuorum).toBe(2);
     expect(STRICT_FALLBACK_POLICY.kind).toBe("work");
+  });
+
+  it("autonomyLevel override derives autoMode (dispatch+ ⇒ type2) and is the autonomy master", () => {
+    const full = resolvePolicy({
+      schemaVersion: 1,
+      kind: "work", // work default is manual, but the override opens it
+      overrides: { autonomyLevel: "full" },
+    });
+    expect(full.autonomyLevel).toBe("full");
+    expect(full.autoMode).toBe("type2"); // derived from the level — no separate autoMode override
+    const ap = resolvePolicy({ schemaVersion: 1, kind: "work", overrides: { autonomyLevel: "auto_plan" } });
+    expect(ap.autonomyLevel).toBe("auto_plan");
+    expect(ap.autoMode).toBe("type2");
+    // manual override forces dispatch off even for personal
+    const m = resolvePolicy({ schemaVersion: 1, kind: "personal", overrides: { autonomyLevel: "manual" } });
+    expect(m.autoMode).toBe("off");
   });
 });
 

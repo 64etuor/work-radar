@@ -33,16 +33,16 @@ describe("cmdInit / cmdSet / cmdStatus", () => {
 
   it("set mutates kind + overrides and re-validates", async () => {
     await cmdInit({ repo, kind: "personal" });
-    await cmdSet({ repo, kind: "work", "auto-mode": "type2", "review-quorum": "3" });
+    await cmdSet({ repo, kind: "work", "autonomy-level": "full", "review-quorum": "3" });
     const cfg = await readConfig(repo);
     expect(cfg.kind).toBe("work");
-    expect(cfg.overrides?.autoMode).toBe("type2");
+    expect(cfg.overrides?.autonomyLevel).toBe("full");
     expect(cfg.overrides?.reviewQuorum).toBe(3);
   });
 
-  it("set rejects an invalid auto-mode", async () => {
+  it("set rejects an invalid autonomy-level", async () => {
     await cmdInit({ repo, kind: "work" });
-    await expect(cmdSet({ repo, "auto-mode": "yolo" })).rejects.toThrow(/auto-mode/);
+    await expect(cmdSet({ repo, "autonomy-level": "yolo" })).rejects.toThrow(/autonomy-level/);
   });
 
   it("status reports the resolved policy from config", async () => {

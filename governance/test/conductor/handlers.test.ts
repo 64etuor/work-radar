@@ -16,8 +16,26 @@ import {
   firstTerminalSurface,
   findGroupRef,
   projectLabelFromRepoRoot,
+  SESSION_DENIED_TOOLS,
   type SpawnResultLike,
 } from "../../src/conductor/adapter.js";
+
+describe("SESSION_DENIED_TOOLS — executor sessions cannot reach the gate-opening tools", () => {
+  it("denies every human-gate / orchestrator tool, INCLUDING auto_dispatch (auto-accept path)", () => {
+    for (const t of ["approve", "reject", "choose", "accept_plan", "accept_spec", "auto_dispatch"]) {
+      expect(SESSION_DENIED_TOOLS).toContain(`mcp__boule-governance__${t}`);
+    }
+  });
+  it("the claude executor invocation passes the full denylist (incl. auto_dispatch)", () => {
+    const c = buildSessionCommand(
+      "claude",
+      { worktreePath: "/wt/s0" },
+      { serverEntrypoint: "/install/governance/src/mcp/server.ts", governanceWorkspace: "/ws" },
+    );
+    expect(c).toContain("mcp__boule-governance__auto_dispatch");
+    expect(c).toContain("mcp__boule-governance__accept_plan");
+  });
+});
 import type { GovEvent } from "../../src/event/event.js";
 
 let dir: string;

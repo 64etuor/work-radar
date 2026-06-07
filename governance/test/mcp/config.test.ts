@@ -7,7 +7,23 @@ import {
   resolveReviewerCommand,
   reviewerIdentity,
   quorumCollisionWarning,
+  parseAutonomyLevel,
 } from "../../src/mcp/config.js";
+
+describe("parseAutonomyLevel — fail-closed to manual", () => {
+  it("accepts the four levels (case/space-insensitive)", () => {
+    expect(parseAutonomyLevel("manual")).toBe("manual");
+    expect(parseAutonomyLevel(" dispatch ")).toBe("dispatch");
+    expect(parseAutonomyLevel("AUTO_PLAN")).toBe("auto_plan");
+    expect(parseAutonomyLevel("full")).toBe("full");
+  });
+  it("fails closed to manual on unset/unknown/typo (never accidentally opens INVARIANT #1)", () => {
+    expect(parseAutonomyLevel(undefined)).toBe("manual");
+    expect(parseAutonomyLevel("")).toBe("manual");
+    expect(parseAutonomyLevel("fulll")).toBe("manual");
+    expect(parseAutonomyLevel("yes")).toBe("manual");
+  });
+});
 
 const SAFE_ARGS = ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"];
 

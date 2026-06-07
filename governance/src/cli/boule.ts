@@ -76,10 +76,11 @@ export async function cmdSet(flags: ParsedArgs["flags"]): Promise<string> {
   const repo = reqRepo(flags);
   const current: BouleConfig = await readConfig(repo);
   const overrides = { ...(current.overrides ?? {}) };
-  if (flags["auto-mode"] !== undefined) {
-    const m = flags["auto-mode"];
-    if (m !== "off" && m !== "type2") throw new Error("--auto-mode must be off|type2");
-    overrides.autoMode = m;
+  if (flags["autonomy-level"] !== undefined) {
+    const l = flags["autonomy-level"];
+    if (l !== "manual" && l !== "dispatch" && l !== "auto_plan" && l !== "full")
+      throw new Error("--autonomy-level must be manual|dispatch|auto_plan|full");
+    overrides.autonomyLevel = l;
   }
   if (flags["review-quorum"] !== undefined) {
     const n = Number(flags["review-quorum"]);
@@ -106,6 +107,11 @@ export async function cmdStatus(flags: ParsedArgs["flags"]): Promise<string> {
     `repo: ${repo}`,
     `policy source: ${loaded.source}${loaded.reason ? ` (${loaded.reason})` : ""}`,
     `kind: ${loaded.policy.kind}`,
+    `autonomyLevel: ${loaded.policy.autonomyLevel}${
+      loaded.policy.autonomyLevel === "auto_plan" || loaded.policy.autonomyLevel === "full"
+        ? "  ⚠️ AI accepts plan/spec (INVARIANT #1 opened — test/dev)"
+        : ""
+    }`,
     `autoMode: ${loaded.policy.autoMode}  reviewQuorum: ${loaded.policy.reviewQuorum}`,
     `forbiddenDecisionClasses: ${loaded.policy.forbiddenDecisionClasses.join(", ")}`,
     `allowedType2Actions: ${loaded.policy.allowedType2Actions.join(", ")}`,
@@ -141,7 +147,7 @@ export async function cmdRun(flags: ParsedArgs["flags"]): Promise<number> {
 
 const USAGE = `boule <command> --repo <path>
   init   --repo <p> --kind <personal|work> [--project-id X] [--project-name Y] [--overwrite]
-  set    --repo <p> [--kind k] [--auto-mode off|type2] [--review-quorum n]
+  set    --repo <p> [--kind k] [--autonomy-level manual|dispatch|auto_plan|full] [--review-quorum n]
   status --repo <p>
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)`;
 
