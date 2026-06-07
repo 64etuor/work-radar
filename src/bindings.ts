@@ -1292,12 +1292,12 @@ export type HermesMessage = {
 export type HermesMessageRow = {
 	/**  i64 → i32로 좁혀 IPC 노출(specta i64 금지). 실사용에서 메시지 id가 2^31을 넘지 않음. */
 	id: number,
-	session_id: string,
+	sessionId: string,
 	seq: number,
 	role: string,
 	content: string,
-	tool_json: string | null,
-	created_at: string,
+	toolJson: string | null,
+	createdAt: string,
 };
 
 /**
@@ -1317,9 +1317,9 @@ export type HermesSessionRow = {
 	name: string,
 	status: string,
 	cwd: string | null,
-	created_at: string,
-	updated_at: string,
-	last_active_at: string,
+	createdAt: string,
+	updatedAt: string,
+	lastActiveAt: string,
 	archived: number,
 };
 

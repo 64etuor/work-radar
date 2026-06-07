@@ -10,6 +10,7 @@ use crate::db::Db;
 use crate::error::AppError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct HermesSessionRow {
     pub id: String,
     pub name: String,
@@ -23,6 +24,7 @@ pub struct HermesSessionRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct HermesMessageRow {
     /// i64 → i32로 좁혀 IPC 노출(specta i64 금지). 실사용에서 메시지 id가 2^31을 넘지 않음.
     #[sqlx(try_from = "i64")]
@@ -43,14 +45,17 @@ pub(crate) async fn create_inner(
     id: &str,
     name: &str,
 ) -> Result<HermesSessionRow, sqlx::Error> {
-    sqlx::query("INSERT INTO hermes_session (id, name) VALUES (?1, ?2)")
-        .bind(id)
-        .bind(name)
-        .execute(db)
-        .await?;
-    get_inner(db, id).await.map(|o| o.expect("just inserted"))
+    sqlx::query_as(
+        "INSERT INTO hermes_session (id, name) VALUES (?1, ?2) \
+         RETURNING id, name, status, cwd, created_at, updated_at, last_active_at, archived",
+    )
+    .bind(id)
+    .bind(name)
+    .fetch_one(db)
+    .await
 }
 
+#[allow(dead_code)]
 pub(crate) async fn get_inner(db: &Db, id: &str) -> Result<Option<HermesSessionRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, name, status, cwd, created_at, updated_at, last_active_at, archived \
@@ -255,6 +260,8 @@ mod tests {
         assert_eq!(row.id, "sess-1");
         assert_eq!(row.name, "첫 세션");
         assert_eq!(row.archived, 0_i32);
+        assert_eq!(row.status, "idle");
+        assert!(row.cwd.is_none());
 
         let list = list_inner(&db).await.expect("list");
         assert_eq!(list.len(), 1);
