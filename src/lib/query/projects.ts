@@ -7,6 +7,7 @@ import {
   type ProjectKind,
   type SetProjectCalendarColorInput,
   type SetProjectDefaultWriteCalendarInput,
+  type SetProjectNotionDbIdsInput,
 } from "@/bindings";
 
 import { unwrap } from "./client";
@@ -90,6 +91,19 @@ export function useSetProjectDefaultWriteCalendar() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["projects"] });
     },
+  });
+}
+
+/**
+ * 프로젝트 Notion DB 바인딩(백로그/안건) 편집·해제. 생성 후 오타 수정/변경/연결 해제 경로.
+ * 빈 값은 백엔드에서 해제(NULL)로 처리되고, 새 값은 토큰이 있으면 저장 전 라이브 검증된다.
+ */
+export function useSetProjectNotionDbIds() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SetProjectNotionDbIdsInput) =>
+      unwrap(commands.setProjectNotionDbIds(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   });
 }
 

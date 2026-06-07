@@ -11,6 +11,7 @@ export const commands = {
 	setProjectKind: (projectId: string, kind: ProjectKind) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_kind", { projectId, kind })),
 	setProjectCalendarColor: (input: SetProjectCalendarColorInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_calendar_color", { input })),
 	setProjectDefaultWriteCalendar: (input: SetProjectDefaultWriteCalendarInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_default_write_calendar", { input })),
+	setProjectNotionDbIds: (input: SetProjectNotionDbIdsInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_notion_db_ids", { input })),
 	listRepos: (projectId: string) => typedError<Repo[], AppError>(__TAURI_INVOKE("list_repos", { projectId })),
 	createRepo: (input: CreateRepoInput) => typedError<Repo, AppError>(__TAURI_INVOKE("create_repo", { input })),
 	deleteRepo: (repoId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_repo", { repoId })),
@@ -1699,6 +1700,17 @@ export type SetProjectCalendarColorInput = {
 export type SetProjectDefaultWriteCalendarInput = {
 	projectId: string,
 	calendarId: string | null,
+};
+
+/**
+ *  프로젝트 Notion DB 바인딩 변경 입력(생성 후 편집/오타 수정/해제 경로). 각 필드가 `None`이거나
+ *  빈 문자열이면 해당 바인딩을 **해제(클리어)**한다. 새 값은 형식 정규화 후, 토큰이 있으면 저장 전
+ *  라이브 접근 검증을 거친다(생성 시점은 토큰이 없어 검증 불가 — 그래서 이 편집 경로에서 검증).
+ */
+export type SetProjectNotionDbIdsInput = {
+	projectId: string,
+	backlogDbId: string | null,
+	agendaDbId: string | null,
 };
 
 /**  신호 출처. */

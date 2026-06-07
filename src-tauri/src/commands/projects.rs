@@ -5,7 +5,8 @@ use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
     CreateProjectInput, CreateRepoInput, Project, ProjectKind, Provider, Repo,
-    SetProjectCalendarColorInput, SetProjectDefaultWriteCalendarInput, WorkSignal,
+    SetProjectCalendarColorInput, SetProjectDefaultWriteCalendarInput, SetProjectNotionDbIdsInput,
+    WorkSignal,
 };
 use crate::notion::normalize_notion_db_id;
 
@@ -302,6 +303,69 @@ pub async fn set_project_default_write_calendar(
     input: SetProjectDefaultWriteCalendarInput,
 ) -> Result<Project, AppError> {
     update_project_default_write_calendar(db.inner(), &input).await
+}
+
+/// 입력 DB ID/URL을 표준 dashed UUID로 정규화한다. 빈 문자열/공백/None은 `None`(=바인딩 해제).
+/// 형식 오류는 `projects.invalid_notion_db_id`(뷰 링크/garbage 거부 — notion::normalize 위임).
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(github_provider_for_cref 등과 동일).
+#[allow(clippy::result_large_err)]
+fn normalize_opt_notion_db_id(raw: Option<&str>) -> Result<Option<String>, AppError> {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(None),
+        Some(s) => crate::notion::normalize_notion_db_id(s)
+            .map(Some)
+            .map_err(|e| AppError::validation("projects.invalid_notion_db_id", e)),
+    }
+}
+
+/// 프로젝트 Notion DB 바인딩(백로그/안건)을 갱신/해제한다 — 생성 후 오타 수정·변경·해제 경로.
+/// 새로 바인딩되는(Some) DB는 프로젝트 토큰이 있으면 저장 전 라이브 접근 검증(`probe_database`)을
+/// 거쳐 잘못된/접근 불가 DB를 조용히 바인딩하지 않는다. 토큰 미설정이면 형식 검증만으로 저장한다
+/// (생성 시점과 동일 — 토큰은 생성 후 연결되므로 라이브 검증이 구조적으로 불가). 알 수 없는 id는
+/// `projects.not_found`.
+pub(crate) async fn set_project_notion_db_ids_core(
+    db: &Db,
+    input: &SetProjectNotionDbIdsInput,
+) -> Result<Project, AppError> {
+    let backlog = normalize_opt_notion_db_id(input.backlog_db_id.as_deref())?;
+    let agenda = normalize_opt_notion_db_id(input.agenda_db_id.as_deref())?;
+
+    if backlog.is_some() || agenda.is_some() {
+        let cref: String = sqlx::query_scalar("SELECT credential_ref FROM projects WHERE id = ?1")
+            .bind(&input.project_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))?;
+        // 토큰이 있을 때만 라이브 검증(없으면 Err → best-effort로 건너뜀, 형식 검증은 위에서 끝남).
+        if let Ok(token) = crate::notion::notion_token_for_cref(&cref) {
+            if let Some(id) = &backlog {
+                crate::notion::probe_database(&token, id).await?;
+            }
+            if let Some(id) = &agenda {
+                crate::notion::probe_database(&token, id).await?;
+            }
+        }
+    }
+
+    sqlx::query_as::<_, Project>(&format!(
+        "UPDATE projects SET notion_backlog_db_id = ?2, notion_agenda_db_id = ?3, \
+             updated_at = datetime('now') WHERE id = ?1 RETURNING {PROJECT_COLS}"
+    ))
+    .bind(&input.project_id)
+    .bind(&backlog)
+    .bind(&agenda)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_project_notion_db_ids(
+    db: State<'_, Db>,
+    input: SetProjectNotionDbIdsInput,
+) -> Result<Project, AppError> {
+    set_project_notion_db_ids_core(db.inner(), &input).await
 }
 
 // ── Repos (project별 멀티 레포) ───────────────────────────────────────────────
@@ -666,6 +730,72 @@ mod tests {
         // 이미 없는 id(또는 오타) → not_found(조용히 성공하지 않음).
         let miss = delete_repo_core(&db, &repo.id).await.unwrap_err();
         assert_eq!(miss.code, "repos.not_found");
+    }
+
+    /// Notion DB 바인딩: 정규화 저장 / 형식 거부 / 빈 값=해제 / 미존재 id.
+    /// (테스트 환경은 keychain 토큰이 없어 라이브 probe는 건너뛴다 — 형식·해제·UPDATE 경로만 검증.)
+    #[tokio::test]
+    async fn set_notion_db_ids_normalizes_clears_and_rejects_bad_format() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+
+        // raw 32-hex → dashed UUID(36자)로 정규화 저장. agenda는 미설정.
+        let raw = "0123456789abcdef0123456789abcdef";
+        let updated = set_project_notion_db_ids_core(
+            &db,
+            &SetProjectNotionDbIdsInput {
+                project_id: proj.id.clone(),
+                backlog_db_id: Some(raw.into()),
+                agenda_db_id: None,
+            },
+        )
+        .await
+        .unwrap();
+        let stored = updated.notion_backlog_db_id.as_deref().unwrap();
+        assert_eq!(stored.len(), 36, "dashed UUID");
+        assert!(stored.contains('-'));
+        assert!(updated.notion_agenda_db_id.is_none());
+
+        // 잘못된 형식(뷰 링크/garbage) → validation 거부.
+        let bad = set_project_notion_db_ids_core(
+            &db,
+            &SetProjectNotionDbIdsInput {
+                project_id: proj.id.clone(),
+                backlog_db_id: Some("12345".into()),
+                agenda_db_id: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(bad.code, "projects.invalid_notion_db_id");
+
+        // 빈/공백 문자열 → 바인딩 해제(NULL). (연결 해제 경로)
+        let cleared = set_project_notion_db_ids_core(
+            &db,
+            &SetProjectNotionDbIdsInput {
+                project_id: proj.id.clone(),
+                backlog_db_id: Some("   ".into()),
+                agenda_db_id: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(cleared.notion_backlog_db_id.is_none(), "빈 값=해제");
+
+        // 알 수 없는 id(둘 다 None이면 검증 skip → UPDATE가 not_found).
+        let miss = set_project_notion_db_ids_core(
+            &db,
+            &SetProjectNotionDbIdsInput {
+                project_id: "does-not-exist".into(),
+                backlog_db_id: None,
+                agenda_db_id: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(miss.code, "projects.not_found");
     }
 
     /// reconcile: 미태깅 신호를 kind 매칭 프로젝트로 태깅 (Phase 1 kind 힌트 → projectId).

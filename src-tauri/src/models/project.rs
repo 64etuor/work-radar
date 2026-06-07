@@ -57,6 +57,17 @@ pub struct SetProjectDefaultWriteCalendarInput {
     pub calendar_id: Option<String>,
 }
 
+/// 프로젝트 Notion DB 바인딩 변경 입력(생성 후 편집/오타 수정/해제 경로). 각 필드가 `None`이거나
+/// 빈 문자열이면 해당 바인딩을 **해제(클리어)**한다. 새 값은 형식 정규화 후, 토큰이 있으면 저장 전
+/// 라이브 접근 검증을 거친다(생성 시점은 토큰이 없어 검증 불가 — 그래서 이 편집 경로에서 검증).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetProjectNotionDbIdsInput {
+    pub project_id: String,
+    pub backlog_db_id: Option<String>,
+    pub agenda_db_id: Option<String>,
+}
+
 // ── 레포(Repo) ────────────────────────────────────────────────────────────────
 
 /// 레포 제공자. github = remote_url, local = local_path(Codex worktree 베이스).

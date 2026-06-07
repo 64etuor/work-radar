@@ -60,6 +60,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_project_kind,
         commands::set_project_calendar_color,
         commands::set_project_default_write_calendar,
+        commands::set_project_notion_db_ids,
         commands::list_repos,
         commands::create_repo,
         commands::delete_repo,
