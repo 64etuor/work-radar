@@ -43,7 +43,6 @@ export const PERSIST_ALLOWED_KEY_PREFIXES: readonly string[] = [
   "codexStatus",
   "codexModel",
   "cmuxStatus",
-  "hermesBridgeStatus",
   "navKeymap",
   "globalHotkey",
   "notificationPermission",

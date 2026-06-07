@@ -216,16 +216,6 @@ impl From<crate::gmail::GmailError> for AppError {
     }
 }
 
-impl From<crate::messenger::MessengerError> for AppError {
-    fn from(e: crate::messenger::MessengerError) -> Self {
-        use crate::messenger::MessengerError as E;
-        match e {
-            E::Transient(m) => AppError::transient("messenger.transient", m),
-            E::Terminal(m) => AppError::terminal("messenger.terminal", m),
-        }
-    }
-}
-
 impl From<crate::agent::AgentError> for AppError {
     fn from(e: crate::agent::AgentError) -> Self {
         use crate::agent::AgentError as E;

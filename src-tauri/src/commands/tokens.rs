@@ -44,7 +44,7 @@ pub async fn set_project_token(
     }
     // 저장 전 라이브 검증 — **확실히 무효한 토큰(Invalid, 예: 401)만 차단**하고, 네트워크/일시 실패
     // (Unreachable)는 통과시켜 오프라인/blip에 유효 토큰 저장을 막지 않는다(사후 Test ping으로 확인).
-    // OAuth blob 종류(GoogleCalendar/Gmail/HermesBridge)는 단순 ping 대상이 아니라 검증 생략(별도 연결 흐름).
+    // OAuth blob 종류(GoogleCalendar/Gmail)는 단순 ping 대상이 아니라 검증 생략(별도 연결 흐름).
     match kind {
         TokenKind::Notion => {
             if api::probe_notion(token).await.outcome == api::ProbeOutcome::Invalid {
@@ -62,7 +62,7 @@ pub async fn set_project_token(
                 ));
             }
         }
-        TokenKind::GoogleCalendar | TokenKind::Gmail | TokenKind::HermesBridge => {}
+        TokenKind::GoogleCalendar | TokenKind::Gmail => {}
     }
     let cref = project_credential_ref(db.inner(), &project_id)
         .await
@@ -130,11 +130,6 @@ pub async fn ping_project_token(
         TokenKind::Gmail => PingResult {
             ok: false,
             detail: "Gmail은 '연결' 흐름을 사용하세요".into(),
-        },
-        // HermesBridge는 앱 레벨 단일 브리지(project별 ping 대상 아님) — 상태는 hermes_bridge_status로.
-        TokenKind::HermesBridge => PingResult {
-            ok: false,
-            detail: "Hermes 브리지는 별도 상태/연결 흐름을 사용하세요".into(),
         },
     })
 }

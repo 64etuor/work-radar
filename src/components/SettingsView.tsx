@@ -30,7 +30,6 @@ import { AddProjectForm } from "./settings/AddProjectForm";
 import { AgentsPane } from "./settings/AgentsPane";
 import { AppearanceSettings } from "./settings/AppearanceSettings";
 import { ConnectionAuditPanel } from "./settings/ConnectionAuditPanel";
-import { HermesBridgeBlock } from "./settings/HermesBridgeBlock";
 import { HermesConnectionBlock } from "./settings/HermesConnectionBlock";
 import { HermesPanelSettings } from "./settings/HermesPanelSettings";
 import { LifeWheelTagSettings } from "./settings/LifeWheelTagSettings";
@@ -389,8 +388,7 @@ function IntegrationsPane({ pushSuccess }: { pushSuccess: (msg: string) => void 
       <ConnectionAuditPanel onToast={pushSuccess} />
 
       <div className="flex flex-col gap-3">
-        <SectionLabel>Hermes 브리지</SectionLabel>
-        <HermesBridgeBlock onToast={pushSuccess} />
+        <SectionLabel>Hermes</SectionLabel>
         <HermesConnectionBlock />
         <HermesPanelSettings />
       </div>

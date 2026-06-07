@@ -35,7 +35,6 @@ mod logging;
 // 앱 내장 stdio MCP 서버(External Action Gate Phase 1, proposal-only). `--mcp-stdio` 플래그로 진입.
 // pub: integration test(tests/mcp_roundtrip)가 `work_radar_lib::mcp::WrServer`/툴을 호출한다.
 pub mod mcp;
-mod messenger;
 mod models;
 mod news;
 mod notion;
@@ -245,14 +244,6 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Hermes 글로벌 토글 핫키 (feat/hermes-floating A2).
         commands::hermes_get_toggle_hotkey,
         commands::hermes_set_toggle_hotkey,
-        // Hermes 메신저 브리지 (Phase 20 #15) — 봇 토큰 keychain, 수신은 bounded 단발.
-        commands::set_hermes_bridge,
-        commands::hermes_bridge_status,
-        commands::disconnect_hermes,
-        commands::send_hermes_message,
-        commands::fetch_hermes_messages,
-        commands::list_hermes_messages,
-        commands::detect_hermes_chat_id,
         // 스킬 공유 레지스트리 (Phase 20 #21) — 인앱 프롬프트 + 외부 Claude/Codex 스킬.
         skills::registry::list_skills,
         skills::registry::update_skill,

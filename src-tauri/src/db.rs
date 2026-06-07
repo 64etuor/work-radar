@@ -386,9 +386,9 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
-    /// Phase 20 마이그레이션(0012): hermes_bridge/hermes_messages 테이블 + offset 전진 + update dedup.
+    /// Workstream F 마이그레이션(0043): 0012 hermes_bridge/hermes_messages 테이블 드롭(브리지 제거).
     #[tokio::test]
-    async fn migration_0012_adds_hermes_bridge() {
+    async fn migration_0043_drops_hermes_bridge() {
         let path = temp_db_path();
         let pool = init_db(&path).await.expect("init_db failed");
 
@@ -401,51 +401,9 @@ mod tests {
         .expect("query hermes tables failed");
         assert_eq!(
             tables.len(),
-            2,
-            "expected hermes_bridge + hermes_messages from 0012"
+            0,
+            "0043 drops hermes_bridge + hermes_messages (bridge removed)"
         );
-
-        // 단일 브리지 행 upsert + offset 전진 라운드트립.
-        sqlx::query("INSERT INTO hermes_bridge (id, chat_id) VALUES ('singleton', '12345')")
-            .execute(&pool)
-            .await
-            .expect("insert hermes_bridge failed");
-        sqlx::query("UPDATE hermes_bridge SET last_offset = 42 WHERE id = 'singleton'")
-            .execute(&pool)
-            .await
-            .expect("advance offset failed");
-        let (chat, offset): (String, i64) =
-            sqlx::query_as("SELECT chat_id, last_offset FROM hermes_bridge WHERE id='singleton'")
-                .fetch_one(&pool)
-                .await
-                .expect("read bridge failed");
-        assert_eq!(chat, "12345");
-        assert_eq!(offset, 42);
-
-        // 수신 메시지 update_id UNIQUE: 같은 update를 두 번 기록하면 두 번째는 거부(멱등 fetch).
-        sqlx::query(
-            "INSERT INTO hermes_messages (id, direction, text, update_id) VALUES ('m1','received','hi',7)",
-        )
-        .execute(&pool)
-        .await
-        .expect("insert received failed");
-        let dup = sqlx::query(
-            "INSERT INTO hermes_messages (id, direction, text, update_id) VALUES ('m2','received','hi again',7)",
-        )
-        .execute(&pool)
-        .await;
-        assert!(dup.is_err(), "UNIQUE(update_id)로 중복 update 거부");
-
-        // 송신(update_id NULL)은 partial UNIQUE에서 자유 — 여러 건 가능.
-        for id in ["s1", "s2"] {
-            sqlx::query(
-                "INSERT INTO hermes_messages (id, direction, text) VALUES (?1,'sent','cmd')",
-            )
-            .bind(id)
-            .execute(&pool)
-            .await
-            .unwrap_or_else(|e| panic!("insert sent {id}: {e}"));
-        }
 
         pool.close().await;
         std::fs::remove_file(&path).ok();
