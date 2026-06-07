@@ -1,8 +1,8 @@
 /*
  * Control Room scoped tokens. Maps the master §12 status tones onto global
- * --color-wr-* design tokens where they exist (status-working/action-blue/
- * status-waiting/coral/subtle); --cr-pressure has no global orange token yet,
- * so it uses a documented local fallback hex. No raw hex outside this block.
+ * --color-wr-* design tokens where they exist; --cr-pressure has no global
+ * orange token yet, so it uses a documented local fallback hex. No raw hex
+ * outside this block.
  */
 .cr-view {
   --cr-done: var(--color-wr-status-working, #16a34a);
@@ -16,7 +16,7 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  overflow-y: auto;
+  overflow: auto;
   height: 100%;
 }
 
@@ -30,54 +30,236 @@
   color: var(--cr-muted);
   font-size: 0.8125rem;
 }
-
-.cr-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  gap: 1rem;
-}
-
-.cr-dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 9999px;
-  margin-right: 0.4rem;
-  vertical-align: middle;
-}
-.cr-dot[data-tone="done"] {
-  background: var(--cr-done);
-}
-.cr-dot[data-tone="active"] {
-  background: var(--cr-active);
-}
-.cr-dot[data-tone="waiting"] {
-  background: var(--cr-waiting);
-}
-.cr-dot[data-tone="pressure"] {
-  background: var(--cr-pressure);
-}
-.cr-dot[data-tone="blocked"] {
-  background: var(--cr-blocked);
-}
-.cr-dot[data-tone="muted"] {
-  background: var(--cr-muted);
-}
-
-.cr-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.35rem 0;
-  font-size: 0.875rem;
-}
-.cr-id {
-  font-variant-numeric: tabular-nums;
-  color: var(--cr-muted);
-}
 .cr-empty {
   color: var(--cr-muted);
   font-size: 0.8125rem;
   padding: 0.5rem 0;
+}
+
+/* ── Vitals chips ─────────────────────────────────────────── */
+.cr-vitals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.cr-vital {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.8125rem;
+  color: var(--cr-muted);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+.cr-vital--static {
+  cursor: default;
+}
+.cr-vital[data-tone="active"] {
+  color: var(--cr-active);
+}
+.cr-vital[data-tone="blocked"] {
+  color: var(--cr-blocked);
+}
+.cr-vital[data-tone="pressure"] {
+  color: var(--cr-pressure);
+}
+.cr-vital[data-active] {
+  border-color: currentcolor;
+  background: color-mix(in srgb, currentcolor 8%, transparent);
+}
+.cr-vital-n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.cr-vital-label {
+  color: var(--cr-muted);
+}
+
+/* ── Schematic canvas ─────────────────────────────────────── */
+.cr-canvas-wrap {
+  position: relative;
+  overflow: auto;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(var(--color-border, #eef0f2) 1px, transparent 1px) 0 0 / 100% 64px,
+    var(--color-background, #fff);
+}
+.cr-canvas {
+  display: block;
+}
+
+.cr-lane-header {
+  fill: var(--cr-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+/* edges */
+.cr-edge {
+  stroke: var(--cr-muted);
+  stroke-width: 1.25;
+  transition:
+    stroke 0.15s ease,
+    opacity 0.15s ease;
+}
+.cr-edge[data-state="dim"] {
+  opacity: 0.18;
+}
+.cr-edge[data-state="highlight"] {
+  stroke: var(--cr-active);
+  stroke-width: 1.75;
+}
+.cr-arrow-head {
+  fill: var(--cr-muted);
+}
+
+/* nodes */
+.cr-node {
+  cursor: pointer;
+  animation: cr-node-in 0.22s ease both;
+}
+.cr-node-box {
+  fill: var(--color-background, #fff);
+  stroke: var(--cr-muted);
+  stroke-width: 1.25;
+  transition:
+    stroke-width 0.15s ease,
+    fill-opacity 0.15s ease,
+    stroke-opacity 0.15s ease;
+}
+.cr-node[data-tone="done"] .cr-node-box {
+  stroke: var(--cr-done);
+}
+.cr-node[data-tone="active"] .cr-node-box {
+  stroke: var(--cr-active);
+}
+.cr-node[data-tone="waiting"] .cr-node-box {
+  stroke: var(--cr-waiting);
+}
+.cr-node[data-tone="pressure"] .cr-node-box {
+  stroke: var(--cr-pressure);
+}
+.cr-node[data-tone="blocked"] .cr-node-box {
+  stroke: var(--cr-blocked);
+}
+.cr-node-label {
+  fill: var(--color-foreground, #1a1a1a);
+  font-size: 12px;
+  font-weight: 500;
+}
+.cr-node-phase {
+  fill: var(--cr-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.cr-node-flag {
+  color: var(--cr-blocked);
+}
+
+/* interaction states — dim/highlight target children so they never fight the
+   group's enter animation (which pins group opacity via fill-mode: both). */
+.cr-node[data-state="dim"] .cr-node-box {
+  stroke-opacity: 0.3;
+  fill-opacity: 0.5;
+}
+.cr-node[data-state="dim"] .cr-node-label,
+.cr-node[data-state="dim"] .cr-node-phase,
+.cr-node[data-state="dim"] .cr-node-flag {
+  opacity: 0.3;
+}
+.cr-node[data-state="highlight"] .cr-node-box,
+.cr-node[data-selected] .cr-node-box {
+  stroke-width: 2;
+}
+.cr-node[data-selected] .cr-node-box {
+  filter: drop-shadow(0 1px 4px rgb(0 0 0 / 0.12));
+}
+
+/* attention pulse on the box (separate element from the group animation) */
+.cr-node[data-attention] .cr-node-box {
+  animation: cr-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes cr-node-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cr-pulse {
+  0%,
+  100% {
+    stroke-width: 1.5;
+  }
+  50% {
+    stroke-width: 2.75;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-node,
+  .cr-node[data-attention] .cr-node-box {
+    animation: none;
+  }
+}
+
+/* ── Tooltip ──────────────────────────────────────────────── */
+.cr-tooltip {
+  position: absolute;
+  min-width: 12rem;
+  max-width: 18rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  background: var(--color-background, #fff);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
+  pointer-events: none;
+  z-index: 10;
+}
+.cr-tooltip-lane {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cr-muted);
+}
+.cr-tooltip-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.1rem 0 0.4rem;
+  word-break: break-word;
+}
+.cr-tooltip-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  font-size: 0.78rem;
+}
+.cr-tooltip-meta > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.cr-tooltip-meta dt {
+  color: var(--cr-muted);
+}
+.cr-tooltip-meta dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.cr-tooltip-id {
+  word-break: break-all;
+  text-align: right;
 }
