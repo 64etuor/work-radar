@@ -164,6 +164,35 @@ evaluator closes the loop. Compare to today's hang.
 > executor from authoritatively self-completing interact with INVARIANT #1? (It strengthens it —
 > the executor already can't self-APPROVE; now it can't self-CERTIFY completion either.)
 
+> **RECONCILIATION — a stopgap for THIS gap already shipped on dev (`b125664`, the dev-followups
+> #3 track; see memory `work-radar-dev-followups-1234`).** That commit appends, in
+> `conductor/adapter.ts buildSessionCommand` (codex branch only), `&& node <cliEntrypoint>
+> complete-task --workspace W --task T` to the `codex exec` launch: on CLEAN codex exit it shells
+> the new guarded `boule complete-task` (→ `completeTask`, which REFUSES if the task isn't active or
+> has an open `decision_blocked`). It closes the loop today, but it writes `task_completed` **from
+> the executor side** — exactly the authority this slice demotes. So the wrapper and this evaluator
+> gate **cannot both stand as-is**: if the wrapper runs first, the task is `done` before the
+> evaluator judges (the gate is bypassed). The CORE (`49bacf9`) does NOT collide (it adds
+> `backends/` + `repo/config.ts`; the wrapper is in `conductor/`), so this is a design-authority
+> overlap, not a merge conflict — but Slice 4's wiring lands in the same `conductor/` completion path.
+>
+> **Agreement (settles Q-4b as *always-evaluate*):**
+> 1. **Demote, don't keep.** When this slice lands, change the codex wrapper from `&& boule
+>    complete-task` (authoritative) to `&& boule report-exit` — a verdict-free *hint* event meaning
+>    "executor exited clean" — and make the CONDUCTOR's post-evaluator path the SOLE writer of
+>    `task_completed`. The wrapper's clean-exit then becomes the evaluator's *trigger signal*, not a
+>    fast-path bypass (keeps Q-4c's "executor can't self-certify completion" intact).
+> 2. **Reuse the plumbing.** The wrapper already proved the safe seam — shell a `boule` subcommand on
+>    clean codex exit via install-relative `cliEntrypoint()`. The hint event reuses that exact seam
+>    (rename the subcommand; write a hint, not `task_completed`).
+> 3. **Keep the prompt hardening.** buildPrompt's "## Required final action: complete_task" stays — a
+>    real model `complete_task` remains a useful *hint* input to the evaluator.
+> 4. **Until this slice lands, the wrapper STAYS** — it is the only thing closing the codex loop on
+>    dev today; removing it before the evaluator exists re-opens the ~60% adherence hang.
+>
+> Net: wrapper = interim stopgap (on dev now); evaluator = destination authority. **This slice's
+> integration task list MUST include "retire/demote the `b125664` exit-code wrapper to a hint event."**
+
 ## 7. Sequencing & estimate
 
 1. Slice 1 (CODEX_HOME) — small, unblocks codex backends. ~1 commit.
