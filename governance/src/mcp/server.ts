@@ -8,27 +8,63 @@ import { realGitLog } from "../harvest/gitLog.ts";
 import type { DecisionRow } from "../index/types.ts";
 import { formatPrinciples, formatDecisions, formatDecision } from "../index/format.ts";
 import { createTask, status, observations } from "./handlers.ts";
-import { startTask, blockTask, completeTask, cancelTask, listTasks, taskTrail } from "../task/handlers.ts";
 import {
-  proposePlan, acceptPlan, revisePlan, completePlan, archivePlan, supersedePlan, listPlans, planTrail,
+  startTask,
+  blockTask,
+  completeTask,
+  cancelTask,
+  listTasks,
+  taskTrail,
+} from "../task/handlers.ts";
+import {
+  proposePlan,
+  acceptPlan,
+  revisePlan,
+  completePlan,
+  archivePlan,
+  supersedePlan,
+  listPlans,
+  planTrail,
 } from "../plan/handlers.ts";
+import { proposeSpec, acceptSpec, archiveSpec, listSpecs, specTrail } from "../spec/handlers.ts";
 import {
-  proposeSpec, acceptSpec, archiveSpec, listSpecs, specTrail,
-} from "../spec/handlers.ts";
-import {
-  proposeDecision, requestReview, approve, reject, conflicts, why, history, chooseOption,
+  proposeDecision,
+  requestReview,
+  approve,
+  reject,
+  conflicts,
+  why,
+  history,
+  chooseOption,
 } from "../decision/handlers.ts";
 import { escalate } from "../escalate/escalate.ts";
 import { pendingEscalations } from "../escalate/pending.ts";
 import { conductPlan, conductorStatus } from "../conductor/handlers.ts";
-import { stubAdapter, makeLiveAdapter, type ConductorAdapter, type SpawnSyncLike } from "../conductor/adapter.ts";
 import {
-  requestSessionOpen, markWaiting, markBlocked, recordPressure, requestCheckpoint,
-  markHandoffReady, requestSessionClose, closeSession, listSessions, sessionTrail,
+  stubAdapter,
+  makeLiveAdapter,
+  type ConductorAdapter,
+  type SpawnSyncLike,
+} from "../conductor/adapter.ts";
+import { runPreflight } from "../live/preflight.ts";
+import {
+  requestSessionOpen,
+  markWaiting,
+  markBlocked,
+  recordPressure,
+  requestCheckpoint,
+  markHandoffReady,
+  requestSessionClose,
+  closeSession,
+  listSessions,
+  sessionTrail,
 } from "../session/handlers.ts";
 import {
-  observeSessions, makeLiveAdapter as makeObserverLiveAdapter, stubAdapter as observerStubAdapter,
-  type ObserverAdapter, type SpawnResultLike as ObserverSpawnResultLike,
+  observeSessions,
+  makeLiveAdapter as makeObserverLiveAdapter,
+  stubAdapter as observerStubAdapter,
+  type ObserverAdapter,
+  type SpawnResultLike as ObserverSpawnResultLike,
 } from "../session/observer.ts";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
@@ -71,7 +107,10 @@ import { listDispatchLog } from "../orchestrator/dispatch/project.ts";
 import { openStore } from "../graph/store.ts";
 import { rebuildIndex } from "../graph/ingest.ts";
 import {
-  requestHandoff, draftHandoff, runValidateHandoff, listHandoffs,
+  requestHandoff,
+  draftHandoff,
+  runValidateHandoff,
+  listHandoffs,
 } from "../handoff/handlers.ts";
 import { hydrate, type HydrateDeps } from "../steward/hydrateIo.ts";
 import { computeContextPressure } from "../steward/pressure.ts";
@@ -125,28 +164,43 @@ server.registerTool(
 
 server.registerTool(
   "start_task",
-  { description: "task를 active로 전이 (ready/blocked→active)", inputSchema: { taskId: z.string() } },
+  {
+    description: "task를 active로 전이 (ready/blocked→active)",
+    inputSchema: { taskId: z.string() },
+  },
   async ({ taskId }) => {
     const r = await startTask(WORKSPACE, { taskId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `started: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `started: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
 server.registerTool(
   "block_task",
-  { description: "task를 blocked로 전이 (사유 기록)", inputSchema: { taskId: z.string(), reason: z.string() } },
+  {
+    description: "task를 blocked로 전이 (사유 기록)",
+    inputSchema: { taskId: z.string(), reason: z.string() },
+  },
   async ({ taskId, reason }) => {
     const r = await blockTask(WORKSPACE, { taskId, reason }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
 server.registerTool(
   "complete_task",
-  { description: "task를 done으로 전이 (미해소 decision_blocked 있으면 거부)", inputSchema: { taskId: z.string() } },
+  {
+    description: "task를 done으로 전이 (미해소 decision_blocked 있으면 거부)",
+    inputSchema: { taskId: z.string() },
+  },
   async ({ taskId }) => {
     const r = await completeTask(WORKSPACE, { taskId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
@@ -155,7 +209,9 @@ server.registerTool(
   { description: "task를 cancelled로 전이 (terminal)", inputSchema: { taskId: z.string() } },
   async ({ taskId }) => {
     const r = await cancelTask(WORKSPACE, { taskId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `cancelled: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `cancelled: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
@@ -164,7 +220,9 @@ server.registerTool(
   { description: "비종료(non-terminal) task 목록", inputSchema: {} },
   async () => {
     const list = await listTasks(WORKSPACE);
-    const text = list.length ? list.map((t) => `${t.taskId} [${t.phase}] ${t.title}`).join("\n") : "(no open tasks)";
+    const text = list.length
+      ? list.map((t) => `${t.taskId} [${t.phase}] ${t.title}`).join("\n")
+      : "(no open tasks)";
     return { content: [{ type: "text", text }] };
   },
 );
@@ -185,7 +243,8 @@ server.registerTool(
 server.registerTool(
   "propose_plan",
   {
-    description: "Planner: intent + 단계 목록을 draft plan_proposed 이벤트 하나로 기록 (propose-only). specId=연결할 spec(선택)",
+    description:
+      "Planner: intent + 단계 목록을 draft plan_proposed 이벤트 하나로 기록 (propose-only). specId=연결할 spec(선택)",
     inputSchema: { intent: z.string(), steps: z.array(z.string()), specId: z.string().optional() },
   },
   async ({ intent, steps, specId }) => {
@@ -208,19 +267,31 @@ if (SESSION_ALLOWS_VERDICTS)
 
 server.registerTool(
   "revise_plan",
-  { description: "plan을 needs_revision으로 (active→needs_revision, 사유 기록)", inputSchema: { planId: z.string(), reason: z.string() } },
+  {
+    description: "plan을 needs_revision으로 (active→needs_revision, 사유 기록)",
+    inputSchema: { planId: z.string(), reason: z.string() },
+  },
   async ({ planId, reason }) => {
     const r = await revisePlan(WORKSPACE, { planId, reason }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `revision requested: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [
+        { type: "text", text: r.ok ? `revision requested: ${r.eventId}` : `REFUSED: ${r.reason}` },
+      ],
+    };
   },
 );
 
 server.registerTool(
   "complete_plan",
-  { description: "plan을 completed로 (active→completed, terminal)", inputSchema: { planId: z.string() } },
+  {
+    description: "plan을 completed로 (active→completed, terminal)",
+    inputSchema: { planId: z.string() },
+  },
   async ({ planId }) => {
     const r = await completePlan(WORKSPACE, { planId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
@@ -229,16 +300,24 @@ server.registerTool(
   { description: "plan을 archived로 (terminal)", inputSchema: { planId: z.string() } },
   async ({ planId }) => {
     const r = await archivePlan(WORKSPACE, { planId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `archived: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `archived: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
 server.registerTool(
   "supersede_plan",
-  { description: "plan을 superseded로 (새 plan이 대체, terminal). supersededBy=대체하는 새 plan id (필수)", inputSchema: { planId: z.string(), supersededBy: z.string() } },
+  {
+    description:
+      "plan을 superseded로 (새 plan이 대체, terminal). supersededBy=대체하는 새 plan id (필수)",
+    inputSchema: { planId: z.string(), supersededBy: z.string() },
+  },
   async ({ planId, supersededBy }) => {
     const r = await supersedePlan(WORKSPACE, { planId, supersededBy }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `superseded: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `superseded: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
@@ -247,7 +326,9 @@ server.registerTool(
   { description: "비종료(non-terminal) plan 목록", inputSchema: {} },
   async () => {
     const list = await listPlans(WORKSPACE);
-    const text = list.length ? list.map((p) => `${p.planId} [${p.phase}] ${p.title}`).join("\n") : "(no open plans)";
+    const text = list.length
+      ? list.map((p) => `${p.planId} [${p.phase}] ${p.title}`).join("\n")
+      : "(no open plans)";
     return { content: [{ type: "text", text }] };
   },
 );
@@ -260,7 +341,9 @@ server.registerTool(
     const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
     const sp = t.specId ? `\n  spec: ${t.specId}` : "";
     const sup = t.supersededBy ? `\n  superseded-by: ${t.supersededBy}` : "";
-    return { content: [{ type: "text", text: `${t.planId} [${t.phase}] ${t.title}${sp}${sup}\n${chain}` }] };
+    return {
+      content: [{ type: "text", text: `${t.planId} [${t.phase}] ${t.title}${sp}${sup}\n${chain}` }],
+    };
   },
 );
 
@@ -296,7 +379,9 @@ server.registerTool(
   { description: "spec을 archived로 (terminal)", inputSchema: { specId: z.string() } },
   async ({ specId }) => {
     const r = await archiveSpec(WORKSPACE, { specId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `archived: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `archived: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
@@ -305,7 +390,9 @@ server.registerTool(
   { description: "비종료(non-archived) spec 목록", inputSchema: {} },
   async () => {
     const list = await listSpecs(WORKSPACE);
-    const text = list.length ? list.map((sp) => `${sp.specId} [${sp.phase}] ${sp.title}`).join("\n") : "(no open specs)";
+    const text = list.length
+      ? list.map((sp) => `${sp.specId} [${sp.phase}] ${sp.title}`).join("\n")
+      : "(no open specs)";
     return { content: [{ type: "text", text }] };
   },
 );
@@ -317,7 +404,9 @@ server.registerTool(
     const t = await specTrail(WORKSPACE, { specId });
     const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
     const plans = t.plans.length ? `\n  plans: ${t.plans.join(", ")}` : "";
-    return { content: [{ type: "text", text: `${t.specId} [${t.phase}] ${t.title}${plans}\n${chain}` }] };
+    return {
+      content: [{ type: "text", text: `${t.specId} [${t.phase}] ${t.title}${plans}\n${chain}` }],
+    };
   },
 );
 
@@ -381,7 +470,10 @@ server.registerTool(
     });
     return {
       content: [
-        { type: "text", text: `harvested: ${summary.written} new, ${summary.skipped} already-seen` },
+        {
+          type: "text",
+          text: `harvested: ${summary.written} new, ${summary.skipped} already-seen`,
+        },
       ],
     };
   },
@@ -564,9 +656,7 @@ const reviewers = buildReviewers();
 
 // Genuine-quorum advisory (warn-but-continue): live + quorum≥2 인데 라벨들이 동일 (cmd,args)로
 // 붕괴해 distinct reviewer가 quorum 미만이면 가짜 quorum. PII-safe(라벨만)로 경고하고 그대로 기동.
-const quorumWarning = LIVE
-  ? quorumCollisionWarning(REVIEWER_MODELS, process.env, QUORUM)
-  : null;
+const quorumWarning = LIVE ? quorumCollisionWarning(REVIEWER_MODELS, process.env, QUORUM) : null;
 if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 
 // ── Phase C: Conductor adapter ────────────────────────────────────────────────
@@ -619,7 +709,9 @@ server.registerTool(
   },
   async ({ title, body }) => {
     const r = await proposeDecision(WORKSPACE, { title, body }, nowFn(), randFn());
-    return { content: [{ type: "text", text: `decision proposed: ${r.id} (needs external review)` }] };
+    return {
+      content: [{ type: "text", text: `decision proposed: ${r.id} (needs external review)` }],
+    };
   },
 );
 
@@ -641,8 +733,10 @@ server.registerTool(
     const parts = [
       `recorded: ${res.recorded.length} from ${reviewers.length} reviewer(s); distinct models: ${distinctModels}/${QUORUM} (quorum)`,
     ];
-    if (res.skipped.length) parts.push(`skipped: ${res.skipped.map((s) => s.reviewerModel).join(",")}`);
-    if (res.failures.length) parts.push(`failed: ${res.failures.map((f) => f.reviewerModel).join(",")}`);
+    if (res.skipped.length)
+      parts.push(`skipped: ${res.skipped.map((s) => s.reviewerModel).join(",")}`);
+    if (res.failures.length)
+      parts.push(`failed: ${res.failures.map((f) => f.reviewerModel).join(",")}`);
     // Surface a silent fake-quorum right where the operator reads the distinct-model count.
     if (quorumWarning) parts.push(quorumWarning);
     return { content: [{ type: "text", text: parts.join(" | ") }] };
@@ -696,7 +790,9 @@ server.registerTool(
   { description: "결정의 감사 추적(이벤트 체인)", inputSchema: { decisionId: z.string() } },
   async ({ decisionId }) => {
     const t = await why(WORKSPACE, { decisionId }, QUORUM);
-    const text = `${t.title} [${t.phase}]\n` + t.chain.map((c) => `  ${c.type} (${c.actor}): ${c.summary}`).join("\n");
+    const text =
+      `${t.title} [${t.phase}]\n` +
+      t.chain.map((c) => `  ${c.type} (${c.actor}): ${c.summary}`).join("\n");
     return { content: [{ type: "text", text }] };
   },
 );
@@ -706,7 +802,9 @@ server.registerTool(
   { description: "결정 이력(why의 별칭)", inputSchema: { decisionId: z.string() } },
   async ({ decisionId }) => {
     const t = await history(WORKSPACE, { decisionId }, QUORUM);
-    const text = `${t.title} [${t.phase}]\n` + t.chain.map((c) => `  ${c.type} (${c.actor}): ${c.summary}`).join("\n");
+    const text =
+      `${t.title} [${t.phase}]\n` +
+      t.chain.map((c) => `  ${c.type} (${c.actor}): ${c.summary}`).join("\n");
     return { content: [{ type: "text", text }] };
   },
 );
@@ -715,7 +813,8 @@ server.registerTool(
 server.registerTool(
   "escalate",
   {
-    description: "Type 0 에스컬레이션 방출 (decision_proposed + decision_blocked) — append-only, verdict 없음",
+    description:
+      "Type 0 에스컬레이션 방출 (decision_proposed + decision_blocked) — append-only, verdict 없음",
     inputSchema: {
       question: z.string(),
       options: z.array(z.object({ label: z.string() })).min(2),
@@ -746,7 +845,8 @@ server.registerTool(
 server.registerTool(
   "pending_escalations",
   {
-    description: "미해소 Type 0 에스컬레이션 목록 (decision_blocked, verdict 없음) — read-only, bridge용",
+    description:
+      "미해소 Type 0 에스컬레이션 목록 (decision_blocked, verdict 없음) — read-only, bridge용",
     inputSchema: {},
   },
   async () => {
@@ -786,7 +886,8 @@ if (SESSION_ALLOWS_VERDICTS)
 server.registerTool(
   "archive_prune",
   {
-    description: "P6 local Archive Pruner: terminal/expired hypotheses testing→archived one-pass move",
+    description:
+      "P6 local Archive Pruner: terminal/expired hypotheses testing→archived one-pass move",
     inputSchema: {},
   },
   async () => {
@@ -814,11 +915,18 @@ server.registerTool(
 server.registerTool(
   "conduct_plan",
   {
-    description: "사람이 accept한 plan을 1스텝 전진 (task mint + 격리 cmux 세션 spawn). active 아니거나 halt/done/in-flight면 거부 (verdict 없음)",
+    description:
+      "사람이 accept한 plan을 1스텝 전진 (task mint + 격리 cmux 세션 spawn). active 아니거나 halt/done/in-flight면 거부 (verdict 없음)",
     inputSchema: { planId: z.string() },
   },
   async ({ planId }) => {
-    const r = await conductPlan(WORKSPACE, { planId }, { adapter: conductorAdapter }, nowFn(), randFn());
+    const r = await conductPlan(
+      WORKSPACE,
+      { planId },
+      { adapter: conductorAdapter },
+      nowFn(),
+      randFn(),
+    );
     if (!r.ok) return { content: [{ type: "text", text: `REFUSED: ${r.reason}` }] };
     const a = r.advanced!;
     return {
@@ -866,7 +974,13 @@ server.registerTool(
     if (AUTO_MODE !== "type2") {
       return { content: [{ type: "text", text: "auto disabled (set BOULE_AUTO_MODE=type2)" }] };
     }
-    const s = await autoDispatch(WORKSPACE, { adapter: conductorAdapter }, AUTO_MODE, nowFn(), randFn());
+    const s = await autoDispatch(
+      WORKSPACE,
+      { adapter: conductorAdapter },
+      AUTO_MODE,
+      nowFn(),
+      randFn(),
+    );
     return {
       content: [
         {
@@ -881,12 +995,39 @@ server.registerTool(
 server.registerTool(
   "dispatch_log",
   {
-    description: "Phase I read-only list of the auto-dispatch trail (instruction_planned + outcomes).",
+    description:
+      "Phase I read-only list of the auto-dispatch trail (instruction_planned + outcomes).",
     inputSchema: {},
   },
   async () => {
     const log = await listDispatchLog(WORKSPACE);
     return { content: [{ type: "text", text: JSON.stringify(log, null, 2) }] };
+  },
+);
+
+// ── L0: Live-loop preflight (read-only) ───────────────────────────────────────
+// Reports whether the live autonomous loop can physically run here (required: cmux socket/binary
+// + git worktree) and the live-flag posture (advisory). Writes nothing; verdict-free.
+server.registerTool(
+  "preflight",
+  {
+    description:
+      "L0 live-loop preflight — read-only report of required infra (cmux socket/binary, git worktree) " +
+      "+ advisory flag posture (conductor/observer/auto mode, session role). Writes nothing.",
+    inputSchema: {},
+  },
+  async () => {
+    const realSpawnSync: SpawnSyncLike = (cmd, args) => {
+      const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
+      return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+    };
+    const report = runPreflight({ env: process.env, spawn: realSpawnSync, repoRoot: REPO_ROOT });
+    const lines = report.checks.map(
+      (c) => `  ${c.ok ? "✓" : "✗"} [${c.level}] ${c.id}: ${c.detail}`,
+    );
+    return {
+      content: [{ type: "text", text: [`preflight ready=${report.ready}`, ...lines].join("\n") }],
+    };
   },
 );
 
@@ -899,7 +1040,9 @@ server.registerTool(
   async () => {
     const list = await listSessions(WORKSPACE);
     const text = list.length
-      ? list.map((s) => `${s.sessionId} [${s.phase}] ${s.ownership} surface=${s.surface ?? "-"}`).join("\n")
+      ? list
+          .map((s) => `${s.sessionId} [${s.phase}] ${s.ownership} surface=${s.surface ?? "-"}`)
+          .join("\n")
       : "(no open sessions)";
     return { content: [{ type: "text", text }] };
   },
@@ -911,7 +1054,14 @@ server.registerTool(
   async ({ sessionId }) => {
     const t = await sessionTrail(WORKSPACE, { sessionId });
     const chain = t.chain.map((c) => `  ${c.type} (${c.actor})`).join("\n");
-    return { content: [{ type: "text", text: `${t.sessionId} [${t.phase}] ${t.ownership} surface=${t.surface ?? "-"}\n${chain}` }] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${t.sessionId} [${t.phase}] ${t.ownership} surface=${t.surface ?? "-"}\n${chain}`,
+        },
+      ],
+    };
   },
 );
 
@@ -924,17 +1074,35 @@ server.registerTool(
   },
   async () => {
     if (!OBSERVER_CFG.live)
-      return { content: [{ type: "text", text: "observer stub: BOULE_OBSERVER_MODE!=live → cmux 미접근, reconcile 생략" }] };
+      return {
+        content: [
+          {
+            type: "text",
+            text: "observer stub: BOULE_OBSERVER_MODE!=live → cmux 미접근, reconcile 생략",
+          },
+        ],
+      };
     const s = await observeSessions(WORKSPACE, { adapter: observerAdapter }, nowFn(), randFn());
-    return { content: [{ type: "text", text: `observed=${s.observed} crashed=${s.crashed} recovered=${s.recovered} opened=${s.opened}` }] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `observed=${s.observed} crashed=${s.crashed} recovered=${s.recovered} opened=${s.opened}`,
+        },
+      ],
+    };
   },
 );
 
 server.registerTool(
   "request_session_open",
   {
-    description: "planned 세션을 births (session_open_requested). ownership=user_owned|external_owned(기본 user_owned), surface 선택",
-    inputSchema: { ownership: z.enum(["user_owned", "external_owned"]).optional(), surface: z.string().optional() },
+    description:
+      "planned 세션을 births (session_open_requested). ownership=user_owned|external_owned(기본 user_owned), surface 선택",
+    inputSchema: {
+      ownership: z.enum(["user_owned", "external_owned"]).optional(),
+      surface: z.string().optional(),
+    },
   },
   async ({ ownership, surface }) => {
     const r = await requestSessionOpen(WORKSPACE, { ownership, surface }, nowFn(), randFn());
@@ -944,28 +1112,45 @@ server.registerTool(
 
 server.registerTool(
   "mark_session_waiting",
-  { description: "session을 waiting으로 기록 (verdict 없음)", inputSchema: { sessionId: z.string() } },
+  {
+    description: "session을 waiting으로 기록 (verdict 없음)",
+    inputSchema: { sessionId: z.string() },
+  },
   async ({ sessionId }) => {
     const r = await markWaiting(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `waiting: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `waiting: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
 server.registerTool(
   "mark_session_blocked",
-  { description: "session을 blocked로 기록 (사유)", inputSchema: { sessionId: z.string(), reason: z.string() } },
+  {
+    description: "session을 blocked로 기록 (사유)",
+    inputSchema: { sessionId: z.string(), reason: z.string() },
+  },
   async ({ sessionId, reason }) => {
     const r = await markBlocked(WORKSPACE, { sessionId, reason }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
 server.registerTool(
   "record_context_pressure",
-  { description: "context pressure level 기록 (high|critical만 phase 전진)", inputSchema: { sessionId: z.string(), level: z.enum(["low", "medium", "high", "critical"]) } },
+  {
+    description: "context pressure level 기록 (high|critical만 phase 전진)",
+    inputSchema: { sessionId: z.string(), level: z.enum(["low", "medium", "high", "critical"]) },
+  },
   async ({ sessionId, level }) => {
     const r = await recordPressure(WORKSPACE, { sessionId, level }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `pressure(${level}): ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [
+        { type: "text", text: r.ok ? `pressure(${level}): ${r.eventId}` : `REFUSED: ${r.reason}` },
+      ],
+    };
   },
 );
 
@@ -974,7 +1159,14 @@ server.registerTool(
   { description: "session checkpoint 요청 기록", inputSchema: { sessionId: z.string() } },
   async ({ sessionId }) => {
     const r = await requestCheckpoint(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `checkpoint requested: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: r.ok ? `checkpoint requested: ${r.eventId}` : `REFUSED: ${r.reason}`,
+        },
+      ],
+    };
   },
 );
 
@@ -983,25 +1175,42 @@ server.registerTool(
   { description: "session handoff ready 기록", inputSchema: { sessionId: z.string() } },
   async ({ sessionId }) => {
     const r = await markHandoffReady(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `handoff ready: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [
+        { type: "text", text: r.ok ? `handoff ready: ${r.eventId}` : `REFUSED: ${r.reason}` },
+      ],
+    };
   },
 );
 
 server.registerTool(
   "request_session_close",
-  { description: "session close 요청 (→ closing; close_session의 게이트)", inputSchema: { sessionId: z.string() } },
+  {
+    description: "session close 요청 (→ closing; close_session의 게이트)",
+    inputSchema: { sessionId: z.string() },
+  },
   async ({ sessionId }) => {
     const r = await requestSessionClose(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `close requested: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [
+        { type: "text", text: r.ok ? `close requested: ${r.eventId}` : `REFUSED: ${r.reason}` },
+      ],
+    };
   },
 );
 
 server.registerTool(
   "close_session",
-  { description: "session을 closed로 (terminal) — session_close_requested 이후에만. 유일한 session_closed 경로", inputSchema: { sessionId: z.string() } },
+  {
+    description:
+      "session을 closed로 (terminal) — session_close_requested 이후에만. 유일한 session_closed 경로",
+    inputSchema: { sessionId: z.string() },
+  },
   async ({ sessionId }) => {
     const r = await closeSession(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `closed: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `closed: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
@@ -1009,10 +1218,16 @@ server.registerTool(
 // registered unconditionally like observe_sessions. It touches no cmux/network — folds only.
 server.registerTool(
   "suggest",
-  { description: "교차-fold 관찰 → advisory 제안 방출 (orchestrator_suggestion_created만; on-demand 1패스)", inputSchema: {} },
+  {
+    description:
+      "교차-fold 관찰 → advisory 제안 방출 (orchestrator_suggestion_created만; on-demand 1패스)",
+    inputSchema: {},
+  },
   async () => {
     const r = await suggest(WORKSPACE, nowFn(), randFn());
-    return { content: [{ type: "text", text: `suggestions created ${r.created} / skipped ${r.skipped}` }] };
+    return {
+      content: [{ type: "text", text: `suggestions created ${r.created} / skipped ${r.skipped}` }],
+    };
   },
 );
 server.registerTool(
@@ -1033,12 +1248,18 @@ const graphStore = await openStore(join(WORKSPACE, "index", "pglite"));
 
 server.registerTool(
   "rebuild_index",
-  { description: "L0 마크다운 이벤트 → 파생 그래프 인덱스(events+nodes+edges) 멱등 재구축", inputSchema: {} },
+  {
+    description: "L0 마크다운 이벤트 → 파생 그래프 인덱스(events+nodes+edges) 멱등 재구축",
+    inputSchema: {},
+  },
   async () => {
     const st = await rebuildIndex(WORKSPACE, graphStore);
     return {
       content: [
-        { type: "text", text: `index rebuilt: ${st.events} events, ${st.nodes} nodes, ${st.edges} edges (checksum ${st.checksum.slice(0, 8)})` },
+        {
+          type: "text",
+          text: `index rebuilt: ${st.events} events, ${st.nodes} nodes, ${st.edges} edges (checksum ${st.checksum.slice(0, 8)})`,
+        },
       ],
     };
   },
@@ -1062,7 +1283,9 @@ server.registerTool(
   { description: "노드 1개 조회 (node_id = `type:canonical_id`)", inputSchema: { id: z.string() } },
   async ({ id }) => {
     const n = await graphStore.getNode(id);
-    return { content: [{ type: "text", text: n ? JSON.stringify(n, null, 2) : `unknown node: ${id}` }] };
+    return {
+      content: [{ type: "text", text: n ? JSON.stringify(n, null, 2) : `unknown node: ${id}` }],
+    };
   },
 );
 
@@ -1071,7 +1294,9 @@ server.registerTool(
   { description: "노드 + 1-hop 인접 엣지/노드", inputSchema: { id: z.string() } },
   async ({ id }) => {
     const nb = await graphStore.getNeighbors(id);
-    return { content: [{ type: "text", text: nb ? JSON.stringify(nb, null, 2) : `unknown node: ${id}` }] };
+    return {
+      content: [{ type: "text", text: nb ? JSON.stringify(nb, null, 2) : `unknown node: ${id}` }],
+    };
   },
 );
 
@@ -1080,7 +1305,10 @@ server.registerTool(
 // new write is hydrate emitting one handoff_consumed. context_pressure is read-only/advisory.
 server.registerTool(
   "request_handoff",
-  { description: "세션에 대한 handoff를 births (handoff_requested). sessionId=인계 대상 세션", inputSchema: { sessionId: z.string() } },
+  {
+    description: "세션에 대한 handoff를 births (handoff_requested). sessionId=인계 대상 세션",
+    inputSchema: { sessionId: z.string() },
+  },
   async ({ sessionId }) => {
     const r = await requestHandoff(WORKSPACE, { sessionId }, nowFn(), randFn());
     return { content: [{ type: "text", text: `handoff requested: ${r.handoffId}` }] };
@@ -1089,31 +1317,55 @@ server.registerTool(
 
 server.registerTool(
   "draft_handoff",
-  { description: "handoff 초안 markdown 본문 제출 (→ validating). 7개 필수 섹션 포함", inputSchema: { handoffId: z.string(), body: z.string() } },
+  {
+    description: "handoff 초안 markdown 본문 제출 (→ validating). 7개 필수 섹션 포함",
+    inputSchema: { handoffId: z.string(), body: z.string() },
+  },
   async ({ handoffId, body }) => {
     const r = await draftHandoff(WORKSPACE, { handoffId, body }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `drafted: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return {
+      content: [{ type: "text", text: r.ok ? `drafted: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+    };
   },
 );
 
 server.registerTool(
   "validate_handoff",
-  { description: "최신 초안에 대해 7-섹션 구조 검증 → handoff_validated(통과) | handoff_invalid(미충족 섹션)", inputSchema: { handoffId: z.string() } },
+  {
+    description:
+      "최신 초안에 대해 7-섹션 구조 검증 → handoff_validated(통과) | handoff_invalid(미충족 섹션)",
+    inputSchema: { handoffId: z.string() },
+  },
   async ({ handoffId }) => {
     const r = await runValidateHandoff(WORKSPACE, { handoffId }, nowFn(), randFn());
     if (!r.ok) return { content: [{ type: "text", text: `REFUSED: ${r.reason}` }] };
-    return { content: [{ type: "text", text: r.valid ? `validated (pending): ${r.eventId}` : `invalid — missing: ${(r.missing ?? []).join(", ")}` }] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: r.valid
+            ? `validated (pending): ${r.eventId}`
+            : `invalid — missing: ${(r.missing ?? []).join(", ")}`,
+        },
+      ],
+    };
   },
 );
 
 server.registerTool(
   "hydrate",
-  { description: "pending handoff에서 hydration 번들 조립 + handoff_consumed 방출 (새 세션 재개용). 번들은 반환만(미영속)", inputSchema: { handoffId: z.string() } },
+  {
+    description:
+      "pending handoff에서 hydration 번들 조립 + handoff_consumed 방출 (새 세션 재개용). 번들은 반환만(미영속)",
+    inputSchema: { handoffId: z.string() },
+  },
   async ({ handoffId }) => {
     const deps: HydrateDeps = {
       gitSummary: async () => {
         const { spawnSync } = await import("node:child_process");
-        const st = spawnSync("git", ["-C", REPO_ROOT, "status", "--porcelain"], { encoding: "utf8" });
+        const st = spawnSync("git", ["-C", REPO_ROOT, "status", "--porcelain"], {
+          encoding: "utf8",
+        });
         const ds = spawnSync("git", ["-C", REPO_ROOT, "diff", "--stat"], { encoding: "utf8" });
         return { status: (st.stdout ?? "").trim(), diffstat: (ds.stdout ?? "").trim() };
       },
@@ -1148,7 +1400,8 @@ server.registerTool(
 server.registerTool(
   "context_pressure",
   {
-    description: "advisory context pressure 계산 (caller가 런타임 신호 제공, 이벤트-파생 신호는 로그에서 fold). 쓰기 없음 — session_context_pressure_changed 미작성",
+    description:
+      "advisory context pressure 계산 (caller가 런타임 신호 제공, 이벤트-파생 신호는 로그에서 fold). 쓰기 없음 — session_context_pressure_changed 미작성",
     inputSchema: {
       estimatedTokenRatio: z.number().min(0).max(1),
       turnCount: z.number().int().min(0),
@@ -1158,8 +1411,14 @@ server.registerTool(
   },
   async ({ estimatedTokenRatio, turnCount, wallClockMs, filesTouched }) => {
     const all = await readAllEvents(WORKSPACE);
-    const p = computeContextPressure({ estimatedTokenRatio, turnCount, wallClockMs, filesTouched }, all, nowFn());
-    return { content: [{ type: "text", text: `pressure: ${p.level} (score ${p.score.toFixed(2)})` }] };
+    const p = computeContextPressure(
+      { estimatedTokenRatio, turnCount, wallClockMs, filesTouched },
+      all,
+      nowFn(),
+    );
+    return {
+      content: [{ type: "text", text: `pressure: ${p.level} (score ${p.score.toFixed(2)})` }],
+    };
   },
 );
 
