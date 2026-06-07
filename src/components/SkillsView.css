@@ -507,6 +507,13 @@
   color: var(--color-wr-danger);
 }
 
+/* URL 설치 프로젝트 scope 선택(D5b) — provider 아래, 라이브러리 전용 또는 프로젝트 dir로 복사. */
+.skl-install-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* 프로젝트 카피 vendoring 패널(G3-PR2b) — managed 시트 내, vendorable 프로젝트별 복사/해제 액션. */
 .skl-vendor {
   display: flex;

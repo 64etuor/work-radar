@@ -36,6 +36,31 @@ export const SKILL_PROVIDER_ORDER: SkillProvider[] = [
   "other",
 ];
 
+/** URL 설치 대상 provider 옵션(라벨 포함). */
+export interface InstallProviderOption {
+  provider: SkillProvider;
+  label: string;
+}
+
+/**
+ * URL 설치 대상 provider 드롭다운 옵션(D5a, presence-gate). `detect_skill_environments`가
+ * present=true로 보고한 에이전트 provider만 노출한다 — 설치 안 된 에이전트(예: OpenClaw 부재)는 숨긴다.
+ * `"other"`는 특정 에이전트 dir이 아닌 catch-all이라 항상 포함한다(라이브러리 전용 설치 대상).
+ *
+ * 순수 함수(부수효과 없음) — vitest 단위테스트 대상. 표시 순서는 `SKILL_PROVIDER_ORDER`를 따른다.
+ */
+export function buildInstallProviderOptions(
+  environments: SkillEnvironment[] | undefined,
+): InstallProviderOption[] {
+  const present = new Set<SkillProvider>(
+    (environments ?? []).filter((e) => e.present).map((e) => e.provider),
+  );
+  return SKILL_PROVIDER_ORDER.filter((p) => p === "other" || present.has(p)).map((provider) => ({
+    provider,
+    label: SKILL_PROVIDER_LABEL[provider],
+  }));
+}
+
 export type SkillEnvNavId = "all" | "in_app" | `provider:${SkillProvider}` | `workspace:${string}`;
 
 export interface SkillEnvNavItem {
@@ -196,7 +221,7 @@ export function buildWorkspaceHealth(
 
 /** vendoring 대상 provider(프로젝트 dir 관례 있는 것 — 백엔드 scan::vendor_subdir의 FE 트윈). 백엔드가
  *  authoritative이며 그 외 provider는 unsupported_provider로 거부한다. */
-const VENDORABLE_PROVIDERS: ReadonlySet<SkillProvider> = new Set<SkillProvider>([
+export const VENDORABLE_PROVIDERS: ReadonlySet<SkillProvider> = new Set<SkillProvider>([
   "claude",
   "codex",
 ]);

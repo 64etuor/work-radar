@@ -11,6 +11,7 @@ import {
   applyEnvOrder,
   buildDivergedLocationLabels,
   buildDivergedPathSet,
+  buildInstallProviderOptions,
   buildSkillEnvNav,
   buildSkillWorkspaceNav,
   buildVendorTargets,
@@ -290,5 +291,38 @@ describe("buildDivergedLocationLabels", () => {
 
   it("returns an empty map for undefined inputs", () => {
     expect(buildDivergedLocationLabels(undefined, undefined).size).toBe(0);
+  });
+});
+
+describe("buildInstallProviderOptions", () => {
+  it("present인 에이전트 provider만 노출하고 'other'는 항상 포함한다", () => {
+    const opts = buildInstallProviderOptions([
+      env("claude", true),
+      env("codex", true),
+      env("openclaw", false),
+      env("hermes", false),
+    ]);
+    expect(opts.map((o) => o.provider)).toEqual(["claude", "codex", "other"]);
+  });
+
+  it("부재 에이전트(OpenClaw 등)는 숨긴다", () => {
+    const opts = buildInstallProviderOptions([env("openclaw", false)]);
+    expect(opts.map((o) => o.provider)).not.toContain("openclaw");
+    expect(opts.map((o) => o.provider)).toEqual(["other"]);
+  });
+
+  it("undefined/빈 환경이면 'other'만 남는다", () => {
+    expect(buildInstallProviderOptions(undefined).map((o) => o.provider)).toEqual(["other"]);
+    expect(buildInstallProviderOptions([]).map((o) => o.provider)).toEqual(["other"]);
+  });
+
+  it("SKILL_PROVIDER_ORDER 순서를 유지하고 라벨을 붙인다", () => {
+    const opts = buildInstallProviderOptions([
+      env("hermes", true),
+      env("claude", true),
+      env("codex", true),
+    ]);
+    expect(opts.map((o) => o.provider)).toEqual(["claude", "codex", "hermes", "other"]);
+    expect(opts.find((o) => o.provider === "claude")!.label).toBe(SKILL_PROVIDER_LABEL.claude);
   });
 });
