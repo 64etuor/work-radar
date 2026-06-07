@@ -3,6 +3,7 @@ import {
   DEFAULT_FORBIDDEN_DECISION_CLASSES,
   type AutonomyEnvelope,
 } from "../conductor/envelope.ts";
+import { backendsConfigSchema, type BackendsConfig } from "../backends/config.ts";
 
 // Per-repo governance config (spec 2026-06-07 §B/§C). PURE: parse/validate + resolve policy.
 // boule.config.json is the mutable settings surface (editable via `boule set` or the work-radar
@@ -46,6 +47,9 @@ export interface ResolvedPolicy {
   reviewQuorum: number;
   forbiddenDecisionClasses: DecisionClass[];
   allowedType2Actions: string[];
+  /** Per-role backend chains. undefined ⇒ env-derived defaults (consumed by the conductor/reviewer
+   *  wiring; the fail-closed fallback runner lives in backends/fallback.ts). */
+  backends?: BackendsConfig;
 }
 
 // Per-kind defaults. work = strict (manual gates, ≥2 review, all classes escalate); personal =
@@ -91,6 +95,9 @@ const overridesSchema = z
     reviewQuorum: z.number().int().min(1).optional(),
     forbiddenDecisionClasses: z.array(decisionClassSchema).optional(),
     allowedType2Actions: z.array(z.string().min(1)).optional(),
+    // Configurable per-role agent backends + token-exhaustion fallback chains (backends/config.ts).
+    // Omitted ⇒ the harness keeps its current env-derived backend defaults (backward compatible).
+    backends: backendsConfigSchema.optional(),
   })
   .strict();
 
@@ -126,6 +133,8 @@ export function resolvePolicy(config: BouleConfig): ResolvedPolicy {
     reviewQuorum: o.reviewQuorum ?? base.reviewQuorum,
     forbiddenDecisionClasses: o.forbiddenDecisionClasses ?? base.forbiddenDecisionClasses,
     allowedType2Actions: o.allowedType2Actions ?? base.allowedType2Actions,
+    // No per-kind default: undefined ⇒ env-derived backend defaults downstream (additive surface).
+    backends: o.backends,
   };
 }
 
