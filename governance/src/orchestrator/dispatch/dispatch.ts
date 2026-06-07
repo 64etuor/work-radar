@@ -69,6 +69,9 @@ export async function autoDispatch(
   mode: AutoMode,
   now: Date,
   rand: number,
+  /** Hard cap on CONDUCTS this pass (the blast-radius bound enforced under the dispatch boundary —
+   *  `boule tick --max-steps`). Default unbounded preserves the existing MCP auto_dispatch behavior. */
+  maxConducts: number = Number.POSITIVE_INFINITY,
 ): Promise<DispatchSummary> {
   const summary: DispatchSummary = { executed: 0, failed: 0, denied: 0, skipped: 0 };
   if (mode !== "type2") return summary;
@@ -94,6 +97,7 @@ export async function autoDispatch(
   const nextStamp = () => new Date(now.getTime() + offset++ * 1000);
 
   for (const planProposed of plansOf(all)) {
+    if (summary.executed >= maxConducts) break; // blast-radius cap reached → rest waits for next tick
     const conductor = deriveConductorState(planProposed, all);
     if (isTerminalPlanPhase(conductor.planPhase)) continue;
 

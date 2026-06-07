@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { boulePaths } from "../repo/paths.ts";
 import {
   defaultConfig,
@@ -16,6 +16,11 @@ import {
   repoEnv,
   serverEntrypoint,
 } from "../repo/configIo.ts";
+import { makeConductorAdapterFromEnv } from "../conductor/fromEnv.ts";
+import { parseConductorConfig, parseEnvelopeDefaults } from "../mcp/config.ts";
+import { evaluateReadiness } from "../live/readiness.ts";
+import { listStalledTasks } from "../orchestrator/stall.ts";
+import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
 
 // `boule` CLI (spec 2026-06-07 §D): per-repo launcher + settings admin. DB-free — the work-radar
 // app drives discovery of designated local repos and calls `init`/`set` per repo with explicit
@@ -145,11 +150,78 @@ export async function cmdRun(flags: ParsedArgs["flags"]): Promise<number> {
   });
 }
 
+function formatTick(r: TickReport): string {
+  const lines = [`tick: ${r.outcome} (conducted=${r.conducted}, max-step blast-radius respected)`];
+  if (r.specsAccepted || r.plansAccepted)
+    lines.push(`  auto-accepted: ${r.specsAccepted} spec, ${r.plansAccepted} plan`);
+  if (r.haltedPlans.length) lines.push(`  halted plans: ${r.haltedPlans.join(", ")}`);
+  if (r.stalledCount) lines.push(`  stalled tasks: ${r.stalledCount}`);
+  for (const b of r.blockers) lines.push(`  ✗ ${b}`);
+  for (const w of r.warnings) lines.push(`  ⚠ ${w}`);
+  return lines.join("\n");
+}
+
+/** tick: ONE bounded auto-dispatch heartbeat (external cron/operator provides cadence — NOT a
+ *  daemon, INVARIANT #5). Readiness/halt/stall gated; conducts <=--max-steps; reports + exits. */
+export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
+  const repo = reqRepo(flags);
+  const loaded = await loadPolicyOrStrict(repo);
+  if (loaded.source === "fallback")
+    process.stderr.write(`boule: WARN config unreadable, STRICT fallback (${loaded.reason})\n`);
+  const policy = loaded.policy;
+  const p = boulePaths(repo);
+  const env = { ...process.env, ...repoEnv(repo, policy) };
+  const cfg = parseConductorConfig(env);
+
+  const probe = (cmd: string, args: string[]): boolean => {
+    try {
+      return spawnSync(cmd, args, { encoding: "utf8" }).status === 0;
+    } catch {
+      return false;
+    }
+  };
+  const stalledCount = (await listStalledTasks(p.workspace)).length;
+  const readiness = evaluateReadiness({
+    signals: {
+      env,
+      cmuxBinaryOk: probe(cfg.cmuxCmd, ["--version"]),
+      gitWorktreeOk: probe("git", ["-C", repo, "worktree", "list"]),
+    },
+    stalledCount,
+  });
+
+  const report = await runTick(
+    p.workspace,
+    {
+      adapter: makeConductorAdapterFromEnv(env, {
+        workspace: p.workspace,
+        repoRoot: repo,
+        serverEntrypoint: serverEntrypoint(),
+      }),
+      executor: cfg.executor,
+      envelopeDefaults: parseEnvelopeDefaults(env),
+      readiness,
+      autonomyLevel: policy.autonomyLevel,
+      autoMode: policy.autoMode,
+      maxSteps: clampMaxSteps(flags["max-steps"], env.BOULE_TICK_MAX),
+      stalledCount,
+    },
+    new Date(),
+    Math.random(),
+  );
+
+  process.stdout.write(
+    (flags.json === true ? JSON.stringify(report) : formatTick(report)) + "\n",
+  );
+  return tickExitCode(report.outcome);
+}
+
 const USAGE = `boule <command> --repo <path>
   init   --repo <p> --kind <personal|work> [--project-id X] [--project-name Y] [--overwrite]
   set    --repo <p> [--kind k] [--autonomy-level manual|dispatch|auto_plan|full] [--review-quorum n]
   status --repo <p>
-  run    --repo <p>   # exec the per-repo governance MCP server (stdio)`;
+  run    --repo <p>   # exec the per-repo governance MCP server (stdio)
+  tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)`;
 
 export async function main(argv: string[]): Promise<number> {
   const { cmd, flags } = parseArgs(argv);
@@ -166,6 +238,8 @@ export async function main(argv: string[]): Promise<number> {
         return 0;
       case "run":
         return await cmdRun(flags);
+      case "tick":
+        return await cmdTick(flags);
       default:
         process.stderr.write(USAGE + "\n");
         return cmd ? 1 : 0;

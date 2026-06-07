@@ -41,13 +41,8 @@ import {
 import { escalate } from "../escalate/escalate.ts";
 import { pendingEscalations } from "../escalate/pending.ts";
 import { conductPlan, conductorStatus } from "../conductor/handlers.ts";
-import {
-  stubAdapter,
-  makeLiveAdapter,
-  projectLabelFromRepoRoot,
-  type ConductorAdapter,
-  type SpawnSyncLike,
-} from "../conductor/adapter.ts";
+import { type SpawnSyncLike } from "../conductor/adapter.ts";
+import { makeConductorAdapterFromEnv } from "../conductor/fromEnv.ts";
 import { runPreflight } from "../live/preflight.ts";
 import { evaluateReadiness } from "../live/readiness.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
@@ -71,7 +66,6 @@ import {
   type SpawnResultLike as ObserverSpawnResultLike,
 } from "../session/observer.ts";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
-import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
 import {
   parseAutoMode,
   parseAutonomyLevel,
@@ -685,28 +679,14 @@ const AUTO_MODE = autonomyAllows.dispatch(AUTONOMY_LEVEL)
 // Per-repo policy envelope defaults (set by the `boule` launcher from resolved policy). Unset ⇒ {}
 // ⇒ the conductor's built-in envelope defaults apply.
 const ENVELOPE_DEFAULTS = parseEnvelopeDefaults(process.env);
-function buildConductorAdapter(): ConductorAdapter {
-  if (!CONDUCTOR_CFG.live) return stubAdapter;
-  const realSpawnSync: SpawnSyncLike = (cmd, args) => {
-    const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
-    return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-  };
-  return makeLiveAdapter({
-    spawn: realSpawnSync,
-    fs: { mkdir: (p, o) => fsMkdir(p, o), writeFile: (p, d) => fsWriteFile(p, d) },
-    repoRoot: REPO_ROOT,
-    worktreesRoot: CONDUCTOR_CFG.worktreesRoot,
-    cmuxCmd: CONDUCTOR_CFG.cmuxCmd,
-    governanceWorkspace: WORKSPACE, // spawned session's escalate writes back here
-    // The governance server lives at the Boule install (this file), NOT under the target repo —
-    // a designated local repo has no governance/ dir. Spawned sessions point their executor MCP here.
-    serverEntrypoint: fileURLToPath(import.meta.url),
-    // per-project cmux folder (repoRoot basename) — sessions group under it; reuse-or-create.
-    projectLabel: projectLabelFromRepoRoot(REPO_ROOT),
-    log: (line) => process.stderr.write(`${line}\n`), // PII-safe (명령명+status만)
-  });
-}
-const conductorAdapter = buildConductorAdapter();
+// The Conductor adapter (live vs stub) is built from env by the shared helper — same wiring the
+// `boule tick` CLI uses, so the MCP server and tick conduct identically. serverEntrypoint = this
+// install's server.ts (spawned sessions point their executor MCP here, NOT at the target repo).
+const conductorAdapter = makeConductorAdapterFromEnv(process.env, {
+  workspace: WORKSPACE,
+  repoRoot: REPO_ROOT,
+  serverEntrypoint: fileURLToPath(import.meta.url),
+});
 
 // ── Phase D: Observer adapter ─────────────────────────────────────────────────
 // 기본 = no-op(stub·cmux 무접근). BOULE_OBSERVER_MODE=live 일 때만 실제 `cmux tree --all --json` 어댑터.

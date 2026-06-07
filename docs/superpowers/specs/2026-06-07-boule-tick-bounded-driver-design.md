@@ -1,8 +1,8 @@
 # `boule tick` — bounded auto-dispatch driver (design, for confirmation)
 
 - **Date**: 2026-06-07
-- **Status**: DESIGN — not implemented. Confirm before building.
-- **Author**: claude (Opus), from the user's framing.
+- **Status**: ✅ BUILT 2026-06-07 (`boule tick` shipped; codex-consulted, live-proven). §6 resolved below.
+- **Author**: claude (Opus), from the user's framing; design decisions consulted with codex (`codex exec`).
 - **Related**: master plan `governance/docs/plans/2026-06-07-boule-v3-live-autonomy-master-plan.md` (L2 auto_dispatch, L4 readiness); per-repo spec `docs/superpowers/specs/2026-06-07-per-repo-governance-mcp-design.md`; runbook `governance/docs/runbooks/2026-06-07-live-loop-smoke.md`.
 
 ## 0. One line
@@ -68,7 +68,19 @@ The scheduler (cron / launchd / operator / a Phase-3 time-scale agent) owns pers
 | L4 readiness                                    | tick gates on `evaluateReadiness` (preflight infra + observer-live + no open stalls) before conducting.                                          |
 | stall safety (L2-C)                             | `stalled_tasks` non-empty ⇒ tick reports + refuses to advance (recovery is human).                                                               |
 
-## 6. Open questions (decide before building)
+## 6. RESOLVED (codex consult 2026-06-07 — agreed all 5 leans + added 2 refinements)
+
+As built: **1** no tick event (cron log + transition events only). **2** exit codes `0` advanced/idle/in_flight · `10` halted/stalled (page a human) · `1` readiness/infra failed. **3** require full L4 readiness (observer live; no degraded tick). **4** total `--max-steps` cap across all plans, **enforced UNDER the dispatch boundary** (codex: don't loop around an unbounded pass) — `autoDispatch` gained a `maxConducts` param. **5** `boule tick` CLI subcommand reusing `autoAccept`/`evaluateReadiness`/`listStalledTasks`/`autoDispatch` in-process (no MCP). **Codex refinement (adopted):** a structured `TickReport` with stable reason categories — `advanced`/`idle`/`in_flight`/`halted_decision`/`stalled`/`readiness_failed`/`infra_failed` — a contract for cron/dashboards/tests, NOT events. Codex confirmed the "no-waiting / cron=poll-period" model is sound and INVARIANT #1/#5 hold (no sleep loop + hard ceiling; halt on decision_blocked/stall; reuse existing auto-accept audit semantics, no new acceptance path). Live-proven: readiness gate (observer-off → readiness_failed exit 1), seeded plan → advanced (auto-accepted spec+plan at full), 2nd tick → in_flight (session still running, no re-conduct).
+
+**Post-review fixes (codex critic, ACCEPT-WITH-RESERVATIONS → resolved):** `in_flight` now means an
+actually-RUNNING step (a materialized task in `active` phase via `projectTasks`), NOT merely a
+non-terminal plan — so an unaccepted **draft** (at dispatch) or a **needs_revision** plan correctly
+reports **`idle`** (it's the human's turn to accept/revise; not alert-worthy, exit 0), not a false
+`in_flight`. The not-ready outcome is categorized structurally from `stalledCount` + `preflight.ready`
+(no blocker-string regex), and `stalledCount` is threaded into the tick (no double read). Tests now
+pin `in_flight` (running task) and `idle` (unaccepted draft).
+
+### Original open questions (for the record)
 
 1. **Tick audit event?** Should each tick emit a single `tick_ran` audit event (cadence visibility in the SSOT), or stay write-delegating (only `auto_dispatch`'s transition events, no tick noise)? _Lean: no tick event by default; rely on the cron log + the transition events. Optional `--audit` to emit one._
 2. **Exit code semantics** for blocked/stalled — `0` (normal, "nothing to do") vs a distinct non-zero so cron alerting can page a human on a stuck plan. _Lean: `0` for idle/advanced; distinct code (e.g. `10`) for halted/stalled so an operator alert can fire — without that, a stuck plan is silent._
