@@ -42,15 +42,20 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 4px;
+  min-width: 0;
 }
 
 .skl-card-tag {
+  max-width: 100%;
   font-size: 11px;
   line-height: 1;
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--color-wr-surface);
   color: var(--color-wr-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Sheet 안 태그 편집기 */

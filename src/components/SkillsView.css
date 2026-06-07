@@ -202,23 +202,29 @@
   flex-direction: row;
   align-items: center;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 9px 28px 9px 12px;
 }
 .skl-card-top {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
 }
+/* 그리드: 타이틀 우측에 체크박스 자리 확보(겹침 방지). */
+.skl-card.grid .skl-card-top {
+  padding-right: 22px;
+}
 .skl-card.list .skl-card-top {
-  width: 220px;
-  flex-shrink: 0;
+  flex: 0 1 220px;
+  min-width: 0;
 }
 .skl-card-ico {
   flex-shrink: 0;
   color: var(--color-wr-subtle);
 }
 .skl-card-name {
+  flex: 1 1 auto;
   min-width: 0;
   font: 600 13px var(--font-sans);
   overflow: hidden;
@@ -229,6 +235,7 @@
 .skl-card-badges {
   display: inline-flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
@@ -255,6 +262,8 @@
   font-weight: 500;
 }
 .skl-card-sub {
+  max-width: 100%;
+  min-width: 0;
   font: 400 11px var(--font-mono);
   color: var(--color-wr-subtle);
   overflow: hidden;
@@ -262,7 +271,8 @@
   white-space: nowrap;
 }
 .skl-card.list .skl-card-sub {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 280px;
 }
 .skl-card-desc {
@@ -270,6 +280,7 @@
   line-height: 1.5;
   color: var(--color-wr-muted);
   overflow: hidden;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -344,7 +355,9 @@
 }
 .skl-name-static {
   flex: 1;
+  min-width: 0;
   font: 600 14px var(--font-sans);
+  overflow-wrap: anywhere;
 }
 .skl-toggle {
   display: inline-flex;
@@ -357,6 +370,7 @@
 .skl-bind-line {
   font: 400 12px var(--font-sans);
   color: var(--color-wr-subtle);
+  overflow-wrap: anywhere;
 }
 .skl-bind-line code {
   font: 500 11px var(--font-mono);
@@ -369,6 +383,7 @@
 .skl-desc {
   font: 400 13px var(--font-sans);
   color: var(--color-wr-fg);
+  overflow-wrap: anywhere;
 }
 .skl-markdown {
   width: 100%;
@@ -665,16 +680,21 @@
   flex: 1;
   min-width: 0;
 }
+/* 카드 안 타이틀 우상단에 겹쳐 배치(형제 요소라 카드 버튼과 클릭 충돌 없음). */
 .skl-card-check {
+  position: absolute;
+  top: 13px;
+  right: 12px;
+  z-index: 2;
   flex-shrink: 0;
-  margin-top: 14px;
   width: 15px;
   height: 15px;
   accent-color: var(--color-wr-accent);
   cursor: pointer;
 }
 .skl-cards.list .skl-card-check {
-  margin-top: 12px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .skl-card-wrap.selected .skl-card {
   border-color: var(--color-wr-accent);
@@ -683,7 +703,7 @@
 .skl-card-diverged {
   position: absolute;
   top: 6px;
-  right: 6px;
+  right: 34px;
   z-index: 1;
   font-size: 10px;
   line-height: 1;
