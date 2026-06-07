@@ -4,14 +4,22 @@ import type { GovEvent } from "../event/event.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { deriveConductorState, type ConductorState } from "./conductor.ts";
 import { canAdvance } from "./guards.ts";
-import { buildEnvelope, envelopeHash, type AutonomyEnvelope } from "./envelope.ts";
+import {
+  buildEnvelope,
+  envelopeHash,
+  type AutonomyEnvelope,
+  type ExecutorKind,
+} from "./envelope.ts";
 import type { ConductorAdapter } from "./adapter.ts";
 
 // NOTE: this module imports ZERO decision write handlers (no "../decision/handlers.ts"). The
 // Conductor mints ONLY task_created/task_started/step_bound/session_spawned — all verdict-free.
 // Resolution flows exclusively through the existing human-gated choose/approve, never from here.
 
-async function loadConductor(workspaceDir: string, planId: string): Promise<{ state: ConductorState; all: GovEvent[] }> {
+async function loadConductor(
+  workspaceDir: string,
+  planId: string,
+): Promise<{ state: ConductorState; all: GovEvent[] }> {
   const all = await readAllEvents(workspaceDir);
   const grp = eventsForDecision(all, planId);
   if (!grp.proposal || grp.proposal.frontmatter.type !== "plan_proposed")
@@ -39,7 +47,9 @@ function buildPrompt(stepText: string, envelope: AutonomyEnvelope): string {
   ].join("\n");
 }
 
-export interface ConductPlanInput { planId: string }
+export interface ConductPlanInput {
+  planId: string;
+}
 export interface ConductStepReport {
   stepIndex: number;
   taskId: string;
@@ -61,7 +71,7 @@ export interface ConductPlanResult {
 export async function conductPlan(
   workspaceDir: string,
   input: ConductPlanInput,
-  deps: { adapter: ConductorAdapter },
+  deps: { adapter: ConductorAdapter; executor?: ExecutorKind },
   now: Date,
   rand: number,
 ): Promise<ConductPlanResult> {
@@ -69,6 +79,7 @@ export async function conductPlan(
   const gate = canAdvance(state);
   if (!gate.ok) return { ok: false, reason: gate.reason, advanced: null };
 
+  const executor: ExecutorKind = deps.executor ?? "claude";
   const k = state.cursor!; // canAdvance guarantees non-null
   const step = state.steps[k]!;
 
@@ -79,8 +90,11 @@ export async function conductPlan(
   const taskEvt: GovEvent = {
     frontmatter: {
       id: generateId("evt", at(0), rand),
-      type: "task_created", source: "hermes", actor: "conductor",
-      tags: ["task", "conductor"], related_to: [input.planId],
+      type: "task_created",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["task", "conductor"],
+      related_to: [input.planId],
     },
     body: step.text,
   };
@@ -89,7 +103,13 @@ export async function conductPlan(
 
   // Build worktree + envelope (worktree path is the ONLY writable tree — INVARIANT #6).
   const wt = await deps.adapter.createWorktree({ planId: input.planId, stepIndex: k });
-  const envelope = buildEnvelope({ planId: input.planId, stepIndex: k, taskId, worktreePath: wt.path });
+  const envelope = buildEnvelope({
+    planId: input.planId,
+    stepIndex: k,
+    taskId,
+    worktreePath: wt.path,
+    executor,
+  });
   const hash = envelopeHash(envelope);
   const prompt = buildPrompt(step.text, envelope);
   await deps.adapter.writeEnvelopeFile(wt.path, envelope, prompt);
@@ -98,24 +118,40 @@ export async function conductPlan(
   const stepBound: GovEvent = {
     frontmatter: {
       id: generateId("evt", at(1), rand),
-      type: "step_bound", source: "hermes", actor: "conductor",
-      tags: ["conductor"], related_to: [input.planId, taskId],
+      type: "step_bound",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["conductor"],
+      related_to: [input.planId, taskId],
     },
     body: JSON.stringify({ stepIndex: k, taskId, planId: input.planId }),
   };
   await writeEvent(workspaceDir, stepBound, at(1));
 
   // 3) spawn one isolated cmux session bound to the task.
-  const session = await deps.adapter.spawnSession({ worktreePath: wt.path, stepIndex: k, prompt });
+  const session = await deps.adapter.spawnSession({
+    worktreePath: wt.path,
+    stepIndex: k,
+    prompt,
+    executor,
+  });
 
   // 4) session_spawned — records the spawn (verdict-free). Carries envelope + tamper-evident hash.
   const sessionEvt: GovEvent = {
     frontmatter: {
       id: generateId("evt", at(2), rand),
-      type: "session_spawned", source: "hermes", actor: "conductor",
-      tags: ["conductor"], related_to: [taskId],
+      type: "session_spawned",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["conductor"],
+      related_to: [taskId],
     },
-    body: JSON.stringify({ surface: session.surface, worktree: wt.path, envelopeHash: hash, envelope }),
+    body: JSON.stringify({
+      surface: session.surface,
+      worktree: wt.path,
+      envelopeHash: hash,
+      envelope,
+    }),
   };
   await writeEvent(workspaceDir, sessionEvt, at(2));
 
@@ -123,8 +159,11 @@ export async function conductPlan(
   const startedEvt: GovEvent = {
     frontmatter: {
       id: generateId("evt", at(3), rand),
-      type: "task_started", source: "hermes", actor: "conductor",
-      tags: ["task", "conductor"], related_to: [taskId],
+      type: "task_started",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["task", "conductor"],
+      related_to: [taskId],
     },
     body: `Started ${taskId}`,
   };
@@ -133,7 +172,13 @@ export async function conductPlan(
   return {
     ok: true,
     reason: `materialized step ${k}`,
-    advanced: { stepIndex: k, taskId, surface: session.surface, worktreePath: wt.path, envelopeHash: hash },
+    advanced: {
+      stepIndex: k,
+      taskId,
+      surface: session.surface,
+      worktreePath: wt.path,
+      envelopeHash: hash,
+    },
   };
 }
 
@@ -155,7 +200,10 @@ export interface ConductorStatusResult {
 }
 
 /** conductor_status — READ-ONLY render of the derived projection. Writes nothing. */
-export async function conductorStatus(workspaceDir: string, input: ConductPlanInput): Promise<ConductorStatusResult> {
+export async function conductorStatus(
+  workspaceDir: string,
+  input: ConductPlanInput,
+): Promise<ConductorStatusResult> {
   const { state } = await loadConductor(workspaceDir, input.planId);
   return {
     planId: state.planId,
@@ -164,8 +212,12 @@ export async function conductorStatus(workspaceDir: string, input: ConductPlanIn
     halted: state.halted,
     done: state.done,
     steps: state.steps.map((s) => ({
-      stepIndex: s.stepIndex, text: s.text, taskId: s.taskId,
-      surface: s.surface, taskPhase: s.taskPhase, halted: s.halted,
+      stepIndex: s.stepIndex,
+      text: s.text,
+      taskId: s.taskId,
+      surface: s.surface,
+      taskPhase: s.taskPhase,
+      halted: s.halted,
     })),
   };
 }

@@ -923,7 +923,7 @@ server.registerTool(
     const r = await conductPlan(
       WORKSPACE,
       { planId },
-      { adapter: conductorAdapter },
+      { adapter: conductorAdapter, executor: CONDUCTOR_CFG.executor },
       nowFn(),
       randFn(),
     );
@@ -976,7 +976,7 @@ server.registerTool(
     }
     const s = await autoDispatch(
       WORKSPACE,
-      { adapter: conductorAdapter },
+      { adapter: conductorAdapter, executor: CONDUCTOR_CFG.executor },
       AUTO_MODE,
       nowFn(),
       randFn(),

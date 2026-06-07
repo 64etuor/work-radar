@@ -1,4 +1,4 @@
-import type { AutonomyEnvelope } from "./envelope.ts";
+import type { AutonomyEnvelope, ExecutorKind } from "./envelope.ts";
 
 export interface CreateWorktreeSpec {
   planId: string;
@@ -9,6 +9,8 @@ export interface SpawnSessionSpec {
   worktreePath: string;
   stepIndex: number;
   prompt: string;
+  /** which CLI to launch (claude|codex). Omitted ⇒ "claude" (backward-compatible). */
+  executor?: ExecutorKind;
 }
 
 /** DI seam for the side-effecting half of conduct: worktree + cmux session + envelope file.
@@ -17,7 +19,11 @@ export interface SpawnSessionSpec {
 export interface ConductorAdapter {
   createWorktree(spec: CreateWorktreeSpec): Promise<{ path: string }>;
   spawnSession(spec: SpawnSessionSpec): Promise<{ surface: string }>;
-  writeEnvelopeFile(worktreePath: string, envelope: AutonomyEnvelope, prompt: string): Promise<void>;
+  writeEnvelopeFile(
+    worktreePath: string,
+    envelope: AutonomyEnvelope,
+    prompt: string,
+  ): Promise<void>;
 }
 
 /** Deterministic default — fixed path + `surface:stub-<k>`, no real processes/files. So with
@@ -106,6 +112,43 @@ class CommandError extends Error {
   }
 }
 
+/** Build the executor invocation `cmux send`s into the session pane. Pure (so the exact command is
+ *  asserted in tests). Both executors run the SAME step-prompt against the SAME executor-role
+ *  governance MCP (verdict tools structurally absent), so the loop closes identically: the session
+ *  calls complete_task / escalate. Differences are CLI-shaped only.
+ *
+ *  - claude: reads the scoped `.boule/mcp.json` (--mcp-config) under --strict-mcp-config, PLUS an
+ *    explicit verdict-tool --disallowedTools denylist (defense-in-depth on top of the server's
+ *    structural omission).
+ *  - codex: attaches the SAME executor-role server via `-c mcp_servers.*` (codex has no per-server
+ *    denylist — the server's structural verdict-tool omission is the guarantee). Runs one-shot
+ *    `codex exec` in a `workspace-write` sandbox confined to the worktree cwd (NEVER danger-full,
+ *    per codex-worktree-runner). ⚠ The codex MCP round-trip (complete_task FROM codex) is asserted
+ *    structurally here but needs a live smoke (runbook §5) to confirm end-to-end. */
+export function buildSessionCommand(
+  executor: ExecutorKind,
+  spec: { worktreePath: string },
+  deps: { repoRoot: string; governanceWorkspace: string },
+): string {
+  const promptCat = `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"`;
+  if (executor === "codex") {
+    const serverPath = `${deps.repoRoot}/governance/src/mcp/server.ts`;
+    return (
+      `codex exec --sandbox workspace-write --skip-git-repo-check -C "${spec.worktreePath}" ` +
+      `-c 'mcp_servers.boule-governance.command="node"' ` +
+      `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
+      `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}"}' ` +
+      `${promptCat}\n`
+    );
+  }
+  const denied = SESSION_DENIED_TOOLS.map((t) => `"${t}"`).join(" ");
+  return (
+    `claude --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
+    `--disallowedTools ${denied} ` +
+    `${promptCat}\n`
+  );
+}
+
 /** Build a live adapter that runs real `git worktree add --detach` + `cmux new-workspace` +
  *  `cmux send`. Non-determinism (spawn/fs) is injected, so the unit test asserts the exact
  *  command sequence with a fake spawn — no real processes. Each command is bounded (one shot,
@@ -114,7 +157,8 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
   const run = (command: string, args: string[]): SpawnResultLike => {
     const res = deps.spawn(command, args);
     deps.log?.(`conductor exec ${command} ${args[0] ?? ""} status=${res.status ?? "null"}`);
-    if (res.status !== 0) throw new CommandError(`${command} ${args.join(" ")}`, res.status, res.stderr);
+    if (res.status !== 0)
+      throw new CommandError(`${command} ${args.join(" ")}`, res.status, res.stderr);
     return res;
   };
 
@@ -133,23 +177,24 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // 1) open an isolated cmux workspace bound to the worktree cwd; capture surface from stdout.
       const open = run(deps.cmuxCmd, ["new-workspace", "--cwd", spec.worktreePath]);
       const surface = open.stdout.trim();
-      // 2) send the claude invocation. The session runs against the SCOPED executor-role MCP
-      //    config (verdict tools structurally absent) with --strict-mcp-config (ignore the
-      //    user's global servers) and an explicit verdict-tool denylist (defense-in-depth).
-      //    Structural INVARIANT #1: the session can escalate/complete_task but cannot self-resolve.
-      const denied = SESSION_DENIED_TOOLS.map((t) => `"${t}"`).join(" ");
-      const claude =
-        `claude --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
-        `--disallowedTools ${denied} ` +
-        `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"\n`;
-      run(deps.cmuxCmd, ["send", "--surface", surface, claude]);
+      // 2) send the executor invocation (claude|codex). Both run against the SCOPED executor-role
+      //    MCP (verdict tools structurally absent), so a spawned session can escalate/complete_task
+      //    but cannot self-resolve (structural INVARIANT #1). See buildSessionCommand.
+      const command = buildSessionCommand(spec.executor ?? "claude", spec, {
+        repoRoot: deps.repoRoot,
+        governanceWorkspace: deps.governanceWorkspace,
+      });
+      run(deps.cmuxCmd, ["send", "--surface", surface, command]);
       return { surface };
     },
 
     async writeEnvelopeFile(worktreePath, envelope, prompt) {
       const bouleDir = `${worktreePath}/.boule`;
       await deps.fs.mkdir(bouleDir, { recursive: true });
-      await deps.fs.writeFile(`${bouleDir}/envelope.json`, JSON.stringify(envelope, null, 2) + "\n");
+      await deps.fs.writeFile(
+        `${bouleDir}/envelope.json`,
+        JSON.stringify(envelope, null, 2) + "\n",
+      );
       await deps.fs.writeFile(`${bouleDir}/step-prompt.md`, prompt);
       // Scoped executor-role MCP config — the structural backstop for session verdict isolation.
       await deps.fs.writeFile(

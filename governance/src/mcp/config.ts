@@ -1,4 +1,5 @@
 import { normalizeModelId } from "../decision/modelId.ts";
+import type { ExecutorKind } from "../conductor/envelope.ts";
 
 /** Parse BOULE_REVIEW_QUORUM into a positive integer. Junk / <1 / unset → 1.
  *  Fail-closed: an unparseable quorum must never silently LOWER the bar below 1. */
@@ -83,11 +84,7 @@ export function reviewerIdentity(resolved: { command: string; args: string[] }):
  *  normalizeModelId(actor)). Identity = resolved (command, args), so it CANNOT catch a fake
  *  quorum hiding behind the same binary with different args (e.g. `codex --model a` vs
  *  `codex --model b`), nor verify that two distinct binaries are truly distinct models. */
-export function quorumCollisionWarning(
-  models: string[],
-  env: Env,
-  quorum: number,
-): string | null {
+export function quorumCollisionWarning(models: string[], env: Env, quorum: number): string | null {
   if (quorum < 2 || models.length < quorum) return null;
   const byIdentity = new Map<string, string[]>();
   for (const model of models) {
@@ -122,6 +119,16 @@ export interface ConductorConfig {
   cmuxCmd: string;
   /** gitignored root for per-step worktrees (NEVER the user tree); used only by the live adapter. */
   worktreesRoot: string;
+  /** which CLI executor a spawned session runs (L3). "codex" only when BOULE_CONDUCTOR_EXECUTOR=codex;
+   *  anything else fails closed to "claude" (the original behavior). Run-level default; per-step
+   *  override is a follow-up (needs a plan-step schema field). */
+  executor: ExecutorKind;
+}
+
+/** Parse BOULE_CONDUCTOR_EXECUTOR: exact "codex" (case-insensitive, trimmed) ⇒ codex; else claude.
+ *  Fail-closed: an unrecognized value never silently switches executor. */
+export function parseConductorExecutor(raw: string | undefined): ExecutorKind {
+  return (raw ?? "").trim().toLowerCase() === "codex" ? "codex" : "claude";
 }
 
 /** Parse BOULE_CONDUCTOR_MODE: "live" (case-insensitive, trimmed) arms the real adapter; anything
@@ -156,6 +163,7 @@ export function parseConductorConfig(env: Record<string, string | undefined>): C
     live: parseConductorMode(env.BOULE_CONDUCTOR_MODE),
     cmuxCmd: parseConductorCmuxCmd(env.BOULE_CONDUCTOR_CMUX_CMD),
     worktreesRoot: parseConductorWorktreesRoot(env.BOULE_CONDUCTOR_WORKTREES_ROOT),
+    executor: parseConductorExecutor(env.BOULE_CONDUCTOR_EXECUTOR),
   };
 }
 

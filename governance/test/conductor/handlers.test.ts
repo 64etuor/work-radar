@@ -8,18 +8,32 @@ import { completeTask } from "../../src/task/handlers.js";
 import { escalate } from "../../src/escalate/escalate.js";
 import { chooseOption } from "../../src/decision/handlers.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
-import { stubAdapter, makeLiveAdapter, type SpawnResultLike } from "../../src/conductor/adapter.js";
+import {
+  stubAdapter,
+  makeLiveAdapter,
+  buildSessionCommand,
+  type SpawnResultLike,
+} from "../../src/conductor/adapter.js";
 import type { GovEvent } from "../../src/event/event.js";
 
 let dir: string;
 const at = (s: number) => new Date(Date.UTC(2026, 5, 2, 12, 0, s));
 const deps = { adapter: stubAdapter };
 
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), "boule-cond-h-")); });
-afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), "boule-cond-h-"));
+});
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
 
 async function setupActivePlan(): Promise<string> {
-  const { planId } = await proposePlan(dir, { intent: "Load X", steps: ["step a", "step b"] }, at(0), 0.1);
+  const { planId } = await proposePlan(
+    dir,
+    { intent: "Load X", steps: ["step a", "step b"] },
+    at(0),
+    0.1,
+  );
   await acceptPlan(dir, { planId }, at(1), 0.2);
   return planId;
 }
@@ -120,8 +134,14 @@ describe("conductPlan — halt on block (done-criteria #4)", () => {
     // the spawned session escalates, binding its task → decision_blocked.related_to ∋ t0
     const esc = await escalate(
       dir,
-      { question: "fork?", options: [{ label: "x" }, { label: "y" }], actor: "stub-0", relatedTaskId: t0 },
-      at(20), 0.4,
+      {
+        question: "fork?",
+        options: [{ label: "x" }, { label: "y" }],
+        actor: "stub-0",
+        relatedTaskId: t0,
+      },
+      at(20),
+      0.4,
     );
 
     const stHalted = await conductorStatus(dir, { planId });
@@ -137,7 +157,8 @@ describe("conductPlan — halt on block (done-criteria #4)", () => {
     const ch = await chooseOption(
       dir,
       { decisionId: esc.decisionId, blockedEventId: esc.blockedEventId, optionToken: "opt0" },
-      at(70), 0.7,
+      at(70),
+      0.7,
     );
     expect(ch.ok).toBe(true);
 
@@ -165,21 +186,42 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     const writes: Array<{ path: string; data: string }> = [];
     const fakeFs = {
       mkdir: async () => undefined,
-      writeFile: async (path: string, data: string) => { writes.push({ path, data }); },
+      writeFile: async (path: string, data: string) => {
+        writes.push({ path, data });
+      },
     };
     const adapter = makeLiveAdapter({
-      spawn: fakeSpawn, fs: fakeFs, repoRoot: "/repo", worktreesRoot: ".boule-worktrees", cmuxCmd: "cmux",
+      spawn: fakeSpawn,
+      fs: fakeFs,
+      repoRoot: "/repo",
+      worktreesRoot: ".boule-worktrees",
+      cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
     });
 
     const wt = await adapter.createWorktree({ planId: "evt_p1", stepIndex: 0 });
     expect(wt.path).toBe(".boule-worktrees/boule-evt_p1-step0");
-    await adapter.writeEnvelopeFile(wt.path, {
-      planId: "evt_p1", stepIndex: 0, taskId: "evt_t0", worktreePath: wt.path,
-      allowedPathGlobs: [], allowedType2Actions: [], forbiddenDecisionClasses: [], escalationTriggers: [],
-      escalateOnAnyBoundaryCrossing: true,
-    }, "PROMPT");
-    const sess = await adapter.spawnSession({ worktreePath: wt.path, stepIndex: 0, prompt: "PROMPT" });
+    await adapter.writeEnvelopeFile(
+      wt.path,
+      {
+        planId: "evt_p1",
+        stepIndex: 0,
+        taskId: "evt_t0",
+        worktreePath: wt.path,
+        executor: "claude",
+        allowedPathGlobs: [],
+        allowedType2Actions: [],
+        forbiddenDecisionClasses: [],
+        escalationTriggers: [],
+        escalateOnAnyBoundaryCrossing: true,
+      },
+      "PROMPT",
+    );
+    const sess = await adapter.spawnSession({
+      worktreePath: wt.path,
+      stepIndex: 0,
+      prompt: "PROMPT",
+    });
     expect(sess.surface).toBe("7");
 
     expect(calls.map((c) => `${c.cmd} ${c.args[0] ?? ""}`)).toEqual([
@@ -214,11 +256,90 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
   it("surfaces a terminal failure when git exits non-zero (no retry loop)", async () => {
     const fakeSpawn = (): SpawnResultLike => ({ status: 1, stdout: "", stderr: "fatal: boom" });
     const adapter = makeLiveAdapter({
-      spawn: fakeSpawn, fs: { mkdir: async () => undefined, writeFile: async () => undefined },
-      repoRoot: "/repo", worktreesRoot: ".boule-worktrees", cmuxCmd: "cmux",
+      spawn: fakeSpawn,
+      fs: { mkdir: async () => undefined, writeFile: async () => undefined },
+      repoRoot: "/repo",
+      worktreesRoot: ".boule-worktrees",
+      cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
     });
-    await expect(adapter.createWorktree({ planId: "evt_p1", stepIndex: 0 })).rejects.toThrow(/failed/i);
+    await expect(adapter.createWorktree({ planId: "evt_p1", stepIndex: 0 })).rejects.toThrow(
+      /failed/i,
+    );
+  });
+});
+
+describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envelope)", () => {
+  const cmdDeps = { repoRoot: "/repo", governanceWorkspace: "/repo/governance/workspace" };
+
+  it("claude (default) builds the scoped-mcp.json + strict + verdict denylist invocation", () => {
+    const c = buildSessionCommand("claude", { worktreePath: "/wt/s0" }, cmdDeps);
+    expect(c).toContain("claude --mcp-config");
+    expect(c).toContain("--strict-mcp-config");
+    expect(c).toContain("--disallowedTools");
+    expect(c).toContain("mcp__boule-governance__approve");
+    expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
+    expect(c).not.toContain("codex");
+  });
+
+  it("codex builds a workspace-write (NOT danger-full) exec attaching the executor-role MCP via -c", () => {
+    const c = buildSessionCommand("codex", { worktreePath: "/wt/s0" }, cmdDeps);
+    expect(c).toContain("codex exec");
+    expect(c).toContain("--sandbox workspace-write");
+    expect(c).not.toContain("danger");
+    expect(c).toContain('-C "/wt/s0"');
+    // same executor-role server (verdict tools structurally absent), attached via codex -c config
+    expect(c).toContain("mcp_servers.boule-governance.command=");
+    expect(c).toContain('BOULE_SESSION_ROLE="executor"');
+    expect(c).toContain("/repo/governance/src/mcp/server.ts");
+    expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
+    // codex has no per-server denylist — must NOT rely on claude's flags
+    expect(c).not.toContain("--disallowedTools");
+  });
+
+  it("spawnSession sends a codex invocation when executor=codex (same cmux substrate)", async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const fakeSpawn = (cmd: string, args: string[]): SpawnResultLike => {
+      calls.push({ cmd, args });
+      const stdout = cmd === "cmux" && args[0] === "new-workspace" ? "9\n" : "";
+      return { status: 0, stdout, stderr: "" };
+    };
+    const adapter = makeLiveAdapter({
+      spawn: fakeSpawn,
+      fs: { mkdir: async () => undefined, writeFile: async () => undefined },
+      repoRoot: "/repo",
+      worktreesRoot: ".boule-worktrees",
+      cmuxCmd: "cmux",
+      governanceWorkspace: "/repo/governance/workspace",
+    });
+    const sess = await adapter.spawnSession({
+      worktreePath: "/wt/s0",
+      stepIndex: 0,
+      prompt: "P",
+      executor: "codex",
+    });
+    expect(sess.surface).toBe("9");
+    const sent = calls.find((c) => c.cmd === "cmux" && c.args[0] === "send")!;
+    expect(sent.args[3]).toContain("codex exec");
+    expect(sent.args[3]).not.toContain("claude --mcp-config");
+  });
+
+  it("conductPlan(executor=codex) records executor in the session_spawned envelope", async () => {
+    const planId = await setupActivePlan();
+    await conductPlan(dir, { planId }, { adapter: stubAdapter, executor: "codex" }, at(10), 0.3);
+    const all = await readAllEvents(dir);
+    const spawned = all.find((e) => e.frontmatter.type === "session_spawned")!;
+    const body = JSON.parse(spawned.body) as { envelope: { executor: string } };
+    expect(body.envelope.executor).toBe("codex");
+  });
+
+  it("conductPlan defaults to claude in the envelope when executor omitted", async () => {
+    const planId = await setupActivePlan();
+    await conductPlan(dir, { planId }, { adapter: stubAdapter }, at(10), 0.3);
+    const all = await readAllEvents(dir);
+    const spawned = all.find((e) => e.frontmatter.type === "session_spawned")!;
+    const body = JSON.parse(spawned.body) as { envelope: { executor: string } };
+    expect(body.envelope.executor).toBe("claude");
   });
 });
 
