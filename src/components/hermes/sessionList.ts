@@ -1,6 +1,7 @@
 import type { HermesMessageRow, HermesSessionRow } from "@/bindings";
 
 import type { HermesMessage } from "./types";
+import type { TabState } from "./useHermesTabs";
 import { uid } from "./useHermesTabs";
 
 export const DEFAULT_SESSION_NAME = "새 세션";
@@ -60,9 +61,43 @@ function safeParseTools(json: string) {
   }
 }
 
-/** 검색 필터 — 이름 부분일치(대소문자 무시). */
-export function filterSessions(rows: HermesSessionRow[], query: string): HermesSessionRow[] {
+/** 제네릭 이름 필터 — name 필드가 있는 배열에 적용 가능. */
+export function filterByName<T extends { name: string }>(rows: T[], query: string): T[] {
   const q = query.trim().toLowerCase();
   if (!q) return rows;
   return rows.filter((r) => r.name.toLowerCase().includes(q));
+}
+
+/** 검색 필터 — 이름 부분일치(대소문자 무시). */
+export function filterSessions(rows: HermesSessionRow[], query: string): HermesSessionRow[] {
+  return filterByName(rows, query);
+}
+
+const PREVIEW_MAX = 48;
+
+/** 마지막 user/assistant 메시지의 본문 미리보기. */
+export function messagePreview(tab: Pick<TabState, "messages">): string {
+  for (let i = tab.messages.length - 1; i >= 0; i--) {
+    const m = tab.messages[i];
+    if (m.role === "user") return clip(m.text);
+    if (m.role === "assistant") return clip(m.chunks.join(""));
+  }
+  return "";
+}
+
+function clip(s: string): string {
+  const t = s.trim().replace(/\s+/g, " ");
+  return t.length > PREVIEW_MAX ? `${t.slice(0, PREVIEW_MAX - 1)}…` : t;
+}
+
+/** 상대 시각(한국어). now 주입 가능(테스트). */
+export function relativeTime(ts: number, now: number = Date.now()): string {
+  const sec = Math.max(0, Math.floor((now - ts) / 1000));
+  if (sec < 45) return "방금";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  return `${day}일 전`;
 }

@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { commands, type HermesPanelState } from "@/bindings";
@@ -18,18 +18,12 @@ export function HermesPanel({
   onRestart,
   isStreaming,
   showHeaderTitle,
-  onNewTab,
-  onCloseActive,
-  activeTabId,
 }: {
   children: React.ReactNode;
   onRestart?: () => void;
   isStreaming?: boolean;
   /** false면 헤더 'Hermes' 타이틀 숨김(빈 상태 중앙 워드마크와 중복 방지). true로 전환되면 블러인. */
   showHeaderTitle?: boolean;
-  onNewTab?: () => Promise<unknown>;
-  onCloseActive?: () => Promise<unknown>;
-  activeTabId?: string | null;
 }) {
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
   const qc = useQueryClient();
@@ -165,7 +159,8 @@ export function HermesPanel({
 
   const x = state.x ?? 0;
   const y = state.y ?? 0;
-  const w = state.w ?? 380;
+  // 사이드바(세션 목록) + 채팅 2-컬럼이 들어가야 하므로 넓게(720), 높이는 origin의 tall 기본(720).
+  const w = state.w ?? 720;
   const h = state.h ?? 720;
 
   return (
@@ -216,9 +211,6 @@ export function HermesPanel({
         onRestart={onRestart}
         isStreaming={isStreaming}
         showHeaderTitle={showHeaderTitle}
-        onNewTab={onNewTab}
-        onCloseActive={onCloseActive}
-        activeTabId={activeTabId}
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       <ResizeGrip x={x} y={y} w={w} h={h} onBoundsChange={setBounds} />
@@ -246,17 +238,11 @@ function PanelHeader({
   onRestart,
   isStreaming,
   showHeaderTitle,
-  onNewTab,
-  onCloseActive,
-  activeTabId,
 }: BoundsProps & {
   onClose: () => void;
   onRestart?: () => void;
   isStreaming?: boolean;
   showHeaderTitle?: boolean;
-  onNewTab?: () => Promise<unknown>;
-  onCloseActive?: () => Promise<unknown>;
-  activeTabId?: string | null;
 }) {
   const dragRef = useRef<{
     startPx: number;
@@ -319,30 +305,6 @@ function PanelHeader({
         </span>
       )}
       <div className="flex items-center gap-1" data-no-drag>
-        {onNewTab && (
-          <Button
-            data-no-drag
-            variant="ghost"
-            className="hover:bg-muted/60 size-7 p-0"
-            onClick={() => void onNewTab()}
-            aria-label="새 세션"
-            title="새 세션"
-          >
-            <Plus className="size-3.5" />
-          </Button>
-        )}
-        {onCloseActive && activeTabId && (
-          <Button
-            data-no-drag
-            variant="ghost"
-            className="hover:bg-muted/60 size-7 p-0"
-            onClick={() => void onCloseActive()}
-            aria-label="현재 탭 닫기"
-            title="현재 탭 닫기"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        )}
         {onRestart && (
           <Button
             data-no-drag
