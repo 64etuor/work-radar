@@ -68,10 +68,21 @@ export interface ConductPlanResult {
  *    task_created (actor:conductor) → step_bound → session_spawned → task_started
  *  and creates the worktree + envelope file + cmux session via the injected adapter. Refuses
  *  (writes NOTHING) when the plan is not active / halted / done / a step is in-flight. */
+/** Per-repo policy envelope defaults (spec 2026-06-07 §E). Omitted fields fall back to
+ *  buildEnvelope's built-in defaults. */
+export interface ConductorEnvelopeDefaults {
+  forbiddenDecisionClasses?: AutonomyEnvelope["forbiddenDecisionClasses"];
+  allowedType2Actions?: string[];
+}
+
 export async function conductPlan(
   workspaceDir: string,
   input: ConductPlanInput,
-  deps: { adapter: ConductorAdapter; executor?: ExecutorKind },
+  deps: {
+    adapter: ConductorAdapter;
+    executor?: ExecutorKind;
+    envelopeDefaults?: ConductorEnvelopeDefaults;
+  },
   now: Date,
   rand: number,
 ): Promise<ConductPlanResult> {
@@ -109,6 +120,8 @@ export async function conductPlan(
     taskId,
     worktreePath: wt.path,
     executor,
+    forbiddenDecisionClasses: deps.envelopeDefaults?.forbiddenDecisionClasses,
+    allowedType2Actions: deps.envelopeDefaults?.allowedType2Actions,
   });
   const hash = envelopeHash(envelope);
   const prompt = buildPrompt(step.text, envelope);

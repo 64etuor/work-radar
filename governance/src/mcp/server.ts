@@ -70,7 +70,12 @@ import {
 } from "../session/observer.ts";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
-import { parseAutoMode, parseConductorConfig, parseObserverConfig } from "./config.ts";
+import {
+  parseAutoMode,
+  parseConductorConfig,
+  parseObserverConfig,
+  parseEnvelopeDefaults,
+} from "./config.ts";
 import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import {
@@ -666,6 +671,9 @@ if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 // 실제 git worktree + cmux 어댑터. 비결정(spawnSync/fs)은 이 경계에서만 주입(liveReviewer와 동형).
 const CONDUCTOR_CFG = parseConductorConfig(process.env);
 const AUTO_MODE = parseAutoMode(process.env.BOULE_AUTO_MODE);
+// Per-repo policy envelope defaults (set by the `boule` launcher from resolved policy). Unset ⇒ {}
+// ⇒ the conductor's built-in envelope defaults apply.
+const ENVELOPE_DEFAULTS = parseEnvelopeDefaults(process.env);
 function buildConductorAdapter(): ConductorAdapter {
   if (!CONDUCTOR_CFG.live) return stubAdapter;
   const realSpawnSync: SpawnSyncLike = (cmd, args) => {
@@ -925,7 +933,11 @@ server.registerTool(
     const r = await conductPlan(
       WORKSPACE,
       { planId },
-      { adapter: conductorAdapter, executor: CONDUCTOR_CFG.executor },
+      {
+        adapter: conductorAdapter,
+        executor: CONDUCTOR_CFG.executor,
+        envelopeDefaults: ENVELOPE_DEFAULTS,
+      },
       nowFn(),
       randFn(),
     );
@@ -978,7 +990,11 @@ server.registerTool(
     }
     const s = await autoDispatch(
       WORKSPACE,
-      { adapter: conductorAdapter, executor: CONDUCTOR_CFG.executor },
+      {
+        adapter: conductorAdapter,
+        executor: CONDUCTOR_CFG.executor,
+        envelopeDefaults: ENVELOPE_DEFAULTS,
+      },
       AUTO_MODE,
       nowFn(),
       randFn(),

@@ -1,7 +1,7 @@
 import type { ConductorAdapter } from "../../conductor/adapter.ts";
 import type { ExecutorKind } from "../../conductor/envelope.ts";
 import { deriveConductorState } from "../../conductor/conductor.ts";
-import { conductPlan } from "../../conductor/handlers.ts";
+import { conductPlan, type ConductorEnvelopeDefaults } from "../../conductor/handlers.ts";
 import { readAllEvents } from "../../decision/readEvents.ts";
 import type { GovEvent } from "../../event/event.ts";
 import { generateId } from "../../event/id.ts";
@@ -61,7 +61,11 @@ function dispatchEvent(
 /** One on-demand pass over current plan_proposed events. Off mode writes nothing. */
 export async function autoDispatch(
   workspaceDir: string,
-  deps: { adapter: ConductorAdapter; executor?: ExecutorKind },
+  deps: {
+    adapter: ConductorAdapter;
+    executor?: ExecutorKind;
+    envelopeDefaults?: ConductorEnvelopeDefaults;
+  },
   mode: AutoMode,
   now: Date,
   rand: number,

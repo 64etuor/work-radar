@@ -1,5 +1,6 @@
 import { normalizeModelId } from "../decision/modelId.ts";
-import type { ExecutorKind } from "../conductor/envelope.ts";
+import { DEFAULT_FORBIDDEN_DECISION_CLASSES } from "../conductor/envelope.ts";
+import type { ExecutorKind, AutonomyEnvelope } from "../conductor/envelope.ts";
 
 /** Parse BOULE_REVIEW_QUORUM into a positive integer. Junk / <1 / unset → 1.
  *  Fail-closed: an unparseable quorum must never silently LOWER the bar below 1. */
@@ -129,6 +130,32 @@ export interface ConductorConfig {
  *  Fail-closed: an unrecognized value never silently switches executor. */
 export function parseConductorExecutor(raw: string | undefined): ExecutorKind {
   return (raw ?? "").trim().toLowerCase() === "codex" ? "codex" : "claude";
+}
+
+type DecisionClass = AutonomyEnvelope["forbiddenDecisionClasses"][number];
+
+/** Per-repo policy envelope defaults (spec 2026-06-07 §E), set by the launcher via comma-list env.
+ *  Unset ⇒ field omitted ⇒ the conductor's built-in envelope defaults apply. Unknown class tokens
+ *  are dropped (fail-safe: never widen the forbidden set with garbage). */
+export interface EnvelopeDefaults {
+  forbiddenDecisionClasses?: DecisionClass[];
+  allowedType2Actions?: string[];
+}
+
+export function parseEnvelopeDefaults(env: Record<string, string | undefined>): EnvelopeDefaults {
+  const valid = new Set<string>(DEFAULT_FORBIDDEN_DECISION_CLASSES);
+  const classes = (env.BOULE_ENVELOPE_FORBIDDEN_CLASSES ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => valid.has(s)) as DecisionClass[];
+  const actions = (env.BOULE_ENVELOPE_ALLOWED_TYPE2 ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: EnvelopeDefaults = {};
+  if (classes.length) out.forbiddenDecisionClasses = classes;
+  if (actions.length) out.allowedType2Actions = actions;
+  return out;
 }
 
 /** Parse BOULE_CONDUCTOR_MODE: "live" (case-insensitive, trimmed) arms the real adapter; anything

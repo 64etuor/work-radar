@@ -16,6 +16,29 @@
 cd governance && pnpm install --ignore-workspace   # worktrees: --ignore-workspace or deps land in the parent workspace
 ```
 
+## 0.5 Per-repo operation (run Boule inside a designated local repo)
+
+Each designated local repo gets a `.boule/` sidecar (spec `docs/superpowers/specs/2026-06-07-per-repo-governance-mcp-design.md`). Personal vs work differ by policy (work=strict, personal=loose).
+
+```bash
+# scaffold (kind from work-radar; the app passes --kind per designated local repo)
+node --experimental-strip-types governance/src/cli/boule.ts init --repo <repo> --kind <personal|work>
+#   → <repo>/.boule/{boule.config.json (committed), workspace/, worktrees/, mcp.json} + .gitignore patch
+
+# inspect resolved policy (read-only)
+node ... governance/src/cli/boule.ts status --repo <repo>
+
+# change settings later (also editable directly in <repo>/.boule/boule.config.json, or from the
+# work-radar Settings UI which writes the same JSON — Slice 2):
+node ... governance/src/cli/boule.ts set --repo <repo> --kind work --auto-mode off --review-quorum 2
+
+# run the per-repo MCP server (stdio), scoped to that repo's policy:
+node ... governance/src/cli/boule.ts run --repo <repo>
+# or point a client at the generated <repo>/.boule/mcp.json
+```
+
+Policy fail-closes to **work/strict** if `boule.config.json` is missing/corrupt (never silently loose). Re-read on each launch ⇒ a settings change applies on next server start.
+
 ## 1. L0 — Preflight (read-only, safe anywhere)
 
 Confirms the live loop can physically run here. `ready=true` requires: `CMUX_SOCKET_PATH` set,
