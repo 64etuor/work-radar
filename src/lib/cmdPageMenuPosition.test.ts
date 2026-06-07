@@ -23,23 +23,24 @@ describe("clampMenuPosition", () => {
     expect(p.left).toBe(792); // 1000 - 200 - 8
   });
 
-  it("위 공간이 충분하면 above 배치(top = origin.y - clearance - menu.h)", () => {
+  it("아래 공간이 충분하면 기본 below 배치(top = origin.y + clearance)", () => {
     const p = clampMenuPosition({ x: 500, y: 400 }, VP, MENU, MARGIN, CLEAR);
+    expect(p.placement).toBe("below");
+    expect(p.top).toBe(470); // 400 + 70
+  });
+
+  it("아래 공간이 부족하면 above로 flip(top = origin.y - clearance - menu.h)", () => {
+    // origin이 하단 근처 → below(830+60=890)가 뷰포트(800-8) 초과 → 위로 flip
+    const p = clampMenuPosition({ x: 500, y: 760 }, VP, MENU, MARGIN, CLEAR);
     expect(p.placement).toBe("above");
-    expect(p.top).toBe(270); // 400 - 70 - 60
+    expect(p.top).toBe(630); // 760 - 70 - 60
   });
 
-  it("위 공간이 부족하면 below로 flip(top = origin.y + clearance)", () => {
-    const p = clampMenuPosition({ x: 500, y: 20 }, VP, MENU, MARGIN, CLEAR);
-    expect(p.placement).toBe("below");
-    expect(p.top).toBe(90); // 20 + 70
-  });
-
-  it("below가 아래로 넘치면 (뷰포트높이 - 메뉴높이 - margin)으로 clamp", () => {
-    // 작은 뷰포트: 위도 부족 → below, 그러나 below도 넘침 → 끌어올림
+  it("위·아래 모두 부족하면 above로 두되 margin으로 clamp", () => {
+    // 작은 뷰포트: below 넘침 → above, 그러나 above도 음수 → margin으로 floor
     const p = clampMenuPosition({ x: 500, y: 10 }, { w: 1000, h: 120 }, MENU, MARGIN, CLEAR);
-    expect(p.placement).toBe("below");
-    expect(p.top).toBe(52); // clamp: 120 - 60 - 8
+    expect(p.placement).toBe("above");
+    expect(p.top).toBe(8); // 10 - 70 - 60 = -120 → clamp margin
   });
 
   it("메뉴가 뷰포트보다 넓으면 음수 없이 margin으로 floor", () => {
