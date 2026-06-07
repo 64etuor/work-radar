@@ -1,6 +1,6 @@
 # Boule v3 Phase C — Conductor Implementation Plan
 
-> **Status:** ✅ DONE (2026-06-02) — opus critic round-2 ACCEPT (0B/0M/1 minor-hardened), vitest 301, tsc 0, role-gate headless-proven, drift governance-only, bindings unchanged, NOT pushed. Live cmux smoke = user-run ([runbook](2026-06-02-boule-v3-phase-c-live-smoke-runbook.md)). Spec: [design](../design/2026-06-02-boule-v3-phase-c-conductor-design.md). Headless-first (stub adapter) + real cmux adapter behind `BOULE_CONDUCTOR_MODE=live`.
+> **Status:** ✅ DONE (2026-06-02) — opus critic round-2 ACCEPT (0B/0M/1 minor-hardened), vitest 301, tsc 0, role-gate headless-proven, drift governance-only, bindings unchanged, NOT pushed. Live cmux smoke = user-run ([runbook](2026-06-02-boule-v3-phase-c-live-smoke-runbook.md)). Spec: [design §7 Phase Ledger](../design/2026-06-02-boule-v3-orchestrator-control-plane-design.md) (per-phase 설계 §7로 흡수 2026-06-04; 원본은 git 히스토리). Headless-first (stub adapter) + real cmux adapter behind `BOULE_CONDUCTOR_MODE=live`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Checkboxes = build tracking; the runtime ConductorState = events→derived is the truth. Tick only on real evidence.
 

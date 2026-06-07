@@ -18,7 +18,7 @@ cd governance && pnpm install --ignore-workspace   # worktrees: --ignore-workspa
 
 ## 0.5 Per-repo operation (run Boule inside a designated local repo)
 
-Each designated local repo gets a `.boule/` sidecar (spec `docs/superpowers/specs/2026-06-07-per-repo-governance-mcp-design.md`). Personal vs work differ by policy (work=strict, personal=loose).
+Each designated local repo gets a `.boule/` sidecar (spec `governance/docs/design/2026-06-07-per-repo-governance-mcp-design.md`). Personal vs work differ by policy (work=strict, personal=loose).
 
 ```bash
 # scaffold (kind from work-radar; the app passes --kind per designated local repo)

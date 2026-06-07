@@ -1,12 +1,26 @@
 # Boule — Spec & Plan 인덱스 (한 곳)
 
-이 하네스의 **모든 설계·계획 문서를 한 곳에서** 찾는 카탈로그이자 단일 진입점.
+이 하네스의 **모든 설계·계획 문서를 한 곳에서** 찾는 카탈로그이자 **단일 진입점(front door)**.
+배치·명명·정본 규칙은 `conventions.md` 정본 — 이 파일에 중복하지 않는다.
 
-- **파일 정본 = `governance/docs/`** — `design/`(설계 spec) · `plans/`(구현 plan).
-- **앞으로 거버넌스 설계/계획 문서는 모두 여기에 둔다.** brainstorming/writing-plans 스킬은
-  기본 `docs/superpowers/`에 쓰므로, 거버넌스 산출물은 생성 후 `governance/docs/{design,plans}/`로
-  옮긴다(앱-기능 문서는 `docs/superpowers/`에 그대로).
-- L3/L4 정본(adr·decisions·decision-rails)은 `docs/`에 둔다(어댑터가 경로로 읽음 — 이동 금지).
+## START HERE — 무엇을 찾는지로 라우팅
+
+| 알고 싶은 것 | 정본 |
+| --- | --- |
+| **아키텍처 / as-built 전모(v3)** | `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §7 Phase Ledger |
+| **라이브-자율 실행 큐(현재 진행)** | `plans/2026-06-07-boule-v3-live-autonomy-master-plan.md` |
+| per-feature 설계 입력 | `design/`의 개별 spec (프런트도어 아님 — 하위 입력) |
+| L3/L4 결정 소스 | `docs/adr/0007–0009`, `docs/decisions.md` (코드가 경로로 읽음 — **이동 금지**) |
+| 배치·명명·정본 규칙 | `conventions.md` |
+
+> 마스터 플랜은 **움직이는 실행 큐**이지 프런트도어가 아니다. v3 control-plane 설계는
+> **아키텍처 정본**이지 라우팅 소유가 아니다. 둘 다 위 표(이 INDEX)가 라우팅한다.
+
+- **파일 정본 = `governance/docs/`** — `design/`(설계 spec) · `plans/`(구현 plan) · `runbooks/` · `orchestration/`.
+- **거버넌스 설계/계획 문서는 모두 여기에 둔다.** brainstorming/writing-plans 스킬은 기본
+  `docs/superpowers/`에 쓰므로, 거버넌스 산출물은 생성 후 `governance/docs/{design,plans}/`로
+  `git mv`한다(옮기기 전엔 미정본; 앱-기능 문서는 `docs/superpowers/`에 그대로). 상세: `conventions.md` §1.
+- L3/L4 정본(adr·decisions·decision-rails)은 `docs/`에 둔다(어댑터 `build.ts`가 경로로 읽음 — 이동 금지). 상세: `conventions.md` §2.
 - 런타임 객체(`workspace/specs|plans|tasks|…`)는 이 설계 문서가 아니라 **이벤트 파생물**이다(다른 층).
 - 운영 규율: `../workspace/HARNESS.md`.
 
@@ -83,3 +97,14 @@ human-approved PR, push/merge/delete/deploy가 필요한 작업은 external resi
 | 3 | Phase F follow-up — PGlite incremental graph upsert | local, higher blast radius | 🆕 queued |
 | 4 | Phase I/H live smoke preflight + runbook hardening | local preflight only | 🆕 queued |
 | external | P5 human PR, live cmux/GUI smoke, real Postgres/keyring, pgvector, long-running schedule | needs user/live surface | external residual |
+
+## 최근 거버넌스 설계 spec (2026-06-07, `design/`로 통합)
+
+이전에 `docs/superpowers/specs/`·`governance/docs/` 루트에 흩어져 있던 거버넌스 설계 문서를
+`governance/docs/design/`로 모음(2026-06-07 문서 정합성 패스; 정본 규칙 = `conventions.md`).
+
+| 문서 | 요약 |
+| --- | --- |
+| `design/2026-06-07-per-repo-governance-mcp-design.md` | per-repo `.boule/` 사이드카 + per-repo MCP 운영 경계(work=strict/personal=loose). |
+| `design/2026-06-07-boule-tick-bounded-driver-design.md` | `boule tick` bounded 외부 박동 드라이버(cron=시계, NOT 데몬). master plan §9.5.2 / 위 큐. |
+| `design/2026-06-02-b1-vs-v2planner-spec-plan-reconciliation.md` | B1(`feat/governance-boule-p1`) ↔ v2 planner spec/plan 비교 근거. |

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node 24+ strip-types TS (this worktree runs v26; `--experimental-strip-types`; source imports `.ts`, tests import `.js`), vitest 2, zod 4, `@electric-sql/pglite` (new), MCP SDK 1.29 (`server.registerTool`).
 
-**Spec:** `governance/docs/design/2026-06-03-boule-v3-phase-f-graph-index-design.md`
+**Spec:** `governance/docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §7 Phase Ledger (per-phase 설계는 2026-06-04 §7로 흡수; 원본 `...-phase-f-graph-index-design.md`는 git 히스토리).
 
 **Working dir for ALL commands:** `/Users/davidpark/private_project/work-radar/.claude/worktrees/boule-v3-phase-d/governance`
 

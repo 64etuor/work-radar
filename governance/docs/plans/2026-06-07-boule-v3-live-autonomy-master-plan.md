@@ -320,7 +320,7 @@ reuse-or-create(`findGroupRef`/`projectLabelFromRepoRoot`, best-effort=실패해
 | --- | --- | --- | --- |
 | **프로젝트별 cmux 폴더** | ✅ DONE (라이브) | (이 플랜 §9.5.1) | 세션 워크스페이스를 repoRoot basename `workspace-group`로 reuse-or-create(best-effort). |
 | **Graduated autonomy** (`autonomyLevel`) | ✅ DONE (full-auto 라이브) | (boule.config 스키마) | `manual`(work 기본)<`dispatch`(personal 기본)<`auto_plan`(AI가 plan 자동수락)<`full`(+spec). **INVARIANT #1을 여는 유일 경로**, config 파일만으로 제어, test/dev. 하드닝: auto-accept=actor:system+`autonomy-auto` 태그(user 위조 X)·fail-closed→manual·acceptance-only(Type-1/stall은 full에서도 사람)·executor는 구조적 self-accept 불가(`auto_dispatch`가 executor 역할 미등록 + `SESSION_DENIED_TOOLS`)·autoMode는 level에서 파생(단일 소스). `src/orchestrator/autoAccept.ts` + preflight `autonomy_level` advisory + readiness `warnings` + `boule status`/`boule set --autonomy-level`. ⚠BREAKING: `overrides.autoMode` 제거. |
-| **`boule tick`** (bounded driver) | ✅ DONE (라이브, codex-consulted) | `docs/superpowers/specs/2026-06-07-boule-tick-bounded-driver-design.md` | **외부 박동 1회**(cron=시계, NOT 데몬; INVARIANT #5): readiness 게이트(L4)→halt/stall 게이트→autoAccept(level)→autoDispatch(≤`--max-steps`)→stable `TickOutcome`. `autoDispatch` `maxConducts` cap·`src/conductor/fromEnv.ts` adapter 빌더 공유·`src/orchestrator/tick.ts`·exit 0/10/1. cron 배선=operator. |
+| **`boule tick`** (bounded driver) | ✅ DONE (라이브, codex-consulted) | `governance/docs/design/2026-06-07-boule-tick-bounded-driver-design.md` | **외부 박동 1회**(cron=시계, NOT 데몬; INVARIANT #5): readiness 게이트(L4)→halt/stall 게이트→autoAccept(level)→autoDispatch(≤`--max-steps`)→stable `TickOutcome`. `autoDispatch` `maxConducts` cap·`src/conductor/fromEnv.ts` adapter 빌더 공유·`src/orchestrator/tick.ts`·exit 0/10/1. cron 배선=operator. |
 
 > 이 둘은 원래 L0–L6 범위를 넘어선 사용자 요청 산물(테스트용 최고 자율 + 지속성 박동). 모두 opus critic 별도 ACCEPT.
 
@@ -349,27 +349,33 @@ reuse-or-create(`findGroupRef`/`projectLabelFromRepoRoot`, best-effort=실패해
 - pgvector 임베딩, 실 Postgres 서버, 장기 스케줄러/데몬 — v3 external residual 유지.
 - 완전 무인(plan-accept 자동) — 설계상 비채택(§0.1).
 
-## 10. 문서 정합성 패스 (⏭ 다음 세션에 **결정** — 지금 결정하지 않음)
+## 10. 문서 정합성 패스 (✅ Phase 1 DONE 2026-06-07 — codex-consulted; Phase 2 deferred)
 
-거버넌스 문서가 여러 위치/명명으로 흩어져 AI가 "정본"을 혼동한다(메모리 경고 재현). 다음 세션 **첫 작업
-= 아래를 결정하고 한 번에 정리**. 지금은 결정/이동 금지 — 의사결정 항목만 고정.
+거버넌스 문서가 여러 위치/명명으로 흩어져 AI가 "정본"을 혼동하던 문제. codex 자문(`codex exec`,
+session `019ea1c4`)으로 by-path 제약을 **소스로 검증**한 뒤 결정·정리. **정본 = `governance/docs/conventions.md`**.
 
-**A. 위치(home) 분산 — 결정: 거버넌스 문서의 단일 루트는?**
-- `governance/docs/{plans,design,runbooks,adr}` + `governance/docs/INDEX.md` (거버넌스 내부)
-- vs **repo-root** `docs/superpowers/specs/` (최근 spec 2건: per-repo, boule-tick) + `docs/adr/`(ADR-0009) + `docs/decisions.md`
-- ⇒ 같은 종류(spec/ADR)가 두 군데. **결정**: 거버넌스 spec/plan/design/ADR을 `governance/docs/` 아래로 통일할지, 아니면 repo 표준(`docs/...`)을 따를지.
+**결정(A/B/D/E):**
+- **A 위치** → 거버넌스 문서는 `governance/docs/` 아래로 통일(`design/`·`plans/`·`runbooks/`·`orchestration/`).
+  `specs/` 별칭 폐지(거버넌스 spec 버킷 = `design/`). `docs/superpowers/`는 generator 착지장일 뿐(옮기기 전엔 미정본).
+- **B 정본** → 프런트도어 = `governance/docs/INDEX.md`(라우터). 아키텍처=control-plane 설계 §7, 실행 큐=이 master plan,
+  per-feature spec=하위 입력. 마스터 플랜·v3 설계는 둘 다 프런트도어 **아님**.
+- **D decisions.md** → **통합 유지**. 분리하려면 `build.ts` 파서 변경 필요(코드) + breadcrumb이 app 항목과 깊게 교차.
+- **E 명명** → conventions.md §4 표(ADR=`NNNN-kebab`, design=`YYYY-MM-DD-{topic}-design`, plan/runbook=`YYYY-MM-DD-{topic}`).
 
-**B. 정본(canonical) 모호 — 결정: "현재 Boule 전체"의 단일 참조는?**
-- 3중 상위 문서: ① `governance/docs/design/2026-06-02-…orchestrator-control-plane-design.md` §7 Phase Ledger(A–I as-built) ② 이 라이브-자율 master plan(L0–L6 + §9.5.2) ③ per-feature spec들(superpowers/specs). **결정**: 하나를 INDEX 진입점으로 못 박고 나머지는 그 아래 포인터로.
+**by-path 제약(소스 검증됨):** `governance/src/index/build.ts`가 `docs/adr`·`docs/decisions.md`·`docs/areas/decision-rails.md`를
+경로로 읽음 → 이 셋은 repo-root `docs/`에 **잔류**(이동 = 파서 회귀). conventions.md §2.
 
-**C. 스테일 링크** — per-phase PLAN 파일들의 `Spec:/Design:` 헤더가 **삭제된** per-phase design 문서를 가리킴 → design §7로 repoint(메모리 기록).
+**Phase 1 (✅ DONE 2026-06-07, docs-only, 히스토리 보존):**
+- `governance/docs/conventions.md` 신설(home·canonical·by-path·naming 정본) + INDEX.md를 START HERE 라우터로.
+- `git mv` 3건 → `governance/docs/design/`: per-repo-governance-mcp-design, boule-tick-bounded-driver-design(둘 다 `docs/superpowers/specs/`에서), b1-vs-v2planner-reconciliation(`governance/docs/` 루트에서).
+- **C 스테일 링크 수리**: phase B/B2/C/D/F/G/H/I 플랜의 `Spec:`/`Design:` 헤더 9곳을 삭제된 per-phase design → §7 Phase Ledger로 repoint. (완료된 플랜 본문의 "Modify X" 내러티브·임베디드 ledger·`//!` 코드주석은 사료로 보존.) 이동된 3파일의 inbound 경로 참조 4곳 수리.
+- 검증: `rg`로 잔여 stale 0, governance vitest 무회귀.
 
-**D. `decisions.md` 공유** — repo-root `docs/decisions.md`에 app + 거버넌스 breadcrumb이 교차 기록. **결정**: 거버넌스 전용 decisions 로그 분리 vs 통합 유지.
+**Phase 2 (⏭ DEFERRED — 사용자가 D1=C 선택했으나 코드 변경 필요 → 별도 PR·재확인 권장):**
+사용자 선택 C의 delta = 거버넌스 ADR(0007–0009)을 `governance/docs/`로 이동 + 거버넌스 전용 decisions 로그 분리.
+**이건 docs-only가 아니다** — `build.ts` 파서를 (additive로 두 위치 read) 바꾸고 vitest 검증해야 함. 한 PR=한 관심사라 Phase 1과 분리.
+⚠️ codex가 명시적으로 **trap 경고**(소스 변경 없이 이동하면 런타임 진실 악화) + decisions.md의 거버넌스 breadcrumb이 app(Hermes/messenger 등) 항목과 깊게 교차해 **클린 경계 없음**(분리 = 수동 트리아지·낮은 가치). → **착수 전 사용자 재확인**.
 
-**E. 명명 규칙** — `YYYY-MM-DD-kebab.md`(spec/plan/runbook) vs `NNNN-kebab.md`(ADR) 혼재; 날짜 프리픽스 일관성. **결정**: 종류별 명명 컨벤션 1장으로.
-
-**F. 자기참조** — 이 §10/§9.5.2 자체가 doc-sprawl에 기여 → 정리 시 이 plan의 위치도 (A)/(B) 결정에 맞춰 재배치.
-
-산출물(다음 세션): 결정 1장(`docs/.../<date>-governance-doc-conventions.md` 또는 ADR) + INDEX 갱신 + C 링크 수리 + (필요시) 파일 이동(git mv, 히스토리 보존). 코드 무변경 — 순수 문서.
+**F 자기참조:** 이 master plan은 `governance/docs/plans/`에 이미 있어 (A) 결정과 부합 — 이동 불요.
 </content>
 </invoke>

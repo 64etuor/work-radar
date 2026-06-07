@@ -1,6 +1,6 @@
 # Boule v3 Phase B2 — Spec Lifecycle Implementation Plan
 
-> **Status:** ✅ DONE (2026-06-02) — opus critic ACCEPT (0B/0M/2 minors, minor#1 symmetric-assertion fixed), vitest 263, tsc 0, drift governance-only, bindings unchanged, NOT pushed. Spec: [design](../design/2026-06-02-boule-v3-phase-b2-spec-lifecycle-design.md). Mirrors the Phase B Plan slice.
+> **Status:** ✅ DONE (2026-06-02) — opus critic ACCEPT (0B/0M/2 minors, minor#1 symmetric-assertion fixed), vitest 263, tsc 0, drift governance-only, bindings unchanged, NOT pushed. Spec: [design §7 Phase Ledger](../design/2026-06-02-boule-v3-orchestrator-control-plane-design.md) (per-phase 설계 §7로 흡수 2026-06-04; 원본은 git 히스토리). Mirrors the Phase B Plan slice.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Checkboxes = human/build tracking; the runtime Spec state machine = events → derived state is the orchestrator's truth. Tick only when the named evidence is real.
 

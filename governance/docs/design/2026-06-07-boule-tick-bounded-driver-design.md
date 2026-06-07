@@ -3,7 +3,7 @@
 - **Date**: 2026-06-07
 - **Status**: ✅ BUILT 2026-06-07 (`boule tick` shipped; codex-consulted, live-proven). §6 resolved below.
 - **Author**: claude (Opus), from the user's framing; design decisions consulted with codex (`codex exec`).
-- **Related**: master plan `governance/docs/plans/2026-06-07-boule-v3-live-autonomy-master-plan.md` (L2 auto_dispatch, L4 readiness); per-repo spec `docs/superpowers/specs/2026-06-07-per-repo-governance-mcp-design.md`; runbook `governance/docs/runbooks/2026-06-07-live-loop-smoke.md`.
+- **Related**: master plan `governance/docs/plans/2026-06-07-boule-v3-live-autonomy-master-plan.md` (L2 auto_dispatch, L4 readiness); per-repo spec `governance/docs/design/2026-06-07-per-repo-governance-mcp-design.md`; runbook `governance/docs/runbooks/2026-06-07-live-loop-smoke.md`.
 
 ## 0. One line
 
