@@ -359,6 +359,26 @@ pub async fn create_repo(db: State<'_, Db>, input: CreateRepoInput) -> Result<Re
     Ok(insert_repo(db.inner(), &input).await?)
 }
 
+/// 레포 연결 해제(제거). `repos` 행을 삭제한다 — 잘못 추가한 레포를 되돌리는 유일한 경로
+/// (calendar/gmail `disconnect_*` 선례와 대칭). 토큰/keychain은 건드리지 않는다(프로젝트 공유).
+/// 알 수 없는 id는 `repos.not_found`(UI 오작동을 조용히 삼키지 않음).
+pub(crate) async fn delete_repo_core(db: &Db, repo_id: &str) -> Result<(), AppError> {
+    let res = sqlx::query("DELETE FROM repos WHERE id = ?1")
+        .bind(repo_id)
+        .execute(db)
+        .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::not_found("repos.not_found", "repo not found"));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_repo(db: State<'_, Db>, repo_id: String) -> Result<(), AppError> {
+    delete_repo_core(db.inner(), &repo_id).await
+}
+
 // ── projectId 태깅 / reconcile (Phase 1 kind 힌트 → projectId) ─────────────────
 
 #[tauri::command]
@@ -596,6 +616,35 @@ mod tests {
             .await
             .unwrap();
         assert!(fetch_repos(&db, &other.id).await.unwrap().is_empty());
+    }
+
+    /// 레포 제거: 행이 사라지고, 이미 없는 id는 repos.not_found.
+    #[tokio::test]
+    async fn delete_repo_removes_row_and_reports_missing() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let repo = insert_repo(
+            &db,
+            &CreateRepoInput {
+                project_id: proj.id.clone(),
+                provider: Provider::Github,
+                remote_url: Some("https://github.com/64etuor/work-radar".into()),
+                local_path: None,
+                default_branch: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(fetch_repos(&db, &proj.id).await.unwrap().len(), 1);
+
+        delete_repo_core(&db, &repo.id).await.unwrap();
+        assert!(fetch_repos(&db, &proj.id).await.unwrap().is_empty());
+
+        // 이미 없는 id(또는 오타) → not_found(조용히 성공하지 않음).
+        let miss = delete_repo_core(&db, &repo.id).await.unwrap_err();
+        assert_eq!(miss.code, "repos.not_found");
     }
 
     /// reconcile: 미태깅 신호를 kind 매칭 프로젝트로 태깅 (Phase 1 kind 힌트 → projectId).

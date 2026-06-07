@@ -62,6 +62,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_project_default_write_calendar,
         commands::list_repos,
         commands::create_repo,
+        commands::delete_repo,
         commands::set_project_token,
         commands::delete_project_token,
         commands::project_token_status,

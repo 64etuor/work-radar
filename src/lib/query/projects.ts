@@ -102,6 +102,16 @@ export function useCreateRepo() {
   });
 }
 
+/** 레포 연결 해제(제거). projectId는 무효화 대상 쿼리 키 산출용(서버 인자는 repoId만). */
+export function useDeleteRepo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ repoId }: { repoId: string; projectId: string }) =>
+      unwrap(commands.deleteRepo(repoId)),
+    onSuccess: (_data, { projectId }) => qc.invalidateQueries({ queryKey: ["repos", projectId] }),
+  });
+}
+
 /** 미태깅 신호를 kind→매칭 프로젝트로 reconcile. 태깅된 건수 반환. */
 export function useReconcileSignalProjects() {
   const qc = useQueryClient();

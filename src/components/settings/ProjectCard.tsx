@@ -1,4 +1,12 @@
-import { CircleUserRound, FolderGit2, FolderOpen, Github, KeyRound, Plus } from "lucide-react";
+import {
+  CircleUserRound,
+  FolderGit2,
+  FolderOpen,
+  Github,
+  KeyRound,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 
 import type { Project, ProjectKind, PromotionTarget } from "@/bindings";
@@ -14,6 +22,7 @@ import {
   projectCalendarColors,
 } from "@/lib/projectCalendarColor";
 import {
+  useDeleteRepo,
   useProjectTokenStatus,
   useRepos,
   useSetProjectCalendarColor,
@@ -79,7 +88,22 @@ function NotionDbTestButton({
   );
 }
 
-function RepoRow({ provider, loc, branch }: { provider: string; loc: string; branch: string }) {
+function RepoRow({
+  repoId,
+  projectId,
+  provider,
+  loc,
+  branch,
+  onToast,
+}: {
+  repoId: string;
+  projectId: string;
+  provider: string;
+  loc: string;
+  branch: string;
+  onToast: (msg: string) => void;
+}) {
+  const del = useDeleteRepo();
   return (
     <div className="border-border flex items-center gap-3 rounded-lg border px-3.5 py-2.5">
       {provider === "github" ? (
@@ -89,6 +113,25 @@ function RepoRow({ provider, loc, branch }: { provider: string; loc: string; bra
       )}
       <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{loc}</span>
       <Badge variant="outline">{branch}</Badge>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-muted-foreground hover:text-destructive size-7 shrink-0 p-0"
+        aria-label="레포 연결 해제"
+        title="레포 연결 해제"
+        disabled={del.isPending}
+        onClick={() =>
+          del.mutate(
+            { repoId, projectId },
+            {
+              onSuccess: () => onToast("레포 연결 해제됨"),
+              onError: () => onToast("레포 제거 실패"),
+            },
+          )
+        }
+      >
+        <Trash2 className="size-3.5" />
+      </Button>
     </div>
   );
 }
@@ -383,9 +426,12 @@ export function ProjectCard({
           {repos.data?.map((r) => (
             <RepoRow
               key={r.id}
+              repoId={r.id}
+              projectId={project.id}
               provider={r.provider}
               loc={r.remoteUrl ?? r.localPath ?? "—"}
               branch={r.defaultBranch}
+              onToast={onToast}
             />
           ))}
           <AddRepoForm projectId={project.id} onToast={onToast} />

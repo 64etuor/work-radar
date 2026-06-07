@@ -13,6 +13,7 @@ export const commands = {
 	setProjectDefaultWriteCalendar: (input: SetProjectDefaultWriteCalendarInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_default_write_calendar", { input })),
 	listRepos: (projectId: string) => typedError<Repo[], AppError>(__TAURI_INVOKE("list_repos", { projectId })),
 	createRepo: (input: CreateRepoInput) => typedError<Repo, AppError>(__TAURI_INVOKE("create_repo", { input })),
+	deleteRepo: (repoId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_repo", { repoId })),
 	/**  토큰 저장. 토큰은 IPC 인자로만 들어와 즉시 keychain으로 가고, 반환되지 않는다. */
 	setProjectToken: (projectId: string, kind: TokenKind, token: string) => typedError<null, AppError>(__TAURI_INVOKE("set_project_token", { projectId, kind, token })),
 	/**  토큰 삭제(클리어). */
