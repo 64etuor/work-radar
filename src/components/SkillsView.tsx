@@ -1966,13 +1966,19 @@ function AuditPanel({ onDone }: { onDone: () => void }) {
       <ul className="skl-audit-list">
         {rows.map((e) => (
           <li key={e.id} className="skl-audit-row">
-            <span className="skl-audit-action">{e.action}</span>
-            <span className="skl-desc">{e.targetKind}</span>
+            <div className="skl-audit-head">
+              <span className="skl-audit-action">{e.action}</span>
+              <span className="skl-audit-kind">{e.targetKind}</span>
+              <span className="skl-audit-time font-mono">{e.createdAt}</span>
+            </div>
             <span className="skl-audit-target font-mono" title={e.targetRef}>
               {e.targetRef}
             </span>
-            {e.detail && <span className="skl-desc">{e.detail}</span>}
-            <span className="skl-audit-time font-mono">{e.createdAt}</span>
+            {e.detail && (
+              <span className="skl-audit-detail" title={e.detail}>
+                {e.detail}
+              </span>
+            )}
           </li>
         ))}
         {rows.length === 0 && !audit.isError && <li className="skl-desc">아직 기록이 없습니다.</li>}
