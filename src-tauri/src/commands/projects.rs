@@ -336,14 +336,19 @@ pub(crate) async fn set_project_notion_db_ids_core(
             .fetch_optional(db)
             .await?
             .ok_or_else(|| AppError::not_found("projects.not_found", "project not found"))?;
-        // 토큰이 있을 때만 라이브 검증(없으면 Err → best-effort로 건너뜀, 형식 검증은 위에서 끝남).
-        if let Ok(token) = crate::notion::notion_token_for_cref(&cref) {
-            if let Some(id) = &backlog {
-                crate::notion::probe_database(&token, id).await?;
+        // 토큰이 있으면 라이브 검증한다. "토큰 없음"(생성 후 아직 연결 전)은 best-effort로 건너뛰되,
+        // 진짜 keychain 에러는 삼키지 않고 노출한다 — 잘못된 바인딩을 조용히 저장하지 않기 위해.
+        match crate::notion::notion_token_for_cref(&cref) {
+            Ok(token) => {
+                if let Some(id) = &backlog {
+                    crate::notion::probe_database(&token, id).await?;
+                }
+                if let Some(id) = &agenda {
+                    crate::notion::probe_database(&token, id).await?;
+                }
             }
-            if let Some(id) = &agenda {
-                crate::notion::probe_database(&token, id).await?;
-            }
+            Err(e) if e.code == "notion.token_missing" => {}
+            Err(e) => return Err(e),
         }
     }
 
