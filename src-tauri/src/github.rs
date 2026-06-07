@@ -221,6 +221,23 @@ impl HttpPrProvider {
             runs.check_runs.into_iter().map(|r| r.conclusion).collect();
         Ok(aggregate_ci(&conclusions))
     }
+
+    /// 레포 접근 가능성 확인(추가 전 검증): 토큰으로 `GET /repos/{owner}/{repo}` 1회(bounded retry).
+    /// 404/403(없는 레포·권한 없음)은 Terminal로 분류돼 호출부가 액션 가능 에러로 매핑한다.
+    pub async fn check_repo_access(&self, repo_full_name: &str) -> Result<(), GithubError> {
+        let (owner, repo) = parse_owner_repo(repo_full_name).ok_or_else(|| {
+            GithubError::Terminal(format!("레포 형식 파싱 실패: {repo_full_name}"))
+        })?;
+        with_retry(MAX_ATTEMPTS, BASE_DELAY, |_| async {
+            self.octo
+                .repos(&owner, &repo)
+                .get()
+                .await
+                .map(|_| ())
+                .map_err(|e| classify_octocrab(&e))
+        })
+        .await
+    }
 }
 
 impl PrProvider for HttpPrProvider {
@@ -460,6 +477,40 @@ pub fn github_provider_for_cref(cref: &str) -> Result<HttpPrProvider, crate::err
     Ok(HttpPrProvider::new(&token)?)
 }
 
+/// 레포 접근 검증 실패 → 사용자 액션 가능한 AppError 매핑(순수 — 테스트 가능).
+/// Terminal(404/403/파싱 등 = 입력/권한 문제) → validation(`repos.inaccessible`),
+/// Transient(네트워크/429/5xx = 일시적) → terminal(`repos.access_check_failed`).
+pub fn map_repo_access_error(repo_full_name: &str, e: GithubError) -> crate::error::AppError {
+    use crate::error::AppError;
+    match e {
+        GithubError::Terminal(msg) => AppError::validation(
+            "repos.inaccessible",
+            format!(
+                "'{repo_full_name}' 레포에 접근할 수 없습니다 — URL과 GitHub 토큰 권한을 확인하세요 ({msg})"
+            ),
+        ),
+        GithubError::Transient(msg) => AppError::terminal(
+            "repos.access_check_failed",
+            format!("레포 접근 확인 실패(일시적) — 잠시 후 다시 시도하세요 ({msg})"),
+        ),
+    }
+}
+
+/// cref의 GitHub 토큰으로 레포 접근 가능성을 검증한다(추가 전 게이트). 토큰 없음=`github.token_missing`,
+/// 접근 불가=`repos.inaccessible`. Local 레포·빈 URL은 호출부(`create_repo`)가 먼저 거른다.
+// AppError는 큰 Err 변형 — 레포 관용대로 result_large_err 허용(github_provider_for_cref 등과 동일).
+#[allow(clippy::result_large_err)]
+pub async fn validate_github_repo_access(
+    cref: &str,
+    repo_full_name: &str,
+) -> Result<(), crate::error::AppError> {
+    let provider = github_provider_for_cref(cref)?;
+    provider
+        .check_repo_access(repo_full_name)
+        .await
+        .map_err(|e| map_repo_access_error(repo_full_name, e))
+}
+
 /// 승인된 GitHub 액션을 적절한 writer 메서드로 dispatch한다. 키체인/네트워크 없는 **순수 dispatch**
 /// (mock writer로 단위 테스트 가능). 비-GitHub 액션은 호출 측 라우터가 거르지만 방어적으로 거부한다.
 /// writer가 게이트 `ExecOutcome`를 직접 반환하므로 필드별 재매핑이 없다(#12 — 미래 필드 누락 방지).
@@ -592,6 +643,16 @@ mod tests {
             Some(("64etuor".into(), "work-radar".into()))
         );
         assert_eq!(parse_owner_repo("not-a-repo"), None);
+    }
+
+    /// 레포 접근 검증 에러 매핑: Terminal=입력/권한(validation), Transient=일시적(terminal).
+    #[test]
+    fn map_repo_access_error_classifies() {
+        let term =
+            map_repo_access_error("o/r", GithubError::Terminal("HTTP 404: Not Found".into()));
+        assert_eq!(term.code, "repos.inaccessible");
+        let trans = map_repo_access_error("o/r", GithubError::Transient("net".into()));
+        assert_eq!(trans.code, "repos.access_check_failed");
     }
 }
 

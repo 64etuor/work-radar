@@ -4,8 +4,8 @@ use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    CreateProjectInput, CreateRepoInput, Project, ProjectKind, Repo, SetProjectCalendarColorInput,
-    SetProjectDefaultWriteCalendarInput, WorkSignal,
+    CreateProjectInput, CreateRepoInput, Project, ProjectKind, Provider, Repo,
+    SetProjectCalendarColorInput, SetProjectDefaultWriteCalendarInput, WorkSignal,
 };
 use crate::notion::normalize_notion_db_id;
 
@@ -356,6 +356,27 @@ pub(crate) async fn insert_repo(db: &Db, input: &CreateRepoInput) -> Result<Repo
 #[tauri::command]
 #[specta::specta]
 pub async fn create_repo(db: State<'_, Db>, input: CreateRepoInput) -> Result<Repo, AppError> {
+    // GitHub 레포는 추가 전에 그 프로젝트 토큰으로 접근 가능한지 검증한다 — 없는/권한 없는 레포를
+    // 조용히 저장했다가 사용 시점(PR Radar 등)에야 실패하던 문제를 막는다(개인 토큰으로 못 보는
+    // org 레포 등). Local 레포·빈 URL은 검증 대상이 아니다.
+    if matches!(input.provider, Provider::Github) {
+        if let Some(url) = input
+            .remote_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            let cref: String =
+                sqlx::query_scalar("SELECT credential_ref FROM projects WHERE id = ?1")
+                    .bind(&input.project_id)
+                    .fetch_optional(db.inner())
+                    .await?
+                    .ok_or_else(|| {
+                        AppError::not_found("repos.project_not_found", "project not found")
+                    })?;
+            crate::github::validate_github_repo_access(&cref, url).await?;
+        }
+    }
     Ok(insert_repo(db.inner(), &input).await?)
 }
 
