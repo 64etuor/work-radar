@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clampToViewport } from "./clampToViewport";
+import { clampToViewport, defaultBounds } from "./clampToViewport";
 
 describe("clampToViewport", () => {
   it("returns input unchanged when bounds are fully inside viewport", () => {
@@ -27,5 +27,32 @@ describe("clampToViewport", () => {
     const result = clampToViewport(b, 1440, 900);
     expect(result.h).toBe(900);
     expect(result.y).toBe(0);
+  });
+});
+
+describe("defaultBounds", () => {
+  it("uses a tall portrait phone-chat shape on a large viewport", () => {
+    const b = defaultBounds(1440, 900);
+    expect(b.w).toBe(380);
+    expect(b.h).toBe(720);
+    // portrait: clearly taller than wide
+    expect(b.h).toBeGreaterThan(b.w);
+  });
+
+  it("centers horizontally and below the top bar on a large viewport", () => {
+    const b = defaultBounds(1440, 900);
+    // horizontal center: (1440 - 380) / 2 = 530
+    expect(b.x).toBe(530);
+    // vertical center within usable area below the 56px top bar
+    expect(b.y).toBeGreaterThanOrEqual(56);
+  });
+
+  it("clamps to the viewport (with margin) on a short/narrow viewport", () => {
+    const b = defaultBounds(400, 600);
+    // width never exceeds vw - margin, height never exceeds usable - margin
+    expect(b.w).toBeLessThanOrEqual(400 - 32);
+    expect(b.h).toBeLessThanOrEqual(600 - 56 - 32);
+    expect(b.x).toBeGreaterThanOrEqual(0);
+    expect(b.y).toBeGreaterThanOrEqual(56);
   });
 });

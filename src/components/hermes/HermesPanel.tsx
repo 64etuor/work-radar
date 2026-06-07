@@ -127,8 +127,8 @@ export function HermesPanel({
 
   const x = state.x ?? 0;
   const y = state.y ?? 0;
-  const w = state.w ?? 460;
-  const h = state.h ?? 600;
+  const w = state.w ?? 380;
+  const h = state.h ?? 720;
 
   return (
     // TODO(a11y): focus trap + restore
