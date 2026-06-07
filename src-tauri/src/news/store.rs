@@ -154,51 +154,102 @@ fn candidate_limit(total_limit: u32) -> i64 {
     base.saturating_mul(4).max(base.saturating_add(20))
 }
 
+/// "핫" 키워드 부스트 셋(소문자 substring 매치). engagement 신호가 거의 없는 대부분의
+/// 소스에서도 화제성 항목을 살짝 끌어올린다. 작게 유지 — display-only 휴리스틱.
+const HOT_KEYWORDS: &[&str] = &[
+    "ai",
+    "gpt",
+    "llm",
+    "rust",
+    "security",
+    "breach",
+    "release",
+    "launch",
+    "open source",
+    "breakthrough",
+];
+
+/// 표시 전용 composite "hotness" 점수. 순수 함수 — DB 쓰기/스키마 변경 없음.
+///
+/// 세 신호 합산:
+/// - recency: 발행 후 경과 시간에 대한 지수 감쇠(반감기 ~12h). 신선할수록 높음. **항상 존재**.
+/// - engagement: `comment_count`가 있으면 `ln(1+count)`로 접음. 없으면 0 기여(자격 박탈 아님).
+/// - keyword: 제목에 핫 키워드가 있으면 작은 가산 부스트.
+///
+/// comment_count가 reddit 한 소스에만 있으므로 engagement 단독으로는 hot-only가 비어버린다.
+/// recency가 항상 양수라 모든 항목에 점수가 매겨져 hot-only가 절대 비지 않는다.
+fn hotness(item: &NewsItem) -> f64 {
+    let hours_since = chrono::DateTime::parse_from_rfc3339(&item.posted_at)
+        .map(|t| (Utc::now() - t.with_timezone(&Utc)).num_seconds() as f64 / 3600.0)
+        .unwrap_or(f64::MAX)
+        .max(0.0);
+    // 반감기 12h 지수 감쇠: 0h→1.0, 12h→0.5, 24h→0.25 …
+    let recency = 0.5_f64.powf(hours_since / 12.0);
+
+    let engagement = item
+        .comment_count
+        .map_or(0.0, |c| (1.0 + f64::from(c)).ln());
+
+    let title_lc = item.title.to_lowercase();
+    let keyword_boost = if HOT_KEYWORDS.iter().any(|k| title_lc.contains(k)) {
+        0.5
+    } else {
+        0.0
+    };
+
+    recency + engagement + keyword_boost
+}
+
+/// 후보군을 표시용으로 정리한다.
+/// - `hot_only == true`: composite `hotness` 내림차순으로 재정렬 후 상위 `total_limit`.
+///   recency가 항상 양수라 comment_count가 전혀 없어도 절대 비지 않는다.
+/// - `hot_only == false`: DB가 매긴 sort_mode 순서를 보존하되, total_limit로 잘릴 때
+///   상위 hotness 항목이 가시 윈도우에서 밀려나지 않도록 promote(기존 핫-survive 계약 유지).
 fn rank_and_trim(items: Vec<NewsItem>, total_limit: usize, hot_only: bool) -> Vec<NewsItem> {
-    if items.len() <= total_limit {
-        return if hot_only {
-            hot_only_items(items, total_limit)
-        } else {
-            items
-        };
+    if hot_only {
+        let mut scored: Vec<(f64, NewsItem)> =
+            items.into_iter().map(|i| (hotness(&i), i)).collect();
+        // 점수 내림차순. NaN 방지 위해 total_cmp 사용.
+        scored.sort_by(|a, b| b.0.total_cmp(&a.0));
+        return scored
+            .into_iter()
+            .take(total_limit)
+            .map(|(_, i)| i)
+            .collect();
     }
+
+    // hot_only=false: 자를 필요 없으면 DB 순서 그대로.
+    if items.len() <= total_limit {
+        return items;
+    }
+
+    // 잘릴 때만 hotness 상위 항목을 앞으로 promote해 가시 윈도우에서 살아남게 한다.
+    // hot 그룹은 hotness 내림차순(가장 화제인 것이 선두), rest는 DB sort_mode 순서 유지.
     let threshold = hot_threshold(&items);
     let mut hot = Vec::with_capacity(items.len());
     let mut rest = Vec::with_capacity(items.len());
     for item in items {
-        if threshold.is_some_and(|t| item.comment_count.is_some_and(|c| c >= t)) {
+        if hotness(&item) >= threshold {
             hot.push(item);
         } else {
             rest.push(item);
         }
     }
-    if hot_only {
-        hot.truncate(total_limit);
-        return hot;
-    }
+    hot.sort_by(|a, b| hotness(b).total_cmp(&hotness(a)));
     hot.extend(rest);
     hot.truncate(total_limit);
     hot
 }
 
-fn hot_only_items(items: Vec<NewsItem>, total_limit: usize) -> Vec<NewsItem> {
-    let threshold = hot_threshold(&items);
-    let mut hot = items
-        .into_iter()
-        .filter(|item| threshold.is_some_and(|t| item.comment_count.is_some_and(|c| c >= t)))
-        .collect::<Vec<_>>();
-    hot.truncate(total_limit);
-    hot
-}
-
-fn hot_threshold(items: &[NewsItem]) -> Option<u32> {
-    let mut counts: Vec<u32> = items.iter().filter_map(|i| i.comment_count).collect();
-    if counts.is_empty() {
-        return None;
+/// hotness 상위 분위(top-quartile) 컷오프 — 이 이상이면 "핫"으로 분류해 promote 대상.
+fn hot_threshold(items: &[NewsItem]) -> f64 {
+    let mut scores: Vec<f64> = items.iter().map(hotness).collect();
+    if scores.is_empty() {
+        return f64::MAX;
     }
-    counts.sort_unstable_by(|a, b| b.cmp(a));
-    let idx = ((counts.len().saturating_sub(1)) as f64 * 0.25).floor() as usize;
-    Some(std::cmp::max(10, counts[idx]))
+    scores.sort_by(|a, b| b.total_cmp(a));
+    let idx = ((scores.len().saturating_sub(1)) as f64 * 0.25).floor() as usize;
+    scores[idx]
 }
 
 /// 7일 초과 아이템 정리 — fetcher tick 시작 시 호출.
@@ -543,22 +594,67 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn hot_only_filters_non_hot_items() {
+    async fn hot_only_ranks_by_engagement_without_emptying() {
         let p = pool().await;
+        // 두 항목 동일 시각 → recency 동률, engagement(comment_count)가 순서를 가른다.
+        let now = Utc::now();
         let mut cool = item("hn", "1", "cool");
         cool.comment_count = Some(3);
+        cool.posted_at = now.to_rfc3339();
         let mut hot = item("hn", "2", "hot");
         hot.comment_count = Some(50);
+        hot.posted_at = now.to_rfc3339();
         upsert_many(&p, &[cool, hot]).await.unwrap();
         let mut opts = test_opts();
         opts.hot_only = true;
         opts.total_limit = 10;
         let rows = list_recent(&p, &opts, &[]).await.unwrap();
         let ids: Vec<&str> = rows.iter().map(|r| r.external_id.as_str()).collect();
+        // 새 composite: hot_only는 비우지 않고 hotness 내림차순으로 랭크 — 높은 engagement가 선두.
         assert_eq!(
             ids,
-            vec!["2"],
-            "hot_only=true면 댓글 없는/낮은 뉴스는 숨겨야 함"
+            vec!["2", "1"],
+            "hot_only=true면 비우지 말고 engagement 높은 순으로 랭크"
+        );
+    }
+
+    fn dated(source: &str, id: &str, secs_ago: i64, count: Option<u32>) -> NewsItem {
+        let mut n = item(source, id, id);
+        n.posted_at = (Utc::now() - Duration::seconds(secs_ago)).to_rfc3339();
+        n.comment_count = count;
+        n
+    }
+
+    #[test]
+    fn rank_and_trim_hot_only_never_empty_without_comment_counts() {
+        // 모든 아이템이 comment_count 없음(reddit 외 9개 소스 현실). hot-only가 비면 안 됨.
+        let items = vec![
+            dated("d2", "1", 30, None),
+            dated("d2", "2", 10, None),
+            dated("d2", "3", 50, None),
+            dated("d2", "4", 5, None),
+        ];
+        let out = rank_and_trim(items, 3, true);
+        assert_eq!(out.len(), 3, "hot-only는 min(limit, len)만큼 채워야 함");
+        // 최신순(가장 작은 secs_ago 먼저): 4(5s) > 2(10s) > 1(30s).
+        let ids: Vec<&str> = out.iter().map(|i| i.external_id.as_str()).collect();
+        assert_eq!(ids, vec!["4", "2", "1"], "최신순 정렬");
+    }
+
+    #[test]
+    fn rank_and_trim_newer_and_more_engaged_rank_higher() {
+        let items = vec![
+            dated("hn", "old_zero", 100_000, Some(0)),
+            dated("hn", "new_zero", 60, None),
+            dated("hn", "new_hot", 30, Some(500)),
+        ];
+        let out = rank_and_trim(items, 3, true);
+        let ids: Vec<&str> = out.iter().map(|i| i.external_id.as_str()).collect();
+        assert_eq!(ids[0], "new_hot", "최신 + 높은 engagement가 1위");
+        assert_eq!(
+            ids.last(),
+            Some(&"old_zero"),
+            "오래되고 engagement 0인 항목이 꼴찌"
         );
     }
 

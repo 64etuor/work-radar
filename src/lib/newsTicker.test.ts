@@ -10,7 +10,13 @@ import {
   newsTickerItemKey,
 } from "./newsTicker";
 
-function item(source: string, id: string, commentCount: number | null, title = id): NewsItem {
+function item(
+  source: string,
+  id: string,
+  commentCount: number | null,
+  title = id,
+  postedAt = "2026-05-25T00:00:00Z",
+): NewsItem {
   return {
     source,
     externalId: id,
@@ -18,7 +24,7 @@ function item(source: string, id: string, commentCount: number | null, title = i
     url: "https://example.com",
     commentsUrl: null,
     commentCount,
-    postedAt: "2026-05-25T00:00:00Z",
+    postedAt,
   };
 }
 
@@ -62,11 +68,25 @@ describe("news ticker display helpers", () => {
     ).toEqual(["fresh"]);
   });
 
-  it("marks only high-comment top-quartile items as hot trending", () => {
+  it("marks composite top-quartile items as hot — engagement breaks ties at equal recency", () => {
+    // 동일 시각(recency 동률) → engagement(commentCount)가 hotness 순서를 가른다.
     const items = [item("hn", "hot", 80), item("hn", "warm", 20), item("hn", "low", 5)];
     expect(isHotTrendingNews(items[0], items)).toBe(true);
     expect(isHotTrendingNews(items[1], items)).toBe(false);
     expect(isHotTrendingNews(items[2], items)).toBe(false);
-    expect(isHotTrendingNews(item("geeknews", "none", null), items)).toBe(false);
+  });
+
+  it("treats a much fresher item as hot even with zero engagement (recency-driven)", () => {
+    const now = new Date().toISOString();
+    const old = new Date(Date.now() - 72 * 3_600_000).toISOString();
+    const items = [
+      item("geeknews", "fresh", null, "fresh", now),
+      item("hn", "stale1", null, "stale1", old),
+      item("hn", "stale2", null, "stale2", old),
+      item("hn", "stale3", null, "stale3", old),
+    ];
+    // 댓글 수가 전혀 없어도 가장 신선한 항목이 상위 분위에 들어 🔥.
+    expect(isHotTrendingNews(items[0], items)).toBe(true);
+    expect(isHotTrendingNews(items[3], items)).toBe(false);
   });
 });
