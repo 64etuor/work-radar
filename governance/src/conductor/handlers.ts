@@ -42,8 +42,13 @@ function buildPrompt(stepText: string, envelope: AutonomyEnvelope): string {
     "Type-2 micro-decisions inside allowedPathGlobs are yours. The instant you hit a Type-1",
     "boundary / new dependency / invariant conflict / ambiguous intent, call",
     `escalate(question, options[], relatedTaskId='${envelope.taskId}') and STOP. You have NO`,
-    "approve/reject/choose. Call complete_task('" + envelope.taskId + "') only when genuinely done",
-    "with no open block.",
+    "approve/reject/choose.",
+    "",
+    "## Required final action (do NOT skip)",
+    `When the step's work is complete and no Type-1 boundary is open, your FINAL action MUST be the`,
+    `tool call complete_task('${envelope.taskId}'). Reporting completion in prose is NOT enough — the`,
+    "orchestrator only advances when the task_completed event is written. If you are blocked or",
+    "uncertain, call escalate(...) and stop instead.",
   ].join("\n");
 }
 
@@ -145,6 +150,7 @@ export async function conductPlan(
   const session = await deps.adapter.spawnSession({
     worktreePath: wt.path,
     stepIndex: k,
+    taskId,
     prompt,
     executor,
   });

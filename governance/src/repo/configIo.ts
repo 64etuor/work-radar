@@ -20,6 +20,13 @@ export function serverEntrypoint(): string {
   return resolve(fileURLToPath(new URL("../mcp/server.ts", import.meta.url)));
 }
 
+/** Absolute path to this package's `boule` CLI entrypoint. The codex executor's completion wrapper
+ *  shells `node <cliEntrypoint> complete-task` on clean exit, so resolve it install-relative (same
+ *  install as serverEntrypoint), never under the target repo. */
+export function cliEntrypoint(): string {
+  return resolve(fileURLToPath(new URL("../cli/boule.ts", import.meta.url)));
+}
+
 /** Read + strict-parse <repo>/.boule/boule.config.json. THROWS if missing/invalid. */
 export async function readConfig(repoRoot: string): Promise<BouleConfig> {
   const text = await readFile(boulePaths(repoRoot).config, "utf8");

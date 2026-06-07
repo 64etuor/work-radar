@@ -8,6 +8,7 @@ import {
   type SpawnSyncLike,
 } from "./adapter.ts";
 import { parseConductorConfig } from "../mcp/config.ts";
+import { cliEntrypoint } from "../repo/configIo.ts";
 
 /** Build the Conductor adapter from an env map — the single place that wires the LIVE adapter
  *  (real git worktree + cmux + envelope fs) vs the deterministic stub. Default (BOULE_CONDUCTOR_MODE
@@ -32,6 +33,8 @@ export function makeConductorAdapterFromEnv(
     cmuxCmd: cfg.cmuxCmd,
     governanceWorkspace: paths.workspace,
     serverEntrypoint: paths.serverEntrypoint,
+    // install-relative (same resolution as serverEntrypoint); the codex completion wrapper shells it.
+    completeEntrypoint: cliEntrypoint(),
     projectLabel: projectLabelFromRepoRoot(paths.repoRoot),
     log: (line) => process.stderr.write(`${line}\n`),
   });

@@ -2,8 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseArgs, cmdInit, cmdSet, cmdStatus } from "../../src/cli/boule.js";
+import { parseArgs, cmdInit, cmdSet, cmdStatus, cmdCompleteTask } from "../../src/cli/boule.js";
 import { readConfig } from "../../src/repo/configIo.js";
+import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
+import { conductPlan } from "../../src/conductor/handlers.js";
+import { stubAdapter } from "../../src/conductor/adapter.js";
+import { escalate } from "../../src/escalate/escalate.js";
+import { readAllEvents } from "../../src/decision/readEvents.js";
 
 let repo: string;
 beforeEach(async () => {
@@ -61,5 +66,47 @@ describe("cmdInit / cmdSet / cmdStatus", () => {
 
   it("requires --repo", async () => {
     await expect(cmdStatus({})).rejects.toThrow(/--repo/);
+  });
+});
+
+describe("cmdCompleteTask — codex completion-wrapper backstop", () => {
+  const at = (s: number) => new Date(Date.UTC(2026, 5, 2, 12, 0, s));
+  // `repo` doubles as the governance workspace here (events land in <repo>/events) — fine, it's a
+  // fresh temp dir per test. Mirrors the real flow: accept a plan, conduct one step ⇒ an active task.
+  async function activeTask(ws: string): Promise<string> {
+    const { planId } = await proposePlan(ws, { intent: "x", steps: ["step a"] }, at(0), 0.1);
+    await acceptPlan(ws, { planId }, at(1), 0.2);
+    const r = await conductPlan(ws, { planId }, { adapter: stubAdapter }, at(10), 0.3);
+    return r.advanced!.taskId;
+  }
+
+  it("requires --workspace and --task", async () => {
+    await expect(cmdCompleteTask({ task: "t" })).rejects.toThrow(/--workspace/);
+    await expect(cmdCompleteTask({ workspace: repo })).rejects.toThrow(/--task/);
+  });
+
+  it("completes an active task (writes task_completed) so the loop closes on clean codex exit", async () => {
+    const taskId = await activeTask(repo);
+    const out = await cmdCompleteTask({ workspace: repo, task: taskId });
+    expect(out).toMatch(/^completed: /);
+    const done = (await readAllEvents(repo)).filter(
+      (e) => e.frontmatter.type === "task_completed" && e.frontmatter.related_to?.includes(taskId),
+    );
+    expect(done).toHaveLength(1);
+  });
+
+  it("REFUSES (writes nothing) when the task has an unresolved decision_blocked (INVARIANT #1-safe)", async () => {
+    const taskId = await activeTask(repo);
+    // the session escalated → open decision_blocked bound to the task; completing it must be refused
+    await escalate(
+      repo,
+      { question: "fork?", options: [{ label: "a" }, { label: "b" }], relatedTaskId: taskId },
+      at(20),
+      0.4,
+    );
+    const before = (await readAllEvents(repo)).length;
+    const out = await cmdCompleteTask({ workspace: repo, task: taskId });
+    expect(out).toMatch(/^REFUSED: /);
+    expect((await readAllEvents(repo)).length).toBe(before); // wrote nothing
   });
 });

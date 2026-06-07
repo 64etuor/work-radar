@@ -21,6 +21,7 @@ import { parseConductorConfig, parseEnvelopeDefaults } from "../mcp/config.ts";
 import { evaluateReadiness } from "../live/readiness.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
+import { completeTask } from "../task/handlers.ts";
 
 // `boule` CLI (spec 2026-06-07 §D): per-repo launcher + settings admin. DB-free — the work-radar
 // app drives discovery of designated local repos and calls `init`/`set` per repo with explicit
@@ -101,6 +102,21 @@ export async function cmdSet(flags: ParsedArgs["flags"]): Promise<string> {
   await writeConfig(repo, next);
   await writeMcpConfig(repo, resolvePolicy(next));
   return `updated ${boulePaths(repo).config} (kind=${next.kind})`;
+}
+
+/** complete-task: close a task's lifecycle from OUTSIDE the MCP round-trip. The codex executor's
+ *  completion wrapper shells this on clean exit so the loop closes even when the model skips the
+ *  complete_task tool call (gpt-5.5 adherence). Verdict-free + guarded: completeTask REFUSES if the
+ *  task isn't active or has an unresolved decision_blocked, so this can never close a blocked task or
+ *  open INVARIANT #1's gate. A REFUSED result is a normal outcome (exit 0) — it just means no
+ *  task_completed was written (the orchestrator stays halted for a human, as intended). */
+export async function cmdCompleteTask(flags: ParsedArgs["flags"]): Promise<string> {
+  const workspace = typeof flags.workspace === "string" ? flags.workspace : "";
+  const task = typeof flags.task === "string" ? flags.task : "";
+  if (!workspace) throw new Error("--workspace <path> is required");
+  if (!task) throw new Error("--task <id> is required");
+  const r = await completeTask(workspace, { taskId: task }, new Date(), Math.random());
+  return r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}`;
 }
 
 /** status: print the resolved policy + paths (read-only; shows fail-closed fallback if config bad). */
@@ -220,6 +236,7 @@ const USAGE = `boule <command> --repo <path>
   init   --repo <p> --kind <personal|work> [--project-id X] [--project-name Y] [--overwrite]
   set    --repo <p> [--kind k] [--autonomy-level manual|dispatch|auto_plan|full] [--review-quorum n]
   status --repo <p>
+  complete-task --workspace <ws> --task <id>   # close a task (codex completion wrapper; guarded)
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
   tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)`;
 
@@ -235,6 +252,9 @@ export async function main(argv: string[]): Promise<number> {
         return 0;
       case "status":
         process.stdout.write((await cmdStatus(flags)) + "\n");
+        return 0;
+      case "complete-task":
+        process.stdout.write((await cmdCompleteTask(flags)) + "\n");
         return 0;
       case "run":
         return await cmdRun(flags);

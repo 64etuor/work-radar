@@ -8,6 +8,8 @@ export interface CreateWorktreeSpec {
 export interface SpawnSessionSpec {
   worktreePath: string;
   stepIndex: number;
+  /** the bound task — the codex completion wrapper passes it to `complete-task` on clean exit. */
+  taskId: string;
   prompt: string;
   /** which CLI to launch (claude|codex). Omitted ⇒ "claude" (backward-compatible). */
   executor?: ExecutorKind;
@@ -67,6 +69,10 @@ export interface LiveAdapterDeps {
    *  NOT under the target repo. A designated local repo has no governance/ dir, so the spawned
    *  session's executor-role MCP must point here, not at <repoRoot>/governance/src/mcp/server.ts. */
   serverEntrypoint: string;
+  /** Absolute path to the `boule` CLI (the Boule INSTALL). The codex completion wrapper shells
+   *  `node <completeEntrypoint> complete-task` on clean exit so the loop closes even when the model
+   *  forgets the complete_task MCP call. Same install as serverEntrypoint, never the target repo. */
+  completeEntrypoint: string;
   /** The governance workspace the spawned session's escalate must write back to (so the
    *  Conductor sees its decision_blocked). Defaults to <repoRoot>/governance/workspace. */
   governanceWorkspace: string;
@@ -147,12 +153,15 @@ class CommandError extends Error {
  *  - codex: attaches the SAME executor-role server via `-c mcp_servers.*` (codex has no per-server
  *    denylist — the server's structural verdict-tool omission is the guarantee). Runs one-shot
  *    `codex exec` in a `workspace-write` sandbox confined to the worktree cwd (NEVER danger-full,
- *    per codex-worktree-runner). ⚠ The codex MCP round-trip (complete_task FROM codex) is asserted
- *    structurally here but needs a live smoke (runbook §5) to confirm end-to-end. */
+ *    per codex-worktree-runner). The codex model is flakier about issuing the closing complete_task
+ *    MCP call (gpt-5.5 adherence; live smoke §5), so the codex command is followed by a guarded
+ *    completion wrapper: `&& node <cli> complete-task` fires ONLY on clean exit (nonzero ⇒ skipped),
+ *    and `completeTask` itself REFUSES if the task isn't active or has an unresolved decision_blocked
+ *    (verdict-free, INVARIANT #1-safe — it cannot accept a plan/spec or resolve a fork). */
 export function buildSessionCommand(
   executor: ExecutorKind,
-  spec: { worktreePath: string },
-  deps: { serverEntrypoint: string; governanceWorkspace: string },
+  spec: { worktreePath: string; taskId: string },
+  deps: { serverEntrypoint: string; governanceWorkspace: string; completeEntrypoint: string },
 ): string {
   const promptCat = `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"`;
   if (executor === "codex") {
@@ -164,13 +173,18 @@ export function buildSessionCommand(
     // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
     // Autonomy stays sandboxed: --sandbox workspace-write confines writes to the worktree cwd; this
     // is NEVER --dangerously-bypass-approvals-and-sandbox (which removes the sandbox).
+    // `&& node <cli> complete-task` = the adherence backstop: on clean codex exit, close the task
+    // lifecycle even if the model skipped the complete_task tool call. cmux runs --command through a
+    // shell, so the `&&` short-circuits on nonzero exit (no completion on failure/escalation-abort).
     return (
       `codex exec --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
       `-C "${spec.worktreePath}" ` +
       `-c 'mcp_servers.boule-governance.command="node"' ` +
       `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
       `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}"}' ` +
-      `${promptCat}\n`
+      `${promptCat}` +
+      ` && node --experimental-strip-types "${deps.completeEntrypoint}" complete-task ` +
+      `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}"\n`
     );
   }
   const denied = SESSION_DENIED_TOOLS.map((t) => `"${t}"`).join(" ");
@@ -290,6 +304,7 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       const command = buildSessionCommand(spec.executor ?? "claude", spec, {
         serverEntrypoint: deps.serverEntrypoint,
         governanceWorkspace: deps.governanceWorkspace,
+        completeEntrypoint: deps.completeEntrypoint,
       });
       // Create the isolated workspace AND launch the executor atomically via --command. A
       // BACKGROUND workspace runs --command immediately, but a separate `cmux send` to its surface

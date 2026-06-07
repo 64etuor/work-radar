@@ -29,8 +29,12 @@ describe("SESSION_DENIED_TOOLS — executor sessions cannot reach the gate-openi
   it("the claude executor invocation passes the full denylist (incl. auto_dispatch)", () => {
     const c = buildSessionCommand(
       "claude",
-      { worktreePath: "/wt/s0" },
-      { serverEntrypoint: "/install/governance/src/mcp/server.ts", governanceWorkspace: "/ws" },
+      { worktreePath: "/wt/s0", taskId: "evt_t0" },
+      {
+        serverEntrypoint: "/install/governance/src/mcp/server.ts",
+        governanceWorkspace: "/ws",
+        completeEntrypoint: "/install/governance/src/cli/boule.ts",
+      },
     );
     expect(c).toContain("mcp__boule-governance__auto_dispatch");
     expect(c).toContain("mcp__boule-governance__accept_plan");
@@ -233,6 +237,7 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
       fs: fakeFs,
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
+      completeEntrypoint: "/install/governance/src/cli/boule.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -259,6 +264,7 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     const sess = await adapter.spawnSession({
       worktreePath: wt.path,
       stepIndex: 0,
+      taskId: "evt_t0",
       prompt: "PROMPT",
     });
     // surface is the workspace's terminal surface ref (resolved from `tree --json`), NOT the
@@ -309,6 +315,7 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
       fs: { mkdir: async () => undefined, writeFile: async () => undefined },
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
+      completeEntrypoint: "/install/governance/src/cli/boule.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -356,6 +363,7 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
       fs: { mkdir: async () => undefined, writeFile: async () => undefined },
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
+      completeEntrypoint: "/install/governance/src/cli/boule.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -364,7 +372,7 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
 
   it("CREATES the folder anchored on the new workspace when none matches the project label", async () => {
     const fake = makeFake(JSON.stringify({ groups: [] }));
-    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, prompt: "P" });
+    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, taskId: "evt_t0", prompt: "P" });
     expect(sess.surface).toBe("surface:42");
     const create = fake.calls.find((c) => c.args[0] === "workspace-group" && c.args[1] === "create");
     expect(create).toBeTruthy();
@@ -376,7 +384,7 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
     const fake = makeFake(
       JSON.stringify({ groups: [{ name: "work-radar", ref: "workspace_group:5" }] }),
     );
-    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, prompt: "P" });
+    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, taskId: "evt_t0", prompt: "P" });
     expect(sess.surface).toBe("surface:42");
     const add = fake.calls.find((c) => c.args[0] === "workspace-group" && c.args[1] === "add");
     expect(add!.args).toEqual([
@@ -392,7 +400,7 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
 
   it("grouping is BEST-EFFORT: a workspace-group failure still returns the session surface", async () => {
     const fake = makeFake("", true);
-    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, prompt: "P" });
+    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, taskId: "evt_t0", prompt: "P" });
     expect(sess.surface).toBe("surface:42"); // loop not broken by grouping failure
   });
 });
@@ -466,10 +474,11 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
   const cmdDeps = {
     serverEntrypoint: "/install/governance/src/mcp/server.ts",
     governanceWorkspace: "/repo/governance/workspace",
+    completeEntrypoint: "/install/governance/src/cli/boule.ts",
   };
 
   it("claude (default) builds the scoped-mcp.json + strict + verdict denylist invocation", () => {
-    const c = buildSessionCommand("claude", { worktreePath: "/wt/s0" }, cmdDeps);
+    const c = buildSessionCommand("claude", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
     expect(c).toContain("claude --mcp-config");
     expect(c).toContain("--strict-mcp-config");
     // unattended autonomy within the worktree sandbox (see buildSessionCommand)
@@ -480,10 +489,12 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toMatch(/--disallowedTools .*-- "\$\(cat \/wt\/s0\/\.boule\/step-prompt\.md\)"/);
     expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
     expect(c).not.toContain("codex");
+    // claude closes the loop reliably (live smoke) — no codex-style completion wrapper here
+    expect(c).not.toContain("complete-task");
   });
 
   it("codex builds a workspace-write (NOT danger-full) exec attaching the executor-role MCP via -c", () => {
-    const c = buildSessionCommand("codex", { worktreePath: "/wt/s0" }, cmdDeps);
+    const c = buildSessionCommand("codex", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
     expect(c).toContain("codex exec");
     expect(c).toContain("--sandbox workspace-write");
     // approval gate disabled so the headless exec session can call its MCP tools (complete_task);
@@ -499,6 +510,12 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
     // codex has no per-server denylist — must NOT rely on claude's flags
     expect(c).not.toContain("--disallowedTools");
+    // adherence backstop: on CLEAN exit (`&&`), shell the guarded complete-task so the loop closes
+    // even when gpt-5.5 skips the complete_task MCP call (nonzero exit ⇒ short-circuited, no call).
+    expect(c).toContain("&& node");
+    expect(c).toContain(`"${cmdDeps.completeEntrypoint}" complete-task`);
+    expect(c).toContain('--workspace "/repo/governance/workspace"');
+    expect(c).toContain('--task "evt_t0"');
   });
 
   it("spawnSession launches a codex invocation via --command when executor=codex (same cmux substrate)", async () => {
@@ -528,6 +545,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
       fs: { mkdir: async () => undefined, writeFile: async () => undefined },
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
+      completeEntrypoint: "/install/governance/src/cli/boule.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -535,6 +553,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     const sess = await adapter.spawnSession({
       worktreePath: "/wt/s0",
       stepIndex: 0,
+      taskId: "evt_t0",
       prompt: "P",
       executor: "codex",
     });
@@ -542,6 +561,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     const created = calls.find((c) => c.cmd === "cmux" && c.args[0] === "new-workspace")!;
     expect(created.args[3]).toBe("--command");
     expect(created.args[4]).toContain("codex exec");
+    expect(created.args[4]).toContain("complete-task"); // completion wrapper present in the launch cmd
     expect(created.args[4]).not.toContain("claude --mcp-config");
     expect(calls.some((c) => c.cmd === "cmux" && c.args[0] === "send")).toBe(false);
   });
