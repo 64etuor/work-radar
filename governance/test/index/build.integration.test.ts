@@ -20,13 +20,24 @@ describe("buildIndex against the real repo L3/L4 corpus", () => {
     expect(formatPrinciples(index)).toContain("INVARIANT-1");
   });
 
-  it("captures every top-level decision-log bullet (no silent drop)", async () => {
+  it("captures every top-level decision-log bullet from both logs (no silent drop)", async () => {
     const index = await buildIndex(REPO_ROOT, nodeIndexFs);
-    const decisionsMd = await readFile(resolve(REPO_ROOT, "docs", "decisions.md"), "utf8");
-    // Every top-level `- **…` bullet is a decision-log entry; none may be dropped.
-    const bulletCount = (decisionsMd.match(/^- \*\*/gm) ?? []).length;
-    const dlRows = index.decisions.filter((d) => d.kind === "decision-log");
-    expect(bulletCount).toBeGreaterThan(100); // sanity: the real log is large
-    expect(dlRows.length).toBe(bulletCount); // capture all, not a 35% subset
+    const rootMd = await readFile(resolve(REPO_ROOT, "docs", "decisions.md"), "utf8");
+    // Governance log is optional/fail-soft — treat absence as empty.
+    const govMd = await readFile(
+      resolve(REPO_ROOT, "governance", "docs", "decisions.md"),
+      "utf8",
+    ).catch(() => "");
+    const rootBullets = (rootMd.match(/^- \*\*/gm) ?? []).length;
+    const govBullets = (govMd.match(/^- \*\*/gm) ?? []).length;
+    const dlRoot = index.decisions.filter(
+      (d) => d.kind === "decision-log" && d.sourcePath === "docs/decisions.md",
+    );
+    const dlGov = index.decisions.filter(
+      (d) => d.kind === "decision-log" && d.sourcePath === "governance/docs/decisions.md",
+    );
+    expect(rootBullets).toBeGreaterThan(100); // sanity: the real root log is large
+    expect(dlRoot.length).toBe(rootBullets); // capture all root bullets, not a subset
+    expect(dlGov.length).toBe(govBullets); // capture all governance bullets too
   });
 });

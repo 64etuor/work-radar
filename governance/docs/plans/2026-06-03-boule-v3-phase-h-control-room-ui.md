@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (Tauri 2, specta/tauri-specta rc.25, serde, serde_json, chrono) · TypeScript/React (shadcn/ui, lucide, @tanstack/react-query, Tailwind v4 `@theme` tokens) · governance derived JSON (read-only).
 
-**Spec:** `governance/docs/design/2026-06-03-boule-v3-phase-h-control-room-ui-design.md`
+**Spec:** `governance/docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §7 Phase Ledger (per-phase 설계는 2026-06-04 §7로 흡수; 원본 `...-phase-h-control-room-ui-design.md`는 git 히스토리).
 
 **Invariants in scope (first app-touching phase):** #4 specta drift gate (regenerate + commit `bindings.ts`, CI `git diff` must pass) · #6 no app SQLite/migration change · #7 shadcn/lucide/Tailwind-v4 tokens · #1 structural (no event write path) · #2/#3/#5 trivially held (no tokens/network/loops).
 

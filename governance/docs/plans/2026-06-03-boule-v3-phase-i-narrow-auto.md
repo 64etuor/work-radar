@@ -10,7 +10,7 @@
 
 **Tech Stack:** TypeScript (Node `--experimental-strip-types`, vitest), governance event-sourced harness. Reuses `conductPlan`/`deriveConductorState`/`plansOf`/`writeEvent` unchanged.
 
-**Spec:** `governance/docs/design/2026-06-03-boule-v3-phase-i-narrow-auto-design.md` (**rev. 2** — plan-critic ACCEPT-with-minors, 0 blockers; this plan is reconciled to rev.2: M1 sole-producer/F2 body-schema, **M2 dedup-keyed-off-`step_bound`-materialization**, M3 G3 `done`-before-`in_flight` precedence).
+**Spec:** `governance/docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §7 Phase Ledger (per-phase 설계는 2026-06-04 §7로 흡수; 원본 `...-phase-i-narrow-auto-design.md` **rev. 2** — plan-critic ACCEPT-with-minors, 0 blockers; this plan is reconciled to rev.2: M1 sole-producer/F2 body-schema, **M2 dedup-keyed-off-`step_bound`-materialization**, M3 G3 `done`-before-`in_flight` precedence — git 히스토리).
 
 **Invariants:** #1 (no `decision_*` write-path — structural, negative test) is the crux; #4 (`bindings.ts` byte-unchanged — governance is a separate stdio package); #5 (on-demand single pass, no daemon); #6 (no app SQLite/migration). #2/#3/#7 trivially held.
 

@@ -1,4 +1,6 @@
 import { normalizeModelId } from "../decision/modelId.ts";
+import { DEFAULT_FORBIDDEN_DECISION_CLASSES } from "../conductor/envelope.ts";
+import type { ExecutorKind, AutonomyEnvelope } from "../conductor/envelope.ts";
 
 /** Parse BOULE_REVIEW_QUORUM into a positive integer. Junk / <1 / unset → 1.
  *  Fail-closed: an unparseable quorum must never silently LOWER the bar below 1. */
@@ -83,11 +85,7 @@ export function reviewerIdentity(resolved: { command: string; args: string[] }):
  *  normalizeModelId(actor)). Identity = resolved (command, args), so it CANNOT catch a fake
  *  quorum hiding behind the same binary with different args (e.g. `codex --model a` vs
  *  `codex --model b`), nor verify that two distinct binaries are truly distinct models. */
-export function quorumCollisionWarning(
-  models: string[],
-  env: Env,
-  quorum: number,
-): string | null {
+export function quorumCollisionWarning(models: string[], env: Env, quorum: number): string | null {
   if (quorum < 2 || models.length < quorum) return null;
   const byIdentity = new Map<string, string[]>();
   for (const model of models) {
@@ -122,6 +120,42 @@ export interface ConductorConfig {
   cmuxCmd: string;
   /** gitignored root for per-step worktrees (NEVER the user tree); used only by the live adapter. */
   worktreesRoot: string;
+  /** which CLI executor a spawned session runs (L3). "codex" only when BOULE_CONDUCTOR_EXECUTOR=codex;
+   *  anything else fails closed to "claude" (the original behavior). Run-level default; per-step
+   *  override is a follow-up (needs a plan-step schema field). */
+  executor: ExecutorKind;
+}
+
+/** Parse BOULE_CONDUCTOR_EXECUTOR: exact "codex" (case-insensitive, trimmed) ⇒ codex; else claude.
+ *  Fail-closed: an unrecognized value never silently switches executor. */
+export function parseConductorExecutor(raw: string | undefined): ExecutorKind {
+  return (raw ?? "").trim().toLowerCase() === "codex" ? "codex" : "claude";
+}
+
+type DecisionClass = AutonomyEnvelope["forbiddenDecisionClasses"][number];
+
+/** Per-repo policy envelope defaults (spec 2026-06-07 §E), set by the launcher via comma-list env.
+ *  Unset ⇒ field omitted ⇒ the conductor's built-in envelope defaults apply. Unknown class tokens
+ *  are dropped (fail-safe: never widen the forbidden set with garbage). */
+export interface EnvelopeDefaults {
+  forbiddenDecisionClasses?: DecisionClass[];
+  allowedType2Actions?: string[];
+}
+
+export function parseEnvelopeDefaults(env: Record<string, string | undefined>): EnvelopeDefaults {
+  const valid = new Set<string>(DEFAULT_FORBIDDEN_DECISION_CLASSES);
+  const classes = (env.BOULE_ENVELOPE_FORBIDDEN_CLASSES ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => valid.has(s)) as DecisionClass[];
+  const actions = (env.BOULE_ENVELOPE_ALLOWED_TYPE2 ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: EnvelopeDefaults = {};
+  if (classes.length) out.forbiddenDecisionClasses = classes;
+  if (actions.length) out.allowedType2Actions = actions;
+  return out;
 }
 
 /** Parse BOULE_CONDUCTOR_MODE: "live" (case-insensitive, trimmed) arms the real adapter; anything
@@ -150,12 +184,23 @@ export function parseAutoMode(raw: string | undefined): "off" | "type2" {
   return (raw ?? "").trim().toLowerCase() === "type2" ? "type2" : "off";
 }
 
+/** Parse BOULE_AUTONOMY_LEVEL (config-driven graduated autonomy). Fail-closed: anything
+ *  unrecognized → "manual" (fully human-gated). auto_plan/full OPEN INVARIANT #1's acceptance gate,
+ *  so a typo/unknown value must NEVER accidentally land there. */
+export function parseAutonomyLevel(
+  raw: string | undefined,
+): "manual" | "dispatch" | "auto_plan" | "full" {
+  const v = (raw ?? "").trim().toLowerCase();
+  return v === "dispatch" || v === "auto_plan" || v === "full" ? v : "manual";
+}
+
 /** Assemble the Conductor config from env (all safe defaults). */
 export function parseConductorConfig(env: Record<string, string | undefined>): ConductorConfig {
   return {
     live: parseConductorMode(env.BOULE_CONDUCTOR_MODE),
     cmuxCmd: parseConductorCmuxCmd(env.BOULE_CONDUCTOR_CMUX_CMD),
     worktreesRoot: parseConductorWorktreesRoot(env.BOULE_CONDUCTOR_WORKTREES_ROOT),
+    executor: parseConductorExecutor(env.BOULE_CONDUCTOR_EXECUTOR),
   };
 }
 

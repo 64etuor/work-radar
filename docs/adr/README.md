@@ -86,3 +86,11 @@ breadcrumb file. ADRs are the binding records for structural decisions.
 
 When both exist, read the ADR first, then use `docs/decisions.md` for chronology
 and implementation context.
+
+## Governance ADRs live separately
+
+This directory holds the **app** ADRs (0001–0006). The Boule governance harness
+keeps its own ADRs (0007–) under `governance/docs/adr/`. ADR ids are unique across
+both directories (the index build rejects a collision). The governance index
+ingests both dirs additively (`governance/src/index/sources.ts`). See
+`governance/docs/conventions.md` for the full placement rules.

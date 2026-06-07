@@ -1,6 +1,6 @@
 # Boule v3 Phase D — Session Registry + cmux Observer Implementation Plan
 
-> **Status:** ✅ DONE (2026-06-03) — opus critic separate-pass ACCEPT (0 blockers / 0 MAJOR / 2 MINOR; MINOR #1 hardened in `negative.test.ts`). tsc 0, vitest **353** (49 in test/session/), headless stdio smoke OK (11 Phase-D tools + stub no-op), drift `governance/**` only, `bindings.ts` unchanged. NOT pushed (PARKED). **Live cmux smoke (AI-run 2026-06-03): reconcile LOGIC 7/7 GREEN vs REAL cmux surfaces** — known session→`session_observed`(active), exactly one across two observes (heartbeat-on-change), unmanaged surface→one `session_opened` external_owned + idempotent, removed surface→`session_crashed`. ~~⚠️ **BLOCKER (live adapter only): `makeLiveAdapter` runs `cmux list` which real cmux LACKS (status 1 → throws)**~~ **[RESOLVED 2026-06-03]** live adapter now runs `cmux tree --all --json` (terminal-only surface walk) — see plan `2026-06-03-boule-v3-phase-d-observer-live-adapter-fix.md`; reconcile logic unchanged. Design: [session-registry-design](../design/2026-06-03-boule-v3-phase-d-session-registry-design.md).
+> **Status:** ✅ DONE (2026-06-03) — opus critic separate-pass ACCEPT (0 blockers / 0 MAJOR / 2 MINOR; MINOR #1 hardened in `negative.test.ts`). tsc 0, vitest **353** (49 in test/session/), headless stdio smoke OK (11 Phase-D tools + stub no-op), drift `governance/**` only, `bindings.ts` unchanged. NOT pushed (PARKED). **Live cmux smoke (AI-run 2026-06-03): reconcile LOGIC 7/7 GREEN vs REAL cmux surfaces** — known session→`session_observed`(active), exactly one across two observes (heartbeat-on-change), unmanaged surface→one `session_opened` external_owned + idempotent, removed surface→`session_crashed`. ~~⚠️ **BLOCKER (live adapter only): `makeLiveAdapter` runs `cmux list` which real cmux LACKS (status 1 → throws)**~~ **[RESOLVED 2026-06-03]** live adapter now runs `cmux tree --all --json` (terminal-only surface walk) — see plan `2026-06-03-boule-v3-phase-d-observer-live-adapter-fix.md`; reconcile logic unchanged. Design: [design §7 Phase Ledger](../design/2026-06-02-boule-v3-orchestrator-control-plane-design.md) (per-phase 설계 §7로 흡수 2026-06-04; 원본은 git 히스토리).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Checkboxes = build tracking; the runtime `SessionState = events→derived` is the truth. Tick only on real evidence.
 
@@ -10,7 +10,7 @@
 
 **Tech:** TS (Node 24 strip-types; src `.ts`, tests `.js`), vitest, zod 4.4.3.
 
-Design: [2026-06-03-boule-v3-phase-d-session-registry-design.md](../design/2026-06-03-boule-v3-phase-d-session-registry-design.md).
+Design: [design §7 Phase Ledger](../design/2026-06-02-boule-v3-orchestrator-control-plane-design.md) (per-phase 설계 §7로 흡수 2026-06-04; 원본 `...-phase-d-session-registry-design.md`는 git 히스토리).
 
 ---
 

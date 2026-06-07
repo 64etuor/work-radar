@@ -1,6 +1,6 @@
 # Boule v3 Phase B — Plan Lifecycle + Planner Implementation Plan
 
-> **Status:** ✅ DONE (2026-06-02) — branch `feat/boule-v2-planner`, opus critic ACCEPT (0 blockers/0 majors/3 inherited minors), vitest 242, tsc 0, drift `governance/**`-only, `bindings.ts` unchanged. Spec: [design](../design/2026-06-02-boule-v3-phase-b-plan-lifecycle-planner-design.md). Mirrors the proven Phase A plan format. NOT pushed (push = explicit user request only).
+> **Status:** ✅ DONE (2026-06-02) — branch `feat/boule-v2-planner`, opus critic ACCEPT (0 blockers/0 majors/3 inherited minors), vitest 242, tsc 0, drift `governance/**`-only, `bindings.ts` unchanged. Spec: [design §7 Phase Ledger](../design/2026-06-02-boule-v3-orchestrator-control-plane-design.md) (per-phase 설계 §7로 흡수 2026-06-04; 원본은 git 히스토리). Mirrors the proven Phase A plan format. NOT pushed (push = explicit user request only).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development (or executing-plans). Steps use `- [ ]` checkboxes for human/build tracking; the **runtime Plan state machine = events → derived state** is the orchestrator's truth, never these checkboxes. Tick a box only when its named Orchestrator-observable evidence is real (test green / event written).
 

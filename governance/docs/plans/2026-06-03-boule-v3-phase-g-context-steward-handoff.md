@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node 24+ strip-types TS (source imports `.ts`, tests import `.js`), vitest, zod (MCP input), `@modelcontextprotocol/sdk`. Governance sidecar under `governance/` — NOT the Rust app.
 
-**Design:** `governance/docs/design/2026-06-03-boule-v3-phase-g-context-steward-handoff-design.md` (committed `f4ec295`).
+**Design:** `governance/docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §7 Phase Ledger (per-phase 설계는 2026-06-04 §7로 흡수; 원본 `...-phase-g-context-steward-handoff-design.md` committed `f4ec295`, git 히스토리).
 
 **Constraints (user-stated, this slice):** decision_* write-path 0 · no push/merge/delete · `src/bindings.ts` + app SQLite/migrations byte-unchanged · leave gates + separate-critic evidence · bounded implementation only within this accepted plan.
 

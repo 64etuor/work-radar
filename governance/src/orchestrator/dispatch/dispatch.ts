@@ -1,6 +1,7 @@
 import type { ConductorAdapter } from "../../conductor/adapter.ts";
+import type { ExecutorKind } from "../../conductor/envelope.ts";
 import { deriveConductorState } from "../../conductor/conductor.ts";
-import { conductPlan } from "../../conductor/handlers.ts";
+import { conductPlan, type ConductorEnvelopeDefaults } from "../../conductor/handlers.ts";
 import { readAllEvents } from "../../decision/readEvents.ts";
 import type { GovEvent } from "../../event/event.ts";
 import { generateId } from "../../event/id.ts";
@@ -60,10 +61,17 @@ function dispatchEvent(
 /** One on-demand pass over current plan_proposed events. Off mode writes nothing. */
 export async function autoDispatch(
   workspaceDir: string,
-  deps: { adapter: ConductorAdapter },
+  deps: {
+    adapter: ConductorAdapter;
+    executor?: ExecutorKind;
+    envelopeDefaults?: ConductorEnvelopeDefaults;
+  },
   mode: AutoMode,
   now: Date,
   rand: number,
+  /** Hard cap on CONDUCTS this pass (the blast-radius bound enforced under the dispatch boundary —
+   *  `boule tick --max-steps`). Default unbounded preserves the existing MCP auto_dispatch behavior. */
+  maxConducts: number = Number.POSITIVE_INFINITY,
 ): Promise<DispatchSummary> {
   const summary: DispatchSummary = { executed: 0, failed: 0, denied: 0, skipped: 0 };
   if (mode !== "type2") return summary;
@@ -75,7 +83,13 @@ export async function autoDispatch(
     if (e.frontmatter.type === "step_bound" && body.planId && typeof body.stepIndex === "number") {
       existing.add(materializedKey(body.planId, body.stepIndex));
     } else if (e.frontmatter.type === "action_denied" && body.planId && body.reason) {
-      existing.add(deniedKey(body.planId, typeof body.stepIndex === "number" ? body.stepIndex : null, body.reason));
+      existing.add(
+        deniedKey(
+          body.planId,
+          typeof body.stepIndex === "number" ? body.stepIndex : null,
+          body.reason,
+        ),
+      );
     }
   }
 
@@ -83,6 +97,7 @@ export async function autoDispatch(
   const nextStamp = () => new Date(now.getTime() + offset++ * 1000);
 
   for (const planProposed of plansOf(all)) {
+    if (summary.executed >= maxConducts) break; // blast-radius cap reached → rest waits for next tick
     const conductor = deriveConductorState(planProposed, all);
     if (isTerminalPlanPhase(conductor.planPhase)) continue;
 
@@ -119,14 +134,26 @@ export async function autoDispatch(
     const plannedAt = nextStamp();
     await writeEvent(
       workspaceDir,
-      dispatchEvent("instruction_planned", verdict.planId, { planId: verdict.planId, stepIndex: verdict.stepIndex }, plannedAt, rand),
+      dispatchEvent(
+        "instruction_planned",
+        verdict.planId,
+        { planId: verdict.planId, stepIndex: verdict.stepIndex },
+        plannedAt,
+        rand,
+      ),
       plannedAt,
     );
 
     const conductNow = new Date(now.getTime() + offset * 1000);
     offset += 4;
     try {
-      const result = await conductPlan(workspaceDir, { planId: verdict.planId }, deps, conductNow, rand);
+      const result = await conductPlan(
+        workspaceDir,
+        { planId: verdict.planId },
+        deps,
+        conductNow,
+        rand,
+      );
       const outcomeAt = nextStamp();
       if (result.ok && result.advanced) {
         await writeEvent(
@@ -134,7 +161,11 @@ export async function autoDispatch(
           dispatchEvent(
             "orchestrator_action_executed",
             verdict.planId,
-            { planId: verdict.planId, stepIndex: result.advanced.stepIndex, taskId: result.advanced.taskId },
+            {
+              planId: verdict.planId,
+              stepIndex: result.advanced.stepIndex,
+              taskId: result.advanced.taskId,
+            },
             outcomeAt,
             rand,
             [result.advanced.taskId],
@@ -162,7 +193,13 @@ export async function autoDispatch(
       const reason = err instanceof Error ? err.message : String(err);
       await writeEvent(
         workspaceDir,
-        dispatchEvent("orchestrator_action_failed", verdict.planId, { planId: verdict.planId, stepIndex: verdict.stepIndex, reason }, outcomeAt, rand),
+        dispatchEvent(
+          "orchestrator_action_failed",
+          verdict.planId,
+          { planId: verdict.planId, stepIndex: verdict.stepIndex, reason },
+          outcomeAt,
+          rand,
+        ),
         outcomeAt,
       );
       summary.failed++;
