@@ -87,7 +87,10 @@ fn verify_oauth_state(recv: &str, expected: &str) -> Result<(), AppError> {
 }
 
 /// 저장된 creds blob을 읽는다(없으면 None). 토큰 본문은 호출 내부에서만 쓰인다(반환 안 함).
-async fn load_gmail_creds(db: &Db, project_id: &str) -> Result<Option<GmailCreds>, String> {
+pub(crate) async fn load_gmail_creds(
+    db: &Db,
+    project_id: &str,
+) -> Result<Option<GmailCreds>, String> {
     let cref = project_credential_ref(db, project_id).await?;
     match keychain::get_token(&cref, TokenKind::Gmail).map_err(|e| e.to_string())? {
         Some(s) => Ok(Some(GmailCreds::from_blob(&s).map_err(|e| e.to_string())?)),

@@ -23,6 +23,7 @@ export const commands = {
 	projectTokenStatus: (projectId: string) => typedError<TokenStatus, AppError>(__TAURI_INVOKE("project_token_status", { projectId })),
 	/**  토큰으로 외부 API ping(read-only). 토큰은 keychain에서 읽어 Rust 안에서만 쓰인다. */
 	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
+	runConnectionAudit: () => typedError<ConnectionAudit, AppError>(__TAURI_INVOKE("run_connection_audit")),
 	/**  gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
 	ghCliStatus: () => typedError<CliToolStatus, AppError>(__TAURI_INVOKE("gh_cli_status")),
 	/**
@@ -676,6 +677,17 @@ export const commands = {
 };
 
 /* Types */
+/**  같은 외부 계정(GitHub login / Notion bot)이 여러 프로젝트에 쓰인 그룹. */
+export type AccountDuplicate = {
+	/**  "github" | "notion". */
+	service: string,
+	/**  login(github) / bot 이름(notion). */
+	identity: string,
+	projects: AuditProjectRef[],
+	/**  그룹이 개인·업무 프로젝트를 **모두** 포함 → 토큰 분리 권장 위반 가능(강조 경고). */
+	crossKind: boolean,
+};
+
 /**  설정 > Agents에서 보이는 내부 프롬프트 실행 설정. */
 export type AgentPromptConfig = {
 	id: string,
@@ -773,6 +785,13 @@ export type AppliedSkill = {
 
 /**  라이프 도메인 (닫힌 taxonomy = Wheel of Life + other). AI는 세트 밖을 만들지 않는다. */
 export type AreaTag = "health" | "work" | "studies" | "environment" | "recreation" | "romance" | "family" | "friends" | "finances" | "other";
+
+/**  경고 그룹에 등장하는 프로젝트 참조(개인/업무 구분 포함). */
+export type AuditProjectRef = {
+	id: string,
+	name: string,
+	kind: ProjectKind,
+};
 
 /**
  *  백업 스냅샷 1건의 메타. specta는 i64(BigInt) export 금지 → 개수는 i32, 바이트는 f64
@@ -983,6 +1002,28 @@ export type CommitGraphEntry = {
 /**  base...HEAD 커밋 그래프 한 커밋의 방향. right=head 전용, left=base 전용. */
 export type CommitSide = "left" | "right";
 
+/**  한 서비스 연결의 점검 결과. `detail`은 사람이 읽을 식별자/에러(토큰 본문 없음). */
+export type ConnCheck = {
+	state: ConnState,
+	detail: string,
+};
+
+/**  단일 연결의 상태. */
+export type ConnState = 
+/**  미설정(토큰/바인딩 없음). */
+"not_configured" | 
+/**  검증 성공. */
+"ok" | 
+/**  검증 실패(토큰 무효/권한/네트워크 등). */
+"failed";
+
+/**  연결 점검 결과(읽기 전용 집계). */
+export type ConnectionAudit = {
+	projects: ProjectConnectionStatus[],
+	duplicates: DuplicateWarnings,
+	environment: EnvWarning[],
+};
+
 export type ControlRoomSnapshot = {
 	/**  RFC3339 newest state-file mtime; None if nothing has been projected yet. */
 	generatedAt: string | null,
@@ -1118,8 +1159,28 @@ export type DiffMode =
 /**  2-way 드리프트 상태(베이스라인 없음 — 누가 편집했는지는 표시 안 함). snake_case 방출. */
 export type DivergenceStatus = "in_sync" | "diverged";
 
+/**  같은 식별자(레포/DB)가 여러 프로젝트에 중복 설정된 그룹. */
+export type DuplicateGroup = {
+	/**  "owner/repo" · local 경로 · Notion DB id. */
+	identity: string,
+	projects: AuditProjectRef[],
+};
+
+/**  중복 경고 묶음. */
+export type DuplicateWarnings = {
+	repos: DuplicateGroup[],
+	notionDbs: DuplicateGroup[],
+	accounts: AccountDuplicate[],
+};
+
 /**  잡 실행 엔진. agent_runs.engine CHECK과 동일. */
 export type Engine = "codex" | "hermes" | "claude";
+
+/**  환경 경고(예: CLI 다중 설치로 우선순위 모호). */
+export type EnvWarning = {
+	code: string,
+	message: string,
+};
 
 /**  액션 가능 힌트(열기/이동 등). 프런트가 버튼/링크로 노출. */
 export type ErrorAction = {
@@ -1500,6 +1561,19 @@ export type Project = {
 	credentialRef: string,
 	createdAt: string,
 	updatedAt: string,
+};
+
+/**  프로젝트 한 개의 서비스별 연결 상태. */
+export type ProjectConnectionStatus = {
+	projectId: string,
+	name: string,
+	kind: ProjectKind,
+	github: ConnCheck,
+	notion: ConnCheck,
+	notionBacklogDb: ConnCheck,
+	notionAgendaDb: ConnCheck,
+	googleCalendar: ConnCheck,
+	gmail: ConnCheck,
 };
 
 /**  프로젝트 종류. 개인/업무는 별도 토큰·Notion 워크스페이스로 분리된다. */

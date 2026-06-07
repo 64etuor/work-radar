@@ -14,6 +14,7 @@ pub mod approval_grant;
 pub mod agent_run_store;
 pub mod agents;
 pub mod agents_config;
+pub mod audit;
 pub mod calendar;
 pub mod calendar_sync;
 pub mod cmux;
@@ -43,6 +44,7 @@ pub mod worktree;
 
 pub use agents::*;
 pub use agents_config::*;
+pub use audit::*;
 pub use calendar::*;
 pub use calendar_sync::*;
 pub use cmux::*;

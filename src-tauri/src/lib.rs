@@ -68,6 +68,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::delete_project_token,
         commands::project_token_status,
         commands::ping_project_token,
+        // 연결 점검(전 프로젝트 헬스체크 + 중복/환경 경고). 읽기 전용.
+        commands::run_connection_audit,
         // CLI 토큰 import (auth 통일, Phase 14) — 토큰은 keychain으로만, IPC 미반환.
         commands::gh_cli_status,
         commands::import_github_token,

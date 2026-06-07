@@ -79,7 +79,10 @@ fn cancel_google_oauth_attempt(project_id: &str) -> bool {
 // 외부 mutate 0 → Acceptance 불요(PR Radar read 선례). 실 OAuth/네트워크는 사용자 관찰(헤드리스 제외).
 
 /// 저장된 creds blob을 읽는다(없으면 None). 토큰 본문은 호출 내부에서만 쓰인다(반환 안 함).
-async fn load_calendar_creds(db: &Db, project_id: &str) -> Result<Option<CalendarCreds>, String> {
+pub(crate) async fn load_calendar_creds(
+    db: &Db,
+    project_id: &str,
+) -> Result<Option<CalendarCreds>, String> {
     let cref = project_credential_ref(db, project_id).await?;
     match keychain::get_token(&cref, TokenKind::GoogleCalendar).map_err(|e| e.to_string())? {
         Some(s) => Ok(Some(

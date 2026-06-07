@@ -3,6 +3,7 @@
 //! INVARIANT: `quadrant`(사람 결정) vs `suggested_quadrant`/`suggested_area`(파생 힌트) 분리.
 
 mod agent;
+mod audit;
 mod automation;
 mod calendar;
 mod gmail;
@@ -21,6 +22,7 @@ mod tokens;
 mod worktree;
 
 pub use agent::*;
+pub use audit::*;
 pub use automation::*;
 pub use calendar::*;
 pub use gmail::*;
