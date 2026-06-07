@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { resolve, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildIndex, nodeIndexFs } from "../index/build.ts";
 import { harvest, makeWriteOne } from "../harvest/harvest.ts";
 import { realGitLog } from "../harvest/gitLog.ts";
@@ -688,6 +689,9 @@ function buildConductorAdapter(): ConductorAdapter {
     worktreesRoot: CONDUCTOR_CFG.worktreesRoot,
     cmuxCmd: CONDUCTOR_CFG.cmuxCmd,
     governanceWorkspace: WORKSPACE, // spawned session's escalate writes back here
+    // The governance server lives at the Boule install (this file), NOT under the target repo —
+    // a designated local repo has no governance/ dir. Spawned sessions point their executor MCP here.
+    serverEntrypoint: fileURLToPath(import.meta.url),
     // per-project cmux folder (repoRoot basename) — sessions group under it; reuse-or-create.
     projectLabel: projectLabelFromRepoRoot(REPO_ROOT),
     log: (line) => process.stderr.write(`${line}\n`), // PII-safe (명령명+status만)

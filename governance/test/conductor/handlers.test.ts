@@ -214,6 +214,7 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
       spawn: fakeSpawn,
       fs: fakeFs,
       repoRoot: "/repo",
+      serverEntrypoint: "/install/governance/src/mcp/server.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -274,6 +275,10 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     const mcpJson = writes.find((w) => w.path.endsWith("mcp.json"))!.data;
     expect(mcpJson).toContain('"BOULE_SESSION_ROLE": "executor"');
     expect(mcpJson).toContain('"BOULE_WORKSPACE": "/repo/governance/workspace"');
+    // executor MCP server = the Boule install entrypoint, NOT <repoRoot>/governance (the target
+    // repo has no governance/ dir) — this is the per-repo loop-closure fix.
+    expect(mcpJson).toContain("/install/governance/src/mcp/server.ts");
+    expect(mcpJson).not.toContain("/repo/governance/src/mcp/server.ts");
   });
 
   it("surfaces a terminal failure when git exits non-zero (no retry loop)", async () => {
@@ -282,6 +287,7 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
       spawn: fakeSpawn,
       fs: { mkdir: async () => undefined, writeFile: async () => undefined },
       repoRoot: "/repo",
+      serverEntrypoint: "/install/governance/src/mcp/server.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -328,6 +334,7 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
       spawn: fake.spawn,
       fs: { mkdir: async () => undefined, writeFile: async () => undefined },
       repoRoot: "/repo",
+      serverEntrypoint: "/install/governance/src/mcp/server.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -433,7 +440,12 @@ describe("cmux output parsing (real-contract helpers — live-loop de-risk)", ()
 });
 
 describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envelope)", () => {
-  const cmdDeps = { repoRoot: "/repo", governanceWorkspace: "/repo/governance/workspace" };
+  // serverEntrypoint is the Boule INSTALL path, deliberately NOT under /repo (the target repo) —
+  // proves the executor MCP points at the install, not <repoRoot>/governance.
+  const cmdDeps = {
+    serverEntrypoint: "/install/governance/src/mcp/server.ts",
+    governanceWorkspace: "/repo/governance/workspace",
+  };
 
   it("claude (default) builds the scoped-mcp.json + strict + verdict denylist invocation", () => {
     const c = buildSessionCommand("claude", { worktreePath: "/wt/s0" }, cmdDeps);
@@ -461,7 +473,8 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     // same executor-role server (verdict tools structurally absent), attached via codex -c config
     expect(c).toContain("mcp_servers.boule-governance.command=");
     expect(c).toContain('BOULE_SESSION_ROLE="executor"');
-    expect(c).toContain("/repo/governance/src/mcp/server.ts");
+    expect(c).toContain("/install/governance/src/mcp/server.ts");
+    expect(c).not.toContain("/repo/governance/src/mcp/server.ts"); // never repoRoot-derived
     expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
     // codex has no per-server denylist — must NOT rely on claude's flags
     expect(c).not.toContain("--disallowedTools");
@@ -493,6 +506,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
       spawn: fakeSpawn,
       fs: { mkdir: async () => undefined, writeFile: async () => undefined },
       repoRoot: "/repo",
+      serverEntrypoint: "/install/governance/src/mcp/server.ts",
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",

@@ -269,10 +269,10 @@ node: 테스트=node20(CI핀), 런타임 서버=node22+(`--experimental-strip-ty
 워크트리 의존 → 사용자/cmux). 전부 `governance/docs/runbooks/2026-06-07-live-loop-smoke.md`로 실행 가능.
 신규 read-only MCP 진단 도구 3종(`preflight`/`readiness`/`stalled_tasks`)이 go/no-go를 결정적으로 알려준다.
 
-## 9.5.1 라이브 어댑터 수정 (L1/L3 라이브 구동에서 발견 — never-run-live 결함)
+## 9.5.1 라이브 어댑터 수정 (L1/L3 + per-repo 라이브 구동에서 발견 — never-run-live 결함)
 
-라이브 단일스텝을 실제 구동하니 `makeLiveAdapter`의 cmux 배관이 **유닛테스트(가짜 spawn)에서만
-통과하던** 결함 4건이 드러남. 전부 수정 + 실contract 테스트로 고정(`conductor/handlers.test.ts` 26 tests):
+라이브 단일스텝을 실제 구동하니 `makeLiveAdapter`의 cmux/MCP 배관이 **유닛테스트(가짜 spawn)에서만
+통과하던** 결함 5건이 드러남. 전부 수정 + 실contract 테스트로 고정(`conductor/handlers.test.ts`):
 
 1. **surface 파싱**: `new-workspace`는 `OK workspace:N`(공지=stderr)을 출력 → `stdout.trim()`은 surface가
    아닌 workspace ref. 이제 `parseCmuxRef` + `cmux tree --json`에서 워크스페이스의 terminal **surface** resolve
@@ -287,9 +287,23 @@ node: 테스트=node20(CI핀), 런타임 서버=node22+(`--experimental-strip-ty
    **verdict 격리(executor-role MCP)·외부쓰기 게이트(L4)는 이 플래그와 무관하게 구조적으로 유지**되며,
    claude의 OS-레벨 FS 봉쇄는 후속(§9.6). (※ §2의 "worktree=hard boundary"는 codex엔 성립, claude엔 advisory.)
 
+5. **per-repo 세션 MCP 서버 경로**(⭐ per-repo 라이브에서만 노출 — L1/L3 스모크는 governance 심링크로
+   가려졌음): `sessionMcpConfig`/codex `serverPath`가 `${repoRoot}/governance/src/mcp/server.ts`로 서버를
+   유도 — **지정 로컬 레포엔 governance/ 디렉터리가 없다**(그 레포는 boule 설치본이 아님) → 스폰된 세션의
+   executor MCP가 부팅 실패 → `complete_task` 불가 → 루프 영구 정체(파일은 생성되나 닫히지 않음). 수정:
+   서버 경로를 **Boule 설치 위치**(`import.meta.url` 기반 `serverEntrypoint`, `LiveAdapterDeps`로 주입)에서
+   유도, repoRoot와 분리(repoRoot는 worktree git add 전용으로 유지). `boule run --repo <타깃>` 라이브로
+   루프 닫힘 재확인(events→`<repo>/.boule/workspace`, worktree→`<repo>/.boule/worktrees`, decisions ingest=그
+   레포의 `docs/decisions.md`).
+
 또한 **세션 워크스페이스를 프로젝트별 cmux 폴더(workspace-group)로 그룹화** — repoRoot basename 라벨로
 reuse-or-create(`findGroupRef`/`projectLabelFromRepoRoot`, best-effort=실패해도 루프 무영향). 라이브 재현:
 2회 실행이 같은 폴더를 재사용(세션만 추가).
+
+**per-repo `boule run --repo` 라이브 입증**(2026-06-07): `boule init`→`.boule/{config,workspace,worktrees,mcp.json}`
++ `.gitignore` 패치 → `boule run`이 BOULE_WORKSPACE/REPO_ROOT/WORKTREES를 `.boule/`로 스코프 → 1-스텝 루프
+닫힘 + per-repo decisions ingest 확인. (이전엔 Slice 1 유닛테스트만; 이제 실 entrypoint 라이브.) 단 #5 수정
+전엔 per-repo 루프가 닫히지 못했음 — Slice 1을 처음 실제 구동해 발견.
 
 ## 9.6 남은 비결정 follow-up (별도 슬라이스)
 

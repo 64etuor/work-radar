@@ -63,6 +63,10 @@ export interface LiveAdapterDeps {
   repoRoot: string; // git worktrees are added from here (NEVER the user tree directly)
   worktreesRoot: string; // gitignored root; one worktree dir per (plan, step)
   cmuxCmd: string; // the cmux binary (app bin by default)
+  /** Absolute path to the governance MCP server (the Boule INSTALL, e.g. via import.meta.url) —
+   *  NOT under the target repo. A designated local repo has no governance/ dir, so the spawned
+   *  session's executor-role MCP must point here, not at <repoRoot>/governance/src/mcp/server.ts. */
+  serverEntrypoint: string;
   /** The governance workspace the spawned session's escalate must write back to (so the
    *  Conductor sees its decision_blocked). Defaults to <repoRoot>/governance/workspace. */
   governanceWorkspace: string;
@@ -91,14 +95,14 @@ export const SESSION_DENIED_TOOLS = [
 /** The scoped MCP config written into each session worktree. It launches boule with
  *  BOULE_SESSION_ROLE=executor (verdict tools structurally absent) pointed at the SAME
  *  governance workspace, so the session's escalate is visible to the Conductor. */
-export function sessionMcpConfig(repoRoot: string, governanceWorkspace: string): string {
+export function sessionMcpConfig(serverEntrypoint: string, governanceWorkspace: string): string {
   return (
     JSON.stringify(
       {
         mcpServers: {
           [BOULE_MCP_ALIAS]: {
             command: "node",
-            args: ["--experimental-strip-types", `${repoRoot}/governance/src/mcp/server.ts`],
+            args: ["--experimental-strip-types", serverEntrypoint],
             env: { BOULE_SESSION_ROLE: "executor", BOULE_WORKSPACE: governanceWorkspace },
           },
         },
@@ -132,11 +136,13 @@ class CommandError extends Error {
 export function buildSessionCommand(
   executor: ExecutorKind,
   spec: { worktreePath: string },
-  deps: { repoRoot: string; governanceWorkspace: string },
+  deps: { serverEntrypoint: string; governanceWorkspace: string },
 ): string {
   const promptCat = `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"`;
   if (executor === "codex") {
-    const serverPath = `${deps.repoRoot}/governance/src/mcp/server.ts`;
+    // The governance server lives at the Boule INSTALL, not under the target repo (a designated
+    // local repo has no governance/ dir) — derive it from the injected entrypoint, never repoRoot.
+    const serverPath = deps.serverEntrypoint;
     // approval_policy="never" lets the headless exec session call its MCP tools (complete_task /
     // escalate) WITHOUT a per-call approval gate — under the default policy codex blocks the MCP
     // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
@@ -266,7 +272,7 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // (verdict tools structurally absent), so a spawned session can escalate/complete_task but
       // cannot self-resolve (structural INVARIANT #1). See buildSessionCommand.
       const command = buildSessionCommand(spec.executor ?? "claude", spec, {
-        repoRoot: deps.repoRoot,
+        serverEntrypoint: deps.serverEntrypoint,
         governanceWorkspace: deps.governanceWorkspace,
       });
       // Create the isolated workspace AND launch the executor atomically via --command. A
@@ -332,7 +338,7 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // Scoped executor-role MCP config — the structural backstop for session verdict isolation.
       await deps.fs.writeFile(
         `${bouleDir}/mcp.json`,
-        sessionMcpConfig(deps.repoRoot, deps.governanceWorkspace),
+        sessionMcpConfig(deps.serverEntrypoint, deps.governanceWorkspace),
       );
     },
   };
