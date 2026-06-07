@@ -9,16 +9,17 @@
   background: var(--color-wr-bg);
 }
 .skl-head {
-  /* 앱 셸 헤더 높이 고정(pr/wt/jobs/wk와 통일) — 콘텐츠 압박 시 줄어들지 않게.
+  /* 앱 셸 헤더 높이 통일(pr/wt/jobs/wk = padding 14px 22px) — 콘텐츠 압박 시 줄어들지 않게.
+   * 제목 줄은 표준 좌우 패딩(22px)에 맞추고, 세로는 toolbar와 합쳐 표준 헤더 높이를 넘지 않게 축소.
    * 경계선은 바로 아래 .skl-toolbar가 제공하므로 여기엔 두지 않는다(이중선 방지). */
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 18px 10px;
+  padding: 12px 22px 8px;
 }
 .skl-title {
-  font: 600 15px var(--font-sans);
+  font: 600 14px var(--font-sans);
 }
 .skl-count {
   font: 600 11px var(--font-mono);
@@ -31,8 +32,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  padding: 0 18px 12px;
+  gap: 8px;
+  padding: 0 22px 10px;
   border-bottom: 1px solid var(--color-wr-border-light);
 }
 .skl-search {
