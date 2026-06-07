@@ -33,6 +33,16 @@ describe("parseDecisionLog", () => {
     expect(parseDecisionLog("# Decisions\n\nnothing here", "d.md")).toEqual([]);
   });
 
+  it("uses a custom idPrefix (GDL) when provided; defaults to DL", () => {
+    const doc = "- **Gov decision(2026-06-07)**: did it.";
+    const def = parseDecisionLog(doc, "docs/decisions.md");
+    expect(def[0].id).toBe("DL-001"); // default unchanged
+    const gov = parseDecisionLog(doc, "governance/docs/decisions.md", { idPrefix: "GDL" });
+    expect(gov.length).toBe(1);
+    expect(gov[0].id).toBe("GDL-001");
+    expect(gov[0].sourcePath).toBe("governance/docs/decisions.md");
+  });
+
   it("handles the real-world bullet variants (period/qualifier, not just colon)", () => {
     const doc = [
       "- **ADR 체계 도입(2026-05-27).** 구조적 결정은 docs/adr 기록.", // date+period inside bold, no colon

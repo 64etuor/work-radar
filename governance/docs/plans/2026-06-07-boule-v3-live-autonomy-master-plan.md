@@ -264,7 +264,7 @@ fresh-install 한정, 범위 밖). 검증 node: 테스트=node20(CI핀), 런타�
 | **L3** codex peer executor | ⚠️ 배선 라이브 검증 / 어드히어런스 후속 | codex가 `-c mcp_servers`로 executor MCP attach + `complete_task` **호출** 라이브 확인. `approval_policy="never"` 필수(기본 정책=headless exec에서 MCP 호출 차단→`complete_task (failed)` on PermissionRequest) — `buildSessionCommand` 반영(sandbox=workspace-write 유지). 단 gpt-5.5가 파일 작성 후 `complete_task`를 매번 부르진 않음(프롬프트 어드히어런스) → 신뢰성은 step-prompt 강화 또는 옵션 B 래퍼(exit→`task_completed`) 후속(§9.6) |
 | **L4** readiness gate | ✅ DONE | `src/live/readiness.ts` `evaluateReadiness` + 7 test + read-only `readiness` MCP (observer-live 필수); envelope 검증=구조적(ADR-0009) |
 | **L5** Control Room 라이브 | ⏳ 라이브=사용자 | Phase H 뷰 존재; `tauri dev` GUI 스모크 + handoff 라이브=사용자/cmux |
-| **L6** ADR/문서 | ✅ DONE | `docs/adr/0009-live-autonomy-executor-and-readiness.md` + 이 status + runbook |
+| **L6** ADR/문서 | ✅ DONE | `governance/docs/adr/0009-live-autonomy-executor-and-readiness.md` + 이 status + runbook |
 
 **L1 + L2 라이브 입증 완료**(2026-06-07, cmux 네이티브 surface에서 에이전트가 직접 구동). L3 codex
 배선도 라이브 확인(어드히어런스만 후속). **남은 라이브 = L5 Control Room GUI**뿐(`tauri dev` + control-room
@@ -371,10 +371,14 @@ session `019ea1c4`)으로 by-path 제약을 **소스로 검증**한 뒤 결정·
 - **C 스테일 링크 수리**: phase B/B2/C/D/F/G/H/I 플랜의 `Spec:`/`Design:` 헤더 9곳을 삭제된 per-phase design → §7 Phase Ledger로 repoint. (완료된 플랜 본문의 "Modify X" 내러티브·임베디드 ledger·`//!` 코드주석은 사료로 보존.) 이동된 3파일의 inbound 경로 참조 4곳 수리.
 - 검증: `rg`로 잔여 stale 0, governance vitest 무회귀.
 
-**Phase 2 (⏭ DEFERRED — 사용자가 D1=C 선택했으나 코드 변경 필요 → 별도 PR·재확인 권장):**
-사용자 선택 C의 delta = 거버넌스 ADR(0007–0009)을 `governance/docs/`로 이동 + 거버넌스 전용 decisions 로그 분리.
-**이건 docs-only가 아니다** — `build.ts` 파서를 (additive로 두 위치 read) 바꾸고 vitest 검증해야 함. 한 PR=한 관심사라 Phase 1과 분리.
-⚠️ codex가 명시적으로 **trap 경고**(소스 변경 없이 이동하면 런타임 진실 악화) + decisions.md의 거버넌스 breadcrumb이 app(Hermes/messenger 등) 항목과 깊게 교차해 **클린 경계 없음**(분리 = 수동 트리아지·낮은 가치). → **착수 전 사용자 재확인**.
+**Phase 2 (✅ DONE 2026-06-07 — 사용자 "가장 이상적인 구조" 지시 → codex resume-consult 설계 → 구현):**
+codex 재자문(같은 session)으로 "이상적 구조"를 설계: **유일한 실제 결함 = L3/L4 source discovery 하드코딩**(`src/`·`workspace/` 24축 모듈은 이미 이상적 → 무변경). 구현:
+- **`src/index/sources.ts` 신설** = configurable **additive** `IndexSources`(`DEFAULT_INDEX_SOURCES`). `buildIndex(repoRoot, fs, sources?)`가 목록 순회·fail-soft. 기본=앱 `docs/adr/`+거버넌스 `governance/docs/adr/`, `docs/decisions.md`+`governance/docs/decisions.md` **둘 다** read.
+- `parseDecisionLog(content, sourcePath, {idPrefix})` — 기본 `DL`, 거버넌스 `GDL`(id 충돌 회피). ADR id가 dir 간 중복이면 **hard-error**(silent overwrite 금지).
+- 거버넌스 ADR `0007–0009` → `governance/docs/adr/` `git mv`(frontmatter `adr-id`라 ID 불변; 본문 무수정=immutability 유지) + `governance/docs/adr/README.md`. 앱 ADR 0001–0006은 `docs/adr/` 잔류.
+- `governance/docs/decisions.md` 신설(cutover header, **prospective split만** — 과거 ~250줄 교차 항목은 `docs/decisions.md`에 잔류=연대기·`DL-NNN` 보존). 첫 `GDL` breadcrumb = 이 구조 결정.
+- `decision-rails.md`는 repo 전역 잔류. conventions.md §2/INDEX/docs-adr-README 갱신.
+- **검증**: governance `tsc --noEmit` 0 · vitest `test/index` **29/29**(신규: governance-source ingest·dup-ADR throw·GDL prefix) · 앱 `bindings.ts`/migration 무변경. critic 별도 패스 ACCEPT 후 done. 정본 규칙 = `governance/docs/conventions.md`.
 
 **F 자기참조:** 이 master plan은 `governance/docs/plans/`에 이미 있어 (A) 결정과 부합 — 이동 불요.
 </content>

@@ -12,7 +12,7 @@ Codex/규칙은 매트릭스 분류·승격 여부를 자동 확정하지 못한
 > **Boule orchestrator dispatch rail.** Orchestrator/conductor/scheduler dispatch modules do not
 > have a `decision_*` write path. Type-1 boundaries reached by spawned work emit
 > `decision_blocked` and halt until a human resolves them; no timeout/default/self-resolve path.
-> Binding record: `docs/adr/0008-orchestrator-dispatch-decision-rail.md`.
+> Binding record: `governance/docs/adr/0008-orchestrator-dispatch-decision-rail.md`.
 
 ## 2. 모든 외부 변경은 Acceptance 게이트
 

@@ -10,10 +10,17 @@ const BULLET = /^- \*\*(.+?)\*\*\s*(.*)$/;
 // Date at the end of the bold span, tolerating a trailing period (`(2026-05-27).`).
 const DATE_SUFFIX = /\((\d{4}-\d{2}-\d{2})\)\.?\s*$/;
 
-/** Parse `docs/decisions.md` top-level `- **<title>** <rest>` bullets.
- *  Each match is one row; ids are file-order ordinals (DL-NNN) since the log has
- *  no formal ids and is append-only. Non-matching lines are ignored. */
-export function parseDecisionLog(content: string, sourcePath: string): DecisionRow[] {
+/** Parse a decision-log markdown's top-level `- **<title>** <rest>` bullets.
+ *  Each match is one row; ids are file-order ordinals (`<idPrefix>-NNN`) since the
+ *  log has no formal ids and is append-only. `idPrefix` defaults to `DL` (repo-root
+ *  log); the governance-owned log passes `GDL` to avoid id collisions. Non-matching
+ *  lines are ignored. */
+export function parseDecisionLog(
+  content: string,
+  sourcePath: string,
+  opts: { idPrefix?: string } = {},
+): DecisionRow[] {
+  const idPrefix = opts.idPrefix ?? "DL";
   const rows: DecisionRow[] = [];
   let ordinal = 0;
   for (const line of content.split("\n")) {
@@ -27,7 +34,7 @@ export function parseDecisionLog(content: string, sourcePath: string): DecisionR
     // Remainder minus a leading separator (`:`/`.`/space) left over from the bold.
     const rest = m[2].replace(/^[:.\s]+/, "").trim();
     rows.push({
-      id: `DL-${String(ordinal).padStart(3, "0")}`,
+      id: `${idPrefix}-${String(ordinal).padStart(3, "0")}`,
       kind: "decision-log",
       title,
       status: undefined,

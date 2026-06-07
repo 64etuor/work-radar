@@ -4,6 +4,7 @@ import type { DecisionRow, GovernanceIndex, PrincipleRow } from "./types.ts";
 import { parseAdr } from "./adr.ts";
 import { parseDecisionLog } from "./decisionLog.ts";
 import { parseRails } from "./rails.ts";
+import { DEFAULT_INDEX_SOURCES, type IndexSources } from "./sources.ts";
 
 export interface IndexFs {
   /** Returns file contents, or null if missing/unreadable. */
@@ -39,26 +40,49 @@ function pushEdge(m: Map<string, string[]>, key: string, value: string): void {
 }
 
 /** Build the in-memory governance index from the repo's L3/L4 markdown.
- *  markdown is SSOT; this derived structure is rebuilt by calling buildIndex again. */
-export async function buildIndex(repoRoot: string, fs: IndexFs): Promise<GovernanceIndex> {
+ *  markdown is SSOT; this derived structure is rebuilt by calling buildIndex again.
+ *  `sources` is the (additive, fail-soft) discovery config — default reads both the
+ *  repo-root app L3/L4 and the governance-owned L3/L4 (see DEFAULT_INDEX_SOURCES). */
+export async function buildIndex(
+  repoRoot: string,
+  fs: IndexFs,
+  sources: IndexSources = DEFAULT_INDEX_SOURCES,
+): Promise<GovernanceIndex> {
   const decisions: DecisionRow[] = [];
+  // ADR ids must be globally unique across every ADR dir; a silent Map overwrite
+  // would hide a real authoring mistake, so a collision is a hard error.
+  const adrIdSource = new Map<string, string>();
 
-  const adrDir = join(repoRoot, "docs", "adr");
-  const names = (await fs.readDir(adrDir)).filter((n) => n.endsWith(".md") && !SKIP_ADR.has(n));
-  names.sort();
-  for (const name of names) {
-    const content = await fs.readFile(join(adrDir, name));
-    if (content == null) continue;
-    const row = parseAdr(content, `docs/adr/${name}`);
-    if (row) decisions.push(row);
+  for (const src of sources.decisionSources) {
+    if (src.kind === "adr-dir") {
+      const adrDir = join(repoRoot, src.dir);
+      const names = (await fs.readDir(adrDir)).filter((n) => n.endsWith(".md") && !SKIP_ADR.has(n));
+      names.sort();
+      for (const name of names) {
+        const content = await fs.readFile(join(adrDir, name));
+        if (content == null) continue;
+        const row = parseAdr(content, `${src.sourcePathPrefix}/${name}`);
+        if (!row) continue;
+        const prior = adrIdSource.get(row.id);
+        if (prior !== undefined) {
+          throw new Error(`Duplicate ADR id ${row.id}: ${row.sourcePath} collides with ${prior}`);
+        }
+        adrIdSource.set(row.id, row.sourcePath);
+        decisions.push(row);
+      }
+    } else {
+      const content = await fs.readFile(join(repoRoot, src.file));
+      if (content != null) {
+        decisions.push(...parseDecisionLog(content, src.sourcePath, { idPrefix: src.idPrefix }));
+      }
+    }
   }
 
-  const decisionsDoc = await fs.readFile(join(repoRoot, "docs", "decisions.md"));
-  if (decisionsDoc != null) decisions.push(...parseDecisionLog(decisionsDoc, "docs/decisions.md"));
-
-  const railsDoc = await fs.readFile(join(repoRoot, "docs", "areas", "decision-rails.md"));
-  const principles: PrincipleRow[] =
-    railsDoc != null ? parseRails(railsDoc, "docs/areas/decision-rails.md") : [];
+  const principles: PrincipleRow[] = [];
+  for (const src of sources.principleSources) {
+    const content = await fs.readFile(join(repoRoot, src.file));
+    if (content != null) principles.push(...parseRails(content, src.sourcePath));
+  }
 
   const supersededBy = new Map<string, string[]>();
   const referencedBy = new Map<string, string[]>();

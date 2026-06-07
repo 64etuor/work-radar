@@ -10,7 +10,8 @@
 | **아키텍처 / as-built 전모(v3)** | `design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` §7 Phase Ledger |
 | **라이브-자율 실행 큐(현재 진행)** | `plans/2026-06-07-boule-v3-live-autonomy-master-plan.md` |
 | per-feature 설계 입력 | `design/`의 개별 spec (프런트도어 아님 — 하위 입력) |
-| L3/L4 결정 소스 | `docs/adr/0007–0009`, `docs/decisions.md` (코드가 경로로 읽음 — **이동 금지**) |
+| 거버넌스 ADR | `governance/docs/adr/` (0007–; 앱 ADR은 `docs/adr/` 0001–0006) |
+| 거버넌스 결정 로그 | `governance/docs/decisions.md` (`GDL-*`; 과거/앱 로그는 `docs/decisions.md` `DL-*`) |
 | 배치·명명·정본 규칙 | `conventions.md` |
 
 > 마스터 플랜은 **움직이는 실행 큐**이지 프런트도어가 아니다. v3 control-plane 설계는
@@ -20,7 +21,7 @@
 - **거버넌스 설계/계획 문서는 모두 여기에 둔다.** brainstorming/writing-plans 스킬은 기본
   `docs/superpowers/`에 쓰므로, 거버넌스 산출물은 생성 후 `governance/docs/{design,plans}/`로
   `git mv`한다(옮기기 전엔 미정본; 앱-기능 문서는 `docs/superpowers/`에 그대로). 상세: `conventions.md` §1.
-- L3/L4 정본(adr·decisions·decision-rails)은 `docs/`에 둔다(어댑터 `build.ts`가 경로로 읽음 — 이동 금지). 상세: `conventions.md` §2.
+- L3/L4 ingestion은 **additive source list**(`src/index/sources.ts`)다 — 인덱스가 앱(`docs/adr/`·`docs/decisions.md`)과 거버넌스(`governance/docs/adr/`·`governance/docs/decisions.md`)를 **둘 다** 읽는다. `decision-rails.md`는 repo 전역 잔류. 상세: `conventions.md` §2.
 - 런타임 객체(`workspace/specs|plans|tasks|…`)는 이 설계 문서가 아니라 **이벤트 파생물**이다(다른 층).
 - 운영 규율: `../workspace/HARNESS.md`.
 
