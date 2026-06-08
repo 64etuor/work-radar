@@ -333,6 +333,11 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // Boule per-repo autonomy config (Slice 2) — settings-editable boule.config.json knobs.
         commands::get_boule_config,
         commands::set_boule_config,
+        // Boule ticker runtime (Phase T1) — app operator clock settings + manual bounded tick.
+        commands::get_project_tick_status,
+        commands::set_project_tick_enabled,
+        commands::set_project_tick_interval,
+        commands::tick_project_now,
     ])
 }
 
@@ -467,6 +472,22 @@ pub fn run() {
                     code = "external_actions.recovered_interrupted",
                     count = recovered_actions,
                     "interrupted external actions recovered on startup"
+                );
+            }
+
+            // Ticker crash-orphan 회수: 이전 프로세스가 tick 실행 중('in_progress') 죽었으면 그
+            // 잠금을 푼다. 러너는 in-process라 spawn된 boule tick이 앱보다 오래 못 사니, 부팅 시점의
+            // in_progress=1은 반드시 stale → 안 풀면 그 프로젝트가 영구 wedge. attention_required는
+            // 안 건드림(앱 크래시는 거버넌스 halt/stall 아님).
+            let recovered_ticks = tauri::async_runtime::block_on(
+                governance::ticker::recover_interrupted_ticks(&pool),
+            )
+            .unwrap_or(0);
+            if recovered_ticks > 0 {
+                tracing::warn!(
+                    code = "ticker.recovered_interrupted",
+                    count = recovered_ticks,
+                    "interrupted ticker locks released on startup"
                 );
             }
 

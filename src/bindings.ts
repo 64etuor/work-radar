@@ -634,6 +634,14 @@ export const commands = {
 	 *  (test/dev) — the UI warns; acceptance auto-fires actor:"system", never a forged human.
 	 */
 	setBouleConfig: (input: SetBouleConfigInput_Deserialize) => typedError<BouleConfigSettings_Serialize, AppError>(__TAURI_INVOKE("set_boule_config", { input })),
+	/**  Read a project's ticker settings/status. Missing ticker row returns a disabled default view. */
+	getProjectTickStatus: (projectId: string) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("get_project_tick_status", { projectId })),
+	/**  Toggle only the operator clock flag. This does not mutate Boule autonomy/governance state. */
+	setProjectTickEnabled: (projectId: string, enabled: boolean) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_enabled", { projectId, enabled })),
+	/**  Store the future scheduler interval. T1 has no scheduler; this setting is inert until T2. */
+	setProjectTickInterval: (projectId: string, intervalSec: number | null) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_interval", { projectId, intervalSec })),
+	/**  Run one bounded Boule heartbeat for the DB-resolved local repo path. */
+	tickProjectNow: (projectId: string) => typedError<TickProjectNowResult, AppError>(__TAURI_INVOKE("tick_project_now", { projectId })),
 };
 
 /* Types */
@@ -1691,6 +1699,21 @@ export type ProjectConnectionStatus = {
 /**  프로젝트 종류. 개인/업무는 별도 토큰·Notion 워크스페이스로 분리된다. */
 export type ProjectKind = "personal" | "work";
 
+export type ProjectTickStatus = {
+	projectId: string,
+	tickEnabled: boolean,
+	intervalSec: number | null,
+	maxSteps: number,
+	nextDueAt: string | null,
+	inProgress: boolean,
+	lastStartedAt: string | null,
+	lastFinishedAt: string | null,
+	lastOutcome: TickStatusOutcome | null,
+	lastExitCode: number | null,
+	lastReportJson: string | null,
+	attentionRequired: boolean,
+};
+
 /**  append-only 승격 이력 (undo/audit). 외부 변경은 Acceptance 전엔 일어나지 않는다. */
 export type Promotion = {
 	id: string,
@@ -2140,6 +2163,36 @@ export type TaskRow = {
 	title: string,
 	phase: TaskPhase,
 };
+
+export type TickProjectNowResult = {
+	status: ProjectTickStatus,
+	outcome: TickStatusOutcome,
+	success: boolean,
+	skipped: boolean,
+	exitCode: number | null,
+	report: TickReport | null,
+	error: string | null,
+};
+
+export type TickReport = {
+	outcome: TickStatusOutcome,
+	conducted: number,
+	specsAccepted: number,
+	plansAccepted: number,
+	haltedPlans: string[],
+	stalledCount: number,
+	blockers: string[],
+	warnings: string[],
+};
+
+export type TickStatusOutcome = "advanced" | "idle" | "in_flight" | "halted_decision" | "needs_human" | "stalled" | "readiness_failed" | "infra_failed" | "busy" | "timeout" | "spawn_failed" | "parse_failed" | 
+/**
+ *  The app died mid-tick (in_progress lock left set). Boot reconciliation marks the orphaned
+ *  row with this so the stuck lock is released (the in-process runner cannot survive an app
+ *  exit, so any in_progress=1 at startup is necessarily stale). NOT a governance decision/stall,
+ *  so it does NOT set attention_required — the operator simply re-ticks (or the scheduler will).
+ */
+"interrupted";
 
 /**  timeline_notes 한 행. body는 사용자 입력(공백 trim은 IPC 경계에서). */
 export type TimelineNote = {
