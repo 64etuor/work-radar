@@ -10,6 +10,7 @@ import { HermesPanel } from "./hermes/HermesPanel";
 import { HermesSidebar } from "./hermes/HermesSidebar";
 import { useHermesPanelState } from "./hermes/useHermesPanelState";
 import {
+  selectActiveQueueCount,
   selectActiveTab,
   selectIsStreaming,
   selectShowResourceWarning,
@@ -29,6 +30,7 @@ function EmptyHermesState({ onCreateTab }: { onCreateTab: () => Promise<unknown>
 export default function HermesView() {
   const activeTab = useHermesTabsStore(selectActiveTab);
   const isStreaming = useHermesTabsStore(selectIsStreaming);
+  const queueCount = useHermesTabsStore(selectActiveQueueCount);
   const showWarn = useHermesTabsStore(selectShowResourceWarning);
   // Subscribe to the Map reference; derive the array with useMemo so HermesSidebar
   // doesn't re-render on every streaming chunk (Array.from inline would produce a new
@@ -158,6 +160,9 @@ export default function HermesView() {
           {activeTab ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <HermesChatLog
+                // 세션별 remount → 열거나 전환할 때마다 initialScrollRef 가 리셋되어
+                // 즉시(instant) 최하단으로 붙는다(스트리밍 중 append 는 같은 mount라 smooth 유지).
+                key={activeTab.id}
                 messages={activeTab.messages}
                 onRespond={(requestId, optionId, cancelled) =>
                   void respondAsk(activeTab.id, requestId, optionId, cancelled)
@@ -167,8 +172,9 @@ export default function HermesView() {
                 onSend={(text, images) => void send(activeTab.id, text, images)}
                 onCancel={() => void cancel(activeTab.id)}
                 onFocusInput={() => void ensureAgent(activeTab.id)}
-                disabled={activeTab.status === "starting"}
+                disabled={false}
                 isStreaming={isStreaming}
+                queueCount={queueCount}
                 commandsList={activeTab.commandsList}
               />
             </div>

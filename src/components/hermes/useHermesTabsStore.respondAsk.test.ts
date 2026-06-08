@@ -8,9 +8,15 @@ type RespondFn = (
   optionId: string,
   cancelled: boolean,
 ) => Promise<{ status: "ok"; data: null }>;
+type SendFn = (
+  tabId: string,
+  text: string,
+  images: string[],
+) => Promise<{ status: "ok"; data: null }>;
 const hermesAskUserRespond = vi.fn<RespondFn>(() =>
   Promise.resolve({ status: "ok" as const, data: null }),
 );
+const hermesAgentSend = vi.fn<SendFn>(() => Promise.resolve({ status: "ok" as const, data: null }));
 
 vi.mock("@/bindings", () => ({
   commands: {
@@ -23,6 +29,10 @@ vi.mock("@/bindings", () => ({
     // openTab path may run during default-tab logic in other tests; stub the rest as no-ops.
     hermesAgentOpenTab: () => Promise.resolve({ status: "ok", data: null }),
     hermesAgentCloseTab: () => Promise.resolve({ status: "ok", data: null }),
+    hermesAgentSend: (tabId: string, text: string, images: string[]) =>
+      hermesAgentSend(tabId, text, images),
+    hermesMessageAppend: () => Promise.resolve({ status: "ok", data: null }),
+    hermesSessionRename: () => Promise.resolve({ status: "ok", data: null }),
   },
 }));
 
@@ -33,11 +43,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { EMPTY_TABS_STATE } from "./useHermesTabs";
-import { useHermesTabsStore } from "./useHermesTabsStore";
+import { chooseRestoredActiveSession, useHermesTabsStore } from "./useHermesTabsStore";
 
 describe("respondAsk thunk", () => {
   beforeEach(() => {
     hermesAskUserRespond.mockClear();
+    hermesAgentSend.mockClear();
     // Reset the singleton store to a clean state (fresh Map) so tabs from other
     // tests/files can't leak in and make these assertions order-dependent.
     useHermesTabsStore.setState({ ...EMPTY_TABS_STATE, tabs: new Map() });
@@ -65,5 +76,60 @@ describe("respondAsk thunk", () => {
       .tabs.get("a")!
       .messages.find((m) => m.role === "ask");
     expect(card && card.role === "ask" && card.resolved).toBe("cancelled");
+  });
+});
+
+describe("Hermes outbound queue", () => {
+  beforeEach(() => {
+    hermesAskUserRespond.mockClear();
+    hermesAgentSend.mockClear();
+    useHermesTabsStore.setState({ ...EMPTY_TABS_STATE, tabs: new Map() });
+    const d = useHermesTabsStore.getState()._dispatch;
+    d({ type: "open-tab", tabId: "a", defaultName: "A" });
+  });
+
+  it("queues sends while the tab is busy and drains them after ready", async () => {
+    const d = useHermesTabsStore.getState()._dispatch;
+    d({ type: "set-status", tabId: "a", status: "starting" });
+
+    await useHermesTabsStore.getState().send("a", "queued while busy", []);
+
+    let tab = useHermesTabsStore.getState().tabs.get("a")!;
+    expect(hermesAgentSend).not.toHaveBeenCalled();
+    expect(tab.pendingOutbound).toHaveLength(1);
+    expect(tab.messages.some((m) => m.role === "user")).toBe(false);
+
+    d({ type: "set-status", tabId: "a", status: "ready" });
+    await useHermesTabsStore.getState().drainQueued("a");
+
+    tab = useHermesTabsStore.getState().tabs.get("a")!;
+    expect(tab.pendingOutbound).toHaveLength(0);
+    expect(hermesAgentSend).toHaveBeenCalledWith("a", "queued while busy", []);
+    expect(tab.messages[tab.messages.length - 1]).toMatchObject({
+      role: "user",
+      text: "queued while busy",
+    });
+  });
+});
+
+describe("chooseRestoredActiveSession", () => {
+  it("prefers the newest restored session with messages over newer empty sessions", () => {
+    expect(
+      chooseRestoredActiveSession([
+        { id: "empty-newest", messageCount: 0 },
+        { id: "empty-second", messageCount: 0 },
+        { id: "with-messages", messageCount: 1 },
+        { id: "older-with-messages", messageCount: 9 },
+      ]),
+    ).toBe("with-messages");
+  });
+
+  it("falls back to the newest restored session when every session is empty", () => {
+    expect(
+      chooseRestoredActiveSession([
+        { id: "newest-empty", messageCount: 0 },
+        { id: "older-empty", messageCount: 0 },
+      ]),
+    ).toBe("newest-empty");
   });
 });

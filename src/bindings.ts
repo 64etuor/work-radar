@@ -1324,6 +1324,7 @@ export type HermesSessionRow = {
 	updatedAt: string,
 	lastActiveAt: string,
 	archived: number,
+	messageCount: number,
 };
 
 export type InboxCounts = {

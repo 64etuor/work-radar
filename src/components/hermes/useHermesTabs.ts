@@ -7,6 +7,7 @@ export interface TabState {
   name: string;
   status: SessionStatus;
   messages: HermesMessage[];
+  pendingOutbound: OutboundDraft[];
   commandsList: AcpCommand[];
 }
 
@@ -14,6 +15,13 @@ export interface TabsState {
   tabs: Map<TabId, TabState>;
   activeTabId: TabId | null;
 }
+
+export type OutboundDraft = {
+  id: string;
+  text: string;
+  images: string[];
+  ts: number;
+};
 
 export const EMPTY_TABS_STATE: TabsState = {
   tabs: new Map(),
@@ -27,6 +35,8 @@ type Action =
   | { type: "rename"; tabId: TabId; name: string }
   | { type: "set-status"; tabId: TabId; status: SessionStatus }
   | { type: "user"; tabId: TabId; text: string; images: string[] }
+  | { type: "queue-user"; tabId: TabId; draft: OutboundDraft }
+  | { type: "drop-queued-user"; tabId: TabId; draftId: string }
   | { type: "agent-chunk"; tabId: TabId; text: string }
   | { type: "agent-tool"; tabId: TabId; tool: ToolCallSummary }
   | { type: "tool-update"; tabId: TabId; id?: string; patch: Partial<ToolCallSummary> }
@@ -84,6 +94,7 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
         name: a.defaultName,
         status: "idle",
         messages: [],
+        pendingOutbound: [],
         commandsList: [],
       });
       return {
@@ -120,6 +131,18 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
           ts: Date.now(),
         }),
       );
+
+    case "queue-user":
+      return updateTab(state, a.tabId, (t) => ({
+        ...t,
+        pendingOutbound: [...t.pendingOutbound, a.draft],
+      }));
+
+    case "drop-queued-user":
+      return updateTab(state, a.tabId, (t) => ({
+        ...t,
+        pendingOutbound: t.pendingOutbound.filter((draft) => draft.id !== a.draftId),
+      }));
 
     case "system":
       return updateTab(state, a.tabId, (t) =>
@@ -232,6 +255,7 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
       return updateTab(state, a.tabId, (t) => ({
         ...t,
         messages: [],
+        pendingOutbound: [],
         status: "idle",
         commandsList: [],
       }));

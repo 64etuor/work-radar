@@ -19,7 +19,15 @@ import { unwrap } from "@/lib/query/client";
 
 import { autoTitleFrom, rowsToMessages, shouldAutoTitle } from "./sessionList";
 import type { AcpCommand, ToolCallSummary } from "./types";
-import { EMPTY_TABS_STATE, type TabId, tabsReducer, type TabsState, uid } from "./useHermesTabs";
+import {
+  EMPTY_TABS_STATE,
+  type OutboundDraft,
+  type TabId,
+  tabsReducer,
+  type TabsState,
+  type TabState,
+  uid,
+} from "./useHermesTabs";
 
 // ── Store shape ──────────────────────────────────────────────────────────────
 
@@ -33,6 +41,7 @@ interface HermesTabsActions {
   setActive: (tabId: TabId) => void;
   rename: (tabId: TabId, name: string) => void;
   send: (tabId: TabId, text: string, images?: string[]) => Promise<void>;
+  drainQueued: (tabId: TabId) => Promise<void>;
   cancel: (tabId: TabId) => Promise<void>;
   restart: (tabId: TabId) => Promise<void>;
   /** Route an ask-user card choice to the agent + optimistically mark resolved.
@@ -49,9 +58,57 @@ interface HermesTabsActions {
 
 type HermesTabsStore = TabsState & HermesTabsActions;
 
+type RestoredSessionCandidate = {
+  id: string;
+  messageCount?: number;
+};
+
+export function chooseRestoredActiveSession<T extends RestoredSessionCandidate>(
+  sessions: T[],
+  nonEmptyIds?: Set<string>,
+): string | null {
+  const nonEmpty = sessions.find((session) =>
+    nonEmptyIds ? nonEmptyIds.has(session.id) : (session.messageCount ?? 0) > 0,
+  );
+  return nonEmpty?.id ?? sessions[0]?.id ?? null;
+}
+
+function isTabBusy(tab: TabState): boolean {
+  if (tab.status === "starting") return true;
+  const last = tab.messages[tab.messages.length - 1];
+  return !!last && last.role === "assistant" && !last.done;
+}
+
 export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
   const dispatch = (action: Parameters<typeof tabsReducer>[1]) =>
     set((s) => tabsReducer(s, action));
+  const drainingTabs = new Set<TabId>();
+
+  const sendNow = async (tabId: TabId, draft: OutboundDraft): Promise<boolean> => {
+    dispatch({ type: "user", tabId, text: draft.text, images: draft.images });
+    dispatch({ type: "set-status", tabId, status: "starting" });
+    // 영속: user 메시지 + 자동 제목(첫 메시지일 때)
+    void unwrap(commands.hermesMessageAppend(tabId, "user", draft.text, null)).catch(() => {});
+    const tab = get().tabs.get(tabId);
+    if (tab && shouldAutoTitle(tab.name) && draft.text.trim()) {
+      const title = autoTitleFrom(draft.text);
+      dispatch({ type: "rename", tabId, name: title });
+      void unwrap(commands.hermesSessionRename(tabId, title)).catch(() => {});
+    }
+    try {
+      await unwrap(commands.hermesAgentSend(tabId, draft.text, draft.images));
+      return true;
+    } catch (e) {
+      dispatch({
+        type: "system",
+        tabId,
+        text: `송신 실패: ${(e as Error).message}`,
+        level: "error",
+      });
+      dispatch({ type: "set-status", tabId, status: "error" });
+      return false;
+    }
+  };
 
   return {
     ...EMPTY_TABS_STATE,
@@ -122,26 +179,37 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
 
     send: async (tabId, text, images = []) => {
       if (!text.trim() && images.length === 0) return;
-      dispatch({ type: "user", tabId, text, images });
-      dispatch({ type: "set-status", tabId, status: "starting" });
-      // 영속: user 메시지 + 자동 제목(첫 메시지일 때)
-      void unwrap(commands.hermesMessageAppend(tabId, "user", text, null)).catch(() => {});
       const tab = get().tabs.get(tabId);
-      if (tab && shouldAutoTitle(tab.name) && text.trim()) {
-        const title = autoTitleFrom(text);
-        dispatch({ type: "rename", tabId, name: title });
-        void unwrap(commands.hermesSessionRename(tabId, title)).catch(() => {});
+      const draft: OutboundDraft = {
+        id: uid(),
+        text,
+        images,
+        ts: Date.now(),
+      };
+      if (tab && isTabBusy(tab)) {
+        dispatch({ type: "queue-user", tabId, draft });
+        return;
       }
+      const ok = await sendNow(tabId, draft);
+      if (ok) {
+        await get().drainQueued(tabId);
+      }
+    },
+
+    drainQueued: async (tabId) => {
+      if (drainingTabs.has(tabId)) return;
+      drainingTabs.add(tabId);
       try {
-        await unwrap(commands.hermesAgentSend(tabId, text, images));
-      } catch (e) {
-        dispatch({
-          type: "system",
-          tabId,
-          text: `송신 실패: ${(e as Error).message}`,
-          level: "error",
-        });
-        dispatch({ type: "set-status", tabId, status: "error" });
+        while (true) {
+          const tab = get().tabs.get(tabId);
+          if (!tab || isTabBusy(tab) || tab.pendingOutbound.length === 0) return;
+          const draft = tab.pendingOutbound[0];
+          dispatch({ type: "drop-queued-user", tabId, draftId: draft.id });
+          const ok = await sendNow(tabId, draft);
+          if (!ok) return;
+        }
+      } finally {
+        drainingTabs.delete(tabId);
       }
     },
 
@@ -154,6 +222,7 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       // 낙관적: 취소 후 입력 재활성화. 보통 turn-end(cancelled)가 와서 ready 로 정규화하지만,
       // 에이전트가 죽어 turn-end 가 안 오는 경우에도 "starting" 고착으로 입력이 막히지 않게 한다.
       dispatch({ type: "set-status", tabId, status: "ready" });
+      void get().drainQueued(tabId);
     },
 
     // 에이전트 프로세스만 재시작한다(ACP child kill→respawn). **대화 기록은 보존**한다 —
@@ -240,7 +309,8 @@ export function useHermesTabsBootstrap() {
         for (const row of res.data) {
           dispatch({ type: "open-tab", tabId: row.id, defaultName: row.name });
         }
-        const firstId = res.data[0].id;
+        const firstId = chooseRestoredActiveSession(res.data);
+        if (!firstId) return;
         dispatch({ type: "set-active", tabId: firstId });
         // 활성 세션 메시지 lazy-load
         const msgs = await commands.hermesSessionMessages(firstId);
@@ -332,6 +402,7 @@ export function useHermesTabsBootstrap() {
               }
             }
           }
+          void useHermesTabsStore.getState().drainQueued(tabId);
         },
       );
 
@@ -395,8 +466,13 @@ export function selectActiveTab(s: TabsState) {
 export function selectIsStreaming(s: TabsState): boolean {
   const active = selectActiveTab(s);
   if (!active) return false;
+  if (active.status === "starting") return true;
   const last = active.messages[active.messages.length - 1];
   return !!last && last.role === "assistant" && !last.done;
+}
+
+export function selectActiveQueueCount(s: TabsState): number {
+  return selectActiveTab(s)?.pendingOutbound.length ?? 0;
 }
 
 /** 동시 실행(슬롯 점유) 세션 수가 임계 이상인지. 백엔드 holder 크기와 1:1은 아니지만

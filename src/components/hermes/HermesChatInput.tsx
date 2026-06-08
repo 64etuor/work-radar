@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { ArrowUp, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Clock3, Paperclip, Square, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { commands } from "@/bindings";
@@ -22,6 +22,7 @@ interface Props {
   onFocusInput?: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  queueCount?: number;
   commandsList: AcpCommand[];
 }
 
@@ -31,6 +32,7 @@ export function HermesChatInput({
   onFocusInput,
   disabled,
   isStreaming,
+  queueCount = 0,
   commandsList,
 }: Props) {
   const [text, setText] = useState("");
@@ -196,7 +198,7 @@ export function HermesChatInput({
           </Button>
           <Textarea
             ref={taRef}
-            className="max-h-[160px] min-h-[44px] resize-none border-0 bg-transparent py-2.5 pr-14 pl-14 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="max-h-[160px] min-h-[44px] resize-none border-0 bg-transparent py-2.5 pr-24 pl-14 focus-visible:ring-0 focus-visible:ring-offset-0"
             value={text}
             onChange={(e) => {
               setText(e.target.value);
@@ -236,27 +238,35 @@ export function HermesChatInput({
             }}
             onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart)}
             placeholder="메시지 · `/` 명령 · 이미지 paste/drop"
-            disabled={disabled || isStreaming}
+            disabled={disabled}
           />
-          {isStreaming ? (
+          {queueCount > 0 && (
+            <span
+              className="bg-muted text-muted-foreground pointer-events-none absolute top-1/2 right-24 inline-flex h-6 -translate-y-1/2 items-center gap-1 rounded-full px-2 font-mono text-xs"
+              aria-label={`대기 중인 메시지 ${queueCount}개`}
+            >
+              <Clock3 className="size-3" />
+              {queueCount}
+            </span>
+          )}
+          {isStreaming && (
             <Button
-              className="absolute top-1/2 right-2 size-9 -translate-y-1/2 rounded-full p-0"
+              className="absolute top-1/2 right-12 size-9 -translate-y-1/2 rounded-full p-0"
               variant="destructive"
               onClick={onCancel}
               aria-label="중단"
             >
               <Square className="size-4" />
             </Button>
-          ) : (
-            <Button
-              className="absolute top-1/2 right-2 size-9 -translate-y-1/2 rounded-full p-0"
-              onClick={submit}
-              disabled={disabled || (!text.trim() && attachments.length === 0)}
-              aria-label="전송"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
           )}
+          <Button
+            className="absolute top-1/2 right-2 size-9 -translate-y-1/2 rounded-full p-0"
+            onClick={submit}
+            disabled={disabled || (!text.trim() && attachments.length === 0)}
+            aria-label={isStreaming ? "대기열에 추가" : "전송"}
+          >
+            <ArrowUp className="size-4" />
+          </Button>
         </div>
       </div>
     </div>

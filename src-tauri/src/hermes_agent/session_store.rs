@@ -21,6 +21,8 @@ pub struct HermesSessionRow {
     pub last_active_at: String,
     #[sqlx(try_from = "i64")]
     pub archived: i32,
+    #[sqlx(try_from = "i64")]
+    pub message_count: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
@@ -47,7 +49,8 @@ pub(crate) async fn create_inner(
 ) -> Result<HermesSessionRow, sqlx::Error> {
     sqlx::query_as(
         "INSERT INTO hermes_session (id, name) VALUES (?1, ?2) \
-         RETURNING id, name, status, cwd, created_at, updated_at, last_active_at, archived",
+         RETURNING id, name, status, cwd, created_at, updated_at, last_active_at, archived, \
+         0 AS message_count",
     )
     .bind(id)
     .bind(name)
@@ -58,8 +61,12 @@ pub(crate) async fn create_inner(
 #[allow(dead_code)]
 pub(crate) async fn get_inner(db: &Db, id: &str) -> Result<Option<HermesSessionRow>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT id, name, status, cwd, created_at, updated_at, last_active_at, archived \
-         FROM hermes_session WHERE id = ?1",
+        "SELECT s.id, s.name, s.status, s.cwd, s.created_at, s.updated_at, s.last_active_at, \
+         s.archived, COUNT(m.id) AS message_count \
+         FROM hermes_session s \
+         LEFT JOIN hermes_message m ON m.session_id = s.id \
+         WHERE s.id = ?1 \
+         GROUP BY s.id",
     )
     .bind(id)
     .fetch_optional(db)
@@ -68,8 +75,13 @@ pub(crate) async fn get_inner(db: &Db, id: &str) -> Result<Option<HermesSessionR
 
 pub(crate) async fn list_inner(db: &Db) -> Result<Vec<HermesSessionRow>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT id, name, status, cwd, created_at, updated_at, last_active_at, archived \
-         FROM hermes_session WHERE archived = 0 ORDER BY last_active_at DESC",
+        "SELECT s.id, s.name, s.status, s.cwd, s.created_at, s.updated_at, s.last_active_at, \
+         s.archived, COUNT(m.id) AS message_count \
+         FROM hermes_session s \
+         LEFT JOIN hermes_message m ON m.session_id = s.id \
+         WHERE s.archived = 0 \
+         GROUP BY s.id \
+         ORDER BY s.last_active_at DESC",
     )
     .fetch_all(db)
     .await

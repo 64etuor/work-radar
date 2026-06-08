@@ -26,7 +26,11 @@ pub async fn init_db(db_path: &Path) -> Result<Db, sqlx::Error> {
         .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
         .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(5));
+        // 12s: dev에서 GUI + 여러 `--mcp-stdio` 서버(열린 agent/cmux 세션마다 하나)가 같은 DB
+        // 파일을 공유해 프로세스 간 writer 경합이 5s를 넘겨 SQLITE_BUSY("database is locked")가
+        // 났다. WAL은 프로세스 내 writer만 직렬화하므로 다중 프로세스 경합은 busy_timeout 대기로
+        // 흡수한다. writes가 작고 드물어 12s 대기가 풀(acquire_timeout 5s)을 고갈시킬 위험은 낮다.
+        .busy_timeout(Duration::from_secs(12));
 
     // max_connections=10: 30초 백그라운드 calendar sync flush(읽기/쓰기 다수)와 IPC 쿼리·
     // mutation이 동시에 풀을 잡으면 5개로는 단발 spike에 acquire_timeout(기본 30초)이 터졌다.
@@ -74,7 +78,7 @@ mod tests {
             .fetch_one(&pool)
             .await
             .expect("busy_timeout query failed");
-        assert_eq!(busy_timeout, 5000);
+        assert_eq!(busy_timeout, 12000);
     }
 
     /// Phase 16(0011) routines rebuild가 routine_checks 완료 이력을 **보존**하는지 — 데이터 손실 가드.

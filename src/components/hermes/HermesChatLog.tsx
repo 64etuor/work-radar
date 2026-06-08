@@ -36,7 +36,7 @@ function ToolCallPill({ t }: { t: ToolCallSummary }) {
   );
 
   return (
-    <div>
+    <div className="max-w-full min-w-0">
       <button
         type="button"
         aria-expanded={expanded}
@@ -48,10 +48,10 @@ function ToolCallPill({ t }: { t: ToolCallSummary }) {
         <span className="inline-flex shrink-0">{statusIcon}</span>
       </button>
       {expanded && (
-        <div className="bg-muted/30 text-muted-foreground mt-1 max-w-full overflow-x-auto rounded-md px-2 py-1.5 font-mono text-xs whitespace-pre-wrap">
-          {t.title}
-          {t.status ? `\nstatus: ${t.status}` : ""}
-          {t.id ? `\nid: ${t.id}` : ""}
+        <div className="bg-muted/30 text-muted-foreground mt-1 max-w-full min-w-0 overflow-hidden rounded-md px-2 py-1.5 font-mono text-xs">
+          <p className="truncate">{t.title}</p>
+          {t.status && <p className="truncate">status: {t.status}</p>}
+          {t.id && <p className="truncate">id: {t.id}</p>}
         </div>
       )}
     </div>
@@ -74,7 +74,7 @@ function AssistantBubble({
     <div className="max-w-full min-w-0 text-left">
       {m.toolCalls.length > 0 && (
         // items-start로 도구 칩을 항상 좌측 정렬(어떤 부모 flex/grid 조합에서도 가운데 쏠리지 않게).
-        <div className="mb-1.5 flex flex-col items-start gap-1.5 text-left">
+        <div className="mb-1.5 flex max-w-full min-w-0 flex-col items-start gap-1.5 text-left">
           {m.toolCalls.map((t, i) => (
             <ToolCallPill key={t.id ?? i} t={t} />
           ))}
@@ -166,13 +166,17 @@ export function HermesChatLog({ messages, onRespond }: Props) {
   const initialScrollRef = useRef(true);
   useEffect(() => {
     if (!followRef.current) return;
+    // 컨텐츠가 실제로 렌더된 뒤에만 스크롤한다. 빈 상태/exit 애니메이션 중엔 endRef 가
+    // 렌더되지 않으므로(아래 early-return), 여기서 initialScrollRef 를 소모하면 정작 내용이
+    // 뜬 뒤엔 "smooth"로 떨어져 최하단에 안 붙는다. content 가시 시점까지 instant 를 보존한다.
+    if (messages.length === 0 || exiting) return;
     const behavior: ScrollBehavior = initialScrollRef.current ? "auto" : "smooth";
     initialScrollRef.current = false;
     const id = requestAnimationFrame(() => {
       endRef.current?.scrollIntoView({ behavior, block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [messages]);
+  }, [messages, exiting]);
 
   if (messages.length === 0 || exiting) {
     return (
