@@ -131,7 +131,7 @@ export function EventPopover({
   const currentBox = box;
   const { block } = currentBox;
   const isSignal = block.kind === "signal";
-  const isCheckable = isSignal || block.kind === "routine";
+  const isCheckable = isSignal || block.kind === "routine" || Boolean(block.routineId);
   /*
    * 타임라인 배치 삭제는 모든 kind에서 가능 —
    *   signal/routine: stage(unschedule)로 시간 배치만 제거(카드는 Today에 남음).

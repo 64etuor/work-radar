@@ -176,7 +176,7 @@ describe("buildTodayBlocks", () => {
     expect(blocks.map((b) => b.kind)).toEqual(["event"]);
   });
 
-  it("synced routine master event is absorbed instead of rendering as an event job", () => {
+  it("synced routine renders as the calendar event with a local routine checkbox target", () => {
     const routines = [
       {
         id: "r1",
@@ -187,6 +187,7 @@ describe("buildTodayBlocks", () => {
         linkedCalendarId: null,
         googleEventId: "master-1",
         googleCalendarId: "work-cal",
+        done: true,
       },
     ] as never[];
     const events = [
@@ -203,9 +204,27 @@ describe("buildTodayBlocks", () => {
     ] as never[];
     const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].kind).toBe("routine");
+    expect(blocks[0].id).toBe("event:work-cal:master-1");
+    expect(blocks[0].kind).toBe("event");
     expect(blocks[0].linkedEventId).toBe("master-1");
     expect(blocks[0].calendarId).toBe("work-cal");
+    expect(blocks[0].routineId).toBe("r1");
+    expect(blocks[0].done).toBe(true);
+  });
+
+  it("synced routine without a fetched calendar event does not render a routine job block", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "R",
+        timeOfDay: "09:00",
+        timeOverride: null,
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], events: [], routines, date: DATE });
+    expect(blocks).toHaveLength(0);
   });
 
   it("plusMin preserves local time across hour boundary (no UTC drift)", () => {

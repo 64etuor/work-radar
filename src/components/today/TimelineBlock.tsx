@@ -168,7 +168,8 @@ export function TimelineBlock({
   });
   const { attributes, listeners, setNodeRef, transform } = drag;
 
-  const isCheckable = block.kind === "signal" || block.kind === "routine";
+  const isCheckable =
+    block.kind === "signal" || block.kind === "routine" || Boolean(block.routineId);
   const isDone = isCheckable && block.done === true;
 
   const ariaLabel = [

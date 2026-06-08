@@ -78,6 +78,7 @@ function isoFor(
 export function buildTodayBlocks({ signals, events, routines, date }: Input): TimedBlock[] {
   const out: TimedBlock[] = [];
   const absorbed = new Set<string>();
+  const routineByEvent = new Map<string, RoutineToday>();
 
   for (const s of signals) {
     if (!s.scheduledAt || !s.scheduledDuration) continue;
@@ -102,13 +103,14 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
       r.linkedCalendarId ?? r.googleCalendarId,
       r.linkedEventId ?? r.googleEventId,
     );
-    if (key) absorbed.add(key);
+    if (key) routineByEvent.set(key, r);
   }
 
   for (const e of events) {
     if (e.allDay) continue;
     const key = eventKey(e.calendarId, e.id);
     if (key && absorbed.has(key)) continue;
+    const routine = key ? routineByEvent.get(key) : undefined;
     out.push({
       id: `event:${e.calendarId}:${e.id}`,
       kind: "event",
@@ -119,15 +121,18 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
       calendarLabel: e.calendarSummary,
       color: e.projectColor ?? EVENT_FALLBACK_COLOR,
       linkedEventId: e.id,
+      done: routine?.done,
+      routineId: routine?.id,
     });
   }
 
   for (const r of routines) {
     const time = r.timeOverride ?? r.timeOfDay;
     if (!time) continue;
-    const { startISO, endISO } = isoFor(date, time, r.durationMin ?? ROUTINE_DURATION_MIN);
     const linkedCalendarId = r.linkedCalendarId ?? r.googleCalendarId;
     const linkedEventId = r.linkedEventId ?? r.googleEventId;
+    if (eventKey(linkedCalendarId, linkedEventId)) continue;
+    const { startISO, endISO } = isoFor(date, time, r.durationMin ?? ROUTINE_DURATION_MIN);
     out.push({
       id: `routine:${r.id}`,
       kind: "routine",

@@ -106,14 +106,14 @@ export function TodayView() {
     // 블록 상단 중앙을 anchor로 → popover는 side="top" align="center"로 블록 위에 띄움.
     setPopover({ box, anchor: { x: rect.left + rect.width / 2, y: rect.top } });
   }, []);
-  /** 타임라인 ✓ 토글 — block.kind에 따라 signal/routine mutation 분기(event는 done 개념 없음 → 무시). */
+  /** 타임라인 ✓ 토글 — signal 또는 routine-linked calendar event는 로컬 DB 완료 상태만 바꾼다. */
   const handleBlockToggleDone = useCallback(
     (box: LayoutBox, done: boolean) => {
       const { block } = box;
       if (block.kind === "signal") {
         const id = block.id.replace(/^signal:/, "");
         toggleDone.mutate({ id, date: today, done });
-      } else if (block.kind === "routine" && block.routineId) {
+      } else if (block.routineId) {
         toggleRoutine.mutate({ routineId: block.routineId, date: today, done });
       }
     },
