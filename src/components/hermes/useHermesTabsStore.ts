@@ -117,23 +117,25 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
 
     openTab: async () => {
       const tabId = uid();
+      // 낙관적(Linear식): UI에 새 세션을 즉시 표시 + 활성화하고, 느린 백엔드는 뒤에서 처리한다.
+      // (전엔 ACP 에이전트 spawn[느림]을 await 한 뒤에야 탭이 떠 "새 세션" 클릭 반응이 느렸다.)
+      // dispatch 는 동기 → 클릭 즉시 리렌더로 새 세션이 뜬다.
+      dispatch({ type: "open-tab", tabId, defaultName: "새 세션" });
+      dispatch({ type: "set-active", tabId });
+      // 세션 행 생성은 await(빠름) — 이후 메시지 append 의 FK 안전 확보. 실패는 한 줄 노출.
       try {
-        await unwrap(commands.hermesAgentOpenTab(tabId));
         await unwrap(commands.hermesSessionCreate(tabId, "새 세션"));
-        dispatch({ type: "open-tab", tabId, defaultName: "새 세션" });
-        return tabId;
       } catch (e) {
-        const active = get().activeTabId;
-        if (active) {
-          dispatch({
-            type: "system",
-            tabId: active,
-            text: `세션 생성 실패: ${(e as Error).message}`,
-            level: "error",
-          });
-        }
-        return null;
+        dispatch({
+          type: "system",
+          tabId,
+          text: `세션 저장 실패: ${(e as Error).message}`,
+          level: "error",
+        });
       }
+      // 에이전트 spawn(느림)은 백그라운드 — `/` 명령 로드용. 전송은 send 가 lazy-spawn 보장.
+      void unwrap(commands.hermesAgentOpenTab(tabId)).catch(() => {});
+      return tabId;
     },
 
     closeTab: async (tabId) => {
@@ -312,11 +314,21 @@ export function useHermesTabsBootstrap() {
         const firstId = chooseRestoredActiveSession(res.data);
         if (!firstId) return;
         dispatch({ type: "set-active", tabId: firstId });
-        // 활성 세션 메시지 lazy-load
-        const msgs = await commands.hermesSessionMessages(firstId);
-        if (!cancelled && msgs.status === "ok") {
-          dispatch({ type: "load-messages", tabId: firstId, messages: rowsToMessages(msgs.data) });
-        }
+        // 모든 복원 세션의 메시지를 로드한다. 사이드바 프리뷰/시각은 in-memory tab.messages 에서
+        // 나오므로(messagePreview/lastTs), 활성 세션만 로드하면 미방문 세션은 프리뷰가 공백으로
+        // 보였다("언제는 보이고 언제는 사라짐"). 전 세션 로드로 일관되게 채운다.
+        await Promise.all(
+          res.data.map(async (row) => {
+            const msgs = await commands.hermesSessionMessages(row.id);
+            if (!cancelled && msgs.status === "ok" && msgs.data.length > 0) {
+              dispatch({
+                type: "load-messages",
+                tabId: row.id,
+                messages: rowsToMessages(msgs.data),
+              });
+            }
+          }),
+        );
       } else {
         await ensureDefaultTab();
       }

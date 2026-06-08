@@ -176,9 +176,9 @@ export function HermesPanel({
 
   const x = state.x ?? 0;
   const y = state.y ?? 0;
-  // 사이드바(세션 목록) + 채팅 2-컬럼이 들어가야 하므로 가로 비율(720×600). defaultBounds 와 일치.
+  // bounds 로드 전 일시 fallback. defaultBounds(720×780, 세로로 김)와 맞춰 open 시 600→780 깜빡임 방지.
   const w = state.w ?? 720;
-  const h = state.h ?? 600;
+  const h = state.h ?? 780;
 
   return (
     // TODO(a11y): focus trap + restore
