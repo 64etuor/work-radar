@@ -1,5 +1,7 @@
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
   CircleUserRound,
   FolderGit2,
   FolderOpen,
@@ -23,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   calendarColorStyle,
   normalizeHexColor,
@@ -54,10 +57,18 @@ type BouleBudgetCaps = BouleBudgetCaps_Deserialize;
 type BouleBudgetKey = keyof BouleBudgetCaps;
 type BudgetDraft = Record<BouleBudgetKey, string>;
 type BudgetParseResult = BouleBudgetCaps | null | "invalid";
+type AdvancedDraft = {
+  backends: string;
+  routing: string;
+  priceTable: string;
+};
 type BouleConfigPatch = Partial<
   Pick<BouleConfigSettings, "kind" | "autonomyLevel" | "reviewQuorum">
 > & {
   budget?: BouleBudgetCaps | null;
+  backends?: string | null;
+  routing?: string | null;
+  priceTable?: string | null;
 };
 
 const BUDGET_FIELDS: {
@@ -70,6 +81,12 @@ const BUDGET_FIELDS: {
   { key: "stepTokenCap", label: "스텝 토큰 한도", integer: true, step: 1 },
   { key: "runCostCapUsd", label: "실행 비용 USD", integer: false, step: 0.01 },
   { key: "stepCostCapUsd", label: "스텝 비용 USD", integer: false, step: 0.01 },
+];
+
+const ADVANCED_FIELDS: { key: keyof AdvancedDraft; label: string }[] = [
+  { key: "backends", label: "backends" },
+  { key: "routing", label: "routing" },
+  { key: "priceTable", label: "priceTable" },
 ];
 
 function budgetDraftFrom(budget: BouleConfigSettings["budget"]): BudgetDraft {
@@ -108,6 +125,31 @@ function budgetFromDraft(draft: BudgetDraft): BudgetParseResult {
   if (Object.values(parsed).includes("invalid")) return "invalid";
   const next: BouleBudgetCaps = parsed as BouleBudgetCaps;
   return Object.values(next).some((v) => v != null) ? next : null;
+}
+
+function prettyJson(value: unknown): string {
+  return value == null ? "" : JSON.stringify(value, null, 2);
+}
+
+function advancedDraftFrom(data: BouleConfigSettings | null | undefined): AdvancedDraft {
+  return {
+    backends: prettyJson(data?.backends),
+    routing: prettyJson(data?.routing),
+    priceTable: prettyJson(data?.priceTable),
+  };
+}
+
+function advancedInputFromDraft(draft: AdvancedDraft) {
+  return {
+    backends: draft.backends.trim() === "" ? null : draft.backends,
+    routing: draft.routing.trim() === "" ? null : draft.routing,
+    priceTable: draft.priceTable.trim() === "" ? null : draft.priceTable,
+  };
+}
+
+function advancedSeedKey(data: BouleConfigSettings | null | undefined): string | null {
+  if (!data) return null;
+  return JSON.stringify([data.backends ?? null, data.routing ?? null, data.priceTable ?? null]);
 }
 
 /** Notion DB 연결 테스트 버튼 + 인라인 결과. */
@@ -314,28 +356,53 @@ function BouleConfigControls({
   const set = useSetBouleConfig();
   const data = cfg.data;
   const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => budgetDraftFrom(null));
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedDraft, setAdvancedDraft] = useState<AdvancedDraft>(() =>
+    advancedDraftFrom(null),
+  );
+  const [advancedError, setAdvancedError] = useState<string | null>(null);
   const budgetSeed = data ? JSON.stringify(data.budget ?? null) : null;
   const [seededBudget, setSeededBudget] = useState<string | null>(null);
   if (data && budgetSeed !== seededBudget) {
     setSeededBudget(budgetSeed);
     setBudgetDraft(budgetDraftFrom(data.budget));
   }
+  const advancedSeed = advancedSeedKey(data);
+  const [seededAdvanced, setSeededAdvanced] = useState<string | null>(null);
+  if (data && advancedSeed !== seededAdvanced) {
+    setSeededAdvanced(advancedSeed);
+    setAdvancedDraft(advancedDraftFrom(data));
+    setAdvancedError(null);
+  }
+
+  const buildInput = (patch: BouleConfigPatch) => {
+    if (!data) return null;
+    const currentAdvanced = advancedDraftFrom(data);
+    return {
+      repoId,
+      kind: patch.kind ?? data.kind,
+      autonomyLevel: patch.autonomyLevel ?? data.autonomyLevel,
+      reviewQuorum: patch.reviewQuorum ?? data.reviewQuorum,
+      budget: Object.prototype.hasOwnProperty.call(patch, "budget")
+        ? (patch.budget ?? null)
+        : budgetInputFrom(data.budget),
+      backends: Object.prototype.hasOwnProperty.call(patch, "backends")
+        ? (patch.backends ?? null)
+        : advancedInputFromDraft(currentAdvanced).backends,
+      routing: Object.prototype.hasOwnProperty.call(patch, "routing")
+        ? (patch.routing ?? null)
+        : advancedInputFromDraft(currentAdvanced).routing,
+      priceTable: Object.prototype.hasOwnProperty.call(patch, "priceTable")
+        ? (patch.priceTable ?? null)
+        : advancedInputFromDraft(currentAdvanced).priceTable,
+    };
+  };
 
   // every knob change persists the full merged config (the write command requires all knobs).
   const save = (patch: BouleConfigPatch) => {
-    if (!data) return;
-    set.mutate(
-      {
-        repoId,
-        kind: patch.kind ?? data.kind,
-        autonomyLevel: patch.autonomyLevel ?? data.autonomyLevel,
-        reviewQuorum: patch.reviewQuorum ?? data.reviewQuorum,
-        budget: Object.prototype.hasOwnProperty.call(patch, "budget")
-          ? (patch.budget ?? null)
-          : budgetInputFrom(data.budget),
-      },
-      { onError: () => onToast("Boule 설정 저장 실패") },
-    );
+    const input = buildInput(patch);
+    if (!input) return;
+    set.mutate(input, { onError: () => onToast("Boule 설정 저장 실패") });
   };
 
   const onBudgetDraftChange = (key: BouleBudgetKey, value: string) => {
@@ -351,6 +418,19 @@ function BouleConfigControls({
 
   if (cfg.isLoading || !data) return null;
   const opensGate = data.autonomyLevel === "auto_plan" || data.autonomyLevel === "full";
+  const advancedDirty =
+    JSON.stringify(advancedDraft) !== JSON.stringify(advancedDraftFrom(data));
+
+  const saveAdvanced = () => {
+    const advanced = advancedInputFromDraft(advancedDraft);
+    const input = buildInput(advanced);
+    if (!input) return;
+    setAdvancedError(null);
+    set.mutate(input, {
+      onSuccess: () => onToast("Boule advanced 설정 저장됨"),
+      onError: (e) => setAdvancedError(String(e)),
+    });
+  };
 
   return (
     <div className="border-border ml-7 flex flex-col gap-2 rounded-lg border border-dashed px-3.5 py-2.5">
@@ -413,6 +493,55 @@ function BouleConfigControls({
             />
           </Field>
         ))}
+      </div>
+      <div className="border-border bg-muted/15 rounded-lg border">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left"
+          onClick={() => setAdvancedOpen((open) => !open)}
+          aria-expanded={advancedOpen}
+        >
+          {advancedOpen ? (
+            <ChevronDown className="text-muted-foreground size-3.5" />
+          ) : (
+            <ChevronRight className="text-muted-foreground size-3.5" />
+          )}
+          <SectionLabel>ADVANCED JSON</SectionLabel>
+          <span className="text-muted-foreground ml-auto text-xs">
+            {[data.backends, data.routing, data.priceTable].filter(Boolean).length}/3
+          </span>
+        </button>
+        {advancedOpen && (
+          <div className="border-border flex flex-col gap-3 border-t p-3">
+            {ADVANCED_FIELDS.map((field) => (
+              <Field key={field.key} label={field.label}>
+                <Textarea
+                  value={advancedDraft[field.key]}
+                  onChange={(e) => {
+                    setAdvancedDraft((draft) => ({
+                      ...draft,
+                      [field.key]: e.target.value,
+                    }));
+                    setAdvancedError(null);
+                  }}
+                  spellCheck={false}
+                  className="min-h-[128px] resize-y font-mono text-xs leading-5"
+                />
+              </Field>
+            ))}
+            {advancedError && (
+              <div className="flex items-start gap-1.5 text-xs text-[color:var(--destructive)]">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <span className="min-w-0 break-words">{advancedError}</span>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button size="sm" onClick={saveAdvanced} disabled={!advancedDirty || set.isPending}>
+                {set.isPending ? "저장 중…" : "Advanced 저장"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
       {opensGate && (
         <div className="flex items-center gap-1.5 text-xs text-[color:var(--destructive)]">

@@ -12,8 +12,9 @@ export function useControlRoomSnapshot() {
   });
 }
 
-/** A designated local repo's Boule config (kind + autonomyLevel + reviewQuorum + optional budget).
- *  Absent file ⇒ per-kind defaults (`configExists=false`). Disabled until a repoId is provided. */
+/** A designated local repo's Boule config (kind + autonomyLevel + reviewQuorum + optional
+ *  budget/backends/routing/priceTable). Absent file ⇒ per-kind defaults
+ *  (`configExists=false`). Disabled until a repoId is provided. */
 export function useBouleConfig(repoId: string | null) {
   return useQuery({
     queryKey: ["boule-config", repoId],
@@ -23,7 +24,8 @@ export function useBouleConfig(repoId: string | null) {
   });
 }
 
-/** Persist a local repo's Boule settings knobs; primes the cache with the returned resolved view. */
+/** Persist a local repo's Boule settings knobs; advanced JSON strings are parsed/validated in Rust.
+ *  Primes the cache with the returned resolved view. */
 export function useSetBouleConfig() {
   const qc = useQueryClient();
   return useMutation({
