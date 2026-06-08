@@ -14,7 +14,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { commands } from "@/bindings";
+import { commands, type HermesSessionRow } from "@/bindings";
 import { unwrap } from "@/lib/query/client";
 
 import { autoTitleFrom, rowsToMessages, shouldAutoTitle } from "./sessionList";
@@ -303,35 +303,54 @@ export function useHermesTabsBootstrap() {
       cleanups.push(un);
     };
 
-    // 부팅: DB에서 세션 목록 복원. 없으면 빈 세션 1개 생성.
+    // 부팅: DB에서 세션 목록 복원.
+    // 다중 프로세스(GUI + --mcp-stdio)가 같은 DB를 공유해 list 가 일시 실패할 수 있다 → bounded
+    // retry. **list 가 실패했을 때 빈 세션을 만들지 않는다**(전엔 실패 시 ensureDefaultTab 가 stray
+    // "새 세션"을 만들어 실제 세션이 안 보이는 것처럼 됐다 — "또 아무것도 안 보임"). 진짜 빈
+    // DB(ok+0건)일 때만 기본 세션을 만든다.
     void (async () => {
-      const res = await commands.hermesSessionsList();
-      if (cancelled) return;
-      if (res.status === "ok" && res.data.length > 0) {
-        for (const row of res.data) {
-          dispatch({ type: "open-tab", tabId: row.id, defaultName: row.name });
+      let listed: HermesSessionRow[] | null = null;
+      for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
+        const res = await commands.hermesSessionsList();
+        if (cancelled) return;
+        if (res.status === "ok") {
+          listed = res.data;
+          break;
         }
-        const firstId = chooseRestoredActiveSession(res.data);
-        if (!firstId) return;
-        dispatch({ type: "set-active", tabId: firstId });
-        // 모든 복원 세션의 메시지를 로드한다. 사이드바 프리뷰/시각은 in-memory tab.messages 에서
-        // 나오므로(messagePreview/lastTs), 활성 세션만 로드하면 미방문 세션은 프리뷰가 공백으로
-        // 보였다("언제는 보이고 언제는 사라짐"). 전 세션 로드로 일관되게 채운다.
-        await Promise.all(
-          res.data.map(async (row) => {
-            const msgs = await commands.hermesSessionMessages(row.id);
-            if (!cancelled && msgs.status === "ok" && msgs.data.length > 0) {
-              dispatch({
-                type: "load-messages",
-                tabId: row.id,
-                messages: rowsToMessages(msgs.data),
-              });
-            }
-          }),
-        );
-      } else {
-        await ensureDefaultTab();
+        await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
       }
+      if (cancelled) return;
+      if (listed === null) return; // 영구 실패: 폴루션 방지(빈 세션 안 만듦). 다음 실행에서 복원.
+      if (listed.length === 0) {
+        await ensureDefaultTab();
+        return;
+      }
+      for (const row of listed) {
+        dispatch({ type: "open-tab", tabId: row.id, defaultName: row.name });
+      }
+      const firstId = chooseRestoredActiveSession(listed);
+      if (!firstId) return;
+      dispatch({ type: "set-active", tabId: firstId });
+      // 활성 세션 먼저 로드(빠른 채팅 표시). 나머지는 백그라운드 순차 로드 — 동시 N쿼리 spike가
+      // 다중 프로세스 DB 경합을 키워 활성 세션 표시까지 지연시키던 것을 피한다(프리뷰는 곧 채워짐).
+      const activeMsgs = await commands.hermesSessionMessages(firstId);
+      if (!cancelled && activeMsgs.status === "ok" && activeMsgs.data.length > 0) {
+        dispatch({
+          type: "load-messages",
+          tabId: firstId,
+          messages: rowsToMessages(activeMsgs.data),
+        });
+      }
+      void (async () => {
+        for (const row of listed) {
+          if (cancelled) return;
+          if (row.id === firstId) continue;
+          const msgs = await commands.hermesSessionMessages(row.id);
+          if (!cancelled && msgs.status === "ok" && msgs.data.length > 0) {
+            dispatch({ type: "load-messages", tabId: row.id, messages: rowsToMessages(msgs.data) });
+          }
+        }
+      })();
     })();
 
     void (async () => {
