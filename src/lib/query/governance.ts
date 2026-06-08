@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands, type SetBouleConfigInput } from "../../bindings";
+import { commands, type SetBouleConfigInput_Deserialize } from "../../bindings";
 import { unwrap } from "./client";
 
 /** Read-only snapshot of the governance harness derived projections (Control Room). */
@@ -12,8 +12,8 @@ export function useControlRoomSnapshot() {
   });
 }
 
-/** A designated local repo's Boule autonomy config (kind + autonomyLevel + reviewQuorum). Absent
- *  file ⇒ per-kind defaults (`configExists=false`). Disabled until a repoId is provided. */
+/** A designated local repo's Boule config (kind + autonomyLevel + reviewQuorum + optional budget).
+ *  Absent file ⇒ per-kind defaults (`configExists=false`). Disabled until a repoId is provided. */
 export function useBouleConfig(repoId: string | null) {
   return useQuery({
     queryKey: ["boule-config", repoId],
@@ -23,11 +23,11 @@ export function useBouleConfig(repoId: string | null) {
   });
 }
 
-/** Persist a local repo's Boule autonomy knobs; primes the cache with the returned resolved view. */
+/** Persist a local repo's Boule settings knobs; primes the cache with the returned resolved view. */
 export function useSetBouleConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: SetBouleConfigInput) => unwrap(commands.setBouleConfig(input)),
+    mutationFn: (input: SetBouleConfigInput_Deserialize) => unwrap(commands.setBouleConfig(input)),
     onSuccess: (res) => {
       qc.setQueryData(["boule-config", res.repoId], res);
     },

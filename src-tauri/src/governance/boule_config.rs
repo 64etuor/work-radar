@@ -61,6 +61,7 @@ pub struct BouleConfigSettings {
     pub kind: ProjectKind,
     pub autonomy_level: BouleAutonomyLevel,
     pub review_quorum: u32,
+    pub budget: Option<BouleBudgetCaps>,
 }
 
 /// Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
@@ -72,6 +73,22 @@ pub struct SetBouleConfigInput {
     pub kind: ProjectKind,
     pub autonomy_level: BouleAutonomyLevel,
     pub review_quorum: u32,
+    pub budget: Option<BouleBudgetCaps>,
+}
+
+/// Optional pure budget caps (mirrors governance `BudgetCaps`). Empty/all-None means no budget
+/// filtering and is omitted from `overrides.budget` on write.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BouleBudgetCaps {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_token_cap: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step_token_cap: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_cost_cap_usd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step_cost_cap_usd: Option<f64>,
 }
 
 /// Per-kind defaults (mirrors governance `WORK_DEFAULTS`/`PERSONAL_DEFAULTS`). work = strict
@@ -81,6 +98,46 @@ fn kind_defaults(kind: ProjectKind) -> (BouleAutonomyLevel, u32) {
         ProjectKind::Work => (BouleAutonomyLevel::Manual, 2),
         ProjectKind::Personal => (BouleAutonomyLevel::Dispatch, 1),
     }
+}
+
+fn budget_active(budget: &BouleBudgetCaps) -> bool {
+    budget.run_token_cap.is_some()
+        || budget.step_token_cap.is_some()
+        || budget.run_cost_cap_usd.is_some()
+        || budget.step_cost_cap_usd.is_some()
+}
+
+fn validate_budget(budget: &BouleBudgetCaps) -> Result<(), AppError> {
+    let token_caps_ok = budget
+        .run_token_cap
+        .into_iter()
+        .chain(budget.step_token_cap)
+        .all(|cap| cap >= 0);
+    let cost_caps_ok = budget
+        .run_cost_cap_usd
+        .into_iter()
+        .chain(budget.step_cost_cap_usd)
+        .all(|cap| cap.is_finite() && cap >= 0.0);
+    if token_caps_ok && cost_caps_ok {
+        Ok(())
+    } else {
+        Err(AppError::validation(
+            "boule.budget",
+            "budget caps must be non-negative",
+        ))
+    }
+}
+
+fn parse_budget_value(
+    value: Option<&serde_json::Value>,
+) -> Result<Option<BouleBudgetCaps>, AppError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let budget: BouleBudgetCaps = serde_json::from_value(value.clone())
+        .map_err(|e| AppError::terminal("boule.config_budget", e.to_string()))?;
+    validate_budget(&budget)?;
+    Ok(budget_active(&budget).then_some(budget))
 }
 
 const REPO_COLS: &str =
@@ -178,6 +235,7 @@ pub(crate) async fn get_boule_config_core(
                 .map(|q| q as u32)
                 .filter(|q| *q >= 1)
                 .unwrap_or(def_quorum);
+            let budget = parse_budget_value(overrides.and_then(|o| o.get("budget")))?;
             Ok(BouleConfigSettings {
                 repo_id: repo.id,
                 repo_path: dir.to_string_lossy().into_owned(),
@@ -185,6 +243,7 @@ pub(crate) async fn get_boule_config_core(
                 kind,
                 autonomy_level,
                 review_quorum,
+                budget,
             })
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -198,6 +257,7 @@ pub(crate) async fn get_boule_config_core(
                 kind,
                 autonomy_level,
                 review_quorum,
+                budget: None,
             })
         }
         Err(e) => Err(AppError::terminal("boule.config_read", e.to_string())),
@@ -215,6 +275,9 @@ pub(crate) async fn set_boule_config_core(
             "boule.review_quorum",
             "reviewQuorum must be >= 1",
         ));
+    }
+    if let Some(budget) = &input.budget {
+        validate_budget(budget)?;
     }
     let repo = fetch_repo(db, &input.repo_id).await?;
     let dir = local_repo_dir(&repo)?;
@@ -259,6 +322,18 @@ pub(crate) async fn set_boule_config_core(
         "reviewQuorum".into(),
         serde_json::json!(input.review_quorum),
     );
+    match input.budget.as_ref().filter(|budget| budget_active(budget)) {
+        Some(budget) => {
+            ov.insert(
+                "budget".into(),
+                serde_json::to_value(budget)
+                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
+            );
+        }
+        None => {
+            ov.remove("budget");
+        }
+    }
 
     let body = serialize_config(&root)?;
     std::fs::create_dir_all(&boule_dir)
@@ -276,6 +351,7 @@ pub(crate) async fn set_boule_config_core(
         kind: input.kind,
         autonomy_level: input.autonomy_level,
         review_quorum: input.review_quorum,
+        budget: input.budget.clone().filter(budget_active),
     })
 }
 
@@ -403,6 +479,7 @@ mod tests {
                 kind: ProjectKind::Work,
                 autonomy_level: BouleAutonomyLevel::Full,
                 review_quorum: 3,
+                budget: None,
             },
         )
         .await
@@ -424,6 +501,105 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn roundtrip_budget_caps_and_clear_removes_budget() {
+        let db = fresh_db().await;
+        let dir = tempfile::tempdir().unwrap();
+        let repo_id = local_repo_with_dir(&db, ProjectKind::Personal, dir.path()).await;
+
+        let s = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id: repo_id.clone(),
+                kind: ProjectKind::Personal,
+                autonomy_level: BouleAutonomyLevel::Dispatch,
+                review_quorum: 1,
+                budget: Some(BouleBudgetCaps {
+                    run_token_cap: Some(50_000),
+                    step_token_cap: None,
+                    run_cost_cap_usd: Some(2.5),
+                    step_cost_cap_usd: Some(0.75),
+                }),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            s.budget,
+            Some(BouleBudgetCaps {
+                run_token_cap: Some(50_000),
+                step_token_cap: None,
+                run_cost_cap_usd: Some(2.5),
+                step_cost_cap_usd: Some(0.75),
+            })
+        );
+
+        let text =
+            std::fs::read_to_string(dir.path().join(".boule").join("boule.config.json")).unwrap();
+        assert!(text.contains("\"budget\""));
+        assert!(text.contains("\"runCostCapUsd\": 2.5"));
+        assert!(text.contains("\"runTokenCap\": 50000"));
+        assert!(!text.contains("stepTokenCap"));
+
+        let g = get_boule_config_core(&db, &repo_id).await.unwrap();
+        assert_eq!(
+            g.budget.as_ref().and_then(|b| b.run_token_cap),
+            Some(50_000)
+        );
+        assert_eq!(
+            g.budget.as_ref().and_then(|b| b.run_cost_cap_usd),
+            Some(2.5)
+        );
+
+        let cleared = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id: repo_id.clone(),
+                kind: ProjectKind::Personal,
+                autonomy_level: BouleAutonomyLevel::Dispatch,
+                review_quorum: 1,
+                budget: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(cleared.budget, None);
+
+        let text =
+            std::fs::read_to_string(dir.path().join(".boule").join("boule.config.json")).unwrap();
+        assert!(!text.contains("\"budget\""));
+        assert_eq!(
+            get_boule_config_core(&db, &repo_id).await.unwrap().budget,
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn set_rejects_negative_budget_caps() {
+        let db = fresh_db().await;
+        let dir = tempfile::tempdir().unwrap();
+        let repo_id = local_repo_with_dir(&db, ProjectKind::Work, dir.path()).await;
+
+        let e = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id,
+                kind: ProjectKind::Work,
+                autonomy_level: BouleAutonomyLevel::Manual,
+                review_quorum: 2,
+                budget: Some(BouleBudgetCaps {
+                    run_token_cap: Some(-1),
+                    step_token_cap: None,
+                    run_cost_cap_usd: None,
+                    step_cost_cap_usd: None,
+                }),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, "boule.budget");
+    }
+
+    #[tokio::test]
     async fn set_rejects_quorum_zero_and_get_rejects_github() {
         let db = fresh_db().await;
         let dir = tempfile::tempdir().unwrap();
@@ -436,6 +612,7 @@ mod tests {
                 kind: ProjectKind::Personal,
                 autonomy_level: BouleAutonomyLevel::Dispatch,
                 review_quorum: 0,
+                budget: None,
             },
         )
         .await

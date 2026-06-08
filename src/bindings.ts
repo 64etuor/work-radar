@@ -618,16 +618,16 @@ export const commands = {
 	 */
 	getControlRoomSnapshot: () => typedError<ControlRoomSnapshot, AppError>(__TAURI_INVOKE("get_control_room_snapshot")),
 	/**
-	 *  Read a designated LOCAL repo's Boule autonomy config (kind + autonomyLevel + reviewQuorum).
+	 *  Read a designated LOCAL repo's Boule config (kind + autonomyLevel + reviewQuorum + budget).
 	 *  Absent file ⇒ per-kind defaults (config_exists=false). Settings-only — no event write path.
 	 */
-	getBouleConfig: (repoId: string) => typedError<BouleConfigSettings, AppError>(__TAURI_INVOKE("get_boule_config", { repoId })),
+	getBouleConfig: (repoId: string) => typedError<BouleConfigSettings_Serialize, AppError>(__TAURI_INVOKE("get_boule_config", { repoId })),
 	/**
-	 *  Update a local repo's Boule autonomy config. Paths are resolved from the DB (never renderer-
-	 *  supplied); preserves fields this UI doesn't manage. ⚠ auto_plan/full OPEN INVARIANT #1's human
-	 *  gate (test/dev) — the UI warns; acceptance auto-fires actor:"system", never a forged human.
+	 *  Update a local repo's Boule config. Paths are resolved from the DB (never renderer-supplied);
+	 *  preserves fields this UI doesn't manage. ⚠ auto_plan/full OPEN INVARIANT #1's human gate
+	 *  (test/dev) — the UI warns; acceptance auto-fires actor:"system", never a forged human.
 	 */
-	setBouleConfig: (input: SetBouleConfigInput) => typedError<BouleConfigSettings, AppError>(__TAURI_INVOKE("set_boule_config", { input })),
+	setBouleConfig: (input: SetBouleConfigInput_Deserialize) => typedError<BouleConfigSettings_Serialize, AppError>(__TAURI_INVOKE("set_boule_config", { input })),
 };
 
 /* Types */
@@ -810,16 +810,65 @@ export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "
 export type BouleAutonomyLevel = "manual" | "dispatch" | "auto_plan" | "full";
 
 /**
+ *  Optional pure budget caps (mirrors governance `BudgetCaps`). Empty/all-None means no budget
+ *  filtering and is omitted from `overrides.budget` on write.
+ */
+export type BouleBudgetCaps = BouleBudgetCaps_Serialize | BouleBudgetCaps_Deserialize;
+
+/**
+ *  Optional pure budget caps (mirrors governance `BudgetCaps`). Empty/all-None means no budget
+ *  filtering and is omitted from `overrides.budget` on write.
+ */
+export type BouleBudgetCaps_Deserialize = {
+	runTokenCap: number | null,
+	stepTokenCap: number | null,
+	runCostCapUsd: number | null,
+	stepCostCapUsd: number | null,
+};
+
+/**
+ *  Optional pure budget caps (mirrors governance `BudgetCaps`). Empty/all-None means no budget
+ *  filtering and is omitted from `overrides.budget` on write.
+ */
+export type BouleBudgetCaps_Serialize = {
+	runTokenCap?: number | null,
+	stepTokenCap?: number | null,
+	runCostCapUsd?: number | null,
+	stepCostCapUsd?: number | null,
+};
+
+/**
  *  The resolved view shown in Settings. When the config file is absent, `config_exists=false` and
  *  the values are the per-kind defaults (so the UI renders a sensible starting point).
  */
-export type BouleConfigSettings = {
+export type BouleConfigSettings = BouleConfigSettings_Serialize | BouleConfigSettings_Deserialize;
+
+/**
+ *  The resolved view shown in Settings. When the config file is absent, `config_exists=false` and
+ *  the values are the per-kind defaults (so the UI renders a sensible starting point).
+ */
+export type BouleConfigSettings_Deserialize = {
 	repoId: string,
 	repoPath: string,
 	configExists: boolean,
 	kind: ProjectKind,
 	autonomyLevel: BouleAutonomyLevel,
 	reviewQuorum: number,
+	budget: BouleBudgetCaps_Deserialize | null,
+};
+
+/**
+ *  The resolved view shown in Settings. When the config file is absent, `config_exists=false` and
+ *  the values are the per-kind defaults (so the UI renders a sensible starting point).
+ */
+export type BouleConfigSettings_Serialize = {
+	repoId: string,
+	repoPath: string,
+	configExists: boolean,
+	kind: ProjectKind,
+	autonomyLevel: BouleAutonomyLevel,
+	reviewQuorum: number,
+	budget: BouleBudgetCaps_Serialize | null,
 };
 
 /**
@@ -1710,11 +1759,30 @@ export type SessionRow = {
  *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
  *  repo's `local_path` from the DB (defense against a forged path).
  */
-export type SetBouleConfigInput = {
+export type SetBouleConfigInput = SetBouleConfigInput_Serialize | SetBouleConfigInput_Deserialize;
+
+/**
+ *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
+ *  repo's `local_path` from the DB (defense against a forged path).
+ */
+export type SetBouleConfigInput_Deserialize = {
 	repoId: string,
 	kind: ProjectKind,
 	autonomyLevel: BouleAutonomyLevel,
 	reviewQuorum: number,
+	budget: BouleBudgetCaps_Deserialize | null,
+};
+
+/**
+ *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
+ *  repo's `local_path` from the DB (defense against a forged path).
+ */
+export type SetBouleConfigInput_Serialize = {
+	repoId: string,
+	kind: ProjectKind,
+	autonomyLevel: BouleAutonomyLevel,
+	reviewQuorum: number,
+	budget: BouleBudgetCaps_Serialize | null,
 };
 
 /**  프로젝트별 캘린더 표시 색상 변경 입력. `color=NULL`은 기본 팔레트로 되돌림. */
