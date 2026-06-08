@@ -12,11 +12,13 @@ import {
   stubAdapter,
   makeLiveAdapter,
   buildSessionCommand,
+  ensureCleanCodexHome,
   parseCmuxRef,
   firstTerminalSurface,
   findGroupRef,
   projectLabelFromRepoRoot,
   SESSION_DENIED_TOOLS,
+  type FsLike,
   type SpawnResultLike,
 } from "../../src/conductor/adapter.js";
 
@@ -231,6 +233,9 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
       writeFile: async (path: string, data: string) => {
         writes.push({ path, data });
       },
+      pathExists: async () => false,
+      symlink: async () => undefined,
+      rm: async () => undefined,
     };
     const adapter = makeLiveAdapter({
       spawn: fakeSpawn,
@@ -238,6 +243,8 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
       completeEntrypoint: "/install/governance/src/cli/boule.ts",
+      codexAuthPath: "/op/.codex/auth.json",
+      env: { OPENAI_API_KEY: "test-codex-key" }, // env auth ⇒ ensureCleanCodexHome skips the symlink
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -312,10 +319,18 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     const fakeSpawn = (): SpawnResultLike => ({ status: 1, stdout: "", stderr: "fatal: boom" });
     const adapter = makeLiveAdapter({
       spawn: fakeSpawn,
-      fs: { mkdir: async () => undefined, writeFile: async () => undefined },
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        pathExists: async () => false,
+        symlink: async () => undefined,
+        rm: async () => undefined,
+      },
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
       completeEntrypoint: "/install/governance/src/cli/boule.ts",
+      codexAuthPath: "/op/.codex/auth.json",
+      env: { OPENAI_API_KEY: "test-codex-key" }, // env auth ⇒ ensureCleanCodexHome skips the symlink
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -360,10 +375,18 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
   const mkAdapter = (fake: ReturnType<typeof makeFake>) =>
     makeLiveAdapter({
       spawn: fake.spawn,
-      fs: { mkdir: async () => undefined, writeFile: async () => undefined },
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        pathExists: async () => false,
+        symlink: async () => undefined,
+        rm: async () => undefined,
+      },
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
       completeEntrypoint: "/install/governance/src/cli/boule.ts",
+      codexAuthPath: "/op/.codex/auth.json",
+      env: { OPENAI_API_KEY: "test-codex-key" }, // env auth ⇒ ensureCleanCodexHome skips the symlink
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -475,6 +498,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     serverEntrypoint: "/install/governance/src/mcp/server.ts",
     governanceWorkspace: "/repo/governance/workspace",
     completeEntrypoint: "/install/governance/src/cli/boule.ts",
+    codexHome: "/repo/governance/workspace/codex-home",
   };
 
   it("claude (default) builds the scoped-mcp.json + strict + verdict denylist invocation", () => {
@@ -491,6 +515,8 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).not.toContain("codex");
     // claude closes the loop reliably (live smoke) — no codex-style completion wrapper here
     expect(c).not.toContain("complete-task");
+    // claude uses the operator's own profile (its hooks are the app's) — NO CODEX_HOME isolation
+    expect(c).not.toContain("CODEX_HOME");
   });
 
   it("codex builds a workspace-write (NOT danger-full) exec attaching the executor-role MCP via -c", () => {
@@ -516,6 +542,12 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toContain(`"${cmdDeps.completeEntrypoint}" complete-task`);
     expect(c).toContain('--workspace "/repo/governance/workspace"');
     expect(c).toContain('--task "evt_t0"');
+    // CODEX_HOME isolation: clean hooks-free profile, prefixed ONCE before `codex exec` (scopes to
+    // codex only — the trailing `&& node … complete-task` boule CLI does NOT inherit it).
+    expect(c.startsWith("CODEX_HOME='/repo/governance/workspace/codex-home' codex exec")).toBe(true);
+    // exactly once → the trailing `&& node … complete-task` tail carries no CODEX_HOME
+    expect((c.match(/CODEX_HOME=/g) ?? []).length).toBe(1);
+    expect(c.indexOf("CODEX_HOME=")).toBeLessThan(c.indexOf("codex exec"));
   });
 
   it("spawnSession launches a codex invocation via --command when executor=codex (same cmux substrate)", async () => {
@@ -542,10 +574,18 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     };
     const adapter = makeLiveAdapter({
       spawn: fakeSpawn,
-      fs: { mkdir: async () => undefined, writeFile: async () => undefined },
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        pathExists: async () => false,
+        symlink: async () => undefined,
+        rm: async () => undefined,
+      },
       repoRoot: "/repo",
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
       completeEntrypoint: "/install/governance/src/cli/boule.ts",
+      codexAuthPath: "/op/.codex/auth.json",
+      env: { OPENAI_API_KEY: "test-codex-key" }, // env auth ⇒ ensureCleanCodexHome skips the symlink
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
@@ -561,6 +601,9 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     const created = calls.find((c) => c.cmd === "cmux" && c.args[0] === "new-workspace")!;
     expect(created.args[3]).toBe("--command");
     expect(created.args[4]).toContain("codex exec");
+    expect(created.args[4]).toContain(
+      "CODEX_HOME='/repo/governance/workspace/codex-home' codex exec",
+    ); // clean profile prefixed at launch (hook isolation)
     expect(created.args[4]).toContain("complete-task"); // completion wrapper present in the launch cmd
     expect(created.args[4]).not.toContain("claude --mcp-config");
     expect(calls.some((c) => c.cmd === "cmux" && c.args[0] === "send")).toBe(false);
@@ -582,6 +625,90 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     const spawned = all.find((e) => e.frontmatter.type === "session_spawned")!;
     const body = JSON.parse(spawned.body) as { envelope: { executor: string } };
     expect(body.envelope.executor).toBe("claude");
+  });
+});
+
+describe("ensureCleanCodexHome — clean hooks-free codex profile (Slice 1 isolation)", () => {
+  // map-based fake fs: `present` = paths that exist; records writes / symlinks / removals.
+  function makeFs(present: Set<string>) {
+    const writes: Array<{ path: string; data: string }> = [];
+    const symlinks: Array<{ target: string; link: string }> = [];
+    const removed: string[] = [];
+    const fs: FsLike = {
+      mkdir: async () => undefined,
+      writeFile: async (path, data) => {
+        writes.push({ path, data });
+        present.add(path);
+      },
+      pathExists: async (p) => present.has(p),
+      symlink: async (target, link) => {
+        symlinks.push({ target, link });
+        present.add(link);
+      },
+      rm: async (p) => {
+        removed.push(p);
+        present.delete(p);
+      },
+    };
+    return { fs, writes, symlinks, removed };
+  }
+  const HOME = "/repo/.boule/workspace/codex-home";
+  const OP_AUTH = "/op/.codex/auth.json";
+
+  it("writes a hooks-free config.toml (plugin_hooks=false, notify=[]) and never a hooks.json/plugins", async () => {
+    const { fs, writes } = makeFs(new Set([OP_AUTH]));
+    await ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env: {}, fs });
+    const config = writes.find((w) => w.path === `${HOME}/config.toml`)!;
+    expect(config).toBeTruthy();
+    expect(config.data).toContain("plugin_hooks = false");
+    expect(config.data).toContain("notify = []");
+    expect(config.data).not.toContain("developer_instructions");
+    expect(writes.some((w) => w.path.includes("hooks.json") || w.path.includes("plugins"))).toBe(false);
+  });
+
+  it("symlinks the operator auth.json when NO env key (never copies)", async () => {
+    const { fs, symlinks } = makeFs(new Set([OP_AUTH]));
+    await ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env: {}, fs });
+    expect(symlinks).toEqual([{ target: OP_AUTH, link: `${HOME}/auth.json` }]);
+  });
+
+  it("skips the auth symlink when OPENAI_API_KEY / CODEX_API_KEY is set (env auth)", async () => {
+    for (const env of [{ OPENAI_API_KEY: "x" }, { CODEX_API_KEY: "y" }]) {
+      const { fs, symlinks } = makeFs(new Set([OP_AUTH]));
+      await ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env, fs });
+      expect(symlinks).toHaveLength(0);
+    }
+  });
+
+  it("THROWS (never spawns unauthenticated) when neither an env key nor operator auth exists", async () => {
+    const { fs } = makeFs(new Set()); // operator auth absent, no env key
+    await expect(
+      ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env: {}, fs }),
+    ).rejects.toThrow(/codex auth unavailable/);
+  });
+
+  it("removes a stray hooks.json from the clean home (defense-in-depth)", async () => {
+    const { fs, removed } = makeFs(new Set([OP_AUTH, `${HOME}/hooks.json`]));
+    await ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env: {}, fs });
+    expect(removed).toContain(`${HOME}/hooks.json`);
+  });
+
+  it("is idempotent — 2nd call rewrites config but does NOT re-symlink (auth already present), no state wipe", async () => {
+    const { fs, symlinks, writes, removed } = makeFs(new Set([OP_AUTH]));
+    await ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env: {}, fs });
+    await ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env: {}, fs });
+    expect(symlinks).toHaveLength(1); // not re-created on the 2nd call
+    expect(writes.filter((w) => w.path === `${HOME}/config.toml`)).toHaveLength(2); // config rewritten
+    expect(removed).toHaveLength(0); // never deletes session/history state
+  });
+
+  it("drops a now-DANGLING auth link and throws when the operator auth is gone (no opaque codex fail)", async () => {
+    // a prior tick created the link; the operator then removed ~/.codex/auth.json, and there's no env key.
+    const { fs, removed } = makeFs(new Set([`${HOME}/auth.json`]));
+    await expect(
+      ensureCleanCodexHome({ codexHome: HOME, operatorAuthPath: OP_AUTH, env: {}, fs }),
+    ).rejects.toThrow(/codex auth unavailable/);
+    expect(removed).toContain(`${HOME}/auth.json`); // cleaned up the dead link rather than spawning against it
   });
 });
 

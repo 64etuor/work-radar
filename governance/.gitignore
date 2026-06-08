@@ -30,3 +30,9 @@ workspace/state/*.json
 
 # Derived graph index (PGlite) — rebuildable from events via rebuild_index
 workspace/index/
+
+# Conductor's clean codex profile (Slice 1 hook-isolation) — runtime-generated codex home:
+# minimal config.toml + an auth.json symlink to the operator's secret + accumulated codex session
+# history. NEVER source, and MUST NOT be committed (would leak session history / a secret-pointing
+# symlink). (In per-repo mode the home lives under the target repo's own gitignored .boule/.)
+workspace/codex-home/

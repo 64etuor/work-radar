@@ -1,5 +1,13 @@
 import { spawnSync as nodeSpawnSync } from "node:child_process";
-import { mkdir as fsMkdir, writeFile as fsWriteFile } from "node:fs/promises";
+import {
+  lstat as fsLstat,
+  mkdir as fsMkdir,
+  rm as fsRm,
+  symlink as fsSymlink,
+  writeFile as fsWriteFile,
+} from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   stubAdapter,
   makeLiveAdapter,
@@ -25,9 +33,25 @@ export function makeConductorAdapterFromEnv(
     const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
     return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
   };
+  // Operator codex auth (for the clean-CODEX_HOME symlink fallback): honour an already-set CODEX_HOME,
+  // else the default ~/.codex. Read at wire time so the adapter stays env-pure.
+  const codexAuthPath = join(env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json");
   return makeLiveAdapter({
     spawn,
-    fs: { mkdir: (p, o) => fsMkdir(p, o), writeFile: (p, d) => fsWriteFile(p, d) },
+    fs: {
+      mkdir: (p, o) => fsMkdir(p, o),
+      writeFile: (p, d) => fsWriteFile(p, d),
+      pathExists: async (p) => {
+        try {
+          await fsLstat(p);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      symlink: (target, link) => fsSymlink(target, link),
+      rm: (p) => fsRm(p, { force: true }),
+    },
     repoRoot: paths.repoRoot,
     worktreesRoot: cfg.worktreesRoot,
     cmuxCmd: cfg.cmuxCmd,
@@ -35,6 +59,8 @@ export function makeConductorAdapterFromEnv(
     serverEntrypoint: paths.serverEntrypoint,
     // install-relative (same resolution as serverEntrypoint); the codex completion wrapper shells it.
     completeEntrypoint: cliEntrypoint(),
+    codexAuthPath,
+    env,
     projectLabel: projectLabelFromRepoRoot(paths.repoRoot),
     log: (line) => process.stderr.write(`${line}\n`),
   });

@@ -57,6 +57,12 @@ export type SpawnSyncLike = (command: string, args: string[]) => SpawnResultLike
 export interface FsLike {
   mkdir(path: string, opts: { recursive: boolean }): Promise<unknown>;
   writeFile(path: string, data: string): Promise<unknown>;
+  /** true if the path exists (any type, incl. a symlink). Idempotent clean-home materialization. */
+  pathExists(path: string): Promise<boolean>;
+  /** create a symlink at `link` pointing to `target` (the clean codex home's auth.json → operator). */
+  symlink(target: string, link: string): Promise<unknown>;
+  /** remove a file (best-effort; deletes a stray hooks.json from the clean codex home). */
+  rm(path: string): Promise<unknown>;
 }
 
 export interface LiveAdapterDeps {
@@ -76,6 +82,13 @@ export interface LiveAdapterDeps {
   /** The governance workspace the spawned session's escalate must write back to (so the
    *  Conductor sees its decision_blocked). Defaults to <repoRoot>/governance/workspace. */
   governanceWorkspace: string;
+  /** Operator codex auth.json path (e.g. `${CODEX_HOME:-~/.codex}/auth.json`). The conductor spawns
+   *  codex under a clean per-repo CODEX_HOME (no operator hooks); that home has no auth, so when no
+   *  env API key is set ensureCleanCodexHome symlinks this in — never copied (codex may refresh it;
+   *  one real identity), never the operator's ~/.codex touched otherwise. */
+  codexAuthPath: string;
+  /** Process env — the OPENAI_API_KEY/CODEX_API_KEY check (env auth ⇒ no auth.json symlink needed). */
+  env: Record<string, string | undefined>;
   /** cmux workspace-group (sidebar folder) name. Each spawned session's workspace is grouped under
    *  it — reused if the folder already exists, created otherwise — so a project's sessions stay
    *  visually separated. Omitted ⇒ no grouping. The server defaults it to the repoRoot basename. */
@@ -142,6 +155,59 @@ class CommandError extends Error {
   }
 }
 
+/** The minimal config.toml written into the conductor's clean codex profile: NO hooks, plugins,
+ *  notify, or developer_instructions — so a conductor-spawned `codex exec` is never hijacked by the
+ *  operator's oh-my-codex / cmux hooks (config.toml `notify`/`plugin_hooks`/`developer_instructions`
+ *  + hooks.json). Absence of a plugins/ dir and hooks.json already means "off"; this makes the
+ *  isolation contract explicit and durable. */
+const CLEAN_CODEX_CONFIG =
+  "# Boule clean Codex profile — conductor-owned. Do NOT add hooks, plugins, notify, or\n" +
+  "# developer instructions here (isolating the conductor from the operator's codex is the point).\n" +
+  "plugin_hooks = false\n" +
+  "notify = []\n";
+
+export interface EnsureCleanCodexHomeDeps {
+  codexHome: string;
+  /** operator auth.json to symlink in when no env API key is set. */
+  operatorAuthPath: string;
+  env: Record<string, string | undefined>;
+  fs: FsLike;
+}
+
+/** Idempotently materialize a clean, hooks-free CODEX_HOME for a conductor-spawned codex, so the
+ *  operator's oh-my-codex/cmux hooks never load (the hijack root cause). Writes the minimal config,
+ *  removes a stray hooks.json, and ensures auth: an env API key wins (no file); else symlink the
+ *  operator's auth.json (one real identity, never copied) — THROWS if neither is available so we
+ *  never spawn an unauthenticated codex. NEVER wipes session/history state (reusable across ticks),
+ *  and NEVER touches the operator's ~/.codex beyond reading the auth symlink target. */
+export async function ensureCleanCodexHome(deps: EnsureCleanCodexHomeDeps): Promise<void> {
+  const { codexHome, operatorAuthPath, env, fs } = deps;
+  await fs.mkdir(codexHome, { recursive: true });
+  await fs.writeFile(`${codexHome}/config.toml`, CLEAN_CODEX_CONFIG);
+  // Defense: a stray hooks.json under our OWN clean home would re-introduce hooks — remove it.
+  const hooksPath = `${codexHome}/hooks.json`;
+  if (await fs.pathExists(hooksPath)) await fs.rm(hooksPath);
+  // Auth: env key wins (no file needed). Never put a key in the command string — codex inherits env.
+  if (env.OPENAI_API_KEY || env.CODEX_API_KEY) return;
+  const authLink = `${codexHome}/auth.json`;
+  // No env key ⇒ we need the operator's auth. Check the SOURCE first: if it's gone (operator rotated/
+  // removed ~/.codex/auth.json since a prior tick created the link), surface a CLEAR pre-spawn error
+  // and drop the now-dangling link — never skip on a dead symlink that would make codex fail opaquely.
+  if (!(await fs.pathExists(operatorAuthPath))) {
+    if (await fs.pathExists(authLink)) await fs.rm(authLink);
+    throw new Error(
+      `conductor: codex auth unavailable — set OPENAI_API_KEY / CODEX_API_KEY or provide ${operatorAuthPath}`,
+    );
+  }
+  if (await fs.pathExists(authLink)) return; // idempotent — valid existing link (operator auth present)
+  await fs.symlink(operatorAuthPath, authLink);
+}
+
+/** POSIX single-quote a value for safe shell interpolation (paths with spaces/specials). */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 /** Build the executor invocation `cmux send`s into the session pane. Pure (so the exact command is
  *  asserted in tests). Both executors run the SAME step-prompt against the SAME executor-role
  *  governance MCP (verdict tools structurally absent), so the loop closes identically: the session
@@ -161,13 +227,27 @@ class CommandError extends Error {
 export function buildSessionCommand(
   executor: ExecutorKind,
   spec: { worktreePath: string; taskId: string },
-  deps: { serverEntrypoint: string; governanceWorkspace: string; completeEntrypoint: string },
+  deps: {
+    serverEntrypoint: string;
+    governanceWorkspace: string;
+    completeEntrypoint: string;
+    /** clean per-repo CODEX_HOME the conductor codex runs under (required for executor==="codex";
+     *  materialized by ensureCleanCodexHome). Isolates from the operator's oh-my-codex/cmux hooks. */
+    codexHome?: string;
+  },
 ): string {
   const promptCat = `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"`;
   if (executor === "codex") {
     // The governance server lives at the Boule INSTALL, not under the target repo (a designated
     // local repo has no governance/ dir) — derive it from the injected entrypoint, never repoRoot.
     const serverPath = deps.serverEntrypoint;
+    // CODEX_HOME='<clean home>' redirects codex's profile (config.toml/auth/hooks/plugins) to a
+    // conductor-owned hooks-free dir, so the operator's oh-my-codex/cmux hooks NEVER load (the
+    // hijack root cause). The prefix env assignment applies to `codex exec` ONLY — the trailing
+    // `&& node … complete-task` (boule CLI) does NOT inherit it. Required: materialized beforehand.
+    if (!deps.codexHome) {
+      throw new Error("buildSessionCommand: codex requires deps.codexHome (clean hooks-free profile)");
+    }
     // approval_policy="never" lets the headless exec session call its MCP tools (complete_task /
     // escalate) WITHOUT a per-call approval gate — under the default policy codex blocks the MCP
     // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
@@ -177,6 +257,7 @@ export function buildSessionCommand(
     // lifecycle even if the model skipped the complete_task tool call. cmux runs --command through a
     // shell, so the `&&` short-circuits on nonzero exit (no completion on failure/escalation-abort).
     return (
+      `CODEX_HOME=${shellQuote(deps.codexHome)} ` +
       `codex exec --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
       `-C "${spec.worktreePath}" ` +
       `-c 'mcp_servers.boule-governance.command="node"' ` +
@@ -301,10 +382,24 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // The executor invocation (claude|codex). Both run against the SCOPED executor-role MCP
       // (verdict tools structurally absent), so a spawned session can escalate/complete_task but
       // cannot self-resolve (structural INVARIANT #1). See buildSessionCommand.
-      const command = buildSessionCommand(spec.executor ?? "claude", spec, {
+      const executor = spec.executor ?? "claude";
+      // Per-repo clean codex profile (gitignored, reusable across ticks). Built ONLY for codex so the
+      // operator's oh-my-codex/cmux hooks can't hijack the spawned session (the root cause of empty
+      // codex returns inside a cmux surface). Claude needs none (its hooks are the app's own).
+      const codexHome = `${deps.governanceWorkspace}/codex-home`;
+      if (executor === "codex") {
+        await ensureCleanCodexHome({
+          codexHome,
+          operatorAuthPath: deps.codexAuthPath,
+          env: deps.env,
+          fs: deps.fs,
+        });
+      }
+      const command = buildSessionCommand(executor, spec, {
         serverEntrypoint: deps.serverEntrypoint,
         governanceWorkspace: deps.governanceWorkspace,
         completeEntrypoint: deps.completeEntrypoint,
+        codexHome,
       });
       // Create the isolated workspace AND launch the executor atomically via --command. A
       // BACKGROUND workspace runs --command immediately, but a separate `cmux send` to its surface
