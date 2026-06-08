@@ -815,6 +815,49 @@ export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "
  */
 export type BouleAutonomyLevel = "manual" | "dispatch" | "auto_plan" | "full";
 
+export type BouleBackendChain = BouleBackendChain_Serialize | BouleBackendChain_Deserialize;
+
+export type BouleBackendChain_Deserialize = {
+	chain: BouleBackendSpec_Deserialize[],
+};
+
+export type BouleBackendChain_Serialize = {
+	chain: BouleBackendSpec_Serialize[],
+};
+
+/**  Backend provider (mirrors governance `Provider`). `deterministic` is evaluator-only. */
+export type BouleBackendProvider = "claude" | "codex" | "command" | "deterministic";
+
+export type BouleBackendSpec = BouleBackendSpec_Serialize | BouleBackendSpec_Deserialize;
+
+export type BouleBackendSpec_Deserialize = {
+	provider: BouleBackendProvider,
+	model: string | null,
+	command: string | null,
+	args: string[] | null,
+};
+
+export type BouleBackendSpec_Serialize = {
+	provider: BouleBackendProvider,
+	model?: string | null,
+	command?: string | null,
+	args?: string[] | null,
+};
+
+export type BouleBackendsConfig = BouleBackendsConfig_Serialize | BouleBackendsConfig_Deserialize;
+
+export type BouleBackendsConfig_Deserialize = {
+	executor: BouleBackendChain_Deserialize | null,
+	reviewers: BouleBackendChain_Deserialize[] | null,
+	evaluator: BouleBackendChain_Deserialize | null,
+};
+
+export type BouleBackendsConfig_Serialize = {
+	executor?: BouleBackendChain_Serialize | null,
+	reviewers?: BouleBackendChain_Serialize[] | null,
+	evaluator?: BouleBackendChain_Serialize | null,
+};
+
 /**
  *  Optional pure budget caps (mirrors governance `BudgetCaps`). Empty/all-None means no budget
  *  filtering and is omitted from `overrides.budget` on write.
@@ -861,6 +904,9 @@ export type BouleConfigSettings_Deserialize = {
 	autonomyLevel: BouleAutonomyLevel,
 	reviewQuorum: number,
 	budget: BouleBudgetCaps_Deserialize | null,
+	backends: BouleBackendsConfig_Deserialize | null,
+	routing: BouleRoutingConfig_Deserialize | null,
+	priceTable: { [key in string]: { [key in string]: BoulePriceEntry_Deserialize } } | null,
 };
 
 /**
@@ -875,6 +921,47 @@ export type BouleConfigSettings_Serialize = {
 	autonomyLevel: BouleAutonomyLevel,
 	reviewQuorum: number,
 	budget: BouleBudgetCaps_Serialize | null,
+	backends: BouleBackendsConfig_Serialize | null,
+	routing: BouleRoutingConfig_Serialize | null,
+	priceTable: { [key in string]: { [key in string]: BoulePriceEntry_Serialize } } | null,
+};
+
+export type BoulePriceEntry = BoulePriceEntry_Serialize | BoulePriceEntry_Deserialize;
+
+export type BoulePriceEntry_Deserialize = {
+	estimatedTokens: number | null,
+	costPerTokenUsd: number | null,
+	costPerStepUsd: number | null,
+};
+
+export type BoulePriceEntry_Serialize = {
+	estimatedTokens: number | null,
+	costPerTokenUsd?: number | null,
+	costPerStepUsd?: number | null,
+};
+
+export type BouleRoutingByDifficulty = BouleRoutingByDifficulty_Serialize | BouleRoutingByDifficulty_Deserialize;
+
+export type BouleRoutingByDifficulty_Deserialize = {
+	trivial: BouleBackendSpec_Deserialize | null,
+	standard: BouleBackendSpec_Deserialize | null,
+	hard: BouleBackendSpec_Deserialize | null,
+};
+
+export type BouleRoutingByDifficulty_Serialize = {
+	trivial?: BouleBackendSpec_Serialize | null,
+	standard?: BouleBackendSpec_Serialize | null,
+	hard?: BouleBackendSpec_Serialize | null,
+};
+
+export type BouleRoutingConfig = BouleRoutingConfig_Serialize | BouleRoutingConfig_Deserialize;
+
+export type BouleRoutingConfig_Deserialize = {
+	executor: BouleRoutingByDifficulty_Deserialize | null,
+};
+
+export type BouleRoutingConfig_Serialize = {
+	executor?: BouleRoutingByDifficulty_Serialize | null,
 };
 
 /**
@@ -1790,13 +1877,15 @@ export type SessionRow = {
 
 /**
  *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
- *  repo's `local_path` from the DB (defense against a forged path).
+ *  repo's `local_path` from the DB (defense against a forged path). Advanced nested knobs are raw
+ *  JSON strings so parsing/validation stays fail-closed in Rust; empty/null unsets the override.
  */
 export type SetBouleConfigInput = SetBouleConfigInput_Serialize | SetBouleConfigInput_Deserialize;
 
 /**
  *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
- *  repo's `local_path` from the DB (defense against a forged path).
+ *  repo's `local_path` from the DB (defense against a forged path). Advanced nested knobs are raw
+ *  JSON strings so parsing/validation stays fail-closed in Rust; empty/null unsets the override.
  */
 export type SetBouleConfigInput_Deserialize = {
 	repoId: string,
@@ -1804,11 +1893,15 @@ export type SetBouleConfigInput_Deserialize = {
 	autonomyLevel: BouleAutonomyLevel,
 	reviewQuorum: number,
 	budget: BouleBudgetCaps_Deserialize | null,
+	backends: string | null,
+	routing: string | null,
+	priceTable: string | null,
 };
 
 /**
  *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
- *  repo's `local_path` from the DB (defense against a forged path).
+ *  repo's `local_path` from the DB (defense against a forged path). Advanced nested knobs are raw
+ *  JSON strings so parsing/validation stays fail-closed in Rust; empty/null unsets the override.
  */
 export type SetBouleConfigInput_Serialize = {
 	repoId: string,
@@ -1816,6 +1909,9 @@ export type SetBouleConfigInput_Serialize = {
 	autonomyLevel: BouleAutonomyLevel,
 	reviewQuorum: number,
 	budget: BouleBudgetCaps_Serialize | null,
+	backends: string | null,
+	routing: string | null,
+	priceTable: string | null,
 };
 
 /**  프로젝트별 캘린더 표시 색상 변경 입력. `color=NULL`은 기본 팔레트로 되돌림. */

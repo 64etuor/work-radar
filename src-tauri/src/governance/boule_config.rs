@@ -14,6 +14,7 @@
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{ProjectKind, Provider, Repo};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::BTreeMap;
@@ -62,10 +63,14 @@ pub struct BouleConfigSettings {
     pub autonomy_level: BouleAutonomyLevel,
     pub review_quorum: u32,
     pub budget: Option<BouleBudgetCaps>,
+    pub backends: Option<BouleBackendsConfig>,
+    pub routing: Option<BouleRoutingConfig>,
+    pub price_table: Option<BoulePriceTable>,
 }
 
 /// Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
-/// repo's `local_path` from the DB (defense against a forged path).
+/// repo's `local_path` from the DB (defense against a forged path). Advanced nested knobs are raw
+/// JSON strings so parsing/validation stays fail-closed in Rust; empty/null unsets the override.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SetBouleConfigInput {
@@ -74,6 +79,9 @@ pub struct SetBouleConfigInput {
     pub autonomy_level: BouleAutonomyLevel,
     pub review_quorum: u32,
     pub budget: Option<BouleBudgetCaps>,
+    pub backends: Option<String>,
+    pub routing: Option<String>,
+    pub price_table: Option<String>,
 }
 
 /// Optional pure budget caps (mirrors governance `BudgetCaps`). Empty/all-None means no budget
@@ -90,6 +98,87 @@ pub struct BouleBudgetCaps {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub step_cost_cap_usd: Option<f64>,
 }
+
+/// Backend provider (mirrors governance `Provider`). `deterministic` is evaluator-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum BouleBackendProvider {
+    Claude,
+    Codex,
+    Command,
+    Deterministic,
+}
+
+impl BouleBackendProvider {
+    fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "claude" => Some(Self::Claude),
+            "codex" => Some(Self::Codex),
+            "command" => Some(Self::Command),
+            "deterministic" => Some(Self::Deterministic),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BouleBackendSpec {
+    pub provider: BouleBackendProvider,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BouleBackendChain {
+    pub chain: Vec<BouleBackendSpec>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BouleBackendsConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executor: Option<BouleBackendChain>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reviewers: Option<Vec<BouleBackendChain>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evaluator: Option<BouleBackendChain>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BouleRoutingByDifficulty {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trivial: Option<BouleBackendSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub standard: Option<BouleBackendSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hard: Option<BouleBackendSpec>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BouleRoutingConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executor: Option<BouleRoutingByDifficulty>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BoulePriceEntry {
+    pub estimated_tokens: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_per_token_usd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_per_step_usd: Option<f64>,
+}
+
+pub type BoulePriceTable = BTreeMap<String, BTreeMap<String, BoulePriceEntry>>;
 
 /// Per-kind defaults (mirrors governance `WORK_DEFAULTS`/`PERSONAL_DEFAULTS`). work = strict
 /// (manual gates, ≥2 review); personal = loose (auto-dispatch, single review).
@@ -128,6 +217,212 @@ fn validate_budget(budget: &BouleBudgetCaps) -> Result<(), AppError> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum BouleBackendRole {
+    Executor,
+    Reviewer,
+    Evaluator,
+}
+
+impl BouleBackendRole {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Executor => "executor",
+            Self::Reviewer => "reviewer",
+            Self::Evaluator => "evaluator",
+        }
+    }
+}
+
+fn validate_non_empty_opt(value: Option<&String>, field: &str) -> Result<(), String> {
+    if value.is_some_and(|s| s.is_empty()) {
+        Err(format!("{field} must be non-empty when provided"))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_backend_spec(spec: &BouleBackendSpec, role: BouleBackendRole) -> Result<(), String> {
+    validate_non_empty_opt(spec.model.as_ref(), "model")?;
+    validate_non_empty_opt(spec.command.as_ref(), "command")?;
+    if spec.provider == BouleBackendProvider::Command && spec.command.is_none() {
+        return Err("provider 'command' requires a command".into());
+    }
+    if spec.provider == BouleBackendProvider::Deterministic
+        && !matches!(role, BouleBackendRole::Evaluator)
+    {
+        return Err(format!(
+            "backend 'deterministic' is not allowed for role '{}' (evaluator only)",
+            role.as_str()
+        ));
+    }
+    Ok(())
+}
+
+fn validate_backend_chain(role: BouleBackendRole, chain: &BouleBackendChain) -> Result<(), String> {
+    if chain.chain.is_empty() {
+        return Err(format!(
+            "{} backend chain must contain at least one backend",
+            role.as_str()
+        ));
+    }
+    for spec in &chain.chain {
+        validate_backend_spec(spec, role)?;
+    }
+    Ok(())
+}
+
+fn backends_active(backends: &BouleBackendsConfig) -> bool {
+    backends.executor.is_some()
+        || backends
+            .reviewers
+            .as_ref()
+            .is_some_and(|reviewers| !reviewers.is_empty())
+        || backends.evaluator.is_some()
+}
+
+fn validate_backends(backends: &BouleBackendsConfig) -> Result<(), AppError> {
+    if let Some(chain) = &backends.executor {
+        validate_backend_chain(BouleBackendRole::Executor, chain)
+            .map_err(|msg| AppError::validation("boule.backends", msg))?;
+    }
+    if let Some(reviewers) = &backends.reviewers {
+        for chain in reviewers {
+            validate_backend_chain(BouleBackendRole::Reviewer, chain)
+                .map_err(|msg| AppError::validation("boule.backends", msg))?;
+        }
+    }
+    if let Some(chain) = &backends.evaluator {
+        validate_backend_chain(BouleBackendRole::Evaluator, chain)
+            .map_err(|msg| AppError::validation("boule.backends", msg))?;
+    }
+    Ok(())
+}
+
+fn routing_active(routing: &BouleRoutingConfig) -> bool {
+    routing
+        .executor
+        .as_ref()
+        .is_some_and(|r| r.trivial.is_some() || r.standard.is_some() || r.hard.is_some())
+}
+
+fn validate_routing(routing: &BouleRoutingConfig) -> Result<(), AppError> {
+    if let Some(executor) = &routing.executor {
+        for spec in [&executor.trivial, &executor.standard, &executor.hard]
+            .into_iter()
+            .flatten()
+        {
+            validate_backend_spec(spec, BouleBackendRole::Executor)
+                .map_err(|msg| AppError::validation("boule.routing", msg))?;
+        }
+    }
+    Ok(())
+}
+
+fn price_table_active(price_table: &BoulePriceTable) -> bool {
+    price_table.values().any(|models| !models.is_empty())
+}
+
+fn validate_price_table(price_table: &BoulePriceTable) -> Result<(), AppError> {
+    for (provider, models) in price_table {
+        if provider.is_empty() {
+            return Err(AppError::validation(
+                "boule.price_table",
+                "priceTable provider keys must be non-empty",
+            ));
+        }
+        if BouleBackendProvider::from_key(provider).is_none() {
+            return Err(AppError::validation(
+                "boule.price_table",
+                format!("unknown provider '{provider}'"),
+            ));
+        }
+        for (model, entry) in models {
+            if model.is_empty() {
+                return Err(AppError::validation(
+                    "boule.price_table",
+                    "priceTable model keys must be non-empty",
+                ));
+            }
+            let token_ok = entry.estimated_tokens.is_finite() && entry.estimated_tokens >= 0.0;
+            let token_cost_ok = entry
+                .cost_per_token_usd
+                .is_none_or(|cost| cost.is_finite() && cost >= 0.0);
+            let step_cost_ok = entry
+                .cost_per_step_usd
+                .is_none_or(|cost| cost.is_finite() && cost >= 0.0);
+            let has_cost = entry.cost_per_token_usd.is_some() || entry.cost_per_step_usd.is_some();
+            if !(token_ok && token_cost_ok && step_cost_ok && has_cost) {
+                return Err(AppError::validation(
+                    "boule.price_table",
+                    "price entry requires non-negative estimatedTokens and costPerTokenUsd or costPerStepUsd",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_raw_override<T>(raw: Option<&String>, code: &str) -> Result<Option<T>, AppError>
+where
+    T: DeserializeOwned,
+{
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    serde_json::from_str(raw).map(Some).map_err(|e| {
+        AppError::validation(
+            code,
+            format!(
+                "invalid JSON for {}: {e}",
+                code.strip_prefix("boule.").unwrap_or(code)
+            ),
+        )
+    })
+}
+
+fn parse_value_override<T>(
+    value: Option<&serde_json::Value>,
+    code: &str,
+) -> Result<Option<T>, AppError>
+where
+    T: DeserializeOwned,
+{
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    serde_json::from_value(value.clone())
+        .map(Some)
+        .map_err(|e| AppError::terminal(code, e.to_string()))
+}
+
+fn parse_backends_raw(raw: Option<&String>) -> Result<Option<BouleBackendsConfig>, AppError> {
+    let backends = parse_raw_override(raw, "boule.backends")?;
+    if let Some(backends) = &backends {
+        validate_backends(backends)?;
+    }
+    Ok(backends.filter(backends_active))
+}
+
+fn parse_routing_raw(raw: Option<&String>) -> Result<Option<BouleRoutingConfig>, AppError> {
+    let routing = parse_raw_override(raw, "boule.routing")?;
+    if let Some(routing) = &routing {
+        validate_routing(routing)?;
+    }
+    Ok(routing.filter(routing_active))
+}
+
+fn parse_price_table_raw(raw: Option<&String>) -> Result<Option<BoulePriceTable>, AppError> {
+    let price_table = parse_raw_override(raw, "boule.price_table")?;
+    if let Some(price_table) = &price_table {
+        validate_price_table(price_table)?;
+    }
+    Ok(price_table.filter(price_table_active))
+}
+
 fn parse_budget_value(
     value: Option<&serde_json::Value>,
 ) -> Result<Option<BouleBudgetCaps>, AppError> {
@@ -138,6 +433,36 @@ fn parse_budget_value(
         .map_err(|e| AppError::terminal("boule.config_budget", e.to_string()))?;
     validate_budget(&budget)?;
     Ok(budget_active(&budget).then_some(budget))
+}
+
+fn parse_backends_value(
+    value: Option<&serde_json::Value>,
+) -> Result<Option<BouleBackendsConfig>, AppError> {
+    let backends = parse_value_override(value, "boule.config_backends")?;
+    if let Some(backends) = &backends {
+        validate_backends(backends)?;
+    }
+    Ok(backends.filter(backends_active))
+}
+
+fn parse_routing_value(
+    value: Option<&serde_json::Value>,
+) -> Result<Option<BouleRoutingConfig>, AppError> {
+    let routing = parse_value_override(value, "boule.config_routing")?;
+    if let Some(routing) = &routing {
+        validate_routing(routing)?;
+    }
+    Ok(routing.filter(routing_active))
+}
+
+fn parse_price_table_value(
+    value: Option<&serde_json::Value>,
+) -> Result<Option<BoulePriceTable>, AppError> {
+    let price_table = parse_value_override(value, "boule.config_price_table")?;
+    if let Some(price_table) = &price_table {
+        validate_price_table(price_table)?;
+    }
+    Ok(price_table.filter(price_table_active))
 }
 
 const REPO_COLS: &str =
@@ -236,6 +561,9 @@ pub(crate) async fn get_boule_config_core(
                 .filter(|q| *q >= 1)
                 .unwrap_or(def_quorum);
             let budget = parse_budget_value(overrides.and_then(|o| o.get("budget")))?;
+            let backends = parse_backends_value(overrides.and_then(|o| o.get("backends")))?;
+            let routing = parse_routing_value(overrides.and_then(|o| o.get("routing")))?;
+            let price_table = parse_price_table_value(overrides.and_then(|o| o.get("priceTable")))?;
             Ok(BouleConfigSettings {
                 repo_id: repo.id,
                 repo_path: dir.to_string_lossy().into_owned(),
@@ -244,6 +572,9 @@ pub(crate) async fn get_boule_config_core(
                 autonomy_level,
                 review_quorum,
                 budget,
+                backends,
+                routing,
+                price_table,
             })
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -258,6 +589,9 @@ pub(crate) async fn get_boule_config_core(
                 autonomy_level,
                 review_quorum,
                 budget: None,
+                backends: None,
+                routing: None,
+                price_table: None,
             })
         }
         Err(e) => Err(AppError::terminal("boule.config_read", e.to_string())),
@@ -279,6 +613,9 @@ pub(crate) async fn set_boule_config_core(
     if let Some(budget) = &input.budget {
         validate_budget(budget)?;
     }
+    let next_backends = parse_backends_raw(input.backends.as_ref())?;
+    let next_routing = parse_routing_raw(input.routing.as_ref())?;
+    let next_price_table = parse_price_table_raw(input.price_table.as_ref())?;
     let repo = fetch_repo(db, &input.repo_id).await?;
     let dir = local_repo_dir(&repo)?;
     let boule_dir = dir.join(".boule");
@@ -334,6 +671,42 @@ pub(crate) async fn set_boule_config_core(
             ov.remove("budget");
         }
     }
+    match next_backends.as_ref() {
+        Some(backends) => {
+            ov.insert(
+                "backends".into(),
+                serde_json::to_value(backends)
+                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
+            );
+        }
+        None => {
+            ov.remove("backends");
+        }
+    }
+    match next_routing.as_ref() {
+        Some(routing) => {
+            ov.insert(
+                "routing".into(),
+                serde_json::to_value(routing)
+                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
+            );
+        }
+        None => {
+            ov.remove("routing");
+        }
+    }
+    match next_price_table.as_ref() {
+        Some(price_table) => {
+            ov.insert(
+                "priceTable".into(),
+                serde_json::to_value(price_table)
+                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
+            );
+        }
+        None => {
+            ov.remove("priceTable");
+        }
+    }
 
     let body = serialize_config(&root)?;
     std::fs::create_dir_all(&boule_dir)
@@ -352,6 +725,9 @@ pub(crate) async fn set_boule_config_core(
         autonomy_level: input.autonomy_level,
         review_quorum: input.review_quorum,
         budget: input.budget.clone().filter(budget_active),
+        backends: next_backends,
+        routing: next_routing,
+        price_table: next_price_table,
     })
 }
 
@@ -480,6 +856,9 @@ mod tests {
                 autonomy_level: BouleAutonomyLevel::Full,
                 review_quorum: 3,
                 budget: None,
+                backends: None,
+                routing: None,
+                price_table: None,
             },
         )
         .await
@@ -519,6 +898,9 @@ mod tests {
                     run_cost_cap_usd: Some(2.5),
                     step_cost_cap_usd: Some(0.75),
                 }),
+                backends: None,
+                routing: None,
+                price_table: None,
             },
         )
         .await
@@ -558,6 +940,9 @@ mod tests {
                 autonomy_level: BouleAutonomyLevel::Dispatch,
                 review_quorum: 1,
                 budget: None,
+                backends: None,
+                routing: None,
+                price_table: None,
             },
         )
         .await
@@ -571,6 +956,220 @@ mod tests {
             get_boule_config_core(&db, &repo_id).await.unwrap().budget,
             None
         );
+    }
+
+    #[tokio::test]
+    async fn roundtrip_advanced_overrides_and_clear_removes_them() {
+        let db = fresh_db().await;
+        let dir = tempfile::tempdir().unwrap();
+        let repo_id = local_repo_with_dir(&db, ProjectKind::Work, dir.path()).await;
+
+        let backends = r#"{
+          "executor": { "chain": [{ "provider": "claude", "model": "claude-sonnet-4-5" }] },
+          "reviewers": [{ "chain": [{ "provider": "codex", "model": "gpt-5-codex-small" }] }],
+          "evaluator": { "chain": [{ "provider": "deterministic" }] }
+        }"#;
+        let routing = r#"{
+          "executor": {
+            "standard": { "provider": "codex", "model": "gpt-5-codex-small" },
+            "hard": { "provider": "command", "command": "boule-eval", "args": ["--json"] }
+          }
+        }"#;
+        let price_table = r#"{
+          "claude": {
+            "default": { "estimatedTokens": 20000, "costPerStepUsd": 0.2 }
+          },
+          "codex": {
+            "gpt-5-codex-small": { "estimatedTokens": 2000, "costPerTokenUsd": 0.000005 }
+          }
+        }"#;
+
+        let s = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id: repo_id.clone(),
+                kind: ProjectKind::Work,
+                autonomy_level: BouleAutonomyLevel::Manual,
+                review_quorum: 2,
+                budget: None,
+                backends: Some(backends.into()),
+                routing: Some(routing.into()),
+                price_table: Some(price_table.into()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            s.backends
+                .as_ref()
+                .and_then(|b| b.executor.as_ref())
+                .and_then(|c| c.chain.first())
+                .map(|spec| spec.model.as_deref()),
+            Some(Some("claude-sonnet-4-5"))
+        );
+        assert_eq!(
+            s.routing
+                .as_ref()
+                .and_then(|r| r.executor.as_ref())
+                .and_then(|r| r.standard.as_ref())
+                .map(|spec| spec.provider),
+            Some(BouleBackendProvider::Codex)
+        );
+        assert_eq!(
+            s.price_table
+                .as_ref()
+                .and_then(|table| table.get("claude"))
+                .and_then(|models| models.get("default"))
+                .map(|entry| entry.estimated_tokens),
+            Some(20_000.0)
+        );
+
+        let path = dir.path().join(".boule").join("boule.config.json");
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"backends\""));
+        assert!(text.contains("\"priceTable\""));
+        assert!(text.contains("\"costPerStepUsd\": 0.2"));
+        assert!(text.contains("\"standard\""));
+        assert!(!text.contains("price_table"));
+
+        let g = get_boule_config_core(&db, &repo_id).await.unwrap();
+        assert_eq!(g.backends, s.backends);
+        assert_eq!(g.routing, s.routing);
+        assert_eq!(g.price_table, s.price_table);
+
+        let cleared = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id: repo_id.clone(),
+                kind: ProjectKind::Work,
+                autonomy_level: BouleAutonomyLevel::Manual,
+                review_quorum: 2,
+                budget: None,
+                backends: None,
+                routing: None,
+                price_table: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(cleared.backends, None);
+        assert_eq!(cleared.routing, None);
+        assert_eq!(cleared.price_table, None);
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("\"backends\""));
+        assert!(!text.contains("\"routing\""));
+        assert!(!text.contains("\"priceTable\""));
+    }
+
+    #[tokio::test]
+    async fn set_rejects_invalid_advanced_overrides_without_writing() {
+        let db = fresh_db().await;
+        let dir = tempfile::tempdir().unwrap();
+        let repo_id = local_repo_with_dir(&db, ProjectKind::Work, dir.path()).await;
+
+        set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id: repo_id.clone(),
+                kind: ProjectKind::Work,
+                autonomy_level: BouleAutonomyLevel::Manual,
+                review_quorum: 2,
+                budget: None,
+                backends: Some(
+                    r#"{"executor":{"chain":[{"provider":"claude","model":"ok"}]}}"#.into(),
+                ),
+                routing: None,
+                price_table: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let path = dir.path().join(".boule").join("boule.config.json");
+        let before = std::fs::read_to_string(&path).unwrap();
+        let e = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id,
+                kind: ProjectKind::Work,
+                autonomy_level: BouleAutonomyLevel::Manual,
+                review_quorum: 2,
+                budget: None,
+                backends: Some(r#"{"executor":{"chain":[{"provider":"deterministic"}]}}"#.into()),
+                routing: None,
+                price_table: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, "boule.backends");
+        assert!(
+            e.message.contains("deterministic"),
+            "error should explain the rejected provider"
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+    }
+
+    #[tokio::test]
+    async fn set_rejects_bad_json_and_invalid_price_entry_without_writing() {
+        let db = fresh_db().await;
+        let dir = tempfile::tempdir().unwrap();
+        let repo_id = local_repo_with_dir(&db, ProjectKind::Personal, dir.path()).await;
+
+        set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id: repo_id.clone(),
+                kind: ProjectKind::Personal,
+                autonomy_level: BouleAutonomyLevel::Dispatch,
+                review_quorum: 1,
+                budget: None,
+                backends: None,
+                routing: None,
+                price_table: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let path = dir.path().join(".boule").join("boule.config.json");
+        let before = std::fs::read_to_string(&path).unwrap();
+        let bad_json = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id: repo_id.clone(),
+                kind: ProjectKind::Personal,
+                autonomy_level: BouleAutonomyLevel::Dispatch,
+                review_quorum: 1,
+                budget: None,
+                backends: Some("{".into()),
+                routing: None,
+                price_table: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(bad_json.code, "boule.backends");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+
+        let invalid_price = set_boule_config_core(
+            &db,
+            &SetBouleConfigInput {
+                repo_id,
+                kind: ProjectKind::Personal,
+                autonomy_level: BouleAutonomyLevel::Dispatch,
+                review_quorum: 1,
+                budget: None,
+                backends: None,
+                routing: None,
+                price_table: Some(r#"{"claude":{"default":{"estimatedTokens":1000}}}"#.into()),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(invalid_price.code, "boule.price_table");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     }
 
     #[tokio::test]
@@ -592,6 +1191,9 @@ mod tests {
                     run_cost_cap_usd: None,
                     step_cost_cap_usd: None,
                 }),
+                backends: None,
+                routing: None,
+                price_table: None,
             },
         )
         .await
@@ -613,6 +1215,9 @@ mod tests {
                 autonomy_level: BouleAutonomyLevel::Dispatch,
                 review_quorum: 0,
                 budget: None,
+                backends: None,
+                routing: None,
+                price_table: None,
             },
         )
         .await
