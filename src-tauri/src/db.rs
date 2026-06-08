@@ -386,9 +386,10 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
-    /// Workstream F 마이그레이션(0043): 0012 hermes_bridge/hermes_messages 테이블 드롭(브리지 제거).
+    /// Workstream F 마이그레이션(0044): 0012 hermes_bridge/hermes_messages 테이블 드롭(브리지 제거).
+    /// (0043 = hermes_sessions 생성이 dev DB들에 먼저 적용돼 있어, drop은 0044로 둔다 — 번호 충돌 회피.)
     #[tokio::test]
-    async fn migration_0043_drops_hermes_bridge() {
+    async fn migration_0044_drops_hermes_bridge() {
         let path = temp_db_path();
         let pool = init_db(&path).await.expect("init_db failed");
 
@@ -402,7 +403,7 @@ mod tests {
         assert_eq!(
             tables.len(),
             0,
-            "0043 drops hermes_bridge + hermes_messages (bridge removed)"
+            "0044 drops hermes_bridge + hermes_messages (bridge removed)"
         );
 
         pool.close().await;
