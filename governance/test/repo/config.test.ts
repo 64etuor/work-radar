@@ -41,6 +41,41 @@ describe("parseBouleConfig — strict, fail-closed validation", () => {
       parseBouleConfig({ schemaVersion: 1, kind: "personal", overrides: { reviewQuorum: 0 } }),
     ).toThrow();
   });
+
+  it("accepts omitted budget and priceTable overrides for backward compatibility", () => {
+    const c = parseBouleConfig({ schemaVersion: 1, kind: "work", overrides: {} });
+    const p = resolvePolicy(c);
+
+    expect(c.overrides?.budget).toBeUndefined();
+    expect(c.overrides?.priceTable).toBeUndefined();
+    expect(p.budget).toBeUndefined();
+    expect(p.priceTable).toBeUndefined();
+  });
+
+  it("parses optional budget and priceTable overrides additively", () => {
+    const p = resolvePolicy(
+      parseBouleConfig({
+        schemaVersion: 1,
+        kind: "work",
+        overrides: {
+          reviewQuorum: 2,
+          budget: { runTokenCap: 100_000, stepCostCapUsd: 0.25 },
+          priceTable: {
+            codex: {
+              "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(p.reviewQuorum).toBe(2);
+    expect(p.budget).toEqual({ runTokenCap: 100_000, stepCostCapUsd: 0.25 });
+    expect(p.priceTable?.codex?.["gpt-5-codex-small"]).toEqual({
+      estimatedTokens: 2_000,
+      costPerStepUsd: 0.01,
+    });
+  });
 });
 
 describe("resolvePolicy — per-kind defaults + override precedence", () => {
