@@ -159,8 +159,18 @@ export function HermesChatLog({ messages, onRespond }: Props) {
     return () => clearTimeout(t);
   }, [exiting]);
 
+  // 메시지 변경 + 마운트(패널 재오픈) 시 최하단 추적. 첫 스크롤(마운트·재오픈)은 instant로
+  // 즉시 최하단에 붙이고(껐다 켜면 바로 마지막 메시지), 이후 스트리밍 갱신은 smooth.
+  // rAF로 마크다운/코드블록 레이아웃 완료 후 스크롤을 보장한다.
+  const initialScrollRef = useRef(true);
   useEffect(() => {
-    if (followRef.current) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!followRef.current) return;
+    const behavior: ScrollBehavior = initialScrollRef.current ? "auto" : "smooth";
+    initialScrollRef.current = false;
+    const id = requestAnimationFrame(() => {
+      endRef.current?.scrollIntoView({ behavior, block: "end" });
+    });
+    return () => cancelAnimationFrame(id);
   }, [messages]);
 
   if (messages.length === 0 || exiting) {
