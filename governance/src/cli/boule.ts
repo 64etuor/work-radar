@@ -3,10 +3,19 @@ import { boulePaths } from "../repo/paths.ts";
 import {
   defaultConfig,
   parseBouleConfig,
+  routingConfigSchema,
   resolvePolicy,
   type BouleConfig,
   type Kind,
+  type RoutingConfig,
 } from "../repo/config.ts";
+import {
+  assertProviderAllowed,
+  backendsConfigSchema,
+  type BackendsConfig,
+  type BackendSpec,
+} from "../backends/config.ts";
+import { priceTableSchema, type PriceTable } from "../backends/budget.ts";
 import { initRepo } from "../repo/scaffold.ts";
 import {
   readConfig,
@@ -84,6 +93,7 @@ export async function cmdInit(flags: ParsedArgs["flags"]): Promise<string> {
 export async function cmdSet(flags: ParsedArgs["flags"]): Promise<string> {
   const repo = reqRepo(flags);
   const current: BouleConfig = await readConfig(repo);
+  const parsedOverrides = parseStructuredOverrideFlags(flags);
   const overrides = { ...(current.overrides ?? {}) };
   if (flags["autonomy-level"] !== undefined) {
     const l = flags["autonomy-level"];
@@ -96,6 +106,18 @@ export async function cmdSet(flags: ParsedArgs["flags"]): Promise<string> {
     if (!Number.isInteger(n) || n < 1) throw new Error("--review-quorum must be an integer >= 1");
     overrides.reviewQuorum = n;
   }
+  if (parsedOverrides.backendsProvided) {
+    if (parsedOverrides.backends === null) delete overrides.backends;
+    else overrides.backends = parsedOverrides.backends;
+  }
+  if (parsedOverrides.routingProvided) {
+    if (parsedOverrides.routing === null) delete overrides.routing;
+    else overrides.routing = parsedOverrides.routing;
+  }
+  if (parsedOverrides.priceTableProvided) {
+    if (parsedOverrides.priceTable === null) delete overrides.priceTable;
+    else overrides.priceTable = parsedOverrides.priceTable;
+  }
   const next: BouleConfig = {
     ...current,
     kind: flags.kind !== undefined ? asKind(flags.kind) : current.kind,
@@ -105,6 +127,101 @@ export async function cmdSet(flags: ParsedArgs["flags"]): Promise<string> {
   await writeConfig(repo, next);
   await writeMcpConfig(repo, resolvePolicy(next));
   return `updated ${boulePaths(repo).config} (kind=${next.kind})`;
+}
+
+interface StructuredOverrideFlags {
+  backendsProvided: boolean;
+  backends?: BackendsConfig | null;
+  routingProvided: boolean;
+  routing?: RoutingConfig | null;
+  priceTableProvided: boolean;
+  priceTable?: PriceTable | null;
+}
+
+function parseStructuredOverrideFlags(flags: ParsedArgs["flags"]): StructuredOverrideFlags {
+  const parsed: StructuredOverrideFlags = {
+    backendsProvided: false,
+    routingProvided: false,
+    priceTableProvided: false,
+  };
+
+  if (flags.backends !== undefined) {
+    parsed.backendsProvided = true;
+    const raw = parseJsonFlag(flags, "backends");
+    if (isClearValue(raw)) {
+      parsed.backends = null;
+    } else {
+      const backends = backendsConfigSchema.parse(raw);
+      validateBackendsProviders(backends);
+      parsed.backends = backends;
+    }
+  }
+
+  if (flags.routing !== undefined) {
+    parsed.routingProvided = true;
+    const raw = parseJsonFlag(flags, "routing");
+    if (isClearValue(raw)) {
+      parsed.routing = null;
+    } else {
+      const routing = routingConfigSchema.parse(raw);
+      validateRoutingProviders(routing);
+      parsed.routing = routing;
+    }
+  }
+
+  if (flags["price-table"] !== undefined) {
+    parsed.priceTableProvided = true;
+    const raw = parseJsonFlag(flags, "price-table");
+    if (isClearValue(raw)) {
+      parsed.priceTable = null;
+    } else {
+      parsed.priceTable = priceTableSchema.parse(raw);
+    }
+  }
+
+  return parsed;
+}
+
+function parseJsonFlag(flags: ParsedArgs["flags"], name: string): unknown {
+  const raw = flags[name];
+  if (typeof raw !== "string") throw new Error(`--${name} <json> is required`);
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    const detail = err instanceof Error ? `: ${err.message}` : "";
+    throw new Error(`--${name} must be valid JSON${detail}`);
+  }
+}
+
+function isClearValue(value: unknown): boolean {
+  return (
+    value === null ||
+    (typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0)
+  );
+}
+
+function validateBackendsProviders(backends: BackendsConfig): void {
+  for (const spec of backends.executor?.chain ?? []) assertProviderAllowed("executor", spec);
+  for (const reviewer of backends.reviewers ?? []) {
+    for (const spec of reviewer.chain) assertProviderAllowed("reviewer", spec);
+  }
+}
+
+function validateRoutingProviders(routing: RoutingConfig): void {
+  for (const spec of routingSpecs(routing)) assertProviderAllowed("executor", spec);
+}
+
+function routingSpecs(routing: RoutingConfig): BackendSpec[] {
+  const executor = routing.executor;
+  if (!executor) return [];
+  const specs: BackendSpec[] = [];
+  if (executor.trivial) specs.push(executor.trivial);
+  if (executor.standard) specs.push(executor.standard);
+  if (executor.hard) specs.push(executor.hard);
+  return specs;
 }
 
 /** report-exit: executor-side clean-exit hint from OUTSIDE the MCP round-trip. It never writes
@@ -198,11 +315,41 @@ export async function cmdStatus(flags: ParsedArgs["flags"]): Promise<string> {
     `autoMode: ${loaded.policy.autoMode}  reviewQuorum: ${loaded.policy.reviewQuorum}`,
     `forbiddenDecisionClasses: ${loaded.policy.forbiddenDecisionClasses.join(", ")}`,
     `allowedType2Actions: ${loaded.policy.allowedType2Actions.join(", ")}`,
+    `backends: ${formatBackendsStatus(loaded.policy.backends)}`,
+    `routing: ${formatRoutingStatus(loaded.policy.routing)}`,
+    `priceTable: ${formatPriceTableStatus(loaded.policy.priceTable)}`,
     `workspace: ${p.workspace}`,
     `worktrees: ${p.worktrees}`,
     `mcp.json: ${p.mcp}`,
   ];
   return lines.join("\n");
+}
+
+function formatBackendsStatus(backends: BackendsConfig | undefined): string {
+  if (!backends) return "unset";
+  const executor = backends.executor ? `executor chain ${backends.executor.chain.length}` : "executor unset";
+  const reviewerLengths = (backends.reviewers ?? []).map((reviewer) => reviewer.chain.length);
+  const reviewers = backends.reviewers
+    ? `reviewers ${backends.reviewers.length} [${reviewerLengths.join(",")}]`
+    : "reviewers unset";
+  const evaluator = backends.evaluator ? `evaluator chain ${backends.evaluator.chain.length}` : "evaluator unset";
+  return `SET (${executor}, ${reviewers}, ${evaluator})`;
+}
+
+function formatRoutingStatus(routing: RoutingConfig | undefined): string {
+  if (!routing) return "unset";
+  const executor = routing.executor;
+  const difficulties = [
+    executor?.trivial ? "trivial" : undefined,
+    executor?.standard ? "standard" : undefined,
+    executor?.hard ? "hard" : undefined,
+  ].filter((difficulty) => difficulty !== undefined);
+  return `SET (executor difficulties: ${difficulties.length ? difficulties.join(", ") : "none"})`;
+}
+
+function formatPriceTableStatus(priceTable: PriceTable | undefined): string {
+  if (!priceTable) return "unset";
+  return `SET (providers ${Object.keys(priceTable).length})`;
 }
 
 /** run: exec the governance MCP server scoped to this repo's policy env (stdio passthrough). */
@@ -298,7 +445,7 @@ export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
 
 const USAGE = `boule <command> --repo <path>
   init   --repo <p> --kind <personal|work> [--project-id X] [--project-name Y] [--overwrite]
-  set    --repo <p> [--kind k] [--autonomy-level manual|dispatch|auto_plan|full] [--review-quorum n]
+  set    --repo <p> [--kind k] [--autonomy-level manual|dispatch|auto_plan|full] [--review-quorum n] [--backends json] [--routing json] [--price-table json]
   status --repo <p>
   report-exit --workspace <ws> --task <id>   # executor clean-exit hint (verdict-free)
   record-attempt --workspace <ws> --task <id> --attempt <n> --exit-code <n> --launched true|false --worktree-dirty true|false [--stderr-digest s]

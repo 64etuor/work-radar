@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -11,6 +11,7 @@ import {
   cmdRecordAttempt,
 } from "../../src/cli/boule.js";
 import { readConfig } from "../../src/repo/configIo.js";
+import { boulePaths } from "../../src/repo/paths.js";
 import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
 import { conductPlan } from "../../src/conductor/handlers.js";
 import { stubAdapter } from "../../src/conductor/adapter.js";
@@ -23,6 +24,10 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(repo, { recursive: true, force: true });
 });
+
+async function rawConfig(): Promise<string> {
+  return await readFile(boulePaths(repo).config, "utf8");
+}
 
 describe("parseArgs", () => {
   it("parses command + --key value / --key=value / boolean --flag", () => {
@@ -56,12 +61,179 @@ describe("cmdInit / cmdSet / cmdStatus", () => {
     await expect(cmdSet({ repo, "autonomy-level": "yolo" })).rejects.toThrow(/autonomy-level/);
   });
 
+  it("set --backends round-trips validated JSON into overrides.backends", async () => {
+    await cmdInit({ repo, kind: "work" });
+    const backends = {
+      executor: { chain: [{ provider: "codex", model: "gpt-5-codex-small" }] },
+      reviewers: [{ chain: [{ provider: "claude", model: "claude-sonnet-4-5" }] }],
+      evaluator: { chain: [{ provider: "deterministic" }] },
+    };
+
+    await cmdSet({ repo, backends: JSON.stringify(backends) });
+
+    expect((await readConfig(repo)).overrides?.backends).toEqual(backends);
+  });
+
+  it("set --backends invalid JSON throws and leaves config unchanged", async () => {
+    await cmdInit({ repo, kind: "work" });
+    await cmdSet({ repo, "autonomy-level": "dispatch", "review-quorum": "2" });
+    const before = await rawConfig();
+
+    await expect(cmdSet({ repo, backends: '{"executor":' })).rejects.toThrow(/--backends must be valid JSON/);
+
+    expect(await rawConfig()).toBe(before);
+  });
+
+  it("set --backends schema-invalid JSON throws and leaves config unchanged", async () => {
+    await cmdInit({ repo, kind: "work" });
+    await cmdSet({ repo, "review-quorum": "2" });
+    const before = await rawConfig();
+
+    await expect(cmdSet({ repo, backends: JSON.stringify({ executor: { chain: [] } }) })).rejects.toThrow();
+
+    expect(await rawConfig()).toBe(before);
+  });
+
+  it("set --backends rejects deterministic executor chains before writing", async () => {
+    await cmdInit({ repo, kind: "work" });
+    await cmdSet({ repo, "review-quorum": "2" });
+    const before = await rawConfig();
+
+    await expect(
+      cmdSet({
+        repo,
+        backends: JSON.stringify({ executor: { chain: [{ provider: "deterministic" }] } }),
+      }),
+    ).rejects.toThrow(/deterministic.*executor/);
+
+    expect(await rawConfig()).toBe(before);
+  });
+
+  it("set --routing and --price-table round-trip valid JSON", async () => {
+    await cmdInit({ repo, kind: "work" });
+    const routing = {
+      executor: {
+        trivial: { provider: "codex", model: "gpt-5-codex-small" },
+        hard: { provider: "claude", model: "claude-opus-4-1" },
+      },
+    };
+    const priceTable = {
+      codex: {
+        "gpt-5-codex-small": { estimatedTokens: 2000, costPerStepUsd: 0.01 },
+      },
+      claude: {
+        "claude-opus-4-1": { estimatedTokens: 40000, costPerStepUsd: 1.2 },
+      },
+    };
+
+    await cmdSet({
+      repo,
+      routing: JSON.stringify(routing),
+      "price-table": JSON.stringify(priceTable),
+    });
+
+    const cfg = await readConfig(repo);
+    expect(cfg.overrides?.routing).toEqual(routing);
+    expect(cfg.overrides?.priceTable).toEqual(priceTable);
+  });
+
+  it("set --routing and --price-table invalid input leaves config unchanged", async () => {
+    await cmdInit({ repo, kind: "work" });
+    await cmdSet({ repo, "autonomy-level": "dispatch" });
+    const before = await rawConfig();
+
+    await expect(
+      cmdSet({
+        repo,
+        routing: JSON.stringify({ executor: { standard: { provider: "deterministic" } } }),
+      }),
+    ).rejects.toThrow(/deterministic.*executor/);
+    expect(await rawConfig()).toBe(before);
+
+    await expect(
+      cmdSet({
+        repo,
+        "price-table": JSON.stringify({ codex: { default: { estimatedTokens: 1 } } }),
+      }),
+    ).rejects.toThrow();
+    expect(await rawConfig()).toBe(before);
+  });
+
+  it("set --backends null or empty object clears overrides.backends", async () => {
+    await cmdInit({ repo, kind: "work" });
+    const backends = {
+      executor: { chain: [{ provider: "codex", model: "gpt-5-codex-small" }] },
+    };
+    await cmdSet({ repo, backends: JSON.stringify(backends), "review-quorum": "2" });
+
+    await cmdSet({ repo, backends: "null" });
+    expect((await readConfig(repo)).overrides).toEqual({ reviewQuorum: 2 });
+
+    await cmdSet({ repo, backends: JSON.stringify(backends) });
+    await cmdSet({ repo, backends: "{}" });
+    expect((await readConfig(repo)).overrides).toEqual({ reviewQuorum: 2 });
+  });
+
+  it("set omitting backend flags preserves existing overrides", async () => {
+    await cmdInit({ repo, kind: "work" });
+    const backends = {
+      executor: { chain: [{ provider: "codex", model: "gpt-5-codex-small" }] },
+    };
+    const routing = { executor: { trivial: { provider: "codex", model: "gpt-5-codex-small" } } };
+    const priceTable = {
+      codex: {
+        "gpt-5-codex-small": { estimatedTokens: 2000, costPerStepUsd: 0.01 },
+      },
+    };
+    await cmdSet({
+      repo,
+      backends: JSON.stringify(backends),
+      routing: JSON.stringify(routing),
+      "price-table": JSON.stringify(priceTable),
+      "review-quorum": "2",
+    });
+
+    await cmdSet({ repo, "autonomy-level": "full" });
+
+    expect((await readConfig(repo)).overrides).toEqual({
+      autonomyLevel: "full",
+      reviewQuorum: 2,
+      backends,
+      routing,
+      priceTable,
+    });
+  });
+
   it("status reports the resolved policy from config", async () => {
     await cmdInit({ repo, kind: "personal" });
     const out = await cmdStatus({ repo });
     expect(out).toMatch(/policy source: config/);
     expect(out).toMatch(/kind: personal/);
     expect(out).toMatch(/autoMode: type2/);
+  });
+
+  it("status shows backends/routing/priceTable presence", async () => {
+    await cmdInit({ repo, kind: "work" });
+    await cmdSet({
+      repo,
+      backends: JSON.stringify({
+        executor: { chain: [{ provider: "codex", model: "gpt-5-codex-small" }] },
+        reviewers: [{ chain: [{ provider: "claude", model: "claude-sonnet-4-5" }] }],
+      }),
+      routing: JSON.stringify({
+        executor: { trivial: { provider: "codex", model: "gpt-5-codex-small" } },
+      }),
+      "price-table": JSON.stringify({
+        codex: {
+          "gpt-5-codex-small": { estimatedTokens: 2000, costPerStepUsd: 0.01 },
+        },
+      }),
+    });
+
+    const out = await cmdStatus({ repo });
+    expect(out).toMatch(/backends: SET \(executor chain 1, reviewers 1 \[1\], evaluator unset\)/);
+    expect(out).toMatch(/routing: SET \(executor difficulties: trivial\)/);
+    expect(out).toMatch(/priceTable: SET \(providers 1\)/);
   });
 
   it("status on an uninitialized repo shows the strict fallback", async () => {
