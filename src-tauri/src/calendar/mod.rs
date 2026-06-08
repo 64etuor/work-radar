@@ -197,6 +197,7 @@ pub async fn fetch_events_core<P: CalendarProvider>(
             for r in raws {
                 out.push(CalendarEvent {
                     id: r.id,
+                    recurring_event_id: r.recurring_event_id,
                     calendar_id: cal_id.clone(),
                     calendar_summary: cal_summary.clone(),
                     title: r.title,

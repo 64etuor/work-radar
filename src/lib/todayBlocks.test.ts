@@ -212,6 +212,42 @@ describe("buildTodayBlocks", () => {
     expect(blocks[0].done).toBe(true);
   });
 
+  it("synced recurring routine instance uses recurringEventId as the checkbox target", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "R",
+        timeOfDay: "09:00",
+        timeOverride: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+        done: false,
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "master-1_20260528T000000Z",
+        recurringEventId: "master-1",
+        title: "R",
+        start: "2026-05-28T09:00:00",
+        end: "2026-05-28T09:30:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].id).toBe("event:work-cal:master-1_20260528T000000Z");
+    expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].linkedEventId).toBe("master-1_20260528T000000Z");
+    expect(blocks[0].routineId).toBe("r1");
+    expect(blocks[0].done).toBe(false);
+  });
+
   it("synced routine without a fetched calendar event does not render a routine job block", () => {
     const routines = [
       {

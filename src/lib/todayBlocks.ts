@@ -52,6 +52,12 @@ function eventKey(calendarId: string | null | undefined, eventId: string | null 
   return calendarId && eventId ? `${calendarId}\u0000${eventId}` : null;
 }
 
+function eventLookupKeys(e: CalendarEvent): string[] {
+  return [eventKey(e.calendarId, e.id), eventKey(e.calendarId, e.recurringEventId)].filter(
+    (key): key is string => Boolean(key),
+  );
+}
+
 function plusMin(iso: string, m: number): string {
   // 로컬 ISO 보존(예: "2026-05-28T23:30:00"). `.toISOString()`을 쓰면 UTC로 변환되어
   // 다운스트림 `new Date(iso).getHours()`에서 시간이 어긋난다(KST=+9 등). 자정/DST 교차 시 블록 위치가 깨진다.
@@ -110,7 +116,9 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
     if (e.allDay) continue;
     const key = eventKey(e.calendarId, e.id);
     if (key && absorbed.has(key)) continue;
-    const routine = key ? routineByEvent.get(key) : undefined;
+    const routine = eventLookupKeys(e)
+      .map((lookupKey) => routineByEvent.get(lookupKey))
+      .find((candidate): candidate is RoutineToday => Boolean(candidate));
     out.push({
       id: `event:${e.calendarId}:${e.id}`,
       kind: "event",

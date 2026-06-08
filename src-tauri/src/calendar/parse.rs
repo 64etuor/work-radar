@@ -16,6 +16,7 @@ pub struct RawCalendar {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawEvent {
     pub id: String,
+    pub recurring_event_id: Option<String>,
     pub title: String,
     /// timed = RFC3339(`start.dateTime`), all-day = YYYY-MM-DD(`start.date`).
     pub start: String,
@@ -54,6 +55,10 @@ pub fn parse_calendar_list(body: &serde_json::Value) -> Vec<RawCalendar> {
 /// timed = `start.dateTime`(RFC3339), all-day = `start.date`(YYYY-MM-DD).
 pub fn parse_calendar_event(item: &serde_json::Value) -> Option<RawEvent> {
     let id = item.get("id").and_then(|v| v.as_str())?.to_string();
+    let recurring_event_id = item
+        .get("recurringEventId")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let start_obj = item.get("start")?;
     let (start, all_day) = match start_obj.get("dateTime").and_then(|v| v.as_str()) {
         Some(dt) => (dt.to_string(), false),
@@ -87,6 +92,7 @@ pub fn parse_calendar_event(item: &serde_json::Value) -> Option<RawEvent> {
         .map(String::from);
     Some(RawEvent {
         id,
+        recurring_event_id,
         title,
         start,
         end,
@@ -141,6 +147,7 @@ mod tests {
     fn parse_calendar_event_timed_and_all_day() {
         let timed = serde_json::json!({
             "id": "e1", "summary": "스탠드업",
+            "recurringEventId": "master-1",
             "start": { "dateTime": "2026-05-21T09:00:00+09:00" },
             "end": { "dateTime": "2026-05-21T09:30:00+09:00" },
             "location": "Zoom", "htmlLink": "https://cal/e1"
@@ -148,6 +155,7 @@ mod tests {
         let r = parse_calendar_event(&timed).unwrap();
         assert!(!r.all_day);
         assert_eq!(r.start, "2026-05-21T09:00:00+09:00");
+        assert_eq!(r.recurring_event_id.as_deref(), Some("master-1"));
         assert_eq!(r.location.as_deref(), Some("Zoom"));
         assert_eq!(r.url.as_deref(), Some("https://cal/e1"));
 

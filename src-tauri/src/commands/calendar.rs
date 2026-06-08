@@ -665,6 +665,7 @@ mod tests {
     fn ev(title: &str, start: &str, end: &str) -> CalendarEvent {
         CalendarEvent {
             id: "e".into(),
+            recurring_event_id: None,
             calendar_id: "c".into(),
             calendar_summary: "cal".into(),
             title: title.into(),

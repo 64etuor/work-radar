@@ -174,6 +174,7 @@ async fn refresh_core_errors_when_not_connected() {
 fn ev(id: &str, start: &str, all_day: bool) -> RawEvent {
     RawEvent {
         id: id.into(),
+        recurring_event_id: None,
         title: id.into(),
         start: start.into(),
         end: start.into(),
@@ -228,6 +229,7 @@ async fn fetch_events_core_merges_sorts_isolates() {
     assert_eq!(ids, vec!["vac", "morning", "noon"]);
     assert_eq!(out[0].calendar_summary, "개인");
     assert_eq!(out[0].project_id, "pA");
+    assert_eq!(out[0].recurring_event_id, None);
     assert!(out[0].all_day);
 }
 

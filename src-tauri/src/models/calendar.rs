@@ -43,6 +43,8 @@ pub struct SelectedCalendar {
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEvent {
     pub id: String,
+    /// 반복 일정 인스턴스가 가리키는 Google recurring master event id.
+    pub recurring_event_id: Option<String>,
     pub calendar_id: String,
     /// 캘린더 표시 이름 (저장된 선택 목록 summary). 이벤트 제목과 별개.
     pub calendar_summary: String,
