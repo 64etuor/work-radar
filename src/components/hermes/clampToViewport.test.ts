@@ -31,12 +31,12 @@ describe("clampToViewport", () => {
 });
 
 describe("defaultBounds", () => {
-  it("uses a landscape sidebar+chat shape on a large viewport", () => {
+  it("uses a tall chat shape on a large viewport", () => {
     const b = defaultBounds(1440, 900);
     expect(b.w).toBe(720);
-    expect(b.h).toBe(600);
-    // landscape: wider than tall (fits the session sidebar beside the chat)
-    expect(b.w).toBeGreaterThan(b.h);
+    expect(b.h).toBe(780);
+    // 세로로 길다(폰챗 느낌) — 사이드바는 720 너비 안에 채팅과 함께 들어간다.
+    expect(b.h).toBeGreaterThan(b.w);
   });
 
   it("centers horizontally and below the top bar on a large viewport", () => {

@@ -160,6 +160,18 @@ export function HermesPanel({
     };
   }, [state.open]);
 
+  // 패널을 "열 때마다" 화면 중앙 + 기본(세로로 긴) 크기로 재배치한다(사용자 요청:
+  // 처음 열면 가운데, 세로로 길게). 열려 있는 동안의 드래그/리사이즈는 유지되지만
+  // 닫았다 다시 열면 중앙 기본으로 돌아온다. closed→open 전이에서만 1회 동작.
+  const prevOpenForCenterRef = useRef(state.open);
+  useEffect(() => {
+    const was = prevOpenForCenterRef.current;
+    prevOpenForCenterRef.current = state.open;
+    if (state.open && !was) {
+      setBounds(defaultBounds(window.innerWidth, window.innerHeight));
+    }
+  }, [state.open, setBounds]);
+
   if (!state.open && !isClosing) return null;
 
   const x = state.x ?? 0;
