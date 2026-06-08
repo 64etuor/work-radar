@@ -18,6 +18,8 @@ export interface RecordAttemptInput {
   launched: boolean;
   worktreeDirty: boolean;
   stderrDigest?: string;
+  usageTokens?: number;
+  usageCostUsd?: number;
 }
 
 async function loadTask(workspaceDir: string, taskId: string): Promise<{ state: TaskState; all: GovEvent[] }> {
@@ -137,6 +139,13 @@ export async function recordExecutorAttempt(
     launched: input.launched,
     ...(input.stderrDigest ? { stderrDigest: input.stderrDigest } : {}),
   });
+  const usage =
+    input.usageTokens !== undefined || input.usageCostUsd !== undefined
+      ? {
+          ...(input.usageTokens !== undefined ? { tokens: input.usageTokens } : {}),
+          ...(input.usageCostUsd !== undefined ? { costUsd: input.usageCostUsd } : {}),
+        }
+      : "unknown";
   const body = {
     attemptIndex: input.attemptIndex,
     exitCode: input.exitCode,
@@ -144,7 +153,7 @@ export async function recordExecutorAttempt(
     worktreeDirty: input.worktreeDirty,
     ...(input.stderrDigest ? { stderrDigest: input.stderrDigest } : {}),
     outcomeClass,
-    usage: "unknown",
+    usage,
   };
   const evt: GovEvent = {
     frontmatter: {

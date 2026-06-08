@@ -329,6 +329,56 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     expect((await readAllEvents(dir)).some((e) => e.frontmatter.type === "session_spawned")).toBe(false);
   });
 
+  it("reconstructs prior reserved spend so the next step downgrades from an unaffordable frontier head", async () => {
+    const planId = await setupActivePlanWithSteps([
+      { text: "frontier first", difficulty: "hard" },
+      { text: "budget pressured second", difficulty: "hard" },
+    ]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "claude", model: "claude-opus-4-1" },
+      { provider: "codex", model: "gpt-5-codex-small" },
+    ]);
+    const budget = {
+      caps: { runCostCapUsd: 1.21 },
+      priceTable: {
+        claude: {
+          "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+        },
+        codex: {
+          "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+        },
+      },
+    };
+
+    const first = await conductPlan(
+      dir,
+      { planId },
+      { adapter: recordingAdapter(spawns), policy, budget, viability: viableProbes() },
+      at(10),
+      0.3,
+    );
+    expect(first.ok).toBe(true);
+    expect(spawns[0]!.executor).toBe("claude");
+    expect((await completeTask(dir, { taskId: first.advanced!.taskId }, at(30), 0.4)).ok).toBe(true);
+
+    const second = await conductPlan(
+      dir,
+      { planId },
+      { adapter: recordingAdapter(spawns), policy, budget, viability: viableProbes() },
+      at(50),
+      0.5,
+    );
+
+    expect(second.ok).toBe(true);
+    expect(spawns).toHaveLength(2);
+    expect(spawns[1]!.executor).toBe("codex");
+    const secondSpawn = spawnedBodies(await readAllEvents(dir))[1];
+    expect(secondSpawn).toMatchObject({
+      selectedBackend: { provider: "codex", model: "gpt-5-codex-small" },
+    });
+  });
+
   it("fails closed when no configured backend is viable: no spawn and no silent completion", async () => {
     const planId = await setupActivePlanWithSteps([{ text: "no viable executor", difficulty: "hard" }]);
     const spawns: SpawnSessionSpec[] = [];

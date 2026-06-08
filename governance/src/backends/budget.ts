@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import type { BackendSpec, Provider } from "./config.ts";
+import { backendSpecSchema, type BackendSpec, type Provider } from "./config.ts";
+import type { GovEvent } from "../event/event.ts";
 
 export const UNKNOWN_COST = "unknown_cost";
 export const DEFAULT_MODEL_KEY = "default";
@@ -26,6 +27,13 @@ export interface BudgetSnapshot {
 }
 
 export type CostEstimate = number | typeof UNKNOWN_COST;
+
+export interface ReconstructBudgetSnapshotOptions {
+  caps?: BudgetCaps;
+  maxUnknownCostUsd?: number;
+  maxUnknownTokens?: number;
+  excludeTaskIds?: readonly string[];
+}
 
 export const budgetCapsSchema = z
   .object({
@@ -71,12 +79,45 @@ export const DEFAULT_PRICE_TABLE = {
   },
 } satisfies PriceTable;
 
+const DEFAULT_UNKNOWN_ATTEMPT_COST_USD = 1;
+const DEFAULT_UNKNOWN_ATTEMPT_TOKENS = 1;
+
+const trustedUsageSchema = z
+  .object({
+    tokens: z.number().nonnegative().optional(),
+    costUsd: z.number().nonnegative().optional(),
+  })
+  .strict()
+  .refine((usage) => usage.tokens !== undefined || usage.costUsd !== undefined, {
+    message: "trusted usage requires tokens or costUsd",
+  });
+
+const attemptStartedBodySchema = z
+  .object({
+    attemptIndex: z.number().int().nonnegative(),
+    backend: backendSpecSchema,
+  })
+  .passthrough();
+
+const attemptFinishedBodySchema = z
+  .object({
+    attemptIndex: z.number().int().nonnegative(),
+    usage: z.union([z.literal("unknown"), trustedUsageSchema]).optional(),
+  })
+  .passthrough();
+
+type TrustedUsage = z.infer<typeof trustedUsageSchema>;
+
 export function estimateCost(spec: BackendSpec, priceTable: PriceTable): CostEstimate {
   const entry = priceEntry(spec, priceTable);
   if (!entry) return UNKNOWN_COST;
   if (entry.costPerStepUsd !== undefined) return entry.costPerStepUsd;
   if (entry.costPerTokenUsd !== undefined) return entry.estimatedTokens * entry.costPerTokenUsd;
   return UNKNOWN_COST;
+}
+
+export function estimateTokens(spec: BackendSpec, priceTable: PriceTable): number | undefined {
+  return priceEntry(spec, priceTable)?.estimatedTokens;
 }
 
 export function affordable(
@@ -102,6 +143,52 @@ export function affordable(
   return true;
 }
 
+export function reconstructBudgetSnapshot(
+  events: readonly GovEvent[],
+  priceTable: PriceTable,
+  opts: ReconstructBudgetSnapshotOptions = {},
+): BudgetSnapshot {
+  const excluded = new Set(opts.excludeTaskIds ?? []);
+  const attempts = new Map<string, { backend?: BackendSpec; usage?: TrustedUsage | "unknown" }>();
+
+  for (const event of events) {
+    const taskId = primaryTaskId(event);
+    if (taskId && excluded.has(taskId)) continue;
+
+    if (event.frontmatter.type === "executor_attempt_started") {
+      const parsed = attemptStartedBodySchema.safeParse(safeJson(event.body));
+      if (!parsed.success || !taskId) continue;
+      attempts.set(attemptKey(taskId, parsed.data.attemptIndex), {
+        ...(attempts.get(attemptKey(taskId, parsed.data.attemptIndex)) ?? {}),
+        backend: parsed.data.backend,
+      });
+      continue;
+    }
+
+    if (event.frontmatter.type === "executor_attempt_finished") {
+      const parsed = attemptFinishedBodySchema.safeParse(safeJson(event.body));
+      if (!parsed.success || !taskId) continue;
+      attempts.set(attemptKey(taskId, parsed.data.attemptIndex), {
+        ...(attempts.get(attemptKey(taskId, parsed.data.attemptIndex)) ?? {}),
+        usage: parsed.data.usage ?? "unknown",
+      });
+    }
+  }
+
+  let spentTokens = 0;
+  let spentCostUsd = 0;
+  for (const attempt of attempts.values()) {
+    const spend =
+      attempt.usage && attempt.usage !== "unknown"
+        ? trustedSpend(attempt.usage, attempt.backend, priceTable, opts)
+        : reservedSpend(attempt.backend, priceTable, opts);
+    spentTokens += spend.spentTokens;
+    spentCostUsd += spend.spentCostUsd;
+  }
+
+  return { spentTokens, spentCostUsd };
+}
+
 function capsActive(caps: BudgetCaps | undefined): caps is BudgetCaps {
   if (!caps) return false;
   return (
@@ -117,4 +204,90 @@ function priceEntry(spec: BackendSpec, priceTable: PriceTable): PriceEntry | und
   if (!providerPrices) return undefined;
   const key = spec.model ?? DEFAULT_MODEL_KEY;
   return providerPrices[key];
+}
+
+function safeJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function primaryTaskId(event: GovEvent): string | null {
+  return event.frontmatter.related_to?.[0] ?? null;
+}
+
+function attemptKey(taskId: string, attemptIndex: number): string {
+  return `${taskId}\u0000${attemptIndex}`;
+}
+
+function reservedSpend(
+  backend: BackendSpec | undefined,
+  priceTable: PriceTable,
+  opts: ReconstructBudgetSnapshotOptions,
+): BudgetSnapshot {
+  if (!backend) return conservativeUnknownSpend(opts);
+  const cost = estimateCost(backend, priceTable);
+  return {
+    spentTokens: estimateTokens(backend, priceTable) ?? conservativeUnknownTokens(opts),
+    spentCostUsd: cost === UNKNOWN_COST ? conservativeUnknownCost(opts) : cost,
+  };
+}
+
+function trustedSpend(
+  usage: TrustedUsage,
+  backend: BackendSpec | undefined,
+  priceTable: PriceTable,
+  opts: ReconstructBudgetSnapshotOptions,
+): BudgetSnapshot {
+  const tokens = usage.tokens ?? 0;
+  const costUsd =
+    usage.costUsd ??
+    actualCostFromTokens(tokens, backend, priceTable) ??
+    reservedSpend(backend, priceTable, opts).spentCostUsd;
+  return {
+    spentTokens: tokens,
+    spentCostUsd: costUsd,
+  };
+}
+
+function actualCostFromTokens(
+  tokens: number,
+  backend: BackendSpec | undefined,
+  priceTable: PriceTable,
+): number | undefined {
+  if (!backend) return undefined;
+  const entry = priceEntry(backend, priceTable);
+  if (entry?.costPerTokenUsd === undefined) return undefined;
+  return tokens * entry.costPerTokenUsd;
+}
+
+function conservativeUnknownSpend(opts: ReconstructBudgetSnapshotOptions): BudgetSnapshot {
+  return {
+    spentTokens: conservativeUnknownTokens(opts),
+    spentCostUsd: conservativeUnknownCost(opts),
+  };
+}
+
+function conservativeUnknownTokens(opts: ReconstructBudgetSnapshotOptions): number {
+  return firstPositive([
+    opts.maxUnknownTokens,
+    opts.caps?.stepTokenCap,
+    opts.caps?.runTokenCap,
+    DEFAULT_UNKNOWN_ATTEMPT_TOKENS,
+  ]);
+}
+
+function conservativeUnknownCost(opts: ReconstructBudgetSnapshotOptions): number {
+  return firstPositive([
+    opts.maxUnknownCostUsd,
+    opts.caps?.stepCostCapUsd,
+    opts.caps?.runCostCapUsd,
+    DEFAULT_UNKNOWN_ATTEMPT_COST_USD,
+  ]);
+}
+
+function firstPositive(values: readonly (number | undefined)[]): number {
+  return values.find((value) => value !== undefined && value > 0) ?? 0;
 }

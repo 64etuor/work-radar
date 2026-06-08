@@ -11,6 +11,7 @@ import type { GovEvent } from "../../../src/event/event.js";
 import { writeEvent } from "../../../src/event/writeEvent.js";
 import { autoDispatch } from "../../../src/orchestrator/dispatch/dispatch.js";
 import type { BackendSpec } from "../../../src/backends/config.js";
+import type { PriceTable } from "../../../src/backends/budget.js";
 import type { ResolvedPolicy } from "../../../src/repo/config.js";
 
 const RAND = 0.42;
@@ -139,6 +140,43 @@ async function recordAttemptFinished(input: {
       worktreeDirty: input.worktreeDirty ?? false,
       outcomeClass: input.outcomeClass,
       usage: "unknown",
+    }),
+  }, when);
+}
+
+async function seedTaskCompleted(taskId: string): Promise<void> {
+  const when = later();
+  await seed({
+    frontmatter: {
+      id: generateId("evt", when, RAND),
+      type: "task_completed",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["task"],
+      related_to: [taskId],
+    },
+    body: `Completed ${taskId}`,
+  }, when);
+}
+
+async function seedExecutorAttemptStarted(input: {
+  taskId: string;
+  attemptIndex: number;
+  backend: BackendSpec;
+}): Promise<void> {
+  const when = later();
+  await seed({
+    frontmatter: {
+      id: generateId("evt", when, RAND),
+      type: "executor_attempt_started",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["conductor", "attempt-hint"],
+      related_to: [input.taskId],
+    },
+    body: JSON.stringify({
+      attemptIndex: input.attemptIndex,
+      backend: input.backend,
     }),
   }, when);
 }
@@ -480,6 +518,120 @@ describe("autoDispatch", () => {
     expect(spawns.map((s) => s.attemptIndex ?? 0)).toEqual([0, 1, 2]);
     const attempts = (await readAllEvents(ws)).filter((e) => e.frontmatter.type === "executor_attempt_started");
     expect(attempts).toHaveLength(3);
+  });
+
+  it("LW4: autoDispatch feeds reconstructed spend into the second step's executor selection", async () => {
+    await seedAcceptedPlan([
+      "frontier first <!-- boule:difficulty hard -->",
+      "budget pressured second <!-- boule:difficulty hard -->",
+    ]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "claude", model: "claude-opus-4-1" },
+      { provider: "codex", model: "gpt-5-codex-small" },
+    ]);
+    const budget = {
+      caps: { runCostCapUsd: 1.21 },
+      priceTable: {
+        claude: {
+          "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+        },
+        codex: {
+          "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+        },
+      } satisfies PriceTable,
+    };
+
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, budget, viability: viableAll() }, "type2", at(), RAND);
+    expect(spawns[0]!.executor).toBe("claude");
+    await seedTaskCompleted(await taskIdOfStep("frontier first"));
+
+    const summary = await autoDispatch(
+      ws,
+      { adapter: recordingAdapter(spawns), policy, budget, viability: viableAll() },
+      "type2",
+      at(),
+      RAND,
+    );
+
+    expect(summary.executed).toBe(1);
+    expect(spawns).toHaveLength(2);
+    expect(spawns[1]).toMatchObject({ executor: "codex", attemptIndex: 0 });
+  });
+
+  it("LW4: retry re-derivation excludes the task's own reserves so attemptIndex can advance through the chain", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "claude", model: "claude-opus-4-1" },
+      { provider: "command", command: "codex", model: "external-stub" },
+    ], {
+      routing: { executor: { standard: { provider: "codex", model: "gpt-5-codex-max" } } },
+    });
+    const budget = {
+      caps: { runCostCapUsd: 0.8 },
+      priceTable: {
+        codex: {
+          "gpt-5-codex-max": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
+        },
+        claude: {
+          "claude-opus-4-1": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
+        },
+        command: {
+          "external-stub": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
+        },
+      } satisfies PriceTable,
+    };
+
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, budget, viability: viableAll() }, "type2", at(), RAND);
+    const taskId = await taskIdOfStep("step a");
+    await recordAttemptFinished({ taskId, attemptIndex: 0, outcomeClass: "token_exhausted" });
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, budget, viability: viableAll() }, "type2", at(), RAND);
+    await recordAttemptFinished({ taskId, attemptIndex: 1, outcomeClass: "token_exhausted" });
+    const third = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, budget, viability: viableAll() }, "type2", at(), RAND);
+
+    expect(third.executed).toBe(1);
+    expect(spawns.map((spawn) => spawn.attemptIndex ?? 0)).toEqual([0, 1, 2]);
+    expect(spawns.map((spawn) => spawn.executor)).toEqual(["codex", "codex", "claude"]);
+    expect(typesOf(await readAllEvents(ws))).not.toContain("task_completed");
+  });
+
+  it("LW4: retry still stalls fail-closed when unrelated run-level spend exhausts the budget", async () => {
+    await seedAcceptedPlan(["step a"]);
+    await seedExecutorAttemptStarted({
+      taskId: "other_task",
+      attemptIndex: 0,
+      backend: { provider: "claude", model: "claude-opus-4-1" },
+    });
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "claude", model: "claude-opus-4-1" },
+    ]);
+    const budget = {
+      caps: { runCostCapUsd: 0.8 },
+      priceTable: {
+        codex: {
+          "gpt-5-codex-max": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
+        },
+        claude: {
+          "claude-opus-4-1": { estimatedTokens: 10_000, costPerStepUsd: 0.8 },
+        },
+      } satisfies PriceTable,
+    };
+
+    const summary = await autoDispatch(
+      ws,
+      { adapter: recordingAdapter(spawns), policy, budget, viability: viableAll() },
+      "type2",
+      at(),
+      RAND,
+    );
+
+    expect(summary.failed).toBe(1);
+    expect(spawns).toHaveLength(0);
+    expect(typesOf(await readAllEvents(ws))).toContain("orchestrator_action_failed");
   });
 });
 
