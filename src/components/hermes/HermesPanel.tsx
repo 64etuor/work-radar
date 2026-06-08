@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { RotateCcw, X } from "lucide-react";
+import { PanelLeft, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { commands, type HermesPanelState } from "@/bindings";
@@ -18,12 +18,17 @@ export function HermesPanel({
   onRestart,
   isStreaming,
   showHeaderTitle,
+  sidebarOpen,
+  onToggleSidebar,
 }: {
   children: React.ReactNode;
   onRestart?: () => void;
   isStreaming?: boolean;
   /** false면 헤더 'Hermes' 타이틀 숨김(빈 상태 중앙 워드마크와 중복 방지). true로 전환되면 블러인. */
   showHeaderTitle?: boolean;
+  /** 좌측 세션 사이드바 표시 여부(상단 토글 버튼이 제어). undefined면 토글 버튼 숨김. */
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }) {
   const { state, setOpen, setBounds, isLoading } = useHermesPanelState();
   const qc = useQueryClient();
@@ -211,6 +216,8 @@ export function HermesPanel({
         onRestart={onRestart}
         isStreaming={isStreaming}
         showHeaderTitle={showHeaderTitle}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={onToggleSidebar}
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       <ResizeGrip x={x} y={y} w={w} h={h} onBoundsChange={setBounds} />
@@ -238,11 +245,15 @@ function PanelHeader({
   onRestart,
   isStreaming,
   showHeaderTitle,
+  sidebarOpen,
+  onToggleSidebar,
 }: BoundsProps & {
   onClose: () => void;
   onRestart?: () => void;
   isStreaming?: boolean;
   showHeaderTitle?: boolean;
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }) {
   const dragRef = useRef<{
     startPx: number;
@@ -282,6 +293,19 @@ function PanelHeader({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
+      {onToggleSidebar && (
+        <Button
+          data-no-drag
+          variant="ghost"
+          className="hover:bg-muted/60 mr-1 size-7 shrink-0 p-0"
+          onClick={onToggleSidebar}
+          aria-label={sidebarOpen ? "세션 목록 숨기기" : "세션 목록 보기"}
+          aria-pressed={sidebarOpen}
+          title={sidebarOpen ? "세션 목록 숨기기" : "세션 목록 보기"}
+        >
+          <PanelLeft className="size-3.5" />
+        </Button>
+      )}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         {/* 첫 메시지 이후에만 노출(중앙 워드마크 exit → 약간의 딜레이 후 블러인). */}
         {showHeaderTitle && (

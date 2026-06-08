@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,18 @@ export default function HermesView() {
 
   // Read panel open state to gate the keyboard handler (see below).
   const { state: panelState } = useHermesPanelState();
+
+  // 좌측 세션 사이드바 표시 토글(상단 버튼). localStorage 로 패널 재오픈/재시작에도 유지.
+  // 사이드바를 접으면 채팅 단일 컬럼으로 좁게 쓸 수 있다(폰챗 형태). 세션은 닫혀도 그대로 유지된다.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => localStorage.getItem("hermes.sidebarOpen") !== "false",
+  );
+  const toggleSidebar = () =>
+    setSidebarOpen((v) => {
+      const next = !v;
+      localStorage.setItem("hermes.sidebarOpen", String(next));
+      return next;
+    });
 
   const removeSession = async (id: string) => {
     try {
@@ -125,17 +137,21 @@ export default function HermesView() {
       onRestart={async () => {
         if (activeTab) await restart(activeTab.id);
       }}
+      sidebarOpen={sidebarOpen}
+      onToggleSidebar={toggleSidebar}
     >
       <div className="flex min-h-0 flex-1">
-        <HermesSidebar
-          tabs={tabs}
-          activeTabId={activeTabId}
-          onSelect={setActive}
-          onNew={() => void openTab()}
-          onDelete={(id) => void removeSession(id)}
-          onRename={onRename}
-          showResourceWarning={showWarn}
-        />
+        {sidebarOpen && (
+          <HermesSidebar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onSelect={setActive}
+            onNew={() => void openTab()}
+            onDelete={(id) => void removeSession(id)}
+            onRename={onRename}
+            showResourceWarning={showWarn}
+          />
+        )}
         <div className="flex min-h-0 flex-1 flex-col">
           {activeTab ? (
             <div className="flex min-h-0 flex-1 flex-col">
