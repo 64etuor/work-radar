@@ -19,6 +19,8 @@ export interface ReviewResult {
   verdict: "endorse" | "concerns" | "object";
   rationale: string;
   reviewerModel: string;
+  /** Actual backend identity that produced the verdict, e.g. codex or claude/opus. */
+  reviewerBackend?: string;
 }
 
 /** Seam for the External Reviewer. Tests inject a deterministic fn; the live
@@ -30,6 +32,7 @@ export interface RecordReviewResult {
   reviewPath: string;
   verdict: ReviewResult["verdict"];
   reviewerModel: string;
+  reviewerBackend?: string;
 }
 
 /** Run the injected reviewer, persist the review artifact, and append a linked
@@ -55,13 +58,23 @@ export async function recordReview(
   const reviewsDir = join(workspaceDir, "reviews");
   await mkdir(reviewsDir, { recursive: true });
   const reviewPath = join(reviewsDir, `${req.decisionId}.md`);
-  const artifact = matter.stringify(result.rationale, {
+  const artifactData: Record<string, string> = {
     decision_id: req.decisionId,
     verdict: result.verdict,
     reviewer_model: result.reviewerModel,
     author_model: req.authorModel,
-  });
+  };
+  if (result.reviewerBackend) artifactData.reviewer_backend = result.reviewerBackend;
+  const artifact = matter.stringify(result.rationale, artifactData);
   await writeFile(reviewPath, artifact); // reviews are overwritable (latest review wins); the event log is the immutable record
+
+  const tags = [
+    "decision",
+    "review",
+    `verdict:${result.verdict}`,
+    `author_model:${normalizeModelId(req.authorModel)}`, // re-derivable half of the (author,reviewer) pair
+  ];
+  if (result.reviewerBackend) tags.push(`reviewer_backend:${result.reviewerBackend}`);
 
   const evt: GovEvent = {
     frontmatter: {
@@ -69,19 +82,20 @@ export async function recordReview(
       type: "decision_review_recorded",
       source: "reviewer",
       actor: result.reviewerModel,
-      tags: [
-        "decision",
-        "review",
-        `verdict:${result.verdict}`,
-        `author_model:${normalizeModelId(req.authorModel)}`, // re-derivable half of the (author,reviewer) pair
-      ],
+      tags,
       related_to: [req.decisionId],
     },
     body: `External review (${result.reviewerModel}) of ${req.decisionId}: ${result.verdict}`,
   };
   await writeEvent(workspaceDir, evt, now);
 
-  return { reviewEventId: evt.frontmatter.id, reviewPath, verdict: result.verdict, reviewerModel: result.reviewerModel };
+  return {
+    reviewEventId: evt.frontmatter.id,
+    reviewPath,
+    verdict: result.verdict,
+    reviewerModel: result.reviewerModel,
+    reviewerBackend: result.reviewerBackend,
+  };
 }
 
 /** A named reviewer: the model label + its injected ReviewFn closure. */

@@ -1,3 +1,6 @@
+import type { BackendSpec } from "../backends/config.ts";
+import { backendIdentity } from "../backends/identity.ts";
+import { classifyAttempt, runWithFallback, type AttemptError } from "../backends/fallback.ts";
 import type { ReviewFn, ReviewRequest, ReviewResult } from "./reviewer.ts";
 
 /** Minimal structural seam over a child process — satisfied by node's
@@ -74,6 +77,17 @@ export interface LiveReviewDeps {
   log?: (line: string) => void;
 }
 
+export interface ResolvedReviewBackend {
+  command: string;
+  args: string[];
+  reviewerModel: string;
+}
+
+export interface LiveReviewChainDeps extends LiveReviewDeps {
+  chain: BackendSpec[];
+  resolveBackend: (spec: BackendSpec) => ResolvedReviewBackend;
+}
+
 class TimeoutError extends Error {
   constructor(ms: number) {
     super(`reviewer timed out after ${ms}ms`);
@@ -81,9 +95,24 @@ class TimeoutError extends Error {
   }
 }
 
+class ReviewProcessError extends Error {
+  constructor(
+    readonly code: number | null,
+    readonly stderr: string,
+  ) {
+    super(`reviewer exited with code ${code ?? "null"}`);
+    this.name = "ReviewProcessError";
+  }
+}
+
+interface ReviewInvocation {
+  command: string;
+  args: string[];
+}
+
 /** One subprocess attempt. Resolves stdout on clean exit; rejects on spawn error,
  *  non-zero exit, or timeout (killing the child). */
-function runOnce(deps: LiveReviewDeps, req: ReviewRequest): Promise<string> {
+function runOnce(deps: LiveReviewDeps, req: ReviewRequest, invocation?: ReviewInvocation): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let settled = false;
     let cancelTimer: () => void = () => {};
@@ -96,7 +125,7 @@ function runOnce(deps: LiveReviewDeps, req: ReviewRequest): Promise<string> {
 
     let child: ChildLike;
     try {
-      child = deps.spawn(deps.command, deps.buildArgs(req));
+      child = deps.spawn(invocation?.command ?? deps.command, invocation?.args ?? deps.buildArgs(req));
     } catch (err) {
       reject(err as Error);
       return;
@@ -114,17 +143,18 @@ function runOnce(deps: LiveReviewDeps, req: ReviewRequest): Promise<string> {
     }, deps.timeoutMs);
 
     let out = "";
+    let errOut = "";
     child.stdout.on("data", (c) => {
       out += typeof c === "string" ? c : c.toString();
     });
-    child.stderr.on("data", () => {
-      /* swallow — never logged as a body */
+    child.stderr.on("data", (c) => {
+      errOut += typeof c === "string" ? c : c.toString();
     });
     child.on("error", (err) => done(() => reject(err)));
     child.on("close", (code) =>
       done(() => {
         if (code === 0) resolve(out);
-        else reject(new Error(`reviewer exited with code ${code ?? "null"}`));
+        else reject(new ReviewProcessError(code, errOut));
       }),
     );
 
@@ -135,6 +165,45 @@ function runOnce(deps: LiveReviewDeps, req: ReviewRequest): Promise<string> {
       done(() => reject(err as Error));
     }
   });
+}
+
+function classifyReviewError(err: Error): AttemptError {
+  if (err instanceof ReviewProcessError) {
+    const classified = classifyAttempt(err.code, err.stderr);
+    return classified === "ok" ? { kind: "fatal", detail: "unexpected clean reviewer exit classified as error" } : classified;
+  }
+  if (err instanceof TimeoutError) return { kind: "transient" };
+  return { kind: "fatal", detail: err.message.slice(0, 200) };
+}
+
+async function runBackendWithRetry(
+  deps: LiveReviewDeps,
+  req: ReviewRequest,
+  invocation: ReviewInvocation & { reviewerModel: string; backend: BackendSpec },
+  maxAttempts: number,
+): Promise<{ ok: true; value: ReviewResult } | { ok: false; error: AttemptError }> {
+  let lastError: AttemptError = { kind: "transient" };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const stdout = await runOnce(deps, req, invocation);
+      const { verdict, rationale } = deps.parse(stdout);
+      const reviewerBackend = backendIdentity(invocation.backend);
+      deps.log?.(`liveReview ok cmd=${invocation.command} attempt=${attempt} bytes=${stdout.length}`);
+      return {
+        ok: true,
+        value: { verdict, rationale, reviewerModel: invocation.reviewerModel, reviewerBackend },
+      };
+    } catch (err) {
+      lastError = classifyReviewError(err as Error);
+      deps.log?.(`liveReview fail cmd=${invocation.command} attempt=${attempt} err=${(err as Error).name}`);
+      if (lastError.kind === "fatal") return { ok: false, error: lastError };
+      if (attempt < maxAttempts) {
+        const backoff = deps.backoffMs * 2 ** (attempt - 1) + Math.floor(deps.rand() * deps.backoffMs);
+        await deps.sleep(backoff);
+      }
+    }
+  }
+  return { ok: false, error: lastError };
 }
 
 /** Build a ReviewFn that calls a different-model CLI with bounded retry + jitter,
@@ -161,5 +230,22 @@ export function liveReview(deps: LiveReviewDeps): ReviewFn {
     throw new Error(
       `liveReview exhausted ${maxAttempts} attempt(s) for ${req.decisionId}: ${lastErr?.message ?? "unknown"}`,
     );
+  };
+}
+
+export function liveReviewChain(deps: LiveReviewChainDeps): ReviewFn {
+  const maxAttempts = Math.max(1, deps.maxAttempts);
+  return async (req: ReviewRequest): Promise<ReviewResult> => {
+    const result = await runWithFallback("reviewer", deps.chain, async (spec) => {
+      const resolved = deps.resolveBackend(spec);
+      return runBackendWithRetry(
+        deps,
+        req,
+        { command: resolved.command, args: resolved.args, reviewerModel: resolved.reviewerModel, backend: spec },
+        maxAttempts,
+      );
+    });
+    if (result.ok) return result.value;
+    throw new Error(`liveReviewChain reviewer ${result.terminal.outcome} for ${req.decisionId}`);
   };
 }

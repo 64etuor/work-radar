@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  liveReviewChain,
   liveReview,
   defaultReviewPrompt,
   parseVerdict,
@@ -10,6 +11,7 @@ import {
   type LiveReviewDeps,
 } from "../../src/decision/liveReviewer.js";
 import type { ReviewRequest } from "../../src/decision/reviewer.js";
+import type { BackendSpec } from "../../src/backends/config.js";
 
 const REQ: ReviewRequest = {
   decisionId: "evt_20260601_120000_aaaa",
@@ -20,7 +22,7 @@ const REQ: ReviewRequest = {
 
 type Behavior =
   | { kind: "ok"; stdout: string }
-  | { kind: "exit"; code: number }
+  | { kind: "exit"; code: number; stderr?: string }
   | { kind: "spawnError"; message: string }
   | { kind: "asyncError"; message: string }
   | { kind: "hang" };
@@ -36,12 +38,13 @@ function scriptedSpawn(behaviors: Behavior[]) {
     if (b.kind === "spawnError") throw new Error(b.message);
     const cbs = {
       data: [] as ((c: string) => void)[],
+      stderr: [] as ((c: string) => void)[],
       close: [] as ((c: number | null) => void)[],
       error: [] as ((e: Error) => void)[],
     };
     const child: ChildLike = {
       stdout: { on: (_e, cb) => cbs.data.push(cb as (c: string) => void) },
-      stderr: { on: () => {} },
+      stderr: { on: (_e, cb) => cbs.stderr.push(cb as (c: string) => void) },
       stdin: {
         write: () => {},
         end: () =>
@@ -50,6 +53,7 @@ function scriptedSpawn(behaviors: Behavior[]) {
               cbs.data.forEach((f) => f(b.stdout));
               cbs.close.forEach((f) => f(0));
             } else if (b.kind === "exit") {
+              if (b.stderr) cbs.stderr.forEach((f) => f(b.stderr ?? ""));
               cbs.close.forEach((f) => f(b.code));
             } else if (b.kind === "asyncError") {
               cbs.error.forEach((f) => f(new Error(b.message)));
@@ -179,5 +183,65 @@ describe("liveReview", () => {
     expect(joined).not.toContain("PII-NAME");
     expect(joined).toMatch(/attempt=/);
     expect(joined).toMatch(/bytes=/);
+  });
+});
+
+describe("liveReviewChain", () => {
+  function chainDeps(
+    behaviorsByCommand: Record<string, Behavior[]>,
+    chain: BackendSpec[],
+    over: Partial<LiveReviewDeps> = {},
+  ): LiveReviewDeps & {
+    chain: BackendSpec[];
+    resolveBackend: (spec: BackendSpec) => { command: string; args: string[]; reviewerModel: string };
+  } {
+    const calls: string[] = [];
+    return {
+      ...deps(over),
+      chain,
+      spawn: (command, args) => {
+        calls.push(command);
+        return scriptedSpawn(behaviorsByCommand[command] ?? [{ kind: "spawnError", message: `unexpected ${command}` }]).spawn(
+          command,
+          args,
+        );
+      },
+      resolveBackend: (spec) => ({
+        command: spec.provider === "command" ? spec.command ?? "command" : spec.provider,
+        args: [],
+        reviewerModel: spec.model ?? spec.provider,
+      }),
+      log: (line) => over.log?.(`${line} calls=${calls.join(",")}`),
+    };
+  }
+
+  it("records the actual fallback backend that returned the verdict, not the configured head", async () => {
+    const res = await liveReviewChain(
+      chainDeps(
+        {
+          claude: [{ kind: "exit", code: 1, stderr: "usage limit" }],
+          codex: [{ kind: "ok", stdout: '{"verdict":"endorse","rationale":"ok"}' }],
+        },
+        [{ provider: "claude" }, { provider: "codex" }],
+      ),
+    )(REQ);
+
+    expect(res.verdict).toBe("endorse");
+    expect(res.reviewerModel).toBe("codex");
+    expect(res.reviewerBackend).toBe("codex");
+  });
+
+  it("exhausted reviewer chain fails closed with no verdict", async () => {
+    await expect(
+      liveReviewChain(
+        chainDeps(
+          {
+            codex: [{ kind: "exit", code: 1, stderr: "quota exceeded" }],
+            gemini: [{ kind: "exit", code: 1, stderr: "insufficient_quota" }],
+          },
+          [{ provider: "codex" }, { provider: "command", command: "gemini" }],
+        ),
+      )(REQ),
+    ).rejects.toThrow(/reviewer.*blocked/i);
   });
 });

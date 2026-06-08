@@ -1,4 +1,5 @@
 import type { GovEvent } from "../event/event.ts";
+import { normalizeBackendIdentity } from "../backends/identity.ts";
 import { normalizeModelId } from "./modelId.ts";
 
 export type DecisionPhase = "proposed" | "reviewed" | "approved" | "rejected" | "chosen";
@@ -23,6 +24,13 @@ function reviewAuthorModel(e: GovEvent): string | null {
   return tag ? tag.slice("author_model:".length) : null;
 }
 
+function reviewBackendIdentity(e: GovEvent): string | null {
+  const tags = e.frontmatter.tags;
+  if (!Array.isArray(tags)) return null;
+  const tag = tags.find((t) => t.startsWith("reviewer_backend:"));
+  return tag ? normalizeBackendIdentity(tag.slice("reviewer_backend:".length)) : null;
+}
+
 /** The option token a decision_chosen recorded (tag `option:<token>`), or null. */
 function chosenOptionOf(e: GovEvent): string | null {
   const tags = e.frontmatter.tags;
@@ -43,16 +51,18 @@ export function deriveDecisionState(
 ): DecisionState {
   const decisionId = proposal.frontmatter.id;
   const title = proposal.body.split("\n", 1)[0]?.trim() || decisionId;
-  // §7: count DISTINCT normalized reviewer models (not events). A review qualifies only
-  // when its recorded reviewer model ≠ author_model (normalized); a forged same-model
-  // event, or one missing the author tag, does not satisfy the gate (fail-closed).
+  // §7: count DISTINCT actual reviewer backends when recorded, falling back to legacy
+  // actor/model labels. A review qualifies only when its recorded reviewer model ≠
+  // author_model (normalized); malformed/missing author tags fail closed.
   const distinctModels = new Set<string>();
   for (const e of related) {
     if (e.frontmatter.type !== "decision_review_recorded") continue;
     const author = reviewAuthorModel(e);
     if (author === null) continue; // fail-closed
     const reviewer = normalizeModelId(e.frontmatter.actor);
-    if (reviewer !== normalizeModelId(author)) distinctModels.add(reviewer);
+    if (reviewer !== normalizeModelId(author)) {
+      distinctModels.add(reviewBackendIdentity(e) ?? reviewer);
+    }
   }
   const reviewCount = distinctModels.size;
   const rejected = related.some((e) => e.frontmatter.type === "decision_rejected");

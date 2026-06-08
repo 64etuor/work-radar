@@ -75,24 +75,18 @@ import {
 } from "./config.ts";
 import { autoAccept } from "../orchestrator/autoAccept.ts";
 import { autonomyAllows } from "../repo/config.ts";
-import type { ReviewFn } from "../decision/reviewer.ts";
 import { spawn as nodeSpawn } from "node:child_process";
-import {
-  liveReview,
-  defaultReviewPrompt,
-  parseVerdict,
-  type SpawnLike,
-  type ChildLike,
-} from "../decision/liveReviewer.ts";
+import type { ChildLike, SpawnLike } from "../decision/liveReviewer.ts";
 import {
   parseQuorum,
   parseReviewerModels,
-  resolveReviewerCommand,
   quorumCollisionWarning,
   parsePatternConfig,
 } from "./config.ts";
 import type { ReviewerEntry } from "../decision/reviewer.ts";
+import { buildReviewerEntries } from "./reviewers.ts";
 import { normalizeModelId } from "../decision/modelId.ts";
+import { loadPolicyOrStrict } from "../repo/configIo.ts";
 import { runDetect } from "../patterns/detect.ts";
 import { makeWritePattern } from "../patterns/write.ts";
 import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
@@ -128,6 +122,7 @@ const WORKSPACE =
 // docs/areas/decision-rails.md). Default: two levels up from the workspace
 // (<repo>/governance/workspace → <repo>). Overridable for tests/relocation.
 const REPO_ROOT = process.env.BOULE_REPO_ROOT ?? resolve(WORKSPACE, "..", "..");
+const LOADED_POLICY = await loadPolicyOrStrict(REPO_ROOT);
 
 // 비결정 입력은 서버 경계에서만 (핸들러는 순수 유지)
 const nowFn = () => new Date();
@@ -613,56 +608,30 @@ const QUORUM = parseQuorum(process.env.BOULE_REVIEW_QUORUM);
 // BOULE_REVIEWER_MODELS=codex,gemini 리스트(정규화 dedup) → 없으면 단수 BOULE_REVIEWER_MODEL로 폴백.
 const REVIEWER_MODELS = parseReviewerModels(process.env.BOULE_REVIEWER_MODELS, REVIEWER_MODEL);
 
-function placeholderReviewFor(model: string): ReviewFn {
-  return async (req) => ({
-    verdict: "concerns",
-    rationale: `[placeholder reviewer — set BOULE_REVIEWER_MODE=live to wire a real model] reviewed "${req.title}".`,
-    reviewerModel: model,
-  });
-}
-
-function liveReviewFor(model: string): ReviewFn {
-  // Per-model CMD/ARGS resolution (falls back to the globals, then a safe read-only default),
-  // so a ≥2 distinct-model live quorum runs genuinely different binaries — not one CLI relabeled.
-  const { command, args: argsTemplate } = resolveReviewerCommand(model, process.env);
-  const realSpawn: SpawnLike = (cmd, args) => nodeSpawn(cmd, args) as unknown as ChildLike;
-  return liveReview({
-    spawn: realSpawn,
-    command,
-    buildArgs: () => argsTemplate, // prompt is fed via stdin, not argv
-    buildPrompt: defaultReviewPrompt,
-    reviewerModel: model,
-    parse: parseVerdict,
-    timeoutMs: Number(process.env.BOULE_REVIEWER_TIMEOUT_MS ?? 120000),
-    maxAttempts: Number(process.env.BOULE_REVIEWER_MAX_ATTEMPTS ?? 2),
-    backoffMs: 500,
-    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-    setTimer: (cb, ms) => {
-      const t = setTimeout(cb, ms);
-      return () => clearTimeout(t);
-    },
-    rand: Math.random,
-    log: (line) => process.stderr.write(`${line}\n`), // PII-safe (size/attempt/exit only)
-  });
-}
-
 // 비결정(서브프로세스/타이머/Math.random)은 이 경계에서만 주입. 기본 = stub(결정적·CI 무변경).
 // BOULE_REVIEWER_MODE=live 일 때만 작성자와 다른 모델 CLI를 bounded retry로 호출.
 // 각 모델은 resolveReviewerCommand로 자기 CMD/ARGS를 해석(per-model override → 전역 → 안전 기본).
 const LIVE = process.env.BOULE_REVIEWER_MODE === "live";
+const realReviewerSpawn: SpawnLike = (cmd, args) => nodeSpawn(cmd, args) as unknown as ChildLike;
 
 function buildReviewers(): ReviewerEntry[] {
-  return REVIEWER_MODELS.map((model) => ({
-    model,
-    fn: LIVE ? liveReviewFor(model) : placeholderReviewFor(model),
-  }));
+  return buildReviewerEntries({
+    env: process.env,
+    fallbackReviewerModel: REVIEWER_MODEL,
+    live: LIVE,
+    reviewerChains: LOADED_POLICY.policy.backends?.reviewers,
+    spawn: realReviewerSpawn,
+    log: (line) => process.stderr.write(`${line}\n`), // PII-safe (size/attempt/exit only)
+  });
 }
 
 const reviewers = buildReviewers();
 
 // Genuine-quorum advisory (warn-but-continue): live + quorum≥2 인데 라벨들이 동일 (cmd,args)로
 // 붕괴해 distinct reviewer가 quorum 미만이면 가짜 quorum. PII-safe(라벨만)로 경고하고 그대로 기동.
-const quorumWarning = LIVE ? quorumCollisionWarning(REVIEWER_MODELS, process.env, QUORUM) : null;
+const quorumWarning = LIVE && !LOADED_POLICY.policy.backends?.reviewers
+  ? quorumCollisionWarning(REVIEWER_MODELS, process.env, QUORUM)
+  : null;
 if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 
 // ── Phase C: Conductor adapter ────────────────────────────────────────────────
@@ -735,9 +704,9 @@ server.registerTool(
       nowFn(),
       randFn(),
     );
-    const distinctModels = new Set(res.recorded.map((r) => normalizeModelId(r.reviewerModel))).size;
+    const distinctModels = new Set(res.recorded.map((r) => r.reviewerBackend ?? normalizeModelId(r.reviewerModel))).size;
     const parts = [
-      `recorded: ${res.recorded.length} from ${reviewers.length} reviewer(s); distinct models: ${distinctModels}/${QUORUM} (quorum)`,
+      `recorded: ${res.recorded.length} from ${reviewers.length} reviewer(s); distinct actual reviewers: ${distinctModels}/${QUORUM} (quorum)`,
     ];
     if (res.skipped.length)
       parts.push(`skipped: ${res.skipped.map((s) => s.reviewerModel).join(",")}`);

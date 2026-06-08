@@ -82,6 +82,28 @@ describe("deriveDecisionState", () => {
     expect(s.reviewCount).toBe(1); // codex == Codex:latest after normalize
   });
 
+  it("counts DISTINCT actual reviewer backends when reviewer_backend tags are present", () => {
+    const s = deriveDecisionState(
+      proposal,
+      [
+        evt("decision_review_recorded", {
+          source: "reviewer",
+          actor: "codex",
+          tags: ["author_model:claude", "reviewer_backend:codex"],
+        }),
+        evt("decision_review_recorded", {
+          source: "reviewer",
+          actor: "Codex:latest",
+          tags: ["author_model:claude", "reviewer_backend:codex"],
+        }),
+      ],
+      2,
+    );
+    expect(s.phase).toBe("proposed");
+    expect(s.reviewed).toBe(false);
+    expect(s.reviewCount).toBe(1);
+  });
+
   it("counts two DISTINCT models as 2", () => {
     const s = deriveDecisionState(proposal, [
       evt("decision_review_recorded", { source: "reviewer", actor: "codex", tags: ["author_model:claude"] }),
