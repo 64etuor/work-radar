@@ -110,7 +110,7 @@ const routingByDifficultySchema = z
   })
   .strict();
 
-const routingConfigSchema = z
+export const routingConfigSchema = z
   .object({
     executor: routingByDifficultySchema.optional(),
   })
