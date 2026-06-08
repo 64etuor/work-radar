@@ -299,3 +299,30 @@ codex 권고 순서 그대로: 권위(M1) → 정족수(M2) → resolver(M3) →
 - **C evaluator**: 래퍼 강등 + **MCP complete_task도 task_completed 쓰기 중단**(executor_reported_done); 세션 terminal 후 평가; deterministic rung은 명시 check 계약일 때만; 멱등키 taskId+sessionId+diffHash.
 - **D INVARIANT #1**: §3 위험 등록부의 출처. "deterministic 일반 완료 = 이름만 그럴듯한 auto-complete."
 - **E 페이징**: ①완료 권위(hint-only) ②정족수 체인(실제 provider 카운트) ③순수 resolver ④예산 ⑤난이도. "리뷰 게이트가 모델 선택보다 위험 — 선택 복잡도 전에 quorum 고정."
+
+---
+
+## 11. As-built (2026-06-08) — M1–M5 landed + integrated
+
+**전부 codex executor 구현 → `gate.sh` 독립 검증 → 별도 opus critic 패스(author≠reviewer) → 로컬 커밋 → 통합 머지.** 통합 브랜치 `plan/autonomous-orchestration`(로컬, **미푸시**). 결정 정본 = `governance/docs/adr/0010-autonomous-coding-backend-selection-policy-engine.md`.
+
+| Phase | commit | gate | critic |
+| --- | --- | --- | --- |
+| 마스터플랜 | `e646124` | — | — |
+| **M1** 완료 권위(evaluator) | `7c3e7c3` | tsc0 / vitest 601 | ACCEPT |
+| toolkit(`scripts/orchestration/`) | `172a5d9` | gate.sh self-test | — |
+| **M2** 정족수 체인 | `3e3a986` | 595 | ACCEPT-W-RES, 0 blocker |
+| **M3** 순수 resolver | `684f13f` | 596 | ACCEPT-W-RES → MAJOR(죽은 routing 분기) 제거 후 |
+| **M4** 예산 거버넌스 | `ccb0b29` | 622 | ACCEPT, 0 blocker |
+| **M5** 난이도 라우팅(typed) | `075e82a` | 634 | ACCEPT, 0 blocker |
+| 통합(M1–M5) | `83b3576` | **tsc0 / vitest 634 / files 103 / drift 0** | — |
+| **M6a** ADR-0010+docs | (이 커밋) | — | — |
+
+- **병렬**: M2(`decision/`)·M3(`backends/resolve.ts`)는 독립 서브시스템이라 별도 worktree에서 동시 실행, M1·M4·M5는 직렬. 통합 머지 충돌 0(`mcp/server.ts` M1×M2는 git 3-way 자동 해소).
+- **공통 codex 습관 교정**: M2·M3가 `vitest.config.ts` cacheDir를 무단 추가 → revert(이후 슬라이스 브리프에 명시 금지 → M4/M5는 미발생). M3의 untyped `as PolicyWithRouting` routing 분기 → 제거, M5에서 typed 재도입.
+- **검증 베이스라인**: 590 green → +11(M1) +5(M2) +6(M3) +10(M4) +12(M5) = **634**. 전구간 app `bindings.ts`/migration drift 0.
+
+### 11.1 Deferred (M6b + 라이브 잔여 — 사용자 greenlight 대기)
+- **M6b work-radar Settings UI** (backends/routing/budget 편집) — 앱 도메인(Rust `boule_config`+React+specta bindings), 별도 관심사.
+- **라이브 wiring**: resolver/budget/difficulty selection을 conductor executor-dispatch에 실제 배선 + 실 usage 기록(현재 예산 spend=input) + evaluator LLM rung(현재 deterministic `check`만) + cmux 라이브 스모크.
+- **푸시**: `plan/autonomous-orchestration`은 로컬만 — 사용자 명시 요청 시에만 push.
