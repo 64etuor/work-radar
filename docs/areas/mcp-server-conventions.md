@@ -81,7 +81,7 @@ rmcp + `schemars(JsonSchema)` + serde로 스키마가 **Rust param struct에서 
 - **키는 제안 *내용*에서 파생한 안정값**(시도별 UUID 금지 — dedup이 절대 안 걸림). GitHub write
   툴은 `sha256(project_id ‖ kind ‖ payload-json)`을 키로 쓴다(`mcp/mod.rs::stable_idem_key`).
   같은 외부 쓰기의 재시도는 같은 키 → 활성 동일 키에 dedup(`enqueue_with_idempotency`).
-- **잔여 위험 — idempotency_key는 _제안_ dedup이지 _API 효과_ dedup이 아니다(#5).** POST가
+- **잔여 위험 — idempotency*key는 *제안* dedup이지 \_API 효과* dedup이 아니다(#5).** POST가
   GitHub에 도달한 뒤 **응답만 유실**되면 액션은 `failed`로 표시되고(쓰기 재시도는 중복 mutation
   위험이라 `WRITE_MAX_ATTEMPTS=1`), 사람이 재제안하면 **중복 코멘트/이슈**가 날 수 있다. 키는 새
   제안 행을 막을 뿐 이미 일어난 외부 효과를 되돌리지 못한다. 현 결정(`decisions.md` 2026-06-04):
@@ -97,9 +97,9 @@ rmcp + `schemars(JsonSchema)` + serde로 스키마가 **Rust param struct에서 
 
 ## 4. SQLite 경합 — 짧은 insert-only writer
 
-- MCP 프로세스는 앱과 **동일 DB**를 연다(앱 DB resolver 재사용 — 경로 하드코딩 금지,
-  `WORK_RADAR_DEV_DB` override 포함). 앱이 이미 pool pragma(WAL 등)를 설정하므로 MCP는
-  **새 pragma를 임의 설정하지 않는다**.
+- MCP 프로세스는 앱과 **동일 app-data DB**를 연다(앱 DB resolver 재사용 — 경로 하드코딩 금지).
+  debug/dev와 release/prod를 분리하지 않는다. 앱이 이미 pool pragma(WAL 등)를 설정하므로
+  MCP는 **새 pragma를 임의 설정하지 않는다**.
 - MCP 핸들러 트랜잭션은 `validate(밖) → BEGIN → INSERT proposal → COMMIT`만.
   **tx 안에서 LLM/네트워크/파일/긴 계산 금지.**
 - `SQLITE_BUSY`는 bounded retry(backoff+jitter, `retry.rs` 패턴) — 무한 재시도 금지.

@@ -17,22 +17,14 @@ use std::path::PathBuf;
 ///
 /// 앱(`lib.rs` setup)은 `app.path().app_data_dir()`로 release 경로를 얻지만, 그건 tauri AppHandle을
 /// 요구한다. tauri 2의 `app_data_dir()`는 의미상 `dirs::data_dir()/<bundle identifier>`이므로 헤드리스로
-/// 동일 경로를 재현한다. dev override(`WORK_RADAR_DEV_DB`)·temp dev DB·release SSOT 분기 로직 자체는
-/// 앱과 같은 `crate::resolve_db_path`로 위임한다(단일 진실원).
+/// 동일 경로를 재현한다. debug/dev와 release/prod 모두 앱과 같은 `crate::resolve_db_path`로
+/// app-data DB를 연다(단일 진실원).
 fn resolve_app_db_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let is_dev = cfg!(debug_assertions);
-    let dev_override = std::env::var("WORK_RADAR_DEV_DB").ok();
-    // tauri app_data_dir() 동치: dirs::data_dir()/<identifier>. release 경로에서만 실제 사용되지만
-    // (dev 경로는 temp 또는 override) 항상 계산해 resolve_db_path에 넘긴다.
+    // tauri app_data_dir() 동치: dirs::data_dir()/<identifier>.
     let app_data = dirs::data_dir()
         .ok_or("could not resolve OS data dir (app_data_dir equivalent)")?
         .join(crate::APP_BUNDLE_IDENTIFIER);
-    Ok(crate::resolve_db_path(
-        is_dev,
-        dev_override.as_deref(),
-        &std::env::temp_dir(),
-        &app_data,
-    ))
+    Ok(crate::resolve_db_path(&app_data))
 }
 
 /// `--mcp-stdio` 모드 본체. 앱과 동일 DB를 열고 stdio MCP 서버를 구동하며, 트랜스포트가 닫힐

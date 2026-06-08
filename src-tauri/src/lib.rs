@@ -421,23 +421,13 @@ pub fn run() {
             app.manage(log_guards);
             app.manage(logging::LogDir(log_dir));
 
-            // DB 경로: release(설치본)는 app-data의 prod SSOT(`work-radar.db`). **개발(debug) 빌드는
-            // 실 prod DB를 절대 건드리지 않도록** OS temp의 격리된 dev DB를 쓴다(랜덤 아님 → dev 런 간
-            // 지속). `cargo tauri dev`는 debug 빌드라 `debug_assertions`로 깔끔히 분기된다.
+            // DB 경로: debug/dev와 release/prod 모두 app-data의 단일 SSOT(`work-radar.db`)를 쓴다.
+            // 사용자가 dev에서 본 데이터와 설치본에서 본 데이터가 갈라지지 않게 하는 계약이다.
             let is_dev = cfg!(debug_assertions);
-            // dev-only override (WORK_RADAR_DEV_DB) isolates a branch's dev DB from the shared
-            // temp dev DB — e.g. when a sibling branch has migrated it past this binary's head.
-            let dev_override = std::env::var("WORK_RADAR_DEV_DB").ok();
-            let db_path = resolve_db_path(
-                is_dev,
-                dev_override.as_deref(),
-                &std::env::temp_dir(),
-                &app_data,
-            );
+            let db_path = resolve_db_path(&app_data);
             tracing::info!(
                 code = "db.path_selected",
                 dev = is_dev,
-                overridden = is_dev && dev_override.as_deref().is_some_and(|s| !s.is_empty()),
                 "database path selected"
             );
             let pool = tauri::async_runtime::block_on(db::init_db(&db_path))
@@ -601,21 +591,9 @@ pub fn run() {
 /// 경로를 재현할 때 이 const를 쓴다(`mcp::run`). conf와 동기화 — 변경 시 둘 다 갱신.
 pub(crate) const APP_BUNDLE_IDENTIFIER: &str = "co.kr.mirrorless.workradar";
 
-/// Resolve the SQLite path. The dev override (`WORK_RADAR_DEV_DB`) is honored ONLY for dev
-/// builds — a release build always uses the app-data prod SSOT, never an env-supplied path
-/// (safety). An empty override is treated as unset. Unset → today's isolated temp dev DB.
-pub(crate) fn resolve_db_path(
-    is_dev: bool,
-    dev_override: Option<&str>,
-    temp_dir: &std::path::Path,
-    app_data: &std::path::Path,
-) -> std::path::PathBuf {
-    if is_dev {
-        if let Some(ov) = dev_override.filter(|s| !s.is_empty()) {
-            return std::path::PathBuf::from(ov);
-        }
-        return temp_dir.join("work-radar-dev").join("work-radar.db");
-    }
+/// Resolve the SQLite path. Debug/dev and release/prod intentionally share the same
+/// app-data SSOT so local testing, MCP, and the installed app see one operational DB.
+pub(crate) fn resolve_db_path(app_data: &std::path::Path) -> std::path::PathBuf {
     app_data.join("work-radar.db")
 }
 
@@ -633,35 +611,13 @@ mod db_path_tests {
     use super::resolve_db_path;
     use std::path::{Path, PathBuf};
 
-    fn temp() -> PathBuf {
-        Path::new("/tmp/td").to_path_buf()
-    }
     fn app_data() -> PathBuf {
         Path::new("/app/data").to_path_buf()
     }
 
     #[test]
-    fn dev_with_override_uses_override_path() {
-        let got = resolve_db_path(true, Some("/x/y.db"), &temp(), &app_data());
-        assert_eq!(got, PathBuf::from("/x/y.db"));
-    }
-
-    #[test]
-    fn dev_with_empty_override_falls_back_to_default_temp_path() {
-        let got = resolve_db_path(true, Some(""), &temp(), &app_data());
-        assert_eq!(got, PathBuf::from("/tmp/td/work-radar-dev/work-radar.db"));
-    }
-
-    #[test]
-    fn dev_without_override_uses_default_temp_path() {
-        let got = resolve_db_path(true, None, &temp(), &app_data());
-        assert_eq!(got, PathBuf::from("/tmp/td/work-radar-dev/work-radar.db"));
-    }
-
-    #[test]
-    fn release_ignores_override_and_uses_prod_ssot() {
-        // Safety: a release build must never be redirected by env to a non-prod DB.
-        let got = resolve_db_path(false, Some("/x/y.db"), &temp(), &app_data());
+    fn all_builds_use_app_data_ssot() {
+        let got = resolve_db_path(&app_data());
         assert_eq!(got, PathBuf::from("/app/data/work-radar.db"));
     }
 }
