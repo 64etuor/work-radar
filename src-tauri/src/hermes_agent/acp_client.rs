@@ -50,7 +50,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as Json};
 use specta::Type;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::io::BufReader;
@@ -82,6 +82,10 @@ pub struct AcpSession {
     pub(crate) stdin_tx: mpsc::Sender<Vec<u8>>,
     pub(crate) pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Json>>>>,
     pub(crate) next_id: Arc<AtomicU64>,
+    /// false until the first `session/prompt` is sent to THIS child. Used to gate the
+    /// resume-replay preamble to a fresh child's first prompt (decoupled from spawn timing,
+    /// so eager spawn in `open_tab` doesn't suppress replay).
+    pub(crate) first_prompt_sent: Arc<AtomicBool>,
     child: Child,
 }
 
@@ -109,6 +113,7 @@ impl AcpSession {
         let (stdin_tx, mut stdin_rx) = mpsc::channel::<Vec<u8>>(32);
         let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Json>>>> = Default::default();
         let next_id = Arc::new(AtomicU64::new(1));
+        let first_prompt_sent = Arc::new(AtomicBool::new(false));
 
         // Writer task: drain stdin_rx → child stdin
         tokio::spawn(async move {
@@ -170,6 +175,7 @@ impl AcpSession {
             stdin_tx,
             pending,
             next_id,
+            first_prompt_sent,
             child,
         };
 

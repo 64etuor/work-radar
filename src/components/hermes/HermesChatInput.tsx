@@ -18,12 +18,21 @@ function isImagePath(p: string): boolean {
 interface Props {
   onSend: (text: string, images: string[]) => void;
   onCancel?: () => void;
+  /** 입력창 포커스 시 호출 — ACP 에이전트를 미리 spawn해 `/` 명령을 로드한다. */
+  onFocusInput?: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
   commandsList: AcpCommand[];
 }
 
-export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, commandsList }: Props) {
+export function HermesChatInput({
+  onSend,
+  onCancel,
+  onFocusInput,
+  disabled,
+  isStreaming,
+  commandsList,
+}: Props) {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -195,6 +204,7 @@ export function HermesChatInput({ onSend, onCancel, disabled, isStreaming, comma
               setActiveIdx(0);
             }}
             onPaste={onPaste}
+            onFocus={onFocusInput}
             onKeyDown={(e) => {
               if (menuOpen) {
                 if (e.key === "ArrowDown") {

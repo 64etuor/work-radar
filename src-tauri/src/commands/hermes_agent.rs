@@ -16,16 +16,46 @@ pub fn new_holder() -> HermesAgentHolder {
     Arc::new(RwLock::new(HashMap::new()))
 }
 
+/// Ensure an ACP child session exists for `tab_id` (idempotent). Spawns one if absent.
+/// Spawning runs the `initialize` + `session/new` handshake, which makes the agent emit
+/// `available_commands` — so calling this before the first prompt lets the `/` slash menu
+/// populate. Replay is gated by the per-session `first_prompt_sent` flag (not spawn timing),
+/// so pre-spawning here does not suppress the resume-replay preamble.
+async fn ensure_session(
+    app: &AppHandle,
+    holder: &HermesAgentHolder,
+    tab_id: &str,
+) -> Result<(), AppError> {
+    {
+        let map = holder.read().await;
+        if map.contains_key(tab_id) {
+            return Ok(());
+        }
+    }
+    // Spawn WITHOUT holding the lock so concurrent tabs don't serialise here.
+    let session = AcpSession::spawn(app.clone(), tab_id.to_string()).await?;
+    let mut map = holder.write().await;
+    if map.contains_key(tab_id) {
+        // Racing spawn won — drop ours.
+        drop(map);
+        session.kill().await;
+    } else {
+        map.insert(tab_id.to_string(), session);
+    }
+    Ok(())
+}
+
+/// Eagerly establish the agent session so `available_commands` arrives (slash menu) and the
+/// agent is ready. Idempotent — no-op if already spawned. The frontend calls this when a
+/// session is focused/opened.
 #[tauri::command]
 #[specta::specta]
 pub async fn hermes_agent_open_tab(
-    _holder: State<'_, HermesAgentHolder>,
-    _tab_id: String,
+    app: AppHandle,
+    holder: State<'_, HermesAgentHolder>,
+    tab_id: String,
 ) -> Result<(), AppError> {
-    // No-op: tab existence is tracked by the frontend; the backend reserves a slot
-    // only on first `send` (lazy spawn). Cap is enforced at spawn time in `send`.
-    // This command remains for explicit "tab will be used" signaling and future-proofing.
-    Ok(())
+    ensure_session(&app, &holder, &tab_id).await
 }
 
 #[tauri::command]
@@ -38,58 +68,28 @@ pub async fn hermes_agent_send(
     text: String,
     image_paths: Vec<String>,
 ) -> Result<(), AppError> {
-    // 1. Lazy spawn — if no child for this slot, spawn one.
-    let snapshot = {
+    // 1. Lazy spawn — ensure a child exists (idempotent; may already be spawned via open_tab).
+    ensure_session(&app, &holder, &tab_id).await?;
+    let (session_id, transport, stdin_tx, pending, next_id, first_prompt_sent) = {
         let map = holder.read().await;
-        map.get(&tab_id).map(|s| {
-            (
-                s.session_id.clone(),
-                s.image_transport,
-                s.stdin_tx.clone(),
-                s.pending.clone(),
-                s.next_id.clone(),
-            )
-        })
+        let s = map.get(&tab_id).ok_or_else(|| {
+            AppError::unexpected("hermes.acp.protocol", "session missing after ensure")
+        })?;
+        (
+            s.session_id.clone(),
+            s.image_transport,
+            s.stdin_tx.clone(),
+            s.pending.clone(),
+            s.next_id.clone(),
+            s.first_prompt_sent.clone(),
+        )
     };
+    // 이 child 에 대한 "첫 prompt" 인가? (spawn 시점과 무관 — open_tab 선-spawn 후에도 replay 보존.)
+    let is_first_prompt = !first_prompt_sent.swap(true, std::sync::atomic::Ordering::SeqCst);
 
-    let mut spawned = false;
-    let (session_id, transport, stdin_tx, pending, next_id) = match snapshot {
-        Some(s) => s,
-        None => {
-            spawned = true;
-            // Spawn WITHOUT holding any lock so concurrent tabs don't serialise here.
-            let session = AcpSession::spawn(app.clone(), tab_id.clone()).await?;
-            let mut map = holder.write().await;
-            if let Some(existing) = map.get(&tab_id) {
-                // Racing spawn won — use existing session, kill ours.
-                spawned = false;
-                let tup = (
-                    existing.session_id.clone(),
-                    existing.image_transport,
-                    existing.stdin_tx.clone(),
-                    existing.pending.clone(),
-                    existing.next_id.clone(),
-                );
-                drop(map);
-                session.kill().await;
-                tup
-            } else {
-                let tup = (
-                    session.session_id.clone(),
-                    session.image_transport,
-                    session.stdin_tx.clone(),
-                    session.pending.clone(),
-                    session.next_id.clone(),
-                );
-                map.insert(tab_id.clone(), session);
-                tup
-            }
-        }
-    };
-
-    // 재개: 방금 spawn한 세션이고 DB에 이전 히스토리가 있으면 최근 N개를 preamble로 prepend.
+    // 재개: fresh child 의 첫 prompt이고 DB에 이전 히스토리가 있으면 최근 N개를 preamble로 prepend.
     const REPLAY_LIMIT: i64 = 20;
-    let effective_text = if spawned {
+    let effective_text = if is_first_prompt {
         let recent = crate::hermes_agent::session_store::recent_messages_inner(
             db.inner(),
             &tab_id,

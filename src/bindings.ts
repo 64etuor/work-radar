@@ -426,6 +426,11 @@ export const commands = {
 	/**  Hermes 패널 상태 저장. */
 	hermesPanelStateSet: (state: HermesPanelState) => typedError<null, AppError>(__TAURI_INVOKE("hermes_panel_state_set", { state })),
 	hermesDetect: () => typedError<HermesDetectResult, AppError>(__TAURI_INVOKE("hermes_detect")),
+	/**
+	 *  Eagerly establish the agent session so `available_commands` arrives (slash menu) and the
+	 *  agent is ready. Idempotent — no-op if already spawned. The frontend calls this when a
+	 *  session is focused/opened.
+	 */
 	hermesAgentOpenTab: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_open_tab", { tabId })),
 	hermesAgentSend: (tabId: string, text: string, imagePaths: string[]) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_send", { tabId, text, imagePaths })),
 	hermesSessionsList: () => typedError<HermesSessionRow[], AppError>(__TAURI_INVOKE("hermes_sessions_list")),

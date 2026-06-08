@@ -38,6 +38,7 @@ export default function HermesView() {
   const activeTabId = useHermesTabsStore((s) => s.activeTabId);
   const openTab = useHermesTabsStore((s) => s.openTab);
   const closeTab = useHermesTabsStore((s) => s.closeTab);
+  const ensureAgent = useHermesTabsStore((s) => s.ensureAgent);
   const setActive = useHermesTabsStore((s) => s.setActive);
   const send = useHermesTabsStore((s) => s.send);
   const cancel = useHermesTabsStore((s) => s.cancel);
@@ -152,7 +153,8 @@ export default function HermesView() {
             showResourceWarning={showWarn}
           />
         )}
-        <div className="flex min-h-0 flex-1 flex-col">
+        {/* min-w-0 필수: 없으면 긴 툴 호출/코드 블록이 flex 컬럼을 늘려 채팅창 레이아웃이 깨진다. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {activeTab ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <HermesChatLog
@@ -164,6 +166,7 @@ export default function HermesView() {
               <HermesChatInput
                 onSend={(text, images) => void send(activeTab.id, text, images)}
                 onCancel={() => void cancel(activeTab.id)}
+                onFocusInput={() => void ensureAgent(activeTab.id)}
                 disabled={activeTab.status === "starting"}
                 isStreaming={isStreaming}
                 commandsList={activeTab.commandsList}

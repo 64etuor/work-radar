@@ -27,6 +27,9 @@ interface HermesTabsActions {
   /** Open a new tab (cap check + backend IPC). Returns assigned tabId or null on cap/error. */
   openTab: () => Promise<TabId | null>;
   closeTab: (tabId: TabId) => Promise<void>;
+  /** ACP 에이전트를 미리 spawn(멱등) — `/` 슬래시 명령(available-commands)이 첫 전송 전에
+   *  로드되도록 한다. 입력창 포커스 시 호출. */
+  ensureAgent: (tabId: TabId) => Promise<void>;
   setActive: (tabId: TabId) => void;
   rename: (tabId: TabId, name: string) => void;
   send: (tabId: TabId, text: string, images?: string[]) => Promise<void>;
@@ -93,6 +96,14 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       }
     },
 
+    ensureAgent: async (tabId) => {
+      try {
+        await unwrap(commands.hermesAgentOpenTab(tabId));
+      } catch {
+        /* best-effort — 명령 로드 실패해도 채팅엔 영향 없음 */
+      }
+    },
+
     setActive: (tabId) => {
       dispatch({ type: "set-active", tabId });
       const tab = get().tabs.get(tabId);
@@ -140,6 +151,9 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       } catch {
         // best-effort
       }
+      // 낙관적: 취소 후 입력 재활성화. 보통 turn-end(cancelled)가 와서 ready 로 정규화하지만,
+      // 에이전트가 죽어 turn-end 가 안 오는 경우에도 "starting" 고착으로 입력이 막히지 않게 한다.
+      dispatch({ type: "set-status", tabId, status: "ready" });
     },
 
     // 에이전트 프로세스만 재시작한다(ACP child kill→respawn). **대화 기록은 보존**한다 —
@@ -285,6 +299,14 @@ export function useHermesTabsBootstrap() {
             tabId,
             status: e.payload.status,
             error: e.payload.error,
+          });
+          // 턴 종료 시 세션 상태를 정규화한다. session-ready 는 spawn 1회만 오므로(2번째
+          // 턴부터·취소 시 status 가 "starting"에 고착 → 입력창 disabled). 종료마다 ready 로
+          // 되돌려 입력을 다시 활성화한다(실패 턴은 error). (cancel→입력 불가 버그의 근본 원인.)
+          dispatch({
+            type: "set-status",
+            tabId,
+            status: e.payload.status === "error" ? "error" : "ready",
           });
           // 영속: 방금 닫힌 assistant 메시지 1개를 DB에 append.
           const tab = useHermesTabsStore.getState().tabs.get(tabId);

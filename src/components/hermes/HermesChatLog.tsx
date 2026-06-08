@@ -19,7 +19,8 @@ interface Props {
 /** Tool pill title with typewriter reveal. */
 function ToolPillTitle({ title }: { title: string }) {
   const revealed = useTypewriter(title);
-  return <span className="font-mono">{revealed}</span>;
+  // min-w-0 + truncate: 긴 툴 호출 제목이 pill 을 채팅 폭 밖으로 늘리지 않게 말줄임.
+  return <span className="min-w-0 truncate font-mono">{revealed}</span>;
 }
 
 function ToolCallPill({ t }: { t: ToolCallSummary }) {
@@ -40,11 +41,11 @@ function ToolCallPill({ t }: { t: ToolCallSummary }) {
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
-        className="border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors"
+        className="border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 inline-flex max-w-full min-w-0 items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors"
       >
         <Wrench className="size-3 shrink-0" />
         <ToolPillTitle title={t.title || t.kind || "tool"} />
-        {statusIcon}
+        <span className="inline-flex shrink-0">{statusIcon}</span>
       </button>
       {expanded && (
         <div className="bg-muted/30 text-muted-foreground mt-1 max-w-full overflow-x-auto rounded-md px-2 py-1.5 font-mono text-xs whitespace-pre-wrap">
