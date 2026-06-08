@@ -21,7 +21,7 @@ pub async fn get_control_room_snapshot() -> Result<ControlRoomSnapshot, AppError
     read_snapshot(&state_dir)
 }
 
-/// Read a designated LOCAL repo's Boule autonomy config (kind + autonomyLevel + reviewQuorum).
+/// Read a designated LOCAL repo's Boule config (kind + autonomyLevel + reviewQuorum + budget).
 /// Absent file ⇒ per-kind defaults (config_exists=false). Settings-only — no event write path.
 #[tauri::command]
 #[specta::specta]
@@ -33,9 +33,9 @@ pub async fn get_boule_config(
     get_boule_config_core(db.inner(), &repo_id).await
 }
 
-/// Update a local repo's Boule autonomy config. Paths are resolved from the DB (never renderer-
-/// supplied); preserves fields this UI doesn't manage. ⚠ auto_plan/full OPEN INVARIANT #1's human
-/// gate (test/dev) — the UI warns; acceptance auto-fires actor:"system", never a forged human.
+/// Update a local repo's Boule config. Paths are resolved from the DB (never renderer-supplied);
+/// preserves fields this UI doesn't manage. ⚠ auto_plan/full OPEN INVARIANT #1's human gate
+/// (test/dev) — the UI warns; acceptance auto-fires actor:"system", never a forged human.
 #[tauri::command]
 #[specta::specta]
 #[allow(clippy::result_large_err)] // AppError 큰 Err 변형 — 레포 관용(snapshot.rs 등과 동일).

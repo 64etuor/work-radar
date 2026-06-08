@@ -11,7 +11,13 @@ import {
 } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 
-import type { BouleConfigSettings, Project, ProjectKind, PromotionTarget } from "@/bindings";
+import type {
+  BouleBudgetCaps_Deserialize,
+  BouleConfigSettings_Serialize,
+  Project,
+  ProjectKind,
+  PromotionTarget,
+} from "@/bindings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,6 +48,67 @@ import { AddRepoForm } from "./AddRepoForm";
 import { GoogleAccountBlock } from "./GoogleAccountBlock";
 import { Field, SectionLabel, Segmented } from "./SettingsKit";
 import { TokenRow } from "./TokenRow";
+
+type BouleConfigSettings = BouleConfigSettings_Serialize;
+type BouleBudgetCaps = BouleBudgetCaps_Deserialize;
+type BouleBudgetKey = keyof BouleBudgetCaps;
+type BudgetDraft = Record<BouleBudgetKey, string>;
+type BudgetParseResult = BouleBudgetCaps | null | "invalid";
+type BouleConfigPatch = Partial<
+  Pick<BouleConfigSettings, "kind" | "autonomyLevel" | "reviewQuorum">
+> & {
+  budget?: BouleBudgetCaps | null;
+};
+
+const BUDGET_FIELDS: {
+  key: BouleBudgetKey;
+  label: string;
+  integer: boolean;
+  step: number;
+}[] = [
+  { key: "runTokenCap", label: "실행 토큰 한도", integer: true, step: 1 },
+  { key: "stepTokenCap", label: "스텝 토큰 한도", integer: true, step: 1 },
+  { key: "runCostCapUsd", label: "실행 비용 USD", integer: false, step: 0.01 },
+  { key: "stepCostCapUsd", label: "스텝 비용 USD", integer: false, step: 0.01 },
+];
+
+function budgetDraftFrom(budget: BouleConfigSettings["budget"]): BudgetDraft {
+  return {
+    runTokenCap: budget?.runTokenCap == null ? "" : String(budget.runTokenCap),
+    stepTokenCap: budget?.stepTokenCap == null ? "" : String(budget.stepTokenCap),
+    runCostCapUsd: budget?.runCostCapUsd == null ? "" : String(budget.runCostCapUsd),
+    stepCostCapUsd: budget?.stepCostCapUsd == null ? "" : String(budget.stepCostCapUsd),
+  };
+}
+
+function budgetInputFrom(budget: BouleConfigSettings["budget"]): BouleBudgetCaps | null {
+  if (!budget) return null;
+  return {
+    runTokenCap: budget.runTokenCap ?? null,
+    stepTokenCap: budget.stepTokenCap ?? null,
+    runCostCapUsd: budget.runCostCapUsd ?? null,
+    stepCostCapUsd: budget.stepCostCapUsd ?? null,
+  };
+}
+
+function parseBudgetValue(raw: string, integer: boolean): number | null | "invalid" {
+  if (raw.trim() === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return "invalid";
+  return integer ? Math.trunc(n) : n;
+}
+
+function budgetFromDraft(draft: BudgetDraft): BudgetParseResult {
+  const parsed = {
+    runTokenCap: parseBudgetValue(draft.runTokenCap, true),
+    stepTokenCap: parseBudgetValue(draft.stepTokenCap, true),
+    runCostCapUsd: parseBudgetValue(draft.runCostCapUsd, false),
+    stepCostCapUsd: parseBudgetValue(draft.stepCostCapUsd, false),
+  };
+  if (Object.values(parsed).includes("invalid")) return "invalid";
+  const next: BouleBudgetCaps = parsed as BouleBudgetCaps;
+  return Object.values(next).some((v) => v != null) ? next : null;
+}
 
 /** Notion DB 연결 테스트 버튼 + 인라인 결과. */
 function NotionDbTestButton({
@@ -246,11 +313,16 @@ function BouleConfigControls({
   const cfg = useBouleConfig(repoId);
   const set = useSetBouleConfig();
   const data = cfg.data;
+  const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => budgetDraftFrom(null));
+  const budgetSeed = data ? JSON.stringify(data.budget ?? null) : null;
+  const [seededBudget, setSeededBudget] = useState<string | null>(null);
+  if (data && budgetSeed !== seededBudget) {
+    setSeededBudget(budgetSeed);
+    setBudgetDraft(budgetDraftFrom(data.budget));
+  }
 
-  // every knob change persists the full merged config (the write command requires all three).
-  const save = (
-    patch: Partial<Pick<BouleConfigSettings, "kind" | "autonomyLevel" | "reviewQuorum">>,
-  ) => {
+  // every knob change persists the full merged config (the write command requires all knobs).
+  const save = (patch: BouleConfigPatch) => {
     if (!data) return;
     set.mutate(
       {
@@ -258,9 +330,23 @@ function BouleConfigControls({
         kind: patch.kind ?? data.kind,
         autonomyLevel: patch.autonomyLevel ?? data.autonomyLevel,
         reviewQuorum: patch.reviewQuorum ?? data.reviewQuorum,
+        budget: Object.prototype.hasOwnProperty.call(patch, "budget")
+          ? (patch.budget ?? null)
+          : budgetInputFrom(data.budget),
       },
       { onError: () => onToast("Boule 설정 저장 실패") },
     );
+  };
+
+  const onBudgetDraftChange = (key: BouleBudgetKey, value: string) => {
+    const nextDraft = { ...budgetDraft, [key]: value };
+    setBudgetDraft(nextDraft);
+    const budget = budgetFromDraft(nextDraft);
+    if (budget === "invalid") {
+      onToast("Boule 예산 한도는 0 이상이어야 합니다");
+      return;
+    }
+    save({ budget });
   };
 
   if (cfg.isLoading || !data) return null;
@@ -312,6 +398,21 @@ function BouleConfigControls({
             ]}
           />
         </Field>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {BUDGET_FIELDS.map((field) => (
+          <Field key={field.key} label={field.label}>
+            <Input
+              type="number"
+              min={0}
+              step={field.step}
+              inputMode={field.integer ? "numeric" : "decimal"}
+              value={budgetDraft[field.key]}
+              className="h-8 w-full text-right"
+              onChange={(e) => onBudgetDraftChange(field.key, e.target.value)}
+            />
+          </Field>
+        ))}
       </div>
       {opensGate && (
         <div className="flex items-center gap-1.5 text-xs text-[color:var(--destructive)]">
