@@ -1,7 +1,11 @@
 import type { ConductorAdapter } from "../../conductor/adapter.ts";
 import type { ExecutorKind } from "../../conductor/envelope.ts";
 import { deriveConductorState } from "../../conductor/conductor.ts";
-import { conductPlan, type ConductorEnvelopeDefaults } from "../../conductor/handlers.ts";
+import {
+  conductPlan,
+  redispatchExecutorAttempt,
+  type ConductorEnvelopeDefaults,
+} from "../../conductor/handlers.ts";
 import type { ExecutorViabilityProbes } from "../../conductor/handlers.ts";
 import { readAllEvents } from "../../decision/readEvents.ts";
 import type { GovEvent } from "../../event/event.ts";
@@ -106,6 +110,80 @@ export async function autoDispatch(
     if (summary.executed >= maxConducts) break; // blast-radius cap reached → rest waits for next tick
     const conductor = deriveConductorState(planProposed, all);
     if (isTerminalPlanPhase(conductor.planPhase)) continue;
+
+    if (summary.executed < maxConducts && conductor.planPhase === "active" && !conductor.halted && !conductor.done) {
+      const retryNow = new Date(now.getTime() + offset * 1000);
+      offset += 2;
+      try {
+        const retry = await redispatchExecutorAttempt(
+          workspaceDir,
+          { planId: conductor.planId },
+          deps,
+          retryNow,
+          rand,
+        );
+        if (retry.kind === "advanced") {
+          const outcomeAt = nextStamp();
+          await writeEvent(
+            workspaceDir,
+            dispatchEvent(
+              "orchestrator_action_executed",
+              conductor.planId,
+              {
+                planId: conductor.planId,
+                stepIndex: retry.advanced.stepIndex,
+                taskId: retry.advanced.taskId,
+                attemptIndex: retry.advanced.attemptIndex,
+              },
+              outcomeAt,
+              rand,
+              [retry.advanced.taskId],
+            ),
+            outcomeAt,
+          );
+          summary.executed++;
+          continue;
+        }
+        if (retry.kind === "stalled") {
+          const outcomeAt = nextStamp();
+          await writeEvent(
+            workspaceDir,
+            dispatchEvent(
+              "orchestrator_action_failed",
+              conductor.planId,
+              {
+                planId: conductor.planId,
+                stepIndex: retry.stepIndex,
+                taskId: retry.taskId,
+                reason: retry.reason,
+              },
+              outcomeAt,
+              rand,
+              [retry.taskId],
+            ),
+            outcomeAt,
+          );
+          summary.failed++;
+          continue;
+        }
+      } catch (err) {
+        const outcomeAt = nextStamp();
+        const reason = err instanceof Error ? err.message : String(err);
+        await writeEvent(
+          workspaceDir,
+          dispatchEvent(
+            "orchestrator_action_failed",
+            conductor.planId,
+            { planId: conductor.planId, stepIndex: conductor.cursor, reason },
+            outcomeAt,
+            rand,
+          ),
+          outcomeAt,
+        );
+        summary.failed++;
+        continue;
+      }
+    }
 
     const verdict = evaluateAutoDispatch(conductor, mode);
     if (verdict.decision === "deny") {
