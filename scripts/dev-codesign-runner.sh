@@ -125,6 +125,13 @@ sign_binary() {
   fi
 
   echo "🔏 codesign before launch: $bin" >&2
+  # partition-list self-heal: codesign 이 dev 키체인의 개인키를 무인으로 쓰도록 보장한다.
+  # 이게 없으면 키체인이 unlock 돼 있어도 codesign 이 키 ACL 때문에 매 실행 키체인 암호를
+  # 요구한다(setup 이 한 번 설정하지만 OS 리셋/구버전 setup 이면 풀린다). idempotent·빠름·
+  # 실패는 비치명(그 경우 아래 codesign 이 기존과 동일하게 동작 — 회귀 없음).
+  security set-key-partition-list \
+    -S "apple-tool:,apple:,codesign:" \
+    -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null 2>&1 || true
   if ! codesign --force --sign "$signing_id" --identifier "$IDENTIFIER" "$bin"; then
     echo "❌ codesign failed with identity '$CERT_NAME' ($signing_id)." >&2
     echo "   Run: pnpm tauri:dev:setup" >&2
