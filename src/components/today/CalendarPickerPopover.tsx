@@ -7,10 +7,11 @@
  */
 import { useMemo, useState } from "react";
 
-import type { Project, SelectedCalendar } from "@/bindings";
+import type { Kind } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useProjects, useSetProjectDefaultWriteCalendar } from "@/lib/query";
+import { routineCalendarPickCandidates } from "@/lib/routineSync";
 
 type Props = {
   open: boolean;
@@ -18,39 +19,38 @@ type Props = {
   anchor: { x: number; y: number } | null;
   /** signal의 project (none이면 후보 비어 보임 — 사용자가 cancel하면 picker 호출자가 resolve(null)). */
   signalProjectId: string | null;
+  /** routine drop이면 signal project 대신 routine kind로 같은-kind 프로젝트 캘린더를 보여준다. */
+  routineKind?: Kind | null;
   onPick: (calendarId: string) => void;
   onClose: () => void;
 };
 
-function safeParse(json: string | null | undefined): SelectedCalendar[] {
-  if (!json) return [];
-  try {
-    const v = JSON.parse(json);
-    if (!Array.isArray(v)) return [];
-    return v.filter(
-      (c): c is SelectedCalendar =>
-        typeof c === "object" && c !== null && typeof (c as { id?: unknown }).id === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-export function CalendarPickerPopover({ open, anchor, signalProjectId, onPick, onClose }: Props) {
+export function CalendarPickerPopover({
+  open,
+  anchor,
+  signalProjectId,
+  routineKind = null,
+  onPick,
+  onClose,
+}: Props) {
   const projectsQ = useProjects();
   const setDefault = useSetProjectDefaultWriteCalendar();
   const [picked, setPicked] = useState<string | null>(null);
   // 안전 기본값: 사용자가 의식적으로 체크해야 영속 저장 — 첫 picker에서 무의식 저장 방지.
   const [saveDefault, setSaveDefault] = useState<boolean>(false);
 
-  const project: Project | undefined = useMemo(() => {
+  const signalProject = useMemo(() => {
     if (!signalProjectId) return undefined;
     return (projectsQ.data ?? []).find((p) => p.id === signalProjectId);
   }, [projectsQ.data, signalProjectId]);
 
   const candidates = useMemo(
-    () => safeParse(project?.googleCalendarIds ?? null),
-    [project?.googleCalendarIds],
+    () => routineCalendarPickCandidates(projectsQ.data ?? [], signalProjectId, routineKind),
+    [projectsQ.data, routineKind, signalProjectId],
+  );
+  const pickedCandidate = useMemo(
+    () => candidates.find((c) => c.id === picked) ?? null,
+    [candidates, picked],
   );
 
   if (!open || !anchor) return null;
@@ -71,21 +71,27 @@ export function CalendarPickerPopover({ open, anchor, signalProjectId, onPick, o
       </PopoverTrigger>
       <PopoverContent className="w-[280px] space-y-2" align="start">
         <div className="text-sm font-semibold">캘린더 선택</div>
-        {!project && (
+        {!signalProject && !routineKind && (
           <div className="text-muted-foreground text-xs">
             연결된 프로젝트가 없어요. 트레이 항목의 프로젝트를 먼저 지정하세요.
           </div>
         )}
-        {project && candidates.length === 0 && (
+        {signalProject && candidates.length === 0 && (
           <div className="text-muted-foreground text-xs">
             이 프로젝트에 선택된 Google 캘린더가 없어요. 설정에서 먼저 선택하세요.
+          </div>
+        )}
+        {!signalProject && routineKind && candidates.length === 0 && (
+          <div className="text-muted-foreground text-xs">
+            연결된 {routineKind === "work" ? "업무" : "개인"} 프로젝트에 선택된 Google 캘린더가
+            없어요. 설정에서 먼저 선택하세요.
           </div>
         )}
         {candidates.map((c) => {
           const active = picked === c.id;
           return (
             <button
-              key={c.id}
+              key={`${c.projectId}:${c.id}`}
               type="button"
               className={`w-full rounded px-2 py-1 text-left text-xs transition-colors ${
                 active ? "bg-wr-accent-soft" : "hover:bg-hover"
@@ -116,10 +122,10 @@ export function CalendarPickerPopover({ open, anchor, signalProjectId, onPick, o
             disabled={!picked || setDefault.isPending}
             onClick={async () => {
               if (!picked) return;
-              if (saveDefault && project) {
+              if (saveDefault && pickedCandidate) {
                 try {
                   await setDefault.mutateAsync({
-                    projectId: project.id,
+                    projectId: pickedCandidate.projectId,
                     calendarId: picked,
                   });
                 } catch {

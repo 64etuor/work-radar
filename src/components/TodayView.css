@@ -804,19 +804,25 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--color-wr-border);
+  border-radius: 4px;
   color: var(--color-wr-subtle);
   cursor: pointer;
-  transition: background var(--wr-motion-fast) var(--wr-ease-out);
+  transition:
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out),
+    color var(--wr-motion-fast) var(--wr-ease-out);
 }
 .tl-block-check:hover,
 .tl-block-check:focus-visible {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--color-wr-elevated);
+  border-color: var(--color-wr-border-strong);
 }
-.tl-block-check[data-done] {
-  color: var(--color-q2);
+.tl-block-check[data-state="checked"] {
+  color: #fff;
+  background: var(--color-q2);
+  border-color: var(--color-q2);
 }
 .tl-block-check:focus-visible {
   outline: 2px solid var(--color-wr-focus);

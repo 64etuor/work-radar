@@ -98,7 +98,10 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
   }
   for (const r of routines) {
     if (!(r.timeOverride ?? r.timeOfDay)) continue;
-    const key = eventKey(r.linkedCalendarId, r.linkedEventId);
+    const key = eventKey(
+      r.linkedCalendarId ?? r.googleCalendarId,
+      r.linkedEventId ?? r.googleEventId,
+    );
     if (key) absorbed.add(key);
   }
 
@@ -122,17 +125,19 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
   for (const r of routines) {
     const time = r.timeOverride ?? r.timeOfDay;
     if (!time) continue;
-    const { startISO, endISO } = isoFor(date, time);
+    const { startISO, endISO } = isoFor(date, time, r.durationMin ?? ROUTINE_DURATION_MIN);
+    const linkedCalendarId = r.linkedCalendarId ?? r.googleCalendarId;
+    const linkedEventId = r.linkedEventId ?? r.googleEventId;
     out.push({
       id: `routine:${r.id}`,
       kind: "routine",
       title: r.title,
       startISO,
       endISO,
-      calendarId: r.linkedCalendarId ?? "",
-      calendarLabel: r.linkedCalendarId ?? "",
+      calendarId: linkedCalendarId ?? "",
+      calendarLabel: linkedCalendarId ?? "",
       color: ROUTINE_COLOR,
-      linkedEventId: r.linkedEventId ?? undefined,
+      linkedEventId: linkedEventId ?? undefined,
       done: r.done,
       routineId: r.id,
     });

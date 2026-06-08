@@ -198,7 +198,8 @@ export function TodayView() {
    * pointer 좌표는 마지막 pointermove 위치(없으면 화면 안쪽 기본값)로 anchor.
    */
   const [picker, setPicker] = useState<{
-    signalId: string;
+    targetId: string;
+    targetKind: "signal" | "routine";
     anchor: { x: number; y: number };
     resolve: (calendarId: string | null) => void;
   } | null>(null);
@@ -210,10 +211,10 @@ export function TodayView() {
   const canvasPointerXRef = useRef<number | null>(null);
 
   const promptCalendarPicker = useCallback(
-    (signalId: string) =>
+    (targetId: string, targetKind: "signal" | "routine" = "signal") =>
       new Promise<string | null>((resolve) => {
         pickerResolverRef.current = resolve;
-        setPicker({ signalId, anchor: { ...lastPointerRef.current }, resolve });
+        setPicker({ targetId, targetKind, anchor: { ...lastPointerRef.current }, resolve });
       }),
     [],
   );
@@ -282,8 +283,13 @@ export function TodayView() {
 
   const pickerSignalProjectId = useMemo(() => {
     if (!picker) return null;
-    return rail.find((s) => s.id === picker.signalId)?.projectId ?? null;
+    if (picker.targetKind !== "signal") return null;
+    return rail.find((s) => s.id === picker.targetId)?.projectId ?? null;
   }, [picker, rail]);
+  const pickerRoutineKind = useMemo(() => {
+    if (!picker || picker.targetKind !== "routine") return null;
+    return routineList.find((r) => r.id === picker.targetId)?.kind ?? null;
+  }, [picker, routineList]);
 
   return (
     <DndContext
@@ -350,6 +356,7 @@ export function TodayView() {
             open
             anchor={picker.anchor}
             signalProjectId={pickerSignalProjectId}
+            routineKind={pickerRoutineKind}
             onPick={(calendarId) => {
               picker.resolve(calendarId);
               pickerResolverRef.current = null;

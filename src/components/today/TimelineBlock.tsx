@@ -1,9 +1,10 @@
 import { useDraggable } from "@dnd-kit/core";
-import { CheckCircle2, Circle, Repeat } from "lucide-react";
+import { Repeat } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockStyle";
 import type { DragData } from "@/components/today/useTimelineDnd";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
 import type { LayoutBox } from "@/lib/timelineLayout";
 import { eventBlockApiId } from "@/lib/todayBlocks";
@@ -231,24 +232,18 @@ export function TimelineBlock({
       {isCheckable && onToggleDone && (
         // 블록 button의 형제로 배치(중첩 interactive 회피) — pointerdown으로 dnd-kit
         // listener 버블 끊기. click은 done 토글로만 소비.
-        <button
-          type="button"
+        <Checkbox
           className="tl-block-check"
-          data-done={isDone || undefined}
+          checked={isDone}
+          forceMountIndicator
           aria-label={isDone ? `${block.title} 완료 취소` : `${block.title} 완료`}
           title={isDone ? "완료 취소" : "완료"}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleDone(box, !isDone);
+          onClick={(e) => e.stopPropagation()}
+          onCheckedChange={(checked) => {
+            onToggleDone(box, checked === true);
           }}
-        >
-          {isDone ? (
-            <CheckCircle2 className="size-3.5" aria-hidden />
-          ) : (
-            <Circle className="size-3.5" aria-hidden />
-          )}
-        </button>
+        />
       )}
       <ResizeHandle edge="top" box={box} durationMin={durationMin} />
       <ResizeHandle edge="bottom" box={box} durationMin={durationMin} />

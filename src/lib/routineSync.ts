@@ -50,6 +50,27 @@ export function routineSyncCandidates(
 }
 
 /**
+ * Today timeline 배치 picker 후보.
+ * - signal 배치는 signal.projectId로 단일 프로젝트 캘린더만 보여준다.
+ * - routine 배치는 signal project가 없으므로 routine.kind와 같은 프로젝트들의 캘린더를 보여준다.
+ */
+export function routineCalendarPickCandidates(
+  projects: Project[],
+  projectId: string | null,
+  routineKind: Kind | null,
+): RoutineSyncCandidate[] {
+  if (projectId) {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return [];
+    return safeParseSelectedCalendars(project.googleCalendarIds).map((c) => ({
+      ...c,
+      projectId: project.id,
+    }));
+  }
+  return routineSyncCandidates(projects, routineKind);
+}
+
+/**
  * 동기화 중인 루틴의 표시 라벨 — 후보에서 summary 우선, 없으면 calendarId 원문 fallback.
  * googleCalendarId가 null(미동기화)이면 null.
  */

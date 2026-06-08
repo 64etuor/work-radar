@@ -224,7 +224,10 @@ type Opts = {
   /** 시그널 id로 프로젝트 기본 캘린더를 찾는다. 없으면 null. */
   defaultCalendarFor: (signalId: string) => string | null;
   /** project default가 없을 때 popover를 띄우고 사용자가 고른 캘린더 id를 resolve. */
-  promptCalendarPicker: (signalId: string) => Promise<string | null>;
+  promptCalendarPicker: (
+    targetId: string,
+    targetKind?: "signal" | "routine",
+  ) => Promise<string | null>;
   /**
    * 캔버스 그리드 로컬 Y (px). TimelineCanvas가 pointermove로 기록 → onDragEnd에서 읽는다.
    * dropData에 mutable 객체를 박는 antipattern 회피용 (PR 5 코드리뷰).
@@ -303,7 +306,8 @@ export function useTimelineDnd(opts: Opts) {
 
       // ── 1: tray → canvas ─────────────────────────────────────────────
       if (a.from === "tray" && o.to === "canvas") {
-        const cal = defaultCalendarFor(a.signalId) ?? (await promptCalendarPicker(a.signalId));
+        const cal =
+          defaultCalendarFor(a.signalId) ?? (await promptCalendarPicker(a.signalId, "signal"));
         if (!cal) return;
         const at = pixelToLocalIso(date, resolveCanvasGridY(o.gridY));
         const durationMin = a.durationMin ?? DEFAULT_SCHEDULE_MIN;
@@ -475,7 +479,7 @@ export function useTimelineDnd(opts: Opts) {
       // ── 7: routine → canvas (routineSchedule, 1회성 시간 배치) ────────
       if (a.from === "routine" && o.to === "canvas") {
         // routine은 routineId 기반 calendar 매핑이 없으므로 picker만(default lookup 없음).
-        const cal = await promptCalendarPicker(a.routineId);
+        const cal = await promptCalendarPicker(a.routineId, "routine");
         if (!cal) return;
         const at = pixelToLocalIso(date, resolveCanvasGridY(o.gridY));
         try {

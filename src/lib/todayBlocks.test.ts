@@ -176,6 +176,38 @@ describe("buildTodayBlocks", () => {
     expect(blocks.map((b) => b.kind)).toEqual(["event"]);
   });
 
+  it("synced routine master event is absorbed instead of rendering as an event job", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "R",
+        timeOfDay: "09:00",
+        timeOverride: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "master-1",
+        title: "R",
+        start: "2026-05-28T09:00:00",
+        end: "2026-05-28T09:30:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("routine");
+    expect(blocks[0].linkedEventId).toBe("master-1");
+    expect(blocks[0].calendarId).toBe("work-cal");
+  });
+
   it("plusMin preserves local time across hour boundary (no UTC drift)", () => {
     const signals = [
       {

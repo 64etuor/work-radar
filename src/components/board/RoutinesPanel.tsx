@@ -441,10 +441,12 @@ export function RoutinesPanel({
                 indicator={CHECK_INDICATOR}
               />
               <div className="body">
-                <div className="ttl">{r.title}</div>
+                <div className="ttl">
+                  <span className="ttl-text">{r.title}</span>
+                  {r.timeOfDay && <span className="ttl-time">{r.timeOfDay}</span>}
+                </div>
                 <div className="meta">
                   <span className="badge b-sched">{schedLabel(r)}</span>
-                  {r.timeOfDay && <span className="badge b-time">{r.timeOfDay}</span>}
                   <CardTagEditor
                     target={r}
                     tags={lifeWheelTags}

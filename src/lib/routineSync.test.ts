@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Project } from "@/bindings";
 
 import {
+  routineCalendarPickCandidates,
   routineSyncCandidates,
   routineSyncedLabel,
   safeParseSelectedCalendars,
@@ -97,6 +98,31 @@ describe("routineSyncCandidates", () => {
   it("선택 캘린더 없는 프로젝트는 후보 0(막다른 길 안내용)", () => {
     const empty = project({ id: "pe", kind: "personal", googleCalendarIds: null });
     expect(routineSyncCandidates([empty], "personal")).toEqual([]);
+  });
+});
+
+describe("routineCalendarPickCandidates", () => {
+  const personalA = project({
+    id: "pa",
+    kind: "personal",
+    googleCalendarIds: calsJson([{ id: "cal-me", summary: "내 캘린더" }]),
+  });
+  const workA = project({
+    id: "wa",
+    kind: "work",
+    googleCalendarIds: calsJson([{ id: "cal-work", summary: "업무" }]),
+  });
+
+  it("signal project id keeps picker scoped to that project", () => {
+    expect(routineCalendarPickCandidates([personalA, workA], "pa", null)).toEqual([
+      { id: "cal-me", summary: "내 캘린더", projectId: "pa" },
+    ]);
+  });
+
+  it("routine kind can pick work calendars without a signal project id", () => {
+    expect(routineCalendarPickCandidates([personalA, workA], null, "work")).toEqual([
+      { id: "cal-work", summary: "업무", projectId: "wa" },
+    ]);
   });
 });
 
