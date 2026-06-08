@@ -5,6 +5,14 @@ import {
   type Provider,
   type Role,
 } from "./config.ts";
+import {
+  DEFAULT_PRICE_TABLE,
+  affordable,
+  type BudgetCaps,
+  type BudgetSnapshot,
+  type PriceTable,
+} from "./budget.ts";
+import { exhaustedTerminal, type Terminal } from "./fallback.ts";
 import type { ResolvedPolicy } from "../repo/config.ts";
 
 export type Difficulty = "trivial" | "standard" | "hard";
@@ -13,6 +21,12 @@ type Tier = "cheap" | "mid" | "frontier";
 
 export interface ResolveBackendInput {
   difficulty?: Difficulty;
+}
+
+export interface ResolveBudgetContext {
+  caps?: BudgetCaps;
+  snapshot?: BudgetSnapshot;
+  priceTable?: PriceTable;
 }
 
 const DEFAULT_DIFFICULTY: Difficulty = "standard";
@@ -48,13 +62,33 @@ export function resolveBackendChain(
   role: Role,
   input: ResolveBackendInput,
   policy: ResolvedPolicy,
-): BackendChain {
+): BackendChain;
+export function resolveBackendChain(
+  role: Role,
+  input: ResolveBackendInput,
+  policy: ResolvedPolicy,
+  budget: ResolveBudgetContext,
+): BackendChain | Terminal;
+export function resolveBackendChain(
+  role: Role,
+  input: ResolveBackendInput,
+  policy: ResolvedPolicy,
+  budget?: ResolveBudgetContext,
+): BackendChain | Terminal {
   const configured = configuredChain(role, policy);
   const candidates = (configured ?? LEGACY_DEFAULT_BACKENDS[role]).chain.map((spec) => ({ ...spec }));
   for (const spec of candidates) assertProviderAllowed(role, spec);
 
   const difficulty = input.difficulty ?? DEFAULT_DIFFICULTY;
-  return { chain: orderByDifficulty(candidates, difficulty) };
+  const ordered = orderByDifficulty(candidates, difficulty);
+  if (!budget) return { chain: ordered };
+
+  const caps = budget.caps ?? policy.budget;
+  const snapshot = budget.snapshot ?? { spentTokens: 0, spentCostUsd: 0 };
+  const priceTable = budget.priceTable ?? policy.priceTable ?? DEFAULT_PRICE_TABLE;
+  const filtered = ordered.filter((spec) => affordable(spec, caps, snapshot, priceTable));
+  if (filtered.length === 0) return exhaustedTerminal(role);
+  return { chain: filtered };
 }
 
 function configuredChain(role: Role, policy: ResolvedPolicy): BackendChain | undefined {

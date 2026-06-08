@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import type { BackendSpec } from "../../src/backends/config.js";
 import { resolveBackendChain, type Difficulty } from "../../src/backends/resolve.js";
 import type { ResolvedPolicy } from "../../src/repo/config.js";
+import type { PriceTable } from "../../src/backends/budget.js";
 
 const BASE_POLICY: ResolvedPolicy = {
   kind: "work",
@@ -57,6 +58,92 @@ describe("resolveBackendChain", () => {
         },
       ],
     });
+  });
+
+  it("keeps M3 behavior byte-for-byte when budget context is absent", () => {
+    const policy = policyWithExecutor(MIXED_CHAIN);
+    const noBudget = resolveBackendChain("executor", { difficulty: "hard" }, policy);
+
+    expect(noBudget).toEqual({
+      chain: [
+        { provider: "claude", model: "claude-opus-4-1" },
+        { provider: "claude", model: "claude-sonnet-4-5" },
+        { provider: "codex", model: "gpt-5-codex-small" },
+      ],
+    });
+  });
+
+  it("filters unaffordable candidates after difficulty ordering so a cheaper codex backend becomes head", () => {
+    const priceTable: PriceTable = {
+      claude: {
+        "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+        "claude-sonnet-4-5": { estimatedTokens: 15_000, costPerStepUsd: 0.3 },
+      },
+      codex: {
+        "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+      },
+    };
+
+    const resolved = resolveBackendChain("executor", { difficulty: "hard" }, policyWithExecutor(MIXED_CHAIN), {
+      caps: { stepCostCapUsd: 0.05 },
+      snapshot: { spentTokens: 0, spentCostUsd: 0 },
+      priceTable,
+    });
+
+    expect(resolved).toEqual({
+      chain: [{ provider: "codex", model: "gpt-5-codex-small" }],
+    });
+  });
+
+  it("returns the role-correct terminal when every budget-filtered candidate is unaffordable", () => {
+    const priceTable: PriceTable = {
+      claude: {
+        "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+        "claude-sonnet-4-5": { estimatedTokens: 15_000, costPerStepUsd: 0.3 },
+      },
+      codex: {
+        "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+      },
+    };
+
+    const resolved = resolveBackendChain("executor", { difficulty: "hard" }, policyWithExecutor(MIXED_CHAIN), {
+      caps: { stepCostCapUsd: 0.001 },
+      snapshot: { spentTokens: 0, spentCostUsd: 0 },
+      priceTable,
+    });
+
+    expect(resolved).toEqual({ role: "executor", outcome: "stall" });
+  });
+
+  it("does not treat unknown model cost as free while caps are active", () => {
+    const resolved = resolveBackendChain(
+      "executor",
+      { difficulty: "hard" },
+      policyWithExecutor([{ provider: "claude", model: "missing-model" }]),
+      {
+        caps: { runCostCapUsd: 100 },
+        snapshot: { spentTokens: 0, spentCostUsd: 0 },
+        priceTable: {},
+      },
+    );
+
+    expect(resolved).toEqual({ role: "executor", outcome: "stall" });
+  });
+
+  it("budget filtering never lowers quorum or changes acceptance policy", () => {
+    const policy = policyWithExecutor(MIXED_CHAIN);
+    const before = JSON.stringify(policy);
+
+    resolveBackendChain("executor", { difficulty: "hard" }, policy, {
+      caps: { stepCostCapUsd: 0.001 },
+      snapshot: { spentTokens: 0, spentCostUsd: 0 },
+      priceTable: {},
+    });
+
+    expect(policy.reviewQuorum).toBe(2);
+    expect(policy.autonomyLevel).toBe("manual");
+    expect(policy.autoMode).toBe("off");
+    expect(JSON.stringify(policy)).toBe(before);
   });
 
   it("throws when deterministic appears in an executor or reviewer chain", () => {

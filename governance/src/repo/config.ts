@@ -4,6 +4,12 @@ import {
   type AutonomyEnvelope,
 } from "../conductor/envelope.ts";
 import { backendsConfigSchema, type BackendsConfig } from "../backends/config.ts";
+import {
+  budgetCapsSchema,
+  priceTableSchema,
+  type BudgetCaps,
+  type PriceTable,
+} from "../backends/budget.ts";
 
 // Per-repo governance config (spec 2026-06-07 §B/§C). PURE: parse/validate + resolve policy.
 // boule.config.json is the mutable settings surface (editable via `boule set` or the work-radar
@@ -50,6 +56,10 @@ export interface ResolvedPolicy {
   /** Per-role backend chains. undefined ⇒ env-derived defaults (consumed by the conductor/reviewer
    *  wiring; the fail-closed fallback runner lives in backends/fallback.ts). */
   backends?: BackendsConfig;
+  /** Optional pure budget caps. undefined ⇒ no budget filtering unless the caller supplies caps. */
+  budget?: BudgetCaps;
+  /** Optional provider/model pricing table. Unknown entries under active caps fail closed. */
+  priceTable?: PriceTable;
 }
 
 // Per-kind defaults. work = strict (manual gates, ≥2 review, all classes escalate); personal =
@@ -98,6 +108,8 @@ const overridesSchema = z
     // Configurable per-role agent backends + token-exhaustion fallback chains (backends/config.ts).
     // Omitted ⇒ the harness keeps its current env-derived backend defaults (backward compatible).
     backends: backendsConfigSchema.optional(),
+    budget: budgetCapsSchema.optional(),
+    priceTable: priceTableSchema.optional(),
   })
   .strict();
 
@@ -135,6 +147,8 @@ export function resolvePolicy(config: BouleConfig): ResolvedPolicy {
     allowedType2Actions: o.allowedType2Actions ?? base.allowedType2Actions,
     // No per-kind default: undefined ⇒ env-derived backend defaults downstream (additive surface).
     backends: o.backends,
+    budget: o.budget,
+    priceTable: o.priceTable,
   };
 }
 
