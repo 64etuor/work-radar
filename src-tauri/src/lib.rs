@@ -15,6 +15,7 @@ mod agent;
 mod api;
 mod cache;
 mod calendar;
+mod cmux_bridge;
 mod commands;
 // Phase 1: MCP 라운드트립 integration test(tests/mcp_roundtrip)가 `init_db`로 tempdir 풀을
 // 만들 수 있도록 crate 밖에서 보이게 한다(앱 마이그레이션 경로 재사용 — 하드코딩 금지).
@@ -310,6 +311,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         // cmux 워크스페이스 상태 (B1, best-effort 표시 전용 — INVARIANT #1: 결정 레일 미사용).
         commands::cmux_status,
         commands::cmux_focus_workspace,
+        commands::cmux_bridge_snapshot,
         // 외부 뉴스 페처 (PR B, 표시 전용 — INVARIANT #1: 큐/매트릭스 자동 주입 금지).
         commands::news_list_recent,
         commands::news_sources_available,

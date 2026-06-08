@@ -585,6 +585,7 @@ export const commands = {
 	 *  `cmux select-workspace --workspace <ref>`. 바이너리 부재·실패는 graceful(Ok(false), 에러 아님).
 	 */
 	cmuxFocusWorkspace: (reference: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cmux_focus_workspace", { reference })),
+	cmuxBridgeSnapshot: () => typedError<CmuxBridgeSnapshot, AppError>(__TAURI_INVOKE("cmux_bridge_snapshot")),
 	newsListRecent: () => typedError<NewsItem[], AppError>(__TAURI_INVOKE("news_list_recent")),
 	newsSourcesAvailable: () => typedError<NewsSourceMeta[], AppError>(__TAURI_INVOKE("news_sources_available")),
 	newsSourcesSetEnabled: (source: string, enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("news_sources_set_enabled", { source, enabled })),
@@ -964,6 +965,33 @@ export type CliToolStatus = {
 	/**  사람이 읽을 상태 상세 (토큰 본문 미포함). */
 	detail: string,
 };
+
+export type CmuxBridgeRemoteRef = {
+	title: string | null,
+	chatId: string | null,
+	threadId: string | null,
+};
+
+export type CmuxBridgeSession = {
+	transport: CmuxBridgeTransport,
+	state: CmuxBridgeSessionState,
+	sessionId: string | null,
+	surface: string | null,
+	paneName: string | null,
+	workspaceTitle: string | null,
+	cwd: string | null,
+	remote: CmuxBridgeRemoteRef,
+};
+
+export type CmuxBridgeSessionState = "active" | "archived" | "stale";
+
+export type CmuxBridgeSnapshot = {
+	transports: CmuxBridgeTransport[],
+	sessions: CmuxBridgeSession[],
+	warnings: string[],
+};
+
+export type CmuxBridgeTransport = "telegram" | "slack";
 
 export type CmuxStatus = {
 	available: boolean,
