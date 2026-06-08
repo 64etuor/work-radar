@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 
 import type { BackendSpec } from "../../src/backends/config.js";
-import { resolveBackendChain, type Difficulty } from "../../src/backends/resolve.js";
+import {
+  resolveBackendChain,
+  selectExecutorChain,
+  type Difficulty,
+} from "../../src/backends/resolve.js";
 import type { ResolvedPolicy } from "../../src/repo/config.js";
 import type { PriceTable } from "../../src/backends/budget.js";
 
@@ -42,6 +46,51 @@ describe("resolveBackendChain", () => {
 
   it("hard difficulty promotes a frontier claude backend to head", () => {
     expect(headFor("hard")).toEqual({ provider: "claude", model: "claude-opus-4-1" });
+  });
+
+  it("typed executor routing override promotes the matching configured backend to head", () => {
+    const policy: ResolvedPolicy = {
+      ...policyWithExecutor(MIXED_CHAIN),
+      routing: {
+        executor: {
+          hard: { provider: "codex", model: "gpt-5-codex-small" },
+        },
+      },
+    };
+
+    expect(resolveBackendChain("executor", { difficulty: "hard" }, policy)).toEqual({
+      chain: [
+        { provider: "codex", model: "gpt-5-codex-small" },
+        { provider: "claude", model: "claude-opus-4-1" },
+        { provider: "claude", model: "claude-sonnet-4-5" },
+      ],
+    });
+  });
+
+  it("routing omitted keeps difficulty tier ordering unchanged", () => {
+    expect(resolveBackendChain("executor", { difficulty: "hard" }, policyWithExecutor(MIXED_CHAIN))).toEqual({
+      chain: [
+        { provider: "claude", model: "claude-opus-4-1" },
+        { provider: "claude", model: "claude-sonnet-4-5" },
+        { provider: "codex", model: "gpt-5-codex-small" },
+      ],
+    });
+  });
+
+  it("ignores routing selectors that do not match a configured executor backend", () => {
+    const policy: ResolvedPolicy = {
+      ...policyWithExecutor(MIXED_CHAIN),
+      routing: {
+        executor: {
+          hard: { provider: "codex", model: "not-configured" },
+        },
+      },
+    };
+
+    expect(resolveBackendChain("executor", { difficulty: "hard" }, policy).chain[0]).toEqual({
+      provider: "claude",
+      model: "claude-opus-4-1",
+    });
   });
 
   it("omitted role backends resolve to the legacy single-backend defaults", () => {
@@ -161,6 +210,55 @@ describe("resolveBackendChain", () => {
         },
       ),
     ).toThrow(/deterministic/);
+  });
+
+  it("still rejects deterministic as an executor backend when routing selects it", () => {
+    const policy: ResolvedPolicy = {
+      ...BASE_POLICY,
+      backends: { executor: { chain: [{ provider: "deterministic" }] } },
+      routing: { executor: { hard: { provider: "deterministic" } } },
+    };
+
+    expect(() => resolveBackendChain("executor", { difficulty: "hard" }, policy)).toThrow(
+      /deterministic/,
+    );
+  });
+
+  it("selectExecutorChain composes explicit difficulty over heuristic signals", () => {
+    const selected = selectExecutorChain(
+      { text: "tiny targeted edit", difficulty: "trivial", touchedFileCount: 12 },
+      policyWithExecutor(MIXED_CHAIN),
+    );
+
+    expect(selected).toEqual({
+      chain: [
+        { provider: "codex", model: "gpt-5-codex-small" },
+        { provider: "claude", model: "claude-sonnet-4-5" },
+        { provider: "claude", model: "claude-opus-4-1" },
+      ],
+    });
+  });
+
+  it("selectExecutorChain uses heuristic difficulty and budget fail-closed terminal", () => {
+    const selected = selectExecutorChain(
+      { text: "wide refactor", touchedFileCount: 12 },
+      policyWithExecutor(MIXED_CHAIN),
+      {
+        caps: { stepCostCapUsd: 0.001 },
+        snapshot: { spentTokens: 0, spentCostUsd: 0 },
+        priceTable: {
+          claude: {
+            "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+            "claude-sonnet-4-5": { estimatedTokens: 15_000, costPerStepUsd: 0.3 },
+          },
+          codex: {
+            "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+          },
+        },
+      },
+    );
+
+    expect(selected).toEqual({ role: "executor", outcome: "stall" });
   });
 
   it("is pure and deterministic for repeated inputs", () => {

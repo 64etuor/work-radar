@@ -5,6 +5,7 @@ import {
   type Provider,
   type Role,
 } from "./config.ts";
+import { inferDifficulty, type Difficulty, type DifficultySignals } from "./difficulty.ts";
 import {
   DEFAULT_PRICE_TABLE,
   affordable,
@@ -15,7 +16,7 @@ import {
 import { exhaustedTerminal, type Terminal } from "./fallback.ts";
 import type { ResolvedPolicy } from "../repo/config.ts";
 
-export type Difficulty = "trivial" | "standard" | "hard";
+export type { Difficulty };
 
 type Tier = "cheap" | "mid" | "frontier";
 
@@ -27,6 +28,11 @@ export interface ResolveBudgetContext {
   caps?: BudgetCaps;
   snapshot?: BudgetSnapshot;
   priceTable?: PriceTable;
+}
+
+export interface ExecutorStepInput extends DifficultySignals {
+  text?: string;
+  difficulty?: Difficulty;
 }
 
 const DEFAULT_DIFFICULTY: Difficulty = "standard";
@@ -80,7 +86,7 @@ export function resolveBackendChain(
   for (const spec of candidates) assertProviderAllowed(role, spec);
 
   const difficulty = input.difficulty ?? DEFAULT_DIFFICULTY;
-  const ordered = orderByDifficulty(candidates, difficulty);
+  const ordered = applyRoutingHead(role, orderByDifficulty(candidates, difficulty), difficulty, policy);
   if (!budget) return { chain: ordered };
 
   const caps = budget.caps ?? policy.budget;
@@ -89,6 +95,25 @@ export function resolveBackendChain(
   const filtered = ordered.filter((spec) => affordable(spec, caps, snapshot, priceTable));
   if (filtered.length === 0) return exhaustedTerminal(role);
   return { chain: filtered };
+}
+
+export function selectExecutorChain(
+  step: ExecutorStepInput,
+  policy: ResolvedPolicy,
+): BackendChain;
+export function selectExecutorChain(
+  step: ExecutorStepInput,
+  policy: ResolvedPolicy,
+  budget: ResolveBudgetContext,
+): BackendChain | Terminal;
+export function selectExecutorChain(
+  step: ExecutorStepInput,
+  policy: ResolvedPolicy,
+  budget?: ResolveBudgetContext,
+): BackendChain | Terminal {
+  const difficulty = step.difficulty ?? inferDifficulty(step);
+  if (!budget) return resolveBackendChain("executor", { difficulty }, policy);
+  return resolveBackendChain("executor", { difficulty }, policy, budget);
 }
 
 function configuredChain(role: Role, policy: ResolvedPolicy): BackendChain | undefined {
@@ -118,6 +143,27 @@ function orderByDifficulty(candidates: BackendSpec[], difficulty: Difficulty): B
       return a.index - b.index;
     })
     .map(({ spec }) => spec);
+}
+
+function applyRoutingHead(
+  role: Role,
+  ordered: BackendSpec[],
+  difficulty: Difficulty,
+  policy: ResolvedPolicy,
+): BackendSpec[] {
+  if (role !== "executor") return ordered;
+  const selector = policy.routing?.executor?.[difficulty];
+  if (!selector) return ordered;
+  const match = ordered.find((spec) => matchesSelector(spec, selector));
+  if (!match) return ordered;
+  return [match, ...ordered.filter((spec) => spec !== match)];
+}
+
+function matchesSelector(spec: BackendSpec, selector: BackendSpec): boolean {
+  if (spec.provider !== selector.provider) return false;
+  if (selector.model !== undefined && spec.model !== selector.model) return false;
+  if (selector.command !== undefined && spec.command !== selector.command) return false;
+  return true;
 }
 
 function inferTier(spec: BackendSpec): Tier {

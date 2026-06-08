@@ -253,6 +253,7 @@ server.registerTool(
           z.string(),
           z.object({
             text: z.string(),
+            difficulty: z.enum(["trivial", "standard", "hard"]).optional(),
             check: z.object({ command: z.string().optional(), artifact: z.string().optional() }).optional(),
           }),
         ]),
