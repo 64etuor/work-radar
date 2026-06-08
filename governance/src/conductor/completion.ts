@@ -1,12 +1,15 @@
 import { access } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import type { BackendSpec } from "../backends/config.ts";
+import { runWithFallback, type AttemptError } from "../backends/fallback.ts";
 import { deriveConductorState, type PlanStepCheck } from "./conductor.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import type { GovEvent } from "../event/event.ts";
 import { plansOf } from "../plan/plan.ts";
 import { sessionsOf, deriveSessionState, type SessionState } from "../session/session.ts";
 import { completeTask } from "../task/handlers.ts";
+import type { ResolvedPolicy } from "../repo/config.ts";
 
 export interface CompletionDeps {
   pathExists(path: string): Promise<boolean>;
@@ -29,12 +32,36 @@ export const nodeCompletionDeps: CompletionDeps = {
 };
 
 export type CompletionDecision = "pass" | "needs_human" | "wait";
+export type EvaluationVerdict = "pass" | "fail" | "inconclusive";
+export interface EvaluationRequest {
+  taskId: string;
+  sessionId: string;
+  stepPrompt: string;
+  worktreeDiff: string;
+  backend: BackendSpec;
+}
+export type EvaluateFnResult =
+  | { ok: true; verdict: EvaluationVerdict; rationale: string }
+  | { ok: false; error: AttemptError };
+export type EvaluateFn = (req: EvaluationRequest) => Promise<EvaluateFnResult>;
+
+export interface CompletionGateOptions {
+  policy?: ResolvedPolicy;
+  evaluate?: EvaluateFn;
+}
+
+export interface CompletionRunOptions extends CompletionGateOptions {
+  readWorktreeDiff?: (worktreePath: string | null) => Promise<string>;
+}
+
 export interface CompletionGateInput {
   taskId: string;
   sessionId: string;
   taskActive: boolean;
   sessionTerminal: boolean;
   hasHint: boolean;
+  stepPrompt?: string;
+  worktreeDiff?: string;
   check?: PlanStepCheck;
   worktreePath: string | null;
 }
@@ -43,21 +70,26 @@ export interface CompletionGateResult {
   reason: string;
 }
 
-export async function evaluateCompletionGate(
+const DETERMINISTIC_RUNG: BackendSpec = { provider: "deterministic" };
+
+function evaluatorChain(policy: ResolvedPolicy | undefined): BackendSpec[] {
+  const configured = policy?.backends?.evaluator?.chain;
+  if (!configured) return [DETERMINISTIC_RUNG];
+  return [...configured.filter((spec) => spec.provider !== "deterministic"), DETERMINISTIC_RUNG];
+}
+
+async function evaluateDeterministicCheck(
   input: CompletionGateInput,
   deps: CompletionDeps,
-): Promise<CompletionGateResult> {
-  if (!input.taskActive) return { decision: "wait", reason: "task is not active" };
-  if (!input.sessionTerminal) return { decision: "wait", reason: "session is not terminal" };
-  if (!input.hasHint) return { decision: "wait", reason: "no executor_reported_done hint" };
+): Promise<{ verdict: EvaluationVerdict; rationale: string }> {
   if (!input.check?.command && !input.check?.artifact) {
-    return { decision: "needs_human", reason: "no deterministic check contract" };
+    return { verdict: "fail", rationale: "no deterministic check contract" };
   }
 
   if (input.check.command) {
     try {
       const r = await deps.runCommand(input.check.command, input.worktreePath);
-      if (r.status === 0) return { decision: "pass", reason: "check.command exited 0" };
+      if (r.status === 0) return { verdict: "pass", rationale: "check.command exited 0" };
     } catch {
       // fall through to artifact, if present; otherwise fail closed below.
     }
@@ -68,11 +100,52 @@ export async function evaluateCompletionGate(
       ? input.check.artifact
       : join(input.worktreePath ?? "", input.check.artifact);
     if (await deps.pathExists(artifactPath)) {
-      return { decision: "pass", reason: "check.artifact exists" };
+      return { verdict: "pass", rationale: "check.artifact exists" };
     }
   }
 
-  return { decision: "needs_human", reason: "deterministic check was not satisfied" };
+  return { verdict: "fail", rationale: "deterministic check was not satisfied" };
+}
+
+export async function evaluateCompletionGate(
+  input: CompletionGateInput,
+  deps: CompletionDeps,
+  options: CompletionGateOptions = {},
+): Promise<CompletionGateResult> {
+  if (!input.taskActive) return { decision: "wait", reason: "task is not active" };
+  if (!input.sessionTerminal) return { decision: "wait", reason: "session is not terminal" };
+  if (!input.hasHint) return { decision: "wait", reason: "no executor_reported_done hint" };
+
+  let lastRationale = "no evaluator rung passed";
+  const fallback = await runWithFallback<CompletionGateResult>(
+    "evaluator",
+    evaluatorChain(options.policy),
+    async (backend) => {
+      const result =
+        backend.provider === "deterministic"
+          ? { ok: true as const, ...(await evaluateDeterministicCheck(input, deps)) }
+          : options.evaluate
+            ? await options.evaluate({
+                taskId: input.taskId,
+                sessionId: input.sessionId,
+                stepPrompt: input.stepPrompt ?? "",
+                worktreeDiff: input.worktreeDiff ?? "",
+                backend,
+              })
+            : { ok: false as const, error: { kind: "token_exhausted" as const } };
+
+      if (!result.ok) return result;
+      lastRationale = result.rationale;
+      if (result.verdict === "pass") {
+        return { ok: true, value: { decision: "pass", reason: result.rationale } };
+      }
+      // A non-pass judgement is not a completion signal. Continue to later rungs; exhaustion still
+      // terminates as evaluator:needs_human via runWithFallback.
+      return { ok: false, error: { kind: "transient" } };
+    },
+  );
+  if (fallback.ok) return fallback.value;
+  return { decision: "needs_human", reason: lastRationale };
 }
 
 export interface CompletionPassSummary {
@@ -118,6 +191,7 @@ export async function completeReportedDone(
   deps: CompletionDeps = nodeCompletionDeps,
   now: Date,
   rand: number,
+  options: CompletionRunOptions = {},
 ): Promise<CompletionPassSummary> {
   const summary: CompletionPassSummary = { completed: 0, needsHuman: 0, waited: 0 };
   const all = await readAllEvents(workspaceDir);
@@ -128,6 +202,7 @@ export async function completeReportedDone(
     const conductor = deriveConductorState(plan, all);
     for (const step of conductor.steps) {
       if (!step.taskId || !step.sessionId) continue;
+      const worktreeDiff = options.readWorktreeDiff ? await options.readWorktreeDiff(step.worktreePath) : "";
       const result = await evaluateCompletionGate(
         {
           taskId: step.taskId,
@@ -135,10 +210,13 @@ export async function completeReportedDone(
           taskActive: step.taskPhase === "active",
           sessionTerminal: isSessionTerminal(sessions.get(step.sessionId)),
           hasHint: hintsFor(all, step.taskId, step.sessionId).length > 0,
+          stepPrompt: step.text,
+          worktreeDiff,
           ...(step.check ? { check: step.check } : {}),
           worktreePath: step.worktreePath,
         },
         deps,
+        options,
       );
       if (result.decision === "wait") {
         summary.waited++;

@@ -8,7 +8,9 @@ import { stubAdapter } from "../../src/conductor/adapter.js";
 import {
   completeReportedDone,
   evaluateCompletionGate,
+  type EvaluateFn,
   type CompletionDeps,
+  type CompletionRunOptions,
 } from "../../src/conductor/completion.js";
 import { completeTaskTool } from "../../src/mcp/taskCompletion.js";
 import { reportTaskDone } from "../../src/task/handlers.js";
@@ -16,6 +18,7 @@ import { readAllEvents } from "../../src/decision/readEvents.js";
 import { writeEvent } from "../../src/event/writeEvent.js";
 import { generateId } from "../../src/event/id.js";
 import type { GovEvent } from "../../src/event/event.js";
+import type { ResolvedPolicy } from "../../src/repo/config.js";
 
 let dir: string;
 const at = (s: number) => new Date(Date.UTC(2026, 5, 8, 12, 0, s));
@@ -36,6 +39,24 @@ const passDeps: CompletionDeps = {
 const failDeps: CompletionDeps = {
   pathExists: async () => false,
   runCommand: async () => ({ status: 2 }),
+};
+
+const evaluatorPolicy: ResolvedPolicy = {
+  kind: "work",
+  autonomyLevel: "manual",
+  autoMode: "off",
+  reviewQuorum: 2,
+  forbiddenDecisionClasses: [
+    "scope",
+    "architecture",
+    "irreversible-design",
+    "security",
+    "product-behavior",
+    "dependency",
+    "data-loss",
+  ],
+  allowedType2Actions: ["edit", "test", "lint"],
+  backends: { evaluator: { chain: [{ provider: "codex", model: "judge" }] } },
 };
 
 async function activeStep(
@@ -96,6 +117,75 @@ describe("executor completion hints", () => {
 });
 
 describe("evaluateCompletionGate", () => {
+  it("evaluator configured + judge PASS => pass", async () => {
+    const seen: string[] = [];
+    const evaluate: EvaluateFn = async (req) => {
+      seen.push(`${req.backend.provider}:${req.stepPrompt}:${req.worktreeDiff}`);
+      return { ok: true, verdict: "pass", rationale: "accepted" };
+    };
+
+    const r = await evaluateCompletionGate(
+      {
+        taskId: "t",
+        sessionId: "s",
+        taskActive: true,
+        sessionTerminal: true,
+        hasHint: true,
+        stepPrompt: "implement slice",
+        worktreeDiff: "diff --git a/x b/x",
+        worktreePath: "/wt",
+      },
+      passDeps,
+      { policy: evaluatorPolicy, evaluate },
+    );
+
+    expect(r.decision).toBe("pass");
+    expect(seen).toEqual(["codex:implement slice:diff --git a/x b/x"]);
+  });
+
+  it("evaluator configured + judge FAIL + failed deterministic check => needs_human", async () => {
+    const evaluate: EvaluateFn = async () => ({ ok: true, verdict: "fail", rationale: "missing acceptance" });
+
+    const r = await evaluateCompletionGate(
+      {
+        taskId: "t",
+        sessionId: "s",
+        taskActive: true,
+        sessionTerminal: true,
+        hasHint: true,
+        stepPrompt: "implement slice",
+        check: { command: "pnpm test" },
+        worktreeDiff: "diff",
+        worktreePath: "/wt",
+      },
+      failDeps,
+      { policy: evaluatorPolicy, evaluate },
+    );
+
+    expect(r.decision).toBe("needs_human");
+  });
+
+  it("evaluator chain exhausted (all token_exhausted) => needs_human, not pass", async () => {
+    const evaluate: EvaluateFn = async () => ({ ok: false, error: { kind: "token_exhausted" } });
+
+    const r = await evaluateCompletionGate(
+      {
+        taskId: "t",
+        sessionId: "s",
+        taskActive: true,
+        sessionTerminal: true,
+        hasHint: true,
+        stepPrompt: "implement slice",
+        worktreeDiff: "diff",
+        worktreePath: "/wt",
+      },
+      passDeps,
+      { policy: evaluatorPolicy, evaluate },
+    );
+
+    expect(r.decision).toBe("needs_human");
+  });
+
   it("hint + terminal + satisfied check => pass", async () => {
     const r = await evaluateCompletionGate(
       {
@@ -150,6 +240,11 @@ describe("evaluateCompletionGate", () => {
   });
 
   it("no hint, or session not terminal => wait with no completion attempt", async () => {
+    let attempts = 0;
+    const evaluate: EvaluateFn = async () => {
+      attempts++;
+      return { ok: true, verdict: "pass", rationale: "accepted" };
+    };
     const noHint = await evaluateCompletionGate(
       {
         taskId: "t",
@@ -161,6 +256,7 @@ describe("evaluateCompletionGate", () => {
         worktreePath: "/wt",
       },
       passDeps,
+      { policy: evaluatorPolicy, evaluate },
     );
     const running = await evaluateCompletionGate(
       {
@@ -173,13 +269,60 @@ describe("evaluateCompletionGate", () => {
         worktreePath: "/wt",
       },
       passDeps,
+      { policy: evaluatorPolicy, evaluate },
     );
     expect(noHint.decision).toBe("wait");
     expect(running.decision).toBe("wait");
+    expect(attempts).toBe(0);
   });
 });
 
 describe("completeReportedDone", () => {
+  it("evaluator configured + judge PASS => writes task_completed", async () => {
+    const { taskId, sessionId } = await activeStep("step a");
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const r = await completeReportedDone(dir, passDeps, at(30), 0.6, {
+      policy: evaluatorPolicy,
+      evaluate: async () => ({ ok: true, verdict: "pass", rationale: "accepted" }),
+      readWorktreeDiff: async () => "diff",
+    });
+
+    expect(r.completed).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(1);
+  });
+
+  it("evaluator configured + judge FAIL + no check => needs_human, task stays open", async () => {
+    const { taskId, sessionId } = await activeStep("step a");
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const r = await completeReportedDone(dir, passDeps, at(30), 0.6, {
+      policy: evaluatorPolicy,
+      evaluate: async () => ({ ok: true, verdict: "fail", rationale: "missing acceptance" }),
+      readWorktreeDiff: async () => "diff",
+    });
+
+    expect(r.needsHuman).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
+  });
+
+  it("evaluator chain exhausted => needs_human, task stays open", async () => {
+    const { taskId, sessionId } = await activeStep("step a");
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const r = await completeReportedDone(dir, passDeps, at(30), 0.6, {
+      policy: evaluatorPolicy,
+      evaluate: async () => ({ ok: false, error: { kind: "token_exhausted" } }),
+      readWorktreeDiff: async () => "diff",
+    });
+
+    expect(r.needsHuman).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
+  });
+
   it("hint + terminal + satisfied check => writes task_completed", async () => {
     const { taskId, sessionId } = await activeStep({ text: "step a", check: { artifact: "done.txt" } });
     await reportTaskDone(dir, { taskId }, at(20), 0.4);
@@ -236,6 +379,21 @@ describe("completeReportedDone", () => {
 
     expect((await completeReportedDone(dir, passDeps, at(30), 0.6)).completed).toBe(1);
     expect((await completeReportedDone(dir, passDeps, at(40), 0.7)).completed).toBe(0);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(1);
+  });
+
+  it("idempotency: evaluator pass does not double-write task_completed", async () => {
+    const { taskId, sessionId } = await activeStep("step a");
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const opts: CompletionRunOptions = {
+      policy: evaluatorPolicy,
+      evaluate: async () => ({ ok: true, verdict: "pass", rationale: "accepted" }),
+      readWorktreeDiff: async () => "diff",
+    };
+    expect((await completeReportedDone(dir, passDeps, at(30), 0.6, opts)).completed).toBe(1);
+    expect((await completeReportedDone(dir, passDeps, at(40), 0.7, opts)).completed).toBe(0);
     expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(1);
   });
 });
