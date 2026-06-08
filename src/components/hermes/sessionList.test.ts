@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { HermesMessageRow } from "@/bindings";
 
-import { autoTitleFrom, messagePreview, relativeTime, rowsToMessages } from "./sessionList";
+import {
+  autoTitleFrom,
+  messagePreview,
+  relativeTime,
+  rowsToMessages,
+  shouldAutoTitle,
+} from "./sessionList";
 import type { TabState } from "./useHermesTabs";
 
 describe("autoTitleFrom", () => {
@@ -11,8 +17,26 @@ describe("autoTitleFrom", () => {
     const long = "a".repeat(80);
     expect(autoTitleFrom(long).length).toBeLessThanOrEqual(40);
   });
+  it("truncates with an ellipsis when over the limit", () => {
+    const long = "가".repeat(60);
+    const title = autoTitleFrom(long);
+    expect(title.endsWith("…")).toBe(true);
+    expect(title.length).toBe(40);
+  });
+  it("collapses internal whitespace/newlines", () => {
+    expect(autoTitleFrom("qcy 이어폰\n좋다는데   디시")).toBe("qcy 이어폰 좋다는데 디시");
+  });
   it("falls back for empty", () => {
     expect(autoTitleFrom("   ")).toBe("새 세션");
+  });
+});
+
+describe("shouldAutoTitle", () => {
+  it("titles a default-named or empty session, not a manually renamed one", () => {
+    expect(shouldAutoTitle("새 세션")).toBe(true);
+    expect(shouldAutoTitle("")).toBe(true);
+    expect(shouldAutoTitle("   ")).toBe(true);
+    expect(shouldAutoTitle("쿠팡아아아")).toBe(false); // 사용자가 직접 바꾼 이름은 보존
   });
 });
 

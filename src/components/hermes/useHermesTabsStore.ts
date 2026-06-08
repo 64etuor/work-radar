@@ -142,13 +142,16 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       }
     },
 
+    // 에이전트 프로세스만 재시작한다(ACP child kill→respawn). **대화 기록은 보존**한다 —
+    // reset-tab(메시지 wipe)을 호출하지 않는다. 다음 전송 때 Slice 5 replay 가 직전 맥락을
+    // 다시 먹여 이어간다. (이전 버그: 이 버튼이 reset-tab 으로 대화를 날려 "초기화"처럼 보였음.)
     restart: async (tabId) => {
       try {
         await unwrap(commands.hermesAgentCloseTab(tabId));
       } catch {
         // best-effort
       }
-      dispatch({ type: "reset-tab", tabId });
+      dispatch({ type: "set-status", tabId, status: "idle" });
       try {
         await unwrap(commands.hermesAgentOpenTab(tabId));
       } catch {

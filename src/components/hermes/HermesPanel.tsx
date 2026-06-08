@@ -335,8 +335,8 @@ function PanelHeader({
             variant="ghost"
             className="hover:bg-muted/60 size-7 p-0"
             onClick={() => void onRestart()}
-            aria-label="새 세션"
-            title="새 세션 시작"
+            aria-label="에이전트 재시작"
+            title="에이전트 재시작 (대화 유지)"
           >
             <RotateCcw className="size-3.5" />
           </Button>

@@ -103,6 +103,9 @@ export function HermesSidebar({
                       onChange={(e) => setDraft(e.target.value)}
                       onBlur={() => commitRename(t.id)}
                       onKeyDown={(e) => {
+                        // 행(role=button)의 keydown 핸들러가 Space/Enter 를 preventDefault 로
+                        // 삼키지 않도록 입력 단계에서 전파를 막는다(스페이스 입력 가능).
+                        e.stopPropagation();
                         if (e.key === "Enter") commitRename(t.id);
                         if (e.key === "Escape") setEditingId(null);
                       }}
