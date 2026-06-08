@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deriveConductorState, parsePlanSteps } from "../../src/conductor/conductor.js";
+import { deriveConductorState, parsePlanStepRecords, parsePlanSteps } from "../../src/conductor/conductor.js";
 import type { GovEvent, EventType } from "../../src/event/event.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
 import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
@@ -23,6 +23,12 @@ const accepted = ev("plan_accepted", "evt_acc", [PLAN_ID], "", "user");
 describe("parsePlanSteps", () => {
   it("extracts numbered steps, stripping the N. prefix and ignoring the intent line", () => {
     expect(parsePlanSteps(TWO_STEP)).toEqual(["step a", "step b"]);
+  });
+  it("golden/back-compat: a plan step with no check parses fine", () => {
+    expect(parsePlanStepRecords(TWO_STEP)).toEqual([
+      { text: "step a" },
+      { text: "step b" },
+    ]);
   });
   it("returns [] for a body with no numbered steps", () => {
     expect(parsePlanSteps("just an intent line")).toEqual([]);

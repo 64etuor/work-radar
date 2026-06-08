@@ -18,6 +18,7 @@ export type EventType =
   | "task_blocked"      // v3 Phase A: task active → blocked (carries reason)
   | "task_completed"    // v3 Phase A: task active → done (guarded: no open decision_blocked)
   | "task_cancelled"    // v3 Phase A: task → cancelled (terminal)
+  | "executor_reported_done" // M1: verdict-free hint that executor reported/exited done; NOT terminal
   | "plan_proposed"     // v3 Phase B: Planner emits one draft plan (actor=planner, propose-only)
   | "plan_accepted"     // v3 Phase B: human gate — draft/needs_revision → active (actor=user)
   | "plan_revised"      // v3 Phase B: active → needs_revision (revision requested, carries reason)

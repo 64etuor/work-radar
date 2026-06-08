@@ -169,6 +169,7 @@ describe("clampMaxSteps / tickExitCode", () => {
     expect(tickExitCode("idle")).toBe(0);
     expect(tickExitCode("in_flight")).toBe(0);
     expect(tickExitCode("halted_decision")).toBe(10);
+    expect(tickExitCode("needs_human")).toBe(10);
     expect(tickExitCode("stalled")).toBe(10);
     expect(tickExitCode("readiness_failed")).toBe(1);
     expect(tickExitCode("infra_failed")).toBe(1);

@@ -12,11 +12,11 @@ import { createTask, status, observations } from "./handlers.ts";
 import {
   startTask,
   blockTask,
-  completeTask,
   cancelTask,
   listTasks,
   taskTrail,
 } from "../task/handlers.ts";
+import { completeTaskTool } from "./taskCompletion.ts";
 import {
   proposePlan,
   acceptPlan,
@@ -199,13 +199,13 @@ server.registerTool(
 server.registerTool(
   "complete_task",
   {
-    description: "task를 done으로 전이 (미해소 decision_blocked 있으면 거부)",
+    description: "executor가 완료/정상 종료를 보고하는 verdict-free 힌트 (완료 판정 아님)",
     inputSchema: { taskId: z.string() },
   },
   async ({ taskId }) => {
-    const r = await completeTask(WORKSPACE, { taskId }, nowFn(), randFn());
+    const r = await completeTaskTool(WORKSPACE, { taskId }, nowFn(), randFn());
     return {
-      content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }],
+      content: [{ type: "text", text: r.ok ? `reported: ${r.eventId}` : `REFUSED: ${r.reason}` }],
     };
   },
 );
@@ -251,7 +251,19 @@ server.registerTool(
   {
     description:
       "Planner: intent + 단계 목록을 draft plan_proposed 이벤트 하나로 기록 (propose-only). specId=연결할 spec(선택)",
-    inputSchema: { intent: z.string(), steps: z.array(z.string()), specId: z.string().optional() },
+    inputSchema: {
+      intent: z.string(),
+      steps: z.array(
+        z.union([
+          z.string(),
+          z.object({
+            text: z.string(),
+            check: z.object({ command: z.string().optional(), artifact: z.string().optional() }).optional(),
+          }),
+        ]),
+      ),
+      specId: z.string().optional(),
+    },
   },
   async ({ intent, steps, specId }) => {
     const r = await proposePlan(WORKSPACE, { intent, steps, specId }, nowFn(), randFn());

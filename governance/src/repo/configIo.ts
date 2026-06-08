@@ -21,7 +21,7 @@ export function serverEntrypoint(): string {
 }
 
 /** Absolute path to this package's `boule` CLI entrypoint. The codex executor's completion wrapper
- *  shells `node <cliEntrypoint> complete-task` on clean exit, so resolve it install-relative (same
+ *  shells `node <cliEntrypoint> report-exit` on clean exit, so resolve it install-relative (same
  *  install as serverEntrypoint), never under the target repo. */
 export function cliEntrypoint(): string {
   return resolve(fileURLToPath(new URL("../cli/boule.ts", import.meta.url)));

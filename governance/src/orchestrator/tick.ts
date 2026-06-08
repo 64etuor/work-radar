@@ -1,6 +1,7 @@
 import { readAllEvents } from "../decision/readEvents.ts";
 import { plansOf } from "../plan/plan.ts";
 import { deriveConductorState } from "../conductor/conductor.ts";
+import { completeReportedDone, type CompletionDeps } from "../conductor/completion.ts";
 import { isTerminalPlanPhase } from "./dispatch/policy.ts";
 import { projectTasks } from "../task/project.ts";
 import { autoAccept } from "./autoAccept.ts";
@@ -17,6 +18,7 @@ export type TickOutcome =
   | "idle" // nothing to do (no active non-terminal plan with pending work)
   | "in_flight" // active plan(s) exist but their step is already running — wait for next tick
   | "halted_decision" // an open decision_blocked — human must choose
+  | "needs_human" // completion evaluator could not pass deterministically — human must inspect
   | "stalled" // a crashed-session in-flight task — human must re-dispatch/recover
   | "readiness_failed" // infra ok but posture not unattended-safe (e.g. observer not live)
   | "infra_failed"; // preflight infra missing (cmux/git)
@@ -33,7 +35,7 @@ export function clampMaxSteps(raw: string | boolean | undefined, ceilingRaw?: st
 /** outcome → process exit code: 0 ok (advanced/idle/in_flight) · 10 needs-human (halted/stalled) ·
  *  1 broken-env (readiness/infra failed). Lets cron alert on 10 (page a human) vs 1 (fix infra). */
 export function tickExitCode(outcome: TickOutcome): number {
-  if (outcome === "halted_decision" || outcome === "stalled") return 10;
+  if (outcome === "halted_decision" || outcome === "needs_human" || outcome === "stalled") return 10;
   if (outcome === "readiness_failed" || outcome === "infra_failed") return 1;
   return 0; // advanced | idle | in_flight
 }
@@ -62,6 +64,7 @@ export interface TickDeps {
   /** Stall count the caller already computed (also fed to evaluateReadiness) — avoids a re-read and
    *  categorizes the not-ready outcome structurally (no blocker-string regex). */
   stalledCount: number;
+  completionDeps?: CompletionDeps;
 }
 
 /** One bounded heartbeat: readiness gate → halt/stall gate → autoAccept(level) → autoDispatch(<=N).
@@ -102,6 +105,15 @@ export async function runTick(
     .filter((s) => !isTerminalPlanPhase(s.planPhase));
   const haltedPlans = activeStates.filter((s) => s.halted).map((s) => s.planId);
   if (haltedPlans.length) return { ...base, outcome: "halted_decision", haltedPlans };
+
+  const completion = await completeReportedDone(workspaceDir, deps.completionDeps, now, rand);
+  if (completion.needsHuman > 0) {
+    return {
+      ...base,
+      outcome: "needs_human",
+      blockers: [...base.blockers, `${completion.needsHuman} completion check(s) need a human`],
+    };
+  }
 
   // Conduct — auto-accept per autonomyLevel (orchestrator-only; honest actor:system), then advance
   // at most maxSteps ready steps (the cap is enforced under the dispatch boundary).

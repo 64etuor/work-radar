@@ -8,7 +8,7 @@ export interface CreateWorktreeSpec {
 export interface SpawnSessionSpec {
   worktreePath: string;
   stepIndex: number;
-  /** the bound task — the codex completion wrapper passes it to `complete-task` on clean exit. */
+  /** the bound task — the codex completion wrapper passes it to `report-exit` on clean exit. */
   taskId: string;
   prompt: string;
   /** which CLI to launch (claude|codex). Omitted ⇒ "claude" (backward-compatible). */
@@ -76,8 +76,8 @@ export interface LiveAdapterDeps {
    *  session's executor-role MCP must point here, not at <repoRoot>/governance/src/mcp/server.ts. */
   serverEntrypoint: string;
   /** Absolute path to the `boule` CLI (the Boule INSTALL). The codex completion wrapper shells
-   *  `node <completeEntrypoint> complete-task` on clean exit so the loop closes even when the model
-   *  forgets the complete_task MCP call. Same install as serverEntrypoint, never the target repo. */
+   *  `node <completeEntrypoint> report-exit` on clean exit so the conductor sees a completion hint
+   *  even when the model forgets the complete_task MCP call. Same install as serverEntrypoint. */
   completeEntrypoint: string;
   /** The governance workspace the spawned session's escalate must write back to (so the
    *  Conductor sees its decision_blocked). Defaults to <repoRoot>/governance/workspace. */
@@ -221,9 +221,7 @@ function shellQuote(value: string): string {
  *    `codex exec` in a `workspace-write` sandbox confined to the worktree cwd (NEVER danger-full,
  *    per codex-worktree-runner). The codex model is flakier about issuing the closing complete_task
  *    MCP call (gpt-5.5 adherence; live smoke §5), so the codex command is followed by a guarded
- *    completion wrapper: `&& node <cli> complete-task` fires ONLY on clean exit (nonzero ⇒ skipped),
- *    and `completeTask` itself REFUSES if the task isn't active or has an unresolved decision_blocked
- *    (verdict-free, INVARIANT #1-safe — it cannot accept a plan/spec or resolve a fork). */
+ *    hint wrapper: `&& node <cli> report-exit` fires ONLY on clean exit (nonzero ⇒ skipped). */
 export function buildSessionCommand(
   executor: ExecutorKind,
   spec: { worktreePath: string; taskId: string },
@@ -244,7 +242,7 @@ export function buildSessionCommand(
     // CODEX_HOME='<clean home>' redirects codex's profile (config.toml/auth/hooks/plugins) to a
     // conductor-owned hooks-free dir, so the operator's oh-my-codex/cmux hooks NEVER load (the
     // hijack root cause). The prefix env assignment applies to `codex exec` ONLY — the trailing
-    // `&& node … complete-task` (boule CLI) does NOT inherit it. Required: materialized beforehand.
+    // `&& node … report-exit` (boule CLI) does NOT inherit it. Required: materialized beforehand.
     if (!deps.codexHome) {
       throw new Error("buildSessionCommand: codex requires deps.codexHome (clean hooks-free profile)");
     }
@@ -253,9 +251,9 @@ export function buildSessionCommand(
     // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
     // Autonomy stays sandboxed: --sandbox workspace-write confines writes to the worktree cwd; this
     // is NEVER --dangerously-bypass-approvals-and-sandbox (which removes the sandbox).
-    // `&& node <cli> complete-task` = the adherence backstop: on clean codex exit, close the task
-    // lifecycle even if the model skipped the complete_task tool call. cmux runs --command through a
-    // shell, so the `&&` short-circuits on nonzero exit (no completion on failure/escalation-abort).
+    // `&& node <cli> report-exit` = the adherence backstop: on clean codex exit, record a
+    // verdict-free hint even if the model skipped the complete_task tool call. cmux runs --command
+    // through a shell, so the `&&` short-circuits on nonzero exit.
     return (
       `CODEX_HOME=${shellQuote(deps.codexHome)} ` +
       `codex exec --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
@@ -264,7 +262,7 @@ export function buildSessionCommand(
       `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
       `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}"}' ` +
       `${promptCat}` +
-      ` && node --experimental-strip-types "${deps.completeEntrypoint}" complete-task ` +
+      ` && node --experimental-strip-types "${deps.completeEntrypoint}" report-exit ` +
       `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}"\n`
     );
   }

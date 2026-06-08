@@ -513,8 +513,9 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toMatch(/--disallowedTools .*-- "\$\(cat \/wt\/s0\/\.boule\/step-prompt\.md\)"/);
     expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
     expect(c).not.toContain("codex");
-    // claude closes the loop reliably (live smoke) — no codex-style completion wrapper here
+    // claude closes the loop reliably (live smoke) — no codex-style exit-report wrapper here
     expect(c).not.toContain("complete-task");
+    expect(c).not.toContain("report-exit");
     // claude uses the operator's own profile (its hooks are the app's) — NO CODEX_HOME isolation
     expect(c).not.toContain("CODEX_HOME");
   });
@@ -536,16 +537,17 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
     // codex has no per-server denylist — must NOT rely on claude's flags
     expect(c).not.toContain("--disallowedTools");
-    // adherence backstop: on CLEAN exit (`&&`), shell the guarded complete-task so the loop closes
+    // adherence backstop: on CLEAN exit (`&&`), shell report-exit as a verdict-free hint
     // even when gpt-5.5 skips the complete_task MCP call (nonzero exit ⇒ short-circuited, no call).
     expect(c).toContain("&& node");
-    expect(c).toContain(`"${cmdDeps.completeEntrypoint}" complete-task`);
+    expect(c).toContain(`"${cmdDeps.completeEntrypoint}" report-exit`);
+    expect(c).not.toContain(`"${cmdDeps.completeEntrypoint}" complete-task`);
     expect(c).toContain('--workspace "/repo/governance/workspace"');
     expect(c).toContain('--task "evt_t0"');
     // CODEX_HOME isolation: clean hooks-free profile, prefixed ONCE before `codex exec` (scopes to
-    // codex only — the trailing `&& node … complete-task` boule CLI does NOT inherit it).
+    // codex only — the trailing `&& node … report-exit` boule CLI does NOT inherit it).
     expect(c.startsWith("CODEX_HOME='/repo/governance/workspace/codex-home' codex exec")).toBe(true);
-    // exactly once → the trailing `&& node … complete-task` tail carries no CODEX_HOME
+    // exactly once → the trailing `&& node … report-exit` tail carries no CODEX_HOME
     expect((c.match(/CODEX_HOME=/g) ?? []).length).toBe(1);
     expect(c.indexOf("CODEX_HOME=")).toBeLessThan(c.indexOf("codex exec"));
   });
@@ -604,7 +606,8 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(created.args[4]).toContain(
       "CODEX_HOME='/repo/governance/workspace/codex-home' codex exec",
     ); // clean profile prefixed at launch (hook isolation)
-    expect(created.args[4]).toContain("complete-task"); // completion wrapper present in the launch cmd
+    expect(created.args[4]).toContain("report-exit"); // completion hint wrapper present in the launch cmd
+    expect(created.args[4]).not.toContain("complete-task");
     expect(created.args[4]).not.toContain("claude --mcp-config");
     expect(calls.some((c) => c.cmd === "cmux" && c.args[0] === "send")).toBe(false);
   });

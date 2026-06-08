@@ -11,6 +11,7 @@ import type { EdgeRow, EdgeType, EventRow, GraphProjection, NodeRow, NodeType } 
 /** Which graph subject a given event type belongs to (null = no node subject in this cut). */
 const SUBJECT_TYPE_OF: Partial<Record<EventType, NodeType>> = {
   task_created: "task", task_started: "task", task_blocked: "task", task_completed: "task", task_cancelled: "task",
+  executor_reported_done: "task",
   plan_proposed: "plan", plan_accepted: "plan", plan_revised: "plan", plan_completed: "plan", plan_archived: "plan", plan_superseded: "plan",
   spec_proposed: "spec", spec_accepted: "spec", spec_archived: "spec",
   decision_recorded: "decision", decision_proposed: "decision", decision_review_recorded: "decision",

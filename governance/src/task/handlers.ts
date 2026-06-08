@@ -31,6 +31,16 @@ async function writeLifecycle(
   return evt.frontmatter.id;
 }
 
+function latestSessionForTask(all: GovEvent[], taskId: string): string | null {
+  let latest: GovEvent | null = null;
+  for (const e of all) {
+    if (e.frontmatter.type !== "session_spawned") continue;
+    if (!(e.frontmatter.related_to ?? []).includes(taskId)) continue;
+    if (!latest || e.frontmatter.id.localeCompare(latest.frontmatter.id) > 0) latest = e;
+  }
+  return latest?.frontmatter.id ?? null;
+}
+
 /** True if a decision_blocked related to this task escalates a decision with NO verdict yet.
  *  Conservative: a block whose decision proposal cannot be found counts as open.
  *  Exported so the v3 Conductor's halt projection REUSES this exact coupling (not a duplicate). */
@@ -76,6 +86,31 @@ export async function completeTask(workspaceDir: string, input: { taskId: string
   if (!gate.ok) return { ok: false, reason: gate.reason };
   const eventId = await writeLifecycle(workspaceDir, "task_completed", input.taskId, `Completed ${input.taskId}`, now, rand);
   return { ok: true, reason: gate.reason, eventId };
+}
+
+/** report_done — executor-side verdict-free hint. It NEVER writes task_completed. */
+export async function reportTaskDone(
+  workspaceDir: string,
+  input: { taskId: string },
+  now: Date,
+  rand: number,
+): Promise<TaskGateResult> {
+  const { all } = await loadTask(workspaceDir, input.taskId);
+  const sessionId = latestSessionForTask(all, input.taskId);
+  const related_to = sessionId ? [input.taskId, sessionId] : [input.taskId];
+  const evt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", now, rand),
+      type: "executor_reported_done",
+      source: "agent_run",
+      actor: "executor",
+      tags: ["task", "completion-hint"],
+      related_to,
+    },
+    body: JSON.stringify({ taskId: input.taskId, sessionId }),
+  };
+  await writeEvent(workspaceDir, evt, now);
+  return { ok: true, reason: "executor reported done", eventId: evt.frontmatter.id };
 }
 
 /** cancel_task — any non-terminal → cancelled. */

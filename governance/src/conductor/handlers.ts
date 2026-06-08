@@ -13,8 +13,9 @@ import {
 import type { ConductorAdapter } from "./adapter.ts";
 
 // NOTE: this module imports ZERO decision write handlers (no "../decision/handlers.ts"). The
-// Conductor mints ONLY task_created/task_started/step_bound/session_spawned — all verdict-free.
-// Resolution flows exclusively through the existing human-gated choose/approve, never from here.
+// Conductor mints task_created/task_started/step_bound/session_spawned and, after the completion
+// gate passes, delegates task_completed to the guarded task lifecycle writer. Decision resolution
+// flows exclusively through the existing human-gated choose/approve, never from here.
 
 async function loadConductor(
   workspaceDir: string,
@@ -46,9 +47,9 @@ function buildPrompt(stepText: string, envelope: AutonomyEnvelope): string {
     "",
     "## Required final action (do NOT skip)",
     `When the step's work is complete and no Type-1 boundary is open, your FINAL action MUST be the`,
-    `tool call complete_task('${envelope.taskId}'). Reporting completion in prose is NOT enough — the`,
-    "orchestrator only advances when the task_completed event is written. If you are blocked or",
-    "uncertain, call escalate(...) and stop instead.",
+    `tool call complete_task('${envelope.taskId}'). This is a verdict-free hint to the conductor's`,
+    "completion evaluator; it does NOT certify completion by itself. If you are blocked or uncertain,",
+    "call escalate(...) and stop instead.",
   ].join("\n");
 }
 

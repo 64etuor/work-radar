@@ -32,8 +32,33 @@ async function writeLifecycle(
   return evt.frontmatter.id;
 }
 
-export interface ProposePlanInput { intent: string; steps: string[]; specId?: string; }
+export interface PlanStepInput {
+  text: string;
+  check?: { command?: string; artifact?: string };
+}
+export interface ProposePlanInput { intent: string; steps: Array<string | PlanStepInput>; specId?: string; }
 export interface ProposePlanResult { planId: string; }
+
+function normalizeStep(input: string | PlanStepInput): PlanStepInput | null {
+  if (typeof input === "string") {
+    const text = input.trim();
+    return text ? { text } : null;
+  }
+  const text = input.text?.trim();
+  if (!text) return null;
+  const command = input.check?.command?.trim();
+  const artifact = input.check?.artifact?.trim();
+  const check = {
+    ...(command ? { command } : {}),
+    ...(artifact ? { artifact } : {}),
+  };
+  return Object.keys(check).length ? { text, check } : { text };
+}
+
+function serializeStep(step: PlanStepInput, index: number): string {
+  const check = step.check ? ` <!-- boule:check ${JSON.stringify(step.check)} -->` : "";
+  return `${index + 1}. ${step.text}${check}`;
+}
 
 /** Planner — consumes a "load feature X" intent, emits EXACTLY ONE plan_proposed (draft).
  *  actor:"planner" (NOT a human, NOT a verdict). This is the ONLY write path here; there is no
@@ -43,9 +68,9 @@ export async function proposePlan(
 ): Promise<ProposePlanResult> {
   const intent = input.intent?.trim();
   if (!intent) throw new Error("plan intent must be non-empty");
-  const steps = (input.steps ?? []).map((s) => s.trim()).filter(Boolean);
+  const steps = (input.steps ?? []).map(normalizeStep).filter((s): s is PlanStepInput => s !== null);
   if (steps.length === 0) throw new Error("plan must have at least one step");
-  const body = `${intent}\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
+  const body = `${intent}\n\n${steps.map(serializeStep).join("\n")}`;
   const specId = input.specId?.trim();
   const evt: GovEvent = {
     frontmatter: {
