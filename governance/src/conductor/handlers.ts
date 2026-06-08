@@ -2,7 +2,7 @@ import { generateId } from "../event/id.ts";
 import { writeEvent } from "../event/writeEvent.ts";
 import type { GovEvent } from "../event/event.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
-import { deriveConductorState, type ConductorState } from "./conductor.ts";
+import { deriveConductorState, type ConductorState, type ConductorStepState } from "./conductor.ts";
 import { canAdvance } from "./guards.ts";
 import {
   buildEnvelope,
@@ -74,6 +74,7 @@ export interface ConductStepReport {
   surface: string;
   worktreePath: string;
   envelopeHash: string;
+  attemptIndex?: number;
 }
 export interface ConductPlanResult {
   ok: boolean;
@@ -122,6 +123,18 @@ export async function selectViableExecutorBackend(
   return exhaustedTerminal("executor");
 }
 
+async function selectViableExecutorBackendAtIndex(
+  chain: BackendChain,
+  index: number,
+  probes: ExecutorViabilityProbes,
+): Promise<SelectedExecutorBackend | Terminal> {
+  const spec = chain.chain[index];
+  if (!spec) return exhaustedTerminal("executor");
+  const executor = await viableExecutorKind(spec, probes);
+  if (!executor) return exhaustedTerminal("executor");
+  return { executor, backend: spec };
+}
+
 async function viableExecutorKind(
   spec: BackendSpec,
   probes: ExecutorViabilityProbes,
@@ -161,12 +174,207 @@ function selectedBackendRecord(spec: BackendSpec): SelectedBackendRecord {
   };
 }
 
+function sameBackend(a: BackendSpec | SelectedBackendRecord | null, b: BackendSpec): boolean {
+  if (!a) return false;
+  if (a.provider !== b.provider) return false;
+  if (a.model !== b.model) return false;
+  const command = "command" in a ? a.command : undefined;
+  return command === b.command;
+}
+
 function defaultBackendForExecutor(executor: ExecutorKind): SelectedBackendRecord {
   return { provider: executor };
 }
 
 function isTerminal(value: BackendChain | Terminal | SelectedExecutorBackend): value is Terminal {
   return "role" in value;
+}
+
+export interface RedispatchExecutorAttemptInput {
+  planId: string;
+}
+
+export type RedispatchExecutorAttemptResult =
+  | { kind: "no_action"; reason: string }
+  | { kind: "advanced"; advanced: ConductStepReport }
+  | { kind: "stalled"; stepIndex: number; taskId: string; reason: "executor:stall" };
+
+export async function redispatchExecutorAttempt(
+  workspaceDir: string,
+  input: RedispatchExecutorAttemptInput,
+  deps: {
+    adapter: ConductorAdapter;
+    executor?: ExecutorKind;
+    envelopeDefaults?: ConductorEnvelopeDefaults;
+    policy?: ResolvedPolicy;
+    budget?: ResolveBudgetContext;
+    viability?: ExecutorViabilityProbes;
+  },
+  now: Date,
+  rand: number,
+): Promise<RedispatchExecutorAttemptResult> {
+  const { state } = await loadConductor(workspaceDir, input.planId);
+  const step = state.steps.find((s) => shouldConsiderRetry(s));
+  if (!step || !step.taskId) return { kind: "no_action", reason: "no retry-eligible attempt" };
+  if (!deps.policy?.backends?.executor) {
+    await writeExecutorStall(workspaceDir, step.taskId, "executor chain unavailable", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
+
+  const currentAttempt = step.attempts.currentAttemptIndex;
+  if (currentAttempt === null) return { kind: "no_action", reason: "no started attempt" };
+
+  if (step.attempts.latestFinishedWorktreeDirty !== false) {
+    await writeExecutorStall(workspaceDir, step.taskId, "executor token-exhausted attempt left a dirty worktree", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
+
+  const chainOrTerminal = deps.budget
+    ? selectExecutorChain(step, deps.policy, deps.budget)
+    : selectExecutorChain(step, deps.policy);
+  if (isTerminal(chainOrTerminal)) {
+    await writeExecutorStall(workspaceDir, step.taskId, "executor chain exhausted", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
+
+  const nextAttempt = currentAttempt + 1;
+  if (nextAttempt >= chainOrTerminal.chain.length) {
+    await writeExecutorStall(workspaceDir, step.taskId, "executor chain exhausted", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
+
+  const nextSpec = chainOrTerminal.chain[nextAttempt]!;
+  if (sameBackend(step.attempts.latestStartedBackend, nextSpec)) {
+    await writeExecutorStall(workspaceDir, step.taskId, "executor retry would repeat the same backend", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
+
+  const selected = await selectViableExecutorBackendAtIndex(
+    chainOrTerminal,
+    nextAttempt,
+    deps.viability ?? FAIL_CLOSED_VIABILITY,
+  );
+  if (isTerminal(selected)) {
+    await writeExecutorStall(workspaceDir, step.taskId, "next executor backend is not viable", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
+
+  const at = (i: number) => new Date(now.getTime() + i * 1000);
+  const selectedBackend = selectedBackendRecord(selected.backend);
+  const wt = await deps.adapter.createWorktree({
+    planId: input.planId,
+    stepIndex: step.stepIndex,
+    attemptIndex: nextAttempt,
+  });
+  const envelope = buildEnvelope({
+    planId: input.planId,
+    stepIndex: step.stepIndex,
+    taskId: step.taskId,
+    worktreePath: wt.path,
+    executor: selected.executor,
+    selectedBackend,
+    forbiddenDecisionClasses: deps.envelopeDefaults?.forbiddenDecisionClasses,
+    allowedType2Actions: deps.envelopeDefaults?.allowedType2Actions,
+  });
+  const hash = envelopeHash(envelope);
+  const prompt = buildPrompt(step.text, envelope);
+  await deps.adapter.writeEnvelopeFile(wt.path, envelope, prompt);
+  const session = await deps.adapter.spawnSession({
+    worktreePath: wt.path,
+    stepIndex: step.stepIndex,
+    taskId: step.taskId,
+    prompt,
+    executor: selected.executor,
+    attemptIndex: nextAttempt,
+  });
+
+  const sessionEvt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", at(0), rand),
+      type: "session_spawned",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["conductor"],
+      related_to: [step.taskId],
+    },
+    body: JSON.stringify({
+      surface: session.surface,
+      worktree: wt.path,
+      envelopeHash: hash,
+      envelope,
+      selectedBackend,
+      attemptIndex: nextAttempt,
+    }),
+  };
+  await writeEvent(workspaceDir, sessionEvt, at(0));
+
+  const attemptStartedEvt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", at(1), rand),
+      type: "executor_attempt_started",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["conductor", "attempt-hint"],
+      related_to: [step.taskId],
+    },
+    body: JSON.stringify({
+      attemptIndex: nextAttempt,
+      backend: selectedBackend,
+    }),
+  };
+  await writeEvent(workspaceDir, attemptStartedEvt, at(1));
+
+  return {
+    kind: "advanced",
+    advanced: {
+      stepIndex: step.stepIndex,
+      taskId: step.taskId,
+      surface: session.surface,
+      worktreePath: wt.path,
+      envelopeHash: hash,
+      attemptIndex: nextAttempt,
+    },
+  };
+}
+
+function shouldConsiderRetry(step: ConductorStepState): boolean {
+  const attempts = step.attempts;
+  return (
+    step.taskId !== null &&
+    step.taskPhase === "active" &&
+    attempts.currentAttemptIndex !== null &&
+    attempts.latestFinishedAttemptIndex === attempts.currentAttemptIndex &&
+    attempts.latestFinishedOutcomeClass === "token_exhausted"
+  );
+}
+
+async function writeExecutorStall(
+  workspaceDir: string,
+  taskId: string,
+  reason: string,
+  now: Date,
+  rand: number,
+): Promise<void> {
+  const all = await readAllEvents(workspaceDir);
+  const alreadyBlocked = all.some(
+    (e) =>
+      e.frontmatter.type === "task_blocked" &&
+      (e.frontmatter.related_to ?? []).includes(taskId) &&
+      e.body.includes("executor:stall"),
+  );
+  if (alreadyBlocked) return;
+  const evt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", now, rand),
+      type: "task_blocked",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["task", "conductor", "executor-stall"],
+      related_to: [taskId],
+    },
+    body: `Blocked ${taskId}: executor:stall (${reason})`,
+  };
+  await writeEvent(workspaceDir, evt, now);
 }
 
 export async function conductPlan(
@@ -262,6 +470,7 @@ export async function conductPlan(
     taskId,
     prompt,
     executor,
+    attemptIndex: 0,
   });
 
   // 4) session_spawned — records the spawn (verdict-free). Carries envelope + tamper-evident hash.

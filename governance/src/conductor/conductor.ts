@@ -4,6 +4,8 @@ import { derivePlanState, type PlanPhase } from "../plan/plan.ts";
 import { deriveTaskState, type TaskPhase } from "../task/task.ts";
 import { hasOpenBlock } from "../task/handlers.ts";
 import type { Difficulty } from "../backends/difficulty.ts";
+import type { AttemptOutcomeClass } from "../backends/attemptClass.ts";
+import type { BackendSpec } from "../backends/config.ts";
 
 export interface PlanStepCheck {
   command?: string;
@@ -14,6 +16,14 @@ export interface PlanStepRecord {
   text: string;
   difficulty?: Difficulty;
   check?: PlanStepCheck;
+}
+
+export interface ExecutorAttemptProjection {
+  currentAttemptIndex: number | null;
+  latestStartedBackend: BackendSpec | null;
+  latestFinishedAttemptIndex: number | null;
+  latestFinishedOutcomeClass: AttemptOutcomeClass | null;
+  latestFinishedWorktreeDirty: boolean | null;
 }
 
 /** One plan step, projected against its (maybe-absent) bound task. */
@@ -28,6 +38,7 @@ export interface ConductorStepState {
   worktreePath: string | null; // the session_spawned worktree path, or null
   taskPhase: TaskPhase | null;
   halted: boolean; // this step's task sits on an open decision_blocked
+  attempts: ExecutorAttemptProjection;
 }
 
 export interface ConductorState {
@@ -133,14 +144,15 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
     if (!boundTaskByStep.has(idx)) boundTaskByStep.set(idx, taskId);
   }
 
-  // session details per task from session_spawned.
+  // Latest session details per task from session_spawned. A task can have multiple executor
+  // attempts; the status projection should point at the latest spawned surface/worktree.
   const sessionByTask = new Map<string, { sessionId: string; surface: string | null; worktreePath: string | null }>();
   for (const e of allEvents) {
     if (e.frontmatter.type !== "session_spawned") continue;
     const taskId = (e.frontmatter.related_to ?? [])[0];
     const surface = parseSurface(e.body);
     const worktreePath = parseWorktreePath(e.body);
-    if (taskId && !sessionByTask.has(taskId)) {
+    if (taskId) {
       sessionByTask.set(taskId, { sessionId: e.frontmatter.id, surface, worktreePath });
     }
   }
@@ -159,6 +171,7 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
         worktreePath: null,
         taskPhase: null,
         halted: false,
+        attempts: emptyAttemptProjection(),
       };
     }
     const tGrp = eventsForDecision(allEvents, taskId);
@@ -176,6 +189,7 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
       worktreePath: session?.worktreePath ?? null,
       taskPhase,
       halted,
+      attempts: projectExecutorAttempts(allEvents, taskId),
     };
   });
 
@@ -201,6 +215,85 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
   }
 
   return { planId, planPhase, steps, cursor, halted, done };
+}
+
+function emptyAttemptProjection(): ExecutorAttemptProjection {
+  return {
+    currentAttemptIndex: null,
+    latestStartedBackend: null,
+    latestFinishedAttemptIndex: null,
+    latestFinishedOutcomeClass: null,
+    latestFinishedWorktreeDirty: null,
+  };
+}
+
+function projectExecutorAttempts(allEvents: GovEvent[], taskId: string): ExecutorAttemptProjection {
+  let currentAttemptIndex: number | null = null;
+  let latestStartedBackend: BackendSpec | null = null;
+  let latestFinishedAttemptIndex: number | null = null;
+  let latestFinishedOutcomeClass: AttemptOutcomeClass | null = null;
+  let latestFinishedWorktreeDirty: boolean | null = null;
+
+  for (const e of allEvents) {
+    if (!(e.frontmatter.related_to ?? []).includes(taskId)) continue;
+    if (e.frontmatter.type === "executor_attempt_started") {
+      const body = safeAttemptBody(e.body);
+      if (typeof body.attemptIndex !== "number" || !Number.isInteger(body.attemptIndex)) continue;
+      if (currentAttemptIndex === null || body.attemptIndex >= currentAttemptIndex) {
+        currentAttemptIndex = body.attemptIndex;
+        latestStartedBackend = parseBackendSpec(body.backend);
+      }
+    } else if (e.frontmatter.type === "executor_attempt_finished") {
+      const body = safeAttemptBody(e.body);
+      if (typeof body.attemptIndex !== "number" || !Number.isInteger(body.attemptIndex)) continue;
+      if (
+        latestFinishedAttemptIndex === null ||
+        body.attemptIndex >= latestFinishedAttemptIndex
+      ) {
+        latestFinishedAttemptIndex = body.attemptIndex;
+        latestFinishedOutcomeClass = parseOutcomeClass(body.outcomeClass);
+        latestFinishedWorktreeDirty =
+          typeof body.worktreeDirty === "boolean" ? body.worktreeDirty : null;
+      }
+    }
+  }
+
+  return {
+    currentAttemptIndex,
+    latestStartedBackend,
+    latestFinishedAttemptIndex,
+    latestFinishedOutcomeClass,
+    latestFinishedWorktreeDirty,
+  };
+}
+
+function safeAttemptBody(body: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(body);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseOutcomeClass(value: unknown): AttemptOutcomeClass | null {
+  if (value === "ok" || value === "token_exhausted" || value === "transient" || value === "fatal")
+    return value;
+  return null;
+}
+
+function parseBackendSpec(value: unknown): BackendSpec | null {
+  if (!value || typeof value !== "object") return null;
+  const rec = value as Record<string, unknown>;
+  const provider = rec.provider;
+  if (provider !== "claude" && provider !== "codex" && provider !== "command" && provider !== "deterministic")
+    return null;
+  const out: BackendSpec = { provider };
+  if (typeof rec.model === "string" && rec.model) out.model = rec.model;
+  if (typeof rec.command === "string" && rec.command) out.command = rec.command;
+  if (Array.isArray(rec.args) && rec.args.every((arg) => typeof arg === "string"))
+    out.args = rec.args;
+  return out;
 }
 
 // step_bound / session_spawned bodies are canonical JSON minted by the conductor (handlers.ts).

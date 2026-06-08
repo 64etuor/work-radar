@@ -3,13 +3,15 @@ import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stubAdapter, type ConductorAdapter } from "../../../src/conductor/adapter.js";
+import { stubAdapter, type ConductorAdapter, type SpawnSessionSpec } from "../../../src/conductor/adapter.js";
 import { canApprove } from "../../../src/decision/guardian.js";
 import { readAllEvents } from "../../../src/decision/readEvents.js";
 import { generateId } from "../../../src/event/id.js";
 import type { GovEvent } from "../../../src/event/event.js";
 import { writeEvent } from "../../../src/event/writeEvent.js";
 import { autoDispatch } from "../../../src/orchestrator/dispatch/dispatch.js";
+import type { BackendSpec } from "../../../src/backends/config.js";
+import type { ResolvedPolicy } from "../../../src/repo/config.js";
 
 const RAND = 0.42;
 let ws: string;
@@ -63,6 +65,82 @@ async function seedAcceptedPlan(steps: string[]): Promise<string> {
     body: `Human accepted ${planId}`,
   }, acceptedAt);
   return planId;
+}
+
+const BASE_POLICY: ResolvedPolicy = {
+  kind: "work",
+  autonomyLevel: "manual",
+  autoMode: "off",
+  reviewQuorum: 2,
+  forbiddenDecisionClasses: ["scope"],
+  allowedType2Actions: ["edit", "test", "lint"],
+};
+
+function policyWithExecutor(chain: BackendSpec[], extra: Partial<ResolvedPolicy> = {}): ResolvedPolicy {
+  return {
+    ...BASE_POLICY,
+    ...extra,
+    backends: { executor: { chain } },
+  };
+}
+
+function recordingAdapter(spawns: SpawnSessionSpec[]): ConductorAdapter {
+  return {
+    ...stubAdapter,
+    async spawnSession(spec: SpawnSessionSpec) {
+      spawns.push(spec);
+      return { surface: `stub-${spec.stepIndex}-attempt${spec.attemptIndex ?? 0}` };
+    },
+  };
+}
+
+function viableAll() {
+  return {
+    commandExists: () => true,
+    codexAuthAvailable: () => true,
+    ensureCleanCodexHome: () => true,
+  };
+}
+
+function nonViableClaude() {
+  return {
+    commandExists: (cmd: string) => cmd !== "claude",
+    codexAuthAvailable: () => true,
+    ensureCleanCodexHome: () => true,
+  };
+}
+
+async function taskIdOfStep(stepText: string): Promise<string> {
+  return (await readAllEvents(ws)).find(
+    (e) => e.frontmatter.type === "task_created" && e.body === stepText,
+  )!.frontmatter.id;
+}
+
+async function recordAttemptFinished(input: {
+  taskId: string;
+  attemptIndex: number;
+  outcomeClass: "ok" | "token_exhausted" | "transient" | "fatal";
+  worktreeDirty?: boolean;
+}): Promise<void> {
+  const when = later();
+  await seed({
+    frontmatter: {
+      id: generateId("evt", when, RAND),
+      type: "executor_attempt_finished",
+      source: "agent_run",
+      actor: "executor",
+      tags: ["task", "attempt-hint"],
+      related_to: [input.taskId],
+    },
+    body: JSON.stringify({
+      attemptIndex: input.attemptIndex,
+      exitCode: input.outcomeClass === "ok" ? 0 : 1,
+      launched: true,
+      worktreeDirty: input.worktreeDirty ?? false,
+      outcomeClass: input.outcomeClass,
+      usage: "unknown",
+    }),
+  }, when);
 }
 
 function typesOf(all: GovEvent[]): string[] {
@@ -238,6 +316,170 @@ describe("autoDispatch", () => {
     expect(summary.executed).toBe(2);
     const ids = (await readAllEvents(ws)).map((e) => e.frontmatter.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("LW3: token_exhausted + clean worktree + next viable backend re-dispatches exactly once on the same task without a new step_bound", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "claude", model: "claude-opus-4-1" },
+    ], {
+      routing: { executor: { standard: { provider: "codex", model: "gpt-5-codex-max" } } },
+    });
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    const taskId = await taskIdOfStep("step a");
+    await recordAttemptFinished({ taskId, attemptIndex: 0, outcomeClass: "token_exhausted" });
+
+    const summary = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+    expect(summary.executed).toBe(1);
+    expect(spawns).toHaveLength(2);
+    expect(spawns[1]).toMatchObject({ taskId, executor: "claude", attemptIndex: 1 });
+    const all = await readAllEvents(ws);
+    expect(all.filter((e) => e.frontmatter.type === "step_bound")).toHaveLength(1);
+    expect(all.filter((e) => e.frontmatter.type === "session_spawned")).toHaveLength(2);
+    const attempts = all
+      .filter((e) => e.frontmatter.type === "executor_attempt_started" && e.frontmatter.related_to?.includes(taskId))
+      .map((e) => JSON.parse(e.body))
+      .sort((a, b) => a.attemptIndex - b.attemptIndex);
+    expect(attempts).toEqual([
+      { attemptIndex: 0, backend: { provider: "codex", model: "gpt-5-codex-max" } },
+      { attemptIndex: 1, backend: { provider: "claude", model: "claude-opus-4-1" } },
+    ]);
+    expect(typesOf(all)).not.toContain("task_completed");
+    expect(typesOf(all).filter((x) => x.startsWith("decision_"))).toEqual([]);
+  });
+
+  it("LW3 double-exec guard: token_exhausted + dirty worktree stalls instead of re-dispatching", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "claude", model: "claude-opus-4-1" },
+    ]);
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    const taskId = await taskIdOfStep("step a");
+    await recordAttemptFinished({ taskId, attemptIndex: 0, outcomeClass: "token_exhausted", worktreeDirty: true });
+
+    const summary = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+    expect(summary.failed).toBe(1);
+    expect(spawns).toHaveLength(1);
+    const all = await readAllEvents(ws);
+    expect(all.filter((e) => e.frontmatter.type === "executor_attempt_started")).toHaveLength(1);
+    expect(all.filter((e) => e.frontmatter.type === "task_blocked" && e.frontmatter.related_to?.includes(taskId))).toHaveLength(1);
+    expect(
+      all.some((e) => e.frontmatter.type === "orchestrator_action_failed" && JSON.parse(e.body).reason === "executor:stall"),
+    ).toBe(true);
+    expect(typesOf(all)).not.toContain("task_completed");
+    expect(typesOf(all).filter((x) => x.startsWith("decision_"))).toEqual([]);
+  });
+
+  it("LW3: token_exhausted at the last backend stalls human-pending without spawning or completing", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([{ provider: "codex", model: "gpt-5-codex-max" }]);
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    const taskId = await taskIdOfStep("step a");
+    await recordAttemptFinished({ taskId, attemptIndex: 0, outcomeClass: "token_exhausted" });
+
+    const summary = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+    expect(summary.failed).toBe(1);
+    expect(spawns).toHaveLength(1);
+    const all = await readAllEvents(ws);
+    expect(all.filter((e) => e.frontmatter.type === "task_blocked" && e.frontmatter.related_to?.includes(taskId))).toHaveLength(1);
+    expect(typesOf(all)).not.toContain("task_completed");
+    expect(typesOf(all).filter((x) => x.startsWith("decision_"))).toEqual([]);
+  });
+
+  it("LW3: token_exhausted + clean worktree stalls when the exact next backend is not viable", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "claude", model: "claude-opus-4-1" },
+    ], {
+      routing: { executor: { standard: { provider: "codex", model: "gpt-5-codex-max" } } },
+    });
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    const taskId = await taskIdOfStep("step a");
+    await recordAttemptFinished({ taskId, attemptIndex: 0, outcomeClass: "token_exhausted" });
+
+    const summary = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: nonViableClaude() }, "type2", at(), RAND);
+
+    expect(summary.failed).toBe(1);
+    expect(spawns).toHaveLength(1);
+    const all = await readAllEvents(ws);
+    expect(all.filter((e) => e.frontmatter.type === "task_blocked" && e.frontmatter.related_to?.includes(taskId))).toHaveLength(1);
+    expect(all.filter((e) => e.frontmatter.type === "executor_attempt_started")).toHaveLength(1);
+    expect(typesOf(all)).not.toContain("task_completed");
+  });
+
+  it.each(["transient", "fatal", "ok"] as const)(
+    "LW3: %s executor outcomes never trigger provider re-dispatch",
+    async (outcomeClass) => {
+      await seedAcceptedPlan(["step a"]);
+      const spawns: SpawnSessionSpec[] = [];
+      const policy = policyWithExecutor([
+        { provider: "codex", model: "gpt-5-codex-max" },
+        { provider: "claude", model: "claude-opus-4-1" },
+      ]);
+      await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+      const taskId = await taskIdOfStep("step a");
+      await recordAttemptFinished({ taskId, attemptIndex: 0, outcomeClass });
+
+      const summary = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+      expect(summary.executed).toBe(0);
+      expect(spawns).toHaveLength(1);
+      const all = await readAllEvents(ws);
+      expect(all.filter((e) => e.frontmatter.type === "executor_attempt_started")).toHaveLength(1);
+      expect(typesOf(all)).not.toContain("task_completed");
+    },
+  );
+
+  it("LW3 golden: without a token_exhausted attempt finish, ordinary in-flight dispatch remains unchanged", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "claude", model: "claude-opus-4-1" },
+    ]);
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+    const summary = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+    expect(summary).toMatchObject({ executed: 0, failed: 0, denied: 1 });
+    expect(spawns).toHaveLength(1);
+    const all = await readAllEvents(ws);
+    expect(all.filter((e) => e.frontmatter.type === "step_bound")).toHaveLength(1);
+    expect(all.filter((e) => e.frontmatter.type === "executor_attempt_started")).toHaveLength(1);
+  });
+
+  it("LW3 boundedness: one tick advances at most one attempt and a later tick advances one more, never past chain length", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor([
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "claude", model: "claude-sonnet-4-5" },
+      { provider: "command", command: "codex", model: "external-stub" },
+    ]);
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    const taskId = await taskIdOfStep("step a");
+    await recordAttemptFinished({ taskId, attemptIndex: 0, outcomeClass: "token_exhausted" });
+
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    await recordAttemptFinished({ taskId, attemptIndex: 1, outcomeClass: "token_exhausted" });
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    await recordAttemptFinished({ taskId, attemptIndex: 2, outcomeClass: "token_exhausted" });
+    const exhausted = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+    expect(exhausted.failed).toBe(1);
+    expect(spawns.map((s) => s.attemptIndex ?? 0)).toEqual([0, 1, 2]);
+    const attempts = (await readAllEvents(ws)).filter((e) => e.frontmatter.type === "executor_attempt_started");
+    expect(attempts).toHaveLength(3);
   });
 });
 

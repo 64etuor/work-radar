@@ -3,6 +3,8 @@ import type { AutonomyEnvelope, ExecutorKind } from "./envelope.ts";
 export interface CreateWorktreeSpec {
   planId: string;
   stepIndex: number;
+  /** Attempt 0 keeps the legacy step path; retries get a fresh per-attempt worktree. */
+  attemptIndex?: number;
   repoRoot?: string;
 }
 export interface SpawnSessionSpec {
@@ -13,6 +15,8 @@ export interface SpawnSessionSpec {
   prompt: string;
   /** which CLI to launch (claude|codex). Omitted ⇒ "claude" (backward-compatible). */
   executor?: ExecutorKind;
+  /** Supervised executor attempt index; omitted keeps legacy attempt 0 behavior. */
+  attemptIndex?: number;
 }
 
 /** DI seam for the side-effecting half of conduct: worktree + cmux session + envelope file.
@@ -32,7 +36,8 @@ export interface ConductorAdapter {
  *  BOULE_CONDUCTOR_MODE unset, CI conducts plans without touching git/cmux/fs (design §6). */
 export const stubAdapter: ConductorAdapter = {
   async createWorktree(spec) {
-    return { path: `.boule-worktrees/stub-${spec.planId}-step${spec.stepIndex}` };
+    const suffix = spec.attemptIndex && spec.attemptIndex > 0 ? `-attempt${spec.attemptIndex}` : "";
+    return { path: `.boule-worktrees/stub-${spec.planId}-step${spec.stepIndex}${suffix}` };
   },
   async spawnSession(spec) {
     return { surface: `stub-${spec.stepIndex}` };
@@ -211,9 +216,10 @@ function shellQuote(value: string): string {
 
 function withAttemptEvidenceTail(
   executorCommand: string,
-  spec: { worktreePath: string; taskId: string },
+  spec: { worktreePath: string; taskId: string; attemptIndex?: number },
   deps: { governanceWorkspace: string; completeEntrypoint: string },
 ): string {
+  const attemptIndex = spec.attemptIndex ?? 0;
   return (
     `__boule_stderr="$(mktemp)"` +
     `; ${executorCommand} 2>"$__boule_stderr"` +
@@ -222,7 +228,7 @@ function withAttemptEvidenceTail(
     `; if [ -n "$(git -C "${spec.worktreePath}" status --porcelain 2>/dev/null)" ]; then __boule_dirty=true; fi` +
     `; __boule_digest="$(LC_ALL=C tr '\\n' ' ' < "$__boule_stderr" | cut -c 1-500)"` +
     `; node --experimental-strip-types "${deps.completeEntrypoint}" record-attempt ` +
-    `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}" --attempt 0 ` +
+    `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}" --attempt ${attemptIndex} ` +
     `--exit-code "$__boule_exit" --launched true --worktree-dirty "$__boule_dirty" ` +
     `--stderr-digest "$__boule_digest"` +
     `; if [ "$__boule_exit" -eq 0 ]; then node --experimental-strip-types "${deps.completeEntrypoint}" report-exit ` +
@@ -247,7 +253,7 @@ function withAttemptEvidenceTail(
  *    is recorded on every exit, while report-exit remains clean-exit-only. */
 export function buildSessionCommand(
   executor: ExecutorKind,
-  spec: { worktreePath: string; taskId: string },
+  spec: { worktreePath: string; taskId: string; attemptIndex?: number },
   deps: {
     serverEntrypoint: string;
     governanceWorkspace: string;
@@ -383,12 +389,14 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
     return res;
   };
 
-  const worktreePathFor = (planId: string, stepIndex: number) =>
-    `${deps.worktreesRoot}/boule-${planId}-step${stepIndex}`;
+  const worktreePathFor = (planId: string, stepIndex: number, attemptIndex?: number) => {
+    const suffix = attemptIndex && attemptIndex > 0 ? `-attempt${attemptIndex}` : "";
+    return `${deps.worktreesRoot}/boule-${planId}-step${stepIndex}${suffix}`;
+  };
 
   return {
     async createWorktree(spec) {
-      const path = worktreePathFor(spec.planId, spec.stepIndex);
+      const path = worktreePathFor(spec.planId, spec.stepIndex, spec.attemptIndex);
       // Worktree is added from repoRoot into the gitignored worktrees root — never the user tree.
       run("git", ["-C", deps.repoRoot, "worktree", "add", "--detach", path, "HEAD"]);
       return { path };

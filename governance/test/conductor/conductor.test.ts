@@ -150,6 +150,43 @@ describe("deriveConductorState — pure projection", () => {
     const s = deriveConductorState(plan(TWO_STEP), all);
     expect(s.steps[0]!.surface).toBe("stub-0");
   });
+
+  it("projects executor attempts from events only, including the latest token-exhausted clean finish", () => {
+    const taskId = "evt_t0";
+    const all = [
+      plan(TWO_STEP), accepted,
+      ev("task_created", taskId, [PLAN_ID], "step a"),
+      ev("step_bound", "evt_sb0", [PLAN_ID, taskId], JSON.stringify({ stepIndex: 0, taskId, planId: PLAN_ID })),
+      ev("session_spawned", "evt_ss0", [taskId], JSON.stringify({ surface: "stub-0", worktree: "w0", envelopeHash: "h", envelope: {} })),
+      ev("executor_attempt_started", "evt_as0", [taskId], JSON.stringify({ attemptIndex: 0, backend: { provider: "codex" } })),
+      ev(
+        "executor_attempt_finished",
+        "evt_af0",
+        [taskId],
+        JSON.stringify({
+          attemptIndex: 0,
+          exitCode: 1,
+          launched: true,
+          worktreeDirty: false,
+          outcomeClass: "token_exhausted",
+          usage: "unknown",
+        }),
+      ),
+      ev("task_started", "evt_ts0", [taskId]),
+    ];
+
+    const s1 = deriveConductorState(plan(TWO_STEP), all);
+    const s2 = deriveConductorState(plan(TWO_STEP), [...all]);
+
+    expect(s1.steps[0]!.attempts).toEqual({
+      currentAttemptIndex: 0,
+      latestStartedBackend: { provider: "codex" },
+      latestFinishedAttemptIndex: 0,
+      latestFinishedOutcomeClass: "token_exhausted",
+      latestFinishedWorktreeDirty: false,
+    });
+    expect(s2.steps[0]!.attempts).toEqual(s1.steps[0]!.attempts);
+  });
 });
 
 describe("KEYSTONE — deriveConductorState is byte-stable across a state wipe + re-derive from events/", () => {
