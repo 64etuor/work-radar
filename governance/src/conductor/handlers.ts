@@ -17,6 +17,10 @@ import {
   type ResolveBudgetContext,
 } from "../backends/resolve.ts";
 import {
+  DEFAULT_PRICE_TABLE,
+  reconstructBudgetSnapshot,
+} from "../backends/budget.ts";
+import {
   assertProviderAllowed,
   type BackendChain,
   type BackendSpec,
@@ -213,7 +217,7 @@ export async function redispatchExecutorAttempt(
   now: Date,
   rand: number,
 ): Promise<RedispatchExecutorAttemptResult> {
-  const { state } = await loadConductor(workspaceDir, input.planId);
+  const { state, all } = await loadConductor(workspaceDir, input.planId);
   const step = state.steps.find((s) => shouldConsiderRetry(s));
   if (!step || !step.taskId) return { kind: "no_action", reason: "no retry-eligible attempt" };
   if (!deps.policy?.backends?.executor) {
@@ -229,8 +233,9 @@ export async function redispatchExecutorAttempt(
     return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
   }
 
-  const chainOrTerminal = deps.budget
-    ? selectExecutorChain(step, deps.policy, deps.budget)
+  const budget = budgetContextFromJournal(all, deps.policy, deps.budget, step.taskId);
+  const chainOrTerminal = budget
+    ? selectExecutorChain(step, deps.policy, budget)
     : selectExecutorChain(step, deps.policy);
   if (isTerminal(chainOrTerminal)) {
     await writeExecutorStall(workspaceDir, step.taskId, "executor chain exhausted", now, rand);
@@ -391,7 +396,7 @@ export async function conductPlan(
   now: Date,
   rand: number,
 ): Promise<ConductPlanResult> {
-  const { state } = await loadConductor(workspaceDir, input.planId);
+  const { state, all } = await loadConductor(workspaceDir, input.planId);
   const gate = canAdvance(state);
   if (!gate.ok) return { ok: false, reason: gate.reason, advanced: null };
 
@@ -401,8 +406,9 @@ export async function conductPlan(
   let selectedBackend: SelectedBackendRecord | undefined;
   const policy = deps.policy;
   if (policy?.backends?.executor !== undefined) {
-    const chain = deps.budget
-      ? selectExecutorChain(step, policy, deps.budget)
+    const budget = budgetContextFromJournal(all, policy, deps.budget);
+    const chain = budget
+      ? selectExecutorChain(step, policy, budget)
       : selectExecutorChain(step, policy);
     const selected = await selectViableExecutorBackend(
       chain,
@@ -535,6 +541,27 @@ export async function conductPlan(
       envelopeHash: hash,
     },
   };
+}
+
+function budgetContextFromJournal(
+  events: readonly GovEvent[],
+  policy: ResolvedPolicy,
+  provided: ResolveBudgetContext | undefined,
+  excludeTaskId?: string,
+): ResolveBudgetContext | undefined {
+  if (!provided && !policy.budget) return undefined;
+
+  const caps = provided?.caps ?? policy.budget;
+  const priceTable = provided?.priceTable ?? policy.priceTable ?? DEFAULT_PRICE_TABLE;
+  const opts = excludeTaskId
+    ? { caps, excludeTaskIds: [excludeTaskId] }
+    : { caps };
+  const context: ResolveBudgetContext = {
+    snapshot: reconstructBudgetSnapshot(events, priceTable, opts),
+    priceTable,
+  };
+  if (caps) context.caps = caps;
+  return context;
 }
 
 export interface ConductorStatusStep {

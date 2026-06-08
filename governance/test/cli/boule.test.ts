@@ -155,4 +155,26 @@ describe("cmdRecordAttempt — supervised attempt evidence hint", () => {
     expect(body).not.toHaveProperty("completed");
     expect(events.some((e) => e.frontmatter.type === "task_completed")).toBe(false);
   });
+
+  it("optionally records trusted numeric usage without parsing agent output", async () => {
+    const taskId = await activeTask(repo);
+    await cmdRecordAttempt({
+      workspace: repo,
+      task: taskId,
+      attempt: "0",
+      "exit-code": "0",
+      launched: "true",
+      "worktree-dirty": "false",
+      "usage-tokens": "3000",
+      "usage-cost": "0.09",
+    });
+
+    const finished = (await readAllEvents(repo)).find(
+      (e) => e.frontmatter.type === "executor_attempt_finished" && e.frontmatter.related_to?.includes(taskId),
+    );
+    expect(JSON.parse(finished!.body)).toMatchObject({
+      attemptIndex: 0,
+      usage: { tokens: 3000, costUsd: 0.09 },
+    });
+  });
 });

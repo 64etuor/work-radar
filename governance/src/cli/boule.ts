@@ -138,6 +138,18 @@ function reqBooleanFlag(flags: ParsedArgs["flags"], name: string): boolean {
   throw new Error(`--${name} must be true|false`);
 }
 
+function optionalNonnegativeNumberFlag(
+  flags: ParsedArgs["flags"],
+  name: string,
+): number | undefined {
+  const raw = flags[name];
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || !raw) throw new Error(`--${name} <number> is required`);
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error(`--${name} must be a nonnegative number`);
+  return value;
+}
+
 export async function cmdRecordAttempt(flags: ParsedArgs["flags"]): Promise<string> {
   const workspace = reqFlag(flags, "workspace");
   const task = reqFlag(flags, "task");
@@ -149,6 +161,8 @@ export async function cmdRecordAttempt(flags: ParsedArgs["flags"]): Promise<stri
     typeof flags["stderr-digest"] === "string" && flags["stderr-digest"]
       ? flags["stderr-digest"]
       : undefined;
+  const usageTokens = optionalNonnegativeNumberFlag(flags, "usage-tokens");
+  const usageCostUsd = optionalNonnegativeNumberFlag(flags, "usage-cost");
   const r = await recordExecutorAttempt(
     workspace,
     {
@@ -158,6 +172,8 @@ export async function cmdRecordAttempt(flags: ParsedArgs["flags"]): Promise<stri
       launched,
       worktreeDirty,
       ...(stderrDigest ? { stderrDigest } : {}),
+      ...(usageTokens !== undefined ? { usageTokens } : {}),
+      ...(usageCostUsd !== undefined ? { usageCostUsd } : {}),
     },
     new Date(),
     Math.random(),
