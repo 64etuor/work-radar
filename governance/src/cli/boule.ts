@@ -24,7 +24,7 @@ import { parseConductorConfig, parseEnvelopeDefaults } from "../mcp/config.ts";
 import { evaluateReadiness } from "../live/readiness.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
-import { reportTaskDone } from "../task/handlers.ts";
+import { recordExecutorAttempt, reportTaskDone } from "../task/handlers.ts";
 
 // `boule` CLI (spec 2026-06-07 §D): per-repo launcher + settings admin. DB-free — the work-radar
 // app drives discovery of designated local repos and calls `init`/`set` per repo with explicit
@@ -116,6 +116,53 @@ export async function cmdReportExit(flags: ParsedArgs["flags"]): Promise<string>
   if (!task) throw new Error("--task <id> is required");
   const r = await reportTaskDone(workspace, { taskId: task }, new Date(), Math.random());
   return r.ok ? `reported: ${r.eventId}` : `REFUSED: ${r.reason}`;
+}
+
+function reqFlag(flags: ParsedArgs["flags"], name: string): string {
+  const value = flags[name];
+  if (typeof value !== "string" || !value) throw new Error(`--${name} <value> is required`);
+  return value;
+}
+
+function reqIntegerFlag(flags: ParsedArgs["flags"], name: string): number {
+  const raw = reqFlag(flags, name);
+  const value = Number(raw);
+  if (!Number.isInteger(value)) throw new Error(`--${name} must be an integer`);
+  return value;
+}
+
+function reqBooleanFlag(flags: ParsedArgs["flags"], name: string): boolean {
+  const raw = reqFlag(flags, name);
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  throw new Error(`--${name} must be true|false`);
+}
+
+export async function cmdRecordAttempt(flags: ParsedArgs["flags"]): Promise<string> {
+  const workspace = reqFlag(flags, "workspace");
+  const task = reqFlag(flags, "task");
+  const attemptIndex = reqIntegerFlag(flags, "attempt");
+  const exitCode = reqIntegerFlag(flags, "exit-code");
+  const launched = reqBooleanFlag(flags, "launched");
+  const worktreeDirty = reqBooleanFlag(flags, "worktree-dirty");
+  const stderrDigest =
+    typeof flags["stderr-digest"] === "string" && flags["stderr-digest"]
+      ? flags["stderr-digest"]
+      : undefined;
+  const r = await recordExecutorAttempt(
+    workspace,
+    {
+      taskId: task,
+      attemptIndex,
+      exitCode,
+      launched,
+      worktreeDirty,
+      ...(stderrDigest ? { stderrDigest } : {}),
+    },
+    new Date(),
+    Math.random(),
+  );
+  return r.ok ? `recorded-attempt: ${r.eventId}` : `REFUSED: ${r.reason}`;
 }
 
 /** status: print the resolved policy + paths (read-only; shows fail-closed fallback if config bad). */
@@ -238,6 +285,7 @@ const USAGE = `boule <command> --repo <path>
   set    --repo <p> [--kind k] [--autonomy-level manual|dispatch|auto_plan|full] [--review-quorum n]
   status --repo <p>
   report-exit --workspace <ws> --task <id>   # executor clean-exit hint (verdict-free)
+  record-attempt --workspace <ws> --task <id> --attempt <n> --exit-code <n> --launched true|false --worktree-dirty true|false [--stderr-digest s]
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
   tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)`;
 
@@ -256,6 +304,9 @@ export async function main(argv: string[]): Promise<number> {
         return 0;
       case "report-exit":
         process.stdout.write((await cmdReportExit(flags)) + "\n");
+        return 0;
+      case "record-attempt":
+        process.stdout.write((await cmdRecordAttempt(flags)) + "\n");
         return 0;
       case "run":
         return await cmdRun(flags);

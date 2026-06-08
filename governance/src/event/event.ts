@@ -19,6 +19,8 @@ export type EventType =
   | "task_completed"    // v3 Phase A: task active → done (guarded: no open decision_blocked)
   | "task_cancelled"    // v3 Phase A: task → cancelled (terminal)
   | "executor_reported_done" // M1: verdict-free hint that executor reported/exited done; NOT terminal
+  | "executor_attempt_started" // LW2: verdict-free supervised-attempt birth hint; NEVER terminal
+  | "executor_attempt_finished" // LW2: verdict-free supervised-attempt exit evidence; NEVER terminal
   | "plan_proposed"     // v3 Phase B: Planner emits one draft plan (actor=planner, propose-only)
   | "plan_accepted"     // v3 Phase B: human gate — draft/needs_revision → active (actor=user)
   | "plan_revised"      // v3 Phase B: active → needs_revision (revision requested, carries reason)

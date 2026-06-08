@@ -5,8 +5,20 @@ import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { deriveDecisionState } from "../decision/decision.ts";
 import { deriveTaskState, tasksOf, type TaskState } from "./task.ts";
 import { canStart, canBlock, canComplete, canCancel } from "./guards.ts";
+import {
+  classifyAttemptEvidence,
+  type AttemptOutcomeClass,
+} from "../backends/attemptClass.ts";
 
 export interface TaskGateResult { ok: boolean; reason: string; eventId?: string; }
+export interface RecordAttemptInput {
+  taskId: string;
+  attemptIndex: number;
+  exitCode: number;
+  launched: boolean;
+  worktreeDirty: boolean;
+  stderrDigest?: string;
+}
 
 async function loadTask(workspaceDir: string, taskId: string): Promise<{ state: TaskState; all: GovEvent[] }> {
   const all = await readAllEvents(workspaceDir);
@@ -111,6 +123,42 @@ export async function reportTaskDone(
   };
   await writeEvent(workspaceDir, evt, now);
   return { ok: true, reason: "executor reported done", eventId: evt.frontmatter.id };
+}
+
+export async function recordExecutorAttempt(
+  workspaceDir: string,
+  input: RecordAttemptInput,
+  now: Date,
+  rand: number,
+): Promise<TaskGateResult> {
+  await loadTask(workspaceDir, input.taskId);
+  const outcomeClass: AttemptOutcomeClass = classifyAttemptEvidence({
+    exitCode: input.exitCode,
+    launched: input.launched,
+    ...(input.stderrDigest ? { stderrDigest: input.stderrDigest } : {}),
+  });
+  const body = {
+    attemptIndex: input.attemptIndex,
+    exitCode: input.exitCode,
+    launched: input.launched,
+    worktreeDirty: input.worktreeDirty,
+    ...(input.stderrDigest ? { stderrDigest: input.stderrDigest } : {}),
+    outcomeClass,
+    usage: "unknown",
+  };
+  const evt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", now, rand),
+      type: "executor_attempt_finished",
+      source: "agent_run",
+      actor: "executor",
+      tags: ["task", "attempt-hint"],
+      related_to: [input.taskId],
+    },
+    body: JSON.stringify(body),
+  };
+  await writeEvent(workspaceDir, evt, now);
+  return { ok: true, reason: "executor attempt recorded", eventId: evt.frontmatter.id };
 }
 
 /** cancel_task — any non-terminal → cancelled. */

@@ -161,6 +161,10 @@ function selectedBackendRecord(spec: BackendSpec): SelectedBackendRecord {
   };
 }
 
+function defaultBackendForExecutor(executor: ExecutorKind): SelectedBackendRecord {
+  return { provider: executor };
+}
+
 function isTerminal(value: BackendChain | Terminal | SelectedExecutorBackend): value is Terminal {
   return "role" in value;
 }
@@ -280,10 +284,27 @@ export async function conductPlan(
   };
   await writeEvent(workspaceDir, sessionEvt, at(2));
 
-  // 5) task_started — the bound task is now active (the session is running).
-  const startedEvt: GovEvent = {
+  // 5) executor_attempt_started — observation-only hint. It has no completion/approval authority.
+  const attemptStartedEvt: GovEvent = {
     frontmatter: {
       id: generateId("evt", at(3), rand),
+      type: "executor_attempt_started",
+      source: "hermes",
+      actor: "conductor",
+      tags: ["conductor", "attempt-hint"],
+      related_to: [taskId],
+    },
+    body: JSON.stringify({
+      attemptIndex: 0,
+      backend: selectedBackend ?? defaultBackendForExecutor(executor),
+    }),
+  };
+  await writeEvent(workspaceDir, attemptStartedEvt, at(3));
+
+  // 6) task_started — the bound task is now active (the session is running).
+  const startedEvt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", at(4), rand),
       type: "task_started",
       source: "hermes",
       actor: "conductor",
@@ -292,7 +313,7 @@ export async function conductPlan(
     },
     body: `Started ${taskId}`,
   };
-  await writeEvent(workspaceDir, startedEvt, at(3));
+  await writeEvent(workspaceDir, startedEvt, at(4));
 
   return {
     ok: true,

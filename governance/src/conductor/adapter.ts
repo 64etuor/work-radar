@@ -75,9 +75,10 @@ export interface LiveAdapterDeps {
    *  NOT under the target repo. A designated local repo has no governance/ dir, so the spawned
    *  session's executor-role MCP must point here, not at <repoRoot>/governance/src/mcp/server.ts. */
   serverEntrypoint: string;
-  /** Absolute path to the `boule` CLI (the Boule INSTALL). The codex completion wrapper shells
-   *  `node <completeEntrypoint> report-exit` on clean exit so the conductor sees a completion hint
-   *  even when the model forgets the complete_task MCP call. Same install as serverEntrypoint. */
+  /** Absolute path to the `boule` CLI (the Boule INSTALL). The executor wrapper shells
+   *  `node <completeEntrypoint> record-attempt` on every exit and `report-exit` on clean exit so
+   *  the conductor sees verdict-free hints even when the model forgets the complete_task MCP call.
+   *  Same install as serverEntrypoint. */
   completeEntrypoint: string;
   /** The governance workspace the spawned session's escalate must write back to (so the
    *  Conductor sees its decision_blocked). Defaults to <repoRoot>/governance/workspace. */
@@ -208,6 +209,29 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+function withAttemptEvidenceTail(
+  executorCommand: string,
+  spec: { worktreePath: string; taskId: string },
+  deps: { governanceWorkspace: string; completeEntrypoint: string },
+): string {
+  return (
+    `__boule_stderr="$(mktemp)"` +
+    `; ${executorCommand} 2>"$__boule_stderr"` +
+    `; __boule_exit=$?` +
+    `; __boule_dirty=false` +
+    `; if [ -n "$(git -C "${spec.worktreePath}" status --porcelain 2>/dev/null)" ]; then __boule_dirty=true; fi` +
+    `; __boule_digest="$(LC_ALL=C tr '\\n' ' ' < "$__boule_stderr" | cut -c 1-500)"` +
+    `; node --experimental-strip-types "${deps.completeEntrypoint}" record-attempt ` +
+    `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}" --attempt 0 ` +
+    `--exit-code "$__boule_exit" --launched true --worktree-dirty "$__boule_dirty" ` +
+    `--stderr-digest "$__boule_digest"` +
+    `; if [ "$__boule_exit" -eq 0 ]; then node --experimental-strip-types "${deps.completeEntrypoint}" report-exit ` +
+    `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}"; fi` +
+    `; rm -f "$__boule_stderr"` +
+    `; exit "$__boule_exit"\n`
+  );
+}
+
 /** Build the executor invocation `cmux send`s into the session pane. Pure (so the exact command is
  *  asserted in tests). Both executors run the SAME step-prompt against the SAME executor-role
  *  governance MCP (verdict tools structurally absent), so the loop closes identically: the session
@@ -219,9 +243,8 @@ function shellQuote(value: string): string {
  *  - codex: attaches the SAME executor-role server via `-c mcp_servers.*` (codex has no per-server
  *    denylist — the server's structural verdict-tool omission is the guarantee). Runs one-shot
  *    `codex exec` in a `workspace-write` sandbox confined to the worktree cwd (NEVER danger-full,
- *    per codex-worktree-runner). The codex model is flakier about issuing the closing complete_task
- *    MCP call (gpt-5.5 adherence; live smoke §5), so the codex command is followed by a guarded
- *    hint wrapper: `&& node <cli> report-exit` fires ONLY on clean exit (nonzero ⇒ skipped). */
+ *    per codex-worktree-runner). Both branches append the same supervised-attempt wrapper: evidence
+ *    is recorded on every exit, while report-exit remains clean-exit-only. */
 export function buildSessionCommand(
   executor: ExecutorKind,
   spec: { worktreePath: string; taskId: string },
@@ -251,20 +274,15 @@ export function buildSessionCommand(
     // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
     // Autonomy stays sandboxed: --sandbox workspace-write confines writes to the worktree cwd; this
     // is NEVER --dangerously-bypass-approvals-and-sandbox (which removes the sandbox).
-    // `&& node <cli> report-exit` = the adherence backstop: on clean codex exit, record a
-    // verdict-free hint even if the model skipped the complete_task tool call. cmux runs --command
-    // through a shell, so the `&&` short-circuits on nonzero exit.
-    return (
+    const codexCommand =
       `CODEX_HOME=${shellQuote(deps.codexHome)} ` +
       `codex exec --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
       `-C "${spec.worktreePath}" ` +
       `-c 'mcp_servers.boule-governance.command="node"' ` +
       `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
       `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}"}' ` +
-      `${promptCat}` +
-      ` && node --experimental-strip-types "${deps.completeEntrypoint}" report-exit ` +
-      `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}"\n`
-    );
+      `${promptCat}`;
+    return withAttemptEvidenceTail(codexCommand, spec, deps);
   }
   const denied = SESSION_DENIED_TOOLS.map((t) => `"${t}"`).join(" ");
   // bypassPermissions = unattended autonomy: without it the session blocks on the first Write/MCP
@@ -278,12 +296,12 @@ export function buildSessionCommand(
   // (L4). OS-level FS confinement for claude is a deferred follow-up (plan §9.6).
   // `--` terminates option parsing so the variadic `--disallowedTools <tools...>` cannot swallow
   // the positional prompt (without it, claude launches with NO prompt and sits idle → loop hangs).
-  return (
+  const claudeCommand =
     `claude --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
     `--permission-mode bypassPermissions ` +
     `--disallowedTools ${denied} ` +
-    `-- ${promptCat}\n`
-  );
+    `-- ${promptCat}`;
+  return withAttemptEvidenceTail(claudeCommand, spec, deps);
 }
 
 /** Extract the first `<kind>:<n>` ref from cmux stdout. cmux prints `OK <ref>` on success and

@@ -13,6 +13,7 @@ import { completeTask } from "../../src/task/handlers.js";
 import { escalate } from "../../src/escalate/escalate.js";
 import { chooseOption } from "../../src/decision/handlers.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
+import { cmdRecordAttempt } from "../../src/cli/boule.js";
 import {
   stubAdapter,
   makeLiveAdapter,
@@ -160,14 +161,20 @@ describe("conductPlan — one step per call (done-criteria #2)", () => {
     const all = await readAllEvents(dir);
     const conductorMinted = all.filter((e) => e.frontmatter.actor === "conductor");
     expect(typesOf(conductorMinted).sort()).toEqual(
-      ["session_spawned", "step_bound", "task_created", "task_started"].sort(),
+      [
+        "executor_attempt_started",
+        "session_spawned",
+        "step_bound",
+        "task_created",
+        "task_started",
+      ].sort(),
     );
     // exactly ONE task_created (step 0 only) — step 1 not materialized
     expect(all.filter((e) => e.frontmatter.type === "task_created")).toHaveLength(1);
 
-    // distinct chronological ids for the 4 minted events
+    // distinct chronological ids for the 5 minted events
     const ids = conductorMinted.map((e) => e.frontmatter.id);
-    expect(new Set(ids).size).toBe(4);
+    expect(new Set(ids).size).toBe(5);
   });
 
   it("conductor-minted task uses actor:conductor (NOT user)", async () => {
@@ -366,6 +373,55 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
         selectedBackend: { provider: "codex", model: "gpt-5-codex-max" },
       },
     });
+  });
+
+  it("mints executor_attempt_started at spawn with attemptIndex 0 and backend", async () => {
+    const planId = await setupActivePlanWithSteps([{ text: "audited step", difficulty: "hard" }]);
+    const policy = policyWithExecutor([{ provider: "codex", model: "gpt-5-codex-max" }]);
+
+    await conductPlan(
+      dir,
+      { planId },
+      { adapter: stubAdapter, policy, viability: viableProbes() },
+      at(10),
+      0.3,
+    );
+
+    const all = await readAllEvents(dir);
+    const task = all.find((e) => e.frontmatter.type === "task_created")!;
+    const attempt = all.find((e) => e.frontmatter.type === "executor_attempt_started")!;
+    expect(attempt.frontmatter.related_to).toEqual([task.frontmatter.id]);
+    expect(JSON.parse(attempt.body)).toEqual({
+      attemptIndex: 0,
+      backend: { provider: "codex", model: "gpt-5-codex-max" },
+    });
+  });
+
+  it("does not redispatch, switch provider, or complete from a token_exhausted attempt hint", async () => {
+    const spawns: SpawnSessionSpec[] = [];
+    const planId = await setupActivePlan();
+    const r1 = await conductPlan(dir, { planId }, { adapter: recordingAdapter(spawns) }, at(10), 0.3);
+    expect(r1.ok).toBe(true);
+
+    await cmdRecordAttempt({
+      workspace: dir,
+      task: r1.advanced!.taskId,
+      attempt: "0",
+      "exit-code": "1",
+      launched: "true",
+      "worktree-dirty": "false",
+      "stderr-digest": "usage limit reached",
+    });
+
+    const r2 = await conductPlan(dir, { planId }, { adapter: recordingAdapter(spawns) }, at(40), 0.4);
+    expect(r2.ok).toBe(false);
+    expect(r2.reason).toMatch(/in-flight/i);
+    expect(spawns).toHaveLength(1);
+
+    const all = await readAllEvents(dir);
+    expect(all.filter((e) => e.frontmatter.type === "step_bound")).toHaveLength(1);
+    expect(all.filter((e) => e.frontmatter.type === "session_spawned")).toHaveLength(1);
+    expect(all.filter((e) => e.frontmatter.type === "task_completed")).toHaveLength(0);
   });
 
   it("uses only injected probes for viability and is deterministic for repeated inputs", async () => {
@@ -764,9 +820,12 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toMatch(/--disallowedTools .*-- "\$\(cat \/wt\/s0\/\.boule\/step-prompt\.md\)"/);
     expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
     expect(c).not.toContain("codex");
-    // claude closes the loop reliably (live smoke) — no codex-style exit-report wrapper here
     expect(c).not.toContain("complete-task");
-    expect(c).not.toContain("report-exit");
+    expect(c).toContain("record-attempt");
+    expect(c).toContain("report-exit");
+    expect(c).toContain("--attempt 0");
+    expect(c).toContain("--exit-code");
+    expect(c).toContain("git -C \"/wt/s0\" status --porcelain");
     // claude uses the operator's own profile (its hooks are the app's) — NO CODEX_HOME isolation
     expect(c).not.toContain("CODEX_HOME");
   });
@@ -788,16 +847,21 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
     // codex has no per-server denylist — must NOT rely on claude's flags
     expect(c).not.toContain("--disallowedTools");
-    // adherence backstop: on CLEAN exit (`&&`), shell report-exit as a verdict-free hint
-    // even when gpt-5.5 skips the complete_task MCP call (nonzero exit ⇒ short-circuited, no call).
-    expect(c).toContain("&& node");
+    // supervised attempt evidence records the real exit code on success and failure; report-exit
+    // remains guarded to clean exits only.
+    expect(c).toContain("record-attempt");
+    expect(c).toContain('if [ "$__boule_exit" -eq 0 ]; then node');
     expect(c).toContain(`"${cmdDeps.completeEntrypoint}" report-exit`);
+    expect(c).toContain(`"${cmdDeps.completeEntrypoint}" record-attempt`);
     expect(c).not.toContain(`"${cmdDeps.completeEntrypoint}" complete-task`);
     expect(c).toContain('--workspace "/repo/governance/workspace"');
     expect(c).toContain('--task "evt_t0"');
+    expect(c).toContain("--attempt 0");
+    expect(c).toContain("--exit-code");
+    expect(c).toContain("git -C \"/wt/s0\" status --porcelain");
     // CODEX_HOME isolation: clean hooks-free profile, prefixed ONCE before `codex exec` (scopes to
     // codex only — the trailing `&& node … report-exit` boule CLI does NOT inherit it).
-    expect(c.startsWith("CODEX_HOME='/repo/governance/workspace/codex-home' codex exec")).toBe(true);
+    expect(c).toContain("; CODEX_HOME='/repo/governance/workspace/codex-home' codex exec");
     // exactly once → the trailing `&& node … report-exit` tail carries no CODEX_HOME
     expect((c.match(/CODEX_HOME=/g) ?? []).length).toBe(1);
     expect(c.indexOf("CODEX_HOME=")).toBeLessThan(c.indexOf("codex exec"));

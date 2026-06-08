@@ -23,7 +23,7 @@ async function taskIdForStep(all: GovEvent[], text: string): Promise<string> {
 }
 
 describe("ZERO-VERDICT isolation (done-criteria #6)", () => {
-  it("a full conduct run emits ONLY task_*/step_bound/session_spawned — ZERO decision_* events", async () => {
+  it("a full conduct run emits ONLY task_*/step_bound/session_spawned/attempt hints — ZERO decision_* events", async () => {
     const { planId } = await proposePlan(dir, { intent: "Load X", steps: ["step a", "step b"] }, at(0), 0.1);
     await acceptPlan(dir, { planId }, at(1), 0.2);
 
@@ -40,7 +40,13 @@ describe("ZERO-VERDICT isolation (done-criteria #6)", () => {
     const conductorAuthored = all.filter((e) => e.frontmatter.actor === "conductor");
     expect(conductorAuthored.some((e) => e.frontmatter.type.startsWith("decision_"))).toBe(false);
     // every conductor event is in the verdict-free whitelist.
-    const allowed = new Set(["task_created", "task_started", "step_bound", "session_spawned"]);
+    const allowed = new Set([
+      "task_created",
+      "task_started",
+      "step_bound",
+      "session_spawned",
+      "executor_attempt_started",
+    ]);
     expect(conductorAuthored.every((e) => allowed.has(e.frontmatter.type))).toBe(true);
   });
 });
