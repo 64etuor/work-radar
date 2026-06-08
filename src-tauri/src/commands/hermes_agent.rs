@@ -89,7 +89,7 @@ pub async fn hermes_agent_send(
 
     // 재개: fresh child 의 첫 prompt이고 DB에 이전 히스토리가 있으면 최근 N개를 preamble로 prepend.
     const REPLAY_LIMIT: i64 = 20;
-    let effective_text = if is_first_prompt {
+    let effective_text = if should_prepend_replay_preamble(is_first_prompt, &text) {
         let recent = crate::hermes_agent::session_store::recent_messages_inner(
             db.inner(),
             &tab_id,
@@ -226,6 +226,11 @@ fn mime_from_ext(path: &str) -> &'static str {
     }
 }
 
+fn should_prepend_replay_preamble(is_first_prompt: bool, text: &str) -> bool {
+    let trimmed = text.trim();
+    is_first_prompt && !trimmed.is_empty() && !trimmed.starts_with('/')
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn hermes_agent_cancel(
@@ -340,5 +345,19 @@ mod tests {
         let mut map = holder.write().await;
         let removed = map.remove("missing");
         assert!(removed.is_none());
+    }
+
+    #[test]
+    fn replay_preamble_is_not_added_to_slash_commands() {
+        assert!(should_prepend_replay_preamble(
+            true,
+            "이전 작업 이어서 해줘"
+        ));
+        assert!(!should_prepend_replay_preamble(true, "/new"));
+        assert!(!should_prepend_replay_preamble(true, "  /clear  "));
+        assert!(!should_prepend_replay_preamble(
+            false,
+            "이전 작업 이어서 해줘"
+        ));
     }
 }
