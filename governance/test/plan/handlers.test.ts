@@ -36,6 +36,24 @@ describe("plan handlers — Planner + lifecycle", () => {
     expect(all.some((e) => e.frontmatter.type === "plan_accepted")).toBe(false);
   });
 
+  it("propose accepts optional step difficulty and remains backward compatible when omitted", async () => {
+    const { planId } = await proposePlan(
+      dir,
+      {
+        intent: "Route work",
+        steps: [{ text: "tiny edit", difficulty: "trivial" }, { text: "legacy step" }],
+      },
+      at(0),
+      0.1,
+    );
+
+    const proposal = (await readAllEvents(dir)).find((e) => e.frontmatter.id === planId)!;
+
+    expect(proposal.body).toContain("1. tiny edit <!-- boule:difficulty trivial -->");
+    expect(proposal.body).toContain("2. legacy step");
+    expect(proposal.body).not.toContain("boule:check");
+  });
+
   it("accept_plan writes plan_accepted with actor=user (human gate); draft → active", async () => {
     const { planId } = await proposePlan(dir, { intent: "X", steps: ["a"] }, at(0), 0.1);
     const r = await acceptPlan(dir, { planId }, at(1), 0.2);

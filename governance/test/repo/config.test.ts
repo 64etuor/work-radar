@@ -48,17 +48,25 @@ describe("parseBouleConfig — strict, fail-closed validation", () => {
 
     expect(c.overrides?.budget).toBeUndefined();
     expect(c.overrides?.priceTable).toBeUndefined();
+    expect(c.overrides?.routing).toBeUndefined();
     expect(p.budget).toBeUndefined();
     expect(p.priceTable).toBeUndefined();
+    expect(p.routing).toBeUndefined();
   });
 
-  it("parses optional budget and priceTable overrides additively", () => {
+  it("parses optional routing, budget, and priceTable overrides additively", () => {
     const p = resolvePolicy(
       parseBouleConfig({
         schemaVersion: 1,
         kind: "work",
         overrides: {
           reviewQuorum: 2,
+          routing: {
+            executor: {
+              hard: { provider: "claude", model: "claude-opus-4-1" },
+              trivial: { provider: "codex", model: "gpt-5-codex-small" },
+            },
+          },
           budget: { runTokenCap: 100_000, stepCostCapUsd: 0.25 },
           priceTable: {
             codex: {
@@ -70,11 +78,35 @@ describe("parseBouleConfig — strict, fail-closed validation", () => {
     );
 
     expect(p.reviewQuorum).toBe(2);
+    expect(p.routing?.executor?.hard).toEqual({
+      provider: "claude",
+      model: "claude-opus-4-1",
+    });
+    expect(p.routing?.executor?.trivial).toEqual({
+      provider: "codex",
+      model: "gpt-5-codex-small",
+    });
     expect(p.budget).toEqual({ runTokenCap: 100_000, stepCostCapUsd: 0.25 });
     expect(p.priceTable?.codex?.["gpt-5-codex-small"]).toEqual({
       estimatedTokens: 2_000,
       costPerStepUsd: 0.01,
     });
+  });
+
+  it("rejects routing for verdict/completion roles", () => {
+    expect(() =>
+      parseBouleConfig({
+        schemaVersion: 1,
+        kind: "work",
+        overrides: {
+          routing: {
+            reviewer: {
+              hard: { provider: "claude", model: "claude-sonnet-4-5" },
+            },
+          },
+        },
+      }),
+    ).toThrow();
   });
 });
 

@@ -4,6 +4,7 @@ import type { GovEvent, EventType } from "../event/event.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { derivePlanState, plansOf, type PlanState } from "./plan.ts";
 import { canAccept, canRevise, canComplete, canArchive, canSupersede } from "./guards.ts";
+import type { Difficulty } from "../backends/difficulty.ts";
 
 export interface PlanGateResult { ok: boolean; reason: string; eventId?: string; }
 
@@ -34,6 +35,7 @@ async function writeLifecycle(
 
 export interface PlanStepInput {
   text: string;
+  difficulty?: Difficulty;
   check?: { command?: string; artifact?: string };
 }
 export interface ProposePlanInput { intent: string; steps: Array<string | PlanStepInput>; specId?: string; }
@@ -52,12 +54,17 @@ function normalizeStep(input: string | PlanStepInput): PlanStepInput | null {
     ...(command ? { command } : {}),
     ...(artifact ? { artifact } : {}),
   };
-  return Object.keys(check).length ? { text, check } : { text };
+  return {
+    text,
+    ...(input.difficulty ? { difficulty: input.difficulty } : {}),
+    ...(Object.keys(check).length ? { check } : {}),
+  };
 }
 
 function serializeStep(step: PlanStepInput, index: number): string {
+  const difficulty = step.difficulty ? ` <!-- boule:difficulty ${step.difficulty} -->` : "";
   const check = step.check ? ` <!-- boule:check ${JSON.stringify(step.check)} -->` : "";
-  return `${index + 1}. ${step.text}${check}`;
+  return `${index + 1}. ${step.text}${difficulty}${check}`;
 }
 
 /** Planner — consumes a "load feature X" intent, emits EXACTLY ONE plan_proposed (draft).

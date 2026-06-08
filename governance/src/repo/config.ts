@@ -3,7 +3,11 @@ import {
   DEFAULT_FORBIDDEN_DECISION_CLASSES,
   type AutonomyEnvelope,
 } from "../conductor/envelope.ts";
-import { backendsConfigSchema, type BackendsConfig } from "../backends/config.ts";
+import {
+  backendSpecSchema,
+  backendsConfigSchema,
+  type BackendsConfig,
+} from "../backends/config.ts";
 import {
   budgetCapsSchema,
   priceTableSchema,
@@ -56,6 +60,8 @@ export interface ResolvedPolicy {
   /** Per-role backend chains. undefined ⇒ env-derived defaults (consumed by the conductor/reviewer
    *  wiring; the fail-closed fallback runner lives in backends/fallback.ts). */
   backends?: BackendsConfig;
+  /** Executor-only difficulty routing. Selectors can only promote already-configured candidates. */
+  routing?: RoutingConfig;
   /** Optional pure budget caps. undefined ⇒ no budget filtering unless the caller supplies caps. */
   budget?: BudgetCaps;
   /** Optional provider/model pricing table. Unknown entries under active caps fail closed. */
@@ -96,6 +102,21 @@ const decisionClassSchema = z.enum([
   "data-loss",
 ]);
 
+const routingByDifficultySchema = z
+  .object({
+    trivial: backendSpecSchema.optional(),
+    standard: backendSpecSchema.optional(),
+    hard: backendSpecSchema.optional(),
+  })
+  .strict();
+
+const routingConfigSchema = z
+  .object({
+    executor: routingByDifficultySchema.optional(),
+  })
+  .strict();
+export type RoutingConfig = z.infer<typeof routingConfigSchema>;
+
 const overridesSchema = z
   .object({
     // autonomyLevel is the SINGLE autonomy knob; autoMode is DERIVED from it (no separate override —
@@ -108,6 +129,7 @@ const overridesSchema = z
     // Configurable per-role agent backends + token-exhaustion fallback chains (backends/config.ts).
     // Omitted ⇒ the harness keeps its current env-derived backend defaults (backward compatible).
     backends: backendsConfigSchema.optional(),
+    routing: routingConfigSchema.optional(),
     budget: budgetCapsSchema.optional(),
     priceTable: priceTableSchema.optional(),
   })
@@ -147,6 +169,7 @@ export function resolvePolicy(config: BouleConfig): ResolvedPolicy {
     allowedType2Actions: o.allowedType2Actions ?? base.allowedType2Actions,
     // No per-kind default: undefined ⇒ env-derived backend defaults downstream (additive surface).
     backends: o.backends,
+    routing: o.routing,
     budget: o.budget,
     priceTable: o.priceTable,
   };
