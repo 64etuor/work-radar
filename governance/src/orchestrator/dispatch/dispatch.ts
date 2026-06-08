@@ -151,7 +151,7 @@ export async function autoDispatch(
     );
 
     const conductNow = new Date(now.getTime() + offset * 1000);
-    offset += 4;
+    offset += 5;
     try {
       const result = await conductPlan(
         workspaceDir,
