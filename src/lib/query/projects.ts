@@ -38,6 +38,21 @@ export function useCreateProject() {
   });
 }
 
+/** 프로젝트 삭제. 로컬 기록은 보존되고 project 연결만 해제된다(FK SET NULL). */
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => unwrap(commands.deleteProject(projectId)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+      void qc.invalidateQueries({ queryKey: ["routines"] });
+      void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
+    },
+  });
+}
+
 /**
  * 기존 프로젝트 이름 편집. 단일 컬럼 갱신이라 kind 토글과 독립 — 두 편집이 겹쳐도 서로
  * 덮어쓰지 않는다(lost-update 방지). 생성 후 사용자 편집 경로.

@@ -34,6 +34,7 @@ import {
 } from "@/lib/projectCalendarColor";
 import {
   useBouleConfig,
+  useDeleteProject,
   useDeleteRepo,
   useProjectTokenStatus,
   useRepos,
@@ -357,9 +358,7 @@ function BouleConfigControls({
   const data = cfg.data;
   const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => budgetDraftFrom(null));
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [advancedDraft, setAdvancedDraft] = useState<AdvancedDraft>(() =>
-    advancedDraftFrom(null),
-  );
+  const [advancedDraft, setAdvancedDraft] = useState<AdvancedDraft>(() => advancedDraftFrom(null));
   const [advancedError, setAdvancedError] = useState<string | null>(null);
   const budgetSeed = data ? JSON.stringify(data.budget ?? null) : null;
   const [seededBudget, setSeededBudget] = useState<string | null>(null);
@@ -418,8 +417,7 @@ function BouleConfigControls({
 
   if (cfg.isLoading || !data) return null;
   const opensGate = data.autonomyLevel === "auto_plan" || data.autonomyLevel === "full";
-  const advancedDirty =
-    JSON.stringify(advancedDraft) !== JSON.stringify(advancedDraftFrom(data));
+  const advancedDirty = JSON.stringify(advancedDraft) !== JSON.stringify(advancedDraftFrom(data));
 
   const saveAdvanced = () => {
     const advanced = advancedInputFromDraft(advancedDraft);
@@ -755,6 +753,19 @@ export function ProjectCard({
 }) {
   const repos = useRepos(project.id);
   const tokenStatus = useProjectTokenStatus(project.id);
+  const deleteProject = useDeleteProject();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleDeleteProject = () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    deleteProject.mutate(project.id, {
+      onSuccess: () => onToast(`프로젝트 삭제됨: ${project.name}`),
+      onError: (e) => onToast(`프로젝트 삭제 실패: ${String(e)}`),
+    });
+  };
 
   return (
     <Card className="overflow-hidden rounded-2xl">
@@ -834,6 +845,41 @@ export function ProjectCard({
             </div>
           ))}
           <AddRepoForm projectId={project.id} onToast={onToast} />
+        </div>
+
+        <div className="border-destructive/30 bg-destructive/5 flex flex-col gap-3 rounded-xl border p-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="text-destructive size-4" />
+            <SectionLabel>프로젝트 삭제</SectionLabel>
+          </div>
+          <p className="text-muted-foreground text-xs leading-5">
+            프로젝트 행과 레포 연결을 삭제합니다. 완료 기록과 루틴은 남기고 프로젝트 연결만
+            해제합니다.
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={confirmDelete ? "destructive" : "outline"}
+              size="sm"
+              onClick={handleDeleteProject}
+              disabled={deleteProject.isPending}
+              className={cn(!confirmDelete && "text-destructive hover:text-destructive")}
+            >
+              <Trash2 className="size-3.5" />
+              {deleteProject.isPending ? "삭제 중" : confirmDelete ? "정말 삭제" : "삭제"}
+            </Button>
+            {confirmDelete && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleteProject.isPending}
+              >
+                취소
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </Card>

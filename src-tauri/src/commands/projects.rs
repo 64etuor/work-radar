@@ -3,10 +3,11 @@ use tauri::State;
 use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
+use crate::keychain;
 use crate::models::{
     CreateProjectInput, CreateRepoInput, Project, ProjectKind, Provider, Repo,
     SetProjectCalendarColorInput, SetProjectDefaultWriteCalendarInput, SetProjectNotionDbIdsInput,
-    WorkSignal,
+    TokenKind, WorkSignal,
 };
 use crate::notion::normalize_notion_db_id;
 
@@ -103,6 +104,58 @@ pub async fn create_project(
             other => AppError::from(other),
         }
     })
+}
+
+pub(crate) async fn delete_project_core(db: &Db, project_id: &str) -> Result<(), AppError> {
+    let Some((credential_ref,)) =
+        sqlx::query_as::<_, (String,)>("SELECT credential_ref FROM projects WHERE id = ?1")
+            .bind(project_id)
+            .fetch_optional(db)
+            .await?
+    else {
+        return Err(AppError::not_found(
+            "projects.not_found",
+            "project not found",
+        ));
+    };
+
+    let res = sqlx::query("DELETE FROM projects WHERE id = ?1")
+        .bind(project_id)
+        .execute(db)
+        .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::not_found(
+            "projects.not_found",
+            "project not found",
+        ));
+    }
+
+    for kind in [
+        TokenKind::Notion,
+        TokenKind::Github,
+        TokenKind::GoogleCalendar,
+        TokenKind::Gmail,
+    ] {
+        if let Err(e) = keychain::delete_token(&credential_ref, kind) {
+            tracing::warn!(
+                code = "projects.delete_token_cleanup_failed",
+                token_kind = kind.as_str(),
+                error = %e,
+                "project token cleanup failed"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// 프로젝트 삭제. 로컬 SQLite 액션이며 외부 write 없음.
+/// FK 규칙: repos는 cascade, signals/routines/agent_runs 등은 project_id=NULL.
+/// keychain 토큰은 credential_ref 기준으로 best-effort cleanup 한다.
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_project(db: State<'_, Db>, project_id: String) -> Result<(), AppError> {
+    delete_project_core(db.inner(), &project_id).await
 }
 
 /// 기존 프로젝트 이름 변경(`set_project_calendar_color` 미러). trim 후 빈 값 거부.
@@ -535,6 +588,80 @@ mod tests {
             "project별 keychain 키는 분리"
         );
         assert_eq!(fetch_projects(&db).await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn delete_project_removes_project_and_preserves_local_history() {
+        let db = fresh_db().await;
+        let proj = insert_project(&db, &project_input("임시 프로젝트", ProjectKind::Work))
+            .await
+            .unwrap();
+        let repo = insert_repo(
+            &db,
+            &CreateRepoInput {
+                project_id: proj.id.clone(),
+                provider: Provider::Github,
+                remote_url: Some("https://github.com/64etuor/work-radar".into()),
+                local_path: None,
+                default_branch: None,
+            },
+        )
+        .await
+        .unwrap();
+        let sig = insert_signal(
+            &db,
+            &CreateSignalInput {
+                title: "삭제 후에도 남을 완료 기록".into(),
+                kind: Some(Kind::Work),
+                project_id: Some(proj.id.clone()),
+            },
+        )
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO routines (id, project_id, title, freq, kind, area, active) \
+             VALUES ('rt-delete-project', ?1, '삭제 후에도 남을 루틴', 'daily', 'work', 'work', 1)",
+        )
+        .bind(&proj.id)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        delete_project_core(&db, &proj.id).await.unwrap();
+
+        assert!(
+            fetch_project(&db, &proj.id).await.unwrap().is_none(),
+            "project row is deleted"
+        );
+        assert!(
+            fetch_repos(&db, &proj.id).await.unwrap().is_empty(),
+            "repos cascade away with project"
+        );
+        let repo_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM repos WHERE id = ?1")
+            .bind(repo.id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(repo_count.0, 0);
+        let signal_project: (Option<String>,) =
+            sqlx::query_as("SELECT project_id FROM signals WHERE id = ?1")
+                .bind(sig.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(signal_project.0, None, "signals are kept as local history");
+        let routine_project: (Option<String>,) =
+            sqlx::query_as("SELECT project_id FROM routines WHERE id = 'rt-delete-project'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(
+            routine_project.0, None,
+            "routines are kept as local history"
+        );
+
+        let miss = delete_project_core(&db, &proj.id).await.unwrap_err();
+        assert_eq!(miss.code, "projects.not_found");
     }
 
     #[tokio::test]

@@ -7,6 +7,12 @@ export const commands = {
 	/**  모든 프로젝트 목록. Phase 0에서는 빈 DB라 빈 배열을 반환한다. */
 	listProjects: () => typedError<Project[], AppError>(__TAURI_INVOKE("list_projects")),
 	createProject: (input: CreateProjectInput) => typedError<Project, AppError>(__TAURI_INVOKE("create_project", { input })),
+	/**
+	 *  프로젝트 삭제. 로컬 SQLite 액션이며 외부 write 없음.
+	 *  FK 규칙: repos는 cascade, signals/routines/agent_runs 등은 project_id=NULL.
+	 *  keychain 토큰은 credential_ref 기준으로 best-effort cleanup 한다.
+	 */
+	deleteProject: (projectId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_project", { projectId })),
 	setProjectName: (projectId: string, name: string) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_name", { projectId, name })),
 	setProjectKind: (projectId: string, kind: ProjectKind) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_kind", { projectId, kind })),
 	setProjectCalendarColor: (input: SetProjectCalendarColorInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_calendar_color", { input })),

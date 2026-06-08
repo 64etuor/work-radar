@@ -56,6 +56,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_projects,
         // Projects / Repos / 토큰 (Phase 2).
         commands::create_project,
+        commands::delete_project,
         commands::set_project_name,
         commands::set_project_kind,
         commands::set_project_calendar_color,
