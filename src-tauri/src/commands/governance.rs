@@ -9,6 +9,10 @@ use crate::governance::boule_config::{
 use crate::governance::snapshot::{
     read_snapshot, resolve_governance_state_dir, ControlRoomSnapshot,
 };
+use crate::governance::ticker::{
+    get_project_tick_status_core, set_project_tick_enabled_core, set_project_tick_interval_core,
+    tick_project_now as tick_project_now_core, ProjectTickStatus, TickProjectNowResult,
+};
 use tauri::State;
 
 /// Read the latest derived governance projections. Absent axes return empty;
@@ -44,4 +48,50 @@ pub async fn set_boule_config(
     input: SetBouleConfigInput,
 ) -> Result<BouleConfigSettings, AppError> {
     set_boule_config_core(db.inner(), &input).await
+}
+
+/// Read a project's ticker settings/status. Missing ticker row returns a disabled default view.
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn get_project_tick_status(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<ProjectTickStatus, AppError> {
+    get_project_tick_status_core(db.inner(), &project_id).await
+}
+
+/// Toggle only the operator clock flag. This does not mutate Boule autonomy/governance state.
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn set_project_tick_enabled(
+    db: State<'_, Db>,
+    project_id: String,
+    enabled: bool,
+) -> Result<ProjectTickStatus, AppError> {
+    set_project_tick_enabled_core(db.inner(), &project_id, enabled).await
+}
+
+/// Store the future scheduler interval. T1 has no scheduler; this setting is inert until T2.
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn set_project_tick_interval(
+    db: State<'_, Db>,
+    project_id: String,
+    interval_sec: Option<i32>,
+) -> Result<ProjectTickStatus, AppError> {
+    set_project_tick_interval_core(db.inner(), &project_id, interval_sec).await
+}
+
+/// Run one bounded Boule heartbeat for the DB-resolved local repo path.
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn tick_project_now(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<TickProjectNowResult, AppError> {
+    tick_project_now_core(db.inner(), &project_id).await
 }
