@@ -31,18 +31,18 @@ describe("clampToViewport", () => {
 });
 
 describe("defaultBounds", () => {
-  it("uses a tall portrait phone-chat shape on a large viewport", () => {
+  it("uses a landscape sidebar+chat shape on a large viewport", () => {
     const b = defaultBounds(1440, 900);
-    expect(b.w).toBe(380);
-    expect(b.h).toBe(720);
-    // portrait: clearly taller than wide
-    expect(b.h).toBeGreaterThan(b.w);
+    expect(b.w).toBe(720);
+    expect(b.h).toBe(600);
+    // landscape: wider than tall (fits the session sidebar beside the chat)
+    expect(b.w).toBeGreaterThan(b.h);
   });
 
   it("centers horizontally and below the top bar on a large viewport", () => {
     const b = defaultBounds(1440, 900);
-    // horizontal center: (1440 - 380) / 2 = 530
-    expect(b.x).toBe(530);
+    // horizontal center: (1440 - 720) / 2 = 360
+    expect(b.x).toBe(360);
     // vertical center within usable area below the 56px top bar
     expect(b.y).toBeGreaterThanOrEqual(56);
   });

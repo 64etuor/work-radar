@@ -20,11 +20,12 @@ export function clampToViewport(b: Bounds, vw: number, vh: number): Bounds {
 const TOP_BAR_H = 56;
 
 /**
- * 기본 패널 크기 — 세로로 긴 폰챗(portrait) 비율.
+ * 기본 패널 크기 — 좌측 세션 사이드바 + 채팅 2컬럼이 들어가는 가로 비율(720×600).
+ * (사이드바는 상단 버튼으로 접을 수 있다 — 접으면 좁게 쓸 수 있고, 기본은 펼침이라 가로.)
  * viewport 보다 크면 아래 clamp(여백 포함)가 추가 축소한다.
  */
-const DEFAULT_W = 380;
-const DEFAULT_H = 720;
+const DEFAULT_W = 720;
+const DEFAULT_H = 600;
 /** 기본 배치 시 viewport 가장자리와의 최소 여백(px). */
 const MARGIN = 32;
 

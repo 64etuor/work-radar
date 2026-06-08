@@ -164,9 +164,9 @@ export function HermesPanel({
 
   const x = state.x ?? 0;
   const y = state.y ?? 0;
-  // 사이드바(세션 목록) + 채팅 2-컬럼이 들어가야 하므로 넓게(720), 높이는 origin의 tall 기본(720).
+  // 사이드바(세션 목록) + 채팅 2-컬럼이 들어가야 하므로 가로 비율(720×600). defaultBounds 와 일치.
   const w = state.w ?? 720;
-  const h = state.h ?? 720;
+  const h = state.h ?? 600;
 
   return (
     // TODO(a11y): focus trap + restore
