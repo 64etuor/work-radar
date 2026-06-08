@@ -3,7 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
-import { conductPlan, conductorStatus } from "../../src/conductor/handlers.js";
+import {
+  conductPlan,
+  conductorStatus,
+  selectViableExecutorBackend,
+  type ExecutorViabilityProbes,
+} from "../../src/conductor/handlers.js";
 import { completeTask } from "../../src/task/handlers.js";
 import { escalate } from "../../src/escalate/escalate.js";
 import { chooseOption } from "../../src/decision/handlers.js";
@@ -20,7 +25,11 @@ import {
   SESSION_DENIED_TOOLS,
   type FsLike,
   type SpawnResultLike,
+  type SpawnSessionSpec,
 } from "../../src/conductor/adapter.js";
+import type { BackendChain, BackendSpec } from "../../src/backends/config.js";
+import type { ResolvedPolicy } from "../../src/repo/config.js";
+import type { GovEvent } from "../../src/event/event.js";
 
 describe("SESSION_DENIED_TOOLS — executor sessions cannot reach the gate-opening tools", () => {
   it("denies every human-gate / orchestrator tool, INCLUDING auto_dispatch (auto-accept path)", () => {
@@ -42,11 +51,18 @@ describe("SESSION_DENIED_TOOLS — executor sessions cannot reach the gate-openi
     expect(c).toContain("mcp__boule-governance__accept_plan");
   });
 });
-import type { GovEvent } from "../../src/event/event.js";
 
 let dir: string;
 const at = (s: number) => new Date(Date.UTC(2026, 5, 2, 12, 0, s));
 const deps = { adapter: stubAdapter };
+const BASE_POLICY: ResolvedPolicy = {
+  kind: "work",
+  autonomyLevel: "manual",
+  autoMode: "off",
+  reviewQuorum: 2,
+  forbiddenDecisionClasses: ["scope"],
+  allowedType2Actions: ["edit", "test", "lint"],
+};
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "boule-cond-h-"));
@@ -65,11 +81,51 @@ async function setupActivePlan(): Promise<string> {
   await acceptPlan(dir, { planId }, at(1), 0.2);
   return planId;
 }
+async function setupActivePlanWithSteps(
+  steps: Parameters<typeof proposePlan>[1]["steps"],
+): Promise<string> {
+  const { planId } = await proposePlan(dir, { intent: "Load X", steps }, at(0), 0.1);
+  await acceptPlan(dir, { planId }, at(1), 0.2);
+  return planId;
+}
 function typesOf(all: GovEvent[]): string[] {
   return all.map((e) => e.frontmatter.type);
 }
 async function taskIdForStep(all: GovEvent[], text: string): Promise<string> {
   return all.find((e) => e.frontmatter.type === "task_created" && e.body === text)!.frontmatter.id;
+}
+function policyWithExecutor(chain: BackendSpec[], extra: Partial<ResolvedPolicy> = {}): ResolvedPolicy {
+  return {
+    ...BASE_POLICY,
+    ...extra,
+    backends: { executor: { chain } },
+  };
+}
+function viableProbes(opts: {
+  missingCommands?: readonly string[];
+  codexAuth?: boolean;
+  cleanCodexHome?: boolean;
+} = {}): ExecutorViabilityProbes {
+  const missing = new Set(opts.missingCommands ?? []);
+  return {
+    commandExists: (cmd) => !missing.has(cmd),
+    codexAuthAvailable: () => opts.codexAuth ?? true,
+    ensureCleanCodexHome: () => opts.cleanCodexHome ?? true,
+  };
+}
+function recordingAdapter(spawns: SpawnSessionSpec[]) {
+  return {
+    ...stubAdapter,
+    async spawnSession(spec: SpawnSessionSpec) {
+      spawns.push(spec);
+      return { surface: `stub-${spec.stepIndex}` };
+    },
+  };
+}
+function spawnedBodies(all: GovEvent[]): unknown[] {
+  return all
+    .filter((e) => e.frontmatter.type === "session_spawned")
+    .map((e) => JSON.parse(e.body));
 }
 
 describe("conductPlan — accept gate (US-001 / done-criteria #1)", () => {
@@ -149,6 +205,201 @@ describe("conductPlan — observe → advance (done-criteria #3)", () => {
     expect(r2.advanced!.stepIndex).toBe(1);
     const all2 = await readAllEvents(dir);
     expect(all2.filter((e) => e.frontmatter.type === "task_created")).toHaveLength(2);
+  });
+});
+
+describe("conductPlan — LW1 pre-flight executor selection", () => {
+  it("selects the ideal head from selectExecutorChain when the hard-step backend is viable", async () => {
+    const planId = await setupActivePlanWithSteps([{ text: "hard step", difficulty: "hard" }]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor(
+      [
+        { provider: "codex", model: "gpt-5-codex-max" },
+        { provider: "claude", model: "claude-opus-4-1" },
+      ],
+      {
+        routing: { executor: { hard: { provider: "codex", model: "gpt-5-codex-max" } } },
+      },
+    );
+
+    const r = await conductPlan(
+      dir,
+      { planId },
+      { adapter: recordingAdapter(spawns), policy, viability: viableProbes() },
+      at(10),
+      0.3,
+    );
+
+    expect(r.ok).toBe(true);
+    expect(spawns).toHaveLength(1);
+    expect(spawns[0]!.executor).toBe("codex");
+  });
+
+  it("falls forward once during pre-flight when the ideal codex backend lacks auth", async () => {
+    const planId = await setupActivePlanWithSteps([{ text: "hard step", difficulty: "hard" }]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor(
+      [
+        { provider: "codex", model: "gpt-5-codex-max" },
+        { provider: "claude", model: "claude-opus-4-1" },
+      ],
+      {
+        routing: { executor: { hard: { provider: "codex", model: "gpt-5-codex-max" } } },
+      },
+    );
+
+    const r = await conductPlan(
+      dir,
+      { planId },
+      {
+        adapter: recordingAdapter(spawns),
+        policy,
+        viability: viableProbes({ codexAuth: false }),
+      },
+      at(10),
+      0.3,
+    );
+
+    expect(r.ok).toBe(true);
+    expect(spawns).toHaveLength(1);
+    expect(spawns[0]!.executor).toBe("claude");
+  });
+
+  it("keeps no-backends configured behavior identical: single claude executor and no selectedBackend audit field", async () => {
+    const planId = await setupActivePlanWithSteps([{ text: "legacy step", difficulty: "hard" }]);
+    const spawns: SpawnSessionSpec[] = [];
+
+    const r = await conductPlan(
+      dir,
+      { planId },
+      { adapter: recordingAdapter(spawns), policy: BASE_POLICY },
+      at(10),
+      0.3,
+    );
+
+    expect(r.ok).toBe(true);
+    expect(spawns[0]!.executor).toBe("claude");
+    const all = await readAllEvents(dir);
+    expect(spawnedBodies(all)[0]).toEqual({
+      surface: "stub-0",
+      worktree: expect.stringMatching(/^\.boule-worktrees\/stub-evt_20260602_120000_[a-z0-9]+-step0$/),
+      envelopeHash: expect.any(String),
+      envelope: expect.objectContaining({ executor: "claude" }),
+    });
+    expect(spawnedBodies(all)[0]).not.toHaveProperty("selectedBackend");
+  });
+
+  it("fails closed when budget filtering returns the executor stall terminal: no spawn and the step remains open", async () => {
+    const planId = await setupActivePlanWithSteps([{ text: "over budget", difficulty: "hard" }]);
+    const spawns: SpawnSessionSpec[] = [];
+    const r = await conductPlan(
+      dir,
+      { planId },
+      {
+        adapter: recordingAdapter(spawns),
+        policy: policyWithExecutor([{ provider: "claude", model: "claude-opus-4-1" }]),
+        budget: {
+          caps: { stepCostCapUsd: 0.001 },
+          snapshot: { spentTokens: 0, spentCostUsd: 0 },
+          priceTable: {
+            claude: {
+              "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+            },
+          },
+        },
+        viability: viableProbes(),
+      },
+      at(10),
+      0.3,
+    );
+
+    expect(r).toEqual({ ok: false, reason: "executor:stall", advanced: null });
+    expect(spawns).toHaveLength(0);
+    expect(await conductorStatus(dir, { planId })).toMatchObject({
+      cursor: 0,
+      steps: [expect.objectContaining({ taskId: null })],
+    });
+    expect((await readAllEvents(dir)).some((e) => e.frontmatter.type === "session_spawned")).toBe(false);
+  });
+
+  it("fails closed when no configured backend is viable: no spawn and no silent completion", async () => {
+    const planId = await setupActivePlanWithSteps([{ text: "no viable executor", difficulty: "hard" }]);
+    const spawns: SpawnSessionSpec[] = [];
+
+    const r = await conductPlan(
+      dir,
+      { planId },
+      {
+        adapter: recordingAdapter(spawns),
+        policy: policyWithExecutor([
+          { provider: "codex", model: "gpt-5-codex-max" },
+          { provider: "claude", model: "claude-opus-4-1" },
+        ]),
+        viability: viableProbes({ codexAuth: false, missingCommands: ["claude"] }),
+      },
+      at(10),
+      0.3,
+    );
+
+    expect(r).toEqual({ ok: false, reason: "executor:stall", advanced: null });
+    expect(spawns).toHaveLength(0);
+    expect(typesOf(await readAllEvents(dir))).not.toContain("task_completed");
+    expect(await conductorStatus(dir, { planId })).toMatchObject({ cursor: 0 });
+  });
+
+  it("records the selected backend in the envelope and session_spawned body", async () => {
+    const planId = await setupActivePlanWithSteps([{ text: "audited step", difficulty: "hard" }]);
+    const policy = policyWithExecutor([{ provider: "codex", model: "gpt-5-codex-max" }]);
+
+    await conductPlan(
+      dir,
+      { planId },
+      { adapter: stubAdapter, policy, viability: viableProbes() },
+      at(10),
+      0.3,
+    );
+
+    expect(spawnedBodies(await readAllEvents(dir))[0]).toMatchObject({
+      selectedBackend: { provider: "codex", model: "gpt-5-codex-max" },
+      envelope: {
+        executor: "codex",
+        selectedBackend: { provider: "codex", model: "gpt-5-codex-max" },
+      },
+    });
+  });
+
+  it("uses only injected probes for viability and is deterministic for repeated inputs", async () => {
+    const calls: string[] = [];
+    const probes: ExecutorViabilityProbes = {
+      commandExists: (cmd) => {
+        calls.push(`cmd:${cmd}`);
+        return true;
+      },
+      codexAuthAvailable: () => {
+        calls.push("auth");
+        return false;
+      },
+      ensureCleanCodexHome: () => {
+        calls.push("clean");
+        return false;
+      },
+    };
+    const chain: BackendChain = {
+      chain: [
+        { provider: "codex", model: "gpt-5-codex-max" },
+        { provider: "claude", model: "claude-opus-4-1" },
+      ],
+    };
+
+    await expect(selectViableExecutorBackend(chain, probes)).resolves.toEqual({
+      executor: "claude",
+      backend: { provider: "claude", model: "claude-opus-4-1" },
+    });
+    await expect(selectViableExecutorBackend(chain, probes)).resolves.toEqual({
+      executor: "claude",
+      backend: { provider: "claude", model: "claude-opus-4-1" },
+    });
+    expect(calls).toEqual(["cmd:codex", "auth", "cmd:claude", "cmd:codex", "auth", "cmd:claude"]);
   });
 });
 

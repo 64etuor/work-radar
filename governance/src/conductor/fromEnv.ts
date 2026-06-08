@@ -11,10 +11,13 @@ import { join } from "node:path";
 import {
   stubAdapter,
   makeLiveAdapter,
+  ensureCleanCodexHome,
   projectLabelFromRepoRoot,
   type ConductorAdapter,
   type SpawnSyncLike,
+  type FsLike,
 } from "./adapter.ts";
+import type { ExecutorViabilityProbes } from "./handlers.ts";
 import { parseConductorConfig } from "../mcp/config.ts";
 import { cliEntrypoint } from "../repo/configIo.ts";
 
@@ -64,4 +67,51 @@ export function makeConductorAdapterFromEnv(
     projectLabel: projectLabelFromRepoRoot(paths.repoRoot),
     log: (line) => process.stderr.write(`${line}\n`),
   });
+}
+
+export function makeExecutorViabilityProbesFromEnv(
+  env: Record<string, string | undefined>,
+  paths: { workspace: string },
+): ExecutorViabilityProbes {
+  const codexAuthPath = join(env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json");
+  const fs: FsLike = {
+    mkdir: (p, o) => fsMkdir(p, o),
+    writeFile: (p, d) => fsWriteFile(p, d),
+    pathExists: async (p) => {
+      try {
+        await fsLstat(p);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    symlink: (target, link) => fsSymlink(target, link),
+    rm: (p) => fsRm(p, { force: true }),
+  };
+  return {
+    commandExists: (cmd) => {
+      try {
+        return nodeSpawnSync(cmd, ["--version"], { encoding: "utf8" }).status === 0;
+      } catch {
+        return false;
+      }
+    },
+    codexAuthAvailable: async () => {
+      if (env.OPENAI_API_KEY || env.CODEX_API_KEY) return true;
+      return fs.pathExists(codexAuthPath);
+    },
+    ensureCleanCodexHome: async () => {
+      try {
+        await ensureCleanCodexHome({
+          codexHome: `${paths.workspace}/codex-home`,
+          operatorAuthPath: codexAuthPath,
+          env,
+          fs,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
 }

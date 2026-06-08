@@ -16,7 +16,10 @@ import {
   repoEnv,
   serverEntrypoint,
 } from "../repo/configIo.ts";
-import { makeConductorAdapterFromEnv } from "../conductor/fromEnv.ts";
+import {
+  makeConductorAdapterFromEnv,
+  makeExecutorViabilityProbesFromEnv,
+} from "../conductor/fromEnv.ts";
 import { parseConductorConfig, parseEnvelopeDefaults } from "../mcp/config.ts";
 import { evaluateReadiness } from "../live/readiness.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
@@ -212,6 +215,8 @@ export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
       }),
       executor: cfg.executor,
       envelopeDefaults: parseEnvelopeDefaults(env),
+      policy,
+      viability: makeExecutorViabilityProbesFromEnv(env, { workspace: p.workspace }),
       readiness,
       autonomyLevel: policy.autonomyLevel,
       autoMode: policy.autoMode,

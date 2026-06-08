@@ -2,12 +2,15 @@ import type { ConductorAdapter } from "../../conductor/adapter.ts";
 import type { ExecutorKind } from "../../conductor/envelope.ts";
 import { deriveConductorState } from "../../conductor/conductor.ts";
 import { conductPlan, type ConductorEnvelopeDefaults } from "../../conductor/handlers.ts";
+import type { ExecutorViabilityProbes } from "../../conductor/handlers.ts";
 import { readAllEvents } from "../../decision/readEvents.ts";
 import type { GovEvent } from "../../event/event.ts";
 import { generateId } from "../../event/id.ts";
 import { writeEvent } from "../../event/writeEvent.ts";
 import { plansOf } from "../../plan/plan.ts";
 import { evaluateAutoDispatch, isTerminalPlanPhase, type AutoMode } from "./policy.ts";
+import type { ResolveBudgetContext } from "../../backends/resolve.ts";
+import type { ResolvedPolicy } from "../../repo/config.ts";
 
 // IMPORTANT: this module imports ZERO decision write handlers. Its own writes are only the four
 // verdict-free dispatch events; decision resolution remains human-gated elsewhere.
@@ -65,6 +68,9 @@ export async function autoDispatch(
     adapter: ConductorAdapter;
     executor?: ExecutorKind;
     envelopeDefaults?: ConductorEnvelopeDefaults;
+    policy?: ResolvedPolicy;
+    budget?: ResolveBudgetContext;
+    viability?: ExecutorViabilityProbes;
   },
   mode: AutoMode,
   now: Date,

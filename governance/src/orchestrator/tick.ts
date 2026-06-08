@@ -9,8 +9,10 @@ import { autoDispatch } from "./dispatch/dispatch.ts";
 import type { ConductorAdapter } from "../conductor/adapter.ts";
 import type { ExecutorKind } from "../conductor/envelope.ts";
 import type { ConductorEnvelopeDefaults } from "../conductor/handlers.ts";
+import type { ExecutorViabilityProbes } from "../conductor/handlers.ts";
 import type { ReadinessReport } from "../live/readiness.ts";
-import type { AutonomyLevel, AutoMode } from "../repo/config.ts";
+import type { AutonomyLevel, AutoMode, ResolvedPolicy } from "../repo/config.ts";
+import type { ResolveBudgetContext } from "../backends/resolve.ts";
 
 /** Stable reason categories (a contract for cron alerting / dashboards / tests — NOT events). */
 export type TickOutcome =
@@ -55,6 +57,9 @@ export interface TickDeps {
   adapter: ConductorAdapter;
   executor?: ExecutorKind;
   envelopeDefaults?: ConductorEnvelopeDefaults;
+  policy?: ResolvedPolicy;
+  budget?: ResolveBudgetContext;
+  viability?: ExecutorViabilityProbes;
   /** Pre-computed by the caller (the CLI runs the infra probes + stall count). */
   readiness: ReadinessReport;
   autonomyLevel: AutonomyLevel;
@@ -120,7 +125,14 @@ export async function runTick(
   const acc = await autoAccept(workspaceDir, deps.autonomyLevel, now, rand);
   const disp = await autoDispatch(
     workspaceDir,
-    { adapter: deps.adapter, executor: deps.executor, envelopeDefaults: deps.envelopeDefaults },
+    {
+      adapter: deps.adapter,
+      executor: deps.executor,
+      envelopeDefaults: deps.envelopeDefaults,
+      policy: deps.policy,
+      budget: deps.budget,
+      viability: deps.viability,
+    },
     deps.autoMode,
     now,
     rand,

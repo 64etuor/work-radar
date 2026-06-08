@@ -3,6 +3,7 @@ import { eventsForDecision } from "../decision/readEvents.ts";
 import { derivePlanState, type PlanPhase } from "../plan/plan.ts";
 import { deriveTaskState, type TaskPhase } from "../task/task.ts";
 import { hasOpenBlock } from "../task/handlers.ts";
+import type { Difficulty } from "../backends/difficulty.ts";
 
 export interface PlanStepCheck {
   command?: string;
@@ -11,6 +12,7 @@ export interface PlanStepCheck {
 
 export interface PlanStepRecord {
   text: string;
+  difficulty?: Difficulty;
   check?: PlanStepCheck;
 }
 
@@ -18,6 +20,7 @@ export interface PlanStepRecord {
 export interface ConductorStepState {
   stepIndex: number; // 0-based index into the parsed step list
   text: string;
+  difficulty?: Difficulty;
   check?: PlanStepCheck;
   taskId: string | null; // the step_bound task, or null when unmaterialized
   sessionId: string | null; // the session_spawned event id, or null
@@ -54,21 +57,53 @@ export function parsePlanSteps(planBody: string): string[] {
 }
 
 function parsePlanStepLine(line: string): PlanStepRecord {
-  const marker = line.match(/\s*<!--\s*boule:check\s+(\{.*\})\s*-->\s*$/);
-  if (!marker) return { text: line.trim() };
-  const text = line.slice(0, marker.index).trim();
+  const difficultyMarker = line.match(/<!--\s*boule:difficulty\s+(\S+)\s*-->/);
+  const difficulty =
+    difficultyMarker && isDifficulty(difficultyMarker[1]!) ? difficultyMarker[1] : undefined;
+  const checkMarker = line.match(/<!--\s*boule:check\s+(\{.*?\})\s*-->/);
+  const text = line
+    .replace(/\s*<!--\s*boule:difficulty\s+\S+\s*-->/g, "")
+    .replace(/\s*<!--\s*boule:check\s+\{.*?\}\s*-->/g, "")
+    .trim();
+  if (!checkMarker) {
+    return {
+      text,
+      ...(difficulty ? { difficulty } : {}),
+    };
+  }
   try {
-    const raw = JSON.parse(marker[1]!) as { command?: unknown; artifact?: unknown };
-    const command = typeof raw.command === "string" && raw.command.trim() ? raw.command.trim() : undefined;
-    const artifact = typeof raw.artifact === "string" && raw.artifact.trim() ? raw.artifact.trim() : undefined;
+    const raw: unknown = JSON.parse(checkMarker[1]!);
+    const rec = recordOf(raw);
+    const command =
+      typeof rec.command === "string" && rec.command.trim() ? rec.command.trim() : undefined;
+    const artifact =
+      typeof rec.artifact === "string" && rec.artifact.trim() ? rec.artifact.trim() : undefined;
     const check = {
       ...(command ? { command } : {}),
       ...(artifact ? { artifact } : {}),
     };
-    return Object.keys(check).length ? { text, check } : { text };
+    return {
+      text,
+      ...(difficulty ? { difficulty } : {}),
+      ...(Object.keys(check).length ? { check } : {}),
+    };
   } catch {
-    return { text: line.trim() };
+    return {
+      text: line.trim(),
+      ...(difficulty ? { difficulty } : {}),
+    };
   }
+}
+
+function isDifficulty(value: string): value is Difficulty {
+  return value === "trivial" || value === "standard" || value === "hard";
+}
+
+function recordOf(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object") return {};
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) out[key] = Reflect.get(value, key);
+  return out;
 }
 
 /** PURE composing projection over a plan + the full event list. Reads `step_bound`/
@@ -116,6 +151,7 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
       return {
         stepIndex,
         text: step.text,
+        ...(step.difficulty ? { difficulty: step.difficulty } : {}),
         ...(step.check ? { check: step.check } : {}),
         taskId: null,
         sessionId: null,
@@ -132,6 +168,7 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
     return {
       stepIndex,
       text: step.text,
+      ...(step.difficulty ? { difficulty: step.difficulty } : {}),
       ...(step.check ? { check: step.check } : {}),
       taskId,
       sessionId: session?.sessionId ?? null,

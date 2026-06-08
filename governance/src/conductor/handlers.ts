@@ -9,8 +9,20 @@ import {
   envelopeHash,
   type AutonomyEnvelope,
   type ExecutorKind,
+  type SelectedBackendRecord,
 } from "./envelope.ts";
 import type { ConductorAdapter } from "./adapter.ts";
+import {
+  selectExecutorChain,
+  type ResolveBudgetContext,
+} from "../backends/resolve.ts";
+import {
+  assertProviderAllowed,
+  type BackendChain,
+  type BackendSpec,
+} from "../backends/config.ts";
+import { exhaustedTerminal, type Terminal } from "../backends/fallback.ts";
+import type { ResolvedPolicy } from "../repo/config.ts";
 
 // NOTE: this module imports ZERO decision write handlers (no "../decision/handlers.ts"). The
 // Conductor mints task_created/task_started/step_bound/session_spawned and, after the completion
@@ -81,6 +93,78 @@ export interface ConductorEnvelopeDefaults {
   allowedType2Actions?: string[];
 }
 
+export interface ExecutorViabilityProbes {
+  commandExists(command: string): boolean | Promise<boolean>;
+  codexAuthAvailable(): boolean | Promise<boolean>;
+  ensureCleanCodexHome(): boolean | Promise<boolean>;
+}
+
+export interface SelectedExecutorBackend {
+  executor: ExecutorKind;
+  backend: BackendSpec;
+}
+
+const FAIL_CLOSED_VIABILITY: ExecutorViabilityProbes = {
+  commandExists: () => false,
+  codexAuthAvailable: () => false,
+  ensureCleanCodexHome: () => false,
+};
+
+export async function selectViableExecutorBackend(
+  resolved: BackendChain | Terminal,
+  probes: ExecutorViabilityProbes,
+): Promise<SelectedExecutorBackend | Terminal> {
+  if (isTerminal(resolved)) return resolved;
+  for (const spec of resolved.chain) {
+    const executor = await viableExecutorKind(spec, probes);
+    if (executor) return { executor, backend: spec };
+  }
+  return exhaustedTerminal("executor");
+}
+
+async function viableExecutorKind(
+  spec: BackendSpec,
+  probes: ExecutorViabilityProbes,
+): Promise<ExecutorKind | null> {
+  try {
+    assertProviderAllowed("executor", spec);
+  } catch {
+    return null;
+  }
+  const executor = executorKindForBackend(spec);
+  if (!executor) return null;
+  const command = spec.provider === "command" ? spec.command : executor;
+  if (!command || !(await probes.commandExists(command))) return null;
+  if (executor !== "codex") return executor;
+  if (!(await probes.codexAuthAvailable())) return null;
+  if (!(await probes.ensureCleanCodexHome())) return null;
+  return executor;
+}
+
+function executorKindForBackend(spec: BackendSpec): ExecutorKind | null {
+  if (spec.provider === "claude") return "claude";
+  if (spec.provider === "codex") return "codex";
+  if (spec.provider === "command") return commandProviderExecutor(spec.command);
+  return null;
+}
+
+function commandProviderExecutor(command: string | undefined): ExecutorKind | null {
+  if (command === "claude") return "claude";
+  if (command === "codex") return "codex";
+  return null;
+}
+
+function selectedBackendRecord(spec: BackendSpec): SelectedBackendRecord {
+  return {
+    provider: spec.provider,
+    ...(spec.model ? { model: spec.model } : {}),
+  };
+}
+
+function isTerminal(value: BackendChain | Terminal | SelectedExecutorBackend): value is Terminal {
+  return "role" in value;
+}
+
 export async function conductPlan(
   workspaceDir: string,
   input: ConductPlanInput,
@@ -88,6 +172,9 @@ export async function conductPlan(
     adapter: ConductorAdapter;
     executor?: ExecutorKind;
     envelopeDefaults?: ConductorEnvelopeDefaults;
+    policy?: ResolvedPolicy;
+    budget?: ResolveBudgetContext;
+    viability?: ExecutorViabilityProbes;
   },
   now: Date,
   rand: number,
@@ -96,9 +183,25 @@ export async function conductPlan(
   const gate = canAdvance(state);
   if (!gate.ok) return { ok: false, reason: gate.reason, advanced: null };
 
-  const executor: ExecutorKind = deps.executor ?? "claude";
   const k = state.cursor!; // canAdvance guarantees non-null
   const step = state.steps[k]!;
+  let executor: ExecutorKind = deps.executor ?? "claude";
+  let selectedBackend: SelectedBackendRecord | undefined;
+  const policy = deps.policy;
+  if (policy?.backends?.executor !== undefined) {
+    const chain = deps.budget
+      ? selectExecutorChain(step, policy, deps.budget)
+      : selectExecutorChain(step, policy);
+    const selected = await selectViableExecutorBackend(
+      chain,
+      deps.viability ?? FAIL_CLOSED_VIABILITY,
+    );
+    if (isTerminal(selected)) {
+      return { ok: false, reason: "executor:stall", advanced: null };
+    }
+    executor = selected.executor;
+    selectedBackend = selectedBackendRecord(selected.backend);
+  }
 
   // Per-event second-offset stamps → distinct chronological ids in one call (escalate.ts trick).
   const at = (i: number) => new Date(now.getTime() + i * 1000);
@@ -126,6 +229,7 @@ export async function conductPlan(
     taskId,
     worktreePath: wt.path,
     executor,
+    selectedBackend,
     forbiddenDecisionClasses: deps.envelopeDefaults?.forbiddenDecisionClasses,
     allowedType2Actions: deps.envelopeDefaults?.allowedType2Actions,
   });
@@ -171,6 +275,7 @@ export async function conductPlan(
       worktree: wt.path,
       envelopeHash: hash,
       envelope,
+      ...(selectedBackend ? { selectedBackend } : {}),
     }),
   };
   await writeEvent(workspaceDir, sessionEvt, at(2));

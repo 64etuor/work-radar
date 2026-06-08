@@ -42,7 +42,10 @@ import { escalate } from "../escalate/escalate.ts";
 import { pendingEscalations } from "../escalate/pending.ts";
 import { conductPlan, conductorStatus } from "../conductor/handlers.ts";
 import { type SpawnSyncLike } from "../conductor/adapter.ts";
-import { makeConductorAdapterFromEnv } from "../conductor/fromEnv.ts";
+import {
+  makeConductorAdapterFromEnv,
+  makeExecutorViabilityProbesFromEnv,
+} from "../conductor/fromEnv.ts";
 import { runPreflight } from "../live/preflight.ts";
 import { evaluateReadiness } from "../live/readiness.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
@@ -669,6 +672,9 @@ const conductorAdapter = makeConductorAdapterFromEnv(process.env, {
   repoRoot: REPO_ROOT,
   serverEntrypoint: fileURLToPath(import.meta.url),
 });
+const EXECUTOR_VIABILITY = makeExecutorViabilityProbesFromEnv(process.env, {
+  workspace: WORKSPACE,
+});
 
 // ── Phase D: Observer adapter ─────────────────────────────────────────────────
 // 기본 = no-op(stub·cmux 무접근). BOULE_OBSERVER_MODE=live 일 때만 실제 `cmux tree --all --json` 어댑터.
@@ -915,6 +921,8 @@ server.registerTool(
         adapter: conductorAdapter,
         executor: CONDUCTOR_CFG.executor,
         envelopeDefaults: ENVELOPE_DEFAULTS,
+        policy: LOADED_POLICY.policy,
+        viability: EXECUTOR_VIABILITY,
       },
       nowFn(),
       randFn(),
@@ -979,6 +987,8 @@ if (SESSION_ALLOWS_VERDICTS)
         adapter: conductorAdapter,
         executor: CONDUCTOR_CFG.executor,
         envelopeDefaults: ENVELOPE_DEFAULTS,
+        policy: LOADED_POLICY.policy,
+        viability: EXECUTOR_VIABILITY,
       },
       AUTO_MODE,
       nowFn(),
