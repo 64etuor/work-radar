@@ -34,6 +34,8 @@ import { evaluateReadiness } from "../live/readiness.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
 import { recordExecutorAttempt, reportTaskDone } from "../task/handlers.ts";
+import { readAllEvents } from "../decision/readEvents.ts";
+import { buildControlRoomSnapshot } from "../snapshot/snapshot.ts";
 
 // `boule` CLI (spec 2026-06-07 §D): per-repo launcher + settings admin. DB-free — the work-radar
 // app drives discovery of designated local repos and calls `init`/`set` per repo with explicit
@@ -325,6 +327,13 @@ export async function cmdStatus(flags: ParsedArgs["flags"]): Promise<string> {
   return lines.join("\n");
 }
 
+/** snapshot: read-only live Control Room fold over <repo>/.boule/workspace/events. */
+export async function cmdSnapshot(flags: ParsedArgs["flags"]): Promise<string> {
+  const repo = reqRepo(flags);
+  const events = await readAllEvents(boulePaths(repo).workspace);
+  return JSON.stringify(buildControlRoomSnapshot(events));
+}
+
 function formatBackendsStatus(backends: BackendsConfig | undefined): string {
   if (!backends) return "unset";
   const executor = backends.executor ? `executor chain ${backends.executor.chain.length}` : "executor unset";
@@ -449,6 +458,7 @@ const USAGE = `boule <command> --repo <path>
   status --repo <p>
   report-exit --workspace <ws> --task <id>   # executor clean-exit hint (verdict-free)
   record-attempt --workspace <ws> --task <id> --attempt <n> --exit-code <n> --launched true|false --worktree-dirty true|false [--stderr-digest s]
+  snapshot --repo <p> [--json]   # read-only live Control Room snapshot JSON
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
   tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)`;
 
@@ -470,6 +480,9 @@ export async function main(argv: string[]): Promise<number> {
         return 0;
       case "record-attempt":
         process.stdout.write((await cmdRecordAttempt(flags)) + "\n");
+        return 0;
+      case "snapshot":
+        process.stdout.write((await cmdSnapshot(flags)) + "\n");
         return 0;
       case "run":
         return await cmdRun(flags);

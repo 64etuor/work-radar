@@ -7,6 +7,7 @@ import {
   cmdInit,
   cmdSet,
   cmdStatus,
+  cmdSnapshot,
   cmdReportExit,
   cmdRecordAttempt,
 } from "../../src/cli/boule.js";
@@ -16,6 +17,8 @@ import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
 import { conductPlan } from "../../src/conductor/handlers.js";
 import { stubAdapter } from "../../src/conductor/adapter.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
+import { writeEvent } from "../../src/event/writeEvent.js";
+import type { GovEvent } from "../../src/event/event.js";
 
 let repo: string;
 beforeEach(async () => {
@@ -244,6 +247,49 @@ describe("cmdInit / cmdSet / cmdStatus", () => {
 
   it("requires --repo", async () => {
     await expect(cmdStatus({})).rejects.toThrow(/--repo/);
+  });
+});
+
+describe("cmdSnapshot", () => {
+  it("folds <repo>/.boule/workspace/events and writes no events", async () => {
+    const workspace = boulePaths(repo).workspace;
+    const event: GovEvent = {
+      frontmatter: {
+        id: "evt_20260608_101500_0001",
+        type: "task_created",
+        source: "system",
+        actor: "test",
+        tags: [],
+      },
+      body: "Snapshot task",
+    };
+    await writeEvent(workspace, event, new Date(Date.UTC(2026, 5, 8, 10, 15, 0)));
+    const before = (await readAllEvents(workspace)).map((e) => e.frontmatter.id);
+
+    const out = await cmdSnapshot({ repo, json: true });
+    const after = (await readAllEvents(workspace)).map((e) => e.frontmatter.id);
+    const snap = JSON.parse(out);
+
+    expect(after).toEqual(before);
+    expect(snap.generatedAt).toBe("2026-06-08T10:15:00Z");
+    expect(snap.tasks).toEqual([
+      { taskId: "evt_20260608_101500_0001", title: "Snapshot task", phase: "ready" },
+    ]);
+    expect(snap.orchestrator.tasks).toEqual([
+      { taskId: "evt_20260608_101500_0001", phase: "ready", hasOpenBlock: false },
+    ]);
+  });
+
+  it("returns an empty snapshot for a repo with no event directory", async () => {
+    expect(JSON.parse(await cmdSnapshot({ repo, json: true }))).toEqual({
+      generatedAt: null,
+      tasks: [],
+      plans: [],
+      specs: [],
+      sessions: [],
+      handoffs: [],
+      orchestrator: { tasks: [], plans: [], sessions: [] },
+    });
   });
 });
 
