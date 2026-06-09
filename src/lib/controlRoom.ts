@@ -45,6 +45,18 @@ export function statusTone(phase: AnyPhase): StatusTone {
   }
 }
 
+/** Resolve which project's snapshot the Control Room should show. Honors the user's
+ *  `selected` choice while it still exists in `available`; otherwise falls back to the
+ *  first available project (and `null` when there are none). Pure → testable, and avoids
+ *  a setState-in-effect by being derived each render. */
+export function pickActiveProjectId(
+  available: readonly string[],
+  selected: string | null,
+): string | null {
+  if (selected != null && available.includes(selected)) return selected;
+  return available[0] ?? null;
+}
+
 /** Humanize the snapshot mtime. `nowMs` is injected so the function is pure/testable. */
 export function relativeAgo(generatedAt: string | null, nowMs: number): string {
   if (!generatedAt) return "아직 프로젝션 없음";

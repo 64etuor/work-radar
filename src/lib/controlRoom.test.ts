@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { relativeAgo, statusTone } from "./controlRoom";
+import { pickActiveProjectId, relativeAgo, statusTone } from "./controlRoom";
+
+describe("pickActiveProjectId", () => {
+  it("defaults to the first project when nothing is selected", () => {
+    expect(pickActiveProjectId(["a", "b"], null)).toBe("a");
+  });
+
+  it("honors a still-present selection", () => {
+    expect(pickActiveProjectId(["a", "b"], "b")).toBe("b");
+  });
+
+  it("falls back to the first project when the selection disappeared", () => {
+    expect(pickActiveProjectId(["a", "b"], "gone")).toBe("a");
+  });
+
+  it("returns null when there are no projects", () => {
+    expect(pickActiveProjectId([], "a")).toBeNull();
+    expect(pickActiveProjectId([], null)).toBeNull();
+  });
+});
 
 describe("statusTone", () => {
   it("maps phases to the master §12 color buckets", () => {

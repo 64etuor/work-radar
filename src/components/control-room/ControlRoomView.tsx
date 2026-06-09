@@ -4,10 +4,10 @@ import { AlertTriangle, Gauge, Loader2, Play, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { ProjectTickerStatusRow, TickStatusOutcome } from "../../bindings";
-import { relativeAgo } from "../../lib/controlRoom";
+import { pickActiveProjectId, relativeAgo } from "../../lib/controlRoom";
 import { computeVitals, type VitalKey } from "../../lib/controlRoomGraph";
 import {
-  useControlRoomSnapshot,
+  useProjectControlRoomSnapshot,
   useProjectTickerList,
   useSetTickEnabled,
   useSetTickInterval,
@@ -16,13 +16,32 @@ import {
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Switch } from "../ui/switch";
 import { Schematic } from "./Schematic";
 import { Vitals } from "./Vitals";
 
 export default function ControlRoomView() {
-  const { data, isLoading, isError, error, refetch, isFetching } = useControlRoomSnapshot();
   const ticker = useProjectTickerList();
+  // Which project's governance state to show. The snapshot is per-project (folded LIVE from
+  // that repo's .boule/workspace), so the user picks one; default = first available project.
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const projects = useMemo(
+    () => (ticker.data ?? []).map((row) => ({ id: row.projectId, name: row.projectName })),
+    [ticker.data],
+  );
+  const activeProjectId = pickActiveProjectId(
+    projects.map((p) => p.id),
+    selectedProject,
+  );
+  const { data, isLoading, isError, error, refetch, isFetching } =
+    useProjectControlRoomSnapshot(activeProjectId);
   // Date.now() is impure, so seed "now" once via a lazy initializer; refreshes bump it.
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [filter, setFilter] = useState<VitalKey | null>(null);
@@ -44,6 +63,23 @@ export default function ControlRoomView() {
           <Gauge size={18} aria-hidden /> Control Room
         </h1>
         <span className="cr-stamp">
+          {activeProjectId && projects.length > 0 && (
+            <Select
+              value={activeProjectId}
+              onValueChange={(value) => setSelectedProject(value)}
+            >
+              <SelectTrigger className="cr-project-select" aria-label="Control Room project">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {stamp}
           <Button
             variant="outline"
@@ -70,6 +106,11 @@ export default function ControlRoomView() {
 
       <TickerPanel rows={ticker.data ?? []} nowMs={nowMs} loading={ticker.isLoading} />
 
+      {!ticker.isLoading && projects.length === 0 && (
+        <Card className="p-4">
+          <div className="cr-empty">프로젝트가 없습니다 — 설정에서 프로젝트를 추가하세요.</div>
+        </Card>
+      )}
       {isLoading && <div className="cr-empty">불러오는 중…</div>}
       {isError && (
         <Card className="p-4">

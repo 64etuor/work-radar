@@ -647,7 +647,10 @@ pub async fn recover_interrupted_ticks(db: &Db) -> Result<u64, AppError> {
     Ok(res.rows_affected())
 }
 
-async fn resolve_project_repo_path(db: &Db, project_id: &str) -> Result<PathBuf, AppError> {
+pub(crate) async fn resolve_project_repo_path(
+    db: &Db,
+    project_id: &str,
+) -> Result<PathBuf, AppError> {
     ensure_project_exists(db, project_id).await?;
     let path: Option<String> = sqlx::query_scalar(
         "SELECT local_path FROM repos \
@@ -670,7 +673,7 @@ fn error_report_json(code: &str, message: &str) -> String {
     serde_json::json!({ "error": { "code": code, "message": message } }).to_string()
 }
 
-async fn resolve_node_bin() -> Option<PathBuf> {
+pub(crate) async fn resolve_node_bin() -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(node) = std::env::var("BOULE_NODE") {
         if !node.trim().is_empty() {
@@ -707,7 +710,7 @@ async fn node_version(bin: &Path) -> Option<String> {
     }
 }
 
-fn resolve_boule_cli_entrypoint() -> Option<PathBuf> {
+pub(crate) fn resolve_boule_cli_entrypoint() -> Option<PathBuf> {
     if let Ok(entrypoint) = std::env::var("BOULE_CLI_ENTRYPOINT") {
         let p = PathBuf::from(entrypoint);
         if p.is_file() {

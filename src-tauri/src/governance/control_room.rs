@@ -1,0 +1,302 @@
+//! Per-project Control Room snapshot. Runs the bounded, read-only `boule snapshot
+//! --repo <path> --json` CLI over a DB-resolved local repo path and parses its JSON
+//! into [`ControlRoomSnapshot`]. The repo path is ALWAYS resolved from the DB (never
+//! renderer-supplied — INVARIANT, plan §6) and the CLI never writes governance events
+//! (INVARIANT #1, structural).
+#![allow(clippy::result_large_err)]
+
+use crate::db::Db;
+use crate::error::AppError;
+use crate::governance::snapshot::{parse_control_room_snapshot, ControlRoomSnapshot};
+use crate::governance::ticker::{
+    resolve_boule_cli_entrypoint, resolve_node_bin, resolve_project_repo_path,
+};
+use async_trait::async_trait;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::process::Command;
+
+/// Bounded ceiling for one read-only snapshot fold. The CLI is a one-shot read; this only
+/// guards against a hung child (no unbounded wait — plan §6 "no unbounded timer").
+const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Runs `boule snapshot` for a repo and returns its stdout (the snapshot JSON). Abstracted
+/// so the orchestration is unit-testable without spawning a real `node` process.
+#[async_trait]
+pub trait SnapshotCommandRunner: Send + Sync {
+    async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError>;
+}
+
+/// Real runner: spawns `node --experimental-strip-types <boule.ts> snapshot --repo <p> --json`.
+pub struct RealSnapshotCommandRunner {
+    node_bin: PathBuf,
+    cli_entrypoint: PathBuf,
+}
+
+impl RealSnapshotCommandRunner {
+    pub async fn resolve() -> Result<Self, AppError> {
+        let node_bin = resolve_node_bin().await.ok_or_else(|| {
+            AppError::terminal("governance.node_not_found", "node binary not found")
+        })?;
+        let cli_entrypoint = resolve_boule_cli_entrypoint().ok_or_else(|| {
+            AppError::terminal(
+                "governance.boule_cli_not_found",
+                "boule CLI entrypoint not found; set BOULE_CLI_ENTRYPOINT or WORK_RADAR_GOVERNANCE_DIR",
+            )
+        })?;
+        Ok(Self {
+            node_bin,
+            cli_entrypoint,
+        })
+    }
+}
+
+#[async_trait]
+impl SnapshotCommandRunner for RealSnapshotCommandRunner {
+    async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError> {
+        let child = Command::new(&self.node_bin)
+            .arg("--experimental-strip-types")
+            .arg(&self.cli_entrypoint)
+            .arg("snapshot")
+            .arg("--repo")
+            .arg(repo_path)
+            .arg("--json")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .output();
+        let output = tokio::time::timeout(SNAPSHOT_TIMEOUT, child)
+            .await
+            .map_err(|_| {
+                AppError::terminal("governance.snapshot_timeout", "boule snapshot timed out")
+            })?
+            .map_err(|e| AppError::terminal("governance.snapshot_spawn_failed", e.to_string()))?;
+        if !output.status.success() {
+            // Bounded diagnostic: exit code + a truncated stderr tail (the CLI's own
+            // message; never an external network body).
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let tail: String = stderr.trim().chars().take(300).collect();
+            return Err(AppError::terminal(
+                "governance.snapshot_failed",
+                format!("exit {}: {tail}", output.status.code().unwrap_or(-1)),
+            ));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+}
+
+/// Default production runner: resolves the real `node`/CLI per call (cheap; mirrors ticker).
+struct SystemSnapshotCommandRunner;
+
+#[async_trait]
+impl SnapshotCommandRunner for SystemSnapshotCommandRunner {
+    async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError> {
+        RealSnapshotCommandRunner::resolve()
+            .await?
+            .run_snapshot_command(repo_path)
+            .await
+    }
+}
+
+/// Fold a project's `.boule/workspace` events into a live Control Room snapshot.
+pub async fn get_project_control_room_snapshot(
+    db: &Db,
+    project_id: &str,
+) -> Result<ControlRoomSnapshot, AppError> {
+    get_project_control_room_snapshot_with_runner(db, project_id, SystemSnapshotCommandRunner).await
+}
+
+pub async fn get_project_control_room_snapshot_with_runner<R: SnapshotCommandRunner>(
+    db: &Db,
+    project_id: &str,
+    runner: R,
+) -> Result<ControlRoomSnapshot, AppError> {
+    // A project with no enabled local repo (e.g. a Notion-only / GitHub-only project) simply
+    // has no `.boule/workspace` to fold — that is an EMPTY snapshot, not an error. Surfacing a
+    // raw `ticker.repo_not_found` here would re-introduce the broken-on-live failure T4b fixes
+    // (plan §6). Unknown-project and any other error still propagate.
+    let repo_path = match resolve_project_repo_path(db, project_id).await {
+        Ok(path) => path,
+        Err(err) if err.code == "ticker.repo_not_found" => {
+            return Ok(ControlRoomSnapshot::default())
+        }
+        Err(err) => return Err(err),
+    };
+    let stdout = runner.run_snapshot_command(&repo_path).await?;
+    parse_control_room_snapshot(&stdout)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::init_db;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_db_path() -> PathBuf {
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before epoch")
+            .as_nanos();
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("work-radar-control-room-test-{nanos}-{seq}.db"))
+    }
+
+    async fn test_db() -> Db {
+        init_db(&temp_db_path()).await.expect("init test db")
+    }
+
+    async fn seed_project(db: &Db, project_id: &str) {
+        sqlx::query(
+            "INSERT INTO projects (id, name, kind, credential_ref) VALUES (?1, 'CR', 'personal', 'cred')",
+        )
+        .bind(project_id)
+        .execute(db)
+        .await
+        .expect("seed project");
+    }
+
+    async fn seed_local_repo(db: &Db, project_id: &str, repo_id: &str, path: &str) {
+        sqlx::query(
+            "INSERT INTO repos (id, project_id, provider, local_path, default_branch, enabled) \
+             VALUES (?1, ?2, 'local', ?3, 'main', 1)",
+        )
+        .bind(repo_id)
+        .bind(project_id)
+        .bind(path)
+        .execute(db)
+        .await
+        .expect("seed repo");
+    }
+
+    struct FakeRunner {
+        calls: Arc<Mutex<Vec<PathBuf>>>,
+        result: Result<String, AppError>,
+    }
+
+    impl FakeRunner {
+        fn ok(stdout: &str) -> Self {
+            Self {
+                calls: Arc::new(Mutex::new(Vec::new())),
+                result: Ok(stdout.to_string()),
+            }
+        }
+
+        fn err(code: &str) -> Self {
+            Self {
+                calls: Arc::new(Mutex::new(Vec::new())),
+                result: Err(AppError::terminal(code, "boom")),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl SnapshotCommandRunner for FakeRunner {
+        async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError> {
+            self.calls
+                .lock()
+                .expect("calls lock")
+                .push(repo_path.to_path_buf());
+            self.result.clone()
+        }
+    }
+
+    const VALID_SNAPSHOT: &str = r#"{"generatedAt":"2026-06-09T00:00:00Z","tasks":[{"taskId":"t1","title":"T","phase":"active"}],"plans":[],"specs":[],"sessions":[],"handoffs":[],"orchestrator":{"tasks":[],"plans":[],"sessions":[]}}"#;
+
+    #[tokio::test]
+    async fn folds_resolved_repo_path_into_snapshot() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", "/tmp/repo-under-test").await;
+        let runner = FakeRunner::ok(VALID_SNAPSHOT);
+
+        let snap = get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .expect("snapshot");
+
+        assert_eq!(snap.tasks.len(), 1);
+        assert_eq!(snap.generated_at.as_deref(), Some("2026-06-09T00:00:00Z"));
+    }
+
+    #[tokio::test]
+    async fn passes_db_resolved_repo_path_to_runner_not_renderer() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", "/tmp/the-only-repo").await;
+        let runner = FakeRunner::ok(VALID_SNAPSHOT);
+        let calls = runner.calls.clone();
+
+        get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .expect("snapshot");
+
+        let recorded = calls.lock().expect("calls lock");
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0], PathBuf::from("/tmp/the-only-repo"));
+    }
+
+    #[tokio::test]
+    async fn project_without_local_repo_yields_empty_snapshot_without_running() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await; // no repo row (e.g. Notion-only project)
+        let runner = FakeRunner::ok(VALID_SNAPSHOT);
+        let calls = runner.calls.clone();
+
+        let snap = get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .expect("empty snapshot, not an error");
+
+        assert_eq!(snap, ControlRoomSnapshot::default());
+        assert!(snap.tasks.is_empty() && snap.generated_at.is_none());
+        // Never shelled out — no local repo to fold.
+        assert_eq!(*calls.lock().expect("calls lock"), Vec::<PathBuf>::new());
+    }
+
+    #[tokio::test]
+    async fn unknown_project_still_errors() {
+        let db = test_db().await;
+        // No project seeded at all → resolve_project_repo_path's ensure_project_exists errors.
+        let runner = FakeRunner::ok(VALID_SNAPSHOT);
+        let calls = runner.calls.clone();
+
+        let err = get_project_control_room_snapshot_with_runner(&db, "ghost", runner)
+            .await
+            .unwrap_err();
+
+        assert_ne!(err.code, "ticker.repo_not_found"); // a real error, not the empty-snapshot path
+        assert_eq!(*calls.lock().expect("calls lock"), Vec::<PathBuf>::new());
+    }
+
+    #[tokio::test]
+    async fn runner_error_propagates() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", "/tmp/repo").await;
+        let runner = FakeRunner::err("governance.snapshot_failed");
+
+        let err = get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, "governance.snapshot_failed");
+    }
+
+    #[tokio::test]
+    async fn malformed_runner_output_is_terminal_parse_error() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", "/tmp/repo").await;
+        let runner = FakeRunner::ok("{ not json");
+        let calls = runner.calls.clone();
+
+        let err = get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, "governance.parse_failed");
+        assert_eq!(calls.lock().expect("calls lock").len(), 1); // ran, then failed to parse
+    }
+}

@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands, type SetBouleConfigInput_Deserialize } from "../../bindings";
 import { unwrap } from "./client";
 
-/** Read-only snapshot of the governance harness derived projections (Control Room). */
-export function useControlRoomSnapshot() {
+/** LIVE per-project Control Room snapshot, folded from the project's `.boule/workspace`
+ *  events by the read-only `boule snapshot` CLI. Disabled until a projectId is provided. */
+export function useProjectControlRoomSnapshot(projectId: string | null) {
   return useQuery({
-    queryKey: ["control-room-snapshot"],
-    queryFn: () => unwrap(commands.getControlRoomSnapshot()),
+    queryKey: ["control-room-snapshot", projectId],
+    queryFn: () => unwrap(commands.getProjectControlRoomSnapshot(projectId!)),
+    enabled: projectId != null,
     staleTime: 5_000,
   });
 }

@@ -6,9 +6,8 @@ use crate::error::AppError;
 use crate::governance::boule_config::{
     get_boule_config_core, set_boule_config_core, BouleConfigSettings, SetBouleConfigInput,
 };
-use crate::governance::snapshot::{
-    read_snapshot, resolve_governance_state_dir, ControlRoomSnapshot,
-};
+use crate::governance::control_room::get_project_control_room_snapshot as get_project_control_room_snapshot_core;
+use crate::governance::snapshot::ControlRoomSnapshot;
 use crate::governance::ticker::{
     get_project_tick_status_core, list_project_tick_status_core, set_project_tick_enabled_core,
     set_project_tick_interval_core, tick_project_now as tick_project_now_core, ProjectTickStatus,
@@ -16,14 +15,17 @@ use crate::governance::ticker::{
 };
 use tauri::State;
 
-/// Read the latest derived governance projections. Absent axes return empty;
-/// `generatedAt` is null until the harness has projected at least once.
+/// Read ONE project's LIVE Control Room snapshot by folding its `.boule/workspace` events
+/// via the bounded, read-only `boule snapshot` CLI. The repo path is resolved from the DB
+/// (never renderer-supplied). Empty arrays + null `generatedAt` for a repo with no events.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_control_room_snapshot() -> Result<ControlRoomSnapshot, AppError> {
-    let state_dir =
-        resolve_governance_state_dir(std::env::var("WORK_RADAR_GOVERNANCE_WORKSPACE").ok());
-    read_snapshot(&state_dir)
+#[allow(clippy::result_large_err)] // AppError 큰 Err 변형 — 레포 관용(snapshot.rs 등과 동일).
+pub async fn get_project_control_room_snapshot(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<ControlRoomSnapshot, AppError> {
+    get_project_control_room_snapshot_core(db.inner(), &project_id).await
 }
 
 /// Read a designated LOCAL repo's Boule config (kind + autonomyLevel + reviewQuorum + budget).

@@ -458,7 +458,7 @@ const USAGE = `boule <command> --repo <path>
   status --repo <p>
   report-exit --workspace <ws> --task <id>   # executor clean-exit hint (verdict-free)
   record-attempt --workspace <ws> --task <id> --attempt <n> --exit-code <n> --launched true|false --worktree-dirty true|false [--stderr-digest s]
-  snapshot --repo <p> [--json]   # read-only live Control Room snapshot JSON
+  snapshot --repo <p>   # read-only live Control Room snapshot (always JSON on stdout)
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
   tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)`;
 

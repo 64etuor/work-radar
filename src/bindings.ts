@@ -627,10 +627,11 @@ export const commands = {
 	/**  메모 명시적 삭제(빈 body upsert와 동등하지만 의도 분리용). */
 	deleteTimelineNote: (targetKind: TimelineNoteTarget, targetId: string, date: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_timeline_note", { targetKind, targetId, date })),
 	/**
-	 *  Read the latest derived governance projections. Absent axes return empty;
-	 *  `generatedAt` is null until the harness has projected at least once.
+	 *  Read ONE project's LIVE Control Room snapshot by folding its `.boule/workspace` events
+	 *  via the bounded, read-only `boule snapshot` CLI. The repo path is resolved from the DB
+	 *  (never renderer-supplied). Empty arrays + null `generatedAt` for a repo with no events.
 	 */
-	getControlRoomSnapshot: () => typedError<ControlRoomSnapshot, AppError>(__TAURI_INVOKE("get_control_room_snapshot")),
+	getProjectControlRoomSnapshot: (projectId: string) => typedError<ControlRoomSnapshot, AppError>(__TAURI_INVOKE("get_project_control_room_snapshot", { projectId })),
 	/**
 	 *  Read a designated LOCAL repo's Boule config (kind + autonomyLevel + reviewQuorum + budget).
 	 *  Absent file ⇒ per-kind defaults (config_exists=false). Settings-only — no event write path.
