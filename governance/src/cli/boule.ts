@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { boulePaths } from "../repo/paths.ts";
 import {
   defaultConfig,
@@ -29,9 +29,8 @@ import {
   makeConductorAdapterFromEnv,
   makeExecutorViabilityProbesFromEnv,
 } from "../conductor/fromEnv.ts";
-import { parseConductorConfig, parseEnvelopeDefaults } from "../mcp/config.ts";
-import { evaluateReadiness } from "../live/readiness.ts";
-import { listStalledTasks } from "../orchestrator/stall.ts";
+import { parseEnvelopeDefaults } from "../mcp/config.ts";
+import { computeRepoReadiness } from "../live/repoReadiness.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
 import { recordExecutorAttempt, reportTaskDone } from "../task/handlers.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
@@ -399,30 +398,11 @@ function formatTick(r: TickReport): string {
  *  daemon, INVARIANT #5). Readiness/halt/stall gated; conducts <=--max-steps; reports + exits. */
 export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
   const repo = reqRepo(flags);
-  const loaded = await loadPolicyOrStrict(repo);
-  if (loaded.source === "fallback")
-    process.stderr.write(`boule: WARN config unreadable, STRICT fallback (${loaded.reason})\n`);
-  const policy = loaded.policy;
+  const rr = await computeRepoReadiness(repo);
+  if (rr.source === "fallback")
+    process.stderr.write(`boule: WARN config unreadable, STRICT fallback (${rr.reason})\n`);
+  const { policy, env, cfg, stalledCount, readiness } = rr;
   const p = boulePaths(repo);
-  const env = { ...process.env, ...repoEnv(repo, policy) };
-  const cfg = parseConductorConfig(env);
-
-  const probe = (cmd: string, args: string[]): boolean => {
-    try {
-      return spawnSync(cmd, args, { encoding: "utf8" }).status === 0;
-    } catch {
-      return false;
-    }
-  };
-  const stalledCount = (await listStalledTasks(p.workspace)).length;
-  const readiness = evaluateReadiness({
-    signals: {
-      env,
-      cmuxBinaryOk: probe(cfg.cmuxCmd, ["--version"]),
-      gitWorktreeOk: probe("git", ["-C", repo, "worktree", "list"]),
-    },
-    stalledCount,
-  });
 
   const report = await runTick(
     p.workspace,
