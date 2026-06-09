@@ -17,6 +17,8 @@ import { MatrixCanvas } from "@/components/board/MatrixCanvas";
 import { normalizeTitleEdit } from "@/components/board/matrixCanvasUtils";
 import { type ProjectPickerState } from "@/components/board/ProjectPickerModal";
 import { type RoutineDraft } from "@/components/board/RoutinesPanel";
+import { sortSignalsForBoard } from "@/components/board/signalOrdering";
+import { useSignalPop } from "@/components/board/useSignalPop";
 import {
   localToday,
   localWeekday,
@@ -58,6 +60,7 @@ import {
   useUpdateSignalTitle,
 } from "@/lib/query";
 import { IpcError } from "@/lib/query/client";
+import { signalCalendarProjectId } from "@/lib/signalCalendarRouting";
 import { useToastStore } from "@/lib/toast";
 import { usePendingSignalFocus } from "@/lib/usePendingSignalFocus";
 import { useUIStore } from "@/store";
@@ -119,47 +122,31 @@ export function CaptureBoard() {
   const updateTitle = useUpdateSignalTitle();
   const deleteSignal = useDeleteSignal();
   const { goTo } = useUIStore();
-  // enrich_batch 진행 표시는 agent_runs SSOT에서 직접 파생 (store 브릿지 없음).
-  // 결과 모달은 사용자가 에이전트 바 박스를 클릭해야 열린다 — 자동 오픈 없음.
   const enrichAllAgentRunning = useEnrichAllRunning();
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
   const signals = useMemo(() => signalsQ.data ?? [], [signalsQ.data]);
+  const [captureOrder, setCaptureOrder] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const boardSignals = useMemo(
+    () => sortSignalsForBoard(signals, captureOrder),
+    [signals, captureOrder],
+  );
   const todayItems = useMemo(() => todayQ.data ?? [], [todayQ.data]);
   const routines = useMemo(() => routinesQ.data ?? [], [routinesQ.data]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // 팔레트 시그널 검색(goToSignal) → 그 카드를 선택(포커스). 보드 비가시 시그널이면 무해한 no-op.
   usePendingSignalFocus(setSelectedId);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<CardMenuState | null>(null);
   const [calendarModal, setCalendarModal] = useState<CalendarModalState | null>(null);
   const [projectPicker, setProjectPicker] = useState<ProjectPickerState | null>(null);
-  const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
 
-  // 새 카드 pop 추적: 직전까지 알던 id 집합. 새로 등장한 카드만 pop.
-  const knownIdsRef = useRef<Set<string>>(new Set());
-  const expectPopRef = useRef(false);
-  // 긴급도 가중을 이미 적용한 (signalId|eventsSig) 키 — 같은 이벤트 집합에 중복 호출/churn 방지.
+  const { expectPopRef, knownIdsRef, poppedIds } = useSignalPop(signals);
   const urgencyAppliedRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    const current = new Set(signals.map((s) => s.id));
-    if (expectPopRef.current) {
-      const fresh = signals.filter((s) => !knownIdsRef.current.has(s.id)).map((s) => s.id);
-      if (fresh.length) {
-        setPoppedIds(new Set(fresh));
-        window.setTimeout(() => setPoppedIds(new Set()), 400);
-      }
-      expectPopRef.current = false;
-    }
-    knownIdsRef.current = current;
-  }, [signals]);
-
-  // ── 액션 ──
   // 새 신호는 kind에 맞는 프로젝트로 태깅(있으면). 없으면 NULL → 나중에 reconcile.
   const projects = projectsQ.data ?? [];
   const projectIdForKind = (kind: Kind): string | null =>
@@ -167,7 +154,19 @@ export function CaptureBoard() {
 
   const handleCapture = (title: string, kind: Kind) => {
     expectPopRef.current = true;
-    createSignal.mutate({ title, kind, projectId: projectIdForKind(kind) });
+    createSignal.mutate(
+      { title, kind, projectId: projectIdForKind(kind) },
+      {
+        onSuccess: (signal) => {
+          if (knownIdsRef.current.has(signal.id)) return;
+          setCaptureOrder((prev) => {
+            const next = new Map(prev);
+            next.set(signal.id, next.size + 1);
+            return next;
+          });
+        },
+      },
+    );
   };
 
   const handleClassify = useCallback(
@@ -323,7 +322,9 @@ export function CaptureBoard() {
         setCalendarModal({
           signalId,
           title: sig?.title ?? "",
-          projectId: sig?.projectId ?? null,
+          projectId: sig
+            ? signalCalendarProjectId(projects, sig.projectId ?? null, sig.kind ?? null)
+            : null,
         });
         break;
       }
@@ -573,7 +574,7 @@ export function CaptureBoard() {
 
       <div className="board">
         <MatrixCanvas
-          signals={signals}
+          signals={boardSignals}
           selectedId={selectedId}
           poppedIds={poppedIds}
           onSelect={setSelectedId}

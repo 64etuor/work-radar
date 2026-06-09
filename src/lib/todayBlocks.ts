@@ -81,10 +81,30 @@ function isoFor(
   return { startISO, endISO };
 }
 
+function hhmmOf(iso: string): string | null {
+  return iso.length >= 16 ? iso.slice(11, 16) : null;
+}
+
+function eventDurationMin(e: CalendarEvent): number | null {
+  if (!e.end) return null;
+  const ms = new Date(e.end).getTime() - new Date(e.start).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return Math.round(ms / 60_000);
+}
+
+function routineMatchesEvent(routine: RoutineToday, event: CalendarEvent): boolean {
+  const time = routine.timeOverride ?? routine.timeOfDay;
+  if (!time) return false;
+  if (hhmmOf(event.start) !== time) return false;
+  const duration = routine.durationMin ?? ROUTINE_DURATION_MIN;
+  return eventDurationMin(event) === duration;
+}
+
 export function buildTodayBlocks({ signals, events, routines, date }: Input): TimedBlock[] {
   const out: TimedBlock[] = [];
   const absorbed = new Set<string>();
   const routineByEvent = new Map<string, RoutineToday>();
+  const staleRoutineIds = new Set<string>();
 
   for (const s of signals) {
     if (!s.scheduledAt || !s.scheduledDuration) continue;
@@ -119,10 +139,15 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
     const routine = eventLookupKeys(e)
       .map((lookupKey) => routineByEvent.get(lookupKey))
       .find((candidate): candidate is RoutineToday => Boolean(candidate));
+    if (routine && !routineMatchesEvent(routine, e)) {
+      if (key) absorbed.add(key);
+      staleRoutineIds.add(routine.id);
+      continue;
+    }
     out.push({
       id: `event:${e.calendarId}:${e.id}`,
       kind: "event",
-      title: e.title,
+      title: routine?.title ?? e.title,
       startISO: e.start,
       endISO: e.end ?? plusMin(e.start, 30),
       calendarId: e.calendarId,
@@ -139,7 +164,7 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
     if (!time) continue;
     const linkedCalendarId = r.linkedCalendarId ?? r.googleCalendarId;
     const linkedEventId = r.linkedEventId ?? r.googleEventId;
-    if (eventKey(linkedCalendarId, linkedEventId)) continue;
+    if (eventKey(linkedCalendarId, linkedEventId) && !staleRoutineIds.has(r.id)) continue;
     const { startISO, endISO } = isoFor(date, time, r.durationMin ?? ROUTINE_DURATION_MIN);
     out.push({
       id: `routine:${r.id}`,

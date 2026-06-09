@@ -83,22 +83,22 @@ export default function App() {
   const transitionTimerRef = useRef<number | null>(null);
   const navigateView = useCallback(
     (target: View, motion: ViewMotion | "neutral" = "neutral") => {
-      if (motion === "neutral" || target === view) {
+      const currentView = useUIStore.getState().view;
+      if (transitionTimerRef.current !== null) {
+        window.clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+
+      if (motion === "neutral" || target === currentView) {
+        transitionRunningRef.current = false;
         setViewSnapshot(null);
         goTo(target);
         return;
       }
 
-      if (transitionRunningRef.current) return;
-
       const shell = document.querySelector<HTMLElement>(".view-shell");
       const motionId = ++viewSnapshotIdRef.current;
       transitionRunningRef.current = true;
-
-      if (transitionTimerRef.current !== null) {
-        window.clearTimeout(transitionTimerRef.current);
-        transitionTimerRef.current = null;
-      }
 
       flushSync(() => {
         setViewSnapshot({
@@ -115,7 +115,7 @@ export default function App() {
         setViewSnapshot((snapshot) => (snapshot?.id === motionId ? null : snapshot));
       }, VIEW_SLIDE_CLEANUP_MS);
     },
-    [goTo, view],
+    [goTo],
   );
 
   useEffect(
@@ -145,7 +145,7 @@ export default function App() {
     },
     (dir) => {
       const motion = dir > 0 ? "forward" : "back";
-      navigateView(adjacentView(view, dir), motion);
+      navigateView(adjacentView(useUIStore.getState().view, dir), motion);
     },
   );
 

@@ -61,6 +61,12 @@ export function formatCountdownLabel(display: CountdownDisplay): string {
   return `${display.text} 남음`;
 }
 
+/** 저장/표시에 쓰는 스프린트 목표 문구 정규화. 비어 있으면 표시하지 않는다. */
+export function formatSprintGoal(goal: string | null | undefined): string | null {
+  const normalized = (goal ?? "").trim().replace(/\s+/g, " ");
+  return normalized.length > 0 ? normalized : null;
+}
+
 /** 요일 코드 → 한국어 라벨(에디터 표시). bindings의 Weekday(snake_case)와 동일 키. */
 export const WEEKDAY_LABELS: Record<string, string> = {
   mon: "월",

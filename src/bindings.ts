@@ -229,6 +229,8 @@ export const commands = {
 	anchorWeekday: Weekday,
 	/**  경계 기준 시각 'HH:MM'(로컬 wall-clock). */
 	anchorTime: string,
+	/**  스프린트 목표 문구. 기존 JSON에는 없을 수 있으므로 역직렬화 기본값을 유지한다. */
+	goal?: string,
 } | null, AppError>(__TAURI_INVOKE("get_sprint_config")),
 	/**  스프린트 설정 저장(검증 후 JSON upsert). 단일 전역 — app_config 한 행. */
 	setSprintConfig: (config: SprintConfig) => typedError<null, AppError>(__TAURI_INVOKE("set_sprint_config", { config })),
@@ -2163,6 +2165,8 @@ export type SprintConfig = {
 	anchorWeekday: Weekday,
 	/**  경계 기준 시각 'HH:MM'(로컬 wall-clock). */
 	anchorTime: string,
+	/**  스프린트 목표 문구. 기존 JSON에는 없을 수 있으므로 역직렬화 기본값을 유지한다. */
+	goal?: string,
 };
 
 /**  헤더 카운트다운 데이터: 다음 경계(로컬 RFC3339)와 남은 초(음수=overdue). 미설정 시 None. */

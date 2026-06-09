@@ -2,10 +2,12 @@ import "./PrRadarView.css";
 
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Bot, ExternalLink, MessageSquare, RefreshCw, TriangleAlert } from "lucide-react";
+import { lazy, Suspense } from "react";
 
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import type { BucketChartDatum } from "@/lib/prRadarChart";
 import {
   fetchPrRadar,
   openExternal,
@@ -18,6 +20,12 @@ import {
   useTriggerPrSelfcheck,
 } from "@/lib/query";
 import { useUIStore } from "@/store";
+
+const PrBucketDistributionChart = lazy(() =>
+  import("@/lib/prRadarChart").then((module) => ({
+    default: module.PrBucketDistributionChart,
+  })),
+);
 
 /** 5개 readiness 버킷 표시 순서 + 라벨 (PLAN.md Phase 4). */
 const BUCKETS: { key: ReadinessBucket; label: string; hint: string }[] = [
@@ -34,6 +42,41 @@ const CI_LABEL: Record<CiStatus, string> = {
   pending: "CI 진행",
   none: "체크 없음",
 };
+
+type PrDashboardMetric = {
+  key: string;
+  label: string;
+  value: number;
+  tone?: "danger" | "success" | "muted";
+};
+
+const BUCKET_COLORS: Record<ReadinessBucket, string> = {
+  ci_blocked: "var(--color-wr-danger)",
+  needs_self_check: "var(--color-q3)",
+  ready: "var(--color-q2)",
+  stale: "var(--color-wr-muted)",
+  merged_cleanup: "var(--color-wr-subtle)",
+};
+
+const BUCKET_SHORT_LABEL: Record<ReadinessBucket, string> = {
+  ci_blocked: "CI",
+  needs_self_check: "Review",
+  ready: "Ready",
+  stale: "Stale",
+  merged_cleanup: "Merged",
+};
+
+function groupPrRadarItems(items: PrRadarItem[]): Record<ReadinessBucket, PrRadarItem[]> {
+  const grouped: Record<ReadinessBucket, PrRadarItem[]> = {
+    ci_blocked: [],
+    needs_self_check: [],
+    ready: [],
+    stale: [],
+    merged_cleanup: [],
+  };
+  for (const item of items) grouped[item.bucket].push(item);
+  return grouped;
+}
 
 /**
  * PR Radar — 멀티 레포 PR을 readiness 버킷별로(INVARIANT #4: 자기 뷰). 임계치/충돌은 Inbox
@@ -72,14 +115,43 @@ export function PrRadarView() {
   const isFetching = results.some((r) => r.isFetching);
   const errors = results.map((r) => r.error).filter((e): e is Error => !!e);
 
-  const grouped: Record<ReadinessBucket, PrRadarItem[]> = {
-    ci_blocked: [],
-    needs_self_check: [],
-    ready: [],
-    stale: [],
-    merged_cleanup: [],
-  };
-  for (const it of items) grouped[it.bucket].push(it);
+  const grouped = groupPrRadarItems(items);
+
+  const suspicious = items.filter((it) => it.isSuspicious || it.aiFlagged).length;
+  const ciBlocked = grouped.ci_blocked.length;
+  const ready = grouped.ready.length;
+  const stale = grouped.stale.length;
+  const critical = items.filter((it) => it.hasCriticalAlert).length;
+  const avgAge =
+    items.length === 0
+      ? 0
+      : Math.round(items.reduce((sum, it) => sum + it.ageDays, 0) / items.length);
+  const dashboardMetrics: PrDashboardMetric[] = [
+    { key: "total", label: "Total PRs", value: items.length },
+    {
+      key: "suspicious",
+      label: "Suspicious",
+      value: suspicious,
+      tone: suspicious ? "danger" : "muted",
+    },
+    { key: "blocked", label: "CI Blocked", value: ciBlocked, tone: ciBlocked ? "danger" : "muted" },
+    { key: "ready", label: "Ready", value: ready, tone: ready ? "success" : "muted" },
+    { key: "stale", label: "Stale", value: stale, tone: stale ? "danger" : "muted" },
+    {
+      key: "critical",
+      label: "Critical Alerts",
+      value: critical,
+      tone: critical ? "danger" : "muted",
+    },
+    { key: "avgAge", label: "Avg Age", value: avgAge, tone: avgAge >= 7 ? "danger" : "muted" },
+  ];
+  const bucketChartData: BucketChartDatum[] = BUCKETS.map((bucket) => ({
+    key: bucket.key,
+    label: bucket.label,
+    shortLabel: BUCKET_SHORT_LABEL[bucket.key],
+    value: grouped[bucket.key].length,
+    fill: BUCKET_COLORS[bucket.key],
+  }));
 
   const noProjects = projects.data && projectList.length === 0;
   const empty = !isFetching && items.length === 0 && errors.length === 0;
@@ -116,6 +188,33 @@ export function PrRadarView() {
           <div className="pr-empty">
             표시할 PR이 없습니다. enabled GitHub 레포의 열린 PR이 여기 모입니다.
           </div>
+        )}
+
+        {!noProjects && items.length > 0 && (
+          <section className="pr-dashboard" aria-label="PR Radar dashboard metrics">
+            <div className="pr-metrics">
+              {dashboardMetrics.map((metric) => (
+                <div
+                  key={metric.key}
+                  className={cn("pr-metric", metric.tone && `pr-metric-${metric.tone}`)}
+                >
+                  <span className="pr-metric-label">{metric.label}</span>
+                  <span className="pr-metric-value">
+                    {metric.key === "avgAge" ? `${metric.value}d` : metric.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <figure className="pr-chart" aria-label="PR count by readiness bucket">
+              <div className="pr-chart-head">
+                <span className="pr-chart-title">Bucket Distribution</span>
+                <span className="pr-chart-subtitle">readiness mix</span>
+              </div>
+              <Suspense fallback={<div className="pr-chart-loading">Loading chart</div>}>
+                <PrBucketDistributionChart data={bucketChartData} />
+              </Suspense>
+            </figure>
+          </section>
         )}
 
         {!noProjects &&

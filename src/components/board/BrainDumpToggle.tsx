@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Kind } from "@/bindings";
 import { parseDump } from "@/components/board/boardUtils";
+import { nextBrainDumpKind } from "@/components/board/brainDumpKind";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -98,6 +99,11 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
     setOpen(false);
   }, [value, pendingKind, onSubmit]);
 
+  const togglePendingKind = useCallback(() => {
+    setPendingKind((kind) => nextBrainDumpKind(kind));
+    window.requestAnimationFrame(() => effectiveInputRef.current?.focus());
+  }, [effectiveInputRef]);
+
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -137,7 +143,16 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
       </button>
 
       {/* 폼은 항상 마운트되어 transition 안정. closed면 aria-hidden + tabindex −1로 비활성. */}
-      <div className="bd-form" aria-hidden={!open}>
+      <div
+        className="bd-form"
+        aria-hidden={!open}
+        onKeyDown={(e) => {
+          if (e.key !== "Tab") return;
+          e.preventDefault();
+          e.stopPropagation();
+          togglePendingKind();
+        }}
+      >
         <span className="bd-label" aria-hidden>
           BRAIN
         </span>

@@ -13,7 +13,7 @@
 // 본 모듈의 모든 IPC/helper는 Result<_, AppError>로 통일 → 모듈 단위 result_large_err 허용.
 #![allow(clippy::result_large_err)]
 
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 use tauri::State;
 
 use crate::{
@@ -48,6 +48,11 @@ struct RoutineSyncRow {
     created_at: String,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct RoutineEditSyncSnapshot {
+    row: RoutineSyncRow,
+}
+
 async fn load_routine(db: &Db, id: &str) -> Result<RoutineSyncRow, AppError> {
     sqlx::query_as::<_, RoutineSyncRow>(
         "SELECT project_id, title, freq, weekdays, anchor_date, time_of_day, \
@@ -59,6 +64,17 @@ async fn load_routine(db: &Db, id: &str) -> Result<RoutineSyncRow, AppError> {
     .fetch_optional(db)
     .await?
     .ok_or_else(|| AppError::not_found("routine.not_found", "루틴을 찾을 수 없습니다"))
+}
+
+pub(crate) async fn routine_edit_sync_snapshot(
+    db: &Db,
+    routine_id: &str,
+) -> Result<Option<RoutineEditSyncSnapshot>, AppError> {
+    let row = load_routine(db, routine_id).await?;
+    if row.google_event_id.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(RoutineEditSyncSnapshot { row }))
 }
 
 /// 프로젝트 kind 조회 ('personal'|'work'). 프로젝트 없으면 not_found.
@@ -183,6 +199,16 @@ async fn build_master_event_input(
     row: &RoutineSyncRow,
     tzid: &str,
 ) -> Result<CreateEventInput, AppError> {
+    build_master_event_input_with_reference(db, routine_id, row, tzid, None).await
+}
+
+async fn build_master_event_input_with_reference(
+    db: &Db,
+    routine_id: &str,
+    row: &RoutineSyncRow,
+    tzid: &str,
+    reference_override: Option<&str>,
+) -> Result<CreateEventInput, AppError> {
     let exdate_dates: Vec<String> =
         sqlx::query_scalar("SELECT date FROM routine_exdates WHERE routine_id = ?1 ORDER BY date")
             .bind(routine_id)
@@ -199,12 +225,14 @@ async fn build_master_event_input(
     };
     // created_at은 'YYYY-MM-DD HH:MM:SS' (sqlx datetime('now')) — 앞 10자 = 날짜.
     // 포맷이 깨졌다면 1970 fallback이 DTSTART에 새겨질 위험 → 명시적 거부.
-    let reference = row.created_at.get(0..10).ok_or_else(|| {
-        AppError::validation(
-            "routine.created_at_malformed",
-            "routine.created_at 포맷이 YYYY-MM-DD HH:MM:SS가 아닙니다",
-        )
-    })?;
+    let reference = reference_override
+        .or_else(|| row.created_at.get(0..10))
+        .ok_or_else(|| {
+            AppError::validation(
+                "routine.created_at_malformed",
+                "routine.created_at 포맷이 YYYY-MM-DD HH:MM:SS가 아닙니다",
+            )
+        })?;
 
     let input = RRuleInput {
         freq,
@@ -233,6 +261,43 @@ async fn build_master_event_input(
         recurrence: parts.recurrence_lines,
         time_zone: Some(spec.tzid),
     })
+}
+
+fn until_for_previous_day(
+    effective_date: &str,
+    time_of_day: Option<&str>,
+) -> Result<String, AppError> {
+    let effective = NaiveDate::parse_from_str(effective_date, "%Y-%m-%d").map_err(|_| {
+        AppError::validation(
+            "routine.edit.bad_effective_date",
+            "날짜 형식이 YYYY-MM-DD가 아닙니다",
+        )
+    })?;
+    let previous = effective - Duration::days(1);
+    rrule::exdate_local(&previous.format("%Y-%m-%d").to_string(), time_of_day)
+        .map_err(|e| AppError::validation("routine.rrule_invalid", format!("UNTIL 매핑 실패: {e}")))
+}
+
+fn cap_recurrence_before(input: &mut CreateEventInput, until: &str) -> Result<(), AppError> {
+    let Some(rrule_line) = input.recurrence.first_mut() else {
+        return Err(AppError::validation(
+            "routine.rrule_invalid",
+            "반복 규칙이 없어 시리즈를 분할할 수 없습니다",
+        ));
+    };
+    let Some(rule) = rrule_line.strip_prefix("RRULE:") else {
+        return Err(AppError::validation(
+            "routine.rrule_invalid",
+            "RRULE 라인 형식이 올바르지 않습니다",
+        ));
+    };
+    let base = rule
+        .split(';')
+        .filter(|part| !part.starts_with("UNTIL="))
+        .collect::<Vec<_>>()
+        .join(";");
+    *rrule_line = format!("RRULE:{base};UNTIL={until}");
+    Ok(())
 }
 
 /// 동기화 활성화/이동 전 매핑 가드(enable·move 공용). 파괴적 Google 호출 **전에** 검증해야
@@ -456,22 +521,112 @@ pub(crate) async fn patch_routine_sync_with_provider<P: CalendarProvider>(
     }
 }
 
+/// Provider injection helper — synced routine edit must not rewrite past generated instances.
+/// It caps the old master before `effective_date`, creates a new master from `effective_date`, and
+/// moves the local mirror to the new master id.
+pub(crate) async fn split_routine_sync_after_edit_with_provider<P: CalendarProvider>(
+    db: &Db,
+    provider: &P,
+    access_token: &str,
+    routine_id: &str,
+    before: RoutineEditSyncSnapshot,
+    effective_date: &str,
+    tzid: &str,
+) -> Result<(), AppError> {
+    let (Some(cal_id), Some(old_evt_id)) = (
+        before.row.google_calendar_id.as_deref(),
+        before.row.google_event_id.as_deref(),
+    ) else {
+        return Ok(());
+    };
+
+    let mut old_input = build_master_event_input(db, routine_id, &before.row, tzid).await?;
+    let until = until_for_previous_day(effective_date, before.row.time_of_day.as_deref())?;
+    cap_recurrence_before(&mut old_input, &until)?;
+    let old_payload = build_event_payload(&old_input);
+
+    match provider
+        .patch_event(access_token, cal_id, old_evt_id, &old_payload)
+        .await
+    {
+        Ok(()) => {}
+        Err(CalendarError::NotFound(_)) => {
+            clear_google_mirror(db, routine_id).await?;
+            return Err(sync_expired());
+        }
+        Err(e) => return Err(e.into()),
+    }
+
+    let row = load_routine(db, routine_id).await?;
+    let new_input =
+        build_master_event_input_with_reference(db, routine_id, &row, tzid, Some(effective_date))
+            .await?;
+    let (new_event_id, _html_link) = match provider
+        .create_event(access_token, cal_id, &new_input)
+        .await
+    {
+        Ok(created) => created,
+        Err(e) => {
+            clear_google_mirror(db, routine_id).await?;
+            crate::commands::calendar::invalidate_calendar_events_cache().await;
+            return Err(e.into());
+        }
+    };
+    sqlx::query("UPDATE routines SET google_calendar_id = ?1, google_event_id = ?2 WHERE id = ?3")
+        .bind(cal_id)
+        .bind(&new_event_id)
+        .bind(routine_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 /// 루틴 편집 후 동기화 전파(crud::update_routine에서 호출). 동기화 OFF면 토큰 조회 없이 no-op.
-/// 동기화 ON이면 master event PATCH — 실패는 호출자가 patch_failed로 surface(로컬 변경은 유지).
+/// 동기화 ON이면 Google master series를 edit date 기준으로 split한다. 실패는 호출자가 patch_failed로
+/// surface(로컬 변경은 유지).
 #[allow(clippy::result_large_err)]
 pub(crate) async fn patch_synced_routine_after_edit(
+    db: &Db,
+    routine_id: &str,
+    before: Option<RoutineEditSyncSnapshot>,
+    effective_date: &str,
+) -> Result<(), AppError> {
+    let Some(before) = before else {
+        // 미동기화 — 토큰 조회 없이 no-op (편집의 흔한 경우).
+        return Ok(());
+    };
+    let project_id = require_project_id(&before.row)?;
+    let access = access_token_or_not_connected(db, project_id).await?;
+    let provider = HttpCalendarProvider::new()?;
+    split_routine_sync_after_edit_with_provider(
+        db,
+        &provider,
+        &access,
+        routine_id,
+        before,
+        effective_date,
+        TZID_DEFAULT,
+    )
+    .await?;
+    crate::commands::calendar::invalidate_calendar_events_cache().await;
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+pub(crate) async fn patch_synced_routine_exdates(
     db: &Db,
     routine_id: &str,
 ) -> Result<(), AppError> {
     let row = load_routine(db, routine_id).await?;
     if row.google_event_id.is_none() {
-        // 미동기화 — 토큰 조회 없이 no-op (편집의 흔한 경우).
         return Ok(());
     }
     let project_id = require_project_id(&row)?;
     let access = access_token_or_not_connected(db, project_id).await?;
     let provider = HttpCalendarProvider::new()?;
-    patch_routine_sync_with_provider(db, &provider, &access, routine_id, TZID_DEFAULT).await
+    patch_routine_sync_with_provider(db, &provider, &access, routine_id, TZID_DEFAULT).await?;
+    crate::commands::calendar::invalidate_calendar_events_cache().await;
+    Ok(())
 }
 
 /// 루틴 삭제 전 Google master event 정리(crud::delete_routine에서 호출). 동기화 OFF면 토큰 조회
@@ -666,7 +821,7 @@ pub async fn unschedule_routine_today(
     // 존재 확인(깔끔한 not_found) — 이후 FK 위반 대신 명확한 에러.
     load_routine(db.inner(), &routine_id).await?;
     insert_exdate_row(db.inner(), &routine_id, &date).await?;
-    patch_synced_routine_after_edit(db.inner(), &routine_id)
+    patch_synced_routine_exdates(db.inner(), &routine_id)
         .await
         .map_err(exdate_patch_failed)
 }
@@ -682,7 +837,7 @@ pub async fn restore_routine_today(
     validate_ymd(&date)?;
     load_routine(db.inner(), &routine_id).await?;
     delete_exdate_row(db.inner(), &routine_id, &date).await?;
-    patch_synced_routine_after_edit(db.inner(), &routine_id)
+    patch_synced_routine_exdates(db.inner(), &routine_id)
         .await
         .map_err(exdate_patch_failed)
 }
@@ -1373,6 +1528,88 @@ mod tests {
             rec.starts_with("RRULE:FREQ=WEEKLY;BYDAY=MO"),
             "PATCH가 편집된 weekly 스케줄 반영: {rec}"
         );
+    }
+
+    /// synced routine edit: past Google instances are preserved by capping the old master before
+    /// the edit date and creating a new master for edited future instances.
+    #[tokio::test]
+    async fn edit_splits_synced_master_from_effective_date() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query("UPDATE routines SET created_at = '2026-05-29 00:00:00' WHERE id = ?1")
+            .bind(&rid)
+            .execute(&db)
+            .await
+            .unwrap();
+        mark_synced(&db, &rid, "cal_g", "evt_old").await;
+        let before = routine_edit_sync_snapshot(&db, &rid)
+            .await
+            .unwrap()
+            .expect("synced snapshot");
+
+        update_routine_inner(
+            &db,
+            UpdateRoutineInput {
+                id: rid.clone(),
+                title: "헬스장 새 시간".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                time_of_day: Some("08:00".into()),
+                reminder_offset_min: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: Some(45),
+            },
+        )
+        .await
+        .unwrap();
+
+        let provider = RecordingProvider::with_create_id("evt_new");
+        split_routine_sync_after_edit_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            before,
+            "2026-06-09",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1, "old master is capped once");
+        assert_eq!(patched[0].1, "cal_g");
+        assert_eq!(patched[0].2, "evt_old");
+        let old_rec = patched[0].3["recurrence"][0].as_str().unwrap();
+        assert!(
+            old_rec.contains("UNTIL=20260608T070000"),
+            "old master ends before effective date at the old routine time: {old_rec}"
+        );
+        assert_eq!(
+            patched[0].3["start"]["dateTime"], "2026-05-29T07:00:00",
+            "old master keeps the previous DTSTART"
+        );
+
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created.len(), 1, "new future master is created once");
+        assert_eq!(created[0].1, "cal_g");
+        assert_eq!(created[0].2.title, "헬스장 새 시간");
+        assert_eq!(created[0].2.start, "2026-06-09T08:00:00");
+        assert_eq!(created[0].2.end, "2026-06-09T08:45:00");
+
+        let row = load_routine(&db, &rid).await.unwrap();
+        assert_eq!(row.google_event_id.as_deref(), Some("evt_new"));
+        assert_eq!(row.google_calendar_id.as_deref(), Some("cal_g"));
     }
 
     /// patch: provider 실패는 에러로 전파(호출자 update_routine이 patch_failed로 wrap).

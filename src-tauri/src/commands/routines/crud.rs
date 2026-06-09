@@ -155,6 +155,8 @@ pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Res
         &input.weekdays,
     )?;
     let routine_id = input.id.clone();
+    let sync_snapshot =
+        super::google_sync::routine_edit_sync_snapshot(db.inner(), &routine_id).await?;
     update_routine_inner(db.inner(), input)
         .await
         .map_err(AppError::from)?;
@@ -162,22 +164,27 @@ pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Res
     // 사용자 폼 저장 = 사람 결정이므로 Acceptance 게이트 불요(#2). 미동기화면 토큰 조회 없이 no-op.
     // 전파 실패는 로컬 변경을 되돌리지 않는다 — patch_failed로 wrap해 "저장됐지만 동기화 실패"를
     // 프런트가 toast로 surface(프런트는 onSettled로 routines 무효화 → 로컬 변경은 화면에 반영).
-    super::google_sync::patch_synced_routine_after_edit(db.inner(), &routine_id)
-        .await
-        .map_err(|e| {
-            // stale mirror로 sync가 자동 해제된 경우(routine.sync.expired)는 마스킹하지 않고 그대로
-            // 통과 — "다시 켜세요" 재연결 안내가 토스트에 닿아야 한다(generic patch_failed로 덮으면 손실).
-            if e.code == super::google_sync::SYNC_EXPIRED_CODE {
-                return e;
-            }
-            AppError::terminal(
-                "routine.sync.patch_failed",
-                format!(
-                    "루틴은 저장됐지만 Google 동기화에 실패했습니다 — 설정에서 재시도 ({})",
-                    e.message
-                ),
-            )
-        })
+    super::google_sync::patch_synced_routine_after_edit(
+        db.inner(),
+        &routine_id,
+        sync_snapshot,
+        &local_today(),
+    )
+    .await
+    .map_err(|e| {
+        // stale mirror로 sync가 자동 해제된 경우(routine.sync.expired)는 마스킹하지 않고 그대로
+        // 통과 — "다시 켜세요" 재연결 안내가 토스트에 닿아야 한다(generic patch_failed로 덮으면 손실).
+        if e.code == super::google_sync::SYNC_EXPIRED_CODE {
+            return e;
+        }
+        AppError::terminal(
+            "routine.sync.patch_failed",
+            format!(
+                "루틴은 저장됐지만 Google 동기화에 실패했습니다 — 설정에서 재시도 ({})",
+                e.message
+            ),
+        )
+    })
 }
 
 pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<(), sqlx::Error> {

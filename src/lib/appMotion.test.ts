@@ -17,8 +17,11 @@ describe("app view motion", () => {
   it("preserves Cmd+arrow navigation direction as the view-shell motion class", () => {
     expect(appSource).toContain('type ViewMotion = "forward" | "back"');
     expect(appSource).toContain('const motion = dir > 0 ? "forward" : "back"');
-    expect(appSource).toContain("navigateView(adjacentView(view, dir), motion)");
+    expect(appSource).toContain(
+      "navigateView(adjacentView(useUIStore.getState().view, dir), motion)",
+    );
     expect(appSource).toContain("transitionRunningRef.current");
+    expect(appSource).not.toContain("if (transitionRunningRef.current) return");
     expect(appSource).toContain('className="view-stage"');
     expect(appSource).toContain('className="view-shell"');
     expect(appSource).toContain('<div key={view} className="view-content">');
@@ -33,6 +36,8 @@ describe("app view motion", () => {
     expect(appSource).toContain("dangerouslySetInnerHTML={{ __html: viewSnapshot.html }}");
     expect(appSource).toContain("const VIEW_SLIDE_CLEANUP_MS = 460");
     expect(appSource).toContain("transitionTimerRef.current");
+    expect(appSource).toContain("window.clearTimeout(transitionTimerRef.current)");
+    expect(appSource).toContain("adjacentView(useUIStore.getState().view, dir)");
     expect(motionSource).toContain(".view-stage");
     expect(motionSource).toContain(".view-snapshot");
     expect(motionSource).toContain(".view-content");

@@ -378,8 +378,7 @@ export function SkillsView() {
         <span className="skl-count">{total}</span>
       </header>
 
-      {/* 상호작용 컨트롤은 drag-region 밖 별도 툴바에(InboxView 선례) — 드래그가 입력/클릭을 삼키지 않도록.
-          검색 입력은 카드 리스트 페인 상단으로 이동(D1) — 아래 .skl-body 상단에 sticky로 둔다. */}
+      {/* 상호작용 컨트롤은 drag-region 밖 별도 툴바에(InboxView 선례) — 드래그가 입력/클릭을 삼키지 않도록. */}
       <div className="skl-toolbar">
         <div className="skl-viewtoggle" role="group" aria-label="보기 전환">
           <Button
@@ -668,8 +667,7 @@ export function SkillsView() {
         </nav>
 
         <div className="skl-body">
-          {/* 검색은 리스트 페인 상단에 sticky(D1) — 카드가 스크롤돼도 항상 보인다. */}
-          <div className="skl-search-pane">
+          <div className="skl-list-search" aria-label="스킬 목록 검색">
             <div className="skl-search">
               <Search className="size-3.5" />
               <input

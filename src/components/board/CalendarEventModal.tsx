@@ -96,6 +96,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
       setAllDay(false);
       setStart(t.start);
       setEnd(t.end);
+      setCalendarId("");
       setDescription("");
     }
   }

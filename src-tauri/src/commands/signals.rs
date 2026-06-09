@@ -316,12 +316,14 @@ pub async fn search_signals(db: State<'_, Db>, query: String) -> Result<Vec<Work
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::projects::insert_project;
     use crate::commands::shared::test_support::*;
     use crate::commands::signal_store::{
-        fetch_signals, insert_signal, set_quadrant, update_title, SIGNAL_COLS,
+        fetch_signals, insert_signal, set_quadrant, set_signal_kind as set_signal_kind_row,
+        update_title, SIGNAL_COLS,
     };
-    use crate::models::Kind;
     use crate::models::SignalSource;
+    use crate::models::{Kind, ProjectKind};
 
     /// INVARIANT #1: 생성된 카드는 항상 unclassified로 진입한다.
     #[tokio::test]
@@ -351,6 +353,38 @@ mod tests {
         assert_eq!(a.id, b.id, "동일 입력은 같은 신호로 합쳐져야 함");
         let all = fetch_signals(&db).await.unwrap();
         assert_eq!(all.len(), 1, "dedup이면 행은 하나");
+    }
+
+    /// 개인/업무 manual override는 캘린더/Notion 라우팅 project_id도 같은 kind로 맞춘다.
+    #[tokio::test]
+    async fn set_signal_kind_reroutes_project_id_to_matching_kind() {
+        let db = fresh_db().await;
+        let work_project = insert_project(&db, &project_input("Work", ProjectKind::Work))
+            .await
+            .unwrap();
+        let personal_project = insert_project(&db, &project_input("Life", ProjectKind::Personal))
+            .await
+            .unwrap();
+        let sig = insert_signal(
+            &db,
+            &CreateSignalInput {
+                title: "개인 병원 예약".into(),
+                kind: Some(Kind::Work),
+                project_id: Some(work_project.id),
+            },
+        )
+        .await
+        .unwrap();
+
+        let updated = set_signal_kind_row(&db, &sig.id, Some(Kind::Personal))
+            .await
+            .unwrap();
+
+        assert!(matches!(updated.kind, Some(Kind::Personal)));
+        assert_eq!(
+            updated.project_id.as_deref(),
+            Some(personal_project.id.as_str())
+        );
     }
 
     /// INVARIANT #1: quadrant는 명시적 classify 호출로만 바뀐다.

@@ -144,18 +144,11 @@
   overflow-y: auto;
   padding: 16px 18px 28px;
 }
-/* 검색 페인(D1) — 리스트 페인 상단에 sticky. 카드가 스크롤돼도 항상 보인다. */
-.skl-search-pane {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  /* .skl-body의 좌우/상단 패딩을 상쇄해 sticky 배경이 스크롤 콘텐츠를 가린다. */
-  margin: -16px -18px 12px;
-  padding: 12px 18px;
-  background: var(--color-wr-bg);
-  border-bottom: 1px solid var(--color-wr-border-light);
+.skl-list-search {
+  display: flex;
+  margin: 0 0 12px;
 }
-.skl-search-pane .skl-search {
+.skl-list-search .skl-search {
   max-width: 360px;
 }
 .skl-section {

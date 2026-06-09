@@ -36,12 +36,12 @@ export function KindAreaChips({
   const areaTag = areaKey ? tags.find((t) => t.id === areaKey) : null;
   return (
     <>
-      {target.kind && (
-        <KindBadge kind={target.kind} className="h-4 px-1.5 py-0 text-[10px] leading-none" />
-      )}
+      {target.kind && <KindBadge kind={target.kind} className="typo-micro h-4 px-1.5 py-0" />}
       {areaKey && (
         <span
-          className="b-tag"
+          className={cn(
+            "b-tag life-wheel-area-chip typo-micro inline-flex items-center rounded-full px-1.5 py-px font-semibold",
+          )}
           style={{
             background: areaTag?.color ?? "#75758a",
             color: readableTextColor(areaTag?.color ?? "#75758a"),

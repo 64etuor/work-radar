@@ -623,7 +623,13 @@ pub(crate) async fn set_signal_kind(
     kind: Option<Kind>,
 ) -> Result<WorkSignal, sqlx::Error> {
     sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET kind = ?2, updated_at = datetime('now') \
+        "UPDATE signals \
+         SET kind = ?2, \
+             project_id = CASE \
+                 WHEN ?2 IS NULL THEN NULL \
+                 ELSE (SELECT p.id FROM projects p WHERE p.kind = ?2 ORDER BY p.created_at LIMIT 1) \
+             END, \
+             updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(id)

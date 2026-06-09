@@ -32,6 +32,9 @@ pub struct SprintConfig {
     pub anchor_weekday: Weekday,
     /// 경계 기준 시각 'HH:MM'(로컬 wall-clock).
     pub anchor_time: String,
+    /// 스프린트 목표 문구. 기존 JSON에는 없을 수 있으므로 역직렬화 기본값을 유지한다.
+    #[serde(default)]
+    pub goal: String,
 }
 
 /// `Weekday` → chrono 요일(경계 정렬 계산용).
@@ -119,6 +122,9 @@ fn validate(config: &SprintConfig) -> Result<(), (&'static str, &'static str)> {
             "sprint.invalid_time",
             "anchor_time은 'HH:MM' 형식이어야 합니다",
         ));
+    }
+    if config.goal.chars().count() > 160 {
+        return Err(("sprint.invalid_goal", "goal은 160자 이하여야 합니다"));
     }
     Ok(())
 }
@@ -224,6 +230,7 @@ mod tests {
             interval_days: 14,
             anchor_weekday: Weekday::Fri,
             anchor_time: "21:00".to_string(),
+            goal: String::new(),
         }
     }
 
@@ -266,6 +273,7 @@ mod tests {
             interval_days: 7,
             anchor_weekday: Weekday::Mon,
             anchor_time: "09:00".to_string(),
+            goal: String::new(),
         };
         // 2026-05-23 토 → 다음 월 09:00 = 2026-05-25.
         let now = dt(2026, 5, 23, 12, 0);
@@ -301,6 +309,7 @@ mod tests {
             interval_days: 7,
             anchor_weekday: Weekday::Sun,
             anchor_time: "02:30".to_string(),
+            goal: String::new(),
         };
         // 2026-03-08은 일요일(전환일). 전날 토 23:00에서 다음 경계는 그 일 02:30(wall-clock).
         // 02:30은 spring-forward로 실재하지 않는 로컬 시각이지만, wall-clock 모델은 흔들리지 않는다.
@@ -323,6 +332,7 @@ mod tests {
             interval_days: 14,
             anchor_weekday: Weekday::Fri,
             anchor_time: "21:00".to_string(),
+            goal: String::new(),
         };
         // 10-30 21:00 경계 직후(10-31 00:00) → 다음은 14일 뒤 11-13 금 21:00.
         let now = dt(2026, 10, 31, 0, 0);
@@ -349,6 +359,7 @@ mod tests {
             interval_days: 14,
             anchor_weekday: Weekday::Fri,
             anchor_time: "21:00".to_string(),
+            goal: String::new(),
         };
         let b = next_boundary(&cfg, dt(2026, 10, 31, 0, 0)).unwrap();
         let a = remaining_seconds(&cfg, dt(2026, 10, 31, 0, 0)).unwrap();
@@ -374,6 +385,13 @@ mod tests {
         let raw = get_config(&db, KEY_SPRINT).await.unwrap().unwrap();
         let back: SprintConfig = serde_json::from_str(&raw).unwrap();
         assert_eq!(back, cfg);
+    }
+
+    #[test]
+    fn config_deserializes_legacy_json_without_goal() {
+        let raw = r#"{"intervalDays":14,"anchorWeekday":"fri","anchorTime":"21:00"}"#;
+        let back: SprintConfig = serde_json::from_str(raw).unwrap();
+        assert_eq!(back.goal, "");
     }
 
     #[test]

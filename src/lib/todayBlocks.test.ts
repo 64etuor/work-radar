@@ -212,6 +212,38 @@ describe("buildTodayBlocks", () => {
     expect(blocks[0].done).toBe(true);
   });
 
+  it("synced routine uses the local routine title while calendar cache refreshes", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "Updated routine",
+        timeOfDay: "09:00",
+        timeOverride: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+        done: false,
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "master-1",
+        title: "Old routine",
+        start: "2026-05-28T09:00:00",
+        end: "2026-05-28T09:30:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].id).toBe("event:work-cal:master-1");
+    expect(blocks[0].title).toBe("Updated routine");
+  });
+
   it("synced recurring routine instance uses recurringEventId as the checkbox target", () => {
     const routines = [
       {
@@ -246,6 +278,42 @@ describe("buildTodayBlocks", () => {
     expect(blocks[0].linkedEventId).toBe("master-1_20260528T000000Z");
     expect(blocks[0].routineId).toBe("r1");
     expect(blocks[0].done).toBe(false);
+  });
+
+  it("stale synced routine event is replaced by the edited local routine time", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "R edited",
+        timeOfDay: "10:00",
+        timeOverride: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+        durationMin: 45,
+        done: false,
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "master-1_20260528T000000Z",
+        recurringEventId: "master-1",
+        title: "R old",
+        start: "2026-05-28T09:00:00",
+        end: "2026-05-28T09:30:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("routine");
+    expect(blocks[0].title).toBe("R edited");
+    expect(blocks[0].startISO).toContain("10:00");
+    expect(blocks[0].endISO).toContain("10:45");
   });
 
   it("synced routine without a fetched calendar event does not render a routine job block", () => {

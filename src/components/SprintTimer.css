@@ -19,31 +19,41 @@
   width: min(610px, 52vw);
   height: 32px;
   max-width: 100%;
-  overflow: hidden;
-  contain: layout paint;
+  overflow: visible;
+  contain: layout;
 }
-/* is-editing 중에도 inline-flex 중앙정렬을 유지 — 미터가 in-flow로 자연 중앙에 배치되고
- * 에디터는 absolute inset:0 으로 그 위에 덮여 슬라이드 인/아웃. 미터의 left/width를 고정하지
- * 않으므로 반응형(840/560px 브레이크포인트) 폭 변화도 자동 반영. */
+.sprint-timer.is-editing {
+  width: min(980px, 82vw);
+  height: 32px;
+  contain: layout;
+}
+.sprint-timer.has-goal:not(.is-editing) {
+  height: 32px;
+}
+/* is-editing 중에도 헤더 1줄 높이를 유지한다. 에디터는 absolute inset:0 으로 같은 슬롯에 덮인다. */
 /* ── 스프린트 미터 ──
    에디토리얼 1줄 라벨 + 그 아래 얇은 진행 바. 박스/필 없음 — 헤더 라인에 자연스럽게 녹는다.
    라벨: 'SPRINT · {n일 남음}' (mono caps + 본문). 색만으로 의미 전달 금지 → 'SPRINT' 라벨 병기.
    바: 3px 트랙(border-light) + 채움(near-black). overdue=coral 풀필 + 텍스트 코랄. */
 .sprint-meter {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 5px;
-  width: 270px;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 132px;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  width: 460px;
   height: 32px;
   box-sizing: border-box;
-  padding: 4px 6px 6px;
+  padding: 0 6px 5px;
   border: none;
   background: transparent;
   cursor: pointer;
   color: var(--color-wr-fg);
   border-radius: var(--radius-sm);
   transition: background-color 0.15s ease;
+}
+.sprint-timer.has-goal .sprint-meter {
+  width: 520px;
 }
 .sprint-meter:hover {
   background: var(--color-wr-elevated);
@@ -73,8 +83,19 @@
   display: inline-flex;
   align-items: baseline;
   justify-content: flex-start;
-  gap: 8px;
   line-height: 1;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.sprint-meter-goal {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-wr-fg);
+  font: 600 12px/1.1 var(--font-sans);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sprint-meter-tag {
   font: 700 10px var(--font-mono);
@@ -82,18 +103,22 @@
   text-transform: uppercase;
   color: var(--color-wr-fg);
 }
-.sprint-meter-sep {
-  font: 400 11px var(--font-mono);
-  color: var(--color-wr-border);
-}
 .sprint-meter-text {
-  font: 500 12px var(--font-mono);
-  letter-spacing: 0.04em;
+  overflow: hidden;
+  justify-self: end;
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--color-wr-muted);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sprint-meter-bar {
-  position: relative;
+  position: absolute;
+  right: 6px;
+  bottom: 2px;
+  left: 6px;
   height: 3px;
   border-radius: 2px;
   background: var(--color-wr-border-light);
@@ -124,10 +149,12 @@
   height: 32px;
   padding: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   align-items: center;
+  box-shadow: none;
 }
 /* 에디터는 의미상 헤더 아래에 숨겨져 있다 — 클릭 시 슬롯 안으로 위로 슬라이드인.
  * 닫힐 때 다시 아래로 슬라이드아웃해 헤더 아래로 사라짐. */
@@ -140,7 +167,7 @@
 }
 .sprint-editor-title {
   justify-self: start;
-  margin-right: 10px;
+  margin-right: 4px;
   font: 700 10px var(--font-mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -148,9 +175,9 @@
 }
 .sprint-editor-grid {
   display: grid;
-  grid-template-columns: max-content max-content minmax(205px, 1fr) max-content max-content;
+  grid-template-columns: max-content max-content max-content minmax(180px, 1fr) max-content;
   align-items: center;
-  column-gap: 9px;
+  gap: 0 7px;
   height: 100%;
   width: 100%;
 }
@@ -164,7 +191,7 @@
 .sprint-lbl {
   justify-self: center;
   text-align: center;
-  font: 500 10px var(--font-sans);
+  font: 500 9px var(--font-sans);
   color: var(--color-wr-subtle);
 }
 .sprint-stepper {
@@ -177,20 +204,20 @@
   gap: 4px;
 }
 .sprint-wd-row > button {
-  width: 26px;
-  min-width: 26px;
-  height: 28px;
-  flex: 0 0 26px;
+  width: 24px;
+  min-width: 24px;
+  height: 26px;
+  flex: 0 0 24px;
 }
 .sprint-time-selectors {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 28px;
+  height: 26px;
 }
 .sprint-time-select {
-  width: 48px;
-  height: 28px;
+  width: 46px;
+  height: 26px;
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-sm);
   background: var(--color-wr-bg);
@@ -212,20 +239,27 @@
   font: 400 12px var(--font-sans);
   color: var(--color-q1);
 }
+.sprint-goal-field {
+  grid-column: auto;
+}
+.sprint-goal-field input {
+  width: 100%;
+}
 .sprint-pop-actions {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   justify-content: flex-end;
   margin-top: 0;
   min-width: 0;
+  flex-shrink: 0;
+  grid-column: auto;
+  grid-row: auto;
 }
 .sprint-actions-spacer {
   display: none;
 }
-/* slideOutUp / slideInDown / slideInUp / slideOutDown — animate.css 형태로 슬롯 높이만큼 풀이동.
- * .sprint-timer 부모가 overflow:hidden + 32px 고정이므로 100%(=32px) 거리로 헤더 위/아래로 사라짐.
- * opacity는 미세 페이드(0.0 머무름) — 슬라이드 시각이 주, 페이드는 가장자리 어색함만 다듬는 역할. */
+/* slideOutUp / slideInDown / slideInUp / slideOutDown — 1줄 슬롯 높이만큼 이동. */
 @keyframes sprint-meter-slide-out-up {
   from {
     opacity: 1;
@@ -272,16 +306,20 @@
     display: none;
   }
   .sprint-meter {
-    width: 240px;
+    grid-template-columns: 76px minmax(0, 1fr) 116px;
+    width: 380px;
+  }
+  .sprint-timer.has-goal .sprint-meter {
+    width: 430px;
   }
   .sprint-timer.is-editing {
-    width: min(560px, calc(100vw - 32px));
+    width: min(860px, calc(100vw - 32px));
   }
   .sprint-timer {
     width: min(560px, calc(100vw - 32px));
   }
   .sprint-editor-grid {
-    grid-template-columns: max-content max-content 1fr max-content;
+    grid-template-columns: max-content max-content minmax(150px, 1fr) max-content;
     column-gap: 8px;
   }
   .sprint-editor-title {
@@ -290,23 +328,52 @@
   .sprint-pop-actions {
     grid-column: auto;
   }
+  .sprint-goal-field {
+    grid-column: auto;
+  }
+  .sprint-field:nth-child(3) {
+    display: none;
+  }
 }
 
 @media (max-width: 560px) {
   .sprint-timer.is-editing {
-    width: min(360px, calc(100vw - 28px));
+    width: min(390px, calc(100vw - 28px));
+    height: 32px;
   }
   .sprint-timer {
-    width: min(360px, calc(100vw - 28px));
+    width: min(390px, calc(100vw - 28px));
+  }
+  .sprint-meter,
+  .sprint-timer.has-goal .sprint-meter {
+    grid-template-columns: 66px minmax(0, 1fr) 104px;
+    width: min(390px, calc(100vw - 28px));
+  }
+  .sprint-meter-goal {
+    font-size: 11px;
+  }
+  .sprint-meter-text {
+    font-size: 11px;
+  }
+  .sprint-inline-editor {
+    height: 32px;
   }
   .sprint-editor-grid {
     grid-template-columns: max-content 1fr max-content;
     gap: 6px;
   }
   .sprint-field:first-child .sprint-lbl,
-  .sprint-field:nth-child(3),
-  .sprint-pop-actions button:first-of-type {
+  .sprint-field:nth-child(2),
+  .sprint-field:nth-child(3) {
     display: none;
+  }
+  .sprint-goal-field {
+    grid-column: 1 / -1;
+  }
+  .sprint-pop-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-content: flex-end;
   }
   .sprint-stepper,
   .sprint-pop-actions {

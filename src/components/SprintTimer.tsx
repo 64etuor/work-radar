@@ -16,6 +16,7 @@ import { IpcError } from "@/lib/query/client";
 import {
   formatCountdown,
   formatCountdownLabel,
+  formatSprintGoal,
   remainingSecondsUntil,
   WEEKDAY_LABELS,
 } from "@/lib/sprint";
@@ -99,6 +100,8 @@ export function SprintTimer() {
     return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [editorState]);
 
+  const goalText = formatSprintGoal(config?.goal);
+
   const renderMeter = (extraClass = "", disabled = false) =>
     configured && meter ? (
       <button
@@ -106,17 +109,15 @@ export function SprintTimer() {
         className={`sprint-meter${extraClass}`}
         title="스프린트 일정 편집"
         aria-live="polite"
-        aria-label={`스프린트 ${formatCountdownLabel(meter.display)} (${Math.round(meter.pct * 100)}%)`}
+        aria-label={`스프린트 ${goalText ? `${goalText}, ` : ""}${formatCountdownLabel(meter.display)} (${Math.round(meter.pct * 100)}%)`}
         disabled={disabled}
         onClick={openEditor}
       >
         <span className="sprint-meter-label">
           <span className="sprint-meter-tag">SPRINT</span>
-          <span className="sprint-meter-sep" aria-hidden>
-            ·
-          </span>
-          <span className="sprint-meter-text">{formatCountdownLabel(meter.display)}</span>
         </span>
+        {goalText && <span className="sprint-meter-goal">{goalText}</span>}
+        <span className="sprint-meter-text">{formatCountdownLabel(meter.display)}</span>
         <span className="sprint-meter-bar" aria-hidden>
           <span className="sprint-meter-fill" style={{ width: `${meter.pct * 100}%` }} />
         </span>
@@ -131,17 +132,17 @@ export function SprintTimer() {
       >
         <span className="sprint-meter-label">
           <span className="sprint-meter-tag">SPRINT</span>
-          <span className="sprint-meter-sep" aria-hidden>
-            ·
-          </span>
-          <span className="sprint-meter-text">설정</span>
         </span>
+        <span className="sprint-meter-text">설정</span>
         <span className="sprint-meter-bar" aria-hidden />
       </button>
     );
 
   return (
-    <div ref={rootRef} className={cn("sprint-timer", editorVisible && "is-editing")}>
+    <div
+      ref={rootRef}
+      className={cn("sprint-timer", editorVisible && "is-editing", goalText && "has-goal")}
+    >
       {/* opening: 미터는 위로 빠지고(slideOutUp), 에디터는 아래에서 올라옴(slideInUp).
        *  closing: 에디터는 아래로 사라지고(slideOutDown), 미터는 위에서 내려옴(slideInDown). */}
       {editorState === "opening" && renderMeter(" is-leaving", true)}
@@ -171,23 +172,22 @@ const DEFAULT_CONFIG: SprintConfig = {
   intervalDays: 14,
   anchorWeekday: "fri",
   anchorTime: "21:00",
+  goal: "",
 };
 
 function SprintEditor({ config, opening = false, closing = false, onClose }: EditorProps) {
-  // role="dialog" — 인라인 확장 편집 영역을 의미적으로 인터랙티브 컨테이너로 명시.
-  // 비모달이므로 aria-modal는 생략(셸 Esc는 overlay-stack 통해 양보).
   return (
-    <div
-      role="dialog"
+    <form
       className={cn("sprint-inline-editor", opening && "is-opening", closing && "is-closing")}
       aria-label="스프린트 일정 편집"
+      onSubmit={(event) => event.preventDefault()}
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
       }}
     >
       <div className="sprint-editor-title">SPRINT</div>
       <SprintEditorFields config={config} onClose={onClose} />
-    </div>
+    </form>
   );
 }
 
@@ -206,6 +206,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
     config?.anchorWeekday ?? DEFAULT_CONFIG.anchorWeekday,
   );
   const [time, setTime] = useState(config?.anchorTime ?? DEFAULT_CONFIG.anchorTime);
+  const [goal, setGoal] = useState(config?.goal ?? DEFAULT_CONFIG.goal);
   const [hour, minute] = time.split(":");
   const setTimePart = (nextHour: string, nextMinute: string) =>
     setTime(`${nextHour}:${nextMinute}`);
@@ -213,7 +214,12 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
   const save = () => {
     if (setConfig.isPending) return;
     setConfig.mutate(
-      { intervalDays, anchorWeekday: weekday, anchorTime: time },
+      {
+        intervalDays,
+        anchorWeekday: weekday,
+        anchorTime: time,
+        goal: formatSprintGoal(goal) ?? "",
+      },
       {
         onSuccess: () => {
           pushSuccess("스프린트 일정 저장됨");
@@ -329,13 +335,25 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
         </div>
       </label>
 
+      <label className="sprint-field sprint-goal-field" htmlFor={`${fieldId}-goal`}>
+        <span className="sprint-lbl">목표</span>
+        <Input
+          id={`${fieldId}-goal`}
+          value={goal}
+          maxLength={160}
+          onChange={(e) => setGoal(e.target.value)}
+          placeholder="이번 스프린트 목표"
+          className="h-7 min-w-0 px-2 text-xs"
+        />
+      </label>
+
       {setConfig.isError && <div className="sprint-err">{String(setConfig.error)}</div>}
 
       <div className="sprint-pop-actions">
         {config && (
           <Button
             variant="outline"
-            className="h-7 rounded-full px-3 text-xs"
+            className="h-7 rounded-full px-2.5 text-xs"
             onClick={remove}
             disabled={clearConfig.isPending}
           >
@@ -343,11 +361,11 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
           </Button>
         )}
         <span className="sprint-actions-spacer" />
-        <Button variant="outline" className="h-7 rounded-full px-3 text-xs" onClick={onClose}>
+        <Button variant="outline" className="h-7 rounded-full px-2.5 text-xs" onClick={onClose}>
           취소
         </Button>
         <Button
-          className="h-7 rounded-full px-4 text-xs"
+          className="h-7 rounded-full px-3 text-xs"
           onClick={save}
           disabled={setConfig.isPending}
         >
