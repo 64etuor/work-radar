@@ -373,122 +373,124 @@ export function SkillsView() {
 
   return (
     <div className="skl">
-      <header className="skl-head" data-tauri-drag-region>
-        <span className="skl-title">스킬 레지스트리</span>
-        <span className="skl-count">{total}</span>
-      </header>
+      {/* 한 줄 헤더: 타이틀(좌, drag-region) + 컨트롤 아이콘(우, 세로 중앙). 컨트롤은 drag-region
+          밖에 둬야 드래그가 입력/클릭을 삼키지 않는다(InboxView 선례). */}
+      <header className="skl-head">
+        <div className="skl-head-title" data-tauri-drag-region>
+          <span className="skl-title">스킬 레지스트리</span>
+          <span className="skl-count">{total}</span>
+        </div>
+        <div className="skl-toolbar">
+          <div className="skl-viewtoggle" role="group" aria-label="보기 전환">
+            <Button
+              variant={listView ? "outline" : "default"}
+              size="sm"
+              className="rounded-full px-2.5"
+              aria-pressed={!listView}
+              aria-label="그리드 보기"
+              onClick={() => setListView(false)}
+            >
+              <LayoutGrid className="size-4" />
+            </Button>
+            <Button
+              variant={listView ? "default" : "outline"}
+              size="sm"
+              className="rounded-full px-2.5"
+              aria-pressed={listView}
+              aria-label="리스트 보기"
+              onClick={() => setListView(true)}
+            >
+              <List className="size-4" />
+            </Button>
+          </div>
 
-      {/* 상호작용 컨트롤은 drag-region 밖 별도 툴바에(InboxView 선례) — 드래그가 입력/클릭을 삼키지 않도록. */}
-      <div className="skl-toolbar">
-        <div className="skl-viewtoggle" role="group" aria-label="보기 전환">
           <Button
-            variant={listView ? "outline" : "default"}
+            variant="outline"
             size="sm"
             className="rounded-full px-2.5"
-            aria-pressed={!listView}
-            aria-label="그리드 보기"
-            onClick={() => setListView(false)}
+            aria-label="도움말"
+            onClick={() => setHelpOpen(true)}
           >
-            <LayoutGrid className="size-4" />
+            <CircleHelp className="size-4" />
           </Button>
+
           <Button
-            variant={listView ? "default" : "outline"}
+            variant="outline"
             size="sm"
-            className="rounded-full px-2.5"
-            aria-pressed={listView}
-            aria-label="리스트 보기"
-            onClick={() => setListView(true)}
+            className="gap-1.5 rounded-full"
+            onClick={() => {
+              setAdding(true);
+              setInstalling(false);
+              setSelectedId(null);
+            }}
           >
-            <List className="size-4" />
+            <Plus className="size-4" />
+            인앱 프롬프트 추가
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            onClick={() => {
+              setInstalling(true);
+              setAdding(false);
+              setSelectedId(null);
+            }}
+          >
+            <Download className="size-4" />
+            URL로 설치
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            onClick={() => {
+              setBackupOpen(true);
+              setAdding(false);
+              setInstalling(false);
+              setSelectedId(null);
+            }}
+          >
+            <Archive className="size-4" />
+            백업/복원
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            onClick={() => {
+              setUpdateOpen(true);
+              setAdding(false);
+              setInstalling(false);
+              setBackupOpen(false);
+              setSelectedId(null);
+            }}
+          >
+            <RefreshCw className="size-4" />
+            업데이트
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            onClick={() => {
+              setAuditOpen(true);
+              setAdding(false);
+              setInstalling(false);
+              setBackupOpen(false);
+              setUpdateOpen(false);
+              setSelectedId(null);
+            }}
+          >
+            <ScrollText className="size-4" />
+            감사 로그
           </Button>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-full px-2.5"
-          aria-label="도움말"
-          onClick={() => setHelpOpen(true)}
-        >
-          <CircleHelp className="size-4" />
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => {
-            setAdding(true);
-            setInstalling(false);
-            setSelectedId(null);
-          }}
-        >
-          <Plus className="size-4" />
-          인앱 프롬프트 추가
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => {
-            setInstalling(true);
-            setAdding(false);
-            setSelectedId(null);
-          }}
-        >
-          <Download className="size-4" />
-          URL로 설치
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => {
-            setBackupOpen(true);
-            setAdding(false);
-            setInstalling(false);
-            setSelectedId(null);
-          }}
-        >
-          <Archive className="size-4" />
-          백업/복원
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => {
-            setUpdateOpen(true);
-            setAdding(false);
-            setInstalling(false);
-            setBackupOpen(false);
-            setSelectedId(null);
-          }}
-        >
-          <RefreshCw className="size-4" />
-          업데이트
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          onClick={() => {
-            setAuditOpen(true);
-            setAdding(false);
-            setInstalling(false);
-            setBackupOpen(false);
-            setUpdateOpen(false);
-            setSelectedId(null);
-          }}
-        >
-          <ScrollText className="size-4" />
-          감사 로그
-        </Button>
-      </div>
+      </header>
 
       {allTags.length > 0 && (
         <div className="skl-tagbar" role="group" aria-label="태그 필터">
@@ -629,6 +631,17 @@ export function SkillsView() {
 
       <div className="skl-main">
         <nav className="skl-sidebar" aria-label="스킬 환경">
+          <div className="skl-sidebar-search" aria-label="스킬 목록 검색">
+            <div className="skl-search">
+              <Search className="size-3.5" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="스킬 검색"
+                aria-label="스킬 검색"
+              />
+            </div>
+          </div>
           {envNav.map((item) => (
             <EnvNavButton
               key={item.id}
@@ -667,17 +680,6 @@ export function SkillsView() {
         </nav>
 
         <div className="skl-body">
-          <div className="skl-list-search" aria-label="스킬 목록 검색">
-            <div className="skl-search">
-              <Search className="size-3.5" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="스킬 검색"
-                aria-label="스킬 검색"
-              />
-            </div>
-          </div>
           {skills.isError && (
             <div className="skl-note err">
               레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
