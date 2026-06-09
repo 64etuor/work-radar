@@ -1,0 +1,31 @@
+src/components/TodayView.tsx
+  s_17be6252b4320c::t_dba910c75a069b 194-195
+src/components/settings/GoogleAccountBlock.tsx
+  s_17be6252b4320c::t_f47efa614a3e1c 329,334
+  s_17be6252b4320c::t_db25959af60cbe 284-290
+  s_17be6252b4320c::t_edc42f94983e95 381
+  s_17be6252b4320c::t_0cefc91154affa 1,5,13,15
+  s_17be6252b4320c::t_cc824ae5729d01 351,353-367,369-380,382-396,398
+  s_17be6252b4320c::t_d531452547d354 330-333
+  s_17be6252b4320c::t_a2fb5ac2a18c7c 303-304,307-308
+src/components/today/useTimelineDnd.ts
+  s_17be6252b4320c::t_f5920b803271a2 534,545-546
+src/components/SettingsView.tsx
+  s_17be6252b4320c::t_c3cd04ebdbcdfa 201-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d3ce3ee2aebc4128ac926e22fdf107363e258d9e",
+  "prompts": {},
+  "sessions": {
+    "s_17be6252b4320c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02315e61-300b-41c3-b367-e7dc1a47dc59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
