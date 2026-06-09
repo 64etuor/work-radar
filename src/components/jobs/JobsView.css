@@ -211,12 +211,12 @@
 .jobs .jobs-prop {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
   margin: 4px 0 2px;
-  padding: 11px 12px;
-  background: var(--color-wr-surface);
+  padding: 12px;
+  background: color-mix(in srgb, var(--color-wr-surface) 54%, var(--color-wr-bg));
   border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
 }
 .jobs .jobs-prop-loading {
   font: 400 12px var(--font-sans);
@@ -268,27 +268,42 @@
   line-height: 1.4;
 }
 .jobs .jobs-prop-hint {
-  font: 400 11px var(--font-sans);
-  color: var(--color-wr-subtle);
+  font: 400 12px var(--font-sans);
+  color: var(--color-wr-muted);
   line-height: 1.4;
+}
+.jobs .jobs-prop-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(380px, calc(100vh - 340px));
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
 }
 /* Phase 15 — 배치 enrich Proposal의 카드별 항목 행. */
 .jobs .jobs-prop-batch-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: 7px;
+  padding: 10px 11px;
   border: 1px solid var(--color-wr-border-light);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--color-wr-bg);
 }
 .jobs .jobs-prop-batch-title {
-  font: 500 12px var(--font-sans);
+  font: 600 13px var(--font-sans);
   color: var(--color-wr-fg);
+  line-height: 1.35;
 }
 .jobs .jobs-prop-batch-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 8px;
+}
+.jobs .jobs-prop-select {
+  width: 100%;
+  min-width: 0;
 }
 .jobs .jobs-prop-batch-reason {
   font: 400 11px var(--font-sans);
@@ -303,6 +318,13 @@
 }
 .jobs .jobs-prop-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
   margin-top: 2px;
+}
+
+@media (max-width: 720px) {
+  .jobs .jobs-prop-batch-row {
+    grid-template-columns: 1fr;
+  }
 }

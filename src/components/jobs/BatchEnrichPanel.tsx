@@ -66,49 +66,51 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
         <div className="jobs-prop-empty">(적용 가능한 카드 제안이 없습니다)</div>
       )}
 
-      {items.map((it, i) => (
-        <div key={it.id} className="jobs-prop-batch-item">
-          <div className="jobs-prop-batch-title">{it.title ?? it.id}</div>
-          <div className="jobs-prop-batch-row">
-            <Select
-              value={it.suggestedQuadrant ?? "unclassified"}
-              onValueChange={(v) => setItem(i, { suggestedQuadrant: v as Quadrant })}
-            >
-              <SelectTrigger className="flex-1" aria-label="제안 사분면">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {QUADRANT_OPTS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={it.suggestedArea ?? AREA_NONE}
-              onValueChange={(v) =>
-                setItem(i, {
-                  suggestedArea: v === AREA_NONE ? null : (v as AreaTag),
-                })
-              }
-            >
-              <SelectTrigger className="flex-1" aria-label="제안 영역">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={AREA_NONE}>(미설정)</SelectItem>
-                {AREA_OPTS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="jobs-prop-batch-list">
+        {items.map((it, i) => (
+          <div key={it.id} className="jobs-prop-batch-item">
+            <div className="jobs-prop-batch-title">{it.title ?? it.id}</div>
+            <div className="jobs-prop-batch-row">
+              <Select
+                value={it.suggestedQuadrant ?? "unclassified"}
+                onValueChange={(v) => setItem(i, { suggestedQuadrant: v as Quadrant })}
+              >
+                <SelectTrigger className="jobs-prop-select" aria-label="제안 사분면">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUADRANT_OPTS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={it.suggestedArea ?? AREA_NONE}
+                onValueChange={(v) =>
+                  setItem(i, {
+                    suggestedArea: v === AREA_NONE ? null : (v as AreaTag),
+                  })
+                }
+              >
+                <SelectTrigger className="jobs-prop-select" aria-label="제안 영역">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AREA_NONE}>(미설정)</SelectItem>
+                  {AREA_OPTS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {it.reason && <div className="jobs-prop-batch-reason">{it.reason}</div>}
           </div>
-          {it.reason && <div className="jobs-prop-batch-reason">{it.reason}</div>}
-        </div>
-      ))}
+        ))}
+      </div>
 
       {(accept.error || reject.error) && (
         <div className="jobs-prop-err">{((accept.error ?? reject.error) as Error).message}</div>
@@ -126,7 +128,7 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
           }
         >
           <Check className="size-3.5" />
-          전체 accept (확정)
+          전체 확정
         </Button>
         <Button
           variant="destructiveOutline"

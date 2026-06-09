@@ -1,0 +1,84 @@
+.agent-run-dialog {
+  width: min(880px, calc(100vw - 48px));
+  max-width: none;
+  max-height: min(760px, calc(100vh - 112px));
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--color-wr-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-bg);
+  box-shadow: var(--wr-shadow-overlay);
+}
+
+.agent-run-modal.jobs {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  max-height: inherit;
+  min-height: 0;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+
+.agent-run-head {
+  display: flex;
+  align-items: center;
+  gap: var(--wr-density-md);
+  min-height: 48px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.agent-run-title {
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-wr-fg);
+}
+
+.agent-run-kind {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+
+.agent-run-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 18px 18px;
+}
+
+.agent-run-empty {
+  padding: 16px 2px;
+  font: 400 13px var(--font-sans);
+  color: var(--color-wr-subtle);
+}
+
+.agent-run-modal .jobs-card {
+  border-color: transparent;
+  padding: 0;
+  background: transparent;
+}
+
+.agent-run-modal .jobs-card-top {
+  padding-right: 28px;
+}
+
+@media (max-width: 720px) {
+  .agent-run-dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 88px);
+  }
+
+  .agent-run-head {
+    padding-inline: 14px;
+  }
+
+  .agent-run-scroll {
+    padding: 12px 14px 14px;
+  }
+}

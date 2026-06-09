@@ -107,11 +107,11 @@ export function MatrixCanvas({
   /** 부트 fan-out을 한 번만 적용하기 위한 플래그. */
   const bootedRef = useRef(false);
 
-  // 최신 콜백/데이터를 드래그 핸들러가 참조하도록 ref에 보관 (리스너 재바인딩 회피).
-  // 포인터 이벤트는 항상 commit 이후 발생하므로 effect 동기화로 충분(react-hooks/refs).
+  // 최신 콜백/데이터를 드래그/레이아웃 핸들러가 참조하도록 ref에 보관 (리스너 재바인딩 회피).
+  // 레이아웃 effect보다 먼저 signalsRef가 갱신돼야 새 카드도 첫 배치에 포함된다.
   const cbRef = useRef({ onClassify, onPromoteToday, onSelect });
   const signalsRef = useRef(signals);
-  useEffect(() => {
+  useLayoutEffect(() => {
     cbRef.current = { onClassify, onPromoteToday, onSelect };
     signalsRef.current = signals;
   });

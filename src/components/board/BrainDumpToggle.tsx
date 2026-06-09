@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Kind } from "@/bindings";
 import { parseDump } from "@/components/board/boardUtils";
 import { nextBrainDumpKind } from "@/components/board/brainDumpKind";
+import { shouldOpenBrainDumpFromGlobalEnter } from "@/components/board/BrainDumpToggleEvents";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -70,18 +71,11 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
     return () => window.removeEventListener("pointerdown", onDown);
   }, [open, value]);
 
-  // 전역 Enter — collapsed && 어떤 input/textarea/select/contenteditable에도 포커스 없을 때.
+  // 전역 Enter — collapsed && 다른 overlay/interactive control이 이벤트를 소유하지 않을 때만.
   useEffect(() => {
     if (open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Enter") return;
-      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-      const ae = document.activeElement as HTMLElement | null;
-      if (ae) {
-        const tag = ae.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-        if (ae.isContentEditable) return;
-      }
+      if (!shouldOpenBrainDumpFromGlobalEnter(e, document.activeElement)) return;
       e.preventDefault();
       setOpen(true);
     };

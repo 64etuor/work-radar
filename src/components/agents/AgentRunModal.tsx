@@ -1,3 +1,6 @@
+import "./AgentRunModal.css";
+import "@/components/jobs/JobsView.css";
+
 import { useState } from "react";
 
 import { JobCard } from "@/components/jobs/JobCard";
@@ -42,21 +45,28 @@ export function AgentRunModal() {
 
   return (
     <Dialog open={true} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogTitle>에이전트 결과</DialogTitle>
-        {!run ? (
-          <div className="text-wr-subtle text-sm">
-            잡 정보를 찾을 수 없습니다. 이미 정리되었거나 동기화 중일 수 있습니다.
+      <DialogContent className="agent-run-dialog" aria-describedby={undefined}>
+        <div className="agent-run-modal jobs">
+          <div className="agent-run-head">
+            <DialogTitle className="agent-run-title">에이전트 결과</DialogTitle>
+            {run && <span className="agent-run-kind">{run.kind}</span>}
           </div>
-        ) : (
-          <JobCard
-            run={run}
-            logOpen={logOpen}
-            log={logs.get(run.id)}
-            onToggleLog={() => setLogOpen((v) => !v)}
-            onKill={() => killAgentRun.mutate(run.id)}
-          />
-        )}
+          <div className="agent-run-scroll">
+            {!run ? (
+              <div className="agent-run-empty">
+                잡 정보를 찾을 수 없습니다. 이미 정리되었거나 동기화 중일 수 있습니다.
+              </div>
+            ) : (
+              <JobCard
+                run={run}
+                logOpen={logOpen}
+                log={logs.get(run.id)}
+                onToggleLog={() => setLogOpen((v) => !v)}
+                onKill={() => killAgentRun.mutate(run.id)}
+              />
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
