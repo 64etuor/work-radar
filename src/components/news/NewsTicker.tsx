@@ -7,7 +7,7 @@
 import "./NewsTicker.css";
 
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { CSSProperties } from "react";
+import { type CSSProperties, useLayoutEffect, useRef } from "react";
 
 import type { NewsItem } from "@/bindings";
 import {
@@ -33,6 +33,31 @@ export function NewsTicker() {
   const marqueeSeconds = options.data?.marqueeSeconds ?? 60;
   const hotOnly = options.data?.hotOnly ?? false;
 
+  // 콘텐츠 폭에 비례해 duration을 잡아 항목 수와 무관하게 일정한 스크롤 속도(px/초)를 유지한다.
+  // (고정 duration이면 항목이 많을수록 더 먼 거리를 같은 시간에 흘러 "최저 속도도 빠름".)
+  // 체감 속도 = REF_PX / marqueeSeconds px/s (콘텐츠 폭 무관). React state 없이 측정 후
+  // CSS 변수를 직접 써 리렌더를 피한다. 트랙은 동일 콘텐츠 2벌(-50%) → 스크롤 거리 = scrollWidth/2.
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const REF_PX = 1200;
+    const MIN_DURATION_S = 20;
+    const apply = () => {
+      const contentPx = el.scrollWidth / 2;
+      const dur =
+        contentPx > 0
+          ? Math.max(MIN_DURATION_S, (marqueeSeconds * contentPx) / REF_PX)
+          : marqueeSeconds;
+      el.style.setProperty("--news-marquee-duration", `${dur}s`);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // q.data = 트랙 마운트/콘텐츠 변경 트리거(안정 참조). 폭 변화 자체는 ResizeObserver가 잡는다.
+  }, [q.data, marqueeSeconds]);
+
   // 빈 상태 — 로딩/실패/소스 0개/아이템 0개 모두 동일 톤으로 subtle 안내.
   if (q.isLoading) {
     return <div className="news-ticker is-empty">뉴스 불러오는 중…</div>;
@@ -52,7 +77,9 @@ export function NewsTicker() {
   return (
     <div className="news-ticker" role="region" aria-label="외부 뉴스 티커">
       <div
+        ref={trackRef}
         className="news-ticker-track"
+        // 초기 fallback — 마운트 후 useLayoutEffect가 콘텐츠 폭 기준으로 덮어쓴다.
         style={{ "--news-marquee-duration": `${marqueeSeconds}s` } as CSSProperties}
       >
         <NewsTrack items={items} />
