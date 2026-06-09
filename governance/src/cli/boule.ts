@@ -330,7 +330,17 @@ export async function cmdStatus(flags: ParsedArgs["flags"]): Promise<string> {
 export async function cmdSnapshot(flags: ParsedArgs["flags"]): Promise<string> {
   const repo = reqRepo(flags);
   const events = await readAllEvents(boulePaths(repo).workspace);
-  return JSON.stringify(buildControlRoomSnapshot(events));
+  const { readiness } = await computeRepoReadiness(repo);
+  return JSON.stringify({
+    ...buildControlRoomSnapshot(events),
+    infra: readiness.preflight.checks,
+    readiness: {
+      ready: readiness.ready,
+      blockers: readiness.blockers,
+      warnings: readiness.warnings,
+      gates: readiness.gates,
+    },
+  });
 }
 
 function formatBackendsStatus(backends: BackendsConfig | undefined): string {

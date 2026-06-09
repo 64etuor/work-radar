@@ -1,4 +1,6 @@
 import type { GovEvent } from "../event/event.ts";
+import type { PreflightCheck } from "../live/preflight.ts";
+import type { ReadinessGates } from "../live/readiness.ts";
 import { projectHandoffs } from "../handoff/project.ts";
 import { projectOrchestratorView } from "../orchestrator/view.ts";
 import { projectPlans } from "../plan/project.ts";
@@ -67,6 +69,13 @@ export interface OrchestratorRows {
   sessions: OrchestratorSessionRow[];
 }
 
+export interface ReadinessView {
+  ready: boolean;
+  blockers: string[];
+  warnings: string[];
+  gates: ReadinessGates;
+}
+
 export interface ControlRoomSnapshot {
   generatedAt: string | null;
   tasks: TaskRow[];
@@ -75,6 +84,8 @@ export interface ControlRoomSnapshot {
   sessions: SessionRow[];
   handoffs: HandoffRow[];
   orchestrator: OrchestratorRows;
+  infra?: PreflightCheck[];
+  readiness?: ReadinessView;
 }
 
 function eventTimestamp(id: string): string | null {

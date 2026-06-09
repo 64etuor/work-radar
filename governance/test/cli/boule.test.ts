@@ -281,7 +281,8 @@ describe("cmdSnapshot", () => {
   });
 
   it("returns an empty snapshot for a repo with no event directory", async () => {
-    expect(JSON.parse(await cmdSnapshot({ repo, json: true }))).toEqual({
+    // infra + readiness keys are additive (A3); use objectContaining to tolerate them.
+    expect(JSON.parse(await cmdSnapshot({ repo, json: true }))).toMatchObject({
       generatedAt: null,
       tasks: [],
       plans: [],
