@@ -39,7 +39,6 @@ import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProjectCard } from "./settings/ProjectCard";
 import { SectionLabel } from "./settings/SettingsKit";
 import { SkillRootsSettings } from "./settings/SkillRootsSettings";
-import { TimelineCalendarDefaults } from "./settings/TimelineCalendarDefaults";
 
 type SettingsCategory =
   | "projects"
@@ -199,15 +198,12 @@ export function SettingsView() {
             </div>
 
             {category === "projects" && (
-              <>
-                <TimelineCalendarDefaults onToast={pushSuccess} />
-                <ProjectsPane
-                  list={list}
-                  projects={projects}
-                  settingsIntent={settingsIntent}
-                  pushSuccess={pushSuccess}
-                />
-              </>
+              <ProjectsPane
+                list={list}
+                projects={projects}
+                settingsIntent={settingsIntent}
+                pushSuccess={pushSuccess}
+              />
             )}
             {category === "agents" && <AgentsPane onToast={pushSuccess} />}
             {category === "shortcuts" && <NavigationSettings onToast={pushSuccess} />}

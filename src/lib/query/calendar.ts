@@ -5,32 +5,11 @@ import {
   commands,
   type CreateCalendarEventInput,
   type CreatedCalendarEvent,
-  type Kind,
   type SelectedCalendar,
   type WorkSignal,
 } from "@/bindings";
 
 import { unwrap } from "./client";
-
-/** kind별 타임라인 기본 캘린더(전역). 프로젝트 기본값이 없을 때 폴백으로 쓰인다. */
-export function useDefaultWriteCalendars() {
-  return useQuery({
-    queryKey: ["defaultWriteCalendars"],
-    queryFn: () => unwrap(commands.getDefaultWriteCalendars()),
-  });
-}
-
-/** kind별 기본 캘린더 저장(null=기본 없음). */
-export function useSetDefaultWriteCalendar() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ kind, calendarId }: { kind: Kind; calendarId: string | null }) =>
-      unwrap(commands.setDefaultWriteCalendar(kind, calendarId)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["defaultWriteCalendars"] });
-    },
-  });
-}
 
 /** Today 콕핏용 캘린더 이벤트 쿼리 래퍼(ambient — 짧은 staleTime). projectId=null → 전 프로젝트 병합. */
 export function useCalendarEvents(date: string) {

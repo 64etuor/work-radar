@@ -654,61 +654,6 @@ fn parse_quadrant_hint(s: &str) -> Option<crate::models::Quadrant> {
     }
 }
 
-// ── 타임라인 kind별 기본 캘린더 (전역, app_config — 마이그레이션 0) ──────────────
-// 프로젝트 `default_write_calendar_id`가 없을 때 signal.kind(개인/업무)로 폴백할 기본
-// 캘린더. INVARIANT #7: per-machine 설정은 app_config KV(신규 테이블 없음).
-const KEY_DEFAULT_WRITE_PERSONAL: &str = "calendar.default_write.personal";
-const KEY_DEFAULT_WRITE_WORK: &str = "calendar.default_write.work";
-
-/// 개인/업무 kind별 타임라인 기본 캘린더(미설정은 None).
-#[derive(Debug, Default, serde::Serialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct DefaultWriteCalendars {
-    pub personal: Option<String>,
-    pub work: Option<String>,
-}
-
-/// kind별 기본 캘린더 조회(app_config 두 키).
-#[tauri::command]
-#[specta::specta]
-pub async fn get_default_write_calendars(
-    db: State<'_, Db>,
-) -> Result<DefaultWriteCalendars, AppError> {
-    Ok(DefaultWriteCalendars {
-        personal: crate::commands::nav::get_config(db.inner(), KEY_DEFAULT_WRITE_PERSONAL).await?,
-        work: crate::commands::nav::get_config(db.inner(), KEY_DEFAULT_WRITE_WORK).await?,
-    })
-}
-
-/// kind별 기본 캘린더 설정. calendar_id가 None/공백이면 키 삭제(=기본 없음).
-#[tauri::command]
-#[specta::specta]
-pub async fn set_default_write_calendar(
-    db: State<'_, Db>,
-    kind: crate::models::Kind,
-    calendar_id: Option<String>,
-) -> Result<(), AppError> {
-    use crate::models::Kind;
-    let key = match kind {
-        Kind::Personal => KEY_DEFAULT_WRITE_PERSONAL,
-        Kind::Work => KEY_DEFAULT_WRITE_WORK,
-    };
-    match calendar_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
-        Some(value) => crate::commands::nav::set_config(db.inner(), key, value).await?,
-        None => {
-            sqlx::query("DELETE FROM app_config WHERE key = ?1")
-                .bind(key)
-                .execute(db.inner())
-                .await?;
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

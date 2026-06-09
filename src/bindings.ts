@@ -17,10 +17,6 @@ export const commands = {
 	setProjectKind: (projectId: string, kind: ProjectKind) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_kind", { projectId, kind })),
 	setProjectCalendarColor: (input: SetProjectCalendarColorInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_calendar_color", { input })),
 	setProjectDefaultWriteCalendar: (input: SetProjectDefaultWriteCalendarInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_default_write_calendar", { input })),
-	/**  kind별 기본 캘린더 조회(app_config 두 키). */
-	getDefaultWriteCalendars: () => typedError<DefaultWriteCalendars, AppError>(__TAURI_INVOKE("get_default_write_calendars")),
-	/**  kind별 기본 캘린더 설정. calendar_id가 None/공백이면 키 삭제(=기본 없음). */
-	setDefaultWriteCalendar: (kind: Kind, calendarId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_default_write_calendar", { kind, calendarId })),
 	setProjectNotionDbIds: (input: SetProjectNotionDbIdsInput) => typedError<Project, AppError>(__TAURI_INVOKE("set_project_notion_db_ids", { input })),
 	listRepos: (projectId: string) => typedError<Repo[], AppError>(__TAURI_INVOKE("list_repos", { projectId })),
 	createRepo: (input: CreateRepoInput) => typedError<Repo, AppError>(__TAURI_INVOKE("create_repo", { input })),
@@ -1292,12 +1288,6 @@ export type DebtPoint = {
 	staleBacklog: number,
 	cleanupNeeded: number,
 	prAttention: number,
-};
-
-/**  개인/업무 kind별 타임라인 기본 캘린더(미설정은 None). */
-export type DefaultWriteCalendars = {
-	personal: string | null,
-	work: string | null,
 };
 
 /**  diff 파일 목록 한 항목 (통계만 — 파일별 hunk는 지연 로드). specta i64/u64 금지 → adds/dels u32. */

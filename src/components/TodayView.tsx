@@ -35,7 +35,6 @@ import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import {
   localToday,
   useCalendarEvents,
-  useDefaultWriteCalendars,
   useProjects,
   useToday,
   useTodayOverview,
@@ -74,7 +73,6 @@ export function TodayView() {
   const todayRail = useToday(date);
   const routines = useTodayRoutines(date, weekday);
   const projectsQ = useProjects();
-  const defaultWriteCalendars = useDefaultWriteCalendars();
   const toggleDone = useToggleTodayDone();
   const toggleRoutine = useToggleRoutineCheck();
 
@@ -193,8 +191,8 @@ export function TodayView() {
 
   // ── DnD wiring ──────────────────────────────────────────────────────
   const defaultCalendarFor = useMemo(
-    () => buildDefaultCalendarFor(rail, projectsQ.data ?? [], defaultWriteCalendars.data),
-    [rail, projectsQ.data, defaultWriteCalendars.data],
+    () => buildDefaultCalendarFor(rail, projectsQ.data ?? []),
+    [rail, projectsQ.data],
   );
 
   /**
