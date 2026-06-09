@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { TimelineNote, WorkSignal } from "@/bindings";
 import { Badge } from "@/components/ui/badge";
@@ -157,6 +157,9 @@ function HistoryGroup({
   );
 }
 
+/** 메모 최대 높이(px) = 3줄. 11.5px 폰트 × 1.45 line-height ≈ 16.7px/줄 × 3 ≈ 50px. */
+const MEMO_MAX_PX = 50;
+
 function HistoryItem({
   signal,
   initialBody,
@@ -170,11 +173,21 @@ function HistoryItem({
   const upsert = useUpsertTimelineNote();
   const [body, setBody] = useState(initialBody);
   const dirtyRef = useRef(false);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   // 사용자가 타이핑 중이면 외부 invalidation으로 인한 initialBody 갱신이 덮지 않음.
   useEffect(() => {
     if (!dirtyRef.current) setBody(initialBody);
   }, [initialBody]);
+
+  // 내용 따라 자동 확장(최대 3줄=MEMO_MAX_PX). WKWebView가 CSS `field-sizing`을 지원 안 할 수
+  // 있어 scrollHeight 측정으로 직접 높이를 맞춘다 — 넘치면 max-h + overflow로 내부 스크롤.
+  useLayoutEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MEMO_MAX_PX)}px`;
+  }, [body]);
 
   const debounced = useDebouncedCallback((next: string) => {
     upsert.mutate(
@@ -216,14 +229,16 @@ function HistoryItem({
         )}
       </div>
       <Textarea
+        ref={taRef}
         value={body}
         placeholder="메모…"
         rows={1}
         aria-label={`${signal.title} 메모`}
         className={cn(
           // shadcn 기본 chrome 제거 — 인라인 텍스트처럼 보이게.
-          // 내용 따라 늘되 최대 3줄(11.5px×1.45≈50px)로 상한 — 넘치면 내부 스크롤(제목과 동일 정책).
-          "field-sizing-content max-h-[50px] min-h-0 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0",
+          // 높이는 useLayoutEffect가 내용 따라 1→3줄로 맞춤(field-sizing 미지원 WKWebView 대비).
+          // max-h는 안전망 — 넘치면 내부 스크롤(제목과 동일 정책).
+          "max-h-[50px] min-h-0 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0",
           "text-wr-subtle placeholder:text-wr-subtle/55 pl-3.5 text-[11.5px] leading-[1.45] placeholder:italic",
           "focus-visible:text-wr-fg shadow-none ring-0 focus:ring-0 focus-visible:shadow-[inset_2px_0_0_0_var(--color-wr-accent)]",
           "hover:text-wr-fg",

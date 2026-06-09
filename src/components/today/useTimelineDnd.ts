@@ -531,18 +531,28 @@ export function useTodayDndSensors() {
 /** DndContext re-export — caller import 단순화. */
 export { DndContext };
 
-/** signals → projectId 기반 defaultCalendarFor 빌더(스펙 §6.5). */
+/**
+ * signals → defaultCalendarFor 빌더(스펙 §6.5).
+ * 우선순위: 프로젝트 `default_write_calendar_id` → 없으면 signal.kind의 전역 기본 캘린더
+ * (`kindDefaults`, 설정에서 개인/업무별로 지정) → 둘 다 없으면 null(picker).
+ */
 export function buildDefaultCalendarFor(
   signals: WorkSignal[],
   projects: { id: string; defaultWriteCalendarId: string | null }[],
+  kindDefaults?: { personal: string | null; work: string | null } | null,
 ): (signalId: string) => string | null {
   const sigToProj = new Map<string, string | null>(signals.map((s) => [s.id, s.projectId]));
+  const sigToKind = new Map<string, WorkSignal["kind"]>(signals.map((s) => [s.id, s.kind]));
   const projDefault = new Map<string, string | null>(
     projects.map((p) => [p.id, p.defaultWriteCalendarId]),
   );
   return (signalId: string) => {
     const projectId = sigToProj.get(signalId);
-    if (!projectId) return null;
-    return projDefault.get(projectId) ?? null;
+    const projDef = projectId ? (projDefault.get(projectId) ?? null) : null;
+    if (projDef) return projDef;
+    // 프로젝트 기본값이 없으면 signal.kind의 전역 기본 캘린더로 폴백.
+    const kind = sigToKind.get(signalId) ?? null;
+    if (kind && kindDefaults) return kindDefaults[kind] ?? null;
+    return null;
   };
 }
