@@ -1,0 +1,20 @@
+docs/superpowers/specs/2026-06-09-control-room-live-schematic-design.md
+  s_4005e97bfd6ff0::t_c9af65fd18a8e1 82,85
+  s_4005e97bfd6ff0::t_c039871f2b2f14 1-14,16-81,86-122,124-169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "44dddce57ecfa8c42dfcdeac8a6b464b3a7f310f",
+  "prompts": {},
+  "sessions": {
+    "s_4005e97bfd6ff0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acde3604-d875-44d3-ba16-da7cdb366b0a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
