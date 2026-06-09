@@ -13,6 +13,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::TimeZone;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Notify;
@@ -350,7 +351,7 @@ fn parse_create_input(payload: &str) -> Result<CreateEventInput, SyncError> {
         .and_then(|x| x.as_str())
         .ok_or_else(|| SyncError::Terminal("create payload missing title".into()))?
         .to_string();
-    let start = v
+    let raw_start = v
         .get("start")
         .and_then(|x| x.as_str())
         .ok_or_else(|| SyncError::Terminal("create payload missing start".into()))?
@@ -360,6 +361,11 @@ fn parse_create_input(payload: &str) -> Result<CreateEventInput, SyncError> {
         .and_then(|x| x.as_i64())
         .ok_or_else(|| SyncError::Terminal("create payload missing duration_min".into()))?;
     let all_day = v.get("all_day").and_then(|x| x.as_bool()).unwrap_or(false);
+    let start = if all_day {
+        raw_start
+    } else {
+        normalize_timed_start(&raw_start)?
+    };
     let end = compute_end(&start, duration_min, all_day)?;
     let description = v
         .get("description")
@@ -388,11 +394,12 @@ fn build_patch_body(payload: &str) -> Result<serde_json::Value, SyncError> {
     if let Some(start) = v.get("start").and_then(|x| x.as_str()) {
         // patch도 start와 함께 end가 같이 가야 Google이 받아준다(부분 PATCH지만 start만 보내면
         // 기존 end가 그대로라 거리 변경이 안 반영됨). duration_min이 같이 와야 한다.
+        let start = normalize_timed_start(start)?;
         let duration_min = v
             .get("duration_min")
             .and_then(|x| x.as_i64())
             .ok_or_else(|| SyncError::Terminal("patch with start requires duration_min".into()))?;
-        let end = compute_end(start, duration_min, false)?;
+        let end = compute_end(&start, duration_min, false)?;
         body.insert("start".into(), serde_json::json!({ "dateTime": start }));
         body.insert("end".into(), serde_json::json!({ "dateTime": end }));
     } else if let Some(duration_min) = v.get("duration_min").and_then(|x| x.as_i64()) {
@@ -405,6 +412,24 @@ fn build_patch_body(payload: &str) -> Result<serde_json::Value, SyncError> {
         ));
     }
     Ok(serde_json::Value::Object(body))
+}
+
+fn normalize_timed_start(start: &str) -> Result<String, SyncError> {
+    let trimmed = start.trim();
+    if trimmed.is_empty() {
+        return Err(SyncError::Terminal("start missing/empty".into()));
+    }
+    if chrono::DateTime::parse_from_rfc3339(trimmed).is_ok() {
+        return Ok(trimmed.to_string());
+    }
+    let naive = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%dT%H:%M:%S")
+        .map_err(|e| SyncError::Terminal(format!("start parse: {e}")))?;
+    let local = chrono::Local
+        .from_local_datetime(&naive)
+        .single()
+        .or_else(|| chrono::Local.from_local_datetime(&naive).earliest())
+        .ok_or_else(|| SyncError::Terminal("start local time ambiguous".into()))?;
+    Ok(local.to_rfc3339())
 }
 
 /// start(RFC3339 timed) + duration_min → end(RFC3339). all_day=true는 start YYYY-MM-DD → end +1 day.
@@ -572,6 +597,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_create_input_normalizes_local_iso_start() {
+        let payload = r#"{"title":"Demo","start":"2026-05-28T10:00:00","duration_min":45}"#;
+        let input = parse_create_input(payload).unwrap();
+        assert!(chrono::DateTime::parse_from_rfc3339(&input.start).is_ok());
+        assert!(chrono::DateTime::parse_from_rfc3339(&input.end).is_ok());
+        assert!(input.start.starts_with("2026-05-28T10:00:00"));
+    }
+
+    #[test]
+    fn parse_create_input_rejects_empty_start() {
+        let payload = r#"{"title":"Demo","start":"","duration_min":45}"#;
+        let err = parse_create_input(payload).expect_err("empty start should be terminal");
+        assert!(format!("{err}").contains("start missing/empty"));
+    }
+
+    #[test]
     fn build_patch_body_start_requires_duration() {
         let payload = r#"{"start":"2026-05-28T10:00:00+09:00"}"#;
         assert!(build_patch_body(payload).is_err());
@@ -583,6 +624,25 @@ mod tests {
         let body = build_patch_body(payload).unwrap();
         assert!(body.get("start").is_some());
         assert!(body.get("end").is_some());
+    }
+
+    #[test]
+    fn build_patch_body_normalizes_local_iso_start() {
+        let payload = r#"{"start":"2026-05-28T10:00:00","duration_min":30}"#;
+        let body = build_patch_body(payload).unwrap();
+        let start = body
+            .get("start")
+            .and_then(|v| v.get("dateTime"))
+            .and_then(|v| v.as_str())
+            .expect("patch start");
+        let end = body
+            .get("end")
+            .and_then(|v| v.get("dateTime"))
+            .and_then(|v| v.as_str())
+            .expect("patch end");
+        assert!(chrono::DateTime::parse_from_rfc3339(start).is_ok());
+        assert!(chrono::DateTime::parse_from_rfc3339(end).is_ok());
+        assert!(start.starts_with("2026-05-28T10:00:00"));
     }
 
     // ── 통합: execute_with_access(create) end-to-end ─────────────────────────────

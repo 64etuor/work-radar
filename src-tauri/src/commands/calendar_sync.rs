@@ -103,6 +103,9 @@ pub(crate) async fn stage_calendar_write_inner(
     notify: &Arc<Notify>,
     req: StageWriteRequest,
 ) -> Result<(), AppError> {
+    if let Some(code) = validate_write_op(&req.op) {
+        return Err(AppError::validation(code, "calendar write start is empty"));
+    }
     // PR 6: 루틴은 오늘 처음 인터랙션 시점에 routine_checks 행이 없을 수 있다.
     // build_queue_row 전에 idempotent INSERT로 행 보장(UNIQUE(routine_id, date) 0011 마이그레이션).
     // 이렇게 해야 fetch_linked_event/이후 sync 워커의 link_back UPDATE가 0행이 안 되고
@@ -223,6 +226,21 @@ pub(crate) async fn stage_calendar_write_inner(
     .await?;
     notify.notify_one();
     Ok(())
+}
+
+fn validate_write_op(op: &WriteOp) -> Option<&'static str> {
+    let at = match op {
+        WriteOp::Schedule { at, .. }
+        | WriteOp::Reschedule { at, .. }
+        | WriteOp::Resize { at, .. }
+        | WriteOp::MoveCalendar { at, .. }
+        | WriteOp::CreateBlank { at, .. } => Some(at),
+        WriteOp::Unschedule => None,
+    };
+    if at.is_some_and(|value| value.trim().is_empty()) {
+        return Some("calendar.invalid_start");
+    }
+    None
 }
 
 /// 루틴 체크 행 보장 — (routine_id, date) UNIQUE 위에서 INSERT...ON CONFLICT DO NOTHING.
@@ -588,6 +606,54 @@ mod tests {
                 .unwrap();
         assert_eq!(scheduled_at.as_deref(), Some("2026-05-28T10:00:00"));
         assert_eq!(scheduled_duration, Some(30));
+
+        let (queued,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(queued, 0);
+    }
+
+    #[tokio::test]
+    async fn empty_start_is_rejected_before_signal_mirror_or_queue() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) \
+             VALUES ('s1','Demo','braindump','thought')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let req = StageWriteRequest {
+            target: WriteTarget::Signal { id: "s1".into() },
+            op: WriteOp::Schedule {
+                at: "".into(),
+                duration_min: 30,
+                calendar_id: "cal1".into(),
+                title: "Demo".into(),
+            },
+            idempotency_key: "test-empty-start".into(),
+        };
+        let err = stage_calendar_write_inner(&db, &notify, req)
+            .await
+            .expect_err("empty start should reject");
+        assert_eq!(err.code, "calendar.invalid_start");
+
+        let (scheduled_at, scheduled_duration, linked_calendar_id): (
+            Option<String>,
+            Option<i64>,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT scheduled_at, scheduled_duration, linked_calendar_id FROM signals WHERE id='s1'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(scheduled_at.is_none());
+        assert!(scheduled_duration.is_none());
+        assert!(linked_calendar_id.is_none());
 
         let (queued,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
             .fetch_one(&db)
