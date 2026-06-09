@@ -2,6 +2,7 @@
 
 use crate::db::Db;
 use crate::error::AppError;
+use crate::governance::boule_config::{get_boule_config_core, BouleAutonomyLevel};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -67,6 +68,82 @@ pub struct ProjectTickStatus {
     pub last_exit_code: Option<i32>,
     pub last_report_json: Option<String>,
     pub attention_required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTickerStatusRow {
+    pub project_id: String,
+    pub project_name: String,
+    pub tick_enabled: bool,
+    pub interval_sec: Option<i32>,
+    pub max_steps: i32,
+    pub next_due_at: Option<String>,
+    pub in_progress: bool,
+    pub last_started_at: Option<String>,
+    pub last_finished_at: Option<String>,
+    pub last_outcome: Option<TickStatusOutcome>,
+    pub last_exit_code: Option<i32>,
+    pub attention_required: bool,
+    pub autonomy_level: Option<BouleAutonomyLevel>,
+}
+
+impl ProjectTickerStatusRow {
+    fn from_raw(
+        raw: ProjectTickerStatusRawRow,
+        autonomy_level: Option<BouleAutonomyLevel>,
+    ) -> Self {
+        Self {
+            project_id: raw.project_id,
+            project_name: raw.project_name,
+            tick_enabled: raw.tick_enabled,
+            interval_sec: raw.interval_sec,
+            max_steps: raw.max_steps,
+            next_due_at: raw.next_due_at,
+            in_progress: raw.in_progress,
+            last_started_at: raw.last_started_at,
+            last_finished_at: raw.last_finished_at,
+            last_outcome: raw.last_outcome,
+            last_exit_code: raw.last_exit_code,
+            attention_required: raw.attention_required,
+            autonomy_level,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ProjectTickerStatusRawRow {
+    project_id: String,
+    project_name: String,
+    tick_enabled: bool,
+    interval_sec: Option<i32>,
+    max_steps: i32,
+    next_due_at: Option<String>,
+    in_progress: bool,
+    last_started_at: Option<String>,
+    last_finished_at: Option<String>,
+    last_outcome: Option<TickStatusOutcome>,
+    last_exit_code: Option<i32>,
+    attention_required: bool,
+}
+
+impl<'r> FromRow<'r, SqliteRow> for ProjectTickerStatusRawRow {
+    fn from_row(row: &'r SqliteRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            project_id: row.try_get("project_id")?,
+            project_name: row.try_get("project_name")?,
+            tick_enabled: row.try_get("tick_enabled")?,
+            interval_sec: row.try_get("interval_sec")?,
+            max_steps: row.try_get("max_steps")?,
+            next_due_at: row.try_get("next_due_at")?,
+            in_progress: row.try_get("in_progress")?,
+            last_started_at: row.try_get("last_started_at")?,
+            last_finished_at: row.try_get("last_finished_at")?,
+            last_outcome: row.try_get("last_outcome")?,
+            last_exit_code: row.try_get("last_exit_code")?,
+            attention_required: row.try_get("attention_required")?,
+        })
+    }
 }
 
 impl ProjectTickStatus {
@@ -342,6 +419,39 @@ pub async fn get_project_tick_status_core(
     Ok(status.unwrap_or_else(|| ProjectTickStatus::default_for(project_id)))
 }
 
+pub async fn list_project_tick_status_core(
+    db: &Db,
+) -> Result<Vec<ProjectTickerStatusRow>, AppError> {
+    let rows = sqlx::query_as::<_, ProjectTickerStatusRawRow>(
+        "SELECT \
+             p.id AS project_id, \
+             p.name AS project_name, \
+             COALESCE(t.tick_enabled, 0) AS tick_enabled, \
+             t.interval_sec AS interval_sec, \
+             COALESCE(t.max_steps, ?1) AS max_steps, \
+             t.next_due_at AS next_due_at, \
+             COALESCE(t.in_progress, 0) AS in_progress, \
+             t.last_started_at AS last_started_at, \
+             t.last_finished_at AS last_finished_at, \
+             t.last_outcome AS last_outcome, \
+             t.last_exit_code AS last_exit_code, \
+             COALESCE(t.attention_required, 0) AS attention_required \
+         FROM projects p \
+         LEFT JOIN project_ticker t ON t.project_id = p.id \
+         ORDER BY p.created_at, p.id",
+    )
+    .bind(DEFAULT_MAX_STEPS)
+    .fetch_all(db)
+    .await?;
+
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let autonomy_level = project_autonomy_level_best_effort(db, &row.project_id).await;
+        out.push(ProjectTickerStatusRow::from_raw(row, autonomy_level));
+    }
+    Ok(out)
+}
+
 pub async fn set_project_tick_enabled_core(
     db: &Db,
     project_id: &str,
@@ -465,6 +575,25 @@ async fn current_max_steps(db: &Db, project_id: &str) -> Result<i32, AppError> {
             .await?
             .max(1),
     )
+}
+
+async fn project_autonomy_level_best_effort(
+    db: &Db,
+    project_id: &str,
+) -> Option<BouleAutonomyLevel> {
+    let repo_id = sqlx::query_scalar::<_, String>(
+        "SELECT id FROM repos \
+         WHERE project_id = ?1 AND provider = 'local' AND enabled = 1 \
+           AND local_path IS NOT NULL AND local_path != '' \
+         ORDER BY created_at, id LIMIT 1",
+    )
+    .bind(project_id)
+    .fetch_optional(db)
+    .await
+    .ok()??;
+
+    let config = get_boule_config_core(db, &repo_id).await.ok()?;
+    config.config_exists.then_some(config.autonomy_level)
 }
 
 async fn acquire_in_progress(db: &Db, project_id: &str) -> Result<bool, AppError> {
@@ -947,6 +1076,51 @@ mod tests {
             .expect("status");
         assert!(status.tick_enabled);
         assert_eq!(status.interval_sec, Some(900));
+    }
+
+    #[tokio::test]
+    async fn list_project_tick_status_left_joins_all_projects_with_best_effort_autonomy() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_project(&db, "p2").await;
+        sqlx::query("UPDATE projects SET name = 'No ticker' WHERE id = 'p2'")
+            .execute(&db)
+            .await
+            .expect("rename project");
+
+        let repo_dir = tempfile::tempdir().expect("temp repo dir");
+        std::fs::create_dir_all(repo_dir.path().join(".boule")).expect("create boule dir");
+        std::fs::write(
+            repo_dir.path().join(".boule").join("boule.config.json"),
+            r#"{"schemaVersion":1,"kind":"work","overrides":{"autonomyLevel":"manual","reviewQuorum":1}}"#,
+        )
+        .expect("write config");
+        seed_local_repo(&db, "p1", "r1", repo_dir.path().to_str()).await;
+
+        set_project_tick_enabled_core(&db, "p1", true)
+            .await
+            .expect("enable ticker");
+        set_project_tick_interval_core(&db, "p1", Some(600))
+            .await
+            .expect("set interval");
+
+        let rows = list_project_tick_status_core(&db)
+            .await
+            .expect("list ticker rows");
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].project_id, "p1");
+        assert_eq!(rows[0].project_name, "Ticker");
+        assert!(rows[0].tick_enabled);
+        assert_eq!(rows[0].interval_sec, Some(600));
+        assert_eq!(rows[0].autonomy_level, Some(BouleAutonomyLevel::Manual));
+
+        assert_eq!(rows[1].project_id, "p2");
+        assert_eq!(rows[1].project_name, "No ticker");
+        assert!(!rows[1].tick_enabled);
+        assert_eq!(rows[1].interval_sec, None);
+        assert_eq!(rows[1].max_steps, DEFAULT_MAX_STEPS);
+        assert_eq!(rows[1].autonomy_level, None);
     }
 
     #[tokio::test]

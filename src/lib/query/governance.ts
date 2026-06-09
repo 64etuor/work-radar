@@ -12,6 +12,53 @@ export function useControlRoomSnapshot() {
   });
 }
 
+const PROJECT_TICKER_LIST_KEY = ["project-ticker-list"] as const;
+
+/** Live per-project ticker state from app SQLite, separate from the Control Room snapshot. */
+export function useProjectTickerList() {
+  return useQuery({
+    queryKey: PROJECT_TICKER_LIST_KEY,
+    queryFn: () => unwrap(commands.listProjectTickStatus()),
+    refetchInterval: 4_000,
+    staleTime: 2_000,
+  });
+}
+
+export function useSetTickEnabled() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, enabled }: { projectId: string; enabled: boolean }) =>
+      unwrap(commands.setProjectTickEnabled(projectId, enabled)),
+    onSuccess: (res) => {
+      qc.setQueryData(["project-tick-status", res.projectId], res);
+      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
+    },
+  });
+}
+
+export function useSetTickInterval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, intervalSec }: { projectId: string; intervalSec: number | null }) =>
+      unwrap(commands.setProjectTickInterval(projectId, intervalSec)),
+    onSuccess: (res) => {
+      qc.setQueryData(["project-tick-status", res.projectId], res);
+      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
+    },
+  });
+}
+
+export function useTickNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => unwrap(commands.tickProjectNow(projectId)),
+    onSuccess: (res) => {
+      qc.setQueryData(["project-tick-status", res.status.projectId], res.status);
+      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
+    },
+  });
+}
+
 /** A designated local repo's Boule config (kind + autonomyLevel + reviewQuorum + optional
  *  budget/backends/routing/priceTable). Absent file ⇒ per-kind defaults
  *  (`configExists=false`). Disabled until a repoId is provided. */

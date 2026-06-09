@@ -10,8 +10,9 @@ use crate::governance::snapshot::{
     read_snapshot, resolve_governance_state_dir, ControlRoomSnapshot,
 };
 use crate::governance::ticker::{
-    get_project_tick_status_core, set_project_tick_enabled_core, set_project_tick_interval_core,
-    tick_project_now as tick_project_now_core, ProjectTickStatus, TickProjectNowResult,
+    get_project_tick_status_core, list_project_tick_status_core, set_project_tick_enabled_core,
+    set_project_tick_interval_core, tick_project_now as tick_project_now_core, ProjectTickStatus,
+    ProjectTickerStatusRow, TickProjectNowResult,
 };
 use tauri::State;
 
@@ -59,6 +60,17 @@ pub async fn get_project_tick_status(
     project_id: String,
 ) -> Result<ProjectTickStatus, AppError> {
     get_project_tick_status_core(db.inner(), &project_id).await
+}
+
+/// Read every project's live ticker status from app SQLite. Missing ticker rows return disabled
+/// defaults; Boule autonomy is best-effort from the first enabled local repo config.
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn list_project_tick_status(
+    db: State<'_, Db>,
+) -> Result<Vec<ProjectTickerStatusRow>, AppError> {
+    list_project_tick_status_core(db.inner()).await
 }
 
 /// Toggle only the operator clock flag. This does not mutate Boule autonomy/governance state.

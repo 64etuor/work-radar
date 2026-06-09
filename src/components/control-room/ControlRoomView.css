@@ -1,16 +1,14 @@
 /*
  * Control Room scoped tokens. Maps the master §12 status tones onto global
- * --color-wr-* design tokens where they exist; --cr-pressure has no global
- * orange token yet, so it uses a documented local fallback hex. No raw hex
- * outside this block.
+ * design tokens; raw color values stay in src/styles/tokens.css.
  */
 .cr-view {
-  --cr-done: var(--color-wr-status-working, #16a34a);
-  --cr-active: var(--color-wr-action-blue, #1863dc);
-  --cr-waiting: var(--color-wr-status-waiting, #eab308);
-  --cr-pressure: #c2590f; /* local: no global orange token (deferred) */
-  --cr-blocked: var(--color-wr-coral, #ff7759);
-  --cr-muted: var(--color-wr-subtle, #93939f);
+  --cr-done: var(--color-wr-status-working);
+  --cr-active: var(--color-wr-action-blue);
+  --cr-waiting: var(--color-wr-status-waiting);
+  --cr-pressure: var(--color-today-debt-warn);
+  --cr-blocked: var(--color-wr-coral);
+  --cr-muted: var(--color-wr-subtle);
 
   padding: 1.25rem;
   display: flex;
@@ -36,6 +34,145 @@
   padding: 0.5rem 0;
 }
 
+/* ── Project ticker ───────────────────────────────────────── */
+.cr-ticker-card {
+  border-radius: 0.5rem;
+}
+.cr-ticker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+.cr-ticker-kicker {
+  color: var(--cr-muted);
+  font-size: var(--text-caption-sm);
+  font-weight: 600;
+  letter-spacing: var(--tracking-mono-label);
+  text-transform: uppercase;
+}
+.cr-ticker-title {
+  margin: 0.12rem 0 0;
+  font-size: var(--text-title-md);
+  font-weight: 600;
+  line-height: var(--leading-title-md);
+}
+.cr-ticker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.cr-ticker-row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto minmax(7rem, 9rem) minmax(14rem, auto) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--color-border);
+}
+.cr-ticker-row[data-attention] {
+  border-left: 3px solid var(--color-destructive);
+  padding-left: 0.65rem;
+}
+.cr-ticker-main {
+  min-width: 0;
+}
+.cr-ticker-project {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.cr-ticker-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-body-md);
+  font-weight: 600;
+  line-height: var(--leading-body-md);
+}
+.cr-ticker-note {
+  margin-top: 0.18rem;
+  color: var(--cr-muted);
+  font-size: var(--text-caption-sm);
+  line-height: var(--leading-caption-sm);
+}
+.cr-ticker-attention,
+.cr-ticker-running {
+  gap: 0.25rem;
+}
+.cr-ticker-running svg,
+.cr-ticker-row button svg {
+  flex: 0 0 auto;
+}
+.cr-ticker-running svg,
+.cr-ticker-row button:disabled svg {
+  animation: cr-spin 0.8s linear infinite;
+}
+.cr-ticker-toggle,
+.cr-ticker-interval {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--cr-muted);
+  font-size: var(--text-label-sm);
+  white-space: nowrap;
+}
+.cr-ticker-interval input {
+  width: 6rem;
+  height: 2rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  padding: 0 0.55rem;
+  font-size: var(--text-body-md);
+  font-variant-numeric: tabular-nums;
+}
+.cr-ticker-interval input:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+.cr-ticker-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  color: var(--cr-muted);
+  font-size: var(--text-caption-sm);
+  line-height: var(--leading-caption-sm);
+}
+.cr-ticker-outcome {
+  font-variant-numeric: tabular-nums;
+}
+.cr-ticker-outcome[data-outcome="advanced"],
+.cr-ticker-outcome[data-outcome="idle"] {
+  color: var(--cr-done);
+}
+.cr-ticker-outcome[data-outcome="in_flight"] {
+  color: var(--cr-active);
+}
+.cr-ticker-outcome[data-outcome="halted_decision"],
+.cr-ticker-outcome[data-outcome="needs_human"],
+.cr-ticker-outcome[data-outcome="stalled"] {
+  color: var(--color-destructive);
+}
+.cr-ticker-outcome[data-outcome="readiness_failed"],
+.cr-ticker-outcome[data-outcome="infra_failed"],
+.cr-ticker-outcome[data-outcome="timeout"],
+.cr-ticker-outcome[data-outcome="spawn_failed"],
+.cr-ticker-outcome[data-outcome="parse_failed"] {
+  color: var(--cr-pressure);
+}
+
+@keyframes cr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── Vitals chips ─────────────────────────────────────────── */
 .cr-vitals {
   display: flex;
@@ -47,7 +184,7 @@
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0.7rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   background: transparent;
   font-size: 0.8125rem;
@@ -87,11 +224,11 @@
 .cr-canvas-wrap {
   position: relative;
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--color-border);
   border-radius: 0.75rem;
   background:
-    linear-gradient(var(--color-border, #eef0f2) 1px, transparent 1px) 0 0 / 100% 64px,
-    var(--color-background, #fff);
+    linear-gradient(var(--color-border) 1px, transparent 1px) 0 0 / 100% 64px,
+    var(--color-background);
 }
 .cr-canvas {
   display: block;
@@ -129,7 +266,7 @@
   animation: cr-node-in 0.22s ease both;
 }
 .cr-node-box {
-  fill: var(--color-background, #fff);
+  fill: var(--color-background);
   stroke: var(--cr-muted);
   stroke-width: 1.25;
   transition:
@@ -153,7 +290,7 @@
   stroke: var(--cr-blocked);
 }
 .cr-node-label {
-  fill: var(--color-foreground, #1a1a1a);
+  fill: var(--color-foreground);
   font-size: 12px;
   font-weight: 500;
 }
@@ -182,7 +319,7 @@
   stroke-width: 2;
 }
 .cr-node[data-selected] .cr-node-box {
-  filter: drop-shadow(0 1px 4px rgb(0 0 0 / 0.12));
+  filter: drop-shadow(var(--wr-shadow-hairline));
 }
 
 /* attention pulse on the box (separate element from the group animation) */
@@ -209,8 +346,21 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .cr-node,
-  .cr-node[data-attention] .cr-node-box {
+  .cr-node[data-attention] .cr-node-box,
+  .cr-ticker-running svg,
+  .cr-ticker-row button:disabled svg {
     animation: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .cr-ticker-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cr-ticker-toggle,
+  .cr-ticker-interval,
+  .cr-ticker-meta {
+    grid-column: 1 / -1;
   }
 }
 
@@ -220,10 +370,10 @@
   min-width: 12rem;
   max-width: 18rem;
   padding: 0.6rem 0.75rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
-  background: var(--color-background, #fff);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
+  background: var(--color-background);
+  box-shadow: var(--wr-shadow-sm);
   pointer-events: none;
   z-index: 10;
 }

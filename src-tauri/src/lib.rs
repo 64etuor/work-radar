@@ -336,6 +336,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_boule_config,
         // Boule ticker runtime (Phase T1) — app operator clock settings + manual bounded tick.
         commands::get_project_tick_status,
+        commands::list_project_tick_status,
         commands::set_project_tick_enabled,
         commands::set_project_tick_interval,
         commands::tick_project_now,
