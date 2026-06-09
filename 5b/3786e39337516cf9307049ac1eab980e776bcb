@@ -1,0 +1,19 @@
+src/components/board/LifeWheelPalette.tsx
+  s_17be6252b4320c::t_2501cf51f40241 37-39,42-53,55-56,64,70-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5b3786e39337516cf9307049ac1eab980e776bcb",
+  "prompts": {},
+  "sessions": {
+    "s_17be6252b4320c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02315e61-300b-41c3-b367-e7dc1a47dc59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
