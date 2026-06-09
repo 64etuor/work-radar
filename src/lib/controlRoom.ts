@@ -1,4 +1,12 @@
-import type { HandoffPhase, PlanPhase, SessionPhase, SpecPhase, TaskPhase } from "../bindings";
+import type {
+  HandoffPhase,
+  PlanPhase,
+  PreflightCheck,
+  ReadinessGates,
+  SessionPhase,
+  SpecPhase,
+  TaskPhase,
+} from "../bindings";
 
 /** Master §12 node-status buckets, collapsed to the tones the UI renders. */
 export type StatusTone = "done" | "active" | "waiting" | "pressure" | "blocked" | "muted";
@@ -67,4 +75,17 @@ export function relativeAgo(generatedAt: string | null, nowMs: number): string {
   if (mins < 60) return `${mins}분 전 프로젝션`;
   const hrs = Math.round(mins / 60);
   return `${hrs}시간 전 프로젝션`;
+}
+
+export type InfraTone = "ok" | "down" | "advisory";
+
+/** ok → green, failing-required → red (down), failing-advisory → amber. */
+export function infraTone(check: PreflightCheck): InfraTone {
+  if (check.ok) return "ok";
+  return check.level === "required" ? "down" : "advisory";
+}
+
+/** Armed ⇔ every readiness gate passes. */
+export function isArmed(gates: ReadinessGates): boolean {
+  return gates.preflight && gates.conductor && gates.observer && gates.auto && gates.stall;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { pickActiveProjectId, relativeAgo, statusTone } from "./controlRoom";
+import type { PreflightCheck, ReadinessGates } from "../bindings";
+import { infraTone, isArmed, pickActiveProjectId, relativeAgo, statusTone } from "./controlRoom";
 
 describe("pickActiveProjectId", () => {
   it("defaults to the first project when nothing is selected", () => {
@@ -41,4 +42,26 @@ describe("relativeAgo", () => {
     const now = Date.parse("2026-06-03T00:10:00Z");
     expect(relativeAgo("2026-06-03T00:00:00Z", now)).toBe("10분 전 프로젝션");
   });
+});
+
+describe("infraTone", () => {
+  const chk = (ok: boolean, level: string): PreflightCheck =>
+    ({ id: "x", ok, level, detail: "" }) as PreflightCheck;
+  it("ok check → ok", () => expect(infraTone(chk(true, "required"))).toBe("ok"));
+  it("failing required → down", () => expect(infraTone(chk(false, "required"))).toBe("down"));
+  it("failing advisory → advisory", () =>
+    expect(infraTone(chk(false, "advisory"))).toBe("advisory"));
+});
+
+describe("isArmed", () => {
+  const gates = (over: Partial<ReadinessGates>): ReadinessGates => ({
+    preflight: true,
+    conductor: true,
+    observer: true,
+    auto: true,
+    stall: true,
+    ...over,
+  });
+  it("all gates pass → armed", () => expect(isArmed(gates({}))).toBe(true));
+  it("any gate fails → not armed", () => expect(isArmed(gates({ observer: false }))).toBe(false));
 });
