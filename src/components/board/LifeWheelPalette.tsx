@@ -34,27 +34,42 @@ export function KindAreaChips({
 }) {
   const areaKey = parseAreaTagKeys(target.areaTags, target.area)[0] ?? null;
   const areaTag = areaKey ? tags.find((t) => t.id === areaKey) : null;
+  // kind·area 칩을 동일한 작은 크기로 통일. shadcn Badge 기본의 `text-xs`(12px)가
+  // `typo-micro`(10px)를 cascade에서 눌러 칩이 커지므로, Badge 대신 plain span에 typo-micro를
+  // 직접 적용한다 — 두 칩이 같은 작은 크기로 정렬된다.
   return (
     <>
-      {target.kind && <KindBadge kind={target.kind} className="typo-micro h-4 px-1.5 py-0" />}
+      {target.kind && (
+        <span
+          className={cn(
+            KIND_AREA_CHIP,
+            target.kind === "work"
+              ? "bg-accent text-accent-foreground"
+              : "bg-secondary text-secondary-foreground",
+          )}
+        >
+          {kindLabel(target.kind)}
+        </span>
+      )}
       {areaKey && (
-        // kind 배지와 동일한 공통 Badge 칩 — area 색만 인라인으로 입힌다(높이/모양/타이포 통일).
-        <Badge
-          variant="outline"
-          className="b-tag life-wheel-area-chip typo-micro h-4 border-transparent px-1.5 py-0 font-semibold"
+        <span
+          className={cn(KIND_AREA_CHIP, "b-tag life-wheel-area-chip")}
           style={{
             background: areaTag?.color ?? "#75758a",
             color: readableTextColor(areaTag?.color ?? "#75758a"),
-            borderColor: "transparent",
           }}
           title={areaTag?.label ?? areaKey}
         >
           {areaTag?.label ?? areaKey}
-        </Badge>
+        </span>
       )}
     </>
   );
 }
+
+/** kind·area 공통 소형 칩 베이스 — typo-micro(10px)로 작게 통일. 색은 kind 변형/인라인으로. */
+const KIND_AREA_CHIP =
+  "inline-flex items-center rounded-full px-1.5 py-px font-semibold typo-micro";
 
 /**
  * 카드 인라인 태그 편집 대상의 최소 모양 — kind 토글 + Life Wheel 버튼을 그리는 데 필요한 필드만.
