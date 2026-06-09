@@ -1,0 +1,23 @@
+governance/src/live/repoReadiness.ts
+  s_4005e97bfd6ff0::t_7af49814583704 1-54
+governance/src/cli/boule.ts
+  s_4005e97bfd6ff0::t_22a7e4bb6ac59e 32-33
+  s_4005e97bfd6ff0::t_50e727fe5f9752 1
+  s_4005e97bfd6ff0::t_85f9d1fe168606 401-404
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b839595a9b669537fe42f478517d126627c8e62a",
+  "prompts": {},
+  "sessions": {
+    "s_4005e97bfd6ff0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acde3604-d875-44d3-ba16-da7cdb366b0a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
