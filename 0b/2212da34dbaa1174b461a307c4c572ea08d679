@@ -1,0 +1,26 @@
+src/components/SkillsView.css
+  s_17be6252b4320c::t_002fcbc2b37189 43
+  s_17be6252b4320c::t_e66b021cc378cf 12-13,15-22,26-27
+  s_17be6252b4320c::t_81e6cdf7693f9c 154-156,158-161
+src/components/SkillsView.tsx
+  s_17be6252b4320c::t_3becdef571c290 634-644
+  s_17be6252b4320c::t_75f8d9fe4b0f2d 376-383
+  s_17be6252b4320c::t_62352299a4c2ae 384-405,408,411-412,414,416,418,420-425,427-428,431-443,445-458,460-474,476-491
+  s_17be6252b4320c::t_afe5dc7256e84c 492-493
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0b2212da34dbaa1174b461a307c4c572ea08d679",
+  "prompts": {},
+  "sessions": {
+    "s_17be6252b4320c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02315e61-300b-41c3-b367-e7dc1a47dc59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
