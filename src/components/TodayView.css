@@ -435,6 +435,8 @@
   height: 2px;
   background: var(--color-today-now-line);
   z-index: 5;
+  /* z-index 5라 블록(z-index 2) 위에 뜨므로, 현재시각과 겹친 블록 클릭을 가로채지 않도록 차단. */
+  pointer-events: none;
   /* PR 7 모션: 분 단위 갱신 시 부드럽게 슬라이드(`top`이 1분=1px이라 60s 일치). */
   transition: top 60s linear;
 }
@@ -940,7 +942,8 @@
 
 .today-history-item-head {
   display: flex;
-  align-items: center;
+  /* 멀티라인 제목에서 dot/시각 배지가 첫 줄에 정렬되도록 top 기준. */
+  align-items: flex-start;
   gap: 8px;
   font: 500 12px/1.35 var(--font-sans);
   color: var(--color-wr-fg);
@@ -951,15 +954,21 @@
   height: 6px;
   border-radius: 9999px;
   flex-shrink: 0;
+  /* head가 flex-start이므로 첫 줄(line-box ~16px) 중앙에 dot를 맞춘다. */
+  margin-top: 5px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) inset;
 }
 
 .today-history-item-title {
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
+  /* 완료 제목: 1줄 말줄임 대신 내용 따라 늘되 최대 3줄로 상한(긴 제목 가독성 + 레일 안정). */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
   letter-spacing: -0.005em;
 }
 

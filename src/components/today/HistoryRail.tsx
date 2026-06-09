@@ -222,7 +222,8 @@ function HistoryItem({
         aria-label={`${signal.title} 메모`}
         className={cn(
           // shadcn 기본 chrome 제거 — 인라인 텍스트처럼 보이게.
-          "field-sizing-content min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-0",
+          // 내용 따라 늘되 최대 3줄(11.5px×1.45≈50px)로 상한 — 넘치면 내부 스크롤(제목과 동일 정책).
+          "field-sizing-content max-h-[50px] min-h-0 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0",
           "text-wr-subtle placeholder:text-wr-subtle/55 pl-3.5 text-[11.5px] leading-[1.45] placeholder:italic",
           "focus-visible:text-wr-fg shadow-none ring-0 focus:ring-0 focus-visible:shadow-[inset_2px_0_0_0_var(--color-wr-accent)]",
           "hover:text-wr-fg",

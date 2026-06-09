@@ -5,6 +5,40 @@ import { buildTodayBlocks, eventBlockApiId } from "./todayBlocks";
 const DATE = "2026-05-28";
 
 describe("buildTodayBlocks", () => {
+  it("excludes scheduled signals whose date differs from the selected date", () => {
+    // rollover 레일에는 다른 날짜로 배치된 signal이 남을 수 있다 — 보는 날짜와 다르면 제외돼야 한다.
+    const signals = [
+      {
+        id: "today",
+        title: "오늘 배치",
+        scheduledAt: `${DATE}T09:00:00`,
+        scheduledDuration: 60,
+      },
+      {
+        id: "other",
+        title: "다른날 배치",
+        scheduledAt: "2026-05-29T09:00:00",
+        scheduledDuration: 60,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].id).toBe("signal:today");
+  });
+
+  it("keeps a signal scheduled with a local offset on the same local date", () => {
+    const signals = [
+      {
+        id: "s1",
+        title: "오프셋",
+        scheduledAt: `${DATE}T23:30:00+09:00`,
+        scheduledDuration: 30,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
+    expect(blocks).toHaveLength(1);
+  });
+
   it("signal with linkedEventId absorbs matching google event", () => {
     const signals = [
       {

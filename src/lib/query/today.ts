@@ -65,7 +65,10 @@ export function useToggleTodayDone() {
   return useMutation({
     mutationFn: ({ id, date, done }: { id: string; date: string; done: boolean }) =>
       unwrap(commands.toggleTodayDone(id, date, done)),
-    onSuccess: () => inv.today(),
+    onSuccess: () => {
+      inv.today();
+      inv.completedHistory();
+    },
   });
 }
 

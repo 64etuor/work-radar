@@ -34,7 +34,6 @@ import { stage } from "@/lib/calendarSync";
 import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import {
   localToday,
-  localWeekday,
   useCalendarEvents,
   useProjects,
   useToday,
@@ -42,6 +41,7 @@ import {
   useTodayRoutines,
   useToggleRoutineCheck,
   useToggleTodayDone,
+  weekdayForDate,
 } from "@/lib/query";
 import { unwrap } from "@/lib/query/client";
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
@@ -53,23 +53,25 @@ import { useUIStore } from "@/store";
  * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).
  *   좌 미배치 트레이 + 우 24h 캔버스 + 헤더(날짜 네비 + Work Debt 4칩 + Staged 배지).
  * PR 5: DnD wiring — tray↔canvas schedule/reschedule/unschedule + cross-cal staged
- * (resize/createBlank은 후속 정련). 데이터: today-bound(오버뷰/레일/루틴은 today 고정),
- * 캘린더 일정만 선택 날짜 재조회.
+ * (resize/createBlank은 후속 정련). 데이터: 레일·루틴·캘린더 일정 모두 선택 날짜(date)로
+ * 재조회 — 날짜 네비게이션 시 그 날의 일정만 본다(오버뷰/Work Debt만 today 고정).
  */
 export function TodayView() {
   const { goTo } = useUIStore();
   const qc = useQueryClient();
   const today = localToday();
-  const weekday = localWeekday();
   const [date, setDate] = useState<string>(today);
+  // 선택 날짜의 요일 — 루틴은 선택 날짜로 재조회(다른 날짜로 가면 그 날 요일의 루틴을 본다).
+  const weekday = weekdayForDate(date);
 
   // sync 실패 이벤트 → 토스트 + 캐시 invalidate(rollback).
   useCalendarSyncEvents();
 
   const overview = useTodayOverview(today);
   const events = useCalendarEvents(date);
-  const todayRail = useToday(today);
-  const routines = useTodayRoutines(today, weekday);
+  // 레일·루틴 모두 선택 날짜로 조회 — 옵티미스틱 패치 키(["today", date])와도 일치.
+  const todayRail = useToday(date);
+  const routines = useTodayRoutines(date, weekday);
   const projectsQ = useProjects();
   const toggleDone = useToggleTodayDone();
   const toggleRoutine = useToggleRoutineCheck();
@@ -110,14 +112,15 @@ export function TodayView() {
   const handleBlockToggleDone = useCallback(
     (box: LayoutBox, done: boolean) => {
       const { block } = box;
+      // 보고 있는 날짜(date) 기준으로 완료 기록 — 날짜 네비게이션 중에도 표시된 블록과 일관.
       if (block.kind === "signal") {
         const id = block.id.replace(/^signal:/, "");
-        toggleDone.mutate({ id, date: today, done });
+        toggleDone.mutate({ id, date, done });
       } else if (block.routineId) {
-        toggleRoutine.mutate({ routineId: block.routineId, date: today, done });
+        toggleRoutine.mutate({ routineId: block.routineId, date, done });
       }
     },
-    [today, toggleDone, toggleRoutine],
+    [date, toggleDone, toggleRoutine],
   );
   const handlePopoverClose = useCallback(() => setPopover(null), []);
   const removeEventFromCache = useCallback(
@@ -149,23 +152,23 @@ export function TodayView() {
           removeEventFromCache(calendarId, eventId);
         } else if (block.kind === "routine" && block.routineId) {
           const routineId = block.routineId;
-          // 루틴 목록/블록은 today-bound(useTodayRoutines(today, …))라 "오늘 빼기"는 항상 today를
-          // 대상으로 한다 — 날짜 네비게이션 중에도 navigated date가 아닌 today에 EXDATE를 쓴다
-          // (done-토글과 동일). date를 쓰면 동기화 루틴의 엉뚱한 미래 occurrence가 조용히 지워진다.
-          // "오늘 빼기" = EXDATE: 로컬 skip 행 + 동기화 ON이면 master event EXDATE PATCH.
-          await unwrap(commands.unscheduleRoutineToday(routineId, today));
+          // 루틴 목록/블록이 선택 날짜(useTodayRoutines(date, …))로 조회되므로, "빼기"는 보고 있는
+          // 날짜(date)의 occurrence를 대상으로 EXDATE 한다 — 표시된 인스턴스와 일치(today 고정 시
+          // 다른 날짜를 보는 중에 엉뚱하게 오늘 occurrence가 지워진다).
+          // 빼기 = EXDATE: 로컬 skip 행 + 동기화 ON이면 master event EXDATE PATCH.
+          await unwrap(commands.unscheduleRoutineToday(routineId, date));
           // per-instance Google 이벤트가 있으면(드물게 드래그로 배치됐던 경우) 함께 정리.
           if (linkedEventId && calendarId) {
-            await stage({ kind: "routineUnschedule", routineId, date: today });
+            await stage({ kind: "routineUnschedule", routineId, date });
             removeEventFromCache(calendarId, linkedEventId);
             void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
           }
           void qc.invalidateQueries({ queryKey: ["routines"] });
           // 되돌리기 토스트(useTimelineDnd 언스케줄 패턴과 동일 — 자동 dismiss 안에 누르면 복구).
-          useToastStore.getState().pushInfo(`오늘 타임라인에서 뺐어요: ${title}`, {
+          useToastStore.getState().pushInfo(`타임라인에서 뺐어요: ${title}`, {
             undoLabel: "되돌리기",
             onUndo: () => {
-              void unwrap(commands.restoreRoutineToday(routineId, today))
+              void unwrap(commands.restoreRoutineToday(routineId, date))
                 .then(() => qc.invalidateQueries({ queryKey: ["routines"] }))
                 .catch((err) => useToastStore.getState().pushError("routine.restore", err));
             },
@@ -183,7 +186,7 @@ export function TodayView() {
         useToastStore.getState().pushError("calendar.delete", err);
       });
     },
-    [date, today, qc, removeEventFromCache],
+    [date, qc, removeEventFromCache],
   );
 
   // ── DnD wiring ──────────────────────────────────────────────────────
@@ -315,10 +318,8 @@ export function TodayView() {
             unscheduledTodays={unscheduledTodays}
             unscheduledRoutines={unscheduledRoutines}
             allDayEvents={allDay}
-            onToggleDone={(id, done) => toggleDone.mutate({ id, date: today, done })}
-            onToggleRoutine={(routineId, done) =>
-              toggleRoutine.mutate({ routineId, date: today, done })
-            }
+            onToggleDone={(id, done) => toggleDone.mutate({ id, date, done })}
+            onToggleRoutine={(routineId, done) => toggleRoutine.mutate({ routineId, date, done })}
           />
           <div className="today-canvas-wrap">
             {noCalendarsConfigured ? (

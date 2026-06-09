@@ -83,10 +83,20 @@ export function tomorrow(): string {
   return fmtLocalDate(d);
 }
 
+const WEEKDAY_MAP: Weekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
 /** 로컬 오늘 요일 (루틴 매칭용). JS getDay: 0=일 → Weekday. */
 export function localWeekday(): Weekday {
-  const map: Weekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  return map[new Date().getDay()];
+  return WEEKDAY_MAP[new Date().getDay()];
+}
+
+/**
+ * 임의 날짜(YYYY-MM-DD)의 로컬 요일. Today 뷰가 선택 날짜로 루틴을 재조회할 때 사용 —
+ * 정오 기준으로 파싱해 DST/타임존 경계의 off-by-one 회피.
+ */
+export function weekdayForDate(date: string): Weekday {
+  const [y, m, d] = date.split("-").map(Number);
+  return WEEKDAY_MAP[new Date(y, m - 1, d, 12).getDay()];
 }
 
 /** 경과일 카운터 +N = (오늘 − forDate) + 1. 옮긴 날 +1, 매일 +1 증가. */
@@ -124,5 +134,7 @@ export function useInvalidate() {
       void qc.invalidateQueries({ queryKey: ["routine-tracking"] });
       return qc.invalidateQueries({ queryKey: ["routines"] });
     },
+    // 완료 토글 → HistoryRail(useCompletedHistory: ["completedHistory", date])가 즉시 갱신되도록.
+    completedHistory: () => qc.invalidateQueries({ queryKey: ["completedHistory"] }),
   };
 }

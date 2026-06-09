@@ -362,29 +362,51 @@ async fn build_queue_row(
                 GOOGLE_SYNC_DEBOUNCE_MS,
             )
         }
-        WriteOp::Reschedule { at, duration_min } => {
-            let (cal, ev) = existing.ok_or_else(|| {
-                AppError::validation("calendar.no_linked_event", "no linked event to reschedule")
-            })?;
-            let payload = serde_json::json!({
-                "start": at,
-                "duration_min": duration_min,
-            })
-            .to_string();
-            ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
-        }
-        WriteOp::Resize { at, duration_min } => {
-            let (cal, ev) = existing.ok_or_else(|| {
-                AppError::validation("calendar.no_linked_event", "no linked event to resize")
-            })?;
-            // resize-only patch는 워커가 거부 — start와 묶어 보낸다(워커 simplification).
-            let payload = serde_json::json!({
-                "start": at,
-                "duration_min": duration_min,
-            })
-            .to_string();
-            ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
-        }
+        WriteOp::Reschedule { at, duration_min } => match existing {
+            Some((cal, ev)) => {
+                let payload = serde_json::json!({
+                    "start": at,
+                    "duration_min": duration_min,
+                })
+                .to_string();
+                ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
+            }
+            // 배치 직후 미동기화 — pending create에 coalesce(없으면 거부).
+            None => {
+                coalesce_into_pending_create(
+                    pool,
+                    target_kind,
+                    target_id,
+                    at,
+                    *duration_min,
+                    "reschedule",
+                )
+                .await?
+            }
+        },
+        WriteOp::Resize { at, duration_min } => match existing {
+            Some((cal, ev)) => {
+                // resize-only patch는 워커가 거부 — start와 묶어 보낸다(워커 simplification).
+                let payload = serde_json::json!({
+                    "start": at,
+                    "duration_min": duration_min,
+                })
+                .to_string();
+                ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
+            }
+            // 배치 직후 미동기화 — pending create에 coalesce(없으면 거부).
+            None => {
+                coalesce_into_pending_create(
+                    pool,
+                    target_kind,
+                    target_id,
+                    at,
+                    *duration_min,
+                    "resize",
+                )
+                .await?
+            }
+        },
         WriteOp::Unschedule => {
             let (cal, ev) = existing.ok_or_else(|| {
                 AppError::validation("calendar.no_linked_event", "no linked event to unschedule")
@@ -486,6 +508,61 @@ fn pair_or_none(t: (Option<String>, Option<String>)) -> Option<(String, String)>
         (Some(a), Some(b)) => Some((a, b)),
         _ => None,
     }
+}
+
+/// 같은 target의 아직 미동기화된 pending `create` 행(calendar_id, payload_json)을 조회.
+/// 배치(schedule) 직후 워커가 Google 이벤트를 만들기 전 윈도우에서만 존재한다.
+async fn fetch_pending_create(
+    pool: &SqlitePool,
+    target_kind: &str,
+    target_id: &str,
+) -> Result<Option<(String, String)>, AppError> {
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT calendar_id, payload_json FROM pending_calendar_writes \
+         WHERE target_kind = ?1 AND target_id = ?2 AND kind = 'create'",
+    )
+    .bind(target_kind)
+    .bind(target_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row)
+}
+
+/// linked event가 아직 없는 reschedule/resize를 pending `create`에 coalesce한다.
+///
+/// 배치 직후엔 signal에 linked_event_id가 없어(워커가 디바운스 후 생성+링크) patch 타깃이
+/// 없다. 이때 create 행이 있으면 에러 대신 그 행 payload를 새 start/duration으로 갱신한다
+/// — `upsert_write`가 UNIQUE(target, 'create')로 머지하므로 디바운스 윈도우 안의 연속
+/// 드래그/리사이즈가 한 create로 합쳐지고, 워커는 최종 위치로 한 번에 이벤트를 만든다.
+/// create 행조차 없으면(이벤트가 외부에서 삭제된 진짜 orphan) 기존대로 거부한다.
+async fn coalesce_into_pending_create(
+    pool: &SqlitePool,
+    target_kind: &str,
+    target_id: &str,
+    at: &str,
+    duration_min: i32,
+    verb: &str,
+) -> Result<(&'static str, String, Option<String>, String, i64), AppError> {
+    let (cal, create_payload) = fetch_pending_create(pool, target_kind, target_id)
+        .await?
+        .ok_or_else(|| {
+            AppError::validation(
+                "calendar.no_linked_event",
+                format!("no linked event to {verb}"),
+            )
+        })?;
+    // create 행의 title 보존 — start/duration만 새 값으로 교체.
+    let title = serde_json::from_str::<serde_json::Value>(&create_payload)
+        .ok()
+        .and_then(|v| v.get("title").and_then(|t| t.as_str()).map(str::to_string))
+        .unwrap_or_default();
+    let payload = serde_json::json!({
+        "title": title,
+        "start": at,
+        "duration_min": duration_min,
+    })
+    .to_string();
+    Ok(("create", cal, None, payload, GOOGLE_SYNC_DEBOUNCE_MS))
 }
 
 #[cfg(test)]
@@ -612,6 +689,76 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(queued, 0);
+    }
+
+    #[tokio::test]
+    async fn reschedule_before_sync_coalesces_into_pending_create() {
+        // 배치 직후(워커가 Google 이벤트 만들기 전) reschedule이 에러 대신 pending create에 머지돼야 한다.
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) \
+             VALUES ('s1','Demo','braindump','thought')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 1) 배치 — pending create + 로컬 mirror.
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Schedule {
+                    at: "2026-05-28T10:00:00".into(),
+                    duration_min: 30,
+                    calendar_id: "cal1".into(),
+                    title: "Demo".into(),
+                },
+                idempotency_key: "k-schedule".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 2) 동기화 전 reschedule — coalesce(에러 없음).
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Reschedule {
+                    at: "2026-05-28T12:00:00".into(),
+                    duration_min: 45,
+                },
+                idempotency_key: "k-reschedule".into(),
+            },
+        )
+        .await
+        .expect("reschedule before sync should coalesce, not error");
+
+        // 큐: create 한 행만(머지), payload는 최신 위치 + title 보존.
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT kind, payload_json FROM pending_calendar_writes WHERE target_id='s1'",
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1, "create 한 행으로 머지");
+        assert_eq!(rows[0].0, "create");
+        assert!(rows[0].1.contains("2026-05-28T12:00:00"));
+        assert!(rows[0].1.contains("45"));
+        assert!(rows[0].1.contains("Demo"), "title 보존");
+
+        // 로컬 mirror도 새 위치.
+        let (at, dur): (Option<String>, Option<i64>) =
+            sqlx::query_as("SELECT scheduled_at, scheduled_duration FROM signals WHERE id='s1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(at.as_deref(), Some("2026-05-28T12:00:00"));
+        assert_eq!(dur, Some(45));
     }
 
     #[tokio::test]

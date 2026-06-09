@@ -58,6 +58,15 @@ function eventLookupKeys(e: CalendarEvent): string[] {
   );
 }
 
+/**
+ * 로컬-ISO(`YYYY-MM-DDTHH:MM:SS[+09:00]`)에서 로컬 날짜(YYYY-MM-DD)만 추출.
+ * 본 코드베이스의 scheduledAt/이벤트 start는 전부 로컬-오프셋 ISO로 기록되므로
+ * 앞 10자가 곧 로컬 날짜다(`new Date` 재파싱은 UTC 변환으로 자정 경계 off-by-one 위험 → 회피).
+ */
+function localDateOf(iso: string): string {
+  return iso.slice(0, 10);
+}
+
 function plusMin(iso: string, m: number): string {
   // 로컬 ISO 보존(예: "2026-05-28T23:30:00"). `.toISOString()`을 쓰면 UTC로 변환되어
   // 다운스트림 `new Date(iso).getHours()`에서 시간이 어긋난다(KST=+9 등). 자정/DST 교차 시 블록 위치가 깨진다.
@@ -108,6 +117,9 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
 
   for (const s of signals) {
     if (!s.scheduledAt || !s.scheduledDuration) continue;
+    // 선택 날짜 스코핑: Today 레일은 rollover라 미래/과거 배치 signal이 캐시에 남을 수 있다.
+    // scheduledAt의 로컬 날짜가 보는 날짜와 다르면 렌더 제외 — "오늘 일정이 다른 날짜로 따라오는" 버그 방지.
+    if (localDateOf(s.scheduledAt) !== date) continue;
     out.push({
       id: `signal:${s.id}`,
       kind: "signal",
