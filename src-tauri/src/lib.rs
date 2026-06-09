@@ -543,6 +543,11 @@ pub fn run() {
             let sched_db: db::Db = app.state::<db::Db>().inner().clone();
             scheduler::spawn_loop(sched_db, AppNotifier(app.handle().clone()));
 
+            // Boule auto ticker (Phase T2): app-bound operator clock only. This is not a daemon and
+            // it does not add a governance loop; every due row delegates to the T1 bounded tick path.
+            let ticker_db: db::Db = app.state::<db::Db>().inner().clone();
+            governance::ticker_scheduler::spawn_loop(ticker_db);
+
             // 캘린더 sync 워커(Today×Timeline PR 2): pending_calendar_writes 큐를 200ms tick +
             // Notify로 굴린다. 외부 호출 Rust only(INVARIANT) · bounded retry [1s,3s,9s]×3(#5) ·
             // staged=true는 commit_staged_writes로 풀릴 때까지 skip(#2 Acceptance).
