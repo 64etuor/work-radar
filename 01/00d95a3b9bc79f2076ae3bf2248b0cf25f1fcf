@@ -1,0 +1,19 @@
+docs/superpowers/plans/2026-06-09-control-room-live-schematic.md
+  s_4005e97bfd6ff0::t_59c17c31a9ee81 1-240,242-872,874-997
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0100d95a3b9bc79f2076ae3bf2248b0cf25f1fcf",
+  "prompts": {},
+  "sessions": {
+    "s_4005e97bfd6ff0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acde3604-d875-44d3-ba16-da7cdb366b0a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
