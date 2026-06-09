@@ -1,0 +1,20 @@
+src-tauri/src/governance/snapshot.rs
+  s_4005e97bfd6ff0::t_ef84167f831848 301-336
+  s_4005e97bfd6ff0::t_da51831ba211e1 182-209,221-224
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a0483af8d83f8b65ce4700ba9987f92a297af2dd",
+  "prompts": {},
+  "sessions": {
+    "s_4005e97bfd6ff0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acde3604-d875-44d3-ba16-da7cdb366b0a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
