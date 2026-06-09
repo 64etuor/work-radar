@@ -1199,6 +1199,8 @@ export type ControlRoomSnapshot = {
 	sessions: SessionRow[],
 	handoffs: HandoffRow[],
 	orchestrator: OrchestratorView,
+	infra?: PreflightCheck[],
+	readiness?: ReadinessView,
 };
 
 /**
@@ -1676,6 +1678,13 @@ export type PrSelfCheckProposal = {
 	migrationNotes?: string[],
 };
 
+export type PreflightCheck = {
+	id: string,
+	ok: boolean,
+	level: string,
+	detail: string,
+};
+
 /**  최상위 그룹. `credential_ref`는 keychain 키일 뿐, 토큰 평문이 아니다. */
 export type Project = {
 	id: string,
@@ -1790,6 +1799,21 @@ export type Quadrant = "q1_do_now" | "q2_schedule" | "q3_quick_contain" | "q4_dr
 
 /**  readiness 버킷 (PR Radar 자기 뷰의 분류 — 매트릭스 결정 레일과 별개, INVARIANT #4). */
 export type ReadinessBucket = "needs_self_check" | "ci_blocked" | "ready" | "merged_cleanup" | "stale";
+
+export type ReadinessGates = {
+	preflight: boolean,
+	conductor: boolean,
+	observer: boolean,
+	auto: boolean,
+	stall: boolean,
+};
+
+export type ReadinessView = {
+	ready: boolean,
+	blockers: string[],
+	warnings: string[],
+	gates: ReadinessGates,
+};
 
 /**  안전 dev rebase 결과 (Phase 12c). 성공/충돌(abort+복구) 둘 다 terminal로 노출한다. */
 export type RebaseResult = {

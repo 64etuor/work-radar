@@ -179,6 +179,34 @@ pub struct OrchestratorView {
     pub sessions: Vec<OrchestratorSessionRow>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightCheck {
+    pub id: String,
+    pub ok: bool,
+    pub level: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadinessGates {
+    pub preflight: bool,
+    pub conductor: bool,
+    pub observer: bool,
+    pub auto: bool,
+    pub stall: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadinessView {
+    pub ready: bool,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+    pub gates: ReadinessGates,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRoomSnapshot {
@@ -190,6 +218,10 @@ pub struct ControlRoomSnapshot {
     pub sessions: Vec<SessionRow>,
     pub handoffs: Vec<HandoffRow>,
     pub orchestrator: OrchestratorView,
+    #[serde(default)]
+    pub infra: Vec<PreflightCheck>,
+    #[serde(default)]
+    pub readiness: ReadinessView,
 }
 
 /// Parse the combined Control Room snapshot JSON emitted by `boule snapshot --json`.
@@ -265,5 +297,41 @@ mod tests {
         let json = r#"{"generatedAt":null,"tasks":[{"taskId":"t1","title":"T","phase":"frobnicated"}],"plans":[],"specs":[],"sessions":[],"handoffs":[],"orchestrator":{"tasks":[],"plans":[],"sessions":[]}}"#;
         let snap = parse_control_room_snapshot(json).unwrap();
         assert_eq!(snap.tasks[0].phase, TaskPhase::Unknown);
+    }
+
+    #[test]
+    fn parses_infra_and_readiness_blocks() {
+        let json = r#"{
+            "generatedAt": null,
+            "tasks": [], "plans": [], "specs": [], "sessions": [], "handoffs": [],
+            "orchestrator": {"tasks": [], "plans": [], "sessions": []},
+            "infra": [
+                {"id":"cmux_socket","ok":false,"level":"required","detail":"CMUX_SOCKET_PATH MISSING"},
+                {"id":"conductor_mode","ok":false,"level":"advisory","detail":"stub"}
+            ],
+            "readiness": {
+                "ready": false,
+                "blockers": ["BOULE_OBSERVER_MODE!=live — crashes/stalls undetected (unsafe unattended)"],
+                "warnings": [],
+                "gates": {"preflight":false,"conductor":false,"observer":false,"auto":false,"stall":true}
+            }
+        }"#;
+        let snap = parse_control_room_snapshot(json).unwrap();
+        assert_eq!(snap.infra.len(), 2);
+        assert_eq!(snap.infra[0].id, "cmux_socket");
+        assert!(!snap.infra[0].ok);
+        assert_eq!(snap.infra[0].level, "required");
+        assert!(!snap.readiness.ready);
+        assert!(snap.readiness.gates.stall);
+        assert!(!snap.readiness.gates.observer);
+        assert_eq!(snap.readiness.blockers.len(), 1);
+    }
+
+    #[test]
+    fn default_snapshot_has_empty_infra_and_unready_readiness() {
+        let snap = ControlRoomSnapshot::default();
+        assert!(snap.infra.is_empty());
+        assert!(!snap.readiness.ready);
+        assert!(!snap.readiness.gates.preflight);
     }
 }
