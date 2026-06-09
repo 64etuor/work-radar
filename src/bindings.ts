@@ -642,6 +642,11 @@ export const commands = {
 	setBouleConfig: (input: SetBouleConfigInput_Deserialize) => typedError<BouleConfigSettings_Serialize, AppError>(__TAURI_INVOKE("set_boule_config", { input })),
 	/**  Read a project's ticker settings/status. Missing ticker row returns a disabled default view. */
 	getProjectTickStatus: (projectId: string) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("get_project_tick_status", { projectId })),
+	/**
+	 *  Read every project's live ticker status from app SQLite. Missing ticker rows return disabled
+	 *  defaults; Boule autonomy is best-effort from the first enabled local repo config.
+	 */
+	listProjectTickStatus: () => typedError<ProjectTickerStatusRow[], AppError>(__TAURI_INVOKE("list_project_tick_status")),
 	/**  Toggle only the operator clock flag. This does not mutate Boule autonomy/governance state. */
 	setProjectTickEnabled: (projectId: string, enabled: boolean) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_enabled", { projectId, enabled })),
 	/**  Store the future scheduler interval. T1 has no scheduler; this setting is inert until T2. */
@@ -1720,6 +1725,22 @@ export type ProjectTickStatus = {
 	lastExitCode: number | null,
 	lastReportJson: string | null,
 	attentionRequired: boolean,
+};
+
+export type ProjectTickerStatusRow = {
+	projectId: string,
+	projectName: string,
+	tickEnabled: boolean,
+	intervalSec: number | null,
+	maxSteps: number,
+	nextDueAt: string | null,
+	inProgress: boolean,
+	lastStartedAt: string | null,
+	lastFinishedAt: string | null,
+	lastOutcome: TickStatusOutcome | null,
+	lastExitCode: number | null,
+	attentionRequired: boolean,
+	autonomyLevel: BouleAutonomyLevel | null,
 };
 
 /**  append-only 승격 이력 (undo/audit). 외부 변경은 Acceptance 전엔 일어나지 않는다. */
