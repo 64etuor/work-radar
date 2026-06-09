@@ -1,0 +1,22 @@
+governance/test/live/readiness-gates.test.ts
+  s_4005e97bfd6ff0::t_c4df9a58841863 1-33
+governance/src/live/readiness.ts
+  s_4005e97bfd6ff0::t_a5a7e5ef79defa 63-72,74,76,78,80,92
+  s_4005e97bfd6ff0::t_7306a05303b9a6 35-42,52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3e4dee7f550a75fa51c612dd2025b795daee6b1e",
+  "prompts": {},
+  "sessions": {
+    "s_4005e97bfd6ff0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acde3604-d875-44d3-ba16-da7cdb366b0a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
