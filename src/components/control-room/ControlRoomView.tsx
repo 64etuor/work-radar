@@ -16,14 +16,10 @@ import {
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { InfraBar } from "./InfraBar";
+import { ReadinessStrip } from "./ReadinessStrip";
 import { Schematic } from "./Schematic";
 import { Vitals } from "./Vitals";
 
@@ -40,6 +36,7 @@ export default function ControlRoomView() {
     projects.map((p) => p.id),
     selectedProject,
   );
+  const activeTicker = (ticker.data ?? []).find((row) => row.projectId === activeProjectId) ?? null;
   const { data, isLoading, isError, error, refetch, isFetching } =
     useProjectControlRoomSnapshot(activeProjectId);
   // Date.now() is impure, so seed "now" once via a lazy initializer; refreshes bump it.
@@ -64,10 +61,7 @@ export default function ControlRoomView() {
         </h1>
         <span className="cr-stamp">
           {activeProjectId && projects.length > 0 && (
-            <Select
-              value={activeProjectId}
-              onValueChange={(value) => setSelectedProject(value)}
-            >
+            <Select value={activeProjectId} onValueChange={(value) => setSelectedProject(value)}>
               <SelectTrigger className="cr-project-select" aria-label="Control Room project">
                 <SelectValue />
               </SelectTrigger>
@@ -96,14 +90,6 @@ export default function ControlRoomView() {
         </span>
       </div>
 
-      {vitals && (
-        <Vitals
-          vitals={vitals}
-          active={filter}
-          onToggle={(key) => setFilter((cur) => (cur === key ? null : key))}
-        />
-      )}
-
       <TickerPanel rows={ticker.data ?? []} nowMs={nowMs} loading={ticker.isLoading} />
 
       {!ticker.isLoading && projects.length === 0 && (
@@ -119,14 +105,23 @@ export default function ControlRoomView() {
           </div>
         </Card>
       )}
-      {data &&
-        (total === 0 ? (
-          <Card className="p-4">
-            <div className="cr-empty">아직 프로젝션 없음 — 진행 중인 work가 없습니다.</div>
-          </Card>
-        ) : (
+      {data && (
+        <>
+          {data.infra !== undefined && <InfraBar infra={data.infra} ticker={activeTicker} />}
+          {data.readiness !== undefined && <ReadinessStrip readiness={data.readiness} />}
+          {vitals && (
+            <Vitals
+              vitals={vitals}
+              active={filter}
+              onToggle={(key) => setFilter((cur) => (cur === key ? null : key))}
+            />
+          )}
+          {total === 0 && (
+            <div className="cr-empty">진행 중인 work 없음 — 인프라/readiness만 표시 중.</div>
+          )}
           <Schematic snap={data} filter={filter} />
-        ))}
+        </>
+      )}
     </div>
   );
 }
@@ -208,9 +203,7 @@ function TickerRow({ row, nowMs }: { row: ProjectTickerStatusRow; nowMs: number 
           )}
         </div>
         {row.tickEnabled && row.autonomyLevel === "manual" && (
-          <div className="cr-ticker-note">
-            Clock on · autonomy manual — waiting for human gates
-          </div>
+          <div className="cr-ticker-note">Clock on · autonomy manual — waiting for human gates</div>
         )}
       </div>
 
@@ -272,7 +265,7 @@ function OutcomeChip({
   outcome: TickStatusOutcome | null;
   inProgress: boolean;
 }) {
-  const label = inProgress ? "in_flight" : outcome ?? "not_run";
+  const label = inProgress ? "in_flight" : (outcome ?? "not_run");
   return (
     <Badge variant="outline" className="cr-ticker-outcome" data-outcome={label}>
       {label}

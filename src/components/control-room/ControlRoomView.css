@@ -424,3 +424,69 @@
   word-break: break-all;
   text-align: right;
 }
+
+/* ── Infra bar ───────────────────────────────────────────── */
+.cr-infra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+}
+.cr-infra-chip {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  color: var(--cr-muted);
+}
+.cr-infra-chip[data-tone="ok"] {
+  border-color: var(--cr-done);
+  color: var(--cr-done);
+}
+.cr-infra-chip[data-tone="down"] {
+  border-color: var(--color-destructive);
+  color: var(--color-destructive);
+}
+.cr-infra-chip[data-tone="advisory"] {
+  border-color: var(--cr-pressure);
+  color: var(--cr-pressure);
+}
+
+/* ── Readiness strip ─────────────────────────────────────── */
+.cr-readiness {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.cr-readiness-gates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.cr-gate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-destructive);
+}
+.cr-gate[data-pass] {
+  color: var(--cr-done);
+}
+.cr-readiness-verdict {
+  margin-left: 0.25rem;
+}
+.cr-readiness-blockers {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.75rem;
+  color: var(--cr-muted);
+}
+.cr-readiness-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--cr-pressure);
+}
