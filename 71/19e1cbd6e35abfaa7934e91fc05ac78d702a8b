@@ -1,0 +1,23 @@
+src/lib/controlRoom.ts
+  s_4005e97bfd6ff0::t_224772c3145033 79-91
+  s_4005e97bfd6ff0::t_d181f45c51f142 1-9
+src/lib/controlRoom.test.ts
+  s_4005e97bfd6ff0::t_22a8a5626fa170 3-4
+  s_4005e97bfd6ff0::t_bb1d23911d9e35 46-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7119e1cbd6e35abfaa7934e91fc05ac78d702a8b",
+  "prompts": {},
+  "sessions": {
+    "s_4005e97bfd6ff0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acde3604-d875-44d3-ba16-da7cdb366b0a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
