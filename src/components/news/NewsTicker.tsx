@@ -41,7 +41,7 @@ export function NewsTicker() {
   useLayoutEffect(() => {
     const el = trackRef.current;
     if (!el) return;
-    const REF_PX = 1200;
+    const REF_PX = 2400;
     const MIN_DURATION_S = 20;
     const apply = () => {
       const contentPx = el.scrollWidth / 2;
