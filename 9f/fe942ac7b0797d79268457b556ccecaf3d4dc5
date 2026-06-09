@@ -1,0 +1,24 @@
+src/components/news/NewsTicker.tsx
+  s_17be6252b4320c::t_d62a470704509a 37,40-43,56-57,60
+  s_17be6252b4320c::t_716f94dc122be2 82
+  s_17be6252b4320c::t_a05f4beb2ff1b5 10
+  s_17be6252b4320c::t_b4ebd4c5179823 58-59
+  s_17be6252b4320c::t_99d988507f0b18 36,38-39,44-55
+  s_17be6252b4320c::t_a150448efd0701 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "9ffe942ac7b0797d79268457b556ccecaf3d4dc5",
+  "prompts": {},
+  "sessions": {
+    "s_17be6252b4320c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02315e61-300b-41c3-b367-e7dc1a47dc59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
