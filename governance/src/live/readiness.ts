@@ -32,6 +32,14 @@ export interface ReadinessInput {
   stalledCount: number;
 }
 
+export interface ReadinessGates {
+  preflight: boolean;
+  conductor: boolean;
+  observer: boolean;
+  auto: boolean;
+  stall: boolean;
+}
+
 export interface ReadinessReport {
   /** true ⇔ safe to run unattended (every blocker cleared). */
   ready: boolean;
@@ -41,6 +49,8 @@ export interface ReadinessReport {
    *  INVARIANT #1 gate). These do NOT flip `ready` — the user opts into them by config — but they
    *  must be surfaced on the live-go path, not just in `boule status`. */
   warnings: string[];
+  /** structured per-gate booleans for dashboard rendering (additive; existing consumers ignore). */
+  gates: ReadinessGates;
   /** the underlying L0 preflight (infra detail). */
   preflight: PreflightReport;
 }
@@ -49,17 +59,25 @@ export interface ReadinessReport {
 export function evaluateReadiness(input: ReadinessInput): ReadinessReport {
   const preflight = evaluatePreflight(input.signals);
   const env = input.signals.env;
-  const blockers: string[] = [];
 
-  if (!preflight.ready)
+  const gates: ReadinessGates = {
+    preflight: preflight.ready,
+    conductor: parseConductorMode(env.BOULE_CONDUCTOR_MODE),
+    observer: parseObserverMode(env.BOULE_OBSERVER_MODE),
+    auto: parseAutoMode(env.BOULE_AUTO_MODE) === "type2",
+    stall: input.stalledCount === 0,
+  };
+
+  const blockers: string[] = [];
+  if (!gates.preflight)
     blockers.push("preflight infra not ready (cmux socket/binary or git worktree)");
-  if (!parseConductorMode(env.BOULE_CONDUCTOR_MODE))
+  if (!gates.conductor)
     blockers.push("BOULE_CONDUCTOR_MODE!=live — no real sessions would spawn");
-  if (!parseObserverMode(env.BOULE_OBSERVER_MODE))
+  if (!gates.observer)
     blockers.push("BOULE_OBSERVER_MODE!=live — crashes/stalls undetected (unsafe unattended)");
-  if (parseAutoMode(env.BOULE_AUTO_MODE) !== "type2")
+  if (!gates.auto)
     blockers.push("BOULE_AUTO_MODE!=type2 — no unattended step advance");
-  if (input.stalledCount > 0)
+  if (!gates.stall)
     blockers.push(`${input.stalledCount} stalled task(s) — resolve before unattended dispatch`);
 
   // Non-blocking posture warning: an opened INVARIANT #1 gate is opt-in (does NOT block readiness),
@@ -71,5 +89,5 @@ export function evaluateReadiness(input: ReadinessInput): ReadinessReport {
       `BOULE_AUTONOMY_LEVEL=${autonomy} — INVARIANT #1 OPENED: AI auto-accepts ${autonomy === "full" ? "plan + spec" : "plan"} (test/dev only; Type-1 decisions + stalls still halt for a human)`,
     );
 
-  return { ready: blockers.length === 0, blockers, warnings, preflight };
+  return { ready: blockers.length === 0, blockers, warnings, gates, preflight };
 }
