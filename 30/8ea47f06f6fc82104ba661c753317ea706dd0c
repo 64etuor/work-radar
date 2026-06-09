@@ -1,0 +1,19 @@
+docs/decisions.md
+  s_4005e97bfd6ff0::t_1f3ad80b7d480b 573
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "308ea47f06f6fc82104ba661c753317ea706dd0c",
+  "prompts": {},
+  "sessions": {
+    "s_4005e97bfd6ff0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acde3604-d875-44d3-ba16-da7cdb366b0a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
