@@ -38,10 +38,10 @@ export function KindAreaChips({
     <>
       {target.kind && <KindBadge kind={target.kind} className="typo-micro h-4 px-1.5 py-0" />}
       {areaKey && (
-        <span
-          className={cn(
-            "b-tag life-wheel-area-chip typo-micro inline-flex items-center rounded-full px-1.5 py-px font-semibold",
-          )}
+        // kind 배지와 동일한 공통 Badge 칩 — area 색만 인라인으로 입힌다(높이/모양/타이포 통일).
+        <Badge
+          variant="outline"
+          className="b-tag life-wheel-area-chip typo-micro h-4 border-transparent px-1.5 py-0 font-semibold"
           style={{
             background: areaTag?.color ?? "#75758a",
             color: readableTextColor(areaTag?.color ?? "#75758a"),
@@ -50,7 +50,7 @@ export function KindAreaChips({
           title={areaTag?.label ?? areaKey}
         >
           {areaTag?.label ?? areaKey}
-        </span>
+        </Badge>
       )}
     </>
   );
