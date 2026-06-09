@@ -1,0 +1,54 @@
+src-tauri/src/commands/calendar_sync.rs
+  s_17be6252b4320c::t_f6feed0b90408f 365-375,385-398,408-409
+  s_17be6252b4320c::t_8fd6ebb3a3445f 376-384,399-407,549-552
+  s_17be6252b4320c::t_f2175983e9611f 543
+  s_17be6252b4320c::t_39bcb473a4a59a 513-542,544-548,553-567
+  s_17be6252b4320c::t_e334e78803b8c8 695-763
+src/components/today/HistoryRail.tsx
+  s_17be6252b4320c::t_c02f249b700427 225-226
+src/lib/todayBlocks.ts
+  s_17be6252b4320c::t_1c26886e0f0e77 120-122
+  s_17be6252b4320c::t_41fb3215d10a9b 61-69
+src/lib/todayBlocks.test.ts
+  s_17be6252b4320c::t_aefcb6807ebb7e 8-41
+src/lib/query/client.ts
+  s_17be6252b4320c::t_db11c4a482c83c 86-87,90-99
+  s_17be6252b4320c::t_77f09729506b03 137-138
+src/components/TodayView.tsx
+  s_17be6252b4320c::t_316a67c2092fec 72-74
+  s_17be6252b4320c::t_7ce48116463b5a 115,118,120,123
+  s_17be6252b4320c::t_b57a9f68da9235 321
+  s_17be6252b4320c::t_1086ad1ec86e4e 56-57
+  s_17be6252b4320c::t_59be6da295f70d 44
+  s_17be6252b4320c::t_b9f834812c0770 64-65
+  s_17be6252b4320c::t_da376fc6997bc2 322
+  s_17be6252b4320c::t_6fec329a3a7a46 189
+  s_17be6252b4320c::t_8f911be8fe2556 155-159,162,168,171
+src-tauri/capabilities/default.json
+  s_17be6252b4320c::t_70bba2152c5f51 17-20
+docs/decisions.md
+  s_17be6252b4320c::t_629c6532a71345 574
+src/lib/query/today.ts
+  s_17be6252b4320c::t_862b9919e62cf6 68-71
+src/components/TodayView.css
+  s_17be6252b4320c::t_2832cfee9e4fd8 438-439
+  s_17be6252b4320c::t_bbd0bcb79b5a22 965-969,971
+  s_17be6252b4320c::t_cae654b009f806 945-946
+  s_17be6252b4320c::t_f16a10f9adc60b 957-958
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "bd4d43e6ef0503216a3eab5f0799c590268fb265",
+  "prompts": {},
+  "sessions": {
+    "s_17be6252b4320c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02315e61-300b-41c3-b367-e7dc1a47dc59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
