@@ -3,3 +3,4 @@
 pub mod boule_config;
 pub mod snapshot;
 pub mod ticker;
+pub mod ticker_scheduler;
