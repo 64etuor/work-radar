@@ -1,3 +1,4 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useMemo, useState } from "react";
 
 import { commands } from "@/bindings";
@@ -8,6 +9,8 @@ import { HermesChatInput } from "./hermes/HermesChatInput";
 import { HermesChatLog } from "./hermes/HermesChatLog";
 import { HermesPanel } from "./hermes/HermesPanel";
 import { HermesSidebar } from "./hermes/HermesSidebar";
+import { resolveHermesShortcut } from "./hermes/keyboardShortcuts";
+import { confirmDeleteSession } from "./hermes/sessionConfirm";
 import { useHermesPanelState } from "./hermes/useHermesPanelState";
 import {
   selectActiveQueueCount,
@@ -39,7 +42,6 @@ export default function HermesView() {
   const tabs = useMemo(() => Array.from(tabsMap.values()), [tabsMap]);
   const activeTabId = useHermesTabsStore((s) => s.activeTabId);
   const openTab = useHermesTabsStore((s) => s.openTab);
-  const closeTab = useHermesTabsStore((s) => s.closeTab);
   const ensureAgent = useHermesTabsStore((s) => s.ensureAgent);
   const setActive = useHermesTabsStore((s) => s.setActive);
   const send = useHermesTabsStore((s) => s.send);
@@ -64,6 +66,7 @@ export default function HermesView() {
     });
 
   const removeSession = async (id: string) => {
+    if (!confirmDeleteSession(useHermesTabsStore.getState().tabs.get(id))) return;
     try {
       await unwrap(commands.hermesAgentCloseTab(id));
     } catch {
@@ -96,41 +99,32 @@ export default function HermesView() {
   // is appended last so stopImmediatePropagation() here is safe: it only suppresses
   // later-registered listeners, not already-fired earlier ones.
   //
+  // ⌘W: hides the app window only. Closing a Hermes session is an explicit sidebar action.
+  //
   // ⌘1–9: additionally skip when focus is in an editable element (mirrors
   // useViewShortcuts isEditableTarget guard) — typing "1" in the search box must not
   // switch sessions.
   useEffect(() => {
-    const isEditable = (t: EventTarget | null): boolean => {
-      if (!(t instanceof HTMLElement)) return false;
-      const tag = t.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || (t as HTMLElement).isContentEditable;
-    };
-
     const onKey = (e: KeyboardEvent) => {
-      if (!panelState.open) return;
-      if (!(e.metaKey || e.ctrlKey)) return;
+      const action = resolveHermesShortcut(e, {
+        panelOpen: panelState.open,
+        tabs: Array.from(useHermesTabsStore.getState().tabs.values()),
+      });
+      if (!action) return;
 
-      if (e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (action.type === "new-tab") {
         void openTab();
-      } else if (e.key.toLowerCase() === "w") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        if (activeTabId) void closeTab(activeTabId);
-      } else if (/^[1-9]$/.test(e.key) && !isEditable(e.target)) {
-        const idx = Number(e.key) - 1;
-        const list = Array.from(useHermesTabsStore.getState().tabs.values());
-        if (list[idx]) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          setActive(list[idx].id);
-        }
+      } else if (action.type === "hide-window") {
+        void getCurrentWindow().hide();
+      } else {
+        setActive(action.tabId);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelState.open, activeTabId, openTab, closeTab, setActive]);
+  }, [panelState.open, activeTabId, openTab, setActive]);
 
   return (
     <HermesPanel

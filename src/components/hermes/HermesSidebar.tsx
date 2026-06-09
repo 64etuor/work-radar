@@ -127,8 +127,8 @@ export function HermesSidebar({
                   <Button
                     variant="ghost"
                     className="hover:bg-destructive/10 hover:text-destructive size-6 shrink-0 p-0 opacity-0 group-hover:opacity-100"
-                    aria-label="세션 삭제"
-                    title="세션 삭제(대화 기록 제거)"
+                    aria-label="세션 영구 삭제"
+                    title="세션 영구 삭제"
                     onClick={(e) => {
                       e.stopPropagation();
                       onDelete(t.id);
