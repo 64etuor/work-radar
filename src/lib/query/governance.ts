@@ -10,7 +10,8 @@ export function useProjectControlRoomSnapshot(projectId: string | null) {
     queryKey: ["control-room-snapshot", projectId],
     queryFn: () => unwrap(commands.getProjectControlRoomSnapshot(projectId!)),
     enabled: projectId != null,
-    staleTime: 5_000,
+    staleTime: 2_000,
+    refetchInterval: 4_000,
   });
 }
 
