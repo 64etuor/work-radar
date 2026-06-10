@@ -1,0 +1,64 @@
+package.json
+  s_354e94b88ccc74::t_624b3280f765a6 43
+src/components/control-room/ControlRoomView.css
+  s_354e94b88ccc74::t_f8bc0cb5117b17 287-290,292,295,300-301,303-305,307,309,312-314,318-319,322-333,335,337-339,341-342,344-345,347-348,350-351,353-354,356-357,360-363,365-366,368,371-374,377-387,389-391,393-395,397-398,400-401,404-406,408-409,411,414,417,420,423,426,429-490
+  s_354e94b88ccc74::t_be127c2be5ef16 49,72-78,80-85
+src/components/control-room/FlowSchematic.tsx
+  s_354e94b88ccc74::t_d6b407e151335c 145
+  s_354e94b88ccc74::t_416afc64bf2cab 1-10,13,26,29-36,54-55,64-71,78-104,109-127,129-135,139-144,146-162
+  s_354e94b88ccc74::t_6f600e3f96bbf9 14,16-18,27,73-77
+  s_354e94b88ccc74::t_4735a9f3a7dce6 15
+src/components/control-room/NodeTooltip.tsx
+  s_354e94b88ccc74::t_ea4d7117ce74e1 3-6,11-13
+src/lib/controlRoomFlow.test.ts
+  s_354e94b88ccc74::t_fc4d462f33cf13 25,33,72-77
+  s_354e94b88ccc74::t_b09f0feb1fc736 4
+  s_354e94b88ccc74::t_cd905ec700617e 26-32
+  s_354e94b88ccc74::t_6f600e3f96bbf9 94-137
+  s_354e94b88ccc74::t_368a097e2ffdc4 5
+  s_354e94b88ccc74::t_63ef4293308ad7 1-3,6-24,34-71,78-93
+src/components/control-room/CommandDeck.tsx
+  s_354e94b88ccc74::t_b41281f2568393 2
+  s_354e94b88ccc74::t_e768d3d0ef4974 41,43-49
+  s_354e94b88ccc74::t_fc4d462f33cf13 50-54,57-60,62-70,72-79
+  s_354e94b88ccc74::t_a9e55ceef853bd 80-81
+pnpm-lock.yaml
+  s_354e94b88ccc74::t_e46f3b65a5a188 53-55,1634-1636,1649-1651,1661-1666,1814-1829,1909-1911,1951-1958,1979-1982,1999-2008,3241-3255,4641-4644,4657-4658,4667-4675,4870-4894,4958-4959,5001-5007,5026-5027,5042-5058,6494-6499
+src/components/control-room/FlowEdge.tsx
+  s_354e94b88ccc74::t_8d7d01e8074b85 1,3-29,31-36
+docs/decisions.md
+  s_354e94b88ccc74::t_e46f3b65a5a188 588
+src/components/control-room/Vitals.tsx
+  s_354e94b88ccc74::t_a4a55384f887a9 3,7-23
+  s_354e94b88ccc74::t_d1f1a4711cffea 51-53,59-61
+  s_354e94b88ccc74::t_fc4d462f33cf13 2
+src/components/control-room/FlowNode.tsx
+  s_354e94b88ccc74::t_a28ef984472792 1,4-5,7,9-15,21-37,39-40,46,49,56-65
+  s_354e94b88ccc74::t_fc4d462f33cf13 50-55
+src/lib/controlRoomFlow.ts
+  s_354e94b88ccc74::t_6f600e3f96bbf9 83-105
+  s_354e94b88ccc74::t_f3be47f2b95824 1-82,106-107
+src/components/control-room/ControlRoomView.tsx
+  s_354e94b88ccc74::t_14d29d4d6593b2 120-121
+  s_354e94b88ccc74::t_75ff08844714ef 16
+src/components/control-room/ProjectTabs.tsx
+  s_354e94b88ccc74::t_2564faad6d7135 1
+  s_354e94b88ccc74::t_9a1b7a06722b76 19
+  s_354e94b88ccc74::t_d42581e9fa2a12 49-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "8d695bfa3ed6ef1ae90ec792ca5d230573384e6f",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
