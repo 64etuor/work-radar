@@ -1,0 +1,23 @@
+governance/src/conductor/adapter.ts
+  s_354e94b88ccc74::t_81021ee3b7c577 312-316,318
+governance/test/conductor/handlers.test.ts
+  s_354e94b88ccc74::t_053b1bb5afd986 865,981
+docs/decisions.md
+  s_354e94b88ccc74::t_8cebb496b1803c 591
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "121f83a5ce576f1addaa9d82fd4a49bf25921266",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
