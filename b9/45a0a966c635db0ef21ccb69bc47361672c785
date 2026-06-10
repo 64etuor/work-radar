@@ -1,0 +1,62 @@
+src/components/settings/NewsFiltersForm.tsx
+  s_ac5b671ce9b440::t_d8aaf48b4e5c05 1-119
+src/components/skills/InstallPanel.tsx
+  s_ac5b671ce9b440::t_30b761997a060b 1-157
+src/components/settings/NewsMarqueeSpeedField.tsx
+  s_ac5b671ce9b440::t_e22a4ec9fdf729 1-4,12-62
+  s_ac5b671ce9b440::t_90239775843806 5-11
+src/components/skills/useSkillBatchSelection.ts
+  s_ac5b671ce9b440::t_4039e50a7780b8 1-185
+src/components/skills/AuditPanel.tsx
+  s_ac5b671ce9b440::t_46c20627e1e6a7 1-49
+src/components/skills/panels.tsx
+  s_ac5b671ce9b440::t_72212cd8fc2e90 1-6
+src/components/settings/useOauthAttempt.ts
+  s_ac5b671ce9b440::t_9eb077374fa166 10-15,20,26-27,39-50,58-60
+  s_ac5b671ce9b440::t_3cb6f7d3b256ea 1-9,16-19,21-25,28-38,51-57,61-62
+src/components/skills/UpdatePanel.tsx
+  s_ac5b671ce9b440::t_1c72c3d94fabf8 1-137
+src/components/settings/CalendarPicker.tsx
+  s_ac5b671ce9b440::t_c4754b096791aa 1-146
+src/components/settings/marqueeSpeed.ts
+  s_ac5b671ce9b440::t_a6e6c341c39d95 1-35
+src/components/settings/NewsSourceSettings.tsx
+  s_ac5b671ce9b440::t_81139ce6cc5535 4,7,26-27
+src/components/settings/GoogleAccountBlock.tsx
+  s_ac5b671ce9b440::t_479897740688da 49-51,82,88,92,96-97,106
+  s_ac5b671ce9b440::t_cb1c8cca5314be 1-2,15,18,41-48,52
+  s_ac5b671ce9b440::t_30e78651f72ffc 17
+src/lib/query/skills.ts
+  s_ac5b671ce9b440::t_d20e50fe2aa0e1 420
+  s_ac5b671ce9b440::t_225b846cb74410 267
+  s_ac5b671ce9b440::t_9fb5c48a41edf3 254
+  s_ac5b671ce9b440::t_dcad8737b7deef 1,19-25,27-31
+  s_ac5b671ce9b440::t_239441a274d48f 296,310-311
+  s_ac5b671ce9b440::t_38f75962750977 374-375
+  s_ac5b671ce9b440::t_b318262178391f 26
+src/components/SkillsView.tsx
+  s_ac5b671ce9b440::t_6ee3517b33cab3 202-222
+src/components/skills/CreatePanel.tsx
+  s_ac5b671ce9b440::t_9e9c25349f6f8c 1-90
+src/lib/query/signals.ts
+  s_ac5b671ce9b440::t_b6881630872008 119,129,139
+  s_ac5b671ce9b440::t_cf02672fddc389 1,14-21
+src/components/skills/BackupPanel.tsx
+  s_ac5b671ce9b440::t_0cbd702e28b4ea 1-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b945a0a966c635db0ef21ccb69bc47361672c785",
+  "prompts": {},
+  "sessions": {
+    "s_ac5b671ce9b440": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c13ba734-c2ee-46c2-ac97-5c53f3e7113d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
