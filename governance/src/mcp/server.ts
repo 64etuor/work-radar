@@ -882,7 +882,12 @@ server.registerTool(
         options,
         ambiguityKind: ambiguity_kind as never,
         agentRecommendation: agent_recommendation,
-        relatedTaskId: related_task_id,
+        // Structural task linkage: a conductor-spawned session's mcp.json sets BOULE_TASK_ID and
+        // it takes PRECEDENCE over the model-supplied argument — the conductor knows which task
+        // this session runs; the model can omit, garble, or even mis-cite it (live 2026-06-10:
+        // step5's relatedTaskId leaked into the question text). The argument remains the path for
+        // manual/non-conductor sessions, where no env binding exists.
+        relatedTaskId: process.env.BOULE_TASK_ID ?? related_task_id,
       },
       nowFn(),
       randFn(),

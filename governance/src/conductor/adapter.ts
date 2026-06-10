@@ -141,6 +141,7 @@ export function sessionMcpConfig(
   serverEntrypoint: string,
   governanceWorkspace: string,
   repoRoot: string,
+  taskId?: string,
 ): string {
   return (
     JSON.stringify(
@@ -156,6 +157,11 @@ export function sessionMcpConfig(
               BOULE_SESSION_ROLE: "executor",
               BOULE_WORKSPACE: governanceWorkspace,
               BOULE_REPO_ROOT: repoRoot,
+              // BOULE_TASK_ID makes escalate's task linkage STRUCTURAL: the server defaults
+              // related_task_id to it, so a session whose model garbles/omits the argument still
+              // binds its fork to the task (live 2026-06-10: step5's relatedTaskId leaked into the
+              // question text and the decision never related to the task).
+              ...(taskId ? { BOULE_TASK_ID: taskId } : {}),
             },
           },
         },
@@ -303,7 +309,7 @@ export function buildSessionCommand(
       `-C "${spec.worktreePath}" ` +
       `-c 'mcp_servers.boule-governance.command="node"' ` +
       `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
-      `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}"}' ` +
+      `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}",BOULE_TASK_ID="${spec.taskId}"}' ` +
       `${promptCat}`;
     return withAttemptEvidenceTail(codexCommand, spec, deps);
   }
@@ -466,7 +472,7 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // Scoped executor-role MCP config — the structural backstop for session verdict isolation.
       await deps.fs.writeFile(
         `${bouleDir}/mcp.json`,
-        sessionMcpConfig(deps.serverEntrypoint, deps.governanceWorkspace, deps.repoRoot),
+        sessionMcpConfig(deps.serverEntrypoint, deps.governanceWorkspace, deps.repoRoot, envelope.taskId),
       );
     },
   };

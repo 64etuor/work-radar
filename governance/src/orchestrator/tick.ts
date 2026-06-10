@@ -10,6 +10,7 @@ import type { ConductorAdapter } from "../conductor/adapter.ts";
 import type { ExecutorKind } from "../conductor/envelope.ts";
 import type { ConductorEnvelopeDefaults } from "../conductor/handlers.ts";
 import type { ExecutorViabilityProbes } from "../conductor/handlers.ts";
+import { resumeChosenEscalation } from "../conductor/handlers.ts";
 import type { ReadinessReport } from "../live/readiness.ts";
 import type { AutonomyLevel, AutoMode, ResolvedPolicy } from "../repo/config.ts";
 import type { ResolveBudgetContext } from "../backends/resolve.ts";
@@ -110,6 +111,29 @@ export async function runTick(
     .filter((s) => !isTerminalPlanPhase(s.planPhase));
   const haltedPlans = activeStates.filter((s) => s.halted).map((s) => s.planId);
   if (haltedPlans.length) return { ...base, outcome: "halted_decision", haltedPlans };
+
+  // Gate 2.5 — post-choose resume. A task whose escalation a human just resolved must be
+  // re-dispatched WITH the decision BEFORE the completion gate runs: the gate would re-check work
+  // the escalated session declined to do and park the tick at needs_human forever (live limbo
+  // 2026-06-10). Dispatch-gated like autoDispatch — at autoMode "off" (manual) the human dispatches.
+  if (deps.autoMode !== "off") {
+    let resumed = 0;
+    for (const s of activeStates) {
+      const r = await resumeChosenEscalation(
+        workspaceDir,
+        { planId: s.planId },
+        {
+          adapter: deps.adapter,
+          ...(deps.executor ? { executor: deps.executor } : {}),
+          ...(deps.envelopeDefaults ? { envelopeDefaults: deps.envelopeDefaults } : {}),
+        },
+        now,
+        rand,
+      );
+      if (r.kind === "advanced") resumed++;
+    }
+    if (resumed > 0) return { ...base, outcome: "advanced", conducted: resumed };
+  }
 
   const completion = await completeReportedDone(workspaceDir, deps.completionDeps, now, rand);
   if (completion.needsHuman > 0) {
