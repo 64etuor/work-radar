@@ -1,0 +1,100 @@
+governance/test/cli/boule.test.ts
+  s_ac5b671ce9b440::t_6d0a5341ec92e8 380
+  s_ac5b671ce9b440::t_1e24875f9847a0 21-25
+  s_ac5b671ce9b440::t_90557459bca8c0 383-384
+governance/src/conductor/fromEnv.ts
+  s_ac5b671ce9b440::t_d5debdd004e9c1 24-47,61,64,82-83
+  s_ac5b671ce9b440::t_91a35860ed581b 2
+  s_ac5b671ce9b440::t_9698a5ddbe5b21 63
+governance/test/mcp/meta.test.ts
+  s_ac5b671ce9b440::t_f6228f5afd6cca 64
+governance/src/repo/spawn.ts
+  s_ac5b671ce9b440::t_616f70afe922a8 1-2,44-60
+  s_ac5b671ce9b440::t_d77a1f242b1847 3-43
+governance/test/graph/negative.test.ts
+  s_ac5b671ce9b440::t_db6f0c98c9ce2c 15-16
+governance/src/session/observer.ts
+  s_ac5b671ce9b440::t_401966c5ad9f94 3
+  s_ac5b671ce9b440::t_82242eb3b1212c 4
+  s_ac5b671ce9b440::t_3b6810c137eda1 78-84,87
+  s_ac5b671ce9b440::t_d746ded9fa512b 46
+governance/src/conductor/adapter.ts
+  s_ac5b671ce9b440::t_02e4adddfc4a66 351-352,354,358-359
+  s_ac5b671ce9b440::t_fe62e10961d908 2
+  s_ac5b671ce9b440::t_99d1af7aa05af0 53-55
+governance/src/mcp/server.ts
+  s_ac5b671ce9b440::t_fd20da3db8ccba 160
+  s_ac5b671ce9b440::t_084f5fd417fbfb 1415,1457
+  s_ac5b671ce9b440::t_96fa2ca3f37016 80,82-83
+  s_ac5b671ce9b440::t_c7c03e1f8d6b02 172
+  s_ac5b671ce9b440::t_168ffcb658b6a3 304
+  s_ac5b671ce9b440::t_1d1da3e8af3dc2 193
+  s_ac5b671ce9b440::t_e37fa4638f393d 689
+  s_ac5b671ce9b440::t_f448ed84bc61b4 1050-1054
+  s_ac5b671ce9b440::t_cb8f5a3a2723da 1225
+  s_ac5b671ce9b440::t_476a5a22b323f5 1239-1244
+  s_ac5b671ce9b440::t_ab8f6196839c1d 357
+  s_ac5b671ce9b440::t_5564b09c8e2b08 567
+  s_ac5b671ce9b440::t_96a14ad639d1f9 1255
+  s_ac5b671ce9b440::t_25bf7cdce8b4c1 63
+  s_ac5b671ce9b440::t_0a60cea3f790f3 475
+  s_ac5b671ce9b440::t_5dc33c3f0bd263 1096
+  s_ac5b671ce9b440::t_0945c33ac6bf53 900,902
+  s_ac5b671ce9b440::t_1d7e0f3a59a298 1402
+  s_ac5b671ce9b440::t_ae7a222a7c4ef3 455
+  s_ac5b671ce9b440::t_a89bf2b0df1fa4 610,615
+  s_ac5b671ce9b440::t_34d8c2e7560f4c 766
+  s_ac5b671ce9b440::t_4e207f26074133 1276
+  s_ac5b671ce9b440::t_7db477857b6761 258
+  s_ac5b671ce9b440::t_4c25a440e810a1 751
+  s_ac5b671ce9b440::t_835b9964e0cc8f 282
+  s_ac5b671ce9b440::t_428eda6b78f6a6 1264
+  s_ac5b671ce9b440::t_61af8a5542d13a 366
+  s_ac5b671ce9b440::t_d2536232b39b0b 85-91
+  s_ac5b671ce9b440::t_014f22ea25de3f 184
+  s_ac5b671ce9b440::t_c3b4f99a5bd473 1213
+  s_ac5b671ce9b440::t_9c05bb8ef3747a 62
+  s_ac5b671ce9b440::t_e350cdbc601a83 1289
+  s_ac5b671ce9b440::t_f16fa90503495e 943
+  s_ac5b671ce9b440::t_7f46824a053b8e 270
+  s_ac5b671ce9b440::t_3fa62fea26005a 291
+governance/src/live/repoReadiness.ts
+  s_ac5b671ce9b440::t_8d387a95639d90 1
+  s_ac5b671ce9b440::t_3e26682e3ecc9b 29,32
+governance/src/mcp/response.ts
+  s_ac5b671ce9b440::t_5baa1b9aa0ac58 1-32
+governance/test/mcp/hypotheses.test.ts
+  s_ac5b671ce9b440::t_195a328b9e2213 110
+governance/src/cli/boule.ts
+  s_ac5b671ce9b440::t_325889c08bcf1d 41-46
+  s_ac5b671ce9b440::t_167bb7963cfe83 514-518,528-529
+governance/test/graph/store.test.ts
+  s_ac5b671ce9b440::t_e21bd8791747e9 20-21
+governance/test/graph/rebuild-equivalence.test.ts
+  s_ac5b671ce9b440::t_7e3b410b2a3dae 29-30
+governance/src/observation/chain.ts
+  s_ac5b671ce9b440::t_3ec12d675dbf3b 112
+  s_ac5b671ce9b440::t_f94d74dba2c56d 40-41,59-61
+  s_ac5b671ce9b440::t_7e48f2e3664702 25,30-34
+  s_ac5b671ce9b440::t_de21ff91b88e70 91
+  s_ac5b671ce9b440::t_abeafe8e50f2c0 1-24,26-29,35-39,42-53,56-58,62-90,92-103,109-111,113-116
+  s_ac5b671ce9b440::t_56e971a66dc1b5 54-55
+  s_ac5b671ce9b440::t_96e03714715787 105
+  s_ac5b671ce9b440::t_f66b6e5177c551 104,106-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ed7e842db1532dfe2fe952fdd63a6918cb422bb4",
+  "prompts": {},
+  "sessions": {
+    "s_ac5b671ce9b440": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c13ba734-c2ee-46c2-ac97-5c53f3e7113d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
