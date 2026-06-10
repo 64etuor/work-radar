@@ -58,6 +58,13 @@ export interface SpawnResultLike {
 }
 export type SpawnSyncLike = (command: string, args: string[]) => SpawnResultLike;
 
+/** The local branch that chains step outputs for a plan: each completion-gate pass commits the
+ *  step worktree's changes and advances this ref, and createWorktree bases the next step on it.
+ *  Local-only — never pushed; merge-back to dev stays a human action (branch merge, not file copy). */
+export function planBranchName(planId: string): string {
+  return `boule/${planId}`;
+}
+
 /** A real filesystem write seam (node fs/promises at the boundary; a fake in tests). */
 export interface FsLike {
   mkdir(path: string, opts: { recursive: boolean }): Promise<unknown>;
@@ -382,8 +389,14 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
   return {
     async createWorktree(spec) {
       const path = worktreePathFor(spec.planId, spec.stepIndex, spec.attemptIndex);
+      // Step chaining: base on the plan branch (prior steps' committed output) when it exists so
+      // each step sees its predecessors' work; without it (first step) fall back to HEAD. The probe
+      // must not go through run() — a missing branch is the normal first-step case, not a failure.
+      const planBranch = `refs/heads/${planBranchName(spec.planId)}`;
+      const probe = deps.spawn("git", ["-C", deps.repoRoot, "rev-parse", "--verify", "--quiet", planBranch]);
+      const base = probe.status === 0 ? planBranch : "HEAD";
       // Worktree is added from repoRoot into the gitignored worktrees root — never the user tree.
-      run("git", ["-C", deps.repoRoot, "worktree", "add", "--detach", path, "HEAD"]);
+      run("git", ["-C", deps.repoRoot, "worktree", "add", "--detach", path, base]);
       return { path };
     },
 

@@ -595,6 +595,8 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const fakeSpawn = (cmd: string, args: string[]): SpawnResultLike => {
       calls.push({ cmd, args });
+      // No plan branch yet (first step): the rev-parse probe fails ⇒ worktree bases on HEAD.
+      if (cmd === "git" && args.includes("rev-parse")) return { status: 1, stdout: "", stderr: "" };
       // Real cmux contract: `new-workspace` prints `OK workspace:N` on stdout (the legacy-alias
       // notice goes to stderr); the workspace's terminal surface is resolved from `tree --json`.
       if (cmd === "cmux" && args[0] === "new-workspace")
@@ -670,18 +672,27 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     expect(sess.surface).toBe("surface:42");
 
     expect(calls.map((c) => `${c.cmd} ${c.args[0] ?? ""}`)).toEqual([
-      "git -C",
+      "git -C", // plan-branch probe (rev-parse — fails: first step)
+      "git -C", // worktree add
       "cmux new-workspace",
       "cmux tree",
     ]);
-    expect(calls[0]!.args).toEqual(["-C", "/repo", "worktree", "add", "--detach", wt.path, "HEAD"]);
+    expect(calls[0]!.args).toEqual([
+      "-C",
+      "/repo",
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      "refs/heads/boule/evt_p1",
+    ]);
+    expect(calls[1]!.args).toEqual(["-C", "/repo", "worktree", "add", "--detach", wt.path, "HEAD"]);
     // the executor is launched ATOMICALLY at workspace creation via --command (a separate `send`
     // to a background workspace surface fails), and the worktree cwd is bound.
-    expect(calls[1]!.args.slice(0, 4)).toEqual(["new-workspace", "--cwd", wt.path, "--command"]);
-    expect(calls[2]!.args).toEqual(["tree", "--all", "--json"]);
+    expect(calls[2]!.args.slice(0, 4)).toEqual(["new-workspace", "--cwd", wt.path, "--command"]);
+    expect(calls[3]!.args).toEqual(["tree", "--all", "--json"]);
     // the claude invocation (in the --command arg) runs against the scoped executor-role config
     // + denies verdict tools
-    const claudeCmd = calls[1]!.args[4]!;
+    const claudeCmd = calls[2]!.args[4]!;
     expect(claudeCmd).toContain("--mcp-config");
     expect(claudeCmd).toContain("--strict-mcp-config");
     expect(claudeCmd).toContain("--disallowedTools");
@@ -729,6 +740,47 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     await expect(adapter.createWorktree({ planId: "evt_p1", stepIndex: 0 })).rejects.toThrow(
       /failed/i,
     );
+  });
+
+  it("createWorktree bases on the plan branch when it exists (step chaining)", async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const fakeSpawn = (cmd: string, args: string[]): SpawnResultLike => {
+      calls.push({ cmd, args });
+      // Plan branch exists (a prior step's output was committed): probe succeeds.
+      return { status: 0, stdout: "abc123\n", stderr: "" };
+    };
+    const adapter = makeLiveAdapter({
+      spawn: fakeSpawn,
+      fs: {
+        mkdir: async () => undefined,
+        writeFile: async () => undefined,
+        pathExists: async () => false,
+        symlink: async () => undefined,
+        rm: async () => undefined,
+      },
+      repoRoot: "/repo",
+      serverEntrypoint: "/install/governance/src/mcp/server.ts",
+      completeEntrypoint: "/install/governance/src/cli/boule.ts",
+      codexAuthPath: "/op/.codex/auth.json",
+      env: { OPENAI_API_KEY: "test-codex-key" },
+      worktreesRoot: ".boule-worktrees",
+      cmuxCmd: "cmux",
+      governanceWorkspace: "/repo/governance/workspace",
+    });
+    const wt = await adapter.createWorktree({ planId: "evt_p1", stepIndex: 3, attemptIndex: 1 });
+    expect(wt.path).toBe(".boule-worktrees/boule-evt_p1-step3-attempt1");
+    expect(calls.map((c) => c.args[2])).toEqual(["rev-parse", "worktree"]);
+    // Both the next step AND a retry attempt base on the chained plan branch, not HEAD — a failed
+    // attempt was never committed, so retrying from the branch restarts on the last good step.
+    expect(calls[1]!.args).toEqual([
+      "-C",
+      "/repo",
+      "worktree",
+      "add",
+      "--detach",
+      wt.path,
+      "refs/heads/boule/evt_p1",
+    ]);
   });
 });
 

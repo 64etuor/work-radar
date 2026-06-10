@@ -3,6 +3,7 @@ import { isAbsolute, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import type { BackendSpec } from "../backends/config.ts";
 import { runWithFallback, type AttemptError } from "../backends/fallback.ts";
+import { planBranchName } from "./adapter.ts";
 import { deriveConductorState, type PlanStepCheck } from "./conductor.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import type { GovEvent } from "../event/event.ts";
@@ -14,6 +15,16 @@ import type { ResolvedPolicy } from "../repo/config.ts";
 export interface CompletionDeps {
   pathExists(path: string): Promise<boolean>;
   runCommand(command: string, cwd: string | null): Promise<{ status: number | null }>;
+  /** Step chaining (optional dep — fakes without it keep legacy no-chain behavior): after the
+   *  completion gate passes, commit the step worktree's changes and advance the plan branch
+   *  (`planBranchName`) so the next step's worktree sees them. `committed:false` = clean tree
+   *  (nothing to chain). A failure must NOT complete the task — the caller degrades to
+   *  needs_human (fail-closed: never mark a step done with its output left unchained). */
+  commitStepOutput?(input: {
+    worktreePath: string;
+    planId: string;
+    stepIndex: number;
+  }): Promise<{ ok: true; committed: boolean } | { ok: false; error: string }>;
 }
 
 export const nodeCompletionDeps: CompletionDeps = {
@@ -28,6 +39,25 @@ export const nodeCompletionDeps: CompletionDeps = {
   async runCommand(command, cwd) {
     const r = spawnSync(command, { cwd: cwd ?? undefined, shell: true, stdio: "ignore" });
     return { status: r.status };
+  },
+  async commitStepOutput({ worktreePath, planId, stepIndex }) {
+    // All ops are -C <worktree> (detached HEAD) — the user tree is never touched (INVARIANT #6).
+    // .boule/ and node_modules are gitignored, so add -A stages only real step output.
+    const git = (...args: string[]) =>
+      spawnSync("git", ["-C", worktreePath, ...args], { stdio: "ignore" }).status;
+    if (git("add", "-A") !== 0) return { ok: false, error: "git add -A failed" };
+    const staged = git("diff", "--cached", "--quiet");
+    if (staged === 0) return { ok: true, committed: false }; // clean tree — nothing to chain
+    if (staged !== 1) return { ok: false, error: "git diff --cached --quiet failed" };
+    // --no-verify: husky's pre-commit (cargo fmt / lint-staged) is the interactive tree's gate;
+    // chain commits are internal artifacts re-verified by each step's boule:check.
+    if (git("commit", "--no-verify", "-m", `boule(${planId}): step ${stepIndex} output`) !== 0)
+      return { ok: false, error: "git commit failed" };
+    // Boule's own worktrees are all detached, so the branch is normally never checked out; if an
+    // operator has it checked out (e.g. mid merge-back), branch -f fails here and we fail closed.
+    if (git("branch", "-f", planBranchName(planId), "HEAD") !== 0)
+      return { ok: false, error: "git branch -f failed" };
+    return { ok: true, committed: true };
   },
 };
 
@@ -225,6 +255,20 @@ export async function completeReportedDone(
       if (result.decision === "needs_human") {
         summary.needsHuman++;
         continue;
+      }
+      // Chain the passed step's output BEFORE completing the task: commit the worktree and advance
+      // the plan branch so the next step's worktree sees it. Fail-closed — a chain failure degrades
+      // to needs_human instead of completing a task whose output would be orphaned.
+      if (deps.commitStepOutput && step.worktreePath) {
+        const chained = await deps.commitStepOutput({
+          worktreePath: step.worktreePath,
+          planId: plan.frontmatter.id,
+          stepIndex: step.stepIndex,
+        });
+        if (!chained.ok) {
+          summary.needsHuman++;
+          continue;
+        }
       }
       const stamp = new Date(now.getTime() + offset++ * 1000);
       const r = await completeTask(workspaceDir, { taskId: step.taskId }, stamp, rand);

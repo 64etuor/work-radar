@@ -345,6 +345,68 @@ describe("completeReportedDone", () => {
     expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
   });
 
+  it("pass + chaining dep => commits step output (plan branch) before task_completed", async () => {
+    const { planId, taskId, sessionId } = await activeStep({
+      text: "step a",
+      check: { artifact: "done.txt" },
+    });
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const commits: Array<{ worktreePath: string; planId: string; stepIndex: number }> = [];
+    const deps: CompletionDeps = {
+      ...passDeps,
+      commitStepOutput: async (input) => {
+        commits.push(input);
+        return { ok: true, committed: true };
+      },
+    };
+    const r = await completeReportedDone(dir, deps, at(30), 0.6);
+
+    expect(r.completed).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(1);
+    expect(commits).toEqual([
+      { worktreePath: expect.stringContaining("-step0"), planId, stepIndex: 0 },
+    ]);
+  });
+
+  it("pass + clean tree (committed:false) => task still completes", async () => {
+    const { taskId, sessionId } = await activeStep({
+      text: "step a",
+      check: { artifact: "done.txt" },
+    });
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const deps: CompletionDeps = {
+      ...passDeps,
+      commitStepOutput: async () => ({ ok: true, committed: false }),
+    };
+    const r = await completeReportedDone(dir, deps, at(30), 0.6);
+
+    expect(r.completed).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(1);
+  });
+
+  it("pass + chain commit FAILURE => needs_human, task stays open (fail-closed)", async () => {
+    const { taskId, sessionId } = await activeStep({
+      text: "step a",
+      check: { artifact: "done.txt" },
+    });
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const deps: CompletionDeps = {
+      ...passDeps,
+      commitStepOutput: async () => ({ ok: false, error: "git commit failed" }),
+    };
+    const r = await completeReportedDone(dir, deps, at(30), 0.6);
+
+    expect(r.completed).toBe(0);
+    expect(r.needsHuman).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
+  });
+
   it("hint + terminal + failed check => needs_human, task stays open (R5)", async () => {
     const { taskId, sessionId } = await activeStep({ text: "step a", check: { command: "pnpm test" } });
     await reportTaskDone(dir, { taskId }, at(20), 0.4);
