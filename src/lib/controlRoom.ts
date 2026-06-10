@@ -2,6 +2,7 @@ import type {
   HandoffPhase,
   PlanPhase,
   PreflightCheck,
+  ProjectTickerStatusRow,
   ReadinessGates,
   SessionPhase,
   SpecPhase,
@@ -64,6 +65,18 @@ export function pickActiveProjectId(
 ): string | null {
   if (selected != null && available.includes(selected)) return selected;
   return available[0] ?? null;
+}
+
+/** Project-tab status dot tone. Mirrors the INFRA tone vocabulary so the dot reads the same
+ *  as the chips: a "down" project needs the operator, "ok" = armed clock (enabled + live),
+ *  "advisory" = clock on but not live, "muted" = clock off. Pure → testable. */
+export type ProjectDotTone = "down" | "ok" | "advisory" | "muted";
+
+export function projectDotTone(row: ProjectTickerStatusRow): ProjectDotTone {
+  if (row.attentionRequired) return "down";
+  if (row.tickEnabled && row.liveEnabled) return "ok";
+  if (row.tickEnabled) return "advisory";
+  return "muted";
 }
 
 /** Humanize the snapshot mtime. `nowMs` is injected so the function is pure/testable. */

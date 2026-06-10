@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type { PreflightCheck, ReadinessGates, TickerSchedulerStatus } from "../bindings";
+import type {
+  PreflightCheck,
+  ProjectTickerStatusRow,
+  ReadinessGates,
+  TickerSchedulerStatus,
+} from "../bindings";
 import {
   infraTone,
   isArmed,
   pickActiveProjectId,
+  projectDotTone,
   relativeAgo,
   SCHEDULER_STALE_AFTER_SEC,
   schedulerChip,
@@ -39,6 +45,31 @@ describe("statusTone", () => {
     expect(statusTone("blocked")).toBe("blocked");
     expect(statusTone("closed")).toBe("muted");
     expect(statusTone("unknown")).toBe("muted");
+  });
+});
+
+describe("projectDotTone", () => {
+  const row = (over: Partial<ProjectTickerStatusRow>): ProjectTickerStatusRow =>
+    ({
+      tickEnabled: false,
+      liveEnabled: false,
+      attentionRequired: false,
+      ...over,
+    }) as ProjectTickerStatusRow;
+  it("attention wins → down", () => {
+    expect(
+      projectDotTone(row({ attentionRequired: true, tickEnabled: true, liveEnabled: true })),
+    ).toBe("down");
+  });
+  it("enabled + live → ok", () => {
+    expect(projectDotTone(row({ tickEnabled: true, liveEnabled: true }))).toBe("ok");
+  });
+  it("enabled only → advisory", () => {
+    expect(projectDotTone(row({ tickEnabled: true }))).toBe("advisory");
+  });
+  it("clock off → muted", () => {
+    expect(projectDotTone(row({}))).toBe("muted");
+    expect(projectDotTone(row({ liveEnabled: true }))).toBe("muted");
   });
 });
 

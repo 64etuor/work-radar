@@ -12,25 +12,36 @@ const GATE_LABELS: { key: keyof ReadinessView["gates"]; label: string }[] = [
   { key: "stall", label: "stall" },
 ];
 
-export function ReadinessStrip({ readiness }: { readiness: ReadinessView }) {
+/** ARMED/NOT-ARMED verdict badge + the 5 readiness gate chips. Rendered inside the Command
+ *  Deck's "지금 POSTURE" zone; the blockers/warnings live in {@link ReadinessDetails} below the
+ *  deck so a long blocker list never stretches the deck row. */
+export function ReadinessGatesRow({ readiness }: { readiness: ReadinessView }) {
   const armed = isArmed(readiness.gates);
   return (
-    <div className="cr-readiness" data-armed={armed || undefined}>
-      <div className="cr-readiness-gates">
-        {GATE_LABELS.map(({ key, label }) => {
-          const pass = readiness.gates[key];
-          return (
-            <span key={key} className="cr-gate" data-pass={pass || undefined}>
-              {pass ? <Check size={12} aria-hidden /> : <X size={12} aria-hidden />}
-              {label}
-            </span>
-          );
-        })}
-        <Badge variant={armed ? "secondary" : "destructive"} className="cr-readiness-verdict">
-          {armed ? <ShieldCheck size={12} aria-hidden /> : <ShieldAlert size={12} aria-hidden />}
-          {armed ? "ARMED" : "NOT ARMED"}
-        </Badge>
-      </div>
+    <div className="cr-readiness-gates" data-armed={armed || undefined}>
+      <Badge variant={armed ? "secondary" : "destructive"} className="cr-readiness-verdict">
+        {armed ? <ShieldCheck size={12} aria-hidden /> : <ShieldAlert size={12} aria-hidden />}
+        {armed ? "ARMED" : "NOT ARMED"}
+      </Badge>
+      {GATE_LABELS.map(({ key, label }) => {
+        const pass = readiness.gates[key];
+        return (
+          <span key={key} className="cr-gate" data-pass={pass || undefined}>
+            {pass ? <Check size={12} aria-hidden /> : <X size={12} aria-hidden />}
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Blockers (only when not armed) + advisory warnings. Rendered below the deck. */
+export function ReadinessDetails({ readiness }: { readiness: ReadinessView }) {
+  const armed = isArmed(readiness.gates);
+  if ((armed || readiness.blockers.length === 0) && readiness.warnings.length === 0) return null;
+  return (
+    <div className="cr-readiness-details">
       {!armed && readiness.blockers.length > 0 && (
         <ul className="cr-readiness-blockers">
           {readiness.blockers.map((b) => (

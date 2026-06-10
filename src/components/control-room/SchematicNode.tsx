@@ -23,6 +23,7 @@ export function SchematicNode({ node, state, selected, index, onHover, onSelect 
       className="cr-node"
       data-tone={node.tone}
       data-state={state}
+      data-inflight={node.tone === "active" || undefined}
       data-attention={node.attention || undefined}
       data-selected={selected || undefined}
       transform={`translate(${node.x}, ${node.y})`}
