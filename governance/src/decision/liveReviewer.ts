@@ -96,12 +96,18 @@ class TimeoutError extends Error {
 }
 
 class ReviewProcessError extends Error {
-  constructor(
-    readonly code: number | null,
-    readonly stderr: string,
-  ) {
+  // Explicit fields, NOT TS parameter properties: `constructor(readonly x)` needs type
+  // TRANSFORMATION, which `node --experimental-strip-types` (strip-only) rejects at parse
+  // time — it killed every consumer that value-imports this module (hermes `mcp test`
+  // boule-governance could not even boot the MCP server).
+  readonly code: number | null;
+  readonly stderr: string;
+
+  constructor(code: number | null, stderr: string) {
     super(`reviewer exited with code ${code ?? "null"}`);
     this.name = "ReviewProcessError";
+    this.code = code;
+    this.stderr = stderr;
   }
 }
 
