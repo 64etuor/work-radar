@@ -1,0 +1,39 @@
+src-tauri/src/governance/control_room.rs
+  s_354e94b88ccc74::t_fb6d08e9e6301a 211-215
+  s_354e94b88ccc74::t_c958848722a512 28-30,59-61,67-76,106,109,138-139,189,219,255-256,273,288
+  s_354e94b88ccc74::t_7aacfda5787e20 292-306
+src/bindings.ts
+  s_354e94b88ccc74::t_7aacfda5787e20 664-669,1776-1780,1797
+src-tauri/migrations/0048_ticker_live_enabled.sql
+  s_354e94b88ccc74::t_7ecdaec09ca02d 1-7
+src-tauri/src/governance/ticker.rs
+  s_354e94b88ccc74::t_fb6d08e9e6301a 1284-1286,1296-1298
+  s_354e94b88ccc74::t_2fd1aea3bdc2b4 91-93,112,135,156,175,196,217,251-253,330-331,339-347,413,417,463-464,489-490,543-559,649-656
+  s_354e94b88ccc74::t_7aacfda5787e20 1269-1283,1287-1295,1299-1301
+src-tauri/src/commands/governance.rs
+  s_354e94b88ccc74::t_3d78b6cf277d88 13-15,106-117
+src/components/control-room/ControlRoomView.tsx
+  s_354e94b88ccc74::t_c2b808f67c0168 14,170,180,236-245
+docs/decisions.md
+  s_354e94b88ccc74::t_bffa6a975891b0 586
+src/lib/query/governance.ts
+  s_354e94b88ccc74::t_c2b808f67c0168 64-75
+src-tauri/src/lib.rs
+  s_354e94b88ccc74::t_3d78b6cf277d88 343
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e87b8004b5eac84a178568dff8a509a83c19ab27",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
