@@ -1,0 +1,38 @@
+src/lib/useCmdKnob.ts
+  s_b8a01d6932bdea::t_bb6b29726e0d83 101
+  s_b8a01d6932bdea::t_e6b4b2b039968c 4
+  s_b8a01d6932bdea::t_3918e6658e3ef7 85,87-90
+src/lib/nav.ts
+  s_b8a01d6932bdea::t_d71de3afd1bdfd 193-195
+  s_b8a01d6932bdea::t_fcf73ed82a48de 170-173
+src/lib/nav.test.ts
+  s_b8a01d6932bdea::t_175f00c34b9c85 123,125-126
+src/lib/appActions.ts
+  s_b8a01d6932bdea::t_b5db41d7dcc129 1
+  s_b8a01d6932bdea::t_f9508d2cdafb2a 62-117
+src/components/settings/NavigationSettings.tsx
+  s_b8a01d6932bdea::t_546508cd9f8d53 8-15,17-23
+  s_b8a01d6932bdea::t_cafa99ff8209ce 357-381,383-396
+  s_b8a01d6932bdea::t_261cd05ed7896c 88,91-92
+  s_b8a01d6932bdea::t_63b6aa3f8a6071 238,240,247
+  s_b8a01d6932bdea::t_be6463ccca192e 382
+src/lib/appActions.test.ts
+  s_b8a01d6932bdea::t_1b26700604e4bf 81-115
+  s_b8a01d6932bdea::t_10d7bbf0e1cedf 3-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c20a223752a8b6b293898d5032d923874615a4cd",
+  "prompts": {},
+  "sessions": {
+    "s_b8a01d6932bdea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b25308-efb2-4cd6-8340-d3a192aa43be",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
