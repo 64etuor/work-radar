@@ -1,0 +1,36 @@
+governance/src/mcp/server.ts
+  s_189899020c7048::t_72f61234e7612e 885-890
+governance/src/conductor/adapter.ts
+  s_189899020c7048::t_d6c33b5e819e2a 475
+  s_189899020c7048::t_52aae005615e9a 144,160-164
+  s_189899020c7048::t_660d1bf567014a 312
+governance/test/conductor/resume.test.ts
+  s_189899020c7048::t_b894a0f8579f7d 1-128,163-183
+  s_189899020c7048::t_8ce82ad6c37fc4 129-162
+governance/src/orchestrator/tick.ts
+  s_189899020c7048::t_4984e0a618ab41 13
+  s_189899020c7048::t_f699d40c2f8963 115-137
+governance/src/conductor/handlers.ts
+  s_189899020c7048::t_f48af322609aeb 5
+  s_189899020c7048::t_4aa796e097314e 502-504
+  s_189899020c7048::t_a7427205a30558 412
+  s_189899020c7048::t_d657fec9b5e7f2 346-355,357-360,368-384,394-411,413-424,429-501,505-544
+  s_189899020c7048::t_af697f036151c3 356,361-367,385-393
+  s_189899020c7048::t_7052b8dd5df1f1 425-428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "29a92bcfabb0a863ccccf06c95c324b9c7f79f9e",
+  "prompts": {},
+  "sessions": {
+    "s_189899020c7048": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ec94408-dd6b-4ae8-98b9-2bb3143a05c5",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
