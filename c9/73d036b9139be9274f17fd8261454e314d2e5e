@@ -1,0 +1,44 @@
+src/components/skills/DivergencePanel.tsx
+  s_d8557d82b81ed1::t_5d7cecf23342f3 1-149
+src/components/SkillsView.tsx
+  s_d8557d82b81ed1::t_2ea8e79df104ea 49
+  s_d8557d82b81ed1::t_e99904313176bb 24,40,65-70
+src/components/skills/InAppEditor.tsx
+  s_d8557d82b81ed1::t_53bfd99d398717 1-178
+src/components/skills/VendorPanel.tsx
+  s_d8557d82b81ed1::t_a5096a7d594ac5 1-5,12-99
+  s_d8557d82b81ed1::t_2ea8e79df104ea 6-11
+src/components/skills/ExternalViewer.tsx
+  s_d8557d82b81ed1::t_62d46fcc18da39 1-7,13-144
+  s_d8557d82b81ed1::t_2ea8e79df104ea 8-12
+src/components/skills/SkillPromptDiff.tsx
+  s_d8557d82b81ed1::t_f983b2e798ec4c 1-19
+src/components/skills/panels.tsx
+  s_d8557d82b81ed1::t_7b15ec10ee412c 31
+  s_d8557d82b81ed1::t_2ea8e79df104ea 34
+  s_d8557d82b81ed1::t_6ea58fddfaab6f 1-30,32-33,35-508
+src/components/skills/EnvNavButton.tsx
+  s_d8557d82b81ed1::t_7d7c1c62400ea6 1-54
+src/components/skills/ManagedViewer.tsx
+  s_d8557d82b81ed1::t_e7769415712885 1-131
+src/components/skills/SkillCard.tsx
+  s_d8557d82b81ed1::t_bb88fe70fe5af4 1-80
+src/components/skills/SkillTagsEditor.tsx
+  s_d8557d82b81ed1::t_53b13f1362e9b1 1-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c973d036b9139be9274f17fd8261454e314d2e5e",
+  "prompts": {},
+  "sessions": {
+    "s_d8557d82b81ed1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4ea5c81-1428-45e3-92ea-b20c2056ed7b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
