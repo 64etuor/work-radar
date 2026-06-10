@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Weekly Review — mockups</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1a1a1a; --muted:#6b6b6b; --faint:#9a9a9a;
+    --border:#e7e7e4; --border-strong:#d8d8d3; --surface:#f7f7f5; --elevated:#fbfbfa;
+    --green:#3f7d5e; --green-pale:#eaf3ee;
+    --coral:#c0563f; --coral-pale:#f7ece8;
+    --amber:#b5862b; --blue:#3a6ea5;
+    --q1:#c0563f; --q2:#3f7d5e; --q3:#b5862b; --q4:#7a7a7a;
+    --shadow-sm:0 1px 2px rgba(20,20,20,.04),0 1px 3px rgba(20,20,20,.06);
+    --r:12px;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#ececea;font-family:var(--font);color:var(--fg);-webkit-font-smoothing:antialiased;line-height:1.4}
+  .tabs{position:sticky;top:0;z-index:30;display:flex;gap:6px;padding:12px 20px;background:#ececeaee;backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+  .tabs button{font:600 12px/1 var(--font);letter-spacing:.01em;padding:9px 14px;border:1px solid var(--border-strong);background:#fff;border-radius:8px;cursor:pointer;color:var(--muted)}
+  .tabs button.active{background:var(--fg);color:#fff;border-color:var(--fg)}
+  .tabs .note{margin-left:auto;align-self:center;font:400 11px/1.3 var(--font);color:var(--muted);max-width:340px;text-align:right}
+  .stage{display:none;padding:28px 20px 80px}
+  .stage.active{display:block}
+  .page{max-width:1100px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-sm);overflow:hidden}
+  .ph{padding:22px 26px 18px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;justify-content:space-between}
+  .ph h1{font:600 19px/1.2 var(--font);letter-spacing:-.01em}
+  .ph .range{font:500 12px/1 var(--mono);color:var(--muted)}
+  .body{padding:22px 26px}
+  .grid2{display:grid;grid-template-columns:minmax(0,360px) 1fr;gap:24px}
+  .sect-h{font:600 11px/1 var(--font);text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:12px}
+  /* radar card */
+  .card{border:1px solid var(--border);border-radius:var(--r);padding:18px;background:#fff}
+  .radar-wrap{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center}
+  .legend span{font:500 11px/1 var(--font);color:var(--muted);display:inline-flex;align-items:center;gap:5px}
+  .dot{width:8px;height:8px;border-radius:50%}
+  /* kpi tiles */
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .tile{border:1px solid var(--border);border-radius:var(--r);padding:14px 14px 12px;background:#fff}
+  .tile .k{font:600 11px/1 var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+  .tile .v{font:600 26px/1 var(--font);margin-top:9px;letter-spacing:-.02em}
+  .tile .d{font:500 11px/1 var(--mono);margin-top:6px;color:var(--green)}
+  .tile .d.down{color:var(--coral)}
+  .barrow{display:flex;align-items:center;gap:12px;margin-top:14px}
+  .bar{flex:1;height:20px;border-radius:999px;background:var(--surface);overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--green);border-radius:999px}
+  .trend{display:flex;align-items:flex-end;gap:6px;height:72px;margin-top:8px}
+  .trend .col{flex:1;display:flex;flex-direction:column-reverse;gap:2px}
+  .trend .col i{display:block;border-radius:2px}
+  .trend .col .u{background:var(--coral)}
+  .trend .col .q{background:var(--amber)}
+  .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+  .seg button{font:600 11px/1 var(--font);padding:7px 12px;border:0;background:#fff;color:var(--muted);cursor:pointer;border-right:1px solid var(--border)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--fg);color:#fff}
+  .rankrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+  .rank{border:1px solid var(--border);border-radius:var(--r);padding:14px}
+  .rank.impact{background:var(--green-pale)}
+  .rank.regret{background:var(--coral-pale)}
+  .rank h4{font:600 12px/1 var(--font);display:flex;align-items:center;gap:6px}
+  .rank.impact h4{color:var(--green)} .rank.regret h4{color:var(--coral)}
+  .rank li{list-style:none;font:400 12px/1.5 var(--font);color:var(--fg);padding:5px 0;border-top:1px solid #ffffff80}
+  .tl{margin-top:6px}
+  .tlrow{display:grid;grid-template-columns:48px 1fr;gap:14px;padding:11px 0;border-top:1px solid var(--border)}
+  .tlrow .date{font:600 11px/1.3 var(--mono);color:var(--faint)}
+  .tlrow .ttl{font:400 13px/1.4 var(--font)}
+  .chips{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+  .chip{font:500 10px/1 var(--font);padding:4px 8px;border-radius:999px;background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+  .chip.area{background:var(--green-pale);color:var(--green);border-color:transparent}
+  .accordion{border:1px solid var(--border);border-radius:var(--r);margin-top:14px;overflow:hidden}
+  .accordion summary{cursor:pointer;list-style:none;padding:14px 16px;font:600 13px/1 var(--font);display:flex;justify-content:space-between;align-items:center;background:var(--elevated)}
+  .accordion summary::-webkit-details-marker{display:none}
+  .accordion .ac-body{padding:6px 16px 12px}
+  .arch{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)}
+  .arch .ttl{font:400 13px/1.3 var(--font);flex:1}
+  .badge{font:600 10px/1 var(--font);padding:4px 8px;border-radius:6px;background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+  .restore{font:600 11px/1 var(--font);padding:6px 11px;border:1px solid var(--border-strong);border-radius:7px;background:#fff;color:var(--fg);cursor:pointer}
+  .row-sep{height:1px;background:var(--border);margin:26px 0}
+  /* week navigator */
+  .nav{display:flex;align-items:center;gap:10px;padding:14px 26px;border-bottom:1px solid var(--border);background:var(--elevated)}
+  .gran{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+  .gran button{font:600 11px/1 var(--font);padding:7px 11px;border:0;border-right:1px solid var(--border);background:#fff;color:var(--muted);cursor:pointer}
+  .gran button:last-child{border-right:0}
+  .gran button.on{background:var(--fg);color:#fff}
+  .pager{display:flex;align-items:center;gap:6px}
+  .pager button{width:30px;height:30px;border:1px solid var(--border-strong);border-radius:8px;background:#fff;cursor:pointer;font-size:14px;color:var(--fg);display:grid;place-items:center}
+  .pager button:disabled{opacity:.35;cursor:default}
+  .pager .cur{font:600 13px/1 var(--font);min-width:170px;text-align:center}
+  .pager .cur small{display:block;font:500 10px/1.4 var(--mono);color:var(--faint);margin-top:3px}
+  .today-btn{margin-left:auto;font:600 11px/1 var(--font);padding:7px 12px;border:1px solid var(--border-strong);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer}
+  /* week scrubber timeline */
+  .scrub{display:flex;gap:4px;padding:12px 26px 16px;border-bottom:1px solid var(--border);overflow-x:auto}
+  .scrub .wk{flex:0 0 auto;width:46px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 4px 6px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+  .scrub .wk:hover{background:var(--surface)}
+  .scrub .wk.on{background:#fff;border-color:var(--fg);box-shadow:var(--shadow-sm)}
+  .scrub .wk .spark{width:100%;height:34px;display:flex;align-items:flex-end;justify-content:center}
+  .scrub .wk .spark i{width:14px;background:#cdd8d1;border-radius:3px}
+  .scrub .wk.on .spark i{background:var(--green)}
+  .scrub .wk .lab{font:600 10px/1 var(--mono);color:var(--faint)}
+  .scrub .wk.on .lab{color:var(--fg)}
+  .twocol{display:grid;grid-template-columns:300px 1fr;gap:0}
+  .twocol .rail{border-right:1px solid var(--border);padding:22px;position:sticky;top:53px;align-self:start}
+  .twocol .main{padding:22px 26px}
+  .mut{color:var(--muted)} .small{font-size:11px}
+  h3.block{font:600 13px/1 var(--font);margin:22px 0 12px}
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button data-t="a" class="active" onclick="show('a')">A · 내러티브 리포트 (추천)</button>
+  <button data-t="b" onclick="show('b')">B · 커맨드 센터 2단</button>
+  <button data-t="c" onclick="show('c')">C · 라이트(현행 보존)</button>
+  <span class="note">3가지 레이아웃 후보입니다. 차트·숫자는 더미. 클릭해서 비교해 보세요.</span>
+</div>
+
+<!-- ========================= CONCEPT A ========================= -->
+<section class="stage active" id="a">
+  <div class="page">
+    <div class="ph"><h1>Weekly Review</h1><span class="range" id="aRange">6/3 – 6/9 · 24주차</span></div>
+
+    <!-- WEEK NAVIGATOR: drives the whole page -->
+    <div class="nav">
+      <div class="gran">
+        <button class="on">주</button><button>월</button><button>분기</button>
+      </div>
+      <div class="pager">
+        <button onclick="stepWeek(-1)">‹</button>
+        <span class="cur" id="aCur">24주차<small>6/3 – 6/9</small></span>
+        <button onclick="stepWeek(1)" id="aNext">›</button>
+      </div>
+      <button class="today-btn" onclick="gotoWeek(24)">이번 주로</button>
+    </div>
+    <!-- SCRUBBER: page through weeks like a timeline -->
+    <div class="scrub" id="aScrub"></div>
+
+    <div class="body">
+
+      <div class="grid2">
+        <!-- LEFT: radar -->
+        <div class="card">
+          <div class="sect-h">Life Wheel · 이번 주 활동 분포</div>
+          <div class="radar-wrap">
+            <div id="radarA"></div>
+            <div class="legend">
+              <span><i class="dot" style="background:var(--green)"></i>이번 주</span>
+              <span><i class="dot" style="background:#c9c9c4"></i>4주 평균</span>
+            </div>
+          </div>
+        </div>
+        <!-- RIGHT: momentum -->
+        <div>
+          <div class="sect-h">모멘텀</div>
+          <div class="kpis">
+            <div class="tile"><div class="k">캡처</div><div class="v">38</div><div class="d">▲ 12%</div></div>
+            <div class="tile"><div class="k">완료</div><div class="v">29</div><div class="d">▲ 8%</div></div>
+            <div class="tile"><div class="k">승격</div><div class="v">5</div><div class="d down">▼ 2</div></div>
+          </div>
+          <div class="kpis" style="grid-template-columns:1fr 1fr;margin-top:10px">
+            <div class="tile"><div class="k">PR 신규 주목</div><div class="v">7</div></div>
+            <div class="tile"><div class="k">PR 해소</div><div class="v">6</div><div class="d">86%</div></div>
+          </div>
+          <div class="sect-h" style="margin-top:20px">루틴 이행률</div>
+          <div class="tile">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span class="small mut">14 / 17 완료</span><span style="font:600 18px var(--font)">82%</span>
+            </div>
+            <div class="barrow" style="margin-top:8px"><div class="bar"><i style="width:82%"></i></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row-sep"></div>
+
+      <div class="sect-h">부채 추세 · 최근 7일</div>
+      <div class="card">
+        <div class="trend">
+          <div class="col"><i class="u" style="height:30px"></i><i class="q" style="height:14px"></i></div>
+          <div class="col"><i class="u" style="height:24px"></i><i class="q" style="height:18px"></i></div>
+          <div class="col"><i class="u" style="height:28px"></i><i class="q" style="height:10px"></i></div>
+          <div class="col"><i class="u" style="height:20px"></i><i class="q" style="height:16px"></i></div>
+          <div class="col"><i class="u" style="height:16px"></i><i class="q" style="height:12px"></i></div>
+          <div class="col"><i class="u" style="height:12px"></i><i class="q" style="height:8px"></i></div>
+          <div class="col"><i class="u" style="height:10px"></i><i class="q" style="height:6px"></i></div>
+        </div>
+        <div class="legend" style="justify-content:flex-start;margin-top:12px">
+          <span><i class="dot" style="background:var(--coral)"></i>미분류</span>
+          <span><i class="dot" style="background:var(--amber)"></i>Q1 기한초과</span>
+        </div>
+      </div>
+
+      <div class="row-sep"></div>
+
+      <!-- Reflection (회고) inline -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="sect-h" style="margin:0">회고 · <span id="aRetroLab">24주차</span> 완료한 일 · 14건</div>
+        <span class="mut small">상단 주차 네비게이터에 연동 ↑</span>
+      </div>
+      <div class="rankrow">
+        <div class="rank impact"><h4>✦ 고임팩트</h4>
+          <ul><li>온보딩 플로우 재설계 머지</li><li>결제 버그 핫픽스</li><li>주간 리포트 자동화</li></ul></div>
+        <div class="rank regret"><h4>⌀ 하지말걸</h4>
+          <ul><li>안 쓰는 대시보드 색 튜닝</li><li>과도한 회의 정리</li></ul></div>
+      </div>
+      <div class="tl">
+        <div class="tlrow"><div class="date">6/9<br>월</div><div><div class="ttl">온보딩 플로우 재설계 머지</div><div class="chips"><span class="chip area">커리어</span><span class="chip">work</span></div></div></div>
+        <div class="tlrow"><div class="date">6/8<br>일</div><div><div class="ttl">가족 저녁 약속 지킴</div><div class="chips"><span class="chip area" style="background:#f1ecf7;color:#7a5ba8">가족</span></div></div></div>
+        <div class="tlrow"><div class="date">6/7<br>토</div><div><div class="ttl">러닝 5km · 루틴 유지</div><div class="chips"><span class="chip area" style="background:#eaf3f7;color:#3a6ea5">건강</span></div></div></div>
+      </div>
+
+      <!-- Archive collapsed -->
+      <details class="accordion">
+        <summary><span>보관함 · 12개</span><span class="mut small">펼치기 ▾</span></summary>
+        <div class="ac-body">
+          <div class="arch"><span class="ttl">분기 OKR 초안</span><span class="badge">archived</span><button class="restore">복원</button></div>
+          <div class="arch"><span class="ttl">읽을 아티클 — 나중에</span><span class="badge">snoozed · 6/15</span><button class="restore">복원</button></div>
+          <div class="arch"><span class="ttl">디자인 레퍼런스 모음</span><span class="badge">archived</span><button class="restore">복원</button></div>
+        </div>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========================= CONCEPT B ========================= -->
+<section class="stage" id="b">
+  <div class="page">
+    <div class="ph"><h1>Weekly Review</h1><span class="range">6/3 – 6/9 · 24주차</span></div>
+    <div class="twocol">
+      <div class="rail">
+        <div class="sect-h">Life Wheel</div>
+        <div id="radarB"></div>
+        <div class="legend" style="margin-top:10px"><span><i class="dot" style="background:var(--green)"></i>이번 주</span><span><i class="dot" style="background:#c9c9c4"></i>평균</span></div>
+        <h3 class="block">핵심 지표</h3>
+        <div class="tile" style="margin-bottom:8px"><div class="k">완료</div><div class="v">29</div><div class="d">▲ 8%</div></div>
+        <div class="tile" style="margin-bottom:8px"><div class="k">루틴</div><div class="v">82%</div></div>
+        <div class="tile"><div class="k">PR 해소</div><div class="v">6</div></div>
+      </div>
+      <div class="main">
+        <div class="seg" style="margin-bottom:18px"><button class="on">회고</button><button>보관함</button><button>부채</button></div>
+        <div class="rankrow">
+          <div class="rank impact"><h4>✦ 고임팩트</h4><ul><li>온보딩 재설계</li><li>결제 핫픽스</li></ul></div>
+          <div class="rank regret"><h4>⌀ 하지말걸</h4><ul><li>색 튜닝</li><li>과도한 회의</li></ul></div>
+        </div>
+        <h3 class="block">타임라인</h3>
+        <div class="tl">
+          <div class="tlrow"><div class="date">6/9</div><div><div class="ttl">온보딩 플로우 재설계 머지</div><div class="chips"><span class="chip area">커리어</span></div></div></div>
+          <div class="tlrow"><div class="date">6/8</div><div><div class="ttl">가족 저녁 약속 지킴</div><div class="chips"><span class="chip area" style="background:#f1ecf7;color:#7a5ba8">가족</span></div></div></div>
+          <div class="tlrow"><div class="date">6/7</div><div><div class="ttl">러닝 5km</div><div class="chips"><span class="chip area" style="background:#eaf3f7;color:#3a6ea5">건강</span></div></div></div>
+          <div class="tlrow"><div class="date">6/6</div><div><div class="ttl">코드리뷰 12건</div><div class="chips"><span class="chip area">커리어</span></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= CONCEPT C ========================= -->
+<section class="stage" id="c">
+  <div class="page" style="max-width:780px">
+    <div class="ph"><h1>Weekly Review</h1><span class="range">6/3 – 6/9</span></div>
+    <div class="body">
+      <div class="card" style="margin-bottom:20px">
+        <div class="sect-h">Life Wheel</div>
+        <div class="radar-wrap"><div id="radarC"></div></div>
+      </div>
+      <div class="sect-h">처리량</div>
+      <div class="kpis" style="margin-bottom:20px">
+        <div class="tile"><div class="k">캡처</div><div class="v">38</div></div>
+        <div class="tile"><div class="k">완료</div><div class="v">29</div></div>
+        <div class="tile"><div class="k">승격</div><div class="v">5</div></div>
+      </div>
+      <div class="sect-h">루틴 이행률</div>
+      <div class="tile" style="margin-bottom:20px"><div class="barrow"><span style="font:600 16px var(--font)">82%</span><div class="bar"><i style="width:82%"></i></div></div></div>
+      <p class="mut small">↑ 현행 WeeklyView 구조를 최대한 보존 + 라이브 휠만 상단에 추가. 회고/보관함은 별도 탭 유지(병합 안 함). 가장 안전하지만 "통합 대시보드" 요구엔 미달.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+function show(t){
+  document.querySelectorAll('.stage').forEach(s=>s.classList.toggle('active',s.id===t));
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
+}
+// ---- simple radar renderer ----
+function radar(el,size,axes,series){
+  const cx=size/2, cy=size/2, R=size/2-34, n=axes.length;
+  const ang=i=>(-Math.PI/2)+i*2*Math.PI/n;
+  const pt=(i,r)=>[cx+Math.cos(ang(i))*R*r, cy+Math.sin(ang(i))*R*r];
+  let g='';
+  // rings
+  [.25,.5,.75,1].forEach(r=>{
+    let p=axes.map((_,i)=>pt(i,r).join(',')).join(' ');
+    g+=`<polygon points="${p}" fill="none" stroke="#ececea" stroke-width="1"/>`;
+  });
+  // spokes + labels
+  axes.forEach((a,i)=>{
+    const [x,y]=pt(i,1);
+    g+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#ececea"/>`;
+    const [lx,ly]=pt(i,1.16);
+    g+=`<text x="${lx}" y="${ly}" font-size="10.5" font-weight="600" fill="#6b6b6b" text-anchor="middle" dominant-baseline="middle">${a}</text>`;
+  });
+  // series
+  series.forEach(s=>{
+    let p=s.vals.map((v,i)=>pt(i,v).join(',')).join(' ');
+    g+=`<polygon points="${p}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="2" stroke-linejoin="round"/>`;
+    s.vals.forEach((v,i)=>{const [x,y]=pt(i,v);g+=`<circle cx="${x}" cy="${y}" r="2.6" fill="${s.stroke}"/>`;});
+  });
+  el.innerHTML=`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${g}</svg>`;
+}
+const AX=['커리어','건강','가족','성장','재정','관계'];
+const week={vals:[.9,.55,.65,.4,.3,.5],fill:'rgba(63,125,94,.16)',stroke:'#3f7d5e'};
+const avg ={vals:[.7,.6,.55,.55,.45,.6],fill:'rgba(150,150,148,.10)',stroke:'#c9c9c4'};
+radar(document.getElementById('radarB'),250,AX,[avg,week]);
+radar(document.getElementById('radarC'),300,AX,[week]);
+
+// ---- week navigator (concept A) ----
+const CUR_WEEK=24; let sel=24;
+// deterministic dummy data per week so paging visibly changes the page
+function rng(w){let x=Math.sin(w*97.13)*1e4;return x-Math.floor(x);}
+function dataFor(w){
+  const r=rng(w);
+  return {
+    vals:AX.map((_,i)=>0.3+rng(w*7+i)*0.65),
+    cap:24+Math.floor(r*30), done:18+Math.floor(rng(w+1)*22),
+    promo:1+Math.floor(rng(w+2)*7), routine:60+Math.floor(rng(w+3)*38),
+    retro:8+Math.floor(rng(w+4)*14),
+    range:weekRange(w)
+  };
+}
+function weekRange(w){ // fake calendar: week 24 = 6/3–6/9, 7 days each
+  const base=new Date(2026,5,3); const off=(w-24)*7;
+  const s=new Date(base); s.setDate(s.getDate()+off);
+  const e=new Date(s); e.setDate(e.getDate()+6);
+  const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  return `${f(s)} – ${f(e)}`;
+}
+function render(){
+  const d=dataFor(sel);
+  document.getElementById('aRange').textContent=`${d.range} · ${sel}주차`;
+  document.getElementById('aCur').innerHTML=`${sel}주차<small>${d.range}</small>`;
+  document.getElementById('aRetroLab').textContent=`${sel}주차`;
+  document.getElementById('aNext').disabled = sel>=CUR_WEEK;
+  // KPIs
+  setKpi(d);
+  // radar: selected week vs trailing 4-week avg
+  const avgVals=AX.map((_,i)=>{let s=0;for(let k=1;k<=4;k++)s+=0.3+rng((sel-k)*7+i)*0.65;return s/4;});
+  radar(document.getElementById('radarA'),300,AX,
+    [{vals:avgVals,fill:'rgba(150,150,148,.10)',stroke:'#c9c9c4'},
+     {vals:d.vals,fill:'rgba(63,125,94,.16)',stroke:'#3f7d5e'}]);
+  // scrubber highlight
+  document.querySelectorAll('#aScrub .wk').forEach(el=>el.classList.toggle('on',+el.dataset.w===sel));
+}
+function setKpi(d){
+  const tiles=document.querySelectorAll('#a .kpis .tile .v');
+  if(tiles[0])tiles[0].textContent=d.cap;
+  if(tiles[1])tiles[1].textContent=d.done;
+  if(tiles[2])tiles[2].textContent=d.promo;
+}
+function stepWeek(n){ sel=Math.min(CUR_WEEK,Math.max(14,sel+n)); render(); }
+function gotoWeek(w){ sel=w; render(); }
+// build scrubber: last 11 weeks, each a mini activity spark
+(function(){
+  const wrap=document.getElementById('aScrub'); let h='';
+  for(let w=14;w<=CUR_WEEK;w++){
+    const a=dataFor(w); const tot=a.done;
+    h+=`<div class="wk" data-w="${w}" onclick="gotoWeek(${w})">
+      <div class="spark"><i style="height:${10+tot}px"></i></div>
+      <span class="lab">${w}</span></div>`;
+  }
+  wrap.innerHTML=h; render();
+  wrap.scrollLeft=wrap.scrollWidth;
+})();
+</script>
+</body>
+</html>
