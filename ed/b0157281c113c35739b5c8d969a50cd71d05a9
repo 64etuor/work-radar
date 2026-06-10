@@ -1,0 +1,22 @@
+src/lib/knobGeometry.test.ts
+  s_b8a01d6932bdea::t_96f9f7aed204e7 43-45
+  s_b8a01d6932bdea::t_164ffba74fbea7 35-42,46
+src/lib/knobGeometry.ts
+  s_b8a01d6932bdea::t_04302637a9d4cf 12-18,30-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "edb0157281c113c35739b5c8d969a50cd71d05a9",
+  "prompts": {},
+  "sessions": {
+    "s_b8a01d6932bdea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b25308-efb2-4cd6-8340-d3a192aa43be",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
