@@ -1,0 +1,41 @@
+src/components/TodayView.tsx
+  s_360a7df630281b::t_475837070c0508 102-119
+  s_360a7df630281b::t_39656c896176f0 39,50
+  s_360a7df630281b::t_d25ee7f6277ba1 354
+src/lib/todayBlocks.test.ts
+  s_360a7df630281b::t_6b942e001efb73 3-8,439-488
+src/components/today/EventPopover.tsx
+  s_360a7df630281b::t_e7339224cb20a0 1-2,5,12,44-52,57-59,63,65-68,70-72,89,110-117,151-159,183-216,220,222-247,250-251,256,262-266,273-274,280-281,288-290,297,300,303-304,306,309
+src/components/today/TimelineCanvas.tsx
+  s_360a7df630281b::t_a2e0bede891690 22-23
+  s_360a7df630281b::t_f12111d5bec26b 153
+  s_360a7df630281b::t_3cfa45bbd5bb27 51
+src/components/today/TimelineBlock.tsx
+  s_360a7df630281b::t_54168a0f0ba061 2
+  s_360a7df630281b::t_c9a678fc3c6a30 154,161
+  s_360a7df630281b::t_49c9055328f4bf 194
+  s_360a7df630281b::t_fa750371e19817 244
+  s_360a7df630281b::t_b601424a83c635 247
+  s_360a7df630281b::t_3d53c4116b108a 14-15,26-30
+  s_360a7df630281b::t_68a12cfb04becf 175-177
+src/lib/todayBlocks.ts
+  s_360a7df630281b::t_7f74dcf2142efb 1,5-31
+src/components/TodayView.css
+  s_360a7df630281b::t_2d72e454dd4ffc 567-597
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5fa06f238948cbf561112ecc14e9e2c33d5b51fa",
+  "prompts": {},
+  "sessions": {
+    "s_360a7df630281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad8d0f5f-9b75-4266-aefc-43b1769e93e9",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
