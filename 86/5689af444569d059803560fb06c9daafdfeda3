@@ -1,0 +1,26 @@
+src/components/RoutineTrackingView.css
+  s_ef5de42741471b::t_60edcf01b0a7d5 1-140
+src/components/board/LifeWheelPalette.tsx
+  s_ef5de42741471b::t_b32b1e028f158d 25
+src/components/TodayView.css
+  s_ef5de42741471b::t_faa9b375525d5a 867,871
+  s_ef5de42741471b::t_4df358a20908f0 1019
+src/components/RoutineTrackingView.tsx
+  s_ef5de42741471b::t_53b154834cf2bc 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "865689af444569d059803560fb06c9daafdfeda3",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
