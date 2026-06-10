@@ -1,0 +1,23 @@
+src/components/control-room/ControlRoomView.css
+  s_354e94b88ccc74::t_ceb1d8acb7536d 645-737
+src/components/control-room/ControlRoomView.tsx
+  s_354e94b88ccc74::t_ceb1d8acb7536d 113,123-148
+docs/decisions.md
+  s_354e94b88ccc74::t_a78f025baf377d 589
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7c913d4c21311b0c100e44e43bc503541007316f",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
