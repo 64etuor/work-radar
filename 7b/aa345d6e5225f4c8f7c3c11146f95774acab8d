@@ -1,0 +1,19 @@
+src/components/WeeklyView.tsx
+  s_ef5de42741471b::t_20e617cbaa6dbe 4,6-13,15,23-27,30-94,101-115,122-178,183-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7baa345d6e5225f4c8f7c3c11146f95774acab8d",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
