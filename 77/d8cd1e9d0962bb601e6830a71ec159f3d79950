@@ -1,0 +1,25 @@
+mockups/weekly.html
+  s_ef5de42741471b::t_fb4e8f7c106a59 200-201
+  s_ef5de42741471b::t_e54713341c07be 319-376
+  s_ef5de42741471b::t_57d448f2b2e213 124-140
+  s_ef5de42741471b::t_ce85fee7ef663d 1-82,105-123,141-199,202-318,377-379
+  s_ef5de42741471b::t_cd23ca534778f4 83-104
+docs/superpowers/specs/2026-06-11-weekly-review-redesign-design.md
+  s_ef5de42741471b::t_a25de666c39c97 1-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "77d8cd1e9d0962bb601e6830a71ec159f3d79950",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
