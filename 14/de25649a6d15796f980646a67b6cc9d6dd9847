@@ -1,0 +1,36 @@
+src/lib/useCmdKnob.ts
+  s_b8a01d6932bdea::t_b447afa75dce60 170-171
+  s_b8a01d6932bdea::t_bccb1b6de91bbc 5
+  s_b8a01d6932bdea::t_37206e10393810 177
+src/components/HermesView.tsx
+  s_b8a01d6932bdea::t_c881cffcd36b6d 13
+  s_b8a01d6932bdea::t_7ebf0076f1ac9c 102,106-110,118,133-134
+src/lib/keydownBus.ts
+  s_b8a01d6932bdea::t_0a7b98398ee69c 1-15,22-67
+  s_b8a01d6932bdea::t_d19990f7aa56be 16-21
+src/App.tsx
+  s_b8a01d6932bdea::t_a0b24dc158d6f2 193
+  s_b8a01d6932bdea::t_d31cedb44d44a0 28
+  s_b8a01d6932bdea::t_f62af44ee6a127 166-167
+src/lib/useViewShortcuts.ts
+  s_b8a01d6932bdea::t_d3bced01c6ace8 127,129
+  s_b8a01d6932bdea::t_64ecb2feb7fbd9 5
+src/lib/keydownBus.test.ts
+  s_b8a01d6932bdea::t_63d019048c3168 1-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "14de25649a6d15796f980646a67b6cc9d6dd9847",
+  "prompts": {},
+  "sessions": {
+    "s_b8a01d6932bdea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b25308-efb2-4cd6-8340-d3a192aa43be",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
