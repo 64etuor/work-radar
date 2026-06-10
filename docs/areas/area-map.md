@@ -18,7 +18,7 @@ The thin `CLAUDE.md` at the repo root mirrors this table as one-liners and tells
 
 ## Why this exists
 
-Today every agent session loads `CLAUDE.md` (thin) + `AGENTS.md` (~65 lines, inlines shadcn/news/tech-stack) + `PLAN.md` (heavy: INVARIANTS § + 20 Phases). An agent fixing a news fetcher bug loads shadcn migration discipline; an agent rewriting `MatrixCanvas` loads SQLite migration rules. Auto-memory shows recurring incidents (parallel-worktree contamination, executor-late-writes, loop-shares-tree, rtk pipe truncation, shadcn keep-vs-migrate misjudgments) where the relevant rule was buried — or absent.
+(도입 당시) every agent session loaded `CLAUDE.md` (thin) + `AGENTS.md` (which then inlined shadcn/news/tech-stack — since split out into area docs) + `PLAN.md` (heavy: INVARIANTS § + 20 Phases). An agent fixing a news fetcher bug loads shadcn migration discipline; an agent rewriting `MatrixCanvas` loads SQLite migration rules. Auto-memory shows recurring incidents (parallel-worktree contamination, executor-late-writes, loop-shares-tree, rtk pipe truncation, shadcn keep-vs-migrate misjudgments) where the relevant rule was buried — or absent.
 
 Goal: **load the rule only when the scope says you need it.**
 

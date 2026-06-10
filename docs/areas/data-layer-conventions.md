@@ -16,8 +16,8 @@
 
 ## SSOT 분리 (INVARIANT #7)
 
-- **Notion** = 백로그/안건 *내용*의 SSOT. 로컬 미러는 read cache + write-through.
-- **SQLite** = 매트릭스 상태·신호·승격 이력·에이전트 잡·옵션·뉴스의 SSOT.
+- 정본: `docs/areas/decision-rails.md` #7. 요지만: Notion=내용 SSOT, SQLite=상태·신호·
+  승격·잡·옵션·뉴스 SSOT, 로컬 미러는 read cache + write-through.
 - API rate limit (Notion 3 req/s, GitHub octocrab) + pagination 준수. bounded retry.
 - 오프라인 우선: 네트워크 불가 시 UI 무차단, 승격은 큐잉 후 reconcile.
 

@@ -106,6 +106,6 @@ human-approved PR, push/merge/delete/deploy가 필요한 작업은 external resi
 
 | 문서 | 요약 |
 | --- | --- |
-| `design/2026-06-07-per-repo-governance-mcp-design.md` | per-repo `.boule/` 사이드카 + per-repo MCP 운영 경계(work=strict/personal=loose). |
+| `design/2026-06-07-per-repo-governance-mcp-design.md` | per-repo `.boule/` 사이드카 + per-repo MCP 운영 경계(work=strict/personal=loose). **구현·운용 중** — as-built 스키마는 ADR-0009/0010(`autonomyLevel`은 spec 이후 추가). |
 | `design/2026-06-07-boule-tick-bounded-driver-design.md` | `boule tick` bounded 외부 박동 드라이버(cron=시계, NOT 데몬). master plan §9.5.2 / 위 큐. |
 | `design/2026-06-02-b1-vs-v2planner-spec-plan-reconciliation.md` | B1(`feat/governance-boule-p1`) ↔ v2 planner spec/plan 비교 근거. |

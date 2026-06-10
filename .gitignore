@@ -18,6 +18,9 @@ src-tauri/gen/schemas
 # Boule v3 Conductor live-mode per-step worktrees (gitignored; never the user tree)
 .boule-worktrees/
 
+# Boule per-repo governance sidecar (machine-local config + runtime workspace/worktrees)
+.boule/
+
 # logs
 *.log
 logs

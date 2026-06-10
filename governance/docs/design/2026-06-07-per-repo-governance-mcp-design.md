@@ -1,7 +1,12 @@
 # Per-Repo Governance MCP — operate Boule in each designated local repo (personal/work differently)
 
 - **Date**: 2026-06-07
-- **Status**: design approved (brainstorm 2026-06-07); spec for implementation
+- **Status**: design approved (brainstorm 2026-06-07); spec for implementation.
+  **As-built note (2026-06-10):** implemented and operating (per-repo `.boule/` sidecar live).
+  Post-dating this spec, graduated autonomy added `overrides.autonomyLevel`
+  (manual<dispatch<auto_plan<full) to `boule.config.json` and `BOULE_AUTONOMY_LEVEL` to the
+  generated `mcp.json` env — see ADR-0009/ADR-0010 for the as-built schema; this spec's §B/§D.4
+  field lists predate that feature.
 - **Branch**: `plan/autonomous-orchestration` (continues the live-autonomy track)
 - **Depends on**: Boule v3 (A–I on dev) + the 2026-06-07 live-autonomy work (L0–L6).
 

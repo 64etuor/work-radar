@@ -33,6 +33,10 @@ INVARIANT 7개 + 추가 전역 규칙(webview 스택, 닫힌 taxonomy 등)은 �
 
 ## 3. Phases
 
+> **Status (2026-06-10):** Phase 0–11은 **출하 완료**(이력: `docs/decisions.md`). 아래
+> done-criteria 체크박스는 당시 계획 스냅샷이며 사후 갱신하지 않는다 — 현재 상태의
+> 정본은 `docs/decisions.md`다. Phase 12–20은 §3b 상태 노트 참조.
+
 ### Phase 0 — 스켈레톤 & 스파인
 
 **Goal:** 빈 앱이 부팅되고, Rust↔TS 타입 계약과 DB 마이그레이션 스파인이 선다.
@@ -259,6 +263,9 @@ bounded·graceful degrade(#5), read-only 스코프(외부 mutate 0 → Acceptanc
 
 ## 3b. Phase 12–20 — Dogfooding 정교화 (통합 ralplan)
 
+> **Status (2026-06-10):** 이 번호 스킴은 **재편됨** — 12–20의 작업은 named feature plan
+> (`docs/plans/`, `docs/superpowers/plans/`)으로 옮겨져 다수 출하됨. 현재 상태의 정본은
+> `docs/decisions.md`. 아래는 이력 스냅샷이다.
 > 사용자 dogfooding 백로그(~24개)를 brainstorming으로 9 Phase로 분할. **정본 설계·병렬 파견 전략·
 > 의존 그래프·INVARIANT 적합성 = `docs/specs/phase-12-20-dogfood-refinement.md`.** 아래는 요약.
 > 병렬 파견 wave: **(0) 12a→12b 게이트 → (1) 13·14·15·17·19·12c·12d → (2) 16·20 → (3) 18.**

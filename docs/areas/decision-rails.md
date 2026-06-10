@@ -14,6 +14,14 @@ Codex/규칙은 매트릭스 분류·승격 여부를 자동 확정하지 못한
 > `decision_blocked` and halt until a human resolves them; no timeout/default/self-resolve path.
 > Binding record: `governance/docs/adr/0008-orchestrator-dispatch-decision-rail.md`.
 
+> **Graduated autonomy 경계.** `.boule/boule.config.json`의 `autonomyLevel`
+> (manual < dispatch < auto_plan < full)은 **acceptance/dispatch 자동화만** 연다 — spec/plan
+> accept와 다음 step 파견. Type-1 결정(`decision_blocked`)과 stall 해소는 `full`에서도
+> 항상 사람이 푼다. `auto_plan`/`full`은 **config-file-only(test/dev), per-kind 기본값 불가**.
+> 이 INVARIANT와 모순 아님: 자동화는 실행 *진입*을 열 뿐, 결정 레일은 닫힌 채 유지된다.
+> as-built 정의: `governance/src/repo/config.ts` (ADR-0009 §4의 anemic-auto 경계·ADR-0010
+> fail-closed 드라이버와 정합 — 이 ladder 자체는 두 ADR 이후 추가).
+
 ## 2. 모든 외부 변경은 Acceptance 게이트
 
 Codex 출력이 Notion/GitHub를 직접 mutate하지 못한다. 사람이 accept해야 변경된다.

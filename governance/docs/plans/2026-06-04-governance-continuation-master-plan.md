@@ -1,5 +1,10 @@
 # Governance Continuation Master Plan
 
+> **SUPERSEDED (2026-06-10):** this 2026-06-04 queue was overtaken by
+> `2026-06-07-boule-v3-live-autonomy-master-plan.md` and
+> `2026-06-08-autonomous-coding-master-plan.md`. Kept as historical record — do not
+> execute this queue; see `governance/docs/INDEX.md` for the live entry point.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Continue Boule governance work after the P4/P5/P6 Slice 1 landing by taking the next local-implementable residuals in a fixed order.
