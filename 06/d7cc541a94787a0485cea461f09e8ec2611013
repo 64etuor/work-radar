@@ -1,0 +1,29 @@
+src/lib/weeklyLifeWheel.ts
+  s_5fca8d1449e8cc::t_334543264def9f 276-308
+src/components/WeeklyView.tsx
+  s_5fca8d1449e8cc::t_c6eb23f4f6279e 64-66
+  s_5fca8d1449e8cc::t_83f0eb6c7a8865 3,13-19,21,23-27
+  s_5fca8d1449e8cc::t_8de9d8e881ee55 151-160,162-183,187-202,204-292
+  s_5fca8d1449e8cc::t_d23406be3f15da 4-12,161,184-186,203
+src/lib/weeklyLifeWheel.test.ts
+  s_5fca8d1449e8cc::t_df88e10a8d4e4d 7
+  s_5fca8d1449e8cc::t_edc5338b141db4 202-232
+src/components/WeeklyView.css
+  s_5fca8d1449e8cc::t_2a01b82ce77794 149-255
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "06d7cc541a94787a0485cea461f09e8ec2611013",
+  "prompts": {},
+  "sessions": {
+    "s_5fca8d1449e8cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0cbef881-a6a1-4126-b8ea-6071b5930f42",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
