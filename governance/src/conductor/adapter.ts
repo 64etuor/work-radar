@@ -1,5 +1,6 @@
 import type { AutonomyEnvelope, ExecutorKind } from "./envelope.ts";
 import { type SpawnResultLike, type SpawnSyncLike, walkTerminalSurfaces } from "../repo/spawn.ts";
+import { sessionDeniedTools } from "../mcp/verdictTools.ts";
 
 export interface CreateWorktreeSpec {
   planId: string;
@@ -107,28 +108,10 @@ const BOULE_MCP_ALIAS = "boule-governance";
 
 /** Verdict tools an executor-role session must never reach. Defense-in-depth: the server itself
  *  unregisters these when BOULE_SESSION_ROLE=executor (structural), AND the CLI is told to deny
- *  them. A spawned session can `escalate`/`complete_task`/read, but cannot resolve a fork. */
-export const SESSION_DENIED_TOOLS = [
-  `mcp__${BOULE_MCP_ALIAS}__approve`,
-  `mcp__${BOULE_MCP_ALIAS}__reject`,
-  `mcp__${BOULE_MCP_ALIAS}__choose`,
-  `mcp__${BOULE_MCP_ALIAS}__accept_plan`,
-  `mcp__${BOULE_MCP_ALIAS}__accept_spec`,
-  // auto_dispatch is an ORCHESTRATOR tool: it can auto-accept plans/specs (autonomyLevel) and spawn
-  // sub-sessions. An executor session must never reach it — else it could open INVARIANT #1's gate
-  // for its own plan. Denied here (claude denylist) AND structurally unregistered for executor role
-  // in server.ts (mirrors accept_plan/accept_spec); the guarantee does not rely on env isolation.
-  `mcp__${BOULE_MCP_ALIAS}__auto_dispatch`,
-  // Pattern curation shapes the curated set that steers future detection — a judgment
-  // call an executor must not make about its own observation stream. Mirrors the
-  // structural unregistration in server.ts.
-  `mcp__${BOULE_MCP_ALIAS}__activate_pattern`,
-  `mcp__${BOULE_MCP_ALIAS}__archive_pattern`,
-  // archive_prune's pattern half moves stale candidates into the curated set — curation
-  // by the clock. Same wall as the explicit curation tools. (`detect` is deliberately
-  // executor-reachable: candidates never steer detection until curated.)
-  `mcp__${BOULE_MCP_ALIAS}__archive_prune`,
-];
+ *  them. A spawned session can `escalate`/`complete_task`/read, but cannot resolve a fork.
+ *  Canonical list (+ per-tool rationale) lives in `src/mcp/verdictTools.ts` — server gating and
+ *  this denylist derive from the same source, so they cannot drift. */
+export const SESSION_DENIED_TOOLS = sessionDeniedTools(BOULE_MCP_ALIAS);
 
 /** The scoped MCP config written into each session worktree. It launches boule with
  *  BOULE_SESSION_ROLE=executor (verdict tools structurally absent) pointed at the SAME
@@ -386,7 +369,14 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // each step sees its predecessors' work; without it (first step) fall back to HEAD. The probe
       // must not go through run() — a missing branch is the normal first-step case, not a failure.
       const planBranch = `refs/heads/${planBranchName(spec.planId)}`;
-      const probe = deps.spawn("git", ["-C", deps.repoRoot, "rev-parse", "--verify", "--quiet", planBranch]);
+      const probe = deps.spawn("git", [
+        "-C",
+        deps.repoRoot,
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        planBranch,
+      ]);
       const base = probe.status === 0 ? planBranch : "HEAD";
       // Worktree is added from repoRoot into the gitignored worktrees root — never the user tree.
       run("git", ["-C", deps.repoRoot, "worktree", "add", "--detach", path, base]);
@@ -456,7 +446,12 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // Scoped executor-role MCP config — the structural backstop for session verdict isolation.
       await deps.fs.writeFile(
         `${bouleDir}/mcp.json`,
-        sessionMcpConfig(deps.serverEntrypoint, deps.governanceWorkspace, deps.repoRoot, envelope.taskId),
+        sessionMcpConfig(
+          deps.serverEntrypoint,
+          deps.governanceWorkspace,
+          deps.repoRoot,
+          envelope.taskId,
+        ),
       );
     },
   };

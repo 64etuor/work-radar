@@ -61,6 +61,7 @@ import {
 } from "../session/observer.ts";
 import { makeNodeSpawnSync } from "../repo/spawn.ts";
 import { okOrRefused, refusedText } from "./response.ts";
+import { VERDICT_TOOL_NAME_SET } from "./verdictTools.ts";
 import {
   parseAutoMode,
   parseAutonomyLevel,
@@ -136,6 +137,23 @@ function renderFrontmatter(fm: Record<string, unknown>): string {
 
 // SDK 1.29(실측): server.tool()은 deprecated → registerTool(name, config, cb).
 const server = new McpServer({ name: "boule-governance", version: "0.0.1" });
+
+/** The ONLY registration path for verdict tools (INVARIANT #1 structural wall).
+ *  - executor role ⇒ no-op: the tool is structurally absent, not merely refused.
+ *  - name outside the canonical `VERDICT_TOOL_NAMES` ⇒ throw at startup: gating a tool means
+ *    listing it in `verdictTools.ts` first, which also feeds the session CLI denylist
+ *    (`SESSION_DENIED_TOOLS`) — single source, no drift.
+ *  `test/mcp/verdictGating.test.ts` pins that every canonical name registers through this
+ *  helper and never through a bare `server.registerTool`. */
+const registerVerdictTool: typeof server.registerTool = ((name, ...rest) => {
+  if (!VERDICT_TOOL_NAME_SET.has(name)) {
+    throw new Error(
+      `registerVerdictTool: "${name}" is not in VERDICT_TOOL_NAMES (verdictTools.ts)`,
+    );
+  }
+  if (!SESSION_ALLOWS_VERDICTS) return undefined;
+  return (server.registerTool as (...a: unknown[]) => unknown)(name, ...rest);
+}) as typeof server.registerTool;
 
 server.registerTool(
   "create_task",
@@ -248,9 +266,8 @@ server.registerTool(
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "accept_plan",
   { description: "사람 게이트: plan을 active로 (draft/needs_revision→active, actor=user)", inputSchema: { planId: z.string() } },
   async ({ planId }) => {
@@ -347,9 +364,8 @@ server.registerTool(
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "accept_spec",
   { description: "사람 게이트: spec을 accepted로 (draft→accepted, actor=user)", inputSchema: { specId: z.string() } },
   async ({ specId }) => {
@@ -518,43 +534,41 @@ server.registerTool(
 // so it mirrors the verdict-tool gating: structurally unregistered for executor-role
 // sessions AND in SESSION_DENIED_TOOLS (an executor must not shape the curated set that
 // steers future detection).
-if (SESSION_ALLOWS_VERDICTS) {
-  server.registerTool(
-    "activate_pattern",
-    {
-      description: "패턴 큐레이션: candidate → active (사람/오케스트레이터 판단)",
-      inputSchema: { id: z.string() },
-    },
-    async ({ id }) => {
-      const r = await curatePattern(WORKSPACE, id, "activate", "user");
-      const text =
-        r.outcome === "moved"
-          ? `activated: ${id} (${r.from} → ${r.to})`
-          : r.outcome === "already"
-            ? `already ${r.to}: ${id}`
-            : `REFUSED (${r.outcome}): ${id}`;
-      return { content: [{ type: "text", text }] };
-    },
-  );
+registerVerdictTool(
+  "activate_pattern",
+  {
+    description: "패턴 큐레이션: candidate → active (사람/오케스트레이터 판단)",
+    inputSchema: { id: z.string() },
+  },
+  async ({ id }) => {
+    const r = await curatePattern(WORKSPACE, id, "activate", "user");
+    const text =
+      r.outcome === "moved"
+        ? `activated: ${id} (${r.from} → ${r.to})`
+        : r.outcome === "already"
+          ? `already ${r.to}: ${id}`
+          : `REFUSED (${r.outcome}): ${id}`;
+    return { content: [{ type: "text", text }] };
+  },
+);
 
-  server.registerTool(
-    "archive_pattern",
-    {
-      description: "패턴 큐레이션: candidate|active → archived (망각; 복원은 수동 git)",
-      inputSchema: { id: z.string() },
-    },
-    async ({ id }) => {
-      const r = await curatePattern(WORKSPACE, id, "archive", "user");
-      const text =
-        r.outcome === "moved"
-          ? `archived: ${id} (${r.from} → ${r.to})`
-          : r.outcome === "already"
-            ? `already ${r.to}: ${id}`
-            : `REFUSED (${r.outcome}): ${id}`;
-      return { content: [{ type: "text", text }] };
-    },
-  );
-}
+registerVerdictTool(
+  "archive_pattern",
+  {
+    description: "패턴 큐레이션: candidate|active → archived (망각; 복원은 수동 git)",
+    inputSchema: { id: z.string() },
+  },
+  async ({ id }) => {
+    const r = await curatePattern(WORKSPACE, id, "archive", "user");
+    const text =
+      r.outcome === "moved"
+        ? `archived: ${id} (${r.from} → ${r.to})`
+        : r.outcome === "already"
+          ? `already ${r.to}: ${id}`
+          : `REFUSED (${r.outcome}): ${id}`;
+    return { content: [{ type: "text", text }] };
+  },
+);
 
 server.registerTool(
   "run_hypothesis_tester",
@@ -738,9 +752,8 @@ server.registerTool(
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "approve",
   {
     description: "결정 사람 승인(게이트) — 외부검토 없으면 거부",
@@ -753,9 +766,8 @@ if (SESSION_ALLOWS_VERDICTS)
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "reject",
   {
     description: "결정 사람 반려(게이트)",
@@ -857,9 +869,8 @@ server.registerTool(
 // v2 slice1 — BRIDGE/HUMAN-ONLY: only the Telegram bridge calls this, on an exact token match.
 // Human-gated (actor:user) but NOT review-gated — a Type 0 tap is a direction-pick, not an ADR approval.
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "choose",
   {
     description: "Type 0 해소 — 사람이 고른 옵션을 decision_chosen(actor:user)으로 기록",
@@ -888,21 +899,20 @@ if (SESSION_ALLOWS_VERDICTS)
 // candidates into the curated set (steers future detection), so an executor must not
 // reach it even time-bounded. (`detect` stays executor-reachable on purpose: it only
 // CREATES candidates, which never enter the curated set without curation.)
-if (SESSION_ALLOWS_VERDICTS)
-  server.registerTool(
-    "archive_prune",
-    {
-      description:
-        "P6 Archive Pruner: terminal/expired hypotheses + stale candidate 패턴(90d) → archived one-pass move",
-      inputSchema: {},
-    },
-    async () => {
-      const result = await runArchivePrune(WORKSPACE, nowFn());
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
-  );
+registerVerdictTool(
+  "archive_prune",
+  {
+    description:
+      "P6 Archive Pruner: terminal/expired hypotheses + stale candidate 패턴(90d) → archived one-pass move",
+    inputSchema: {},
+  },
+  async () => {
+    const result = await runArchivePrune(WORKSPACE, nowFn());
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
 
 server.registerTool(
   "archive_status",
@@ -977,9 +987,8 @@ server.registerTool(
 // proposed plans/specs. ORCHESTRATOR-ONLY: structurally NOT registered for an executor session
 // (mirrors accept_plan/accept_spec) + in SESSION_DENIED_TOOLS — so an executor can never auto-accept
 // its own plan. Verdict-free; writes no decision_*.
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "auto_dispatch",
   {
     description:
