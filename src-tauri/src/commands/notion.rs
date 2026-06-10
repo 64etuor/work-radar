@@ -428,21 +428,18 @@ pub async fn flush_promotions(db: State<'_, Db>) -> Result<FlushSummary, AppErro
     Ok(flush_inner(db.inner(), &writer).await?)
 }
 
-/// 프로젝트의 Notion DB 연결을 테스트한다. token은 keychain에서 Rust 안에서만 읽고 반환하지 않는다.
-/// 성공: DB title 속성명을 포함한 짧은 확인 메시지. 실패: 액션 가능 에러 메시지.
-#[tauri::command]
-#[specta::specta]
-pub async fn test_notion_connection(
-    db: State<'_, Db>,
-    project_id: String,
+/// 프로젝트의 credential_ref + Notion DB ID를 조회한다(test_notion_connection 전용 헬퍼).
+/// 에러 코드/메시지는 기존 `test_notion_connection` 동작과 동일하게 유지한다.
+async fn fetch_notion_credentials(
+    db: &Db,
+    project_id: &str,
     target: PromotionTarget,
-) -> Result<String, AppError> {
-    // 프로젝트에서 credential_ref + DB ID 조회.
+) -> Result<(String, String), AppError> {
     let proj: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT credential_ref, notion_backlog_db_id, notion_agenda_db_id FROM projects WHERE id = ?1",
     )
-    .bind(&project_id)
-    .fetch_optional(db.inner())
+    .bind(project_id)
+    .fetch_optional(db)
     .await?;
     let (cref, backlog, agenda) = proj.ok_or_else(|| {
         AppError::not_found("notion.project_not_found", "프로젝트를 찾을 수 없음")
@@ -465,13 +462,26 @@ pub async fn test_notion_connection(
         )
     })?;
 
-    // 토큰 keychain에서만 — 반환하지 않는다(INVARIANT).
     let token = keychain::get_token(&cref, TokenKind::Notion)?.ok_or_else(|| {
         AppError::not_found(
             "notion.token_missing",
             "Notion 토큰이 없음(설정에서 토큰 저장 필요)",
         )
     })?;
+
+    Ok((token, db_id))
+}
+
+/// 프로젝트의 Notion DB 연결을 테스트한다. token은 keychain에서 Rust 안에서만 읽고 반환하지 않는다.
+/// 성공: DB title 속성명을 포함한 짧은 확인 메시지. 실패: 액션 가능 에러 메시지.
+#[tauri::command]
+#[specta::specta]
+pub async fn test_notion_connection(
+    db: State<'_, Db>,
+    project_id: String,
+    target: PromotionTarget,
+) -> Result<String, AppError> {
+    let (token, db_id) = fetch_notion_credentials(db.inner(), &project_id, target).await?;
 
     // 도메인 모듈의 단발 probe 호출 — HTTP 구성/분류는 notion.rs 단일 책임.
     let title_prop = crate::notion::probe_database(&token, &db_id).await?;
