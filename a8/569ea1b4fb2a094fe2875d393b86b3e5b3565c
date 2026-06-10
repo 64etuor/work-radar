@@ -1,0 +1,50 @@
+src/components/hermes/HermesPanel.tsx
+  s_354e94b88ccc74::t_4d3aa7b240a22e 236,266
+  s_354e94b88ccc74::t_c10344af2b8871 274
+  s_354e94b88ccc74::t_809da7175da810 23,28-29,350
+src/bindings.ts
+  s_354e94b88ccc74::t_cbcf7349a76ee9 452-453
+docs/decisions.md
+  s_354e94b88ccc74::t_66c8e98c12526e 584
+src-tauri/src/hermes_agent/session_store.rs
+  s_354e94b88ccc74::t_cbcf7349a76ee9 120,127-132
+  s_354e94b88ccc74::t_be646fb1e11f15 114-117,433-470
+  s_354e94b88ccc74::t_8d1ef0e08a4e08 26-28,56,68,82,102-113,118-119,121-126,133-142
+src-tauri/src/hermes_agent/acp_client.rs
+  s_354e94b88ccc74::t_cbcf7349a76ee9 351,354,356
+  s_354e94b88ccc74::t_8686ae88e548bf 94-98,210-213,306,308-311,313-315,317-319,322-350,357-371,373-388,390-398,400,655-658,662-672,676-677,679-693
+  s_354e94b88ccc74::t_be646fb1e11f15 316,389
+src/components/hermes/keyboardShortcuts.test.ts
+  s_354e94b88ccc74::t_66c8e98c12526e 14
+src/components/hermes/useHermesTabsStore.ts
+  s_354e94b88ccc74::t_6962f58c2a5ae9 37
+  s_354e94b88ccc74::t_48fd1cee52d421 142-150,339-344
+src-tauri/migrations/0047_hermes_session_project.sql
+  s_354e94b88ccc74::t_446d8b572ba778 1-6
+src/components/hermes/useHermesTabs.ts
+  s_354e94b88ccc74::t_48fd1cee52d421 12-14,35-36,103,126-127
+src-tauri/src/commands/hermes_agent.rs
+  s_354e94b88ccc74::t_45713b8d498cc3 27,36-38,40,60,63-67,70-91,105
+  s_354e94b88ccc74::t_cbcf7349a76ee9 68-69
+src-tauri/src/lib.rs
+  s_354e94b88ccc74::t_732a2ccf9fdfa9 245
+src/components/HermesView.tsx
+  s_354e94b88ccc74::t_4c00fafc2e0685 6-12,14
+  s_354e94b88ccc74::t_f50b53ef4cce6c 60-61,149-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a8569ea1b4fb2a094fe2875d393b86b3e5b3565c",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
