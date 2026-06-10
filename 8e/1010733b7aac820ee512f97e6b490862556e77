@@ -1,0 +1,21 @@
+src/lib/lifeWheelRadar.ts
+  s_ef5de42741471b::t_d236e7321e4a77 1-50
+src/lib/lifeWheelRadar.test.ts
+  s_ef5de42741471b::t_97fa9ce1154bca 1-4,7-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "8e1010733b7aac820ee512f97e6b490862556e77",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
