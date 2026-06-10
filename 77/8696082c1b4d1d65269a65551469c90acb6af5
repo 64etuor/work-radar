@@ -1,0 +1,29 @@
+src/App.tsx
+  s_b8a01d6932bdea::t_a5cb308582591c 28
+  s_b8a01d6932bdea::t_39783efe2c4d0d 144-146
+src/lib/useViewShortcuts.ts
+  s_b8a01d6932bdea::t_6309ca3b802d38 4-22
+  s_b8a01d6932bdea::t_f5cfc0a8ad224c 82
+src/lib/useViewShortcuts.test.ts
+  s_b8a01d6932bdea::t_ab16fbc104d89d 1-35
+src/lib/useCmdKnob.ts
+  s_b8a01d6932bdea::t_66f4b0756e22a4 69-71
+src/lib/nav.ts
+  s_b8a01d6932bdea::t_c8af206824765e 201-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "778696082c1b4d1d65269a65551469c90acb6af5",
+  "prompts": {},
+  "sessions": {
+    "s_b8a01d6932bdea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b25308-efb2-4cd6-8340-d3a192aa43be",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
