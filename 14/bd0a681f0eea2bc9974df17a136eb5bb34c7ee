@@ -1,0 +1,26 @@
+governance/src/conductor/adapter.ts
+  s_189899020c7048::t_60737ff1de969b 447
+  s_189899020c7048::t_44d6e256d9f0ed 429-436
+governance/test/conductor/handlers.test.ts
+  s_189899020c7048::t_31d15d72ebde5f 1008,1013-1015,1039,1041-1043,1046-1048
+  s_189899020c7048::t_d01e22b47288b6 695
+  s_189899020c7048::t_1414a779601805 693-694,696-698
+  s_189899020c7048::t_77efca5f46b725 710,715
+  s_189899020c7048::t_c2d310fa792b7d 1040
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "14bd0a681f0eea2bc9974df17a136eb5bb34c7ee",
+  "prompts": {},
+  "sessions": {
+    "s_189899020c7048": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ec94408-dd6b-4ae8-98b9-2bb3143a05c5",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
