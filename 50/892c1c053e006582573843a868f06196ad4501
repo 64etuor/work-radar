@@ -1,0 +1,21 @@
+src/lib/weeklyLifeWheel.ts
+  s_9f190b4ac369bc::t_b9f849590f5d35 1-275
+src/lib/weeklyLifeWheel.test.ts
+  s_9f190b4ac369bc::t_b9f849590f5d35 1-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "50892c1c053e006582573843a868f06196ad4501",
+  "prompts": {},
+  "sessions": {
+    "s_9f190b4ac369bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03ddc955-b328-43c4-be63-b36a08ace1d6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
