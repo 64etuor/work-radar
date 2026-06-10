@@ -426,6 +426,14 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
         completeEntrypoint: deps.completeEntrypoint,
         codexHome,
       });
+      // The wrapper is ~2KB and --command is TYPED into the pane's interactive shell: a line that
+      // long overflows the tty's canonical input buffer (MAX_CANON ~1024) during the shell-startup
+      // race, arriving truncated and never submitted (live wedge 2026-06-10, step6 — masked before
+      // by the embedded "\n" accidentally splitting the line). Write the wrapper to a script in the
+      // worktree's .boule dir and type only a short `sh <script>` line.
+      const scriptPath = `${spec.worktreePath}/.boule/run-step.sh`;
+      await deps.fs.mkdir(`${spec.worktreePath}/.boule`, { recursive: true });
+      await deps.fs.writeFile(scriptPath, command);
       // Create the isolated workspace AND launch the executor atomically via --command. A
       // BACKGROUND workspace runs --command immediately, but a separate `cmux send` to its surface
       // fails ("Surface is not a terminal") until that workspace is made visible — so the session
@@ -436,7 +444,7 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
         "--cwd",
         spec.worktreePath,
         "--command",
-        command,
+        `sh ${shellQuote(scriptPath)}\n`,
       ]);
       const workspaceRef = parseCmuxRef(open.stdout, "workspace");
       // Resolve the workspace's terminal surface so the Observer can reconcile this session by ref.

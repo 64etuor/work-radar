@@ -690,9 +690,12 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     // to a background workspace surface fails), and the worktree cwd is bound.
     expect(calls[2]!.args.slice(0, 4)).toEqual(["new-workspace", "--cwd", wt.path, "--command"]);
     expect(calls[3]!.args).toEqual(["tree", "--all", "--json"]);
-    // the claude invocation (in the --command arg) runs against the scoped executor-role config
-    // + denies verdict tools
-    const claudeCmd = calls[2]!.args[4]!;
+    // The TYPED launch line is a short `sh <script>` — the ~2KB wrapper itself goes into
+    // .boule/run-step.sh (typed lines >MAX_CANON arrive truncated during the shell-startup race).
+    expect(calls[2]!.args[4]).toBe(`sh '${wt.path}/.boule/run-step.sh'\n`);
+    // the claude invocation (in the run-step.sh script) runs against the scoped executor-role
+    // config + denies verdict tools
+    const claudeCmd = writes.find((w) => w.path.endsWith("run-step.sh"))!.data;
     expect(claudeCmd).toContain("--mcp-config");
     expect(claudeCmd).toContain("--strict-mcp-config");
     expect(claudeCmd).toContain("--disallowedTools");
@@ -704,11 +707,12 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     // command must never embed one; the stderr digest uses '[:cntrl:]' instead.
     expect(claudeCmd).not.toContain("\\n");
     expect(claudeCmd).toContain("tr '[:cntrl:]' ' '");
-    // envelope + prompt + scoped MCP config written into the worktree's .boule dir
+    // envelope + prompt + scoped MCP config + launch script written into the worktree's .boule dir
     expect(writes.map((w) => w.path)).toEqual([
       `${wt.path}/.boule/envelope.json`,
       `${wt.path}/.boule/step-prompt.md`,
       `${wt.path}/.boule/mcp.json`,
+      `${wt.path}/.boule/run-step.sh`,
     ]);
     const mcpJson = writes.find((w) => w.path.endsWith("mcp.json"))!.data;
     expect(mcpJson).toContain('"BOULE_SESSION_ROLE": "executor"');
@@ -1001,11 +1005,14 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
         };
       return { status: 0, stdout: "", stderr: "" };
     };
+    const writes: Array<{ path: string; data: string }> = [];
     const adapter = makeLiveAdapter({
       spawn: fakeSpawn,
       fs: {
         mkdir: async () => undefined,
-        writeFile: async () => undefined,
+        writeFile: async (path: string, data: string) => {
+          writes.push({ path, data });
+        },
         pathExists: async () => false,
         symlink: async () => undefined,
         rm: async () => undefined,
@@ -1029,13 +1036,16 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(sess.surface).toBe("surface:55");
     const created = calls.find((c) => c.cmd === "cmux" && c.args[0] === "new-workspace")!;
     expect(created.args[3]).toBe("--command");
-    expect(created.args[4]).toContain("codex exec");
-    expect(created.args[4]).toContain(
+    // the typed launch line is the short `sh <script>`; the codex wrapper lives in run-step.sh
+    expect(created.args[4]).toBe("sh '/wt/s0/.boule/run-step.sh'\n");
+    const codexCmd = writes.find((w) => w.path === "/wt/s0/.boule/run-step.sh")!.data;
+    expect(codexCmd).toContain("codex exec");
+    expect(codexCmd).toContain(
       "CODEX_HOME='/repo/governance/workspace/codex-home' codex exec",
     ); // clean profile prefixed at launch (hook isolation)
-    expect(created.args[4]).toContain("report-exit"); // completion hint wrapper present in the launch cmd
-    expect(created.args[4]).not.toContain("complete-task");
-    expect(created.args[4]).not.toContain("claude -p --mcp-config");
+    expect(codexCmd).toContain("report-exit"); // completion hint wrapper present in the launch cmd
+    expect(codexCmd).not.toContain("complete-task");
+    expect(codexCmd).not.toContain("claude -p --mcp-config");
     expect(calls.some((c) => c.cmd === "cmux" && c.args[0] === "send")).toBe(false);
   });
 
