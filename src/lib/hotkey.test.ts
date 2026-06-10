@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { eventToHotkeySpec, formatHotkeySpec, parseHotkeySpec } from "./hotkey";
+import { eventToHotkeySpec, formatHotkeySpec } from "./hotkey";
 
 describe("formatHotkeySpec", () => {
   it("modifier를 심볼로 바꾸고 구분자 없이 결합", () => {
@@ -14,45 +14,45 @@ describe("formatHotkeySpec", () => {
   });
 });
 
-describe("parseHotkeySpec", () => {
-  it("Cmd+Left → ArrowLeft + metaKey", () => {
-    expect(parseHotkeySpec("Cmd+Left")).toEqual({
-      key: "ArrowLeft",
-      ctrlKey: false,
-      metaKey: true,
-      altKey: false,
-      shiftKey: false,
-    });
+describe("eventToHotkeySpec", () => {
+  it("modifier 동반 키 → 정규화 spec", () => {
+    expect(
+      eventToHotkeySpec({
+        key: "1",
+        ctrlKey: false,
+        metaKey: true,
+        altKey: false,
+        shiftKey: false,
+      }),
+    ).toBe("Cmd+1");
+    expect(
+      eventToHotkeySpec({
+        key: "ArrowRight",
+        ctrlKey: false,
+        metaKey: true,
+        altKey: false,
+        shiftKey: false,
+      }),
+    ).toBe("Cmd+Right");
   });
-
-  it("Cmd+Shift+C → c + meta + shift", () => {
-    expect(parseHotkeySpec("Cmd+Shift+C")).toEqual({
-      key: "c",
-      ctrlKey: false,
-      metaKey: true,
-      altKey: false,
-      shiftKey: true,
-    });
-  });
-
-  it("Cmd+, → Comma 특수키", () => {
-    expect(parseHotkeySpec("Cmd+,")?.key).toBe(",");
-  });
-
-  it("modifier 없음/빈 값 → null", () => {
-    expect(parseHotkeySpec("Left")).toBeNull();
-    expect(parseHotkeySpec("")).toBeNull();
-  });
-
-  it("eventToHotkeySpec와 라운드트립", () => {
-    const parsed = parseHotkeySpec("Cmd+Right")!;
-    const spec = eventToHotkeySpec({
-      key: parsed.key,
-      ctrlKey: parsed.ctrlKey,
-      metaKey: parsed.metaKey,
-      altKey: parsed.altKey,
-      shiftKey: parsed.shiftKey,
-    });
-    expect(spec).toBe("Cmd+Right");
+  it("modifier 없음/modifier-only → null", () => {
+    expect(
+      eventToHotkeySpec({
+        key: "a",
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+      }),
+    ).toBeNull();
+    expect(
+      eventToHotkeySpec({
+        key: "Meta",
+        ctrlKey: false,
+        metaKey: true,
+        altKey: false,
+        shiftKey: false,
+      }),
+    ).toBeNull();
   });
 });
