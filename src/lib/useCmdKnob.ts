@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
-import { dispatchHotkey } from "@/lib/dispatchHotkey";
+import { type AppAction, resolveCombo } from "@/lib/appActions";
 import type { KnobDir } from "@/lib/knobGeometry";
 import { KNOB_DIRECTIONS, KNOB_TRIGGER_DEFAULT, KNOB_TRIGGER_KEY } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
@@ -49,7 +49,7 @@ export interface CmdKnobState {
   visible: boolean;
   origin: { x: number; y: number };
   dirEnabled: Record<KnobDir, boolean>;
-  /** 방향 발사: 그 방향에 설정된 combo를 dispatch. 미설정이면 no-op. */
+  /** 방향 발사: 그 방향에 설정된 combo를 AppAction으로 해석해 dispatch. 미설정/해석 불가면 no-op. */
   fire: (dir: KnobDir) => void;
 }
 
@@ -58,8 +58,11 @@ export interface CmdKnobState {
  * dwell 중 비-모디파이어 키/추가 모디파이어가 오면 그 hold 세션 취소(기존 조합키 무손상).
  * visible 이후엔 키로 취소하지 않는다 — 자기 합성 발사에 스스로 닫히지 않도록(설계 §3).
  * 트리거 release로만 종료.
+ *
+ * dispatch: App의 dispatchAction. 방향 fire는 합성 KeyboardEvent 왕복 없이 콤보를
+ * resolveCombo로 해석해 인프로세스 직행한다(ADR-0011 — 자기-매칭/리스너 순서 의존 제거).
  */
-export function useCmdKnob(): CmdKnobState {
+export function useCmdKnob(dispatch: (action: AppAction) => void): CmdKnobState {
   const keymap = useNavKeymap();
   const [visible, setVisible] = useState(false);
   const [origin, setOrigin] = useState({ x: 0, y: 0 });
@@ -86,11 +89,18 @@ export function useCmdKnob(): CmdKnobState {
     right: !!(keymap.data?.knob_right ?? "").trim(),
   };
 
+  const dispatchRef = useRef(dispatch);
+  useEffect(() => {
+    dispatchRef.current = dispatch;
+  });
+
   const fire = (dir: KnobDir) => {
     const map = keymapRef.current;
     const key = KNOB_DIRECTIONS.find((d) => d.dir === dir)?.key;
-    const combo = key ? (map?.[key] ?? "") : "";
-    if (combo.trim()) dispatchHotkey(combo.trim());
+    const combo = (key ? (map?.[key] ?? "") : "").trim();
+    if (!combo) return;
+    const action = resolveCombo(map, combo);
+    if (action) dispatchRef.current(action);
   };
 
   useEffect(() => {

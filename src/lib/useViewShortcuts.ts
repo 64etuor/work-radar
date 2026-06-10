@@ -1,29 +1,11 @@
 import { useEffect, useRef } from "react";
 
+import { actionForKeymapKey, type AppAction, findKeymapAction } from "@/lib/appActions";
 import { eventToHotkeySpec } from "@/lib/hotkey";
-import { isKnobKeymapKey } from "@/lib/nav";
-
-/**
- * keymap에서 combo spec과 정확히 일치하는 **액션** 키를 찾는다(대소문자 무시). knob 예약 키
- * (knob_up/down/left/right/trigger)는 제외 — 그 값은 knob이 발사할 콤보지 액션 바인딩이 아니라서,
- * 포함하면 knob 방향 fire가 자기 자신과 매칭돼 무효 View 네비가 된다(isKnobKeymapKey doc). 순수 함수.
- */
-export function findKeymapAction(
-  map: Record<string, string> | undefined,
-  combo: string,
-): string | null {
-  if (!map) return null;
-  const lower = combo.trim().toLowerCase();
-  if (!lower) return null;
-  const hit = Object.entries(map).find(
-    ([k, sc]) => !isKnobKeymapKey(k) && sc.trim() !== "" && sc.trim().toLowerCase() === lower,
-  );
-  return hit ? hit[0] : null;
-}
 
 /**
  * 메뉴별 키보드 단축키 적용 (Phase 18 #7). keymap(action→shortcut)을 받아 전역 keydown에서
- * 매칭되면 onAction(actionKey)를 부른다. actionKey는 보통 view지만 "calendar" 같은 액션도 가능.
+ * 매칭되면 AppAction으로 해석해 dispatch한다(ADR-0011 — 문자열 액션 키 대신 일급 액션).
  *
  * 두 포맷을 함께 지원한다:
  *   - **조합 단축키**(현 기본): "Cmd+1" / "Ctrl+Shift+K" — modifier 동반. 입력 포커스에서도 동작
@@ -31,7 +13,8 @@ export function findKeymapAction(
  *   - **레거시 단일/체인**: "1" / "g b" — modifier 없음. 입력 포커스 시 비활성(타이핑 보존),
  *     체인은 1초 내 두 번째 키. (예전에 저장한 keymap 호환용.)
  *
- * Cmd/Ctrl+←/→: NAV 순서 기준 인접 뷰 전환(onAdjacent). 빈 문자열 단축키는 무시(그 액션 비활성).
+ * Cmd/Ctrl+←/→: NAV 순서 기준 인접 뷰 전환(adjacent 액션). 빈 문자열 단축키는 무시.
+ * keymap에 매칭돼도 AppAction으로 해석 불가한 키(제거된 view 등)는 no-op(preventDefault 없음).
  */
 
 const CHORD_TIMEOUT_MS = 1000;
@@ -55,18 +38,15 @@ function normalizeKey(e: KeyboardEvent): string | null {
 export function useViewShortcuts(
   keymap: Record<string, string> | undefined,
   enabled: boolean,
-  onAction: (actionKey: string) => void,
-  onAdjacent?: (dir: -1 | 1) => void,
+  dispatch: (action: AppAction) => void,
 ) {
   // 최신 props를 keydown 리스너에서 안전하게 읽기 위한 ref. keydown은 항상 commit 이후
   // 발생하므로 effect로 동기화해도 stale 위험이 없다(react-hooks/refs).
-  const onActionRef = useRef(onAction);
-  const onAdjacentRef = useRef(onAdjacent);
+  const dispatchRef = useRef(dispatch);
   const keymapRef = useRef(keymap);
   const enabledRef = useRef(enabled);
   useEffect(() => {
-    onActionRef.current = onAction;
-    onAdjacentRef.current = onAdjacent;
+    dispatchRef.current = dispatch;
     keymapRef.current = keymap;
     enabledRef.current = enabled;
   });
@@ -79,7 +59,11 @@ export function useViewShortcuts(
       window.clearTimeout(timer);
     };
 
-    const findExact = (combo: string): string | null => findKeymapAction(keymapRef.current, combo);
+    /** combo 문자열(핫키 spec 또는 레거시 단일/체인) → AppAction. */
+    const resolve = (combo: string): AppAction | null => {
+      const key = findKeymapAction(keymapRef.current, combo);
+      return key ? actionForKeymapKey(key) : null;
+    };
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (!enabledRef.current) return;
@@ -89,7 +73,7 @@ export function useViewShortcuts(
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
           e.preventDefault();
           clearPrefix();
-          onAdjacentRef.current?.(e.key === "ArrowLeft" ? -1 : 1);
+          dispatchRef.current({ kind: "adjacent", dir: e.key === "ArrowLeft" ? -1 : 1 });
           return;
         }
       }
@@ -98,11 +82,11 @@ export function useViewShortcuts(
       if (e.metaKey || e.ctrlKey || e.altKey) {
         const spec = eventToHotkeySpec(e);
         if (!spec) return;
-        const action = findExact(spec);
+        const action = resolve(spec);
         if (action) {
           e.preventDefault();
           clearPrefix();
-          onActionRef.current(action);
+          dispatchRef.current(action);
         }
         return;
       }
@@ -115,11 +99,11 @@ export function useViewShortcuts(
       if (!key) return;
 
       const combo = prefix ? `${prefix} ${key}` : key;
-      const exact = findExact(combo);
-      if (exact) {
+      const action = resolve(combo);
+      if (action) {
         e.preventDefault();
         clearPrefix();
-        onActionRef.current(exact);
+        dispatchRef.current(action);
         return;
       }
 

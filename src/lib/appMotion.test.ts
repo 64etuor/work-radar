@@ -16,10 +16,9 @@ const motionSource =
 describe("app view motion", () => {
   it("preserves Cmd+arrow navigation direction as the view-shell motion class", () => {
     expect(appSource).toContain('type ViewMotion = "forward" | "back"');
-    expect(appSource).toContain('const motion = dir > 0 ? "forward" : "back"');
-    expect(appSource).toContain(
-      "navigateView(adjacentView(useUIStore.getState().view, dir), motion)",
-    );
+    // adjacent 액션(ADR-0011 dispatchAction): 방향 → forward/back motion 보존.
+    expect(appSource).toContain('action.dir > 0 ? "forward" : "back"');
+    expect(appSource).toContain("adjacentView(useUIStore.getState().view, action.dir)");
     expect(appSource).toContain("transitionRunningRef.current");
     expect(appSource).not.toContain("if (transitionRunningRef.current) return");
     expect(appSource).toContain('className="view-stage"');
@@ -37,7 +36,7 @@ describe("app view motion", () => {
     expect(appSource).toContain("const VIEW_SLIDE_CLEANUP_MS = 460");
     expect(appSource).toContain("transitionTimerRef.current");
     expect(appSource).toContain("window.clearTimeout(transitionTimerRef.current)");
-    expect(appSource).toContain("adjacentView(useUIStore.getState().view, dir)");
+    expect(appSource).toContain("adjacentView(useUIStore.getState().view, action.dir)");
     expect(motionSource).toContain(".view-stage");
     expect(motionSource).toContain(".view-snapshot");
     expect(motionSource).toContain(".view-content");

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CmdPageMenu } from "@/components/CmdPageMenu";
 import { CmdShortcutBar } from "@/components/CmdShortcutBar";
+import type { AppAction } from "@/lib/appActions";
 import { type KnobDir, knobFrame } from "@/lib/knobGeometry";
 import type { ViewMotion } from "@/lib/nav";
 import { useCmdKnob } from "@/lib/useCmdKnob";
@@ -26,11 +27,14 @@ const CENTER: { x: number; y: number } = { x: 0, y: 0 };
  */
 export function CmdKnob({
   onNavigate,
+  dispatchAction,
 }: {
-  /** 페이지 메뉴 칩 클릭 시 슬라이드 전환(App의 navigateView). 레버 방향 발사는 dispatchHotkey 경로 유지. */
+  /** 페이지 메뉴 칩 클릭 시 슬라이드 전환(App의 navigateView). */
   onNavigate: (view: View, motion: ViewMotion) => void;
+  /** 레버 방향 발사 경로 — fire가 콤보를 AppAction으로 해석해 직행 디스패치(ADR-0011). */
+  dispatchAction: (action: AppAction) => void;
 }) {
-  const { visible, origin, dirEnabled, fire } = useCmdKnob();
+  const { visible, origin, dirEnabled, fire } = useCmdKnob(dispatchAction);
   const [offset, setOffset] = useState(CENTER);
   const [armed, setArmed] = useState<KnobDir | null>(null);
   const [dragging, setDragging] = useState(false);

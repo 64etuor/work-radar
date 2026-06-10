@@ -23,8 +23,9 @@ import { cn } from "@/components/ui/cn";
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
+import { type AppAction } from "@/lib/appActions";
 import { fontFamilyFor } from "@/lib/fontPresets";
-import { adjacentView, NAV_BY_VIEW } from "@/lib/nav";
+import { adjacentView } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
 import { useViewShortcuts } from "@/lib/useViewShortcuts";
 import { useUIStore, type View } from "@/store";
@@ -130,24 +131,35 @@ export default function App() {
     document.documentElement.style.setProperty("--font-sans", fontFamilyFor(font));
   }, [font]);
 
+  // 단축키/knob 공용 액션 실행 단일 chokepoint(ADR-0011). AppAction은 타입드라 무효 View
+  // 캐스팅 경로가 없다 — resolveCombo/actionForKeymapKey가 등록 액션만 생산.
+  const dispatchAction = useCallback(
+    (action: AppAction) => {
+      switch (action.kind) {
+        case "toggle-calendar":
+          setCalendarOpen(!calendarOpen);
+          break;
+        case "toggle-inbox":
+          setInboxOpen(!inboxOpen);
+          break;
+        case "navigate":
+          navigateView(action.view, "neutral");
+          break;
+        case "adjacent":
+          navigateView(
+            adjacentView(useUIStore.getState().view, action.dir),
+            action.dir > 0 ? "forward" : "back",
+          );
+          break;
+      }
+    },
+    [calendarOpen, inboxOpen, setCalendarOpen, setInboxOpen, navigateView],
+  );
+
   // per-view 단축키 (Phase 18 #7) — 입력 비포커스 + 팔레트 닫힘일 때만 활성.
   // Cmd+←/→ → NAV_ITEMS 순서 기준 인접 뷰 전환(P3).
   const keymap = useNavKeymap();
-  useViewShortcuts(
-    keymap.data,
-    !paletteOpen,
-    (action) => {
-      if (action === "calendar") setCalendarOpen(!calendarOpen);
-      else if (action === "inbox") setInboxOpen(!inboxOpen);
-      // 알 수 없는 액션 키는 무시 — View로 캐스팅해 goTo하면 store view가 무효값으로 오염돼
-      // adjacentView가 no-op이 된다(Cmd+←/→ 사망). 방어선: 등록된 view만 네비.
-      else if (action in NAV_BY_VIEW) navigateView(action as View, "neutral");
-    },
-    (dir) => {
-      const motion = dir > 0 ? "forward" : "back";
-      navigateView(adjacentView(useUIStore.getState().view, dir), motion);
-    },
-  );
+  useViewShortcuts(keymap.data, !paletteOpen, dispatchAction);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -220,7 +232,7 @@ export default function App() {
       <ToastHost />
       {/* 전역 오락실 조이스틱 — 트리거 hold 시 커서 위치에 등장(useCmdKnob). 페이지 메뉴 칩 클릭은
           navigateView로 슬라이드 전환(레버 ←/→와 동일 효과). */}
-      <CmdKnob onNavigate={navigateView} />
+      <CmdKnob onNavigate={navigateView} dispatchAction={dispatchAction} />
     </div>
   );
 }

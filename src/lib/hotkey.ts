@@ -69,9 +69,12 @@ export interface ParsedHotkey {
 }
 
 /**
- * "Cmd+Left" 류 spec → 합성 KeyboardEvent에 넣을 필드. modifier가 하나도 없거나
+ * "Cmd+Left" 류 spec → KeyboardEvent 필드. modifier가 하나도 없거나
  * 키 라벨이 없으면 null(eventToHotkeySpec의 역). 단일 문자는 소문자 e.key로,
  * 특수 라벨은 LABEL_TO_KEY로 복원한다(F1~F12는 그대로).
+ *
+ * ADR-0011로 유일 호출자(dispatchHotkey)가 삭제돼 현재 프로덕션 소비자 없음 —
+ * eventToHotkeySpec의 역함수 유틸로 의도적으로 보존(테스트 유지).
  */
 export function parseHotkeySpec(spec: string): ParsedHotkey | null {
   const parts = spec
