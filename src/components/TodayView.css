@@ -864,11 +864,11 @@
 
 /* ── 우측 완료 이력 패널 (HistoryRail) ─────────────────────────────
  *
- * RetroView와 동일한 시각 언어:
+ * Weekly Review 회고 섹션과 동일한 시각 언어:
  *   - section head: mono uppercase 11px(`--font-mono` letter-spacing 0.08em)
  *   - date label: mono 11px subtle
  *   - hairline border-light 분리선, hover/focus에 옅은 bg-soft tint
- * 좁은 화면(<1280)에선 grid에서 빠지고 hidden — 회고는 RetroView로 유도.
+ * 좁은 화면(<1280)에선 grid에서 빠지고 hidden — 회고는 Weekly Review로 유도.
  */
 
 .today-history {
@@ -1016,7 +1016,7 @@
  * 720–1040: 좌트레이+우캔버스 2열 그리드를 상단 띠+캔버스 1열로 변경.
  * 트레이는 grid auto-fill로 카드형 칩 — 시간축 가로 스크롤 0 확보.
  */
-/* 1280 미만: 우측 완료 이력 패널 숨김(2단으로 회귀). 회고는 RetroView로 유도. */
+/* 1280 미만: 우측 완료 이력 패널 숨김(2단으로 회귀). 회고는 Weekly Review로 유도. */
 @media (max-width: 1279px) {
   .today-main {
     grid-template-columns: 210px minmax(560px, 1fr);

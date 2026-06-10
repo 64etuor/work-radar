@@ -22,7 +22,7 @@ export function KindBadge({ kind, className }: { kind: Kind; className?: string 
 }
 
 /**
- * Read-only kind + area 칩 페어 (RetroView / RoutineTrackingView 등 비편집 컨텍스트용).
+ * Read-only kind + area 칩 페어 (Weekly Review / RoutineTrackingView 등 비편집 컨텍스트용).
  * 인터랙티브 편집은 [[CardTagEditor]] 사용. area 색은 사용자 Life Wheel 팔레트에서 가져온다.
  */
 export function KindAreaChips({
