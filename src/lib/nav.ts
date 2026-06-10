@@ -6,7 +6,6 @@ import {
   Gauge,
   GitCompare,
   GitPullRequest,
-  History,
   LayoutGrid,
   type LucideIcon,
   Repeat,
@@ -22,7 +21,7 @@ import type { View } from "@/store";
  *
  * 그룹핑(consolidation): 네비를 의미 단위로 묶는다 — 실제 capability 삭제는 없다(보수적).
  *   운영(operate)  : board / today — 매일 쓰는 결정·실행 표면 (Inbox는 에이전트 바 트레이로 이전 — EXTRA_ACTIONS)
- *   리뷰(review)   : weekly / retro / routines    — 돌아보기·집계
+ *   리뷰(review)   : weekly / routines    — 돌아보기·집계
  *   코드(code)     : radar / worktree / jobs      — PR·워크트리·에이전트 잡
  *   외부(connect)  : skills                       — 스킬 레지스트리
  */
@@ -72,18 +71,10 @@ export const NAV_ITEMS: NavItem[] = [
   {
     view: "weekly",
     label: "Weekly Review",
-    search: "weekly review 주간 회고 집계 처리량 추세",
+    search: "weekly review 주간 회고 집계 처리량 추세 임팩트 보관함 archive 복원",
     icon: CalendarRange,
     group: "review",
     defaultShortcut: "Cmd+4",
-  },
-  {
-    view: "retro",
-    label: "회고 / 보관함",
-    search: "retro 회고 완료 임팩트 보관함 archive 복원 regret",
-    icon: History,
-    group: "review",
-    defaultShortcut: "Cmd+5",
   },
   {
     view: "routines",

@@ -14,7 +14,6 @@ import HermesView from "@/components/HermesView";
 import { JobsView } from "@/components/jobs/JobsView";
 import { NewsTicker } from "@/components/news/NewsTicker";
 import { PrRadarView } from "@/components/PrRadarView";
-import { RetroView } from "@/components/RetroView";
 import { RoutineTrackingView } from "@/components/RoutineTrackingView";
 import { SettingsView } from "@/components/SettingsView";
 import { SkillsView } from "@/components/SkillsView";
@@ -44,7 +43,6 @@ function renderView(renderedView: View) {
   if (renderedView === "settings") return <SettingsView />;
   if (renderedView === "today") return <TodayView />;
   if (renderedView === "weekly") return <WeeklyView />;
-  if (renderedView === "retro") return <RetroView />;
   if (renderedView === "routines") return <RoutineTrackingView />;
   if (renderedView === "radar") return <PrRadarView />;
   if (renderedView === "worktree") return <WorktreeView />;
