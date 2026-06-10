@@ -1,0 +1,43 @@
+src/components/settings/project-card/ProjectCalendarColorControl.tsx
+  s_d8557d82b81ed1::t_050bbe87e49d93 1-108
+src/components/settings/ProjectCard.tsx
+  s_d8557d82b81ed1::t_9d13dcba03bab0 25
+  s_360a7df630281b::t_0593729df4d6e0 10,12,20-24
+  s_d8557d82b81ed1::t_2ea8e79df104ea 16
+scripts/design-gate-baseline.json
+  s_d8557d82b81ed1::t_2a7b16b576dc64 33
+src/components/settings/project-card/ProjectIdentityEditor.tsx
+  s_d8557d82b81ed1::t_ef4546653a0a76 1-104
+src/components/settings/project-card/RepoRow.tsx
+  s_d8557d82b81ed1::t_83a550c602f5ec 1-53
+src/components/settings/project-card/NotionDbEditor.tsx
+  s_d8557d82b81ed1::t_02eaa25e47052b 1-5,7-151
+  s_d8557d82b81ed1::t_2ea8e79df104ea 6
+src/components/settings/project-card/BouleConfigControls.tsx
+  s_d8557d82b81ed1::t_2ea8e79df104ea 1,4
+  s_d8557d82b81ed1::t_feb7c894e57b98 2-3,5-318
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7718006e5852d7d5e7aae2905b76f2d186d0ee7a",
+  "prompts": {},
+  "sessions": {
+    "s_360a7df630281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad8d0f5f-9b75-4266-aefc-43b1769e93e9",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_d8557d82b81ed1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4ea5c81-1428-45e3-92ea-b20c2056ed7b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
