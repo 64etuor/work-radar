@@ -305,7 +305,8 @@ function readableTextColor(hex: string): string {
   return luminance < 0.48 ? "#ffffff" : "#212121";
 }
 
-function parseAreaTagKeys(raw: string | null, primary: string | null): string[] {
+/** 신호의 area 태그 키 배열 해석. areaTags(JSON 배열) 우선, 없으면 primary area 단일. 공용. */
+export function parseAreaTagKeys(raw: string | null, primary: string | null): string[] {
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
