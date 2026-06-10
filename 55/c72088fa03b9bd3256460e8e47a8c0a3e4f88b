@@ -1,0 +1,21 @@
+governance/src/decision/liveReviewer.ts
+  s_354e94b88ccc74::t_5cd141d441b786 99-106,109-110
+docs/decisions.md
+  s_354e94b88ccc74::t_85cc137b03bee9 585
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "55c72088fa03b9bd3256460e8e47a8c0a3e4f88b",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
