@@ -564,6 +564,37 @@
   vertical-align: -1px;
 }
 
+/*
+ * 메모 인디케이터 — 제목 앞 작은 노트 아이콘(메모 존재 신호) + 블록이 충분히 높으면(≈56px)
+ * 본문 1줄 스니펫. 짧은 블록은 아이콘만으로 "메모 있음"을 알린다(TimelineBlock showSnippet).
+ */
+.tl-block-memo-icon {
+  width: 10px;
+  height: 10px;
+  display: inline;
+  margin-right: 3px;
+  vertical-align: -1px;
+  color: var(--color-wr-muted);
+}
+
+.tl-block-memo {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--color-wr-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 작은 블록(compact/ultra)에선 노트 아이콘을 한 단계 더 축소. */
+.tl-block--compact .tl-block-memo-icon,
+.tl-block--ultra .tl-block-memo-icon {
+  width: 9px;
+  height: 9px;
+  margin-right: 2px;
+}
+
 .tl-block-signal {
   background: color-mix(in srgb, var(--tl-accent, var(--color-today-signal)) 16%, #fff);
   border-color: color-mix(in srgb, var(--color-today-signal) 45%, transparent);

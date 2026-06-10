@@ -19,6 +19,8 @@ type Props = {
   date: string;
   today: string;
   boxes: LayoutBox[];
+  /** blockId → 메모 body. 블록 위 노트 아이콘/스니펫 표시용(없으면 표시 안 함). */
+  memoByBlockId?: Map<string, string>;
   onBlockClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
   /** ✓ 체크 토글(signal/routine). 부모(TodayView)가 block.kind 분기로 mutate dispatch. */
   onToggleDone?: (box: LayoutBox, done: boolean) => void;
@@ -46,6 +48,7 @@ export function TimelineCanvas({
   date,
   today,
   boxes,
+  memoByBlockId,
   onBlockClick,
   onToggleDone,
   pointerYRef,
@@ -147,6 +150,7 @@ export function TimelineCanvas({
             <TimelineBlock
               key={b.id}
               box={b}
+              memo={memoByBlockId?.get(b.block.id)}
               onClick={onBlockClick}
               onToggleDone={onToggleDone}
               suppressDragTransform={suppressBlockTransform}

@@ -36,6 +36,7 @@ import {
   localToday,
   useCalendarEvents,
   useProjects,
+  useTimelineNotesForDate,
   useToday,
   useTodayOverview,
   useTodayRoutines,
@@ -46,7 +47,7 @@ import {
 import { unwrap } from "@/lib/query/client";
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
-import { buildTodayBlocks } from "@/lib/todayBlocks";
+import { blockNoteTarget, buildTodayBlocks, noteTargetMapKey } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
 
 /**
@@ -97,6 +98,24 @@ export function TodayView() {
     [rail, allEvents, routineList, date],
   );
   const boxes = useMemo(() => computeLayout(blocks), [blocks]);
+
+  // 블록 위 메모 표시 — 날짜별 메모 1회 조회(N+1 회피) 후 blockId → body 맵으로 환원.
+  // EventPopover와 동일한 blockNoteTarget 키를 써서 표시/편집이 항상 같은 메모를 가리킨다.
+  const notesQ = useTimelineNotesForDate(date);
+  const memoByBlockId = useMemo(() => {
+    const byTarget = new Map<string, string>();
+    for (const n of notesQ.data ?? []) {
+      if (n.body.trim()) byTarget.set(noteTargetMapKey(n.targetKind, n.targetId), n.body);
+    }
+    const m = new Map<string, string>();
+    for (const box of boxes) {
+      const t = blockNoteTarget(box.block);
+      if (!t) continue;
+      const body = byTarget.get(noteTargetMapKey(t.targetKind, t.targetId));
+      if (body) m.set(box.block.id, body);
+    }
+    return m;
+  }, [boxes, notesQ.data]);
 
   const [popover, setPopover] = useState<{
     box: LayoutBox;
@@ -332,6 +351,7 @@ export function TodayView() {
                 date={date}
                 today={today}
                 boxes={boxes}
+                memoByBlockId={memoByBlockId}
                 onBlockClick={handleBlockClick}
                 onToggleDone={handleBlockToggleDone}
                 pointerYRef={canvasPointerYRef}

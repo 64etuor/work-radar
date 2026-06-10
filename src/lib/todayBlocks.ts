@@ -1,6 +1,34 @@
-import type { CalendarEvent, RoutineToday, WorkSignal } from "@/bindings";
+import type { CalendarEvent, RoutineToday, TimelineNoteTarget, WorkSignal } from "@/bindings";
 
 import type { TimedBlock } from "./timelineLayout";
+
+/**
+ * 타임라인 블록 → timeline_notes 타깃(target_kind, target_id) 매핑.
+ * EventPopover(메모 편집)와 TodayView(블록 위 메모 표시)가 같은 키를 쓰도록 단일 정본.
+ * 메모를 가질 수 없는 블록(미동기화 event 등)은 null.
+ *   - signal: id 본체(`signal:` 접두사 제거)
+ *   - routine: routineId
+ *   - event: `{calendarId}:{linkedEventId}` (둘 다 있을 때만)
+ */
+export function blockNoteTarget(
+  block: Pick<TimedBlock, "kind" | "id" | "routineId" | "linkedEventId" | "calendarId">,
+): { targetKind: TimelineNoteTarget; targetId: string } | null {
+  if (block.kind === "signal") {
+    return { targetKind: "signal", targetId: block.id.replace(/^signal:/, "") };
+  }
+  if (block.kind === "routine" && block.routineId) {
+    return { targetKind: "routine", targetId: block.routineId };
+  }
+  if (block.kind === "event" && block.linkedEventId && block.calendarId) {
+    return { targetKind: "event", targetId: `${block.calendarId}:${block.linkedEventId}` };
+  }
+  return null;
+}
+
+/** 메모 룩업 맵 키 — (target_kind, target_id) 한 쌍을 NUL로 결합(targetId가 ':'를 포함해도 안전). */
+export function noteTargetMapKey(targetKind: TimelineNoteTarget, targetId: string): string {
+  return `${targetKind}\u0000${targetId}`;
+}
 
 /**
  * Today×Timeline blocks 합성 (spec §4 데이터·§D8 카드 정본).

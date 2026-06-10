@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import { Repeat } from "lucide-react";
+import { Repeat, StickyNote } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockStyle";
@@ -11,6 +11,8 @@ import { eventBlockApiId } from "@/lib/todayBlocks";
 
 type Props = {
   box: LayoutBox;
+  /** 이 블록에 달린 메모 body(없으면 undefined). 있으면 제목 앞 노트 아이콘 + (공간 되면) 1줄 스니펫. */
+  memo?: string;
   onClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
   /**
    * 좌상단 ✓ 체크 토글. signal/routine 블록에만 표시 — event는 done 개념 없음.
@@ -20,6 +22,12 @@ type Props = {
   suppressDragTransform?: boolean;
   disableLayoutTransition?: boolean;
 };
+
+/** 메모 첫 줄만(스니펫). 줄바꿈 이후는 버리고 CSS ellipsis가 가로 넘침 처리. */
+function memoSnippet(memo: string): string {
+  const first = memo.split("\n").find((l) => l.trim().length > 0);
+  return (first ?? "").trim();
+}
 
 function hhmm(iso: string): string {
   const d = new Date(iso);
@@ -143,12 +151,14 @@ function ResizeHandle({
  */
 export function TimelineBlock({
   box,
+  memo,
   onClick,
   onToggleDone,
   suppressDragTransform = false,
   disableLayoutTransition = false,
 }: Props) {
   const { block, topPx, heightPx, leftPct, widthPct } = box;
+  const hasMemo = Boolean(memo && memo.trim());
   // 실제 endISO−startISO 그대로 — 15분 floor는 dispatcher(useTimelineDnd) 책임.
   const durationMin = Math.round(
     (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) / 60000,
@@ -162,6 +172,9 @@ export function TimelineBlock({
    */
   const compact = heightPx < 36;
   const ultraCompact = heightPx < 22;
+  // 스니펫(메모 1줄)은 normal 모드 + 시간·제목 두 줄 위에 한 줄 더 들어갈 높이(≈56px)일 때만.
+  // 그보다 짧으면 제목 앞 노트 아이콘만으로 메모 존재를 표시(공간 부족 시 본문 생략).
+  const showSnippet = hasMemo && !compact && heightPx >= 56;
   const drag = useDraggable({
     id: `block:${block.id}`,
     data: dragDataForBox(box, durationMin),
@@ -178,6 +191,7 @@ export function TimelineBlock({
     block.calendarLabel || block.calendarId
       ? `(${block.calendarLabel || block.calendarId})`
       : `(${block.kind})`,
+    hasMemo ? "메모 있음" : null,
     isDone ? "완료됨" : null,
   ]
     .filter(Boolean)
@@ -227,8 +241,10 @@ export function TimelineBlock({
         </div>
         <div className="tl-block-title">
           {block.kind === "routine" && <Repeat className="tl-block-icon" aria-hidden />}
+          {hasMemo && <StickyNote className="tl-block-memo-icon" aria-hidden />}
           {block.title}
         </div>
+        {showSnippet && memo && <div className="tl-block-memo">{memoSnippet(memo)}</div>}
       </button>
       {isCheckable && onToggleDone && (
         // 블록 button의 형제로 배치(중첩 interactive 회피) — pointerdown으로 dnd-kit

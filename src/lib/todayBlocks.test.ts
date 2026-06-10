@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTodayBlocks, eventBlockApiId } from "./todayBlocks";
+import {
+  blockNoteTarget,
+  buildTodayBlocks,
+  eventBlockApiId,
+  noteTargetMapKey,
+} from "./todayBlocks";
 
 const DATE = "2026-05-28";
 
@@ -429,5 +434,57 @@ describe("eventBlockApiId", () => {
     expect(id).toBe("evt-y");
     expect(id).not.toContain("cal-x");
     expect(id).not.toContain(":");
+  });
+});
+
+describe("blockNoteTarget", () => {
+  it("maps a signal block to its bare id", () => {
+    expect(blockNoteTarget({ kind: "signal", id: "signal:s1", calendarId: "" })).toEqual({
+      targetKind: "signal",
+      targetId: "s1",
+    });
+  });
+
+  it("maps a routine block to its routineId", () => {
+    expect(
+      blockNoteTarget({ kind: "routine", id: "routine:r1", routineId: "r1", calendarId: "" }),
+    ).toEqual({ targetKind: "routine", targetId: "r1" });
+  });
+
+  it("returns null for a routine block missing routineId", () => {
+    expect(blockNoteTarget({ kind: "routine", id: "routine:r1", calendarId: "" })).toBeNull();
+  });
+
+  it("maps an event block to calendarId:linkedEventId", () => {
+    expect(
+      blockNoteTarget({
+        kind: "event",
+        id: "event:cal-1:evt-9",
+        calendarId: "cal-1",
+        linkedEventId: "evt-9",
+      }),
+    ).toEqual({ targetKind: "event", targetId: "cal-1:evt-9" });
+  });
+
+  it("returns null for an event block without a linked event", () => {
+    expect(
+      blockNoteTarget({ kind: "event", id: "event:cal-1:evt-9", calendarId: "cal-1" }),
+    ).toBeNull();
+  });
+
+  it("produces a stable map key that round-trips a stored note target", () => {
+    // 표시(blockNoteTarget) ↔ 저장(note.targetKind/targetId) 키가 일치해야 메모가 블록에 붙는다.
+    const target = blockNoteTarget({
+      kind: "event",
+      id: "event:cal-1:evt-9",
+      calendarId: "cal-1",
+      linkedEventId: "evt-9",
+    });
+    expect(target).not.toBeNull();
+    const fromBlock = noteTargetMapKey(target!.targetKind, target!.targetId);
+    const fromNote = noteTargetMapKey("event", "cal-1:evt-9");
+    expect(fromBlock).toBe(fromNote);
+    // 다른 타깃끼리는 충돌하지 않는다.
+    expect(noteTargetMapKey("signal", "a")).not.toBe(noteTargetMapKey("routine", "a"));
   });
 });
