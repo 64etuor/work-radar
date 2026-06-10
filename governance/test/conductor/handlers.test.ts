@@ -21,8 +21,6 @@ import {
   ensureCleanCodexHome,
   parseCmuxRef,
   firstTerminalSurface,
-  findGroupRef,
-  projectLabelFromRepoRoot,
   SESSION_DENIED_TOOLS,
   type FsLike,
   type SpawnResultLike,
@@ -734,19 +732,14 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
   });
 });
 
-describe("makeLiveAdapter — per-project cmux folder grouping", () => {
-  // fake cmux/git: new-workspace → workspace:7; tree → one terminal surface:42 in workspace:7;
-  // workspace-group list → the provided groups; everything else → ok. Records all calls.
-  const makeFake = (groupsJson: string, failGroupCmds = false) => {
+describe("makeLiveAdapter — sessions spawn as visible cmux workspaces, no grouping", () => {
+  // fake cmux/git: new-workspace → workspace:7; tree → one terminal surface:42 in workspace:7.
+  const makeFake = () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const spawn = (cmd: string, args: string[]): SpawnResultLike => {
       calls.push({ cmd, args });
       if (cmd === "cmux" && args[0] === "new-workspace")
         return { status: 0, stdout: "OK workspace:7\n", stderr: "" };
-      if (cmd === "cmux" && args[0] === "workspace-group" && args[1] === "list")
-        return failGroupCmds
-          ? { status: 1, stdout: "", stderr: "no such command" }
-          : { status: 0, stdout: groupsJson, stderr: "" };
       if (cmd === "cmux" && args[0] === "tree")
         return {
           status: 0,
@@ -782,15 +775,14 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
       serverEntrypoint: "/install/governance/src/mcp/server.ts",
       completeEntrypoint: "/install/governance/src/cli/boule.ts",
       codexAuthPath: "/op/.codex/auth.json",
-      env: { OPENAI_API_KEY: "test-codex-key" }, // env auth ⇒ ensureCleanCodexHome skips the symlink
+      env: { OPENAI_API_KEY: "test-codex-key" },
       worktreesRoot: ".boule-worktrees",
       cmuxCmd: "cmux",
       governanceWorkspace: "/repo/governance/workspace",
-      projectLabel: "work-radar",
     });
 
-  it("CREATES the folder anchored on the new workspace when none matches the project label", async () => {
-    const fake = makeFake(JSON.stringify({ groups: [] }));
+  it("spawns a visible cmux workspace and issues NO workspace-group commands (grouping removed)", async () => {
+    const fake = makeFake();
     const sess = await mkAdapter(fake).spawnSession({
       worktreePath: "/wt/s0",
       stepIndex: 0,
@@ -798,53 +790,8 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
       prompt: "P",
     });
     expect(sess.surface).toBe("surface:42");
-    const create = fake.calls.find(
-      (c) => c.args[0] === "workspace-group" && c.args[1] === "create",
-    );
-    expect(create).toBeTruthy();
-    expect(create!.args).toEqual([
-      "workspace-group",
-      "create",
-      "--name",
-      "work-radar",
-      "--from",
-      "workspace:7",
-    ]);
-    expect(fake.calls.some((c) => c.args[1] === "add")).toBe(false);
-  });
-
-  it("REUSES (adds the workspace to) an existing folder matching the project label", async () => {
-    const fake = makeFake(
-      JSON.stringify({ groups: [{ name: "work-radar", ref: "workspace_group:5" }] }),
-    );
-    const sess = await mkAdapter(fake).spawnSession({
-      worktreePath: "/wt/s0",
-      stepIndex: 0,
-      taskId: "evt_t0",
-      prompt: "P",
-    });
-    expect(sess.surface).toBe("surface:42");
-    const add = fake.calls.find((c) => c.args[0] === "workspace-group" && c.args[1] === "add");
-    expect(add!.args).toEqual([
-      "workspace-group",
-      "add",
-      "--group",
-      "workspace_group:5",
-      "--workspace",
-      "workspace:7",
-    ]);
-    expect(fake.calls.some((c) => c.args[1] === "create")).toBe(false);
-  });
-
-  it("grouping is BEST-EFFORT: a workspace-group failure still returns the session surface", async () => {
-    const fake = makeFake("", true);
-    const sess = await mkAdapter(fake).spawnSession({
-      worktreePath: "/wt/s0",
-      stepIndex: 0,
-      taskId: "evt_t0",
-      prompt: "P",
-    });
-    expect(sess.surface).toBe("surface:42"); // loop not broken by grouping failure
+    expect(fake.calls.some((c) => c.args[0] === "new-workspace")).toBe(true);
+    expect(fake.calls.some((c) => c.args[0] === "workspace-group")).toBe(false);
   });
 });
 
@@ -900,22 +847,6 @@ describe("cmux output parsing (real-contract helpers — live-loop de-risk)", ()
   });
   it("firstTerminalSurface throws on invalid JSON", () => {
     expect(() => firstTerminalSurface("not json", "workspace:7")).toThrow(/invalid JSON/);
-  });
-  it("findGroupRef returns the ref of a group matching the name, else null", () => {
-    const list = JSON.stringify({
-      groups: [
-        { name: "other", ref: "workspace_group:1" },
-        { name: "work-radar", ref: "workspace_group:5" },
-      ],
-    });
-    expect(findGroupRef(list, "work-radar")).toBe("workspace_group:5");
-    expect(findGroupRef(list, "absent")).toBeNull();
-    expect(findGroupRef("not json", "work-radar")).toBeNull();
-    expect(findGroupRef(JSON.stringify({ groups: [] }), "work-radar")).toBeNull();
-  });
-  it("projectLabelFromRepoRoot returns the repo dir basename (trailing slashes trimmed)", () => {
-    expect(projectLabelFromRepoRoot("/Users/me/private_project/work-radar")).toBe("work-radar");
-    expect(projectLabelFromRepoRoot("/tmp/boule-live-smoke/")).toBe("boule-live-smoke");
   });
 });
 

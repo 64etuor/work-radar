@@ -95,10 +95,6 @@ export interface LiveAdapterDeps {
   codexAuthPath: string;
   /** Process env — the OPENAI_API_KEY/CODEX_API_KEY check (env auth ⇒ no auth.json symlink needed). */
   env: Record<string, string | undefined>;
-  /** cmux workspace-group (sidebar folder) name. Each spawned session's workspace is grouped under
-   *  it — reused if the folder already exists, created otherwise — so a project's sessions stay
-   *  visually separated. Omitted ⇒ no grouping. The server defaults it to the repoRoot basename. */
-  projectLabel?: string;
   log?: (line: string) => void; // PII-safe (command names + status only)
 }
 
@@ -359,36 +355,9 @@ export function firstTerminalSurface(treeJson: string, workspaceRef: string): st
   throw new Error(`conductor: cmux tree has no terminal surface for ${workspaceRef}`);
 }
 
-/** Find an existing cmux workspace-group ref by name from `cmux workspace-group list --json`.
- *  Returns null when absent or the JSON is unparseable (the caller then creates the group). */
-export function findGroupRef(listJson: string, name: string): string | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(listJson);
-  } catch {
-    return null;
-  }
-  const rec = (x: unknown): Record<string, unknown> =>
-    x && typeof x === "object" ? (x as Record<string, unknown>) : {};
-  const groups = rec(parsed).groups;
-  if (!Array.isArray(groups)) return null;
-  for (const g of groups) {
-    const node = rec(g);
-    if (node.name === name && typeof node.ref === "string" && node.ref.length > 0) return node.ref;
-  }
-  return null;
-}
-
-/** Per-project cmux folder label = the repo dir's basename, so every session spawned for a given
- *  designated local repo groups under one collapsible sidebar folder (personal vs work stay
- *  visually separated). Trailing slashes trimmed; empty ⇒ the original string. */
-export function projectLabelFromRepoRoot(repoRoot: string): string {
-  const parts = repoRoot.replace(/\/+$/, "").split("/");
-  return parts[parts.length - 1] || repoRoot;
-}
-
 /** Build a live adapter that runs real `git worktree add --detach` + `cmux new-workspace --command`
- *  + per-project `cmux workspace-group` + `cmux tree --json`. Non-determinism (spawn/fs) is injected,
+ *  + `cmux tree --json` — every session is a VISIBLE cmux workspace pane (observable, never a
+ *  detached background process). Non-determinism (spawn/fs) is injected,
  *  so the unit test asserts the exact command sequence with a fake spawn — no real processes. Each
  *  command is bounded (one shot, no retry loop) and surfaces a terminal failure (design §6). */
 export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
@@ -449,37 +418,6 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
         command,
       ]);
       const workspaceRef = parseCmuxRef(open.stdout, "workspace");
-      // Group this workspace under a per-project cmux folder: reuse the folder if it already exists,
-      // else create it anchored on this workspace. Best-effort — the session is already launched, so
-      // a grouping failure (e.g. older cmux without workspace-group) must NOT break the loop.
-      if (deps.projectLabel) {
-        try {
-          const list = run(deps.cmuxCmd, ["workspace-group", "list", "--json"]);
-          const groupRef = findGroupRef(list.stdout, deps.projectLabel);
-          if (groupRef)
-            run(deps.cmuxCmd, [
-              "workspace-group",
-              "add",
-              "--group",
-              groupRef,
-              "--workspace",
-              workspaceRef,
-            ]);
-          else
-            run(deps.cmuxCmd, [
-              "workspace-group",
-              "create",
-              "--name",
-              deps.projectLabel,
-              "--from",
-              workspaceRef,
-            ]);
-        } catch (e) {
-          deps.log?.(
-            `conductor: workspace-group grouping skipped (best-effort): ${(e as Error).message.slice(0, 120)}`,
-          );
-        }
-      }
       // Resolve the workspace's terminal surface so the Observer can reconcile this session by ref.
       // Use `--all` (every window) to match the Observer's scope — the new workspace may land in a
       // window outside the default view; firstTerminalSurface throws (terminal failure) if absent.

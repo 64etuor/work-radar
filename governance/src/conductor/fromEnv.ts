@@ -12,7 +12,6 @@ import {
   stubAdapter,
   makeLiveAdapter,
   ensureCleanCodexHome,
-  projectLabelFromRepoRoot,
   type ConductorAdapter,
   type SpawnSyncLike,
   type FsLike,
@@ -64,7 +63,6 @@ export function makeConductorAdapterFromEnv(
     completeEntrypoint: cliEntrypoint(),
     codexAuthPath,
     env,
-    projectLabel: projectLabelFromRepoRoot(paths.repoRoot),
     log: (line) => process.stderr.write(`${line}\n`),
   });
 }
