@@ -1,36 +1,7 @@
-src-tauri/src/skills/tests/workspace.rs
-  s_ac5b671ce9b440::t_525eabfe658db3 1-96
-src-tauri/src/skills/tests/scan.rs
-  s_ac5b671ce9b440::t_e0c953f2ed37bd 1-504
-src-tauri/src/skills/tests/mod.rs
-  s_ac5b671ce9b440::t_c6c792da739f1d 1-124
-src-tauri/src/commands/notion.rs
-  s_ac5b671ce9b440::t_26e0c87bcaac28 431-435,437,441-442,472-484
-src-tauri/src/skills/tests/tags.rs
-  s_ac5b671ce9b440::t_077e01a8b52c5c 1-182
-src-tauri/src/skills/tests/installer.rs
-  s_ac5b671ce9b440::t_d80c68fbf27d39 1-310
-src-tauri/src/skills/tests/roots.rs
-  s_ac5b671ce9b440::t_679406cd4fe9fa 1-177
-src-tauri/src/skills/tests/recursion.rs
-  s_ac5b671ce9b440::t_1b0d3446994a66 1-145
-src-tauri/src/governance/boule_config.rs
-  s_ac5b671ce9b440::t_4d1fa56d4bf0fd 601-622
-  s_ac5b671ce9b440::t_f3dd0f141360e8 684-686,688-691
 ---
 {
   "schema_version": "authorship/3.0.0",
   "git_ai_version": "1.5.6",
   "base_commit_sha": "5663d2b7b22101d982ea798a70a5cf83200b7434",
-  "prompts": {},
-  "sessions": {
-    "s_ac5b671ce9b440": {
-      "agent_id": {
-        "tool": "claude",
-        "id": "c13ba734-c2ee-46c2-ac97-5c53f3e7113d",
-        "model": "claude-fable-5"
-      },
-      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
-    }
-  }
+  "prompts": {}
 }
