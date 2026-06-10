@@ -23,6 +23,9 @@ pub struct HermesSessionRow {
     pub archived: i32,
     #[sqlx(try_from = "i64")]
     pub message_count: i32,
+    /// 바인딩된 프로젝트(없으면 None). 이 프로젝트의 DB-resolved 레포의 .boule/mcp.json이
+    /// 세션 spawn 시 boule-governance MCP로 주입된다.
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
@@ -50,7 +53,7 @@ pub(crate) async fn create_inner(
     sqlx::query_as(
         "INSERT INTO hermes_session (id, name) VALUES (?1, ?2) \
          RETURNING id, name, status, cwd, created_at, updated_at, last_active_at, archived, \
-         0 AS message_count",
+         0 AS message_count, project_id",
     )
     .bind(id)
     .bind(name)
@@ -62,7 +65,7 @@ pub(crate) async fn create_inner(
 pub(crate) async fn get_inner(db: &Db, id: &str) -> Result<Option<HermesSessionRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT s.id, s.name, s.status, s.cwd, s.created_at, s.updated_at, s.last_active_at, \
-         s.archived, COUNT(m.id) AS message_count \
+         s.archived, COUNT(m.id) AS message_count, s.project_id \
          FROM hermes_session s \
          LEFT JOIN hermes_message m ON m.session_id = s.id \
          WHERE s.id = ?1 \
@@ -76,7 +79,7 @@ pub(crate) async fn get_inner(db: &Db, id: &str) -> Result<Option<HermesSessionR
 pub(crate) async fn list_inner(db: &Db) -> Result<Vec<HermesSessionRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT s.id, s.name, s.status, s.cwd, s.created_at, s.updated_at, s.last_active_at, \
-         s.archived, COUNT(m.id) AS message_count \
+         s.archived, COUNT(m.id) AS message_count, s.project_id \
          FROM hermes_session s \
          LEFT JOIN hermes_message m ON m.session_id = s.id \
          WHERE s.archived = 0 \
@@ -94,6 +97,49 @@ pub(crate) async fn rename_inner(db: &Db, id: &str, name: &str) -> Result<(), sq
         .execute(db)
         .await?;
     Ok(())
+}
+
+/// 세션 ↔ 프로젝트 바인딩. Some이면 projects 존재 검증(없으면 not_found), None이면 해제.
+pub(crate) async fn set_project_inner(
+    db: &Db,
+    id: &str,
+    project_id: Option<&str>,
+) -> Result<(), AppError> {
+    if let Some(pid) = project_id {
+        let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM projects WHERE id = ?1")
+            .bind(pid)
+            .fetch_optional(db)
+            .await?;
+        if exists.is_none() {
+            return Err(AppError::not_found(
+                "projects.not_found",
+                "project not found",
+            ));
+        }
+    }
+    let res = sqlx::query(
+        "UPDATE hermes_session SET project_id = ?2, updated_at = datetime('now') WHERE id = ?1",
+    )
+    .bind(id)
+    .bind(project_id)
+    .execute(db)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::not_found(
+            "hermes.session_not_found",
+            "hermes session not found",
+        ));
+    }
+    Ok(())
+}
+
+/// 세션의 현재 프로젝트 바인딩(세션 행이 없거나 미바인딩이면 None).
+pub(crate) async fn project_id_inner(db: &Db, id: &str) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT project_id FROM hermes_session WHERE id = ?1")
+        .bind(id)
+        .fetch_optional(db)
+        .await
+        .map(|row| row.flatten())
 }
 
 pub(crate) async fn archive_inner(db: &Db, id: &str) -> Result<(), sqlx::Error> {
@@ -382,6 +428,46 @@ mod tests {
         assert!(p.contains("이전 대화"));
         assert!(p.contains("hi"));
         assert!(p.contains("yo"));
+    }
+
+    #[tokio::test]
+    async fn set_project_binds_validates_and_clears() {
+        let db = fresh_db().await;
+        create_inner(&db, "tab1", "세션").await.expect("create");
+        sqlx::query(
+            "INSERT INTO projects (id, name, kind, credential_ref) VALUES ('p1', 'P', 'personal', 'c')",
+        )
+        .execute(&db)
+        .await
+        .expect("seed project");
+
+        // unknown project → not_found, binding unchanged
+        let err = set_project_inner(&db, "tab1", Some("ghost"))
+            .await
+            .expect_err("ghost project");
+        assert_eq!(err.code, "projects.not_found");
+        assert_eq!(project_id_inner(&db, "tab1").await.expect("read"), None);
+
+        // bind → read back (list/create rows carry it too)
+        set_project_inner(&db, "tab1", Some("p1"))
+            .await
+            .expect("bind");
+        assert_eq!(
+            project_id_inner(&db, "tab1")
+                .await
+                .expect("read")
+                .as_deref(),
+            Some("p1")
+        );
+        let listed = list_inner(&db).await.expect("list");
+        assert_eq!(listed[0].project_id.as_deref(), Some("p1"));
+
+        // clear → None
+        set_project_inner(&db, "tab1", None).await.expect("clear");
+        assert_eq!(project_id_inner(&db, "tab1").await.expect("read"), None);
+
+        // missing session row → None (graceful, spawn injects nothing)
+        assert_eq!(project_id_inner(&db, "nope").await.expect("read"), None);
     }
 
     fn mk(role: &str, content: &str) -> HermesMessageRow {

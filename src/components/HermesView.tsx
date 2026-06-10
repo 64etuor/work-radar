@@ -3,7 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { unwrap } from "@/lib/query/client";
+import { useProjects } from "@/lib/query/projects";
 
 import { HermesChatInput } from "./hermes/HermesChatInput";
 import { HermesChatLog } from "./hermes/HermesChatLog";
@@ -49,6 +57,8 @@ export default function HermesView() {
   const restart = useHermesTabsStore((s) => s.restart);
   const respondAsk = useHermesTabsStore((s) => s.respondAsk);
   const rename = useHermesTabsStore((s) => s.rename);
+  const setSessionProject = useHermesTabsStore((s) => s.setSessionProject);
+  const projects = useProjects();
 
   // Read panel open state to gate the keyboard handler (see below).
   const { state: panelState } = useHermesPanelState();
@@ -136,6 +146,35 @@ export default function HermesView() {
       }}
       sidebarOpen={sidebarOpen}
       onToggleSidebar={toggleSidebar}
+      headerExtra={
+        activeTab && (
+          // 세션 ↔ 프로젝트 바인딩: 선택하면 그 프로젝트 레포의 boule-governance MCP가
+          // 다음 spawn에 주입된다(레포 경로는 Rust가 DB로 해석). 변경 시 child 재시작.
+          <Select
+            value={activeTab.projectId ?? "none"}
+            onValueChange={(value) =>
+              void setSessionProject(activeTab.id, value === "none" ? null : value)
+            }
+          >
+            <SelectTrigger
+              data-no-drag
+              className="h-7 max-w-36 text-xs"
+              aria-label="세션 프로젝트 바인딩"
+              title="프로젝트를 바인딩하면 이 세션에서 boule 거버넌스 도구(propose_plan 등)를 쓸 수 있습니다"
+            >
+              <SelectValue placeholder="프로젝트 없음" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">프로젝트 없음</SelectItem>
+              {(projects.data ?? []).map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )
+      }
     >
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && (

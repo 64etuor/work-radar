@@ -446,6 +446,13 @@ export const commands = {
 	hermesSessionRename: (id: string, name: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_session_rename", { id, name })),
 	hermesSessionArchive: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_session_archive", { id })),
 	hermesSessionDelete: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_session_delete", { id })),
+	/**
+	 *  세션 ↔ 프로젝트 바인딩 설정/해제. 실행 중인 child가 있으면 종료해 다음 open/send가
+	 *  새 바인딩의 MCP 주입으로 재spawn하게 한다(재개 preamble이 대화 맥락을 복원).
+	 *  ⚠ 좁은 TOCTOU: DB 갱신과 kill 사이에 경쟁 spawn이 옛 바인딩을 읽을 수 있다 — 최악
+	 *  한 메시지 분량이며 다음 재바인딩/재시작으로 자가 치유(잠금 추가 대비 수용).
+	 */
+	hermesSessionSetProject: (tabId: string, projectId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("hermes_session_set_project", { tabId, projectId })),
 	hermesSessionMessages: (id: string) => typedError<HermesMessageRow[], AppError>(__TAURI_INVOKE("hermes_session_messages", { id })),
 	hermesMessageAppend: (sessionId: string, role: string, content: string, toolJson: string | null) => typedError<number, AppError>(__TAURI_INVOKE("hermes_message_append", { sessionId, role, content, toolJson })),
 	hermesAgentCancel: (tabId: string) => typedError<null, AppError>(__TAURI_INVOKE("hermes_agent_cancel", { tabId })),
@@ -1455,6 +1462,11 @@ export type HermesSessionRow = {
 	lastActiveAt: string,
 	archived: number,
 	messageCount: number,
+	/**
+	 *  바인딩된 프로젝트(없으면 None). 이 프로젝트의 DB-resolved 레포의 .boule/mcp.json이
+	 *  세션 spawn 시 boule-governance MCP로 주입된다.
+	 */
+	projectId: string | null,
 };
 
 export type InboxCounts = {

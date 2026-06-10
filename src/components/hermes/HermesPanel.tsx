@@ -20,10 +20,13 @@ export function HermesPanel({
   showHeaderTitle,
   sidebarOpen,
   onToggleSidebar,
+  headerExtra,
 }: {
   children: React.ReactNode;
   onRestart?: () => void;
   isStreaming?: boolean;
+  /** 헤더 우측 버튼 그룹 앞에 끼워 넣을 추가 컨트롤(예: 세션 프로젝트 바인딩 선택). */
+  headerExtra?: React.ReactNode;
   /** false면 헤더 'Hermes' 타이틀 숨김(빈 상태 중앙 워드마크와 중복 방지). true로 전환되면 블러인. */
   showHeaderTitle?: boolean;
   /** 좌측 세션 사이드바 표시 여부(상단 토글 버튼이 제어). undefined면 토글 버튼 숨김. */
@@ -230,6 +233,7 @@ export function HermesPanel({
         showHeaderTitle={showHeaderTitle}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={onToggleSidebar}
+        headerExtra={headerExtra}
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       <ResizeGrip x={x} y={y} w={w} h={h} onBoundsChange={setBounds} />
@@ -259,6 +263,7 @@ function PanelHeader({
   showHeaderTitle,
   sidebarOpen,
   onToggleSidebar,
+  headerExtra,
 }: BoundsProps & {
   onClose: () => void;
   onRestart?: () => void;
@@ -266,6 +271,7 @@ function PanelHeader({
   showHeaderTitle?: boolean;
   sidebarOpen?: boolean;
   onToggleSidebar?: () => void;
+  headerExtra?: React.ReactNode;
 }) {
   const dragRef = useRef<{
     startPx: number;
@@ -341,6 +347,7 @@ function PanelHeader({
         </span>
       )}
       <div className="flex items-center gap-1" data-no-drag>
+        {headerExtra}
         {onRestart && (
           <Button
             data-no-drag

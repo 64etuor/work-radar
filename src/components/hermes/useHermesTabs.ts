@@ -9,6 +9,9 @@ export interface TabState {
   messages: HermesMessage[];
   pendingOutbound: OutboundDraft[];
   commandsList: AcpCommand[];
+  /** 바인딩된 프로젝트(없으면 null). 바인딩되면 그 프로젝트 레포의 boule-governance MCP가
+   *  세션 spawn에 주입된다(Rust가 DB로 레포 경로 해석). */
+  projectId: string | null;
 }
 
 export interface TabsState {
@@ -29,7 +32,8 @@ export const EMPTY_TABS_STATE: TabsState = {
 };
 
 type Action =
-  | { type: "open-tab"; tabId: TabId; defaultName: string }
+  | { type: "open-tab"; tabId: TabId; defaultName: string; projectId?: string | null }
+  | { type: "set-project"; tabId: TabId; projectId: string | null }
   | { type: "close-tab"; tabId: TabId }
   | { type: "set-active"; tabId: TabId }
   | { type: "rename"; tabId: TabId; name: string }
@@ -96,6 +100,7 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
         messages: [],
         pendingOutbound: [],
         commandsList: [],
+        projectId: a.projectId ?? null,
       });
       return {
         tabs: next,
@@ -117,6 +122,9 @@ export function tabsReducer(state: TabsState, a: Action): TabsState {
 
     case "rename":
       return updateTab(state, a.tabId, (t) => ({ ...t, name: a.name }));
+
+    case "set-project":
+      return updateTab(state, a.tabId, (t) => ({ ...t, projectId: a.projectId }));
 
     case "set-status":
       return updateTab(state, a.tabId, (t) => ({ ...t, status: a.status }));

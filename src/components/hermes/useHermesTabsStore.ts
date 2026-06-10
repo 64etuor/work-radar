@@ -34,6 +34,7 @@ import {
 interface HermesTabsActions {
   /** Open a new tab (cap check + backend IPC). Returns assigned tabId or null on cap/error. */
   openTab: () => Promise<TabId | null>;
+  setSessionProject: (tabId: TabId, projectId: string | null) => Promise<void>;
   closeTab: (tabId: TabId) => Promise<void>;
   /** ACP 에이전트를 미리 spawn(멱등) — `/` 슬래시 명령(available-commands)이 첫 전송 전에
    *  로드되도록 한다. 입력창 포커스 시 호출. */
@@ -136,6 +137,15 @@ export const useHermesTabsStore = create<HermesTabsStore>((set, get) => {
       // 에이전트 spawn(느림)은 백그라운드 — `/` 명령 로드용. 전송은 send 가 lazy-spawn 보장.
       void unwrap(commands.hermesAgentOpenTab(tabId)).catch(() => {});
       return tabId;
+    },
+
+    /** 세션 ↔ 프로젝트 바인딩. Rust가 실행 중 child를 종료해 다음 open/send가 새 바인딩의
+     *  boule MCP 주입으로 재spawn한다(재개 preamble이 대화 맥락 복원). */
+    setSessionProject: async (tabId: TabId, projectId: string | null) => {
+      await unwrap(commands.hermesSessionSetProject(tabId, projectId));
+      dispatch({ type: "set-project", tabId, projectId });
+      // child가 죽었으므로 idle로 되돌리고, 다음 포커스/전송이 재spawn.
+      dispatch({ type: "set-status", tabId, status: "idle" });
     },
 
     closeTab: async (tabId) => {
@@ -326,7 +336,12 @@ export function useHermesTabsBootstrap() {
         return;
       }
       for (const row of listed) {
-        dispatch({ type: "open-tab", tabId: row.id, defaultName: row.name });
+        dispatch({
+          type: "open-tab",
+          tabId: row.id,
+          defaultName: row.name,
+          projectId: row.projectId,
+        });
       }
       const firstId = chooseRestoredActiveSession(listed);
       if (!firstId) return;

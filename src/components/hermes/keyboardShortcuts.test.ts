@@ -11,6 +11,7 @@ function tab(id: string): TabState {
     messages: [],
     pendingOutbound: [],
     commandsList: [],
+    projectId: null,
   };
 }
 

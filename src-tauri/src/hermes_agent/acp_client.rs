@@ -91,7 +91,11 @@ pub struct AcpSession {
 
 #[allow(dead_code)]
 impl AcpSession {
-    pub async fn spawn(app: AppHandle, tab_id: String) -> Result<Self, AppError> {
+    pub async fn spawn(
+        app: AppHandle,
+        tab_id: String,
+        mcp_servers: Vec<Json>,
+    ) -> Result<Self, AppError> {
         let mut child = Command::new("hermes")
             .arg("acp")
             .stdin(std::process::Stdio::piped())
@@ -203,10 +207,10 @@ impl AcpSession {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "/tmp".to_string());
 
-        // A안 (Boule, spec §5.0): opt-in inject the governance MCP server into the
-        // ACP `session/new` payload so Hermes loads it. Unset env → `[]` (today's
-        // behaviour, no-op). Internal ACP payload → bindings.ts/specta unaffected (#4).
-        let mcp_servers = governance_mcp_servers_from_env();
+        // Boule (spec §5.0): the caller injects the governance MCP server list into the
+        // ACP `session/new` payload — resolved from the session's PROJECT binding (DB-resolved
+        // repo path → .boule/mcp.json), never renderer-supplied. Unbound session → `[]` (no-op).
+        // Internal ACP payload → bindings.ts/specta unaffected (#4).
         let new_resp = session
             .request(
                 "session/new",
@@ -299,52 +303,101 @@ impl AcpSession {
     }
 }
 
-/// Read Boule opt-in env and build the `session/new` `mcpServers` array (A안).
+/// Resolve the boule-governance MCP descriptor(s) for a Hermes tab from its PROJECT binding.
 ///
-/// `BOULE_GOVERNANCE_DIR` is the opt-in gate; `BOULE_NODE` optionally overrides
-/// the node binary (absolute path) for GUI launches where PATH may lack node.
-fn governance_mcp_servers_from_env() -> Vec<Json> {
-    let dir = std::env::var("BOULE_GOVERNANCE_DIR").ok();
-    let node = std::env::var("BOULE_NODE")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "node".to_string());
-    governance_mcp_servers(dir.as_deref(), &node)
-}
-
-/// Pure builder: governance dir (opt-in) → ACP stdio MCP descriptor(s).
+/// - tab unbound (or session row absent) → `[]` (no-op, today's default).
+/// - bound project has no enabled local repo → warn + `[]` (chat still works).
+/// - `<repo>/.boule/mcp.json` missing/unreadable/unparseable → warn + `[]` (graceful degrade,
+///   no retry — INVARIANT #5). Run `boule init --repo <p>` to materialize it.
 ///
-/// - `dir` unset/empty → `vec![]` (identical to pre-A안 behaviour, no-op).
-/// - `dir` set but `<dir>/src/mcp/server.ts` missing → `warn!` (path only) + `vec![]`
-///   (graceful degrade, no retry — INVARIANT #5).
-/// - otherwise → one `McpServerStdio` descriptor. Note ACP `env` is a **list**
-///   `[{name,value}]` (differs from hermes config.yaml's dict — spec §5.0).
-///
-/// `dir`/`node` are injected (not read from env here) so this stays unit-testable.
-fn governance_mcp_servers(dir: Option<&str>, node: &str) -> Vec<Json> {
-    let Some(dir) = dir.filter(|d| !d.is_empty()) else {
+/// The repo path is ALWAYS resolved from the DB (never renderer-supplied — same INVARIANT as
+/// the ticker, plan §6); the generated mcp.json is the canonical per-repo policy env, so this
+/// stays in lockstep with the `claude --mcp-config .boule/mcp.json` path.
+pub(crate) async fn governance_mcp_servers_for_tab(db: &crate::db::Db, tab_id: &str) -> Vec<Json> {
+    let Ok(Some(project_id)) =
+        crate::hermes_agent::session_store::project_id_inner(db, tab_id).await
+    else {
         return vec![];
     };
-    let server_ts = std::path::Path::new(dir).join("src/mcp/server.ts");
-    if !server_ts.exists() {
+    let repo = match crate::governance::ticker::resolve_project_repo_path(db, &project_id).await {
+        Ok(path) => path,
+        Err(e) => {
+            tracing::warn!(
+                target: "boule.governance",
+                %project_id,
+                error = %e,
+                "hermes session bound to a project without a local repo; skipping MCP load"
+            );
+            return vec![];
+        }
+    };
+    let mcp_json_path = repo.join(".boule").join("mcp.json");
+    let raw = match tokio::fs::read_to_string(&mcp_json_path).await {
+        Ok(raw) => raw,
+        Err(e) => {
+            tracing::warn!(
+                target: "boule.governance",
+                path = %mcp_json_path.display(),
+                error = %e,
+                "no readable .boule/mcp.json for bound project; run `boule init` — skipping MCP load"
+            );
+            return vec![];
+        }
+    };
+    // GUI launches may lack node on PATH — resolve an absolute node for `command: "node"`.
+    let node_override = crate::governance::ticker::resolve_node_bin()
+        .await
+        .map(|p| p.to_string_lossy().into_owned());
+    if node_override.is_none() {
         tracing::warn!(
             target: "boule.governance",
-            governance_dir = %dir,
-            "BOULE_GOVERNANCE_DIR set but src/mcp/server.ts missing; skipping MCP load"
+            "no node binary resolved; MCP descriptor keeps bare \"node\" (may fail under GUI PATH)"
         );
-        return vec![];
     }
-    let server_ts = server_ts.to_string_lossy().into_owned();
-    let workspace = std::path::Path::new(dir)
-        .join("workspace")
-        .to_string_lossy()
-        .into_owned();
-    vec![json!({
-        "name": "boule-governance",
-        "command": node,
-        "args": ["--experimental-strip-types", server_ts],
-        "env": [{ "name": "BOULE_WORKSPACE", "value": workspace }],
-    })]
+    acp_mcp_servers_from_boule_mcp_json(&raw, node_override.as_deref())
+}
+
+/// Pure: a repo's generated `.boule/mcp.json` ({"mcpServers": {<name>: {command, args, env{}}}})
+/// → ACP `session/new` `mcpServers` array. ACP `env` is a **list** `[{name,value}]` (differs
+/// from mcp.json's dict — spec §5.0). `node_override` (absolute path) replaces a bare
+/// `"node"` command so GUI launches without PATH still spawn. Malformed input → `[]`.
+pub(crate) fn acp_mcp_servers_from_boule_mcp_json(
+    raw: &str,
+    node_override: Option<&str>,
+) -> Vec<Json> {
+    let Ok(parsed) = serde_json::from_str::<Json>(raw) else {
+        return vec![];
+    };
+    let Some(servers) = parsed.get("mcpServers").and_then(|v| v.as_object()) else {
+        return vec![];
+    };
+    let mut out = Vec::new();
+    for (name, spec) in servers {
+        let Some(command) = spec.get("command").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let command = match node_override {
+            Some(node) if command == "node" => node.to_string(),
+            _ => command.to_string(),
+        };
+        let args = spec.get("args").cloned().unwrap_or_else(|| json!([]));
+        let env_list: Vec<Json> = spec
+            .get("env")
+            .and_then(|v| v.as_object())
+            .map(|envs| {
+                envs.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|val| json!({ "name": k, "value": val })))
+                    .collect()
+            })
+            .unwrap_or_default();
+        out.push(json!({
+            "name": name,
+            "command": command,
+            "args": args,
+            "env": env_list,
+        }));
+    }
+    out
 }
 
 /// Emit a Tauri event with `tabId` injected at the top level of payload.
@@ -599,43 +652,45 @@ mod tests {
     use super::*;
 
     #[test]
-    fn governance_mcp_servers_empty_when_dir_unset_or_blank() {
-        assert!(governance_mcp_servers(None, "node").is_empty());
-        assert!(governance_mcp_servers(Some(""), "node").is_empty());
+    fn acp_servers_empty_on_malformed_or_missing_mcp_servers() {
+        assert!(acp_mcp_servers_from_boule_mcp_json("not json", None).is_empty());
+        assert!(acp_mcp_servers_from_boule_mcp_json("{}", None).is_empty());
+        assert!(acp_mcp_servers_from_boule_mcp_json(r#"{"mcpServers": {}}"#, None).is_empty());
     }
 
     #[test]
-    fn governance_mcp_servers_empty_when_server_missing() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let dir = tmp.path().to_string_lossy().into_owned();
-        // No src/mcp/server.ts created → graceful degrade to empty.
-        assert!(governance_mcp_servers(Some(&dir), "node").is_empty());
-    }
-
-    #[test]
-    fn governance_mcp_servers_one_entry_when_server_present() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let mcp_dir = tmp.path().join("src").join("mcp");
-        std::fs::create_dir_all(&mcp_dir).expect("mkdir");
-        std::fs::write(mcp_dir.join("server.ts"), "// stub").expect("write");
-        let dir = tmp.path().to_string_lossy().into_owned();
-
-        let servers = governance_mcp_servers(Some(&dir), "/abs/node");
+    fn acp_servers_converts_env_dict_to_acp_list_and_overrides_bare_node() {
+        let raw = r#"{
+          "mcpServers": {
+            "boule-governance": {
+              "command": "node",
+              "args": ["--experimental-strip-types", "/install/governance/src/mcp/server.ts"],
+              "env": { "BOULE_WORKSPACE": "/repo/.boule/workspace", "BOULE_AUTONOMY_LEVEL": "dispatch" }
+            }
+          }
+        }"#;
+        let servers = acp_mcp_servers_from_boule_mcp_json(raw, Some("/abs/node"));
         assert_eq!(servers.len(), 1);
         let s = &servers[0];
         assert_eq!(s["name"], "boule-governance");
-        assert_eq!(s["command"], "/abs/node");
-        assert_eq!(s["args"][0], "--experimental-strip-types");
-        assert!(s["args"][1]
-            .as_str()
-            .expect("args[1] str")
-            .ends_with("src/mcp/server.ts"));
+        assert_eq!(s["command"], "/abs/node"); // bare "node" → absolute override (GUI PATH)
+        assert_eq!(s["args"][1], "/install/governance/src/mcp/server.ts");
         // ACP env MUST be a list of {name,value} (not a dict) — spec §5.0.
-        assert_eq!(s["env"][0]["name"], "BOULE_WORKSPACE");
-        assert!(s["env"][0]["value"]
-            .as_str()
-            .expect("env value str")
-            .ends_with("workspace"));
+        let env = s["env"].as_array().expect("env list");
+        assert!(env
+            .iter()
+            .any(|e| e["name"] == "BOULE_WORKSPACE" && e["value"] == "/repo/.boule/workspace"));
+        assert!(env
+            .iter()
+            .any(|e| e["name"] == "BOULE_AUTONOMY_LEVEL" && e["value"] == "dispatch"));
+    }
+
+    #[test]
+    fn acp_servers_keeps_non_node_command_untouched() {
+        let raw = r#"{"mcpServers": {"x": {"command": "/usr/local/bin/work-radar", "args": ["--mcp-stdio"]}}}"#;
+        let servers = acp_mcp_servers_from_boule_mcp_json(raw, Some("/abs/node"));
+        assert_eq!(servers[0]["command"], "/usr/local/bin/work-radar");
+        assert_eq!(servers[0]["env"], json!([]));
     }
 
     #[test]

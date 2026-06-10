@@ -242,6 +242,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         hermes_agent::session_store::hermes_session_rename,
         hermes_agent::session_store::hermes_session_archive,
         hermes_agent::session_store::hermes_session_delete,
+        commands::hermes_agent::hermes_session_set_project,
         hermes_agent::session_store::hermes_session_messages,
         hermes_agent::session_store::hermes_message_append,
         commands::hermes_agent::hermes_agent_cancel,

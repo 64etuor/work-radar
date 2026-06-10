@@ -24,6 +24,7 @@ pub fn new_holder() -> HermesAgentHolder {
 async fn ensure_session(
     app: &AppHandle,
     holder: &HermesAgentHolder,
+    db: &crate::db::Db,
     tab_id: &str,
 ) -> Result<(), AppError> {
     {
@@ -32,8 +33,11 @@ async fn ensure_session(
             return Ok(());
         }
     }
+    // Project-bound boule-governance MCP (DB-resolved repo → .boule/mcp.json; unbound → []).
+    let mcp_servers =
+        crate::hermes_agent::acp_client::governance_mcp_servers_for_tab(db, tab_id).await;
     // Spawn WITHOUT holding the lock so concurrent tabs don't serialise here.
-    let session = AcpSession::spawn(app.clone(), tab_id.to_string()).await?;
+    let session = AcpSession::spawn(app.clone(), tab_id.to_string(), mcp_servers).await?;
     let mut map = holder.write().await;
     if map.contains_key(tab_id) {
         // Racing spawn won — drop ours.
@@ -53,9 +57,38 @@ async fn ensure_session(
 pub async fn hermes_agent_open_tab(
     app: AppHandle,
     holder: State<'_, HermesAgentHolder>,
+    db: State<'_, crate::db::Db>,
     tab_id: String,
 ) -> Result<(), AppError> {
-    ensure_session(&app, &holder, &tab_id).await
+    ensure_session(&app, &holder, db.inner(), &tab_id).await
+}
+
+/// 세션 ↔ 프로젝트 바인딩 설정/해제. 실행 중인 child가 있으면 종료해 다음 open/send가
+/// 새 바인딩의 MCP 주입으로 재spawn하게 한다(재개 preamble이 대화 맥락을 복원).
+/// ⚠ 좁은 TOCTOU: DB 갱신과 kill 사이에 경쟁 spawn이 옛 바인딩을 읽을 수 있다 — 최악
+/// 한 메시지 분량이며 다음 재바인딩/재시작으로 자가 치유(잠금 추가 대비 수용).
+#[tauri::command]
+#[specta::specta]
+pub async fn hermes_session_set_project(
+    holder: State<'_, HermesAgentHolder>,
+    db: State<'_, crate::db::Db>,
+    tab_id: String,
+    project_id: Option<String>,
+) -> Result<(), AppError> {
+    crate::hermes_agent::session_store::set_project_inner(
+        db.inner(),
+        &tab_id,
+        project_id.as_deref(),
+    )
+    .await?;
+    let removed = {
+        let mut map = holder.write().await;
+        map.remove(&tab_id)
+    };
+    if let Some(session) = removed {
+        session.kill().await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -69,7 +102,7 @@ pub async fn hermes_agent_send(
     image_paths: Vec<String>,
 ) -> Result<(), AppError> {
     // 1. Lazy spawn — ensure a child exists (idempotent; may already be spawned via open_tab).
-    ensure_session(&app, &holder, &tab_id).await?;
+    ensure_session(&app, &holder, db.inner(), &tab_id).await?;
     let (session_id, transport, stdin_tx, pending, next_id, first_prompt_sent) = {
         let map = holder.read().await;
         let s = map.get(&tab_id).ok_or_else(|| {
