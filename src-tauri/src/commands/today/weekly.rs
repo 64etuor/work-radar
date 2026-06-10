@@ -54,7 +54,8 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
         "SELECT r.freq, r.weekdays, r.anchor_date, r.monthly_pattern, r.monthly_nth_week, rc.date \
              FROM routine_checks rc \
              JOIN routines r ON r.id = rc.routine_id \
-             WHERE r.active = 1 AND rc.date BETWEEN ?1 AND ?2",
+             WHERE r.active = 1 AND rc.completed_at IS NOT NULL \
+               AND rc.date BETWEEN ?1 AND ?2",
     )
     .bind(&start_s)
     .bind(&end_s)

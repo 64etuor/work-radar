@@ -30,6 +30,8 @@ type Props = {
    */
   pointerYRef?: React.MutableRefObject<number | null>;
   pointerXRef?: React.MutableRefObject<number | null>;
+  /** 그리드 DOM을 부모(TodayView)에 노출 — useTimelineDnd가 onDragEnd에서 fresh rect를 읽는다. */
+  gridElRef?: React.MutableRefObject<HTMLDivElement | null>;
   activeDrag?: DragData | null;
   activeDelta?: DragDelta | null;
 };
@@ -53,6 +55,7 @@ export function TimelineCanvas({
   onToggleDone,
   pointerYRef,
   pointerXRef,
+  gridElRef,
   activeDrag,
   activeDelta,
 }: Props) {
@@ -97,11 +100,12 @@ export function TimelineCanvas({
   const bindGridRef = useCallback(
     (el: HTMLDivElement | null) => {
       gridRef.current = el;
+      if (gridElRef) gridElRef.current = el;
       setNodeRef(el);
       if (!el) return;
       setGridWidth((prev) => (prev === el.clientWidth ? prev : el.clientWidth));
     },
-    [setNodeRef],
+    [setNodeRef, gridElRef],
   );
 
   // pointer-tracking: 캔버스 위 pointer Y를 그리드 로컬 좌표로 환산.

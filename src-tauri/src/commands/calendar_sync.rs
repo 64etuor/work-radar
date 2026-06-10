@@ -147,6 +147,20 @@ pub(crate) async fn stage_calendar_write_inner(
             .bind(date)
             .execute(pool)
             .await?;
+        } else if matches!(req.op, WriteOp::Unschedule) {
+            // 트레이 복귀 = 즉시 로컬 mirror에서 time_override/링크 제거(signal Unschedule과 대칭).
+            // 이전엔 워커가 Google delete에 성공한 뒤에야 unlink_impl이 지워서, 동기화 지연/실패 시
+            // linked_event_id=NULL인데 time_override만 남는 좀비 상태 → 블록이 옛 시각에 잔류했다.
+            // completed_at(완료 마커)은 건드리지 않는다 — unschedule≠완료해제.
+            sqlx::query(
+                "UPDATE routine_checks SET time_override = NULL, \
+                 linked_event_id = NULL, linked_calendar_id = NULL \
+                 WHERE routine_id = ?1 AND date = ?2",
+            )
+            .bind(routine_id)
+            .bind(date)
+            .execute(pool)
+            .await?;
         }
     }
 
@@ -602,6 +616,36 @@ mod tests {
         assert_eq!(
             count, 1,
             "멱등 — UNIQUE(routine_id, date) ON CONFLICT DO NOTHING"
+        );
+    }
+
+    /// 회귀(0049): 루틴을 캘린더에 배치(ensure_routine_check_row = 링크 목적 행)해도
+    /// "완료"로 표시되면 안 된다. done = (completed_at IS NOT NULL)이고, 링크 행은
+    /// completed_at을 세팅하지 않는다. 0049 이전엔 done = (rc.id IS NOT NULL)이라
+    /// 배치만으로 체크박스가 켜지고, 체크 해제 시 링크 행을 통째로 DELETE했다(버그).
+    #[tokio::test]
+    async fn scheduling_routine_does_not_mark_it_done() {
+        let db = fresh_db().await;
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, active) VALUES ('r1','아침','daily',1)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 캘린더 배치(링크) — 완료 아님.
+        ensure_routine_check_row(&db, "r1", "2026-05-28")
+            .await
+            .unwrap();
+        let (completed,): (Option<String>,) = sqlx::query_as(
+            "SELECT completed_at FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(
+            completed.is_none(),
+            "배치(링크) 행은 완료 마커가 없어야 한다 — scheduled≠done"
         );
     }
 

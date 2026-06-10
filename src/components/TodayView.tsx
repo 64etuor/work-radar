@@ -228,9 +228,11 @@ export function TodayView() {
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
   // 활성 picker resolver — unmount 시 promise leak 방지용(아래 cleanup effect에서 resolve(null)).
   const pickerResolverRef = useRef<((v: string | null) => void) | null>(null);
-  // TimelineCanvas pointer Y — useTimelineDnd가 onDragEnd에서 읽는다.
+  // TimelineCanvas 라이브 hover preview용 grid-local 좌표(드래그 중 가이드/프리뷰 렌더).
   const canvasPointerYRef = useRef<number | null>(null);
   const canvasPointerXRef = useRef<number | null>(null);
+  // 캔버스 그리드 DOM — useTimelineDnd가 onDragEnd에서 fresh rect를 읽어 드롭 좌표를 환산한다.
+  const gridElRef = useRef<HTMLDivElement | null>(null);
 
   const promptCalendarPicker = useCallback(
     (targetId: string, targetKind: "signal" | "routine" = "signal") =>
@@ -260,7 +262,8 @@ export function TodayView() {
     date,
     defaultCalendarFor,
     promptCalendarPicker,
-    canvasPointerYRef,
+    gridElRef,
+    pointerClientRef: lastPointerRef,
   });
 
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
@@ -356,6 +359,7 @@ export function TodayView() {
                 onToggleDone={handleBlockToggleDone}
                 pointerYRef={canvasPointerYRef}
                 pointerXRef={canvasPointerXRef}
+                gridElRef={gridElRef}
                 activeDrag={activeDrag}
                 activeDelta={activeDelta}
               />

@@ -64,9 +64,11 @@ pub async fn fetch_routine_tracking(
         let weekdays = parse_weekdays(weekdays_json.as_deref());
         let nth_week = monthly_nth_week.map(|v| v as i32);
 
-        // 이 루틴의 체크 날짜 집합(기간 내).
+        // 이 루틴의 완료 날짜 집합(기간 내). completed_at IS NOT NULL = 실제 완료
+        // (캘린더 배치/시각 override만 있는 행은 제외 — done과 link/override 분리).
         let check_rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT date FROM routine_checks WHERE routine_id = ?1 AND date BETWEEN ?2 AND ?3",
+            "SELECT date FROM routine_checks \
+             WHERE routine_id = ?1 AND completed_at IS NOT NULL AND date BETWEEN ?2 AND ?3",
         )
         .bind(&id)
         .bind(start.format("%Y-%m-%d").to_string())

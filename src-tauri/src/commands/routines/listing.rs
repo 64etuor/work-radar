@@ -46,7 +46,7 @@ pub async fn fetch_today_routines(
     let rows = sqlx::query_as::<_, RoutineRow>(
         "SELECT r.id, r.title, r.freq, r.weekdays, r.anchor_date, r.time_of_day, \
                 r.reminder_offset_min, r.area, r.area_tags, r.kind, \
-                (rc.id IS NOT NULL) AS done, \
+                (rc.completed_at IS NOT NULL) AS done, \
                 rc.time_override, rc.linked_event_id, rc.linked_calendar_id, \
                 r.monthly_pattern, r.monthly_nth_week, r.duration_min, \
                 r.google_event_id, r.google_calendar_id \
