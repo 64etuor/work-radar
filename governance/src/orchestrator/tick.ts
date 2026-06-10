@@ -137,10 +137,21 @@ export async function runTick(
 
   const completion = await completeReportedDone(workspaceDir, deps.completionDeps, now, rand);
   if (completion.needsHuman > 0) {
+    // Name the task, step, check, and reason — a bare count sent operators spelunking raw event
+    // files to find WHICH step was stuck and why (live 2026-06-10).
+    const details = completion.needsHumanDetails.map(
+      (d) =>
+        `needs_human: plan ${d.planId} step ${d.stepIndex} task ${d.taskId} — ${d.reason}` +
+        (d.checkCommand ? ` (check: ${d.checkCommand})` : ""),
+    );
     return {
       ...base,
       outcome: "needs_human",
-      blockers: [...base.blockers, `${completion.needsHuman} completion check(s) need a human`],
+      blockers: [
+        ...base.blockers,
+        `${completion.needsHuman} completion check(s) need a human`,
+        ...details,
+      ],
     };
   }
 

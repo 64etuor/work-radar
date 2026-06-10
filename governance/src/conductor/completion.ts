@@ -178,10 +178,23 @@ export async function evaluateCompletionGate(
   return { decision: "needs_human", reason: lastRationale };
 }
 
+/** Why a specific task could not pass the completion gate — the operator-facing diagnosis that
+ *  was previously dropped on the floor (live 2026-06-10: "1 completion check(s) need a human"
+ *  named neither the task nor the failing check; the cause was only recoverable by spelunking
+ *  raw event files). */
+export interface NeedsHumanDetail {
+  planId: string;
+  stepIndex: number;
+  taskId: string;
+  reason: string;
+  checkCommand: string | null;
+}
+
 export interface CompletionPassSummary {
   completed: number;
   needsHuman: number;
   waited: number;
+  needsHumanDetails: NeedsHumanDetail[];
 }
 
 function bodySessionId(evt: GovEvent): string | null {
@@ -223,7 +236,12 @@ export async function completeReportedDone(
   rand: number,
   options: CompletionRunOptions = {},
 ): Promise<CompletionPassSummary> {
-  const summary: CompletionPassSummary = { completed: 0, needsHuman: 0, waited: 0 };
+  const summary: CompletionPassSummary = {
+    completed: 0,
+    needsHuman: 0,
+    waited: 0,
+    needsHumanDetails: [],
+  };
   const all = await readAllEvents(workspaceDir);
   const sessions = sessionById(all);
   let offset = 0;
@@ -252,8 +270,18 @@ export async function completeReportedDone(
         summary.waited++;
         continue;
       }
-      if (result.decision === "needs_human") {
+      const detail = (reason: string): void => {
         summary.needsHuman++;
+        summary.needsHumanDetails.push({
+          planId: plan.frontmatter.id,
+          stepIndex: step.stepIndex,
+          taskId: step.taskId!,
+          reason,
+          checkCommand: step.check?.command ?? null,
+        });
+      };
+      if (result.decision === "needs_human") {
+        detail(result.reason);
         continue;
       }
       // Chain the passed step's output BEFORE completing the task: commit the worktree and advance
@@ -266,14 +294,14 @@ export async function completeReportedDone(
           stepIndex: step.stepIndex,
         });
         if (!chained.ok) {
-          summary.needsHuman++;
+          detail(`step chaining failed: ${chained.error}`);
           continue;
         }
       }
       const stamp = new Date(now.getTime() + offset++ * 1000);
       const r = await completeTask(workspaceDir, { taskId: step.taskId }, stamp, rand);
       if (r.ok) summary.completed++;
-      else summary.needsHuman++;
+      else detail(`completeTask refused: ${"reason" in r ? String(r.reason) : "unknown"}`);
     }
   }
 

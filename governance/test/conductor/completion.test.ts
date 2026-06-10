@@ -407,6 +407,28 @@ describe("completeReportedDone", () => {
     expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
   });
 
+  it("needs_human carries the per-task diagnosis (taskId/step/check/reason)", async () => {
+    const { planId, taskId, sessionId } = await activeStep({
+      text: "step a",
+      check: { command: "pnpm test" },
+    });
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const r = await completeReportedDone(dir, failDeps, at(30), 0.6);
+
+    expect(r.needsHuman).toBe(1);
+    expect(r.needsHumanDetails).toEqual([
+      {
+        planId,
+        stepIndex: 0,
+        taskId,
+        reason: expect.any(String),
+        checkCommand: "pnpm test",
+      },
+    ]);
+  });
+
   it("hint + terminal + failed check => needs_human, task stays open (R5)", async () => {
     const { taskId, sessionId } = await activeStep({ text: "step a", check: { command: "pnpm test" } });
     await reportTaskDone(dir, { taskId }, at(20), 0.4);
