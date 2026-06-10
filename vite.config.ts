@@ -41,7 +41,9 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 4. + 에이전트 작업 영역 — .boule 워크트리 생성/제거가 레포 내부라 watch에
+      //    잡히면 HMR 오반응 + chokidar fd/메모리 낭비 (governance/workspace = L0 이벤트 쓰기)
+      ignored: ["**/src-tauri/**", "**/.boule/**", "**/governance/workspace/**"],
     },
   },
 }));
