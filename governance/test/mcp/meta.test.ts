@@ -57,8 +57,11 @@ describe("meta_observe MCP tool surface", () => {
     expect(source).toContain("// ── P5: Meta Observer");
     expect(source).toContain('"meta_observe"');
 
-    const p5Block = source.slice(source.indexOf("// ── P5: Meta Observer"), source.indexOf("const AUTHOR_MODEL"));
-    expect(p5Block).toContain("buildMetaObservation");
+    const p5Block = source.slice(
+      source.indexOf("// ── P5: Meta Observer"),
+      source.indexOf("const AUTHOR_MODEL"),
+    );
+    expect(p5Block).toContain("runMetaObserve(");
     expect(p5Block).not.toContain('"approve"');
     expect(p5Block).not.toContain('"reject"');
     expect(p5Block).not.toContain('"choose"');

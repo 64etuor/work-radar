@@ -1,4 +1,5 @@
 import type { AutonomyEnvelope, ExecutorKind } from "./envelope.ts";
+import { type SpawnResultLike, type SpawnSyncLike, walkTerminalSurfaces } from "../repo/spawn.ts";
 
 export interface CreateWorktreeSpec {
   planId: string;
@@ -49,14 +50,9 @@ export const stubAdapter: ConductorAdapter = {
 
 // ── Live adapter (behind BOULE_CONDUCTOR_MODE=live) ───────────────────────────────────────────
 
-/** Minimal structural seam over a child process — satisfied by node's spawnSync-like boundary
- *  and by a fake in tests. Synchronous capture keeps the command SEQUENCE assertable. */
-export interface SpawnResultLike {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-}
-export type SpawnSyncLike = (command: string, args: string[]) => SpawnResultLike;
+// Re-exported from the shared spawn seam so existing importers (`import { SpawnSyncLike } from
+// "../conductor/adapter.ts"`) continue to work without changes.
+export type { SpawnResultLike, SpawnSyncLike } from "../repo/spawn.ts";
 
 /** The local branch that chains step outputs for a plan: each completion-gate pass commits the
  *  step worktree's changes and advances this ref, and createWorktree bases the next step on it.
@@ -352,27 +348,15 @@ export function parseCmuxRef(stdout: string, kind: "workspace" | "surface"): str
  *  reconciles live sessions by SURFACE ref) can detect this session's crash (L2 stall safety).
  *  Mirrors observer.ts parseSurfaces but scoped to one workspace. Throws if none is found. */
 export function firstTerminalSurface(treeJson: string, workspaceRef: string): string {
-  let tree: unknown;
+  // walkTerminalSurfaces returns [] on parse failure; we need to distinguish that from
+  // "parsed but no match" — so check parse separately for the conductor-specific error message.
   try {
-    tree = JSON.parse(treeJson);
+    JSON.parse(treeJson);
   } catch {
     throw new Error("conductor: cmux tree --json returned invalid JSON");
   }
-  const rec = (x: unknown): Record<string, unknown> =>
-    x && typeof x === "object" ? (x as Record<string, unknown>) : {};
-  const asArray = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
-  for (const w of asArray(rec(tree).windows)) {
-    for (const ws of asArray(rec(w).workspaces)) {
-      if (rec(ws).ref !== workspaceRef) continue;
-      for (const p of asArray(rec(ws).panes)) {
-        for (const s of asArray(rec(p).surfaces)) {
-          const node = rec(s);
-          if (typeof node.ref === "string" && node.ref.length > 0 && node.type === "terminal")
-            return node.ref;
-        }
-      }
-    }
-  }
+  const match = walkTerminalSurfaces(treeJson).find((e) => e.workspaceRef === workspaceRef);
+  if (match) return match.ref;
   throw new Error(`conductor: cmux tree has no terminal surface for ${workspaceRef}`);
 }
 

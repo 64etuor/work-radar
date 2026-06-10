@@ -12,7 +12,8 @@ async function snapshotEvents(day: string): Promise<Map<string, string>> {
   return snap;
 }
 
-describe("graph ingest is read-only over L0 (INVARIANT #1)", () => {
+// PGlite-heavy: ~3s isolated, can exceed the 5s default under full-suite worker load.
+describe("graph ingest is read-only over L0 (INVARIANT #1)", { timeout: 20_000 }, () => {
   it("adds no new event files AND modifies no existing event content", async () => {
     const ws = await mkdtemp(join(tmpdir(), "boule-f-neg-"));
     const day = join(ws, "events", "2026-06-03");

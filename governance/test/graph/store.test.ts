@@ -5,7 +5,10 @@ import { checksumProjection } from "../../src/graph/checksum.js";
 import type { GovEvent } from "../../src/event/event.js";
 
 function evt(over: Partial<GovEvent["frontmatter"]>, body = "Title"): GovEvent {
-  return { frontmatter: { id: "x", type: "task_created", source: "hermes", actor: "u", tags: [], ...over }, body };
+  return {
+    frontmatter: { id: "x", type: "task_created", source: "hermes", actor: "u", tags: [], ...over },
+    body,
+  };
 }
 
 const events: GovEvent[] = [
@@ -14,7 +17,8 @@ const events: GovEvent[] = [
   evt({ id: "p1", type: "plan_proposed" }, "Plan one"),
 ];
 
-describe("graph store (PGlite :memory:)", () => {
+// PGlite-heavy: can exceed the 5s default under full-suite worker load.
+describe("graph store (PGlite :memory:)", { timeout: 20_000 }, () => {
   it("rebuilds, reports status, and round-trips checksum equal to the projection", async () => {
     const store = await openStore(":memory:");
     const proj = projectGraph(events);
