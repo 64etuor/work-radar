@@ -309,8 +309,13 @@ export function buildSessionCommand(
   // (L4). OS-level FS confinement for claude is a deferred follow-up (plan §9.6).
   // `--` terminates option parsing so the variadic `--disallowedTools <tools...>` cannot swallow
   // the positional prompt (without it, claude launches with NO prompt and sits idle → loop hangs).
+  // `-p` (--print) = ONE-SHOT: without it claude starts an interactive REPL that processes the
+  // prompt and then WAITS FOR INPUT forever — the attempt-evidence tail (record-attempt →
+  // report-exit → session close) never runs and the completion gate wedges on a non-terminal
+  // session (live run 2026-06-10, surface:18). Mirrors codex's one-shot `codex exec`; the cmux
+  // pane still shows the run's output (observability is the pane, not the REPL).
   const claudeCommand =
-    `claude --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
+    `claude -p --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
     `--permission-mode bypassPermissions ` +
     `--disallowedTools ${denied} ` +
     `-- ${promptCat}`;

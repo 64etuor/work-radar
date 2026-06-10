@@ -862,7 +862,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
 
   it("claude (default) builds the scoped-mcp.json + strict + verdict denylist invocation", () => {
     const c = buildSessionCommand("claude", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
-    expect(c).toContain("claude --mcp-config");
+    expect(c).toContain("claude -p --mcp-config"); // -p = one-shot: REPL would wedge the loop
     expect(c).toContain("--strict-mcp-config");
     // unattended autonomy within the worktree sandbox (see buildSessionCommand)
     expect(c).toContain("--permission-mode bypassPermissions");
@@ -978,7 +978,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     ); // clean profile prefixed at launch (hook isolation)
     expect(created.args[4]).toContain("report-exit"); // completion hint wrapper present in the launch cmd
     expect(created.args[4]).not.toContain("complete-task");
-    expect(created.args[4]).not.toContain("claude --mcp-config");
+    expect(created.args[4]).not.toContain("claude -p --mcp-config");
     expect(calls.some((c) => c.cmd === "cmux" && c.args[0] === "send")).toBe(false);
   });
 
