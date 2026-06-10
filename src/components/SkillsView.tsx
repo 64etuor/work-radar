@@ -1289,6 +1289,14 @@ function ExternalViewer({ skill, onImported }: { skill: Skill; onImported: () =>
     );
   };
 
+  // 편집 취소: 초안을 버리고 읽기 모드로 복귀(파일 무변경).
+  const cancelEdit = () => {
+    if (write.isPending) return;
+    setEditing(false);
+    setDraft(null);
+    setNote(null);
+  };
+
   // 라이브러리로 import: 외부 파일은 읽기만 하고 중앙으로 복사(원본 무손상). 성공 시 목록이 갱신되며
   // 이 발견본은 managed로 대체(억제)되므로 Sheet를 닫는다. 자동 실행 없음(#1/#2 — 파일 복사일 뿐).
   const importToLibrary = () => {
@@ -1326,14 +1334,24 @@ function ExternalViewer({ skill, onImported }: { skill: Skill; onImported: () =>
             </Button>
           </>
         ) : (
-          <Button
-            className="gap-1.5 rounded-full"
-            onClick={save}
-            disabled={!dirty || write.isPending}
-          >
-            <Save className="size-4" />
-            {write.isPending ? "저장 중…" : "파일 저장"}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              className="rounded-full"
+              onClick={cancelEdit}
+              disabled={write.isPending}
+            >
+              취소
+            </Button>
+            <Button
+              className="gap-1.5 rounded-full"
+              onClick={save}
+              disabled={!dirty || write.isPending}
+            >
+              <Save className="size-4" />
+              {write.isPending ? "저장 중…" : "파일 저장"}
+            </Button>
+          </>
         )}
       </div>
 
@@ -1350,7 +1368,7 @@ function ExternalViewer({ skill, onImported }: { skill: Skill; onImported: () =>
         </div>
       ) : editing ? (
         <Textarea
-          className="min-h-[320px] resize-y font-mono leading-relaxed"
+          className="min-h-0 flex-1 resize-none font-mono leading-relaxed"
           value={draft ?? ""}
           onChange={(e) => setDraft(e.target.value)}
           spellCheck={false}

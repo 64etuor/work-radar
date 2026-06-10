@@ -414,12 +414,10 @@
   overflow-wrap: anywhere;
 }
 .skl-markdown {
-  /* D3: 미리보기는 가용 높이를 채우며 내부 스크롤한다(시트 본문 압박 안 함). 좁은/넓은 폭 모두
-   * 유동 폭 + prose max-width로 가독성 유지. 고정 max-height(480px) 제거 — flex 높이로 적응. */
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 72ch;
+  max-width: none;
   overflow: auto;
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-md);
