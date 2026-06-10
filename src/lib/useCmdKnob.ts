@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
-import { type AppAction, resolveCombo } from "@/lib/appActions";
+import { type AppAction, knobActionFor } from "@/lib/appActions";
 import type { KnobDir } from "@/lib/knobGeometry";
 import { KNOB_DIRECTIONS, KNOB_TRIGGER_DEFAULT, KNOB_TRIGGER_KEY } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
@@ -82,11 +82,12 @@ export function useCmdKnob(dispatch: (action: AppAction) => void): CmdKnobState 
     visibleRef.current = visible;
   }, [visible]);
 
+  // 방향 활성 = 그 방향 값이 실제 액션으로 해석될 때만(빈 값/무효 토큰/죽은 콤보 = 끔).
   const dirEnabled: Record<KnobDir, boolean> = {
-    up: !!(keymap.data?.knob_up ?? "").trim(),
-    down: !!(keymap.data?.knob_down ?? "").trim(),
-    left: !!(keymap.data?.knob_left ?? "").trim(),
-    right: !!(keymap.data?.knob_right ?? "").trim(),
+    up: knobActionFor(keymap.data?.knob_up ?? "", keymap.data) !== null,
+    down: knobActionFor(keymap.data?.knob_down ?? "", keymap.data) !== null,
+    left: knobActionFor(keymap.data?.knob_left ?? "", keymap.data) !== null,
+    right: knobActionFor(keymap.data?.knob_right ?? "", keymap.data) !== null,
   };
 
   const dispatchRef = useRef(dispatch);
@@ -97,9 +98,7 @@ export function useCmdKnob(dispatch: (action: AppAction) => void): CmdKnobState 
   const fire = (dir: KnobDir) => {
     const map = keymapRef.current;
     const key = KNOB_DIRECTIONS.find((d) => d.dir === dir)?.key;
-    const combo = (key ? (map?.[key] ?? "") : "").trim();
-    if (!combo) return;
-    const action = resolveCombo(map, combo);
+    const action = knobActionFor(key ? (map?.[key] ?? "") : "", map);
     if (action) dispatchRef.current(action);
   };
 

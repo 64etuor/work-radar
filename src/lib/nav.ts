@@ -167,9 +167,10 @@ export function defaultKeymap(): Record<string, string> {
   const m: Record<string, string> = {};
   for (const n of NAV_ITEMS) if (n.defaultShortcut) m[n.view] = n.defaultShortcut;
   for (const a of EXTRA_ACTIONS) if (a.defaultShortcut) m[a.key] = a.defaultShortcut;
-  // 조이스틱: 좌우는 인접 뷰 nav(기존 슬라이드 재사용), 상하는 기본 비활성(빈값).
-  m.knob_left = "Cmd+Left";
-  m.knob_right = "Cmd+Right";
+  // 조이스틱: 값은 액션 토큰(appActions.parseKnobToken 문법). 좌우는 인접 뷰 nav,
+  // 상하는 기본 비활성(빈값). 레거시 콤보("Cmd+Left") 저장값은 read 시 호환 해석.
+  m.knob_left = "adjacent:prev";
+  m.knob_right = "adjacent:next";
   m.knob_up = "";
   m.knob_down = "";
   m[KNOB_TRIGGER_KEY] = KNOB_TRIGGER_DEFAULT;
@@ -189,9 +190,9 @@ export const KNOB_TRIGGER_KEY = "knob_trigger";
 export const KNOB_TRIGGER_DEFAULT = "Cmd";
 
 /**
- * knob 예약 keymap 키(방향 4 + 트리거)인가. 이 키들의 값은 "knob이 발사할 콤보"지 액션 바인딩이
- * 아니다 — 액션 매칭(useViewShortcuts)에서 제외하지 않으면 knob_up="Cmd+Up" fire가 자기 자신과
- * 매칭돼 onAction("knob_up")→무효 View 네비로 view 상태를 오염시킨다.
+ * knob 예약 keymap 키(방향 4 + 트리거)인가. 이 키들의 값은 knob 액션 토큰(또는 레거시 콤보)이지
+ * 단축키 액션 바인딩이 아니다 — 액션 매칭(useViewShortcuts)에서 제외하지 않으면 레거시
+ * knob_up="Cmd+Up" 저장값이 자기 자신과 매칭돼 무효 View 네비로 view 상태를 오염시킨다.
  */
 export function isKnobKeymapKey(key: string): boolean {
   return key === KNOB_TRIGGER_KEY || KNOB_DIRECTIONS.some((d) => d.key === key);

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { actionForKeymapKey, findKeymapAction, resolveCombo } from "./appActions";
+import {
+  actionForKeymapKey,
+  findKeymapAction,
+  knobActionFor,
+  knobActionOptions,
+  knobTokenForAction,
+  parseKnobToken,
+  resolveCombo,
+} from "./appActions";
 
 const MAP = {
   board: "Cmd+1",
@@ -68,5 +76,40 @@ describe("resolveCombo", () => {
 
   it("미등록 combo는 null(no-op)", () => {
     expect(resolveCombo(MAP, "Cmd+K")).toBeNull();
+  });
+});
+
+describe("knob 액션 토큰 (ADR-0011 후속 ① — 방향→액션 직접 바인딩)", () => {
+  it("parseKnobToken: 토큰 문법 → AppAction", () => {
+    expect(parseKnobToken("adjacent:prev")).toEqual({ kind: "adjacent", dir: -1 });
+    expect(parseKnobToken("adjacent:next")).toEqual({ kind: "adjacent", dir: 1 });
+    expect(parseKnobToken("view:board")).toEqual({ kind: "navigate", view: "board" });
+    expect(parseKnobToken("toggle:calendar")).toEqual({ kind: "toggle-calendar" });
+    expect(parseKnobToken("toggle:inbox")).toEqual({ kind: "toggle-inbox" });
+  });
+
+  it("parseKnobToken: 무효 토큰/무효 view/콤보 문자열은 null", () => {
+    expect(parseKnobToken("view:retro")).toBeNull(); // 제거된 view
+    expect(parseKnobToken("Cmd+Left")).toBeNull(); // 콤보는 토큰이 아님(호환은 knobActionFor)
+    expect(parseKnobToken("")).toBeNull();
+  });
+
+  it("knobActionFor: 토큰 정본 + 레거시 콤보 read-시 호환(기존 저장값 무파괴)", () => {
+    expect(knobActionFor("adjacent:prev", undefined)).toEqual({ kind: "adjacent", dir: -1 });
+    // 레거시: 종전 기본값 "Cmd+Left"/"Cmd+Right" → 인접 네비로 계속 동작.
+    expect(knobActionFor("Cmd+Left", MAP)).toEqual({ kind: "adjacent", dir: -1 });
+    // 레거시: 메뉴 단축키 콤보 → 그 액션.
+    expect(knobActionFor("Cmd+2", MAP)).toEqual({ kind: "navigate", view: "today" });
+    // 죽은 콤보(자기-매칭 포함)/빈 값 → null(그 방향 끔).
+    expect(knobActionFor("Cmd+Up", MAP)).toBeNull();
+    expect(knobActionFor("", MAP)).toBeNull();
+  });
+
+  it("knobTokenForAction: AppAction → 토큰 라운드트립", () => {
+    for (const o of knobActionOptions()) {
+      const action = parseKnobToken(o.token);
+      expect(action, o.token).not.toBeNull();
+      expect(knobTokenForAction(action!)).toBe(o.token);
+    }
   });
 });

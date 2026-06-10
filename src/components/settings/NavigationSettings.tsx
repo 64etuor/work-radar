@@ -5,8 +5,22 @@ import { useMemo, useRef, useState } from "react";
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { knobActionFor, knobActionOptions, knobTokenForAction } from "@/lib/appActions";
 import { eventToHotkeySpec } from "@/lib/hotkey";
-import { EXTRA_ACTIONS, KNOB_DIRECTIONS, KNOB_TRIGGER_KEY, NAV_ITEMS } from "@/lib/nav";
+import {
+  EXTRA_ACTIONS,
+  isKnobKeymapKey,
+  KNOB_DIRECTIONS,
+  KNOB_TRIGGER_KEY,
+  NAV_ITEMS,
+} from "@/lib/nav";
 import {
   useGlobalHotkey,
   useNavKeymap,
@@ -71,9 +85,11 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
   }
 
   // 중복 감지: 같은 spec(대소문자 무시)을 2개 이상 액션이 쓰면 그 행을 빨갛게(경고만).
+  // knob 예약 키는 제외 — 값이 단축키 spec이 아니라 액션 토큰이라 중복 개념이 다르다.
   const specCounts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const v of Object.values(kmDraft)) {
+    for (const [k, v] of Object.entries(kmDraft)) {
+      if (isKnobKeymapKey(k)) continue;
       const s = v.trim().toLowerCase();
       if (s) c[s] = (c[s] ?? 0) + 1;
     }
@@ -219,17 +235,16 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         {KNOB_DIRECTIONS.map((d) => (
           <div key={d.key} className="flex items-center gap-3 py-1">
             <span className="text-foreground typo-body-md w-28 shrink-0">{d.label}</span>
-            <ViewKeymapCapture
+            <KnobActionSelect
               value={kmDraft[d.key] ?? ""}
+              keymap={kmDraft}
               onChange={(v) => setKmDraft((prev) => ({ ...prev, [d.key]: v }))}
               label={d.label}
-              duplicate={false}
             />
           </div>
         ))}
         <p className="text-muted-foreground text-xs">
-          뷰 전환(인접 이동)은 <code>Cmd+Left</code>/<code>Cmd+Right</code>처럼 Shift·Alt 없는
-          조합만 동작합니다. 그 외 방향엔 원하는 메뉴 단축키(예: Cmd+1)를 지정하세요. 빈 값 = 그
+          방향마다 실행할 액션을 고르세요(이전/다음 뷰, 특정 뷰 열기, 캘린더·Inbox 토글). 없음 = 그
           방향 비활성.
         </p>
       </div>
@@ -336,6 +351,46 @@ function ViewKeymapCapture({
         </button>
       )}
     </div>
+  );
+}
+
+// ── 조이스틱 방향 액션 드롭다운 ───────────────────────────────────
+
+/** Radix Select는 빈 문자열 value를 허용하지 않아 "없음"은 sentinel로 표현. */
+const KNOB_OFF = "__off__";
+
+/**
+ * knob 방향 값(액션 토큰 정본 / 레거시 콤보 호환)을 액션 드롭다운으로 편집한다(ADR-0011 후속 ①).
+ * 표시 값은 항상 동등 토큰으로 정규화(knobActionFor→knobTokenForAction) — 레거시 콤보
+ * ("Cmd+Left")도 해당 액션으로 보이고, 변경 시 토큰으로 저장돼 자연 이행된다.
+ */
+function KnobActionSelect({
+  value,
+  keymap,
+  onChange,
+  label,
+}: {
+  value: string;
+  keymap: Record<string, string>;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  const action = knobActionFor(value, keymap);
+  const token = action ? knobTokenForAction(action) : KNOB_OFF;
+  return (
+    <Select value={token} onValueChange={(v) => onChange(v === KNOB_OFF ? "" : v)}>
+      <SelectTrigger className="h-8 w-auto min-w-[160px]" aria-label={`${label} 액션 선택`}>
+        <SelectValue placeholder="없음" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={KNOB_OFF}>없음</SelectItem>
+        {knobActionOptions().map((o) => (
+          <SelectItem key={o.token} value={o.token}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

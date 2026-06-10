@@ -120,10 +120,10 @@ describe("viewMotionBetween", () => {
 });
 
 describe("defaultKeymap knob 엔트리", () => {
-  it("좌우 기본 = Cmd+Left/Right, 상하 = 빈값", () => {
+  it("좌우 기본 = adjacent 액션 토큰, 상하 = 빈값", () => {
     const m = defaultKeymap();
-    expect(m.knob_left).toBe("Cmd+Left");
-    expect(m.knob_right).toBe("Cmd+Right");
+    expect(m.knob_left).toBe("adjacent:prev");
+    expect(m.knob_right).toBe("adjacent:next");
     expect(m.knob_up).toBe("");
     expect(m.knob_down).toBe("");
   });
