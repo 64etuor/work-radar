@@ -1,0 +1,26 @@
+src/lib/knobGeometry.ts
+  s_b8a01d6932bdea::t_bbba7a5a489df5 41-59
+src/lib/knobGeometry.test.ts
+  s_b8a01d6932bdea::t_026dd1cd908436 3
+  s_b8a01d6932bdea::t_e8b6db25d67e85 48,50-53,57-58,62-63,69-70,75-76
+  s_b8a01d6932bdea::t_e0a0c1fe1680d7 49,54-56,59-61,64-68,71-74
+src/components/CmdKnob.tsx
+  s_b8a01d6932bdea::t_597b72f9eb42c0 55-62,64
+  s_b8a01d6932bdea::t_026dd1cd908436 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "df1c35746b5b9c47b53fe895d94b6fd01bc53aa3",
+  "prompts": {},
+  "sessions": {
+    "s_b8a01d6932bdea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b25308-efb2-4cd6-8340-d3a192aa43be",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
