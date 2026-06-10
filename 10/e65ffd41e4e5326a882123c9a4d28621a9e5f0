@@ -1,0 +1,28 @@
+src/lib/hotkey.test.ts
+  s_b8a01d6932bdea::t_7c2a10927da5ca 3,17-19,27-36,38-39,47-48,56
+  s_1e7f8df11880c7::t_6952fcd14b79f0 20-26,40-46,49-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "10e65ffd41e4e5326a882123c9a4d28621a9e5f0",
+  "prompts": {},
+  "sessions": {
+    "s_1e7f8df11880c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f0e40a7e-9fbe-41c9-92c2-4a40fc477c4e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_b8a01d6932bdea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b25308-efb2-4cd6-8340-d3a192aa43be",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
