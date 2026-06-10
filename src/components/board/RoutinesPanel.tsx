@@ -1,42 +1,22 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 
-import type {
-  Kind,
-  LifeWheelTagConfig,
-  Project,
-  RoutineFreq,
-  RoutineMonthlyPattern,
-  RoutineToday,
-  Weekday,
-} from "@/bindings";
+import type { Kind, LifeWheelTagConfig, Project, RoutineToday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
+import { RoutineForm } from "@/components/board/RoutineForm";
+import { type RoutineDraft, schedLabel } from "@/components/board/routineSchedule";
 import { RoutineSyncButton } from "@/components/board/RoutineSyncButton";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
-import { Input } from "@/components/ui/input";
 import { useListReorder } from "@/lib/useListReorder";
+
+// 외부 소비자(CaptureBoard/ExecutionRail)가 이 모듈에서 RoutineDraft를 import 하므로 재export로 경로 유지.
+export type { RoutineDraft };
 
 // 매 렌더 새 JSX 노드 할당 방지(react-doctor/jsx-no-jsx-as-prop) — props/closure가 없는 정적 SVG.
 const CHECK_INDICATOR = <CheckIcon />;
-
-/** 루틴 생성 입력(폼 → CaptureBoard). kind/area는 카드에서 즉시 갱신(IPC)되므로 폼은 안 받는다. */
-export type RoutineDraft = {
-  title: string;
-  freq: RoutineFreq;
-  weekdays: Weekday[];
-  anchorDate: string | null;
-  timeOfDay: string | null;
-  reminderOffsetMin: number | null;
-  /** monthly 풍부 패턴. monthly가 아니면 null(백엔드가 NULL로 정리). */
-  monthlyPattern: RoutineMonthlyPattern | null;
-  /** nth_weekday 주차(1..5, -1=마지막). nth_weekday가 아니면 null. */
-  monthlyNthWeek: number | null;
-  /** Google 동기화 시 이벤트 길이(분). null=기본 30분 fallback. */
-  durationMin: number | null;
-};
 
 type Props = {
   routines: RoutineToday[];
@@ -63,58 +43,6 @@ type Props = {
   syncBusy?: boolean;
 };
 
-const DAYS: { label: string; key: Weekday }[] = [
-  { label: "월", key: "mon" },
-  { label: "화", key: "tue" },
-  { label: "수", key: "wed" },
-  { label: "목", key: "thu" },
-  { label: "금", key: "fri" },
-  { label: "토", key: "sat" },
-  { label: "일", key: "sun" },
-];
-
-const FREQS: { value: RoutineFreq; label: string }[] = [
-  { value: "daily", label: "매일" },
-  { value: "weekly", label: "매주" },
-  { value: "biweekly", label: "격주" },
-  { value: "monthly", label: "매월" },
-];
-
-const MONTHLY_PATTERNS: { value: RoutineMonthlyPattern; label: string }[] = [
-  { value: "day_of_month", label: "같은 날짜" },
-  { value: "nth_weekday", label: "N번째 요일" },
-];
-
-// nth_weekday 주차. -1=마지막(달의 마지막 해당 요일). 백엔드 검증/매핑과 동일 도메인(1..5, -1).
-const NTH_WEEKS: { value: number; label: string }[] = [
-  { value: 1, label: "첫째" },
-  { value: 2, label: "둘째" },
-  { value: 3, label: "셋째" },
-  { value: 4, label: "넷째" },
-  { value: 5, label: "다섯째" },
-  { value: -1, label: "마지막" },
-];
-
-function schedLabel(r: RoutineToday): string {
-  if (r.freq === "daily") return "매일";
-  if (r.freq === "monthly") {
-    if (r.monthlyPattern === "nth_weekday") {
-      const nthLabel = NTH_WEEKS.find((w) => w.value === r.monthlyNthWeek)?.label;
-      const dayLabel = DAYS.find((d) => d.key === r.weekdays[0])?.label;
-      return nthLabel && dayLabel ? `매월 ${nthLabel} ${dayLabel}` : "매월";
-    }
-    const day = r.anchorDate ? Number(r.anchorDate.split("-")[2]) : null;
-    return day ? `매월 ${day}일` : "매월";
-  }
-  const order = DAYS.map((d) => d.key);
-  const days = r.weekdays
-    .slice()
-    .sort((a, b) => order.indexOf(a) - order.indexOf(b))
-    .map((w) => DAYS.find((d) => d.key === w)?.label ?? w)
-    .join("·");
-  return r.freq === "biweekly" ? `격주 ${days}` : days;
-}
-
 /** 우측 하단 Routines 패널 — 오늘 해당 반복 작업 체크리스트 + 추가 폼 + 드래그 정렬. */
 export function RoutinesPanel({
   routines,
@@ -134,21 +62,11 @@ export function RoutinesPanel({
   syncBusy,
 }: Props) {
   // open=false: 폼 닫힘. open=true + editId=null: 새 루틴 추가. open=true + editId: 수정 모드.
-  const fieldId = useId();
-  const timeId = `${fieldId}-time`;
-  const offsetId = `${fieldId}-offset`;
-  const durationId = `${fieldId}-duration`;
-
+  // openSeq는 폼 remount nonce — 열 때마다 증가시켜 RoutineForm(key=openSeq)을 새로 마운트해
+  // 입력 state를 리셋/재시드한다(과거 reset() + 개별 set* 동작과 동치).
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [freq, setFreq] = useState<RoutineFreq>("daily");
-  const [days, setDays] = useState<Set<Weekday>>(new Set());
-  const [time, setTime] = useState("");
-  const [offset, setOffset] = useState("");
-  const [monthlyPattern, setMonthlyPattern] = useState<RoutineMonthlyPattern>("day_of_month");
-  const [nthWeek, setNthWeek] = useState(2);
-  const [duration, setDuration] = useState("");
+  const [openSeq, setOpenSeq] = useState(0);
   // BrainDump 카드와 동일하게 area 방사형 휠을 위한 anchor 상태(panel 내 자체 소유).
   const [areaPalette, setAreaPalette] = useState<{
     routineId: string;
@@ -161,86 +79,21 @@ export function RoutinesPanel({
     onReorder,
   );
 
-  // 요일 입력은 weekly/biweekly(복수)에서, monthly nth_weekday(단일)에서 의미.
-  const needsWeekdays = freq === "weekly" || freq === "biweekly";
-  const isMonthly = freq === "monthly";
-  const isNthWeekday = isMonthly && monthlyPattern === "nth_weekday";
-
-  const toggleDay = (key: Weekday) => {
-    // nth_weekday는 요일 정확히 1개 — 클릭 시 단일 선택으로 치환.
-    if (isNthWeekday) {
-      setDays(new Set([key]));
-      return;
-    }
-    setDays((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const reset = () => {
-    setTitle("");
-    setFreq("daily");
-    setDays(new Set());
-    setTime("");
-    setOffset("");
-    setMonthlyPattern("day_of_month");
-    setNthWeek(2);
-    setDuration("");
-    setEditId(null);
-  };
-
   const openCreate = () => {
-    reset();
+    setEditId(null);
+    setOpenSeq((s) => s + 1);
     setOpen(true);
   };
 
   const openEdit = (r: RoutineToday) => {
     setEditId(r.id);
-    setTitle(r.title);
-    setFreq(r.freq);
-    setDays(new Set(r.weekdays));
-    setTime(r.timeOfDay ?? "");
-    setOffset(r.reminderOffsetMin != null ? String(r.reminderOffsetMin) : "");
-    setMonthlyPattern(r.monthlyPattern ?? "day_of_month");
-    setNthWeek(r.monthlyNthWeek ?? 2);
-    setDuration(r.durationMin != null ? String(r.durationMin) : "");
+    setOpenSeq((s) => s + 1);
     setOpen(true);
   };
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const t = title.trim();
-    if (!t) return;
-    if (needsWeekdays && days.size === 0) return; // weekly/biweekly는 요일 필수.
-    if (isNthWeekday && days.size !== 1) return; // nth_weekday는 요일 정확히 1개(백엔드 검증 미러).
-    // weekly/biweekly는 복수 요일, nth_weekday는 단일 요일을 weekdays로 전달. 그 외는 빈 배열.
-    const weekdays =
-      needsWeekdays || isNthWeekday ? DAYS.filter((d) => days.has(d.key)).map((d) => d.key) : [];
-    const offNum = offset.trim() === "" ? null : Math.max(0, Number(offset));
-    const durNum = duration.trim() === "" ? null : Math.max(0, Number(duration));
-    const draft: RoutineDraft = {
-      title: t,
-      freq,
-      weekdays,
-      // biweekly/monthly anchor는 백엔드가 기존 값 또는 오늘로 채운다(폼은 비워 보낸다).
-      anchorDate: null,
-      timeOfDay: time.trim() === "" ? null : time,
-      reminderOffsetMin: Number.isFinite(offNum as number) ? offNum : null,
-      // 패턴 필드는 monthly일 때만 의미 — 그 외 freq면 null(백엔드도 NULL 정리).
-      monthlyPattern: isMonthly ? monthlyPattern : null,
-      monthlyNthWeek: isNthWeekday ? nthWeek : null,
-      durationMin: Number.isFinite(durNum as number) ? durNum : null,
-    };
-    if (editId) {
-      onUpdate(editId, draft);
-    } else {
-      onCreate(draft);
-    }
-    reset();
+  const closeForm = () => {
     setOpen(false);
+    setEditId(null);
   };
 
   const handleDelete = (r: RoutineToday) => {
@@ -274,153 +127,17 @@ export function RoutinesPanel({
       </div>
 
       {open && (
-        <form className="rform" onSubmit={submit}>
-          <Input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="루틴 제목 (예: 아침 운동)"
-            autoComplete="off"
-            data-cb-routine-title
-            autoFocus
-            className="mb-1.5 h-8 text-[13px]"
-          />
-          <div className="rfreqs">
-            {FREQS.map((f) => (
-              <Button
-                key={f.value}
-                type="button"
-                variant={freq === f.value ? "default" : "outline"}
-                size="sm"
-                aria-pressed={freq === f.value}
-                className="flex-1 text-[11px]"
-                onClick={() => setFreq(f.value)}
-              >
-                {f.label}
-              </Button>
-            ))}
-          </div>
-          {isMonthly && (
-            <div className="rfreqs" role="group" aria-label="월간 반복 방식">
-              {MONTHLY_PATTERNS.map((p) => (
-                <Button
-                  key={p.value}
-                  type="button"
-                  variant={monthlyPattern === p.value ? "default" : "outline"}
-                  size="sm"
-                  aria-pressed={monthlyPattern === p.value}
-                  className="flex-1 text-[11px]"
-                  onClick={() => setMonthlyPattern(p.value)}
-                >
-                  {p.label}
-                </Button>
-              ))}
-            </div>
-          )}
-          {isNthWeekday && (
-            <div className="days" role="group" aria-label="주차 선택">
-              {NTH_WEEKS.map((w) => (
-                <Button
-                  key={w.value}
-                  type="button"
-                  variant={nthWeek === w.value ? "default" : "outline"}
-                  size="sm"
-                  aria-pressed={nthWeek === w.value}
-                  className="h-[26px] flex-1 p-0 text-[11px]"
-                  onClick={() => setNthWeek(w.value)}
-                >
-                  {w.label}
-                </Button>
-              ))}
-            </div>
-          )}
-          {(needsWeekdays || isNthWeekday) && (
-            <div className="days">
-              {DAYS.map((d) => (
-                <Button
-                  key={d.key}
-                  type="button"
-                  variant={days.has(d.key) ? "default" : "outline"}
-                  size="sm"
-                  aria-pressed={days.has(d.key)}
-                  className="size-[26px] p-0 text-[11px]"
-                  onClick={() => toggleDay(d.key)}
-                >
-                  {d.label}
-                </Button>
-              ))}
-            </div>
-          )}
-          {isMonthly && monthlyPattern === "day_of_month" && (
-            <div className="rhint">오늘 날짜를 매월 기준일로 사용합니다 (월말 자동 보정).</div>
-          )}
-          {isNthWeekday && (
-            <div className="rhint">매월 N번째 해당 요일에 반복합니다 (요일 하나 선택).</div>
-          )}
-          {freq === "biweekly" && (
-            <div className="rhint">이번 주를 기준으로 2주마다 반복합니다.</div>
-          )}
-          <div className="rtime">
-            <label htmlFor={timeId}>
-              시간
-              <Input
-                id={timeId}
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="h-8 w-auto px-2 text-xs"
-              />
-            </label>
-            <label htmlFor={offsetId}>
-              알림
-              <span className="roff">
-                <Input
-                  id={offsetId}
-                  type="number"
-                  min={0}
-                  value={offset}
-                  onChange={(e) => setOffset(e.target.value)}
-                  placeholder="0"
-                  disabled={time.trim() === ""}
-                  className="h-8 w-12 px-2 text-xs"
-                />
-                분 전
-              </span>
-            </label>
-            <label htmlFor={durationId}>
-              길이
-              <span className="roff">
-                <Input
-                  id={durationId}
-                  type="number"
-                  min={0}
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  placeholder="30"
-                  className="h-8 w-12 px-2 text-xs"
-                />
-                분
-              </span>
-            </label>
-          </div>
-          <div className="row">
-            <Button type="submit" size="sm" className="rounded-full px-3.5 text-xs">
-              {editId ? "저장" : "추가"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-full px-3.5 text-xs"
-              onClick={() => {
-                reset();
-                setOpen(false);
-              }}
-            >
-              취소
-            </Button>
-          </div>
-        </form>
+        <RoutineForm
+          key={openSeq}
+          isEdit={editId !== null}
+          initial={editId ? (routines.find((r) => r.id === editId) ?? null) : null}
+          onSubmit={(draft) => {
+            if (editId) onUpdate(editId, draft);
+            else onCreate(draft);
+            closeForm();
+          }}
+          onCancel={closeForm}
+        />
       )}
 
       <div className="pb-body">
