@@ -1,0 +1,27 @@
+src-tauri/src/calendar/sync.rs
+  s_360a7df630281b::t_a614c211785d78 449
+  s_360a7df630281b::t_6c36a90628fbf1 551
+src/components/today/useTimelineDnd.ts
+  s_360a7df630281b::t_36e5b375500c0d 366-369
+src-tauri/src/calendar/pending_store.rs
+  s_360a7df630281b::t_f6451211f7a8f5 60-62
+src-tauri/src/commands/calendar.rs
+  s_360a7df630281b::t_a5d086056b193b 489-495
+  s_360a7df630281b::t_15132de67cb532 508-509
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "99e6e8f155eddca926c5a3d2dfdace76680dca51",
+  "prompts": {},
+  "sessions": {
+    "s_360a7df630281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad8d0f5f-9b75-4266-aefc-43b1769e93e9",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
