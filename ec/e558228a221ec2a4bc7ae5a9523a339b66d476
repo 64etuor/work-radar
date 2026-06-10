@@ -1,0 +1,27 @@
+governance/test/mcp/verdictGating.test.ts
+  s_1e7f8df11880c7::t_c81bc2c59e80da 43-54,57,70,76,83-86,88-97
+governance/test/mcp/hypotheses.test.ts
+  s_1e7f8df11880c7::t_fdb7125ce9070c 101-104,111
+governance/test/mcp/archive.test.ts
+  s_1e7f8df11880c7::t_c4c70eee038f51 110-113,119-120
+governance/test/mcp/meta.test.ts
+  s_1e7f8df11880c7::t_2cec8d7c7c8107 55-58,65
+governance/src/mcp/server.ts
+  s_1e7f8df11880c7::t_96ed11af207488 31-42,165-201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ece558228a221ec2a4bc7ae5a9523a339b66d476",
+  "prompts": {},
+  "sessions": {
+    "s_1e7f8df11880c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f0e40a7e-9fbe-41c9-92c2-4a40fc477c4e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
