@@ -1,0 +1,19 @@
+src/components/weekly/ArchiveAccordion.tsx
+  s_ef5de42741471b::t_1079109e318deb 1-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b2dccc7257d698a5309bdea81bb09b7d7bf35d26",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
