@@ -110,18 +110,42 @@ export default function ControlRoomView() {
             />
           )}
           {total === 0 ? (
-            <div className="cr-canvas-empty">
-              <div className="cr-canvas-empty-title">진행 중인 work 없음</div>
-              <div className="cr-canvas-empty-hint">
-                plan을 propose/accept하면 여기 다이어그램으로 나타납니다.
-              </div>
-            </div>
+            <GhostPipeline />
           ) : (
             // key = remount per project so React Flow re-runs fitView on tab switch.
             <FlowSchematic key={activeProjectId ?? "none"} snap={data} filter={filter} />
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/** Empty-state skeleton: a ghost of the 5-lane pipeline so the canvas never reads as
+ *  broken/blank — dashed placeholder cards with a quiet shimmer (reduced-motion gated),
+ *  hint text below. Pure markup; no React Flow mount for zero nodes. */
+function GhostPipeline() {
+  const lanes = ["SPEC", "PLAN", "TASK", "SESSION", "HANDOFF"];
+  return (
+    <div className="cr-ghost" aria-label="진행 중인 work 없음">
+      <div className="cr-ghost-row" aria-hidden>
+        {lanes.map((lane, i) => (
+          <div key={lane} className="cr-ghost-lane">
+            <div className="cr-ghost-cell">
+              <div className="cr-ghost-lane-label">{lane}</div>
+              <div className="cr-ghost-node" style={{ animationDelay: `${i * 0.12}s` }}>
+                <span className="cr-ghost-bar" />
+                <span className="cr-ghost-bar cr-ghost-bar--short" />
+              </div>
+            </div>
+            {i < lanes.length - 1 && <div className="cr-ghost-link" />}
+          </div>
+        ))}
+      </div>
+      <div className="cr-canvas-empty-title">진행 중인 work 없음</div>
+      <div className="cr-canvas-empty-hint">
+        plan을 propose/accept하면 여기 다이어그램으로 나타납니다.
+      </div>
     </div>
   );
 }
