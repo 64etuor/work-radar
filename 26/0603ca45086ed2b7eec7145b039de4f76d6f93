@@ -1,0 +1,46 @@
+src-tauri/src/commands/routines/mod.rs
+  s_5168a1a14ba3af::t_7934e6b1a27ad0 982-984
+src-tauri/src/commands/routines/listing.rs
+  s_5168a1a14ba3af::t_78d7b925c43182 49
+src-tauri/src/commands/calendar_sync.rs
+  s_5168a1a14ba3af::t_2fc099e6cc6855 150-163
+  s_5168a1a14ba3af::t_66caa346b75e3b 622-651
+src-tauri/src/commands/routines/crud.rs
+  s_5168a1a14ba3af::t_354323c3f43af5 343-344,346-348,367-370,372-387
+src-tauri/migrations/0049_routine_completion_marker.sql
+  s_5168a1a14ba3af::t_dc5035d659b1f9 1-27
+src/components/TodayView.tsx
+  s_5168a1a14ba3af::t_e95ed27a640a49 362
+  s_5168a1a14ba3af::t_9bf59ac0e9ce80 231,234-235
+  s_5168a1a14ba3af::t_e5c72ce76de820 265-266
+src/components/today/TimelineCanvas.tsx
+  s_5168a1a14ba3af::t_69f932a30e12c9 58
+  s_5168a1a14ba3af::t_cb0ec1f66dc3a7 103,108
+  s_5168a1a14ba3af::t_c550ff92b98dd3 33-34
+src-tauri/src/commands/today/mod.rs
+  s_5168a1a14ba3af::t_11be96212966e8 417
+  s_5168a1a14ba3af::t_87f6e45f228741 343
+src/components/today/useTimelineDnd.ts
+  s_5168a1a14ba3af::t_8db7f6510c6056 232-233,235-242
+  s_5168a1a14ba3af::t_ae4a8f30179b4d 251,253-257,259-267
+src-tauri/src/commands/today/weekly.rs
+  s_5168a1a14ba3af::t_2987cc816eaf84 57-58
+src-tauri/src/commands/routines/tracking.rs
+  s_5168a1a14ba3af::t_05f5e55ae94dcb 67-68,70-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "260603ca45086ed2b7eec7145b039de4f76d6f93",
+  "prompts": {},
+  "sessions": {
+    "s_5168a1a14ba3af": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c46668de-39ec-4921-b3e5-8ef8e6724aff",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
