@@ -32,4 +32,16 @@ describe("armedDirection", () => {
   it("해당 방향이 disabled면 null", () => {
     expect(armedDirection(-60, 10, R, RATIO, { ...ALL, left: false })).toBeNull();
   });
+  it("우세 축이 disabled여도 다른 축이 임계+enabled면 그쪽으로 폴백(상하 미바인딩 기본값)", () => {
+    // 위로 크게 → 좌로 curve(세로가 아직 우세하지만 좌측 성분이 임계 초과). up 미바인딩 → left로 발사.
+    const updown_off = { up: false, down: false, left: true, right: true };
+    expect(armedDirection(-60, -70, R, RATIO, updown_off)).toBe("left");
+    expect(armedDirection(60, -70, R, RATIO, updown_off)).toBe("right");
+  });
+  it("우세 축 disabled + 다른 축이 임계 미만이면 null(폴백 후보 없음)", () => {
+    // 거의 수직 위(좌측 성분이 임계 미만). up 미바인딩 → 폴백 없음 → null.
+    expect(
+      armedDirection(-40, -70, R, RATIO, { up: false, down: false, left: true, right: true }),
+    ).toBeNull();
+  });
 });
