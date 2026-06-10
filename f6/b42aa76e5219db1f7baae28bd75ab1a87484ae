@@ -1,0 +1,32 @@
+src/components/board/RoutinesPanel.dom.test.tsx
+  s_d8557d82b81ed1::t_306260691c94e2 196
+  s_d8557d82b81ed1::t_aa9dbc7a2aed38 1-7,9-51,55-61,65-192,226
+  s_d8557d82b81ed1::t_1ef296af05cd2f 193-195,197-225
+  s_d8557d82b81ed1::t_6119898b078402 52-54,62-64
+  s_d8557d82b81ed1::t_f5d351a81ef19f 8
+src/components/board/routineSchedule.ts
+  s_d8557d82b81ed1::t_9de8982b437dc6 1-69
+src/components/board/RoutineForm.tsx
+  s_d8557d82b81ed1::t_44da5a802868f5 11-12
+  s_d8557d82b81ed1::t_eb85eed515fb63 1-10,13-239
+src/components/board/RoutinesPanel.tsx
+  s_d8557d82b81ed1::t_9aacb8a96e73aa 2,4,7-8,15-17,65-66,69,83-84,90,94,96,130-140
+scripts/design-gate-baseline.json
+  s_d8557d82b81ed1::t_264ed2917ceb7d 17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "f6b42aa76e5219db1f7baae28bd75ab1a87484ae",
+  "prompts": {},
+  "sessions": {
+    "s_d8557d82b81ed1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4ea5c81-1428-45e3-92ea-b20c2056ed7b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
