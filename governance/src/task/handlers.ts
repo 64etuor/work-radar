@@ -5,12 +5,14 @@ import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { deriveDecisionState } from "../decision/decision.ts";
 import { deriveTaskState, tasksOf, type TaskState } from "./task.ts";
 import { canStart, canBlock, canComplete, canCancel } from "./guards.ts";
-import {
-  classifyAttemptEvidence,
-  type AttemptOutcomeClass,
-} from "../backends/attemptClass.ts";
+import { classifyAttemptEvidence, type AttemptOutcomeClass } from "../backends/attemptClass.ts";
 
-export interface TaskGateResult { ok: boolean; reason: string; eventId?: string; }
+export interface TaskGateResult {
+  ok: boolean;
+  reason: string;
+  eventId?: string;
+  sessionId?: string | null;
+}
 export interface RecordAttemptInput {
   taskId: string;
   attemptIndex: number;
@@ -22,7 +24,10 @@ export interface RecordAttemptInput {
   usageCostUsd?: number;
 }
 
-async function loadTask(workspaceDir: string, taskId: string): Promise<{ state: TaskState; all: GovEvent[] }> {
+async function loadTask(
+  workspaceDir: string,
+  taskId: string,
+): Promise<{ state: TaskState; all: GovEvent[] }> {
   const all = await readAllEvents(workspaceDir);
   const grp = eventsForDecision(all, taskId);
   if (!grp.proposal || grp.proposal.frontmatter.type !== "task_created")
@@ -31,13 +36,21 @@ async function loadTask(workspaceDir: string, taskId: string): Promise<{ state: 
 }
 
 async function writeLifecycle(
-  workspaceDir: string, type: EventType, taskId: string, body: string, now: Date, rand: number,
+  workspaceDir: string,
+  type: EventType,
+  taskId: string,
+  body: string,
+  now: Date,
+  rand: number,
 ): Promise<string> {
   const evt: GovEvent = {
     frontmatter: {
       id: generateId("evt", now, rand),
-      type, source: "hermes", actor: "user",
-      tags: ["task"], related_to: [taskId],
+      type,
+      source: "hermes",
+      actor: "user",
+      tags: ["task"],
+      related_to: [taskId],
     },
     body,
   };
@@ -60,7 +73,9 @@ function latestSessionForTask(all: GovEvent[], taskId: string): string | null {
  *  Exported so the v3 Conductor's halt projection REUSES this exact coupling (not a duplicate). */
 export function hasOpenBlock(all: GovEvent[], taskId: string): boolean {
   const blocks = all.filter(
-    (e) => e.frontmatter.type === "decision_blocked" && (e.frontmatter.related_to ?? []).includes(taskId),
+    (e) =>
+      e.frontmatter.type === "decision_blocked" &&
+      (e.frontmatter.related_to ?? []).includes(taskId),
   );
   for (const b of blocks) {
     const relatedIds = b.frontmatter.related_to ?? [];
@@ -76,29 +91,65 @@ export function hasOpenBlock(all: GovEvent[], taskId: string): boolean {
 }
 
 /** start_task — ready/blocked → active. */
-export async function startTask(workspaceDir: string, input: { taskId: string }, now: Date, rand: number): Promise<TaskGateResult> {
+export async function startTask(
+  workspaceDir: string,
+  input: { taskId: string },
+  now: Date,
+  rand: number,
+): Promise<TaskGateResult> {
   const { state } = await loadTask(workspaceDir, input.taskId);
   const gate = canStart(state);
   if (!gate.ok) return { ok: false, reason: gate.reason };
-  const eventId = await writeLifecycle(workspaceDir, "task_started", input.taskId, `Started ${input.taskId}`, now, rand);
+  const eventId = await writeLifecycle(
+    workspaceDir,
+    "task_started",
+    input.taskId,
+    `Started ${input.taskId}`,
+    now,
+    rand,
+  );
   return { ok: true, reason: gate.reason, eventId };
 }
 
 /** block_task — active → blocked (records reason). */
-export async function blockTask(workspaceDir: string, input: { taskId: string; reason: string }, now: Date, rand: number): Promise<TaskGateResult> {
+export async function blockTask(
+  workspaceDir: string,
+  input: { taskId: string; reason: string },
+  now: Date,
+  rand: number,
+): Promise<TaskGateResult> {
   const { state } = await loadTask(workspaceDir, input.taskId);
   const gate = canBlock(state);
   if (!gate.ok) return { ok: false, reason: gate.reason };
-  const eventId = await writeLifecycle(workspaceDir, "task_blocked", input.taskId, `Blocked ${input.taskId}: ${input.reason}`, now, rand);
+  const eventId = await writeLifecycle(
+    workspaceDir,
+    "task_blocked",
+    input.taskId,
+    `Blocked ${input.taskId}: ${input.reason}`,
+    now,
+    rand,
+  );
   return { ok: true, reason: gate.reason, eventId };
 }
 
 /** complete_task — active → done. Guarded by canComplete (incl. open-block coupling). */
-export async function completeTask(workspaceDir: string, input: { taskId: string }, now: Date, rand: number): Promise<TaskGateResult> {
+export async function completeTask(
+  workspaceDir: string,
+  input: { taskId: string },
+  now: Date,
+  rand: number,
+): Promise<TaskGateResult> {
   const { state, all } = await loadTask(workspaceDir, input.taskId);
   const gate = canComplete(state, hasOpenBlock(all, input.taskId));
   if (!gate.ok) return { ok: false, reason: gate.reason };
-  const eventId = await writeLifecycle(workspaceDir, "task_completed", input.taskId, `Completed ${input.taskId}`, now, rand);
+  const eventId = await writeLifecycle(
+    workspaceDir,
+    "task_completed",
+    input.taskId,
+    `Completed ${input.taskId}`,
+    now,
+    rand,
+  );
   return { ok: true, reason: gate.reason, eventId };
 }
 
@@ -124,7 +175,7 @@ export async function reportTaskDone(
     body: JSON.stringify({ taskId: input.taskId, sessionId }),
   };
   await writeEvent(workspaceDir, evt, now);
-  return { ok: true, reason: "executor reported done", eventId: evt.frontmatter.id };
+  return { ok: true, reason: "executor reported done", eventId: evt.frontmatter.id, sessionId };
 }
 
 export async function recordExecutorAttempt(
@@ -171,15 +222,31 @@ export async function recordExecutorAttempt(
 }
 
 /** cancel_task — any non-terminal → cancelled. */
-export async function cancelTask(workspaceDir: string, input: { taskId: string }, now: Date, rand: number): Promise<TaskGateResult> {
+export async function cancelTask(
+  workspaceDir: string,
+  input: { taskId: string },
+  now: Date,
+  rand: number,
+): Promise<TaskGateResult> {
   const { state } = await loadTask(workspaceDir, input.taskId);
   const gate = canCancel(state);
   if (!gate.ok) return { ok: false, reason: gate.reason };
-  const eventId = await writeLifecycle(workspaceDir, "task_cancelled", input.taskId, `Cancelled ${input.taskId}`, now, rand);
+  const eventId = await writeLifecycle(
+    workspaceDir,
+    "task_cancelled",
+    input.taskId,
+    `Cancelled ${input.taskId}`,
+    now,
+    rand,
+  );
   return { ok: true, reason: gate.reason, eventId };
 }
 
-export interface TaskSummary { taskId: string; title: string; phase: TaskState["phase"]; }
+export interface TaskSummary {
+  taskId: string;
+  title: string;
+  phase: TaskState["phase"];
+}
 
 /** tasks — non-terminal tasks. */
 export async function listTasks(workspaceDir: string): Promise<TaskSummary[]> {
@@ -188,22 +255,39 @@ export async function listTasks(workspaceDir: string): Promise<TaskSummary[]> {
   for (const t of tasksOf(all)) {
     const grp = eventsForDecision(all, t.frontmatter.id);
     const s = deriveTaskState(grp.proposal!, grp.related);
-    if (s.phase !== "done" && s.phase !== "cancelled") out.push({ taskId: s.taskId, title: s.title, phase: s.phase });
+    if (s.phase !== "done" && s.phase !== "cancelled")
+      out.push({ taskId: s.taskId, title: s.title, phase: s.phase });
   }
   return out;
 }
 
-export interface TaskTrailEntry { id: string; type: GovEvent["frontmatter"]["type"]; actor: string; summary: string; }
-export interface TaskTrail { taskId: string; title: string; phase: TaskState["phase"]; chain: TaskTrailEntry[]; }
+export interface TaskTrailEntry {
+  id: string;
+  type: GovEvent["frontmatter"]["type"];
+  actor: string;
+  summary: string;
+}
+export interface TaskTrail {
+  taskId: string;
+  title: string;
+  phase: TaskState["phase"];
+  chain: TaskTrailEntry[];
+}
 
 /** task <id> — full chronological trail. */
-export async function taskTrail(workspaceDir: string, input: { taskId: string }): Promise<TaskTrail> {
+export async function taskTrail(
+  workspaceDir: string,
+  input: { taskId: string },
+): Promise<TaskTrail> {
   const all = await readAllEvents(workspaceDir);
   const grp = eventsForDecision(all, input.taskId);
-  if (!grp.proposal || grp.proposal.frontmatter.type !== "task_created") throw new Error(`unknown task: ${input.taskId}`);
+  if (!grp.proposal || grp.proposal.frontmatter.type !== "task_created")
+    throw new Error(`unknown task: ${input.taskId}`);
   const s = deriveTaskState(grp.proposal, grp.related);
   const chain: TaskTrailEntry[] = [grp.proposal, ...grp.related].map((e) => ({
-    id: e.frontmatter.id, type: e.frontmatter.type, actor: e.frontmatter.actor,
+    id: e.frontmatter.id,
+    type: e.frontmatter.type,
+    actor: e.frontmatter.actor,
     summary: e.body.split("\n", 1)[0] ?? "",
   }));
   return { taskId: s.taskId, title: s.title, phase: s.phase, chain };

@@ -33,6 +33,8 @@ import { parseEnvelopeDefaults } from "../mcp/config.ts";
 import { computeRepoReadiness } from "../live/repoReadiness.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
 import { recordExecutorAttempt, reportTaskDone } from "../task/handlers.ts";
+import { closeSession, requestSessionClose } from "../session/handlers.ts";
+import { makeObserverAdapterFromEnv, observeSessions } from "../session/observer.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { buildControlRoomSnapshot } from "../snapshot/snapshot.ts";
 import { harvest, makeWriteOne } from "../harvest/harvest.ts";
@@ -251,7 +253,33 @@ export async function cmdReportExit(flags: ParsedArgs["flags"]): Promise<string>
   if (!workspace) throw new Error("--workspace <path> is required");
   if (!task) throw new Error("--task <id> is required");
   const r = await reportTaskDone(workspace, { taskId: task }, new Date(), Math.random());
-  return r.ok ? `reported: ${r.eventId}` : `REFUSED: ${r.reason}`;
+  if (!r.ok) return `REFUSED: ${r.reason}`;
+  // Clean exit ALSO closes the session via the documented two-step lifecycle (request_close →
+  // close): the executor process is gone but its cmux pane stays open, so without this the
+  // session never reaches a terminal phase and the completion gate waits forever (the observer
+  // deliberately never auto-closes — §18.3; crash detection stays its job). Best-effort: a
+  // close refusal (e.g. already closed) never fails the exit hint.
+  let closeNote = "no session to close";
+  if (r.sessionId) {
+    const req = await requestSessionClose(
+      workspace,
+      { sessionId: r.sessionId },
+      new Date(),
+      Math.random(),
+    );
+    if (req.ok) {
+      const closed = await closeSession(
+        workspace,
+        { sessionId: r.sessionId },
+        new Date(Date.now() + 1000),
+        Math.random(),
+      );
+      closeNote = closed.ok ? `session closed: ${r.sessionId}` : `close refused: ${closed.reason}`;
+    } else {
+      closeNote = `close request refused: ${req.reason}`;
+    }
+  }
+  return `reported: ${r.eventId} (${closeNote})`;
 }
 
 function reqFlag(flags: ParsedArgs["flags"], name: string): string {
@@ -431,6 +459,25 @@ function formatTick(r: TickReport): string {
  *  daemon, INVARIANT #5). Readiness/halt/stall gated; conducts <=--max-steps; reports + exits. */
 export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
   const repo = reqRepo(flags);
+  // ONE bounded session reconcile (live observer only — a stub's empty surface set would
+  // crash every known session). Runs BEFORE readiness so this tick's stall count already
+  // reflects vanished surfaces; previously observe_sessions was MCP-manual-only, so a
+  // crashed pane was never detected by the app-driven loop.
+  {
+    const obs = makeObserverAdapterFromEnv(process.env);
+    if (obs.live) {
+      const summary = await observeSessions(
+        boulePaths(repo).workspace,
+        { adapter: obs.adapter },
+        new Date(),
+        Math.random(),
+      );
+      process.stderr.write(
+        `boule: observe observed=${summary.observed} crashed=${summary.crashed} ` +
+          `recovered=${summary.recovered} opened=${summary.opened}\n`,
+      );
+    }
+  }
   const rr = await computeRepoReadiness(repo);
   if (rr.source === "fallback")
     process.stderr.write(`boule: WARN config unreadable, STRICT fallback (${rr.reason})\n`);

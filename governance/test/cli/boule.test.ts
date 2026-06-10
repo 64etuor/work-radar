@@ -18,6 +18,7 @@ import { conductPlan } from "../../src/conductor/handlers.js";
 import { stubAdapter } from "../../src/conductor/adapter.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
 import { writeEvent } from "../../src/event/writeEvent.js";
+import { makeObserverAdapterFromEnv, observeSessions } from "../../src/session/observer.js";
 import type { GovEvent } from "../../src/event/event.js";
 
 let repo: string;
@@ -82,7 +83,9 @@ describe("cmdInit / cmdSet / cmdStatus", () => {
     await cmdSet({ repo, "autonomy-level": "dispatch", "review-quorum": "2" });
     const before = await rawConfig();
 
-    await expect(cmdSet({ repo, backends: '{"executor":' })).rejects.toThrow(/--backends must be valid JSON/);
+    await expect(cmdSet({ repo, backends: '{"executor":' })).rejects.toThrow(
+      /--backends must be valid JSON/,
+    );
 
     expect(await rawConfig()).toBe(before);
   });
@@ -92,7 +95,9 @@ describe("cmdInit / cmdSet / cmdStatus", () => {
     await cmdSet({ repo, "review-quorum": "2" });
     const before = await rawConfig();
 
-    await expect(cmdSet({ repo, backends: JSON.stringify({ executor: { chain: [] } }) })).rejects.toThrow();
+    await expect(
+      cmdSet({ repo, backends: JSON.stringify({ executor: { chain: [] } }) }),
+    ).rejects.toThrow();
 
     expect(await rawConfig()).toBe(before);
   });
@@ -316,13 +321,92 @@ describe("cmdReportExit — codex completion-wrapper hint", () => {
     expect(out).toMatch(/^reported: /);
     const events = await readAllEvents(repo);
     const hints = events.filter(
-      (e) => e.frontmatter.type === "executor_reported_done" && e.frontmatter.related_to?.includes(taskId),
+      (e) =>
+        e.frontmatter.type === "executor_reported_done" &&
+        e.frontmatter.related_to?.includes(taskId),
     );
     const completions = events.filter(
       (e) => e.frontmatter.type === "task_completed" && e.frontmatter.related_to?.includes(taskId),
     );
     expect(hints).toHaveLength(1);
     expect(completions).toHaveLength(0);
+  });
+
+  it("closes the bound session on clean exit (request_close → close, terminal for the gate)", async () => {
+    const taskId = await activeTask(repo);
+    const out = await cmdReportExit({ workspace: repo, task: taskId });
+    expect(out).toMatch(/session closed: /);
+    const events = await readAllEvents(repo);
+    const types = events.map((e) => e.frontmatter.type);
+    expect(types).toContain("session_close_requested");
+    expect(types).toContain("session_closed");
+    // task is still NOT completed — only the conductor's completion gate may certify.
+    expect(types).not.toContain("task_completed");
+  });
+
+  it("is idempotent-safe: a second report-exit reports but refuses a double close", async () => {
+    const taskId = await activeTask(repo);
+    await cmdReportExit({ workspace: repo, task: taskId });
+    // events are filed as <HH-MM-SS>_<type>.md — space same-typed writes one second apart.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const out = await cmdReportExit({ workspace: repo, task: taskId });
+    expect(out).toMatch(/^reported: /);
+    expect(out).toMatch(/refused/);
+    const events = await readAllEvents(repo);
+    expect(events.filter((e) => e.frontmatter.type === "session_closed")).toHaveLength(1);
+  });
+});
+
+describe("cmdTick observer reconcile (makeObserverAdapterFromEnv)", () => {
+  it("non-live env → stub adapter, live=false (caller must not reconcile)", () => {
+    const r = makeObserverAdapterFromEnv({});
+    expect(r.live).toBe(false);
+  });
+
+  it("live env → adapter lists cmux surfaces via injected spawn", async () => {
+    const tree = JSON.stringify({
+      windows: [
+        {
+          workspaces: [
+            { ref: "workspace:1", panes: [{ surfaces: [{ ref: "surface:9", type: "terminal" }] }] },
+          ],
+        },
+      ],
+    });
+    const r = makeObserverAdapterFromEnv({ BOULE_OBSERVER_MODE: "live" }, (cmd, args) => {
+      expect(args[0]).toBe("tree");
+      return { status: 0, stdout: tree, stderr: "" };
+    });
+    expect(r.live).toBe(true);
+    const surfaces = await r.adapter.listSurfaces();
+    expect(surfaces.map((s) => s.surface)).toEqual(["surface:9"]);
+  });
+
+  it("live reconcile marks a vanished-surface session crashed → terminal for the completion gate", async () => {
+    // Seed a spawned session bound to a surface that cmux no longer reports.
+    const sessionEvt: GovEvent = {
+      frontmatter: {
+        id: "evt_20260610_120000_0001",
+        type: "session_opened",
+        source: "system",
+        actor: "system",
+        tags: ["session"],
+      },
+      body: JSON.stringify({ surface: "surface:404", ownership: "orchestrator_owned" }),
+    };
+    await writeEvent(repo, sessionEvt, new Date(Date.UTC(2026, 5, 10, 12, 0, 0)));
+    const r = makeObserverAdapterFromEnv({ BOULE_OBSERVER_MODE: "live" }, () => ({
+      status: 0,
+      stdout: JSON.stringify({ windows: [] }),
+      stderr: "",
+    }));
+    const summary = await observeSessions(
+      repo,
+      { adapter: r.adapter },
+      new Date(Date.UTC(2026, 5, 10, 12, 1, 0)),
+      0.5,
+    );
+    expect(summary.crashed).toBe(1);
   });
 });
 
@@ -357,7 +441,9 @@ describe("cmdRecordAttempt — supervised attempt evidence hint", () => {
 
     const events = await readAllEvents(repo);
     const finished = events.find(
-      (e) => e.frontmatter.type === "executor_attempt_finished" && e.frontmatter.related_to?.includes(taskId),
+      (e) =>
+        e.frontmatter.type === "executor_attempt_finished" &&
+        e.frontmatter.related_to?.includes(taskId),
     );
     expect(finished).toBeDefined();
     const body = JSON.parse(finished!.body);
@@ -389,7 +475,9 @@ describe("cmdRecordAttempt — supervised attempt evidence hint", () => {
     });
 
     const finished = (await readAllEvents(repo)).find(
-      (e) => e.frontmatter.type === "executor_attempt_finished" && e.frontmatter.related_to?.includes(taskId),
+      (e) =>
+        e.frontmatter.type === "executor_attempt_finished" &&
+        e.frontmatter.related_to?.includes(taskId),
     );
     expect(JSON.parse(finished!.body)).toMatchObject({
       attemptIndex: 0,

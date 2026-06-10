@@ -1,4 +1,6 @@
+import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { generateId } from "../event/id.ts";
+import { parseObserverConfig } from "../mcp/config.ts";
 import { writeEvent } from "../event/writeEvent.ts";
 import type { GovEvent, EventType } from "../event/event.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
@@ -29,6 +31,32 @@ export const stubAdapter: ObserverAdapter = {
     return [];
   },
 };
+
+/** Build the observer adapter from an env map — live `cmux tree` adapter only when
+ *  BOULE_OBSERVER_MODE=live, else the no-op stub (an empty surface set would otherwise
+ *  crash every known session — callers must NOT reconcile in non-live mode). `spawn` is
+ *  injectable for tests; defaults to child_process.spawnSync. */
+export function makeObserverAdapterFromEnv(
+  env: Record<string, string | undefined>,
+  spawn?: SpawnSyncLike,
+): { adapter: ObserverAdapter; live: boolean } {
+  const cfg = parseObserverConfig(env);
+  if (!cfg.live) return { adapter: stubAdapter, live: false };
+  const realSpawn: SpawnSyncLike =
+    spawn ??
+    ((cmd, args) => {
+      const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
+      return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+    });
+  return {
+    adapter: makeLiveAdapter({
+      spawn: realSpawn,
+      cmuxCmd: cfg.cmuxCmd,
+      log: (line) => process.stderr.write(`${line}\n`), // PII-safe (command+status+count)
+    }),
+    live: true,
+  };
+}
 
 // ── Live adapter (behind BOULE_OBSERVER_MODE=live) ────────────────────────────────────────────
 
@@ -73,7 +101,8 @@ export function parseSurfaces(stdout: string): LiveSurface[] {
   }
   const out = new Set<string>();
   const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  const rec = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
+  const rec = (v: unknown): Record<string, unknown> =>
+    v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 
   for (const w of asArray(rec(tree).windows)) {
     for (const ws of asArray(rec(w).workspaces)) {
