@@ -1,0 +1,30 @@
+src/components/agent-status/runToBox.ts
+  s_d8557d82b81ed1::t_cff63e8ab886eb 3
+  s_d8557d82b81ed1::t_226cb549a98266 1-2,4-45
+src/components/agent-status/shared.ts
+  s_d8557d82b81ed1::t_cff63e8ab886eb 2
+  s_d8557d82b81ed1::t_75f33d044573a3 1,3-25
+src/components/agent-status/AgentBox.tsx
+  s_d8557d82b81ed1::t_9853a7d11a678b 1-136
+src/components/agent-status/BoxIcon.tsx
+  s_d8557d82b81ed1::t_94c49539d57a32 1-22
+src/components/AgentStatusBar.tsx
+  s_d8557d82b81ed1::t_a7f05eb85ac16b 5-6,12,18-19,21,41-43
+  s_d8557d82b81ed1::t_cff63e8ab886eb 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0981dc4d0de4da2320f1d22b74cd2e6220ffd73e",
+  "prompts": {},
+  "sessions": {
+    "s_d8557d82b81ed1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4ea5c81-1428-45e3-92ea-b20c2056ed7b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
