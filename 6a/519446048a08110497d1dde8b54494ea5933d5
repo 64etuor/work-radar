@@ -1,0 +1,22 @@
+src/components/WeeklyView.css
+  s_ef5de42741471b::t_b1a3e3456d7490 149-502
+src/components/weekly/ReflectionSection.tsx
+  s_ef5de42741471b::t_a5ec5c1fc36b5f 89-90
+  s_ef5de42741471b::t_dd43bd49fd0c30 78-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "6a519446048a08110497d1dde8b54494ea5933d5",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
