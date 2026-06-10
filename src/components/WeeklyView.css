@@ -146,3 +146,110 @@
   font: 400 10px var(--font-mono);
   color: var(--color-wr-subtle);
 }
+
+/* ── Life Wheel hero (주간 작업 차원 레이더) ──────────────────────────────────── */
+.wk .wk-hero {
+  margin-bottom: 28px;
+}
+.wk .wk-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+@media (max-width: 620px) {
+  .wk .wk-hero-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.wk .wk-radar {
+  min-width: 0;
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 16px;
+  background: var(--color-wr-surface);
+  padding: 8px 6px;
+}
+.wk .wk-hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.wk .wk-score {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 12px;
+  background: var(--color-wr-surface);
+  padding: 12px 14px;
+}
+.wk .wk-score-num {
+  font: 600 32px var(--font-sans);
+  line-height: 1;
+  color: var(--color-wr-fg);
+}
+.wk .wk-score-unit {
+  font: 500 13px var(--font-mono);
+  color: var(--color-wr-subtle);
+}
+.wk .wk-score-cap {
+  width: 100%;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-wr-muted);
+}
+.wk .wk-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.wk .wk-insight {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 12px;
+  background: var(--color-wr-surface);
+  padding: 10px 12px;
+  min-width: 0;
+}
+.wk .wk-insight-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-wr-subtle);
+}
+.wk .wk-insight-val {
+  font: 600 15px var(--font-sans);
+  line-height: 1.25;
+  color: var(--color-wr-fg);
+  overflow-wrap: anywhere;
+}
+.wk .wk-insight-sub {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-muted);
+  overflow-wrap: anywhere;
+}
+/* confidence 배지 — measured는 미표시, sparse=경고 톤, empty=중립 톤. */
+.wk .wk-conf {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.wk .wk-conf-sparse {
+  color: var(--color-today-debt-warn);
+  background: color-mix(in srgb, var(--color-today-debt-warn) 14%, transparent);
+}
+.wk .wk-conf-empty {
+  color: var(--color-wr-subtle);
+  background: var(--color-wr-elevated);
+}

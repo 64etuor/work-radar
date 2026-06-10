@@ -1,12 +1,34 @@
 import "./WeeklyView.css";
 
-import { CheckCircle2, GitPullRequest, Inbox, Repeat, Send, TrendingDown } from "lucide-react";
+import {
+  CheckCircle2,
+  GitPullRequest,
+  Inbox,
+  Radar as RadarIcon,
+  Repeat,
+  Send,
+  TrendingDown,
+} from "lucide-react";
+import {
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+} from "recharts";
 
-import type { DebtPoint } from "@/bindings";
+import type { DebtPoint, WeeklyReview } from "@/bindings";
 import { localToday, useWeeklyReview } from "@/lib/query";
+import {
+  computeWeeklyLifeWheel,
+  deriveLifeWheelInsights,
+  type LifeWheelConfidence,
+} from "@/lib/weeklyLifeWheel";
 
-/** YYYY-MM-DD → M/D (짧은 라벨). */
-function md(date: string): string {
+/** YYYY-MM-DD → M/D (짧은 라벨). 렌더 직전 날짜 포맷 헬퍼(export=테스트 대상). */
+// eslint-disable-next-line react-refresh/only-export-components -- 순수 포맷 헬퍼를 테스트에 노출(HMR 무관).
+export function md(date: string): string {
   const [, m, d] = date.split("-");
   return `${Number(m)}/${Number(d)}`;
 }
@@ -40,6 +62,9 @@ export function WeeklyView() {
 
         {data && (
           <>
+            {/* 라이프 휠 (주간 작업 차원 레이더) — hero */}
+            <LifeWheelHero review={data} />
+
             {/* 처리량 */}
             <section className="wk-sec">
               <div className="wk-sec-head">
@@ -120,6 +145,148 @@ export function WeeklyView() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** confidence → 짧은 한글 라벨(배지용). measured는 배지 미표시이므로 호출부에서 거른다. */
+const CONFIDENCE_LABEL: Record<LifeWheelConfidence, string> = {
+  measured: "측정됨",
+  sparse: "표본 빈약",
+  empty: "데이터 없음",
+};
+
+/** sparse/empty일 때만 작은 배지를 단다(measured는 군더더기 없이 둠). */
+function ConfidenceBadge({ confidence }: { confidence: LifeWheelConfidence }) {
+  if (confidence === "measured") return null;
+  return <span className={`wk-conf wk-conf-${confidence}`}>{CONFIDENCE_LABEL[confidence]}</span>;
+}
+
+/**
+ * 주간 작업 라이프 휠 hero — 기존 recharts(RadarChart)로 7축 레이더 + 전체 점수/신뢰도 +
+ * 인사이트 카드(강점/취약/부채 움직임/루틴). 모든 수치는 `computeWeeklyLifeWheel` 순수 파생.
+ * 0/희소 데이터는 helper의 empty/sparse 상태로 표현 — 오해 부르는 100은 만들지 않는다.
+ */
+export function LifeWheelHero({ review }: { review: WeeklyReview }) {
+  const wheel = computeWeeklyLifeWheel(review);
+  const insights = deriveLifeWheelInsights(wheel);
+
+  // 레이더 데이터: empty 축은 score=null로 두어 그 꼭짓점을 비운다(0으로 채우지 않음).
+  const radarData = wheel.axes.map((a) => ({
+    axis: a.label,
+    score: a.score,
+  }));
+
+  return (
+    <section className="wk-sec wk-hero">
+      <div className="wk-sec-head">
+        <RadarIcon className="text-wr-subtle size-4" />
+        <span className="wk-sec-name">라이프 휠 (주간 작업)</span>
+        <span className="wk-sec-count">
+          {wheel.measuredCount}/{wheel.axes.length}축
+        </span>
+      </div>
+
+      {wheel.measuredCount === 0 ? (
+        <div className="wk-hint">
+          이번 주는 아직 집계할 활동이 없습니다. 캡처·완료·루틴 체크가 쌓이면 레이더가 채워집니다.
+        </div>
+      ) : (
+        <div className="wk-hero-grid">
+          <div className="wk-radar">
+            <ResponsiveContainer width="100%" height={240}>
+              <RadarChart data={radarData} margin={{ top: 14, right: 22, bottom: 14, left: 22 }}>
+                <PolarGrid stroke="var(--color-wr-border-light)" />
+                <PolarAngleAxis
+                  dataKey="axis"
+                  tick={{ fill: "var(--color-wr-subtle)", fontSize: 10 }}
+                />
+                <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} tickCount={5} />
+                <Radar
+                  dataKey="score"
+                  stroke="var(--color-wr-accent)"
+                  fill="var(--color-wr-accent)"
+                  fillOpacity={0.16}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                  dot={{ r: 2, fill: "var(--color-wr-accent)", strokeWidth: 0 }}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="wk-hero-side">
+            <div className="wk-score">
+              <span className="wk-score-num">{wheel.overall ?? "—"}</span>
+              <span className="wk-score-unit">/100</span>
+              <span className="wk-score-cap">전체 주간 점수</span>
+              {wheel.measuredCount < wheel.axes.length && (
+                <span className="wk-conf wk-conf-sparse">부분 집계</span>
+              )}
+            </div>
+
+            <div className="wk-insights">
+              {insights.best && (
+                <InsightCard
+                  eyebrow="강점 축"
+                  value={insights.best.label}
+                  sub={`${insights.best.score}점`}
+                  confidence={insights.best.confidence}
+                />
+              )}
+              {/* measured 축이 2개 이상일 때만 취약 축을 별도로 보여준다(best와 중복 방지). */}
+              {insights.weakest && wheel.measuredCount >= 2 && (
+                <InsightCard
+                  eyebrow="취약 축"
+                  value={insights.weakest.label}
+                  sub={`${insights.weakest.score}점`}
+                  confidence={insights.weakest.confidence}
+                />
+              )}
+              {insights.momentum && (
+                <InsightCard
+                  eyebrow="부채 움직임"
+                  value={insights.momentum.score === null ? "—" : insights.momentum.detail}
+                  sub={insights.momentum.score === null ? insights.momentum.detail : "정리 모멘텀"}
+                  confidence={insights.momentum.confidence}
+                />
+              )}
+              {insights.routine && (
+                <InsightCard
+                  eyebrow="루틴 이행"
+                  value={insights.routine.score === null ? "—" : `${insights.routine.score}%`}
+                  sub={insights.routine.detail}
+                  confidence={insights.routine.confidence}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** 인사이트 카드 한 장. confidence가 sparse/empty면 배지로 신뢰도를 명시한다. */
+function InsightCard({
+  eyebrow,
+  value,
+  sub,
+  confidence,
+}: {
+  eyebrow: string;
+  value: string;
+  sub: string;
+  confidence: LifeWheelConfidence;
+}) {
+  return (
+    <div className="wk-insight">
+      <span className="wk-insight-eyebrow">
+        {eyebrow}
+        <ConfidenceBadge confidence={confidence} />
+      </span>
+      <span className="wk-insight-val">{value}</span>
+      <span className="wk-insight-sub">{sub}</span>
     </div>
   );
 }
