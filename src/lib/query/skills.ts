@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   type AppliedSkill,
@@ -15,6 +15,20 @@ import {
 } from "@/bindings";
 
 import { unwrap } from "./client";
+
+/** 워크스페이스 3종 무효화 — useVendorSkillToProject/useUnvendorSkillFromProject/usePullDivergence/usePushDivergence 공통. */
+function invalidateSkillWorkspace(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
+  void qc.invalidateQueries({ queryKey: ["skillDivergences"] });
+  void qc.invalidateQueries({ queryKey: ["skills"] });
+}
+
+/** 라이브러리 3종 무효화 — staged 업데이트 적용(useApplySkillUpdate) 계열. */
+function invalidateSkillLibrary(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ["skills"] });
+  void qc.invalidateQueries({ queryKey: ["skillUpdateStatus"] });
+  void qc.invalidateQueries({ queryKey: ["skillBackups"] });
+}
 
 // 스킬 공유 레지스트리 (Phase 20 #21). 인앱 에이전트 프롬프트(편집 가능 잡 템플릿)와 외부
 // Claude/Codex 스킬(~/.claude/skills)을 한 곳에서 본다. 프롬프트 편집은 codex 제안 *내용*만
@@ -237,11 +251,7 @@ export function useVendorSkillToProject() {
   return useMutation({
     mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
       unwrap(commands.vendorSkillToProject(args.repoId, args.provider, args.name)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
-      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
-      qc.invalidateQueries({ queryKey: ["skills"] });
-    },
+    onSuccess: () => invalidateSkillWorkspace(qc),
   });
 }
 
@@ -254,11 +264,7 @@ export function useUnvendorSkillFromProject() {
   return useMutation({
     mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
       unwrap(commands.unvendorSkillFromProject(args.repoId, args.provider, args.name)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
-      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
-      qc.invalidateQueries({ queryKey: ["skills"] });
-    },
+    onSuccess: () => invalidateSkillWorkspace(qc),
   });
 }
 
@@ -287,11 +293,7 @@ export function usePullDivergence() {
   return useMutation({
     mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
       unwrap(commands.pullDivergence(args.repoId, args.provider, args.name)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
-      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
-      qc.invalidateQueries({ queryKey: ["skills"] });
-    },
+    onSuccess: () => invalidateSkillWorkspace(qc),
   });
 }
 
@@ -305,10 +307,8 @@ export function usePushDivergence() {
     mutationFn: (args: { repoId: string; provider: SkillProvider; name: string }) =>
       unwrap(commands.pushDivergence(args.repoId, args.provider, args.name)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["skillDivergences"] });
-      qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
-      qc.invalidateQueries({ queryKey: ["skills"] });
-      qc.invalidateQueries({ queryKey: ["skillBackups"] });
+      invalidateSkillWorkspace(qc);
+      void qc.invalidateQueries({ queryKey: ["skillBackups"] });
     },
   });
 }
@@ -371,8 +371,8 @@ export function useRestoreSkillLibrary() {
   return useMutation({
     mutationFn: (id: string) => unwrap(commands.restoreSkillLibrary(id)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["skills"] });
-      qc.invalidateQueries({ queryKey: ["skillBackups"] });
+      void qc.invalidateQueries({ queryKey: ["skills"] });
+      void qc.invalidateQueries({ queryKey: ["skillBackups"] });
     },
   });
 }
@@ -417,11 +417,7 @@ export function useApplySkillUpdate() {
   return useMutation({
     mutationFn: (args: { provider: SkillProvider; name: string }) =>
       unwrap(commands.applySkillUpdate(args.provider, args.name)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["skills"] });
-      qc.invalidateQueries({ queryKey: ["skillUpdateStatus"] });
-      qc.invalidateQueries({ queryKey: ["skillBackups"] });
-    },
+    onSuccess: () => invalidateSkillLibrary(qc),
   });
 }
 
