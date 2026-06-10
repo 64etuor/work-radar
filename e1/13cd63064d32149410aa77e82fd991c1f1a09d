@@ -1,0 +1,25 @@
+governance/src/orchestrator/tick.ts
+  s_189899020c7048::t_68037cb2a2c017 140-146,150-154
+governance/test/conductor/completion.test.ts
+  s_189899020c7048::t_3e484850128d53 410-431
+governance/src/conductor/completion.ts
+  s_189899020c7048::t_087e2f27feb504 181-192,197
+  s_189899020c7048::t_3c4d1d29df2b97 273,275-284,297,304
+  s_189899020c7048::t_2806e36048eaa9 239-244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e113cd63064d32149410aa77e82fd991c1f1a09d",
+  "prompts": {},
+  "sessions": {
+    "s_189899020c7048": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ec94408-dd6b-4ae8-98b9-2bb3143a05c5",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
