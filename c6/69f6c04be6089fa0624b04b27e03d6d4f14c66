@@ -1,0 +1,21 @@
+src/components/weekly/WeekNavigator.tsx
+  s_ef5de42741471b::t_b7236393782bf9 1-44
+src/components/weekly/WeekScrubber.tsx
+  s_ef5de42741471b::t_13288b3004db92 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c669f6c04be6089fa0624b04b27e03d6d4f14c66",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
