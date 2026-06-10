@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { type AppAction, knobActionFor } from "@/lib/appActions";
+import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 import type { KnobDir } from "@/lib/knobGeometry";
 import { KNOB_DIRECTIONS, KNOB_TRIGGER_DEFAULT, KNOB_TRIGGER_KEY } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
@@ -166,13 +167,14 @@ export function useCmdKnob(dispatch: (action: AppAction) => void): CmdKnobState 
     };
 
     window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("keydown", onKeyDown);
+    // keydown은 버스 경유 — 관찰 전용 최상위(knobWatch doc 참조). keyup 등은 버스 비대상.
+    const unregisterKeydown = registerKeydown(KEYDOWN_PRIORITY.knobWatch, onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onBlur);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("keydown", onKeyDown);
+      unregisterKeydown();
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onVisibility);

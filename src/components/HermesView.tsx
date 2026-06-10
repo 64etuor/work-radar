@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 import { unwrap } from "@/lib/query/client";
 import { useProjects } from "@/lib/query/projects";
 
@@ -98,16 +99,15 @@ export default function HermesView() {
 
   // ⌘N / ⌘W / ⌘1–9 keyboard shortcuts.
   //
-  // Gating: HermesView is always mounted (App.tsx:218), so we must explicitly check
+  // Gating: HermesView is always mounted (App.tsx), so we must explicitly check
   // panelState.open — if the panel is closed the handler returns immediately. This
   // prevents mutating Hermes state invisibly while the panel is hidden.
   //
-  // Conflict: useViewShortcuts (src/lib/useViewShortcuts.ts:88) catches ALL metaKey
-  // events unconditionally and routes them through the keymap — Cmd+1/2/4–9 navigate
-  // views. When we handle a Hermes key we call stopImmediatePropagation() so the view
-  // shortcut listener (registered first, in App.tsx) does not also fire. Our listener
-  // is appended last so stopImmediatePropagation() here is safe: it only suppresses
-  // later-registered listeners, not already-fired earlier ones.
+  // Conflict: useViewShortcuts catches ALL metaKey events and routes them through the
+  // keymap — Cmd+1/2/4–9 navigate views. Suppression is now explicit via the keydown
+  // bus: this handler runs at KEYDOWN_PRIORITY.hermes (highest) and returning `true`
+  // consumes the event so lower-priority handlers never see it (ADR-0011 후속 ② —
+  // 종전의 stopImmediatePropagation + 마운트-순서 암묵 계약을 대체).
   //
   // ⌘W: hides the app window only. Closing a Hermes session is an explicit sidebar action.
   //
@@ -115,7 +115,7 @@ export default function HermesView() {
   // useViewShortcuts isEditableTarget guard) — typing "1" in the search box must not
   // switch sessions.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    return registerKeydown(KEYDOWN_PRIORITY.hermes, (e) => {
       const action = resolveHermesShortcut(e, {
         panelOpen: panelState.open,
         tabs: Array.from(useHermesTabsStore.getState().tabs.values()),
@@ -123,7 +123,6 @@ export default function HermesView() {
       if (!action) return;
 
       e.preventDefault();
-      e.stopImmediatePropagation();
       if (action.type === "new-tab") {
         void openTab();
       } else if (action.type === "hide-window") {
@@ -131,9 +130,8 @@ export default function HermesView() {
       } else {
         setActive(action.tabId);
       }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+      return true; // 소비 — 뷰 단축키로 전파하지 않음.
+    });
   }, [panelState.open, activeTabId, openTab, setActive]);
 
   return (

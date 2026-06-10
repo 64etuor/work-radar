@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { actionForKeymapKey, type AppAction, findKeymapAction } from "@/lib/appActions";
 import { eventToHotkeySpec } from "@/lib/hotkey";
+import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 
 /**
  * 메뉴별 키보드 단축키 적용 (Phase 18 #7). keymap(action→shortcut)을 받아 전역 keydown에서
@@ -123,9 +124,9 @@ export function useViewShortcuts(
       clearPrefix();
     };
 
-    window.addEventListener("keydown", onKeyDown);
+    const unregister = registerKeydown(KEYDOWN_PRIORITY.keymap, onKeyDown);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      unregister();
       window.clearTimeout(timer);
     };
   }, []);

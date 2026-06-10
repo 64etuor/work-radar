@@ -25,6 +25,7 @@ import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
 import { type AppAction } from "@/lib/appActions";
 import { fontFamilyFor } from "@/lib/fontPresets";
+import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 import { adjacentView } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
 import { useViewShortcuts } from "@/lib/useViewShortcuts";
@@ -162,7 +163,8 @@ export default function App() {
   useViewShortcuts(keymap.data, !paletteOpen, dispatchAction);
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
+    // 셸 하드코딩 키(Cmd+K 팔레트, Esc 계층) — keydown 버스 shell 우선순위(ADR-0011 후속 ②).
+    return registerKeydown(KEYDOWN_PRIORITY.shell, (e) => {
       const meta = e.metaKey || e.ctrlKey;
       // Cmd/Ctrl+K → 명령 팔레트 토글.
       if (meta && e.key.toLowerCase() === "k") {
@@ -188,9 +190,7 @@ export default function App() {
         }
         void getCurrentWindow().hide();
       }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    });
   }, [view, paletteOpen, setPaletteOpen, navigateView]);
 
   return (
