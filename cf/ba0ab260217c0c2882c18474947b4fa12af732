@@ -1,0 +1,39 @@
+.gitignore
+  s_ac5b671ce9b440::t_3b7eb0eddaee7d 21-23
+governance/docs/INDEX.md
+  s_ac5b671ce9b440::t_fbda17dc510688 109
+docs/superpowers/plans/README.md
+  s_ac5b671ce9b440::t_f833db3d5b75c8 1-12
+docs/areas/decision-rails.md
+  s_ac5b671ce9b440::t_33f41371b252b0 17,20-23
+  s_ac5b671ce9b440::t_89583568c7a36c 18-19,24
+docs/areas/data-layer-conventions.md
+  s_ac5b671ce9b440::t_32fc3745e789ef 19-20
+docs/decisions.md
+  s_ac5b671ce9b440::t_4f1b7e530ae8f9 592
+PLAN.md
+  s_ac5b671ce9b440::t_f19160e0e3ac40 266-268
+  s_ac5b671ce9b440::t_dc8e0f49bf3643 36-39
+governance/docs/plans/2026-06-04-governance-continuation-master-plan.md
+  s_ac5b671ce9b440::t_9abbd8fdd67c87 3-7
+docs/areas/area-map.md
+  s_ac5b671ce9b440::t_9db7b7c596bd45 21
+governance/docs/design/2026-06-07-per-repo-governance-mcp-design.md
+  s_ac5b671ce9b440::t_4f668db8b5d8e3 4-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "cfba0ab260217c0c2882c18474947b4fa12af732",
+  "prompts": {},
+  "sessions": {
+    "s_ac5b671ce9b440": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c13ba734-c2ee-46c2-ac97-5c53f3e7113d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
