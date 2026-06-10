@@ -9,13 +9,7 @@ import { realGitLog } from "../harvest/gitLog.ts";
 import type { DecisionRow } from "../index/types.ts";
 import { formatPrinciples, formatDecisions, formatDecision } from "../index/format.ts";
 import { createTask, status, observations } from "./handlers.ts";
-import {
-  startTask,
-  blockTask,
-  cancelTask,
-  listTasks,
-  taskTrail,
-} from "../task/handlers.ts";
+import { startTask, blockTask, cancelTask, listTasks, taskTrail } from "../task/handlers.ts";
 import { completeTaskTool } from "./taskCompletion.ts";
 import {
   proposePlan,
@@ -93,6 +87,7 @@ import { loadPolicyOrStrict } from "../repo/configIo.ts";
 import { runDetect } from "../patterns/detect.ts";
 import { makeWritePattern } from "../patterns/write.ts";
 import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
+import { curatePattern } from "../patterns/curate.ts";
 import { makeWriteHypothesis } from "../hypotheses/write.ts";
 import {
   listHypotheses,
@@ -101,7 +96,8 @@ import {
   runHypothesisTester,
 } from "../hypotheses/tester.ts";
 import { buildMetaObservation } from "../meta/observer.ts";
-import { archiveStatus, runArchivePruner } from "../archive/pruner.ts";
+import { persistMetaProposal } from "../meta/persist.ts";
+import { archiveStatus, runArchivePruner, runPatternPruner } from "../archive/pruner.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
@@ -257,7 +253,9 @@ server.registerTool(
           z.object({
             text: z.string(),
             difficulty: z.enum(["trivial", "standard", "hard"]).optional(),
-            check: z.object({ command: z.string().optional(), artifact: z.string().optional() }).optional(),
+            check: z
+              .object({ command: z.string().optional(), artifact: z.string().optional() })
+              .optional(),
           }),
         ]),
       ),
@@ -438,10 +436,18 @@ server.registerTool(
 
 server.registerTool(
   "observations",
-  { description: "활성 패턴 목록(P1: 빈 목록)", inputSchema: {} },
+  { description: "발견된(candidate) + 활성(active) 패턴 목록 (read-only)", inputSchema: {} },
   async () => {
     const o = await observations(WORKSPACE);
-    return { content: [{ type: "text", text: `active patterns: ${o.patterns.length}` }] };
+    const text = o.patterns.length
+      ? o.patterns
+          .map(
+            (p) =>
+              `- ${p.id} ${p.kind} scope=${p.scope} evidence=${p.evidence_count} conf=${p.confidence} [${p.status}]`,
+          )
+          .join("\n")
+      : "no patterns observed";
+    return { content: [{ type: "text", text }] };
   },
 );
 
@@ -551,6 +557,48 @@ server.registerTool(
   },
 );
 
+// Pattern curation — a human/orchestrator judgment ("this observation is real / noise"),
+// so it mirrors the verdict-tool gating: structurally unregistered for executor-role
+// sessions AND in SESSION_DENIED_TOOLS (an executor must not shape the curated set that
+// steers future detection).
+if (SESSION_ALLOWS_VERDICTS) {
+  server.registerTool(
+    "activate_pattern",
+    {
+      description: "패턴 큐레이션: candidate → active (사람/오케스트레이터 판단)",
+      inputSchema: { id: z.string() },
+    },
+    async ({ id }) => {
+      const r = await curatePattern(WORKSPACE, id, "activate", "user");
+      const text =
+        r.outcome === "moved"
+          ? `activated: ${id} (${r.from} → ${r.to})`
+          : r.outcome === "already"
+            ? `already ${r.to}: ${id}`
+            : `REFUSED (${r.outcome}): ${id}`;
+      return { content: [{ type: "text", text }] };
+    },
+  );
+
+  server.registerTool(
+    "archive_pattern",
+    {
+      description: "패턴 큐레이션: candidate|active → archived (망각; 복원은 수동 git)",
+      inputSchema: { id: z.string() },
+    },
+    async ({ id }) => {
+      const r = await curatePattern(WORKSPACE, id, "archive", "user");
+      const text =
+        r.outcome === "moved"
+          ? `archived: ${id} (${r.from} → ${r.to})`
+          : r.outcome === "already"
+            ? `already ${r.to}: ${id}`
+            : `REFUSED (${r.outcome}): ${id}`;
+      return { content: [{ type: "text", text }] };
+    },
+  );
+}
+
 server.registerTool(
   "run_hypothesis_tester",
   {
@@ -597,21 +645,27 @@ server.registerTool(
 );
 
 // ── P5: Meta Observer ─────────────────────────────────────────────────────────
-// Local proposal draft only. No L3/L4 writes and no verdict tools.
+// PROPOSE-ONLY: the draft is persisted under meta/proposals/ (content-addressed,
+// idempotent) so it survives the MCP reply, but rails / principles / events are
+// never written. A human turns the draft into an ADR / rails PR.
 server.registerTool(
   "meta_observe",
   {
     description:
-      "P5 local Meta Observer: verified hypotheses를 principle proposal draft로 렌더링만 함 (no file writes)",
+      "P5 Meta Observer: verified hypotheses → principle proposal draft, meta/proposals/에 영속 (propose-only)",
     inputSchema: {},
   },
   async () => {
     const result = buildMetaObservation({ hypotheses: await listHypotheses(WORKSPACE) });
+    const persisted =
+      result.hasProposal && result.markdown
+        ? await persistMetaProposal(WORKSPACE, result.markdown)
+        : null;
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(result, null, 2),
+          text: JSON.stringify({ ...result, persisted }, null, 2),
         },
       ],
     };
@@ -645,9 +699,10 @@ const reviewers = buildReviewers();
 
 // Genuine-quorum advisory (warn-but-continue): live + quorum≥2 인데 라벨들이 동일 (cmd,args)로
 // 붕괴해 distinct reviewer가 quorum 미만이면 가짜 quorum. PII-safe(라벨만)로 경고하고 그대로 기동.
-const quorumWarning = LIVE && !LOADED_POLICY.policy.backends?.reviewers
-  ? quorumCollisionWarning(REVIEWER_MODELS, process.env, QUORUM)
-  : null;
+const quorumWarning =
+  LIVE && !LOADED_POLICY.policy.backends?.reviewers
+    ? quorumCollisionWarning(REVIEWER_MODELS, process.env, QUORUM)
+    : null;
 if (quorumWarning) process.stderr.write(`${quorumWarning}\n`);
 
 // ── Phase C: Conductor adapter ────────────────────────────────────────────────
@@ -723,7 +778,9 @@ server.registerTool(
       nowFn(),
       randFn(),
     );
-    const distinctModels = new Set(res.recorded.map((r) => r.reviewerBackend ?? normalizeModelId(r.reviewerModel))).size;
+    const distinctModels = new Set(
+      res.recorded.map((r) => r.reviewerBackend ?? normalizeModelId(r.reviewerModel)),
+    ).size;
     const parts = [
       `recorded: ${res.recorded.length} from ${reviewers.length} reviewer(s); distinct actual reviewers: ${distinctModels}/${QUORUM} (quorum)`,
     ];
@@ -876,25 +933,36 @@ if (SESSION_ALLOWS_VERDICTS)
 );
 
 // ── P6: Archive Pruner ────────────────────────────────────────────────────────
-// Hypothesis-only local archive pass. No verdict tools and no writes outside hypotheses.
-server.registerTool(
-  "archive_prune",
-  {
-    description:
-      "P6 local Archive Pruner: terminal/expired hypotheses testing→archived one-pass move",
-    inputSchema: {},
-  },
-  async () => {
-    const today = nowFn().toISOString().slice(0, 10);
-    const summary = await runArchivePruner(WORKSPACE, today);
-    return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
-  },
-);
+// The forgetting loop: terminal/expired hypotheses + stale candidate patterns →
+// archived. Writes stay inside hypotheses/ and patterns/; events are NEVER pruned
+// (folds replay the full L0 log). No verdict tools.
+// Gated like activate_pattern/archive_pattern: the pattern half archives stale
+// candidates into the curated set (steers future detection), so an executor must not
+// reach it even time-bounded. (`detect` stays executor-reachable on purpose: it only
+// CREATES candidates, which never enter the curated set without curation.)
+if (SESSION_ALLOWS_VERDICTS)
+  server.registerTool(
+    "archive_prune",
+    {
+      description:
+        "P6 Archive Pruner: terminal/expired hypotheses + stale candidate 패턴(90d) → archived one-pass move",
+      inputSchema: {},
+    },
+    async () => {
+      const now = nowFn();
+      const today = now.toISOString().slice(0, 10);
+      const hypotheses = await runArchivePruner(WORKSPACE, today);
+      const patterns = await runPatternPruner(WORKSPACE, now);
+      return {
+        content: [{ type: "text", text: JSON.stringify({ hypotheses, patterns }, null, 2) }],
+      };
+    },
+  );
 
 server.registerTool(
   "archive_status",
   {
-    description: "P6 Archive Pruner read-only hypothesis archive counts",
+    description: "P6 Archive Pruner read-only archive counts (hypotheses + patterns)",
     inputSchema: {},
   },
   async () => {
@@ -1105,7 +1173,9 @@ server.registerTool(
       ? "readiness ready=true (safe for unattended dispatch)"
       : ["readiness ready=false — blockers:", ...report.blockers.map((b) => `  ✗ ${b}`)].join("\n");
     const warns = report.warnings.length
-      ? ["\nwarnings (non-blocking — opted in):", ...report.warnings.map((w) => `  ⚠ ${w}`)].join("\n")
+      ? ["\nwarnings (non-blocking — opted in):", ...report.warnings.map((w) => `  ⚠ ${w}`)].join(
+          "\n",
+        )
       : "";
     return { content: [{ type: "text", text: head + warns }] };
   },

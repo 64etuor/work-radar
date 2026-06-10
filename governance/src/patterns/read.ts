@@ -44,26 +44,39 @@ export interface PatternView {
   status: string;
 }
 
-/** List candidate patterns (frontmatter summary), sorted by id for stable output. */
-export async function listPatterns(workspaceDir: string): Promise<PatternView[]> {
-  const dir = join(workspaceDir, "patterns", "candidates");
+export type PatternSubdir = (typeof SUBDIRS)[number];
+
+/** List patterns across the given subdirs (frontmatter summary), sorted by id within each
+ *  subdir for stable output. `status` reflects the file's frontmatter, not the subdir. */
+export async function listPatternsIn(
+  workspaceDir: string,
+  subdirs: readonly PatternSubdir[],
+): Promise<PatternView[]> {
   const out: PatternView[] = [];
-  for (const f of (await readDir(dir)).sort()) {
-    try {
-      const { data } = matter(await readFile(join(dir, f), "utf8"));
-      out.push({
-        id: String(data.id ?? f.replace(/\.md$/, "")),
-        kind: String(data.kind ?? ""),
-        scope: String(data.scope ?? ""),
-        evidence_count: Number(data.evidence_count ?? 0),
-        confidence: Number(data.confidence ?? 0),
-        status: String(data.status ?? ""),
-      });
-    } catch {
-      // malformed → skip
+  for (const sub of subdirs) {
+    const dir = join(workspaceDir, "patterns", sub);
+    for (const f of (await readDir(dir)).sort()) {
+      try {
+        const { data } = matter(await readFile(join(dir, f), "utf8"));
+        out.push({
+          id: String(data.id ?? f.replace(/\.md$/, "")),
+          kind: String(data.kind ?? ""),
+          scope: String(data.scope ?? ""),
+          evidence_count: Number(data.evidence_count ?? 0),
+          confidence: Number(data.confidence ?? 0),
+          status: String(data.status ?? ""),
+        });
+      } catch {
+        // malformed → skip
+      }
     }
   }
   return out;
+}
+
+/** List candidate patterns (frontmatter summary), sorted by id for stable output. */
+export async function listPatterns(workspaceDir: string): Promise<PatternView[]> {
+  return listPatternsIn(workspaceDir, ["candidates"]);
 }
 
 /** Safe pattern-id shape: alphanumerics + underscore only. Rejects any id with a path

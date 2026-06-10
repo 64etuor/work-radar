@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm, readdir } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask, status, observations } from "../../src/mcp/handlers.js";
@@ -28,8 +28,26 @@ describe("status", () => {
 });
 
 describe("observations", () => {
-  it("returns active patterns (empty in P1)", async () => {
+  it("returns an empty list on a fresh workspace", async () => {
     const o = await observations(ws);
     expect(o.patterns).toEqual([]);
+  });
+
+  it("lists candidate and active patterns but not archived ones", async () => {
+    const file = (id: string, status: string) =>
+      `---\nid: ${id}\nkind: commit_scope_hotspot\nscope: news\nevidence_count: 4\nconfidence: 0.5\nstatus: ${status}\n---\nbody\n`;
+    await mkdir(join(ws, "patterns", "candidates"), { recursive: true });
+    await mkdir(join(ws, "patterns", "active"), { recursive: true });
+    await mkdir(join(ws, "patterns", "archived"), { recursive: true });
+    await writeFile(join(ws, "patterns", "candidates", "pat_a.md"), file("pat_a", "candidate"));
+    await writeFile(join(ws, "patterns", "active", "pat_b.md"), file("pat_b", "active"));
+    await writeFile(join(ws, "patterns", "archived", "pat_c.md"), file("pat_c", "archived"));
+
+    const o = await observations(ws);
+    expect(o.patterns.map((p) => [p.id, p.status])).toEqual([
+      ["pat_a", "candidate"],
+      ["pat_b", "active"],
+    ]);
+    expect(o.patterns[0].evidence_count).toBe(4);
   });
 });

@@ -53,7 +53,13 @@ describe("archive pruner IO", () => {
     expect(await exists(join(ws, "hypotheses", "testing", "hyp_keep.md"))).toBe(true);
 
     expect(await runArchivePruner(ws, "2026-06-04")).toEqual({ moved: 0, skipped: 1, malformed: 0 });
-    expect(await archiveStatus(ws)).toEqual({ testing: 1, archived: 2 });
+    expect(await archiveStatus(ws)).toEqual({
+      testing: 1,
+      archived: 2,
+      pattern_candidates: 0,
+      pattern_active: 0,
+      pattern_archived: 0,
+    });
   });
 
   it("keeps an existing archived file and unlinks the testing duplicate", async () => {

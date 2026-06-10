@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { generateId } from "../event/id.ts";
 import { writeEvent } from "../event/writeEvent.ts";
 import type { GovEvent } from "../event/event.ts";
+import { listPatternsIn, type PatternView } from "../patterns/read.ts";
 
 export interface CreateTaskInput { description: string; }
 export interface CreateTaskResult { id: string; path: string; }
@@ -42,9 +43,10 @@ export async function status(workspaceDir: string): Promise<StatusResult> {
   return { eventCount: count };
 }
 
-export interface ObservationsResult { patterns: string[]; }
+export interface ObservationsResult { patterns: PatternView[]; }
 
-/** /observations — active patterns. P1: empty (Pattern Detector lands in P3). */
-export async function observations(_workspaceDir: string): Promise<ObservationsResult> {
-  return { patterns: [] };
+/** /observations — recently discovered + human-activated patterns (candidates first,
+ *  then active; archived patterns are forgotten on purpose). Read-only. */
+export async function observations(workspaceDir: string): Promise<ObservationsResult> {
+  return { patterns: await listPatternsIn(workspaceDir, ["candidates", "active"]) };
 }

@@ -34,7 +34,17 @@ import type { GovEvent } from "../../src/event/event.js";
 
 describe("SESSION_DENIED_TOOLS — executor sessions cannot reach the gate-opening tools", () => {
   it("denies every human-gate / orchestrator tool, INCLUDING auto_dispatch (auto-accept path)", () => {
-    for (const t of ["approve", "reject", "choose", "accept_plan", "accept_spec", "auto_dispatch"]) {
+    for (const t of [
+      "approve",
+      "reject",
+      "choose",
+      "accept_plan",
+      "accept_spec",
+      "auto_dispatch",
+      "activate_pattern",
+      "archive_pattern",
+      "archive_prune",
+    ]) {
       expect(SESSION_DENIED_TOOLS).toContain(`mcp__boule-governance__${t}`);
     }
   });
@@ -95,18 +105,23 @@ function typesOf(all: GovEvent[]): string[] {
 async function taskIdForStep(all: GovEvent[], text: string): Promise<string> {
   return all.find((e) => e.frontmatter.type === "task_created" && e.body === text)!.frontmatter.id;
 }
-function policyWithExecutor(chain: BackendSpec[], extra: Partial<ResolvedPolicy> = {}): ResolvedPolicy {
+function policyWithExecutor(
+  chain: BackendSpec[],
+  extra: Partial<ResolvedPolicy> = {},
+): ResolvedPolicy {
   return {
     ...BASE_POLICY,
     ...extra,
     backends: { executor: { chain } },
   };
 }
-function viableProbes(opts: {
-  missingCommands?: readonly string[];
-  codexAuth?: boolean;
-  cleanCodexHome?: boolean;
-} = {}): ExecutorViabilityProbes {
+function viableProbes(
+  opts: {
+    missingCommands?: readonly string[];
+    codexAuth?: boolean;
+    cleanCodexHome?: boolean;
+  } = {},
+): ExecutorViabilityProbes {
   const missing = new Set(opts.missingCommands ?? []);
   return {
     commandExists: (cmd) => !missing.has(cmd),
@@ -124,9 +139,7 @@ function recordingAdapter(spawns: SpawnSessionSpec[]) {
   };
 }
 function spawnedBodies(all: GovEvent[]): unknown[] {
-  return all
-    .filter((e) => e.frontmatter.type === "session_spawned")
-    .map((e) => JSON.parse(e.body));
+  return all.filter((e) => e.frontmatter.type === "session_spawned").map((e) => JSON.parse(e.body));
 }
 
 describe("conductPlan — accept gate (US-001 / done-criteria #1)", () => {
@@ -289,7 +302,9 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     const all = await readAllEvents(dir);
     expect(spawnedBodies(all)[0]).toEqual({
       surface: "stub-0",
-      worktree: expect.stringMatching(/^\.boule-worktrees\/stub-evt_20260602_120000_[a-z0-9]+-step0$/),
+      worktree: expect.stringMatching(
+        /^\.boule-worktrees\/stub-evt_20260602_120000_[a-z0-9]+-step0$/,
+      ),
       envelopeHash: expect.any(String),
       envelope: expect.objectContaining({ executor: "claude" }),
     });
@@ -326,7 +341,9 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
       cursor: 0,
       steps: [expect.objectContaining({ taskId: null })],
     });
-    expect((await readAllEvents(dir)).some((e) => e.frontmatter.type === "session_spawned")).toBe(false);
+    expect((await readAllEvents(dir)).some((e) => e.frontmatter.type === "session_spawned")).toBe(
+      false,
+    );
   });
 
   it("reconstructs prior reserved spend so the next step downgrades from an unaffordable frontier head", async () => {
@@ -360,7 +377,9 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     );
     expect(first.ok).toBe(true);
     expect(spawns[0]!.executor).toBe("claude");
-    expect((await completeTask(dir, { taskId: first.advanced!.taskId }, at(30), 0.4)).ok).toBe(true);
+    expect((await completeTask(dir, { taskId: first.advanced!.taskId }, at(30), 0.4)).ok).toBe(
+      true,
+    );
 
     const second = await conductPlan(
       dir,
@@ -380,7 +399,9 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
   });
 
   it("fails closed when no configured backend is viable: no spawn and no silent completion", async () => {
-    const planId = await setupActivePlanWithSteps([{ text: "no viable executor", difficulty: "hard" }]);
+    const planId = await setupActivePlanWithSteps([
+      { text: "no viable executor", difficulty: "hard" },
+    ]);
     const spawns: SpawnSessionSpec[] = [];
 
     const r = await conductPlan(
@@ -450,7 +471,13 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
   it("does not redispatch, switch provider, or complete from a token_exhausted attempt hint", async () => {
     const spawns: SpawnSessionSpec[] = [];
     const planId = await setupActivePlan();
-    const r1 = await conductPlan(dir, { planId }, { adapter: recordingAdapter(spawns) }, at(10), 0.3);
+    const r1 = await conductPlan(
+      dir,
+      { planId },
+      { adapter: recordingAdapter(spawns) },
+      at(10),
+      0.3,
+    );
     expect(r1.ok).toBe(true);
 
     await cmdRecordAttempt({
@@ -463,7 +490,13 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
       "stderr-digest": "usage limit reached",
     });
 
-    const r2 = await conductPlan(dir, { planId }, { adapter: recordingAdapter(spawns) }, at(40), 0.4);
+    const r2 = await conductPlan(
+      dir,
+      { planId },
+      { adapter: recordingAdapter(spawns) },
+      at(40),
+      0.4,
+    );
     expect(r2.ok).toBe(false);
     expect(r2.reason).toMatch(/in-flight/i);
     expect(spawns).toHaveLength(1);
@@ -575,7 +608,10 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
             windows: [
               {
                 workspaces: [
-                  { ref: "workspace:7", panes: [{ surfaces: [{ ref: "surface:42", type: "terminal" }] }] },
+                  {
+                    ref: "workspace:7",
+                    panes: [{ surfaces: [{ ref: "surface:42", type: "terminal" }] }],
+                  },
                 ],
               },
             ],
@@ -718,7 +754,10 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
             windows: [
               {
                 workspaces: [
-                  { ref: "workspace:7", panes: [{ surfaces: [{ ref: "surface:42", type: "terminal" }] }] },
+                  {
+                    ref: "workspace:7",
+                    panes: [{ surfaces: [{ ref: "surface:42", type: "terminal" }] }],
+                  },
                 ],
               },
             ],
@@ -752,11 +791,25 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
 
   it("CREATES the folder anchored on the new workspace when none matches the project label", async () => {
     const fake = makeFake(JSON.stringify({ groups: [] }));
-    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, taskId: "evt_t0", prompt: "P" });
+    const sess = await mkAdapter(fake).spawnSession({
+      worktreePath: "/wt/s0",
+      stepIndex: 0,
+      taskId: "evt_t0",
+      prompt: "P",
+    });
     expect(sess.surface).toBe("surface:42");
-    const create = fake.calls.find((c) => c.args[0] === "workspace-group" && c.args[1] === "create");
+    const create = fake.calls.find(
+      (c) => c.args[0] === "workspace-group" && c.args[1] === "create",
+    );
     expect(create).toBeTruthy();
-    expect(create!.args).toEqual(["workspace-group", "create", "--name", "work-radar", "--from", "workspace:7"]);
+    expect(create!.args).toEqual([
+      "workspace-group",
+      "create",
+      "--name",
+      "work-radar",
+      "--from",
+      "workspace:7",
+    ]);
     expect(fake.calls.some((c) => c.args[1] === "add")).toBe(false);
   });
 
@@ -764,7 +817,12 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
     const fake = makeFake(
       JSON.stringify({ groups: [{ name: "work-radar", ref: "workspace_group:5" }] }),
     );
-    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, taskId: "evt_t0", prompt: "P" });
+    const sess = await mkAdapter(fake).spawnSession({
+      worktreePath: "/wt/s0",
+      stepIndex: 0,
+      taskId: "evt_t0",
+      prompt: "P",
+    });
     expect(sess.surface).toBe("surface:42");
     const add = fake.calls.find((c) => c.args[0] === "workspace-group" && c.args[1] === "add");
     expect(add!.args).toEqual([
@@ -780,7 +838,12 @@ describe("makeLiveAdapter — per-project cmux folder grouping", () => {
 
   it("grouping is BEST-EFFORT: a workspace-group failure still returns the session surface", async () => {
     const fake = makeFake("", true);
-    const sess = await mkAdapter(fake).spawnSession({ worktreePath: "/wt/s0", stepIndex: 0, taskId: "evt_t0", prompt: "P" });
+    const sess = await mkAdapter(fake).spawnSession({
+      worktreePath: "/wt/s0",
+      stepIndex: 0,
+      taskId: "evt_t0",
+      prompt: "P",
+    });
     expect(sess.surface).toBe("surface:42"); // loop not broken by grouping failure
   });
 });
@@ -799,7 +862,10 @@ describe("cmux output parsing (real-contract helpers — live-loop de-risk)", ()
         {
           workspaces: [
             { ref: "workspace:1", panes: [{ surfaces: [{ ref: "surface:1", type: "terminal" }] }] },
-            { ref: "workspace:7", panes: [{ surfaces: [{ ref: "surface:42", type: "terminal" }] }] },
+            {
+              ref: "workspace:7",
+              panes: [{ surfaces: [{ ref: "surface:42", type: "terminal" }] }],
+            },
           ],
         },
       ],
@@ -814,7 +880,12 @@ describe("cmux output parsing (real-contract helpers — live-loop de-risk)", ()
             {
               ref: "workspace:7",
               panes: [
-                { surfaces: [{ ref: "surface:9", type: "browser" }, { ref: "surface:10", type: "terminal" }] },
+                {
+                  surfaces: [
+                    { ref: "surface:9", type: "browser" },
+                    { ref: "surface:10", type: "terminal" },
+                  ],
+                },
               ],
             },
           ],
@@ -875,7 +946,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toContain("report-exit");
     expect(c).toContain("--attempt 0");
     expect(c).toContain("--exit-code");
-    expect(c).toContain("git -C \"/wt/s0\" status --porcelain");
+    expect(c).toContain('git -C "/wt/s0" status --porcelain');
     // claude uses the operator's own profile (its hooks are the app's) — NO CODEX_HOME isolation
     expect(c).not.toContain("CODEX_HOME");
   });
@@ -908,7 +979,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toContain('--task "evt_t0"');
     expect(c).toContain("--attempt 0");
     expect(c).toContain("--exit-code");
-    expect(c).toContain("git -C \"/wt/s0\" status --porcelain");
+    expect(c).toContain('git -C "/wt/s0" status --porcelain');
     // CODEX_HOME isolation: clean hooks-free profile, prefixed ONCE before `codex exec` (scopes to
     // codex only — the trailing `&& node … report-exit` boule CLI does NOT inherit it).
     expect(c).toContain("; CODEX_HOME='/repo/governance/workspace/codex-home' codex exec");
@@ -930,7 +1001,10 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
             windows: [
               {
                 workspaces: [
-                  { ref: "workspace:9", panes: [{ surfaces: [{ ref: "surface:55", type: "terminal" }] }] },
+                  {
+                    ref: "workspace:9",
+                    panes: [{ surfaces: [{ ref: "surface:55", type: "terminal" }] }],
+                  },
                 ],
               },
             ],
@@ -1031,7 +1105,9 @@ describe("ensureCleanCodexHome — clean hooks-free codex profile (Slice 1 isola
     expect(config.data).toContain("plugin_hooks = false");
     expect(config.data).toContain("notify = []");
     expect(config.data).not.toContain("developer_instructions");
-    expect(writes.some((w) => w.path.includes("hooks.json") || w.path.includes("plugins"))).toBe(false);
+    expect(writes.some((w) => w.path.includes("hooks.json") || w.path.includes("plugins"))).toBe(
+      false,
+    );
   });
 
   it("symlinks the operator auth.json when NO env key (never copies)", async () => {

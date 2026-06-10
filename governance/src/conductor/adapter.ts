@@ -120,6 +120,15 @@ export const SESSION_DENIED_TOOLS = [
   // for its own plan. Denied here (claude denylist) AND structurally unregistered for executor role
   // in server.ts (mirrors accept_plan/accept_spec); the guarantee does not rely on env isolation.
   `mcp__${BOULE_MCP_ALIAS}__auto_dispatch`,
+  // Pattern curation shapes the curated set that steers future detection — a judgment
+  // call an executor must not make about its own observation stream. Mirrors the
+  // structural unregistration in server.ts.
+  `mcp__${BOULE_MCP_ALIAS}__activate_pattern`,
+  `mcp__${BOULE_MCP_ALIAS}__archive_pattern`,
+  // archive_prune's pattern half moves stale candidates into the curated set — curation
+  // by the clock. Same wall as the explicit curation tools. (`detect` is deliberately
+  // executor-reachable: candidates never steer detection until curated.)
+  `mcp__${BOULE_MCP_ALIAS}__archive_prune`,
 ];
 
 /** The scoped MCP config written into each session worktree. It launches boule with
@@ -273,7 +282,9 @@ export function buildSessionCommand(
     // hijack root cause). The prefix env assignment applies to `codex exec` ONLY — the trailing
     // `&& node … report-exit` (boule CLI) does NOT inherit it. Required: materialized beforehand.
     if (!deps.codexHome) {
-      throw new Error("buildSessionCommand: codex requires deps.codexHome (clean hooks-free profile)");
+      throw new Error(
+        "buildSessionCommand: codex requires deps.codexHome (clean hooks-free profile)",
+      );
     }
     // approval_policy="never" lets the headless exec session call its MCP tools (complete_task /
     // escalate) WITHOUT a per-call approval gate — under the default policy codex blocks the MCP
