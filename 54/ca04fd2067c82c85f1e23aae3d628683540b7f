@@ -1,0 +1,21 @@
+src/lib/weekRange.test.ts
+  s_ef5de42741471b::t_76f6ceec77fb4b 1-2,5-41
+src/lib/weekRange.ts
+  s_ef5de42741471b::t_2daed9846493fc 1-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "54ca04fd2067c82c85f1e23aae3d628683540b7f",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
