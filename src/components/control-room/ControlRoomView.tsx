@@ -13,8 +13,8 @@ import {
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { CommandDeck } from "./CommandDeck";
+import { FlowSchematic } from "./FlowSchematic";
 import { ProjectTabs } from "./ProjectTabs";
-import { Schematic } from "./Schematic";
 import { Vitals } from "./Vitals";
 
 export default function ControlRoomView() {
@@ -117,7 +117,8 @@ export default function ControlRoomView() {
               </div>
             </div>
           ) : (
-            <Schematic snap={data} filter={filter} />
+            // key = remount per project so React Flow re-runs fitView on tab switch.
+            <FlowSchematic key={activeProjectId ?? "none"} snap={data} filter={filter} />
           )}
         </>
       )}

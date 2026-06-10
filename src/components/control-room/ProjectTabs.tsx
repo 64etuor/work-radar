@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 
 import type { ProjectTickerStatusRow } from "../../bindings";
@@ -15,6 +16,7 @@ export function ProjectTabs({
   onSelect: (projectId: string) => void;
 }) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const reduce = useReducedMotion();
 
   function onKeyDown(e: React.KeyboardEvent, index: number) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -44,6 +46,14 @@ export function ProjectTabs({
             onClick={() => onSelect(row.projectId)}
             onKeyDown={(e) => onKeyDown(e, index)}
           >
+            {selected && (
+              <motion.span
+                layoutId={reduce ? undefined : "cr-tab-active"}
+                className="cr-tab-active"
+                aria-hidden
+                transition={{ duration: 0.18, ease: "easeOut" }}
+              />
+            )}
             <span className="cr-tab-dot" data-tone={projectDotTone(row)} aria-hidden />
             <span className="cr-tab-name">{row.projectName}</span>
           </button>

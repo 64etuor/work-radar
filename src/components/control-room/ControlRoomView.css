@@ -46,6 +46,7 @@
   padding-bottom: 0.35rem;
 }
 .cr-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -68,8 +69,20 @@
 }
 .cr-tab[data-selected] {
   color: var(--color-foreground);
-  border-color: var(--color-border);
+}
+/* Sliding active-tab chrome (motion layoutId). Sits behind the dot+name. */
+.cr-tab-active {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   background: var(--color-background);
+  z-index: 0;
+}
+.cr-tab .cr-tab-dot,
+.cr-tab .cr-tab-name {
+  position: relative;
+  z-index: 1;
 }
 .cr-tab:focus-visible {
   outline: 2px solid var(--color-ring);
@@ -271,19 +284,210 @@
   color: var(--cr-muted);
 }
 
-/* ── Schematic canvas ─────────────────────────────────────── */
-.cr-canvas-wrap {
+/* ── React Flow canvas (cr-flow-*) ───────────────────────────
+   White editorial override of the RF default chrome: hairline border, no neon,
+   muted controls + attribution. Tone palette reuses the --cr-* vars. */
+.cr-flow-wrap {
   position: relative;
-  overflow: auto;
+  height: 26rem;
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
+  overflow: hidden;
   background:
     linear-gradient(var(--color-border) 1px, transparent 1px) 0 0 / 100% 64px,
     var(--color-background);
 }
-.cr-canvas {
-  display: block;
+.cr-flow-wrap .react-flow {
+  background: transparent;
 }
+.cr-flow-wrap .react-flow__attribution {
+  background: transparent;
+  font-size: 9px;
+}
+.cr-flow-wrap .react-flow__attribution a {
+  color: var(--cr-muted);
+  opacity: 0.6;
+}
+
+/* Lane header label — pinned column marker, mono-ish uppercase. */
+.cr-flow-lane {
+  color: var(--cr-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Work node card */
+.cr-flow-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 11px;
+  border: 1.25px solid var(--cr-muted);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: var(--color-background);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s ease,
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.cr-flow-node[data-tone="done"] {
+  border-color: var(--cr-done);
+}
+.cr-flow-node[data-tone="active"] {
+  border-color: var(--cr-active);
+}
+.cr-flow-node[data-tone="waiting"] {
+  border-color: var(--cr-waiting);
+}
+.cr-flow-node[data-tone="pressure"] {
+  border-color: var(--cr-pressure);
+}
+.cr-flow-node[data-tone="blocked"] {
+  border-color: var(--cr-blocked);
+}
+.cr-flow-node-label {
+  color: var(--color-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cr-flow-node-phase {
+  color: var(--cr-muted);
+  font-size: 10px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.cr-flow-node-flag {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--cr-blocked);
+}
+/* Hidden, non-interactive connection handles (edges still anchor to them). */
+.cr-flow-handle {
+  opacity: 0;
+  pointer-events: none;
+  min-width: 1px;
+  min-height: 1px;
+  width: 1px;
+  height: 1px;
+  border: none;
+  background: transparent;
+}
+
+/* Interaction states */
+.cr-flow-node[data-state="dim"] {
+  opacity: 0.32;
+}
+.cr-flow-node[data-state="highlight"],
+.cr-flow-node[data-selected] {
+  border-color: var(--color-foreground);
+}
+.cr-flow-node[data-tone="active"][data-state="highlight"] {
+  border-color: var(--cr-active);
+}
+.cr-flow-node[data-selected] {
+  box-shadow: var(--wr-shadow-sm);
+}
+
+/* attention pulse + in-flight pulse — preserved from the SVG version */
+.cr-flow-node[data-attention] {
+  animation: cr-flow-attention 1.8s ease-in-out infinite;
+}
+.cr-flow-node[data-inflight]:not([data-attention]) {
+  animation: cr-flow-inflight 2.2s ease-in-out infinite;
+}
+@keyframes cr-flow-attention {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cr-blocked) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--cr-blocked) 18%, transparent);
+  }
+}
+@keyframes cr-flow-inflight {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cr-active) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-active) 14%, transparent);
+  }
+}
+
+/* Edges */
+.cr-flow-edge {
+  stroke: var(--cr-muted);
+  stroke-width: 1.25;
+}
+.cr-flow-edge[data-dim] {
+  opacity: 0.18;
+}
+.cr-flow-edge[data-active] {
+  stroke: var(--cr-active);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  animation: cr-flow-dash 0.6s linear infinite;
+}
+@keyframes cr-flow-dash {
+  to {
+    stroke-dashoffset: -9;
+  }
+}
+/* Arrow markers default to RF's; tint them muted. */
+.cr-flow-wrap .react-flow__arrowhead {
+  fill: var(--cr-muted);
+}
+
+/* Controls — minimal white chrome, no shadow flood */
+.cr-flow-controls.react-flow__controls {
+  box-shadow: var(--wr-shadow-sm);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.cr-flow-controls .react-flow__controls-button {
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--cr-muted);
+}
+.cr-flow-controls .react-flow__controls-button:hover {
+  background: color-mix(in srgb, currentcolor 6%, var(--color-background));
+}
+.cr-flow-controls .react-flow__controls-button svg {
+  fill: currentcolor;
+}
+
+/* Selected-node info panel docks the existing NodeTooltip card. */
+.cr-flow-panel.react-flow__panel {
+  margin: 0.6rem;
+}
+.cr-flow-tooltip-dock .cr-tooltip {
+  position: static;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cr-flow-node[data-attention],
+  .cr-flow-node[data-inflight] {
+    animation: none;
+  }
+  .cr-flow-edge[data-active] {
+    animation: none;
+  }
+}
+
 .cr-canvas-empty {
   display: flex;
   flex-direction: column;
@@ -310,136 +514,7 @@
   line-height: var(--leading-caption-sm);
 }
 
-.cr-lane-header {
-  fill: var(--cr-muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-
-/* edges */
-.cr-edge {
-  stroke: var(--cr-muted);
-  stroke-width: 1.25;
-  transition:
-    stroke 0.15s ease,
-    opacity 0.15s ease;
-}
-.cr-edge[data-state="dim"] {
-  opacity: 0.18;
-}
-.cr-edge[data-state="highlight"] {
-  stroke: var(--cr-active);
-  stroke-width: 1.75;
-}
-.cr-arrow-head {
-  fill: var(--cr-muted);
-}
-
-/* nodes */
-.cr-node {
-  cursor: pointer;
-  animation: cr-node-in 0.22s ease both;
-}
-.cr-node-box {
-  fill: var(--color-background);
-  stroke: var(--cr-muted);
-  stroke-width: 1.25;
-  transition:
-    stroke-width 0.15s ease,
-    fill-opacity 0.15s ease,
-    stroke-opacity 0.15s ease;
-}
-.cr-node[data-tone="done"] .cr-node-box {
-  stroke: var(--cr-done);
-}
-.cr-node[data-tone="active"] .cr-node-box {
-  stroke: var(--cr-active);
-}
-.cr-node[data-tone="waiting"] .cr-node-box {
-  stroke: var(--cr-waiting);
-}
-.cr-node[data-tone="pressure"] .cr-node-box {
-  stroke: var(--cr-pressure);
-}
-.cr-node[data-tone="blocked"] .cr-node-box {
-  stroke: var(--cr-blocked);
-}
-.cr-node-label {
-  fill: var(--color-foreground);
-  font-size: 12px;
-  font-weight: 500;
-}
-.cr-node-phase {
-  fill: var(--cr-muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.cr-node-flag {
-  color: var(--cr-blocked);
-}
-
-/* interaction states — dim/highlight target children so they never fight the
-   group's enter animation (which pins group opacity via fill-mode: both). */
-.cr-node[data-state="dim"] .cr-node-box {
-  stroke-opacity: 0.3;
-  fill-opacity: 0.5;
-}
-.cr-node[data-state="dim"] .cr-node-label,
-.cr-node[data-state="dim"] .cr-node-phase,
-.cr-node[data-state="dim"] .cr-node-flag {
-  opacity: 0.3;
-}
-.cr-node[data-state="highlight"] .cr-node-box,
-.cr-node[data-selected] .cr-node-box {
-  stroke-width: 2;
-}
-.cr-node[data-selected] .cr-node-box {
-  filter: drop-shadow(var(--wr-shadow-hairline));
-}
-
-/* attention pulse on the box (separate element from the group animation) */
-.cr-node[data-attention] .cr-node-box {
-  animation: cr-pulse 1.8s ease-in-out infinite;
-}
-/* in-flight (active) nodes get a subtle live pulse so running work reads as alive.
-   attention takes precedence (more urgent) when both apply. */
-.cr-node[data-inflight]:not([data-attention]) .cr-node-box {
-  animation: cr-inflight 2.2s ease-in-out infinite;
-}
-
-@keyframes cr-node-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes cr-pulse {
-  0%,
-  100% {
-    stroke-width: 1.5;
-  }
-  50% {
-    stroke-width: 2.75;
-  }
-}
-@keyframes cr-inflight {
-  0%,
-  100% {
-    fill-opacity: 1;
-    filter: none;
-  }
-  50% {
-    fill-opacity: 0.85;
-    filter: drop-shadow(0 0 3px var(--cr-active));
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .cr-node,
-  .cr-node[data-attention] .cr-node-box,
-  .cr-node[data-inflight] .cr-node-box,
   .cr-deck-controlrow button:disabled svg {
     animation: none;
   }

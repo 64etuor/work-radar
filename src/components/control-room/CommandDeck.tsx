@@ -1,4 +1,5 @@
 import { AlertTriangle, Loader2, Play } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
 import type {
@@ -37,40 +38,47 @@ export function CommandDeck({
   scheduler: TickerSchedulerStatus | null;
   nowMs: number;
 }) {
+  const reduce = useReducedMotion();
   return (
-    <Card className="cr-deck p-4">
-      <div className="cr-deck-zones">
-        {readiness !== undefined && (
-          <section className="cr-deck-zone" aria-label="지금 POSTURE">
-            <div className="cr-deck-kicker">지금 POSTURE</div>
-            <ReadinessGatesRow readiness={readiness} />
-          </section>
-        )}
-
-        <section className="cr-deck-zone" aria-label="마지막 TICK">
-          <div className="cr-deck-kicker">마지막 TICK</div>
-          <LastTick row={row} nowMs={nowMs} />
-        </section>
-
-        <section className="cr-deck-zone cr-deck-controls" aria-label="컨트롤">
-          <div className="cr-deck-kicker">컨트롤</div>
-          <DeckControls row={row} />
-          {row.tickEnabled && row.autonomyLevel === "manual" && (
-            <div className="cr-deck-note">
-              Clock on · autonomy manual — 사람 게이트 대기 중 (자동 디스패치 없음)
-            </div>
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
+    >
+      <Card className="cr-deck p-4">
+        <div className="cr-deck-zones">
+          {readiness !== undefined && (
+            <section className="cr-deck-zone" aria-label="지금 POSTURE">
+              <div className="cr-deck-kicker">지금 POSTURE</div>
+              <ReadinessGatesRow readiness={readiness} />
+            </section>
           )}
-        </section>
-      </div>
 
-      {readiness !== undefined && <ReadinessDetails readiness={readiness} />}
+          <section className="cr-deck-zone" aria-label="마지막 TICK">
+            <div className="cr-deck-kicker">마지막 TICK</div>
+            <LastTick row={row} nowMs={nowMs} />
+          </section>
 
-      {infra !== undefined && (
-        <div className="cr-deck-infra">
-          <InfraBar infra={infra} ticker={row} scheduler={scheduler} />
+          <section className="cr-deck-zone cr-deck-controls" aria-label="컨트롤">
+            <div className="cr-deck-kicker">컨트롤</div>
+            <DeckControls row={row} />
+            {row.tickEnabled && row.autonomyLevel === "manual" && (
+              <div className="cr-deck-note">
+                Clock on · autonomy manual — 사람 게이트 대기 중 (자동 디스패치 없음)
+              </div>
+            )}
+          </section>
         </div>
-      )}
-    </Card>
+
+        {readiness !== undefined && <ReadinessDetails readiness={readiness} />}
+
+        {infra !== undefined && (
+          <div className="cr-deck-infra">
+            <InfraBar infra={infra} ticker={row} scheduler={scheduler} />
+          </div>
+        )}
+      </Card>
+    </motion.div>
   );
 }
 
