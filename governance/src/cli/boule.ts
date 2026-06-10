@@ -35,6 +35,24 @@ import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orches
 import { recordExecutorAttempt, reportTaskDone } from "../task/handlers.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { buildControlRoomSnapshot } from "../snapshot/snapshot.ts";
+import { harvest, makeWriteOne } from "../harvest/harvest.ts";
+import { realGitLog } from "../harvest/gitLog.ts";
+import { buildIndex, nodeIndexFs } from "../index/build.ts";
+import type { DecisionRow } from "../index/types.ts";
+import { runDetect } from "../patterns/detect.ts";
+import { makeWritePattern } from "../patterns/write.ts";
+import { loadCuratedKeys } from "../patterns/read.ts";
+import { parsePatternConfig } from "../mcp/config.ts";
+import {
+  listHypotheses,
+  readSupportedPatterns,
+  readTestingHypotheses,
+  runHypothesisTester,
+} from "../hypotheses/tester.ts";
+import { makeWriteHypothesis } from "../hypotheses/write.ts";
+import { buildMetaObservation } from "../meta/observer.ts";
+import { persistMetaProposal } from "../meta/persist.ts";
+import { runArchivePruner, runPatternPruner } from "../archive/pruner.ts";
 
 // `boule` CLI (spec 2026-06-07 §D): per-repo launcher + settings admin. DB-free — the work-radar
 // app drives discovery of designated local repos and calls `init`/`set` per repo with explicit
@@ -264,7 +282,8 @@ function optionalNonnegativeNumberFlag(
   if (raw === undefined) return undefined;
   if (typeof raw !== "string" || !raw) throw new Error(`--${name} <number> is required`);
   const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) throw new Error(`--${name} must be a nonnegative number`);
+  if (!Number.isFinite(value) || value < 0)
+    throw new Error(`--${name} must be a nonnegative number`);
   return value;
 }
 
@@ -345,12 +364,16 @@ export async function cmdSnapshot(flags: ParsedArgs["flags"]): Promise<string> {
 
 function formatBackendsStatus(backends: BackendsConfig | undefined): string {
   if (!backends) return "unset";
-  const executor = backends.executor ? `executor chain ${backends.executor.chain.length}` : "executor unset";
+  const executor = backends.executor
+    ? `executor chain ${backends.executor.chain.length}`
+    : "executor unset";
   const reviewerLengths = (backends.reviewers ?? []).map((reviewer) => reviewer.chain.length);
   const reviewers = backends.reviewers
     ? `reviewers ${backends.reviewers.length} [${reviewerLengths.join(",")}]`
     : "reviewers unset";
-  const evaluator = backends.evaluator ? `evaluator chain ${backends.evaluator.chain.length}` : "evaluator unset";
+  const evaluator = backends.evaluator
+    ? `evaluator chain ${backends.evaluator.chain.length}`
+    : "evaluator unset";
   return `SET (${executor}, ${reviewers}, ${evaluator})`;
 }
 
@@ -436,10 +459,89 @@ export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
     Math.random(),
   );
 
-  process.stdout.write(
-    (flags.json === true ? JSON.stringify(report) : formatTick(report)) + "\n",
-  );
+  process.stdout.write((flags.json === true ? JSON.stringify(report) : formatTick(report)) + "\n");
   return tickExitCode(report.outcome);
+}
+
+/** housekeep: ONE bounded observation-chain pass (harvest → detect → hypothesis-test →
+ *  meta-observe → archive-prune). The slow-timescale heartbeat of the SSOT design — external
+ *  cron/operator provides cadence (NOT a daemon, INVARIANT #5). Writes stay inside the
+ *  repo's .boule/workspace (L0 events content-addressed, L1 patterns, L2 hypotheses,
+ *  meta/proposals); ZERO decision-rail writes — meta output is a propose-only draft file.
+ *  No transaction across stages: a mid-chain throw exits 1 with earlier stages applied —
+ *  safe BECAUSE every stage is idempotent/content-addressed (the next pass reconciles). */
+export async function cmdHousekeep(flags: ParsedArgs["flags"]): Promise<number> {
+  const repo = reqRepo(flags);
+  const ws = boulePaths(repo).workspace;
+  const now = new Date();
+
+  const harvested = await harvest({
+    gitLog: () => realGitLog(repo),
+    loadDecisionRows: async () =>
+      (await buildIndex(repo, nodeIndexFs)).decisions as readonly DecisionRow[],
+    writeOne: makeWriteOne(ws),
+  });
+
+  const patternCfg = parsePatternConfig(process.env);
+  const detected = await runDetect({
+    readEvents: () => readAllEvents(ws),
+    loadCuratedKeys: () => loadCuratedKeys(ws),
+    writePattern: makeWritePattern(ws, { evidenceCap: patternCfg.evidenceCap }),
+    options: patternCfg,
+  });
+
+  const tested = await runHypothesisTester({
+    readEvents: () => readAllEvents(ws),
+    readPatterns: () => readSupportedPatterns(ws),
+    readTestingHypotheses: () => readTestingHypotheses(ws),
+    writeHypothesis: makeWriteHypothesis(ws),
+    now: () => now,
+  });
+
+  const observation = buildMetaObservation({ hypotheses: await listHypotheses(ws) });
+  const proposal =
+    observation.hasProposal && observation.markdown
+      ? await persistMetaProposal(ws, observation.markdown)
+      : null;
+
+  const prunedHypotheses = await runArchivePruner(ws, now.toISOString().slice(0, 10));
+  const prunedPatterns = await runPatternPruner(ws, now);
+
+  const report = {
+    harvested: { written: harvested.written, skipped: harvested.skipped },
+    detected: {
+      written: detected.written,
+      skipped: detected.skipped,
+      candidates: detected.candidates,
+    },
+    hypotheses: tested,
+    proposal: proposal ? { id: proposal.id, outcome: proposal.outcome } : null,
+    pruned: { hypotheses: prunedHypotheses, patterns: prunedPatterns },
+  };
+  process.stdout.write(
+    (flags.json === true ? JSON.stringify(report) : formatHousekeep(report)) + "\n",
+  );
+  return 0;
+}
+
+function formatHousekeep(r: {
+  harvested: { written: number; skipped: number };
+  detected: { written: number; skipped: number; candidates: number };
+  hypotheses: { proposed: number; verified: number; refuted: number; skipped: number };
+  proposal: { id: string; outcome: string } | null;
+  pruned: {
+    hypotheses: { moved: number; skipped: number; malformed: number };
+    patterns: { moved: number; skipped: number; malformed: number };
+  };
+}): string {
+  return [
+    `housekeep:`,
+    `  harvested: ${r.harvested.written} new, ${r.harvested.skipped} already-seen`,
+    `  patterns: ${r.detected.written} new, ${r.detected.candidates} candidate(s)`,
+    `  hypotheses: ${r.hypotheses.proposed} proposed, ${r.hypotheses.verified} verified, ${r.hypotheses.refuted} refuted`,
+    `  proposal: ${r.proposal ? `${r.proposal.id} (${r.proposal.outcome})` : "none"}`,
+    `  pruned: ${r.pruned.hypotheses.moved} hypotheses, ${r.pruned.patterns.moved} stale patterns`,
+  ].join("\n");
 }
 
 const USAGE = `boule <command> --repo <path>
@@ -450,7 +552,8 @@ const USAGE = `boule <command> --repo <path>
   record-attempt --workspace <ws> --task <id> --attempt <n> --exit-code <n> --launched true|false --worktree-dirty true|false [--stderr-digest s]
   snapshot --repo <p>   # read-only live Control Room snapshot (always JSON on stdout)
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
-  tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)`;
+  tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)
+  housekeep --repo <p> [--json]   # ONE bounded observation pass: harvest→detect→test→meta→prune (cron-driven)`;
 
 export async function main(argv: string[]): Promise<number> {
   const { cmd, flags } = parseArgs(argv);
@@ -478,6 +581,8 @@ export async function main(argv: string[]): Promise<number> {
         return await cmdRun(flags);
       case "tick":
         return await cmdTick(flags);
+      case "housekeep":
+        return await cmdHousekeep(flags);
       default:
         process.stderr.write(USAGE + "\n");
         return cmd ? 1 : 0;
