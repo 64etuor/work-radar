@@ -1,0 +1,45 @@
+src/lib/appActions.test.ts
+  s_b8a01d6932bdea::t_e3948427ce6cfa 1-72
+src/lib/appMotion.test.ts
+  s_b8a01d6932bdea::t_9563a35dd9355c 19-21
+  s_b8a01d6932bdea::t_f34640a9f9583a 39
+src/components/CmdKnob.tsx
+  s_b8a01d6932bdea::t_b88baacf81866b 30,32,34-35,37
+  s_b8a01d6932bdea::t_9a37297cde4376 7
+src/lib/hotkey.ts
+  s_b8a01d6932bdea::t_d3d04c40d6d6ad 72,75-77
+src/App.tsx
+  s_b8a01d6932bdea::t_bfce76d1f08010 26,28
+  s_b8a01d6932bdea::t_83a49d556d1495 134-158,162
+  s_b8a01d6932bdea::t_0162b8a4d89ab3 235
+docs/decisions.md
+  s_b8a01d6932bdea::t_d83d069d2a065a 604
+src/lib/appActions.ts
+  s_b8a01d6932bdea::t_cd3c43b78f7d0f 1-61
+src/lib/useViewShortcuts.ts
+  s_b8a01d6932bdea::t_3a3b5a07c7109a 3,8,16-17,41,45,49,62-66,76,85,89,102-103,106
+src/lib/useCmdKnob.ts
+  s_b8a01d6932bdea::t_8b1e47ad7bc95c 4
+  s_b8a01d6932bdea::t_3f6dee7ec84f30 61-63,65
+  s_b8a01d6932bdea::t_59cbfc7c17ebf7 92-96,100-103
+  s_b8a01d6932bdea::t_5278e4872e2ec1 52
+docs/adr/0011-knob-fire-direct-action-dispatch.md
+  s_b8a01d6932bdea::t_11d521a9686060 65-66
+  s_b8a01d6932bdea::t_da00fcf5e3d768 1-64,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "969dad9b79756d5124dd4c6d4c09c6aa5238d4c3",
+  "prompts": {},
+  "sessions": {
+    "s_b8a01d6932bdea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b25308-efb2-4cd6-8340-d3a192aa43be",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
