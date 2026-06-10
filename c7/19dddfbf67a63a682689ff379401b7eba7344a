@@ -1,0 +1,35 @@
+governance/src/conductor/adapter.ts
+  s_189899020c7048::t_32a173cf69184f 392-397,399
+  s_189899020c7048::t_b6e38f00da14c8 61-67
+governance/test/conductor/handlers.test.ts
+  s_189899020c7048::t_df3583173fc892 675-676,680-688,691-692,695
+  s_189899020c7048::t_eb8798edda808f 598-599
+  s_189899020c7048::t_7fc75370ed043f 744-784
+governance/test/conductor/completion.test.ts
+  s_189899020c7048::t_6add971e39e8bc 373-390
+  s_189899020c7048::t_8a5f3f48851c58 348-372,391-409
+governance/docs/plans/2026-06-10-step-worktree-chaining.md
+  s_189899020c7048::t_ccc81b42bc992d 55-58
+  s_189899020c7048::t_3db6b4845fd659 1-54,59-75
+governance/src/conductor/completion.ts
+  s_189899020c7048::t_43ddd6538c2494 18-27,43-55,58-60
+  s_189899020c7048::t_884248e89537b4 259-272
+  s_189899020c7048::t_4e33699fce8e2f 6
+  s_189899020c7048::t_09c64fa604811a 56-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c719dddfbf67a63a682689ff379401b7eba7344a",
+  "prompts": {},
+  "sessions": {
+    "s_189899020c7048": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ec94408-dd6b-4ae8-98b9-2bb3143a05c5",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
