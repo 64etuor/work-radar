@@ -488,20 +488,6 @@
   }
 }
 
-.cr-canvas-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 14rem;
-  text-align: center;
-  border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
-  background:
-    linear-gradient(var(--color-border) 1px, transparent 1px) 0 0 / 100% 64px,
-    var(--color-background);
-}
 .cr-canvas-empty-title {
   color: var(--color-foreground);
   font-size: var(--text-body-md);
