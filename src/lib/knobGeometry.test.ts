@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { armedDirection, clampToThrow, type KnobDir } from "./knobGeometry";
+import { armedDirection, clampToThrow, type KnobDir, knobFrame } from "./knobGeometry";
 
 const ALL: Record<KnobDir, boolean> = { up: true, down: true, left: true, right: true };
 
@@ -43,5 +43,34 @@ describe("armedDirection", () => {
     expect(
       armedDirection(-40, -70, R, RATIO, { up: false, down: false, left: true, right: true }),
     ).toBeNull();
+  });
+});
+
+describe("knobFrame — 판정은 raw, 표시는 클램프", () => {
+  const R = 46; // CmdKnob THROW_RADIUS
+  const RATIO = 0.55;
+  const UPDOWN_OFF = { up: false, down: false, left: true, right: true };
+
+  it("버그 제스처: 위로 150px 후 좌로 60px → left armed (클램프 좌표로 판정하면 60→17px로 희석돼 null이던 케이스)", () => {
+    const f = knobFrame(-60, -150, R, RATIO, UPDOWN_OFF);
+    expect(f.armed).toBe("left");
+  });
+
+  it("표시 offset은 림으로 클램프(스틱이 원 밖으로 안 나감)", () => {
+    const f = knobFrame(-60, -150, R, RATIO, UPDOWN_OFF);
+    expect(Math.hypot(f.offset.x, f.offset.y)).toBeCloseTo(R);
+  });
+
+  it("커서를 원점 근처로 되돌리면 중립(null) — 상태 없음(경로 무관)", () => {
+    // delta 적분 방식과 달리 직전 경로가 무엇이든 현재 위치만 본다.
+    const f = knobFrame(5, -8, R, RATIO, UPDOWN_OFF);
+    expect(f.armed).toBeNull();
+    expect(f.offset).toEqual({ x: 5, y: -8 });
+  });
+
+  it("반경 안 직접 좌 드래그(종전 동작 보존)", () => {
+    const f = knobFrame(-30, 0, R, RATIO, UPDOWN_OFF);
+    expect(f.armed).toBe("left");
+    expect(f.offset).toEqual({ x: -30, y: 0 });
   });
 });
