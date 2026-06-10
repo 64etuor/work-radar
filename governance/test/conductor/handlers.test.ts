@@ -699,6 +699,11 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     expect(claudeCmd).toContain("mcp__boule-governance__choose");
     expect(claudeCmd).toContain("mcp__boule-governance__approve");
     expect(claudeCmd).toContain(`$(cat ${wt.path}/.boule/step-prompt.md)`);
+    // Regression guard (live wedge 2026-06-10): cmux new-workspace --command translates a literal
+    // two-char "\n" sequence into Enter, splitting the wrapper across shell lines. The generated
+    // command must never embed one; the stderr digest uses '[:cntrl:]' instead.
+    expect(claudeCmd).not.toContain("\\n");
+    expect(claudeCmd).toContain("tr '[:cntrl:]' ' '");
     // envelope + prompt + scoped MCP config written into the worktree's .boule dir
     expect(writes.map((w) => w.path)).toEqual([
       `${wt.path}/.boule/envelope.json`,

@@ -238,7 +238,10 @@ function withAttemptEvidenceTail(
     `; __boule_exit=$?` +
     `; __boule_dirty=false` +
     `; if [ -n "$(git -C "${spec.worktreePath}" status --porcelain 2>/dev/null)" ]; then __boule_dirty=true; fi` +
-    `; __boule_digest="$(LC_ALL=C tr '\\n' ' ' < "$__boule_stderr" | cut -c 1-500)"` +
+    // '[:cntrl:]' (not '\n'): cmux new-workspace --command translates a literal "\n" sequence into
+    // Enter, splitting the wrapper across shell lines — it only survives via zsh's dquote/cmdsubst
+    // continuation prompt (observed live 2026-06-10; fragile, and a wedge if the shell differs).
+    `; __boule_digest="$(LC_ALL=C tr '[:cntrl:]' ' ' < "$__boule_stderr" | cut -c 1-500)"` +
     `; node --experimental-strip-types "${deps.completeEntrypoint}" record-attempt ` +
     `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}" --attempt ${attemptIndex} ` +
     `--exit-code "$__boule_exit" --launched true --worktree-dirty "$__boule_dirty" ` +
