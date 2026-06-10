@@ -1,0 +1,31 @@
+src/components/weekly/LifeWheelRadar.tsx
+  s_ef5de42741471b::t_69f3644e83d53c 112
+  s_ef5de42741471b::t_4d16698e1720d6 12
+  s_ef5de42741471b::t_48737ee2f5c4dd 38-45
+  s_ef5de42741471b::t_f33b8486c1a440 71
+src/components/WeeklyView.css
+  s_ef5de42741471b::t_52cb65eca6cdc8 340-345
+src/components/WeeklyView.test.tsx
+  s_ef5de42741471b::t_85d98d9c91b9b5 4-110
+src/lib/lifeWheelRadar.ts
+  s_ef5de42741471b::t_c49fa6338c89a3 51-77
+src/lib/lifeWheelRadar.test.ts
+  s_ef5de42741471b::t_8810a407724aa6 93-114,117-125
+  s_ef5de42741471b::t_c3b7b0a5ce59f3 6-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a2c9c5deb2066da3ea931784e5495bad499f3690",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
