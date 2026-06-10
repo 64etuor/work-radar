@@ -1,0 +1,74 @@
+src-tauri/src/commands/governance.rs
+  s_354e94b88ccc74::t_2f9e44cf5b2b4e 16-18
+  s_354e94b88ccc74::t_21d7935addbcea 115-125
+src-tauri/migrations/0046_ticker_scheduler_reliability.sql
+  s_354e94b88ccc74::t_9a4bd132dc2799 1-19
+src/lib/controlRoom.ts
+  s_354e94b88ccc74::t_cf9edf3b5d90f2 93-139
+  s_354e94b88ccc74::t_028bf1ffd0123f 9
+src/lib/controlRoom.test.ts
+  s_354e94b88ccc74::t_c4256e89bd247d 3-12
+  s_354e94b88ccc74::t_e4e7fa47e38051 76-107
+src/lib/query/governance.ts
+  s_354e94b88ccc74::t_0b74b39266cc78 30-39
+docs/superpowers/specs/2026-06-10-ticker-scheduler-reliability-design.md
+  s_354e94b88ccc74::t_999a795ff42842 1-82
+src/components/control-room/ControlRoomView.tsx
+  s_354e94b88ccc74::t_16fd87526926c2 14
+  s_354e94b88ccc74::t_3f965387446cd3 112-114
+  s_354e94b88ccc74::t_ba7039f92e5fa6 202-210
+  s_354e94b88ccc74::t_3035f3656b2479 29
+src-tauri/src/lib.rs
+  s_354e94b88ccc74::t_38d7f9dbfade83 343
+src-tauri/src/governance/ticker_scheduler.rs
+  s_354e94b88ccc74::t_a52fac2dd59157 712-714
+  s_354e94b88ccc74::t_c83a211ff2f640 679-684,686-689,691-692,694-706,708-711,715-781
+  s_354e94b88ccc74::t_8a0ba41342c361 690,693
+  s_354e94b88ccc74::t_74ad08c7e0ef0f 144
+  s_354e94b88ccc74::t_6911c8369b5b1a 213-219,230-231
+  s_354e94b88ccc74::t_a5f539812c84eb 77-89,96-107,110-143,145-149
+  s_354e94b88ccc74::t_67a3b441d98f50 249-250
+  s_354e94b88ccc74::t_0f262ffee91008 108-109
+  s_354e94b88ccc74::t_87d23ae73ee772 11-12,14-15
+  s_354e94b88ccc74::t_f02cc754a97a91 191-194,197,201,207-209,220-229,232-241,251,257-265,268-273
+  s_354e94b88ccc74::t_31ceda6865eb10 266-267,685
+  s_354e94b88ccc74::t_ae43491a83a4e5 707
+src-tauri/src/governance/ticker.rs
+  s_354e94b88ccc74::t_b9f3d44efa8a75 130
+  s_354e94b88ccc74::t_31ceda6865eb10 1263-1266
+  s_354e94b88ccc74::t_ef821c68879284 108
+  s_354e94b88ccc74::t_f905f440a307b5 464-465
+  s_354e94b88ccc74::t_8010e9d0dc04d2 208
+  s_354e94b88ccc74::t_7a6c248e15db44 698-699
+  s_354e94b88ccc74::t_5cb652405d268b 90
+  s_354e94b88ccc74::t_d8bffc9a4fba33 188
+  s_354e94b88ccc74::t_51bc3d7b609524 150
+  s_354e94b88ccc74::t_5a6c2fcce66bd5 440
+  s_354e94b88ccc74::t_d230aaa3cb1b35 1216-1262,1267-1317
+  s_354e94b88ccc74::t_ba36f1c33cafc1 20-24
+  s_354e94b88ccc74::t_78fdd0d41e4cfe 59-72
+  s_354e94b88ccc74::t_fd029244f2058f 643-647,651-656,663-665,671-688
+  s_354e94b88ccc74::t_1322efdb3cdb94 168
+docs/decisions.md
+  s_354e94b88ccc74::t_3b088eb07173f3 581
+src/components/control-room/InfraBar.tsx
+  s_354e94b88ccc74::t_57485ac85c3502 2
+  s_354e94b88ccc74::t_6cfdafb40f961c 19,23,25,38-40
+  s_354e94b88ccc74::t_775f94279cdd5b 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "971cba7298ba7e14baa23b26150f4278bdaba8d1",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
