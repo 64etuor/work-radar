@@ -75,6 +75,8 @@ export function ReflectionSection({ items, tags }: Props) {
                         type="button"
                         className={cn("wk-tag-btn impact", s.impactHigh && "on")}
                         title="고임팩트 ⭐"
+                        aria-label="고임팩트 토글"
+                        aria-pressed={!!s.impactHigh}
                         disabled={setImpact.isPending}
                         onClick={() => setImpact.mutate({ id: s.id, value: !s.impactHigh })}
                       >
@@ -84,6 +86,8 @@ export function ReflectionSection({ items, tags }: Props) {
                         type="button"
                         className={cn("wk-tag-btn regret", s.regret && "on")}
                         title="하지말걸"
+                        aria-label="하지말걸 토글"
+                        aria-pressed={!!s.regret}
                         disabled={setRegret.isPending}
                         onClick={() => setRegret.mutate({ id: s.id, value: !s.regret })}
                       >
