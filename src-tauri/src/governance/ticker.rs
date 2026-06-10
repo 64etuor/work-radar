@@ -17,6 +17,11 @@ const DEFAULT_MAX_STEPS: i32 = 1;
 const DEFAULT_TICK_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const AUX_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// Back-to-back infra-class failures (spawn/timeout/parse/readiness/infra) tolerated before the
+/// row raises `attention_required` and drops out of the auto due-scan. Bounded retry: without
+/// this, an infra failure would silently re-run at every interval forever.
+pub const MAX_CONSECUTIVE_INFRA_FAILURES: i32 = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
 #[sqlx(rename_all = "snake_case")]
@@ -51,6 +56,20 @@ impl TickStatusOutcome {
     fn is_success(self, exit_code: i32) -> bool {
         exit_code == 0 && matches!(self, Self::Advanced | Self::Idle | Self::InFlight)
     }
+
+    /// Infra-class failures: the tick did not produce a governance verdict (CLI missing, hung,
+    /// unparsable, or readiness/preflight not met). These escalate to `attention_required` only
+    /// after [`MAX_CONSECUTIVE_INFRA_FAILURES`] in a row.
+    fn is_infra_failure(self) -> bool {
+        matches!(
+            self,
+            Self::SpawnFailed
+                | Self::Timeout
+                | Self::ParseFailed
+                | Self::ReadinessFailed
+                | Self::InfraFailed
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -68,6 +87,7 @@ pub struct ProjectTickStatus {
     pub last_exit_code: Option<i32>,
     pub last_report_json: Option<String>,
     pub attention_required: bool,
+    pub consecutive_failures: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -85,6 +105,7 @@ pub struct ProjectTickerStatusRow {
     pub last_outcome: Option<TickStatusOutcome>,
     pub last_exit_code: Option<i32>,
     pub attention_required: bool,
+    pub consecutive_failures: i32,
     pub autonomy_level: Option<BouleAutonomyLevel>,
 }
 
@@ -106,6 +127,7 @@ impl ProjectTickerStatusRow {
             last_outcome: raw.last_outcome,
             last_exit_code: raw.last_exit_code,
             attention_required: raw.attention_required,
+            consecutive_failures: raw.consecutive_failures,
             autonomy_level,
         }
     }
@@ -125,6 +147,7 @@ struct ProjectTickerStatusRawRow {
     last_outcome: Option<TickStatusOutcome>,
     last_exit_code: Option<i32>,
     attention_required: bool,
+    consecutive_failures: i32,
 }
 
 impl<'r> FromRow<'r, SqliteRow> for ProjectTickerStatusRawRow {
@@ -142,6 +165,7 @@ impl<'r> FromRow<'r, SqliteRow> for ProjectTickerStatusRawRow {
             last_outcome: row.try_get("last_outcome")?,
             last_exit_code: row.try_get("last_exit_code")?,
             attention_required: row.try_get("attention_required")?,
+            consecutive_failures: row.try_get("consecutive_failures")?,
         })
     }
 }
@@ -161,6 +185,7 @@ impl ProjectTickStatus {
             last_exit_code: None,
             last_report_json: None,
             attention_required: false,
+            consecutive_failures: 0,
         }
     }
 }
@@ -180,6 +205,7 @@ impl<'r> FromRow<'r, SqliteRow> for ProjectTickStatus {
             last_exit_code: row.try_get("last_exit_code")?,
             last_report_json: row.try_get("last_report_json")?,
             attention_required: row.try_get("attention_required")?,
+            consecutive_failures: row.try_get("consecutive_failures")?,
         })
     }
 }
@@ -411,7 +437,7 @@ pub async fn get_project_tick_status_core(
     let status = sqlx::query_as::<_, ProjectTickStatus>(
         "SELECT project_id, tick_enabled, interval_sec, max_steps, next_due_at, in_progress, \
          last_started_at, last_finished_at, last_outcome, last_exit_code, last_report_json, \
-         attention_required FROM project_ticker WHERE project_id = ?1",
+         attention_required, consecutive_failures FROM project_ticker WHERE project_id = ?1",
     )
     .bind(project_id)
     .fetch_optional(db)
@@ -435,7 +461,8 @@ pub async fn list_project_tick_status_core(
              t.last_finished_at AS last_finished_at, \
              t.last_outcome AS last_outcome, \
              t.last_exit_code AS last_exit_code, \
-             COALESCE(t.attention_required, 0) AS attention_required \
+             COALESCE(t.attention_required, 0) AS attention_required, \
+             COALESCE(t.consecutive_failures, 0) AS consecutive_failures \
          FROM projects p \
          LEFT JOIN project_ticker t ON t.project_id = p.id \
          ORDER BY p.created_at, p.id",
@@ -613,21 +640,52 @@ async fn persist_finalized_tick(
     project_id: &str,
     tick: &FinalizedTick,
 ) -> Result<(), AppError> {
-    let attention_required = tick.outcome.requires_attention();
+    let governance_attention = tick.outcome.requires_attention();
+    let infra_failure = tick.outcome.is_infra_failure();
+    // Single atomic UPDATE: infra failures bump consecutive_failures and escalate to
+    // attention_required at the threshold (which removes the row from the auto due-scan —
+    // bounded retry). Any non-infra outcome resets the streak.
     sqlx::query(
         "UPDATE project_ticker \
          SET in_progress = 0, last_finished_at = datetime('now'), last_outcome = ?2, \
-             last_exit_code = ?3, last_report_json = ?4, attention_required = ?5 \
+             last_exit_code = ?3, last_report_json = ?4, \
+             consecutive_failures = CASE WHEN ?6 THEN consecutive_failures + 1 ELSE 0 END, \
+             attention_required = CASE \
+                 WHEN ?5 THEN 1 \
+                 WHEN ?6 AND consecutive_failures + 1 >= ?7 THEN 1 \
+                 ELSE 0 END \
          WHERE project_id = ?1",
     )
     .bind(project_id)
     .bind(tick.outcome)
     .bind(tick.exit_code)
     .bind(&tick.report_json)
-    .bind(attention_required)
+    .bind(governance_attention)
+    .bind(infra_failure)
+    .bind(MAX_CONSECUTIVE_INFRA_FAILURES)
     .execute(db)
     .await?;
     Ok(())
+}
+
+/// Persist a due-scan dispatch failure (the tick command never ran — e.g. the project's repo
+/// path could not be resolved). Without this, a scheduler-side `Err` left the row untouched and
+/// silently retried at every interval forever. Reuses the same bounded-escalation path as
+/// infra-class tick outcomes.
+pub async fn record_auto_tick_dispatch_failure(
+    db: &Db,
+    project_id: &str,
+    error: &AppError,
+) -> Result<(), AppError> {
+    ensure_ticker_row(db, project_id).await?;
+    let tick = FinalizedTick {
+        outcome: TickStatusOutcome::SpawnFailed,
+        exit_code: None,
+        report_json: Some(error_report_json("dispatch_failed", &error.message)),
+        report: None,
+        error: Some(error.message.clone()),
+    };
+    persist_finalized_tick(db, project_id, &tick).await
 }
 
 /// Boot reconciliation (MAJOR fix): release `in_progress` locks orphaned by an app crash/exit.
@@ -637,6 +695,8 @@ async fn persist_finalized_tick(
 /// `recover_interrupted_actions`. Does NOT touch `attention_required` (an app crash is not a
 /// governance halt/stall). Returns the number of locks released.
 pub async fn recover_interrupted_ticks(db: &Db) -> Result<u64, AppError> {
+    // Deliberately leaves consecutive_failures untouched: an app exit mid-tick says nothing
+    // about the tick infra itself, so it neither extends nor resets the failure streak.
     let res = sqlx::query(
         "UPDATE project_ticker \
          SET in_progress = 0, last_finished_at = datetime('now'), last_outcome = 'interrupted' \
@@ -1152,5 +1212,107 @@ mod tests {
         .await
         .expect("ticker sql");
         assert!(!ticker_sql.contains("autonomy"));
+    }
+
+    async fn ticker_row(db: &Db, project_id: &str) -> (i32, bool, Option<TickStatusOutcome>) {
+        sqlx::query_as::<_, (i32, bool, Option<TickStatusOutcome>)>(
+            "SELECT consecutive_failures, attention_required, last_outcome \
+             FROM project_ticker WHERE project_id = ?1",
+        )
+        .bind(project_id)
+        .fetch_one(db)
+        .await
+        .expect("ticker row")
+    }
+
+    #[tokio::test]
+    async fn infra_failures_escalate_to_attention_after_threshold() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", Some("/tmp/repo-a")).await;
+
+        for round in 1..=MAX_CONSECUTIVE_INFRA_FAILURES {
+            let runner = FakeRunner::error(TickerError::Spawn("boom".into()));
+            let result = tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+                .await
+                .expect("tick result");
+            assert_eq!(result.outcome, TickStatusOutcome::SpawnFailed);
+            let (failures, attention, outcome) = ticker_row(&db, "p1").await;
+            assert_eq!(failures, round);
+            assert_eq!(outcome, Some(TickStatusOutcome::SpawnFailed));
+            assert_eq!(
+                attention,
+                round >= MAX_CONSECUTIVE_INFRA_FAILURES,
+                "attention only at the threshold (round {round})"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn success_resets_failure_streak_and_clears_attention() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", Some("/tmp/repo-a")).await;
+        for _ in 0..MAX_CONSECUTIVE_INFRA_FAILURES {
+            let runner = FakeRunner::error(TickerError::Spawn("boom".into()));
+            tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+                .await
+                .expect("tick result");
+        }
+        let (failures, attention, _) = ticker_row(&db, "p1").await;
+        assert_eq!(
+            (failures, attention),
+            (MAX_CONSECUTIVE_INFRA_FAILURES, true)
+        );
+
+        // A manual tick is still allowed with attention raised; success resets the streak.
+        let runner = FakeRunner::output(0, &advanced_report());
+        let result = tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+            .await
+            .expect("tick result");
+        assert!(result.success);
+        let (failures, attention, outcome) = ticker_row(&db, "p1").await;
+        assert_eq!((failures, attention), (0, false));
+        assert_eq!(outcome, Some(TickStatusOutcome::Advanced));
+    }
+
+    #[tokio::test]
+    async fn governance_attention_outcome_resets_streak_but_keeps_attention() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", Some("/tmp/repo-a")).await;
+        let runner = FakeRunner::error(TickerError::Spawn("boom".into()));
+        tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+            .await
+            .expect("tick result");
+
+        let runner = FakeRunner::output(10, halted_report());
+        tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+            .await
+            .expect("tick result");
+
+        let (failures, attention, outcome) = ticker_row(&db, "p1").await;
+        assert_eq!((failures, attention), (0, true));
+        assert_eq!(outcome, Some(TickStatusOutcome::HaltedDecision));
+    }
+
+    #[tokio::test]
+    async fn record_auto_tick_dispatch_failure_counts_toward_escalation() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+
+        for round in 1..=MAX_CONSECUTIVE_INFRA_FAILURES {
+            record_auto_tick_dispatch_failure(
+                &db,
+                "p1",
+                &AppError::not_found("ticker.repo_not_found", "no repo"),
+            )
+            .await
+            .expect("record failure");
+            let (failures, attention, outcome) = ticker_row(&db, "p1").await;
+            assert_eq!(failures, round);
+            assert_eq!(outcome, Some(TickStatusOutcome::SpawnFailed));
+            assert_eq!(attention, round >= MAX_CONSECUTIVE_INFRA_FAILURES);
+        }
     }
 }

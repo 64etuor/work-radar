@@ -656,6 +656,23 @@ export const commands = {
 	setProjectTickInterval: (projectId: string, intervalSec: number | null) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_interval", { projectId, intervalSec })),
 	/**  Run one bounded Boule heartbeat for the DB-resolved local repo path. */
 	tickProjectNow: (projectId: string) => typedError<TickProjectNowResult, AppError>(__TAURI_INVOKE("tick_project_now", { projectId })),
+	/**
+	 *  Read the app-bound scheduler's heartbeat. `None` = the scheduler has never woken on this
+	 *  database; a stale `secondsSinceWake` means the scheduler task is dead (previously invisible).
+	 */
+	getTickerSchedulerStatus: () => typedError<{
+	lastWakeAt: string,
+	scanOk: boolean,
+	runnerOk: boolean,
+	runnerError: string | null,
+	fired: number,
+	/**
+	 *  Age of the heartbeat in seconds, computed inside SQLite (single clock — no renderer
+	 *  clock-skew). Stale ≫ [`BASE_WAKE_INTERVAL`] means the scheduler task is dead.
+	 *  i32 (not i64): specta forbids BigInt-style types in bindings; ±68 years is plenty.
+	 */
+	secondsSinceWake: number,
+} | null, AppError>(__TAURI_INVOKE("get_ticker_scheduler_status")),
 };
 
 /* Types */
@@ -1737,6 +1754,7 @@ export type ProjectTickStatus = {
 	lastExitCode: number | null,
 	lastReportJson: string | null,
 	attentionRequired: boolean,
+	consecutiveFailures: number,
 };
 
 export type ProjectTickerStatusRow = {
@@ -1752,6 +1770,7 @@ export type ProjectTickerStatusRow = {
 	lastOutcome: TickStatusOutcome | null,
 	lastExitCode: number | null,
 	attentionRequired: boolean,
+	consecutiveFailures: number,
 	autonomyLevel: BouleAutonomyLevel | null,
 };
 
@@ -2251,6 +2270,24 @@ export type TickStatusOutcome = "advanced" | "idle" | "in_flight" | "halted_deci
  *  so it does NOT set attention_required — the operator simply re-ticks (or the scheduler will).
  */
 "interrupted";
+
+/**
+ *  Live heartbeat of the app-bound scheduler, written once per wake. `None` means the scheduler
+ *  has never woken on this database (or the feature predates this row).
+ */
+export type TickerSchedulerStatus = {
+	lastWakeAt: string,
+	scanOk: boolean,
+	runnerOk: boolean,
+	runnerError: string | null,
+	fired: number,
+	/**
+	 *  Age of the heartbeat in seconds, computed inside SQLite (single clock — no renderer
+	 *  clock-skew). Stale ≫ [`BASE_WAKE_INTERVAL`] means the scheduler task is dead.
+	 *  i32 (not i64): specta forbids BigInt-style types in bindings; ±68 years is plenty.
+	 */
+	secondsSinceWake: number,
+};
 
 /**  timeline_notes 한 행. body는 사용자 입력(공백 trim은 IPC 경계에서). */
 export type TimelineNote = {

@@ -1,5 +1,5 @@
-import type { PreflightCheck, ProjectTickerStatusRow } from "../../bindings";
-import { infraTone } from "../../lib/controlRoom";
+import type { PreflightCheck, ProjectTickerStatusRow, TickerSchedulerStatus } from "../../bindings";
+import { infraTone, schedulerChip } from "../../lib/controlRoom";
 
 /** Short human label per stable preflight id; falls back to the id. */
 const LABELS: Record<string, string> = {
@@ -16,10 +16,13 @@ const LABELS: Record<string, string> = {
 export function InfraBar({
   infra,
   ticker,
+  scheduler,
 }: {
   infra: PreflightCheck[];
   ticker: ProjectTickerStatusRow | null;
+  scheduler: TickerSchedulerStatus | null;
 }) {
+  const schedChip = schedulerChip(scheduler);
   return (
     <div className="cr-infra">
       {infra.map((check) => (
@@ -32,6 +35,9 @@ export function InfraBar({
           {LABELS[check.id] ?? check.id}
         </span>
       ))}
+      <span className="cr-infra-chip" data-tone={schedChip.tone} title={schedChip.title}>
+        {schedChip.label}
+      </span>
       {ticker && (
         <span
           className="cr-infra-chip"

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { PreflightCheck, ReadinessGates } from "../bindings";
-import { infraTone, isArmed, pickActiveProjectId, relativeAgo, statusTone } from "./controlRoom";
+import type { PreflightCheck, ReadinessGates, TickerSchedulerStatus } from "../bindings";
+import {
+  infraTone,
+  isArmed,
+  pickActiveProjectId,
+  relativeAgo,
+  SCHEDULER_STALE_AFTER_SEC,
+  schedulerChip,
+  statusTone,
+} from "./controlRoom";
 
 describe("pickActiveProjectId", () => {
   it("defaults to the first project when nothing is selected", () => {
@@ -64,4 +72,36 @@ describe("isArmed", () => {
   });
   it("all gates pass → armed", () => expect(isArmed(gates({}))).toBe(true));
   it("any gate fails → not armed", () => expect(isArmed(gates({ observer: false }))).toBe(false));
+});
+
+describe("schedulerChip", () => {
+  const status = (over: Partial<TickerSchedulerStatus>): TickerSchedulerStatus => ({
+    lastWakeAt: "2026-06-10 10:00:00",
+    scanOk: true,
+    runnerOk: true,
+    runnerError: null,
+    fired: 0,
+    secondsSinceWake: 5,
+    ...over,
+  });
+  it("no heartbeat yet → advisory", () => {
+    expect(schedulerChip(null).tone).toBe("advisory");
+  });
+  it("healthy recent wake → ok", () => {
+    expect(schedulerChip(status({})).tone).toBe("ok");
+  });
+  it("runner unavailable → down with the error in the title", () => {
+    const chip = schedulerChip(status({ runnerOk: false, runnerError: "no node" }));
+    expect(chip.tone).toBe("down");
+    expect(chip.title).toContain("no node");
+  });
+  it("stale heartbeat past threshold → down", () => {
+    expect(schedulerChip(status({ secondsSinceWake: SCHEDULER_STALE_AFTER_SEC + 1 })).tone).toBe(
+      "down",
+    );
+    expect(schedulerChip(status({ secondsSinceWake: SCHEDULER_STALE_AFTER_SEC })).tone).toBe("ok");
+  });
+  it("recent wake but failed scan → advisory", () => {
+    expect(schedulerChip(status({ scanOk: false })).tone).toBe("advisory");
+  });
 });

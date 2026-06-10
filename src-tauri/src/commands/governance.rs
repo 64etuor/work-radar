@@ -13,6 +13,9 @@ use crate::governance::ticker::{
     set_project_tick_interval_core, tick_project_now as tick_project_now_core, ProjectTickStatus,
     ProjectTickerStatusRow, TickProjectNowResult,
 };
+use crate::governance::ticker_scheduler::{
+    get_ticker_scheduler_status_core, TickerSchedulerStatus,
+};
 use tauri::State;
 
 /// Read ONE project's LIVE Control Room snapshot by folding its `.boule/workspace` events
@@ -108,4 +111,15 @@ pub async fn tick_project_now(
     project_id: String,
 ) -> Result<TickProjectNowResult, AppError> {
     tick_project_now_core(db.inner(), &project_id).await
+}
+
+/// Read the app-bound scheduler's heartbeat. `None` = the scheduler has never woken on this
+/// database; a stale `secondsSinceWake` means the scheduler task is dead (previously invisible).
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn get_ticker_scheduler_status(
+    db: State<'_, Db>,
+) -> Result<Option<TickerSchedulerStatus>, AppError> {
+    get_ticker_scheduler_status_core(db.inner()).await
 }

@@ -27,6 +27,16 @@ export function useProjectTickerList() {
   });
 }
 
+/** App-bound scheduler heartbeat (single row). `null` data = scheduler never woke. */
+export function useTickerSchedulerStatus() {
+  return useQuery({
+    queryKey: ["ticker-scheduler-status"],
+    queryFn: () => unwrap(commands.getTickerSchedulerStatus()),
+    refetchInterval: 4_000,
+    staleTime: 2_000,
+  });
+}
+
 export function useSetTickEnabled() {
   const qc = useQueryClient();
   return useMutation({

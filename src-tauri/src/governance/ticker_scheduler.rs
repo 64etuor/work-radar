@@ -8,8 +8,11 @@
 use crate::db::Db;
 use crate::error::AppError;
 use crate::governance::ticker::{
-    tick_project_now_with_runner, RealTickCommandRunner, TickCommandRunner, TickerRunConfig,
+    record_auto_tick_dispatch_failure, tick_project_now_with_runner, RealTickCommandRunner,
+    TickCommandRunner, TickerRunConfig,
 };
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use sqlx::FromRow;
 use std::time::Duration;
 use tokio::time::MissedTickBehavior;
@@ -71,10 +74,79 @@ where
                     error = %e,
                     "auto tick failed during due scan"
                 );
+                // Persist the failure on the row so it counts toward bounded escalation
+                // instead of silently retrying at every interval forever. Best-effort: a
+                // second DB error must not abort the rest of the scan.
+                if let Err(persist_err) =
+                    record_auto_tick_dispatch_failure(db, &row.project_id, &e).await
+                {
+                    tracing::warn!(
+                        code = "ticker_scheduler.failure_record_failed",
+                        project_id = %row.project_id,
+                        error = %persist_err,
+                        "could not persist auto tick dispatch failure"
+                    );
+                }
             }
         }
     }
     Ok(fired)
+}
+
+/// Live heartbeat of the app-bound scheduler, written once per wake. `None` means the scheduler
+/// has never woken on this database (or the feature predates this row).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct TickerSchedulerStatus {
+    pub last_wake_at: String,
+    pub scan_ok: bool,
+    pub runner_ok: bool,
+    pub runner_error: Option<String>,
+    pub fired: i32,
+    /// Age of the heartbeat in seconds, computed inside SQLite (single clock — no renderer
+    /// clock-skew). Stale ≫ [`BASE_WAKE_INTERVAL`] means the scheduler task is dead.
+    /// i32 (not i64): specta forbids BigInt-style types in bindings; ±68 years is plenty.
+    pub seconds_since_wake: i32,
+}
+
+/// Upsert the single heartbeat row. Failures are surfaced to the caller, which logs and keeps
+/// the loop alive (the heartbeat must never kill the scheduler it reports on).
+pub async fn record_scheduler_heartbeat(
+    db: &Db,
+    now: &str,
+    scan_ok: bool,
+    runner_ok: bool,
+    runner_error: Option<&str>,
+    fired: usize,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO ticker_scheduler_status (id, last_wake_at, scan_ok, runner_ok, runner_error, fired) \
+         VALUES (1, ?1, ?2, ?3, ?4, ?5) \
+         ON CONFLICT(id) DO UPDATE SET last_wake_at = excluded.last_wake_at, \
+             scan_ok = excluded.scan_ok, runner_ok = excluded.runner_ok, \
+             runner_error = excluded.runner_error, fired = excluded.fired",
+    )
+    .bind(now)
+    .bind(scan_ok)
+    .bind(runner_ok)
+    .bind(runner_error)
+    .bind(fired as i64)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn get_ticker_scheduler_status_core(
+    db: &Db,
+) -> Result<Option<TickerSchedulerStatus>, AppError> {
+    Ok(sqlx::query_as::<_, TickerSchedulerStatus>(
+        "SELECT last_wake_at, scan_ok, runner_ok, runner_error, fired, \
+             CAST(MAX(0, strftime('%s', 'now') - strftime('%s', last_wake_at)) AS INTEGER) \
+                 AS seconds_since_wake \
+         FROM ticker_scheduler_status WHERE id = 1",
+    )
+    .fetch_optional(db)
+    .await?)
 }
 
 async fn due_rows(db: &Db, now: &str) -> Result<Vec<DueTickerRow>, sqlx::Error> {
@@ -116,62 +188,89 @@ fn clamp_interval(interval_sec: i32) -> i32 {
     interval_sec.max(MIN_INTERVAL_SEC)
 }
 
-/// Spawn the app-bound ticker scheduler on Tauri's managed async runtime. If the real Boule runner
-/// cannot be resolved, the app stays up and auto-ticking is disabled until the next app start.
+/// Spawn the app-bound ticker scheduler on Tauri's managed async runtime. The scheduler stays
+/// alive even when the Boule runner is unavailable at boot: it re-resolves on every wake
+/// (self-healing — e.g. node installed after launch) and records the failure in the heartbeat
+/// row instead of silently disabling auto-ticking until the next app start.
 pub fn spawn_loop(db: Db) {
     tauri::async_runtime::spawn(async move {
-        let runner = match RealTickCommandRunner::resolve().await {
-            Ok(runner) => runner,
-            Err(e) => {
-                tracing::warn!(
-                    code = "ticker_scheduler.runner_unavailable",
-                    error = %e,
-                    "ticker scheduler disabled: Boule runner unavailable"
-                );
-                return;
-            }
-        };
-        spawn_loop_with_runner(db, runner, TickerRunConfig::default(), SystemTickerClock);
+        run_loop(db, TickerRunConfig::default(), SystemTickerClock).await;
     });
 }
 
-pub fn spawn_loop_with_runner<R, C>(db: Db, runner: R, config: TickerRunConfig, clock: C)
+async fn run_loop<C>(db: Db, config: TickerRunConfig, clock: C)
 where
-    R: TickCommandRunner + Clone + 'static,
-    C: TickerClock,
-{
-    tauri::async_runtime::spawn(async move {
-        run_loop(db, runner, config, clock).await;
-    });
-}
-
-async fn run_loop<R, C>(db: Db, runner: R, config: TickerRunConfig, clock: C)
-where
-    R: TickCommandRunner + Clone,
     C: TickerClock,
 {
     let mut ticker = tokio::time::interval(BASE_WAKE_INTERVAL);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    // Resolved once and cached; while unavailable we retry every wake. A runner that breaks
+    // AFTER caching surfaces per-row as spawn_failed and escalates via consecutive_failures.
+    let mut runner: Option<RealTickCommandRunner> = None;
     loop {
         ticker.tick().await;
         let now = clock.now_string();
-        match run_due_scan(&db, runner.clone(), config, &now).await {
-            Ok(fired) if fired > 0 => {
-                tracing::info!(
-                    code = "ticker_scheduler.scan",
-                    fired,
-                    "auto ticker due scan fired projects"
-                );
+        let active_runner = match &runner {
+            Some(cached) => cached.clone(),
+            None => match RealTickCommandRunner::resolve().await {
+                Ok(resolved) => {
+                    runner = Some(resolved.clone());
+                    resolved
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        code = "ticker_scheduler.runner_unavailable",
+                        error = %e,
+                        "Boule runner unavailable; auto ticks paused, retrying next wake"
+                    );
+                    record_heartbeat_best_effort(&db, &now, false, false, Some(&e.to_string()), 0)
+                        .await;
+                    continue;
+                }
+            },
+        };
+        match run_due_scan(&db, active_runner, config, &now).await {
+            Ok(fired) => {
+                if fired > 0 {
+                    tracing::info!(
+                        code = "ticker_scheduler.scan",
+                        fired,
+                        "auto ticker due scan fired projects"
+                    );
+                }
+                record_heartbeat_best_effort(&db, &now, true, true, None, fired).await;
             }
-            Ok(_) => {}
             Err(e) => {
                 tracing::warn!(
                     code = "ticker_scheduler.scan_failed",
                     error = %e,
                     "auto ticker due scan failed"
                 );
+                // `fired` is a display-only per-wake count; a mid-scan DB error may
+                // undercount ticks that already fired this wake (scan_ok=false flags it).
+                record_heartbeat_best_effort(&db, &now, false, true, None, 0).await;
             }
         }
+    }
+}
+
+/// The heartbeat reports on the scheduler — it must never kill it. Log and continue.
+async fn record_heartbeat_best_effort(
+    db: &Db,
+    now: &str,
+    scan_ok: bool,
+    runner_ok: bool,
+    runner_error: Option<&str>,
+    fired: usize,
+) {
+    if let Err(e) =
+        record_scheduler_heartbeat(db, now, scan_ok, runner_ok, runner_error, fired).await
+    {
+        tracing::warn!(
+            code = "ticker_scheduler.heartbeat_failed",
+            error = %e,
+            "could not persist scheduler heartbeat"
+        );
     }
 }
 
@@ -576,5 +675,108 @@ mod tests {
                 .await
                 .expect("last outcome");
         assert_eq!(outcome, Some(TickStatusOutcome::Advanced));
+    }
+
+    #[tokio::test]
+    async fn heartbeat_upserts_single_row_and_status_reads_back() {
+        let db = test_db().await;
+
+        assert_eq!(
+            get_ticker_scheduler_status_core(&db).await.expect("status"),
+            None,
+            "no heartbeat yet"
+        );
+
+        record_scheduler_heartbeat(&db, "2026-06-01 09:59:00", false, false, Some("no node"), 0)
+            .await
+            .expect("first heartbeat");
+        record_scheduler_heartbeat(&db, "2026-06-01 10:00:00", true, true, None, 2)
+            .await
+            .expect("second heartbeat");
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ticker_scheduler_status")
+            .fetch_one(&db)
+            .await
+            .expect("count");
+        assert_eq!(count, 1, "single-row upsert");
+
+        let status = get_ticker_scheduler_status_core(&db)
+            .await
+            .expect("status")
+            .expect("row present");
+        assert_eq!(status.last_wake_at, "2026-06-01 10:00:00");
+        assert!(status.scan_ok && status.runner_ok);
+        assert_eq!(status.runner_error, None);
+        assert_eq!(status.fired, 2);
+        assert!(
+            status.seconds_since_wake > 60,
+            "age from a timestamp days in the past must be large, got {}",
+            status.seconds_since_wake
+        );
+    }
+
+    /// A due row whose dispatch errs (here: no local repo to resolve) must count toward bounded
+    /// escalation and eventually drop out of the due-scan — not silently retry forever.
+    #[tokio::test]
+    async fn dispatch_error_escalates_and_row_leaves_due_scan() {
+        let db = test_db().await;
+        // Project WITHOUT a repo row: resolve_project_repo_path fails inside the tick path.
+        sqlx::query(
+            "INSERT INTO projects (id, name, kind, credential_ref) VALUES ('p1', 'NoRepo', 'personal', 'cred')",
+        )
+        .execute(&db)
+        .await
+        .expect("seed project");
+        seed_ticker(
+            &db,
+            "p1",
+            true,
+            Some(60),
+            Some("2026-06-09 09:00:00"),
+            false,
+            false,
+        )
+        .await;
+        let runner = RecordingRunner::new();
+
+        let scan_times = [
+            "2026-06-09 10:00:00",
+            "2026-06-09 10:02:00",
+            "2026-06-09 10:04:00",
+        ];
+        for now in scan_times {
+            let fired = run_due_scan(&db, runner.clone(), TickerRunConfig::fast(), now)
+                .await
+                .expect("scan");
+            assert_eq!(fired, 0);
+        }
+        assert_eq!(runner.call_count(), 0, "tick command never spawned");
+
+        let (failures, attention): (i32, bool) = sqlx::query_as(
+            "SELECT consecutive_failures, attention_required FROM project_ticker WHERE project_id = 'p1'",
+        )
+        .fetch_one(&db)
+        .await
+        .expect("row");
+        assert_eq!(failures, 3);
+        assert!(attention, "escalated to attention at the threshold");
+
+        // With attention raised the row is no longer selected — bounded retry proven.
+        let fired = run_due_scan(
+            &db,
+            runner.clone(),
+            TickerRunConfig::fast(),
+            "2026-06-09 10:06:00",
+        )
+        .await
+        .expect("scan");
+        assert_eq!(fired, 0);
+        let (failures_after, _): (i32, bool) = sqlx::query_as(
+            "SELECT consecutive_failures, attention_required FROM project_ticker WHERE project_id = 'p1'",
+        )
+        .fetch_one(&db)
+        .await
+        .expect("row");
+        assert_eq!(failures_after, 3, "no further attempts recorded");
     }
 }

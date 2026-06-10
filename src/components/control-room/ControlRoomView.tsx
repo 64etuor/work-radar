@@ -11,6 +11,7 @@ import {
   useProjectTickerList,
   useSetTickEnabled,
   useSetTickInterval,
+  useTickerSchedulerStatus,
   useTickNow,
 } from "../../lib/query/governance";
 import { Badge } from "../ui/badge";
@@ -25,6 +26,7 @@ import { Vitals } from "./Vitals";
 
 export default function ControlRoomView() {
   const ticker = useProjectTickerList();
+  const scheduler = useTickerSchedulerStatus();
   // Which project's governance state to show. The snapshot is per-project (folded LIVE from
   // that repo's .boule/workspace), so the user picks one; default = first available project.
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -107,7 +109,9 @@ export default function ControlRoomView() {
       )}
       {data && (
         <>
-          {data.infra !== undefined && <InfraBar infra={data.infra} ticker={activeTicker} />}
+          {data.infra !== undefined && (
+            <InfraBar infra={data.infra} ticker={activeTicker} scheduler={scheduler.data ?? null} />
+          )}
           {data.readiness !== undefined && <ReadinessStrip readiness={data.readiness} />}
           {vitals && (
             <Vitals
@@ -193,6 +197,15 @@ function TickerRow({ row, nowMs }: { row: ProjectTickerStatusRow; nowMs: number 
             <Badge variant="destructive" className="cr-ticker-attention">
               <AlertTriangle size={12} aria-hidden />
               waiting on you
+            </Badge>
+          )}
+          {row.consecutiveFailures > 0 && (
+            <Badge
+              variant="outline"
+              className="cr-ticker-failures"
+              title="연속 인프라 실패 횟수 — 3회에 도달하면 자동 tick이 멈추고 attention이 켜집니다"
+            >
+              {row.consecutiveFailures}× fail
             </Badge>
           )}
           {busy && (
