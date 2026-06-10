@@ -1,0 +1,20 @@
+docs/superpowers/specs/2026-06-11-weekly-review-redesign-design.md
+  s_ef5de42741471b::t_53f7ee6798fab1 123-125
+  s_ef5de42741471b::t_4f79365bd25e96 74-85,87-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "90a646e90736ae82c56d5fc6417d3b7208864989",
+  "prompts": {},
+  "sessions": {
+    "s_ef5de42741471b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b13973f8-41c0-45cf-8d1f-ee4edf376509",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
