@@ -25,7 +25,9 @@ const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(30);
 /// so the orchestration is unit-testable without spawning a real `node` process.
 #[async_trait]
 pub trait SnapshotCommandRunner: Send + Sync {
-    async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError>;
+    /// `live` mirrors the project's ticker LIVE opt-in so the snapshot's readiness verdict
+    /// matches what a real tick would gate on (dashboard == tick verdict invariant).
+    async fn run_snapshot_command(&self, repo_path: &Path, live: bool) -> Result<String, AppError>;
 }
 
 /// Real runner: spawns `node --experimental-strip-types <boule.ts> snapshot --repo <p> --json`.
@@ -54,14 +56,24 @@ impl RealSnapshotCommandRunner {
 
 #[async_trait]
 impl SnapshotCommandRunner for RealSnapshotCommandRunner {
-    async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError> {
-        let child = Command::new(&self.node_bin)
+    async fn run_snapshot_command(&self, repo_path: &Path, live: bool) -> Result<String, AppError> {
+        let mut command = Command::new(&self.node_bin);
+        command
             .arg("--experimental-strip-types")
             .arg(&self.cli_entrypoint)
             .arg("snapshot")
             .arg("--repo")
             .arg(repo_path)
-            .arg("--json")
+            .arg("--json");
+        // Same per-project LIVE injection as the tick runner — the Control Room readiness
+        // strip must show the verdict a real tick would compute. live=false does not unset
+        // any operator shell env (global CLI fallback wins there).
+        if live {
+            command
+                .env("BOULE_CONDUCTOR_MODE", "live")
+                .env("BOULE_OBSERVER_MODE", "live");
+        }
+        let child = command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
@@ -91,10 +103,10 @@ struct SystemSnapshotCommandRunner;
 
 #[async_trait]
 impl SnapshotCommandRunner for SystemSnapshotCommandRunner {
-    async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError> {
+    async fn run_snapshot_command(&self, repo_path: &Path, live: bool) -> Result<String, AppError> {
         RealSnapshotCommandRunner::resolve()
             .await?
-            .run_snapshot_command(repo_path)
+            .run_snapshot_command(repo_path, live)
             .await
     }
 }
@@ -123,7 +135,8 @@ pub async fn get_project_control_room_snapshot_with_runner<R: SnapshotCommandRun
         }
         Err(err) => return Err(err),
     };
-    let stdout = runner.run_snapshot_command(&repo_path).await?;
+    let live = crate::governance::ticker::current_live_enabled(db, project_id).await?;
+    let stdout = runner.run_snapshot_command(&repo_path, live).await?;
     parse_control_room_snapshot(&stdout)
 }
 
@@ -173,7 +186,7 @@ mod tests {
     }
 
     struct FakeRunner {
-        calls: Arc<Mutex<Vec<PathBuf>>>,
+        calls: Arc<Mutex<Vec<(PathBuf, bool)>>>,
         result: Result<String, AppError>,
     }
 
@@ -195,11 +208,15 @@ mod tests {
 
     #[async_trait]
     impl SnapshotCommandRunner for FakeRunner {
-        async fn run_snapshot_command(&self, repo_path: &Path) -> Result<String, AppError> {
+        async fn run_snapshot_command(
+            &self,
+            repo_path: &Path,
+            live: bool,
+        ) -> Result<String, AppError> {
             self.calls
                 .lock()
                 .expect("calls lock")
-                .push(repo_path.to_path_buf());
+                .push((repo_path.to_path_buf(), live));
             self.result.clone()
         }
     }
@@ -235,7 +252,8 @@ mod tests {
 
         let recorded = calls.lock().expect("calls lock");
         assert_eq!(recorded.len(), 1);
-        assert_eq!(recorded[0], PathBuf::from("/tmp/the-only-repo"));
+        assert_eq!(recorded[0].0, PathBuf::from("/tmp/the-only-repo"));
+        assert!(!recorded[0].1, "no ticker row ⇒ live defaults to false");
     }
 
     #[tokio::test]
@@ -252,7 +270,7 @@ mod tests {
         assert_eq!(snap, ControlRoomSnapshot::default());
         assert!(snap.tasks.is_empty() && snap.generated_at.is_none());
         // Never shelled out — no local repo to fold.
-        assert_eq!(*calls.lock().expect("calls lock"), Vec::<PathBuf>::new());
+        assert!(calls.lock().expect("calls lock").is_empty());
     }
 
     #[tokio::test]
@@ -267,7 +285,25 @@ mod tests {
             .unwrap_err();
 
         assert_ne!(err.code, "ticker.repo_not_found"); // a real error, not the empty-snapshot path
-        assert_eq!(*calls.lock().expect("calls lock"), Vec::<PathBuf>::new());
+        assert!(calls.lock().expect("calls lock").is_empty());
+    }
+
+    #[tokio::test]
+    async fn live_opt_in_flows_into_snapshot_runner() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", "/tmp/repo").await;
+        crate::governance::ticker::set_project_tick_live_core(&db, "p1", true)
+            .await
+            .expect("set live");
+        let runner = FakeRunner::ok(VALID_SNAPSHOT);
+        let calls = runner.calls.clone();
+
+        get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .expect("snapshot");
+
+        assert!(calls.lock().expect("calls lock")[0].1, "live flag injected");
     }
 
     #[tokio::test]

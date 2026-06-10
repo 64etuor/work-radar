@@ -11,6 +11,7 @@ import {
   useProjectTickerList,
   useSetTickEnabled,
   useSetTickInterval,
+  useSetTickLive,
   useTickerSchedulerStatus,
   useTickNow,
 } from "../../lib/query/governance";
@@ -166,6 +167,7 @@ function TickerPanel({
 function TickerRow({ row, nowMs }: { row: ProjectTickerStatusRow; nowMs: number }) {
   const setEnabled = useSetTickEnabled();
   const setInterval = useSetTickInterval();
+  const setLive = useSetTickLive();
   const tickNow = useTickNow();
   const [draft, setDraft] = useState(() => ({
     intervalSec: row.intervalSec,
@@ -175,6 +177,7 @@ function TickerRow({ row, nowMs }: { row: ProjectTickerStatusRow; nowMs: number 
     draft.intervalSec === row.intervalSec ? draft.value : intervalDraft(row.intervalSec);
 
   const enablingThis = setEnabled.isPending && setEnabled.variables?.projectId === row.projectId;
+  const togglingLive = setLive.isPending && setLive.variables?.projectId === row.projectId;
   const savingInterval =
     setInterval.isPending && setInterval.variables?.projectId === row.projectId;
   const tickingThis = tickNow.isPending && tickNow.variables === row.projectId;
@@ -227,6 +230,19 @@ function TickerRow({ row, nowMs }: { row: ProjectTickerStatusRow; nowMs: number 
           onCheckedChange={(enabled) => setEnabled.mutate({ projectId: row.projectId, enabled })}
           disabled={enablingThis}
           aria-label={`${row.projectName} ticker enabled`}
+        />
+      </label>
+
+      <label
+        className="cr-ticker-toggle"
+        title="LIVE: 이 프로젝트의 tick/snapshot에 BOULE_CONDUCTOR_MODE/OBSERVER_MODE=live를 주입 — 실제 세션이 spawn됩니다 (프로젝트별 운영자 opt-in)"
+      >
+        <span>Live</span>
+        <Switch
+          checked={row.liveEnabled}
+          onCheckedChange={(live) => setLive.mutate({ projectId: row.projectId, live })}
+          disabled={togglingLive}
+          aria-label={`${row.projectName} live mode`}
         />
       </label>
 

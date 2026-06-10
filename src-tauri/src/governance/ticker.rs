@@ -88,6 +88,9 @@ pub struct ProjectTickStatus {
     pub last_report_json: Option<String>,
     pub attention_required: bool,
     pub consecutive_failures: i32,
+    /// Per-project operator opt-in: inject BOULE_CONDUCTOR_MODE/OBSERVER_MODE=live into
+    /// this project's spawned boule tick/snapshot. 0 = stub adapter (nothing spawns).
+    pub live_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -106,6 +109,7 @@ pub struct ProjectTickerStatusRow {
     pub last_exit_code: Option<i32>,
     pub attention_required: bool,
     pub consecutive_failures: i32,
+    pub live_enabled: bool,
     pub autonomy_level: Option<BouleAutonomyLevel>,
 }
 
@@ -128,6 +132,7 @@ impl ProjectTickerStatusRow {
             last_exit_code: raw.last_exit_code,
             attention_required: raw.attention_required,
             consecutive_failures: raw.consecutive_failures,
+            live_enabled: raw.live_enabled,
             autonomy_level,
         }
     }
@@ -148,6 +153,7 @@ struct ProjectTickerStatusRawRow {
     last_exit_code: Option<i32>,
     attention_required: bool,
     consecutive_failures: i32,
+    live_enabled: bool,
 }
 
 impl<'r> FromRow<'r, SqliteRow> for ProjectTickerStatusRawRow {
@@ -166,6 +172,7 @@ impl<'r> FromRow<'r, SqliteRow> for ProjectTickerStatusRawRow {
             last_exit_code: row.try_get("last_exit_code")?,
             attention_required: row.try_get("attention_required")?,
             consecutive_failures: row.try_get("consecutive_failures")?,
+            live_enabled: row.try_get("live_enabled")?,
         })
     }
 }
@@ -186,6 +193,7 @@ impl ProjectTickStatus {
             last_report_json: None,
             attention_required: false,
             consecutive_failures: 0,
+            live_enabled: false,
         }
     }
 }
@@ -206,6 +214,7 @@ impl<'r> FromRow<'r, SqliteRow> for ProjectTickStatus {
             last_report_json: row.try_get("last_report_json")?,
             attention_required: row.try_get("attention_required")?,
             consecutive_failures: row.try_get("consecutive_failures")?,
+            live_enabled: row.try_get("live_enabled")?,
         })
     }
 }
@@ -239,6 +248,9 @@ pub struct TickProjectNowResult {
 pub struct TickCommandRequest {
     pub repo_path: PathBuf,
     pub max_steps: i32,
+    /// Operator LIVE opt-in for this project (DB project_ticker.live_enabled): when true the
+    /// runner injects BOULE_CONDUCTOR_MODE/OBSERVER_MODE=live into the spawned child.
+    pub live: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -315,7 +327,8 @@ impl TickCommandRunner for RealTickCommandRunner {
         &self,
         request: TickCommandRequest,
     ) -> Result<TickCommandOutput, TickerError> {
-        let output = Command::new(&self.node_bin)
+        let mut command = Command::new(&self.node_bin);
+        command
             .arg("--experimental-strip-types")
             .arg(&self.cli_entrypoint)
             .arg("tick")
@@ -323,7 +336,15 @@ impl TickCommandRunner for RealTickCommandRunner {
             .arg(&request.repo_path)
             .arg("--max-steps")
             .arg(request.max_steps.to_string())
-            .arg("--json")
+            .arg("--json");
+        // Per-project LIVE opt-in (DB) → child env. Shell env stays a global fallback for
+        // CLI/cron; live=false deliberately does NOT unset it (operator env wins there).
+        if request.live {
+            command
+                .env("BOULE_CONDUCTOR_MODE", "live")
+                .env("BOULE_OBSERVER_MODE", "live");
+        }
+        let output = command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
@@ -389,9 +410,11 @@ where
     }
 
     let max_steps = current_max_steps(db, project_id).await?;
+    let live = current_live_enabled(db, project_id).await?;
     let request = TickCommandRequest {
         repo_path,
         max_steps,
+        live,
     };
     let command_result =
         tokio::time::timeout(config.timeout, runner.run_tick_command(request)).await;
@@ -437,7 +460,8 @@ pub async fn get_project_tick_status_core(
     let status = sqlx::query_as::<_, ProjectTickStatus>(
         "SELECT project_id, tick_enabled, interval_sec, max_steps, next_due_at, in_progress, \
          last_started_at, last_finished_at, last_outcome, last_exit_code, last_report_json, \
-         attention_required, consecutive_failures FROM project_ticker WHERE project_id = ?1",
+         attention_required, consecutive_failures, live_enabled \
+         FROM project_ticker WHERE project_id = ?1",
     )
     .bind(project_id)
     .fetch_optional(db)
@@ -462,7 +486,8 @@ pub async fn list_project_tick_status_core(
              t.last_outcome AS last_outcome, \
              t.last_exit_code AS last_exit_code, \
              COALESCE(t.attention_required, 0) AS attention_required, \
-             COALESCE(t.consecutive_failures, 0) AS consecutive_failures \
+             COALESCE(t.consecutive_failures, 0) AS consecutive_failures, \
+             COALESCE(t.live_enabled, 0) AS live_enabled \
          FROM projects p \
          LEFT JOIN project_ticker t ON t.project_id = p.id \
          ORDER BY p.created_at, p.id",
@@ -510,6 +535,23 @@ pub async fn set_project_tick_interval_core(
     sqlx::query("UPDATE project_ticker SET interval_sec = ?2 WHERE project_id = ?1")
         .bind(project_id)
         .bind(interval_sec)
+        .execute(db)
+        .await?;
+    get_project_tick_status_core(db, project_id).await
+}
+
+/// Per-project LIVE opt-in toggle (operator consent to spawn real sessions). The ticker/
+/// snapshot runners read it at spawn time; no governance event/autonomy write.
+pub async fn set_project_tick_live_core(
+    db: &Db,
+    project_id: &str,
+    live: bool,
+) -> Result<ProjectTickStatus, AppError> {
+    ensure_project_exists(db, project_id).await?;
+    ensure_ticker_row(db, project_id).await?;
+    sqlx::query("UPDATE project_ticker SET live_enabled = ?2 WHERE project_id = ?1")
+        .bind(project_id)
+        .bind(live)
         .execute(db)
         .await?;
     get_project_tick_status_core(db, project_id).await
@@ -602,6 +644,16 @@ async fn current_max_steps(db: &Db, project_id: &str) -> Result<i32, AppError> {
             .await?
             .max(1),
     )
+}
+
+pub(crate) async fn current_live_enabled(db: &Db, project_id: &str) -> Result<bool, AppError> {
+    Ok(sqlx::query_scalar::<_, bool>(
+        "SELECT live_enabled FROM project_ticker WHERE project_id = ?1",
+    )
+    .bind(project_id)
+    .fetch_optional(db)
+    .await?
+    .unwrap_or(false))
 }
 
 async fn project_autonomy_level_best_effort(
@@ -1212,6 +1264,39 @@ mod tests {
         .await
         .expect("ticker sql");
         assert!(!ticker_sql.contains("autonomy"));
+    }
+
+    #[tokio::test]
+    async fn live_toggle_persists_and_flows_into_tick_request() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", Some("/tmp/repo-a")).await;
+
+        // Default OFF: request carries live=false.
+        let runner = FakeRunner::output(0, &advanced_report());
+        let calls = runner.calls.clone();
+        tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+            .await
+            .expect("tick");
+        assert!(!calls.lock().expect("calls")[0].live);
+
+        // Toggle ON → status reflects it and the next tick request carries live=true.
+        let status = set_project_tick_live_core(&db, "p1", true)
+            .await
+            .expect("set live");
+        assert!(status.live_enabled);
+        let runner = FakeRunner::output(0, &advanced_report());
+        let calls = runner.calls.clone();
+        tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+            .await
+            .expect("tick");
+        assert!(calls.lock().expect("calls")[0].live);
+
+        // Toggle OFF again → fail-closed.
+        let status = set_project_tick_live_core(&db, "p1", false)
+            .await
+            .expect("set live");
+        assert!(!status.live_enabled);
     }
 
     async fn ticker_row(db: &Db, project_id: &str) -> (i32, bool, Option<TickStatusOutcome>) {

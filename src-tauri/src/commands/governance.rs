@@ -10,8 +10,9 @@ use crate::governance::control_room::get_project_control_room_snapshot as get_pr
 use crate::governance::snapshot::ControlRoomSnapshot;
 use crate::governance::ticker::{
     get_project_tick_status_core, list_project_tick_status_core, set_project_tick_enabled_core,
-    set_project_tick_interval_core, tick_project_now as tick_project_now_core, ProjectTickStatus,
-    ProjectTickerStatusRow, TickProjectNowResult,
+    set_project_tick_interval_core, set_project_tick_live_core,
+    tick_project_now as tick_project_now_core, ProjectTickStatus, ProjectTickerStatusRow,
+    TickProjectNowResult,
 };
 use crate::governance::ticker_scheduler::{
     get_ticker_scheduler_status_core, TickerSchedulerStatus,
@@ -100,6 +101,20 @@ pub async fn set_project_tick_interval(
     interval_sec: Option<i32>,
 ) -> Result<ProjectTickStatus, AppError> {
     set_project_tick_interval_core(db.inner(), &project_id, interval_sec).await
+}
+
+/// Per-project LIVE opt-in (operator consent to spawn real sessions): when on, the app
+/// injects BOULE_CONDUCTOR_MODE/OBSERVER_MODE=live into this project's boule tick/snapshot
+/// children. Settings-only — no governance event/autonomy write.
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn set_project_tick_live(
+    db: State<'_, Db>,
+    project_id: String,
+    live: bool,
+) -> Result<ProjectTickStatus, AppError> {
+    set_project_tick_live_core(db.inner(), &project_id, live).await
 }
 
 /// Run one bounded Boule heartbeat for the DB-resolved local repo path.

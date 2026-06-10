@@ -661,6 +661,12 @@ export const commands = {
 	setProjectTickEnabled: (projectId: string, enabled: boolean) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_enabled", { projectId, enabled })),
 	/**  Store the future scheduler interval. T1 has no scheduler; this setting is inert until T2. */
 	setProjectTickInterval: (projectId: string, intervalSec: number | null) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_interval", { projectId, intervalSec })),
+	/**
+	 *  Per-project LIVE opt-in (operator consent to spawn real sessions): when on, the app
+	 *  injects BOULE_CONDUCTOR_MODE/OBSERVER_MODE=live into this project's boule tick/snapshot
+	 *  children. Settings-only — no governance event/autonomy write.
+	 */
+	setProjectTickLive: (projectId: string, live: boolean) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_live", { projectId, live })),
 	/**  Run one bounded Boule heartbeat for the DB-resolved local repo path. */
 	tickProjectNow: (projectId: string) => typedError<TickProjectNowResult, AppError>(__TAURI_INVOKE("tick_project_now", { projectId })),
 	/**
@@ -1767,6 +1773,11 @@ export type ProjectTickStatus = {
 	lastReportJson: string | null,
 	attentionRequired: boolean,
 	consecutiveFailures: number,
+	/**
+	 *  Per-project operator opt-in: inject BOULE_CONDUCTOR_MODE/OBSERVER_MODE=live into
+	 *  this project's spawned boule tick/snapshot. 0 = stub adapter (nothing spawns).
+	 */
+	liveEnabled: boolean,
 };
 
 export type ProjectTickerStatusRow = {
@@ -1783,6 +1794,7 @@ export type ProjectTickerStatusRow = {
 	lastExitCode: number | null,
 	attentionRequired: boolean,
 	consecutiveFailures: number,
+	liveEnabled: boolean,
 	autonomyLevel: BouleAutonomyLevel | null,
 };
 

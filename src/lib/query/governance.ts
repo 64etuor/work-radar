@@ -61,6 +61,18 @@ export function useSetTickInterval() {
   });
 }
 
+export function useSetTickLive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, live }: { projectId: string; live: boolean }) =>
+      unwrap(commands.setProjectTickLive(projectId, live)),
+    onSuccess: (res) => {
+      qc.setQueryData(["project-tick-status", res.projectId], res);
+      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
+    },
+  });
+}
+
 export function useTickNow() {
   const qc = useQueryClient();
   return useMutation({
