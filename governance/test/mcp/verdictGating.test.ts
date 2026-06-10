@@ -40,10 +40,21 @@ describe("verdict gating — single source, no drift (INVARIANT #1)", () => {
   });
 
   describe("server.ts registration surface", () => {
-    const sourceP = readFile(join(import.meta.dirname, "../../src/mcp/server.ts"), "utf8");
+    const SRC_MCP = join(import.meta.dirname, "../../src/mcp");
+    const TOOLS_DIR = join(SRC_MCP, "tools");
+
+    // Concatenation of server.ts + every file in src/mcp/tools/ (sorted for determinism).
+    // This is the full registration surface after the split.
+    async function readRegistrationSurface(): Promise<string> {
+      const { readdir } = await import("node:fs/promises");
+      const toolFiles = (await readdir(TOOLS_DIR)).filter((f) => f.endsWith(".ts")).sort();
+      const parts = [await readFile(join(SRC_MCP, "server.ts"), "utf8")];
+      for (const f of toolFiles) parts.push(await readFile(join(TOOLS_DIR, f), "utf8"));
+      return parts.join("\n");
+    }
 
     it("every verdict tool registers via registerVerdictTool — never via bare server.registerTool", async () => {
-      const source = await sourceP;
+      const source = await readRegistrationSurface();
       for (const name of VERDICT_TOOL_NAMES) {
         const gated = new RegExp(`registerVerdictTool\\(\\s*"${name}"`);
         const bare = new RegExp(`server\\.registerTool\\(\\s*"${name}"`);
@@ -56,23 +67,34 @@ describe("verdict gating — single source, no drift (INVARIANT #1)", () => {
     });
 
     it("gated registration count equals the canonical list (none dropped, none duplicated)", async () => {
-      const source = await sourceP;
+      const source = await readRegistrationSurface();
       const calls = source.match(/registerVerdictTool\(\s*"/g) ?? [];
       expect(calls.length).toBe(VERDICT_TOOL_NAMES.length);
     });
 
     it("no non-canonical tool sneaks through the gated helper", async () => {
-      const source = await sourceP;
+      const source = await readRegistrationSurface();
       for (const m of source.matchAll(/registerVerdictTool\(\s*"([^"]+)"/g)) {
         expect(VERDICT_TOOL_NAME_SET.has(m[1]!), `"${m[1]}" not in VERDICT_TOOL_NAMES`).toBe(true);
       }
     });
 
     it("the executor no-op gate lives inside the helper (single predicate site)", async () => {
-      const source = await sourceP;
-      // Exactly one registration-gating use of SESSION_ALLOWS_VERDICTS — inside registerVerdictTool.
-      const uses = source.match(/if \(!?SESSION_ALLOWS_VERDICTS\)/g) ?? [];
+      // The predicate must appear exactly once — inside registerVerdictTool in server.ts.
+      // No tools/*.ts file may contain it (the gate is the helper's job alone).
+      const serverSource = await readFile(join(SRC_MCP, "server.ts"), "utf8");
+      const uses = serverSource.match(/if \(!?SESSION_ALLOWS_VERDICTS\)/g) ?? [];
       expect(uses).toEqual(["if (!SESSION_ALLOWS_VERDICTS)"]);
+
+      const { readdir } = await import("node:fs/promises");
+      const toolFiles = (await readdir(TOOLS_DIR)).filter((f) => f.endsWith(".ts")).sort();
+      for (const f of toolFiles) {
+        const s = await readFile(join(TOOLS_DIR, f), "utf8");
+        expect(
+          s.includes("SESSION_ALLOWS_VERDICTS"),
+          `tools/${f} must not mention SESSION_ALLOWS_VERDICTS`,
+        ).toBe(false);
+      }
     });
   });
 });

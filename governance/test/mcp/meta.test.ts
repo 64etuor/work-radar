@@ -52,14 +52,17 @@ describe("meta_observe MCP round-trip", () => {
 
 describe("meta_observe MCP tool surface", () => {
   it("registers a P5 propose-only tool with a stable no-verdict block", async () => {
-    const source = await readFile(join(import.meta.dirname, "../../src/mcp/server.ts"), "utf8");
+    const source = await readFile(
+      join(import.meta.dirname, "../../src/mcp/tools/observation.ts"),
+      "utf8",
+    );
 
     expect(source).toContain("// ── P5: Meta Observer");
     expect(source).toContain('"meta_observe"');
 
     const p5Block = source.slice(
       source.indexOf("// ── P5: Meta Observer"),
-      source.indexOf("const AUTHOR_MODEL"),
+      source.indexOf("// ── P6: Archive Pruner"),
     );
     expect(p5Block).toContain("runMetaObserve(");
     expect(p5Block).not.toContain('"approve"');
