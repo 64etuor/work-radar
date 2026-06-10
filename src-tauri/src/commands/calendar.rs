@@ -432,7 +432,7 @@ async fn fetch_events_windowed(
     let cache_key = format!("{time_min}|{time_max}|{}", project_ids.join(","));
 
     let log_key = cache_key.clone();
-    calendar_events_cache()
+    let mut events = calendar_events_cache()
         .get_or_fetch(cache_key, force_refresh, || async {
             // 캐시 miss → 실제 Google fetch 시점(hit이면 이 클로저 미실행 → 로그 없음).
             tracing::debug!(
@@ -469,9 +469,79 @@ async fn fetch_events_windowed(
                     calendars: calendars.into_iter().map(|c| (c.id, c.summary)).collect(),
                 });
             }
-            Ok(calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await)
+            Ok::<_, AppError>(
+                calendar::fetch_events_core(&provider, ctxs, &time_min, &time_max).await,
+            )
         })
-        .await
+        .await?;
+    overlay_pending_event_writes(db, &mut events).await?;
+    Ok(events)
+}
+
+/// ADR-0002 "큐에 우리 pending이 있으면 우리 값이 이김": 표시 read가 아직 Google에 반영
+/// 전(디바운스/재시도 중)인 pending write를 fetch 결과(TTL 캐시 포함) 위에 오버레이한다.
+/// 이게 없으면 디바운스 윈도 안의 refetch가 Google의 옛 시간을 돌려줘 로컬 편집이 화면에서
+/// 되돌아간다. staged 행(cross-cal Acceptance 대기)은 사람 승인 전이므로 미적용.
+async fn overlay_pending_event_writes(
+    db: &Db,
+    events: &mut Vec<CalendarEvent>,
+) -> Result<(), AppError> {
+    // attempts >= 3(재시도 예산 소진 = is_terminal_attempt)은 제외 — Google에 반영되지 못한
+    // 채로 큐에 남는 행이 화면을 영구히 거짓으로 덮지 않게 한다(실패는 토스트로 이미 노출).
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT kind, calendar_id, event_id, payload_json
+         FROM pending_calendar_writes
+         WHERE event_id IS NOT NULL
+           AND attempts < 3
+           AND (json_extract(payload_json, '$.staged') IS NULL
+                OR json_extract(payload_json, '$.staged') = 0)",
+    )
+    .fetch_all(db)
+    .await?;
+    apply_pending_overlay(events, &rows);
+    Ok(())
+}
+
+/// 순수 오버레이 — `delete` pending은 이벤트 숨김, `patch`(start+duration_min)는 시간 덮어쓰기.
+/// `create`는 event_id가 아직 없어 대상 외. all-day 이벤트는 patch payload가 timed 전제라 skip.
+/// 파싱 불가 payload는 조용히 건너뛴다(오버레이는 표시 가속 — 실패해도 fetch 결과 그대로).
+/// 같은 이벤트에 patch+delete가 공존하면(큐 UNIQUE상 kind별 최대 1행) 순서 무관 delete가 이긴다
+/// (retain이 패치 여부와 무관하게 제거).
+fn apply_pending_overlay(
+    events: &mut Vec<CalendarEvent>,
+    rows: &[(String, String, String, String)],
+) {
+    for (kind, cal_id, event_id, payload) in rows {
+        match kind.as_str() {
+            "delete" => {
+                events.retain(|e| !(e.id == *event_id && e.calendar_id == *cal_id));
+            }
+            "patch" => {
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(payload) else {
+                    continue;
+                };
+                let Some(raw_start) = v.get("start").and_then(|x| x.as_str()) else {
+                    continue;
+                };
+                let Some(dur) = v.get("duration_min").and_then(|x| x.as_i64()) else {
+                    continue;
+                };
+                let Ok(start) = calendar::sync::normalize_timed_start(raw_start) else {
+                    continue;
+                };
+                let Ok(end) = calendar::sync::compute_end(&start, dur, false) else {
+                    continue;
+                };
+                for e in events.iter_mut() {
+                    if e.id == *event_id && e.calendar_id == *cal_id && !e.all_day {
+                        e.start = start.clone();
+                        e.end = end.clone();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// 단일 프로젝트(또는 전체)의 project_id 목록을 해석한다(None=모든 프로젝트 병합, Today/Drawer 공용).
@@ -678,6 +748,101 @@ mod tests {
             project_color: "#2D6CDF".into(),
             project_text_color: "#FFFFFF".into(),
         }
+    }
+
+    /// ADR-0002 pending-이김 오버레이: patch는 시간 덮어쓰기, delete는 숨김, all-day는 skip.
+    #[test]
+    fn pending_overlay_patch_overrides_and_delete_hides() {
+        let mut events = vec![
+            CalendarEvent {
+                id: "e1".into(),
+                calendar_id: "c1".into(),
+                ..ev(
+                    "회의",
+                    "2026-06-10T10:00:00+09:00",
+                    "2026-06-10T10:30:00+09:00",
+                )
+            },
+            CalendarEvent {
+                id: "e2".into(),
+                calendar_id: "c1".into(),
+                ..ev(
+                    "점심",
+                    "2026-06-10T12:00:00+09:00",
+                    "2026-06-10T13:00:00+09:00",
+                )
+            },
+            CalendarEvent {
+                id: "e3".into(),
+                calendar_id: "c1".into(),
+                all_day: true,
+                ..ev("휴가", "2026-06-10", "2026-06-11")
+            },
+        ];
+        let rows = vec![
+            (
+                "patch".to_string(),
+                "c1".to_string(),
+                "e1".to_string(),
+                r#"{"start":"2026-06-10T14:00:00+09:00","duration_min":45}"#.to_string(),
+            ),
+            (
+                "delete".to_string(),
+                "c1".to_string(),
+                "e2".to_string(),
+                "{}".to_string(),
+            ),
+            (
+                "patch".to_string(),
+                "c1".to_string(),
+                "e3".to_string(),
+                r#"{"start":"2026-06-10T09:00:00+09:00","duration_min":30}"#.to_string(),
+            ),
+        ];
+        apply_pending_overlay(&mut events, &rows);
+        assert_eq!(events.len(), 2, "delete pending은 이벤트를 숨긴다");
+        assert_eq!(events[0].id, "e1");
+        assert_eq!(events[0].start, "2026-06-10T14:00:00+09:00");
+        assert_eq!(events[0].end, "2026-06-10T14:45:00+09:00");
+        assert_eq!(events[1].id, "e3");
+        assert_eq!(events[1].start, "2026-06-10", "all-day는 오버레이 비대상");
+    }
+
+    /// 다른 캘린더/이벤트 id·깨진 payload는 오버레이 무영향(표시 가속 — 조용히 skip).
+    #[test]
+    fn pending_overlay_ignores_mismatches_and_bad_payload() {
+        let mut events = vec![CalendarEvent {
+            id: "e1".into(),
+            calendar_id: "c1".into(),
+            ..ev(
+                "회의",
+                "2026-06-10T10:00:00+09:00",
+                "2026-06-10T10:30:00+09:00",
+            )
+        }];
+        let rows = vec![
+            (
+                "patch".to_string(),
+                "c2".to_string(), // 다른 캘린더
+                "e1".to_string(),
+                r#"{"start":"2026-06-10T14:00:00+09:00","duration_min":45}"#.to_string(),
+            ),
+            (
+                "patch".to_string(),
+                "c1".to_string(),
+                "e1".to_string(),
+                "not-json".to_string(),
+            ),
+            (
+                "create".to_string(),
+                "c1".to_string(),
+                "e1".to_string(),
+                "{}".to_string(),
+            ),
+        ];
+        apply_pending_overlay(&mut events, &rows);
+        assert_eq!(events[0].start, "2026-06-10T10:00:00+09:00");
+        assert_eq!(events.len(), 1);
     }
 
     #[test]

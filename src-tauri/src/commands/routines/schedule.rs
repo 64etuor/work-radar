@@ -96,7 +96,11 @@ pub fn routine_due_on(
             // 주 경계 parity: 각 날짜를 일요일 기준 주 인덱스로 환산해 14일(2주) parity 비교.
             // (days_since_anchor_week / 7) % 2 == 0 과 등가지만, 음수/요일 어긋남에 안정적이도록
             // 두 날짜의 "월요일 기준 주 시작"의 일수 차이로 계산한다.
-            let anchor_week = week_start(anchor);
+            // ⚠️ parity epoch는 RRULE DTSTART와 같아야 한다: rrule.rs(routine_to_rrule)는
+            // anchor가 선택 요일이 아니면 첫 매칭 요일로 forward-normalize한 날짜를 DTSTART로
+            // 쓰고, Google의 INTERVAL=2 parity는 DTSTART 주 기준이다. raw anchor 주를 쓰면
+            // 정규화가 주 경계를 넘은 경우 Google 미러와 정반대 주에 due가 뜬다.
+            let anchor_week = week_start(biweekly_epoch(anchor, weekdays));
             let date_week = week_start(date);
             let weeks = (date_week - anchor_week).num_days() / 7;
             weeks % 2 == 0
@@ -116,6 +120,20 @@ pub fn routine_due_on(
             }
         },
     }
+}
+
+/// biweekly parity epoch — anchor가 선택 요일이면 그대로, 아니면 첫 매칭 요일로 forward
+/// (최대 6일). rrule.rs `next_matching_weekday`와 동치 — 로컬 due-calc와 Google RRULE
+/// DTSTART가 같은 주를 2주 주기의 기준으로 삼게 한다.
+fn biweekly_epoch(anchor: NaiveDate, weekdays: &[Weekday]) -> NaiveDate {
+    for offset in 0..7 {
+        let d = anchor + chrono::Duration::days(offset);
+        let wk = weekday_key(d.weekday());
+        if weekdays.iter().any(|w| weekday_enum_key(*w) == wk) {
+            return d;
+        }
+    }
+    anchor
 }
 
 /// 그 날이 속한 주의 월요일(주 시작) 날짜. parity 계산 기준을 요일과 무관하게 만든다.

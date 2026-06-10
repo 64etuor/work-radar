@@ -20,19 +20,24 @@ export function usePendingWrites() {
 
   // CalendarSyncFlushed / CalendarSyncFailed 이벤트가 오면 즉시 재조회(폴링 보강).
   useEffect(() => {
+    // listen()은 async — cleanup이 resolve 전에 돌면 unlisten 미호출로 리스너 누적.
+    let cancelled = false;
     let dispose1: (() => void) | undefined;
     let dispose2: (() => void) | undefined;
     void listen("CalendarSyncFlushed", () => {
       void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
     }).then((u) => {
-      dispose1 = u;
+      if (cancelled) u();
+      else dispose1 = u;
     });
     void listen("CalendarSyncFailed", () => {
       void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
     }).then((u) => {
-      dispose2 = u;
+      if (cancelled) u();
+      else dispose2 = u;
     });
     return () => {
+      cancelled = true;
       dispose1?.();
       dispose2?.();
     };

@@ -28,7 +28,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { type MutableRefObject, useCallback } from "react";
 
-import type { CalendarEvent, WorkSignal } from "@/bindings";
+import type { CalendarEvent, RoutineToday, WorkSignal } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
 import { applySchedulePatch } from "@/lib/optimisticSchedule";
 import { useToastStore } from "@/lib/toast";
@@ -295,6 +295,17 @@ export function useTimelineDnd(opts: Opts) {
     void qc.invalidateQueries({ queryKey: ["calendarEvents", date] });
   }, [qc, date]);
 
+  /** routines 캐시(["routines", date]) optimistic 패치 — signal/event 블록과 동일하게 드래그
+   *  직후 블록이 새 위치에 머물게 한다(이전엔 invalidate-only라 refetch까지 스냅백). */
+  const patchRoutineCache = useCallback(
+    (routineId: string, patch: { timeOverride?: string; durationMin?: number }) => {
+      qc.setQueryData<RoutineToday[]>(["routines", date], (old) =>
+        old?.map((r) => (r.id === routineId ? { ...r, ...patch } : r)),
+      );
+    },
+    [qc, date],
+  );
+
   const onDragEnd = useCallback(
     async (ev: DragEndEvent, activeAtStart?: DragData | null) => {
       const a = resolveDragEndActiveData(
@@ -351,6 +362,11 @@ export function useTimelineDnd(opts: Opts) {
             at,
             durationMin: clamped,
           });
+        } else if (a.blockKind === "routine") {
+          // durationMin은 패치하지 않는다 — routine_checks엔 per-day duration 컬럼이 없어
+          // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
+          // 리사이즈 높이가 곧 스냅백한다. 시간 위치(time_override)만 optimistic.
+          patchRoutineCache(a.routineId, { timeOverride: at.slice(11, 16) });
         }
         try {
           if (a.blockKind === "event") {
@@ -393,6 +409,8 @@ export function useTimelineDnd(opts: Opts) {
           patchEventCache(a.calendarId, a.eventId, { start: at, durationMin: a.durationMin });
         } else if (a.blockKind === "signal") {
           patchSignalCaches(a.signalId, { at });
+        } else if (a.blockKind === "routine") {
+          patchRoutineCache(a.routineId, { timeOverride: at.slice(11, 16) });
         }
         try {
           if (a.blockKind === "event") {
@@ -470,7 +488,11 @@ export function useTimelineDnd(opts: Opts) {
             title: a.title,
           });
         } catch {
-          // staged는 큐 표시(usePendingWrites)가 끌어가 — 별도 invalidate만.
+          // stage IPC 자체가 실패하면 큐 행이 안 생겨 usePendingWrites에도 안 뜬다 —
+          // 무음이면 사용자는 이동이 접수된 줄 안다. 토스트로 노출.
+          useToastStore
+            .getState()
+            .pushError("calendar.stage", "캘린더 이동 스테이징 실패 — 다시 시도하세요");
         }
         void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
         return;
@@ -510,6 +532,7 @@ export function useTimelineDnd(opts: Opts) {
       invalidateSignalCaches,
       invalidateEventCaches,
       patchEventCache,
+      patchRoutineCache,
       qc,
     ],
   );

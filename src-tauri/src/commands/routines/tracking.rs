@@ -105,10 +105,15 @@ pub async fn fetch_routine_tracking(
         }
 
         // 현재 streak: 최신 due부터 거꾸로 연속 체크.
+        // 윈도 끝(=오늘)의 미체크 due는 "아직 안 한 것"이지 "거른 것"이 아니므로 streak를
+        // 끊지 않고 건너뛴다 — 하루가 끝나기 전 streak가 0으로 깜빡이는 것 방지.
+        let end_ds = end.format("%Y-%m-%d").to_string();
         let mut streak = 0u32;
-        for h in history.iter().rev() {
+        for (i, h) in history.iter().rev().enumerate() {
             if h.done {
                 streak += 1;
+            } else if i == 0 && h.date == end_ds {
+                continue;
             } else {
                 break;
             }

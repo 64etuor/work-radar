@@ -1,9 +1,10 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   commands,
   type CreateRoutineInput,
   type Kind,
+  type RoutineToday,
   type UpdateRoutineInput,
   type Weekday,
 } from "@/bindings";
@@ -142,13 +143,26 @@ export function useMoveRoutineGoogleSync() {
   });
 }
 
-/** 루틴 완료 토글 (날짜별, 다음날 리셋). */
+/** 루틴 완료 토글 (날짜별, 다음날 리셋). 최빈 상호작용이라 optimistic — 체크가 즉시 뒤집히고,
+ *  실패 시 스냅샷 롤백, settle 시 무효화로 서버 상태와 수렴한다. */
 export function useToggleRoutineCheck() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ routineId, date, done }: { routineId: string; date: string; done: boolean }) =>
       unwrap(commands.toggleRoutineCheck(routineId, date, done)),
-    onSuccess: () => inv.routines(),
+    onMutate: async ({ routineId, date, done }) => {
+      await qc.cancelQueries({ queryKey: ["routines", date] });
+      const prev = qc.getQueryData<RoutineToday[]>(["routines", date]);
+      qc.setQueryData<RoutineToday[]>(["routines", date], (old) =>
+        old?.map((r) => (r.id === routineId ? { ...r, done } : r)),
+      );
+      return { prev, date };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["routines", ctx.date], ctx.prev);
+    },
+    onSettled: () => inv.routines(),
   });
 }
 

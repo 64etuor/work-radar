@@ -24,6 +24,9 @@ export function useCalendarSyncEvents() {
   const qc = useQueryClient();
 
   useEffect(() => {
+    // listen()은 async — cleanup이 resolve 전에 돌면 unlisten이 영영 호출되지 않아
+    // remount마다 리스너가 누적된다. cancelled 플래그로 늦게 도착한 unlisten을 즉시 실행.
+    let cancelled = false;
     let disposeFailed: (() => void) | undefined;
     let disposeFlushed: (() => void) | undefined;
 
@@ -41,7 +44,8 @@ export function useCalendarSyncEvents() {
       void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
       void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
     }).then((u) => {
-      disposeFailed = u;
+      if (cancelled) u();
+      else disposeFailed = u;
     });
 
     void listen("CalendarSyncFlushed", () => {
@@ -50,10 +54,12 @@ export function useCalendarSyncEvents() {
       void qc.invalidateQueries({ queryKey: ["today"] });
       void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
     }).then((u) => {
-      disposeFlushed = u;
+      if (cancelled) u();
+      else disposeFlushed = u;
     });
 
     return () => {
+      cancelled = true;
       disposeFailed?.();
       disposeFlushed?.();
     };

@@ -355,6 +355,34 @@ mod tests {
         ));
     }
 
+    /// biweekly: anchor가 선택 요일이 아니고 forward 정규화가 주 경계를 넘는 경우 —
+    /// parity epoch는 RRULE DTSTART(첫 매칭 요일)의 주여야 Google 미러와 같은 주에 뜬다.
+    /// anchor=일 2026-05-24(주: 5/18~), 요일=[수,토] → 첫 매칭=수 5/27(주: 5/25~).
+    #[test]
+    fn biweekly_parity_matches_rrule_dtstart_week() {
+        let anchor = "2026-05-24"; // 일요일, 선택 요일 아님
+        let days = [Weekday::Wed, Weekday::Sat];
+        let due = |d: &str| {
+            routine_due_on(
+                RoutineFreq::Biweekly,
+                &days,
+                Some(anchor),
+                None,
+                None,
+                nd(d),
+            )
+        };
+        // DTSTART 주(5/25~): 5/27(수)·5/30(토) due — Google 첫 occurrence와 일치.
+        assert!(due("2026-05-27"), "DTSTART 당일(수) due");
+        assert!(due("2026-05-30"), "DTSTART 주 토요일 due");
+        // 다음 주(6/1~)는 off — 예전엔 raw anchor 주(5/18~) parity로 여기가 due였다(미러 반전).
+        assert!(!due("2026-06-03"), "1주 뒤 수요일은 off");
+        assert!(!due("2026-06-06"), "1주 뒤 토요일은 off");
+        // 2주 뒤(6/8~)는 다시 due.
+        assert!(due("2026-06-10"));
+        assert!(due("2026-06-13"));
+    }
+
     /// daily는 항상 due, weekly는 요일만.
     #[test]
     fn daily_and_weekly_due() {

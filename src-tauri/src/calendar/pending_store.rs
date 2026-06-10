@@ -57,6 +57,9 @@ pub async fn upsert_write(
 }
 
 /// backoff 스케줄(spec §6.1): [1s, 3s, 9s]. 4회차 이상도 9s 캡(워커가 is_terminal_attempt로 중단).
+/// 실제 적용은 `record_failure`의 원자 UPDATE 안 CASE 식 — 이 함수는 스케줄 명세의
+/// 테스트 가능한 정본으로 유지한다(둘이 어긋나면 테스트가 알린다).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn backoff_ms_for_attempt(attempt: i32) -> i64 {
     match attempt {
         0 => 1_000,
@@ -91,20 +94,18 @@ pub async fn fetch_due_writes(pool: &SqlitePool) -> sqlx::Result<Vec<PendingWrit
 /// 시도 실패 기록 — attempts += 1, next_attempt_at = now + backoff(prev_attempts), last_error 보존.
 /// 워커가 이 함수 호출 후 `is_terminal_attempt`로 종료 여부 판단(이 함수는 큐를 지우지 않는다).
 pub async fn record_failure(pool: &SqlitePool, id: i32, err: &str) -> sqlx::Result<()> {
-    let row: (i32,) = sqlx::query_as("SELECT attempts FROM pending_calendar_writes WHERE id = ?")
-        .bind(id)
-        .fetch_one(pool)
-        .await?;
-    let backoff = backoff_ms_for_attempt(row.0);
-    let next_attempts = row.0 + 1;
-    let next_at = format_sqlite_datetime(Utc::now() + Duration::milliseconds(backoff));
+    // 단일 원자 UPDATE — SELECT-then-UPDATE로 쪼개면 그 사이 IPC `upsert_write`가
+    // attempts=0으로 리셋(새 의도)한 것을 stale 증가가 덮어쓴다. SQLite의 SET 식은
+    // 전부 갱신 전 행 값 기준이라 backoff는 증가 전 attempts로 계산된다(스케줄 [1s,3s,9s]).
     sqlx::query(
         "UPDATE pending_calendar_writes
-         SET attempts = ?, next_attempt_at = ?, last_error = ?
+         SET next_attempt_at = datetime('now',
+               '+' || (CASE WHEN attempts = 0 THEN 1 WHEN attempts = 1 THEN 3 ELSE 9 END)
+                   || ' seconds'),
+             attempts = attempts + 1,
+             last_error = ?
          WHERE id = ?",
     )
-    .bind(next_attempts)
-    .bind(next_at)
     .bind(err)
     .bind(id)
     .execute(pool)

@@ -191,7 +191,20 @@ pub fn routine_to_rrule(input: &RRuleInput<'_>, exdates: &[&str]) -> Result<RRul
                 .ok_or(RRuleError::MonthlyPatternMissing)?;
             let rrule = match pattern {
                 MonthlyPattern::DayOfMonth => {
-                    format!("FREQ=MONTHLY;BYMONTHDAY={}", anchor.day())
+                    let day = anchor.day();
+                    if day > 28 {
+                        // 로컬 due-calc(schedule.rs monthly_due)는 짧은 달에서 말일로 클램프한다.
+                        // BYMONTHDAY=31 단독은 RFC5545/Google에서 그 달을 "건너뛰므로"(클램프 아님)
+                        // 미러가 어긋난다. BYMONTHDAY=28..=day + BYSETPOS=-1 = 매달 그 집합에서
+                        // 실재하는 마지막 날 = 클램프 의미와 정확히 일치(예: 31 → 1월 31, 4월 30, 2월 28/29).
+                        let days = (28..=day)
+                            .map(|d| d.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        format!("FREQ=MONTHLY;BYMONTHDAY={days};BYSETPOS=-1")
+                    } else {
+                        format!("FREQ=MONTHLY;BYMONTHDAY={day}")
+                    }
                 }
                 MonthlyPattern::NthWeekday => {
                     if input.weekdays.len() != 1 {
@@ -472,16 +485,39 @@ mod tests {
         assert_eq!(s.rrule, "FREQ=MONTHLY;BYMONTHDAY=15");
     }
 
-    // 11) monthly day_of_month=31 — 2월 처리는 Google이 알아서, RRULE 그대로 전달.
+    // 11) monthly day_of_month=31 — BYMONTHDAY=31 단독은 짧은 달을 건너뛴다(클램프 아님).
+    // 로컬 due-calc는 말일로 클램프하므로 BYSETPOS=-1 클램프 형태로 내보내 동치 유지.
     #[test]
-    fn monthly_day_of_month_31st() {
+    fn monthly_day_of_month_31st_clamps_short_months() {
         let inp = RRuleInput {
             anchor_date: Some("2026-05-31"),
             monthly_pattern: Some(MonthlyPattern::DayOfMonth),
             ..input(Freq::Monthly)
         };
         let s = routine_to_rrule(&inp, &[]).unwrap();
-        assert_eq!(s.rrule, "FREQ=MONTHLY;BYMONTHDAY=31");
+        assert_eq!(s.rrule, "FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1");
+    }
+
+    // 11b) day 29/30도 클램프 형태, 28 이하는 단독 BYMONTHDAY 유지(모든 달에 존재).
+    #[test]
+    fn monthly_day_of_month_clamp_threshold() {
+        let mk = |anchor: &'static str| RRuleInput {
+            anchor_date: Some(anchor),
+            monthly_pattern: Some(MonthlyPattern::DayOfMonth),
+            ..input(Freq::Monthly)
+        };
+        assert_eq!(
+            routine_to_rrule(&mk("2026-05-29"), &[]).unwrap().rrule,
+            "FREQ=MONTHLY;BYMONTHDAY=28,29;BYSETPOS=-1"
+        );
+        assert_eq!(
+            routine_to_rrule(&mk("2026-05-30"), &[]).unwrap().rrule,
+            "FREQ=MONTHLY;BYMONTHDAY=28,29,30;BYSETPOS=-1"
+        );
+        assert_eq!(
+            routine_to_rrule(&mk("2026-05-28"), &[]).unwrap().rrule,
+            "FREQ=MONTHLY;BYMONTHDAY=28"
+        );
     }
 
     // 12) monthly nth_weekday: 2nd Tue.

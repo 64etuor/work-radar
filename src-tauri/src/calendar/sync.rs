@@ -127,6 +127,9 @@ impl SyncEngine {
                         "failed to delete completed pending write"
                     );
                 }
+                // 외부 write가 반영됐으니 표시 TTL 캐시를 비운다 — 다음 fetch가 PATCH 전
+                // 스냅샷(최대 60s stale)을 돌려줘 optimistic 위치를 되돌리는 것 방지.
+                crate::commands::calendar::invalidate_calendar_events_cache().await;
                 if let Err(e) = self.app.emit(
                     "CalendarSyncFlushed",
                     serde_json::json!({ "pendingId": pending_id }),
@@ -414,7 +417,7 @@ fn build_patch_body(payload: &str) -> Result<serde_json::Value, SyncError> {
     Ok(serde_json::Value::Object(body))
 }
 
-fn normalize_timed_start(start: &str) -> Result<String, SyncError> {
+pub(crate) fn normalize_timed_start(start: &str) -> Result<String, SyncError> {
     let trimmed = start.trim();
     if trimmed.is_empty() {
         return Err(SyncError::Terminal("start missing/empty".into()));
@@ -432,13 +435,20 @@ fn normalize_timed_start(start: &str) -> Result<String, SyncError> {
     Ok(local.to_rfc3339())
 }
 
-/// start(RFC3339 timed) + duration_min → end(RFC3339). all_day=true는 start YYYY-MM-DD → end +1 day.
-fn compute_end(start: &str, duration_min: i64, all_day: bool) -> Result<String, SyncError> {
+/// start(RFC3339 timed) + duration_min → end(RFC3339). all_day=true는 start YYYY-MM-DD →
+/// end = start + max(1, ceil(duration_min/1440)) days (Google all-day end.date는 exclusive —
+/// duration이 며칠 분량이면 멀티데이 그대로 미러, 1일 미만/누락은 1일).
+pub(crate) fn compute_end(
+    start: &str,
+    duration_min: i64,
+    all_day: bool,
+) -> Result<String, SyncError> {
     if all_day {
         let date = chrono::NaiveDate::parse_from_str(start, "%Y-%m-%d")
             .map_err(|e| SyncError::Terminal(format!("all-day start parse: {e}")))?;
+        let days = ((duration_min.max(0) + 1439) / 1440).max(1);
         let end = date
-            .succ_opt()
+            .checked_add_signed(chrono::Duration::days(days))
             .ok_or_else(|| SyncError::Terminal("all-day end overflow".into()))?;
         return Ok(end.format("%Y-%m-%d").to_string());
     }
@@ -538,7 +548,7 @@ async fn resolve_access_token<P: CalendarProvider>(
 type SyncResult<T = ()> = Result<T, SyncError>;
 
 #[derive(Debug, thiserror::Error)]
-enum SyncError {
+pub(crate) enum SyncError {
     #[error("{0}")]
     Terminal(String),
     #[error("{0}")]
@@ -584,6 +594,16 @@ mod tests {
     fn compute_end_all_day_succ_date() {
         let end = compute_end("2026-05-28", 0, true).unwrap();
         assert_eq!(end, "2026-05-29");
+    }
+
+    /// duration_min이 며칠 분량이면 멀티데이 all-day로 미러(end exclusive). 1440=1일, 4320=3일.
+    #[test]
+    fn compute_end_all_day_multi_day_from_duration() {
+        assert_eq!(compute_end("2026-05-28", 1440, true).unwrap(), "2026-05-29");
+        assert_eq!(compute_end("2026-05-28", 4320, true).unwrap(), "2026-05-31");
+        // 하루 미만/half-day는 1일로 올림, 1.5일은 2일로 올림.
+        assert_eq!(compute_end("2026-05-28", 30, true).unwrap(), "2026-05-29");
+        assert_eq!(compute_end("2026-05-28", 2160, true).unwrap(), "2026-05-30");
     }
 
     #[test]
