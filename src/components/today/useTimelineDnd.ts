@@ -229,10 +229,17 @@ type Opts = {
     targetKind?: "signal" | "routine",
   ) => Promise<string | null>;
   /**
-   * 캔버스 그리드 로컬 Y (px). TimelineCanvas가 pointermove로 기록 → onDragEnd에서 읽는다.
-   * dropData에 mutable 객체를 박는 antipattern 회피용 (PR 5 코드리뷰).
+   * 캔버스 그리드 DOM. onDragEnd 시점에 fresh `getBoundingClientRect()`를 읽어
+   * 스크롤/auto-scroll로 그리드가 움직인 경우에도 정확한 그리드 로컬 좌표를 만든다.
    */
-  canvasPointerYRef?: MutableRefObject<number | null>;
+  gridElRef?: MutableRefObject<HTMLDivElement | null>;
+  /**
+   * 마지막 포인터 viewport 좌표(raw `clientX`/`clientY`). TodayView가 `.today` onPointerMove로
+   * 기록한다. 드롭 위치 = 이 raw 좌표를 드롭 시점 fresh 그리드 rect 기준으로 환산 — 이전의
+   * "grid-local Y를 move 시점에 미리 계산해 ref에 박는" 방식은 auto-scroll 중 stale가 되어
+   * 드롭이 화면과 어긋났다.
+   */
+  pointerClientRef?: MutableRefObject<{ x: number; y: number }>;
 };
 
 /**
@@ -241,12 +248,23 @@ type Opts = {
  */
 export function useTimelineDnd(opts: Opts) {
   const qc = useQueryClient();
-  const { date, defaultCalendarFor, promptCalendarPicker, canvasPointerYRef } = opts;
+  const { date, defaultCalendarFor, promptCalendarPicker, gridElRef, pointerClientRef } = opts;
 
-  /** dropData.gridY는 register 시점 스냅샷일 수 있어 신뢰 못함 — 부모 pointer ref 우선. */
+  /**
+   * 드롭 그리드 Y(px) — 드롭 시점에 raw 포인터 viewport 좌표를 fresh 그리드 rect로 환산한다.
+   * dropData.gridY(register 시점 스냅샷)도, move 시점에 미리 계산해 둔 grid-local 값도 믿지
+   * 않는다(둘 다 스크롤/auto-scroll 중 어긋남). el·pointer가 없으면 fallback.
+   */
   const resolveCanvasGridY = useCallback(
-    (fallback: number): number => canvasPointerYRef?.current ?? fallback,
-    [canvasPointerYRef],
+    (fallback: number): number => {
+      const el = gridElRef?.current;
+      const p = pointerClientRef?.current;
+      if (!el || !p) return fallback;
+      const rect = el.getBoundingClientRect();
+      const y = p.y - rect.top;
+      return Math.max(0, Math.min(24 * HOUR_PX, y));
+    },
+    [gridElRef, pointerClientRef],
   );
 
   /** signals 캐시 + today 레일 캐시(둘 다 WorkSignal[]) 동시 패치. */

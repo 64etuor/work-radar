@@ -598,6 +598,28 @@ pub(crate) async fn get_boule_config_core(
     }
 }
 
+/// Insert `value` serialized as JSON into `map[key]`, or remove `key` when `value` is `None`.
+/// Reduces the 4× copy-pasted upsert-or-remove blocks in `set_boule_config_core`.
+fn upsert_or_remove_override<T: serde::Serialize>(
+    map: &mut serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    value: Option<&T>,
+) -> Result<(), AppError> {
+    match value {
+        Some(v) => {
+            map.insert(
+                key.into(),
+                serde_json::to_value(v)
+                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
+            );
+        }
+        None => {
+            map.remove(key);
+        }
+    }
+    Ok(())
+}
+
 /// Write the editable knobs, preserving any fields this UI doesn't manage. Validates reviewQuorum
 /// (≥1) and writes atomically (tmp + rename) with the stable serializer.
 pub(crate) async fn set_boule_config_core(
@@ -659,54 +681,14 @@ pub(crate) async fn set_boule_config_core(
         "reviewQuorum".into(),
         serde_json::json!(input.review_quorum),
     );
-    match input.budget.as_ref().filter(|budget| budget_active(budget)) {
-        Some(budget) => {
-            ov.insert(
-                "budget".into(),
-                serde_json::to_value(budget)
-                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
-            );
-        }
-        None => {
-            ov.remove("budget");
-        }
-    }
-    match next_backends.as_ref() {
-        Some(backends) => {
-            ov.insert(
-                "backends".into(),
-                serde_json::to_value(backends)
-                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
-            );
-        }
-        None => {
-            ov.remove("backends");
-        }
-    }
-    match next_routing.as_ref() {
-        Some(routing) => {
-            ov.insert(
-                "routing".into(),
-                serde_json::to_value(routing)
-                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
-            );
-        }
-        None => {
-            ov.remove("routing");
-        }
-    }
-    match next_price_table.as_ref() {
-        Some(price_table) => {
-            ov.insert(
-                "priceTable".into(),
-                serde_json::to_value(price_table)
-                    .map_err(|e| AppError::unexpected("boule.serialize", e.to_string()))?,
-            );
-        }
-        None => {
-            ov.remove("priceTable");
-        }
-    }
+    upsert_or_remove_override(
+        ov,
+        "budget",
+        input.budget.as_ref().filter(|b| budget_active(b)),
+    )?;
+    upsert_or_remove_override(ov, "backends", next_backends.as_ref())?;
+    upsert_or_remove_override(ov, "routing", next_routing.as_ref())?;
+    upsert_or_remove_override(ov, "priceTable", next_price_table.as_ref())?;
 
     let body = serialize_config(&root)?;
     std::fs::create_dir_all(&boule_dir)

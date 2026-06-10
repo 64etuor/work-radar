@@ -1,17 +1,10 @@
 // 설정 → 뉴스 카테고리. 글로벌 옵션(D-Tune) + 키워드 필터(D-Safe) + 소스별 on/off 토글(카테고리 그룹). 즉시 반영 + 토스트.
 // INVARIANT #1: 뉴스는 표시 전용 — 토글/필터/옵션이 결정 레일 어떤 데이터도 안 건드림.
 
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
-import type {
-  FilterMode,
-  KeywordFilter,
-  NewsCategory,
-  NewsOptions,
-  NewsSourceMeta,
-  SortMode,
-} from "@/bindings";
+import type { NewsCategory, NewsOptions, NewsSourceMeta, SortMode } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,23 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
-  useAddNewsFilter,
-  useNewsFilters,
   useNewsOptions,
   useNewsSources,
-  useRemoveNewsFilter,
   useSetNewsOptions,
   useSetNewsSourceEnabled,
 } from "@/lib/query/news";
 import { useToastStore } from "@/lib/toast";
 
+import { NewsFiltersForm } from "./NewsFiltersForm";
+import { NewsMarqueeSpeedField } from "./NewsMarqueeSpeedField";
 import { SectionLabel } from "./SettingsKit";
-
-const MARQUEE_SPEED_MIN = 1;
-const MARQUEE_SPEED_MAX = 9;
 
 const CATEGORY_LABEL: Record<NewsCategory, string> = {
   koreanTech: "한글 기술블로그",
@@ -303,191 +291,6 @@ function OptionRow({
         )}
       </div>
       <div className="shrink-0">{children}</div>
-    </div>
-  );
-}
-
-function NewsMarqueeSpeedField({
-  disabled,
-  seconds,
-  onCommit,
-}: {
-  disabled: boolean;
-  seconds: number;
-  onCommit: (seconds: number) => void;
-}) {
-  const initialSpeed = secondsToMarqueeSpeed(seconds);
-  const [draft, setDraft] = useState(initialSpeed);
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-foreground text-[13px] font-medium">마퀴 속도</div>
-        <div className="text-muted-foreground typo-caption-sm max-w-[28rem] text-right">
-          뉴스가 흘러가는 체감 속도입니다. 기본은 보통.
-        </div>
-      </div>
-      <div className="flex flex-col gap-2">
-        <div className="relative pt-1">
-          <Slider
-            value={[draft]}
-            min={MARQUEE_SPEED_MIN}
-            max={MARQUEE_SPEED_MAX}
-            step={1}
-            disabled={disabled}
-            onValueChange={([v]) => setDraft(clampMarqueeSpeed(v ?? initialSpeed))}
-            onValueCommit={([v]) => {
-              const next = clampMarqueeSpeed(v ?? initialSpeed);
-              setDraft(next);
-              onCommit(marqueeSpeedToSeconds(next));
-            }}
-            aria-label="뉴스 마퀴 속도"
-          />
-          <div className="pointer-events-none mt-1 flex justify-between px-1">
-            {Array.from({ length: MARQUEE_SPEED_MAX - MARQUEE_SPEED_MIN + 1 }, (_, i) => (
-              <span key={i} className="bg-border h-1.5 w-px rounded-full" aria-hidden="true" />
-            ))}
-          </div>
-        </div>
-        <div className="text-muted-foreground flex items-center justify-between px-0.5 text-xs">
-          <span>느림</span>
-          <span>빠름</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function clampMarqueeSpeed(value: number): number {
-  return Math.max(MARQUEE_SPEED_MIN, Math.min(MARQUEE_SPEED_MAX, Math.trunc(value)));
-}
-
-function marqueeSpeedToSeconds(speed: number): number {
-  const bySpeed: Record<number, number> = {
-    1: 180,
-    2: 150,
-    3: 120,
-    4: 90,
-    5: 60,
-    6: 45,
-    7: 35,
-    8: 28,
-    9: 20,
-  };
-  return bySpeed[clampMarqueeSpeed(speed)] ?? 60;
-}
-
-function secondsToMarqueeSpeed(seconds: number): number {
-  if (seconds >= 165) return 1;
-  if (seconds >= 135) return 2;
-  if (seconds >= 105) return 3;
-  if (seconds >= 75) return 4;
-  if (seconds >= 53) return 5;
-  if (seconds >= 40) return 6;
-  if (seconds >= 32) return 7;
-  if (seconds >= 24) return 8;
-  return 9;
-}
-
-function NewsFiltersForm({ onToast }: { onToast: (msg: string) => void }) {
-  const q = useNewsFilters();
-  const add = useAddNewsFilter();
-  const remove = useRemoveNewsFilter();
-  const [kw, setKw] = useState("");
-  const [mode, setMode] = useState<FilterMode>("include");
-
-  const submit = () => {
-    const trimmed = kw.trim();
-    if (!trimmed) return;
-    add.mutate(
-      { keyword: trimmed, mode },
-      {
-        onSuccess: () => {
-          setKw("");
-          onToast(`${mode === "include" ? "포함" : "제외"} 키워드 추가: ${trimmed}`);
-        },
-      },
-    );
-  };
-
-  const list = q.data ?? [];
-  const includes = list.filter((f) => f.mode === "include");
-  const excludes = list.filter((f) => f.mode === "exclude");
-
-  return (
-    <section className="border-border bg-card/80 rounded-2xl border p-5 shadow-[var(--wr-shadow-hairline)]">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <SectionLabel>키워드 필터</SectionLabel>
-          <p className="text-muted-foreground mt-1 text-xs">
-            포함은 OR, 제외는 AND. 빈 리스트면 전체를 보여줍니다.
-          </p>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_auto]">
-        <Input
-          value={kw}
-          onChange={(e) => setKw(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder="예: AI, Rust, crypto"
-          className="w-full"
-        />
-        <Select value={mode} onValueChange={(v) => setMode(v as FilterMode)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="include">포함</SelectItem>
-            <SelectItem value="exclude">제외</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button onClick={submit} disabled={!kw.trim() || add.isPending}>
-          추가
-        </Button>
-      </div>
-      <p className="text-muted-foreground mt-2 text-xs">
-        대소문자 무관, 부분 일치. 필터를 비우면 전체 표시.
-      </p>
-      {includes.length > 0 && (
-        <div className="mt-4">
-          <SectionLabel className="mb-1.5">포함</SectionLabel>
-          <ChipList list={includes} onRemove={(id) => remove.mutate(id)} />
-        </div>
-      )}
-      {excludes.length > 0 && (
-        <div className="mt-4">
-          <SectionLabel className="mb-1.5">제외</SectionLabel>
-          <ChipList list={excludes} onRemove={(id) => remove.mutate(id)} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ChipList({ list, onRemove }: { list: KeywordFilter[]; onRemove: (id: number) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {list.map((f) => (
-        <span
-          key={f.id}
-          className="border-border bg-muted inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs"
-        >
-          {f.keyword}
-          <button
-            type="button"
-            onClick={() => onRemove(f.id)}
-            aria-label={`${f.keyword} 제거`}
-            className="hover:bg-hover rounded-full p-0.5"
-          >
-            <X className="size-3" />
-          </button>
-        </span>
-      ))}
     </div>
   );
 }

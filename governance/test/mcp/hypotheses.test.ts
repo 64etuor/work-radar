@@ -72,8 +72,18 @@ describe("hypothesis MCP round-trip", () => {
       now: () => new Date("2026-06-04T00:00:00.000Z"),
     };
 
-    expect(await runHypothesisTester(deps)).toEqual({ proposed: 1, verified: 0, refuted: 0, skipped: 0 });
-    expect(await runHypothesisTester(deps)).toEqual({ proposed: 0, verified: 1, refuted: 0, skipped: 1 });
+    expect(await runHypothesisTester(deps)).toEqual({
+      proposed: 1,
+      verified: 0,
+      refuted: 0,
+      skipped: 0,
+    });
+    expect(await runHypothesisTester(deps)).toEqual({
+      proposed: 0,
+      verified: 1,
+      refuted: 0,
+      skipped: 1,
+    });
 
     const list = await listHypotheses(ws);
     expect(list).toHaveLength(1);
@@ -93,8 +103,11 @@ describe("hypothesis MCP tool surface", () => {
     expect(source).toContain('"run_hypothesis_tester"');
     expect(source).toContain('"hypotheses"');
 
-    const p4Block = source.slice(source.indexOf('"run_hypothesis_tester"'), source.indexOf("const AUTHOR_MODEL"));
-    expect(p4Block).toContain("writeHypothesis: makeWriteHypothesis");
+    const p4Block = source.slice(
+      source.indexOf('"run_hypothesis_tester"'),
+      source.indexOf("const AUTHOR_MODEL"),
+    );
+    expect(p4Block).toContain("runHypothesisTest(");
     expect(p4Block).not.toContain('"approve"');
     expect(p4Block).not.toContain('"reject"');
     expect(p4Block).not.toContain('"choose"');

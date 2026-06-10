@@ -21,31 +21,17 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type { Skill, SkillProvider, SkillRef } from "@/bindings";
 import { SkillsHelpDialog } from "@/components/SkillsHelpDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
-  useApplyManagedSkills,
-  useDeleteSkill,
-  useSetSkillTags,
   useSkillDivergences,
   useSkillEnvironments,
   useSkills,
   useSkillWorkspaces,
-  useUnapplyManagedSkills,
-  useUpdateSkill,
 } from "@/lib/query";
 import { providerLabel } from "@/lib/skillBadges";
-import {
-  addTagToSkill,
-  batchApplyTargets,
-  batchMutableTargets,
-  batchTaggableTargets,
-  selectedSkills,
-  summarizeBatch,
-} from "@/lib/skillBatch";
 import { groupCrossToolSkills, type GroupedSkill, type SkillLocation } from "@/lib/skillDedup";
 import {
   applyEnvOrder,
@@ -68,6 +54,7 @@ import { InAppEditor } from "./skills/InAppEditor";
 import { ManagedViewer } from "./skills/ManagedViewer";
 import { AuditPanel, BackupPanel, CreatePanel, InstallPanel, UpdatePanel } from "./skills/panels";
 import { SkillCard } from "./skills/SkillCard";
+import { useSkillBatchSelection } from "./skills/useSkillBatchSelection";
 
 const ENV_ORDER_KEY = "wr:skills:env-order";
 
@@ -116,15 +103,6 @@ export function SkillsView() {
   const [helpOpen, setHelpOpen] = useState(false);
   // 태그 필터(#12): null=전체, UNTAGGED=태그 없음, 그 외=해당 태그. 로컬 표시 상태(외부 불변).
   const [activeTag, setActiveTag] = useState<string | null>(null);
-  // 다중 선택(#9): 선택된 통합 Skill.id 집합 + 배치 태그 입력. 외부 스킬은 토글/삭제 비대상(skillBatch).
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
-  const [batchTag, setBatchTag] = useState("");
-  const [batchNote, setBatchNote] = useState<string | null>(null);
-  // 배치 노트가 오류 스타일(빨강)인지 — 기본 true(실패 메시지가 다수). 적용/해제 성공 요약만 false(중립).
-  const [batchNoteErr, setBatchNoteErr] = useState(true);
-  const batchUpdate = useUpdateSkill();
-  const batchDelete = useDeleteSkill();
-  const batchSetTags = useSetSkillTags();
 
   // 환경 사이드바: 활성 환경(필터) + 로컬 표시 순서(드래그 재정렬) + 진행 중 드래그 id.
   const [activeEnvId, setActiveEnvId] = useState<string>("all");
@@ -221,106 +199,27 @@ export function SkillsView() {
     setSelectedId(null);
   };
 
-  // 다중 선택(#9): 토글/삭제는 인앱만(외부 제외), 태깅은 선택 전체(외부=로컬 SQLite만). skillBatch가 정본.
-  // 그룹 카드 체크박스(#4): 멤버 전체를 한 번에 켜고/끈다. 모두 선택돼 있으면 해제, 아니면 전체 선택.
-  // 배치 로직(selectedIds → list)은 그대로 — 외부 멤버는 토글/삭제에서 자동 제외, 태깅엔 포함된다.
-  const toggleSelectGroup = (ids: string[]) =>
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const allSelected = ids.every((id) => next.has(id));
-      for (const id of ids) {
-        if (allSelected) next.delete(id);
-        else next.add(id);
-      }
-      return next;
-    });
-  const clearSelection = () => {
-    setSelectedIds(new Set());
-    setBatchNote(null);
-    setBatchNoteErr(true);
-  };
-  const selCount = selectedSkills(list, selectedIds).length;
-  const mutableTargets = batchMutableTargets(list, selectedIds);
-  const taggableTargets = batchTaggableTargets(list, selectedIds);
-  const batchBusy = batchUpdate.isPending || batchDelete.isPending || batchSetTags.isPending;
-
-  // 배치 결과 정리: 성공한 항목만 선택 해제하고(실패는 재시도 가능하게 선택 유지), 실패 수를 노출한다.
-  // 무효화(onSuccess)가 진실을 다시 가져오므로 부분 실패해도 표시는 일관된다.
-  const finishBatch = (targets: Skill[], results: PromiseSettledResult<unknown>[]) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      targets.forEach((t, i) => {
-        if (results[i]?.status === "fulfilled") next.delete(t.id);
-      });
-      return next;
-    });
-    const failed = results.filter((r) => r.status === "rejected").length;
-    setBatchNote(failed > 0 ? `${failed}개 실패 — 다시 시도하세요` : null);
-    setBatchNoteErr(true); // 토글/태그/삭제 배치 노트는 항상 오류 스타일(실패 메시지).
-  };
-
-  const batchToggle = (enabled: boolean) => {
-    if (batchBusy) return;
-    setBatchNote(null);
-    const targets = mutableTargets;
-    Promise.allSettled(targets.map((s) => batchUpdate.mutateAsync({ id: s.id, enabled }))).then(
-      (results) => finishBatch(targets, results),
-    );
-  };
-  const batchAddTag = () => {
-    const t = batchTag.trim();
-    if (!t || batchBusy) return;
-    setBatchTag("");
-    setBatchNote(null);
-    const targets = taggableTargets;
-    Promise.allSettled(
-      targets.map((s) => batchSetTags.mutateAsync({ skillKey: s.id, tags: addTagToSkill(s, t) })),
-    ).then((results) => finishBatch(targets, results));
-  };
-  const batchRemove = () => {
-    if (batchBusy || mutableTargets.length === 0) return;
-    if (
-      !window.confirm(
-        `선택한 인앱 프롬프트 ${mutableTargets.length}개를 삭제할까요? (외부 스킬은 제외)`,
-      )
-    )
-      return;
-    setBatchNote(null);
-    const targets = mutableTargets;
-    Promise.allSettled(targets.map((s) => batchDelete.mutateAsync(s.id))).then((results) =>
-      finishBatch(targets, results),
-    );
-  };
-
-  // 배치 적용/해제(G2-PR2, ADR-0006 레일 ①) — managed 스킬만 대상(외부/인앱 제외). 백엔드가
-  // best-effort 처리하고 항목별 결과를 돌려준다. 충돌은 덮어쓰지 않고 스킵된다.
-  const applyBatch = useApplyManagedSkills();
-  const unapplyBatch = useUnapplyManagedSkills();
-  const applyTargets = batchApplyTargets(list, selectedIds);
-  const batchApplyBusy = applyBatch.isPending || unapplyBatch.isPending;
-
-  const toRefs = (skills: typeof applyTargets): SkillRef[] =>
-    // batchApplyTargets가 provider != null만 통과시키므로 여기서 provider는 항상 존재한다.
-    skills.map((s) => ({ provider: s.provider as SkillProvider, name: s.name }));
-
-  const runBatchApply = (remove: boolean) => {
-    if (batchApplyBusy || applyTargets.length === 0) return;
-    setBatchNote(null);
-    const refs = toRefs(applyTargets);
-    const mut = remove ? unapplyBatch : applyBatch;
-    mut.mutate(refs, {
-      // clearSelection()이 batchNote/Err를 리셋하므로 요약·중립 플래그는 선택 해제 *후*에 설정한다.
-      onSuccess: (results) => {
-        clearSelection();
-        setBatchNote(summarizeBatch(results));
-        setBatchNoteErr(false); // 적용/해제 결과 요약은 중립(정보) 스타일.
-      },
-      onError: () => {
-        setBatchNote("배치 적용에 실패했습니다");
-        setBatchNoteErr(true);
-      },
-    });
-  };
+  // 다중 선택(#9) 상태 기계 — useSkillBatchSelection으로 추출.
+  const {
+    selectedIds,
+    batchTag,
+    setBatchTag,
+    batchNote,
+    batchNoteErr,
+    selCount,
+    mutableTargets,
+    applyTargets,
+    batchBusy,
+    batchApplyBusy,
+    applyBatch,
+    unapplyBatch,
+    toggleSelectGroup,
+    clearSelection,
+    batchToggle,
+    batchAddTag,
+    batchRemove,
+    runBatchApply,
+  } = useSkillBatchSelection(list);
 
   return (
     <div className="skl">

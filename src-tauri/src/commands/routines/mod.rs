@@ -979,8 +979,9 @@ mod tests {
     async fn toggle_check(db: &Db, routine_id: &str, date: &str, done: bool) {
         if done {
             sqlx::query(
-                "INSERT OR IGNORE INTO routine_checks (id, routine_id, date) \
-                 VALUES (lower(hex(randomblob(16))), ?1, ?2)",
+                "INSERT INTO routine_checks (id, routine_id, date, completed_at) \
+                 VALUES (lower(hex(randomblob(16))), ?1, ?2, datetime('now')) \
+                 ON CONFLICT(routine_id, date) DO UPDATE SET completed_at = datetime('now')",
             )
             .bind(routine_id)
             .bind(date)

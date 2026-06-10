@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { makeNodeSpawnSync } from "../repo/spawn.ts";
 
 import { parseConductorConfig, type ConductorConfig } from "../mcp/config.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
@@ -26,9 +26,10 @@ export async function computeRepoReadiness(repoRoot: string): Promise<RepoReadin
   const loaded = await loadPolicyOrStrict(repoRoot);
   const env = { ...process.env, ...repoEnv(repoRoot, loaded.policy) };
   const cfg = parseConductorConfig(env);
+  const nodeSpawn = makeNodeSpawnSync();
   const probe = (cmd: string, args: string[]): boolean => {
     try {
-      return spawnSync(cmd, args, { encoding: "utf8" }).status === 0;
+      return nodeSpawn(cmd, args).status === 0;
     } catch {
       return false;
     }

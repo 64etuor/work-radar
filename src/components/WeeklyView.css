@@ -337,6 +337,12 @@
   cursor: pointer;
   font: inherit;
 }
+.wk .wk-radar-note {
+  margin-top: 8px;
+  text-align: center;
+  font: 500 11px/1.3 var(--font-mono);
+  color: var(--color-wr-subtle);
+}
 
 /* ── 회고 랭킹/타임라인 ─────────────────────────── */
 .wk .wk-rank {

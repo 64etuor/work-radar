@@ -9,7 +9,7 @@ import {
 } from "recharts";
 
 import type { LifeWheelTagConfig, WorkSignal } from "@/bindings";
-import { computeRadarAxes, radarRenderMode } from "@/lib/lifeWheelRadar";
+import { computeRadarAxes, radarRenderMode, weekConfidence } from "@/lib/lifeWheelRadar";
 
 const SERIES_CURRENT = "var(--color-wr-green, #3f7d5e)";
 const SERIES_AVG = "var(--color-wr-subtle, #c9c9c4)";
@@ -32,6 +32,14 @@ export function LifeWheelRadar({ weekSignals, trailingWeeks, tags, onOpenSetting
           설정에서 추가
         </button>
       </div>
+    );
+  }
+
+  // 표본 신뢰도(dev weeklyLifeWheel에서 흡수): 근거 없는 주를 "균형 잡힌 0 분포"로 오독하지 않게.
+  const confidence = weekConfidence(weekSignals, tags);
+  if (confidence === "empty") {
+    return (
+      <div className="wk-radar-empty">이번 주는 아직 집계할 활동이 없습니다 — 표시할 분포 없음</div>
     );
   }
 
@@ -60,6 +68,7 @@ export function LifeWheelRadar({ weekSignals, trailingWeeks, tags, onOpenSetting
             <span className="wk-bar-num">{d.current}</span>
           </div>
         ))}
+        {confidence === "sparse" && <p className="wk-radar-note">표본 빈약 — 분포는 참고용</p>}
       </div>
     );
   }
@@ -100,6 +109,7 @@ export function LifeWheelRadar({ weekSignals, trailingWeeks, tags, onOpenSetting
           4주 평균
         </span>
       </div>
+      {confidence === "sparse" && <p className="wk-radar-note">표본 빈약 — 분포는 참고용</p>}
     </div>
   );
 }

@@ -18,7 +18,11 @@ import { conductPlan } from "../../src/conductor/handlers.js";
 import { stubAdapter } from "../../src/conductor/adapter.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
 import { writeEvent } from "../../src/event/writeEvent.js";
-import { makeObserverAdapterFromEnv, observeSessions } from "../../src/session/observer.js";
+import {
+  makeObserverAdapterFromEnv,
+  observeSessions,
+  type SpawnSyncLike,
+} from "../../src/session/observer.js";
 import type { GovEvent } from "../../src/event/event.js";
 
 let repo: string;
@@ -373,10 +377,11 @@ describe("cmdTick observer reconcile (makeObserverAdapterFromEnv)", () => {
         },
       ],
     });
-    const r = makeObserverAdapterFromEnv({ BOULE_OBSERVER_MODE: "live" }, (cmd, args) => {
+    const fakeSpawn: SpawnSyncLike = (cmd, args) => {
       expect(args[0]).toBe("tree");
       return { status: 0, stdout: tree, stderr: "" };
-    });
+    };
+    const r = makeObserverAdapterFromEnv({ BOULE_OBSERVER_MODE: "live" }, fakeSpawn);
     expect(r.live).toBe(true);
     const surfaces = await r.adapter.listSurfaces();
     expect(surfaces.map((s) => s.surface)).toEqual(["surface:9"]);

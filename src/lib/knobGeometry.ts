@@ -9,8 +9,13 @@ export function clampToThrow(dx: number, dy: number, radius: number): { x: numbe
 }
 
 /**
- * 현재 편향에서 armed 방향 판정. 우세 축의 절대값이 임계(radius*ratio)를 넘고
- * 그 방향이 enabled일 때만 방향 반환. 화면 좌표라 위쪽이 음의 y.
+ * 현재 편향에서 armed 방향 판정. 우세 축의 절대값이 임계(radius*ratio)를 넘으면 그 축으로,
+ * 단 그 방향이 disabled(미바인딩)면 **다른 축이 임계를 넘고 enabled일 때 그쪽으로 폴백**한다.
+ * 화면 좌표라 위쪽이 음의 y.
+ *
+ * 폴백이 필요한 이유: 방향은 원점 대비 절대 위치의 우세 축으로 정해지는데, 상하가 기본
+ * 미바인딩(nav.ts)이라 "위로 크게 밀었다가 좌로 curve"하면 좌측 성분이 임계를 넘어도 세로 축이
+ * 우세한 동안 up(dead)으로 판정돼 발사가 안 되던 결함을 막는다. 우세 축이 enabled면 종전과 동일.
  */
 export function armedDirection(
   dx: number,
@@ -22,7 +27,14 @@ export function armedDirection(
   const threshold = radius * ratio;
   const ax = Math.abs(dx);
   const ay = Math.abs(dy);
-  if (ax < threshold && ay < threshold) return null;
-  const dir: KnobDir = ax >= ay ? (dx < 0 ? "left" : "right") : dy < 0 ? "up" : "down";
-  return enabled[dir] ? dir : null;
+  // 각 축이 임계를 넘었을 때의 후보(미만이면 null).
+  const horiz: KnobDir | null = ax >= threshold ? (dx < 0 ? "left" : "right") : null;
+  const vert: KnobDir | null = ay >= threshold ? (dy < 0 ? "up" : "down") : null;
+  // 우세 축 우선, 그 방향이 disabled면 다른 축으로 폴백(타이브레이크는 종전대로 가로 우선).
+  const primary = ax >= ay ? horiz : vert;
+  const secondary = ax >= ay ? vert : horiz;
+  for (const cand of [primary, secondary]) {
+    if (cand && enabled[cand]) return cand;
+  }
+  return null;
 }

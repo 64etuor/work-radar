@@ -1,6 +1,7 @@
-import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { generateId } from "../event/id.ts";
 import { parseObserverConfig } from "../mcp/config.ts";
+import { makeNodeSpawnSync, walkTerminalSurfaces, type SpawnSyncLike } from "../repo/spawn.ts";
+export type { SpawnResultLike, SpawnSyncLike } from "../repo/spawn.ts";
 import { writeEvent } from "../event/writeEvent.ts";
 import type { GovEvent, EventType } from "../event/event.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
@@ -42,12 +43,7 @@ export function makeObserverAdapterFromEnv(
 ): { adapter: ObserverAdapter; live: boolean } {
   const cfg = parseObserverConfig(env);
   if (!cfg.live) return { adapter: stubAdapter, live: false };
-  const realSpawn: SpawnSyncLike =
-    spawn ??
-    ((cmd, args) => {
-      const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
-      return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-    });
+  const realSpawn: SpawnSyncLike = spawn ?? makeNodeSpawnSync();
   return {
     adapter: makeLiveAdapter({
       spawn: realSpawn,
@@ -59,13 +55,6 @@ export function makeObserverAdapterFromEnv(
 }
 
 // ── Live adapter (behind BOULE_OBSERVER_MODE=live) ────────────────────────────────────────────
-
-export interface SpawnResultLike {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-}
-export type SpawnSyncLike = (command: string, args: string[]) => SpawnResultLike;
 
 export interface ObserverLiveDeps {
   spawn: SpawnSyncLike; // child_process.spawnSync-like
@@ -80,43 +69,22 @@ class CommandError extends Error {
   }
 }
 
-/** A surface node inside `cmux tree --json`. Only the fields we read are typed; everything is
- *  treated as unknown and guarded (the CLI may add fields). */
-interface CmuxSurfaceNode {
-  ref?: unknown;
-  type?: unknown;
-}
-
 /** Parse `cmux tree --all --json` stdout into the set of LIVE TERMINAL surfaces. Walks
  *  windows[].workspaces[].panes[].surfaces[], keeping each surface whose `type === "terminal"`
  *  (Boule sessions are terminal agents — browser surfaces are not sessions). Deduped, order-stable
  *  by first appearance. Returns [] on malformed/empty stdout (defensive — the adapter still throws
  *  on a non-zero exit; a 0-exit with junk stdout simply yields no surfaces). */
 export function parseSurfaces(stdout: string): LiveSurface[] {
-  let tree: unknown;
-  try {
-    tree = JSON.parse(stdout);
-  } catch {
-    return [];
-  }
-  const out = new Set<string>();
-  const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  const rec = (v: unknown): Record<string, unknown> =>
-    v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-
-  for (const w of asArray(rec(tree).windows)) {
-    for (const ws of asArray(rec(w).workspaces)) {
-      for (const p of asArray(rec(ws).panes)) {
-        for (const s of asArray(rec(p).surfaces)) {
-          const node = s as CmuxSurfaceNode;
-          if (typeof node.ref === "string" && node.ref.length > 0 && node.type === "terminal") {
-            out.add(node.ref);
-          }
-        }
-      }
+  // walkTerminalSurfaces returns [] on parse failure — same defensive behaviour as before.
+  const seen = new Set<string>();
+  const out: LiveSurface[] = [];
+  for (const { ref } of walkTerminalSurfaces(stdout)) {
+    if (!seen.has(ref)) {
+      seen.add(ref);
+      out.push({ surface: ref });
     }
   }
-  return [...out].map((surface) => ({ surface }));
+  return out;
 }
 
 /** Build a live adapter that runs a real, bounded (one-shot, no retry loop) `cmux tree --all --json`

@@ -37,24 +37,13 @@ import { closeSession, requestSessionClose } from "../session/handlers.ts";
 import { makeObserverAdapterFromEnv, observeSessions } from "../session/observer.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
 import { buildControlRoomSnapshot } from "../snapshot/snapshot.ts";
-import { harvest, makeWriteOne } from "../harvest/harvest.ts";
-import { realGitLog } from "../harvest/gitLog.ts";
-import { buildIndex, nodeIndexFs } from "../index/build.ts";
-import type { DecisionRow } from "../index/types.ts";
-import { runDetect } from "../patterns/detect.ts";
-import { makeWritePattern } from "../patterns/write.ts";
-import { loadCuratedKeys } from "../patterns/read.ts";
-import { parsePatternConfig } from "../mcp/config.ts";
 import {
-  listHypotheses,
-  readSupportedPatterns,
-  readTestingHypotheses,
-  runHypothesisTester,
-} from "../hypotheses/tester.ts";
-import { makeWriteHypothesis } from "../hypotheses/write.ts";
-import { buildMetaObservation } from "../meta/observer.ts";
-import { persistMetaProposal } from "../meta/persist.ts";
-import { runArchivePruner, runPatternPruner } from "../archive/pruner.ts";
+  runHarvest,
+  runDetectStage,
+  runHypothesisTest,
+  runMetaObserve,
+  runArchivePrune,
+} from "../observation/chain.ts";
 
 // `boule` CLI (spec 2026-06-07 §D): per-repo launcher + settings admin. DB-free — the work-radar
 // app drives discovery of designated local repos and calls `init`/`set` per repo with explicit
@@ -522,37 +511,11 @@ export async function cmdHousekeep(flags: ParsedArgs["flags"]): Promise<number> 
   const ws = boulePaths(repo).workspace;
   const now = new Date();
 
-  const harvested = await harvest({
-    gitLog: () => realGitLog(repo),
-    loadDecisionRows: async () =>
-      (await buildIndex(repo, nodeIndexFs)).decisions as readonly DecisionRow[],
-    writeOne: makeWriteOne(ws),
-  });
-
-  const patternCfg = parsePatternConfig(process.env);
-  const detected = await runDetect({
-    readEvents: () => readAllEvents(ws),
-    loadCuratedKeys: () => loadCuratedKeys(ws),
-    writePattern: makeWritePattern(ws, { evidenceCap: patternCfg.evidenceCap }),
-    options: patternCfg,
-  });
-
-  const tested = await runHypothesisTester({
-    readEvents: () => readAllEvents(ws),
-    readPatterns: () => readSupportedPatterns(ws),
-    readTestingHypotheses: () => readTestingHypotheses(ws),
-    writeHypothesis: makeWriteHypothesis(ws),
-    now: () => now,
-  });
-
-  const observation = buildMetaObservation({ hypotheses: await listHypotheses(ws) });
-  const proposal =
-    observation.hasProposal && observation.markdown
-      ? await persistMetaProposal(ws, observation.markdown)
-      : null;
-
-  const prunedHypotheses = await runArchivePruner(ws, now.toISOString().slice(0, 10));
-  const prunedPatterns = await runPatternPruner(ws, now);
+  const harvested = await runHarvest(repo, ws);
+  const detected = await runDetectStage(ws);
+  const tested = await runHypothesisTest(ws, now);
+  const meta = await runMetaObserve(ws);
+  const pruned = await runArchivePrune(ws, now);
 
   const report = {
     harvested: { written: harvested.written, skipped: harvested.skipped },
@@ -562,8 +525,8 @@ export async function cmdHousekeep(flags: ParsedArgs["flags"]): Promise<number> 
       candidates: detected.candidates,
     },
     hypotheses: tested,
-    proposal: proposal ? { id: proposal.id, outcome: proposal.outcome } : null,
-    pruned: { hypotheses: prunedHypotheses, patterns: prunedPatterns },
+    proposal: meta.persisted ? { id: meta.persisted.id, outcome: meta.persisted.outcome } : null,
+    pruned: { hypotheses: pruned.hypotheses, patterns: pruned.patterns },
   };
   process.stdout.write(
     (flags.json === true ? JSON.stringify(report) : formatHousekeep(report)) + "\n",

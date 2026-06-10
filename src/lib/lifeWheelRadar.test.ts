@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 
 import type { LifeWheelTagConfig, WorkSignal } from "@/bindings";
 
-import { computeRadarAxes, type RadarAxis, radarRenderMode } from "./lifeWheelRadar";
+import {
+  computeRadarAxes,
+  type RadarAxis,
+  radarRenderMode,
+  weekConfidence,
+  weekSampleSize,
+} from "./lifeWheelRadar";
 
 function tag(id: string, enabled = true): LifeWheelTagConfig {
   return { id, label: id.toUpperCase(), color: "#3f7d5e", builtIn: true, enabled };
@@ -82,5 +88,38 @@ describe("radarRenderMode", () => {
   });
   it("ignores disabled tags in mode decision", () => {
     expect(radarRenderMode([tag("a"), tag("b"), tag("c", false)])).toBe("bars");
+  });
+});
+
+describe("weekSampleSize / weekConfidence", () => {
+  const tags = [tag("health"), tag("family"), tag("career")];
+
+  it("weekSampleSize sums enabled-axis contributions (multi-tag counts per axis)", () => {
+    expect(weekSampleSize([], tags)).toBe(0);
+    expect(weekSampleSize([sig("a", "health")], tags)).toBe(1);
+    expect(weekSampleSize([sig("a", "health", ["health", "family"])], tags)).toBe(2);
+    expect(weekSampleSize([sig("a", null)], tags)).toBe(0); // untagged ignored
+  });
+
+  it("empty when no tagged completed signals (blocks fake balanced-0 distribution)", () => {
+    expect(weekConfidence([], tags)).toBe("empty");
+    expect(weekConfidence([sig("a", null)], tags)).toBe("empty");
+  });
+
+  it("sparse at or below the floor (default 2)", () => {
+    expect(weekConfidence([sig("a", "health")], tags)).toBe("sparse");
+    expect(weekConfidence([sig("a", "health"), sig("b", "family")], tags)).toBe("sparse");
+  });
+
+  it("measured above the floor", () => {
+    expect(weekConfidence([sig("a", "health"), sig("b", "family"), sig("c", "career")], tags)).toBe(
+      "measured",
+    );
+  });
+
+  it("respects a custom sparseFloor", () => {
+    const many = [sig("a", "health"), sig("b", "family"), sig("c", "career")];
+    expect(weekConfidence(many, tags, 5)).toBe("sparse"); // 3 ≤ 5
+    expect(weekConfidence(many, tags, 2)).toBe("measured"); // 3 > 2
   });
 });

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   commands,
@@ -10,6 +10,15 @@ import {
 } from "@/bindings";
 
 import { unwrap, useInvalidate } from "./client";
+
+/** ["signals"] + ["today"] 쌍 무효화 — useSetSignalStatus/useSetSignalAreaTagKey/useSetSignalKind 공통. */
+function invalidateBoardAndToday(qc: QueryClient, opts?: { withLifeWheelTags?: boolean }) {
+  void qc.invalidateQueries({ queryKey: ["signals"] });
+  void qc.invalidateQueries({ queryKey: ["today"] });
+  if (opts?.withLifeWheelTags) {
+    void qc.invalidateQueries({ queryKey: ["lifeWheelTags"] });
+  }
+}
 
 /** 매트릭스 + 미분류 카드 (Today로 승격되지 않은 active 신호). */
 export function useSignals() {
@@ -107,11 +116,7 @@ export function useSetLifeWheelTags() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (tags: LifeWheelTagConfig[]) => unwrap(commands.setLifeWheelTags(tags)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["lifeWheelTags"] });
-      void qc.invalidateQueries({ queryKey: ["signals"] });
-      void qc.invalidateQueries({ queryKey: ["today"] });
-    },
+    onSuccess: () => invalidateBoardAndToday(qc, { withLifeWheelTags: true }),
   });
 }
 
@@ -121,10 +126,7 @@ export function useSetSignalAreaTagKey() {
   return useMutation({
     mutationFn: ({ id, tagKey }: { id: string; tagKey: string | null }) =>
       unwrap(commands.setSignalAreaTagKey(id, tagKey)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["signals"] });
-      void qc.invalidateQueries({ queryKey: ["today"] });
-    },
+    onSuccess: () => invalidateBoardAndToday(qc),
   });
 }
 
@@ -134,9 +136,6 @@ export function useSetSignalKind() {
   return useMutation({
     mutationFn: ({ id, kind }: { id: string; kind: Kind | null }) =>
       unwrap(commands.setSignalKind(id, kind)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["signals"] });
-      void qc.invalidateQueries({ queryKey: ["today"] });
-    },
+    onSuccess: () => invalidateBoardAndToday(qc),
   });
 }

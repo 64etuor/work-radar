@@ -4,9 +4,6 @@ import { z } from "zod";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildIndex, nodeIndexFs } from "../index/build.ts";
-import { harvest, makeWriteOne } from "../harvest/harvest.ts";
-import { realGitLog } from "../harvest/gitLog.ts";
-import type { DecisionRow } from "../index/types.ts";
 import { formatPrinciples, formatDecisions, formatDecision } from "../index/format.ts";
 import { createTask, status, observations } from "./handlers.ts";
 import { startTask, blockTask, cancelTask, listTasks, taskTrail } from "../task/handlers.ts";
@@ -62,7 +59,9 @@ import {
   type ObserverAdapter,
   type SpawnResultLike as ObserverSpawnResultLike,
 } from "../session/observer.ts";
-import { spawnSync as nodeSpawnSync } from "node:child_process";
+import { makeNodeSpawnSync } from "../repo/spawn.ts";
+import { okOrRefused, refusedText } from "./response.ts";
+import { VERDICT_TOOL_NAME_SET } from "./verdictTools.ts";
 import {
   parseAutoMode,
   parseAutonomyLevel,
@@ -74,31 +73,23 @@ import { autoAccept } from "../orchestrator/autoAccept.ts";
 import { autonomyAllows } from "../repo/config.ts";
 import { spawn as nodeSpawn } from "node:child_process";
 import type { ChildLike, SpawnLike } from "../decision/liveReviewer.ts";
-import {
-  parseQuorum,
-  parseReviewerModels,
-  quorumCollisionWarning,
-  parsePatternConfig,
-} from "./config.ts";
+import { parseQuorum, parseReviewerModels, quorumCollisionWarning } from "./config.ts";
 import type { ReviewerEntry } from "../decision/reviewer.ts";
 import { buildReviewerEntries } from "./reviewers.ts";
 import { normalizeModelId } from "../decision/modelId.ts";
 import { loadPolicyOrStrict } from "../repo/configIo.ts";
-import { runDetect } from "../patterns/detect.ts";
-import { makeWritePattern } from "../patterns/write.ts";
-import { loadCuratedKeys, listPatterns, getPattern } from "../patterns/read.ts";
+import { listPatterns, getPattern } from "../patterns/read.ts";
 import { curatePattern } from "../patterns/curate.ts";
-import { makeWriteHypothesis } from "../hypotheses/write.ts";
-import {
-  listHypotheses,
-  readSupportedPatterns,
-  readTestingHypotheses,
-  runHypothesisTester,
-} from "../hypotheses/tester.ts";
-import { buildMetaObservation } from "../meta/observer.ts";
-import { persistMetaProposal } from "../meta/persist.ts";
-import { archiveStatus, runArchivePruner, runPatternPruner } from "../archive/pruner.ts";
+import { listHypotheses } from "../hypotheses/tester.ts";
+import { archiveStatus } from "../archive/pruner.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
+import {
+  runHarvest,
+  runDetectStage,
+  runHypothesisTest,
+  runMetaObserve,
+  runArchivePrune,
+} from "../observation/chain.ts";
 import { suggest } from "../orchestrator/suggest.ts";
 import { listSuggestions } from "../orchestrator/project.ts";
 import { autoDispatch } from "../orchestrator/dispatch/dispatch.ts";
@@ -137,9 +128,6 @@ const randFn = () => Math.random();
 const SESSION_ROLE = (process.env.BOULE_SESSION_ROLE ?? "").trim().toLowerCase();
 const SESSION_ALLOWS_VERDICTS = SESSION_ROLE !== "executor";
 
-// Pattern detector knobs (env, safe defaults: minEvidence=5, confFull=50).
-const PATTERN_CFG = parsePatternConfig(process.env);
-
 /** Render a pattern's frontmatter as plain lines (no YAML re-serialization) for the detail view. */
 function renderFrontmatter(fm: Record<string, unknown>): string {
   return Object.entries(fm)
@@ -149,6 +137,23 @@ function renderFrontmatter(fm: Record<string, unknown>): string {
 
 // SDK 1.29(실측): server.tool()은 deprecated → registerTool(name, config, cb).
 const server = new McpServer({ name: "boule-governance", version: "0.0.1" });
+
+/** The ONLY registration path for verdict tools (INVARIANT #1 structural wall).
+ *  - executor role ⇒ no-op: the tool is structurally absent, not merely refused.
+ *  - name outside the canonical `VERDICT_TOOL_NAMES` ⇒ throw at startup: gating a tool means
+ *    listing it in `verdictTools.ts` first, which also feeds the session CLI denylist
+ *    (`SESSION_DENIED_TOOLS`) — single source, no drift.
+ *  `test/mcp/verdictGating.test.ts` pins that every canonical name registers through this
+ *  helper and never through a bare `server.registerTool`. */
+const registerVerdictTool: typeof server.registerTool = ((name, ...rest) => {
+  if (!VERDICT_TOOL_NAME_SET.has(name)) {
+    throw new Error(
+      `registerVerdictTool: "${name}" is not in VERDICT_TOOL_NAMES (verdictTools.ts)`,
+    );
+  }
+  if (!SESSION_ALLOWS_VERDICTS) return undefined;
+  return (server.registerTool as (...a: unknown[]) => unknown)(name, ...rest);
+}) as typeof server.registerTool;
 
 server.registerTool(
   "create_task",
@@ -170,9 +175,7 @@ server.registerTool(
   },
   async ({ taskId }) => {
     const r = await startTask(WORKSPACE, { taskId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `started: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("started", r);
   },
 );
 
@@ -184,9 +187,7 @@ server.registerTool(
   },
   async ({ taskId, reason }) => {
     const r = await blockTask(WORKSPACE, { taskId, reason }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("blocked", r);
   },
 );
 
@@ -198,9 +199,7 @@ server.registerTool(
   },
   async ({ taskId }) => {
     const r = await completeTaskTool(WORKSPACE, { taskId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `reported: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("reported", r);
   },
 );
 
@@ -209,9 +208,7 @@ server.registerTool(
   { description: "task를 cancelled로 전이 (terminal)", inputSchema: { taskId: z.string() } },
   async ({ taskId }) => {
     const r = await cancelTask(WORKSPACE, { taskId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `cancelled: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("cancelled", r);
   },
 );
 
@@ -269,14 +266,13 @@ server.registerTool(
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "accept_plan",
   { description: "사람 게이트: plan을 active로 (draft/needs_revision→active, actor=user)", inputSchema: { planId: z.string() } },
   async ({ planId }) => {
     const r = await acceptPlan(WORKSPACE, { planId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `accepted: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return okOrRefused("accepted", r);
   },
 );
 
@@ -288,11 +284,7 @@ server.registerTool(
   },
   async ({ planId, reason }) => {
     const r = await revisePlan(WORKSPACE, { planId, reason }, nowFn(), randFn());
-    return {
-      content: [
-        { type: "text", text: r.ok ? `revision requested: ${r.eventId}` : `REFUSED: ${r.reason}` },
-      ],
-    };
+    return okOrRefused("revision requested", r);
   },
 );
 
@@ -304,9 +296,7 @@ server.registerTool(
   },
   async ({ planId }) => {
     const r = await completePlan(WORKSPACE, { planId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `completed: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("completed", r);
   },
 );
 
@@ -315,9 +305,7 @@ server.registerTool(
   { description: "plan을 archived로 (terminal)", inputSchema: { planId: z.string() } },
   async ({ planId }) => {
     const r = await archivePlan(WORKSPACE, { planId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `archived: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("archived", r);
   },
 );
 
@@ -330,9 +318,7 @@ server.registerTool(
   },
   async ({ planId, supersededBy }) => {
     const r = await supersedePlan(WORKSPACE, { planId, supersededBy }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `superseded: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("superseded", r);
   },
 );
 
@@ -378,14 +364,13 @@ server.registerTool(
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "accept_spec",
   { description: "사람 게이트: spec을 accepted로 (draft→accepted, actor=user)", inputSchema: { specId: z.string() } },
   async ({ specId }) => {
     const r = await acceptSpec(WORKSPACE, { specId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `accepted: ${r.eventId}` : `REFUSED: ${r.reason}` }] };
+    return okOrRefused("accepted", r);
   },
 );
 
@@ -394,9 +379,7 @@ server.registerTool(
   { description: "spec을 archived로 (terminal)", inputSchema: { specId: z.string() } },
   async ({ specId }) => {
     const r = await archiveSpec(WORKSPACE, { specId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `archived: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("archived", r);
   },
 );
 
@@ -485,12 +468,7 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const summary = await harvest({
-      gitLog: () => realGitLog(REPO_ROOT),
-      loadDecisionRows: async () =>
-        (await buildIndex(REPO_ROOT, nodeIndexFs)).decisions as readonly DecisionRow[],
-      writeOne: makeWriteOne(WORKSPACE),
-    });
+    const summary = await runHarvest(REPO_ROOT, WORKSPACE);
     return {
       content: [
         {
@@ -510,12 +488,7 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const summary = await runDetect({
-      readEvents: () => readAllEvents(WORKSPACE),
-      loadCuratedKeys: () => loadCuratedKeys(WORKSPACE),
-      writePattern: makeWritePattern(WORKSPACE, { evidenceCap: PATTERN_CFG.evidenceCap }),
-      options: PATTERN_CFG,
-    });
+    const summary = await runDetectStage(WORKSPACE);
     return {
       content: [
         {
@@ -561,43 +534,41 @@ server.registerTool(
 // so it mirrors the verdict-tool gating: structurally unregistered for executor-role
 // sessions AND in SESSION_DENIED_TOOLS (an executor must not shape the curated set that
 // steers future detection).
-if (SESSION_ALLOWS_VERDICTS) {
-  server.registerTool(
-    "activate_pattern",
-    {
-      description: "패턴 큐레이션: candidate → active (사람/오케스트레이터 판단)",
-      inputSchema: { id: z.string() },
-    },
-    async ({ id }) => {
-      const r = await curatePattern(WORKSPACE, id, "activate", "user");
-      const text =
-        r.outcome === "moved"
-          ? `activated: ${id} (${r.from} → ${r.to})`
-          : r.outcome === "already"
-            ? `already ${r.to}: ${id}`
-            : `REFUSED (${r.outcome}): ${id}`;
-      return { content: [{ type: "text", text }] };
-    },
-  );
+registerVerdictTool(
+  "activate_pattern",
+  {
+    description: "패턴 큐레이션: candidate → active (사람/오케스트레이터 판단)",
+    inputSchema: { id: z.string() },
+  },
+  async ({ id }) => {
+    const r = await curatePattern(WORKSPACE, id, "activate", "user");
+    const text =
+      r.outcome === "moved"
+        ? `activated: ${id} (${r.from} → ${r.to})`
+        : r.outcome === "already"
+          ? `already ${r.to}: ${id}`
+          : `REFUSED (${r.outcome}): ${id}`;
+    return { content: [{ type: "text", text }] };
+  },
+);
 
-  server.registerTool(
-    "archive_pattern",
-    {
-      description: "패턴 큐레이션: candidate|active → archived (망각; 복원은 수동 git)",
-      inputSchema: { id: z.string() },
-    },
-    async ({ id }) => {
-      const r = await curatePattern(WORKSPACE, id, "archive", "user");
-      const text =
-        r.outcome === "moved"
-          ? `archived: ${id} (${r.from} → ${r.to})`
-          : r.outcome === "already"
-            ? `already ${r.to}: ${id}`
-            : `REFUSED (${r.outcome}): ${id}`;
-      return { content: [{ type: "text", text }] };
-    },
-  );
-}
+registerVerdictTool(
+  "archive_pattern",
+  {
+    description: "패턴 큐레이션: candidate|active → archived (망각; 복원은 수동 git)",
+    inputSchema: { id: z.string() },
+  },
+  async ({ id }) => {
+    const r = await curatePattern(WORKSPACE, id, "archive", "user");
+    const text =
+      r.outcome === "moved"
+        ? `archived: ${id} (${r.from} → ${r.to})`
+        : r.outcome === "already"
+          ? `already ${r.to}: ${id}`
+          : `REFUSED (${r.outcome}): ${id}`;
+    return { content: [{ type: "text", text }] };
+  },
+);
 
 server.registerTool(
   "run_hypothesis_tester",
@@ -607,13 +578,7 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const summary = await runHypothesisTester({
-      readEvents: () => readAllEvents(WORKSPACE),
-      readPatterns: () => readSupportedPatterns(WORKSPACE),
-      readTestingHypotheses: () => readTestingHypotheses(WORKSPACE),
-      writeHypothesis: makeWriteHypothesis(WORKSPACE),
-      now: nowFn,
-    });
+    const summary = await runHypothesisTest(WORKSPACE, nowFn());
     return {
       content: [
         {
@@ -656,16 +621,12 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const result = buildMetaObservation({ hypotheses: await listHypotheses(WORKSPACE) });
-    const persisted =
-      result.hasProposal && result.markdown
-        ? await persistMetaProposal(WORKSPACE, result.markdown)
-        : null;
+    const result = await runMetaObserve(WORKSPACE);
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ ...result, persisted }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
     };
@@ -738,12 +699,8 @@ const EXECUTOR_VIABILITY = makeExecutorViabilityProbesFromEnv(process.env, {
 const OBSERVER_CFG = parseObserverConfig(process.env);
 function buildObserverAdapter(): ObserverAdapter {
   if (!OBSERVER_CFG.live) return observerStubAdapter;
-  const realSpawnSync = (cmd: string, args: string[]): ObserverSpawnResultLike => {
-    const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
-    return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-  };
   return makeObserverLiveAdapter({
-    spawn: realSpawnSync,
+    spawn: makeNodeSpawnSync(),
     cmuxCmd: OBSERVER_CFG.cmuxCmd,
     log: (line) => process.stderr.write(`${line}\n`), // PII-safe (명령명+status+count만)
   });
@@ -795,9 +752,8 @@ server.registerTool(
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "approve",
   {
     description: "결정 사람 승인(게이트) — 외부검토 없으면 거부",
@@ -805,14 +761,13 @@ if (SESSION_ALLOWS_VERDICTS)
   },
   async ({ decisionId }) => {
     const r = await approve(WORKSPACE, { decisionId }, nowFn(), randFn(), QUORUM);
-    return { content: [{ type: "text", text: r.ok ? `approved: ${decisionId}` : `REFUSED: ${r.reason}` }] };
+    return okOrRefused("approved", { ok: r.ok, eventId: decisionId, reason: r.reason });
   },
 );
 
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "reject",
   {
     description: "결정 사람 반려(게이트)",
@@ -820,7 +775,7 @@ if (SESSION_ALLOWS_VERDICTS)
   },
   async ({ decisionId }) => {
     const r = await reject(WORKSPACE, { decisionId }, nowFn(), randFn());
-    return { content: [{ type: "text", text: r.ok ? `rejected: ${decisionId}` : `REFUSED: ${r.reason}` }] };
+    return okOrRefused("rejected", { ok: r.ok, eventId: decisionId, reason: r.reason });
   },
 );
 
@@ -914,9 +869,8 @@ server.registerTool(
 // v2 slice1 — BRIDGE/HUMAN-ONLY: only the Telegram bridge calls this, on an exact token match.
 // Human-gated (actor:user) but NOT review-gated — a Type 0 tap is a direction-pick, not an ADR approval.
 // verdict tool — gated off for executor-role sessions (structural INVARIANT #1)
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "choose",
   {
     description: "Type 0 해소 — 사람이 고른 옵션을 decision_chosen(actor:user)으로 기록",
@@ -945,24 +899,20 @@ if (SESSION_ALLOWS_VERDICTS)
 // candidates into the curated set (steers future detection), so an executor must not
 // reach it even time-bounded. (`detect` stays executor-reachable on purpose: it only
 // CREATES candidates, which never enter the curated set without curation.)
-if (SESSION_ALLOWS_VERDICTS)
-  server.registerTool(
-    "archive_prune",
-    {
-      description:
-        "P6 Archive Pruner: terminal/expired hypotheses + stale candidate 패턴(90d) → archived one-pass move",
-      inputSchema: {},
-    },
-    async () => {
-      const now = nowFn();
-      const today = now.toISOString().slice(0, 10);
-      const hypotheses = await runArchivePruner(WORKSPACE, today);
-      const patterns = await runPatternPruner(WORKSPACE, now);
-      return {
-        content: [{ type: "text", text: JSON.stringify({ hypotheses, patterns }, null, 2) }],
-      };
-    },
-  );
+registerVerdictTool(
+  "archive_prune",
+  {
+    description:
+      "P6 Archive Pruner: terminal/expired hypotheses + stale candidate 패턴(90d) → archived one-pass move",
+    inputSchema: {},
+  },
+  async () => {
+    const result = await runArchivePrune(WORKSPACE, nowFn());
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
 
 server.registerTool(
   "archive_status",
@@ -1000,7 +950,7 @@ server.registerTool(
       nowFn(),
       randFn(),
     );
-    if (!r.ok) return { content: [{ type: "text", text: `REFUSED: ${r.reason}` }] };
+    if (!r.ok) return refusedText(r.reason ?? "unknown");
     const a = r.advanced!;
     return {
       content: [
@@ -1037,9 +987,8 @@ server.registerTool(
 // proposed plans/specs. ORCHESTRATOR-ONLY: structurally NOT registered for an executor session
 // (mirrors accept_plan/accept_spec) + in SESSION_DENIED_TOOLS — so an executor can never auto-accept
 // its own plan. Verdict-free; writes no decision_*.
-if (SESSION_ALLOWS_VERDICTS)
-  // prettier-ignore
-  server.registerTool(
+// prettier-ignore
+registerVerdictTool(
   "auto_dispatch",
   {
     description:
@@ -1107,11 +1056,11 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const realSpawnSync: SpawnSyncLike = (cmd, args) => {
-      const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
-      return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-    };
-    const report = runPreflight({ env: process.env, spawn: realSpawnSync, repoRoot: REPO_ROOT });
+    const report = runPreflight({
+      env: process.env,
+      spawn: makeNodeSpawnSync(),
+      repoRoot: REPO_ROOT,
+    });
     const lines = report.checks.map(
       (c) => `  ${c.ok ? "✓" : "✗"} [${c.level}] ${c.id}: ${c.detail}`,
     );
@@ -1153,10 +1102,7 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const realSpawnSync: SpawnSyncLike = (cmd, args) => {
-      const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
-      return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-    };
+    const realSpawnSync = makeNodeSpawnSync();
     const probe = (cmd: string, args: string[]): boolean => {
       try {
         return realSpawnSync(cmd, args).status === 0;
@@ -1273,9 +1219,7 @@ server.registerTool(
   },
   async ({ sessionId }) => {
     const r = await markWaiting(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `waiting: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("waiting", r);
   },
 );
 
@@ -1287,9 +1231,7 @@ server.registerTool(
   },
   async ({ sessionId, reason }) => {
     const r = await markBlocked(WORKSPACE, { sessionId, reason }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `blocked: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("blocked", r);
   },
 );
 
@@ -1303,7 +1245,12 @@ server.registerTool(
     const r = await recordPressure(WORKSPACE, { sessionId, level }, nowFn(), randFn());
     return {
       content: [
-        { type: "text", text: r.ok ? `pressure(${level}): ${r.eventId}` : `REFUSED: ${r.reason}` },
+        {
+          type: "text",
+          text: r.ok
+            ? `pressure(${level}): ${r.eventId ?? ""}`
+            : `REFUSED: ${r.reason ?? "unknown"}`,
+        },
       ],
     };
   },
@@ -1314,14 +1261,7 @@ server.registerTool(
   { description: "session checkpoint 요청 기록", inputSchema: { sessionId: z.string() } },
   async ({ sessionId }) => {
     const r = await requestCheckpoint(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return {
-      content: [
-        {
-          type: "text",
-          text: r.ok ? `checkpoint requested: ${r.eventId}` : `REFUSED: ${r.reason}`,
-        },
-      ],
-    };
+    return okOrRefused("checkpoint requested", r);
   },
 );
 
@@ -1330,11 +1270,7 @@ server.registerTool(
   { description: "session handoff ready 기록", inputSchema: { sessionId: z.string() } },
   async ({ sessionId }) => {
     const r = await markHandoffReady(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return {
-      content: [
-        { type: "text", text: r.ok ? `handoff ready: ${r.eventId}` : `REFUSED: ${r.reason}` },
-      ],
-    };
+    return okOrRefused("handoff ready", r);
   },
 );
 
@@ -1346,11 +1282,7 @@ server.registerTool(
   },
   async ({ sessionId }) => {
     const r = await requestSessionClose(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return {
-      content: [
-        { type: "text", text: r.ok ? `close requested: ${r.eventId}` : `REFUSED: ${r.reason}` },
-      ],
-    };
+    return okOrRefused("close requested", r);
   },
 );
 
@@ -1363,9 +1295,7 @@ server.registerTool(
   },
   async ({ sessionId }) => {
     const r = await closeSession(WORKSPACE, { sessionId }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `closed: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("closed", r);
   },
 );
 
@@ -1478,9 +1408,7 @@ server.registerTool(
   },
   async ({ handoffId, body }) => {
     const r = await draftHandoff(WORKSPACE, { handoffId, body }, nowFn(), randFn());
-    return {
-      content: [{ type: "text", text: r.ok ? `drafted: ${r.eventId}` : `REFUSED: ${r.reason}` }],
-    };
+    return okOrRefused("drafted", r);
   },
 );
 
@@ -1493,7 +1421,7 @@ server.registerTool(
   },
   async ({ handoffId }) => {
     const r = await runValidateHandoff(WORKSPACE, { handoffId }, nowFn(), randFn());
-    if (!r.ok) return { content: [{ type: "text", text: `REFUSED: ${r.reason}` }] };
+    if (!r.ok) return refusedText(r.reason ?? "unknown");
     return {
       content: [
         {
@@ -1535,7 +1463,7 @@ server.registerTool(
       },
     };
     const r = await hydrate(WORKSPACE, { handoffId }, deps, nowFn(), randFn());
-    if (!r.ok) return { content: [{ type: "text", text: `REFUSED: ${r.reason}` }] };
+    if (!r.ok) return refusedText(r.reason ?? "unknown");
     return { content: [{ type: "text", text: r.markdown ?? "" }] };
   },
 );

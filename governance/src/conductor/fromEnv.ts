@@ -1,4 +1,5 @@
 import { spawnSync as nodeSpawnSync } from "node:child_process";
+import { makeNodeSpawnSync } from "../repo/spawn.ts";
 import {
   lstat as fsLstat,
   mkdir as fsMkdir,
@@ -20,6 +21,30 @@ import type { ExecutorViabilityProbes } from "./handlers.ts";
 import { parseConductorConfig } from "../mcp/config.ts";
 import { cliEntrypoint } from "../repo/configIo.ts";
 
+/** Resolve the operator codex auth.json path from an env map.
+ *  Honours an already-set CODEX_HOME; else falls back to ~/.codex. */
+function resolveCodexAuthPath(env: Record<string, string | undefined>): string {
+  return join(env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json");
+}
+
+/** Build a node-backed FsLike from the real fs/promises module. */
+function nodeFsLike(): FsLike {
+  return {
+    mkdir: (p, o) => fsMkdir(p, o),
+    writeFile: (p, d) => fsWriteFile(p, d),
+    pathExists: async (p) => {
+      try {
+        await fsLstat(p);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    symlink: (target, link) => fsSymlink(target, link),
+    rm: (p) => fsRm(p, { force: true }),
+  };
+}
+
 /** Build the Conductor adapter from an env map — the single place that wires the LIVE adapter
  *  (real git worktree + cmux + envelope fs) vs the deterministic stub. Default (BOULE_CONDUCTOR_MODE
  *  unset) ⇒ stub (CI-safe, no side effects). Shared by the MCP server and the `boule tick` CLI so
@@ -31,29 +56,12 @@ export function makeConductorAdapterFromEnv(
 ): ConductorAdapter {
   const cfg = parseConductorConfig(env);
   if (!cfg.live) return stubAdapter;
-  const spawn: SpawnSyncLike = (cmd, args) => {
-    const r = nodeSpawnSync(cmd, args, { encoding: "utf8" });
-    return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-  };
   // Operator codex auth (for the clean-CODEX_HOME symlink fallback): honour an already-set CODEX_HOME,
   // else the default ~/.codex. Read at wire time so the adapter stays env-pure.
-  const codexAuthPath = join(env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json");
+  const codexAuthPath = resolveCodexAuthPath(env);
   return makeLiveAdapter({
-    spawn,
-    fs: {
-      mkdir: (p, o) => fsMkdir(p, o),
-      writeFile: (p, d) => fsWriteFile(p, d),
-      pathExists: async (p) => {
-        try {
-          await fsLstat(p);
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      symlink: (target, link) => fsSymlink(target, link),
-      rm: (p) => fsRm(p, { force: true }),
-    },
+    spawn: makeNodeSpawnSync(),
+    fs: nodeFsLike(),
     repoRoot: paths.repoRoot,
     worktreesRoot: cfg.worktreesRoot,
     cmuxCmd: cfg.cmuxCmd,
@@ -71,21 +79,8 @@ export function makeExecutorViabilityProbesFromEnv(
   env: Record<string, string | undefined>,
   paths: { workspace: string },
 ): ExecutorViabilityProbes {
-  const codexAuthPath = join(env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json");
-  const fs: FsLike = {
-    mkdir: (p, o) => fsMkdir(p, o),
-    writeFile: (p, d) => fsWriteFile(p, d),
-    pathExists: async (p) => {
-      try {
-        await fsLstat(p);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    symlink: (target, link) => fsSymlink(target, link),
-    rm: (p) => fsRm(p, { force: true }),
-  };
+  const codexAuthPath = resolveCodexAuthPath(env);
+  const fs = nodeFsLike();
   return {
     commandExists: (cmd) => {
       try {

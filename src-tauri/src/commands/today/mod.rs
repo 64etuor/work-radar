@@ -340,7 +340,7 @@ mod tests {
         .unwrap();
         for d in ["2026-05-17", "2026-05-19", "2026-05-21", "2026-05-02"] {
             sqlx::query(
-                "INSERT INTO routine_checks (id, routine_id, date) VALUES (lower(hex(randomblob(16))), 'rt1', ?1)",
+                "INSERT INTO routine_checks (id, routine_id, date, completed_at) VALUES (lower(hex(randomblob(16))), 'rt1', ?1, datetime('now'))",
             )
             .bind(d)
             .execute(&db)
@@ -414,7 +414,7 @@ mod tests {
         // 스케줄(월) 체크 1 + 비스케줄(타 요일) 체크 1.
         for date in [&monday, &other] {
             sqlx::query(
-                "INSERT INTO routine_checks (id, routine_id, date) VALUES (lower(hex(randomblob(16))), 'rtw', ?1)",
+                "INSERT INTO routine_checks (id, routine_id, date, completed_at) VALUES (lower(hex(randomblob(16))), 'rtw', ?1, datetime('now'))",
             )
             .bind(date)
             .execute(&db)

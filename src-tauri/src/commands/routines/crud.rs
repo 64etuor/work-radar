@@ -340,9 +340,12 @@ pub async fn toggle_routine_check(
     done: bool,
 ) -> Result<(), AppError> {
     if done {
+        // 완료 = completed_at 마커 세팅. 행이 이미 있으면(캘린더 배치/시각 override 목적)
+        // 그 행에 completed_at만 얹어 링크/override를 보존한다.
         sqlx::query(
-            "INSERT OR IGNORE INTO routine_checks (id, routine_id, date) \
-             VALUES (lower(hex(randomblob(16))), ?1, ?2)",
+            "INSERT INTO routine_checks (id, routine_id, date, completed_at) \
+             VALUES (lower(hex(randomblob(16))), ?1, ?2, datetime('now')) \
+             ON CONFLICT(routine_id, date) DO UPDATE SET completed_at = datetime('now')",
         )
         .bind(&routine_id)
         .bind(&date)
@@ -361,12 +364,27 @@ pub async fn toggle_routine_check(
         .await
         .map_err(AppError::from)?;
     } else {
-        sqlx::query("DELETE FROM routine_checks WHERE routine_id = ?1 AND date = ?2")
-            .bind(&routine_id)
-            .bind(&date)
-            .execute(db.inner())
-            .await
-            .map_err(AppError::from)?;
+        // 완료 해제 = 완료 마커만 지운다. 링크(linked_event_id/calendar_id)나 시각 override가
+        // 남아 있으면 행 자체는 보존(체크 해제가 캘린더 배치/이동을 날리지 않게). 아무 상태도
+        // 남지 않으면 행을 정리해 다음날 자동 리셋 의미를 지킨다.
+        sqlx::query(
+            "UPDATE routine_checks SET completed_at = NULL WHERE routine_id = ?1 AND date = ?2",
+        )
+        .bind(&routine_id)
+        .bind(&date)
+        .execute(db.inner())
+        .await
+        .map_err(AppError::from)?;
+        sqlx::query(
+            "DELETE FROM routine_checks WHERE routine_id = ?1 AND date = ?2 \
+             AND completed_at IS NULL AND linked_event_id IS NULL \
+             AND linked_calendar_id IS NULL AND time_override IS NULL",
+        )
+        .bind(&routine_id)
+        .bind(&date)
+        .execute(db.inner())
+        .await
+        .map_err(AppError::from)?;
     }
     Ok(())
 }
