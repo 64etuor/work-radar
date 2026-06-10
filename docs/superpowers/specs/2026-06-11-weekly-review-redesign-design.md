@@ -71,11 +71,24 @@ WeeklyView.tsx (통합 surface, RetroView 흡수)
 
 ### 4.2 LifeWheelRadar (recharts)
 
-- `getLifeWheelTags()`의 `enabled` 태그를 축으로. 미설정/`area=null` 신호는 "기타" 축 또는 제외(설계 시 후자 — 노이즈 감소).
+- **축은 런타임 계산.** Life Wheel 팔레트는 사용자가 태그를 추가/삭제/비활성할 수 있으므로
+  축 집합과 개수를 하드코딩하지 않는다. `getLifeWheelTags()`의 `enabled === true` 태그를
+  `id` 기준 안정 정렬해 축으로 사용. 태그 개수 N은 가변.
+- 미설정/`area=null` 완료 신호는 **제외**(노이즈 감소, 사용자 확정). "기타" 축 없음.
+- **가변 N 처리 (degenerate 가드):**
+  - **N ≥ 3** → recharts `<RadarChart>` (정상 폴리곤).
+  - **N === 1 또는 2** → 레이더는 폴리곤이 안 되므로 **수평 바 폴백**(축별 count 막대)으로
+    렌더. 동일 데이터·동일 토큰, 표현만 교체.
+  - **N === 0** (enabled 태그 없음) → "Life Wheel 태그가 없습니다 — 설정에서 추가하세요"
+    안내 + 설정 딥링크.
+  - **N 과다(라벨 혼잡)** → 라벨은 축 끝에 배치하되 긴 라벨은 말줄임. 차트 크기는 고정,
+    축 각도는 `360/N` 자동. (별도 상한 없음 — 팔레트가 곧 상한.)
 - 시리즈 2개: 선택 주(녹색 fill), 직전 4주 평균(회색). `<Radar>` 2개 + `<PolarGrid>` + `<PolarAngleAxis>`.
-- 값 = 해당 area의 완료 신호 수. 정규화: 축별 raw count 표시(툴팁), 폴리곤 반경은 max-count 기준 스케일.
-- 색/타이포는 토큰만(`--color-wr-*`, `typo-*`). recharts에 hex 직접 주입 시 토큰 CSS 변수 경유.
-- 빈 주(완료 0) = 빈 그리드 + "이 주에 완료한 항목 없음" 안내.
+- 값 = 해당 area의 완료 신호 수. 정규화: 축별 raw count 표시(툴팁), 폴리곤 반경은
+  **선택주+평균 통틀어 max-count** 기준 스케일(두 시리즈 비교 가능하게 공통 스케일).
+- 색/타이포는 토큰만. 시리즈 색은 의미색(선택주=green, 평균=muted) 고정 —
+  태그별 색(`tag.color`)은 **바 폴백/툴팁 범례에서만** 사용(레이더 폴리곤은 시리즈색).
+- 빈 주(완료 0, N≥1) = 축은 그리되 폴리곤 0 반경 + "이 주에 완료한 항목 없음" 안내.
 
 ## 5. 네비게이션/라우팅 변경 (파괴적)
 
@@ -107,7 +120,9 @@ WeeklyView.tsx (통합 surface, RetroView 흡수)
 ## 8. 테스트
 
 - `useWeekNav` 순수 로직: offset 경계(미래 차단), reset, goto, start/end 날짜 계산 — vitest.
-- Radar 그룹핑 헬퍼(신호[] → area별 count, null/미설정 처리) 순수 함수 — vitest.
+- Radar 그룹핑 헬퍼(신호[] + enabled 태그[] → 축별 count) 순수 함수 — vitest.
+  케이스: null/미설정 제외, 비활성 태그 제외, 안정 정렬, 공통 max 스케일,
+  **N=0/1/2/3+ 분기**(0=안내, 1·2=바 폴백 신호, 3+=레이더), 추가/삭제로 N 변동 시 축 재계산.
 - 회고 랭킹/타임라인 그룹핑 헬퍼(이미 RetroView에 있으면 이전 + 테스트 추가).
 - 컴포넌트 렌더 스모크(빈 상태 포함) — 기존 testing 관례.
 - 게이트: `pnpm typecheck` + `pnpm lint` + `pnpm vitest run` + `bindings.ts` drift 0(백엔드 무변경이라 자명) + `pnpm tauri dev` 부팅.
