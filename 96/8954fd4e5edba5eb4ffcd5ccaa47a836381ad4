@@ -1,0 +1,26 @@
+governance/test/cli/housekeep.test.ts
+  s_354e94b88ccc74::t_0b389c64a8634b 8-9,69-101
+  s_354e94b88ccc74::t_565ad283286275 1-7,10-68,102-103
+docs/decisions.md
+  s_354e94b88ccc74::t_e176d636477016 583
+governance/src/cli/boule.ts
+  s_354e94b88ccc74::t_8812d0e9d34b8a 522
+  s_354e94b88ccc74::t_851fdceb354854 38-55,466-469,473-511,517-520,524-544,555-556,584-585
+  s_354e94b88ccc74::t_390789cf1bf73b 285-286,367-369,374-376,462,470-472,512-516
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "968954fd4e5edba5eb4ffcd5ccaa47a836381ad4",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
