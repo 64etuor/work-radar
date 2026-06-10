@@ -1,0 +1,59 @@
+governance/src/mcp/handlers.ts
+  s_354e94b88ccc74::t_f0f26acc5ddf17 6
+  s_354e94b88ccc74::t_afb94133e65356 46,48-51
+governance/test/mcp/archive.test.ts
+  s_354e94b88ccc74::t_4f492b3c1da175 56-62
+governance/test/archive/pruner.test.ts
+  s_354e94b88ccc74::t_4f492b3c1da175 1-5,7-8,53-120
+governance/test/mcp/handlers.test.ts
+  s_354e94b88ccc74::t_3c71c1b01b69f5 2,31,35-51
+governance/src/patterns/read.ts
+  s_354e94b88ccc74::t_151ed7c06f2d00 47-54,56-71,77-79
+governance/src/meta/persist.ts
+  s_354e94b88ccc74::t_fc3a01276ce6c3 1-38
+governance/test/meta/persist.test.ts
+  s_354e94b88ccc74::t_a5860198272266 1-43
+governance/src/archive/pruner.ts
+  s_354e94b88ccc74::t_5948cad765e643 1,3,9-13,23-25
+  s_354e94b88ccc74::t_bd2448d39c7d0c 84-154,159-161
+governance/test/conductor/handlers.test.ts
+  s_354e94b88ccc74::t_9c143afcfae811 46
+  s_354e94b88ccc74::t_239341305399e0 108-111,118-124,142,305-307,344-346,380-382,402-404,474-480,493-499,611-614,757-760,794-799,801-803,805-812,820-825,841-846,865-868,883-888,949,982,1004-1007,1108-1110
+  s_354e94b88ccc74::t_d5acad6185a922 37-45,47
+governance/src/patterns/curate.ts
+  s_354e94b88ccc74::t_70e248d5bc68c7 1-74
+governance/src/conductor/adapter.ts
+  s_354e94b88ccc74::t_9c143afcfae811 128-131
+  s_354e94b88ccc74::t_5811078c531ce5 123-127
+  s_354e94b88ccc74::t_239341305399e0 285-287
+docs/decisions.md
+  s_354e94b88ccc74::t_1d0a6f2babb941 582
+governance/test/patterns/curate.test.ts
+  s_354e94b88ccc74::t_397f4ce8adad91 1-103
+governance/src/mcp/server.ts
+  s_354e94b88ccc74::t_a610c34d81a43f 649-650
+  s_354e94b88ccc74::t_0c31b45e822c77 439,442-450
+  s_354e94b88ccc74::t_4d69385775ec26 648,655,660-663,668
+  s_354e94b88ccc74::t_9c143afcfae811 939-955,959-960
+  s_354e94b88ccc74::t_7a8c48efcab901 936-938,965
+  s_354e94b88ccc74::t_e921cc717915e6 99-100
+  s_354e94b88ccc74::t_5a16f92b06daaf 560-601
+  s_354e94b88ccc74::t_3ea0440aab4a0c 90
+  s_354e94b88ccc74::t_239341305399e0 12,256-258,702-705,781-783,956-958,1176-1178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ad8a2e9c8c5f172c1f00779f896b37953989227a",
+  "prompts": {},
+  "sessions": {
+    "s_354e94b88ccc74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "accc3d0f-a57c-49fd-b267-cdcda406c00b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
