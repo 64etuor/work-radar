@@ -66,7 +66,9 @@ export function useCmdKnob(): CmdKnobState {
 
   // 리스너에서 안전하게 읽을 최신값 ref.
   const keymapRef = useRef(keymap.data);
-  const pointerRef = useRef({ x: 0, y: 0 });
+  // 초기값 = 뷰포트 중앙: 앱 시작/리로드 후 mousemove가 한 번도 없으면 (0,0)이라 knob이
+  // 좌상단 구석에 스폰되던 결함 방지(첫 mousemove부터는 실제 커서 추적).
+  const pointerRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
   const visibleRef = useRef(false);
   const dwellTimerRef = useRef<number | null>(null);
   const downNonModRef = useRef(false);

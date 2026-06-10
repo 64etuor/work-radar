@@ -1,6 +1,25 @@
 import { useEffect, useRef } from "react";
 
 import { eventToHotkeySpec } from "@/lib/hotkey";
+import { isKnobKeymapKey } from "@/lib/nav";
+
+/**
+ * keymap에서 combo spec과 정확히 일치하는 **액션** 키를 찾는다(대소문자 무시). knob 예약 키
+ * (knob_up/down/left/right/trigger)는 제외 — 그 값은 knob이 발사할 콤보지 액션 바인딩이 아니라서,
+ * 포함하면 knob 방향 fire가 자기 자신과 매칭돼 무효 View 네비가 된다(isKnobKeymapKey doc). 순수 함수.
+ */
+export function findKeymapAction(
+  map: Record<string, string> | undefined,
+  combo: string,
+): string | null {
+  if (!map) return null;
+  const lower = combo.trim().toLowerCase();
+  if (!lower) return null;
+  const hit = Object.entries(map).find(
+    ([k, sc]) => !isKnobKeymapKey(k) && sc.trim() !== "" && sc.trim().toLowerCase() === lower,
+  );
+  return hit ? hit[0] : null;
+}
 
 /**
  * 메뉴별 키보드 단축키 적용 (Phase 18 #7). keymap(action→shortcut)을 받아 전역 keydown에서
@@ -60,16 +79,7 @@ export function useViewShortcuts(
       window.clearTimeout(timer);
     };
 
-    /** keymap에서 spec(대소문자 무시)과 정확히 일치하는 액션 키를 찾는다. */
-    const findExact = (combo: string): string | null => {
-      const map = keymapRef.current;
-      if (!map) return null;
-      const lower = combo.toLowerCase();
-      const hit = Object.entries(map).find(
-        ([, sc]) => sc.trim() !== "" && sc.trim().toLowerCase() === lower,
-      );
-      return hit ? hit[0] : null;
-    };
+    const findExact = (combo: string): string | null => findKeymapAction(keymapRef.current, combo);
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (!enabledRef.current) return;

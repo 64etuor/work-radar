@@ -24,7 +24,7 @@ import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { WeeklyView } from "@/components/WeeklyView";
 import { WorktreeView } from "@/components/WorktreeView";
 import { fontFamilyFor } from "@/lib/fontPresets";
-import { adjacentView } from "@/lib/nav";
+import { adjacentView, NAV_BY_VIEW } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
 import { useViewShortcuts } from "@/lib/useViewShortcuts";
 import { useUIStore, type View } from "@/store";
@@ -139,7 +139,9 @@ export default function App() {
     (action) => {
       if (action === "calendar") setCalendarOpen(!calendarOpen);
       else if (action === "inbox") setInboxOpen(!inboxOpen);
-      else navigateView(action as View, "neutral");
+      // 알 수 없는 액션 키는 무시 — View로 캐스팅해 goTo하면 store view가 무효값으로 오염돼
+      // adjacentView가 no-op이 된다(Cmd+←/→ 사망). 방어선: 등록된 view만 네비.
+      else if (action in NAV_BY_VIEW) navigateView(action as View, "neutral");
     },
     (dir) => {
       const motion = dir > 0 ? "forward" : "back";

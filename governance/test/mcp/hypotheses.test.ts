@@ -98,14 +98,17 @@ describe("hypothesis MCP round-trip", () => {
 
 describe("hypothesis MCP tool surface", () => {
   it("registers P4 tools without adding executor verdict or decision write tools", async () => {
-    const source = await readFile(join(import.meta.dirname, "../../src/mcp/server.ts"), "utf8");
+    const source = await readFile(
+      join(import.meta.dirname, "../../src/mcp/tools/observation.ts"),
+      "utf8",
+    );
 
     expect(source).toContain('"run_hypothesis_tester"');
     expect(source).toContain('"hypotheses"');
 
     const p4Block = source.slice(
       source.indexOf('"run_hypothesis_tester"'),
-      source.indexOf("const AUTHOR_MODEL"),
+      source.indexOf("// ── P5: Meta Observer"),
     );
     expect(p4Block).toContain("runHypothesisTest(");
     expect(p4Block).not.toContain('"approve"');

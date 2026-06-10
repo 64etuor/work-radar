@@ -13,7 +13,12 @@ afterEach(async () => {
   await rm(ws, { recursive: true, force: true });
 });
 
-async function seedTesting(id: string, status: "testing" | "verified" | "refuted", expires: string, body = "Body.\n") {
+async function seedTesting(
+  id: string,
+  status: "testing" | "verified" | "refuted",
+  expires: string,
+  body = "Body.\n",
+) {
   const dir = join(ws, "hypotheses", "testing");
   await mkdir(dir, { recursive: true });
   const raw = matter.stringify(body, {
@@ -42,17 +47,39 @@ async function exists(path: string): Promise<boolean> {
 
 describe("archive pruner IO", () => {
   it("moves terminal and expired hypotheses, preserves raw bytes, and is idempotent", async () => {
-    const refutedRaw = await seedTesting("hyp_refuted", "refuted", "2026-06-10", "Refuted raw body.\n");
-    const expiredRaw = await seedTesting("hyp_expired", "testing", "2026-06-03", "Expired raw body.\n");
+    const refutedRaw = await seedTesting(
+      "hyp_refuted",
+      "refuted",
+      "2026-06-10",
+      "Refuted raw body.\n",
+    );
+    const expiredRaw = await seedTesting(
+      "hyp_expired",
+      "testing",
+      "2026-06-03",
+      "Expired raw body.\n",
+    );
     await seedTesting("hyp_keep", "testing", "2026-06-04", "Keep raw body.\n");
 
-    expect(await runArchivePruner(ws, "2026-06-04")).toEqual({ moved: 2, skipped: 1, malformed: 0 });
-    expect(await readFile(join(ws, "hypotheses", "archived", "hyp_refuted.md"), "utf8")).toBe(refutedRaw);
-    expect(await readFile(join(ws, "hypotheses", "archived", "hyp_expired.md"), "utf8")).toBe(expiredRaw);
+    expect(await runArchivePruner(ws, "2026-06-04")).toEqual({
+      moved: 2,
+      skipped: 1,
+      malformed: 0,
+    });
+    expect(await readFile(join(ws, "hypotheses", "archived", "hyp_refuted.md"), "utf8")).toBe(
+      refutedRaw,
+    );
+    expect(await readFile(join(ws, "hypotheses", "archived", "hyp_expired.md"), "utf8")).toBe(
+      expiredRaw,
+    );
     expect(await exists(join(ws, "hypotheses", "testing", "hyp_refuted.md"))).toBe(false);
     expect(await exists(join(ws, "hypotheses", "testing", "hyp_keep.md"))).toBe(true);
 
-    expect(await runArchivePruner(ws, "2026-06-04")).toEqual({ moved: 0, skipped: 1, malformed: 0 });
+    expect(await runArchivePruner(ws, "2026-06-04")).toEqual({
+      moved: 0,
+      skipped: 1,
+      malformed: 0,
+    });
     expect(await archiveStatus(ws)).toEqual({
       testing: 1,
       archived: 2,
@@ -68,7 +95,11 @@ describe("archive pruner IO", () => {
     await mkdir(archivedDir, { recursive: true });
     await writeFile(join(archivedDir, "hyp_same.md"), "old archived body\n", "utf8");
 
-    expect(await runArchivePruner(ws, "2026-06-04")).toEqual({ moved: 0, skipped: 1, malformed: 0 });
+    expect(await runArchivePruner(ws, "2026-06-04")).toEqual({
+      moved: 0,
+      skipped: 1,
+      malformed: 0,
+    });
     expect(await readFile(join(archivedDir, "hyp_same.md"), "utf8")).toBe("old archived body\n");
     expect(await exists(join(ws, "hypotheses", "testing", "hyp_same.md"))).toBe(false);
   });
@@ -76,16 +107,17 @@ describe("archive pruner IO", () => {
 
 describe("archive MCP tool surface", () => {
   it("registers P6 archive tools without decision or unrelated write surfaces", async () => {
-    const source = await readFile(join(import.meta.dirname, "../../src/mcp/server.ts"), "utf8");
+    const source = await readFile(
+      join(import.meta.dirname, "../../src/mcp/tools/observation.ts"),
+      "utf8",
+    );
 
     expect(source).toContain("// ── P6: Archive Pruner");
     expect(source).toContain('"archive_prune"');
     expect(source).toContain('"archive_status"');
 
-    const p6Block = source.slice(
-      source.indexOf("// ── P6: Archive Pruner"),
-      source.indexOf("// ── Phase C: Conductor"),
-    );
+    // P6 slice: from the marker to end of file (archive tools are last in observation.ts).
+    const p6Block = source.slice(source.indexOf("// ── P6: Archive Pruner"));
     expect(p6Block).not.toContain('"approve"');
     expect(p6Block).not.toContain('"choose"');
     expect(p6Block).not.toContain("decision_");

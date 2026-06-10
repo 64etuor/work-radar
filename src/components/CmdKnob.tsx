@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CmdPageMenu } from "@/components/CmdPageMenu";
 import { CmdShortcutBar } from "@/components/CmdShortcutBar";
-import { armedDirection, clampToThrow, type KnobDir } from "@/lib/knobGeometry";
+import { type KnobDir, knobFrame } from "@/lib/knobGeometry";
 import type { ViewMotion } from "@/lib/nav";
 import { useCmdKnob } from "@/lib/useCmdKnob";
 import type { View } from "@/store";
@@ -52,10 +52,16 @@ export function CmdKnob({
     const onMove = (e: MouseEvent) => {
       if (!draggingRef.current) return;
       const o = originRef.current;
-      const { x, y } = clampToThrow(e.clientX - o.x, e.clientY - o.y, THROW_RADIUS);
-      const dir = armedDirection(x, y, THROW_RADIUS, ARM_RATIO, dirEnabledRef.current);
+      // 판정은 raw(커서-원점), 표시만 클램프 — knobFrame doc 참조. 상태 없음(경로 무관).
+      const { offset, armed: dir } = knobFrame(
+        e.clientX - o.x,
+        e.clientY - o.y,
+        THROW_RADIUS,
+        ARM_RATIO,
+        dirEnabledRef.current,
+      );
       armedRef.current = dir;
-      setOffset({ x, y });
+      setOffset(offset);
       setArmed(dir);
     };
     const onUp = () => {

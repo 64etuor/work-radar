@@ -189,6 +189,15 @@ export const KNOB_TRIGGER_KEY = "knob_trigger";
 export const KNOB_TRIGGER_DEFAULT = "Cmd";
 
 /**
+ * knob 예약 keymap 키(방향 4 + 트리거)인가. 이 키들의 값은 "knob이 발사할 콤보"지 액션 바인딩이
+ * 아니다 — 액션 매칭(useViewShortcuts)에서 제외하지 않으면 knob_up="Cmd+Up" fire가 자기 자신과
+ * 매칭돼 onAction("knob_up")→무효 View 네비로 view 상태를 오염시킨다.
+ */
+export function isKnobKeymapKey(key: string): boolean {
+  return key === KNOB_TRIGGER_KEY || KNOB_DIRECTIONS.some((d) => d.key === key);
+}
+
+/**
  * NAV_ITEMS 순서 기반 인접 뷰 계산(Cmd+←/→ 네비). 순수 함수.
  * dir: -1 = 이전, +1 = 다음.
  * 경계 동작은 **wrap**(첫에서 ←는 마지막으로, 마지막에서 →는 첫으로) —

@@ -38,3 +38,22 @@ export function armedDirection(
   }
   return null;
 }
+
+/**
+ * 드래그 한 프레임의 결과: **판정은 raw(커서-원점) 좌표, 표시는 림 클램프**. 호출부가 둘을
+ * 묶어 쓰게 강제한다 — 클램프된 좌표로 판정하면 각도 보존 축소 때문에 한 축으로 멀리 간 뒤의
+ * 다른 축 성분이 임계 아래로 희석돼(60px→17px) "위로 밀었다 좌로 꺾으면 무반응"이 된다.
+ * raw 판정은 상태가 없어(직전 경로 무관, 현재 위치만) 결정적이다.
+ */
+export function knobFrame(
+  dx: number,
+  dy: number,
+  radius: number,
+  ratio: number,
+  enabled: Record<KnobDir, boolean>,
+): { offset: { x: number; y: number }; armed: KnobDir | null } {
+  return {
+    offset: clampToThrow(dx, dy, radius),
+    armed: armedDirection(dx, dy, radius, ratio, enabled),
+  };
+}
