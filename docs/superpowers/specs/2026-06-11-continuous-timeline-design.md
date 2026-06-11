@@ -116,7 +116,22 @@ fetch 단위는 기존 per-day를 유지한다 (`["calendarEvents", date]`, `["r
 회귀: 기존 단일일 케이스 전부 anchor=해당일로 통과 유지.
 검증 게이트: `docs/reference/commands.md` 정본 (typecheck/lint/vitest + tauri dev 부팅).
 
-## 9. 의도적 deferred
+## 9. 구현 편차 (as-built, 2026-06-11)
+
+구현 중 확정한 의도적 편차 — 상세 근거는 plan(`docs/superpowers/plans/2026-06-11-continuous-timeline.md`):
+
+- §3 "DOM ±1일 윈도잉" → **로드 일수 캡(21일)**으로 대체. 날짜당 블록 수가 작아 전체
+  렌더가 충분히 싸고, 캡이 같은 목적(DOM/메모리 바운드)을 더 단순하게 달성.
+- **초기 로드 = [어제, 오늘, 내일] 3일** (즉시 prepend 트리거 방지 + 컨텍스트).
+- **DragData에 `blockId` 추가** — preview의 블록 매칭을 재구성식에서 정본 id 전달로.
+  기존 event preview가 `event:${eventId}`로 복합키와 불일치해 매칭이 항상 실패하던
+  버그를 동반 수정.
+- 루틴 가상 인스턴스 블록 id에 날짜 포함(`routine:${id}:${date}`) — 멀티데이 병합 시
+  인접 날짜 인스턴스의 id 충돌 방지. 소비처는 `routineId` 필드 사용이라 무영향.
+- 완료 토글/루틴 EXDATE/메모 키/popover date는 보던 날짜(view date)가 아니라
+  **블록 occurrence 날짜**(`localDateOf(startISO)`) 기준으로 통일.
+
+## 10. 의도적 deferred
 
 - 루틴의 자정 걸침 표현 (`routine_checks` 스키마 확장 필요 — 별도 트랙)
 - 레일/루틴 목록의 스크롤 추종 날짜 네비게이션 (뷰 전체 연속화)
