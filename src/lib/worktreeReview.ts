@@ -265,3 +265,17 @@ export function visualGitGraphCells(graphPrefix: string): VisualGitGraphCell[] {
     }
   });
 }
+
+/** mtime → "N분/시간/일 전 변경" 상대 라벨(순수). 미래 mtime(시계 왜곡)은 표시 안 함. */
+export function relativeActivity(newestMtime: string | null): string {
+  if (!newestMtime) return "";
+  const diffMs = Date.now() - new Date(newestMtime).getTime();
+  if (diffMs < 0) return "";
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return "방금 변경";
+  if (diffMin < 60) return `${diffMin}분 전 변경`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}시간 전 변경`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}일 전 변경`;
+}

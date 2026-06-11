@@ -40,11 +40,6 @@
   gap: 6px;
   margin-bottom: 18px;
 }
-.rt .rt-range {
-  font: 400 11px var(--font-mono);
-  color: var(--color-wr-subtle);
-  margin-left: 4px;
-}
 
 /* ── 루틴 카드 ─────────────────────────────────────────────────────────────── */
 .rt .trk-list {

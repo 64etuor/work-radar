@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { addDays } from "@/lib/calendarRange";
 import { localToday, useCreateCalendarEvent, useSelectedCalendars } from "@/lib/query";
 import { useToastStore } from "@/lib/toast";
 
@@ -48,15 +49,6 @@ function localOffset(): string {
   const abs = Math.abs(min);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
-}
-
-/** YYYY-MM-DD에 n일 더해 YYYY-MM-DD 반환. 종일 이벤트의 end.date는 Google에서 **배타적**이라 +1일이 필요. */
-function addDays(dateStr: string, n: number): string {
-  const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + n);
-  const pad = (x: number) => String(x).padStart(2, "0");
-  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
 /**

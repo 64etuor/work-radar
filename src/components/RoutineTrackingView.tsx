@@ -8,6 +8,7 @@ import { KindAreaChips } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { localToday, useLifeWheelTags, useRoutineTracking } from "@/lib/query";
+import { monthDay } from "@/lib/weekRange";
 
 type Period = 7 | 30 | 90;
 const PERIODS: { value: Period; label: string }[] = [
@@ -24,10 +25,6 @@ const FREQ_LABEL: Record<RoutineFreq, string> = {
 };
 
 /** YYYY-MM-DD → M/D. */
-function md(date: string): string {
-  const [, m, d] = date.split("-");
-  return `${Number(m)}/${Number(d)}`;
-}
 
 /**
  * 루틴 트래킹 뷰 (Phase 16 #12). 루틴별 이행률(%)·현재 streak·히스토리 히트맵.
@@ -122,7 +119,7 @@ function TrackCard({
             <span
               key={h.date}
               className={cn("trk-cell", h.done && "on")}
-              title={`${md(h.date)} ${h.done ? "완료" : "미완료"}`}
+              title={`${monthDay(h.date)} ${h.done ? "완료" : "미완료"}`}
             />
           ))}
         </div>

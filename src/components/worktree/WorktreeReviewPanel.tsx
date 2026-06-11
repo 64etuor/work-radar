@@ -7,6 +7,7 @@ import {
   emptyStateForLens,
   localChangeCount,
   mergeStateSummary,
+  relativeActivity,
   type ReviewLens,
   reviewQueueLabel,
 } from "@/lib/worktreeReview";
@@ -99,18 +100,6 @@ function WorktreeTimeline({ worktree }: { worktree: Worktree }) {
  * newestMtime(ISO 문자열 또는 null) → 한국어 상대시간 레이블.
  * activeChange=true(90초 이내)면 "작업중" 펄스를 별도 배지로 표시.
  */
-function relativeActivity(newestMtime: string | null): string {
-  if (!newestMtime) return "";
-  const diffMs = Date.now() - new Date(newestMtime).getTime();
-  if (diffMs < 0) return "";
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "방금 변경";
-  if (diffMin < 60) return `${diffMin}분 전 변경`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간 전 변경`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}일 전 변경`;
-}
 
 function BranchRail({ worktree, activity }: { worktree: Worktree; activity: string }) {
   const baseAhead = worktree.baseAhead ?? 0;

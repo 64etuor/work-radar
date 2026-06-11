@@ -4,7 +4,7 @@ import type { CSSProperties, HTMLAttributes } from "react";
 import type { Worktree } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
-import { localChangeCount, localChangeSummary } from "@/lib/worktreeReview";
+import { localChangeCount, localChangeSummary, relativeActivity } from "@/lib/worktreeReview";
 
 type WorktreeSideListProps = {
   collapsed: boolean;
@@ -89,19 +89,6 @@ export function WorktreeSideList({
       <div className="wt-resize-handle" {...resizeHandleProps} title="패널 크기 조절" />
     </aside>
   );
-}
-
-function relativeActivity(newestMtime: string | null): string {
-  if (!newestMtime) return "";
-  const diffMs = Date.now() - new Date(newestMtime).getTime();
-  if (diffMs < 0) return ""; // 미래 mtime — 시계 왜곡, 표시 안 함
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "방금 변경";
-  if (diffMin < 60) return `${diffMin}분 전 변경`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간 전 변경`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}일 전 변경`;
 }
 
 /** worktree 상태 배지: 활성 펄스(90초 이내) / 상대시간 / dirty / +ahead / -behind / clean. */

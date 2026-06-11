@@ -537,11 +537,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.skl-vendor-diverged {
-  font: 400 12px var(--font-sans);
-  color: var(--color-wr-danger);
-}
-
 /* divergence 해소 컨트롤(G3-PR2c) — 인라인 diff + pull/push. 중첩 overlay 없음(Esc 계약). */
 .skl-vendor-resolve {
   display: flex;
