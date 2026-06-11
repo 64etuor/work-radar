@@ -73,15 +73,8 @@ const PROMOTION_LABEL: Record<"backlog" | "agenda", string> = {
   backlog: "백로그 등록",
   agenda: "안건 승격",
 };
-
-/**
- * Capture Board — 5영역(미분류·2×2·Today·Routines·캡처) 결정 보드.
- * 서버 상태(useSignals/useToday/useTodayRoutines)에서 렌더, 뮤테이션은 refetch로 재동기화.
- * INVARIANT #1: 카드는 항상 unclassified 생성, 사분면 변경은 명시적 사람 제스처(드래그/키보드)뿐.
- * INVARIANT #2: 백로그/안건은 Notion 즉시 승격(사람 클릭=결정). 캘린더는 직접 모달 → 즉시 write(Phase 19,
- * 사용자 폼=사람 결정 — Acceptance 게이트는 자동화/Codex의 외부 mutate 차단용이라 사람 폼 제출엔 불요).
- */
-export function CaptureBoard() {
+// Capture Board owner: query/mutation orchestration plus human-only decision gestures.
+function useCaptureBoardView() {
   const today = localToday();
   const weekday = localWeekday();
 
@@ -156,7 +149,7 @@ export function CaptureBoard() {
       { title, kind, projectId: projectIdForKind(kind) },
       {
         onSuccess: (signal) => {
-          if (knownIdsRef.current.has(signal.id)) return;
+          if (knownIdsRef.current!.has(signal.id)) return;
           setCaptureOrder((prev) => {
             const next = new Map(prev);
             next.set(signal.id, next.size + 1);
@@ -645,4 +638,8 @@ export function CaptureBoard() {
       />
     </div>
   );
+}
+
+export function CaptureBoard() {
+  return useCaptureBoardView();
 }

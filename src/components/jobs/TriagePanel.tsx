@@ -67,8 +67,8 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
       <div className="jobs-prop-label">수정안</div>
       {(d.suggestedFixes ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
       <ul className="jobs-prop-ul">
-        {(d.suggestedFixes ?? []).map((s, i) => (
-          <li key={i}>{s}</li>
+        {(d.suggestedFixes ?? []).map((s) => (
+          <li key={s}>{s}</li>
         ))}
       </ul>
       <label className="jobs-prop-label" htmlFor={summaryId}>

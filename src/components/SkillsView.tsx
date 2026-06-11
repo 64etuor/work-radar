@@ -80,7 +80,7 @@ function loadEnvOrder(): string[] {
  * Acceptance 게이트(awaiting_approval)를 거치고 accept는 suggested 필드/proposal만 쓴다 — 스킬을
  * 편집해도 자동 분류/자동 적용 경로는 절대 생기지 않는다. 외부 스킬 파일은 실행하지 않는다(읽기/편집).
  */
-export function SkillsView() {
+function useSkillsView() {
   const { pendingSkillId, clearPendingSkill } = useUIStore();
   const skills = useSkills();
   const environments = useSkillEnvironments();
@@ -663,6 +663,10 @@ export function SkillsView() {
       <SkillsHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
+}
+
+export function SkillsView() {
+  return useSkillsView();
 }
 
 /** 본문 카드 섹션 분류(그룹 단위). 도구 간 동일 스킬(2곳 이상)은 맨 위 "공유 스킬" 섹션으로 모으고,

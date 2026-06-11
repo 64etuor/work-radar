@@ -29,8 +29,9 @@ export function useDebouncedCallback<A extends unknown[]>(
   useEffect(() => {
     return () => {
       // unmount 시 pending이 있으면 버리지 않고 마지막 인자로 flush(데이터 유실 방지).
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
+      const timer = timerRef.current;
+      if (timer !== null) {
+        clearTimeout(timer);
         timerRef.current = null;
         if (pendingArgsRef.current !== null) {
           const args = pendingArgsRef.current;

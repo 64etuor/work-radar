@@ -78,7 +78,7 @@ export function useCmdKnob(dispatch: (action: AppAction) => void): CmdKnobState 
   const downNonModRef = useRef(false);
   useEffect(() => {
     keymapRef.current = keymap.data;
-  });
+  }, [keymap.data]);
   useEffect(() => {
     visibleRef.current = visible;
   }, [visible]);
@@ -94,7 +94,7 @@ export function useCmdKnob(dispatch: (action: AppAction) => void): CmdKnobState 
   const dispatchRef = useRef(dispatch);
   useEffect(() => {
     dispatchRef.current = dispatch;
-  });
+  }, [dispatch]);
 
   const fire = (dir: KnobDir) => {
     const map = keymapRef.current;

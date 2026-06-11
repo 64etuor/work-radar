@@ -81,9 +81,10 @@ export function CmdKnob({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       // 세션 종료(트리거 release 등) — 중단된 드래그 상태를 리셋(다음 세션 깨끗하게).
+      const wasDragging = draggingRef.current;
       draggingRef.current = false;
       armedRef.current = null;
-      setDragging(false);
+      if (wasDragging) setDragging(false);
     };
   }, [visible]);
 

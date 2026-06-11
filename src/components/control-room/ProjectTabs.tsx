@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from "motion/react";
+import { domAnimation, LazyMotion, m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 
 import type { ProjectTickerStatusRow } from "../../bindings";
@@ -47,12 +47,14 @@ export function ProjectTabs({
             onKeyDown={(e) => onKeyDown(e, index)}
           >
             {selected && (
-              <motion.span
-                layoutId={reduce ? undefined : "cr-tab-active"}
-                className="cr-tab-active"
-                aria-hidden
-                transition={{ duration: 0.18, ease: "easeOut" }}
-              />
+              <LazyMotion features={domAnimation}>
+                <m.span
+                  layoutId={reduce ? undefined : "cr-tab-active"}
+                  className="cr-tab-active"
+                  aria-hidden
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                />
+              </LazyMotion>
             )}
             <span className="cr-tab-dot" data-tone={projectDotTone(row)} aria-hidden />
             <span className="cr-tab-name">{row.projectName}</span>

@@ -68,7 +68,7 @@ type Props = {
  * 포스트잇은 absolute로 배치되고, 서버 신호 목록이 바뀔 때마다 imperative하게 재배치된다.
  * 드래그는 pointer 이벤트 + ref 기반 라이브 위치, 드롭 시에만 서버 commit.
  */
-export function MatrixCanvas({
+function useMatrixCanvasView({
   signals,
   selectedId,
   poppedIds,
@@ -100,7 +100,8 @@ export function MatrixCanvas({
     q3: null,
     q4: null,
   });
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const cardRefs = useRef<Map<string, HTMLDivElement> | null>(null);
+  if (cardRefs.current === null) cardRefs.current = new Map();
   const [areaPalette, setAreaPalette] = useState<{
     signalId: string;
     x: number;
@@ -179,7 +180,7 @@ export function MatrixCanvas({
     const z = rectIn(el);
     const positions = computeZonePositions({ count: list.length, zone, rect: z });
     list.forEach((s, i) => {
-      const el2 = cardRefs.current.get(s.id);
+      const el2 = cardRefs.current!.get(s.id);
       const pos = positions[i];
       if (el2 && pos) place(el2, pos.x, pos.y, pos.rotation, zone === "unclassified" && anim, i);
     });
@@ -392,8 +393,8 @@ export function MatrixCanvas({
             key={s.id}
             className={`postit${qClass}${selCls}${popCls}`}
             ref={(el) => {
-              if (el) cardRefs.current.set(s.id, el);
-              else cardRefs.current.delete(s.id);
+              if (el) cardRefs.current!.set(s.id, el);
+              else cardRefs.current!.delete(s.id);
             }}
             onPointerDown={(e) => onCardPointerDown(e, s.id)}
             onMouseDown={() => cbRef.current.onSelect(s.id)}
@@ -485,6 +486,10 @@ export function MatrixCanvas({
       )}
     </div>
   );
+}
+
+export function MatrixCanvas(props: Props) {
+  return useMatrixCanvasView(props);
 }
 
 /**

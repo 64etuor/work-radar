@@ -45,8 +45,10 @@ export function useHermesPanelState() {
   // debounce 타이머를 unmount 시 정리
   useEffect(() => {
     return () => {
-      if (debounceRef.current !== null) {
-        clearTimeout(debounceRef.current);
+      const timer = debounceRef.current;
+      if (timer !== null) {
+        debounceRef.current = null;
+        clearTimeout(timer);
       }
     };
   }, []);

@@ -50,7 +50,7 @@ export function useViewShortcuts(
     dispatchRef.current = dispatch;
     keymapRef.current = keymap;
     enabledRef.current = enabled;
-  });
+  }, [dispatch, enabled, keymap]);
 
   useEffect(() => {
     let prefix: string | null = null;

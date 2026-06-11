@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { AreaTag, Kind, LifeWheelTagConfig } from "@/bindings";
 import { kindLabel } from "@/components/board/boardUtils";
+import { parseAreaTagKeys } from "@/components/board/lifeWheelTags";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/ui/cn";
 
@@ -304,19 +305,4 @@ function readableTextColor(hex: string): string {
   const b = Number.parseInt(normalized.slice(4, 6), 16) / 255;
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return luminance < 0.48 ? "#ffffff" : "#212121";
-}
-
-/** 신호의 area 태그 키 배열 해석. areaTags(JSON 배열) 우선, 없으면 primary area 단일. 공용. */
-export function parseAreaTagKeys(raw: string | null, primary: string | null): string[] {
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((value): value is string => typeof value === "string");
-      }
-    } catch {
-      // Fall back to primary tag below.
-    }
-  }
-  return primary ? [primary] : [];
 }

@@ -1,6 +1,6 @@
 // src/lib/lifeWheelRadar.ts
 import type { LifeWheelTagConfig, RoutineTrackingItem, WorkSignal } from "@/bindings";
-import { parseAreaTagKeys } from "@/components/board/LifeWheelPalette";
+import { parseAreaTagKeys } from "@/components/board/lifeWheelTags";
 import { bucketByWeekOffset } from "@/lib/weekRange";
 
 export interface RadarAxis {

@@ -95,7 +95,7 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
       <div className="jobs-prop-checks">
         {(d.selfChecks ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
         {(d.selfChecks ?? []).map((c, i) => (
-          <label key={i} className="jobs-prop-check">
+          <label key={`${c.item}:${c.note ?? ""}`} className="jobs-prop-check">
             <input
               type="checkbox"
               aria-label={c.item}
@@ -116,8 +116,8 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
         <>
           <div className="jobs-prop-label">스크린샷 필요</div>
           <ul className="jobs-prop-ul">
-            {(d.screenshotsNeeded ?? []).map((s, i) => (
-              <li key={i}>{s}</li>
+            {(d.screenshotsNeeded ?? []).map((s) => (
+              <li key={s}>{s}</li>
             ))}
           </ul>
         </>
@@ -127,8 +127,8 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
         <>
           <div className="jobs-prop-label">마이그레이션/배포 노트</div>
           <ul className="jobs-prop-ul">
-            {(d.migrationNotes ?? []).map((s, i) => (
-              <li key={i}>{s}</li>
+            {(d.migrationNotes ?? []).map((s) => (
+              <li key={s}>{s}</li>
             ))}
           </ul>
         </>

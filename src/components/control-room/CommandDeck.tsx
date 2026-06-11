@@ -1,5 +1,5 @@
 import { AlertTriangle, Loader2, Play } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { domAnimation, LazyMotion, m, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
 import type {
@@ -43,45 +43,47 @@ export function CommandDeck({
 }) {
   const reduce = useReducedMotion();
   return (
-    <motion.div
-      initial={reduce ? false : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
-    >
-      <div className="cr-deck">
-        <div className="cr-deck-zones">
-          {readiness !== undefined && (
-            <section className="cr-deck-zone" aria-label="지금 POSTURE">
-              <div className="cr-deck-kicker">지금 POSTURE</div>
-              <ReadinessGatesRow readiness={readiness} />
-            </section>
-          )}
-
-          <section className="cr-deck-zone" aria-label="마지막 TICK">
-            <div className="cr-deck-kicker">마지막 TICK</div>
-            <LastTick row={row} nowMs={nowMs} />
-          </section>
-
-          <section className="cr-deck-zone cr-deck-controls" aria-label="컨트롤">
-            <div className="cr-deck-kicker">컨트롤</div>
-            <DeckControls row={row} />
-            {row.tickEnabled && row.autonomyLevel === "manual" && (
-              <div className="cr-deck-note">
-                Clock on · autonomy manual — 사람 게이트 대기 중 (자동 디스패치 없음)
-              </div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        initial={reduce ? false : { opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
+      >
+        <div className="cr-deck">
+          <div className="cr-deck-zones">
+            {readiness !== undefined && (
+              <section className="cr-deck-zone" aria-label="지금 POSTURE">
+                <div className="cr-deck-kicker">지금 POSTURE</div>
+                <ReadinessGatesRow readiness={readiness} />
+              </section>
             )}
-          </section>
-        </div>
 
-        {readiness !== undefined && <ReadinessDetails readiness={readiness} />}
+            <section className="cr-deck-zone" aria-label="마지막 TICK">
+              <div className="cr-deck-kicker">마지막 TICK</div>
+              <LastTick row={row} nowMs={nowMs} />
+            </section>
 
-        {infra !== undefined && (
-          <div className="cr-deck-infra">
-            <InfraBar infra={infra} ticker={row} scheduler={scheduler} />
+            <section className="cr-deck-zone cr-deck-controls" aria-label="컨트롤">
+              <div className="cr-deck-kicker">컨트롤</div>
+              <DeckControls row={row} />
+              {row.tickEnabled && row.autonomyLevel === "manual" && (
+                <div className="cr-deck-note">
+                  Clock on · autonomy manual — 사람 게이트 대기 중 (자동 디스패치 없음)
+                </div>
+              )}
+            </section>
           </div>
-        )}
-      </div>
-    </motion.div>
+
+          {readiness !== undefined && <ReadinessDetails readiness={readiness} />}
+
+          {infra !== undefined && (
+            <div className="cr-deck-infra">
+              <InfraBar infra={infra} ticker={row} scheduler={scheduler} />
+            </div>
+          )}
+        </div>
+      </m.div>
+    </LazyMotion>
   );
 }
 
@@ -139,7 +141,7 @@ function DeckControls({ row }: { row: ProjectTickerStatusRow }) {
 
   return (
     <div className="cr-deck-controlrow">
-      <label className="cr-ticker-toggle">
+      <div className="cr-ticker-toggle">
         <span>Enabled</span>
         <Switch
           checked={row.tickEnabled}
@@ -147,9 +149,9 @@ function DeckControls({ row }: { row: ProjectTickerStatusRow }) {
           disabled={enablingThis}
           aria-label={`${row.projectName} ticker enabled`}
         />
-      </label>
+      </div>
 
-      <label
+      <div
         className="cr-ticker-toggle"
         title="LIVE: 이 프로젝트의 tick/snapshot에 BOULE_CONDUCTOR_MODE/OBSERVER_MODE=live를 주입 — 실제 세션이 spawn됩니다 (프로젝트별 운영자 opt-in)"
       >
@@ -160,7 +162,7 @@ function DeckControls({ row }: { row: ProjectTickerStatusRow }) {
           disabled={togglingLive}
           aria-label={`${row.projectName} live mode`}
         />
-      </label>
+      </div>
 
       <label className="cr-ticker-interval">
         <span>Interval</span>

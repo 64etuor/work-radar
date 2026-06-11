@@ -1,5 +1,13 @@
 import { Activity, AlertTriangle, Boxes, Pause } from "lucide-react";
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import {
+  animate,
+  domAnimation,
+  LazyMotion,
+  m,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from "motion/react";
 import { useEffect } from "react";
 
 import type { VitalKey, Vitals as VitalsData } from "../../lib/controlRoomGraph";
@@ -19,7 +27,11 @@ function AnimatedCount({ value }: { value: number }) {
     return () => controls.stop();
   }, [mv, value, reduce]);
 
-  return <motion.span>{rounded}</motion.span>;
+  return (
+    <LazyMotion features={domAnimation}>
+      <m.span>{rounded}</m.span>
+    </LazyMotion>
+  );
 }
 
 interface Props {

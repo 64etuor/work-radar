@@ -69,10 +69,14 @@ export function UpdatePanel({ onDone }: { onDone: () => void }) {
           닫기
         </Button>
       </div>
-      <label className="skl-update-launch">
-        <Switch checked={!!onLaunch.data} onCheckedChange={(v) => setOnLaunch.mutate(v)} />
+      <div className="skl-update-launch">
+        <Switch
+          checked={!!onLaunch.data}
+          onCheckedChange={(v) => setOnLaunch.mutate(v)}
+          aria-label="앱 시작 시 스킬 업데이트 자동 확인"
+        />
         <span className="skl-desc">앱 시작 시 자동 확인(opt-in · 한 번만 · 자동 적용 안 함)</span>
-      </label>
+      </div>
       {note && <span className="skl-note">{note}</span>}
 
       <ul className="skl-backup-list">
@@ -83,7 +87,7 @@ export function UpdatePanel({ onDone }: { onDone: () => void }) {
               <span className="font-mono">{r.name}</span>
               <div className="skl-update-ctl">
                 {r.updateAvailable && <Badge variant="default">업데이트 가능</Badge>}
-                <label className="skl-update-toggle">
+                <div className="skl-update-toggle">
                   <Switch
                     checked={r.autoUpdate}
                     onCheckedChange={(v) =>
@@ -93,9 +97,10 @@ export function UpdatePanel({ onDone }: { onDone: () => void }) {
                         enabled: v,
                       })
                     }
+                    aria-label={`${r.name} 자동 업데이트`}
                   />
                   <span className="skl-desc">자동</span>
-                </label>
+                </div>
                 {r.updateAvailable &&
                   (confirmKey === key ? (
                     <>
