@@ -607,34 +607,46 @@
 }
 .cb .item .cb-check {
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
+  width: 26px;
+  height: 26px;
   margin-top: 1px;
-  border: 1.5px solid var(--color-wr-border);
-  border-radius: 5px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-wr-muted);
   cursor: pointer;
   display: grid;
   place-items: center;
   transition: var(--wr-motion-fast);
 }
 .cb .item .cb-check:hover {
-  border-color: var(--color-wr-muted);
-}
-.cb .item.done .cb-check {
-  background: var(--color-wr-green);
-  border-color: var(--color-wr-green);
+  color: var(--color-wr-fg);
 }
 .cb .item .cb-check svg {
-  width: 11px;
-  height: 11px;
-  stroke: var(--color-wr-on-coral-btn); /* 항상 흰색(다크 미반전) — 초록 체크칩 위 화이트 체크 */
-  /* thin-line 정렬: 3 → 2 (11px white-on-green 체크는 1.5면 너무 얇아 가독성 위해 2 유지). */
-  stroke-width: 2;
-  fill: none;
-  opacity: 0;
+  width: 26px;
+  height: 26px;
+  stroke: currentColor;
 }
-.cb .item.done .cb-check svg {
+.cb .item .cb-check .scribble-check-box {
+  stroke: var(--color-wr-border);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.cb .item .cb-check .scribble-check-mark {
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
   opacity: 1;
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  transition: 0.5s stroke-dashoffset;
+}
+.cb .item.done .cb-check {
+  color: var(--color-wr-fg);
+}
+.cb .item.done .cb-check .scribble-check-mark {
+  stroke-dashoffset: 0;
 }
 .cb .item .body {
   flex: 1;
@@ -691,10 +703,24 @@
   color: var(--color-wr-fg);
 }
 .cb .item .ttl-text {
+  position: relative;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.cb .item .ttl-text::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  height: 1.5px;
+  background: currentColor;
+  opacity: 0.72;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .cb .item .ttl-time {
   flex-shrink: 0;
@@ -703,7 +729,15 @@
 }
 .cb .item.done .ttl {
   color: var(--color-wr-subtle);
-  text-decoration: line-through;
+}
+.cb .item.done .ttl-text::after {
+  transform: scaleX(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb .item .cb-check .scribble-check-mark,
+  .cb .item .ttl-text::after {
+    transition: none;
+  }
 }
 .cb .item .meta {
   display: flex;

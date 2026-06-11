@@ -100,22 +100,88 @@
 
 .postit-card-check {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 3px;
+  right: 3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: 0;
+  border-radius: 3px;
   padding: 0;
+  width: 26px;
+  height: 26px;
+  color: var(--color-wr-muted);
   cursor: pointer;
+}
+.postit-card-check:hover {
+  color: var(--color-wr-fg);
+}
+
+.postit-card-check .scribble-check {
+  width: 26px;
+  height: 26px;
+  stroke: currentColor;
+}
+
+.postit-card-check .scribble-check-box {
+  stroke: var(--color-wr-border);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+.postit-card-check .scribble-check-mark {
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 1;
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  transition: 0.5s stroke-dashoffset;
+}
+
+.postit-card-check[data-state="checked"] {
+  color: var(--color-wr-fg);
+}
+
+.postit-card-check[data-state="checked"] .scribble-check-mark {
+  stroke-dashoffset: 0;
 }
 
 .postit-card-body {
+  position: relative;
   font-size: 13px;
   line-height: 1.4;
   text-align: left;
   word-break: break-word;
+}
+.postit-card-body::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  height: 1.5px;
+  background: currentColor;
+  opacity: 0.68;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.postit-card[data-done="true"] .postit-card-body {
+  color: var(--color-wr-subtle);
+}
+
+.postit-card[data-done="true"] .postit-card-body::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .postit-card-check .scribble-check-mark,
+  .postit-card-body::after {
+    transition: none;
+  }
 }
 
 .postit-card-pdate {

@@ -1,9 +1,10 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Calendar, CheckCircle2, ChevronDown, ChevronRight, Circle, Repeat } from "lucide-react";
+import { Calendar, ChevronDown, ChevronRight, Repeat } from "lucide-react";
 import { type CSSProperties, useState } from "react";
 
 import type { CalendarEvent, Kind, Quadrant, RoutineToday, WorkSignal } from "@/bindings";
 import { areaLabel, shortDate } from "@/components/board/boardUtils";
+import { CheckIcon } from "@/components/board/CheckIcon";
 import {
   CARD_HEIGHT,
   type CardPosition,
@@ -85,15 +86,12 @@ function CheckButton({
     <button
       type="button"
       className="postit-card-check"
+      data-state={done ? "checked" : "unchecked"}
       aria-label={label}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
     >
-      {done ? (
-        <CheckCircle2 className="text-q2 size-4" />
-      ) : (
-        <Circle className="text-wr-subtle size-4" />
-      )}
+      <CheckIcon />
     </button>
   );
 }
@@ -122,6 +120,7 @@ function SignalDraggableCard({
       dragging={isDragging}
       style={style}
       data-kind="today"
+      data-done={done || undefined}
       {...attributes}
       {...listeners}
       aria-label={`${signal.title} (Today, 드래그하여 시간축에 배치)`}
@@ -163,6 +162,7 @@ function RoutineDraggableCard({
       dragging={isDragging}
       style={style}
       data-kind="routine"
+      data-done={routine.done || undefined}
       {...attributes}
       {...listeners}
       aria-label={`${routine.title} (루틴, 드래그하여 시간축에 배치)`}
