@@ -5,11 +5,7 @@ import type { LifeWheelTagConfig } from "@/bindings";
 import { KindAreaChips } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
 import { useArchivedSnoozed, useRestoreSignal } from "@/lib/query";
-
-function md(date: string): string {
-  const [, m, d] = date.split("-");
-  return `${Number(m)}/${Number(d)}`;
-}
+import { monthDay } from "@/lib/weekRange";
 
 export function ArchiveAccordion({ tags }: { tags: LifeWheelTagConfig[] }) {
   const list = useArchivedSnoozed();
@@ -41,7 +37,7 @@ export function ArchiveAccordion({ tags }: { tags: LifeWheelTagConfig[] }) {
                   {s.status === "archived" ? "보관됨" : "미룸"}
                 </span>
                 {s.status === "snoozed" && s.snoozeUntil && (
-                  <span className="wk-arc-sub">복귀 {md(s.snoozeUntil)}</span>
+                  <span className="wk-arc-sub">복귀 {monthDay(s.snoozeUntil)}</span>
                 )}
                 <KindAreaChips target={s} tags={tags} />
               </div>

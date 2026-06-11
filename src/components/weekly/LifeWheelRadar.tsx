@@ -8,15 +8,20 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-import type { LifeWheelTagConfig, WorkSignal } from "@/bindings";
-import { computeRadarAxes, radarRenderMode, weekConfidence } from "@/lib/lifeWheelRadar";
+import type { LifeWheelTagConfig } from "@/bindings";
+import {
+  computeRadarAxes,
+  radarRenderMode,
+  type TaggedActivity,
+  weekConfidence,
+} from "@/lib/lifeWheelRadar";
 
 const SERIES_CURRENT = "var(--color-wr-green, #3f7d5e)";
 const SERIES_AVG = "var(--color-wr-subtle, #c9c9c4)";
 
 interface Props {
-  weekSignals: WorkSignal[]; // 선택 주 완료 신호
-  trailingWeeks: WorkSignal[][]; // 직전 4주(각 주 신호 배열)
+  weekSignals: TaggedActivity[]; // 선택 주 완료 활동(브레인덤프 카드 + 루틴 완료)
+  trailingWeeks: TaggedActivity[][]; // 직전 4주(각 주 활동 배열)
   tags: LifeWheelTagConfig[];
   onOpenSettings: () => void; // N=0 딥링크
 }

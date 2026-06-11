@@ -1,9 +1,10 @@
 // src/lib/lifeWheelRadar.test.ts
 import { describe, expect, it } from "vitest";
 
-import type { LifeWheelTagConfig, WorkSignal } from "@/bindings";
+import type { LifeWheelTagConfig, RoutineTrackingItem, WorkSignal } from "@/bindings";
 
 import {
+  bucketRoutineDoneByOffset,
   computeRadarAxes,
   type RadarAxis,
   radarRenderMode,
@@ -121,5 +122,72 @@ describe("weekSampleSize / weekConfidence", () => {
     const many = [sig("a", "health"), sig("b", "family"), sig("c", "career")];
     expect(weekConfidence(many, tags, 5)).toBe("sparse"); // 3 ≤ 5
     expect(weekConfidence(many, tags, 2)).toBe("measured"); // 3 > 2
+  });
+});
+
+describe("bucketRoutineDoneByOffset", () => {
+  function routine(
+    id: string,
+    area: string | null,
+    history: { date: string; done: boolean }[],
+    areaTags?: string[],
+  ): RoutineTrackingItem {
+    return {
+      id,
+      title: id,
+      freq: "daily" as never,
+      area: area as never,
+      areaTags: areaTags ? JSON.stringify(areaTags) : null,
+      kind: "personal" as never,
+      due: history.length,
+      done: history.filter((h) => h.done).length,
+      ratePct: 0,
+      streak: 0,
+      history,
+    };
+  }
+
+  // 2026-06-11(목) 기준: 이번 주 = 6/8(월)–6/14(일), 지난주 = 6/1–6/7
+  const today = "2026-06-11";
+
+  it("buckets done occurrences into their week offset with the routine's area tags", () => {
+    const map = bucketRoutineDoneByOffset(
+      [
+        routine("run", "health", [
+          { date: "2026-06-09", done: true }, // 이번 주
+          { date: "2026-06-10", done: false }, // 미완료 → 제외
+          { date: "2026-06-03", done: true }, // 지난주
+        ]),
+      ],
+      today,
+    );
+    expect(map.get(0)).toEqual([{ area: "health", areaTags: null }]);
+    expect(map.get(-1)).toEqual([{ area: "health", areaTags: null }]);
+    expect(map.get(-2)).toEqual([]);
+  });
+
+  it("feeds computeRadarAxes alongside signals (cards + routines combined)", () => {
+    const tags = [tag("health"), tag("career")];
+    const map = bucketRoutineDoneByOffset(
+      [
+        routine("run", "health", [
+          { date: "2026-06-09", done: true },
+          { date: "2026-06-11", done: true },
+        ]),
+      ],
+      today,
+    );
+    const combined = [sig("a", "career"), ...(map.get(0) ?? [])];
+    const axes = computeRadarAxes(combined, tags);
+    expect(axes.find((x) => x.key === "health")?.count).toBe(2);
+    expect(axes.find((x) => x.key === "career")?.count).toBe(1);
+  });
+
+  it("ignores done dates outside the 12-week window", () => {
+    const map = bucketRoutineDoneByOffset(
+      [routine("old", "health", [{ date: "2024-01-01", done: true }])],
+      today,
+    );
+    for (const [, v] of map) expect(v).toEqual([]);
   });
 });

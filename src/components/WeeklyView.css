@@ -1,5 +1,11 @@
 /* ── Weekly review 뷰 (Phase 11c) ──────────────────────────────────────────── */
 .wk {
+  /* component-local layout tokens — 좌우 여백·칼럼/스택 간격의 단일 정의 */
+  --wk-gutter: 22px;
+  --wk-col-gap: 32px;
+  --wk-stack-gap: 24px;
+  --wk-chip-gap: 6px;
+
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -20,19 +26,14 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.wk .wk-range {
-  margin-left: auto;
-  font: 500 12px var(--font-mono);
-  color: var(--color-wr-subtle);
-}
 .wk .wk-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   width: 100%;
-  max-width: 760px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 18px 22px 40px;
+  padding: 18px var(--wk-gutter) 40px;
 }
 .wk .wk-hint {
   font: 400 12px var(--font-sans);
@@ -147,12 +148,14 @@
   color: var(--color-wr-subtle);
 }
 
-/* ── 주차 네비게이터 ─────────────────────────── */
+/* ── 주차 네비게이터 (pager 중앙 정렬, '이번 주로'는 우측 고정) ──────────── */
 .wk .wk-nav {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  padding: 12px 0;
+  padding: 12px var(--wk-gutter);
   border-bottom: 1px solid var(--color-wr-border-light);
 }
 .wk .wk-pager {
@@ -187,7 +190,8 @@
   color: var(--color-wr-subtle);
 }
 .wk .wk-today-btn {
-  margin-left: auto;
+  position: absolute;
+  right: var(--wk-gutter);
   font: 600 11px/1 var(--font-sans);
   padding: 7px 12px;
   border: 1px solid var(--color-wr-card-border);
@@ -197,13 +201,20 @@
   cursor: pointer;
 }
 
-/* ── 스크러바 ─────────────────────────── */
+/* ── 스크러바 (중앙 정렬 — auto margin이라 넘치면 0으로 접혀 좌측 클리핑 없음.
+   `justify-content: safe center`는 WKWebView 미지원이라 못 쓴다) ─────────── */
 .wk .wk-scrub {
   display: flex;
   gap: 4px;
-  padding: 12px 0 14px;
+  padding: 12px var(--wk-gutter) 14px;
   overflow-x: auto;
   border-bottom: 1px solid var(--color-wr-border-light);
+}
+.wk .wk-week:first-child {
+  margin-left: auto;
+}
+.wk .wk-week:last-child {
+  margin-right: auto;
 }
 .wk .wk-week {
   flex: 0 0 auto;
@@ -248,17 +259,46 @@
   color: var(--color-wr-fg);
 }
 
-/* ── 히어로 2단 ─────────────────────────── */
-.wk .wk-hero {
+/* ── KPI 스트립: 처리량(3타일) + PR 활동(2타일) — 타일 폭이 같도록 3:2 분할,
+   섹션 간 간격만 col-gap. 좁으면 세로 스택 ─────────────────────────────── */
+.wk .wk-kpis {
   display: grid;
-  grid-template-columns: minmax(0, 360px) 1fr;
-  gap: 24px;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--wk-col-gap);
   padding-top: 18px;
 }
-@media (max-width: 720px) {
-  .wk .wk-hero {
+@media (max-width: 920px) {
+  .wk .wk-kpis {
     grid-template-columns: 1fr;
   }
+}
+.wk .wk-kpis .wk-sec {
+  margin-bottom: 0;
+}
+.wk .wk-stats-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* ── 2칼럼: 대시보드(좌) · 완료한 일/보관함(우) — 좁으면 세로 스택 ──────── */
+.wk .wk-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--wk-col-gap);
+  padding-top: var(--wk-stack-gap);
+}
+@media (max-width: 920px) {
+  .wk .wk-cols {
+    grid-template-columns: 1fr;
+  }
+}
+.wk .wk-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wk-stack-gap);
+  min-width: 0;
+}
+.wk .wk-col .wk-sec {
+  margin-bottom: 0;
 }
 .wk .wk-card {
   border: 1px solid var(--color-wr-card-border);
@@ -349,7 +389,6 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-bottom: 14px;
 }
 .wk .wk-rank-card {
   border: 1px solid var(--color-wr-card-border);
@@ -394,6 +433,10 @@
   padding: 11px 0;
   border-top: 1px solid var(--color-wr-border-light);
 }
+/* 섹션 헤더 바로 아래 첫 그룹은 border-top 생략 — 헤더 border-bottom과 이중선 방지 */
+.wk .wk-sec-head + .wk-group {
+  border-top: 0;
+}
 .wk .wk-group-date {
   font: 600 11px/1.3 var(--font-mono);
   color: var(--color-wr-subtle);
@@ -408,10 +451,13 @@
 .wk .wk-item-ttl {
   font: 400 13px/1.4 var(--font-sans);
 }
+/* 타이틀 + kind/area 칩 한 줄(좁으면 칩만 줄바꿈) */
 .wk .wk-item-body {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--wk-chip-gap);
+  min-width: 0;
 }
 .wk .wk-item-tags {
   display: flex;

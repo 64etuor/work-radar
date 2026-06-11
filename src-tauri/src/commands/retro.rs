@@ -113,11 +113,21 @@ mod tests {
         assert_eq!(completed.len(), 2, "범위 내 완료 2건(c는 범위 밖 제외)");
         assert_eq!(completed[0].id, b.id, "완료일 내림차순(b=21 먼저)");
 
-        // 태깅: a=고임팩트, b=후회.
+        // 태깅: a=좋아요, b=싫어요.
         let ta = set_impact(&db, &a.id, true).await.unwrap();
         assert_eq!(ta.impact_high, Some(true));
         let tb = set_regret(&db, &b.id, true).await.unwrap();
         assert_eq!(tb.regret, Some(true));
+
+        // 태깅(updated_at 갱신)이 완료 목록 순서를 바꾸지 않는다 — 정렬 키는 불변(created_at/id).
+        let after_tag = fetch_completed(&db, "2026-05-16", "2026-05-22")
+            .await
+            .unwrap();
+        assert_eq!(
+            after_tag.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+            completed.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+            "태깅 후에도 순서 동일"
+        );
 
         // 토글 off도 동작.
         let ta2 = set_impact(&db, &a.id, false).await.unwrap();

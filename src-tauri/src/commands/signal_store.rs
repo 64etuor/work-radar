@@ -703,10 +703,12 @@ pub(crate) async fn fetch_completed(
     start: &str,
     end: &str,
 ) -> Result<Vec<WorkSignal>, sqlx::Error> {
+    // 정렬은 불변 키만(created_at, id) — updated_at은 impact/regret 태깅으로 바뀌어
+    // 태깅 직후 목록 순서가 튄다. 시간 순 고정.
     sqlx::query_as::<_, WorkSignal>(&format!(
         "SELECT {SIGNAL_COLS} FROM signals \
          WHERE today_done_at IS NOT NULL AND today_done_at BETWEEN ?1 AND ?2 \
-         ORDER BY today_done_at DESC, updated_at DESC"
+         ORDER BY today_done_at DESC, created_at DESC, id DESC"
     ))
     .bind(start)
     .bind(end)
@@ -714,10 +716,13 @@ pub(crate) async fn fetch_completed(
     .await
 }
 
-/// 고임팩트 태그 토글(사람 결정 — INVARIANT #1). quadrant/status 무변경. (retro.rs 이전)
+/// 좋아요(고임팩트) 태그 토글(사람 결정 — INVARIANT #1). quadrant/status 무변경.
+/// 좋아요/싫어요는 상호배타 — 켤 때 regret를 같은 UPDATE에서 원자적으로 끈다. (retro.rs 이전)
 pub(crate) async fn set_impact(db: &Db, id: &str, value: bool) -> Result<WorkSignal, sqlx::Error> {
     sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET impact_high = ?2, updated_at = datetime('now') \
+        "UPDATE signals SET impact_high = ?2, \
+         regret = CASE WHEN ?2 THEN 0 ELSE regret END, \
+         updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(id)
@@ -726,10 +731,12 @@ pub(crate) async fn set_impact(db: &Db, id: &str, value: bool) -> Result<WorkSig
     .await
 }
 
-/// 후회 태그 토글(사람 결정 — INVARIANT #1). (retro.rs 이전)
+/// 싫어요(후회) 태그 토글(사람 결정 — INVARIANT #1). 켤 때 impact_high를 함께 끈다(상호배타). (retro.rs 이전)
 pub(crate) async fn set_regret(db: &Db, id: &str, value: bool) -> Result<WorkSignal, sqlx::Error> {
     sqlx::query_as::<_, WorkSignal>(&format!(
-        "UPDATE signals SET regret = ?2, updated_at = datetime('now') \
+        "UPDATE signals SET regret = ?2, \
+         impact_high = CASE WHEN ?2 THEN 0 ELSE impact_high END, \
+         updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(id)
@@ -840,6 +847,7 @@ mod tests {
     }
 
     /// 회고: set_impact/set_regret 태깅이 라운드트립되고 confirmed quadrant는 무변경.
+    /// 좋아요/싫어요는 상호배타 — 한쪽을 켜면 반대쪽이 꺼진다.
     #[tokio::test]
     async fn impact_regret_tagging_roundtrips_without_touching_quadrant() {
         let db = fresh_db().await;
@@ -848,6 +856,16 @@ mod tests {
         assert_eq!(i.impact_high, Some(true));
         let r = set_regret(&db, &s.id, true).await.unwrap();
         assert_eq!(r.regret, Some(true));
+        assert_eq!(r.impact_high, Some(false), "싫어요 켜면 좋아요는 꺼진다");
         assert!(matches!(r.quadrant, Quadrant::Unclassified)); // 태깅은 결정 레일 무침범.
+
+        let i2 = set_impact(&db, &s.id, true).await.unwrap();
+        assert_eq!(i2.impact_high, Some(true));
+        assert_eq!(i2.regret, Some(false), "좋아요 켜면 싫어요는 꺼진다");
+
+        // 끄는 건 반대쪽을 건드리지 않는다.
+        let i3 = set_impact(&db, &s.id, false).await.unwrap();
+        assert_eq!(i3.impact_high, Some(false));
+        assert_eq!(i3.regret, Some(false));
     }
 }

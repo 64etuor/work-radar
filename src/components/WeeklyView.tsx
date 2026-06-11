@@ -1,23 +1,27 @@
 import "./WeeklyView.css";
 
-import { CheckCircle2, GitPullRequest, Inbox, Repeat, Send, TrendingDown } from "lucide-react";
+import {
+  CheckCircle2,
+  GitPullRequest,
+  Inbox,
+  NotebookPen,
+  Repeat,
+  Send,
+  TrendingDown,
+} from "lucide-react";
 import { useEffect, useMemo } from "react";
 
-import type { DebtPoint, WorkSignal } from "@/bindings";
+import type { DebtPoint } from "@/bindings";
 import { ArchiveAccordion } from "@/components/weekly/ArchiveAccordion";
 import { LifeWheelRadar } from "@/components/weekly/LifeWheelRadar";
-import { ReflectionSection } from "@/components/weekly/ReflectionSection";
+import { CompletedList, ReflectionRank } from "@/components/weekly/ReflectionSection";
 import { WeekNavigator } from "@/components/weekly/WeekNavigator";
 import { WeekScrubber } from "@/components/weekly/WeekScrubber";
-import { useCompleted, useLifeWheelTags, useWeeklyReview } from "@/lib/query";
+import { bucketRoutineDoneByOffset } from "@/lib/lifeWheelRadar";
+import { useCompleted, useLifeWheelTags, useRoutineTracking, useWeeklyReview } from "@/lib/query";
 import { useWeekNav } from "@/lib/useWeekNav";
-import { weekRangeForOffset, WEEKS_WINDOW } from "@/lib/weekRange";
+import { bucketByWeekOffset, monthDay, weekRangeForOffset, WEEKS_WINDOW } from "@/lib/weekRange";
 import { useUIStore } from "@/store";
-
-function md(date: string): string {
-  const [, m, d] = date.split("-");
-  return `${Number(m)}/${Number(d)}`;
-}
 
 export function WeeklyView() {
   const nav = useWeekNav();
@@ -36,22 +40,14 @@ export function WeeklyView() {
   const tags = tagsQ.data ?? [];
 
   // 주별 버킷: offset → 그 주에 완료된 신호[]
-  const byOffset = useMemo(() => {
-    const map = new Map<number, WorkSignal[]>();
-    for (let o = -(WEEKS_WINDOW - 1); o <= 0; o++) map.set(o, []);
-    for (const s of allItems) {
-      const done = s.todayDoneAt;
-      if (!done) continue;
-      for (let o = -(WEEKS_WINDOW - 1); o <= 0; o++) {
-        const r = weekRangeForOffset(nav.today, o);
-        if (done >= r.start && done <= r.end) {
-          map.get(o)!.push(s);
-          break;
-        }
-      }
-    }
-    return map;
-  }, [allItems, nav.today]);
+  const byOffset = useMemo(
+    () =>
+      bucketByWeekOffset(
+        allItems.flatMap((s) => (s.todayDoneAt ? [{ date: s.todayDoneAt, value: s }] : [])),
+        nav.today,
+      ),
+    [allItems, nav.today],
+  );
 
   const countByOffset = useMemo(() => {
     const rec: Record<number, number> = {};
@@ -60,12 +56,24 @@ export function WeeklyView() {
   }, [byOffset]);
 
   const weekItems = byOffset.get(nav.offset) ?? [];
-  const trailingWeeks = useMemo(
+
+  // 루틴 완료 occurrence — 레이더는 카드 + 루틴을 함께 활동 분포로 집계
+  const tracking = useRoutineTracking(nav.today, WEEKS_WINDOW * 7);
+  const routineByOffset = useMemo(
+    () => bucketRoutineDoneByOffset(tracking.data ?? [], nav.today),
+    [tracking.data, nav.today],
+  );
+  const radarWeekItems = useMemo(
+    () => [...weekItems, ...(routineByOffset.get(nav.offset) ?? [])],
+    [weekItems, routineByOffset, nav.offset],
+  );
+  const radarTrailingWeeks = useMemo(
     () =>
-      [nav.offset - 1, nav.offset - 2, nav.offset - 3, nav.offset - 4].map(
-        (o) => byOffset.get(o) ?? [],
-      ),
-    [byOffset, nav.offset],
+      [nav.offset - 1, nav.offset - 2, nav.offset - 3, nav.offset - 4].map((o) => [
+        ...(byOffset.get(o) ?? []),
+        ...(routineByOffset.get(o) ?? []),
+      ]),
+    [byOffset, routineByOffset, nav.offset],
   );
 
   // 키보드 ←/→ (입력 포커스 시 무시)
@@ -120,21 +128,9 @@ export function WeeklyView() {
           </div>
         )}
 
-        {/* 히어로: 레이더 + 모멘텀 */}
-        <div className="wk-hero">
-          <div className="wk-card">
-            <div className="wk-sec-head">
-              <span className="wk-sec-name">Life Wheel · 이번 주 활동 분포</span>
-            </div>
-            <LifeWheelRadar
-              weekSignals={weekItems}
-              trailingWeeks={trailingWeeks}
-              tags={tags}
-              onOpenSettings={() => goTo("settings")}
-            />
-          </div>
-
-          <div className="wk-momentum">
+        {/* KPI 스트립: 처리량 + PR 활동 — 전폭 한 줄, 동일 타일 */}
+        <div className="wk-kpis">
+          <section className="wk-sec">
             <div className="wk-sec-head">
               <Send className="text-wr-subtle size-4" />
               <span className="wk-sec-name">처리량</span>
@@ -156,11 +152,14 @@ export function WeeklyView() {
                 value={data?.throughput.promoted ?? 0}
               />
             </div>
+          </section>
+
+          <section className="wk-sec">
             <div className="wk-sec-head">
               <GitPullRequest className="text-wr-subtle size-4" />
               <span className="wk-sec-name">PR 활동</span>
             </div>
-            <div className="wk-stats">
+            <div className="wk-stats wk-stats-2">
               <StatTile
                 icon={<GitPullRequest className="size-4" />}
                 label="새 attention"
@@ -172,48 +171,74 @@ export function WeeklyView() {
                 value={data?.prActivity.resolved ?? 0}
               />
             </div>
-            <div className="wk-sec-head">
-              <Repeat className="text-wr-subtle size-4" />
-              <span className="wk-sec-name">루틴 이행률</span>
-              {data && (
-                <span className="wk-sec-count">
-                  {data.routineAdherence.done}/{data.routineAdherence.due}
-                </span>
-              )}
-            </div>
-            <div className="wk-bar">
-              <div
-                className="wk-bar-fill"
-                style={{ width: `${data?.routineAdherence.ratePct ?? 0}%` }}
-              />
-              <span className="wk-bar-pct">{data?.routineAdherence.ratePct ?? 0}%</span>
-            </div>
-          </div>
+          </section>
         </div>
 
-        {/* 부채 추세 */}
-        <section className="wk-sec">
-          <div className="wk-sec-head">
-            <TrendingDown className="text-wr-subtle size-4" />
-            <span className="wk-sec-name">부채 추세 (미분류 · Q1 overdue)</span>
-          </div>
-          {!data || data.debtTrend.length === 0 ? (
-            <div className="wk-hint">추세 데이터가 쌓이는 중입니다.</div>
-          ) : (
-            <DebtTrend points={data.debtTrend} />
-          )}
-        </section>
+        {/* 2칼럼: 대시보드(좌) · 완료한 일/보관함(우) — 좁은 화면에선 세로 스택 */}
+        <div className="wk-cols">
+          <div className="wk-col">
+            <div className="wk-card">
+              <div className="wk-sec-head">
+                <span className="wk-sec-name">Life Wheel · 이번 주 활동 분포</span>
+              </div>
+              <LifeWheelRadar
+                weekSignals={radarWeekItems}
+                trailingWeeks={radarTrailingWeeks}
+                tags={tags}
+                onOpenSettings={() => goTo("settings")}
+              />
+            </div>
 
-        {/* 회고(병합) */}
-        <section className="wk-sec">
-          <div className="wk-sec-head">
-            <span className="wk-sec-name">회고 · 이 주 완료한 일</span>
-          </div>
-          <ReflectionSection items={weekItems} tags={tags} />
-        </section>
+            <div className="wk-momentum">
+              <div className="wk-sec-head">
+                <Repeat className="text-wr-subtle size-4" />
+                <span className="wk-sec-name">루틴 이행률</span>
+                {data && (
+                  <span className="wk-sec-count">
+                    {data.routineAdherence.done}/{data.routineAdherence.due}
+                  </span>
+                )}
+              </div>
+              <div className="wk-bar">
+                <div
+                  className="wk-bar-fill"
+                  style={{ width: `${data?.routineAdherence.ratePct ?? 0}%` }}
+                />
+                <span className="wk-bar-pct">{data?.routineAdherence.ratePct ?? 0}%</span>
+              </div>
+            </div>
 
-        {/* 보관함(병합·접이식) */}
-        <ArchiveAccordion tags={tags} />
+            {/* 부채 추세 */}
+            <section className="wk-sec">
+              <div className="wk-sec-head">
+                <TrendingDown className="text-wr-subtle size-4" />
+                <span className="wk-sec-name">부채 추세 (미분류 · Q1 overdue)</span>
+              </div>
+              {!data || data.debtTrend.length === 0 ? (
+                <div className="wk-hint">추세 데이터가 쌓이는 중입니다.</div>
+              ) : (
+                <DebtTrend points={data.debtTrend} />
+              )}
+            </section>
+
+            {/* 회고 랭크(좋아요/싫어요) */}
+            <section className="wk-sec">
+              <div className="wk-sec-head">
+                <NotebookPen className="text-wr-subtle size-4" />
+                <span className="wk-sec-name">회고</span>
+              </div>
+              <ReflectionRank items={weekItems} />
+            </section>
+          </div>
+
+          <div className="wk-col">
+            {/* 이 주 완료한 일 */}
+            <CompletedList items={weekItems} tags={tags} />
+
+            {/* 보관함(병합·접이식) */}
+            <ArchiveAccordion tags={tags} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -249,7 +274,7 @@ function DebtTrend({ points }: { points: DebtPoint[] }) {
               title={`Q1 overdue ${p.q1Overdue}`}
             />
           </div>
-          <span className="wk-trend-date">{md(p.date)}</span>
+          <span className="wk-trend-date">{monthDay(p.date)}</span>
         </div>
       ))}
     </div>

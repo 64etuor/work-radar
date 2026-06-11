@@ -1,12 +1,7 @@
 // src/components/weekly/WeekNavigator.tsx
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { isoWeekNumber, type WeekRange } from "@/lib/weekRange";
-
-function md(date: string): string {
-  const [, m, d] = date.split("-");
-  return `${Number(m)}/${Number(d)}`;
-}
+import { isoWeekNumber, monthDay, type WeekRange } from "@/lib/weekRange";
 
 interface Props {
   range: WeekRange;
@@ -27,7 +22,7 @@ export function WeekNavigator({ range, isCurrent, isOldest, onPrev, onNext, onRe
         <span className="wk-cur">
           {isoWeekNumber(range.end)}주차
           <small>
-            {md(range.start)} – {md(range.end)}
+            {monthDay(range.start)} – {monthDay(range.end)}
           </small>
         </span>
         <button type="button" onClick={onNext} disabled={isCurrent} aria-label="다음 주">

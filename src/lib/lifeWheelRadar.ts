@@ -1,6 +1,7 @@
 // src/lib/lifeWheelRadar.ts
-import type { LifeWheelTagConfig, WorkSignal } from "@/bindings";
+import type { LifeWheelTagConfig, RoutineTrackingItem, WorkSignal } from "@/bindings";
 import { parseAreaTagKeys } from "@/components/board/LifeWheelPalette";
+import { bucketByWeekOffset } from "@/lib/weekRange";
 
 export interface RadarAxis {
   key: string;
@@ -8,6 +9,12 @@ export interface RadarAxis {
   color: string;
   count: number;
 }
+
+/**
+ * 레이더가 집계하는 최소 모양 — area 태그만 있으면 된다. WorkSignal(브레인덤프 카드)과
+ * 루틴 완료 occurrence 둘 다 이 모양으로 들어온다.
+ */
+export type TaggedActivity = Pick<WorkSignal, "area" | "areaTags">;
 
 /** enabled 태그만, id 오름차순. */
 function enabledSorted(tags: LifeWheelTagConfig[]): LifeWheelTagConfig[] {
@@ -21,7 +28,10 @@ function enabledSorted(tags: LifeWheelTagConfig[]): LifeWheelTagConfig[] {
  * 신호[]를 enabled 태그 축별 완료 count로 집계(순수).
  * 신호가 여러 area 태그를 가지면 각 축에 1씩. 미설정 신호·비활성 태그는 제외.
  */
-export function computeRadarAxes(signals: WorkSignal[], tags: LifeWheelTagConfig[]): RadarAxis[] {
+export function computeRadarAxes(
+  signals: TaggedActivity[],
+  tags: LifeWheelTagConfig[],
+): RadarAxis[] {
   const axisTags = enabledSorted(tags);
   const enabledKeys = new Set(axisTags.map((t) => t.id));
   const counts = new Map<string, number>();
@@ -60,13 +70,13 @@ export type WeekConfidence = "measured" | "sparse" | "empty";
 export const DEFAULT_SPARSE_FLOOR = 2;
 
 /** 선택 주에 enabled 축으로 집계된 완료 신호 총량(다중 태그는 축마다 1) → 그 주 표본 크기. */
-export function weekSampleSize(signals: WorkSignal[], tags: LifeWheelTagConfig[]): number {
+export function weekSampleSize(signals: TaggedActivity[], tags: LifeWheelTagConfig[]): number {
   return computeRadarAxes(signals, tags).reduce((sum, a) => sum + a.count, 0);
 }
 
 /** 선택 주 레이더의 표본 신뢰도. 0=empty, ≤floor=sparse, 그 외 measured. */
 export function weekConfidence(
-  signals: WorkSignal[],
+  signals: TaggedActivity[],
   tags: LifeWheelTagConfig[],
   sparseFloor: number = DEFAULT_SPARSE_FLOOR,
 ): WeekConfidence {
@@ -74,4 +84,23 @@ export function weekConfidence(
   if (total === 0) return "empty";
   if (total <= sparseFloor) return "sparse";
   return "measured";
+}
+
+/**
+ * 루틴 완료 occurrence → 주 offset별 TaggedActivity 버킷(순수).
+ * 레이더가 브레인덤프 카드뿐 아니라 루틴 이행도 활동 분포로 집계하기 위한 변환.
+ * history의 done=true 날짜만, 그 날짜가 속한 주(offset)에 루틴의 area 태그로 1건씩.
+ */
+export function bucketRoutineDoneByOffset(
+  items: RoutineTrackingItem[],
+  today: string,
+): Map<number, TaggedActivity[]> {
+  return bucketByWeekOffset(
+    items.flatMap((item) =>
+      item.history
+        .filter((day) => day.done)
+        .map((day) => ({ date: day.date, value: { area: item.area, areaTags: item.areaTags } })),
+    ),
+    today,
+  );
 }
