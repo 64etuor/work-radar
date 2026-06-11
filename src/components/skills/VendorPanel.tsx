@@ -1,5 +1,5 @@
 import { Copy, Unlink } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { Skill } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,7 @@ export function VendorPanel({ skill }: { skill: Skill }) {
   const vendor = useVendorSkillToProject();
   const unvendor = useUnvendorSkillFromProject();
   const [note, setNote] = useState<string | null>(null);
-  const targets = useMemo(
-    () => buildVendorTargets(skill, workspaces.data, divergences.data),
-    [skill, workspaces.data, divergences.data],
-  );
+  const targets = buildVendorTargets(skill, workspaces.data, divergences.data);
   if (!skill.provider || targets.length === 0) return null;
   const provider = skill.provider;
   const busy = vendor.isPending || unvendor.isPending;

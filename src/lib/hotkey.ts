@@ -83,8 +83,9 @@ const DISPLAY_SYMBOLS: Record<string, string> = {
 export function formatHotkeySpec(spec: string): string {
   return spec
     .split("+")
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => DISPLAY_SYMBOLS[p] ?? p)
+    .flatMap((p) => {
+      const t = p.trim();
+      return t ? [DISPLAY_SYMBOLS[t] ?? t] : [];
+    })
     .join("");
 }

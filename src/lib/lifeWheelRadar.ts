@@ -67,7 +67,7 @@ export function radarRenderMode(tags: LifeWheelTagConfig[]): RadarMode {
 export type WeekConfidence = "measured" | "sparse" | "empty";
 
 /** 이 값 이하의 표본(축에 집계된 총 완료 수)은 sparse로 플래그. */
-export const DEFAULT_SPARSE_FLOOR = 2;
+const DEFAULT_SPARSE_FLOOR = 2;
 
 /** 선택 주에 enabled 축으로 집계된 완료 신호 총량(다중 태그는 축마다 1) → 그 주 표본 크기. */
 export function weekSampleSize(signals: TaggedActivity[], tags: LifeWheelTagConfig[]): number {

@@ -82,6 +82,12 @@ export type CardTagTarget = {
   areaTags: string | null;
 };
 
+// 카드 드래그 핸들러가 버튼 포인터 활성화를 방해하지 않도록 preventDefault만 실행.
+// 로컬 상태를 참조하지 않으므로 모듈 스코프에 위치.
+function keepCardDragPrimary(event: React.PointerEvent<HTMLButtonElement>) {
+  event.preventDefault();
+}
+
 export function CardTagEditor({
   target,
   tags,
@@ -102,11 +108,6 @@ export function CardTagEditor({
   const areaLabelText = selectedTag?.label ?? selectedArea ?? "미분류";
   const areaAriaLabel =
     selectedAreas.length === 0 ? "Life wheel tag 선택: 미분류" : "Life wheel tag 선택";
-  const keepCardDragPrimary = (event: React.PointerEvent<HTMLButtonElement>) => {
-    // Keep button clicks available, but do not let pointer activation focus the
-    // button or block the parent post-it drag handler.
-    event.preventDefault();
-  };
 
   return (
     <div className="postit-tags">

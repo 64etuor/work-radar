@@ -320,7 +320,8 @@ export function useHermesTabsBootstrap() {
     // DB(ok+0건)일 때만 기본 세션을 만든다.
     void (async () => {
       let listed: HermesSessionRow[] | null = null;
-      for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
+      // attempt++ (UpdateExpression)는 람다 캡처 시 React Compiler BuildHIR 미지원 — += 로 우회.
+      for (let attempt = 0; attempt < 4 && !cancelled; attempt += 1) {
         const res = await commands.hermesSessionsList();
         if (cancelled) return;
         if (res.status === "ok") {
@@ -523,7 +524,7 @@ export function selectActiveQueueCount(s: TabsState): number {
 
 /** 동시 실행(슬롯 점유) 세션 수가 임계 이상인지. 백엔드 holder 크기와 1:1은 아니지만
  *  FE가 추적하는 활성 탭 수의 근사로 충분(경고 전용, 차단 아님). */
-export const LIVE_SESSION_WARN_THRESHOLD = 8;
+const LIVE_SESSION_WARN_THRESHOLD = 8;
 export function selectShowResourceWarning(s: TabsState): boolean {
   return s.tabs.size >= LIVE_SESSION_WARN_THRESHOLD;
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -57,7 +57,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
 
   // Hermes 패널 토글 — OS 글로벌 단축키 (hermesGetToggleHotkey / hermesSetToggleHotkey).
   const qc = useQueryClient();
-  const hermesHotkey = useQuery({
+  const { data: hermesHotkeyData } = useQuery({
     queryKey: ["hermes-toggle-hotkey"],
     queryFn: async () => unwrap(commands.hermesGetToggleHotkey()),
   });
@@ -86,7 +86,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
 
   // 중복 감지: 같은 spec(대소문자 무시)을 2개 이상 액션이 쓰면 그 행을 빨갛게(경고만).
   // knob 예약 키는 제외 — 값이 단축키 spec이 아니라 액션 토큰이라 중복 개념이 다르다.
-  const specCounts = useMemo(() => {
+  const specCounts = (() => {
     const c: Record<string, number> = {};
     for (const [k, v] of Object.entries(kmDraft)) {
       if (isKnobKeymapKey(k)) continue;
@@ -94,7 +94,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
       if (s) c[s] = (c[s] ?? 0) + 1;
     }
     return c;
-  }, [kmDraft]);
+  })();
   const isDup = (spec: string) => {
     const s = spec.trim().toLowerCase();
     return s !== "" && (specCounts[s] ?? 0) > 1;
@@ -184,7 +184,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground min-w-[96px] text-xs">Hermes 패널 토글</span>
         <HotkeyCapture
-          value={hermesHotkey.data ?? "Cmd+Shift+Space"}
+          value={hermesHotkeyData ?? "Cmd+Shift+Space"}
           onChange={(spec) => setHermesHotkey.mutate(spec)}
         />
       </div>
@@ -405,10 +405,10 @@ const TRIGGER_CHIPS: { mod: string; glyph: string }[] = [
 /** "Cmd+Shift" 류 spec ↔ 칩 토글. 모디파이어 순서는 Ctrl→Cmd→Alt→Shift 고정. */
 function TriggerPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const active = new Set(
-    value
-      .split("+")
-      .map((p) => p.trim())
-      .filter(Boolean),
+    value.split("+").flatMap((p) => {
+      const t = p.trim();
+      return t ? [t] : [];
+    }),
   );
   const toggle = (mod: string) => {
     const next = new Set(active);

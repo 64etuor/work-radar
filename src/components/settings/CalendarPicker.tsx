@@ -1,5 +1,5 @@
 import { Check, Star } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { cn } from "@/components/ui/cn";
 import {
@@ -31,10 +31,7 @@ export function CalendarPicker({
   // optimistic: 체크박스 토글 즉시 mutate. 서버 응답이 늦어도 즉시 반응 보이도록
   // 직전 토글 결과를 로컬에 잠깐 가지고 있다가 서버 데이터가 따라잡으면 비운다.
   const [pendingChecked, setPendingChecked] = useState<Set<string> | null>(null);
-  const savedChecked = useMemo(
-    () => new Set(calendars.data?.filter((c) => c.selected).map((c) => c.id) ?? []),
-    [calendars.data],
-  );
+  const savedChecked = new Set(calendars.data?.filter((c) => c.selected).map((c) => c.id) ?? []);
   const checked = pendingChecked ?? savedChecked;
 
   const toggle = (id: string) => {

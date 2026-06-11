@@ -1,7 +1,7 @@
 import "./CalendarDrawer.css";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import { CalendarView } from "@/components/board/CalendarView";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,7 @@ export function CalendarDrawer({ open, onClose }: Props) {
   const projectsQ = useProjects();
   const { goTo } = useUIStore();
 
-  const { start, end } = useMemo(() => viewRange(mode, date), [mode, date]);
+  const { start, end } = viewRange(mode, date);
   const eventsQ = useCalendarEventsRange(start, end, open);
 
   // 어떤 프로젝트도 캘린더를 선택하지 않았으면 OAuth 미연결/미설정 상태(ambient 판정 — 네트워크 없음).

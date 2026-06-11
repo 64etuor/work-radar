@@ -9,7 +9,7 @@ import {
   Send,
   TrendingDown,
 } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 
 import type { DebtPoint } from "@/bindings";
 import { ArchiveAccordion } from "@/components/weekly/ArchiveAccordion";
@@ -34,46 +34,28 @@ export function WeeklyView() {
   // 12주 완료 신호 1회 — 스크러바·레이더·회고 공용
   const windowStart = weekRangeForOffset(nav.today, -(WEEKS_WINDOW - 1)).start;
   const completed = useCompleted(windowStart, nav.today);
-  const allItems = useMemo(() => completed.data ?? [], [completed.data]);
+  const allItems = completed.data ?? [];
 
   const tagsQ = useLifeWheelTags();
   const tags = tagsQ.data ?? [];
 
   // 주별 버킷: offset → 그 주에 완료된 신호[]
-  const byOffset = useMemo(
-    () =>
-      bucketByWeekOffset(
-        allItems.flatMap((s) => (s.todayDoneAt ? [{ date: s.todayDoneAt, value: s }] : [])),
-        nav.today,
-      ),
-    [allItems, nav.today],
+  const byOffset = bucketByWeekOffset(
+    allItems.flatMap((s) => (s.todayDoneAt ? [{ date: s.todayDoneAt, value: s }] : [])),
+    nav.today,
   );
 
-  const countByOffset = useMemo(() => {
-    const rec: Record<number, number> = {};
-    byOffset.forEach((v, k) => (rec[k] = v.length));
-    return rec;
-  }, [byOffset]);
+  const countByOffset: Record<number, number> = {};
+  byOffset.forEach((v, k) => (countByOffset[k] = v.length));
 
   const weekItems = byOffset.get(nav.offset) ?? [];
 
   // 루틴 완료 occurrence — 레이더는 카드 + 루틴을 함께 활동 분포로 집계
   const tracking = useRoutineTracking(nav.today, WEEKS_WINDOW * 7);
-  const routineByOffset = useMemo(
-    () => bucketRoutineDoneByOffset(tracking.data ?? [], nav.today),
-    [tracking.data, nav.today],
-  );
-  const radarWeekItems = useMemo(
-    () => [...weekItems, ...(routineByOffset.get(nav.offset) ?? [])],
-    [weekItems, routineByOffset, nav.offset],
-  );
-  const radarTrailingWeeks = useMemo(
-    () =>
-      [nav.offset - 1, nav.offset - 2, nav.offset - 3, nav.offset - 4].map((o) => [
-        ...(byOffset.get(o) ?? []),
-        ...(routineByOffset.get(o) ?? []),
-      ]),
-    [byOffset, routineByOffset, nav.offset],
+  const routineByOffset = bucketRoutineDoneByOffset(tracking.data ?? [], nav.today);
+  const radarWeekItems = [...weekItems, ...(routineByOffset.get(nav.offset) ?? [])];
+  const radarTrailingWeeks = [nav.offset - 1, nav.offset - 2, nav.offset - 3, nav.offset - 4].map(
+    (o) => [...(byOffset.get(o) ?? []), ...(routineByOffset.get(o) ?? [])],
   );
 
   // 키보드 ←/→ (입력 포커스 시 무시)

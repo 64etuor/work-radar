@@ -2,7 +2,7 @@
 // INVARIANT #1: 뉴스는 표시 전용 — 토글/필터/옵션이 결정 레일 어떤 데이터도 안 건드림.
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { NewsCategory, NewsOptions, NewsSourceMeta, SortMode } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -40,15 +40,12 @@ export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void
   const { pushError } = useToastStore();
   const [collapsed, setCollapsed] = useState<Set<NewsCategory>>(new Set());
 
-  const grouped = useMemo(() => {
-    const out: Record<NewsCategory, NewsSourceMeta[]> = {
-      koreanTech: [],
-      englishTech: [],
-      aiResearch: [],
-    };
-    (sources.data ?? []).forEach((s) => out[s.category].push(s));
-    return out;
-  }, [sources.data]);
+  const grouped: Record<NewsCategory, NewsSourceMeta[]> = {
+    koreanTech: [],
+    englishTech: [],
+    aiResearch: [],
+  };
+  (sources.data ?? []).forEach((s) => grouped[s.category].push(s));
 
   const toggleCollapsed = (c: NewsCategory) => {
     setCollapsed((prev) => {

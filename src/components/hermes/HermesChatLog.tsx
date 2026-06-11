@@ -145,12 +145,14 @@ export function HermesChatLog({ messages, onRespond }: Props) {
   // 초기값 = "지금 비었는지". 메시지가 이미 있는 채로 mount(세션 복원/전환)되면 false라
   // 거짓 exit 트리거를 막는다. (버그: 복원 세션에서 빈 워드마크가 떠 내용이 안 나옴 —
   // 초기값 true + StrictMode 이중 effect로 exiting 이 true에 고착됐다.)
-  const prevEmpty = useRef(messages.length === 0);
-  useEffect(() => {
-    const isEmpty = messages.length === 0;
-    if (prevEmpty.current && !isEmpty) setExiting(true);
-    prevEmpty.current = isEmpty;
-  }, [messages.length]);
+  // 전환 감지는 render 중 prev-compare(공식 "storing information from previous renders"
+  // 패턴) — effect 내 동기 setState는 React Compiler 최적화를 깬다.
+  const isEmpty = messages.length === 0;
+  const [prevEmpty, setPrevEmpty] = useState(isEmpty);
+  if (isEmpty !== prevEmpty) {
+    setPrevEmpty(isEmpty);
+    if (!isEmpty) setExiting(true);
+  }
   // exit 펄스아웃 타이머는 exiting 에만 의존 — 그 사이 메시지 길이가 바뀌어도(스트리밍 중
   // assistant 버블 추가 등) messages.length effect의 cleanup이 타이머를 지워 exiting 이
   // 영구히 true로 고착되는 일을 막는다.

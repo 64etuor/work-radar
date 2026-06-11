@@ -1,6 +1,6 @@
 import "./CaptureBoard.css";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Kind, PromotionTarget } from "@/bindings";
 import { BoardOverlays } from "@/components/board/BoardOverlays";
@@ -126,14 +126,11 @@ export function CaptureBoard() {
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
-  const signals = useMemo(() => signalsQ.data ?? [], [signalsQ.data]);
+  const signals = signalsQ.data ?? [];
   const [captureOrder, setCaptureOrder] = useState<ReadonlyMap<string, number>>(() => new Map());
-  const boardSignals = useMemo(
-    () => sortSignalsForBoard(signals, captureOrder),
-    [signals, captureOrder],
-  );
-  const todayItems = useMemo(() => todayQ.data ?? [], [todayQ.data]);
-  const routines = useMemo(() => routinesQ.data ?? [], [routinesQ.data]);
+  const boardSignals = sortSignalsForBoard(signals, captureOrder);
+  const todayItems = todayQ.data ?? [];
+  const routines = routinesQ.data ?? [];
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   usePendingSignalFocus(setSelectedId);
@@ -145,7 +142,8 @@ export function CaptureBoard() {
   const captureInputRef = useRef<HTMLInputElement>(null);
 
   const { expectPopRef, knownIdsRef, poppedIds } = useSignalPop(signals);
-  const urgencyAppliedRef = useRef<Set<string>>(new Set());
+  const urgencyAppliedRef = useRef<Set<string>>(null);
+  if (urgencyAppliedRef.current === null) urgencyAppliedRef.current = new Set();
 
   // 새 신호는 kind에 맞는 프로젝트로 태깅(있으면). 없으면 NULL → 나중에 reconcile.
   const projects = projectsQ.data ?? [];
@@ -169,6 +167,8 @@ export function CaptureBoard() {
     );
   };
 
+  // 둘 다 키다운 effect deps로 쓰여 referential identity가 필요 — 컴파일러가 메모이즈하지만
+  // 정적 분석기(no-effect-with-fresh-deps)와 bailout 시 안전을 위해 명시 유지.
   const handleClassify = useCallback(
     (id: string, zone: ZoneKey) => {
       classifySignal.mutate({ id, quadrant: zoneToQuadrant(zone) });
@@ -526,8 +526,8 @@ export function CaptureBoard() {
     );
     for (const s of unclassified) {
       const key = `${s.id}::${eventsSig}`;
-      if (urgencyAppliedRef.current.has(key)) continue;
-      urgencyAppliedRef.current.add(key);
+      if (urgencyAppliedRef.current!.has(key)) continue;
+      urgencyAppliedRef.current!.add(key);
       // keywords는 현재 보조 키워드 모델이 없어 빈 배열(제목 매칭만). 실패는 조용히 무시(표시 힌트).
       applyUrgency.mutate({ signalId: s.id, keywords: [], events });
     }

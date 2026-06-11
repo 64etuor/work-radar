@@ -81,6 +81,8 @@ export default function App() {
   const viewSnapshotIdRef = useRef(0);
   const transitionRunningRef = useRef(false);
   const transitionTimerRef = useRef<number | null>(null);
+  // effect deps(키다운 버스 재구독)로 쓰여 referential identity가 필요 — 컴파일러가 메모이즈하지만
+  // 정적 분석기(no-effect-with-fresh-deps)와 bailout 시 안전을 위해 명시 유지.
   const navigateView = useCallback(
     (target: View, motion: ViewMotion | "neutral" = "neutral") => {
       const currentView = useUIStore.getState().view;
@@ -134,28 +136,25 @@ export default function App() {
 
   // 단축키/knob 공용 액션 실행 단일 chokepoint(ADR-0011). AppAction은 타입드라 무효 View
   // 캐스팅 경로가 없다 — resolveCombo/actionForKeymapKey가 등록 액션만 생산.
-  const dispatchAction = useCallback(
-    (action: AppAction) => {
-      switch (action.kind) {
-        case "toggle-calendar":
-          setCalendarOpen(!calendarOpen);
-          break;
-        case "toggle-inbox":
-          setInboxOpen(!inboxOpen);
-          break;
-        case "navigate":
-          navigateView(action.view, "neutral");
-          break;
-        case "adjacent":
-          navigateView(
-            adjacentView(useUIStore.getState().view, action.dir),
-            action.dir > 0 ? "forward" : "back",
-          );
-          break;
-      }
-    },
-    [calendarOpen, inboxOpen, setCalendarOpen, setInboxOpen, navigateView],
-  );
+  const dispatchAction = (action: AppAction) => {
+    switch (action.kind) {
+      case "toggle-calendar":
+        setCalendarOpen(!calendarOpen);
+        break;
+      case "toggle-inbox":
+        setInboxOpen(!inboxOpen);
+        break;
+      case "navigate":
+        navigateView(action.view, "neutral");
+        break;
+      case "adjacent":
+        navigateView(
+          adjacentView(useUIStore.getState().view, action.dir),
+          action.dir > 0 ? "forward" : "back",
+        );
+        break;
+    }
+  };
 
   // per-view 단축키 (Phase 18 #7) — 입력 비포커스 + 팔레트 닫힘일 때만 활성.
   // Cmd+←/→ → NAV_ITEMS 순서 기준 인접 뷰 전환(P3).

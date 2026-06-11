@@ -1,7 +1,7 @@
 import "./ControlRoomView.css";
 
 import { Gauge, RefreshCw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { pickActiveProjectId, relativeAgo } from "../../lib/controlRoom";
 import { computeVitals, type VitalKey } from "../../lib/controlRoomGraph";
@@ -23,7 +23,7 @@ export default function ControlRoomView() {
   // Which project's governance state to show. The snapshot is per-project (folded LIVE from
   // that repo's .boule/workspace), so the user picks one; default = first available project.
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const rows = useMemo(() => ticker.data ?? [], [ticker.data]);
+  const rows = ticker.data ?? [];
   const activeProjectId = pickActiveProjectId(
     rows.map((r) => r.projectId),
     selectedProject,
@@ -35,8 +35,8 @@ export default function ControlRoomView() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [filter, setFilter] = useState<VitalKey | null>(null);
 
-  const stamp = useMemo(() => (data ? relativeAgo(data.generatedAt, nowMs) : ""), [data, nowMs]);
-  const vitals = useMemo(() => (data ? computeVitals(data) : null), [data]);
+  const stamp = data ? relativeAgo(data.generatedAt, nowMs) : "";
+  const vitals = data ? computeVitals(data) : null;
   const total = data
     ? data.tasks.length +
       data.plans.length +

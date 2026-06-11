@@ -1,6 +1,6 @@
 import { useDroppable } from "@dnd-kit/core";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { TimelineBlock } from "@/components/today/TimelineBlock";
 import {
@@ -72,24 +72,14 @@ export function TimelineCanvas({
   }, [date, today]);
 
   const showNow = date === today;
-  const previewBoxes = useMemo(
-    () => previewTimelineBoxes({ boxes, activeDrag, delta: activeDelta, date }),
-    [boxes, activeDrag, activeDelta, date],
-  );
-  const renderBoxes = useMemo(
-    () => renderTimelineBoxesForDrag({ boxes, previewBoxes, activeDrag }),
-    [boxes, previewBoxes, activeDrag],
-  );
-  const activeGuide = useMemo(
-    () =>
-      dragGuideFromLayout({
-        boxes,
-        activeDrag,
-        delta: activeDelta,
-        gridWidth,
-      }),
-    [boxes, activeDrag, activeDelta, gridWidth],
-  );
+  const previewBoxes = previewTimelineBoxes({ boxes, activeDrag, delta: activeDelta, date });
+  const renderBoxes = renderTimelineBoxesForDrag({ boxes, previewBoxes, activeDrag });
+  const activeGuide = dragGuideFromLayout({
+    boxes,
+    activeDrag,
+    delta: activeDelta,
+    gridWidth,
+  });
   const suppressBlockTransform = activeDrag?.from === "canvas-resize";
 
   // dropData는 상수 — gridY는 dropData에 박지 않는다(@dnd-kit가 register 시점 스냅샷할
@@ -97,16 +87,13 @@ export function TimelineCanvas({
   // useTimelineDnd가 onDragEnd에서 읽는다.
   const dropData: DropData = { to: "canvas", gridY: 0 };
   const { setNodeRef, isOver } = useDroppable({ id: "today-canvas", data: dropData });
-  const bindGridRef = useCallback(
-    (el: HTMLDivElement | null) => {
-      gridRef.current = el;
-      if (gridElRef) gridElRef.current = el;
-      setNodeRef(el);
-      if (!el) return;
-      setGridWidth((prev) => (prev === el.clientWidth ? prev : el.clientWidth));
-    },
-    [setNodeRef, gridElRef],
-  );
+  const bindGridRef = (el: HTMLDivElement | null) => {
+    gridRef.current = el;
+    if (gridElRef) gridElRef.current = el;
+    setNodeRef(el);
+    if (!el) return;
+    setGridWidth((prev) => (prev === el.clientWidth ? prev : el.clientWidth));
+  };
 
   // pointer-tracking: 캔버스 위 pointer Y를 그리드 로컬 좌표로 환산.
   // - 부모 pointerYRef(ref-only)는 매 move마다 갱신 — onDragEnd에서 읽힘.

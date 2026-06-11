@@ -1,5 +1,5 @@
 import { Download } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { SkillProvider } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -38,10 +38,7 @@ export function InstallPanel({ onDone }: { onDone: (id: string | null) => void }
   const [projectId, setProjectId] = useState<string>(PROJECT_NONE);
   const [note, setNote] = useState<string | null>(null);
 
-  const providerOptions = useMemo(
-    () => buildInstallProviderOptions(environments.data),
-    [environments.data],
-  );
+  const providerOptions = buildInstallProviderOptions(environments.data);
   // 선택된 provider가 더 이상 옵션에 없으면(감지 변동) 첫 옵션으로 보정.
   if (providerOptions.length > 0 && !providerOptions.some((o) => o.provider === provider)) {
     setProvider(providerOptions[0].provider);

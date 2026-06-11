@@ -20,6 +20,8 @@ import {
 } from "@/components/board/matrixGeometry";
 import { InboxColumn } from "@/components/inbox/InboxColumn";
 
+const zoneOf = (s: WorkSignal): ZoneKey => quadrantToZone(s.quadrant);
+
 type DropTarget = ZoneKey | "today";
 
 type Props = {
@@ -115,8 +117,6 @@ export function MatrixCanvas({
     cbRef.current = { onClassify, onPromoteToday, onSelect };
     signalsRef.current = signals;
   });
-
-  const zoneOf = (s: WorkSignal): ZoneKey => quadrantToZone(s.quadrant);
 
   const rectIn = (el: HTMLElement) => {
     const o = canvasRef.current!.getBoundingClientRect();

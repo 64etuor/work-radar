@@ -3,7 +3,7 @@ import { type StatusTone, statusTone } from "./controlRoom";
 
 /** Horizontal strata of the work pipeline, left → right. */
 export type LaneKind = "spec" | "plan" | "task" | "session" | "handoff";
-export const LANES: LaneKind[] = ["spec", "plan", "task", "session", "handoff"];
+const LANES: LaneKind[] = ["spec", "plan", "task", "session", "handoff"];
 
 export interface GraphNode {
   id: string; // `${lane}:${rawId}` — globally unique
@@ -46,7 +46,7 @@ export const PAD_X = 24;
 export const PAD_Y = 16;
 export const LANE_W = 200;
 export const LANE_HEADER_H = 36;
-export const ROW_H = 64;
+const ROW_H = 64;
 export const NODE_W = 152;
 export const NODE_H = 46;
 

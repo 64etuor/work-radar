@@ -19,7 +19,7 @@ import {
   Unlink,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { SkillsHelpDialog } from "@/components/SkillsHelpDialog";
 import { Button } from "@/components/ui/button";
@@ -124,53 +124,38 @@ export function SkillsView() {
     setAdding(false);
   });
 
-  const list = useMemo(() => skills.data ?? [], [skills.data]);
-  const filtered = useMemo(() => {
+  const list = skills.data ?? [];
+  const filtered = (() => {
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((s) =>
       [s.name, s.binding, s.sourcePath, s.kind].filter(Boolean).join(" ").toLowerCase().includes(q),
     );
-  }, [list, search]);
+  })();
 
   // 사이드바 항목은 전체 목록(검색 무관)에서 빌드해 검색 중에도 환경이 사라지지 않게 한다.
   // 카운트/본문은 검색 적용된 filtered를 쓴다.
-  const envNav = useMemo(
-    () => applyEnvOrder(buildSkillEnvNav(list, environments.data), envOrder),
-    [list, environments.data, envOrder],
-  );
-  const workspaceNav = useMemo(() => buildSkillWorkspaceNav(workspaces.data), [workspaces.data]);
-  const divergedPaths = useMemo(() => buildDivergedPathSet(divergences.data), [divergences.data]);
+  const envNav = applyEnvOrder(buildSkillEnvNav(list, environments.data), envOrder);
+  const workspaceNav = buildSkillWorkspaceNav(workspaces.data);
+  const divergedPaths = buildDivergedPathSet(divergences.data);
   // per-location 귀속(#6 ff): diverged memberPath → 프로젝트 라벨. 카드 마커가 "어느 프로젝트가 다른지" 표기.
-  const locationLabels = useMemo(
-    () => buildDivergedLocationLabels(divergences.data, workspaces.data),
-    [divergences.data, workspaces.data],
-  );
+  const locationLabels = buildDivergedLocationLabels(divergences.data, workspaces.data);
   // 사이드바 sync 헬스(#17): 워크스페이스별 diverged 멤버 수(repoId 키). divergences가 단일 출처(C6).
-  const workspaceHealth = useMemo(() => buildWorkspaceHealth(divergences.data), [divergences.data]);
-  const totalDiverged = useMemo(
-    () => [...workspaceHealth.values()].reduce((a, b) => a + b, 0),
-    [workspaceHealth],
-  );
+  const workspaceHealth = buildWorkspaceHealth(divergences.data);
+  const totalDiverged = [...workspaceHealth.values()].reduce((a, b) => a + b, 0);
   const activeEnv = [...envNav, ...workspaceNav].find((i) => i.id === activeEnvId) ?? envNav[0];
-  const envFiltered = useMemo(
-    () => (activeEnv ? filtered.filter(activeEnv.match) : filtered),
-    [filtered, activeEnv],
-  );
+  const envFiltered = activeEnv ? filtered.filter(activeEnv.match) : filtered;
   // 태그 필터(#12): pill 소스는 전체 목록(검색/환경 무관)에서 모아 안정적으로 유지하고, 본문은
   // 환경+태그를 모두 적용한 결과를 쓴다. 활성 태그가 더 이상 존재하지 않으면 자동으로 전체로 복귀.
-  const allTags = useMemo(() => collectTags(list), [list]);
+  const allTags = collectTags(list);
   if (activeTag !== null && activeTag !== UNTAGGED && !allTags.includes(activeTag)) {
     setActiveTag(null);
   }
-  const tagFiltered = useMemo(
-    () => envFiltered.filter((s) => matchesTag(s, activeTag)),
-    [envFiltered, activeTag],
-  );
+  const tagFiltered = envFiltered.filter((s) => matchesTag(s, activeTag));
   // 도구 간 동일 스킬 그룹화(#4): 외부 스킬을 이름으로 묶어 한 카드로 표시한다(해싱/IO 없음 — 스캔
   // latency 무영향). segmentSkills는 그룹 단위로 섹션을 나눈다.
-  const grouped = useMemo(() => groupCrossToolSkills(tagFiltered), [tagFiltered]);
-  const segments = useMemo(() => segmentSkills(grouped), [grouped]);
+  const grouped = groupCrossToolSkills(tagFiltered);
+  const segments = segmentSkills(grouped);
   const total = tagFiltered.length;
 
   const onEnvDrop = (targetId: string) => {
@@ -184,11 +169,11 @@ export function SkillsView() {
   // 열린 외부 스킬이 도구 간 그룹의 일원이면 그 그룹의 위치들을 모아 Sheet 상단 전환 칩을 만든다.
   // 카드와 같은 `grouped`(필터 적용본)에서 찾으므로 카드 "N곳" 배지와 전환 칩 개수가 항상 일치한다.
   // 위치 선택 = selectedId 교체(기존 보기/편집 흐름 재사용 — 자동 실행 없음).
-  const selectedGroup = useMemo<SkillLocation[]>(() => {
+  const selectedGroup: SkillLocation[] = (() => {
     if (!selected || selected.kind !== "external") return [];
     const g = grouped.find((grp) => grp.memberIds.includes(selected.id));
     return g && g.locations.length > 1 ? g.locations : [];
-  }, [grouped, selected]);
+  })();
   const sheetOpen = adding || installing || backupOpen || updateOpen || auditOpen || !!selected;
   const closeSheet = () => {
     setAdding(false);

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { commands, type HermesPanelState } from "@/bindings";
 import { unwrap } from "@/lib/query/client";
@@ -60,33 +60,27 @@ export function useHermesPanelState() {
 
   const state = data ?? DEFAULT_PANEL_STATE;
 
-  const setOpen = useCallback(
-    (open: boolean) => {
-      const next: HermesPanelState = { ...state, open };
-      // optimistic 업데이트
-      qc.setQueryData<HermesPanelState>(QUERY_KEY, next);
-      // 즉시 backend write (fire-and-forget; 에러는 전역 IpcError 핸들러로)
-      void unwrap(commands.hermesPanelStateSet(next));
-    },
-    [qc, state],
-  );
+  const setOpen = (open: boolean) => {
+    const next: HermesPanelState = { ...state, open };
+    // optimistic 업데이트
+    qc.setQueryData<HermesPanelState>(QUERY_KEY, next);
+    // 즉시 backend write (fire-and-forget; 에러는 전역 IpcError 핸들러로)
+    void unwrap(commands.hermesPanelStateSet(next));
+  };
 
-  const setBounds = useCallback(
-    (b: Partial<Pick<HermesPanelState, "x" | "y" | "w" | "h">>) => {
-      const next = mergeBounds(state, b);
-      // 즉시 optimistic 업데이트 (매 호출마다)
-      qc.setQueryData<HermesPanelState>(QUERY_KEY, next);
-      // debounce 후 backend write
-      if (debounceRef.current !== null) {
-        clearTimeout(debounceRef.current);
-      }
-      debounceRef.current = setTimeout(() => {
-        debounceRef.current = null;
-        void unwrap(commands.hermesPanelStateSet(next));
-      }, DEBOUNCE_MS);
-    },
-    [qc, state],
-  );
+  const setBounds = (b: Partial<Pick<HermesPanelState, "x" | "y" | "w" | "h">>) => {
+    const next = mergeBounds(state, b);
+    // 즉시 optimistic 업데이트 (매 호출마다)
+    qc.setQueryData<HermesPanelState>(QUERY_KEY, next);
+    // debounce 후 backend write
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      void unwrap(commands.hermesPanelStateSet(next));
+    }, DEBOUNCE_MS);
+  };
 
   return { state, setOpen, setBounds, isLoading };
 }

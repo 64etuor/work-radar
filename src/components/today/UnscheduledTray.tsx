@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Calendar, CheckCircle2, ChevronDown, ChevronRight, Circle, Repeat } from "lucide-react";
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, useState } from "react";
 
 import type { CalendarEvent, Kind, Quadrant, RoutineToday, WorkSignal } from "@/bindings";
 import { areaLabel, shortDate } from "@/components/board/boardUtils";
@@ -209,16 +209,12 @@ export function UnscheduledTray({
 
   // 1-col deck 좌표 — 캡쳐보드와 동일 함수, footerHeight=0 (트레이엔 enrich 버튼 없음).
   const deckHeight = computeDeckHeight(cardCount);
-  const positions = useMemo(
-    () =>
-      computeZonePositions({
-        count: cardCount,
-        zone: "unclassified",
-        rect: { x: 0, y: 0, w: INBOX_WIDTH, h: deckHeight },
-        footerHeight: 0,
-      }),
-    [cardCount, deckHeight],
-  );
+  const positions = computeZonePositions({
+    count: cardCount,
+    zone: "unclassified",
+    rect: { x: 0, y: 0, w: INBOX_WIDTH, h: deckHeight },
+    footerHeight: 0,
+  });
 
   return (
     <aside

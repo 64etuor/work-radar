@@ -17,6 +17,14 @@ import {
   summarizeBatch,
 } from "@/lib/skillBatch";
 
+/** batchApplyTargets를 SkillRef 배열로 변환(provider는 항상 존재 — batchApplyTargets 필터 보장). */
+function toRefs(skills: Skill[]): SkillRef[] {
+  return skills.map((s) => ({
+    provider: s.provider as import("@/bindings").SkillProvider,
+    name: s.name,
+  }));
+}
+
 export interface SkillBatchSelectionResult {
   // state
   selectedIds: ReadonlySet<string>;
@@ -133,13 +141,6 @@ export function useSkillBatchSelection(list: Skill[]): SkillBatchSelectionResult
       finishBatch(targets, results),
     );
   };
-
-  // batchApplyTargets가 provider != null만 통과시키므로 여기서 provider는 항상 존재한다.
-  const toRefs = (skills: typeof applyTargets): SkillRef[] =>
-    skills.map((s) => ({
-      provider: s.provider as import("@/bindings").SkillProvider,
-      name: s.name,
-    }));
 
   const runBatchApply = (remove: boolean) => {
     if (batchApplyBusy || applyTargets.length === 0) return;

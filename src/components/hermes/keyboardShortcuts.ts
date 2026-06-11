@@ -14,7 +14,7 @@ type HermesShortcutEvent = {
   target: EventTarget | null;
 };
 
-export function isEditableShortcutTarget(t: EventTarget | null): boolean {
+function isEditableShortcutTarget(t: EventTarget | null): boolean {
   if (typeof HTMLElement === "undefined") return false;
   if (!(t instanceof HTMLElement)) return false;
   const tag = t.tagName;

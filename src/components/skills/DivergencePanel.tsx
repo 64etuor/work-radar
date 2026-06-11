@@ -10,7 +10,7 @@ import { SkillPromptDiff } from "./SkillPromptDiff";
 
 /** diverged 프로젝트 카피 ↔ 중앙 트리 차이 본문(G3-PR2c — 표시 전용). added/removed는 파일명, changed는
  *  파일별 lineDiff(중앙=base, 프로젝트=current). 인라인 렌더(중첩 overlay 없음 — Esc 계약 보존). */
-export function DivergenceDiffBody({ diff }: { diff: SkillDiff }) {
+function DivergenceDiffBody({ diff }: { diff: SkillDiff }) {
   if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
     return <div className="skl-note">차이 없음 (이미 동기화됨)</div>;
   }

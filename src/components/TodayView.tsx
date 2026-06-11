@@ -6,9 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -77,142 +75,129 @@ export function TodayView() {
   const toggleDone = useToggleTodayDone();
   const toggleRoutine = useToggleRoutineCheck();
 
-  const noCalendarsConfigured = useMemo(() => {
-    const projects = projectsQ.data ?? [];
-    if (projectsQ.isLoading || projects.length === 0) return false;
-    return projects.every((p) => {
+  const projects = projectsQ.data ?? [];
+  const noCalendarsConfigured =
+    !projectsQ.isLoading &&
+    projects.length > 0 &&
+    projects.every((p) => {
       const ids = p.googleCalendarIds?.trim();
       return !ids || ids === "[]";
     });
-  }, [projectsQ.data, projectsQ.isLoading]);
 
-  const allEvents = useMemo(() => events.data ?? [], [events.data]);
+  const allEvents = events.data ?? [];
   const allDay = allEvents.filter((e) => e.allDay);
-  const rail = useMemo(() => todayRail.data ?? [], [todayRail.data]);
+  const rail = todayRail.data ?? [];
   const unscheduledTodays = rail.filter((s) => !s.scheduledAt);
-  const routineList = useMemo(() => routines.data ?? [], [routines.data]);
+  const routineList = routines.data ?? [];
   const unscheduledRoutines = routineList.filter((r) => !r.timeOverride && !r.timeOfDay);
 
-  const blocks = useMemo(
-    () => buildTodayBlocks({ signals: rail, events: allEvents, routines: routineList, date }),
-    [rail, allEvents, routineList, date],
-  );
-  const boxes = useMemo(() => computeLayout(blocks), [blocks]);
+  const blocks = buildTodayBlocks({
+    signals: rail,
+    events: allEvents,
+    routines: routineList,
+    date,
+  });
+  const boxes = computeLayout(blocks);
 
   // 블록 위 메모 표시 — 날짜별 메모 1회 조회(N+1 회피) 후 blockId → body 맵으로 환원.
   // EventPopover와 동일한 blockNoteTarget 키를 써서 표시/편집이 항상 같은 메모를 가리킨다.
   const notesQ = useTimelineNotesForDate(date);
-  const memoByBlockId = useMemo(() => {
-    const byTarget = new Map<string, string>();
-    for (const n of notesQ.data ?? []) {
-      if (n.body.trim()) byTarget.set(noteTargetMapKey(n.targetKind, n.targetId), n.body);
-    }
-    const m = new Map<string, string>();
-    for (const box of boxes) {
-      const t = blockNoteTarget(box.block);
-      if (!t) continue;
-      const body = byTarget.get(noteTargetMapKey(t.targetKind, t.targetId));
-      if (body) m.set(box.block.id, body);
-    }
-    return m;
-  }, [boxes, notesQ.data]);
+  const byTarget = new Map<string, string>();
+  for (const n of notesQ.data ?? []) {
+    if (n.body.trim()) byTarget.set(noteTargetMapKey(n.targetKind, n.targetId), n.body);
+  }
+  const memoByBlockId = new Map<string, string>();
+  for (const box of boxes) {
+    const t = blockNoteTarget(box.block);
+    if (!t) continue;
+    const body = byTarget.get(noteTargetMapKey(t.targetKind, t.targetId));
+    if (body) memoByBlockId.set(box.block.id, body);
+  }
 
   const [popover, setPopover] = useState<{
     box: LayoutBox;
     anchor: { x: number; y: number };
   } | null>(null);
 
-  const handleBlockClick = useCallback((box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => {
+  const handleBlockClick = (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     // 블록 상단 중앙을 anchor로 → popover는 side="top" align="center"로 블록 위에 띄움.
     setPopover({ box, anchor: { x: rect.left + rect.width / 2, y: rect.top } });
-  }, []);
+  };
   /** 타임라인 ✓ 토글 — signal 또는 routine-linked calendar event는 로컬 DB 완료 상태만 바꾼다. */
-  const handleBlockToggleDone = useCallback(
-    (box: LayoutBox, done: boolean) => {
-      const { block } = box;
-      // 보고 있는 날짜(date) 기준으로 완료 기록 — 날짜 네비게이션 중에도 표시된 블록과 일관.
+  const handleBlockToggleDone = (box: LayoutBox, done: boolean) => {
+    const { block } = box;
+    // 보고 있는 날짜(date) 기준으로 완료 기록 — 날짜 네비게이션 중에도 표시된 블록과 일관.
+    if (block.kind === "signal") {
+      const id = block.id.replace(/^signal:/, "");
+      toggleDone.mutate({ id, date, done });
+    } else if (block.routineId) {
+      toggleRoutine.mutate({ routineId: block.routineId, date, done });
+    }
+  };
+  const handlePopoverClose = () => setPopover(null);
+  const removeEventFromCache = (calendarId: string, eventId: string) => {
+    qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) =>
+      old?.filter((event) => !(event.calendarId === calendarId && event.id === eventId)),
+    );
+  };
+  const handleDeleteSchedule = (box: LayoutBox) => {
+    const { block } = box;
+    const title = block.title;
+    const linkedEventId = block.linkedEventId;
+    const calendarId = block.calendarId;
+    const run = async () => {
+      // 모든 kind에서 unschedule 가능 — signal/routine은 linkedEventId 없어도 stage(unschedule)
+      // 자체는 동작(타임라인에서만 빼고 카드는 Today 잔류). Google 캐시 제거는 linkedEventId 있을 때만.
       if (block.kind === "signal") {
-        const id = block.id.replace(/^signal:/, "");
-        toggleDone.mutate({ id, date, done });
-      } else if (block.routineId) {
-        toggleRoutine.mutate({ routineId: block.routineId, date, done });
-      }
-    },
-    [date, toggleDone, toggleRoutine],
-  );
-  const handlePopoverClose = useCallback(() => setPopover(null), []);
-  const removeEventFromCache = useCallback(
-    (calendarId: string, eventId: string) => {
-      qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) =>
-        old?.filter((event) => !(event.calendarId === calendarId && event.id === eventId)),
-      );
-    },
-    [date, qc],
-  );
-  const handleDeleteSchedule = useCallback(
-    (box: LayoutBox) => {
-      const { block } = box;
-      const title = block.title;
-      const linkedEventId = block.linkedEventId;
-      const calendarId = block.calendarId;
-      const run = async () => {
-        // 모든 kind에서 unschedule 가능 — signal/routine은 linkedEventId 없어도 stage(unschedule)
-        // 자체는 동작(타임라인에서만 빼고 카드는 Today 잔류). Google 캐시 제거는 linkedEventId 있을 때만.
-        if (block.kind === "signal") {
-          const signalId = block.id.replace(/^signal:/, "");
-          await stage({ kind: "unschedule", targetSignalId: signalId });
-          if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
-          void qc.invalidateQueries({ queryKey: ["signals"] });
-          void qc.invalidateQueries({ queryKey: ["today"] });
-        } else if (block.kind === "event") {
-          const eventId = block.linkedEventId ?? block.id.replace(/^event:/, "");
-          await stage({ kind: "eventUnschedule", eventId, calendarId });
-          removeEventFromCache(calendarId, eventId);
-        } else if (block.kind === "routine" && block.routineId) {
-          const routineId = block.routineId;
-          // 루틴 목록/블록이 선택 날짜(useTodayRoutines(date, …))로 조회되므로, "빼기"는 보고 있는
-          // 날짜(date)의 occurrence를 대상으로 EXDATE 한다 — 표시된 인스턴스와 일치(today 고정 시
-          // 다른 날짜를 보는 중에 엉뚱하게 오늘 occurrence가 지워진다).
-          // 빼기 = EXDATE: 로컬 skip 행 + 동기화 ON이면 master event EXDATE PATCH.
-          await unwrap(commands.unscheduleRoutineToday(routineId, date));
-          // per-instance Google 이벤트가 있으면(드물게 드래그로 배치됐던 경우) 함께 정리.
-          if (linkedEventId && calendarId) {
-            await stage({ kind: "routineUnschedule", routineId, date });
-            removeEventFromCache(calendarId, linkedEventId);
-            void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
-          }
-          void qc.invalidateQueries({ queryKey: ["routines"] });
-          // 되돌리기 토스트(useTimelineDnd 언스케줄 패턴과 동일 — 자동 dismiss 안에 누르면 복구).
-          useToastStore.getState().pushInfo(`타임라인에서 뺐어요: ${title}`, {
-            undoLabel: "되돌리기",
-            onUndo: () => {
-              void unwrap(commands.restoreRoutineToday(routineId, date))
-                .then(() => qc.invalidateQueries({ queryKey: ["routines"] }))
-                .catch((err) => useToastStore.getState().pushError("routine.restore", err));
-            },
-          });
-          return;
-        }
-        void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
-        useToastStore.getState().pushSuccess(`일정 삭제됨: ${title}`);
-      };
-      void run().catch((err) => {
+        const signalId = block.id.replace(/^signal:/, "");
+        await stage({ kind: "unschedule", targetSignalId: signalId });
+        if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
         void qc.invalidateQueries({ queryKey: ["signals"] });
         void qc.invalidateQueries({ queryKey: ["today"] });
+      } else if (block.kind === "event") {
+        const eventId = block.linkedEventId ?? block.id.replace(/^event:/, "");
+        await stage({ kind: "eventUnschedule", eventId, calendarId });
+        removeEventFromCache(calendarId, eventId);
+      } else if (block.kind === "routine" && block.routineId) {
+        const routineId = block.routineId;
+        // 루틴 목록/블록이 선택 날짜(useTodayRoutines(date, …))로 조회되므로, "빼기"는 보고 있는
+        // 날짜(date)의 occurrence를 대상으로 EXDATE 한다 — 표시된 인스턴스와 일치(today 고정 시
+        // 다른 날짜를 보는 중에 엉뚱하게 오늘 occurrence가 지워진다).
+        // 빼기 = EXDATE: 로컬 skip 행 + 동기화 ON이면 master event EXDATE PATCH.
+        await unwrap(commands.unscheduleRoutineToday(routineId, date));
+        // per-instance Google 이벤트가 있으면(드물게 드래그로 배치됐던 경우) 함께 정리.
+        if (linkedEventId && calendarId) {
+          await stage({ kind: "routineUnschedule", routineId, date });
+          removeEventFromCache(calendarId, linkedEventId);
+          void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+        }
         void qc.invalidateQueries({ queryKey: ["routines"] });
-        void qc.invalidateQueries({ queryKey: ["calendarEvents", date] });
-        useToastStore.getState().pushError("calendar.delete", err);
-      });
-    },
-    [date, qc, removeEventFromCache],
-  );
+        // 되돌리기 토스트(useTimelineDnd 언스케줄 패턴과 동일 — 자동 dismiss 안에 누르면 복구).
+        useToastStore.getState().pushInfo(`타임라인에서 뺐어요: ${title}`, {
+          undoLabel: "되돌리기",
+          onUndo: () => {
+            void unwrap(commands.restoreRoutineToday(routineId, date))
+              .then(() => qc.invalidateQueries({ queryKey: ["routines"] }))
+              .catch((err) => useToastStore.getState().pushError("routine.restore", err));
+          },
+        });
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+      useToastStore.getState().pushSuccess(`일정 삭제됨: ${title}`);
+    };
+    void run().catch((err) => {
+      void qc.invalidateQueries({ queryKey: ["signals"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+      void qc.invalidateQueries({ queryKey: ["routines"] });
+      void qc.invalidateQueries({ queryKey: ["calendarEvents", date] });
+      useToastStore.getState().pushError("calendar.delete", err);
+    });
+  };
 
   // ── DnD wiring ──────────────────────────────────────────────────────
-  const defaultCalendarFor = useMemo(
-    () => buildDefaultCalendarFor(rail, projectsQ.data ?? []),
-    [rail, projectsQ.data],
-  );
+  const defaultCalendarFor = buildDefaultCalendarFor(rail, projectsQ.data ?? []);
 
   /**
    * Picker state — useTimelineDnd가 `promptCalendarPicker(signalId)`를 호출하면
@@ -234,14 +219,11 @@ export function TodayView() {
   // 캔버스 그리드 DOM — useTimelineDnd가 onDragEnd에서 fresh rect를 읽어 드롭 좌표를 환산한다.
   const gridElRef = useRef<HTMLDivElement | null>(null);
 
-  const promptCalendarPicker = useCallback(
-    (targetId: string, targetKind: "signal" | "routine" = "signal") =>
-      new Promise<string | null>((resolve) => {
-        pickerResolverRef.current = resolve;
-        setPicker({ targetId, targetKind, anchor: { ...lastPointerRef.current }, resolve });
-      }),
-    [],
-  );
+  const promptCalendarPicker = (targetId: string, targetKind: "signal" | "routine" = "signal") =>
+    new Promise<string | null>((resolve) => {
+      pickerResolverRef.current = resolve;
+      setPicker({ targetId, targetKind, anchor: { ...lastPointerRef.current }, resolve });
+    });
 
   // Unmount cleanup — 미해결 picker promise가 있으면 null로 resolve하고 ref 정리.
   useEffect(
@@ -253,9 +235,9 @@ export function TodayView() {
   );
 
   // 트레이/캔버스 어디서든 pointer move를 트래킹 → picker anchor에 재사용.
-  const trackPointer = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+  const trackPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
     lastPointerRef.current = { x: e.clientX, y: e.clientY };
-  }, []);
+  };
 
   const sensors = useTodayDndSensors();
   const { onDragEnd } = useTimelineDnd({
@@ -272,49 +254,44 @@ export function TodayView() {
   const [activeDelta, setActiveDelta] = useState<DragDelta | null>(null);
   const [isOverTray, setIsOverTray] = useState(false);
   const activeDragStartRef = useRef<DragData | null>(null);
-  const handleDragStart = useCallback(
-    (ev: { active: { id: string | number; data: { current?: unknown } } }) => {
-      const data = (ev.active.data.current as DragData | undefined) ?? null;
-      activeDragStartRef.current = data;
-      setActiveDrag(data);
-      setActiveDelta({ x: 0, y: 0 });
-      setIsOverTray(false);
-    },
-    [],
-  );
-  const handleDragMove = useCallback((ev: DragMoveEvent) => {
+  const handleDragStart = (ev: {
+    active: { id: string | number; data: { current?: unknown } };
+  }) => {
+    const data = (ev.active.data.current as DragData | undefined) ?? null;
+    activeDragStartRef.current = data;
+    setActiveDrag(data);
+    setActiveDelta({ x: 0, y: 0 });
+    setIsOverTray(false);
+  };
+  const handleDragMove = (ev: DragMoveEvent) => {
     setActiveDelta(ev.delta);
-  }, []);
-  const handleDragOver = useCallback((ev: DragOverEvent) => {
+  };
+  const handleDragOver = (ev: DragOverEvent) => {
     setIsOverTray(ev.over?.id === "today-tray");
-  }, []);
-  const handleDragEndWithReset = useCallback(
-    async (ev: Parameters<typeof onDragEnd>[0]) => {
-      const activeAtStart = activeDragStartRef.current;
-      setActiveDrag(null);
-      setActiveDelta(null);
-      setIsOverTray(false);
-      activeDragStartRef.current = null;
-      await onDragEnd(ev, activeAtStart);
-    },
-    [onDragEnd],
-  );
-  const handleDragCancel = useCallback(() => {
+  };
+  const handleDragEndWithReset = async (ev: Parameters<typeof onDragEnd>[0]) => {
+    const activeAtStart = activeDragStartRef.current;
+    setActiveDrag(null);
+    setActiveDelta(null);
+    setIsOverTray(false);
+    activeDragStartRef.current = null;
+    await onDragEnd(ev, activeAtStart);
+  };
+  const handleDragCancel = () => {
     activeDragStartRef.current = null;
     setActiveDrag(null);
     setActiveDelta(null);
     setIsOverTray(false);
-  }, []);
+  };
 
-  const pickerSignalProjectId = useMemo(() => {
-    if (!picker) return null;
-    if (picker.targetKind !== "signal") return null;
-    return rail.find((s) => s.id === picker.targetId)?.projectId ?? null;
-  }, [picker, rail]);
-  const pickerRoutineKind = useMemo(() => {
-    if (!picker || picker.targetKind !== "routine") return null;
-    return routineList.find((r) => r.id === picker.targetId)?.kind ?? null;
-  }, [picker, routineList]);
+  const pickerSignalProjectId =
+    picker && picker.targetKind === "signal"
+      ? (rail.find((s) => s.id === picker.targetId)?.projectId ?? null)
+      : null;
+  const pickerRoutineKind =
+    picker && picker.targetKind === "routine"
+      ? (routineList.find((r) => r.id === picker.targetId)?.kind ?? null)
+      : null;
 
   return (
     <DndContext

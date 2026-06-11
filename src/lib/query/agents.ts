@@ -18,36 +18,8 @@ import { unwrap } from "./client";
 /** Jobs 뷰 폴링 주기 — 실행 중 잡 상태 전이를 따라잡되 과한 부하 없이. */
 const JOBS_POLL_MS = 2_000;
 
-/** enrich/triage 등 단건 잡 모달 폴링 주기 — 사람이 응답을 기다리는 맥락이라 더 짧게. */
-const AGENT_RUN_POLL_MS = 1_000;
-
 /** 잡 상태 중 terminal — 도달하면 폴링 중단(INVARIANT #5: 무한 폴링 금지). */
-export const AGENT_TERMINAL_STATUSES = new Set([
-  "awaiting_approval",
-  "succeeded",
-  "failed",
-  "cancelled",
-]);
-
-/**
- * 잡 단건 상태 폴링 훅. `runId`가 null이면 disabled.
- * terminal 상태에 도달하면 자동으로 폴링 중단(`refetchInterval` 반환값으로 제어).
- * 직접 `setInterval`로 commands.agentRunStatus를 호출하지 말 것 — IPC 호출은 query 레이어를 거친다.
- */
-export function useAgentRunStatus(runId: string | null, opts?: { pollMs?: number }) {
-  const pollMs = opts?.pollMs ?? AGENT_RUN_POLL_MS;
-  return useQuery({
-    queryKey: ["agentRunStatus", runId],
-    queryFn: () => unwrap(commands.agentRunStatus(runId as string)),
-    enabled: !!runId,
-    refetchInterval: (q) => {
-      const s = q.state.data;
-      if (!s) return pollMs;
-      return AGENT_TERMINAL_STATUSES.has(s.status) ? false : pollMs;
-    },
-    retry: false, // 잡 없음/네트워크 실패는 즉시 노출(스피너 유지 방지).
-  });
-}
+const AGENT_TERMINAL_STATUSES = new Set(["awaiting_approval", "succeeded", "failed", "cancelled"]);
 
 /**
  * 미분류 배치 enrich 잡(`enrich_batch`)이 현재 활성인지 — `useAgentRuns()`에서 직접 파생.

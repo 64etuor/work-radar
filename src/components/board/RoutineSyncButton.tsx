@@ -6,7 +6,7 @@
  * (CalendarPickerPopover 패턴 미러). 선택 시 enable IPC가 kind 일치를 백엔드에서 재검증한다.
  */
 import { CalendarCheck, CalendarPlus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { Project, RoutineToday } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -34,21 +34,12 @@ export function RoutineSyncButton({ routine, projects, onEnable, onDisable, onMo
   const disabledNoTime = !synced && noTime;
 
   // 루틴 kind와 같은 kind의 프로젝트가 설정에서 고른 캘린더들 = sync 후보(순수 로직 — routineSync.ts).
-  const candidates = useMemo(
-    () => routineSyncCandidates(projects, routine.kind),
-    [projects, routine.kind],
-  );
+  const candidates = routineSyncCandidates(projects, routine.kind);
 
-  const syncedLabel = useMemo(
-    () => routineSyncedLabel(candidates, routine.googleCalendarId),
-    [candidates, routine.googleCalendarId],
-  );
+  const syncedLabel = routineSyncedLabel(candidates, routine.googleCalendarId);
 
   // 이동 후보 = 현재 동기화 캘린더를 제외한 같은 kind 후보들(다른 캘린더로 이동).
-  const moveCandidates = useMemo(
-    () => candidates.filter((c) => c.id !== routine.googleCalendarId),
-    [candidates, routine.googleCalendarId],
-  );
+  const moveCandidates = candidates.filter((c) => c.id !== routine.googleCalendarId);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

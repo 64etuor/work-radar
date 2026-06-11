@@ -1,5 +1,5 @@
 // src/lib/useWeekNav.ts
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { localToday } from "@/lib/query";
 
@@ -27,10 +27,10 @@ export interface WeekNav {
 export function useWeekNav(): WeekNav {
   const today = localToday();
   const [offset, setOffset] = useState(0);
-  const goto = useCallback((o: number) => setOffset(clampOffset(o)), []);
-  const prev = useCallback(() => setOffset((o) => clampOffset(o - 1)), []);
-  const next = useCallback(() => setOffset((o) => clampOffset(o + 1)), []);
-  const reset = useCallback(() => setOffset(0), []);
+  const goto = (o: number) => setOffset(clampOffset(o));
+  const prev = () => setOffset((o) => clampOffset(o - 1));
+  const next = () => setOffset((o) => clampOffset(o + 1));
+  const reset = () => setOffset(0);
   return {
     offset,
     range: weekRangeForOffset(today, offset),

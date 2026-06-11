@@ -14,7 +14,7 @@ const SEVERITY_RANK: Record<string, number> = {
   success: 3,
 };
 
-export function severityRank(severity: string): number {
+function severityRank(severity: string): number {
   return SEVERITY_RANK[severity] ?? 99;
 }
 

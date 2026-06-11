@@ -44,6 +44,9 @@ function tokenStyle(t: ThemedToken): CSSProperties {
  * MAX_DIFF_LINES 초과 시 잘라 비차단을 보장한다.
  */
 export function DiffText({ text, path }: { text: string; path: string | null }) {
+  // allLines→parsed→codeIndices 체인이 토크나이즈 effect deps로 쓰여 referential identity가
+  // 필요 — 컴파일러가 메모이즈하지만 정적 분석기(no-effect-with-fresh-deps)와 bailout 시
+  // 안전을 위해 명시 유지.
   const allLines = useMemo(() => (text.length === 0 ? [] : text.split("\n")), [text]);
   const truncated = allLines.length > MAX_DIFF_LINES;
 
@@ -52,7 +55,7 @@ export function DiffText({ text, path }: { text: string; path: string | null }) 
     return lines.map(parseDiffLine);
   }, [allLines]);
 
-  const lang = useMemo(() => detectLang(path), [path]);
+  const lang = detectLang(path);
 
   // 코드 줄만 모아 한 번에 토크나이즈(문맥 유지 + 단일 패스). 마커는 제외.
   const { codeText, codeIndices } = useMemo(() => {

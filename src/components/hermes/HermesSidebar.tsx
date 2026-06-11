@@ -1,5 +1,5 @@
 import { MessageSquarePlus, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ export function HermesSidebar({
   const [editingId, setEditingId] = useState<TabId | null>(null);
   const [draft, setDraft] = useState("");
 
-  const filtered = useMemo(() => filterByName(tabs, query), [tabs, query]);
+  const filtered = filterByName(tabs, query);
 
   const commitRename = (id: TabId) => {
     const name = draft.trim();
@@ -98,6 +98,7 @@ export function HermesSidebar({
                   />
                   {editingId === t.id ? (
                     <input
+                      aria-label="세션 이름"
                       autoFocus
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}

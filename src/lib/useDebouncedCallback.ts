@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * `fn`을 마지막 호출 기준 `delay`ms 뒤에만 실행하는 콜백을 돌려준다. 잇따른 호출은 타이머를
@@ -41,35 +41,32 @@ export function useDebouncedCallback<A extends unknown[]>(
     };
   }, []);
 
-  const cancel = useCallback(() => {
+  const cancel = () => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     pendingArgsRef.current = null;
-  }, []);
+  };
 
-  const run = useCallback(
-    (...args: A) => {
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      pendingArgsRef.current = args;
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        pendingArgsRef.current = null;
-        fnRef.current(...args);
-      }, delay);
-    },
-    [delay],
-  );
+  const run = (...args: A) => {
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    pendingArgsRef.current = args;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      pendingArgsRef.current = null;
+      fnRef.current(...args);
+    }, delay);
+  };
 
-  const flushNow = useCallback((...args: A) => {
+  const flushNow = (...args: A) => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     pendingArgsRef.current = null;
     fnRef.current(...args);
-  }, []);
+  };
 
   return { run, flushNow, cancel };
 }

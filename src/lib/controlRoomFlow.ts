@@ -3,7 +3,6 @@ import type { Edge, Node } from "@xyflow/react";
 import {
   type GraphEdge,
   type GraphNode,
-  LANE_HEADER_H,
   LANE_W,
   type LaneKind,
   PAD_X,
@@ -102,6 +101,3 @@ export function deriveEdgeState(
   }
   return { activeIds, dimIds };
 }
-
-/** Convenience: the y of the lane header band, used to offset fitView padding. */
-export const LANE_BAND_HEIGHT = LANE_HEADER_H;

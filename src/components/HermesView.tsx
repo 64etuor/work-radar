@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,7 @@ export default function HermesView() {
   // doesn't re-render on every streaming chunk (Array.from inline would produce a new
   // array identity on every store update).
   const tabsMap = useHermesTabsStore((s) => s.tabs);
-  const tabs = useMemo(() => Array.from(tabsMap.values()), [tabsMap]);
+  const tabs = Array.from(tabsMap.values());
   const activeTabId = useHermesTabsStore((s) => s.activeTabId);
   const openTab = useHermesTabsStore((s) => s.openTab);
   const ensureAgent = useHermesTabsStore((s) => s.ensureAgent);

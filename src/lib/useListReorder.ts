@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * 공용 세로 리스트 드래그 정렬 훅 (Phase 17 Today, Phase 16 routines 재사용 — spec §1.C).
@@ -36,14 +36,15 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
     cbRef.current = onReorder;
   });
   // id → 항목 DOM(드롭 인덱스 계산용).
-  const itemEls = useRef(new Map<string, HTMLElement>());
+  const itemEls = useRef<Map<string, HTMLElement>>(null);
+  if (itemEls.current === null) itemEls.current = new Map();
 
-  const registerItem = useCallback((id: string, el: HTMLElement | null) => {
-    if (el) itemEls.current.set(id, el);
-    else itemEls.current.delete(id);
-  }, []);
+  const registerItem = (id: string, el: HTMLElement | null) => {
+    if (el) itemEls.current!.set(id, el);
+    else itemEls.current!.delete(id);
+  };
 
-  const onHandlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
+  const onHandlePointerDown = (e: React.PointerEvent, id: string) => {
     // 좌클릭/터치만. 다른 핸들/버튼과 충돌하지 않게 stopPropagation.
     if (e.button !== 0 && e.pointerType === "mouse") return;
     e.preventDefault();
@@ -56,7 +57,7 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
     // 드래그 중 행을 포인터에 맞춰 들어올려 따라오게 한다(브레인덤프 postit과 동일 감각).
     // React state 대신 직접 DOM 변형(MatrixCanvas 패턴) — 매 move 리렌더 회피.
     const startY = e.clientY;
-    const draggingEl = itemEls.current.get(id) ?? null;
+    const draggingEl = itemEls.current!.get(id) ?? null;
     if (draggingEl) draggingEl.style.willChange = "transform";
 
     // 포인터 Y가 어느 항목의 어느 절반에 있는지 → 드롭 위치.
@@ -66,7 +67,7 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
         // 따라다니는(transform된) 자기 자신은 드롭 대상/측정에서 제외 —
         // 아니면 자신의 rect가 커서를 따라와 항상 self가 잡혀 재정렬이 안 된다.
         if (oid === id) continue;
-        const el = itemEls.current.get(oid);
+        const el = itemEls.current!.get(oid);
         if (!el) continue;
         const r = el.getBoundingClientRect();
         if (clientY >= r.top && clientY <= r.bottom) {
@@ -113,7 +114,7 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
-  }, []);
+  };
 
   return {
     /** 드래그 중인 항목 id (스타일링용). */

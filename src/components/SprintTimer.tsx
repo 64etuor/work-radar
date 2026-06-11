@@ -1,6 +1,6 @@
 import "./SprintTimer.css";
 
-import { useCallback, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
 import type { SprintConfig, Weekday } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -55,28 +55,29 @@ export function SprintTimer() {
 
   const status = statusQ.data ?? null;
   const config = configQ.data ?? null;
-  const meter = useMemo(() => {
-    if (!status || !config) return null;
+  let meter: { display: ReturnType<typeof formatCountdown>; pct: number } | null = null;
+  if (status && config) {
     const secs = remainingSecondsUntil(status.nextBoundary, nowMs);
-    if (secs == null) return null;
-    const display = formatCountdown(secs);
-    // 진행도 = 전체 인터벌 대비 경과 비율. overdue면 100% 채움(시각 cap).
-    const totalSec = Math.max(1, config.intervalDays * 86_400);
-    const elapsedSec = totalSec - secs;
-    const pct = display.overdue ? 1 : Math.max(0, Math.min(1, elapsedSec / totalSec));
-    return { display, pct };
-  }, [status, config, nowMs]);
+    if (secs != null) {
+      const display = formatCountdown(secs);
+      // 진행도 = 전체 인터벌 대비 경과 비율. overdue면 100% 채움(시각 cap).
+      const totalSec = Math.max(1, config.intervalDays * 86_400);
+      const elapsedSec = totalSec - secs;
+      const pct = display.overdue ? 1 : Math.max(0, Math.min(1, elapsedSec / totalSec));
+      meter = { display, pct };
+    }
+  }
 
   const configured = !!config;
   const editorVisible = editorState !== "closed";
 
-  const openEditor = useCallback(() => {
+  const openEditor = () => {
     setEditorState((state) => (state === "closed" ? "opening" : state));
-  }, []);
+  };
 
-  const closeEditor = useCallback(() => {
+  const closeEditor = () => {
     setEditorState((state) => (state === "closed" ? state : "closing"));
-  }, []);
+  };
 
   useEffect(() => {
     if (editorState !== "opening" && editorState !== "closing") return undefined;

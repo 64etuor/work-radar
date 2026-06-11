@@ -1,5 +1,5 @@
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useId, useState } from "react";
 
 import type { LifeWheelTagConfig } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -38,8 +38,8 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
     400,
   );
 
-  const draft = useMemo(() => textDraft ?? tags.data ?? [], [textDraft, tags.data]);
-  const enabledCount = useMemo(() => draft.filter((tag) => tag.enabled).length, [draft]);
+  const draft = textDraft ?? tags.data ?? [];
+  const enabledCount = draft.filter((tag) => tag.enabled).length;
 
   const updateTagText = (id: string, patch: Partial<LifeWheelTagConfig>) => {
     const next = draft.map((tag) => (tag.id === id ? { ...tag, ...patch } : tag));

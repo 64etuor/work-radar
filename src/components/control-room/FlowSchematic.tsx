@@ -7,7 +7,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ControlRoomSnapshot } from "../../bindings";
 import {
@@ -40,16 +40,13 @@ function FlowSchematicInner({
   snap: ControlRoomSnapshot;
   filter: VitalKey | null;
 }) {
-  const schematic = useMemo(() => buildSchematic(snap), [snap]);
+  const schematic = buildSchematic(snap);
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   const focusId = hovered ?? selected;
-  const lineage = useMemo(
-    () => (focusId ? lineageOf(focusId, schematic.edges) : null),
-    [focusId, schematic.edges],
-  );
-  const nodeById = useMemo(() => new Map(schematic.nodes.map((n) => [n.id, n])), [schematic.nodes]);
+  const lineage = focusId ? lineageOf(focusId, schematic.edges) : null;
+  const nodeById = new Map(schematic.nodes.map((n) => [n.id, n]));
 
   // Esc clears the pinned selection only (mirrors the SVG version: no-op when
   // nothing is pinned, so it never fights an overlay shown on top).
@@ -61,47 +58,40 @@ function FlowSchematicInner({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const nodeState = useCallback(
-    (n: GraphNode): NodeRenderState => {
-      if (lineage) return lineage.has(n.id) ? "highlight" : "dim";
-      if (filter) return nodeMatchesVital(n, filter) ? "highlight" : "dim";
-      return "normal";
-    },
-    [lineage, filter],
-  );
+  const nodeState = (n: GraphNode): NodeRenderState => {
+    if (lineage) return lineage.has(n.id) ? "highlight" : "dim";
+    if (filter) return nodeMatchesVital(n, filter) ? "highlight" : "dim";
+    return "normal";
+  };
 
   // Edge highlight/dim — pure derivation, unit-tested in controlRoomFlow.test.ts.
-  const { activeIds: activeEdgeIds, dimIds: dimEdgeIds } = useMemo(
-    () => deriveEdgeState(schematic.edges, nodeById, lineage),
-    [schematic.edges, nodeById, lineage],
+  const { activeIds: activeEdgeIds, dimIds: dimEdgeIds } = deriveEdgeState(
+    schematic.edges,
+    nodeById,
+    lineage,
   );
 
-  const nodes: CrFlowNode[] = useMemo(() => {
-    return toFlowNodes(schematic).map((n) => {
-      if (n.type !== "cr") return n;
-      const graphNode = (n.data as { node: GraphNode }).node;
-      return {
-        ...n,
-        selected: selected === n.id,
-        data: { ...n.data, renderState: nodeState(graphNode) },
-      };
-    });
-  }, [schematic, nodeState, selected]);
+  const nodes: CrFlowNode[] = toFlowNodes(schematic).map((n) => {
+    if (n.type !== "cr") return n;
+    const graphNode = (n.data as { node: GraphNode }).node;
+    return {
+      ...n,
+      selected: selected === n.id,
+      data: { ...n.data, renderState: nodeState(graphNode) },
+    };
+  });
 
-  const edges = useMemo(
-    () => toFlowEdges(schematic.edges, { activeIds: activeEdgeIds, dimIds: dimEdgeIds }),
-    [schematic.edges, activeEdgeIds, dimEdgeIds],
-  );
+  const edges = toFlowEdges(schematic.edges, { activeIds: activeEdgeIds, dimIds: dimEdgeIds });
 
-  const onNodeClick: NodeMouseHandler = useCallback((_, node) => {
+  const onNodeClick: NodeMouseHandler = (_, node) => {
     if (node.type !== "cr") return;
     setSelected((cur) => (cur === node.id ? null : node.id));
-  }, []);
+  };
 
-  const onNodeMouseEnter: NodeMouseHandler = useCallback((_, node) => {
+  const onNodeMouseEnter: NodeMouseHandler = (_, node) => {
     setHovered(node.type === "cr" ? node.id : null);
-  }, []);
-  const onNodeMouseLeave: NodeMouseHandler = useCallback(() => setHovered(null), []);
+  };
+  const onNodeMouseLeave: NodeMouseHandler = () => setHovered(null);
 
   const selectedNode = selected ? (nodeById.get(selected) ?? null) : null;
 

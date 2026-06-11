@@ -6,7 +6,6 @@ export * from "./calendar";
 export * from "./calendarSync";
 export * from "./client";
 export * from "./cmux";
-export * from "./cmuxBridge";
 export * from "./governance";
 export * from "./inbox";
 export * from "./nav";

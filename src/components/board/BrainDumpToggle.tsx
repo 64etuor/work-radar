@@ -1,7 +1,7 @@
 import "./BrainDumpToggle.css";
 
 import { CornerDownLeft } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Kind } from "@/bindings";
 import { parseDump } from "@/components/board/boardUtils";
@@ -83,7 +83,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const submit = useCallback(() => {
+  const submit = () => {
     const raw = value;
     if (!raw.trim()) return;
     const { kind, text } = parseDump(raw);
@@ -91,12 +91,12 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
     onSubmit(text, kind ?? pendingKind);
     setValue("");
     setOpen(false);
-  }, [value, pendingKind, onSubmit]);
+  };
 
-  const togglePendingKind = useCallback(() => {
+  const togglePendingKind = () => {
     setPendingKind((kind) => nextBrainDumpKind(kind));
     window.requestAnimationFrame(() => effectiveInputRef.current?.focus());
-  }, [effectiveInputRef]);
+  };
 
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {

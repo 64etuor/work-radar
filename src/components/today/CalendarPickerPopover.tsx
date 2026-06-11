@@ -5,7 +5,7 @@
  * 프로젝트 매핑이 없는 routine drop 시 캘린더 픽업을 사용자에게 묻는다.
  * "기본 캘린더로 저장" 체크 시 `setProjectDefaultWriteCalendar`로 영속(다음 drop부터 묻지 않음).
  */
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { Kind } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -39,19 +39,16 @@ export function CalendarPickerPopover({
   // 안전 기본값: 사용자가 의식적으로 체크해야 영속 저장 — 첫 picker에서 무의식 저장 방지.
   const [saveDefault, setSaveDefault] = useState<boolean>(false);
 
-  const signalProject = useMemo(() => {
-    if (!signalProjectId) return undefined;
-    return (projectsQ.data ?? []).find((p) => p.id === signalProjectId);
-  }, [projectsQ.data, signalProjectId]);
+  const signalProject = signalProjectId
+    ? (projectsQ.data ?? []).find((p) => p.id === signalProjectId)
+    : undefined;
 
-  const candidates = useMemo(
-    () => routineCalendarPickCandidates(projectsQ.data ?? [], signalProjectId, routineKind),
-    [projectsQ.data, routineKind, signalProjectId],
+  const candidates = routineCalendarPickCandidates(
+    projectsQ.data ?? [],
+    signalProjectId,
+    routineKind,
   );
-  const pickedCandidate = useMemo(
-    () => candidates.find((c) => c.id === picked) ?? null,
-    [candidates, picked],
-  );
+  const pickedCandidate = candidates.find((c) => c.id === picked) ?? null;
 
   if (!open || !anchor) return null;
 

@@ -1,6 +1,5 @@
 // src/components/weekly/ReflectionSection.tsx
 import { CheckCircle2, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useMemo } from "react";
 
 import type { LifeWheelTagConfig, WorkSignal } from "@/bindings";
 import { KindAreaChips } from "@/components/board/LifeWheelPalette";
@@ -15,8 +14,8 @@ interface Props {
 
 /** 회고 랭크 카드 페어(좋아요/싫어요) — 대시보드 칼럼용. */
 export function ReflectionRank({ items }: Pick<Props, "items">) {
-  const impactful = useMemo(() => items.filter((s) => s.impactHigh), [items]);
-  const wasteful = useMemo(() => items.filter((s) => s.regret), [items]);
+  const impactful = items.filter((s) => s.impactHigh);
+  const wasteful = items.filter((s) => s.regret);
 
   return (
     <div className="wk-rank">
@@ -41,16 +40,14 @@ export function CompletedList({ items, tags }: Props) {
   const setImpact = useSetSignalImpact();
   const setRegret = useSetSignalRegret();
 
-  const groups = useMemo(() => {
-    const map = new Map<string, WorkSignal[]>();
-    for (const s of items) {
-      const key = s.todayDoneAt ?? "—";
-      const arr = map.get(key) ?? [];
-      arr.push(s);
-      map.set(key, arr);
-    }
-    return [...map.entries()];
-  }, [items]);
+  const groupsMap = new Map<string, WorkSignal[]>();
+  for (const s of items) {
+    const key = s.todayDoneAt ?? "—";
+    const arr = groupsMap.get(key) ?? [];
+    arr.push(s);
+    groupsMap.set(key, arr);
+  }
+  const groups = [...groupsMap.entries()];
 
   return (
     <section className="wk-sec">

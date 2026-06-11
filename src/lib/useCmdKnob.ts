@@ -15,10 +15,10 @@ type TriggerMods = { ctrl: boolean; meta: boolean; alt: boolean; shift: boolean 
 /** "Cmd+Shift" 류 트리거 spec → 모디파이어 집합. 빈 값/무효는 Cmd 단독으로 폴백. (테스트용 export) */
 export function parseTrigger(spec: string | undefined): TriggerMods {
   const mods: TriggerMods = { ctrl: false, meta: false, alt: false, shift: false };
-  const parts = (spec && spec.trim() ? spec : KNOB_TRIGGER_DEFAULT)
-    .split("+")
-    .map((p) => p.trim().toLowerCase())
-    .filter(Boolean);
+  const parts = (spec && spec.trim() ? spec : KNOB_TRIGGER_DEFAULT).split("+").flatMap((p) => {
+    const t = p.trim().toLowerCase();
+    return t ? [t] : [];
+  });
   for (const p of parts) {
     if (p === "ctrl") mods.ctrl = true;
     else if (p === "cmd" || p === "meta") mods.meta = true;

@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import type { CalendarEvent } from "@/bindings";
 import { cn } from "@/components/ui/cn";
 import {
@@ -60,7 +58,7 @@ type Props = {
  * 이벤트=radius sm 블록(종일/시간 분리). 순수 표시 컴포넌트(상태/fetch는 호출부).
  */
 export function CalendarView({ events, mode, date, onSelectDate }: Props) {
-  const buckets = useMemo(() => bucketByDate(events), [events]);
+  const buckets = bucketByDate(events);
   const todayIso = toLocalISODate(new Date());
 
   if (mode === "day") {

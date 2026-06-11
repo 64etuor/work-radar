@@ -13,7 +13,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { InboxItem } from "@/bindings";
 import { groupInboxBySource, inferTargetView, labelSource } from "@/components/inbox/inboxGrouping";
@@ -48,8 +48,8 @@ export function InboxTray({ onClose }: { onClose: () => void }) {
   const markRead = useMarkInboxItemRead();
   const dismiss = useDismissInboxItem();
 
-  const list = useMemo(() => items.data ?? [], [items.data]);
-  const groups = useMemo(() => groupInboxBySource(list), [list]);
+  const list = items.data ?? [];
+  const groups = groupInboxBySource(list);
 
   // 접힌 섹션 source 키 집합(기본=전부 펼침). 사용자 토글로만 변동.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());

@@ -18,6 +18,12 @@ import { useNavKeymap, useProjects, useSearchSignals, useSkills } from "@/lib/qu
 import { skillSearchValue } from "@/lib/skillGrouping";
 import { useUIStore } from "@/store";
 
+/** 명령 실행: 최근 명령 기록 후 액션 호출. 로컬 state 미사용 — 컴포넌트 밖에서 안정적으로 정의. */
+function runCommand(label: string, action: () => void) {
+  rememberRecentCommand(label);
+  action();
+}
+
 /**
  * cmdk 명령 팔레트 — 단일 창 네비게이션 진입점 (Cmd+K).
  * 뷰 목록·라벨·단축키는 `@/lib/nav`(정본)에서 가져와 의미 그룹(운영/리뷰/코드/외부)으로
@@ -56,11 +62,6 @@ export function CommandPalette() {
   const recentActions = recentCommands()
     .map((label) => ({ label, action: actionForRecent(label, goTo, openInbox) }))
     .filter((item): item is { label: string; action: () => void } => !!item.action);
-
-  const runCommand = (label: string, action: () => void) => {
-    rememberRecentCommand(label);
-    action();
-  };
 
   return (
     <div className="cmdk-overlay" onPointerDown={() => setPaletteOpen(false)}>

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { TimelineNote, WorkSignal } from "@/bindings";
 import { Badge } from "@/components/ui/badge";
@@ -29,15 +29,15 @@ export function HistoryRail({ today }: { today: string }) {
   const history = useCompletedHistory(today);
   const projectsQ = useProjects();
 
-  const projectColor = useMemo(() => {
+  const projectColor = (() => {
     const map = new Map<string, string>();
     for (const p of projectsQ.data ?? []) {
       map.set(p.id, normalizeHexColor(p.calendarColor) ?? defaultProjectCalendarColor(p.id));
     }
     return map;
-  }, [projectsQ.data]);
+  })();
 
-  const groups = useMemo(() => {
+  const groups = (() => {
     const m = new Map<string, WorkSignal[]>();
     for (const page of history.data?.pages ?? []) {
       for (const s of page.rows) {
@@ -49,16 +49,10 @@ export function HistoryRail({ today }: { today: string }) {
       }
     }
     return Array.from(m.entries());
-  }, [history.data]);
+  })();
 
-  const totalCount = useMemo(
-    () => groups.reduce((sum, [, items]) => sum + items.length, 0),
-    [groups],
-  );
-  const todayCount = useMemo(
-    () => groups.find(([d]) => d === today)?.[1].length ?? 0,
-    [groups, today],
-  );
+  const totalCount = groups.reduce((sum, [, items]) => sum + items.length, 0);
+  const todayCount = groups.find(([d]) => d === today)?.[1].length ?? 0;
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -132,13 +126,13 @@ function HistoryGroup({
   colorOf: Map<string, string>;
 }) {
   const notesQ = useTimelineNotesForDate(date);
-  const bodyById = useMemo(() => {
+  const bodyById = (() => {
     const m = new Map<string, string>();
     for (const n of (notesQ.data ?? []) as TimelineNote[]) {
       if (n.targetKind === "signal") m.set(n.targetId, n.body);
     }
     return m;
-  }, [notesQ.data]);
+  })();
 
   return (
     <section className="today-history-group">

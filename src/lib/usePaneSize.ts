@@ -3,7 +3,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 type PaneSizeOptions = {
   key: string;
@@ -45,77 +45,67 @@ export function usePaneSize({
   const storageKey = `wr-pane:${key}`;
   const [size, setSizeState] = useState(() => clamp(readSize(storageKey, defaultSize), min, max));
 
-  const setSize = useCallback(
-    (next: number) => {
-      const snapped = next <= snap ? min : next;
-      const value = clamp(snapped, min, max);
-      setSizeState(value);
-      try {
-        localStorage.setItem(storageKey, String(value));
-      } catch {
-        /* ignore storage failures */
-      }
-      return value;
+  const setSize = (next: number) => {
+    const snapped = next <= snap ? min : next;
+    const value = clamp(snapped, min, max);
+    setSizeState(value);
+    try {
+      localStorage.setItem(storageKey, String(value));
+    } catch {
+      /* ignore storage failures */
+    }
+    return value;
+  };
+
+  const bindResizeHandle = (onSnapCollapse?: () => void) => ({
+    role: "separator",
+    "aria-orientation": "vertical" as const,
+    tabIndex: 0,
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startSize = size;
+      const target = event.currentTarget;
+      target.setPointerCapture(event.pointerId);
+      const onMove = (move: PointerEvent) => {
+        const next = setSize(startSize + move.clientX - startX);
+        if (next <= min && onSnapCollapse) onSnapCollapse();
+      };
+      const onUp = () => {
+        target.releasePointerCapture(event.pointerId);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
     },
-    [max, min, snap, storageKey],
-  );
-
-  const bindResizeHandle = useCallback(
-    (onSnapCollapse?: () => void) => ({
-      role: "separator",
-      "aria-orientation": "vertical" as const,
-      tabIndex: 0,
-      onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+    onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+      if (event.key === "ArrowLeft") {
         event.preventDefault();
-        const startX = event.clientX;
-        const startSize = size;
-        const target = event.currentTarget;
-        target.setPointerCapture(event.pointerId);
-        const onMove = (move: PointerEvent) => {
-          const next = setSize(startSize + move.clientX - startX);
-          if (next <= min && onSnapCollapse) onSnapCollapse();
-        };
-        const onUp = () => {
-          target.releasePointerCapture(event.pointerId);
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("pointerup", onUp);
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp);
-      },
-      onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
-        if (event.key === "ArrowLeft") {
-          event.preventDefault();
-          const next = setSize(size - 24);
-          if (next <= min && onSnapCollapse) onSnapCollapse();
-        }
-        if (event.key === "ArrowRight") {
-          event.preventDefault();
-          setSize(size + 24);
-        }
-        if (event.key === "Home") {
-          event.preventDefault();
-          const next = setSize(min);
-          if (next <= min && onSnapCollapse) onSnapCollapse();
-        }
-        if (event.key === "End") {
-          event.preventDefault();
-          setSize(max);
-        }
-      },
-    }),
-    [max, min, setSize, size],
-  );
+        const next = setSize(size - 24);
+        if (next <= min && onSnapCollapse) onSnapCollapse();
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setSize(size + 24);
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        const next = setSize(min);
+        if (next <= min && onSnapCollapse) onSnapCollapse();
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        setSize(max);
+      }
+    },
+  });
 
-  const style = useMemo(
-    () =>
-      collapsed
-        ? undefined
-        : ({
-            "--pane-size": `${size}px`,
-          } as CSSProperties),
-    [collapsed, size],
-  );
+  const style = collapsed
+    ? undefined
+    : ({
+        "--pane-size": `${size}px`,
+      } as CSSProperties);
 
   return { size, setSize, style, bindResizeHandle };
 }

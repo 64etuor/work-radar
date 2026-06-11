@@ -1,5 +1,5 @@
 import { GitCompare, RotateCcw, Save, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { Skill } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,7 @@ export function InAppEditor({ skill }: { skill: Skill }) {
   // #18: 시드 binding을 가진 인앱 프롬프트만 코드 상수 폴백이 있다(외부/미시드는 null → diff 비대상).
   // 현재 편집본(prompt)을 기본값과 비교 — 같으면 "기본값과 동일", 다르면 diff/복원 노출.
   const fallback = skill.fallbackPrompt;
-  const diff = useMemo(
-    () => (fallback != null ? lineDiff(fallback, prompt) : []),
-    [fallback, prompt],
-  );
+  const diff = fallback != null ? lineDiff(fallback, prompt) : [];
   const customized = fallback != null && prompt !== fallback;
   const stats = diffStats(diff);
 

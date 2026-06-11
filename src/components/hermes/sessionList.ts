@@ -4,7 +4,7 @@ import type { HermesMessage } from "./types";
 import type { TabState } from "./useHermesTabs";
 import { uid } from "./useHermesTabs";
 
-export const DEFAULT_SESSION_NAME = "새 세션";
+const DEFAULT_SESSION_NAME = "새 세션";
 const TITLE_MAX = 40;
 
 /** 첫 user 메시지로 세션 제목 생성. 비면 기본 이름. */

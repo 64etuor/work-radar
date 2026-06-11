@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ArrowUp, Clock3, Paperclip, Square, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { detectSlashToken } from "./detectSlashToken";
 import { HermesSlashMenu } from "./HermesSlashMenu";
 import type { AcpCommand } from "./types";
+
+// React Compiler(BuildHIR)가 컴포넌트 본문 내 import() 식을 아직 지원하지 않아 모듈 스코프로 호이스트.
+const loadWebviewWindow = () => import("@tauri-apps/api/webviewWindow");
+const loadDialog = () => import("@tauri-apps/plugin-dialog");
 
 function isImagePath(p: string): boolean {
   const ext = p.split(".").pop()?.toLowerCase() ?? "";
@@ -26,6 +30,16 @@ interface Props {
   commandsList: AcpCommand[];
 }
 
+const saveBytes = async (bytes: Uint8Array, ext: string): Promise<string | null> => {
+  try {
+    const r = await commands.hermesSavePastedImage(Array.from(bytes), ext);
+    if (r.status !== "ok") return null;
+    return r.data;
+  } catch {
+    return null;
+  }
+};
+
 export function HermesChatInput({
   onSend,
   onCancel,
@@ -41,68 +55,48 @@ export function HermesChatInput({
   const [attachments, setAttachments] = useState<string[]>([]);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  const slash = useMemo(() => detectSlashToken(text, caret), [text, caret]);
-  const filtered = useMemo(
-    () =>
-      slash.active
-        ? commandsList.filter((c) => c.name.toLowerCase().startsWith(slash.query.toLowerCase()))
-        : [],
-    [commandsList, slash.active, slash.query],
-  );
+  const slash = detectSlashToken(text, caret);
+  const filtered = slash.active
+    ? commandsList.filter((c) => c.name.toLowerCase().startsWith(slash.query.toLowerCase()))
+    : [];
   const menuOpen = slash.active && filtered.length > 0;
 
-  const pickSlash = useCallback(
-    (cmd: AcpCommand) => {
-      const before = text.slice(0, slash.start);
-      const after = text.slice(caret);
-      const inserted = `/${cmd.name} `;
-      const nextText = before + inserted + after;
-      setText(nextText);
-      const newCaret = (before + inserted).length;
-      requestAnimationFrame(() => {
-        taRef.current?.focus();
-        taRef.current?.setSelectionRange(newCaret, newCaret);
-        setCaret(newCaret);
-      });
-      setActiveIdx(0);
-    },
-    [text, caret, slash.start],
-  );
+  const pickSlash = (cmd: AcpCommand) => {
+    const before = text.slice(0, slash.start);
+    const after = text.slice(caret);
+    const inserted = `/${cmd.name} `;
+    const nextText = before + inserted + after;
+    setText(nextText);
+    const newCaret = (before + inserted).length;
+    requestAnimationFrame(() => {
+      taRef.current?.focus();
+      taRef.current?.setSelectionRange(newCaret, newCaret);
+      setCaret(newCaret);
+    });
+    setActiveIdx(0);
+  };
 
-  const saveBytes = useCallback(async (bytes: Uint8Array, ext: string): Promise<string | null> => {
-    try {
-      const r = await commands.hermesSavePastedImage(Array.from(bytes), ext);
-      if (r.status !== "ok") return null;
-      return r.data;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const onPaste = useCallback(
-    async (e: React.ClipboardEvent) => {
-      const items = Array.from(e.clipboardData.items);
-      for (const item of items) {
-        if (item.type.startsWith("image/")) {
-          e.preventDefault();
-          const blob = item.getAsFile();
-          if (!blob) continue;
-          const ab = await blob.arrayBuffer();
-          const ext = item.type.split("/")[1] ?? "png";
-          const path = await saveBytes(new Uint8Array(ab), ext);
-          if (path) setAttachments((a) => [...a, path]);
-        }
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        const ab = await blob.arrayBuffer();
+        const ext = item.type.split("/")[1] ?? "png";
+        const path = await saveBytes(new Uint8Array(ab), ext);
+        if (path) setAttachments((a) => [...a, path]);
       }
-    },
-    [saveBytes],
-  );
+    }
+  };
 
   // Tauri 2 기본 설정에서는 OS WebView 가 drag-drop 을 DOM 보다 먼저 가로채므로
   // HTML onDrop 이 동작하지 않는다. 윈도우 레벨 이벤트에 직접 등록.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
-    void import("@tauri-apps/api/webviewWindow").then(({ getCurrentWebviewWindow }) =>
+    void loadWebviewWindow().then(({ getCurrentWebviewWindow }) =>
       getCurrentWebviewWindow()
         .onDragDropEvent((event) => {
           if (event.payload.type !== "drop") return;
@@ -123,23 +117,23 @@ export function HermesChatInput({
     };
   }, []);
 
-  const pickFile = useCallback(async () => {
-    const { open } = await import("@tauri-apps/plugin-dialog");
+  const pickFile = async () => {
+    const { open } = await loadDialog();
     const result = await open({
       multiple: true,
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
     });
     const paths = Array.isArray(result) ? result : result ? [result] : [];
     if (paths.length > 0) setAttachments((a) => [...a, ...paths]);
-  }, []);
+  };
 
-  const submit = useCallback(() => {
+  const submit = () => {
     if (!text.trim() && attachments.length === 0) return;
     onSend(text, attachments);
     setText("");
     setAttachments([]);
     setActiveIdx(0);
-  }, [text, attachments, onSend]);
+  };
 
   return (
     <div className="relative p-4">

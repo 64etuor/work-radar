@@ -1,6 +1,6 @@
 import "./CalendarEventModal.css";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -76,7 +76,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
   const [calendarId, setCalendarId] = useState("");
   const [description, setDescription] = useState("");
 
-  const calendars = useMemo(() => calendarsQ.data ?? [], [calendarsQ.data]);
+  const calendars = calendarsQ.data ?? [];
 
   // 모달 열릴 때 폼 시드 — setState는 prev-compare로 render에서 적용 (set-state-in-effect 회피).
   const [prevState, setPrevState] = useState(state);

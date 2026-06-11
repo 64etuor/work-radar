@@ -1,6 +1,6 @@
 import "./WorktreeView.css";
 
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { DiffMode, Worktree } from "@/bindings";
 import {
@@ -39,16 +39,16 @@ export function WorktreeView() {
   const [selectedDiff, setSelectedDiff] = useState<SelectedDiff | null>(null);
   const [showCleanup, setShowCleanup] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
-  const closeGraph = useCallback(() => setGraphOpen(false), []);
+  const closeGraph = () => setGraphOpen(false);
   // 패널 접기(레이아웃 선호 — localStorage로 세션 간 유지). diff 본문은 항상 표시.
   const [sideCollapsed, setSideCollapsed] = useStickyToggle("wt-side-collapsed");
   const [filesCollapsed, setFilesCollapsed] = useStickyToggle("wt-files-collapsed");
 
-  const list = useMemo(() => {
+  const list = (() => {
     const raw = worktrees.data ?? [];
     if (!projectFilter) return raw;
     return raw.filter((w) => w.projectId === projectFilter);
-  }, [worktrees.data, projectFilter]);
+  })();
   const selected = list.find((w) => w.path === selectedPath) ?? null;
 
   // 모드별 ref 준비 상태: working/staged는 항상, vs_base는 base, branch↔branch는 base+head.
@@ -154,7 +154,7 @@ export function WorktreeView() {
     );
   }
 
-  const grouped = useMemo(() => {
+  const grouped = (() => {
     const g = new Map<string, Worktree[]>();
     for (const w of list) {
       const arr = g.get(w.repoLabel) ?? [];
@@ -162,7 +162,7 @@ export function WorktreeView() {
       g.set(w.repoLabel, arr);
     }
     return [...g.entries()];
-  }, [list]);
+  })();
 
   const cleanupRepo = selected ?? list.find((w) => w.isPrimary) ?? list[0] ?? null;
   const branchFileCount = branchFiles.data?.length ?? null;
