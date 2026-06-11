@@ -1,0 +1,19 @@
+docs/superpowers/plans/2026-06-11-continuous-timeline.md
+  s_bbe5afa2d0a5e5::t_f91ec1740518f8 1-17,19-442,444-707,709-982
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "44003bcd36f9ec857bcadc257157f60d2dd9ef5a",
+  "prompts": {},
+  "sessions": {
+    "s_bbe5afa2d0a5e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7d04a86-d93d-4e49-9873-85da3bd363b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
