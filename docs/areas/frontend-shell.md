@@ -99,6 +99,17 @@ ADR로 정한 뒤(아래는 현재 상태의 정본):
   graph lane, 외부 브랜드 색상(news source colors), 좁은 의미의 shadow는 전역 토큰으로 승격하지 않는다.
 - Raw value 정책: 전역/공유 CSS에서는 raw hex/rgb/shadow 금지. 컴포넌트 CSS에서는 먼저 local semantic
   token으로 선언하고 selector는 token을 참조한다. 레거시 전역 CSS 파일을 다시 만들지 않는다.
+- 토큰화 작업 규율 (2026-06-11 전수 토큰화 패스 기준 — 사용처 raw 값 0 유지):
+  - local token은 root selector 선언 블록 최상단에 모으고 "component-local tokens" 주석 한 줄을 단다.
+    사용처가 자손인지 확인하고 선언한다(형제 selector에 선언하면 상속 안 됨).
+  - 값은 비트 단위 보존이 기본. 전역 토큰 참조는 **값이 정확히 일치할 때만** — 한 자리라도 다르면
+    local 핀 고정(예: `#f6f5f1` ≠ `--color-wr-elevated #f6f5f2`). `.dark` override가 있는 전역 토큰을
+    하드코딩 색 자리에 넣으면 다크모드 의미가 바뀌므로 금지.
+  - `var(--token, raw폴백)` 형태로 토큰 값을 중복하지 않는다 — 토큰이 항상 정의되면 폴백을 지우고,
+    폴백이 사실상 기본값이면 그 값을 tokens.css로 승격한 뒤 폴백을 제거한다(`--wr-pulse-*` 패턴).
+    정의 없는 `var()`를 만들지 말 것(선언 누락은 invalid-at-computed-value로 조용히 떨어진다).
+  - `pnpm check:design-tokens`는 **TSX 클래스만** 본다(R1 이모지/R2 off-token 색/R3 arbitrary 타이포).
+    CSS 파일의 raw 값은 안 잡으므로 사용처 grep(`#hex|rgba?\(` 중 토큰 정의 라인 제외)으로 직접 확인한다.
 - light 모드 기본 (`index.html`엔 `class="dark"` 없음, color-scheme: light).
 - 다크 토큰은 `.dark` override (PR C 2026-05-24). `--color-wr-coral`/`--color-wr-green`은
   override 없음 → on-coral/on-green 텍스트는 non-inverting `--color-wr-on-coral-btn` 사용.
