@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   blockNoteTarget,
+  buildTimelineBlocks,
   buildTodayBlocks,
   eventBlockApiId,
   noteTargetMapKey,
@@ -486,5 +487,68 @@ describe("blockNoteTarget", () => {
     expect(fromBlock).toBe(fromNote);
     // 다른 타깃끼리는 충돌하지 않는다.
     expect(noteTargetMapKey("signal", "a")).not.toBe(noteTargetMapKey("routine", "a"));
+  });
+});
+
+describe("buildTimelineBlocks (멀티데이 병합)", () => {
+  const event = (id: string, start: string, end: string) =>
+    ({
+      id,
+      calendarId: "cal1",
+      calendarSummary: "Cal 1",
+      title: id,
+      start,
+      end,
+      allDay: false,
+      projectColor: null,
+    }) as never;
+
+  it("자정 걸침 이벤트가 인접 두 날짜 버킷에 중복으로 와도 1개 블록", () => {
+    const e = event("ev1", "2026-06-11T23:00:00+09:00", "2026-06-12T01:30:00+09:00");
+    const out = buildTimelineBlocks({
+      signals: [],
+      eventsByDate: { "2026-06-11": [e], "2026-06-12": [e] },
+      routinesByDate: {},
+      dates: ["2026-06-11", "2026-06-12"],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("event:cal1:ev1");
+    expect(out[0].endISO).toBe("2026-06-12T01:30:00+09:00"); // full span 유지
+  });
+
+  it("같은 루틴의 가상 인스턴스는 날짜별로 별개 블록(id에 날짜 포함)", () => {
+    const routine = {
+      id: "r1",
+      title: "운동",
+      timeOfDay: "07:00",
+      timeOverride: null,
+    } as never;
+    const out = buildTimelineBlocks({
+      signals: [],
+      eventsByDate: {},
+      routinesByDate: { "2026-06-11": [routine], "2026-06-12": [routine] },
+      dates: ["2026-06-11", "2026-06-12"],
+    });
+    const ids = out.map((b) => b.id).sort();
+    expect(ids).toEqual(["routine:r1:2026-06-11", "routine:r1:2026-06-12"]);
+    expect(out.every((b) => b.routineId === "r1")).toBe(true);
+  });
+
+  it("signal은 자기 scheduledAt 날짜에만 1회 렌더", () => {
+    const signal = {
+      id: "s1",
+      title: "작업",
+      scheduledAt: "2026-06-12T02:00:00+09:00",
+      scheduledDuration: 60,
+    } as never;
+    const out = buildTimelineBlocks({
+      signals: [signal],
+      eventsByDate: {},
+      routinesByDate: {},
+      dates: ["2026-06-11", "2026-06-12"],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("signal:s1");
+    expect(out[0].startISO).toBe("2026-06-12T02:00:00+09:00");
   });
 });

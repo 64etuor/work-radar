@@ -207,7 +207,9 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
     if (eventKey(linkedCalendarId, linkedEventId) && !staleRoutineIds.has(r.id)) continue;
     const { startISO, endISO } = isoFor(date, time, r.durationMin ?? ROUTINE_DURATION_MIN);
     out.push({
-      id: `routine:${r.id}`,
+      // 날짜 포함 — 멀티데이 병합(buildTimelineBlocks) 시 같은 루틴의 인접 날짜 가상
+      // 인스턴스가 id 충돌로 dedup되지 않도록. 소비처는 routineId 필드를 쓴다.
+      id: `routine:${r.id}:${date}`,
       kind: "routine",
       title: r.title,
       startISO,
@@ -221,5 +223,44 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
     });
   }
 
+  return out;
+}
+
+/**
+ * 멀티데이 타임라인 블록 합성(연속 타임라인 스펙 §3).
+ *
+ * 날짜별로 buildTodayBlocks를 실행해 병합하고 블록 id로 dedup한다.
+ * - 자정 걸침 Google 이벤트는 overlap 시맨틱상 인접 두 날짜 버킷에 모두 내려온다 →
+ *   `event:${calendarId}:${id}` 복합키 dedup으로 full-span 1개만 남긴다.
+ * - signal은 scheduledAt의 로컬 날짜에서만 생성되므로(buildTodayBlocks의 날짜 필터)
+ *   병합 후에도 1회만 나타난다.
+ * - 루틴 가상 인스턴스는 id에 날짜가 포함되어 날짜별 별개 블록.
+ */
+export function buildTimelineBlocks({
+  signals,
+  eventsByDate,
+  routinesByDate,
+  dates,
+}: {
+  signals: WorkSignal[];
+  eventsByDate: Record<string, CalendarEvent[] | undefined>;
+  routinesByDate: Record<string, RoutineToday[] | undefined>;
+  dates: string[];
+}): TimedBlock[] {
+  const seen = new Set<string>();
+  const out: TimedBlock[] = [];
+  for (const date of dates) {
+    const blocks = buildTodayBlocks({
+      signals,
+      events: eventsByDate[date] ?? [],
+      routines: routinesByDate[date] ?? [],
+      date,
+    });
+    for (const b of blocks) {
+      if (seen.has(b.id)) continue;
+      seen.add(b.id);
+      out.push(b);
+    }
+  }
   return out;
 }
