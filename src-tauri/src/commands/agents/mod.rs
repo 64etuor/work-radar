@@ -2,11 +2,13 @@ mod enrich;
 mod selfcheck;
 mod spine;
 mod triage;
+mod usage;
 
 pub use enrich::*;
 pub use selfcheck::*;
 pub use spine::*;
 pub use triage::*;
+pub use usage::*;
 
 use crate::agent::codex_availability;
 use crate::db::Db;

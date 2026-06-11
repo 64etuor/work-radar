@@ -33,6 +33,20 @@ export function useEnrichAllRunning(): boolean {
   );
 }
 
+/**
+ * claude/codex 사용량 한도(5h/주간 게이지) — Control Room 헤더.
+ * 외부 호출 빈도는 백엔드 TTL 캐시가 묶으므로 폴링은 고정 30s(snapshot 4s 패턴과 동일한 always-on).
+ */
+export function useAgentUsageStatus() {
+  return useQuery({
+    queryKey: ["agentUsageStatus"],
+    queryFn: () => unwrap(commands.agentUsageStatus()),
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+    retry: false, // 실패는 unavailable 표시로 — 다음 폴링이 자연 재시도.
+  });
+}
+
 /** codex 설치/인증 상태 (자동화 UI 활성/비활성 판정). */
 export function useCodexStatus() {
   return useQuery({

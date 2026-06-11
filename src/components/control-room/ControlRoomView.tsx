@@ -12,6 +12,7 @@ import {
 } from "../../lib/query/governance";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
+import { AgentUsageStrip } from "./AgentUsageStrip";
 import { CommandDeck } from "./CommandDeck";
 import { FlowSchematic } from "./FlowSchematic";
 import { ProjectTabs } from "./ProjectTabs";
@@ -51,6 +52,7 @@ export default function ControlRoomView() {
         <h1 className="inline-flex items-center gap-2 text-lg font-semibold">
           <Gauge size={18} aria-hidden /> Control Room
         </h1>
+        <AgentUsageStrip />
         <span className="cr-stamp">
           {stamp}
           <Button

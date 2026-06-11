@@ -251,6 +251,8 @@ export const commands = {
 } | null, AppError>(__TAURI_INVOKE("sprint_status")),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, AppError>(__TAURI_INVOKE("codex_status")),
+	/**  claude/codex 사용량 한도 스냅샷 (TTL 캐시 적용, 읽기 전용 — 외부 변경 0). */
+	agentUsageStatus: () => typedError<AgentUsageStatus, AppError>(__TAURI_INVOKE("agent_usage_status")),
 	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */
 	triggerEchoJob: (input: TriggerEchoInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_echo_job", { input })),
 	/**  codex 잡 트리거 (read_only 샌드박스 고정 — 실행 레일=Phase 10). 미설치/미인증이면 Err(graceful degrade). */
@@ -773,6 +775,22 @@ export type AgentRunView = {
  *  proposed(큐 대기) → running → succeeded | failed | cancelled. (awaiting_approval은 Phase 8.)
  */
 export type AgentStatus = "proposed" | "awaiting_approval" | "running" | "succeeded" | "failed" | "cancelled";
+
+/**  에이전트 하나의 사용량 상태 (graceful degrade — 못 읽으면 available=false). */
+export type AgentUsage = {
+	available: boolean,
+	/**  unavailable 사유 (사람이 읽을, 토큰/PII 없음). */
+	detail: string | null,
+	windows: UsageWindow[],
+	/**  데이터 기준 시각 (codex=세션 이벤트 timestamp). None=알 수 없음. */
+	asOf: string | null,
+};
+
+/**  헤더 게이지 페이로드 — claude + codex 묶음. */
+export type AgentUsageStatus = {
+	claude: AgentUsage,
+	codex: AgentUsage,
+};
 
 /**  IPC 경계를 넘는 유일한 에러 타입. */
 export type AppError = {
@@ -2465,6 +2483,15 @@ export type UpdateStatus = {
 	lastCheckedAt: string | null,
 	/**  staging에 installed와 다른 commit가 받아져 있으면 true(적용 가능). */
 	updateAvailable: boolean,
+};
+
+/**  사용량 윈도(5시간/주간). `used_percent`는 0..=100. */
+export type UsageWindow = {
+	/**  "five_hour" | "weekly" (표시 라벨은 프런트가 결정). */
+	id: string,
+	usedPercent: number | null,
+	/**  리셋 시각 (ISO 8601 UTC). 소스에 없으면 None. */
+	resetsAt: string | null,
 };
 
 /**

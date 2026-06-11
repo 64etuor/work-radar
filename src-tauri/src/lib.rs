@@ -12,6 +12,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 
 mod agent;
+mod agent_usage;
 mod api;
 mod cache;
 mod calendar;
@@ -166,6 +167,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::sprint_status,
         // Agent 스파인 (잡 큐 + bounds + kill, Phase 7).
         commands::codex_status,
+        commands::agent_usage_status,
         commands::trigger_echo_job,
         commands::trigger_codex_job,
         commands::list_agent_runs,
