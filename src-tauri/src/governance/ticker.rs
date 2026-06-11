@@ -759,13 +759,20 @@ pub async fn recover_interrupted_ticks(db: &Db) -> Result<u64, AppError> {
     Ok(res.rows_affected())
 }
 
-pub(crate) async fn resolve_project_repo_path(
+/// 집계 대상 로컬 레포 한 행 — Control Room이 "어느 레포를 접었는지" 표시할 수 있게
+/// 경로뿐 아니라 id도 노출한다. 선정 규칙(첫 enabled 로컬 레포)은 tick과 동일해야 한다.
+pub(crate) struct ProjectRepoRow {
+    pub id: String,
+    pub local_path: String,
+}
+
+pub(crate) async fn resolve_project_repo_row(
     db: &Db,
     project_id: &str,
-) -> Result<PathBuf, AppError> {
+) -> Result<ProjectRepoRow, AppError> {
     ensure_project_exists(db, project_id).await?;
-    let path: Option<String> = sqlx::query_scalar(
-        "SELECT local_path FROM repos \
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT id, local_path FROM repos \
          WHERE project_id = ?1 AND provider = 'local' AND enabled = 1 \
            AND local_path IS NOT NULL AND local_path != '' \
          ORDER BY created_at, id LIMIT 1",
@@ -773,12 +780,22 @@ pub(crate) async fn resolve_project_repo_path(
     .bind(project_id)
     .fetch_optional(db)
     .await?;
-    path.map(PathBuf::from).ok_or_else(|| {
-        AppError::not_found(
-            "ticker.repo_not_found",
-            "project has no enabled local repo with local_path",
-        )
-    })
+    row.map(|(id, local_path)| ProjectRepoRow { id, local_path })
+        .ok_or_else(|| {
+            AppError::not_found(
+                "ticker.repo_not_found",
+                "project has no enabled local repo with local_path",
+            )
+        })
+}
+
+pub(crate) async fn resolve_project_repo_path(
+    db: &Db,
+    project_id: &str,
+) -> Result<PathBuf, AppError> {
+    Ok(PathBuf::from(
+        resolve_project_repo_row(db, project_id).await?.local_path,
+    ))
 }
 
 fn error_report_json(code: &str, message: &str) -> String {

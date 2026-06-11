@@ -16,6 +16,7 @@ import { AgentUsageStrip } from "./AgentUsageStrip";
 import { CommandDeck } from "./CommandDeck";
 import { FlowSchematic } from "./FlowSchematic";
 import { ProjectTabs } from "./ProjectTabs";
+import { RepoCoverage } from "./RepoCoverage";
 import { Vitals } from "./Vitals";
 
 export default function ControlRoomView() {
@@ -71,7 +72,14 @@ export default function ControlRoomView() {
       </div>
 
       {rows.length > 0 && (
-        <ProjectTabs rows={rows} activeProjectId={activeProjectId} onSelect={setSelectedProject} />
+        <div className="cr-projectbar">
+          <ProjectTabs
+            rows={rows}
+            activeProjectId={activeProjectId}
+            onSelect={setSelectedProject}
+          />
+          <RepoCoverage covered={data?.coveredRepo} />
+        </div>
       )}
 
       {!ticker.isLoading && rows.length === 0 && (

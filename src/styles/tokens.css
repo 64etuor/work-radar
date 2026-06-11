@@ -28,7 +28,9 @@
   --color-wr-coral-soft: #ffad9b; /* Soft Coral — chip 보더 */
   --color-wr-green: #003c33; /* Deep Enterprise Green — 다크 product band */
   --color-wr-status-working: #16a34a; /* 에이전트 상태등 — 작업중(초록), 흰/다크 양쪽 가독 */
-  --color-wr-status-waiting: #eab308; /* 에이전트 상태등 — 입력 대기(노랑) */
+  --color-wr-status-waiting: #eab308; /* 에이전트 상태등 — 입력 대기(노랑). 소형 상태 점 전용 */
+  --color-wr-status-waiting-deep: #a16207; /* 대기 톤의 절제된 골드 — 큰 면적(노드 보더/텍스트)용.
+     밝은 waiting 노랑은 white editorial 캔버스에서 카드 보더로 쓰면 시각적으로 너무 시끄럽다 */
   --color-wr-navy: #071829; /* Dark Navy — security/financial band */
   --color-wr-brand-claude: #d97757; /* Claude 브랜드 terra — 에이전트 사용량 게이지 아이콘 */
 

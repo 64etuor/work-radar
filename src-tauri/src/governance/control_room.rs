@@ -7,9 +7,9 @@
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::governance::snapshot::{parse_control_room_snapshot, ControlRoomSnapshot};
+use crate::governance::snapshot::{parse_control_room_snapshot, ControlRoomSnapshot, CoveredRepo};
 use crate::governance::ticker::{
-    resolve_boule_cli_entrypoint, resolve_node_bin, resolve_project_repo_path,
+    resolve_boule_cli_entrypoint, resolve_node_bin, resolve_project_repo_row,
 };
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
@@ -128,16 +128,46 @@ pub async fn get_project_control_room_snapshot_with_runner<R: SnapshotCommandRun
     // has no `.boule/workspace` to fold — that is an EMPTY snapshot, not an error. Surfacing a
     // raw `ticker.repo_not_found` here would re-introduce the broken-on-live failure T4b fixes
     // (plan §6). Unknown-project and any other error still propagate.
-    let repo_path = match resolve_project_repo_path(db, project_id).await {
-        Ok(path) => path,
+    let repo = match resolve_project_repo_row(db, project_id).await {
+        Ok(row) => row,
         Err(err) if err.code == "ticker.repo_not_found" => {
             return Ok(ControlRoomSnapshot::default())
         }
         Err(err) => return Err(err),
     };
     let live = crate::governance::ticker::current_live_enabled(db, project_id).await?;
-    let stdout = runner.run_snapshot_command(&repo_path, live).await?;
-    parse_control_room_snapshot(&stdout)
+    let stdout = runner
+        .run_snapshot_command(Path::new(&repo.local_path), live)
+        .await?;
+    let mut snap = parse_control_room_snapshot(&stdout)?;
+    snap.covered_repo = Some(resolve_covered_repo(db, project_id, repo).await?);
+    Ok(snap)
+}
+
+/// 멀티레포 프로젝트 coverage 표시 — 접힌 레포의 식별 + 프로젝트의 enabled 로컬 레포 총수.
+async fn resolve_covered_repo(
+    db: &Db,
+    project_id: &str,
+    repo: crate::governance::ticker::ProjectRepoRow,
+) -> Result<CoveredRepo, AppError> {
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM repos \
+         WHERE project_id = ?1 AND provider = 'local' AND enabled = 1 \
+           AND local_path IS NOT NULL AND local_path != ''",
+    )
+    .bind(project_id)
+    .fetch_one(db)
+    .await?;
+    let name = Path::new(&repo.local_path)
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| repo.local_path.clone());
+    Ok(CoveredRepo {
+        repo_id: repo.id,
+        name,
+        local_path: repo.local_path,
+        enabled_local_total: total.max(1) as u32,
+    })
 }
 
 #[cfg(test)]
@@ -236,6 +266,63 @@ mod tests {
 
         assert_eq!(snap.tasks.len(), 1);
         assert_eq!(snap.generated_at.as_deref(), Some("2026-06-09T00:00:00Z"));
+        // coverage 식별: 접힌 레포의 id/이름(경로 마지막 세그먼트)/총수.
+        let covered = snap.covered_repo.expect("covered repo populated");
+        assert_eq!(covered.repo_id, "r1");
+        assert_eq!(covered.name, "repo-under-test");
+        assert_eq!(covered.local_path, "/tmp/repo-under-test");
+        assert_eq!(covered.enabled_local_total, 1);
+    }
+
+    /// 멀티레포 프로젝트: 첫 enabled 로컬 레포(created_at, id 순)만 접고, 총수로 형제 존재를 알린다.
+    #[tokio::test]
+    async fn multi_repo_project_covers_first_repo_and_reports_total() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", "/tmp/first-repo").await;
+        seed_local_repo(&db, "p1", "r2", "/tmp/second-repo").await;
+        let runner = FakeRunner::ok(VALID_SNAPSHOT);
+        let calls = runner.calls.clone();
+
+        let snap = get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .expect("snapshot");
+
+        // 같은 created_at(초 단위)에서는 id 순 — r1이 선정.
+        assert_eq!(
+            calls.lock().expect("calls lock")[0].0,
+            PathBuf::from("/tmp/first-repo")
+        );
+        let covered = snap.covered_repo.expect("covered repo populated");
+        assert_eq!(covered.repo_id, "r1");
+        assert_eq!(covered.enabled_local_total, 2, "형제 레포 존재가 드러난다");
+    }
+
+    /// disabled 레포는 선정에서도 총수에서도 빠진다 (enabled=1 술어 잠금).
+    #[tokio::test]
+    async fn disabled_repo_excluded_from_coverage_total() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", "/tmp/enabled-repo").await;
+        sqlx::query(
+            "INSERT INTO repos (id, project_id, provider, local_path, default_branch, enabled) \
+             VALUES ('r2', 'p1', 'local', '/tmp/disabled-repo', 'main', 0)",
+        )
+        .execute(&db)
+        .await
+        .expect("seed disabled repo");
+        let runner = FakeRunner::ok(VALID_SNAPSHOT);
+
+        let snap = get_project_control_room_snapshot_with_runner(&db, "p1", runner)
+            .await
+            .expect("snapshot");
+
+        let covered = snap.covered_repo.expect("covered repo populated");
+        assert_eq!(covered.repo_id, "r1");
+        assert_eq!(
+            covered.enabled_local_total, 1,
+            "disabled 레포는 총수 미포함"
+        );
     }
 
     #[tokio::test]
@@ -269,6 +356,10 @@ mod tests {
 
         assert_eq!(snap, ControlRoomSnapshot::default());
         assert!(snap.tasks.is_empty() && snap.generated_at.is_none());
+        assert!(
+            snap.covered_repo.is_none(),
+            "레포 없음 → coverage 칩 숨김 계약"
+        );
         // Never shelled out — no local repo to fold.
         assert!(calls.lock().expect("calls lock").is_empty());
     }

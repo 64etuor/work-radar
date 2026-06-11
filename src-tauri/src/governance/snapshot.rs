@@ -222,6 +222,24 @@ pub struct ControlRoomSnapshot {
     pub infra: Vec<PreflightCheck>,
     #[serde(default)]
     pub readiness: ReadinessView,
+    /// 이 스냅샷이 실제로 접은 레포(멀티레포 프로젝트 coverage 표시). CLI 출력이 아니라
+    /// Rust가 DB 해석 결과로 채운다 — None = 로컬 레포 없는 프로젝트(빈 스냅샷).
+    #[serde(default)]
+    pub covered_repo: Option<CoveredRepo>,
+}
+
+/// Control Room 스냅샷의 집계 대상 레포 식별. 프로젝트는 레포를 여러 개 가질 수 있지만
+/// 스냅샷은 첫 enabled 로컬 레포 하나만 접는다(`resolve_project_repo_row`) — FE가 그
+/// 사실을 표시할 수 있도록 식별 + 형제 수를 함께 내려준다.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CoveredRepo {
+    pub repo_id: String,
+    /// 표시용 이름 — local_path의 마지막 세그먼트.
+    pub name: String,
+    pub local_path: String,
+    /// 프로젝트의 enabled 로컬 레포 총수(이 레포 포함). 1 초과 = 미포함 레포 존재.
+    pub enabled_local_total: u32,
 }
 
 /// Parse the combined Control Room snapshot JSON emitted by `boule snapshot --json`.
