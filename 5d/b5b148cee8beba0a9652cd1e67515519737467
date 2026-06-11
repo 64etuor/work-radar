@@ -1,0 +1,48 @@
+src/components/control-room/AgentUsageStrip.tsx
+  s_9b9c8df07c54b0::t_dc2642c6f66ca2 24
+  s_9b9c8df07c54b0::t_773d11fbf4874f 13-14
+  s_9b9c8df07c54b0::t_218c33e5f8b73c 25-26,28
+  s_9b9c8df07c54b0::t_80f83a792346fc 42-43
+  s_9b9c8df07c54b0::t_b1041bf8513f86 1-12,15-23,27,29-41,44-67
+src/components/control-room/ControlRoomView.tsx
+  s_9b9c8df07c54b0::t_a05c0d7473c789 55
+  s_9b9c8df07c54b0::t_2dbf28eea00aa1 15
+src-tauri/src/lib.rs
+  s_9b9c8df07c54b0::t_d0dd316a49f2be 15
+  s_9b9c8df07c54b0::t_f57d769012251e 170
+src/lib/agentUsage.test.ts
+  s_9b9c8df07c54b0::t_645711ea5ac516 1-39
+src/lib/query/agents.ts
+  s_9b9c8df07c54b0::t_f2e48b7838db90 64-75
+src/lib/agentUsage.ts
+  s_9b9c8df07c54b0::t_9b7556d88cc818 1-46
+src-tauri/src/commands/agents/usage.rs
+  s_9b9c8df07c54b0::t_ea64456b5e8d91 1-73
+docs/decisions.md
+  s_9b9c8df07c54b0::t_5f558e43d265ff 606
+src/components/control-room/ControlRoomView.css
+  s_9b9c8df07c54b0::t_6d643b97b2cc35 21,23-25,28-30,32
+  s_9b9c8df07c54b0::t_5f6b3dad16727f 39-129
+src-tauri/src/agent_usage.rs
+  s_9b9c8df07c54b0::t_c34a21dd71f4c4 1-192,199-294,301-308,313-364
+  s_9b9c8df07c54b0::t_d7ef6ccba35074 193-198,296-300,309-312
+  s_9b9c8df07c54b0::t_3fad41f707aab2 295
+src-tauri/src/commands/agents/mod.rs
+  s_9b9c8df07c54b0::t_79b7e9383feba8 5,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5db5b148cee8beba0a9652cd1e67515519737467",
+  "prompts": {},
+  "sessions": {
+    "s_9b9c8df07c54b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01cf6144-ac31-46e8-80c0-7fced600563d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
