@@ -3,6 +3,18 @@
    collapsed=원형 트리거(48px ⏎ + 펄스), expanded=가로 pill(원형이 좌측 안으로 흡수, form fade-in).
    z=20(카드 < 20 < cmdk 90). `prefers-reduced-motion: reduce`면 펄스/transition 무효. */
 .brain-dump-toggle {
+  /* component-local tokens */
+  --bdt-shadow-rest: 0 1px 0 rgba(10, 14, 30, 0.02), 0 8px 22px rgba(10, 14, 30, 0.08);
+  --bdt-shadow-hover: 0 1px 0 rgba(10, 14, 30, 0.02), 0 12px 28px rgba(255, 119, 89, 0.18);
+  --bdt-shadow-open: 0 1px 0 rgba(10, 14, 30, 0.02), 0 14px 32px rgba(255, 119, 89, 0.18);
+  --bdt-trigger-bg-rest: linear-gradient(135deg, #1a1a20 0%, #303038 100%);
+  --bdt-trigger-bg-open: linear-gradient(135deg, var(--color-wr-coral) 0%, #d65a44 100%);
+  --bdt-trigger-color-open: #fff;
+  --bdt-trigger-shadow-rest:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  --bdt-trigger-shadow-open:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+
   position: absolute;
   top: 50%;
   left: 50%;
@@ -16,9 +28,7 @@
   border: 1px solid var(--color-wr-border-light);
   background: var(--color-wr-bg);
   border-radius: 9999px;
-  box-shadow:
-    0 1px 0 rgba(10, 14, 30, 0.02),
-    0 8px 22px rgba(10, 14, 30, 0.08);
+  box-shadow: var(--bdt-shadow-rest);
   transform: translate(-50%, -50%);
   transition:
     width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -33,15 +43,11 @@
   padding: 0 8px 0 4px;
   background: var(--color-wr-bg);
   border-color: var(--color-wr-coral-soft);
-  box-shadow:
-    0 1px 0 rgba(10, 14, 30, 0.02),
-    0 14px 32px rgba(255, 119, 89, 0.18);
+  box-shadow: var(--bdt-shadow-open);
 }
 .brain-dump-toggle:hover {
   border-color: var(--color-wr-coral-soft);
-  box-shadow:
-    0 1px 0 rgba(10, 14, 30, 0.02),
-    0 12px 28px rgba(255, 119, 89, 0.18);
+  box-shadow: var(--bdt-shadow-hover);
 }
 
 /* 원형 트리거 — ⏎ 아이콘. collapsed 상태에서만 펄스 링 발산. */
@@ -55,14 +61,12 @@
   align-items: center;
   justify-content: center;
   border: none;
-  background: linear-gradient(135deg, #1a1a20 0%, #303038 100%);
+  background: var(--bdt-trigger-bg-rest);
   color: var(--color-wr-coral);
   border-radius: 9999px;
   cursor: pointer;
   outline-offset: 3px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: var(--bdt-trigger-shadow-rest);
   transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .brain-dump-toggle[data-state="closed"] .bd-trigger:hover {
@@ -73,11 +77,9 @@
   width: 32px;
   height: 32px;
   margin: 7px 6px 7px 7px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--color-wr-coral) 0%, #d65a44 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  color: var(--bdt-trigger-color-open);
+  background: var(--bdt-trigger-bg-open);
+  box-shadow: var(--bdt-trigger-shadow-open);
 }
 .bd-icon {
   position: relative;

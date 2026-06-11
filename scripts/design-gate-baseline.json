@@ -45,9 +45,5 @@
   "R3|src/components/worktree/WorktreeHeader.tsx|text-[12px]",
   "R3|src/components/worktree/WorktreeLensToolbar.tsx|text-[12px]",
   "R3|src/components/worktree/WorktreeRefsBar.tsx|text-[12px]",
-  "R3|src/components/worktree/WorktreeReviewPanel.tsx|text-[12px]",
-  "R3|src/poc/PocSettings.tsx|text-[11px]",
-  "R3|src/poc/PocSettings.tsx|text-[13px]",
-  "R3|src/poc/PocSettings.tsx|text-[9px]",
-  "R3|src/poc/PocSettings.tsx|tracking-[0.12em]"
+  "R3|src/components/worktree/WorktreeReviewPanel.tsx|text-[12px]"
 ]

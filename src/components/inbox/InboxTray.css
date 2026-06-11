@@ -1,4 +1,6 @@
 .inbox-tray {
+  /* component-local token — action-blue 배지 위 텍스트(라이트/다크 동일 유지) */
+  --it-on-accent: #fff;
   display: flex;
   max-height: min(70vh, 560px);
   flex-direction: column;
@@ -121,7 +123,7 @@
   flex: 0 0 auto;
   border-radius: 999px;
   background: var(--color-wr-action-blue);
-  color: #fff;
+  color: var(--it-on-accent);
   font-size: 10px;
   line-height: 1;
   padding: 3px 6px;

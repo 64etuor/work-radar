@@ -2,17 +2,21 @@
    absolute 배치라 별도 클래스로 분리. position:relative로 flex/grid에서 자연 흐름. */
 
 .postit-card {
+  /* component-local tokens — postit 그림자(보드 .cb .postit과 동일 비주얼) */
+  --postit-shadow-rest: 0 6px 16px rgba(15, 20, 40, 0.08);
+  --postit-shadow-drag: 0 12px 24px rgba(15, 20, 40, 0.18);
+
   position: relative;
   width: 150px;
   box-sizing: border-box;
   min-height: 74px;
-  background: var(--color-wr-bg, #fff);
+  background: var(--color-wr-bg);
   border: 1px solid var(--color-wr-border-light);
   border-left: 4px solid var(--color-wr-sticky-border);
   border-radius: var(--cb-r-sm);
   padding: 8px 11px 22px;
   cursor: grab;
-  box-shadow: 0 6px 16px rgba(15, 20, 40, 0.08);
+  box-shadow: var(--postit-shadow-rest);
   font: 400 13px/1.4 var(--font-sans);
   color: var(--color-wr-fg);
   user-select: none;
@@ -25,7 +29,7 @@
 .postit-card:active,
 .postit-card[data-dragging] {
   cursor: grabbing;
-  box-shadow: 0 12px 24px rgba(15, 20, 40, 0.18);
+  box-shadow: var(--postit-shadow-drag);
 }
 
 .postit-card[data-dragging] {

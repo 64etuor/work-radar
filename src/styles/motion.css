@@ -202,18 +202,18 @@
 @keyframes wr-pulse-ring {
   0% {
     box-shadow:
-      0 0 0 0 var(--wr-pulse-primary, rgba(255, 119, 89, 0.55)),
-      0 0 0 0 var(--wr-pulse-secondary, rgba(255, 119, 89, 0.35));
+      0 0 0 0 var(--wr-pulse-primary),
+      0 0 0 0 var(--wr-pulse-secondary);
   }
   70% {
     box-shadow:
-      0 0 0 14px var(--wr-pulse-clear, rgba(255, 119, 89, 0)),
-      0 0 0 22px var(--wr-pulse-clear, rgba(255, 119, 89, 0));
+      0 0 0 14px var(--wr-pulse-clear),
+      0 0 0 22px var(--wr-pulse-clear);
   }
   100% {
     box-shadow:
-      0 0 0 0 var(--wr-pulse-clear, rgba(255, 119, 89, 0)),
-      0 0 0 0 var(--wr-pulse-clear, rgba(255, 119, 89, 0));
+      0 0 0 0 var(--wr-pulse-clear),
+      0 0 0 0 var(--wr-pulse-clear);
   }
 }
 
@@ -248,7 +248,7 @@
 
 @keyframes wr-radial-backdrop-in {
   from {
-    background: rgb(255 255 255 / 0);
+    background: var(--wr-radial-fade-from);
   }
   to {
     background: var(--radial-backdrop-bg, transparent);
@@ -260,7 +260,7 @@
     background: var(--radial-backdrop-bg, transparent);
   }
   to {
-    background: rgb(255 255 255 / 0);
+    background: var(--wr-radial-fade-from);
   }
 }
 
@@ -392,6 +392,12 @@
  * 4개의 빔(top/right/bottom/left)을 4초 사이클의 각 25% 구간에 순차 활성 → 보더를 따라 회전.
  * pastel orb(HermesChatLog 빈 상태)와 동일 팔레트 — translateX/Y 만 변동(GPU 친화). */
 .hermes-border-light > span {
+  /* component-local tokens — 보더 글로우 파스텔(이 효과 한정, 전역 승격 금지) */
+  --hbl-pink: #ff9eb5;
+  --hbl-purple: #c8a6ff;
+  --hbl-blue: #9ed5ff;
+  --hbl-glow: 0 0 6px rgba(180, 150, 230, 0.6);
+
   position: absolute;
   display: block;
 }
@@ -408,29 +414,57 @@
 .hermes-border-light .hbl-top {
   top: 0;
   left: 0;
-  background: linear-gradient(90deg, transparent, #ff9eb5, #c8a6ff, #9ed5ff, transparent);
-  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--hbl-pink),
+    var(--hbl-purple),
+    var(--hbl-blue),
+    transparent
+  );
+  box-shadow: var(--hbl-glow);
   animation: hbl-top 4s linear infinite;
 }
 .hermes-border-light .hbl-right {
   top: 0;
   right: 0;
-  background: linear-gradient(180deg, transparent, #9ed5ff, #c8a6ff, #ff9eb5, transparent);
-  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--hbl-blue),
+    var(--hbl-purple),
+    var(--hbl-pink),
+    transparent
+  );
+  box-shadow: var(--hbl-glow);
   animation: hbl-right 4s linear infinite;
 }
 .hermes-border-light .hbl-bottom {
   bottom: 0;
   left: 0;
-  background: linear-gradient(270deg, transparent, #ff9eb5, #c8a6ff, #9ed5ff, transparent);
-  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  background: linear-gradient(
+    270deg,
+    transparent,
+    var(--hbl-pink),
+    var(--hbl-purple),
+    var(--hbl-blue),
+    transparent
+  );
+  box-shadow: var(--hbl-glow);
   animation: hbl-bottom 4s linear infinite;
 }
 .hermes-border-light .hbl-left {
   bottom: 0;
   left: 0;
-  background: linear-gradient(0deg, transparent, #9ed5ff, #c8a6ff, #ff9eb5, transparent);
-  box-shadow: 0 0 6px rgba(180, 150, 230, 0.6);
+  background: linear-gradient(
+    0deg,
+    transparent,
+    var(--hbl-blue),
+    var(--hbl-purple),
+    var(--hbl-pink),
+    transparent
+  );
+  box-shadow: var(--hbl-glow);
   animation: hbl-left 4s linear infinite;
 }
 /* 각 빔은 자기 구간(25%) 동안 -100% → 100%로 가로지르고 나머지 시간엔 100%(=off-screen)에 대기.

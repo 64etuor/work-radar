@@ -15,6 +15,26 @@
 .cb {
   /* --cb-r-{sm,md,lg}는 src/styles/tokens.css @theme로 승격(글로벌 공유). */
   --cb-pale-green: var(--color-wr-pale-green);
+
+  /* ── 사분면 드롭 존 틴트 (q1–q4 drop 상태 배경) ── */
+  --cb-zone-q1-tint: rgba(255, 119, 89, 0.1); /* coral @ 10% */
+  --cb-zone-q2-tint: rgba(0, 60, 51, 0.08); /* deep green @ 8% */
+  --cb-zone-q3-tint: rgba(24, 99, 220, 0.08); /* action blue @ 8% */
+  --cb-zone-q4-tint: rgba(147, 147, 159, 0.12); /* muted slate @ 12% */
+
+  /* ── 사분면 배지 배경 (b-q1 / b-age.old) ── */
+  --cb-badge-q1-bg: rgba(255, 119, 89, 0.14); /* coral @ 14% */
+  --cb-badge-age-old-bg: rgba(255, 119, 89, 0.12); /* coral @ 12% */
+
+  /* ── 포스트잇·리스트 아이템 그림자 ── */
+  --cb-shadow-postit: 0 8px 22px rgba(15, 20, 40, 0.12); /* 포스트잇 정지 상태 */
+  --cb-shadow-postit-drag: 0 16px 34px rgba(15, 20, 40, 0.26); /* 포스트잇 드래그 */
+  --cb-shadow-item-drag: 0 12px 26px rgba(15, 20, 40, 0.22); /* 리스트 항목 드래그 */
+
+  /* ── 영역 래디얼 메뉴 그림자 ── */
+  --cb-shadow-radial-core: 0 10px 24px rgb(10 14 30 / 0.14); /* 코어 버튼 기본 */
+  --cb-shadow-radial-core-active: 0 14px 32px rgb(10 14 30 / 0.18); /* 코어 버튼 hover/active */
+  --cb-shadow-radial-wheel: drop-shadow(8px 11px 0 rgb(33 33 33 / 0.15)); /* 휠 세그먼트 필터 */
   display: flex;
   flex-direction: column;
   /* view-shell(=100vh - AgentStatusBar) 안을 채운다. 100vh면 에이전트 바(P10a 56px)만큼
@@ -133,16 +153,16 @@
   background: var(--color-wr-elevated);
 }
 .cb .cell.q1.drop {
-  background: rgba(255, 119, 89, 0.1);
+  background: var(--cb-zone-q1-tint);
 }
 .cb .cell.q2.drop {
-  background: rgba(0, 60, 51, 0.08);
+  background: var(--cb-zone-q2-tint);
 }
 .cb .cell.q3.drop {
-  background: rgba(24, 99, 220, 0.08);
+  background: var(--cb-zone-q3-tint);
 }
 .cb .cell.q4.drop {
-  background: rgba(147, 147, 159, 0.12);
+  background: var(--cb-zone-q4-tint);
 }
 
 /* 포스트잇 (canvas 내 absolute) */
@@ -157,7 +177,7 @@
   border-radius: var(--cb-r-sm);
   padding: 10px 11px 24px;
   cursor: grab;
-  box-shadow: 0 8px 22px rgba(15, 20, 40, 0.12);
+  box-shadow: var(--cb-shadow-postit);
   font: 400 13px/1.4 var(--font-sans);
   color: var(--color-wr-fg);
   overflow: hidden;
@@ -274,7 +294,7 @@
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--area-color, var(--color-wr-border)) 36%, white);
   background: color-mix(in srgb, var(--area-color, var(--color-wr-bg)) 10%, var(--color-wr-bg));
-  box-shadow: 0 10px 24px rgb(10 14 30 / 0.14);
+  box-shadow: var(--cb-shadow-radial-core);
   cursor: pointer;
   font: 600 9px var(--font-mono);
   transition:
@@ -316,7 +336,7 @@
   width: 300px;
   height: 300px;
   overflow: visible;
-  filter: drop-shadow(8px 11px 0 rgb(33 33 33 / 0.15));
+  filter: var(--cb-shadow-radial-wheel);
 }
 .cb .area-wheel-segment {
   cursor: pointer;
@@ -375,7 +395,7 @@
   color: color-mix(in srgb, var(--area-color) 86%, var(--color-wr-fg));
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--area-color) 22%, transparent),
-    0 14px 32px rgb(10 14 30 / 0.18);
+    var(--cb-shadow-radial-core-active);
 }
 @keyframes area-wheel-piece-in {
   from {
@@ -414,15 +434,6 @@
     opacity: 0;
     transform: scale(0.58) translateY(4px);
   }
-}
-/* kind 정본 컬러 — 베이지(personal) / 코랄(work). KindBadge와 동일 의도. */
-.cb .chip-personal {
-  background: var(--color-secondary);
-  color: var(--color-secondary-foreground);
-}
-.cb .chip-work {
-  background: var(--color-accent);
-  color: var(--color-accent-foreground);
 }
 /* Phase 9 enrich — 확정 영역(area) chip. */
 .cb .chip-area {
@@ -498,7 +509,7 @@
 }
 .cb .postit.dragging {
   cursor: grabbing;
-  box-shadow: 0 16px 34px rgba(15, 20, 40, 0.26);
+  box-shadow: var(--cb-shadow-postit-drag);
   transition:
     transform var(--wr-motion-fast),
     box-shadow var(--wr-motion-base);
@@ -716,7 +727,7 @@
   letter-spacing: 0.04em;
 }
 .cb .b-q1 {
-  background: rgba(255, 119, 89, 0.14);
+  background: var(--cb-badge-q1-bg);
   color: var(--color-wr-danger);
 }
 .cb .b-q2 {
@@ -737,7 +748,7 @@
   border: 1px solid var(--color-wr-border-light);
 }
 .cb .b-age.old {
-  background: rgba(255, 119, 89, 0.12);
+  background: var(--cb-badge-age-old-bg);
   color: var(--color-wr-danger);
   border-color: transparent;
 }
@@ -795,7 +806,7 @@
   z-index: 50;
   opacity: 0.6;
   background: var(--color-wr-bg);
-  box-shadow: 0 12px 26px rgba(15, 20, 40, 0.22);
+  box-shadow: var(--cb-shadow-item-drag);
   transition: box-shadow var(--wr-motion-base);
 }
 .cb .item[data-dragging] .grip {
@@ -863,11 +874,6 @@
   font: 400 11px var(--font-sans);
   color: var(--color-wr-muted);
 }
-.cb .b-time {
-  background: var(--color-wr-accent-soft);
-  color: var(--color-wr-accent);
-}
-
 /* Phase 15 — 미분류 영역 "전체 제안 실행"(배치 enrich) 버튼. */
 /* 인박스 하단 풀폭 액션 버튼(전체 제안 실행) — 카드 영역은 layoutZone이 INBOX_FOOTER만큼 비워둠. */
 .cb .inbox-enrich-all {
@@ -896,43 +902,6 @@
 .cb .inbox-enrich-all:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.cb-toast {
-  position: fixed;
-  left: 50%;
-  bottom: 96px;
-  transform: translateX(-50%) translateY(8px);
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--color-wr-near-black);
-  color: var(--color-wr-on-dark-btn);
-  padding: 9px 16px;
-  border-radius: 999px;
-  font: 500 13px var(--font-sans);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 95;
-  transition: var(--wr-motion-slow);
-  white-space: nowrap;
-}
-.cb-toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-  pointer-events: auto;
-}
-.cb-toast-link {
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--color-wr-on-dark-btn);
-  border: 0;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font: 600 12px var(--font-sans);
-  cursor: pointer;
-}
-.cb-toast-link:hover {
-  background: rgba(255, 255, 255, 0.28);
 }
 
 /* ── 반응형 ── */

@@ -1,12 +1,14 @@
 /* 카드 액션 메뉴 — fixed, .cb 밖에 portal 없이 body 안에 그리므로 별도 스코프 */
 .cb-card-menu {
+  /* component-local token — 카드 메뉴 팝업 그림자 */
+  --cbm-shadow: 0 16px 40px rgba(10, 14, 30, 0.22);
   position: fixed;
   z-index: 80;
   min-width: 170px;
   background: var(--color-wr-popup-bg);
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--cb-r-md);
-  box-shadow: 0 16px 40px rgba(10, 14, 30, 0.22);
+  box-shadow: var(--cbm-shadow);
   padding: 6px;
 }
 .cb-card-menu button {

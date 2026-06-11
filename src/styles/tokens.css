@@ -126,6 +126,12 @@
    * 예외: MatrixCanvas 카드 drag(물리 튜닝값)와 cb-pop 스프링 애니메이션은 의도적 bespoke.
    */
   --wr-motion-fast: 0.12s; /* 빠른 상호작용 피드백 (hover, toggle) */
+  /* wr-pulse-ring 기본 링 색 — 소비 컴포넌트가 override(BrainDumpToggle 등). motion.css 폴백의 SSOT. */
+  --wr-pulse-primary: rgba(255, 119, 89, 0.55);
+  --wr-pulse-secondary: rgba(255, 119, 89, 0.35);
+  --wr-pulse-clear: rgba(255, 119, 89, 0);
+  /* radial popover 백드롭 페이드 시작값(흰 0-alpha — keyframes 공용) */
+  --wr-radial-fade-from: rgb(255 255 255 / 0);
   --wr-motion-base: 0.18s; /* 뷰 전환 + 표준 요소 전환 */
   --wr-motion-slow: 0.28s; /* 슬라이드/팝오버 등 느린 전환 */
   --wr-motion-panel: 0.22s; /* 모달/팔레트/토스트 출현 */

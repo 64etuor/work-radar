@@ -1,5 +1,12 @@
 /* 전역 오락실 조이스틱. origin(커서 좌표)에 fixed, 베이스 중심을 origin에 맞춘다. */
 .cmd-knob {
+  --knob-shadow-float: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.14);
+  --knob-dome-hi: #fff;
+  --knob-dome-mid: #ececed;
+  --knob-dome-lo: #d8d8da;
+  --knob-stick-inset: rgba(255, 255, 255, 0.8);
+  --knob-stick-drop: rgba(0, 0, 0, 0.22);
+
   position: fixed;
   z-index: 70; /* 오버레이 스택 위 — 팔레트/드로어와 겹치지 않게(억제는 훅에서) */
   width: 0;
@@ -18,9 +25,7 @@
   border-radius: 50%;
   background: var(--color-wr-surface);
   border: 1px solid var(--color-wr-border);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 8px 24px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--knob-shadow-float);
 }
 
 .cmd-knob-guide {
@@ -70,10 +75,15 @@
   padding: 0;
   border-radius: 50%;
   border: 1px solid var(--color-wr-border);
-  background: radial-gradient(circle at 38% 32%, #fff 0%, #ececed 62%, #d8d8da 100%);
+  background: radial-gradient(
+    circle at 38% 32%,
+    var(--knob-dome-hi) 0%,
+    var(--knob-dome-mid) 62%,
+    var(--knob-dome-lo) 100%
+  );
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.8),
-    0 4px 10px rgba(0, 0, 0, 0.22);
+    inset 0 1px 1px var(--knob-stick-inset),
+    0 4px 10px var(--knob-stick-drop);
   cursor: grab;
   pointer-events: auto;
   transform: translate(-50%, -50%);

@@ -1,6 +1,11 @@
 /* ── ToastHost (A7) ────────────────────────────────────────────────────────── */
 
 .toast-host {
+  /* component-local tokens — 다크 토스트 표면 위 보더/액션 톤 */
+  --toast-border: rgba(255, 255, 255, 0.08);
+  --toast-action-bg: rgba(255, 255, 255, 0.16);
+  --toast-action-bg-hover: rgba(255, 255, 255, 0.28);
+
   position: fixed;
   right: 16px;
   bottom: 16px;
@@ -28,13 +33,13 @@
 .toast-error {
   background: var(--color-wr-near-black);
   color: var(--color-wr-on-dark-btn);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--toast-border);
 }
 
 .toast-success {
   background: var(--color-wr-near-black);
   color: var(--color-wr-on-dark-btn);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--toast-border);
 }
 
 .toast-info {
@@ -81,12 +86,12 @@
 
 .toast-error .toast-btn,
 .toast-success .toast-btn {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--toast-action-bg);
   color: var(--color-wr-on-dark-btn);
 }
 .toast-error .toast-btn:hover,
 .toast-success .toast-btn:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--toast-action-bg-hover);
 }
 
 .toast-info .toast-btn {

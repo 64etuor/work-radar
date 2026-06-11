@@ -3,10 +3,13 @@
  * Cohere white editorial: 흰 패널 + thin border, 절제된 그림자. 단일 창 네비게이션.
  */
 .cmdk-overlay {
+  /* component-local token — 팔레트 백드롭 스크림(navy dim) */
+  --cmdk-scrim: rgba(15, 20, 40, 0.28);
+
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: rgba(15, 20, 40, 0.28);
+  background: var(--cmdk-scrim);
   display: flex;
   align-items: flex-start;
   justify-content: center;

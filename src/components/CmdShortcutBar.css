@@ -1,5 +1,7 @@
 /* Cmd-hold 단축키 치트시트 — 화면 하단 중앙 고정(정렬 로직 없음). 레버/메뉴와 같은 세션. */
 .cmd-shortcut-bar {
+  --csb-shadow-float: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.14);
+
   position: fixed;
   left: 50%;
   bottom: 16px;
@@ -14,9 +16,7 @@
   border-radius: 12px;
   background: var(--color-wr-surface);
   border: 1px solid var(--color-wr-border);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 8px 24px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--csb-shadow-float);
   transform: translateX(-50%);
   animation: cmd-shortcut-bar-in var(--wr-motion-fast) var(--wr-ease-out) both;
 }
