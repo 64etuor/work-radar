@@ -1,0 +1,22 @@
+src/lib/timelineLayout.test.ts
+  s_bbe5afa2d0a5e5::t_b80b96972dfaf5 100-144
+src/lib/timelineLayout.ts
+  s_bbe5afa2d0a5e5::t_d4b1dccc79e8b7 50-62
+  s_bbe5afa2d0a5e5::t_9e136c1a95a5c3 9-10,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "34e9b11ac2186e651219ef103ddac15a331a122d",
+  "prompts": {},
+  "sessions": {
+    "s_bbe5afa2d0a5e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7d04a86-d93d-4e49-9873-85da3bd363b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
