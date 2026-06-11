@@ -1,0 +1,68 @@
+src/lib/query/timelineNotes.ts
+  s_bbe5afa2d0a5e5::t_cd38a26af4113b 31-41
+  s_bbe5afa2d0a5e5::t_8ad2f7b6b9142f 1
+src/components/TodayView.tsx
+  s_bbe5afa2d0a5e5::t_2f5933cb56ba76 68,70-76,82-85
+  s_bbe5afa2d0a5e5::t_11f8ed974c97bd 121,124-125,131-133,150,153,155,160-161,170-171,191,194,203,217
+  s_bbe5afa2d0a5e5::t_9e15fa5a6bf64c 448
+  s_bbe5afa2d0a5e5::t_5208b2c3fad1a0 408
+  s_bbe5afa2d0a5e5::t_74e0a4520d474f 421,429
+  s_bbe5afa2d0a5e5::t_869c317a6c416e 100-101,104,107,109-111,113-116,120,123
+  s_bbe5afa2d0a5e5::t_462365ac8a08e5 10
+  s_bbe5afa2d0a5e5::t_1a0166ec77f272 268-269,276-347
+  s_bbe5afa2d0a5e5::t_5cf74b497546ba 36,38,41,46-47,49,52-55
+src/components/today/timelinePreview.test.ts
+  s_bbe5afa2d0a5e5::t_069f200166acbc 28,33,45-46,50,56,61,72-73,83-84,86,91,96,109,118-146
+src/components/today/timelinePreview.ts
+  s_bbe5afa2d0a5e5::t_dda542d727338c 1-2,12-14,17,42,48-49,60,73,80,89-90,95-97,112,119-120,131
+src/components/TodayView.css
+  s_bbe5afa2d0a5e5::t_b421d65a0e1774 434,444-468
+src/lib/query/calendar.ts
+  s_bbe5afa2d0a5e5::t_d2ed155bceb1e5 25-37,39-46
+  s_bbe5afa2d0a5e5::t_2d81769292aca2 1
+src/components/today/useTimelineDnd.test.ts
+  s_bbe5afa2d0a5e5::t_069f200166acbc 3-4,16,35,62-63,77-78,97,114-115
+src/components/today/useTimelineDnd.ts
+  s_bbe5afa2d0a5e5::t_7b8927cc973c28 62-63,73,83
+  s_bbe5afa2d0a5e5::t_4f79882708f802 155,157-160
+  s_bbe5afa2d0a5e5::t_63ffed7549f8d2 104,113,123
+  s_bbe5afa2d0a5e5::t_0e1e17927f2b73 227-229,235,256
+  s_bbe5afa2d0a5e5::t_70aa55fcd2a2d7 259-260,262,266
+  s_bbe5afa2d0a5e5::t_4d08d2aa495645 318-322
+  s_bbe5afa2d0a5e5::t_fab87fa69e3817 376-379,385,400
+  s_bbe5afa2d0a5e5::t_731ccf5c6fcc51 452
+  s_bbe5afa2d0a5e5::t_474d48182c576e 284
+  s_bbe5afa2d0a5e5::t_5e0ad97b6988f6 17-18
+  s_bbe5afa2d0a5e5::t_32f857c5e11f70 35-41
+  s_bbe5afa2d0a5e5::t_a2d492590e926f 209
+  s_bbe5afa2d0a5e5::t_a0ba122c48a3b9 478,483-484
+  s_bbe5afa2d0a5e5::t_6d27e331e5fc2e 188-194,196
+  s_bbe5afa2d0a5e5::t_bd7065f7450d53 307-308,314-317,338,353
+  s_bbe5afa2d0a5e5::t_708617834f603b 34
+src/lib/query/routines.ts
+  s_bbe5afa2d0a5e5::t_a92bc9b3f549a2 12,22-32,34-37
+  s_bbe5afa2d0a5e5::t_fd56b5028ca261 1
+src/components/today/TimelineCanvas.tsx
+  s_bbe5afa2d0a5e5::t_1b9bf19f64dfaf 13-14,18,22-23,43-44,46-64,68-70,73,85-88,102-109,116,141,160,165-192,208,216-221
+  s_bbe5afa2d0a5e5::t_c32e8a0b6f9378 89-91,98,100
+src/components/today/TimelineBlock.tsx
+  s_bbe5afa2d0a5e5::t_38315b0e2d728d 108
+  s_bbe5afa2d0a5e5::t_81739b583ac179 47,59,70
+  s_bbe5afa2d0a5e5::t_e5a5901df69ec3 86,98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7190dbb91be200a3eb375b744324f6694d33c818",
+  "prompts": {},
+  "sessions": {
+    "s_bbe5afa2d0a5e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7d04a86-d93d-4e49-9873-85da3bd363b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
