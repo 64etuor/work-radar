@@ -1,0 +1,33 @@
+src/components/postit/PostitCard.css
+  s_31555ec447d242::t_90be88370a76d6 110,130,148,152,158-184
+  s_31555ec447d242::t_0a3b3f74c50774 103-104,112-113,117,119-127,129,131-136,145-147
+  s_31555ec447d242::t_ce6aaff7adc464 114,118,128,137-144,149,185
+src/components/CaptureBoard.css
+  s_31555ec447d242::t_d38270b940a1ac 613-614,628-630,632,635-638,648
+  s_31555ec447d242::t_494813eb9a5a4e 615
+  s_31555ec447d242::t_c2af4852b02cd3 633,649,706,712-724,732-740
+  s_31555ec447d242::t_f68a9041a7d3c9 610-611,616,623,626-627,631,641-646
+src/components/today/UnscheduledTray.tsx
+  s_31555ec447d242::t_ba41a6239cf4fc 2,7,89,94
+  s_31555ec447d242::t_b03164b75bb65e 123,165
+src/components/board/CheckIcon.tsx
+  s_31555ec447d242::t_5d3e48c08ddeb8 18
+  s_31555ec447d242::t_a0b701d489bae7 5-13
+  s_31555ec447d242::t_6c6e249f973cf4 1,4,14-17,19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "fc792925a168651b33872bc026eebbc52c128003",
+  "prompts": {},
+  "sessions": {
+    "s_31555ec447d242": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb63c-9203-7421-ba18-2299ac19438b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
