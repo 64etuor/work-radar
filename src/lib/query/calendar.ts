@@ -39,7 +39,6 @@ export function useCalendarEventsForDates(dates: string[]) {
         string,
         CalendarEvent[]
       >,
-      isLoading: results.some((r) => r.isLoading),
     }),
   });
 }

@@ -1,5 +1,7 @@
 import type { CalendarEvent, RoutineToday, TimelineNoteTarget, WorkSignal } from "@/bindings";
 
+import { localDateOf } from "./timeAxis";
+import { plusMinutesLocal } from "./timelineCoords";
 import type { TimedBlock } from "./timelineLayout";
 
 /**
@@ -86,23 +88,6 @@ function eventLookupKeys(e: CalendarEvent): string[] {
   );
 }
 
-/**
- * 로컬-ISO(`YYYY-MM-DDTHH:MM:SS[+09:00]`)에서 로컬 날짜(YYYY-MM-DD)만 추출.
- * 본 코드베이스의 scheduledAt/이벤트 start는 전부 로컬-오프셋 ISO로 기록되므로
- * 앞 10자가 곧 로컬 날짜다(`new Date` 재파싱은 UTC 변환으로 자정 경계 off-by-one 위험 → 회피).
- */
-function localDateOf(iso: string): string {
-  return iso.slice(0, 10);
-}
-
-function plusMin(iso: string, m: number): string {
-  // 로컬 ISO 보존(예: "2026-05-28T23:30:00"). `.toISOString()`을 쓰면 UTC로 변환되어
-  // 다운스트림 `new Date(iso).getHours()`에서 시간이 어긋난다(KST=+9 등). 자정/DST 교차 시 블록 위치가 깨진다.
-  const d = new Date(new Date(iso).getTime() + m * 60_000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
 function isoFor(
   date: string,
   hhmm: string,
@@ -153,7 +138,7 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
       kind: "signal",
       title: s.title,
       startISO: s.scheduledAt,
-      endISO: plusMin(s.scheduledAt, s.scheduledDuration),
+      endISO: plusMinutesLocal(s.scheduledAt, s.scheduledDuration),
       calendarId: s.linkedCalendarId ?? "",
       calendarLabel: s.linkedCalendarId ?? "",
       color: SIGNAL_COLOR,
@@ -189,7 +174,7 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
       kind: "event",
       title: routine?.title ?? e.title,
       startISO: e.start,
-      endISO: e.end ?? plusMin(e.start, 30),
+      endISO: e.end ?? plusMinutesLocal(e.start, 30),
       calendarId: e.calendarId,
       calendarLabel: e.calendarSummary,
       color: e.projectColor ?? EVENT_FALLBACK_COLOR,

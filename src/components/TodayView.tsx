@@ -185,9 +185,8 @@ export function TodayView() {
         removeEventFromCache(calendarId, eventId);
       } else if (block.kind === "routine" && block.routineId) {
         const routineId = block.routineId;
-        // 루틴 목록/블록이 선택 날짜(useTodayRoutines(date, …))로 조회되므로, "빼기"는 보고 있는
-        // 날짜(date)의 occurrence를 대상으로 EXDATE 한다 — 표시된 인스턴스와 일치(today 고정 시
-        // 다른 날짜를 보는 중에 엉뚱하게 오늘 occurrence가 지워진다).
+        // "빼기"는 표시된 occurrence의 날짜(occDate = 블록 startISO의 날짜)를 대상으로
+        // EXDATE 한다 — 보던 날짜가 아닌 블록 자신의 날짜라 연속 타임라인에서도 일치.
         // 빼기 = EXDATE: 로컬 skip 행 + 동기화 ON이면 master event EXDATE PATCH.
         await unwrap(commands.unscheduleRoutineToday(routineId, occDate));
         // per-instance Google 이벤트가 있으면(드물게 드래그로 배치됐던 경우) 함께 정리.
