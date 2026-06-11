@@ -1,0 +1,27 @@
+src/components/TodayView.tsx
+  s_31555ec447d242::t_f7f66817f840d8 46
+  s_31555ec447d242::t_0b750dbb26366b 28-31,77,117,138,140,296
+  s_31555ec447d242::t_cb2565b0b8814d 32
+  s_31555ec447d242::t_123c1526790785 60-63
+src/components/today/useTimelineScheduleActions.ts
+  s_31555ec447d242::t_65dcc1add9033b 1-80
+src/components/today/useTimelineScroll.ts
+  s_31555ec447d242::t_2626cf5aa58758 2-163
+  s_31555ec447d242::t_588c2f55a4a7bb 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "15662c949e05053621be1174496437162f5faee6",
+  "prompts": {},
+  "sessions": {
+    "s_31555ec447d242": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb63c-9203-7421-ba18-2299ac19438b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
