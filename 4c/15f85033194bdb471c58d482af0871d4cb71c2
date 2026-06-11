@@ -1,0 +1,39 @@
+src/components/TodayView.css
+  s_31555ec447d242::t_e463a26caff80a 65-67,124,306-311,355-356
+  s_31555ec447d242::t_6411e7a43244f8 312
+src/components/TodayView.tsx
+  s_31555ec447d242::t_e0c44415730a5c 231-234,241,244,247,251,257
+  s_31555ec447d242::t_3b1a1f45d52759 9,51-68,70-73,75,77-80
+  s_31555ec447d242::t_ec862031d35be7 69,74,76
+src/components/today/HistoryRail.tsx
+  s_31555ec447d242::t_5c86ea1ad8f49c 143,167-188,195-209,225,243
+  s_31555ec447d242::t_d8001550a273ae 189-194,238-242,244-258
+scripts/check-frontend-ownership.test.mjs
+  s_31555ec447d242::t_c1e54fdc81c997 61-66,109-120
+  s_31555ec447d242::t_c6fa97d12f6e57 16
+src/components/today/StagedBadge.tsx
+  s_31555ec447d242::t_4f55a4619d5ec8 27,35
+src/components/today/UnscheduledTray.tsx
+  s_31555ec447d242::t_383a0526e10092 227-234,237-243,245,271,277,284,286
+  s_31555ec447d242::t_d8001550a273ae 225
+src/components/today/TodayHeader.tsx
+  s_31555ec447d242::t_feae2fde17e257 103,126
+scripts/check-frontend-ownership.mjs
+  s_31555ec447d242::t_6424b643e35f34 8,34-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4c15f85033194bdb471c58d482af0871d4cb71c2",
+  "prompts": {},
+  "sessions": {
+    "s_31555ec447d242": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb63c-9203-7421-ba18-2299ac19438b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
