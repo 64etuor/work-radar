@@ -1,0 +1,19 @@
+vite.config.ts
+  s_c7ae2e76dc02ae::t_92757f35aba6a5 14-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "812fcf702bd3350bf333e691e74adb71811714f8",
+  "prompts": {},
+  "sessions": {
+    "s_c7ae2e76dc02ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfab002c-28d7-4865-a4a0-689215d39ab9",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}

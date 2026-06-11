@@ -1,0 +1,202 @@
+src/components/TodayView.tsx
+  s_c7ae2e76dc02ae::t_63313298c2ce4b 78-82,87,89,91,94-97,99-100
+  s_c7ae2e76dc02ae::t_aba60d31e4a114 105-115
+  s_c7ae2e76dc02ae::t_475b64a35ecbf4 122,126
+  s_c7ae2e76dc02ae::t_139e2a1149304d 128-143
+  s_c7ae2e76dc02ae::t_3e1750bc8b3833 144
+  s_c7ae2e76dc02ae::t_d4ebd5d3d8ef2d 197
+  s_c7ae2e76dc02ae::t_2dd9c44048cb79 200
+  s_c7ae2e76dc02ae::t_3bfa68451471fd 222-226
+  s_c7ae2e76dc02ae::t_e926a51aea3870 238,240
+  s_c7ae2e76dc02ae::t_9c75f87e984f3f 257,259-266,268-269,271-280,285
+  s_c7ae2e76dc02ae::t_76d6a355f814c7 287-294
+src/components/hermes/HermesChatLog.tsx
+  s_c7ae2e76dc02ae::t_e3c1e4ce6ac473 148-155
+src/components/hermes/useHermesPanelState.ts
+  s_c7ae2e76dc02ae::t_c0dc4a3dd54cc1 2
+  s_c7ae2e76dc02ae::t_435aeb8cc99c1b 63-69,71-83
+src/components/hermes/useHermesTabsStore.ts
+  s_c7ae2e76dc02ae::t_dea46b5a287d3d 323-324
+  s_c7ae2e76dc02ae::t_37392bc1106ec5 527
+src/components/SkillsView.tsx
+  s_c7ae2e76dc02ae::t_af3416f1a90d6f 22
+  s_c7ae2e76dc02ae::t_5759df0fd34792 127-128,134,138-140,142,144-145,147,150,154,157-158
+  s_c7ae2e76dc02ae::t_27e49e650f6d88 172,176
+src/components/board/CalendarDrawer.tsx
+  s_c7ae2e76dc02ae::t_ebf31eb8f98452 4
+  s_c7ae2e76dc02ae::t_ec77d1cf16364e 58
+src/components/control-room/FlowSchematic.tsx
+  s_c7ae2e76dc02ae::t_16671d32caaccd 10
+  s_c7ae2e76dc02ae::t_e5261d85ec7be1 43,48-49
+  s_c7ae2e76dc02ae::t_af3b0ab8328b5e 61-65,68-71,74-82,84,86,89,91,93-94
+src/components/inbox/inboxGrouping.ts
+  s_c7ae2e76dc02ae::t_c3afa1906e666f 17
+src/components/today/HistoryRail.tsx
+  s_c7ae2e76dc02ae::t_af7c9abe541547 1
+  s_c7ae2e76dc02ae::t_8fc3d0a71b0c3f 32,38,40,52,54-55
+  s_c7ae2e76dc02ae::t_63ff87a3e2f5c6 129,135
+src/components/worktree/WorktreeView.tsx
+  s_c7ae2e76dc02ae::t_2712a0a0a416cd 3
+  s_c7ae2e76dc02ae::t_89b147b6e82efd 42
+  s_c7ae2e76dc02ae::t_6b177fdfc21d6c 47,51
+  s_c7ae2e76dc02ae::t_06432a420bff20 157,165
+src/components/board/CalendarEventModal.tsx
+  s_c7ae2e76dc02ae::t_525d841451a2dc 3
+  s_c7ae2e76dc02ae::t_e7412156c19898 79
+src/components/hermes/sessionList.ts
+  s_c7ae2e76dc02ae::t_446c8a2fdf34e6 7
+src/components/board/CalendarView.tsx
+  s_c7ae2e76dc02ae::t_f6e0d0ce51bcef 61
+src/components/settings/NavigationSettings.tsx
+  s_c7ae2e76dc02ae::t_7a7f479ae51ee8 3
+  s_c7ae2e76dc02ae::t_fd2d3fa56cc6cb 60
+  s_c7ae2e76dc02ae::t_aa8ec334c8f6c8 89,97
+  s_c7ae2e76dc02ae::t_a3af79c51a9aee 187
+  s_c7ae2e76dc02ae::t_7313b0bafe4037 408-411
+src/components/settings/CalendarPicker.tsx
+  s_c7ae2e76dc02ae::t_7f0032a89adbbe 2
+  s_c7ae2e76dc02ae::t_b077535bb99b77 34
+src/components/today/TimelineCanvas.tsx
+  s_c7ae2e76dc02ae::t_ffa649a5591404 3
+  s_c7ae2e76dc02ae::t_b17da99c177c17 75-82
+  s_c7ae2e76dc02ae::t_788f0f1bfba687 90-96
+src/components/today/useTimelineDnd.ts
+  s_c7ae2e76dc02ae::t_f6d2f6c0f4fe9b 29
+  s_c7ae2e76dc02ae::t_7f661f5a2562fd 258-265
+  s_c7ae2e76dc02ae::t_afd0b9e822a7f2 268-275
+  s_c7ae2e76dc02ae::t_d6692945ddbea7 277,280
+  s_c7ae2e76dc02ae::t_38592191d7ee13 282-302,304-305
+  s_c7ae2e76dc02ae::t_34384daec635c5 307,309
+  s_c7ae2e76dc02ae::t_731dc330516669 313-314,316-320
+  s_c7ae2e76dc02ae::t_32f77acae37396 322
+  s_c7ae2e76dc02ae::t_39dfdfb0d4e5fb 532
+  s_c7ae2e76dc02ae::t_86b4cd0e572ada 540
+src/lib/controlRoomGraph.ts
+  s_c7ae2e76dc02ae::t_d837754b2cbd78 6
+  s_c7ae2e76dc02ae::t_abfa9f7ea1b33b 49
+src/lib/lifeWheelRadar.ts
+  s_c7ae2e76dc02ae::t_d7efb7a6e50ed2 70
+src/lib/useDebouncedCallback.ts
+  s_c7ae2e76dc02ae::t_12794cbf57b095 1
+  s_c7ae2e76dc02ae::t_910a0ab9cc19bc 44,50
+  s_c7ae2e76dc02ae::t_e54aec40b470f1 52-60,62,69
+src/components/worktree/WorktreeDiffText.tsx
+  s_c7ae2e76dc02ae::t_3a81a73fa9b2d8 47-49
+  s_c7ae2e76dc02ae::t_f6694fe47e9054 58
+src/components/hermes/HermesChatInput.tsx
+  s_c7ae2e76dc02ae::t_60655776d6c9f2 3
+  s_c7ae2e76dc02ae::t_c96e7eadbb7e67 13-16
+  s_c7ae2e76dc02ae::t_63029838fe9e96 33-42,58-61,64-77
+  s_c7ae2e76dc02ae::t_51e31db91d5fb3 79-89,91-92
+  s_c7ae2e76dc02ae::t_0c81be5b93371c 99
+  s_c7ae2e76dc02ae::t_f6d443044cf1b8 120,128,130,136
+  s_c7ae2e76dc02ae::t_8e94e7aa656d86 121
+src/components/inbox/InboxTray.tsx
+  s_c7ae2e76dc02ae::t_270db88728cf77 16
+  s_c7ae2e76dc02ae::t_7251cb19bbc344 51-52
+src/components/board/RoutineSyncButton.tsx
+  s_c7ae2e76dc02ae::t_3c2b5193f101eb 9
+  s_c7ae2e76dc02ae::t_85502f61d449cb 37,39,42
+src/components/HermesView.tsx
+  s_c7ae2e76dc02ae::t_bedab257aa10ec 2
+  s_c7ae2e76dc02ae::t_a53a0a1a59c443 51
+src/components/skills/useSkillBatchSelection.ts
+  s_c7ae2e76dc02ae::t_3b82a1b13a4fbd 20-27
+src/lib/useCmdKnob.ts
+  s_c7ae2e76dc02ae::t_4945f513a7478d 18-21
+src/components/CommandPalette.tsx
+  s_c7ae2e76dc02ae::t_320ac6be227743 21-26
+src/lib/useListReorder.ts
+  s_c7ae2e76dc02ae::t_9f4fbfaf2edebc 1
+  s_c7ae2e76dc02ae::t_67ad6aa91843ac 39-40,42-45,47
+  s_c7ae2e76dc02ae::t_0c4c43e39973d2 60
+  s_c7ae2e76dc02ae::t_d0d6ad40159a06 70
+  s_c7ae2e76dc02ae::t_4b5aadb130f80f 117
+src/components/today/UnscheduledTray.tsx
+  s_c7ae2e76dc02ae::t_84f0ae3ff4a925 3
+  s_c7ae2e76dc02ae::t_45b2b506d4b7f5 212-217
+src/components/SprintTimer.tsx
+  s_c7ae2e76dc02ae::t_a71e9e64a3d6e0 3
+  s_c7ae2e76dc02ae::t_d6dd36c7f6ecce 58-59,61-69
+  s_c7ae2e76dc02ae::t_403b3e7cad0ed3 74,76,78,80
+src/components/weekly/ReflectionSection.tsx
+  s_c7ae2e76dc02ae::t_fb5fed644d11e8 43-50
+src/lib/usePaneSize.ts
+  s_c7ae2e76dc02ae::t_7981ad96b00835 6
+  s_c7ae2e76dc02ae::t_a04c2ee76d067f 48-58,60-83,85-102,104-108
+src/lib/useWeekNav.ts
+  s_c7ae2e76dc02ae::t_d2526c97119c09 2
+  s_c7ae2e76dc02ae::t_e042cf261390b9 30-33
+src/components/hermes/HermesSidebar.tsx
+  s_c7ae2e76dc02ae::t_712ddcb323a639 2
+  s_c7ae2e76dc02ae::t_78c0c6ff394d70 38
+  s_c7ae2e76dc02ae::t_35d15432649edd 101
+src/components/settings/LifeWheelTagSettings.tsx
+  s_c7ae2e76dc02ae::t_6860a5da6dd65e 2
+  s_c7ae2e76dc02ae::t_5c5e2969119028 41-42
+src/components/board/BrainDumpToggle.tsx
+  s_c7ae2e76dc02ae::t_26567284a85a13 4
+  s_c7ae2e76dc02ae::t_cc329a70d77cce 86,94,96,99
+src/components/skills/VendorPanel.tsx
+  s_c7ae2e76dc02ae::t_2bde9a6d01e8cb 2
+  s_c7ae2e76dc02ae::t_08176817c7e703 25
+src/components/board/LifeWheelPalette.tsx
+  s_c7ae2e76dc02ae::t_978bf07150b4e0 85-90
+src/lib/hotkey.ts
+  s_c7ae2e76dc02ae::t_21d25c5aa2614c 86-89
+src/components/WeeklyView.tsx
+  s_c7ae2e76dc02ae::t_e4f58244efcfd2 12
+  s_c7ae2e76dc02ae::t_8636386f73ab93 37
+src/components/CaptureBoard.tsx
+  s_c7ae2e76dc02ae::t_3208e75ea2e78f 3
+  s_c7ae2e76dc02ae::t_bdb8a256e28cab 129,131-133
+  s_c7ae2e76dc02ae::t_0b461df89ab65e 145-146
+  s_c7ae2e76dc02ae::t_802a1b25367f3b 170-171
+src/App.tsx
+  s_c7ae2e76dc02ae::t_9e1c5281768bfb 139-157
+src/components/skills/DivergencePanel.tsx
+  s_c7ae2e76dc02ae::t_65d124d2d5cb96 13
+src/lib/query/agents.ts
+  s_c7ae2e76dc02ae::t_64d759edeb08e1 22
+src/components/board/MatrixCanvas.tsx
+  s_c7ae2e76dc02ae::t_b1796a9997720f 23-24
+src/components/hermes/keyboardShortcuts.ts
+  s_c7ae2e76dc02ae::t_89b50177a64f04 17
+src/components/settings/NewsSourceSettings.tsx
+  s_c7ae2e76dc02ae::t_1919cff40c8b22 5
+  s_c7ae2e76dc02ae::t_07620a555fadf4 43-48
+src/components/hermes/useTypewriter.ts
+  s_c7ae2e76dc02ae::t_30dfa368172d73 1
+  s_c7ae2e76dc02ae::t_ffaa9b7d7be3fa 26-30,38-41
+  s_c7ae2e76dc02ae::t_93fd65c71f35da 32,34
+  s_c7ae2e76dc02ae::t_0bb0e61eca3ce8 55
+src/components/skills/InAppEditor.tsx
+  s_c7ae2e76dc02ae::t_cdea2609e5aba1 2
+  s_c7ae2e76dc02ae::t_a1e5241f05cf72 40
+src/components/skills/InstallPanel.tsx
+  s_c7ae2e76dc02ae::t_2c5fa26e891106 2
+  s_c7ae2e76dc02ae::t_3f2c7810512e5d 41
+src/components/today/CalendarPickerPopover.tsx
+  s_c7ae2e76dc02ae::t_a91df81b9c1a02 8
+  s_c7ae2e76dc02ae::t_85f784d8f1d633 42-44,46-49,51
+src/components/control-room/ControlRoomView.tsx
+  s_c7ae2e76dc02ae::t_f42d1c6eb0a81f 4
+  s_c7ae2e76dc02ae::t_8ffc11290bd726 26
+  s_c7ae2e76dc02ae::t_6e7739c0f89b5c 38-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "44ed2fb2c6d9aafa0478e257164ab3dd530e0a4c",
+  "prompts": {},
+  "sessions": {
+    "s_c7ae2e76dc02ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfab002c-28d7-4865-a4a0-689215d39ab9",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
