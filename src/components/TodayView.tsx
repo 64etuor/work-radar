@@ -55,6 +55,9 @@ const MAX_LOADED_DAYS = 21;
 /** 하루 높이(px) — 60px/h × 24h. */
 const DAY_PX = 24 * 60;
 
+/** 블록이 표시된 날짜(occurrence) — 완료 기록/루틴 EXDATE/메모 키가 블록과 일관되도록. */
+const blockDate = (block: TimedBlock) => localDateOf(block.startISO);
+
 /**
  * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).
  *   좌 미배치 트레이 + 우 24h 캔버스 + 헤더(날짜 네비 + Work Debt 4칩 + Staged 배지).
@@ -112,9 +115,6 @@ export function TodayView() {
     dates: visibleDates,
   });
   const boxes = computeLayout(blocks, anchorDate);
-
-  // 블록이 표시된 날짜(occurrence) — 완료 기록/루틴 EXDATE/메모 키가 블록과 일관되도록.
-  const blockDate = (block: TimedBlock) => localDateOf(block.startISO);
 
   // 블록 위 메모 표시 — 날짜별 메모 1회 조회(N+1 회피) 후 blockId → body 맵으로 환원.
   // EventPopover와 동일한 blockNoteTarget 키를 써서 표시/편집이 항상 같은 메모를 가리킨다.
