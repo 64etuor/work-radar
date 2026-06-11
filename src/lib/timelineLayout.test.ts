@@ -97,3 +97,48 @@ describe("computeLayout", () => {
     expect(out[0].heightPx).toBe(60);
   });
 });
+
+describe("computeLayout — continuous axis (anchor)", () => {
+  it("자정 걸침 블록: 단일 연속 박스, 양수 height (기존 20px 슬리버 버그 회귀 방지)", () => {
+    const out = computeLayout(
+      [make("x", "2026-06-11T23:00:00", "2026-06-12T01:30:00")],
+      "2026-06-11",
+    );
+    expect(out[0].topPx).toBe(23 * 60);
+    expect(out[0].heightPx).toBe(150); // 음수 duration → max(20, …) 슬리버가 아니라 실제 150분
+  });
+
+  it("anchor 이후 날짜 블록은 1440px 오프셋", () => {
+    const out = computeLayout(
+      [make("y", "2026-06-12T09:00:00", "2026-06-12T10:00:00")],
+      "2026-06-11",
+    );
+    expect(out[0].topPx).toBe(1440 + 540);
+  });
+
+  it("자정을 가로지르는 겹침도 한 클러스터로 50/50 분할", () => {
+    const out = computeLayout(
+      [
+        make("a", "2026-06-11T23:00:00", "2026-06-12T01:00:00"),
+        make("b", "2026-06-11T23:30:00", "2026-06-12T00:30:00"),
+      ],
+      "2026-06-11",
+    );
+    expect(out.find((x) => x.id === "a")!.widthPct).toBe(50);
+    expect(out.find((x) => x.id === "b")!.widthPct).toBe(50);
+  });
+
+  it("anchor 이전 시작 블록은 음수 topPx (그리드가 클리핑)", () => {
+    const out = computeLayout(
+      [make("z", "2026-06-10T23:00:00", "2026-06-11T01:00:00")],
+      "2026-06-11",
+    );
+    expect(out[0].topPx).toBe(-60);
+    expect(out[0].heightPx).toBe(120);
+  });
+
+  it("anchor 생략 시 가장 이른 블록 날짜가 anchor (기존 단일일 호출 하위호환)", () => {
+    const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00")]);
+    expect(out[0].topPx).toBe(540);
+  });
+});

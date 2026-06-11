@@ -6,9 +6,12 @@
  * `leftPct`/`widthPct`를 계산해 반환한다.
  *
  * - 순수함수: Date.now / 무작위 입력 사용 금지. 동일 입력 → 동일 출력.
- * - 멀티데이 블록은 범위 밖(스펙). 모든 블록은 분 단위(0..1440) 기준.
+ * - 연속 절대 분 축(앵커 날짜 00:00 기준) — 자정 걸침 블록은 단일 연속 박스로 그려진다
+ *   (연속 타임라인 스펙 `docs/superpowers/specs/2026-06-11-continuous-timeline-design.md` §2).
  * - 60px/시간(스펙 §D2). `heightPx`는 최소 20px 보정.
  */
+
+import { absMin, localDateOf } from "./timeAxis";
 
 export type TimedBlock = {
   id: string;
@@ -44,12 +47,19 @@ export type LayoutBox = {
 const HOUR_PX = 60;
 const MIN_BLOCK_PX = 20;
 
-function toMin(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-}
-
-export function computeLayout(blocks: TimedBlock[]): LayoutBox[] {
+/**
+ * @param anchorDate 절대 분 축의 0점(YYYY-MM-DD, 로드된 가장 이른 날). 생략 시 블록 중
+ * 가장 이른 startISO의 날짜 — 단일일 호출 하위호환(기존 테스트/단일일 사용처).
+ */
+export function computeLayout(blocks: TimedBlock[], anchorDate?: string): LayoutBox[] {
+  if (blocks.length === 0) return [];
+  const anchor =
+    anchorDate ??
+    blocks.reduce(
+      (min, b) => (localDateOf(b.startISO) < min ? localDateOf(b.startISO) : min),
+      localDateOf(blocks[0].startISO),
+    );
+  const toMin = (iso: string) => absMin(iso, anchor);
   const items = [...blocks].sort((a, b) => {
     const sa = toMin(a.startISO);
     const sb = toMin(b.startISO);
