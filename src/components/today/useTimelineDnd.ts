@@ -14,8 +14,8 @@
  * Cross-cal moveCalendar는 staged라 optimistic 안 함(INVARIANT #2 — 사용자 Acceptance 게이트).
  * 실패 이벤트(`CalendarSyncFailed`)는 `useCalendarSyncEvents`가 invalidateQueries로 롤백.
  *
- * 픽셀→시간: 60px/h, 15분 스냅. 로컬 ISO("YYYY-MM-DDTHH:MM:SS")로 빌드 — UTC 미사용
- * (PR 4 todayBlocks.ts plusMin 패턴과 동일, 동일 timezone-drift 버그 방지).
+ * 픽셀→시간 변환은 `@/lib/timelineCoords`(연속 절대 분 축) — 자정 넘는 드래그/리사이즈 가능.
+ * 루틴 블록만 occurrence 날짜 안으로 클램프(routine_checks가 date+HH:MM 구조, 스펙 §5).
  */
 import {
   DndContext,
@@ -31,6 +31,14 @@ import { type MutableRefObject } from "react";
 import type { CalendarEvent, RoutineToday, WorkSignal } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
 import { applySchedulePatch } from "@/lib/optimisticSchedule";
+import { absMin, localDateOf } from "@/lib/timeAxis";
+import {
+  clampIsoToDate,
+  pixelToLocalIso,
+  plusMinutesLocal,
+  resizeIsoByPx,
+  shiftIsoByPx,
+} from "@/lib/timelineCoords";
 import { useToastStore } from "@/lib/toast";
 
 const HOUR_PX = 60;
@@ -39,89 +47,6 @@ const SNAP_MIN = 15;
 const DEFAULT_SCHEDULE_MIN = 60;
 /** routine 신규 배치 길이(분) — 스펙 §D8 루틴 가상 인스턴스. */
 const ROUTINE_SCHEDULE_MIN = 30;
-
-function snap(min: number): number {
-  return Math.round(min / SNAP_MIN) * SNAP_MIN;
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/**
- * 로컬 timezone offset 문자열 (`+09:00` 형태). RFC3339 datetime 표기에 필수
- * (백엔드 `chrono::DateTime::parse_from_rfc3339`는 offset이 없으면 reject).
- */
-function tzOffset(): string {
-  const min = -new Date().getTimezoneOffset();
-  const sign = min >= 0 ? "+" : "-";
-  const abs = Math.abs(min);
-  return `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
-}
-
-/**
- * date(YYYY-MM-DD) + 그리드 픽셀 오프셋 → RFC3339 with local offset
- * (`YYYY-MM-DDTHH:MM:SS+09:00`). 음수는 0(00:00)으로 clamp, 24h 초과는
- * 23:45로 clamp(스냅 정렬 유지). 백엔드 sync 워커가 `parse_from_rfc3339`로 받음.
- */
-function pixelToLocalIso(date: string, gridY: number): string {
-  const rawMin = (gridY / HOUR_PX) * 60;
-  const snapped = snap(rawMin);
-  const clamped = Math.max(0, Math.min(24 * 60 - SNAP_MIN, snapped));
-  const h = Math.floor(clamped / 60);
-  const m = clamped % 60;
-  return `${date}T${pad(h)}:${pad(m)}:00${tzOffset()}`;
-}
-
-/** 기존 ISO(또는 null) + delta px → 새 RFC3339(with offset). timezone-drift 안전. */
-export function shiftIsoByPx(date: string, startISO: string, deltaPx: number): string {
-  const d = new Date(startISO);
-  const startMin = d.getHours() * 60 + d.getMinutes();
-  const deltaMin = (deltaPx / HOUR_PX) * 60;
-  const snapped = snap(startMin + deltaMin);
-  const clamped = Math.max(0, Math.min(24 * 60 - SNAP_MIN, snapped));
-  const h = Math.floor(clamped / 60);
-  const m = clamped % 60;
-  return `${date}T${pad(h)}:${pad(m)}:00${tzOffset()}`;
-}
-
-export function plusMinutesLocal(iso: string, minutes: number): string {
-  const d = new Date(new Date(iso).getTime() + minutes * 60_000);
-  const offsetMatch = iso.match(/([+-]\d{2}:\d{2})$/);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${offsetMatch?.[1] ?? ""}`;
-}
-
-export function resizeIsoByPx({
-  date,
-  startISO,
-  durationMin,
-  edge,
-  deltaPx,
-}: {
-  date: string;
-  startISO: string;
-  durationMin: number;
-  edge: "top" | "bottom";
-  deltaPx: number;
-}): { at: string; durationMin: number } {
-  const startDate = new Date(startISO);
-  const startMin = startDate.getHours() * 60 + startDate.getMinutes();
-  const endMin = startMin + durationMin;
-  const deltaMin = (deltaPx / HOUR_PX) * 60;
-  if (edge === "top") {
-    const nextStartMin = Math.max(0, Math.min(endMin - SNAP_MIN, snap(startMin + deltaMin)));
-    return {
-      at: pixelToLocalIso(date, nextStartMin),
-      durationMin: endMin - nextStartMin,
-    };
-  }
-  return {
-    at: startISO,
-    durationMin: Math.max(SNAP_MIN, Math.min(24 * 60 - startMin, snap(durationMin + deltaMin))),
-  };
-}
 
 /** drag data attached to draggable nodes via `useDraggable({ data: ... })`. */
 export type DragData =
@@ -134,6 +59,8 @@ export type DragData =
   | {
       from: "canvas";
       blockKind: "signal";
+      /** 타임라인 블록 정본 id(`block.id`) — preview가 드래그 중 블록을 재구성 없이 매칭. */
+      blockId: string;
       signalId: string;
       title: string;
       startISO: string;
@@ -143,6 +70,7 @@ export type DragData =
   | {
       from: "canvas";
       blockKind: "event";
+      blockId: string;
       eventId: string;
       title: string;
       startISO: string;
@@ -152,6 +80,7 @@ export type DragData =
   | {
       from: "canvas";
       blockKind: "routine";
+      blockId: string;
       routineId: string;
       title: string;
       startISO: string;
@@ -172,6 +101,7 @@ export type DragData =
       from: "canvas-resize";
       edge: "top" | "bottom";
       blockKind: "signal";
+      blockId: string;
       signalId: string;
       startISO: string;
       durationMin: number;
@@ -180,6 +110,7 @@ export type DragData =
       from: "canvas-resize";
       edge: "top" | "bottom";
       blockKind: "event";
+      blockId: string;
       eventId: string;
       calendarId: string;
       startISO: string;
@@ -189,6 +120,7 @@ export type DragData =
       from: "canvas-resize";
       edge: "top" | "bottom";
       blockKind: "routine";
+      blockId: string;
       routineId: string;
       startISO: string;
       durationMin: number;
@@ -220,7 +152,12 @@ export function resolveDragEndActiveData(
 }
 
 type Opts = {
+  /** Today 레일 캐시 키(["today", date])용 선택 날짜 — 레일/트레이 스코프(기존 유지). */
   date: string;
+  /** 로드된 첫 날짜(연속 절대 분 축의 0점). */
+  anchorDate: string;
+  /** 로드된 일수 — 픽셀↔ISO 클램프 상한. */
+  days: number;
   /** 시그널 id로 프로젝트 기본 캘린더를 찾는다. 없으면 null. */
   defaultCalendarFor: (signalId: string) => string | null;
   /** project default가 없을 때 popover를 띄우고 사용자가 고른 캘린더 id를 resolve. */
@@ -248,7 +185,15 @@ type Opts = {
  */
 export function useTimelineDnd(opts: Opts) {
   const qc = useQueryClient();
-  const { date, defaultCalendarFor, promptCalendarPicker, gridElRef, pointerClientRef } = opts;
+  const {
+    date,
+    anchorDate,
+    days,
+    defaultCalendarFor,
+    promptCalendarPicker,
+    gridElRef,
+    pointerClientRef,
+  } = opts;
 
   /**
    * 드롭 그리드 Y(px) — 드롭 시점에 raw 포인터 viewport 좌표를 fresh 그리드 rect로 환산한다.
@@ -261,7 +206,7 @@ export function useTimelineDnd(opts: Opts) {
     if (!el || !p) return fallback;
     const rect = el.getBoundingClientRect();
     const y = p.y - rect.top;
-    return Math.max(0, Math.min(24 * HOUR_PX, y));
+    return Math.max(0, Math.min(days * 24 * HOUR_PX, y));
   };
 
   /** signals 캐시 + today 레일 캐시(둘 다 WorkSignal[]) 동시 패치. */
@@ -279,12 +224,15 @@ export function useTimelineDnd(opts: Opts) {
     void qc.invalidateQueries({ queryKey: ["today"] });
   };
 
+  /** 로드된 모든 날짜 버킷(+드로어 range 버킷) 순회 패치 — 자정 걸침 이벤트는 인접 두 버킷에
+   *  중복 존재하고, 자정 넘는 이동은 버킷 소속이 바뀌므로 단일 date 키 패치는 화면과 어긋난다.
+   *  렌더는 ISO에서 위치를 유도하므로 버킷 잔류 자체는 무해(다음 invalidate/refetch가 정리). */
   const patchEventCache = (
     calendarId: string,
     eventId: string,
     patch: { start?: string; durationMin?: number },
   ) => {
-    qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) => {
+    qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) => {
       if (!old) return old;
       return old.map((event) => {
         if (event.calendarId !== calendarId || event.id !== eventId) return event;
@@ -305,16 +253,17 @@ export function useTimelineDnd(opts: Opts) {
   };
 
   const invalidateEventCaches = () => {
-    void qc.invalidateQueries({ queryKey: ["calendarEvents", date] });
+    void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
 
-  /** routines 캐시(["routines", date]) optimistic 패치 — signal/event 블록과 동일하게 드래그
-   *  직후 블록이 새 위치에 머물게 한다(이전엔 invalidate-only라 refetch까지 스냅백). */
+  /** routines 캐시 optimistic 패치 — 드래그 직후 블록이 새 위치에 머물게 한다(invalidate-only면
+   *  refetch까지 스냅백). timeOverride는 occurrence 날짜의 routine_checks 행 — 그 날짜 버킷만 패치. */
   const patchRoutineCache = (
+    occDate: string,
     routineId: string,
     patch: { timeOverride?: string; durationMin?: number },
   ) => {
-    qc.setQueryData<RoutineToday[]>(["routines", date], (old) =>
+    qc.setQueryData<RoutineToday[]>(["routines", occDate], (old) =>
       old?.map((r) => (r.id === routineId ? { ...r, ...patch } : r)),
     );
   };
@@ -332,7 +281,7 @@ export function useTimelineDnd(opts: Opts) {
       const cal =
         defaultCalendarFor(a.signalId) ?? (await promptCalendarPicker(a.signalId, "signal"));
       if (!cal) return;
-      const at = pixelToLocalIso(date, resolveCanvasGridY(o.gridY));
+      const at = pixelToLocalIso(anchorDate, days, resolveCanvasGridY(o.gridY));
       const durationMin = a.durationMin ?? DEFAULT_SCHEDULE_MIN;
       patchSignalCaches(a.signalId, { at, durationMin, calendarId: cal });
       try {
@@ -355,14 +304,22 @@ export function useTimelineDnd(opts: Opts) {
     // 최소 15분(1 snap) 보장, 00:00–24:00 안에 clamp.
     if (a.from === "canvas-resize" && o.to === "canvas") {
       const resized = resizeIsoByPx({
-        date,
+        anchorDate,
+        days,
         startISO: a.startISO,
         durationMin: a.durationMin,
         edge: a.edge,
         deltaPx: ev.delta.y,
       });
-      const { at } = resized;
-      const clamped = resized.durationMin;
+      // 루틴은 occurrence 날짜 안으로 클램프 — routine_checks(date+HH:MM)가 다음 날 새벽을
+      // 표현하지 못한다(스펙 §5). top 핸들이 날짜를 넘으면 그 날 00:00에서 멈춘다.
+      const occDate = localDateOf(a.startISO);
+      const at = a.blockKind === "routine" ? clampIsoToDate(resized.at, occDate) : resized.at;
+      // 클램프로 시작이 밀렸으면 끝 시각 고정을 위해 duration을 보정(absMin 차이만큼).
+      const clamped =
+        at === resized.at
+          ? resized.durationMin
+          : resized.durationMin + (absMin(resized.at, occDate) - absMin(at, occDate));
       if (clamped === a.durationMin && at === a.startISO) return;
       if (a.blockKind === "event") {
         patchEventCache(a.calendarId, a.eventId, {
@@ -378,7 +335,7 @@ export function useTimelineDnd(opts: Opts) {
         // durationMin은 패치하지 않는다 — routine_checks엔 per-day duration 컬럼이 없어
         // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
         // 리사이즈 높이가 곧 스냅백한다. 시간 위치(time_override)만 optimistic.
-        patchRoutineCache(a.routineId, { timeOverride: at.slice(11, 16) });
+        patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
       }
       try {
         if (a.blockKind === "event") {
@@ -393,7 +350,7 @@ export function useTimelineDnd(opts: Opts) {
           await stage({
             kind: "routineResize",
             routineId: a.routineId,
-            date,
+            date: occDate,
             at,
             durationMin: clamped,
           });
@@ -416,13 +373,16 @@ export function useTimelineDnd(opts: Opts) {
 
     // ── 2: canvas → canvas (reschedule, 같은 캘린더 시간 이동) ───────
     if (a.from === "canvas" && o.to === "canvas") {
-      const at = shiftIsoByPx(date, a.startISO, ev.delta.y);
+      const shifted = shiftIsoByPx(anchorDate, days, a.startISO, ev.delta.y);
+      // 루틴은 occurrence 날짜 안으로 클램프(스펙 §5) — event/signal은 자정 통과 자유.
+      const occDate = localDateOf(a.startISO);
+      const at = a.blockKind === "routine" ? clampIsoToDate(shifted, occDate) : shifted;
       if (a.blockKind === "event") {
         patchEventCache(a.calendarId, a.eventId, { start: at, durationMin: a.durationMin });
       } else if (a.blockKind === "signal") {
         patchSignalCaches(a.signalId, { at });
       } else if (a.blockKind === "routine") {
-        patchRoutineCache(a.routineId, { timeOverride: at.slice(11, 16) });
+        patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
       }
       try {
         if (a.blockKind === "event") {
@@ -437,7 +397,7 @@ export function useTimelineDnd(opts: Opts) {
           await stage({
             kind: "routineReschedule",
             routineId: a.routineId,
-            date,
+            date: occDate,
             at,
             durationMin: a.durationMin,
           });
@@ -489,7 +449,7 @@ export function useTimelineDnd(opts: Opts) {
     // ── 5: canvas → 다른 캘린더 zone (moveCalendar, staged) ──────────
     if (a.from === "canvas" && a.blockKind === "signal" && o.to === "canvas:cal") {
       if (o.calendarId === a.calendarId) return; // 동일 캘린더면 noop.
-      const at = shiftIsoByPx(date, a.startISO, ev.delta.y);
+      const at = shiftIsoByPx(anchorDate, days, a.startISO, ev.delta.y);
       try {
         await stage({
           kind: "moveCalendar",
@@ -515,12 +475,13 @@ export function useTimelineDnd(opts: Opts) {
       // routine은 routineId 기반 calendar 매핑이 없으므로 picker만(default lookup 없음).
       const cal = await promptCalendarPicker(a.routineId, "routine");
       if (!cal) return;
-      const at = pixelToLocalIso(date, resolveCanvasGridY(o.gridY));
+      const at = pixelToLocalIso(anchorDate, days, resolveCanvasGridY(o.gridY));
       try {
         await stage({
           kind: "routineSchedule",
           routineId: a.routineId,
-          date,
+          // 드롭 위치의 날짜가 곧 occurrence — 인접 날짜 영역에 떨어뜨리면 그 날 배치.
+          date: localDateOf(at),
           at,
           durationMin: ROUTINE_SCHEDULE_MIN,
           calendarId: cal,

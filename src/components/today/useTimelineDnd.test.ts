@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { plusMinutesLocal, resizeIsoByPx } from "@/lib/timelineCoords";
+
 import {
   type DragData,
   normalizeDropDataForDragEnd,
-  plusMinutesLocal,
-  resizeIsoByPx,
   resolveDragEndActiveData,
 } from "./useTimelineDnd";
 
@@ -13,6 +13,7 @@ describe("normalizeDropDataForDragEnd", () => {
     const drag: DragData = {
       from: "canvas",
       blockKind: "event",
+      blockId: "event:cal1:evt1",
       eventId: "evt1",
       title: "Event",
       startISO: "2026-05-28T09:00:00+09:00",
@@ -31,6 +32,7 @@ describe("normalizeDropDataForDragEnd", () => {
       from: "canvas-resize",
       edge: "bottom",
       blockKind: "signal",
+      blockId: "signal:sig1",
       signalId: "sig1",
       startISO: "2026-05-28T09:00:00+09:00",
       durationMin: 60,
@@ -57,7 +59,8 @@ describe("resizeIsoByPx", () => {
   it("top-handle drag keeps the original end time fixed", () => {
     const originalEnd = plusMinutesLocal("2026-05-28T09:00:00+09:00", 60);
     const resized = resizeIsoByPx({
-      date: "2026-05-28",
+      anchorDate: "2026-05-28",
+      days: 1,
       startISO: "2026-05-28T09:00:00+09:00",
       durationMin: 60,
       edge: "top",
@@ -71,7 +74,8 @@ describe("resizeIsoByPx", () => {
 
   it("bottom-handle drag keeps start fixed and changes end", () => {
     const resized = resizeIsoByPx({
-      date: "2026-05-28",
+      anchorDate: "2026-05-28",
+      days: 1,
       startISO: "2026-05-28T09:00:00+09:00",
       durationMin: 60,
       edge: "bottom",
@@ -90,6 +94,7 @@ describe("resolveDragEndActiveData", () => {
       from: "canvas-resize",
       edge: "bottom",
       blockKind: "signal",
+      blockId: "signal:sig1",
       signalId: "sig1",
       startISO: "2026-05-28T09:00:00+09:00",
       durationMin: 60,
@@ -106,7 +111,8 @@ describe("resolveDragEndActiveData", () => {
     }
 
     const resized = resizeIsoByPx({
-      date: "2026-05-28",
+      anchorDate: "2026-05-28",
+      days: 1,
       startISO: active.startISO,
       durationMin: active.durationMin,
       edge: active.edge,

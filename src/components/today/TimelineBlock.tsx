@@ -44,6 +44,7 @@ function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
     return {
       from: "canvas",
       blockKind: "event",
+      blockId: block.id,
       eventId: eventBlockApiId(block),
       title: block.title,
       startISO: block.startISO,
@@ -55,6 +56,7 @@ function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
     return {
       from: "canvas",
       blockKind: "routine",
+      blockId: block.id,
       routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
       title: block.title,
       startISO: block.startISO,
@@ -65,6 +67,7 @@ function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
   return {
     from: "canvas",
     blockKind: "signal",
+    blockId: block.id,
     signalId: stripBlockPrefix(block.id, "signal"),
     title: block.title,
     startISO: block.startISO,
@@ -80,6 +83,7 @@ function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: n
       from: "canvas-resize",
       edge,
       blockKind: "event",
+      blockId: block.id,
       eventId: eventBlockApiId(block),
       calendarId: block.calendarId,
       startISO: block.startISO,
@@ -91,6 +95,7 @@ function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: n
       from: "canvas-resize",
       edge,
       blockKind: "routine",
+      blockId: block.id,
       routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
       startISO: block.startISO,
       durationMin,
@@ -100,6 +105,7 @@ function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: n
     from: "canvas-resize",
     edge,
     blockKind: "signal",
+    blockId: block.id,
     signalId: stripBlockPrefix(block.id, "signal"),
     startISO: block.startISO,
     durationMin,

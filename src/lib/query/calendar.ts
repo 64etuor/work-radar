@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   type CalendarEvent,
@@ -19,6 +19,28 @@ export function useCalendarEvents(date: string) {
     queryFn: () => fetchCalendarEvents(null, date, false),
     staleTime: 60_000,
     retry: 1,
+  });
+}
+
+/**
+ * 연속 타임라인용 — 로드된 날짜별 캘린더 이벤트(useQueries). 키는 단일일 훅과 동일
+ * (["calendarEvents", date])이라 캐시/persist/optimistic 패치 경로를 공유한다(스펙 §3).
+ */
+export function useCalendarEventsForDates(dates: string[]) {
+  return useQueries({
+    queries: dates.map((date) => ({
+      queryKey: ["calendarEvents", date] as const,
+      queryFn: () => fetchCalendarEvents(null, date, false),
+      staleTime: 60_000,
+      retry: 1,
+    })),
+    combine: (results) => ({
+      byDate: Object.fromEntries(dates.map((d, i) => [d, results[i]?.data ?? []])) as Record<
+        string,
+        CalendarEvent[]
+      >,
+      isLoading: results.some((r) => r.isLoading),
+    }),
   });
 }
 

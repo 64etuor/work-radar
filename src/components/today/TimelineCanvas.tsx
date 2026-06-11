@@ -10,13 +10,17 @@ import {
   renderTimelineBoxesForDrag,
 } from "@/components/today/timelinePreview";
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
+import { weekdayForDate } from "@/lib/query";
+import { dayDiff } from "@/lib/timeAxis";
 import type { LayoutBox } from "@/lib/timelineLayout";
 
 const HOUR_PX = 60;
+const DAY_PX = 24 * HOUR_PX;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 type Props = {
-  date: string;
+  /** 로드된 날짜(연속·오름차순). anchor = dates[0]. 연속 타임라인 스펙 §4. */
+  dates: string[];
   today: string;
   boxes: LayoutBox[];
   /** blockId → 메모 body. 블록 위 노트 아이콘/스니펫 표시용(없으면 표시 안 함). */
@@ -36,18 +40,37 @@ type Props = {
   activeDelta?: DragDelta | null;
 };
 
-function nowOffsetPx(): number {
+/** "지금"의 절대 px(앵커 날짜 00:00 기준). 앵커 범위 밖이면 음수/초과 — 호출부가 범위 체크. */
+function nowOffsetPx(anchorDate: string): number {
   const d = new Date();
-  return (d.getHours() + d.getMinutes() / 60) * HOUR_PX;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return (dayDiff(date, anchorDate) * 24 + d.getHours() + d.getMinutes() / 60) * HOUR_PX;
+}
+
+const WEEKDAY_KO: Record<string, string> = {
+  sun: "일",
+  mon: "월",
+  tue: "화",
+  wed: "수",
+  thu: "목",
+  fri: "금",
+  sat: "토",
+};
+
+/** 날짜 separator 라벨 — "6월 12일 (금)". */
+function fmtDayLabel(date: string): string {
+  const [, m, d] = date.split("-").map(Number);
+  return `${m}월 ${d}일 (${WEEKDAY_KO[weekdayForDate(date)]})`;
 }
 
 /**
- * 24h 캔버스(스펙 §3·§D2). 1시간=60px, 총 1440px.
- * PR 5: 그리드 전체가 droppable("canvas") — drop 시 그리드 내부 Y 좌표(gridY)를 dropData에 담아
- * useTimelineDnd가 15분 스냅 ISO로 변환. 드래그 중 hover Y는 setHoverY로 가이드 라인 렌더(선택).
+ * 연속 멀티데이 캔버스(연속 타임라인 스펙 §4). 1시간=60px, 총 dates.length×1440px.
+ * 각 날짜 00:00에 separator, 시간 라벨/업무시간 음영은 날짜별 반복. now 라인은 절대 위치 1개.
+ * 그리드 전체가 droppable("canvas") — 드롭 Y는 절대 좌표라 날짜가 Y에서 유도된다(자정 통과 배치).
  */
 export function TimelineCanvas({
-  date,
+  dates,
   today,
   boxes,
   memoByBlockId,
@@ -59,26 +82,38 @@ export function TimelineCanvas({
   activeDrag,
   activeDelta,
 }: Props) {
-  const [nowPx, setNowPx] = useState<number>(() => nowOffsetPx());
+  const anchorDate = dates[0];
+  const days = dates.length;
+  const totalPx = days * DAY_PX;
+
+  // 분 단위 tick — nowPx는 렌더 시 anchorDate에서 파생(앵커 변경 시 effect-내 setState 회피).
+  const [, setMinuteTick] = useState(0);
+  const nowPx = nowOffsetPx(anchorDate);
   const [hoverPx, setHoverPx] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [gridWidth, setGridWidth] = useState<number>(0);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (date !== today) return;
-    const t = setInterval(() => setNowPx(nowOffsetPx()), 60_000);
+    const t = setInterval(() => setMinuteTick((v) => v + 1), 60_000);
     return () => clearInterval(t);
-  }, [date, today]);
+  }, []);
 
-  const showNow = date === today;
-  const previewBoxes = previewTimelineBoxes({ boxes, activeDrag, delta: activeDelta, date });
+  const showNow = dates.includes(today);
+  const previewBoxes = previewTimelineBoxes({
+    boxes,
+    activeDrag,
+    delta: activeDelta,
+    anchorDate,
+    days,
+  });
   const renderBoxes = renderTimelineBoxesForDrag({ boxes, previewBoxes, activeDrag });
   const activeGuide = dragGuideFromLayout({
     boxes,
     activeDrag,
     delta: activeDelta,
     gridWidth,
+    days,
   });
   const suppressBlockTransform = activeDrag?.from === "canvas-resize";
 
@@ -103,7 +138,7 @@ export function TimelineCanvas({
     const el = gridRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const y = Math.max(0, Math.min(24 * HOUR_PX, e.clientY - rect.top));
+    const y = Math.max(0, Math.min(totalPx, e.clientY - rect.top));
     const x = Math.max(60, Math.min(rect.width, e.clientX - rect.left));
     if (pointerYRef) pointerYRef.current = y;
     if (pointerXRef) pointerXRef.current = x;
@@ -122,18 +157,39 @@ export function TimelineCanvas({
   return (
     <div
       className="today-canvas"
-      data-date={date}
+      data-dates={`${dates[0]}..${dates[days - 1]}`}
       data-drop-over={isOver || undefined}
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
     >
-      <div ref={bindGridRef} className="today-canvas-grid" style={{ height: `${24 * HOUR_PX}px` }}>
-        {/* 업무시간 음영 (09–18) — 시각적 닻. */}
-        <div className="today-canvas-workhours" aria-hidden />
-        {HOURS.map((h) => (
-          <div key={h} className="today-canvas-hour" style={{ top: `${h * HOUR_PX}px` }}>
-            <span className="today-canvas-hour-label">{String(h).padStart(2, "0")}:00</span>
-            <div className="today-canvas-hour-rule" />
+      <div ref={bindGridRef} className="today-canvas-grid" style={{ height: `${totalPx}px` }}>
+        {dates.map((date, di) => (
+          <div key={date} aria-hidden>
+            {/* 업무시간 음영 (09–18) — 날짜별 반복(시각적 닻). */}
+            <div
+              className="today-canvas-workhours"
+              style={{ top: `${di * DAY_PX + 9 * HOUR_PX}px`, height: `${9 * HOUR_PX}px` }}
+            />
+            {HOURS.map((h) => (
+              <div
+                key={`${date}:${h}`}
+                className="today-canvas-hour"
+                style={{ top: `${(di * 24 + h) * HOUR_PX}px` }}
+              >
+                <span className="today-canvas-hour-label">{String(h).padStart(2, "0")}:00</span>
+                <div className="today-canvas-hour-rule" />
+              </div>
+            ))}
+            {di > 0 && (
+              <div className="today-canvas-day-sep" style={{ top: `${di * DAY_PX}px` }}>
+                <span
+                  className="today-canvas-day-sep-label"
+                  data-today={date === today || undefined}
+                >
+                  {fmtDayLabel(date)}
+                </span>
+              </div>
+            )}
           </div>
         ))}
         <div className="today-canvas-block-layer" aria-hidden={false}>
@@ -149,7 +205,7 @@ export function TimelineCanvas({
             />
           ))}
         </div>
-        {showNow && (
+        {showNow && nowPx >= 0 && nowPx <= totalPx && (
           <div className="today-canvas-now" style={{ top: `${nowPx}px` }} aria-label="현재 시각" />
         )}
         {activeDrag &&
@@ -157,11 +213,12 @@ export function TimelineCanvas({
             const guideY = activeGuide?.y ?? hoverPx;
             const guideX = activeGuide?.x ?? hoverX;
             if (guideY === null || guideX === null) return null;
-            // 15분 그리드 스냅 — 분 단위로 환산해 라벨까지 표시(스펙 §D2).
-            // HOUR_PX=60이라 1min=1px, snap = round(min/15)*15.
-            const snapMin = Math.max(0, Math.min(24 * 60, Math.round(guideY / 15) * 15));
-            const hh = String(Math.floor(snapMin / 60)).padStart(2, "0");
-            const mm = String(snapMin % 60).padStart(2, "0");
+            // 15분 그리드 스냅 — 절대 분으로 환산해 라벨은 일중 시각(hh:mm)으로 표시(스펙 §D2).
+            // HOUR_PX=60이라 1min=1px. 날짜 컨텍스트는 separator가 제공.
+            const snapMin = Math.max(0, Math.min(days * 1440, Math.round(guideY / 15) * 15));
+            const dayMin = snapMin % 1440;
+            const hh = String(Math.floor(dayMin / 60)).padStart(2, "0");
+            const mm = String(dayMin % 60).padStart(2, "0");
             const previewDuration =
               activeGuide?.durationMin ??
               ("durationMin" in activeDrag ? (activeDrag.durationMin ?? 60) : 60);

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   commands,
@@ -9,13 +9,32 @@ import {
   type Weekday,
 } from "@/bindings";
 
-import { unwrap, useInvalidate } from "./client";
+import { unwrap, useInvalidate, weekdayForDate } from "./client";
 
 /** 오늘 해당하는 루틴 + 날짜별 완료 상태. */
 export function useTodayRoutines(date: string, weekday: Weekday) {
   return useQuery({
     queryKey: ["routines", date],
     queryFn: () => unwrap(commands.listTodayRoutines(date, weekday)),
+  });
+}
+
+/**
+ * 연속 타임라인용 — 로드된 날짜별 루틴(useQueries). 키는 단일일 훅과 동일(["routines", date]).
+ * 요일은 날짜에서 유도(weekdayForDate) — 호출부가 요일을 따로 계산할 필요 없음.
+ */
+export function useTodayRoutinesForDates(dates: string[]) {
+  return useQueries({
+    queries: dates.map((date) => ({
+      queryKey: ["routines", date] as const,
+      queryFn: () => unwrap(commands.listTodayRoutines(date, weekdayForDate(date))),
+    })),
+    combine: (results) => ({
+      byDate: Object.fromEntries(dates.map((d, i) => [d, results[i]?.data ?? []])) as Record<
+        string,
+        RoutineToday[]
+      >,
+    }),
   });
 }
 

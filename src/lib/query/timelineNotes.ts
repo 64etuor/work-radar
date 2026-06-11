@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { commands, type TimelineNote, type TimelineNoteTarget } from "@/bindings";
 
@@ -25,6 +25,17 @@ export function useTimelineNotesForDate(date: string | null) {
     queryKey: ["timelineNotesForDate", date],
     enabled: date !== null,
     queryFn: () => unwrap(commands.listTimelineNotesForDate(date as string)),
+  });
+}
+
+/** 연속 타임라인용 — 로드된 날짜들의 메모 통합(useQueries, 키는 단일일 훅과 동일). */
+export function useTimelineNotesForDates(dates: string[]) {
+  return useQueries({
+    queries: dates.map((date) => ({
+      queryKey: ["timelineNotesForDate", date] as const,
+      queryFn: () => unwrap(commands.listTimelineNotesForDate(date)),
+    })),
+    combine: (results) => ({ all: results.flatMap((r) => r.data ?? []) }),
   });
 }
 

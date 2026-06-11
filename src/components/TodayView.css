@@ -431,16 +431,41 @@
   pointer-events: none;
 }
 
-/* 업무시간(09-18) 가벼운 음영 — 시각적 닻. */
+/* 업무시간(09-18) 가벼운 음영 — 시각적 닻. top/height는 날짜별 인라인(멀티데이 반복). */
 .today-canvas-workhours {
   position: absolute;
   left: 60px;
   right: 0;
-  top: 540px; /* 9h × 60px */
-  height: 540px; /* 9h band */
   background: color-mix(in srgb, var(--color-today-signal) 5.5%, transparent);
   z-index: 0;
   pointer-events: none;
+}
+
+/* 날짜 경계 separator — 멀티데이 연속 캔버스의 00:00 라인 + 날짜 라벨 칩. */
+.today-canvas-day-sep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px solid var(--color-wr-border);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.today-canvas-day-sep-label {
+  display: inline-block;
+  margin-left: 64px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-wr-muted);
+  background: var(--color-wr-bg);
+  border: 1px solid var(--color-wr-border);
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+.today-canvas-day-sep-label[data-today] {
+  color: var(--color-wr-fg);
 }
 
 .today-canvas-now {

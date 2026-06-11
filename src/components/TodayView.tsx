@@ -7,6 +7,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -32,21 +33,26 @@ import { stage } from "@/lib/calendarSync";
 import { useCalendarSyncEvents } from "@/lib/calendarSyncEvents";
 import {
   localToday,
-  useCalendarEvents,
+  useCalendarEventsForDates,
   useProjects,
-  useTimelineNotesForDate,
+  useTimelineNotesForDates,
   useToday,
   useTodayOverview,
-  useTodayRoutines,
+  useTodayRoutinesForDates,
   useToggleRoutineCheck,
   useToggleTodayDone,
-  weekdayForDate,
 } from "@/lib/query";
 import { unwrap } from "@/lib/query/client";
-import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
+import { addDays, dayDiff, localDateOf } from "@/lib/timeAxis";
+import { computeLayout, type LayoutBox, type TimedBlock } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
-import { blockNoteTarget, buildTodayBlocks, noteTargetMapKey } from "@/lib/todayBlocks";
+import { blockNoteTarget, buildTimelineBlocks, noteTargetMapKey } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
+
+/** 로드 일수 상한 — DOM/메모리 바운드(스펙 §3의 윈도잉 의도를 캡으로 충족). */
+const MAX_LOADED_DAYS = 21;
+/** 하루 높이(px) — 60px/h × 24h. */
+const DAY_PX = 24 * 60;
 
 /**
  * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).
@@ -59,18 +65,25 @@ export function TodayView() {
   const { goTo } = useUIStore();
   const qc = useQueryClient();
   const today = localToday();
+  // 레일/트레이/KPI 스코프 날짜(기존 의미 유지). 타임라인은 visibleDates 연속 축.
   const [date, setDate] = useState<string>(today);
-  // 선택 날짜의 요일 — 루틴은 선택 날짜로 재조회(다른 날짜로 가면 그 날 요일의 루틴을 본다).
-  const weekday = weekdayForDate(date);
+  // 연속 타임라인의 로드된 날짜들(연속·오름차순, 스펙 §3). 초기 [어제, 오늘, 내일].
+  const [visibleDates, setVisibleDates] = useState<string[]>(() => [
+    addDays(today, -1),
+    today,
+    addDays(today, 1),
+  ]);
+  const anchorDate = visibleDates[0];
 
   // sync 실패 이벤트 → 토스트 + 캐시 invalidate(rollback).
   useCalendarSyncEvents();
 
   const overview = useTodayOverview(today);
-  const events = useCalendarEvents(date);
-  // 레일·루틴 모두 선택 날짜로 조회 — 옵티미스틱 패치 키(["today", date])와도 일치.
+  // 타임라인 데이터는 로드된 모든 날짜 — per-day 버킷(useQueries) 병합(스펙 §3).
+  const eventsQ = useCalendarEventsForDates(visibleDates);
+  const routinesQ = useTodayRoutinesForDates(visibleDates);
+  // 레일은 선택 날짜로 조회 — 옵티미스틱 패치 키(["today", date])와도 일치.
   const todayRail = useToday(date);
-  const routines = useTodayRoutines(date, weekday);
   const projectsQ = useProjects();
   const toggleDone = useToggleTodayDone();
   const toggleRoutine = useToggleRoutineCheck();
@@ -84,33 +97,40 @@ export function TodayView() {
       return !ids || ids === "[]";
     });
 
-  const allEvents = events.data ?? [];
-  const allDay = allEvents.filter((e) => e.allDay);
+  // 트레이/AllDay 스트립은 선택 날짜(date) 스코프 유지 — 캐시 버킷은 타임라인과 공유.
+  const allDay = (eventsQ.byDate[date] ?? []).filter((e) => e.allDay);
   const rail = todayRail.data ?? [];
   const unscheduledTodays = rail.filter((s) => !s.scheduledAt);
-  const routineList = routines.data ?? [];
+  const routineList = routinesQ.byDate[date] ?? [];
   const unscheduledRoutines = routineList.filter((r) => !r.timeOverride && !r.timeOfDay);
 
-  const blocks = buildTodayBlocks({
+  const blocks = buildTimelineBlocks({
     signals: rail,
-    events: allEvents,
-    routines: routineList,
-    date,
+    eventsByDate: eventsQ.byDate,
+    routinesByDate: routinesQ.byDate,
+    dates: visibleDates,
   });
-  const boxes = computeLayout(blocks);
+  const boxes = computeLayout(blocks, anchorDate);
+
+  // 블록이 표시된 날짜(occurrence) — 완료 기록/루틴 EXDATE/메모 키가 블록과 일관되도록.
+  const blockDate = (block: TimedBlock) => localDateOf(block.startISO);
 
   // 블록 위 메모 표시 — 날짜별 메모 1회 조회(N+1 회피) 후 blockId → body 맵으로 환원.
   // EventPopover와 동일한 blockNoteTarget 키를 써서 표시/편집이 항상 같은 메모를 가리킨다.
-  const notesQ = useTimelineNotesForDate(date);
+  const notesQ = useTimelineNotesForDates(visibleDates);
+  // 멀티데이 병합이라 (target, 날짜)까지 키에 포함 — 같은 루틴의 인접 날짜 메모 충돌 방지.
   const byTarget = new Map<string, string>();
-  for (const n of notesQ.data ?? []) {
-    if (n.body.trim()) byTarget.set(noteTargetMapKey(n.targetKind, n.targetId), n.body);
+  for (const n of notesQ.all) {
+    if (n.body.trim())
+      byTarget.set(`${noteTargetMapKey(n.targetKind, n.targetId)}\u0000${n.date}`, n.body);
   }
   const memoByBlockId = new Map<string, string>();
   for (const box of boxes) {
     const t = blockNoteTarget(box.block);
     if (!t) continue;
-    const body = byTarget.get(noteTargetMapKey(t.targetKind, t.targetId));
+    const body = byTarget.get(
+      `${noteTargetMapKey(t.targetKind, t.targetId)}\u0000${blockDate(box.block)}`,
+    );
     if (body) memoByBlockId.set(box.block.id, body);
   }
 
@@ -127,17 +147,18 @@ export function TodayView() {
   /** 타임라인 ✓ 토글 — signal 또는 routine-linked calendar event는 로컬 DB 완료 상태만 바꾼다. */
   const handleBlockToggleDone = (box: LayoutBox, done: boolean) => {
     const { block } = box;
-    // 보고 있는 날짜(date) 기준으로 완료 기록 — 날짜 네비게이션 중에도 표시된 블록과 일관.
+    // 블록이 놓인 날짜(occurrence) 기준으로 완료 기록 — 연속 타임라인에서 표시된 블록과 일관.
     if (block.kind === "signal") {
       const id = block.id.replace(/^signal:/, "");
-      toggleDone.mutate({ id, date, done });
+      toggleDone.mutate({ id, date: blockDate(block), done });
     } else if (block.routineId) {
-      toggleRoutine.mutate({ routineId: block.routineId, date, done });
+      toggleRoutine.mutate({ routineId: block.routineId, date: blockDate(block), done });
     }
   };
   const handlePopoverClose = () => setPopover(null);
   const removeEventFromCache = (calendarId: string, eventId: string) => {
-    qc.setQueryData<CalendarEvent[]>(["calendarEvents", date], (old) =>
+    // 자정 걸침 이벤트는 인접 날짜 버킷에 중복 존재 — 로드된 모든 버킷에서 제거.
+    qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) =>
       old?.filter((event) => !(event.calendarId === calendarId && event.id === eventId)),
     );
   };
@@ -146,6 +167,8 @@ export function TodayView() {
     const title = block.title;
     const linkedEventId = block.linkedEventId;
     const calendarId = block.calendarId;
+    // 표시된 occurrence의 날짜 — 루틴 EXDATE/복구가 보이는 인스턴스와 일치(연속 타임라인).
+    const occDate = blockDate(block);
     const run = async () => {
       // 모든 kind에서 unschedule 가능 — signal/routine은 linkedEventId 없어도 stage(unschedule)
       // 자체는 동작(타임라인에서만 빼고 카드는 Today 잔류). Google 캐시 제거는 linkedEventId 있을 때만.
@@ -165,10 +188,10 @@ export function TodayView() {
         // 날짜(date)의 occurrence를 대상으로 EXDATE 한다 — 표시된 인스턴스와 일치(today 고정 시
         // 다른 날짜를 보는 중에 엉뚱하게 오늘 occurrence가 지워진다).
         // 빼기 = EXDATE: 로컬 skip 행 + 동기화 ON이면 master event EXDATE PATCH.
-        await unwrap(commands.unscheduleRoutineToday(routineId, date));
+        await unwrap(commands.unscheduleRoutineToday(routineId, occDate));
         // per-instance Google 이벤트가 있으면(드물게 드래그로 배치됐던 경우) 함께 정리.
         if (linkedEventId && calendarId) {
-          await stage({ kind: "routineUnschedule", routineId, date });
+          await stage({ kind: "routineUnschedule", routineId, date: occDate });
           removeEventFromCache(calendarId, linkedEventId);
           void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
         }
@@ -177,7 +200,7 @@ export function TodayView() {
         useToastStore.getState().pushInfo(`타임라인에서 뺐어요: ${title}`, {
           undoLabel: "되돌리기",
           onUndo: () => {
-            void unwrap(commands.restoreRoutineToday(routineId, date))
+            void unwrap(commands.restoreRoutineToday(routineId, occDate))
               .then(() => qc.invalidateQueries({ queryKey: ["routines"] }))
               .catch((err) => useToastStore.getState().pushError("routine.restore", err));
           },
@@ -191,7 +214,7 @@ export function TodayView() {
       void qc.invalidateQueries({ queryKey: ["signals"] });
       void qc.invalidateQueries({ queryKey: ["today"] });
       void qc.invalidateQueries({ queryKey: ["routines"] });
-      void qc.invalidateQueries({ queryKey: ["calendarEvents", date] });
+      void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
       useToastStore.getState().pushError("calendar.delete", err);
     });
   };
@@ -242,11 +265,86 @@ export function TodayView() {
   const sensors = useTodayDndSensors();
   const { onDragEnd } = useTimelineDnd({
     date,
+    anchorDate,
+    days: visibleDates.length,
     defaultCalendarFor,
     promptCalendarPicker,
     gridElRef,
     pointerClientRef: lastPointerRef,
   });
+
+  // ── 연속 스크롤 관리(스펙 §3·§4) ─────────────────────────────────────
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const prevAnchorRef = useRef(anchorDate);
+  const didInitialScrollRef = useRef(false);
+  const extendingRef = useRef(false);
+  const prevNavDateRef = useRef(date);
+
+  // 초기 1회: "지금"이 뷰포트 중앙에 오도록(스펙 §1 — 열면 현재시각 센터).
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el || didInitialScrollRef.current) return;
+    const idx = visibleDates.indexOf(today);
+    if (idx < 0) return;
+    const now = new Date();
+    const nowPx = idx * DAY_PX + now.getHours() * 60 + now.getMinutes();
+    el.scrollTop = Math.max(0, nowPx - el.clientHeight / 2);
+    didInitialScrollRef.current = true;
+  }, [visibleDates, today]);
+
+  // prepend(또는 상단 드롭) 시 scrollTop 보정 — anchor 변화량(일수×1440px)만큼.
+  // 빼먹으면 위로 날짜를 붙일 때 화면이 점프한다(스펙 §3 prepend 앵커링).
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    const prev = prevAnchorRef.current;
+    prevAnchorRef.current = anchorDate;
+    if (!el || prev === anchorDate) return;
+    el.scrollTop += dayDiff(prev, anchorDate) * DAY_PX;
+  }, [anchorDate]);
+
+  // 날짜 목록 갱신 반영 후 lazy-extend 가드 해제.
+  useEffect(() => {
+    extendingRef.current = false;
+  }, [visibleDates]);
+
+  const handleCanvasScroll = () => {
+    const el = wrapRef.current;
+    if (!el || extendingRef.current) return;
+    const nearTop = el.scrollTop < DAY_PX / 2;
+    const nearBottom = el.scrollTop + el.clientHeight > el.scrollHeight - DAY_PX / 2;
+    if (!nearTop && !nearBottom) return;
+    extendingRef.current = true;
+    setVisibleDates((prev) => {
+      let next = nearTop
+        ? [addDays(prev[0], -1), ...prev]
+        : [...prev, addDays(prev[prev.length - 1], 1)];
+      // 캡 초과 시 viewport 반대편 끝을 드롭 — anchor 변화는 위 effect가 scrollTop 보정.
+      if (next.length > MAX_LOADED_DAYS) next = nearTop ? next.slice(0, -1) : next.slice(1);
+      return next;
+    });
+  };
+
+  // 헤더 날짜 네비 — 레일 스코프 변경 + 타임라인을 그 날짜로 스크롤(범위 밖이면 로드 확장).
+  const handleDateChange = (d: string) => {
+    setDate(d);
+    setVisibleDates((prev) => {
+      let next = prev;
+      while (d < next[0]) next = [addDays(next[0], -1), ...next];
+      while (d > next[next.length - 1]) next = [...next, addDays(next[next.length - 1], 1)];
+      return next;
+    });
+  };
+
+  // 네비로 date가 바뀐 뒤(같은 렌더 사이클에 visibleDates 확장 반영됨) 해당 날짜 08:00로 스크롤.
+  useEffect(() => {
+    if (prevNavDateRef.current === date) return;
+    prevNavDateRef.current = date;
+    const el = wrapRef.current;
+    if (!el) return;
+    const idx = dayDiff(date, anchorDate);
+    if (idx < 0 || idx >= visibleDates.length) return;
+    el.scrollTop = idx * DAY_PX + 8 * 60;
+  }, [date, anchorDate, visibleDates.length]);
 
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
@@ -307,7 +405,7 @@ export function TodayView() {
           date={date}
           today={today}
           debt={overview.data?.workDebt ?? {}}
-          onDateChange={setDate}
+          onDateChange={handleDateChange}
         />
         <div className="today-staged-slot">
           <StagedBadge />
@@ -320,7 +418,7 @@ export function TodayView() {
             onToggleDone={(id, done) => toggleDone.mutate({ id, date, done })}
             onToggleRoutine={(routineId, done) => toggleRoutine.mutate({ routineId, date, done })}
           />
-          <div className="today-canvas-wrap">
+          <div className="today-canvas-wrap" ref={wrapRef} onScroll={handleCanvasScroll}>
             {noCalendarsConfigured ? (
               <div className="today-canvas-cta">
                 <p>Google 계정이 연결되지 않았습니다.</p>
@@ -328,7 +426,7 @@ export function TodayView() {
               </div>
             ) : (
               <TimelineCanvas
-                date={date}
+                dates={visibleDates}
                 today={today}
                 boxes={boxes}
                 memoByBlockId={memoByBlockId}
@@ -347,7 +445,7 @@ export function TodayView() {
         <EventPopover
           open={popover !== null}
           box={popover?.box ?? null}
-          date={date}
+          date={popover ? blockDate(popover.box.block) : date}
           anchor={popover?.anchor ?? null}
           onClose={handlePopoverClose}
           onDeleteSchedule={handleDeleteSchedule}
