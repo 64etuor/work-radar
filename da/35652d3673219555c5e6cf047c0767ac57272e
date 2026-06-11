@@ -1,0 +1,60 @@
+src/components/board/useSignalPop.ts
+  s_911a588f72a4cd::t_e7ff68923eb741 7-8,14
+src/components/board/MatrixCanvas.tsx
+  s_911a588f72a4cd::t_7338565f500666 71,103-104,183,396-397,491-492
+src/components/board/LifeWheelPalette.tsx
+  s_911a588f72a4cd::t_b3357e625adda7 5
+src/components/CmdKnob.tsx
+  s_911a588f72a4cd::t_7338565f500666 84,87
+src/components/jobs/SelfCheckPanel.tsx
+  s_911a588f72a4cd::t_b3357e625adda7 98,119-120,130-131
+src/components/hermes/useHermesPanelState.ts
+  s_911a588f72a4cd::t_7338565f500666 48-51
+src/components/control-room/Vitals.tsx
+  s_911a588f72a4cd::t_5fdaea16646cee 2-4,6-10,30-34
+  s_911a588f72a4cd::t_cf38ce47b475a8 5
+src/lib/useCmdKnob.ts
+  s_911a588f72a4cd::t_7338565f500666 81,97
+src/components/CaptureBoard.tsx
+  s_911a588f72a4cd::t_56aedb500b77d2 152
+  s_911a588f72a4cd::t_cffaa592fc7c67 77,642
+  s_911a588f72a4cd::t_0643181ad0ab30 643-645
+  s_911a588f72a4cd::t_80310bb839325d 76
+src/components/skills/UpdatePanel.tsx
+  s_911a588f72a4cd::t_b3357e625adda7 72-77,79,90,100,103
+src/components/SkillsView.tsx
+  s_911a588f72a4cd::t_e727e9165d0d27 83,668-669
+src/components/control-room/ProjectTabs.tsx
+  s_911a588f72a4cd::t_cf38ce47b475a8 1
+  s_911a588f72a4cd::t_5fdaea16646cee 50-57
+src/components/board/lifeWheelTags.ts
+  s_911a588f72a4cd::t_b3357e625adda7 1-14
+src/lib/useDebouncedCallback.ts
+  s_911a588f72a4cd::t_7338565f500666 32-34
+src/components/control-room/CommandDeck.tsx
+  s_911a588f72a4cd::t_0962fce6c8d603 52-58,61-64,66-74,76-84
+  s_911a588f72a4cd::t_cf38ce47b475a8 2
+  s_911a588f72a4cd::t_5fdaea16646cee 46-51,85-86,144,152,154,165
+src/lib/lifeWheelRadar.ts
+  s_911a588f72a4cd::t_b3357e625adda7 3
+src/lib/useViewShortcuts.ts
+  s_911a588f72a4cd::t_7338565f500666 53
+src/components/jobs/TriagePanel.tsx
+  s_911a588f72a4cd::t_b3357e625adda7 70-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "da35652d3673219555c5e6cf047c0767ac57272e",
+  "prompts": {},
+  "sessions": {
+    "s_911a588f72a4cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb645-8804-7363-8888-ac13e58c5cbf",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
