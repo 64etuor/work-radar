@@ -30,6 +30,7 @@
   --color-wr-status-working: #16a34a; /* 에이전트 상태등 — 작업중(초록), 흰/다크 양쪽 가독 */
   --color-wr-status-waiting: #eab308; /* 에이전트 상태등 — 입력 대기(노랑) */
   --color-wr-navy: #071829; /* Dark Navy — security/financial band */
+  --color-wr-brand-claude: #d97757; /* Claude 브랜드 terra — 에이전트 사용량 게이지 아이콘 */
 
   /* Semantic */
   --color-wr-focus: #4c6ee6; /* 키보드 포커스 ring */
