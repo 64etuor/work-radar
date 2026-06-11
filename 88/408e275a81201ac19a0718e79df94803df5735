@@ -1,0 +1,85 @@
+src/components/CaptureBoard.css
+  s_5c261c6dcf99b9::t_8ceded48fb2301 339
+  s_5c261c6dcf99b9::t_c7544b35d20d62 751
+  s_5c261c6dcf99b9::t_964e3512991e5f 180
+  s_5c261c6dcf99b9::t_4110be6b73d953 809
+  s_5c261c6dcf99b9::t_98262fa789eaec 18-37
+  s_5c261c6dcf99b9::t_736a0958973c8d 297
+  s_5c261c6dcf99b9::t_913c10000bff9c 398
+  s_5c261c6dcf99b9::t_9d5c27c53e7be4 156,159,162,165
+  s_5c261c6dcf99b9::t_756b3ea9cb55c7 512
+  s_5c261c6dcf99b9::t_9ebe9c42259473 730
+src/components/postit/PostitCard.css
+  s_5c261c6dcf99b9::t_bded5c04be18d2 5-8,13,19,32
+src/components/CmdShortcutBar.css
+  s_5c261c6dcf99b9::t_e20e2b9c77fd93 3-4,19
+src/components/TodayView.css
+  s_5c261c6dcf99b9::t_42d36f772f560b 8-22
+  s_5c261c6dcf99b9::t_c07b82d7b63280 990
+  s_5c261c6dcf99b9::t_1528b18361f254 176
+  s_5c261c6dcf99b9::t_1c2d31c442da5e 969
+  s_5c261c6dcf99b9::t_26cdb80afe55c7 942
+  s_5c261c6dcf99b9::t_59dd2d44dfb6d2 391
+  s_5c261c6dcf99b9::t_fe67f3d9adeb34 292
+  s_5c261c6dcf99b9::t_20ad340fabce8b 404-405,408
+  s_5c261c6dcf99b9::t_883ebefe2201e9 534
+  s_5c261c6dcf99b9::t_b63916185d99d4 524
+  s_5c261c6dcf99b9::t_3b0dc2896dcde2 196
+  s_5c261c6dcf99b9::t_38eb0800350006 354
+  s_5c261c6dcf99b9::t_efb1ec661cdcf9 986
+  s_5c261c6dcf99b9::t_454a5e508606e3 1009
+  s_5c261c6dcf99b9::t_b9ad1191be51bc 208,213-214
+  s_5c261c6dcf99b9::t_9b5e0ee4f3e675 614
+  s_5c261c6dcf99b9::t_bf99a58701378e 362
+  s_5c261c6dcf99b9::t_00e7aeadbafdc1 116
+  s_5c261c6dcf99b9::t_b0874325af598e 75
+  s_5c261c6dcf99b9::t_e808bef656f89b 239,244-245
+  s_5c261c6dcf99b9::t_7fe1bcc3c29ad5 875
+  s_5c261c6dcf99b9::t_0ae5245d4b3cff 736
+  s_5c261c6dcf99b9::t_77756b2fe4bc89 645-649
+  s_5c261c6dcf99b9::t_4f5eac6036ae43 547
+  s_5c261c6dcf99b9::t_7d491adb46e506 859
+  s_5c261c6dcf99b9::t_bd2b90d55ba6c5 429
+  s_5c261c6dcf99b9::t_40eba641ee7332 895
+  s_5c261c6dcf99b9::t_dce3ecf88d7949 417
+  s_5c261c6dcf99b9::t_d6076cc31096f8 623
+src/components/board/CardMenu.css
+  s_5c261c6dcf99b9::t_bded5c04be18d2 3-4,11
+src/components/CmdPageMenu.css
+  s_5c261c6dcf99b9::t_b3835e44200b6a 3-4,17
+src/components/ToastHost.css
+  s_5c261c6dcf99b9::t_bded5c04be18d2 4-8,36,42,89,94
+src/styles/tokens.css
+  s_5c261c6dcf99b9::t_bded5c04be18d2 129-132
+scripts/design-gate-baseline.json
+  s_5c261c6dcf99b9::t_8a4e712c157936 48
+src/components/CmdKnob.css
+  s_5c261c6dcf99b9::t_2852a1efba1fac 3-9
+  s_5c261c6dcf99b9::t_3aa94f25a2a1a7 28
+  s_5c261c6dcf99b9::t_f112dee790bbd8 78-83,85-86
+src/components/CommandPalette.css
+  s_5c261c6dcf99b9::t_bded5c04be18d2 6-8,12
+src/styles/motion.css
+  s_5c261c6dcf99b9::t_8080eacce79f4f 251,263,395-400,417-425,431-439,445-453,459-467
+  s_5c261c6dcf99b9::t_bded5c04be18d2 205-206,210-211,215-216
+src/components/inbox/InboxTray.css
+  s_5c261c6dcf99b9::t_bded5c04be18d2 2-3,126
+src/components/board/BrainDumpToggle.css
+  s_5c261c6dcf99b9::t_0d15dae93d326c 6-17,31,46,50,64,69,80-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "88408e275a81201ac19a0718e79df94803df5735",
+  "prompts": {},
+  "sessions": {
+    "s_5c261c6dcf99b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24766495-c6d8-4fcb-bfdc-48baf90b0af8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
