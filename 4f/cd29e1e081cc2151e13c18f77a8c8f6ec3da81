@@ -1,0 +1,21 @@
+src/lib/timelineCoords.test.ts
+  s_bbe5afa2d0a5e5::t_94b7b2d691a679 1-79
+src/lib/timelineCoords.ts
+  s_bbe5afa2d0a5e5::t_9881bb13b071b0 1-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4fcd29e1e081cc2151e13c18f77a8c8f6ec3da81",
+  "prompts": {},
+  "sessions": {
+    "s_bbe5afa2d0a5e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7d04a86-d93d-4e49-9873-85da3bd363b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
