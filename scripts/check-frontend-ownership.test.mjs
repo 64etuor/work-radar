@@ -60,10 +60,6 @@ function validFiles(overrides = {}) {
     "src/components/board/matrixGeometry.test.ts": "import './matrixGeometry';\n",
     "src/components/TodayView.tsx":
       'import { useTimelineScroll } from "@/components/today/useTimelineScroll";\n',
-    "src/components/today/useTimelineScheduleActions.ts":
-      "export function useTimelineScheduleActions() { return {}; }\n",
-    "src/components/today/useTimelineScroll.ts":
-      "export function useTimelineScroll() { return {}; }\n",
     ...overrides,
   };
 }
@@ -107,15 +103,17 @@ test("rejects shared css component namespaces", async () => {
   assert.match(failures.join("\n"), /Component namespace selectors are forbidden/);
 });
 
-test("keeps Today timeline responsibilities split out of the view", async () => {
+test("rejects large orchestrators without a custom hook boundary", async () => {
   const root = await makeFixture(
     validFiles({
-      "src/components/today/useTimelineScroll.ts": undefined,
+      "src/components/TodayView.tsx": Array.from({ length: 300 }, (_, i) =>
+        i === 0 ? "export function TodayView() { return null; }" : `// filler ${i}`,
+      ).join("\n"),
     }),
   );
   const failures = await checkFrontendOwnership(root);
   assert.match(
     failures.join("\n"),
-    /src\/components\/today\/useTimelineScroll\.ts: required frontend ownership boundary file is missing/,
+    /large orchestrators must extract lifecycle\/state details behind a local custom hook boundary/,
   );
 });

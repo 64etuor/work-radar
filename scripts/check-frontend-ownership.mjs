@@ -31,13 +31,14 @@ const REQUIRED_FILES = [
   "src/components/board/boardOverlayUtils.ts",
   "src/components/board/matrixGeometry.ts",
   "src/components/board/matrixGeometry.test.ts",
-  "src/components/today/useTimelineScheduleActions.ts",
-  "src/components/today/useTimelineScroll.ts",
 ];
 
 const QUERY_IMPORT_RE =
   /from\s+["']@\/lib\/query(?:\/[^"']*)?["']|from\s+["']\.\.\/(?:\.\.\/)*lib\/query(?:\/[^"']*)?["']/;
 const COMPONENT_NAMESPACE_RE = /\.(?:cb|wt|jobs|asb|today)(?:[-_a-zA-Z0-9]|\b)/;
+const CUSTOM_HOOK_BOUNDARY_MIN_LINES = 300;
+const CUSTOM_HOOK_BOUNDARY_RE =
+  /from\s+["'](?:@\/(?:components|lib)\/[^"']*\/use[A-Z][^"']*|\.{1,2}\/[^"']*\/use[A-Z][^"']*)["']|function\s+use[A-Z]\w*\s*\(/;
 
 const LEAF_OWNERSHIP = [
   {
@@ -135,9 +136,15 @@ export async function checkFrontendOwnership(root = process.cwd()) {
 
   for (const [file, max] of MAX_LINES) {
     if (!existsSync(resolve(root, file))) continue;
-    const lines = countLines(await readText(root, file));
+    const text = await readText(root, file);
+    const lines = countLines(text);
     if (lines > max) {
       failures.push(`${file}: ${lines} lines exceeds ownership guard limit ${max}.`);
+    }
+    if (lines >= CUSTOM_HOOK_BOUNDARY_MIN_LINES && !CUSTOM_HOOK_BOUNDARY_RE.test(text)) {
+      failures.push(
+        `${file}: large orchestrators must extract lifecycle/state details behind a local custom hook boundary.`,
+      );
     }
   }
 
