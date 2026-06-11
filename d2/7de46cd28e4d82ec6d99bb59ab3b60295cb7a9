@@ -1,0 +1,19 @@
+docs/areas/frontend-shell.md
+  s_c7ae2e76dc02ae::t_c92e8f8ce24ab4 49-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d27de46cd28e4d82ec6d99bb59ab3b60295cb7a9",
+  "prompts": {},
+  "sessions": {
+    "s_c7ae2e76dc02ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfab002c-28d7-4865-a4a0-689215d39ab9",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
