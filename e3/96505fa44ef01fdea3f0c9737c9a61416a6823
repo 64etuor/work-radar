@@ -1,0 +1,33 @@
+src/components/control-room/AgentUsageStrip.tsx
+  s_9b9c8df07c54b0::t_a75cf6ce3b13ca 5-6,10,18-68,72-81,84-100,112,114,120
+src/components/control-room/agentBrandIcons.tsx
+  s_9b9c8df07c54b0::t_e8b002d69e6a04 1-32
+src/components/control-room/ControlRoomView.css
+  s_9b9c8df07c54b0::t_ac10b1ca9b6954 107
+  s_9b9c8df07c54b0::t_6c22e12001f05b 40,45,47,50-54,59-69,76,86
+  s_9b9c8df07c54b0::t_0e37b0af09ab82 55-57
+  s_9b9c8df07c54b0::t_1567f551cb32a4 134-136,150,157
+  s_9b9c8df07c54b0::t_485831da3bbb61 137-149,151-156,158-159
+src/styles/tokens.css
+  s_9b9c8df07c54b0::t_7a03bd5744ba19 33
+src/components/ui/tooltip.tsx
+  s_9b9c8df07c54b0::t_f247b9050aeb83 1-10,16-42,44-54
+  s_9b9c8df07c54b0::t_f460b4cbefb0b4 43
+  s_9b9c8df07c54b0::t_0e37b0af09ab82 11-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e396505fa44ef01fdea3f0c9737c9a61416a6823",
+  "prompts": {},
+  "sessions": {
+    "s_9b9c8df07c54b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01cf6144-ac31-46e8-80c0-7fced600563d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
