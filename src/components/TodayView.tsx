@@ -308,9 +308,54 @@ export function TodayView() {
     extendingRef.current = false;
   }, [visibleDates]);
 
+  /**
+   * 프로그램 스크롤(네비/"오늘" 클릭) 중 표시 — smooth 애니메이션이 끝날 때까지
+   * 스크롤 추종(setDate)·lazy-extend를 억제한다. 추종을 끄지 않으면 중간 날짜들로
+   * date가 깜빡이고, extend의 prepend 보정이 애니메이션 목표 좌표를 흔든다.
+   * 해제 = 목표 근접(8px) 또는 1.6s 타임아웃(사용자 휠 개입 등으로 미도달 시 fail-open).
+   */
+  const programmaticScrollRef = useRef<{ target: number; since: number } | null>(null);
+  const followRafRef = useRef<number | null>(null);
+
+  const smoothScrollTo = (top: number) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const clamped = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, top));
+    programmaticScrollRef.current = { target: clamped, since: performance.now() };
+    el.scrollTo({ top: clamped, behavior: "smooth" });
+  };
+
   const handleCanvasScroll = () => {
     const el = wrapRef.current;
-    if (!el || extendingRef.current) return;
+    if (!el) return;
+
+    // 프로그램 스크롤 진행 중 — 도달/타임아웃 전엔 추종·extend 모두 보류.
+    const prog = programmaticScrollRef.current;
+    if (prog) {
+      const arrived = Math.abs(el.scrollTop - prog.target) < 8;
+      const timedOut = performance.now() - prog.since > 1_600;
+      if (!arrived && !timedOut) return;
+      programmaticScrollRef.current = null;
+    }
+
+    // 스크롤 추종: 뷰포트 중앙이 속한 날짜로 헤더 date를 따라가게(rAF 1회로 합침).
+    // 추종발 setDate는 네비가 아니므로 prevNavDateRef를 같이 맞춰 스크롤-투-날짜 effect를 무효화.
+    if (followRafRef.current === null) {
+      followRafRef.current = requestAnimationFrame(() => {
+        followRafRef.current = null;
+        const node = wrapRef.current;
+        if (!node || programmaticScrollRef.current) return;
+        const centerIdx = Math.floor((node.scrollTop + node.clientHeight / 2) / DAY_PX);
+        const clampedIdx = Math.max(0, Math.min(visibleDates.length - 1, centerIdx));
+        const viewDate = visibleDates[clampedIdx];
+        if (viewDate && viewDate !== prevNavDateRef.current) {
+          prevNavDateRef.current = viewDate;
+          setDate(viewDate);
+        }
+      });
+    }
+
+    if (extendingRef.current) return;
     // 캡 도달 시 lazy-extend 자체를 멈춘다(가드 ref를 세우지 않음 — no-op setState 방지).
     if (visibleDates.length >= MAX_LOADED_DAYS) return;
     const nearTop = el.scrollTop < DAY_PX / 2;
@@ -322,13 +367,23 @@ export function TodayView() {
     setVisibleDates((prev) => extendDates(prev, nearTop ? "up" : "down", MAX_LOADED_DAYS));
   };
 
+  // 추종 rAF 잔여분 unmount 정리.
+  useEffect(
+    () => () => {
+      if (followRafRef.current !== null) cancelAnimationFrame(followRafRef.current);
+    },
+    [],
+  );
+
   // 헤더 날짜 네비 — 레일 스코프 변경 + 타임라인을 그 날짜로 스크롤(범위 밖이면 로드 확장).
   const handleDateChange = (d: string) => {
     setDate(d);
     setVisibleDates((prev) => includeDate(prev, d));
   };
 
-  // 네비로 date가 바뀐 뒤(같은 렌더 사이클에 visibleDates 확장 반영됨) 해당 날짜 08:00로 스크롤.
+  // 네비로 date가 바뀐 뒤(같은 렌더 사이클에 visibleDates 확장 반영됨) 해당 날짜로 smooth 스크롤.
+  // 오늘이면 현재시각 센터("오늘" 버튼의 자연 복귀), 다른 날짜는 08:00 상단.
+  // 스크롤-추종발 변경은 prevNavDateRef가 이미 갱신돼 있어 여기서 스킵된다.
   useEffect(() => {
     if (prevNavDateRef.current === date) return;
     prevNavDateRef.current = date;
@@ -336,8 +391,14 @@ export function TodayView() {
     if (!el) return;
     const idx = dayDiff(date, anchorDate);
     if (idx < 0 || idx >= visibleDates.length) return;
-    el.scrollTop = idx * DAY_PX + 8 * 60;
-  }, [date, anchorDate, visibleDates.length]);
+    if (date === today) {
+      const now = new Date();
+      const nowPx = idx * DAY_PX + now.getHours() * 60 + now.getMinutes();
+      smoothScrollTo(nowPx - el.clientHeight / 2);
+    } else {
+      smoothScrollTo(idx * DAY_PX + 8 * 60);
+    }
+  }, [date, anchorDate, visibleDates.length, today]);
 
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.

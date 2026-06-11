@@ -97,7 +97,7 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
           disabled={isToday}
           onClick={() => onDateChange(today)}
         >
-          오늘로
+          오늘
         </Button>
       </div>
       <div className="today-debt-chips" role="group" aria-label="Work Debt 요약">
