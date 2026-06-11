@@ -1,0 +1,23 @@
+src/lib/todayBlocks.test.ts
+  s_bbe5afa2d0a5e5::t_53744ef8c5a511 5
+  s_bbe5afa2d0a5e5::t_c55936858dff55 492-554
+src/lib/todayBlocks.ts
+  s_bbe5afa2d0a5e5::t_932c5200d6c060 228-266
+  s_bbe5afa2d0a5e5::t_6745cd61b3d387 210-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "32ff8868da37c6657542a1b8cff8dc09eb9ea798",
+  "prompts": {},
+  "sessions": {
+    "s_bbe5afa2d0a5e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7d04a86-d93d-4e49-9873-85da3bd363b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
