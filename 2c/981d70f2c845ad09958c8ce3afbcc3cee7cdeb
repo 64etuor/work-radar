@@ -1,0 +1,28 @@
+src/lib/worktreeReview.ts
+  s_5c261c6dcf99b9::t_07b1006978ca56 268-281
+src/components/worktree/WorktreeSideList.tsx
+  s_5c261c6dcf99b9::t_07b1006978ca56 7
+src/components/RoutineTrackingView.tsx
+  s_5c261c6dcf99b9::t_07b1006978ca56 122
+  s_5c261c6dcf99b9::t_19e73f5ee6e8bd 11
+src/components/worktree/WorktreeReviewPanel.tsx
+  s_5c261c6dcf99b9::t_19e73f5ee6e8bd 10
+src/components/board/CalendarEventModal.tsx
+  s_5c261c6dcf99b9::t_03f400115c36d4 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "2c981d70f2c845ad09958c8ce3afbcc3cee7cdeb",
+  "prompts": {},
+  "sessions": {
+    "s_5c261c6dcf99b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24766495-c6d8-4fcb-bfdc-48baf90b0af8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
