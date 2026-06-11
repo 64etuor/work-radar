@@ -11,7 +11,15 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      babel: {
+        // React Compiler — 자동 메모이제이션 (React 19 기본 타깃)
+        plugins: ["babel-plugin-react-compiler"],
+      },
+    }),
+    tailwindcss(),
+  ],
 
   // P6: react-query disk-persist buster를 앱 버전에 묶는다(버전 변경 시 디스크 캐시 자동 무효화).
   define: {
