@@ -1,0 +1,19 @@
+docs/superpowers/specs/2026-06-11-continuous-timeline-design.md
+  s_bbe5afa2d0a5e5::t_c5eb678dc55870 1-16,18-90,92-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3a003b36fbc16f954e605240cff46f98a84b2d69",
+  "prompts": {},
+  "sessions": {
+    "s_bbe5afa2d0a5e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7d04a86-d93d-4e49-9873-85da3bd363b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
