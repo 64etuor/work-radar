@@ -46,6 +46,26 @@ worktree.
 - `persist.ts` = react-query persist(인 메모리 + storage). 하이브리드 캐싱(moka TTL은 백엔드).
 - mutation 후 `invalidateQueries` — 도메인별 키 컨벤션 일관.
 
+모범 사례 (위반은 react-doctor/critic이 잡는다):
+
+- **invalidation은 헬퍼 경유.** `useInvalidate()`(signals/today/routines)·`useInvalidateRetro()`
+  등 헬퍼가 파생 집계 동봉 invariant를 강제한다 — 인라인 `qc.invalidateQueries`로 풀지 말 것.
+  새 도메인이면 같은 파일에 로컬 invalidate 헬퍼를 만들어 mutation들이 공유.
+- **캐시 무변경 mutation은 네이밍으로 선언.** `usePing*`/`useDetect*`/`useCancel*`/`useFocus*`/
+  `useSchedule*Notification` — invalidation 없음이 정상이며 FP 문서가 이 패턴을 suppress 한다.
+- **`useQuery` 결과는 쓰는 필드만 구조분해.** 객체 통째 보관은 tracked-property 구독을 무효화해
+  안 쓰는 필드 변화에도 리렌더된다 (`query-destructure-result`).
+- **서버값 → 편집 draft는 effect 동기화 금지.** 쿼리 키를 컴포넌트 `key`로 써서 리마운트
+  시딩(`useState(initial)`) — dirty 가드/synced ref 부기가 구조적으로 불필요해진다.
+  선례: `EventPopover`의 `MemoEditor`. 로딩 중엔 동일 지오메트리 비활성 셸.
+- **폴링은 `refetchInterval` 콜백으로 terminal 중단** (INVARIANT #5 bounded). `setInterval`로
+  IPC 직접 호출 금지 — 모든 IPC는 query 레이어를 거친다.
+- **queryKey는 값-해시.** fresh 배열/객체를 넘겨도 안전하다 — effect deps의 참조 동일성
+  요구와 혼동하지 말 것.
+- **React Compiler 활성 전제.** `queryFn`/`select`는 순수하게 유지하고, 훅 결과를 받아 만드는
+  파생값에 수동 `useMemo`를 두지 않는다(컴파일러가 메모이즈). 예외는 effect deps로 들어가는
+  값뿐 — 그 경우만 명시 메모 + 사유 주석.
+
 ## State (`src/store.ts`)
 
 Zustand. `view`, modal/picker 상태, agent 이름 persist.
