@@ -24,7 +24,7 @@ export function StagedBadge() {
   const ids = staged.map((s) => s.id);
 
   return (
-    <div className="today-staged" role="status" aria-live="polite">
+    <output className="today-staged" aria-live="polite">
       <span className="today-staged-text">변경 {staged.length}건 대기 중</span>
       <Button size="sm" variant="ghost" disabled={busy} onClick={() => cancel.mutate(ids)}>
         {cancel.isPending ? "취소 중…" : "취소"}
@@ -32,6 +32,6 @@ export function StagedBadge() {
       <Button size="sm" disabled={busy} onClick={() => commit.mutate(ids)}>
         {commit.isPending ? "적용 중…" : "적용"}
       </Button>
-    </div>
+    </output>
   );
 }

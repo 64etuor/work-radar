@@ -62,6 +62,9 @@
   margin-left: auto;
   display: flex;
   gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
 }
 
 .today-debt-chip {
@@ -118,6 +121,7 @@
   border-radius: 9999px;
   font-size: 11px;
   color: var(--color-wr-fg);
+  appearance: none;
 }
 
 .today-staged-text {
@@ -299,6 +303,13 @@
 /* 카드 deck — 캡쳐보드 인박스와 동일 1-col 절대배치 스택(겹치는 postit). 높이는 inline. */
 .today-tray-deck {
   position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.today-tray-card-item {
+  list-style: none;
 }
 
 /* 종일/empty extras — deck 아래로 정상 흐름. */
@@ -341,6 +352,8 @@
 
 .today-tray-allday {
   padding: 0 8px 8px;
+  margin: 0;
+  list-style: none;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;

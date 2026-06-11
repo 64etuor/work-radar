@@ -13,6 +13,7 @@ async function makeFixture(files) {
   );
   await mkdir(root, { recursive: true });
   for (const [path, contents] of Object.entries(files)) {
+    if (contents === undefined) continue;
     const fullPath = join(root, path);
     await mkdir(join(fullPath, ".."), { recursive: true });
     await writeFile(fullPath, contents);
@@ -57,6 +58,12 @@ function validFiles(overrides = {}) {
     "src/components/board/matrixGeometry.ts":
       "export function computeZonePositions() { return []; }\n",
     "src/components/board/matrixGeometry.test.ts": "import './matrixGeometry';\n",
+    "src/components/TodayView.tsx":
+      'import { useTimelineScroll } from "@/components/today/useTimelineScroll";\n',
+    "src/components/today/useTimelineScheduleActions.ts":
+      "export function useTimelineScheduleActions() { return {}; }\n",
+    "src/components/today/useTimelineScroll.ts":
+      "export function useTimelineScroll() { return {}; }\n",
     ...overrides,
   };
 }
@@ -98,4 +105,17 @@ test("rejects shared css component namespaces", async () => {
   );
   const failures = await checkFrontendOwnership(root);
   assert.match(failures.join("\n"), /Component namespace selectors are forbidden/);
+});
+
+test("keeps Today timeline responsibilities split out of the view", async () => {
+  const root = await makeFixture(
+    validFiles({
+      "src/components/today/useTimelineScroll.ts": undefined,
+    }),
+  );
+  const failures = await checkFrontendOwnership(root);
+  assert.match(
+    failures.join("\n"),
+    /src\/components\/today\/useTimelineScroll\.ts: required frontend ownership boundary file is missing/,
+  );
 });

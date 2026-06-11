@@ -124,7 +124,6 @@ function SignalDraggableCard({
       data-kind="today"
       {...attributes}
       {...listeners}
-      role="listitem"
       aria-label={`${signal.title} (Today, 드래그하여 시간축에 배치)`}
       tags={
         <>
@@ -166,7 +165,6 @@ function RoutineDraggableCard({
       data-kind="routine"
       {...attributes}
       {...listeners}
-      role="listitem"
       aria-label={`${routine.title} (루틴, 드래그하여 시간축에 배치)`}
       tags={
         <>
@@ -224,30 +222,27 @@ export function UnscheduledTray({
       data-drop-over={isOver || undefined}
     >
       <InboxColumn label="Inbox" ko="미배치" count={cardCount}>
-        <div
-          className="today-tray-deck"
-          role="list"
-          aria-label="미배치 카드"
-          style={{ height: deckHeight }}
-        >
+        <ul className="today-tray-deck" aria-label="미배치 카드" style={{ height: deckHeight }}>
           {unscheduledTodays.map((s, i) => (
-            <SignalDraggableCard
-              key={`s-${s.id}`}
-              signal={s}
-              done={Boolean(s.todayDoneAt)}
-              onToggleDone={onToggleDone}
-              style={positionStyle(positions[i])}
-            />
+            <li key={`s-${s.id}`} className="today-tray-card-item">
+              <SignalDraggableCard
+                signal={s}
+                done={Boolean(s.todayDoneAt)}
+                onToggleDone={onToggleDone}
+                style={positionStyle(positions[i])}
+              />
+            </li>
           ))}
           {unscheduledRoutines.map((r, i) => (
-            <RoutineDraggableCard
-              key={`r-${r.id}`}
-              routine={r}
-              onToggleRoutine={onToggleRoutine}
-              style={positionStyle(positions[unscheduledTodays.length + i])}
-            />
+            <li key={`r-${r.id}`} className="today-tray-card-item">
+              <RoutineDraggableCard
+                routine={r}
+                onToggleRoutine={onToggleRoutine}
+                style={positionStyle(positions[unscheduledTodays.length + i])}
+              />
+            </li>
           ))}
-        </div>
+        </ul>
         {(empty || allDayEvents.length > 0) && (
           <div className="today-tray-extras">
             {empty && <div className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</div>}
@@ -273,24 +268,22 @@ export function UnscheduledTray({
                   </span>
                 </button>
                 {allDayOpen && (
-                  <div
+                  <ul
                     id="today-tray-allday-body"
                     className="today-tray-allday"
-                    role="list"
                     aria-label="종일 이벤트 목록"
                   >
                     {allDayEvents.map((e) => (
-                      <span
+                      <li
                         key={e.id}
-                        role="listitem"
                         className="today-tray-chip"
                         style={calendarColorStyle(e.projectColor, e.projectTextColor)}
                         title={e.calendarSummary}
                       >
                         {e.title}
-                      </span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </div>
             )}

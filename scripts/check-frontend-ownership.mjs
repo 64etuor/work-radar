@@ -5,6 +5,7 @@ import { relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MAX_LINES = new Map([
+  ["src/components/TodayView.tsx", 420],
   ["src/components/worktree/WorktreeView.tsx", 450],
   ["src/components/jobs/JobsView.tsx", 220],
   ["src/components/CaptureBoard.tsx", 650],
@@ -30,6 +31,8 @@ const REQUIRED_FILES = [
   "src/components/board/boardOverlayUtils.ts",
   "src/components/board/matrixGeometry.ts",
   "src/components/board/matrixGeometry.test.ts",
+  "src/components/today/useTimelineScheduleActions.ts",
+  "src/components/today/useTimelineScroll.ts",
 ];
 
 const QUERY_IMPORT_RE =

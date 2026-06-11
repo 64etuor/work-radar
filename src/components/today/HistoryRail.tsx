@@ -140,7 +140,7 @@ function HistoryGroup({
       <ul className="today-history-items">
         {items.map((s) => (
           <HistoryItem
-            key={s.id}
+            key={`${s.id}:${bodyById.get(s.id) ?? ""}`}
             signal={s}
             initialBody={bodyById.get(s.id) ?? ""}
             colorOf={colorOf}
@@ -164,42 +164,6 @@ function HistoryItem({
   colorOf: Map<string, string>;
 }) {
   const date = signal.todayDoneAt as string;
-  const upsert = useUpsertTimelineNote();
-  const [body, setBody] = useState(initialBody);
-  const dirtyRef = useRef(false);
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // 사용자가 타이핑 중이면 외부 invalidation으로 인한 initialBody 갱신이 덮지 않음.
-  useEffect(() => {
-    if (!dirtyRef.current) setBody(initialBody);
-  }, [initialBody]);
-
-  // 내용 따라 자동 확장(최대 3줄=MEMO_MAX_PX). WKWebView가 CSS `field-sizing`을 지원 안 할 수
-  // 있어 scrollHeight 측정으로 직접 높이를 맞춘다 — 넘치면 max-h + overflow로 내부 스크롤.
-  useLayoutEffect(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MEMO_MAX_PX)}px`;
-  }, [body]);
-
-  const debounced = useDebouncedCallback((next: string) => {
-    upsert.mutate(
-      { targetKind: "signal", targetId: signal.id, date, body: next },
-      {
-        onSuccess: () => {
-          dirtyRef.current = false;
-        },
-        // client.ts:39 — mutations 글로벌 onError 없음. 침묵 실패 방지.
-        onError: (err) => {
-          useToastStore
-            .getState()
-            .pushError("memo.save", err instanceof IpcError ? err.app : String(err));
-        },
-      },
-    );
-  }, 500);
-
   const color = signal.projectId ? (colorOf.get(signal.projectId) ?? null) : null;
   const hhmm = formatLocalHHMM(signal.updatedAt);
 
@@ -222,29 +186,76 @@ function HistoryItem({
           </Badge>
         )}
       </div>
-      <Textarea
-        ref={taRef}
-        value={body}
-        placeholder="메모…"
-        rows={1}
-        aria-label={`${signal.title} 메모`}
-        className={cn(
-          // shadcn 기본 chrome 제거 — 인라인 텍스트처럼 보이게.
-          // 높이는 useLayoutEffect가 내용 따라 1→3줄로 맞춤(field-sizing 미지원 WKWebView 대비).
-          // max-h는 안전망 — 넘치면 내부 스크롤(제목과 동일 정책).
-          "max-h-[50px] min-h-0 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0",
-          "text-wr-subtle placeholder:text-wr-subtle/55 pl-3.5 text-[11.5px] leading-[1.45] placeholder:italic",
-          "focus-visible:text-wr-fg shadow-none ring-0 focus:ring-0 focus-visible:shadow-[inset_2px_0_0_0_var(--color-wr-accent)]",
-          "hover:text-wr-fg",
-        )}
-        onChange={(e) => {
-          dirtyRef.current = true;
-          setBody(e.target.value);
-          debounced.run(e.target.value);
-        }}
-        onBlur={() => debounced.flushNow(body)}
+      <HistoryMemoEditor
+        signalId={signal.id}
+        title={signal.title}
+        date={date}
+        initialBody={initialBody}
       />
     </li>
+  );
+}
+
+function HistoryMemoEditor({
+  signalId,
+  title,
+  date,
+  initialBody,
+}: {
+  signalId: string;
+  title: string;
+  date: string;
+  initialBody: string;
+}) {
+  const upsert = useUpsertTimelineNote();
+  const [body, setBody] = useState(initialBody);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // 내용 따라 자동 확장(최대 3줄=MEMO_MAX_PX). WKWebView가 CSS `field-sizing`을 지원 안 할 수
+  // 있어 scrollHeight 측정으로 직접 높이를 맞춘다 — 넘치면 max-h + overflow로 내부 스크롤.
+  useLayoutEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MEMO_MAX_PX)}px`;
+  }, [body]);
+
+  const debounced = useDebouncedCallback((next: string) => {
+    upsert.mutate(
+      { targetKind: "signal", targetId: signalId, date, body: next },
+      {
+        // client.ts:39 — mutations 글로벌 onError 없음. 침묵 실패 방지.
+        onError: (err) => {
+          useToastStore
+            .getState()
+            .pushError("memo.save", err instanceof IpcError ? err.app : String(err));
+        },
+      },
+    );
+  }, 500);
+
+  return (
+    <Textarea
+      ref={taRef}
+      value={body}
+      placeholder="메모…"
+      rows={1}
+      aria-label={`${title} 메모`}
+      className={cn(
+        // shadcn 기본 chrome 제거 — 인라인 텍스트처럼 보이게.
+        // 높이는 useLayoutEffect가 내용 따라 1→3줄로 맞춤(field-sizing 미지원 WKWebView 대비).
+        // max-h는 안전망 — 넘치면 내부 스크롤(제목과 동일 정책).
+        "max-h-[50px] min-h-0 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0",
+        "text-wr-subtle placeholder:text-wr-subtle/55 pl-3.5 text-[11.5px] leading-[1.45] placeholder:italic",
+        "focus-visible:text-wr-fg shadow-none ring-0 focus:ring-0 focus-visible:shadow-[inset_2px_0_0_0_var(--color-wr-accent)]",
+        "hover:text-wr-fg",
+      )}
+      onChange={(e) => {
+        setBody(e.target.value);
+        debounced.run(e.target.value);
+      }}
+      onBlur={() => debounced.flushNow(body)}
+    />
   );
 }
 

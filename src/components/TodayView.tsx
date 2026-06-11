@@ -6,6 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useReducer,
   useRef,
   useState,
 } from "react";
@@ -46,6 +47,37 @@ import {
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
 import { blockNoteTarget, buildTimelineBlocks, noteTargetMapKey } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
+
+type DragGhostState = {
+  activeDrag: DragData | null;
+  activeDelta: DragDelta | null;
+  isOverTray: boolean;
+};
+
+type DragGhostAction =
+  | { type: "start"; data: DragData | null }
+  | { type: "move"; delta: DragDelta }
+  | { type: "over"; isOverTray: boolean }
+  | { type: "reset" };
+
+const INITIAL_DRAG_GHOST_STATE: DragGhostState = {
+  activeDrag: null,
+  activeDelta: null,
+  isOverTray: false,
+};
+
+function dragGhostReducer(state: DragGhostState, action: DragGhostAction): DragGhostState {
+  switch (action.type) {
+    case "start":
+      return { activeDrag: action.data, activeDelta: { x: 0, y: 0 }, isOverTray: false };
+    case "move":
+      return { ...state, activeDelta: action.delta };
+    case "over":
+      return { ...state, isOverTray: action.isOverTray };
+    case "reset":
+      return INITIAL_DRAG_GHOST_STATE;
+  }
+}
 
 /**
  * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).
@@ -196,38 +228,33 @@ export function TodayView() {
 
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
-  const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
-  const [activeDelta, setActiveDelta] = useState<DragDelta | null>(null);
-  const [isOverTray, setIsOverTray] = useState(false);
+  const [{ activeDrag, activeDelta, isOverTray }, dispatchDragGhost] = useReducer(
+    dragGhostReducer,
+    INITIAL_DRAG_GHOST_STATE,
+  );
   const activeDragStartRef = useRef<DragData | null>(null);
   const handleDragStart = (ev: {
     active: { id: string | number; data: { current?: unknown } };
   }) => {
     const data = (ev.active.data.current as DragData | undefined) ?? null;
     activeDragStartRef.current = data;
-    setActiveDrag(data);
-    setActiveDelta({ x: 0, y: 0 });
-    setIsOverTray(false);
+    dispatchDragGhost({ type: "start", data });
   };
   const handleDragMove = (ev: DragMoveEvent) => {
-    setActiveDelta(ev.delta);
+    dispatchDragGhost({ type: "move", delta: ev.delta });
   };
   const handleDragOver = (ev: DragOverEvent) => {
-    setIsOverTray(ev.over?.id === "today-tray");
+    dispatchDragGhost({ type: "over", isOverTray: ev.over?.id === "today-tray" });
   };
   const handleDragEndWithReset = async (ev: Parameters<typeof onDragEnd>[0]) => {
     const activeAtStart = activeDragStartRef.current;
-    setActiveDrag(null);
-    setActiveDelta(null);
-    setIsOverTray(false);
+    dispatchDragGhost({ type: "reset" });
     activeDragStartRef.current = null;
     await onDragEnd(ev, activeAtStart);
   };
   const handleDragCancel = () => {
     activeDragStartRef.current = null;
-    setActiveDrag(null);
-    setActiveDelta(null);
-    setIsOverTray(false);
+    dispatchDragGhost({ type: "reset" });
   };
 
   const pickerSignalProjectId =

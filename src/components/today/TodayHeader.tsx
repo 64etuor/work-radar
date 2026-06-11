@@ -100,7 +100,7 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
           오늘
         </Button>
       </div>
-      <div className="today-debt-chips" role="group" aria-label="Work Debt 요약">
+      <fieldset className="today-debt-chips" aria-label="Work Debt 요약">
         {CHIPS.map((c) => {
           const n = debt[c.key];
           // a11y: 아이콘만 있는 chip이라 텍스트 라벨 + 숫자를 aria-label로 합쳐 노출.
@@ -123,7 +123,7 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
             </button>
           );
         })}
-      </div>
+      </fieldset>
     </header>
   );
 }
