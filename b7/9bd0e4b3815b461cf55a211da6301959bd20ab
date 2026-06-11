@@ -1,0 +1,19 @@
+src/components/agent-status/firstSeen.ts
+  s_c7ae2e76dc02ae::t_eb137724bc0ba7 1-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b79bd0e4b3815b461cf55a211da6301959bd20ab",
+  "prompts": {},
+  "sessions": {
+    "s_c7ae2e76dc02ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfab002c-28d7-4865-a4a0-689215d39ab9",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
