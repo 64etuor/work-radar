@@ -17,14 +17,17 @@ import {
 } from "../../lib/query/governance";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Card } from "../ui/card";
 import { Switch } from "../ui/switch";
 import { InfraBar } from "./InfraBar";
 import { ReadinessDetails, ReadinessGatesRow } from "./ReadinessStrip";
 
 /** Per-project command deck: 지금 POSTURE (readiness) · 마지막 TICK (last outcome) · controls,
  *  with the INFRA chip row on the deck's bottom edge. Replaces the all-projects ticker panel —
- *  tabs select the project; this card shows that one project only. */
+ *  tabs select the project; this card shows that one project only.
+ *
+ *  Card 셸은 ControlRoomView의 프로젝트 콘솔(.cr-console)이 소유한다 — 탭(projectbar)은
+ *  프로젝트 전환 시 remount되면 안 되므로(키가 projectId) 카드 밖 형제로 남고,
+ *  이 컴포넌트는 카드 안의 deck 본문만 그린다. */
 export function CommandDeck({
   row,
   readiness,
@@ -45,7 +48,7 @@ export function CommandDeck({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15, ease: "easeOut" }}
     >
-      <Card className="cr-deck p-4">
+      <div className="cr-deck">
         <div className="cr-deck-zones">
           {readiness !== undefined && (
             <section className="cr-deck-zone" aria-label="지금 POSTURE">
@@ -77,7 +80,7 @@ export function CommandDeck({
             <InfraBar infra={infra} ticker={row} scheduler={scheduler} />
           </div>
         )}
-      </Card>
+      </div>
     </motion.div>
   );
 }

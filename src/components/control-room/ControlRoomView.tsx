@@ -71,35 +71,39 @@ export default function ControlRoomView() {
         </span>
       </div>
 
-      {rows.length > 0 && (
-        <div className="cr-projectbar">
-          <ProjectTabs
-            rows={rows}
-            activeProjectId={activeProjectId}
-            onSelect={setSelectedProject}
-          />
-          <RepoCoverage covered={data?.coveredRepo} />
-        </div>
-      )}
-
       {!ticker.isLoading && rows.length === 0 && (
         <Card className="p-4">
           <div className="cr-empty">프로젝트가 없습니다 — 설정에서 프로젝트를 추가하세요.</div>
         </Card>
       )}
 
-      {activeTicker && (
-        // key = remount per project: DeckControls' interval draft state must reset on tab
-        // switch (without it, two projects sharing the same intervalSec leak an uncommitted
-        // draft across tabs — and a blur would silently write it to the OTHER project).
-        <CommandDeck
-          key={activeTicker.projectId}
-          row={activeTicker}
-          readiness={data?.readiness}
-          infra={data?.infra}
-          scheduler={scheduler.data ?? null}
-          nowMs={nowMs}
-        />
+      {rows.length > 0 && (
+        // 프로젝트 콘솔: 선택(탭+레포 coverage)과 그 프로젝트의 deck을 한 카드로 묶는다 —
+        // 선택 UI는 헤더 chrome이 아니라 콘텐츠 소속. 탭은 카드 안 첫 행이지만 deck의
+        // projectId key 밖에 있어 탭 전환 시 remount되지 않는다(슬라이딩 인디케이터 보존).
+        <Card className="cr-console p-4">
+          <div className="cr-projectbar">
+            <ProjectTabs
+              rows={rows}
+              activeProjectId={activeProjectId}
+              onSelect={setSelectedProject}
+            />
+            <RepoCoverage covered={data?.coveredRepo} />
+          </div>
+          {activeTicker && (
+            // key = remount per project: DeckControls' interval draft state must reset on tab
+            // switch (without it, two projects sharing the same intervalSec leak an uncommitted
+            // draft across tabs — and a blur would silently write it to the OTHER project).
+            <CommandDeck
+              key={activeTicker.projectId}
+              row={activeTicker}
+              readiness={data?.readiness}
+              infra={data?.infra}
+              scheduler={scheduler.data ?? null}
+              nowMs={nowMs}
+            />
+          )}
+        </Card>
       )}
 
       {isLoading && <div className="cr-empty">불러오는 중…</div>}

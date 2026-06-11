@@ -5,8 +5,11 @@
 .cr-view {
   --cr-done: var(--color-wr-status-working);
   --cr-active: var(--color-wr-action-blue);
-  /* waiting은 deep 골드 — 밝은 status-waiting 노랑은 소형 점 전용(큰 보더에선 톤 충돌). */
-  --cr-waiting: var(--color-wr-status-waiting-deep);
+  /* waiting = 팔레트 파생(신규 hex 0): 디자인 토큰의 대기 노랑을 가라앉힌 믹스(≈짙은 골드).
+   * 밝은 원색 노랑은 에이전트 바 소형 상태 점 전용 — 큰 노드 보더에선 톤 충돌.
+   * 믹스 상대는 .dark 오버라이드가 없는 wr-black(테마-안정) — near-black은 다크에서
+   * #ededea로 반전돼 믹스 의미가 뒤집힌다(frontend-shell.md 토큰 규칙). */
+  --cr-waiting: color-mix(in srgb, var(--color-wr-status-waiting) 60%, var(--color-wr-black) 40%);
   --cr-pressure: var(--color-today-debt-warn);
   --cr-blocked: var(--color-wr-coral);
   --cr-muted: var(--color-wr-subtle);
@@ -176,16 +179,21 @@
   padding: 0.5rem 0;
 }
 
-/* ── Project bar (탭 + 레포 coverage) ─────────────────────── */
-/* 프로젝트 선택을 헤더에서 분리한 자체 밴드 — 좌측 탭, 우측에 "어느 레포를 접었는지"
- * coverage 칩. 하단 헤어라인이 이 밴드의 소유(탭이 아니라). */
+/* ── 프로젝트 콘솔 (탭 + 레포 coverage + deck 한 카드) ─────── */
+.cr-console {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+/* 콘솔 첫 행 — 좌측 탭, 우측 "어느 레포를 접었는지" coverage 칩. 하단 헤어라인으로
+ * 아래 deck 본문과 구분(카드 안 내부 구획). */
 .cr-projectbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: 0.4rem;
+  padding-bottom: 0.55rem;
 }
 .cr-tabs {
   display: flex;
@@ -284,7 +292,6 @@
 
 /* ── Command deck ─────────────────────────────────────────── */
 .cr-deck {
-  border-radius: 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
