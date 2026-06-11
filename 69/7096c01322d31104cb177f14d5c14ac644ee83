@@ -1,0 +1,86 @@
+src/components/weekly/ArchiveAccordion.tsx
+  s_5c261c6dcf99b9::t_d7d020810ecb44 40
+  s_5c261c6dcf99b9::t_a4b104c9b38f3b 8
+src/components/WeeklyView.css
+  s_5c261c6dcf99b9::t_f8c7e8b029d03a 454,457-460
+  s_5c261c6dcf99b9::t_fb179d0f0beff0 194
+  s_5c261c6dcf99b9::t_a30eb87ec86d69 280-282,286-287,297
+  s_5c261c6dcf99b9::t_c19bdb59edd657 158
+  s_5c261c6dcf99b9::t_ecdf7b00ce0563 34
+  s_5c261c6dcf99b9::t_5c1aface0d3ee0 36
+  s_5c261c6dcf99b9::t_563fbb98c8f1f1 193
+  s_5c261c6dcf99b9::t_7d9c8946309251 283-285,289-296,298-301
+  s_5c261c6dcf99b9::t_54c30d06f17fc8 204-205,213-217
+  s_5c261c6dcf99b9::t_a42c0c6b1c1532 151,153,156
+  s_5c261c6dcf99b9::t_857422f3a4cd82 262-264,266-267,270-271,275-279
+  s_5c261c6dcf99b9::t_5f260662f8c55a 3-8
+  s_5c261c6dcf99b9::t_279ee7dde6592b 209
+  s_5c261c6dcf99b9::t_5abb9d29afdc85 436-439
+src-tauri/src/commands/signal_store.rs
+  s_5c261c6dcf99b9::t_8a863500376936 706-707,711
+  s_5c261c6dcf99b9::t_9d51a04d0ee2bb 850,859,861-869
+  s_5c261c6dcf99b9::t_28a7753762475f 719-720,723-725,734,737-739
+src/lib/lifeWheelRadar.ts
+  s_5c261c6dcf99b9::t_1847a5b6645b06 4
+  s_5c261c6dcf99b9::t_2960318e9a8937 79
+  s_5c261c6dcf99b9::t_f3220bec663d75 88-97,106
+  s_5c261c6dcf99b9::t_32d22f6027ec8c 98-105
+  s_5c261c6dcf99b9::t_30fc4566c1023b 2,13-17
+  s_5c261c6dcf99b9::t_6c8ef519685dda 31-34
+  s_5c261c6dcf99b9::t_73ecb1464b5b21 73
+src/lib/weekRange.ts
+  s_5c261c6dcf99b9::t_2cd460fc4c7b31 4-5,11,46,49,59
+  s_5c261c6dcf99b9::t_283343ae732865 30-45,47-48,50-56
+src/lib/weekRange.test.ts
+  s_5c261c6dcf99b9::t_f499a126d64532 4-11,49-89
+src-tauri/src/commands/retro.rs
+  s_5c261c6dcf99b9::t_17fd71fe9b51a6 116,122-130
+src/components/weekly/WeekNavigator.tsx
+  s_5c261c6dcf99b9::t_9ee2220ea5a922 25
+  s_5c261c6dcf99b9::t_ccc356462bb7dc 4
+src/lib/lifeWheelRadar.test.ts
+  s_5c261c6dcf99b9::t_3753c92b3509f3 127-193
+  s_5c261c6dcf99b9::t_e847a50d610cbe 4,7
+src/components/WeeklyView.tsx
+  s_5c261c6dcf99b9::t_d295d3d5eb52b8 14
+  s_5c261c6dcf99b9::t_3fab8766596b38 20-21
+  s_5c261c6dcf99b9::t_89ad3878c45ccc 178-188,192
+  s_5c261c6dcf99b9::t_0acc210c8d646f 193-208,213-221
+  s_5c261c6dcf99b9::t_c90f6cd2ca83c3 211-212
+  s_5c261c6dcf99b9::t_41b3a9bc7b5954 222,225-226,229,231,237-241
+  s_5c261c6dcf99b9::t_f9fd81f755d913 277
+  s_5c261c6dcf99b9::t_7bbe906c78e867 43-50
+  s_5c261c6dcf99b9::t_91f9b69e7da207 228,230,234-236
+  s_5c261c6dcf99b9::t_dc383a8d7f162c 17
+  s_5c261c6dcf99b9::t_581839224c253e 59-70,72-76
+  s_5c261c6dcf99b9::t_f35e3d9523a50e 131-133,155-157,162,174-175
+  s_5c261c6dcf99b9::t_2cf598ef05c57a 3-11
+  s_5c261c6dcf99b9::t_3c6b6728eae7a5 176-177
+  s_5c261c6dcf99b9::t_75747377d48ec4 227
+  s_5c261c6dcf99b9::t_6fee9078d6fe4f 23
+  s_5c261c6dcf99b9::t_19fe50c2a4b138 224
+src/components/weekly/ReflectionSection.tsx
+  s_5c261c6dcf99b9::t_d34ff1ad6289cc 17-23,26-30,32-40,56-60,62-66,68-78,81-84,86-89,92-97,99-100,102-105,128
+  s_5c261c6dcf99b9::t_3607bf8981de54 9
+  s_5c261c6dcf99b9::t_38db79183b65db 67
+  s_5c261c6dcf99b9::t_19fe50c2a4b138 2,16,24-25,31,79-80,85,90-91
+src/components/weekly/LifeWheelRadar.tsx
+  s_5c261c6dcf99b9::t_fc7afe5ea41bde 23-24
+  s_5c261c6dcf99b9::t_55d9485b8dcd3b 11-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "697096c01322d31104cb177f14d5c14ac644ee83",
+  "prompts": {},
+  "sessions": {
+    "s_5c261c6dcf99b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24766495-c6d8-4fcb-bfdc-48baf90b0af8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
