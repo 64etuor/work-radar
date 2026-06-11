@@ -3,7 +3,7 @@ import "./AgentStatusBar.css";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Calendar, Inbox, Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { useHermesTabsStore } from "@/components/hermes/useHermesTabsStore";
 import { InboxTray } from "@/components/inbox/InboxTray";
@@ -16,6 +16,11 @@ import { useCmuxStatus, useFocusCmuxWorkspace } from "@/lib/query/cmux";
 import { useUIStore } from "@/store";
 
 import { AgentBox } from "./agent-status/AgentBox";
+import {
+  getFirstSeenSnapshot,
+  reconcileFirstSeen,
+  subscribeFirstSeen,
+} from "./agent-status/firstSeen";
 import { runToBox } from "./agent-status/runToBox";
 import { type SessionBox, STATE_LABEL } from "./agent-status/shared";
 
@@ -50,7 +55,7 @@ export function AgentStatusBar() {
   const setInboxOpen = useUIStore((s) => s.setInboxOpen);
   const runs = useAgentRuns();
   const inboxCounts = useInboxCounts();
-  const list = useMemo(() => runs.data ?? [], [runs.data]);
+  const list = runs.data ?? [];
 
   // hermes multi-session tabs (표시 전용 INVARIANT #1 — store selector만, 결정 미사용).
   const hermesTabs = useHermesTabsStore((s) => s.tabs);
@@ -62,13 +67,15 @@ export function AgentStatusBar() {
   const focusCmux = useFocusCmuxWorkspace();
 
   // client-side first-seen: 백엔드 timestamp 없는 세션(hermes tabs/cmux)의 경과 기준점.
-  // 표시 전용 — 결정 로직 미사용. 신규 키는 effect에서 등록·사라진 키는 정리(react-hooks/refs).
-  // 신규 키가 처음 보일 한 프레임은 Date.now() fallback("0s")으로 노출되며 직후 effect가 persist.
-  const [firstSeen, setFirstSeen] = useState<Map<string, number>>(() => new Map());
+  // 표시 전용 — 결정 로직 미사용. 외부 레지스트리(firstSeen.ts) 구독 — effect가 setState 없이
+  // reconcile만 하므로 React Compiler 최적화가 유지된다. 신규 키가 처음 보일 한 프레임은
+  // 스냅샷 미반영("0s" fallback)이며 직후 effect가 persist.
+  const firstSeen = useSyncExternalStore(subscribeFirstSeen, getFirstSeenSnapshot);
 
   // ── 세션 → 박스 enumerate (codex runs + hermes tabs + cmux) ──────────────
-  const boxes = useMemo<SessionBox[]>(() => {
-    const out: SessionBox[] = [];
+  const boxes: SessionBox[] = [];
+  {
+    const out = boxes;
 
     // 1) agent_runs: 활성 잡 + 사용자가 아직 ack(모달 클릭→close)하지 않은 종료 잡을 표시.
     //    클릭 → `AgentRunModal` 오픈 → 모달 닫힐 때 `acked_at` 마킹(SQLite SSOT) → 바에서 숨김.
@@ -117,50 +124,27 @@ export function AgentStatusBar() {
         });
       }
     }
-
-    return out;
-  }, [list, hermesTabs, cmux.data, firstSeen]);
+  }
 
   // hermes tab / cmux 세션 first-seen 등록 + 사라진 키 정리. Date.now()는 impure라 render에 못 두므로
-  // effect에서만 호출(react-hooks/{refs,purity}). hermes는 working일 때만, cmux도 마찬가지.
-  // 함수형 updater + 변경 없으면 prev 반환으로 cascading render 차단 — set-state-in-effect 룰의
-  // 회피 의도(불필요 리렌더)는 만족하므로 suppress.
+  // effect에서 외부 레지스트리에 reconcile(setState 0 — 스토어 스냅샷 교체가 구독 리렌더를 만든다).
+  // hermes는 working일 때만, cmux도 마찬가지.
+  const cmuxData = cmux.data;
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFirstSeen((prev) => {
-      const desired = new Set<string>();
-      for (const t of hermesTabs.values()) {
-        const state: BoxState =
-          t.status === "error" ? "error" : t.status === "starting" ? "working" : "idle";
-        if (state === "working") desired.add(`hermes:${t.id}`);
+    const desired = new Set<string>();
+    for (const t of hermesTabs.values()) {
+      if (t.status === "starting") desired.add(`hermes:${t.id}`);
+    }
+    if (cmuxData?.available) {
+      for (const w of cmuxData.workspaces) {
+        if (cmuxBoxState(w.agentStatus) === "working") desired.add(`cmux:${w.reference}`);
       }
-      const cmuxData = cmux.data;
-      if (cmuxData?.available) {
-        for (const w of cmuxData.workspaces) {
-          if (cmuxBoxState(w.agentStatus) === "working") desired.add(`cmux:${w.reference}`);
-        }
-      }
-      let changed = false;
-      const next = new Map(prev);
-      const now = Date.now();
-      for (const k of desired) {
-        if (!next.has(k)) {
-          next.set(k, now);
-          changed = true;
-        }
-      }
-      for (const k of next.keys()) {
-        if (!desired.has(k)) {
-          next.delete(k);
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [hermesTabs, cmux.data]);
+    }
+    reconcileFirstSeen(desired);
+  }, [hermesTabs, cmuxData]);
 
   // 박스 이름 오버라이드(app_config) — 키별 사용자 지정 라벨. 없으면 box.name fallback.
-  const sessionKeys = useMemo(() => boxes.map((b) => b.key), [boxes]);
+  const sessionKeys = boxes.map((b) => b.key);
   const names = useAgentNames(sessionKeys);
   const nameOverrides = names.data ?? {};
   const setName = useSetAgentName();

@@ -1,5 +1,5 @@
 import { Check, Clock, ExternalLink, LayoutGrid, Trash2, Undo2 } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import type { TimelineNoteTarget } from "@/bindings";
 import { Badge } from "@/components/ui/badge";
@@ -81,60 +81,8 @@ export function EventPopover({
   onToggleDone,
 }: Props) {
   const goTo = useUIStore((s) => s.goTo);
-  const memoKey = useMemo(() => (box ? memoKeyFor(box.block, date) : null), [box, date]);
+  const memoKey = box ? memoKeyFor(box.block, date) : null;
   const noteQ = useTimelineNote(memoKey);
-  const upsert = useUpsertTimelineNote();
-  const [draft, setDraft] = useState("");
-  const dirtyRef = useRef(false);
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
-
-  /*
-   * 키별 1회만 sync — data 변화에 의존하면 사용자가 타이핑한 draft가 fetch/refetch 결과로 덮인다.
-   * 저장 onSuccess에서 dirty=false 복귀 → 서버값과 draft가 일치할 때만 외부 동기화 허용.
-   */
-  const syncedKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!open || !memoKey) {
-      syncedKeyRef.current = null;
-      dirtyRef.current = false;
-      return;
-    }
-    const key = `${memoKey.targetKind}:${memoKey.targetId}:${memoKey.date}`;
-    if (syncedKeyRef.current === key) return;
-    if (noteQ.data === undefined && noteQ.isLoading) return;
-    setDraft(noteQ.data?.body ?? "");
-    syncedKeyRef.current = key;
-    dirtyRef.current = false;
-  }, [open, memoKey, noteQ.data, noteQ.isLoading]);
-
-  // 내용 따라 자동 확장(최대 MEMO_MAX_PX). 넘치면 내부 스크롤. draft·open 변화마다 재측정.
-  useLayoutEffect(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MEMO_MAX_PX)}px`;
-  }, [draft, open]);
-
-  const debouncedSave = useDebouncedCallback((next: string) => {
-    if (!memoKey) return;
-    upsert.mutate(
-      {
-        targetKind: memoKey.targetKind,
-        targetId: memoKey.targetId,
-        date: memoKey.date,
-        body: next,
-      },
-      {
-        onSuccess: () => {
-          dirtyRef.current = false;
-        },
-        onError: (err) =>
-          useToastStore
-            .getState()
-            .pushError("memo.save", err instanceof IpcError ? err.app : String(err)),
-      },
-    );
-  }, 500);
 
   if (!open || !box || !anchor) return null;
   const currentBox = box;
@@ -149,14 +97,6 @@ export function EventPopover({
   const isDone = isCheckable && block.done === true;
   const isRoutine = block.kind === "routine";
   const calLabel = block.calendarLabel || block.calendarId;
-
-  // 저장 상태 라벨 — pending이면 "저장 중…", draft가 서버 저장본과 일치하고 비어있지 않으면 "저장됨".
-  const savedBody = noteQ.data?.body ?? "";
-  const savedLabel = upsert.isPending
-    ? "저장 중…"
-    : draft.trim() && draft === savedBody
-      ? "저장됨"
-      : "";
 
   const handleDelete = () => {
     // 루틴 "오늘 빼기"는 EXDATE(되돌리기 토스트로 복구 가능)라 confirm 없이 즉시 실행.
@@ -217,35 +157,34 @@ export function EventPopover({
           </div>
         </div>
 
-        {/* 2. 메모 — 라벨 + 저장 상태 + 자동확장 textarea. */}
-        {memoKey && (
-          <div className="border-border border-t px-3.5 py-2.5">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                메모
-              </span>
-              {savedLabel && (
-                <span className="text-muted-foreground text-xs" aria-live="polite">
-                  {savedLabel}
+        {/* 2. 메모 — 라벨 + 저장 상태 + 자동확장 textarea. 쿼리 도착 전엔 동일 지오메트리의
+            비활성 셸(시딩 전 입력 방지), 도착 후 memoKey 단위 keyed 에디터로 리마운트 시딩. */}
+        {memoKey &&
+          (noteQ.data === undefined && noteQ.isLoading ? (
+            <div className="border-border border-t px-3.5 py-2.5">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                  메모
                 </span>
-              )}
+              </div>
+              <Textarea
+                className="min-h-0 resize-none overflow-y-auto px-2 py-1.5 text-xs leading-relaxed"
+                rows={2}
+                placeholder="이 일정에 대한 메모…"
+                value=""
+                aria-label="블록 메모"
+                readOnly
+                disabled
+              />
             </div>
-            <Textarea
-              ref={taRef}
-              className="min-h-0 resize-none overflow-y-auto px-2 py-1.5 text-xs leading-relaxed"
-              rows={2}
-              placeholder="이 일정에 대한 메모…"
-              value={draft}
-              aria-label="블록 메모"
-              onChange={(e) => {
-                dirtyRef.current = true;
-                setDraft(e.target.value);
-                debouncedSave.run(e.target.value);
-              }}
-              onBlur={() => debouncedSave.flushNow(draft)}
+          ) : (
+            <MemoEditor
+              key={`${memoKey.targetKind}:${memoKey.targetId}:${memoKey.date}`}
+              memoKey={memoKey}
+              initialBody={noteQ.data?.body ?? ""}
+              savedBody={noteQ.data?.body ?? ""}
             />
-          </div>
-        )}
+          ))}
 
         {/* 3. 액션 — 완료/보드/Google은 좌측, 삭제는 우측 분리. */}
         <div className="border-border flex items-center gap-1 border-t px-2.5 py-2">
@@ -311,5 +250,88 @@ export function EventPopover({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * 메모 섹션 — memoKey 단위로 `key=` 리마운트되는 분리 에디터.
+ *
+ * draft는 mount 시 useState 초기값으로 1회 시딩한다(공식 key-reset 패턴). 키가 바뀌면
+ * 리마운트로 리시드되므로 "키별 1회 sync" effect + dirty/syncedKey ref 부기가 필요 없고,
+ * refetch가 와도 mount 뒤엔 draft를 덮지 않는 기존 계약이 구조적으로 보장된다.
+ * 닫힘/키 전환 unmount 시 useDebouncedCallback이 pending 입력을 flush한다(유실 0).
+ */
+function MemoEditor({
+  memoKey,
+  initialBody,
+  savedBody,
+}: {
+  memoKey: { targetKind: TimelineNoteTarget; targetId: string; date: string };
+  initialBody: string;
+  /** 서버 저장본(쿼리 최신값) — "저장됨" 라벨 비교 전용. */
+  savedBody: string;
+}) {
+  const upsert = useUpsertTimelineNote();
+  const [draft, setDraft] = useState(initialBody);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // 내용 따라 자동 확장(최대 MEMO_MAX_PX). 넘치면 내부 스크롤. draft 변화마다 재측정.
+  useLayoutEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MEMO_MAX_PX)}px`;
+  }, [draft]);
+
+  const debouncedSave = useDebouncedCallback((next: string) => {
+    upsert.mutate(
+      {
+        targetKind: memoKey.targetKind,
+        targetId: memoKey.targetId,
+        date: memoKey.date,
+        body: next,
+      },
+      {
+        onError: (err) =>
+          useToastStore
+            .getState()
+            .pushError("memo.save", err instanceof IpcError ? err.app : String(err)),
+      },
+    );
+  }, 500);
+
+  // 저장 상태 라벨 — pending이면 "저장 중…", draft가 서버 저장본과 일치하고 비어있지 않으면 "저장됨".
+  const savedLabel = upsert.isPending
+    ? "저장 중…"
+    : draft.trim() && draft === savedBody
+      ? "저장됨"
+      : "";
+
+  return (
+    <div className="border-border border-t px-3.5 py-2.5">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          메모
+        </span>
+        {savedLabel && (
+          <span className="text-muted-foreground text-xs" aria-live="polite">
+            {savedLabel}
+          </span>
+        )}
+      </div>
+      <Textarea
+        ref={taRef}
+        className="min-h-0 resize-none overflow-y-auto px-2 py-1.5 text-xs leading-relaxed"
+        rows={2}
+        placeholder="이 일정에 대한 메모…"
+        value={draft}
+        aria-label="블록 메모"
+        onChange={(e) => {
+          setDraft(e.target.value);
+          debouncedSave.run(e.target.value);
+        }}
+        onBlur={() => debouncedSave.flushNow(draft)}
+      />
+    </div>
   );
 }
