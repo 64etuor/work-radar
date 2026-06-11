@@ -1,0 +1,43 @@
+src-tauri/src/governance/control_room.rs
+  s_9b9c8df07c54b0::t_c56b7146be9d39 131-132,139-170
+  s_9b9c8df07c54b0::t_6f8f9dce9385e1 269-298
+  s_9b9c8df07c54b0::t_c3b5269d389264 10,12
+  s_9b9c8df07c54b0::t_fa5a6b1998c33f 322-325,359-362
+  s_9b9c8df07c54b0::t_71848ceffe47e7 301-321
+docs/decisions.md
+  s_9b9c8df07c54b0::t_1aa9fc5df38340 608
+src-tauri/src/governance/snapshot.rs
+  s_9b9c8df07c54b0::t_8e881fa4376e7c 225-242
+src/bindings.ts
+  s_9b9c8df07c54b0::t_e6807b0206d115 1252-1270
+src/components/control-room/RepoCoverage.tsx
+  s_9b9c8df07c54b0::t_2823d960c1405f 1-39
+src/components/control-room/ControlRoomView.tsx
+  s_9b9c8df07c54b0::t_f676e26e79fe19 75-82
+  s_9b9c8df07c54b0::t_d43034812a5db6 19
+src-tauri/src/governance/ticker.rs
+  s_9b9c8df07c54b0::t_11692734b17a5a 762-769,772,774-775,783-798
+src/styles/tokens.css
+  s_9b9c8df07c54b0::t_e1e8422e532cb4 31-33
+src/components/control-room/ControlRoomView.css
+  s_9b9c8df07c54b0::t_637344ea140007 13
+  s_9b9c8df07c54b0::t_7b624e3d5d1661 8-9
+  s_9b9c8df07c54b0::t_5fef5cfbad6b66 179-189,194-217
+  s_9b9c8df07c54b0::t_4d267ce5fa5801 39,74,82,94,160,175,425,486,529,538,706,750,761-762,780-781,792,799
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "fc647e1b99feeaec4658f076cccb3bfafaebe365",
+  "prompts": {},
+  "sessions": {
+    "s_9b9c8df07c54b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01cf6144-ac31-46e8-80c0-7fced600563d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
