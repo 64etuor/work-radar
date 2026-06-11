@@ -73,6 +73,14 @@ export function clampIsoToDate(iso: string, date: string): string {
 }
 
 /**
+ * duration을 주어진 날짜의 자정까지로 클램프(루틴 bottom-resize — 끝이 자정을 넘으면
+ * Google-synced 루틴의 master event end가 다음 날로 새어 스펙 §5와 모순된다).
+ */
+export function clampDurationToDate(startISO: string, date: string, durationMin: number): number {
+  return Math.max(SNAP_MIN, Math.min(1440 - absMin(startISO, date), durationMin));
+}
+
+/**
  * 로컬 ISO + n분 — 로컬 표기 보존(`.toISOString()` UTC 변환 금지, todayBlocks.plusMin과 동일
  * 근거). 입력에 오프셋이 있으면 그대로 유지한다(분 가산은 오프셋을 바꾸지 않음 — DST 비고려는
  * 기존 plusMinutesLocal 동작과 동일).

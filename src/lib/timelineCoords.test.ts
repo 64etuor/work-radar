@@ -70,6 +70,16 @@ describe("timelineCoords (anchor=2026-06-11, days=3)", () => {
     );
   });
 
+  it("clampDurationToDate: 루틴 bottom-resize가 자정을 넘지 못한다", async () => {
+    const { clampDurationToDate } = await import("./timelineCoords");
+    // 23:00 시작 + 150분 요청 → 60분(자정까지)으로 클램프
+    expect(clampDurationToDate(`2026-06-11T23:00:00${off(A)}`, "2026-06-11", 150)).toBe(60);
+    // 자정 안이면 무변경
+    expect(clampDurationToDate(`2026-06-11T09:00:00${off(A)}`, "2026-06-11", 90)).toBe(90);
+    // 최소 15분 보장
+    expect(clampDurationToDate(`2026-06-11T23:45:00${off(A)}`, "2026-06-11", 60)).toBe(15);
+  });
+
   it("plusMinutesLocal: 로컬 ISO 보존 + 자정 통과", async () => {
     const { plusMinutesLocal } = await import("./timelineCoords");
     expect(plusMinutesLocal(`2026-06-11T23:30:00${off(A)}`, 60)).toBe(

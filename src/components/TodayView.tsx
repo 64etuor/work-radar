@@ -45,6 +45,7 @@ import {
 import { unwrap } from "@/lib/query/client";
 import { addDays, dayDiff, localDateOf } from "@/lib/timeAxis";
 import { computeLayout, type LayoutBox, type TimedBlock } from "@/lib/timelineLayout";
+import { extendDates, includeDate } from "@/lib/timelineWindow";
 import { useToastStore } from "@/lib/toast";
 import { blockNoteTarget, buildTimelineBlocks, noteTargetMapKey } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
@@ -310,29 +311,21 @@ export function TodayView() {
   const handleCanvasScroll = () => {
     const el = wrapRef.current;
     if (!el || extendingRef.current) return;
+    // 캡 도달 시 lazy-extend 자체를 멈춘다(가드 ref를 세우지 않음 — no-op setState 방지).
+    if (visibleDates.length >= MAX_LOADED_DAYS) return;
     const nearTop = el.scrollTop < DAY_PX / 2;
     const nearBottom = el.scrollTop + el.clientHeight > el.scrollHeight - DAY_PX / 2;
     if (!nearTop && !nearBottom) return;
     extendingRef.current = true;
-    setVisibleDates((prev) => {
-      let next = nearTop
-        ? [addDays(prev[0], -1), ...prev]
-        : [...prev, addDays(prev[prev.length - 1], 1)];
-      // 캡 초과 시 viewport 반대편 끝을 드롭 — anchor 변화는 위 effect가 scrollTop 보정.
-      if (next.length > MAX_LOADED_DAYS) next = nearTop ? next.slice(0, -1) : next.slice(1);
-      return next;
-    });
+    // 캡 = 확장 중단(축출 아님) — today/date가 visibleDates에서 절대 빠지지 않아
+    // now 라인 소실·레일↔캔버스 버킷 불일치가 구조적으로 불가능(timelineWindow.ts).
+    setVisibleDates((prev) => extendDates(prev, nearTop ? "up" : "down", MAX_LOADED_DAYS));
   };
 
   // 헤더 날짜 네비 — 레일 스코프 변경 + 타임라인을 그 날짜로 스크롤(범위 밖이면 로드 확장).
   const handleDateChange = (d: string) => {
     setDate(d);
-    setVisibleDates((prev) => {
-      let next = prev;
-      while (d < next[0]) next = [addDays(next[0], -1), ...next];
-      while (d > next[next.length - 1]) next = [...next, addDays(next[next.length - 1], 1)];
-      return next;
-    });
+    setVisibleDates((prev) => includeDate(prev, d));
   };
 
   // 네비로 date가 바뀐 뒤(같은 렌더 사이클에 visibleDates 확장 반영됨) 해당 날짜 08:00로 스크롤.

@@ -33,6 +33,7 @@ import { stage } from "@/lib/calendarSync";
 import { applySchedulePatch } from "@/lib/optimisticSchedule";
 import { absMin, localDateOf } from "@/lib/timeAxis";
 import {
+  clampDurationToDate,
   clampIsoToDate,
   pixelToLocalIso,
   plusMinutesLocal,
@@ -316,10 +317,12 @@ export function useTimelineDnd(opts: Opts) {
       const occDate = localDateOf(a.startISO);
       const at = a.blockKind === "routine" ? clampIsoToDate(resized.at, occDate) : resized.at;
       // 클램프로 시작이 밀렸으면 끝 시각 고정을 위해 duration을 보정(absMin 차이만큼).
-      const clamped =
+      // 루틴은 끝도 자정을 넘지 못한다(bottom-resize 상한 — Google master end 누수 방지).
+      let clamped =
         at === resized.at
           ? resized.durationMin
           : resized.durationMin + (absMin(resized.at, occDate) - absMin(at, occDate));
+      if (a.blockKind === "routine") clamped = clampDurationToDate(at, occDate, clamped);
       if (clamped === a.durationMin && at === a.startISO) return;
       if (a.blockKind === "event") {
         patchEventCache(a.calendarId, a.eventId, {
@@ -399,7 +402,8 @@ export function useTimelineDnd(opts: Opts) {
             routineId: a.routineId,
             date: occDate,
             at,
-            durationMin: a.durationMin,
+            // 위치 클램프 후에도 끝이 자정을 넘을 수 있다(23:45 + 60분) — 동일 상한 적용.
+            durationMin: clampDurationToDate(at, occDate, a.durationMin),
           });
           void qc.invalidateQueries({ queryKey: ["routines"] });
         } else {
