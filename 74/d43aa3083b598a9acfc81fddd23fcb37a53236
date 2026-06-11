@@ -1,0 +1,30 @@
+src/components/control-room/ControlRoomView.css
+  s_9b9c8df07c54b0::t_2ccbd0f354c1d0 182-189,196
+  s_9b9c8df07c54b0::t_5c89ee7a789319 8-12
+src/components/control-room/ControlRoomView.tsx
+  s_9b9c8df07c54b0::t_1ccdd60e2538a0 80-106
+docs/decisions.md
+  s_9b9c8df07c54b0::t_712268e695aa21 609
+src/components/control-room/CommandDeck.tsx
+  s_9b9c8df07c54b0::t_04ebd26cd55cd8 51
+  s_9b9c8df07c54b0::t_11c37b1c7357c8 26-30
+  s_9b9c8df07c54b0::t_6627a53dd2b677 83
+src/styles/tokens.css
+  s_9b9c8df07c54b0::t_0916bc10f2834d 31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "74d43aa3083b598a9acfc81fddd23fcb37a53236",
+  "prompts": {},
+  "sessions": {
+    "s_9b9c8df07c54b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01cf6144-ac31-46e8-80c0-7fced600563d",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
