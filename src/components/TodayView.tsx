@@ -295,12 +295,22 @@ export function TodayView() {
 
   // prepend(또는 상단 드롭) 시 scrollTop 보정 — anchor 변화량(일수×1440px)만큼.
   // 빼먹으면 위로 날짜를 붙일 때 화면이 점프한다(스펙 §3 prepend 앵커링).
+  // 같은 커밋에서 now 라인(`top 60s`)·블록 wrap의 절대 top도 +1440px 점프하므로, 페인트 전에
+  // 그리드에 data-anchor-shift를 걸어 CSS 트랜지션을 한 프레임 끈다 — 안 끄면 scrollTop은
+  // 보정돼 화면이 고정인데 선/블록이 트랜지션을 따라 천천히 아래로 흘러내린다.
   useLayoutEffect(() => {
     const el = wrapRef.current;
     const prev = prevAnchorRef.current;
     prevAnchorRef.current = anchorDate;
     if (!el || prev === anchorDate) return;
     el.scrollTop += dayDiff(prev, anchorDate) * DAY_PX;
+    const grid = gridElRef.current;
+    if (grid) {
+      grid.setAttribute("data-anchor-shift", "");
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => grid.removeAttribute("data-anchor-shift"));
+      });
+    }
   }, [anchorDate]);
 
   // 날짜 목록 갱신 반영 후 lazy-extend 가드 해제.
@@ -382,7 +392,8 @@ export function TodayView() {
   };
 
   // 네비로 date가 바뀐 뒤(같은 렌더 사이클에 visibleDates 확장 반영됨) 해당 날짜로 smooth 스크롤.
-  // 오늘이면 현재시각 센터("오늘" 버튼의 자연 복귀), 다른 날짜는 08:00 상단.
+  // 목적지는 모든 날짜("오늘" 포함) 08:00 상단 — 업무시간 시작이 화면에 들어오게(사용자 피드백:
+  // 현재시각 센터는 오후에 누르면 13시부터 보여 아침 일정이 가려진다).
   // 스크롤-추종발 변경은 prevNavDateRef가 이미 갱신돼 있어 여기서 스킵된다.
   useEffect(() => {
     if (prevNavDateRef.current === date) return;
@@ -391,14 +402,8 @@ export function TodayView() {
     if (!el) return;
     const idx = dayDiff(date, anchorDate);
     if (idx < 0 || idx >= visibleDates.length) return;
-    if (date === today) {
-      const now = new Date();
-      const nowPx = idx * DAY_PX + now.getHours() * 60 + now.getMinutes();
-      smoothScrollTo(nowPx - el.clientHeight / 2);
-    } else {
-      smoothScrollTo(idx * DAY_PX + 8 * 60);
-    }
-  }, [date, anchorDate, visibleDates.length, today]);
+    smoothScrollTo(idx * DAY_PX + 8 * 60);
+  }, [date, anchorDate, visibleDates.length]);
 
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.

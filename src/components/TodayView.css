@@ -468,6 +468,14 @@
   color: var(--color-wr-fg);
 }
 
+/* anchor 시프트(위로 날짜 prepend) 커밋 한 프레임 — 절대 top이 ±1440px 점프하므로
+   트랜지션을 끈다(TodayView가 페인트 전에 속성 부여). !important는 .tl-block-wrap의
+   롱폼 transition 선언을 확실히 덮기 위함(인라인 스타일은 이 경로에선 없음). */
+.today-canvas-grid[data-anchor-shift] .today-canvas-now,
+.today-canvas-grid[data-anchor-shift] .tl-block-wrap {
+  transition: none !important;
+}
+
 .today-canvas-now {
   position: absolute;
   left: 60px;
