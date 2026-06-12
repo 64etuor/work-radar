@@ -1,0 +1,54 @@
+src/lib/todayBlocks.test.ts
+  s_851a67ed0e4868::t_6a63426a8bacc9 139-145,176-182,200-206
+  s_851a67ed0e4868::t_03616babf429df 85,101-107
+  s_bbe5afa2d0a5e5::t_c55936858dff55 855-856
+  s_851a67ed0e4868::t_2559a2e2b4bdae 212-218,228-234,241-247,503-509
+  s_851a67ed0e4868::t_7a73e97d6fa30e 664,683,693-695,699-707,711,717-854
+  s_851a67ed0e4868::t_205096d53c8535 518-519,524-533
+  s_851a67ed0e4868::t_3bf483789980c6 14,17-21,23-27,30,32-33,36,38-40,42-46,49
+  s_851a67ed0e4868::t_2cc88af7ef6d3f 122
+  s_851a67ed0e4868::t_9ac70d3cd84868 540,551-557
+  s_851a67ed0e4868::t_9414da794c4202 274,304,340,373,410,448,486
+  s_851a67ed0e4868::t_be128f4bcc990f 64-72
+src/components/today/useTimelineScheduleActions.ts
+  s_851a67ed0e4868::t_a8f8efaee3b186 34
+src/components/TodayView.tsx
+  s_851a67ed0e4868::t_ba5f12c81e6d26 170
+  s_851a67ed0e4868::t_6bd6acea32820b 129
+src/lib/timelineLayout.ts
+  s_851a67ed0e4868::t_0f31051c83cdb4 35-36
+src/lib/todayBlocks.ts
+  s_851a67ed0e4868::t_1f43f73298c173 1-7
+  s_851a67ed0e4868::t_e00cce36ebc26f 139-145,151-155,157,159,161-162
+  s_851a67ed0e4868::t_d2f4f12a3764bb 21-24,27-30
+  s_851a67ed0e4868::t_998fa77280d630 244,249,255,265
+  s_851a67ed0e4868::t_319553a62d96b4 57-58
+  s_851a67ed0e4868::t_8c431a631431ed 169-171
+src/components/today/TimelineBlock.tsx
+  s_851a67ed0e4868::t_97dc9a842bb756 73
+  s_851a67ed0e4868::t_c26969f11629d0 112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ac3051777573364c2b4450026dc0e06b86c69417",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": null
+    },
+    "s_bbe5afa2d0a5e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7d04a86-d93d-4e49-9873-85da3bd363b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
