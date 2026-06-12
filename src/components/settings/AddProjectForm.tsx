@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { ProjectKind } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,10 @@ import { trimOrNull } from "@/lib/utils";
 
 import { Field, SectionLabel, Segmented } from "./SettingsKit";
 
+function focusInputOnMount(node: HTMLInputElement | null) {
+  node?.focus();
+}
+
 /**
  * Add Project 폼 — 개인/업무 + Notion DB 바인딩.
  * 토큰은 여기서 받지 않는다 — 프로젝트 생성 후 ProjectCard의 CLI 가져오기/keychain으로.
@@ -29,16 +33,11 @@ export function AddProjectForm({
   onCreated?: (msg: string, projectId?: string) => void;
 }) {
   const create = useCreateProject();
-  const nameRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ProjectKind>("work");
   const [backlogDb, setBacklogDb] = useState("");
   const [agendaDb, setAgendaDb] = useState("");
-
-  useEffect(() => {
-    if (autoFocus) nameRef.current?.focus();
-  }, [autoFocus]);
 
   const submit = () => {
     if (!name.trim() || create.isPending) return;
@@ -66,7 +65,7 @@ export function AddProjectForm({
         <SectionLabel>프로젝트 추가</SectionLabel>
         {/* typo-title-md now applies via cn()/twMergeTypo (strips CardTitle base text-base/leading-none).
             Renders identically to the prior arbitrary triplet (17/600/1.25/-0.01em). See src/lib/tw.ts. */}
-        <CardTitle className="mt-1 typo-title-md">새 프로젝트</CardTitle>
+        <CardTitle className="typo-title-md mt-1">새 프로젝트</CardTitle>
         <CardDescription className="max-w-[60ch] leading-6">
           개인 또는 업무 프로젝트를 추가하고 필요한 Notion DB를 선택적으로 연결하세요.
         </CardDescription>
@@ -76,7 +75,7 @@ export function AddProjectForm({
         <Field label="이름" htmlFor="new-project-name">
           <Input
             id="new-project-name"
-            ref={nameRef}
+            ref={autoFocus ? focusInputOnMount : undefined}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}

@@ -6,6 +6,12 @@ import { useSetProjectKind, useSetProjectName } from "@/lib/query";
 
 import { Segmented } from "../SettingsKit";
 
+function focusAndSelectInput(node: HTMLInputElement | null) {
+  if (!node) return;
+  node.focus();
+  node.select();
+}
+
 /**
  * 프로젝트 이름(더블클릭 인라인 편집) + 종류(개인/업무 Segmented 즉시 전환).
  * 이름: Enter/blur 저장, Esc 취소(셸 window-level Esc로 버블 방지), 공백 이름 거부.
@@ -21,7 +27,7 @@ export function ProjectIdentityEditor({
   const setName = useSetProjectName();
   const setKind = useSetProjectKind();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(project.name);
+  const [draft, setDraft] = useState("");
 
   const beginEdit = () => {
     setDraft(project.name);
@@ -66,12 +72,12 @@ export function ProjectIdentityEditor({
     <div className="flex flex-wrap items-center gap-2">
       {editing ? (
         <input
+          ref={focusAndSelectInput}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onNameKeyDown}
           onBlur={commitName}
           onFocus={(e) => e.currentTarget.select()}
-          autoFocus
           disabled={setName.isPending}
           aria-invalid={empty || undefined}
           aria-label="프로젝트 이름"

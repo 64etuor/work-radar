@@ -19,18 +19,23 @@ export function ProjectCalendarColorControl({
   project: Project;
   onToast: (msg: string) => void;
 }) {
+  const colorKey = project.calendarColor ?? "default";
+  return <ProjectCalendarColorDraft key={colorKey} project={project} onToast={onToast} />;
+}
+
+function ProjectCalendarColorDraft({
+  project,
+  onToast,
+}: {
+  project: Project;
+  onToast: (msg: string) => void;
+}) {
   const colors = projectCalendarColors(project.id, project.calendarColor);
   const [draft, setDraft] = useState(colors.background);
   const saveColor = useSetProjectCalendarColor();
   const normalizedDraft = normalizeHexColor(draft);
   const savedBackground = normalizeHexColor(project.calendarColor ?? null) ?? colors.background;
   const preview = normalizedDraft ? projectCalendarColors(project.id, normalizedDraft) : colors;
-  // 서버 값이 바뀌면 드래프트도 동기화.
-  const [seededFrom, setSeededFrom] = useState<string | null | undefined>(undefined);
-  if (project.calendarColor !== seededFrom) {
-    setSeededFrom(project.calendarColor ?? null);
-    setDraft(colors.background);
-  }
 
   const persist = useDebouncedCallback((color: string | null) => {
     saveColor.mutate({ projectId: project.id, color });

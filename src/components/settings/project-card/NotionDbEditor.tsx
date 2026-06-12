@@ -71,18 +71,20 @@ export function NotionDbEditor({
   project: Project;
   onToast: (msg: string) => void;
 }) {
+  const draftKey = JSON.stringify([project.notionBacklogDbId, project.notionAgendaDbId]);
+  return <NotionDbDraftEditor key={draftKey} project={project} onToast={onToast} />;
+}
+
+function NotionDbDraftEditor({
+  project,
+  onToast,
+}: {
+  project: Project;
+  onToast: (msg: string) => void;
+}) {
   const save = useSetProjectNotionDbIds();
   const [backlog, setBacklog] = useState(project.notionBacklogDbId ?? "");
   const [agenda, setAgenda] = useState(project.notionAgendaDbId ?? "");
-
-  // 서버 값이 바뀌면(저장 성공 등) 드래프트 재시드 — 두 필드를 JSON 배열 키로 합쳐 단일 비교(구분자 충돌/제어문자 없음).
-  const serverKey = JSON.stringify([project.notionBacklogDbId, project.notionAgendaDbId]);
-  const [seeded, setSeeded] = useState(serverKey);
-  if (serverKey !== seeded) {
-    setSeeded(serverKey);
-    setBacklog(project.notionBacklogDbId ?? "");
-    setAgenda(project.notionAgendaDbId ?? "");
-  }
 
   const dirty =
     (trimOrNull(backlog) ?? "") !== (project.notionBacklogDbId ?? "") ||
