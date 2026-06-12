@@ -180,19 +180,28 @@ pub(crate) async fn stage_calendar_write_inner(
     // routine_checks.time_override를 같은 IPC 안에서 미러한다. 이벤트만 patch되고 루틴 시각이
     // 그대로면 todayBlocks의 stale 판정이 이동된 이벤트를 숨기고 옛 시각의 가상 블록을 그린다
     // (드래그해도 블록이 원위치에 남는 버그). RoutineCheck 타깃의 미러와 동일 규율.
+    //
+    // 링크백(adoption)도 함께 한다 — 사용자가 만진 인스턴스를 그 occurrence의 per-day
+    // mirror event로 명시 저장. recurring-sync 루틴은 per-day 링크가 없어 occurrence↔이벤트
+    // 대응이 렌더 시각-추론에만 의존했는데(이번 버그 일가의 뿌리), 링크가 박히면 이후 그
+    // 날짜의 reschedule/resize/unschedule이 전부 ID 기반으로 동작한다(로컬-only 폴백 불필요).
     if let WriteTarget::Event {
+        calendar_id,
+        event_id,
         routine_id: Some(routine_id),
         routine_date: Some(date),
-        ..
     } = &req.target
     {
         if let WriteOp::Reschedule { at, .. } | WriteOp::Resize { at, .. } = &req.op {
             ensure_routine_check_row(pool, routine_id, date).await?;
             sqlx::query(
-                "UPDATE routine_checks SET time_override = ?1 \
-                 WHERE routine_id = ?2 AND date = ?3",
+                "UPDATE routine_checks \
+                 SET time_override = ?1, linked_event_id = ?2, linked_calendar_id = ?3 \
+                 WHERE routine_id = ?4 AND date = ?5",
             )
             .bind(extract_hhmm(at))
+            .bind(event_id)
+            .bind(calendar_id)
             .bind(routine_id)
             .bind(date)
             .execute(pool)
@@ -824,14 +833,25 @@ mod tests {
         };
         stage_calendar_write_inner(&db, &notify, req).await.unwrap();
 
-        // 루틴 occurrence 미러 — 블록이 새 위치를 따라간다.
-        let (time_override,): (Option<String>,) = sqlx::query_as(
-            "SELECT time_override FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
+        // 루틴 occurrence 미러 + 링크백(adoption) — 블록이 새 위치를 따라가고,
+        // 만진 인스턴스가 그 날짜의 per-day mirror event로 명시 저장된다.
+        let (time_override, linked_event_id, linked_calendar_id): (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT time_override, linked_event_id, linked_calendar_id \
+             FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
         )
         .fetch_one(&db)
         .await
         .unwrap();
         assert_eq!(time_override.as_deref(), Some("10:30"));
+        assert_eq!(
+            linked_event_id.as_deref(),
+            Some("master-1_20260528T000000Z")
+        );
+        assert_eq!(linked_calendar_id.as_deref(), Some("work-cal"));
 
         // 캘린더 patch 큐 행 — 이벤트 타깃 그대로(루틴 컨텍스트는 미러 전용).
         let (kind, event_id): (String, Option<String>) =
@@ -841,6 +861,81 @@ mod tests {
                 .unwrap();
         assert_eq!(kind, "patch");
         assert_eq!(event_id.as_deref(), Some("master-1_20260528T000000Z"));
+    }
+
+    /// adoption 효과 엔드투엔드: 루틴-backed 이벤트를 한 번 만지면(링크백) 그 뒤 같은
+    /// occurrence의 routine_check 타깃 이동은 — 이전처럼 로컬-only 폴백이 아니라 —
+    /// 링크된 인스턴스를 patch하는 큐 행을 만든다(추론→ID 기반 전환의 실증).
+    #[tokio::test]
+    async fn adopted_instance_makes_subsequent_routine_moves_id_based() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, active, time_of_day) \
+             VALUES ('r1','아침','daily',1,'09:00')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // 1) 루틴-backed 이벤트 드래그 — adoption.
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Event {
+                    calendar_id: "work-cal".into(),
+                    event_id: "master-1_20260528T000000Z".into(),
+                    routine_id: Some("r1".into()),
+                    routine_date: Some("2026-05-28".into()),
+                },
+                op: WriteOp::Reschedule {
+                    at: "2026-05-28T10:30:00".into(),
+                    duration_min: 30,
+                },
+                idempotency_key: "adopt".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 2) 같은 occurrence를 routine_check 타깃으로 다시 이동(가상 블록 드래그 경로).
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::RoutineCheck {
+                    routine_id: "r1".into(),
+                    date: "2026-05-28".into(),
+                },
+                op: WriteOp::Reschedule {
+                    at: "2026-05-28T13:00:00".into(),
+                    duration_min: 30,
+                },
+                idempotency_key: "move-after-adopt".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 링크 덕에 routine_check 이동도 인스턴스 patch 큐 행을 만든다(로컬-only 아님).
+        let (count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pending_calendar_writes \
+             WHERE target_kind='routine_check' AND kind='patch' \
+               AND event_id='master-1_20260528T000000Z'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(count, 1);
+
+        let (time_override,): (Option<String>,) = sqlx::query_as(
+            "SELECT time_override FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(time_override.as_deref(), Some("13:00"));
     }
 
     /// 루틴 컨텍스트 없는 평범한 이벤트 write는 routine_checks를 일절 만들지 않는다.

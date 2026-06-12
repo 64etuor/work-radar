@@ -48,6 +48,8 @@ const SNAP_MIN = 15;
 const DEFAULT_SCHEDULE_MIN = 60;
 /** routine 신규 배치 길이(분) — 스펙 §D8 루틴 가상 인스턴스. */
 const ROUTINE_SCHEDULE_MIN = 30;
+/** 로컬 ISO('YYYY-MM-DDTHH:MM...')에서 HH:MM — routine_checks.time_override 포맷. */
+const hhmmOfIso = (iso: string): string => iso.slice(11, 16);
 
 /** drag data attached to draggable nodes via `useDraggable({ data: ... })`. */
 export type DragData =
@@ -343,7 +345,7 @@ export function useTimelineDnd(opts: Opts) {
         // 루틴-backed면 루틴 캐시의 timeOverride도 같이 패치 — refetch 전 interim에도
         // routineMatchesEvent가 성립해 블록이 새 위치에 머문다.
         if (a.routineId) {
-          patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
+          patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
         }
       } else if (a.blockKind === "signal") {
         patchSignalCaches(a.signalId, {
@@ -354,7 +356,7 @@ export function useTimelineDnd(opts: Opts) {
         // durationMin은 패치하지 않는다 — routine_checks엔 per-day duration 컬럼이 없어
         // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
         // 리사이즈 높이가 곧 스냅백한다. 시간 위치(time_override)만 optimistic.
-        patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
+        patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
       }
       try {
         if (a.blockKind === "event") {
@@ -414,12 +416,12 @@ export function useTimelineDnd(opts: Opts) {
       if (a.blockKind === "event") {
         patchEventCache(a.calendarId, a.eventId, { start: at, durationMin: movedDurationMin });
         if (a.routineId) {
-          patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
+          patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
         }
       } else if (a.blockKind === "signal") {
         patchSignalCaches(a.signalId, { at });
       } else if (a.blockKind === "routine") {
-        patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
+        patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
       }
       try {
         if (a.blockKind === "event") {
