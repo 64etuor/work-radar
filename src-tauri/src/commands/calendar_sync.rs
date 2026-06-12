@@ -132,8 +132,10 @@ pub(crate) async fn stage_calendar_write_inner(
             ..
         } => ("event", format!("{calendar_id}|{event_id}")),
     };
-    let (kind, calendar_id, event_id_opt, payload, debounce_ms) =
-        build_queue_row(&req, pool, target_kind, &target_id).await?;
+    // None = 외부 미러 대상이 없는 유효한 로컬-only write(링크/pending create 없는
+    // routine_check 시간 이동). 큐 행 없이 아래 로컬 미러만 수행한다 — 거부하면
+    // 가상 루틴 블록 드래그가 로컬에서도 안 움직인다(원위치 잔류).
+    let queue_row = build_queue_row(&req, pool, target_kind, &target_id).await?;
 
     // build_queue_row 성공 뒤에만 로컬 mirror를 바꾼다. linked event가 없는 unschedule/resize가
     // 실패했는데 카드만 미배치로 돌아가는 상태 분리를 막기 위한 순서 보장이다.
@@ -260,18 +262,20 @@ pub(crate) async fn stage_calendar_write_inner(
             WriteOp::MoveCalendar { .. } => {}
         }
     }
-    upsert_write(
-        pool,
-        kind,
-        target_kind,
-        &target_id,
-        &calendar_id,
-        event_id_opt.as_deref(),
-        &payload,
-        debounce_ms,
-    )
-    .await?;
-    notify.notify_one();
+    if let Some((kind, calendar_id, event_id_opt, payload, debounce_ms)) = queue_row {
+        upsert_write(
+            pool,
+            kind,
+            target_kind,
+            &target_id,
+            &calendar_id,
+            event_id_opt.as_deref(),
+            &payload,
+            debounce_ms,
+        )
+        .await?;
+        notify.notify_one();
+    }
     Ok(())
 }
 
@@ -381,14 +385,16 @@ pub async fn list_pending_writes(db: State<'_, Db>) -> Result<Vec<PendingWrite>,
 // ── op → queue row 변환 (build_queue_row) ──────────────────────────────────────
 
 /// op + 기존 linked event(있다면) → (kind, calendar_id, event_id, payload_json, debounce_ms).
+/// 큐 행 스펙을 만든다. `Ok(None)` = 외부 미러 대상이 없는 유효한 로컬-only write
+/// (링크/pending create 없는 routine_check 시간 이동) — 호출자는 큐 upsert를 건너뛴다.
 async fn build_queue_row(
     req: &StageWriteRequest,
     pool: &SqlitePool,
     target_kind: &str,
     target_id: &str,
-) -> Result<(&'static str, String, Option<String>, String, i64), AppError> {
+) -> Result<Option<(&'static str, String, Option<String>, String, i64)>, AppError> {
     let existing = fetch_linked_event(pool, target_kind, target_id).await?;
-    Ok(match &req.op {
+    Ok(Some(match &req.op {
         WriteOp::Schedule {
             at,
             duration_min,
@@ -418,18 +424,21 @@ async fn build_queue_row(
                 .to_string();
                 ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
             }
-            // 배치 직후 미동기화 — pending create에 coalesce(없으면 거부).
-            None => {
-                coalesce_into_pending_create(
-                    pool,
-                    target_kind,
-                    target_id,
-                    at,
-                    *duration_min,
-                    "reschedule",
-                )
-                .await?
-            }
+            // 배치 직후 미동기화 — pending create에 coalesce.
+            // (signal: 없으면 거부 / routine_check: 없으면 로컬-only 미러 = 큐 없음)
+            None => match coalesce_into_pending_create(
+                pool,
+                target_kind,
+                target_id,
+                at,
+                *duration_min,
+                "reschedule",
+            )
+            .await?
+            {
+                Some(row) => row,
+                None => return Ok(None),
+            },
         },
         WriteOp::Resize { at, duration_min } => match existing {
             Some((cal, ev)) => {
@@ -441,18 +450,21 @@ async fn build_queue_row(
                 .to_string();
                 ("patch", cal, Some(ev), payload, GOOGLE_SYNC_DEBOUNCE_MS)
             }
-            // 배치 직후 미동기화 — pending create에 coalesce(없으면 거부).
-            None => {
-                coalesce_into_pending_create(
-                    pool,
-                    target_kind,
-                    target_id,
-                    at,
-                    *duration_min,
-                    "resize",
-                )
-                .await?
-            }
+            // 배치 직후 미동기화 — pending create에 coalesce.
+            // (signal: 없으면 거부 / routine_check: 없으면 로컬-only 미러 = 큐 없음)
+            None => match coalesce_into_pending_create(
+                pool,
+                target_kind,
+                target_id,
+                at,
+                *duration_min,
+                "resize",
+            )
+            .await?
+            {
+                Some(row) => row,
+                None => return Ok(None),
+            },
         },
         WriteOp::Unschedule => {
             let (cal, ev) = existing.ok_or_else(|| {
@@ -502,7 +514,7 @@ async fn build_queue_row(
                 GOOGLE_SYNC_DEBOUNCE_MS,
             )
         }
-    })
+    }))
 }
 
 /// target → (calendar_id, event_id) — 카드/루틴 mirror에 박혀 있는 linked event를 조회.
@@ -581,7 +593,12 @@ async fn fetch_pending_create(
 /// 없다. 이때 create 행이 있으면 에러 대신 그 행 payload를 새 start/duration으로 갱신한다
 /// — `upsert_write`가 UNIQUE(target, 'create')로 머지하므로 디바운스 윈도우 안의 연속
 /// 드래그/리사이즈가 한 create로 합쳐지고, 워커는 최종 위치로 한 번에 이벤트를 만든다.
-/// create 행조차 없으면(이벤트가 외부에서 삭제된 진짜 orphan) 기존대로 거부한다.
+///
+/// create 행조차 없을 때는 target에 따라 갈린다:
+/// - signal: 이벤트가 외부에서 삭제된 진짜 orphan → 기존대로 거부.
+/// - routine_check: Google 링크 없는 시간 이동도 유효하다(time_override는 로컬 정본,
+///   recurring-sync 루틴의 가상 블록·stale 블록 드래그가 이 경로) → `Ok(None)` =
+///   큐 행 없이 로컬 미러만. 거부하면 블록이 로컬에서도 안 움직인다(원위치 잔류 버그).
 async fn coalesce_into_pending_create(
     pool: &SqlitePool,
     target_kind: &str,
@@ -589,15 +606,17 @@ async fn coalesce_into_pending_create(
     at: &str,
     duration_min: i32,
     verb: &str,
-) -> Result<(&'static str, String, Option<String>, String, i64), AppError> {
-    let (cal, create_payload) = fetch_pending_create(pool, target_kind, target_id)
-        .await?
-        .ok_or_else(|| {
-            AppError::validation(
-                "calendar.no_linked_event",
-                format!("no linked event to {verb}"),
-            )
-        })?;
+) -> Result<Option<(&'static str, String, Option<String>, String, i64)>, AppError> {
+    let Some((cal, create_payload)) = fetch_pending_create(pool, target_kind, target_id).await?
+    else {
+        if target_kind == "routine_check" {
+            return Ok(None);
+        }
+        return Err(AppError::validation(
+            "calendar.no_linked_event",
+            format!("no linked event to {verb}"),
+        ));
+    };
     // create 행의 title 보존 — start/duration만 새 값으로 교체.
     let title = serde_json::from_str::<serde_json::Value>(&create_payload)
         .ok()
@@ -609,7 +628,13 @@ async fn coalesce_into_pending_create(
         "duration_min": duration_min,
     })
     .to_string();
-    Ok(("create", cal, None, payload, GOOGLE_SYNC_DEBOUNCE_MS))
+    Ok(Some((
+        "create",
+        cal,
+        None,
+        payload,
+        GOOGLE_SYNC_DEBOUNCE_MS,
+    )))
 }
 
 #[cfg(test)]
@@ -680,6 +705,50 @@ mod tests {
             completed.is_none(),
             "배치(링크) 행은 완료 마커가 없어야 한다 — scheduled≠done"
         );
+    }
+
+    /// 회귀: Google 링크도 pending create도 없는 루틴의 시간 이동(가상 블록·stale 블록 드래그,
+    /// recurring-sync 루틴의 per-day check은 링크가 없다)은 거부되면 안 된다 —
+    /// calendar.no_linked_event로 거부하면 로컬 time_override조차 안 바뀌어 블록이 원위치에
+    /// 남는다. 로컬-only 미러(큐 행 0)로 성공해야 한다.
+    #[tokio::test]
+    async fn routine_reschedule_without_link_mirrors_time_override_without_queue() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, active, time_of_day) \
+             VALUES ('r1','아침','daily',1,'09:00')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let req = StageWriteRequest {
+            target: WriteTarget::RoutineCheck {
+                routine_id: "r1".into(),
+                date: "2026-05-28".into(),
+            },
+            op: WriteOp::Reschedule {
+                at: "2026-05-28T11:15:00".into(),
+                duration_min: 30,
+            },
+            idempotency_key: "test-unlinked-routine-move".into(),
+        };
+        stage_calendar_write_inner(&db, &notify, req).await.unwrap();
+
+        let (time_override,): (Option<String>,) = sqlx::query_as(
+            "SELECT time_override FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(time_override.as_deref(), Some("11:15"));
+
+        let (queued,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(queued, 0, "외부 미러 대상이 없으니 큐 행도 없어야 한다");
     }
 
     /// 회귀: 동기화된 루틴 블록(이벤트 블록으로 렌더)을 드래그하면 Google 이벤트만 patch되고

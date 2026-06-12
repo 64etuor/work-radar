@@ -39,10 +39,7 @@ const client = new Client({ name: "boule-bridge", version: "1.0.0" });
 try {
   await client.connect(transport);
   const res = await client.callTool({ name: tool, arguments: args });
-  const text = (res.content ?? [])
-    .filter((c) => c.type === "text")
-    .map((c) => c.text)
-    .join("\n");
+  const text = (res.content ?? []).flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
   process.stdout.write(text + "\n");
   process.exitCode = res.isError ? 1 : 0;
 } catch (err) {

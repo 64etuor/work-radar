@@ -370,26 +370,30 @@ function findResolvedEscalation(
   taskId: string,
   latestSpawnId: string,
 ): ResolvedEscalation | null {
+  const chosenByDecisionId = new Map<string, GovEvent>();
+  const resumedDecisionIds = new Set<string>();
+  for (const e of all) {
+    if (e.frontmatter.type === "decision_chosen") {
+      for (const ref of e.frontmatter.related_to ?? []) chosenByDecisionId.set(ref, e);
+    }
+    if (
+      e.frontmatter.type === "session_spawned" &&
+      (e.frontmatter.tags ?? []).includes("resume")
+    ) {
+      for (const ref of e.frontmatter.related_to ?? []) resumedDecisionIds.add(ref);
+    }
+  }
+
   for (const blocked of all) {
     if (blocked.frontmatter.type !== "decision_blocked") continue;
     const rel = blocked.frontmatter.related_to ?? [];
     if (!rel.includes(taskId)) continue;
     const decisionId = rel.find((r) => r !== taskId);
     if (!decisionId) continue;
-    const chosen = all.find(
-      (e) =>
-        e.frontmatter.type === "decision_chosen" &&
-        (e.frontmatter.related_to ?? []).includes(decisionId),
-    );
+    const chosen = chosenByDecisionId.get(decisionId);
     if (!chosen) continue;
     // Hard consume-once: a resume spawn already references this decision — never resume it again.
-    const alreadyResumed = all.some(
-      (e) =>
-        e.frontmatter.type === "session_spawned" &&
-        (e.frontmatter.tags ?? []).includes("resume") &&
-        (e.frontmatter.related_to ?? []).includes(decisionId),
-    );
-    if (alreadyResumed) continue;
+    if (resumedDecisionIds.has(decisionId)) continue;
     // Legacy filter: a resolution older than the latest spawn was already overtaken by a dispatch.
     if (chosen.frontmatter.id <= latestSpawnId) continue;
     const token =
@@ -404,7 +408,8 @@ function findResolvedEscalation(
         options?: Array<{ token: string; label: string }>;
       };
       question = body.question ?? "";
-      const opt = body.options?.find((o) => o.token === token);
+      const optionsByToken = new Map(body.options?.map((o) => [o.token, o]) ?? []);
+      const opt = token ? optionsByToken.get(token) : undefined;
       if (opt) chosenLabel = `${opt.token} — ${opt.label}`;
     } catch {
       // body unparseable — keep the bare token; the resume context degrades, never blocks

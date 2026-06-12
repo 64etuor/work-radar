@@ -158,8 +158,9 @@ export function reconstructBudgetSnapshot(
     if (event.frontmatter.type === "executor_attempt_started") {
       const parsed = attemptStartedBodySchema.safeParse(safeJson(event.body));
       if (!parsed.success || !taskId) continue;
-      attempts.set(attemptKey(taskId, parsed.data.attemptIndex), {
-        ...(attempts.get(attemptKey(taskId, parsed.data.attemptIndex)) ?? {}),
+      const key = attemptKey(taskId, parsed.data.attemptIndex);
+      attempts.set(key, {
+        ...(attempts.get(key) ?? {}),
         backend: parsed.data.backend,
       });
       continue;
@@ -168,8 +169,9 @@ export function reconstructBudgetSnapshot(
     if (event.frontmatter.type === "executor_attempt_finished") {
       const parsed = attemptFinishedBodySchema.safeParse(safeJson(event.body));
       if (!parsed.success || !taskId) continue;
-      attempts.set(attemptKey(taskId, parsed.data.attemptIndex), {
-        ...(attempts.get(attemptKey(taskId, parsed.data.attemptIndex)) ?? {}),
+      const key = attemptKey(taskId, parsed.data.attemptIndex);
+      attempts.set(key, {
+        ...(attempts.get(key) ?? {}),
         usage: parsed.data.usage ?? "unknown",
       });
     }

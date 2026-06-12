@@ -67,9 +67,11 @@ export function useSetSignalStatus() {
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: SignalStatus }) =>
       unwrap(commands.setSignalStatus(id, status)),
-    onSuccess: () => {
+    onSuccess: (_data, { status }) => {
       inv.signals();
       inv.today();
+      if (status === "done") inv.completedHistory();
+      if (status === "archived" || status === "snoozed") inv.archivedSnoozed();
     },
   });
 }
@@ -80,7 +82,10 @@ export function useSnoozeSignal() {
   return useMutation({
     mutationFn: ({ id, until }: { id: string; until: string }) =>
       unwrap(commands.snoozeSignal(id, until)),
-    onSuccess: () => inv.signals(),
+    onSuccess: () => {
+      inv.signals();
+      inv.archivedSnoozed();
+    },
   });
 }
 

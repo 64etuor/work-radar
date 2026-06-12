@@ -106,10 +106,11 @@ export async function runTick(
 
   // Gate 2 — halt (readiness does not cover an open decision_blocked). Stop, do not advance past it.
   const all = await readAllEvents(workspaceDir);
-  const activeStates = plansOf(all)
-    .map((p) => deriveConductorState(p, all))
-    .filter((s) => !isTerminalPlanPhase(s.planPhase));
-  const haltedPlans = activeStates.filter((s) => s.halted).map((s) => s.planId);
+  const activeStates = plansOf(all).flatMap((p) => {
+    const state = deriveConductorState(p, all);
+    return isTerminalPlanPhase(state.planPhase) ? [] : [state];
+  });
+  const haltedPlans = activeStates.flatMap((s) => (s.halted ? [s.planId] : []));
   if (haltedPlans.length) return { ...base, outcome: "halted_decision", haltedPlans };
 
   // Gate 2.5 — post-choose resume. A task whose escalation a human just resolved must be

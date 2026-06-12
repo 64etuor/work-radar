@@ -3,8 +3,10 @@ import type { MetaObservationInput, MetaObservationResult } from "./types.ts";
 
 export function buildMetaObservation(input: MetaObservationInput): MetaObservationResult {
   const verified = input.hypotheses
-    .filter((hypothesis) => hypothesis.kind === "commit_scope_hotspot_persists")
-    .filter((hypothesis) => hypothesis.status === "verified")
+    .filter(
+      (hypothesis) =>
+        hypothesis.kind === "commit_scope_hotspot_persists" && hypothesis.status === "verified",
+    )
     .sort((a, b) => a.scope.localeCompare(b.scope) || a.id.localeCompare(b.id));
 
   if (verified.length === 0) {

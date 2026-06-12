@@ -54,9 +54,12 @@ function idStampMs(id: string): number | null {
  *  verdict event (decision_approved/rejected/chosen) in the log. Conservative: unmatched → open. */
 function countUnresolvedDecisions(log: GovEvent[]): number {
   const VERDICTS = new Set(["decision_approved", "decision_rejected", "decision_chosen"]);
-  const resolved = new Set(
-    log.filter((e) => VERDICTS.has(e.frontmatter.type)).flatMap((e) => e.frontmatter.related_to ?? []),
-  );
+  const resolved = new Set<string>();
+  for (const e of log) {
+    if (VERDICTS.has(e.frontmatter.type)) {
+      for (const ref of e.frontmatter.related_to ?? []) resolved.add(ref);
+    }
+  }
   let n = 0;
   for (const e of log) {
     if (e.frontmatter.type !== "decision_blocked") continue;
@@ -69,25 +72,41 @@ function countUnresolvedDecisions(log: GovEvent[]): number {
 /** In-flight task count (active|blocked task lifecycle) as a bounded proxy for "distance to a safe
  *  stopping boundary": more live work = further from a clean checkpoint. PURE over the log. */
 function inFlightTaskCount(log: GovEvent[]): number {
-  const created = log.filter((e) => e.frontmatter.type === "task_created").map((e) => e.frontmatter.id);
+  const stateByTask = new Map<string, { terminal: boolean; live: boolean }>();
+  for (const e of log) {
+    if (e.frontmatter.type === "task_created") {
+      stateByTask.set(e.frontmatter.id, { terminal: false, live: false });
+    }
+  }
+
+  for (const e of log) {
+    const terminal =
+      e.frontmatter.type === "task_completed" || e.frontmatter.type === "task_cancelled";
+    const live = e.frontmatter.type === "task_started" || e.frontmatter.type === "task_blocked";
+    if (!terminal && !live) continue;
+    for (const taskId of e.frontmatter.related_to ?? []) {
+      const state = stateByTask.get(taskId);
+      if (!state) continue;
+      if (terminal) state.terminal = true;
+      if (live) state.live = true;
+    }
+  }
+
   let n = 0;
-  for (const taskId of created) {
-    const related = log.filter((e) => (e.frontmatter.related_to ?? []).includes(taskId));
-    const terminal = related.some((e) => e.frontmatter.type === "task_completed" || e.frontmatter.type === "task_cancelled");
-    if (terminal) continue;
-    const started = related.some((e) => e.frontmatter.type === "task_started");
-    const blocked = related.some((e) => e.frontmatter.type === "task_blocked");
-    if (started || blocked) n++;
+  for (const state of stateByTask.values()) {
+    if (!state.terminal && state.live) n++;
   }
   return n;
 }
 
 /** Age (ms) since the most recent handoff_requested. No handoff ever → HOUR_MS (max component). */
 function lastHandoffAgeMs(log: GovEvent[], now: Date): number {
-  const births = log
-    .filter((e) => e.frontmatter.type === "handoff_requested")
-    .map((e) => idStampMs(e.frontmatter.id))
-    .filter((x): x is number => x !== null);
+  const births: number[] = [];
+  for (const e of log) {
+    if (e.frontmatter.type !== "handoff_requested") continue;
+    const stamp = idStampMs(e.frontmatter.id);
+    if (stamp !== null) births.push(stamp);
+  }
   if (births.length === 0) return HOUR_MS;
   return Math.max(0, now.getTime() - Math.max(...births));
 }

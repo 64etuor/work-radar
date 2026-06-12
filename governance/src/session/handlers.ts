@@ -5,7 +5,7 @@ import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import {
   deriveSessionState,
   sessionsOf,
-  ORIGIN_TYPES,
+  isSessionOriginType,
   type SessionState,
   type Ownership,
 } from "./session.ts";
@@ -25,15 +25,13 @@ export interface SessionGateResult {
   eventId?: string;
 }
 
-const isOriginType = (t: EventType): boolean => (ORIGIN_TYPES as readonly string[]).includes(t);
-
 async function loadSession(
   workspaceDir: string,
   sessionId: string,
 ): Promise<{ state: SessionState; all: GovEvent[] }> {
   const all = await readAllEvents(workspaceDir);
   const grp = eventsForDecision(all, sessionId);
-  if (!grp.proposal || !isOriginType(grp.proposal.frontmatter.type))
+  if (!grp.proposal || !isSessionOriginType(grp.proposal.frontmatter.type))
     throw new Error(`unknown session: ${sessionId}`);
   return { state: deriveSessionState(grp.proposal, grp.related), all };
 }
@@ -281,7 +279,7 @@ export async function sessionTrail(
 ): Promise<SessionTrail> {
   const all = await readAllEvents(workspaceDir);
   const grp = eventsForDecision(all, input.sessionId);
-  if (!grp.proposal || !isOriginType(grp.proposal.frontmatter.type))
+  if (!grp.proposal || !isSessionOriginType(grp.proposal.frontmatter.type))
     throw new Error(`unknown session: ${input.sessionId}`);
   const s = deriveSessionState(grp.proposal, grp.related);
   const chain: SessionTrailEntry[] = [grp.proposal, ...grp.related].map((e) => ({

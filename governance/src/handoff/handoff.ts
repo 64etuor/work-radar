@@ -44,11 +44,16 @@ export function deriveHandoffState(birth: GovEvent, related: GovEvent[]): Handof
 /** All handoff birth events (chronological by id). A handoff_requested referencing an existing
  *  handoff birth is excluded (defensive double-count guard, clone of sessionsOf). */
 export function handoffsOf(all: GovEvent[]): GovEvent[] {
-  const birthIds = new Set(
-    all.filter((e) => e.frontmatter.type === "handoff_requested").map((e) => e.frontmatter.id),
-  );
+  const birthIds = new Set<string>();
+  for (const e of all) {
+    if (e.frontmatter.type === "handoff_requested") birthIds.add(e.frontmatter.id);
+  }
   return all
-    .filter((e) => e.frontmatter.type === "handoff_requested")
-    .filter((e) => !(e.frontmatter.related_to ?? []).some((r) => birthIds.has(r)))
+    .flatMap((e) =>
+      e.frontmatter.type === "handoff_requested" &&
+      !(e.frontmatter.related_to ?? []).some((r) => birthIds.has(r))
+        ? [e]
+        : [],
+    )
     .sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
 }

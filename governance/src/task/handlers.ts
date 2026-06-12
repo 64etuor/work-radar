@@ -62,7 +62,8 @@ function latestSessionForTask(all: GovEvent[], taskId: string): string | null {
   let latest: GovEvent | null = null;
   for (const e of all) {
     if (e.frontmatter.type !== "session_spawned") continue;
-    if (!(e.frontmatter.related_to ?? []).includes(taskId)) continue;
+    const related = e.frontmatter.related_to ?? [];
+    if (!related.includes(taskId)) continue;
     if (!latest || e.frontmatter.id.localeCompare(latest.frontmatter.id) > 0) latest = e;
   }
   return latest?.frontmatter.id ?? null;
@@ -72,6 +73,10 @@ function latestSessionForTask(all: GovEvent[], taskId: string): string | null {
  *  Conservative: a block whose decision proposal cannot be found counts as open.
  *  Exported so the v3 Conductor's halt projection REUSES this exact coupling (not a duplicate). */
 export function hasOpenBlock(all: GovEvent[], taskId: string): boolean {
+  const proposalById = new Map<string, GovEvent>();
+  for (const e of all) {
+    if (e.frontmatter.type === "decision_proposed") proposalById.set(e.frontmatter.id, e);
+  }
   const blocks = all.filter(
     (e) =>
       e.frontmatter.type === "decision_blocked" &&
@@ -79,10 +84,14 @@ export function hasOpenBlock(all: GovEvent[], taskId: string): boolean {
   );
   for (const b of blocks) {
     const relatedIds = b.frontmatter.related_to ?? [];
-    const decId = relatedIds.find((rid) => {
-      const p = all.find((e) => e.frontmatter.id === rid);
-      return p?.frontmatter.type === "decision_proposed";
-    });
+    let decId: string | undefined;
+    for (const rid of relatedIds) {
+      const p = proposalById.get(rid);
+      if (p?.frontmatter.type === "decision_proposed") {
+        decId = rid;
+        break;
+      }
+    }
     if (!decId) return true; // cannot prove resolved → conservative
     const grp = eventsForDecision(all, decId);
     if (grp.proposal && !deriveDecisionState(grp.proposal, grp.related).verdict) return true;

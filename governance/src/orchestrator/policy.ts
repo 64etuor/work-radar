@@ -33,11 +33,10 @@ const ACTIVE_LIKE: ReadonlySet<SessionPhase> = new Set<SessionPhase>([
 export function evaluateSuggestions(view: OrchestratorView): SuggestionCandidate[] {
   const out: SuggestionCandidate[] = [];
   const taskById = new Map(view.tasks.map((t) => [t.state.taskId, t]));
-  const boundTaskIds = new Set(
-    view.sessions
-      .filter((s) => s.phase !== "closed" && s.taskId !== null)
-      .map((s) => s.taskId as string),
-  );
+  const boundTaskIds = new Set<string>();
+  for (const s of view.sessions) {
+    if (s.phase !== "closed" && s.taskId !== null) boundTaskIds.add(s.taskId);
+  }
 
   for (const s of view.sessions) {
     const activeLike = ACTIVE_LIKE.has(s.phase);
@@ -46,8 +45,11 @@ export function evaluateSuggestions(view: OrchestratorView): SuggestionCandidate
     }
     if (activeLike && s.taskId !== null) {
       const t = taskById.get(s.taskId);
-      if (t && (t.state.phase === "done" || t.state.phase === "cancelled")) {
-        out.push({ ruleId: "session_stale", subjectId: s.sessionId, subjectType: "session", detail: `bound task ${s.taskId} is ${t.state.phase} — consider closing` });
+      if (t) {
+        const phase = t.state.phase;
+        if (phase === "done" || phase === "cancelled") {
+          out.push({ ruleId: "session_stale", subjectId: s.sessionId, subjectType: "session", detail: `bound task ${s.taskId} is ${phase} — consider closing` });
+        }
       }
     }
     if (activeLike && s.taskId === null && s.ownership === "external_owned") {
@@ -56,12 +58,13 @@ export function evaluateSuggestions(view: OrchestratorView): SuggestionCandidate
   }
 
   for (const t of view.tasks) {
-    const terminal = t.state.phase === "done" || t.state.phase === "cancelled";
-    if (t.state.phase === "active" && !boundTaskIds.has(t.state.taskId)) {
-      out.push({ ruleId: "task_needs_session", subjectId: t.state.taskId, subjectType: "task", detail: "active task with no open session" });
+    const { phase, taskId } = t.state;
+    const terminal = phase === "done" || phase === "cancelled";
+    if (phase === "active" && !boundTaskIds.has(taskId)) {
+      out.push({ ruleId: "task_needs_session", subjectId: taskId, subjectType: "task", detail: "active task with no open session" });
     }
     if (!terminal && t.hasOpenBlock) {
-      out.push({ ruleId: "task_blocked_decision", subjectId: t.state.taskId, subjectType: "task", detail: "unresolved decision_blocked in task chain — needs human" });
+      out.push({ ruleId: "task_blocked_decision", subjectId: taskId, subjectType: "task", detail: "unresolved decision_blocked in task chain — needs human" });
     }
   }
 

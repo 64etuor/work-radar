@@ -42,9 +42,17 @@ function sections(body: string): Section[] {
 
 export function validateHandoff(body: string): ValidationResult {
   const found = sections(body);
+  const foundByLowerName = new Map(found.map((section) => [section.name.toLowerCase(), section]));
   const missing: string[] = [];
   for (const required of REQUIRED_SECTIONS) {
-    const match = found.find((s) => s.name.toLowerCase().startsWith(required.toLowerCase()));
+    const requiredLower = required.toLowerCase();
+    let match: Section | undefined;
+    for (const [name, section] of foundByLowerName) {
+      if (name.startsWith(requiredLower)) {
+        match = section;
+        break;
+      }
+    }
     if (!match || match.content.trim().length === 0) missing.push(required);
   }
   return { ok: missing.length === 0, missing };

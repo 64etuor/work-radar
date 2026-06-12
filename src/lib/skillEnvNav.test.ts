@@ -71,7 +71,11 @@ describe("buildSkillEnvNav", () => {
 
   it("provider는 기본 순서(claude→codex→openclaw→hermes→other)로 노출한다", () => {
     const nav = buildSkillEnvNav([], [env("other", true), env("codex", true), env("claude", true)]);
-    expect(nav.filter((i) => i.id.startsWith("provider:")).map((i) => i.label)).toEqual([
+    const providerLabels: string[] = [];
+    for (const item of nav) {
+      if (item.id.startsWith("provider:")) providerLabels.push(item.label);
+    }
+    expect(providerLabels).toEqual([
       SKILL_PROVIDER_LABEL.claude,
       SKILL_PROVIDER_LABEL.codex,
       SKILL_PROVIDER_LABEL.other,

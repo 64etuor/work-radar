@@ -32,8 +32,10 @@ export const ORIGIN_TYPES = [
   "session_spawned",
 ] as const;
 type OriginType = (typeof ORIGIN_TYPES)[number];
-function isOrigin(t: GovEvent["frontmatter"]["type"]): t is OriginType {
-  return (ORIGIN_TYPES as readonly string[]).includes(t);
+const ORIGIN_TYPE_SET: ReadonlySet<string> = new Set(ORIGIN_TYPES);
+
+export function isSessionOriginType(t: GovEvent["frontmatter"]["type"]): t is OriginType {
+  return ORIGIN_TYPE_SET.has(t);
 }
 
 /** Parse a string field out of a session event's canonical-JSON body; null if absent/non-JSON. */
@@ -131,11 +133,14 @@ export function deriveSessionState(birth: GovEvent, related: GovEvent[]): Sessio
  *  references an existing origin id is a TRANSITION (e.g. planned→opening), not a birth — so it is
  *  excluded to avoid double-counting (design §3). */
 export function sessionsOf(all: GovEvent[]): GovEvent[] {
-  const originIds = new Set(
-    all.filter((e) => isOrigin(e.frontmatter.type)).map((e) => e.frontmatter.id),
-  );
-  return all
-    .filter((e) => isOrigin(e.frontmatter.type))
+  const originIds = new Set<string>();
+  const origins: GovEvent[] = [];
+  for (const event of all) {
+    if (!isSessionOriginType(event.frontmatter.type)) continue;
+    origins.push(event);
+    originIds.add(event.frontmatter.id);
+  }
+  return origins
     .filter((e) => !(e.frontmatter.related_to ?? []).some((r) => originIds.has(r)))
     .sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
 }

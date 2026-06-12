@@ -1,4 +1,10 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import {
   type CalendarEvent,
@@ -10,6 +16,12 @@ import {
 } from "@/bindings";
 
 import { unwrap } from "./client";
+
+function invalidateCalendarSelection(qc: QueryClient, projectId: string) {
+  void qc.invalidateQueries({ queryKey: ["googleCalendars", projectId] });
+  void qc.invalidateQueries({ queryKey: ["selectedCalendars", projectId] });
+  void qc.invalidateQueries({ queryKey: ["projects"] });
+}
 
 /** Today 콕핏용 캘린더 이벤트 쿼리 래퍼(ambient — 짧은 staleTime). projectId=null → 전 프로젝트 병합. */
 export function useCalendarEvents(date: string) {
@@ -122,10 +134,7 @@ export function useSetSelectedCalendars() {
   return useMutation({
     mutationFn: ({ projectId, calendars }: { projectId: string; calendars: SelectedCalendar[] }) =>
       unwrap(commands.setSelectedCalendars(projectId, calendars)),
-    onSuccess: (_data, v) => {
-      void qc.invalidateQueries({ queryKey: ["googleCalendars", v.projectId] });
-      void qc.invalidateQueries({ queryKey: ["projects"] });
-    },
+    onSuccess: (_data, v) => invalidateCalendarSelection(qc, v.projectId),
   });
 }
 

@@ -41,9 +41,12 @@ const RECENT_N = 20;
 
 function openBlockers(log: GovEvent[]): OpenBlocker[] {
   const VERDICTS = new Set(["decision_approved", "decision_rejected", "decision_chosen"]);
-  const resolved = new Set(
-    log.filter((e) => VERDICTS.has(e.frontmatter.type)).flatMap((e) => e.frontmatter.related_to ?? []),
-  );
+  const resolved = new Set<string>();
+  for (const e of log) {
+    if (VERDICTS.has(e.frontmatter.type)) {
+      for (const ref of e.frontmatter.related_to ?? []) resolved.add(ref);
+    }
+  }
   const out: OpenBlocker[] = [];
   for (const e of log) {
     if (e.frontmatter.type !== "decision_blocked") continue;

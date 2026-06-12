@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { commands, type WorkSignal } from "@/bindings";
 
-import { unwrap } from "./client";
+import { unwrap, useInvalidate } from "./client";
 
 /**
  * 회고(retro) 완료 todo 타임라인 (Phase 17). [start,end] 로컬 날짜 inclusive.
@@ -53,10 +53,10 @@ export function useCompletedHistory(today: string) {
 
 /** 회고 쿼리 무효화(태깅 후 갱신). completed/archive 둘 다. */
 function useInvalidateRetro() {
-  const qc = useQueryClient();
+  const inv = useInvalidate();
   return () => {
-    void qc.invalidateQueries({ queryKey: ["completed"] });
-    void qc.invalidateQueries({ queryKey: ["archivedSnoozed"] });
+    void inv.completedHistory();
+    void inv.archivedSnoozed();
   };
 }
 
@@ -95,6 +95,8 @@ export function useRestoreSignal() {
     mutationFn: (id: string) => unwrap(commands.restoreSignal(id)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["archivedSnoozed"] });
+      void qc.invalidateQueries({ queryKey: ["signalSearch"] });
+      void qc.invalidateQueries({ queryKey: ["todayOverview"] });
       void qc.invalidateQueries({ queryKey: ["signals"] });
     },
   });

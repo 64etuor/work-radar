@@ -52,13 +52,17 @@ export interface InstallProviderOption {
 export function buildInstallProviderOptions(
   environments: SkillEnvironment[] | undefined,
 ): InstallProviderOption[] {
-  const present = new Set<SkillProvider>(
-    (environments ?? []).filter((e) => e.present).map((e) => e.provider),
-  );
-  return SKILL_PROVIDER_ORDER.filter((p) => p === "other" || present.has(p)).map((provider) => ({
-    provider,
-    label: SKILL_PROVIDER_LABEL[provider],
-  }));
+  const present = new Set<SkillProvider>();
+  for (const e of environments ?? []) {
+    if (e.present) present.add(e.provider);
+  }
+
+  const options: InstallProviderOption[] = [];
+  for (const provider of SKILL_PROVIDER_ORDER) {
+    if (provider !== "other" && !present.has(provider)) continue;
+    options.push({ provider, label: SKILL_PROVIDER_LABEL[provider] });
+  }
+  return options;
 }
 
 export type SkillEnvNavId = "all" | "in_app" | `provider:${SkillProvider}` | `workspace:${string}`;
@@ -135,12 +139,16 @@ export function buildSkillWorkspaceNav(
  * 기본 순서를 보존한 채 뒤로(안정 정렬). 외부 상태 불변 — 표시 순서만.
  */
 export function applyEnvOrder(items: SkillEnvNavItem[], order: string[]): SkillEnvNavItem[] {
-  const pinned = items.filter((i) => i.pinned);
-  const movable = items.filter((i) => !i.pinned);
-  const rank = (id: string) => {
-    const idx = order.indexOf(id);
-    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
-  };
+  const pinned: SkillEnvNavItem[] = [];
+  const movable: SkillEnvNavItem[] = [];
+  for (const item of items) {
+    if (item.pinned) pinned.push(item);
+    else movable.push(item);
+  }
+
+  const ranks = new Map<string, number>();
+  order.forEach((id, idx) => ranks.set(id, idx));
+  const rank = (id: string) => ranks.get(id) ?? Number.MAX_SAFE_INTEGER;
   // Array.sort는 안정적 → 동일 rank(둘 다 미저장)면 원래 순서 유지.
   const sorted = [...movable].sort((a, b) => rank(a.id) - rank(b.id));
   return [...pinned, ...sorted];
@@ -151,8 +159,14 @@ export function envCounts(
   item: SkillEnvNavItem,
   skills: Skill[],
 ): { enabled: number; total: number } {
-  const group = skills.filter(item.match);
-  return { enabled: group.filter((s) => s.enabled).length, total: group.length };
+  let enabled = 0;
+  let total = 0;
+  for (const skill of skills) {
+    if (!item.match(skill)) continue;
+    total += 1;
+    if (skill.enabled) enabled += 1;
+  }
+  return { enabled, total };
 }
 
 /**

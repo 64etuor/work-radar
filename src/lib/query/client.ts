@@ -124,6 +124,7 @@ export function useInvalidate() {
   return {
     signals: () => {
       void overview();
+      void qc.invalidateQueries({ queryKey: ["signalSearch"] });
       return qc.invalidateQueries({ queryKey: ["signals"] });
     },
     today: () => {
@@ -132,9 +133,15 @@ export function useInvalidate() {
     },
     routines: () => {
       void qc.invalidateQueries({ queryKey: ["routine-tracking"] });
+      void qc.invalidateQueries({ queryKey: ["weeklyReview"] });
       return qc.invalidateQueries({ queryKey: ["routines"] });
     },
     // 완료 토글 → HistoryRail(useCompletedHistory: ["completedHistory", date])가 즉시 갱신되도록.
-    completedHistory: () => qc.invalidateQueries({ queryKey: ["completedHistory"] }),
+    completedHistory: () => {
+      void qc.invalidateQueries({ queryKey: ["completed"] });
+      void qc.invalidateQueries({ queryKey: ["weeklyReview"] });
+      return qc.invalidateQueries({ queryKey: ["completedHistory"] });
+    },
+    archivedSnoozed: () => qc.invalidateQueries({ queryKey: ["archivedSnoozed"] }),
   };
 }

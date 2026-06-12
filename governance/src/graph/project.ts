@@ -54,9 +54,12 @@ function occurredAt(id: string): string | null {
 
 /** L0 1:1 rows. content_hash over the serialized markdown; authority = first related decision id. */
 export function toEventRows(events: GovEvent[]): EventRow[] {
-  const decisionIds = new Set(
-    events.filter((e) => SUBJECT_TYPE_OF[e.frontmatter.type] === "decision").map((e) => subjectOf(e).id),
-  );
+  const decisionIds = new Set<string>();
+  for (const e of events) {
+    if (SUBJECT_TYPE_OF[e.frontmatter.type] !== "decision") continue;
+    const id = subjectOf(e).id;
+    if (id !== null) decisionIds.add(id);
+  }
   return events.map((e) => {
     const fm = e.frontmatter;
     const subj = subjectOf(e);
@@ -114,9 +117,14 @@ export function toEdgeRows(events: GovEvent[], nodes: NodeRow[]): EdgeRow[] {
 
     // step_bound binds two existing nodes but mints no subject node of its own (§3.2).
     if (fm.type === "step_bound") {
-      const targets = (fm.related_to ?? []).map((r) => byCanon.get(r)).filter((n): n is NodeRow => !!n);
-      const task = targets.find((n) => n.node_type === "task");
-      const plan = targets.find((n) => n.node_type === "plan");
+      let task: NodeRow | undefined;
+      let plan: NodeRow | undefined;
+      for (const ref of fm.related_to ?? []) {
+        const target = byCanon.get(ref);
+        if (!target) continue;
+        if (target.node_type === "task") task = target;
+        if (target.node_type === "plan") plan = target;
+      }
       if (task && plan) push(task.node_id, plan.node_id, "step_of", fm.id);
       continue;
     }

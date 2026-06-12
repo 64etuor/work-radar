@@ -137,7 +137,8 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
   const boundTaskByStep = new Map<number, string>();
   for (const e of allEvents) {
     if (e.frontmatter.type !== "step_bound") continue;
-    if (!(e.frontmatter.related_to ?? []).includes(planId)) continue;
+    const related = e.frontmatter.related_to ?? [];
+    if (!related.includes(planId)) continue;
     const idx = parseStepIndex(e.body);
     const taskId = parseBoundTaskId(e.body);
     if (idx === null || taskId === null) continue;
@@ -235,7 +236,8 @@ function projectExecutorAttempts(allEvents: GovEvent[], taskId: string): Executo
   let latestFinishedWorktreeDirty: boolean | null = null;
 
   for (const e of allEvents) {
-    if (!(e.frontmatter.related_to ?? []).includes(taskId)) continue;
+    const related = e.frontmatter.related_to ?? [];
+    if (!related.includes(taskId)) continue;
     if (e.frontmatter.type === "executor_attempt_started") {
       const body = safeAttemptBody(e.body);
       if (typeof body.attemptIndex !== "number" || !Number.isInteger(body.attemptIndex)) continue;

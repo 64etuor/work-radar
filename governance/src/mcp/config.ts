@@ -95,9 +95,9 @@ export function quorumCollisionWarning(models: string[], env: Env, quorum: numbe
     byIdentity.set(id, labels);
   }
   if (byIdentity.size >= quorum) return null;
-  const colliding = [...byIdentity.values()]
-    .filter((labels) => labels.length > 1)
-    .map((labels) => labels.join(", "));
+  const colliding = [...byIdentity.values()].flatMap((labels) =>
+    labels.length > 1 ? [labels.join(", ")] : [],
+  );
   return (
     `⚠ fake-quorum: ${byIdentity.size} distinct reviewer(s) < quorum ${quorum} — ` +
     `these labels share a reviewer command: [${colliding.join("; ")}]`
@@ -144,14 +144,14 @@ export interface EnvelopeDefaults {
 
 export function parseEnvelopeDefaults(env: Record<string, string | undefined>): EnvelopeDefaults {
   const valid = new Set<string>(DEFAULT_FORBIDDEN_DECISION_CLASSES);
-  const classes = (env.BOULE_ENVELOPE_FORBIDDEN_CLASSES ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => valid.has(s)) as DecisionClass[];
-  const actions = (env.BOULE_ENVELOPE_ALLOWED_TYPE2 ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const classes = (env.BOULE_ENVELOPE_FORBIDDEN_CLASSES ?? "").split(",").flatMap((s) => {
+    const trimmed = s.trim();
+    return valid.has(trimmed) ? [trimmed as DecisionClass] : [];
+  });
+  const actions = (env.BOULE_ENVELOPE_ALLOWED_TYPE2 ?? "").split(",").flatMap((s) => {
+    const trimmed = s.trim();
+    return trimmed ? [trimmed] : [];
+  });
   const out: EnvelopeDefaults = {};
   if (classes.length) out.forbiddenDecisionClasses = classes;
   if (actions.length) out.allowedType2Actions = actions;

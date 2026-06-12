@@ -20,12 +20,15 @@ import { unwrap } from "./client";
 function invalidateSkillWorkspace(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ["skillWorkspaces"] });
   void qc.invalidateQueries({ queryKey: ["skillDivergences"] });
+  void qc.invalidateQueries({ queryKey: ["skillDiff"] });
   void qc.invalidateQueries({ queryKey: ["skills"] });
 }
 
 /** 라이브러리 3종 무효화 — staged 업데이트 적용(useApplySkillUpdate) 계열. */
 function invalidateSkillLibrary(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ["skills"] });
+  void qc.invalidateQueries({ queryKey: ["skillDivergences"] });
+  void qc.invalidateQueries({ queryKey: ["skillDiff"] });
   void qc.invalidateQueries({ queryKey: ["skillUpdateStatus"] });
   void qc.invalidateQueries({ queryKey: ["skillBackups"] });
 }

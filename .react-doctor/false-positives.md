@@ -78,6 +78,12 @@
 
 - `useEffect` deps 의도적 생략(mount-only 효과 / mutation 콜백 안정성 보장 / unrelated
   re-run 차단). 각 사이트는 변경 시 영향 분석이 필요해 일괄 자동 픽스 불가.
+- `src/components/board/MatrixCanvas.tsx` layout/resize effects — imperative post-it geometry owner.
+  `signalsRef`/`cbRef` are updated in layout effect so pointer/resize handlers keep current data without
+  rebinding drag listeners; adding every helper/function dep causes drag/layout churn.
+- `src/components/worktree/WorktreeDiffText.tsx` Shiki tokenize effect — `codeIndices` is intentionally
+  referentially stable through the `parsed` memo chain because it is an effect dependency. Removing memoization
+  recreates fresh deps and can repeatedly retokenize large diffs.
 
 ## `react-doctor/no-react19-deprecated-apis`
 
@@ -103,6 +109,21 @@
   prop이 바뀔 때 reseed/reset이 필요한 경우 공식 권장 패턴. "derive during render"
   대안은 reset 시점을 표현 못함. ProjectPickerModal, CalendarEventModal, AgentsPane,
   AgentStatusBar, MatrixCanvas, SkillsView 모두 이 패턴 사용.
+- `src/components/hermes/HermesChatLog.tsx` `prevEmpty` — empty→non-empty transition detection controls
+  the one-shot Hermes wordmark exit pulse. An effect-based mirror can race with streaming message updates and
+  clear the exit timer; the render-time previous-value pattern is the intentional reset boundary.
+
+## `react-doctor/no-derived-state`
+
+- Same protected previous-render comparison family as `no-derived-useState`: the state is not cached derived
+  display data, it is a transition/reset sentinel. Rewriting these sites as effects introduces an extra stale
+  render or races with unmount/remount animations.
+
+## `react-doctor/no-cascading-set-state`
+
+- `src/components/hermes/HermesChatLog.tsx` empty-state transition — the paired `setPrevEmpty` +
+  `setExiting(true)` occurs only when `messages.length === 0` flips. It intentionally avoids a post-render
+  effect cascade that previously allowed the empty wordmark to stick during restored/streaming sessions.
 
 ## `react-doctor/rerender-state-only-in-handlers`
 
@@ -122,6 +143,13 @@
 - "5+ useState" 단순 카운트 휴리스틱. 무관한 폼 필드(Settings/AgentsPane/
   NavigationSettings/GoogleAccountBlock/WorktreeView)는 reducer 통합이 결합도를 오히려
   높임. 진짜 관련 state는 이미 단일 객체로 묶여 있음.
+- `src/components/board/RoutineForm.tsx` — fields are independent HTML form controls seeded once by parent
+  remount key. A reducer would centralize unrelated setters without adding invariant protection.
+- `src/components/settings/AgentsPane.tsx` `AgentPromptConfigRow` — independent draft fields map 1:1 to
+  backend config fields; the dirty check is the only cohesive projection.
+- `src/components/worktree/WorktreeView.tsx` — state groups are workflow controls (project filter, selected
+  worktree, review lens/refs, selected diff, drawers). Collapsing them into one reducer would widen unrelated
+  update paths inside the query orchestration owner.
 
 ## `react-doctor/no-event-handler`
 
@@ -158,6 +186,23 @@
   추가 (cb 없을 때 div는 클릭 핸들러도 없음). 워커가 조건부 role을 검출 못함.
 - `MatrixCanvas.tsx:393` — post-it 카드 `<div>`는 `@dnd-kit` drag source. role/tabIndex
   추가가 drag-and-drop semantics와 충돌.
+
+## `react-doctor/prefer-html-dialog`
+
+- `src/components/board/CalendarDrawer.tsx` `<aside role="dialog">` — protected bespoke non-modal
+  side/bottom sheet. It uses capture-phase Esc + `stopPropagation` to prevent App window-hide, restores trigger
+  focus, and remains usable alongside the board. Replacing it with native `<dialog>` or radix Dialog breaks the
+  responsive side-sheet/non-modal contract documented in `docs/areas/frontend-board.md` and
+  `docs/areas/shadcn-migration.md`.
+
+## `react-doctor/rendering-hydration-mismatch-time`
+
+- This Tauri/Vite app has no SSR hydration path. `src/components/today/useTimelineScroll.ts` reads `new Date()`
+  inside `useLayoutEffect` only to center the scroll position after mount; it does not render time-dependent
+  markup.
+- `src/components/control-room/ControlRoomView.tsx` seeds `nowMs` with a lazy `Date.now()` initializer and
+  updates it only on explicit refresh. The rendered relative stamp is client-only operational chrome, not
+  server-rendered content.
 
 ## `react-doctor/no-noninteractive-element-interactions`
 
