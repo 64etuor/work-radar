@@ -107,26 +107,27 @@
   font-weight: 600;
   color: var(--color-foreground);
 }
+/* 세그먼트 게이지 — 10칸(칸=10%), 점등 색은 threshold 톤(ok/warn/crit)을 바가 들고
+ * 칸이 상속. 빈 칸 트랙 = 잉크 16% 헤어라인 (raw 값 금지 — currentcolor 믹스). */
 .cr-usage-bar {
-  display: block;
-  height: 4px;
-  border-radius: 999px;
-  overflow: hidden;
-  /* 트랙 = 잉크 12% 헤어라인 (raw 값 금지 — currentcolor 믹스). */
+  display: flex;
+  gap: 2px;
+  height: 5px;
   color: var(--cr-muted);
+}
+.cr-usage-seg {
+  flex: 1;
+  border-radius: 1px;
   background: color-mix(in srgb, currentcolor 16%, transparent);
+  transition: background 0.25s ease;
 }
-.cr-usage-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
+.cr-usage-bar .cr-usage-seg[data-filled] {
   background: var(--cr-active);
-  transition: width 0.4s ease;
 }
-.cr-usage-fill[data-tone="warn"] {
+.cr-usage-bar[data-tone="warn"] .cr-usage-seg[data-filled] {
   background: var(--cr-pressure);
 }
-.cr-usage-fill[data-tone="crit"] {
+.cr-usage-bar[data-tone="crit"] .cr-usage-seg[data-filled] {
   background: var(--cr-blocked);
 }
 .cr-usage-reset {

@@ -104,20 +104,27 @@ function UsageDetail({ name, usage, nowMs }: { name: string; usage: AgentUsage; 
   );
 }
 
+/** 세그먼트 게이지 칸 수 — 칸당 10%. */
+const GAUGE_SEGMENTS = 10;
+
 function UsageGauge({ window: w, nowMs }: { window: UsageWindow; nowMs: number }) {
   // specta는 f64를 nullable로 내보낸다(NaN 비표현) — 백엔드는 항상 유한값을 주지만 방어.
   if (w.usedPercent == null) return null;
   const pct = Math.round(w.usedPercent);
   const tone = usageTone(w.usedPercent);
   const resetIn = formatResetIn(w.resetsAt, nowMs);
+  // 0%만 빈 게이지 — 1~9%도 사용 중임이 보이게 최소 1칸 점등.
+  const filled = pct === 0 ? 0 : Math.max(1, Math.round((pct / 100) * GAUGE_SEGMENTS));
   return (
     <div className="cr-usage-win">
       <span className="cr-usage-win-head">
         <span className="cr-usage-win-label">{usageWindowLabel(w.id)}</span>
         <span className="cr-usage-pct">{pct}%</span>
       </span>
-      <span className="cr-usage-bar">
-        <span className="cr-usage-fill" data-tone={tone} style={{ width: `${pct}%` }} />
+      <span className="cr-usage-bar" data-tone={tone}>
+        {Array.from({ length: GAUGE_SEGMENTS }, (_, i) => (
+          <span key={i} className="cr-usage-seg" data-filled={i < filled || undefined} />
+        ))}
       </span>
       <span className="cr-usage-reset">{resetIn ? `↻ ${resetIn}` : " "}</span>
     </div>
