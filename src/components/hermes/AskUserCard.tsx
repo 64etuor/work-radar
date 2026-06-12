@@ -23,10 +23,9 @@ export function AskUserCard({ message, onRespond }: Props) {
       {message.toolName && (
         <p className="text-muted-foreground mb-2 font-mono text-xs">{message.toolName}</p>
       )}
-      <div
-        role="group"
+      <fieldset
         aria-label={message.toolName ?? "에이전트 선택 요청"}
-        className="flex flex-col gap-1.5"
+        className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0"
       >
         {message.options.map((o) => {
           const chosen = resolved === o.id;
@@ -44,7 +43,7 @@ export function AskUserCard({ message, onRespond }: Props) {
             </Button>
           );
         })}
-      </div>
+      </fieldset>
       {!isResolved ? (
         <button
           type="button"

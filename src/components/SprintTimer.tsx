@@ -177,14 +177,20 @@ const DEFAULT_CONFIG: SprintConfig = {
 };
 
 function SprintEditor({ config, opening = false, closing = false, onClose }: EditorProps) {
+  const handleEscape = useEffectEvent(() => onClose());
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") handleEscape();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
   return (
     <form
       className={cn("sprint-inline-editor", opening && "is-opening", closing && "is-closing")}
       aria-label="스프린트 일정 편집"
       onSubmit={(event) => event.preventDefault()}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
-      }}
     >
       <div className="sprint-editor-title">SPRINT</div>
       <SprintEditorFields config={config} onClose={onClose} />

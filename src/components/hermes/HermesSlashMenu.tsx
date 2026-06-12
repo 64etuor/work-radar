@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function HermesSlashMenu({ items, activeIdx, onPick, onHover }: Props) {
-  const ref = useRef<HTMLUListElement>(null);
+  const ref = useRef<HTMLMenuElement>(null);
 
   useEffect(() => {
     const li = ref.current?.children[activeIdx] as HTMLElement | undefined;
@@ -22,33 +22,34 @@ export function HermesSlashMenu({ items, activeIdx, onPick, onHover }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <ul
+    <menu
       ref={ref}
-      role="listbox"
-      className="bg-popover border-border/60 absolute right-0 bottom-full left-0 mb-2 max-h-56 overflow-auto rounded-xl border py-1.5 text-sm shadow-lg"
+      className="bg-popover border-border/60 absolute right-0 bottom-full left-0 mb-2 max-h-56 list-none overflow-auto rounded-xl border py-1.5 text-sm shadow-lg"
+      aria-label="Hermes 명령"
     >
       {items.map((c, i) => (
-        <li
-          key={c.name}
-          role="option"
-          tabIndex={-1}
-          aria-selected={i === activeIdx}
-          className={cn(
-            "mx-1 cursor-pointer rounded-md px-2.5 py-1.5",
-            i === activeIdx ? "bg-muted/80" : "hover:bg-muted/50",
-          )}
-          onMouseEnter={() => onHover(i)}
-          onMouseDown={(e) => {
-            e.preventDefault(); // avoid blur of textarea
-            onPick(c);
-          }}
-        >
-          <span className="font-mono">/{c.name}</span>
-          {c.description && (
-            <span className="text-muted-foreground ml-2 text-xs">{c.description}</span>
-          )}
+        <li key={c.name}>
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-current={i === activeIdx}
+            className={cn(
+              "mx-1 block w-[calc(100%-0.5rem)] cursor-pointer rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-inherit",
+              i === activeIdx ? "bg-muted/80" : "hover:bg-muted/50",
+            )}
+            onMouseEnter={() => onHover(i)}
+            onMouseDown={(e) => {
+              e.preventDefault(); // avoid blur of textarea
+              onPick(c);
+            }}
+          >
+            <span className="font-mono">/{c.name}</span>
+            {c.description && (
+              <span className="text-muted-foreground ml-2 text-xs">{c.description}</span>
+            )}
+          </button>
         </li>
       ))}
-    </ul>
+    </menu>
   );
 }

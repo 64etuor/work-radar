@@ -11,10 +11,9 @@ interface SpinnerProps {
 
 export function Spinner({ size = "sm", className = "" }: SpinnerProps) {
   return (
-    <span
+    <output
       className={`spinner spinner-${size}${className ? ` ${className}` : ""}`}
       aria-label="로딩 중"
-      role="status"
     />
   );
 }

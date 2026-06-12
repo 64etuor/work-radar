@@ -16,7 +16,7 @@ export function AgentUsageStrip() {
   if (!q.data) return <div className="cr-usage" aria-hidden />;
   return (
     <TooltipProvider>
-      <div className="cr-usage" role="group" aria-label="에이전트 사용량 한도">
+      <section className="cr-usage" aria-label="에이전트 사용량 한도">
         <UsageCluster
           brand="claude"
           name="Claude"
@@ -31,7 +31,7 @@ export function AgentUsageStrip() {
           usage={q.data.codex}
           nowMs={q.dataUpdatedAt}
         />
-      </div>
+      </section>
     </TooltipProvider>
   );
 }

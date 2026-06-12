@@ -38,9 +38,9 @@ describe("AskUserCard", () => {
     expect(html).toContain('aria-pressed="false"');
   });
 
-  it("groups the options with an accessible role+label", () => {
+  it("groups the options with a native fieldset and accessible label", () => {
     const html = renderToStaticMarkup(<AskUserCard message={base} onRespond={() => {}} />);
-    expect(html).toContain('role="group"');
+    expect(html).toContain("<fieldset");
     expect(html).toContain('aria-label="Write foo.txt"');
   });
 
