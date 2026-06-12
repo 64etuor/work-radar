@@ -251,7 +251,7 @@ export const commands = {
 } | null, AppError>(__TAURI_INVOKE("sprint_status")),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, AppError>(__TAURI_INVOKE("codex_status")),
-	/**  claude/codex 사용량 한도 스냅샷 (TTL 캐시 적용, 읽기 전용 — 외부 변경 0). */
+	/**  claude/codex 사용량 한도 스냅샷 (TTL 캐시 + 429 백오프 + stale 폴백, 읽기 전용). */
 	agentUsageStatus: () => typedError<AgentUsageStatus, AppError>(__TAURI_INVOKE("agent_usage_status")),
 	/**  echo 테스트 잡 트리거 (codex 없이 bound/kill/로그 캡처 검증). engine=codex/kind=echo로 영속. */
 	triggerEchoJob: (input: TriggerEchoInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_echo_job", { input })),

@@ -69,7 +69,8 @@ function UsageCluster({
   );
 }
 
-/** 툴팁 본문 — 윈도별 사용률+절대 리셋 시각, codex는 세션 기준 시각(stale 가능)도. */
+/** 툴팁 본문 — 윈도별 사용률+절대 리셋 시각, 기준 시각(codex=세션 기록, claude=마지막 성공 호출).
+ * available이어도 detail이 있으면 stale 사유(예: 429 백오프 중 이전 스냅샷 표시)를 함께 보여준다. */
 function UsageDetail({ name, usage, nowMs }: { name: string; usage: AgentUsage; nowMs: number }) {
   if (!usage.available) {
     return (
@@ -97,7 +98,8 @@ function UsageDetail({ name, usage, nowMs }: { name: string; usage: AgentUsage; 
           </div>
         );
       })}
-      {asOf && <div className="cr-usage-tip-muted">{asOf} 세션 기록 기준</div>}
+      {asOf && <div className="cr-usage-tip-muted">{asOf} 기준</div>}
+      {usage.detail && <div className="cr-usage-tip-muted">{usage.detail}</div>}
     </div>
   );
 }

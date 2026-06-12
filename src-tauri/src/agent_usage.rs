@@ -8,7 +8,8 @@
 //!
 //! 둘 다 실패해도 Err 대신 `available=false + detail`로 graceful degrade —
 //! Control Room은 항상 그릴 수 있어야 한다. 호출당 시도는 1회(무한 retry 금지,
-//! INVARIANT #5); 주기는 프런트 폴링 + 커맨드 레이어 TTL 캐시가 통제한다.
+//! INVARIANT #5); 주기·429 백오프·stale 폴백은 커맨드 레이어(TTL 캐시)가 통제한다 —
+//! 그래서 claude fetch는 429를 별도 분기(`ClaudeUsageFetch::RateLimited`)로 돌려준다.
 
 use serde::Serialize;
 use specta::Type;
@@ -215,8 +216,21 @@ pub fn extract_access_token(text: &str) -> Option<String> {
     (!token.is_empty()).then(|| token.to_owned())
 }
 
+/// claude usage 호출 결과 — 캐시 레이어가 429(백오프)와 일반 실패(stale 폴백)를
+/// 구분해야 해서 AgentUsage가 아니라 3분기 enum으로 돌려준다.
+#[derive(Debug)]
+pub enum ClaudeUsageFetch {
+    Ok(AgentUsage),
+    /// HTTP 429 — `Retry-After` 헤더(초)가 있으면 함께.
+    RateLimited {
+        retry_after_secs: Option<u64>,
+    },
+    /// 그 외 실패 (사람이 읽을 사유, 토큰/PII 없음).
+    Failed(String),
+}
+
 /// usage 엔드포인트 단일 시도 호출 (timeout은 client 빌더에서). 응답 본문은 로그 금지.
-pub async fn fetch_claude_usage(client: &reqwest::Client, token: &str) -> AgentUsage {
+pub async fn fetch_claude_usage(client: &reqwest::Client, token: &str) -> ClaudeUsageFetch {
     let resp = match client
         .get(CLAUDE_USAGE_URL)
         .bearer_auth(token)
@@ -228,20 +242,37 @@ pub async fn fetch_claude_usage(client: &reqwest::Client, token: &str) -> AgentU
         Err(e) => {
             // reqwest 에러 Display에는 URL만 — 토큰/본문 없음.
             let kind = if e.is_timeout() { "timeout" } else { "network" };
-            return AgentUsage::unavailable(format!("usage API 연결 실패 ({kind})"));
+            return ClaudeUsageFetch::Failed(format!("usage API 연결 실패 ({kind})"));
         }
     };
     let status = resp.status();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return AgentUsage::unavailable("Claude Code 토큰 만료 — claude에서 재로그인 필요");
+        return ClaudeUsageFetch::Failed("Claude Code 토큰 만료 — claude에서 재로그인 필요".into());
+    }
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        let retry_after_secs = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.trim().parse::<u64>().ok());
+        return ClaudeUsageFetch::RateLimited { retry_after_secs };
     }
     if !status.is_success() {
-        return AgentUsage::unavailable(format!("usage API {status}"));
+        return ClaudeUsageFetch::Failed(format!("usage API {status}"));
     }
     let Ok(v) = resp.json::<serde_json::Value>().await else {
-        return AgentUsage::unavailable("usage API 응답 파싱 실패");
+        return ClaudeUsageFetch::Failed("usage API 응답 파싱 실패".into());
     };
-    parse_claude_usage(&v)
+    let usage = parse_claude_usage(&v);
+    if usage.available {
+        ClaudeUsageFetch::Ok(usage)
+    } else {
+        ClaudeUsageFetch::Failed(
+            usage
+                .detail
+                .unwrap_or_else(|| "usage API 응답에 한도 정보 없음".into()),
+        )
+    }
 }
 
 /// usage 응답(`five_hour`/`seven_day` × `{utilization, resets_at}`) 파싱. 순수 — 테스트 대상.
