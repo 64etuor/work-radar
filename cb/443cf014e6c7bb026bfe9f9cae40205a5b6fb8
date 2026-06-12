@@ -1,0 +1,44 @@
+src/components/jobs/JobsView.css
+  s_68a719f240e2a3::t_8a85d6edce6476 206-240,242
+  s_68a719f240e2a3::t_c94f3ed7a2081d 170-173,178,182-186
+src/lib/agentBar.test.ts
+  s_68a719f240e2a3::t_0c6ed97cf28af3 7
+  s_68a719f240e2a3::t_00e4e4072b134c 102-117
+src/lib/agentBar.ts
+  s_68a719f240e2a3::t_9053409cc1386b 81-93
+src/components/agent-status/AgentBox.tsx
+  s_68a719f240e2a3::t_401bb82cdba625 100-104,115,120,127-141
+  s_68a719f240e2a3::t_1516c1441d014e 3
+src/components/agents/AgentRunModal.css
+  s_68a719f240e2a3::t_fbf65b7ba64ff9 29-30,34-36
+src/components/jobs/jobsUtils.test.ts
+  s_68a719f240e2a3::t_0671182de7f94f 1-23
+DESIGN.md
+  s_68a719f240e2a3::t_eb5e82463246e7 479-484
+src/components/agents/AgentRunModal.tsx
+  s_68a719f240e2a3::t_de8e8118aadc8a 7
+  s_68a719f240e2a3::t_3a52864e748133 54-59
+src/components/AgentStatusBar.css
+  s_68a719f240e2a3::t_09178136fc241a 274
+  s_68a719f240e2a3::t_5021f3dd3cdf57 113,123-129,131-132,141-152,162-164,168-171,175-179,181-184
+src/components/jobs/JobCard.tsx
+  s_68a719f240e2a3::t_9f110155b13c38 2-8,10-11,14,17,20-47,64-66,83-87,90-107,122-130
+src/components/jobs/jobsUtils.ts
+  s_68a719f240e2a3::t_abb28c162d7214 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "cb443cf014e6c7bb026bfe9f9cae40205a5b6fb8",
+  "prompts": {},
+  "sessions": {
+    "s_68a719f240e2a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce2020b1-411b-4dc5-9215-5d849e9960ba",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
