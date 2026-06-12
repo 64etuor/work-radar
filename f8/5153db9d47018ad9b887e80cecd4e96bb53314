@@ -1,0 +1,29 @@
+docs/decisions.md
+  s_125e7320476d49::t_8af37d8f5034c7 613
+governance/docs/plans/README.md
+  s_2b95ff4ba8f6d9::t_bbf0bf2d457a2d 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "f85153db9d47018ad9b887e80cecd4e96bb53314",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
