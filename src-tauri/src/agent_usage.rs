@@ -72,8 +72,11 @@ pub fn read_codex_usage(home: &std::path::Path) -> AgentUsage {
         return AgentUsage::unavailable("codex 세션 기록 없음 (~/.codex/sessions)");
     }
     let mut files = collect_jsonl_files(&sessions);
-    // 경로가 YYYY/MM/DD/rollout-<timestamp>-… 구조라 사전식 내림차순 = 최신순.
-    files.sort_unstable_by(|a, b| b.cmp(a));
+    // 데이터 최신성 기준 = mtime(마지막 기록 시각). 파일명(세션 시작 시각) 정렬은 함정 —
+    // 장수 세션이 가장 신선한 rate_limits를 계속 쓰는 동안, 더 늦게 시작했지만 이미 끝난
+    // 세션 파일들이 사전식 정렬에서 그를 가려 게이지가 옛 스냅샷에 동결된다(2026-06-12 실관측).
+    // mtime 조회 실패는 epoch 0 = 맨 뒤. 동률 tiebreak은 경로 내림차순(파일명 최신 우선).
+    files.sort_unstable_by_key(|p| std::cmp::Reverse((mtime_of(p), p.clone())));
     for path in files.into_iter().take(CODEX_MAX_FILES) {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
@@ -83,6 +86,12 @@ pub fn read_codex_usage(home: &std::path::Path) -> AgentUsage {
         }
     }
     AgentUsage::unavailable("codex 세션에서 rate limit 스냅샷을 찾지 못함")
+}
+
+fn mtime_of(p: &std::path::Path) -> std::time::SystemTime {
+    std::fs::metadata(p)
+        .and_then(|m| m.modified())
+        .unwrap_or(std::time::UNIX_EPOCH)
 }
 
 fn collect_jsonl_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
@@ -401,6 +410,42 @@ mod tests {
     fn codex_returns_none_without_rate_limits() {
         let lines = [r#"{"type":"event_msg","payload":{"type":"agent_message"}}"#];
         assert!(parse_codex_rate_limits(lines.into_iter()).is_none());
+    }
+
+    /// 파일 선택 = mtime 최신순(파일명 아님) — 장수 세션(이른 시작·최신 기록)이
+    /// 늦게 시작했지만 이미 끝난 세션에 가려지지 않는다 (2026-06-12 게이지 동결 회귀).
+    #[test]
+    fn codex_picks_freshest_mtime_not_filename() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let sessions = dir.path().join(".codex").join("sessions").join("2026");
+        std::fs::create_dir_all(&sessions).expect("mkdir");
+        let snap = |pct: f64, ts: &str| {
+            format!(
+                r#"{{"timestamp":"{ts}","payload":{{"type":"token_count","rate_limits":{{"primary":{{"used_percent":{pct},"resets_at":1781300000}}}}}}}}"#
+            )
+        };
+        // 파일명상 "더 최신"이지만 이미 끝난 세션(옛 스냅샷, 옛 mtime).
+        let finished = sessions.join("rollout-2026-06-12T16-53-00-bbb.jsonl");
+        std::fs::write(&finished, snap(100.0, "2026-06-12T08:13:00Z")).expect("write");
+        // 파일명상 "더 과거"지만 아직 살아서 최신 스냅샷을 쓰는 세션(새 mtime).
+        let live = sessions.join("rollout-2026-06-12T12-30-00-aaa.jsonl");
+        std::fs::write(&live, snap(37.0, "2026-06-12T12:50:00Z")).expect("write");
+        let now = std::time::SystemTime::now();
+        std::fs::File::options()
+            .write(true)
+            .open(&finished)
+            .and_then(|f| f.set_modified(now - std::time::Duration::from_secs(3600)))
+            .expect("set old mtime");
+        std::fs::File::options()
+            .write(true)
+            .open(&live)
+            .and_then(|f| f.set_modified(now))
+            .expect("set new mtime");
+
+        let u = read_codex_usage(dir.path());
+        assert!(u.available);
+        assert_eq!(u.as_of.as_deref(), Some("2026-06-12T12:50:00Z"));
+        assert_eq!(u.windows[0].used_percent, 37.0);
     }
 
     /// claude usage 응답: five_hour/seven_day → 윈도 2개, utilization 0..=100 clamp.
