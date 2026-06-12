@@ -279,6 +279,27 @@
   grid-template-columns: repeat(2, 1fr);
 }
 
+/* ── 배치 시간 area 목록 ─────────────────────────────────────────────────── */
+.wk .wk-time-areas {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wk .wk-time-area {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--wr-subtle);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--wr-border, color-mix(in srgb, currentColor 12%, transparent));
+}
+.wk .wk-time-area:last-child {
+  border-bottom: none;
+}
+
 /* ── 2칼럼: 대시보드(좌) · 완료한 일/보관함(우) — 좁으면 세로 스택 ──────── */
 .wk .wk-cols {
   display: grid;

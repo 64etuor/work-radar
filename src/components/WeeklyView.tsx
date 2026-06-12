@@ -2,6 +2,7 @@ import "./WeeklyView.css";
 
 import {
   CheckCircle2,
+  Clock,
   GitPullRequest,
   Inbox,
   NotebookPen,
@@ -12,6 +13,7 @@ import {
 import { useEffect } from "react";
 
 import type { DebtPoint } from "@/bindings";
+import { areaLabel } from "@/components/board/boardUtils";
 import { ArchiveAccordion } from "@/components/weekly/ArchiveAccordion";
 import { LifeWheelRadar } from "@/components/weekly/LifeWheelRadar";
 import { CompletedList, ReflectionRank } from "@/components/weekly/ReflectionSection";
@@ -19,6 +21,7 @@ import { WeekNavigator } from "@/components/weekly/WeekNavigator";
 import { WeekScrubber } from "@/components/weekly/WeekScrubber";
 import { bucketRoutineDoneByOffset } from "@/lib/lifeWheelRadar";
 import { useCompleted, useLifeWheelTags, useRoutineTracking, useWeeklyReview } from "@/lib/query";
+import { fmtMinutes } from "@/lib/timeTotals";
 import { useWeekNav } from "@/lib/useWeekNav";
 import { bucketByWeekOffset, monthDay, weekRangeForOffset, WEEKS_WINDOW } from "@/lib/weekRange";
 import { useUIStore } from "@/store";
@@ -154,6 +157,30 @@ export function WeeklyView() {
               />
             </div>
           </section>
+
+          <section className="wk-sec">
+            <div className="wk-sec-head">
+              <Clock className="text-wr-subtle size-4" />
+              <span className="wk-sec-name">배치 시간</span>
+            </div>
+            <div className="wk-stats wk-stats-2">
+              <StatTile
+                icon={<Clock className="size-4" />}
+                label="총 배치"
+                value={fmtMinutes(data?.timeSpent?.totalMin ?? 0)}
+              />
+            </div>
+            {(data?.timeSpent?.byArea ?? []).length > 0 && (
+              <ul className="wk-time-areas">
+                {(data?.timeSpent?.byArea ?? []).map((row) => (
+                  <li key={row.area ?? "untagged"} className="wk-time-area">
+                    <span>{row.area ? areaLabel(row.area) : "미태깅"}</span>
+                    <span>{fmtMinutes(row.totalMin)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
 
         {/* 2칼럼: 대시보드(좌) · 완료한 일/보관함(우) — 좁은 화면에선 세로 스택 */}
@@ -226,7 +253,15 @@ export function WeeklyView() {
   );
 }
 
-function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function StatTile({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+}) {
   return (
     <div className="wk-tile">
       <span className="wk-tile-top">
