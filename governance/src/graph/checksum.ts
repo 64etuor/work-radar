@@ -2,7 +2,7 @@ import { sha256hex } from "../event/id.ts";
 import type { GraphProjection } from "./types.ts";
 
 /** Recursively key-sorted JSON — stable regardless of object key insertion order. */
-export function stableStringify(v: unknown): string {
+function stableStringify(v: unknown): string {
   if (v === null || typeof v !== "object") return JSON.stringify(v);
   if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
   const keys = Object.keys(v as Record<string, unknown>).sort();

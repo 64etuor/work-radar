@@ -49,7 +49,7 @@ const PROVIDER_ORDER: Record<Difficulty, Provider[]> = {
   hard: ["claude", "codex", "command", "deterministic"],
 };
 
-export const LEGACY_DEFAULT_BACKENDS: Record<Role, BackendChain> = {
+const LEGACY_DEFAULT_BACKENDS: Record<Role, BackendChain> = {
   executor: { chain: [{ provider: "claude" }] },
   reviewer: {
     chain: [

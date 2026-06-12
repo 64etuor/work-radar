@@ -44,7 +44,7 @@ export const budgetCapsSchema = z
   })
   .strict();
 
-export const priceEntrySchema = z
+const priceEntrySchema = z
   .object({
     estimatedTokens: z.number().nonnegative(),
     costPerTokenUsd: z.number().nonnegative().optional(),

@@ -27,7 +27,7 @@ export interface CompletionDeps {
   }): Promise<{ ok: true; committed: boolean } | { ok: false; error: string }>;
 }
 
-export const nodeCompletionDeps: CompletionDeps = {
+const nodeCompletionDeps: CompletionDeps = {
   async pathExists(path) {
     try {
       await access(path);

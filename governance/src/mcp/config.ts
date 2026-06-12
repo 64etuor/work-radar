@@ -165,14 +165,14 @@ export function parseConductorMode(raw: string | undefined): boolean {
 }
 
 /** Parse BOULE_CONDUCTOR_CMUX_CMD → the cmux binary; blank/unset → "cmux". */
-export function parseConductorCmuxCmd(raw: string | undefined): string {
+function parseConductorCmuxCmd(raw: string | undefined): string {
   const v = (raw ?? "").trim();
   return v || "cmux";
 }
 
 /** Parse BOULE_CONDUCTOR_WORKTREES_ROOT → the gitignored worktrees root; blank/unset →
  *  ".boule-worktrees" (the gitignored default; never the user tree). */
-export function parseConductorWorktreesRoot(raw: string | undefined): string {
+function parseConductorWorktreesRoot(raw: string | undefined): string {
   const v = (raw ?? "").trim();
   return v || ".boule-worktrees";
 }

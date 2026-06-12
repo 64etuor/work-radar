@@ -53,7 +53,7 @@ export const DEFAULT_FORBIDDEN_DECISION_CLASSES: AmbiguityKind[] = [
   "data-loss",
 ];
 
-export const DEFAULT_ESCALATION_TRIGGERS: string[] = [
+const DEFAULT_ESCALATION_TRIGGERS: string[] = [
   "new dependency",
   "invariant conflict",
   "ambiguous intent",

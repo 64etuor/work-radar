@@ -20,7 +20,7 @@ export type MinimumGate = "none" | "human" | "external-review" | "type1-guardian
 /** Default escalation time-to-live. Past this, pendingEscalations stops surfacing it so the
  *  bridge no longer re-sends — bounded by design (INVARIANT #5). It mints NO terminal event;
  *  the decision stays open in the store and a human can still resolve it directly. */
-export const DEFAULT_ESCALATION_TTL_HOURS = 72;
+const DEFAULT_ESCALATION_TTL_HOURS = 72;
 
 export interface EscalateOption {
   label: string;

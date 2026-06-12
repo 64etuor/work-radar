@@ -9,7 +9,7 @@ const SAFE_ID = /^[A-Za-z0-9_]+$/;
 /** Candidate patterns nobody curated within this window are presumed noise and archived
  *  (the forgetting loop). Archived patterns join the curated set, so the same scope is not
  *  re-detected — un-archiving stays a manual git operation. */
-export const STALE_PATTERN_DAYS = 90;
+const STALE_PATTERN_DAYS = 90;
 
 export interface ArchivePrunerSummary {
   moved: number;

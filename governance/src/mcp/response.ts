@@ -6,7 +6,7 @@
 export type TextContent = { content: [{ type: "text"; text: string }] };
 
 /** Build a success text response: `"<verb>: <eventId>"`. */
-export function okText(verb: string, eventId: string): TextContent {
+function okText(verb: string, eventId: string): TextContent {
   return { content: [{ type: "text", text: `${verb}: ${eventId}` }] };
 }
 
@@ -27,6 +27,6 @@ export function okOrRefused(
 }
 
 /** Plain text response (for tools that produce freeform text). */
-export function plainText(text: string): TextContent {
+function plainText(text: string): TextContent {
   return { content: [{ type: "text", text }] };
 }

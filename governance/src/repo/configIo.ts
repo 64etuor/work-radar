@@ -17,14 +17,14 @@ import { boulePaths } from "./paths.ts";
 /** Absolute path to this governance package's MCP server entrypoint (for generated mcp.json /
  *  launcher exec). Resolved from this module so it is install-location independent. */
 export function serverEntrypoint(): string {
-  return resolve(fileURLToPath(new URL("../mcp/server.ts", import.meta.url)));
+  return resolve(fileURLToPath(new URL("..", import.meta.url)), "mcp", "server.ts");
 }
 
 /** Absolute path to this package's `boule` CLI entrypoint. The codex executor's completion wrapper
  *  shells `node <cliEntrypoint> report-exit` on clean exit, so resolve it install-relative (same
  *  install as serverEntrypoint), never under the target repo. */
 export function cliEntrypoint(): string {
-  return resolve(fileURLToPath(new URL("../cli/boule.ts", import.meta.url)));
+  return resolve(fileURLToPath(new URL("..", import.meta.url)), "cli", "boule.ts");
 }
 
 /** Read + strict-parse <repo>/.boule/boule.config.json. THROWS if missing/invalid. */

@@ -116,7 +116,7 @@ export const SESSION_DENIED_TOOLS = sessionDeniedTools(BOULE_MCP_ALIAS);
 /** The scoped MCP config written into each session worktree. It launches boule with
  *  BOULE_SESSION_ROLE=executor (verdict tools structurally absent) pointed at the SAME
  *  governance workspace, so the session's escalate is visible to the Conductor. */
-export function sessionMcpConfig(
+function sessionMcpConfig(
   serverEntrypoint: string,
   governanceWorkspace: string,
   repoRoot: string,

@@ -15,7 +15,7 @@ import { z } from "zod";
  *    Valid only as an EVALUATOR fallback — it consumes no tokens, so it is the last rung that lets a
  *    step complete when no model is available. It is NOT a reviewer (a decision verdict needs a model
  *    or a human — never a deterministic rubber-stamp). */
-export const PROVIDERS = ["claude", "codex", "command", "deterministic"] as const;
+const PROVIDERS = ["claude", "codex", "command", "deterministic"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export const backendSpecSchema = z
@@ -34,7 +34,7 @@ export const backendSpecSchema = z
 export type BackendSpec = z.infer<typeof backendSpecSchema>;
 
 /** An ordered fallback chain: try entries left→right until one succeeds (see runWithFallback). */
-export const backendChainSchema = z
+const backendChainSchema = z
   .object({ chain: z.array(backendSpecSchema).min(1) })
   .strict();
 export type BackendChain = z.infer<typeof backendChainSchema>;
