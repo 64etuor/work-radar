@@ -1,0 +1,23 @@
+src-tauri/src/lib.rs
+  s_851a67ed0e4868::t_0db8e2c43b3f88 109-111
+src-tauri/src/commands/today/mod.rs
+  s_851a67ed0e4868::t_b5bd28debcbcd4 2,7
+src-tauri/src/commands/today/placements.rs
+  s_851a67ed0e4868::t_a38fc79681a937 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "57cde4d337271ef31398c8be5a4cdfd865dfe086",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
