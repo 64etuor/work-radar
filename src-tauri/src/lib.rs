@@ -343,6 +343,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_project_tick_enabled,
         commands::set_project_tick_interval,
         commands::set_project_tick_live,
+        commands::clear_ticker_attention,
         commands::tick_project_now,
         commands::get_ticker_scheduler_status,
     ])

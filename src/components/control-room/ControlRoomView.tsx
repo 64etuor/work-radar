@@ -15,6 +15,7 @@ import { Card } from "../ui/card";
 import { AgentUsageStrip } from "./AgentUsageStrip";
 import { CommandDeck } from "./CommandDeck";
 import { FlowSchematic } from "./FlowSchematic";
+import { MergeBacklog } from "./MergeBacklog";
 import { ProjectTabs } from "./ProjectTabs";
 import { RepoCoverage } from "./RepoCoverage";
 import { Vitals } from "./Vitals";
@@ -88,7 +89,10 @@ export default function ControlRoomView() {
               activeProjectId={activeProjectId}
               onSelect={setSelectedProject}
             />
-            <RepoCoverage covered={data?.coveredRepo} />
+            <span className="cr-projectbar-chips">
+              <MergeBacklog branches={data?.unmergedPlanBranches} />
+              <RepoCoverage covered={data?.coveredRepo} />
+            </span>
           </div>
           {activeTicker && (
             // key = remount per project: DeckControls' interval draft state must reset on tab

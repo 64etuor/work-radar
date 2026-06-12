@@ -9,8 +9,8 @@ use crate::governance::boule_config::{
 use crate::governance::control_room::get_project_control_room_snapshot as get_project_control_room_snapshot_core;
 use crate::governance::snapshot::ControlRoomSnapshot;
 use crate::governance::ticker::{
-    get_project_tick_status_core, list_project_tick_status_core, set_project_tick_enabled_core,
-    set_project_tick_interval_core, set_project_tick_live_core,
+    clear_ticker_attention_core, get_project_tick_status_core, list_project_tick_status_core,
+    set_project_tick_enabled_core, set_project_tick_interval_core, set_project_tick_live_core,
     tick_project_now as tick_project_now_core, ProjectTickStatus, ProjectTickerStatusRow,
     TickProjectNowResult,
 };
@@ -115,6 +115,20 @@ pub async fn set_project_tick_live(
     live: bool,
 ) -> Result<ProjectTickStatus, AppError> {
     set_project_tick_live_core(db.inner(), &project_id, live).await
+}
+
+/// P1(a) — attention 래치 해제(operator affordance). `attention_required=0` +
+/// `consecutive_failures=0`(다음 인프라 실패가 깨끗한 새 bounded-escalation 윈도우에서
+/// 재래치되도록). `last_*`/`in_progress`/스케줄러 heartbeat는 건드리지 않는다 —
+/// 래치 사유는 다음 tick까지 그대로 보인다. governance 이벤트 쓰기 없음(INVARIANT #1).
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::result_large_err)]
+pub async fn clear_ticker_attention(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<ProjectTickStatus, AppError> {
+    clear_ticker_attention_core(db.inner(), &project_id).await
 }
 
 /// Run one bounded Boule heartbeat for the DB-resolved local repo path.

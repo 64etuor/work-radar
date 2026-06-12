@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, Play } from "lucide-react";
+import { AlertTriangle, Loader2, Play, Unlock } from "lucide-react";
 import { domAnimation, LazyMotion, m, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
@@ -9,7 +9,10 @@ import type {
   TickerSchedulerStatus,
   TickStatusOutcome,
 } from "../../bindings";
+import { buildGoLiveRemedies, parseLatchDetail } from "../../lib/controlRoom";
 import {
+  useClearTickerAttention,
+  useProjectTickStatus,
   useSetTickEnabled,
   useSetTickInterval,
   useSetTickLive,
@@ -42,6 +45,7 @@ export function CommandDeck({
   nowMs: number;
 }) {
   const reduce = useReducedMotion();
+  const remedies = buildGoLiveRemedies(row, readiness, infra);
   return (
     <LazyMotion features={domAnimation}>
       <m.div
@@ -74,7 +78,11 @@ export function CommandDeck({
             </section>
           </div>
 
-          {readiness !== undefined && <ReadinessDetails readiness={readiness} />}
+          {row.attentionRequired && <AttentionLatchPanel row={row} />}
+
+          {readiness !== undefined && (
+            <ReadinessDetails readiness={readiness} remedies={remedies} />
+          )}
 
           {infra !== undefined && (
             <div className="cr-deck-infra">
@@ -107,6 +115,81 @@ function LastTick({ row, nowMs }: { row: ProjectTickerStatusRow; nowMs: number }
           <AlertTriangle size={12} aria-hidden />
           waiting on you
         </Badge>
+      )}
+    </div>
+  );
+}
+
+/** P1(a) — attention 래치 패널: 래치 사유(last_outcome + last_report_json의 needs_human
+ *  상세)와 "래치 해제" 버튼. 확인은 2-클릭 인라인(1클릭 = 무장 → 해제 확인/취소) — 기존
+ *  Dialog 래퍼는 DialogTrigger 미노출이라 버튼-트리거 포커스 복원 계약(shadcn-migration.md)을
+ *  충족할 수 없고, 새 오버레이는 cmux Esc 스모크 hard gate가 따라온다. 인라인 확인은
+ *  오버레이 0 = Esc/focus 계약 비대상. 해제 의미는 버튼 옆에 명시(스캔 재진입 + 카운터 리셋). */
+function AttentionLatchPanel({ row }: { row: ProjectTickerStatusRow }) {
+  const [armed, setArmed] = useState(false);
+  const clear = useClearTickerAttention();
+  // 사유 상세는 단건 status에만 있는 lastReportJson에서 — 래치된 행에서만 fetch.
+  const { data: status } = useProjectTickStatus(row.projectId, row.attentionRequired);
+  const detail = parseLatchDetail(status?.lastReportJson);
+  const clearing = clear.isPending && clear.variables === row.projectId;
+
+  return (
+    <div className="cr-latch" role="status" aria-label="attention 래치">
+      <div className="cr-latch-head">
+        <AlertTriangle size={13} aria-hidden />
+        <span className="cr-latch-title">ATTENTION 래치 — 자동 tick 중단됨</span>
+        <Badge
+          variant="outline"
+          className="cr-ticker-outcome"
+          data-outcome={row.lastOutcome ?? "not_run"}
+        >
+          {row.lastOutcome ?? "not_run"}
+        </Badge>
+      </div>
+      {detail.length > 0 && (
+        <ul className="cr-latch-reasons">
+          {detail.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
+      <div className="cr-latch-actions">
+        {!armed ? (
+          <Button
+            variant="destructiveOutline"
+            size="sm"
+            onClick={() => setArmed(true)}
+            aria-label={`${row.projectName} attention 래치 해제`}
+          >
+            <Unlock size={14} aria-hidden />
+            래치 해제
+          </Button>
+        ) : (
+          <>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => clear.mutate(row.projectId)}
+              disabled={clearing}
+              aria-label={`${row.projectName} 래치 해제 확인`}
+            >
+              {clearing ? <Loader2 size={14} aria-hidden /> : <Unlock size={14} aria-hidden />}
+              해제 확인
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setArmed(false)} disabled={clearing}>
+              취소
+            </Button>
+          </>
+        )}
+        <span className="cr-latch-note">
+          해제하면 자동 tick 스캔에 다시 포함되고 연속 실패 카운터가 0으로 리셋됩니다 — 원인이
+          미해소면 다음 tick이 같은 지점에서 다시 래치합니다.
+        </span>
+      </div>
+      {clear.isError && (
+        <div className="cr-latch-error">
+          해제 실패: {String((clear.error as Error)?.message ?? clear.error)}
+        </div>
       )}
     </div>
   );

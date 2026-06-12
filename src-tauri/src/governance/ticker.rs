@@ -557,6 +557,30 @@ pub async fn set_project_tick_live_core(
     get_project_tick_status_core(db, project_id).await
 }
 
+/// P1(a) — operator latch release. Clears `attention_required` AND resets the
+/// `consecutive_failures` streak so the row re-enters the auto due-scan and the NEXT
+/// infra failure starts a fresh bounded-escalation window (re-latches cleanly at
+/// [`MAX_CONSECUTIVE_INFRA_FAILURES`] — without the reset, one post-release failure
+/// would immediately re-latch). Touches NOTHING else: `in_progress`, `last_*` audit
+/// fields and the scheduler heartbeat stay as-is — the latch context
+/// (`last_outcome`/`last_report_json`) remains visible until the next tick overwrites it.
+pub async fn clear_ticker_attention_core(
+    db: &Db,
+    project_id: &str,
+) -> Result<ProjectTickStatus, AppError> {
+    ensure_project_exists(db, project_id).await?;
+    ensure_ticker_row(db, project_id).await?;
+    sqlx::query(
+        "UPDATE project_ticker \
+         SET attention_required = 0, consecutive_failures = 0 \
+         WHERE project_id = ?1",
+    )
+    .bind(project_id)
+    .execute(db)
+    .await?;
+    get_project_tick_status_core(db, project_id).await
+}
+
 struct FinalizedTick {
     outcome: TickStatusOutcome,
     exit_code: Option<i32>,
@@ -1416,5 +1440,86 @@ mod tests {
             assert_eq!(outcome, Some(TickStatusOutcome::SpawnFailed));
             assert_eq!(attention, round >= MAX_CONSECUTIVE_INFRA_FAILURES);
         }
+    }
+
+    /// P1(a): governance-latched row (halted_decision) → release clears attention but
+    /// PRESERVES the latch context (last_outcome/last_report_json) and audit fields.
+    #[tokio::test]
+    async fn clear_attention_releases_governance_latch_preserving_context() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", Some("/tmp/repo-a")).await;
+        let runner = FakeRunner::output(10, halted_report());
+        tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+            .await
+            .expect("tick result");
+        let before = get_project_tick_status_core(&db, "p1")
+            .await
+            .expect("status");
+        assert!(before.attention_required);
+
+        let status = clear_ticker_attention_core(&db, "p1")
+            .await
+            .expect("clear attention");
+
+        assert!(!status.attention_required);
+        assert_eq!(status.consecutive_failures, 0);
+        // Latch context stays visible until the next tick overwrites it.
+        assert_eq!(status.last_outcome, Some(TickStatusOutcome::HaltedDecision));
+        assert_eq!(status.last_report_json, before.last_report_json);
+        assert_eq!(status.last_exit_code, Some(10));
+        assert!(!status.in_progress);
+    }
+
+    /// P1(a): infra-latched row → release resets the streak so the NEXT failure starts a
+    /// fresh bounded-escalation window (counts 1..threshold again) instead of insta-relatching.
+    #[tokio::test]
+    async fn clear_attention_resets_streak_so_next_failure_relatches_cleanly() {
+        let db = test_db().await;
+        seed_project(&db, "p1").await;
+        seed_local_repo(&db, "p1", "r1", Some("/tmp/repo-a")).await;
+        for _ in 0..MAX_CONSECUTIVE_INFRA_FAILURES {
+            let runner = FakeRunner::error(TickerError::Spawn("boom".into()));
+            tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+                .await
+                .expect("tick result");
+        }
+        let (failures, attention, _) = ticker_row(&db, "p1").await;
+        assert_eq!(
+            (failures, attention),
+            (MAX_CONSECUTIVE_INFRA_FAILURES, true)
+        );
+
+        clear_ticker_attention_core(&db, "p1")
+            .await
+            .expect("clear attention");
+        let (failures, attention, _) = ticker_row(&db, "p1").await;
+        assert_eq!((failures, attention), (0, false));
+
+        // One failure after release: streak restarts at 1, NO immediate re-latch.
+        let runner = FakeRunner::error(TickerError::Spawn("boom".into()));
+        tick_project_now_with_runner(&db, "p1", runner, TickerRunConfig::fast())
+            .await
+            .expect("tick result");
+        let (failures, attention, _) = ticker_row(&db, "p1").await;
+        assert_eq!((failures, attention), (1, false));
+    }
+
+    /// P1(a): unknown project errors; a project without a ticker row gets the default row
+    /// (idempotent release — already-clear attention stays clear).
+    #[tokio::test]
+    async fn clear_attention_validates_project_and_is_idempotent() {
+        let db = test_db().await;
+        let err = clear_ticker_attention_core(&db, "ghost")
+            .await
+            .expect_err("unknown project");
+        assert_eq!(err.code, "projects.not_found");
+
+        seed_project(&db, "p1").await;
+        let status = clear_ticker_attention_core(&db, "p1")
+            .await
+            .expect("no ticker row yet → default row");
+        assert!(!status.attention_required);
+        assert_eq!(status.consecutive_failures, 0);
     }
 }

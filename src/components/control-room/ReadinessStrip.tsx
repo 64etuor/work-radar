@@ -1,7 +1,7 @@
-import { AlertTriangle, Check, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, Check, ShieldAlert, ShieldCheck, Wrench, X } from "lucide-react";
 
 import type { ReadinessView } from "../../bindings";
-import { isArmed } from "../../lib/controlRoom";
+import { type GoLiveRemedy, isArmed } from "../../lib/controlRoom";
 import { Badge } from "../ui/badge";
 
 const GATE_LABELS: { key: keyof ReadinessView["gates"]; label: string }[] = [
@@ -36,16 +36,40 @@ export function ReadinessGatesRow({ readiness }: { readiness: ReadinessView }) {
   );
 }
 
-/** Blockers (only when not armed) + advisory warnings. Rendered below the deck. */
-export function ReadinessDetails({ readiness }: { readiness: ReadinessView }) {
+/** Blockers (only when not armed) + Go-Live remedies (P1b: 실패 항목별 "어떻게 고침" 한 줄,
+ *  같은 콘솔의 토글은 그 토글을 직접 지시) + advisory warnings. Rendered below the deck. */
+export function ReadinessDetails({
+  readiness,
+  remedies = [],
+}: {
+  readiness: ReadinessView;
+  remedies?: GoLiveRemedy[];
+}) {
   const armed = isArmed(readiness.gates);
-  if ((armed || readiness.blockers.length === 0) && readiness.warnings.length === 0) return null;
+  if (
+    (armed || readiness.blockers.length === 0) &&
+    readiness.warnings.length === 0 &&
+    remedies.length === 0
+  ) {
+    return null;
+  }
   return (
     <div className="cr-readiness-details">
       {!armed && readiness.blockers.length > 0 && (
         <ul className="cr-readiness-blockers">
           {readiness.blockers.map((b) => (
             <li key={b}>{b}</li>
+          ))}
+        </ul>
+      )}
+      {remedies.length > 0 && (
+        <ul className="cr-remedies" aria-label="Go-Live 체크리스트 처방">
+          {remedies.map((r) => (
+            <li key={r.key} className="cr-remedy">
+              <Wrench size={12} aria-hidden />
+              <span className="cr-remedy-gate">{r.gate}</span>
+              <span className="cr-remedy-text">{r.remedy}</span>
+            </li>
           ))}
         </ul>
       )}

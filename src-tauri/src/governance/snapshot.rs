@@ -226,6 +226,27 @@ pub struct ControlRoomSnapshot {
     /// Rust가 DB 해석 결과로 채운다 — None = 로컬 레포 없는 프로젝트(빈 스냅샷).
     #[serde(default)]
     pub covered_repo: Option<CoveredRepo>,
+    /// P4(a) — 완주-미머지 `boule/<planId>` 브랜치 목록("merge 대기 N"). CLI가 git 리스팅
+    /// 실패 시 필드 자체를 omit(fail-soft)하므로 default 빈 벡터로 흡수한다. 표시 전용 —
+    /// 머지는 인간 유지(자동 merge-back 기각, 플랜 §5).
+    #[serde(default)]
+    pub unmerged_plan_branches: Vec<UnmergedPlanBranch>,
+}
+
+/// 완주-미머지 plan 브랜치 한 행 — governance `repo/planBranches.ts`의 `UnmergedPlanBranch`
+/// JSON(camelCase) 미러. 읽기 전용 가시화 데이터(이 모듈엔 git/merge 경로 없음).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UnmergedPlanBranch {
+    /// 짧은 브랜치명, 예: `boule/evt_20260610_075405_4553`.
+    pub branch: String,
+    /// 축약 tip SHA.
+    pub tip: String,
+    /// tip 커밋 subject(한 줄).
+    pub subject: String,
+    /// HEAD에서 도달 불가한 커밋 수(`rev-list --count HEAD..branch`); per-branch 카운트
+    /// 실패 시 None(행 자체는 그대로 표시). specta i64 금지 규약 → i32.
+    pub ahead_count: Option<i32>,
 }
 
 /// Control Room 스냅샷의 집계 대상 레포 식별. 프로젝트는 레포를 여러 개 가질 수 있지만
@@ -351,5 +372,33 @@ mod tests {
         assert!(snap.infra.is_empty());
         assert!(!snap.readiness.ready);
         assert!(!snap.readiness.gates.preflight);
+    }
+
+    /// P4(a): `unmergedPlanBranches` 파싱 — null aheadCount(브랜치별 카운트 실패)도 행 유지.
+    #[test]
+    fn parses_unmerged_plan_branches_including_null_ahead_count() {
+        let json = r#"{
+            "generatedAt": null,
+            "tasks": [], "plans": [], "specs": [], "sessions": [], "handoffs": [],
+            "orchestrator": {"tasks": [], "plans": [], "sessions": []},
+            "unmergedPlanBranches": [
+                {"branch":"boule/evt_1","tip":"abc1234","subject":"feat: step 3","aheadCount":4},
+                {"branch":"boule/evt_2","tip":"def5678","subject":"fix: retry","aheadCount":null}
+            ]
+        }"#;
+        let snap = parse_control_room_snapshot(json).unwrap();
+        assert_eq!(snap.unmerged_plan_branches.len(), 2);
+        assert_eq!(snap.unmerged_plan_branches[0].branch, "boule/evt_1");
+        assert_eq!(snap.unmerged_plan_branches[0].ahead_count, Some(4));
+        assert_eq!(snap.unmerged_plan_branches[1].subject, "fix: retry");
+        assert_eq!(snap.unmerged_plan_branches[1].ahead_count, None);
+    }
+
+    /// P4(a) fail-soft 계약: CLI가 git 리스팅 실패 시 필드를 omit → 빈 벡터로 흡수(에러 아님).
+    #[test]
+    fn absent_unmerged_plan_branches_defaults_to_empty() {
+        let json = r#"{"generatedAt":null,"tasks":[],"plans":[],"specs":[],"sessions":[],"handoffs":[],"orchestrator":{"tasks":[],"plans":[],"sessions":[]}}"#;
+        let snap = parse_control_room_snapshot(json).unwrap();
+        assert!(snap.unmerged_plan_branches.is_empty());
     }
 }

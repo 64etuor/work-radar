@@ -27,6 +27,31 @@ export function useProjectTickerList() {
   });
 }
 
+/** ONE project's full tick status (incl. `lastReportJson` — the list rows omit it).
+ *  P1(a)에서 attention 래치 사유 표시에 쓴다 — `enabled`로 래치된 행에서만 fetch.
+ *  뮤테이션들이 같은 키(["project-tick-status", id])에 setQueryData로 프라임한다. */
+export function useProjectTickStatus(projectId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["project-tick-status", projectId],
+    queryFn: () => unwrap(commands.getProjectTickStatus(projectId)),
+    enabled,
+    staleTime: 2_000,
+  });
+}
+
+/** P1(a) — attention 래치 해제: attention_required=0 + consecutive_failures=0.
+ *  last_* 필드와 heartbeat는 보존(사유는 다음 tick까지 표시됨). */
+export function useClearTickerAttention() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => unwrap(commands.clearTickerAttention(projectId)),
+    onSuccess: (res) => {
+      qc.setQueryData(["project-tick-status", res.projectId], res);
+      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
+    },
+  });
+}
+
 /** App-bound scheduler heartbeat (single row). `null` data = scheduler never woke. */
 export function useTickerSchedulerStatus() {
   return useQuery({

@@ -669,6 +669,13 @@ export const commands = {
 	 *  children. Settings-only — no governance event/autonomy write.
 	 */
 	setProjectTickLive: (projectId: string, live: boolean) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("set_project_tick_live", { projectId, live })),
+	/**
+	 *  P1(a) — attention 래치 해제(operator affordance). `attention_required=0` +
+	 *  `consecutive_failures=0`(다음 인프라 실패가 깨끗한 새 bounded-escalation 윈도우에서
+	 *  재래치되도록). `last_*`/`in_progress`/스케줄러 heartbeat는 건드리지 않는다 —
+	 *  래치 사유는 다음 tick까지 그대로 보인다. governance 이벤트 쓰기 없음(INVARIANT #1).
+	 */
+	clearTickerAttention: (projectId: string) => typedError<ProjectTickStatus, AppError>(__TAURI_INVOKE("clear_ticker_attention", { projectId })),
 	/**  Run one bounded Boule heartbeat for the DB-resolved local repo path. */
 	tickProjectNow: (projectId: string) => typedError<TickProjectNowResult, AppError>(__TAURI_INVOKE("tick_project_now", { projectId })),
 	/**
@@ -1254,6 +1261,12 @@ export type ControlRoomSnapshot = {
 	 *  Rust가 DB 해석 결과로 채운다 — None = 로컬 레포 없는 프로젝트(빈 스냅샷).
 	 */
 	coveredRepo?: CoveredRepo | null,
+	/**
+	 *  P4(a) — 완주-미머지 `boule/<planId>` 브랜치 목록("merge 대기 N"). CLI가 git 리스팅
+	 *  실패 시 필드 자체를 omit(fail-soft)하므로 default 빈 벡터로 흡수한다. 표시 전용 —
+	 *  머지는 인간 유지(자동 merge-back 기각, 플랜 §5).
+	 */
+	unmergedPlanBranches?: UnmergedPlanBranch[],
 };
 
 /**
@@ -2455,6 +2468,24 @@ export type TriggerPrSelfCheckInput = {
 	timeoutSec: number,
 	maxTurns: number,
 	costCapUsd: number | null,
+};
+
+/**
+ *  완주-미머지 plan 브랜치 한 행 — governance `repo/planBranches.ts`의 `UnmergedPlanBranch`
+ *  JSON(camelCase) 미러. 읽기 전용 가시화 데이터(이 모듈엔 git/merge 경로 없음).
+ */
+export type UnmergedPlanBranch = {
+	/**  짧은 브랜치명, 예: `boule/evt_20260610_075405_4553`. */
+	branch: string,
+	/**  축약 tip SHA. */
+	tip: string,
+	/**  tip 커밋 subject(한 줄). */
+	subject: string,
+	/**
+	 *  HEAD에서 도달 불가한 커밋 수(`rev-list --count HEAD..branch`); per-branch 카운트
+	 *  실패 시 None(행 자체는 그대로 표시). specta i64 금지 규약 → i32.
+	 */
+	aheadCount: number | null,
 };
 
 /**  내부 프롬프트 실행 설정 저장 입력. `None`은 상속/미설정이다. */

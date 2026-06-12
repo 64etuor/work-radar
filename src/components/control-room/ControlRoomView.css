@@ -232,6 +232,44 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* 프로젝트 바 우측 칩 묶음 (merge 대기 + 레포 coverage). */
+.cr-projectbar-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+/* P4(a) merge 대기 칩 — repo 칩 셸 재사용 + 대기 톤 카운트. */
+.cr-merge-count {
+  color: var(--cr-pressure);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.cr-merge-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.cr-merge-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.cr-merge-branch {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption-sm);
+  color: var(--color-foreground);
+  white-space: nowrap;
+}
+.cr-merge-ahead {
+  color: var(--cr-pressure);
+  font-size: var(--text-caption-sm);
+  font-variant-numeric: tabular-nums;
+}
 .cr-tab {
   position: relative;
   display: inline-flex;
@@ -813,6 +851,91 @@
   gap: 0.25rem;
   font-size: var(--text-label-sm);
   color: var(--cr-pressure);
+}
+/* P1(b) Go-Live 처방 목록 — 실패 게이트별 "어떻게 고침" 한 줄. */
+.cr-remedies {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.cr-remedy {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: var(--text-label-sm);
+  color: var(--color-foreground);
+}
+.cr-remedy svg {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--cr-muted);
+}
+.cr-remedy-gate {
+  flex: 0 0 auto;
+  color: var(--cr-danger);
+  font-weight: 600;
+  font-size: var(--text-caption-sm);
+  letter-spacing: var(--tracking-mono-label);
+  text-transform: uppercase;
+}
+.cr-remedy-text {
+  min-width: 0;
+}
+
+/* ── P1(a) attention 래치 패널 ───────────────────────────── */
+.cr-latch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-destructive);
+  border-radius: var(--radius-md);
+  background: var(--color-destructive-soft);
+}
+.cr-latch-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--cr-danger);
+}
+.cr-latch-head svg {
+  flex: 0 0 auto;
+}
+.cr-latch-title {
+  font-size: var(--text-caption-sm);
+  font-weight: 600;
+  letter-spacing: var(--tracking-mono-label);
+  text-transform: uppercase;
+}
+.cr-latch-reasons {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--text-label-sm);
+  color: var(--color-foreground);
+}
+.cr-latch-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.cr-latch-actions button svg {
+  flex: 0 0 auto;
+}
+.cr-latch-actions button:disabled svg {
+  animation: cr-spin 0.8s linear infinite;
+}
+.cr-latch-note {
+  min-width: 0;
+  font-size: var(--text-label-sm);
+  color: var(--color-muted-foreground);
+}
+.cr-latch-error {
+  font-size: var(--text-label-sm);
+  color: var(--cr-danger);
 }
 
 /* ── Empty-state ghost pipeline ─────────────────────────────────────────── */
