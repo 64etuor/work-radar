@@ -24,12 +24,16 @@ export type StageInput =
       targetSignalId: string;
       at: string;
       durationMin: number;
+      /** 이동 출발 블록의 날짜(YYYY-MM-DD) — 날짜를 넘는 이동 시 그 날의 placement 행 삭제. */
+      fromDate?: string;
     }
   | {
       kind: "resize";
       targetSignalId: string;
       at: string;
       durationMin: number;
+      /** 리사이즈 출발 블록의 날짜(YYYY-MM-DD) — top-핸들 리사이즈가 날짜를 넘을 수 있다. */
+      fromDate?: string;
     }
   | {
       kind: "eventReschedule";
@@ -52,7 +56,12 @@ export type StageInput =
       routineDate?: string;
     }
   | { kind: "eventUnschedule"; eventId: string; calendarId: string }
-  | { kind: "unschedule"; targetSignalId: string }
+  | {
+      kind: "unschedule";
+      targetSignalId: string;
+      /** 트레이로 복귀시키는 블록의 날짜(YYYY-MM-DD) — 그 날의 placement 행 삭제. */
+      fromDate?: string;
+    }
   | {
       kind: "moveCalendar";
       targetSignalId: string;
@@ -129,6 +138,7 @@ function toRequest(i: StageInput): StageWriteRequest {
         op: "reschedule",
         at: i.at,
         duration_min: i.durationMin,
+        from_date: i.fromDate ?? null,
       };
       return { target, op, idempotency_key };
     }
@@ -138,6 +148,7 @@ function toRequest(i: StageInput): StageWriteRequest {
         op: "resize",
         at: i.at,
         duration_min: i.durationMin,
+        from_date: i.fromDate ?? null,
       };
       return { target, op, idempotency_key };
     }
@@ -153,6 +164,7 @@ function toRequest(i: StageInput): StageWriteRequest {
         op: "reschedule",
         at: i.at,
         duration_min: i.durationMin,
+        from_date: null,
       };
       return { target, op, idempotency_key };
     }
@@ -168,6 +180,7 @@ function toRequest(i: StageInput): StageWriteRequest {
         op: "resize",
         at: i.at,
         duration_min: i.durationMin,
+        from_date: null,
       };
       return { target, op, idempotency_key };
     }
@@ -179,12 +192,12 @@ function toRequest(i: StageInput): StageWriteRequest {
         routine_id: null,
         routine_date: null,
       };
-      const op: WriteOp = { op: "unschedule" };
+      const op: WriteOp = { op: "unschedule", from_date: null };
       return { target, op, idempotency_key };
     }
     case "unschedule": {
       const target: WriteTarget = { kind: "signal", id: i.targetSignalId };
-      const op: WriteOp = { op: "unschedule" };
+      const op: WriteOp = { op: "unschedule", from_date: i.fromDate ?? null };
       return { target, op, idempotency_key };
     }
     case "moveCalendar": {
@@ -231,7 +244,7 @@ function toRequest(i: StageInput): StageWriteRequest {
         routine_id: i.routineId,
         date: i.date,
       };
-      const op: WriteOp = { op: "unschedule" };
+      const op: WriteOp = { op: "unschedule", from_date: null };
       return { target, op, idempotency_key };
     }
     case "routineReschedule": {
@@ -244,6 +257,7 @@ function toRequest(i: StageInput): StageWriteRequest {
         op: "reschedule",
         at: i.at,
         duration_min: i.durationMin,
+        from_date: null,
       };
       return { target, op, idempotency_key };
     }
@@ -257,6 +271,7 @@ function toRequest(i: StageInput): StageWriteRequest {
         op: "resize",
         at: i.at,
         duration_min: i.durationMin,
+        from_date: null,
       };
       return { target, op, idempotency_key };
     }

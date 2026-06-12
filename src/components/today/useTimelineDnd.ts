@@ -385,6 +385,7 @@ export function useTimelineDnd(opts: Opts) {
             targetSignalId: a.signalId,
             at,
             durationMin: clamped,
+            fromDate: localDateOf(a.startISO),
           });
         }
       } catch {
@@ -450,6 +451,7 @@ export function useTimelineDnd(opts: Opts) {
             targetSignalId: a.signalId,
             at,
             durationMin: a.durationMin,
+            fromDate: localDateOf(a.startISO),
           });
         }
       } catch {
@@ -473,7 +475,11 @@ export function useTimelineDnd(opts: Opts) {
       const signalId = a.signalId;
       patchSignalCaches(signalId, { clearLink: true });
       try {
-        await stage({ kind: "unschedule", targetSignalId: signalId });
+        await stage({
+          kind: "unschedule",
+          targetSignalId: signalId,
+          fromDate: localDateOf(prevAt),
+        });
         // 1.5s 토스트 + undo 액션(다시 reschedule). pushInfo 자동 dismiss(2500ms)에 의존,
         // onUndo는 사용자가 명시적으로 눌렀을 때만 실행.
         useToastStore.getState().pushInfo("일정 해제됨", {
@@ -483,6 +489,7 @@ export function useTimelineDnd(opts: Opts) {
               targetSignalId: signalId,
               at: prevAt,
               durationMin: prevDur,
+              fromDate: localDateOf(prevAt),
             });
           },
           undoLabel: "되돌리기",

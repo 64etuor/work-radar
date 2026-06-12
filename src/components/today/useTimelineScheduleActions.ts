@@ -32,7 +32,7 @@ export function useTimelineScheduleActions() {
       // 자체는 동작(타임라인에서만 빼고 카드는 Today 잔류). Google 캐시 제거는 linkedEventId 있을 때만.
       if (block.kind === "signal") {
         const signalId = block.id.replace(/^signal:/, "");
-        await stage({ kind: "unschedule", targetSignalId: signalId });
+        await stage({ kind: "unschedule", targetSignalId: signalId, fromDate: occDate });
         if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
         void qc.invalidateQueries({ queryKey: ["signals"] });
         void qc.invalidateQueries({ queryKey: ["today"] });
