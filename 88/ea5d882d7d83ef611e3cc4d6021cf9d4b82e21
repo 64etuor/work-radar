@@ -1,0 +1,53 @@
+governance/src/graph/store.ts
+  s_a3748a16380c10::t_12346366461d03 83
+src/lib/lifeWheelRadar.ts
+  s_a3748a16380c10::t_0f897934786dbd 21-25,57-60,102-109
+src/lib/skillGrouping.ts
+  s_a3748a16380c10::t_0f897934786dbd 45-54,57-60
+src/components/settings/AgentsPane.tsx
+  s_a3748a16380c10::t_0f897934786dbd 336
+  s_a3748a16380c10::t_bf759b44786db7 291,302-305,351
+governance/src/hypotheses/tester.ts
+  s_a3748a16380c10::t_12346366461d03 94-98,152
+  s_a3748a16380c10::t_e0ff20c82894e7 173
+src/lib/query/calendar.ts
+  s_a3748a16380c10::t_8e4548bf436984 24-30,87,96,112
+governance/src/patterns/read.ts
+  s_a3748a16380c10::t_12346366461d03 20,22,28,33-37,59,61,64,71,75-78
+src/lib/skillBatch.ts
+  s_a3748a16380c10::t_0f897934786dbd 58-63
+src/lib/routineSync.ts
+  s_a3748a16380c10::t_0f897934786dbd 40-63,77,79,93-96
+src/components/control-room/CommandDeck.tsx
+  s_a3748a16380c10::t_0f897934786dbd 137,194
+governance/src/spec/handlers.ts
+  s_a3748a16380c10::t_e0ff20c82894e7 108-112
+src/components/control-room/ReadinessStrip.tsx
+  s_a3748a16380c10::t_0f897934786dbd 15-16,45
+src/lib/nav.ts
+  s_a3748a16380c10::t_0f897934786dbd 235-240
+src/components/hermes/HermesChatLog.tsx
+  s_a3748a16380c10::t_93480ed3c71701 3,193-197,199
+src/lib/query/tokens.ts
+  s_a3748a16380c10::t_4b8546461dcb15 1,7-13,39,49,87
+src/components/settings/LifeWheelTagSettings.tsx
+  s_a3748a16380c10::t_0f897934786dbd 129
+governance/src/decision/handlers.ts
+  s_a3748a16380c10::t_e0ff20c82894e7 161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "88ea5d882d7d83ef611e3cc4d6021cf9d4b82e21",
+  "prompts": {},
+  "sessions": {
+    "s_a3748a16380c10": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ebbf6-99d6-7231-84b5-ecd617010cc2",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
