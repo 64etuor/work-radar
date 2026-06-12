@@ -16,6 +16,19 @@ export function runDurationSec(startedAt: string | null, finishedAt: string | nu
   return (end - start) / 1000;
 }
 
+/**
+ * 스크롤 위치가 "바닥 근처"인지(= 로그 follow 유지 대상). 임계 40px — 마지막 줄 부분
+ * 가림/서브픽셀 오차 허용. 순수 함수(LogPane onScroll에서 호출, 단위테스트 대상).
+ */
+export function isPinnedToBottom(
+  scrollHeight: number,
+  scrollTop: number,
+  clientHeight: number,
+  thresholdPx = 40,
+): boolean {
+  return scrollHeight - scrollTop - clientHeight < thresholdPx;
+}
+
 /** run.trigger(JSON)에서 PR 링크 정보 추출 (없으면 null). */
 export function prTrigger(
   trigger: string | null,

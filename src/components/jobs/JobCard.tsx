@@ -14,8 +14,34 @@ import type { AgentRunView } from "@/bindings";
 import { formatElapsedCompact } from "@/lib/agentBar";
 
 import { JOB_STATUS } from "./jobsConstants";
-import { runDurationSec } from "./jobsUtils";
+import { isPinnedToBottom, runDurationSec } from "./jobsUtils";
 import { ProposalPanel } from "./ProposalPanel";
+
+/**
+ * 로그 본문 — 실행 중 잡은 폴링으로 내용이 늘어나므로, 사용자가 바닥에 붙어 있을 때만
+ * 자동 follow(스크롤 점프). 위로 올려 읽는 중엔 위치를 보존한다(강제 점프 금지).
+ */
+function LogPane({ loading, text }: { loading: boolean; text: string | null }) {
+  const ref = useRef<HTMLPreElement>(null);
+  // 마지막 스크롤 기준 "바닥 근처" 여부 — 초기 열람은 최신부터(true).
+  const pinned = useRef(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [text]);
+  return (
+    <pre
+      ref={ref}
+      className="jobs-log"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        pinned.current = isPinnedToBottom(el.scrollHeight, el.scrollTop, el.clientHeight);
+      }}
+    >
+      {loading ? "로그 불러오는 중…" : (text ?? "(로그 없음)")}
+    </pre>
+  );
+}
 
 /** 로그 복사 버튼 — 클릭 시 1.5s "복사됨" 피드백(타이머는 언마운트 시 정리, bounded). */
 function CopyLogButton({ text }: { text: string }) {
@@ -124,9 +150,7 @@ export function JobCard({
             <span className="jobs-log-label">LOG</span>
             {logText != null && <CopyLogButton text={logText} />}
           </div>
-          <pre className="jobs-log">
-            {log?.isLoading ? "로그 불러오는 중…" : (logText ?? "(로그 없음)")}
-          </pre>
+          <LogPane loading={log?.isLoading ?? false} text={logText} />
         </div>
       )}
     </div>
