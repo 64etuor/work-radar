@@ -1,0 +1,37 @@
+src/lib/agentUsage.test.ts
+  s_68a719f240e2a3::t_3843869e0b40cd 3
+  s_68a719f240e2a3::t_1c757ed053de2d 40-60
+src-tauri/src/commands/agents/usage.rs
+  s_68a719f240e2a3::t_b1c318ccfd87af 77
+  s_68a719f240e2a3::t_d3383b5851ddf4 121-131
+  s_68a719f240e2a3::t_a884eaeb771128 234
+  s_68a719f240e2a3::t_644be6afafb9f3 15-16
+  s_68a719f240e2a3::t_c573878d714f67 106-107
+src-tauri/src/agent_usage.rs
+  s_68a719f240e2a3::t_8bf32c0197e13e 386-398
+  s_68a719f240e2a3::t_5ba2272e034f6d 138
+  s_68a719f240e2a3::t_bfa4fb6a07cb74 310,314-345
+  s_68a719f240e2a3::t_e70e4015007d48 38-40,50
+src/lib/agentUsage.ts
+  s_68a719f240e2a3::t_609250cbb3666d 19-36
+src/components/control-room/AgentUsageStrip.tsx
+  s_68a719f240e2a3::t_8f4be1e1c3c1d1 85,94,96-98,105-110
+  s_68a719f240e2a3::t_c4893ceb11af60 126-130
+  s_68a719f240e2a3::t_d7d0c36f088b06 3-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "cba67686c91d6c1e82744015bae48d4fc6db8d28",
+  "prompts": {},
+  "sessions": {
+    "s_68a719f240e2a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce2020b1-411b-4dc5-9215-5d849e9960ba",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
