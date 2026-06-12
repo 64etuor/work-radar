@@ -1,0 +1,25 @@
+governance/docs/plans/2026-06-12-boule-omc-alignment-operability-master-plan.md
+  s_2b95ff4ba8f6d9::t_45c1edfbc6bcdc 59
+  s_2b95ff4ba8f6d9::t_1fa024617f65da 62
+  s_2b95ff4ba8f6d9::t_2d7ce7dd033dd9 182
+  s_2b95ff4ba8f6d9::t_3631e01fa2be8c 151
+  s_2b95ff4ba8f6d9::t_da526cddc95f6d 121
+  s_2b95ff4ba8f6d9::t_3fd83ebe99f7e9 135
+  s_2b95ff4ba8f6d9::t_8882dfa5497e72 1-58,60-61,63-120,122-134,136-150,152-181,183-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "920617115e23fe3c0bae7cfd274f55b322f1003f",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
