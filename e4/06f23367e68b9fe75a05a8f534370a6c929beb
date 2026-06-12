@@ -1,0 +1,29 @@
+src/components/skills/DivergencePanel.tsx
+  s_125e7320476d49::t_32d34e954340ac 109,145
+src/components/jobs/JobsView.tsx
+  s_125e7320476d49::t_7819dec6ba87e0 35-38
+src/components/settings/CalendarPicker.tsx
+  s_125e7320476d49::t_e470312c8f9a8c 34-37,49-54
+src/components/skills/SkillPromptDiff.tsx
+  s_125e7320476d49::t_32d34e954340ac 8,17
+src/components/SkillsView.tsx
+  s_125e7320476d49::t_e43758fe057b14 163-166,683-688,692-693,698-699,704-705,710-711,716-717,722-723,728-729,734-735,738,750,753-760,763-767
+  s_125e7320476d49::t_33b4939b2345f9 548-561
+  s_125e7320476d49::t_65eb114490aa88 739-749,751-752
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e406f23367e68b9fe75a05a8f534370a6c929beb",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
