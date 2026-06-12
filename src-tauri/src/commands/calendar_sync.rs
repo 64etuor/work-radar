@@ -19,6 +19,7 @@ use tokio::sync::Notify;
 
 use crate::calendar::pending_store::{delete_write, upsert_write};
 use crate::calendar::timing::GOOGLE_SYNC_DEBOUNCE_MS;
+use crate::commands::placement_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::PendingWrite;
@@ -62,11 +63,30 @@ pub enum WriteOp {
         title: String,
     },
     /// 시간 이동 — patch(start+duration), 기존 linked event 필요, Google API 디바운스.
-    Reschedule { at: String, duration_min: i32 },
+    /// `from_date`: Signal 타깃 전용 — 이동 출발 블록의 날짜(YYYY-MM-DD).
+    /// 날짜가 바뀌는 이동이면 그 날짜의 signal_day_placements 행을 삭제한다.
+    /// routine_check/event 타깃에선 무시. None이면 현 scheduled_at의 날짜로 폴백(레거시 큐 행).
+    Reschedule {
+        at: String,
+        duration_min: i32,
+        #[serde(default)]
+        from_date: Option<String>,
+    },
     /// 리사이즈만 — start와 함께 묶어 patch로 보낸다(워커 단순화). 기존 linked event 필요.
-    Resize { at: String, duration_min: i32 },
+    /// `from_date`: Reschedule과 동일 의미(top-핸들 리사이즈는 날짜를 넘을 수 있다).
+    Resize {
+        at: String,
+        duration_min: i32,
+        #[serde(default)]
+        from_date: Option<String>,
+    },
     /// 큐에서 delete → 카드 mirror 정리(scheduled_at/duration/linked_* NULL).
-    Unschedule,
+    /// `from_date`: Signal 타깃 전용 — 트레이로 복귀시키는 블록의 날짜.
+    /// 그 날짜의 placement 행만 삭제한다(과거 날짜 히스토리는 보존).
+    Unschedule {
+        #[serde(default)]
+        from_date: Option<String>,
+    },
     /// 다른 캘린더로 이동 — create with staged=true(commit_staged_writes로 풀릴 때까지 skip).
     /// 기존 이벤트의 delete는 호출자(UI)가 별도 unschedule을 추가로 stage해 처리한다.
     MoveCalendar {
@@ -159,7 +179,7 @@ pub(crate) async fn stage_calendar_write_inner(
             .bind(date)
             .execute(pool)
             .await?;
-        } else if matches!(req.op, WriteOp::Unschedule) {
+        } else if matches!(req.op, WriteOp::Unschedule { .. }) {
             // 트레이 복귀 = 즉시 로컬 mirror에서 time_override/링크 제거(signal Unschedule과 대칭).
             // 이전엔 워커가 Google delete에 성공한 뒤에야 unlink_impl이 지워서, 동기화 지연/실패 시
             // linked_event_id=NULL인데 time_override만 남는 좀비 상태 → 블록이 옛 시각에 잔류했다.
@@ -214,14 +234,40 @@ pub(crate) async fn stage_calendar_write_inner(
     // 새 schedule을 본다. (이전엔 link_back만 있어서 Google round-trip 끝나야
     // UI에 반영, 사용자 체감 "한참 있다 보임".)
     if let WriteTarget::Signal { id } = &req.target {
+        // placement from_date 폴백용 — 미러 UPDATE 전에 읽는다(이후엔 새 값으로 덮임).
+        // NOTE: scheduled_at 미러와 placement 쓰기는 트랜잭션으로 묶지 않았다 — 이 파일의
+        // 기존 로컬 미러들(routine time_override 등)과 동일한 비원자 규율. TX wrapping은
+        // decisions.md의 기존 deferred 항목과 함께 후속(placement_store 시그니처 리플).
+        let prev_date: Option<String> =
+            sqlx::query_scalar("SELECT substr(scheduled_at, 1, 10) FROM signals WHERE id = ?1")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?
+                .flatten();
         match &req.op {
             WriteOp::Schedule {
                 at,
                 duration_min,
                 calendar_id,
                 ..
+            } => {
+                sqlx::query(
+                    "UPDATE signals SET scheduled_at = ?1, scheduled_duration = ?2, \
+                     linked_calendar_id = ?3 WHERE id = ?4",
+                )
+                .bind(at)
+                .bind(*duration_min)
+                .bind(calendar_id)
+                .bind(id)
+                .execute(pool)
+                .await?;
+                // 날짜별 배치 SSOT 미러 — 트레이→캔버스 신규 배치는 그 날짜 행 upsert.
+                placement_store::upsert_placement(pool, id, local_date_of(at), at, *duration_min)
+                    .await?;
             }
-            | WriteOp::CreateBlank {
+            // CreateBlank의 Signal id는 placeholder UUID(실 카드 아님) — FK 위반이므로
+            // placement 미러 제외. scheduled_at UPDATE는 기존처럼 0행 no-op.
+            WriteOp::CreateBlank {
                 at,
                 duration_min,
                 calendar_id,
@@ -238,7 +284,16 @@ pub(crate) async fn stage_calendar_write_inner(
                 .execute(pool)
                 .await?;
             }
-            WriteOp::Reschedule { at, duration_min } => {
+            WriteOp::Reschedule {
+                at,
+                duration_min,
+                from_date,
+            }
+            | WriteOp::Resize {
+                at,
+                duration_min,
+                from_date,
+            } => {
                 sqlx::query(
                     "UPDATE signals SET scheduled_at = ?1, scheduled_duration = ?2 WHERE id = ?3",
                 )
@@ -247,18 +302,19 @@ pub(crate) async fn stage_calendar_write_inner(
                 .bind(id)
                 .execute(pool)
                 .await?;
+                // 도착 날짜 upsert 먼저, 출발 날짜 삭제 나중 — 중간 실패 시 "양쪽 소실"
+                // 대신 "무해한 중복"이 남도록 부분 실패 모드를 선택(다음 이동/unschedule이 정리).
+                let new_date = local_date_of(at);
+                placement_store::upsert_placement(pool, id, new_date, at, *duration_min).await?;
+                // 날짜를 넘는 이동이면 출발 날짜 행 삭제(같은 날이면 위 upsert가 그 행을 갱신).
+                let src = from_date.as_deref().or(prev_date.as_deref());
+                if let Some(src) = src {
+                    if src != new_date {
+                        placement_store::delete_placement(pool, id, src).await?;
+                    }
+                }
             }
-            WriteOp::Resize { at, duration_min } => {
-                sqlx::query(
-                    "UPDATE signals SET scheduled_at = ?1, scheduled_duration = ?2 WHERE id = ?3",
-                )
-                .bind(at)
-                .bind(*duration_min)
-                .bind(id)
-                .execute(pool)
-                .await?;
-            }
-            WriteOp::Unschedule => {
+            WriteOp::Unschedule { from_date } => {
                 sqlx::query(
                     "UPDATE signals SET scheduled_at = NULL, scheduled_duration = NULL, \
                      linked_event_id = NULL, linked_calendar_id = NULL WHERE id = ?1",
@@ -266,6 +322,10 @@ pub(crate) async fn stage_calendar_write_inner(
                 .bind(id)
                 .execute(pool)
                 .await?;
+                // 그 날짜의 배치만 트레이 복귀 — 과거 날짜 placement는 누적 집계 히스토리로 보존.
+                if let Some(src) = from_date.as_deref().or(prev_date.as_deref()) {
+                    placement_store::delete_placement(pool, id, src).await?;
+                }
             }
             // MoveCalendar는 staged — Acceptance 게이트 전까지 로컬 mirror도 보류.
             // commit_staged_writes 시점이 아니라 워커 flush 시 link_back에서 반영된다.
@@ -296,7 +356,7 @@ fn validate_write_op(op: &WriteOp) -> Option<&'static str> {
         | WriteOp::Resize { at, .. }
         | WriteOp::MoveCalendar { at, .. }
         | WriteOp::CreateBlank { at, .. } => Some(at),
-        WriteOp::Unschedule => None,
+        WriteOp::Unschedule { .. } => None,
     };
     if at.is_some_and(|value| value.trim().is_empty()) {
         return Some("calendar.invalid_start");
@@ -321,6 +381,12 @@ pub(crate) async fn ensure_routine_check_row(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// 로컬 ISO 'YYYY-MM-DD…'에서 날짜 10글자. validate_write_op가 빈 at을 선차단하므로
+/// 짧은 입력은 방어적으로 전체 문자열 반환(placement date 불일치는 upsert가 무해).
+fn local_date_of(at: &str) -> &str {
+    at.get(0..10).unwrap_or(at)
 }
 
 /// ISO 'YYYY-MM-DDTHH:MM[:SS...]'에서 HH:MM만 추출. 형식 불일치 시 "00:00".
@@ -425,7 +491,9 @@ async fn build_queue_row(
                 GOOGLE_SYNC_DEBOUNCE_MS,
             )
         }
-        WriteOp::Reschedule { at, duration_min } => match existing {
+        WriteOp::Reschedule {
+            at, duration_min, ..
+        } => match existing {
             Some((cal, ev)) => {
                 let payload = serde_json::json!({
                     "start": at,
@@ -450,7 +518,9 @@ async fn build_queue_row(
                 None => return Ok(None),
             },
         },
-        WriteOp::Resize { at, duration_min } => match existing {
+        WriteOp::Resize {
+            at, duration_min, ..
+        } => match existing {
             Some((cal, ev)) => {
                 // resize-only patch는 워커가 거부 — start와 묶어 보낸다(워커 simplification).
                 let payload = serde_json::json!({
@@ -476,7 +546,7 @@ async fn build_queue_row(
                 None => return Ok(None),
             },
         },
-        WriteOp::Unschedule => {
+        WriteOp::Unschedule { .. } => {
             let (cal, ev) = existing.ok_or_else(|| {
                 AppError::validation("calendar.no_linked_event", "no linked event to unschedule")
             })?;
@@ -741,6 +811,7 @@ mod tests {
             op: WriteOp::Reschedule {
                 at: "2026-05-28T11:15:00".into(),
                 duration_min: 30,
+                from_date: None,
             },
             idempotency_key: "test-unlinked-routine-move".into(),
         };
@@ -782,6 +853,7 @@ mod tests {
             op: WriteOp::Resize {
                 at: "2026-05-28T08:45:00".into(),
                 duration_min: 45,
+                from_date: None,
             },
             idempotency_key: "test-unlinked-routine-resize".into(),
         };
@@ -828,6 +900,7 @@ mod tests {
             op: WriteOp::Reschedule {
                 at: "2026-05-28T10:30:00".into(),
                 duration_min: 30,
+                from_date: None,
             },
             idempotency_key: "test-routine-backed-move".into(),
         };
@@ -892,6 +965,7 @@ mod tests {
                 op: WriteOp::Reschedule {
                     at: "2026-05-28T10:30:00".into(),
                     duration_min: 30,
+                    from_date: None,
                 },
                 idempotency_key: "adopt".into(),
             },
@@ -911,6 +985,7 @@ mod tests {
                 op: WriteOp::Reschedule {
                     at: "2026-05-28T13:00:00".into(),
                     duration_min: 30,
+                    from_date: None,
                 },
                 idempotency_key: "move-after-adopt".into(),
             },
@@ -953,6 +1028,7 @@ mod tests {
             op: WriteOp::Reschedule {
                 at: "2026-05-28T10:30:00".into(),
                 duration_min: 30,
+                from_date: None,
             },
             idempotency_key: "test-plain-event-move".into(),
         };
@@ -979,7 +1055,7 @@ mod tests {
 
         let req = StageWriteRequest {
             target: WriteTarget::Signal { id: "s1".into() },
-            op: WriteOp::Unschedule,
+            op: WriteOp::Unschedule { from_date: None },
             idempotency_key: "test-unschedule".into(),
         };
         let err = stage_calendar_write_inner(&db, &notify, req)
@@ -1028,6 +1104,7 @@ mod tests {
             op: WriteOp::Reschedule {
                 at: "2026-05-28T12:00:00".into(),
                 duration_min: 45,
+                from_date: None,
             },
             idempotency_key: "test-reschedule".into(),
         };
@@ -1091,6 +1168,7 @@ mod tests {
                 op: WriteOp::Reschedule {
                     at: "2026-05-28T12:00:00".into(),
                     duration_min: 45,
+                    from_date: None,
                 },
                 idempotency_key: "k-reschedule".into(),
             },
@@ -1176,5 +1254,268 @@ mod tests {
         assert_eq!(extract_hhmm("2026-05-28T23:45:00"), "23:45");
         // 형식 미달 — fallback "00:00".
         assert_eq!(extract_hhmm("invalid"), "00:00");
+    }
+
+    // ── placement mirroring tests (Task 3) ──────────────────────────────────
+
+    /// Schedule op → signal_day_placements에 그 날짜 행이 생성된다.
+    #[tokio::test]
+    async fn signal_schedule_upserts_day_placement() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) \
+             VALUES ('s1','X','braindump','thought')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Schedule {
+                    at: "2026-06-11T14:00:00".into(),
+                    duration_min: 60,
+                    calendar_id: "cal".into(),
+                    title: "X".into(),
+                },
+                idempotency_key: "t3-schedule".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = placement_store::fetch_placements_in_range(&db, "2026-06-11", "2026-06-11")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "배치 1행");
+        assert_eq!(rows[0].date, "2026-06-11");
+        assert_eq!(rows[0].start_at, "2026-06-11T14:00:00");
+        assert_eq!(rows[0].duration_min, 60);
+    }
+
+    /// Reschedule이 날짜를 넘으면 출발 날짜 행이 삭제되고 도착 날짜 행만 남는다.
+    #[tokio::test]
+    async fn signal_reschedule_across_dates_moves_placement_row() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, \
+             scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','X','braindump','thought','2026-06-10T09:00:00',30,'ev1','cal')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // 6/10 placement 시드.
+        placement_store::upsert_placement(&db, "s1", "2026-06-10", "2026-06-10T09:00:00", 30)
+            .await
+            .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Reschedule {
+                    at: "2026-06-11T10:00:00".into(),
+                    duration_min: 60,
+                    from_date: Some("2026-06-10".into()),
+                },
+                idempotency_key: "t3-reschedule-cross".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = placement_store::fetch_placements_in_range(&db, "2026-06-10", "2026-06-11")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "6/10 삭제, 6/11만 남아야 한다");
+        assert_eq!(rows[0].date, "2026-06-11");
+        assert_eq!(rows[0].start_at, "2026-06-11T10:00:00");
+    }
+
+    /// 같은 날 Reschedule은 기존 날짜 히스토리를 보존하며 당일 행만 갱신한다.
+    #[tokio::test]
+    async fn signal_reschedule_same_date_keeps_other_days_history() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, \
+             scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','X','braindump','thought','2026-06-11T14:00:00',60,'ev1','cal')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // 6/10 + 6/11 placement 시드.
+        placement_store::upsert_placement(&db, "s1", "2026-06-10", "2026-06-10T09:00:00", 30)
+            .await
+            .unwrap();
+        placement_store::upsert_placement(&db, "s1", "2026-06-11", "2026-06-11T14:00:00", 60)
+            .await
+            .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Reschedule {
+                    at: "2026-06-11T16:00:00".into(),
+                    duration_min: 30,
+                    from_date: Some("2026-06-11".into()),
+                },
+                idempotency_key: "t3-reschedule-same".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = placement_store::fetch_placements_in_range(&db, "2026-06-10", "2026-06-11")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 2, "6/10 보존, 6/11 갱신 — 2행");
+        let r10 = rows.iter().find(|r| r.date == "2026-06-10").expect("6/10");
+        assert_eq!(r10.start_at, "2026-06-10T09:00:00", "6/10 불변");
+        assert_eq!(r10.duration_min, 30);
+        let r11 = rows.iter().find(|r| r.date == "2026-06-11").expect("6/11");
+        assert_eq!(r11.start_at, "2026-06-11T16:00:00", "6/11 갱신");
+        assert_eq!(r11.duration_min, 30);
+    }
+
+    /// Unschedule(from_date 있음)은 그 날짜 placement만 삭제하고 다른 날짜는 보존한다.
+    /// 링크 있는 신호로 설정 — build_queue_row가 linked event를 요구하므로
+    /// placement 미러(Unschedule 로컬 미러 블록)까지 도달하려면 링크가 필요하다.
+    #[tokio::test]
+    async fn signal_unschedule_deletes_only_from_date_placement() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, \
+             scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','X','braindump','thought','2026-06-11T14:00:00',60,'ev1','cal')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // 6/10 + 6/11 placement 시드.
+        placement_store::upsert_placement(&db, "s1", "2026-06-10", "2026-06-10T09:00:00", 30)
+            .await
+            .unwrap();
+        placement_store::upsert_placement(&db, "s1", "2026-06-11", "2026-06-11T14:00:00", 60)
+            .await
+            .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Unschedule {
+                    from_date: Some("2026-06-11".into()),
+                },
+                idempotency_key: "t3-unschedule".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = placement_store::fetch_placements_in_range(&db, "2026-06-10", "2026-06-11")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "6/11 삭제, 6/10만 남아야 한다");
+        assert_eq!(rows[0].date, "2026-06-10");
+    }
+
+    /// Resize도 날짜를 넘으면(top-핸들 리사이즈) 출발 날짜 행이 삭제되고 도착 날짜만 남는다
+    /// — Reschedule과 같은 arm이지만 변형별로 직접 핀.
+    #[tokio::test]
+    async fn signal_resize_across_dates_moves_placement_row() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, \
+             scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','X','braindump','thought','2026-06-10T09:00:00',30,'ev1','cal')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // 6/10 placement 시드.
+        placement_store::upsert_placement(&db, "s1", "2026-06-10", "2026-06-10T09:00:00", 30)
+            .await
+            .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Resize {
+                    at: "2026-06-11T10:00:00".into(),
+                    duration_min: 60,
+                    from_date: Some("2026-06-10".into()),
+                },
+                idempotency_key: "t3-resize-cross".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = placement_store::fetch_placements_in_range(&db, "2026-06-10", "2026-06-11")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "6/10 삭제, 6/11만 남아야 한다");
+        assert_eq!(rows[0].date, "2026-06-11");
+        assert_eq!(rows[0].start_at, "2026-06-11T10:00:00");
+        assert_eq!(rows[0].duration_min, 60);
+    }
+
+    /// 대상 날짜에 이미 placement가 있어도 Schedule은 UNIQUE 에러 없이 단일 행을
+    /// 새 값으로 갱신한다(ON CONFLICT upsert 경유 확인).
+    #[tokio::test]
+    async fn signal_schedule_onto_existing_date_updates_in_place() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) \
+             VALUES ('s1','X','braindump','thought')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // 같은 날짜에 placement 선시드.
+        placement_store::upsert_placement(&db, "s1", "2026-06-11", "2026-06-11T09:00:00", 30)
+            .await
+            .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Schedule {
+                    at: "2026-06-11T14:00:00".into(),
+                    duration_min: 60,
+                    calendar_id: "cal".into(),
+                    title: "X".into(),
+                },
+                idempotency_key: "t3-schedule-existing".into(),
+            },
+        )
+        .await
+        .expect("schedule onto existing date must upsert, not UNIQUE-error");
+
+        let rows = placement_store::fetch_placements_in_range(&db, "2026-06-11", "2026-06-11")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "단일 행 유지");
+        assert_eq!(rows[0].start_at, "2026-06-11T14:00:00");
+        assert_eq!(rows[0].duration_min, 60);
     }
 }

@@ -6,7 +6,6 @@ use crate::db::Db;
 use crate::models::{SignalDayPlacement, SignalTimeTotal};
 
 /// (signal_id, date) upsert — 같은 날 재배치/이동은 같은 행 갱신(dedup upsert 관례).
-#[allow(dead_code)]
 pub(crate) async fn upsert_placement(
     db: &Db,
     signal_id: &str,
@@ -31,7 +30,6 @@ pub(crate) async fn upsert_placement(
 }
 
 /// 그 날짜의 배치 제거(트레이 복귀/날짜 이동의 출발지 정리).
-#[allow(dead_code)]
 pub(crate) async fn delete_placement(
     db: &Db,
     signal_id: &str,

@@ -2713,12 +2713,24 @@ export type WorktreeStatus = "clean" | "dirty" | "ahead" | "behind" | "diverged"
 export type WriteOp = 
 /**  신규 배치 — create 이벤트, Google API 디바운스. */
 { op: "schedule"; at: string; duration_min: number; calendar_id: string; title: string } | 
-/**  시간 이동 — patch(start+duration), 기존 linked event 필요, Google API 디바운스. */
-{ op: "reschedule"; at: string; duration_min: number } | 
-/**  리사이즈만 — start와 함께 묶어 patch로 보낸다(워커 단순화). 기존 linked event 필요. */
-{ op: "resize"; at: string; duration_min: number } | 
-/**  큐에서 delete → 카드 mirror 정리(scheduled_at/duration/linked_* NULL). */
-{ op: "unschedule" } | 
+/**
+ *  시간 이동 — patch(start+duration), 기존 linked event 필요, Google API 디바운스.
+ *  `from_date`: Signal 타깃 전용 — 이동 출발 블록의 날짜(YYYY-MM-DD).
+ *  날짜가 바뀌는 이동이면 그 날짜의 signal_day_placements 행을 삭제한다.
+ *  routine_check/event 타깃에선 무시. None이면 현 scheduled_at의 날짜로 폴백(레거시 큐 행).
+ */
+{ op: "reschedule"; at: string; duration_min: number; from_date?: string | null } | 
+/**
+ *  리사이즈만 — start와 함께 묶어 patch로 보낸다(워커 단순화). 기존 linked event 필요.
+ *  `from_date`: Reschedule과 동일 의미(top-핸들 리사이즈는 날짜를 넘을 수 있다).
+ */
+{ op: "resize"; at: string; duration_min: number; from_date?: string | null } | 
+/**
+ *  큐에서 delete → 카드 mirror 정리(scheduled_at/duration/linked_* NULL).
+ *  `from_date`: Signal 타깃 전용 — 트레이로 복귀시키는 블록의 날짜.
+ *  그 날짜의 placement 행만 삭제한다(과거 날짜 히스토리는 보존).
+ */
+{ op: "unschedule"; from_date?: string | null } | 
 /**
  *  다른 캘린더로 이동 — create with staged=true(commit_staged_writes로 풀릴 때까지 skip).
  *  기존 이벤트의 delete는 호출자(UI)가 별도 unschedule을 추가로 stage해 처리한다.
