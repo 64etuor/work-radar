@@ -1,0 +1,21 @@
+src-tauri/src/agent_usage.rs
+  s_68a719f240e2a3::t_8dd5557c2b01c1 415-450
+  s_68a719f240e2a3::t_f6f6e94dc376f3 91-96
+  s_68a719f240e2a3::t_6fb35385d320bf 75-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e8e1f35bbf676153c5deec8853702067b3613181",
+  "prompts": {},
+  "sessions": {
+    "s_68a719f240e2a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce2020b1-411b-4dc5-9215-5d849e9960ba",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
