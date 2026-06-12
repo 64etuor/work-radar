@@ -1,0 +1,25 @@
+src-tauri/src/commands/calendar_sync.rs
+  s_50fa9ee27d9fdd::t_af839f60c55131 183-187,189-190,198-200,203-204
+  s_50fa9ee27d9fdd::t_34bda5d7c1aac7 836-844,850-854,866-938
+src/components/today/useTimelineDnd.ts
+  s_50fa9ee27d9fdd::t_57db219462244e 51-52
+  s_50fa9ee27d9fdd::t_506295e5296635 348,359,419,424
+docs/decisions.md
+  s_50fa9ee27d9fdd::t_b3b4f11f041dd9 619
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ffe53c58db2ee217cb09f70c4d23a34429245df5",
+  "prompts": {},
+  "sessions": {
+    "s_50fa9ee27d9fdd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a01fc03c-2746-4dac-aef8-9621d8057b39",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
