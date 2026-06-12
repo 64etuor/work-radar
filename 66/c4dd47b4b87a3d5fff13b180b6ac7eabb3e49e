@@ -1,0 +1,75 @@
+governance/src/conductor/handlers.ts
+  s_2b95ff4ba8f6d9::t_79e68e76be7843 6-11
+  s_2b95ff4ba8f6d9::t_fde8d1a5632fcf 58-65,68-88,117-118
+  s_2b95ff4ba8f6d9::t_3456ad4c829999 66-67
+  s_2b95ff4ba8f6d9::t_805bd5ce89ff29 719
+  s_2b95ff4ba8f6d9::t_feac66867e5d85 36-40
+  s_2b95ff4ba8f6d9::t_73017c9ae9153c 89-96,119
+  s_2b95ff4ba8f6d9::t_ceb97c46b06b61 336-343
+  s_2b95ff4ba8f6d9::t_8ff2e3d6cd009b 541-548
+governance/src/conductor/usageParse.ts
+  s_2b95ff4ba8f6d9::t_0fe769871aa3ee 1-160
+governance/test/conductor/attemptFeedback.test.ts
+  s_2b95ff4ba8f6d9::t_358f4a427c81d0 1-160
+governance/src/conductor/attemptFeedback.ts
+  s_2b95ff4ba8f6d9::t_d14b32b32712e8 1-79
+governance/test/cli/tick.test.ts
+  s_2b95ff4ba8f6d9::t_455140018d78b4 1-19,21-163,181,183,190-191,193,197,199-200,202-205,211-213
+  s_2b95ff4ba8f6d9::t_ebeec5d678b49a 20
+governance/test/cli/recordAttemptUsage.test.ts
+  s_2b95ff4ba8f6d9::t_f8bf0d85f4b774 1-6,10-16,18-20,25-115
+  s_2b95ff4ba8f6d9::t_afbebec8e6d65a 7-9,17,21-24
+governance/src/cli/boule.ts
+  s_2b95ff4ba8f6d9::t_d988b1b5b859e7 33
+  s_2b95ff4ba8f6d9::t_8e538ec7ff32bd 485-486,487-489,491,495,497-501,503-524,526-534,304,336,385,392,481
+  s_2b95ff4ba8f6d9::t_53583d23e14053 560-562,568,587
+  s_2b95ff4ba8f6d9::t_046d2b85c1c15a 592,492,525,593-605,618-622,305,386
+  s_2b95ff4ba8f6d9::t_eeb85e547c4267 2
+  s_2b95ff4ba8f6d9::t_ecce59e034da55 34,43-49
+  s_2b95ff4ba8f6d9::t_e092aac77668ed 67-68
+  s_2b95ff4ba8f6d9::t_e9b272573e4871 474
+  s_2b95ff4ba8f6d9::t_df2b87e5046a1c 502,606,398-400,403,607-617
+  s_2b95ff4ba8f6d9::t_d854dd62b1d7bc 689
+  s_2b95ff4ba8f6d9::t_351d87d0f0a63e 722-727
+  s_2b95ff4ba8f6d9::t_e5c4d67dd9a829 35-39
+  s_2b95ff4ba8f6d9::t_982bf8a342e799 298-303,317-335
+  s_2b95ff4ba8f6d9::t_6e6c7192f66698 382-383,387-391,393-394
+  s_2b95ff4ba8f6d9::t_ec6731d70430a0 384,490
+  s_2b95ff4ba8f6d9::t_4026ec857a6457 475-480
+  s_2b95ff4ba8f6d9::t_3d2e577e697900 563-567,580
+  s_2b95ff4ba8f6d9::t_c72c78a069203e 685-686
+governance/src/backends/resolve.ts
+  s_2b95ff4ba8f6d9::t_9ad66082ddb35a 119-130
+governance/test/conductor/usageParse.test.ts
+  s_2b95ff4ba8f6d9::t_299cfd6e1a0517 1-108
+governance/src/orchestrator/tick.ts
+  s_2b95ff4ba8f6d9::t_9bec94ecf0e739 4-8
+  s_2b95ff4ba8f6d9::t_72988c3107996f 90-93
+  s_2b95ff4ba8f6d9::t_401f213f4d48dc 158-164
+  s_2b95ff4ba8f6d9::t_22c88f02d222f2 32-33
+  s_2b95ff4ba8f6d9::t_b942c79842fac1 44-46,50,62-64
+  s_2b95ff4ba8f6d9::t_3b6305ac7c2c87 21
+  s_2b95ff4ba8f6d9::t_6e5de8b1932583 65-70
+governance/src/conductor/adapter.ts
+  s_2b95ff4ba8f6d9::t_0c6fef8ee06fd9 218,223-233,243-246,249
+  s_2b95ff4ba8f6d9::t_62547a2266a23d 298-300,303,309
+  s_2b95ff4ba8f6d9::t_2a9bd9f72b0a76 328-331,334,338
+governance/test/conductor/handlers.test.ts
+  s_2b95ff4ba8f6d9::t_721d3b6f2dc0c0 976-978,982-1016
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "66c4dd47b4b87a3d5fff13b180b6ac7eabb3e49e",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}

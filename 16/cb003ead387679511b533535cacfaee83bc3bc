@@ -1,0 +1,50 @@
+governance/src/cli/boule.ts
+  s_2b95ff4ba8f6d9::t_d988b1b5b859e7 33
+  s_2b95ff4ba8f6d9::t_8e538ec7ff32bd 485-486,487-489,491,495,497-501,503-524,526-534,304,336,385,392,481
+  s_2b95ff4ba8f6d9::t_53583d23e14053 560-562,568,587
+  s_2b95ff4ba8f6d9::t_046d2b85c1c15a 592,492,525,593-605,618-622,305,386
+  s_2b95ff4ba8f6d9::t_eeb85e547c4267 2
+  s_2b95ff4ba8f6d9::t_ecce59e034da55 34,43-49
+  s_2b95ff4ba8f6d9::t_e092aac77668ed 67-68
+  s_2b95ff4ba8f6d9::t_e9b272573e4871 474
+  s_2b95ff4ba8f6d9::t_df2b87e5046a1c 502,606,398-400,403,607-617
+  s_2b95ff4ba8f6d9::t_d854dd62b1d7bc 689
+  s_2b95ff4ba8f6d9::t_351d87d0f0a63e 722-727
+  s_2b95ff4ba8f6d9::t_e5c4d67dd9a829 35-39
+  s_2b95ff4ba8f6d9::t_982bf8a342e799 298-303,317-335
+  s_2b95ff4ba8f6d9::t_6e6c7192f66698 382-383,387-391,393-394
+  s_2b95ff4ba8f6d9::t_ec6731d70430a0 384,490
+  s_2b95ff4ba8f6d9::t_4026ec857a6457 475-480
+  s_2b95ff4ba8f6d9::t_3d2e577e697900 563-567,580
+  s_2b95ff4ba8f6d9::t_c72c78a069203e 685-686
+  s_2b95ff4ba8f6d9::t_64991b28ea96b4 690-692
+governance/src/cli/schedule.ts
+  s_2b95ff4ba8f6d9::t_0dfb5247df1d02 1-23,28-97,109-118,121-139,142-143,147,149-152,154-155,159-195,199,201,204-221,224,228,230-242,244-257,259-261,264-268,271-279,282-296,298-318,99,105-106
+  s_2b95ff4ba8f6d9::t_d956937d94dc11 263
+  s_2b95ff4ba8f6d9::t_118fb3be6a6df5 24-27
+  s_2b95ff4ba8f6d9::t_594bfc30957710 98,100-104,107-108
+  s_2b95ff4ba8f6d9::t_0b9f86ab2018b4 119-120
+  s_2b95ff4ba8f6d9::t_66032e3c31ddf7 140-141,144-146,148,153,156-158
+  s_2b95ff4ba8f6d9::t_c00ab5b2af93b3 196-198,200,202-203
+  s_2b95ff4ba8f6d9::t_95cc14cfd0c6d0 222,227,258,262,269-270,280-281,297
+  s_2b95ff4ba8f6d9::t_039728a3674b20 223,225-226,229,243
+governance/test/cli/schedule.test.ts
+  s_2b95ff4ba8f6d9::t_c8d8bfd25ed564 1-291
+  s_2b95ff4ba8f6d9::t_e7304ac104d1cd 292-368
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "16cb003ead387679511b533535cacfaee83bc3bc",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}

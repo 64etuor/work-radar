@@ -1,0 +1,24 @@
+governance/docs/STATUS.md
+  s_2b95ff4ba8f6d9::t_c9b0bc25e828a5 19
+  s_2b95ff4ba8f6d9::t_65dafcf32c9eef 27
+  s_2b95ff4ba8f6d9::t_0fcc610be9f724 35
+  s_2b95ff4ba8f6d9::t_a619679d9dc7a6 51-55
+docs/decisions.md
+  s_2b95ff4ba8f6d9::t_cce1dde21a5cb2 618
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b76dcf5c3d8bcb965e746b8a5bf2c6580ba9b6a4",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
