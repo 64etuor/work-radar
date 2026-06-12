@@ -1,0 +1,29 @@
+src/components/hermes/AskUserCard.tsx
+  s_125e7320476d49::t_0633a48f8f8eef 26,28,46
+src/components/SprintTimer.tsx
+  s_125e7320476d49::t_0633a48f8f8eef 180-188
+src/components/Spinner.tsx
+  s_125e7320476d49::t_0633a48f8f8eef 14
+src/components/hermes/AskUserCard.test.tsx
+  s_125e7320476d49::t_46d411980ad411 41,43
+src/components/control-room/AgentUsageStrip.tsx
+  s_125e7320476d49::t_0633a48f8f8eef 19,34
+src/components/hermes/HermesSlashMenu.tsx
+  s_125e7320476d49::t_0633a48f8f8eef 15,25,27-28,31-50,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "75c66d0f8858a06024b1ef1af5054572071f1cfd",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
