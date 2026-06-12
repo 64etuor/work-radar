@@ -2,7 +2,7 @@ import "./CaptureBoard.css";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { Kind, PromotionTarget } from "@/bindings";
+import type { Kind, PromotionTarget, WorkSignal } from "@/bindings";
 import { BoardOverlays } from "@/components/board/BoardOverlays";
 import {
   projectPickerErrorMessage,
@@ -73,6 +73,8 @@ const PROMOTION_LABEL: Record<"backlog" | "agenda", string> = {
   backlog: "백로그 등록",
   agenda: "안건 승격",
 };
+const EMPTY_SIGNALS: WorkSignal[] = [];
+
 // Capture Board owner: query/mutation orchestration plus human-only decision gestures.
 function useCaptureBoardView() {
   const today = localToday();
@@ -84,7 +86,7 @@ function useCaptureBoardView() {
   const projectsQ = useProjects();
   // 캘린더 긴급도 가중(표시 힌트 전용). 보드의 오늘 이벤트(ambient)를 미분류 카드에 퍼지 매칭한다.
   const calendarQ = useCalendarEvents(today);
-  const applyUrgency = useApplyCalendarUrgency();
+  const { mutate: applyUrgency } = useApplyCalendarUrgency();
 
   const createSignal = useCreateSignal();
   const classifySignal = useClassifySignal();
@@ -119,7 +121,7 @@ function useCaptureBoardView() {
   const { pushSuccess, pushError } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
-  const signals = signalsQ.data ?? [];
+  const signals = signalsQ.data ?? EMPTY_SIGNALS;
   const [captureOrder, setCaptureOrder] = useState<ReadonlyMap<string, number>>(() => new Map());
   const boardSignals = sortSignalsForBoard(signals, captureOrder);
   const todayItems = todayQ.data ?? [];
@@ -522,10 +524,9 @@ function useCaptureBoardView() {
       if (urgencyAppliedRef.current!.has(key)) continue;
       urgencyAppliedRef.current!.add(key);
       // keywords는 현재 보조 키워드 모델이 없어 빈 배열(제목 매칭만). 실패는 조용히 무시(표시 힌트).
-      applyUrgency.mutate({ signalId: s.id, keywords: [], events });
+      applyUrgency({ signalId: s.id, keywords: [], events });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarQ.data, signals]);
+  }, [applyUrgency, calendarQ.data, signals]);
 
   const loadError = signalsQ.isError || todayQ.isError || routinesQ.isError;
 

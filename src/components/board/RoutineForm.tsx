@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import type { RoutineFreq, RoutineMonthlyPattern, RoutineToday, Weekday } from "@/bindings";
 import {
@@ -30,6 +30,7 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
   const timeId = `${fieldId}-time`;
   const offsetId = `${fieldId}-offset`;
   const durationId = `${fieldId}-duration`;
+  const titleRef = useRef<HTMLInputElement | null>(null);
 
   const [title, setTitle] = useState(initial?.title ?? "");
   const [freq, setFreq] = useState<RoutineFreq>(initial?.freq ?? "daily");
@@ -50,6 +51,10 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
   const needsWeekdays = freq === "weekly" || freq === "biweekly";
   const isMonthly = freq === "monthly";
   const isNthWeekday = isMonthly && monthlyPattern === "nth_weekday";
+
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
 
   const toggleDay = (key: Weekday) => {
     // nth_weekday는 요일 정확히 1개 — 클릭 시 단일 선택으로 치환.
@@ -72,8 +77,12 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
     if (needsWeekdays && days.size === 0) return; // weekly/biweekly는 요일 필수.
     if (isNthWeekday && days.size !== 1) return; // nth_weekday는 요일 정확히 1개(백엔드 검증 미러).
     // weekly/biweekly는 복수 요일, nth_weekday는 단일 요일을 weekdays로 전달. 그 외는 빈 배열.
-    const weekdays =
-      needsWeekdays || isNthWeekday ? DAYS.filter((d) => days.has(d.key)).map((d) => d.key) : [];
+    const weekdays: Weekday[] = [];
+    if (needsWeekdays || isNthWeekday) {
+      for (const day of DAYS) {
+        if (days.has(day.key)) weekdays.push(day.key);
+      }
+    }
     const offNum = offset.trim() === "" ? null : Math.max(0, Number(offset));
     const durNum = duration.trim() === "" ? null : Math.max(0, Number(duration));
     const draft: RoutineDraft = {
@@ -95,13 +104,13 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
   return (
     <form className="rform" onSubmit={submit}>
       <Input
+        ref={titleRef}
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="루틴 제목 (예: 아침 운동)"
         autoComplete="off"
         data-cb-routine-title
-        autoFocus
         className="mb-1.5 h-8 text-[13px]"
       />
       <div className="rfreqs">
@@ -120,7 +129,8 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
         ))}
       </div>
       {isMonthly && (
-        <div className="rfreqs" role="group" aria-label="월간 반복 방식">
+        <fieldset className="rfreqs m-0 min-w-0 border-0 p-0">
+          <legend className="sr-only">월간 반복 방식</legend>
           {MONTHLY_PATTERNS.map((p) => (
             <Button
               key={p.value}
@@ -134,10 +144,11 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
               {p.label}
             </Button>
           ))}
-        </div>
+        </fieldset>
       )}
       {isNthWeekday && (
-        <div className="days" role="group" aria-label="주차 선택">
+        <fieldset className="days m-0 min-w-0 border-0 p-0">
+          <legend className="sr-only">주차 선택</legend>
           {NTH_WEEKS.map((w) => (
             <Button
               key={w.value}
@@ -151,7 +162,7 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
               {w.label}
             </Button>
           ))}
-        </div>
+        </fieldset>
       )}
       {(needsWeekdays || isNthWeekday) && (
         <div className="days">

@@ -29,6 +29,15 @@ type Props = {
   onClose: () => void;
 };
 
+type CalendarDraft = {
+  title: string;
+  allDay: boolean;
+  start: string;
+  end: string;
+  calendarId: string;
+  description: string;
+};
+
 /** "HH:00" 한 시간 뒤를 더한 RFC3339 보정 없이 datetime-local 값(YYYY-MM-DDTHH:mm) 두 개를 만든다. */
 function defaultTimes(): { start: string; end: string } {
   const now = new Date();
@@ -51,12 +60,36 @@ function localOffset(): string {
   return `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
 }
 
+function createDraft(title: string): CalendarDraft {
+  const t = defaultTimes();
+  return {
+    title,
+    allDay: false,
+    start: t.start,
+    end: t.end,
+    calendarId: "",
+    description: "",
+  };
+}
+
 /**
  * 카드 → 직접 캘린더 이벤트 생성 모달 (Phase 19).
  * INVARIANT #2: 사용자 폼 제출 = 사람 결정 → 직접 write 정합(Acceptance 대기 없음 — 게이트는 자동화용).
  * 토큰은 keychain(Rust) — 본문 미노출. 실패는 graceful로 표시. DESIGN.md(Cohere white editorial) 톤.
  */
 export function CalendarEventModal({ state, onClose }: Props) {
+  if (!state) return null;
+
+  return <CalendarEventModalContent key={state.signalId} state={state} onClose={onClose} />;
+}
+
+function CalendarEventModalContent({
+  state,
+  onClose,
+}: {
+  state: CalendarModalState;
+  onClose: () => void;
+}) {
   const fieldId = useId();
   const titleId = `${fieldId}-title`;
   const startId = `${fieldId}-start`;
@@ -64,84 +97,66 @@ export function CalendarEventModal({ state, onClose }: Props) {
   const calendarFieldId = `${fieldId}-calendar`;
   const descId = `${fieldId}-desc`;
 
-  const projectId = state?.projectId ?? null;
-  const calendarsQ = useSelectedCalendars(projectId, !!state);
+  const projectId = state.projectId;
+  const calendarsQ = useSelectedCalendars(projectId, true);
   const create = useCreateCalendarEvent();
   const { pushSuccess } = useToastStore();
 
-  const [title, setTitle] = useState("");
-  const [allDay, setAllDay] = useState(false);
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [calendarId, setCalendarId] = useState("");
-  const [description, setDescription] = useState("");
+  const [draft, setDraft] = useState(() => createDraft(state.title));
 
   const calendars = calendarsQ.data ?? [];
+  const calendarId = draft.calendarId || calendars[0]?.id || "";
 
-  // 모달 열릴 때 폼 시드 — setState는 prev-compare로 render에서 적용 (set-state-in-effect 회피).
-  const [prevState, setPrevState] = useState(state);
-  if (state !== prevState) {
-    setPrevState(state);
-    if (state) {
-      const t = defaultTimes();
-      setTitle(state.title);
-      setAllDay(false);
-      setStart(t.start);
-      setEnd(t.end);
-      setCalendarId("");
-      setDescription("");
-    }
-  }
-  // mutation 상태 reset은 진짜 side-effect라 effect 유지.
+  const { reset } = create;
   useEffect(() => {
-    if (state) create.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
-
-  // 캘린더 목록이 오면 첫 항목을 기본 선택(아직 선택 없을 때만) —
-  // !calendarId 가드로 idempotent하므로 render에서 직접 적용 (set-state-in-effect 회피).
-  if (calendars.length > 0 && !calendarId) {
-    setCalendarId(calendars[0].id);
-  }
+    reset();
+  }, [reset]);
 
   // Esc/외부 클릭/창 양보는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
-
-  if (!state) return null;
 
   const noCalendars = !calendarsQ.isLoading && calendars.length === 0;
 
   // 종일 토글 시 시작/종료 값 포맷을 맞춘다. 종일=날짜(YYYY-MM-DD), 타임드=datetime-local(00:00 기본).
   const toggleAllDay = (next: boolean) => {
-    setAllDay(next);
+    const start = draft.start;
+    const end = draft.end;
     if (next) {
       // 종일 = 날짜(YYYY-MM-DD). end.date는 배타적이라 start 다음날 이상으로 보정(같은 날이면 +1일).
       const startDate = start.slice(0, 10);
       const endDate = end.slice(0, 10);
-      setStart(startDate);
-      setEnd(endDate > startDate ? endDate : addDays(startDate, 1));
+      setDraft((current) => ({
+        ...current,
+        allDay: true,
+        start: startDate,
+        end: endDate > startDate ? endDate : addDays(startDate, 1),
+      }));
     } else {
-      setStart((s) => (s.length <= 10 ? `${s.slice(0, 10)}T09:00` : s));
-      setEnd((s) => (s.length <= 10 ? `${s.slice(0, 10)}T10:00` : s));
+      setDraft((current) => ({
+        ...current,
+        allDay: false,
+        start: current.start.length <= 10 ? `${current.start.slice(0, 10)}T09:00` : current.start,
+        end: current.end.length <= 10 ? `${current.end.slice(0, 10)}T10:00` : current.end,
+      }));
     }
   };
 
   const submit = () => {
     if (create.isPending) return;
-    const trimmed = title.trim();
-    if (!trimmed || !calendarId || !start || !end) return;
+    const trimmed = draft.title.trim();
+    if (!trimmed || !calendarId || !draft.start || !draft.end) return;
     const offset = localOffset();
     // all-day = 날짜만(YYYY-MM-DD), end.date는 **배타적**이라 start보다 뒤여야 함(같거나 앞이면 +1일 보정).
     // timed = datetime-local + 로컬 오프셋 → RFC3339.
     let startVal: string;
     let endVal: string;
-    if (allDay) {
-      const sd = start.slice(0, 10);
-      const ed = end.slice(0, 10);
+    if (draft.allDay) {
+      const sd = draft.start.slice(0, 10);
+      const ed = draft.end.slice(0, 10);
       startVal = sd;
       endVal = ed > sd ? ed : addDays(sd, 1);
     } else {
-      startVal = `${start}:00${offset}`;
-      endVal = `${end}:00${offset}`;
+      startVal = `${draft.start}:00${offset}`;
+      endVal = `${draft.end}:00${offset}`;
     }
     create.mutate(
       {
@@ -151,8 +166,8 @@ export function CalendarEventModal({ state, onClose }: Props) {
           title: trimmed,
           start: startVal,
           end: endVal,
-          allDay: allDay,
-          description: description.trim() || null,
+          allDay: draft.allDay,
+          description: draft.description.trim() || null,
         },
       },
       {
@@ -187,8 +202,8 @@ export function CalendarEventModal({ state, onClose }: Props) {
           <span className="cev-lbl">제목</span>
           <Input
             id={titleId}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={draft.title}
+            onChange={(e) => setDraft((current) => ({ ...current, title: e.target.value }))}
             placeholder="이벤트 제목"
             autoFocus
           />
@@ -199,7 +214,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
           <input
             type="checkbox"
             aria-label="종일"
-            checked={allDay}
+            checked={draft.allDay}
             onChange={(e) => toggleAllDay(e.target.checked)}
           />
           <span>종일</span>
@@ -210,18 +225,18 @@ export function CalendarEventModal({ state, onClose }: Props) {
             <span className="cev-lbl">시작</span>
             <Input
               id={startId}
-              type={allDay ? "date" : "datetime-local"}
-              value={allDay ? start.slice(0, 10) : start}
-              onChange={(e) => setStart(e.target.value)}
+              type={draft.allDay ? "date" : "datetime-local"}
+              value={draft.allDay ? draft.start.slice(0, 10) : draft.start}
+              onChange={(e) => setDraft((current) => ({ ...current, start: e.target.value }))}
             />
           </label>
           <label className="cev-field" htmlFor={endId}>
             <span className="cev-lbl">종료</span>
             <Input
               id={endId}
-              type={allDay ? "date" : "datetime-local"}
-              value={allDay ? end.slice(0, 10) : end}
-              onChange={(e) => setEnd(e.target.value)}
+              type={draft.allDay ? "date" : "datetime-local"}
+              value={draft.allDay ? draft.end.slice(0, 10) : draft.end}
+              onChange={(e) => setDraft((current) => ({ ...current, end: e.target.value }))}
             />
           </label>
         </div>
@@ -235,7 +250,7 @@ export function CalendarEventModal({ state, onClose }: Props) {
           ) : (
             <Select
               value={calendarId}
-              onValueChange={setCalendarId}
+              onValueChange={(next) => setDraft((current) => ({ ...current, calendarId: next }))}
               disabled={calendarsQ.isLoading}
             >
               <SelectTrigger id={calendarFieldId} aria-label="캘린더 선택">
@@ -256,8 +271,8 @@ export function CalendarEventModal({ state, onClose }: Props) {
           <span className="cev-lbl">설명 (선택)</span>
           <Textarea
             id={descId}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={draft.description}
+            onChange={(e) => setDraft((current) => ({ ...current, description: e.target.value }))}
             placeholder="메모"
             rows={2}
           />
@@ -273,7 +288,12 @@ export function CalendarEventModal({ state, onClose }: Props) {
             className="rounded-full px-[22px]"
             onClick={submit}
             disabled={
-              create.isPending || noCalendars || !title.trim() || !calendarId || !start || !end
+              create.isPending ||
+              noCalendars ||
+              !draft.title.trim() ||
+              !calendarId ||
+              !draft.start ||
+              !draft.end
             }
             title={projectId ? "Google Calendar에 이벤트 생성" : "프로젝트 미태깅 카드"}
           >

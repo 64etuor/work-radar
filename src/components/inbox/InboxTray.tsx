@@ -62,7 +62,7 @@ export function InboxTray({ onClose }: { onClose: () => void }) {
     });
 
   return (
-    <div className="inbox-tray" role="dialog" aria-label="Inbox">
+    <aside className="inbox-tray" aria-label="Inbox">
       <header className="inbox-tray-head">
         <span className="inbox-tray-title">Inbox</span>
         <div className="inbox-tray-stats" aria-label="Inbox counters">
@@ -126,7 +126,7 @@ export function InboxTray({ onClose }: { onClose: () => void }) {
           );
         })}
       </div>
-    </div>
+    </aside>
   );
 }
 

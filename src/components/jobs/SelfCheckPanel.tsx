@@ -24,21 +24,8 @@ function normalizeProposal(p: PrSelfCheckProposal): PrSelfCheckProposal {
  * 사람이 편집하고 accept하면 로컬에 반영된다. **GitHub 제출은 사람이 수동으로** 한다(INVARIANT #2).
  */
 export function SelfCheckPanel({ run }: { run: AgentRunView }) {
-  const fieldId = useId();
-  const summaryId = `${fieldId}-summary`;
-
   const proposal = usePrProposal(run.id, true);
-  const accept = useAcceptProposal();
   const reject = useRejectProposal();
-  const pr = prTrigger(run.trigger);
-
-  // 편집 가능한 로컬 사본 — prev-compare로 render에서 시드 (set-state-in-effect 회피).
-  const [draft, setDraft] = useState<PrSelfCheckProposal | null>(null);
-  const [seededFrom, setSeededFrom] = useState<PrSelfCheckProposal | null>(null);
-  if (proposal.data && proposal.data !== seededFrom) {
-    setSeededFrom(proposal.data);
-    setDraft(normalizeProposal(proposal.data));
-  }
 
   if (proposal.isLoading) {
     return (
@@ -67,9 +54,20 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
       </div>
     );
   }
-  const d = draft ?? normalizeProposal(proposal.data ?? {});
+  const initial = normalizeProposal(proposal.data ?? {});
 
-  const setChecks = (checks: SelfCheckItem[]) => setDraft({ ...d, selfChecks: checks });
+  return <SelfCheckEditor key={JSON.stringify(initial)} run={run} initial={initial} />;
+}
+
+function SelfCheckEditor({ run, initial }: { run: AgentRunView; initial: PrSelfCheckProposal }) {
+  const fieldId = useId();
+  const summaryId = `${fieldId}-summary`;
+  const accept = useAcceptProposal();
+  const reject = useRejectProposal();
+  const pr = prTrigger(run.trigger);
+  const [draft, setDraft] = useState(() => initial);
+
+  const setChecks = (checks: SelfCheckItem[]) => setDraft({ ...draft, selfChecks: checks });
 
   return (
     <div className="jobs-prop">
@@ -86,22 +84,24 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
       <Textarea
         id={summaryId}
         className="min-h-0 resize-y"
-        value={d.summary ?? ""}
+        value={draft.summary ?? ""}
         rows={3}
-        onChange={(e) => setDraft({ ...d, summary: e.target.value })}
+        onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
       />
 
       <div className="jobs-prop-label">self-check 체크리스트</div>
       <div className="jobs-prop-checks">
-        {(d.selfChecks ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
-        {(d.selfChecks ?? []).map((c, i) => (
+        {(draft.selfChecks ?? []).length === 0 && (
+          <div className="jobs-prop-empty">(항목 없음)</div>
+        )}
+        {(draft.selfChecks ?? []).map((c, i) => (
           <label key={`${c.item}:${c.note ?? ""}`} className="jobs-prop-check">
             <input
               type="checkbox"
               aria-label={c.item}
               checked={c.checked ?? false}
               onChange={(e) => {
-                const next = [...(d.selfChecks ?? [])];
+                const next = [...(draft.selfChecks ?? [])];
                 next[i] = { ...c, checked: e.target.checked };
                 setChecks(next);
               }}
@@ -112,22 +112,22 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
         ))}
       </div>
 
-      {(d.screenshotsNeeded ?? []).length > 0 && (
+      {(draft.screenshotsNeeded ?? []).length > 0 && (
         <>
           <div className="jobs-prop-label">스크린샷 필요</div>
           <ul className="jobs-prop-ul">
-            {(d.screenshotsNeeded ?? []).map((s) => (
+            {(draft.screenshotsNeeded ?? []).map((s) => (
               <li key={s}>{s}</li>
             ))}
           </ul>
         </>
       )}
 
-      {(d.migrationNotes ?? []).length > 0 && (
+      {(draft.migrationNotes ?? []).length > 0 && (
         <>
           <div className="jobs-prop-label">마이그레이션/배포 노트</div>
           <ul className="jobs-prop-ul">
-            {(d.migrationNotes ?? []).map((s) => (
+            {(draft.migrationNotes ?? []).map((s) => (
               <li key={s}>{s}</li>
             ))}
           </ul>
@@ -145,7 +145,7 @@ export function SelfCheckPanel({ run }: { run: AgentRunView }) {
           size="sm"
           className="rounded-full text-[12px]"
           disabled={accept.isPending}
-          onClick={() => accept.mutate({ runId: run.id, accepted: d })}
+          onClick={() => accept.mutate({ runId: run.id, accepted: draft })}
         >
           <Check className="size-3.5" />
           accept (로컬 반영)

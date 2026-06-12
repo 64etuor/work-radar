@@ -82,27 +82,23 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
           const list = buckets.get(d) ?? [];
           const dd = parseLocalISODate(d);
           return (
-            <div
-              key={d}
-              className={cn("calv-col", d === todayIso && "is-today")}
-              role={onSelectDate ? "button" : undefined}
-              tabIndex={onSelectDate ? 0 : undefined}
-              onClick={onSelectDate ? () => onSelectDate(d) : undefined}
-              onKeyDown={
-                onSelectDate
-                  ? (e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelectDate(d);
-                      }
-                    }
-                  : undefined
-              }
-            >
-              <div className="calv-col-head">
-                <span className="calv-dow">{WEEKDAY_LABELS[i]}</span>
-                <span className="calv-dom">{dd.getDate()}</span>
-              </div>
+            <div key={d} className={cn("calv-col", d === todayIso && "is-today")}>
+              {onSelectDate ? (
+                <button
+                  type="button"
+                  className="calv-col-head w-full border-0 bg-transparent p-0"
+                  onClick={() => onSelectDate(d)}
+                  aria-label={`${d} 선택`}
+                >
+                  <span className="calv-dow">{WEEKDAY_LABELS[i]}</span>
+                  <span className="calv-dom">{dd.getDate()}</span>
+                </button>
+              ) : (
+                <div className="calv-col-head">
+                  <span className="calv-dow">{WEEKDAY_LABELS[i]}</span>
+                  <span className="calv-dom">{dd.getDate()}</span>
+                </div>
+              )}
               <div className="calv-col-body">
                 {list.length === 0 ? (
                   <div className="calv-col-empty">·</div>
@@ -138,21 +134,19 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
             <div
               key={d}
               className={cn("calv-cell", outside && "is-outside", d === todayIso && "is-today")}
-              role={onSelectDate ? "button" : undefined}
-              tabIndex={onSelectDate ? 0 : undefined}
-              onClick={onSelectDate ? () => onSelectDate(d) : undefined}
-              onKeyDown={
-                onSelectDate
-                  ? (e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelectDate(d);
-                      }
-                    }
-                  : undefined
-              }
             >
-              <span className="calv-cell-dom">{dd.getDate()}</span>
+              {onSelectDate ? (
+                <button
+                  type="button"
+                  className="calv-cell-dom w-fit border-0 bg-transparent p-0 text-left"
+                  onClick={() => onSelectDate(d)}
+                  aria-label={`${d} 선택`}
+                >
+                  {dd.getDate()}
+                </button>
+              ) : (
+                <span className="calv-cell-dom">{dd.getDate()}</span>
+              )}
               <div className="calv-cell-events">
                 {list.slice(0, 3).map((ev) => (
                   <span

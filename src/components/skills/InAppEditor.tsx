@@ -16,21 +16,11 @@ export function InAppEditor({ skill }: { skill: Skill }) {
   const update = useUpdateSkill();
   const del = useDeleteSkill();
 
-  const [prompt, setPrompt] = useState(skill.prompt ?? "");
-  const [name, setName] = useState(skill.name);
+  const [prompt, setPrompt] = useState(() => skill.prompt ?? "");
+  const [name, setName] = useState(() => skill.name);
   const [note, setNote] = useState<string | null>(null);
   // 기본값(코드 상수)과의 diff 펼침 여부(#18). 스킬 전환 시 초기화.
   const [showDiff, setShowDiff] = useState(false);
-
-  // 다른 스킬로 전환 시 폼 동기화 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
-  // (key 재마운트가 1차 — 이건 안전망.)
-  const [seededId, setSeededId] = useState(skill.id);
-  if (skill.id !== seededId) {
-    setSeededId(skill.id);
-    setPrompt(skill.prompt ?? "");
-    setName(skill.name);
-    setShowDiff(false);
-  }
 
   const dirty = prompt !== (skill.prompt ?? "") || name !== skill.name;
 

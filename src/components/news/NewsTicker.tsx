@@ -75,7 +75,7 @@ export function NewsTicker() {
   }
 
   return (
-    <div className="news-ticker" role="region" aria-label="외부 뉴스 티커">
+    <section className="news-ticker" aria-label="외부 뉴스 티커">
       <div
         ref={trackRef}
         className="news-ticker-track"
@@ -85,7 +85,7 @@ export function NewsTicker() {
         <NewsTrack items={items} />
         <NewsTrack items={items} ariaHidden />
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -127,7 +127,6 @@ function NewsTickerItem({
       }
       title={item.title}
       tabIndex={tabbable ? 0 : -1}
-      aria-hidden={tabbable ? undefined : true}
     >
       <span className={`news-src-badge ${newsSourceClass(item.source)}`}>
         {newsSourceLabel(item.source)}

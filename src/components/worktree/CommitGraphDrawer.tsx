@@ -40,7 +40,7 @@ export function CommitGraphDrawer({
   }, [onClose]);
 
   return (
-    <aside className="wt-commit-drawer" role="dialog" aria-label="커밋 그래프" data-wr-overlay-open>
+    <aside className="wt-commit-drawer" aria-label="커밋 그래프" data-wr-overlay-open>
       <header className="wt-commit-head">
         <div>
           <span className="wt-commit-kicker">Commit graph</span>
@@ -112,19 +112,11 @@ function CommitGraphBody({ graph }: { graph: CommitGraph | undefined }) {
           {graph.truncated ? <strong>최근 80개만</strong> : <strong>verified</strong>}
         </div>
         <div className="wt-commit-table-scroll">
-          <div className="wt-commit-grid" role="grid" aria-label="commit grid">
-            <div className="wt-h wt-h-graph" role="columnheader">
-              Graph
-            </div>
-            <div className="wt-h wt-h-commit" role="columnheader">
-              Commit
-            </div>
-            <div className="wt-h wt-h-author" role="columnheader">
-              Author
-            </div>
-            <div className="wt-h wt-h-date" role="columnheader">
-              Date
-            </div>
+          <div className="wt-commit-grid" aria-hidden="true">
+            <div className="wt-h wt-h-graph">Graph</div>
+            <div className="wt-h wt-h-commit">Commit</div>
+            <div className="wt-h wt-h-author">Author</div>
+            <div className="wt-h wt-h-date">Date</div>
 
             <GraphCanvas
               rows={topology.rows}
@@ -140,21 +132,15 @@ function CommitGraphBody({ graph }: { graph: CommitGraph | undefined }) {
                   <div
                     className={`wt-c wt-c-commit wt-c-side-${commit.side}`}
                     style={{ gridRow }}
-                    role="cell"
                     title={commit.subject}
                   >
                     <code className="wt-commit-hash">{commit.shortHash}</code>
                     <span className="wt-commit-subject">{commit.subject}</span>
                   </div>
-                  <div
-                    className="wt-c wt-c-author"
-                    style={{ gridRow }}
-                    role="cell"
-                    title={commit.author}
-                  >
+                  <div className="wt-c wt-c-author" style={{ gridRow }} title={commit.author}>
                     {commit.author}
                   </div>
-                  <div className="wt-c wt-c-date" style={{ gridRow }} role="cell">
+                  <div className="wt-c wt-c-date" style={{ gridRow }}>
                     {commit.date}
                   </div>
                 </Fragment>

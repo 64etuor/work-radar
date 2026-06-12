@@ -219,7 +219,8 @@ function useSkillsView() {
           <span className="skl-count">{total}</span>
         </div>
         <div className="skl-toolbar">
-          <div className="skl-viewtoggle" role="group" aria-label="보기 전환">
+          <fieldset className="skl-viewtoggle m-0 min-w-0 border-0 p-0">
+            <legend className="sr-only">보기 전환</legend>
             <Button
               variant={listView ? "outline" : "default"}
               size="sm"
@@ -240,7 +241,7 @@ function useSkillsView() {
             >
               <List className="size-4" />
             </Button>
-          </div>
+          </fieldset>
 
           <Button
             variant="outline"
@@ -331,7 +332,8 @@ function useSkillsView() {
       </header>
 
       {allTags.length > 0 && (
-        <div className="skl-tagbar" role="group" aria-label="태그 필터">
+        <fieldset className="skl-tagbar m-0 min-w-0 border-0 p-0">
+          <legend className="sr-only">태그 필터</legend>
           <button
             type="button"
             className={cn("skl-tagpill", activeTag === null && "active")}
@@ -359,7 +361,7 @@ function useSkillsView() {
           >
             태그 없음
           </button>
-        </div>
+        </fieldset>
       )}
 
       {selCount > 0 && (
@@ -616,7 +618,8 @@ function useSkillsView() {
                             : "인앱 프롬프트"}
             </SheetTitle>
             {!adding && selectedGroup.length > 1 && (
-              <div className="skl-sheet-switch" role="group" aria-label="위치 전환">
+              <fieldset className="skl-sheet-switch m-0 min-w-0 border-0 p-0">
+                <legend className="sr-only">위치 전환</legend>
                 <span className="skl-sheet-switch-label">{selectedGroup.length}곳</span>
                 {selectedGroup.map((loc) => (
                   <button
@@ -630,7 +633,7 @@ function useSkillsView() {
                     {providerLabel(loc.provider)}
                   </button>
                 ))}
-              </div>
+              </fieldset>
             )}
             <div className="skl-sheet-body">
               {adding ? (

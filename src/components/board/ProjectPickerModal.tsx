@@ -36,18 +36,30 @@ type Props = {
  * DESIGN.md(Cohere white editorial) — CalendarEventModal과 동일한 cev-* 토큰 재사용.
  */
 export function ProjectPickerModal({ state, onClose, onPick }: Props) {
-  const [selected, setSelected] = useState("");
+  if (!state) return null;
 
-  // 모달 열릴 때 첫 후보를 기본 선택 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
-  const [prevState, setPrevState] = useState(state);
-  if (state !== prevState) {
-    setPrevState(state);
-    if (state) setSelected(state.candidates[0]?.id ?? "");
-  }
+  return (
+    <ProjectPickerModalContent
+      key={`${state.signalId}:${state.target}`}
+      state={state}
+      onClose={onClose}
+      onPick={onPick}
+    />
+  );
+}
+
+function ProjectPickerModalContent({
+  state,
+  onClose,
+  onPick,
+}: {
+  state: ProjectPickerState;
+  onClose: () => void;
+  onPick: (projectId: string) => void;
+}) {
+  const [selected, setSelected] = useState(() => state.candidates[0]?.id ?? "");
 
   // Esc/외부 클릭/창 양보·포커스는 PR 0 Dialog 래퍼(overlay-stack 계약)가 전담(plan §0.6).
-
-  if (!state) return null;
 
   const submit = () => {
     if (!selected) return;

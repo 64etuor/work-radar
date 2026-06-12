@@ -122,26 +122,39 @@ export function BouleConfigControls({
   const cfg = useBouleConfig(repoId);
   const set = useSetBouleConfig();
   const data = cfg.data;
-  const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => budgetDraftFrom(null));
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [advancedDraft, setAdvancedDraft] = useState<AdvancedDraft>(() => advancedDraftFrom(null));
-  const [advancedError, setAdvancedError] = useState<string | null>(null);
   const budgetSeed = data ? JSON.stringify(data.budget ?? null) : null;
-  const [seededBudget, setSeededBudget] = useState<string | null>(null);
-  if (data && budgetSeed !== seededBudget) {
-    setSeededBudget(budgetSeed);
-    setBudgetDraft(budgetDraftFrom(data.budget));
-  }
   const advancedSeed = advancedSeedKey(data);
-  const [seededAdvanced, setSeededAdvanced] = useState<string | null>(null);
-  if (data && advancedSeed !== seededAdvanced) {
-    setSeededAdvanced(advancedSeed);
-    setAdvancedDraft(advancedDraftFrom(data));
-    setAdvancedError(null);
-  }
+
+  if (cfg.isLoading || !data) return null;
+
+  return (
+    <BouleConfigDraftControls
+      key={`${budgetSeed ?? ""}:${advancedSeed ?? ""}`}
+      repoId={repoId}
+      data={data}
+      set={set}
+      onToast={onToast}
+    />
+  );
+}
+
+function BouleConfigDraftControls({
+  repoId,
+  data,
+  set,
+  onToast,
+}: {
+  repoId: string;
+  data: BouleConfigSettings;
+  set: ReturnType<typeof useSetBouleConfig>;
+  onToast: (msg: string) => void;
+}) {
+  const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => budgetDraftFrom(data.budget));
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedDraft, setAdvancedDraft] = useState<AdvancedDraft>(() => advancedDraftFrom(data));
+  const [advancedError, setAdvancedError] = useState<string | null>(null);
 
   const buildInput = (patch: BouleConfigPatch) => {
-    if (!data) return null;
     const currentAdvanced = advancedDraftFrom(data);
     return {
       repoId,
@@ -181,7 +194,6 @@ export function BouleConfigControls({
     save({ budget });
   };
 
-  if (cfg.isLoading || !data) return null;
   const opensGate = data.autonomyLevel === "auto_plan" || data.autonomyLevel === "full";
   const advancedDirty = JSON.stringify(advancedDraft) !== JSON.stringify(advancedDraftFrom(data));
 

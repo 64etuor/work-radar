@@ -15,21 +15,8 @@ import { ProposalError } from "./ProposalError";
  * 뿐 외부 무변경(INVARIANT #2) — 실제 수정은 사람이. (재트리거 캡 초과는 백엔드가 Q1 escalate.)
  */
 export function TriagePanel({ run }: { run: AgentRunView }) {
-  const fieldId = useId();
-  const causeId = `${fieldId}-cause`;
-  const summaryId = `${fieldId}-summary`;
-
   const proposal = useTriageProposal(run.id, true);
-  const accept = useAcceptTriage();
   const reject = useRejectProposal();
-  const pr = prTrigger(run.trigger);
-  // proposal 로드 시 draft 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
-  const [draft, setDraft] = useState<CiTriageProposal | null>(null);
-  const [seededFrom, setSeededFrom] = useState<CiTriageProposal | null>(null);
-  if (proposal.data && proposal.data !== seededFrom) {
-    setSeededFrom(proposal.data);
-    setDraft(proposal.data);
-  }
 
   if (proposal.isLoading) {
     return (
@@ -43,8 +30,19 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
       <ProposalError runId={run.id} message={(proposal.error as Error).message} reject={reject} />
     );
   }
-  const d: CiTriageProposal = draft ??
-    proposal.data ?? { cause: "", suggestedFixes: [], summary: "" };
+  const initial: CiTriageProposal = proposal.data ?? { cause: "", suggestedFixes: [], summary: "" };
+
+  return <TriageEditor key={JSON.stringify(initial)} run={run} initial={initial} />;
+}
+
+function TriageEditor({ run, initial }: { run: AgentRunView; initial: CiTriageProposal }) {
+  const fieldId = useId();
+  const causeId = `${fieldId}-cause`;
+  const summaryId = `${fieldId}-summary`;
+  const accept = useAcceptTriage();
+  const reject = useRejectProposal();
+  const pr = prTrigger(run.trigger);
+  const [draft, setDraft] = useState(() => initial);
 
   return (
     <div className="jobs-prop">
@@ -61,13 +59,15 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
         id={causeId}
         className="min-h-0 resize-y"
         rows={2}
-        value={d.cause ?? ""}
-        onChange={(e) => setDraft({ ...d, cause: e.target.value })}
+        value={draft.cause ?? ""}
+        onChange={(e) => setDraft({ ...draft, cause: e.target.value })}
       />
       <div className="jobs-prop-label">수정안</div>
-      {(d.suggestedFixes ?? []).length === 0 && <div className="jobs-prop-empty">(항목 없음)</div>}
+      {(draft.suggestedFixes ?? []).length === 0 && (
+        <div className="jobs-prop-empty">(항목 없음)</div>
+      )}
       <ul className="jobs-prop-ul">
-        {(d.suggestedFixes ?? []).map((s) => (
+        {(draft.suggestedFixes ?? []).map((s) => (
           <li key={s}>{s}</li>
         ))}
       </ul>
@@ -78,8 +78,8 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
         id={summaryId}
         className="min-h-0 resize-y"
         rows={2}
-        value={d.summary ?? ""}
-        onChange={(e) => setDraft({ ...d, summary: e.target.value })}
+        value={draft.summary ?? ""}
+        onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
       />
       <div className="jobs-prop-hint">
         accept는 <b>로컬 기록</b>일 뿐입니다(외부 무변경). 실제 수정은 직접.
@@ -92,7 +92,7 @@ export function TriagePanel({ run }: { run: AgentRunView }) {
           size="sm"
           className="rounded-full text-[12px]"
           disabled={accept.isPending}
-          onClick={() => accept.mutate({ runId: run.id, accepted: d })}
+          onClick={() => accept.mutate({ runId: run.id, accepted: draft })}
         >
           <Check className="size-3.5" />
           accept (로컬 기록)

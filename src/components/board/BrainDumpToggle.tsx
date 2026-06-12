@@ -102,6 +102,8 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
     if (e.key === "Enter") {
       e.preventDefault();
       submit();
+    } else if (e.key === "Tab") {
+      onFormControlKeyDown(e);
     } else if (e.key === "Escape") {
       if (value.trim().length === 0) {
         // App 셸까지 안 가도록 즉시 차단(없으면 window가 hide됨 — INVARIANT 회귀).
@@ -110,6 +112,13 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
         setOpen(false);
       }
     }
+  };
+
+  const onFormControlKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    e.stopPropagation();
+    togglePendingKind();
   };
 
   return (
@@ -137,14 +146,12 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
       </button>
 
       {/* 폼은 항상 마운트되어 transition 안정. closed면 aria-hidden + tabindex −1로 비활성. */}
-      <div
+      <form
         className="bd-form"
         aria-hidden={!open}
-        onKeyDown={(e) => {
-          if (e.key !== "Tab") return;
+        onSubmit={(e) => {
           e.preventDefault();
-          e.stopPropagation();
-          togglePendingKind();
+          submit();
         }}
       >
         <span className="bd-label" aria-hidden>
@@ -160,6 +167,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
             value="personal"
             size="sm"
             tabIndex={open ? 0 : -1}
+            onKeyDown={onFormControlKeyDown}
             className="text-wr-subtle data-[state=on]:bg-secondary data-[state=on]:text-secondary-foreground font-semibold"
           >
             개인
@@ -168,6 +176,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
             value="work"
             size="sm"
             tabIndex={open ? 0 : -1}
+            onKeyDown={onFormControlKeyDown}
             className="text-wr-subtle data-[state=on]:bg-accent data-[state=on]:text-accent-foreground font-semibold"
           >
             업무
@@ -187,15 +196,15 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
           tabIndex={open ? 0 : -1}
         />
         <Button
-          type="button"
+          type="submit"
           size="pill"
-          onClick={submit}
           disabled={disabled}
           tabIndex={open ? 0 : -1}
+          onKeyDown={onFormControlKeyDown}
         >
           붙이기
         </Button>
-      </div>
+      </form>
     </div>
   );
 }

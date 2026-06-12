@@ -505,7 +505,7 @@ function TitleEditor({
   onCommit: (title: string) => void;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState(initial);
+  const [draft, setDraft] = useState(() => initial);
   const ref = useRef<HTMLTextAreaElement>(null);
   // commit/cancel 1회만 — Esc 취소가 textarea 언마운트→blur(onCommit)로 되살아나는 것을 차단.
   const settled = useRef(false);
@@ -514,12 +514,6 @@ function TitleEditor({
     settled.current = true;
     onCommit(value);
   };
-  const cancel = () => {
-    if (settled.current) return;
-    settled.current = true;
-    onCancel();
-  };
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -530,17 +524,21 @@ function TitleEditor({
   // Esc 취소(캡처 단계 — App 셸의 창 숨김 핸들러보다 먼저 가로채야 한다).
   // synthetic stopPropagation은 native window 리스너를 못 막으므로 ProjectPickerModal과 동일 패턴.
   useEffect(() => {
+    const cancelEdit = () => {
+      if (settled.current) return;
+      settled.current = true;
+      onCancel();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
         e.preventDefault();
-        cancel();
+        cancelEdit();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onCancel]);
 
   return (
     <textarea

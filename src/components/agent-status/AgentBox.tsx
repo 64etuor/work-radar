@@ -19,7 +19,7 @@ function NameEditor({
   onCommit: (name: string) => void;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState(initial);
+  const [draft, setDraft] = useState(() => initial);
   const ref = useRef<HTMLInputElement>(null);
   const settled = useRef(false);
   const commit = (value: string) => {
@@ -27,12 +27,6 @@ function NameEditor({
     settled.current = true;
     onCommit(value);
   };
-  const cancel = () => {
-    if (settled.current) return;
-    settled.current = true;
-    onCancel();
-  };
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -43,17 +37,21 @@ function NameEditor({
   // Esc 취소(캡처 단계 — App 셸의 창 숨김 핸들러보다 먼저 가로채야 한다).
   // synthetic stopPropagation은 native window 리스너를 못 막으므로 ProjectPickerModal과 동일 패턴.
   useEffect(() => {
+    const cancelEdit = () => {
+      if (settled.current) return;
+      settled.current = true;
+      onCancel();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
         e.preventDefault();
-        cancel();
+        cancelEdit();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onCancel]);
 
   return (
     <input

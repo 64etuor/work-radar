@@ -6,12 +6,12 @@ export function NodeTooltip({ node, docked = false }: { node: GraphNode; docked?
   // Docked (React Flow Panel): the Panel positions it; drop the absolute coords.
   const flip = node.lane === "handoff";
   return (
-    <div
+    <aside
       className="cr-tooltip"
       data-flip={(!docked && flip) || undefined}
       data-docked={docked || undefined}
       style={docked ? undefined : { left: flip ? node.x - 10 : node.x + NODE_W + 10, top: node.y }}
-      role="dialog"
+      aria-label={`${node.label} details`}
     >
       <div className="cr-tooltip-lane">{node.lane}</div>
       <div className="cr-tooltip-title">{node.label}</div>
@@ -31,6 +31,6 @@ export function NodeTooltip({ node, docked = false }: { node: GraphNode; docked?
           <dd className="cr-tooltip-id">{node.rawId}</dd>
         </div>
       </dl>
-    </div>
+    </aside>
   );
 }

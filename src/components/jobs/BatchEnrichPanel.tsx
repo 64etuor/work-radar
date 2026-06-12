@@ -24,15 +24,7 @@ import { ProposalError } from "./ProposalError";
  */
 export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
   const proposal = useBatchEnrichProposal(run.id, true);
-  const accept = useAcceptEnrichAll();
   const reject = useRejectProposal();
-  // proposal 로드 시 draft 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
-  const [draft, setDraft] = useState<BatchEnrichItem[] | null>(null);
-  const [seededFrom, setSeededFrom] = useState<BatchEnrichItem[] | null>(null);
-  if (proposal.data && proposal.data.items !== seededFrom) {
-    setSeededFrom(proposal.data.items);
-    setDraft(proposal.data.items);
-  }
 
   if (proposal.isLoading) {
     return (
@@ -46,13 +38,36 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
       <ProposalError runId={run.id} message={(proposal.error as Error).message} reject={reject} />
     );
   }
-  const items = draft ?? proposal.data?.items ?? [];
+  const items = proposal.data?.items ?? [];
   const skipped = proposal.data?.skipped ?? 0;
+
+  return (
+    <BatchEnrichEditor
+      key={JSON.stringify({ items, skipped })}
+      runId={run.id}
+      initialItems={items}
+      skipped={skipped}
+    />
+  );
+}
+
+function BatchEnrichEditor({
+  runId,
+  initialItems,
+  skipped,
+}: {
+  runId: string;
+  initialItems: BatchEnrichItem[];
+  skipped: number;
+}) {
+  const accept = useAcceptEnrichAll();
+  const reject = useRejectProposal();
+  const [items, setItems] = useState(() => initialItems);
 
   const setItem = (i: number, patch: Partial<BatchEnrichItem>) => {
     const next = [...items];
     next[i] = { ...next[i], ...patch };
-    setDraft(next);
+    setItems(next);
   };
 
   return (
@@ -122,7 +137,7 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
           disabled={accept.isPending || items.length === 0}
           onClick={() =>
             accept.mutate({
-              runId: run.id,
+              runId,
               accepted: { items, skipped },
             })
           }
@@ -135,7 +150,7 @@ export function BatchEnrichPanel({ run }: { run: AgentRunView }) {
           size="sm"
           className="rounded-full text-[12px]"
           disabled={reject.isPending}
-          onClick={() => reject.mutate(run.id)}
+          onClick={() => reject.mutate(runId)}
         >
           <X className="size-3.5" />
           폐기

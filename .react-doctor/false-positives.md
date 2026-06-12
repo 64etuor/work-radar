@@ -33,20 +33,21 @@
 
 ## `react-doctor/no-flush-sync`
 
-- `src/App.tsx:3` `flushSync(() => { setViewSnapshot(...); goTo(target); })` — 뷰 전환 시
+- `src/App.tsx:3` import + `src/App.tsx:105` `flushSync(() => { setViewSnapshot(...); goTo(target); })` — 뷰 전환 시
   직전 `shell.innerHTML` 스냅샷이 새 view로 교체되기 **전에** 캡처돼야 슬라이드 트랜지션이
   성립. `startTransition`로 바꾸면 deferred render가 되어 snapshot이 새 트리로 덮임. by-design.
 
 ## `react-doctor/no-render-in-render`
 
-- `src/App.tsx:187` `{renderView(view)}` — `renderView`는 이미 모듈 스코프(line 40, 주석
-  포함) 순수 매핑 함수. 워커가 JSX 안의 함수 호출 텍스트만 보고 발화. 인라인 컴포넌트가 아님.
+- `src/App.tsx:207` `{renderView(view)}` — `renderView`는 이미 모듈 스코프(`src/App.tsx:43`)
+  순수 매핑 함수. 워커가 JSX 안의 함수 호출 텍스트만 보고 발화. 인라인 컴포넌트가 아님.
 
 ## `react-doctor/no-danger`
 
-- `src/App.tsx:195` `dangerouslySetInnerHTML={{ __html: viewSnapshot.html }}` —
-  `viewSnapshot.html`은 직전 렌더 결과를 `shell.innerHTML`로 캡처한 자기 자신의 DOM 문자열.
-  외부 입력 0 (same-origin app DOM 재투영) → XSS surface 없음. 뷰 전환 슬라이드 전용.
+- `src/App.tsx:215` `dangerouslySetInnerHTML={{ __html: viewSnapshot.html }}` —
+  `viewSnapshot.html`은 `src/App.tsx:101-109`에서 직전 렌더 결과를 `shell.innerHTML`로
+  캡처한 자기 자신의 DOM 문자열. 외부 입력 0 (same-origin app DOM 재투영) → XSS surface
+  없음. 뷰 전환 슬라이드 전용.
 
 ## `react-doctor/rerender-functional-setstate`
 
@@ -130,8 +131,21 @@
 
 ## `react-doctor/no-multi-comp`
 
-- `src/components/ui/select.tsx` (`Select`/`SelectContent`/`SelectItem`) 등 — shadcn
-  primitive convention(한 파일 = primitive family). 분리하면 shadcn convention 회귀.
+- `src/components/ui/select.tsx:31,56` (`SelectContent`/`SelectItem`) — shadcn
+  primitive convention(한 파일 = primitive family)이며 `docs/areas/shadcn-migration.md`가
+  `src/components/ui/**`를 primitive family로 관리한다. `SelectContent`는 overlay-stack
+  `data-wr-overlay-open` 계약도 함께 보유하므로 분리하면 shadcn convention과 Esc 계약
+  추적성이 회귀한다.
+
+## `react-doctor/react-compiler-no-manual-memoization`
+
+- `src/App.tsx:86` `navigateView` — `registerKeydown(..., navigateView)` effect deps와
+  `CmdKnob` prop identity에 연결된 shell navigation chokepoint. React Compiler가 켜져 있어도
+  정적 분석기/bailout 환경에서 키다운 버스 재구독을 피하려는 명시 identity 보존.
+- `src/components/worktree/WorktreeDiffText.tsx:50-61` `allLines`/`parsed`/`codeText+codeIndices`
+  chain — `codeIndices`가 Shiki tokenize effect deps(`src/components/worktree/WorktreeDiffText.tsx:82-101`)로
+  들어간다. 주석처럼 compiler bailout 또는 정적 분석기 `no-effect-with-fresh-deps` 안전을 위해
+  referential identity가 의도된 수동 메모.
 
 ## `react-doctor/no-giant-component`
 

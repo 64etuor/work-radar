@@ -184,11 +184,8 @@ export function HermesPanel({
   const h = state.h ?? 780;
 
   return (
-    // TODO(a11y): focus trap + restore
-    <div
-      role="dialog"
+    <section
       aria-label="Hermes"
-      aria-modal="false"
       data-state={state.open ? "open" : "closed"}
       onAnimationEnd={(e) => {
         // fade-out 종료 시 즉시 언마운트(타임아웃보다 우선). 자식 애니메이션은 무시.
@@ -237,7 +234,7 @@ export function HermesPanel({
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       <ResizeGrip x={x} y={y} w={w} h={h} onBoundsChange={setBounds} />
-    </div>
+    </section>
   );
 }
 

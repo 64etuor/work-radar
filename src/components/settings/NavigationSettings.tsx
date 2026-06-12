@@ -34,6 +34,12 @@ import { unwrap } from "@/lib/query/client";
 import { HotkeyCapture } from "./HotkeyCapture";
 import { SectionLabel } from "./SettingsKit";
 
+type GlobalHotkeyQuery = ReturnType<typeof useGlobalHotkey>;
+type SetGlobalHotkeyMutation = ReturnType<typeof useSetGlobalHotkey>;
+type ResetGlobalHotkeyMutation = ReturnType<typeof useResetGlobalHotkey>;
+type NavKeymapMutation = ReturnType<typeof useSetNavKeymap>;
+type ResetNavKeymapMutation = ReturnType<typeof useResetNavKeymap>;
+
 /** 키맵 에디터 행: view + EXTRA_ACTIONS(calendar 등)를 한 목록으로. */
 const KEYMAP_ROWS: { key: string; label: string }[] = [
   ...NAV_ITEMS.map((n) => ({ key: n.view as string, label: n.label })),
@@ -66,40 +72,69 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hermes-toggle-hotkey"] }),
   });
 
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium">네비게이션 / 단축키</span>
+      </div>
+
+      {/* 글로벌 창 핫키 — 키 캡처 */}
+      <GlobalHotkeyEditor
+        key={hotkey.data ?? ""}
+        hotkey={hotkey}
+        setHotkey={setHotkey}
+        resetHotkey={resetHotkey}
+        onToast={onToast}
+      />
+      <p className="text-muted-foreground text-xs">
+        캡처 버튼 클릭 후 원하는 단축키를 누르세요 (예: Ctrl+Space, Cmd+Shift+K). 변경 시 즉시
+        재등록되며, 충돌 또는 지원하지 않는 키이면 이전 핫키를 유지합니다.
+      </p>
+
+      {/* Hermes 패널 토글 — OS 글로벌 단축키 */}
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground min-w-[96px] text-xs">Hermes 패널 토글</span>
+        <HotkeyCapture
+          value={hermesHotkeyData ?? "Cmd+Shift+Space"}
+          onChange={(spec) => setHermesHotkey.mutate(spec)}
+        />
+      </div>
+      {setHermesHotkey.isError && (
+        <p className="text-xs text-[color:var(--destructive)]">
+          단축키 등록 실패 — 다른 앱이나 nav 단축키와 충돌일 수 있습니다.
+        </p>
+      )}
+
+      {/* per-action keymap */}
+      <KeymapEditor
+        key={JSON.stringify(keymap.data ?? {})}
+        initialDraft={keymap.data ?? {}}
+        setKeymap={setKeymap}
+        resetKeymap={resetKeymap}
+        onToast={onToast}
+      />
+
+      {hotkey.isError && (
+        <p className="text-xs text-[color:var(--destructive)]">{String(hotkey.error)}</p>
+      )}
+    </div>
+  );
+}
+
+function GlobalHotkeyEditor({
+  hotkey,
+  setHotkey,
+  resetHotkey,
+  onToast,
+}: {
+  hotkey: GlobalHotkeyQuery;
+  setHotkey: SetGlobalHotkeyMutation;
+  resetHotkey: ResetGlobalHotkeyMutation;
+  onToast: (msg: string) => void;
+}) {
   // 글로벌 핫키 — 캡처된 사람 읽을 수 있는 라벨 / 서버 저장 spec.
-  const [hkSpec, setHkSpec] = useState("");
+  const [hkSpec, setHkSpec] = useState(() => hotkey.data ?? "");
   const [hkErr, setHkErr] = useState("");
-  // 서버 값 시드 — prev-compare로 render에서 적용 (set-state-in-effect 회피).
-  const [hkSeededFrom, setHkSeededFrom] = useState<string | undefined>(undefined);
-  if (hotkey.data !== hkSeededFrom) {
-    setHkSeededFrom(hotkey.data);
-    if (hotkey.data) setHkSpec(hotkey.data);
-  }
-
-  // keymap 드래프트 (action → shortcut spec string).
-  const [kmDraft, setKmDraft] = useState<Record<string, string>>({});
-  const [kmSeededFrom, setKmSeededFrom] = useState<Record<string, string> | undefined>(undefined);
-  if (keymap.data !== kmSeededFrom) {
-    setKmSeededFrom(keymap.data);
-    if (keymap.data) setKmDraft(keymap.data);
-  }
-
-  // 중복 감지: 같은 spec(대소문자 무시)을 2개 이상 액션이 쓰면 그 행을 빨갛게(경고만).
-  // knob 예약 키는 제외 — 값이 단축키 spec이 아니라 액션 토큰이라 중복 개념이 다르다.
-  const specCounts = (() => {
-    const c: Record<string, number> = {};
-    for (const [k, v] of Object.entries(kmDraft)) {
-      if (isKnobKeymapKey(k)) continue;
-      const s = v.trim().toLowerCase();
-      if (s) c[s] = (c[s] ?? 0) + 1;
-    }
-    return c;
-  })();
-  const isDup = (spec: string) => {
-    const s = spec.trim().toLowerCase();
-    return s !== "" && (specCounts[s] ?? 0) > 1;
-  };
-  const hasDup = Object.values(specCounts).some((n) => n > 1);
 
   const saveHotkey = () => {
     const spec = hkSpec.trim();
@@ -126,33 +161,8 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
     });
   };
 
-  const saveKeymap = () => {
-    if (setKeymap.isPending) return;
-    const cleaned: Record<string, string> = {};
-    for (const [k, v] of Object.entries(kmDraft)) cleaned[k] = v.trim();
-    // 중복이 있어도 저장은 허용(사용자 정책) — 경고만 띄운다.
-    setKeymap.mutate(cleaned, {
-      onSuccess: () =>
-        onToast(hasDup ? "단축키 저장됨 (중복 있음 — 경고 확인)" : "메뉴 단축키 저장됨"),
-      onError: (e) => onToast(String(e)),
-    });
-  };
-
-  const resetKm = () => {
-    if (resetKeymap.isPending) return;
-    resetKeymap.mutate(undefined, {
-      onSuccess: () => onToast("메뉴 단축키 기본값으로 리셋됨"),
-      onError: (e) => onToast(String(e)),
-    });
-  };
-
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium">네비게이션 / 단축키</span>
-      </div>
-
-      {/* 글로벌 창 핫키 — 키 캡처 */}
+    <>
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground min-w-[96px] text-xs">글로벌 창 핫키</span>
         <HotkeyCapture value={hkSpec} onChange={setHkSpec} />
@@ -175,26 +185,63 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         </Button>
       </div>
       {hkErr && <p className="text-xs text-[color:var(--destructive)]">{hkErr}</p>}
-      <p className="text-muted-foreground text-xs">
-        캡처 버튼 클릭 후 원하는 단축키를 누르세요 (예: Ctrl+Space, Cmd+Shift+K). 변경 시 즉시
-        재등록되며, 충돌 또는 지원하지 않는 키이면 이전 핫키를 유지합니다.
-      </p>
+    </>
+  );
+}
 
-      {/* Hermes 패널 토글 — OS 글로벌 단축키 */}
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground min-w-[96px] text-xs">Hermes 패널 토글</span>
-        <HotkeyCapture
-          value={hermesHotkeyData ?? "Cmd+Shift+Space"}
-          onChange={(spec) => setHermesHotkey.mutate(spec)}
-        />
-      </div>
-      {setHermesHotkey.isError && (
-        <p className="text-xs text-[color:var(--destructive)]">
-          단축키 등록 실패 — 다른 앱이나 nav 단축키와 충돌일 수 있습니다.
-        </p>
-      )}
+function KeymapEditor({
+  initialDraft,
+  setKeymap,
+  resetKeymap,
+  onToast,
+}: {
+  initialDraft: Record<string, string>;
+  setKeymap: NavKeymapMutation;
+  resetKeymap: ResetNavKeymapMutation;
+  onToast: (msg: string) => void;
+}) {
+  // keymap 드래프트 (action → shortcut spec string).
+  const [kmDraft, setKmDraft] = useState(() => initialDraft);
 
-      {/* per-action keymap */}
+  // 중복 감지: 같은 spec(대소문자 무시)을 2개 이상 액션이 쓰면 그 행을 빨갛게(경고만).
+  // knob 예약 키는 제외 — 값이 단축키 spec이 아니라 액션 토큰이라 중복 개념이 다르다.
+  const specCounts = (() => {
+    const c: Record<string, number> = {};
+    for (const [k, v] of Object.entries(kmDraft)) {
+      if (isKnobKeymapKey(k)) continue;
+      const s = v.trim().toLowerCase();
+      if (s) c[s] = (c[s] ?? 0) + 1;
+    }
+    return c;
+  })();
+  const isDup = (spec: string) => {
+    const s = spec.trim().toLowerCase();
+    return s !== "" && (specCounts[s] ?? 0) > 1;
+  };
+  const hasDup = Object.values(specCounts).some((n) => n > 1);
+
+  const saveKeymap = () => {
+    if (setKeymap.isPending) return;
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(kmDraft)) cleaned[k] = v.trim();
+    // 중복이 있어도 저장은 허용(사용자 정책) — 경고만 띄운다.
+    setKeymap.mutate(cleaned, {
+      onSuccess: () =>
+        onToast(hasDup ? "단축키 저장됨 (중복 있음 — 경고 확인)" : "메뉴 단축키 저장됨"),
+      onError: (e) => onToast(String(e)),
+    });
+  };
+
+  const resetKm = () => {
+    if (resetKeymap.isPending) return;
+    resetKeymap.mutate(undefined, {
+      onSuccess: () => onToast("메뉴 단축키 기본값으로 리셋됨"),
+      onError: (e) => onToast(String(e)),
+    });
+  };
+
+  return (
+    <>
       <div className="flex flex-col gap-1.5">
         <SectionLabel>메뉴 단축키 (기본 Cmd+숫자 · 빈 값 = 끔)</SectionLabel>
         <div className="flex flex-col gap-1">
@@ -261,11 +308,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         캡처 버튼 클릭 후 조합 단축키(예: Cmd+1, Cmd+Shift+C)를 누르세요. ✕로 끄기. 조합 단축키는
         입력 중에도 동작합니다.
       </p>
-
-      {hotkey.isError && (
-        <p className="text-xs text-[color:var(--destructive)]">{String(hotkey.error)}</p>
-      )}
-    </div>
+    </>
   );
 }
 

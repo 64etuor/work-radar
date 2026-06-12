@@ -1,12 +1,5 @@
 // src/components/weekly/LifeWheelRadar.tsx
-import {
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-} from "recharts";
+import { lazy, Suspense } from "react";
 
 import type { LifeWheelTagConfig } from "@/bindings";
 import {
@@ -18,6 +11,53 @@ import {
 
 const SERIES_CURRENT = "var(--color-wr-green, #3f7d5e)";
 const SERIES_AVG = "var(--color-wr-subtle, #c9c9c4)";
+
+type RadarDatum = {
+  axis: string;
+  current: number;
+  average: number;
+};
+
+type RadarChartPanelProps = {
+  data: RadarDatum[];
+  max: number;
+};
+
+const RadarChartPanel = lazy(async () => {
+  const { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } =
+    await import("recharts");
+
+  return {
+    default: function RadarChartPanel({ data, max }: RadarChartPanelProps) {
+      return (
+        <ResponsiveContainer width="100%" height={280}>
+          <RadarChart data={data} outerRadius="72%">
+            <PolarGrid stroke="var(--color-wr-border-light, #ececea)" />
+            <PolarAngleAxis
+              dataKey="axis"
+              tick={{ fill: "var(--color-wr-subtle, #6b6b6b)", fontSize: 11 }}
+            />
+            <PolarRadiusAxis domain={[0, max]} tick={false} axisLine={false} />
+            <Radar
+              name="4주 평균"
+              dataKey="average"
+              stroke={SERIES_AVG}
+              fill={SERIES_AVG}
+              fillOpacity={0.12}
+            />
+            <Radar
+              name="이번 주"
+              dataKey="current"
+              stroke={SERIES_CURRENT}
+              fill={SERIES_CURRENT}
+              fillOpacity={0.18}
+            />
+          </RadarChart>
+        </ResponsiveContainer>
+      );
+    },
+  };
+});
 
 interface Props {
   weekSignals: TaggedActivity[]; // 선택 주 완료 활동(브레인덤프 카드 + 루틴 완료)
@@ -80,30 +120,11 @@ export function LifeWheelRadar({ weekSignals, trailingWeeks, tags, onOpenSetting
 
   return (
     <div className="wk-radar">
-      <ResponsiveContainer width="100%" height={280}>
-        <RadarChart data={data} outerRadius="72%">
-          <PolarGrid stroke="var(--color-wr-border-light, #ececea)" />
-          <PolarAngleAxis
-            dataKey="axis"
-            tick={{ fill: "var(--color-wr-subtle, #6b6b6b)", fontSize: 11 }}
-          />
-          <PolarRadiusAxis domain={[0, max]} tick={false} axisLine={false} />
-          <Radar
-            name="4주 평균"
-            dataKey="average"
-            stroke={SERIES_AVG}
-            fill={SERIES_AVG}
-            fillOpacity={0.12}
-          />
-          <Radar
-            name="이번 주"
-            dataKey="current"
-            stroke={SERIES_CURRENT}
-            fill={SERIES_CURRENT}
-            fillOpacity={0.18}
-          />
-        </RadarChart>
-      </ResponsiveContainer>
+      <Suspense
+        fallback={<div className="wk-radar-chart-skeleton" style={{ height: 280 }} aria-hidden />}
+      >
+        <RadarChartPanel data={data} max={max} />
+      </Suspense>
       <div className="wk-radar-legend">
         <span>
           <i className="wk-dot" style={{ background: SERIES_CURRENT }} />
