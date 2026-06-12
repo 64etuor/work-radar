@@ -259,11 +259,11 @@
   color: var(--color-wr-fg);
 }
 
-/* ── KPI 스트립: 처리량(3타일) + PR 활동(2타일) — 타일 폭이 같도록 3:2 분할,
-   섹션 간 간격만 col-gap. 좁으면 세로 스택 ─────────────────────────────── */
+/* ── KPI 스트립: 처리량(3타일) + PR 활동(2타일) + 배치 시간(2타일) — 타일 폭이
+   같도록 3:2:2 분할, 섹션 간 간격만 col-gap. 좁으면 세로 스택 ──────────── */
 .wk .wk-kpis {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr);
   gap: var(--wk-col-gap);
   padding-top: 18px;
 }

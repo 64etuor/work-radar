@@ -205,7 +205,7 @@ export function UnscheduledTray({
   onToggleDone,
   onToggleRoutine,
   totals,
-  today = "",
+  today,
 }: Props) {
   const [allDayOpen, setAllDayOpen] = useState(false);
   const cardCount = unscheduledTodays.length + unscheduledRoutines.length;
@@ -235,7 +235,7 @@ export function UnscheduledTray({
           {unscheduledTodays.map((s, i) => {
             const t = totals?.get(s.id);
             const badge =
-              t && s.todayForDate
+              t && s.todayForDate && today
                 ? `누적 ${fmtMinutes(t.totalMin)} · ${todayAgeDays(s.todayForDate, today)}일째`
                 : undefined;
             return (

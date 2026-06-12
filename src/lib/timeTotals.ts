@@ -1,8 +1,9 @@
-/** 분 → "45m" | "3h" | "1h 30m". */
+/** 분 → "45m" | "3h" | "1h 30m". 소수 입력은 정수 절사. */
 export function fmtMinutes(min: number): string {
-  if (min <= 0) return "0m";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
+  const totalMinInt = Math.floor(min);
+  if (totalMinInt <= 0) return "0m";
+  const h = Math.floor(totalMinInt / 60);
+  const m = totalMinInt % 60;
   if (h === 0) return `${m}m`;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
@@ -11,5 +12,6 @@ export function fmtMinutes(min: number): string {
 export function todayAgeDays(todayForDate: string, today: string): number {
   const diff =
     new Date(`${today}T00:00:00`).getTime() - new Date(`${todayForDate}T00:00:00`).getTime();
+  if (Number.isNaN(diff)) return 1;
   return Math.max(0, Math.round(diff / 86_400_000)) + 1;
 }

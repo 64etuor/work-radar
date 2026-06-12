@@ -15,6 +15,9 @@ describe("fmtMinutes", () => {
   it('returns "1h 30m" for 90', () => {
     expect(fmtMinutes(90)).toBe("1h 30m");
   });
+  it('truncates fractional minutes — "1h 30m" for 90.7', () => {
+    expect(fmtMinutes(90.7)).toBe("1h 30m");
+  });
 });
 
 describe("todayAgeDays", () => {
@@ -23,5 +26,8 @@ describe("todayAgeDays", () => {
   });
   it("returns 1 on the same day", () => {
     expect(todayAgeDays("2026-06-12", "2026-06-12")).toBe(1);
+  });
+  it("clamps to 1 when registration date is in the future", () => {
+    expect(todayAgeDays("2026-06-15", "2026-06-10")).toBe(1);
   });
 });
