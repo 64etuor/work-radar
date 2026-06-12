@@ -16,7 +16,7 @@ plan 문서는 착수 시점 스냅샷(`plans/README.md`)이다. 이 분리(fron
 | 순서 | 슬라이스 | 상태 |
 | --- | --- | --- |
 | P0 | 문서 정합 (INDEX/STATUS/area-map/conventions/배너/런북/GDL 동결) | ✅ 2026-06-12 (이 커밋) |
-| P5a | harness 영구 문서 `governance/docs/harness/`로 이동 | 큐 |
+| P5a | harness 영구 문서 `governance/docs/harness/`로 이동 (HARNESS·agents·interfaces·orchestrator) | ✅ 2026-06-12 |
 | P1 | Disarmed→Armed 운용 표면 (래치 해제 UI·Go-Live 체크리스트·cmux 해석기·bin alias) | 큐 |
 | P2 | 완료 권위 실전화 (checkless 게이트·evaluator rung 배선·check 계약 주입) | 큐 |
 | P3 | tick mutex·launchd schedule CLI·브릿지 경로 수정·escalation TTL/outbound | 큐 |

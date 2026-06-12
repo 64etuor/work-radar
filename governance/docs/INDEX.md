@@ -15,7 +15,7 @@
 | 거버넌스 ADR | `governance/docs/adr/` — 배치=도메인, **id는 repo 전역 단일 시퀀스**(`docs/adr/README.md` 정본) |
 | 결정 breadcrumb | repo-root `docs/decisions.md`(`DL-*`, 단일 로그) — `governance/docs/decisions.md`(`GDL-*`)는 2026-06-12 동결 |
 | 배치·명명·정본 규칙 | `conventions.md` |
-| 운영 규율(워크스페이스 행동 규칙) | `../workspace/HARNESS.md` |
+| 운영 규율(워크스페이스 행동 규칙) | `harness/HARNESS.md` (+ `harness/agents/`·`harness/interfaces/MCP.md`·`harness/orchestrator.md`) |
 | 라이브 운용 런북 (오늘 손으로 켜는 법 포함) | `runbooks/2026-06-07-live-loop-smoke.md` |
 
 - **파일 정본 = `governance/docs/`** — `design/`(설계 spec) · `plans/`(구현 plan) · `runbooks/` · `orchestration/`.
@@ -24,7 +24,7 @@
   (`docs/plans/`·`docs/superpowers/{specs,plans}/`)에 두고, 아래 카탈로그가 **교차 라우팅**한다(`conventions.md` §1).
 - L3/L4 ingestion은 additive source list(`src/index/sources.ts`) — 앱·거버넌스의 ADR/결정 로그를 **둘 다** 읽는다(`conventions.md` §2).
 - 런타임 상태는 per-repo **`.boule/workspace`**(이벤트 파생물 — 설계 문서가 아니다).
-  구 `governance/workspace/`는 **2026-06-02 동결 레거시**(durable 문서만 거주, 이동 예정 — STATUS P5a).
+  구 `governance/workspace/`는 **2026-06-02 동결 레거시**(순수 이벤트 아카이브 — durable 문서는 `harness/`로 이동 완료, 2026-06-12 P5a).
 
 ## 설계 계보 (Design lineage)
 

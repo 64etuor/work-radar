@@ -6,14 +6,14 @@ SSOT, 인덱스는 PGlite(v3 Phase F; pgvector deferred). **라이브 런타임 
 
 설계/계획 전체 인덱스: **`docs/INDEX.md`** (단일 진입점). 진행 상태·실행 큐 = `docs/STATUS.md`.
 최신 마스터 설계 = `docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md`
-(v3 Orchestrator Control Plane). 운영 규율 = `workspace/HARNESS.md`.
+(v3 Orchestrator Control Plane). 운영 규율 = `docs/harness/HARNESS.md`.
 
 ## 구조
 
-- `docs/` — 이 하네스의 설계/계획 문서 (`design/` spec · `plans/` plan · `INDEX.md` 카탈로그 · `STATUS.md` 진행 ledger)
+- `docs/` — 이 하네스의 설계/계획 문서 (`design/` spec · `plans/` plan · `INDEX.md` 카탈로그 · `STATUS.md` 진행 ledger · `harness/` 운영 규율+에이전트/MCP 명세)
 - `workspace/` — **LEGACY (2026-06-02 동결)**: 초기 글로벌 SSOT였으나 per-repo `.boule/workspace`로
-  이전됨. 동결 이벤트 아카이브 + durable 문서(`HARNESS.md`·`agents/`·`interfaces/`)만 거주
-  (문서는 `docs/harness/`로 이동 예정 — `docs/STATUS.md` P5a). 새 이벤트를 여기 쓰지 않는다.
+  이전됨. 순수 동결 이벤트 아카이브만 잔존(durable 문서는 `docs/harness/`로 이동 완료 —
+  2026-06-12 P5a). 새 이벤트를 여기 쓰지 않는다.
 - `src/event/` — SSOT 직렬화 (id, frontmatter, append-only write)
 - `src/gateway/` — 레포 활동 → 정규화 L0 event
 - `src/mcp/` — Governance MCP 인터페이스 (handlers + stdio server)

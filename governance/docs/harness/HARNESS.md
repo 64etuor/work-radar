@@ -1,9 +1,9 @@
 # Boule — Harness 운영 지침 (durable)
 
-> **위치 주의 (2026-06-12):** 이 문서가 사는 `governance/workspace/`는 **2026-06-02 동결된
-> 레거시 워크스페이스**다(라이브 = per-repo `<repo>/.boule/workspace`, ADR-0009). 이 문서
-> 자체는 durable 규칙으로 **현역**이며 모든 workspace(per-repo 포함)에 적용된다 —
-> `governance/docs/harness/`로 이동 예정(`../docs/STATUS.md` P5a).
+> **위치 (2026-06-12 P5a 이동):** `governance/workspace/`(2026-06-02 동결 레거시)에서
+> `governance/docs/harness/`로 이동. 이 규칙은 **모든 boule workspace에 적용**된다 —
+> 라이브 per-repo `<repo>/.boule/workspace`(ADR-0009) 포함. 자매 문서: `agents/`(에이전트
+> 명세), `interfaces/MCP.md`(MCP 명세), `orchestrator.md`(Phase E 정책 축).
 
 이 문서는 boule workspace 안에서 행동하는 **모든 에이전트/세션**(Gateway, Guardian, Reviewer,
 Pattern Detector, Planner, Conductor, Orchestrator, …)이 따르는 **레포 전역 durable 규칙**이다.

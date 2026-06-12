@@ -1,4 +1,7 @@
-# orchestrator/ — Orchestrator 정책·상태머신 (Phase E에서 채움)
+# Orchestrator 정책·상태머신 (Phase E에서 채움)
+
+> 2026-06-12 P5a: `governance/workspace/orchestrator/README.md`에서 이동. 빈
+> `session-templates/` 트리는 동결 workspace에 잔존(채워질 때 per-repo 설계로 재논의).
 
 오케스트레이터의 **사람-저술** 운영 정의. 코드가 아니라 SSOT의 일부(에이전트 명세처럼).
 Phase E(observe/suggest only) 착수 시 다음을 채운다:

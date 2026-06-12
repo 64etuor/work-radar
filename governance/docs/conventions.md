@@ -12,8 +12,9 @@ breadcrumb 참조. 이 컨벤션은 codex 자문(by-path 제약 소스 검증) �
 | 구현 plan | `governance/docs/plans/` |
 | 런북 | `governance/docs/runbooks/` |
 | 오케스트레이션 로그 | `governance/docs/orchestration/` |
-| 거버넌스 ADR | `governance/docs/adr/` (0007–) |
-| 거버넌스 결정 로그 | `governance/docs/decisions.md` |
+| 하네스 운영 규율·에이전트/MCP 명세 | `governance/docs/harness/` (HARNESS.md·agents/·interfaces/·orchestrator.md — 2026-06-12 P5a에 동결 workspace에서 이동) |
+| 거버넌스 ADR | `governance/docs/adr/` (id는 repo 전역 단일 시퀀스 — §2) |
+| 거버넌스 결정 로그 | `governance/docs/decisions.md` (**2026-06-12 동결** — 신규는 `docs/decisions.md` DL) |
 | 카탈로그/프런트도어 | `governance/docs/INDEX.md` |
 | 진행 상태·실행 큐 (moving ledger) | `governance/docs/STATUS.md` |
 | 이 컨벤션 | `governance/docs/conventions.md` |
