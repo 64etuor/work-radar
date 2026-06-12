@@ -1,0 +1,24 @@
+src/components/WeeklyView.css
+  s_851a67ed0e4868::t_57998774cb8d8b 282-302
+src/components/WeeklyView.tsx
+  s_851a67ed0e4868::t_70dfd6ddbe7b0c 16
+  s_851a67ed0e4868::t_22714e06d29965 256-258,260-262,264
+  s_851a67ed0e4868::t_c4d08e1e17d7e7 160-183
+  s_851a67ed0e4868::t_b03f1b66eaca21 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3f9e4c9a3fbeb19e9aac888737e0ff00ef447c8b",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
