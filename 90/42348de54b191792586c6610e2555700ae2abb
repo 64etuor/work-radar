@@ -1,0 +1,25 @@
+src/components/jobs/jobsUtils.test.ts
+  s_68a719f240e2a3::t_e555caa360fd6f 3
+  s_68a719f240e2a3::t_16464491ae186e 24-43
+src/components/jobs/jobsUtils.ts
+  s_68a719f240e2a3::t_794c50c5657ddf 19-31
+src/components/jobs/JobCard.tsx
+  s_68a719f240e2a3::t_76a49cd6d09a70 17,20-44
+  s_68a719f240e2a3::t_5e09f63ac3d9af 153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "9042348de54b191792586c6610e2555700ae2abb",
+  "prompts": {},
+  "sessions": {
+    "s_68a719f240e2a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce2020b1-411b-4dc5-9215-5d849e9960ba",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
