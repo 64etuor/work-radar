@@ -28,7 +28,8 @@ export type TickOutcome =
   | "needs_human" // completion evaluator could not pass deterministically — human must inspect
   | "stalled" // a crashed-session in-flight task — human must re-dispatch/recover
   | "readiness_failed" // infra ok but posture not unattended-safe (e.g. observer not live)
-  | "infra_failed"; // preflight infra missing (cmux/git)
+  | "infra_failed" // preflight infra missing (cmux/git)
+  | "locked"; // another tick holds the workspace mutex — benign no-op (CLI-level; runTick never returns this)
 
 /** Clamp --max-steps to [1, ceiling] (ceiling from BOULE_TICK_MAX, default 10). The blast-radius
  *  bound is ALWAYS finite — a tick can never become an unbounded run (INVARIANT #5). */
@@ -39,12 +40,13 @@ export function clampMaxSteps(raw: string | boolean | undefined, ceilingRaw?: st
   return Math.min(n, ceiling);
 }
 
-/** outcome → process exit code: 0 ok (advanced/idle/in_flight) · 10 needs-human (halted/stalled) ·
- *  1 broken-env (readiness/infra failed). Lets cron alert on 10 (page a human) vs 1 (fix infra). */
+/** outcome → process exit code: 0 ok (advanced/idle/in_flight/locked) · 10 needs-human
+ *  (halted/stalled) · 1 broken-env (readiness/infra failed). Lets cron alert on 10 (page a human)
+ *  vs 1 (fix infra). "locked" is 0 — a concurrent tick is the system WORKING, not failing. */
 export function tickExitCode(outcome: TickOutcome): number {
   if (outcome === "halted_decision" || outcome === "needs_human" || outcome === "stalled") return 10;
   if (outcome === "readiness_failed" || outcome === "infra_failed") return 1;
-  return 0; // advanced | idle | in_flight
+  return 0; // advanced | idle | in_flight | locked
 }
 
 export interface TickReport {
@@ -56,6 +58,9 @@ export interface TickReport {
   stalledCount: number;
   blockers: string[];
   warnings: string[];
+  /** P3c — attached by the CLI AFTER runTick (never set here): the opt-in outbound
+   *  escalation-sync hook's outcome. Absent when the repo doesn't configure `escalationSync`. */
+  escalationSync?: "ok" | "failed" | "skipped";
 }
 
 export interface TickDeps {

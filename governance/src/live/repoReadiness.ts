@@ -1,5 +1,6 @@
 import { makeNodeSpawnSync } from "../repo/spawn.ts";
 
+import { ensureCmuxSocketEnv } from "../conductor/cmuxSocket.ts";
 import { parseConductorConfig, type ConductorConfig } from "../mcp/config.ts";
 import { listStalledTasks } from "../orchestrator/stall.ts";
 import { loadPolicyOrStrict, repoEnv } from "../repo/configIo.ts";
@@ -24,6 +25,11 @@ export interface RepoReadiness {
  *  always equals what a real tick would gate on. */
 export async function computeRepoReadiness(repoRoot: string): Promise<RepoReadiness> {
   const loaded = await loadPolicyOrStrict(repoRoot);
+  // P1c — resolve a cmux socket (env → boule.config.json → ~/.local/state/cmux discovery) BEFORE
+  // folding env: a Dock/launchd context inherits no CMUX_SOCKET_PATH, and the cmux child spawns
+  // read process.env. Shared by tick AND snapshot so the dashboard verdict equals the tick's.
+  // All-fail ⇒ env untouched ⇒ the exact current readiness-fail behavior (no degrade).
+  await ensureCmuxSocketEnv(repoRoot);
   const env = { ...process.env, ...repoEnv(repoRoot, loaded.policy) };
   const cfg = parseConductorConfig(env);
   const nodeSpawn = makeNodeSpawnSync();

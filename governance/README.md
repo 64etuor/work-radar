@@ -25,6 +25,10 @@ pnpm --dir governance install
 pnpm --dir governance test
 ```
 
+CLI는 `governance/bin/boule`로 바로 실행한다 (`./bin/boule status --repo <p>` —
+`node --experimental-strip-types …` 주문 불필요; `boule schedule install --repo <abs>`가
+launchd 틱 스케줄을 설치한다. 사용자 발동·가역·`<repo>/.boule/schedule-audit.log` 감사).
+
 ## Hermes 로드 경로 (spec §5.0)
 
 Governance MCP 서버(`src/mcp/server.ts`)를 Hermes 세션에 노출하는 두 경로:

@@ -135,12 +135,25 @@ const overridesSchema = z
   })
   .strict();
 
+/** Opt-in outbound escalation-sync hook (P3c): argv ARRAY spawned ONCE after a tick that ends with
+ *  pending escalations — never a shell string (no interpolation surface). Bounded + non-blocking;
+ *  the runner lives in cli/escalationSync.ts. */
+const escalationSyncSchema = z
+  .object({
+    command: z.array(z.string().min(1)).min(1),
+  })
+  .strict();
+
 const configSchema = z
   .object({
     schemaVersion: z.literal(1),
     projectId: z.string().optional(),
     projectName: z.string().optional(),
     kind: z.enum(["personal", "work"]),
+    /** Machine-local cmux socket pin — step (2) of the P1c resolver (env → THIS → discovery).
+     *  Operational (not policy), so it lives top-level, outside `overrides`. */
+    cmuxSocketPath: z.string().min(1).optional(),
+    escalationSync: escalationSyncSchema.optional(),
     overrides: overridesSchema.optional(),
   })
   .strict();

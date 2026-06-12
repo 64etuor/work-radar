@@ -64,7 +64,7 @@ describe("pendingEscalations", () => {
     expect((await pendingEscalations(ws, new Date("2026-06-02T10:05:00Z")))[0].sessionId).toBeNull();
   });
 
-  it("omits an escalation once past its TTL (bounded — no nagging forever, INVARIANT #5)", async () => {
+  it("keeps an expired escalation LISTED with expired:true (the halt persists — hiding it was the bug)", async () => {
     const created = new Date("2026-06-02T10:00:00Z");
     await escalate(
       ws,
@@ -72,10 +72,34 @@ describe("pendingEscalations", () => {
       created,
       0.5,
     );
-    // 23h later — still within TTL → pending
-    expect(await pendingEscalations(ws, new Date("2026-06-03T09:00:00Z"))).toHaveLength(1);
-    // 48h later — past TTL → omitted (decision stays in the store; it just stops being re-sent)
-    expect(await pendingEscalations(ws, new Date("2026-06-04T10:00:00Z"))).toHaveLength(0);
+    // 23h later — within TTL → pending, NOT expired
+    const fresh = await pendingEscalations(ws, new Date("2026-06-03T09:00:00Z"));
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0].expired).toBe(false);
+    expect(fresh[0].expiredAt).toBeNull();
+    // 48h later — past TTL → STILL listed, flagged expired (+ the expiry stamp). The unresolved
+    // decision_blocked keeps its plan halted, so the operator list must keep showing it (P3d).
+    const stale = await pendingEscalations(ws, new Date("2026-06-04T10:00:00Z"));
+    expect(stale).toHaveLength(1);
+    expect(stale[0].expired).toBe(true);
+    // escalate stamps expires = blocked-event time (created+1s) + ttl
+    expect(stale[0].expiredAt).toBe("2026-06-03T10:00:01.000Z");
+  });
+
+  it("a chosen escalation stays omitted even after its TTL (resolution, not expiry, removes entries)", async () => {
+    const esc = await escalate(
+      ws,
+      { question: "q?", options: [{ label: "a" }, { label: "b" }], ttlHours: 24 },
+      new Date("2026-06-02T10:00:00Z"),
+      0.5,
+    );
+    await chooseOption(
+      ws,
+      { decisionId: esc.decisionId, blockedEventId: esc.blockedEventId, optionToken: "opt1" },
+      new Date("2026-06-02T10:05:00Z"),
+      0.5,
+    );
+    expect(await pendingEscalations(ws, new Date("2026-06-05T10:00:00Z"))).toHaveLength(0);
   });
 
   it("surfaces the agent recommendation when one was given (null otherwise)", async () => {

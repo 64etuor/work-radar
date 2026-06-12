@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { parseArgs, commandTokenIndex, type ParsedArgs } from "./args.ts";
 import { boulePaths } from "../repo/paths.ts";
 import {
   defaultConfig,
@@ -30,9 +31,17 @@ import {
   makeExecutorViabilityProbesFromEnv,
 } from "../conductor/fromEnv.ts";
 import { evaluatorCompletionOptions } from "../conductor/evaluateLive.ts";
+import { ensureCmuxSocketEnv } from "../conductor/cmuxSocket.ts";
 import { parseEnvelopeDefaults } from "../mcp/config.ts";
 import { computeRepoReadiness } from "../live/repoReadiness.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
+import { acquireTickLock, clampLockTtlMs } from "../orchestrator/tickLock.ts";
+import {
+  clampSyncTimeoutMs,
+  maybeRunEscalationSync,
+  type EscalationSyncDeps,
+} from "./escalationSync.ts";
+import { cmdSchedule } from "./schedule.ts";
 import { recordExecutorAttempt, reportTaskDone } from "../task/handlers.ts";
 import { closeSession, requestSessionClose } from "../session/handlers.ts";
 import { makeObserverAdapterFromEnv, observeSessions } from "../session/observer.ts";
@@ -50,32 +59,8 @@ import {
 // app drives discovery of designated local repos and calls `init`/`set` per repo with explicit
 // args (keeps the governance package decoupled from the app sqlite, decision #3).
 
-export interface ParsedArgs {
-  cmd: string;
-  flags: Record<string, string | boolean>;
-}
-
-/** Tiny arg parser: `--key value` | `--key=value` | `--flag` (boolean). First non-flag = command. */
-export function parseArgs(argv: string[]): ParsedArgs {
-  const flags: Record<string, string | boolean> = {};
-  let cmd = "";
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]!;
-    if (!a.startsWith("--")) {
-      if (!cmd) cmd = a;
-      continue;
-    }
-    const eq = a.indexOf("=");
-    if (eq !== -1) {
-      flags[a.slice(2, eq)] = a.slice(eq + 1);
-    } else if (i + 1 < argv.length && !argv[i + 1]!.startsWith("--")) {
-      flags[a.slice(2)] = argv[++i]!;
-    } else {
-      flags[a.slice(2)] = true;
-    }
-  }
-  return { cmd, flags };
-}
+// parseArgs moved to args.ts (shared with schedule.ts); re-exported so existing importers keep working.
+export { parseArgs, type ParsedArgs } from "./args.ts";
 
 function reqRepo(flags: ParsedArgs["flags"]): string {
   const repo = flags.repo;
@@ -440,15 +425,59 @@ function formatTick(r: TickReport): string {
     lines.push(`  auto-accepted: ${r.specsAccepted} spec, ${r.plansAccepted} plan`);
   if (r.haltedPlans.length) lines.push(`  halted plans: ${r.haltedPlans.join(", ")}`);
   if (r.stalledCount) lines.push(`  stalled tasks: ${r.stalledCount}`);
+  if (r.escalationSync) lines.push(`  escalation sync: ${r.escalationSync}`);
   for (const b of r.blockers) lines.push(`  ✗ ${b}`);
   for (const w of r.warnings) lines.push(`  ⚠ ${w}`);
   return lines.join("\n");
 }
 
+/** Test seams for cmdTick's side channels (never used by production callers). */
+export interface CmdTickSeams {
+  escalationSync?: EscalationSyncDeps;
+}
+
 /** tick: ONE bounded auto-dispatch heartbeat (external cron/operator provides cadence — NOT a
  *  daemon, INVARIANT #5). Readiness/halt/stall gated; conducts <=--max-steps; reports + exits. */
-export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
+export async function cmdTick(flags: ParsedArgs["flags"], seams: CmdTickSeams = {}): Promise<number> {
   const repo = reqRepo(flags);
+  // P3a tick mutex — two clocks exist (in-app tokio ticker + launchd StartInterval); an advisory
+  // workspace lock keeps them from double-conducting. Acquired BEFORE the observer reconcile so a
+  // locked tick writes ZERO events. Held-and-fresh ⇒ benign no-op (outcome "locked", exit 0).
+  const lock = await acquireTickLock(boulePaths(repo).workspace, new Date(), {
+    ttlMs: clampLockTtlMs(process.env.BOULE_TICK_LOCK_TTL_MS),
+  });
+  if (!lock.acquired) {
+    const report: TickReport = {
+      outcome: "locked",
+      conducted: 0,
+      specsAccepted: 0,
+      plansAccepted: 0,
+      haltedPlans: [],
+      stalledCount: 0,
+      blockers: [],
+      warnings: [
+        `tick lock held (pid ${lock.holder?.pid ?? "?"} since ${lock.holder?.acquiredAt ?? "?"}) — another tick is running; this one is a benign no-op`,
+      ],
+    };
+    process.stdout.write((flags.json === true ? JSON.stringify(report) : formatTick(report)) + "\n");
+    return tickExitCode(report.outcome);
+  }
+  try {
+    return await runTickLocked(repo, flags, seams);
+  } finally {
+    await lock.release();
+  }
+}
+
+async function runTickLocked(
+  repo: string,
+  flags: ParsedArgs["flags"],
+  seams: CmdTickSeams,
+): Promise<number> {
+  // P1c — resolve a cmux socket (env → config → discovery) BEFORE any cmux spawn: the observer
+  // reconcile + the live adapter's children inherit process.env. All-fail ⇒ env untouched ⇒
+  // preflight fails exactly as before (no headless degrade).
+  await ensureCmuxSocketEnv(repo);
   // ONE bounded session reconcile (live observer only — a stub's empty surface set would
   // crash every known session). Runs BEFORE readiness so this tick's stall count already
   // reflects vanished surfaces; previously observe_sessions was MCP-manual-only, so a
@@ -501,8 +530,26 @@ export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
     Math.random(),
   );
 
-  process.stdout.write((flags.json === true ? JSON.stringify(report) : formatTick(report)) + "\n");
-  return tickExitCode(report.outcome);
+  // P3c — opt-in outbound escalation reach: when this tick ENDS with pending escalations and the
+  // repo configures `escalationSync`, run it ONCE (bounded). Strictly non-blocking: the outcome
+  // is recorded in the report and NEVER changes the tick exit code (a broken notifier must not
+  // masquerade as a broken loop).
+  const sync = await maybeRunEscalationSync({
+    repoRoot: repo,
+    workspace: p.workspace,
+    now: new Date(),
+    env: process.env,
+    deps: {
+      timeoutMs: clampSyncTimeoutMs(process.env.BOULE_ESCALATION_SYNC_TIMEOUT_MS),
+      ...(seams.escalationSync ?? {}),
+    },
+  });
+  const finalReport: TickReport = sync ? { ...report, escalationSync: sync } : report;
+
+  process.stdout.write(
+    (flags.json === true ? JSON.stringify(finalReport) : formatTick(finalReport)) + "\n",
+  );
+  return tickExitCode(finalReport.outcome);
 }
 
 /** housekeep: ONE bounded observation-chain pass (harvest → detect → hypothesis-test →
@@ -569,7 +616,10 @@ const USAGE = `boule <command> --repo <path>
   snapshot --repo <p>   # read-only live Control Room snapshot (always JSON on stdout)
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
   tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)
-  housekeep --repo <p> [--json]   # ONE bounded observation pass: harvest→detect→test→meta→prune (cron-driven)`;
+  housekeep --repo <p> [--json]   # ONE bounded observation pass: harvest→detect→test→meta→prune (cron-driven)
+  schedule install   --repo <abs> [--interval-sec n>=60 (default 300)] [--max-steps n]   # launchd LaunchAgent (user-invoked·reversible·audited)
+  schedule uninstall --repo <abs>   # bootout + remove plist (idempotent)
+  schedule status    --repo <abs>   # plist/loaded/interval/log path`;
 
 export async function main(argv: string[]): Promise<number> {
   const { cmd, flags } = parseArgs(argv);
@@ -599,6 +649,12 @@ export async function main(argv: string[]): Promise<number> {
         return await cmdTick(flags);
       case "housekeep":
         return await cmdHousekeep(flags);
+      case "schedule": {
+        // two-level command: re-parse everything AFTER the `schedule` token as its own argv.
+        const rest = argv.slice(commandTokenIndex(argv) + 1);
+        process.stdout.write((await cmdSchedule(rest)) + "\n");
+        return 0;
+      }
       default:
         process.stderr.write(USAGE + "\n");
         return cmd ? 1 : 0;

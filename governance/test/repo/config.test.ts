@@ -42,6 +42,49 @@ describe("parseBouleConfig — strict, fail-closed validation", () => {
     ).toThrow();
   });
 
+  it("accepts the optional machine-local cmuxSocketPath (P1c resolver step 2)", () => {
+    const c = parseBouleConfig({
+      schemaVersion: 1,
+      kind: "personal",
+      cmuxSocketPath: "/Users/u/.local/state/cmux/cmux.sock",
+    });
+    expect(c.cmuxSocketPath).toBe("/Users/u/.local/state/cmux/cmux.sock");
+    expect(() =>
+      parseBouleConfig({ schemaVersion: 1, kind: "personal", cmuxSocketPath: "" }),
+    ).toThrow();
+  });
+
+  it("accepts the opt-in escalationSync hook as an argv ARRAY only (no shell strings)", () => {
+    const c = parseBouleConfig({
+      schemaVersion: 1,
+      kind: "personal",
+      escalationSync: { command: ["python3", "bridge/boule_sync_telegram.py", "--live"] },
+    });
+    expect(c.escalationSync?.command).toEqual([
+      "python3",
+      "bridge/boule_sync_telegram.py",
+      "--live",
+    ]);
+    // a shell string, an empty argv, and unknown sub-fields all fail closed
+    expect(() =>
+      parseBouleConfig({
+        schemaVersion: 1,
+        kind: "personal",
+        escalationSync: { command: "python3 x.py" },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseBouleConfig({ schemaVersion: 1, kind: "personal", escalationSync: { command: [] } }),
+    ).toThrow();
+    expect(() =>
+      parseBouleConfig({
+        schemaVersion: 1,
+        kind: "personal",
+        escalationSync: { command: ["x"], shell: true },
+      }),
+    ).toThrow();
+  });
+
   it("accepts omitted budget and priceTable overrides for backward compatibility", () => {
     const c = parseBouleConfig({ schemaVersion: 1, kind: "work", overrides: {} });
     const p = resolvePolicy(c);

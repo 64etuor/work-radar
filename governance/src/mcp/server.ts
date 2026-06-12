@@ -41,12 +41,28 @@ import { registerSessionTools } from "./tools/sessions.ts";
 import { registerGraphTools } from "./tools/graph.ts";
 import { registerHandoffTools } from "./tools/handoff.ts";
 
-const WORKSPACE =
-  process.env.BOULE_WORKSPACE ?? new URL("../../workspace", import.meta.url).pathname;
+// FAIL-CLOSED workspace resolution (P3b). The old default — this package's governance/workspace —
+// froze 2026-06-02; live state is per-repo (<repo>/.boule/workspace). Defaulting silently pointed
+// agents at a corpse store (escalations written where no conductor looks). No env ⇒ refuse to
+// start and name the two supported entrypoints, which both set the env.
+const WORKSPACE = (process.env.BOULE_WORKSPACE ?? "").trim();
+if (!WORKSPACE) {
+  process.stderr.write(
+    [
+      "boule-governance: BOULE_WORKSPACE is not set — refusing to start against the retired",
+      "default (governance/workspace froze 2026-06-02; live state is <repo>/.boule/workspace).",
+      "Start the server through one of the supported entrypoints (both set the env):",
+      "  • generated client config:  claude --mcp-config <repo>/.boule/mcp.json",
+      "  • per-repo launcher:        boule run --repo <repo>",
+      "",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
 
 // Repo root holds the canonical L3/L4 markdown (docs/adr, docs/decisions.md,
 // docs/areas/decision-rails.md). Default: two levels up from the workspace
-// (<repo>/governance/workspace → <repo>). Overridable for tests/relocation.
+// (<repo>/.boule/workspace → <repo>). Overridable for tests/relocation.
 const REPO_ROOT = process.env.BOULE_REPO_ROOT ?? resolve(WORKSPACE, "..", "..");
 const LOADED_POLICY = await loadPolicyOrStrict(REPO_ROOT);
 

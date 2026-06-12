@@ -4,6 +4,9 @@
   "type": "module",
   "version": "0.0.1",
   "description": "Boule — SSOT governance harness sidecar for work-radar (P1 skeleton)",
+  "bin": {
+    "boule": "./bin/boule"
+  },
   "scripts": {
     "test": "vitest run",
     "mcp": "node --experimental-strip-types src/mcp/server.ts"

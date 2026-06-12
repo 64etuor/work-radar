@@ -1,0 +1,7 @@
+#!/usr/bin/env -S node --experimental-strip-types
+// `boule` bin alias (P1d) — kills the `node --experimental-strip-types src/cli/boule.ts` 주문.
+// Extensionless ESM works here: the nearest package.json (governance) is "type":"module", and
+// node resolves ../src against this file's real path (symlink-safe). Verified on macOS 24.6.
+import { main } from "../src/cli/boule.ts";
+
+main(process.argv.slice(2)).then((code) => process.exit(code));

@@ -178,7 +178,8 @@ governance/workspace/   # "LEGACY — frozen 2026-06-02, live = .boule/workspace
 | launchd tick ↔ 앱 ticker 이중 dispatch | P3(a) mutex가 **선행 deliverable**(스케줄러 설치 전 머지); tick 자체도 이벤트 소싱이라 중복 conduct만이 위험 — mutex가 차단 |
 | evaluator LLM 비용·오판 | opt-in + bounded + verdict는 task 단위 fail-closed(`needs_human` fallback 유지); 정족수 확장은 후속 |
 | P0 대수술이 타 세션과 충돌 | docs-only 단일 PR로 즉시; 충돌 시 문서 머지는 union-safe |
-| cmux 디스커버리 오탐(죽은 소켓) | 소켓 liveness probe 후 채택, 실패 시 기존 escalation 경로 |
+| cmux 디스커버리 오탐(죽은 소켓) | stat-isSocket 검사 후 채택(as-built; full connect-probe는 비용 대비 기각 — 오탐 시 기존 readiness-fail 경로로 안전 강등) |
+| 만료-미전달 escalation의 1회 지연 전달 | **의도된 동작**(P3d as-built, critic 판정 수용): expired-but-undelivered 블록은 sent-marker dedup으로 **딱 1회** 전달된다 — halt가 실재하는데 침묵 드롭하던 것이 원래 버그. 운영자에게 stale 알림 1회 도달 가능성을 여기 명시 |
 | GDL 은퇴가 06-07 결정 번복 | 5일 실증 데이터(§3.2-M3) 근거 명시 + breadcrumb 기록; ingestion 무변경이라 가역. in-flight 중 GDL 신규 행이 끼어들면 freeze note에 흡수(union-safe) |
 | 롤백 | P1/P2/P3 각 슬라이스 독립 revert 가능(opt-in 설계); launchd는 `uninstall` 한 방(가역) |
 
