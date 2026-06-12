@@ -31,16 +31,26 @@ export interface StatusResult { eventCount: number; }
 /** /status — count L0 events across all dated dirs. */
 export async function status(workspaceDir: string): Promise<StatusResult> {
   const eventsDir = join(workspaceDir, "events");
-  let count = 0;
   let days: string[] = [];
-  try { days = await readdir(eventsDir); } catch { return { eventCount: 0 }; }
-  for (const day of days) {
-    if (day.startsWith(".")) continue;
-    let files: string[] = [];
-    try { files = await readdir(join(eventsDir, day)); } catch { continue; }
-    count += files.filter((f) => f.endsWith(".md")).length;
+  try {
+    days = await readdir(eventsDir);
+  } catch {
+    return { eventCount: 0 };
   }
-  return { eventCount: count };
+  const counts = await Promise.all(
+    days
+      .filter((day) => !day.startsWith("."))
+      .map(async (day) => {
+        let files: string[] = [];
+        try {
+          files = await readdir(join(eventsDir, day));
+        } catch {
+          return 0;
+        }
+        return files.filter((f) => f.endsWith(".md")).length;
+      }),
+  );
+  return { eventCount: counts.reduce((sum, count) => sum + count, 0) };
 }
 
 export interface ObservationsResult { patterns: PatternView[]; }

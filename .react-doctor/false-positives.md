@@ -87,15 +87,20 @@
 
 ## `react-doctor/no-react19-deprecated-apis`
 
-- `.claude/skills/...` / `.codex/skills/...` 아래 템플릿 파일 — 앱 코드가 아니라 스킬
-  배포용 React 18 호환 템플릿. 앱 빌드/번들 대상 외.
+- `.claude/skills/tailwind-v4-shadcn/SKILL.md:235`,
+  `.codex/skills/tailwind-v4-shadcn/SKILL.md:235`,
+  `.claude/skills/tailwind-v4-shadcn/references/dark-mode.md:102`,
+  `.codex/skills/tailwind-v4-shadcn/references/dark-mode.md:102` —
+  스킬 문서의 fenced 예제 코드(`ReactDOM.createRoot(...).render(...)`). 앱 코드가
+  아니고 빌드/번들 대상 외이며, 스킬 배포용 템플릿 호환성 설명으로 남긴다.
 
 ## `react-doctor/no-array-index-key`, `no-array-index-as-key`
 
 - 데이터 자체가 stable ID 없는 agent 응답 string list (`selfChecks`, `suggestedFixes`,
   `screenshotsNeeded`, `migrationNotes`) — content를 key로 써도 중복 가능.
-- diff block/line/token (`src/components/worktree/WorktreeDiffText.tsx`) — 매 렌더마다
-  통째로 재계산되는 ephemeral 뷰. 인덱스 key가 reconcile 정확성에 영향 없음.
+- diff block/line/token (`src/components/worktree/WorktreeDiffText.tsx:113-122`) —
+  `parsed`에서 매 렌더 통째로 재계산되는 ephemeral diff 뷰. 블록/줄/token에는 서버 stable ID가
+  없고 순서 자체가 diff 좌표라 인덱스 key가 reconcile 정확성에 영향 없음.
 
 ## `react-doctor/js-combine-iterations`
 
@@ -159,21 +164,21 @@
 
 ## `react-doctor/no-multi-comp`
 
-- `src/components/ui/select.tsx:31,56` (`SelectContent`/`SelectItem`) — shadcn
-  primitive convention(한 파일 = primitive family)이며 `docs/areas/shadcn-migration.md`가
-  `src/components/ui/**`를 primitive family로 관리한다. `SelectContent`는 overlay-stack
-  `data-wr-overlay-open` 계약도 함께 보유하므로 분리하면 shadcn convention과 Esc 계약
-  추적성이 회귀한다.
+- `src/components/ui/select.tsx:10,31,56` (`SelectTrigger`/`SelectContent`/`SelectItem`) —
+  shadcn primitive convention(한 파일 = primitive family)이며
+  `docs/areas/shadcn-migration.md`가 `src/components/ui/**`를 primitive family로 관리한다.
+  `SelectContent`는 overlay-stack `data-wr-overlay-open` 계약도 함께 보유하므로 분리하면
+  shadcn convention과 Esc 계약 추적성이 회귀한다.
 
 ## `react-doctor/react-compiler-no-manual-memoization`
 
 - `src/App.tsx:86` `navigateView` — `registerKeydown(..., navigateView)` effect deps와
   `CmdKnob` prop identity에 연결된 shell navigation chokepoint. React Compiler가 켜져 있어도
   정적 분석기/bailout 환경에서 키다운 버스 재구독을 피하려는 명시 identity 보존.
-- `src/components/worktree/WorktreeDiffText.tsx:50-61` `allLines`/`parsed`/`codeText+codeIndices`
-  chain — `codeIndices`가 Shiki tokenize effect deps(`src/components/worktree/WorktreeDiffText.tsx:82-101`)로
-  들어간다. 주석처럼 compiler bailout 또는 정적 분석기 `no-effect-with-fresh-deps` 안전을 위해
-  referential identity가 의도된 수동 메모.
+- `src/components/worktree/WorktreeDiffText.tsx:50-71` `allLines`/`parsed`/
+  `codeText+codeIndices` chain — `codeIndices`가 Shiki tokenize effect deps
+  (`src/components/worktree/WorktreeDiffText.tsx:82-100`)로 들어간다. 주석처럼 compiler bailout 또는
+  정적 분석기 `no-effect-with-fresh-deps` 안전을 위해 referential identity가 의도된 수동 메모.
 
 ## `react-doctor/no-giant-component`
 

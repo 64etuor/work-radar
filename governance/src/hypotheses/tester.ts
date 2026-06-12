@@ -138,70 +138,84 @@ export async function runHypothesisTester(deps: HypothesisTesterDeps): Promise<H
 }
 
 export async function readSupportedPatterns(workspaceDir: string): Promise<SupportedPattern[]> {
-  const patterns: SupportedPattern[] = [];
-  for (const subdir of PATTERN_SUBDIRS) {
-    const dir = join(workspaceDir, "patterns", subdir);
-    for (const file of await markdownFiles(dir)) {
-      try {
-        const { data } = matter(await readFile(join(dir, file), "utf8"));
-        if (data.kind !== "commit_scope_hotspot") continue;
-        const id = String(data.id ?? file.replace(/\.md$/, ""));
-        if (!SAFE_ID.test(id)) continue;
-        const evidenceCount = data.evidence_count;
-        if (!Number.isInteger(evidenceCount) || evidenceCount <= 0) continue;
-        patterns.push({
-          id,
-          kind: "commit_scope_hotspot",
-          scope: String(data.scope ?? "").trim().toLowerCase(),
-          evidenceCount,
-        });
-      } catch {
-        // malformed pattern -> skip
-      }
-    }
-  }
-  return patterns
+  const patternGroups = await Promise.all(
+    PATTERN_SUBDIRS.map(async (subdir) => {
+      const dir = join(workspaceDir, "patterns", subdir);
+      const files = await markdownFiles(dir);
+      return Promise.all(files.map((file) => readSupportedPattern(dir, file)));
+    }),
+  );
+  return patternGroups
+    .flat()
+    .filter((pattern): pattern is SupportedPattern => pattern !== null)
     .filter((pattern) => pattern.scope.length > 0)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 export async function readTestingHypotheses(workspaceDir: string): Promise<HypothesisRecord[]> {
   const dir = join(workspaceDir, "hypotheses", "testing");
-  const hypotheses: HypothesisRecord[] = [];
-  for (const file of await markdownFiles(dir)) {
-    try {
-      hypotheses.push(parseHypothesisMarkdown(await readFile(join(dir, file), "utf8")));
-    } catch {
-      // malformed hypothesis -> skip
-    }
-  }
-  return hypotheses.sort((a, b) => a.id.localeCompare(b.id));
+  const hypotheses = await Promise.all(
+    (await markdownFiles(dir)).map((file) => readHypothesis(dir, file)),
+  );
+  return hypotheses
+    .filter((hypothesis): hypothesis is HypothesisRecord => hypothesis !== null)
+    .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 export async function listHypotheses(workspaceDir: string): Promise<HypothesisView[]> {
-  const out: HypothesisView[] = [];
-  for (const subdir of HYPOTHESIS_SUBDIRS) {
-    const dir = join(workspaceDir, "hypotheses", subdir);
-    for (const file of await markdownFiles(dir)) {
-      try {
-        const parsed = parseHypothesisMarkdown(await readFile(join(dir, file), "utf8"));
-        out.push({
-          id: parsed.id,
-          from_pattern: parsed.fromPattern,
-          kind: parsed.kind,
-          scope: parsed.scope,
-          status: parsed.status,
-          test_method: parsed.testMethod,
-          baseline: parsed.baseline,
-          threshold: parsed.threshold,
-          expires: parsed.expires,
-        });
-      } catch {
-        // malformed hypothesis -> skip
-      }
-    }
+  const views = await Promise.all(
+    HYPOTHESIS_SUBDIRS.map(async (subdir) => {
+      const dir = join(workspaceDir, "hypotheses", subdir);
+      const records = await Promise.all(
+        (await markdownFiles(dir)).map((file) => readHypothesis(dir, file)),
+      );
+      return records
+        .filter((record): record is HypothesisRecord => record !== null)
+        .map(hypothesisView);
+    }),
+  );
+  return views.flat().sort((a, b) => a.id.localeCompare(b.id));
+}
+
+async function readSupportedPattern(dir: string, file: string): Promise<SupportedPattern | null> {
+  try {
+    const { data } = matter(await readFile(join(dir, file), "utf8"));
+    if (data.kind !== "commit_scope_hotspot") return null;
+    const id = String(data.id ?? file.replace(/\.md$/, ""));
+    if (!SAFE_ID.test(id)) return null;
+    const evidenceCount = data.evidence_count;
+    if (!Number.isInteger(evidenceCount) || evidenceCount <= 0) return null;
+    return {
+      id,
+      kind: "commit_scope_hotspot",
+      scope: String(data.scope ?? "").trim().toLowerCase(),
+      evidenceCount,
+    };
+  } catch {
+    return null;
   }
-  return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+async function readHypothesis(dir: string, file: string): Promise<HypothesisRecord | null> {
+  try {
+    return parseHypothesisMarkdown(await readFile(join(dir, file), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function hypothesisView(parsed: HypothesisRecord): HypothesisView {
+  return {
+    id: parsed.id,
+    from_pattern: parsed.fromPattern,
+    kind: parsed.kind,
+    scope: parsed.scope,
+    status: parsed.status,
+    test_method: parsed.testMethod,
+    baseline: parsed.baseline,
+    threshold: parsed.threshold,
+    expires: parsed.expires,
+  };
 }
 
 async function markdownFiles(dir: string): Promise<string[]> {

@@ -5,19 +5,35 @@ import { parseEvent, type GovEvent } from "../event/event.ts";
 /** Read every L0 event under events/<YYYY-MM-DD>/*.md. Tolerant of a missing dir. */
 export async function readAllEvents(workspaceDir: string): Promise<GovEvent[]> {
   const eventsDir = join(workspaceDir, "events");
-  const out: GovEvent[] = [];
   let days: string[] = [];
-  try { days = await readdir(eventsDir); } catch { return out; }
-  for (const day of days.sort()) {
-    if (day.startsWith(".")) continue;
-    let files: string[] = [];
-    try { files = await readdir(join(eventsDir, day)); } catch { continue; }
-    for (const f of files.sort()) {
-      if (!f.endsWith(".md")) continue;
-      out.push(parseEvent(await readFile(join(eventsDir, day, f), "utf8")));
-    }
+  try {
+    days = await readdir(eventsDir);
+  } catch {
+    return [];
   }
-  return out;
+
+  const dayEvents = await Promise.all(
+    days
+      .filter((day) => !day.startsWith("."))
+      .sort()
+      .map(async (day) => {
+        const dayDir = join(eventsDir, day);
+        let files: string[] = [];
+        try {
+          files = await readdir(dayDir);
+        } catch {
+          return [];
+        }
+        return Promise.all(
+          files
+            .filter((file) => file.endsWith(".md"))
+            .sort()
+            .map(async (file) => parseEvent(await readFile(join(dayDir, file), "utf8"))),
+        );
+      }),
+  );
+
+  return dayEvents.flat();
 }
 
 export interface DecisionGroup {

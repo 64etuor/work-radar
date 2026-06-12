@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useReducer, useState } from "react";
 
 import type { AgentPromptConfig, AgentReasoningEffort } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,59 @@ import {
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 
 import { SectionLabel, StatusDot } from "./SettingsKit";
+
+type AgentPromptDraft = {
+  name: string;
+  prompt: string;
+  model: string;
+  reasoning: AgentReasoningEffort | "inherit";
+  fastMode: boolean;
+  enabled: boolean;
+  promptOpen: boolean;
+};
+
+type AgentPromptDraftAction =
+  | { type: "name"; value: string }
+  | { type: "prompt"; value: string }
+  | { type: "model"; value: string }
+  | { type: "reasoning"; value: AgentReasoningEffort | "inherit" }
+  | { type: "fastMode"; value: boolean }
+  | { type: "enabled"; value: boolean }
+  | { type: "togglePromptOpen" };
+
+function initAgentPromptDraft(config: AgentPromptConfig): AgentPromptDraft {
+  return {
+    name: config.name,
+    prompt: config.prompt,
+    model: config.model ?? "",
+    reasoning: config.reasoningEffort ?? "inherit",
+    fastMode: config.fastMode,
+    enabled: config.enabled,
+    promptOpen: false,
+  };
+}
+
+function agentPromptDraftReducer(
+  state: AgentPromptDraft,
+  action: AgentPromptDraftAction,
+): AgentPromptDraft {
+  switch (action.type) {
+    case "name":
+      return { ...state, name: action.value };
+    case "prompt":
+      return { ...state, prompt: action.value };
+    case "model":
+      return { ...state, model: action.value };
+    case "reasoning":
+      return { ...state, reasoning: action.value };
+    case "fastMode":
+      return { ...state, fastMode: action.value };
+    case "enabled":
+      return { ...state, enabled: action.value };
+    case "togglePromptOpen":
+      return { ...state, promptOpen: !state.promptOpen };
+  }
+}
 
 /**
  * 에이전트 설정 패널 (B2 Part B).
@@ -192,15 +245,8 @@ function AgentPromptConfigRow({
   onToast: (msg: string) => void;
 }) {
   const update = useUpdateAgentPromptConfig();
-  const [name, setName] = useState(config.name);
-  const [prompt, setPrompt] = useState(config.prompt);
-  const [model, setModel] = useState(config.model ?? "");
-  const [reasoning, setReasoning] = useState<AgentReasoningEffort | "inherit">(
-    config.reasoningEffort ?? "inherit",
-  );
-  const [fastMode, setFastMode] = useState(config.fastMode);
-  const [enabled, setEnabled] = useState(config.enabled);
-  const [promptOpen, setPromptOpen] = useState(false);
+  const [draft, dispatchDraft] = useReducer(agentPromptDraftReducer, config, initAgentPromptDraft);
+  const { name, prompt, model, reasoning, fastMode, enabled, promptOpen } = draft;
 
   const dirty =
     name !== config.name ||
@@ -233,19 +279,23 @@ function AgentPromptConfigRow({
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => dispatchDraft({ type: "name", value: e.target.value })}
           className="h-8 min-w-48 flex-1"
           aria-label={`${config.binding} 이름`}
         />
         <code className="bg-muted rounded px-2 py-1 text-[11px]">{config.binding}</code>
         <div className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
-          <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="에이전트 사용" />
+          <Switch
+            checked={enabled}
+            onCheckedChange={(value) => dispatchDraft({ type: "enabled", value })}
+            aria-label="에이전트 사용"
+          />
           사용
         </div>
       </div>
       <button
         type="button"
-        onClick={() => setPromptOpen((v) => !v)}
+        onClick={() => dispatchDraft({ type: "togglePromptOpen" })}
         aria-expanded={promptOpen}
         className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs"
       >
@@ -255,7 +305,7 @@ function AgentPromptConfigRow({
       {promptOpen && (
         <textarea
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => dispatchDraft({ type: "prompt", value: e.target.value })}
           className="border-input bg-background text-foreground focus:ring-ring mt-2 min-h-24 w-full rounded-md border px-3 py-2 font-mono text-xs outline-none focus:ring-2"
           aria-label={`${config.binding} 프롬프트`}
         />
@@ -264,7 +314,7 @@ function AgentPromptConfigRow({
         <Input
           list={`codex-models-${config.id}`}
           value={model}
-          onChange={(e) => setModel(e.target.value)}
+          onChange={(e) => dispatchDraft({ type: "model", value: e.target.value })}
           placeholder="모델 상속"
           className="h-8 font-mono text-xs"
           aria-label={`${config.binding} 모델`}
@@ -276,7 +326,9 @@ function AgentPromptConfigRow({
         </datalist>
         <Select
           value={reasoning}
-          onValueChange={(v) => setReasoning(v as AgentReasoningEffort | "inherit")}
+          onValueChange={(value) =>
+            dispatchDraft({ type: "reasoning", value: value as AgentReasoningEffort | "inherit" })
+          }
         >
           <SelectTrigger className="h-8 text-xs" aria-label={`${config.binding} thinking`}>
             <SelectValue />
@@ -290,7 +342,11 @@ function AgentPromptConfigRow({
           </SelectContent>
         </Select>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Switch checked={fastMode} onCheckedChange={setFastMode} aria-label="fast 모드" />
+          <Switch
+            checked={fastMode}
+            onCheckedChange={(value) => dispatchDraft({ type: "fastMode", value })}
+            aria-label="fast 모드"
+          />
           fast
         </div>
         <Button

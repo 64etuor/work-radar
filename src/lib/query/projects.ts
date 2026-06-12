@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   commands,
@@ -11,6 +11,15 @@ import {
 } from "@/bindings";
 
 import { unwrap } from "./client";
+
+function invalidateRepoTopology(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ["worktrees"] });
+  void qc.invalidateQueries({ queryKey: ["cleanupCandidates"] });
+  void qc.invalidateQueries({ queryKey: ["prRadar"] });
+  void qc.invalidateQueries({ queryKey: ["project-ticker-list"] });
+  void qc.invalidateQueries({ queryKey: ["control-room-snapshot"] });
+  void qc.invalidateQueries({ queryKey: ["boule-config"] });
+}
 
 /** 프로젝트 목록 (Phase 0). */
 export function useProjects() {
@@ -45,6 +54,8 @@ export function useDeleteProject() {
     mutationFn: (projectId: string) => unwrap(commands.deleteProject(projectId)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: ["repos"] });
+      invalidateRepoTopology(qc);
       void qc.invalidateQueries({ queryKey: ["signals"] });
       void qc.invalidateQueries({ queryKey: ["today"] });
       void qc.invalidateQueries({ queryKey: ["routines"] });
@@ -103,9 +114,7 @@ export function useSetProjectDefaultWriteCalendar() {
   return useMutation({
     mutationFn: (input: SetProjectDefaultWriteCalendarInput) =>
       unwrap(commands.setProjectDefaultWriteCalendar(input)),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["projects"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   });
 }
 
@@ -127,7 +136,10 @@ export function useCreateRepo() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateRepoInput) => unwrap(commands.createRepo(input)),
-    onSuccess: (repo) => qc.invalidateQueries({ queryKey: ["repos", repo.projectId] }),
+    onSuccess: (repo) => {
+      void qc.invalidateQueries({ queryKey: ["repos", repo.projectId] });
+      invalidateRepoTopology(qc);
+    },
   });
 }
 
@@ -137,7 +149,10 @@ export function useDeleteRepo() {
   return useMutation({
     mutationFn: ({ repoId }: { repoId: string; projectId: string }) =>
       unwrap(commands.deleteRepo(repoId)),
-    onSuccess: (_data, { projectId }) => qc.invalidateQueries({ queryKey: ["repos", projectId] }),
+    onSuccess: (_data, { projectId }) => {
+      void qc.invalidateQueries({ queryKey: ["repos", projectId] });
+      invalidateRepoTopology(qc);
+    },
   });
 }
 

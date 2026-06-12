@@ -58,11 +58,14 @@ export async function buildIndex(
       const adrDir = join(repoRoot, src.dir);
       const names = (await fs.readDir(adrDir)).filter((n) => n.endsWith(".md") && !SKIP_ADR.has(n));
       names.sort();
-      for (const name of names) {
-        const content = await fs.readFile(join(adrDir, name));
-        if (content == null) continue;
-        const row = parseAdr(content, `${src.sourcePathPrefix}/${name}`);
-        if (!row) continue;
+      const rows = await Promise.all(
+        names.map(async (name) => {
+          const content = await fs.readFile(join(adrDir, name));
+          return content == null ? null : parseAdr(content, `${src.sourcePathPrefix}/${name}`);
+        }),
+      );
+      for (const row of rows) {
+        if (row == null) continue;
         const prior = adrIdSource.get(row.id);
         if (prior !== undefined) {
           throw new Error(`Duplicate ADR id ${row.id}: ${row.sourcePath} collides with ${prior}`);
