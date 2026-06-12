@@ -32,6 +32,8 @@ export type TimedBlock = {
   done?: boolean;
   /** 루틴 블록의 routine_id (popover 토글 호출용). 다른 kind에선 무의미. */
   routineId?: string;
+  /** signal 블록의 원본 signal id — id는 `signal:${id}:${date}`라 파싱 대신 이 필드를 쓴다. */
+  signalId?: string;
 };
 
 export type LayoutBox = {

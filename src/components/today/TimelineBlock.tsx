@@ -70,7 +70,7 @@ function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
     from: "canvas",
     blockKind: "signal",
     blockId: block.id,
-    signalId: stripBlockPrefix(block.id, "signal"),
+    signalId: block.signalId ?? stripBlockPrefix(block.id, "signal"),
     title: block.title,
     startISO: block.startISO,
     durationMin,
@@ -109,7 +109,7 @@ function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: n
     edge,
     blockKind: "signal",
     blockId: block.id,
-    signalId: stripBlockPrefix(block.id, "signal"),
+    signalId: block.signalId ?? stripBlockPrefix(block.id, "signal"),
     startISO: block.startISO,
     durationMin,
   };

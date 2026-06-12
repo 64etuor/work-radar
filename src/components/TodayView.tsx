@@ -126,6 +126,7 @@ export function TodayView() {
 
   const blocks = buildTimelineBlocks({
     signals: rail,
+    placements: [], // Task 8에서 실제 쿼리 연결
     eventsByDate: eventsQ.byDate,
     routinesByDate: routinesQ.byDate,
     dates: visibleDates,
@@ -166,7 +167,7 @@ export function TodayView() {
     const { block } = box;
     // 블록이 놓인 날짜(occurrence) 기준으로 완료 기록 — 연속 타임라인에서 표시된 블록과 일관.
     if (block.kind === "signal") {
-      const id = block.id.replace(/^signal:/, "");
+      const id = block.signalId ?? block.id.replace(/^signal:/, "");
       toggleDone.mutate({ id, date: timelineBlockDate(block), done });
     } else if (block.routineId) {
       toggleRoutine.mutate({ routineId: block.routineId, date: timelineBlockDate(block), done });

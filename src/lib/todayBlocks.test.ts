@@ -11,37 +11,42 @@ import {
 const DATE = "2026-05-28";
 
 describe("buildTodayBlocks", () => {
-  it("excludes scheduled signals whose date differs from the selected date", () => {
+  it("excludes placements whose date differs from the selected date", () => {
     // rollover 레일에는 다른 날짜로 배치된 signal이 남을 수 있다 — 보는 날짜와 다르면 제외돼야 한다.
     const signals = [
+      { id: "today", title: "오늘 배치", scheduledAt: null, scheduledDuration: null },
+      { id: "other", title: "다른날 배치", scheduledAt: null, scheduledDuration: null },
+    ] as never[];
+    const placements = [
+      { id: "p1", signalId: "today", date: DATE, startAt: `${DATE}T09:00:00`, durationMin: 60 },
       {
-        id: "today",
-        title: "오늘 배치",
-        scheduledAt: `${DATE}T09:00:00`,
-        scheduledDuration: 60,
-      },
-      {
-        id: "other",
-        title: "다른날 배치",
-        scheduledAt: "2026-05-29T09:00:00",
-        scheduledDuration: 60,
+        id: "p2",
+        signalId: "other",
+        date: "2026-05-29",
+        startAt: "2026-05-29T09:00:00",
+        durationMin: 60,
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
+    const blocks = buildTodayBlocks({ signals, placements, events: [], routines: [], date: DATE });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].id).toBe("signal:today");
+    expect(blocks[0].id).toBe(`signal:today:${DATE}`);
+    expect(blocks[0].signalId).toBe("today");
   });
 
-  it("keeps a signal scheduled with a local offset on the same local date", () => {
+  it("keeps a placement with a local offset startAt on the same local date", () => {
     const signals = [
+      { id: "s1", title: "오프셋", scheduledAt: null, scheduledDuration: null },
+    ] as never[];
+    const placements = [
       {
-        id: "s1",
-        title: "오프셋",
-        scheduledAt: `${DATE}T23:30:00+09:00`,
-        scheduledDuration: 30,
+        id: "p1",
+        signalId: "s1",
+        date: DATE,
+        startAt: `${DATE}T23:30:00+09:00`,
+        durationMin: 30,
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
+    const blocks = buildTodayBlocks({ signals, placements, events: [], routines: [], date: DATE });
     expect(blocks).toHaveLength(1);
   });
 
@@ -56,6 +61,15 @@ describe("buildTodayBlocks", () => {
         linkedCalendarId: "cal-id",
       },
     ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: DATE,
+        startAt: "2026-05-28T09:00:00",
+        durationMin: 60,
+      },
+    ] as never[];
     const events = [
       {
         id: "g1",
@@ -68,7 +82,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals, events, routines: [], date: DATE });
+    const blocks = buildTodayBlocks({ signals, placements, events, routines: [], date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("signal");
   });
@@ -84,6 +98,15 @@ describe("buildTodayBlocks", () => {
         linkedCalendarId: "cal-a",
       },
     ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: DATE,
+        startAt: "2026-05-28T09:00:00",
+        durationMin: 60,
+      },
+    ] as never[];
     const events = [
       {
         id: "g1",
@@ -96,7 +119,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals, events, routines: [], date: DATE });
+    const blocks = buildTodayBlocks({ signals, placements, events, routines: [], date: DATE });
     expect(blocks.map((b) => b.kind)).toEqual(["signal", "event"]);
   });
 
@@ -113,7 +136,13 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines: [], date: DATE });
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events,
+      routines: [],
+      date: DATE,
+    });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("event");
     expect(blocks[0].calendarId).toBe("cal-id");
@@ -144,7 +173,13 @@ describe("buildTodayBlocks", () => {
         projectColor: "#555",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines: [], date: DATE });
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events,
+      routines: [],
+      date: DATE,
+    });
     expect(blocks).toHaveLength(2);
     expect(new Set(blocks.map((b) => b.id)).size).toBe(2);
   });
@@ -162,13 +197,25 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines: [], date: DATE });
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events,
+      routines: [],
+      date: DATE,
+    });
     expect(blocks).toHaveLength(0);
   });
 
   it("routine with timeOfDay produces virtual instance", () => {
     const routines = [{ id: "r1", title: "R", timeOfDay: "07:00", timeOverride: null }] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events: [], routines, date: DATE });
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events: [],
+      routines,
+      date: DATE,
+    });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("routine");
     expect(blocks[0].startISO).toContain("07:00");
@@ -178,14 +225,26 @@ describe("buildTodayBlocks", () => {
     const routines = [
       { id: "r1", title: "R", timeOfDay: "07:00", timeOverride: "09:00" },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events: [], routines, date: DATE });
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events: [],
+      routines,
+      date: DATE,
+    });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].startISO).toContain("09:00");
   });
 
   it("routine without any time is skipped", () => {
     const routines = [{ id: "r1", title: "R", timeOfDay: null, timeOverride: null }] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events: [], routines, date: DATE });
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events: [],
+      routines,
+      date: DATE,
+    });
     expect(blocks).toHaveLength(0);
   });
 
@@ -212,7 +271,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks.map((b) => b.kind)).toEqual(["event"]);
   });
 
@@ -242,7 +301,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].id).toBe("event:work-cal:master-1");
     expect(blocks[0].kind).toBe("event");
@@ -278,7 +337,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].id).toBe("event:work-cal:master-1");
     expect(blocks[0].title).toBe("Updated routine");
@@ -311,7 +370,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].id).toBe("event:work-cal:master-1_20260528T000000Z");
     expect(blocks[0].kind).toBe("event");
@@ -348,7 +407,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("routine");
     expect(blocks[0].title).toBe("R edited");
@@ -386,7 +445,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("event");
     expect(blocks[0].routineId).toBe("r1");
@@ -424,7 +483,7 @@ describe("buildTodayBlocks", () => {
         projectColor: "#444",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("event");
     expect(blocks[0].endISO).toContain("10:00");
@@ -441,29 +500,17 @@ describe("buildTodayBlocks", () => {
         googleCalendarId: "work-cal",
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals: [], events: [], routines, date: DATE });
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events: [],
+      routines,
+      date: DATE,
+    });
     expect(blocks).toHaveLength(0);
   });
 
   it("plusMin preserves local time across hour boundary (no UTC drift)", () => {
-    const signals = [
-      {
-        id: "s1",
-        title: "S",
-        scheduledAt: "2026-05-28T23:30:00",
-        scheduledDuration: 60,
-        linkedEventId: null,
-        linkedCalendarId: null,
-      },
-    ] as never[];
-    const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
-    // local 00:30 다음날, NOT 15:30Z(UTC). `.toISOString()` 회귀 차단.
-    expect(blocks[0].endISO).toMatch(/^2026-05-29T00:30:00/);
-    // 로컬 포맷 보존 확인 — 'Z' 접미사 금지.
-    expect(blocks[0].endISO.endsWith("Z")).toBe(false);
-  });
-
-  it("signal without scheduledAt is skipped (unscheduled)", () => {
     const signals = [
       {
         id: "s1",
@@ -474,7 +521,40 @@ describe("buildTodayBlocks", () => {
         linkedCalendarId: null,
       },
     ] as never[];
-    const blocks = buildTodayBlocks({ signals, events: [], routines: [], date: DATE });
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: DATE,
+        startAt: "2026-05-28T23:30:00",
+        durationMin: 60,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals, placements, events: [], routines: [], date: DATE });
+    // local 00:30 다음날, NOT 15:30Z(UTC). `.toISOString()` 회귀 차단.
+    expect(blocks[0].endISO).toMatch(/^2026-05-29T00:30:00/);
+    // 로컬 포맷 보존 확인 — 'Z' 접미사 금지.
+    expect(blocks[0].endISO.endsWith("Z")).toBe(false);
+  });
+
+  it("signal without a placement is skipped (unscheduled)", () => {
+    const signals = [
+      {
+        id: "s1",
+        title: "S",
+        scheduledAt: null,
+        scheduledDuration: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({
+      signals,
+      placements: [],
+      events: [],
+      routines: [],
+      date: DATE,
+    });
     expect(blocks).toHaveLength(0);
   });
 });
@@ -581,6 +661,7 @@ describe("buildTimelineBlocks (멀티데이 병합)", () => {
     const e = event("ev1", "2026-06-11T23:00:00+09:00", "2026-06-12T01:30:00+09:00");
     const out = buildTimelineBlocks({
       signals: [],
+      placements: [],
       eventsByDate: { "2026-06-11": [e], "2026-06-12": [e] },
       routinesByDate: {},
       dates: ["2026-06-11", "2026-06-12"],
@@ -599,6 +680,7 @@ describe("buildTimelineBlocks (멀티데이 병합)", () => {
     } as never;
     const out = buildTimelineBlocks({
       signals: [],
+      placements: [],
       eventsByDate: {},
       routinesByDate: { "2026-06-11": [routine], "2026-06-12": [routine] },
       dates: ["2026-06-11", "2026-06-12"],
@@ -608,21 +690,224 @@ describe("buildTimelineBlocks (멀티데이 병합)", () => {
     expect(out.every((b) => b.routineId === "r1")).toBe(true);
   });
 
-  it("signal은 자기 scheduledAt 날짜에만 1회 렌더", () => {
+  it("signal은 placement 날짜에서만 렌더 (scheduledAt 무관)", () => {
+    // 기존 scheduledAt 기반 테스트 → placement 기반으로 전환.
+    // placement가 2026-06-12에 있으면 해당 날짜에만 1블록.
     const signal = {
       id: "s1",
       title: "작업",
-      scheduledAt: "2026-06-12T02:00:00+09:00",
-      scheduledDuration: 60,
+      scheduledAt: null,
+      scheduledDuration: null,
+    } as never;
+    const placement = {
+      id: "p1",
+      signalId: "s1",
+      date: "2026-06-12",
+      startAt: "2026-06-12T02:00:00",
+      durationMin: 60,
     } as never;
     const out = buildTimelineBlocks({
       signals: [signal],
+      placements: [placement],
       eventsByDate: {},
       routinesByDate: {},
       dates: ["2026-06-11", "2026-06-12"],
     });
     expect(out).toHaveLength(1);
-    expect(out[0].id).toBe("signal:s1");
-    expect(out[0].startISO).toBe("2026-06-12T02:00:00+09:00");
+    expect(out[0].id).toBe("signal:s1:2026-06-12");
+    expect(out[0].startISO).toBe("2026-06-12T02:00:00");
+  });
+});
+
+describe("buildTodayBlocks — placement 기반 signal 렌더링", () => {
+  it("renders a block from the viewed date's placement (not scheduledAt)", () => {
+    // signal에 scheduledAt 없어도 placement(2026-06-11 14:00, 60분)로 블록 생성
+    const signals = [
+      { id: "s1", title: "플레이스먼트 시그널", scheduledAt: null, scheduledDuration: null },
+    ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: "2026-06-11",
+        startAt: "2026-06-11T14:00:00",
+        durationMin: 60,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({
+      signals,
+      placements,
+      events: [],
+      routines: [],
+      date: "2026-06-11",
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].id).toBe("signal:s1:2026-06-11");
+    expect(blocks[0].signalId).toBe("s1");
+    expect(blocks[0].startISO).toBe("2026-06-11T14:00:00");
+    expect(blocks[0].kind).toBe("signal");
+  });
+
+  it("multi-day: same signal renders one block per placed date, no dedup collision", () => {
+    // placements 6/10+6/11, buildTimelineBlocks dates 2일 → signal 블록 2개
+    const signals = [
+      { id: "s1", title: "반복 시그널", scheduledAt: null, scheduledDuration: null },
+    ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: "2026-06-10",
+        startAt: "2026-06-10T10:00:00",
+        durationMin: 30,
+      },
+      {
+        id: "p2",
+        signalId: "s1",
+        date: "2026-06-11",
+        startAt: "2026-06-11T10:00:00",
+        durationMin: 30,
+      },
+    ] as never[];
+    const out = buildTimelineBlocks({
+      signals,
+      placements,
+      eventsByDate: {},
+      routinesByDate: {},
+      dates: ["2026-06-10", "2026-06-11"],
+    });
+    const signalBlocks = out.filter((b) => b.kind === "signal");
+    expect(signalBlocks).toHaveLength(2);
+    const ids = signalBlocks.map((b) => b.id).sort();
+    expect(ids).toEqual(["signal:s1:2026-06-10", "signal:s1:2026-06-11"]);
+    // id 충돌 없이 각 블록이 별개 아이디 보유
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it("no placement on viewed date -> no signal block (tray case)", () => {
+    // placement 6/10만 있고 date=6/11 → 블록 0개
+    const signals = [
+      { id: "s1", title: "어제 시그널", scheduledAt: null, scheduledDuration: null },
+    ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: "2026-06-10",
+        startAt: "2026-06-10T10:00:00",
+        durationMin: 30,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({
+      signals,
+      placements,
+      events: [],
+      routines: [],
+      date: "2026-06-11",
+    });
+    expect(blocks).toHaveLength(0);
+  });
+
+  it("placement signal absorbs linked google event on the same date", () => {
+    // signal with linkedCalendarId/linkedEventId + scheduledAt on the viewed date
+    // + matching Google event → event NOT rendered (absorbed), signal block rendered once
+    const signals = [
+      {
+        id: "s1",
+        title: "S",
+        scheduledAt: "2026-06-11T09:00:00",
+        scheduledDuration: 60,
+        linkedEventId: "g1",
+        linkedCalendarId: "cal-id",
+      },
+    ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: "2026-06-11",
+        startAt: "2026-06-11T09:00:00",
+        durationMin: 60,
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "g1",
+        title: "G",
+        start: "2026-06-11T09:00:00",
+        end: "2026-06-11T10:00:00",
+        allDay: false,
+        calendarId: "cal-id",
+        calendarSummary: "cal",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({
+      signals,
+      placements,
+      events,
+      routines: [],
+      date: "2026-06-11",
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("signal");
+    expect(blocks[0].id).toBe("signal:s1:2026-06-11");
+  });
+});
+
+describe("buildTimelineBlocks — off-date 미러 absorb 회귀", () => {
+  it("stale mirror event on an earlier placed date is absorbed (no double render)", () => {
+    // 시그널이 6/10+6/11 두 placement 보유, 미러 이벤트는 6/10 버킷에 남은 stale 캐시
+    // (scheduledAt=최신 배치 6/11). placement가 있는 날짜에선 placement 블록이 SSOT —
+    // 6/10 이벤트는 absorbed, signal 블록은 날짜별 1개씩 총 2개.
+    const signals = [
+      {
+        id: "s1",
+        title: "S",
+        scheduledAt: "2026-06-11T10:00:00",
+        scheduledDuration: 30,
+        linkedEventId: "g1",
+        linkedCalendarId: "cal-id",
+      },
+    ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: "2026-06-10",
+        startAt: "2026-06-10T10:00:00",
+        durationMin: 30,
+      },
+      {
+        id: "p2",
+        signalId: "s1",
+        date: "2026-06-11",
+        startAt: "2026-06-11T10:00:00",
+        durationMin: 30,
+      },
+    ] as never[];
+    const staleMirror = {
+      id: "g1",
+      title: "S (mirror)",
+      start: "2026-06-10T10:00:00",
+      end: "2026-06-10T10:30:00",
+      allDay: false,
+      calendarId: "cal-id",
+      calendarSummary: "cal",
+      projectColor: "#444",
+    } as never;
+    const out = buildTimelineBlocks({
+      signals,
+      placements,
+      eventsByDate: { "2026-06-10": [staleMirror] },
+      routinesByDate: {},
+      dates: ["2026-06-10", "2026-06-11"],
+    });
+    expect(out.filter((b) => b.kind === "event")).toHaveLength(0);
+    const signalIds = out
+      .filter((b) => b.kind === "signal")
+      .map((b) => b.id)
+      .sort();
+    expect(signalIds).toEqual(["signal:s1:2026-06-10", "signal:s1:2026-06-11"]);
   });
 });

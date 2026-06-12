@@ -1,6 +1,11 @@
-import type { CalendarEvent, RoutineToday, TimelineNoteTarget, WorkSignal } from "@/bindings";
+import type {
+  CalendarEvent,
+  RoutineToday,
+  SignalDayPlacement,
+  TimelineNoteTarget,
+  WorkSignal,
+} from "@/bindings";
 
-import { localDateOf } from "./timeAxis";
 import { plusMinutesLocal } from "./timelineCoords";
 import type { TimedBlock } from "./timelineLayout";
 
@@ -13,10 +18,16 @@ import type { TimedBlock } from "./timelineLayout";
  *   - event: `{calendarId}:{linkedEventId}` (둘 다 있을 때만)
  */
 export function blockNoteTarget(
-  block: Pick<TimedBlock, "kind" | "id" | "routineId" | "linkedEventId" | "calendarId">,
+  block: Pick<
+    TimedBlock,
+    "kind" | "id" | "routineId" | "linkedEventId" | "calendarId" | "signalId"
+  >,
 ): { targetKind: TimelineNoteTarget; targetId: string } | null {
   if (block.kind === "signal") {
-    return { targetKind: "signal", targetId: block.id.replace(/^signal:/, "") };
+    return {
+      targetKind: "signal",
+      targetId: block.signalId ?? block.id.replace(/^signal:/, ""),
+    };
   }
   if (block.kind === "routine" && block.routineId) {
     return { targetKind: "routine", targetId: block.routineId };
@@ -43,6 +54,8 @@ export function noteTargetMapKey(targetKind: TimelineNoteTarget, targetId: strin
  */
 type Input = {
   signals: WorkSignal[];
+  /** 날짜별 배치 SSOT — signal 블록은 이 배열에서만 생성된다. */
+  placements: SignalDayPlacement[];
   events: CalendarEvent[];
   routines: RoutineToday[];
   /** YYYY-MM-DD (로컬 today). 루틴 가상 인스턴스 ISO 빌드용. */
@@ -123,29 +136,39 @@ function routineMatchesEvent(routine: RoutineToday, event: CalendarEvent): boole
   return hhmmOf(event.start) === time;
 }
 
-export function buildTodayBlocks({ signals, events, routines, date }: Input): TimedBlock[] {
+export function buildTodayBlocks({
+  signals,
+  placements,
+  events,
+  routines,
+  date,
+}: Input): TimedBlock[] {
   const out: TimedBlock[] = [];
   const absorbed = new Set<string>();
   const routineByEvent = new Map<string, RoutineToday>();
   const staleRoutineIds = new Set<string>();
 
-  for (const s of signals) {
-    if (!s.scheduledAt || !s.scheduledDuration) continue;
-    // 선택 날짜 스코핑: Today 레일은 rollover라 미래/과거 배치 signal이 캐시에 남을 수 있다.
-    // scheduledAt의 로컬 날짜가 보는 날짜와 다르면 렌더 제외 — "오늘 일정이 다른 날짜로 따라오는" 버그 방지.
-    if (localDateOf(s.scheduledAt) !== date) continue;
+  const signalById = new Map(signals.map((s) => [s.id, s]));
+  for (const p of placements) {
+    if (p.date !== date) continue;
+    const s = signalById.get(p.signalId);
+    if (!s) continue; // 레일 밖 시그널(완료 후 미표시 등) — 블록 생략
     out.push({
-      id: `signal:${s.id}`,
+      id: `signal:${s.id}:${date}`, // 날짜 포함 — 다일 배치 시 buildTimelineBlocks dedup 충돌 방지
       kind: "signal",
+      signalId: s.id,
       title: s.title,
-      startISO: s.scheduledAt,
-      endISO: plusMinutesLocal(s.scheduledAt, s.scheduledDuration),
+      startISO: p.startAt,
+      endISO: plusMinutesLocal(p.startAt, p.durationMin),
       calendarId: s.linkedCalendarId ?? "",
       calendarLabel: s.linkedCalendarId ?? "",
       color: SIGNAL_COLOR,
       linkedEventId: s.linkedEventId ?? undefined,
       done: Boolean(s.todayDoneAt),
     });
+    // Google 미러 absorb — placement가 있는 날짜에선 placement 블록이 그 시그널의 표현 SSOT.
+    // 미러 이벤트가 어느 버킷에 있든(이동 전 stale 캐시 포함) 같은 날짜에서 중복 렌더하지 않는다.
+    // absorbed는 호출(=날짜)마다 새로 만들어지므로 placement 없는 날짜에선 이벤트가 정상 렌더된다.
     const key = eventKey(s.linkedCalendarId, s.linkedEventId);
     if (key) absorbed.add(key);
   }
@@ -218,17 +241,18 @@ export function buildTodayBlocks({ signals, events, routines, date }: Input): Ti
  * 날짜별로 buildTodayBlocks를 실행해 병합하고 블록 id로 dedup한다.
  * - 자정 걸침 Google 이벤트는 overlap 시맨틱상 인접 두 날짜 버킷에 모두 내려온다 →
  *   `event:${calendarId}:${id}` 복합키 dedup으로 full-span 1개만 남긴다.
- * - signal은 scheduledAt의 로컬 날짜에서만 생성되므로(buildTodayBlocks의 날짜 필터)
- *   병합 후에도 1회만 나타난다.
+ * - signal은 placement 날짜별 별개 블록(id에 날짜 포함).
  * - 루틴 가상 인스턴스는 id에 날짜가 포함되어 날짜별 별개 블록.
  */
 export function buildTimelineBlocks({
   signals,
+  placements,
   eventsByDate,
   routinesByDate,
   dates,
 }: {
   signals: WorkSignal[];
+  placements: SignalDayPlacement[];
   eventsByDate: Record<string, CalendarEvent[] | undefined>;
   routinesByDate: Record<string, RoutineToday[] | undefined>;
   dates: string[];
@@ -238,6 +262,7 @@ export function buildTimelineBlocks({
   for (const date of dates) {
     const blocks = buildTodayBlocks({
       signals,
+      placements,
       events: eventsByDate[date] ?? [],
       routines: routinesByDate[date] ?? [],
       date,
