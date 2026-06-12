@@ -115,10 +115,10 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
 
     // 배치 시간 합산 — signal_day_placements(날짜별 배치 SSOT) 기반. 배치=시간 사용 간주.
     let area_rows: Vec<(Option<AreaTag>, i64)> = sqlx::query_as(
-        "SELECT s.area, SUM(p.duration_min) \
+        "SELECT s.area, SUM(p.duration_min) AS total_min \
            FROM signal_day_placements p JOIN signals s ON s.id = p.signal_id \
           WHERE p.date BETWEEN ?1 AND ?2 \
-          GROUP BY s.area ORDER BY SUM(p.duration_min) DESC",
+          GROUP BY s.area ORDER BY total_min DESC",
     )
     .bind(&start_s)
     .bind(&end_s)

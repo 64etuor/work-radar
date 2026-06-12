@@ -59,8 +59,8 @@ pub(crate) async fn fetch_placements_in_range(
     .await
 }
 
-/// 카드별 누적 배치 시간 + 배치된 날 수(배지용). Today 레일 카드만 의미 있지만
-/// 전체를 반환하고 FE가 매핑한다(레일은 보통 소수 — 스코프 조인 불필요).
+/// 카드별 전체 기간 누적 시간/일수(배지용) — date 필터 없음은 의도(배지=전체 기간).
+/// 전체를 반환하고 FE가 Today 레일 카드에 매핑한다.
 pub(crate) async fn fetch_signal_time_totals(db: &Db) -> Result<Vec<SignalTimeTotal>, sqlx::Error> {
     let rows: Vec<(String, i64, i64)> = sqlx::query_as(
         "SELECT signal_id, SUM(duration_min), COUNT(*) \
