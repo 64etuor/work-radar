@@ -1,0 +1,24 @@
+src-tauri/src/commands/agents/usage.rs
+  s_485685d86c251e::t_a5c55c35959002 106-112,117-119
+  s_485685d86c251e::t_48f3b73c16dbfa 33,44-46
+  s_485685d86c251e::t_e53ba2a6783bdc 7-8
+  s_485685d86c251e::t_58c53cc226bd25 113-116
+docs/decisions.md
+  s_485685d86c251e::t_6c95add8d6b900 615
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "6fa816d26a51e6ea8657535defed23be91294ad8",
+  "prompts": {},
+  "sessions": {
+    "s_485685d86c251e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1daa8fac-6fb6-4f6c-a669-97172a33f0e3",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
