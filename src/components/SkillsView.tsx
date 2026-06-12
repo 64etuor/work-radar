@@ -160,7 +160,10 @@ function useSkillsView() {
 
   const onEnvDrop = (targetId: string) => {
     if (!dragId) return;
-    const movableIds = envNav.filter((i) => !i.pinned).map((i) => i.id);
+    const movableIds: string[] = [];
+    for (const item of envNav) {
+      if (!item.pinned) movableIds.push(item.id);
+    }
     setEnvOrder(reorderEnv(movableIds, dragId, targetId));
     setDragId(null);
   };
@@ -542,16 +545,20 @@ function useSkillsView() {
                       {(() => {
                         // diverged location들을 프로젝트 라벨로 귀속(#6 ff). divergedPaths=멤버십 판정,
                         // locationLabels=이름. 둘 다 divergences 단일 출처라 키 집합 동일.
-                        const names = [
-                          ...new Set(
-                            g.locations
-                              .filter(
-                                (l) => l.sourcePath != null && divergedPaths.has(l.sourcePath),
-                              )
-                              .map((l) => locationLabels.get(l.sourcePath as string))
-                              .filter((v): v is string => v != null),
-                          ),
-                        ];
+                        const names: string[] = [];
+                        const seen = new Set<string>();
+                        for (const location of g.locations) {
+                          if (
+                            location.sourcePath == null ||
+                            !divergedPaths.has(location.sourcePath)
+                          ) {
+                            continue;
+                          }
+                          const label = locationLabels.get(location.sourcePath);
+                          if (label == null || seen.has(label)) continue;
+                          seen.add(label);
+                          names.push(label);
+                        }
                         if (names.length === 0) return null;
                         return (
                           <span
@@ -673,59 +680,89 @@ export function SkillsView() {
  * 단일 위치 스킬만 기존 provider 섹션에 둔다(#4). 외부 귀속은 백엔드 `Skill.provider`(P0)를 직접 쓴다
  * — 경로추론(구 `providerOf`) 폐기. in-app은 binding 유무로 Global/Project를 나눈다(항상 단일 위치). */
 function segmentSkills(groups: GroupedSkill[]) {
-  const single = (g: GroupedSkill) => g.locations.length === 1;
-  const defs = [
+  const defs: {
+    key: string;
+    label: string;
+    groups: GroupedSkill[];
+    enabled: number;
+  }[] = [
     {
       key: "shared",
       label: "공유 스킬 (여러 도구)",
-      match: (g: GroupedSkill) => g.locations.length > 1,
+      groups: [],
+      enabled: 0,
     },
     {
       key: "global",
       label: "Global Skills",
-      match: (g: GroupedSkill) => single(g) && g.skill.kind === "in_app_prompt" && !g.skill.binding,
+      groups: [],
+      enabled: 0,
     },
     {
       key: "project",
       label: "Project Skills",
-      match: (g: GroupedSkill) =>
-        single(g) && g.skill.kind === "in_app_prompt" && !!g.skill.binding,
+      groups: [],
+      enabled: 0,
     },
     {
       key: "external-claude",
       label: "External Skills · Claude",
-      match: (g: GroupedSkill) => single(g) && g.skill.provider === "claude",
+      groups: [],
+      enabled: 0,
     },
     {
       key: "external-codex",
       label: "External Skills · Codex",
-      match: (g: GroupedSkill) => single(g) && g.skill.provider === "codex",
+      groups: [],
+      enabled: 0,
     },
     {
       key: "external-openclaw",
       label: "External Skills · OpenClaw",
-      match: (g: GroupedSkill) => single(g) && g.skill.provider === "openclaw",
+      groups: [],
+      enabled: 0,
     },
     {
       key: "external-hermes",
       label: "External Skills · Hermes",
-      match: (g: GroupedSkill) => single(g) && g.skill.provider === "hermes",
+      groups: [],
+      enabled: 0,
     },
     {
       key: "external-other",
       label: "External Skills · Other",
-      match: (g: GroupedSkill) => single(g) && g.skill.provider === "other",
+      groups: [],
+      enabled: 0,
     },
   ];
-  return defs
-    .map((def) => {
-      const group = groups.filter(def.match);
-      return {
+
+  const defForGroup = (group: GroupedSkill) => {
+    if (group.locations.length > 1) return defs[0];
+    if (group.skill.kind === "in_app_prompt") return group.skill.binding ? defs[2] : defs[1];
+    if (group.skill.provider === "claude") return defs[3];
+    if (group.skill.provider === "codex") return defs[4];
+    if (group.skill.provider === "openclaw") return defs[5];
+    if (group.skill.provider === "hermes") return defs[6];
+    if (group.skill.provider === "other") return defs[7];
+    return null;
+  };
+
+  for (const group of groups) {
+    const def = defForGroup(group);
+    if (def == null) continue;
+    def.groups.push(group);
+    if (group.skill.enabled) def.enabled += 1;
+  }
+
+  return defs.flatMap((def) => {
+    if (def.groups.length === 0) return [];
+    return [
+      {
         key: def.key,
         label: def.label,
-        health: `${group.filter((g) => g.skill.enabled).length}/${group.length}`,
-        groups: group.sort((a, b) => a.skill.name.localeCompare(b.skill.name)),
-      };
-    })
-    .filter((seg) => seg.groups.length > 0);
+        health: `${def.enabled}/${def.groups.length}`,
+        groups: def.groups.sort((a, b) => a.skill.name.localeCompare(b.skill.name)),
+      },
+    ];
+  });
 }

@@ -32,7 +32,10 @@ export function JobsView() {
   const [prompt, setPrompt] = useState("");
   const [openLogIds, setOpenLogIds] = useState<Set<string>>(new Set());
   const list = runs.data ?? [];
-  const openLogIdList = list.map((run) => run.id).filter((id) => openLogIds.has(id));
+  const openLogIdList: string[] = [];
+  for (const run of list) {
+    if (openLogIds.has(run.id)) openLogIdList.push(run.id);
+  }
   const logs = useAgentLogs(openLogIdList);
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
   const toggleLog = (runId: string) => {

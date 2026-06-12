@@ -5,7 +5,7 @@ import type { DiffLine } from "@/lib/lineDiff";
  * 표시 전용 — 신규 의존성 없이 `lineDiff`(LCS) 결과를 +/− 거터로 보여준다. */
 export function SkillPromptDiff({ lines }: { lines: DiffLine[] }) {
   return (
-    <div className="skl-diff" role="region" aria-label="기본값과의 차이">
+    <section className="skl-diff" aria-label="기본값과의 차이">
       {lines.map((l, idx) => (
         <div key={`${idx}-${l.op}`} className={cn("skl-diff-line", `skl-diff-${l.op}`)}>
           <span className="skl-diff-gutter" aria-hidden="true">
@@ -14,6 +14,6 @@ export function SkillPromptDiff({ lines }: { lines: DiffLine[] }) {
           <span className="skl-diff-text">{l.text || " "}</span>
         </div>
       ))}
-    </div>
+    </section>
   );
 }

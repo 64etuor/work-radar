@@ -31,7 +31,10 @@ export function CalendarPicker({
   // optimistic: 체크박스 토글 즉시 mutate. 서버 응답이 늦어도 즉시 반응 보이도록
   // 직전 토글 결과를 로컬에 잠깐 가지고 있다가 서버 데이터가 따라잡으면 비운다.
   const [pendingChecked, setPendingChecked] = useState<Set<string> | null>(null);
-  const savedChecked = new Set(calendars.data?.filter((c) => c.selected).map((c) => c.id) ?? []);
+  const savedChecked = new Set<string>();
+  for (const calendar of calendars.data ?? []) {
+    if (calendar.selected) savedChecked.add(calendar.id);
+  }
   const checked = pendingChecked ?? savedChecked;
 
   const toggle = (id: string) => {
@@ -43,9 +46,12 @@ export function CalendarPicker({
     setPendingChecked(next);
     // 포함 해제하는 캘린더가 현재 기본이면 기본도 해제 — 포함 안 된 캘린더는 기본일 수 없다.
     if (removing && defaultCalendarId === id) pickDefault(null);
-    const selected = calendars.data
-      .filter((c) => next.has(c.id))
-      .map((c) => ({ id: c.id, summary: c.summary }));
+    const selected: Array<{ id: string; summary: string }> = [];
+    for (const calendar of calendars.data) {
+      if (next.has(calendar.id)) {
+        selected.push({ id: calendar.id, summary: calendar.summary });
+      }
+    }
     save.mutate(
       { projectId, calendars: selected },
       {

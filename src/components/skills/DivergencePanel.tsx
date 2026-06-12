@@ -106,7 +106,7 @@ export function DivergenceResolver({
         {open ? "닫기" : "변경됨 · 해소…"}
       </Button>
       {open && (
-        <div className="skl-vendor-resolve-body" role="region" aria-label="중앙과의 차이 · 해소">
+        <section className="skl-vendor-resolve-body" aria-label="중앙과의 차이 · 해소">
           {diff.isLoading && <div className="skl-note">차이 불러오는 중…</div>}
           {diff.isError && <div className="skl-note">차이를 불러오지 못했습니다.</div>}
           {diff.data && <DivergenceDiffBody diff={diff.data} />}
@@ -142,7 +142,7 @@ export function DivergenceResolver({
               </Button>
             )}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
