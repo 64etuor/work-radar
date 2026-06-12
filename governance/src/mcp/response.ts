@@ -26,7 +26,9 @@ export function okOrRefused(
     : refusedText(r.reason ?? "unknown");
 }
 
-/** Plain text response (for tools that produce freeform text). */
-function plainText(text: string): TextContent {
+/** Plain text response (for tools that produce freeform text).
+ *  Exported again 2026-06-12: the unused-surface trim un-exported it, but the P2
+ *  accept_plan checkless warning (mcp/tools/plans.ts) now consumes it. */
+export function plainText(text: string): TextContent {
   return { content: [{ type: "text", text }] };
 }
