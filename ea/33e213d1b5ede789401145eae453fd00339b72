@@ -1,0 +1,54 @@
+src-tauri/src/commands/calendar_sync.rs
+  s_50fa9ee27d9fdd::t_9fe71ff022fe25 685-761
+  s_50fa9ee27d9fdd::t_296e320c9ac068 132
+  s_50fa9ee27d9fdd::t_d7cdf0ba491816 176-199
+  s_50fa9ee27d9fdd::t_9d2bfba00e3865 42-49
+src/lib/todayBlocks.test.ts
+  s_50fa9ee27d9fdd::t_4f57e916fef0aa 359-432
+src/components/today/TimelineBlock.tsx
+  s_50fa9ee27d9fdd::t_4d70557327ea73 53-54
+  s_50fa9ee27d9fdd::t_9409d76dfd2979 93
+src/lib/calendarSync.ts
+  s_50fa9ee27d9fdd::t_d7038f5ff06a64 164-165
+  s_50fa9ee27d9fdd::t_86f837ec80cd22 179-180
+  s_50fa9ee27d9fdd::t_771e816c08dd81 149-150
+  s_50fa9ee27d9fdd::t_6b3db4df217c52 40-43,51-52
+src/components/today/useTimelineDnd.ts
+  s_50fa9ee27d9fdd::t_99b2384c151828 454-461
+  s_50fa9ee27d9fdd::t_93ee1c4bfd72f3 80-85
+  s_50fa9ee27d9fdd::t_9026af7069cbd1 367-368,370
+  s_50fa9ee27d9fdd::t_551982934e8045 125-126
+  s_50fa9ee27d9fdd::t_63a336e4c2fd76 389-396
+  s_50fa9ee27d9fdd::t_ca3de0f427d600 405,407-409,416-418,432-433,435
+  s_50fa9ee27d9fdd::t_681dae9561a7a4 410-413,415,431
+  s_50fa9ee27d9fdd::t_7052b9faae4f8b 325,327-329,336,343-347
+  s_50fa9ee27d9fdd::t_7ef37e819a344d 442
+src/lib/todayBlocks.ts
+  s_50fa9ee27d9fdd::t_4444f6e0229a08 110-119,123
+src/bindings.ts
+  s_125e7320476d49::t_b1d7d5542f1b89 2695-2703
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ea33e213d1b5ede789401145eae453fd00339b72",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_50fa9ee27d9fdd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a01fc03c-2746-4dac-aef8-9621d8057b39",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
