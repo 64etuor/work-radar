@@ -4,8 +4,8 @@
 //! 커맨드 레이어에 TTL 캐시를 둬 호출 빈도를 묶는다(폴링≠외부 호출).
 //! OMC HUD와 같은 토큰을 같은 엔드포인트로 두드리므로 호출 예산을 보수적으로:
 //! 성공 TTL 90s + 429는 지수 백오프(Retry-After 존중, 최대 5분) 동안 호출 차단.
-//! 실패 시엔 15분 내 마지막 성공 스냅샷을 stale로 계속 내려(detail에 사유),
-//! 게이지가 일시 오류마다 꺼지지 않게 한다. 실패는 Err가 아니라 에이전트별
+//! 실패 시엔 두 에이전트 모두 15분 내 마지막 성공 스냅샷을 stale로 계속 내려
+//! (detail에 사유), 게이지가 일시 오류마다 꺼지지 않게 한다. 실패는 Err가 아니라 에이전트별
 //! `available=false`로 내려간다(graceful degrade — 헤더 위젯이 본문을 막으면 안 된다).
 
 use std::sync::OnceLock;
@@ -30,7 +30,7 @@ const BACKOFF_MAX: Duration = Duration::from_secs(5 * 60);
 /// Retry-After 헤더 신뢰 상한 — 비정상적으로 큰 값으로 게이지가 영구히 꺼지는 것 방지.
 const RETRY_AFTER_MAX: Duration = Duration::from_secs(60 * 60);
 
-/// claude usage 호출 상태 — 429 백오프와 stale 폴백을 위해 전체 status 캐시와 별도로 든다.
+/// 에이전트별 호출 상태 — 429 백오프와 stale 폴백을 위해 전체 status 캐시와 별도로 든다.
 #[derive(Default)]
 struct UsageCache {
     /// 전체 응답 캐시 (성공/실패 무관 — 폴링 1회분 묶음).
@@ -41,6 +41,9 @@ struct UsageCache {
     claude_backoff_until: Option<Instant>,
     /// 연속 429 횟수 (성공 시 리셋).
     claude_429_streak: u32,
+    /// 마지막으로 성공한 codex 스냅샷 — 새 세션 burst로 최근 파일들에 rate_limits가
+    /// 없어지는 일시 공백에도 게이지를 유지한다 (백오프는 불필요 — 로컬 IO뿐).
+    codex_last_good: Option<(Instant, AgentUsage)>,
 }
 
 static CACHE: OnceLock<tokio::sync::Mutex<UsageCache>> = OnceLock::new();
@@ -100,7 +103,20 @@ pub async fn agent_usage_status() -> Result<AgentUsageStatus, AppError> {
             }
         }
     };
-    let codex = load_codex(home).await;
+    let codex = {
+        let scanned = load_codex(home).await;
+        if scanned.available {
+            guard.codex_last_good = Some((now, scanned.clone()));
+            scanned
+        } else {
+            // claude와 같은 stale 폴백 — 스캔 실패/공백 시 15분 내 마지막 성공 스냅샷 유지.
+            let reason = scanned
+                .detail
+                .as_deref()
+                .unwrap_or("codex 사용량 읽기 실패");
+            stale_or_unavailable(guard.codex_last_good.as_ref(), reason, now)
+        }
+    };
 
     let status = AgentUsageStatus { claude, codex };
     guard.status = Some((Instant::now(), status.clone()));
