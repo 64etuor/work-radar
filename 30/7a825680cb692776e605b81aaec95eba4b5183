@@ -1,0 +1,31 @@
+src-tauri/src/commands/placement_store.rs
+  s_851a67ed0e4868::t_9001c5cd9c9206 9
+  s_851a67ed0e4868::t_3d52bf3c699846 1-2,4-8,10-33,35-48,50-66,68-122,125-128,130-136,140-141,149-209
+  s_851a67ed0e4868::t_7db688f2bc25e2 34
+  s_851a67ed0e4868::t_55868c344e8a97 67
+  s_851a67ed0e4868::t_c1589969f489a2 49
+  s_851a67ed0e4868::t_4d9ec26e8dbd40 123-124,129,137-139,142-148
+  s_851a67ed0e4868::t_867eaff07a8add 3
+src-tauri/src/models/signals.rs
+  s_851a67ed0e4868::t_1a319697723f80 179-180,182-194,196-203
+  s_851a67ed0e4868::t_c3f542bde863cb 181
+  s_851a67ed0e4868::t_66d407d19b1263 195
+src-tauri/src/commands/mod.rs
+  s_851a67ed0e4868::t_afd8cf48561459 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "307a825680cb692776e605b81aaec95eba4b5183",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": null
+    }
+  }
+}
