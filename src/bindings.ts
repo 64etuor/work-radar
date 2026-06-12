@@ -93,6 +93,10 @@ export const commands = {
 	todayOverview: (date: string) => typedError<TodayOverview, AppError>(__TAURI_INVOKE("today_overview", { date })),
 	/**  지난 7일 주간 회고 집계. `end_date`=프런트가 보내는 로컬 오늘. */
 	weeklyReview: (endDate: string) => typedError<WeeklyReview, AppError>(__TAURI_INVOKE("weekly_review", { endDate })),
+	/**  [start_date, end_date] inclusive 범위의 날짜별 배치 — 타임라인 렌더용 (read only). */
+	listSignalPlacements: (startDate: string, endDate: string) => typedError<SignalDayPlacement[], AppError>(__TAURI_INVOKE("list_signal_placements", { startDate, endDate })),
+	/**  카드별 누적 배치 시간/일수 — Today 카드 배지용 (read only). */
+	signalTimeTotals: () => typedError<SignalTimeTotal[], AppError>(__TAURI_INVOKE("signal_time_totals")),
 	/**  완료 todo 타임라인. `start`/`end`는 프런트가 보내는 로컬 날짜(YYYY-MM-DD) inclusive. */
 	listCompleted: (start: string, end: string) => typedError<WorkSignal[], AppError>(__TAURI_INVOKE("list_completed", { start, end })),
 	setSignalImpact: (id: string, value: boolean) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("set_signal_impact", { id, value })),
@@ -2115,11 +2119,32 @@ export type SetProjectNotionDbIdsInput = {
 	agendaDbId: string | null,
 };
 
+/**
+ *  시그널의 날짜별 타임라인 배치(1일 1블록, UNIQUE(signal_id, date)).
+ *  렌더링·누적 집계의 SSOT. signals.scheduled_at은 최신 배치 + Google 미러 커서로 별도 유지.
+ */
+export type SignalDayPlacement = {
+	id: string,
+	signalId: string,
+	/**  YYYY-MM-DD (로컬). */
+	date: string,
+	/**  로컬 ISO "YYYY-MM-DDTHH:MM:SS". */
+	startAt: string,
+	durationMin: number,
+};
+
 /**  신호 출처. */
 export type SignalSource = "braindump" | "notion_backlog" | "notion_agenda" | "github_pr" | "calendar" | "hermes" | "system";
 
 /**  신호 상태. */
 export type SignalStatus = "new" | "classified" | "promoted" | "linked" | "done" | "snoozed" | "archived";
+
+/**  카드별 누적 배치 시간(배지용). specta i64 금지 → u32. */
+export type SignalTimeTotal = {
+	signalId: string,
+	totalMin: number,
+	dayCount: number,
+};
 
 /**  신호 종류. */
 export type SignalType = "thought" | "task_candidate" | "decision_candidate" | "pr_attention" | "agent_alert" | "meeting_prep" | "stale" | "cleanup";

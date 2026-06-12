@@ -1,8 +1,10 @@
 mod overview;
+mod placements;
 mod rail;
 mod weekly;
 
 pub use overview::*;
+pub use placements::*;
 pub use rail::*;
 pub use weekly::*;
 

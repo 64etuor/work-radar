@@ -106,6 +106,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::today_overview,
         // Weekly review (Phase 11c).
         commands::weekly_review,
+        // Signal day placements — read IPC (Phase 11d).
+        commands::list_signal_placements,
+        commands::signal_time_totals,
         // 회고 + 보관함 (Phase 17, 로컬 read + 사람 태깅).
         commands::list_completed,
         commands::set_signal_impact,

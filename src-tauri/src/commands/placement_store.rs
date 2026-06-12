@@ -44,7 +44,6 @@ pub(crate) async fn delete_placement(
 }
 
 /// [start, end] inclusive 범위의 placement — 타임라인 렌더용.
-#[allow(dead_code)]
 pub(crate) async fn fetch_placements_in_range(
     db: &Db,
     start_date: &str,
@@ -62,7 +61,6 @@ pub(crate) async fn fetch_placements_in_range(
 
 /// 카드별 누적 배치 시간 + 배치된 날 수(배지용). Today 레일 카드만 의미 있지만
 /// 전체를 반환하고 FE가 매핑한다(레일은 보통 소수 — 스코프 조인 불필요).
-#[allow(dead_code)]
 pub(crate) async fn fetch_signal_time_totals(db: &Db) -> Result<Vec<SignalTimeTotal>, sqlx::Error> {
     let rows: Vec<(String, i64, i64)> = sqlx::query_as(
         "SELECT signal_id, SUM(duration_min), COUNT(*) \
