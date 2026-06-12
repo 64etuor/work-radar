@@ -107,19 +107,20 @@ function hhmmOf(iso: string): string | null {
   return iso.length >= 16 ? iso.slice(11, 16) : null;
 }
 
-function eventDurationMin(e: CalendarEvent): number | null {
-  if (!e.end) return null;
-  const ms = new Date(e.end).getTime() - new Date(e.start).getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  return Math.round(ms / 60_000);
-}
-
+/**
+ * 동기화 이벤트가 루틴의 (앱 기준) 시각과 일치하는가 — 시각(HH:MM)만 비교한다.
+ *
+ * 불일치 = "앱에서 루틴 시각을 바꿨는데 Google 인스턴스가 아직 옛 시각"인 stale 케이스로
+ * 간주해 이벤트를 숨기고 앱 시각의 가상 루틴 블록을 그린다.
+ *
+ * duration은 비교하지 않는다 — per-day duration은 routine_checks에 컬럼이 없어 표현 불가라,
+ * 동기화 루틴 블록을 리사이즈하면(이벤트 길이만 변경) 영구 불일치 → 블록이 정의 길이로
+ * 스냅백하며 실제 Google 이벤트가 숨겨졌다. 길이는 이벤트가 정본, 시각은 앱이 정본.
+ */
 function routineMatchesEvent(routine: RoutineToday, event: CalendarEvent): boolean {
   const time = routine.timeOverride ?? routine.timeOfDay;
   if (!time) return false;
-  if (hhmmOf(event.start) !== time) return false;
-  const duration = routine.durationMin ?? ROUTINE_DURATION_MIN;
-  return eventDurationMin(event) === duration;
+  return hhmmOf(event.start) === time;
 }
 
 export function buildTodayBlocks({ signals, events, routines, date }: Input): TimedBlock[] {

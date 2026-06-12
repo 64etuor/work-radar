@@ -77,6 +77,12 @@ export type DragData =
       startISO: string;
       durationMin: number;
       calendarId: string;
+      /**
+       * 동기화된 루틴이 이벤트 블록으로 렌더된 경우(todayBlocks 흡수) 그 루틴 id.
+       * 이동/리사이즈 stage에 동봉해 routine_checks.time_override를 함께 미러 — 캘린더만
+       * 움직이고 루틴이 옛 시각에 남아 블록이 스냅백하는 버그 방지.
+       */
+      routineId?: string;
     }
   | {
       from: "canvas";
@@ -116,6 +122,8 @@ export type DragData =
       calendarId: string;
       startISO: string;
       durationMin: number;
+      /** 동기화된 루틴의 이벤트 블록이면 루틴 id(canvas variant와 동일 의미). */
+      routineId?: string;
     }
   | {
       from: "canvas-resize";
@@ -314,21 +322,29 @@ export function useTimelineDnd(opts: Opts) {
       });
       // 루틴은 occurrence 날짜 안으로 클램프 — routine_checks(date+HH:MM)가 다음 날 새벽을
       // 표현하지 못한다(스펙 §5). top 핸들이 날짜를 넘으면 그 날 00:00에서 멈춘다.
+      // 동기화된 루틴의 이벤트 블록(routineId 동봉)도 time_override가 같은 구조라 동일 클램프.
       const occDate = localDateOf(a.startISO);
-      const at = a.blockKind === "routine" ? clampIsoToDate(resized.at, occDate) : resized.at;
+      const routineBacked =
+        a.blockKind === "routine" || (a.blockKind === "event" && a.routineId != null);
+      const at = routineBacked ? clampIsoToDate(resized.at, occDate) : resized.at;
       // 클램프로 시작이 밀렸으면 끝 시각 고정을 위해 duration을 보정(absMin 차이만큼).
       // 루틴은 끝도 자정을 넘지 못한다(bottom-resize 상한 — Google master end 누수 방지).
       let clamped =
         at === resized.at
           ? resized.durationMin
           : resized.durationMin + (absMin(resized.at, occDate) - absMin(at, occDate));
-      if (a.blockKind === "routine") clamped = clampDurationToDate(at, occDate, clamped);
+      if (routineBacked) clamped = clampDurationToDate(at, occDate, clamped);
       if (clamped === a.durationMin && at === a.startISO) return;
       if (a.blockKind === "event") {
         patchEventCache(a.calendarId, a.eventId, {
           start: at,
           durationMin: clamped,
         });
+        // 루틴-backed면 루틴 캐시의 timeOverride도 같이 패치 — refetch 전 interim에도
+        // routineMatchesEvent가 성립해 블록이 새 위치에 머문다.
+        if (a.routineId) {
+          patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
+        }
       } else if (a.blockKind === "signal") {
         patchSignalCaches(a.signalId, {
           at,
@@ -348,7 +364,10 @@ export function useTimelineDnd(opts: Opts) {
             calendarId: a.calendarId,
             at,
             durationMin: clamped,
+            routineId: a.routineId,
+            routineDate: a.routineId ? occDate : undefined,
           });
+          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
         } else if (a.blockKind === "routine") {
           await stage({
             kind: "routineResize",
@@ -367,9 +386,14 @@ export function useTimelineDnd(opts: Opts) {
           });
         }
       } catch {
-        if (a.blockKind === "event") invalidateEventCaches();
-        else if (a.blockKind === "routine") void qc.invalidateQueries({ queryKey: ["routines"] });
-        else invalidateSignalCaches();
+        if (a.blockKind === "event") {
+          invalidateEventCaches();
+          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
+        } else if (a.blockKind === "routine") {
+          void qc.invalidateQueries({ queryKey: ["routines"] });
+        } else {
+          invalidateSignalCaches();
+        }
       }
       return;
     }
@@ -378,10 +402,20 @@ export function useTimelineDnd(opts: Opts) {
     if (a.from === "canvas" && o.to === "canvas") {
       const shifted = shiftIsoByPx(anchorDate, days, a.startISO, ev.delta.y);
       // 루틴은 occurrence 날짜 안으로 클램프(스펙 §5) — event/signal은 자정 통과 자유.
+      // 동기화된 루틴의 이벤트 블록(routineId 동봉)도 time_override(date+HH:MM) 구조라 동일 클램프.
       const occDate = localDateOf(a.startISO);
-      const at = a.blockKind === "routine" ? clampIsoToDate(shifted, occDate) : shifted;
+      const routineBacked =
+        a.blockKind === "routine" || (a.blockKind === "event" && a.routineId != null);
+      const at = routineBacked ? clampIsoToDate(shifted, occDate) : shifted;
+      // 루틴-backed는 위치 클램프 후에도 끝이 자정을 넘을 수 있다(23:45+60분) — 루틴 분기와 동일 상한.
+      const movedDurationMin = routineBacked
+        ? clampDurationToDate(at, occDate, a.durationMin)
+        : a.durationMin;
       if (a.blockKind === "event") {
-        patchEventCache(a.calendarId, a.eventId, { start: at, durationMin: a.durationMin });
+        patchEventCache(a.calendarId, a.eventId, { start: at, durationMin: movedDurationMin });
+        if (a.routineId) {
+          patchRoutineCache(occDate, a.routineId, { timeOverride: at.slice(11, 16) });
+        }
       } else if (a.blockKind === "signal") {
         patchSignalCaches(a.signalId, { at });
       } else if (a.blockKind === "routine") {
@@ -394,16 +428,18 @@ export function useTimelineDnd(opts: Opts) {
             eventId: a.eventId,
             calendarId: a.calendarId,
             at,
-            durationMin: a.durationMin,
+            durationMin: movedDurationMin,
+            routineId: a.routineId,
+            routineDate: a.routineId ? occDate : undefined,
           });
+          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
         } else if (a.blockKind === "routine") {
           await stage({
             kind: "routineReschedule",
             routineId: a.routineId,
             date: occDate,
             at,
-            // 위치 클램프 후에도 끝이 자정을 넘을 수 있다(23:45 + 60분) — 동일 상한 적용.
-            durationMin: clampDurationToDate(at, occDate, a.durationMin),
+            durationMin: movedDurationMin,
           });
           void qc.invalidateQueries({ queryKey: ["routines"] });
         } else {
@@ -415,9 +451,14 @@ export function useTimelineDnd(opts: Opts) {
           });
         }
       } catch {
-        if (a.blockKind === "event") invalidateEventCaches();
-        else if (a.blockKind === "routine") void qc.invalidateQueries({ queryKey: ["routines"] });
-        else invalidateSignalCaches();
+        if (a.blockKind === "event") {
+          invalidateEventCaches();
+          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
+        } else if (a.blockKind === "routine") {
+          void qc.invalidateQueries({ queryKey: ["routines"] });
+        } else {
+          invalidateSignalCaches();
+        }
       }
       return;
     }

@@ -2692,7 +2692,15 @@ export type WriteOp =
 { op: "create_blank"; title: string; at: string; duration_min: number; calendar_id: string };
 
 /**  stage_calendar_write의 대상. routine_check은 (routine_id, date)로 식별. */
-export type WriteTarget = { kind: "signal"; id: string } | { kind: "routine_check"; routine_id: string; date: string } | { kind: "event"; calendar_id: string; event_id: string };
+export type WriteTarget = { kind: "signal"; id: string } | { kind: "routine_check"; routine_id: string; date: string } | { kind: "event"; calendar_id: string; event_id: string; 
+/**
+ *  이 이벤트가 동기화된 루틴의 블록이면 그 루틴 id — Reschedule/Resize 시
+ *  `routine_checks.time_override`를 같은 트랜잭션 흐름에서 미러해, 캘린더만 움직이고
+ *  루틴이 옛 시각에 남는 분리(stale-hide 스냅백)를 막는다. `routine_date`와 쌍.
+ */
+routine_id?: string | null; 
+/**  위 루틴의 occurrence 날짜(YYYY-MM-DD). `routine_id`와 쌍으로만 의미. */
+routine_date?: string | null };
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

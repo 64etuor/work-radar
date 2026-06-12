@@ -356,6 +356,80 @@ describe("buildTodayBlocks", () => {
     expect(blocks[0].endISO).toContain("10:45");
   });
 
+  // 회귀: 동기화 루틴 블록 드래그 — 이벤트 patch + routine_checks.time_override 미러가 한 쌍.
+  // timeOverride가 이벤트의 새 시각과 일치하면 블록은 (옛 시각 가상 블록이 아니라)
+  // 이동된 이벤트로 렌더돼야 한다. 이전엔 이벤트만 움직여 stale 판정 → 원위치 스냅백.
+  it("moved synced routine renders the event at its new time when timeOverride follows", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "R",
+        timeOfDay: "09:00",
+        timeOverride: "10:30",
+        linkedEventId: null,
+        linkedCalendarId: null,
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+        done: false,
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "master-1_20260528T000000Z",
+        recurringEventId: "master-1",
+        title: "R",
+        start: "2026-05-28T10:30:00",
+        end: "2026-05-28T11:00:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].routineId).toBe("r1");
+    expect(blocks[0].startISO).toContain("10:30");
+  });
+
+  // 회귀: 동기화 루틴 블록 리사이즈 — per-day duration은 routine_checks에 표현 불가라
+  // duration까지 비교하면 영구 불일치(블록이 정의 길이로 스냅백 + 실제 이벤트 숨김).
+  // 시각이 일치하면 길이는 이벤트가 정본 — 리사이즈된 길이 그대로 렌더.
+  it("resized synced routine event keeps the event duration (time-only stale match)", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "R",
+        timeOfDay: "09:00",
+        timeOverride: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+        durationMin: 30,
+        done: false,
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "master-1_20260528T000000Z",
+        recurringEventId: "master-1",
+        title: "R",
+        start: "2026-05-28T09:00:00",
+        end: "2026-05-28T10:00:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], events, routines, date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].endISO).toContain("10:00");
+  });
+
   it("synced routine without a fetched calendar event does not render a routine job block", () => {
     const routines = [
       {

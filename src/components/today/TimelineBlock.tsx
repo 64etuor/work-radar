@@ -50,6 +50,8 @@ function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
       startISO: block.startISO,
       durationMin,
       calendarId: block.calendarId,
+      // 동기화된 루틴이 이벤트로 렌더된 블록 — 이동 시 루틴 time_override도 함께 미러.
+      routineId: block.routineId,
     };
   }
   if (block.kind === "routine") {
@@ -88,6 +90,7 @@ function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: n
       calendarId: block.calendarId,
       startISO: block.startISO,
       durationMin,
+      routineId: block.routineId,
     };
   }
   if (block.kind === "routine") {

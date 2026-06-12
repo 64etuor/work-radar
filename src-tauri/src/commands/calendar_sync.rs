@@ -39,6 +39,14 @@ pub enum WriteTarget {
     Event {
         calendar_id: String,
         event_id: String,
+        /// 이 이벤트가 동기화된 루틴의 블록이면 그 루틴 id — Reschedule/Resize 시
+        /// `routine_checks.time_override`를 같은 트랜잭션 흐름에서 미러해, 캘린더만 움직이고
+        /// 루틴이 옛 시각에 남는 분리(stale-hide 스냅백)를 막는다. `routine_date`와 쌍.
+        #[serde(default)]
+        routine_id: Option<String>,
+        /// 위 루틴의 occurrence 날짜(YYYY-MM-DD). `routine_id`와 쌍으로만 의미.
+        #[serde(default)]
+        routine_date: Option<String>,
     },
 }
 
@@ -121,6 +129,7 @@ pub(crate) async fn stage_calendar_write_inner(
         WriteTarget::Event {
             calendar_id,
             event_id,
+            ..
         } => ("event", format!("{calendar_id}|{event_id}")),
     };
     let (kind, calendar_id, event_id_opt, payload, debounce_ms) =
@@ -157,6 +166,30 @@ pub(crate) async fn stage_calendar_write_inner(
                  linked_event_id = NULL, linked_calendar_id = NULL \
                  WHERE routine_id = ?1 AND date = ?2",
             )
+            .bind(routine_id)
+            .bind(date)
+            .execute(pool)
+            .await?;
+        }
+    }
+
+    // 루틴-backed 이벤트(동기화된 루틴이 이벤트 블록으로 렌더되는 경우)의 시간 이동/리사이즈는
+    // routine_checks.time_override를 같은 IPC 안에서 미러한다. 이벤트만 patch되고 루틴 시각이
+    // 그대로면 todayBlocks의 stale 판정이 이동된 이벤트를 숨기고 옛 시각의 가상 블록을 그린다
+    // (드래그해도 블록이 원위치에 남는 버그). RoutineCheck 타깃의 미러와 동일 규율.
+    if let WriteTarget::Event {
+        routine_id: Some(routine_id),
+        routine_date: Some(date),
+        ..
+    } = &req.target
+    {
+        if let WriteOp::Reschedule { at, .. } | WriteOp::Resize { at, .. } = &req.op {
+            ensure_routine_check_row(pool, routine_id, date).await?;
+            sqlx::query(
+                "UPDATE routine_checks SET time_override = ?1 \
+                 WHERE routine_id = ?2 AND date = ?3",
+            )
+            .bind(extract_hhmm(at))
             .bind(routine_id)
             .bind(date)
             .execute(pool)
@@ -647,6 +680,83 @@ mod tests {
             completed.is_none(),
             "배치(링크) 행은 완료 마커가 없어야 한다 — scheduled≠done"
         );
+    }
+
+    /// 회귀: 동기화된 루틴 블록(이벤트 블록으로 렌더)을 드래그하면 Google 이벤트만 patch되고
+    /// routine_checks.time_override가 안 바뀌어 — todayBlocks stale 판정이 이동된 이벤트를
+    /// 숨기고 옛 시각의 가상 루틴 블록을 그렸다(블록 원위치 잔류 버그). Event 타깃에 루틴
+    /// 컨텍스트가 동봉되면 같은 IPC에서 time_override가 미러돼야 한다.
+    #[tokio::test]
+    async fn event_reschedule_with_routine_context_mirrors_time_override() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, active, time_of_day) \
+             VALUES ('r1','아침','daily',1,'09:00')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let req = StageWriteRequest {
+            target: WriteTarget::Event {
+                calendar_id: "work-cal".into(),
+                event_id: "master-1_20260528T000000Z".into(),
+                routine_id: Some("r1".into()),
+                routine_date: Some("2026-05-28".into()),
+            },
+            op: WriteOp::Reschedule {
+                at: "2026-05-28T10:30:00".into(),
+                duration_min: 30,
+            },
+            idempotency_key: "test-routine-backed-move".into(),
+        };
+        stage_calendar_write_inner(&db, &notify, req).await.unwrap();
+
+        // 루틴 occurrence 미러 — 블록이 새 위치를 따라간다.
+        let (time_override,): (Option<String>,) = sqlx::query_as(
+            "SELECT time_override FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(time_override.as_deref(), Some("10:30"));
+
+        // 캘린더 patch 큐 행 — 이벤트 타깃 그대로(루틴 컨텍스트는 미러 전용).
+        let (kind, event_id): (String, Option<String>) =
+            sqlx::query_as("SELECT kind, event_id FROM pending_calendar_writes")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(kind, "patch");
+        assert_eq!(event_id.as_deref(), Some("master-1_20260528T000000Z"));
+    }
+
+    /// 루틴 컨텍스트 없는 평범한 이벤트 write는 routine_checks를 일절 만들지 않는다.
+    #[tokio::test]
+    async fn event_reschedule_without_routine_context_leaves_routine_checks_alone() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let req = StageWriteRequest {
+            target: WriteTarget::Event {
+                calendar_id: "work-cal".into(),
+                event_id: "ev-1".into(),
+                routine_id: None,
+                routine_date: None,
+            },
+            op: WriteOp::Reschedule {
+                at: "2026-05-28T10:30:00".into(),
+                duration_min: 30,
+            },
+            idempotency_key: "test-plain-event-move".into(),
+        };
+        stage_calendar_write_inner(&db, &notify, req).await.unwrap();
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM routine_checks")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[tokio::test]

@@ -37,6 +37,10 @@ export type StageInput =
       calendarId: string;
       at: string;
       durationMin: number;
+      /** 동기화된 루틴의 이벤트 블록이면 루틴 id — Rust가 time_override를 같은 IPC에서 미러. */
+      routineId?: string;
+      /** 위 루틴의 occurrence 날짜(YYYY-MM-DD). routineId와 쌍. */
+      routineDate?: string;
     }
   | {
       kind: "eventResize";
@@ -44,6 +48,8 @@ export type StageInput =
       calendarId: string;
       at: string;
       durationMin: number;
+      routineId?: string;
+      routineDate?: string;
     }
   | { kind: "eventUnschedule"; eventId: string; calendarId: string }
   | { kind: "unschedule"; targetSignalId: string }
@@ -140,6 +146,8 @@ function toRequest(i: StageInput): StageWriteRequest {
         kind: "event",
         calendar_id: i.calendarId,
         event_id: i.eventId,
+        routine_id: i.routineId ?? null,
+        routine_date: i.routineDate ?? null,
       };
       const op: WriteOp = {
         op: "reschedule",
@@ -153,6 +161,8 @@ function toRequest(i: StageInput): StageWriteRequest {
         kind: "event",
         calendar_id: i.calendarId,
         event_id: i.eventId,
+        routine_id: i.routineId ?? null,
+        routine_date: i.routineDate ?? null,
       };
       const op: WriteOp = {
         op: "resize",
@@ -166,6 +176,8 @@ function toRequest(i: StageInput): StageWriteRequest {
         kind: "event",
         calendar_id: i.calendarId,
         event_id: i.eventId,
+        routine_id: null,
+        routine_date: null,
       };
       const op: WriteOp = { op: "unschedule" };
       return { target, op, idempotency_key };
