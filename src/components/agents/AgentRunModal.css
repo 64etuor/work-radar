@@ -26,8 +26,14 @@
   align-items: center;
   gap: var(--wr-density-md);
   min-height: 48px;
-  padding: 12px 18px;
+  /* 우측 여백 = shadcn Dialog 닫기(✕)와 상태 배지 충돌 방지. */
+  padding: 12px 48px 12px 18px;
   border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+/* 헤더 상태 배지 — JobCard 배지 톤 재사용, 우측 정렬. */
+.agent-run-status {
+  margin-left: auto;
 }
 
 .agent-run-title {

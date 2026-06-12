@@ -167,13 +167,23 @@
   color: var(--color-wr-muted);
   line-height: 1.35;
 }
+/* 실패 잡 detail = 에러 메시지 — Error Red로 의미 부여(배지 "실패" 라벨과 병기). */
+.jobs .jobs-detail-error {
+  color: var(--color-wr-danger);
+}
 .jobs .jobs-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font: 400 11px var(--font-mono);
   color: var(--color-wr-subtle);
+}
+/* 메타 항목 — thin-line 아이콘 + 값(이전 ⏱/↻ 텍스트 기호 대체, lucide 통일). */
+.jobs .jobs-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .jobs .jobs-card-actions {
   display: flex;
@@ -193,12 +203,45 @@
 .jobs .jobs-log-toggle:hover {
   color: var(--color-wr-fg);
 }
+/* 로그 블록 — Mono 마이크로 헤더(LOG + 복사) 달린 elevated 패널. */
+.jobs .jobs-log-wrap {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-xs);
+  background: var(--color-wr-elevated);
+  overflow: hidden;
+}
+.jobs .jobs-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 11px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+.jobs .jobs-log-label {
+  font: 600 9px var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--color-wr-subtle);
+}
+.jobs .jobs-log-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: 500 10px var(--font-mono);
+  color: var(--color-wr-muted);
+}
+.jobs .jobs-log-copy:hover {
+  color: var(--color-wr-fg);
+}
 .jobs .jobs-log {
-  margin: 2px 0 0;
+  margin: 0;
   max-height: 220px;
   overflow: auto;
-  background: var(--color-wr-elevated);
-  border-radius: var(--radius-xs);
   padding: 9px 11px;
   font: 400 11px var(--font-mono);
   line-height: 1.45;

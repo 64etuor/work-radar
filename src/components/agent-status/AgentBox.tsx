@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { progressRatio } from "@/lib/agentBar";
+import { formatElapsedCompact, progressRatio } from "@/lib/agentBar";
 
 import { BoxIcon } from "./BoxIcon";
 import type { SessionBox } from "./shared";
@@ -97,6 +97,11 @@ export function AgentBox({
   const working = box.state === "working";
   const elapsedSec = box.startedMs != null ? (nowMs - box.startedMs) / 1000 : 0;
   const ratio = working ? progressRatio(elapsedSec, box.timeoutSec) : 0;
+  // 상태줄 = 라벨 + (working이면) 경과 병기 — "작업 중 · 12m".
+  const stateLine =
+    working && box.startedMs != null
+      ? `${box.stateLabel} · ${formatElapsedCompact(elapsedSec)}`
+      : box.stateLabel;
 
   // 편집 중에는 클릭이 Jobs로 이동하지 않도록 div로 전환(input 포커스 보존).
   const Tag = editing ? "div" : "button";
@@ -107,26 +112,33 @@ export function AgentBox({
       className={`asb-box asb-box-${box.state}`}
       onClick={editing ? undefined : onOpen}
       title={editing ? undefined : box.title}
+      aria-label={editing ? undefined : `${displayName} · ${stateLine}`}
     >
       {working && box.startedMs != null && !editing && (
         <span className="asb-box-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
       )}
-      {/* 상태는 박스 하단 보더 색으로 표시(P10c) — 별도 dot 제거. 의미는 title/aria로 보강. */}
+      {/* 상태 = 하단 보더 색 + 박스 내 마이크로 라벨 병기(색만으로 의미 전달 금지 — DESIGN.md). */}
       <span className="asb-box-icon">
         <BoxIcon box={box} size={13} />
       </span>
       {editing ? (
         <NameEditor initial={displayName} onCommit={onCommit} onCancel={onCancel} />
       ) : (
-        <span
-          className="asb-box-name"
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            onEditStart();
-          }}
-          title="더블클릭해서 이름 편집"
-        >
-          {displayName}
+        <span className="asb-box-text">
+          <span
+            className="asb-box-name"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              onEditStart();
+            }}
+            title="더블클릭해서 이름 편집"
+          >
+            {displayName}
+          </span>
+          {/* 시각 상태 라벨 — 의미는 버튼 aria-label에 이미 병합, 중복 낭독 방지로 hidden. */}
+          <span className="asb-box-state" aria-hidden="true">
+            {stateLine}
+          </span>
         </span>
       )}
     </Tag>

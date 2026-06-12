@@ -110,7 +110,7 @@
   transition: width 0.9s linear;
 }
 .asb-box-icon,
-.asb-box-name {
+.asb-box-text {
   position: relative;
   z-index: 1;
 }
@@ -120,8 +120,16 @@
   color: var(--color-wr-muted);
   flex: 0 0 auto;
 }
+/* 이름+상태 2줄 컬럼 — 상태 라벨을 박스 안에 상시 노출(색-단일 채널 금지, DESIGN.md). */
+.asb-box-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
 .asb-box-name {
-  font: 500 14px var(--font-sans);
+  font: 500 13px var(--font-sans);
+  line-height: 1.25;
   color: var(--color-wr-fg);
   white-space: nowrap;
   overflow: hidden;
@@ -130,8 +138,18 @@
   /* 세션명은 한글 ~6자에서 말줄임(…) — 너무 긴 제목이 바를 늘리지 않게(약 6.5em ≈ 6자). */
   max-width: 6.5em;
 }
-/* 상태 표시(P10c) — 박스 하단 보더 색으로 단일 채널화. 색만으로 의미 전달 금지(title에 라벨 병기).
- * idle = 기본 hairline. working/waiting/error = 3px accent underline + 호환 위해 transparent 보더 보존. */
+/* 상태 마이크로 라벨 — Mono, 상태색과 동일 톤(라벨 텍스트가 의미를 직접 전달). */
+.asb-box-state {
+  font: 600 9px var(--font-mono);
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--color-wr-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 상태 표시 — 하단 3px 보더 색 + 박스 내 마이크로 라벨 병기(색만으로 의미 전달 금지).
+ * idle = 기본 hairline. done은 ack 대기 "결과 확인" affordance라 Action Blue(링크 톤). */
 .asb-box {
   border-bottom-width: 3px;
 }
@@ -141,15 +159,29 @@
 .asb-box-working {
   border-bottom-color: var(--color-wr-status-working);
 }
+.asb-box-working .asb-box-state {
+  color: var(--color-wr-status-working);
+}
 .asb-box-waiting {
   border-bottom-color: var(--color-wr-status-waiting);
+}
+/* waiting 노랑은 흰 배경 텍스트 대비가 약함 — 토큰 주석대로 ink와 mix해 가라앉힘. */
+.asb-box-waiting .asb-box-state {
+  color: color-mix(in srgb, var(--color-wr-status-waiting) 55%, var(--color-wr-fg));
 }
 .asb-box-error {
   border-bottom-color: var(--color-wr-danger);
 }
-/* 종료(succeeded/cancelled) — 사용자가 클릭(ack)할 때까지 잔존. 성공 톤(success), 의미는 title로 보강. */
+.asb-box-error .asb-box-state {
+  color: var(--color-wr-danger);
+}
+/* 종료(succeeded/cancelled) — 사용자가 클릭(ack)할 때까지 잔존. Action Blue = "클릭해서 결과 확인".
+ * (이전 var(--color-wr-success)는 미정의 토큰 → fallback 의존이었음. 의도 색으로 명시.) */
 .asb-box-done {
-  border-bottom-color: var(--color-wr-success, var(--color-wr-accent));
+  border-bottom-color: var(--color-wr-accent);
+}
+.asb-box-done .asb-box-state {
+  color: var(--color-wr-accent);
 }
 /* '+N' 오버플로 칩 — button-pill-outline 톤, 클릭 전 tooltip로 나머지 노출. */
 .asb-overflow {
@@ -239,7 +271,7 @@
   z-index: 1;
   width: 9ch;
   min-width: 0;
-  font: 500 14px var(--font-sans);
+  font: 500 13px var(--font-sans);
   color: var(--color-wr-fg);
   background: var(--color-wr-bg);
   border: 1px solid var(--color-wr-border-light);

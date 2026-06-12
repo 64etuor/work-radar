@@ -4,6 +4,7 @@ import "@/components/jobs/JobsView.css";
 import { useState } from "react";
 
 import { JobCard } from "@/components/jobs/JobCard";
+import { JOB_STATUS } from "@/components/jobs/jobsConstants";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAckAgentRun, useAgentLogs, useAgentRuns, useKillAgentRun } from "@/lib/query";
 import { useUIStore } from "@/store";
@@ -50,6 +51,12 @@ export function AgentRunModal() {
           <div className="agent-run-head">
             <DialogTitle className="agent-run-title">에이전트 결과</DialogTitle>
             {run && <span className="agent-run-kind">{run.kind}</span>}
+            {/* 헤더에서 상태 즉시 식별 — JobCard 배지와 동일 톤(JOB_STATUS 재사용). */}
+            {run && (
+              <span className={`jobs-badge agent-run-status ${JOB_STATUS[run.status].cls}`}>
+                {JOB_STATUS[run.status].label}
+              </span>
+            )}
           </div>
           <div className="agent-run-scroll">
             {!run ? (

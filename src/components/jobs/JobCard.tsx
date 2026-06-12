@@ -1,10 +1,49 @@
 import type { UseQueryResult } from "@tanstack/react-query";
-import { FileText, Square } from "lucide-react";
+import {
+  CircleDollarSign,
+  Copy,
+  FileText,
+  Hourglass,
+  RotateCcw,
+  Square,
+  Timer,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AgentRunView } from "@/bindings";
+import { formatElapsedCompact } from "@/lib/agentBar";
 
 import { JOB_STATUS } from "./jobsConstants";
+import { runDurationSec } from "./jobsUtils";
 import { ProposalPanel } from "./ProposalPanel";
+
+/** 로그 복사 버튼 — 클릭 시 1.5s "복사됨" 피드백(타이머는 언마운트 시 정리, bounded). */
+function CopyLogButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  return (
+    <button
+      type="button"
+      className="jobs-log-copy"
+      onClick={() => {
+        void navigator.clipboard.writeText(text);
+        setCopied(true);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setCopied(false), 1500);
+      }}
+      aria-label="로그 복사"
+    >
+      <Copy className="size-3" />
+      {copied ? "복사됨" : "복사"}
+    </button>
+  );
+}
 
 export function JobCard({
   run,
@@ -22,6 +61,9 @@ export function JobCard({
   const st = JOB_STATUS[run.status];
   // 실행/대기 중에만 kill (awaiting_approval은 프로세스 종료 → accept/reject로 처리).
   const killable = run.status === "running" || run.status === "proposed";
+  // 종료 잡의 실제 실행 시간(정적 타임스탬프 차 — 시계 불요).
+  const durationSec = runDurationSec(run.startedAt, run.finishedAt);
+  const logText = log?.data?.trim() ? log.data : null;
 
   return (
     <div className="jobs-card">
@@ -38,12 +80,31 @@ export function JobCard({
         )}
       </div>
 
-      {run.detail && <div className="jobs-detail">{run.detail}</div>}
+      {run.detail && (
+        <div className={run.status === "failed" ? "jobs-detail jobs-detail-error" : "jobs-detail"}>
+          {run.detail}
+        </div>
+      )}
 
       <div className="jobs-meta">
-        <span title="timeout bound">⏱ {run.timeoutSec}s</span>
-        <span title="max turns">↻ {run.maxTurns}턴</span>
-        <span title="cost cap">$ {(run.costCapUsd ?? 0).toFixed(2)}</span>
+        <span className="jobs-meta-item" title="timeout bound">
+          <Timer className="size-3" />
+          {run.timeoutSec}s
+        </span>
+        <span className="jobs-meta-item" title="max turns">
+          <RotateCcw className="size-3" />
+          {run.maxTurns}턴
+        </span>
+        <span className="jobs-meta-item" title="cost cap">
+          <CircleDollarSign className="size-3" />
+          cap {(run.costCapUsd ?? 0).toFixed(2)}
+        </span>
+        {durationSec != null && (
+          <span className="jobs-meta-item" title="실행 시간">
+            <Hourglass className="size-3" />
+            {formatElapsedCompact(durationSec)}
+          </span>
+        )}
         {run.costTokens != null && <span>· {run.costTokens} tok</span>}
         {run.costUsd != null && <span>· ${run.costUsd.toFixed(4)}</span>}
       </div>
@@ -58,9 +119,15 @@ export function JobCard({
       </div>
 
       {logOpen && (
-        <pre className="jobs-log">
-          {log?.isLoading ? "로그 불러오는 중…" : log?.data?.trim() ? log.data : "(로그 없음)"}
-        </pre>
+        <div className="jobs-log-wrap">
+          <div className="jobs-log-head">
+            <span className="jobs-log-label">LOG</span>
+            {logText != null && <CopyLogButton text={logText} />}
+          </div>
+          <pre className="jobs-log">
+            {log?.isLoading ? "로그 불러오는 중…" : (logText ?? "(로그 없음)")}
+          </pre>
+        </div>
       )}
     </div>
   );

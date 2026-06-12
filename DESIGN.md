@@ -476,8 +476,12 @@ hairline 룰)와 포스트잇, 그리고 따로 떠 있는 **조작 패널**이 
 - 내용 = `agent-box` 가로 행 + 좌측 Mono 마이크로 라벨 `AGENTS`.
 - **`agent-box`**: 1px `border-light`, radius `sm`(8px). 구성:
   - thin-line **engine 아이콘**(codex=terminal · hermes=paper-plane · claude=sparkle).
-  - **편집 가능 이름**(Body 14px). 더블클릭/편집아이콘 → 인라인 input, Focus Blue(`#4c6ee6`) 링.
-  - **상태 = 색 dot + Mono 마이크로 라벨 병기**(idle=Muted Slate `--color-wr-subtle` · working=`--color-wr-status-working` `#16a34a` · error=Error Red `--color-wr-danger`).
+  - **편집 가능 이름**(Body 13px) + 그 아래 **Mono 마이크로 상태줄**(2줄 컬럼).
+    더블클릭/편집아이콘 → 인라인 input, Focus Blue(`#4c6ee6`) 링.
+  - **상태 = 하단 3px 보더 색 + 박스 내 Mono 마이크로 라벨 병기**
+    (idle=hairline/Muted Slate · working=`--color-wr-status-working` `#16a34a`, 라벨에 경과 병기 "작업 중 · 12m" ·
+    waiting=`--color-wr-status-waiting`(라벨 텍스트는 ink와 mix해 가라앉힘) · error=Error Red `--color-wr-danger` ·
+    done(ack 대기)=Action Blue `--color-wr-accent` — "클릭해서 결과 확인" affordance).
     **색만으로 의미 금지**(DESIGN 전역 규칙 — 항상 텍스트/아이콘 라벨 병기).
   - **진행 백필**: working 시 박스를 좌→우로 채우는 옅은 wash(과한 그림자/그라데이션 금지).
   - **너비 = 경과 시간 기반**: idle=초기(~96px), 길어질수록 증가, **상한 ~240px**(bounded).

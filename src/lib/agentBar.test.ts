@@ -4,6 +4,7 @@ import {
   BOX_MAX_PX,
   BOX_MIN_PX,
   boxWidth,
+  formatElapsedCompact,
   overflowSplit,
   progressRatio,
   UNBOUNDED_SATURATE_SEC,
@@ -96,5 +97,21 @@ describe("agentBar — 개수 상한 + '+N' 오버플로(P10a)", () => {
   it("음수/소수 입력 방어", () => {
     expect(overflowSplit(-1)).toEqual({ visibleCount: 0, overflow: 0 });
     expect(overflowSplit(8.7)).toEqual({ visibleCount: 8, overflow: 0 });
+  });
+});
+
+describe("agentBar — 경과 컴팩트 라벨", () => {
+  it("초/분/시 단계별 포맷", () => {
+    expect(formatElapsedCompact(0)).toBe("0s");
+    expect(formatElapsedCompact(42)).toBe("42s");
+    expect(formatElapsedCompact(60)).toBe("1m");
+    expect(formatElapsedCompact(12 * 60 + 30)).toBe("12m");
+    expect(formatElapsedCompact(3600)).toBe("1h 0m");
+    expect(formatElapsedCompact(3600 + 24 * 60)).toBe("1h 24m");
+  });
+
+  it("음수/NaN 방어 → 0s", () => {
+    expect(formatElapsedCompact(-5)).toBe("0s");
+    expect(formatElapsedCompact(Number.NaN)).toBe("0s");
   });
 });

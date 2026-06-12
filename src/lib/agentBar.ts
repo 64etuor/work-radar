@@ -78,3 +78,16 @@ function clamp01(n: number): number {
   if (Number.isNaN(n)) return 0;
   return Math.max(0, Math.min(1, n));
 }
+
+/**
+ * 경과(초) → 컴팩트 표시 라벨. 에이전트 박스 상태줄/잡 카드 duration 공용(표시 전용).
+ * <60s → "42s" · <1h → "12m" · ≥1h → "1h 24m". 음수/NaN은 "0s"로 방어.
+ */
+export function formatElapsedCompact(elapsedSec: number): string {
+  const sec = Number.isFinite(elapsedSec) ? Math.max(0, Math.floor(elapsedSec)) : 0;
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  return `${h}h ${min % 60}m`;
+}
