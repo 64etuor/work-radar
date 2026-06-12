@@ -1,0 +1,21 @@
+src/components/board/CheckIcon.tsx
+  s_125e7320476d49::t_e9ebfe723cedaa 14
+src/components/hermes/HermesChatInput.tsx
+  s_125e7320476d49::t_e9ebfe723cedaa 81-86,88,91-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ed5c64c4aa9ceeddbe7e68a7707a910b9acb3c9f",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
