@@ -1,0 +1,67 @@
+src/components/settings/NavigationSettings.tsx
+  s_125e7320476d49::t_635a8b21edc80b 37-42,75-79,81-92,94-137,165,188-190,192-204,206-244,311
+src/components/hermes/HermesPanel.tsx
+  s_125e7320476d49::t_635a8b21edc80b 187,237
+src/components/board/RoutineForm.tsx
+  s_125e7320476d49::t_635a8b21edc80b 1,33,55-58,80-85,107,132-133,147,150-151,165
+src/components/board/BrainDumpToggle.tsx
+  s_125e7320476d49::t_635a8b21edc80b 105-106,117-123,149,152,154,170,179,199,203,207
+src/components/board/CalendarView.tsx
+  s_125e7320476d49::t_635a8b21edc80b 86-101,138-149
+  s_125e7320476d49::t_8a691763afec42 85
+src/components/CaptureBoard.tsx
+  s_125e7320476d49::t_635a8b21edc80b 5,76-77,89,124,527,529
+src/components/board/ProjectPickerModal.tsx
+  s_125e7320476d49::t_635a8b21edc80b 39,41-49,51-60,62
+src/components/control-room/NodeTooltip.tsx
+  s_125e7320476d49::t_635a8b21edc80b 9,14,34
+src/components/hermes/HermesSidebar.tsx
+  s_125e7320476d49::t_635a8b21edc80b 2,37,41-46,89,93,99,115-118,126,130,133,138-142,149
+src/components/news/NewsTicker.tsx
+  s_125e7320476d49::t_635a8b21edc80b 78,88
+src/components/settings/project-card/BouleConfigControls.tsx
+  s_125e7320476d49::t_635a8b21edc80b 127-155
+src/components/skills/InAppEditor.tsx
+  s_125e7320476d49::t_635a8b21edc80b 19-20
+src/components/SkillsView.tsx
+  s_125e7320476d49::t_635a8b21edc80b 222-223,244,335-336,364,621-622,636
+src/components/weekly/LifeWheelRadar.tsx
+  s_125e7320476d49::t_635a8b21edc80b 2,15-61,123-127
+src/components/worktree/CommitGraphDrawer.tsx
+  s_125e7320476d49::t_8a691763afec42 116-119,140
+  s_125e7320476d49::t_635a8b21edc80b 43,115,143
+src/components/jobs/TriagePanel.tsx
+  s_125e7320476d49::t_635a8b21edc80b 33-45,62-63,66-68,70,81-82,95
+.react-doctor/false-positives.md
+  s_125e7320476d49::t_635a8b21edc80b 36,42-43,47-50,134-148
+src/lib/prRadarChart.tsx
+  s_125e7320476d49::t_635a8b21edc80b 1,13-59,62-66
+src/components/inbox/InboxTray.tsx
+  s_125e7320476d49::t_635a8b21edc80b 65,129
+src/components/agent-status/AgentBox.tsx
+  s_125e7320476d49::t_635a8b21edc80b 22,40-44,49,54
+src/components/jobs/SelfCheckPanel.tsx
+  s_125e7320476d49::t_635a8b21edc80b 57-68,70,87,89,94-97,104,115,119,126,130,148
+src/components/board/MatrixCanvas.tsx
+  s_125e7320476d49::t_635a8b21edc80b 508,527-531,536,541
+src/components/board/CalendarEventModal.tsx
+  s_125e7320476d49::t_635a8b21edc80b 32-40,63-74,81-92,100-101,105,108,110,112-113,121-122,127-132,134-139,145-146,152-154,158-159,169-170,205-206,217,228-230,237-239,253,274-275,291-296
+src/components/jobs/BatchEnrichPanel.tsx
+  s_125e7320476d49::t_635a8b21edc80b 41,44-66,70,140,153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "6e67697046d99264097e6ea64c5c4f40162b60a0",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
