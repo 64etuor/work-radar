@@ -51,8 +51,3 @@ export function reconcileFirstSeen(desired: ReadonlySet<string>): void {
   snapshot = next;
   for (const l of listeners) l();
 }
-
-/** 테스트 전용 — 모듈 상태 초기화. */
-export function resetFirstSeenForTest(): void {
-  snapshot = new Map();
-}

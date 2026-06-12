@@ -134,7 +134,7 @@ function AttentionLatchPanel({ row }: { row: ProjectTickerStatusRow }) {
   const clearing = clear.isPending && clear.variables === row.projectId;
 
   return (
-    <div className="cr-latch" role="status" aria-label="attention 래치">
+    <output className="cr-latch" aria-label="attention 래치">
       <div className="cr-latch-head">
         <AlertTriangle size={13} aria-hidden />
         <span className="cr-latch-title">ATTENTION 래치 — 자동 tick 중단됨</span>
@@ -191,7 +191,7 @@ function AttentionLatchPanel({ row }: { row: ProjectTickerStatusRow }) {
           해제 실패: {String((clear.error as Error)?.message ?? clear.error)}
         </div>
       )}
-    </div>
+    </output>
   );
 }
 

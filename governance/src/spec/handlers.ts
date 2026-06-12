@@ -105,8 +105,11 @@ export async function specTrail(workspaceDir: string, input: { specId: string })
     summary: e.body.split("\n", 1)[0] ?? "",
   }));
   const plans = all
-    .filter((e) => e.frontmatter.type === "plan_proposed" && (e.frontmatter.related_to ?? []).includes(input.specId))
-    .map((e) => e.frontmatter.id)
+    .flatMap((e) =>
+      e.frontmatter.type === "plan_proposed" && (e.frontmatter.related_to ?? []).includes(input.specId)
+        ? [e.frontmatter.id]
+        : [],
+    )
     .sort((a, b) => a.localeCompare(b));
   return { specId: s.specId, title: s.title, phase: s.phase, plans, chain };
 }

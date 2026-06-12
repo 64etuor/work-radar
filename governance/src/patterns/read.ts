@@ -17,20 +17,24 @@ async function readDir(dir: string): Promise<string[]> {
  *  Tolerant of `.gitkeep` and malformed files. Scope is normalized to match detect.ts. */
 export async function loadCuratedKeys(workspaceDir: string): Promise<Set<string>> {
   const keys = new Set<string>();
-  for (const sub of ["active", "archived"]) {
+  const groups = await Promise.all(["active", "archived"].map(async (sub) => {
     const dir = join(workspaceDir, "patterns", sub);
-    for (const f of await readDir(dir)) {
+    return Promise.all((await readDir(dir)).map(async (f) => {
       try {
         const { data } = matter(await readFile(join(dir, f), "utf8"));
         const kind = data.kind;
         const scope = data.scope;
         if (typeof kind === "string" && typeof scope === "string") {
-          keys.add(curatedKeyString(kind, scope.trim().toLowerCase()));
+          return curatedKeyString(kind, scope.trim().toLowerCase());
         }
       } catch {
         // malformed → skip
       }
-    }
+      return null;
+    }));
+  }));
+  for (const key of groups.flat()) {
+    if (key !== null) keys.add(key);
   }
   return keys;
 }
@@ -52,26 +56,26 @@ export async function listPatternsIn(
   workspaceDir: string,
   subdirs: readonly PatternSubdir[],
 ): Promise<PatternView[]> {
-  const out: PatternView[] = [];
-  for (const sub of subdirs) {
+  const groups = await Promise.all(subdirs.map(async (sub) => {
     const dir = join(workspaceDir, "patterns", sub);
-    for (const f of (await readDir(dir)).sort()) {
+    return Promise.all((await readDir(dir)).sort().map(async (f) => {
       try {
         const { data } = matter(await readFile(join(dir, f), "utf8"));
-        out.push({
+        return {
           id: String(data.id ?? f.replace(/\.md$/, "")),
           kind: String(data.kind ?? ""),
           scope: String(data.scope ?? ""),
           evidence_count: Number(data.evidence_count ?? 0),
           confidence: Number(data.confidence ?? 0),
           status: String(data.status ?? ""),
-        });
+        };
       } catch {
         // malformed → skip
       }
-    }
-  }
-  return out;
+      return null;
+    }));
+  }));
+  return groups.flat().filter((pattern): pattern is PatternView => pattern !== null);
 }
 
 /** List candidate patterns (frontmatter summary), sorted by id for stable output. */

@@ -158,9 +158,7 @@ export async function chooseOption(
   let mintedTokens: string[] = [];
   try {
     const body = JSON.parse(blocked.body) as { options?: { token?: unknown }[] };
-    mintedTokens = (body.options ?? [])
-      .map((o) => o.token)
-      .filter((t): t is string => typeof t === "string");
+    mintedTokens = (body.options ?? []).flatMap((o) => (typeof o.token === "string" ? [o.token] : []));
   } catch {
     mintedTokens = [];
   }

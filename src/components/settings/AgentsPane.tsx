@@ -288,7 +288,7 @@ function AgentPromptConfigRow({
           <Switch
             checked={enabled}
             onCheckedChange={(value) => dispatchDraft({ type: "enabled", value })}
-            aria-label="에이전트 사용"
+            aria-label={`${config.binding} 사용`}
           />
           사용
         </div>
@@ -299,7 +299,10 @@ function AgentPromptConfigRow({
         aria-expanded={promptOpen}
         className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs"
       >
-        <ChevronRight className={`size-3 transition-transform ${promptOpen ? "rotate-90" : ""}`} />
+        <ChevronRight
+          className={`size-3 transition-transform ${promptOpen ? "rotate-90" : ""}`}
+          aria-hidden
+        />
         프롬프트 {promptOpen ? "접기" : "펼치기"}
       </button>
       {promptOpen && (
@@ -330,7 +333,7 @@ function AgentPromptConfigRow({
             dispatchDraft({ type: "reasoning", value: value as AgentReasoningEffort | "inherit" })
           }
         >
-          <SelectTrigger className="h-8 text-xs" aria-label={`${config.binding} thinking`}>
+          <SelectTrigger className="h-8 text-xs" aria-label={`${config.binding} reasoning effort`}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -345,7 +348,7 @@ function AgentPromptConfigRow({
           <Switch
             checked={fastMode}
             onCheckedChange={(value) => dispatchDraft({ type: "fastMode", value })}
-            aria-label="fast 모드"
+            aria-label={`${config.binding} fast 모드`}
           />
           fast
         </div>

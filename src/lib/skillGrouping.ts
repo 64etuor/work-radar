@@ -42,13 +42,22 @@ function sortWithin(a: Skill, b: Skill): number {
  */
 export function groupSkillsForPalette(skills: Skill[]): SkillPaletteGroup[] {
   const order: SkillPaletteGroupKey[] = ["project", "global"];
-  return order
-    .map((key) => ({
+  const grouped: Record<SkillPaletteGroupKey, Skill[]> = {
+    project: [],
+    global: [],
+  };
+  for (const skill of skills) grouped[groupKeyOf(skill)].push(skill);
+
+  const groups: SkillPaletteGroup[] = [];
+  for (const key of order) {
+    if (grouped[key].length === 0) continue;
+    groups.push({
       key,
       heading: SKILL_PALETTE_HEADINGS[key],
-      skills: skills.filter((s) => groupKeyOf(s) === key).sort(sortWithin),
-    }))
-    .filter((g) => g.skills.length > 0);
+      skills: grouped[key].sort(sortWithin),
+    });
+  }
+  return groups;
 }
 
 /** 팔레트 검색 매칭 문자열(이름 + 바인딩 + 종류 동의어). cmdk value로 쓴다. */

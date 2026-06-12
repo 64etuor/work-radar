@@ -1,8 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { commands, type TokenKind } from "@/bindings";
 
 import { unwrap } from "./client";
+
+function invalidateTokenDependents(qc: QueryClient, projectId: string, kind: TokenKind) {
+  void qc.invalidateQueries({ queryKey: ["tokenStatus", projectId] });
+  if (kind === "github") {
+    void qc.invalidateQueries({ queryKey: ["prRadar", projectId] });
+  }
+}
 
 /** 토큰 존재 여부만(본문 미노출 — INVARIANT). 마스킹 표시용. */
 export function useProjectTokenStatus(projectId: string) {
@@ -29,7 +36,7 @@ export function useSetProjectToken() {
       kind: TokenKind;
       token: string;
     }) => unwrap(commands.setProjectToken(projectId, kind, token)),
-    onSuccess: (_data, v) => qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
+    onSuccess: (_data, v) => invalidateTokenDependents(qc, v.projectId, v.kind),
   });
 }
 
@@ -39,7 +46,7 @@ export function useDeleteProjectToken() {
   return useMutation({
     mutationFn: ({ projectId, kind }: { projectId: string; kind: TokenKind }) =>
       unwrap(commands.deleteProjectToken(projectId, kind)),
-    onSuccess: (_data, v) => qc.invalidateQueries({ queryKey: ["tokenStatus", v.projectId] }),
+    onSuccess: (_data, v) => invalidateTokenDependents(qc, v.projectId, v.kind),
   });
 }
 
@@ -77,7 +84,7 @@ export function useImportGithubToken() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) => unwrap(commands.importGithubToken(projectId)),
-    onSuccess: (_data, projectId) => qc.invalidateQueries({ queryKey: ["tokenStatus", projectId] }),
+    onSuccess: (_data, projectId) => invalidateTokenDependents(qc, projectId, "github"),
   });
 }
 

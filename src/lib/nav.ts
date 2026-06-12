@@ -232,9 +232,12 @@ export function buildShortcutHints(keymap: Record<string, string> | undefined): 
     ...NAV_ITEMS.map((n) => ({ key: n.view as string, label: n.label })),
     ...EXTRA_ACTIONS.map((a) => ({ key: a.key, label: a.label })),
   ];
-  return rows
-    .map((r) => ({ ...r, spec: (keymap[r.key] ?? "").trim() }))
-    .filter((r) => r.spec.length > 0);
+  const hints: ShortcutHint[] = [];
+  for (const row of rows) {
+    const spec = (keymap[row.key] ?? "").trim();
+    if (spec.length > 0) hints.push({ ...row, spec });
+  }
+  return hints;
 }
 
 /** 슬라이드 전환 방향(App의 navigateView가 받는 motion). NAV 순서 기준. */

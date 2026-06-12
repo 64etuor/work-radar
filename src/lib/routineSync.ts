@@ -37,16 +37,30 @@ export function routineSyncCandidates(
   // 프로젝트가 고르면 picker에 중복으로 뜨고, "다른 프로젝트로 같은 캘린더 이동" = 무의미한
   // DELETE+CREATE round-trip을 부른다 — id가 같으면 동일 물리 캘린더이므로 한 번만 노출한다.
   const seen = new Set<string>();
-  return projects
-    .filter((p) => p.kind === routineKind)
-    .flatMap((p) =>
-      safeParseSelectedCalendars(p.googleCalendarIds).map((c) => ({ ...c, projectId: p.id })),
-    )
-    .filter((c) => {
-      if (seen.has(c.id)) return false;
-      seen.add(c.id);
-      return true;
-    });
+  const candidates: RoutineSyncCandidate[] = [];
+  for (const project of projects) {
+    if (project.kind !== routineKind) continue;
+    for (const calendar of safeParseSelectedCalendars(project.googleCalendarIds)) {
+      if (seen.has(calendar.id)) continue;
+      seen.add(calendar.id);
+      candidates.push({ ...calendar, projectId: project.id });
+    }
+  }
+  return candidates;
+}
+
+function candidatesForProject(project: Project): RoutineSyncCandidate[] {
+  return safeParseSelectedCalendars(project.googleCalendarIds).map((calendar) => ({
+    ...calendar,
+    projectId: project.id,
+  }));
+}
+
+function projectById(projects: Project[], projectId: string): Project | null {
+  for (const project of projects) {
+    if (project.id === projectId) return project;
+  }
+  return null;
 }
 
 /**
@@ -60,12 +74,9 @@ export function routineCalendarPickCandidates(
   routineKind: Kind | null,
 ): RoutineSyncCandidate[] {
   if (projectId) {
-    const project = projects.find((p) => p.id === projectId);
+    const project = projectById(projects, projectId);
     if (!project) return [];
-    return safeParseSelectedCalendars(project.googleCalendarIds).map((c) => ({
-      ...c,
-      projectId: project.id,
-    }));
+    return candidatesForProject(project);
   }
   return routineSyncCandidates(projects, routineKind);
 }
@@ -79,6 +90,8 @@ export function routineSyncedLabel(
   googleCalendarId: string | null,
 ): string | null {
   if (googleCalendarId == null) return null;
-  const match = candidates.find((c) => c.id === googleCalendarId);
-  return match?.summary || googleCalendarId;
+  for (const candidate of candidates) {
+    if (candidate.id === googleCalendarId) return candidate.summary || googleCalendarId;
+  }
+  return googleCalendarId;
 }

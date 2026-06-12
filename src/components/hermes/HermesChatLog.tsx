@@ -1,6 +1,6 @@
 import { type DotLottie, DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { Check, Loader2, Wrench, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type UIEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -190,14 +190,13 @@ export function HermesChatLog({ messages, onRespond }: Props) {
     );
   }
 
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  };
+
   return (
-    <div
-      className="min-w-0 flex-1 overflow-auto p-4"
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-      }}
-    >
+    <div className="min-w-0 flex-1 overflow-auto p-4" onScroll={handleScroll}>
       <div className="flex flex-col">
         {messages.map((m, idx) => {
           const prev = messages[idx - 1];

@@ -126,6 +126,7 @@ export function LifeWheelTagSettings({ onToast }: { onToast: (message: string) =
               }}
               className="border-border bg-card focus:border-ring h-9 rounded-lg border px-3 text-sm outline-none"
               placeholder="예: 운동, 독서, 사이드프로젝트"
+              aria-label="새 태그 이름"
             />
           </Field>
           <Button type="button" className="gap-1.5 self-end" onClick={addTag}>

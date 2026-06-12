@@ -18,10 +18,11 @@ export type TaggedActivity = Pick<WorkSignal, "area" | "areaTags">;
 
 /** enabled 태그만, id 오름차순. */
 function enabledSorted(tags: LifeWheelTagConfig[]): LifeWheelTagConfig[] {
-  return tags
-    .filter((t) => t.enabled)
-    .slice()
-    .sort((a, b) => a.id.localeCompare(b.id));
+  const enabled: LifeWheelTagConfig[] = [];
+  for (const tag of tags) {
+    if (tag.enabled) enabled.push(tag);
+  }
+  return enabled.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 /**
@@ -53,7 +54,10 @@ export type RadarMode = "empty" | "bars" | "radar";
 
 /** enabled 태그 개수 → 렌더 모드. 0=안내, 1~2=수평 바, 3+=레이더. */
 export function radarRenderMode(tags: LifeWheelTagConfig[]): RadarMode {
-  const n = tags.filter((t) => t.enabled).length;
+  let n = 0;
+  for (const tag of tags) {
+    if (tag.enabled) n += 1;
+  }
   if (n === 0) return "empty";
   if (n <= 2) return "bars";
   return "radar";
@@ -95,12 +99,12 @@ export function bucketRoutineDoneByOffset(
   items: RoutineTrackingItem[],
   today: string,
 ): Map<number, TaggedActivity[]> {
-  return bucketByWeekOffset(
-    items.flatMap((item) =>
-      item.history
-        .filter((day) => day.done)
-        .map((day) => ({ date: day.date, value: { area: item.area, areaTags: item.areaTags } })),
-    ),
-    today,
-  );
+  const doneEntries: { date: string; value: TaggedActivity }[] = [];
+  for (const item of items) {
+    for (const day of item.history) {
+      if (!day.done) continue;
+      doneEntries.push({ date: day.date, value: { area: item.area, areaTags: item.areaTags } });
+    }
+  }
+  return bucketByWeekOffset(doneEntries, today);
 }

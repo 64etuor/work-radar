@@ -21,6 +21,13 @@ function invalidateCalendarSelection(qc: QueryClient, projectId: string) {
   void qc.invalidateQueries({ queryKey: ["googleCalendars", projectId] });
   void qc.invalidateQueries({ queryKey: ["selectedCalendars", projectId] });
   void qc.invalidateQueries({ queryKey: ["projects"] });
+  void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
+}
+
+function invalidateGoogleAccount(qc: QueryClient, projectId: string) {
+  void qc.invalidateQueries({ queryKey: ["googleAccountStatus", projectId] });
+  void qc.invalidateQueries({ queryKey: ["googleCalendars", projectId] });
+  void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
 }
 
 /** Today 콕핏용 캘린더 이벤트 쿼리 래퍼(ambient — 짧은 staleTime). projectId=null → 전 프로젝트 병합. */
@@ -77,8 +84,7 @@ export function useSetGoogleAccountOauthClient() {
       clientId: string;
       clientSecret: string;
     }) => unwrap(commands.setGoogleOauthClient(projectId, clientId, clientSecret)),
-    onSuccess: (_data, v) =>
-      qc.invalidateQueries({ queryKey: ["googleAccountStatus", v.projectId] }),
+    onSuccess: (_data, v) => invalidateGoogleAccount(qc, v.projectId),
   });
 }
 
@@ -87,8 +93,7 @@ export function useStartGoogleAccountOauth() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) => unwrap(commands.startGoogleOauth(projectId)),
-    onSuccess: (_data, projectId) =>
-      qc.invalidateQueries({ queryKey: ["googleAccountStatus", projectId] }),
+    onSuccess: (_data, projectId) => invalidateGoogleAccount(qc, projectId),
   });
 }
 
@@ -104,8 +109,7 @@ export function useDisconnectGoogleAccount() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) => unwrap(commands.disconnectGoogle(projectId)),
-    onSuccess: (_data, projectId) =>
-      qc.invalidateQueries({ queryKey: ["googleAccountStatus", projectId] }),
+    onSuccess: (_data, projectId) => invalidateGoogleAccount(qc, projectId),
   });
 }
 

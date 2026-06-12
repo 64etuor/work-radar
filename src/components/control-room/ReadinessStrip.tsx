@@ -12,6 +12,8 @@ const GATE_LABELS: { key: keyof ReadinessView["gates"]; label: string }[] = [
   { key: "stall", label: "stall" },
 ];
 
+const EMPTY_REMEDIES: GoLiveRemedy[] = [];
+
 /** ARMED/NOT-ARMED verdict badge + the 5 readiness gate chips. Rendered inside the Command
  *  Deck's "지금 POSTURE" zone; the blockers/warnings live in {@link ReadinessDetails} below the
  *  deck so a long blocker list never stretches the deck row. */
@@ -40,7 +42,7 @@ export function ReadinessGatesRow({ readiness }: { readiness: ReadinessView }) {
  *  같은 콘솔의 토글은 그 토글을 직접 지시) + advisory warnings. Rendered below the deck. */
 export function ReadinessDetails({
   readiness,
-  remedies = [],
+  remedies = EMPTY_REMEDIES,
 }: {
   readiness: ReadinessView;
   remedies?: GoLiveRemedy[];

@@ -91,9 +91,11 @@ export function evaluateHypothesis(
 }
 
 export async function runHypothesisTester(deps: HypothesisTesterDeps): Promise<HypothesisTesterSummary> {
-  const events = await safeRead(deps.readEvents, []);
-  const patterns = await safeRead(deps.readPatterns, []);
-  const existing = await safeRead(deps.readTestingHypotheses, []);
+  const [events, patterns, existing] = await Promise.all([
+    safeRead(deps.readEvents, []),
+    safeRead(deps.readPatterns, []),
+    safeRead(deps.readTestingHypotheses, []),
+  ]);
   const existingIds = new Set(existing.map((hypothesis) => hypothesis.id));
   const expires = addDays(deps.now(), 30);
 
@@ -147,8 +149,7 @@ export async function readSupportedPatterns(workspaceDir: string): Promise<Suppo
   );
   return patternGroups
     .flat()
-    .filter((pattern): pattern is SupportedPattern => pattern !== null)
-    .filter((pattern) => pattern.scope.length > 0)
+    .filter((pattern): pattern is SupportedPattern => pattern !== null && pattern.scope.length > 0)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
@@ -169,9 +170,7 @@ export async function listHypotheses(workspaceDir: string): Promise<HypothesisVi
       const records = await Promise.all(
         (await markdownFiles(dir)).map((file) => readHypothesis(dir, file)),
       );
-      return records
-        .filter((record): record is HypothesisRecord => record !== null)
-        .map(hypothesisView);
+      return records.flatMap((record) => (record === null ? [] : [hypothesisView(record)]));
     }),
   );
   return views.flat().sort((a, b) => a.id.localeCompare(b.id));

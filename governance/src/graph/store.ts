@@ -80,8 +80,7 @@ export async function openStore(loc: string): Promise<GraphStore> {
       const ids = new Set<string>();
       for (const x of e.rows) { ids.add(x.from_node_id); ids.add(x.to_node_id); }
       ids.delete(id);
-      const neighbors: NodeRow[] = [];
-      for (const nid of ids) { const n = await getNode(nid); if (n) neighbors.push(n); }
+      const neighbors = (await Promise.all([...ids].map((nid) => getNode(nid)))).filter((n): n is NodeRow => n !== null);
       return { node, edges: e.rows, neighbors };
     },
     async close() { await db.close(); },
