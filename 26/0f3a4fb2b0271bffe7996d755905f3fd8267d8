@@ -1,0 +1,26 @@
+src-tauri/src/commands/placement_store.rs
+  s_851a67ed0e4868::t_fbedc10d62a297 3-4
+  s_851a67ed0e4868::t_3d52bf3c699846 1-2,5-198
+src-tauri/src/models/signals.rs
+  s_851a67ed0e4868::t_66d407d19b1263 195
+  s_851a67ed0e4868::t_c3f542bde863cb 181
+  s_851a67ed0e4868::t_1a319697723f80 179-180,182-194,196-203
+src-tauri/src/commands/mod.rs
+  s_851a67ed0e4868::t_afd8cf48561459 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "260f3a4fb2b0271bffe7996d755905f3fd8267d8",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
