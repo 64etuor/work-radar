@@ -1,0 +1,29 @@
+governance/src/cli/schedule.ts
+  s_2b95ff4ba8f6d9::t_66032e3c31ddf7 140-141,144-146,148,153,156-158
+  s_2b95ff4ba8f6d9::t_c00ab5b2af93b3 196-198,200,202-203
+  s_2b95ff4ba8f6d9::t_95cc14cfd0c6d0 258,262,269-270,280-281,297
+  s_2b95ff4ba8f6d9::t_039728a3674b20 222-223,225-227,229,243
+  s_2b95ff4ba8f6d9::t_594bfc30957710 98-108
+  s_2b95ff4ba8f6d9::t_118fb3be6a6df5 24-27
+  s_2b95ff4ba8f6d9::t_0b9f86ab2018b4 119-120
+governance/src/cli/boule.ts
+  s_2b95ff4ba8f6d9::t_64991b28ea96b4 690-692
+governance/test/cli/schedule.test.ts
+  s_2b95ff4ba8f6d9::t_e7304ac104d1cd 292-368
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "09262f748e5d3dfc690ba2ff33b553a315e9bbe6",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
