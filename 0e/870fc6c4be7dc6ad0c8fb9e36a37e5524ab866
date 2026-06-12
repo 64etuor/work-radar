@@ -1,0 +1,53 @@
+governance/src/orchestrator/tick.ts
+  s_2b95ff4ba8f6d9::t_3b6305ac7c2c87 21
+  s_2b95ff4ba8f6d9::t_6e5de8b1932583 65-70
+governance/test/conductor/usageParse.test.ts
+  s_2b95ff4ba8f6d9::t_299cfd6e1a0517 1-108
+governance/test/conductor/handlers.test.ts
+  s_2b95ff4ba8f6d9::t_721d3b6f2dc0c0 976-978,982-1016
+governance/src/conductor/adapter.ts
+  s_2b95ff4ba8f6d9::t_0c6fef8ee06fd9 218,223-233,243-246,249
+  s_2b95ff4ba8f6d9::t_62547a2266a23d 298-300,303,309
+  s_2b95ff4ba8f6d9::t_2a9bd9f72b0a76 328-331,334,338
+governance/src/cli/boule.ts
+  s_2b95ff4ba8f6d9::t_e5c4d67dd9a829 35-39
+  s_2b95ff4ba8f6d9::t_6e6c7192f66698 382-394,398-400,403
+  s_2b95ff4ba8f6d9::t_df2b87e5046a1c 607-617
+  s_2b95ff4ba8f6d9::t_3d2e577e697900 563-567,580
+  s_2b95ff4ba8f6d9::t_c72c78a069203e 685-686
+  s_2b95ff4ba8f6d9::t_ec6731d70430a0 490
+  s_2b95ff4ba8f6d9::t_982bf8a342e799 298-305,317-336
+  s_2b95ff4ba8f6d9::t_4026ec857a6457 475-481
+governance/test/conductor/attemptFeedback.test.ts
+  s_2b95ff4ba8f6d9::t_358f4a427c81d0 1-160
+governance/test/cli/recordAttemptUsage.test.ts
+  s_2b95ff4ba8f6d9::t_f8bf0d85f4b774 1-6,10-16,18-20,25-115
+  s_2b95ff4ba8f6d9::t_afbebec8e6d65a 7-9,17,21-24
+governance/src/conductor/handlers.ts
+  s_2b95ff4ba8f6d9::t_feac66867e5d85 36-40
+  s_2b95ff4ba8f6d9::t_73017c9ae9153c 89-96,119
+  s_2b95ff4ba8f6d9::t_ceb97c46b06b61 336-343
+  s_2b95ff4ba8f6d9::t_8ff2e3d6cd009b 541-548
+governance/src/conductor/usageParse.ts
+  s_2b95ff4ba8f6d9::t_0fe769871aa3ee 1-160
+governance/src/conductor/attemptFeedback.ts
+  s_2b95ff4ba8f6d9::t_d14b32b32712e8 1-79
+governance/src/backends/resolve.ts
+  s_2b95ff4ba8f6d9::t_9ad66082ddb35a 119-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0e870fc6c4be7dc6ad0c8fb9e36a37e5524ab866",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
