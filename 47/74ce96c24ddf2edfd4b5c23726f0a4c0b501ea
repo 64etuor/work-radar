@@ -1,0 +1,26 @@
+src/components/settings/project-card/ProjectCalendarColorControl.tsx
+  s_125e7320476d49::t_239bf3170b815a 22-31
+src/components/settings/project-card/ProjectIdentityEditor.tsx
+  s_125e7320476d49::t_239bf3170b815a 9-14,30,75
+src/components/settings/project-card/NotionDbEditor.tsx
+  s_125e7320476d49::t_239bf3170b815a 74-83
+src/components/settings/AddProjectForm.tsx
+  s_125e7320476d49::t_7db5df2b48dc53 68
+  s_125e7320476d49::t_239bf3170b815a 2,20-23,78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4774ce96c24ddf2edfd4b5c23726f0a4c0b501ea",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
