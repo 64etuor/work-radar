@@ -28,9 +28,13 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { type MutableRefObject } from "react";
 
-import type { CalendarEvent, RoutineToday, WorkSignal } from "@/bindings";
+import type { CalendarEvent, RoutineToday, SignalDayPlacement, WorkSignal } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
-import { applySchedulePatch } from "@/lib/optimisticSchedule";
+import {
+  applyPlacementPatch,
+  applySchedulePatch,
+  type PlacementPatch,
+} from "@/lib/optimisticSchedule";
 import { absMin, localDateOf } from "@/lib/timeAxis";
 import {
   clampDurationToDate,
@@ -233,6 +237,15 @@ export function useTimelineDnd(opts: Opts) {
   const invalidateSignalCaches = () => {
     void qc.invalidateQueries({ queryKey: ["signals"] });
     void qc.invalidateQueries({ queryKey: ["today"] });
+    void qc.invalidateQueries({ queryKey: ["signalPlacements"] });
+    void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
+  };
+
+  /** ["signalPlacements"] 캐시 optimistic 패치 — 렌더는 placement가 SSOT라 이걸 패치해야 스냅백이 없다. */
+  const patchPlacementCaches = (signalId: string, patch: PlacementPatch) => {
+    qc.setQueriesData<SignalDayPlacement[]>({ queryKey: ["signalPlacements"] }, (old) =>
+      old ? applyPlacementPatch(old, signalId, patch) : old,
+    );
   };
 
   /** 로드된 모든 날짜 버킷(+드로어 range 버킷) 순회 패치 — 자정 걸침 이벤트는 인접 두 버킷에
@@ -295,6 +308,12 @@ export function useTimelineDnd(opts: Opts) {
       const at = pixelToLocalIso(anchorDate, days, resolveCanvasGridY(o.gridY));
       const durationMin = a.durationMin ?? DEFAULT_SCHEDULE_MIN;
       patchSignalCaches(a.signalId, { at, durationMin, calendarId: cal });
+      patchPlacementCaches(a.signalId, {
+        type: "upsert",
+        date: localDateOf(at),
+        startAt: at,
+        durationMin,
+      });
       try {
         await stage({
           kind: "schedule",
@@ -304,6 +323,7 @@ export function useTimelineDnd(opts: Opts) {
           calendarId: cal,
           title: a.title,
         });
+        void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
       } catch {
         invalidateSignalCaches();
       }
@@ -352,6 +372,13 @@ export function useTimelineDnd(opts: Opts) {
           at,
           durationMin: clamped,
         });
+        patchPlacementCaches(a.signalId, {
+          type: "move",
+          fromDate: localDateOf(a.startISO),
+          date: localDateOf(at),
+          startAt: at,
+          durationMin: clamped,
+        });
       } else if (a.blockKind === "routine") {
         // durationMin은 패치하지 않는다 — routine_checks엔 per-day duration 컬럼이 없어
         // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
@@ -387,6 +414,7 @@ export function useTimelineDnd(opts: Opts) {
             durationMin: clamped,
             fromDate: localDateOf(a.startISO),
           });
+          void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
         }
       } catch {
         if (a.blockKind === "event") {
@@ -421,6 +449,13 @@ export function useTimelineDnd(opts: Opts) {
         }
       } else if (a.blockKind === "signal") {
         patchSignalCaches(a.signalId, { at });
+        patchPlacementCaches(a.signalId, {
+          type: "move",
+          fromDate: localDateOf(a.startISO),
+          date: localDateOf(at),
+          startAt: at,
+          durationMin: a.durationMin,
+        });
       } else if (a.blockKind === "routine") {
         patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
       }
@@ -453,6 +488,7 @@ export function useTimelineDnd(opts: Opts) {
             durationMin: a.durationMin,
             fromDate: localDateOf(a.startISO),
           });
+          void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
         }
       } catch {
         if (a.blockKind === "event") {
@@ -474,6 +510,7 @@ export function useTimelineDnd(opts: Opts) {
       const prevDur = a.durationMin;
       const signalId = a.signalId;
       patchSignalCaches(signalId, { clearLink: true });
+      patchPlacementCaches(signalId, { type: "remove", date: localDateOf(prevAt) });
       try {
         await stage({
           kind: "unschedule",
@@ -484,6 +521,14 @@ export function useTimelineDnd(opts: Opts) {
         // onUndo는 사용자가 명시적으로 눌렀을 때만 실행.
         useToastStore.getState().pushInfo("일정 해제됨", {
           onUndo: () => {
+            // 되돌리기 = 원래 자리 복원: placements 캐시를 즉시 재패치해야 블록이 바로 돌아온다
+            // (다른 DnD 분기들과 동일한 optimistic 규율).
+            patchPlacementCaches(signalId, {
+              type: "upsert",
+              date: localDateOf(prevAt),
+              startAt: prevAt,
+              durationMin: prevDur,
+            });
             void stage({
               kind: "reschedule",
               targetSignalId: signalId,

@@ -7,7 +7,7 @@
  *
  * 순수 함수 — 입력 배열은 mutation하지 않고 새 배열을 반환한다.
  */
-import type { WorkSignal } from "@/bindings";
+import type { SignalDayPlacement, WorkSignal } from "@/bindings";
 
 export type SchedulePatch = {
   /** 새 scheduledAt (YYYY-MM-DDTHH:MM:SS, 로컬 ISO). undefined면 미변경. */
@@ -58,4 +58,32 @@ export function rollbackSchedulePatch(
   const orig = original.find((s) => s.id === id);
   if (!orig) return current;
   return current.map((s) => (s.id === id ? orig : s));
+}
+
+export type PlacementPatch =
+  | { type: "upsert"; date: string; startAt: string; durationMin: number }
+  | { type: "move"; fromDate: string; date: string; startAt: string; durationMin: number }
+  | { type: "remove"; date: string };
+
+/** ["signalPlacements"] 캐시 즉시 패치 — 드래그 직후 스냅백 방지. refetch가 정본으로 교체. */
+export function applyPlacementPatch(
+  placements: SignalDayPlacement[],
+  signalId: string,
+  patch: PlacementPatch,
+): SignalDayPlacement[] {
+  const without = (date: string) =>
+    placements.filter((p) => !(p.signalId === signalId && p.date === date));
+  if (patch.type === "remove") return without(patch.date);
+  const base = patch.type === "move" ? without(patch.fromDate) : placements;
+  const rest = base.filter((p) => !(p.signalId === signalId && p.date === patch.date));
+  return [
+    ...rest,
+    {
+      id: `optimistic:${signalId}:${patch.date}`,
+      signalId,
+      date: patch.date,
+      startAt: patch.startAt,
+      durationMin: patch.durationMin,
+    },
+  ];
 }

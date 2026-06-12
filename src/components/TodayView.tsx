@@ -37,6 +37,7 @@ import {
   localToday,
   useCalendarEventsForDates,
   useProjects,
+  useSignalPlacements,
   useTimelineNotesForDates,
   useToday,
   useTodayOverview,
@@ -117,16 +118,25 @@ export function TodayView() {
       return !ids || ids === "[]";
     });
 
+  // visibleDates는 항상 오름차순(useTimelineScroll 초기값 + extendDates 보장).
+  const placementsQ = useSignalPlacements(
+    visibleDates[0] ?? today,
+    visibleDates[visibleDates.length - 1] ?? today,
+  );
+  const placements = placementsQ.data ?? [];
+
   // 트레이/AllDay 스트립은 선택 날짜(date) 스코프 유지 — 캐시 버킷은 타임라인과 공유.
   const allDay = (eventsQ.byDate[date] ?? []).filter((e) => e.allDay);
   const rail = todayRail.data ?? [];
-  const unscheduledTodays = rail.filter((s) => !s.scheduledAt);
+  // carry-over: 미완료 카드가 "보는 날짜"에 배치가 없으면 트레이 — 과거 배치 기록은 보존된다.
+  const placedOnDate = new Set(placements.filter((p) => p.date === date).map((p) => p.signalId));
+  const unscheduledTodays = rail.filter((s) => !placedOnDate.has(s.id));
   const routineList = routinesQ.byDate[date] ?? [];
   const unscheduledRoutines = routineList.filter((r) => !r.timeOverride && !r.timeOfDay);
 
   const blocks = buildTimelineBlocks({
     signals: rail,
-    placements: [], // Task 8에서 실제 쿼리 연결
+    placements,
     eventsByDate: eventsQ.byDate,
     routinesByDate: routinesQ.byDate,
     dates: visibleDates,

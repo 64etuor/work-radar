@@ -36,6 +36,8 @@ export function useTimelineScheduleActions() {
         if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
         void qc.invalidateQueries({ queryKey: ["signals"] });
         void qc.invalidateQueries({ queryKey: ["today"] });
+        void qc.invalidateQueries({ queryKey: ["signalPlacements"] });
+        void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
       } else if (block.kind === "event") {
         const eventId = block.linkedEventId ?? block.id.replace(/^event:/, "");
         await stage({ kind: "eventUnschedule", eventId, calendarId });
@@ -72,6 +74,8 @@ export function useTimelineScheduleActions() {
       void qc.invalidateQueries({ queryKey: ["today"] });
       void qc.invalidateQueries({ queryKey: ["routines"] });
       void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
+      void qc.invalidateQueries({ queryKey: ["signalPlacements"] });
+      void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
       useToastStore.getState().pushError("calendar.delete", err);
     });
   };

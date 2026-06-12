@@ -80,3 +80,19 @@ export function useReorderToday() {
     onSuccess: () => inv.today(),
   });
 }
+
+/** [start,end] 범위 날짜별 배치 — 타임라인 시그널 블록의 SSOT. */
+export function useSignalPlacements(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ["signalPlacements", startDate, endDate],
+    queryFn: () => unwrap(commands.listSignalPlacements(startDate, endDate)),
+  });
+}
+
+/** 카드별 누적 배치 시간(분)/일수 — Today 카드 배지(전체 기간). */
+export function useSignalTimeTotals() {
+  return useQuery({
+    queryKey: ["signalTimeTotals"],
+    queryFn: () => unwrap(commands.signalTimeTotals()),
+  });
+}

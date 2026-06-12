@@ -1,13 +1,18 @@
 /**
- * Today×Timeline Optimistic 패치 헬퍼 테스트(PR 5).
+ * Today×Timeline Optimistic 패치 헬퍼 테스트(PR 5 + Task 8).
  *
- * 순수 함수 — DnD 한 번에 캐시(WorkSignal[])를 즉시 갱신하고, sync 실패 시 원본으로 되돌린다.
+ * 순수 함수 — DnD 한 번에 캐시(WorkSignal[] / SignalDayPlacement[])를 즉시 갱신하고,
+ * sync 실패 시 원본으로 되돌린다.
  */
 import { describe, expect, it } from "vitest";
 
-import type { WorkSignal } from "@/bindings";
+import type { SignalDayPlacement, WorkSignal } from "@/bindings";
 
-import { applySchedulePatch, rollbackSchedulePatch } from "./optimisticSchedule";
+import {
+  applyPlacementPatch,
+  applySchedulePatch,
+  rollbackSchedulePatch,
+} from "./optimisticSchedule";
 
 function mkSignal(partial: Partial<WorkSignal> & { id: string }): WorkSignal {
   // 테스트 fixture — 필수 필드만 채우고 나머지는 type assertion으로 좁힌다.
@@ -84,5 +89,75 @@ describe("rollbackSchedulePatch", () => {
     const current = [mkSignal({ id: "s1", scheduledAt: "patched" })];
     const back = rollbackSchedulePatch(current, "missing", orig);
     expect(back).toBe(current);
+  });
+});
+
+// ── applyPlacementPatch ──────────────────────────────────────────────────────
+
+function mkPlacement(
+  partial: Partial<SignalDayPlacement> & { signalId: string; date: string },
+): SignalDayPlacement {
+  return {
+    id: partial.id ?? `p:${partial.signalId}:${partial.date}`,
+    signalId: partial.signalId,
+    date: partial.date,
+    startAt: partial.startAt ?? `${partial.date}T09:00:00`,
+    durationMin: partial.durationMin ?? 60,
+  };
+}
+
+describe("applyPlacementPatch", () => {
+  it("upsert replaces same (signal, date) row", () => {
+    const existing = mkPlacement({
+      signalId: "s1",
+      date: "2026-06-10",
+      startAt: "2026-06-10T08:00:00",
+      durationMin: 30,
+    });
+    const other = mkPlacement({ signalId: "s1", date: "2026-06-11" });
+    const result = applyPlacementPatch([existing, other], "s1", {
+      type: "upsert",
+      date: "2026-06-10",
+      startAt: "2026-06-10T10:00:00",
+      durationMin: 90,
+    });
+    // old row for 2026-06-10 gone, new row present
+    const row = result.find((p) => p.signalId === "s1" && p.date === "2026-06-10");
+    expect(result.length).toBe(2);
+    expect(row?.startAt).toBe("2026-06-10T10:00:00");
+    expect(row?.durationMin).toBe(90);
+    // other date untouched
+    expect(result.find((p) => p.date === "2026-06-11")).toBeDefined();
+  });
+
+  it("move removes fromDate row and adds new date row", () => {
+    const p = mkPlacement({ signalId: "s1", date: "2026-06-10" });
+    const result = applyPlacementPatch([p], "s1", {
+      type: "move",
+      fromDate: "2026-06-10",
+      date: "2026-06-12",
+      startAt: "2026-06-12T11:00:00",
+      durationMin: 45,
+    });
+    expect(result.find((r) => r.date === "2026-06-10")).toBeUndefined();
+    const moved = result.find((r) => r.date === "2026-06-12");
+    expect(moved?.startAt).toBe("2026-06-12T11:00:00");
+    expect(moved?.durationMin).toBe(45);
+  });
+
+  it("remove deletes only that date row — other dates preserved", () => {
+    const p1 = mkPlacement({ signalId: "s1", date: "2026-06-10" });
+    const p2 = mkPlacement({ signalId: "s1", date: "2026-06-11" });
+    const result = applyPlacementPatch([p1, p2], "s1", { type: "remove", date: "2026-06-10" });
+    expect(result.find((r) => r.date === "2026-06-10")).toBeUndefined();
+    expect(result.find((r) => r.date === "2026-06-11")).toBeDefined();
+  });
+
+  it("other signals are unaffected by any patch", () => {
+    const p1 = mkPlacement({ signalId: "s1", date: "2026-06-10" });
+    const p2 = mkPlacement({ signalId: "s2", date: "2026-06-10" });
+    const result = applyPlacementPatch([p1, p2], "s1", { type: "remove", date: "2026-06-10" });
+    expect(result.find((r) => r.signalId === "s2")).toBeDefined();
+    expect(result.find((r) => r.signalId === "s1")).toBeUndefined();
   });
 });
