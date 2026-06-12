@@ -116,6 +116,18 @@ export function selectExecutorChain(
   return resolveBackendChain("executor", { difficulty }, policy, budget);
 }
 
+/** P4(b) — map a resolved policy's OPTIONAL budget config to the dispatch-time budget context
+ *  (`TickDeps.budget`). Unconfigured (`policy.budget` absent) ⇒ undefined ⇒ byte-identical legacy
+ *  behavior (no budget filtering). Configured ⇒ caps + priceTable thread to the conductor, whose
+ *  journal reconstruction (handlers.budgetContextFromJournal) supplies the spend snapshot —
+ *  unknown-usage attempts there reserve conservatively, so the rail fails closed, never open. */
+export function policyBudgetContext(policy: ResolvedPolicy): ResolveBudgetContext | undefined {
+  if (!policy.budget) return undefined;
+  const context: ResolveBudgetContext = { caps: policy.budget };
+  if (policy.priceTable) context.priceTable = policy.priceTable;
+  return context;
+}
+
 function configuredChain(role: Role, policy: ResolvedPolicy): BackendChain | undefined {
   const backends = policy.backends;
   if (!backends) return undefined;

@@ -18,6 +18,7 @@ import { resumeChosenEscalation } from "../conductor/handlers.ts";
 import type { ReadinessReport } from "../live/readiness.ts";
 import type { AutonomyLevel, AutoMode, ResolvedPolicy } from "../repo/config.ts";
 import type { ResolveBudgetContext } from "../backends/resolve.ts";
+import type { UnmergedPlanBranch } from "../repo/planBranches.ts";
 
 /** Stable reason categories (a contract for cron alerting / dashboards / tests — NOT events). */
 export type TickOutcome =
@@ -61,6 +62,12 @@ export interface TickReport {
   /** P3c — attached by the CLI AFTER runTick (never set here): the opt-in outbound
    *  escalation-sync hook's outcome. Absent when the repo doesn't configure `escalationSync`. */
   escalationSync?: "ok" | "failed" | "skipped";
+  /** P4a — attached by the CLI AFTER runTick (never set here): completed-but-unmerged
+   *  `boule/<planId>` branches awaiting HUMAN merge-back (R5 — finished work must not strand
+   *  silently). Absent when the git listing failed (fail-soft observability, never a gate);
+   *  `[]` when there are genuinely none. Additive JSON only — the app's Rust TickReport
+   *  deserializer ignores unknown fields (no deny_unknown_fields), proven by `escalationSync`. */
+  unmergedPlanBranches?: UnmergedPlanBranch[];
 }
 
 export interface TickDeps {

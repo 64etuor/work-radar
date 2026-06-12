@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import type { BackendSpec } from "../../src/backends/config.js";
 import {
+  policyBudgetContext,
   resolveBackendChain,
   selectExecutorChain,
   type Difficulty,
@@ -271,5 +272,38 @@ describe("resolveBackendChain", () => {
     expect(first).toEqual(second);
     expect(JSON.stringify(policy)).toBe(before);
     expect(first.chain).not.toBe(policy.backends?.executor?.chain);
+  });
+});
+
+describe("policyBudgetContext (P4b — cmdTick budget opt-in)", () => {
+  it("unconfigured policy (no budget) ⇒ undefined — byte-identical legacy tick behavior", () => {
+    expect(policyBudgetContext(BASE_POLICY)).toBeUndefined();
+    expect(policyBudgetContext(policyWithExecutor(MIXED_CHAIN))).toBeUndefined();
+  });
+
+  it("configured budget threads caps (and priceTable when present) into the dispatch context", () => {
+    const caps = { runCostCapUsd: 5, stepTokenCap: 50_000 };
+    expect(policyBudgetContext({ ...BASE_POLICY, budget: caps })).toEqual({ caps });
+
+    const priceTable: PriceTable = {
+      claude: { default: { estimatedTokens: 10_000, costPerStepUsd: 0.5 } },
+    };
+    expect(policyBudgetContext({ ...BASE_POLICY, budget: caps, priceTable })).toEqual({
+      caps,
+      priceTable,
+    });
+  });
+
+  it("a configured context actually FILTERS dispatch-time selection (caps bite via affordable)", () => {
+    // step cost cap below every priced rung ⇒ the chain exhausts (Terminal), proving the threaded
+    // context is consumed by resolveBackendChain — not just carried along.
+    const policy = policyWithExecutor(MIXED_CHAIN);
+    const withBudget = { ...policy, budget: { stepCostCapUsd: 0.001 } };
+    const context = policyBudgetContext(withBudget)!;
+    const out = selectExecutorChain({ text: "step" }, withBudget, context);
+    expect("role" in out && out.role === "executor").toBe(true); // Terminal — nothing affordable
+    // unconfigured: same call WITHOUT budget keeps the full chain
+    const legacy = selectExecutorChain({ text: "step" }, policy);
+    expect("chain" in legacy && legacy.chain.length === MIXED_CHAIN.length).toBe(true);
   });
 });

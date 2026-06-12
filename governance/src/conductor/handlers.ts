@@ -33,6 +33,11 @@ import {
 } from "../backends/config.ts";
 import { exhaustedTerminal, type Terminal } from "../backends/fallback.ts";
 import type { ResolvedPolicy } from "../repo/config.ts";
+import {
+  projectPreviousAttemptFeedback,
+  previousAttemptLines,
+  type PreviousAttemptFeedback,
+} from "./attemptFeedback.ts";
 
 // NOTE: this module imports ZERO decision write handlers (no "../decision/handlers.ts"). The
 // Conductor mints task_created/task_started/step_bound/session_spawned and, after the completion
@@ -81,8 +86,14 @@ function completionCertificationLines(check?: PlanStepCheck): string[] {
 }
 
 /** The spawn prompt = step text + inlined envelope + the escalate-and-stop contract (design §6)
- *  + the completion-certification contract (P2c). */
-function buildPrompt(stepText: string, envelope: AutonomyEnvelope, check?: PlanStepCheck): string {
+ *  + the completion-certification contract (P2c) + the previous-attempt failure feedback (P4c —
+ *  only when the bound task has recorded FAILED attempts; first attempts are byte-identical). */
+function buildPrompt(
+  stepText: string,
+  envelope: AutonomyEnvelope,
+  check?: PlanStepCheck,
+  previousAttempt?: PreviousAttemptFeedback | null,
+): string {
   return [
     `# Conductor-dispatched step ${envelope.stepIndex} (task ${envelope.taskId})`,
     "",
@@ -105,6 +116,7 @@ function buildPrompt(stepText: string, envelope: AutonomyEnvelope, check?: PlanS
     "call escalate(...) and stop instead.",
     "",
     ...completionCertificationLines(check),
+    ...(previousAttempt ? ["", ...previousAttemptLines(previousAttempt)] : []),
   ].join("\n");
 }
 
@@ -321,7 +333,14 @@ export async function redispatchExecutorAttempt(
     allowedType2Actions: deps.envelopeDefaults?.allowedType2Actions,
   });
   const hash = envelopeHash(envelope);
-  const prompt = buildPrompt(step.text, envelope, step.check);
+  // P4c failure feedback: the retry prompt names the prior failure (count/exit/stderr digest) so
+  // the next attempt changes approach instead of blindly repeating it (OMC pattern #8).
+  const prompt = buildPrompt(
+    step.text,
+    envelope,
+    step.check,
+    projectPreviousAttemptFeedback(all, step.taskId),
+  );
   await deps.adapter.writeEnvelopeFile(wt.path, envelope, prompt);
   const session = await deps.adapter.spawnSession({
     worktreePath: wt.path,
@@ -524,7 +543,14 @@ export async function resumeChosenEscalation(
       (resolved.question ? `${resolved.question}\n\n` : "") +
       `**Chosen:** ${resolved.chosenLabel}\n` +
       `The fork above is RESOLVED — proceed accordingly and do NOT re-escalate the same question.`;
-    const prompt = buildPrompt(stepTextWithDecision, envelope, step.check);
+    // P4c: a resume after failed attempts also carries the failure feedback (null when the prior
+    // session exited cleanly to escalate — the common resume case — keeping that prompt unchanged).
+    const prompt = buildPrompt(
+      stepTextWithDecision,
+      envelope,
+      step.check,
+      projectPreviousAttemptFeedback(all, step.taskId),
+    );
     await deps.adapter.writeEnvelopeFile(wt.path, envelope, prompt);
     const session = await deps.adapter.spawnSession({
       worktreePath: wt.path,

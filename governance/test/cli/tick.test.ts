@@ -160,3 +160,54 @@ describe("cmdTick — escalation sync hook (P3c)", () => {
     expect(sync.spawns).toHaveLength(0); // nothing pending — no spawn
   });
 });
+
+describe("cmdTick — unmerged plan-branch surfacing (P4a)", () => {
+  const NUL = "\u0000";
+  function fixtureSpawn(listing: string): {
+    spawn: (cmd: string, args: string[]) => { status: number | null; stdout: string; stderr: string };
+    calls: string[][];
+  } {
+    const calls: string[][] = [];
+    return {
+      calls,
+      spawn: (_cmd, args) => {
+        calls.push(args);
+        if (args.includes("for-each-ref")) return { status: 0, stdout: listing, stderr: "" };
+        if (args.includes("rev-list")) return { status: 0, stdout: "4\n", stderr: "" };
+        return { status: 1, stdout: "", stderr: "" };
+      },
+    };
+  }
+
+  it("surfaces completed-but-unmerged boule/* branches in the JSON report (additive field)", async () => {
+    await cmdInit({ repo, kind: "personal" });
+    const git = fixtureSpawn(`boule/evt_p1${NUL}abc1234${NUL}step 6: finish slice\n`);
+    const code = await cmdTick({ repo, json: true }, { unmergedBranches: { spawn: git.spawn } });
+    expect(code).toBe(1); // infra_failed in a non-git temp repo — surfacing NEVER changes the exit
+    expect(lastReport().unmergedPlanBranches).toEqual([
+      { branch: "boule/evt_p1", tip: "abc1234", subject: "step 6: finish slice", aheadCount: 4 },
+    ]);
+  });
+
+  it("fail-soft: a failed git listing OMITS the field — tick outcome and exit code unchanged", async () => {
+    await cmdInit({ repo, kind: "personal" });
+    // default spawn runs real git against a non-repo temp dir ⇒ listing fails ⇒ field absent
+    const code = await cmdTick({ repo, json: true });
+    expect(code).toBe(1);
+    expect(lastReport().outcome).toBe("infra_failed");
+    expect("unmergedPlanBranches" in lastReport()).toBe(false);
+  });
+
+  it("a locked tick stays a TOTAL no-op — no branch-listing spawns either", async () => {
+    await cmdInit({ repo, kind: "personal" });
+    const ws = boulePaths(repo).workspace;
+    const holder = await acquireTickLock(ws, new Date(), { pid: 424242 });
+    expect(holder.acquired).toBe(true);
+    const git = fixtureSpawn(`boule/evt_p1${NUL}abc1234${NUL}s\n`);
+    await cmdTick({ repo, json: true }, { unmergedBranches: { spawn: git.spawn } });
+    expect(lastReport().outcome).toBe("locked");
+    expect("unmergedPlanBranches" in lastReport()).toBe(false);
+    expect(git.calls).toHaveLength(0);
+    if (holder.acquired) await holder.release();
+  });
+});

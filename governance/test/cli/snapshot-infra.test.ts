@@ -36,3 +36,33 @@ describe("cmdSnapshot infra/readiness", () => {
     });
   });
 });
+
+describe("cmdSnapshot — unmerged plan-branch surfacing (P4a)", () => {
+  const NUL = "\u0000";
+
+  it("includes unmergedPlanBranches (additive field) when the git listing succeeds", async () => {
+    const spawn = (_cmd: string, args: string[]) => {
+      if (args.includes("for-each-ref"))
+        return {
+          status: 0,
+          stdout: `boule/evt_p1${NUL}abc1234${NUL}step 6: finish slice\n`,
+          stderr: "",
+        };
+      if (args.includes("rev-list")) return { status: 0, stdout: "2\n", stderr: "" };
+      return { status: 1, stdout: "", stderr: "" };
+    };
+    const snap = JSON.parse(await cmdSnapshot({ repo }, { unmergedBranches: { spawn } }));
+    expect(snap.unmergedPlanBranches).toEqual([
+      { branch: "boule/evt_p1", tip: "abc1234", subject: "step 6: finish slice", aheadCount: 2 },
+    ]);
+    // the established axes are untouched — strictly additive
+    expect(snap.tasks).toEqual([]);
+    expect(Array.isArray(snap.infra)).toBe(true);
+  });
+
+  it("fail-soft: a failed listing (non-git temp dir, real spawn) OMITS the field — snapshot still emits", async () => {
+    const snap = JSON.parse(await cmdSnapshot({ repo }));
+    expect("unmergedPlanBranches" in snap).toBe(false);
+    expect(snap.tasks).toEqual([]); // the snapshot itself is unbroken
+  });
+});

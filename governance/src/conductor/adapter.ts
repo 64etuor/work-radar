@@ -215,12 +215,22 @@ function withAttemptEvidenceTail(
   executorCommand: string,
   spec: { worktreePath: string; taskId: string; attemptIndex?: number },
   deps: { governanceWorkspace: string; completeEntrypoint: string },
+  executor: ExecutorKind,
 ): string {
   const attemptIndex = spec.attemptIndex ?? 0;
   return (
     `__boule_stderr="$(mktemp)"` +
-    `; ${executorCommand} 2>"$__boule_stderr"` +
-    `; __boule_exit=$?` +
+    `; __boule_stdout="$(mktemp)"` +
+    `; __boule_ec="$(mktemp)"` +
+    // P4(b) stdout usage capture: `tee` keeps the run VISIBLE in the cmux pane (the operational
+    // source of truth) while persisting stdout for record-attempt's usage parse. A pipeline's $?
+    // is tee's, so the brace group writes the EXECUTOR's exit code to a file first — that file,
+    // not $?, is the preserved exit status.
+    `; { ${executorCommand} 2>"$__boule_stderr"; echo $? >"$__boule_ec"; } | tee "$__boule_stdout"` +
+    `; __boule_exit="$(cat "$__boule_ec")"` +
+    // Numeric guard: a wedged capture (empty/garbled exit file) must read as FAILURE, never as
+    // success — completion stays fail-closed even when the capture plumbing itself breaks.
+    `; case "$__boule_exit" in ''|*[!0-9]*) __boule_exit=1;; esac` +
     `; __boule_dirty=false` +
     `; if [ -n "$(git -C "${spec.worktreePath}" status --porcelain 2>/dev/null)" ]; then __boule_dirty=true; fi` +
     // '[:cntrl:]' (not '\n'): cmux new-workspace --command translates a literal "\n" sequence into
@@ -230,10 +240,13 @@ function withAttemptEvidenceTail(
     `; node --experimental-strip-types "${deps.completeEntrypoint}" record-attempt ` +
     `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}" --attempt ${attemptIndex} ` +
     `--exit-code "$__boule_exit" --launched true --worktree-dirty "$__boule_dirty" ` +
-    `--stderr-digest "$__boule_digest"` +
+    `--stderr-digest "$__boule_digest" ` +
+    // Usage evidence (fail-soft): record-attempt parses the captured stdout per executor shape;
+    // any parse/read failure records usage:"unknown" exactly as before — never fails the record.
+    `--usage-stdout-file "$__boule_stdout" --executor ${executor}` +
     `; if [ "$__boule_exit" -eq 0 ]; then node --experimental-strip-types "${deps.completeEntrypoint}" report-exit ` +
     `--workspace "${deps.governanceWorkspace}" --task "${spec.taskId}"; fi` +
-    `; rm -f "$__boule_stderr"` +
+    `; rm -f "$__boule_stderr" "$__boule_stdout" "$__boule_ec"` +
     `; exit "$__boule_exit"\n`
   );
 }
@@ -282,15 +295,18 @@ export function buildSessionCommand(
     // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
     // Autonomy stays sandboxed: --sandbox workspace-write confines writes to the worktree cwd; this
     // is NEVER --dangerously-bypass-approvals-and-sandbox (which removes the sandbox).
+    // `--json` = machine-readable JSONL on stdout incl. token-count events — the wrapper tail's
+    // usage capture (P4b) parses them so the attempt records real usage instead of "unknown"
+    // (budget would otherwise reserve max). The pane shows the same JSONL stream via tee.
     const codexCommand =
       `CODEX_HOME=${shellQuote(deps.codexHome)} ` +
-      `codex exec --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
+      `codex exec --json --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
       `-C "${spec.worktreePath}" ` +
       `-c 'mcp_servers.boule-governance.command="node"' ` +
       `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
       `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}",BOULE_TASK_ID="${spec.taskId}"}' ` +
       `${promptCat}`;
-    return withAttemptEvidenceTail(codexCommand, spec, deps);
+    return withAttemptEvidenceTail(codexCommand, spec, deps, "codex");
   }
   const denied = SESSION_DENIED_TOOLS.map((t) => `"${t}"`).join(" ");
   // bypassPermissions = unattended autonomy: without it the session blocks on the first Write/MCP
@@ -309,12 +325,17 @@ export function buildSessionCommand(
   // report-exit → session close) never runs and the completion gate wedges on a non-terminal
   // session (live run 2026-06-10, surface:18). Mirrors codex's one-shot `codex exec`; the cmux
   // pane still shows the run's output (observability is the pane, not the REPL).
+  // `--output-format stream-json --verbose` (verbose is REQUIRED by the CLI for stream-json under
+  // -p): plain `-p` text output carries NO usage data, so attempts could never record real token
+  // spend (P4b). The final `{"type":"result",…}` JSONL event carries usage + total_cost_usd, which
+  // the wrapper tail's captured stdout hands to record-attempt. The pane shows the JSONL via tee.
   const claudeCommand =
     `claude -p --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
+    `--output-format stream-json --verbose ` +
     `--permission-mode bypassPermissions ` +
     `--disallowedTools ${denied} ` +
     `-- ${promptCat}`;
-  return withAttemptEvidenceTail(claudeCommand, spec, deps);
+  return withAttemptEvidenceTail(claudeCommand, spec, deps, "claude");
 }
 
 /** Extract the first `<kind>:<n>` ref from cmux stdout. cmux prints `OK <ref>` on success and

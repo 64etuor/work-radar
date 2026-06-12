@@ -973,11 +973,47 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(c).toContain("--exit-code");
     expect(c).toContain('git -C "/wt/s0" status --porcelain');
     // CODEX_HOME isolation: clean hooks-free profile, prefixed ONCE before `codex exec` (scopes to
-    // codex only — the trailing `&& node … report-exit` boule CLI does NOT inherit it).
-    expect(c).toContain("; CODEX_HOME='/repo/governance/workspace/codex-home' codex exec");
+    // codex only — the trailing `&& node … report-exit` boule CLI does NOT inherit it). The prefix
+    // now sits inside the stdout-capture brace group (P4b tee), still immediately before codex exec.
+    expect(c).toContain("{ CODEX_HOME='/repo/governance/workspace/codex-home' codex exec");
     // exactly once → the trailing `&& node … report-exit` tail carries no CODEX_HOME
     expect((c.match(/CODEX_HOME=/g) ?? []).length).toBe(1);
     expect(c.indexOf("CODEX_HOME=")).toBeLessThan(c.indexOf("codex exec"));
+    // P4b: codex emits machine-readable JSONL (token-count events) for the usage capture
+    expect(c).toContain("codex exec --json");
+  });
+
+  it("P4b wrapper: stdout tee-capture preserves the EXECUTOR's exit code and threads usage args", () => {
+    for (const executor of ["claude", "codex"] as const) {
+      const c = buildSessionCommand(executor, { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
+      // stdout captured to a file WHILE staying visible in the pane
+      expect(c).toContain('| tee "$__boule_stdout"');
+      // a pipeline's $? is tee's — the executor's own exit code is written to a file inside the
+      // brace group and read back; THAT value is recorded and the wrapper exits with it
+      expect(c).toContain('echo $? >"$__boule_ec"; } | tee');
+      expect(c).toContain('__boule_exit="$(cat "$__boule_ec")"');
+      expect(c).toContain(`case "$__boule_exit" in ''|*[!0-9]*) __boule_exit=1;; esac`);
+      expect(c).toContain('--exit-code "$__boule_exit"');
+      expect(c.trimEnd().endsWith('exit "$__boule_exit"')).toBe(true);
+      // record-attempt receives the captured stdout + the executor kind for shape-aware parsing
+      expect(c).toContain('--usage-stdout-file "$__boule_stdout"');
+      expect(c).toContain(`--executor ${executor}`);
+      // all three temp files are cleaned AFTER record-attempt consumed them
+      expect(c).toContain('rm -f "$__boule_stderr" "$__boule_stdout" "$__boule_ec"');
+      expect(c.indexOf("record-attempt")).toBeLessThan(c.indexOf("rm -f"));
+      // single-line wrapper (the only newline is the trailing one) — the cmux literal-\n wedge
+      // guard documented in withAttemptEvidenceTail stays honored
+      expect(c.trimEnd()).not.toContain("\n");
+    }
+  });
+
+  it("P4b: claude runs stream-json so usage exists in stdout; codex runs --json", () => {
+    const claude = buildSessionCommand("claude", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
+    // --verbose is REQUIRED by the claude CLI for stream-json under -p
+    expect(claude).toContain("--output-format stream-json --verbose");
+    const codex = buildSessionCommand("codex", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
+    expect(codex).toContain("codex exec --json");
+    expect(codex).not.toContain("stream-json");
   });
 
   it("spawnSession launches a codex invocation via --command when executor=codex (same cmux substrate)", async () => {

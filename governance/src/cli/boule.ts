@@ -32,6 +32,11 @@ import {
 } from "../conductor/fromEnv.ts";
 import { evaluatorCompletionOptions } from "../conductor/evaluateLive.ts";
 import { ensureCmuxSocketEnv } from "../conductor/cmuxSocket.ts";
+import { readUsageFromStdoutFile } from "../conductor/usageParse.ts";
+import type { ExecutorKind } from "../conductor/envelope.ts";
+import { policyBudgetContext } from "../backends/resolve.ts";
+import { listUnmergedPlanBranches } from "../repo/planBranches.ts";
+import { makeNodeSpawnSync, type SpawnSyncLike } from "../repo/spawn.ts";
 import { parseEnvelopeDefaults } from "../mcp/config.ts";
 import { computeRepoReadiness } from "../live/repoReadiness.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
@@ -290,6 +295,14 @@ function optionalNonnegativeNumberFlag(
   return value;
 }
 
+/** Optional `--executor claude|codex` (the wrapper threads its executor kind so the usage parse
+ *  knows which stdout shape to expect). Anything else ⇒ undefined — usage parsing is fail-soft
+ *  observability, so an unknown kind degrades to usage:"unknown", never an error. */
+function optionalExecutorFlag(flags: ParsedArgs["flags"]): ExecutorKind | undefined {
+  const raw = flags.executor;
+  return raw === "claude" || raw === "codex" ? raw : undefined;
+}
+
 export async function cmdRecordAttempt(flags: ParsedArgs["flags"]): Promise<string> {
   const workspace = reqFlag(flags, "workspace");
   const task = reqFlag(flags, "task");
@@ -301,8 +314,26 @@ export async function cmdRecordAttempt(flags: ParsedArgs["flags"]): Promise<stri
     typeof flags["stderr-digest"] === "string" && flags["stderr-digest"]
       ? flags["stderr-digest"]
       : undefined;
-  const usageTokens = optionalNonnegativeNumberFlag(flags, "usage-tokens");
-  const usageCostUsd = optionalNonnegativeNumberFlag(flags, "usage-cost");
+  let usageTokens = optionalNonnegativeNumberFlag(flags, "usage-tokens");
+  let usageCostUsd = optionalNonnegativeNumberFlag(flags, "usage-cost");
+  // P4b — parse usage from the wrapper-captured executor stdout (fail-soft: any read/parse failure
+  // leaves usage "unknown" — the pre-existing behavior — and NEVER fails the record). Explicit
+  // --usage-tokens/--usage-cost flags are direct assertions and win over the file parse.
+  const usageStdoutFile = flags["usage-stdout-file"];
+  const executor = optionalExecutorFlag(flags);
+  if (
+    usageTokens === undefined &&
+    usageCostUsd === undefined &&
+    typeof usageStdoutFile === "string" &&
+    usageStdoutFile &&
+    executor
+  ) {
+    const parsed = await readUsageFromStdoutFile(usageStdoutFile, executor);
+    if (parsed) {
+      usageTokens = parsed.tokens;
+      usageCostUsd = parsed.costUsd;
+    }
+  }
   const r = await recordExecutorAttempt(
     workspace,
     {
@@ -348,13 +379,28 @@ export async function cmdStatus(flags: ParsedArgs["flags"]): Promise<string> {
   return lines.join("\n");
 }
 
-/** snapshot: read-only live Control Room fold over <repo>/.boule/workspace/events. */
-export async function cmdSnapshot(flags: ParsedArgs["flags"]): Promise<string> {
+/** Test seam for cmdSnapshot's git side channel (never used by production callers). */
+export interface CmdSnapshotSeams {
+  unmergedBranches?: { spawn?: SpawnSyncLike };
+}
+
+/** snapshot: read-only live Control Room fold over <repo>/.boule/workspace/events.
+ *  `unmergedPlanBranches` (P4a) is ADDITIVE and fail-soft: omitted entirely when the git listing
+ *  fails (non-repo / git absent) — the app's snapshot deserializer ignores unknown fields
+ *  (src-tauri snapshot.rs has no deny_unknown_fields), so old apps parse this output unchanged. */
+export async function cmdSnapshot(
+  flags: ParsedArgs["flags"],
+  seams: CmdSnapshotSeams = {},
+): Promise<string> {
   const repo = reqRepo(flags);
   const events = await readAllEvents(boulePaths(repo).workspace);
   const { readiness } = await computeRepoReadiness(repo);
+  const unmerged = listUnmergedPlanBranches(repo, {
+    spawn: seams.unmergedBranches?.spawn ?? makeNodeSpawnSync(),
+  });
   return JSON.stringify({
     ...buildControlRoomSnapshot(events),
+    ...(unmerged !== null ? { unmergedPlanBranches: unmerged } : {}),
     infra: readiness.preflight.checks,
     readiness: {
       ready: readiness.ready,
@@ -426,6 +472,13 @@ function formatTick(r: TickReport): string {
   if (r.haltedPlans.length) lines.push(`  halted plans: ${r.haltedPlans.join(", ")}`);
   if (r.stalledCount) lines.push(`  stalled tasks: ${r.stalledCount}`);
   if (r.escalationSync) lines.push(`  escalation sync: ${r.escalationSync}`);
+  if (r.unmergedPlanBranches?.length) {
+    lines.push(`  awaiting human merge-back: ${r.unmergedPlanBranches.length} plan branch(es)`);
+    for (const b of r.unmergedPlanBranches)
+      lines.push(
+        `    ${b.branch} @ ${b.tip}${b.aheadCount !== null ? ` (+${b.aheadCount})` : ""} — ${b.subject}`,
+      );
+  }
   for (const b of r.blockers) lines.push(`  ✗ ${b}`);
   for (const w of r.warnings) lines.push(`  ⚠ ${w}`);
   return lines.join("\n");
@@ -434,6 +487,7 @@ function formatTick(r: TickReport): string {
 /** Test seams for cmdTick's side channels (never used by production callers). */
 export interface CmdTickSeams {
   escalationSync?: EscalationSyncDeps;
+  unmergedBranches?: { spawn?: SpawnSyncLike };
 }
 
 /** tick: ONE bounded auto-dispatch heartbeat (external cron/operator provides cadence — NOT a
@@ -506,6 +560,11 @@ async function runTickLocked(
   // P2b (ADR-0010 last mile): the LLM evaluator rung is reachable ONLY when the policy configures
   // backends.evaluator — otherwise undefined keeps the legacy deterministic-rung-only behavior.
   const completionOptions = evaluatorCompletionOptions(policy, env);
+  // P4b (ADR-0010 budget rail): thread the policy's OPTIONAL budget caps/priceTable into TickDeps
+  // so dispatch-time budget filtering runs with explicit context. Unconfigured ⇒ undefined ⇒
+  // byte-identical legacy behavior. The spend snapshot itself is journal-reconstructed at the
+  // dispatch site (handlers.budgetContextFromJournal) — unknown-usage attempts reserve max.
+  const budget = policyBudgetContext(policy);
 
   const report = await runTick(
     p.workspace,
@@ -518,6 +577,7 @@ async function runTickLocked(
       executor: cfg.executor,
       envelopeDefaults: parseEnvelopeDefaults(env),
       policy,
+      ...(budget ? { budget } : {}),
       viability: makeExecutorViabilityProbesFromEnv(env, { workspace: p.workspace }),
       readiness,
       autonomyLevel: policy.autonomyLevel,
@@ -544,7 +604,17 @@ async function runTickLocked(
       ...(seams.escalationSync ?? {}),
     },
   });
-  const finalReport: TickReport = sync ? { ...report, escalationSync: sync } : report;
+  // P4a — surface completed-but-unmerged boule/<planId> branches in the tick report (fail-soft:
+  // a failed git listing OMITS the field and never changes the tick outcome/exit code — this is
+  // observability for the human merge-back, not a gate).
+  const unmerged = listUnmergedPlanBranches(repo, {
+    spawn: seams.unmergedBranches?.spawn ?? makeNodeSpawnSync(),
+  });
+  const finalReport: TickReport = {
+    ...report,
+    ...(sync ? { escalationSync: sync } : {}),
+    ...(unmerged !== null ? { unmergedPlanBranches: unmerged } : {}),
+  };
 
   process.stdout.write(
     (flags.json === true ? JSON.stringify(finalReport) : formatTick(finalReport)) + "\n",
@@ -612,8 +682,8 @@ const USAGE = `boule <command> --repo <path>
   set    --repo <p> [--kind k] [--autonomy-level manual|dispatch|auto_plan|full] [--review-quorum n] [--backends json] [--routing json] [--price-table json]
   status --repo <p>
   report-exit --workspace <ws> --task <id>   # executor clean-exit hint (verdict-free)
-  record-attempt --workspace <ws> --task <id> --attempt <n> --exit-code <n> --launched true|false --worktree-dirty true|false [--stderr-digest s]
-  snapshot --repo <p>   # read-only live Control Room snapshot (always JSON on stdout)
+  record-attempt --workspace <ws> --task <id> --attempt <n> --exit-code <n> --launched true|false --worktree-dirty true|false [--stderr-digest s] [--usage-tokens n] [--usage-cost n] [--usage-stdout-file <path> --executor claude|codex]
+  snapshot --repo <p>   # read-only live Control Room snapshot (always JSON on stdout; incl. unmergedPlanBranches)
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
   tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)
   housekeep --repo <p> [--json]   # ONE bounded observation pass: harvest→detect→test→meta→prune (cron-driven)
