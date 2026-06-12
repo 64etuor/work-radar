@@ -1,0 +1,19 @@
+governance/src/mcp/response.ts
+  s_2b95ff4ba8f6d9::t_e1d27378f8cbd5 29-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d8f44a67224b0f3d3142b5ff125b3d9f0feece14",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}

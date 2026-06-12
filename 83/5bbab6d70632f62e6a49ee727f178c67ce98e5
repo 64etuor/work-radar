@@ -1,0 +1,56 @@
+src-tauri/src/governance/snapshot.rs
+  s_2b95ff4ba8f6d9::t_04a9b8a2cde7ab 229-233
+  s_2b95ff4ba8f6d9::t_4dc2c6162aaad6 236-249
+  s_2b95ff4ba8f6d9::t_971f7a5a5d4c5f 376-403
+src/lib/controlRoom.test.ts
+  s_2b95ff4ba8f6d9::t_95250d2b59aeea 7,11,14
+  s_2b95ff4ba8f6d9::t_1bd2588c547e80 111-196,198-226
+src/lib/controlRoom.ts
+  s_2b95ff4ba8f6d9::t_2ec858fa4e6f91 7
+  s_2b95ff4ba8f6d9::t_1e81fc15ddf82a 118-254
+src/components/control-room/ReadinessStrip.tsx
+  s_2b95ff4ba8f6d9::t_b9fce5f2be1138 1
+  s_2b95ff4ba8f6d9::t_509eaa65ef7223 39-47,49-55,65-72
+src/lib/query/governance.ts
+  s_2b95ff4ba8f6d9::t_081088504d5dc1 30-42,44-54
+  s_2b95ff4ba8f6d9::t_24a1138578d808 43
+src/components/control-room/CommandDeck.tsx
+  s_2b95ff4ba8f6d9::t_b466b44d46186e 1,12,14-15
+  s_2b95ff4ba8f6d9::t_4ca3f8a1b216ad 48,81-85
+  s_2b95ff4ba8f6d9::t_8dbf6094a565ae 123-184,187-197
+  s_2b95ff4ba8f6d9::t_7faa336014a765 185-186
+src/components/control-room/ControlRoomView.tsx
+  s_2b95ff4ba8f6d9::t_1fecf97d09bc44 18
+  s_2b95ff4ba8f6d9::t_af9a8b8bbc1a12 92-95
+src-tauri/src/commands/governance.rs
+  s_2b95ff4ba8f6d9::t_c0deca3a0e6d88 12-13
+  s_2b95ff4ba8f6d9::t_0546a459b0a165 120-133
+src-tauri/src/lib.rs
+  s_2b95ff4ba8f6d9::t_d8c7cc12cd4d33 346
+src/components/control-room/MergeBacklog.tsx
+  s_2b95ff4ba8f6d9::t_3dd33696d404f8 1-2,4-16,18-40
+  s_2b95ff4ba8f6d9::t_18418c932ea3f6 3
+  s_2b95ff4ba8f6d9::t_1f715b00929fdf 17
+src-tauri/src/governance/ticker.rs
+  s_2b95ff4ba8f6d9::t_3403dbbd74dea2 560-583
+  s_2b95ff4ba8f6d9::t_4344eb5618adfa 1444-1524
+src/components/control-room/ControlRoomView.css
+  s_2b95ff4ba8f6d9::t_40e81ab475920d 235-272
+  s_2b95ff4ba8f6d9::t_48c12c90b3ebed 855-939
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "835bbab6d70632f62e6a49ee727f178c67ce98e5",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
