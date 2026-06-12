@@ -60,7 +60,7 @@ const evaluatorPolicy: ResolvedPolicy = {
 };
 
 async function activeStep(
-  step: string | { text: string; check?: { command?: string; artifact?: string } },
+  step: string | { text: string; check?: { command?: string; artifact?: string; kind?: "human" } },
   base = 0,
 ) {
   const { planId } = await proposePlan(dir, { intent: "I", steps: [step] }, at(base), 0.1);
@@ -479,5 +479,120 @@ describe("completeReportedDone", () => {
     expect((await completeReportedDone(dir, passDeps, at(30), 0.6, opts)).completed).toBe(1);
     expect((await completeReportedDone(dir, passDeps, at(40), 0.7, opts)).completed).toBe(0);
     expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(1);
+  });
+});
+
+describe("explicit human certification — check:{kind:'human'} (P2a)", () => {
+  it("gate: kind:human => needs_human and the LLM evaluator is NEVER consulted (machine cannot certify)", async () => {
+    let invoked = 0;
+    const evaluate: EvaluateFn = async () => {
+      invoked++;
+      return { ok: true, verdict: "pass", rationale: "would have passed" };
+    };
+    const r = await evaluateCompletionGate(
+      {
+        taskId: "t",
+        sessionId: "s",
+        taskActive: true,
+        sessionTerminal: true,
+        hasHint: true,
+        check: { kind: "human" },
+        worktreePath: "/wt",
+      },
+      passDeps,
+      { policy: evaluatorPolicy, evaluate },
+    );
+    expect(r.decision).toBe("needs_human");
+    expect(r.reason).toContain("human");
+    expect(invoked).toBe(0);
+  });
+
+  it("completeReportedDone: a kind:human step parks at needs_human with the explicit-human reason", async () => {
+    const { taskId, sessionId } = await activeStep({ text: "review docs", check: { kind: "human" } });
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const r = await completeReportedDone(dir, passDeps, at(30), 0.6);
+
+    expect(r.needsHuman).toBe(1);
+    expect(r.needsHumanDetails[0]!.reason).toContain("human certification");
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
+  });
+});
+
+describe("fail-closed evaluator negative paths (INVARIANT #1 critical — never a silent pass)", () => {
+  it("gate: evaluator THROWING => needs_human, not an exception, not a pass", async () => {
+    const evaluate: EvaluateFn = async () => {
+      throw new Error("judge exploded");
+    };
+    const r = await evaluateCompletionGate(
+      {
+        taskId: "t",
+        sessionId: "s",
+        taskActive: true,
+        sessionTerminal: true,
+        hasHint: true,
+        stepPrompt: "implement slice",
+        worktreeDiff: "diff",
+        worktreePath: "/wt",
+      },
+      passDeps,
+      { policy: evaluatorPolicy, evaluate },
+    );
+    expect(r.decision).toBe("needs_human");
+  });
+
+  it("completeReportedDone: evaluator throwing => needs_human, task stays open", async () => {
+    const { taskId, sessionId } = await activeStep("step a");
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const r = await completeReportedDone(dir, passDeps, at(30), 0.6, {
+      policy: evaluatorPolicy,
+      evaluate: async () => {
+        throw new Error("spawn ENOENT");
+      },
+      readWorktreeDiff: async () => "diff",
+    });
+
+    expect(r.needsHuman).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
+  });
+
+  it("completeReportedDone: evaluator fatal (unparseable judge output) => needs_human, task stays open", async () => {
+    const { taskId, sessionId } = await activeStep("step a");
+    await reportTaskDone(dir, { taskId }, at(20), 0.4);
+    await crashSession(sessionId);
+
+    const r = await completeReportedDone(dir, passDeps, at(30), 0.6, {
+      policy: evaluatorPolicy,
+      evaluate: async () => ({ ok: false, error: { kind: "fatal", detail: "no JSON in output" } }),
+      readWorktreeDiff: async () => "diff",
+    });
+
+    expect(r.needsHuman).toBe(1);
+    expect(count("task_completed", taskId, await readAllEvents(dir))).toBe(0);
+  });
+
+  it("gate passes the step's check + worktree path through to the evaluator request", async () => {
+    let seen: { check?: unknown; worktreePath?: unknown } | null = null;
+    const evaluate: EvaluateFn = async (req) => {
+      seen = { check: req.check, worktreePath: req.worktreePath };
+      return { ok: true, verdict: "pass", rationale: "ok" };
+    };
+    await evaluateCompletionGate(
+      {
+        taskId: "t",
+        sessionId: "s",
+        taskActive: true,
+        sessionTerminal: true,
+        hasHint: true,
+        check: { command: "pnpm test" },
+        worktreePath: "/wt/step0",
+      },
+      failDeps,
+      { policy: evaluatorPolicy, evaluate },
+    );
+    expect(seen).toEqual({ check: { command: "pnpm test" }, worktreePath: "/wt/step0" });
   });
 });

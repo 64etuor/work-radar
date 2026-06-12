@@ -8,8 +8,9 @@ import {
   supersedePlan,
   listPlans,
   planTrail,
+  checklessStepWarning,
 } from "../../plan/handlers.ts";
-import { okOrRefused } from "../response.ts";
+import { okOrRefused, plainText } from "../response.ts";
 import type { ToolContext } from "./context.ts";
 
 /** Plan lifecycle tools: propose_plan, accept_plan(verdict), revise_plan, complete_plan,
@@ -34,7 +35,13 @@ export function registerPlanTools(ctx: ToolContext): void {
               text: z.string(),
               difficulty: z.enum(["trivial", "standard", "hard"]).optional(),
               check: z
-                .object({ command: z.string().optional(), artifact: z.string().optional() })
+                .object({
+                  command: z.string().optional(),
+                  artifact: z.string().optional(),
+                  // explicit "a human certifies this step" (suppresses the accept warning;
+                  // still demotes the plan from auto-accept and routes to needs_human).
+                  kind: z.literal("human").optional(),
+                })
                 .optional(),
             }),
           ]),
@@ -55,7 +62,12 @@ export function registerPlanTools(ctx: ToolContext): void {
   { description: "사람 게이트: plan을 active로 (draft/needs_revision→active, actor=user)", inputSchema: { planId: z.string() } },
   async ({ planId }) => {
     const r = await acceptPlan(WORKSPACE, { planId }, nowFn(), randFn());
-    return okOrRefused("accepted", r);
+    if (!r.ok) return okOrRefused("accepted", r);
+    // Human accept stays allowed for checkless plans — but say WHICH steps a machine cannot
+    // certify (P2a), so the needs_human park later is an announced cost, not a silent dead-end.
+    const warning = await checklessStepWarning(WORKSPACE, planId);
+    const ok = okOrRefused("accepted", r);
+    return warning ? plainText(`${ok.content[0].text}\n${warning}`) : ok;
   },
 );
 

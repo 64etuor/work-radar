@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   proposePlan, acceptPlan, revisePlan, completePlan, archivePlan, supersedePlan, listPlans, planTrail,
+  checklessStepWarning,
 } from "../../src/plan/handlers.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
 
@@ -149,5 +150,67 @@ describe("plan handlers — Planner + lifecycle", () => {
     const soloProposal = (await readAllEvents(dir)).find((e) => e.frontmatter.id === solo)!;
     expect(soloProposal.frontmatter.related_to).toBeUndefined();
     expect((await planTrail(dir, { planId: solo })).specId).toBeNull();
+  });
+});
+
+describe("checklessStepWarning — human-accept warning for steps a machine cannot certify (P2a)", () => {
+  it("names the checkless step indices on a successful accept", async () => {
+    const { planId } = await proposePlan(
+      dir,
+      { intent: "I", steps: ["no check", { text: "checked", check: { command: "true" } }, "also no check"] },
+      at(0),
+      0.1,
+    );
+    const w = await checklessStepWarning(dir, planId);
+    expect(w).toContain("0, 2");
+    expect(w).toContain("human certification");
+  });
+
+  it("is null when every step carries a machine check", async () => {
+    const { planId } = await proposePlan(
+      dir,
+      {
+        intent: "I",
+        steps: [
+          { text: "a", check: { command: "true" } },
+          { text: "b", check: { artifact: "out.txt" } },
+        ],
+      },
+      at(0),
+      0.1,
+    );
+    expect(await checklessStepWarning(dir, planId)).toBeNull();
+  });
+
+  it("explicit check:{kind:'human'} suppresses the warning (the author already declared it)", async () => {
+    const { planId } = await proposePlan(
+      dir,
+      { intent: "I", steps: [{ text: "review docs", check: { kind: "human" } }] },
+      at(0),
+      0.1,
+    );
+    expect(await checklessStepWarning(dir, planId)).toBeNull();
+  });
+
+  it("mixed: warns ONLY about non-explicit checkless steps", async () => {
+    const { planId } = await proposePlan(
+      dir,
+      {
+        intent: "I",
+        steps: [
+          { text: "human-certified", check: { kind: "human" } },
+          "silently checkless",
+        ],
+      },
+      at(0),
+      0.1,
+    );
+    const w = await checklessStepWarning(dir, planId);
+    expect(w).toContain("1");
+    expect(w).not.toContain("0,");
+  });
+
+  it("is null for an unknown plan id", async () => {
+    expect(await checklessStepWarning(dir, "evt_nope")).toBeNull();
   });
 });

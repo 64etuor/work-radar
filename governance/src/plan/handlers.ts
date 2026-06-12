@@ -5,6 +5,7 @@ import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { derivePlanState, plansOf, type PlanState } from "./plan.ts";
 import { canAccept, canRevise, canComplete, canArchive, canSupersede } from "./guards.ts";
 import type { Difficulty } from "../backends/difficulty.ts";
+import { machineUncertifiableSteps } from "../conductor/conductor.ts";
 
 export interface PlanGateResult { ok: boolean; reason: string; eventId?: string; }
 
@@ -36,7 +37,8 @@ async function writeLifecycle(
 export interface PlanStepInput {
   text: string;
   difficulty?: Difficulty;
-  check?: { command?: string; artifact?: string };
+  /** kind:"human" = explicit "a human certifies this step" (see conductor.ts PlanStepCheck). */
+  check?: { command?: string; artifact?: string; kind?: "human" };
 }
 export interface ProposePlanInput { intent: string; steps: Array<string | PlanStepInput>; specId?: string; }
 export interface ProposePlanResult { planId: string; }
@@ -50,9 +52,11 @@ function normalizeStep(input: string | PlanStepInput): PlanStepInput | null {
   if (!text) return null;
   const command = input.check?.command?.trim();
   const artifact = input.check?.artifact?.trim();
+  const kind = input.check?.kind === "human" ? ("human" as const) : undefined;
   const check = {
     ...(command ? { command } : {}),
     ...(artifact ? { artifact } : {}),
+    ...(kind ? { kind } : {}),
   };
   return {
     text,
@@ -90,6 +94,23 @@ export async function proposePlan(
   };
   await writeEvent(workspaceDir, evt, now);
   return { planId: evt.frontmatter.id };
+}
+
+/** The human-accept warning for steps no machine can certify (P2a): names the SILENTLY checkless
+ *  step indices — an explicit check:{kind:"human"} step is excluded (the author already declared
+ *  the human requirement). null = nothing to warn about (or the plan is unknown — the accept
+ *  handler surfaces its own refusal). */
+export async function checklessStepWarning(workspaceDir: string, planId: string): Promise<string | null> {
+  const all = await readAllEvents(workspaceDir);
+  const grp = eventsForDecision(all, planId);
+  if (!grp.proposal || grp.proposal.frontmatter.type !== "plan_proposed") return null;
+  const silent = machineUncertifiableSteps(grp.proposal.body).filter((s) => !s.explicitHuman);
+  if (silent.length === 0) return null;
+  const indices = silent.map((s) => s.stepIndex).join(", ");
+  return (
+    `WARNING: step(s) ${indices} have no check contract (check.command/check.artifact) — ` +
+    `completion will require human certification (the step parks at needs_human until an operator certifies)`
+  );
 }
 
 /** accept_plan — HUMAN GATE: draft/needs_revision → active (actor:"user"). */

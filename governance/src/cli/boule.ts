@@ -29,6 +29,7 @@ import {
   makeConductorAdapterFromEnv,
   makeExecutorViabilityProbesFromEnv,
 } from "../conductor/fromEnv.ts";
+import { evaluatorCompletionOptions } from "../conductor/evaluateLive.ts";
 import { parseEnvelopeDefaults } from "../mcp/config.ts";
 import { computeRepoReadiness } from "../live/repoReadiness.ts";
 import { runTick, clampMaxSteps, tickExitCode, type TickReport } from "../orchestrator/tick.ts";
@@ -473,6 +474,10 @@ export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
   const { policy, env, cfg, stalledCount, readiness } = rr;
   const p = boulePaths(repo);
 
+  // P2b (ADR-0010 last mile): the LLM evaluator rung is reachable ONLY when the policy configures
+  // backends.evaluator — otherwise undefined keeps the legacy deterministic-rung-only behavior.
+  const completionOptions = evaluatorCompletionOptions(policy, env);
+
   const report = await runTick(
     p.workspace,
     {
@@ -490,6 +495,7 @@ export async function cmdTick(flags: ParsedArgs["flags"]): Promise<number> {
       autoMode: policy.autoMode,
       maxSteps: clampMaxSteps(flags["max-steps"], env.BOULE_TICK_MAX),
       stalledCount,
+      ...(completionOptions ? { completionOptions } : {}),
     },
     new Date(),
     Math.random(),

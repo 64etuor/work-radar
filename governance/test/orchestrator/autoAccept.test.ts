@@ -17,9 +17,16 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+// Every step carries a machine check: the P2a authoring gate demotes checkless plans from
+// auto-accept, so the level-gating tests below seed machine-certifiable plans.
 async function seed() {
   const { specId } = await proposeSpec(dir, { title: "S", summary: "sum" }, at(0), 0.1);
-  const { planId } = await proposePlan(dir, { intent: "I", steps: ["a"], specId }, at(1), 0.2);
+  const { planId } = await proposePlan(
+    dir,
+    { intent: "I", steps: [{ text: "a", check: { command: "true" } }], specId },
+    at(1),
+    0.2,
+  );
   return { specId, planId };
 }
 async function accepts() {
@@ -80,5 +87,77 @@ describe("autoAccept — orchestrator gate opened only by autonomyLevel (INVARIA
     const all = await readAllEvents(dir);
     expect(all.filter((e) => e.frontmatter.type === "spec_accepted")).toHaveLength(1);
     expect(all.filter((e) => e.frontmatter.type === "plan_accepted")).toHaveLength(1);
+  });
+});
+
+describe("checkless authoring gate — auto-accept requires EVERY step machine-certifiable (P2a)", () => {
+  async function denials() {
+    const all = await readAllEvents(dir);
+    return all.filter((e) => e.frontmatter.type === "action_denied");
+  }
+
+  it("full + a checkless step => plan NOT auto-accepted, ONE reasoned verdict-free action_denied", async () => {
+    const { planId } = await proposePlan(
+      dir,
+      { intent: "I", steps: [{ text: "a", check: { command: "true" } }, "b has no check"] },
+      at(1),
+      0.2,
+    );
+    const s = await autoAccept(dir, "full", at(10), 0.3);
+    expect(s.plansAccepted).toBe(0);
+    const a = await accepts();
+    expect(a.planAccepted).toHaveLength(0);
+
+    const d = await denials();
+    expect(d).toHaveLength(1);
+    expect(d[0]!.frontmatter.actor).toBe("system");
+    expect(d[0]!.frontmatter.related_to).toContain(planId);
+    const body = JSON.parse(d[0]!.body) as { planId: string; stepIndices: number[]; reason: string };
+    expect(body.planId).toBe(planId);
+    expect(body.stepIndices).toEqual([1]);
+    expect(body.reason).toContain("1"); // names the checkless step index
+    expect(body.reason.toLowerCase()).toContain("human");
+  });
+
+  it("denial is idempotent — a second pass writes no duplicate action_denied", async () => {
+    await proposePlan(dir, { intent: "I", steps: ["checkless"] }, at(1), 0.2);
+    await autoAccept(dir, "full", at(10), 0.3);
+    await autoAccept(dir, "full", at(20), 0.4);
+    expect(await denials()).toHaveLength(1);
+  });
+
+  it("explicit check:{kind:'human'} ALSO demotes (a full-auto plan needing a mid-flight human is human-accepted)", async () => {
+    await proposePlan(
+      dir,
+      { intent: "I", steps: [{ text: "review", check: { kind: "human" } }] },
+      at(1),
+      0.2,
+    );
+    const s = await autoAccept(dir, "full", at(10), 0.3);
+    expect(s.plansAccepted).toBe(0);
+    expect((await accepts()).planAccepted).toHaveLength(0);
+    expect(await denials()).toHaveLength(1);
+  });
+
+  it("the gate also narrows auto_plan (every auto-accept level, not just full)", async () => {
+    await proposePlan(dir, { intent: "I", steps: ["checkless"] }, at(1), 0.2);
+    const s = await autoAccept(dir, "auto_plan", at(10), 0.3);
+    expect(s.plansAccepted).toBe(0);
+    expect(await denials()).toHaveLength(1);
+  });
+
+  it("manual/dispatch never write a denial (the gate only fires where auto-accept would)", async () => {
+    await proposePlan(dir, { intent: "I", steps: ["checkless"] }, at(1), 0.2);
+    await autoAccept(dir, "manual", at(10), 0.3);
+    await autoAccept(dir, "dispatch", at(11), 0.4);
+    expect(await denials()).toHaveLength(0);
+  });
+
+  it("full + checkless plan: the SPEC still auto-accepts (denial is plan-scoped)", async () => {
+    const { specId } = await proposeSpec(dir, { title: "S", summary: "sum" }, at(0), 0.1);
+    await proposePlan(dir, { intent: "I", steps: ["checkless"], specId }, at(1), 0.2);
+    const s = await autoAccept(dir, "full", at(10), 0.3);
+    expect(s.specsAccepted).toBe(1);
+    expect(s.plansAccepted).toBe(0);
   });
 });

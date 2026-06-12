@@ -1,3 +1,4 @@
+import { machineUncertifiableSteps, type MachineUncertifiableStep } from "../conductor/conductor.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { writeEvent } from "../event/writeEvent.ts";
 import { generateId } from "../event/id.ts";
@@ -25,7 +26,12 @@ export interface AutoAcceptSummary {
  *   - a spawned EXECUTOR session can NOT reach this: it is invoked ONLY from the `auto_dispatch` MCP
  *     tool, which is structurally NOT registered for executor role (server.ts gates it on
  *     SESSION_ALLOWS_VERDICTS) and is in SESSION_DENIED_TOOLS — same two-layer barrier as
- *     accept_plan/accept_spec. (Does NOT rely on env isolation.) */
+ *     accept_plan/accept_spec. (Does NOT rely on env isolation.)
+ *   - CHECKLESS AUTHORING GATE (P2a, fail-closed narrowing): a plan with ANY step no machine can
+ *     certify (checkless, or explicit check:{kind:"human"}) is NEVER auto-accepted — it is demoted
+ *     to the human accept_plan gate with ONE verdict-free `action_denied` naming the step indices
+ *     (the same event vocabulary autoDispatch uses for denied actions; deduped per plan+reason).
+ *     Without this, a full-auto plan silently dead-ends at needs_human mid-flight (live 2026-06-10). */
 export async function autoAccept(
   workspaceDir: string,
   level: AutonomyLevel,
@@ -39,6 +45,15 @@ export async function autoAccept(
   let offset = 0;
   const stamp = () => new Date(now.getTime() + offset++ * 1000); // distinct chronological ids
 
+  // Existing denials (planId+reason), so repeated passes never re-record the same demotion —
+  // mirrors autoDispatch's action_denied dedup.
+  const denied = new Set<string>();
+  for (const e of all) {
+    if (e.frontmatter.type !== "action_denied") continue;
+    const key = deniedKeyOf(e.body);
+    if (key) denied.add(key);
+  }
+
   // full → accept proposed specs first (so auto-accepted plans sit on accepted specs).
   if (autonomyAllows.autoAcceptSpec(level)) {
     for (const sp of specsOf(all)) {
@@ -50,16 +65,72 @@ export async function autoAccept(
       }
     }
   }
-  // auto_plan | full → accept proposed plans.
+  // auto_plan | full → accept proposed plans, UNLESS a step lacks a machine check contract.
   for (const p of plansOf(all)) {
     const grp = eventsForDecision(all, p.frontmatter.id);
     const s = derivePlanState(grp.proposal!, grp.related);
-    if (canAcceptPlan(s).ok) {
-      await writeAutoAccepted(workspaceDir, "plan_accepted", s.planId, "plan", level, stamp(), rand);
-      summary.plansAccepted++;
+    if (!canAcceptPlan(s).ok) continue;
+    const uncertifiable = machineUncertifiableSteps(grp.proposal!.body);
+    if (uncertifiable.length > 0) {
+      const reason = checklessDenyReason(uncertifiable);
+      const key = `${s.planId}\u0000${reason}`;
+      if (!denied.has(key)) {
+        await writeAutoDenied(workspaceDir, s.planId, uncertifiable, reason, stamp(), rand);
+        denied.add(key);
+      }
+      continue; // human accept_plan remains available (with a warning) — see plan/handlers.ts
     }
+    await writeAutoAccepted(workspaceDir, "plan_accepted", s.planId, "plan", level, stamp(), rand);
+    summary.plansAccepted++;
   }
   return summary;
+}
+
+function deniedKeyOf(body: string): string | null {
+  try {
+    const b = JSON.parse(body) as { planId?: unknown; reason?: unknown };
+    if (typeof b.planId === "string" && typeof b.reason === "string") return `${b.planId}\u0000${b.reason}`;
+  } catch {
+    /* foreign body shape — not ours */
+  }
+  return null;
+}
+
+function checklessDenyReason(steps: MachineUncertifiableStep[]): string {
+  const indices = steps.map((s) => s.stepIndex).join(", ");
+  return (
+    `auto-accept denied: step(s) ${indices} have no machine-certifiable check ` +
+    `(need check.command or check.artifact; check:{"kind":"human"} = explicit human certification) — ` +
+    `human accept_plan required`
+  );
+}
+
+/** The demotion record: verdict-free `action_denied` (the SAME event type autoDispatch mints for
+ *  denied actions — no new decision_* vocabulary), actor:system, explaining WHICH steps blocked
+ *  auto-accept. The plan itself is untouched (stays proposed for the human gate). */
+async function writeAutoDenied(
+  workspaceDir: string,
+  planId: string,
+  steps: MachineUncertifiableStep[],
+  reason: string,
+  now: Date,
+  rand: number,
+): Promise<void> {
+  const evt: GovEvent = {
+    frontmatter: {
+      id: generateId("evt", now, rand),
+      type: "action_denied",
+      source: "system",
+      actor: "system",
+      tags: ["plan", "autonomy-auto"],
+      related_to: [planId],
+    },
+    body: JSON.stringify({ planId, stepIndices: steps.map((s) => s.stepIndex), reason }),
+  };
+  // Disambiguator: autoDispatch can mint its own action_denied for the SAME plan in the SAME tick
+  // second (e.g. the still-draft plan is denied dispatch right after this demotion) — the filename
+  // must not collide with it (writeEvent is wx-immutable).
+  await writeEvent(workspaceDir, evt, now, { disambiguator: `autoaccept-${planId.slice(-4)}` });
 }
 
 async function writeAutoAccepted(

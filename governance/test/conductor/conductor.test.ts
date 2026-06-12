@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deriveConductorState, parsePlanStepRecords, parsePlanSteps } from "../../src/conductor/conductor.js";
+import {
+  deriveConductorState,
+  machineUncertifiableSteps,
+  parsePlanStepRecords,
+  parsePlanSteps,
+} from "../../src/conductor/conductor.js";
 import type { GovEvent, EventType } from "../../src/event/event.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
 import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
@@ -221,3 +226,35 @@ async function firstTaskId(dir: string): Promise<string> {
   const t = all.find((e) => e.frontmatter.type === "task_created");
   return t!.frontmatter.id;
 }
+
+describe("check:{kind:'human'} parsing + machineUncertifiableSteps (P2a authoring gate input)", () => {
+  it("parses an explicit human check marker", () => {
+    const body = 'I\n\n1. review the docs <!-- boule:check {"kind":"human"} -->';
+    expect(parsePlanStepRecords(body)).toEqual([{ text: "review the docs", check: { kind: "human" } }]);
+  });
+
+  it("machineUncertifiableSteps: checkless and explicit-human steps are listed; command/artifact steps are not", () => {
+    const body = [
+      "I",
+      "",
+      "1. checkless step",
+      '2. checked step <!-- boule:check {"command":"true"} -->',
+      '3. human step <!-- boule:check {"kind":"human"} -->',
+      '4. artifact step <!-- boule:check {"artifact":"out.txt"} -->',
+    ].join("\n");
+    expect(machineUncertifiableSteps(body)).toEqual([
+      { stepIndex: 0, explicitHuman: false },
+      { stepIndex: 2, explicitHuman: true },
+    ]);
+  });
+
+  it("kind:'human' DOMINATES a co-declared command/artifact (the step stays human-certified)", () => {
+    const body = 'I\n\n1. odd step <!-- boule:check {"kind":"human","command":"true"} -->';
+    expect(machineUncertifiableSteps(body)).toEqual([{ stepIndex: 0, explicitHuman: true }]);
+  });
+
+  it("an all-machine-checked plan yields no entries", () => {
+    const body = 'I\n\n1. a <!-- boule:check {"command":"true"} -->\n2. b <!-- boule:check {"artifact":"x"} -->';
+    expect(machineUncertifiableSteps(body)).toEqual([]);
+  });
+});

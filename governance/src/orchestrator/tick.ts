@@ -1,7 +1,11 @@
 import { readAllEvents } from "../decision/readEvents.ts";
 import { plansOf } from "../plan/plan.ts";
 import { deriveConductorState } from "../conductor/conductor.ts";
-import { completeReportedDone, type CompletionDeps } from "../conductor/completion.ts";
+import {
+  completeReportedDone,
+  type CompletionDeps,
+  type CompletionRunOptions,
+} from "../conductor/completion.ts";
 import { isTerminalPlanPhase } from "./dispatch/policy.ts";
 import { projectTasks } from "../task/project.ts";
 import { autoAccept } from "./autoAccept.ts";
@@ -71,6 +75,10 @@ export interface TickDeps {
    *  categorizes the not-ready outcome structurally (no blocker-string regex). */
   stalledCount: number;
   completionDeps?: CompletionDeps;
+  /** Completion-gate options (P2b): when the resolved policy configures `backends.evaluator`, the
+   *  CLI passes { policy, evaluate, readWorktreeDiff } so the LLM evaluator rung is reachable from
+   *  the tick path. Omitted ⇒ byte-identical legacy behavior (deterministic rung only). */
+  completionOptions?: CompletionRunOptions;
 }
 
 /** One bounded heartbeat: readiness gate → halt/stall gate → autoAccept(level) → autoDispatch(<=N).
@@ -136,7 +144,13 @@ export async function runTick(
     if (resumed > 0) return { ...base, outcome: "advanced", conducted: resumed };
   }
 
-  const completion = await completeReportedDone(workspaceDir, deps.completionDeps, now, rand);
+  const completion = await completeReportedDone(
+    workspaceDir,
+    deps.completionDeps,
+    now,
+    rand,
+    deps.completionOptions,
+  );
   if (completion.needsHuman > 0) {
     // Name the task, step, check, and reason — a bare count sent operators spelunking raw event
     // files to find WHICH step was stuck and why (live 2026-06-10).

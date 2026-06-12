@@ -10,6 +10,12 @@ import type { BackendSpec } from "../backends/config.ts";
 export interface PlanStepCheck {
   command?: string;
   artifact?: string;
+  /** Explicit "a HUMAN certifies this step" declaration. It dominates a co-declared
+   *  command/artifact: the completion gate routes the step straight to needs_human (no machine —
+   *  deterministic or LLM — may certify it), and it still demotes the plan from auto-accept
+   *  (a full-auto plan that needs a human mid-flight should be human-accepted). What it buys the
+   *  author: the human-accept warning is suppressed (the requirement is declared, not forgotten). */
+  kind?: "human";
 }
 
 export interface PlanStepRecord {
@@ -89,9 +95,11 @@ function parsePlanStepLine(line: string): PlanStepRecord {
       typeof rec.command === "string" && rec.command.trim() ? rec.command.trim() : undefined;
     const artifact =
       typeof rec.artifact === "string" && rec.artifact.trim() ? rec.artifact.trim() : undefined;
+    const kind = rec.kind === "human" ? ("human" as const) : undefined;
     const check = {
       ...(command ? { command } : {}),
       ...(artifact ? { artifact } : {}),
+      ...(kind ? { kind } : {}),
     };
     return {
       text,
@@ -108,6 +116,31 @@ function parsePlanStepLine(line: string): PlanStepRecord {
 
 function isDifficulty(value: string): value is Difficulty {
   return value === "trivial" || value === "standard" || value === "hard";
+}
+
+export interface MachineUncertifiableStep {
+  stepIndex: number;
+  /** true when the author explicitly declared check:{kind:"human"} (suppresses the human-accept
+   *  warning); false = silently checkless. Either way the step demotes the plan from auto-accept. */
+  explicitHuman: boolean;
+}
+
+/** Steps NO machine can certify at completion time: checkless steps (no check.command/artifact)
+ *  and explicit check:{kind:"human"} steps (kind dominates a co-declared command/artifact).
+ *  Input to the P2a authoring gate — auto-accept requires this list to be EMPTY, so a plan can
+ *  never silently dead-end at needs_human after a full-auto acceptance (live 2026-06-10). */
+export function machineUncertifiableSteps(planBody: string): MachineUncertifiableStep[] {
+  const out: MachineUncertifiableStep[] = [];
+  parsePlanStepRecords(planBody).forEach((step, stepIndex) => {
+    if (step.check?.kind === "human") {
+      out.push({ stepIndex, explicitHuman: true });
+      return;
+    }
+    if (!step.check?.command && !step.check?.artifact) {
+      out.push({ stepIndex, explicitHuman: false });
+    }
+  });
+  return out;
 }
 
 function recordOf(value: unknown): Record<string, unknown> {

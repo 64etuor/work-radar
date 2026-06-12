@@ -6,9 +6,14 @@ import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
 import { proposeSpec } from "../../src/spec/handlers.js";
 import { escalate } from "../../src/escalate/escalate.js";
 import { readAllEvents } from "../../src/decision/readEvents.js";
+import { writeEvent } from "../../src/event/writeEvent.js";
+import { generateId } from "../../src/event/id.js";
 import { stubAdapter } from "../../src/conductor/adapter.js";
+import type { CompletionDeps } from "../../src/conductor/completion.js";
 import { evaluateReadiness } from "../../src/live/readiness.js";
 import type { PreflightSignals } from "../../src/live/preflight.js";
+import { reportTaskDone } from "../../src/task/handlers.js";
+import type { ResolvedPolicy } from "../../src/repo/config.js";
 import { runTick, clampMaxSteps, tickExitCode, type TickDeps } from "../../src/orchestrator/tick.js";
 
 let dir: string;
@@ -136,13 +141,30 @@ describe("runTick — gates + bounded conduct + stable outcomes", () => {
     expect(r.conducted).toBe(1); // the cap held; the other waits for the next tick
   });
 
-  it("autonomyLevel=full auto-accepts spec+plan then advances (no human gate)", async () => {
+  it("autonomyLevel=full auto-accepts spec+plan then advances (no human gate; every step machine-checked)", async () => {
     const { specId } = await proposeSpec(dir, { title: "S", summary: "s" }, at(0), 0.1);
-    await proposePlan(dir, { intent: "I", steps: ["a"], specId }, at(1), 0.2); // NOT accepted
+    // P2a: auto-accept requires a machine check contract on EVERY step.
+    await proposePlan(
+      dir,
+      { intent: "I", steps: [{ text: "a", check: { command: "true" } }], specId },
+      at(1),
+      0.2,
+    ); // NOT accepted
     const r = await tick({ autonomyLevel: "full" });
     expect(r.specsAccepted).toBe(1);
     expect(r.plansAccepted).toBe(1);
     expect(r.outcome).toBe("advanced");
+  });
+
+  it("autonomyLevel=full + a CHECKLESS plan => demoted to human accept (not accepted, reasoned denial)", async () => {
+    await proposePlan(dir, { intent: "I", steps: ["a has no check"] }, at(1), 0.2);
+    const r = await tick({ autonomyLevel: "full" });
+    expect(r.plansAccepted).toBe(0);
+    expect(r.conducted).toBe(0);
+    expect(r.outcome).toBe("idle"); // draft stays awaiting a human accept
+    const denied = (await readAllEvents(dir)).filter((e) => e.frontmatter.type === "action_denied");
+    expect(denied.length).toBeGreaterThanOrEqual(1);
+    expect(denied.some((e) => /machine/.test(JSON.parse(e.body).reason ?? ""))).toBe(true);
   });
 
   it("manual/dispatch do NOT auto-accept (an unaccepted plan stays idle)", async () => {
@@ -173,5 +195,123 @@ describe("clampMaxSteps / tickExitCode", () => {
     expect(tickExitCode("stalled")).toBe(10);
     expect(tickExitCode("readiness_failed")).toBe(1);
     expect(tickExitCode("infra_failed")).toBe(1);
+  });
+});
+
+describe("runTick — evaluator rung wiring (deps.completionOptions, ADR-0010 last mile)", () => {
+  const evaluatorPolicy: ResolvedPolicy = {
+    kind: "work",
+    autonomyLevel: "dispatch",
+    autoMode: "type2",
+    reviewQuorum: 2,
+    forbiddenDecisionClasses: ["scope"],
+    allowedType2Actions: ["edit"],
+    backends: { evaluator: { chain: [{ provider: "codex", model: "judge" }] } },
+  };
+  // Fakes WITHOUT commitStepOutput (stub worktree paths are not real git trees) and with a
+  // failing deterministic check, so any completion MUST come from the evaluator rung.
+  const failingCompletionDeps: CompletionDeps = {
+    pathExists: async () => false,
+    runCommand: async () => ({ status: 1 }),
+  };
+
+  async function reportedDoneStep(): Promise<string> {
+    await activePlan(); // checkless, human-accepted
+    expect((await tick()).outcome).toBe("advanced"); // conduct step 0 (stub session)
+    const taskId = await boundTaskId();
+    await reportTaskDone(dir, { taskId }, at(12), 0.7);
+    const all = await readAllEvents(dir);
+    const session = all.find((e) => e.frontmatter.type === "session_spawned")!;
+    await writeEvent(
+      dir,
+      {
+        frontmatter: {
+          id: generateId("evt", at(13), 0.8),
+          type: "session_crashed",
+          source: "system",
+          actor: "observer",
+          tags: ["session"],
+          related_to: [session.frontmatter.id],
+        },
+        body: "crashed",
+      },
+      at(13),
+    );
+    return taskId;
+  }
+
+  it("configured chain + evaluator verdict complete=true => task_completed via the evaluator rung", async () => {
+    const taskId = await reportedDoneStep();
+    const r = await runTick(
+      dir,
+      deps({
+        completionDeps: failingCompletionDeps,
+        completionOptions: {
+          policy: evaluatorPolicy,
+          evaluate: async () => ({ ok: true, verdict: "pass", rationale: "all done" }),
+          readWorktreeDiff: async () => "diff",
+        },
+      }),
+      at(20),
+      0.6,
+    );
+    expect(r.outcome).not.toBe("needs_human");
+    const all = await readAllEvents(dir);
+    expect(
+      all.filter(
+        (e) => e.frontmatter.type === "task_completed" && e.frontmatter.related_to?.includes(taskId),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("NEGATIVE PATH LOCKED: evaluator throwing => needs_human (exit 10), never a silent pass", async () => {
+    const taskId = await reportedDoneStep();
+    const r = await runTick(
+      dir,
+      deps({
+        completionDeps: failingCompletionDeps,
+        completionOptions: {
+          policy: evaluatorPolicy,
+          evaluate: async () => {
+            throw new Error("judge spawn failed");
+          },
+          readWorktreeDiff: async () => "diff",
+        },
+      }),
+      at(20),
+      0.6,
+    );
+    expect(r.outcome).toBe("needs_human");
+    expect(tickExitCode(r.outcome)).toBe(10);
+    const all = await readAllEvents(dir);
+    expect(
+      all.filter(
+        (e) => e.frontmatter.type === "task_completed" && e.frontmatter.related_to?.includes(taskId),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("NEGATIVE PATH LOCKED: evaluator garbage (fatal) => needs_human, never a silent pass", async () => {
+    await reportedDoneStep();
+    const r = await runTick(
+      dir,
+      deps({
+        completionDeps: failingCompletionDeps,
+        completionOptions: {
+          policy: evaluatorPolicy,
+          evaluate: async () => ({ ok: false, error: { kind: "fatal", detail: "unparseable output" } }),
+          readWorktreeDiff: async () => "diff",
+        },
+      }),
+      at(20),
+      0.6,
+    );
+    expect(r.outcome).toBe("needs_human");
+  });
+
+  it("unconfigured (no completionOptions) keeps current behavior: checkless reported-done => needs_human", async () => {
+    await reportedDoneStep();
+    const r = await runTick(dir, deps({ completionDeps: failingCompletionDeps }), at(20), 0.6);
+    expect(r.outcome).toBe("needs_human");
   });
 });

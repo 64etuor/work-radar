@@ -69,6 +69,10 @@ export interface EvaluationRequest {
   stepPrompt: string;
   worktreeDiff: string;
   backend: BackendSpec;
+  /** Judge context (additive): the step's declared deterministic contract, if any. */
+  check?: PlanStepCheck;
+  /** The worktree under judgement (the judge may inspect it read-only). */
+  worktreePath?: string | null;
 }
 export type EvaluateFnResult =
   | { ok: true; verdict: EvaluationVerdict; rationale: string }
@@ -146,6 +150,16 @@ export async function evaluateCompletionGate(
   if (!input.sessionTerminal) return { decision: "wait", reason: "session is not terminal" };
   if (!input.hasHint) return { decision: "wait", reason: "no executor_reported_done hint" };
 
+  // Explicit human certification: check:{kind:"human"} declares that NO machine — deterministic
+  // or LLM judge — may certify this step. Route straight to the human BEFORE the rung chain
+  // (an evaluator verdict on an explicitly-human step would override the author's declaration).
+  if (input.check?.kind === "human") {
+    return {
+      decision: "needs_human",
+      reason: "step declares check: human — completion requires human certification",
+    };
+  }
+
   let lastRationale = "no evaluator rung passed";
   const fallback = await runWithFallback<CompletionGateResult>(
     "evaluator",
@@ -155,13 +169,19 @@ export async function evaluateCompletionGate(
         backend.provider === "deterministic"
           ? { ok: true as const, ...(await evaluateDeterministicCheck(input, deps)) }
           : options.evaluate
-            ? await options.evaluate({
-                taskId: input.taskId,
-                sessionId: input.sessionId,
-                stepPrompt: input.stepPrompt ?? "",
-                worktreeDiff: input.worktreeDiff ?? "",
-                backend,
-              })
+            ? // A throwing EvaluateFn is a rung failure, never a tick crash (fail-closed): classify
+              // as transient so the chain still falls through to the deterministic rung.
+              await options
+                .evaluate({
+                  taskId: input.taskId,
+                  sessionId: input.sessionId,
+                  stepPrompt: input.stepPrompt ?? "",
+                  worktreeDiff: input.worktreeDiff ?? "",
+                  backend,
+                  ...(input.check ? { check: input.check } : {}),
+                  worktreePath: input.worktreePath,
+                })
+                .catch((): EvaluateFnResult => ({ ok: false, error: { kind: "transient" } }))
             : { ok: false as const, error: { kind: "token_exhausted" as const } };
 
       if (!result.ok) return result;

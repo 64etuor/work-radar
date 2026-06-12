@@ -3,7 +3,12 @@ import { writeEvent } from "../event/writeEvent.ts";
 import type { GovEvent } from "../event/event.ts";
 import { readAllEvents, eventsForDecision } from "../decision/readEvents.ts";
 import { deriveSessionState } from "../session/session.ts";
-import { deriveConductorState, type ConductorState, type ConductorStepState } from "./conductor.ts";
+import {
+  deriveConductorState,
+  type ConductorState,
+  type ConductorStepState,
+  type PlanStepCheck,
+} from "./conductor.ts";
 import { canAdvance } from "./guards.ts";
 import {
   buildEnvelope,
@@ -45,8 +50,39 @@ async function loadConductor(
   return { state: deriveConductorState(grp.proposal, all), all };
 }
 
-/** The spawn prompt = step text + inlined envelope + the escalate-and-stop contract (design §6). */
-function buildPrompt(stepText: string, envelope: AutonomyEnvelope): string {
+/** What will certify this step's completion — told to the executor up front (P2c). Previously a
+ *  checkless step dead-ended at needs_human AFTER execution with the session never warned, and a
+ *  checked step's contract lived only in the plan body the session never saw. */
+function completionCertificationLines(check?: PlanStepCheck): string[] {
+  const head = "## Completion certification";
+  if (check?.kind === "human") {
+    return [
+      head,
+      "This step declares check: human — completion requires human certification. No command or",
+      "artifact will auto-complete it: finish the work, call complete_task, and an operator certifies.",
+    ];
+  }
+  const contract: string[] = [];
+  if (check?.command) contract.push(`- this command must exit 0 (run in your worktree): ${check.command}`);
+  if (check?.artifact) contract.push(`- this artifact must exist (worktree-relative): ${check.artifact}`);
+  if (contract.length > 0) {
+    return [
+      head,
+      "After your session ends, completion is certified by this deterministic check:",
+      ...contract,
+      "Make it pass before calling complete_task — otherwise the step parks at needs_human.",
+    ];
+  }
+  return [
+    head,
+    "This step declares NO machine check contract — after your session ends, completion requires",
+    "HUMAN certification (the step parks at needs_human until an operator certifies it).",
+  ];
+}
+
+/** The spawn prompt = step text + inlined envelope + the escalate-and-stop contract (design §6)
+ *  + the completion-certification contract (P2c). */
+function buildPrompt(stepText: string, envelope: AutonomyEnvelope, check?: PlanStepCheck): string {
   return [
     `# Conductor-dispatched step ${envelope.stepIndex} (task ${envelope.taskId})`,
     "",
@@ -67,6 +103,8 @@ function buildPrompt(stepText: string, envelope: AutonomyEnvelope): string {
     `tool call complete_task('${envelope.taskId}'). This is a verdict-free hint to the conductor's`,
     "completion evaluator; it does NOT certify completion by itself. If you are blocked or uncertain,",
     "call escalate(...) and stop instead.",
+    "",
+    ...completionCertificationLines(check),
   ].join("\n");
 }
 
@@ -283,7 +321,7 @@ export async function redispatchExecutorAttempt(
     allowedType2Actions: deps.envelopeDefaults?.allowedType2Actions,
   });
   const hash = envelopeHash(envelope);
-  const prompt = buildPrompt(step.text, envelope);
+  const prompt = buildPrompt(step.text, envelope, step.check);
   await deps.adapter.writeEnvelopeFile(wt.path, envelope, prompt);
   const session = await deps.adapter.spawnSession({
     worktreePath: wt.path,
@@ -486,7 +524,7 @@ export async function resumeChosenEscalation(
       (resolved.question ? `${resolved.question}\n\n` : "") +
       `**Chosen:** ${resolved.chosenLabel}\n` +
       `The fork above is RESOLVED — proceed accordingly and do NOT re-escalate the same question.`;
-    const prompt = buildPrompt(stepTextWithDecision, envelope);
+    const prompt = buildPrompt(stepTextWithDecision, envelope, step.check);
     await deps.adapter.writeEnvelopeFile(wt.path, envelope, prompt);
     const session = await deps.adapter.spawnSession({
       worktreePath: wt.path,
@@ -657,7 +695,7 @@ export async function conductPlan(
     allowedType2Actions: deps.envelopeDefaults?.allowedType2Actions,
   });
   const hash = envelopeHash(envelope);
-  const prompt = buildPrompt(step.text, envelope);
+  const prompt = buildPrompt(step.text, envelope, step.check);
   await deps.adapter.writeEnvelopeFile(wt.path, envelope, prompt);
 
   // 2) step_bound — binds step index ↔ task (verdict-free). Body = canonical JSON.
