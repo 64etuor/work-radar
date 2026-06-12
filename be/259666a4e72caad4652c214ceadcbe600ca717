@@ -1,0 +1,49 @@
+governance/src/escalate/escalate.ts
+  s_8ff0561b82c961::t_199658b79be86b 23
+governance/src/backends/config.ts
+  s_8ff0561b82c961::t_199658b79be86b 18,37
+governance/src/conductor/envelope.ts
+  s_8ff0561b82c961::t_199658b79be86b 56
+governance/src/graph/checksum.ts
+  s_8ff0561b82c961::t_199658b79be86b 5
+governance/src/archive/pruner.ts
+  s_8ff0561b82c961::t_199658b79be86b 12
+governance/src/backends/resolve.ts
+  s_8ff0561b82c961::t_199658b79be86b 52
+governance/src/conductor/completion.ts
+  s_8ff0561b82c961::t_199658b79be86b 30
+governance/src/repo/configIo.ts
+  s_125e7320476d49::t_870d97b0a1a2df 20,27
+governance/src/backends/budget.ts
+  s_8ff0561b82c961::t_199658b79be86b 47
+governance/src/mcp/config.ts
+  s_8ff0561b82c961::t_199658b79be86b 168,175
+governance/src/mcp/response.ts
+  s_8ff0561b82c961::t_199658b79be86b 9,30
+governance/src/conductor/adapter.ts
+  s_8ff0561b82c961::t_199658b79be86b 119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "be259666a4e72caad4652c214ceadcbe600ca717",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_8ff0561b82c961": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ebab4-1700-7b51-b572-78dcf7466afc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
