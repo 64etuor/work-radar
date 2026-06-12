@@ -687,9 +687,9 @@ const USAGE = `boule <command> --repo <path>
   run    --repo <p>   # exec the per-repo governance MCP server (stdio)
   tick   --repo <p> [--max-steps n] [--json]   # ONE bounded auto-dispatch heartbeat (cron-driven)
   housekeep --repo <p> [--json]   # ONE bounded observation pass: harvest→detect→test→meta→prune (cron-driven)
-  schedule install   --repo <abs> [--interval-sec n>=60 (default 300)] [--max-steps n]   # launchd LaunchAgent (user-invoked·reversible·audited)
-  schedule uninstall --repo <abs>   # bootout + remove plist (idempotent)
-  schedule status    --repo <abs>   # plist/loaded/interval/log path`;
+  schedule install   --repo <abs> [--kind tick|housekeep] [--interval-sec n (tick>=60 def 300 / housekeep>=3600 def 86400)] [--max-steps n (tick-only)]   # launchd LaunchAgent (user-invoked·reversible·audited)
+  schedule uninstall --repo <abs> [--kind tick|housekeep]   # bootout + remove plist (idempotent)
+  schedule status    --repo <abs> [--kind tick|housekeep]   # plist/loaded/interval/log path`;
 
 export async function main(argv: string[]): Promise<number> {
   const { cmd, flags } = parseArgs(argv);

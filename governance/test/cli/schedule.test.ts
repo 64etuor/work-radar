@@ -289,3 +289,80 @@ describe("cmdSchedule status", () => {
     );
   });
 });
+
+describe("P5b — --kind housekeep (separate LaunchAgent, daily default)", () => {
+  const repo = "/Users/u/proj";
+
+  it("install --kind housekeep: distinct label, housekeep argv (no --max-steps), 86400s default, own log file", async () => {
+    const f = fakeDeps();
+    const out = await cmdSchedule(["install", "--repo", repo, "--kind", "housekeep"], f.deps);
+    const label = scheduleLabel(repo, "housekeep");
+    expect(label).toMatch(/^kr\.boule\.housekeep\./);
+    const plistPath = join(HOME, "Library", "LaunchAgents", `${label}.plist`);
+    const plist = f.written[plistPath];
+    expect(plist).toBeDefined();
+    expect(plist).toContain("<string>housekeep</string>");
+    expect(plist).not.toContain("--max-steps");
+    expect(plist).toContain("<integer>86400</integer>");
+    expect(plist).toContain("launchd-housekeep.log");
+    expect(out).toContain("housekeep every 86400s");
+    expect(out).toContain("--kind housekeep");
+    expect(f.appended[join(repo, ".boule", "schedule-audit.log")]?.[0]).toContain(
+      `install ${label}`,
+    );
+  });
+
+  it("housekeep interval floor is 3600 (a whole observation pass is never sub-hourly)", async () => {
+    const f = fakeDeps();
+    await expect(
+      cmdSchedule(
+        ["install", "--repo", repo, "--kind", "housekeep", "--interval-sec", "1800"],
+        f.deps,
+      ),
+    ).rejects.toThrow(/>= 3600 for housekeep/);
+  });
+
+  it("--max-steps with housekeep is rejected loudly (tick-only flag)", async () => {
+    const f = fakeDeps();
+    await expect(
+      cmdSchedule(["install", "--repo", repo, "--kind", "housekeep", "--max-steps", "3"], f.deps),
+    ).rejects.toThrow(/tick-only/);
+  });
+
+  it("tick and housekeep agents coexist; uninstall --kind housekeep removes ONLY the housekeep plist", async () => {
+    const f = fakeDeps();
+    await cmdSchedule(["install", "--repo", repo], f.deps);
+    await cmdSchedule(["install", "--repo", repo, "--kind", "housekeep"], f.deps);
+    const tickPlist = join(HOME, "Library", "LaunchAgents", `${scheduleLabel(repo)}.plist`);
+    const hkPlist = join(
+      HOME,
+      "Library",
+      "LaunchAgents",
+      `${scheduleLabel(repo, "housekeep")}.plist`,
+    );
+    expect(f.written[tickPlist]).toBeDefined();
+    expect(f.written[hkPlist]).toBeDefined();
+    await cmdSchedule(["uninstall", "--repo", repo, "--kind", "housekeep"], f.deps);
+    expect(f.removed).toContain(hkPlist);
+    expect(f.removed).not.toContain(tickPlist);
+  });
+
+  it("invalid --kind throws; omitted --kind stays tick (regression)", async () => {
+    const f = fakeDeps();
+    await expect(
+      cmdSchedule(["install", "--repo", repo, "--kind", "weekly"], f.deps),
+    ).rejects.toThrow(/--kind must be tick\|housekeep/);
+    const out = await cmdSchedule(["install", "--repo", repo], f.deps);
+    expect(out).toContain("tick every 300s");
+    expect(scheduleLabel(repo)).toMatch(/^kr\.boule\.tick\./);
+  });
+
+  it("status --kind housekeep reads the housekeep agent", async () => {
+    const f = fakeDeps({ execResults: [{ status: 0 }, { status: 0 }, { status: 0 }] });
+    await cmdSchedule(["install", "--repo", repo, "--kind", "housekeep"], f.deps);
+    const out = await cmdSchedule(["status", "--repo", repo, "--kind", "housekeep"], f.deps);
+    expect(out).toContain(scheduleLabel(repo, "housekeep"));
+    expect(out).toContain("interval: 86400s");
+    expect(out).toContain("launchd-housekeep.log");
+  });
+});

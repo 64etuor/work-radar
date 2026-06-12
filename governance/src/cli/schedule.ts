@@ -21,6 +21,10 @@ import { parseArgs, type ParsedArgs } from "./args.ts";
 // idempotent), and AUDITED (one line per install/uninstall in <repo>/.boule/schedule-audit.log).
 // The plist pins NO CMUX_SOCKET_PATH — the P1c resolver discovers the live socket at tick time
 // (a pinned path would rot whenever cmux restarts).
+//
+// P5b — `--kind housekeep` reuses the same plist machinery for the observation-chain pass
+// (`boule housekeep`, default daily). Deliberately a separate LaunchAgent per kind: coupling
+// housekeep to tick cadence would mean a disarmed (never-ticking) project never housekeeps.
 
 export interface ScheduleExecResult {
   status: number | null;
@@ -91,8 +95,17 @@ export function scheduleSlug(repoAbs: string): string {
   return `${base}-${hash}`;
 }
 
-export function scheduleLabel(repoAbs: string): string {
-  return `kr.boule.tick.${scheduleSlug(repoAbs)}`;
+export type ScheduleKind = "tick" | "housekeep";
+
+function parseKind(flags: ParsedArgs["flags"]): ScheduleKind {
+  const raw = flags.kind;
+  if (raw === undefined) return "tick";
+  if (raw === "tick" || raw === "housekeep") return raw;
+  throw new Error(`--kind must be tick|housekeep (got ${String(raw)})`);
+}
+
+export function scheduleLabel(repoAbs: string, kind: ScheduleKind = "tick"): string {
+  return `kr.boule.${kind}.${scheduleSlug(repoAbs)}`;
 }
 
 function plistPathFor(homeDir: string, label: string): string {
@@ -103,8 +116,8 @@ function auditPathFor(repo: string): string {
   return join(repo, ".boule", "schedule-audit.log");
 }
 
-function logPathFor(repo: string): string {
-  return join(repo, ".boule", "logs", "launchd-tick.log");
+function logPathFor(repo: string, kind: ScheduleKind = "tick"): string {
+  return join(repo, ".boule", "logs", `launchd-${kind}.log`);
 }
 
 function xmlEscape(s: string): string {
@@ -124,19 +137,25 @@ export interface TickPlistOpts {
   intervalSec: number;
   maxSteps?: number;
   logPath: string;
+  /** which boule subcommand the agent runs (default tick; P5b adds housekeep). */
+  kind?: ScheduleKind;
 }
 
-/** Pure plist rendering (snapshot-tested). PATH = the node bin dir + the system sbin/bin set —
- *  enough for node/git/launchctl-spawned children without inheriting a user shell environment. */
+/** Pure plist rendering (snapshot-tested) for BOTH schedule kinds. PATH = the node bin dir + the
+ *  system sbin/bin set — enough for node/git/launchctl-spawned children without inheriting a
+ *  user shell environment. */
 export function renderTickPlist(opts: TickPlistOpts): string {
+  const kind = opts.kind ?? "tick";
   const argv = [
     opts.nodePath,
     "--experimental-strip-types",
     opts.cliPath,
-    "tick",
+    kind,
     "--repo",
     opts.repo,
-    ...(opts.maxSteps !== undefined ? ["--max-steps", String(opts.maxSteps)] : []),
+    ...(kind === "tick" && opts.maxSteps !== undefined
+      ? ["--max-steps", String(opts.maxSteps)]
+      : []),
     "--json",
   ];
   const argvXml = argv.map((a) => `    <string>${xmlEscape(a)}</string>`).join("\n");
@@ -174,12 +193,14 @@ function reqAbsRepo(flags: ParsedArgs["flags"]): string {
   return repo;
 }
 
-function parseIntervalSec(flags: ParsedArgs["flags"]): number {
+function parseIntervalSec(flags: ParsedArgs["flags"], kind: ScheduleKind): number {
+  // housekeep is a whole observation-chain pass — daily by default, never sub-hourly.
+  const min = kind === "housekeep" ? 3600 : 60;
   const raw = flags["interval-sec"];
-  if (raw === undefined) return 300;
+  if (raw === undefined) return kind === "housekeep" ? 86_400 : 300;
   const n = Number(raw);
-  if (typeof raw !== "string" || !Number.isInteger(n) || n < 60)
-    throw new Error("--interval-sec must be an integer >= 60");
+  if (typeof raw !== "string" || !Number.isInteger(n) || n < min)
+    throw new Error(`--interval-sec must be an integer >= ${min} for ${kind}`);
   return n;
 }
 
@@ -198,11 +219,14 @@ async function appendAudit(deps: ScheduleDeps, repo: string, line: string): Prom
 
 async function installSchedule(flags: ParsedArgs["flags"], deps: ScheduleDeps): Promise<string> {
   const repo = reqAbsRepo(flags);
-  const intervalSec = parseIntervalSec(flags);
+  const kind = parseKind(flags);
+  const intervalSec = parseIntervalSec(flags, kind);
   const maxSteps = parseMaxSteps(flags);
-  const label = scheduleLabel(repo);
+  if (kind === "housekeep" && maxSteps !== undefined)
+    throw new Error("--max-steps is tick-only (housekeep has no step budget)");
+  const label = scheduleLabel(repo, kind);
   const plistPath = plistPathFor(deps.homeDir, label);
-  const logPath = logPathFor(repo);
+  const logPath = logPathFor(repo, kind);
 
   await deps.fs.mkdir(dirname(logPath));
   await deps.fs.mkdir(dirname(plistPath));
@@ -216,6 +240,7 @@ async function installSchedule(flags: ParsedArgs["flags"], deps: ScheduleDeps): 
       intervalSec,
       ...(maxSteps !== undefined ? { maxSteps } : {}),
       logPath,
+      kind,
     }),
   );
 
@@ -230,18 +255,19 @@ async function installSchedule(flags: ParsedArgs["flags"], deps: ScheduleDeps): 
   }
   await appendAudit(deps, repo, `install ${label} interval=${intervalSec}`);
   return [
-    `installed ${label} (tick every ${intervalSec}s${maxSteps !== undefined ? `, max-steps ${maxSteps}` : ""})`,
+    `installed ${label} (${kind} every ${intervalSec}s${maxSteps !== undefined ? `, max-steps ${maxSteps}` : ""})`,
     `  plist: ${plistPath}`,
     `  logs:  ${logPath}`,
     `  audit: ${auditPathFor(repo)}`,
-    `  uninstall: boule schedule uninstall --repo ${repo}`,
+    `  uninstall: boule schedule uninstall --repo ${repo}${kind === "tick" ? "" : ` --kind ${kind}`}`,
     `  note: the agent pins this node binary (${deps.nodePath}) — re-run install after a node upgrade`,
   ].join("\n");
 }
 
 async function uninstallSchedule(flags: ParsedArgs["flags"], deps: ScheduleDeps): Promise<string> {
   const repo = reqAbsRepo(flags);
-  const label = scheduleLabel(repo);
+  const kind = parseKind(flags);
+  const label = scheduleLabel(repo, kind);
   const plistPath = plistPathFor(deps.homeDir, label);
   const out = deps.exec("launchctl", ["bootout", `gui/${deps.uid}/${label}`]);
   await deps.fs.rm(plistPath); // force — already-missing is ok (idempotent)
@@ -251,7 +277,8 @@ async function uninstallSchedule(flags: ParsedArgs["flags"], deps: ScheduleDeps)
 
 async function statusSchedule(flags: ParsedArgs["flags"], deps: ScheduleDeps): Promise<string> {
   const repo = reqAbsRepo(flags);
-  const label = scheduleLabel(repo);
+  const kind = parseKind(flags);
+  const label = scheduleLabel(repo, kind);
   const plistPath = plistPathFor(deps.homeDir, label);
   const exists = await deps.fs.pathExists(plistPath);
   const loaded = deps.exec("launchctl", ["print", `gui/${deps.uid}/${label}`]).status === 0;
@@ -267,7 +294,7 @@ async function statusSchedule(flags: ParsedArgs["flags"], deps: ScheduleDeps): P
     `plist: ${exists ? "installed" : "not installed"} (${plistPath})`,
     `loaded: ${loaded ? "yes" : "no"}`,
     `interval: ${exists ? interval : "n/a"}`,
-    `logs: ${logPathFor(repo)}`,
+    `logs: ${logPathFor(repo, kind)}`,
   ].join("\n");
 }
 
