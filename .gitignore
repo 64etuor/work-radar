@@ -14,6 +14,8 @@ src-tauri/gen/schemas
 
 # OMC / Ralph session state
 .omc
+# oh-my-codex session state (이전엔 .git/info/exclude에만 있어 비일관)
+.omx/
 
 # Boule v3 Conductor live-mode per-step worktrees (gitignored; never the user tree)
 .boule-worktrees/

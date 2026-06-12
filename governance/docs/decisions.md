@@ -3,12 +3,14 @@
 Boule 거버넌스 하네스의 Phase 트레이드오프·운영 breadcrumb (append-only).
 구조적 결정은 `adr/`(거버넌스 ADR), 작은 Phase 노트는 여기.
 
-**Cutover (2026-06-07):** 이 로그는 이 시점부터 **앞으로의 거버넌스 breadcrumb만** 담는다.
-이전 거버넌스 항목은 repo-root `docs/decisions.md`에 앱 항목과 시간순으로 섞여 그대로 남는다
-(연대기·`DL-NNN` id 안정성 보존 위해 과거 발굴/이동 안 함; `conventions.md` §2). 인덱스 빌드는
-두 로그를 **둘 다** 읽으며, 이 로그의 행은 `GDL-NNN`으로 부여돼 repo 로그 `DL-NNN`과 충돌하지 않는다.
-
-규칙: 새 **거버넌스(Boule)** breadcrumb → 여기. 새 **앱(work-radar)** breadcrumb → `docs/decisions.md`.
+**FROZEN (2026-06-12):** 이 로그는 **GDL-004에서 동결**됐다 — 더 이상 추가하지 않는다.
+2026-06-07 cutover("새 거버넌스 breadcrumb → 여기")는 5일 실증에서 지켜지지 않았다
+(GDL 4건 vs 같은 기간 거버넌스 breadcrumb 다수가 `docs/decisions.md`(DL) 착지) →
+**단일 로그로 회귀: 새 breadcrumb은 거버넌스 포함 전부 repo-root `docs/decisions.md`(DL)**.
+기존 GDL-001..004는 불변(append-only 보존), 인덱스는 두 로그를 계속 읽는다
+(`src/index/sources.ts` additive — 코드 무변경, id 안정). in-flight 세션이 모르고 GDL 행을
+추가하면 이 동결 노트 아래로 흡수하고 다음부터 DL로. 근거: `conventions.md` §2 +
+`docs/plans/2026-06-12-boule-omc-alignment-operability-master-plan.md` §3.2-M3.
 
 ---
 

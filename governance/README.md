@@ -1,17 +1,19 @@
-# Boule — SSOT Governance Harness (P1 skeleton)
+# Boule — SSOT Governance Harness
 
-work-radar 레포 안의 self-contained 사이드카(Tauri/Vite 빌드 그래프 밖). markdown이
-SSOT(`workspace/`), 인덱스(Postgres)는 P3에서 도입. P1은 순수 markdown + Node 서비스.
+work-radar 레포 안의 self-contained 사이드카(Tauri/Vite 빌드 그래프 밖). markdown 이벤트가
+SSOT, 인덱스는 PGlite(v3 Phase F; pgvector deferred). **라이브 런타임 스토어는 per-repo
+`<repo>/.boule/workspace`**(ADR-0009 per-repo 전환) — 이 디렉터리의 `workspace/`가 아니다.
 
-설계/계획 전체 인덱스: **`docs/INDEX.md`** (단일 진입점). 최신 마스터 설계 =
-`docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md` (v3 Orchestrator
-Control Plane). 운영 규율 = `workspace/HARNESS.md`.
+설계/계획 전체 인덱스: **`docs/INDEX.md`** (단일 진입점). 진행 상태·실행 큐 = `docs/STATUS.md`.
+최신 마스터 설계 = `docs/design/2026-06-02-boule-v3-orchestrator-control-plane-design.md`
+(v3 Orchestrator Control Plane). 운영 규율 = `workspace/HARNESS.md`.
 
 ## 구조
 
-- `docs/` — 이 하네스의 설계/계획 문서 (`design/` spec · `plans/` plan · `INDEX.md` 카탈로그)
-- `workspace/` — git-tracked SSOT. 인식론 L0–L4(events/patterns/hypotheses) + 실행 평면
-  (specs/plans/tasks/sessions/handoffs/orchestrator) + reviews/state/agents/interfaces. 규율=`workspace/HARNESS.md`
+- `docs/` — 이 하네스의 설계/계획 문서 (`design/` spec · `plans/` plan · `INDEX.md` 카탈로그 · `STATUS.md` 진행 ledger)
+- `workspace/` — **LEGACY (2026-06-02 동결)**: 초기 글로벌 SSOT였으나 per-repo `.boule/workspace`로
+  이전됨. 동결 이벤트 아카이브 + durable 문서(`HARNESS.md`·`agents/`·`interfaces/`)만 거주
+  (문서는 `docs/harness/`로 이동 예정 — `docs/STATUS.md` P5a). 새 이벤트를 여기 쓰지 않는다.
 - `src/event/` — SSOT 직렬화 (id, frontmatter, append-only write)
 - `src/gateway/` — 레포 활동 → 정규화 L0 event
 - `src/mcp/` — Governance MCP 인터페이스 (handlers + stdio server)
@@ -74,7 +76,7 @@ mcp_servers:
       - --experimental-strip-types
       - <repo>/governance/src/mcp/server.ts
     env:
-      BOULE_WORKSPACE: <repo>/governance/workspace
+      BOULE_WORKSPACE: <repo>/.boule/workspace # 라이브 per-repo 스토어 (구 governance/workspace 아님)
     tools:
       include: [create_task, status, observations]
 ```

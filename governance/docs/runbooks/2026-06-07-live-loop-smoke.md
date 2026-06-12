@@ -23,7 +23,8 @@ Each designated local repo gets a `.boule/` sidecar (spec `governance/docs/desig
 ```bash
 # scaffold (kind from work-radar; the app passes --kind per designated local repo)
 node --experimental-strip-types governance/src/cli/boule.ts init --repo <repo> --kind <personal|work>
-#   → <repo>/.boule/{boule.config.json (committed), workspace/, worktrees/, mcp.json} + .gitignore patch
+#   → <repo>/.boule/{boule.config.json, workspace/, worktrees/, mcp.json} — 전체 machine-local
+#     (.gitignore가 .boule/ 통째로 ignore — 커밋 대상 아님)
 
 # inspect resolved policy (read-only)
 node ... governance/src/cli/boule.ts status --repo <repo>
@@ -39,6 +40,29 @@ node ... governance/src/cli/boule.ts run --repo <repo>
 
 Policy fail-closes to **work/strict** if `boule.config.json` is missing/corrupt (never silently loose). Re-read on each launch ⇒ a settings change applies on next server start.
 
+## 0.7 오늘 손으로 켜는 법 — 재무장 의식 8단계 (disarmed 기본 상태 → 도는 루프)
+
+> 시스템은 기본 **disarmed**로 출고된다(`tick_enabled=0`·`live_enabled=0`·attention 래치).
+> 아래 8단계가 2026-06-12 기준 정확한 수동 재무장 절차다(자동화/UI 개선은
+> `governance/docs/plans/2026-06-12-boule-omc-alignment-operability-master-plan.md` P1–P3).
+
+1. **cmux 가능한 env에서 앱 실행** — `CMUX_SOCKET_PATH`가 앱 env에 상속돼야 한다(cmux pane 안에서
+   `pnpm tauri dev`). 앱은 루프가 도는 동안 열어 둔다(스케줄러는 in-app — 앱 종료=루프 정지).
+2. **`.boule` init 확인** — 대상 repo에 `.boule/`가 없으면 §0.5의 `boule init`.
+3. **Control Room에서 ARM** — 프로젝트 행: **LIVE 토글 on**(`live_enabled` — off면 stub adapter) +
+   **tick enabled on** + interval(≥30s)/max_steps 설정.
+4. **attention 래치 해제** — `attention_required=1`이면 due-scan이 영구 제외한다. pending
+   `needs_human`을 해소한 뒤 **Tick now**가 비-attention 결과로 끝나야 래치가 리셋된다(전용
+   해제 버튼은 P1에서).
+5. **plan 투입** — MCP 세션(`claude --mcp-config <repo>/.boule/mcp.json` 또는 `boule run --repo`)에서
+   `propose_spec` → `propose_plan`. **모든 step에 `check.command` 또는 `check.artifact`** — check 없는
+   step은 자동 완료 인증이 불가능해 `needs_human`에 박힌다(evaluator rung 배선은 P2).
+6. **수락** — `autonomyLevel=full`이면 다음 tick이 auto-accept; 아니면 `accept_spec`/`accept_plan` 수동.
+7. **babysit** — `halted_decision` ⇒ MCP `choose`로 해소(Telegram 자동 도달은 P3 전까지 수동
+   `bridge/boule_sync_telegram.py sync-once`); `needs_human` ⇒ 원인 수정 후 Tick now; `stalled` ⇒ 재dispatch.
+8. **수확** — plan 완주 후 `boule/<planId>` 브랜치를 사람이 검토·머지한다(자동 merge-back 없음 —
+   의도된 게이트. 표면화는 P4).
+
 ## 1. L0 — Preflight (read-only, safe anywhere)
 
 Confirms the live loop can physically run here. `ready=true` requires: `CMUX_SOCKET_PATH` set,
@@ -46,8 +70,8 @@ Confirms the live loop can physically run here. `ready=true` requires: `CMUX_SOC
 before they are armed).
 
 ```bash
-# via the MCP tool (preferred — exercises the real wiring):
-node governance/path/to/one-shot-mcp-client.mjs preflight   # see §5 for a minimal client
+# via the MCP tool (preferred — exercises the real wiring; run FROM governance/ so node_modules resolves):
+node bridge/boule-mcp.mjs preflight   # one-shot MCP client (or the inline minimal client below)
 # expected: "preflight ready=true" with the 3 required checks ✓
 ```
 

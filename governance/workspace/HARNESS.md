@@ -1,6 +1,11 @@
 # Boule — Harness 운영 지침 (durable)
 
-이 문서는 이 workspace 안에서 행동하는 **모든 에이전트/세션**(Gateway, Guardian, Reviewer,
+> **위치 주의 (2026-06-12):** 이 문서가 사는 `governance/workspace/`는 **2026-06-02 동결된
+> 레거시 워크스페이스**다(라이브 = per-repo `<repo>/.boule/workspace`, ADR-0009). 이 문서
+> 자체는 durable 규칙으로 **현역**이며 모든 workspace(per-repo 포함)에 적용된다 —
+> `governance/docs/harness/`로 이동 예정(`../docs/STATUS.md` P5a).
+
+이 문서는 boule workspace 안에서 행동하는 **모든 에이전트/세션**(Gateway, Guardian, Reviewer,
 Pattern Detector, Planner, Conductor, Orchestrator, …)이 따르는 **레포 전역 durable 규칙**이다.
 아키텍처 정본은 설계 docs(§아래 인덱스), 7 INVARIANT 정본은 `docs/areas/decision-rails.md`.
 이 파일은 그 규율을 workspace 행동 규칙으로 압축한다 — 규칙을 중복하지 않고 가리킨다.

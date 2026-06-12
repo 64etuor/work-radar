@@ -139,6 +139,7 @@ Area 문서:
 
 전역 참조:
 
+- `governance/docs/INDEX.md` — **Boule 거버넌스 하네스 프런트도어**(라우팅; 현재 큐=`governance/docs/STATUS.md`)
 - `docs/reference/commands.md` — 명령 인덱스
 - `docs/architecture.md` — 시스템 구조
 - `DESIGN.md` — 시각 디자인 정본

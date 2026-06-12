@@ -1,6 +1,12 @@
-# Boule SSOT Workspace
+# Boule SSOT Workspace — ⚠️ LEGACY (2026-06-02 동결)
 
-markdown이 단일 진실의 원천(SSOT). 인덱스(Postgres, Phase F+)는 파생물이며 이 디렉토리에서
+> **이 워크스페이스는 런타임으로서 은퇴했다.** 라이브 per-repo 스토어 =
+> `<repo>/.boule/workspace`(ADR-0009; work-radar 자신도 `.boule/workspace` 사용).
+> 여기 남은 것: 2026-06-02까지의 동결 이벤트 아카이브 + durable 문서
+> (`HARNESS.md`·`agents/`·`interfaces/` — `docs/harness/`로 이동 예정, `../docs/STATUS.md` P5a).
+> **새 이벤트를 여기 쓰지 않는다.** `state/` 투영은 T4b에서 은퇴·제거됨(`boule snapshot`이 대체).
+
+markdown이 단일 진실의 원천(SSOT). 인덱스(PGlite, Phase F)는 파생물이며 워크스페이스에서
 완전 재구축 가능하다(write-first rule). 운영 규율은 `HARNESS.md`.
 
 ## 인식론적 사다리 (L0–L4) — 무엇을 참이라 믿는가
@@ -26,7 +32,6 @@ markdown이 단일 진실의 원천(SSOT). 인덱스(Postgres, Phase F+)는 파�
 ## 공통
 
 - `reviews/`    External Reviewer 산출물 (런타임 출력 · gitignore)
-- `state/`      재생성 가능 캐시 view (파생)
 - `agents/`     에이전트 명세서 (SSOT의 일부 · ALLOWED_PATHS 선언)
 - `interfaces/` MCP 명령/도구 명세
 

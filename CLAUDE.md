@@ -20,6 +20,7 @@
 - `src/components/board/**` → `docs/areas/frontend-board.md` + `DESIGN.md` §App Surface
 - `src/components/ui/**` 또는 Dialog/Dropdown/Select 추가 → `docs/areas/shadcn-migration.md`
 - `src/components/{settings,*View}/**` → `docs/areas/frontend-shell.md`
+- `governance/**` 또는 `.boule/**` (Boule 하네스) → `governance/docs/INDEX.md` (프런트도어) + `governance/docs/STATUS.md` (현재 큐)
 - 병렬 에이전트 디스패치 / 자동 루프 → `docs/areas/parallel-agent-safety.md`
 - 커밋·푸시·CI / husky / cargo PATH → `docs/areas/shell-tooling.md` + `docs/areas/git-conventions.md`
 - Phase 시작 전 → `PLAN.md` (해당 Phase) + `docs/areas/decision-rails.md` (INVARIANTS)
