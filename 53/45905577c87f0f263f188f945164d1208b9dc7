@@ -1,0 +1,40 @@
+src/lib/optimisticSchedule.test.ts
+  s_851a67ed0e4868::t_b478a8f0cadbd3 2,4-5,9,11-13,15
+  s_851a67ed0e4868::t_5fa58a3b0f5648 94-97,99-114,116-163
+src/lib/query/today.ts
+  s_851a67ed0e4868::t_7c0b8041e90be0 83-98
+src/components/today/useTimelineScheduleActions.ts
+  s_851a67ed0e4868::t_ad988df00d4552 39-40
+  s_851a67ed0e4868::t_6d2ec3a566d01b 77-78
+src/components/TodayView.tsx
+  s_851a67ed0e4868::t_4dd507878afbee 40
+  s_851a67ed0e4868::t_80a763638cfe9c 121-127,131-133,139
+src/components/today/useTimelineDnd.ts
+  s_851a67ed0e4868::t_ad2be7e1e4d505 513
+  s_851a67ed0e4868::t_8848ae8138e86b 31,33-35,37
+  s_851a67ed0e4868::t_7ce1ceed1b885d 311-314,316,326
+  s_851a67ed0e4868::t_dd42a724b85c61 375-379,381
+  s_851a67ed0e4868::t_a04c99adfd047c 417
+  s_851a67ed0e4868::t_485fe0a2d26a3d 240-248
+  s_851a67ed0e4868::t_e072d103cb88db 452-456,458
+  s_851a67ed0e4868::t_5ef1c4dd3bdf74 491
+src/lib/optimisticSchedule.ts
+  s_851a67ed0e4868::t_3f6759b9ff1753 62-89
+  s_851a67ed0e4868::t_6198e8811d2f55 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5345905577c87f0f263f188f945164d1208b9dc7",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
