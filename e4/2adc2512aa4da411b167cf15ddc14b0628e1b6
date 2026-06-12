@@ -1,0 +1,31 @@
+docs/decisions.md
+  s_485685d86c251e::t_391db15a63be7c 614
+src-tauri/src/commands/agents/usage.rs
+  s_485685d86c251e::t_eeac150b65abb8 76-80,87-88,169-178,217-225
+  s_485685d86c251e::t_d4793922da714f 5-9,16,20-21,24-31,33-46,58,62,64,71-75,81-86,89-104,106,110-137,139,145-146,159-168,179-216,226-243
+src/components/control-room/AgentUsageStrip.tsx
+  s_485685d86c251e::t_061d1d0d39aaf5 101-102
+  s_485685d86c251e::t_490dbc44c1b9fd 72-73
+src-tauri/src/agent_usage.rs
+  s_485685d86c251e::t_704407b3bebd66 219-224,228-231,233,245,250-258,261,264,266-275
+  s_485685d86c251e::t_6abfbfae80b403 11-12
+  s_485685d86c251e::t_eeac150b65abb8 225-227
+src/bindings.ts
+  s_485685d86c251e::t_5fc090bf480e80 254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e42adc2512aa4da411b167cf15ddc14b0628e1b6",
+  "prompts": {},
+  "sessions": {
+    "s_485685d86c251e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1daa8fac-6fb6-4f6c-a669-97172a33f0e3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
