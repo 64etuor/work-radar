@@ -791,6 +791,11 @@ export type AgentUsage = {
 	windows: UsageWindow[],
 	/**  데이터 기준 시각 (codex=세션 이벤트 timestamp). None=알 수 없음. */
 	asOf: string | null,
+	/**
+	 *  로그인 계정 이메일 — 로컬 auth 파일에서만 읽음(네트워크 0). PII — 툴팁 표시 전용,
+	 *  로그/detail에 절대 싣지 않는다. usage 가용성과 독립(unavailable이어도 채울 수 있음).
+	 */
+	account: string | null,
 };
 
 /**  헤더 게이지 페이로드 — claude + codex 묶음. */

@@ -35,6 +35,9 @@ pub struct AgentUsage {
     pub windows: Vec<UsageWindow>,
     /// 데이터 기준 시각 (codex=세션 이벤트 timestamp). None=알 수 없음.
     pub as_of: Option<String>,
+    /// 로그인 계정 이메일 — 로컬 auth 파일에서만 읽음(네트워크 0). PII — 툴팁 표시 전용,
+    /// 로그/detail에 절대 싣지 않는다. usage 가용성과 독립(unavailable이어도 채울 수 있음).
+    pub account: Option<String>,
 }
 
 impl AgentUsage {
@@ -44,6 +47,7 @@ impl AgentUsage {
             detail: Some(detail.into()),
             windows: Vec::new(),
             as_of: None,
+            account: None,
         }
     }
 }
@@ -131,6 +135,7 @@ pub fn parse_codex_rate_limits<'a>(lines: impl Iterator<Item = &'a str>) -> Opti
             detail: None,
             windows,
             as_of: event_ts.map(str::to_owned),
+            account: None, // 계정은 커맨드 레이어가 auth 파일에서 별도 주입.
         });
     }
     None
@@ -301,8 +306,43 @@ pub fn parse_claude_usage(v: &serde_json::Value) -> AgentUsage {
         available: true,
         detail: None,
         windows,
-        as_of: None, // 호출 시점 데이터 = 캐시 레이어가 시각을 안다.
+        as_of: None,   // 호출 시점 데이터 = 캐시 레이어가 시각을 안다.
+        account: None, // 계정은 커맨드 레이어가 auth 파일에서 별도 주입.
     }
+}
+
+// ── 로그인 계정 (로컬 auth 파일 — 네트워크 0, PII는 반환값으로만) ────────────
+
+/// claude 로그인 계정 — `~/.claude.json`의 `oauthAccount.emailAddress`.
+/// 파일 부재/파싱 실패는 조용히 None (게이지 가용성과 무관한 부가 정보).
+pub fn claude_account(home: &std::path::Path) -> Option<String> {
+    let text = std::fs::read_to_string(home.join(".claude.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    v.get("oauthAccount")?
+        .get("emailAddress")?
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// codex 로그인 계정 — `~/.codex/auth.json`의 `tokens.id_token` JWT `email` 클레임.
+/// 표시 전용이라 서명 검증 없이 payload만 디코드. API-key 모드(토큰 없음)는 None.
+pub fn codex_account(home: &std::path::Path) -> Option<String> {
+    let text = std::fs::read_to_string(home.join(".codex").join("auth.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let id_token = v.get("tokens")?.get("id_token")?.as_str()?;
+    email_from_id_token(id_token)
+}
+
+/// JWT id_token → `email` 클레임 (서명 미검증 — 로컬 표시 전용). 순수 함수, 테스트 대상.
+/// 토큰 원문은 절대 로그/에러에 싣지 않는다.
+pub fn email_from_id_token(id_token: &str) -> Option<String> {
+    use base64::Engine as _;
+    let payload_b64 = id_token.split('.').nth(1)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload_b64)
+        .ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    claims.get("email")?.as_str().map(str::to_owned)
 }
 
 #[cfg(test)]
@@ -341,6 +381,19 @@ mod tests {
             u.windows[0].resets_at.as_deref(),
             Some("2026-06-10T01:00:00Z")
         );
+    }
+
+    /// id_token payload의 email 클레임만 디코드(서명 미검증 — 표시 전용). 비-JWT는 None.
+    #[test]
+    fn id_token_email_claim() {
+        use base64::Engine as _;
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(br#"{"email":"a@b.c","sub":"x"}"#);
+        let tok = format!("eyJhbGciOiJSUzI1NiJ9.{payload}.sig");
+        assert_eq!(email_from_id_token(&tok).as_deref(), Some("a@b.c"));
+        assert!(email_from_id_token("not-a-jwt").is_none());
+        let no_email = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"sub":"x"}"#);
+        assert!(email_from_id_token(&format!("h.{no_email}.s")).is_none());
     }
 
     /// rate_limits가 전혀 없으면 None (호출자가 더 과거 파일로 — bounded).

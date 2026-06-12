@@ -1,6 +1,12 @@
 import type { AgentUsage, UsageWindow } from "@/bindings";
 
-import { formatResetAt, formatResetIn, usageTone, usageWindowLabel } from "../../lib/agentUsage";
+import {
+  effectiveUsedPercent,
+  formatResetAt,
+  formatResetIn,
+  usageTone,
+  usageWindowLabel,
+} from "../../lib/agentUsage";
 import { useAgentUsageStatus } from "../../lib/query/agents";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { ClaudeIcon, OpenAiIcon } from "./agentBrandIcons";
@@ -76,6 +82,7 @@ function UsageDetail({ name, usage, nowMs }: { name: string; usage: AgentUsage; 
     return (
       <div className="cr-usage-tip">
         <div className="cr-usage-tip-title">{name}</div>
+        {usage.account && <div className="cr-usage-tip-muted">{usage.account}</div>}
         <div className="cr-usage-tip-muted">{usage.detail ?? "사용량을 읽지 못했습니다."}</div>
       </div>
     );
@@ -84,16 +91,23 @@ function UsageDetail({ name, usage, nowMs }: { name: string; usage: AgentUsage; 
   return (
     <div className="cr-usage-tip">
       <div className="cr-usage-tip-title">{name} 사용량</div>
+      {usage.account && <div className="cr-usage-tip-muted">{usage.account}</div>}
       {usage.windows.map((w) => {
-        if (w.usedPercent == null) return null;
+        const pct = effectiveUsedPercent(w.usedPercent, w.resetsAt, nowMs);
+        if (pct == null) return null;
+        const reset = w.usedPercent != null && pct === 0 && w.usedPercent !== 0;
         const resetIn = formatResetIn(w.resetsAt, nowMs);
         const resetAt = formatResetAt(w.resetsAt);
         return (
           <div key={w.id} className="cr-usage-tip-row">
             <span>{w.id === "five_hour" ? "5시간 한도" : "주간 한도"}</span>
             <span className="cr-usage-tip-val">
-              {Math.round(w.usedPercent)}%
-              {resetAt ? ` · ${resetAt} 리셋${resetIn ? ` (${resetIn} 후)` : ""}` : ""}
+              {Math.round(pct)}%
+              {reset
+                ? " · 리셋 경과 (새 활동 대기)"
+                : resetAt
+                  ? ` · ${resetAt} 리셋${resetIn ? ` (${resetIn} 후)` : ""}`
+                  : ""}
             </span>
           </div>
         );
@@ -109,9 +123,11 @@ const GAUGE_SEGMENTS = 10;
 
 function UsageGauge({ window: w, nowMs }: { window: UsageWindow; nowMs: number }) {
   // specta는 f64를 nullable로 내보낸다(NaN 비표현) — 백엔드는 항상 유한값을 주지만 방어.
-  if (w.usedPercent == null) return null;
-  const pct = Math.round(w.usedPercent);
-  const tone = usageTone(w.usedPercent);
+  // resets_at이 지난 윈도는 0%로 강제 — 롤오버 후 새 스냅샷이 없다고 옛 수치를 유지하지 않는다.
+  const effective = effectiveUsedPercent(w.usedPercent, w.resetsAt, nowMs);
+  if (effective == null) return null;
+  const pct = Math.round(effective);
+  const tone = usageTone(effective);
   const resetIn = formatResetIn(w.resetsAt, nowMs);
   // 0%만 빈 게이지 — 1~9%도 사용 중임이 보이게 최소 1칸 점등.
   const filled = pct === 0 ? 0 : Math.max(1, Math.round((pct / 100) * GAUGE_SEGMENTS));

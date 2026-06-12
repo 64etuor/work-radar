@@ -16,6 +16,24 @@ export function usageWindowLabel(id: string): string {
   return id.toUpperCase();
 }
 
+/**
+ * 윈도의 표시용 사용률. `resets_at`이 이미 지났으면 윈도가 롤오버된 것 — 소스(세션 파일/
+ * 캐시)가 새 데이터를 못 받아도 옛 수치를 사실처럼 그리지 않고 0%로 간주한다.
+ * (다음 실제 스냅샷이 오면 그 값으로 대체.) 파싱 불가 resetsAt은 수치 그대로.
+ */
+export function effectiveUsedPercent(
+  usedPercent: number | null,
+  resetsAt: string | null,
+  nowMs: number,
+): number | null {
+  if (usedPercent == null) return null;
+  if (resetsAt) {
+    const t = Date.parse(resetsAt);
+    if (!Number.isNaN(t) && t <= nowMs) return 0;
+  }
+  return usedPercent;
+}
+
 /** 리셋까지 남은 시간을 "2d 3h" / "4h 12m" / "45m"으로. 과거/파싱 불가면 null. */
 export function formatResetIn(resetsAt: string | null, nowMs: number): string | null {
   if (!resetsAt) return null;

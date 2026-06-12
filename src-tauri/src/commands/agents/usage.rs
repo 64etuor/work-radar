@@ -12,8 +12,8 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use crate::agent_usage::{
-    claude_access_token, fetch_claude_usage, read_codex_usage, AgentUsage, AgentUsageStatus,
-    ClaudeUsageFetch,
+    claude_access_token, claude_account, codex_account, fetch_claude_usage, read_codex_usage,
+    AgentUsage, AgentUsageStatus, ClaudeUsageFetch,
 };
 use crate::error::AppError;
 
@@ -74,7 +74,7 @@ pub async fn agent_usage_status() -> Result<AgentUsageStatus, AppError> {
     let now = Instant::now();
     let in_backoff = guard.claude_backoff_until.is_some_and(|until| now < until);
 
-    let claude = if in_backoff {
+    let mut claude = if in_backoff {
         // 백오프 중엔 HTTP를 아예 치지 않는다 — stale 스냅샷 또는 사유만.
         stale_or_unavailable(
             guard.claude_last_good.as_ref(),
@@ -103,8 +103,8 @@ pub async fn agent_usage_status() -> Result<AgentUsageStatus, AppError> {
             }
         }
     };
-    let codex = {
-        let scanned = load_codex(home).await;
+    let mut codex = {
+        let scanned = load_codex(home.clone()).await;
         if scanned.available {
             guard.codex_last_good = Some((now, scanned.clone()));
             scanned
@@ -117,6 +117,17 @@ pub async fn agent_usage_status() -> Result<AgentUsageStatus, AppError> {
             stale_or_unavailable(guard.codex_last_good.as_ref(), reason, now)
         }
     };
+
+    // 로그인 계정 주입 — 로컬 auth 파일만(네트워크 0), usage 가용성과 독립.
+    // PII: 반환 페이로드(툴팁)로만 흐르고 로그/detail엔 싣지 않는다.
+    let (claude_acct, codex_acct) = tokio::task::spawn_blocking(move || match home {
+        Some(h) => (claude_account(&h), codex_account(&h)),
+        None => (None, None),
+    })
+    .await
+    .unwrap_or((None, None));
+    claude.account = claude_acct;
+    codex.account = codex_acct;
 
     let status = AgentUsageStatus { claude, codex };
     guard.status = Some((Instant::now(), status.clone()));
@@ -220,6 +231,7 @@ mod tests {
             detail: None,
             windows: Vec::new(),
             as_of: Some("2026-06-12T00:00:00Z".into()),
+            account: None,
         }
     }
 
