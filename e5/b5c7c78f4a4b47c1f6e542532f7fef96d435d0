@@ -1,0 +1,35 @@
+src-tauri/src/commands/calendar_sync.rs
+  s_851a67ed0e4868::t_f5b85f63cce6ab 22
+  s_851a67ed0e4868::t_63b755d5cc90ec 898
+  s_851a67ed0e4868::t_7eabaf42639e3f 237-243,261-263,265-272,274-275,279,284-293,302-310,312,320-323
+  s_851a67ed0e4868::t_3372ef2033071a 1253-1428
+  s_851a67ed0e4868::t_8c64d81f7d8524 1102
+  s_851a67ed0e4868::t_db0669567dd91a 1166
+  s_851a67ed0e4868::t_1755da5674db99 809
+  s_851a67ed0e4868::t_ac78dfed0fdb8e 66-74,76-82,84-89
+  s_851a67ed0e4868::t_238a8e685a9251 963
+  s_851a67ed0e4868::t_5774b7aefee314 1053
+  s_851a67ed0e4868::t_69d42c5712302d 381-386
+  s_851a67ed0e4868::t_336da407afb0e1 354
+  s_851a67ed0e4868::t_b3b88dfa088cdc 182
+  s_851a67ed0e4868::t_b79cf2e2eaa62c 1026
+  s_851a67ed0e4868::t_9368946376af35 489-491,516-518,544
+  s_851a67ed0e4868::t_8679d8547e7106 983
+  s_851a67ed0e4868::t_50e3ab562b7093 851
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e5b5c7c78f4a4b47c1f6e542532f7fef96d435d0",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
