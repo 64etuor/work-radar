@@ -1,4 +1,4 @@
-use super::WorkSignal;
+use super::{AreaTag, WorkSignal};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 // ── Today 운영 뷰 + Work Debt (Phase 11a) ─────────────────────────────────────
@@ -89,4 +89,21 @@ pub struct WeeklyReview {
     pub pr_activity: WeeklyPrActivity,
     pub routine_adherence: WeeklyRoutineAdherence,
     pub debt_trend: Vec<DebtPoint>,
+    pub time_spent: WeeklyTimeSpent,
+}
+
+/// 주간 영역별 배치 시간 한 줄. area=NULL은 미태깅 카드 묶음.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyAreaTime {
+    pub area: Option<AreaTag>,
+    pub total_min: u32,
+}
+
+/// 주간 배치 시간 합산(signal_day_placements 기반). 배치=시간 사용으로 간주(스펙 §요구사항).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyTimeSpent {
+    pub total_min: u32,
+    pub by_area: Vec<WeeklyAreaTime>,
 }

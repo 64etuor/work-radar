@@ -447,6 +447,57 @@ mod tests {
         );
     }
 
+    /// 주간 time_spent는 [start,end] 범위 내 placement만 area별로 합산한다(area=NULL 묶음 포함).
+    #[tokio::test]
+    async fn weekly_time_spent_sums_placements_in_range_by_area() {
+        use crate::commands::placement_store::upsert_placement;
+        use crate::models::AreaTag;
+        let db = fresh_db().await;
+        // s1=health, s2=area NULL.
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, area) \
+             VALUES ('s1', 'X', 'braindump', 'thought', 'health')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) \
+             VALUES ('s2', 'Y', 'braindump', 'thought')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // in-range 2건 + out-of-range 1건(2026-06-01, 범위=[2026-06-06..2026-06-12]).
+        upsert_placement(&db, "s1", "2026-06-09", "2026-06-09T09:00:00", 60)
+            .await
+            .unwrap();
+        upsert_placement(&db, "s2", "2026-06-10", "2026-06-10T10:00:00", 30)
+            .await
+            .unwrap();
+        upsert_placement(&db, "s1", "2026-06-01", "2026-06-01T09:00:00", 999)
+            .await
+            .unwrap();
+
+        let wr = fetch_weekly_review(&db, "2026-06-12").await.unwrap();
+        assert_eq!(wr.time_spent.total_min, 90, "in-range 합산만(999 제외)");
+        assert_eq!(wr.time_spent.by_area.len(), 2, "health + NULL 묶음");
+        let health = wr
+            .time_spent
+            .by_area
+            .iter()
+            .find(|r| r.area == Some(AreaTag::Health))
+            .expect("health row");
+        assert_eq!(health.total_min, 60);
+        let untagged = wr
+            .time_spent
+            .by_area
+            .iter()
+            .find(|r| r.area.is_none())
+            .expect("NULL row");
+        assert_eq!(untagged.total_min, 30);
+    }
+
     /// 승격 시 매트릭스에서 빠지고 Today에 나타난다. quadrant 배지는 유지된다.
     #[tokio::test]
     async fn promote_today_moves_card_to_today_rail() {

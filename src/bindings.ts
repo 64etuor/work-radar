@@ -2588,6 +2588,12 @@ export type UserSkillRoot = {
 /**  요일 (weekly 루틴 스케줄 + 오늘 매칭용). */
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
+/**  주간 영역별 배치 시간 한 줄. area=NULL은 미태깅 카드 묶음. */
+export type WeeklyAreaTime = {
+	area: AreaTag | null,
+	totalMin: number,
+};
+
 /**
  *  주간 PR 활동. PR Radar는 ambient(머지 히스토리 미영속) → 근사:
  *  `attention_new`=범위 내 새 PR-attention 신호, `resolved`=done 전이된 PR 신호(머지/CI해소 근사).
@@ -2605,6 +2611,7 @@ export type WeeklyReview = {
 	prActivity: WeeklyPrActivity,
 	routineAdherence: WeeklyRoutineAdherence,
 	debtTrend: DebtPoint[],
+	timeSpent: WeeklyTimeSpent,
 };
 
 /**  주간 루틴 이행률. due=스케줄상 해당 occurrence 수, done=실제 체크 수, rate_pct=done*100/due(0..100). */
@@ -2622,6 +2629,12 @@ export type WeeklyThroughput = {
 	completed: number,
 	/**  accept된 외부 승격(Notion 등 status=created) 수. */
 	promoted: number,
+};
+
+/**  주간 배치 시간 합산(signal_day_placements 기반). 배치=시간 사용으로 간주(스펙 §요구사항). */
+export type WeeklyTimeSpent = {
+	totalMin: number,
+	byArea: WeeklyAreaTime[],
 };
 
 /**

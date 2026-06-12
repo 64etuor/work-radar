@@ -5,8 +5,8 @@ use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    DebtPoint, RoutineFreq, RoutineMonthlyPattern, WeeklyPrActivity, WeeklyReview,
-    WeeklyRoutineAdherence, WeeklyThroughput,
+    AreaTag, DebtPoint, RoutineFreq, RoutineMonthlyPattern, WeeklyAreaTime, WeeklyPrActivity,
+    WeeklyReview, WeeklyRoutineAdherence, WeeklyThroughput, WeeklyTimeSpent,
 };
 
 // ── Weekly review (Phase 11c, read 집계) ──────────────────────────────────────
@@ -113,6 +113,28 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     // due=0이면 0% (checked_div None → unwrap_or). done ⊆ due지만 안전하게 100% 캡.
     let rate_pct = (done * 100).checked_div(due).unwrap_or(0).min(100);
 
+    // 배치 시간 합산 — signal_day_placements(날짜별 배치 SSOT) 기반. 배치=시간 사용 간주.
+    let area_rows: Vec<(Option<AreaTag>, i64)> = sqlx::query_as(
+        "SELECT s.area, SUM(p.duration_min) \
+           FROM signal_day_placements p JOIN signals s ON s.id = p.signal_id \
+          WHERE p.date BETWEEN ?1 AND ?2 \
+          GROUP BY s.area ORDER BY SUM(p.duration_min) DESC",
+    )
+    .bind(&start_s)
+    .bind(&end_s)
+    .fetch_all(db)
+    .await?;
+    let time_spent = WeeklyTimeSpent {
+        total_min: area_rows.iter().map(|(_, m)| (*m).max(0) as u32).sum(),
+        by_area: area_rows
+            .into_iter()
+            .map(|(area, m)| WeeklyAreaTime {
+                area,
+                total_min: m.max(0) as u32,
+            })
+            .collect(),
+    };
+
     // debt_trend — 11a 스냅샷 누적분(7일 미만이면 있는 만큼). i64 fetch 후 u32 변환.
     let rows: Vec<(String, i64, i64, i64, i64, i64)> = sqlx::query_as(
         "SELECT date, unclassified, q1_overdue, stale_backlog, cleanup_needed, pr_attention \
@@ -152,6 +174,7 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
             rate_pct,
         },
         debt_trend,
+        time_spent,
     })
 }
 
