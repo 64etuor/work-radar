@@ -119,7 +119,9 @@ function UsageGauge({ window: w, nowMs }: { window: UsageWindow; nowMs: number }
     <div className="cr-usage-win">
       <span className="cr-usage-win-head">
         <span className="cr-usage-win-label">{usageWindowLabel(w.id)}</span>
-        <span className="cr-usage-pct">{pct}%</span>
+        <span className="cr-usage-pct" data-tone={tone}>
+          {pct}%
+        </span>
       </span>
       <span className="cr-usage-bar" data-tone={tone}>
         {Array.from({ length: GAUGE_SEGMENTS }, (_, i) => (

@@ -107,6 +107,13 @@
   font-weight: 600;
   color: var(--color-foreground);
 }
+/* 숫자도 게이지 칸과 같은 threshold 톤을 따른다 (70% warn / 90% crit). */
+.cr-usage-pct[data-tone="warn"] {
+  color: var(--cr-pressure);
+}
+.cr-usage-pct[data-tone="crit"] {
+  color: var(--cr-blocked);
+}
 /* 세그먼트 게이지 — 10칸(칸=10%), 점등 색은 threshold 톤(ok/warn/crit)을 바가 들고
  * 칸이 상속. 빈 칸 트랙 = 잉크 16% 헤어라인 (raw 값 금지 — currentcolor 믹스). */
 .cr-usage-bar {
