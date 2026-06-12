@@ -17,11 +17,13 @@ plan 문서는 착수 시점 스냅샷(`plans/README.md`)이다. 이 분리(fron
 | --- | --- | --- |
 | P0 | 문서 정합 (INDEX/STATUS/area-map/conventions/배너/런북/GDL 동결) | ✅ 2026-06-12 (이 커밋) |
 | P5a | harness 영구 문서 `governance/docs/harness/`로 이동 (HARNESS·agents·interfaces·orchestrator) | ✅ 2026-06-12 |
-| P1 | Disarmed→Armed 운용 표면 (래치 해제 UI·Go-Live 체크리스트·cmux 해석기·bin alias) | 큐 |
-| P2 | 완료 권위 실전화 (checkless 게이트·evaluator rung 배선·check 계약 주입) | 큐 |
-| P3 | tick mutex·launchd schedule CLI·브릿지 경로 수정·escalation TTL/outbound | 큐 |
-| P4 | unmerged 산출물 표면화·usage 파싱·실패 피드백 루프 | 큐 |
-| P5b | housekeep launchd 스케줄·구 workspace 아카이브 결정 | 큐 |
+| P1 | Disarmed→Armed 운용 표면 (래치 해제 UI·Go-Live remedy·merge-대기 칩·cmux 해석기·bin alias) | ✅ 2026-06-12 (라이브 GUI 스모크=사용자) |
+| P2 | 완료 권위 실전화 (checkless 게이트·evaluator rung 배선·check 계약 주입) | ✅ 2026-06-12 (evaluator 라이브 1회 실증=운영 잔존) |
+| P3 | tick mutex·launchd schedule CLI·브릿지 경로 수정·escalation TTL/outbound | ✅ 2026-06-12 (launchd 실설치=사용자 발동) |
+| P4 | unmerged 산출물 표면화·usage 파싱·실패 피드백 루프 | ✅ 2026-06-12 (stream-json 라이브 1-shot 스모크 잔존) |
+| P5b | housekeep launchd 스케줄·구 workspace 아카이브 결정(=동결 유지) | ✅ 2026-06-12 |
+
+**큐 소진(2026-06-12)** — P0–P5 전부 랜딩. 다음 트랙은 새 plan을 이 표에 등록하고 시작한다.
 
 ## Landed tracks (최신 위, 날짜=랜딩일)
 
@@ -30,6 +32,7 @@ plan 문서는 착수 시점 스냅샷(`plans/README.md`)이다. 이 분리(fron
 
 | 날짜 | 트랙 | 정본 문서 |
 | --- | --- | --- |
+| 06-12 | **정합·운용성 P0–P5 전 페이즈 랜딩** (P2 vitest 780 → P3 828 → P5b 871 / 앱 cargo 691·FE 542; 각 슬라이스 별도 critic ACCEPT) | `plans/2026-06-12-boule-omc-alignment-operability-master-plan.md` + DL breadcrumb 2026-06-12 |
 | 06-12 | Boule×OMC 정합·운용성 마스터플랜 (critic ACCEPT) | `plans/2026-06-12-boule-omc-alignment-operability-master-plan.md` |
 | 06-11 | 관찰 체인 보강(thin 4곳) + `boule housekeep` CLI | DL breadcrumb 2026-06-11 |
 | 06-10 | step worktree chaining (plan 브랜치 위 step 누적) + 하네스 결함 수정(cmux truncation/REPL wedge 등) | `plans/2026-06-10-step-worktree-chaining.md` |
@@ -45,7 +48,9 @@ plan 문서는 착수 시점 스냅샷(`plans/README.md`)이다. 이 분리(fron
 
 ## External residuals (사용자/라이브 표면 필요 — 에이전트 단독 불가)
 
-- 라이브 GUI 스모크: Control Room 비주얼·Go-Live 플로우(P1 이후 재정의).
-- 실 폰 Telegram escalation 왕복 스모크 (P3 이후).
+- **Go-Live 라이브 스모크**: 래치된 프로젝트 → 사유 확인 → 해제 → 체크리스트 green → Tick now 성공 1회 관찰(P1 done-criteria; 런북 §0.7 의식 참조).
+- **launchd 실설치**: `boule schedule install --repo <repo>` (+ 필요 시 `--kind housekeep`) — 사용자 발동(ADR-0006).
+- **evaluator rung 라이브 1회 실증**: backends.evaluator 구성 후 task_completed 인증 + 음성 경로 관찰(P2).
+- **claude stream-json 1-shot 스모크**: `claude -p --output-format stream-json --verbose` 플래그 조합이 현 CLI에서 유효한지 1회 확인(P4 critic open question; 실패해도 fail-closed).
+- **실 폰 Telegram escalation 왕복 스모크**: inbound 경로는 `.boule/workspace`로 수정됨(2026-06-12) — sync-once → 탭 → resume 관찰(P3).
 - `feat/governance-boule-p1` PARKED 브랜치 처분 결정 (Boule v1 메인트리 ~85커밋, 미푸시).
-- 운영 결정: launchd 스케줄 실설치(P3가 CLI를 만들고, 설치는 사용자 발동).
