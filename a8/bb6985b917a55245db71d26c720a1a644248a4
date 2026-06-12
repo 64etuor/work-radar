@@ -1,0 +1,93 @@
+governance/src/orchestrator/policy.ts
+  s_125e7320476d49::t_83c58653db1284 36-39,48-52,61-64,67
+governance/src/orchestrator/tick.ts
+  s_125e7320476d49::t_83c58653db1284 109-113
+governance/src/task/handlers.ts
+  s_125e7320476d49::t_83c58653db1284 65-66,76-79,87-94
+governance/src/conductor/conductor.ts
+  s_125e7320476d49::t_83c58653db1284 140-141,239-240
+governance/src/backends/budget.ts
+  s_125e7320476d49::t_83c58653db1284 161-163,172-174
+governance/src/handoff/validate.ts
+  s_125e7320476d49::t_83c58653db1284 45,48-55
+src/lib/query/retro.ts
+  s_125e7320476d49::t_83c58653db1284 5,56,58-59,98-99
+src/lib/query/client.ts
+  s_125e7320476d49::t_83c58653db1284 127,136,140-145
+governance/src/mcp/config.ts
+  s_125e7320476d49::t_83c58653db1284 98-100,147-154
+src-tauri/src/commands/calendar_sync.rs
+  s_50fa9ee27d9fdd::t_15da4cbca67f33 135-138
+  s_50fa9ee27d9fdd::t_fe88e9b932de31 388-389,395,397
+  s_50fa9ee27d9fdd::t_1e709341910bec 710-753
+  s_50fa9ee27d9fdd::t_47df0140ffdd49 427-441
+  s_50fa9ee27d9fdd::t_db3a008a0a035b 453-467
+  s_50fa9ee27d9fdd::t_ebf5a3d06d3987 596-601,609-619
+  s_50fa9ee27d9fdd::t_7104a123fe789c 517
+  s_50fa9ee27d9fdd::t_33695db628772f 265-278
+  s_2b95ff4ba8f6d9::t_8944c909118e8b 631-637
+governance/src/handoff/handoff.ts
+  s_125e7320476d49::t_83c58653db1284 47-50,52-57
+src/lib/query/calendar.ts
+  s_125e7320476d49::t_83c58653db1284 1-7,20-25,137
+governance/src/graph/project.ts
+  s_125e7320476d49::t_83c58653db1284 57-62,120-127
+governance/src/conductor/handlers.ts
+  s_125e7320476d49::t_83c58653db1284 373-386,393,396,411-412
+.react-doctor/false-positives.md
+  s_125e7320476d49::t_83c58653db1284 81-86,112-126,146-152,190-205
+governance/src/meta/observer.ts
+  s_125e7320476d49::t_83c58653db1284 6-9
+governance/src/steward/hydrate.ts
+  s_125e7320476d49::t_83c58653db1284 44-49
+src/lib/skillEnvNav.ts
+  s_125e7320476d49::t_83c58653db1284 55-65,142-151,162-169
+governance/bridge/boule-mcp.mjs
+  s_125e7320476d49::t_83c58653db1284 42
+governance/src/session/handlers.ts
+  s_125e7320476d49::t_1b73aa51565b01 282
+  s_125e7320476d49::t_029131076a7da4 8,34
+src/lib/query/skills.ts
+  s_125e7320476d49::t_83c58653db1284 23,30-31
+src/lib/query/signals.ts
+  s_125e7320476d49::t_83c58653db1284 70,73-74,85-88
+src/lib/skillEnvNav.test.ts
+  s_125e7320476d49::t_83c58653db1284 74-78
+governance/src/steward/pressure.ts
+  s_125e7320476d49::t_83c58653db1284 57-62,75-94,96-97,104-109
+governance/src/session/session.ts
+  s_125e7320476d49::t_f207501619b8d7 35-38,137-141,143
+  s_125e7320476d49::t_83c58653db1284 136,142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a8bb6985b917a55245db71d26c720a1a644248a4",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_50fa9ee27d9fdd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a01fc03c-2746-4dac-aef8-9621d8057b39",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
