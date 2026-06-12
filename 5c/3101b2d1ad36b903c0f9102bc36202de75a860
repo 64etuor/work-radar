@@ -1,0 +1,21 @@
+src/components/control-room/ControlRoomView.css
+  s_485685d86c251e::t_1388f68928f845 110-111,113-115,117-120,122,124,127,130
+src/components/control-room/AgentUsageStrip.tsx
+  s_485685d86c251e::t_55e87ac097026e 107-109,116-117,124-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5c3101b2d1ad36b903c0f9102bc36202de75a860",
+  "prompts": {},
+  "sessions": {
+    "s_485685d86c251e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1daa8fac-6fb6-4f6c-a669-97172a33f0e3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
