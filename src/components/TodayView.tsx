@@ -38,6 +38,7 @@ import {
   useCalendarEventsForDates,
   useProjects,
   useSignalPlacements,
+  useSignalTimeTotals,
   useTimelineNotesForDates,
   useToday,
   useTodayOverview,
@@ -108,6 +109,11 @@ export function TodayView() {
   const toggleDone = useToggleTodayDone();
   const toggleRoutine = useToggleRoutineCheck();
   const { handleDeleteSchedule } = useTimelineScheduleActions();
+
+  const totalsQ = useSignalTimeTotals();
+  const totalsBySignal = new Map(
+    (totalsQ.data ?? []).map((t) => [t.signalId, { totalMin: t.totalMin, dayCount: t.dayCount }]),
+  );
 
   const projects = projectsQ.data ?? [];
   const noCalendarsConfigured =
@@ -303,6 +309,8 @@ export function TodayView() {
             allDayEvents={allDay}
             onToggleDone={(id, done) => toggleDone.mutate({ id, date, done })}
             onToggleRoutine={(routineId, done) => toggleRoutine.mutate({ routineId, date, done })}
+            totals={totalsBySignal}
+            today={today}
           />
           <div className="today-canvas-wrap" ref={wrapRef} onScroll={handleCanvasScroll}>
             {noCalendarsConfigured ? (

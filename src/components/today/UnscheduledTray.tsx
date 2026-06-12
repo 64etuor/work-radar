@@ -14,6 +14,7 @@ import { InboxColumn } from "@/components/inbox/InboxColumn";
 import { PostitCard, type PostitQuadrant } from "@/components/postit/PostitCard";
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
 import { calendarColorStyle } from "@/lib/projectCalendarColor";
+import { fmtMinutes, todayAgeDays } from "@/lib/timeTotals";
 
 type Props = {
   unscheduledTodays: WorkSignal[];
@@ -21,6 +22,10 @@ type Props = {
   allDayEvents: CalendarEvent[];
   onToggleDone: (id: string, done: boolean) => void;
   onToggleRoutine: (routineId: string, done: boolean) => void;
+  /** signalId → 누적 배치 시간(분)/일수. 없으면 배지 생략. */
+  totals?: Map<string, { totalMin: number; dayCount: number }>;
+  /** 로컬 오늘(YYYY-MM-DD) — N일째 계산. */
+  today?: string;
 };
 
 const KIND_KO: Record<Kind, string> = { personal: "개인", work: "업무" };
@@ -102,11 +107,13 @@ function SignalDraggableCard({
   done,
   onToggleDone,
   style,
+  badge,
 }: {
   signal: WorkSignal;
   done: boolean;
   onToggleDone: (id: string, done: boolean) => void;
   style?: CSSProperties;
+  badge?: string;
 }) {
   const data: DragData = { from: "tray", signalId: signal.id, title: signal.title };
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -136,7 +143,7 @@ function SignalDraggableCard({
         </>
       }
       body={signal.title}
-      footer={shortDate(signal.createdAt)}
+      footer={badge ?? shortDate(signal.createdAt)}
     />
   );
 }
@@ -197,6 +204,8 @@ export function UnscheduledTray({
   allDayEvents,
   onToggleDone,
   onToggleRoutine,
+  totals,
+  today = "",
 }: Props) {
   const [allDayOpen, setAllDayOpen] = useState(false);
   const cardCount = unscheduledTodays.length + unscheduledRoutines.length;
@@ -223,16 +232,24 @@ export function UnscheduledTray({
     >
       <InboxColumn label="Inbox" ko="미배치" count={cardCount}>
         <ul className="today-tray-deck" aria-label="미배치 카드" style={{ height: deckHeight }}>
-          {unscheduledTodays.map((s, i) => (
-            <li key={`s-${s.id}`} className="today-tray-card-item">
-              <SignalDraggableCard
-                signal={s}
-                done={Boolean(s.todayDoneAt)}
-                onToggleDone={onToggleDone}
-                style={positionStyle(positions[i])}
-              />
-            </li>
-          ))}
+          {unscheduledTodays.map((s, i) => {
+            const t = totals?.get(s.id);
+            const badge =
+              t && s.todayForDate
+                ? `누적 ${fmtMinutes(t.totalMin)} · ${todayAgeDays(s.todayForDate, today)}일째`
+                : undefined;
+            return (
+              <li key={`s-${s.id}`} className="today-tray-card-item">
+                <SignalDraggableCard
+                  signal={s}
+                  done={Boolean(s.todayDoneAt)}
+                  onToggleDone={onToggleDone}
+                  style={positionStyle(positions[i])}
+                  badge={badge}
+                />
+              </li>
+            );
+          })}
           {unscheduledRoutines.map((r, i) => (
             <li key={`r-${r.id}`} className="today-tray-card-item">
               <RoutineDraggableCard
