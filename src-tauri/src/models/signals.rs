@@ -176,6 +176,31 @@ pub struct WorkSignal {
     pub updated_at: String,
 }
 
+/// 시그널의 날짜별 타임라인 배치(1일 1블록, UNIQUE(signal_id, date)).
+/// 렌더링·누적 집계의 SSOT. signals.scheduled_at은 최신 배치 + Google 미러 커서로 별도 유지.
+#[allow(dead_code)] // IPC 배선은 Task 4에서 추가된다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct SignalDayPlacement {
+    pub id: String,
+    pub signal_id: String,
+    /// YYYY-MM-DD (로컬).
+    pub date: String,
+    /// 로컬 ISO "YYYY-MM-DDTHH:MM:SS".
+    pub start_at: String,
+    pub duration_min: i32,
+}
+
+/// 카드별 누적 배치 시간(배지용). specta i64 금지 → u32.
+#[allow(dead_code)] // IPC 배선은 Task 4에서 추가된다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SignalTimeTotal {
+    pub signal_id: String,
+    pub total_min: u32,
+    pub day_count: u32,
+}
+
 /// 신호 생성 입력. 카드는 항상 unclassified로 만들어진다.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

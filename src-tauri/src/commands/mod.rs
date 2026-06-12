@@ -28,6 +28,7 @@ pub mod nav;
 pub mod news;
 pub mod notification_store;
 pub mod notion;
+pub mod placement_store;
 pub mod pr_radar;
 pub mod projects;
 pub mod retro;
