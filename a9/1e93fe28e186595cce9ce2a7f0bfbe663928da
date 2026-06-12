@@ -1,0 +1,69 @@
+governance/test/conductor/completion.test.ts
+  s_2b95ff4ba8f6d9::t_6e9d5fcac7775f 63
+governance/src/conductor/completion.ts
+  s_2b95ff4ba8f6d9::t_c9e99044665f45 72-75
+  s_2b95ff4ba8f6d9::t_315a3bb0e37f4c 153-162,172-184
+governance/src/orchestrator/tick.ts
+  s_2b95ff4ba8f6d9::t_9bec94ecf0e739 4-8
+  s_2b95ff4ba8f6d9::t_72988c3107996f 78-81
+  s_2b95ff4ba8f6d9::t_401f213f4d48dc 147-153
+governance/src/cli/boule.ts
+  s_2b95ff4ba8f6d9::t_d988b1b5b859e7 32
+  s_2b95ff4ba8f6d9::t_8e538ec7ff32bd 446
+  s_2b95ff4ba8f6d9::t_046d2b85c1c15a 447,503
+  s_2b95ff4ba8f6d9::t_53583d23e14053 477-480,498
+governance/src/orchestrator/autoAccept.ts
+  s_2b95ff4ba8f6d9::t_98ad2ded1a3cba 1
+  s_2b95ff4ba8f6d9::t_8436ebb6c05fc8 29-34
+governance/test/orchestrator/autoAccept.test.ts
+  s_2b95ff4ba8f6d9::t_9541cd741363b9 20-21,24-29
+governance/src/plan/handlers.ts
+  s_2b95ff4ba8f6d9::t_bb92936ecc64bf 8
+  s_2b95ff4ba8f6d9::t_e9ece14fe194cf 40-41
+  s_2b95ff4ba8f6d9::t_359e3c61035c46 55,59
+  s_2b95ff4ba8f6d9::t_f2d62cb45ed159 99-115
+governance/test/plan/handlers.test.ts
+  s_2b95ff4ba8f6d9::t_4088982679a9c9 7
+governance/src/conductor/conductor.ts
+  s_2b95ff4ba8f6d9::t_ce387a57a7864f 13-18
+  s_2b95ff4ba8f6d9::t_0e5e56d92657cd 98,102
+  s_2b95ff4ba8f6d9::t_c100dd7d5045dc 121-145
+governance/test/conductor/stepPromptCheck.test.ts
+  s_2b95ff4ba8f6d9::t_c2059fcc741340 1-70
+governance/test/conductor/evaluateLive.test.ts
+  s_2b95ff4ba8f6d9::t_a6f7e7b004653a 1-270
+governance/src/conductor/evaluateLive.ts
+  s_2b95ff4ba8f6d9::t_1a1625d1214163 1-252,260-267,269-285
+  s_2b95ff4ba8f6d9::t_168ed996aa6326 253-259
+  s_2b95ff4ba8f6d9::t_0eac2140b07f20 268
+governance/src/conductor/handlers.ts
+  s_2b95ff4ba8f6d9::t_79e68e76be7843 6-11
+  s_2b95ff4ba8f6d9::t_fde8d1a5632fcf 53-60,63-83,106-107
+  s_2b95ff4ba8f6d9::t_3456ad4c829999 61-62
+  s_2b95ff4ba8f6d9::t_805bd5ce89ff29 698
+governance/test/conductor/conductor.test.ts
+  s_2b95ff4ba8f6d9::t_03a9ba57f9b452 5-10
+governance/src/mcp/tools/plans.ts
+  s_2b95ff4ba8f6d9::t_f4f7cc0d9e0530 11,13
+  s_2b95ff4ba8f6d9::t_8e522315904e49 38-44
+  s_2b95ff4ba8f6d9::t_da777cbaab194a 65-70
+governance/test/orchestrator/tick.test.ts
+  s_2b95ff4ba8f6d9::t_d82835c0a4e821 9-10,12,15-16
+  s_2b95ff4ba8f6d9::t_5137fbb339a2d1 144,146-152,159-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a91e93fe28e186595cce9ce2a7f0bfbe663928da",
+  "prompts": {},
+  "sessions": {
+    "s_2b95ff4ba8f6d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b12226e-abd8-49ae-80c6-eff09bcdac37",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
