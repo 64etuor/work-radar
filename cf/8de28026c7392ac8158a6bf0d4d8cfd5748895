@@ -1,0 +1,27 @@
+src/lib/timeTotals.test.ts
+  s_851a67ed0e4868::t_635e20a8405b57 30-32
+  s_851a67ed0e4868::t_b0d98cb1456768 18-20
+src/lib/timeTotals.ts
+  s_851a67ed0e4868::t_3fa2fcb4bd02cc 1,3-6,15
+src/components/today/UnscheduledTray.tsx
+  s_851a67ed0e4868::t_67098845a7cbfe 208
+  s_851a67ed0e4868::t_c38b69e2e05170 238
+src/components/WeeklyView.css
+  s_851a67ed0e4868::t_46ba3b438d0769 262-263,266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "cf8de28026c7392ac8158a6bf0d4d8cfd5748895",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
