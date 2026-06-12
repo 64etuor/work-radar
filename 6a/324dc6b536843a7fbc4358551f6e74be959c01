@@ -1,0 +1,33 @@
+governance/src/hypotheses/tester.ts
+  s_125e7320476d49::t_d40b6343fee4a1 141-150,157-162,166-195,197-218
+governance/src/mcp/handlers.ts
+  s_125e7320476d49::t_d40b6343fee4a1 35-38,40-53
+.react-doctor/false-positives.md
+  s_125e7320476d49::t_d40b6343fee4a1 90-95,101-103,167-171,178-181
+governance/src/decision/readEvents.ts
+  s_125e7320476d49::t_d40b6343fee4a1 9-12,14-36
+governance/src/index/build.ts
+  s_125e7320476d49::t_d40b6343fee4a1 61-68
+src/components/settings/AgentsPane.tsx
+  s_125e7320476d49::t_d40b6343fee4a1 2,28-80,248-249,282,288-292,298,308,317,329-331,345-349
+src/lib/query/projects.ts
+  s_125e7320476d49::t_d40b6343fee4a1 1,15-23,57-58,117,139-142,152-155
+src/components/board/useSignalPop.ts
+  s_125e7320476d49::t_d40b6343fee4a1 7,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "6a324dc6b536843a7fbc4358551f6e74be959c01",
+  "prompts": {},
+  "sessions": {
+    "s_125e7320476d49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb9e1-6711-75c0-a648-089640d14423",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
