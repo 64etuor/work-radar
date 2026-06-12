@@ -71,6 +71,14 @@ UI 드래그 → useTimelineDnd.onDragEnd
         → 행 삭제 (성공) 또는 last_error + CalendarSyncFailed (terminal)
 ```
 
+## 시그널 배치 SSOT
+
+`signal_day_placements(signal_id, date)` 가 시그널 블록 렌더·집계의 SSOT다(1일 1블록,
+UNIQUE(signal*id, date)). 특정 날짜에 행이 없으면 해당 시그널은 그 날 트레이로
+복귀한다(carry-over). `signals.scheduled_at` 및 `signals.linked*\*`컬럼은 최신 배치의
+Google 미러 커서로만 유지하며 렌더 기준으로 사용하지 않는다. 배치 쓰기는`stage_calendar_write`의 Signal 분기에서 placement 행을 함께 미러하고, `from_date`로
+출발 날짜를 지정한다.
+
 ## Esc / overlay-stack
 
 `EventPopover`, `CalendarPickerPopover`는 shadcn Popover(radix)다 — App 셸의
