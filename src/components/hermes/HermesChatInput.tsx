@@ -78,16 +78,22 @@ export function HermesChatInput({
 
   const onPaste = async (e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items);
-    for (const item of items) {
-      if (item.type.startsWith("image/")) {
-        e.preventDefault();
+    const imageItems = items.filter((item) => item.type.startsWith("image/"));
+    if (imageItems.length === 0) return;
+
+    e.preventDefault();
+    const savedPaths = await Promise.all(
+      imageItems.map(async (item) => {
         const blob = item.getAsFile();
-        if (!blob) continue;
+        if (!blob) return null;
         const ab = await blob.arrayBuffer();
         const ext = item.type.split("/")[1] ?? "png";
-        const path = await saveBytes(new Uint8Array(ab), ext);
-        if (path) setAttachments((a) => [...a, path]);
-      }
+        return saveBytes(new Uint8Array(ab), ext);
+      }),
+    );
+    const paths = savedPaths.filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      setAttachments((current) => [...current, ...paths]);
     }
   };
 
