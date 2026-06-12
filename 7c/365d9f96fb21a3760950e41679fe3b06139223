@@ -1,0 +1,21 @@
+docs/decisions.md
+  s_851a67ed0e4868::t_df3cb5b8dbcb04 621
+docs/areas/today-timeline.md
+  s_851a67ed0e4868::t_20fd5b69c71384 74-76,79-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7c365d9f96fb21a3760950e41679fe3b06139223",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
