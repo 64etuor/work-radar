@@ -137,8 +137,9 @@ pub(crate) async fn stage_calendar_write_inner(
     // 가상 루틴 블록 드래그가 로컬에서도 안 움직인다(원위치 잔류).
     let queue_row = build_queue_row(&req, pool, target_kind, &target_id).await?;
 
-    // build_queue_row 성공 뒤에만 로컬 mirror를 바꾼다. linked event가 없는 unschedule/resize가
-    // 실패했는데 카드만 미배치로 돌아가는 상태 분리를 막기 위한 순서 보장이다.
+    // build_queue_row가 Err 없이 끝난 뒤에만 로컬 mirror를 바꾼다(Some=큐 행 예정,
+    // None=로컬-only 둘 다 성공). linked event가 없는 unschedule/resize가 거부됐는데
+    // 카드만 미배치로 돌아가는 상태 분리를 막기 위한 순서 보장이다.
     if let WriteTarget::RoutineCheck { routine_id, date } = &req.target {
         // Schedule/Reschedule이면 time_override를 즉시 로컬에 반영 — Google mirror는 큐 워커가.
         // 트레이↔캔버스 드래그 직후 UI가 다음 fetch에서 time_override를 보는 게 보장돼야 한다(spec §D10).
@@ -749,6 +750,47 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(queued, 0, "외부 미러 대상이 없으니 큐 행도 없어야 한다");
+    }
+
+    /// Resize 경로도 동일 — None-coalesce arm이 Reschedule과 별도 분기라 직접 핀.
+    #[tokio::test]
+    async fn routine_resize_without_link_mirrors_time_override_without_queue() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, active, time_of_day) \
+             VALUES ('r1','아침','daily',1,'09:00')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let req = StageWriteRequest {
+            target: WriteTarget::RoutineCheck {
+                routine_id: "r1".into(),
+                date: "2026-05-28".into(),
+            },
+            op: WriteOp::Resize {
+                at: "2026-05-28T08:45:00".into(),
+                duration_min: 45,
+            },
+            idempotency_key: "test-unlinked-routine-resize".into(),
+        };
+        stage_calendar_write_inner(&db, &notify, req).await.unwrap();
+
+        let (time_override,): (Option<String>,) = sqlx::query_as(
+            "SELECT time_override FROM routine_checks WHERE routine_id='r1' AND date='2026-05-28'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(time_override.as_deref(), Some("08:45"));
+
+        let (queued,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(queued, 0);
     }
 
     /// 회귀: 동기화된 루틴 블록(이벤트 블록으로 렌더)을 드래그하면 Google 이벤트만 patch되고
