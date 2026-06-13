@@ -166,6 +166,34 @@ export function resolveDragEndActiveData(
   return activeAtStart ?? activeAtEnd;
 }
 
+/**
+ * tray/routine 드래그가 droppable 없이(`over` undefined) 끝났을 때만 canvas 폴백을 합성할지 판단.
+ * 기본 충돌판정(rectIntersection)은 작은 트레이 카드를 빠르게/가장자리로 놓으면 캔버스 droppable을
+ * `over`로 보고하지 않을 수 있고, 그러면 onDragEnd가 무음 return → "드래그가 안 먹는" 회귀가 된다.
+ * canvas/canvas-resize 자기-드롭은 normalizeDropDataForDragEnd가 이미 폴백하므로 제외.
+ */
+export function shouldSynthesizeCanvasDropFromPointer(
+  active: DragData | undefined,
+  over: DropData | undefined,
+  isPointerDrag: boolean,
+): boolean {
+  // 키보드 드래그는 last pointer가 사용자가 가리킨 곳이 아니다(마우스 잔여 좌표) — 폴백 금지.
+  if (!isPointerDrag) return false;
+  if (over) return false;
+  if (!active) return false;
+  return active.from === "tray" || active.from === "routine";
+}
+
+/** client 좌표가 rect 경계(가장자리 포함) 안인지. 폴백을 그리드 밖 드롭으로 오발동시키지 않기 위함. */
+export function isClientPointInsideRect(
+  point: { x: number; y: number },
+  rect: { left: number; right: number; top: number; bottom: number },
+): boolean {
+  return (
+    point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
+  );
+}
+
 type Opts = {
   /** Today 레일 캐시 키(["today", date])용 선택 날짜 — 레일/트레이 스코프(기존 유지). */
   date: string;
@@ -297,7 +325,22 @@ export function useTimelineDnd(opts: Opts) {
       activeAtStart,
       ev.active.data.current as DragData | undefined,
     );
-    const o = normalizeDropDataForDragEnd(a, ev.over?.data.current as DropData | undefined);
+    let o = normalizeDropDataForDragEnd(a, ev.over?.data.current as DropData | undefined);
+    // tray/routine 드래그가 over 없이 끝났을 때: 마지막 포인터가 그리드 rect 안이면 canvas 배치로
+    // 폴백(무음 noop 방지), 밖이면 토스트로 알린다. fresh rect + 마지막 raw 포인터는 여기서만 읽힌다.
+    // 키보드 드래그(KeyboardSensor)는 포인터 좌표가 의미 없으므로 폴백 제외(기존 no-op 유지).
+    const isPointerDrag = !(ev.activatorEvent instanceof KeyboardEvent);
+    if (shouldSynthesizeCanvasDropFromPointer(a, o, isPointerDrag)) {
+      const p = pointerClientRef?.current;
+      const rect = gridElRef?.current?.getBoundingClientRect();
+      if (p && rect && isClientPointInsideRect(p, rect)) {
+        o = { to: "canvas", gridY: 0 };
+      } else {
+        useToastStore
+          .getState()
+          .pushError("timeline.drop", "타임라인 영역 안에 놓아야 배치할 수 있습니다");
+      }
+    }
     if (!a || !o) return;
 
     // ── 1: tray → canvas ─────────────────────────────────────────────

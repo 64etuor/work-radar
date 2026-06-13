@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { timelineBlockPlacementStyle } from "./timelineBlockStyle";
+import { resizeHandleHeightPx, timelineBlockPlacementStyle } from "./timelineBlockStyle";
 
 describe("timelineBlockPlacementStyle", () => {
   it("uses CSS-safe percentages for split overlap placement", () => {
@@ -46,5 +46,24 @@ describe("timelineBlockPlacementStyle", () => {
     expect(style.height).toBe("120px");
     expect(style.transition).toBe("none");
     expect(style.willChange).toBe("auto");
+  });
+});
+
+describe("resizeHandleHeightPx", () => {
+  it("shrinks the resize hitbox on short blocks to preserve a center move band (Bug 1a)", () => {
+    // 최소 블록(20px = 15분) → 3px 핸들 → 중앙 14px가 move로 잡힘.
+    expect(resizeHandleHeightPx(20)).toBe(3);
+    // 30분(30px) → 5px.
+    expect(resizeHandleHeightPx(30)).toBe(5);
+    // 36px 이상은 풀사이즈 8px.
+    expect(resizeHandleHeightPx(36)).toBe(8);
+    expect(resizeHandleHeightPx(60)).toBe(8);
+  });
+
+  it("clamps to the [3, 8] range", () => {
+    // 20px 미만(이론상)에서도 최소 3px 유지.
+    expect(resizeHandleHeightPx(10)).toBe(3);
+    // 아주 큰 블록도 8px 상한.
+    expect(resizeHandleHeightPx(600)).toBe(8);
   });
 });

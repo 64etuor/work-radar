@@ -2,7 +2,10 @@ import { useDraggable } from "@dnd-kit/core";
 import { Repeat, StickyNote } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
-import { timelineBlockPlacementStyle } from "@/components/today/timelineBlockStyle";
+import {
+  resizeHandleHeightPx,
+  timelineBlockPlacementStyle,
+} from "@/components/today/timelineBlockStyle";
 import type { DragData } from "@/components/today/useTimelineDnd";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
@@ -212,15 +215,21 @@ export function TimelineBlock({
     <div
       className="tl-block-wrap"
       data-dragging={drag.isDragging || undefined}
-      style={timelineBlockPlacementStyle({
-        topPx,
-        heightPx,
-        leftPct,
-        widthPct,
-        dragging: drag.isDragging,
-        translate: suppressDragTransform ? null : transform,
-        disableLayoutTransition,
-      })}
+      style={
+        {
+          ...timelineBlockPlacementStyle({
+            topPx,
+            heightPx,
+            leftPct,
+            widthPct,
+            dragging: drag.isDragging,
+            translate: suppressDragTransform ? null : transform,
+            disableLayoutTransition,
+          }),
+          // 높이별 리사이즈 핸들 hitbox(CSS var) — 짧은 블록 중앙 move 밴드 확보(Bug 1a).
+          "--tl-resize-h": `${resizeHandleHeightPx(heightPx)}px`,
+        } as CSSProperties
+      }
     >
       <button
         ref={setNodeRef}
