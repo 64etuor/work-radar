@@ -107,7 +107,7 @@ export function TimelineCanvas({
     anchorDate,
     days,
   });
-  const renderBoxes = renderTimelineBoxesForDrag({ boxes, previewBoxes, activeDrag });
+  const renderBoxes = renderTimelineBoxesForDrag({ previewBoxes });
   const activeGuide = dragGuideFromLayout({
     boxes,
     activeDrag,
@@ -115,7 +115,11 @@ export function TimelineCanvas({
     gridWidth,
     days,
   });
-  const suppressBlockTransform = activeDrag?.from === "canvas-resize";
+  // 캔버스 이동/리사이즈 모두 preview가 스냅된 블록 위치를 소유한다 → raw transform suppress +
+  // 레이아웃 transition off(드래그 중 active 블록 ±7.5px 오차 제거 Bug 2a, 이웃 220ms 리플로우
+  // rubber-band 제거 Bug 2b). 드롭 시 activeDrag=null로 돌아오면 transition이 살아나 settle.
+  const previewOwnsBlockLayout =
+    activeDrag?.from === "canvas" || activeDrag?.from === "canvas-resize";
 
   // dropData는 상수 — gridY는 dropData에 박지 않는다(@dnd-kit가 register 시점 스냅샷할
   // 위험 + mutable ref antipattern). 실제 Y 좌표는 부모 pointerYRef에 기록되어
@@ -200,8 +204,8 @@ export function TimelineCanvas({
               memo={memoByBlockId?.get(b.block.id)}
               onClick={onBlockClick}
               onToggleDone={onToggleDone}
-              suppressDragTransform={suppressBlockTransform}
-              disableLayoutTransition={activeDrag?.from === "canvas-resize"}
+              suppressDragTransform={previewOwnsBlockLayout}
+              disableLayoutTransition={previewOwnsBlockLayout}
             />
           ))}
         </div>

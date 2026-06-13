@@ -1,5 +1,12 @@
 import type { DragData } from "@/components/today/useTimelineDnd";
-import { plusMinutesLocal, resizeIsoByPx, shiftIsoByPx } from "@/lib/timelineCoords";
+import { absMin, localDateOf } from "@/lib/timeAxis";
+import {
+  clampDurationToDate,
+  clampIsoToDate,
+  plusMinutesLocal,
+  resizeIsoByPx,
+  shiftIsoByPx,
+} from "@/lib/timelineCoords";
 import { computeLayout, type LayoutBox, type TimedBlock } from "@/lib/timelineLayout";
 
 export type DragDelta = { x: number; y: number };
@@ -17,21 +24,19 @@ function blockIdForDrag(data: DragData): string | null {
   return data.blockId;
 }
 
+/**
+ * 캔버스 이동/리사이즈 중 렌더할 박스 = 스냅된 previewBoxes 그대로.
+ * 과거엔 active 블록만 원본 위치로 되돌려 dnd raw transform이 커서를 따라가게 했으나, 그 방식은
+ * 블록이 unsnapped raw 커서를 따라가며 스냅된 드롭 가이드/실제 착지점과 최대 ±7.5px 어긋나
+ * "고스트가 어색"했다(Bug 2a). 이제 active 블록도 스냅된 preview 위치에 렌더하고, raw transform은
+ * TimelineCanvas의 suppressDragTransform로 끈다 → 블록 == 가이드 == 착지점.
+ */
 export function renderTimelineBoxesForDrag({
-  boxes,
   previewBoxes,
-  activeDrag,
 }: {
-  boxes: LayoutBox[];
   previewBoxes: LayoutBox[];
-  activeDrag: DragData | null | undefined;
 }): LayoutBox[] {
-  if (activeDrag?.from !== "canvas") return previewBoxes;
-  const activeId = blockIdForDrag(activeDrag);
-  if (!activeId) return previewBoxes;
-  const activeOriginal = boxes.find((box) => box.id === activeId);
-  if (!activeOriginal) return previewBoxes;
-  return previewBoxes.map((box) => (box.id === activeId ? activeOriginal : box));
+  return previewBoxes;
 }
 
 export function dragGuideFromLayout({
@@ -108,9 +113,20 @@ export function previewTimelineBoxes({
     const block = box.block;
     if (block.id !== activeId) return block;
 
+    // 루틴/루틴-backed 이벤트는 occurrence 날짜 안으로 클램프 — commit(useTimelineDnd §2/§3)과
+    // 동일해야 preview가 다른 날을 보여주고 드롭 시 스냅백하지 않는다(스펙 §5, Bug 2c).
+    const occDate = localDateOf(activeDrag.startISO);
+    const routineBacked =
+      activeDrag.blockKind === "routine" ||
+      (activeDrag.blockKind === "event" && activeDrag.routineId != null);
+
     if (activeDrag.from === "canvas") {
-      const startISO = shiftIsoByPx(anchorDate, days, activeDrag.startISO, delta.y);
-      const endISO = plusMinutesLocal(startISO, activeDrag.durationMin);
+      const shifted = shiftIsoByPx(anchorDate, days, activeDrag.startISO, delta.y);
+      const startISO = routineBacked ? clampIsoToDate(shifted, occDate) : shifted;
+      const durationMin = routineBacked
+        ? clampDurationToDate(startISO, occDate, activeDrag.durationMin)
+        : activeDrag.durationMin;
+      const endISO = plusMinutesLocal(startISO, durationMin);
       changed = startISO !== block.startISO || endISO !== block.endISO;
       return { ...block, startISO, endISO };
     }
@@ -123,9 +139,16 @@ export function previewTimelineBoxes({
       edge: activeDrag.edge,
       deltaPx: delta.y,
     });
-    const endISO = plusMinutesLocal(resized.at, resized.durationMin);
-    changed = resized.at !== block.startISO || endISO !== block.endISO;
-    return { ...block, startISO: resized.at, endISO };
+    const at = routineBacked ? clampIsoToDate(resized.at, occDate) : resized.at;
+    // 시작이 클램프로 밀렸으면 끝 시각 고정을 위해 duration 보정(commit의 resize 분기와 동일).
+    let durationMin =
+      at === resized.at
+        ? resized.durationMin
+        : resized.durationMin + (absMin(resized.at, occDate) - absMin(at, occDate));
+    if (routineBacked) durationMin = clampDurationToDate(at, occDate, durationMin);
+    const endISO = plusMinutesLocal(at, durationMin);
+    changed = at !== block.startISO || endISO !== block.endISO;
+    return { ...block, startISO: at, endISO };
   });
 
   return changed ? computeLayout(blocks, anchorDate) : boxes;
