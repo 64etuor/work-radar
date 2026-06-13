@@ -1,0 +1,22 @@
+src-tauri/src/commands/calendar_sync.rs
+  s_851a67ed0e4868::t_0a274b31fcbffd 1386-1390
+  s_851a67ed0e4868::t_39689b0d7a0d8d 1342-1385,1391-1394
+src-tauri/src/commands/placement_store.rs
+  s_851a67ed0e4868::t_a23d43518b5674 169-204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ba8e21bfce2b242b5a8cadb77ba6bbaf48107e13",
+  "prompts": {},
+  "sessions": {
+    "s_851a67ed0e4868": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca532f09-ec21-4a83-a6a1-7708b43b6788",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
