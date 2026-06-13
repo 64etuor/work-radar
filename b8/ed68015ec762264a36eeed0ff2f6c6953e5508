@@ -1,0 +1,56 @@
+governance/src/observation/chain.ts
+  s_68cf86000d9035::t_674ddd9055d2fa 113-116
+governance/src/orchestrator/suggest.ts
+  s_68cf86000d9035::t_6ad5b2a52f3d92 41,60,65
+governance/src/conductor/evaluateLive.ts
+  s_68cf86000d9035::t_702f818c9da874 19-20
+src/components/CmdKnob.tsx
+  s_68cf86000d9035::t_fc292a4d085bdc 19-24,44,72,79,90,97-98,126,134
+governance/src/mcp/handlers.ts
+  s_68cf86000d9035::t_25d786604dd88e 40-44,52-55
+governance/src/index/build.ts
+  s_68cf86000d9035::t_80f7ba84d33041 56,67-79,81-82,87-94
+governance/src/harvest/harvest.ts
+  s_68cf86000d9035::t_ed8b661c634e4a 43,45
+src/lib/todayBlocks.ts
+  s_68cf86000d9035::t_702f818c9da874 104-114,199
+src/components/today/useTimelineScroll.ts
+  s_68cf86000d9035::t_6efab22b715acf 87,127,138,141
+governance/src/session/observer.ts
+  s_68cf86000d9035::t_6ad5b2a52f3d92 207,218,225
+governance/src/patterns/detect.ts
+  s_68cf86000d9035::t_ed8b661c634e4a 102,105-106
+src/components/board/useSignalPop.ts
+  s_68cf86000d9035::t_702f818c9da874 7,10-12
+src/lib/skillEnvNav.ts
+  s_68cf86000d9035::t_a3ffbc706229ad 31
+src/components/TodayView.tsx
+  s_68cf86000d9035::t_25d786604dd88e 138-141
+governance/src/hypotheses/tester.ts
+  s_68cf86000d9035::t_6ad5b2a52f3d92 104-119,122-132,134-137,139-142
+governance/src/cli/schedule.ts
+  s_68cf86000d9035::t_702f818c9da874 57
+governance/src/steward/pressure.ts
+  s_68cf86000d9035::t_25d786604dd88e 83-85
+governance/src/conductor/cmuxSocket.ts
+  s_68cf86000d9035::t_c7434ccaaedac8 92,95-105,107-109
+src/lib/controlRoomGraph.ts
+  s_68cf86000d9035::t_25d786604dd88e 161-164
+  s_68cf86000d9035::t_702f818c9da874 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b8ed68015ec762264a36eeed0ff2f6c6953e5508",
+  "prompts": {},
+  "sessions": {
+    "s_68cf86000d9035": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec0b3-3dbf-7fe2-9ece-3c6ed6bec2b1",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
