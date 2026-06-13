@@ -166,6 +166,42 @@ mod tests {
         assert_eq!(rows[0].date, "2026-06-11");
     }
 
+    /// signal 삭제 시 ON DELETE CASCADE로 그 시그널의 placement 행 전체가 삭제된다.
+    /// 다른 시그널의 placement는 영향받지 않음을 확인(FK CASCADE 범위 격리).
+    /// signal_time_totals 설계가 의존하는 고아-안전 보증을 고정한다.
+    #[tokio::test]
+    async fn deleting_signal_cascade_deletes_its_placements() {
+        let db = fresh_db().await;
+        insert_signal_row(&db, "s1").await;
+        insert_signal_row(&db, "s2").await;
+
+        // s1 — 두 날짜에 배치.
+        upsert_placement(&db, "s1", "2026-06-10", "2026-06-10T09:00:00", 30)
+            .await
+            .unwrap();
+        upsert_placement(&db, "s1", "2026-06-11", "2026-06-11T10:00:00", 45)
+            .await
+            .unwrap();
+        // s2 — 같은 범위에 1행 배치(CASCADE가 s1만 지워야 한다).
+        upsert_placement(&db, "s2", "2026-06-10", "2026-06-10T13:00:00", 60)
+            .await
+            .unwrap();
+
+        // s1 삭제 — ON DELETE CASCADE가 signal_day_placements 행도 제거해야 한다.
+        sqlx::query("DELETE FROM signals WHERE id = 's1'")
+            .execute(&db)
+            .await
+            .expect("s1 delete");
+
+        let rows = fetch_placements_in_range(&db, "2026-06-01", "2026-06-30")
+            .await
+            .unwrap();
+        // s1의 2행은 CASCADE로 삭제, s2의 1행만 남아야 한다.
+        assert_eq!(rows.len(), 1, "s1 삭제 후 s2 placement 1행만 남아야 한다");
+        assert_eq!(rows[0].signal_id, "s2", "남은 행은 s2의 것");
+        assert_eq!(rows[0].date, "2026-06-10");
+    }
+
     /// 마이그레이션 백필 SQL 의미론 검증: signals에 scheduled_at/duration이 있는 행을
     /// 정확히 매핑해 placement 행으로 만든다.
     #[tokio::test]

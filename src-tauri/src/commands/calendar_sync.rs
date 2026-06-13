@@ -1339,6 +1339,60 @@ mod tests {
         assert_eq!(rows[0].start_at, "2026-06-11T10:00:00");
     }
 
+    /// from_date=None이면 prev_date(미러 UPDATE 전 signals.scheduled_at 날짜)로 폴백해
+    /// 출발 날짜 placement 행을 삭제한다. FE가 from_date를 생략해도 고아 행이 남지 않음을
+    /// 보증하는 회귀 핀.
+    #[tokio::test]
+    async fn signal_reschedule_without_from_date_falls_back_to_scheduled_at_date() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        // 링크 있는 신호 — build_queue_row가 linked event를 요구하므로
+        // placement 미러 블록에 도달하려면 linked_event_id/linked_calendar_id 필요.
+        // (signal_reschedule_across_dates_moves_placement_row 설정과 동일, from_date만 None.)
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, \
+             scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','X','braindump','thought','2026-06-10T09:00:00',30,'ev1','cal')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // 6/10 placement 시드 — from_date=None 폴백이 이 행을 삭제해야 한다.
+        placement_store::upsert_placement(&db, "s1", "2026-06-10", "2026-06-10T09:00:00", 30)
+            .await
+            .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Reschedule {
+                    at: "2026-06-11T10:00:00".into(),
+                    duration_min: 30,
+                    from_date: None, // ← FE 생략 → prev_date("2026-06-10") 폴백
+                },
+                idempotency_key: "t3-reschedule-no-from-date".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = placement_store::fetch_placements_in_range(&db, "2026-06-10", "2026-06-11")
+            .await
+            .unwrap();
+        // prev_date 폴백이 작동하면: 6/10 행 삭제 + 6/11 행 신규 = 1행.
+        // 폴백이 없으면: 6/10 고아 + 6/11 = 2행 (회귀).
+        assert_eq!(
+            rows.len(),
+            1,
+            "from_date=None 폴백으로 6/10 삭제, 6/11만 남아야 한다"
+        );
+        assert_eq!(rows[0].date, "2026-06-11");
+        assert_eq!(rows[0].start_at, "2026-06-11T10:00:00");
+        assert_eq!(rows[0].duration_min, 30);
+    }
+
     /// 같은 날 Reschedule은 기존 날짜 히스토리를 보존하며 당일 행만 갱신한다.
     #[tokio::test]
     async fn signal_reschedule_same_date_keeps_other_days_history() {
