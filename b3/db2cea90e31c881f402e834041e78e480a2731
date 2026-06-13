@@ -1,0 +1,31 @@
+docs/decisions.md
+  s_f565cc6f0de5df::t_34ace0870baeae 622
+src/components/today/timelinePreview.ts
+  s_f565cc6f0de5df::t_e7579bbd17650a 27-33,39
+  s_f565cc6f0de5df::t_0b3b4fe043db24 116-122,124-129,142-151
+  s_f565cc6f0de5df::t_554ef5e0469167 2-9
+src/components/today/timelinePreview.test.ts
+  s_f565cc6f0de5df::t_9d8b4316990f93 144-218
+  s_f565cc6f0de5df::t_d77b86d76b0c28 219-294
+  s_f565cc6f0de5df::t_23ec139760e562 53,76,78-79,81-82
+src/components/today/TimelineCanvas.tsx
+  s_f565cc6f0de5df::t_4553ae4ad834a3 118-122
+  s_f565cc6f0de5df::t_8da9025c7e5da6 207-208
+  s_f565cc6f0de5df::t_cf23ab449a6467 110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b3db2cea90e31c881f402e834041e78e480a2731",
+  "prompts": {},
+  "sessions": {
+    "s_f565cc6f0de5df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f9b60de7-658b-4348-b3c3-684c5585d054",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
