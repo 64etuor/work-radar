@@ -110,7 +110,9 @@ export async function runMetaObserve(workspace: string): Promise<MetaObserveResu
 
 /** Stage 5: archive terminal/expired hypotheses + stale candidate patterns. */
 export async function runArchivePrune(workspace: string, now: Date): Promise<ChainArchiveSummary> {
-  const hypotheses = await runArchivePruner(workspace, now.toISOString().slice(0, 10));
-  const patterns = await runPatternPruner(workspace, now);
+  const [hypotheses, patterns] = await Promise.all([
+    runArchivePruner(workspace, now.toISOString().slice(0, 10)),
+    runPatternPruner(workspace, now),
+  ]);
   return { hypotheses, patterns };
 }

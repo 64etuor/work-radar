@@ -45,7 +45,7 @@ export type VitalKey = "inProgress" | "blocked" | "awaitingHuman";
 export const PAD_X = 24;
 export const PAD_Y = 16;
 export const LANE_W = 200;
-export const LANE_HEADER_H = 36;
+const LANE_HEADER_H = 36;
 const ROW_H = 64;
 export const NODE_W = 152;
 export const NODE_H = 46;
@@ -158,9 +158,10 @@ function compareNode(a: NodeDraft, b: NodeDraft): number {
 }
 
 export function buildSchematic(snap: ControlRoomSnapshot): Schematic {
-  const blockedTaskIds = new Set(
-    snap.orchestrator.tasks.filter((t) => t.hasOpenBlock).map((t) => t.taskId),
-  );
+  const blockedTaskIds = new Set<string>();
+  for (const task of snap.orchestrator.tasks) {
+    if (task.hasOpenBlock) blockedTaskIds.add(task.taskId);
+  }
 
   const drafts: NodeDraft[] = [];
   for (const sp of snap.specs)

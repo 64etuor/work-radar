@@ -101,6 +101,17 @@ function eventLookupKeys(e: CalendarEvent): string[] {
   );
 }
 
+function findRoutineForEvent(
+  e: CalendarEvent,
+  routineByEvent: Map<string, RoutineToday>,
+): RoutineToday | undefined {
+  for (const lookupKey of eventLookupKeys(e)) {
+    const routine = routineByEvent.get(lookupKey);
+    if (routine) return routine;
+  }
+  return undefined;
+}
+
 function isoFor(
   date: string,
   hhmm: string,
@@ -185,9 +196,7 @@ export function buildTodayBlocks({
     if (e.allDay) continue;
     const key = eventKey(e.calendarId, e.id);
     if (key && absorbed.has(key)) continue;
-    const routine = eventLookupKeys(e)
-      .map((lookupKey) => routineByEvent.get(lookupKey))
-      .find((candidate): candidate is RoutineToday => Boolean(candidate));
+    const routine = findRoutineForEvent(e, routineByEvent);
     if (routine && !routineMatchesEvent(routine, e)) {
       if (key) absorbed.add(key);
       staleRoutineIds.add(routine.id);

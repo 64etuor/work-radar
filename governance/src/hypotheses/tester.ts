@@ -101,38 +101,45 @@ export async function runHypothesisTester(deps: HypothesisTesterDeps): Promise<H
 
   const summary: HypothesisTesterSummary = { proposed: 0, verified: 0, refuted: 0, skipped: 0 };
 
-  for (const pattern of patterns) {
-    const hypothesis = hypothesisFromPattern(pattern, { expires });
-    if (existingIds.has(hypothesis.id)) {
-      summary.skipped++;
-      continue;
-    }
-    try {
-      const outcome = await deps.writeHypothesis(hypothesis);
-      if (outcome === "written") summary.proposed++;
-      else summary.skipped++;
-    } catch {
-      summary.skipped++;
-    }
+  const proposedOutcomes = await Promise.all(
+    patterns.map(async (pattern) => {
+      const hypothesis = hypothesisFromPattern(pattern, { expires });
+      if (existingIds.has(hypothesis.id)) {
+        return "skipped" as const;
+      }
+      try {
+        return await deps.writeHypothesis(hypothesis);
+      } catch {
+        return "skipped" as const;
+      }
+    }),
+  );
+  for (const outcome of proposedOutcomes) {
+    if (outcome === "written") summary.proposed++;
+    else summary.skipped++;
   }
 
-  for (const hypothesis of existing) {
-    const evaluated = evaluateHypothesis(hypothesis, events);
-    if (evaluated.status === hypothesis.status) {
-      summary.skipped++;
-      continue;
-    }
-    try {
-      const outcome = await deps.writeHypothesis(evaluated);
-      if (outcome === "skipped") {
-        summary.skipped++;
-      } else if (evaluated.status === "verified") {
-        summary.verified++;
-      } else if (evaluated.status === "refuted") {
-        summary.refuted++;
+  const evaluatedOutcomes = await Promise.all(
+    existing.map(async (hypothesis) => {
+      const evaluated = evaluateHypothesis(hypothesis, events);
+      if (evaluated.status === hypothesis.status) {
+        return { outcome: "skipped" as const, status: evaluated.status };
       }
-    } catch {
+      try {
+        const outcome = await deps.writeHypothesis(evaluated);
+        return { outcome, status: evaluated.status };
+      } catch {
+        return { outcome: "skipped" as const, status: evaluated.status };
+      }
+    }),
+  );
+  for (const { outcome, status } of evaluatedOutcomes) {
+    if (outcome === "skipped") {
       summary.skipped++;
+    } else if (status === "verified") {
+      summary.verified++;
+    } else if (status === "refuted") {
+      summary.refuted++;
     }
   }
 

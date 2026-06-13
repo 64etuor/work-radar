@@ -84,7 +84,7 @@ export function useTimelineScroll({ today, gridElRef }: UseTimelineScrollArgs) {
     el.scrollTo({ top: clamped, behavior: "smooth" });
   }, []);
 
-  const handleCanvasScroll = useCallback(() => {
+  const handleCanvasScroll = () => {
     const el = wrapRef.current;
     if (!el) return;
 
@@ -124,7 +124,7 @@ export function useTimelineScroll({ today, gridElRef }: UseTimelineScrollArgs) {
     // 캡 = 확장 중단(축출 아님) — today/date가 visibleDates에서 절대 빠지지 않아
     // now 라인 소실·레일↔캔버스 버킷 불일치가 구조적으로 불가능(timelineWindow.ts).
     setVisibleDates((prev) => extendDates(prev, nearTop ? "up" : "down", MAX_LOADED_DAYS));
-  }, [visibleDates]);
+  };
 
   // 추종 rAF 잔여분 unmount 정리.
   useEffect(
@@ -135,10 +135,10 @@ export function useTimelineScroll({ today, gridElRef }: UseTimelineScrollArgs) {
   );
 
   // 헤더 날짜 네비 — 레일 스코프 변경 + 타임라인을 그 날짜로 스크롤(범위 밖이면 로드 확장).
-  const handleDateChange = useCallback((d: string) => {
+  const handleDateChange = (d: string) => {
     setDate(d);
     setVisibleDates((prev) => includeDate(prev, d));
-  }, []);
+  };
 
   // 네비로 date가 바뀐 뒤(같은 렌더 사이클에 visibleDates 확장 반영됨) 해당 날짜로 smooth 스크롤.
   // 목적지는 모든 날짜("오늘" 포함) 08:00 상단 — 업무시간 시작이 화면에 들어오게(사용자 피드백:

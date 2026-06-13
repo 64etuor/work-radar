@@ -38,6 +38,7 @@ export async function suggest(workspaceDir: string, now: Date, rand: number): Pr
 
   const summary: SuggestSummary = { created: 0, skipped: 0 };
   let i = 0;
+  const writes: Array<Promise<unknown>> = [];
   for (const c of candidates) {
     const k = keyOf(c.ruleId, c.subjectId);
     if (existing.has(k)) {
@@ -56,10 +57,11 @@ export async function suggest(workspaceDir: string, now: Date, rand: number): Pr
       },
       body: JSON.stringify({ rule: c.ruleId, subject: c.subjectId, subjectType: c.subjectType, detail: c.detail }),
     };
-    await writeEvent(workspaceDir, evt, stamp);
+    writes.push(writeEvent(workspaceDir, evt, stamp));
     existing.add(k);
     summary.created++;
     i++;
   }
+  await Promise.all(writes);
   return summary;
 }

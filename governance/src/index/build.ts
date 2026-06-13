@@ -53,7 +53,7 @@ export async function buildIndex(
   // would hide a real authoring mistake, so a collision is a hard error.
   const adrIdSource = new Map<string, string>();
 
-  for (const src of sources.decisionSources) {
+  const decisionRowsBySource = await Promise.all(sources.decisionSources.map(async (src) => {
     if (src.kind === "adr-dir") {
       const adrDir = join(repoRoot, src.dir);
       const names = (await fs.readDir(adrDir)).filter((n) => n.endsWith(".md") && !SKIP_ADR.has(n));
@@ -64,27 +64,34 @@ export async function buildIndex(
           return content == null ? null : parseAdr(content, `${src.sourcePathPrefix}/${name}`);
         }),
       );
-      for (const row of rows) {
-        if (row == null) continue;
-        const prior = adrIdSource.get(row.id);
-        if (prior !== undefined) {
-          throw new Error(`Duplicate ADR id ${row.id}: ${row.sourcePath} collides with ${prior}`);
-        }
-        adrIdSource.set(row.id, row.sourcePath);
-        decisions.push(row);
+      return rows.filter((row): row is DecisionRow => row !== null);
+    }
+    const content = await fs.readFile(join(repoRoot, src.file));
+    return content == null
+      ? []
+      : parseDecisionLog(content, src.sourcePath, { idPrefix: src.idPrefix });
+  }));
+
+  for (const rows of decisionRowsBySource) {
+    for (const row of rows) {
+      const prior = adrIdSource.get(row.id);
+      if (prior !== undefined) {
+        throw new Error(`Duplicate ADR id ${row.id}: ${row.sourcePath} collides with ${prior}`);
       }
-    } else {
-      const content = await fs.readFile(join(repoRoot, src.file));
-      if (content != null) {
-        decisions.push(...parseDecisionLog(content, src.sourcePath, { idPrefix: src.idPrefix }));
-      }
+      adrIdSource.set(row.id, row.sourcePath);
+      decisions.push(row);
     }
   }
 
   const principles: PrincipleRow[] = [];
-  for (const src of sources.principleSources) {
-    const content = await fs.readFile(join(repoRoot, src.file));
-    if (content != null) principles.push(...parseRails(content, src.sourcePath));
+  const principleRowsBySource = await Promise.all(
+    sources.principleSources.map(async (src) => {
+      const content = await fs.readFile(join(repoRoot, src.file));
+      return content == null ? [] : parseRails(content, src.sourcePath);
+    }),
+  );
+  for (const rows of principleRowsBySource) {
+    principles.push(...rows);
   }
 
   const supersededBy = new Map<string, string[]>();

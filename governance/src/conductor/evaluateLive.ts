@@ -16,8 +16,8 @@ import type {
 // in here — runWithFallback's chain IS the fallback (INVARIANT #5), and every failure mode maps to
 // a rung failure (AttemptError), NEVER a verdict: the gate stays fail-closed (INVARIANT #1).
 
-export const STEP_OPEN = "<<<STEP";
-export const STEP_CLOSE = "STEP>>>";
+const STEP_OPEN = "<<<STEP";
+const STEP_CLOSE = "STEP>>>";
 
 /** Build the judge prompt. ALL session-influenced content — step prompt + worktree diff — is
  *  enclosed in a delimited DATA block (canonical §7 prompt-injection posture, mirroring

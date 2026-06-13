@@ -89,17 +89,24 @@ export async function resolveCmuxSocket(deps: {
   } catch {
     return null;
   }
-  const candidates: Array<{ path: string; mtimeMs: number }> = [];
+  const statJobs: Array<Promise<{ path: string; mtimeMs: number } | null>> = [];
   for (const name of names) {
     if (!name.endsWith(".sock")) continue;
-    const path = join(dir, name);
-    try {
-      const s = await deps.fs.stat(path);
-      if (s.isSocket) candidates.push({ path, mtimeMs: s.mtimeMs });
-    } catch {
-      /* vanished between readdir and stat — skip */
-    }
+    statJobs.push(
+      (async () => {
+        const path = join(dir, name);
+        try {
+          const s = await deps.fs.stat(path);
+          return s.isSocket ? { path, mtimeMs: s.mtimeMs } : null;
+        } catch {
+          return null; // vanished between readdir and stat — skip
+        }
+      })(),
+    );
   }
+  const candidates = (await Promise.all(statJobs)).filter(
+    (candidate): candidate is { path: string; mtimeMs: number } => candidate !== null,
+  );
   candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
   const newest = candidates[0];
   return newest ? { path: newest.path, source: "discovery" } : null;

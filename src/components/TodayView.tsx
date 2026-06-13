@@ -135,7 +135,10 @@ export function TodayView() {
   const allDay = (eventsQ.byDate[date] ?? []).filter((e) => e.allDay);
   const rail = todayRail.data ?? [];
   // carry-over: 미완료 카드가 "보는 날짜"에 배치가 없으면 트레이 — 과거 배치 기록은 보존된다.
-  const placedOnDate = new Set(placements.filter((p) => p.date === date).map((p) => p.signalId));
+  const placedOnDate = new Set<string>();
+  for (const placement of placements) {
+    if (placement.date === date) placedOnDate.add(placement.signalId);
+  }
   const unscheduledTodays = rail.filter((s) => !placedOnDate.has(s.id));
   const routineList = routinesQ.byDate[date] ?? [];
   const unscheduledRoutines = routineList.filter((r) => !r.timeOverride && !r.timeOfDay);

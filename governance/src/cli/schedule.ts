@@ -54,7 +54,7 @@ export interface ScheduleDeps {
   now: () => Date;
 }
 
-export function nodeScheduleDeps(): ScheduleDeps {
+function nodeScheduleDeps(): ScheduleDeps {
   const spawn = makeNodeSpawnSync();
   return {
     exec: (command, args) => spawn(command, args),

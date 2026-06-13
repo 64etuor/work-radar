@@ -16,6 +16,12 @@ const TILT_DEG = 22; // 풀 편향 시 최대 틸트 각
 
 const GLYPH: Record<KnobDir, string> = { up: "↑", down: "↓", left: "←", right: "→" };
 const CENTER: { x: number; y: number } = { x: 0, y: 0 };
+type KnobVisualState = {
+  offset: { x: number; y: number };
+  armed: KnobDir | null;
+  dragging: boolean;
+};
+const KNOB_REST: KnobVisualState = { offset: CENTER, armed: null, dragging: false };
 
 /**
  * 전역 오락실 조이스틱(설계 §3). useCmdKnob이 visible/origin/발사를 관리하고,
@@ -35,9 +41,7 @@ export function CmdKnob({
   dispatchAction: (action: AppAction) => void;
 }) {
   const { visible, origin, dirEnabled, fire } = useCmdKnob(dispatchAction);
-  const [offset, setOffset] = useState(CENTER);
-  const [armed, setArmed] = useState<KnobDir | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [knob, setKnob] = useState<KnobVisualState>(KNOB_REST);
 
   // 전역 핸들러가 읽을 최신값 ref(커밋마다 동기화). draggingRef는 핸들러 가드 전용.
   const draggingRef = useRef(false);
@@ -65,15 +69,14 @@ export function CmdKnob({
         dirEnabledRef.current,
       );
       armedRef.current = dir;
-      setOffset(offset);
-      setArmed(dir);
+      setKnob({ offset, armed: dir, dragging: true });
     };
     const onUp = () => {
       if (!draggingRef.current) return;
       draggingRef.current = false;
       if (armedRef.current) fireRef.current(armedRef.current);
       armedRef.current = null;
-      setDragging(false); // shownOffset → 중앙, CSS transition으로 스프링백
+      setKnob((prev) => ({ ...prev, dragging: false })); // shownOffset → 중앙, CSS transition으로 스프링백
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -84,15 +87,15 @@ export function CmdKnob({
       const wasDragging = draggingRef.current;
       draggingRef.current = false;
       armedRef.current = null;
-      if (wasDragging) setDragging(false);
+      if (wasDragging) setKnob((prev) => ({ ...prev, dragging: false }));
     };
   }, [visible]);
 
   if (!visible) return null;
 
   // 드래그 중이 아닐 땐 항상 중앙(스프링백 + 세션 간 stale 방지) — raw state는 드래그 중에만 반영.
-  const shown = dragging ? offset : CENTER;
-  const shownArmed = dragging ? armed : null;
+  const shown = knob.dragging ? knob.offset : CENTER;
+  const shownArmed = knob.dragging ? knob.armed : null;
   const tiltX = (shown.y / THROW_RADIUS) * TILT_DEG; // 위로 밀면 -y → 앞으로 기울기
   const tiltY = (shown.x / THROW_RADIUS) * TILT_DEG;
 
@@ -120,7 +123,7 @@ export function CmdKnob({
         <button
           type="button"
           className="cmd-knob-stick"
-          data-dragging={dragging || undefined}
+          data-dragging={knob.dragging || undefined}
           style={{
             transform: `translate(-50%, -50%) translate(${shown.x}px, ${shown.y}px) perspective(220px) rotateX(${-tiltX}deg) rotateY(${tiltY}deg)`,
           }}
@@ -128,9 +131,7 @@ export function CmdKnob({
             e.preventDefault();
             draggingRef.current = true;
             armedRef.current = null;
-            setOffset(CENTER);
-            setArmed(null);
-            setDragging(true);
+            setKnob({ offset: CENTER, armed: null, dragging: true });
           }}
           aria-label="조이스틱 — 방향으로 밀어 단축키 실행"
         />

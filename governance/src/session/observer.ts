@@ -204,6 +204,7 @@ export async function observeSessions(
   // Write with per-emission second-offset stamps → distinct chronological ids in one pass.
   let i = 0;
   const summary: ObserveSummary = { observed: 0, crashed: 0, recovered: 0, opened: 0 };
+  const writes: Array<Promise<unknown>> = [];
   for (const e of emissions) {
     const at = new Date(now.getTime() + i * 1000);
     const frontmatter: GovEvent["frontmatter"] = {
@@ -214,13 +215,14 @@ export async function observeSessions(
       tags: ["session", "observer"],
       ...(e.sessionId ? { related_to: [e.sessionId] } : {}),
     };
-    await writeEvent(workspaceDir, { frontmatter, body: e.body }, at);
+    writes.push(writeEvent(workspaceDir, { frontmatter, body: e.body }, at));
     if (e.type === "session_observed") summary.observed++;
     else if (e.type === "session_crashed") summary.crashed++;
     else if (e.type === "session_recovered") summary.recovered++;
     else summary.opened++;
     i++;
   }
+  await Promise.all(writes);
   return summary;
 }
 

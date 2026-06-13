@@ -28,13 +28,7 @@ export const SKILL_PROVIDER_LABEL: Record<SkillProvider, string> = {
 };
 
 /** 외부 provider 기본 노출 순서(감지된 것만 렌더). */
-export const SKILL_PROVIDER_ORDER: SkillProvider[] = [
-  "claude",
-  "codex",
-  "openclaw",
-  "hermes",
-  "other",
-];
+const SKILL_PROVIDER_ORDER: SkillProvider[] = ["claude", "codex", "openclaw", "hermes", "other"];
 
 /** URL 설치 대상 provider 옵션(라벨 포함). */
 export interface InstallProviderOption {

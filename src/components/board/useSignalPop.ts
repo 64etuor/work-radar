@@ -4,8 +4,12 @@ import type { WorkSignal } from "@/bindings";
 
 export function useSignalPop(signals: WorkSignal[]) {
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
-  const knownIdsRef = useRef<Set<string>>(new Set());
+  const knownIdsRef = useRef<Set<string>>(null!);
   const expectPopRef = useRef(false);
+
+  if (knownIdsRef.current === null) {
+    knownIdsRef.current = new Set();
+  }
 
   useEffect(() => {
     const current = new Set(signals.map((s) => s.id));

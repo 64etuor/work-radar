@@ -80,9 +80,9 @@ function inFlightTaskCount(log: GovEvent[]): number {
   }
 
   for (const e of log) {
-    const terminal =
-      e.frontmatter.type === "task_completed" || e.frontmatter.type === "task_cancelled";
-    const live = e.frontmatter.type === "task_started" || e.frontmatter.type === "task_blocked";
+    const type = e.frontmatter.type;
+    const terminal = type === "task_completed" || type === "task_cancelled";
+    const live = type === "task_started" || type === "task_blocked";
     if (!terminal && !live) continue;
     for (const taskId of e.frontmatter.related_to ?? []) {
       const state = stateByTask.get(taskId);

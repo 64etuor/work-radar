@@ -40,9 +40,9 @@ export async function harvest(deps: HarvestDeps): Promise<HarvestSummary> {
     items.push(row.kind === "adr" ? adrItem(row) : decisionItem(row));
   }
 
+  const outcomes = await Promise.all(items.map((item) => deps.writeOne(item)));
   const summary: HarvestSummary = { written: 0, skipped: 0 };
-  for (const item of items) {
-    const outcome = await deps.writeOne(item);
+  for (const outcome of outcomes) {
     if (outcome === "written") summary.written++;
     else summary.skipped++;
   }

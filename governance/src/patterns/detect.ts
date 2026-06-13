@@ -99,10 +99,11 @@ export async function runDetect(deps: DetectDeps): Promise<DetectSummary> {
     curated = new Set<string>();
   }
   const { patterns, droppedNoScope, scopesConsidered } = detectPatterns(events, curated, deps.options);
+  const outcomes = await Promise.all(patterns.map((p) => deps.writePattern(p)));
   let written = 0;
   let skipped = 0;
-  for (const p of patterns) {
-    if ((await deps.writePattern(p)) === "written") written++;
+  for (const outcome of outcomes) {
+    if (outcome === "written") written++;
     else skipped++;
   }
   return { written, skipped, candidates: patterns.length, droppedNoScope, scopesConsidered };

@@ -37,10 +37,11 @@ export async function status(workspaceDir: string): Promise<StatusResult> {
   } catch {
     return { eventCount: 0 };
   }
-  const counts = await Promise.all(
-    days
-      .filter((day) => !day.startsWith("."))
-      .map(async (day) => {
+  const countJobs: Array<Promise<number>> = [];
+  for (const day of days) {
+    if (day.startsWith(".")) continue;
+    countJobs.push(
+      (async () => {
         let files: string[] = [];
         try {
           files = await readdir(join(eventsDir, day));
@@ -48,8 +49,10 @@ export async function status(workspaceDir: string): Promise<StatusResult> {
           return 0;
         }
         return files.filter((f) => f.endsWith(".md")).length;
-      }),
-  );
+      })(),
+    );
+  }
+  const counts = await Promise.all(countJobs);
   return { eventCount: counts.reduce((sum, count) => sum + count, 0) };
 }
 
