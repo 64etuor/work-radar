@@ -546,6 +546,7 @@
  * dnd-kit pixel 좌표라 transition을 끄지 않으면 따라옴이 부자연스러움.
  */
 .tl-block-wrap {
+  z-index: 2; /* 기본 — 인라인에서 CSS로 이전(2026-06-14)해 :hover lift가 인라인 스타일을 이길 수 있게. */
   transition:
     left var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1)),
     width var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1)),
@@ -555,7 +556,19 @@
 }
 
 .tl-block-wrap[data-dragging] {
+  z-index: 10; /* 드래그 중 다른 블록 위로(인라인 zIndex:10에서 이전). */
   transition: none;
+}
+
+/*
+ * 호버/포커스 시 블록을 이웃 위로 살짝 띄운다(z 6 > 이웃 2). 핸들 band 자체는 가려지지 않지만
+ * abutting 블록의 1px seam + scale 잔여 sub-pixel 경합을 굳힌다.
+ * ⚠ 반드시 아래 seam inset(.tl-block-resize-top/bottom의 1px)과 함께 적용 — lift만 적용하면
+ * 띄워진 위 블록 body가 아래 블록의 상단 핸들을 seam에서 덮어 역-occlusion이 생긴다(coupling).
+ */
+.tl-block-wrap:hover,
+.tl-block-wrap:focus-within {
+  z-index: 6;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -595,7 +608,7 @@
 
 .tl-block:active {
   cursor: grabbing;
-  transform: scale(1.02);
+  /* scale(1.02) 제거(2026-06-14) — 누르는 순간 아래로 0.4–1px 자라 핸들 정밀도를 떨어뜨렸다. */
   box-shadow: var(--wr-shadow-sm);
 }
 
@@ -713,14 +726,15 @@
 }
 
 /*
- * PR 7: 블록 하단 리사이즈 핸들 (스펙 §7 row 3).
- * 6px 높이 띠 — 호버 시 진해진다. dnd-kit이 spread하는 role=button + tabindex로 키보드 가능.
+ * PR 7: 블록 리사이즈 핸들 (스펙 §7 row 3).
+ * 상/하 8px 띠 — 호버 시 진해진다. dnd-kit이 spread하는 role=button + tabindex로 키보드 가능.
+ * showTopHandle 모델(2026-06-14): 짧은 블록(<28px)은 상단 핸들을 떼고 전체 body를 move로 둔다.
  */
 .tl-block-resize {
   position: absolute;
   left: 8px;
   right: 8px;
-  /* 높이별 hitbox — TimelineBlock이 resizeHandleHeightPx로 주입(Bug 1a). 미지정 시 8px. */
+  /* hitbox 높이 — 이제 상수 8px(--tl-resize-h, 2026-06-14). 짧은 블록은 핸들 개수로 move 밴드 확보. */
   height: var(--tl-resize-h, 8px);
   cursor: ns-resize;
   z-index: 3;
@@ -731,13 +745,13 @@
 }
 
 .tl-block-resize-top {
-  top: 0;
+  top: 1px; /* seam inset — abutting 위 블록의 하단 핸들과 정확한 경계행을 공유하지 않게. */
   bottom: auto;
 }
 
 .tl-block-resize-bottom {
   top: auto;
-  bottom: 0;
+  bottom: 1px; /* seam inset — abutting 아래 블록의 상단 핸들과 경계행 공유 회피. */
 }
 
 /* 항상 보이는 가운데 그립 라인 — hover 전에도 "여기 잡을 수 있다" 신호. */

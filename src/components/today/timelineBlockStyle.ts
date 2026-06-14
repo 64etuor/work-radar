@@ -39,7 +39,6 @@ export function timelineBlockPlacementStyle({
     height: `${heightPx}px`,
     left: `${leftPct}%`,
     width: `calc(${widthPct}% - 4px)`,
-    zIndex: dragging ? 10 : 2,
     opacity: dragging ? 0.4 : 1,
     transition: disableLayoutTransition ? "none" : undefined,
     willChange: disableLayoutTransition ? "auto" : undefined,
