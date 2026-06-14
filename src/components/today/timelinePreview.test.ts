@@ -147,6 +147,75 @@ describe("previewTimelineBoxes", () => {
     expect(guide!.y).toBe(1425);
   });
 
+  it("루틴 이동 가이드 클램프는 occurrence가 day 2일 때도 px-day에서 유도된다 (topPx≥1440)", () => {
+    // 루틴이 2026-05-29(day 1, anchor 05-28 기준 topPx=2820) 23:00에 있다.
+    const routineBox: TimedBlock = {
+      id: "routine:r1",
+      kind: "routine",
+      title: "Routine",
+      startISO: "2026-05-29T23:00:00+09:00",
+      endISO: "2026-05-29T23:30:00+09:00",
+      calendarId: "cal",
+      color: "#4a7bb8",
+      routineId: "r1",
+    };
+    const boxes = computeLayout([routineBox], "2026-05-28");
+    const drag: DragData = {
+      from: "canvas",
+      blockKind: "routine",
+      blockId: "routine:r1",
+      routineId: "r1",
+      title: "Routine",
+      startISO: "2026-05-29T23:00:00+09:00",
+      durationMin: 30,
+      calendarId: "cal",
+    };
+
+    // topPx 2820 + 120 = 2940(day 2 01:00)이지만 occurrence day [1440, 2865]로 클램프 → 2865
+    // ([0,1425]가 아니라 dayStart=1440 기준이어야 한다).
+    const guide = dragGuideFromLayout({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: 120 },
+      gridWidth: 460,
+      days: 3,
+    });
+    expect(guide!.y).toBe(2865);
+  });
+
+  it("루틴 bottom-resize 가이드는 끝 엣지가 자정을 넘지 못한다 (가이드==preview/commit, Bug 2c)", () => {
+    const routineBox: TimedBlock = {
+      id: "routine:r1",
+      kind: "routine",
+      title: "Routine",
+      startISO: "2026-05-28T23:00:00+09:00",
+      endISO: "2026-05-28T23:30:00+09:00",
+      calendarId: "cal",
+      color: "#4a7bb8",
+      routineId: "r1",
+    };
+    const boxes = computeLayout([routineBox], "2026-05-28");
+    const drag: DragData = {
+      from: "canvas-resize",
+      edge: "bottom",
+      blockKind: "routine",
+      blockId: "routine:r1",
+      routineId: "r1",
+      startISO: "2026-05-28T23:00:00+09:00",
+      durationMin: 30,
+    };
+
+    // 끝 엣지 raw = topPx 1380 + height 30 + 120 = 1530(다음 날 01:30)이지만 자정(1440)에서 멈춘다.
+    const guide = dragGuideFromLayout({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: 120 },
+      gridWidth: 460,
+      days: 2,
+    });
+    expect(guide!.y).toBe(1440);
+  });
+
   it("canvas 드래그가 자정을 넘기면 preview 블록의 날짜가 증가한다 (연속 축)", () => {
     const boxes = computeLayout(
       [block("event:cal:e1", "2026-05-28T23:00:00+09:00", "2026-05-28T23:30:00+09:00")],

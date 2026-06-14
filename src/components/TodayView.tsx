@@ -239,12 +239,13 @@ export function TodayView() {
     // pointermove뿐 아니라 auto-scroll에도 발화 → 정지한 커서도 스크롤에 맞춰 grid-local Y가
     // 재계산된다. dnd-kit delta는 scroll-adjusted(translate+scrollAdjustment)라 auto-scroll 중
     // 실제 커서와 2배 어긋나므로 포인터 환산에 쓰지 않는다. raw가 없으면(키보드 드래그/첫 프레임)
-    // pointerGrid=null → TimelineCanvas가 activeGuide(블록-anchored)로 폴백.
+    // undefined를 보내 reducer가 이전 값 유지 → 키보드 드래그는 start의 null이 그대로 남아
+    // 크로스헤어가 stale 마우스 위치를 그리지 않는다(activeGuide/hoverPx로 폴백).
     const raw = dragRawPointerRef.current;
     const rect = gridElRef.current?.getBoundingClientRect();
-    const pointerGrid =
-      raw && rect ? clientPointToGridGuide(raw, rect, visibleDates.length * 24 * 60) : null;
-    dispatchDragGhost({ type: "move", delta: ev.delta, pointerGrid });
+    const nextPointerGrid =
+      raw && rect ? clientPointToGridGuide(raw, rect, visibleDates.length * 24 * 60) : undefined;
+    dispatchDragGhost({ type: "move", delta: ev.delta, pointerGrid: nextPointerGrid });
   };
   const handleDragOver = (ev: DragOverEvent) => {
     dispatchDragGhost({ type: "over", isOverTray: ev.over?.id === "today-tray" });
@@ -266,11 +267,14 @@ export function TodayView() {
   useEffect(() => {
     if (!activeDrag) return;
     const onMove = (e: PointerEvent) => {
+      // 멀티터치 보조 포인터는 무시 — dnd-kit 드래그는 primary 포인터가 구동한다(엉뚱한
+      // 좌표로 드롭 위치가 오염되는 것 방지). 좌표만 읽고 preventDefault 없음 → passive.
+      if (!e.isPrimary) return;
       const p = { x: e.clientX, y: e.clientY };
       dragRawPointerRef.current = p;
       lastPointerRef.current = p;
     };
-    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointermove", onMove, { passive: true });
     return () => {
       window.removeEventListener("pointermove", onMove);
       dragRawPointerRef.current = null;

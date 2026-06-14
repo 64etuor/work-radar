@@ -84,32 +84,40 @@ export function dragGuideFromLayout({
   const left = 60 + (layerWidth * activeBox.leftPct) / 100;
   const width = Math.max(0, (layerWidth * activeBox.widthPct) / 100 - 4);
   const centerX = left + width / 2 + delta.x;
+  const guideX = Math.max(60, Math.min(gridWidth, centerX));
+
+  // 루틴/루틴-backed 이동·리사이즈는 occurrence 날짜 안으로 클램프(preview/commit과 동일, Bug 2c) —
+  // 자정 넘김 시 가이드 라인이 클램프된 블록 착지 엣지와 다른 hh:mm을 보이지 않게 한다. 원본 블록의
+  // topPx로 occurrence 날짜의 px 범위(dayStart..dayStart+1440)를 유도(anchorDate 불필요).
+  const routineBacked =
+    activeDrag.blockKind === "routine" ||
+    (activeDrag.blockKind === "event" && activeDrag.routineId != null);
+  const dayStart = Math.floor(activeBox.topPx / 1440) * 1440;
 
   if (activeDrag.from === "canvas-resize") {
-    const edgeY =
+    const rawEdgeY =
       activeDrag.edge === "top"
         ? activeBox.topPx + delta.y
         : activeBox.topPx + activeBox.heightPx + delta.y;
+    // top 핸들=시작 엣지(occurrence 날짜 안, end-15 이하), bottom 핸들=끝 엣지(start+15 이상, 자정 이하).
+    const edgeY = !routineBacked
+      ? rawEdgeY
+      : activeDrag.edge === "top"
+        ? Math.max(dayStart, Math.min(dayStart + 1440 - 15, rawEdgeY))
+        : Math.max(dayStart + 15, Math.min(dayStart + 1440, rawEdgeY));
     return {
-      x: Math.max(60, Math.min(gridWidth, centerX)),
+      x: guideX,
       y: Math.max(0, Math.min(maxY, edgeY)),
       durationMin: activeDrag.durationMin,
     };
   }
 
-  // 루틴/루틴-backed 이동은 occurrence 날짜 안으로 클램프(preview/commit과 동일, Bug 2c) — 자정
-  // 넘김 시 가이드 라인이 클램프된 블록 착지 엣지와 다른 hh:mm을 보이지 않게 한다. 원본 블록의
-  // topPx로 occurrence 날짜의 px 범위([dayStart, dayStart+1440-15])를 유도(anchorDate 불필요).
-  const routineBacked =
-    activeDrag.blockKind === "routine" ||
-    (activeDrag.blockKind === "event" && activeDrag.routineId != null);
   const moveY = activeBox.topPx + delta.y;
-  const dayStart = Math.floor(activeBox.topPx / 1440) * 1440;
   const clampedY = routineBacked
     ? Math.max(dayStart, Math.min(dayStart + 1440 - 15, moveY))
     : moveY;
   return {
-    x: Math.max(60, Math.min(gridWidth, centerX)),
+    x: guideX,
     y: Math.max(0, Math.min(maxY, clampedY)),
     durationMin: activeDrag.durationMin,
   };
