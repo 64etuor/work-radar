@@ -1,0 +1,30 @@
+src/components/today/TimelineBlock.test.ts
+  s_f1c45ebba0178b::t_71a251834574e5 53-56
+  s_f1c45ebba0178b::t_673adc52567966 3
+src/components/TodayView.css
+  s_f1c45ebba0178b::t_61a8fe4304fcce 564-566
+  s_f1c45ebba0178b::t_5ed9c9501b7a76 893-894
+  s_f1c45ebba0178b::t_7300d1d075f99e 728-730,736-737
+  s_f1c45ebba0178b::t_273ccc80744c2d 747,753
+src/components/today/timelineBlockStyle.ts
+  s_f1c45ebba0178b::t_7a4917841486bd 3-6,8
+src/components/today/TimelineBlock.tsx
+  s_f1c45ebba0178b::t_b8f84e88efa85b 229-230
+  s_f1c45ebba0178b::t_4dd995c38cc878 284-286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "43c7d2e9de236dc4efbb11acf80b04834cede3fa",
+  "prompts": {},
+  "sessions": {
+    "s_f1c45ebba0178b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33f5e466-9a85-43a3-8bc9-bb208dd9b941",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
