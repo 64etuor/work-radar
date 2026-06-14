@@ -1,0 +1,21 @@
+src/components/today/TimelineBlock.tsx
+  s_f1c45ebba0178b::t_e0ef58e6b4901e 285-287
+  s_f1c45ebba0178b::t_56e55cf9444325 7
+  s_f1c45ebba0178b::t_d081504fa29560 230-232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "02dfc184937a7c8fa324dff93660c444de35c9d4",
+  "prompts": {},
+  "sessions": {
+    "s_f1c45ebba0178b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33f5e466-9a85-43a3-8bc9-bb208dd9b941",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
