@@ -1,0 +1,29 @@
+src/components/board/useSignalPop.ts
+  s_68cf86000d9035::t_d9b70522c80a59 35
+  s_68cf86000d9035::t_adf32341dfa5e5 8,14-24,26,29-33,36-38
+src/components/hermes/useHermesTabsStore.ts
+  s_68cf86000d9035::t_01bce4497c493d 413-440,442-450,453
+  s_68cf86000d9035::t_e28335dec269b4 373-382,384-391,393-401,403-406,408-412,454-455,457-464,466-470,472-497
+src/components/CaptureBoard.tsx
+  s_68cf86000d9035::t_b42209b7580611 139,153-154,184
+governance/src/patterns/curate.ts
+  s_68cf86000d9035::t_1c26bfa9c905aa 54,57,59,61-64
+governance/src/patterns/read.ts
+  s_68cf86000d9035::t_88b260755984bc 98,104,106-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "43eadfefdb7725756b834f2b24f63851d9d21b49",
+  "prompts": {},
+  "sessions": {
+    "s_68cf86000d9035": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec0b3-3dbf-7fe2-9ece-3c6ed6bec2b1",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
