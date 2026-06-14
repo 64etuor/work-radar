@@ -1,0 +1,24 @@
+docs/decisions.md
+  s_9879bbf7505b01::t_733f070c05b66a 632
+src/components/today/TimelineCanvas.tsx
+  s_9879bbf7505b01::t_fd0258804a5770 317
+  s_9879bbf7505b01::t_595169d88df911 302
+  s_9879bbf7505b01::t_879c38f12a9793 259-273
+  s_9879bbf7505b01::t_ec9f8bb9dffb6a 289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d6c8634cc9b93b25ece6a4baae3b7dce81808ebc",
+  "prompts": {},
+  "sessions": {
+    "s_9879bbf7505b01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "910261e2-a97c-4d6e-865b-9882c8bae41f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
