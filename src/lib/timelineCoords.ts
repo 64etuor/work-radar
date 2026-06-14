@@ -7,9 +7,43 @@ import { absMin, isoFromAbsMin } from "./timeAxis";
 
 const HOUR_PX = 60;
 const SNAP_MIN = 15;
+/** 자석 엣지 스냅 임계(분=px, 1px=1min). 인접 블록 start/end에 이 범위 내면 그리드보다 우선. */
+const MAGNET_THRESHOLD_MIN = 6;
 
-function snap(min: number): number {
-  return Math.round(min / SNAP_MIN) * SNAP_MIN;
+export type SnapOpts = {
+  /** 그리드 스냅 단위(분). 기본 15. Alt/Option fine-snap 시 5. */
+  snapMin?: number;
+  /** 자석 후보 엣지(절대 분) — 인접 블록 start/end. 비거나 미지정이면 그리드만. */
+  magnetEdges?: number[];
+  /** 자석 임계(분). 기본 6. */
+  magnetThresholdMin?: number;
+};
+
+function gridSnap(min: number, snapMin: number = SNAP_MIN): number {
+  return Math.round(min / snapMin) * snapMin;
+}
+
+/**
+ * 절대 분 스냅 — 자석 엣지가 임계 내에 있으면 가장 가까운 엣지로(그리드보다 우선), 아니면 그리드.
+ * 순수 함수. 자석 엣지/그리드 단위는 opts로 주입(기본=그리드 15, 자석 없음).
+ */
+export function snapAbsMin(rawMin: number, opts?: SnapOpts): number {
+  const snapMin = opts?.snapMin ?? SNAP_MIN;
+  const edges = opts?.magnetEdges;
+  const threshold = opts?.magnetThresholdMin ?? MAGNET_THRESHOLD_MIN;
+  if (edges && edges.length > 0) {
+    let nearest = edges[0];
+    let nearestDist = Math.abs(rawMin - edges[0]);
+    for (let i = 1; i < edges.length; i++) {
+      const d = Math.abs(rawMin - edges[i]);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = edges[i];
+      }
+    }
+    if (nearestDist <= threshold) return nearest;
+  }
+  return gridSnap(rawMin, snapMin);
 }
 
 function clampAbs(min: number, days: number): number {
@@ -18,7 +52,7 @@ function clampAbs(min: number, days: number): number {
 
 /** 그리드 픽셀(절대 Y) → 로컬 ISO. 날짜는 Y에서 유도(자정 넘는 배치 가능). */
 export function pixelToLocalIso(anchorDate: string, days: number, gridY: number): string {
-  const abs = clampAbs(snap((gridY / HOUR_PX) * 60), days);
+  const abs = clampAbs(gridSnap((gridY / HOUR_PX) * 60), days);
   return isoFromAbsMin(anchorDate, abs);
 }
 
@@ -28,8 +62,12 @@ export function shiftIsoByPx(
   days: number,
   startISO: string,
   deltaPx: number,
+  opts?: SnapOpts,
 ): string {
-  const abs = clampAbs(snap(absMin(startISO, anchorDate) + (deltaPx / HOUR_PX) * 60), days);
+  const abs = clampAbs(
+    snapAbsMin(absMin(startISO, anchorDate) + (deltaPx / HOUR_PX) * 60, opts),
+    days,
+  );
   return isoFromAbsMin(anchorDate, abs);
 }
 
@@ -41,6 +79,7 @@ export function resizeIsoByPx({
   durationMin,
   edge,
   deltaPx,
+  snapOpts,
 }: {
   anchorDate: string;
   days: number;
@@ -48,19 +87,24 @@ export function resizeIsoByPx({
   durationMin: number;
   edge: "top" | "bottom";
   deltaPx: number;
+  snapOpts?: SnapOpts;
 }): { at: string; durationMin: number } {
   const startAbs = absMin(startISO, anchorDate);
   const endAbs = startAbs + durationMin;
   const deltaMin = (deltaPx / HOUR_PX) * 60;
   if (edge === "top") {
-    const nextStart = Math.max(0, Math.min(endAbs - SNAP_MIN, snap(startAbs + deltaMin)));
+    const nextStart = Math.max(
+      0,
+      Math.min(endAbs - SNAP_MIN, snapAbsMin(startAbs + deltaMin, snapOpts)),
+    );
     return { at: isoFromAbsMin(anchorDate, nextStart), durationMin: endAbs - nextStart };
   }
-  const maxDuration = days * 1440 - startAbs;
-  return {
-    at: startISO,
-    durationMin: Math.max(SNAP_MIN, Math.min(maxDuration, snap(durationMin + deltaMin))),
-  };
+  const snappedEnd = snapAbsMin(endAbs + deltaMin, snapOpts);
+  const durationMinNext = Math.max(
+    SNAP_MIN,
+    Math.min(days * 1440 - startAbs, snappedEnd - startAbs),
+  );
+  return { at: startISO, durationMin: durationMinNext };
 }
 
 /**

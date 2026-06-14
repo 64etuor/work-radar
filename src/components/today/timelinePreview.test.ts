@@ -360,6 +360,84 @@ describe("previewTimelineBoxes", () => {
     expect(moved.block.endISO.startsWith("2026-05-29T01:30")).toBe(false);
   });
 
+  it("magnet beats grid within threshold (lands on neighbor edge)", () => {
+    const boxes = computeLayout([
+      block("event:cal:e1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00"),
+      block("event:cal:e2", "2026-05-28T11:00:00+09:00", "2026-05-28T12:00:00+09:00"),
+    ]);
+    const drag: DragData = {
+      from: "canvas",
+      blockKind: "event",
+      blockId: "event:cal:e2",
+      eventId: "e2",
+      title: "E2",
+      startISO: "2026-05-28T11:00:00+09:00",
+      durationMin: 60,
+      calendarId: "cal",
+    };
+    // 660-58=602 → grid 600; e1 end 600 is within 6 → magnet 600.
+    const preview = previewTimelineBoxes({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: -58 },
+      anchorDate: "2026-05-28",
+      days: 1,
+    });
+    expect(preview.find((b) => b.id === "event:cal:e2")!.topPx).toBe(600);
+  });
+
+  it("grid wins when no neighbor edge is within threshold", () => {
+    const boxes = computeLayout([
+      block("event:cal:e1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00"),
+      block("event:cal:e2", "2026-05-28T11:00:00+09:00", "2026-05-28T12:00:00+09:00"),
+    ]);
+    const drag: DragData = {
+      from: "canvas",
+      blockKind: "event",
+      blockId: "event:cal:e2",
+      eventId: "e2",
+      title: "E2",
+      startISO: "2026-05-28T11:00:00+09:00",
+      durationMin: 60,
+      calendarId: "cal",
+    };
+    // 660-52=608 → grid 615 (10:15); e1 end 600 is 15 away (>6) → grid wins.
+    const preview = previewTimelineBoxes({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: -52 },
+      anchorDate: "2026-05-28",
+      days: 1,
+    });
+    expect(preview.find((b) => b.id === "event:cal:e2")!.topPx).toBe(615);
+  });
+
+  it("fine snap (snapMin=5) yields 5-minute steps", () => {
+    const boxes = computeLayout([
+      block("event:cal:e1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00"),
+    ]);
+    const drag: DragData = {
+      from: "canvas",
+      blockKind: "event",
+      blockId: "event:cal:e1",
+      eventId: "e1",
+      title: "E1",
+      startISO: "2026-05-28T09:00:00+09:00",
+      durationMin: 60,
+      calendarId: "cal",
+    };
+    // 540 + 7 = 547 → fine 5 → 545 (09:05). Single block → no magnet edges.
+    const preview = previewTimelineBoxes({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: 7 },
+      anchorDate: "2026-05-28",
+      days: 1,
+      snapMin: 5,
+    });
+    expect(preview.find((b) => b.id === "event:cal:e1")!.topPx).toBe(545);
+  });
+
   it("루틴-backed 이벤트 top-resize는 시작이 occurrence 날짜를 벗어나지 못한다 (Bug 2c)", () => {
     const eventBox: TimedBlock = {
       id: "event:cal:e1",

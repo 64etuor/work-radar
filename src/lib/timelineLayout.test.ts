@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeLayout, type TimedBlock } from "./timelineLayout";
+import { computeLayout, magnetEdgesFromBoxes, type TimedBlock } from "./timelineLayout";
 
 const make = (
   id: string,
@@ -140,5 +140,43 @@ describe("computeLayout — continuous axis (anchor)", () => {
   it("anchor 생략 시 가장 이른 블록 날짜가 anchor (기존 단일일 호출 하위호환)", () => {
     const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00")]);
     expect(out[0].topPx).toBe(540);
+  });
+});
+
+describe("magnetEdgesFromBoxes", () => {
+  const boxes = computeLayout(
+    [
+      {
+        id: "a",
+        kind: "event",
+        title: "A",
+        startISO: "2026-06-11T09:00:00+09:00",
+        endISO: "2026-06-11T10:00:00+09:00",
+        calendarId: "c",
+        color: "#000",
+      },
+      {
+        id: "b",
+        kind: "event",
+        title: "B",
+        startISO: "2026-06-11T11:00:00+09:00",
+        endISO: "2026-06-11T11:30:00+09:00",
+        calendarId: "c",
+        color: "#000",
+      },
+    ],
+    "2026-06-11",
+  );
+
+  it("returns start+end absolute minutes of every box except the excluded one", () => {
+    expect(magnetEdgesFromBoxes(boxes, "2026-06-11", "a").sort((x, y) => x - y)).toEqual([
+      660, 690,
+    ]);
+  });
+
+  it("includes all edges when excludeId is null", () => {
+    expect(magnetEdgesFromBoxes(boxes, "2026-06-11", null).sort((x, y) => x - y)).toEqual([
+      540, 600, 660, 690,
+    ]);
   });
 });

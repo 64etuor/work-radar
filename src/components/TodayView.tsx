@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
+import { DragGhost } from "@/components/today/DragGhost";
 import { dragGhostReducer, INITIAL_DRAG_GHOST_STATE } from "@/components/today/dragGhostState";
 import { EventPopover } from "@/components/today/EventPopover";
 import { HistoryRail } from "@/components/today/HistoryRail";
@@ -183,6 +184,14 @@ export function TodayView() {
   // pointer-events 살아있음)가 hit-test를 가로채 .today onPointerMove가 끊겨도 잡힌다. crosshair
   // 및 드롭 좌표(lastPointerRef)의 공통 raw 소스 — dnd-kit delta는 scroll-adjusted라 쓰지 않는다.
   const dragRawPointerRef = useRef<{ x: number; y: number } | null>(null);
+  // Alt/Option fine-snap(5분) — 드래그 시작 activator + 드래그 중 keydown/keyup으로 라이브 추적.
+  // ref는 onDragEnd(커밋)가, state는 preview 리렌더(미리보기 스냅)가 읽는다 — 같은 소스라 preview==commit.
+  const fineSnapRef = useRef(false);
+  const [fineSnap, setFineSnap] = useState(false);
+  const setFine = (v: boolean) => {
+    fineSnapRef.current = v;
+    setFineSnap((prev) => (prev === v ? prev : v));
+  };
   // 활성 picker resolver — unmount 시 promise leak 방지용(아래 cleanup effect에서 resolve(null)).
   const pickerResolverRef = useRef<((v: string | null) => void) | null>(null);
   // TimelineCanvas 라이브 hover preview용 grid-local 좌표(드래그 중 가이드/프리뷰 렌더).
@@ -218,6 +227,8 @@ export function TodayView() {
     promptCalendarPicker,
     gridElRef,
     pointerClientRef: lastPointerRef,
+    boxes,
+    fineSnapRef,
   });
 
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
@@ -229,9 +240,11 @@ export function TodayView() {
   const activeDragStartRef = useRef<DragData | null>(null);
   const handleDragStart = (ev: {
     active: { id: string | number; data: { current?: unknown } };
+    activatorEvent?: Event;
   }) => {
     const data = (ev.active.data.current as DragData | undefined) ?? null;
     activeDragStartRef.current = data;
+    setFine(Boolean((ev.activatorEvent as { altKey?: boolean } | undefined)?.altKey));
     dispatchDragGhost({ type: "start", data });
   };
   const handleDragMove = (ev: DragMoveEvent) => {
@@ -253,12 +266,14 @@ export function TodayView() {
   const handleDragEndWithReset = async (ev: Parameters<typeof onDragEnd>[0]) => {
     const activeAtStart = activeDragStartRef.current;
     dispatchDragGhost({ type: "reset" });
+    setFine(false);
     activeDragStartRef.current = null;
     await onDragEnd(ev, activeAtStart);
   };
   const handleDragCancel = () => {
     activeDragStartRef.current = null;
     dispatchDragGhost({ type: "reset" });
+    setFine(false);
   };
 
   // 드래그 동안만 문서 레벨 pointermove 구독 → raw 커서 좌표를 ref에 기록(렌더 없음).
@@ -275,8 +290,13 @@ export function TodayView() {
       lastPointerRef.current = p;
     };
     window.addEventListener("pointermove", onMove, { passive: true });
+    const onKey = (e: KeyboardEvent) => setFine(e.altKey);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
     return () => {
       window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
       dragRawPointerRef.current = null;
     };
   }, [activeDrag]);
@@ -339,6 +359,7 @@ export function TodayView() {
                 activeDrag={activeDrag}
                 activeDelta={activeDelta}
                 dragPointerGrid={pointerGrid}
+                fineSnap={fineSnap}
               />
             )}
           </div>
@@ -376,33 +397,5 @@ export function TodayView() {
         {activeDrag ? <DragGhost data={activeDrag} isOverTray={isOverTray} /> : null}
       </DragOverlay>
     </DndContext>
-  );
-}
-
-/**
- * 드래그 중 cursor를 따라다니는 ghost. dnd-kit `DragOverlay`는 Portal 렌더,
- * pointer 이벤트 무시 — Notion/Linear 류 "옮기는 느낌" 제공.
- * 캔버스 블록을 트레이 위로 끌면 인박스 카드 형태로 ghost를 전환해 unschedule 의도를 시각화.
- */
-function DragGhost({ data, isOverTray }: { data: DragData; isOverTray: boolean }) {
-  // canvas-resize: 인플레이스 preview(블록 리사이즈 + 시각 pill)가 정본 — 따라오는 막대 ghost는 중복.
-  if (data.from === "canvas-resize") return null;
-  if (data.from === "canvas") {
-    if (!isOverTray) return null;
-    // 캔버스→트레이 드래그: 인박스 카드 비주얼로 전환(unschedule 미리보기).
-    return (
-      <div className="today-drag-ghost today-drag-ghost--card">
-        <div className="today-drag-ghost-card-title">{data.title}</div>
-      </div>
-    );
-  }
-  // 여기까지 오면 from은 tray | routine (canvas, canvas-resize는 위에서 처리됨).
-  return (
-    <div className="today-drag-ghost">
-      <span className="today-drag-ghost-grip" aria-hidden>
-        ⠿
-      </span>
-      <span className="today-drag-ghost-title">{data.title}</span>
-    </div>
   );
 }

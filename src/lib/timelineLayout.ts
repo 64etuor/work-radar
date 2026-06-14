@@ -131,3 +131,21 @@ export function computeLayout(blocks: TimedBlock[], anchorDate?: string): Layout
   }
   return out;
 }
+
+/**
+ * 자석 엣지 후보 = excludeId를 제외한 모든 박스의 실제 start/end(절대 분). heightPx(=floor 20px)가
+ * 아니라 block.startISO/endISO에서 유도해 짧은 블록의 끝도 정확하다. 순수 함수.
+ */
+export function magnetEdgesFromBoxes(
+  boxes: LayoutBox[],
+  anchorDate: string,
+  excludeId: string | null,
+): number[] {
+  const edges: number[] = [];
+  for (const b of boxes) {
+    if (b.id === excludeId) continue;
+    edges.push(absMin(b.block.startISO, anchorDate));
+    edges.push(absMin(b.block.endISO, anchorDate));
+  }
+  return edges;
+}

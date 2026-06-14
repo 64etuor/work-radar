@@ -42,6 +42,8 @@ type Props = {
   activeDelta?: DragDelta | null;
   /** 라이브 드래그 포인터(그리드 로컬). 크로스헤어가 블록 top-anchor/stale hover 대신 커서를 따른다. */
   dragPointerGrid?: { x: number; y: number } | null;
+  /** Alt/Option fine-snap(5분) 활성 — preview snapMin을 5로. */
+  fineSnap?: boolean;
 };
 
 /** "지금"의 절대 px(앵커 날짜 00:00 기준). 앵커 범위 밖이면 음수/초과 — 호출부가 범위 체크. */
@@ -86,6 +88,7 @@ export function TimelineCanvas({
   activeDrag,
   activeDelta,
   dragPointerGrid,
+  fineSnap,
 }: Props) {
   const anchorDate = dates[0];
   const days = dates.length;
@@ -111,6 +114,7 @@ export function TimelineCanvas({
     delta: activeDelta,
     anchorDate,
     days,
+    snapMin: fineSnap ? 5 : 15,
   });
   const renderBoxes = renderTimelineBoxesForDrag({ previewBoxes });
   const activeGuide = dragGuideFromLayout({

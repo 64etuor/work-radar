@@ -44,6 +44,7 @@ import {
   resizeIsoByPx,
   shiftIsoByPx,
 } from "@/lib/timelineCoords";
+import { type LayoutBox, magnetEdgesFromBoxes } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
 
 const HOUR_PX = 60;
@@ -252,6 +253,10 @@ type Opts = {
    * 드롭이 화면과 어긋났다.
    */
   pointerClientRef?: MutableRefObject<{ x: number; y: number }>;
+  /** 자석 스냅 후보용 현재 레이아웃 박스(드래그 중 정적). 미지정이면 자석 없음. */
+  boxes?: LayoutBox[];
+  /** Alt/Option fine-snap(5분) 라이브 상태 ref. true면 snapMin=5. */
+  fineSnapRef?: MutableRefObject<boolean>;
 };
 
 /**
@@ -268,6 +273,8 @@ export function useTimelineDnd(opts: Opts) {
     promptCalendarPicker,
     gridElRef,
     pointerClientRef,
+    boxes,
+    fineSnapRef,
   } = opts;
 
   /**
@@ -388,6 +395,12 @@ export function useTimelineDnd(opts: Opts) {
     }
     if (!a || !o) return;
 
+    const snapMin = fineSnapRef?.current ? 5 : 15;
+    const snapOptsFor = (blockId: string) => ({
+      snapMin,
+      magnetEdges: magnetEdgesFromBoxes(boxes ?? [], anchorDate, blockId),
+    });
+
     // ── 1: tray → canvas ─────────────────────────────────────────────
     if (a.from === "tray" && o.to === "canvas") {
       const cal =
@@ -429,6 +442,7 @@ export function useTimelineDnd(opts: Opts) {
         durationMin: a.durationMin,
         edge: a.edge,
         deltaPx: ev.delta.y,
+        snapOpts: snapOptsFor(a.blockId),
       });
       // 루틴은 occurrence 날짜 안으로 클램프 — routine_checks(date+HH:MM)가 다음 날 새벽을
       // 표현하지 못한다(스펙 §5). top 핸들이 날짜를 넘으면 그 날 00:00에서 멈춘다.
@@ -519,7 +533,13 @@ export function useTimelineDnd(opts: Opts) {
 
     // ── 2: canvas → canvas (reschedule, 같은 캘린더 시간 이동) ───────
     if (a.from === "canvas" && o.to === "canvas") {
-      const shifted = shiftIsoByPx(anchorDate, days, a.startISO, ev.delta.y);
+      const shifted = shiftIsoByPx(
+        anchorDate,
+        days,
+        a.startISO,
+        ev.delta.y,
+        snapOptsFor(a.blockId),
+      );
       // 루틴은 occurrence 날짜 안으로 클램프(스펙 §5) — event/signal은 자정 통과 자유.
       // 동기화된 루틴의 이벤트 블록(routineId 동봉)도 time_override(date+HH:MM) 구조라 동일 클램프.
       const occDate = localDateOf(a.startISO);
@@ -636,7 +656,7 @@ export function useTimelineDnd(opts: Opts) {
     // ── 5: canvas → 다른 캘린더 zone (moveCalendar, staged) ──────────
     if (a.from === "canvas" && a.blockKind === "signal" && o.to === "canvas:cal") {
       if (o.calendarId === a.calendarId) return; // 동일 캘린더면 noop.
-      const at = shiftIsoByPx(anchorDate, days, a.startISO, ev.delta.y);
+      const at = shiftIsoByPx(anchorDate, days, a.startISO, ev.delta.y, snapOptsFor(a.blockId));
       try {
         await stage({
           kind: "moveCalendar",

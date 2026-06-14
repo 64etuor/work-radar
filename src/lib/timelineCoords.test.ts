@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { tzOffsetForDate } from "./timeAxis";
-import { clampIsoToDate, pixelToLocalIso, resizeIsoByPx, shiftIsoByPx } from "./timelineCoords";
+import {
+  clampIsoToDate,
+  pixelToLocalIso,
+  resizeIsoByPx,
+  shiftIsoByPx,
+  snapAbsMin,
+} from "./timelineCoords";
 
 const off = (d: string) => tzOffsetForDate(d);
 
@@ -85,5 +91,79 @@ describe("timelineCoords (anchor=2026-06-11, days=3)", () => {
     expect(plusMinutesLocal(`2026-06-11T23:30:00${off(A)}`, 60)).toBe(
       `2026-06-12T00:30:00${off(A)}`,
     );
+  });
+});
+
+describe("snapAbsMin", () => {
+  it("grid-snaps to 15 by default", () => {
+    expect(snapAbsMin(102)).toBe(105);
+    expect(snapAbsMin(97)).toBe(90);
+  });
+
+  it("fine-snaps to 5 when snapMin=5 (Alt/Option)", () => {
+    expect(snapAbsMin(102, { snapMin: 5 })).toBe(100);
+    expect(snapAbsMin(103, { snapMin: 5 })).toBe(105);
+  });
+
+  it("magnet-snaps to the nearest edge within threshold, beating the grid", () => {
+    expect(snapAbsMin(102, { magnetEdges: [100] })).toBe(100);
+  });
+
+  it("falls back to grid when no edge is within threshold", () => {
+    expect(snapAbsMin(102, { magnetEdges: [92] })).toBe(105);
+  });
+
+  it("picks the nearest of several edges", () => {
+    expect(snapAbsMin(610, { magnetEdges: [600, 615, 720] })).toBe(615);
+  });
+
+  it("magnet works across midnight (continuous absolute minutes)", () => {
+    expect(snapAbsMin(1438, { magnetEdges: [1440] })).toBe(1440);
+  });
+});
+
+describe("shiftIsoByPx / resizeIsoByPx with SnapOpts", () => {
+  const A = "2026-06-11";
+
+  it("shiftIsoByPx magnet-snaps the start to a neighbor edge", () => {
+    expect(shiftIsoByPx(A, 3, `2026-06-11T09:00:00${off(A)}`, 4, { magnetEdges: [540] })).toBe(
+      `2026-06-11T09:00:00${off(A)}`,
+    );
+  });
+
+  it("shiftIsoByPx fine-snaps to 5 with snapMin=5", () => {
+    expect(shiftIsoByPx(A, 3, `2026-06-11T09:00:00${off(A)}`, 7, { snapMin: 5 })).toBe(
+      `2026-06-11T09:05:00${off(A)}`,
+    );
+  });
+
+  it("resizeIsoByPx bottom magnet-snaps the end to a neighbor edge", () => {
+    const r = resizeIsoByPx({
+      anchorDate: A,
+      days: 3,
+      startISO: `2026-06-11T09:00:00${off(A)}`,
+      durationMin: 60,
+      edge: "bottom",
+      deltaPx: 4,
+      snapOpts: { magnetEdges: [600] },
+    });
+    expect(r.durationMin).toBe(60);
+    expect(r.at).toBe(`2026-06-11T09:00:00${off(A)}`);
+  });
+
+  it("resizeIsoByPx bottom snaps the END to the grid for a non-grid-aligned start (Google event)", () => {
+    // 09:07 start(=547) + 60 = end 10:07(=607); bottom edge grid-snaps the END to 10:00(=600),
+    // so duration becomes 53 (the dragged edge lands on the visible gridline, not the duration).
+    // This is the magnet/grid model: we snap the absolute edge position, not the duration delta.
+    const r = resizeIsoByPx({
+      anchorDate: A,
+      days: 3,
+      startISO: `2026-06-11T09:07:00${off(A)}`,
+      durationMin: 60,
+      edge: "bottom",
+      deltaPx: 0,
+    });
+    expect(r.durationMin).toBe(53);
+    expect(r.at).toBe(`2026-06-11T09:07:00${off(A)}`);
   });
 });

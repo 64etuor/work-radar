@@ -7,7 +7,12 @@ import {
   resizeIsoByPx,
   shiftIsoByPx,
 } from "@/lib/timelineCoords";
-import { computeLayout, type LayoutBox, type TimedBlock } from "@/lib/timelineLayout";
+import {
+  computeLayout,
+  type LayoutBox,
+  magnetEdgesFromBoxes,
+  type TimedBlock,
+} from "@/lib/timelineLayout";
 
 export type DragDelta = { x: number; y: number };
 export type DragGuide = {
@@ -129,6 +134,7 @@ export function previewTimelineBoxes({
   delta,
   anchorDate,
   days,
+  snapMin,
 }: {
   boxes: LayoutBox[];
   activeDrag: DragData | null | undefined;
@@ -136,6 +142,7 @@ export function previewTimelineBoxes({
   /** 연속 절대 분 축의 0점(로드된 첫 날짜) — computeLayout/좌표 변환 공유. */
   anchorDate: string;
   days: number;
+  /** 그리드 스냅 단위(분). 기본 15. Alt/Option fine-snap 시 5. */ snapMin?: number;
 }): LayoutBox[] {
   if (!activeDrag || !delta) return boxes;
   if (activeDrag.from !== "canvas" && activeDrag.from !== "canvas-resize") {
@@ -143,6 +150,11 @@ export function previewTimelineBoxes({
   }
   const activeId = blockIdForDrag(activeDrag);
   if (!activeId) return boxes;
+
+  const snapOpts = {
+    snapMin,
+    magnetEdges: magnetEdgesFromBoxes(boxes, anchorDate, activeId),
+  };
 
   let changed = false;
   const blocks: TimedBlock[] = boxes.map((box) => {
@@ -157,7 +169,7 @@ export function previewTimelineBoxes({
       (activeDrag.blockKind === "event" && activeDrag.routineId != null);
 
     if (activeDrag.from === "canvas") {
-      const shifted = shiftIsoByPx(anchorDate, days, activeDrag.startISO, delta.y);
+      const shifted = shiftIsoByPx(anchorDate, days, activeDrag.startISO, delta.y, snapOpts);
       const startISO = routineBacked ? clampIsoToDate(shifted, occDate) : shifted;
       const durationMin = routineBacked
         ? clampDurationToDate(startISO, occDate, activeDrag.durationMin)
@@ -174,6 +186,7 @@ export function previewTimelineBoxes({
       durationMin: activeDrag.durationMin,
       edge: activeDrag.edge,
       deltaPx: delta.y,
+      snapOpts,
     });
     const at = routineBacked ? clampIsoToDate(resized.at, occDate) : resized.at;
     // 시작이 클램프로 밀렸으면 끝 시각 고정을 위해 duration 보정(commit의 resize 분기와 동일).
