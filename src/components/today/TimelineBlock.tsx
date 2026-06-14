@@ -4,6 +4,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import {
   resizeHandleHeightPx,
+  showTopHandle,
   timelineBlockPlacementStyle,
 } from "@/components/today/timelineBlockStyle";
 import type { DragData } from "@/components/today/useTimelineDnd";
@@ -226,8 +227,9 @@ export function TimelineBlock({
             translate: suppressDragTransform ? null : transform,
             disableLayoutTransition,
           }),
-          // 높이별 리사이즈 핸들 hitbox(CSS var) — 짧은 블록 중앙 move 밴드 확보(Bug 1a).
-          "--tl-resize-h": `${resizeHandleHeightPx(heightPx)}px`,
+          // 리사이즈 핸들 hitbox(CSS var) — 이제 상수 8px(Bug fix 2026-06-14). 짧은 블록은
+          // showTopHandle로 상단 핸들을 떼서 move 밴드를 확보한다.
+          "--tl-resize-h": `${resizeHandleHeightPx()}px`,
         } as CSSProperties
       }
     >
@@ -280,7 +282,9 @@ export function TimelineBlock({
           }}
         />
       )}
-      <ResizeHandle edge="top" box={box} durationMin={durationMin} />
+      {/* 짧은 블록(<28px)은 상단 핸들 생략 — 전체 body가 move로 잡혀야 하기 때문(Bug fix 2026-06-14).
+          상단 시각 조정은 Phase 3 키보드로 보완. 하단 핸들은 항상 렌더. */}
+      {showTopHandle(heightPx) && <ResizeHandle edge="top" box={box} durationMin={durationMin} />}
       <ResizeHandle edge="bottom" box={box} durationMin={durationMin} />
     </div>
   );
