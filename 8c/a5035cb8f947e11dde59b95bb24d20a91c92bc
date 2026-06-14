@@ -1,0 +1,40 @@
+src/components/today/timelineDragData.ts
+  s_9879bbf7505b01::t_729aae9abe6203 1-127
+docs/decisions.md
+  s_9879bbf7505b01::t_388161a295d213 633
+src/components/today/TimelineBlock.tsx
+  s_9879bbf7505b01::t_0e1a2438f866b0 9
+src/components/today/TimelineBlock.dom.test.tsx
+  s_9879bbf7505b01::t_f2fc94656bcd6c 73-122
+  s_9879bbf7505b01::t_551e0eb0c64938 10
+src/lib/todayBlocks.ts
+  s_9879bbf7505b01::t_c16fdc3e5dfbd9 130
+  s_9879bbf7505b01::t_910e97a02532b1 237-240
+  s_9879bbf7505b01::t_8be5e024e64cb5 181-183,186-192,195-198,202,204-206,211,221-224,228,235-236,242-243,250-251
+  s_9879bbf7505b01::t_5323fcb82287c3 229-234
+  s_9879bbf7505b01::t_ba8b782e47e665 136-137,139-143
+src/lib/todayBlocks.test.ts
+  s_9879bbf7505b01::t_c7a3548517a792 305,307-308
+  s_9879bbf7505b01::t_cb87d7120c40cd 343
+  s_9879bbf7505b01::t_c0b50399b606b0 452
+  s_9879bbf7505b01::t_7e6f3d9f1fe44f 490
+  s_9879bbf7505b01::t_a119a981e2bdc1 375,377-378
+  s_9879bbf7505b01::t_c5e166ab8bb264 494-543
+  s_9879bbf7505b01::t_fc45b744f8e1f2 544-546,553,565-569
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "8ca5035cb8f947e11dde59b95bb24d20a91c92bc",
+  "prompts": {},
+  "sessions": {
+    "s_9879bbf7505b01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "910261e2-a97c-4d6e-865b-9882c8bae41f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
