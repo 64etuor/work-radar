@@ -1,0 +1,19 @@
+docs/superpowers/plans/2026-06-14-dnd-overhaul-autonomous-loop-runbook.md
+  s_f1c45ebba0178b::t_a87915914e8e3b 1-4,6-33,35-86,88-107,109-132,134-142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c74bfe946aabe25f3a9868dc378d3a56820a2d44",
+  "prompts": {},
+  "sessions": {
+    "s_f1c45ebba0178b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33f5e466-9a85-43a3-8bc9-bb208dd9b941",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
