@@ -60,24 +60,34 @@ export async function requestReview(
   const failures: ReviewFailure[] = [];
   const skipped: ReviewSkip[] = [];
 
-  for (let i = 0; i < reviewers.length; i++) {
-    const { model, fn } = reviewers[i];
-    // pre-skip a reviewer that is the same model as the author (different-model invariant)
-    if (normalizeModelId(model) === normalizeModelId(input.authorModel)) {
-      skipped.push({ reviewerModel: model, reason: "same model as author" });
-      continue;
-    }
-    const at = new Date(now.getTime() + i * 1000); // unique stamp within a batch → unique id + filename; a cross-batch same-second collision is fail-safe (writeEvent uses wx → surfaces as a caught failure, not corruption)
-    try {
-      const r = await recordReview(
-        workspaceDir,
-        { decisionId: input.decisionId, title: state.title, proposalBody: proposal.body, authorModel: input.authorModel },
-        fn, at, rand,
-      );
-      recorded.push(r);
-    } catch (err) {
-      failures.push({ reviewerModel: model, error: err instanceof Error ? err.message : String(err) });
-    }
+  const results = await Promise.all(
+    reviewers.map(async ({ model, fn }, i): Promise<
+      | { kind: "recorded"; result: RecordReviewResult }
+      | { kind: "failure"; failure: ReviewFailure }
+      | { kind: "skipped"; skip: ReviewSkip }
+    > => {
+      // pre-skip a reviewer that is the same model as the author (different-model invariant)
+      if (normalizeModelId(model) === normalizeModelId(input.authorModel)) {
+        return { kind: "skipped", skip: { reviewerModel: model, reason: "same model as author" } };
+      }
+      const at = new Date(now.getTime() + i * 1000); // unique stamp within a batch → unique id + filename; a cross-batch same-second collision is fail-safe (writeEvent uses wx → surfaces as a caught failure, not corruption)
+      try {
+        const result = await recordReview(
+          workspaceDir,
+          { decisionId: input.decisionId, title: state.title, proposalBody: proposal.body, authorModel: input.authorModel },
+          fn, at, rand,
+        );
+        return { kind: "recorded", result };
+      } catch (err) {
+        return { kind: "failure", failure: { reviewerModel: model, error: err instanceof Error ? err.message : String(err) } };
+      }
+    }),
+  );
+
+  for (const result of results) {
+    if (result.kind === "recorded") recorded.push(result.result);
+    else if (result.kind === "failure") failures.push(result.failure);
+    else skipped.push(result.skip);
   }
   return { recorded, failures, skipped };
 }

@@ -62,8 +62,7 @@ function latestSessionForTask(all: GovEvent[], taskId: string): string | null {
   let latest: GovEvent | null = null;
   for (const e of all) {
     if (e.frontmatter.type !== "session_spawned") continue;
-    const related = e.frontmatter.related_to ?? [];
-    if (!related.includes(taskId)) continue;
+    if (!eventReferences(e, taskId)) continue;
     if (!latest || e.frontmatter.id.localeCompare(latest.frontmatter.id) > 0) latest = e;
   }
   return latest?.frontmatter.id ?? null;
@@ -73,30 +72,41 @@ function latestSessionForTask(all: GovEvent[], taskId: string): string | null {
  *  Conservative: a block whose decision proposal cannot be found counts as open.
  *  Exported so the v3 Conductor's halt projection REUSES this exact coupling (not a duplicate). */
 export function hasOpenBlock(all: GovEvent[], taskId: string): boolean {
+  return openBlockedTaskIds(all).has(taskId);
+}
+
+export function openBlockedTaskIds(all: readonly GovEvent[]): Set<string> {
   const proposalById = new Map<string, GovEvent>();
+  const relatedEventsById = buildRelatedEventsById(all);
   for (const e of all) {
     if (e.frontmatter.type === "decision_proposed") proposalById.set(e.frontmatter.id, e);
   }
-  const blocks = all.filter(
-    (e) =>
-      e.frontmatter.type === "decision_blocked" &&
-      (e.frontmatter.related_to ?? []).includes(taskId),
-  );
-  for (const b of blocks) {
+
+  const openTaskIds = new Set<string>();
+  for (const b of all) {
+    if (b.frontmatter.type !== "decision_blocked") continue;
     const relatedIds = b.frontmatter.related_to ?? [];
     let decId: string | undefined;
+    const taskIds: string[] = [];
     for (const rid of relatedIds) {
       const p = proposalById.get(rid);
-      if (p?.frontmatter.type === "decision_proposed") {
+      if (!decId && p?.frontmatter.type === "decision_proposed") {
         decId = rid;
-        break;
+      } else {
+        taskIds.push(rid);
       }
     }
-    if (!decId) return true; // cannot prove resolved → conservative
-    const grp = eventsForDecision(all, decId);
-    if (grp.proposal && !deriveDecisionState(grp.proposal, grp.related).verdict) return true;
+    if (!decId) {
+      for (const candidateTaskId of taskIds) openTaskIds.add(candidateTaskId);
+      continue;
+    }
+    const proposal = proposalById.get(decId);
+    const related = relatedEventsById.get(decId) ?? [];
+    if (proposal && !deriveDecisionState(proposal, related).verdict) {
+      for (const candidateTaskId of taskIds) openTaskIds.add(candidateTaskId);
+    }
   }
-  return false;
+  return openTaskIds;
 }
 
 /** start_task — ready/blocked → active. */
@@ -260,10 +270,10 @@ export interface TaskSummary {
 /** tasks — non-terminal tasks. */
 export async function listTasks(workspaceDir: string): Promise<TaskSummary[]> {
   const all = await readAllEvents(workspaceDir);
+  const relatedEventsById = buildRelatedEventsById(all);
   const out: TaskSummary[] = [];
   for (const t of tasksOf(all)) {
-    const grp = eventsForDecision(all, t.frontmatter.id);
-    const s = deriveTaskState(grp.proposal!, grp.related);
+    const s = deriveTaskState(t, relatedEventsById.get(t.frontmatter.id) ?? []);
     if (s.phase !== "done" && s.phase !== "cancelled")
       out.push({ taskId: s.taskId, title: s.title, phase: s.phase });
   }
@@ -300,4 +310,30 @@ export async function taskTrail(
     summary: e.body.split("\n", 1)[0] ?? "",
   }));
   return { taskId: s.taskId, title: s.title, phase: s.phase, chain };
+}
+
+function buildRelatedEventsById(all: readonly GovEvent[]): Map<string, GovEvent[]> {
+  const relatedEventsById = new Map<string, GovEvent[]>();
+  for (const event of all) {
+    for (const relatedId of event.frontmatter.related_to ?? []) {
+      if (relatedId === event.frontmatter.id) continue;
+      const existing = relatedEventsById.get(relatedId);
+      if (existing) {
+        existing.push(event);
+      } else {
+        relatedEventsById.set(relatedId, [event]);
+      }
+    }
+  }
+  for (const relatedEvents of relatedEventsById.values()) {
+    relatedEvents.sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
+  }
+  return relatedEventsById;
+}
+
+function eventReferences(event: GovEvent, id: string): boolean {
+  for (const ref of event.frontmatter.related_to ?? []) {
+    if (ref === id) return true;
+  }
+  return false;
 }

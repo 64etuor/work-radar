@@ -443,10 +443,9 @@ function findResolvedEscalation(
 
   for (const blocked of all) {
     if (blocked.frontmatter.type !== "decision_blocked") continue;
-    const rel = blocked.frontmatter.related_to ?? [];
-    if (!rel.includes(taskId)) continue;
-    const decisionId = rel.find((r) => r !== taskId);
-    if (!decisionId) continue;
+    const linked = taskLinkWithFirstOtherRef(blocked, taskId);
+    if (!linked) continue;
+    const decisionId = linked.firstOtherRef;
     const chosen = chosenByDecisionId.get(decisionId);
     if (!chosen) continue;
     // Hard consume-once: a resume spawn already references this decision — never resume it again.
@@ -500,17 +499,13 @@ export async function resumeChosenEscalation(
   rand: number,
 ): Promise<ResumeChosenEscalationResult> {
   const { state, all } = await loadConductor(workspaceDir, input.planId);
+  const latestSpawnByRelatedId = latestSessionSpawnByRelatedId(all);
   for (const step of state.steps) {
     if (!step.taskId || !step.sessionId) continue;
     if (step.taskPhase !== "active" || step.halted) continue;
     // Latest spawn for the task (resume spawns append here, so ordering self-terminates).
-    const spawns = all.filter(
-      (e) =>
-        e.frontmatter.type === "session_spawned" &&
-        (e.frontmatter.related_to ?? []).includes(step.taskId!),
-    );
-    if (spawns.length === 0) continue;
-    const latestSpawn = spawns.reduce((a, b) => (a.frontmatter.id > b.frontmatter.id ? a : b));
+    const latestSpawn = latestSpawnByRelatedId.get(step.taskId);
+    if (!latestSpawn) continue;
     // Never spawn beside a live session: the latest one must be terminal.
     const grp = eventsForDecision(all, latestSpawn.frontmatter.id);
     const sess = deriveSessionState(latestSpawn, grp.related);
@@ -611,6 +606,36 @@ export async function resumeChosenEscalation(
   return { kind: "no_action", reason: "no resolved-escalation step" };
 }
 
+function taskLinkWithFirstOtherRef(
+  event: GovEvent,
+  taskId: string,
+): { firstOtherRef: string } | null {
+  let referencesTask = false;
+  let firstOtherRef: string | null = null;
+  for (const ref of event.frontmatter.related_to ?? []) {
+    if (ref === taskId) {
+      referencesTask = true;
+    } else if (!firstOtherRef) {
+      firstOtherRef = ref;
+    }
+  }
+  return referencesTask && firstOtherRef ? { firstOtherRef } : null;
+}
+
+function latestSessionSpawnByRelatedId(all: readonly GovEvent[]): Map<string, GovEvent> {
+  const latestSpawnByRelatedId = new Map<string, GovEvent>();
+  for (const event of all) {
+    if (event.frontmatter.type !== "session_spawned") continue;
+    for (const relatedId of event.frontmatter.related_to ?? []) {
+      const latest = latestSpawnByRelatedId.get(relatedId);
+      if (!latest || event.frontmatter.id > latest.frontmatter.id) {
+        latestSpawnByRelatedId.set(relatedId, event);
+      }
+    }
+  }
+  return latestSpawnByRelatedId;
+}
+
 function shouldConsiderRetry(step: ConductorStepState): boolean {
   const attempts = step.attempts;
   return (
@@ -633,7 +658,7 @@ async function writeExecutorStall(
   const alreadyBlocked = all.some(
     (e) =>
       e.frontmatter.type === "task_blocked" &&
-      (e.frontmatter.related_to ?? []).includes(taskId) &&
+      eventReferences(e, taskId) &&
       e.body.includes("executor:stall"),
   );
   if (alreadyBlocked) return;
@@ -649,6 +674,13 @@ async function writeExecutorStall(
     body: `Blocked ${taskId}: executor:stall (${reason})`,
   };
   await writeEvent(workspaceDir, evt, now);
+}
+
+function eventReferences(event: GovEvent, id: string): boolean {
+  for (const ref of event.frontmatter.related_to ?? []) {
+    if (ref === id) return true;
+  }
+  return false;
 }
 
 export async function conductPlan(

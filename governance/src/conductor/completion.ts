@@ -249,6 +249,16 @@ function isSessionTerminal(s: SessionState | undefined): boolean {
   return s?.phase === "closed" || s?.phase === "crashed";
 }
 
+interface CompletionCandidate {
+  planId: string;
+  stepIndex: number;
+  worktreePath: string | null;
+}
+
+function completionDiffKey(candidate: CompletionCandidate): string {
+  return `${candidate.planId}\u0000${candidate.stepIndex}`;
+}
+
 export async function completeReportedDone(
   workspaceDir: string,
   deps: CompletionDeps = nodeCompletionDeps,
@@ -264,13 +274,37 @@ export async function completeReportedDone(
   };
   const all = await readAllEvents(workspaceDir);
   const sessions = sessionById(all);
+  const worktreeDiffs = new Map<string, string>();
+  const readWorktreeDiff = options.readWorktreeDiff;
+  if (readWorktreeDiff) {
+    const candidates = plansOf(all).flatMap((plan): CompletionCandidate[] => {
+      const conductor = deriveConductorState(plan, all);
+      return conductor.steps.flatMap((step) =>
+        step.taskId && step.sessionId
+          ? [{ planId: plan.frontmatter.id, stepIndex: step.stepIndex, worktreePath: step.worktreePath }]
+          : [],
+      );
+    });
+    const diffs = await Promise.all(
+      candidates.map(async (candidate) => ({
+        key: completionDiffKey(candidate),
+        diff: await readWorktreeDiff(candidate.worktreePath),
+      })),
+    );
+    for (const { key, diff } of diffs) worktreeDiffs.set(key, diff);
+  }
   let offset = 0;
 
   for (const plan of plansOf(all)) {
+    const planId = plan.frontmatter.id;
     const conductor = deriveConductorState(plan, all);
     for (const step of conductor.steps) {
       if (!step.taskId || !step.sessionId) continue;
-      const worktreeDiff = options.readWorktreeDiff ? await options.readWorktreeDiff(step.worktreePath) : "";
+      const worktreeDiff = worktreeDiffs.get(completionDiffKey({
+        planId,
+        stepIndex: step.stepIndex,
+        worktreePath: step.worktreePath,
+      })) ?? "";
       const result = await evaluateCompletionGate(
         {
           taskId: step.taskId,
@@ -293,7 +327,7 @@ export async function completeReportedDone(
       const detail = (reason: string): void => {
         summary.needsHuman++;
         summary.needsHumanDetails.push({
-          planId: plan.frontmatter.id,
+          planId,
           stepIndex: step.stepIndex,
           taskId: step.taskId!,
           reason,
@@ -310,7 +344,7 @@ export async function completeReportedDone(
       if (deps.commitStepOutput && step.worktreePath) {
         const chained = await deps.commitStepOutput({
           worktreePath: step.worktreePath,
-          planId: plan.frontmatter.id,
+          planId,
           stepIndex: step.stepIndex,
         });
         if (!chained.ok) {

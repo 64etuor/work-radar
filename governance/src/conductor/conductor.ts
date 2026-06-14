@@ -1,8 +1,7 @@
 import type { GovEvent } from "../event/event.ts";
-import { eventsForDecision } from "../decision/readEvents.ts";
 import { derivePlanState, type PlanPhase } from "../plan/plan.ts";
 import { deriveTaskState, type TaskPhase } from "../task/task.ts";
-import { hasOpenBlock } from "../task/handlers.ts";
+import { openBlockedTaskIds } from "../task/handlers.ts";
 import type { Difficulty } from "../backends/difficulty.ts";
 import type { AttemptOutcomeClass } from "../backends/attemptClass.ts";
 import type { BackendSpec } from "../backends/config.ts";
@@ -162,16 +161,17 @@ function recordOf(value: unknown): Record<string, unknown> {
  *  - done = every step materialized AND terminal (done|cancelled). */
 export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent[]): ConductorState {
   const planId = planProposed.frontmatter.id;
-  const planGrp = eventsForDecision(allEvents, planId);
-  const planPhase = derivePlanState(planProposed, planGrp.related).phase;
+  const relatedEventsById = buildRelatedEventsById(allEvents);
+  const eventById = buildEventById(allEvents);
+  const planPhase = derivePlanState(planProposed, relatedEventsById.get(planId) ?? []).phase;
   const stepRecords = parsePlanStepRecords(planProposed.body);
+  const haltedTaskIds = openBlockedTaskIds(allEvents);
 
   // Index step_bound events: stepIndex → taskId (first binding wins; binds are append-only/immutable).
   const boundTaskByStep = new Map<number, string>();
   for (const e of allEvents) {
     if (e.frontmatter.type !== "step_bound") continue;
-    const related = e.frontmatter.related_to ?? [];
-    if (!related.includes(planId)) continue;
+    if (!eventReferences(e, planId)) continue;
     const idx = parseStepIndex(e.body);
     const taskId = parseBoundTaskId(e.body);
     if (idx === null || taskId === null) continue;
@@ -208,9 +208,10 @@ export function deriveConductorState(planProposed: GovEvent, allEvents: GovEvent
         attempts: emptyAttemptProjection(),
       };
     }
-    const tGrp = eventsForDecision(allEvents, taskId);
-    const taskPhase = tGrp.proposal ? deriveTaskState(tGrp.proposal, tGrp.related).phase : null;
-    const halted = hasOpenBlock(allEvents, taskId);
+    const taskProposal = eventById.get(taskId) ?? null;
+    const taskRelated = relatedEventsById.get(taskId) ?? [];
+    const taskPhase = taskProposal ? deriveTaskState(taskProposal, taskRelated).phase : null;
+    const halted = haltedTaskIds.has(taskId);
     const session = sessionByTask.get(taskId);
     return {
       stepIndex,
@@ -269,8 +270,7 @@ function projectExecutorAttempts(allEvents: GovEvent[], taskId: string): Executo
   let latestFinishedWorktreeDirty: boolean | null = null;
 
   for (const e of allEvents) {
-    const related = e.frontmatter.related_to ?? [];
-    if (!related.includes(taskId)) continue;
+    if (!eventReferences(e, taskId)) continue;
     if (e.frontmatter.type === "executor_attempt_started") {
       const body = safeAttemptBody(e.body);
       if (typeof body.attemptIndex !== "number" || !Number.isInteger(body.attemptIndex)) continue;
@@ -300,6 +300,40 @@ function projectExecutorAttempts(allEvents: GovEvent[], taskId: string): Executo
     latestFinishedOutcomeClass,
     latestFinishedWorktreeDirty,
   };
+}
+
+function buildRelatedEventsById(allEvents: readonly GovEvent[]): Map<string, GovEvent[]> {
+  const relatedEventsById = new Map<string, GovEvent[]>();
+  for (const event of allEvents) {
+    for (const relatedId of event.frontmatter.related_to ?? []) {
+      if (relatedId === event.frontmatter.id) continue;
+      const existing = relatedEventsById.get(relatedId);
+      if (existing) {
+        existing.push(event);
+      } else {
+        relatedEventsById.set(relatedId, [event]);
+      }
+    }
+  }
+  for (const relatedEvents of relatedEventsById.values()) {
+    relatedEvents.sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
+  }
+  return relatedEventsById;
+}
+
+function buildEventById(allEvents: readonly GovEvent[]): Map<string, GovEvent> {
+  const eventById = new Map<string, GovEvent>();
+  for (const event of allEvents) {
+    eventById.set(event.frontmatter.id, event);
+  }
+  return eventById;
+}
+
+function eventReferences(event: GovEvent, id: string): boolean {
+  for (const ref of event.frontmatter.related_to ?? []) {
+    if (ref === id) return true;
+  }
+  return false;
 }
 
 function safeAttemptBody(body: string): Record<string, unknown> {

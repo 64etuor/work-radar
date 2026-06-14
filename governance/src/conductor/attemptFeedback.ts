@@ -32,7 +32,7 @@ export function projectPreviousAttemptFeedback(
   let last: { attemptIndex: number; exitCode: number; stderrDigest?: string } | null = null;
   for (const e of allEvents) {
     if (e.frontmatter.type !== "executor_attempt_finished") continue;
-    if (!(e.frontmatter.related_to ?? []).includes(taskId)) continue;
+    if (!eventReferences(e, taskId)) continue;
     let body: Record<string, unknown>;
     try {
       const parsed: unknown = JSON.parse(e.body);
@@ -76,4 +76,11 @@ export function previousAttemptLines(feedback: PreviousAttemptFeedback): string[
       : []),
     "Diagnose the failure above and CHANGE YOUR APPROACH — do not repeat the same failing actions.",
   ];
+}
+
+function eventReferences(event: GovEvent, id: string): boolean {
+  for (const ref of event.frontmatter.related_to ?? []) {
+    if (ref === id) return true;
+  }
+  return false;
 }
