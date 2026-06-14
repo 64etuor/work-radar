@@ -623,6 +623,31 @@ describe("activeDragLabel", () => {
     });
   });
 
+  it("threads snapMin so the pill matches the fine-snapped block under Alt (Major B regression)", () => {
+    const drag: DragData = {
+      from: "canvas",
+      blockKind: "event",
+      blockId: "event:cal:e1",
+      eventId: "e1",
+      title: "Event",
+      startISO: "2026-05-28T09:00:00+09:00",
+      durationMin: 60,
+      calendarId: "cal",
+    };
+    const at = (snapMin?: number) =>
+      activeDragLabel({
+        boxes,
+        activeDrag: drag,
+        delta: { x: 0, y: 7 },
+        anchorDate: "2026-05-28",
+        days: 1,
+        snapMin,
+      })?.startHHMM;
+    // +7px → default 15-grid rounds to 09:00, but Alt fine-snap (snapMin 5) → 09:05.
+    expect(at(undefined)).toBe("09:00");
+    expect(at(5)).toBe("09:05");
+  });
+
   it("returns null for non-canvas drags", () => {
     const tray: DragData = { from: "tray", signalId: "s1", title: "Signal" };
     expect(

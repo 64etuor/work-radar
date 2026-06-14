@@ -273,9 +273,12 @@ export function TodayView() {
   const handleDragEndWithReset = async (ev: Parameters<typeof onDragEnd>[0]) => {
     const activeAtStart = activeDragStartRef.current;
     dispatchDragGhost({ type: "reset" });
-    setFine(false);
     activeDragStartRef.current = null;
+    // ⚠ fineSnap 리셋은 commit(onDragEnd) 이후에 — onDragEnd가 fineSnapRef.current를 동기적으로 읽어
+    // snapMin(Alt=5분)을 정한다. 먼저 false로 리셋하면 Alt fine-snap이 커밋에서 죽어 preview(5분)와
+    // commit(15분)이 어긋난다(preview==commit 불변 위반). 순서를 바꾸지 말 것.
     await onDragEnd(ev, activeAtStart);
+    setFine(false);
     clearAnnounce();
   };
   const handleDragCancel = () => {

@@ -125,7 +125,14 @@ export function TimelineCanvas({
     days,
   });
   // 캔버스 이동/리사이즈 중 active 엣지에 붙는 시각·길이 pill 라벨(resize=범위+길이, move=시작 시각).
-  const dragLabel = activeDragLabel({ boxes, activeDrag, delta: activeDelta, anchorDate, days });
+  const dragLabel = activeDragLabel({
+    boxes,
+    activeDrag,
+    delta: activeDelta,
+    anchorDate,
+    days,
+    snapMin: fineSnap ? 5 : 15,
+  });
   // 캔버스 이동/리사이즈 모두 preview가 스냅된 블록 위치를 소유한다 → raw transform suppress +
   // 레이아웃 transition off(드래그 중 active 블록 ±7.5px 오차 제거 Bug 2a, 이웃 220ms 리플로우
   // rubber-band 제거 Bug 2b). 드롭 시 activeDrag=null로 돌아오면 transition이 살아나 settle.
@@ -138,7 +145,14 @@ export function TimelineCanvas({
   const conflictBlockId =
     activeDrag &&
     (activeDrag.from === "canvas" || activeDrag.from === "canvas-resize") &&
-    activeDragWouldOverlap({ boxes, activeDrag, delta: activeDelta, anchorDate, days })
+    activeDragWouldOverlap({
+      boxes,
+      activeDrag,
+      delta: activeDelta,
+      anchorDate,
+      days,
+      snapMin: fineSnap ? 5 : 15,
+    })
       ? activeDrag.blockId
       : null;
 

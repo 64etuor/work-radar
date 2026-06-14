@@ -235,6 +235,8 @@ export function activeDragLabel(args: {
   delta: DragDelta | null | undefined;
   anchorDate: string;
   days: number;
+  /** 그리드 스냅 단위(분). 기본 15. Alt fine-snap 시 5 — pill 시각이 렌더된 블록과 일치해야 한다. */
+  snapMin?: number;
 }): ActiveDragLabel | null {
   const { activeDrag, anchorDate } = args;
   if (!activeDrag) return null;
@@ -265,6 +267,8 @@ export function activeDragWouldOverlap(args: {
   delta: DragDelta | null | undefined;
   anchorDate: string;
   days: number;
+  /** 그리드 스냅 단위(분). 기본 15. Alt fine-snap 시 5 — 틴트가 렌더된 preview 레이아웃과 일치해야 한다. */
+  snapMin?: number;
 }): boolean {
   const { activeDrag } = args;
   if (!activeDrag) return false;
