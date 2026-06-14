@@ -15,7 +15,7 @@ SQLite·마이그레이션은 `docs/areas/data-layer-conventions.md`에 있다 �
 설계 정본: `docs/superpowers/specs/2026-06-04-external-action-gate-mcp-design.md` §3.
 Phase 계획: `docs/superpowers/plans/2026-06-04-external-action-gate-phase1.md`.
 
-## 핵심 불변 — MCP는 "제안 생성기"이지 "행위 실행기"가 아니다
+## 핵심 불변 — MCP는 기본적으로 "제안 생성기"이지 "행위 실행기"가 아니다
 
 > **MCP 서버는 외부 AI가 작업을 *제안*만 하는 표면이다. 실행은 사용자 승인 후
 > Rust 커넥터 전용.** 이것이 INVARIANT #1(결정 레일은 사람만) / #2(외부 변경은
@@ -39,6 +39,13 @@ MCP 툴 본문은 `external_actions::store::{enqueue,list_pending,status}`만 �
   불가하게 만들면 type-wall이 됨 — 그 전까지는 컴파일 보장이 아니라 계약임을 명시.
 - 위반(`approve`/`reject`/execute를 mcp에서 호출) = INVARIANT #1/#2 위반 = 차단.
 
+**좁은 예외 — Work Radar Hermes Calendar.** work-radar가 Hermes ACP 세션에
+`work-radar --mcp-stdio` 서버를 주입하면서 `WORK_RADAR_MCP_CALLER=hermes`를 함께 준 경우,
+`wr_calendar_create_event`만 즉시 Google Calendar 이벤트를 생성할 수 있다. 이때 사람 게이트는
+Hermes의 ACP `session/request_permission` 카드이며, Work Radar 승인 큐를 한 번 더 거치지 않는다.
+토큰/identity는 여전히 `project_id` → DB `credential_ref` → keychain으로만 해석한다. 다른 MCP caller,
+다른 write tool, env 없는 `--mcp-stdio`는 기존 proposal-only 계약을 유지한다.
+
 ## 1. 툴 표면 — 좁게 고정
 
 | 허용                                                                    | 금지                                                  |
@@ -51,6 +58,8 @@ MCP 툴 본문은 `external_actions::store::{enqueue,list_pending,status}`만 �
   표면(`wr_list_projects`/`wr_read_signals`/`wr_pr_status` 등 cache read)을 나열한다 —
   **read 표면은 Phase별로 확장되지만 write 툴 계약(enqueue만)은 불변.**
 - 툴 목록은 **startup 시 고정** — 런타임 동적 registration 금지(rug pull 방어).
+- `wr_calendar_create_event`의 Hermes-origin 직접 생성 예외는 위 표면 안의 고정 동작이며, 동적 tool
+  mutation이 아니다. env marker가 없으면 동일 툴은 proposal-only로 동작한다.
 - 툴 표면 변경 = 명시적 코드 변경 + 스키마 스냅샷 테스트 갱신(아래 §8).
 
 ## 2. 입력 스키마 — strict, 좁은 타입
@@ -180,6 +189,8 @@ session_id/input_hash`) — "이 proposal이 왜 생겼나"를 사용자가 추�
 
 - **모든 write 툴(현재·미래)의 본문 = `store::enqueue`만.** 커넥터별 PR로 GitHub/Notion/
   Calendar/Gmail write 툴이 추가돼도 본문은 §1·§2·§8을 그대로 상속 — `execute`/`approve` 경로 없음.
+  단, 위에 명시한 Work Radar Hermes `wr_calendar_create_event` 예외는 Hermes permission card를 사람
+  결정으로 간주하는 Phase 19 Calendar 직접 생성 경로다.
 - **read 표면은 Phase별로 확장**하되 토큰/payload 본문 미노출(§6·§7)은 불변.
 - **검증 계약:** 헤드리스 stdio 라운드트립(propose→enqueue→list/status, 외부호출 0) +
   스키마 스냅샷(§8) + `cargo test`/clippy `-D warnings`/fmt. 실 외부호출 라이브 스모크는 **사용자**.

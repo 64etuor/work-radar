@@ -1,15 +1,18 @@
-//! work-radar 앱 내장 stdio MCP 서버(External Action Gate Phase 1, **proposal-only**).
+//! work-radar 앱 내장 stdio MCP 서버(External Action Gate Phase 1, **proposal-only by default**).
 //!
 //! 외부 AI 에이전트(Claude Code / Codex / Hermes)가 `work-radar --mcp-stdio`로 spawn해 등록한다.
 //! - read 툴  = DB 조회(메타만 — 토큰/payload 본문 미노출).
 //! - write 툴 = `store::enqueue`만 호출(제안 생성). 커넥터 `execute`/`Acceptance::mint` 경로 **없음**
 //!   — 모듈 경계 + Task 1.0 토큰 type-wall(`pub(in crate::external_actions)`)로 컴파일 강제.
+//! - 예외: work-radar Hermes가 ACP `session/request_permission`으로 먼저 사용자 확인을 받은 뒤
+//!   호출하는 `wr_calendar_create_event`는 `WORK_RADAR_MCP_CALLER=hermes`일 때만 즉시 생성한다.
 //!
 //! 승인/실행은 work-radar GUI(같은 DB의 승인 패널)와 Rust 커넥터(Phase 2~5)가 담당한다.
-//! 이 모듈은 실 외부 호출을 **하지 않는다**(Phase 1 외부 호출 0).
+//! 기본 MCP 경로는 실 외부 호출을 **하지 않는다**(Phase 1 외부 호출 0).
 
 pub mod run;
 
+use crate::calendar::{execute_calendar_action, HttpCalendarProvider};
 use crate::commands::projects;
 use crate::db::Db;
 use crate::error::AppError;
@@ -171,6 +174,19 @@ pub struct ActionStatus {
     pub status: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum McpCaller {
+    Hermes,
+    Other,
+}
+
+fn mcp_caller_from_env() -> McpCaller {
+    match std::env::var("WORK_RADAR_MCP_CALLER") {
+        Ok(v) if v.trim().eq_ignore_ascii_case("hermes") => McpCaller::Hermes,
+        _ => McpCaller::Other,
+    }
+}
+
 #[tool_router(server_handler)]
 impl WrServer {
     /// 승인 대기 외부 액션 목록(메타만). 토큰/payload 본문 미노출.
@@ -282,26 +298,41 @@ impl WrServer {
             .await
     }
 
-    /// Google Calendar 이벤트 생성을 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
-    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다. 사람-폼 제출
-    /// (앱 내부 pending_calendar_writes)과는 별개 경로다(spec §4 이중 경로 — 이건 외부 에이전트 제안용).
+    /// Google Calendar 이벤트 생성을 기본적으로 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust
+    /// 커넥터가 실행). 예외: work-radar Hermes가 ACP permission card로 이미 사용자 확인을 받은
+    /// 세션(`WORK_RADAR_MCP_CALLER=hermes`)에서는 즉시 생성한다. project_id를 검증해 credential_ref를
+    /// 해석하고(#11), proposal 경로는 안정 멱등 키로 enqueue한다.
     #[tool(
         name = "wr_calendar_create_event",
-        description = "Propose creating a Google Calendar event for the given project (project_id is validated against the projects table; start/end accept RFC3339 or YYYY-MM-DD for all-day). Returns an action_id awaiting user approval; does NOT execute."
+        description = "Create a Google Calendar event only when called by work-radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated; start/end accept RFC3339 or YYYY-MM-DD for all-day."
     )]
     pub async fn calendar_create_event(
         &self,
         Parameters(p): Parameters<CalendarCreateEventParams>,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        self.calendar_create_event_for_caller(p, mcp_caller_from_env())
+            .await
+    }
+
+    async fn calendar_create_event_for_caller(
+        &self,
+        p: CalendarCreateEventParams,
+        caller: McpCaller,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("Calendar 이벤트 생성: {}", p.title);
         let action = ExternalAction::CalendarCreateEvent {
-            calendar_id: p.calendar_id,
-            title: p.title,
-            start: p.start,
-            end: p.end,
+            calendar_id: p.calendar_id.clone(),
+            title: p.title.clone(),
+            start: p.start.clone(),
+            end: p.end.clone(),
             all_day: p.all_day,
-            description: p.description,
+            description: p.description.clone(),
         };
+        if caller == McpCaller::Hermes {
+            return self
+                .execute_hermes_calendar_create(&p.project_id, action)
+                .await;
+        }
         self.enqueue_write_proposal(&p.project_id, action, &summary)
             .await
     }
@@ -380,6 +411,47 @@ impl WrServer {
 }
 
 impl WrServer {
+    /// Hermes-only direct Calendar write path. The human gate is Hermes' ACP permission card; this
+    /// function still resolves identity from the DB project row and token from keychain only.
+    async fn execute_hermes_calendar_create(
+        &self,
+        project_id: &str,
+        action: ExternalAction,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let project = projects::fetch_project(&self.db, project_id)
+            .await
+            .map_err(|e| mcp_tool_error("wr_calendar_create_event", &AppError::from(e)))?
+            .ok_or_else(|| {
+                rmcp::ErrorData::invalid_params(format!("unknown project_id: {project_id}"), None)
+            })?;
+        let access = crate::commands::calendar::access_token_for_cref(&project.credential_ref)
+            .await
+            .map_err(|e| {
+                mcp_tool_error(
+                    "wr_calendar_create_event",
+                    &AppError::terminal("calendar.access_token", e),
+                )
+            })?
+            .ok_or_else(|| {
+                mcp_tool_error(
+                    "wr_calendar_create_event",
+                    &AppError::not_found(
+                        "calendar.not_connected",
+                        "미연결 — 먼저 Google Calendar를 연결하세요",
+                    ),
+                )
+            })?;
+        let provider = HttpCalendarProvider::new()
+            .map_err(|e| mcp_tool_error("wr_calendar_create_event", &AppError::from(e)))?;
+        let outcome = execute_calendar_action(&provider, &access, &action)
+            .await
+            .map_err(|e| mcp_tool_error("wr_calendar_create_event", &e))?;
+        Ok(Json(ProposeResult {
+            action_id: outcome.external_ref.unwrap_or_default(),
+            status: "succeeded".into(),
+        }))
+    }
+
     /// 외부 write 제안의 공통 경로(서비스 무관 — GitHub/Notion/… 공유): project_id 검증(#11) →
     /// preview 합성(대상 identity 노출) → 안정 멱등 키로 enqueue. **실행하지 않는다**
     /// (store::enqueue_with_idempotency만 — 승인 후 Rust 커넥터가 실행). Phase 2~5 write 툴이 공유한다.
@@ -455,6 +527,10 @@ fn stable_idem_key(action: &ExternalAction, project_id: &str) -> Result<String, 
 /// (예: "db.query") message/payload 본문은 절대 넣지 않는다. trace_id는 로그 상관용으로 stderr에만.
 /// stderr 기록(stdout 아님 — stdout은 MCP 프로토콜 전용)으로 삼킨 에러가 완전히 안 보이는 일은 없게 한다.
 fn db_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
+    mcp_tool_error(tool, e)
+}
+
+fn mcp_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
     eprintln!(
         "[work-radar mcp-stdio] {tool} db error: code={} trace_id={}",
         e.code, e.trace_id
@@ -646,7 +722,7 @@ mod write_tool_tests {
             description: Some("주간 동기화".into()),
         };
         let first = server
-            .calendar_create_event(Parameters(params()))
+            .calendar_create_event_for_caller(params(), McpCaller::Other)
             .await
             .unwrap();
         let id1 = first.0.action_id.clone();
@@ -658,7 +734,7 @@ mod write_tool_tests {
         );
         // 동일 제안 재호출 → 안정 키로 dedup(같은 id, 큐 1건).
         let second = server
-            .calendar_create_event(Parameters(params()))
+            .calendar_create_event_for_caller(params(), McpCaller::Other)
             .await
             .unwrap();
         assert_eq!(
@@ -666,6 +742,35 @@ mod write_tool_tests {
             "동일 내용 = 동일 멱등 키 = 같은 id"
         );
         assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
+    }
+
+    /// Hermes-origin Calendar 호출은 승인 큐에 enqueue하지 않는다. 알 수 없는 project_id도 즉시 거부된다.
+    #[tokio::test]
+    async fn hermes_calendar_create_event_rejects_unknown_project_without_enqueue() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let res = server
+            .calendar_create_event_for_caller(
+                CalendarCreateEventParams {
+                    project_id: "does-not-exist".into(),
+                    calendar_id: "primary".into(),
+                    title: "회의".into(),
+                    start: "2026-06-04T10:00:00+09:00".into(),
+                    end: "2026-06-04T11:00:00+09:00".into(),
+                    all_day: false,
+                    description: None,
+                },
+                McpCaller::Hermes,
+            )
+            .await;
+        assert!(
+            res.is_err(),
+            "Hermes direct 경로도 unknown project_id는 거부"
+        );
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "Hermes direct 경로는 승인 큐에 enqueue하지 않음"
+        );
     }
 
     /// Gmail: 알 수 없는 project_id → 거부 + enqueue 0(#11, 다른 write 툴과 동일한 격리 계약).

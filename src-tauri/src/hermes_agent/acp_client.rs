@@ -357,6 +357,8 @@ pub(crate) async fn governance_mcp_servers_for_tab(db: &crate::db::Db, tab_id: &
     acp_mcp_servers_from_boule_mcp_json(&raw, node_override.as_deref())
 }
 
+const HERMES_MCP_CALLER_ENV: &str = "WORK_RADAR_MCP_CALLER";
+
 /// Pure: a repo's generated `.boule/mcp.json` ({"mcpServers": {<name>: {command, args, env{}}}})
 /// → ACP `session/new` `mcpServers` array. ACP `env` is a **list** `[{name,value}]` (differs
 /// from mcp.json's dict — spec §5.0). `node_override` (absolute path) replaces a bare
@@ -381,15 +383,19 @@ pub(crate) fn acp_mcp_servers_from_boule_mcp_json(
             _ => command.to_string(),
         };
         let args = spec.get("args").cloned().unwrap_or_else(|| json!([]));
-        let env_list: Vec<Json> = spec
+        let mut env_list: Vec<Json> = spec
             .get("env")
             .and_then(|v| v.as_object())
             .map(|envs| {
                 envs.iter()
+                    .filter(|(k, _)| k.as_str() != HERMES_MCP_CALLER_ENV)
                     .filter_map(|(k, v)| v.as_str().map(|val| json!({ "name": k, "value": val })))
                     .collect()
             })
             .unwrap_or_default();
+        if is_work_radar_mcp_stdio(&command, &args) {
+            env_list.push(json!({ "name": HERMES_MCP_CALLER_ENV, "value": "hermes" }));
+        }
         out.push(json!({
             "name": name,
             "command": command,
@@ -398,6 +404,17 @@ pub(crate) fn acp_mcp_servers_from_boule_mcp_json(
         }));
     }
     out
+}
+
+fn is_work_radar_mcp_stdio(command: &str, args: &Json) -> bool {
+    let has_mcp_stdio = args
+        .as_array()
+        .is_some_and(|items| items.iter().any(|v| v.as_str() == Some("--mcp-stdio")));
+    has_mcp_stdio
+        && command
+            .rsplit('/')
+            .next()
+            .is_some_and(|bin| bin.contains("work-radar"))
 }
 
 /// Emit a Tauri event with `tabId` injected at the top level of payload.
@@ -683,6 +700,10 @@ mod tests {
         assert!(env
             .iter()
             .any(|e| e["name"] == "BOULE_AUTONOMY_LEVEL" && e["value"] == "dispatch"));
+        assert!(
+            !env.iter().any(|e| e["name"] == HERMES_MCP_CALLER_ENV),
+            "governance node MCP server does not get work-radar direct-write marker"
+        );
     }
 
     #[test]
@@ -690,7 +711,10 @@ mod tests {
         let raw = r#"{"mcpServers": {"x": {"command": "/usr/local/bin/work-radar", "args": ["--mcp-stdio"]}}}"#;
         let servers = acp_mcp_servers_from_boule_mcp_json(raw, Some("/abs/node"));
         assert_eq!(servers[0]["command"], "/usr/local/bin/work-radar");
-        assert_eq!(servers[0]["env"], json!([]));
+        assert_eq!(
+            servers[0]["env"],
+            json!([{ "name": HERMES_MCP_CALLER_ENV, "value": "hermes" }])
+        );
     }
 
     #[test]
