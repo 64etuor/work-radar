@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { resizeHandleHeightPx, timelineBlockPlacementStyle } from "./timelineBlockStyle";
+import {
+  resizeHandleHeightPx,
+  showTopHandle,
+  timelineBlockPlacementStyle,
+} from "./timelineBlockStyle";
 
 describe("timelineBlockPlacementStyle", () => {
   it("uses CSS-safe percentages for split overlap placement", () => {
@@ -50,20 +54,24 @@ describe("timelineBlockPlacementStyle", () => {
 });
 
 describe("resizeHandleHeightPx", () => {
-  it("shrinks the resize hitbox on short blocks to preserve a center move band (Bug 1a)", () => {
-    // 최소 블록(20px = 15분) → 3px 핸들 → 중앙 14px가 move로 잡힘.
-    expect(resizeHandleHeightPx(20)).toBe(3);
-    // 30분(30px) → 5px.
-    expect(resizeHandleHeightPx(30)).toBe(5);
-    // 36px 이상은 풀사이즈 8px.
-    expect(resizeHandleHeightPx(36)).toBe(8);
-    expect(resizeHandleHeightPx(60)).toBe(8);
+  it("returns a steady 8px hitbox (Bug fix 2026-06-14: the old 3px floor was ungrabbable)", () => {
+    // timelineLayout floors block heights to MIN_BLOCK_PX=20; short blocks drop the TOP
+    // handle (showTopHandle) instead of shrinking the band, so 8px never eats the move band.
+    expect(resizeHandleHeightPx()).toBe(8);
+  });
+});
+
+describe("showTopHandle", () => {
+  it("renders both handles only when a usable move band fits (>=28px)", () => {
+    expect(showTopHandle(28)).toBe(true);
+    expect(showTopHandle(36)).toBe(true);
+    expect(showTopHandle(60)).toBe(true);
   });
 
-  it("clamps to the [3, 8] range", () => {
-    // 20px 미만(이론상)에서도 최소 3px 유지.
-    expect(resizeHandleHeightPx(10)).toBe(3);
-    // 아주 큰 블록도 8px 상한.
-    expect(resizeHandleHeightPx(600)).toBe(8);
+  it("drops the top handle on short blocks so the whole body stays grabbable for move", () => {
+    // 8px handle + 8px handle + >=12px move band = 28px. Below that => single bottom handle.
+    // timelineLayout floors heights to 20px, so 20..27px is the real single-handle range.
+    expect(showTopHandle(27)).toBe(false);
+    expect(showTopHandle(20)).toBe(false);
   });
 });

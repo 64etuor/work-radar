@@ -1,13 +1,19 @@
 import type { CSSProperties } from "react";
 
-/**
- * 짧은 블록일수록 상/하단 리사이즈 핸들 hitbox(px)를 줄여 중앙 move-grab 밴드를 확보한다(Bug 1a).
- * 핸들은 z-index가 블록 버튼보다 위라, 풀사이즈 8px×2가 ≤30분(≤30px) 블록 grab 면적의 40~50%를
- * 가려 "옮기려는데 리사이즈가 잡히는" 회귀를 만든다. 높이에 비례해 축소(36px+→8px, 30px→5px,
- * 최소 블록 20px→3px)해 리사이즈는 유지하되 중앙은 항상 move로 잡히게 한다.
- */
-export function resizeHandleHeightPx(heightPx: number): number {
-  return Math.max(3, Math.min(8, Math.floor((heightPx - 20) / 2)));
+/** 리사이즈 핸들 hitbox 높이(px) — 항상 8px. 예전 3px 바닥은 마우스로 잡기 불가능했다(Bug, 2026-06-14).
+ *  짧은 블록은 핸들을 줄이는 대신 `showTopHandle`로 상단 핸들을 떼서 move 밴드를 확보하므로,
+ *  핸들 자체는 모든 높이에서 8px로 유지한다. */
+export function resizeHandleHeightPx(): number {
+  return 8;
+}
+
+/** 상/하 2-핸들을 렌더할 최소 블록 높이(px). 8px 핸들 2개(16px) + 최소 12px move 밴드 = 28px.
+ *  그보다 짧으면(20–27px; timelineLayout이 20px로 floor) 하단 단일 핸들 + 전체 body=move. */
+export const TWO_HANDLE_MIN_PX = 28;
+
+/** 짧은 블록(<28px)은 상단 핸들을 떼고 전체 body를 move로 둔다 — 8px×2가 move 밴드를 0으로 만들기 때문. */
+export function showTopHandle(heightPx: number): boolean {
+  return heightPx >= TWO_HANDLE_MIN_PX;
 }
 
 export function timelineBlockPlacementStyle({
