@@ -1,0 +1,62 @@
+src/lib/timelineCoords.test.ts
+  s_9879bbf7505b01::t_572f49f929609b 153-168
+  s_9879bbf7505b01::t_b56dddd14b58db 152,169
+  s_68cf86000d9035::t_0e66362b893544 96-151
+  s_9879bbf7505b01::t_1ac8bdd24443c4 4-10
+docs/superpowers/plans/2026-06-14-dnd-overhaul-autonomous-loop-runbook.md
+  s_9879bbf7505b01::t_e1dac27d296456 139-140
+src/components/TodayView.tsx
+  s_9879bbf7505b01::t_e563e7141ee728 15
+  s_68cf86000d9035::t_0e66362b893544 187-194,230-231,243,247,269,276,293-295,298-299,362
+src/components/today/DragGhost.tsx
+  s_9879bbf7505b01::t_b6aef6f310328b 1-29
+docs/superpowers/plans/2026-06-14-dnd-overhaul-phase2-snapping-model.md
+  s_68cf86000d9035::t_0e66362b893544 1-17,19-60,64-67,71-155,160-187,192-194,199-209,211-219,243-245,249-251,255-312,317-321,323-327,337-341,366,369,392,395,418,421-429,431-447,450-451,457-458,460-461,471-472,474-475,477-478,480-481,483-484,486-495,504-505,507-508,518-519,521-524,526-527,533-537,540-541,543-544,556-557,559-572,574-578
+  s_9879bbf7505b01::t_0966e47c1d93d4 18,61-63,68-70,156-159,188-191,195-198,210,220-242,246-248,252-254,313-316,322,328-336,342-365,367-368,370-391,393-394,396-417,419-420,430,448-449,452-456,459,462-470,473,476,479,482,485,496-503,506,509-517,520,525,528-532,538-539,542,545-555,558,573
+src/lib/timelineLayout.ts
+  s_68cf86000d9035::t_0e66362b893544 134-151
+src/lib/timelineLayout.test.ts
+  s_68cf86000d9035::t_0e66362b893544 3,145-148,167-171,175-177
+  s_9879bbf7505b01::t_1ac8bdd24443c4 149-166,172-174,178-180
+  s_9879bbf7505b01::t_0ebb9bd2074f99 181-182
+src/lib/timelineCoords.ts
+  s_68cf86000d9035::t_0e66362b893544 10-11,13-46,55,65,82,90,102,107
+  s_9879bbf7505b01::t_1ac8bdd24443c4 67-70,96-99,103-106
+src/components/today/TimelineCanvas.tsx
+  s_68cf86000d9035::t_0e66362b893544 45-46,91,117
+src/components/today/useTimelineDnd.ts
+  s_9879bbf7505b01::t_1ac8bdd24443c4 536-542
+  s_68cf86000d9035::t_0e66362b893544 47,256-259,276-277,398-403,445,659
+src/components/today/timelinePreview.ts
+  s_9879bbf7505b01::t_1ac8bdd24443c4 10-12,14-15
+  s_9879bbf7505b01::t_0966e47c1d93d4 13
+  s_68cf86000d9035::t_0e66362b893544 137,145,154-158,172,189
+src/components/today/timelinePreview.test.ts
+  s_68cf86000d9035::t_0e66362b893544 363-440
+docs/decisions.md
+  s_9879bbf7505b01::t_eb0649bdc83d6a 628
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "86bb1c75a730bb75718784c0949bc2754cbf1c89",
+  "prompts": {},
+  "sessions": {
+    "s_68cf86000d9035": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec0b3-3dbf-7fe2-9ece-3c6ed6bec2b1",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_9879bbf7505b01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "910261e2-a97c-4d6e-865b-9882c8bae41f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
