@@ -1,0 +1,29 @@
+src-tauri/src/hermes_agent/acp_client.rs
+  s_a82331f7fe39b9::t_8ece7cfed21a11 413-417,704
+  s_a82331f7fe39b9::t_8414b3cd9cc08b 360-361,386,391,396-398,409-412,703,705-706,714-717
+docs/areas/mcp-server-conventions.md
+  s_a82331f7fe39b9::t_34b670929d1449 18,42-48,61-62,192-193
+src-tauri/src/mcp/mod.rs
+  s_a82331f7fe39b9::t_9e590cd601fa97 1,7-8,11,15
+  s_a82331f7fe39b9::t_49790a7a3a1f6d 301-304,307,312-320,324-327,329,331-335
+  s_a82331f7fe39b9::t_8ece7cfed21a11 766-769
+  s_a82331f7fe39b9::t_83b06895ca9c8f 414-454,530-533
+  s_a82331f7fe39b9::t_8f9395ad0317e4 725,737,747-765,770-773
+  s_a82331f7fe39b9::t_ee2d32b52e9788 177-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b26671cd921cb7a9ba650d95a1c5c9c48b615054",
+  "prompts": {},
+  "sessions": {
+    "s_a82331f7fe39b9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec5e0-6ba9-7f13-a167-2e2dad4520e3",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
