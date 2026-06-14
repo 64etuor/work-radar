@@ -24,6 +24,8 @@ type Props = {
   onToggleDone?: (box: LayoutBox, done: boolean) => void;
   suppressDragTransform?: boolean;
   disableLayoutTransition?: boolean;
+  /** 드래그 미리보기에서 이 블록이 다른 블록과 겹치면 true — 경고 틴트(미리보기 전용). */
+  conflict?: boolean;
 };
 
 /** 메모 첫 줄만(스니펫). 줄바꿈 이후는 버리고 CSS ellipsis가 가로 넘침 처리. */
@@ -168,6 +170,7 @@ export function TimelineBlock({
   onToggleDone,
   suppressDragTransform = false,
   disableLayoutTransition = false,
+  conflict = false,
 }: Props) {
   const { block, topPx, heightPx, leftPct, widthPct } = box;
   const hasMemo = Boolean(memo && memo.trim());
@@ -215,6 +218,7 @@ export function TimelineBlock({
     <div
       className="tl-block-wrap"
       data-dragging={drag.isDragging || undefined}
+      data-conflict={conflict || undefined}
       style={
         {
           ...timelineBlockPlacementStyle({

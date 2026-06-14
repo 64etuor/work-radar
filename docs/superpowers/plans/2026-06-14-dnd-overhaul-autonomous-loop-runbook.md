@@ -136,7 +136,7 @@ and hand the live-smoke checklist to the user.
 ## Progress ledger (update each iteration)
 
 - [x] **Phase 0** — handle reliability / Google-Calendar grab model. dev `43c7d2e`, PUSHED, user-live-confirmed.
-- [ ] **Phase 1** — drag/resize feel.
+- [~] **Phase 1** — drag/resize feel. Implemented + gated + critic-ACCEPT, committed to `dev` (NOT pushed). Awaiting user live-smoke (overlap tint · pill tracks edge · no double-ghost · off-grid snap-back).
 - [ ] **Phase 2** — snapping model.
 - [ ] **Phase 3** — keyboard / a11y (+ deferred render-level handle test).
 - [ ] **Phase 4** — failure & edge UX (+ routine midnight affordance).

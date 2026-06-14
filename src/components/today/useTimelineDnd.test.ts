@@ -5,6 +5,7 @@ import { plusMinutesLocal, resizeIsoByPx } from "@/lib/timelineCoords";
 import {
   type DragData,
   isClientPointInsideRect,
+  isOffGridCanvasRelease,
   normalizeDropDataForDragEnd,
   resolveDragEndActiveData,
   shouldSynthesizeCanvasDropFromPointer,
@@ -179,5 +180,85 @@ describe("resolveDragEndActiveData", () => {
 
     expect(resized.durationMin).toBe(120);
     expect(plusMinutesLocal(resized.at, resized.durationMin)).toContain("11:00");
+  });
+});
+
+describe("isOffGridCanvasRelease", () => {
+  const canvas: DragData = {
+    from: "canvas",
+    blockKind: "signal",
+    blockId: "signal:sig1",
+    signalId: "sig1",
+    title: "Signal",
+    startISO: "2026-05-28T09:00:00+09:00",
+    durationMin: 60,
+    calendarId: "cal1",
+  };
+  const rect = { left: 100, right: 400, top: 50, bottom: 600 };
+
+  it("classifies a canvas release outside the grid rect as off-grid", () => {
+    expect(isOffGridCanvasRelease(canvas, undefined, { point: { x: 50, y: 300 }, rect })).toBe(
+      true,
+    );
+  });
+
+  it("does not classify a canvas release inside the grid rect (collision-miss → still commit)", () => {
+    expect(isOffGridCanvasRelease(canvas, undefined, { point: { x: 200, y: 300 }, rect })).toBe(
+      false,
+    );
+  });
+
+  it("never off-grid when a droppable was hit", () => {
+    expect(
+      isOffGridCanvasRelease(
+        canvas,
+        { to: "canvas", gridY: 0 },
+        { point: { x: 50, y: 300 }, rect },
+      ),
+    ).toBe(false);
+  });
+
+  it("does not classify tray drags (they own a separate fallback)", () => {
+    const tray: DragData = { from: "tray", signalId: "sig1", title: "Signal" };
+    expect(isOffGridCanvasRelease(tray, undefined, { point: { x: 50, y: 300 }, rect })).toBe(false);
+  });
+
+  it("does not classify when pointer or rect is unknown (keyboard / no ref)", () => {
+    expect(isOffGridCanvasRelease(canvas, undefined, { point: null, rect })).toBe(false);
+    expect(
+      isOffGridCanvasRelease(canvas, undefined, { point: { x: 50, y: 300 }, rect: null }),
+    ).toBe(false);
+  });
+
+  it("treats a point exactly on the grid edge as inside (inclusive boundary)", () => {
+    expect(isOffGridCanvasRelease(canvas, undefined, { point: { x: 100, y: 300 }, rect })).toBe(
+      false,
+    );
+  });
+});
+
+describe("normalizeDropDataForDragEnd with release", () => {
+  const canvas: DragData = {
+    from: "canvas",
+    blockKind: "signal",
+    blockId: "signal:sig1",
+    signalId: "sig1",
+    title: "Signal",
+    startISO: "2026-05-28T09:00:00+09:00",
+    durationMin: 60,
+    calendarId: "cal1",
+  };
+  const rect = { left: 100, right: 400, top: 50, bottom: 600 };
+
+  it("returns undefined (snap back) for an off-grid canvas release", () => {
+    expect(
+      normalizeDropDataForDragEnd(canvas, undefined, { point: { x: 50, y: 300 }, rect }),
+    ).toBeUndefined();
+  });
+
+  it("returns a canvas self-drop for an on-grid lost droppable", () => {
+    expect(
+      normalizeDropDataForDragEnd(canvas, undefined, { point: { x: 200, y: 300 }, rect }),
+    ).toEqual({ to: "canvas", gridY: 0 });
   });
 });

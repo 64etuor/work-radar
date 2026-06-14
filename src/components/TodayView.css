@@ -203,6 +203,23 @@
   pointer-events: none;
 }
 
+/* 리사이즈/이동 중 active 엣지에 붙는 시각·길이 pill (Phase 1). */
+.today-canvas-resize-pill {
+  position: absolute;
+  transform: translate(8px, -50%);
+  padding: 2px 7px;
+  background: var(--color-wr-fg);
+  color: var(--td-white);
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 0 2px 6px var(--td-shadow-dark-12);
+}
+
 /* DragOverlay ghost — Notion-style 따라오는 미리보기. */
 .today-drag-ghost {
   display: inline-flex;
@@ -260,15 +277,6 @@
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
-}
-
-.today-drag-ghost-resize {
-  width: 60px;
-  height: 6px;
-  background: var(--color-today-signal, var(--color-today-signal));
-  border-radius: 3px;
-  opacity: 0.7;
-  cursor: ns-resize;
 }
 
 /* ── 본문 그리드 (트레이 + 캔버스) ─────────────────────────────────── */
@@ -568,6 +576,12 @@
 .tl-block-wrap:hover,
 .tl-block-wrap:focus-within {
   z-index: 6;
+}
+
+/* 드래그 미리보기 겹침 경고 틴트 — data-conflict는 미리보기 전용(드롭 시 제거). */
+.tl-block-wrap[data-conflict] .tl-block {
+  background: color-mix(in srgb, var(--color-today-debt-warn) 22%, var(--td-white));
+  box-shadow: inset 0 0 0 1px var(--color-today-debt-warn);
 }
 
 @media (prefers-reduced-motion: reduce) {

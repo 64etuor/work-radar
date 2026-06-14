@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { TimelineBlock } from "@/components/today/TimelineBlock";
 import {
+  activeDragLabel,
+  activeDragWouldOverlap,
   type DragDelta,
   dragGuideFromLayout,
   previewTimelineBoxes,
@@ -118,11 +120,23 @@ export function TimelineCanvas({
     gridWidth,
     days,
   });
+  // 캔버스 이동/리사이즈 중 active 엣지에 붙는 시각·길이 pill 라벨(resize=범위+길이, move=시작 시각).
+  const dragLabel = activeDragLabel({ boxes, activeDrag, delta: activeDelta, anchorDate, days });
   // 캔버스 이동/리사이즈 모두 preview가 스냅된 블록 위치를 소유한다 → raw transform suppress +
   // 레이아웃 transition off(드래그 중 active 블록 ±7.5px 오차 제거 Bug 2a, 이웃 220ms 리플로우
   // rubber-band 제거 Bug 2b). 드롭 시 activeDrag=null로 돌아오면 transition이 살아나 settle.
   const previewOwnsBlockLayout =
     activeDrag?.from === "canvas" || activeDrag?.from === "canvas-resize";
+
+  // 드래그 미리보기에서 겹치는 active 블록 id — active(드래그 중) 블록 자체를 틴트한다(Google-캘린더 모델:
+  //  active 블록은 스냅된 착지 위치에 인플레이스 렌더되고 DragOverlay ghost는 suppress되므로 사용자가
+  //  보는 정본이다). 미리보기 전용 — 드롭 시 사라진다.
+  const conflictBlockId =
+    activeDrag &&
+    (activeDrag.from === "canvas" || activeDrag.from === "canvas-resize") &&
+    activeDragWouldOverlap({ boxes, activeDrag, delta: activeDelta, anchorDate, days })
+      ? activeDrag.blockId
+      : null;
 
   // dropData는 상수 — gridY는 dropData에 박지 않는다(@dnd-kit가 register 시점 스냅샷할
   // 위험 + mutable ref antipattern). 실제 Y 좌표는 부모 pointerYRef에 기록되어
@@ -209,6 +223,7 @@ export function TimelineCanvas({
               onToggleDone={onToggleDone}
               suppressDragTransform={previewOwnsBlockLayout}
               disableLayoutTransition={previewOwnsBlockLayout}
+              conflict={b.id === conflictBlockId}
             />
           ))}
         </div>
@@ -265,6 +280,17 @@ export function TimelineCanvas({
                     <span>
                       {hh}:{mm}
                     </span>
+                  </div>
+                )}
+                {dragLabel && activeGuide && (
+                  <div
+                    className="today-canvas-resize-pill"
+                    style={{ top: `${activeGuide.y}px`, left: `${activeGuide.x}px` }}
+                    aria-hidden
+                  >
+                    {dragLabel.kind === "resize"
+                      ? `${dragLabel.startHHMM}–${dragLabel.endHHMM} · ${dragLabel.durationLabel}`
+                      : dragLabel.startHHMM}
                   </div>
                 )}
               </>

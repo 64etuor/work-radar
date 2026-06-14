@@ -385,10 +385,8 @@ export function TodayView() {
  * 캔버스 블록을 트레이 위로 끌면 인박스 카드 형태로 ghost를 전환해 unschedule 의도를 시각화.
  */
 function DragGhost({ data, isOverTray }: { data: DragData; isOverTray: boolean }) {
-  const isResize = data.from === "canvas-resize";
-  if (isResize) {
-    return <div className="today-drag-ghost today-drag-ghost-resize" />;
-  }
+  // canvas-resize: 인플레이스 preview(블록 리사이즈 + 시각 pill)가 정본 — 따라오는 막대 ghost는 중복.
+  if (data.from === "canvas-resize") return null;
   if (data.from === "canvas") {
     if (!isOverTray) return null;
     // 캔버스→트레이 드래그: 인박스 카드 비주얼로 전환(unschedule 미리보기).

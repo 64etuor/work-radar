@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { computeLayout, type TimedBlock } from "@/lib/timelineLayout";
 
 import {
+  activeDragLabel,
+  activeDragWouldOverlap,
   clientPointToGridGuide,
   dragGuideFromLayout,
   previewTimelineBoxes,
@@ -395,6 +397,165 @@ describe("previewTimelineBoxes", () => {
     expect(moved.block.startISO.startsWith("2026-05-29T00:00")).toBe(true);
     expect(moved.block.startISO.startsWith("2026-05-28")).toBe(false);
     expect(moved.block.endISO.startsWith("2026-05-29T01:30")).toBe(true);
+  });
+});
+
+describe("activeDragWouldOverlap", () => {
+  const boxes = computeLayout([
+    block("signal:s1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00"),
+    block("event:cal:e1", "2026-05-28T11:00:00+09:00", "2026-05-28T12:00:00+09:00"),
+  ]);
+  const drag: DragData = {
+    from: "canvas",
+    blockKind: "event",
+    blockId: "event:cal:e1",
+    eventId: "e1",
+    title: "Event",
+    startISO: "2026-05-28T11:00:00+09:00",
+    durationMin: 60,
+    calendarId: "cal",
+  };
+
+  it("is true when the dragged block previews onto another block (multi-column cluster)", () => {
+    expect(
+      activeDragWouldOverlap({
+        boxes,
+        activeDrag: drag,
+        delta: { x: 0, y: -120 },
+        anchorDate: "2026-05-28",
+        days: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it("is false when the dragged block previews onto empty time", () => {
+    expect(
+      activeDragWouldOverlap({
+        boxes,
+        activeDrag: drag,
+        delta: { x: 0, y: 180 },
+        anchorDate: "2026-05-28",
+        days: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("is false for non-canvas drags", () => {
+    const tray: DragData = { from: "tray", signalId: "s1", title: "Signal" };
+    expect(
+      activeDragWouldOverlap({
+        boxes,
+        activeDrag: tray,
+        delta: { x: 0, y: 0 },
+        anchorDate: "2026-05-28",
+        days: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when there is no active drag", () => {
+    expect(
+      activeDragWouldOverlap({
+        boxes,
+        activeDrag: null,
+        delta: { x: 0, y: 0 },
+        anchorDate: "2026-05-28",
+        days: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when the dragged block id is not in the layout", () => {
+    const ghost: DragData = {
+      from: "canvas",
+      blockKind: "event",
+      blockId: "event:cal:missing",
+      eventId: "missing",
+      title: "Missing",
+      startISO: "2026-05-28T11:00:00+09:00",
+      durationMin: 60,
+      calendarId: "cal",
+    };
+    expect(
+      activeDragWouldOverlap({
+        boxes,
+        activeDrag: ghost,
+        delta: { x: 0, y: 0 },
+        anchorDate: "2026-05-28",
+        days: 1,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("activeDragLabel", () => {
+  const boxes = computeLayout([
+    block("event:cal:e1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00"),
+  ]);
+
+  it("labels a bottom resize with the full range + duration", () => {
+    const drag: DragData = {
+      from: "canvas-resize",
+      edge: "bottom",
+      blockKind: "event",
+      blockId: "event:cal:e1",
+      eventId: "e1",
+      calendarId: "cal",
+      startISO: "2026-05-28T09:00:00+09:00",
+      durationMin: 60,
+    };
+    const label = activeDragLabel({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: 15 },
+      anchorDate: "2026-05-28",
+      days: 1,
+    });
+    expect(label).toEqual({
+      kind: "resize",
+      startHHMM: "09:00",
+      endHHMM: "10:15",
+      durationLabel: "1h15m",
+    });
+  });
+
+  it("labels a move with the new start time", () => {
+    const drag: DragData = {
+      from: "canvas",
+      blockKind: "event",
+      blockId: "event:cal:e1",
+      eventId: "e1",
+      title: "Event",
+      startISO: "2026-05-28T09:00:00+09:00",
+      durationMin: 60,
+      calendarId: "cal",
+    };
+    const label = activeDragLabel({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: 120 },
+      anchorDate: "2026-05-28",
+      days: 1,
+    });
+    expect(label).toEqual({
+      kind: "move",
+      startHHMM: "11:00",
+      endHHMM: "12:00",
+      durationLabel: "1h",
+    });
+  });
+
+  it("returns null for non-canvas drags", () => {
+    const tray: DragData = { from: "tray", signalId: "s1", title: "Signal" };
+    expect(
+      activeDragLabel({
+        boxes,
+        activeDrag: tray,
+        delta: { x: 0, y: 0 },
+        anchorDate: "2026-05-28",
+        days: 1,
+      }),
+    ).toBeNull();
   });
 });
 

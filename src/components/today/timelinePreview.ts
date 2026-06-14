@@ -189,3 +189,78 @@ export function previewTimelineBoxes({
 
   return changed ? computeLayout(blocks, anchorDate) : boxes;
 }
+
+export type ActiveDragLabel = {
+  kind: "move" | "resize";
+  startHHMM: string;
+  endHHMM: string;
+  /** "1h15m" / "45m" / "1h" — 0분/0시 생략. */
+  durationLabel: string;
+};
+
+/** 로컬 ISO('YYYY-MM-DDTHH:MM…')에서 HH:MM — UTC 변환 금지(INVARIANT #7). */
+function hhmmOfIso(iso: string): string {
+  return iso.slice(11, 16);
+}
+
+function fmtDurationLabel(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h <= 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h${m}m`;
+}
+
+/**
+ * 드래그 중 active 캔버스 블록의 시간 라벨(플로팅 pill용). preview 블록의 스냅된 startISO/endISO를
+ * 그대로 읽어(= previewTimelineBoxes가 이미 계산한 정본) 드래그 수학을 중복하지 않는다. resize면
+ * 범위+길이, move면 시작 시각을 caller가 표시한다.
+ */
+export function activeDragLabel(args: {
+  boxes: LayoutBox[];
+  activeDrag: DragData | null | undefined;
+  delta: DragDelta | null | undefined;
+  anchorDate: string;
+  days: number;
+}): ActiveDragLabel | null {
+  const { activeDrag, anchorDate } = args;
+  if (!activeDrag) return null;
+  if (activeDrag.from !== "canvas" && activeDrag.from !== "canvas-resize") return null;
+  const activeId = blockIdForDrag(activeDrag);
+  if (!activeId) return null;
+  const preview = previewTimelineBoxes(args);
+  const box = preview.find((b) => b.id === activeId);
+  if (!box) return null;
+  const { startISO, endISO } = box.block;
+  const durationMin = Math.max(0, absMin(endISO, anchorDate) - absMin(startISO, anchorDate));
+  return {
+    kind: activeDrag.from === "canvas-resize" ? "resize" : "move",
+    startHHMM: hhmmOfIso(startISO),
+    endHHMM: hhmmOfIso(endISO),
+    durationLabel: fmtDurationLabel(durationMin),
+  };
+}
+
+/**
+ * 드래그 중인 캔버스 블록이 preview 레이아웃에서 다른 블록과 겹치는지 — computeLayout이 멀티컬럼
+ * 클러스터로 배치했는지(`widthPct < 100`)로 유도한다(스펙 §4 Phase 1). 미리보기 전용 겹침 틴트
+ * 트리거. last-write-wins는 유지하고 _피드백_만 추가한다(area doc).
+ */
+export function activeDragWouldOverlap(args: {
+  boxes: LayoutBox[];
+  activeDrag: DragData | null | undefined;
+  delta: DragDelta | null | undefined;
+  anchorDate: string;
+  days: number;
+}): boolean {
+  const { activeDrag } = args;
+  if (!activeDrag) return false;
+  if (activeDrag.from !== "canvas" && activeDrag.from !== "canvas-resize") return false;
+  const activeId = blockIdForDrag(activeDrag);
+  if (!activeId) return false;
+  const preview = previewTimelineBoxes(args);
+  const activeBox = preview.find((b) => b.id === activeId);
+  if (!activeBox) return false;
+  // n===1 → widthPct===100 (100/1은 IEEE 754에서 정확) → 단독 블록은 false. 멀티컬럼(n≥2)만 <100.
+  return activeBox.widthPct < 100;
+}

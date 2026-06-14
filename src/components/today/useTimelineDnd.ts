@@ -147,13 +147,21 @@ export type DropData =
   | { to: "canvas"; gridY: number }
   | { to: "canvas:cal"; calendarId: string; gridY: number };
 
+/**
+ * `over`가 있으면 그대로 반환, 없으면 `active` 타입으로 폴백을 결정한다.
+ * `release`를 주면 그리드 밖 canvas/canvas-resize 릴리스를 `undefined`(스냅백)로 분류한다 —
+ * 단 이 함수는 순수 분류기로 토스트를 띄우지 않는다. 사용자 알림(토스트)은 호출부(onDragEnd)가
+ * 이 함수 호출 전에 책임진다.
+ */
 export function normalizeDropDataForDragEnd(
   active: DragData | undefined,
   over: DropData | undefined,
+  release?: ReleaseAt,
 ): DropData | undefined {
   if (over) return over;
   if (!active) return undefined;
   if (active.from === "canvas" || active.from === "canvas-resize") {
+    if (release && isOffGridCanvasRelease(active, over, release)) return undefined;
     return { to: "canvas", gridY: 0 };
   }
   return undefined;
@@ -192,6 +200,30 @@ export function isClientPointInsideRect(
   return (
     point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
   );
+}
+
+/** 릴리스 위치 분류용 입력 — 마지막 raw 포인터(viewport)와 드롭 시점 fresh 그리드 rect. */
+export type ReleaseAt = {
+  point: { x: number; y: number } | null | undefined;
+  rect: { left: number; right: number; top: number; bottom: number } | null | undefined;
+};
+
+/**
+ * canvas/canvas-resize 드래그가 droppable 없이(over 없음) 끝났는데 release 포인터가 그리드 rect
+ * 밖이면 "그리드 밖 릴리스"로 분류한다 — 커밋하지 않고 스냅백 + 토스트. 포인터/rect를 모르면(키보드
+ * 드래그/ref 미주입) 분류하지 않아 기존 delta 기반 커밋을 유지한다. dnd-kit collision-miss(포인터는
+ * 그리드 안)는 off-grid가 아니다 — 그 경우 기존처럼 delta로 재해석한다.
+ */
+export function isOffGridCanvasRelease(
+  active: DragData | undefined,
+  over: DropData | undefined,
+  release: ReleaseAt,
+): boolean {
+  if (over) return false;
+  if (!active) return false;
+  if (active.from !== "canvas" && active.from !== "canvas-resize") return false;
+  if (!release.point || !release.rect) return false;
+  return !isClientPointInsideRect(release.point, release.rect);
 }
 
 type Opts = {
@@ -325,11 +357,24 @@ export function useTimelineDnd(opts: Opts) {
       activeAtStart,
       ev.active.data.current as DragData | undefined,
     );
-    let o = normalizeDropDataForDragEnd(a, ev.over?.data.current as DropData | undefined);
-    // tray/routine 드래그가 over 없이 끝났을 때: 마지막 포인터가 그리드 rect 안이면 canvas 배치로
-    // 폴백(무음 noop 방지), 밖이면 토스트로 알린다. fresh rect + 마지막 raw 포인터는 여기서만 읽힌다.
-    // 키보드 드래그(KeyboardSensor)는 포인터 좌표가 의미 없으므로 폴백 제외(기존 no-op 유지).
+    const overData = ev.over?.data.current as DropData | undefined;
+    // 키보드 드래그(KeyboardSensor)는 last pointer가 사용자가 가리킨 곳이 아니므로 release 분류 제외.
     const isPointerDrag = !(ev.activatorEvent instanceof KeyboardEvent);
+    const release: ReleaseAt | undefined = isPointerDrag
+      ? {
+          point: pointerClientRef?.current ?? null,
+          rect: gridElRef?.current?.getBoundingClientRect() ?? null,
+        }
+      : undefined;
+    // canvas/canvas-resize를 그리드 밖에서 릴리스하면 커밋하지 않고 스냅백 + 토스트(이전엔 delta로
+    // 그리드 상단에 커밋됐다). collision-miss(포인터는 그리드 안)는 off-grid가 아니라 그대로 커밋.
+    if (release && isOffGridCanvasRelease(a, overData, release)) {
+      useToastStore.getState().pushError("timeline.drop", "타임라인 영역 밖이라 되돌렸습니다");
+      return;
+    }
+    let o = normalizeDropDataForDragEnd(a, overData, release);
+    // tray/routine 드래그가 over 없이 끝났을 때: 마지막 포인터가 그리드 rect 안이면 canvas 배치로
+    // 폴백(무음 noop 방지), 밖이면 토스트로 알린다.
     if (shouldSynthesizeCanvasDropFromPointer(a, o, isPointerDrag)) {
       const p = pointerClientRef?.current;
       const rect = gridElRef?.current?.getBoundingClientRect();
