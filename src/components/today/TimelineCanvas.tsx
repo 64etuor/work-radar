@@ -38,6 +38,8 @@ type Props = {
   gridElRef?: React.MutableRefObject<HTMLDivElement | null>;
   activeDrag?: DragData | null;
   activeDelta?: DragDelta | null;
+  /** 라이브 드래그 포인터(그리드 로컬). 크로스헤어가 블록 top-anchor/stale hover 대신 커서를 따른다. */
+  dragPointerGrid?: { x: number; y: number } | null;
 };
 
 /** "지금"의 절대 px(앵커 날짜 00:00 기준). 앵커 범위 밖이면 음수/초과 — 호출부가 범위 체크. */
@@ -81,6 +83,7 @@ export function TimelineCanvas({
   gridElRef,
   activeDrag,
   activeDelta,
+  dragPointerGrid,
 }: Props) {
   const anchorDate = dates[0];
   const days = dates.length;
@@ -214,8 +217,11 @@ export function TimelineCanvas({
         )}
         {activeDrag &&
           (() => {
-            const guideY = activeGuide?.y ?? hoverPx;
-            const guideX = activeGuide?.x ?? hoverX;
+            // 캔버스 이동/리사이즈는 activeGuide(블록 착지 엣지)가 정본 — 시간 라벨도 착지 시각이라 정확.
+            // tray/routine은 activeGuide=null → 라이브 raw 포인터(dragPointerGrid)가 커서를 정확히 따른다
+            // (옛 hoverPx 폴백은 dnd-kit 오버레이 hit-test로 stale했음). 둘 다 없으면 hover로 최종 폴백.
+            const guideY = activeGuide?.y ?? dragPointerGrid?.y ?? hoverPx;
+            const guideX = activeGuide?.x ?? dragPointerGrid?.x ?? hoverX;
             if (guideY === null || guideX === null) return null;
             // 15분 그리드 스냅 — 절대 분으로 환산해 라벨은 일중 시각(hh:mm)으로 표시(스펙 §D2).
             // HOUR_PX=60이라 1min=1px. 날짜 컨텍스트는 separator가 제공.

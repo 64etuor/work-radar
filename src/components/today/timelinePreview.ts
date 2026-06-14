@@ -16,6 +16,23 @@ export type DragGuide = {
   durationMin: number;
 };
 
+/**
+ * viewport client 좌표 → 그리드 로컬 좌표(크로스헤어 가이드용). onPointerMove의 환산과 동일:
+ * y는 [0, totalPx], x는 [60(시간 라벨 거터), rect.width]로 클램프. 드래그 중 라이브 포인터를
+ * dnd-kit activator+delta로 구해 이 함수로 환산하면 오버레이 hit-test로 onPointerMove가 끊겨도
+ * 크로스헤어가 항상 실제 커서를 따른다(블록 top-anchor offset·stale hover 동시 해소).
+ */
+export function clientPointToGridGuide(
+  point: { x: number; y: number },
+  rect: { left: number; top: number; width: number },
+  totalPx: number,
+): { x: number; y: number } {
+  return {
+    y: Math.max(0, Math.min(totalPx, point.y - rect.top)),
+    x: Math.max(60, Math.min(rect.width, point.x - rect.left)),
+  };
+}
+
 /** 드래그 중인 캔버스 블록의 정본 id — DragData.blockId(블록 id 그대로) 사용.
  *  과거의 `event:${eventId}` 재구성은 복합키(`event:${calendarId}:${id}`)와 불일치해
  *  event 블록 preview 매칭이 항상 실패했다(연속 타임라인 전환과 함께 수정). */
@@ -80,9 +97,20 @@ export function dragGuideFromLayout({
     };
   }
 
+  // 루틴/루틴-backed 이동은 occurrence 날짜 안으로 클램프(preview/commit과 동일, Bug 2c) — 자정
+  // 넘김 시 가이드 라인이 클램프된 블록 착지 엣지와 다른 hh:mm을 보이지 않게 한다. 원본 블록의
+  // topPx로 occurrence 날짜의 px 범위([dayStart, dayStart+1440-15])를 유도(anchorDate 불필요).
+  const routineBacked =
+    activeDrag.blockKind === "routine" ||
+    (activeDrag.blockKind === "event" && activeDrag.routineId != null);
+  const moveY = activeBox.topPx + delta.y;
+  const dayStart = Math.floor(activeBox.topPx / 1440) * 1440;
+  const clampedY = routineBacked
+    ? Math.max(dayStart, Math.min(dayStart + 1440 - 15, moveY))
+    : moveY;
   return {
     x: Math.max(60, Math.min(gridWidth, centerX)),
-    y: Math.max(0, Math.min(maxY, activeBox.topPx + delta.y)),
+    y: Math.max(0, Math.min(maxY, clampedY)),
     durationMin: activeDrag.durationMin,
   };
 }

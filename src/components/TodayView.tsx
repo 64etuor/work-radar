@@ -12,11 +12,12 @@ import {
 } from "react";
 
 import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
+import { dragGhostReducer, INITIAL_DRAG_GHOST_STATE } from "@/components/today/dragGhostState";
 import { EventPopover } from "@/components/today/EventPopover";
 import { HistoryRail } from "@/components/today/HistoryRail";
 import { StagedBadge } from "@/components/today/StagedBadge";
 import { TimelineCanvas } from "@/components/today/TimelineCanvas";
-import type { DragDelta } from "@/components/today/timelinePreview";
+import { clientPointToGridGuide } from "@/components/today/timelinePreview";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
 import {
@@ -49,37 +50,6 @@ import {
 import { computeLayout, type LayoutBox } from "@/lib/timelineLayout";
 import { blockNoteTarget, buildTimelineBlocks, noteTargetMapKey } from "@/lib/todayBlocks";
 import { useUIStore } from "@/store";
-
-type DragGhostState = {
-  activeDrag: DragData | null;
-  activeDelta: DragDelta | null;
-  isOverTray: boolean;
-};
-
-type DragGhostAction =
-  | { type: "start"; data: DragData | null }
-  | { type: "move"; delta: DragDelta }
-  | { type: "over"; isOverTray: boolean }
-  | { type: "reset" };
-
-const INITIAL_DRAG_GHOST_STATE: DragGhostState = {
-  activeDrag: null,
-  activeDelta: null,
-  isOverTray: false,
-};
-
-function dragGhostReducer(state: DragGhostState, action: DragGhostAction): DragGhostState {
-  switch (action.type) {
-    case "start":
-      return { activeDrag: action.data, activeDelta: { x: 0, y: 0 }, isOverTray: false };
-    case "move":
-      return { ...state, activeDelta: action.delta };
-    case "over":
-      return { ...state, isOverTray: action.isOverTray };
-    case "reset":
-      return INITIAL_DRAG_GHOST_STATE;
-  }
-}
 
 /**
  * Today — 하루 운영 콕핏(스펙 §3 통합 뷰).
@@ -209,6 +179,10 @@ export function TodayView() {
     resolve: (calendarId: string | null) => void;
   } | null>(null);
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
+  // 드래그 중 raw viewport 포인터 — 문서 레벨 pointermove로 기록. dnd-kit DragOverlay(z-999,
+  // pointer-events 살아있음)가 hit-test를 가로채 .today onPointerMove가 끊겨도 잡힌다. crosshair
+  // 및 드롭 좌표(lastPointerRef)의 공통 raw 소스 — dnd-kit delta는 scroll-adjusted라 쓰지 않는다.
+  const dragRawPointerRef = useRef<{ x: number; y: number } | null>(null);
   // 활성 picker resolver — unmount 시 promise leak 방지용(아래 cleanup effect에서 resolve(null)).
   const pickerResolverRef = useRef<((v: string | null) => void) | null>(null);
   // TimelineCanvas 라이브 hover preview용 grid-local 좌표(드래그 중 가이드/프리뷰 렌더).
@@ -248,7 +222,7 @@ export function TodayView() {
 
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
-  const [{ activeDrag, activeDelta, isOverTray }, dispatchDragGhost] = useReducer(
+  const [{ activeDrag, activeDelta, isOverTray, pointerGrid }, dispatchDragGhost] = useReducer(
     dragGhostReducer,
     INITIAL_DRAG_GHOST_STATE,
   );
@@ -261,7 +235,16 @@ export function TodayView() {
     dispatchDragGhost({ type: "start", data });
   };
   const handleDragMove = (ev: DragMoveEvent) => {
-    dispatchDragGhost({ type: "move", delta: ev.delta });
+    // raw viewport 포인터(dragRawPointerRef)를 fresh grid rect로 환산한다. onDragMove는
+    // pointermove뿐 아니라 auto-scroll에도 발화 → 정지한 커서도 스크롤에 맞춰 grid-local Y가
+    // 재계산된다. dnd-kit delta는 scroll-adjusted(translate+scrollAdjustment)라 auto-scroll 중
+    // 실제 커서와 2배 어긋나므로 포인터 환산에 쓰지 않는다. raw가 없으면(키보드 드래그/첫 프레임)
+    // pointerGrid=null → TimelineCanvas가 activeGuide(블록-anchored)로 폴백.
+    const raw = dragRawPointerRef.current;
+    const rect = gridElRef.current?.getBoundingClientRect();
+    const pointerGrid =
+      raw && rect ? clientPointToGridGuide(raw, rect, visibleDates.length * 24 * 60) : null;
+    dispatchDragGhost({ type: "move", delta: ev.delta, pointerGrid });
   };
   const handleDragOver = (ev: DragOverEvent) => {
     dispatchDragGhost({ type: "over", isOverTray: ev.over?.id === "today-tray" });
@@ -276,6 +259,23 @@ export function TodayView() {
     activeDragStartRef.current = null;
     dispatchDragGhost({ type: "reset" });
   };
+
+  // 드래그 동안만 문서 레벨 pointermove 구독 → raw 커서 좌표를 ref에 기록(렌더 없음).
+  // .today onPointerMove는 dnd-kit 오버레이가 hit-test를 가로채면 끊기므로 문서 레벨로 잡는다.
+  // 이 raw 좌표가 crosshair(트레이/루틴)와 트레이/루틴 드롭 좌표(resolveCanvasGridY)를 정확히 만든다.
+  useEffect(() => {
+    if (!activeDrag) return;
+    const onMove = (e: PointerEvent) => {
+      const p = { x: e.clientX, y: e.clientY };
+      dragRawPointerRef.current = p;
+      lastPointerRef.current = p;
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      dragRawPointerRef.current = null;
+    };
+  }, [activeDrag]);
 
   const pickerSignalProjectId =
     picker && picker.targetKind === "signal"
@@ -334,6 +334,7 @@ export function TodayView() {
                 gridElRef={gridElRef}
                 activeDrag={activeDrag}
                 activeDelta={activeDelta}
+                dragPointerGrid={pointerGrid}
               />
             )}
           </div>

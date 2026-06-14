@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { computeLayout, type TimedBlock } from "@/lib/timelineLayout";
 
 import {
+  clientPointToGridGuide,
   dragGuideFromLayout,
   previewTimelineBoxes,
   renderTimelineBoxesForDrag,
@@ -110,6 +111,40 @@ describe("previewTimelineBoxes", () => {
       durationMin: 60,
     });
     expect(guide!.x).toBeGreaterThan(60);
+  });
+
+  it("루틴 이동 가이드 y는 occurrence 날짜 안으로 클램프된다 (가이드==착지 엣지, Bug 2c)", () => {
+    const routineBox: TimedBlock = {
+      id: "routine:r1",
+      kind: "routine",
+      title: "Routine",
+      startISO: "2026-05-28T23:00:00+09:00",
+      endISO: "2026-05-28T23:30:00+09:00",
+      calendarId: "cal",
+      color: "#4a7bb8",
+      routineId: "r1",
+    };
+    const boxes = computeLayout([routineBox], "2026-05-28");
+    const drag: DragData = {
+      from: "canvas",
+      blockKind: "routine",
+      blockId: "routine:r1",
+      routineId: "r1",
+      title: "Routine",
+      startISO: "2026-05-28T23:00:00+09:00",
+      durationMin: 30,
+      calendarId: "cal",
+    };
+
+    // topPx 1380 + 120 = 1500(다음 날 01:00)이지만 occurrence day [0, 1425]로 클램프 → 1425.
+    const guide = dragGuideFromLayout({
+      boxes,
+      activeDrag: drag,
+      delta: { x: 0, y: 120 },
+      gridWidth: 460,
+      days: 2,
+    });
+    expect(guide!.y).toBe(1425);
   });
 
   it("canvas 드래그가 자정을 넘기면 preview 블록의 날짜가 증가한다 (연속 축)", () => {
@@ -291,5 +326,26 @@ describe("previewTimelineBoxes", () => {
     expect(moved.block.startISO.startsWith("2026-05-29T00:00")).toBe(true);
     expect(moved.block.startISO.startsWith("2026-05-28")).toBe(false);
     expect(moved.block.endISO.startsWith("2026-05-29T01:30")).toBe(true);
+  });
+});
+
+describe("clientPointToGridGuide", () => {
+  const rect = { left: 100, top: 50, width: 460 };
+
+  it("converts viewport client coords to grid-local (크로스헤어가 커서를 따른다)", () => {
+    expect(clientPointToGridGuide({ x: 300, y: 250 }, rect, 1440)).toEqual({ x: 200, y: 200 });
+  });
+
+  it("clamps x into the [60px hour-gutter, rect width] range", () => {
+    // 110-100=10 → 60px 거터로 클램프.
+    expect(clientPointToGridGuide({ x: 110, y: 100 }, rect, 1440).x).toBe(60);
+    // 폭 초과 → rect.width.
+    expect(clientPointToGridGuide({ x: 9999, y: 100 }, rect, 1440).x).toBe(460);
+  });
+
+  it("clamps y into [0, totalPx]", () => {
+    // 40-50=-10 → 0.
+    expect(clientPointToGridGuide({ x: 300, y: 40 }, rect, 1440).y).toBe(0);
+    expect(clientPointToGridGuide({ x: 300, y: 99999 }, rect, 1440).y).toBe(1440);
   });
 });
