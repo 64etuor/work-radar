@@ -625,8 +625,9 @@
   box-shadow: var(--wr-shadow-sm);
 }
 
+/* 키보드 포커스 — 6px 핸들도 분명히 보이게(focus indicator v2 gap 해소, Phase 3). */
 .tl-block:focus-visible {
-  outline: 2px solid var(--color-wr-focus);
+  outline: 2px solid var(--color-today-signal);
   outline-offset: 1px;
 }
 
@@ -802,8 +803,10 @@
 }
 
 .tl-block-resize:focus-visible {
-  outline: 2px solid var(--color-wr-focus);
+  outline: 2px solid var(--color-today-signal);
   outline-offset: 1px;
+  background: color-mix(in srgb, var(--color-today-signal) 45%, transparent);
+  z-index: 7;
 }
 
 .tl-block-routine {

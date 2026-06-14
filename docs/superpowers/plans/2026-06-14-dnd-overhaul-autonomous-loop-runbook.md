@@ -138,5 +138,5 @@ and hand the live-smoke checklist to the user.
 - [x] **Phase 0** — handle reliability / Google-Calendar grab model. dev `43c7d2e`, PUSHED, user-live-confirmed.
 - [~] **Phase 1** — drag/resize feel. Implemented + gated + critic-ACCEPT, committed to `dev` `7664830` (NOT pushed). Awaiting user live-smoke (overlap tint · pill tracks edge · no double-ghost · off-grid snap-back).
 - [~] **Phase 2** — snapping model. Implemented + gated + critic-ACCEPT, committed to `dev` (NOT pushed). Awaiting user live feel-smoke (Alt=5-min fine snap · magnetic edge-snap to neighbor start/end · move+resize snap parity). NB: bottom-resize now snaps the absolute end (GCal model) — a 09:07 event's end snaps to the gridline.
-- [ ] **Phase 3** — keyboard / a11y (+ deferred render-level handle test).
+- [~] **Phase 3** — keyboard / a11y (+ render-level both-handles test). Implemented + gated + critic-ACCEPT, committed to `dev` (NOT pushed). Awaiting user a11y-smoke (Tab→block→Space→↑/↓ 15-min steps, Shift=1h; handle Tab→Space→↑/↓ resize; Esc cancels; SR announces time). v2 keyboard items retired in `docs/areas/today-timeline.md`.
 - [ ] **Phase 4** — failure & edge UX (+ routine midnight affordance).

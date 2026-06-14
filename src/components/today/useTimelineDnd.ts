@@ -20,6 +20,7 @@
 import {
   DndContext,
   type DragEndEvent,
+  type KeyboardCoordinateGetter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -710,13 +711,33 @@ export function useTimelineDnd(opts: Opts) {
   return { onDragEnd };
 }
 
+/**
+ * 키보드 드래그 좌표 스텝 — 세로 타임라인이라 ArrowUp/Down만 처리(1px=1min): 기본 15분, Shift=1h.
+ * 좌우 화살표는 무시(undefined → dnd-kit 무이동). Space/Enter(집기/놓기)·Esc(취소)는 KeyboardSensor가 처리.
+ */
+export const timelineKeyboardCoordinates: KeyboardCoordinateGetter = (
+  event,
+  { currentCoordinates },
+) => {
+  const step = event.shiftKey ? 60 : 15;
+  if (event.code === "ArrowDown") {
+    event.preventDefault();
+    return { ...currentCoordinates, y: currentCoordinates.y + step };
+  }
+  if (event.code === "ArrowUp") {
+    event.preventDefault();
+    return { ...currentCoordinates, y: currentCoordinates.y - step };
+  }
+  return undefined;
+};
+
 /** sensors까지 묶어 한 번에 쓸 수 있는 컨테이너 컴포넌트 helper. */
 export function useTodayDndSensors() {
   const sensors = useSensors(
     // distance 3px로 낮춤 — 6px은 일부 환경에서 활성화가 느렸다.
     // delay-based 활성화도 고려 가능(touch 친화)이지만 desktop은 distance가 적합.
     useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
-    useSensor(KeyboardSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: timelineKeyboardCoordinates }),
   );
   return sensors;
 }

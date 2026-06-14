@@ -149,6 +149,7 @@ function ResizeHandle({
       className={`tl-block-resize tl-block-resize-${edge}`}
       data-dragging={isDragging || undefined}
       aria-label={edge === "top" ? "블록 시작 시간 조정" : "블록 종료 시간 조정"}
+      aria-keyshortcuts="ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown"
       {...attributes}
       {...listeners}
     />
@@ -255,9 +256,10 @@ export function TimelineBlock({
         }
         onClick={(e) => onClick(box, e)}
         title={block.title}
+        aria-keyshortcuts="ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown"
+        aria-label={ariaLabel}
         {...attributes}
         {...listeners}
-        aria-label={ariaLabel}
       >
         <div className="tl-block-time">
           {hhmm(block.startISO)}–{hhmm(block.endISO)}

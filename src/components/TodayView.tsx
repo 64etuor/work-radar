@@ -21,6 +21,7 @@ import { TimelineCanvas } from "@/components/today/TimelineCanvas";
 import { clientPointToGridGuide } from "@/components/today/timelinePreview";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
+import { useKeyboardDragAnnounce } from "@/components/today/useKeyboardDragAnnounce";
 import {
   buildDefaultCalendarFor,
   DndContext,
@@ -230,13 +231,17 @@ export function TodayView() {
     boxes,
     fineSnapRef,
   });
-
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
   const [{ activeDrag, activeDelta, isOverTray, pointerGrid }, dispatchDragGhost] = useReducer(
     dragGhostReducer,
     INITIAL_DRAG_GHOST_STATE,
   );
+  const {
+    announce,
+    announceKeyboardMove,
+    clear: clearAnnounce,
+  } = useKeyboardDragAnnounce({ boxes, anchorDate, days: visibleDates.length });
   const activeDragStartRef = useRef<DragData | null>(null);
   const handleDragStart = (ev: {
     active: { id: string | number; data: { current?: unknown } };
@@ -259,6 +264,8 @@ export function TodayView() {
     const nextPointerGrid =
       raw && rect ? clientPointToGridGuide(raw, rect, visibleDates.length * 24 * 60) : undefined;
     dispatchDragGhost({ type: "move", delta: ev.delta, pointerGrid: nextPointerGrid });
+    // 키보드 드래그만 라이브 리전으로 새 시각을 알린다(포인터 드래그는 pill이 시각 피드백).
+    announceKeyboardMove(ev, activeDragStartRef.current);
   };
   const handleDragOver = (ev: DragOverEvent) => {
     dispatchDragGhost({ type: "over", isOverTray: ev.over?.id === "today-tray" });
@@ -269,11 +276,13 @@ export function TodayView() {
     setFine(false);
     activeDragStartRef.current = null;
     await onDragEnd(ev, activeAtStart);
+    clearAnnounce();
   };
   const handleDragCancel = () => {
     activeDragStartRef.current = null;
     dispatchDragGhost({ type: "reset" });
     setFine(false);
+    clearAnnounce();
   };
 
   // 드래그 동안만 문서 레벨 pointermove 구독 → raw 커서 좌표를 ref에 기록(렌더 없음).
@@ -320,6 +329,9 @@ export function TodayView() {
       onDragCancel={handleDragCancel}
     >
       <div className="today" onPointerMove={trackPointer}>
+        <div className="sr-only" role="status" aria-live="polite">
+          {announce}
+        </div>
         <TodayHeader
           date={date}
           today={today}

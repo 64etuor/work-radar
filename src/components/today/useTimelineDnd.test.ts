@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { plusMinutesLocal, resizeIsoByPx } from "@/lib/timelineCoords";
 
@@ -9,6 +9,7 @@ import {
   normalizeDropDataForDragEnd,
   resolveDragEndActiveData,
   shouldSynthesizeCanvasDropFromPointer,
+  timelineKeyboardCoordinates,
 } from "./useTimelineDnd";
 
 describe("normalizeDropDataForDragEnd", () => {
@@ -260,5 +261,42 @@ describe("normalizeDropDataForDragEnd with release", () => {
     expect(
       normalizeDropDataForDragEnd(canvas, undefined, { point: { x: 200, y: 300 }, rect }),
     ).toEqual({ to: "canvas", gridY: 0 });
+  });
+});
+
+describe("timelineKeyboardCoordinates", () => {
+  const call = (code: string, shiftKey: boolean, y: number) =>
+    timelineKeyboardCoordinates(
+      { code, shiftKey, preventDefault() {} } as unknown as KeyboardEvent,
+      { currentCoordinates: { x: 10, y } } as never,
+    );
+
+  it("steps 15px (15 min) per ArrowDown/ArrowUp", () => {
+    expect(call("ArrowDown", false, 100)).toEqual({ x: 10, y: 115 });
+    expect(call("ArrowUp", false, 100)).toEqual({ x: 10, y: 85 });
+  });
+
+  it("steps 60px (1h) with Shift", () => {
+    expect(call("ArrowDown", true, 100)).toEqual({ x: 10, y: 160 });
+    expect(call("ArrowUp", true, 100)).toEqual({ x: 10, y: 40 });
+  });
+
+  it("ignores horizontal arrows (vertical timeline)", () => {
+    expect(call("ArrowLeft", false, 100)).toBeUndefined();
+    expect(call("ArrowRight", false, 100)).toBeUndefined();
+  });
+
+  it("preventDefault on handled keys only (so the page doesn't scroll mid-drag)", () => {
+    const fired = (code: string) => {
+      const preventDefault = vi.fn();
+      timelineKeyboardCoordinates(
+        { code, shiftKey: false, preventDefault } as unknown as KeyboardEvent,
+        { currentCoordinates: { x: 10, y: 100 } } as never,
+      );
+      return preventDefault;
+    };
+    expect(fired("ArrowDown")).toHaveBeenCalledOnce();
+    expect(fired("ArrowUp")).toHaveBeenCalledOnce();
+    expect(fired("ArrowLeft")).not.toHaveBeenCalled();
   });
 });
