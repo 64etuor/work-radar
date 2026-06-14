@@ -1,0 +1,22 @@
+src/components/TodayView.css
+  s_f1c45ebba0178b::t_084a115b0f47f2 611
+  s_f1c45ebba0178b::t_74ef28c60f6e30 549,559,563-571
+  s_f1c45ebba0178b::t_67be37bcd12e96 729-731,737
+  s_f1c45ebba0178b::t_f5ead86241aeee 748,754
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "90795006fca7dca19e59ba9dad477568a129d493",
+  "prompts": {},
+  "sessions": {
+    "s_f1c45ebba0178b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33f5e466-9a85-43a3-8bc9-bb208dd9b941",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
