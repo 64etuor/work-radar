@@ -1,0 +1,25 @@
+docs/superpowers/specs/2026-06-14-today-timeline-dnd-ux-overhaul-design.md
+  s_f1c45ebba0178b::t_01147c76170267 1-15,17-23,25-40,42-43,45-50,52-71,73-81,136-141,161,166-170,172-177,183-221,226-243
+  s_f1c45ebba0178b::t_2a2616086879cd 82-84,86-93,95-96,98-100
+  s_f1c45ebba0178b::t_7e083f122411c8 101-104,106-115,117-127,129-135
+  s_f1c45ebba0178b::t_d0b50483112504 143-148
+  s_f1c45ebba0178b::t_c6d0f330c0d111 222-225
+  s_f1c45ebba0178b::t_d5ef8dc0b038a5 178,180-182
+  s_f1c45ebba0178b::t_0527f19ac491ed 149-150,152-156,158-160,163,165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b0c60b3b5634060dd274276be819368774af01af",
+  "prompts": {},
+  "sessions": {
+    "s_f1c45ebba0178b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33f5e466-9a85-43a3-8bc9-bb208dd9b941",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
