@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  resizeHandleHeightPx,
-  showTopHandle,
-  timelineBlockPlacementStyle,
-} from "./timelineBlockStyle";
+import { resizeHandleHeightPx, timelineBlockPlacementStyle } from "./timelineBlockStyle";
 
 describe("timelineBlockPlacementStyle", () => {
   it("uses CSS-safe percentages for split overlap placement", () => {
@@ -54,24 +50,9 @@ describe("timelineBlockPlacementStyle", () => {
 });
 
 describe("resizeHandleHeightPx", () => {
-  it("returns a steady 8px hitbox (Bug fix 2026-06-14: the old 3px floor was ungrabbable)", () => {
-    // timelineLayout floors block heights to MIN_BLOCK_PX=20; short blocks drop the TOP
-    // handle (showTopHandle) instead of shrinking the band, so 8px never eats the move band.
-    expect(resizeHandleHeightPx()).toBe(8);
-  });
-});
-
-describe("showTopHandle", () => {
-  it("renders both handles only when a usable move band fits (>=28px)", () => {
-    expect(showTopHandle(28)).toBe(true);
-    expect(showTopHandle(36)).toBe(true);
-    expect(showTopHandle(60)).toBe(true);
-  });
-
-  it("drops the top handle on short blocks so the whole body stays grabbable for move", () => {
-    // 8px handle + 8px handle + >=12px move band = 28px. Below that => single bottom handle.
-    // timelineLayout floors heights to 20px, so 20..27px is the real single-handle range.
-    expect(showTopHandle(27)).toBe(false);
-    expect(showTopHandle(20)).toBe(false);
+  it("returns a steady 6px hitbox (Google-calendar model 2026-06-14: body=move, thin top/bottom edges=resize)", () => {
+    // 6px is grabbable (vs the old ungrabbable 3px) while leaving more move band than 8px.
+    // occlusion is handled by the wrap z-lift, not by enlarging the handle.
+    expect(resizeHandleHeightPx()).toBe(6);
   });
 });

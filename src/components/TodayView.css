@@ -561,10 +561,9 @@
 }
 
 /*
- * 호버/포커스 시 블록을 이웃 위로 살짝 띄운다(z 6 > 이웃 2). 핸들 band 자체는 가려지지 않지만
- * abutting 블록의 1px seam + scale 잔여 sub-pixel 경합을 굳힌다.
- * ⚠ 반드시 아래 seam inset(.tl-block-resize-top/bottom의 1px)과 함께 적용 — lift만 적용하면
- * 띄워진 위 블록 body가 아래 블록의 상단 핸들을 seam에서 덮어 역-occlusion이 생긴다(coupling).
+ * 호버/포커스 시 블록을 이웃 위로 띄운다(z 6 > 이웃 2) — abutting 블록 경계에서 호버한 블록의
+ * 핸들이 페인트 순서에 지지 않고 포인터를 가져간다(occlusion 수정의 핵심). scale(1.02) 제거와
+ * 함께 동작하며, 핸들은 가장자리(top/bottom:0)에 그대로 둔다(Google-캘린더 모델, 커서 위치 보존).
  */
 .tl-block-wrap:hover,
 .tl-block-wrap:focus-within {
@@ -726,16 +725,16 @@
 }
 
 /*
- * PR 7: 블록 리사이즈 핸들 (스펙 §7 row 3).
- * 상/하 8px 띠 — 호버 시 진해진다. dnd-kit이 spread하는 role=button + tabindex로 키보드 가능.
- * showTopHandle 모델(2026-06-14): 짧은 블록(<28px)은 상단 핸들을 떼고 전체 body를 move로 둔다.
+ * 블록 리사이즈 핸들 (스펙 §7 row 3). Google-캘린더 모델(2026-06-14): body 전체=이동,
+ * 위/아래 얇은 가장자리 띠만=리사이즈. 모든 블록이 상/하 핸들을 가진다(짧은 블록도 위쪽 유지).
+ * 호버 시 진해진다. dnd-kit이 spread하는 role=button + tabindex로 키보드 가능.
  */
 .tl-block-resize {
   position: absolute;
   left: 8px;
   right: 8px;
-  /* hitbox 높이 — 이제 상수 8px(--tl-resize-h, 2026-06-14). 짧은 블록은 핸들 개수로 move 밴드 확보. */
-  height: var(--tl-resize-h, 8px);
+  /* hitbox 높이 — 상수 6px(--tl-resize-h, 2026-06-14). 8px보다 move 밴드를 더 남긴다. */
+  height: var(--tl-resize-h, 6px);
   cursor: ns-resize;
   z-index: 3;
   background: transparent;
@@ -745,13 +744,13 @@
 }
 
 .tl-block-resize-top {
-  top: 1px; /* seam inset — abutting 위 블록의 하단 핸들과 정확한 경계행을 공유하지 않게. */
+  top: 0; /* 가장자리에 그대로 — 커서 위치 보존(Google-캘린더 모델). occlusion은 z-lift가 처리. */
   bottom: auto;
 }
 
 .tl-block-resize-bottom {
   top: auto;
-  bottom: 1px; /* seam inset — abutting 아래 블록의 상단 핸들과 경계행 공유 회피. */
+  bottom: 0;
 }
 
 /* 항상 보이는 가운데 그립 라인 — hover 전에도 "여기 잡을 수 있다" 신호. */
@@ -891,8 +890,8 @@
   height: 11px;
 }
 
-/* 핸들 hitbox 높이는 이제 상수 8px(--tl-resize-h, 2026-06-14) — 짧은 블록은 핸들 개수(showTopHandle)로
- * move 밴드를 확보하므로 높이별 축소가 불필요. ultra 블록에선 가운데 그립 라인(::after)만 더 얇게 유지. */
+/* 핸들 hitbox 높이는 상수 6px(--tl-resize-h, 2026-06-14) — body=move/가장자리=resize(Google-캘린더 모델)라
+ * 높이별 축소가 불필요. ultra 블록에선 가운데 그립 라인(::after)만 시각적으로 더 얇게 유지. */
 .tl-block-wrap:has(.tl-block--ultra) .tl-block-resize::after {
   width: 16px;
   height: 2px;

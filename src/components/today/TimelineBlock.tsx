@@ -4,7 +4,6 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import {
   resizeHandleHeightPx,
-  showTopHandle,
   timelineBlockPlacementStyle,
 } from "@/components/today/timelineBlockStyle";
 import type { DragData } from "@/components/today/useTimelineDnd";
@@ -227,8 +226,8 @@ export function TimelineBlock({
             translate: suppressDragTransform ? null : transform,
             disableLayoutTransition,
           }),
-          // 리사이즈 핸들 hitbox(CSS var) — 이제 상수 8px(Bug fix 2026-06-14). 짧은 블록은
-          // showTopHandle로 상단 핸들을 떼서 move 밴드를 확보한다.
+          // 리사이즈 핸들 hitbox(CSS var) — 상수 6px(Google-캘린더 모델 2026-06-14).
+          // body 전체=이동, 위/아래 가장자리만=리사이즈.
           "--tl-resize-h": `${resizeHandleHeightPx()}px`,
         } as CSSProperties
       }
@@ -282,9 +281,9 @@ export function TimelineBlock({
           }}
         />
       )}
-      {/* 짧은 블록(<28px)은 상단 핸들 생략 — 전체 body가 move로 잡혀야 하기 때문(Bug fix 2026-06-14).
-          상단 시각 조정은 Phase 3 키보드로 보완. 하단 핸들은 항상 렌더. */}
-      {showTopHandle(heightPx) && <ResizeHandle edge="top" box={box} durationMin={durationMin} />}
+      {/* Google-캘린더 모델(2026-06-14): body 전체=이동, 위/아래 가장자리=리사이즈.
+          모든 블록에 상/하 핸들 렌더(짧은 블록도 위쪽 리사이즈 유지). */}
+      <ResizeHandle edge="top" box={box} durationMin={durationMin} />
       <ResizeHandle edge="bottom" box={box} durationMin={durationMin} />
     </div>
   );
