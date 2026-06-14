@@ -1,0 +1,21 @@
+src/components/TodayView.css
+  s_f1c45ebba0178b::t_f3008d74789881 894-895
+docs/superpowers/specs/2026-06-14-today-timeline-dnd-ux-overhaul-design.md
+  s_f1c45ebba0178b::t_6de4741205ac70 110-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "16da9a6a41458cd0847824c6a18f3c3d60df824e",
+  "prompts": {},
+  "sessions": {
+    "s_f1c45ebba0178b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33f5e466-9a85-43a3-8bc9-bb208dd9b941",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
