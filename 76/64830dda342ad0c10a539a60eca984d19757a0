@@ -1,0 +1,61 @@
+docs/superpowers/plans/2026-06-14-dnd-overhaul-phase1-drag-resize-feel.md
+  s_9879bbf7505b01::t_a949d9bc39901a 1-44,47-50,53-60,62-73,76-99,102-245,247-258,260-271,273-410,412-416,418-436,438-442,444-454,457-550,552-657
+src/components/today/timelinePreview.test.ts
+  s_9879bbf7505b01::t_c7543071ba182c 6
+  s_9879bbf7505b01::t_95c723d223ee6b 403-420,428-432,440-445,453-454,489-490
+  s_9879bbf7505b01::t_8e2f9961e7a72c 421-427,433-439,446-452,458-464,480-486,507-519,533-545,550-558
+  s_9879bbf7505b01::t_2ee439296acb25 7
+  s_9879bbf7505b01::t_36b22f8c24fa9d 455-457,465-479,487-488
+  s_9879bbf7505b01::t_ac5ef7dfeb55e4 491-506,520-532,546-549,559-561
+src/components/today/useTimelineDnd.ts
+  s_9879bbf7505b01::t_f1ba53348526c4 205-228
+  s_9879bbf7505b01::t_977b6ee55cbcc7 159,164
+  s_9879bbf7505b01::t_b26d4848469a96 360-361,363-377
+  s_9879bbf7505b01::t_c95c24351af45b 150-155
+src/components/today/TimelineBlock.tsx
+  s_9879bbf7505b01::t_ded364aebab3dc 27-28
+  s_9879bbf7505b01::t_fc81930f4b8e85 173
+  s_9879bbf7505b01::t_9ab8d5825ebf8e 221
+docs/superpowers/plans/2026-06-14-dnd-overhaul-autonomous-loop-runbook.md
+  s_9879bbf7505b01::t_e1a61a7ccd265f 139
+src/components/TodayView.tsx
+  s_9879bbf7505b01::t_09dc5096dd13e3 388-389
+src/components/today/timelinePreview.ts
+  s_9879bbf7505b01::t_2580ef02e6855c 193-243
+  s_9879bbf7505b01::t_f3a2cda4954d4f 192,244-263,265-266
+  s_9879bbf7505b01::t_2b7781af54e2e9 264
+src/components/today/useTimelineDnd.test.ts
+  s_9879bbf7505b01::t_ad286dff5f296f 8
+  s_9879bbf7505b01::t_fd91473ebee0ae 185-199,203-205,209-212,218-227,231,238-259,263-264
+  s_9879bbf7505b01::t_8e2f9961e7a72c 200-202,206-208,213-217,228-230,234-236,260-262
+  s_9879bbf7505b01::t_482f02cc50d08a 232-233,237
+src/components/TodayView.css
+  s_9879bbf7505b01::t_6d337a88107e89 206-222
+  s_9879bbf7505b01::t_d97390dca39ac0 581-586
+docs/decisions.md
+  s_9879bbf7505b01::t_cc0b2677d8a383 627
+src/components/today/TimelineCanvas.tsx
+  s_9879bbf7505b01::t_0c9dd430382d51 8
+  s_9879bbf7505b01::t_764871dbd65f46 285-295
+  s_9879bbf7505b01::t_0af7508c97069f 7
+  s_9879bbf7505b01::t_e74dcb51836cc4 134-140
+  s_9879bbf7505b01::t_48ab4ddf608044 131-133
+  s_9879bbf7505b01::t_c6c22a8ec1a18c 123-124
+  s_9879bbf7505b01::t_0e43d66c42d1ee 226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7664830dda342ad0c10a539a60eca984d19757a0",
+  "prompts": {},
+  "sessions": {
+    "s_9879bbf7505b01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "910261e2-a97c-4d6e-865b-9882c8bae41f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
