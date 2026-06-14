@@ -95,14 +95,14 @@ export async function getPattern(
   id: string,
 ): Promise<{ frontmatter: Record<string, unknown>; body: string } | null> {
   if (!SAFE_ID.test(id)) return null; // path-traversal / out-of-tree read guard
-  for (const sub of SUBDIRS) {
+  const reads = await Promise.all(SUBDIRS.map(async (sub) => {
     const file = join(workspaceDir, "patterns", sub, `${id}.md`);
     try {
       const { data, content } = matter(await readFile(file, "utf8"));
       return { frontmatter: data as Record<string, unknown>, body: content.trim() };
     } catch {
-      // not here → try next
+      return null;
     }
-  }
-  return null;
+  }));
+  return reads.find((pattern) => pattern !== null) ?? null;
 }

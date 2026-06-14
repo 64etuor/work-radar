@@ -370,129 +370,131 @@ export function useHermesTabsBootstrap() {
     })();
 
     void (async () => {
-      await setup<{ kind?: string; text?: string }>("hermes-agent:chunk", (e) => {
-        if (!e.payload.tabId) return;
-        if (e.payload.kind !== "agent") return;
-        dispatch({ type: "agent-chunk", tabId: e.payload.tabId, text: e.payload.text ?? "" });
-      });
+      await Promise.all([
+        setup<{ kind?: string; text?: string }>("hermes-agent:chunk", (e) => {
+          if (!e.payload.tabId) return;
+          if (e.payload.kind !== "agent") return;
+          dispatch({ type: "agent-chunk", tabId: e.payload.tabId, text: e.payload.text ?? "" });
+        }),
 
-      await setup<Record<string, unknown>>("hermes-agent:tool-call", (e) => {
-        const p = e.payload;
-        if (!p.tabId) return;
-        dispatch({
-          type: "agent-tool",
-          tabId: p.tabId as string,
-          tool: {
-            id: p.toolCallId as string | undefined,
-            title: (p.title as string) ?? (p.kind as string) ?? "tool",
-            kind: p.kind as string | undefined,
-            status: (p.status as string) ?? "in_progress",
+        setup<Record<string, unknown>>("hermes-agent:tool-call", (e) => {
+          const p = e.payload;
+          if (!p.tabId) return;
+          dispatch({
+            type: "agent-tool",
+            tabId: p.tabId as string,
+            tool: {
+              id: p.toolCallId as string | undefined,
+              title: (p.title as string) ?? (p.kind as string) ?? "tool",
+              kind: p.kind as string | undefined,
+              status: (p.status as string) ?? "in_progress",
+            },
+          });
+        }),
+
+        setup<Record<string, unknown>>("hermes-agent:tool-call-update", (e) => {
+          const p = e.payload;
+          if (!p.tabId || !p.toolCallId) return;
+          const patch: Partial<ToolCallSummary> = {};
+          if (p.title !== undefined) patch.title = p.title as string;
+          if (p.kind !== undefined) patch.kind = p.kind as string;
+          if (p.status !== undefined) patch.status = p.status as string;
+          dispatch({
+            type: "tool-update",
+            tabId: p.tabId as string,
+            id: p.toolCallId as string,
+            patch,
+          });
+        }),
+
+        setup<{ status: "ok" | "cancelled" | "error"; error?: string }>(
+          "hermes-agent:turn-end",
+          (e) => {
+            const tabId = e.payload.tabId;
+            if (!tabId) return;
+            dispatch({
+              type: "agent-end",
+              tabId,
+              status: e.payload.status,
+              error: e.payload.error,
+            });
+            // 턴 종료 시 세션 상태를 정규화한다. session-ready 는 spawn 1회만 오므로(2번째
+            // 턴부터·취소 시 status 가 "starting"에 고착 → 입력창 disabled). 종료마다 ready 로
+            // 되돌려 입력을 다시 활성화한다(실패 턴은 error). (cancel→입력 불가 버그의 근본 원인.)
+            dispatch({
+              type: "set-status",
+              tabId,
+              status: e.payload.status === "error" ? "error" : "ready",
+            });
+            // 영속: 방금 닫힌 assistant 메시지 1개를 DB에 append.
+            const tab = useHermesTabsStore.getState().tabs.get(tabId);
+            if (tab) {
+              let lastContent: string | undefined;
+              let lastToolCalls: ToolCallSummary[] | undefined;
+              for (let i = tab.messages.length - 1; i >= 0; i--) {
+                const m = tab.messages[i];
+                if (m.role === "assistant") {
+                  lastContent = m.chunks.join("");
+                  lastToolCalls = m.toolCalls;
+                  break;
+                }
+              }
+              if (lastContent !== undefined || lastToolCalls !== undefined) {
+                const content = lastContent ?? "";
+                const toolJson =
+                  lastToolCalls && lastToolCalls.length ? JSON.stringify(lastToolCalls) : null;
+                if (content || toolJson) {
+                  void unwrap(
+                    commands.hermesMessageAppend(tabId, "assistant", content, toolJson),
+                  ).catch(() => {});
+                }
+              }
+            }
+            void useHermesTabsStore.getState().drainQueued(tabId);
           },
-        });
-      });
+        ),
 
-      await setup<Record<string, unknown>>("hermes-agent:tool-call-update", (e) => {
-        const p = e.payload;
-        if (!p.tabId || !p.toolCallId) return;
-        const patch: Partial<ToolCallSummary> = {};
-        if (p.title !== undefined) patch.title = p.title as string;
-        if (p.kind !== undefined) patch.kind = p.kind as string;
-        if (p.status !== undefined) patch.status = p.status as string;
-        dispatch({
-          type: "tool-update",
-          tabId: p.tabId as string,
-          id: p.toolCallId as string,
-          patch,
-        });
-      });
+        setup<{ commands: AcpCommand[] }>("hermes-agent:available-commands", (e) => {
+          if (!e.payload.tabId) return;
+          dispatch({
+            type: "available-commands",
+            tabId: e.payload.tabId,
+            commands: e.payload.commands ?? [],
+          });
+        }),
 
-      await setup<{ status: "ok" | "cancelled" | "error"; error?: string }>(
-        "hermes-agent:turn-end",
-        (e) => {
-          const tabId = e.payload.tabId;
+        setup<unknown>("hermes-agent:session-ready", (e) => {
+          const tabId = (e.payload as { tabId?: string } | null)?.tabId;
           if (!tabId) return;
+          dispatch({ type: "set-status", tabId, status: "ready" });
+        }),
+
+        setup<{ kind: string; message: string }>("hermes-agent:error", (e) => {
+          if (!e.payload.tabId) return;
+          dispatch({ type: "set-status", tabId: e.payload.tabId, status: "error" });
           dispatch({
-            type: "agent-end",
-            tabId,
-            status: e.payload.status,
-            error: e.payload.error,
+            type: "system",
+            tabId: e.payload.tabId,
+            text: `Hermes 오류: ${e.payload.message}`,
+            level: "error",
           });
-          // 턴 종료 시 세션 상태를 정규화한다. session-ready 는 spawn 1회만 오므로(2번째
-          // 턴부터·취소 시 status 가 "starting"에 고착 → 입력창 disabled). 종료마다 ready 로
-          // 되돌려 입력을 다시 활성화한다(실패 턴은 error). (cancel→입력 불가 버그의 근본 원인.)
+        }),
+
+        setup<{
+          requestId?: string;
+          toolName?: string;
+          options?: { id: string; label: string }[];
+        }>("hermes-agent:ask-user", (e) => {
+          if (!e.payload.tabId || !e.payload.requestId) return;
           dispatch({
-            type: "set-status",
-            tabId,
-            status: e.payload.status === "error" ? "error" : "ready",
+            type: "ask-user",
+            tabId: e.payload.tabId,
+            requestId: e.payload.requestId,
+            toolName: e.payload.toolName,
+            options: e.payload.options ?? [],
           });
-          // 영속: 방금 닫힌 assistant 메시지 1개를 DB에 append.
-          const tab = useHermesTabsStore.getState().tabs.get(tabId);
-          if (tab) {
-            let lastContent: string | undefined;
-            let lastToolCalls: ToolCallSummary[] | undefined;
-            for (let i = tab.messages.length - 1; i >= 0; i--) {
-              const m = tab.messages[i];
-              if (m.role === "assistant") {
-                lastContent = m.chunks.join("");
-                lastToolCalls = m.toolCalls;
-                break;
-              }
-            }
-            if (lastContent !== undefined || lastToolCalls !== undefined) {
-              const content = lastContent ?? "";
-              const toolJson =
-                lastToolCalls && lastToolCalls.length ? JSON.stringify(lastToolCalls) : null;
-              if (content || toolJson) {
-                void unwrap(
-                  commands.hermesMessageAppend(tabId, "assistant", content, toolJson),
-                ).catch(() => {});
-              }
-            }
-          }
-          void useHermesTabsStore.getState().drainQueued(tabId);
-        },
-      );
-
-      await setup<{ commands: AcpCommand[] }>("hermes-agent:available-commands", (e) => {
-        if (!e.payload.tabId) return;
-        dispatch({
-          type: "available-commands",
-          tabId: e.payload.tabId,
-          commands: e.payload.commands ?? [],
-        });
-      });
-
-      await setup<unknown>("hermes-agent:session-ready", (e) => {
-        const tabId = (e.payload as { tabId?: string } | null)?.tabId;
-        if (!tabId) return;
-        dispatch({ type: "set-status", tabId, status: "ready" });
-      });
-
-      await setup<{ kind: string; message: string }>("hermes-agent:error", (e) => {
-        if (!e.payload.tabId) return;
-        dispatch({ type: "set-status", tabId: e.payload.tabId, status: "error" });
-        dispatch({
-          type: "system",
-          tabId: e.payload.tabId,
-          text: `Hermes 오류: ${e.payload.message}`,
-          level: "error",
-        });
-      });
-
-      await setup<{
-        requestId?: string;
-        toolName?: string;
-        options?: { id: string; label: string }[];
-      }>("hermes-agent:ask-user", (e) => {
-        if (!e.payload.tabId || !e.payload.requestId) return;
-        dispatch({
-          type: "ask-user",
-          tabId: e.payload.tabId,
-          requestId: e.payload.requestId,
-          toolName: e.payload.toolName,
-          options: e.payload.options ?? [],
-        });
-      });
+        }),
+      ]);
     })();
 
     return () => {

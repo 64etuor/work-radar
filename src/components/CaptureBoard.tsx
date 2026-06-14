@@ -136,7 +136,7 @@ function useCaptureBoardView() {
   const todayPanelRef = useRef<HTMLDivElement>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
 
-  const { expectPopRef, knownIdsRef, poppedIds } = useSignalPop(signals);
+  const { knownIdsRef, markPopped, poppedIds } = useSignalPop(signals);
   const urgencyAppliedRef = useRef<Set<string>>(null);
   if (urgencyAppliedRef.current === null) urgencyAppliedRef.current = new Set();
 
@@ -146,12 +146,12 @@ function useCaptureBoardView() {
     projects.find((p) => p.kind === kind)?.id ?? null;
 
   const handleCapture = (title: string, kind: Kind) => {
-    expectPopRef.current = true;
     createSignal.mutate(
       { title, kind, projectId: projectIdForKind(kind) },
       {
         onSuccess: (signal) => {
-          if (knownIdsRef.current!.has(signal.id)) return;
+          if (knownIdsRef.current.has(signal.id)) return;
+          markPopped(signal.id);
           setCaptureOrder((prev) => {
             const next = new Map(prev);
             next.set(signal.id, next.size + 1);
@@ -181,8 +181,7 @@ function useCaptureBoardView() {
   );
 
   const handleUnpromote = (id: string) => {
-    expectPopRef.current = true;
-    unpromoteToday.mutate(id);
+    unpromoteToday.mutate(id, { onSuccess: () => markPopped(id) });
     pushSuccess("매트릭스로 되돌림");
   };
 

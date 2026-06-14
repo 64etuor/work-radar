@@ -51,14 +51,17 @@ export async function curatePattern(
     // not in target → look in source dirs
   }
 
-  for (const sub of target.sources) {
+  const sourceReads = await Promise.all(target.sources.map(async (sub) => {
     const sourceFile = join(workspaceDir, "patterns", sub, `${id}.md`);
-    let raw: string;
     try {
-      raw = await readFile(sourceFile, "utf8");
+      return { sub, sourceFile, raw: await readFile(sourceFile, "utf8") };
     } catch {
-      continue; // not here → try next source
+      return null;
     }
+  }));
+  const source = sourceReads.find((candidate) => candidate !== null);
+  if (source) {
+    const { sub, sourceFile, raw } = source;
     const { data, content } = matter(raw);
     const next = matter.stringify(content, {
       ...data,

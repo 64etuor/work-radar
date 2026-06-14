@@ -5,24 +5,35 @@ import type { WorkSignal } from "@/bindings";
 export function useSignalPop(signals: WorkSignal[]) {
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
   const knownIdsRef = useRef<Set<string>>(null!);
-  const expectPopRef = useRef(false);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (knownIdsRef.current === null) {
     knownIdsRef.current = new Set();
   }
 
+  const markPopped = (ids: string | string[]) => {
+    const next = Array.isArray(ids) ? ids : [ids];
+    if (next.length === 0) return;
+    setPoppedIds(new Set(next));
+    if (clearTimerRef.current !== null) clearTimeout(clearTimerRef.current);
+    clearTimerRef.current = window.setTimeout(() => {
+      clearTimerRef.current = null;
+      setPoppedIds(new Set());
+    }, 400);
+  };
+
   useEffect(() => {
-    const current = new Set(signals.map((s) => s.id));
-    if (expectPopRef.current) {
-      const fresh = signals.filter((s) => !knownIdsRef.current.has(s.id)).map((s) => s.id);
-      if (fresh.length) {
-        setPoppedIds(new Set(fresh));
-        window.setTimeout(() => setPoppedIds(new Set()), 400);
-      }
-      expectPopRef.current = false;
-    }
-    knownIdsRef.current = current;
+    knownIdsRef.current = new Set(signals.map((s) => s.id));
   }, [signals]);
 
-  return { expectPopRef, knownIdsRef, poppedIds };
+  useEffect(() => {
+    return () => {
+      if (clearTimerRef.current !== null) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  return { knownIdsRef, markPopped, poppedIds };
 }
