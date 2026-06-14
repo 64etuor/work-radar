@@ -1,0 +1,22 @@
+src/components/today/TimelineBlock.test.ts
+  s_f1c45ebba0178b::t_0e36b61470ff9b 57-68,71-75
+  s_f1c45ebba0178b::t_32cd3e2c47978c 3-7
+src/components/today/timelineBlockStyle.ts
+  s_f1c45ebba0178b::t_4e204e2b1965f9 3-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ba90b7ace0cf8643314319a5020623b8085f18a0",
+  "prompts": {},
+  "sessions": {
+    "s_f1c45ebba0178b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33f5e466-9a85-43a3-8bc9-bb208dd9b941",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
