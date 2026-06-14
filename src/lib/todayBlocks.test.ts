@@ -302,9 +302,10 @@ describe("buildTodayBlocks", () => {
       },
     ] as never[];
     const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
+    // 동기화 루틴은 단일 routine 블록으로 렌더(미러 이벤트 흡수). 시각·완료=앱, 길이·색·딥링크=Google.
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].id).toBe("event:work-cal:master-1");
-    expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].id).toBe(`routine:r1:${DATE}`);
+    expect(blocks[0].kind).toBe("routine");
     expect(blocks[0].linkedEventId).toBe("master-1");
     expect(blocks[0].calendarId).toBe("work-cal");
     expect(blocks[0].routineId).toBe("r1");
@@ -339,7 +340,7 @@ describe("buildTodayBlocks", () => {
     ] as never[];
     const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].id).toBe("event:work-cal:master-1");
+    expect(blocks[0].id).toBe(`routine:r1:${DATE}`);
     expect(blocks[0].title).toBe("Updated routine");
   });
 
@@ -371,9 +372,10 @@ describe("buildTodayBlocks", () => {
       },
     ] as never[];
     const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
+    // recurringEventId==master로 매칭 → 흡수, 루틴은 1블록. linkedEventId는 매칭 인스턴스 id 이어받음.
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].id).toBe("event:work-cal:master-1_20260528T000000Z");
-    expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].id).toBe(`routine:r1:${DATE}`);
+    expect(blocks[0].kind).toBe("routine");
     expect(blocks[0].linkedEventId).toBe("master-1_20260528T000000Z");
     expect(blocks[0].routineId).toBe("r1");
     expect(blocks[0].done).toBe(false);
@@ -447,7 +449,7 @@ describe("buildTodayBlocks", () => {
     ] as never[];
     const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].kind).toBe("routine");
     expect(blocks[0].routineId).toBe("r1");
     expect(blocks[0].startISO).toContain("10:30");
   });
@@ -485,17 +487,70 @@ describe("buildTodayBlocks", () => {
     ] as never[];
     const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].kind).toBe("event");
+    expect(blocks[0].kind).toBe("routine");
     expect(blocks[0].endISO).toContain("10:00");
   });
 
-  it("synced routine without a fetched calendar event does not render a routine job block", () => {
+  // 중국어 회귀: 동기화 루틴을 20:45로 옮김(override). Google이 옛 13:30 인스턴스 + 이동 20:45
+  // 인스턴스를 (엣지로) 둘 다 돌려줘도 둘 다 recurringEventId==master로 흡수 → 정확히 1 routine 블록.
+  // 옛 동작은 13:30이 stale 판정→가상블록 + 20:45가 따로 렌더 = 중복이었다.
+  it("moved synced routine never doubles even if Google returns original + moved instances", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "중국어 공부",
+        timeOfDay: "13:30",
+        timeOverride: "20:45",
+        linkedEventId: "master-1_20260528T043000Z",
+        linkedCalendarId: "work-cal",
+        googleEventId: "master-1",
+        googleCalendarId: "work-cal",
+        durationMin: 60,
+        done: true,
+      },
+    ] as never[];
+    const events = [
+      {
+        id: "master-1_20260528T043000Z",
+        recurringEventId: "master-1",
+        title: "중국어 공부",
+        start: "2026-05-28T13:30:00",
+        end: "2026-05-28T14:30:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+      {
+        id: "master-1_20260528T114500Z",
+        recurringEventId: "master-1",
+        title: "중국어 공부",
+        start: "2026-05-28T20:45:00",
+        end: "2026-05-28T21:45:00",
+        allDay: false,
+        calendarId: "work-cal",
+        calendarSummary: "업무",
+        projectColor: "#444",
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({ signals: [], placements: [], events, routines, date: DATE });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("routine");
+    expect(blocks[0].routineId).toBe("r1");
+    expect(blocks[0].startISO).toContain("20:45"); // 앱 시각(override)
+    expect(blocks[0].endISO).toContain("21:45"); // 정의 길이 60분
+  });
+
+  it("synced routine still renders once (from local truth) when its calendar event isn't fetched yet", () => {
+    // 단일 정본 모델: 루틴은 미러 이벤트 유무와 무관하게 항상 1블록(앱 시각·정의 길이). 이벤트가
+    // 늦게 로드되면 흡수되어 그대로 1블록 — 옛 동작(이벤트 로드 전 0개 → 깜빡임/외부삭제 시 사라짐)을 개선.
     const routines = [
       {
         id: "r1",
         title: "R",
         timeOfDay: "09:00",
         timeOverride: null,
+        durationMin: 30,
         googleEventId: "master-1",
         googleCalendarId: "work-cal",
       },
@@ -507,7 +562,11 @@ describe("buildTodayBlocks", () => {
       routines,
       date: DATE,
     });
-    expect(blocks).toHaveLength(0);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("routine");
+    expect(blocks[0].routineId).toBe("r1");
+    expect(blocks[0].startISO).toContain("09:00");
+    expect(blocks[0].endISO).toContain("09:30");
   });
 
   it("plusMin preserves local time across hour boundary (no UTC drift)", () => {

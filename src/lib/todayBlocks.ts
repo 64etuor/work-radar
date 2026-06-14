@@ -127,24 +127,20 @@ function isoFor(
   return { startISO, endISO };
 }
 
+/** 로컬 ISO('…THH:MM…')에서 HH:MM. 16자 미만이면 null. */
 function hhmmOf(iso: string): string | null {
   return iso.length >= 16 ? iso.slice(11, 16) : null;
 }
 
 /**
- * 동기화 이벤트가 루틴의 (앱 기준) 시각과 일치하는가 — 시각(HH:MM)만 비교한다.
- *
- * 불일치 = "앱에서 루틴 시각을 바꿨는데 Google 인스턴스가 아직 옛 시각"인 stale 케이스로
- * 간주해 이벤트를 숨기고 앱 시각의 가상 루틴 블록을 그린다.
- *
- * duration은 비교하지 않는다 — per-day duration은 routine_checks에 컬럼이 없어 표현 불가라,
- * 동기화 루틴 블록을 리사이즈하면(이벤트 길이만 변경) 영구 불일치 → 블록이 정의 길이로
- * 스냅백하며 실제 Google 이벤트가 숨겨졌다. 길이는 이벤트가 정본, 시각은 앱이 정본.
+ * 매칭된 Google 이벤트의 길이(분). 동기화 루틴의 per-day 길이는 routine_checks에 컬럼이 없어 로컬에
+ * 저장 못 하므로, 길이만은 Google 이벤트가 정본(스펙 §5: 시각=앱, 길이=Google). end 없거나 비정상이면 null.
  */
-function routineMatchesEvent(routine: RoutineToday, event: CalendarEvent): boolean {
-  const time = routine.timeOverride ?? routine.timeOfDay;
-  if (!time) return false;
-  return hhmmOf(event.start) === time;
+function eventDurationMin(e: CalendarEvent): number | null {
+  if (!e.end) return null;
+  const ms = new Date(e.end).getTime() - new Date(e.start).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return Math.round(ms / 60_000);
 }
 
 export function buildTodayBlocks({
@@ -157,7 +153,6 @@ export function buildTodayBlocks({
   const out: TimedBlock[] = [];
   const absorbed = new Set<string>();
   const routineByEvent = new Map<string, RoutineToday>();
-  const staleRoutineIds = new Set<string>();
 
   const signalById = new Map(signals.map((s) => [s.id, s]));
   for (const p of placements) {
@@ -183,58 +178,77 @@ export function buildTodayBlocks({
     const key = eventKey(s.linkedCalendarId, s.linkedEventId);
     if (key) absorbed.add(key);
   }
+  // 각 시각 루틴을 instance 링크(linked_event_id)와 master(google_event_id) **양쪽** 키로 등록한다.
+  // Google이 그 루틴을 어떤 형태로 돌려주든(인스턴스 id == linked, 또는 recurringEventId == master)
+  // 한 루틴으로 귀결돼 흡수된다 — 옛 인스턴스/이동 인스턴스가 따로 떠 중복되는 일을 구조적으로 막음.
   for (const r of routines) {
     if (!(r.timeOverride ?? r.timeOfDay)) continue;
-    const key = eventKey(
-      r.linkedCalendarId ?? r.googleCalendarId,
-      r.linkedEventId ?? r.googleEventId,
-    );
-    if (key) routineByEvent.set(key, r);
+    for (const [cal, evt] of [
+      [r.linkedCalendarId, r.linkedEventId],
+      [r.googleCalendarId, r.googleEventId],
+    ] as const) {
+      const key = eventKey(cal, evt);
+      if (key) routineByEvent.set(key, r);
+    }
   }
 
+  // 루틴의 미러 이벤트는 **항상 흡수**(독립 블록 금지) — 루틴은 아래에서 정확히 1블록을 그린다.
+  // 시각 비교(stale 휴리스틱) 없음: 정체성으로 매칭되면 그 이벤트는 그 루틴의 표현일 뿐이다.
+  // matchedEventByRoutine은 routine 블록의 길이(per-day 정본=Google)·색·딥링크 소스.
+  const matchedEventByRoutine = new Map<string, CalendarEvent>();
   for (const e of events) {
     if (e.allDay) continue;
     const key = eventKey(e.calendarId, e.id);
-    if (key && absorbed.has(key)) continue;
+    if (key && absorbed.has(key)) continue; // 시그널 미러
     const routine = findRoutineForEvent(e, routineByEvent);
-    if (routine && !routineMatchesEvent(routine, e)) {
-      if (key) absorbed.add(key);
-      staleRoutineIds.add(routine.id);
-      continue;
+    if (routine) {
+      if (!matchedEventByRoutine.has(routine.id)) matchedEventByRoutine.set(routine.id, e);
+      continue; // 흡수 — 루틴 블록이 대표한다(중복 불가)
     }
     out.push({
       id: `event:${e.calendarId}:${e.id}`,
       kind: "event",
-      title: routine?.title ?? e.title,
+      title: e.title,
       startISO: e.start,
       endISO: e.end ?? plusMinutesLocal(e.start, 30),
       calendarId: e.calendarId,
       calendarLabel: e.calendarSummary,
       color: e.projectColor ?? EVENT_FALLBACK_COLOR,
       linkedEventId: e.id,
-      done: routine?.done,
-      routineId: routine?.id,
     });
   }
 
+  // 모든 due+시각 루틴을 정확히 1블록으로. 시각·제목·완료 = 앱 정본(override ?? time_of_day),
+  // 길이 = 매칭 Google 이벤트가 있으면 그 길이(per-day duration은 로컬에 없음), 없으면 정의 길이.
+  // 동기화 루틴도 routine 블록으로 통일(미러 이벤트는 위에서 흡수됨). 색·딥링크는 매칭 이벤트에서
+  // 이어받아 캘린더 정합을 유지한다.
   for (const r of routines) {
     const time = r.timeOverride ?? r.timeOfDay;
     if (!time) continue;
-    const linkedCalendarId = r.linkedCalendarId ?? r.googleCalendarId;
-    const linkedEventId = r.linkedEventId ?? r.googleEventId;
-    if (eventKey(linkedCalendarId, linkedEventId) && !staleRoutineIds.has(r.id)) continue;
-    const { startISO, endISO } = isoFor(date, time, r.durationMin ?? ROUTINE_DURATION_MIN);
+    const matched = matchedEventByRoutine.get(r.id);
+    // 길이는 매칭 이벤트가 루틴의 **현재 시각과 일치할 때만** 그 길이를 쓴다(=라이브 미러, 리사이즈
+    // 길이 보존). 시각이 다르면(앱에서 옮겼는데 Google이 아직 옛 시각=stale) 그 길이는 무의미하므로
+    // 정의 길이로. 이 시각 비교는 더 이상 표시 여부(숨김/중복)를 결정하지 않는다 — 길이 소스만 고른다.
+    const matchedAtTime = matched != null && hhmmOf(matched.start) === time;
+    const duration =
+      (matchedAtTime ? eventDurationMin(matched) : null) ?? r.durationMin ?? ROUTINE_DURATION_MIN;
+    const { startISO, endISO } = isoFor(date, time, duration);
+    const linkedCalendarId = matched?.calendarId ?? r.linkedCalendarId ?? r.googleCalendarId;
+    // ⚠ per-INSTANCE id만(매칭 인스턴스 또는 routine_checks 링크) — master(google_event_id)는 절대
+    // 안 넣는다. 이 값이 곧 드래그/리사이즈 시 event-backed patch 타깃이라, master면 시리즈 전체가
+    // 이동된다(critic B1). master밖에 없으면 undefined → 드래그는 routine path(로컬 미러)로.
+    const linkedEventId = matched?.id ?? r.linkedEventId ?? undefined;
     out.push({
-      // 날짜 포함 — 멀티데이 병합(buildTimelineBlocks) 시 같은 루틴의 인접 날짜 가상
-      // 인스턴스가 id 충돌로 dedup되지 않도록. 소비처는 routineId 필드를 쓴다.
+      // 날짜 포함 — 멀티데이 병합(buildTimelineBlocks) 시 같은 루틴의 인접 날짜 인스턴스가
+      // id 충돌로 dedup되지 않도록. 소비처는 routineId 필드를 쓴다.
       id: `routine:${r.id}:${date}`,
       kind: "routine",
       title: r.title,
       startISO,
       endISO,
       calendarId: linkedCalendarId ?? "",
-      calendarLabel: linkedCalendarId ?? "",
-      color: ROUTINE_COLOR,
+      calendarLabel: matched?.calendarSummary ?? linkedCalendarId ?? "",
+      color: matched?.projectColor ?? ROUTINE_COLOR,
       linkedEventId: linkedEventId ?? undefined,
       done: r.done,
       routineId: r.id,

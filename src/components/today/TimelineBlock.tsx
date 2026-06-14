@@ -6,11 +6,10 @@ import {
   resizeHandleHeightPx,
   timelineBlockPlacementStyle,
 } from "@/components/today/timelineBlockStyle";
-import type { DragData } from "@/components/today/useTimelineDnd";
+import { dragDataForBox, resizeDataForBox } from "@/components/today/timelineDragData";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
 import type { LayoutBox } from "@/lib/timelineLayout";
-import { eventBlockApiId } from "@/lib/todayBlocks";
 
 type Props = {
   box: LayoutBox;
@@ -37,87 +36,6 @@ function memoSnippet(memo: string): string {
 function hhmm(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function stripBlockPrefix(id: string, kind: "signal" | "event" | "routine"): string {
-  return id.replace(new RegExp(`^${kind}:`), "");
-}
-
-function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
-  const { block } = box;
-  if (block.kind === "event") {
-    return {
-      from: "canvas",
-      blockKind: "event",
-      blockId: block.id,
-      eventId: eventBlockApiId(block),
-      title: block.title,
-      startISO: block.startISO,
-      durationMin,
-      calendarId: block.calendarId,
-      // 동기화된 루틴이 이벤트로 렌더된 블록 — 이동 시 루틴 time_override도 함께 미러.
-      routineId: block.routineId,
-    };
-  }
-  if (block.kind === "routine") {
-    return {
-      from: "canvas",
-      blockKind: "routine",
-      blockId: block.id,
-      routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
-      title: block.title,
-      startISO: block.startISO,
-      durationMin,
-      calendarId: block.calendarId,
-    };
-  }
-  return {
-    from: "canvas",
-    blockKind: "signal",
-    blockId: block.id,
-    signalId: block.signalId ?? stripBlockPrefix(block.id, "signal"),
-    title: block.title,
-    startISO: block.startISO,
-    durationMin,
-    calendarId: block.calendarId,
-  };
-}
-
-function resizeDataForBox(box: LayoutBox, edge: "top" | "bottom", durationMin: number): DragData {
-  const { block } = box;
-  if (block.kind === "event") {
-    return {
-      from: "canvas-resize",
-      edge,
-      blockKind: "event",
-      blockId: block.id,
-      eventId: eventBlockApiId(block),
-      calendarId: block.calendarId,
-      startISO: block.startISO,
-      durationMin,
-      routineId: block.routineId,
-    };
-  }
-  if (block.kind === "routine") {
-    return {
-      from: "canvas-resize",
-      edge,
-      blockKind: "routine",
-      blockId: block.id,
-      routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
-      startISO: block.startISO,
-      durationMin,
-    };
-  }
-  return {
-    from: "canvas-resize",
-    edge,
-    blockKind: "signal",
-    blockId: block.id,
-    signalId: block.signalId ?? stripBlockPrefix(block.id, "signal"),
-    startISO: block.startISO,
-    durationMin,
-  };
 }
 
 /**
