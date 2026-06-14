@@ -107,7 +107,8 @@ sub-pixel/`scale(1.02)` bleed. This is why the past-border `bottom:-4px` extensi
   3 → **8px**; the grip `::after` stays centered in the (now larger) band.
 - **Short blocks (`20px ≤ heightPx < 28px`) render a single bottom handle (8px), whole body = move.** Two
   8px handles (16px) on a 20px block leave only a 4px move band — too small to grab. The 28px threshold
-  guarantees a ≥12px move band whenever both handles render (28 − 16). In the single-handle range the
+  guarantees a ≥10px move band whenever both handles render (28 − 16 − 2px for the two 1px seam insets;
+  the earlier "≥12px" figure omitted the insets — corrected per final review). In the single-handle range the
   handle is a flat **8px** (no shrink formula — a cap keyed to sub-20px heights would be inert since
   nothing below 20px exists). `TimelineBlock` conditionally renders only the `edge="bottom"` `ResizeHandle`
   below the threshold; the `block:<id>` body draggable is unaffected. **Top-edge adjustment for these

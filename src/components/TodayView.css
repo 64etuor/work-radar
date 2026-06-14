@@ -891,8 +891,8 @@
   height: 11px;
 }
 
-/* 핸들 hitbox 높이는 이제 --tl-resize-h(JS 주입)로 연속 축소 — 별도 compact/ultra 오버라이드 불필요(Bug 1a).
- * ultra 블록에선 가운데 그립 라인(::after)만 시각적으로 더 얇게 유지. */
+/* 핸들 hitbox 높이는 이제 상수 8px(--tl-resize-h, 2026-06-14) — 짧은 블록은 핸들 개수(showTopHandle)로
+ * move 밴드를 확보하므로 높이별 축소가 불필요. ultra 블록에선 가운데 그립 라인(::after)만 더 얇게 유지. */
 .tl-block-wrap:has(.tl-block--ultra) .tl-block-resize::after {
   width: 16px;
   height: 2px;
