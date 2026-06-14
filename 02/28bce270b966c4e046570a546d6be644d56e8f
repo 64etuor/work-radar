@@ -1,0 +1,26 @@
+src/components/today/timelinePreview.test.ts
+  s_f565cc6f0de5df::t_e09ecd2c4300ab 150-218
+src/components/TodayView.tsx
+  s_f565cc6f0de5df::t_8da0037017f496 242-243,246-248
+  s_f565cc6f0de5df::t_df0e3666718ad0 270-272,277
+docs/decisions.md
+  s_f565cc6f0de5df::t_43113eaa39f3f3 624
+src/components/today/timelinePreview.ts
+  s_f565cc6f0de5df::t_cbacd85ba6b469 87-95,98,102-107,109,120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0228bce270b966c4e046570a546d6be644d56e8f",
+  "prompts": {},
+  "sessions": {
+    "s_f565cc6f0de5df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f9b60de7-658b-4348-b3c3-684c5585d054",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
