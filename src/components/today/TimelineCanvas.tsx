@@ -256,10 +256,21 @@ export function TimelineCanvas({
             const guideY = activeGuide?.y ?? dragPointerGrid?.y ?? hoverPx;
             const guideX = activeGuide?.x ?? dragPointerGrid?.x ?? hoverX;
             if (guideY === null || guideX === null) return null;
-            // 15분 그리드 스냅 — 절대 분으로 환산해 라벨은 일중 시각(hh:mm)으로 표시(스펙 §D2).
-            // HOUR_PX=60이라 1min=1px. 날짜 컨텍스트는 separator가 제공.
-            const snapMin = Math.max(0, Math.min(days * 1440, Math.round(guideY / 15) * 15));
-            const dayMin = snapMin % 1440;
+            // canvas/canvas-resize: active preview 박스의 스냅된 엣지(Alt fine-snap·자석·루틴 클램프
+            // 모두 반영)가 정본 — 드롭 라인·라벨·pill이 렌더된 블록과 정확히 일치한다. tray/routine은
+            // 아직 블록이 없으므로 기존 15-grid 스냅(배치도 15-grid)으로 폴백. 1min=1px(HOUR_PX=60).
+            const activeBox =
+              activeDrag.from === "canvas" || activeDrag.from === "canvas-resize"
+                ? previewBoxes.find((b) => b.id === activeDrag.blockId)
+                : undefined;
+            const edgeY =
+              activeBox != null
+                ? activeDrag.from === "canvas-resize" && activeDrag.edge === "bottom"
+                  ? activeBox.topPx + activeBox.heightPx
+                  : activeBox.topPx
+                : null;
+            const lineY = edgeY ?? Math.max(0, Math.min(days * 1440, Math.round(guideY / 15) * 15));
+            const dayMin = lineY % 1440;
             const hh = String(Math.floor(dayMin / 60)).padStart(2, "0");
             const mm = String(dayMin % 60).padStart(2, "0");
             const previewDuration =
@@ -275,7 +286,7 @@ export function TimelineCanvas({
               <>
                 <div
                   className="today-canvas-drop-guide"
-                  style={{ top: `${snapMin}px` }}
+                  style={{ top: `${lineY}px` }}
                   data-time={`${hh}:${mm}`}
                   aria-hidden
                 />
@@ -288,7 +299,7 @@ export function TimelineCanvas({
                   <div
                     className={`today-canvas-drop-preview today-canvas-drop-preview-${activeDrag.from}`}
                     style={{
-                      top: `${snapMin}px`,
+                      top: `${lineY}px`,
                       left: `${previewLeft}px`,
                       width: `${previewWidth}px`,
                       height: `${previewHeight}px`,
@@ -303,7 +314,7 @@ export function TimelineCanvas({
                 {dragLabel && activeGuide && (
                   <div
                     className="today-canvas-resize-pill"
-                    style={{ top: `${activeGuide.y}px`, left: `${activeGuide.x}px` }}
+                    style={{ top: `${edgeY ?? activeGuide.y}px`, left: `${activeGuide.x}px` }}
                     aria-hidden
                   >
                     {dragLabel.kind === "resize"
