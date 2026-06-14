@@ -152,17 +152,16 @@ Replace the two handle lines (currently 283-284):
       <ResizeHandle edge="bottom" box={box} durationMin={durationMin} />
 ```
 
-with:
+with the following (the `<>…</>` fragment is only to show valid JSX context — paste the two inner
+lines in place of the originals; do **not** add an actual fragment wrapper):
 
 ```tsx
-{
-  /* 짧은 블록(<28px)은 상단 핸들 생략 — 전체 body가 move로 잡혀야 하기 때문(Bug fix 2026-06-14).
-          상단 시각 조정은 Phase 3 키보드로 보완. 하단 핸들은 항상 렌더. */
-}
-{
-  showTopHandle(heightPx) && <ResizeHandle edge="top" box={box} durationMin={durationMin} />;
-}
-<ResizeHandle edge="bottom" box={box} durationMin={durationMin} />;
+<>
+  {/* 짧은 블록(<28px)은 상단 핸들 생략 — 전체 body가 move로 잡혀야 하기 때문(Bug fix 2026-06-14).
+      상단 시각 조정은 Phase 3 키보드로 보완. 하단 핸들은 항상 렌더. */}
+  {showTopHandle(heightPx) && <ResizeHandle edge="top" box={box} durationMin={durationMin} />}
+  <ResizeHandle edge="bottom" box={box} durationMin={durationMin} />
+</>;
 ```
 
 (`heightPx` is already destructured from `box` at line 172.)
