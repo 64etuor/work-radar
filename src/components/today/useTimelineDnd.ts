@@ -228,6 +228,50 @@ export function isOffGridCanvasRelease(
   return !isClientPointInsideRect(release.point, release.rect);
 }
 
+/** stage IPC 인터랙션 종류 — 실패 토스트 카피를 한 곳에서 관리(분기별 무음 스냅백 방지, Phase 4). */
+export type StageFailureKind =
+  | "schedule"
+  | "reschedule"
+  | "resize"
+  | "unschedule"
+  | "moveCalendar"
+  | "routineSchedule";
+
+/**
+ * stage 실패 시 사용자에게 띄울 토스트(scope+메시지) — 모든 분기가 cross-cal과 동일하게 실패를
+ * 가시화한다(무음 롤백 금지). 롤백(invalidate)은 호출부 catch가 별도로 수행한다.
+ */
+export function stageFailureToast(kind: StageFailureKind): { scope: string; message: string } {
+  switch (kind) {
+    case "schedule":
+      return { scope: "timeline.schedule", message: "일정 배치 실패 — 다시 시도하세요" };
+    case "reschedule":
+      return { scope: "timeline.reschedule", message: "시간 이동 적용 실패 — 다시 시도하세요" };
+    case "resize":
+      return { scope: "timeline.resize", message: "길이 조정 적용 실패 — 다시 시도하세요" };
+    case "unschedule":
+      return { scope: "timeline.unschedule", message: "일정 해제 실패 — 다시 시도하세요" };
+    case "moveCalendar":
+      return { scope: "calendar.stage", message: "캘린더 이동 스테이징 실패 — 다시 시도하세요" };
+    case "routineSchedule":
+      return { scope: "timeline.routine", message: "루틴 배치 실패 — 다시 시도하세요" };
+  }
+}
+
+/**
+ * 루틴 드래그/리사이즈가 occurrence 날짜(자정) 경계에 막혔는지 — 요청 위치/길이가 클램프로 바뀌면 true.
+ * routine_checks(date+HH:MM)는 자정을 넘지 못하므로(스펙 §5), 이게 true면 "00:00에서 멈춤"을 사용자에게
+ * 알린다(클램프 자체는 제거하지 않고 _가시화_만 — Phase 4 어포던스).
+ */
+export function routineBoundaryClamped(
+  rawAt: string,
+  clampedAt: string,
+  rawDurationMin: number,
+  clampedDurationMin: number,
+): boolean {
+  return rawAt !== clampedAt || rawDurationMin !== clampedDurationMin;
+}
+
 type Opts = {
   /** Today 레일 캐시 키(["today", date])용 선택 날짜 — 레일/트레이 스코프(기존 유지). */
   date: string;
@@ -428,6 +472,8 @@ export function useTimelineDnd(opts: Opts) {
         void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
       } catch {
         invalidateSignalCaches();
+        const t = stageFailureToast("schedule");
+        useToastStore.getState().pushError(t.scope, t.message);
       }
       return;
     }
@@ -487,6 +533,9 @@ export function useTimelineDnd(opts: Opts) {
         // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
         // 리사이즈 높이가 곧 스냅백한다. 시간 위치(time_override)만 optimistic.
         patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
+        // 길이 고정 어포던스(Phase 4) — 루틴 길이는 정의로 고정이라 리사이즈는 높이를 바꾸지 못한다.
+        // 무음 스냅백 대신 "시간만 옮겨진다"를 알린다(message-only — 마이그레이션/스키마 변경 없음).
+        useToastStore.getState().pushInfo("루틴 길이는 정의에서 고정 — 시간만 옮겨집니다");
       }
       try {
         if (a.blockKind === "event") {
@@ -528,6 +577,8 @@ export function useTimelineDnd(opts: Opts) {
         } else {
           invalidateSignalCaches();
         }
+        const t = stageFailureToast("resize");
+        useToastStore.getState().pushError(t.scope, t.message);
       }
       return;
     }
@@ -567,6 +618,11 @@ export function useTimelineDnd(opts: Opts) {
         });
       } else if (a.blockKind === "routine") {
         patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
+        // 자정 클램프 어포던스(Phase 4) — 요청 위치/길이가 occurrence 날짜 경계에 막혔으면 알린다
+        // (스펙 §5의 by-design 한계를 무음 stick 대신 가시화 — 클램프 자체는 유지).
+        if (routineBoundaryClamped(shifted, at, a.durationMin, movedDurationMin)) {
+          useToastStore.getState().pushInfo("루틴은 자정을 넘을 수 없어 그 날 안에서 멈췄어요");
+        }
       }
       try {
         if (a.blockKind === "event") {
@@ -608,6 +664,8 @@ export function useTimelineDnd(opts: Opts) {
         } else {
           invalidateSignalCaches();
         }
+        const t = stageFailureToast("reschedule");
+        useToastStore.getState().pushError(t.scope, t.message);
       }
       return;
     }
@@ -650,6 +708,8 @@ export function useTimelineDnd(opts: Opts) {
         });
       } catch {
         invalidateSignalCaches();
+        const t = stageFailureToast("unschedule");
+        useToastStore.getState().pushError(t.scope, t.message);
       }
       return;
     }
@@ -670,9 +730,8 @@ export function useTimelineDnd(opts: Opts) {
       } catch {
         // stage IPC 자체가 실패하면 큐 행이 안 생겨 usePendingWrites에도 안 뜬다 —
         // 무음이면 사용자는 이동이 접수된 줄 안다. 토스트로 노출.
-        useToastStore
-          .getState()
-          .pushError("calendar.stage", "캘린더 이동 스테이징 실패 — 다시 시도하세요");
+        const t = stageFailureToast("moveCalendar");
+        useToastStore.getState().pushError(t.scope, t.message);
       }
       void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
       return;
@@ -699,6 +758,8 @@ export function useTimelineDnd(opts: Opts) {
         // success/failure 모두 한 번만 invalidate. catch 없는 try/finally는
         // React Compiler BuildHIR 미지원이라 finally 대신 양 경로에 명시.
         void qc.invalidateQueries({ queryKey: ["routines"] });
+        const t = stageFailureToast("routineSchedule");
+        useToastStore.getState().pushError(t.scope, t.message);
         throw e;
       }
       void qc.invalidateQueries({ queryKey: ["routines"] });

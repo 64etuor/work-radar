@@ -8,7 +8,10 @@ import {
   isOffGridCanvasRelease,
   normalizeDropDataForDragEnd,
   resolveDragEndActiveData,
+  routineBoundaryClamped,
   shouldSynthesizeCanvasDropFromPointer,
+  type StageFailureKind,
+  stageFailureToast,
   timelineKeyboardCoordinates,
 } from "./useTimelineDnd";
 
@@ -298,5 +301,56 @@ describe("timelineKeyboardCoordinates", () => {
     expect(fired("ArrowDown")).toHaveBeenCalledOnce();
     expect(fired("ArrowUp")).toHaveBeenCalledOnce();
     expect(fired("ArrowLeft")).not.toHaveBeenCalled();
+  });
+});
+
+describe("stageFailureToast", () => {
+  const kinds: StageFailureKind[] = [
+    "schedule",
+    "reschedule",
+    "resize",
+    "unschedule",
+    "moveCalendar",
+    "routineSchedule",
+  ];
+
+  it("returns a non-empty scope + message for every stage kind (no silent failures)", () => {
+    for (const kind of kinds) {
+      const t = stageFailureToast(kind);
+      expect(t.scope.length).toBeGreaterThan(0);
+      expect(t.message.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps the existing cross-calendar copy for moveCalendar", () => {
+    expect(stageFailureToast("moveCalendar")).toEqual({
+      scope: "calendar.stage",
+      message: "캘린더 이동 스테이징 실패 — 다시 시도하세요",
+    });
+  });
+});
+
+describe("routineBoundaryClamped", () => {
+  it("is true when the occurrence-date clamp moved the start", () => {
+    expect(
+      routineBoundaryClamped(
+        "2026-05-29T01:00:00+09:00", // raw (next day)
+        "2026-05-28T23:45:00+09:00", // clamped back into the day
+        30,
+        30,
+      ),
+    ).toBe(true);
+  });
+
+  it("is true when the clamp shortened the duration", () => {
+    expect(
+      routineBoundaryClamped("2026-05-28T23:30:00+09:00", "2026-05-28T23:30:00+09:00", 60, 30),
+    ).toBe(true);
+  });
+
+  it("is false when neither start nor duration changed", () => {
+    expect(
+      routineBoundaryClamped("2026-05-28T09:00:00+09:00", "2026-05-28T09:00:00+09:00", 60, 60),
+    ).toBe(false);
   });
 });
