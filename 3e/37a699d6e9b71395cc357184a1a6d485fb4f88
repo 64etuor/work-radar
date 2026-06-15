@@ -1,0 +1,22 @@
+src/components/today/timelineDragData.ts
+  s_9879bbf7505b01::t_89f07ca37df937 20-22,32-35
+  s_9879bbf7505b01::t_004d5d1663fffb 72-74,84-87
+src/lib/todayBlocks.ts
+  s_9879bbf7505b01::t_4ae715e8daa44d 252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3e37a699d6e9b71395cc357184a1a6d485fb4f88",
+  "prompts": {},
+  "sessions": {
+    "s_9879bbf7505b01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "910261e2-a97c-4d6e-865b-9882c8bae41f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
