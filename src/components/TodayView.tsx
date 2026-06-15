@@ -18,7 +18,6 @@ import { EventPopover } from "@/components/today/EventPopover";
 import { HistoryRail } from "@/components/today/HistoryRail";
 import { StagedBadge } from "@/components/today/StagedBadge";
 import { TimelineCanvas } from "@/components/today/TimelineCanvas";
-import { clientPointToGridGuide } from "@/components/today/timelinePreview";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { UnscheduledTray } from "@/components/today/UnscheduledTray";
 import { useKeyboardDragAnnounce } from "@/components/today/useKeyboardDragAnnounce";
@@ -29,6 +28,7 @@ import {
   useTimelineDnd,
   useTodayDndSensors,
 } from "@/components/today/useTimelineDnd";
+import { useTimelinePointerDelta } from "@/components/today/useTimelinePointerDelta";
 import {
   timelineBlockDate,
   useTimelineScheduleActions,
@@ -169,11 +169,7 @@ export function TodayView() {
   // ── DnD wiring ──────────────────────────────────────────────────────
   const defaultCalendarFor = buildDefaultCalendarFor(rail, projectsQ.data ?? []);
 
-  /**
-   * Picker state — useTimelineDnd가 `promptCalendarPicker(signalId)`를 호출하면
-   * 여기서 popover를 띄우고 사용자가 고른 calendarId로 resolve. cancel 시 null resolve.
-   * pointer 좌표는 마지막 pointermove 위치(없으면 화면 안쪽 기본값)로 anchor.
-   */
+  // Calendar picker promise bridge — anchored at the last known pointer.
   const [picker, setPicker] = useState<{
     targetId: string;
     targetKind: "signal" | "routine";
@@ -181,10 +177,19 @@ export function TodayView() {
     resolve: (calendarId: string | null) => void;
   } | null>(null);
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
-  // 드래그 중 raw viewport 포인터 — 문서 레벨 pointermove로 기록. dnd-kit DragOverlay(z-999,
-  // pointer-events 살아있음)가 hit-test를 가로채 .today onPointerMove가 끊겨도 잡힌다. crosshair
-  // 및 드롭 좌표(lastPointerRef)의 공통 raw 소스 — dnd-kit delta는 scroll-adjusted라 쓰지 않는다.
-  const dragRawPointerRef = useRef<{ x: number; y: number } | null>(null);
+  // Raw-pointer drag delta source; avoids dnd-kit scroll-adjusted delta for canvas motion.
+  const {
+    captureDragStart,
+    clearDragDelta,
+    dragDeltaRef,
+    dragRawPointerRef,
+    prepareDragEndDelta,
+    updateDragMoveDelta,
+  } = useTimelinePointerDelta({
+    gridElRef,
+    lastPointerRef,
+    visibleDays: visibleDates.length,
+  });
   // Alt/Option fine-snap(5분) — 드래그 시작 activator + 드래그 중 keydown/keyup으로 라이브 추적.
   // ref는 onDragEnd(커밋)가, state는 preview 리렌더(미리보기 스냅)가 읽는다 — 같은 소스라 preview==commit.
   const fineSnapRef = useRef(false);
@@ -230,6 +235,7 @@ export function TodayView() {
     pointerClientRef: lastPointerRef,
     boxes,
     fineSnapRef,
+    dragDeltaRef,
   });
   // Notion-스타일 ghost: 드래그 중 active item 미리보기를 cursor 따라 렌더.
   // dnd-kit 기본은 원본만 흐려지고 ghost가 없어 "옮기는 느낌"이 약함.
@@ -248,22 +254,14 @@ export function TodayView() {
     activatorEvent?: Event;
   }) => {
     const data = (ev.active.data.current as DragData | undefined) ?? null;
+    captureDragStart(ev.activatorEvent);
     activeDragStartRef.current = data;
     setFine(Boolean((ev.activatorEvent as { altKey?: boolean } | undefined)?.altKey));
     dispatchDragGhost({ type: "start", data });
   };
   const handleDragMove = (ev: DragMoveEvent) => {
-    // raw viewport 포인터(dragRawPointerRef)를 fresh grid rect로 환산한다. onDragMove는
-    // pointermove뿐 아니라 auto-scroll에도 발화 → 정지한 커서도 스크롤에 맞춰 grid-local Y가
-    // 재계산된다. dnd-kit delta는 scroll-adjusted(translate+scrollAdjustment)라 auto-scroll 중
-    // 실제 커서와 2배 어긋나므로 포인터 환산에 쓰지 않는다. raw가 없으면(키보드 드래그/첫 프레임)
-    // undefined를 보내 reducer가 이전 값 유지 → 키보드 드래그는 start의 null이 그대로 남아
-    // 크로스헤어가 stale 마우스 위치를 그리지 않는다(activeGuide/hoverPx로 폴백).
-    const raw = dragRawPointerRef.current;
-    const rect = gridElRef.current?.getBoundingClientRect();
-    const nextPointerGrid =
-      raw && rect ? clientPointToGridGuide(raw, rect, visibleDates.length * 24 * 60) : undefined;
-    dispatchDragGhost({ type: "move", delta: ev.delta, pointerGrid: nextPointerGrid });
+    const { delta, pointerGrid } = updateDragMoveDelta(ev.delta);
+    dispatchDragGhost({ type: "move", delta, pointerGrid });
     // 키보드 드래그만 라이브 리전으로 새 시각을 알린다(포인터 드래그는 pill이 시각 피드백).
     announceKeyboardMove(ev, activeDragStartRef.current);
   };
@@ -272,30 +270,29 @@ export function TodayView() {
   };
   const handleDragEndWithReset = async (ev: Parameters<typeof onDragEnd>[0]) => {
     const activeAtStart = activeDragStartRef.current;
+    prepareDragEndDelta(ev.delta);
     dispatchDragGhost({ type: "reset" });
     activeDragStartRef.current = null;
     // ⚠ fineSnap 리셋은 commit(onDragEnd) 이후에 — onDragEnd가 fineSnapRef.current를 동기적으로 읽어
     // snapMin(Alt=5분)을 정한다. 먼저 false로 리셋하면 Alt fine-snap이 커밋에서 죽어 preview(5분)와
     // commit(15분)이 어긋난다(preview==commit 불변 위반). 순서를 바꾸지 말 것.
     await onDragEnd(ev, activeAtStart);
+    clearDragDelta();
     setFine(false);
     clearAnnounce();
   };
   const handleDragCancel = () => {
     activeDragStartRef.current = null;
+    clearDragDelta();
     dispatchDragGhost({ type: "reset" });
     setFine(false);
     clearAnnounce();
   };
 
-  // 드래그 동안만 문서 레벨 pointermove 구독 → raw 커서 좌표를 ref에 기록(렌더 없음).
-  // .today onPointerMove는 dnd-kit 오버레이가 hit-test를 가로채면 끊기므로 문서 레벨로 잡는다.
-  // 이 raw 좌표가 crosshair(트레이/루틴)와 트레이/루틴 드롭 좌표(resolveCanvasGridY)를 정확히 만든다.
+  // DragOverlay can intercept .today pointermove, so drag-time raw pointer is captured on window.
   useEffect(() => {
     if (!activeDrag) return;
     const onMove = (e: PointerEvent) => {
-      // 멀티터치 보조 포인터는 무시 — dnd-kit 드래그는 primary 포인터가 구동한다(엉뚱한
-      // 좌표로 드롭 위치가 오염되는 것 방지). 좌표만 읽고 preventDefault 없음 → passive.
       if (!e.isPrimary) return;
       const p = { x: e.clientX, y: e.clientY };
       dragRawPointerRef.current = p;
@@ -309,9 +306,8 @@ export function TodayView() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
-      dragRawPointerRef.current = null;
     };
-  }, [activeDrag]);
+  }, [activeDrag, dragRawPointerRef]);
 
   const pickerSignalProjectId =
     picker && picker.targetKind === "signal"

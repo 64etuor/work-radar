@@ -6,6 +6,7 @@ import {
   activeDragLabel,
   activeDragWouldOverlap,
   clientPointToGridGuide,
+  dragDeltaFromGridPoints,
   dragGuideFromLayout,
   previewTimelineBoxes,
   renderTimelineBoxesForDrag,
@@ -25,6 +26,26 @@ function block(id: string, startISO: string, endISO: string): TimedBlock {
 }
 
 describe("previewTimelineBoxes", () => {
+  it("derives canvas drag delta from raw pointer grid movement instead of dnd-kit scroll-adjusted delta", () => {
+    const start = clientPointToGridGuide(
+      { x: 220, y: 500 },
+      { left: 100, top: 100, width: 520 },
+      1440,
+    );
+    const currentAfterScroll = clientPointToGridGuide(
+      { x: 220, y: 500 },
+      { left: 100, top: 55, width: 520 },
+      1440,
+    );
+
+    expect(
+      dragDeltaFromGridPoints(start, currentAfterScroll, {
+        x: 0,
+        y: 90,
+      }),
+    ).toEqual({ x: 0, y: 45 });
+  });
+
   it("shrinks neighboring blocks while a dragged block previews an overlap", () => {
     const boxes = computeLayout([
       block("signal:s1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00"),

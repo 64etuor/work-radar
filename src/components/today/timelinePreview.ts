@@ -23,9 +23,9 @@ export type DragGuide = {
 
 /**
  * viewport client 좌표 → 그리드 로컬 좌표(크로스헤어 가이드용). onPointerMove의 환산과 동일:
- * y는 [0, totalPx], x는 [60(시간 라벨 거터), rect.width]로 클램프. 드래그 중 라이브 포인터를
- * dnd-kit activator+delta로 구해 이 함수로 환산하면 오버레이 hit-test로 onPointerMove가 끊겨도
- * 크로스헤어가 항상 실제 커서를 따른다(블록 top-anchor offset·stale hover 동시 해소).
+ * y는 [0, totalPx], x는 [60(시간 라벨 거터), rect.width]로 클램프. 드래그 중 raw client
+ * pointer를 이 함수로 환산하면 오버레이 hit-test로 onPointerMove가 끊겨도 크로스헤어와
+ * 캔버스 delta가 실제 커서를 따른다(블록 top-anchor offset·stale hover 동시 해소).
  */
 export function clientPointToGridGuide(
   point: { x: number; y: number },
@@ -35,6 +35,18 @@ export function clientPointToGridGuide(
   return {
     y: Math.max(0, Math.min(totalPx, point.y - rect.top)),
     x: Math.max(60, Math.min(rect.width, point.x - rect.left)),
+  };
+}
+
+export function dragDeltaFromGridPoints(
+  start: DragDelta | null | undefined,
+  current: DragDelta | null | undefined,
+  fallback: DragDelta,
+): DragDelta {
+  if (!start || !current) return fallback;
+  return {
+    x: current.x - start.x,
+    y: current.y - start.y,
   };
 }
 

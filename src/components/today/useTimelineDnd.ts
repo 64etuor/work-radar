@@ -30,6 +30,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type MutableRefObject } from "react";
 
 import type { CalendarEvent, RoutineToday, SignalDayPlacement, WorkSignal } from "@/bindings";
+import type { DragDelta } from "@/components/today/timelinePreview";
 import { stage } from "@/lib/calendarSync";
 import {
   applyPlacementPatch,
@@ -302,6 +303,8 @@ type Opts = {
   boxes?: LayoutBox[];
   /** Alt/Option fine-snap(5분) 라이브 상태 ref. true면 snapMin=5. */
   fineSnapRef?: MutableRefObject<boolean>;
+  /** 포인터 드래그는 raw pointer grid delta를 사용한다. 없으면 dnd-kit delta(키보드 포함)로 폴백. */
+  dragDeltaRef?: MutableRefObject<DragDelta | null>;
 };
 
 /**
@@ -320,6 +323,7 @@ export function useTimelineDnd(opts: Opts) {
     pointerClientRef,
     boxes,
     fineSnapRef,
+    dragDeltaRef,
   } = opts;
 
   /**
@@ -335,6 +339,9 @@ export function useTimelineDnd(opts: Opts) {
     const y = p.y - rect.top;
     return Math.max(0, Math.min(days * 24 * HOUR_PX, y));
   };
+
+  const resolveCanvasDragDelta = (fallback: DragDelta): DragDelta =>
+    dragDeltaRef?.current ?? fallback;
 
   /** signals 캐시 + today 레일 캐시(둘 다 WorkSignal[]) 동시 패치. */
   const patchSignalCaches = (id: string, patch: Parameters<typeof applySchedulePatch>[2]) => {
@@ -479,16 +486,17 @@ export function useTimelineDnd(opts: Opts) {
     }
 
     // ── 3: canvas-resize → canvas (block 상/하단 핸들 드래그) ───────
-    // ev.delta.y만 사용해 새 시간 계산. 아래 핸들은 end 이동, 위 핸들은 start 이동.
+    // 포인터 드래그는 raw grid delta, 키보드 드래그는 dnd-kit delta로 새 시간을 계산한다.
     // 최소 15분(1 snap) 보장, 00:00–24:00 안에 clamp.
     if (a.from === "canvas-resize" && o.to === "canvas") {
+      const dragDelta = resolveCanvasDragDelta(ev.delta);
       const resized = resizeIsoByPx({
         anchorDate,
         days,
         startISO: a.startISO,
         durationMin: a.durationMin,
         edge: a.edge,
-        deltaPx: ev.delta.y,
+        deltaPx: dragDelta.y,
         snapOpts: snapOptsFor(a.blockId),
       });
       // 루틴은 occurrence 날짜 안으로 클램프 — routine_checks(date+HH:MM)가 다음 날 새벽을
@@ -585,11 +593,12 @@ export function useTimelineDnd(opts: Opts) {
 
     // ── 2: canvas → canvas (reschedule, 같은 캘린더 시간 이동) ───────
     if (a.from === "canvas" && o.to === "canvas") {
+      const dragDelta = resolveCanvasDragDelta(ev.delta);
       const shifted = shiftIsoByPx(
         anchorDate,
         days,
         a.startISO,
-        ev.delta.y,
+        dragDelta.y,
         snapOptsFor(a.blockId),
       );
       // 루틴은 occurrence 날짜 안으로 클램프(스펙 §5) — event/signal은 자정 통과 자유.
@@ -717,7 +726,8 @@ export function useTimelineDnd(opts: Opts) {
     // ── 5: canvas → 다른 캘린더 zone (moveCalendar, staged) ──────────
     if (a.from === "canvas" && a.blockKind === "signal" && o.to === "canvas:cal") {
       if (o.calendarId === a.calendarId) return; // 동일 캘린더면 noop.
-      const at = shiftIsoByPx(anchorDate, days, a.startISO, ev.delta.y, snapOptsFor(a.blockId));
+      const dragDelta = resolveCanvasDragDelta(ev.delta);
+      const at = shiftIsoByPx(anchorDate, days, a.startISO, dragDelta.y, snapOptsFor(a.blockId));
       try {
         await stage({
           kind: "moveCalendar",
