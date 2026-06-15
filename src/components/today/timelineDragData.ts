@@ -17,7 +17,9 @@ function stripBlockPrefix(id: string, kind: "signal" | "event" | "routine"): str
  */
 export function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
   const { block } = box;
-  if (block.kind === "event") {
+  // event 블록과 동기화 루틴(per-instance 미러 id)은 같은 event-backed 이동 데이터를 만든다 —
+  // eventReschedule가 Google 인스턴스를 patch(루틴이면 time_override도 미러/adopt).
+  if (block.kind === "event" || (block.kind === "routine" && block.linkedEventId)) {
     return {
       from: "canvas",
       blockKind: "event",
@@ -27,24 +29,13 @@ export function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
       startISO: block.startISO,
       durationMin,
       calendarId: block.calendarId,
-      // 동기화된 루틴이 이벤트로 렌더된 블록 — 이동 시 루틴 time_override도 함께 미러.
-      routineId: block.routineId,
+      routineId:
+        block.kind === "routine"
+          ? (block.routineId ?? stripBlockPrefix(block.id, "routine"))
+          : block.routineId,
     };
   }
   if (block.kind === "routine") {
-    if (block.linkedEventId) {
-      return {
-        from: "canvas",
-        blockKind: "event",
-        blockId: block.id,
-        eventId: eventBlockApiId(block),
-        title: block.title,
-        startISO: block.startISO,
-        durationMin,
-        calendarId: block.calendarId,
-        routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
-      };
-    }
     return {
       from: "canvas",
       blockKind: "routine",
@@ -78,7 +69,9 @@ export function resizeDataForBox(
   durationMin: number,
 ): DragData {
   const { block } = box;
-  if (block.kind === "event") {
+  // event 블록과 동기화 루틴(per-instance 미러 id)은 같은 event-backed 리사이즈 데이터 — eventResize가
+  // Google 인스턴스 길이를 patch(per-day 길이는 routine_checks에 없어 Google이 정본).
+  if (block.kind === "event" || (block.kind === "routine" && block.linkedEventId)) {
     return {
       from: "canvas-resize",
       edge,
@@ -88,23 +81,13 @@ export function resizeDataForBox(
       calendarId: block.calendarId,
       startISO: block.startISO,
       durationMin,
-      routineId: block.routineId,
+      routineId:
+        block.kind === "routine"
+          ? (block.routineId ?? stripBlockPrefix(block.id, "routine"))
+          : block.routineId,
     };
   }
   if (block.kind === "routine") {
-    if (block.linkedEventId) {
-      return {
-        from: "canvas-resize",
-        edge,
-        blockKind: "event",
-        blockId: block.id,
-        eventId: eventBlockApiId(block),
-        calendarId: block.calendarId,
-        startISO: block.startISO,
-        durationMin,
-        routineId: block.routineId ?? stripBlockPrefix(block.id, "routine"),
-      };
-    }
     return {
       from: "canvas-resize",
       edge,

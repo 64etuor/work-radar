@@ -249,7 +249,7 @@ export function buildTodayBlocks({
       calendarId: linkedCalendarId ?? "",
       calendarLabel: matched?.calendarSummary ?? linkedCalendarId ?? "",
       color: matched?.projectColor ?? ROUTINE_COLOR,
-      linkedEventId: linkedEventId ?? undefined,
+      linkedEventId,
       done: r.done,
       routineId: r.id,
     });
