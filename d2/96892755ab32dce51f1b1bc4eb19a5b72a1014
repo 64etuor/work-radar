@@ -1,0 +1,38 @@
+src/components/today/timelinePreview.ts
+  s_51f74f513fd8aa::t_f564a7bc70d1e3 42-43,46-50
+  s_51f74f513fd8aa::t_895b044dfca4a9 26-28
+  s_51f74f513fd8aa::t_ecb566e3c55d17 41,44-45,51-52
+src/components/today/useTimelineDnd.ts
+  s_51f74f513fd8aa::t_d9df4c41c37846 343-344
+  s_51f74f513fd8aa::t_7fb9b6a3d26921 33,306-307,326,345,492,499,596,601,729-730
+  s_51f74f513fd8aa::t_ce9d25fdf9e2a1 489
+src/components/today/useTimelinePointerDelta.ts
+  s_51f74f513fd8aa::t_904f1b89eafdc3 1
+  s_51f74f513fd8aa::t_8bef6641d1bab9 6
+  s_51f74f513fd8aa::t_fe8984740d78e7 68
+  s_51f74f513fd8aa::t_9678ba0fa68829 2-5,7-67,69-81
+src/components/today/timelinePreview.test.ts
+  s_51f74f513fd8aa::t_c3dccaa5db7e03 9,29-48
+src/components/TodayView.tsx
+  s_51f74f513fd8aa::t_0f5c7abb4713be 181-192,257,263-264,273,280,286
+  s_51f74f513fd8aa::t_2f491b488a525b 238
+  s_51f74f513fd8aa::t_3fc053bb39ca68 172,180,292
+  s_51f74f513fd8aa::t_8bef6641d1bab9 31
+  s_51f74f513fd8aa::t_4ba2f256cae573 310
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d296892755ab32dce51f1b1bc4eb19a5b72a1014",
+  "prompts": {},
+  "sessions": {
+    "s_51f74f513fd8aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec934-d14d-77b2-a988-01c0579fa6b5",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
