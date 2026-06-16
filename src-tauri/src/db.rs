@@ -622,4 +622,42 @@ mod tests {
         pool.close().await;
         std::fs::remove_file(&path).ok();
     }
+
+    #[tokio::test]
+    async fn migration_0051_adds_bookkeeping_mvp_schema() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN \
+             ('bookkeeping_transactions','bookkeeping_audit_log','bookkeeping_sync_jobs') \
+             ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query bookkeeping tables failed");
+        assert_eq!(tables.len(), 3, "expected bookkeeping MVP tables");
+
+        let cols: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('bookkeeping_transactions') WHERE name IN \
+             ('source','merchant','amount_minor','currency','spent_at','category','review_status') \
+             ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query bookkeeping transaction columns failed");
+        assert_eq!(cols.len(), 7, "expected transaction core columns");
+
+        sqlx::query(
+            "INSERT INTO bookkeeping_transactions \
+             (id, source, merchant, amount_minor, currency, spent_at, category, review_status) \
+             VALUES ('tx1','manual','Store',12000,'KRW','2026-06-16','food','needs_review')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert bookkeeping transaction");
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
 }

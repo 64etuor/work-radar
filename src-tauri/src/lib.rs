@@ -14,6 +14,7 @@
 mod agent;
 mod agent_usage;
 mod api;
+pub mod bookkeeping;
 mod cache;
 mod calendar;
 mod cmux_bridge;
@@ -72,6 +73,14 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::ping_project_token,
         // 연결 점검(전 프로젝트 헬스체크 + 중복/환경 경고). 읽기 전용.
         commands::run_connection_audit,
+        // Bookkeeping MVP — local ledger/review queue + sanitized sync failures.
+        commands::create_bookkeeping_transaction,
+        commands::list_bookkeeping_transactions,
+        commands::update_bookkeeping_review_status,
+        commands::bookkeeping_monthly_summary,
+        commands::list_bookkeeping_audit,
+        commands::record_bookkeeping_sync_failure,
+        commands::list_bookkeeping_sync_jobs,
         // CLI 토큰 import (auth 통일, Phase 14) — 토큰은 keychain으로만, IPC 미반환.
         commands::gh_cli_status,
         commands::import_github_token,

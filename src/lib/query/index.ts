@@ -2,6 +2,7 @@
 export * from "./agents";
 export * from "./agentsConfig";
 export * from "./audit";
+export * from "./bookkeeping";
 export * from "./calendar";
 export * from "./calendarSync";
 export * from "./client";

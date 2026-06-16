@@ -39,12 +39,14 @@ MCP 툴 본문은 `external_actions::store::{enqueue,list_pending,status}`만 �
   불가하게 만들면 type-wall이 됨 — 그 전까지는 컴파일 보장이 아니라 계약임을 명시.
 - 위반(`approve`/`reject`/execute를 mcp에서 호출) = INVARIANT #1/#2 위반 = 차단.
 
-**좁은 예외 — Work Radar Hermes Calendar.** work-radar가 Hermes ACP 세션에
+**좁은 예외 — Work Radar Hermes MCP.** work-radar가 Hermes ACP 세션에
 `work-radar --mcp-stdio` 서버를 주입하면서 `WORK_RADAR_MCP_CALLER=hermes`를 함께 준 경우,
-`wr_calendar_create_event`만 즉시 Google Calendar 이벤트를 생성할 수 있다. 이때 사람 게이트는
-Hermes의 ACP `session/request_permission` 카드이며, Work Radar 승인 큐를 한 번 더 거치지 않는다.
-토큰/identity는 여전히 `project_id` → DB `credential_ref` → keychain으로만 해석한다. 다른 MCP caller,
-다른 write tool, env 없는 `--mcp-stdio`는 기존 proposal-only 계약을 유지한다.
+Hermes가 호출하는 write tool은 Work Radar 승인 큐를 한 번 더 거치지 않는다. 이때 사람 게이트는
+Hermes의 ACP `session/request_permission` 카드다. 외부 서비스 write(GitHub/Notion/Calendar/Gmail)는
+기존 Rust connector와 `project_id` → DB `credential_ref` → keychain 토큰 해석 경로만 재사용한다.
+Bookkeeping OCR 저장은 외부 서비스 호출이 아니라 로컬 SQLite 쓰기이며 raw image/file path/email
+body/token/credential 필드를 받지 않는다. 다른 MCP caller, env 없는 `--mcp-stdio`는 기존 proposal-only
+계약을 유지한다.
 
 ## 1. 툴 표면 — 좁게 고정
 
@@ -58,8 +60,8 @@ Hermes의 ACP `session/request_permission` 카드이며, Work Radar 승인 큐�
   표면(`wr_list_projects`/`wr_read_signals`/`wr_pr_status` 등 cache read)을 나열한다 —
   **read 표면은 Phase별로 확장되지만 write 툴 계약(enqueue만)은 불변.**
 - 툴 목록은 **startup 시 고정** — 런타임 동적 registration 금지(rug pull 방어).
-- `wr_calendar_create_event`의 Hermes-origin 직접 생성 예외는 위 표면 안의 고정 동작이며, 동적 tool
-  mutation이 아니다. env marker가 없으면 동일 툴은 proposal-only로 동작한다.
+- Hermes-origin 직접 실행 예외는 위 표면 안의 고정 동작이며, 동적 tool mutation이 아니다. env marker가
+  없으면 외부 service write는 proposal-only, Bookkeeping OCR 저장은 거부로 동작한다.
 - 툴 표면 변경 = 명시적 코드 변경 + 스키마 스냅샷 테스트 갱신(아래 §8).
 
 ## 2. 입력 스키마 — strict, 좁은 타입
@@ -187,10 +189,10 @@ session_id/input_hash`) — "이 proposal이 왜 생겼나"를 사용자가 추�
 
 ## 강제 계약 (durable — 라이브 phasing/현황은 plan/spec)
 
-- **모든 write 툴(현재·미래)의 본문 = `store::enqueue`만.** 커넥터별 PR로 GitHub/Notion/
-  Calendar/Gmail write 툴이 추가돼도 본문은 §1·§2·§8을 그대로 상속 — `execute`/`approve` 경로 없음.
-  단, 위에 명시한 Work Radar Hermes `wr_calendar_create_event` 예외는 Hermes permission card를 사람
-  결정으로 간주하는 Phase 19 Calendar 직접 생성 경로다.
+- **기본 write 툴 본문 = `store::enqueue`만.** 커넥터별 PR로 GitHub/Notion/Calendar/Gmail write 툴이
+  추가돼도 non-Hermes MCP caller는 §1·§2·§8을 그대로 상속 — `execute`/`approve` 경로 없음.
+  단, 위에 명시한 Work Radar Hermes MCP 예외는 Hermes permission card를 사람 결정으로 간주하여
+  Work Radar 승인 큐를 한 번 더 거치지 않고 기존 Rust connector 또는 로컬 리뷰큐 저장 경로로 실행한다.
 - **read 표면은 Phase별로 확장**하되 토큰/payload 본문 미노출(§6·§7)은 불변.
 - **검증 계약:** 헤드리스 stdio 라운드트립(propose→enqueue→list/status, 외부호출 0) +
   스키마 스냅샷(§8) + `cargo test`/clippy `-D warnings`/fmt. 실 외부호출 라이브 스모크는 **사용자**.

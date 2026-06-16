@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   Repeat,
   Settings,
+  WalletCards,
 } from "lucide-react";
 
 import type { KnobDir } from "@/lib/knobGeometry";
@@ -75,6 +76,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: CalendarRange,
     group: "review",
     defaultShortcut: "Cmd+4",
+  },
+  {
+    view: "bookkeeping",
+    label: "가계부",
+    search: "bookkeeping ledger expense receipt finance 가계부 지출 영수증 정산 리뷰큐",
+    icon: WalletCards,
+    group: "review",
+    defaultShortcut: "Cmd+5",
   },
   {
     view: "routines",

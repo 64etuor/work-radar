@@ -2,22 +2,26 @@
 //!
 //! 외부 AI 에이전트(Claude Code / Codex / Hermes)가 `work-radar --mcp-stdio`로 spawn해 등록한다.
 //! - read 툴  = DB 조회(메타만 — 토큰/payload 본문 미노출).
-//! - write 툴 = `store::enqueue`만 호출(제안 생성). 커넥터 `execute`/`Acceptance::mint` 경로 **없음**
-//!   — 모듈 경계 + Task 1.0 토큰 type-wall(`pub(in crate::external_actions)`)로 컴파일 강제.
-//! - 예외: work-radar Hermes가 ACP `session/request_permission`으로 먼저 사용자 확인을 받은 뒤
-//!   호출하는 `wr_calendar_create_event`는 `WORK_RADAR_MCP_CALLER=hermes`일 때만 즉시 생성한다.
+//! - write tool = 기본적으로 `store::enqueue`만 호출(제안 생성). 커넥터 `execute`/`Acceptance::mint`
+//!   경로 **없음** — 모듈 경계 + Task 1.0 토큰 type-wall(`pub(in crate::external_actions)`)로 컴파일 강제.
+//! - 예외: work-radar Hermes가 ACP `session/request_permission`으로 먼저 사용자 확인을 받은 뒤 호출하는
+//!   write tool은 `WORK_RADAR_MCP_CALLER=hermes`일 때 Work Radar 승인 큐를 한 번 더 거치지 않고 실행한다.
 //!
-//! 승인/실행은 work-radar GUI(같은 DB의 승인 패널)와 Rust 커넥터(Phase 2~5)가 담당한다.
-//! 기본 MCP 경로는 실 외부 호출을 **하지 않는다**(Phase 1 외부 호출 0).
+//! non-Hermes 승인/실행은 work-radar GUI(같은 DB의 승인 패널)와 Rust 커넥터(Phase 2~5)가 담당한다.
+//! Hermes-marked MCP 경로만 Hermes permission card 이후 기존 Rust 커넥터를 직접 호출한다.
 
 pub mod run;
 
 use crate::calendar::{execute_calendar_action, HttpCalendarProvider};
+use crate::commands::bookkeeping as bookkeeping_commands;
 use crate::commands::projects;
 use crate::db::Db;
 use crate::error::AppError;
-use crate::external_actions::{store, ExternalAction};
-use crate::models::ProjectKind;
+use crate::external_actions::{store, ExecOutcome, ExternalAction};
+use crate::github::{execute_github_action, github_provider_for_cref};
+use crate::gmail::{execute_gmail_action, HttpGmailProvider};
+use crate::models::{BookkeepingSource, CreateBookkeepingTransactionInput, Project, ProjectKind};
+use crate::notion::{execute_notion_action, notion_token_for_cref, HttpNotionWriter};
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::tool;
 use rmcp::tool_router;
@@ -144,6 +148,38 @@ pub struct GmailSendParams {
     pub body: String,
 }
 
+/// Hermes-confirmed OCR receipt save params(`wr_bookkeeping_save_receipt`). This local DB write
+/// accepts normalized receipt fields only; raw images, file paths, email bodies, and credentials are
+/// intentionally not part of the tool schema.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingSaveReceiptParams {
+    /// Optional project id(`wr_list_projects`로 조회). If present, the server validates it.
+    pub project_id: Option<String>,
+    /// Stable OCR/receipt id from Hermes, if available. Used for local dedup.
+    pub source_ref: Option<String>,
+    /// Normalized merchant name.
+    pub merchant: String,
+    /// Minor-unit amount. For KRW this is won.
+    pub amount_minor: i32,
+    /// ISO 4217 currency. Defaults to KRW.
+    pub currency: Option<String>,
+    /// Purchase date in YYYY-MM-DD.
+    pub spent_at: String,
+    /// Optional category. Defaults to uncategorized.
+    pub category: Option<String>,
+    /// Short receipt description.
+    pub description: Option<String>,
+    /// Optional user-facing note.
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingSaveReceiptResult {
+    pub transaction_id: String,
+    pub status: String,
+}
+
 /// 제안 생성 파라미터(`wr_propose_noop`). preview=승인 패널 표시용 사람-친화 요약.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)] // unknown-field 거부 = JSON Schema additionalProperties:false (mcp-server-conventions §2)
@@ -184,6 +220,62 @@ fn mcp_caller_from_env() -> McpCaller {
     match std::env::var("WORK_RADAR_MCP_CALLER") {
         Ok(v) if v.trim().eq_ignore_ascii_case("hermes") => McpCaller::Hermes,
         _ => McpCaller::Other,
+    }
+}
+
+#[allow(async_fn_in_trait)]
+trait HermesMcpExecutor {
+    async fn execute(
+        &self,
+        project: &Project,
+        action: &ExternalAction,
+    ) -> Result<ExecOutcome, AppError>;
+}
+
+struct LiveHermesMcpExecutor;
+
+impl HermesMcpExecutor for LiveHermesMcpExecutor {
+    async fn execute(
+        &self,
+        project: &Project,
+        action: &ExternalAction,
+    ) -> Result<ExecOutcome, AppError> {
+        match action {
+            ExternalAction::Noop { .. } => Ok(ExecOutcome::default()),
+            ExternalAction::GithubIssueComment { .. }
+            | ExternalAction::GithubCreateIssue { .. } => {
+                let writer = github_provider_for_cref(&project.credential_ref)?;
+                execute_github_action(&writer, action).await
+            }
+            ExternalAction::NotionCreatePage { .. } => {
+                let token = notion_token_for_cref(&project.credential_ref)?;
+                execute_notion_action(&HttpNotionWriter::new()?, &token, action).await
+            }
+            ExternalAction::CalendarCreateEvent { .. } => {
+                let access =
+                    crate::commands::calendar::access_token_for_cref(&project.credential_ref)
+                        .await
+                        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+                        .ok_or_else(|| {
+                            AppError::not_found(
+                                "calendar.not_connected",
+                                "미연결 — 먼저 Google Calendar를 연결하세요",
+                            )
+                        })?;
+                execute_calendar_action(&HttpCalendarProvider::new()?, &access, action).await
+            }
+            ExternalAction::GmailSendEmail { .. } => {
+                let access = crate::gmail::access_token_for_cref(&project.credential_ref)
+                    .await?
+                    .ok_or_else(|| {
+                        AppError::not_found(
+                            "gmail.not_connected",
+                            "Google 계정 미연결 — 먼저 Google 계정을 연결하세요(메일 발송 권한 포함)",
+                        )
+                    })?;
+                execute_gmail_action(&HttpGmailProvider::new()?, &access, action).await
+            }
+        }
     }
 }
 
@@ -239,15 +331,30 @@ impl WrServer {
         }))
     }
 
-    /// GitHub 이슈/PR 코멘트를 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
-    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다.
+    /// GitHub 이슈/PR 코멘트. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는
+    /// Hermes permission card를 사람 게이트로 간주해 기존 Rust connector로 직접 실행한다.
+    /// project_id를 검증해 credential_ref를 해석한다(#11).
     #[tool(
         name = "wr_github_comment",
-        description = "Propose a GitHub issue/PR comment for the given project (project_id is validated against the projects table). Returns an action_id awaiting user approval; does NOT execute."
+        description = "Create a GitHub issue/PR comment when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated."
     )]
     pub async fn github_comment(
         &self,
         Parameters(p): Parameters<GithubCommentParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        self.github_comment_for_caller_with_executor(
+            p,
+            mcp_caller_from_env(),
+            &LiveHermesMcpExecutor,
+        )
+        .await
+    }
+
+    async fn github_comment_for_caller_with_executor<E: HermesMcpExecutor>(
+        &self,
+        p: GithubCommentParams,
+        caller: McpCaller,
+        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("GitHub {}#{} 코멘트", p.repo, p.issue_number);
         let action = ExternalAction::GithubIssueComment {
@@ -255,18 +362,40 @@ impl WrServer {
             issue_number: p.issue_number,
             body: p.body,
         };
-        self.enqueue_write_proposal(&p.project_id, action, &summary)
-            .await
+        self.route_write_for_caller(
+            "wr_github_comment",
+            &p.project_id,
+            action,
+            &summary,
+            caller,
+            executor,
+        )
+        .await
     }
 
-    /// GitHub 이슈 생성을 **제안만** 한다 — 실행 안 함. project_id를 검증해 credential_ref를 해석한다(#11).
+    /// GitHub 이슈 생성. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는 직접 실행한다.
+    /// project_id를 검증해 credential_ref를 해석한다(#11).
     #[tool(
         name = "wr_github_create_issue",
-        description = "Propose creating a GitHub issue for the given project (project_id is validated against the projects table). Returns an action_id awaiting user approval; does NOT execute."
+        description = "Create a GitHub issue when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated."
     )]
     pub async fn github_create_issue(
         &self,
         Parameters(p): Parameters<GithubCreateIssueParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        self.github_create_issue_for_caller_with_executor(
+            p,
+            mcp_caller_from_env(),
+            &LiveHermesMcpExecutor,
+        )
+        .await
+    }
+
+    async fn github_create_issue_for_caller_with_executor<E: HermesMcpExecutor>(
+        &self,
+        p: GithubCreateIssueParams,
+        caller: McpCaller,
+        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("GitHub {} 이슈 생성: {}", p.repo, p.title);
         let action = ExternalAction::GithubCreateIssue {
@@ -274,28 +403,56 @@ impl WrServer {
             title: p.title,
             body: p.body,
         };
-        self.enqueue_write_proposal(&p.project_id, action, &summary)
-            .await
+        self.route_write_for_caller(
+            "wr_github_create_issue",
+            &p.project_id,
+            action,
+            &summary,
+            caller,
+            executor,
+        )
+        .await
     }
 
-    /// Notion DB에 페이지 생성을 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
-    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다. 사람-origin
-    /// 카드 승격(앱 내부)과는 별개 경로다(spec §4 이중 경로 — 이건 외부 에이전트 제안용).
+    /// Notion DB 페이지 생성. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는
+    /// 직접 실행한다. project_id를 검증해 credential_ref를 해석한다(#11). 사람-origin 카드 승격(앱 내부)과는
+    /// 별개 경로다(spec §4 이중 경로 — 이건 외부 에이전트 제안용).
     #[tool(
         name = "wr_notion_create_page",
-        description = "Propose creating a Notion page in the given database for the given project (project_id is validated against the projects table; db_id accepts a raw ID or share URL). Returns an action_id awaiting user approval; does NOT execute."
+        description = "Create a Notion page when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated; db_id accepts a raw ID or share URL."
     )]
     pub async fn notion_create_page(
         &self,
         Parameters(p): Parameters<NotionCreatePageParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        self.notion_create_page_for_caller_with_executor(
+            p,
+            mcp_caller_from_env(),
+            &LiveHermesMcpExecutor,
+        )
+        .await
+    }
+
+    async fn notion_create_page_for_caller_with_executor<E: HermesMcpExecutor>(
+        &self,
+        p: NotionCreatePageParams,
+        caller: McpCaller,
+        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("Notion 페이지 생성: {}", p.title);
         let action = ExternalAction::NotionCreatePage {
             db_id: p.db_id,
             title: p.title,
         };
-        self.enqueue_write_proposal(&p.project_id, action, &summary)
-            .await
+        self.route_write_for_caller(
+            "wr_notion_create_page",
+            &p.project_id,
+            action,
+            &summary,
+            caller,
+            executor,
+        )
+        .await
     }
 
     /// Google Calendar 이벤트 생성을 기본적으로 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust
@@ -319,35 +476,57 @@ impl WrServer {
         p: CalendarCreateEventParams,
         caller: McpCaller,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        let summary = format!("Calendar 이벤트 생성: {}", p.title);
-        let action = ExternalAction::CalendarCreateEvent {
-            calendar_id: p.calendar_id.clone(),
-            title: p.title.clone(),
-            start: p.start.clone(),
-            end: p.end.clone(),
-            all_day: p.all_day,
-            description: p.description.clone(),
-        };
-        if caller == McpCaller::Hermes {
-            return self
-                .execute_hermes_calendar_create(&p.project_id, action)
-                .await;
-        }
-        self.enqueue_write_proposal(&p.project_id, action, &summary)
+        self.calendar_create_event_for_caller_with_executor(p, caller, &LiveHermesMcpExecutor)
             .await
     }
 
-    /// Gmail 발송을 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust 커넥터가 실행).
-    /// project_id를 검증해 credential_ref를 해석하고(#11), 안정적 멱등 키로 enqueue한다.
+    async fn calendar_create_event_for_caller_with_executor<E: HermesMcpExecutor>(
+        &self,
+        p: CalendarCreateEventParams,
+        caller: McpCaller,
+        executor: &E,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        let summary = format!("Calendar 이벤트 생성: {}", p.title);
+        let action = ExternalAction::CalendarCreateEvent {
+            calendar_id: p.calendar_id,
+            title: p.title,
+            start: p.start,
+            end: p.end,
+            all_day: p.all_day,
+            description: p.description,
+        };
+        self.route_write_for_caller(
+            "wr_calendar_create_event",
+            &p.project_id,
+            action,
+            &summary,
+            caller,
+            executor,
+        )
+        .await
+    }
+
+    /// Gmail 발송. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는 직접 실행한다.
+    /// project_id를 검증해 credential_ref를 해석한다(#11).
     /// C1: op_summary에 수신자+제목을 담아 승인 패널 preview가 정확한 대상을 사람에게 노출한다
     /// (chain-of-custody #2/#5). 수신자는 preview 컬럼에만 — audit detail(ref=…,bytes=…)에는 안 담긴다(US-004).
     #[tool(
         name = "wr_gmail_send",
-        description = "Propose sending a Gmail message for the given project (project_id is validated against the projects table). Returns an action_id awaiting user approval; does NOT execute."
+        description = "Send a Gmail message when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated."
     )]
     pub async fn gmail_send(
         &self,
         Parameters(p): Parameters<GmailSendParams>,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        self.gmail_send_for_caller_with_executor(p, mcp_caller_from_env(), &LiveHermesMcpExecutor)
+            .await
+    }
+
+    async fn gmail_send_for_caller_with_executor<E: HermesMcpExecutor>(
+        &self,
+        p: GmailSendParams,
+        caller: McpCaller,
+        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("Gmail 발송 → {}: {}", p.to, p.subject);
         let action = ExternalAction::GmailSendEmail {
@@ -355,8 +534,79 @@ impl WrServer {
             subject: p.subject,
             body: p.body,
         };
-        self.enqueue_write_proposal(&p.project_id, action, &summary)
+        self.route_write_for_caller(
+            "wr_gmail_send",
+            &p.project_id,
+            action,
+            &summary,
+            caller,
+            executor,
+        )
+        .await
+    }
+
+    /// Hermes-confirmed OCR receipt save. This is a local bookkeeping row insert/upsert, not an
+    /// external service mutation, and is only enabled for the Hermes-marked MCP server process.
+    #[tool(
+        name = "wr_bookkeeping_save_receipt",
+        description = "Save normalized receipt fields into local bookkeeping when called by Work Radar Hermes after its permission card. Returns only transaction id/status; accepts no raw image, file path, email body, token, or credential fields."
+    )]
+    pub async fn bookkeeping_save_receipt(
+        &self,
+        Parameters(p): Parameters<BookkeepingSaveReceiptParams>,
+    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+        self.bookkeeping_save_receipt_for_caller(p, mcp_caller_from_env())
             .await
+    }
+
+    async fn bookkeeping_save_receipt_for_caller(
+        &self,
+        p: BookkeepingSaveReceiptParams,
+        caller: McpCaller,
+    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+        if caller != McpCaller::Hermes {
+            return Err(rmcp::ErrorData::invalid_params(
+                "wr_bookkeeping_save_receipt requires the Work Radar Hermes MCP caller",
+                None,
+            ));
+        }
+
+        if let Some(project_id) = p.project_id.as_deref() {
+            let project = projects::fetch_project(&self.db, project_id)
+                .await
+                .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &AppError::from(e)))?;
+            if project.is_none() {
+                return Err(rmcp::ErrorData::invalid_params(
+                    format!("unknown project_id: {project_id}"),
+                    None,
+                ));
+            }
+        }
+
+        let row = bookkeeping_commands::upsert_bookkeeping_transaction_from_ingest_inner(
+            &self.db,
+            CreateBookkeepingTransactionInput {
+                project_id: p.project_id,
+                source: BookkeepingSource::Ocr,
+                source_ref: p.source_ref,
+                merchant: p.merchant,
+                description: p.description,
+                amount_minor: p.amount_minor,
+                currency: p.currency.unwrap_or_else(|| "KRW".to_string()),
+                spent_at: p.spent_at,
+                category: p.category.unwrap_or_else(|| "uncategorized".to_string()),
+                note: p.note,
+            },
+            "transaction.ocr_ingested",
+            "OCR 영수증이 리뷰큐에 추가됨",
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
+
+        Ok(Json(BookkeepingSaveReceiptResult {
+            transaction_id: row.id,
+            status: "saved".to_string(),
+        }))
     }
 
     /// 제안만 생성한다 — **실행 안 함**. 사용자 승인 후 Rust 커넥터가 실행(Phase 0 게이트).
@@ -411,41 +661,43 @@ impl WrServer {
 }
 
 impl WrServer {
-    /// Hermes-only direct Calendar write path. The human gate is Hermes' ACP permission card; this
-    /// function still resolves identity from the DB project row and token from keychain only.
-    async fn execute_hermes_calendar_create(
+    async fn route_write_for_caller<E: HermesMcpExecutor>(
         &self,
+        tool: &str,
         project_id: &str,
         action: ExternalAction,
+        op_summary: &str,
+        caller: McpCaller,
+        executor: &E,
+    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
+        if caller == McpCaller::Hermes {
+            return self
+                .execute_hermes_write(tool, project_id, action, executor)
+                .await;
+        }
+        self.enqueue_write_proposal(project_id, action, op_summary)
+            .await
+    }
+
+    /// Hermes-only direct write path. The human gate is Hermes' ACP permission card; this still
+    /// resolves identity from the DB project row and tokens from keychain only.
+    async fn execute_hermes_write<E: HermesMcpExecutor>(
+        &self,
+        tool: &str,
+        project_id: &str,
+        action: ExternalAction,
+        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let project = projects::fetch_project(&self.db, project_id)
             .await
-            .map_err(|e| mcp_tool_error("wr_calendar_create_event", &AppError::from(e)))?
+            .map_err(|e| mcp_tool_error(tool, &AppError::from(e)))?
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_params(format!("unknown project_id: {project_id}"), None)
             })?;
-        let access = crate::commands::calendar::access_token_for_cref(&project.credential_ref)
+        let outcome = executor
+            .execute(&project, &action)
             .await
-            .map_err(|e| {
-                mcp_tool_error(
-                    "wr_calendar_create_event",
-                    &AppError::terminal("calendar.access_token", e),
-                )
-            })?
-            .ok_or_else(|| {
-                mcp_tool_error(
-                    "wr_calendar_create_event",
-                    &AppError::not_found(
-                        "calendar.not_connected",
-                        "미연결 — 먼저 Google Calendar를 연결하세요",
-                    ),
-                )
-            })?;
-        let provider = HttpCalendarProvider::new()
-            .map_err(|e| mcp_tool_error("wr_calendar_create_event", &AppError::from(e)))?;
-        let outcome = execute_calendar_action(&provider, &access, &action)
-            .await
-            .map_err(|e| mcp_tool_error("wr_calendar_create_event", &e))?;
+            .map_err(|e| mcp_tool_error(tool, &e))?;
         Ok(Json(ProposeResult {
             action_id: outcome.external_ref.unwrap_or_default(),
             status: "succeeded".into(),
@@ -523,8 +775,8 @@ fn stable_idem_key(action: &ExternalAction, project_id: &str) -> Result<String, 
     Ok(format!("{:x}", h.finalize()))
 }
 
-/// 읽기 툴의 DB 에러 → rmcp internal-error 매핑. **PII-free**: AppError.code만 노출/기록하고
-/// (예: "db.query") message/payload 본문은 절대 넣지 않는다. trace_id는 로그 상관용으로 stderr에만.
+/// 툴 에러 → rmcp internal-error 매핑. **PII-free**: AppError.code만 노출/기록하고
+/// message/payload 본문은 절대 넣지 않는다. trace_id는 로그 상관용으로 stderr에만.
 /// stderr 기록(stdout 아님 — stdout은 MCP 프로토콜 전용)으로 삼킨 에러가 완전히 안 보이는 일은 없게 한다.
 fn db_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
     mcp_tool_error(tool, e)
@@ -532,10 +784,10 @@ fn db_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
 
 fn mcp_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
     eprintln!(
-        "[work-radar mcp-stdio] {tool} db error: code={} trace_id={}",
+        "[work-radar mcp-stdio] {tool} error: code={} trace_id={}",
         e.code, e.trace_id
     );
-    rmcp::ErrorData::internal_error(format!("db error ({})", e.code), None)
+    rmcp::ErrorData::internal_error(format!("tool error ({})", e.code), None)
 }
 
 #[cfg(test)]
@@ -543,7 +795,39 @@ mod write_tool_tests {
     use super::*;
     use crate::commands::projects::insert_project;
     use crate::commands::shared::test_support::{fresh_db, project_input};
-    use crate::models::ProjectKind;
+    use crate::external_actions::ExecOutcome;
+    use crate::models::{Project, ProjectKind};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct FakeHermesExecutor {
+        calls: AtomicUsize,
+    }
+
+    impl FakeHermesExecutor {
+        fn new() -> Self {
+            Self {
+                calls: AtomicUsize::new(0),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::Relaxed)
+        }
+    }
+
+    impl HermesMcpExecutor for FakeHermesExecutor {
+        async fn execute(
+            &self,
+            _project: &Project,
+            action: &ExternalAction,
+        ) -> Result<ExecOutcome, AppError> {
+            let n = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
+            Ok(ExecOutcome {
+                external_ref: Some(format!("direct-{n}-{}", action.kind_str())),
+                bytes: Some(1),
+            })
+        }
+    }
 
     /// 알 수 없는 project_id → 툴이 에러를 반환하고 **아무것도 enqueue하지 않는다**(#11).
     #[tokio::test]
@@ -625,6 +909,102 @@ mod write_tool_tests {
             .unwrap();
         assert_ne!(a.0.action_id, b.0.action_id);
         assert_eq!(store::list_pending(&db).await.unwrap().len(), 2);
+    }
+
+    /// Hermes-origin write tools use Hermes' own permission gate and therefore execute directly
+    /// through the connector seam instead of creating Work Radar approval proposals.
+    #[tokio::test]
+    async fn hermes_write_tools_execute_direct_without_work_radar_approval_queue() {
+        let db = fresh_db().await;
+        let project = insert_project(&db, &project_input("Mirrorless", ProjectKind::Work))
+            .await
+            .unwrap();
+        let server = WrServer { db: db.clone() };
+        let executor = FakeHermesExecutor::new();
+
+        let github_comment = server
+            .github_comment_for_caller_with_executor(
+                GithubCommentParams {
+                    project_id: project.id.clone(),
+                    repo: "o/r".into(),
+                    issue_number: 7,
+                    body: "hi".into(),
+                },
+                McpCaller::Hermes,
+                &executor,
+            )
+            .await
+            .expect("Hermes GitHub comment direct");
+        let github_issue = server
+            .github_create_issue_for_caller_with_executor(
+                GithubCreateIssueParams {
+                    project_id: project.id.clone(),
+                    repo: "o/r".into(),
+                    title: "T".into(),
+                    body: "B".into(),
+                },
+                McpCaller::Hermes,
+                &executor,
+            )
+            .await
+            .expect("Hermes GitHub issue direct");
+        let notion = server
+            .notion_create_page_for_caller_with_executor(
+                NotionCreatePageParams {
+                    project_id: project.id.clone(),
+                    db_id: "1234567890abcdef1234567890abcdef".into(),
+                    title: "할 일".into(),
+                },
+                McpCaller::Hermes,
+                &executor,
+            )
+            .await
+            .expect("Hermes Notion direct");
+        let calendar = server
+            .calendar_create_event_for_caller_with_executor(
+                CalendarCreateEventParams {
+                    project_id: project.id.clone(),
+                    calendar_id: "primary".into(),
+                    title: "회의".into(),
+                    start: "2026-06-04T10:00:00+09:00".into(),
+                    end: "2026-06-04T11:00:00+09:00".into(),
+                    all_day: false,
+                    description: None,
+                },
+                McpCaller::Hermes,
+                &executor,
+            )
+            .await
+            .expect("Hermes Calendar direct");
+        let gmail = server
+            .gmail_send_for_caller_with_executor(
+                GmailSendParams {
+                    project_id: project.id.clone(),
+                    to: "vip@client.test".into(),
+                    subject: "주간 보고".into(),
+                    body: "본문".into(),
+                },
+                McpCaller::Hermes,
+                &executor,
+            )
+            .await
+            .expect("Hermes Gmail direct");
+
+        assert_eq!(github_comment.0.status, "succeeded");
+        assert!(github_comment.0.action_id.starts_with("direct-1-"));
+        assert_eq!(github_issue.0.status, "succeeded");
+        assert!(github_issue.0.action_id.starts_with("direct-2-"));
+        assert_eq!(notion.0.status, "succeeded");
+        assert!(notion.0.action_id.starts_with("direct-3-"));
+        assert_eq!(calendar.0.status, "succeeded");
+        assert!(calendar.0.action_id.starts_with("direct-4-"));
+        assert_eq!(gmail.0.status, "succeeded");
+        assert!(gmail.0.action_id.starts_with("direct-5-"));
+        assert_eq!(executor.calls(), 5);
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "Hermes direct writes must not create Work Radar approval proposals"
+        );
     }
 
     /// Notion: 알 수 없는 project_id → 거부 + enqueue 0(#11, GitHub와 동일한 격리 계약).
@@ -773,6 +1153,85 @@ mod write_tool_tests {
         );
     }
 
+    /// Hermes-origin OCR receipt save is a local DB write after Hermes' permission card, so it does
+    /// not create a Work Radar approval proposal. The saved row still enters the review queue.
+    #[tokio::test]
+    async fn hermes_bookkeeping_save_receipt_writes_local_review_row_without_enqueue() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+
+        let res = server
+            .bookkeeping_save_receipt_for_caller(
+                BookkeepingSaveReceiptParams {
+                    project_id: None,
+                    source_ref: Some("hermes-ocr-001".into()),
+                    merchant: "동네마트".into(),
+                    amount_minor: 12_300,
+                    currency: Some("KRW".into()),
+                    spent_at: "2026-06-16".into(),
+                    category: Some("food".into()),
+                    description: Some("영수증 OCR".into()),
+                    note: None,
+                },
+                McpCaller::Hermes,
+            )
+            .await
+            .expect("Hermes OCR save");
+
+        assert_eq!(res.0.status, "saved");
+        assert!(!res.0.transaction_id.is_empty());
+        assert!(
+            store::list_pending(&db).await.unwrap().is_empty(),
+            "Hermes bookkeeping save is local DB write, not external proposal"
+        );
+
+        let row: (String, String, String, String, i32) = sqlx::query_as(
+            "SELECT id, source, review_status, merchant, amount_minor \
+             FROM bookkeeping_transactions WHERE id = ?1",
+        )
+        .bind(&res.0.transaction_id)
+        .fetch_one(&db)
+        .await
+        .expect("saved bookkeeping row");
+        assert_eq!(row.0, res.0.transaction_id);
+        assert_eq!(row.1, "ocr");
+        assert_eq!(row.2, "needs_review");
+        assert_eq!(row.3, "동네마트");
+        assert_eq!(row.4, 12_300);
+    }
+
+    /// Non-Hermes MCP callers cannot mutate the local bookkeeping DB through the OCR receipt tool.
+    #[tokio::test]
+    async fn non_hermes_bookkeeping_save_receipt_is_rejected_without_write() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+
+        let res = server
+            .bookkeeping_save_receipt_for_caller(
+                BookkeepingSaveReceiptParams {
+                    project_id: None,
+                    source_ref: Some("other-ocr-001".into()),
+                    merchant: "동네마트".into(),
+                    amount_minor: 12_300,
+                    currency: Some("KRW".into()),
+                    spent_at: "2026-06-16".into(),
+                    category: Some("food".into()),
+                    description: None,
+                    note: None,
+                },
+                McpCaller::Other,
+            )
+            .await;
+
+        assert!(res.is_err(), "only Hermes caller may use direct OCR save");
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM bookkeeping_transactions")
+            .fetch_one(&db)
+            .await
+            .expect("count bookkeeping rows");
+        assert_eq!(count, 0);
+        assert!(store::list_pending(&db).await.unwrap().is_empty());
+    }
+
     /// Gmail: 알 수 없는 project_id → 거부 + enqueue 0(#11, 다른 write 툴과 동일한 격리 계약).
     #[tokio::test]
     async fn gmail_send_rejects_unknown_project_and_enqueues_nothing() {
@@ -843,8 +1302,9 @@ mod write_tool_tests {
 #[cfg(test)]
 mod schema_tests {
     use super::{
-        ActionIdParams, CalendarCreateEventParams, GithubCommentParams, GithubCreateIssueParams,
-        GmailSendParams, NotionCreatePageParams, ProposeNoopParams,
+        ActionIdParams, BookkeepingSaveReceiptParams, CalendarCreateEventParams,
+        GithubCommentParams, GithubCreateIssueParams, GmailSendParams, NotionCreatePageParams,
+        ProposeNoopParams,
     };
     use std::collections::BTreeSet;
 
@@ -990,6 +1450,37 @@ mod schema_tests {
         );
         // proposer는 raw project_ref/credential_ref를 줄 수 없다(#11) — 표면에 없음을 고정.
         assert!(!prop_names(&v).contains("project_ref"));
+        assert!(!prop_names(&v).contains("credential_ref"));
+    }
+
+    #[test]
+    fn bookkeeping_save_receipt_params_schema_is_closed_and_stable() {
+        let v = serde_json::to_value(schemars::schema_for!(BookkeepingSaveReceiptParams)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "BookkeepingSaveReceiptParams must be a closed schema (deny_unknown_fields)"
+        );
+        assert_eq!(
+            prop_names(&v),
+            expect(&[
+                "project_id",
+                "source_ref",
+                "merchant",
+                "amount_minor",
+                "currency",
+                "spent_at",
+                "category",
+                "description",
+                "note",
+            ])
+        );
+        assert_eq!(
+            required_fields(&v),
+            expect(&["merchant", "amount_minor", "spent_at"])
+        );
+        assert!(!prop_names(&v).contains("raw_image"));
+        assert!(!prop_names(&v).contains("image_path"));
         assert!(!prop_names(&v).contains("credential_ref"));
     }
 

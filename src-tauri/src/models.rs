@@ -5,6 +5,7 @@
 mod agent;
 mod audit;
 mod automation;
+mod bookkeeping;
 mod calendar;
 mod inbox;
 mod pending_write;
@@ -22,6 +23,7 @@ mod worktree;
 pub use agent::*;
 pub use audit::*;
 pub use automation::*;
+pub use bookkeeping::*;
 pub use calendar::*;
 pub use inbox::*;
 pub use pending_write::*;

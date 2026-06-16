@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { AgentRunModal } from "@/components/agents/AgentRunModal";
 import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { CalendarDrawer } from "@/components/board/CalendarDrawer";
+import { BookkeepingView } from "@/components/bookkeeping/BookkeepingView";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CmdKnob } from "@/components/CmdKnob";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -45,6 +46,7 @@ function renderView(renderedView: View) {
   if (renderedView === "settings") return <SettingsView />;
   if (renderedView === "today") return <TodayView />;
   if (renderedView === "weekly") return <WeeklyView />;
+  if (renderedView === "bookkeeping") return <BookkeepingView />;
   if (renderedView === "routines") return <RoutineTrackingView />;
   if (renderedView === "radar") return <PrRadarView />;
   if (renderedView === "worktree") return <WorktreeView />;

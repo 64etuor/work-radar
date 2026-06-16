@@ -2,9 +2,10 @@
 //! INVARIANT: 외부 호출은 Rust(reqwest)에, 자격증명(client_id/secret/refresh_token)은 keychain blob에서만
 //! 읽혀 Rust 안에서만 쓰인다(렌더러 미노출).
 //! 스코프는 send-only(`gmail.send`) — 메일 송신만, 읽기/리스트 권한 없음.
-//! send는 **AI-origin(자동화 제안)** 경로라 External Action Gate를 거친다(US-004~006). 게이트가
-//! 통과한 뒤에야 Rust가 실제 송신한다(INVARIANT #2 — 자동화의 외부 mutate 차단). 외부 호출은
-//! bounded retry + graceful terminal failure.
+//! send는 **AI-origin(자동화 제안)** 경로라 non-Hermes MCP caller에서는 External Action Gate를
+//! 거친다(US-004~006). Work Radar가 주입한 Hermes MCP caller는 Hermes permission card를 사람 게이트로
+//! 간주해 Work Radar approval queue를 한 번 더 거치지 않고 같은 Rust connector를 직접 쓴다.
+//! 외부 호출은 bounded retry + graceful terminal failure.
 //!
 //! **Gmail은 Google 계정 OAuth에 통합**되어 별도 Gmail 연결(oauth/loopback/PKCE/connect)은 폐지됐다.
 //! 발송 토큰은 `access_token_for_cref`가 calendar의 통합 Google access token(스코프에 `gmail.send`
@@ -54,7 +55,7 @@ impl Retryable for GmailError {
 /// 메일 송신 계약. 오케스트레이션(`execute_gmail_action`)은 이 트레잇에만 의존 → fake로 cargo test.
 /// 실 HTTP는 `HttpGmailProvider`.
 pub trait GmailProvider {
-    /// 전송 — **단일 시도(재시도 없음)**. External Action Gate(AI-origin) 전용 · 유일한 send 표면.
+    /// 전송 — **단일 시도(재시도 없음)**. AI-origin write 표면.
     /// messages.send는 멱등하지 않다 — 요청이 Gmail에 도달한 뒤 응답만 유실되면(transport drop=
     /// transient) bounded retry는 **중복 발송**을 낸다(이메일은 캘린더 중복보다 비대칭적으로 위험).
     /// 그래서 게이트 write는 재시도 대신 실패를 노출해 사용자가 재제안하게 한다(calendar

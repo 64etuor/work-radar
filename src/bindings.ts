@@ -30,6 +30,13 @@ export const commands = {
 	/**  토큰으로 외부 API ping(read-only). 토큰은 keychain에서 읽어 Rust 안에서만 쓰인다. */
 	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
 	runConnectionAudit: () => typedError<ConnectionAudit, AppError>(__TAURI_INVOKE("run_connection_audit")),
+	createBookkeepingTransaction: (input: CreateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("create_bookkeeping_transaction", { input })),
+	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status })),
+	updateBookkeepingReviewStatus: (id: string, status: BookkeepingReviewStatus) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_review_status", { id, status })),
+	bookkeepingMonthlySummary: (month: string) => typedError<BookkeepingMonthlySummary, AppError>(__TAURI_INVOKE("bookkeeping_monthly_summary", { month })),
+	listBookkeepingAudit: (entityId: string | null) => typedError<BookkeepingAuditEntry[], AppError>(__TAURI_INVOKE("list_bookkeeping_audit", { entityId })),
+	recordBookkeepingSyncFailure: (input: RecordBookkeepingSyncFailureInput) => typedError<BookkeepingSyncJob, AppError>(__TAURI_INVOKE("record_bookkeeping_sync_failure", { input })),
+	listBookkeepingSyncJobs: () => typedError<BookkeepingSyncJob[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_jobs")),
 	/**  gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
 	ghCliStatus: () => typedError<CliToolStatus, AppError>(__TAURI_INVOKE("gh_cli_status")),
 	/**
@@ -897,6 +904,67 @@ export type BatchItemResult = {
  */
 export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "not_ours" | "unsupported_provider" | "error";
 
+export type BookkeepingAuditEntry = {
+	id: string,
+	entityType: string,
+	entityId: string,
+	action: string,
+	summary: string,
+	metadataJson: string,
+	createdAt: string,
+};
+
+export type BookkeepingCategorySummary = {
+	category: string,
+	amountMinor: number,
+	count: number,
+};
+
+export type BookkeepingMonthlySummary = {
+	month: string,
+	totalAmountMinor: number,
+	needsReviewCount: number,
+	approvedCount: number,
+	ignoredCount: number,
+	categories: BookkeepingCategorySummary[],
+};
+
+/**  거래 리뷰 상태. 외부 자동 확정 없이 사람이 approved/ignored로 정리한다. */
+export type BookkeepingReviewStatus = "needs_review" | "approved" | "ignored";
+
+/**  가계부 거래 유입 경로. Gmail/OCR/CSV는 후속 ingest adapter가 같은 리뷰큐에 기록한다. */
+export type BookkeepingSource = "manual" | "ocr" | "gmail" | "csv";
+
+export type BookkeepingSyncJob = {
+	id: string,
+	source: BookkeepingSource,
+	status: string,
+	startedAt: string | null,
+	finishedAt: string | null,
+	sanitizedErrorCode: string | null,
+	sanitizedErrorMessage: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type BookkeepingTransaction = {
+	id: string,
+	projectId: string | null,
+	source: BookkeepingSource,
+	sourceRef: string | null,
+	merchant: string,
+	description: string | null,
+	amountMinor: number,
+	currency: string,
+	spentAt: string,
+	category: string,
+	reviewStatus: BookkeepingReviewStatus,
+	note: string | null,
+	createdAt: string,
+	updatedAt: string,
+	reviewedAt: string | null,
+};
+
 /**
  *  Graduated autonomy level (mirrors governance `AutonomyLevel`). snake_case → the JSON enum
  *  strings `manual|dispatch|auto_plan|full` the governance parser expects.
@@ -1292,6 +1360,19 @@ export type CoveredRepo = {
 	localPath: string,
 	/**  프로젝트의 enabled 로컬 레포 총수(이 레포 포함). 1 초과 = 미포함 레포 존재. */
 	enabledLocalTotal: number,
+};
+
+export type CreateBookkeepingTransactionInput = {
+	projectId: string | null,
+	source: BookkeepingSource,
+	sourceRef: string | null,
+	merchant: string,
+	description: string | null,
+	amountMinor: number,
+	currency: string,
+	spentAt: string,
+	category: string,
+	note: string | null,
 };
 
 /**
@@ -1929,6 +2010,12 @@ export type RebaseResult = {
 	backupRef: string | null,
 	/**  사람이 읽을 결과/실패 요약(성공 통계 또는 충돌 사유). */
 	message: string,
+};
+
+export type RecordBookkeepingSyncFailureInput = {
+	source: BookkeepingSource,
+	errorCode: string,
+	rawErrorMessage: string,
 };
 
 /**  project별 레포. PR Radar(Phase 4)·worktree(Phase 5)의 단위. */
