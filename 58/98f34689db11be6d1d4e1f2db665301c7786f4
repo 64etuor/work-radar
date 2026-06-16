@@ -1,0 +1,82 @@
+docs/plans/2026-06-16-bookkeeping-mvp.md
+  s_ffbf00c1f22bbf::t_c43cea889672bc 1-74
+src-tauri/src/db.rs
+  s_ffbf00c1f22bbf::t_c43cea889672bc 625-662
+src-tauri/src/gmail/mod.rs
+  s_ffbf00c1f22bbf::t_d875fe96252884 5-8,58
+src-tauri/src/lib.rs
+  s_ffbf00c1f22bbf::t_8b10d7a1b1323e 76-83
+  s_ffbf00c1f22bbf::t_14ad740ca6e9f5 17
+src/components/bookkeeping/BookkeepingView.tsx
+  s_ffbf00c1f22bbf::t_b9432038abaa0e 1-323,325,327-421
+src/lib/query/index.ts
+  s_ffbf00c1f22bbf::t_107a8c293dff61 5
+src-tauri/src/mcp/mod.rs
+  s_ffbf00c1f22bbf::t_8e0acf8c167060 5,8,334-336,339,376-377,380,417-419,422,509-510,515
+  s_ffbf00c1f22bbf::t_9a0c9e3ad9e246 6-7,20-24,226-254,265-281,344,351-357,365-373,385-398,406-414,427-440,447-455,478,481-487,498-506,520-529,537-545,664,666,669-689,693,697-698,700
+  s_ffbf00c1f22bbf::t_f70e1bdf791530 255-264,345-350,479-480
+  s_ffbf00c1f22bbf::t_5bde5c4315d46a 16,151-182,546-558,562-576,578-609
+  s_ffbf00c1f22bbf::t_d55dc68fbf2532 577
+  s_ffbf00c1f22bbf::t_1e977077574c88 1156-1234,1305-1307,1456-1483
+  s_ffbf00c1f22bbf::t_2dd1f868675c26 10-11,491-494,496,778-779,787,790
+  s_ffbf00c1f22bbf::t_ecf80ce54a9d84 798-830,914-1007
+src-tauri/src/commands/bookkeeping.rs
+  s_ffbf00c1f22bbf::t_dd36987966b621 5,133-205,209-255
+  s_ffbf00c1f22bbf::t_d5a2759b65a3c5 455,471,488,506
+  s_ffbf00c1f22bbf::t_f8266980c1c4d0 514-519,611-616,663-666,739-741,753,755-758
+  s_ffbf00c1f22bbf::t_a4d1ebaecce3b4 206-208
+  s_ffbf00c1f22bbf::t_8b10d7a1b1323e 3-4,6-132,256-368,370-454,456-470,472-487,489-505,507-513,520-590
+  s_ffbf00c1f22bbf::t_96fd5ef8915a7f 1-2,591-610,617-662,667-738,742-752,754,833-834
+  s_ffbf00c1f22bbf::t_9ffc0487531e1a 369
+  s_ffbf00c1f22bbf::t_2a2b98812717ba 759-814,819-821,826-832
+  s_ffbf00c1f22bbf::t_d55dc68fbf2532 815-818,822-825
+src-tauri/migrations/0051_bookkeeping_mvp.sql
+  s_ffbf00c1f22bbf::t_1638beba02d34a 1-59
+src/lib/query/bookkeeping.ts
+  s_ffbf00c1f22bbf::t_107a8c293dff61 1-4,6-72
+  s_ffbf00c1f22bbf::t_2129e5be141968 5
+src/lib/nav.ts
+  s_ffbf00c1f22bbf::t_107a8c293dff61 13,80-86
+src-tauri/src/commands/mod.rs
+  s_ffbf00c1f22bbf::t_8b10d7a1b1323e 49
+  s_ffbf00c1f22bbf::t_96fd5ef8915a7f 18
+src/store.ts
+  s_ffbf00c1f22bbf::t_107a8c293dff61 8
+src-tauri/src/external_actions/mod.rs
+  s_ffbf00c1f22bbf::t_81b89ff1351a53 3
+  s_ffbf00c1f22bbf::t_5a66b22b8c4641 1,6-7
+docs/areas/mcp-server-conventions.md
+  s_ffbf00c1f22bbf::t_c47b331f064759 42,44-49,63-64,192-195
+docs/areas/decision-rails.md
+  s_ffbf00c1f22bbf::t_24eaf3d2a5d4ea 32-39
+src-tauri/src/bookkeeping.rs
+  s_ffbf00c1f22bbf::t_eb412cec63a897 1-87,89-162,171-181
+  s_ffbf00c1f22bbf::t_d55dc68fbf2532 88,164-170
+  s_ffbf00c1f22bbf::t_df33db696a8e16 163
+src/App.tsx
+  s_ffbf00c1f22bbf::t_107a8c293dff61 8,49
+src/bindings.ts
+  s_ffbf00c1f22bbf::t_d3a2b37431cadc 33-39,907-967,1365-1377,2015-2018
+src-tauri/src/models/bookkeeping.rs
+  s_ffbf00c1f22bbf::t_8b10d7a1b1323e 1-111
+src/components/bookkeeping/BookkeepingView.css
+  s_ffbf00c1f22bbf::t_b9432038abaa0e 1-206
+src-tauri/src/models.rs
+  s_ffbf00c1f22bbf::t_8b10d7a1b1323e 8,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "5898f34689db11be6d1d4e1f2db665301c7786f4",
+  "prompts": {},
+  "sessions": {
+    "s_ffbf00c1f22bbf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ecf5f-de8a-77e1-8a1d-801f8a530396",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
