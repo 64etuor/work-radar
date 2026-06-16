@@ -20,7 +20,8 @@ use tokio::sync::Notify;
 use tokio::time::{interval, Duration, MissedTickBehavior};
 
 use crate::calendar::pending_store::{
-    delete_write, fetch_due_writes, is_terminal_attempt, record_failure,
+    delete_write, fetch_due_writes, is_terminal_attempt, mark_created_event_id, record_failure,
+    record_terminal_failure,
 };
 use crate::calendar::timing::SYNC_WORKER_TICK_MS;
 use crate::calendar::{
@@ -143,19 +144,19 @@ impl SyncEngine {
                 }
             }
             Err(SyncError::Terminal(msg)) => {
-                // Terminal = 재시도 무의미(파싱/인증/검증). retry 예산 소모 없이 즉시 종결:
-                // 큐에서 삭제 + CalendarSyncFailed 1회 emit. attempts 카운터를 굴리지 않는다.
+                // Terminal = 자동 재시도 무의미(파싱/인증/검증). row는 attempts=3으로 보존해
+                // 사용자가 원인을 고친 뒤 명시 retry/cancel 할 수 있게 한다.
                 tracing::error!(
                     code = "calendar.sync.terminal",
                     pending_id,
                     "pending calendar write hit terminal error (skip retries)"
                 );
-                if let Err(e) = delete_write(&self.pool, pending_id).await {
+                if let Err(e) = record_terminal_failure(&self.pool, pending_id, &msg).await {
                     tracing::warn!(
-                        code = "calendar.sync.delete_failed",
+                        code = "calendar.sync.record_terminal_failed",
                         pending_id,
                         error = %e,
-                        "failed to delete terminally-failed pending write"
+                        "failed to record terminally-failed pending write"
                     );
                 }
                 if let Err(e) = self.app.emit(
@@ -232,10 +233,19 @@ async fn execute_with_access<P: CalendarProvider>(
 ) -> SyncResult {
     match w.kind.as_str() {
         "create" => {
+            if let Some(event_id) = w.event_id.as_deref() {
+                link_back_impl(pool, w, event_id)
+                    .await
+                    .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
+                return Ok(());
+            }
             let input = parse_create_input(&w.payload_json)?;
             let (event_id, _url) = provider
                 .create_event(access, &w.calendar_id, &input)
                 .await?;
+            mark_created_event_id(pool, w.id, &event_id)
+                .await
+                .map_err(|e| SyncError::Terminal(format!("mark_created_event_id: {e}")))?;
             link_back_impl(pool, w, &event_id)
                 .await
                 .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
@@ -825,5 +835,55 @@ mod tests {
         assert_eq!(remaining.0, 0);
         // format_sqlite_datetime / Utc는 lifetime 워밍업으로만 참조 — 추후 patch/delete e2e 추가 시 재사용.
         let _ = format_sqlite_datetime(Utc::now());
+    }
+
+    #[tokio::test]
+    async fn create_with_stored_event_id_links_back_without_second_insert() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) VALUES ('s1','Demo','braindump','thought')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let pid = upsert_write(
+            &pool,
+            "create",
+            "signal",
+            "s1",
+            "calA",
+            Some("evt_stored"),
+            r#"{"title":"Demo","start":"2026-05-28T10:00:00+09:00","duration_min":30}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let row = &due[0];
+
+        let provider = RecordingProvider {
+            new_event_id: "evt_duplicate".into(),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake_access", row)
+            .await
+            .unwrap();
+        delete_write(&pool, pid).await.unwrap();
+
+        let created = provider.created.lock().unwrap().clone();
+        assert!(
+            created.is_empty(),
+            "stored event_id must prevent duplicate create"
+        );
+        let (le, lc): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT linked_event_id, linked_calendar_id FROM signals WHERE id = 's1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(le.as_deref(), Some("evt_stored"));
+        assert_eq!(lc.as_deref(), Some("calA"));
     }
 }

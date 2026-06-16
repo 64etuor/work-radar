@@ -17,7 +17,7 @@ use sqlx::SqlitePool;
 use tauri::State;
 use tokio::sync::Notify;
 
-use crate::calendar::pending_store::{delete_write, upsert_write};
+use crate::calendar::pending_store::{delete_write, retry_write, upsert_write};
 use crate::calendar::timing::GOOGLE_SYNC_DEBOUNCE_MS;
 use crate::commands::placement_store;
 use crate::db::Db;
@@ -443,6 +443,33 @@ pub async fn cancel_pending_write(id: i32, db: State<'_, Db>) -> Result<(), AppE
     Ok(())
 }
 
+/// 실패로 멈춘 큐 행을 사람이 명시적으로 다시 due 상태로 만든다(외부 호출은 워커가 수행).
+#[tauri::command]
+#[specta::specta]
+pub async fn retry_pending_write(
+    id: i32,
+    db: State<'_, Db>,
+    notify: State<'_, Arc<Notify>>,
+) -> Result<(), AppError> {
+    retry_pending_write_inner(db.inner(), notify.inner(), id).await
+}
+
+pub(crate) async fn retry_pending_write_inner(
+    pool: &SqlitePool,
+    notify: &Arc<Notify>,
+    id: i32,
+) -> Result<(), AppError> {
+    let changed = retry_write(pool, id).await?;
+    if changed == 0 {
+        return Err(AppError::not_found(
+            "calendar.pending_missing",
+            "pending calendar write not found",
+        ));
+    }
+    notify.notify_one();
+    Ok(())
+}
+
 /// 디버그/관찰용 큐 스냅샷(created_at DESC). 토큰/외부 응답 본문은 큐에 없으므로 안전.
 #[tauri::command]
 #[specta::specta]
@@ -547,9 +574,11 @@ async fn build_queue_row(
             },
         },
         WriteOp::Unschedule { .. } => {
-            let (cal, ev) = existing.ok_or_else(|| {
-                AppError::validation("calendar.no_linked_event", "no linked event to unschedule")
-            })?;
+            let Some((cal, ev)) = existing else {
+                delete_pending_create_or_patch(pool, target_kind, target_id).await?;
+                return Ok(None);
+            };
+            delete_pending_create_or_patch(pool, target_kind, target_id).await?;
             (
                 "delete",
                 cal,
@@ -667,6 +696,24 @@ async fn fetch_pending_create(
     Ok(row)
 }
 
+/// Inbox 복귀/delete intent는 같은 target의 이전 create/patch 의도를 supersede한다.
+/// 그렇지 않으면 오래된 patch가 먼저 실패하거나 적용된 뒤 delete되는 불필요한 순서가 남는다.
+async fn delete_pending_create_or_patch(
+    pool: &SqlitePool,
+    target_kind: &str,
+    target_id: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "DELETE FROM pending_calendar_writes \
+         WHERE target_kind = ?1 AND target_id = ?2 AND kind IN ('create', 'patch')",
+    )
+    .bind(target_kind)
+    .bind(target_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// linked event가 아직 없는 reschedule/resize를 pending `create`에 coalesce한다.
 ///
 /// 배치 직후엔 signal에 linked_event_id가 없어(워커가 디바운스 후 생성+링크) patch 타깃이
@@ -675,7 +722,8 @@ async fn fetch_pending_create(
 /// 드래그/리사이즈가 한 create로 합쳐지고, 워커는 최종 위치로 한 번에 이벤트를 만든다.
 ///
 /// create 행조차 없을 때는 target에 따라 갈린다:
-/// - signal: 이벤트가 외부에서 삭제된 진짜 orphan → 기존대로 거부.
+/// - signal: 로컬 mirror가 calendar_id를 알고 있으면 Google mirror create를 재생성.
+///   calendar_id도 없으면 복구할 대상 캘린더가 없으므로 거부.
 /// - routine_check: Google 링크 없는 시간 이동도 유효하다(time_override는 로컬 정본,
 ///   recurring-sync 루틴의 가상 블록·stale 블록 드래그가 이 경로) → `Ok(None)` =
 ///   큐 행 없이 로컬 미러만. 거부하면 블록이 로컬에서도 안 움직인다(원위치 잔류 버그).
@@ -691,6 +739,12 @@ async fn coalesce_into_pending_create(
     else {
         if target_kind == "routine_check" {
             return Ok(None);
+        }
+        if let Some(row) =
+            recreate_signal_create_from_local_mirror(pool, target_kind, target_id, at, duration_min)
+                .await?
+        {
+            return Ok(Some(row));
         }
         return Err(AppError::validation(
             "calendar.no_linked_event",
@@ -711,6 +765,42 @@ async fn coalesce_into_pending_create(
     Ok(Some((
         "create",
         cal,
+        None,
+        payload,
+        GOOGLE_SYNC_DEBOUNCE_MS,
+    )))
+}
+
+async fn recreate_signal_create_from_local_mirror(
+    pool: &SqlitePool,
+    target_kind: &str,
+    target_id: &str,
+    at: &str,
+    duration_min: i32,
+) -> Result<Option<(&'static str, String, Option<String>, String, i64)>, AppError> {
+    if target_kind != "signal" {
+        return Ok(None);
+    }
+    let row: Option<(String, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT title, linked_calendar_id, scheduled_at FROM signals WHERE id = ?1")
+            .bind(target_id)
+            .fetch_optional(pool)
+            .await?;
+    let Some((title, Some(calendar_id), Some(_scheduled_at))) = row else {
+        return Ok(None);
+    };
+    if calendar_id.trim().is_empty() {
+        return Ok(None);
+    }
+    let payload = serde_json::json!({
+        "title": title,
+        "start": at,
+        "duration_min": duration_min,
+    })
+    .to_string();
+    Ok(Some((
+        "create",
+        calendar_id,
         None,
         payload,
         GOOGLE_SYNC_DEBOUNCE_MS,
@@ -1042,7 +1132,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unschedule_without_link_does_not_clear_signal_schedule_or_queue() {
+    async fn signal_unschedule_without_link_clears_local_schedule_and_placement_without_queue() {
         let db = fresh_db().await;
         let notify = Arc::new(Notify::new());
         sqlx::query(
@@ -1052,16 +1142,20 @@ mod tests {
         .execute(&db)
         .await
         .unwrap();
+        placement_store::upsert_placement(&db, "s1", "2026-05-28", "2026-05-28T10:00:00", 30)
+            .await
+            .unwrap();
 
         let req = StageWriteRequest {
             target: WriteTarget::Signal { id: "s1".into() },
-            op: WriteOp::Unschedule { from_date: None },
+            op: WriteOp::Unschedule {
+                from_date: Some("2026-05-28".into()),
+            },
             idempotency_key: "test-unschedule".into(),
         };
-        let err = stage_calendar_write_inner(&db, &notify, req)
+        stage_calendar_write_inner(&db, &notify, req)
             .await
-            .expect_err("missing linked event should reject unschedule");
-        assert_eq!(err.code, "calendar.no_linked_event");
+            .expect("local-only unschedule should succeed without a linked event");
 
         let (scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id): (
             Option<String>,
@@ -1075,16 +1169,150 @@ mod tests {
         .fetch_one(&db)
         .await
         .unwrap();
-        assert_eq!(scheduled_at.as_deref(), Some("2026-05-28T10:00:00"));
-        assert_eq!(scheduled_duration, Some(30));
+        assert!(scheduled_at.is_none());
+        assert!(scheduled_duration.is_none());
         assert!(linked_event_id.is_none());
         assert!(linked_calendar_id.is_none());
+
+        let placements =
+            placement_store::fetch_placements_in_range(&db, "2026-05-28", "2026-05-28")
+                .await
+                .unwrap();
+        assert!(
+            placements.iter().all(|p| p.signal_id != "s1"),
+            "타임라인에서 Inbox로 되돌리면 해당 날짜 placement가 삭제되어야 한다"
+        );
 
         let (queued,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
             .fetch_one(&db)
             .await
             .unwrap();
         assert_eq!(queued, 0);
+    }
+
+    #[tokio::test]
+    async fn signal_unschedule_after_pending_create_cancels_create_and_clears_local_state() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) \
+             VALUES ('s1','Demo','braindump','thought')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Schedule {
+                    at: "2026-05-28T10:00:00".into(),
+                    duration_min: 30,
+                    calendar_id: "work-cal".into(),
+                    title: "Demo".into(),
+                },
+                idempotency_key: "test-schedule-pending-create".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let (before,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pending_calendar_writes \
+             WHERE target_kind = 'signal' AND target_id = 's1' AND kind = 'create'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(before, 1, "신규 배치는 Google create 큐를 만든다");
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Unschedule {
+                    from_date: Some("2026-05-28".into()),
+                },
+                idempotency_key: "test-unschedule-pending-create".into(),
+            },
+        )
+        .await
+        .expect("pending create before link-back should still be cancellable");
+
+        let (after,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pending_calendar_writes \
+             WHERE target_kind = 'signal' AND target_id = 's1'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(
+            after, 0,
+            "Inbox 복귀 후 늦은 워커가 Google 이벤트를 만들면 안 된다"
+        );
+
+        let (scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id): (
+            Option<String>,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id \
+             FROM signals WHERE id = 's1'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(scheduled_at.is_none());
+        assert!(scheduled_duration.is_none());
+        assert!(linked_event_id.is_none());
+        assert!(linked_calendar_id.is_none());
+        assert!(
+            placement_store::fetch_placements_in_range(&db, "2026-05-28", "2026-05-28")
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn retry_pending_write_requeues_terminal_row() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let id = upsert_write(
+            &db,
+            "patch",
+            "signal",
+            "s1",
+            "cal1",
+            Some("ev1"),
+            r#"{"start":"2026-05-28T10:00:00","duration_min":30}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE pending_calendar_writes \
+             SET attempts = 3, last_error = 'terminal', next_attempt_at = datetime('now') \
+             WHERE id = ?1",
+        )
+        .bind(id)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        retry_pending_write_inner(&db, &notify, id).await.unwrap();
+
+        let rows = crate::calendar::pending_store::fetch_due_writes(&db)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, id);
+        assert_eq!(rows[0].attempts, 0);
+        assert!(rows[0].last_error.is_none());
     }
 
     #[tokio::test]
@@ -1197,6 +1425,65 @@ mod tests {
                 .unwrap();
         assert_eq!(at.as_deref(), Some("2026-05-28T12:00:00"));
         assert_eq!(dur, Some(45));
+    }
+
+    #[tokio::test]
+    async fn signal_resize_with_missing_link_recreates_pending_create_from_local_mirror() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals \
+             (id, title, source, type, scheduled_at, scheduled_duration, linked_calendar_id) \
+             VALUES ('s1','Demo','braindump','thought','2026-05-28T10:00:00',30,'cal1')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        placement_store::upsert_placement(&db, "s1", "2026-05-28", "2026-05-28T10:00:00", 30)
+            .await
+            .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Resize {
+                    at: "2026-05-28T09:45:00".into(),
+                    duration_min: 60,
+                    from_date: Some("2026-05-28".into()),
+                },
+                idempotency_key: "resize-missing-link".into(),
+            },
+        )
+        .await
+        .expect("scheduled signal without event link should recreate its mirror create");
+
+        let rows: Vec<(String, String, Option<String>, String)> = sqlx::query_as(
+            "SELECT kind, calendar_id, event_id, payload_json \
+             FROM pending_calendar_writes WHERE target_kind='signal' AND target_id='s1'",
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "create");
+        assert_eq!(rows[0].1, "cal1");
+        assert!(rows[0].2.is_none());
+        assert!(rows[0].3.contains("Demo"), "title 보존");
+        assert!(rows[0].3.contains("2026-05-28T09:45:00"));
+        assert!(rows[0].3.contains("60"));
+
+        let (at, dur, linked_event_id): (Option<String>, Option<i64>, Option<String>) =
+            sqlx::query_as(
+                "SELECT scheduled_at, scheduled_duration, linked_event_id FROM signals WHERE id='s1'",
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(at.as_deref(), Some("2026-05-28T09:45:00"));
+        assert_eq!(dur, Some(60));
+        assert!(linked_event_id.is_none());
     }
 
     #[tokio::test]
@@ -1484,6 +1771,55 @@ mod tests {
             .unwrap();
         assert_eq!(rows.len(), 1, "6/11 삭제, 6/10만 남아야 한다");
         assert_eq!(rows[0].date, "2026-06-10");
+    }
+
+    #[tokio::test]
+    async fn signal_unschedule_with_link_supersedes_pending_patch() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, \
+             scheduled_at, scheduled_duration, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','X','braindump','thought','2026-06-11T14:00:00',60,'ev1','cal')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        upsert_write(
+            &db,
+            "patch",
+            "signal",
+            "s1",
+            "cal",
+            Some("ev1"),
+            r#"{"start":"2026-06-11T15:00:00","duration_min":30}"#,
+            0,
+        )
+        .await
+        .unwrap();
+
+        stage_calendar_write_inner(
+            &db,
+            &notify,
+            StageWriteRequest {
+                target: WriteTarget::Signal { id: "s1".into() },
+                op: WriteOp::Unschedule {
+                    from_date: Some("2026-06-11".into()),
+                },
+                idempotency_key: "unschedule-supersedes-patch".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows: Vec<String> = sqlx::query_scalar(
+            "SELECT kind FROM pending_calendar_writes \
+             WHERE target_kind = 'signal' AND target_id = 's1' ORDER BY kind",
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows, vec!["delete"]);
     }
 
     /// Resize도 날짜를 넘으면(top-핸들 리사이즈) 출발 날짜 행이 삭제되고 도착 날짜만 남는다

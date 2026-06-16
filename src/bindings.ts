@@ -401,6 +401,8 @@ export const commands = {
 	commitStagedWrites: (ids: number[]) => typedError<null, AppError>(__TAURI_INVOKE("commit_staged_writes", { ids })),
 	/**  큐에서 한 행을 지운다(외부 호출 안 함 — UI 취소/롤백 전용). */
 	cancelPendingWrite: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("cancel_pending_write", { id })),
+	/**  실패로 멈춘 큐 행을 사람이 명시적으로 다시 due 상태로 만든다(외부 호출은 워커가 수행). */
+	retryPendingWrite: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("retry_pending_write", { id })),
 	/**  디버그/관찰용 큐 스냅샷(created_at DESC). 토큰/외부 응답 본문은 큐에 없으므로 안전. */
 	listPendingWrites: () => typedError<PendingWrite[], AppError>(__TAURI_INVOKE("list_pending_writes")),
 	/**  현재 글로벌 창 핫키 문자열 조회(Settings 표시용). 미설정 시 기본값. */

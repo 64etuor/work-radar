@@ -6,7 +6,7 @@
 //! (cross-cal 변경의 명시 Acceptance 게이트, spec §6.2).
 
 use chrono::{DateTime, Duration, Utc};
-use sqlx::SqlitePool;
+use sqlx::{Sqlite, SqlitePool};
 
 /// SQLite `datetime('now')`와 lexicographically 비교 가능한 UTC 문자열(`YYYY-MM-DD HH:MM:SS`).
 /// chrono의 RFC3339(`...T...+00:00`)는 SQLite 형식과 비교가 안 맞아 due 판정이 실패한다.
@@ -20,8 +20,8 @@ use crate::models::PendingWrite;
 /// `debounce_ms` 후가 next_attempt_at — 디바운스 윈도우 안의 다중 호출이 합쳐진다.
 /// 머지될 때 attempts/last_error는 리셋(새 의도 = 깨끗한 1차 시도).
 #[allow(clippy::too_many_arguments)] // 큐 행은 본디 8필드 — DTO 도입은 한 호출지점뿐인 지금 과스펙.
-pub async fn upsert_write(
-    pool: &SqlitePool,
+pub async fn upsert_write<'e, E>(
+    executor: E,
     kind: &str,
     target_kind: &str,
     target_id: &str,
@@ -29,7 +29,10 @@ pub async fn upsert_write(
     event_id: Option<&str>,
     payload_json: &str,
     debounce_ms: i64,
-) -> sqlx::Result<i32> {
+) -> sqlx::Result<i32>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
     let next = format_sqlite_datetime(Utc::now() + Duration::milliseconds(debounce_ms));
     let row: (i32,) = sqlx::query_as(
         r#"INSERT INTO pending_calendar_writes
@@ -51,7 +54,7 @@ pub async fn upsert_write(
     .bind(event_id)
     .bind(payload_json)
     .bind(next)
-    .fetch_one(pool)
+    .fetch_one(executor)
     .await?;
     Ok(row.0)
 }
@@ -82,6 +85,7 @@ pub async fn fetch_due_writes(pool: &SqlitePool) -> sqlx::Result<Vec<PendingWrit
                   payload_json, attempts, next_attempt_at, last_error, created_at
            FROM pending_calendar_writes
            WHERE next_attempt_at <= datetime('now')
+             AND attempts < 3
              AND (json_extract(payload_json, '$.staged') IS NULL
                   OR json_extract(payload_json, '$.staged') = 0)
            ORDER BY next_attempt_at ASC
@@ -89,6 +93,49 @@ pub async fn fetch_due_writes(pool: &SqlitePool) -> sqlx::Result<Vec<PendingWrit
     )
     .fetch_all(pool)
     .await
+}
+
+/// Terminal failure는 자동 재시도하지 않되 row를 보존한다. 사용자가 원인을 고친 뒤
+/// `retry_write`를 명시 호출하면 attempts=0으로 되살아난다.
+pub async fn record_terminal_failure(pool: &SqlitePool, id: i32, err: &str) -> sqlx::Result<()> {
+    sqlx::query(
+        "UPDATE pending_calendar_writes
+         SET attempts = 3,
+             next_attempt_at = datetime('now'),
+             last_error = ?
+         WHERE id = ?",
+    )
+    .bind(err)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 사람이 명시적으로 재시도한 row를 즉시 due 상태로 되돌린다.
+pub async fn retry_write(pool: &SqlitePool, id: i32) -> sqlx::Result<u64> {
+    let result = sqlx::query(
+        "UPDATE pending_calendar_writes
+         SET attempts = 0,
+             next_attempt_at = datetime('now'),
+             last_error = NULL
+         WHERE id = ?",
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+/// create_event가 성공한 뒤 link_back이 실패하면 다음 재시도에서 insert를 반복하지 않도록
+/// Google event id를 pending row에 먼저 기록한다.
+pub async fn mark_created_event_id(pool: &SqlitePool, id: i32, event_id: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE pending_calendar_writes SET event_id = ?1 WHERE id = ?2")
+        .bind(event_id)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 /// 시도 실패 기록 — attempts += 1, next_attempt_at = now + backoff(prev_attempts), last_error 보존.
@@ -267,5 +314,51 @@ mod tests {
                 .unwrap();
         assert_eq!(row.0, 1);
         assert_eq!(row.1.as_deref(), Some("boom"));
+    }
+
+    #[tokio::test]
+    async fn fetch_due_skips_retry_exhausted_rows() {
+        let p = pool().await;
+        let now = format_sqlite_datetime(Utc::now());
+        sqlx::query(
+            "INSERT INTO pending_calendar_writes
+             (kind, target_kind, target_id, calendar_id, payload_json, attempts, next_attempt_at, last_error)
+             VALUES ('patch','signal','done','cal','{}',3,?,'exhausted')",
+        )
+        .bind(&now)
+        .execute(&p)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO pending_calendar_writes
+             (kind, target_kind, target_id, calendar_id, payload_json, attempts, next_attempt_at, last_error)
+             VALUES ('patch','signal','retrying','cal','{}',2,?,'try again')",
+        )
+        .bind(&now)
+        .execute(&p)
+        .await
+        .unwrap();
+
+        let due = fetch_due_writes(&p).await.unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].target_id, "retrying");
+    }
+
+    #[tokio::test]
+    async fn retry_write_requeues_exhausted_row() {
+        let p = pool().await;
+        let id = upsert_write(&p, "patch", "signal", "s1", "cal", None, "{}", 0)
+            .await
+            .unwrap();
+        record_terminal_failure(&p, id, "terminal").await.unwrap();
+
+        let changed = retry_write(&p, id).await.unwrap();
+        assert_eq!(changed, 1);
+
+        let due = fetch_due_writes(&p).await.unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].id, id);
+        assert_eq!(due[0].attempts, 0);
+        assert!(due[0].last_error.is_none());
     }
 }

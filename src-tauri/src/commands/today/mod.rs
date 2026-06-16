@@ -526,6 +526,89 @@ mod tests {
         assert!(fetch_today(&db, "2026-05-21").await.unwrap().is_empty());
     }
 
+    /// Today로 올리는 행위는 "운영 Inbox에 올리기"이다. 같은 날짜의 과거 placement가 남아
+    /// 있어도 바로 시간축 블록으로 확정하지 않는다.
+    #[tokio::test]
+    async fn promote_today_clears_existing_placement_for_that_date() {
+        let db = fresh_db().await;
+        let sig = insert_signal(&db, &input("중복 제목 회의 준비", Some(Kind::Work)))
+            .await
+            .unwrap();
+        crate::commands::placement_store::upsert_placement(
+            &db,
+            &sig.id,
+            "2026-05-21",
+            "2026-05-21T10:00:00",
+            45,
+        )
+        .await
+        .unwrap();
+        crate::commands::placement_store::upsert_placement(
+            &db,
+            &sig.id,
+            "2026-05-20",
+            "2026-05-20T10:00:00",
+            45,
+        )
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE signals SET scheduled_at = '2026-05-21T10:00:00', scheduled_duration = 45, \
+             linked_calendar_id = 'work-cal', linked_event_id = 'event-old' WHERE id = ?1",
+        )
+        .bind(&sig.id)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        promote_today(&db, &sig.id, "2026-05-21").await.unwrap();
+
+        let same_day = crate::commands::placement_store::fetch_placements_in_range(
+            &db,
+            "2026-05-21",
+            "2026-05-21",
+        )
+        .await
+        .unwrap();
+        assert!(
+            same_day.iter().all(|p| p.signal_id != sig.id),
+            "Today에 올린 날짜의 placement가 남으면 운영 Inbox 대신 timeline block으로 렌더된다"
+        );
+        let previous_day = crate::commands::placement_store::fetch_placements_in_range(
+            &db,
+            "2026-05-20",
+            "2026-05-20",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            previous_day
+                .iter()
+                .filter(|p| p.signal_id == sig.id)
+                .count(),
+            1,
+            "다른 날짜의 time-spent 히스토리는 보존한다"
+        );
+
+        let (scheduled_at, scheduled_duration, linked_calendar_id, linked_event_id): (
+            Option<String>,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT scheduled_at, scheduled_duration, linked_calendar_id, linked_event_id \
+             FROM signals WHERE id = ?1",
+        )
+        .bind(&sig.id)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(scheduled_at.is_none());
+        assert!(scheduled_duration.is_none());
+        assert!(linked_calendar_id.is_none());
+        assert!(linked_event_id.is_none());
+    }
+
     /// 완료된 Today 항목은 당일만 보이고 다음날 이월되지 않는다(rollover 제외).
     #[tokio::test]
     async fn completed_today_item_does_not_roll_over() {

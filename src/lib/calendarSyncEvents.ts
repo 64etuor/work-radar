@@ -13,6 +13,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 
+import { commands } from "@/bindings";
+import { IpcError, unwrap } from "@/lib/query/client";
 import { useToastStore } from "@/lib/toast";
 
 type FailedPayload = {
@@ -32,10 +34,26 @@ export function useCalendarSyncEvents() {
 
     void listen<FailedPayload>("CalendarSyncFailed", (ev) => {
       const detail = ev.payload?.error ?? "원인 미상";
+      const pendingId = ev.payload?.pendingId;
       // 프런트-originated 메시지 — pushError(string) 경로로 trace id 자동 생성.
       useToastStore.getState().pushError("calendar.sync", `캘린더 동기화 실패: ${detail}`, {
         onRetry: () => {
-          void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+          if (pendingId == null) {
+            void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+            return;
+          }
+          void unwrap(commands.retryPendingWrite(pendingId))
+            .catch((err: unknown) => {
+              const store = useToastStore.getState();
+              if (err instanceof IpcError) {
+                store.pushError("calendar.retry", err.app);
+              } else {
+                store.pushError("calendar.retry", err instanceof Error ? err.message : String(err));
+              }
+            })
+            .finally(() => {
+              void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
+            });
         },
       });
       // 실패 = optimistic 패치 롤백: SSOT에서 재로드.

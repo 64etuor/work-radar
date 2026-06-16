@@ -1,6 +1,8 @@
 //! signals / signals_fts 테이블 데이터 접근 레이어(백로그 F). 모든 signals SQL의 단일 소유자.
 //! Approach A: 커맨드에서 verbatim 이전 — 동작 무변경. 백로그 G(테이블 분리)는 이 모듈만 바꾼다.
 
+use crate::calendar::pending_store::upsert_write;
+use crate::calendar::timing::GOOGLE_SYNC_DEBOUNCE_MS;
 use crate::db::Db;
 use crate::models::{AreaTag, CreateSignalInput, Kind, Quadrant, SignalStatus, WorkSignal};
 
@@ -176,17 +178,63 @@ pub(crate) async fn promote_today(
     id: &str,
     date: &str,
 ) -> Result<WorkSignal, sqlx::Error> {
-    // 새 항목은 레일 맨 위에 (가장 작은 rank).
-    sqlx::query_as::<_, WorkSignal>(&format!(
+    let mut tx = db.begin().await?;
+    let linked: Option<(String, String)> = sqlx::query_as(
+        "SELECT linked_calendar_id, linked_event_id \
+         FROM signals \
+         WHERE id = ?1 \
+           AND substr(COALESCE(scheduled_at, ''), 1, 10) = ?2 \
+           AND linked_calendar_id IS NOT NULL \
+           AND linked_event_id IS NOT NULL \
+           AND trim(linked_calendar_id) != '' \
+           AND trim(linked_event_id) != ''",
+    )
+    .bind(id)
+    .bind(date)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let signal = sqlx::query_as::<_, WorkSignal>(&format!(
         "UPDATE signals SET today_for_date = ?2, today_done_at = NULL, status = 'promoted', \
             today_rank = COALESCE((SELECT MIN(today_rank) FROM signals WHERE today_for_date IS NOT NULL), 0) - 1, \
+            scheduled_at = CASE WHEN substr(COALESCE(scheduled_at, ''), 1, 10) = ?2 THEN NULL ELSE scheduled_at END, \
+            scheduled_duration = CASE WHEN substr(COALESCE(scheduled_at, ''), 1, 10) = ?2 THEN NULL ELSE scheduled_duration END, \
+            linked_event_id = CASE WHEN substr(COALESCE(scheduled_at, ''), 1, 10) = ?2 THEN NULL ELSE linked_event_id END, \
+            linked_calendar_id = CASE WHEN substr(COALESCE(scheduled_at, ''), 1, 10) = ?2 THEN NULL ELSE linked_calendar_id END, \
             updated_at = datetime('now') \
          WHERE id = ?1 RETURNING {SIGNAL_COLS}"
     ))
     .bind(id)
     .bind(date)
-    .fetch_one(db)
-    .await
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM signal_day_placements WHERE signal_id = ?1 AND date = ?2")
+        .bind(id)
+        .bind(date)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query(
+        "DELETE FROM pending_calendar_writes \
+         WHERE target_kind = 'signal' AND target_id = ?1 AND kind IN ('create', 'patch')",
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
+    if let Some((calendar_id, event_id)) = linked {
+        upsert_write(
+            &mut *tx,
+            "delete",
+            "signal",
+            id,
+            &calendar_id,
+            Some(&event_id),
+            "{}",
+            GOOGLE_SYNC_DEBOUNCE_MS,
+        )
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(signal)
 }
 
 /// Today 승격 취소 → 원 사분면으로 복귀(없으면 미분류). 카운터 리셋. (rail.rs 본문 이전)

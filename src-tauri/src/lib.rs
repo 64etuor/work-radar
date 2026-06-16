@@ -217,6 +217,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::stage_calendar_write,
         commands::commit_staged_writes,
         commands::cancel_pending_write,
+        commands::retry_pending_write,
         commands::list_pending_writes,
         // 네비게이션 설정 (Phase 18 #7) — 글로벌 창 핫키 + 메뉴별 단축키 keymap.
         commands::get_global_hotkey,
