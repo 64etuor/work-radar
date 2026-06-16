@@ -1,0 +1,66 @@
+src-tauri/src/commands/calendar_sync.rs
+  s_c4feae66bc18c5::t_9f0c13ef8a2798 784-788
+  s_c4feae66bc18c5::t_906e4e2b3a3872 1776-1824
+  s_c4feae66bc18c5::t_4e98f31bd63d49 699-700
+  s_c4feae66bc18c5::t_304883a01e35c9 20,446-469
+  s_c4feae66bc18c5::t_fdea9a67bd7bc4 725-726,743-748,774-783,789-803
+  s_fb124bd9d2974a::t_5e5c464108382c 577,579-580,702-707,709-714
+  s_fb124bd9d2974a::t_41409d0add4d50 1177-1180
+  s_c4feae66bc18c5::t_39d889808d1268 578,581,701,708
+  s_fb124bd9d2974a::t_e7f437587ee219 1194-1276,1278,1316-1317
+  s_c4feae66bc18c5::t_27160887d7f05c 1277
+  s_c4feae66bc18c5::t_886ae4cb739796 1279-1315
+  s_c4feae66bc18c5::t_b58328fd9a944b 1431-1488
+  s_fb124bd9d2974a::t_3df6a7170d446e 1135,1145-1147,1151-1153,1156,1158,1172-1173,1181-1184
+src-tauri/src/commands/today/rail.rs
+  s_c4feae66bc18c5::t_d6173f075eb662 68-70,73-74,77-94,107-111,113-114,116,118-119,125-138,189
+  s_c4feae66bc18c5::t_e51f34f8cb80c4 71-72,75
+  s_c4feae66bc18c5::t_d6485a9db18e22 1-2,4,18,22-33
+  s_c4feae66bc18c5::t_f2864c981740cf 76,95-106,112,115,117,120-124
+  s_c4feae66bc18c5::t_329a6b3cdb4908 139-188
+src-tauri/src/commands/signal_store.rs
+  s_fb124bd9d2974a::t_16bf71318e5e17 200-203
+  s_fb124bd9d2974a::t_293fa9a15503c4 197,210,237
+  s_c4feae66bc18c5::t_b23d85637794c3 4-5,181-196,209,211-215,223-236
+  s_c4feae66bc18c5::t_1635b16c077959 216-222
+src-tauri/src/calendar/pending_store.rs
+  s_c4feae66bc18c5::t_27160887d7f05c 132
+  s_c4feae66bc18c5::t_32762596d57385 318-363
+  s_c4feae66bc18c5::t_efffa5858e6640 9,23-24,32-35,57,88,98-131,133-138
+src-tauri/src/lib.rs
+  s_c4feae66bc18c5::t_dfe24befb12786 220
+src/lib/calendarSyncEvents.ts
+  s_c4feae66bc18c5::t_387bd2df450000 16-17,37,41-50,52-56
+src-tauri/src/commands/today/mod.rs
+  s_fb124bd9d2974a::t_54e5d443186883 555-562,592-609
+  s_fb124bd9d2974a::t_d5a2698d0e40a5 529-554,563-565,573-576,584-591,610-611
+  s_fb124bd9d2974a::t_41409d0add4d50 566-572,577-583
+src-tauri/src/calendar/sync.rs
+  s_c4feae66bc18c5::t_8527b04e2df7b9 23-24,147-148,154,156,159,236-241,246-248
+  s_c4feae66bc18c5::t_27160887d7f05c 876-879
+  s_c4feae66bc18c5::t_54f25ef742146f 839-875,880-888
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "f2b1728c2ff1a9a3a3ca3400b43c057803d752f8",
+  "prompts": {},
+  "sessions": {
+    "s_c4feae66bc18c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eceb8-1f9c-7681-8b27-9fce03a9eb3d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_fb124bd9d2974a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ecb70-14d3-7821-a4d0-7d45c5e6725d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
