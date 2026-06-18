@@ -4,7 +4,7 @@
 
 **Goal:** Add the first local bookkeeping slice: manual entries, review queue, monthly/category summaries, audit log, and sanitized sync failure surfacing.
 
-**Architecture:** SQLite remains the local SSOT. Rust owns validation, persistence, audit writes, and sync-error sanitization; the renderer only calls typed specta IPC through TanStack Query. OCR, Gmail read, and CSV import are deferred adapters that will insert into the same review queue.
+**Architecture:** SQLite remains the local SSOT. Rust owns validation, persistence, audit writes, and sync-error sanitization; the renderer only calls typed specta IPC through TanStack Query. OCR and CSV import remain deferred adapters that will insert into the same review queue. Gmail read now uses the Google OAuth token in Rust, resolves label names to label IDs, fetches bounded candidates, and upserts parsed receipts into the review queue.
 
 **Tech Stack:** Tauri 2, Rust, sqlx SQLite migrations, specta/tauri-specta bindings, React, TanStack Query, Tailwind tokens.
 
@@ -72,3 +72,22 @@
 - `pnpm build`
 
 Record any command that cannot run, with the actual reason.
+
+### Task 5: Gmail Receipt Sync Adapter
+
+**Files:**
+
+- Create: `src-tauri/src/gmail/read.rs`
+- Modify: `src-tauri/src/gmail/{mod,http}.rs`
+- Modify: `src-tauri/src/calendar/oauth.rs`
+- Modify: `src-tauri/src/commands/bookkeeping.rs`
+- Modify: `src/lib/query/bookkeeping.ts`
+- Modify: `src/components/bookkeeping/BookkeepingView.tsx`
+
+**Steps:**
+
+1. Extend Google OAuth scope with `gmail.readonly`.
+2. Add a bounded Gmail read provider for labels, message ids, and message bodies.
+3. Resolve user-facing label names to Gmail label ids.
+4. Parse fetched candidates through the existing bookkeeping receipt parser.
+5. Record sanitized per-message failures and a sync completion marker.
