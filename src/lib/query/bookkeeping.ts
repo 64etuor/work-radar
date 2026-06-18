@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  type BookkeepingRecurringOccurrenceStatus,
   type BookkeepingReviewStatus,
   commands,
+  type CreateBookkeepingRecurringExpenseInput,
   type CreateBookkeepingTransactionInput,
   type RecordBookkeepingSyncFailureInput,
+  type SyncBookkeepingGmailReceiptsInput,
 } from "@/bindings";
 
 import { unwrap } from "./client";
@@ -16,10 +19,13 @@ function useInvalidateBookkeeping() {
   };
 }
 
-export function useBookkeepingTransactions(status: BookkeepingReviewStatus | null = null) {
+export function useBookkeepingTransactions(
+  status: BookkeepingReviewStatus | null = null,
+  projectId: string | null = null,
+) {
   return useQuery({
-    queryKey: ["bookkeeping", "transactions", status],
-    queryFn: () => unwrap(commands.listBookkeepingTransactions(status)),
+    queryKey: ["bookkeeping", "transactions", status, projectId],
+    queryFn: () => unwrap(commands.listBookkeepingTransactions(status, projectId)),
   });
 }
 
@@ -41,10 +47,10 @@ export function useUpdateBookkeepingReviewStatus() {
   });
 }
 
-export function useBookkeepingMonthlySummary(month: string) {
+export function useBookkeepingMonthlySummary(month: string, projectId: string | null = null) {
   return useQuery({
-    queryKey: ["bookkeeping", "summary", month],
-    queryFn: () => unwrap(commands.bookkeepingMonthlySummary(month)),
+    queryKey: ["bookkeeping", "summary", month, projectId],
+    queryFn: () => unwrap(commands.bookkeepingMonthlySummary(month, projectId)),
   });
 }
 
@@ -59,6 +65,80 @@ export function useBookkeepingSyncJobs() {
   return useQuery({
     queryKey: ["bookkeeping", "syncJobs"],
     queryFn: () => unwrap(commands.listBookkeepingSyncJobs()),
+  });
+}
+
+export function useBookkeepingTaxonomy() {
+  return useQuery({
+    queryKey: ["bookkeeping", "taxonomy"],
+    queryFn: () => unwrap(commands.bookkeepingListTaxonomy()),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useBookkeepingRecurringExpenses(projectId: string | null = null) {
+  return useQuery({
+    queryKey: ["bookkeeping", "recurringExpenses", projectId],
+    queryFn: () => unwrap(commands.listBookkeepingRecurringExpenses(projectId)),
+  });
+}
+
+export function useCreateBookkeepingRecurringExpense() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: CreateBookkeepingRecurringExpenseInput) =>
+      unwrap(commands.createBookkeepingRecurringExpense(input)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBookkeepingRecurringOccurrences(month: string, projectId: string | null = null) {
+  return useQuery({
+    queryKey: ["bookkeeping", "recurringOccurrences", month, projectId],
+    queryFn: () => unwrap(commands.listBookkeepingRecurringOccurrences(month, projectId)),
+  });
+}
+
+export function useEnsureBookkeepingRecurringOccurrences() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: ({ month, projectId }: { month: string; projectId: string | null }) =>
+      unwrap(commands.ensureBookkeepingRecurringOccurrences(month, projectId)),
+    onSuccess: invalidate,
+  });
+}
+
+export function usePostBookkeepingRecurringOccurrence() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.postBookkeepingRecurringOccurrence(id)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetBookkeepingRecurringOccurrenceStatus() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: BookkeepingRecurringOccurrenceStatus }) =>
+      unwrap(commands.setBookkeepingRecurringOccurrenceStatus(id, status)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBookkeepingGmailLabels(projectId: string | null) {
+  return useQuery({
+    queryKey: ["bookkeeping", "gmailLabels", projectId],
+    queryFn: () => unwrap(commands.listBookkeepingGmailLabels(projectId as string)),
+    enabled: !!projectId,
+  });
+}
+
+export function useSyncBookkeepingGmailReceipts() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: SyncBookkeepingGmailReceiptsInput) =>
+      unwrap(commands.syncBookkeepingGmailReceipts(input)),
+    onSuccess: invalidate,
   });
 }
 

@@ -32,6 +32,18 @@ describe("googleAccountOauthViewState", () => {
     expect(state.elapsedLabel).toBe("8초");
   });
 
+  it("labels connected account reconnect as reconnect", () => {
+    const state = googleAccountOauthViewState({
+      hasClient: true,
+      connected: true,
+      waiting: false,
+      elapsedMs: 0,
+    });
+
+    expect(state.primaryLabel).toBe("다시 연결");
+    expect(state.primaryDisabled).toBe(false);
+  });
+
   it("warns after a long wait that the browser was probably closed", () => {
     const state = googleAccountOauthViewState({
       hasClient: true,

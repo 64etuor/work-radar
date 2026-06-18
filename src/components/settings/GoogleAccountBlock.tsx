@@ -195,12 +195,6 @@ export function GoogleAccountBlock({
             </Button>
           </div>
         </div>
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          Google Cloud Console에서 <b>Desktop</b> OAuth client를 만들어 입력하세요. 캘린더
-          목록·이벤트 생성을 위해 현재는 <code>calendar</code>(읽기+쓰기) 범위를 씁니다.
-          Gmail·Drive·Sheets 기능이 추가되면 같은 Google 계정 연결에서 필요한 권한을 더 요청할 수
-          있습니다. 읽기 전용이나 이전 권한으로 연결했었다면 <b>"다시 연결"</b>로 재동의하세요.
-        </p>
       </div>
 
       {oauthState.showWaitingPanel && (

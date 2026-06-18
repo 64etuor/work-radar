@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { CalendarView } from "@/components/board/CalendarView";
+import { PeriodNavigator } from "@/components/PeriodNavigator";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type CalendarViewMode, parseLocalISODate, stepDate, viewRange } from "@/lib/calendarRange";
@@ -126,49 +127,31 @@ export function CalendarDrawer({ open, onClose }: Props) {
         </button>
       </header>
 
-      <div className="caldrawer-nav">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="size-7 p-0 text-[15px]"
-          aria-label="이전"
-          onClick={() => setDate((d) => stepDate(mode, d, -1))}
-        >
-          ‹
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-[13px] font-semibold"
-          onClick={() => setDate(localToday())}
-        >
-          {headerLabel(mode, date)}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="size-7 p-0 text-[15px]"
-          aria-label="다음"
-          onClick={() => setDate((d) => stepDate(mode, d, 1))}
-        >
-          ›
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="ml-auto size-7 p-0 text-[15px]"
-          aria-label="새로고침"
-          title="새로고침 (캐시 우회)"
-          onClick={() => void refresh()}
-          disabled={eventsQ.isFetching}
-        >
-          ⟳
-        </Button>
-      </div>
+      <PeriodNavigator
+        className="caldrawer-nav"
+        size="compact"
+        valueLabel={headerLabel(mode, date)}
+        previousLabel="이전"
+        nextLabel="다음"
+        resetLabel="오늘로 이동"
+        onPrevious={() => setDate((d) => stepDate(mode, d, -1))}
+        onNext={() => setDate((d) => stepDate(mode, d, 1))}
+        onReset={() => setDate(localToday())}
+        extra={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="size-7 p-0 text-[15px]"
+            aria-label="새로고침"
+            title="새로고침 (캐시 우회)"
+            onClick={() => void refresh()}
+            disabled={eventsQ.isFetching}
+          >
+            ⟳
+          </Button>
+        }
+      />
 
       <div className="caldrawer-body">
         {noCalendarsConfigured ? (

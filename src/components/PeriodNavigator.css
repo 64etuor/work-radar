@@ -1,0 +1,50 @@
+.period-nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--wr-density-sm);
+}
+
+.period-nav-label {
+  flex: 0 0 auto;
+  color: var(--color-wr-subtle);
+}
+
+.period-nav-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.period-nav-value {
+  min-width: 0;
+  max-width: 180px;
+  padding-inline: var(--wr-density-md);
+  color: var(--color-wr-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.period-nav-value[aria-disabled="true"] {
+  color: var(--color-wr-muted);
+}
+
+.period-nav-extra {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.period-nav[data-size="compact"] {
+  gap: var(--wr-density-xs);
+}
+
+.period-nav[data-size="compact"] .period-nav-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.period-nav[data-size="compact"] .period-nav-value {
+  max-width: 144px;
+  padding-inline: var(--wr-density-sm);
+}
