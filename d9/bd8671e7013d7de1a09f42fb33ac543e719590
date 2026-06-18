@@ -1,0 +1,24 @@
+src/lib/timelineLayout.test.ts
+  s_7f2b8b72a78bbc::t_4d944b0668ff4b 147-161
+  s_7f2b8b72a78bbc::t_85ca4df95f347a 99-111,113-114,119,146
+  s_7f2b8b72a78bbc::t_fd7a0d5f901765 112,115-118,120-145
+src/lib/timelineLayout.ts
+  s_7f2b8b72a78bbc::t_c0dd02d8505b89 132-138,141-154
+  s_7f2b8b72a78bbc::t_5bc5e03569e6e7 139-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "d9bd8671e7013d7de1a09f42fb33ac543e719590",
+  "prompts": {},
+  "sessions": {
+    "s_7f2b8b72a78bbc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "643f7e71-53a1-48a0-93e6-cfa367c7b52a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
