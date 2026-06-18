@@ -20,7 +20,11 @@ use crate::error::AppError;
 use crate::external_actions::{store, ExecOutcome, ExternalAction};
 use crate::github::{execute_github_action, github_provider_for_cref};
 use crate::gmail::{execute_gmail_action, HttpGmailProvider};
-use crate::models::{BookkeepingSource, CreateBookkeepingTransactionInput, Project, ProjectKind};
+use crate::models::{
+    BookkeepingDirection, BookkeepingExpenseKind, BookkeepingPaymentMethodKind, BookkeepingSource,
+    CreateBookkeepingLineItemInput, CreateBookkeepingTransactionInput, Project, ProjectKind,
+    SetBookkeepingLineItemsInput,
+};
 use crate::notion::{execute_notion_action, notion_token_for_cref, HttpNotionWriter};
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::tool;
@@ -148,9 +152,32 @@ pub struct GmailSendParams {
     pub body: String,
 }
 
-/// Hermes-confirmed OCR receipt save params(`wr_bookkeeping_save_receipt`). This local DB write
-/// accepts normalized receipt fields only; raw images, file paths, email bodies, and credentials are
-/// intentionally not part of the tool schema.
+/// One receipt line item (`wr_bookkeeping_save_receipt`). Closed schema — deny_unknown_fields does
+/// not inherit to nested structs. amount_minor is the per-line minor-unit amount; quantity defaults 1.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingLineItemParam {
+    pub name: String,
+    pub amount_minor: i32,
+    pub quantity: Option<i32>,
+    pub category_code: Option<String>,
+}
+
+/// One review reason emitted by the CFO judgment (`wr_bookkeeping_save_receipt`). Closed schema so a
+/// future caller cannot smuggle extra fields.
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingReviewReasonParam {
+    /// Stable machine code, e.g. "low_confidence", "line_item_sum_mismatch", "possible_duplicate".
+    pub code: String,
+    /// Optional short human detail (sanitized — no raw email body / image / PII).
+    pub detail: Option<String>,
+}
+
+/// Hermes-confirmed receipt/transaction save params(`wr_bookkeeping_save_receipt`). This local DB
+/// write accepts normalized + judged fields only; raw images, file paths, email bodies, and
+/// credentials are intentionally not part of the tool schema. New judgment fields are all OPTIONAL so
+/// an in-field Hermes sending the original field set keeps validating (additive-optional widening).
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BookkeepingSaveReceiptParams {
@@ -160,7 +187,7 @@ pub struct BookkeepingSaveReceiptParams {
     pub source_ref: Option<String>,
     /// Normalized merchant name.
     pub merchant: String,
-    /// Minor-unit amount. For KRW this is won.
+    /// Minor-unit amount (always positive; sign is carried by `direction`). For KRW this is won.
     pub amount_minor: i32,
     /// ISO 4217 currency. Defaults to KRW.
     pub currency: Option<String>,
@@ -172,12 +199,159 @@ pub struct BookkeepingSaveReceiptParams {
     pub description: Option<String>,
     /// Optional user-facing note.
     pub note: Option<String>,
+    /// "expense" | "income". Defaults to expense; any other value is rejected.
+    pub direction: Option<String>,
+    /// Source asset/account name (e.g. "하나은행").
+    pub account: Option<String>,
+    /// Human-readable subcategory label.
+    pub subcategory: Option<String>,
+    /// Resolved taxonomy category code (server also resolves from raw_category when omitted).
+    pub category_code: Option<String>,
+    /// Resolved taxonomy subcategory code.
+    pub subcategory_code: Option<String>,
+    /// Original incoming category label to preserve (e.g. "🪑 생활용품").
+    pub raw_category: Option<String>,
+    /// Time-of-day HH:MM:SS for the purchase (date stays in `spent_at`).
+    pub spent_at_time: Option<String>,
+    /// Overall judgment confidence 0..1.
+    pub confidence: Option<f64>,
+    /// Per-field confidence map, e.g. {"amount":0.99,"merchant":0.7}.
+    pub field_confidence: Option<std::collections::BTreeMap<String, f64>>,
+    /// Why this row needs review (low confidence, duplicate suspicion, sum mismatch, …).
+    pub review_reasons: Option<Vec<BookkeepingReviewReasonParam>>,
+    /// Order number from the receipt — strong dedup key.
+    pub order_no: Option<String>,
+    /// Payment/approval number — strong dedup key.
+    pub payment_no: Option<String>,
+    /// Optional itemized breakdown. A sum mismatch vs `amount_minor` becomes a review reason.
+    pub line_items: Option<Vec<BookkeepingLineItemParam>>,
 }
 
 #[derive(Serialize, JsonSchema)]
 pub struct BookkeepingSaveReceiptResult {
     pub transaction_id: String,
     pub status: String,
+}
+
+// ── Bookkeeping READ tools (Phase F2, Hermes-gated) ─────────────────────────────────────────────
+// Lean DTOs only — sanitized financial metadata, never raw email bodies / tokens / full internal
+// rows (mcp-server-conventions §6/§7 least-privilege read surface).
+
+/// Sanitized transaction row for the CFO bot. No raw source body; review reasons are codes only.
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingTransactionDto {
+    pub id: String,
+    pub merchant: String,
+    pub amount_minor: i32,
+    pub currency: String,
+    pub direction: String,
+    pub spent_at: String,
+    pub category: String,
+    pub category_code: Option<String>,
+    pub subcategory_code: Option<String>,
+    pub account: Option<String>,
+    pub review_status: String,
+    pub confidence: Option<f64>,
+    /// Review-reason codes only (not free-text details).
+    pub review_reason_codes: Vec<String>,
+    pub source: String,
+    pub source_ref: Option<String>,
+    pub order_no: Option<String>,
+    pub payment_no: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingMonthlySummaryDto {
+    pub month: String,
+    pub total_expense_minor: i32,
+    pub total_income_minor: i32,
+    pub net_minor: i32,
+    pub needs_review_count: u32,
+    pub approved_count: u32,
+    pub ignored_count: u32,
+    pub duplicate_count: u32,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingDuplicateCandidateDto {
+    pub transaction_id: String,
+    pub merchant: String,
+    pub amount_minor: i32,
+    pub spent_at: String,
+    pub score: f64,
+    pub reasons: Vec<String>,
+}
+
+// MCP requires tool outputSchema root type 'object', so list results are wrapped (not bare arrays).
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingTransactionListDto {
+    pub transactions: Vec<BookkeepingTransactionDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingDuplicateCandidateListDto {
+    pub candidates: Vec<BookkeepingDuplicateCandidateDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingCategoryNodeDto {
+    pub code: String,
+    pub parent_code: Option<String>,
+    pub label: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingCategoryAliasDto {
+    pub pattern: String,
+    pub match_kind: String,
+    pub category_code: String,
+    pub subcategory_code: Option<String>,
+    pub confidence: f64,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingCategoryRulesDto {
+    pub taxonomy: Vec<BookkeepingCategoryNodeDto>,
+    pub aliases: Vec<BookkeepingCategoryAliasDto>,
+}
+
+/// `wr_bookkeeping_list_review_queue` / `..._list_recent_transactions` params.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingListParams {
+    pub project_id: Option<String>,
+    /// Result cap (server clamps to 1..=100; default 25).
+    pub limit: Option<u32>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingMonthlySummaryParams {
+    /// YYYY-MM.
+    pub month: String,
+    pub project_id: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingFindDuplicateParams {
+    pub project_id: Option<String>,
+    /// Purchase date YYYY-MM-DD.
+    pub spent_at: String,
+    pub amount_minor: i32,
+    pub merchant: Option<String>,
+    pub order_no: Option<String>,
+    pub payment_no: Option<String>,
+    pub source_ref: Option<String>,
+    /// Exclude this already-saved transaction id from candidates.
+    pub exclude_transaction_id: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingMarkDuplicateParams {
+    pub transaction_id: String,
+    pub duplicate_of_transaction_id: String,
 }
 
 /// 제안 생성 파라미터(`wr_propose_noop`). preview=승인 패널 표시용 사람-친화 요약.
@@ -220,6 +394,58 @@ fn mcp_caller_from_env() -> McpCaller {
     match std::env::var("WORK_RADAR_MCP_CALLER") {
         Ok(v) if v.trim().eq_ignore_ascii_case("hermes") => McpCaller::Hermes,
         _ => McpCaller::Other,
+    }
+}
+
+/// Bookkeeping tools (read + the local mark-duplicate write) are gated to the Work Radar Hermes
+/// caller — the user's private finances are not exposed to other MCP callers (mcp-server-conventions
+/// "좁은 예외" + §7 least-privilege).
+fn require_hermes(caller: McpCaller, tool: &str) -> Result<(), rmcp::ErrorData> {
+    if caller != McpCaller::Hermes {
+        return Err(rmcp::ErrorData::invalid_params(
+            format!("{tool} requires the Work Radar Hermes MCP caller"),
+            None,
+        ));
+    }
+    Ok(())
+}
+
+/// Serialize a closed serde enum to its wire string (e.g. BookkeepingDirection → "expense").
+fn enum_wire_string<T: Serialize>(value: &T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+fn review_reason_codes(review_reasons_json: &str) -> Vec<String> {
+    serde_json::from_str::<Vec<serde_json::Value>>(review_reasons_json)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|r| r.get("code").and_then(|c| c.as_str()).map(str::to_string))
+        .collect()
+}
+
+fn to_transaction_dto(t: crate::models::BookkeepingTransaction) -> BookkeepingTransactionDto {
+    let review_reason_codes = review_reason_codes(&t.review_reasons_json);
+    BookkeepingTransactionDto {
+        id: t.id,
+        merchant: t.merchant,
+        amount_minor: t.amount_minor,
+        currency: t.currency,
+        direction: enum_wire_string(&t.direction),
+        spent_at: t.spent_at,
+        category: t.category,
+        category_code: t.category_code,
+        subcategory_code: t.subcategory_code,
+        account: t.account,
+        review_status: enum_wire_string(&t.review_status),
+        confidence: t.confidence,
+        review_reason_codes,
+        source: enum_wire_string(&t.source),
+        source_ref: t.source_ref,
+        order_no: t.order_no,
+        payment_no: t.payment_no,
     }
 }
 
@@ -583,6 +809,44 @@ impl WrServer {
             }
         }
 
+        let direction = match p.direction.as_deref().map(str::trim) {
+            None | Some("") | Some("expense") => BookkeepingDirection::Expense,
+            Some("income") => BookkeepingDirection::Income,
+            Some(other) => {
+                return Err(rmcp::ErrorData::invalid_params(
+                    format!("invalid direction (expected 'expense' or 'income'): {other}"),
+                    None,
+                ));
+            }
+        };
+        let field_confidence_json = p
+            .field_confidence
+            .as_ref()
+            .map(|map| serde_json::to_string(map).unwrap_or_else(|_| "{}".to_string()));
+        let review_reasons_json = p
+            .review_reasons
+            .as_ref()
+            .map(|reasons| serde_json::to_string(reasons).unwrap_or_else(|_| "[]".to_string()));
+
+        // Map + validate line items BEFORE the row commits — a bad item must not orphan a saved row
+        // (critic MAJOR). prepare_line_items is the same validator the IPC set command uses.
+        let line_item_inputs: Option<Vec<CreateBookkeepingLineItemInput>> =
+            p.line_items.map(|items| {
+                items
+                    .into_iter()
+                    .map(|i| CreateBookkeepingLineItemInput {
+                        name: i.name,
+                        amount_minor: i.amount_minor,
+                        quantity: i.quantity,
+                        category_code: i.category_code,
+                    })
+                    .collect()
+            });
+        if let Some(items) = line_item_inputs.as_ref() {
+            bookkeeping_commands::prepare_line_items(items)
+                .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
+        }
+
         let row = bookkeeping_commands::upsert_bookkeeping_transaction_from_ingest_inner(
             &self.db,
             CreateBookkeepingTransactionInput {
@@ -596,6 +860,24 @@ impl WrServer {
                 spent_at: p.spent_at,
                 category: p.category.unwrap_or_else(|| "uncategorized".to_string()),
                 note: p.note,
+                payment_method_kind: BookkeepingPaymentMethodKind::Unknown,
+                payment_method_label: None,
+                payment_method_last4: None,
+                expense_kind: BookkeepingExpenseKind::Variable,
+                recurring_expense_id: None,
+                recurring_occurrence_id: None,
+                direction,
+                account: p.account,
+                subcategory: p.subcategory,
+                category_code: p.category_code,
+                subcategory_code: p.subcategory_code,
+                raw_category: p.raw_category,
+                spent_at_time: p.spent_at_time,
+                confidence: p.confidence,
+                field_confidence_json,
+                review_reasons_json,
+                order_no: p.order_no,
+                payment_no: p.payment_no,
             },
             "transaction.ocr_ingested",
             "OCR 영수증이 리뷰큐에 추가됨",
@@ -603,9 +885,233 @@ impl WrServer {
         .await
         .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
 
+        if let Some(items) = line_item_inputs {
+            bookkeeping_commands::set_bookkeeping_line_items_inner(
+                &self.db,
+                SetBookkeepingLineItemsInput {
+                    transaction_id: row.id.clone(),
+                    items,
+                },
+            )
+            .await
+            .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
+        }
+
         Ok(Json(BookkeepingSaveReceiptResult {
             transaction_id: row.id,
             status: "saved".to_string(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_bookkeeping_list_recent_transactions",
+        description = "List recent bookkeeping transactions (sanitized metadata) for the Work Radar Hermes caller. No raw email body / token fields."
+    )]
+    pub async fn bookkeeping_list_recent_transactions(
+        &self,
+        Parameters(p): Parameters<BookkeepingListParams>,
+    ) -> Result<Json<BookkeepingTransactionListDto>, rmcp::ErrorData> {
+        self.bookkeeping_list_transactions_for_caller(p, None, mcp_caller_from_env())
+            .await
+    }
+
+    #[tool(
+        name = "wr_bookkeeping_list_review_queue",
+        description = "List bookkeeping transactions awaiting review (sanitized metadata) for the Work Radar Hermes caller."
+    )]
+    pub async fn bookkeeping_list_review_queue(
+        &self,
+        Parameters(p): Parameters<BookkeepingListParams>,
+    ) -> Result<Json<BookkeepingTransactionListDto>, rmcp::ErrorData> {
+        self.bookkeeping_list_transactions_for_caller(
+            p,
+            Some(crate::models::BookkeepingReviewStatus::NeedsReview),
+            mcp_caller_from_env(),
+        )
+        .await
+    }
+
+    async fn bookkeeping_list_transactions_for_caller(
+        &self,
+        p: BookkeepingListParams,
+        status: Option<crate::models::BookkeepingReviewStatus>,
+        caller: McpCaller,
+    ) -> Result<Json<BookkeepingTransactionListDto>, rmcp::ErrorData> {
+        require_hermes(caller, "wr_bookkeeping_list")?;
+        let limit = p.limit.unwrap_or(25).clamp(1, 100);
+        let rows = bookkeeping_commands::list_bookkeeping_transactions_inner(
+            &self.db,
+            status,
+            p.project_id.as_deref(),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_list", &e))?;
+        let transactions = rows
+            .into_iter()
+            .take(limit as usize)
+            .map(to_transaction_dto)
+            .collect();
+        Ok(Json(BookkeepingTransactionListDto { transactions }))
+    }
+
+    #[tool(
+        name = "wr_bookkeeping_monthly_summary",
+        description = "Monthly expense/income/net + review-state counts for the Work Radar Hermes caller."
+    )]
+    pub async fn bookkeeping_monthly_summary(
+        &self,
+        Parameters(p): Parameters<BookkeepingMonthlySummaryParams>,
+    ) -> Result<Json<BookkeepingMonthlySummaryDto>, rmcp::ErrorData> {
+        self.bookkeeping_monthly_summary_for_caller(p, mcp_caller_from_env())
+            .await
+    }
+
+    async fn bookkeeping_monthly_summary_for_caller(
+        &self,
+        p: BookkeepingMonthlySummaryParams,
+        caller: McpCaller,
+    ) -> Result<Json<BookkeepingMonthlySummaryDto>, rmcp::ErrorData> {
+        require_hermes(caller, "wr_bookkeeping_monthly_summary")?;
+        let s = bookkeeping_commands::bookkeeping_monthly_summary_inner(
+            &self.db,
+            &p.month,
+            p.project_id.as_deref(),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_monthly_summary", &e))?;
+        Ok(Json(BookkeepingMonthlySummaryDto {
+            month: s.month,
+            total_expense_minor: s.total_expense_minor,
+            total_income_minor: s.total_income_minor,
+            net_minor: s.net_minor,
+            needs_review_count: s.needs_review_count,
+            approved_count: s.approved_count,
+            ignored_count: s.ignored_count,
+            duplicate_count: s.duplicate_count,
+        }))
+    }
+
+    #[tool(
+        name = "wr_bookkeeping_get_category_rules",
+        description = "Return the seeded category taxonomy + alias rules so the CFO bot can resolve codes consistently. Hermes caller only."
+    )]
+    pub async fn bookkeeping_get_category_rules(
+        &self,
+    ) -> Result<Json<BookkeepingCategoryRulesDto>, rmcp::ErrorData> {
+        self.bookkeeping_get_category_rules_for_caller(mcp_caller_from_env())
+            .await
+    }
+
+    async fn bookkeeping_get_category_rules_for_caller(
+        &self,
+        caller: McpCaller,
+    ) -> Result<Json<BookkeepingCategoryRulesDto>, rmcp::ErrorData> {
+        require_hermes(caller, "wr_bookkeeping_get_category_rules")?;
+        let rules = bookkeeping_commands::bookkeeping_category_rules_inner(&self.db)
+            .await
+            .map_err(|e| mcp_tool_error("wr_bookkeeping_get_category_rules", &e))?;
+        Ok(Json(BookkeepingCategoryRulesDto {
+            taxonomy: rules
+                .taxonomy
+                .into_iter()
+                .map(|n| BookkeepingCategoryNodeDto {
+                    code: n.code,
+                    parent_code: n.parent_code,
+                    label: n.label,
+                })
+                .collect(),
+            aliases: rules
+                .aliases
+                .into_iter()
+                .map(|a| BookkeepingCategoryAliasDto {
+                    pattern: a.pattern,
+                    match_kind: enum_wire_string(&a.match_kind),
+                    category_code: a.category_code,
+                    subcategory_code: a.subcategory_code,
+                    confidence: a.confidence,
+                })
+                .collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_bookkeeping_find_duplicate_candidates",
+        description = "Find likely-duplicate existing transactions before saving (fuzzy: source_ref / order / payment number / amount+date+merchant). Hermes caller only; read-only."
+    )]
+    pub async fn bookkeeping_find_duplicate_candidates(
+        &self,
+        Parameters(p): Parameters<BookkeepingFindDuplicateParams>,
+    ) -> Result<Json<BookkeepingDuplicateCandidateListDto>, rmcp::ErrorData> {
+        self.bookkeeping_find_duplicate_candidates_for_caller(p, mcp_caller_from_env())
+            .await
+    }
+
+    async fn bookkeeping_find_duplicate_candidates_for_caller(
+        &self,
+        p: BookkeepingFindDuplicateParams,
+        caller: McpCaller,
+    ) -> Result<Json<BookkeepingDuplicateCandidateListDto>, rmcp::ErrorData> {
+        require_hermes(caller, "wr_bookkeeping_find_duplicate_candidates")?;
+        let candidates = bookkeeping_commands::find_bookkeeping_duplicate_candidates_inner(
+            &self.db,
+            crate::models::FindBookkeepingDuplicateCandidatesInput {
+                project_id: p.project_id,
+                spent_at: p.spent_at,
+                amount_minor: p.amount_minor,
+                merchant: p.merchant,
+                order_no: p.order_no,
+                payment_no: p.payment_no,
+                // Hermes saves receipts as source=Ocr, so the strongest signal (source+source_ref
+                // exact = 1.0) must resolve against Ocr rows; without this the source_ref path is inert.
+                source: p.source_ref.as_ref().map(|_| BookkeepingSource::Ocr),
+                source_ref: p.source_ref,
+                exclude_transaction_id: p.exclude_transaction_id,
+            },
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_find_duplicate_candidates", &e))?;
+        let candidates = candidates
+            .into_iter()
+            .map(|c| BookkeepingDuplicateCandidateDto {
+                transaction_id: c.transaction.id,
+                merchant: c.transaction.merchant,
+                amount_minor: c.transaction.amount_minor,
+                spent_at: c.transaction.spent_at,
+                score: c.score,
+                reasons: c.reasons,
+            })
+            .collect();
+        Ok(Json(BookkeepingDuplicateCandidateListDto { candidates }))
+    }
+
+    #[tool(
+        name = "wr_bookkeeping_mark_duplicate",
+        description = "Mark a transaction as a duplicate of another (sets it ignored + links the original). Local review-queue write; Hermes caller only."
+    )]
+    pub async fn bookkeeping_mark_duplicate(
+        &self,
+        Parameters(p): Parameters<BookkeepingMarkDuplicateParams>,
+    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+        self.bookkeeping_mark_duplicate_for_caller(p, mcp_caller_from_env())
+            .await
+    }
+
+    async fn bookkeeping_mark_duplicate_for_caller(
+        &self,
+        p: BookkeepingMarkDuplicateParams,
+        caller: McpCaller,
+    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+        require_hermes(caller, "wr_bookkeeping_mark_duplicate")?;
+        let row = bookkeeping_commands::mark_bookkeeping_duplicate_inner(
+            &self.db,
+            &p.transaction_id,
+            &p.duplicate_of_transaction_id,
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_mark_duplicate", &e))?;
+        Ok(Json(BookkeepingSaveReceiptResult {
+            transaction_id: row.id,
+            status: "marked_duplicate".to_string(),
         }))
     }
 
@@ -1172,6 +1678,19 @@ mod write_tool_tests {
                     category: Some("food".into()),
                     description: Some("영수증 OCR".into()),
                     note: None,
+                    direction: None,
+                    account: None,
+                    subcategory: None,
+                    category_code: None,
+                    subcategory_code: None,
+                    raw_category: None,
+                    spent_at_time: None,
+                    confidence: None,
+                    field_confidence: None,
+                    review_reasons: None,
+                    order_no: None,
+                    payment_no: None,
+                    line_items: None,
                 },
                 McpCaller::Hermes,
             )
@@ -1200,6 +1719,129 @@ mod write_tool_tests {
         assert_eq!(row.4, 12_300);
     }
 
+    /// The widened save accepts the full judgment shape (income/account/subcategory/raw label/
+    /// confidence/reasons/order+payment numbers) and persists it — this is the Hermes ingest goal.
+    #[tokio::test]
+    async fn hermes_bookkeeping_save_receipt_persists_widened_judgment_fields() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+
+        let mut field_confidence = std::collections::BTreeMap::new();
+        field_confidence.insert("amount".to_string(), 0.99_f64);
+        field_confidence.insert("merchant".to_string(), 0.6_f64);
+
+        let res = server
+            .bookkeeping_save_receipt_for_caller(
+                BookkeepingSaveReceiptParams {
+                    project_id: None,
+                    source_ref: Some("hermes-ocr-777".into()),
+                    merchant: "쿠팡".into(),
+                    amount_minor: 59_010,
+                    currency: Some("KRW".into()),
+                    spent_at: "2026-06-12".into(),
+                    category: Some("쇼핑".into()),
+                    description: Some("카멜 모니터암".into()),
+                    note: None,
+                    direction: Some("expense".into()),
+                    account: Some("하나".into()),
+                    subcategory: Some("생활용품".into()),
+                    category_code: Some("shopping".into()),
+                    subcategory_code: Some("daily_goods".into()),
+                    raw_category: Some("🪑 생활용품".into()),
+                    spent_at_time: Some("14:28:47".into()),
+                    confidence: Some(0.84),
+                    field_confidence: Some(field_confidence),
+                    review_reasons: Some(vec![BookkeepingReviewReasonParam {
+                        code: "low_merchant_confidence".into(),
+                        detail: Some("merchant inferred from sender".into()),
+                    }]),
+                    order_no: Some("ORDER-9".into()),
+                    payment_no: Some("PAY-9".into()),
+                    line_items: Some(vec![
+                        BookkeepingLineItemParam {
+                            name: "모니터암".into(),
+                            amount_minor: 30_000,
+                            quantity: Some(1),
+                            category_code: None,
+                        },
+                        BookkeepingLineItemParam {
+                            name: "배송비".into(),
+                            amount_minor: 5_000,
+                            quantity: Some(1),
+                            category_code: None,
+                        },
+                    ]),
+                },
+                McpCaller::Hermes,
+            )
+            .await
+            .expect("Hermes widened save");
+        assert_eq!(res.0.status, "saved");
+
+        // Line items persisted through the MCP path; their sum (35_000) ≠ amount (59_010) → reason.
+        let line_items =
+            bookkeeping_commands::list_bookkeeping_line_items_inner(&db, &res.0.transaction_id)
+                .await
+                .expect("line items");
+        assert_eq!(line_items.len(), 2);
+
+        let saved = bookkeeping_commands::list_bookkeeping_transactions_inner(&db, None, None)
+            .await
+            .expect("list transactions")
+            .into_iter()
+            .find(|t| t.id == res.0.transaction_id)
+            .expect("widened row");
+        assert_eq!(saved.direction, BookkeepingDirection::Expense);
+        assert_eq!(saved.account.as_deref(), Some("하나"));
+        assert_eq!(saved.subcategory.as_deref(), Some("생활용품"));
+        assert_eq!(saved.raw_category.as_deref(), Some("🪑 생활용품"));
+        assert_eq!(saved.confidence, Some(0.84));
+        assert!(
+            saved.field_confidence_json.contains("amount"),
+            "field_confidence persisted"
+        );
+        assert!(
+            saved
+                .review_reasons_json
+                .contains("low_merchant_confidence"),
+            "review reasons persisted"
+        );
+        assert_eq!(saved.order_no.as_deref(), Some("ORDER-9"));
+        assert_eq!(saved.payment_no.as_deref(), Some("PAY-9"));
+
+        // Invalid direction is rejected.
+        let bad = server
+            .bookkeeping_save_receipt_for_caller(
+                BookkeepingSaveReceiptParams {
+                    project_id: None,
+                    source_ref: Some("hermes-ocr-778".into()),
+                    merchant: "x".into(),
+                    amount_minor: 1,
+                    currency: None,
+                    spent_at: "2026-06-12".into(),
+                    category: None,
+                    description: None,
+                    note: None,
+                    direction: Some("sideways".into()),
+                    account: None,
+                    subcategory: None,
+                    category_code: None,
+                    subcategory_code: None,
+                    raw_category: None,
+                    spent_at_time: None,
+                    confidence: None,
+                    field_confidence: None,
+                    review_reasons: None,
+                    order_no: None,
+                    payment_no: None,
+                    line_items: None,
+                },
+                McpCaller::Hermes,
+            )
+            .await;
+        assert!(bad.is_err(), "invalid direction rejected");
+    }
+
     /// Non-Hermes MCP callers cannot mutate the local bookkeeping DB through the OCR receipt tool.
     #[tokio::test]
     async fn non_hermes_bookkeeping_save_receipt_is_rejected_without_write() {
@@ -1218,6 +1860,19 @@ mod write_tool_tests {
                     category: Some("food".into()),
                     description: None,
                     note: None,
+                    direction: None,
+                    account: None,
+                    subcategory: None,
+                    category_code: None,
+                    subcategory_code: None,
+                    raw_category: None,
+                    spent_at_time: None,
+                    confidence: None,
+                    field_confidence: None,
+                    review_reasons: None,
+                    order_no: None,
+                    payment_no: None,
+                    line_items: None,
                 },
                 McpCaller::Other,
             )
@@ -1297,12 +1952,162 @@ mod write_tool_tests {
         );
         assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
     }
+
+    #[test]
+    fn registered_tool_set_is_locked() {
+        let names: std::collections::BTreeSet<String> = WrServer::tool_router()
+            .list_all()
+            .into_iter()
+            .map(|t| t.name.to_string())
+            .collect();
+        let expected: std::collections::BTreeSet<String> = [
+            "wr_list_pending_actions",
+            "wr_list_projects",
+            "wr_github_comment",
+            "wr_github_create_issue",
+            "wr_notion_create_page",
+            "wr_calendar_create_event",
+            "wr_gmail_send",
+            "wr_bookkeeping_save_receipt",
+            "wr_bookkeeping_list_recent_transactions",
+            "wr_bookkeeping_list_review_queue",
+            "wr_bookkeeping_monthly_summary",
+            "wr_bookkeeping_get_category_rules",
+            "wr_bookkeeping_find_duplicate_candidates",
+            "wr_bookkeeping_mark_duplicate",
+            "wr_propose_noop",
+            "wr_action_status",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert_eq!(
+            names, expected,
+            "registered MCP tool set drifted — update intentionally + the CFO contract"
+        );
+        // No execute/approve/delete/sql/shell/network capability ever appears on the surface.
+        for forbidden in [
+            "approve",
+            "execute",
+            "delete",
+            "raw_sql",
+            "run_shell",
+            "fetch_url",
+            "mutate_db",
+        ] {
+            assert!(
+                !names.iter().any(|n| n.contains(forbidden)),
+                "forbidden capability on MCP surface: {forbidden}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn bookkeeping_read_tools_require_hermes_caller() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+
+        // Non-Hermes is refused for the summary read tool.
+        let denied = server
+            .bookkeeping_monthly_summary_for_caller(
+                BookkeepingMonthlySummaryParams {
+                    month: "2026-06".into(),
+                    project_id: None,
+                },
+                McpCaller::Other,
+            )
+            .await;
+        assert!(denied.is_err(), "non-Hermes read is refused");
+
+        // find + mark are likewise refused for non-Hermes callers (regression-protect every gate).
+        let denied_find = server
+            .bookkeeping_find_duplicate_candidates_for_caller(
+                BookkeepingFindDuplicateParams {
+                    project_id: None,
+                    spent_at: "2026-06-12".into(),
+                    amount_minor: 1_000,
+                    merchant: None,
+                    order_no: None,
+                    payment_no: None,
+                    source_ref: None,
+                    exclude_transaction_id: None,
+                },
+                McpCaller::Other,
+            )
+            .await;
+        assert!(denied_find.is_err(), "non-Hermes find is refused");
+        let denied_mark = server
+            .bookkeeping_mark_duplicate_for_caller(
+                BookkeepingMarkDuplicateParams {
+                    transaction_id: "a".into(),
+                    duplicate_of_transaction_id: "b".into(),
+                },
+                McpCaller::Other,
+            )
+            .await;
+        assert!(denied_mark.is_err(), "non-Hermes mark is refused");
+
+        // Hermes find-duplicate round-trips against a saved row.
+        server
+            .bookkeeping_save_receipt_for_caller(
+                BookkeepingSaveReceiptParams {
+                    project_id: None,
+                    source_ref: Some("dup-seed".into()),
+                    merchant: "쿠팡".into(),
+                    amount_minor: 59_010,
+                    currency: Some("KRW".into()),
+                    spent_at: "2026-06-12".into(),
+                    category: None,
+                    description: None,
+                    note: None,
+                    direction: None,
+                    account: None,
+                    subcategory: None,
+                    category_code: None,
+                    subcategory_code: None,
+                    raw_category: None,
+                    spent_at_time: None,
+                    confidence: None,
+                    field_confidence: None,
+                    review_reasons: None,
+                    order_no: Some("ORD-DUP".into()),
+                    payment_no: None,
+                    line_items: None,
+                },
+                McpCaller::Hermes,
+            )
+            .await
+            .expect("seed save");
+
+        let candidates = server
+            .bookkeeping_find_duplicate_candidates_for_caller(
+                BookkeepingFindDuplicateParams {
+                    project_id: None,
+                    spent_at: "2026-06-12".into(),
+                    amount_minor: 59_010,
+                    merchant: Some("쿠팡".into()),
+                    order_no: Some("ORD-DUP".into()),
+                    payment_no: None,
+                    source_ref: None,
+                    exclude_transaction_id: None,
+                },
+                McpCaller::Hermes,
+            )
+            .await
+            .expect("find dup");
+        assert!(
+            candidates.0.candidates.iter().any(|c| c.score >= 0.9),
+            "order_no match scores high"
+        );
+    }
 }
 
 #[cfg(test)]
 mod schema_tests {
     use super::{
-        ActionIdParams, BookkeepingSaveReceiptParams, CalendarCreateEventParams,
+        ActionIdParams, BookkeepingFindDuplicateParams, BookkeepingLineItemParam,
+        BookkeepingListParams, BookkeepingMarkDuplicateParams, BookkeepingMonthlySummaryParams,
+        BookkeepingReviewReasonParam, BookkeepingSaveReceiptParams, CalendarCreateEventParams,
         GithubCommentParams, GithubCreateIssueParams, GmailSendParams, NotionCreatePageParams,
         ProposeNoopParams,
     };
@@ -1473,15 +2278,102 @@ mod schema_tests {
                 "category",
                 "description",
                 "note",
+                "direction",
+                "account",
+                "subcategory",
+                "category_code",
+                "subcategory_code",
+                "raw_category",
+                "spent_at_time",
+                "confidence",
+                "field_confidence",
+                "review_reasons",
+                "order_no",
+                "payment_no",
+                "line_items",
             ])
         );
+        // Widening is additive-optional: the original required set is unchanged so an in-field
+        // Hermes sending only the old fields keeps validating.
         assert_eq!(
             required_fields(&v),
             expect(&["merchant", "amount_minor", "spent_at"])
         );
         assert!(!prop_names(&v).contains("raw_image"));
         assert!(!prop_names(&v).contains("image_path"));
+        assert!(!prop_names(&v).contains("email_body"));
         assert!(!prop_names(&v).contains("credential_ref"));
+    }
+
+    #[test]
+    fn bookkeeping_review_reason_param_schema_is_closed() {
+        // deny_unknown_fields does not inherit to nested structs — lock it explicitly.
+        let v = serde_json::to_value(schemars::schema_for!(BookkeepingReviewReasonParam)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "BookkeepingReviewReasonParam must be a closed schema"
+        );
+        assert_eq!(prop_names(&v), expect(&["code", "detail"]));
+        assert_eq!(required_fields(&v), expect(&["code"]));
+    }
+
+    #[test]
+    fn bookkeeping_line_item_param_schema_is_closed() {
+        let v = serde_json::to_value(schemars::schema_for!(BookkeepingLineItemParam)).unwrap();
+        assert_eq!(
+            v["additionalProperties"],
+            serde_json::json!(false),
+            "BookkeepingLineItemParam must be a closed schema"
+        );
+        assert_eq!(
+            prop_names(&v),
+            expect(&["name", "amount_minor", "quantity", "category_code"])
+        );
+        assert_eq!(required_fields(&v), expect(&["name", "amount_minor"]));
+    }
+
+    #[test]
+    fn bookkeeping_read_tool_params_are_closed_schemas() {
+        let list = serde_json::to_value(schemars::schema_for!(BookkeepingListParams)).unwrap();
+        assert_eq!(list["additionalProperties"], serde_json::json!(false));
+        assert_eq!(prop_names(&list), expect(&["project_id", "limit"]));
+
+        let summary =
+            serde_json::to_value(schemars::schema_for!(BookkeepingMonthlySummaryParams)).unwrap();
+        assert_eq!(summary["additionalProperties"], serde_json::json!(false));
+        assert_eq!(prop_names(&summary), expect(&["month", "project_id"]));
+        assert_eq!(required_fields(&summary), expect(&["month"]));
+
+        let find =
+            serde_json::to_value(schemars::schema_for!(BookkeepingFindDuplicateParams)).unwrap();
+        assert_eq!(find["additionalProperties"], serde_json::json!(false));
+        assert_eq!(
+            prop_names(&find),
+            expect(&[
+                "project_id",
+                "spent_at",
+                "amount_minor",
+                "merchant",
+                "order_no",
+                "payment_no",
+                "source_ref",
+                "exclude_transaction_id",
+            ])
+        );
+
+        let mark =
+            serde_json::to_value(schemars::schema_for!(BookkeepingMarkDuplicateParams)).unwrap();
+        assert_eq!(mark["additionalProperties"], serde_json::json!(false));
+        assert_eq!(
+            prop_names(&mark),
+            expect(&["transaction_id", "duplicate_of_transaction_id"])
+        );
+        // Read-tool params never carry raw_sql / shell / url / token fields.
+        for forbidden in ["raw_sql", "url", "command", "token", "credential_ref"] {
+            assert!(!prop_names(&find).contains(forbidden));
+            assert!(!prop_names(&list).contains(forbidden));
+        }
     }
 
     #[test]

@@ -31,12 +31,29 @@ export const commands = {
 	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
 	runConnectionAudit: () => typedError<ConnectionAudit, AppError>(__TAURI_INVOKE("run_connection_audit")),
 	createBookkeepingTransaction: (input: CreateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("create_bookkeeping_transaction", { input })),
-	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status })),
+	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null, projectId: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status, projectId })),
 	updateBookkeepingReviewStatus: (id: string, status: BookkeepingReviewStatus) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_review_status", { id, status })),
-	bookkeepingMonthlySummary: (month: string) => typedError<BookkeepingMonthlySummary, AppError>(__TAURI_INVOKE("bookkeeping_monthly_summary", { month })),
+	bookkeepingMonthlySummary: (month: string, projectId: string | null) => typedError<BookkeepingMonthlySummary, AppError>(__TAURI_INVOKE("bookkeeping_monthly_summary", { month, projectId })),
 	listBookkeepingAudit: (entityId: string | null) => typedError<BookkeepingAuditEntry[], AppError>(__TAURI_INVOKE("list_bookkeeping_audit", { entityId })),
 	recordBookkeepingSyncFailure: (input: RecordBookkeepingSyncFailureInput) => typedError<BookkeepingSyncJob, AppError>(__TAURI_INVOKE("record_bookkeeping_sync_failure", { input })),
 	listBookkeepingSyncJobs: () => typedError<BookkeepingSyncJob[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_jobs")),
+	createBookkeepingRecurringExpense: (input: CreateBookkeepingRecurringExpenseInput) => typedError<BookkeepingRecurringExpense, AppError>(__TAURI_INVOKE("create_bookkeeping_recurring_expense", { input })),
+	listBookkeepingRecurringExpenses: (projectId: string | null) => typedError<BookkeepingRecurringExpense[], AppError>(__TAURI_INVOKE("list_bookkeeping_recurring_expenses", { projectId })),
+	ensureBookkeepingRecurringOccurrences: (month: string, projectId: string | null) => typedError<BookkeepingRecurringOccurrence[], AppError>(__TAURI_INVOKE("ensure_bookkeeping_recurring_occurrences", { month, projectId })),
+	listBookkeepingRecurringOccurrences: (month: string, projectId: string | null) => typedError<BookkeepingRecurringOccurrence[], AppError>(__TAURI_INVOKE("list_bookkeeping_recurring_occurrences", { month, projectId })),
+	postBookkeepingRecurringOccurrence: (id: string) => typedError<BookkeepingRecurringOccurrence, AppError>(__TAURI_INVOKE("post_bookkeeping_recurring_occurrence", { id })),
+	setBookkeepingRecurringOccurrenceStatus: (id: string, status: BookkeepingRecurringOccurrenceStatus) => typedError<BookkeepingRecurringOccurrence, AppError>(__TAURI_INVOKE("set_bookkeeping_recurring_occurrence_status", { id, status })),
+	listBookkeepingGmailLabels: (projectId: string) => typedError<BookkeepingGmailLabel[], AppError>(__TAURI_INVOKE("list_bookkeeping_gmail_labels", { projectId })),
+	syncBookkeepingGmailReceipts: (input: SyncBookkeepingGmailReceiptsInput) => typedError<BookkeepingGmailSyncResult, AppError>(__TAURI_INVOKE("sync_bookkeeping_gmail_receipts", { input })),
+	bookkeepingListTaxonomy: () => typedError<BookkeepingCategoryNode[], AppError>(__TAURI_INVOKE("bookkeeping_list_taxonomy")),
+	bookkeepingGetCategoryRules: () => typedError<BookkeepingCategoryRules, AppError>(__TAURI_INVOKE("bookkeeping_get_category_rules")),
+	overrideBookkeepingCategory: (input: OverrideBookkeepingCategoryInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("override_bookkeeping_category", { input })),
+	listBookkeepingCategoryOverrides: (transactionId: string) => typedError<BookkeepingCategoryOverride[], AppError>(__TAURI_INVOKE("list_bookkeeping_category_overrides", { transactionId })),
+	listBookkeepingLineItems: (transactionId: string) => typedError<BookkeepingLineItem[], AppError>(__TAURI_INVOKE("list_bookkeeping_line_items", { transactionId })),
+	setBookkeepingLineItems: (input: SetBookkeepingLineItemsInput) => typedError<BookkeepingLineItem[], AppError>(__TAURI_INVOKE("set_bookkeeping_line_items", { input })),
+	findBookkeepingDuplicateCandidates: (input: FindBookkeepingDuplicateCandidatesInput) => typedError<BookkeepingDuplicateCandidate[], AppError>(__TAURI_INVOKE("find_bookkeeping_duplicate_candidates", { input })),
+	markBookkeepingDuplicate: (id: string, duplicateOfTransactionId: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("mark_bookkeeping_duplicate", { id, duplicateOfTransactionId })),
+	listBookkeepingSyncCursors: () => typedError<BookkeepingSyncCursor[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_cursors")),
 	/**  gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
 	ghCliStatus: () => typedError<CliToolStatus, AppError>(__TAURI_INVOKE("gh_cli_status")),
 	/**
@@ -904,6 +921,12 @@ export type BatchItemResult = {
  */
 export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "not_ours" | "unsupported_provider" | "error";
 
+/**  alias 매칭 대상. raw_label = 유입 분류 라벨, merchant = 상호, domain = 발신 도메인. */
+export type BookkeepingAliasMatchKind = "merchant" | "raw_label" | "domain";
+
+/**  alias 출처. seed = 마이그레이션 시드, user = 사람, agent = CFO 제안. */
+export type BookkeepingAliasSource = "seed" | "user" | "agent";
+
 export type BookkeepingAuditEntry = {
 	id: string,
 	entityType: string,
@@ -914,26 +937,171 @@ export type BookkeepingAuditEntry = {
 	createdAt: string,
 };
 
+export type BookkeepingCategoryAlias = {
+	id: string,
+	pattern: string,
+	matchKind: BookkeepingAliasMatchKind,
+	categoryCode: string,
+	subcategoryCode: string | null,
+	confidence: number | null,
+	source: BookkeepingAliasSource,
+	createdAt: string,
+};
+
+/**  taxonomy 노드. 대분류는 `parent_code` None, 소분류는 부모 코드를 가리킨다. */
+export type BookkeepingCategoryNode = {
+	code: string,
+	parentCode: string | null,
+	label: string,
+	sortOrder: number,
+	active: boolean,
+};
+
+export type BookkeepingCategoryOverride = {
+	id: string,
+	transactionId: string,
+	fromCode: string | null,
+	toCode: string | null,
+	fromSubcategoryCode: string | null,
+	toSubcategoryCode: string | null,
+	actor: string,
+	reason: string | null,
+	createdAt: string,
+};
+
+/**  `bookkeeping_get_category_rules` 반환 — taxonomy + alias 규칙 묶음. */
+export type BookkeepingCategoryRules = {
+	taxonomy: BookkeepingCategoryNode[],
+	aliases: BookkeepingCategoryAlias[],
+};
+
 export type BookkeepingCategorySummary = {
 	category: string,
 	amountMinor: number,
 	count: number,
 };
 
+/**
+ *  거래 방향. 가계부는 지출/수입을 모두 담되 금액(`amount_minor`)은 항상 양수로 저장하고
+ *  부호 의미는 이 enum이 갖는다(음수 저장 금지). 합계는 방향별로 분리 집계한다.
+ */
+export type BookkeepingDirection = "expense" | "income";
+
+export type BookkeepingDuplicateCandidate = {
+	transaction: BookkeepingTransaction,
+	/**  0..1 — 높을수록 중복 가능성이 큼. */
+	score: number | null,
+	reasons: string[],
+};
+
+/**  거래/고정비의 지출 성격. Gmail ingest는 기본 variable, 사용자가 fixed 계열로 확정한다. */
+export type BookkeepingExpenseKind = "variable" | "fixed" | "subscription" | "installment";
+
+export type BookkeepingGmailLabel = {
+	id: string,
+	name: string,
+};
+
+export type BookkeepingGmailSyncResult = {
+	scannedCount: number,
+	importedCount: number,
+	duplicateCount: number,
+	failedCount: number,
+	/**  이번 동기화 후 저장된 커서(다음 tick의 시작점). 없으면 진전 없음. */
+	cursorAfter: string | null,
+};
+
+export type BookkeepingLineItem = {
+	id: string,
+	transactionId: string,
+	name: string,
+	amountMinor: number,
+	quantity: number,
+	categoryCode: string | null,
+	sortOrder: number,
+	createdAt: string,
+};
+
 export type BookkeepingMonthlySummary = {
 	month: string,
+	/**  지출 합계(= `total_expense_minor`). 프런트 호환을 위해 한 릴리스 유지하는 별칭. */
 	totalAmountMinor: number,
+	totalExpenseMinor: number,
+	totalIncomeMinor: number,
+	/**  순액 = 수입 - 지출(음수 가능). */
+	netMinor: number,
 	needsReviewCount: number,
 	approvedCount: number,
+	/**  사용자가 무시한 건수(중복 표시 제외). */
 	ignoredCount: number,
+	/**  중복으로 표시된 건수(`review_status='ignored'` + `duplicate_of_transaction_id` 존재). */
+	duplicateCount: number,
 	categories: BookkeepingCategorySummary[],
 };
+
+/**  결제수단은 Gmail/OCR에서 확정하지 않고 사람이 리뷰에서 보정할 수 있는 닫힌 값으로 둔다. */
+export type BookkeepingPaymentMethodKind = "unknown" | "cash" | "card" | "bank_transfer" | "simple_pay";
+
+export type BookkeepingRecurringExpense = {
+	id: string,
+	projectId: string | null,
+	name: string,
+	merchant: string | null,
+	amountMinor: number,
+	currency: string,
+	category: string,
+	paymentMethodKind: BookkeepingPaymentMethodKind,
+	paymentMethodLabel: string | null,
+	paymentMethodLast4: string | null,
+	expenseKind: BookkeepingExpenseKind,
+	scheduleDay: number,
+	startMonth: string,
+	endMonth: string | null,
+	status: BookkeepingRecurringExpenseStatus,
+	note: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type BookkeepingRecurringExpenseStatus = "active" | "paused" | "archived";
+
+export type BookkeepingRecurringOccurrence = {
+	id: string,
+	recurringExpenseId: string,
+	recurringName: string,
+	merchant: string | null,
+	month: string,
+	dueDate: string,
+	amountMinor: number,
+	currency: string,
+	category: string,
+	paymentMethodKind: BookkeepingPaymentMethodKind,
+	paymentMethodLabel: string | null,
+	paymentMethodLast4: string | null,
+	expenseKind: BookkeepingExpenseKind,
+	status: BookkeepingRecurringOccurrenceStatus,
+	transactionId: string | null,
+	note: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type BookkeepingRecurringOccurrenceStatus = "planned" | "posted" | "skipped";
 
 /**  거래 리뷰 상태. 외부 자동 확정 없이 사람이 approved/ignored로 정리한다. */
 export type BookkeepingReviewStatus = "needs_review" | "approved" | "ignored";
 
 /**  가계부 거래 유입 경로. Gmail/OCR/CSV는 후속 ingest adapter가 같은 리뷰큐에 기록한다. */
 export type BookkeepingSource = "manual" | "ocr" | "gmail" | "csv";
+
+/**  per-source 동기화 커서. "현재 시점 이후"만 가져오기 위한 durable 위치(마지막으로 본 지점). */
+export type BookkeepingSyncCursor = {
+	source: BookkeepingSource,
+	scopeKey: string,
+	cursorKind: string,
+	cursorValue: string,
+	updatedAt: string,
+};
 
 export type BookkeepingSyncJob = {
 	id: string,
@@ -943,6 +1111,13 @@ export type BookkeepingSyncJob = {
 	finishedAt: string | null,
 	sanitizedErrorCode: string | null,
 	sanitizedErrorMessage: string | null,
+	scannedCount: number,
+	importedCount: number,
+	duplicateCount: number,
+	reviewNeededCount: number,
+	failedCount: number,
+	cursorBefore: string | null,
+	cursorAfter: string | null,
 	createdAt: string,
 	updatedAt: string,
 };
@@ -960,6 +1135,37 @@ export type BookkeepingTransaction = {
 	category: string,
 	reviewStatus: BookkeepingReviewStatus,
 	note: string | null,
+	paymentMethodKind: BookkeepingPaymentMethodKind,
+	paymentMethodLabel: string | null,
+	paymentMethodLast4: string | null,
+	expenseKind: BookkeepingExpenseKind,
+	recurringExpenseId: string | null,
+	recurringOccurrenceId: string | null,
+	/**  지출/수입 방향(기본 expense). 금액은 항상 양수. */
+	direction: BookkeepingDirection,
+	/**  자산/계좌명(예: "하나은행"). 결제수단과 별개의 출처 계좌. */
+	account: string | null,
+	/**  사람이 읽는 소분류 라벨. */
+	subcategory: string | null,
+	/**  taxonomy 대분류 코드(미해석이면 None → "미분류"는 `category`로 표현). */
+	categoryCode: string | null,
+	subcategoryCode: string | null,
+	/**  유입 시 원본 분류 라벨(예: "🪑 생활용품")을 보존 — 재매핑/감사용. */
+	rawCategory: string | null,
+	/**  시:분:초(HH:MM:SS). `spent_at`(날짜)와 분리 저장. */
+	spentAtTime: string | null,
+	/**  CFO 판단 전체 신뢰도 0..1(수동 입력은 None). */
+	confidence: number | null,
+	/**  필드별 신뢰도 맵 raw JSON(예: {"amount":0.99,"merchant":0.7}). */
+	fieldConfidenceJson: string,
+	/**  리뷰 사유 배열 raw JSON(예: [{"code":"low_confidence","detail":"…"}]). */
+	reviewReasonsJson: string,
+	/**  중복으로 표시된 경우 원본 거래 id(`review_status='ignored'`와 함께). */
+	duplicateOfTransactionId: string | null,
+	/**  주문번호 — 영수증/이메일에 있으면 강한 중복 판별 키. */
+	orderNo: string | null,
+	/**  결제(승인)번호 — 강한 중복 판별 키. */
+	paymentNo: string | null,
 	createdAt: string,
 	updatedAt: string,
 	reviewedAt: string | null,
@@ -1362,6 +1568,31 @@ export type CoveredRepo = {
 	enabledLocalTotal: number,
 };
 
+export type CreateBookkeepingLineItemInput = {
+	name: string,
+	amountMinor: number,
+	/**  기본 1. */
+	quantity: number | null,
+	categoryCode: string | null,
+};
+
+export type CreateBookkeepingRecurringExpenseInput = {
+	projectId: string | null,
+	name: string,
+	merchant: string | null,
+	amountMinor: number,
+	currency: string,
+	category: string,
+	paymentMethodKind: BookkeepingPaymentMethodKind,
+	paymentMethodLabel: string | null,
+	paymentMethodLast4: string | null,
+	expenseKind: BookkeepingExpenseKind,
+	scheduleDay: number,
+	startMonth: string,
+	endMonth: string | null,
+	note: string | null,
+};
+
 export type CreateBookkeepingTransactionInput = {
 	projectId: string | null,
 	source: BookkeepingSource,
@@ -1373,6 +1604,26 @@ export type CreateBookkeepingTransactionInput = {
 	spentAt: string,
 	category: string,
 	note: string | null,
+	paymentMethodKind: BookkeepingPaymentMethodKind,
+	paymentMethodLabel: string | null,
+	paymentMethodLast4: string | null,
+	expenseKind: BookkeepingExpenseKind,
+	recurringExpenseId: string | null,
+	recurringOccurrenceId: string | null,
+	direction: BookkeepingDirection,
+	account: string | null,
+	subcategory: string | null,
+	categoryCode: string | null,
+	subcategoryCode: string | null,
+	rawCategory: string | null,
+	spentAtTime: string | null,
+	confidence: number | null,
+	/**  비어 있으면 "{}"로 저장. */
+	fieldConfidenceJson: string | null,
+	/**  비어 있으면 "[]"로 저장. */
+	reviewReasonsJson: string | null,
+	orderNo: string | null,
+	paymentNo: string | null,
 };
 
 /**
@@ -1541,6 +1792,20 @@ export type ErrorKind =
 export type FileChange = "M" | "A" | "D" | "R";
 
 export type FilterMode = "include" | "exclude";
+
+/**  저장 전 중복 후보 조회 입력. 약한 신호(금액/날짜/상호)와 강한 신호(주문/결제번호/source_ref)를 함께 본다. */
+export type FindBookkeepingDuplicateCandidatesInput = {
+	projectId: string | null,
+	spentAt: string,
+	amountMinor: number,
+	merchant: string | null,
+	orderNo: string | null,
+	paymentNo: string | null,
+	source: BookkeepingSource | null,
+	sourceRef: string | null,
+	/**  자기 자신(이미 저장된 경우)을 후보에서 제외. */
+	excludeTransactionId: string | null,
+};
 
 /**  오프라인 복구 시 큐(draft) 재시도 집계. specta는 i64/u64 export 금지 → u32. */
 export type FlushSummary = {
@@ -1744,6 +2009,13 @@ export type OrchestratorView = {
 	tasks: OrchestratorTaskRow[],
 	plans: OrchestratorPlanRow[],
 	sessions: OrchestratorSessionRow[],
+};
+
+export type OverrideBookkeepingCategoryInput = {
+	transactionId: string,
+	categoryCode: string | null,
+	subcategoryCode: string | null,
+	reason: string | null,
 };
 
 export type Ownership = "user_owned" | "orchestrator_owned" | "external_owned" | 
@@ -2146,6 +2418,11 @@ export type SessionRow = {
 	phase: SessionPhase,
 };
 
+export type SetBookkeepingLineItemsInput = {
+	transactionId: string,
+	items: CreateBookkeepingLineItemInput[],
+};
+
 /**
  *  Settings write input. Paths are NEVER renderer-supplied — only the repo id; Rust resolves the
  *  repo's `local_path` from the DB (defense against a forged path). Advanced nested knobs are raw
@@ -2424,6 +2701,14 @@ export type StageWriteRequest = {
 	idempotency_key: string,
 };
 
+export type SyncBookkeepingGmailReceiptsInput = {
+	projectId: string,
+	labelIds: string[],
+	labelNames: string[],
+	query: string | null,
+	maxResults: number | null,
+};
+
 export type TaskPhase = "ready" | "active" | "blocked" | "done" | "cancelled" | 
 /**  Drift-resilient fallback: any wire value not in the known set. */
 "unknown";
@@ -2509,7 +2794,7 @@ export type TodayOverview = {
 export type TokenKind = "notion" | "github" | 
 /**  Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a. */
 "google_calendar" | 
-/**  Gmail send 자격증명 blob ({clientId, clientSecret, refreshToken}). send-only 스코프. Phase 5. */
+/**  Legacy Gmail credential kind. Current Gmail send/read uses the GoogleCalendar OAuth blob. */
 "gmail";
 
 /**  토큰 존재 여부만 노출 (본문 미노출 — INVARIANT: 토큰 렌더러 노출 금지). */

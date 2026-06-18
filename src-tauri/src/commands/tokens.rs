@@ -44,7 +44,7 @@ pub async fn set_project_token(
     }
     // 저장 전 라이브 검증 — **확실히 무효한 토큰(Invalid, 예: 401)만 차단**하고, 네트워크/일시 실패
     // (Unreachable)는 통과시켜 오프라인/blip에 유효 토큰 저장을 막지 않는다(사후 Test ping으로 확인).
-    // OAuth blob 종류(GoogleCalendar/Gmail)는 단순 ping 대상이 아니라 검증 생략(별도 연결 흐름).
+    // OAuth blob 종류(GoogleCalendar/legacy Gmail)는 단순 ping 대상이 아니라 검증 생략(별도 연결 흐름).
     match kind {
         TokenKind::Notion => {
             if api::probe_notion(token).await.outcome == api::ProbeOutcome::Invalid {
@@ -126,10 +126,10 @@ pub async fn ping_project_token(
             ok: false,
             detail: "Google Calendar는 '연결' 흐름을 사용하세요".into(),
         },
-        // Gmail도 OAuth blob이라 단순 ping 대상이 아님 — 연결은 gmail 연결 흐름으로(US-006).
+        // Gmail은 현재 Google 계정 OAuth blob을 공유한다.
         TokenKind::Gmail => PingResult {
             ok: false,
-            detail: "Gmail은 '연결' 흐름을 사용하세요".into(),
+            detail: "Gmail은 Google 계정 연결을 사용하세요".into(),
         },
     })
 }

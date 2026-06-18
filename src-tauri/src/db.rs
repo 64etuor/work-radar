@@ -660,4 +660,228 @@ mod tests {
         pool.close().await;
         std::fs::remove_file(&path).ok();
     }
+
+    #[tokio::test]
+    async fn migration_0052_adds_bookkeeping_payment_and_recurring_schema() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN \
+             ('bookkeeping_recurring_expenses','bookkeeping_recurring_occurrences') \
+             ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query bookkeeping recurring tables failed");
+        assert_eq!(tables.len(), 2, "expected recurring bookkeeping tables");
+
+        let cols: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('bookkeeping_transactions') WHERE name IN \
+             ('payment_method_kind','payment_method_label','payment_method_last4', \
+              'expense_kind','recurring_expense_id','recurring_occurrence_id') \
+             ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query transaction extension columns failed");
+        assert_eq!(cols.len(), 6, "expected payment/fixed-expense columns");
+
+        sqlx::query(
+            "INSERT INTO bookkeeping_recurring_expenses \
+             (id, name, amount_minor, currency, category, payment_method_kind, expense_kind, \
+              schedule_day, start_month, status) \
+             VALUES ('rent','Rent',900000,'KRW','housing','bank_transfer','fixed',25,'2026-06','active')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert recurring expense");
+
+        sqlx::query(
+            "INSERT INTO bookkeeping_recurring_occurrences \
+             (id, recurring_expense_id, month, due_date, amount_minor, currency, status) \
+             VALUES ('rent-2026-06','rent','2026-06','2026-06-25',900000,'KRW','planned')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert recurring occurrence");
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[tokio::test]
+    async fn migration_0053_adds_bookkeeping_judgment_fields() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let cols: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('bookkeeping_transactions') WHERE name IN \
+             ('direction','account','subcategory','category_code','subcategory_code', \
+              'raw_category','spent_at_time','confidence','field_confidence_json', \
+              'review_reasons_json','duplicate_of_transaction_id','order_no','payment_no') \
+             ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query judgment columns failed");
+        assert_eq!(cols.len(), 13, "expected 13 judgment-pipeline columns");
+
+        // direction CHECK + income round-trip + duplicate self-reference.
+        sqlx::query(
+            "INSERT INTO bookkeeping_transactions \
+             (id, source, merchant, amount_minor, currency, spent_at, category, direction, \
+              raw_category, spent_at_time, confidence, order_no, payment_no) \
+             VALUES ('inc-1','manual','용돈',50000,'KRW','2026-06-18','income','income', \
+              '🤑 용돈','11:17:52',0.9,'O-1','P-1')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert income row");
+
+        let bad_direction = sqlx::query(
+            "INSERT INTO bookkeeping_transactions \
+             (id, source, merchant, amount_minor, currency, spent_at, category, direction) \
+             VALUES ('bad-1','manual','x',1,'KRW','2026-06-18','food','sideways')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            bad_direction.is_err(),
+            "direction CHECK must reject unknown values"
+        );
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[tokio::test]
+    async fn migration_0054_seeds_taxonomy_and_aliases() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN \
+             ('bookkeeping_category_taxonomy','bookkeeping_category_alias', \
+              'bookkeeping_category_overrides') ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query taxonomy tables");
+        assert_eq!(tables.len(), 3, "expected 3 taxonomy tables");
+
+        let (top_levels,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM bookkeeping_category_taxonomy WHERE parent_code IS NULL",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count top-levels");
+        assert!(top_levels >= 8, "expected the seeded top-level categories");
+
+        let (uncategorized_label,): (String,) = sqlx::query_as(
+            "SELECT label FROM bookkeeping_category_taxonomy WHERE code='uncategorized'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("uncategorized node");
+        assert_eq!(uncategorized_label, "미분류", "sentinel renders as 미분류");
+
+        let (alias_count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM bookkeeping_category_alias WHERE source='seed'")
+                .fetch_one(&pool)
+                .await
+                .expect("count aliases");
+        assert!(alias_count >= 10, "expected seeded raw-label aliases");
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[tokio::test]
+    async fn migration_0055_adds_line_items_with_cascade() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' \
+             AND name='bookkeeping_transaction_line_items'",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query line item table");
+        assert_eq!(tables.len(), 1, "expected line item table");
+
+        sqlx::query(
+            "INSERT INTO bookkeeping_transactions \
+             (id, source, merchant, amount_minor, currency, spent_at, category) \
+             VALUES ('tx-1','manual','마트',9000,'KRW','2026-06-01','food')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert tx");
+        sqlx::query(
+            "INSERT INTO bookkeeping_transaction_line_items \
+             (id, transaction_id, name, amount_minor, quantity) \
+             VALUES ('li-1','tx-1','사과',4000,1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert line item");
+
+        // FK CASCADE: deleting the transaction removes its line items.
+        sqlx::query("DELETE FROM bookkeeping_transactions WHERE id='tx-1'")
+            .execute(&pool)
+            .await
+            .expect("delete tx");
+        let (remaining,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM bookkeeping_transaction_line_items")
+                .fetch_one(&pool)
+                .await
+                .expect("count line items");
+        assert_eq!(
+            remaining, 0,
+            "line items cascade-deleted with the transaction"
+        );
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[tokio::test]
+    async fn migration_0056_adds_sync_cursor_and_job_counts() {
+        let path = temp_db_path();
+        let pool = init_db(&path).await.expect("init_db failed");
+
+        let tables: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM sqlite_master WHERE type='table' \
+             AND name='bookkeeping_sync_cursors'",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query cursor table");
+        assert_eq!(tables.len(), 1, "expected sync cursor table");
+
+        let cols: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('bookkeeping_sync_jobs') WHERE name IN \
+             ('scanned_count','imported_count','duplicate_count','review_needed_count', \
+              'failed_count','cursor_before','cursor_after') ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query sync job count columns");
+        assert_eq!(cols.len(), 7, "expected sync job count + cursor columns");
+
+        // Cursor PK upsert works.
+        sqlx::query(
+            "INSERT INTO bookkeeping_sync_cursors (source, scope_key, cursor_kind, cursor_value) \
+             VALUES ('gmail','proj-1','internal_date','2026-06-16') \
+             ON CONFLICT(source, scope_key) DO UPDATE SET cursor_value=excluded.cursor_value",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert cursor");
+
+        pool.close().await;
+        std::fs::remove_file(&path).ok();
+    }
 }

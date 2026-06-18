@@ -212,6 +212,12 @@ impl From<crate::gmail::GmailError> for AppError {
         match e {
             E::Transient(m) => AppError::transient("gmail.transient", m),
             E::Terminal(m) => AppError::terminal("gmail.terminal", m),
+            E::ReconnectRequired(m) => AppError::forbidden("gmail.reconnect_required", m)
+                .with_action(ErrorAction {
+                    label: "Google 설정 열기".into(),
+                    url: None,
+                    nav: Some("settings".into()),
+                }),
         }
     }
 }
@@ -359,6 +365,18 @@ mod tests {
         assert_eq!(e.kind, ErrorKind::Forbidden);
         assert_eq!(e.code, "calendar.reconnect_required");
         assert!(e.action.is_some());
+    }
+
+    #[test]
+    fn gmail_reconnect_is_forbidden_with_action() {
+        use crate::gmail::GmailError;
+        let e = AppError::from(GmailError::ReconnectRequired("scope".into()));
+        assert_eq!(e.kind, ErrorKind::Forbidden);
+        assert_eq!(e.code, "gmail.reconnect_required");
+        let action = e.action.expect("gmail reconnect should route to settings");
+        assert_eq!(action.label, "Google 설정 열기");
+        assert_eq!(action.nav.as_deref(), Some("settings"));
+        assert_eq!(action.url, None);
     }
 
     #[test]

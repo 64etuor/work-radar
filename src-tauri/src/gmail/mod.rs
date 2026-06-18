@@ -1,15 +1,15 @@
-//! Gmail send 연동 클라이언트 (External Action Gate 5번째 암, Phase 5).
+//! Gmail send/read 연동 클라이언트 (External Action Gate 5번째 암, Phase 5 + bookkeeping ingest).
 //! INVARIANT: 외부 호출은 Rust(reqwest)에, 자격증명(client_id/secret/refresh_token)은 keychain blob에서만
 //! 읽혀 Rust 안에서만 쓰인다(렌더러 미노출).
-//! 스코프는 send-only(`gmail.send`) — 메일 송신만, 읽기/리스트 권한 없음.
 //! send는 **AI-origin(자동화 제안)** 경로라 non-Hermes MCP caller에서는 External Action Gate를
 //! 거친다(US-004~006). Work Radar가 주입한 Hermes MCP caller는 Hermes permission card를 사람 게이트로
 //! 간주해 Work Radar approval queue를 한 번 더 거치지 않고 같은 Rust connector를 직접 쓴다.
+//! read는 사용자가 지정한 Gmail label/query 후보를 가져와 로컬 가계부 리뷰큐에 넣는 ingest 경로다.
 //! 외부 호출은 bounded retry + graceful terminal failure.
 //!
 //! **Gmail은 Google 계정 OAuth에 통합**되어 별도 Gmail 연결(oauth/loopback/PKCE/connect)은 폐지됐다.
-//! 발송 토큰은 `access_token_for_cref`가 calendar의 통합 Google access token(스코프에 `gmail.send`
-//! 포함)을 그대로 위임받아 쓴다.
+//! 토큰은 `access_token_for_cref`가 calendar의 통합 Google access token(스코프에 `gmail.send` +
+//! `gmail.readonly` 포함)을 그대로 위임받아 쓴다.
 //!
 //! 핵심 규칙:
 //!  - bounded retry only (INVARIANT #5): 무한 retry/poll 금지.
@@ -21,12 +21,15 @@
 
 mod http;
 mod message;
+mod read;
 mod write;
 
 use crate::retry::Retryable;
 
 pub use http::HttpGmailProvider;
 pub use message::build_raw_message;
+pub use read::GmailLabelInfo;
+pub(crate) use read::{GmailMessageSearch, GmailReadProvider, GmailReceiptCandidate};
 pub(crate) use write::execute_gmail_action;
 
 // ── GmailError ─────────────────────────────────────────────────────────────────
@@ -42,6 +45,8 @@ pub enum GmailError {
     Transient(String),
     #[error("{0}")]
     Terminal(String),
+    #[error("{0}")]
+    ReconnectRequired(String),
 }
 
 impl Retryable for GmailError {

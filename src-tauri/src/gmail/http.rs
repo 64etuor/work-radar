@@ -1,27 +1,29 @@
 //! 실 HTTP provider (reqwest, rustls) + 에러 분류(`classify_http`/`classify_reqwest`).
 //! bounded retry(`with_retry` + reqwest timeout). calendar/http.rs와 동일 패턴.
 //!
-//! send-only 스코프(`gmail.send`)라 읽기/getProfile/메시지 리스트 API가 전혀 없다(읽기 스코프 0,
-//! PII 0). **이 모듈은 어떤 Gmail read 엔드포인트도 추가하지 않는다.** 발송 토큰은 게이트의
-//! `access_token_for_cref`(통합 Google access token)가 공급한다.
+//! 발송/읽기 토큰은 게이트와 ingest 경로의 `access_token_for_cref`(통합 Google access token)가 공급한다.
 
 use std::time::Duration;
 
 use crate::retry::with_retry;
 
-use super::{GmailError, GmailProvider};
+use super::{
+    GmailError, GmailMessageSearch, GmailProvider, GmailReadProvider, GmailReceiptCandidate,
+};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 /// backoff 기준 지연(첫 재시도). 실제 base*2^n + jitter.
 const BASE_DELAY: Duration = Duration::from_millis(400);
+const READ_MAX_ATTEMPTS: u32 = 3;
 /// 쓰기(messages.send POST) 재시도 횟수 = 1(재시도 안 함). messages.send는 **멱등하지 않다** — 요청이
 /// Gmail에 도달한 뒤 응답만 유실되면(transport drop=transient) 재시도가 **중복 발송**을 낸다(이메일은
 /// 캘린더 중복보다 비대칭적으로 위험). 그래서 AI-origin 게이트 write(`send_message_once`)는 재시도 대신
 /// 실패를 노출한다(calendar create_event_once / github WRITE_MAX_ATTEMPTS=1 선례, INVARIANT #5 정신).
 const WRITE_MAX_ATTEMPTS: u32 = 1;
 
-/// send-only write 엔드포인트(messages.send). 읽기/getProfile/리스트 엔드포인트는 의도적으로 없다.
 const SEND_ENDPOINT: &str = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+const LABELS_ENDPOINT: &str = "https://gmail.googleapis.com/gmail/v1/users/me/labels";
+const MESSAGES_ENDPOINT: &str = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 
 // ── 에러 분류 + bounded retry (calendar/http.rs와 동일 패턴) ──────────────────────────
 
@@ -30,7 +32,11 @@ pub(super) fn classify_http(status: u16, body: &str) -> GmailError {
     // 외부 응답 본문은 사용자 콘텐츠/PII 가능(send 4xx의 수신자 echo 등) → 메시지·로그에 내용을
     // 넣지 않는다(스펙 §5.5). 크기만 노출.
     let body_len = body.len();
-    if status == 429 || status >= 500 {
+    if status == 403 {
+        GmailError::ReconnectRequired(
+            "Gmail 영수증 권한이 필요합니다. 설정 > Google 계정에서 권한을 갱신하세요".into(),
+        )
+    } else if status == 429 || status >= 500 {
         GmailError::Transient(format!("HTTP {status} (응답 {body_len}B)"))
     } else {
         GmailError::Terminal(format!("HTTP {status} (응답 {body_len}B)"))
@@ -92,6 +98,92 @@ impl HttpGmailProvider {
             .map_err(|e| GmailError::Terminal(format!("send parse: {e}")))?;
         parse_send_response(&json)
     }
+
+    async fn get_json(
+        &self,
+        url: &str,
+        access_token: &str,
+        query: &[(&str, String)],
+    ) -> Result<serde_json::Value, GmailError> {
+        let resp = self
+            .http
+            .get(url)
+            .bearer_auth(access_token)
+            .query(query)
+            .send()
+            .await
+            .map_err(|e| classify_reqwest(&e))?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        if !(200..300).contains(&status) {
+            return Err(classify_http(status, &body));
+        }
+        serde_json::from_str(&body).map_err(|e| GmailError::Terminal(format!("gmail parse: {e}")))
+    }
+
+    async fn get_labels(
+        &self,
+        access_token: &str,
+    ) -> Result<Vec<super::GmailLabelInfo>, GmailError> {
+        let no_query: [(&str, String); 0] = [];
+        let json = self
+            .get_json(LABELS_ENDPOINT, access_token, &no_query)
+            .await?;
+        Ok(super::read::parse_labels(&json))
+    }
+
+    async fn get_message_ids(
+        &self,
+        access_token: &str,
+        search: &GmailMessageSearch,
+    ) -> Result<Vec<String>, GmailError> {
+        // Paginate through nextPageToken so a tick can't silently drop in-window messages older than
+        // one page. Bounded by MAX_PAGES/MAX_TOTAL so this can never become an unbounded fetch.
+        const MAX_PAGES: usize = 20;
+        const MAX_TOTAL: usize = 1000;
+        let per_page = search.max_results.clamp(1, 500).to_string();
+        let mut ids: Vec<String> = Vec::new();
+        let mut page_token: Option<String> = None;
+        for _ in 0..MAX_PAGES {
+            let mut query = vec![
+                ("maxResults", per_page.clone()),
+                ("includeSpamTrash", "false".to_string()),
+            ];
+            if let Some(q) = search.query.as_deref().filter(|q| !q.trim().is_empty()) {
+                query.push(("q", q.trim().to_string()));
+            }
+            for id in &search.label_ids {
+                query.push(("labelIds", id.clone()));
+            }
+            if let Some(token) = &page_token {
+                query.push(("pageToken", token.clone()));
+            }
+            let json = self
+                .get_json(MESSAGES_ENDPOINT, access_token, &query)
+                .await?;
+            ids.extend(super::read::parse_message_ids(&json));
+            if ids.len() >= MAX_TOTAL {
+                ids.truncate(MAX_TOTAL);
+                break;
+            }
+            match super::read::parse_next_page_token(&json) {
+                Some(token) => page_token = Some(token),
+                None => break,
+            }
+        }
+        Ok(ids)
+    }
+
+    async fn get_message(
+        &self,
+        access_token: &str,
+        message_id: &str,
+    ) -> Result<GmailReceiptCandidate, GmailError> {
+        let url = format!("{MESSAGES_ENDPOINT}/{}", encode_path_segment(message_id));
+        let query = [("format", "full".to_string())];
+        let json = self.get_json(&url, access_token, &query).await?;
+        super::read::parse_receipt_candidate(message_id, &json)
+    }
 }
 
 impl GmailProvider for HttpGmailProvider {
@@ -103,6 +195,53 @@ impl GmailProvider for HttpGmailProvider {
         })
         .await
     }
+}
+
+impl GmailReadProvider for HttpGmailProvider {
+    async fn list_labels(
+        &self,
+        access_token: &str,
+    ) -> Result<Vec<super::GmailLabelInfo>, GmailError> {
+        with_retry(READ_MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.get_labels(access_token)
+        })
+        .await
+    }
+
+    async fn list_message_ids(
+        &self,
+        access_token: &str,
+        search: &GmailMessageSearch,
+    ) -> Result<Vec<String>, GmailError> {
+        with_retry(READ_MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.get_message_ids(access_token, search)
+        })
+        .await
+    }
+
+    async fn get_receipt_candidate(
+        &self,
+        access_token: &str,
+        message_id: &str,
+    ) -> Result<GmailReceiptCandidate, GmailError> {
+        with_retry(READ_MAX_ATTEMPTS, BASE_DELAY, |_| {
+            self.get_message(access_token, message_id)
+        })
+        .await
+    }
+}
+
+fn encode_path_segment(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -124,10 +263,12 @@ mod tests {
             classify_http(401, "auth"),
             GmailError::Terminal(_)
         ));
-        assert!(matches!(
-            classify_http(403, "scope"),
-            GmailError::Terminal(_)
-        ));
+        let GmailError::ReconnectRequired(message) = classify_http(403, "scope") else {
+            panic!("403 → ReconnectRequired");
+        };
+        assert!(message.contains("설정 > Google 계정"));
+        assert!(!message.contains("재동의"));
+        assert!(!message.contains("다시 연결"));
         assert!(matches!(
             classify_http(400, "invalid"),
             GmailError::Terminal(_)

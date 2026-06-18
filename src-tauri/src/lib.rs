@@ -81,6 +81,27 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_bookkeeping_audit,
         commands::record_bookkeeping_sync_failure,
         commands::list_bookkeeping_sync_jobs,
+        commands::create_bookkeeping_recurring_expense,
+        commands::list_bookkeeping_recurring_expenses,
+        commands::ensure_bookkeeping_recurring_occurrences,
+        commands::list_bookkeeping_recurring_occurrences,
+        commands::post_bookkeeping_recurring_occurrence,
+        commands::set_bookkeeping_recurring_occurrence_status,
+        commands::list_bookkeeping_gmail_labels,
+        commands::sync_bookkeeping_gmail_receipts,
+        // Bookkeeping taxonomy (Phase B) — seeded category tree + alias rules + override history.
+        commands::bookkeeping_list_taxonomy,
+        commands::bookkeeping_get_category_rules,
+        commands::override_bookkeeping_category,
+        commands::list_bookkeeping_category_overrides,
+        // Bookkeeping line items (Phase C) — itemized breakdown + sum-mismatch review reason.
+        commands::list_bookkeeping_line_items,
+        commands::set_bookkeeping_line_items,
+        // Bookkeeping duplicate detection (Phase D) — fuzzy candidates + mark-duplicate.
+        commands::find_bookkeeping_duplicate_candidates,
+        commands::mark_bookkeeping_duplicate,
+        // Bookkeeping sync cursors (Phase E) — per-source incremental polling state (read).
+        commands::list_bookkeeping_sync_cursors,
         // CLI 토큰 import (auth 통일, Phase 14) — 토큰은 keychain으로만, IPC 미반환.
         commands::gh_cli_status,
         commands::import_github_token,
@@ -209,8 +230,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::google_calendar_status,
         commands::disconnect_google,
         commands::ping_google_calendar,
-        // Gmail 발송은 Google 계정 OAuth에 통합됨(별도 연결 커맨드 없음) — 토큰은 gmail.send 스코프를
-        // 포함한 통합 Google 토큰을 쓰고, 발송은 External Action Gate(`execute`)로만.
+        // Gmail 발송/영수증 읽기는 Google 계정 OAuth에 통합됨(별도 Gmail 연결 커맨드 없음).
+        // 발송은 External Action Gate(`execute`)로만, 읽기는 가계부 ingest가 라벨/query 후보만 가져온다.
         // Google Calendar 캘린더 선택 + 이벤트 (read 레일, Phase 10b).
         commands::list_google_calendars,
         commands::set_selected_calendars,

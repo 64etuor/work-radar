@@ -10,7 +10,7 @@ pub enum TokenKind {
     Github,
     /// Google Calendar 자격증명 blob ({clientId, clientSecret, refreshToken}). Phase 10a.
     GoogleCalendar,
-    /// Gmail send 자격증명 blob ({clientId, clientSecret, refreshToken}). send-only 스코프. Phase 5.
+    /// Legacy Gmail credential kind. Current Gmail send/read uses the GoogleCalendar OAuth blob.
     Gmail,
 }
 
