@@ -1,0 +1,36 @@
+src-tauri/migrations/0053_bookkeeping_judgment_fields.sql
+  s_65a7fb1c329086::t_7d34d5125541f8 43-49,56-63
+  s_65a7fb1c329086::t_033d96cd8bca60 1-42,50-55
+src-tauri/migrations/0054_bookkeeping_taxonomy.sql
+  s_65a7fb1c329086::t_832463e7866ac3 1-83
+src-tauri/migrations/0052_bookkeeping_payment_recurring.sql
+  s_a2ddbf8d6528fe::t_a144325f4765bb 1-75
+src-tauri/migrations/0055_bookkeeping_line_items.sql
+  s_65a7fb1c329086::t_5261e6f1d1120d 1-17
+src-tauri/migrations/0056_bookkeeping_sync_cursor.sql
+  s_65a7fb1c329086::t_34b9ddc9c500cf 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "7c994b79ddb9aef74e11e6c2aee81cff163e11ea",
+  "prompts": {},
+  "sessions": {
+    "s_65a7fb1c329086": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "41f59453-499e-437e-8b01-421318ee1bb9",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_a2ddbf8d6528fe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ed352-7e8a-7ef0-97ca-286c214d534e",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
