@@ -1,0 +1,40 @@
+docs/areas/bookkeeping-cfo-contract.md
+  s_65a7fb1c329086::t_969c6371b7da6c 1-127
+docs/areas/area-map.md
+  s_65a7fb1c329086::t_863b5c711fb867 55
+docs/plans/2026-06-16-bookkeeping-mvp.md
+  s_ffbf00c1f22bbf::t_41d1214df92580 7,75-93
+docs/plans/2026-06-18-bookkeeping-judgment-pipeline.md
+  s_65a7fb1c329086::t_ba3426725667a3 82-99
+  s_65a7fb1c329086::t_a20137043a5bec 173-181
+  s_65a7fb1c329086::t_bca44ba418aa21 68-71
+  s_65a7fb1c329086::t_d0a12c605dfb51 121-124
+  s_65a7fb1c329086::t_73adf58311ef7b 1-47,53-67,72-81,100-120,125-159,164-172,182-187,196-234
+  s_65a7fb1c329086::t_8ecd8350f59ef1 160-163
+  s_65a7fb1c329086::t_b6b5d0eaaa0574 188-195
+  s_65a7fb1c329086::t_b9f7b74a9a5200 48-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "55eac8b9035d5db2e374b3bd68ee697fcddcd4fd",
+  "prompts": {},
+  "sessions": {
+    "s_65a7fb1c329086": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "41f59453-499e-437e-8b01-421318ee1bb9",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_ffbf00c1f22bbf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ecf5f-de8a-77e1-8a1d-801f8a530396",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
