@@ -96,6 +96,69 @@ describe("computeLayout", () => {
     expect(out[0].topPx).toBe(9 * 60);
     expect(out[0].heightPx).toBe(60);
   });
+
+  // ── 회귀: 짧은 블록 abutting 시 hit-region 겹침(드래그 핸들 오발동 근본원인) ─────────────
+  // 두 15분 블록이 맞붙으면(같은 컬럼, 시간 겹침 없음) 각 블록의 hit-rect=[topPx, topPx+heightPx]는
+  // 겹치면 안 된다. MIN_BLOCK_PX(20) 바닥이 topPx(정확)와 결합하면 A=[540,560], B=[555,575]로
+  // 5px 겹쳐 윗 블록의 하단 리사이즈 핸들이 아랫 블록의 상단 핸들과 같은 픽셀을 두고 다툰다 →
+  // 페인트 순서(나중 시작=위)로 포인터가 잘못된 블록을 잡아 "다른 스케줄이 늘어난다".
+  it("두 맞붙는 15분 블록의 hit-rect는 겹치지 않는다 (핸들 오발동 회귀 가드)", () => {
+    const out = computeLayout([
+      make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00"),
+      make("b", "2026-05-28T09:15:00", "2026-05-28T09:30:00"),
+    ]);
+    const a = out.find((x) => x.id === "a")!;
+    const b = out.find((x) => x.id === "b")!;
+    // 같은 가로 컬럼(시간 비겹침 → full width)
+    expect(a.leftPct).toBe(0);
+    expect(b.leftPct).toBe(0);
+    // 위 블록은 실제 길이(15px)로 클램프, 아래 블록은 다음 블록 없어 floor(20px) 유지.
+    expect(a.heightPx).toBe(15);
+    expect(b.heightPx).toBe(20);
+    // A 하단 ≤ B 상단 — hit-rect 비겹침.
+    expect(a.topPx + a.heightPx).toBeLessThanOrEqual(b.topPx);
+  });
+
+  it("5분 간격이면 floor(20px)를 유지한다 (간격이 floor 넘침을 흡수 — 과잉 클램프 금지)", () => {
+    // a 09:00–09:15(실제 15px, floor 20px → 하단 560), b 09:20–09:35(상단 560). 정확히 맞닿아
+    // 겹치지 않으므로 클램프 불필요 → floor 유지.
+    const out = computeLayout([
+      make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00"),
+      make("b", "2026-05-28T09:20:00", "2026-05-28T09:35:00"),
+    ]);
+    const a = out.find((x) => x.id === "a")!;
+    expect(a.heightPx).toBe(20); // floor 유지
+    expect(a.topPx + a.heightPx).toBeLessThanOrEqual(out.find((x) => x.id === "b")!.topPx);
+  });
+
+  it("나란히(다른 컬럼) 짧은 블록은 서로 클램프하지 않는다 (가로 분리 → hit-rect 비충돌)", () => {
+    // 시간 겹침 → 2컬럼(가로 분리). 세로로는 겹쳐도 핸들이 가로로 떨어져 있어 floor를 줄이면 안 된다.
+    const out = computeLayout([
+      make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00"),
+      make("b", "2026-05-28T09:05:00", "2026-05-28T09:20:00"),
+    ]);
+    const a = out.find((x) => x.id === "a")!;
+    const b = out.find((x) => x.id === "b")!;
+    expect(a.widthPct).toBe(50);
+    expect(b.widthPct).toBe(50);
+    expect(a.heightPx).toBe(20); // floor 유지(가로로 분리됨)
+    expect(b.heightPx).toBe(20);
+  });
+
+  it("크로스-클러스터: 다음 클러스터(멀티컬럼)의 topPx까지만 클램프, 실제 길이 밑으로 안 줄인다", () => {
+    // A 09:00–09:10(실제 10px, floor 20px → 하단 560). 다음 클러스터는 09:12 시작 2-컬럼(B,D 겹침).
+    // A는 full-width라 두 컬럼 모두와 가로로 겹친다 → 가장 가까운 다음 top(09:12=552)까지만 클램프.
+    const out = computeLayout([
+      make("a", "2026-05-28T09:00:00", "2026-05-28T09:10:00"),
+      make("b", "2026-05-28T09:12:00", "2026-05-28T09:42:00"),
+      make("d", "2026-05-28T09:12:00", "2026-05-28T09:27:00"),
+    ]);
+    const a = out.find((x) => x.id === "a")!;
+    expect(a.widthPct).toBe(100); // 별도 클러스터, full width
+    expect(a.heightPx).toBe(12); // 552 − 540 = 12 (floor 20에서 클램프)
+    expect(a.heightPx).toBeGreaterThanOrEqual(10); // 실제 길이(10px) 밑으로는 안 줄임
+    expect(out.find((x) => x.id === "b")!.widthPct).toBe(50); // 뒤 클러스터는 2-컬럼
+  });
 });
 
 describe("computeLayout — continuous axis (anchor)", () => {
