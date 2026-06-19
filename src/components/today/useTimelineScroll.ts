@@ -47,8 +47,19 @@ export function useTimelineScroll({ today, gridElRef }: UseTimelineScrollArgs) {
     if (idx < 0) return;
     const now = new Date();
     const nowPx = idx * DAY_PX + now.getHours() * 60 + now.getMinutes();
-    el.scrollTop = Math.max(0, nowPx - el.clientHeight / 2);
+    const target = Math.max(0, nowPx - el.clientHeight / 2);
+    el.scrollTop = target;
     didInitialScrollRef.current = true;
+    // WKWebView 콜드마운트 stale-paint 수정: pre-paint 프로그램 스크롤이 절대 위치 블록 레이어를
+    // stale하게 페인트한다(좌표는 정확, 화면만 아래로 오프셋; 휠로 굴리면 정상화). post-paint(rAF)에서
+    // 실제 스크롤 델타(+1px→복귀)로 컴포지터를 리싱크. cleanup 미취소 = StrictMode가 nudge를 죽이지 않게.
+    requestAnimationFrame(() => {
+      if (!el.isConnected) return;
+      el.scrollTop = target + 1;
+      requestAnimationFrame(() => {
+        if (el.isConnected) el.scrollTop = target;
+      });
+    });
   }, [visibleDates, today]);
 
   // prepend(또는 상단 드롭) 시 scrollTop 보정 — anchor 변화량(일수×1440px)만큼.

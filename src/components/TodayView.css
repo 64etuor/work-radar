@@ -560,7 +560,9 @@
     width var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1)),
     top var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1)),
     height var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1));
-  will-change: left, width, top, height;
+  /* will-change 의도적 미사용: left/width/top/height는 GPU 합성 대상이 아니라 속도 이득이 없는데,
+     WKWebView가 블록을 합성 레이어로 승격시켜 위치 변경(드래그/리스케줄) 후 stale-paint(좌표는
+     정확한데 화면만 오프셋, 스크롤하면 정상화)를 유발한다 → 레이어 승격 회피로 회귀 방지. */
 }
 
 .tl-block-wrap[data-dragging] {
