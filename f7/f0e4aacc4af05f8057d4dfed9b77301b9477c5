@@ -1,0 +1,22 @@
+src/components/today/useTimelineScroll.ts
+  s_7f2b8b72a78bbc::t_4d1a98ce142d3d 50-51,56-62
+  s_7f2b8b72a78bbc::t_cfb8d3deded848 53-55
+src/components/TodayView.css
+  s_7f2b8b72a78bbc::t_6145a2113fe4a6 563-565
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "f7f0e4aacc4af05f8057d4dfed9b77301b9477c5",
+  "prompts": {},
+  "sessions": {
+    "s_7f2b8b72a78bbc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "643f7e71-53a1-48a0-93e6-cfa367c7b52a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
