@@ -1,0 +1,19 @@
+docs/superpowers/specs/2026-06-19-bookkeeping-review-edit-delete-design.md
+  s_b2a0e82184e60f::t_4319899beb6f49 1-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "6902b74678737f8a6a90650cece2513e8be950d8",
+  "prompts": {},
+  "sessions": {
+    "s_b2a0e82184e60f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "32f8b753-0493-49ea-b425-5cd5400076bb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
