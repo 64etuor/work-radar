@@ -33,6 +33,10 @@ export const commands = {
 	createBookkeepingTransaction: (input: CreateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("create_bookkeeping_transaction", { input })),
 	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null, projectId: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status, projectId })),
 	updateBookkeepingReviewStatus: (id: string, status: BookkeepingReviewStatus) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_review_status", { id, status })),
+	updateBookkeepingTransaction: (input: UpdateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_transaction", { input })),
+	deleteBookkeepingTransaction: (id: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("delete_bookkeeping_transaction", { id })),
+	restoreBookkeepingTransaction: (id: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("restore_bookkeeping_transaction", { id })),
+	listBookkeepingTrash: (projectId: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_trash", { projectId })),
 	bookkeepingMonthlySummary: (month: string, projectId: string | null) => typedError<BookkeepingMonthlySummary, AppError>(__TAURI_INVOKE("bookkeeping_monthly_summary", { month, projectId })),
 	listBookkeepingAudit: (entityId: string | null) => typedError<BookkeepingAuditEntry[], AppError>(__TAURI_INVOKE("list_bookkeeping_audit", { entityId })),
 	recordBookkeepingSyncFailure: (input: RecordBookkeepingSyncFailureInput) => typedError<BookkeepingSyncJob, AppError>(__TAURI_INVOKE("record_bookkeeping_sync_failure", { input })),
@@ -1169,6 +1173,7 @@ export type BookkeepingTransaction = {
 	createdAt: string,
 	updatedAt: string,
 	reviewedAt: string | null,
+	deletedAt: string | null,
 };
 
 /**
@@ -2901,6 +2906,28 @@ export type UpdateAgentPromptConfigInput = {
 	model: string | null,
 	reasoningEffort: AgentReasoningEffort | null,
 	fastMode: boolean,
+};
+
+export type UpdateBookkeepingTransactionInput = {
+	id: string,
+	merchant: string | null,
+	description: string | null,
+	amountMinor: number | null,
+	currency: string | null,
+	spentAt: string | null,
+	/**  `Some(None)` clears the time; omitted leaves it unchanged. */
+	spentAtTime: string | null,
+	direction: string | null,
+	note: string | null,
+	account: string | null,
+	categoryCode: string | null,
+	subcategoryCode: string | null,
+	paymentMethodKind: BookkeepingPaymentMethodKind | null,
+	paymentMethodLabel: string | null,
+	paymentMethodLast4: string | null,
+	expenseKind: BookkeepingExpenseKind | null,
+	orderNo: string | null,
+	paymentNo: string | null,
 };
 
 /**

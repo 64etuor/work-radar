@@ -8,6 +8,7 @@ import {
   type CreateBookkeepingTransactionInput,
   type RecordBookkeepingSyncFailureInput,
   type SyncBookkeepingGmailReceiptsInput,
+  type UpdateBookkeepingTransactionInput,
 } from "@/bindings";
 
 import { unwrap } from "./client";
@@ -35,6 +36,38 @@ export function useCreateBookkeepingTransaction() {
     mutationFn: (input: CreateBookkeepingTransactionInput) =>
       unwrap(commands.createBookkeepingTransaction(input)),
     onSuccess: invalidate,
+  });
+}
+
+export function useUpdateBookkeepingTransaction() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: UpdateBookkeepingTransactionInput) =>
+      unwrap(commands.updateBookkeepingTransaction(input)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteBookkeepingTransaction() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.deleteBookkeepingTransaction(id)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRestoreBookkeepingTransaction() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.restoreBookkeepingTransaction(id)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBookkeepingTrash(projectId: string | null = null) {
+  return useQuery({
+    queryKey: ["bookkeeping", "trash", projectId],
+    queryFn: () => unwrap(commands.listBookkeepingTrash(projectId)),
   });
 }
 

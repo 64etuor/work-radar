@@ -123,6 +123,7 @@ pub struct BookkeepingTransaction {
     pub created_at: String,
     pub updated_at: String,
     pub reviewed_at: Option<String>,
+    pub deleted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -156,6 +157,30 @@ pub struct CreateBookkeepingTransactionInput {
     pub field_confidence_json: Option<String>,
     /// 비어 있으면 "[]"로 저장.
     pub review_reasons_json: Option<String>,
+    pub order_no: Option<String>,
+    pub payment_no: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateBookkeepingTransactionInput {
+    pub id: String,
+    pub merchant: Option<String>,
+    pub description: Option<String>,
+    pub amount_minor: Option<i32>,
+    pub currency: Option<String>,
+    pub spent_at: Option<String>,
+    /// `Some(None)` clears the time; omitted leaves it unchanged.
+    pub spent_at_time: Option<Option<String>>,
+    pub direction: Option<String>,
+    pub note: Option<String>,
+    pub account: Option<String>,
+    pub category_code: Option<String>,
+    pub subcategory_code: Option<String>,
+    pub payment_method_kind: Option<BookkeepingPaymentMethodKind>,
+    pub payment_method_label: Option<String>,
+    pub payment_method_last4: Option<String>,
+    pub expense_kind: Option<BookkeepingExpenseKind>,
     pub order_no: Option<String>,
     pub payment_no: Option<String>,
 }

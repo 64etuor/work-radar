@@ -50,6 +50,11 @@ source_of_truth_scope: CFO Bot(Hermes) ↔ Work Radar 가계부 판단 파이프
 **금액 규칙:** 음수 저장 금지. 수입도 `amount_minor>0` + `direction='income'`. 월 합계는 지출/수입/
 순액(net)으로 분리 집계되고, 카테고리 차트는 지출만 본다.
 
+Work Radar GUI는 저장된 거래를 사람이 전체 필드 편집할 수 있는 권위 표면이다. 삭제는
+`deleted_at` 소프트 삭제로 처리해 원장/요약 기본 목록에서 숨기고 휴지통에서 복원 가능하게 하며,
+Gmail 재유입 upsert는 `deleted_at`과 `review_status`를 덮지 않는다. 필드별 수동 잠금은 두지 않고,
+Hermes의 `source_ref` 중복 precheck(skip-on-duplicate)에 위임한다.
+
 ## 3. 리뷰 기준 (CFO → review_reasons)
 
 Hermes는 다음을 `review_reasons[]`(코드 + 짧은 detail)로 표시한다. Work Radar는 line-item 합계

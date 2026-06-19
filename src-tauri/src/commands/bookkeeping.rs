@@ -19,6 +19,7 @@ use crate::models::{
     CreateBookkeepingTransactionInput, FindBookkeepingDuplicateCandidatesInput,
     OverrideBookkeepingCategoryInput, RecordBookkeepingSyncFailureInput,
     SetBookkeepingLineItemsInput, SyncBookkeepingGmailReceiptsInput,
+    UpdateBookkeepingTransactionInput,
 };
 
 const DEFAULT_CURRENCY: &str = "KRW";
@@ -45,7 +46,7 @@ const TRANSACTION_RETURNING_COLUMNS: &str = "id, project_id, source, source_ref,
  recurring_expense_id, recurring_occurrence_id, direction, account, subcategory, category_code, \
  subcategory_code, raw_category, spent_at_time, confidence, field_confidence_json, \
  review_reasons_json, duplicate_of_transaction_id, order_no, payment_no, created_at, updated_at, \
- reviewed_at";
+ reviewed_at, deleted_at";
 const RECURRING_EXPENSE_RETURNING_COLUMNS: &str = "id, project_id, name, merchant, amount_minor, \
  currency, category, payment_method_kind, payment_method_label, payment_method_last4, \
  expense_kind, schedule_day, start_month, end_month, status, note, created_at, updated_at";
@@ -77,6 +78,42 @@ pub async fn update_bookkeeping_review_status(
     status: BookkeepingReviewStatus,
 ) -> Result<BookkeepingTransaction, AppError> {
     update_bookkeeping_review_status_inner(db.inner(), &id, status).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_bookkeeping_transaction(
+    db: State<'_, Db>,
+    input: UpdateBookkeepingTransactionInput,
+) -> Result<BookkeepingTransaction, AppError> {
+    update_bookkeeping_transaction_inner(db.inner(), input).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_bookkeeping_transaction(
+    db: State<'_, Db>,
+    id: String,
+) -> Result<BookkeepingTransaction, AppError> {
+    delete_bookkeeping_transaction_inner(db.inner(), &id).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn restore_bookkeeping_transaction(
+    db: State<'_, Db>,
+    id: String,
+) -> Result<BookkeepingTransaction, AppError> {
+    restore_bookkeeping_transaction_inner(db.inner(), &id).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_bookkeeping_trash(
+    db: State<'_, Db>,
+    project_id: Option<String>,
+) -> Result<Vec<BookkeepingTransaction>, AppError> {
+    list_bookkeeping_trash_inner(db.inner(), project_id.as_deref()).await
 }
 
 #[tauri::command]
@@ -406,6 +443,9 @@ pub(crate) async fn upsert_bookkeeping_transaction_from_ingest_inner(
     apply_category_resolution(db, &mut jf, &category, &merchant).await?;
 
     let mut tx = db.begin().await?;
+    // Re-ingest keeps user-authoritative row state (`review_status`, `deleted_at`) and category
+    // overrides. Field-level edit locks are intentionally delegated to Hermes'
+    // source_ref duplicate precheck, which skips a re-save on an exact source_ref match.
     let upsert_sql = format!(
         "INSERT INTO bookkeeping_transactions \
          (id, project_id, source, source_ref, merchant, description, amount_minor, currency, \
@@ -1066,11 +1106,31 @@ pub(crate) async fn list_bookkeeping_transactions_inner(
          FROM bookkeeping_transactions \
          WHERE (?1 IS NULL OR review_status = ?1) \
            AND (?2 IS NULL OR project_id = ?2) \
+           AND deleted_at IS NULL \
          ORDER BY spent_at DESC, updated_at DESC, id DESC \
          LIMIT 200"
     );
     let rows = sqlx::query_as::<_, BookkeepingTransaction>(&list_sql)
         .bind(status)
+        .bind(project_id)
+        .fetch_all(db)
+        .await?;
+    Ok(rows)
+}
+
+pub(crate) async fn list_bookkeeping_trash_inner(
+    db: &Db,
+    project_id: Option<&str>,
+) -> Result<Vec<BookkeepingTransaction>, AppError> {
+    let list_sql = format!(
+        "SELECT {TRANSACTION_RETURNING_COLUMNS} \
+         FROM bookkeeping_transactions \
+         WHERE (deleted_at IS NOT NULL OR review_status = 'ignored') \
+           AND (?1 IS NULL OR project_id = ?1) \
+         ORDER BY COALESCE(deleted_at, reviewed_at, updated_at) DESC, id DESC \
+         LIMIT 200"
+    );
+    let rows = sqlx::query_as::<_, BookkeepingTransaction>(&list_sql)
         .bind(project_id)
         .fetch_all(db)
         .await?;
@@ -1110,18 +1170,265 @@ pub(crate) async fn update_bookkeeping_review_status_inner(
     Ok(row)
 }
 
+pub(crate) async fn update_bookkeeping_transaction_inner(
+    db: &Db,
+    input: UpdateBookkeepingTransactionInput,
+) -> Result<BookkeepingTransaction, AppError> {
+    let tx_id = clean_required(&input.id, "bookkeeping.transaction_id")?;
+    let current = fetch_bookkeeping_transaction(db, &tx_id).await?;
+
+    let merchant = match input.merchant.as_deref() {
+        Some(value) => clean_required(value, "bookkeeping.merchant")?,
+        None => current.merchant.clone(),
+    };
+    let description = match input.description.as_deref() {
+        Some(value) => clean_optional(Some(value)),
+        None => current.description.clone(),
+    };
+    let amount_minor = match input.amount_minor {
+        Some(value) if value > 0 => value,
+        Some(_) => {
+            return Err(AppError::validation(
+                "bookkeeping.amount",
+                "금액은 0보다 커야 합니다",
+            ))
+        }
+        None => current.amount_minor,
+    };
+    let currency = match input.currency.as_deref() {
+        Some(value) => clean_currency(value)?,
+        None => current.currency.clone(),
+    };
+    let spent_at = match input.spent_at.as_deref() {
+        Some(value) => {
+            validate_date(value)?;
+            value.to_string()
+        }
+        None => current.spent_at.clone(),
+    };
+    let spent_at_time = match input.spent_at_time {
+        Some(Some(value)) => {
+            let cleaned = clean_optional(Some(value.as_str()));
+            if let Some(time) = cleaned.as_deref() {
+                validate_time(time)?;
+            }
+            cleaned
+        }
+        Some(None) => None,
+        None => current.spent_at_time.clone(),
+    };
+    let direction = match input.direction.as_deref() {
+        Some(value) => parse_bookkeeping_direction(value)?,
+        None => current.direction,
+    };
+    let note = match input.note.as_deref() {
+        Some(value) => clean_optional(Some(value)),
+        None => current.note.clone(),
+    };
+    let account = match input.account.as_deref() {
+        Some(value) => clean_optional(Some(value)),
+        None => current.account.clone(),
+    };
+    let payment_method_kind = input
+        .payment_method_kind
+        .unwrap_or(current.payment_method_kind);
+    let payment_method_label = match input.payment_method_label.as_deref() {
+        Some(value) => clean_optional(Some(value)),
+        None => current.payment_method_label.clone(),
+    };
+    let payment_method_last4 = match input.payment_method_last4.as_deref() {
+        Some(value) => clean_payment_last4(Some(value))?,
+        None => current.payment_method_last4.clone(),
+    };
+    let expense_kind = input.expense_kind.unwrap_or(current.expense_kind);
+    let order_no = match input.order_no.as_deref() {
+        Some(value) => clean_optional(Some(value)),
+        None => current.order_no.clone(),
+    };
+    let payment_no = match input.payment_no.as_deref() {
+        Some(value) => clean_optional(Some(value)),
+        None => current.payment_no.clone(),
+    };
+    let category_code = input
+        .category_code
+        .as_deref()
+        .map(|value| clean_optional(Some(value)))
+        .unwrap_or_else(|| current.category_code.clone());
+    let subcategory_code = input
+        .subcategory_code
+        .as_deref()
+        .map(|value| clean_optional(Some(value)))
+        .unwrap_or_else(|| current.subcategory_code.clone());
+    let category_changed =
+        category_code != current.category_code || subcategory_code != current.subcategory_code;
+    let amount_changed = amount_minor != current.amount_minor;
+
+    let mut tx = db.begin().await?;
+    let update_sql = format!(
+        "UPDATE bookkeeping_transactions SET \
+           merchant=?2, description=?3, amount_minor=?4, currency=?5, spent_at=?6, \
+           spent_at_time=?7, direction=?8, note=?9, account=?10, \
+           payment_method_kind=?11, payment_method_label=?12, payment_method_last4=?13, \
+           expense_kind=?14, order_no=?15, payment_no=?16, updated_at=datetime('now') \
+         WHERE id=?1 \
+         RETURNING {TRANSACTION_RETURNING_COLUMNS}"
+    );
+    let row = sqlx::query_as::<_, BookkeepingTransaction>(&update_sql)
+        .bind(&tx_id)
+        .bind(&merchant)
+        .bind(description.as_deref())
+        .bind(amount_minor)
+        .bind(&currency)
+        .bind(&spent_at)
+        .bind(spent_at_time.as_deref())
+        .bind(direction)
+        .bind(note.as_deref())
+        .bind(account.as_deref())
+        .bind(payment_method_kind)
+        .bind(payment_method_label.as_deref())
+        .bind(payment_method_last4.as_deref())
+        .bind(expense_kind)
+        .bind(order_no.as_deref())
+        .bind(payment_no.as_deref())
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "bookkeeping.transaction_not_found",
+                "거래를 찾을 수 없습니다",
+            )
+        })?;
+
+    if amount_changed {
+        let (items_sum, item_count): (i64, i64) = sqlx::query_as(
+            "SELECT COALESCE(SUM(amount_minor * quantity), 0), COUNT(*) \
+             FROM bookkeeping_transaction_line_items WHERE transaction_id = ?1",
+        )
+        .bind(&tx_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let mismatch = item_count > 0 && items_sum != i64::from(amount_minor);
+        update_sum_mismatch_reason_tx(
+            &mut tx,
+            &tx_id,
+            mismatch,
+            items_sum,
+            i64::from(amount_minor),
+        )
+        .await?;
+    }
+
+    insert_audit_log_tx(
+        &mut tx,
+        "transaction",
+        &tx_id,
+        "transaction.updated",
+        "거래 필드가 수정됨",
+        serde_json::json!({
+            "amountChanged": amount_changed,
+            "categoryChanged": category_changed
+        }),
+    )
+    .await?;
+    tx.commit().await?;
+
+    if category_changed {
+        override_bookkeeping_category_inner(
+            db,
+            OverrideBookkeepingCategoryInput {
+                transaction_id: tx_id.clone(),
+                category_code,
+                subcategory_code,
+                reason: Some("transaction_edit".to_string()),
+            },
+        )
+        .await?;
+    }
+
+    if amount_changed || category_changed {
+        fetch_bookkeeping_transaction(db, &tx_id).await
+    } else {
+        Ok(row)
+    }
+}
+
+pub(crate) async fn delete_bookkeeping_transaction_inner(
+    db: &Db,
+    id: &str,
+) -> Result<BookkeepingTransaction, AppError> {
+    set_bookkeeping_deleted_at(db, id, true).await
+}
+
+pub(crate) async fn restore_bookkeeping_transaction_inner(
+    db: &Db,
+    id: &str,
+) -> Result<BookkeepingTransaction, AppError> {
+    set_bookkeeping_deleted_at(db, id, false).await
+}
+
+async fn set_bookkeeping_deleted_at(
+    db: &Db,
+    id: &str,
+    deleted: bool,
+) -> Result<BookkeepingTransaction, AppError> {
+    let tx_id = clean_required(id, "bookkeeping.transaction_id")?;
+    let mut tx = db.begin().await?;
+    let sql = if deleted {
+        format!(
+            "UPDATE bookkeeping_transactions SET deleted_at=datetime('now'), \
+             updated_at=datetime('now') WHERE id=?1 RETURNING {TRANSACTION_RETURNING_COLUMNS}"
+        )
+    } else {
+        format!(
+            "UPDATE bookkeeping_transactions SET deleted_at=NULL, updated_at=datetime('now') \
+             WHERE id=?1 RETURNING {TRANSACTION_RETURNING_COLUMNS}"
+        )
+    };
+    let row = sqlx::query_as::<_, BookkeepingTransaction>(&sql)
+        .bind(&tx_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "bookkeeping.transaction_not_found",
+                "거래를 찾을 수 없습니다",
+            )
+        })?;
+    insert_audit_log_tx(
+        &mut tx,
+        "transaction",
+        &tx_id,
+        if deleted {
+            "transaction.deleted"
+        } else {
+            "transaction.restored"
+        },
+        if deleted {
+            "거래가 휴지통으로 이동됨"
+        } else {
+            "거래가 휴지통에서 복원됨"
+        },
+        serde_json::json!({ "deleted": deleted }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(row)
+}
+
 pub(crate) async fn bookkeeping_monthly_summary_inner(
     db: &Db,
     month: &str,
     project_id: Option<&str>,
 ) -> Result<BookkeepingMonthlySummary, AppError> {
     let (start, end) = month_bounds(month)?;
-    // Category breakdown is EXPENSE only (income has no expense taxonomy). Non-ignored rows.
+    // Category breakdown is EXPENSE only (income has no expense taxonomy). Non-ignored, non-deleted
+    // rows.
     let rows: Vec<(String, i64, i64)> = sqlx::query_as(
         "SELECT category, COALESCE(SUM(amount_minor), 0), COUNT(*) \
          FROM bookkeeping_transactions \
          WHERE spent_at >= ?1 AND spent_at < ?2 AND review_status != 'ignored' \
            AND direction = 'expense' \
+           AND deleted_at IS NULL \
            AND (?3 IS NULL OR project_id = ?3) \
          GROUP BY category \
          ORDER BY COALESCE(SUM(amount_minor), 0) DESC, category ASC",
@@ -1149,6 +1456,7 @@ pub(crate) async fn bookkeeping_monthly_summary_inner(
            COALESCE(SUM(CASE WHEN direction='income' THEN amount_minor ELSE 0 END), 0) \
          FROM bookkeeping_transactions \
          WHERE spent_at >= ?1 AND spent_at < ?2 AND review_status != 'ignored' \
+           AND deleted_at IS NULL \
            AND (?3 IS NULL OR project_id = ?3)",
     )
     .bind(&start)
@@ -1170,6 +1478,7 @@ pub(crate) async fn bookkeeping_monthly_summary_inner(
            COALESCE(SUM(CASE WHEN review_status='ignored' AND duplicate_of_transaction_id IS NOT NULL THEN 1 ELSE 0 END), 0) \
          FROM bookkeeping_transactions \
          WHERE spent_at >= ?1 AND spent_at < ?2 \
+           AND deleted_at IS NULL \
            AND (?3 IS NULL OR project_id = ?3)",
     )
     .bind(&start)
@@ -1483,6 +1792,37 @@ pub(crate) async fn resolve_category_inner(
     })
 }
 
+async fn category_labels_for_codes(
+    db: &Db,
+    category_code: Option<&str>,
+    subcategory_code: Option<&str>,
+) -> Result<(String, Option<String>), AppError> {
+    let category_label = match category_code {
+        Some(code) => taxonomy_label(db, code)
+            .await?
+            .unwrap_or_else(|| code.to_string()),
+        None => "미분류".to_string(),
+    };
+    let subcategory_label = match subcategory_code {
+        Some(code) => Some(
+            taxonomy_label(db, code)
+                .await?
+                .unwrap_or_else(|| code.to_string()),
+        ),
+        None => None,
+    };
+    Ok((category_label, subcategory_label))
+}
+
+async fn taxonomy_label(db: &Db, code: &str) -> Result<Option<String>, AppError> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT label FROM bookkeeping_category_taxonomy WHERE code = ?1")
+            .bind(code)
+            .fetch_optional(db)
+            .await?;
+    Ok(row.map(|(label,)| label))
+}
+
 pub(crate) async fn override_bookkeeping_category_inner(
     db: &Db,
     input: OverrideBookkeepingCategoryInput,
@@ -1491,6 +1831,8 @@ pub(crate) async fn override_bookkeeping_category_inner(
     let to_code = clean_optional(input.category_code.as_deref());
     let to_subcategory = clean_optional(input.subcategory_code.as_deref());
     let reason = clean_optional(input.reason.as_deref());
+    let (category_label, subcategory_label) =
+        category_labels_for_codes(db, to_code.as_deref(), to_subcategory.as_deref()).await?;
 
     let mut tx = db.begin().await?;
     let current: (Option<String>, Option<String>) = sqlx::query_as(
@@ -1504,10 +1846,12 @@ pub(crate) async fn override_bookkeeping_category_inner(
     })?;
 
     sqlx::query(
-        "UPDATE bookkeeping_transactions SET category_code = ?2, subcategory_code = ?3, \
-           updated_at = datetime('now') WHERE id = ?1",
+        "UPDATE bookkeeping_transactions SET category = ?2, subcategory = ?3, \
+           category_code = ?4, subcategory_code = ?5, updated_at = datetime('now') WHERE id = ?1",
     )
     .bind(&tx_id)
+    .bind(&category_label)
+    .bind(subcategory_label.as_deref())
     .bind(to_code.as_deref())
     .bind(to_subcategory.as_deref())
     .execute(&mut *tx)
@@ -1995,6 +2339,25 @@ async fn insert_audit_log_tx(
     Ok(())
 }
 
+async fn fetch_bookkeeping_transaction(
+    db: &Db,
+    id: &str,
+) -> Result<BookkeepingTransaction, AppError> {
+    let row = sqlx::query_as::<_, BookkeepingTransaction>(&format!(
+        "SELECT {TRANSACTION_RETURNING_COLUMNS} FROM bookkeeping_transactions WHERE id = ?1"
+    ))
+    .bind(id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| {
+        AppError::not_found(
+            "bookkeeping.transaction_not_found",
+            "거래를 찾을 수 없습니다",
+        )
+    })?;
+    Ok(row)
+}
+
 #[allow(clippy::result_large_err)]
 fn clean_required(value: &str, code: &str) -> Result<String, AppError> {
     let cleaned = value.trim();
@@ -2066,6 +2429,18 @@ fn clean_currency(value: &str) -> Result<String, AppError> {
         ));
     }
     Ok(cleaned)
+}
+
+#[allow(clippy::result_large_err)]
+fn parse_bookkeeping_direction(value: &str) -> Result<BookkeepingDirection, AppError> {
+    match value.trim() {
+        "expense" => Ok(BookkeepingDirection::Expense),
+        "income" => Ok(BookkeepingDirection::Income),
+        _ => Err(AppError::validation(
+            "bookkeeping.direction",
+            "수입/지출은 expense 또는 income이어야 합니다",
+        )),
+    }
 }
 
 #[allow(clippy::result_large_err)]
@@ -2365,9 +2740,10 @@ mod tests {
     };
     use crate::models::{
         BookkeepingExpenseKind, BookkeepingPaymentMethodKind, BookkeepingRecurringOccurrenceStatus,
-        BookkeepingReviewStatus, BookkeepingSource, CreateBookkeepingRecurringExpenseInput,
-        CreateBookkeepingTransactionInput, CreateProjectInput, ProjectKind,
-        RecordBookkeepingSyncFailureInput, SyncBookkeepingGmailReceiptsInput,
+        BookkeepingReviewStatus, BookkeepingSource, CreateBookkeepingLineItemInput,
+        CreateBookkeepingRecurringExpenseInput, CreateBookkeepingTransactionInput,
+        CreateProjectInput, ProjectKind, RecordBookkeepingSyncFailureInput,
+        SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
     };
     use std::sync::Mutex;
 
@@ -2415,6 +2791,29 @@ mod tests {
             confidence: None,
             field_confidence_json: None,
             review_reasons_json: None,
+            order_no: None,
+            payment_no: None,
+        }
+    }
+
+    fn update_input(id: String) -> UpdateBookkeepingTransactionInput {
+        UpdateBookkeepingTransactionInput {
+            id,
+            merchant: None,
+            description: None,
+            amount_minor: None,
+            currency: None,
+            spent_at: None,
+            spent_at_time: None,
+            direction: None,
+            note: None,
+            account: None,
+            category_code: None,
+            subcategory_code: None,
+            payment_method_kind: None,
+            payment_method_label: None,
+            payment_method_last4: None,
+            expense_kind: None,
             order_no: None,
             payment_no: None,
         }
@@ -2523,6 +2922,189 @@ mod tests {
         assert_eq!(audit.len(), 2);
         assert_eq!(audit[0].action, "transaction.review_status_changed");
         assert_eq!(audit[1].action, "transaction.created");
+    }
+
+    #[tokio::test]
+    async fn soft_delete_moves_transaction_to_trash_and_restore_returns_it_to_lists() {
+        let db = pool().await;
+        let tx = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Delete Me", 9_500, "2026-06-17", "food"),
+        )
+        .await
+        .expect("create transaction");
+
+        let deleted = delete_bookkeeping_transaction_inner(&db, &tx.id)
+            .await
+            .expect("soft delete");
+        assert!(deleted.deleted_at.is_some());
+
+        let main_rows = list_bookkeeping_transactions_inner(&db, None, None)
+            .await
+            .expect("main list");
+        assert!(main_rows.iter().all(|row| row.id != tx.id));
+
+        let trash = list_bookkeeping_trash_inner(&db, None)
+            .await
+            .expect("trash list");
+        assert_eq!(trash.len(), 1);
+        assert_eq!(trash[0].id, tx.id);
+
+        let restored = restore_bookkeeping_transaction_inner(&db, &tx.id)
+            .await
+            .expect("restore");
+        assert!(restored.deleted_at.is_none());
+
+        let main_rows = list_bookkeeping_transactions_inner(&db, None, None)
+            .await
+            .expect("main list after restore");
+        assert!(main_rows.iter().any(|row| row.id == tx.id));
+    }
+
+    #[tokio::test]
+    async fn update_transaction_persists_fields_validates_input_and_recomputes_sum_mismatch() {
+        let db = pool().await;
+        let tx = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Old Merchant", 10_000, "2026-06-17", "misc"),
+        )
+        .await
+        .expect("create transaction");
+        set_bookkeeping_line_items_inner(
+            &db,
+            SetBookkeepingLineItemsInput {
+                transaction_id: tx.id.clone(),
+                items: vec![CreateBookkeepingLineItemInput {
+                    name: "Corrected item".to_string(),
+                    amount_minor: 9_000,
+                    quantity: Some(1),
+                    category_code: None,
+                }],
+            },
+        )
+        .await
+        .expect("line item mismatch");
+
+        let updated = update_bookkeeping_transaction_inner(
+            &db,
+            UpdateBookkeepingTransactionInput {
+                id: tx.id.clone(),
+                merchant: Some("Corrected Merchant".to_string()),
+                description: Some("Corrected description".to_string()),
+                amount_minor: Some(9_000),
+                currency: Some("krw".to_string()),
+                spent_at: Some("2026-06-18".to_string()),
+                spent_at_time: Some(Some("12:34:56".to_string())),
+                direction: Some("income".to_string()),
+                note: Some("Reviewed note".to_string()),
+                account: Some("하나은행".to_string()),
+                category_code: Some("food".to_string()),
+                subcategory_code: Some("food_cafe".to_string()),
+                payment_method_kind: Some(BookkeepingPaymentMethodKind::Card),
+                payment_method_label: Some("개인카드".to_string()),
+                payment_method_last4: Some("1234".to_string()),
+                expense_kind: Some(BookkeepingExpenseKind::Fixed),
+                order_no: Some("ORDER-1".to_string()),
+                payment_no: Some("PAY-1".to_string()),
+            },
+        )
+        .await
+        .expect("update transaction");
+
+        assert_eq!(updated.merchant, "Corrected Merchant");
+        assert_eq!(
+            updated.description.as_deref(),
+            Some("Corrected description")
+        );
+        assert_eq!(updated.amount_minor, 9_000);
+        assert_eq!(updated.currency, "KRW");
+        assert_eq!(updated.spent_at, "2026-06-18");
+        assert_eq!(updated.spent_at_time.as_deref(), Some("12:34:56"));
+        assert_eq!(updated.direction, BookkeepingDirection::Income);
+        assert_eq!(updated.note.as_deref(), Some("Reviewed note"));
+        assert_eq!(updated.account.as_deref(), Some("하나은행"));
+        assert_eq!(updated.category_code.as_deref(), Some("food"));
+        assert_eq!(updated.subcategory_code.as_deref(), Some("food_cafe"));
+        assert_eq!(updated.category, "식비");
+        assert_eq!(updated.subcategory.as_deref(), Some("카페"));
+        assert_eq!(
+            updated.payment_method_kind,
+            BookkeepingPaymentMethodKind::Card
+        );
+        assert_eq!(updated.payment_method_label.as_deref(), Some("개인카드"));
+        assert_eq!(updated.payment_method_last4.as_deref(), Some("1234"));
+        assert_eq!(updated.expense_kind, BookkeepingExpenseKind::Fixed);
+        assert_eq!(updated.order_no.as_deref(), Some("ORDER-1"));
+        assert_eq!(updated.payment_no.as_deref(), Some("PAY-1"));
+        assert!(!updated
+            .review_reasons_json
+            .contains(LINE_ITEM_SUM_MISMATCH_CODE));
+
+        let overrides = list_bookkeeping_category_overrides_inner(&db, &tx.id)
+            .await
+            .expect("category override history");
+        assert_eq!(overrides.len(), 1);
+
+        let bad_amount = update_bookkeeping_transaction_inner(
+            &db,
+            UpdateBookkeepingTransactionInput {
+                id: tx.id.clone(),
+                amount_minor: Some(0),
+                ..update_input(tx.id.clone())
+            },
+        )
+        .await
+        .expect_err("amount validation");
+        assert_eq!(bad_amount.code, "bookkeeping.amount");
+
+        let bad_direction = update_bookkeeping_transaction_inner(
+            &db,
+            UpdateBookkeepingTransactionInput {
+                id: tx.id.clone(),
+                direction: Some("refund".to_string()),
+                ..update_input(tx.id.clone())
+            },
+        )
+        .await
+        .expect_err("direction validation");
+        assert_eq!(bad_direction.code, "bookkeeping.direction");
+    }
+
+    #[tokio::test]
+    async fn reingest_upsert_preserves_deleted_at_and_review_status() {
+        let db = pool().await;
+        let mut input = manual_input("Gmail Store", 15_000, "2026-06-17", "food");
+        input.source = BookkeepingSource::Gmail;
+        input.source_ref = Some("gmail-message-1".to_string());
+
+        let tx = upsert_bookkeeping_transaction_from_ingest_inner(
+            &db,
+            input.clone(),
+            "transaction.ingested",
+            "거래가 저장됨",
+        )
+        .await
+        .expect("initial ingest");
+        update_bookkeeping_review_status_inner(&db, &tx.id, BookkeepingReviewStatus::Approved)
+            .await
+            .expect("approve");
+        delete_bookkeeping_transaction_inner(&db, &tx.id)
+            .await
+            .expect("delete");
+
+        input.merchant = "Gmail Store Reingested".to_string();
+        let reingested = upsert_bookkeeping_transaction_from_ingest_inner(
+            &db,
+            input,
+            "transaction.ingested",
+            "거래가 저장됨",
+        )
+        .await
+        .expect("reingest");
+
+        assert_eq!(reingested.id, tx.id);
+        assert_eq!(reingested.review_status, BookkeepingReviewStatus::Approved);
+        assert!(reingested.deleted_at.is_some());
     }
 
     #[tokio::test]

@@ -11,8 +11,10 @@ import {
   Plus,
   ReceiptText,
   RefreshCw,
+  RotateCcw,
   ShieldAlert,
   Tags,
+  Trash2,
   WalletCards,
 } from "lucide-react";
 import {
@@ -27,6 +29,7 @@ import {
 import type {
   BookkeepingAuditEntry,
   BookkeepingCategorySummary,
+  BookkeepingDirection,
   BookkeepingExpenseKind,
   BookkeepingGmailLabel,
   BookkeepingPaymentMethodKind,
@@ -61,14 +64,18 @@ import {
   useBookkeepingSyncJobs,
   useBookkeepingTaxonomy,
   useBookkeepingTransactions,
+  useBookkeepingTrash,
   useCreateBookkeepingRecurringExpense,
   useCreateBookkeepingTransaction,
+  useDeleteBookkeepingTransaction,
   useEnsureBookkeepingRecurringOccurrences,
   usePostBookkeepingRecurringOccurrence,
   useProjects,
+  useRestoreBookkeepingTransaction,
   useSetBookkeepingRecurringOccurrenceStatus,
   useSyncBookkeepingGmailReceipts,
   useUpdateBookkeepingReviewStatus,
+  useUpdateBookkeepingTransaction,
 } from "@/lib/query";
 import { useToastStore } from "@/lib/toast";
 
@@ -140,6 +147,26 @@ type ManualDraft = {
   paymentMethodLast4: string;
   expenseKind: BookkeepingExpenseKind;
   note: string;
+};
+
+type TransactionEditDraft = {
+  merchant: string;
+  amount: string;
+  currency: string;
+  spentAt: string;
+  spentAtTime: string;
+  direction: BookkeepingDirection;
+  categoryCode: string;
+  subcategoryCode: string;
+  note: string;
+  description: string;
+  account: string;
+  paymentMethodKind: BookkeepingPaymentMethodKind;
+  paymentMethodLabel: string;
+  paymentMethodLast4: string;
+  expenseKind: BookkeepingExpenseKind;
+  orderNo: string;
+  paymentNo: string;
 };
 
 type RecurringDraft = {
@@ -323,6 +350,28 @@ function nullableText(value: string) {
   return value.trim() || null;
 }
 
+function editDraftFromTransaction(tx: BookkeepingTransaction): TransactionEditDraft {
+  return {
+    merchant: tx.merchant,
+    amount: String(tx.amountMinor),
+    currency: tx.currency,
+    spentAt: tx.spentAt,
+    spentAtTime: tx.spentAtTime ?? "",
+    direction: tx.direction,
+    categoryCode: tx.categoryCode ?? tx.category,
+    subcategoryCode: tx.subcategoryCode ?? "",
+    note: tx.note ?? "",
+    description: tx.description ?? "",
+    account: tx.account ?? "",
+    paymentMethodKind: tx.paymentMethodKind,
+    paymentMethodLabel: tx.paymentMethodLabel ?? "",
+    paymentMethodLast4: tx.paymentMethodLast4 ?? "",
+    expenseKind: tx.expenseKind,
+    orderNo: tx.orderNo ?? "",
+    paymentNo: tx.paymentNo ?? "",
+  };
+}
+
 function pushMutationError(scope: string, error: unknown) {
   const store = useToastStore.getState();
   if (error instanceof IpcError) {
@@ -355,7 +404,9 @@ export function BookkeepingView() {
       : ALL_PROJECTS;
   const activeProjectId = selectedProjectId === ALL_PROJECTS ? null : selectedProjectId;
   const gmailLabels = useBookkeepingGmailLabels(activeProjectId);
-  const transactions = useBookkeepingTransactions(null, activeProjectId);
+  const reviewTransactions = useBookkeepingTransactions("needs_review", activeProjectId);
+  const approvedTransactions = useBookkeepingTransactions("approved", activeProjectId);
+  const trashTransactions = useBookkeepingTrash(activeProjectId);
   const summary = useBookkeepingMonthlySummary(month, activeProjectId);
   const audit = useBookkeepingAudit(null);
   const syncJobs = useBookkeepingSyncJobs();
@@ -368,10 +419,12 @@ export function BookkeepingView() {
   const setRecurringStatus = useSetBookkeepingRecurringOccurrenceStatus();
   const syncGmail = useSyncBookkeepingGmailReceipts();
   const review = useUpdateBookkeepingReviewStatus();
+  const updateTx = useUpdateBookkeepingTransaction();
+  const deleteTx = useDeleteBookkeepingTransaction();
+  const restoreTx = useRestoreBookkeepingTransaction();
   const pushSuccess = useToastStore((s) => s.pushSuccess);
   const pushError = useToastStore((s) => s.pushError);
 
-  const reviewQueue = (transactions.data ?? []).filter((tx) => tx.reviewStatus === "needs_review");
   const plannedTotal = (recurringOccurrences.data ?? [])
     .filter((row) => row.status !== "skipped")
     .reduce((sum, row) => sum + row.amountMinor, 0);
@@ -499,10 +552,63 @@ export function BookkeepingView() {
     review.mutate(
       { id: tx.id, status },
       {
-        onSuccess: () => pushSuccess(status === "approved" ? "승인했습니다" : "무시했습니다"),
+        onSuccess: () =>
+          pushSuccess(status === "approved" ? "확정했습니다" : "리뷰 대기로 복원했습니다"),
         onError: (error) => pushMutationError("bookkeeping.review", error),
       },
     );
+  };
+
+  const saveTransaction = (tx: BookkeepingTransaction, draft: TransactionEditDraft) => {
+    const amount = Number(draft.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      pushError("bookkeeping.edit", "금액을 확인하세요");
+      return;
+    }
+    updateTx.mutate(
+      {
+        id: tx.id,
+        merchant: draft.merchant,
+        description: nullableText(draft.description),
+        amountMinor: Math.round(amount),
+        currency: draft.currency,
+        spentAt: draft.spentAt,
+        spentAtTime: nullableText(draft.spentAtTime),
+        direction: draft.direction,
+        note: nullableText(draft.note),
+        account: nullableText(draft.account),
+        categoryCode: nullableText(draft.categoryCode),
+        subcategoryCode: nullableText(draft.subcategoryCode),
+        paymentMethodKind: draft.paymentMethodKind,
+        paymentMethodLabel: nullableText(draft.paymentMethodLabel),
+        paymentMethodLast4: nullableText(draft.paymentMethodLast4),
+        expenseKind: draft.expenseKind,
+        orderNo: nullableText(draft.orderNo),
+        paymentNo: nullableText(draft.paymentNo),
+      },
+      {
+        onSuccess: () => pushSuccess("거래를 저장했습니다"),
+        onError: (error) => pushMutationError("bookkeeping.edit", error),
+      },
+    );
+  };
+
+  const deleteTransaction = (tx: BookkeepingTransaction) => {
+    deleteTx.mutate(tx.id, {
+      onSuccess: () => pushSuccess("휴지통으로 이동했습니다"),
+      onError: (error) => pushMutationError("bookkeeping.delete", error),
+    });
+  };
+
+  const restoreTransaction = (tx: BookkeepingTransaction) => {
+    if (tx.deletedAt) {
+      restoreTx.mutate(tx.id, {
+        onSuccess: () => pushSuccess("거래를 복원했습니다"),
+        onError: (error) => pushMutationError("bookkeeping.restore", error),
+      });
+      return;
+    }
+    setReviewStatus(tx, "needs_review");
   };
 
   const confirmOccurrence = (occurrence: BookkeepingRecurringOccurrence) => {
@@ -555,9 +661,11 @@ export function BookkeepingView() {
         <div className="bk-layout">
           <section className="bk-main">
             <ReviewQueueCard
-              rows={reviewQueue}
-              disabled={review.isPending}
-              onSetStatus={setReviewStatus}
+              rows={reviewTransactions.data ?? []}
+              disabled={review.isPending || updateTx.isPending || deleteTx.isPending}
+              onApprove={(tx) => setReviewStatus(tx, "approved")}
+              onDelete={deleteTransaction}
+              onSave={saveTransaction}
             />
 
             <RecurringMonthCard
@@ -569,10 +677,17 @@ export function BookkeepingView() {
               onSkip={skipOccurrence}
             />
 
-            <RecentTransactionsCard
-              rows={transactions.data ?? []}
-              disabled={review.isPending}
-              onSetStatus={setReviewStatus}
+            <ApprovedTransactionsCard
+              rows={approvedTransactions.data ?? []}
+              disabled={updateTx.isPending || deleteTx.isPending}
+              onDelete={deleteTransaction}
+              onSave={saveTransaction}
+            />
+
+            <TrashTransactionsCard
+              rows={trashTransactions.data ?? []}
+              disabled={restoreTx.isPending || review.isPending}
+              onRestore={restoreTransaction}
             />
           </section>
 
@@ -753,11 +868,15 @@ function BookkeepingScopeControls({
 function ReviewQueueCard({
   rows,
   disabled,
-  onSetStatus,
+  onApprove,
+  onDelete,
+  onSave,
 }: {
   rows: BookkeepingTransaction[];
   disabled: boolean;
-  onSetStatus: (tx: BookkeepingTransaction, status: BookkeepingReviewStatus) => void;
+  onApprove: (tx: BookkeepingTransaction) => void;
+  onDelete: (tx: BookkeepingTransaction) => void;
+  onSave: (tx: BookkeepingTransaction, draft: TransactionEditDraft) => void;
 }) {
   return (
     <Card className="bk-card bk-review-card">
@@ -765,9 +884,9 @@ function ReviewQueueCard({
         <div>
           <CardTitle className="bk-card-title">
             <ClipboardList className="size-4" />
-            리뷰큐
+            검토
           </CardTitle>
-          <CardDescription>Gmail/OCR/수동 거래를 확정하거나 제외합니다.</CardDescription>
+          <CardDescription>Hermes 인박스 거래를 수정한 뒤 확정하거나 삭제합니다.</CardDescription>
         </div>
         <Badge variant="secondary">{rows.length}</Badge>
       </CardHeader>
@@ -775,12 +894,14 @@ function ReviewQueueCard({
         <div className="bk-transaction-list">
           {rows.length === 0 && <EmptyState>대기 중인 거래 없음</EmptyState>}
           {rows.map((tx) => (
-            <TransactionRow
+            <TransactionEditForm
               key={tx.id}
               tx={tx}
               disabled={disabled}
-              onApprove={() => onSetStatus(tx, "approved")}
-              onIgnore={() => onSetStatus(tx, "ignored")}
+              approveLabel="확정"
+              onApprove={() => onApprove(tx)}
+              onDelete={() => onDelete(tx)}
+              onSave={(draft) => onSave(tx, draft)}
             />
           ))}
         </div>
@@ -838,37 +959,113 @@ function RecurringMonthCard({
   );
 }
 
-function RecentTransactionsCard({
+function ApprovedTransactionsCard({
   rows,
   disabled,
-  onSetStatus,
+  onDelete,
+  onSave,
 }: {
   rows: BookkeepingTransaction[];
   disabled: boolean;
-  onSetStatus: (tx: BookkeepingTransaction, status: BookkeepingReviewStatus) => void;
+  onDelete: (tx: BookkeepingTransaction) => void;
+  onSave: (tx: BookkeepingTransaction, draft: TransactionEditDraft) => void;
 }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   return (
     <Card className="bk-card">
       <CardHeader>
         <CardTitle className="bk-card-title">
           <ReceiptText className="size-4" />
-          최근 거래
+          확정 거래
         </CardTitle>
+        <CardDescription>최근 원장 거래입니다. 펼치면 전체 필드를 수정할 수 있습니다.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="bk-transaction-list">
           {rows.length === 0 && <EmptyState>거래 없음</EmptyState>}
-          {rows.slice(0, 8).map((tx) => (
-            <TransactionRow
-              key={tx.id}
-              tx={tx}
-              disabled={disabled}
-              onApprove={() => onSetStatus(tx, "approved")}
-              onIgnore={() => onSetStatus(tx, "ignored")}
-            />
-          ))}
+          {rows.slice(0, 12).map((tx) =>
+            expandedId === tx.id ? (
+              <TransactionEditForm
+                key={tx.id}
+                tx={tx}
+                disabled={disabled}
+                onDelete={() => onDelete(tx)}
+                onSave={(draft) => onSave(tx, draft)}
+                onCancel={() => setExpandedId(null)}
+              />
+            ) : (
+              <TransactionReadRow
+                key={tx.id}
+                tx={tx}
+                disabled={disabled}
+                onEdit={() => setExpandedId(tx.id)}
+                onDelete={() => onDelete(tx)}
+              />
+            ),
+          )}
         </div>
       </CardContent>
+    </Card>
+  );
+}
+
+function TrashTransactionsCard({
+  rows,
+  disabled,
+  onRestore,
+}: {
+  rows: BookkeepingTransaction[];
+  disabled: boolean;
+  onRestore: (tx: BookkeepingTransaction) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card className="bk-card bk-collapsible-card" data-state={open ? "open" : "closed"}>
+      <CardHeader className="bk-card-header-row bk-collapsible-header">
+        <div className="bk-collapsible-heading">
+          <CardTitle className="bk-card-title">
+            <Trash2 className="size-4" />
+            휴지통
+          </CardTitle>
+          <CardDescription>삭제된 거래와 중복·무시 항목을 복원합니다.</CardDescription>
+        </div>
+        <div className="bk-header-actions">
+          <Badge variant="secondary">{rows.length}</Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="bk-collapse-trigger"
+            aria-controls="bk-trash-panel"
+            aria-expanded={open}
+            aria-label={`휴지통 ${open ? "접기" : "펼치기"}`}
+            onClick={() => setOpen(!open)}
+          >
+            <ChevronDown className="bk-collapse-chevron size-4" aria-hidden="true" />
+          </Button>
+        </div>
+      </CardHeader>
+      <div
+        id="bk-trash-panel"
+        className="bk-collapsible-region"
+        data-state={open ? "open" : "closed"}
+        aria-hidden={!open}
+      >
+        <div className="bk-collapsible-inner">
+          <CardContent>
+            <div className="bk-transaction-list">
+              {rows.length === 0 && <EmptyState>휴지통 비어 있음</EmptyState>}
+              {rows.map((tx) => (
+                <TrashTransactionRow
+                  key={tx.id}
+                  tx={tx}
+                  disabled={disabled}
+                  onRestore={() => onRestore(tx)}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1400,16 +1597,249 @@ function EmptyState({ children }: { children: string }) {
   return <div className="bk-empty typo-body-md">{children}</div>;
 }
 
-function TransactionRow({
+function TransactionEditForm({
   tx,
   disabled,
+  approveLabel,
   onApprove,
-  onIgnore,
+  onDelete,
+  onSave,
+  onCancel,
 }: {
   tx: BookkeepingTransaction;
   disabled: boolean;
-  onApprove: () => void;
-  onIgnore: () => void;
+  approveLabel?: string;
+  onApprove?: () => void;
+  onDelete: () => void;
+  onSave: (draft: TransactionEditDraft) => void;
+  onCancel?: () => void;
+}) {
+  const [draft, setDraft] = useState(() => editDraftFromTransaction(tx));
+  const fieldPrefix = `bk-edit-${tx.id}`;
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSave(draft);
+  };
+
+  return (
+    <article className="bk-row bk-transaction bk-transaction-edit" data-status={tx.reviewStatus}>
+      <form className="bk-edit-form" onSubmit={submit}>
+        <div className="bk-edit-head">
+          <div className="bk-row-title">
+            <strong className="typo-body-strong">{tx.merchant}</strong>
+            <span className="text-muted-foreground typo-caption-sm">
+              {tx.source !== "manual" && tx.sourceRef ? `${sourceLabel(tx.source)} · ${tx.sourceRef}` : sourceLabel(tx.source)}
+            </span>
+          </div>
+          <div className="bk-row-amount typo-title-sm">{currency.format(tx.amountMinor)}</div>
+        </div>
+
+        <div className="bk-edit-grid">
+          <Field label="가맹점" htmlFor={`${fieldPrefix}-merchant`}>
+            <Input
+              id={`${fieldPrefix}-merchant`}
+              value={draft.merchant}
+              onChange={(e) => setDraft((current) => ({ ...current, merchant: e.target.value }))}
+              required
+            />
+          </Field>
+          <div className="bk-form-grid">
+            <Field label="금액" htmlFor={`${fieldPrefix}-amount`}>
+              <Input
+                id={`${fieldPrefix}-amount`}
+                value={draft.amount}
+                onChange={(e) => setDraft((current) => ({ ...current, amount: e.target.value }))}
+                inputMode="numeric"
+                required
+              />
+            </Field>
+            <Field label="통화" htmlFor={`${fieldPrefix}-currency`}>
+              <Input
+                id={`${fieldPrefix}-currency`}
+                value={draft.currency}
+                onChange={(e) =>
+                  setDraft((current) => ({ ...current, currency: e.target.value.toUpperCase() }))
+                }
+                maxLength={3}
+                required
+              />
+            </Field>
+          </div>
+          <div className="bk-form-grid">
+            <Field label="날짜" htmlFor={`${fieldPrefix}-spent-at`}>
+              <Input
+                id={`${fieldPrefix}-spent-at`}
+                type="date"
+                value={draft.spentAt}
+                onChange={(e) => setDraft((current) => ({ ...current, spentAt: e.target.value }))}
+                required
+              />
+            </Field>
+            <Field label="시각" htmlFor={`${fieldPrefix}-spent-time`}>
+              <Input
+                id={`${fieldPrefix}-spent-time`}
+                value={draft.spentAtTime}
+                onChange={(e) =>
+                  setDraft((current) => ({ ...current, spentAtTime: e.target.value }))
+                }
+                placeholder="HH:MM:SS"
+              />
+            </Field>
+          </div>
+          <Field label="수입/지출" htmlFor={`${fieldPrefix}-direction`}>
+            <div id={`${fieldPrefix}-direction`} className="bk-segmented" role="group">
+              <Button
+                type="button"
+                size="sm"
+                variant={draft.direction === "expense" ? "default" : "outline"}
+                aria-pressed={draft.direction === "expense"}
+                onClick={() => setDraft((current) => ({ ...current, direction: "expense" }))}
+              >
+                지출
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={draft.direction === "income" ? "default" : "outline"}
+                aria-pressed={draft.direction === "income"}
+                onClick={() => setDraft((current) => ({ ...current, direction: "income" }))}
+              >
+                수입
+              </Button>
+            </div>
+          </Field>
+          <TaxonomyEditFields
+            prefix={fieldPrefix}
+            categoryCode={draft.categoryCode}
+            subcategoryCode={draft.subcategoryCode}
+            onCategoryChange={(categoryCode) =>
+              setDraft((current) => ({ ...current, categoryCode, subcategoryCode: "" }))
+            }
+            onSubcategoryChange={(subcategoryCode) =>
+              setDraft((current) => ({ ...current, subcategoryCode }))
+            }
+          />
+          <Field label="메모" htmlFor={`${fieldPrefix}-note`}>
+            <Textarea
+              id={`${fieldPrefix}-note`}
+              value={draft.note}
+              onChange={(e) => setDraft((current) => ({ ...current, note: e.target.value }))}
+              rows={2}
+            />
+          </Field>
+          <Field label="내용/설명" htmlFor={`${fieldPrefix}-description`}>
+            <Textarea
+              id={`${fieldPrefix}-description`}
+              value={draft.description}
+              onChange={(e) =>
+                setDraft((current) => ({ ...current, description: e.target.value }))
+              }
+              rows={2}
+            />
+          </Field>
+          <Field label="자산" htmlFor={`${fieldPrefix}-account`}>
+            <Input
+              id={`${fieldPrefix}-account`}
+              value={draft.account}
+              onChange={(e) => setDraft((current) => ({ ...current, account: e.target.value }))}
+            />
+          </Field>
+          <PaymentFields
+            kindId={`${fieldPrefix}-payment-kind`}
+            labelId={`${fieldPrefix}-payment-label`}
+            last4Id={`${fieldPrefix}-payment-last4`}
+            kind={draft.paymentMethodKind}
+            label={draft.paymentMethodLabel}
+            last4={draft.paymentMethodLast4}
+            onKindChange={(paymentMethodKind) =>
+              setDraft((current) => ({ ...current, paymentMethodKind }))
+            }
+            onLabelChange={(paymentMethodLabel) =>
+              setDraft((current) => ({ ...current, paymentMethodLabel }))
+            }
+            onLast4Change={(paymentMethodLast4) =>
+              setDraft((current) => ({ ...current, paymentMethodLast4 }))
+            }
+          />
+          <Field label="비용유형" htmlFor={`${fieldPrefix}-expense-kind`}>
+            <Select
+              value={draft.expenseKind}
+              onValueChange={(value) =>
+                setDraft((current) => ({
+                  ...current,
+                  expenseKind: value as BookkeepingExpenseKind,
+                }))
+              }
+            >
+              <SelectTrigger id={`${fieldPrefix}-expense-kind`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_KIND_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="bk-form-grid">
+            <Field label="주문번호" htmlFor={`${fieldPrefix}-order-no`}>
+              <Input
+                id={`${fieldPrefix}-order-no`}
+                value={draft.orderNo}
+                onChange={(e) => setDraft((current) => ({ ...current, orderNo: e.target.value }))}
+              />
+            </Field>
+            <Field label="결제번호" htmlFor={`${fieldPrefix}-payment-no`}>
+              <Input
+                id={`${fieldPrefix}-payment-no`}
+                value={draft.paymentNo}
+                onChange={(e) =>
+                  setDraft((current) => ({ ...current, paymentNo: e.target.value }))
+                }
+              />
+            </Field>
+          </div>
+        </div>
+
+        <TransactionMetadata tx={tx} />
+
+        <div className="bk-row-actions">
+          <Button type="submit" size="sm" disabled={disabled}>
+            저장
+          </Button>
+          {onApprove && (
+            <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onApprove}>
+              <Check className="size-3.5" />
+              {approveLabel ?? "확정"}
+            </Button>
+          )}
+          {onCancel && (
+            <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onCancel}>
+              접기
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onDelete}>
+            <Trash2 className="size-3.5" />
+            삭제
+          </Button>
+        </div>
+      </form>
+    </article>
+  );
+}
+
+function TransactionReadRow({
+  tx,
+  disabled,
+  onEdit,
+  onDelete,
+}: {
+  tx: BookkeepingTransaction;
+  disabled: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <article className="bk-row bk-transaction" data-status={tx.reviewStatus}>
@@ -1420,59 +1850,172 @@ function TransactionRow({
             <span className="text-muted-foreground typo-caption-sm">{tx.description}</span>
           )}
         </div>
-        <div className="bk-row-meta typo-caption-sm">
-          <span>
-            {tx.spentAt}
-            {tx.spentAtTime ? ` ${tx.spentAtTime}` : ""}
-          </span>
-          <Badge variant={tx.direction === "income" ? "secondary" : "outline"}>
-            {directionLabel(tx.direction)}
-          </Badge>
-          <Badge variant="outline">{tx.category}</Badge>
-          {tx.subcategory && <Badge variant="outline">{tx.subcategory}</Badge>}
-          {tx.account && <span>· {tx.account}</span>}
-          <Badge variant="outline">{sourceLabel(tx.source)}</Badge>
-          <Badge variant={tx.expenseKind === "variable" ? "outline" : "secondary"}>
-            {expenseKindLabel(tx.expenseKind)}
-          </Badge>
-          <span>
-            {paymentSummary(tx.paymentMethodKind, tx.paymentMethodLabel, tx.paymentMethodLast4)}
-          </span>
-          {tx.confidence != null && <span>신뢰도 {Math.round(tx.confidence * 100)}%</span>}
-          {tx.duplicateOfTransactionId && <Badge variant="destructive">중복</Badge>}
-          <span>{statusLabel(tx.reviewStatus)}</span>
-        </div>
-        {reviewReasonCodes(tx.reviewReasonsJson).length > 0 && (
-          <div className="bk-row-reasons typo-caption-sm">
-            {reviewReasonCodes(tx.reviewReasonsJson).map((code) => (
-              <Badge key={code} variant="secondary">
-                {code}
-              </Badge>
-            ))}
-          </div>
-        )}
-        {tx.source !== "manual" && tx.sourceRef && (
-          <p className="text-muted-foreground typo-caption-sm">출처 ref: {tx.sourceRef}</p>
-        )}
-        {tx.note && <p className="text-muted-foreground typo-caption-sm">{tx.note}</p>}
+        <TransactionMetadata tx={tx} compact />
       </div>
       <div className="bk-row-amount typo-title-sm">{currency.format(tx.amountMinor)}</div>
       <div className="bk-row-actions">
-        {tx.reviewStatus !== "approved" && (
-          <Button size="sm" variant="outline" disabled={disabled} onClick={onApprove}>
-            <Check className="size-3.5" />
-            승인
-          </Button>
-        )}
-        {tx.reviewStatus !== "ignored" && (
-          <Button size="sm" variant="ghost" disabled={disabled} onClick={onIgnore}>
-            <Ban className="size-3.5" />
-            무시
-          </Button>
-        )}
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onEdit}>
+          편집
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onDelete}>
+          <Trash2 className="size-3.5" />
+          삭제
+        </Button>
       </div>
     </article>
   );
+}
+
+function TrashTransactionRow({
+  tx,
+  disabled,
+  onRestore,
+}: {
+  tx: BookkeepingTransaction;
+  disabled: boolean;
+  onRestore: () => void;
+}) {
+  const reason = tx.deletedAt ? "삭제됨" : "중복·무시";
+  return (
+    <article className="bk-row bk-transaction" data-status={tx.reviewStatus}>
+      <div className="bk-row-main">
+        <div className="bk-row-title">
+          <strong className="typo-body-strong">{tx.merchant}</strong>
+          {tx.description && (
+            <span className="text-muted-foreground typo-caption-sm">{tx.description}</span>
+          )}
+        </div>
+        <div className="bk-row-meta typo-caption-sm">
+          <Badge variant={tx.deletedAt ? "destructive" : "secondary"}>{reason}</Badge>
+          <span>{tx.spentAt}</span>
+          <span>{currency.format(tx.amountMinor)}</span>
+          <Badge variant="outline">{sourceLabel(tx.source)}</Badge>
+          {tx.duplicateOfTransactionId && <Badge variant="destructive">중복</Badge>}
+        </div>
+      </div>
+      <div className="bk-row-actions">
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onRestore}>
+          <RotateCcw className="size-3.5" />
+          복원
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+function TransactionMetadata({ tx, compact = false }: { tx: BookkeepingTransaction; compact?: boolean }) {
+  const reasons = reviewReasonCodes(tx.reviewReasonsJson);
+  return (
+    <>
+      <div className="bk-row-meta typo-caption-sm">
+        <span>
+          {tx.spentAt}
+          {tx.spentAtTime ? ` ${tx.spentAtTime}` : ""}
+        </span>
+        <Badge variant={tx.direction === "income" ? "secondary" : "outline"}>
+          {directionLabel(tx.direction)}
+        </Badge>
+        <Badge variant="outline">{tx.category}</Badge>
+        {tx.subcategory && <Badge variant="outline">{tx.subcategory}</Badge>}
+        {tx.account && <span>· {tx.account}</span>}
+        <Badge variant="outline">{sourceLabel(tx.source)}</Badge>
+        <Badge variant={tx.expenseKind === "variable" ? "outline" : "secondary"}>
+          {expenseKindLabel(tx.expenseKind)}
+        </Badge>
+        {!compact && (
+          <span>
+            {paymentSummary(tx.paymentMethodKind, tx.paymentMethodLabel, tx.paymentMethodLast4)}
+          </span>
+        )}
+        {tx.confidence != null && <span>신뢰도 {Math.round(tx.confidence * 100)}%</span>}
+        {tx.duplicateOfTransactionId && <Badge variant="destructive">중복</Badge>}
+        <span>{statusLabel(tx.reviewStatus)}</span>
+        <span>생성 {tx.createdAt}</span>
+      </div>
+      {reasons.length > 0 && (
+        <div className="bk-row-reasons typo-caption-sm">
+          {reasons.map((code) => (
+            <Badge key={code} variant="secondary">
+              {code}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {!compact && tx.note && <p className="text-muted-foreground typo-caption-sm">{tx.note}</p>}
+    </>
+  );
+}
+
+function TaxonomyEditFields({
+  prefix,
+  categoryCode,
+  subcategoryCode,
+  onCategoryChange,
+  onSubcategoryChange,
+}: {
+  prefix: string;
+  categoryCode: string;
+  subcategoryCode: string;
+  onCategoryChange: (value: string) => void;
+  onSubcategoryChange: (value: string) => void;
+}) {
+  const taxonomy = useBookkeepingTaxonomy();
+  const topLevel =
+    taxonomy.data
+      ?.filter((node) => node.parentCode === null)
+      .map((node) => ({ value: node.code, label: node.label })) ?? [];
+  const subcategories =
+    taxonomy.data
+      ?.filter((node) => node.parentCode === categoryCode)
+      .map((node) => ({ value: node.code, label: node.label })) ?? [];
+  const topItems = ensureSelectOption(
+    topLevel.length > 0 ? topLevel : CATEGORY_OPTIONS.map((code) => ({ value: code, label: code })),
+    categoryCode,
+  );
+  const subItems = ensureSelectOption(subcategories, subcategoryCode);
+
+  return (
+    <div className="bk-form-grid">
+      <Field label="카테고리" htmlFor={`${prefix}-category`}>
+        <Select value={categoryCode} onValueChange={onCategoryChange}>
+          <SelectTrigger id={`${prefix}-category`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {topItems.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="소분류" htmlFor={`${prefix}-subcategory`}>
+        <Select value={subcategoryCode || "__none__"} onValueChange={(value) => onSubcategoryChange(value === "__none__" ? "" : value)}>
+          <SelectTrigger id={`${prefix}-subcategory`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">없음</SelectItem>
+            {subItems
+              .filter((option) => option.value)
+              .map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    </div>
+  );
+}
+
+function ensureSelectOption<T extends { value: string; label: string }>(items: T[], value: string) {
+  if (!value || items.some((item) => item.value === value)) {
+    return items;
+  }
+  return [...items, { value, label: value }];
 }
 
 function RecurringOccurrenceRow({

@@ -134,6 +134,12 @@
   color: var(--bk-ink);
 }
 
+.bk-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wr-density-xs);
+}
+
 .bk-collapsible-header {
   align-items: center;
 }
@@ -256,6 +262,39 @@
 .bk-transaction:hover {
   background: var(--bk-stone);
   transform: translateY(-1px);
+}
+
+.bk-transaction-edit {
+  display: block;
+}
+
+.bk-edit-form {
+  display: grid;
+  gap: var(--wr-density-lg);
+}
+
+.bk-edit-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: var(--wr-density-lg);
+}
+
+.bk-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--wr-density-lg) var(--wr-density-md);
+}
+
+.bk-edit-grid > .bk-payment-fields,
+.bk-edit-grid > .bk-form-grid {
+  min-width: 0;
+}
+
+.bk-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--wr-density-xs);
 }
 
 .bk-transaction:active {
@@ -413,7 +452,9 @@
   .bk-metrics,
   .bk-side,
   .bk-form-grid,
-  .bk-payment-fields {
+  .bk-payment-fields,
+  .bk-edit-head,
+  .bk-edit-grid {
     grid-template-columns: 1fr;
   }
 
