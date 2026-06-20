@@ -1,0 +1,20 @@
+src/lib/timelineCoords.ts
+  s_969188e6331f05::t_fb830a4e79261a 48
+  s_969188e6331f05::t_ff86994403f891 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "24a30478f6e31bd6617aeced311910b075781210",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
