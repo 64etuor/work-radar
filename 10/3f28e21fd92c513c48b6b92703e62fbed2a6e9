@@ -1,0 +1,21 @@
+scripts/check-timeline-axis-ssot.mjs
+  s_969188e6331f05::t_13646f44b0f0ab 1-64
+package.json
+  s_969188e6331f05::t_0838b40ff9966e 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "103f28e21fd92c513c48b6b92703e62fbed2a6e9",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
