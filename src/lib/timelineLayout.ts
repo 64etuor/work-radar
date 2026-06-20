@@ -12,6 +12,7 @@
  */
 
 import { absMin, localDateOf } from "./timeAxis";
+import { HOUR_PX, MIN_BLOCK_PX } from "./timelineAxis";
 
 export type TimedBlock = {
   id: string;
@@ -45,9 +46,6 @@ export type LayoutBox = {
   widthPct: number;
   block: TimedBlock;
 };
-
-const HOUR_PX = 60;
-const MIN_BLOCK_PX = 20;
 
 /**
  * @param anchorDate 절대 분 축의 0점(YYYY-MM-DD, 로드된 가장 이른 날). 생략 시 블록 중
