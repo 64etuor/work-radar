@@ -1,0 +1,23 @@
+src-tauri/src/commands/routines/crud.rs
+  s_969188e6331f05::t_152b83468a5829 276-278,281
+  s_969188e6331f05::t_81dedcd2733ee8 260-275,279-280,282-289
+  s_969188e6331f05::t_44d10d804bc66d 629-638,664-668
+  s_969188e6331f05::t_8c5febc69387dc 227-234
+  s_969188e6331f05::t_3363926966110b 544-628,639-663,669
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "85a6bc7317410e92dfaa419907ac4452eec2b54b",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
