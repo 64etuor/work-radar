@@ -252,3 +252,49 @@ async fn fetch_events_core_empty_selection_is_empty() {
     .await;
     assert!(out.is_empty());
 }
+
+// ── normalize_timed_to_local unit tests ─────────────────────────────────────
+
+use chrono::Offset;
+
+#[test]
+fn normalize_timed_utc_to_local_preserves_instant_and_uses_local_offset() {
+    // 2026-06-20T05:30:00Z is one instant; normalized must be the SAME instant,
+    // rendered with the machine's local offset and no fractional seconds / no 'Z'.
+    let out = normalize_timed_to_local("2026-06-20T05:30:00Z");
+    let got = chrono::DateTime::parse_from_rfc3339(&out).expect("normalized is valid rfc3339");
+    let src = chrono::DateTime::parse_from_rfc3339("2026-06-20T05:30:00Z").unwrap();
+    assert_eq!(got.timestamp(), src.timestamp(), "instant preserved");
+    // offset equals chrono::Local's offset for that instant
+    let expected_offset = src.with_timezone(&chrono::Local).offset().fix();
+    assert_eq!(got.offset(), &expected_offset, "rendered in local offset");
+    assert!(
+        !out.contains('Z') && !out.contains('.'),
+        "no Z, no fractional: {out}"
+    );
+    // fixed char positions the frontend slices rely on
+    assert_eq!(&out[10..11], "T");
+    assert_eq!(
+        out.len(),
+        25,
+        "YYYY-MM-DDTHH:MM:SS+HH:MM is 25 chars: {out}"
+    );
+}
+
+#[test]
+fn normalize_timed_foreign_offset_to_local_preserves_instant() {
+    let out = normalize_timed_to_local("2026-06-20T14:30:00-07:00");
+    let got = chrono::DateTime::parse_from_rfc3339(&out).unwrap();
+    let src = chrono::DateTime::parse_from_rfc3339("2026-06-20T14:30:00-07:00").unwrap();
+    assert_eq!(got.timestamp(), src.timestamp());
+    assert_eq!(
+        *got.offset(),
+        src.with_timezone(&chrono::Local).offset().fix()
+    );
+}
+
+#[test]
+fn normalize_timed_unparseable_passes_through() {
+    assert_eq!(normalize_timed_to_local("not-a-date"), "not-a-date");
+    assert_eq!(normalize_timed_to_local(""), "");
+}
