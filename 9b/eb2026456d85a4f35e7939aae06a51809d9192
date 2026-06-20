@@ -1,0 +1,22 @@
+src/components/today/TimelineCanvas.tsx
+  s_969188e6331f05::t_ed3ab4fea9227f 179
+  s_969188e6331f05::t_6f6a34cba2132a 17
+src/components/today/useTimelineScroll.ts
+  s_969188e6331f05::t_7a8b8dc247f53a 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "9beb2026456d85a4f35e7939aae06a51809d9192",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
