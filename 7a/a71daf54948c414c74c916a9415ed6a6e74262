@@ -1,0 +1,24 @@
+src-tauri/src/calendar/tests.rs
+  s_969188e6331f05::t_e3f2a148a7690f 255-270,275-276,282-289,294-300
+  s_969188e6331f05::t_17bcaa025e6316 271-274,277-281
+  s_969188e6331f05::t_22fa5c2faa0cb1 290-293
+src-tauri/src/calendar/mod.rs
+  s_969188e6331f05::t_7b12a755ee40f8 219-222,224-232
+  s_969188e6331f05::t_fa4a9b527f17f3 223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "7aa71daf54948c414c74c916a9415ed6a6e74262",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
