@@ -239,6 +239,13 @@ async fn execute_with_access<P: CalendarProvider>(
                     .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
                 return Ok(());
             }
+            // 새 mirror 생성 전, 이 카드/루틴의 기존 링크(옛 mirror)를 읽어둔다 — 생성·링크백 후
+            // 옛 이벤트를 삭제해 오펀을 막는다('create가 기존 링크를 대체'하는 일반 케이스 방어:
+            // MoveCalendar(다른 캘린더 이동) 등). Schedule-when-linked는 build_queue_row에서 이미
+            // patch로 가지만, 여기 워커 단의 방어가 cross-cal 및 잔여 경로까지 커버한다(defense-in-depth).
+            let prev_link = fetch_target_link(pool, w)
+                .await
+                .map_err(|e| SyncError::Terminal(format!("fetch prev link: {e}")))?;
             let input = parse_create_input(&w.payload_json)?;
             let (event_id, _url) = provider
                 .create_event(access, &w.calendar_id, &input)
@@ -249,6 +256,14 @@ async fn execute_with_access<P: CalendarProvider>(
             link_back_impl(pool, w, &event_id)
                 .await
                 .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
+            // 옛 mirror가 새 이벤트와 다르면 삭제(오펀 방지). best-effort — 새 이벤트·링크는 이미
+            // 정합이라 삭제 실패(이미 없음 포함)해도 write는 성공으로 본다. 재시도 경로
+            // (w.event_id Some)는 옛 id를 잃으므로 첫 실행에서만 시도 — 잔여는 reconciliation 후속.
+            if let Some((old_cal, old_evt)) = prev_link {
+                if old_evt != event_id {
+                    let _ = provider.delete_event(access, &old_cal, &old_evt).await;
+                }
+            }
             Ok(())
         }
         "patch" => {
@@ -309,6 +324,40 @@ async fn link_back_impl(pool: &SqlitePool, w: &PendingWrite, event_id: &str) -> 
         _ => {}
     }
     Ok(())
+}
+
+/// 워커가 새 mirror 생성 전 카드/루틴의 기존 링크(옛 mirror)를 읽는다 — 생성·링크백 후 옛
+/// 이벤트를 지워 오펀을 막기 위함(link_back_impl의 역). 둘 다 있을 때만 Some.
+async fn fetch_target_link(
+    pool: &SqlitePool,
+    w: &PendingWrite,
+) -> sqlx::Result<Option<(String, String)>> {
+    let row: Option<(Option<String>, Option<String>)> = match w.target_kind.as_str() {
+        "signal" => {
+            sqlx::query_as("SELECT linked_calendar_id, linked_event_id FROM signals WHERE id = ?1")
+                .bind(&w.target_id)
+                .fetch_optional(pool)
+                .await?
+        }
+        "routine_check" => {
+            let Some((routine_id, date)) = split_routine_key(&w.target_id) else {
+                return Ok(None);
+            };
+            sqlx::query_as(
+                "SELECT linked_calendar_id, linked_event_id FROM routine_checks \
+                 WHERE routine_id = ?1 AND date = ?2",
+            )
+            .bind(routine_id)
+            .bind(date)
+            .fetch_optional(pool)
+            .await?
+        }
+        _ => None,
+    };
+    Ok(row.and_then(|(cal, evt)| match (cal, evt) {
+        (Some(c), Some(e)) => Some((c, e)),
+        _ => None,
+    }))
 }
 
 async fn unlink_impl(pool: &SqlitePool, w: &PendingWrite) -> sqlx::Result<()> {
@@ -696,6 +745,7 @@ mod tests {
     #[derive(Default)]
     struct RecordingProvider {
         created: Mutex<Vec<(String, String)>>, // (calendar_id, title)
+        deleted: Mutex<Vec<(String, String)>>, // (calendar_id, event_id)
         new_event_id: String,
     }
 
@@ -745,12 +795,11 @@ mod tests {
         ) -> Result<(), CalendarError> {
             Ok(())
         }
-        async fn delete_event(
-            &self,
-            _at: &str,
-            _cal: &str,
-            _ev: &str,
-        ) -> Result<(), CalendarError> {
+        async fn delete_event(&self, _at: &str, cal: &str, ev: &str) -> Result<(), CalendarError> {
+            self.deleted
+                .lock()
+                .unwrap()
+                .push((cal.to_string(), ev.to_string()));
             Ok(())
         }
     }
@@ -835,6 +884,63 @@ mod tests {
         assert_eq!(remaining.0, 0);
         // format_sqlite_datetime / Utc는 lifetime 워밍업으로만 참조 — 추후 patch/delete e2e 추가 시 재사용.
         let _ = format_sqlite_datetime(Utc::now());
+    }
+
+    /// 오펀 누수 방어(defense-in-depth): 이미 다른 이벤트가 링크된 카드에 대한 create(예: MoveCalendar로
+    /// 다른 캘린더에 새 이벤트 생성)는, 새 이벤트 생성·링크백 후 **옛 mirror 이벤트를 삭제**해야 한다.
+    /// 안 그러면 옛 이벤트가 카드에 안 묶인 채 Google에 남아 중복이 된다.
+    #[tokio::test]
+    async fn create_replacing_existing_link_deletes_old_event() {
+        let pool = fresh_pool().await;
+        // 이미 cal_old의 evt_old에 링크된 시그널.
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','Demo','braindump','thought','evt_old','cal_old')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        // 새 캘린더(cal_new)에 create — MoveCalendar 커밋 후 워커가 보는 형태(staged 제거됨).
+        let _pid = upsert_write(
+            &pool,
+            "create",
+            "signal",
+            "s1",
+            "cal_new",
+            None,
+            r#"{"title":"Demo","start":"2026-06-21T10:00:00+09:00","duration_min":30}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let row = &due[0];
+        let provider = RecordingProvider {
+            new_event_id: "evt_new".into(),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake", row)
+            .await
+            .unwrap();
+
+        // 링크가 새 이벤트로 이동.
+        let (le, lc): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT linked_event_id, linked_calendar_id FROM signals WHERE id = 's1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(le.as_deref(), Some("evt_new"));
+        assert_eq!(lc.as_deref(), Some("cal_new"));
+        // 옛 mirror 이벤트가 삭제됨(오펀 방지).
+        let deleted = provider.deleted.lock().unwrap().clone();
+        assert_eq!(
+            deleted,
+            vec![("cal_old".to_string(), "evt_old".to_string())],
+            "옛 mirror 이벤트를 삭제해 오펀을 막아야 한다"
+        );
     }
 
     #[tokio::test]
