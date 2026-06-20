@@ -298,3 +298,93 @@ fn normalize_timed_unparseable_passes_through() {
     assert_eq!(normalize_timed_to_local("not-a-date"), "not-a-date");
     assert_eq!(normalize_timed_to_local(""), "");
 }
+
+// ── fetch_events_core normalization integration test ─────────────────────────
+
+/// fetch_events_core: 타임드 UTC 이벤트는 로컬 오프셋으로 정규화, all-day는 그대로 통과.
+#[tokio::test]
+async fn fetch_events_core_normalizes_timed_to_local_keeps_all_day() {
+    let mut events = HashMap::new();
+    events.insert(
+        "calMixed".into(),
+        Ok(vec![
+            // timed UTC event — should be normalized to local offset
+            RawEvent {
+                id: "timed_utc".into(),
+                recurring_event_id: None,
+                title: "Timed UTC".into(),
+                start: "2026-06-20T05:30:00Z".into(),
+                end: "2026-06-20T06:30:00Z".into(),
+                all_day: false,
+                location: None,
+                url: None,
+            },
+            // all-day event — must pass through unchanged
+            RawEvent {
+                id: "all_day".into(),
+                recurring_event_id: None,
+                title: "All Day".into(),
+                start: "2026-06-20".into(),
+                end: "2026-06-21".into(),
+                all_day: true,
+                location: None,
+                url: None,
+            },
+        ]),
+    );
+    let provider = FakeProvider {
+        events,
+        ..Default::default()
+    };
+    let projects = vec![ProjectCalendars {
+        project_id: "pNorm".into(),
+        project_color: "#2D6CDF".into(),
+        project_text_color: "#FFFFFF".into(),
+        access_token: "tok".into(),
+        calendars: vec![("calMixed".into(), "정규화".into())],
+    }];
+    let out = fetch_events_core(&provider, projects, "min", "max").await;
+    assert_eq!(out.len(), 2, "two events returned");
+
+    let timed = out
+        .iter()
+        .find(|e| !e.all_day)
+        .expect("timed event present");
+    // same instant, local offset, no Z
+    let got = chrono::DateTime::parse_from_rfc3339(&timed.start)
+        .expect("normalized start is valid rfc3339");
+    let src = chrono::DateTime::parse_from_rfc3339("2026-06-20T05:30:00Z").unwrap();
+    assert_eq!(got.timestamp(), src.timestamp(), "instant preserved");
+    assert!(
+        !timed.start.contains('Z'),
+        "no Z in normalized start: {}",
+        timed.start
+    );
+
+    let got_end =
+        chrono::DateTime::parse_from_rfc3339(&timed.end).expect("normalized end is valid rfc3339");
+    let src_end = chrono::DateTime::parse_from_rfc3339("2026-06-20T06:30:00Z").unwrap();
+    assert_eq!(
+        got_end.timestamp(),
+        src_end.timestamp(),
+        "end instant preserved"
+    );
+    assert!(
+        !timed.end.contains('Z'),
+        "no Z in normalized end: {}",
+        timed.end
+    );
+
+    let all_day = out
+        .iter()
+        .find(|e| e.all_day)
+        .expect("all-day event present");
+    assert_eq!(
+        all_day.start, "2026-06-20",
+        "all-day start passes through unchanged"
+    );
+    assert_eq!(
+        all_day.end, "2026-06-21",
+        "all-day end passes through unchanged"
+    );
+}
