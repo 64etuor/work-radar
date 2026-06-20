@@ -38,6 +38,7 @@ import {
   type PlacementPatch,
 } from "@/lib/optimisticSchedule";
 import { absMin, localDateOf } from "@/lib/timeAxis";
+import { clientToGrid, SNAP_MIN, totalPxForDays } from "@/lib/timelineAxis";
 import {
   clampDurationToDate,
   clampIsoToDate,
@@ -48,9 +49,6 @@ import {
 } from "@/lib/timelineCoords";
 import { type LayoutBox, magnetEdgesFromBoxes } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
-
-const HOUR_PX = 60;
-const SNAP_MIN = 15;
 /** signal 신규 배치 기본 길이(분) — 스펙 §D8. */
 const DEFAULT_SCHEDULE_MIN = 60;
 /** routine 신규 배치 길이(분) — 스펙 §D8 루틴 가상 인스턴스. */
@@ -336,8 +334,7 @@ export function useTimelineDnd(opts: Opts) {
     const p = pointerClientRef?.current;
     if (!el || !p) return fallback;
     const rect = el.getBoundingClientRect();
-    const y = p.y - rect.top;
-    return Math.max(0, Math.min(days * 24 * HOUR_PX, y));
+    return clientToGrid(p, rect, totalPxForDays(days)).y;
   };
 
   const resolveCanvasDragDelta = (fallback: DragDelta): DragDelta =>
