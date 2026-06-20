@@ -224,6 +224,14 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     };
     let duration = input.duration_min.map(|v| v as i64);
 
+    // 시간 변경 감지 — 바뀌었으면 아래에서 '수정한 당일 이후' per-day override를 정리한다.
+    let prev_time_of_day: Option<String> =
+        sqlx::query_scalar::<_, Option<String>>("SELECT time_of_day FROM routines WHERE id = ?1")
+            .bind(&input.id)
+            .fetch_optional(db)
+            .await?
+            .flatten();
+
     // area/kind는 의도적으로 갱신 안 함 — 카드 인라인 편집 IPC(set_routine_area_tag_key/
     // set_routine_kind)가 그 두 컬럼을 소유한다(signals 패턴 미러).
     // google_*도 갱신 안 함 — sync 토글 IPC가 소유. (스케줄 변경의 Google PATCH 전파는 PR 3.)
@@ -247,6 +255,36 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
 
     if result.rows_affected() == 0 {
         return Err(sqlx::Error::RowNotFound);
+    }
+
+    // '수정한 당일 이후로 적용': 시간이 바뀌었으면 오늘(local) 이후의 per-day override/링크를
+    // 정리해, 새 time_of_day가 오늘부터 보이게 한다(렌더는 `time_override ?? time_of_day`라
+    // 옛 override가 남아 있으면 새 시각이 마스킹된다). 과거 날짜는 그날 실제 시각의 기록이라
+    // 보존(히스토리). 동기화 루틴은 google_sync가 같은 effective_date(오늘)로 Google master를
+    // split하므로 앱/Google이 '당일 이후'로 일관된다. 시간 미변경(제목/길이만 편집)이면 건드리지
+    // 않아 사용자가 의도한 per-day 조정을 보존한다.
+    if prev_time_of_day != time_of_day {
+        let today = local_today();
+        sqlx::query(
+            "UPDATE routine_checks SET time_override = NULL, linked_event_id = NULL, \
+             linked_calendar_id = NULL WHERE routine_id = ?1 AND date >= ?2",
+        )
+        .bind(&input.id)
+        .bind(&today)
+        .execute(db)
+        .await?;
+        // 정리 후 아무 상태도 안 남은 행은 삭제 — 빈 routine_checks 잔존 방지. 완료 마커는
+        // `completed_at`(done_at은 NOT NULL DEFAULT라 항상 존재 = 완료 신호 아님; toggle_routine_check
+        // 의 정리 조건과 동일하게 done_at은 보지 않는다).
+        sqlx::query(
+            "DELETE FROM routine_checks WHERE routine_id = ?1 AND date >= ?2 \
+             AND completed_at IS NULL AND time_override IS NULL \
+             AND linked_event_id IS NULL AND linked_calendar_id IS NULL",
+        )
+        .bind(&input.id)
+        .bind(&today)
+        .execute(db)
+        .await?;
     }
 
     // 미발사 루틴 알림 삭제 — 다음 list_today_routines 호출 시 새 시간으로 재enqueue됨.
@@ -502,5 +540,131 @@ mod tests {
             &[],
         )
         .is_ok());
+    }
+
+    fn seed_routine_input(time: &str) -> CreateRoutineInput {
+        CreateRoutineInput {
+            title: "중국어".into(),
+            freq: RoutineFreq::Daily,
+            weekdays: vec![],
+            anchor_date: None,
+            time_of_day: Some(time.into()),
+            reminder_offset_min: None,
+            area: None,
+            kind: None,
+            monthly_pattern: None,
+            monthly_nth_week: None,
+            duration_min: None,
+        }
+    }
+
+    fn edit_input(id: &str, title: &str, time: &str) -> UpdateRoutineInput {
+        UpdateRoutineInput {
+            id: id.into(),
+            title: title.into(),
+            freq: RoutineFreq::Daily,
+            weekdays: vec![],
+            anchor_date: None,
+            time_of_day: Some(time.into()),
+            reminder_offset_min: None,
+            monthly_pattern: None,
+            monthly_nth_week: None,
+            duration_min: None,
+        }
+    }
+
+    async fn insert_override(db: &Db, rid: &str, date: &str, time: &str) {
+        sqlx::query(
+            "INSERT INTO routine_checks (id, routine_id, date, time_override) \
+             VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3)",
+        )
+        .bind(rid)
+        .bind(date)
+        .bind(time)
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
+    async fn count_checks(db: &Db, rid: &str, date: &str) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM routine_checks WHERE routine_id=?1 AND date=?2")
+            .bind(rid)
+            .bind(date)
+            .fetch_one(db)
+            .await
+            .unwrap()
+    }
+
+    // 시간 편집 = '수정한 당일 이후로 적용': 오늘/미래 override는 정리(새 time_of_day가 보이게),
+    // 과거 override는 히스토리로 보존.
+    #[tokio::test]
+    async fn edit_time_clears_today_and_future_overrides_preserves_past() {
+        let db = crate::commands::shared::test_support::fresh_db().await;
+        let rid = insert_routine(&db, &seed_routine_input("13:30"))
+            .await
+            .unwrap()
+            .id;
+        let today = local_today();
+        let past = "2000-01-01";
+        let future = "2999-12-31";
+        insert_override(&db, &rid, past, "08:00").await;
+        insert_override(&db, &rid, &today, "21:00").await;
+        insert_override(&db, &rid, future, "22:00").await;
+
+        update_routine_inner(&db, edit_input(&rid, "중국어", "14:00"))
+            .await
+            .unwrap();
+
+        // 과거 override 보존
+        let past_ov: Option<String> = sqlx::query_scalar(
+            "SELECT time_override FROM routine_checks WHERE routine_id=?1 AND date=?2",
+        )
+        .bind(&rid)
+        .bind(past)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(past_ov.as_deref(), Some("08:00"), "과거 override 보존");
+        // 오늘/미래 override 정리(빈 행 삭제됨)
+        assert_eq!(
+            count_checks(&db, &rid, &today).await,
+            0,
+            "오늘 override 제거"
+        );
+        assert_eq!(
+            count_checks(&db, &rid, future).await,
+            0,
+            "미래 override 제거"
+        );
+    }
+
+    // 시간 미변경(제목만 편집)이면 per-day override를 건드리지 않는다 — 회귀 가드.
+    #[tokio::test]
+    async fn edit_without_time_change_keeps_overrides() {
+        let db = crate::commands::shared::test_support::fresh_db().await;
+        let rid = insert_routine(&db, &seed_routine_input("14:00"))
+            .await
+            .unwrap()
+            .id;
+        let future = "2999-12-31";
+        insert_override(&db, &rid, future, "23:00").await;
+
+        update_routine_inner(&db, edit_input(&rid, "중국어 (제목수정)", "14:00"))
+            .await
+            .unwrap();
+
+        let kept: Option<String> = sqlx::query_scalar(
+            "SELECT time_override FROM routine_checks WHERE routine_id=?1 AND date=?2",
+        )
+        .bind(&rid)
+        .bind(future)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(
+            kept.as_deref(),
+            Some("23:00"),
+            "시간 미변경 편집은 override 보존"
+        );
     }
 }
