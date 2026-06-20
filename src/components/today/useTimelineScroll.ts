@@ -1,12 +1,11 @@
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { addDays, dayDiff } from "@/lib/timeAxis";
+import { DAY_PX } from "@/lib/timelineAxis";
 import { extendDates, includeDate } from "@/lib/timelineWindow";
 
 /** 로드 일수 상한 — DOM/메모리 바운드(스펙 §3의 윈도잉 의도를 캡으로 충족). */
 const MAX_LOADED_DAYS = 21;
-/** 하루 높이(px) — 60px/h × 24h. */
-const DAY_PX = 24 * 60;
 
 type UseTimelineScrollArgs = {
   today: string;

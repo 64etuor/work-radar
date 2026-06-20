@@ -14,10 +14,9 @@ import {
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
 import { weekdayForDate } from "@/lib/query";
 import { dayDiff } from "@/lib/timeAxis";
+import { clientToGrid, DAY_PX, HOUR_PX } from "@/lib/timelineAxis";
 import type { LayoutBox } from "@/lib/timelineLayout";
 
-const HOUR_PX = 60;
-const DAY_PX = 24 * HOUR_PX;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 type Props = {
@@ -177,8 +176,7 @@ export function TimelineCanvas({
     const el = gridRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const y = Math.max(0, Math.min(totalPx, e.clientY - rect.top));
-    const x = Math.max(60, Math.min(rect.width, e.clientX - rect.left));
+    const { x, y } = clientToGrid({ x: e.clientX, y: e.clientY }, rect, totalPx);
     if (pointerYRef) pointerYRef.current = y;
     if (pointerXRef) pointerXRef.current = x;
     if (isOver || activeDrag) {
