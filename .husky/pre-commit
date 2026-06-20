@@ -11,3 +11,4 @@ pnpm typecheck
 pnpm check:frontend-ownership
 pnpm check:classname-regression
 pnpm check:design-tokens
+pnpm check:timeline-axis
