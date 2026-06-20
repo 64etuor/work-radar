@@ -4,9 +4,7 @@
  * RFC3339 로컬 오프셋 필수(백엔드 parse_from_rfc3339) — 오프셋은 대상 "날짜"의 것.
  */
 import { absMin, isoFromAbsMin } from "./timeAxis";
-
-const HOUR_PX = 60;
-const SNAP_MIN = 15;
+import { HOUR_PX, MIN_PER_DAY, SNAP_MIN } from "./timelineAxis";
 /** 자석 엣지 스냅 임계(분=px, 1px=1min). 인접 블록 start/end에 이 범위 내면 그리드보다 우선. */
 const MAGNET_THRESHOLD_MIN = 6;
 
@@ -47,7 +45,7 @@ export function snapAbsMin(rawMin: number, opts?: SnapOpts): number {
 }
 
 function clampAbs(min: number, days: number): number {
-  return Math.max(0, Math.min(days * 1440 - SNAP_MIN, min));
+  return Math.max(0, Math.min(days * MIN_PER_DAY - SNAP_MIN, min));
 }
 
 /** 그리드 픽셀(절대 Y) → 로컬 ISO. 날짜는 Y에서 유도(자정 넘는 배치 가능). */
