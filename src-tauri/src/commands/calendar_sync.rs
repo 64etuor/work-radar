@@ -503,21 +503,42 @@ async fn build_queue_row(
             duration_min,
             calendar_id,
             title,
-        } => {
-            let payload = serde_json::json!({
-                "title": title,
-                "start": at,
-                "duration_min": duration_min,
-            })
-            .to_string();
-            (
-                "create",
-                calendar_id.clone(),
-                None,
-                payload,
-                GOOGLE_SYNC_DEBOUNCE_MS,
-            )
-        }
+        } => match &existing {
+            // 이미 Google 이벤트가 링크돼 있으면 새로 만들지 않고 그 이벤트를 옮긴다(patch).
+            // tray→canvas 재배치(특히 carry-over 후 트레이에서 다시 끌어놓기)가 매번 새 이벤트를
+            // 만들고 옛 이벤트를 카드에 안 묶인 채 남겨 Google에 중복이 무한 누적되던 누수를 차단한다.
+            // patch는 캘린더 이동 불가라 기존 이벤트의 캘린더에 patch한다 — Schedule 타깃 캘린더는
+            // 시그널 기본 캘린더라 기존 링크와 같은 게 정상(다른 캘린더 이동은 별도 MoveCalendar).
+            Some((cal, ev)) => {
+                let payload = serde_json::json!({
+                    "start": at,
+                    "duration_min": duration_min,
+                })
+                .to_string();
+                (
+                    "patch",
+                    cal.clone(),
+                    Some(ev.clone()),
+                    payload,
+                    GOOGLE_SYNC_DEBOUNCE_MS,
+                )
+            }
+            None => {
+                let payload = serde_json::json!({
+                    "title": title,
+                    "start": at,
+                    "duration_min": duration_min,
+                })
+                .to_string();
+                (
+                    "create",
+                    calendar_id.clone(),
+                    None,
+                    payload,
+                    GOOGLE_SYNC_DEBOUNCE_MS,
+                )
+            }
+        },
         WriteOp::Reschedule {
             at, duration_min, ..
         } => match existing {
@@ -1188,6 +1209,69 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(queued, 0);
+    }
+
+    /// 회귀(미러 누수 근본수정): 이미 Google 이벤트가 링크된 시그널을 다시 Schedule(트레이→캔버스
+    /// 재배치, carry-over 후 재드래그 포함)하면 새 이벤트를 만들지 않고 **기존 이벤트를 patch(이동)**
+    /// 해야 한다 — 안 그러면 옛 이벤트가 카드에 안 묶인 채 남아 Google에 중복이 누적된다.
+    #[tokio::test]
+    async fn schedule_on_linked_signal_patches_existing_no_orphan() {
+        let db = fresh_db().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','레포 점검','braindump','thought','evt_old','cal_a')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let req = StageWriteRequest {
+            target: WriteTarget::Signal { id: "s1".into() },
+            op: WriteOp::Schedule {
+                at: "2026-06-21T12:15:00+09:00".into(),
+                duration_min: 240,
+                calendar_id: "cal_a".into(),
+                title: "레포 점검".into(),
+            },
+            idempotency_key: "test-reschedule-from-tray".into(),
+        };
+        let (kind, _cal, event_id, _payload, _deb) = build_queue_row(&req, &db, "signal", "s1")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            kind, "patch",
+            "링크된 시그널 재배치는 기존 이벤트 patch여야 함(새 이벤트 오펀 방지)"
+        );
+        assert_eq!(event_id.as_deref(), Some("evt_old"));
+    }
+
+    /// 링크 없는 시그널의 첫 Schedule은 그대로 create.
+    #[tokio::test]
+    async fn schedule_on_unlinked_signal_creates() {
+        let db = fresh_db().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) \
+             VALUES ('s2','새 작업','braindump','thought')",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let req = StageWriteRequest {
+            target: WriteTarget::Signal { id: "s2".into() },
+            op: WriteOp::Schedule {
+                at: "2026-06-21T09:00:00+09:00".into(),
+                duration_min: 60,
+                calendar_id: "cal_a".into(),
+                title: "새 작업".into(),
+            },
+            idempotency_key: "test-new-schedule".into(),
+        };
+        let (kind, _cal, event_id, _payload, _deb) = build_queue_row(&req, &db, "signal", "s2")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(kind, "create", "링크 없으면 create");
+        assert_eq!(event_id, None);
     }
 
     #[tokio::test]
