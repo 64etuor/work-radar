@@ -5,6 +5,7 @@ import {
   type DragDelta,
   dragDeltaFromGridPoints,
 } from "@/components/today/timelinePreview";
+import { totalPxForDays } from "@/lib/timelineAxis";
 
 type ClientPoint = { x: number; y: number };
 
@@ -37,7 +38,7 @@ export function useTimelinePointerDelta({
   const currentGridPoint = (point: ClientPoint | null | undefined): ClientPoint | null => {
     const rect = gridElRef.current?.getBoundingClientRect();
     if (!point || !rect) return null;
-    return clientPointToGridGuide(point, rect, visibleDays * 24 * 60);
+    return clientPointToGridGuide(point, rect, totalPxForDays(visibleDays));
   };
 
   const captureDragStart = (event: Event | undefined) => {

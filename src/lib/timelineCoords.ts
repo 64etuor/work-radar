@@ -100,7 +100,7 @@ export function resizeIsoByPx({
   const snappedEnd = snapAbsMin(endAbs + deltaMin, snapOpts);
   const durationMinNext = Math.max(
     SNAP_MIN,
-    Math.min(days * 1440 - startAbs, snappedEnd - startAbs),
+    Math.min(days * MIN_PER_DAY - startAbs, snappedEnd - startAbs),
   );
   return { at: startISO, durationMin: durationMinNext };
 }

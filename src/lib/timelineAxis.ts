@@ -2,7 +2,7 @@
  * 타임라인 좌표 정본(SSOT) — 시간↔픽셀 상수 + 무상태 변환 헬퍼.
  *
  * 이 모듈만 픽셀-per-시간을 정의한다. 다른 어떤 파일도 HOUR_PX/DAY_PX를
- * 로컬 정의하지 않는다(SSOT 설계 `docs/superpowers/specs/2026-06-20-...-ssot-design.md` §3.1).
+ * 로컬 정의하지 않는다(SSOT 설계 `docs/superpowers/specs/2026-06-20-today-timeline-coordinate-time-ssot-design.md` §3.1).
  *
  * 도메인 주의: `1px == 1min`은 HOUR_PX=60이라서 성립한다. 픽셀량(DAY_PX/totalPxForDays)과
  * 분량(MIN_PER_DAY)을 절대 섞지 않는다 — 수치는 같아도 의미가 다르다.
