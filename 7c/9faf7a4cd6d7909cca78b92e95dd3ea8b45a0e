@@ -1,0 +1,20 @@
+src/components/today/timelinePreview.ts
+  s_969188e6331f05::t_3afdbe7c93157f 26-28,35
+  s_969188e6331f05::t_d480127db9927f 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "7c9faf7a4cd6d7909cca78b92e95dd3ea8b45a0e",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
