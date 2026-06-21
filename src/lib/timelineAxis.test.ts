@@ -7,9 +7,6 @@ import {
   LABEL_GUTTER_PX,
   MIN_BLOCK_PX,
   MIN_PER_DAY,
-  minToPx,
-  PX_PER_MIN,
-  pxToMin,
   SNAP_MIN,
   totalPxForDays,
 } from "./timelineAxis";
@@ -20,21 +17,8 @@ describe("timelineAxis constants", () => {
     expect(MIN_BLOCK_PX).toBe(20);
     expect(SNAP_MIN).toBe(15);
     expect(MIN_PER_DAY).toBe(1440);
-    expect(PX_PER_MIN).toBe(1);
     expect(DAY_PX).toBe(1440);
     expect(LABEL_GUTTER_PX).toBe(60);
-  });
-});
-
-describe("minToPx / pxToMin", () => {
-  it("round-trips minutes through pixels", () => {
-    for (const min of [0, 15, 90, 1439, 2880]) {
-      expect(pxToMin(minToPx(min))).toBe(min);
-    }
-  });
-  it("uses 1px == 1min (HOUR_PX/60)", () => {
-    expect(minToPx(60)).toBe(60);
-    expect(pxToMin(60)).toBe(60);
   });
 });
 

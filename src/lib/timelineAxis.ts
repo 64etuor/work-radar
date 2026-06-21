@@ -16,22 +16,10 @@ export const MIN_BLOCK_PX = 20;
 export const SNAP_MIN = 15;
 /** 하루 분(min). 절대-분 축 클램프용 — 픽셀 아님. */
 export const MIN_PER_DAY = 1440;
-/** 1분당 픽셀. HOUR_PX/60. */
-export const PX_PER_MIN = HOUR_PX / 60;
 /** 하루 높이(px) = 60px/h × 24h. MIN_PER_DAY와 수치 동일하나 의미는 픽셀. */
 export const DAY_PX = 24 * HOUR_PX;
 /** 시간 라벨 거터 너비(px) — 그리드 컬럼 왼쪽 여백. client→grid x 클램프 하한. */
 export const LABEL_GUTTER_PX = 60;
-
-/** 절대 분 → 픽셀(Y). */
-export function minToPx(min: number): number {
-  return min * PX_PER_MIN;
-}
-
-/** 픽셀(Y) → 절대 분. */
-export function pxToMin(px: number): number {
-  return px / PX_PER_MIN;
-}
 
 /** 로드된 일수의 그리드 총 높이(px). */
 export function totalPxForDays(days: number): number {
