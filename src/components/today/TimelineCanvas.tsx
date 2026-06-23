@@ -14,6 +14,7 @@ import { weekdayForDate } from "@/lib/query";
 import { dayDiff } from "@/lib/timeAxis";
 import { clientToGrid, DAY_PX, HOUR_PX } from "@/lib/timelineAxis";
 import { planTimelineDrag } from "@/lib/timelineDragPlan";
+import { synthesizeGuideX } from "@/lib/timelineGuide";
 import type { LayoutBox } from "@/lib/timelineLayout";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -129,11 +130,12 @@ export function TimelineCanvas({
     if (!activeId) return null;
     const activeBox = boxes.find((box) => box.id === activeId);
     if (!activeBox) return null;
-    const layerWidth = Math.max(0, gridWidth - 60);
-    const left = 60 + (layerWidth * activeBox.visual.leftPct) / 100;
-    const width = Math.max(0, (layerWidth * activeBox.visual.widthPct) / 100 - 4);
-    const centerX = left + width / 2 + (activeDelta?.x ?? 0);
-    const guideX = Math.max(60, Math.min(gridWidth, centerX));
+    const guideX = synthesizeGuideX({
+      leftPct: activeBox.visual.leftPct,
+      widthPct: activeBox.visual.widthPct,
+      gridWidth,
+      deltaX: activeDelta?.x ?? 0,
+    });
     return { ...plan.guide, x: guideX };
   })();
   // 캔버스 이동/리사이즈 중 active 엣지에 붙는 시각·길이 pill 라벨(resize=범위+길이, move=시작 시각).
@@ -274,11 +276,15 @@ export function TimelineCanvas({
               activeDrag.from === "canvas" || activeDrag.from === "canvas-resize"
                 ? previewBoxes.find((b) => b.id === activeDrag.blockId)
                 : undefined;
+            // 가이드 라인은 semantic 엣지(1px==1min)를 따라가야 Phase-5 semantic-anchored
+            // 리사이즈 핸들과 일치한다. floor된 짧은 블록은 visual.bottom이 semantic.endAbs보다
+            // 몇 px 아래라 visual을 쓰면 가이드가 핸들과 어긋난다. bottom-resize→endAbs,
+            // top-resize/move→startAbs(== visual.topPx라 위치 무변, 코드 정합만).
             const edgeY =
               activeBox != null
                 ? activeDrag.from === "canvas-resize" && activeDrag.edge === "bottom"
-                  ? activeBox.visual.topPx + activeBox.visual.heightPx
-                  : activeBox.visual.topPx
+                  ? activeBox.semantic.endAbs
+                  : activeBox.semantic.startAbs
                 : null;
             const lineY = edgeY ?? Math.max(0, Math.min(days * 1440, Math.round(guideY / 15) * 15));
             const dayMin = lineY % 1440;
