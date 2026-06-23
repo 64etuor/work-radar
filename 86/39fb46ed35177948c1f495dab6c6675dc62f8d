@@ -1,0 +1,23 @@
+src/lib/todayBlocks.ts
+  s_969188e6331f05::t_d83e859164ed32 63-68
+  s_969188e6331f05::t_352edb89c4ed4d 158,161
+  s_969188e6331f05::t_dd9e9e6bc53aca 292-302,310
+src/lib/todayBlocks.test.ts
+  s_969188e6331f05::t_c2722c244601ed 917-1012
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "8639fb46ed35177948c1f495dab6c6675dc62f8d",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
