@@ -177,7 +177,8 @@ export function TodayView() {
     resolve: (calendarId: string | null) => void;
   } | null>(null);
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
-  // Raw-pointer drag delta source; avoids dnd-kit scroll-adjusted delta for canvas motion.
+  // Operation delta = dnd-kit ev.delta (authoritative, fixes freeze). Raw pointer kept only
+  // for crosshair cursor (pointerGrid) and off-grid release classification.
   const {
     captureDragStart,
     clearDragDelta,

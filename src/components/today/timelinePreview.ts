@@ -35,18 +35,6 @@ export function clientPointToGridGuide(
   return clientToGrid(point, rect, totalPx);
 }
 
-export function dragDeltaFromGridPoints(
-  start: DragDelta | null | undefined,
-  current: DragDelta | null | undefined,
-  fallback: DragDelta,
-): DragDelta {
-  if (!start || !current) return fallback;
-  return {
-    x: current.x - start.x,
-    y: current.y - start.y,
-  };
-}
-
 /** 드래그 중인 캔버스 블록의 정본 id — DragData.blockId(블록 id 그대로) 사용.
  *  과거의 `event:${eventId}` 재구성은 복합키(`event:${calendarId}:${id}`)와 불일치해
  *  event 블록 preview 매칭이 항상 실패했다(연속 타임라인 전환과 함께 수정). */

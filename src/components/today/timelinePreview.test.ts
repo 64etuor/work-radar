@@ -6,7 +6,6 @@ import {
   activeDragLabel,
   activeDragWouldOverlap,
   clientPointToGridGuide,
-  dragDeltaFromGridPoints,
   dragGuideFromLayout,
   previewTimelineBoxes,
   renderTimelineBoxesForDrag,
@@ -26,24 +25,20 @@ function block(id: string, startISO: string, endISO: string): TimedBlock {
 }
 
 describe("previewTimelineBoxes", () => {
-  it("derives canvas drag delta from raw pointer grid movement instead of dnd-kit scroll-adjusted delta", () => {
-    const start = clientPointToGridGuide(
+  // NOTE: dragDeltaFromGridPoints was removed in P4-TaskA (fix: today: operation delta →
+  // dnd-kit ev.delta). The operation delta (move/resize math) now comes directly from
+  // dnd-kit's ev.delta — grid-point subtraction is no longer used for the operation.
+  // clientPointToGridGuide is kept for the crosshair/guide cursor (pointerGrid only).
+  it("clientPointToGridGuide maps a client point to a grid-local coordinate", () => {
+    const result = clientPointToGridGuide(
       { x: 220, y: 500 },
       { left: 100, top: 100, width: 520 },
       1440,
     );
-    const currentAfterScroll = clientPointToGridGuide(
-      { x: 220, y: 500 },
-      { left: 100, top: 55, width: 520 },
-      1440,
-    );
-
-    expect(
-      dragDeltaFromGridPoints(start, currentAfterScroll, {
-        x: 0,
-        y: 90,
-      }),
-    ).toEqual({ x: 0, y: 45 });
+    expect(typeof result.x).toBe("number");
+    expect(typeof result.y).toBe("number");
+    // Point is 120px below top of rect; grid y should equal 120.
+    expect(result.y).toBe(400);
   });
 
   it("shrinks neighboring blocks while a dragged block previews an overlap", () => {
