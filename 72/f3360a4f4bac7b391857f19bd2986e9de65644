@@ -1,0 +1,37 @@
+src/lib/timelineDragPlan.test.ts
+  s_969188e6331f05::t_20c90c9e748b12 542,562-593
+src/components/today/useTimelineDnd.ts
+  s_969188e6331f05::t_5b387c805596c5 679
+  s_969188e6331f05::t_53cf43901813c7 394-399
+  s_969188e6331f05::t_802b36c85b1720 44
+  s_969188e6331f05::t_af1d8a92baac0e 70-71
+  s_969188e6331f05::t_da3fe2aa139b46 649-650
+src/lib/timelineEventCache.test.ts
+  s_969188e6331f05::t_6b60f0c1b9367c 1-18,22-56
+  s_969188e6331f05::t_7d2cd0777591ca 19-21
+src/lib/timelineDragPlan.ts
+  s_969188e6331f05::t_8ee58fcd2ff00d 454-455
+  s_969188e6331f05::t_e3c4ffd72b0599 107-113
+src/lib/timelineEventCache.ts
+  s_969188e6331f05::t_d29b8c116a96be 1-10
+src/components/today/timelineDragData.ts
+  s_969188e6331f05::t_c37188036b9221 59
+src/components/today/timelineDragData.test.ts
+  s_969188e6331f05::t_5e9b7fde226016 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "72f3360a4f4bac7b391857f19bd2986e9de65644",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
