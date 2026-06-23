@@ -1,0 +1,23 @@
+src/components/today/useTimelineDnd.ts
+  s_969188e6331f05::t_8b8ae55eb6fe99 553-554,561,565-566,569-572,577,582
+  s_969188e6331f05::t_c1ac9a4a14e010 32
+  s_969188e6331f05::t_94ddefeeb8d6f3 567-568,574,581
+src/lib/applyTimelineCommitToCaches.test.ts
+  s_969188e6331f05::t_420478c8a807dd 295-363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "52097e060c2e86d7767c1bbc7fb0811aea2a0c25",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
