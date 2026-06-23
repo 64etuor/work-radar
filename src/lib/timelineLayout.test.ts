@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { computeLayout, magnetEdgesFromBoxes, type TimedBlock } from "./timelineLayout";
+import {
+  computeLayout,
+  magnetEdgesFromBoxes,
+  RESIZE_HANDLE_PX,
+  type TimedBlock,
+} from "./timelineLayout";
 
 const make = (
   id: string,
@@ -21,7 +26,7 @@ describe("computeLayout", () => {
   it("single block fills width", () => {
     const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00")]);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ id: "a", leftPct: 0, widthPct: 100 });
+    expect(out[0]).toMatchObject({ id: "a", visual: { leftPct: 0, widthPct: 100 } });
   });
 
   it("two non-overlapping each full width", () => {
@@ -29,8 +34,8 @@ describe("computeLayout", () => {
       make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00"),
       make("b", "2026-05-28T11:00:00", "2026-05-28T12:00:00"),
     ]);
-    expect(out.find((b) => b.id === "a")!.widthPct).toBe(100);
-    expect(out.find((b) => b.id === "b")!.widthPct).toBe(100);
+    expect(out.find((b) => b.id === "a")!.visual.widthPct).toBe(100);
+    expect(out.find((b) => b.id === "b")!.visual.widthPct).toBe(100);
   });
 
   it("two overlapping → 50/50", () => {
@@ -38,9 +43,9 @@ describe("computeLayout", () => {
       make("a", "2026-05-28T09:00:00", "2026-05-28T10:30:00"),
       make("b", "2026-05-28T10:00:00", "2026-05-28T11:00:00"),
     ]);
-    expect(out.find((b) => b.id === "a")!.widthPct).toBe(50);
-    expect(out.find((b) => b.id === "b")!.widthPct).toBe(50);
-    expect(new Set(out.map((b) => b.leftPct))).toEqual(new Set([0, 50]));
+    expect(out.find((b) => b.id === "a")!.visual.widthPct).toBe(50);
+    expect(out.find((b) => b.id === "b")!.visual.widthPct).toBe(50);
+    expect(new Set(out.map((b) => b.visual.leftPct))).toEqual(new Set([0, 50]));
   });
 
   it("three mutually overlapping → 33/33/33", () => {
@@ -50,10 +55,10 @@ describe("computeLayout", () => {
       make("c", "2026-05-28T10:00:00", "2026-05-28T11:30:00"),
     ]);
     for (const b of out) {
-      expect(Math.abs(b.widthPct - 100 / 3)).toBeLessThan(0.01);
+      expect(Math.abs(b.visual.widthPct - 100 / 3)).toBeLessThan(0.01);
     }
     // 3 distinct columns
-    expect(new Set(out.map((b) => Math.round(b.leftPct))).size).toBe(3);
+    expect(new Set(out.map((b) => Math.round(b.visual.leftPct))).size).toBe(3);
   });
 
   it("cluster boundary: a-b overlap, c separate → cluster1=50/50, c=100", () => {
@@ -62,9 +67,9 @@ describe("computeLayout", () => {
       make("b", "2026-05-28T09:30:00", "2026-05-28T10:30:00"),
       make("c", "2026-05-28T11:00:00", "2026-05-28T12:00:00"),
     ]);
-    expect(out.find((x) => x.id === "a")!.widthPct).toBe(50);
-    expect(out.find((x) => x.id === "b")!.widthPct).toBe(50);
-    expect(out.find((x) => x.id === "c")!.widthPct).toBe(100);
+    expect(out.find((x) => x.id === "a")!.visual.widthPct).toBe(50);
+    expect(out.find((x) => x.id === "b")!.visual.widthPct).toBe(50);
+    expect(out.find((x) => x.id === "c")!.visual.widthPct).toBe(100);
   });
 
   it("zero-duration block gets MIN_BLOCK_PX floor and does not strictly overlap a co-starting block", () => {
@@ -77,9 +82,9 @@ describe("computeLayout", () => {
     ]);
     const a = out.find((x) => x.id === "a")!;
     const b = out.find((x) => x.id === "b")!;
-    expect(a.heightPx).toBe(20); // MIN_BLOCK_PX floor
-    expect(a.widthPct).toBe(100);
-    expect(b.widthPct).toBe(100);
+    expect(a.visual.heightPx).toBe(20); // MIN_BLOCK_PX floor
+    expect(a.visual.widthPct).toBe(100);
+    expect(b.visual.widthPct).toBe(100);
   });
 
   it("identical-start non-zero blocks share a cluster and split width", () => {
@@ -87,14 +92,14 @@ describe("computeLayout", () => {
       make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00"),
       make("b", "2026-05-28T09:00:00", "2026-05-28T10:00:00"),
     ]);
-    expect(out.find((x) => x.id === "a")!.widthPct).toBe(50);
-    expect(out.find((x) => x.id === "b")!.widthPct).toBe(50);
+    expect(out.find((x) => x.id === "a")!.visual.widthPct).toBe(50);
+    expect(out.find((x) => x.id === "b")!.visual.widthPct).toBe(50);
   });
 
   it("topPx and heightPx derived from minutes (60px/hour)", () => {
     const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00")]);
-    expect(out[0].topPx).toBe(9 * 60);
-    expect(out[0].heightPx).toBe(60);
+    expect(out[0].visual.topPx).toBe(9 * 60);
+    expect(out[0].visual.heightPx).toBe(60);
   });
 
   // ── 회귀: 짧은 블록 abutting 시 hit-region 겹침(드래그 핸들 오발동 근본원인) ─────────────
@@ -110,13 +115,13 @@ describe("computeLayout", () => {
     const a = out.find((x) => x.id === "a")!;
     const b = out.find((x) => x.id === "b")!;
     // 같은 가로 컬럼(시간 비겹침 → full width)
-    expect(a.leftPct).toBe(0);
-    expect(b.leftPct).toBe(0);
+    expect(a.visual.leftPct).toBe(0);
+    expect(b.visual.leftPct).toBe(0);
     // 위 블록은 실제 길이(15px)로 클램프, 아래 블록은 다음 블록 없어 floor(20px) 유지.
-    expect(a.heightPx).toBe(15);
-    expect(b.heightPx).toBe(20);
-    // A 하단 ≤ B 상단 — hit-rect 비겹침.
-    expect(a.topPx + a.heightPx).toBeLessThanOrEqual(b.topPx);
+    expect(a.visual.heightPx).toBe(15);
+    expect(b.visual.heightPx).toBe(20);
+    // A 하단 ≤ B 상단 — visual hit-rect 비겹침.
+    expect(a.visual.topPx + a.visual.heightPx).toBeLessThanOrEqual(b.visual.topPx);
   });
 
   it("5분 간격이면 floor(20px)를 유지한다 (간격이 floor 넘침을 흡수 — 과잉 클램프 금지)", () => {
@@ -127,8 +132,10 @@ describe("computeLayout", () => {
       make("b", "2026-05-28T09:20:00", "2026-05-28T09:35:00"),
     ]);
     const a = out.find((x) => x.id === "a")!;
-    expect(a.heightPx).toBe(20); // floor 유지
-    expect(a.topPx + a.heightPx).toBeLessThanOrEqual(out.find((x) => x.id === "b")!.topPx);
+    expect(a.visual.heightPx).toBe(20); // floor 유지
+    expect(a.visual.topPx + a.visual.heightPx).toBeLessThanOrEqual(
+      out.find((x) => x.id === "b")!.visual.topPx,
+    );
   });
 
   it("나란히(다른 컬럼) 짧은 블록은 서로 클램프하지 않는다 (가로 분리 → hit-rect 비충돌)", () => {
@@ -139,10 +146,10 @@ describe("computeLayout", () => {
     ]);
     const a = out.find((x) => x.id === "a")!;
     const b = out.find((x) => x.id === "b")!;
-    expect(a.widthPct).toBe(50);
-    expect(b.widthPct).toBe(50);
-    expect(a.heightPx).toBe(20); // floor 유지(가로로 분리됨)
-    expect(b.heightPx).toBe(20);
+    expect(a.visual.widthPct).toBe(50);
+    expect(b.visual.widthPct).toBe(50);
+    expect(a.visual.heightPx).toBe(20); // floor 유지(가로로 분리됨)
+    expect(b.visual.heightPx).toBe(20);
   });
 
   it("크로스-클러스터: 다음 클러스터(멀티컬럼)의 topPx까지만 클램프, 실제 길이 밑으로 안 줄인다", () => {
@@ -154,10 +161,10 @@ describe("computeLayout", () => {
       make("d", "2026-05-28T09:12:00", "2026-05-28T09:27:00"),
     ]);
     const a = out.find((x) => x.id === "a")!;
-    expect(a.widthPct).toBe(100); // 별도 클러스터, full width
-    expect(a.heightPx).toBe(12); // 552 − 540 = 12 (floor 20에서 클램프)
-    expect(a.heightPx).toBeGreaterThanOrEqual(10); // 실제 길이(10px) 밑으로는 안 줄임
-    expect(out.find((x) => x.id === "b")!.widthPct).toBe(50); // 뒤 클러스터는 2-컬럼
+    expect(a.visual.widthPct).toBe(100); // 별도 클러스터, full width
+    expect(a.visual.heightPx).toBe(12); // 552 − 540 = 12 (floor 20에서 클램프)
+    expect(a.visual.heightPx).toBeGreaterThanOrEqual(10); // 실제 길이(10px) 밑으로는 안 줄임
+    expect(out.find((x) => x.id === "b")!.visual.widthPct).toBe(50); // 뒤 클러스터는 2-컬럼
   });
 });
 
@@ -167,8 +174,8 @@ describe("computeLayout — continuous axis (anchor)", () => {
       [make("x", "2026-06-11T23:00:00", "2026-06-12T01:30:00")],
       "2026-06-11",
     );
-    expect(out[0].topPx).toBe(23 * 60);
-    expect(out[0].heightPx).toBe(150); // 음수 duration → max(20, …) 슬리버가 아니라 실제 150분
+    expect(out[0].visual.topPx).toBe(23 * 60);
+    expect(out[0].visual.heightPx).toBe(150); // 음수 duration → max(20, …) 슬리버가 아니라 실제 150분
   });
 
   it("anchor 이후 날짜 블록은 1440px 오프셋", () => {
@@ -176,7 +183,7 @@ describe("computeLayout — continuous axis (anchor)", () => {
       [make("y", "2026-06-12T09:00:00", "2026-06-12T10:00:00")],
       "2026-06-11",
     );
-    expect(out[0].topPx).toBe(1440 + 540);
+    expect(out[0].visual.topPx).toBe(1440 + 540);
   });
 
   it("자정을 가로지르는 겹침도 한 클러스터로 50/50 분할", () => {
@@ -187,8 +194,8 @@ describe("computeLayout — continuous axis (anchor)", () => {
       ],
       "2026-06-11",
     );
-    expect(out.find((x) => x.id === "a")!.widthPct).toBe(50);
-    expect(out.find((x) => x.id === "b")!.widthPct).toBe(50);
+    expect(out.find((x) => x.id === "a")!.visual.widthPct).toBe(50);
+    expect(out.find((x) => x.id === "b")!.visual.widthPct).toBe(50);
   });
 
   it("anchor 이전 시작 블록은 음수 topPx (그리드가 클리핑)", () => {
@@ -196,13 +203,83 @@ describe("computeLayout — continuous axis (anchor)", () => {
       [make("z", "2026-06-10T23:00:00", "2026-06-11T01:00:00")],
       "2026-06-11",
     );
-    expect(out[0].topPx).toBe(-60);
-    expect(out[0].heightPx).toBe(120);
+    expect(out[0].visual.topPx).toBe(-60);
+    expect(out[0].visual.heightPx).toBe(120);
   });
 
   it("anchor 생략 시 가장 이른 블록 날짜가 anchor (기존 단일일 호출 하위호환)", () => {
     const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T10:00:00")]);
-    expect(out[0].topPx).toBe(540);
+    expect(out[0].visual.topPx).toBe(540);
+  });
+});
+
+describe("computeLayout — semantic/visual/hit split (Task 5.1)", () => {
+  // 15-min block: semantic = true time, visual = floored, hit from semantic
+  it("single 15-min block: semantic edges are true time minutes", () => {
+    const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00")]);
+    const a = out[0];
+    expect(a.semantic.startAbs).toBe(9 * 60);        // 540
+    expect(a.semantic.endAbs).toBe(9 * 60 + 15);     // 555
+    expect(a.semantic.durationMin).toBe(15);
+  });
+
+  it("single 15-min block: visual.heightPx = max(MIN_BLOCK_PX=20, 15) = 20", () => {
+    const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00")]);
+    const a = out[0];
+    expect(a.visual.heightPx).toBe(20);
+    expect(a.visual.topPx).toBe(9 * 60);
+    expect(a.visual.leftPct).toBe(0);
+    expect(a.visual.widthPct).toBe(100);
+  });
+
+  it("single 15-min block: hit handles derived from semantic, not visual", () => {
+    const out = computeLayout([make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00")]);
+    const a = out[0];
+    // topHandle.topPx = semantic.startAbs = 540 (NOT visual.topPx which is same here, but distinct property)
+    expect(a.hit.topHandle.topPx).toBe(540);
+    expect(a.hit.topHandle.heightPx).toBe(RESIZE_HANDLE_PX);
+    // bottomHandle.topPx = semantic.endAbs - RESIZE_HANDLE_PX = 555 - 6 = 549
+    expect(a.hit.bottomHandle.topPx).toBe(555 - RESIZE_HANDLE_PX);
+    expect(a.hit.bottomHandle.heightPx).toBe(RESIZE_HANDLE_PX);
+    // moveBand: moveTop = 540+6=546, moveH = 549-546=3 > 0 → non-null
+    expect(a.hit.moveBand).not.toBeNull();
+    expect(a.hit.moveBand!.topPx).toBe(540 + RESIZE_HANDLE_PX);
+    expect(a.hit.moveBand!.heightPx).toBe(555 - RESIZE_HANDLE_PX - (540 + RESIZE_HANDLE_PX));
+  });
+
+  it("two abutting 15-min blocks: bottomHandle of A does not overlap topHandle of B", () => {
+    const out = computeLayout([
+      make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00"),
+      make("b", "2026-05-28T09:15:00", "2026-05-28T09:30:00"),
+    ]);
+    const a = out.find((x) => x.id === "a")!;
+    const b = out.find((x) => x.id === "b")!;
+    // A bottomHandle ends at semantic.endAbs = 555 (= 9:15 in minutes)
+    const aBottomHandleEnd = a.hit.bottomHandle.topPx + a.hit.bottomHandle.heightPx;
+    // B topHandle starts at semantic.startAbs = 555 (= 9:15 in minutes)
+    const bTopHandleStart = b.hit.topHandle.topPx;
+    // half-open: A's bottom handle end == B's top handle start (no overlap)
+    expect(aBottomHandleEnd).toBeLessThanOrEqual(bTopHandleStart);
+  });
+
+  it("two abutting 15-min blocks: visual clamp still applies to visual.heightPx only", () => {
+    const out = computeLayout([
+      make("a", "2026-05-28T09:00:00", "2026-05-28T09:15:00"),
+      make("b", "2026-05-28T09:15:00", "2026-05-28T09:30:00"),
+    ]);
+    const a = out.find((x) => x.id === "a")!;
+    const b = out.find((x) => x.id === "b")!;
+    // A visual clamped to actual duration (15) since B.visual.topPx = 555 and A.visual.topPx=540, diff=15
+    expect(a.visual.heightPx).toBe(15);
+    // B has no block below it in same column, so stays at floor
+    expect(b.visual.heightPx).toBe(20);
+    // semantic is NOT affected by the clamp
+    expect(a.semantic.endAbs).toBe(555);
+    expect(a.semantic.durationMin).toBe(15);
+  });
+
+  it("RESIZE_HANDLE_PX is exported and equals 6", () => {
+    expect(RESIZE_HANDLE_PX).toBe(6);
   });
 });
 

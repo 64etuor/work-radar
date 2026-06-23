@@ -12,7 +12,7 @@
  */
 
 import { absMin, localDateOf } from "./timeAxis";
-import { HOUR_PX, MIN_BLOCK_PX } from "./timelineAxis";
+import { MIN_BLOCK_PX } from "./timelineAxis";
 
 export type TimedBlock = {
   id: string;
@@ -37,14 +37,20 @@ export type TimedBlock = {
   signalId?: string;
 };
 
+export type TimelineHitRect = { topPx: number; heightPx: number };
+
+export const RESIZE_HANDLE_PX = 6; // single source; was resizeHandleHeightPx()
+
 export type LayoutBox = {
   id: string;
-  topPx: number;
-  heightPx: number;
-  /** 0..100 — 그리드 영역 내 백분율 (60px 라벨 거터는 호출부 CSS가 처리). */
-  leftPct: number;
-  widthPct: number;
   block: TimedBlock;
+  semantic: { startAbs: number; endAbs: number; durationMin: number };
+  visual: { topPx: number; heightPx: number; leftPct: number; widthPct: number };
+  hit: {
+    topHandle: TimelineHitRect;
+    bottomHandle: TimelineHitRect;
+    moveBand: TimelineHitRect | null;
+  };
 };
 
 /**
@@ -117,13 +123,29 @@ export function computeLayout(blocks: TimedBlock[], anchorDate?: string): Layout
       const col = colOf.get(b.id)!;
       const startMin = toMin(b.startISO);
       const endMin = toMin(b.endISO);
+      const leftPct = col * widthPct;
+      const semantic = { startAbs: startMin, endAbs: endMin, durationMin: endMin - startMin };
+      const visual = {
+        topPx: startMin,
+        heightPx: Math.max(MIN_BLOCK_PX, endMin - startMin),
+        leftPct,
+        widthPct,
+      };
+      const topHandle: TimelineHitRect = { topPx: semantic.startAbs, heightPx: RESIZE_HANDLE_PX };
+      const bottomHandle: TimelineHitRect = {
+        topPx: semantic.endAbs - RESIZE_HANDLE_PX,
+        heightPx: RESIZE_HANDLE_PX,
+      };
+      const moveTop = topHandle.topPx + RESIZE_HANDLE_PX;
+      const moveH = bottomHandle.topPx - moveTop;
+      const moveBand: TimelineHitRect | null =
+        moveH > 0 ? { topPx: moveTop, heightPx: moveH } : null;
       out.push({
         id: b.id,
-        topPx: startMin * (HOUR_PX / 60),
-        heightPx: Math.max(MIN_BLOCK_PX, (endMin - startMin) * (HOUR_PX / 60)),
-        leftPct: col * widthPct,
-        widthPct,
         block: b,
+        semantic,
+        visual,
+        hit: { topHandle, bottomHandle, moveBand },
       });
     }
   }
@@ -131,23 +153,24 @@ export function computeLayout(blocks: TimedBlock[], anchorDate?: string): Layout
   // hit-rect 겹침 방지(드래그 핸들 오발동 근본 수정): MIN_BLOCK_PX(20px) 바닥이 정확한 topPx와
   // 결합하면, 같은 가로 컬럼을 공유하는 맞붙는 짧은 블록(예: 15분 블록 두 개)의 wrap이 5px 겹쳐
   // 6px 리사이즈 핸들이 같은 픽셀을 두고 다툰다 → 페인트 순서로 포인터가 잘못된 블록을 잡는다.
-  // 시작이 더 이른 블록의 높이를, 가로로 겹치는 '다음(아래)' 블록의 topPx를 넘지 않게 클램프한다.
+  // 시작이 더 이른 블록의 높이를, 가로로 겹치는 '다음(아래)' 블록의 visual.topPx를 넘지 않게 클램프한다.
   // 가로로 겹치는 블록끼리는 시간상 겹치지 않으므로(겹치면 다른 컬럼=가로 분리) 실제 길이 밑으로는
   // 절대 줄지 않는다(맞붙으면 정확한 길이로, 5px+ 간격이 있으면 바닥 그대로 유지).
   // 한계(범위 외): 클램프 후 높이가 12px 미만이면 한 블록의 상/하 6px 핸들끼리 겹친다 — 하지만
   // 이는 같은 블록 내 엣지 모호성일 뿐(둘 다 그 블록을 리사이즈), 보고된 '다른 블록' 오발동이 아니다.
   const horizontallyOverlaps = (p: LayoutBox, q: LayoutBox): boolean =>
-    p.leftPct < q.leftPct + q.widthPct && q.leftPct < p.leftPct + p.widthPct;
+    p.visual.leftPct < q.visual.leftPct + q.visual.widthPct &&
+    q.visual.leftPct < p.visual.leftPct + p.visual.widthPct;
   for (const box of out) {
     let nextTopPx = Infinity;
     for (const other of out) {
       if (other === box) continue;
-      if (other.topPx <= box.topPx) continue; // 아래쪽(시작이 더 늦은) 블록만
+      if (other.visual.topPx <= box.visual.topPx) continue; // 아래쪽(시작이 더 늦은) 블록만
       if (!horizontallyOverlaps(box, other)) continue;
-      if (other.topPx < nextTopPx) nextTopPx = other.topPx;
+      if (other.visual.topPx < nextTopPx) nextTopPx = other.visual.topPx;
     }
-    if (nextTopPx !== Infinity && box.topPx + box.heightPx > nextTopPx) {
-      box.heightPx = nextTopPx - box.topPx;
+    if (nextTopPx !== Infinity && box.visual.topPx + box.visual.heightPx > nextTopPx) {
+      box.visual.heightPx = nextTopPx - box.visual.topPx;
     }
   }
   return out;
