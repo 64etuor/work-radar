@@ -483,7 +483,7 @@ export function useTimelineDnd(opts: Opts) {
     }
 
     // ── 3: canvas-resize → canvas (block 상/하단 핸들 드래그) ───────
-    // 포인터 드래그는 raw grid delta, 키보드 드래그는 dnd-kit delta로 새 시간을 계산한다.
+    // 포인터·키보드 드래그 모두 dnd-kit ev.delta(resolveCanvasDragDelta)로 새 시간을 계산한다.
     // 최소 15분(1 snap) 보장, 00:00–24:00 안에 clamp.
     if (a.from === "canvas-resize" && o.to === "canvas") {
       const dragDelta = resolveCanvasDragDelta(ev.delta);
