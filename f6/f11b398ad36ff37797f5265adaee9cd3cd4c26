@@ -1,0 +1,21 @@
+src/components/today/useTimelineDnd.ts
+  s_969188e6331f05::t_507aa8616e2e9a 296
+docs/decisions.md
+  s_969188e6331f05::t_e4e24a9b8659d6 635
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "f6f11b398ad36ff37797f5265adaee9cd3cd4c26",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
