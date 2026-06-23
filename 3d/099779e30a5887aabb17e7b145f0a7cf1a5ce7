@@ -1,0 +1,23 @@
+src/lib/timelineDragPlan.ts
+  s_969188e6331f05::t_b290a615514a7d 23
+  s_969188e6331f05::t_b1c58eccfd5a10 1-22,24-480
+src/lib/timelineDragPlan.test.ts
+  s_969188e6331f05::t_5eb4aa04447a25 1-5,7-679
+  s_969188e6331f05::t_7fb726d7e33780 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "3d099779e30a5887aabb17e7b145f0a7cf1a5ce7",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
