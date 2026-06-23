@@ -75,6 +75,34 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // 드래그 operation 수학(resize/shift)은 planTimelineDrag(src/lib/timelineDragPlan.ts)가
+    // 단독 소유한다 — preview·commit이 직접 재계산하면 둘이 어긋난다(반복 버그의 구조적 원인).
+    // 다른 곳에서 직접 호출 금지 → planTimelineDrag의 previewBoxes/commit을 소비할 것.
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/timelineCoords"],
+              importNames: ["resizeIsoByPx", "shiftIsoByPx"],
+              message:
+                "드래그 operation 수학은 planTimelineDrag가 소유한다. resizeIsoByPx/shiftIsoByPx를 직접 부르지 말고 planTimelineDrag의 previewBoxes/commit을 쓸 것 (src/lib/timelineDragPlan.ts).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // 정본 소유자(planner)와 테스트는 직접 호출 허용.
+    files: ["src/lib/timelineDragPlan.ts", "**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": "off",
+    },
+  },
   // 마지막에 와야 함 — Prettier와 충돌하는 stylistic 룰을 비활성화.
   prettier,
 );
