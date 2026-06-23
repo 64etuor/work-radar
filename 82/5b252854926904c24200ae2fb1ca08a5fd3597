@@ -1,0 +1,28 @@
+src/components/today/useTimelineScroll.test.ts
+  s_969188e6331f05::t_e2fc4c5f78af61 1-40
+src/components/today/useTimelineScroll.ts
+  s_969188e6331f05::t_3e696dd6d3006b 47
+  s_969188e6331f05::t_62580ab3d48870 10-36,40-44
+  s_969188e6331f05::t_4f5e32cd2628f6 161-169,173
+src/components/TodayView.tsx
+  s_969188e6331f05::t_39574e2fa0da63 249
+  s_969188e6331f05::t_b3f50639986a9a 69,71
+  s_969188e6331f05::t_8c00d3cc6c8f05 250-252
+  s_969188e6331f05::t_fb10a7d4ec634c 68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "825b252854926904c24200ae2fb1ca08a5fd3597",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
