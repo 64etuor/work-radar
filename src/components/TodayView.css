@@ -761,13 +761,13 @@
 }
 
 .tl-block-resize-top {
-  top: 0; /* 가장자리에 그대로 — 커서 위치 보존(Google-캘린더 모델). occlusion은 z-lift가 처리. */
+  /* top: inline style from hitHandleStyle() — tracks semantic start edge */
   bottom: auto;
 }
 
 .tl-block-resize-bottom {
-  top: auto;
-  bottom: 0;
+  /* top: inline style from hitHandleStyle() — tracks semantic end edge (above visual bottom for floored blocks) */
+  bottom: auto;
 }
 
 /* 항상 보이는 가운데 그립 라인 — hover 전에도 "여기 잡을 수 있다" 신호. */

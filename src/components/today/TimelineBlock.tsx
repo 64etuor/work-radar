@@ -3,6 +3,7 @@ import { Repeat, StickyNote } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import {
+  hitHandleStyle,
   resizeHandleHeightPx,
   timelineBlockPlacementStyle,
 } from "@/components/today/timelineBlockStyle";
@@ -65,6 +66,7 @@ function ResizeHandle({
     <div
       ref={setNodeRef}
       className={`tl-block-resize tl-block-resize-${edge}`}
+      style={hitHandleStyle(box, edge)}
       data-dragging={isDragging || undefined}
       aria-label={edge === "top" ? "블록 시작 시간 조정" : "블록 종료 시간 조정"}
       aria-keyshortcuts="ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown"

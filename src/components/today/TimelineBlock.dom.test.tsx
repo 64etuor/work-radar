@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { LayoutBox } from "@/lib/timelineLayout";
+import { RESIZE_HANDLE_PX } from "@/lib/timelineLayout";
 
 import { TimelineBlock } from "./TimelineBlock";
 import { dragDataForBox, resizeDataForBox } from "./timelineDragData";
@@ -124,5 +125,80 @@ describe("dragDataForBox / resizeDataForBox — synced routine write-back (B1)",
     expect(drag.from === "canvas" && drag.blockKind).toBe("routine");
     const rz = resizeDataForBox(routineBox(undefined), "top", 60);
     expect(rz.from === "canvas-resize" && rz.blockKind).toBe("routine");
+  });
+});
+
+// Task 5.3: floored short block — bottom handle must track the semantic end, NOT visual bottom.
+// For a 15-min block (15px semantic) clamped to MIN_BLOCK_PX (e.g. 22px visual):
+//   semantic.endAbs = visual.topPx + 15
+//   bottomHandle.topPx = semantic.endAbs - RESIZE_HANDLE_PX = visual.topPx + 9
+//   expected inline top = 9 (not 22 - 6 = 16, the visual bottom offset)
+function shortFlooredBox(): LayoutBox {
+  // visual is taller than semantic (floored to MIN_BLOCK_PX equivalent)
+  // semantic: 9:00–9:15 → topPx=540, endAbs=555
+  // visual:  topPx=540, heightPx=22  (clamped up from 15)
+  // hit.bottomHandle.topPx = 555 - 6 = 549
+  return {
+    id: "signal:short1",
+    block: {
+      id: "signal:short1",
+      kind: "signal",
+      title: "Short block",
+      startISO: "2026-05-28T09:00:00+09:00",
+      endISO: "2026-05-28T09:15:00+09:00",
+      calendarId: "cal",
+      color: "#4a7bb8",
+      signalId: "short1",
+    },
+    semantic: { startAbs: 540, endAbs: 555, durationMin: 15 },
+    visual: { topPx: 540, heightPx: 22, leftPct: 0, widthPct: 100 },
+    hit: {
+      topHandle: { topPx: 540, heightPx: RESIZE_HANDLE_PX },
+      bottomHandle: { topPx: 549, heightPx: RESIZE_HANDLE_PX }, // 555 - 6
+      moveBand: { topPx: 546, heightPx: 3 },
+    },
+  };
+}
+
+function renderShortBlock(): HTMLDivElement {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() =>
+    root!.render(
+      <DndContext>
+        <TimelineBlock box={shortFlooredBox()} onClick={() => {}} />
+      </DndContext>,
+    ),
+  );
+  return container;
+}
+
+describe("Task 5.3 — hit-rect handle positioning", () => {
+  it("bottom handle inline top tracks semantic end, not visual bottom (floored block)", () => {
+    const el = renderShortBlock();
+    const bottomHandle = el.querySelector(".tl-block-resize-bottom") as HTMLElement | null;
+    expect(bottomHandle).not.toBeNull();
+
+    const b = shortFlooredBox();
+    // Expected top offset relative to wrap = bottomHandle.topPx - visual.topPx
+    const expectedTop = b.hit.bottomHandle.topPx - b.visual.topPx; // 549 - 540 = 9
+    // Visual bottom offset would be heightPx - RESIZE_HANDLE_PX = 22 - 6 = 16
+    const visualBottomOffset = b.visual.heightPx - RESIZE_HANDLE_PX; // 16
+
+    const inlineTop = bottomHandle!.style.top;
+    expect(inlineTop).toBe(`${expectedTop}px`); // "9px"
+    // Confirm it is NOT pinned to the visual bottom
+    expect(inlineTop).not.toBe(`${visualBottomOffset}px`); // not "16px"
+  });
+
+  it("top handle inline top is 0 (semantic start == visual top)", () => {
+    const el = renderShortBlock();
+    const topHandle = el.querySelector(".tl-block-resize-top") as HTMLElement | null;
+    expect(topHandle).not.toBeNull();
+
+    const b = shortFlooredBox();
+    const expectedTop = b.hit.topHandle.topPx - b.visual.topPx; // 540 - 540 = 0
+    expect(topHandle!.style.top).toBe(`${expectedTop}px`); // "0px"
   });
 });
