@@ -644,7 +644,17 @@ pub(crate) const APP_BUNDLE_IDENTIFIER: &str = "co.kr.mirrorless.workradar";
 
 /// Resolve the SQLite path. Debug/dev and release/prod intentionally share the same
 /// app-data SSOT so local testing, MCP, and the installed app see one operational DB.
+///
+/// `WORK_RADAR_DEV_DB` is an explicit operator override for headless MCP/profile contexts where
+/// Hermes may rewrite `HOME`; without this, the stdio MCP server can silently create a profile-local
+/// DB instead of writing to the Work Radar app DB.
 pub(crate) fn resolve_db_path(app_data: &std::path::Path) -> std::path::PathBuf {
+    if let Ok(raw) = std::env::var("WORK_RADAR_DEV_DB") {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            return std::path::PathBuf::from(trimmed);
+        }
+    }
     app_data.join("work-radar.db")
 }
 
@@ -661,14 +671,31 @@ mod bindings_export {
 mod db_path_tests {
     use super::resolve_db_path;
     use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn app_data() -> PathBuf {
         Path::new("/app/data").to_path_buf()
     }
 
     #[test]
-    fn all_builds_use_app_data_ssot() {
+    fn all_builds_use_app_data_ssot_without_override() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("WORK_RADAR_DEV_DB");
         let got = resolve_db_path(&app_data());
         assert_eq!(got, PathBuf::from("/app/data/work-radar.db"));
+    }
+
+    #[test]
+    fn work_radar_dev_db_override_pins_headless_mcp_to_app_db() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        // 오버라이드가 설정되면 app_data SSOT 대신 그 경로를 그대로 반환한다(헤드리스 MCP가
+        // Hermes의 HOME 재작성으로 프로필-로컬 DB를 만들지 않게 하는 operator override).
+        let override_path = "/custom/headless/work-radar.db";
+        std::env::set_var("WORK_RADAR_DEV_DB", override_path);
+        let got = resolve_db_path(&app_data());
+        assert_eq!(got, PathBuf::from(override_path));
+        std::env::remove_var("WORK_RADAR_DEV_DB");
     }
 }
