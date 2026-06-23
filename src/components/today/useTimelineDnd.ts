@@ -29,25 +29,16 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { type MutableRefObject } from "react";
 
-import type { CalendarEvent, RoutineToday, SignalDayPlacement, WorkSignal } from "@/bindings";
+import type { SignalDayPlacement, WorkSignal } from "@/bindings";
 import type { DragDelta } from "@/components/today/timelinePreview";
+import { applyTimelineCommitToCaches } from "@/lib/applyTimelineCommitToCaches";
 import { stage } from "@/lib/calendarSync";
-import {
-  applyPlacementPatch,
-  applySchedulePatch,
-  type PlacementPatch,
-} from "@/lib/optimisticSchedule";
+import { applyPlacementPatch, type PlacementPatch } from "@/lib/optimisticSchedule";
 import { localDateOf } from "@/lib/timeAxis";
-import { clientToGrid, SNAP_MIN, totalPxForDays } from "@/lib/timelineAxis";
-import { plusMinutesLocal } from "@/lib/timelineCoords";
+import { clientToGrid, totalPxForDays } from "@/lib/timelineAxis";
 import { planTimelineDrag } from "@/lib/timelineDragPlan";
-import { removeEventFromBuckets } from "@/lib/timelineEventCache";
 import { type LayoutBox } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
-/** 로컬 ISO('YYYY-MM-DDTHH:MM...')에서 HH:MM — routine_checks.time_override 포맷.
- *  신규 배치 길이 상수(DEFAULT_SCHEDULE_MIN/ROUTINE_SCHEDULE_MIN)와 픽셀→at·resize/shift 수학은
- *  이제 planTimelineDrag(SSOT)가 소유한다 — 여기선 commit 값을 stage/patch로 적용만 한다. */
-const hhmmOfIso = (iso: string): string => iso.slice(11, 16);
 
 /** drag data attached to draggable nodes via `useDraggable({ data: ... })`. */
 export type DragData =
@@ -267,7 +258,11 @@ export function routineBoundaryClamped(
 }
 
 type Opts = {
-  /** Today 레일 캐시 키(["today", date])용 선택 날짜 — 레일/트레이 스코프(기존 유지). */
+  /**
+   * 선택 날짜(레일/트레이 스코프) — 호출부 API 유지를 위해 남긴다. onDragEnd의 optimistic 캐시
+   * 패치는 applyTimelineCommitToCaches가 `["today"]` prefix(전 버킷)로 일괄 처리하므로 더 이상
+   * 단일 `["today", date]` 키를 직접 쓰지 않는다(SchedulePatch 필드는 날짜 무관 — 매칭 signal id만 변경).
+   */
   date: string;
   /** 로드된 첫 날짜(연속 절대 분 축의 0점). */
   anchorDate: string;
@@ -307,7 +302,6 @@ type Opts = {
 export function useTimelineDnd(opts: Opts) {
   const qc = useQueryClient();
   const {
-    date,
     anchorDate,
     days,
     defaultCalendarFor,
@@ -335,15 +329,8 @@ export function useTimelineDnd(opts: Opts) {
   const resolveCanvasDragDelta = (fallback: DragDelta): DragDelta =>
     dragDeltaRef?.current ?? fallback;
 
-  /** signals 캐시 + today 레일 캐시(둘 다 WorkSignal[]) 동시 패치. */
-  const patchSignalCaches = (id: string, patch: Parameters<typeof applySchedulePatch>[2]) => {
-    qc.setQueryData<WorkSignal[]>(["signals"], (old) =>
-      old ? applySchedulePatch(old, id, patch) : old,
-    );
-    qc.setQueryData<WorkSignal[]>(["today", date], (old) =>
-      old ? applySchedulePatch(old, id, patch) : old,
-    );
-  };
+  // commit-구동 optimistic 캐시 패치(layer-①+②)는 applyTimelineCommitToCaches(SSOT)가 소유한다.
+  // 여기엔 reconciler 밖 concern만 남긴다: 롤백 invalidate(catch), unschedule undo의 placement 복원.
 
   const invalidateSignalCaches = () => {
     void qc.invalidateQueries({ queryKey: ["signals"] });
@@ -352,60 +339,15 @@ export function useTimelineDnd(opts: Opts) {
     void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
   };
 
-  /** ["signalPlacements"] 캐시 optimistic 패치 — 렌더는 placement가 SSOT라 이걸 패치해야 스냅백이 없다. */
-  const patchPlacementCaches = (signalId: string, patch: PlacementPatch) => {
-    qc.setQueriesData<SignalDayPlacement[]>({ queryKey: ["signalPlacements"] }, (old) =>
-      old ? applyPlacementPatch(old, signalId, patch) : old,
-    );
-  };
-
-  /** 로드된 모든 날짜 버킷(+드로어 range 버킷) 순회 패치 — 자정 걸침 이벤트는 인접 두 버킷에
-   *  중복 존재하고, 자정 넘는 이동은 버킷 소속이 바뀌므로 단일 date 키 패치는 화면과 어긋난다.
-   *  렌더는 ISO에서 위치를 유도하므로 버킷 잔류 자체는 무해(다음 invalidate/refetch가 정리). */
-  const patchEventCache = (
-    calendarId: string,
-    eventId: string,
-    patch: { start?: string; durationMin?: number },
-  ) => {
-    qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) => {
-      if (!old) return old;
-      return old.map((event) => {
-        if (event.calendarId !== calendarId || event.id !== eventId) return event;
-        const start = patch.start ?? event.start;
-        const durationMin =
-          patch.durationMin ??
-          Math.max(
-            SNAP_MIN,
-            Math.round((new Date(event.end).getTime() - new Date(event.start).getTime()) / 60000),
-          );
-        return {
-          ...event,
-          start,
-          end: plusMinutesLocal(start, durationMin),
-        };
-      });
-    });
-  };
-
   const invalidateEventCaches = () => {
     void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
 
-  /** 미러 이벤트 1건을 로드된 모든 calendarEvents 버킷에서 즉시 제거 — 언스케줄 시 고아 블록 방지. */
-  const removeEventFromCache = (calendarId: string, eventId: string) =>
-    qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) =>
-      old ? removeEventFromBuckets(old, calendarId, eventId) : old,
-    );
-
-  /** routines 캐시 optimistic 패치 — 드래그 직후 블록이 새 위치에 머물게 한다(invalidate-only면
-   *  refetch까지 스냅백). timeOverride는 occurrence 날짜의 routine_checks 행 — 그 날짜 버킷만 패치. */
-  const patchRoutineCache = (
-    occDate: string,
-    routineId: string,
-    patch: { timeOverride?: string; durationMin?: number },
-  ) => {
-    qc.setQueryData<RoutineToday[]>(["routines", occDate], (old) =>
-      old?.map((r) => (r.id === routineId ? { ...r, ...patch } : r)),
+  /** ["signalPlacements"] 캐시 optimistic 패치 — unschedule undo(되돌리기)가 원래 자리로 즉시 복원할 때만
+   *  쓴다(commit-시점 패치는 reconciler). 렌더는 placement가 SSOT라 이걸 패치해야 스냅백이 없다. */
+  const patchPlacementCaches = (signalId: string, patch: PlacementPatch) => {
+    qc.setQueriesData<SignalDayPlacement[]>({ queryKey: ["signalPlacements"] }, (old) =>
+      old ? applyPlacementPatch(old, signalId, patch) : old,
     );
   };
 
@@ -474,13 +416,9 @@ export function useTimelineDnd(opts: Opts) {
         (await promptCalendarPicker(c.targetSignalId, "signal"));
       if (!cal) return;
       const { at, durationMin } = c;
-      patchSignalCaches(c.targetSignalId, { at, durationMin, calendarId: cal });
-      patchPlacementCaches(c.targetSignalId, {
-        type: "upsert",
-        date: localDateOf(at),
-        startAt: at,
-        durationMin,
-      });
+      // planner는 schedule commit의 calendarId를 미해소(undefined)로 남긴다 — picker로 해소한 cal을
+      // 주입해야 reconciler가 linkedCalendarId를 쓴다(미주입 시 회귀: 빈 calendarId로 렌더).
+      applyTimelineCommitToCaches(qc, { ...c, calendarId: cal });
       try {
         await stage({
           kind: "schedule",
@@ -502,12 +440,7 @@ export function useTimelineDnd(opts: Opts) {
     // ── 3: canvas-resize → canvas (block 상/하단 핸들 드래그) ───────
     if (c.kind === "eventResize") {
       const { at, durationMin } = c;
-      patchEventCache(c.calendarId, c.eventId, { start: at, durationMin });
-      // 루틴-backed면 루틴 캐시의 timeOverride도 같이 패치 — refetch 전 interim에도
-      // routineMatchesEvent가 성립해 블록이 새 위치에 머문다.
-      if (c.routineId && c.routineDate) {
-        patchRoutineCache(c.routineDate, c.routineId, { timeOverride: hhmmOfIso(at) });
-      }
+      applyTimelineCommitToCaches(qc, c);
       try {
         await stage({
           kind: "eventResize",
@@ -532,8 +465,8 @@ export function useTimelineDnd(opts: Opts) {
       const { at, durationMin, date: occDate, routineId } = c;
       // durationMin은 패치하지 않는다 — routine_checks엔 per-day duration 컬럼이 없어
       // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
-      // 리사이즈 높이가 곧 스냅백한다. 시간 위치(time_override)만 optimistic.
-      patchRoutineCache(occDate, routineId, { timeOverride: hhmmOfIso(at) });
+      // 리사이즈 높이가 곧 스냅백한다(reconciler가 time_override만 패치). 시간 위치만 optimistic.
+      applyTimelineCommitToCaches(qc, c);
       // 길이 고정 어포던스(Phase 4) — 루틴 길이는 정의로 고정이라 리사이즈는 높이를 바꾸지 못한다.
       // 무음 스냅백 대신 "시간만 옮겨진다"를 알린다(message-only — 마이그레이션/스키마 변경 없음).
       if (plan.routineLengthFixed) {
@@ -552,14 +485,7 @@ export function useTimelineDnd(opts: Opts) {
 
     if (c.kind === "resize") {
       const { at, durationMin, targetSignalId, fromDate } = c;
-      patchSignalCaches(targetSignalId, { at, durationMin });
-      patchPlacementCaches(targetSignalId, {
-        type: "move",
-        fromDate,
-        date: localDateOf(at),
-        startAt: at,
-        durationMin,
-      });
+      applyTimelineCommitToCaches(qc, c);
       try {
         await stage({ kind: "resize", targetSignalId, at, durationMin, fromDate });
         void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
@@ -574,10 +500,7 @@ export function useTimelineDnd(opts: Opts) {
     // ── 2: canvas → canvas (reschedule, 같은 캘린더 시간 이동) ───────
     if (c.kind === "eventReschedule") {
       const { at, durationMin } = c;
-      patchEventCache(c.calendarId, c.eventId, { start: at, durationMin });
-      if (c.routineId && c.routineDate) {
-        patchRoutineCache(c.routineDate, c.routineId, { timeOverride: hhmmOfIso(at) });
-      }
+      applyTimelineCommitToCaches(qc, c);
       try {
         await stage({
           kind: "eventReschedule",
@@ -600,7 +523,7 @@ export function useTimelineDnd(opts: Opts) {
 
     if (c.kind === "routineReschedule") {
       const { at, durationMin, date: occDate, routineId } = c;
-      patchRoutineCache(occDate, routineId, { timeOverride: hhmmOfIso(at) });
+      applyTimelineCommitToCaches(qc, c);
       // 자정 클램프 어포던스(Phase 4) — 요청 위치/길이가 occurrence 날짜 경계에 막혔으면 알린다
       // (스펙 §5의 by-design 한계를 무음 stick 대신 가시화 — 클램프 자체는 유지).
       if (plan.routineBoundaryClamped) {
@@ -619,14 +542,7 @@ export function useTimelineDnd(opts: Opts) {
 
     if (c.kind === "reschedule") {
       const { at, durationMin, targetSignalId, fromDate } = c;
-      patchSignalCaches(targetSignalId, { at });
-      patchPlacementCaches(targetSignalId, {
-        type: "move",
-        fromDate,
-        date: localDateOf(at),
-        startAt: at,
-        durationMin,
-      });
+      applyTimelineCommitToCaches(qc, c);
       try {
         await stage({ kind: "reschedule", targetSignalId, at, durationMin, fromDate });
         void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
@@ -646,10 +562,8 @@ export function useTimelineDnd(opts: Opts) {
       const prevDur = a.durationMin;
       const signalId = c.targetSignalId;
       const fromDate = c.fromDate;
-      // signal이 Google 이벤트 미러와 연결된 경우 링크 해제 전에 캐시에서 즉시 제거 — 고아 블록 방지.
-      if (c.calendarId && c.linkedEventId) removeEventFromCache(c.calendarId, c.linkedEventId);
-      patchSignalCaches(signalId, { clearLink: true });
-      patchPlacementCaches(signalId, { type: "remove", date: fromDate });
+      // 미러 이벤트 제거 + signal clearLink + placement remove는 reconciler가 소유.
+      applyTimelineCommitToCaches(qc, c);
       try {
         await stage({ kind: "unschedule", targetSignalId: signalId, fromDate });
         // 1.5s 토스트 + undo 액션(다시 reschedule). pushInfo 자동 dismiss(2500ms)에 의존,

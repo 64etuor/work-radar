@@ -4,6 +4,7 @@ import { type CalendarEvent, commands } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
 import { unwrap } from "@/lib/query/client";
 import { localDateOf } from "@/lib/timeAxis";
+import { removeEventFromBuckets } from "@/lib/timelineEventCache";
 import type { LayoutBox, TimedBlock } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
 
@@ -13,10 +14,11 @@ export const timelineBlockDate = (block: TimedBlock) => localDateOf(block.startI
 export function useTimelineScheduleActions() {
   const qc = useQueryClient();
 
+  /** 미러 이벤트 1건을 로드된 모든 calendarEvents 버킷에서 제거 — 공유 removeEventFromBuckets(단일 정본).
+   *  자정 걸침 이벤트는 인접 날짜 버킷에 중복 존재하므로 prefix 키로 전 버킷을 순회한다. */
   const removeEventFromCache = (calendarId: string, eventId: string) => {
-    // 자정 걸침 이벤트는 인접 날짜 버킷에 중복 존재 — 로드된 모든 버킷에서 제거.
     qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) =>
-      old?.filter((event) => !(event.calendarId === calendarId && event.id === eventId)),
+      old ? removeEventFromBuckets(old, calendarId, eventId) : old,
     );
   };
 

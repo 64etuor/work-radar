@@ -159,6 +159,27 @@ describe("applyTimelineCommitToCaches — schedule", () => {
     });
     expect(qc.getQueryData<WorkSignal[]>(["signals"])![0].linkedCalendarId).toBe("keep");
   });
+
+  // PRECONDITION #1: planner는 schedule commit의 calendarId를 undefined로 남기고, onDragEnd가
+  // picker로 해소한 cal을 `{ ...commit, calendarId: cal }`로 주입한다. 그 주입된 형태가 여전히
+  // linkedCalendarId를 쓰는지(미주입 시 회귀=빈 calendarId 렌더) 명시 검증한다.
+  it("schedule commit injected with a resolved calendarId writes linkedCalendarId", () => {
+    seedSignals([signal({ linkedCalendarId: null })]);
+    seedPlacements([]);
+    // planner 산출과 동일한 형태: calendarId 없음.
+    const plannerCommit: TimelineCommit = {
+      kind: "schedule",
+      targetSignalId: "sig-1",
+      at: "2026-05-28T11:00:00",
+      durationMin: 90,
+      title: "Signal",
+    };
+    // onDragEnd의 주입 와이어링과 동치: 해소한 cal을 spread로 주입.
+    applyTimelineCommitToCaches(qc, { ...plannerCommit, calendarId: "cal-resolved" });
+    for (const key of [["signals"], ["today", TODAY]]) {
+      expect(qc.getQueryData<WorkSignal[]>(key)![0].linkedCalendarId).toBe("cal-resolved");
+    }
+  });
 });
 
 describe("applyTimelineCommitToCaches — reschedule (signal)", () => {
