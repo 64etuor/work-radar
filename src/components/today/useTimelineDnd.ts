@@ -573,6 +573,8 @@ export function useTimelineDnd(opts: Opts) {
               durationMin: prevDur,
               calendarId: prevCalendarId || undefined,
             });
+            // 미러 재생성 실패도 무음이면 안 된다 — 옵티미스틱 복원은 이미 끝났으므로(위
+            // applyTimelineCommitToCaches) 실패 시 forward 분기와 동일하게 롤백 invalidate + 토스트.
             void stage({
               kind: "schedule",
               targetSignalId: signalId,
@@ -580,6 +582,11 @@ export function useTimelineDnd(opts: Opts) {
               durationMin: prevDur,
               calendarId: prevCalendarId,
               title: prevTitle,
+            }).catch(() => {
+              invalidateSignalCaches();
+              invalidateEventCaches();
+              const t = stageFailureToast("schedule");
+              useToastStore.getState().pushError(t.scope, t.message);
             });
           },
           undoLabel: "되돌리기",
