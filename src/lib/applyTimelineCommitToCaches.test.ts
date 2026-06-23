@@ -292,6 +292,75 @@ describe("applyTimelineCommitToCaches — unschedule", () => {
   });
 });
 
+describe("applyTimelineCommitToCaches — schedule-restore (unschedule undo)", () => {
+  // Verifies the reconciler call used by onUndo in the unschedule branch:
+  // after an unschedule cleared scheduledAt/linkedCalendarId/placement, applying a
+  // schedule commit with the prior values must fully restore them. This locks the
+  // behaviour that the undo wiring relies on (the onUndo closure itself is not unit-
+  // testable without a toast/stage harness, but the reconciler contract is).
+  it("re-populates scheduledAt + linkedCalendarId + placement after unschedule cleared them", () => {
+    // Start from the post-unschedule state: signal has no schedule fields, no placement.
+    seedSignals([
+      signal({
+        scheduledAt: null,
+        scheduledDuration: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+      }),
+    ]);
+    seedPlacements([]);
+
+    // Apply the schedule-restore commit (mirrors onUndo's applyTimelineCommitToCaches call).
+    const restoreCommit: TimelineCommit = {
+      kind: "schedule",
+      targetSignalId: "sig-1",
+      at: "2026-05-28T09:00:00",
+      durationMin: 60,
+      calendarId: "cal-1",
+    };
+    applyTimelineCommitToCaches(qc, restoreCommit);
+
+    for (const key of [["signals"], ["today", TODAY]]) {
+      const sig = qc.getQueryData<WorkSignal[]>(key)![0];
+      expect(sig.scheduledAt).toBe("2026-05-28T09:00:00");
+      expect(sig.scheduledDuration).toBe(60);
+      expect(sig.linkedCalendarId).toBe("cal-1");
+    }
+
+    const pls = getPlacements();
+    expect(pls).toHaveLength(1);
+    expect(pls[0]).toMatchObject({
+      signalId: "sig-1",
+      date: TODAY,
+      startAt: "2026-05-28T09:00:00",
+      durationMin: 60,
+    });
+  });
+
+  it("schedule-restore without calendarId still restores scheduledAt + placement (local-only path)", () => {
+    seedSignals([signal({ scheduledAt: null, scheduledDuration: null, linkedCalendarId: null })]);
+    seedPlacements([]);
+
+    // Edge: calendarId absent — reconciler should still restore position fields.
+    applyTimelineCommitToCaches(qc, {
+      kind: "schedule",
+      targetSignalId: "sig-1",
+      at: "2026-05-28T10:00:00",
+      durationMin: 45,
+    });
+
+    const sig = qc.getQueryData<WorkSignal[]>(["signals"])![0];
+    expect(sig.scheduledAt).toBe("2026-05-28T10:00:00");
+    expect(sig.scheduledDuration).toBe(45);
+    // calendarId absent → linkedCalendarId stays null (not overwritten with undefined).
+    expect(sig.linkedCalendarId).toBeNull();
+
+    const pls = getPlacements();
+    expect(pls).toHaveLength(1);
+    expect(pls[0].startAt).toBe("2026-05-28T10:00:00");
+  });
+});
+
 describe("applyTimelineCommitToCaches — eventResize", () => {
   it("patches event start+end via duration across all buckets", () => {
     qc.setQueryData<CalendarEvent[]>(["calendarEvents", TODAY], [calEvent()]);

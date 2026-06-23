@@ -29,12 +29,10 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { type MutableRefObject } from "react";
 
-import type { SignalDayPlacement, WorkSignal } from "@/bindings";
+import type { WorkSignal } from "@/bindings";
 import type { DragDelta } from "@/components/today/timelinePreview";
 import { applyTimelineCommitToCaches } from "@/lib/applyTimelineCommitToCaches";
 import { stage } from "@/lib/calendarSync";
-import { applyPlacementPatch, type PlacementPatch } from "@/lib/optimisticSchedule";
-import { localDateOf } from "@/lib/timeAxis";
 import { clientToGrid, totalPxForDays } from "@/lib/timelineAxis";
 import { planTimelineDrag } from "@/lib/timelineDragPlan";
 import { type LayoutBox } from "@/lib/timelineLayout";
@@ -343,14 +341,6 @@ export function useTimelineDnd(opts: Opts) {
     void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
 
-  /** ["signalPlacements"] 캐시 optimistic 패치 — unschedule undo(되돌리기)가 원래 자리로 즉시 복원할 때만
-   *  쓴다(commit-시점 패치는 reconciler). 렌더는 placement가 SSOT라 이걸 패치해야 스냅백이 없다. */
-  const patchPlacementCaches = (signalId: string, patch: PlacementPatch) => {
-    qc.setQueriesData<SignalDayPlacement[]>({ queryKey: ["signalPlacements"] }, (old) =>
-      old ? applyPlacementPatch(old, signalId, patch) : old,
-    );
-  };
-
   const onDragEnd = async (ev: DragEndEvent, activeAtStart?: DragData | null) => {
     const a = resolveDragEndActiveData(
       activeAtStart,
@@ -560,30 +550,36 @@ export function useTimelineDnd(opts: Opts) {
       if (a.from !== "canvas" || a.blockKind !== "signal") return;
       const prevAt = a.startISO;
       const prevDur = a.durationMin;
+      const prevCalendarId = a.calendarId;
+      const prevTitle = a.title;
       const signalId = c.targetSignalId;
       const fromDate = c.fromDate;
       // 미러 이벤트 제거 + signal clearLink + placement remove는 reconciler가 소유.
       applyTimelineCommitToCaches(qc, c);
       try {
         await stage({ kind: "unschedule", targetSignalId: signalId, fromDate });
-        // 1.5s 토스트 + undo 액션(다시 reschedule). pushInfo 자동 dismiss(2500ms)에 의존,
+        // 1.5s 토스트 + undo 액션. pushInfo 자동 dismiss(2500ms)에 의존,
         // onUndo는 사용자가 명시적으로 눌렀을 때만 실행.
         useToastStore.getState().pushInfo("일정 해제됨", {
           onUndo: () => {
-            // 되돌리기 = 원래 자리 복원: placements 캐시를 즉시 재패치해야 블록이 바로 돌아온다
-            // (다른 DnD 분기들과 동일한 optimistic 규율).
-            patchPlacementCaches(signalId, {
-              type: "upsert",
-              date: localDateOf(prevAt),
-              startAt: prevAt,
-              durationMin: prevDur,
-            });
-            void stage({
-              kind: "reschedule",
+            // 되돌리기 = 미러 재생성(schedule-restore). reschedule은 기존 연결 이벤트를 전제하나
+            // unschedule이 Google 미러를 삭제했으므로 schedule로 새 미러를 만들어야 한다.
+            // prevCalendarId를 그대로 사용: 미러 카드면 동일 캘린더에 재생성, 로컬 전용이면
+            // 빈 calendarId로 복원(기존 상태 그대로 — fallback/picker 없음).
+            applyTimelineCommitToCaches(qc, {
+              kind: "schedule",
               targetSignalId: signalId,
               at: prevAt,
               durationMin: prevDur,
-              fromDate: localDateOf(prevAt),
+              calendarId: prevCalendarId || undefined,
+            });
+            void stage({
+              kind: "schedule",
+              targetSignalId: signalId,
+              at: prevAt,
+              durationMin: prevDur,
+              calendarId: prevCalendarId,
+              title: prevTitle,
             });
           },
           undoLabel: "되돌리기",
