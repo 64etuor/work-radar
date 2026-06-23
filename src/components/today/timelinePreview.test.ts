@@ -70,8 +70,8 @@ describe("previewTimelineBoxes", () => {
       days: 1,
     });
 
-    expect(preview.find((b) => b.id === "signal:s1")!.widthPct).toBe(50);
-    expect(preview.find((b) => b.id === "event:cal:e1")!.widthPct).toBe(50);
+    expect(preview.find((b) => b.id === "signal:s1")!.visual.widthPct).toBe(50);
+    expect(preview.find((b) => b.id === "event:cal:e1")!.visual.widthPct).toBe(50);
   });
 
   it("renders the actively moved block at its snapped preview position (no raw-transform substitution, Bug 2a)", () => {
@@ -101,9 +101,9 @@ describe("previewTimelineBoxes", () => {
 
     // 이동된 active 블록은 스냅된 09:00 위치(topPx 540)로 렌더되며, 09:00 시그널과 겹쳐 둘 다 50%.
     // (과거엔 원본 11:00 위치 + widthPct 100으로 되돌리고 raw transform이 커서를 따라갔다.)
-    expect(renderBoxes.find((b) => b.id === "signal:s1")!.widthPct).toBe(50);
-    expect(renderBoxes.find((b) => b.id === "event:cal:e1")!.topPx).toBe(9 * 60);
-    expect(renderBoxes.find((b) => b.id === "event:cal:e1")!.widthPct).toBe(50);
+    expect(renderBoxes.find((b) => b.id === "signal:s1")!.visual.widthPct).toBe(50);
+    expect(renderBoxes.find((b) => b.id === "event:cal:e1")!.visual.topPx).toBe(9 * 60);
+    expect(renderBoxes.find((b) => b.id === "event:cal:e1")!.visual.widthPct).toBe(50);
   });
 
   it("derives a stable guide from dnd delta when canvas pointermove is missing", () => {
@@ -266,7 +266,7 @@ describe("previewTimelineBoxes", () => {
 
     const moved = preview.find((b) => b.id === "event:cal:e1")!;
     expect(moved.block.startISO.startsWith("2026-05-29T01:00")).toBe(true);
-    expect(moved.topPx).toBe(1440 + 60);
+    expect(moved.visual.topPx).toBe(1440 + 60);
   });
 
   it("루틴 블록은 자정을 넘기려 해도 occurrence 날짜 안으로 클램프된다 (preview==commit, Bug 2c)", () => {
@@ -404,7 +404,7 @@ describe("previewTimelineBoxes", () => {
       anchorDate: "2026-05-28",
       days: 1,
     });
-    expect(preview.find((b) => b.id === "event:cal:e2")!.topPx).toBe(600);
+    expect(preview.find((b) => b.id === "event:cal:e2")!.visual.topPx).toBe(600);
   });
 
   it("grid wins when no neighbor edge is within threshold", () => {
@@ -430,7 +430,7 @@ describe("previewTimelineBoxes", () => {
       anchorDate: "2026-05-28",
       days: 1,
     });
-    expect(preview.find((b) => b.id === "event:cal:e2")!.topPx).toBe(615);
+    expect(preview.find((b) => b.id === "event:cal:e2")!.visual.topPx).toBe(615);
   });
 
   it("fine snap (snapMin=5) yields 5-minute steps", () => {
@@ -456,7 +456,7 @@ describe("previewTimelineBoxes", () => {
       days: 1,
       snapMin: 5,
     });
-    expect(preview.find((b) => b.id === "event:cal:e1")!.topPx).toBe(545);
+    expect(preview.find((b) => b.id === "event:cal:e1")!.visual.topPx).toBe(545);
   });
 
   it("루틴-backed 이벤트 top-resize는 시작이 occurrence 날짜를 벗어나지 못한다 (Bug 2c)", () => {

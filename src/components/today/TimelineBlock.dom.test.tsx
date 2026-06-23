@@ -23,10 +23,6 @@ afterEach(() => {
 function box(): LayoutBox {
   return {
     id: "signal:s1",
-    topPx: 540,
-    heightPx: 60,
-    leftPct: 0,
-    widthPct: 100,
     block: {
       id: "signal:s1",
       kind: "signal",
@@ -36,6 +32,13 @@ function box(): LayoutBox {
       calendarId: "cal",
       color: "#4a7bb8",
       signalId: "s1",
+    },
+    semantic: { startAbs: 540, endAbs: 600, durationMin: 60 },
+    visual: { topPx: 540, heightPx: 60, leftPct: 0, widthPct: 100 },
+    hit: {
+      topHandle: { topPx: 540, heightPx: 6 },
+      bottomHandle: { topPx: 594, heightPx: 6 },
+      moveBand: { topPx: 546, heightPx: 48 },
     },
   };
 }
@@ -74,10 +77,6 @@ describe("TimelineBlock keyboard/a11y", () => {
 function routineBox(linkedEventId?: string): LayoutBox {
   return {
     id: "routine:r1:2026-05-28",
-    topPx: 0,
-    heightPx: 60,
-    leftPct: 0,
-    widthPct: 100,
     block: {
       id: "routine:r1:2026-05-28",
       kind: "routine",
@@ -88,6 +87,13 @@ function routineBox(linkedEventId?: string): LayoutBox {
       color: "#4a7bb8",
       routineId: "r1",
       linkedEventId,
+    },
+    semantic: { startAbs: 0, endAbs: 60, durationMin: 60 },
+    visual: { topPx: 0, heightPx: 60, leftPct: 0, widthPct: 100 },
+    hit: {
+      topHandle: { topPx: 0, heightPx: 6 },
+      bottomHandle: { topPx: 54, heightPx: 6 },
+      moveBand: { topPx: 6, heightPx: 48 },
     },
   };
 }

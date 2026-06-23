@@ -95,8 +95,8 @@ export function dragGuideFromLayout({
 
   const maxY = days * 1440;
   const layerWidth = Math.max(0, gridWidth - 60);
-  const left = 60 + (layerWidth * activeBox.leftPct) / 100;
-  const width = Math.max(0, (layerWidth * activeBox.widthPct) / 100 - 4);
+  const left = 60 + (layerWidth * activeBox.visual.leftPct) / 100;
+  const width = Math.max(0, (layerWidth * activeBox.visual.widthPct) / 100 - 4);
   const centerX = left + width / 2 + delta.x;
   const guideX = Math.max(60, Math.min(gridWidth, centerX));
 
@@ -106,13 +106,13 @@ export function dragGuideFromLayout({
   const routineBacked =
     activeDrag.blockKind === "routine" ||
     (activeDrag.blockKind === "event" && activeDrag.routineId != null);
-  const dayStart = Math.floor(activeBox.topPx / 1440) * 1440;
+  const dayStart = Math.floor(activeBox.visual.topPx / 1440) * 1440;
 
   if (activeDrag.from === "canvas-resize") {
     const rawEdgeY =
       activeDrag.edge === "top"
-        ? activeBox.topPx + delta.y
-        : activeBox.topPx + activeBox.heightPx + delta.y;
+        ? activeBox.visual.topPx + delta.y
+        : activeBox.visual.topPx + activeBox.visual.heightPx + delta.y;
     // top 핸들=시작 엣지(occurrence 날짜 안, end-15 이하), bottom 핸들=끝 엣지(start+15 이상, 자정 이하).
     const edgeY = !routineBacked
       ? rawEdgeY
@@ -126,7 +126,7 @@ export function dragGuideFromLayout({
     };
   }
 
-  const moveY = activeBox.topPx + delta.y;
+  const moveY = activeBox.visual.topPx + delta.y;
   const clampedY = routineBacked
     ? Math.max(dayStart, Math.min(dayStart + 1440 - 15, moveY))
     : moveY;
@@ -288,5 +288,5 @@ export function activeDragWouldOverlap(args: {
   const activeBox = preview.find((b) => b.id === activeId);
   if (!activeBox) return false;
   // n===1 → widthPct===100 (100/1은 IEEE 754에서 정확) → 단독 블록은 false. 멀티컬럼(n≥2)만 <100.
-  return activeBox.widthPct < 100;
+  return activeBox.visual.widthPct < 100;
 }

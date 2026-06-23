@@ -91,7 +91,8 @@ export function TimelineBlock({
   disableLayoutTransition = false,
   conflict = false,
 }: Props) {
-  const { block, topPx, heightPx, leftPct, widthPct } = box;
+  const { block } = box;
+  const { topPx, heightPx, leftPct, widthPct } = box.visual;
   const hasMemo = Boolean(memo && memo.trim());
   // 실제 endISO−startISO 그대로 — 15분 floor는 dispatcher(useTimelineDnd) 책임.
   const durationMin = Math.round(

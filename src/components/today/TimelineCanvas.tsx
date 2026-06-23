@@ -264,8 +264,8 @@ export function TimelineCanvas({
             const edgeY =
               activeBox != null
                 ? activeDrag.from === "canvas-resize" && activeDrag.edge === "bottom"
-                  ? activeBox.topPx + activeBox.heightPx
-                  : activeBox.topPx
+                  ? activeBox.visual.topPx + activeBox.visual.heightPx
+                  : activeBox.visual.topPx
                 : null;
             const lineY = edgeY ?? Math.max(0, Math.min(days * 1440, Math.round(guideY / 15) * 15));
             const dayMin = lineY % 1440;
