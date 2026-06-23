@@ -7,14 +7,13 @@ import {
   activeDragLabel,
   activeDragWouldOverlap,
   type DragDelta,
-  dragGuideFromLayout,
-  previewTimelineBoxes,
   renderTimelineBoxesForDrag,
 } from "@/components/today/timelinePreview";
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
 import { weekdayForDate } from "@/lib/query";
 import { dayDiff } from "@/lib/timeAxis";
 import { clientToGrid, DAY_PX, HOUR_PX } from "@/lib/timelineAxis";
+import { planTimelineDrag } from "@/lib/timelineDragPlan";
 import type { LayoutBox } from "@/lib/timelineLayout";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -107,22 +106,36 @@ export function TimelineCanvas({
   }, []);
 
   const showNow = dates.includes(today);
-  const previewBoxes = previewTimelineBoxes({
-    boxes,
-    activeDrag,
-    delta: activeDelta,
+  const plan = planTimelineDrag({
     anchorDate,
     days,
-    snapMin: fineSnap ? 5 : 15,
-  });
-  const renderBoxes = renderTimelineBoxesForDrag({ previewBoxes });
-  const activeGuide = dragGuideFromLayout({
     boxes,
-    activeDrag,
-    delta: activeDelta,
-    gridWidth,
-    days,
+    activeDrag: activeDrag ?? null,
+    drop: { to: "canvas" },
+    delta: activeDelta ?? { x: 0, y: 0 },
+    snapMin: fineSnap ? 5 : 15,
+    release: null,
   });
+  const previewBoxes = plan.previewBoxes;
+  const renderBoxes = renderTimelineBoxesForDrag({ previewBoxes });
+  // Synthesise guide.x from gridWidth (planner defers x to caller — see timelineDragPlan.ts §computeGuide).
+  // Port of the exact x-calc from the now-deleted dragGuideFromLayout.
+  const activeGuide = (() => {
+    if (!plan.guide) return null;
+    const activeId =
+      activeDrag && (activeDrag.from === "canvas" || activeDrag.from === "canvas-resize")
+        ? activeDrag.blockId
+        : null;
+    if (!activeId) return null;
+    const activeBox = boxes.find((box) => box.id === activeId);
+    if (!activeBox) return null;
+    const layerWidth = Math.max(0, gridWidth - 60);
+    const left = 60 + (layerWidth * activeBox.visual.leftPct) / 100;
+    const width = Math.max(0, (layerWidth * activeBox.visual.widthPct) / 100 - 4);
+    const centerX = left + width / 2 + (activeDelta?.x ?? 0);
+    const guideX = Math.max(60, Math.min(gridWidth, centerX));
+    return { ...plan.guide, x: guideX };
+  })();
   // 캔버스 이동/리사이즈 중 active 엣지에 붙는 시각·길이 pill 라벨(resize=범위+길이, move=시작 시각).
   const dragLabel = activeDragLabel({
     boxes,
