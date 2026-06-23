@@ -1,0 +1,33 @@
+src/components/today/useTimelineScheduleActions.ts
+  s_969188e6331f05::t_910bafa0d892e9 7,17-18,21
+src/lib/applyTimelineCommitToCaches.test.ts
+  s_969188e6331f05::t_9ef6765f8dff08 162-182
+src/components/today/useTimelineDnd.ts
+  s_969188e6331f05::t_56b29d12bcc144 488
+  s_969188e6331f05::t_267d26a852c9b7 468-469
+  s_969188e6331f05::t_22e9142e947cac 419-421
+  s_969188e6331f05::t_3725aca95c4abd 332-333,346-350
+  s_969188e6331f05::t_923334c658e04f 32,34,36,38
+  s_969188e6331f05::t_0d962c003ebd81 261-265
+  s_969188e6331f05::t_a8122c7a5e50ea 503
+  s_969188e6331f05::t_5bc632b85c6298 526
+  s_969188e6331f05::t_75ddf0cc579ee8 565-566
+  s_969188e6331f05::t_2c318ad9077724 443
+  s_969188e6331f05::t_4f4aa96bafdf26 545
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "9396adfaec60e20362e2cf402273703cdc3cc3ac",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
