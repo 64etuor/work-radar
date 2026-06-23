@@ -1,0 +1,36 @@
+src/components/today/TimelineBlock.tsx
+  s_969188e6331f05::t_d46732e10d520a 94-95
+src/components/today/TimelineBlock.dom.test.tsx
+  s_969188e6331f05::t_13de9ddea2538c 36-41
+  s_969188e6331f05::t_61947a5c03ca73 91-96
+src/components/today/timelinePreview.ts
+  s_969188e6331f05::t_705fb5434abfda 98-99
+  s_969188e6331f05::t_eae8d5d410eeec 109,114-115
+  s_969188e6331f05::t_af953c8083e6e4 129
+  s_969188e6331f05::t_0ca4bc2ce7acc6 291
+src/components/today/timelinePreview.test.ts
+  s_969188e6331f05::t_8e6da336650add 73-74
+  s_969188e6331f05::t_f6091db6dc7c8a 269
+  s_969188e6331f05::t_04058f8dcffb53 407
+  s_969188e6331f05::t_38f82a1172b2a6 433
+  s_969188e6331f05::t_05c0f856c64990 104-106
+  s_969188e6331f05::t_1fcf4cc6511e03 459
+src/components/today/TimelineCanvas.tsx
+  s_969188e6331f05::t_141daf44a8955c 267-268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "68d401d96f62d58b85af4296005201a5f8ab3579",
+  "prompts": {},
+  "sessions": {
+    "s_969188e6331f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2af50cf-c3d3-4f92-9877-75ab2e21d740",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
