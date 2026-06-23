@@ -293,7 +293,7 @@ type Opts = {
   boxes?: LayoutBox[];
   /** Alt/Option fine-snap(5분) 라이브 상태 ref. true면 snapMin=5. */
   fineSnapRef?: MutableRefObject<boolean>;
-  /** 포인터 드래그는 raw pointer grid delta를 사용한다. 없으면 dnd-kit delta(키보드 포함)로 폴백. */
+  /** operation delta = dnd-kit ev.delta(포인터·키보드 공통, P4). raw pointer는 크로스헤어/릴리스 분류 전용. */
   dragDeltaRef?: MutableRefObject<DragDelta | null>;
 };
 
