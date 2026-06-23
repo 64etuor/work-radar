@@ -7,12 +7,44 @@ import { extendDates, includeDate } from "@/lib/timelineWindow";
 /** 로드 일수 상한 — DOM/메모리 바운드(스펙 §3의 윈도잉 의도를 캡으로 충족). */
 const MAX_LOADED_DAYS = 21;
 
+/**
+ * lazy-extend 방향 결정 — 순수 함수(테스트 가능, 명시적 게이트).
+ * `extending` 가드 진행 중이거나 `dragActive`(드래그 인플라이트)면 null을 돌려 확장을 막는다.
+ * 드래그 중 가장자리 근접 스크롤이 anchorDate를 흔들면 in-flight delta가 시프트된 앵커 기준으로
+ * 해석돼 active 블록이 하루 점프할 수 있다 — 그래서 드래그 중에는 절대 확장하지 않는다.
+ */
+export function shouldExtend({
+  scrollTop,
+  clientHeight,
+  scrollHeight,
+  extending,
+  dragActive,
+}: {
+  scrollTop: number;
+  clientHeight: number;
+  scrollHeight: number;
+  extending: boolean;
+  dragActive: boolean;
+}): "up" | "down" | null {
+  if (extending || dragActive) return null;
+  const nearTop = scrollTop < DAY_PX / 2;
+  const nearBottom = scrollTop + clientHeight > scrollHeight - DAY_PX / 2;
+  if (nearTop) return "up";
+  if (nearBottom) return "down";
+  return null;
+}
+
 type UseTimelineScrollArgs = {
   today: string;
   gridElRef: RefObject<HTMLDivElement | null>;
+  /**
+   * 드래그 인플라이트 신호(ref라 콜백 재생성 없음). true면 lazy-extend를 동결해
+   * 드래그 중 가장자리 스크롤이 anchorDate를 시프트해 active 블록을 하루 점프시키는 것을 막는다.
+   */
+  dragActiveRef?: RefObject<boolean>;
 };
 
-export function useTimelineScroll({ today, gridElRef }: UseTimelineScrollArgs) {
+export function useTimelineScroll({ today, gridElRef, dragActiveRef }: UseTimelineScrollArgs) {
   // 레일/트레이/KPI 스코프 날짜(기존 의미 유지). 타임라인은 visibleDates 연속 축.
   const [date, setDate] = useState<string>(today);
   // 연속 타임라인의 로드된 날짜들(연속·오름차순, 스펙 §3). 초기 [어제, 오늘, 내일].
@@ -124,16 +156,21 @@ export function useTimelineScroll({ today, gridElRef }: UseTimelineScrollArgs) {
       });
     }
 
-    if (extendingRef.current) return;
     // 캡 도달 시 lazy-extend 자체를 멈춘다(가드 ref를 세우지 않음 — no-op setState 방지).
     if (visibleDates.length >= MAX_LOADED_DAYS) return;
-    const nearTop = el.scrollTop < DAY_PX / 2;
-    const nearBottom = el.scrollTop + el.clientHeight > el.scrollHeight - DAY_PX / 2;
-    if (!nearTop && !nearBottom) return;
+    // 확장 여부/방향은 순수 predicate가 결정 — extending 가드 + 드래그 동결(dragActive)을 한곳에서.
+    const dir = shouldExtend({
+      scrollTop: el.scrollTop,
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+      extending: extendingRef.current,
+      dragActive: dragActiveRef?.current ?? false,
+    });
+    if (!dir) return;
     extendingRef.current = true;
     // 캡 = 확장 중단(축출 아님) — today/date가 visibleDates에서 절대 빠지지 않아
     // now 라인 소실·레일↔캔버스 버킷 불일치가 구조적으로 불가능(timelineWindow.ts).
-    setVisibleDates((prev) => extendDates(prev, nearTop ? "up" : "down", MAX_LOADED_DAYS));
+    setVisibleDates((prev) => extendDates(prev, dir, MAX_LOADED_DAYS));
   };
 
   // 추종 rAF 잔여분 unmount 정리.

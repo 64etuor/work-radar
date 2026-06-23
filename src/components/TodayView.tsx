@@ -65,8 +65,10 @@ export function TodayView() {
   const today = localToday();
   // 캔버스 그리드 DOM — useTimelineDnd가 onDragEnd에서 fresh rect를 읽어 드롭 좌표를 환산한다.
   const gridElRef = useRef<HTMLDivElement | null>(null);
+  // 드래그 인플라이트 신호(ref) — useTimelineScroll의 lazy-extend를 동결(앵커 시프트 방지, 아래 effect로 동기화).
+  const dragActiveRef = useRef(false);
   const { anchorDate, date, handleCanvasScroll, handleDateChange, visibleDates, wrapRef } =
-    useTimelineScroll({ today, gridElRef });
+    useTimelineScroll({ today, gridElRef, dragActiveRef });
 
   // sync 실패 이벤트 → 토스트 + 캐시 invalidate(rollback).
   useCalendarSyncEvents();
@@ -244,6 +246,10 @@ export function TodayView() {
     dragGhostReducer,
     INITIAL_DRAG_GHOST_STATE,
   );
+  // reducer state(정본)를 ref로 미러 — lazy-extend 동결 게이트가 콜백 재생성 없이 읽는다.
+  useEffect(() => {
+    dragActiveRef.current = activeDrag != null;
+  }, [activeDrag]);
   const {
     announce,
     announceKeyboardMove,
