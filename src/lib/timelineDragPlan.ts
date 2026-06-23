@@ -104,7 +104,13 @@ export type TimelineCommit =
       durationMin: number;
       title?: string;
     }
-  | { kind: "unschedule"; targetSignalId: string; fromDate: string }
+  | {
+      kind: "unschedule";
+      targetSignalId: string;
+      fromDate: string;
+      calendarId?: string;
+      linkedEventId?: string;
+    }
   | {
       kind: "moveCalendar";
       targetSignalId: string;
@@ -445,6 +451,8 @@ function computeCommit(input: TimelineDragInput): {
         kind: "unschedule",
         targetSignalId: activeDrag.signalId,
         fromDate: localDateOf(activeDrag.startISO),
+        calendarId: activeDrag.calendarId,
+        linkedEventId: activeDrag.linkedEventId,
       },
     };
   }

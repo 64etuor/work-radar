@@ -41,6 +41,7 @@ import { localDateOf } from "@/lib/timeAxis";
 import { clientToGrid, SNAP_MIN, totalPxForDays } from "@/lib/timelineAxis";
 import { plusMinutesLocal } from "@/lib/timelineCoords";
 import { planTimelineDrag } from "@/lib/timelineDragPlan";
+import { removeEventFromBuckets } from "@/lib/timelineEventCache";
 import { type LayoutBox } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
 /** 로컬 ISO('YYYY-MM-DDTHH:MM...')에서 HH:MM — routine_checks.time_override 포맷.
@@ -66,6 +67,8 @@ export type DragData =
       startISO: string;
       durationMin: number;
       calendarId: string;
+      /** signal이 Google 이벤트와 연결된 경우의 미러 이벤트 id — 언스케줄 시 캐시에서 제거용. */
+      linkedEventId?: string;
     }
   | {
       from: "canvas";
@@ -388,6 +391,12 @@ export function useTimelineDnd(opts: Opts) {
     void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
 
+  /** 미러 이벤트 1건을 로드된 모든 calendarEvents 버킷에서 즉시 제거 — 언스케줄 시 고아 블록 방지. */
+  const removeEventFromCache = (calendarId: string, eventId: string) =>
+    qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) =>
+      old ? removeEventFromBuckets(old, calendarId, eventId) : old,
+    );
+
   /** routines 캐시 optimistic 패치 — 드래그 직후 블록이 새 위치에 머물게 한다(invalidate-only면
    *  refetch까지 스냅백). timeOverride는 occurrence 날짜의 routine_checks 행 — 그 날짜 버킷만 패치. */
   const patchRoutineCache = (
@@ -637,6 +646,8 @@ export function useTimelineDnd(opts: Opts) {
       const prevDur = a.durationMin;
       const signalId = c.targetSignalId;
       const fromDate = c.fromDate;
+      // signal이 Google 이벤트 미러와 연결된 경우 링크 해제 전에 캐시에서 즉시 제거 — 고아 블록 방지.
+      if (c.calendarId && c.linkedEventId) removeEventFromCache(c.calendarId, c.linkedEventId);
       patchSignalCaches(signalId, { clearLink: true });
       patchPlacementCaches(signalId, { type: "remove", date: fromDate });
       try {
@@ -665,6 +676,7 @@ export function useTimelineDnd(opts: Opts) {
         });
       } catch {
         invalidateSignalCaches();
+        invalidateEventCaches();
         const t = stageFailureToast("unschedule");
         useToastStore.getState().pushError(t.scope, t.message);
       }

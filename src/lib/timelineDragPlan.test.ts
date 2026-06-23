@@ -539,7 +539,7 @@ describe("planTimelineDrag — schedule / unschedule / moveCalendar / routineSch
     expect((result.commit as { durationMin: number }).durationMin).toBe(45);
   });
 
-  it("canvas signal → tray unschedule", () => {
+  it("canvas signal → tray unschedule (no linkedEventId)", () => {
     const boxes = computeLayout(
       [block("signal:s1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00")],
       ANCHOR,
@@ -559,6 +559,38 @@ describe("planTimelineDrag — schedule / unschedule / moveCalendar / routineSch
       kind: "unschedule",
       targetSignalId: "s1",
       fromDate: "2026-05-28",
+      calendarId: "cal",
+      linkedEventId: undefined,
+    });
+  });
+
+  it("canvas signal → tray unschedule carries calendarId + linkedEventId when linked", () => {
+    const boxes = computeLayout(
+      [
+        block("signal:s1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00", {
+          linkedEventId: "goog-evt-42",
+        }),
+      ],
+      ANCHOR,
+    );
+    const activeDrag: DragData = {
+      from: "canvas",
+      blockKind: "signal",
+      blockId: "signal:s1",
+      signalId: "s1",
+      title: "S1",
+      startISO: "2026-05-28T09:00:00+09:00",
+      durationMin: 60,
+      calendarId: "cal",
+      linkedEventId: "goog-evt-42",
+    };
+    const result = plan({ boxes, activeDrag, drop: { to: "tray" }, delta: { x: 0, y: 0 } });
+    expect(result.commit).toEqual({
+      kind: "unschedule",
+      targetSignalId: "s1",
+      fromDate: "2026-05-28",
+      calendarId: "cal",
+      linkedEventId: "goog-evt-42",
     });
   });
 

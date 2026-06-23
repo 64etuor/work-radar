@@ -56,6 +56,7 @@ export function dragDataForBox(box: LayoutBox, durationMin: number): DragData {
     startISO: block.startISO,
     durationMin,
     calendarId: block.calendarId,
+    linkedEventId: block.linkedEventId,
   };
 }
 
