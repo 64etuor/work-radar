@@ -914,6 +914,102 @@ describe("buildTodayBlocks — placement 기반 signal 렌더링", () => {
   });
 });
 
+describe("buildTimelineBlocks — cross-day signal mirror orphan block", () => {
+  it("midnight-crossing mirror appears in D and D+1 buckets — D+1 orphan event block is absorbed", () => {
+    // 버그 재현: placement D(6/23 23:00 +90min) → mirror이 자정 걸쳐 6/24 버킷에도 내려옴.
+    // D+1에 placement 없으므로 per-date absorbed가 비어 있어 mirror가 event 블록으로 노출됨 (orphan).
+    // fix 후: global absorbMirrorKeys가 D+1 buildTodayBlocks에도 주입 → orphan 제거.
+    const signals = [
+      {
+        id: "s1",
+        title: "전략 로드맵 작성",
+        scheduledAt: "2026-06-23T23:00:00",
+        scheduledDuration: 90,
+        linkedEventId: "b2evmu",
+        linkedCalendarId: "cal-id",
+      },
+    ] as never[];
+    const placements = [
+      {
+        id: "p1",
+        signalId: "s1",
+        date: "2026-06-23",
+        startAt: "2026-06-23T23:00:00",
+        durationMin: 90,
+      },
+    ] as never[];
+    const mirrorEvent = {
+      id: "b2evmu",
+      title: "전략 로드맵 작성",
+      start: "2026-06-23T23:00:00",
+      end: "2026-06-24T00:30:00",
+      allDay: false,
+      calendarId: "cal-id",
+      calendarSummary: "cal",
+      projectColor: "#444",
+    } as never;
+    const out = buildTimelineBlocks({
+      signals,
+      placements,
+      eventsByDate: {
+        "2026-06-23": [mirrorEvent],
+        "2026-06-24": [mirrorEvent], // same mirror event in both day buckets (midnight-crossing)
+      },
+      routinesByDate: {},
+      dates: ["2026-06-23", "2026-06-24"],
+    });
+    // signal block on D — always expected
+    const signalBlocks = out.filter((b) => b.kind === "signal");
+    expect(signalBlocks).toHaveLength(1);
+    expect(signalBlocks[0].id).toBe("signal:s1:2026-06-23");
+    // orphan event block on D+1 must NOT exist
+    const eventBlocks = out.filter((b) => b.kind === "event");
+    expect(eventBlocks).toHaveLength(0);
+  });
+
+  it("single-day signal + same-day mirror still yields exactly one block (no regression)", () => {
+    // 회귀 방지: 자정 미걸침 시그널은 fix 전후 동일하게 signal 1블록만 나와야 한다.
+    const signals = [
+      {
+        id: "s2",
+        title: "단일일 시그널",
+        scheduledAt: "2026-06-23T09:00:00",
+        scheduledDuration: 60,
+        linkedEventId: "ev2",
+        linkedCalendarId: "cal-id",
+      },
+    ] as never[];
+    const placements = [
+      {
+        id: "p2",
+        signalId: "s2",
+        date: "2026-06-23",
+        startAt: "2026-06-23T09:00:00",
+        durationMin: 60,
+      },
+    ] as never[];
+    const mirrorEvent = {
+      id: "ev2",
+      title: "단일일 시그널",
+      start: "2026-06-23T09:00:00",
+      end: "2026-06-23T10:00:00",
+      allDay: false,
+      calendarId: "cal-id",
+      calendarSummary: "cal",
+      projectColor: "#444",
+    } as never;
+    const out = buildTimelineBlocks({
+      signals,
+      placements,
+      eventsByDate: { "2026-06-23": [mirrorEvent] },
+      routinesByDate: {},
+      dates: ["2026-06-23"],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe("signal");
+  });
+});
+
 describe("buildTimelineBlocks — off-date 미러 absorb 회귀", () => {
   it("stale mirror event on an earlier placed date is absorbed (no double render)", () => {
     // 시그널이 6/10+6/11 두 placement 보유, 미러 이벤트는 6/10 버킷에 남은 stale 캐시

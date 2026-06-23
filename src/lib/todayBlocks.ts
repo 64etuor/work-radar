@@ -60,6 +60,12 @@ type Input = {
   routines: RoutineToday[];
   /** YYYY-MM-DD (로컬 today). 루틴 가상 인스턴스 ISO 빌드용. */
   date: string;
+  /**
+   * buildTimelineBlocks에서 주입되는 전역 미러 키 집합.
+   * 자정 걸침 signal의 미러 이벤트는 인접 날짜 버킷에도 내려오므로,
+   * placement가 없는 날짜에서도 이 키를 가진 이벤트는 독립 렌더하지 않는다.
+   */
+  absorbMirrorKeys?: Set<string>;
 };
 
 const ROUTINE_DURATION_MIN = 30;
@@ -149,9 +155,10 @@ export function buildTodayBlocks({
   events,
   routines,
   date,
+  absorbMirrorKeys,
 }: Input): TimedBlock[] {
   const out: TimedBlock[] = [];
-  const absorbed = new Set<string>();
+  const absorbed = new Set<string>(absorbMirrorKeys ?? []);
   const routineByEvent = new Map<string, RoutineToday>();
 
   const signalById = new Map(signals.map((s) => [s.id, s]));
@@ -282,6 +289,17 @@ export function buildTimelineBlocks({
 }): TimedBlock[] {
   const seen = new Set<string>();
   const out: TimedBlock[] = [];
+  // 전체 placements에 연결된 signal 미러 키를 사전에 수집한다.
+  // 자정 걸침 signal의 미러 이벤트는 placement가 없는 인접 날짜 버킷에도 내려오므로,
+  // 해당 날짜의 buildTodayBlocks에도 이 집합을 주입해 orphan event 블록을 방지한다.
+  const signalById = new Map(signals.map((s) => [s.id, s]));
+  const absorbMirrorKeys = new Set<string>();
+  for (const p of placements) {
+    const s = signalById.get(p.signalId);
+    if (!s) continue;
+    const key = eventKey(s.linkedCalendarId, s.linkedEventId);
+    if (key) absorbMirrorKeys.add(key);
+  }
   for (const date of dates) {
     const blocks = buildTodayBlocks({
       signals,
@@ -289,6 +307,7 @@ export function buildTimelineBlocks({
       events: eventsByDate[date] ?? [],
       routines: routinesByDate[date] ?? [],
       date,
+      absorbMirrorKeys,
     });
     for (const b of blocks) {
       if (seen.has(b.id)) continue;
