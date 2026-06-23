@@ -37,23 +37,15 @@ import {
   applySchedulePatch,
   type PlacementPatch,
 } from "@/lib/optimisticSchedule";
-import { absMin, localDateOf } from "@/lib/timeAxis";
+import { localDateOf } from "@/lib/timeAxis";
 import { clientToGrid, SNAP_MIN, totalPxForDays } from "@/lib/timelineAxis";
-import {
-  clampDurationToDate,
-  clampIsoToDate,
-  pixelToLocalIso,
-  plusMinutesLocal,
-  resizeIsoByPx,
-  shiftIsoByPx,
-} from "@/lib/timelineCoords";
-import { type LayoutBox, magnetEdgesFromBoxes } from "@/lib/timelineLayout";
+import { plusMinutesLocal } from "@/lib/timelineCoords";
+import { planTimelineDrag } from "@/lib/timelineDragPlan";
+import { type LayoutBox } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
-/** signal 신규 배치 기본 길이(분) — 스펙 §D8. */
-const DEFAULT_SCHEDULE_MIN = 60;
-/** routine 신규 배치 길이(분) — 스펙 §D8 루틴 가상 인스턴스. */
-const ROUTINE_SCHEDULE_MIN = 30;
-/** 로컬 ISO('YYYY-MM-DDTHH:MM...')에서 HH:MM — routine_checks.time_override 포맷. */
+/** 로컬 ISO('YYYY-MM-DDTHH:MM...')에서 HH:MM — routine_checks.time_override 포맷.
+ *  신규 배치 길이 상수(DEFAULT_SCHEDULE_MIN/ROUTINE_SCHEDULE_MIN)와 픽셀→at·resize/shift 수학은
+ *  이제 planTimelineDrag(SSOT)가 소유한다 — 여기선 commit 값을 stage/patch로 적용만 한다. */
 const hhmmOfIso = (iso: string): string => iso.slice(11, 16);
 
 /** drag data attached to draggable nodes via `useDraggable({ data: ... })`. */
@@ -445,20 +437,36 @@ export function useTimelineDnd(opts: Opts) {
     if (!a || !o) return;
 
     const snapMin = fineSnapRef?.current ? 5 : 15;
-    const snapOptsFor = (blockId: string) => ({
+    // 드래그 OPERATION 수학(at/durationMin/branch)의 단일 정본 — preview와 동일 코드(planTimelineDrag).
+    // schedule/routineSchedule의 픽셀→at는 resolveCanvasGridY로 보정한 gridY를 planner에 넘긴다.
+    const plan = planTimelineDrag({
+      anchorDate,
+      days,
+      boxes: boxes ?? [],
+      activeDrag: a,
+      drop:
+        o.to === "canvas"
+          ? { to: "canvas", gridY: resolveCanvasGridY(o.gridY) }
+          : o.to === "canvas:cal"
+            ? { to: "canvas:cal", calendarId: o.calendarId, gridY: resolveCanvasGridY(o.gridY) }
+            : { to: "tray" },
+      delta: resolveCanvasDragDelta(ev.delta), // == ev.delta(Task A); preview가 쓰는 동일 delta.
       snapMin,
-      magnetEdges: magnetEdgesFromBoxes(boxes ?? [], anchorDate, blockId),
+      release,
     });
+    if (!plan.commit) return; // no-op(zero movement); off-grid는 427에서 이미 return.
+    const c = plan.commit;
 
     // ── 1: tray → canvas ─────────────────────────────────────────────
-    if (a.from === "tray" && o.to === "canvas") {
+    if (c.kind === "schedule") {
+      if (a.from !== "tray") return; // 타입 좁힘 — schedule commit은 tray 드래그에서만 나온다.
       const cal =
-        defaultCalendarFor(a.signalId) ?? (await promptCalendarPicker(a.signalId, "signal"));
+        defaultCalendarFor(c.targetSignalId) ??
+        (await promptCalendarPicker(c.targetSignalId, "signal"));
       if (!cal) return;
-      const at = pixelToLocalIso(anchorDate, days, resolveCanvasGridY(o.gridY));
-      const durationMin = a.durationMin ?? DEFAULT_SCHEDULE_MIN;
-      patchSignalCaches(a.signalId, { at, durationMin, calendarId: cal });
-      patchPlacementCaches(a.signalId, {
+      const { at, durationMin } = c;
+      patchSignalCaches(c.targetSignalId, { at, durationMin, calendarId: cal });
+      patchPlacementCaches(c.targetSignalId, {
         type: "upsert",
         date: localDateOf(at),
         startAt: at,
@@ -467,7 +475,7 @@ export function useTimelineDnd(opts: Opts) {
       try {
         await stage({
           kind: "schedule",
-          targetSignalId: a.signalId,
+          targetSignalId: c.targetSignalId,
           at,
           durationMin,
           calendarId: cal,
@@ -483,105 +491,71 @@ export function useTimelineDnd(opts: Opts) {
     }
 
     // ── 3: canvas-resize → canvas (block 상/하단 핸들 드래그) ───────
-    // 포인터·키보드 드래그 모두 dnd-kit ev.delta(resolveCanvasDragDelta)로 새 시간을 계산한다.
-    // 최소 15분(1 snap) 보장, 00:00–24:00 안에 clamp.
-    if (a.from === "canvas-resize" && o.to === "canvas") {
-      const dragDelta = resolveCanvasDragDelta(ev.delta);
-      const resized = resizeIsoByPx({
-        anchorDate,
-        days,
-        startISO: a.startISO,
-        durationMin: a.durationMin,
-        edge: a.edge,
-        deltaPx: dragDelta.y,
-        snapOpts: snapOptsFor(a.blockId),
-      });
-      // 루틴은 occurrence 날짜 안으로 클램프 — routine_checks(date+HH:MM)가 다음 날 새벽을
-      // 표현하지 못한다(스펙 §5). top 핸들이 날짜를 넘으면 그 날 00:00에서 멈춘다.
-      // 동기화된 루틴의 이벤트 블록(routineId 동봉)도 time_override가 같은 구조라 동일 클램프.
-      const occDate = localDateOf(a.startISO);
-      const routineBacked =
-        a.blockKind === "routine" || (a.blockKind === "event" && a.routineId != null);
-      const at = routineBacked ? clampIsoToDate(resized.at, occDate) : resized.at;
-      // 클램프로 시작이 밀렸으면 끝 시각 고정을 위해 duration을 보정(absMin 차이만큼).
-      // 루틴은 끝도 자정을 넘지 못한다(bottom-resize 상한 — Google master end 누수 방지).
-      let clamped =
-        at === resized.at
-          ? resized.durationMin
-          : resized.durationMin + (absMin(resized.at, occDate) - absMin(at, occDate));
-      if (routineBacked) clamped = clampDurationToDate(at, occDate, clamped);
-      if (clamped === a.durationMin && at === a.startISO) return;
-      if (a.blockKind === "event") {
-        patchEventCache(a.calendarId, a.eventId, {
-          start: at,
-          durationMin: clamped,
-        });
-        // 루틴-backed면 루틴 캐시의 timeOverride도 같이 패치 — refetch 전 interim에도
-        // routineMatchesEvent가 성립해 블록이 새 위치에 머문다.
-        if (a.routineId) {
-          patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
-        }
-      } else if (a.blockKind === "signal") {
-        patchSignalCaches(a.signalId, {
+    if (c.kind === "eventResize") {
+      const { at, durationMin } = c;
+      patchEventCache(c.calendarId, c.eventId, { start: at, durationMin });
+      // 루틴-backed면 루틴 캐시의 timeOverride도 같이 패치 — refetch 전 interim에도
+      // routineMatchesEvent가 성립해 블록이 새 위치에 머문다.
+      if (c.routineId && c.routineDate) {
+        patchRoutineCache(c.routineDate, c.routineId, { timeOverride: hhmmOfIso(at) });
+      }
+      try {
+        await stage({
+          kind: "eventResize",
+          eventId: c.eventId,
+          calendarId: c.calendarId,
           at,
-          durationMin: clamped,
+          durationMin,
+          routineId: c.routineId,
+          routineDate: c.routineDate,
         });
-        patchPlacementCaches(a.signalId, {
-          type: "move",
-          fromDate: localDateOf(a.startISO),
-          date: localDateOf(at),
-          startAt: at,
-          durationMin: clamped,
-        });
-      } else if (a.blockKind === "routine") {
-        // durationMin은 패치하지 않는다 — routine_checks엔 per-day duration 컬럼이 없어
-        // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
-        // 리사이즈 높이가 곧 스냅백한다. 시간 위치(time_override)만 optimistic.
-        patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
-        // 길이 고정 어포던스(Phase 4) — 루틴 길이는 정의로 고정이라 리사이즈는 높이를 바꾸지 못한다.
-        // 무음 스냅백 대신 "시간만 옮겨진다"를 알린다(message-only — 마이그레이션/스키마 변경 없음).
+        if (c.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
+      } catch {
+        invalidateEventCaches();
+        if (c.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
+        const t = stageFailureToast("resize");
+        useToastStore.getState().pushError(t.scope, t.message);
+      }
+      return;
+    }
+
+    if (c.kind === "routineResize") {
+      const { at, durationMin, date: occDate, routineId } = c;
+      // durationMin은 패치하지 않는다 — routine_checks엔 per-day duration 컬럼이 없어
+      // 서버가 영속하지 않는 값(정의의 duration_min으로 refetch 시 복귀)을 캐시에 약속하면
+      // 리사이즈 높이가 곧 스냅백한다. 시간 위치(time_override)만 optimistic.
+      patchRoutineCache(occDate, routineId, { timeOverride: hhmmOfIso(at) });
+      // 길이 고정 어포던스(Phase 4) — 루틴 길이는 정의로 고정이라 리사이즈는 높이를 바꾸지 못한다.
+      // 무음 스냅백 대신 "시간만 옮겨진다"를 알린다(message-only — 마이그레이션/스키마 변경 없음).
+      if (plan.routineLengthFixed) {
         useToastStore.getState().pushInfo("루틴 길이는 정의에서 고정 — 시간만 옮겨집니다");
       }
       try {
-        if (a.blockKind === "event") {
-          await stage({
-            kind: "eventResize",
-            eventId: a.eventId,
-            calendarId: a.calendarId,
-            at,
-            durationMin: clamped,
-            routineId: a.routineId,
-            routineDate: a.routineId ? occDate : undefined,
-          });
-          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else if (a.blockKind === "routine") {
-          await stage({
-            kind: "routineResize",
-            routineId: a.routineId,
-            date: occDate,
-            at,
-            durationMin: clamped,
-          });
-          void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else {
-          await stage({
-            kind: "resize",
-            targetSignalId: a.signalId,
-            at,
-            durationMin: clamped,
-            fromDate: localDateOf(a.startISO),
-          });
-          void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
-        }
+        await stage({ kind: "routineResize", routineId, date: occDate, at, durationMin });
+        void qc.invalidateQueries({ queryKey: ["routines"] });
       } catch {
-        if (a.blockKind === "event") {
-          invalidateEventCaches();
-          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else if (a.blockKind === "routine") {
-          void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else {
-          invalidateSignalCaches();
-        }
+        void qc.invalidateQueries({ queryKey: ["routines"] });
+        const t = stageFailureToast("resize");
+        useToastStore.getState().pushError(t.scope, t.message);
+      }
+      return;
+    }
+
+    if (c.kind === "resize") {
+      const { at, durationMin, targetSignalId, fromDate } = c;
+      patchSignalCaches(targetSignalId, { at, durationMin });
+      patchPlacementCaches(targetSignalId, {
+        type: "move",
+        fromDate,
+        date: localDateOf(at),
+        startAt: at,
+        durationMin,
+      });
+      try {
+        await stage({ kind: "resize", targetSignalId, at, durationMin, fromDate });
+        void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
+      } catch {
+        invalidateSignalCaches();
         const t = stageFailureToast("resize");
         useToastStore.getState().pushError(t.scope, t.message);
       }
@@ -589,87 +563,66 @@ export function useTimelineDnd(opts: Opts) {
     }
 
     // ── 2: canvas → canvas (reschedule, 같은 캘린더 시간 이동) ───────
-    if (a.from === "canvas" && o.to === "canvas") {
-      const dragDelta = resolveCanvasDragDelta(ev.delta);
-      const shifted = shiftIsoByPx(
-        anchorDate,
-        days,
-        a.startISO,
-        dragDelta.y,
-        snapOptsFor(a.blockId),
-      );
-      // 루틴은 occurrence 날짜 안으로 클램프(스펙 §5) — event/signal은 자정 통과 자유.
-      // 동기화된 루틴의 이벤트 블록(routineId 동봉)도 time_override(date+HH:MM) 구조라 동일 클램프.
-      const occDate = localDateOf(a.startISO);
-      const routineBacked =
-        a.blockKind === "routine" || (a.blockKind === "event" && a.routineId != null);
-      const at = routineBacked ? clampIsoToDate(shifted, occDate) : shifted;
-      // 루틴-backed는 위치 클램프 후에도 끝이 자정을 넘을 수 있다(23:45+60분) — 루틴 분기와 동일 상한.
-      const movedDurationMin = routineBacked
-        ? clampDurationToDate(at, occDate, a.durationMin)
-        : a.durationMin;
-      if (a.blockKind === "event") {
-        patchEventCache(a.calendarId, a.eventId, { start: at, durationMin: movedDurationMin });
-        if (a.routineId) {
-          patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
-        }
-      } else if (a.blockKind === "signal") {
-        patchSignalCaches(a.signalId, { at });
-        patchPlacementCaches(a.signalId, {
-          type: "move",
-          fromDate: localDateOf(a.startISO),
-          date: localDateOf(at),
-          startAt: at,
-          durationMin: a.durationMin,
-        });
-      } else if (a.blockKind === "routine") {
-        patchRoutineCache(occDate, a.routineId, { timeOverride: hhmmOfIso(at) });
-        // 자정 클램프 어포던스(Phase 4) — 요청 위치/길이가 occurrence 날짜 경계에 막혔으면 알린다
-        // (스펙 §5의 by-design 한계를 무음 stick 대신 가시화 — 클램프 자체는 유지).
-        if (routineBoundaryClamped(shifted, at, a.durationMin, movedDurationMin)) {
-          useToastStore.getState().pushInfo("루틴은 자정을 넘을 수 없어 그 날 안에서 멈췄어요");
-        }
+    if (c.kind === "eventReschedule") {
+      const { at, durationMin } = c;
+      patchEventCache(c.calendarId, c.eventId, { start: at, durationMin });
+      if (c.routineId && c.routineDate) {
+        patchRoutineCache(c.routineDate, c.routineId, { timeOverride: hhmmOfIso(at) });
       }
       try {
-        if (a.blockKind === "event") {
-          await stage({
-            kind: "eventReschedule",
-            eventId: a.eventId,
-            calendarId: a.calendarId,
-            at,
-            durationMin: movedDurationMin,
-            routineId: a.routineId,
-            routineDate: a.routineId ? occDate : undefined,
-          });
-          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else if (a.blockKind === "routine") {
-          await stage({
-            kind: "routineReschedule",
-            routineId: a.routineId,
-            date: occDate,
-            at,
-            durationMin: movedDurationMin,
-          });
-          void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else {
-          await stage({
-            kind: "reschedule",
-            targetSignalId: a.signalId,
-            at,
-            durationMin: a.durationMin,
-            fromDate: localDateOf(a.startISO),
-          });
-          void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
-        }
+        await stage({
+          kind: "eventReschedule",
+          eventId: c.eventId,
+          calendarId: c.calendarId,
+          at,
+          durationMin,
+          routineId: c.routineId,
+          routineDate: c.routineDate,
+        });
+        if (c.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
       } catch {
-        if (a.blockKind === "event") {
-          invalidateEventCaches();
-          if (a.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else if (a.blockKind === "routine") {
-          void qc.invalidateQueries({ queryKey: ["routines"] });
-        } else {
-          invalidateSignalCaches();
-        }
+        invalidateEventCaches();
+        if (c.routineId) void qc.invalidateQueries({ queryKey: ["routines"] });
+        const t = stageFailureToast("reschedule");
+        useToastStore.getState().pushError(t.scope, t.message);
+      }
+      return;
+    }
+
+    if (c.kind === "routineReschedule") {
+      const { at, durationMin, date: occDate, routineId } = c;
+      patchRoutineCache(occDate, routineId, { timeOverride: hhmmOfIso(at) });
+      // 자정 클램프 어포던스(Phase 4) — 요청 위치/길이가 occurrence 날짜 경계에 막혔으면 알린다
+      // (스펙 §5의 by-design 한계를 무음 stick 대신 가시화 — 클램프 자체는 유지).
+      if (plan.routineBoundaryClamped) {
+        useToastStore.getState().pushInfo("루틴은 자정을 넘을 수 없어 그 날 안에서 멈췄어요");
+      }
+      try {
+        await stage({ kind: "routineReschedule", routineId, date: occDate, at, durationMin });
+        void qc.invalidateQueries({ queryKey: ["routines"] });
+      } catch {
+        void qc.invalidateQueries({ queryKey: ["routines"] });
+        const t = stageFailureToast("reschedule");
+        useToastStore.getState().pushError(t.scope, t.message);
+      }
+      return;
+    }
+
+    if (c.kind === "reschedule") {
+      const { at, durationMin, targetSignalId, fromDate } = c;
+      patchSignalCaches(targetSignalId, { at });
+      patchPlacementCaches(targetSignalId, {
+        type: "move",
+        fromDate,
+        date: localDateOf(at),
+        startAt: at,
+        durationMin,
+      });
+      try {
+        await stage({ kind: "reschedule", targetSignalId, at, durationMin, fromDate });
+        void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
+      } catch {
+        invalidateSignalCaches();
         const t = stageFailureToast("reschedule");
         useToastStore.getState().pushError(t.scope, t.message);
       }
@@ -677,19 +630,17 @@ export function useTimelineDnd(opts: Opts) {
     }
 
     // ── 4: canvas → tray (unschedule) ─────────────────────────────────
-    if (a.from === "canvas" && a.blockKind === "signal" && o.to === "tray") {
-      // 사전 상태 캡처 — undo 시 정확한 prior state 복원용.
+    if (c.kind === "unschedule") {
+      // 사전 상태 캡처 — undo 시 정확한 prior state 복원용. a는 canvas signal로 좁혀짐.
+      if (a.from !== "canvas" || a.blockKind !== "signal") return;
       const prevAt = a.startISO;
       const prevDur = a.durationMin;
-      const signalId = a.signalId;
+      const signalId = c.targetSignalId;
+      const fromDate = c.fromDate;
       patchSignalCaches(signalId, { clearLink: true });
-      patchPlacementCaches(signalId, { type: "remove", date: localDateOf(prevAt) });
+      patchPlacementCaches(signalId, { type: "remove", date: fromDate });
       try {
-        await stage({
-          kind: "unschedule",
-          targetSignalId: signalId,
-          fromDate: localDateOf(prevAt),
-        });
+        await stage({ kind: "unschedule", targetSignalId: signalId, fromDate });
         // 1.5s 토스트 + undo 액션(다시 reschedule). pushInfo 자동 dismiss(2500ms)에 의존,
         // onUndo는 사용자가 명시적으로 눌렀을 때만 실행.
         useToastStore.getState().pushInfo("일정 해제됨", {
@@ -721,17 +672,15 @@ export function useTimelineDnd(opts: Opts) {
     }
 
     // ── 5: canvas → 다른 캘린더 zone (moveCalendar, staged) ──────────
-    if (a.from === "canvas" && a.blockKind === "signal" && o.to === "canvas:cal") {
-      if (o.calendarId === a.calendarId) return; // 동일 캘린더면 noop.
-      const dragDelta = resolveCanvasDragDelta(ev.delta);
-      const at = shiftIsoByPx(anchorDate, days, a.startISO, dragDelta.y, snapOptsFor(a.blockId));
+    if (c.kind === "moveCalendar") {
+      if (a.from !== "canvas") return; // 타입 좁힘 — moveCalendar는 canvas 드래그에서만.
       try {
         await stage({
           kind: "moveCalendar",
-          targetSignalId: a.signalId,
-          calendarId: o.calendarId,
-          at,
-          durationMin: a.durationMin,
+          targetSignalId: c.targetSignalId,
+          calendarId: c.calendarId,
+          at: c.at,
+          durationMin: c.durationMin,
           title: a.title,
         });
       } catch {
@@ -745,19 +694,19 @@ export function useTimelineDnd(opts: Opts) {
     }
 
     // ── 7: routine → canvas (routineSchedule, 1회성 시간 배치) ────────
-    if (a.from === "routine" && o.to === "canvas") {
+    if (c.kind === "routineSchedule") {
+      if (a.from !== "routine") return; // 타입 좁힘 — routineSchedule은 routine 드래그에서만.
       // routine은 routineId 기반 calendar 매핑이 없으므로 picker만(default lookup 없음).
-      const cal = await promptCalendarPicker(a.routineId, "routine");
+      const cal = await promptCalendarPicker(c.routineId, "routine");
       if (!cal) return;
-      const at = pixelToLocalIso(anchorDate, days, resolveCanvasGridY(o.gridY));
       try {
         await stage({
           kind: "routineSchedule",
-          routineId: a.routineId,
+          routineId: c.routineId,
           // 드롭 위치의 날짜가 곧 occurrence — 인접 날짜 영역에 떨어뜨리면 그 날 배치.
-          date: localDateOf(at),
-          at,
-          durationMin: ROUTINE_SCHEDULE_MIN,
+          date: c.date,
+          at: c.at,
+          durationMin: c.durationMin,
           calendarId: cal,
           title: a.title,
         });
@@ -773,7 +722,7 @@ export function useTimelineDnd(opts: Opts) {
       return;
     }
 
-    // 인터랙션 #3 resize / #6 createBlank: 후속 commit (PR 7 정련).
+    // 인터랙션 #6 createBlank(빈 슬롯 직접 그리기): 후속 commit (PR 7 정련).
   };
 
   return { onDragEnd };
