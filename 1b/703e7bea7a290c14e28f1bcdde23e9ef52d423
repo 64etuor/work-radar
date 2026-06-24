@@ -1,0 +1,49 @@
+src/lib/query/bookkeeping.ts
+  s_f910a11abc432f::t_c47cc5fe32e5c0 9,272-289
+src-tauri/src/bookkeeping_export.rs
+  s_f910a11abc432f::t_39c9a278ed8aa4 1-2,6-69,74-198,204-245,252-320,322-355
+  s_f910a11abc432f::t_f54b0d9edbc1d7 3-5,70-73,199-203,246-251
+  s_f910a11abc432f::t_7ef269ae0ae163 321
+src-tauri/src/commands/bookkeeping.rs
+  s_f910a11abc432f::t_8fb2135314cdf3 2200-2234
+  s_f910a11abc432f::t_f54b0d9edbc1d7 6,20-23
+  s_f910a11abc432f::t_355b9c742d1152 356-385
+src/bindings.ts
+  s_f910a11abc432f::t_13f37c8b60b7d3 61-63,1809-1813
+package.json
+  s_f910a11abc432f::t_13f37c8b60b7d3 43
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f910a11abc432f::t_5b7d5cc4d01112 800-814
+  s_f910a11abc432f::t_cd67fb435e03d1 1043-1068
+  s_f910a11abc432f::t_9485a3c5d0d7c7 3-4,12,86-88,143
+  s_f910a11abc432f::t_9850b3d2bf432c 382-389
+  s_f910a11abc432f::t_067a0c8f708301 474-476,482,607-612,619-629
+  s_f910a11abc432f::t_16b9b8daa26718 613-618
+src-tauri/capabilities/default.json
+  s_f910a11abc432f::t_b7de51d19a9076 20-24
+src-tauri/Cargo.toml
+  s_f910a11abc432f::t_91e6800a0463e7 26-27
+src/components/bookkeeping/BookkeepingView.css
+  s_f910a11abc432f::t_9f97a61c9feeae 52-56,74-80,463,481-487
+src-tauri/src/models/bookkeeping.rs
+  s_f910a11abc432f::t_93be416bb25c27 438-445
+src-tauri/src/lib.rs
+  s_f910a11abc432f::t_4867000579703e 456-457
+  s_f910a11abc432f::t_9be48b9512062c 18,108-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "1b703e7bea7a290c14e28f1bcdde23e9ef52d423",
+  "prompts": {},
+  "sessions": {
+    "s_f910a11abc432f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ef985-2b5e-7ad3-94b2-7aade688c63b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
