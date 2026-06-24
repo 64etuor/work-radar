@@ -9,6 +9,7 @@ import {
   type ExportBookkeepingInput,
   type FindBookkeepingDuplicateCandidatesInput,
   type RecordBookkeepingSyncFailureInput,
+  type SetBookkeepingBudgetInput,
   type SetBookkeepingLineItemsInput,
   type SyncBookkeepingGmailReceiptsInput,
   type UpdateBookkeepingTransactionInput,
@@ -122,6 +123,36 @@ export function useBookkeepingMonthlySummary(month: string, projectId: string | 
   return useQuery({
     queryKey: ["bookkeeping", "summary", month, projectId],
     queryFn: () => unwrap(commands.bookkeepingMonthlySummary(month, projectId)),
+  });
+}
+
+export function useBookkeepingBudgets(month: string, projectId: string | null = null) {
+  return useQuery({
+    queryKey: ["bookkeeping", "budgets", month, projectId],
+    queryFn: () => unwrap(commands.listBookkeepingBudgets(month, projectId)),
+  });
+}
+
+export function useBookkeepingBudgetStatus(month: string, projectId: string | null = null) {
+  return useQuery({
+    queryKey: ["bookkeeping", "budgetStatus", month, projectId],
+    queryFn: () => unwrap(commands.bookkeepingBudgetStatus(month, projectId)),
+  });
+}
+
+export function useSetBookkeepingBudget() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: SetBookkeepingBudgetInput) => unwrap(commands.setBookkeepingBudget(input)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteBookkeepingBudget() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(commands.deleteBookkeepingBudget(id)),
+    onSuccess: invalidate,
   });
 }
 

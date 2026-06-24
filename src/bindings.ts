@@ -41,6 +41,10 @@ export const commands = {
 	restoreBookkeepingTransaction: (id: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("restore_bookkeeping_transaction", { id })),
 	listBookkeepingTrash: (projectId: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_trash", { projectId })),
 	bookkeepingMonthlySummary: (month: string, projectId: string | null) => typedError<BookkeepingMonthlySummary, AppError>(__TAURI_INVOKE("bookkeeping_monthly_summary", { month, projectId })),
+	setBookkeepingBudget: (input: SetBookkeepingBudgetInput) => typedError<BookkeepingBudget, AppError>(__TAURI_INVOKE("set_bookkeeping_budget", { input })),
+	listBookkeepingBudgets: (month: string, projectId: string | null) => typedError<BookkeepingBudget[], AppError>(__TAURI_INVOKE("list_bookkeeping_budgets", { month, projectId })),
+	deleteBookkeepingBudget: (id: string) => typedError<boolean, AppError>(__TAURI_INVOKE("delete_bookkeeping_budget", { id })),
+	bookkeepingBudgetStatus: (month: string, projectId: string | null) => typedError<BookkeepingBudgetStatus[], AppError>(__TAURI_INVOKE("bookkeeping_budget_status", { month, projectId })),
 	listBookkeepingAudit: (entityId: string | null) => typedError<BookkeepingAuditEntry[], AppError>(__TAURI_INVOKE("list_bookkeeping_audit", { entityId })),
 	recordBookkeepingSyncFailure: (input: RecordBookkeepingSyncFailureInput) => typedError<BookkeepingSyncJob, AppError>(__TAURI_INVOKE("record_bookkeeping_sync_failure", { input })),
 	listBookkeepingSyncJobs: () => typedError<BookkeepingSyncJob[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_jobs")),
@@ -945,6 +949,31 @@ export type BookkeepingAuditEntry = {
 	summary: string,
 	metadataJson: string,
 	createdAt: string,
+};
+
+export type BookkeepingBudget = {
+	id: string,
+	projectId: string | null,
+	month: string,
+	categoryCode: string,
+	limitMinor: number,
+	currency: string,
+	rollover: boolean,
+	note: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type BookkeepingBudgetStatus = {
+	categoryCode: string,
+	label: string,
+	limitMinor: number,
+	spentMinor: number,
+	remainingMinor: number,
+	rolloverInMinor: number,
+	rollover: boolean,
+	pct: number | null,
+	currency: string,
 };
 
 /**  벌크 작업 1건 결과(건별 보고, best-effort — 일부 실패해도 나머지 진행). */
@@ -2440,6 +2469,16 @@ export type SessionRow = {
 	ownership: Ownership,
 	taskId: string | null,
 	phase: SessionPhase,
+};
+
+export type SetBookkeepingBudgetInput = {
+	projectId: string | null,
+	month: string,
+	categoryCode: string,
+	limitMinor: number,
+	currency: string | null,
+	rollover: boolean,
+	note: string | null,
 };
 
 export type SetBookkeepingLineItemsInput = {

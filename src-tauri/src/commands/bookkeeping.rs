@@ -8,18 +8,19 @@ use crate::db::Db;
 use crate::error::AppError;
 use crate::gmail::{GmailMessageSearch, GmailReadProvider};
 use crate::models::{
-    BookkeepingAliasMatchKind, BookkeepingAuditEntry, BookkeepingBulkItemResult,
-    BookkeepingCategoryAlias, BookkeepingCategoryNode, BookkeepingCategoryOverride,
-    BookkeepingCategoryRules, BookkeepingCategorySummary, BookkeepingDirection,
-    BookkeepingDuplicateCandidate, BookkeepingExpenseKind, BookkeepingGmailLabel,
-    BookkeepingGmailSyncResult, BookkeepingLineItem, BookkeepingMonthlySummary,
-    BookkeepingPaymentMethodKind, BookkeepingRecurringExpense, BookkeepingRecurringExpenseStatus,
-    BookkeepingRecurringOccurrence, BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus,
-    BookkeepingSource, BookkeepingSyncCursor, BookkeepingSyncJob, BookkeepingTransaction,
+    BookkeepingAliasMatchKind, BookkeepingAuditEntry, BookkeepingBudget, BookkeepingBudgetStatus,
+    BookkeepingBulkItemResult, BookkeepingCategoryAlias, BookkeepingCategoryNode,
+    BookkeepingCategoryOverride, BookkeepingCategoryRules, BookkeepingCategorySummary,
+    BookkeepingDirection, BookkeepingDuplicateCandidate, BookkeepingExpenseKind,
+    BookkeepingGmailLabel, BookkeepingGmailSyncResult, BookkeepingLineItem,
+    BookkeepingMonthlySummary, BookkeepingPaymentMethodKind, BookkeepingRecurringExpense,
+    BookkeepingRecurringExpenseStatus, BookkeepingRecurringOccurrence,
+    BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
+    BookkeepingSyncCursor, BookkeepingSyncJob, BookkeepingTransaction,
     CreateBookkeepingLineItemInput, CreateBookkeepingRecurringExpenseInput,
     CreateBookkeepingTransactionInput, ExportBookkeepingInput,
     FindBookkeepingDuplicateCandidatesInput, OverrideBookkeepingCategoryInput,
-    RecordBookkeepingSyncFailureInput, SetBookkeepingLineItemsInput,
+    RecordBookkeepingSyncFailureInput, SetBookkeepingBudgetInput, SetBookkeepingLineItemsInput,
     SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
 };
 
@@ -51,6 +52,8 @@ const TRANSACTION_RETURNING_COLUMNS: &str = "id, project_id, source, source_ref,
 const RECURRING_EXPENSE_RETURNING_COLUMNS: &str = "id, project_id, name, merchant, amount_minor, \
  currency, category, payment_method_kind, payment_method_label, payment_method_last4, \
  expense_kind, schedule_day, start_month, end_month, status, note, created_at, updated_at";
+const BUDGET_RETURNING_COLUMNS: &str = "id, project_id, month, category_code, limit_minor, \
+ currency, rollover, note, created_at, updated_at";
 
 #[tauri::command]
 #[specta::specta]
@@ -163,6 +166,41 @@ pub async fn bookkeeping_monthly_summary(
     project_id: Option<String>,
 ) -> Result<BookkeepingMonthlySummary, AppError> {
     bookkeeping_monthly_summary_inner(db.inner(), &month, project_id.as_deref()).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_bookkeeping_budget(
+    db: State<'_, Db>,
+    input: SetBookkeepingBudgetInput,
+) -> Result<BookkeepingBudget, AppError> {
+    set_bookkeeping_budget_inner(db.inner(), input).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_bookkeeping_budgets(
+    db: State<'_, Db>,
+    month: String,
+    project_id: Option<String>,
+) -> Result<Vec<BookkeepingBudget>, AppError> {
+    list_bookkeeping_budgets_inner(db.inner(), &month, project_id.as_deref()).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_bookkeeping_budget(db: State<'_, Db>, id: String) -> Result<bool, AppError> {
+    delete_bookkeeping_budget_inner(db.inner(), &id).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bookkeeping_budget_status(
+    db: State<'_, Db>,
+    month: String,
+    project_id: Option<String>,
+) -> Result<Vec<BookkeepingBudgetStatus>, AppError> {
+    bookkeeping_budget_status_inner(db.inner(), &month, project_id.as_deref()).await
 }
 
 #[tauri::command]
@@ -1664,6 +1702,156 @@ pub(crate) async fn bookkeeping_monthly_summary_inner(
     })
 }
 
+pub(crate) async fn set_bookkeeping_budget_inner(
+    db: &Db,
+    input: SetBookkeepingBudgetInput,
+) -> Result<BookkeepingBudget, AppError> {
+    validate_month(&input.month)?;
+    if input.limit_minor < 0 {
+        return Err(AppError::validation(
+            "bookkeeping.budget.limit",
+            "예산은 0 이상이어야 합니다",
+        ));
+    }
+    let project_id = clean_optional(input.project_id.as_deref());
+    if let Some(project_id) = project_id.as_deref() {
+        ensure_budget_project_exists(db, project_id).await?;
+    }
+    let category_code = clean_required(&input.category_code, "bookkeeping.budget.category")?;
+    let currency = clean_currency(input.currency.as_deref().unwrap_or(DEFAULT_CURRENCY))?;
+    let note = clean_optional(input.note.as_deref());
+
+    let existing: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM bookkeeping_budgets \
+         WHERE COALESCE(project_id, '') = COALESCE(?1, '') AND month = ?2 AND category_code = ?3",
+    )
+    .bind(project_id.as_deref())
+    .bind(&input.month)
+    .bind(&category_code)
+    .fetch_optional(db)
+    .await?;
+
+    let id = if let Some((id,)) = existing {
+        sqlx::query(
+            "UPDATE bookkeeping_budgets \
+             SET limit_minor = ?2, currency = ?3, rollover = ?4, note = ?5, updated_at = datetime('now') \
+             WHERE id = ?1",
+        )
+        .bind(&id)
+        .bind(input.limit_minor)
+        .bind(&currency)
+        .bind(input.rollover)
+        .bind(note.as_deref())
+        .execute(db)
+        .await?;
+        id
+    } else {
+        let row: (String,) = sqlx::query_as(
+            "INSERT INTO bookkeeping_budgets \
+             (id, project_id, month, category_code, limit_minor, currency, rollover, note) \
+             VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7) \
+             RETURNING id",
+        )
+        .bind(project_id.as_deref())
+        .bind(&input.month)
+        .bind(&category_code)
+        .bind(input.limit_minor)
+        .bind(&currency)
+        .bind(input.rollover)
+        .bind(note.as_deref())
+        .fetch_one(db)
+        .await?;
+        row.0
+    };
+
+    fetch_bookkeeping_budget(db, &id).await
+}
+
+pub(crate) async fn list_bookkeeping_budgets_inner(
+    db: &Db,
+    month: &str,
+    project_id: Option<&str>,
+) -> Result<Vec<BookkeepingBudget>, AppError> {
+    validate_month(month)?;
+    let project_id = clean_optional(project_id);
+    let rows = sqlx::query_as::<_, BookkeepingBudget>(&format!(
+        "SELECT {BUDGET_RETURNING_COLUMNS} FROM bookkeeping_budgets \
+         WHERE month = ?1 AND COALESCE(project_id, '') = COALESCE(?2, '') \
+         ORDER BY category_code ASC"
+    ))
+    .bind(month)
+    .bind(project_id.as_deref())
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+pub(crate) async fn delete_bookkeeping_budget_inner(db: &Db, id: &str) -> Result<bool, AppError> {
+    let id = clean_required(id, "bookkeeping.budget.id")?;
+    let result = sqlx::query("DELETE FROM bookkeeping_budgets WHERE id = ?1")
+        .bind(&id)
+        .execute(db)
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+pub(crate) async fn bookkeeping_budget_status_inner(
+    db: &Db,
+    month: &str,
+    project_id: Option<&str>,
+) -> Result<Vec<BookkeepingBudgetStatus>, AppError> {
+    let budgets = list_bookkeeping_budgets_inner(db, month, project_id).await?;
+    let mut rows = Vec::with_capacity(budgets.len());
+
+    for budget in budgets {
+        let spent = spent_for_budget_category(
+            db,
+            &budget.month,
+            budget.project_id.as_deref(),
+            &budget.category_code,
+        )
+        .await?;
+        let rollover_in = if budget.rollover {
+            rollover_in_for_budget(
+                db,
+                &budget.month,
+                budget.project_id.as_deref(),
+                &budget.category_code,
+            )
+            .await?
+        } else {
+            0
+        };
+        let available = budget.limit_minor.saturating_add(rollover_in);
+        let remaining = available - spent;
+        let pct = if available > 0 {
+            spent as f64 / available as f64
+        } else {
+            0.0
+        };
+        let label = category_label(db, &budget.category_code).await?;
+        rows.push(BookkeepingBudgetStatus {
+            category_code: budget.category_code,
+            label,
+            limit_minor: budget.limit_minor,
+            spent_minor: spent,
+            remaining_minor: remaining,
+            rollover_in_minor: rollover_in,
+            rollover: budget.rollover,
+            pct,
+            currency: budget.currency,
+        });
+    }
+
+    rows.sort_by(|a, b| {
+        b.pct
+            .partial_cmp(&a.pct)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.category_code.cmp(&b.category_code))
+    });
+    Ok(rows)
+}
+
 pub(crate) async fn list_bookkeeping_audit_inner(
     db: &Db,
     entity_id: Option<String>,
@@ -2599,6 +2787,124 @@ async fn ensure_project_exists(db: &Db, project_id: &str) -> Result<(), AppError
     }
 }
 
+async fn ensure_budget_project_exists(db: &Db, project_id: &str) -> Result<(), AppError> {
+    let exists: Option<(String,)> = sqlx::query_as("SELECT id FROM projects WHERE id = ?1")
+        .bind(project_id)
+        .fetch_optional(db)
+        .await?;
+    if exists.is_some() {
+        Ok(())
+    } else {
+        Err(AppError::not_found(
+            "bookkeeping.budget.project_not_found",
+            "project not found",
+        ))
+    }
+}
+
+async fn fetch_bookkeeping_budget(db: &Db, id: &str) -> Result<BookkeepingBudget, AppError> {
+    let row = sqlx::query_as::<_, BookkeepingBudget>(&format!(
+        "SELECT {BUDGET_RETURNING_COLUMNS} FROM bookkeeping_budgets WHERE id = ?1"
+    ))
+    .bind(id)
+    .fetch_one(db)
+    .await?;
+    Ok(row)
+}
+
+async fn spent_for_budget_category(
+    db: &Db,
+    month: &str,
+    project_id: Option<&str>,
+    category_code: &str,
+) -> Result<i32, AppError> {
+    let (start, end) = month_bounds(month)?;
+    let (amount,): (i64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount_minor), 0) \
+         FROM bookkeeping_transactions \
+         WHERE spent_at >= ?1 AND spent_at < ?2 \
+           AND review_status != 'ignored' \
+           AND direction = 'expense' \
+           AND deleted_at IS NULL \
+           AND (?3 IS NULL OR project_id = ?3) \
+           AND COALESCE(category_code, category) = ?4",
+    )
+    .bind(&start)
+    .bind(&end)
+    .bind(project_id)
+    .bind(category_code)
+    .fetch_one(db)
+    .await?;
+    Ok(amount.max(0).min(i32::MAX as i64) as i32)
+}
+
+async fn budget_for_scope(
+    db: &Db,
+    month: &str,
+    project_id: Option<&str>,
+    category_code: &str,
+) -> Result<Option<BookkeepingBudget>, AppError> {
+    let row = sqlx::query_as::<_, BookkeepingBudget>(&format!(
+        "SELECT {BUDGET_RETURNING_COLUMNS} FROM bookkeeping_budgets \
+         WHERE month = ?1 AND COALESCE(project_id, '') = COALESCE(?2, '') AND category_code = ?3"
+    ))
+    .bind(month)
+    .bind(project_id)
+    .bind(category_code)
+    .fetch_optional(db)
+    .await?;
+    Ok(row)
+}
+
+async fn rollover_in_for_budget(
+    db: &Db,
+    month: &str,
+    project_id: Option<&str>,
+    category_code: &str,
+) -> Result<i32, AppError> {
+    let mut cursor = previous_month(month)?;
+    let mut chain = Vec::new();
+    for _ in 0..24 {
+        let Some(budget) = budget_for_scope(db, &cursor, project_id, category_code).await? else {
+            break;
+        };
+        let continue_chain = budget.rollover;
+        chain.push(budget);
+        if !continue_chain {
+            break;
+        }
+        cursor = previous_month(&cursor)?;
+    }
+
+    let mut carry = 0_i32;
+    for budget in chain.into_iter().rev() {
+        let spent = spent_for_budget_category(
+            db,
+            &budget.month,
+            budget.project_id.as_deref(),
+            &budget.category_code,
+        )
+        .await?;
+        carry = budget
+            .limit_minor
+            .saturating_add(carry)
+            .saturating_sub(spent)
+            .max(0);
+    }
+    Ok(carry)
+}
+
+async fn category_label(db: &Db, category_code: &str) -> Result<String, AppError> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT label FROM bookkeeping_category_taxonomy WHERE code = ?1")
+            .bind(category_code)
+            .fetch_optional(db)
+            .await?;
+    Ok(row
+        .map(|(label,)| label)
+        .unwrap_or_else(|| category_code.to_string()))
+}
+
 fn recurring_occurrence_select_sql(where_clause: &str) -> String {
     format!(
         "SELECT o.id, o.recurring_expense_id, e.name AS recurring_name, e.merchant, \
@@ -2853,6 +3159,17 @@ fn month_bounds(month: &str) -> Result<(String, String), AppError> {
 }
 
 #[allow(clippy::result_large_err)]
+fn previous_month(month: &str) -> Result<String, AppError> {
+    let (year, mon) = validate_month(month)?;
+    let (prev_year, prev_mon) = if mon == 1 {
+        (year - 1, 12)
+    } else {
+        (year, mon - 1)
+    };
+    Ok(format!("{prev_year:04}-{prev_mon:02}"))
+}
+
+#[allow(clippy::result_large_err)]
 fn due_date_for_month(month: &str, schedule_day: i32) -> Result<String, AppError> {
     let (year, mon) = validate_month(month)?;
     let last_day = last_day_of_month(year, mon);
@@ -2940,7 +3257,8 @@ mod tests {
         BookkeepingReviewStatus, BookkeepingSource, CreateBookkeepingLineItemInput,
         CreateBookkeepingRecurringExpenseInput, CreateBookkeepingTransactionInput,
         CreateProjectInput, ProjectKind, RecordBookkeepingSyncFailureInput,
-        SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
+        SetBookkeepingBudgetInput, SyncBookkeepingGmailReceiptsInput,
+        UpdateBookkeepingTransactionInput,
     };
     use std::sync::Mutex;
 
@@ -3615,6 +3933,142 @@ mod tests {
                 .expect("personal occurrences");
         assert_eq!(occurrences.len(), 1);
         assert_eq!(occurrences[0].recurring_name, "월세");
+    }
+
+    #[tokio::test]
+    async fn budgets_upsert_by_scope_and_status_uses_monthly_expense_predicate() {
+        let db = pool().await;
+        let needs_review = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Market", 1_000, "2026-06-01", "food"),
+        )
+        .await
+        .expect("needs review expense");
+
+        let mut income = manual_input("Refund", 9_000, "2026-06-02", "food");
+        income.direction = BookkeepingDirection::Income;
+        create_bookkeeping_transaction_inner(&db, income)
+            .await
+            .expect("income excluded");
+
+        let ignored = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Ignored", 2_000, "2026-06-03", "food"),
+        )
+        .await
+        .expect("ignored expense");
+        update_bookkeeping_review_status_inner(&db, &ignored.id, BookkeepingReviewStatus::Ignored)
+            .await
+            .expect("ignore");
+
+        let deleted = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Deleted", 3_000, "2026-06-04", "food"),
+        )
+        .await
+        .expect("deleted expense");
+        delete_bookkeeping_transaction_inner(&db, &deleted.id)
+            .await
+            .expect("soft delete");
+
+        let first = set_bookkeeping_budget_inner(
+            &db,
+            SetBookkeepingBudgetInput {
+                project_id: None,
+                month: "2026-06".to_string(),
+                category_code: "food".to_string(),
+                limit_minor: 5_000,
+                currency: Some("krw".to_string()),
+                rollover: false,
+                note: Some("initial".to_string()),
+            },
+        )
+        .await
+        .expect("insert budget");
+        let second = set_bookkeeping_budget_inner(
+            &db,
+            SetBookkeepingBudgetInput {
+                project_id: None,
+                month: "2026-06".to_string(),
+                category_code: "food".to_string(),
+                limit_minor: 1_500,
+                currency: None,
+                rollover: false,
+                note: Some("updated".to_string()),
+            },
+        )
+        .await
+        .expect("upsert budget");
+
+        assert_eq!(first.id, second.id);
+        assert_eq!(second.limit_minor, 1_500);
+        assert_eq!(
+            needs_review.review_status,
+            BookkeepingReviewStatus::NeedsReview
+        );
+
+        let status = bookkeeping_budget_status_inner(&db, "2026-06", None)
+            .await
+            .expect("status");
+        assert_eq!(status.len(), 1);
+        assert_eq!(status[0].spent_minor, 1_000);
+        assert_eq!(status[0].remaining_minor, 500);
+        assert_eq!(status[0].rollover_in_minor, 0);
+    }
+
+    #[tokio::test]
+    async fn budget_status_rolls_positive_prior_remaining_and_exposes_over_budget() {
+        let db = pool().await;
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("May Market", 3_000, "2026-05-10", "food"),
+        )
+        .await
+        .expect("may expense");
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("June Market", 3_500, "2026-06-10", "food"),
+        )
+        .await
+        .expect("june expense");
+
+        set_bookkeeping_budget_inner(
+            &db,
+            SetBookkeepingBudgetInput {
+                project_id: None,
+                month: "2026-05".to_string(),
+                category_code: "food".to_string(),
+                limit_minor: 5_000,
+                currency: None,
+                rollover: false,
+                note: None,
+            },
+        )
+        .await
+        .expect("may budget");
+        set_bookkeeping_budget_inner(
+            &db,
+            SetBookkeepingBudgetInput {
+                project_id: None,
+                month: "2026-06".to_string(),
+                category_code: "food".to_string(),
+                limit_minor: 1_000,
+                currency: None,
+                rollover: true,
+                note: None,
+            },
+        )
+        .await
+        .expect("june budget");
+
+        let status = bookkeeping_budget_status_inner(&db, "2026-06", None)
+            .await
+            .expect("status");
+
+        assert_eq!(status[0].rollover_in_minor, 2_000);
+        assert_eq!(status[0].spent_minor, 3_500);
+        assert_eq!(status[0].remaining_minor, -500);
+        assert!(status[0].pct > 1.0);
     }
 
     #[tokio::test]

@@ -503,3 +503,44 @@ pub struct BookkeepingMonthlySummary {
     pub duplicate_count: u32,
     pub categories: Vec<BookkeepingCategorySummary>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingBudget {
+    pub id: String,
+    pub project_id: Option<String>,
+    pub month: String,
+    pub category_code: String,
+    pub limit_minor: i32,
+    pub currency: String,
+    pub rollover: bool,
+    pub note: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBookkeepingBudgetInput {
+    pub project_id: Option<String>,
+    pub month: String,
+    pub category_code: String,
+    pub limit_minor: i32,
+    pub currency: Option<String>,
+    pub rollover: bool,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingBudgetStatus {
+    pub category_code: String,
+    pub label: String,
+    pub limit_minor: i32,
+    pub spent_minor: i32,
+    pub remaining_minor: i32,
+    pub rollover_in_minor: i32,
+    pub rollover: bool,
+    pub pct: f64,
+    pub currency: String,
+}

@@ -18,6 +18,7 @@ import {
   Search,
   ShieldAlert,
   Tags,
+  Target,
   Trash2,
   WalletCards,
 } from "lucide-react";
@@ -34,6 +35,7 @@ import {
 
 import type {
   BookkeepingAuditEntry,
+  BookkeepingBudgetStatus,
   BookkeepingCategorySummary,
   BookkeepingDirection,
   BookkeepingExpenseKind,
@@ -66,6 +68,7 @@ import {
   IpcError,
   localToday,
   useBookkeepingAudit,
+  useBookkeepingBudgetStatus,
   useBookkeepingGmailLabels,
   useBookkeepingLineItems,
   useBookkeepingMonthlySummary,
@@ -91,6 +94,7 @@ import {
   usePostBookkeepingRecurringOccurrence,
   useProjects,
   useRestoreBookkeepingTransaction,
+  useSetBookkeepingBudget,
   useSetBookkeepingLineItems,
   useSetBookkeepingRecurringOccurrenceStatus,
   useSyncBookkeepingGmailReceipts,
@@ -106,6 +110,7 @@ import {
   BOOKKEEPING_INPUT_PANEL_ORDER,
   type BookkeepingInputPanel,
 } from "./bookkeepingPanels";
+import { budgetBarPercent, isBudgetOverrun } from "./budgets";
 import { duplicateQueryFromTransaction, formatDuplicateScore } from "./duplicates";
 import { GMAIL_DEFAULT_QUERY, GMAIL_FULL_RESCAN_QUERY, normalizeGmailQuery } from "./gmailSync";
 import {
@@ -158,6 +163,10 @@ const FIELD_IDS = {
   recurringExpenseKind: "bk-recurring-expense-kind",
   recurringNote: "bk-recurring-note",
   recurringPanel: "bk-recurring-panel",
+  budgetCategory: "bk-budget-category",
+  budgetAmount: "bk-budget-amount",
+  budgetRollover: "bk-budget-rollover",
+  budgetNote: "bk-budget-note",
   merchant: "bk-manual-merchant",
   amount: "bk-manual-amount",
   spentAt: "bk-manual-spent-at",
@@ -213,6 +222,13 @@ type RecurringDraft = {
   paymentMethodLabel: string;
   paymentMethodLast4: string;
   expenseKind: BookkeepingExpenseKind;
+  note: string;
+};
+
+type BudgetDraft = {
+  category: string;
+  amount: string;
+  rollover: boolean;
   note: string;
 };
 
@@ -305,6 +321,15 @@ function emptyRecurringDraft(): RecurringDraft {
     paymentMethodLabel: "",
     paymentMethodLast4: "",
     expenseKind: "fixed",
+    note: "",
+  };
+}
+
+function emptyBudgetDraft(): BudgetDraft {
+  return {
+    category: "food",
+    amount: "",
+    rollover: false,
     note: "",
   };
 }
@@ -437,6 +462,7 @@ export function BookkeepingView() {
   );
   const [manualDraft, setManualDraft] = useState<ManualDraft>(() => emptyManualDraft());
   const [recurringDraft, setRecurringDraft] = useState<RecurringDraft>(() => emptyRecurringDraft());
+  const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => emptyBudgetDraft());
   const [inputPanelsOpen, setInputPanelOpen] = useReducer(inputPanelsReducer, {
     ...BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN,
   });
@@ -456,6 +482,7 @@ export function BookkeepingView() {
   const approvedTransactions = useBookkeepingTransactions("approved", activeProjectId);
   const trashTransactions = useBookkeepingTrash(activeProjectId);
   const summary = useBookkeepingMonthlySummary(month, activeProjectId);
+  const budgetStatus = useBookkeepingBudgetStatus(month, activeProjectId);
   const audit = useBookkeepingAudit(null);
   const syncJobs = useBookkeepingSyncJobs();
   const syncCursors = useBookkeepingSyncCursors();
@@ -471,6 +498,7 @@ export function BookkeepingView() {
   const bulkReview = useBulkUpdateBookkeepingReviewStatus();
   const bulkCategory = useBulkSetBookkeepingCategory();
   const bulkDelete = useBulkDeleteBookkeepingTransactions();
+  const setBudget = useSetBookkeepingBudget();
   const exportCsv = useExportBookkeepingCsv();
   const exportQif = useExportBookkeepingQif();
   const exportOfx = useExportBookkeepingOfx();
@@ -600,6 +628,30 @@ export function BookkeepingView() {
           );
         },
         onError: (error) => pushMutationError("bookkeeping.gmail", error),
+      },
+    );
+  };
+
+  const submitBudget = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amount = Number(budgetDraft.amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      pushError("bookkeeping.budget", "예산 금액을 확인하세요");
+      return;
+    }
+    setBudget.mutate(
+      {
+        projectId: activeProjectId,
+        month,
+        categoryCode: budgetDraft.category,
+        limitMinor: Math.round(amount),
+        currency: "KRW",
+        rollover: budgetDraft.rollover,
+        note: nullableText(budgetDraft.note),
+      },
+      {
+        onSuccess: () => pushSuccess("예산을 저장했습니다"),
+        onError: (error) => pushMutationError("bookkeeping.budget", error),
       },
     );
   };
@@ -898,6 +950,14 @@ export function BookkeepingView() {
               pending={syncGmail.isPending}
               onDraftChange={setGmailDraft}
               onSubmit={submitGmailSync}
+            />
+
+            <BudgetCard
+              draft={budgetDraft}
+              statuses={budgetStatus.data ?? []}
+              pending={setBudget.isPending}
+              onDraftChange={setBudgetDraft}
+              onSubmit={submitBudget}
             />
 
             <OperationsLogCard syncJobs={syncJobs.data ?? []} audit={audit.data ?? []} />
@@ -1915,6 +1975,116 @@ function OperationsLogCard({
             </div>
           ))}
           {syncJobs.length === 0 && audit.length === 0 && <EmptyState>기록 없음</EmptyState>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BudgetCard({
+  draft,
+  statuses,
+  pending,
+  onDraftChange,
+  onSubmit,
+}: {
+  draft: BudgetDraft;
+  statuses: BookkeepingBudgetStatus[];
+  pending: boolean;
+  onDraftChange: Dispatch<SetStateAction<BudgetDraft>>;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Card className="bk-card">
+      <CardHeader>
+        <CardTitle className="bk-card-title">
+          <Target className="size-4" />
+          예산
+        </CardTitle>
+        <CardDescription>월별 카테고리 한도</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="bk-form bk-budget-form" onSubmit={onSubmit}>
+          <Field htmlFor={FIELD_IDS.budgetCategory} label="카테고리">
+            <CategorySelect
+              id={FIELD_IDS.budgetCategory}
+              value={draft.category}
+              onValueChange={(category) => onDraftChange((d) => ({ ...d, category }))}
+            />
+          </Field>
+          <Field htmlFor={FIELD_IDS.budgetAmount} label="한도">
+            <Input
+              id={FIELD_IDS.budgetAmount}
+              inputMode="numeric"
+              value={draft.amount}
+              onChange={(event) => onDraftChange((d) => ({ ...d, amount: event.target.value }))}
+              placeholder="500000"
+            />
+          </Field>
+          <label className="bk-checkbox-row" htmlFor={FIELD_IDS.budgetRollover}>
+            <Checkbox
+              id={FIELD_IDS.budgetRollover}
+              checked={draft.rollover}
+              onCheckedChange={(checked) =>
+                onDraftChange((d) => ({ ...d, rollover: checked === true }))
+              }
+            />
+            <span className="typo-body-md">전월 잔액 이월</span>
+          </label>
+          <Field htmlFor={FIELD_IDS.budgetNote} label="메모">
+            <Input
+              id={FIELD_IDS.budgetNote}
+              value={draft.note}
+              onChange={(event) => onDraftChange((d) => ({ ...d, note: event.target.value }))}
+              placeholder="선택"
+            />
+          </Field>
+          <Button type="submit" disabled={pending}>
+            <Check className="size-4" />
+            저장
+          </Button>
+        </form>
+
+        <div className="bk-budget-list">
+          {statuses.length === 0 && <EmptyState>예산 없음</EmptyState>}
+          {statuses.map((status) => {
+            const overrun = isBudgetOverrun(status.remainingMinor);
+            const percent = budgetBarPercent(status.pct ?? 0);
+            return (
+              <button
+                key={status.categoryCode}
+                type="button"
+                className="bk-budget-row"
+                data-overrun={overrun ? "true" : "false"}
+                onClick={() =>
+                  onDraftChange({
+                    category: status.categoryCode,
+                    amount: String(status.limitMinor),
+                    rollover: status.rollover,
+                    note: "",
+                  })
+                }
+              >
+                <span className="bk-budget-row-head">
+                  <strong className="typo-body-strong">{status.label}</strong>
+                  <span className="typo-caption-sm text-muted-foreground">
+                    {currency.format(status.spentMinor)} / {currency.format(status.limitMinor)}
+                  </span>
+                </span>
+                <span className="bk-budget-track" aria-hidden="true">
+                  <span className="bk-budget-fill" style={{ width: `${percent}%` }} />
+                </span>
+                <span className="bk-budget-row-foot typo-caption-sm">
+                  <span>
+                    {overrun ? "초과" : "잔여"} {currency.format(status.remainingMinor)}
+                  </span>
+                  {status.rolloverInMinor > 0 && (
+                    <span>이월 {currency.format(status.rolloverInMinor)}</span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
