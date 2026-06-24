@@ -1,0 +1,25 @@
+src-tauri/src/commands/bookkeeping.rs
+  s_5c80a9ab6b788f::t_0e7ba5e353352c 1804
+  s_5c80a9ab6b788f::t_5c88da7d2525e7 839
+  s_5c80a9ab6b788f::t_6773cbd12e12cb 2056
+  s_5c80a9ab6b788f::t_e566927c00fad2 3119-3120,3122-3125,3133
+  s_5c80a9ab6b788f::t_fc464ec6c427ef 1355-1357,1362-1365,1369,1386-1390,1406-1407,1416-1417,1425
+  s_5c80a9ab6b788f::t_5bc5f74573b023 1358-1361,1391-1394
+  s_5c80a9ab6b788f::t_abcc768bb6f4c6 3121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "d26fe8590eed298eb0b02abf68bd97c45383788d",
+  "prompts": {},
+  "sessions": {
+    "s_5c80a9ab6b788f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60804063-4487-40bb-acd6-88e920e3b071",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
