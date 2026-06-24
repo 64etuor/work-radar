@@ -1,0 +1,45 @@
+src/components/bookkeeping/BookkeepingView.tsx
+  s_5c80a9ab6b788f::t_52dbae94db63b9 926,928,930,935-936,938,944-956,970-994,998-1014
+  s_5c80a9ab6b788f::t_c228b149710de1 713,715,717
+  s_5c80a9ab6b788f::t_121204bfd9658a 73
+  s_5c80a9ab6b788f::t_a287d688066c53 49
+  s_5c80a9ab6b788f::t_d4eb315c8fa954 107
+  s_5c80a9ab6b788f::t_282a8e0f1831e4 597-601,940,2105,2143-2145
+  s_5c80a9ab6b788f::t_e0ba17b42801d6 583-596,602-609
+  s_5c80a9ab6b788f::t_72a0d46b42aa61 442
+src-tauri/src/models/bookkeeping.rs
+  s_5c80a9ab6b788f::t_195cfb1415312a 463-471
+src-tauri/src/lib.rs
+  s_5c80a9ab6b788f::t_5a0a22340cd8f7 80
+src-tauri/src/commands/bookkeeping.rs
+  s_5c80a9ab6b788f::t_a2328ff7559372 2966-3016,3021-3036
+  s_5c80a9ab6b788f::t_deca64630a7b39 85-92
+  s_5c80a9ab6b788f::t_f3d15dc0da08cd 3017-3020
+  s_5c80a9ab6b788f::t_21ddb1f9b5ad6d 10
+  s_5c80a9ab6b788f::t_17a2300199c1b1 11-17
+  s_5c80a9ab6b788f::t_f5682756440ee4 1184-1211
+src/lib/query/bookkeeping.ts
+  s_5c80a9ab6b788f::t_b4fd5afe545f43 85-93
+src/components/bookkeeping/selection.test.ts
+  s_5c80a9ab6b788f::t_1da0a904240d4e 1-41
+src/components/bookkeeping/BookkeepingView.css
+  s_5c80a9ab6b788f::t_293b32757da1cc 579-658
+src/components/bookkeeping/selection.ts
+  s_5c80a9ab6b788f::t_a6b9e5f88894f3 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "bd6a6f303ff715f2144d1dec22cf69ba2dac2675",
+  "prompts": {},
+  "sessions": {
+    "s_5c80a9ab6b788f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60804063-4487-40bb-acd6-88e920e3b071",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
