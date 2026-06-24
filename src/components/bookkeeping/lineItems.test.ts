@@ -60,6 +60,26 @@ describe("lineItemSumState", () => {
     expect(state.sum).toBe(5000);
     expect(state.matches).toBe(true);
   });
+
+  it("multiplies amount by quantity to mirror the server's sum", () => {
+    const drafts = [{ key: "a", name: "커피", amount: "1000", quantity: "3", categoryCode: "" }];
+    const state = lineItemSumState(drafts, 3000);
+    expect(state.sum).toBe(3000);
+    expect(state.matches).toBe(true);
+  });
+
+  it("treats a blank or non-numeric quantity as 1 (server default)", () => {
+    const blank = lineItemSumState(
+      [{ key: "a", name: "커피", amount: "1000", quantity: "", categoryCode: "" }],
+      1000,
+    );
+    const invalid = lineItemSumState(
+      [{ key: "b", name: "커피", amount: "1000", quantity: "x", categoryCode: "" }],
+      1000,
+    );
+    expect(blank.sum).toBe(1000);
+    expect(invalid.sum).toBe(1000);
+  });
 });
 
 describe("lineItemDraftsFromServer", () => {

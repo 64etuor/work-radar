@@ -1965,7 +1965,7 @@ function LineItemEditorForm({
                   onChange={(e) => patch(row.key, { name: e.target.value })}
                 />
               </Field>
-              <Field label="금액" htmlFor={`${prefix}-${row.key}-amount`}>
+              <Field label="단가" htmlFor={`${prefix}-${row.key}-amount`}>
                 <Input
                   id={`${prefix}-${row.key}-amount`}
                   value={row.amount}
@@ -2022,6 +2022,9 @@ function DuplicateCandidates({
   tx: BookkeepingTransaction;
   disabled: boolean;
 }) {
+  // Forward-looking auto-open: expands when the row carries a `possible_duplicate` review reason.
+  // No ingest path emits that reason yet (a producer is a deferred Rust follow-up), so in practice
+  // the panel is opened manually via the button below — this wiring is ready for when a detector lands.
   const flagged = reviewReasonCodes(tx.reviewReasonsJson).includes("possible_duplicate");
   const [open, setOpen] = useState(flagged);
   const query = useFindBookkeepingDuplicateCandidates(duplicateQueryFromTransaction(tx), open);

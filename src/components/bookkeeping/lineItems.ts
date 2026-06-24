@@ -14,6 +14,14 @@ function parseAmountMinor(value: string): number {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
 }
 
+/**  수량 파싱: 빈 값/비숫자는 1로(서버 `quantity.unwrap_or(1)`과 동치). */
+function parseQuantity(value: string): number {
+  const trimmed = value.trim();
+  if (trimmed === "") return 1;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : 1;
+}
+
 /**  이름이 있거나 금액이 0이 아니면 "의미 있는" 행으로 본다(빈 행은 합계/존재 판정에서 제외). */
 function isMeaningful(draft: LineItemDraft): boolean {
   return draft.name.trim() !== "" || parseAmountMinor(draft.amount) !== 0;
@@ -42,7 +50,10 @@ export function lineItemSumState(
   amountMinor: number,
 ): { sum: number; hasItems: boolean; matches: boolean; diff: number } {
   const meaningful = drafts.filter(isMeaningful);
-  const sum = meaningful.reduce((acc, draft) => acc + parseAmountMinor(draft.amount), 0);
+  const sum = meaningful.reduce(
+    (acc, draft) => acc + parseAmountMinor(draft.amount) * parseQuantity(draft.quantity),
+    0,
+  );
   const hasItems = meaningful.length > 0;
   const diff = sum - amountMinor;
   return { sum, hasItems, matches: !hasItems || diff === 0, diff };
