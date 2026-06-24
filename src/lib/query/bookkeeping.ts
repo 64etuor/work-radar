@@ -226,3 +226,10 @@ export function useMarkBookkeepingDuplicate() {
     onSuccess: invalidate,
   });
 }
+
+export function useBookkeepingSyncCursors() {
+  return useQuery({
+    queryKey: ["bookkeeping", "syncCursors"],
+    queryFn: () => unwrap(commands.listBookkeepingSyncCursors()),
+  });
+}

@@ -570,3 +570,9 @@
   align-items: center;
   gap: var(--wr-density-xs);
 }
+
+.bk-gmail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wr-density-xs);
+}

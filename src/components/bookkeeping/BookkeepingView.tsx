@@ -64,6 +64,7 @@ import {
   useBookkeepingMonthlySummary,
   useBookkeepingRecurringExpenses,
   useBookkeepingRecurringOccurrences,
+  useBookkeepingSyncCursors,
   useBookkeepingSyncJobs,
   useBookkeepingTaxonomy,
   useBookkeepingTransactions,
@@ -93,6 +94,7 @@ import {
   type BookkeepingInputPanel,
 } from "./bookkeepingPanels";
 import { duplicateQueryFromTransaction, formatDuplicateScore } from "./duplicates";
+import { GMAIL_DEFAULT_QUERY, GMAIL_FULL_RESCAN_QUERY, normalizeGmailQuery } from "./gmailSync";
 import {
   blankLineItemDraft,
   type LineItemDraft,
@@ -293,7 +295,7 @@ function emptyRecurringDraft(): RecurringDraft {
 function emptyGmailSyncDraft(): GmailSyncDraft {
   return {
     labels: "가계부",
-    query: "newer_than:90d",
+    query: GMAIL_DEFAULT_QUERY,
   };
 }
 
@@ -424,6 +426,7 @@ export function BookkeepingView() {
   const summary = useBookkeepingMonthlySummary(month, activeProjectId);
   const audit = useBookkeepingAudit(null);
   const syncJobs = useBookkeepingSyncJobs();
+  const syncCursors = useBookkeepingSyncCursors();
   const recurringExpenses = useBookkeepingRecurringExpenses(activeProjectId);
   const recurringOccurrences = useBookkeepingRecurringOccurrences(month, activeProjectId);
   const createTx = useCreateBookkeepingTransaction();
@@ -548,7 +551,7 @@ export function BookkeepingView() {
         projectId: activeProjectId,
         labelIds: [],
         labelNames,
-        query: query || null,
+        query: normalizeGmailQuery(gmailDraft.query),
         maxResults: 50,
       },
       {
@@ -732,6 +735,11 @@ export function BookkeepingView() {
 
             <GmailSyncCard
               draft={gmailDraft}
+              lastSyncHint={
+                syncCursors.data?.find(
+                  (cursor) => cursor.source === "gmail" && cursor.scopeKey === activeProjectId,
+                )?.updatedAt ?? null
+              }
               labels={gmailLabels.data ?? []}
               projectSelected={Boolean(activeProjectId)}
               pending={syncGmail.isPending}
@@ -1369,6 +1377,7 @@ function GmailSyncCard({
   labels,
   projectSelected,
   pending,
+  lastSyncHint,
   onDraftChange,
   onSubmit,
 }: {
@@ -1376,6 +1385,7 @@ function GmailSyncCard({
   labels: BookkeepingGmailLabel[];
   projectSelected: boolean;
   pending: boolean;
+  lastSyncHint?: string | null;
   onDraftChange: Dispatch<SetStateAction<GmailSyncDraft>>;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -1403,7 +1413,7 @@ function GmailSyncCard({
               id={FIELD_IDS.gmailQuery}
               value={draft.query}
               onChange={(e) => onDraftChange((current) => ({ ...current, query: e.target.value }))}
-              placeholder="newer_than:90d"
+              placeholder="비우면 증분 동기화 · 예: newer_than:90d"
             />
           </Field>
           {labels.length > 0 && (
@@ -1426,10 +1436,25 @@ function GmailSyncCard({
               ))}
             </div>
           )}
-          <Button type="submit" disabled={pending || !projectSelected}>
-            <RefreshCw className="size-4" />
-            Gmail 동기화
-          </Button>
+          <div className="bk-gmail-actions">
+            <Button type="submit" disabled={pending || !projectSelected}>
+              <RefreshCw className="size-4" />
+              Gmail 동기화
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() =>
+                onDraftChange((current) => ({ ...current, query: GMAIL_FULL_RESCAN_QUERY }))
+              }
+            >
+              전체 다시 스캔(90일)
+            </Button>
+          </div>
+          {lastSyncHint && (
+            <p className="text-muted-foreground typo-caption-sm">마지막 동기화: {lastSyncHint}</p>
+          )}
         </form>
       </CardContent>
     </Card>

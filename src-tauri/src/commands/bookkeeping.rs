@@ -720,6 +720,7 @@ pub(crate) async fn sync_bookkeeping_gmail_receipts_with_provider<P: GmailReadPr
         get_bookkeeping_sync_cursor_inner(db, BookkeepingSource::Gmail, &project_id).await?;
     let cursor_before = cursor.map(|c| c.cursor_value);
     let effective_query = match (query, &cursor_before) {
+        // Explicit caller query intentionally overrides the cursor (one-shot full rescan).
         (Some(q), _) => Some(q),
         (None, Some(date)) => {
             // Widen one day back so a UTC cursor can't exclude an earlier-in-mailbox-TZ receipt;
