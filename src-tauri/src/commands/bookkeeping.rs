@@ -1,5 +1,7 @@
 //! Local bookkeeping store + IPC commands.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use tauri::State;
 
 use crate::bookkeeping::{parse_bookkeeping_email_receipt, BookkeepingEmailReceiptInput};
@@ -9,10 +11,11 @@ use crate::error::AppError;
 use crate::gmail::{GmailMessageSearch, GmailReadProvider};
 use crate::models::{
     BookkeepingAliasMatchKind, BookkeepingAuditEntry, BookkeepingBudget, BookkeepingBudgetStatus,
-    BookkeepingBulkItemResult, BookkeepingCategoryAlias, BookkeepingCategoryNode,
-    BookkeepingCategoryOverride, BookkeepingCategoryRules, BookkeepingCategorySummary,
-    BookkeepingDirection, BookkeepingDuplicateCandidate, BookkeepingExpenseKind,
-    BookkeepingGmailLabel, BookkeepingGmailSyncResult, BookkeepingLineItem,
+    BookkeepingBulkItemResult, BookkeepingCashflowInput, BookkeepingCashflowRow,
+    BookkeepingCategoryAlias, BookkeepingCategoryNode, BookkeepingCategoryOverride,
+    BookkeepingCategoryRules, BookkeepingCategorySummary, BookkeepingCategoryTrendInput,
+    BookkeepingCategoryTrendRow, BookkeepingDirection, BookkeepingDuplicateCandidate,
+    BookkeepingExpenseKind, BookkeepingGmailLabel, BookkeepingGmailSyncResult, BookkeepingLineItem,
     BookkeepingMonthlySummary, BookkeepingPaymentMethodKind, BookkeepingRecurringExpense,
     BookkeepingRecurringExpenseStatus, BookkeepingRecurringOccurrence,
     BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
@@ -201,6 +204,24 @@ pub async fn bookkeeping_budget_status(
     project_id: Option<String>,
 ) -> Result<Vec<BookkeepingBudgetStatus>, AppError> {
     bookkeeping_budget_status_inner(db.inner(), &month, project_id.as_deref()).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bookkeeping_category_trend(
+    db: State<'_, Db>,
+    input: BookkeepingCategoryTrendInput,
+) -> Result<Vec<BookkeepingCategoryTrendRow>, AppError> {
+    bookkeeping_category_trend_inner(db.inner(), input).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bookkeeping_cashflow(
+    db: State<'_, Db>,
+    input: BookkeepingCashflowInput,
+) -> Result<Vec<BookkeepingCashflowRow>, AppError> {
+    bookkeeping_cashflow_inner(db.inner(), input).await
 }
 
 #[tauri::command]
@@ -1852,6 +1873,115 @@ pub(crate) async fn bookkeeping_budget_status_inner(
     Ok(rows)
 }
 
+pub(crate) async fn bookkeeping_category_trend_inner(
+    db: &Db,
+    input: BookkeepingCategoryTrendInput,
+) -> Result<Vec<BookkeepingCategoryTrendRow>, AppError> {
+    let project_id = clean_optional(input.project_id.as_deref());
+    let months = bounded_months(&input.from_month, &input.to_month)?;
+    let (start, _) = month_bounds(months.first().expect("bounded_months is non-empty"))?;
+    let (_, end) = month_bounds(months.last().expect("bounded_months is non-empty"))?;
+    let category_filter = clean_optional(input.category_code.as_deref());
+
+    let rows: Vec<(String, String, i64)> = sqlx::query_as(
+        "SELECT substr(spent_at, 1, 7), COALESCE(category_code, category), COALESCE(SUM(amount_minor), 0) \
+         FROM bookkeeping_transactions \
+         WHERE spent_at >= ?1 AND spent_at < ?2 \
+           AND review_status != 'ignored' \
+           AND direction = 'expense' \
+           AND deleted_at IS NULL \
+           AND (?3 IS NULL OR project_id = ?3) \
+           AND (?4 IS NULL OR COALESCE(category_code, category) = ?4) \
+         GROUP BY substr(spent_at, 1, 7), COALESCE(category_code, category)",
+    )
+    .bind(&start)
+    .bind(&end)
+    .bind(project_id.as_deref())
+    .bind(category_filter.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    let mut categories = BTreeSet::new();
+    let mut by_key = BTreeMap::new();
+    for (month, category_code, amount) in rows {
+        categories.insert(category_code.clone());
+        by_key.insert(
+            (month, category_code),
+            amount.max(0).min(i32::MAX as i64) as i32,
+        );
+    }
+    if let Some(category_code) = category_filter {
+        categories.insert(category_code);
+    }
+
+    let mut out = Vec::new();
+    for month in months {
+        for category_code in &categories {
+            let label = category_label(db, category_code).await?;
+            let expense_minor = by_key
+                .get(&(month.clone(), category_code.clone()))
+                .copied()
+                .unwrap_or(0);
+            out.push(BookkeepingCategoryTrendRow {
+                month: month.clone(),
+                category_code: category_code.clone(),
+                label,
+                expense_minor,
+            });
+        }
+    }
+    Ok(out)
+}
+
+pub(crate) async fn bookkeeping_cashflow_inner(
+    db: &Db,
+    input: BookkeepingCashflowInput,
+) -> Result<Vec<BookkeepingCashflowRow>, AppError> {
+    let project_id = clean_optional(input.project_id.as_deref());
+    let months = bounded_months(&input.from_month, &input.to_month)?;
+    let (start, _) = month_bounds(months.first().expect("bounded_months is non-empty"))?;
+    let (_, end) = month_bounds(months.last().expect("bounded_months is non-empty"))?;
+
+    let rows: Vec<(String, i64, i64)> = sqlx::query_as(
+        "SELECT substr(spent_at, 1, 7), \
+           COALESCE(SUM(CASE WHEN direction = 'income' THEN amount_minor ELSE 0 END), 0), \
+           COALESCE(SUM(CASE WHEN direction = 'expense' THEN amount_minor ELSE 0 END), 0) \
+         FROM bookkeeping_transactions \
+         WHERE spent_at >= ?1 AND spent_at < ?2 \
+           AND review_status != 'ignored' \
+           AND deleted_at IS NULL \
+           AND (?3 IS NULL OR project_id = ?3) \
+         GROUP BY substr(spent_at, 1, 7)",
+    )
+    .bind(&start)
+    .bind(&end)
+    .bind(project_id.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    let by_month = rows
+        .into_iter()
+        .map(|(month, income, expense)| {
+            let income_minor = income.max(0).min(i32::MAX as i64) as i32;
+            let expense_minor = expense.max(0).min(i32::MAX as i64) as i32;
+            (month, (income_minor, expense_minor))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    Ok(months
+        .into_iter()
+        .map(|month| {
+            let (income_minor, expense_minor) = by_month.get(&month).copied().unwrap_or((0, 0));
+            BookkeepingCashflowRow {
+                month,
+                income_minor,
+                expense_minor,
+                net_minor: income_minor - expense_minor,
+            }
+        })
+        .collect())
+}
+
 pub(crate) async fn list_bookkeeping_audit_inner(
     db: &Db,
     entity_id: Option<String>,
@@ -3159,6 +3289,38 @@ fn month_bounds(month: &str) -> Result<(String, String), AppError> {
 }
 
 #[allow(clippy::result_large_err)]
+fn bounded_months(from_month: &str, to_month: &str) -> Result<Vec<String>, AppError> {
+    let (from_year, from_mon) = validate_month(from_month)?;
+    let (to_year, to_mon) = validate_month(to_month)?;
+    let from_idx = month_index(from_year, from_mon);
+    let to_idx = month_index(to_year, to_mon);
+    if from_idx > to_idx {
+        return Err(AppError::validation(
+            "bookkeeping.report.range",
+            "시작 월은 종료 월보다 늦을 수 없습니다",
+        ));
+    }
+    let len = to_idx - from_idx + 1;
+    if len > 24 {
+        return Err(AppError::validation(
+            "bookkeeping.report.range",
+            "리포트 범위는 최대 24개월입니다",
+        ));
+    }
+    Ok((from_idx..=to_idx).map(month_from_index).collect())
+}
+
+fn month_index(year: i32, mon: u32) -> i32 {
+    year.saturating_mul(12) + mon as i32 - 1
+}
+
+fn month_from_index(index: i32) -> String {
+    let year = index.div_euclid(12);
+    let mon = index.rem_euclid(12) + 1;
+    format!("{year:04}-{mon:02}")
+}
+
+#[allow(clippy::result_large_err)]
 fn previous_month(month: &str) -> Result<String, AppError> {
     let (year, mon) = validate_month(month)?;
     let (prev_year, prev_mon) = if mon == 1 {
@@ -4069,6 +4231,119 @@ mod tests {
         assert_eq!(status[0].spent_minor, 3_500);
         assert_eq!(status[0].remaining_minor, -500);
         assert!(status[0].pct > 1.0);
+    }
+
+    #[tokio::test]
+    async fn cashflow_zero_fills_months_and_calculates_net() {
+        let db = pool().await;
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("June Expense", 1_000, "2026-06-01", "food"),
+        )
+        .await
+        .expect("expense");
+
+        let mut income = manual_input("June Income", 5_000, "2026-06-02", "work");
+        income.direction = BookkeepingDirection::Income;
+        create_bookkeeping_transaction_inner(&db, income)
+            .await
+            .expect("income");
+
+        let ignored = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Ignored Expense", 9_000, "2026-06-03", "food"),
+        )
+        .await
+        .expect("ignored");
+        update_bookkeeping_review_status_inner(&db, &ignored.id, BookkeepingReviewStatus::Ignored)
+            .await
+            .expect("ignore");
+
+        let cashflow = bookkeeping_cashflow_inner(
+            &db,
+            BookkeepingCashflowInput {
+                project_id: None,
+                from_month: "2026-06".to_string(),
+                to_month: "2026-08".to_string(),
+            },
+        )
+        .await
+        .expect("cashflow");
+
+        assert_eq!(cashflow.len(), 3);
+        assert_eq!(cashflow[0].month, "2026-06");
+        assert_eq!(cashflow[0].income_minor, 5_000);
+        assert_eq!(cashflow[0].expense_minor, 1_000);
+        assert_eq!(cashflow[0].net_minor, 4_000);
+        assert_eq!(cashflow[1].month, "2026-07");
+        assert_eq!(cashflow[1].income_minor, 0);
+        assert_eq!(cashflow[1].expense_minor, 0);
+        assert_eq!(cashflow[2].month, "2026-08");
+    }
+
+    #[tokio::test]
+    async fn category_trend_is_expense_only_and_zero_fills_selected_category() {
+        let db = pool().await;
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("May Food", 2_000, "2026-05-10", "food"),
+        )
+        .await
+        .expect("may food");
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("June Food", 3_000, "2026-06-10", "food"),
+        )
+        .await
+        .expect("june food");
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("June Transport", 7_000, "2026-06-11", "transport"),
+        )
+        .await
+        .expect("june transport");
+        let mut income = manual_input("June Income", 9_000, "2026-06-12", "food");
+        income.direction = BookkeepingDirection::Income;
+        create_bookkeeping_transaction_inner(&db, income)
+            .await
+            .expect("income ignored by category trend");
+
+        let trend = bookkeeping_category_trend_inner(
+            &db,
+            BookkeepingCategoryTrendInput {
+                project_id: None,
+                from_month: "2026-05".to_string(),
+                to_month: "2026-07".to_string(),
+                category_code: Some("food".to_string()),
+            },
+        )
+        .await
+        .expect("trend");
+
+        assert_eq!(trend.len(), 3);
+        assert_eq!(trend[0].month, "2026-05");
+        assert_eq!(trend[0].expense_minor, 2_000);
+        assert_eq!(trend[1].month, "2026-06");
+        assert_eq!(trend[1].expense_minor, 3_000);
+        assert_eq!(trend[2].month, "2026-07");
+        assert_eq!(trend[2].expense_minor, 0);
+    }
+
+    #[tokio::test]
+    async fn report_ranges_are_clamped_to_twenty_four_months() {
+        let db = pool().await;
+        let err = bookkeeping_cashflow_inner(
+            &db,
+            BookkeepingCashflowInput {
+                project_id: None,
+                from_month: "2024-01".to_string(),
+                to_month: "2026-01".to_string(),
+            },
+        )
+        .await
+        .expect_err("range clamp");
+
+        assert_eq!(err.code, "bookkeeping.report.range");
     }
 
     #[tokio::test]

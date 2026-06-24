@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  type BookkeepingCashflowInput,
+  type BookkeepingCategoryTrendInput,
   type BookkeepingRecurringOccurrenceStatus,
   type BookkeepingReviewStatus,
   commands,
@@ -137,6 +139,20 @@ export function useBookkeepingBudgetStatus(month: string, projectId: string | nu
   return useQuery({
     queryKey: ["bookkeeping", "budgetStatus", month, projectId],
     queryFn: () => unwrap(commands.bookkeepingBudgetStatus(month, projectId)),
+  });
+}
+
+export function useBookkeepingCashflow(input: BookkeepingCashflowInput) {
+  return useQuery({
+    queryKey: ["bookkeeping", "cashflow", input],
+    queryFn: () => unwrap(commands.bookkeepingCashflow(input)),
+  });
+}
+
+export function useBookkeepingCategoryTrend(input: BookkeepingCategoryTrendInput) {
+  return useQuery({
+    queryKey: ["bookkeeping", "categoryTrend", input],
+    queryFn: () => unwrap(commands.bookkeepingCategoryTrend(input)),
   });
 }
 

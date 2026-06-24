@@ -45,6 +45,8 @@ export const commands = {
 	listBookkeepingBudgets: (month: string, projectId: string | null) => typedError<BookkeepingBudget[], AppError>(__TAURI_INVOKE("list_bookkeeping_budgets", { month, projectId })),
 	deleteBookkeepingBudget: (id: string) => typedError<boolean, AppError>(__TAURI_INVOKE("delete_bookkeeping_budget", { id })),
 	bookkeepingBudgetStatus: (month: string, projectId: string | null) => typedError<BookkeepingBudgetStatus[], AppError>(__TAURI_INVOKE("bookkeeping_budget_status", { month, projectId })),
+	bookkeepingCategoryTrend: (input: BookkeepingCategoryTrendInput) => typedError<BookkeepingCategoryTrendRow[], AppError>(__TAURI_INVOKE("bookkeeping_category_trend", { input })),
+	bookkeepingCashflow: (input: BookkeepingCashflowInput) => typedError<BookkeepingCashflowRow[], AppError>(__TAURI_INVOKE("bookkeeping_cashflow", { input })),
 	listBookkeepingAudit: (entityId: string | null) => typedError<BookkeepingAuditEntry[], AppError>(__TAURI_INVOKE("list_bookkeeping_audit", { entityId })),
 	recordBookkeepingSyncFailure: (input: RecordBookkeepingSyncFailureInput) => typedError<BookkeepingSyncJob, AppError>(__TAURI_INVOKE("record_bookkeeping_sync_failure", { input })),
 	listBookkeepingSyncJobs: () => typedError<BookkeepingSyncJob[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_jobs")),
@@ -983,6 +985,20 @@ export type BookkeepingBulkItemResult = {
 	message: string | null,
 };
 
+export type BookkeepingCashflowInput = {
+	projectId: string | null,
+	fromMonth: string,
+	toMonth: string,
+};
+
+export type BookkeepingCashflowRow = {
+	month: string,
+	incomeMinor: number,
+	expenseMinor: number,
+	/**  KRW-scoped net display: income - expense within the same stored currency assumption. */
+	netMinor: number,
+};
+
 export type BookkeepingCategoryAlias = {
 	id: string,
 	pattern: string,
@@ -1025,6 +1041,20 @@ export type BookkeepingCategorySummary = {
 	category: string,
 	amountMinor: number,
 	count: number,
+};
+
+export type BookkeepingCategoryTrendInput = {
+	projectId: string | null,
+	fromMonth: string,
+	toMonth: string,
+	categoryCode: string | null,
+};
+
+export type BookkeepingCategoryTrendRow = {
+	month: string,
+	categoryCode: string,
+	label: string,
+	expenseMinor: number,
 };
 
 /**

@@ -544,3 +544,39 @@ pub struct BookkeepingBudgetStatus {
     pub pct: f64,
     pub currency: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingCategoryTrendInput {
+    pub project_id: Option<String>,
+    pub from_month: String,
+    pub to_month: String,
+    pub category_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingCategoryTrendRow {
+    pub month: String,
+    pub category_code: String,
+    pub label: String,
+    pub expense_minor: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingCashflowInput {
+    pub project_id: Option<String>,
+    pub from_month: String,
+    pub to_month: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingCashflowRow {
+    pub month: String,
+    pub income_minor: i32,
+    pub expense_minor: i32,
+    /// KRW-scoped net display: income - expense within the same stored currency assumption.
+    pub net_minor: i32,
+}
