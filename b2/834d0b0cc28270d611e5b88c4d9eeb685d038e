@@ -1,0 +1,38 @@
+src/components/bookkeeping/lineItems.ts
+  s_5c80a9ab6b788f::t_b887c5d6f19b52 1-60,62-65
+  s_5c80a9ab6b788f::t_653a24a1da6669 61
+src/components/bookkeeping/BookkeepingView.tsx
+  s_5c80a9ab6b788f::t_0fab99e406926d 36
+  s_5c80a9ab6b788f::t_60b457c602e56d 63
+  s_5c80a9ab6b788f::t_e760ffe53e536e 1819-1820
+  s_5c80a9ab6b788f::t_a1f4d4ac51b787 1854-1987
+  s_5c80a9ab6b788f::t_8f0b59e95141f5 93-94,96-99
+  s_5c80a9ab6b788f::t_e2e1fa896a4096 26
+  s_5c80a9ab6b788f::t_e5a051120a073d 95
+  s_5c80a9ab6b788f::t_653a24a1da6669 992-994,999-1020,1646-1648,1751,1813,1828-1834,2061-2067,2155-2158
+  s_5c80a9ab6b788f::t_44d07868ecc238 78
+src/components/bookkeeping/lineItems.test.ts
+  s_5c80a9ab6b788f::t_653a24a1da6669 68-74
+  s_5c80a9ab6b788f::t_8b08abd38ff117 1-67,75-119
+src/components/bookkeeping/BookkeepingView.css
+  s_5c80a9ab6b788f::t_befa9c08ddfb8f 504-543
+src/lib/query/bookkeeping.ts
+  s_5c80a9ab6b788f::t_866a3ed5a94f28 10
+  s_5c80a9ab6b788f::t_71dc6910e03e1a 187-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "b2834d0b0cc28270d611e5b88c4d9eeb685d038e",
+  "prompts": {},
+  "sessions": {
+    "s_5c80a9ab6b788f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60804063-4487-40bb-acd6-88e920e3b071",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
