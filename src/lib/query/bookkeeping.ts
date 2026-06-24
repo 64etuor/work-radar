@@ -6,6 +6,7 @@ import {
   commands,
   type CreateBookkeepingRecurringExpenseInput,
   type CreateBookkeepingTransactionInput,
+  type FindBookkeepingDuplicateCandidatesInput,
   type RecordBookkeepingSyncFailureInput,
   type SetBookkeepingLineItemsInput,
   type SyncBookkeepingGmailReceiptsInput,
@@ -197,6 +198,31 @@ export function useSetBookkeepingLineItems() {
   return useMutation({
     mutationFn: (input: SetBookkeepingLineItemsInput) =>
       unwrap(commands.setBookkeepingLineItems(input)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useFindBookkeepingDuplicateCandidates(
+  input: FindBookkeepingDuplicateCandidatesInput,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["bookkeeping", "duplicates", input],
+    queryFn: () => unwrap(commands.findBookkeepingDuplicateCandidates(input)),
+    enabled,
+  });
+}
+
+export function useMarkBookkeepingDuplicate() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: ({
+      id,
+      duplicateOfTransactionId,
+    }: {
+      id: string;
+      duplicateOfTransactionId: string;
+    }) => unwrap(commands.markBookkeepingDuplicate(id, duplicateOfTransactionId)),
     onSuccess: invalidate,
   });
 }
