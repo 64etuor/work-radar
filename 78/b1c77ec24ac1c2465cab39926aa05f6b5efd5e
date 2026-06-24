@@ -1,0 +1,31 @@
+src/components/bookkeeping/duplicates.ts
+  s_5c80a9ab6b788f::t_7f3629f9260649 1-24
+src/components/bookkeeping/BookkeepingView.css
+  s_5c80a9ab6b788f::t_2d82a62e76d0a6 544-572
+src/components/bookkeeping/BookkeepingView.tsx
+  s_5c80a9ab6b788f::t_0cc0899d5d5a29 95
+  s_5c80a9ab6b788f::t_99df9ec0651d5c 1826-1827
+  s_5c80a9ab6b788f::t_9a1fe30f74552f 1993-2065
+  s_5c80a9ab6b788f::t_fd8ac5a0dd2810 75-76
+src/lib/query/bookkeeping.ts
+  s_5c80a9ab6b788f::t_6a9af15a2e0b15 9
+  s_5c80a9ab6b788f::t_efaa60369e5190 204-228
+src/components/bookkeeping/duplicates.test.ts
+  s_5c80a9ab6b788f::t_12a8c88e846781 1-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "78b1c77ec24ac1c2465cab39926aa05f6b5efd5e",
+  "prompts": {},
+  "sessions": {
+    "s_5c80a9ab6b788f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60804063-4487-40bb-acd6-88e920e3b071",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
