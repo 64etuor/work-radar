@@ -6,6 +6,7 @@ import {
   commands,
   type CreateBookkeepingRecurringExpenseInput,
   type CreateBookkeepingTransactionInput,
+  type ExportBookkeepingInput,
   type FindBookkeepingDuplicateCandidatesInput,
   type RecordBookkeepingSyncFailureInput,
   type SetBookkeepingLineItemsInput,
@@ -266,5 +267,23 @@ export function useBookkeepingSyncCursors() {
   return useQuery({
     queryKey: ["bookkeeping", "syncCursors"],
     queryFn: () => unwrap(commands.listBookkeepingSyncCursors()),
+  });
+}
+
+export function useExportBookkeepingCsv() {
+  return useMutation({
+    mutationFn: (input: ExportBookkeepingInput) => unwrap(commands.exportBookkeepingCsv(input)),
+  });
+}
+
+export function useExportBookkeepingQif() {
+  return useMutation({
+    mutationFn: (input: ExportBookkeepingInput) => unwrap(commands.exportBookkeepingQif(input)),
+  });
+}
+
+export function useExportBookkeepingOfx() {
+  return useMutation({
+    mutationFn: (input: ExportBookkeepingInput) => unwrap(commands.exportBookkeepingOfx(input)),
   });
 }

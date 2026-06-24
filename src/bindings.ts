@@ -58,6 +58,9 @@ export const commands = {
 	listBookkeepingCategoryOverrides: (transactionId: string) => typedError<BookkeepingCategoryOverride[], AppError>(__TAURI_INVOKE("list_bookkeeping_category_overrides", { transactionId })),
 	listBookkeepingLineItems: (transactionId: string) => typedError<BookkeepingLineItem[], AppError>(__TAURI_INVOKE("list_bookkeeping_line_items", { transactionId })),
 	setBookkeepingLineItems: (input: SetBookkeepingLineItemsInput) => typedError<BookkeepingLineItem[], AppError>(__TAURI_INVOKE("set_bookkeeping_line_items", { input })),
+	exportBookkeepingCsv: (input: ExportBookkeepingInput) => typedError<string, AppError>(__TAURI_INVOKE("export_bookkeeping_csv", { input })),
+	exportBookkeepingQif: (input: ExportBookkeepingInput) => typedError<string, AppError>(__TAURI_INVOKE("export_bookkeeping_qif", { input })),
+	exportBookkeepingOfx: (input: ExportBookkeepingInput) => typedError<string, AppError>(__TAURI_INVOKE("export_bookkeeping_ofx", { input })),
 	findBookkeepingDuplicateCandidates: (input: FindBookkeepingDuplicateCandidatesInput) => typedError<BookkeepingDuplicateCandidate[], AppError>(__TAURI_INVOKE("find_bookkeeping_duplicate_candidates", { input })),
 	markBookkeepingDuplicate: (id: string, duplicateOfTransactionId: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("mark_bookkeeping_duplicate", { id, duplicateOfTransactionId })),
 	listBookkeepingSyncCursors: () => typedError<BookkeepingSyncCursor[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_cursors")),
@@ -1802,6 +1805,12 @@ export type ErrorKind =
 "validation" | 
 /**  버그/불변식 위반 — 로그 + 버그리포트 유도. */
 "unexpected";
+
+export type ExportBookkeepingInput = {
+	projectId: string | null,
+	fromDate: string | null,
+	toDate: string | null,
+};
 
 /**  diff 한 파일의 변경 종류. architecture DTO와 동일하게 단일 문자로 직렬화("M"/"A"/"D"/"R"). */
 export type FileChange = "M" | "A" | "D" | "R";

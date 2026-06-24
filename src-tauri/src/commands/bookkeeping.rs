@@ -3,6 +3,7 @@
 use tauri::State;
 
 use crate::bookkeeping::{parse_bookkeeping_email_receipt, BookkeepingEmailReceiptInput};
+use crate::bookkeeping_export::{export_csv, export_ofx, export_qif, BookkeepingExportRow};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::gmail::{GmailMessageSearch, GmailReadProvider};
@@ -16,10 +17,10 @@ use crate::models::{
     BookkeepingRecurringOccurrence, BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus,
     BookkeepingSource, BookkeepingSyncCursor, BookkeepingSyncJob, BookkeepingTransaction,
     CreateBookkeepingLineItemInput, CreateBookkeepingRecurringExpenseInput,
-    CreateBookkeepingTransactionInput, FindBookkeepingDuplicateCandidatesInput,
-    OverrideBookkeepingCategoryInput, RecordBookkeepingSyncFailureInput,
-    SetBookkeepingLineItemsInput, SyncBookkeepingGmailReceiptsInput,
-    UpdateBookkeepingTransactionInput,
+    CreateBookkeepingTransactionInput, ExportBookkeepingInput,
+    FindBookkeepingDuplicateCandidatesInput, OverrideBookkeepingCategoryInput,
+    RecordBookkeepingSyncFailureInput, SetBookkeepingLineItemsInput,
+    SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
 };
 
 const DEFAULT_CURRENCY: &str = "KRW";
@@ -350,6 +351,36 @@ pub async fn set_bookkeeping_line_items(
     input: SetBookkeepingLineItemsInput,
 ) -> Result<Vec<BookkeepingLineItem>, AppError> {
     set_bookkeeping_line_items_inner(db.inner(), input).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn export_bookkeeping_csv(
+    db: State<'_, Db>,
+    input: ExportBookkeepingInput,
+) -> Result<String, AppError> {
+    let rows = export_bookkeeping_rows(db.inner(), input).await?;
+    Ok(export_csv(&rows))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn export_bookkeeping_qif(
+    db: State<'_, Db>,
+    input: ExportBookkeepingInput,
+) -> Result<String, AppError> {
+    let rows = export_bookkeeping_rows(db.inner(), input).await?;
+    Ok(export_qif(&rows))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn export_bookkeeping_ofx(
+    db: State<'_, Db>,
+    input: ExportBookkeepingInput,
+) -> Result<String, AppError> {
+    let rows = export_bookkeeping_rows(db.inner(), input).await?;
+    Ok(export_ofx(&rows))
 }
 
 #[tauri::command]
@@ -2164,6 +2195,41 @@ pub(crate) async fn set_bookkeeping_line_items_inner(
     tx.commit().await?;
 
     list_bookkeeping_line_items_inner(db, &tx_id).await
+}
+
+pub(crate) async fn export_bookkeeping_rows(
+    db: &Db,
+    input: ExportBookkeepingInput,
+) -> Result<Vec<BookkeepingExportRow>, AppError> {
+    let project_id = clean_optional(input.project_id.as_deref());
+    let from_date = clean_optional(input.from_date.as_deref());
+    let to_date = clean_optional(input.to_date.as_deref());
+    let sql = format!(
+        "SELECT {TRANSACTION_RETURNING_COLUMNS} \
+         FROM bookkeeping_transactions \
+         WHERE deleted_at IS NULL \
+           AND review_status != 'ignored' \
+           AND (?1 IS NULL OR project_id = ?1) \
+           AND (?2 IS NULL OR spent_at >= ?2) \
+           AND (?3 IS NULL OR spent_at <= ?3) \
+         ORDER BY spent_at ASC, COALESCE(spent_at_time, '') ASC, id ASC \
+         LIMIT 5000"
+    );
+    let transactions = sqlx::query_as::<_, BookkeepingTransaction>(&sql)
+        .bind(project_id.as_deref())
+        .bind(from_date.as_deref())
+        .bind(to_date.as_deref())
+        .fetch_all(db)
+        .await?;
+    let mut rows = Vec::with_capacity(transactions.len());
+    for transaction in transactions {
+        let line_items = list_bookkeeping_line_items_inner(db, &transaction.id).await?;
+        rows.push(BookkeepingExportRow {
+            transaction,
+            line_items,
+        });
+    }
+    Ok(rows)
 }
 
 /// Add or clear the `line_item_sum_mismatch` review reason on a transaction, preserving any other

@@ -49,6 +49,11 @@
   min-width: 0;
 }
 
+.bk-head-controls {
+  display: grid;
+  gap: var(--wr-density-sm);
+}
+
 .bk-title {
   margin: 0;
   font-family: var(--font-display);
@@ -64,6 +69,13 @@
   grid-template-columns: minmax(168px, 220px) minmax(0, 1fr);
   align-items: end;
   gap: var(--wr-density-md);
+}
+
+.bk-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--wr-density-xs);
 }
 
 .bk-metrics {
@@ -448,6 +460,7 @@
   }
 
   .bk-page-head,
+  .bk-head-controls,
   .bk-scope-controls,
   .bk-metrics,
   .bk-side,
@@ -463,6 +476,14 @@
 
   .bk-title {
     font-size: 36px;
+  }
+
+  .bk-export-actions {
+    justify-content: stretch;
+  }
+
+  .bk-export-actions > button {
+    flex: 1 1 0;
   }
 
   .bk-metric {

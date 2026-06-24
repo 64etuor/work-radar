@@ -1,5 +1,7 @@
 import "./BookkeepingView.css";
 
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   AlertTriangle,
   Ban,
@@ -7,6 +9,7 @@ import {
   Check,
   ChevronDown,
   ClipboardList,
+  Download,
   Landmark,
   Plus,
   ReceiptText,
@@ -80,6 +83,9 @@ import {
   useCreateBookkeepingTransaction,
   useDeleteBookkeepingTransaction,
   useEnsureBookkeepingRecurringOccurrences,
+  useExportBookkeepingCsv,
+  useExportBookkeepingOfx,
+  useExportBookkeepingQif,
   useFindBookkeepingDuplicateCandidates,
   useMarkBookkeepingDuplicate,
   usePostBookkeepingRecurringOccurrence,
@@ -134,6 +140,7 @@ const EXPENSE_KIND_OPTIONS: { value: BookkeepingExpenseKind; label: string }[] =
 const RECURRING_EXPENSE_KIND_OPTIONS = EXPENSE_KIND_OPTIONS.filter(
   (option) => option.value !== "variable",
 );
+type BookkeepingExportFormat = "csv" | "qif" | "ofx";
 
 const FIELD_IDS = {
   projectScope: "bk-project-scope",
@@ -372,6 +379,14 @@ function appendCsvToken(value: string, token: string) {
   return items.join(", ");
 }
 
+function monthRange(month: string): { fromDate: string; toDate: string } {
+  const [yearText, monthText] = month.split("-");
+  const year = Number(yearText);
+  const monthNumber = Number(monthText);
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  return { fromDate: `${month}-01`, toDate: `${month}-${String(lastDay).padStart(2, "0")}` };
+}
+
 function nullableText(value: string) {
   return value.trim() || null;
 }
@@ -456,11 +471,15 @@ export function BookkeepingView() {
   const bulkReview = useBulkUpdateBookkeepingReviewStatus();
   const bulkCategory = useBulkSetBookkeepingCategory();
   const bulkDelete = useBulkDeleteBookkeepingTransactions();
+  const exportCsv = useExportBookkeepingCsv();
+  const exportQif = useExportBookkeepingQif();
+  const exportOfx = useExportBookkeepingOfx();
   const updateTx = useUpdateBookkeepingTransaction();
   const deleteTx = useDeleteBookkeepingTransaction();
   const restoreTx = useRestoreBookkeepingTransaction();
   const pushSuccess = useToastStore((s) => s.pushSuccess);
   const pushError = useToastStore((s) => s.pushError);
+  const exportPending = exportCsv.isPending || exportQif.isPending || exportOfx.isPending;
 
   const plannedTotal = (recurringOccurrences.data ?? [])
     .filter((row) => row.status !== "skipped")
@@ -583,6 +602,31 @@ export function BookkeepingView() {
         onError: (error) => pushMutationError("bookkeeping.gmail", error),
       },
     );
+  };
+
+  const exportBookkeeping = async (format: BookkeepingExportFormat) => {
+    const { fromDate, toDate } = monthRange(month);
+    const input = { projectId: activeProjectId, fromDate, toDate };
+    const extension = format;
+
+    try {
+      const path = await saveDialog({
+        defaultPath: `work-radar-bookkeeping-${month}.${extension}`,
+        filters: [{ name: format.toUpperCase(), extensions: [extension] }],
+      });
+      if (!path) return;
+
+      const payload =
+        format === "csv"
+          ? await exportCsv.mutateAsync(input)
+          : format === "qif"
+            ? await exportQif.mutateAsync(input)
+            : await exportOfx.mutateAsync(input);
+      await writeTextFile(path, payload);
+      pushSuccess(`${format.toUpperCase()} export 저장 완료`);
+    } catch (error) {
+      pushMutationError("bookkeeping.export", error);
+    }
   };
 
   const setReviewStatus = (tx: BookkeepingTransaction, status: BookkeepingReviewStatus) => {
@@ -753,15 +797,21 @@ export function BookkeepingView() {
               가계부
             </h1>
           </div>
-          <BookkeepingScopeControls
-            month={month}
-            projects={projectOptions}
-            selectedProjectId={selectedProjectId}
-            onProjectChange={(projectId) => dispatchScope({ type: "setProject", projectId })}
-            onPreviousMonth={() => dispatchScope({ type: "stepMonth", months: -1 })}
-            onNextMonth={() => dispatchScope({ type: "stepMonth", months: 1 })}
-            onResetMonth={() => dispatchScope({ type: "resetMonth" })}
-          />
+          <div className="bk-head-controls">
+            <BookkeepingScopeControls
+              month={month}
+              projects={projectOptions}
+              selectedProjectId={selectedProjectId}
+              onProjectChange={(projectId) => dispatchScope({ type: "setProject", projectId })}
+              onPreviousMonth={() => dispatchScope({ type: "stepMonth", months: -1 })}
+              onNextMonth={() => dispatchScope({ type: "stepMonth", months: 1 })}
+              onResetMonth={() => dispatchScope({ type: "resetMonth" })}
+            />
+            <BookkeepingExportControls
+              disabled={exportPending}
+              onExport={(format) => void exportBookkeeping(format)}
+            />
+          </div>
         </header>
 
         <BookkeepingMetrics
@@ -986,6 +1036,32 @@ function BookkeepingScopeControls({
           </SelectContent>
         </Select>
       </Field>
+    </div>
+  );
+}
+
+function BookkeepingExportControls({
+  disabled,
+  onExport,
+}: {
+  disabled: boolean;
+  onExport: (format: BookkeepingExportFormat) => void;
+}) {
+  return (
+    <div className="bk-export-actions" role="group" aria-label="가계부 내보내기">
+      {(["csv", "qif", "ofx"] as const).map((format) => (
+        <Button
+          key={format}
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => onExport(format)}
+        >
+          <Download className="size-3.5" />
+          {format.toUpperCase()}
+        </Button>
+      ))}
     </div>
   );
 }

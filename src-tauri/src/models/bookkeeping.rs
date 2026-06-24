@@ -435,6 +435,14 @@ pub struct SetBookkeepingLineItemsInput {
     pub items: Vec<CreateBookkeepingLineItemInput>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportBookkeepingInput {
+    pub project_id: Option<String>,
+    pub from_date: Option<String>,
+    pub to_date: Option<String>,
+}
+
 /// 저장 전 중복 후보 조회 입력. 약한 신호(금액/날짜/상호)와 강한 신호(주문/결제번호/source_ref)를 함께 본다.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
