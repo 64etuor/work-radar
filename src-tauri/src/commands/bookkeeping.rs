@@ -73,8 +73,15 @@ pub async fn list_bookkeeping_transactions(
     db: State<'_, Db>,
     status: Option<BookkeepingReviewStatus>,
     project_id: Option<String>,
+    order_by: Option<String>,
 ) -> Result<Vec<BookkeepingTransaction>, AppError> {
-    list_bookkeeping_transactions_inner(db.inner(), status, project_id.as_deref()).await
+    list_bookkeeping_transactions_ordered_inner(
+        db.inner(),
+        status,
+        project_id.as_deref(),
+        order_by.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1230,13 +1237,34 @@ pub(crate) async fn list_bookkeeping_transactions_inner(
     status: Option<BookkeepingReviewStatus>,
     project_id: Option<&str>,
 ) -> Result<Vec<BookkeepingTransaction>, AppError> {
+    list_bookkeeping_transactions_ordered_inner(db, status, project_id, None).await
+}
+
+pub(crate) async fn list_bookkeeping_transactions_ordered_inner(
+    db: &Db,
+    status: Option<BookkeepingReviewStatus>,
+    project_id: Option<&str>,
+    order_by: Option<&str>,
+) -> Result<Vec<BookkeepingTransaction>, AppError> {
+    let order_clause = match order_by.map(str::trim).filter(|v| !v.is_empty()) {
+        None => "spent_at DESC, updated_at DESC, id DESC",
+        Some("confidence_asc") => {
+            "COALESCE(confidence, 1.0) ASC, spent_at DESC, updated_at DESC, id DESC"
+        }
+        Some(_) => {
+            return Err(AppError::validation(
+                "bookkeeping.order_by",
+                "지원하지 않는 정렬입니다",
+            ));
+        }
+    };
     let list_sql = format!(
         "SELECT {TRANSACTION_RETURNING_COLUMNS} \
          FROM bookkeeping_transactions \
          WHERE (?1 IS NULL OR review_status = ?1) \
            AND (?2 IS NULL OR project_id = ?2) \
            AND deleted_at IS NULL \
-         ORDER BY spent_at DESC, updated_at DESC, id DESC \
+         ORDER BY {order_clause} \
          LIMIT 200"
     );
     let rows = sqlx::query_as::<_, BookkeepingTransaction>(&list_sql)
@@ -2166,7 +2194,7 @@ pub(crate) async fn list_bookkeeping_category_aliases_inner(
 ) -> Result<Vec<BookkeepingCategoryAlias>, AppError> {
     Ok(sqlx::query_as::<_, BookkeepingCategoryAlias>(
         "SELECT id, pattern, match_kind, category_code, subcategory_code, confidence, source, \
-           created_at \
+           created_at, hit_count, last_used_at \
          FROM bookkeeping_category_alias \
          ORDER BY match_kind ASC, pattern ASC",
     )
@@ -2315,8 +2343,9 @@ pub(crate) async fn override_bookkeeping_category_inner(
         category_labels_for_codes(db, to_code.as_deref(), to_subcategory.as_deref()).await?;
 
     let mut tx = db.begin().await?;
-    let current: (Option<String>, Option<String>) = sqlx::query_as(
-        "SELECT category_code, subcategory_code FROM bookkeeping_transactions WHERE id = ?1",
+    let current: (Option<String>, Option<String>, String, Option<String>) = sqlx::query_as(
+        "SELECT category_code, subcategory_code, merchant, raw_category \
+         FROM bookkeeping_transactions WHERE id = ?1",
     )
     .bind(&tx_id)
     .fetch_optional(&mut *tx)
@@ -2351,6 +2380,17 @@ pub(crate) async fn override_bookkeeping_category_inner(
     .bind(reason.as_deref())
     .execute(&mut *tx)
     .await?;
+
+    if let Some(to_code) = to_code.as_deref() {
+        reinforce_category_alias_tx(
+            &mut tx,
+            &current.2,
+            current.3.as_deref(),
+            to_code,
+            to_subcategory.as_deref(),
+        )
+        .await?;
+    }
 
     insert_audit_log_tx(
         &mut tx,
@@ -2387,6 +2427,44 @@ pub(crate) async fn list_bookkeeping_category_overrides_inner(
     .bind(transaction_id)
     .fetch_all(db)
     .await?)
+}
+
+async fn reinforce_category_alias_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    merchant: &str,
+    raw_category: Option<&str>,
+    category_code: &str,
+    subcategory_code: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let (match_kind, pattern) = raw_category
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|raw| ("raw_label", normalize_label(raw)))
+        .filter(|(_, pattern)| !pattern.is_empty())
+        .unwrap_or_else(|| ("merchant", merchant.trim().to_string()));
+    if pattern.is_empty() {
+        return Ok(());
+    }
+
+    sqlx::query(
+        "INSERT INTO bookkeeping_category_alias \
+         (id, pattern, match_kind, category_code, subcategory_code, confidence, source, hit_count, last_used_at) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, 0.96, 'user', 1, datetime('now')) \
+         ON CONFLICT(match_kind, pattern) DO UPDATE SET \
+           category_code = excluded.category_code, \
+           subcategory_code = excluded.subcategory_code, \
+           confidence = max(bookkeeping_category_alias.confidence, excluded.confidence), \
+           source = 'user', \
+           hit_count = bookkeeping_category_alias.hit_count + 1, \
+           last_used_at = datetime('now')",
+    )
+    .bind(pattern)
+    .bind(match_kind)
+    .bind(category_code)
+    .bind(subcategory_code)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 // ── Line items (Phase C) ────────────────────────────────────────────────────────────────────────
@@ -3175,6 +3253,29 @@ async fn apply_category_resolution(
     if jf.confidence.is_none() {
         jf.confidence = resolved.confidence;
     }
+    if let Some(confidence) = resolved.confidence {
+        write_category_field_confidence(jf, confidence)?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+fn write_category_field_confidence(
+    jf: &mut JudgmentFields,
+    confidence: f64,
+) -> Result<(), AppError> {
+    let mut value: serde_json::Value =
+        serde_json::from_str(&jf.field_confidence_json).map_err(|_| {
+            AppError::validation("bookkeeping.field_confidence", "유효한 JSON이 아닙니다")
+        })?;
+    let Some(object) = value.as_object_mut() else {
+        return Err(AppError::validation(
+            "bookkeeping.field_confidence",
+            "JSON 구조가 올바르지 않습니다",
+        ));
+    };
+    object.insert("category".to_string(), serde_json::json!(confidence));
+    jf.field_confidence_json = value.to_string();
     Ok(())
 }
 
@@ -3415,12 +3516,12 @@ mod tests {
         GmailError, GmailLabelInfo, GmailMessageSearch, GmailReadProvider, GmailReceiptCandidate,
     };
     use crate::models::{
-        BookkeepingExpenseKind, BookkeepingPaymentMethodKind, BookkeepingRecurringOccurrenceStatus,
-        BookkeepingReviewStatus, BookkeepingSource, CreateBookkeepingLineItemInput,
-        CreateBookkeepingRecurringExpenseInput, CreateBookkeepingTransactionInput,
-        CreateProjectInput, ProjectKind, RecordBookkeepingSyncFailureInput,
-        SetBookkeepingBudgetInput, SyncBookkeepingGmailReceiptsInput,
-        UpdateBookkeepingTransactionInput,
+        BookkeepingAliasSource, BookkeepingExpenseKind, BookkeepingPaymentMethodKind,
+        BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
+        CreateBookkeepingLineItemInput, CreateBookkeepingRecurringExpenseInput,
+        CreateBookkeepingTransactionInput, CreateProjectInput, ProjectKind,
+        RecordBookkeepingSyncFailureInput, SetBookkeepingBudgetInput,
+        SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
     };
     use std::sync::Mutex;
 
@@ -4907,6 +5008,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_transactions_can_order_review_queue_by_low_confidence() {
+        let db = pool().await;
+        let mut high = manual_input("High Confidence", 1_000, "2026-06-01", "uncategorized");
+        high.raw_category = Some("🪑 생활용품".to_string());
+        create_bookkeeping_transaction_inner(&db, high)
+            .await
+            .expect("high confidence");
+
+        let mut low = manual_input("Low Confidence", 1_000, "2026-06-02", "uncategorized");
+        low.raw_category = Some("unknown raw label".to_string());
+        let low = create_bookkeeping_transaction_inner(&db, low)
+            .await
+            .expect("low confidence");
+
+        let rows = list_bookkeeping_transactions_ordered_inner(
+            &db,
+            Some(BookkeepingReviewStatus::NeedsReview),
+            None,
+            Some("confidence_asc"),
+        )
+        .await
+        .expect("ordered rows");
+
+        assert_eq!(rows[0].id, low.id);
+        assert_eq!(rows[0].review_status, BookkeepingReviewStatus::NeedsReview);
+        assert_eq!(rows[0].confidence, Some(0.0));
+    }
+
+    #[tokio::test]
     async fn ingest_create_resolves_category_code_from_raw_label() {
         let db = pool().await;
         let mut input = manual_input("쿠팡", 59_010, "2026-06-12", "uncategorized");
@@ -4964,6 +5094,73 @@ mod tests {
         assert!(audit
             .iter()
             .any(|a| a.action == "transaction.category_overridden"));
+    }
+
+    #[tokio::test]
+    async fn override_reinforces_alias_without_auto_approving_next_ingest() {
+        let db = pool().await;
+        let row = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Learned Merchant", 12_000, "2026-06-01", "food"),
+        )
+        .await
+        .expect("create");
+
+        override_bookkeeping_category_inner(
+            &db,
+            OverrideBookkeepingCategoryInput {
+                transaction_id: row.id.clone(),
+                category_code: Some("transport".to_string()),
+                subcategory_code: Some("transport_taxi".to_string()),
+                reason: Some("merchant learning".to_string()),
+            },
+        )
+        .await
+        .expect("override");
+        override_bookkeeping_category_inner(
+            &db,
+            OverrideBookkeepingCategoryInput {
+                transaction_id: row.id.clone(),
+                category_code: Some("transport".to_string()),
+                subcategory_code: Some("transport_taxi".to_string()),
+                reason: Some("merchant learning again".to_string()),
+            },
+        )
+        .await
+        .expect("override again");
+
+        let aliases = list_bookkeeping_category_aliases_inner(&db)
+            .await
+            .expect("aliases");
+        let learned = aliases
+            .iter()
+            .find(|alias| {
+                alias.match_kind == BookkeepingAliasMatchKind::Merchant
+                    && alias.pattern == "Learned Merchant"
+            })
+            .expect("learned alias");
+        assert_eq!(learned.category_code, "transport");
+        assert_eq!(learned.subcategory_code.as_deref(), Some("transport_taxi"));
+        assert_eq!(learned.source, BookkeepingAliasSource::User);
+        assert_eq!(learned.hit_count, 2);
+        assert!(learned.last_used_at.is_some());
+
+        let mut ingest = manual_input("Learned Merchant", 9_000, "2026-06-02", "uncategorized");
+        ingest.source = BookkeepingSource::Gmail;
+        ingest.source_ref = Some("learned-merchant-next".to_string());
+        let next = upsert_bookkeeping_transaction_from_ingest_inner(
+            &db,
+            ingest,
+            "transaction.gmail_ingested",
+            "x",
+        )
+        .await
+        .expect("next ingest");
+
+        assert_eq!(next.category_code.as_deref(), Some("transport"));
+        assert_eq!(next.subcategory_code.as_deref(), Some("transport_taxi"));
+        assert_eq!(next.review_status, BookkeepingReviewStatus::NeedsReview);
+        assert!(next.field_confidence_json.contains("category"));
     }
 
     #[tokio::test]

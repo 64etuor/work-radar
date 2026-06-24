@@ -126,6 +126,7 @@ import {
 } from "./lineItems";
 import { reportBarPercent, reportSeriesMax } from "./reports";
 import { type BookkeepingReviewFilter, matchesBookkeepingReviewFilter } from "./reviewFilter";
+import { reviewOrderToQueryParam, type ReviewQueueOrder } from "./reviewSort";
 import { clearSelection, selectedIds, toggleSelection } from "./selection";
 import { reduceBookkeepingTriageState, triageCommandForKey } from "./triageKeys";
 
@@ -151,7 +152,6 @@ const RECURRING_EXPENSE_KIND_OPTIONS = EXPENSE_KIND_OPTIONS.filter(
   (option) => option.value !== "variable",
 );
 type BookkeepingExportFormat = "csv" | "qif" | "ofx";
-
 const FIELD_IDS = {
   projectScope: "bk-project-scope",
   gmailLabels: "bk-gmail-labels",
@@ -477,6 +477,7 @@ export function BookkeepingView() {
   const [manualDraft, setManualDraft] = useState<ManualDraft>(() => emptyManualDraft());
   const [recurringDraft, setRecurringDraft] = useState<RecurringDraft>(() => emptyRecurringDraft());
   const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => emptyBudgetDraft());
+  const [reviewOrder, setReviewOrder] = useState<ReviewQueueOrder>("default");
   const [inputPanelsOpen, setInputPanelOpen] = useReducer(inputPanelsReducer, {
     ...BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN,
   });
@@ -493,7 +494,11 @@ export function BookkeepingView() {
       : ALL_PROJECTS;
   const activeProjectId = selectedProjectId === ALL_PROJECTS ? null : selectedProjectId;
   const gmailLabels = useBookkeepingGmailLabels(activeProjectId);
-  const reviewTransactions = useBookkeepingTransactions("needs_review", activeProjectId);
+  const reviewTransactions = useBookkeepingTransactions(
+    "needs_review",
+    activeProjectId,
+    reviewOrderToQueryParam(reviewOrder),
+  );
   const approvedTransactions = useBookkeepingTransactions("approved", activeProjectId);
   const trashTransactions = useBookkeepingTrash(activeProjectId);
   const summary = useBookkeepingMonthlySummary(month, activeProjectId);
@@ -908,6 +913,7 @@ export function BookkeepingView() {
             <ReviewQueueCard
               key={`${month}:${activeProjectId ?? "all"}`}
               rows={reviewTransactions.data ?? []}
+              order={reviewOrder}
               disabled={review.isPending || updateTx.isPending || deleteTx.isPending}
               bulkPending={bulkReview.isPending || bulkCategory.isPending || bulkDelete.isPending}
               onApprove={(tx) => setReviewStatus(tx, "approved")}
@@ -916,6 +922,7 @@ export function BookkeepingView() {
               onBulkDelete={bulkDeleteTransactions}
               onDelete={deleteTransaction}
               onSave={saveTransaction}
+              onOrderChange={setReviewOrder}
             />
 
             <RecurringMonthCard
@@ -1156,6 +1163,7 @@ function BookkeepingExportControls({
 
 function ReviewQueueCard({
   rows,
+  order,
   disabled,
   bulkPending,
   onApprove,
@@ -1164,8 +1172,10 @@ function ReviewQueueCard({
   onBulkDelete,
   onDelete,
   onSave,
+  onOrderChange,
 }: {
   rows: BookkeepingTransaction[];
+  order: ReviewQueueOrder;
   disabled: boolean;
   bulkPending: boolean;
   onApprove: (tx: BookkeepingTransaction) => void;
@@ -1179,6 +1189,7 @@ function ReviewQueueCard({
   onBulkDelete: (ids: string[], onDone: () => void) => void;
   onDelete: (tx: BookkeepingTransaction) => void;
   onSave: (tx: BookkeepingTransaction, draft: TransactionEditDraft) => void;
+  onOrderChange: (order: ReviewQueueOrder) => void;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [filter, setFilter] = useState<BookkeepingReviewFilter>({
@@ -1282,6 +1293,15 @@ function ReviewQueueCard({
               aria-label="검토 큐 종료일"
             />
           </div>
+          <Select value={order} onValueChange={(value) => onOrderChange(value as ReviewQueueOrder)}>
+            <SelectTrigger aria-label="검토 큐 정렬">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">최신순</SelectItem>
+              <SelectItem value="confidence_asc">낮은 신뢰도</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             size="sm"

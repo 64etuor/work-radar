@@ -29,10 +29,11 @@ function useInvalidateBookkeeping() {
 export function useBookkeepingTransactions(
   status: BookkeepingReviewStatus | null = null,
   projectId: string | null = null,
+  orderBy: string | null = null,
 ) {
   return useQuery({
-    queryKey: ["bookkeeping", "transactions", status, projectId],
-    queryFn: () => unwrap(commands.listBookkeepingTransactions(status, projectId)),
+    queryKey: ["bookkeeping", "transactions", status, projectId, orderBy],
+    queryFn: () => unwrap(commands.listBookkeepingTransactions(status, projectId, orderBy)),
   });
 }
 

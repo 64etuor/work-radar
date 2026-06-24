@@ -372,6 +372,8 @@ pub struct BookkeepingCategoryAlias {
     pub confidence: f64,
     pub source: BookkeepingAliasSource,
     pub created_at: String,
+    pub hit_count: i32,
+    pub last_used_at: Option<String>,
 }
 
 /// `bookkeeping_get_category_rules` 반환 — taxonomy + alias 규칙 묶음.

@@ -800,7 +800,7 @@
 
 .bk-review-tools {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(132px, auto) auto;
   gap: var(--wr-density-sm);
   align-items: center;
   margin-bottom: var(--wr-density-md);

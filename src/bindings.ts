@@ -31,7 +31,7 @@ export const commands = {
 	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
 	runConnectionAudit: () => typedError<ConnectionAudit, AppError>(__TAURI_INVOKE("run_connection_audit")),
 	createBookkeepingTransaction: (input: CreateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("create_bookkeeping_transaction", { input })),
-	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null, projectId: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status, projectId })),
+	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null, projectId: string | null, orderBy: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status, projectId, orderBy })),
 	updateBookkeepingReviewStatus: (id: string, status: BookkeepingReviewStatus) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_review_status", { id, status })),
 	bulkUpdateBookkeepingReviewStatus: (ids: string[], status: BookkeepingReviewStatus) => typedError<BookkeepingBulkItemResult[], AppError>(__TAURI_INVOKE("bulk_update_bookkeeping_review_status", { ids, status })),
 	bulkSetBookkeepingCategory: (ids: string[], categoryCode: string | null, subcategoryCode: string | null, reason: string | null) => typedError<BookkeepingBulkItemResult[], AppError>(__TAURI_INVOKE("bulk_set_bookkeeping_category", { ids, categoryCode, subcategoryCode, reason })),
@@ -1008,6 +1008,8 @@ export type BookkeepingCategoryAlias = {
 	confidence: number | null,
 	source: BookkeepingAliasSource,
 	createdAt: string,
+	hitCount: number,
+	lastUsedAt: string | null,
 };
 
 /**  taxonomy 노드. 대분류는 `parent_code` None, 소분류는 부모 코드를 가리킨다. */

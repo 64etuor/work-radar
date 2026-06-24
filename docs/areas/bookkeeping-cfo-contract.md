@@ -32,20 +32,20 @@ source_of_truth_scope: CFO Bot(Hermes) ↔ Work Radar 가계부 판단 파이프
 거래는 `bookkeeping_transactions` 1행 + 선택적 `bookkeeping_transaction_line_items`. 사용자 export
 컬럼과의 매핑:
 
-| export | 필드 | 비고 |
-| --- | --- | --- |
-| 날짜(날짜+시각) | `spent_at`(YYYY-MM-DD) + `spent_at_time`(HH:MM:SS, 선택) | 날짜/시각 분리 저장 |
-| 자산 | `account` | 예: "하나은행" |
-| 분류(원본 라벨) | `raw_category` | 예: "🪑 생활용품" — **원본 보존** |
-| 분류(해석 코드) | `category_code` / `category` | taxonomy 코드(§4) + 사람용 라벨 |
-| 소분류 | `subcategory` / `subcategory_code` | |
-| 내용 | `description` | |
-| 수입/지출 | `direction` | `expense` \| `income` — **금액은 항상 양수**, 부호는 이 필드 |
-| 메모 | `note` | |
-| 금액 | `amount_minor` | KRW는 원 단위 정수(i32, >0) |
-| 화폐 | `currency` | 3자리(기본 KRW) |
-| (강한 dedup 키) | `order_no` / `payment_no` | 영수증에 있으면 전달 |
-| (판단 근거) | `confidence`(0..1) / `field_confidence`(필드별) / `review_reasons[]` | |
+| export          | 필드                                                                 | 비고                                                         |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 날짜(날짜+시각) | `spent_at`(YYYY-MM-DD) + `spent_at_time`(HH:MM:SS, 선택)             | 날짜/시각 분리 저장                                          |
+| 자산            | `account`                                                            | 예: "하나은행"                                               |
+| 분류(원본 라벨) | `raw_category`                                                       | 예: "🪑 생활용품" — **원본 보존**                            |
+| 분류(해석 코드) | `category_code` / `category`                                         | taxonomy 코드(§4) + 사람용 라벨                              |
+| 소분류          | `subcategory` / `subcategory_code`                                   |                                                              |
+| 내용            | `description`                                                        |                                                              |
+| 수입/지출       | `direction`                                                          | `expense` \| `income` — **금액은 항상 양수**, 부호는 이 필드 |
+| 메모            | `note`                                                               |                                                              |
+| 금액            | `amount_minor`                                                       | KRW는 원 단위 정수(i32, >0)                                  |
+| 화폐            | `currency`                                                           | 3자리(기본 KRW)                                              |
+| (강한 dedup 키) | `order_no` / `payment_no`                                            | 영수증에 있으면 전달                                         |
+| (판단 근거)     | `confidence`(0..1) / `field_confidence`(필드별) / `review_reasons[]` |                                                              |
 
 **금액 규칙:** 음수 저장 금지. 수입도 `amount_minor>0` + `direction='income'`. 월 합계는 지출/수입/
 순액(net)으로 분리 집계되고, 카테고리 차트는 지출만 본다.
@@ -96,11 +96,13 @@ detail은 PII/raw 금지 — 짧은 사유만.
 ## 6. MCP 툴 표면 (시작 시 고정 — `registered_tool_set_is_locked` 테스트로 잠금)
 
 WRITE(로컬, Hermes 전용):
+
 - `wr_bookkeeping_save_receipt` — 정규화·판단된 거래 저장(필드는 §2; raw image/body/token 미수용;
   신규 판단 필드는 모두 **optional**이라 구버전 Hermes 호환). line_items 포함 가능(합계 불일치=리뷰 사유).
 - `wr_bookkeeping_mark_duplicate` — 중복 표시(로컬 리뷰큐 쓰기, 비-Hermes 거부).
 
 READ(Hermes 전용, sanitized 메타데이터만):
+
 - `wr_bookkeeping_list_recent_transactions` / `wr_bookkeeping_list_review_queue` — limit clamp 1..100.
 - `wr_bookkeeping_monthly_summary` — 지출/수입/순액 + 리뷰 상태 카운트.
 - `wr_bookkeeping_get_category_rules` — taxonomy + alias.
@@ -121,6 +123,10 @@ READ(Hermes 전용, sanitized 메타데이터만):
 > ⚠️ 시각 타임존: Hermes는 `날짜는 프런트가 주입`(data-layer-conventions) 관례를 따라 **로컬
 > 날짜/시각으로 분리해** 보낸다(`spent_at`=YYYY-MM-DD 로컬, `spent_at_time`=HH:MM:SS).
 > 순액(net)은 단일 통화(KRW) 가정 — 혼합 통화 월은 net이 무의미하니 통화별로 본다.
+
+> ⚠️ 분류 학습: 수동 분류 보정은 `bookkeeping_category_alias`를 강화해 다음 유입의
+> `category_code`/`subcategory_code` 힌트와 신뢰도만 개선한다. 학습된 alias는 결정 레일을
+> 대체하지 않으며, 새 거래는 계속 `needs_review`로 들어온다(자동 승인 금지).
 
 ## 정본 / 참조
 
