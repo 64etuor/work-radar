@@ -836,7 +836,7 @@ pub(crate) async fn sync_bookkeeping_gmail_receipts_with_provider<P: GmailReadPr
     input: SyncBookkeepingGmailReceiptsInput,
 ) -> Result<BookkeepingGmailSyncResult, AppError> {
     let project_id = clean_required(&input.project_id, "bookkeeping.gmail.project")?;
-    ensure_project_exists(db, &project_id).await?;
+    ensure_project_exists(db, &project_id, "bookkeeping.gmail.project_not_found").await?;
     let query = clean_optional(input.query.as_deref());
     let max_results = input
         .max_results
@@ -1352,15 +1352,21 @@ pub(crate) async fn update_bookkeeping_review_status_inner(
 /// 벌크 리뷰 상태 변경. 각 항목을 독립 처리(best-effort) — 한 항목 실패가 배치를 중단시키지
 /// 않는다. 변이는 단일 `update_bookkeeping_review_status_inner`(자체 tx + 감사 기록)에 위임하고
 /// 그 `Result`만 건별 결과로 분류한다(변이 로직 단일 소스).
-pub(crate) async fn bulk_update_bookkeeping_review_status_inner(
-    db: &Db,
-    ids: &[String],
-    status: BookkeepingReviewStatus,
-) -> Vec<BookkeepingBulkItemResult> {
+/// best-effort 벌크 실행기: id마다 (트림 후) `op`를 호출하고 그 `Result`만 건별
+/// `BookkeepingBulkItemResult`로 분류한다. 한 항목 실패가 나머지를 중단시키지 않는다.
+/// 변이 로직(검증/tx/감사)은 각 `op`가 위임받은 단일 inner에 그대로 머문다.
+async fn run_bookkeeping_bulk<'a, F, Fut, T>(
+    ids: &'a [String],
+    mut op: F,
+) -> Vec<BookkeepingBulkItemResult>
+where
+    F: FnMut(&'a str) -> Fut,
+    Fut: std::future::Future<Output = Result<T, AppError>>,
+{
     let mut out = Vec::with_capacity(ids.len());
     for raw in ids {
         let id = raw.trim();
-        let result = match update_bookkeeping_review_status_inner(db, id, status).await {
+        let result = match op(id).await {
             Ok(_) => BookkeepingBulkItemResult {
                 id: id.to_string(),
                 ok: true,
@@ -1375,6 +1381,17 @@ pub(crate) async fn bulk_update_bookkeeping_review_status_inner(
         out.push(result);
     }
     out
+}
+
+pub(crate) async fn bulk_update_bookkeeping_review_status_inner(
+    db: &Db,
+    ids: &[String],
+    status: BookkeepingReviewStatus,
+) -> Vec<BookkeepingBulkItemResult> {
+    run_bookkeeping_bulk(ids, |id| {
+        update_bookkeeping_review_status_inner(db, id, status)
+    })
+    .await
 }
 
 /// 벌크 분류 지정. `override_bookkeeping_category_inner`가 자체 tx와 audit row를 소유하므로,
@@ -1386,10 +1403,8 @@ pub(crate) async fn bulk_set_bookkeeping_category_inner(
     subcategory_code: Option<&str>,
     reason: Option<&str>,
 ) -> Vec<BookkeepingBulkItemResult> {
-    let mut out = Vec::with_capacity(ids.len());
-    for raw in ids {
-        let id = raw.trim();
-        let result = match override_bookkeeping_category_inner(
+    run_bookkeeping_bulk(ids, |id| {
+        override_bookkeeping_category_inner(
             db,
             OverrideBookkeepingCategoryInput {
                 transaction_id: id.to_string(),
@@ -1398,22 +1413,8 @@ pub(crate) async fn bulk_set_bookkeeping_category_inner(
                 reason: reason.map(str::to_string),
             },
         )
-        .await
-        {
-            Ok(_) => BookkeepingBulkItemResult {
-                id: id.to_string(),
-                ok: true,
-                message: None,
-            },
-            Err(e) => BookkeepingBulkItemResult {
-                id: id.to_string(),
-                ok: false,
-                message: Some(e.to_string()),
-            },
-        };
-        out.push(result);
-    }
-    out
+    })
+    .await
 }
 
 /// 벌크 소프트 삭제. 기존 삭제 inner가 검증, tx, 감사 기록을 소유하므로 항목별로 재사용한다.
@@ -1421,24 +1422,7 @@ pub(crate) async fn bulk_delete_bookkeeping_transactions_inner(
     db: &Db,
     ids: &[String],
 ) -> Vec<BookkeepingBulkItemResult> {
-    let mut out = Vec::with_capacity(ids.len());
-    for raw in ids {
-        let id = raw.trim();
-        let result = match delete_bookkeeping_transaction_inner(db, id).await {
-            Ok(_) => BookkeepingBulkItemResult {
-                id: id.to_string(),
-                ok: true,
-                message: None,
-            },
-            Err(e) => BookkeepingBulkItemResult {
-                id: id.to_string(),
-                ok: false,
-                message: Some(e.to_string()),
-            },
-        };
-        out.push(result);
-    }
-    out
+    run_bookkeeping_bulk(ids, |id| delete_bookkeeping_transaction_inner(db, id)).await
 }
 
 pub(crate) async fn update_bookkeeping_transaction_inner(
@@ -1817,7 +1801,7 @@ pub(crate) async fn set_bookkeeping_budget_inner(
     }
     let project_id = clean_optional(input.project_id.as_deref());
     if let Some(project_id) = project_id.as_deref() {
-        ensure_budget_project_exists(db, project_id).await?;
+        ensure_project_exists(db, project_id, "bookkeeping.budget.project_not_found").await?;
     }
     let category_code = clean_required(&input.category_code, "bookkeeping.budget.category")?;
     let currency = clean_currency(input.currency.as_deref().unwrap_or(DEFAULT_CURRENCY))?;
@@ -2069,7 +2053,7 @@ pub(crate) async fn bookkeeping_reconcile_account_inner(
 ) -> Result<BookkeepingReconcileAccountResult, AppError> {
     let project_id = clean_optional(input.project_id.as_deref());
     if let Some(project_id) = project_id.as_deref() {
-        ensure_budget_project_exists(db, project_id).await?;
+        ensure_project_exists(db, project_id, "bookkeeping.budget.project_not_found").await?;
     }
     let account = clean_required(&input.account, "bookkeeping.reconcile.account")?;
     validate_date(&input.statement_date)?;
@@ -3132,7 +3116,13 @@ fn clean_string_vec(values: Vec<String>) -> Vec<String> {
     cleaned
 }
 
-async fn ensure_project_exists(db: &Db, project_id: &str) -> Result<(), AppError> {
+/// Validate a project FK, surfacing a caller-supplied `not_found` code so each
+/// flow (gmail / budget / reconcile) keeps its own domain-scoped error code.
+async fn ensure_project_exists(
+    db: &Db,
+    project_id: &str,
+    not_found_code: &'static str,
+) -> Result<(), AppError> {
     let exists: Option<(String,)> = sqlx::query_as("SELECT id FROM projects WHERE id = ?1")
         .bind(project_id)
         .fetch_optional(db)
@@ -3140,25 +3130,7 @@ async fn ensure_project_exists(db: &Db, project_id: &str) -> Result<(), AppError
     if exists.is_some() {
         Ok(())
     } else {
-        Err(AppError::not_found(
-            "bookkeeping.gmail.project_not_found",
-            "project not found",
-        ))
-    }
-}
-
-async fn ensure_budget_project_exists(db: &Db, project_id: &str) -> Result<(), AppError> {
-    let exists: Option<(String,)> = sqlx::query_as("SELECT id FROM projects WHERE id = ?1")
-        .bind(project_id)
-        .fetch_optional(db)
-        .await?;
-    if exists.is_some() {
-        Ok(())
-    } else {
-        Err(AppError::not_found(
-            "bookkeeping.budget.project_not_found",
-            "project not found",
-        ))
+        Err(AppError::not_found(not_found_code, "project not found"))
     }
 }
 
