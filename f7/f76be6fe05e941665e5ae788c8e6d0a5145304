@@ -1,0 +1,59 @@
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f910a11abc432f::t_318815ff02658a 576,582,775
+  s_f910a11abc432f::t_6006af4722a456 44
+  s_f910a11abc432f::t_d963ad1aa6e275 107
+src/lib/query/bookkeeping.ts
+  s_f910a11abc432f::t_3a8ff20364ba1b 6,20,350-358
+src/bindings.ts
+  s_f910a11abc432f::t_f28e50b632e623 71,1087-1088,1150,3273-3277
+src-tauri/src/lib.rs
+  s_f910a11abc432f::t_2bd1d46127ddaa 119
+src-tauri/src/commands/bookkeeping.rs
+  s_f910a11abc432f::t_8f3c6569a44316 467-473,2749-2781
+  s_f910a11abc432f::t_d4e9d741d25424 3672-3677
+  s_f910a11abc432f::t_6a1c63b4951b02 4,19
+  s_f910a11abc432f::t_2fc6ce299f826a 4182-4211
+  s_f910a11abc432f::t_51f35490987a0a 20-21,31,3671
+src-tauri/capabilities/default.json
+  s_f910a11abc432f::t_28e991bfcd8cb2 20
+src-tauri/src/bookkeeping_export.rs
+  s_f910a11abc432f::t_5b53b6fb4410f8 73,128-133,152,155-162,164,328,339-351,369-385,391
+docs/plans/2026-06-24-bookkeeping-completeness-plan.md
+  s_5c80a9ab6b788f::t_39e498be92b3af 173-179
+  s_5c80a9ab6b788f::t_ca34dd40d0246a 1-12,20-148,151-158,162-172,180-195,202-226,230-260,262-263,271-299,304-308,312-383,385-543
+  s_f910a11abc432f::t_1738cc834ed232 264-270
+  s_5c80a9ab6b788f::t_3a48e39509d409 384
+  s_5c80a9ab6b788f::t_c0f522f9eee737 196-201
+  s_5c80a9ab6b788f::t_0915d9fdc8833f 159-161
+  s_5c80a9ab6b788f::t_4fe88679c6d346 13-19
+  s_5c80a9ab6b788f::t_496bbd15be9d7a 227-229
+  s_5c80a9ab6b788f::t_8f55386b144c97 149-150
+  s_5c80a9ab6b788f::t_b23409e29c809a 261
+  s_5c80a9ab6b788f::t_3012c71205c976 300-303,309-311
+src-tauri/src/models/bookkeeping.rs
+  s_f910a11abc432f::t_2b3a415056cad9 440-447,456-463,536,554,575,601,619
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "f7f76be6fe05e941665e5ae788c8e6d0a5145304",
+  "prompts": {},
+  "sessions": {
+    "s_5c80a9ab6b788f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60804063-4487-40bb-acd6-88e920e3b071",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_f910a11abc432f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ef985-2b5e-7ad3-94b2-7aade688c63b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
