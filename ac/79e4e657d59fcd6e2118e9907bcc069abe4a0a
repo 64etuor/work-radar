@@ -1,0 +1,25 @@
+src/components/bookkeeping/BookkeepingView.tsx
+  s_5c80a9ab6b788f::t_1859ab1461d027 1968
+  s_5c80a9ab6b788f::t_7372191939698f 2025-2027
+src/components/bookkeeping/lineItems.ts
+  s_5c80a9ab6b788f::t_85fba3bbd76825 53-56
+  s_5c80a9ab6b788f::t_5f538459b259e9 17-24
+src/components/bookkeeping/lineItems.test.ts
+  s_5c80a9ab6b788f::t_06376e2274f8aa 63-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "ac79e4e657d59fcd6e2118e9907bcc069abe4a0a",
+  "prompts": {},
+  "sessions": {
+    "s_5c80a9ab6b788f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60804063-4487-40bb-acd6-88e920e3b071",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
