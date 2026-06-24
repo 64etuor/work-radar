@@ -92,6 +92,34 @@ pub async fn bulk_update_bookkeeping_review_status(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn bulk_set_bookkeeping_category(
+    db: State<'_, Db>,
+    ids: Vec<String>,
+    category_code: Option<String>,
+    subcategory_code: Option<String>,
+    reason: Option<String>,
+) -> Result<Vec<BookkeepingBulkItemResult>, AppError> {
+    Ok(bulk_set_bookkeeping_category_inner(
+        db.inner(),
+        &ids,
+        category_code.as_deref(),
+        subcategory_code.as_deref(),
+        reason.as_deref(),
+    )
+    .await)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bulk_delete_bookkeeping_transactions(
+    db: State<'_, Db>,
+    ids: Vec<String>,
+) -> Result<Vec<BookkeepingBulkItemResult>, AppError> {
+    Ok(bulk_delete_bookkeeping_transactions_inner(db.inner(), &ids).await)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn update_bookkeeping_transaction(
     db: State<'_, Db>,
     input: UpdateBookkeepingTransactionInput,
@@ -1193,6 +1221,70 @@ pub(crate) async fn bulk_update_bookkeeping_review_status_inner(
     for raw in ids {
         let id = raw.trim();
         let result = match update_bookkeeping_review_status_inner(db, id, status).await {
+            Ok(_) => BookkeepingBulkItemResult {
+                id: id.to_string(),
+                ok: true,
+                message: None,
+            },
+            Err(e) => BookkeepingBulkItemResult {
+                id: id.to_string(),
+                ok: false,
+                message: Some(e.to_string()),
+            },
+        };
+        out.push(result);
+    }
+    out
+}
+
+/// 벌크 분류 지정. `override_bookkeeping_category_inner`가 자체 tx와 audit row를 소유하므로,
+/// 호출자는 공유 tx를 만들지 않고 항목별 best-effort로 위임한다.
+pub(crate) async fn bulk_set_bookkeeping_category_inner(
+    db: &Db,
+    ids: &[String],
+    category_code: Option<&str>,
+    subcategory_code: Option<&str>,
+    reason: Option<&str>,
+) -> Vec<BookkeepingBulkItemResult> {
+    let mut out = Vec::with_capacity(ids.len());
+    for raw in ids {
+        let id = raw.trim();
+        let result = match override_bookkeeping_category_inner(
+            db,
+            OverrideBookkeepingCategoryInput {
+                transaction_id: id.to_string(),
+                category_code: category_code.map(str::to_string),
+                subcategory_code: subcategory_code.map(str::to_string),
+                reason: reason.map(str::to_string),
+            },
+        )
+        .await
+        {
+            Ok(_) => BookkeepingBulkItemResult {
+                id: id.to_string(),
+                ok: true,
+                message: None,
+            },
+            Err(e) => BookkeepingBulkItemResult {
+                id: id.to_string(),
+                ok: false,
+                message: Some(e.to_string()),
+            },
+        };
+        out.push(result);
+    }
+    out
+}
+
+/// 벌크 소프트 삭제. 기존 삭제 inner가 검증, tx, 감사 기록을 소유하므로 항목별로 재사용한다.
+pub(crate) async fn bulk_delete_bookkeeping_transactions_inner(
+    db: &Db,
+    ids: &[String],
+) -> Vec<BookkeepingBulkItemResult> {
+    let mut out = Vec::with_capacity(ids.len());
+    for raw in ids {
+        let id = raw.trim();
+        let result = match delete_bookkeeping_transaction_inner(db, id).await {
             Ok(_) => BookkeepingBulkItemResult {
                 id: id.to_string(),
                 ok: true,
@@ -3032,6 +3124,112 @@ mod tests {
             .await
             .expect("fetch transaction");
         assert_eq!(row.review_status, BookkeepingReviewStatus::Approved);
+    }
+
+    #[tokio::test]
+    async fn bulk_set_category_routes_each_item_through_override_audit() {
+        let db = pool().await;
+        let mut ids = Vec::new();
+        for merchant in ["Taxi", "Metro"] {
+            let tx = create_bookkeeping_transaction_inner(
+                &db,
+                manual_input(merchant, 5_000, "2026-06-16", "food"),
+            )
+            .await
+            .expect("create transaction");
+            ids.push(tx.id);
+        }
+
+        let results = bulk_set_bookkeeping_category_inner(
+            &db,
+            &ids,
+            Some("transport"),
+            Some("transport_taxi"),
+            Some("bulk_triage"),
+        )
+        .await;
+
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.ok));
+        for id in &ids {
+            let row = fetch_bookkeeping_transaction(&db, id)
+                .await
+                .expect("fetch transaction");
+            assert_eq!(row.category_code.as_deref(), Some("transport"));
+            assert_eq!(row.subcategory_code.as_deref(), Some("transport_taxi"));
+
+            let history = list_bookkeeping_category_overrides_inner(&db, id)
+                .await
+                .expect("override history");
+            assert_eq!(history.len(), 1);
+
+            let audit = list_bookkeeping_audit_inner(&db, Some(id.clone()))
+                .await
+                .expect("audit");
+            assert!(audit
+                .iter()
+                .any(|entry| entry.action == "transaction.category_overridden"));
+        }
+    }
+
+    #[tokio::test]
+    async fn bulk_set_category_is_best_effort_on_bad_id() {
+        let db = pool().await;
+        let tx = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Taxi", 5_000, "2026-06-16", "food"),
+        )
+        .await
+        .expect("create transaction");
+
+        let ids = vec![tx.id.clone(), "missing-category-target".to_string()];
+        let results =
+            bulk_set_bookkeeping_category_inner(&db, &ids, Some("transport"), None, None).await;
+
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().any(|r| r.id == tx.id && r.ok));
+        let bad = results
+            .iter()
+            .find(|r| r.id == "missing-category-target")
+            .expect("missing id result");
+        assert!(!bad.ok);
+        assert!(bad.message.is_some());
+        let row = fetch_bookkeeping_transaction(&db, &tx.id)
+            .await
+            .expect("fetch transaction");
+        assert_eq!(row.category_code.as_deref(), Some("transport"));
+    }
+
+    #[tokio::test]
+    async fn bulk_delete_transactions_soft_deletes_each_item_best_effort() {
+        let db = pool().await;
+        let tx = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Delete Me", 9_500, "2026-06-17", "food"),
+        )
+        .await
+        .expect("create transaction");
+        let ids = vec![tx.id.clone(), "missing-delete-target".to_string()];
+
+        let results = bulk_delete_bookkeeping_transactions_inner(&db, &ids).await;
+
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().any(|r| r.id == tx.id && r.ok));
+        let bad = results
+            .iter()
+            .find(|r| r.id == "missing-delete-target")
+            .expect("missing id result");
+        assert!(!bad.ok);
+        assert!(bad.message.is_some());
+
+        let deleted = fetch_bookkeeping_transaction(&db, &tx.id)
+            .await
+            .expect("fetch transaction");
+        assert!(deleted.deleted_at.is_some());
+        let main_rows = list_bookkeeping_transactions_inner(&db, None, None)
+            .await
+            .expect("main list");
+        assert!(main_rows.iter().all(|row| row.id != tx.id));
     }
 
     #[tokio::test]

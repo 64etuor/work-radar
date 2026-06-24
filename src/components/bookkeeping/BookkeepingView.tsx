@@ -12,6 +12,7 @@ import {
   ReceiptText,
   RefreshCw,
   RotateCcw,
+  Search,
   ShieldAlert,
   Tags,
   Trash2,
@@ -22,6 +23,7 @@ import {
   type FormEvent,
   type ReactNode,
   type SetStateAction,
+  useEffect,
   useReducer,
   useRef,
   useState,
@@ -56,6 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 import {
   IpcError,
   localToday,
@@ -70,6 +73,8 @@ import {
   useBookkeepingTaxonomy,
   useBookkeepingTransactions,
   useBookkeepingTrash,
+  useBulkDeleteBookkeepingTransactions,
+  useBulkSetBookkeepingCategory,
   useBulkUpdateBookkeepingReviewStatus,
   useCreateBookkeepingRecurringExpense,
   useCreateBookkeepingTransaction,
@@ -104,7 +109,9 @@ import {
   lineItemSumState,
   toLineItemInputs,
 } from "./lineItems";
+import { type BookkeepingReviewFilter, matchesBookkeepingReviewFilter } from "./reviewFilter";
 import { clearSelection, selectedIds, toggleSelection } from "./selection";
+import { reduceBookkeepingTriageState, triageCommandForKey } from "./triageKeys";
 
 const CATEGORY_OPTIONS = ["food", "transport", "shopping", "housing", "health", "work", "misc"];
 const ALL_PROJECTS = "__all__";
@@ -400,6 +407,13 @@ function pushMutationError(scope: string, error: unknown) {
   }
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  const node = target as HTMLElement | null;
+  if (!node) return false;
+  const tag = node.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || node.isContentEditable;
+}
+
 export function BookkeepingView() {
   const [scope, dispatchScope] = useReducer(
     bookkeepingScopeReducer,
@@ -440,6 +454,8 @@ export function BookkeepingView() {
   const syncGmail = useSyncBookkeepingGmailReceipts();
   const review = useUpdateBookkeepingReviewStatus();
   const bulkReview = useBulkUpdateBookkeepingReviewStatus();
+  const bulkCategory = useBulkSetBookkeepingCategory();
+  const bulkDelete = useBulkDeleteBookkeepingTransactions();
   const updateTx = useUpdateBookkeepingTransaction();
   const deleteTx = useDeleteBookkeepingTransaction();
   const restoreTx = useRestoreBookkeepingTransaction();
@@ -607,6 +623,57 @@ export function BookkeepingView() {
     );
   };
 
+  const bulkSetCategory = (
+    ids: string[],
+    categoryCode: string,
+    subcategoryCode: string,
+    onDone: () => void,
+  ) => {
+    if (ids.length === 0) return;
+    bulkCategory.mutate(
+      {
+        ids,
+        categoryCode,
+        subcategoryCode: nullableText(subcategoryCode),
+        reason: "bulk_triage",
+      },
+      {
+        onSuccess: (results) => {
+          const failed = results.filter((r) => !r.ok).length;
+          if (failed > 0) {
+            pushError(
+              "bookkeeping.bulk.category",
+              `${results.length - failed}건 처리, ${failed}건 실패`,
+            );
+          } else {
+            pushSuccess(`${ids.length}건 분류를 지정했습니다`);
+          }
+          onDone();
+        },
+        onError: (error) => pushMutationError("bookkeeping.bulk.category", error),
+      },
+    );
+  };
+
+  const bulkDeleteTransactions = (ids: string[], onDone: () => void) => {
+    if (ids.length === 0) return;
+    bulkDelete.mutate(ids, {
+      onSuccess: (results) => {
+        const failed = results.filter((r) => !r.ok).length;
+        if (failed > 0) {
+          pushError(
+            "bookkeeping.bulk.delete",
+            `${results.length - failed}건 처리, ${failed}건 실패`,
+          );
+        } else {
+          pushSuccess(`${ids.length}건 휴지통으로 이동했습니다`);
+        }
+        onDone();
+      },
+      onError: (error) => pushMutationError("bookkeeping.bulk.delete", error),
+    });
+  };
+
   const saveTransaction = (tx: BookkeepingTransaction, draft: TransactionEditDraft) => {
     const amount = Number(draft.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -709,12 +776,14 @@ export function BookkeepingView() {
         <div className="bk-layout">
           <section className="bk-main">
             <ReviewQueueCard
+              key={`${month}:${activeProjectId ?? "all"}`}
               rows={reviewTransactions.data ?? []}
-              scopeKey={`${month}:${activeProjectId ?? "all"}`}
               disabled={review.isPending || updateTx.isPending || deleteTx.isPending}
-              bulkPending={bulkReview.isPending}
+              bulkPending={bulkReview.isPending || bulkCategory.isPending || bulkDelete.isPending}
               onApprove={(tx) => setReviewStatus(tx, "approved")}
               onBulkReview={bulkSetReviewStatus}
+              onBulkCategory={bulkSetCategory}
+              onBulkDelete={bulkDeleteTransactions}
               onDelete={deleteTransaction}
               onSave={saveTransaction}
             />
@@ -923,36 +992,87 @@ function BookkeepingScopeControls({
 
 function ReviewQueueCard({
   rows,
-  scopeKey,
   disabled,
   bulkPending,
   onApprove,
   onBulkReview,
+  onBulkCategory,
+  onBulkDelete,
   onDelete,
   onSave,
 }: {
   rows: BookkeepingTransaction[];
-  /** month + project 스코프 키. 바뀌면 다른 거래 집합이므로 선택을 비운다(누수 방지). */
-  scopeKey: string;
   disabled: boolean;
   bulkPending: boolean;
   onApprove: (tx: BookkeepingTransaction) => void;
   onBulkReview: (ids: string[], status: BookkeepingReviewStatus, onDone: () => void) => void;
+  onBulkCategory: (
+    ids: string[],
+    categoryCode: string,
+    subcategoryCode: string,
+    onDone: () => void,
+  ) => void;
+  onBulkDelete: (ids: string[], onDone: () => void) => void;
   onDelete: (tx: BookkeepingTransaction) => void;
   onSave: (tx: BookkeepingTransaction, draft: TransactionEditDraft) => void;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  // 스코프(월/프로젝트)가 바뀌면 선택이 다른 거래 집합으로 누수되지 않도록 비운다.
-  const [seenScope, setSeenScope] = useState(scopeKey);
-  if (seenScope !== scopeKey) {
-    setSeenScope(scopeKey);
-    setSelected(clearSelection());
-  }
+  const [filter, setFilter] = useState<BookkeepingReviewFilter>({
+    query: "",
+    fromDate: "",
+    toDate: "",
+  });
+  const [bulkCategoryCode, setBulkCategoryCode] = useState("uncategorized");
+  const [bulkSubcategoryCode, setBulkSubcategoryCode] = useState("");
+  const [triage, setTriage] = useState(() => ({
+    activeIndex: rows.length > 0 ? 0 : -1,
+    helpOpen: false,
+  }));
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const filteredRows = rows.filter((tx) => matchesBookkeepingReviewFilter(tx, filter));
   // 더 이상 큐에 없는 id(확정/삭제로 사라진 행)는 선택에서 떨군다.
-  const present = new Set(rows.map((tx) => tx.id));
+  const present = new Set(filteredRows.map((tx) => tx.id));
   const ids = selectedIds(selected).filter((id) => present.has(id));
   const clear = () => setSelected(clearSelection());
   const runBulk = (status: BookkeepingReviewStatus) => onBulkReview(ids, status, clear);
+  const activeIndex =
+    filteredRows.length === 0
+      ? -1
+      : Math.max(0, Math.min(triage.activeIndex, filteredRows.length - 1));
+  const activeTx = filteredRows[activeIndex] ?? null;
+
+  useEffect(() => {
+    return registerKeydown(KEYDOWN_PRIORITY.keymap, (event) => {
+      if (disabled || bulkPending) return false;
+      if (event.metaKey || event.ctrlKey || event.altKey) return false;
+      if (isEditableTarget(event.target)) return false;
+      const command = triageCommandForKey(event.key);
+      if (!command) return false;
+
+      event.preventDefault();
+      if (command === "move_next" || command === "move_previous" || command === "toggle_help") {
+        setTriage((current) => reduceBookkeepingTriageState(current, command, filteredRows.length));
+        return true;
+      }
+      if (command === "focus_search") {
+        searchRef.current?.focus();
+        return true;
+      }
+      if (command === "focus_category") {
+        if (activeTx) document.getElementById(`bk-edit-${activeTx.id}-category`)?.focus();
+        return true;
+      }
+      if (command === "approve" && activeTx) {
+        onApprove(activeTx);
+        return true;
+      }
+      if (command === "delete" && activeTx) {
+        onDelete(activeTx);
+        return true;
+      }
+      return true;
+    });
+  }, [activeTx, bulkPending, disabled, filteredRows.length, onApprove, onDelete]);
 
   return (
     <Card className="bk-card bk-review-card">
@@ -964,13 +1084,85 @@ function ReviewQueueCard({
           </CardTitle>
           <CardDescription>Hermes 인박스 거래를 수정한 뒤 확정하거나 삭제합니다.</CardDescription>
         </div>
-        <Badge variant="secondary">{rows.length}</Badge>
+        <Badge variant="secondary">{filteredRows.length}</Badge>
       </CardHeader>
       <CardContent>
+        <div className="bk-review-tools">
+          <div className="bk-review-search">
+            <Search className="size-4" />
+            <Input
+              ref={searchRef}
+              value={filter.query}
+              onChange={(event) =>
+                setFilter((current) => ({ ...current, query: event.target.value }))
+              }
+              placeholder="상호, 분류, 금액, 날짜, 사유 검색"
+              aria-label="검토 큐 검색"
+            />
+          </div>
+          <div className="bk-review-date-filters">
+            <Input
+              type="date"
+              value={filter.fromDate}
+              onChange={(event) =>
+                setFilter((current) => ({ ...current, fromDate: event.target.value }))
+              }
+              aria-label="검토 큐 시작일"
+            />
+            <Input
+              type="date"
+              value={filter.toDate}
+              onChange={(event) =>
+                setFilter((current) => ({ ...current, toDate: event.target.value }))
+              }
+              aria-label="검토 큐 종료일"
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-pressed={triage.helpOpen}
+            onClick={() =>
+              setTriage((current) =>
+                reduceBookkeepingTriageState(current, "toggle_help", filteredRows.length),
+              )
+            }
+          >
+            ?
+          </Button>
+        </div>
+        {triage.helpOpen && (
+          <div className="bk-triage-help typo-caption-sm">
+            <span>j/k 이동</span>
+            <span>e 확정</span>
+            <span>x 삭제</span>
+            <span>/ 검색</span>
+            <span>c 분류</span>
+          </div>
+        )}
         {ids.length > 0 && (
           <div className="bk-bulk-bar" role="group" aria-label="선택한 거래 일괄 처리">
             <span className="bk-bulk-count typo-caption-sm">{ids.length}건 선택</span>
             <div className="bk-bulk-actions">
+              <BulkCategorySelect
+                categoryCode={bulkCategoryCode}
+                subcategoryCode={bulkSubcategoryCode}
+                onCategoryChange={(categoryCode) => {
+                  setBulkCategoryCode(categoryCode);
+                  setBulkSubcategoryCode("");
+                }}
+                onSubcategoryChange={setBulkSubcategoryCode}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={bulkPending || !bulkCategoryCode}
+                onClick={() => onBulkCategory(ids, bulkCategoryCode, bulkSubcategoryCode, clear)}
+              >
+                <Tags className="size-3.5" />
+                분류 지정
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -989,13 +1181,26 @@ function ReviewQueueCard({
                 <Ban className="size-3.5" />
                 무시
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={bulkPending}
+                onClick={() => onBulkDelete(ids, clear)}
+              >
+                <Trash2 className="size-3.5" />
+                삭제
+              </Button>
             </div>
           </div>
         )}
         <div className="bk-transaction-list">
-          {rows.length === 0 && <EmptyState>대기 중인 거래 없음</EmptyState>}
-          {rows.map((tx) => (
-            <div key={tx.id} className="bk-review-row">
+          {filteredRows.length === 0 && <EmptyState>대기 중인 거래 없음</EmptyState>}
+          {filteredRows.map((tx, index) => (
+            <div
+              key={tx.id}
+              className="bk-review-row"
+              data-active={index === activeIndex ? "true" : "false"}
+            >
               <Checkbox
                 className="bk-select-check"
                 checked={selected.has(tx.id)}
@@ -1016,6 +1221,57 @@ function ReviewQueueCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function BulkCategorySelect({
+  categoryCode,
+  subcategoryCode,
+  onCategoryChange,
+  onSubcategoryChange,
+}: {
+  categoryCode: string;
+  subcategoryCode: string;
+  onCategoryChange: (value: string) => void;
+  onSubcategoryChange: (value: string) => void;
+}) {
+  const taxonomy = useBookkeepingTaxonomy();
+  const categories =
+    taxonomy.data?.filter((node) => node.parentCode === null || node.parentCode === undefined) ??
+    [];
+  const subcategories = taxonomy.data?.filter((node) => node.parentCode === categoryCode) ?? [];
+
+  return (
+    <div className="bk-bulk-category">
+      <Select value={categoryCode} onValueChange={onCategoryChange}>
+        <SelectTrigger aria-label="일괄 분류">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {categories.map((node) => (
+            <SelectItem key={node.code} value={node.code}>
+              {node.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={subcategoryCode || "__none__"}
+        onValueChange={(value) => onSubcategoryChange(value === "__none__" ? "" : value)}
+      >
+        <SelectTrigger aria-label="일괄 소분류">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">소분류 없음</SelectItem>
+          {subcategories.map((node) => (
+            <SelectItem key={node.code} value={node.code}>
+              {node.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 

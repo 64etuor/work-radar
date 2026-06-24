@@ -91,6 +91,32 @@ export function useBulkUpdateBookkeepingReviewStatus() {
   });
 }
 
+export function useBulkSetBookkeepingCategory() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: ({
+      ids,
+      categoryCode,
+      subcategoryCode,
+      reason,
+    }: {
+      ids: string[];
+      categoryCode: string | null;
+      subcategoryCode: string | null;
+      reason: string | null;
+    }) => unwrap(commands.bulkSetBookkeepingCategory(ids, categoryCode, subcategoryCode, reason)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBulkDeleteBookkeepingTransactions() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (ids: string[]) => unwrap(commands.bulkDeleteBookkeepingTransactions(ids)),
+    onSuccess: invalidate,
+  });
+}
+
 export function useBookkeepingMonthlySummary(month: string, projectId: string | null = null) {
   return useQuery({
     queryKey: ["bookkeeping", "summary", month, projectId],
