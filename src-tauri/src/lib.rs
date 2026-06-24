@@ -77,6 +77,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::create_bookkeeping_transaction,
         commands::list_bookkeeping_transactions,
         commands::update_bookkeeping_review_status,
+        commands::bulk_update_bookkeeping_review_status,
         commands::update_bookkeeping_transaction,
         commands::delete_bookkeeping_transaction,
         commands::restore_bookkeeping_transaction,

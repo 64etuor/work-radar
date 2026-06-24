@@ -82,6 +82,15 @@ export function useUpdateBookkeepingReviewStatus() {
   });
 }
 
+export function useBulkUpdateBookkeepingReviewStatus() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: BookkeepingReviewStatus }) =>
+      unwrap(commands.bulkUpdateBookkeepingReviewStatus(ids, status)),
+    onSuccess: invalidate,
+  });
+}
+
 export function useBookkeepingMonthlySummary(month: string, projectId: string | null = null) {
   return useQuery({
     queryKey: ["bookkeeping", "summary", month, projectId],

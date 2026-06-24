@@ -460,6 +460,15 @@ pub struct BookkeepingDuplicateCandidate {
     pub reasons: Vec<String>,
 }
 
+/// 벌크 작업 1건 결과(건별 보고, best-effort — 일부 실패해도 나머지 진행).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingBulkItemResult {
+    pub id: String,
+    pub ok: bool,
+    pub message: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BookkeepingCategorySummary {

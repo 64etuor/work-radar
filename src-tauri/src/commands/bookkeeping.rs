@@ -7,14 +7,14 @@ use crate::db::Db;
 use crate::error::AppError;
 use crate::gmail::{GmailMessageSearch, GmailReadProvider};
 use crate::models::{
-    BookkeepingAliasMatchKind, BookkeepingAuditEntry, BookkeepingCategoryAlias,
-    BookkeepingCategoryNode, BookkeepingCategoryOverride, BookkeepingCategoryRules,
-    BookkeepingCategorySummary, BookkeepingDirection, BookkeepingDuplicateCandidate,
-    BookkeepingExpenseKind, BookkeepingGmailLabel, BookkeepingGmailSyncResult, BookkeepingLineItem,
-    BookkeepingMonthlySummary, BookkeepingPaymentMethodKind, BookkeepingRecurringExpense,
-    BookkeepingRecurringExpenseStatus, BookkeepingRecurringOccurrence,
-    BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
-    BookkeepingSyncCursor, BookkeepingSyncJob, BookkeepingTransaction,
+    BookkeepingAliasMatchKind, BookkeepingAuditEntry, BookkeepingBulkItemResult,
+    BookkeepingCategoryAlias, BookkeepingCategoryNode, BookkeepingCategoryOverride,
+    BookkeepingCategoryRules, BookkeepingCategorySummary, BookkeepingDirection,
+    BookkeepingDuplicateCandidate, BookkeepingExpenseKind, BookkeepingGmailLabel,
+    BookkeepingGmailSyncResult, BookkeepingLineItem, BookkeepingMonthlySummary,
+    BookkeepingPaymentMethodKind, BookkeepingRecurringExpense, BookkeepingRecurringExpenseStatus,
+    BookkeepingRecurringOccurrence, BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus,
+    BookkeepingSource, BookkeepingSyncCursor, BookkeepingSyncJob, BookkeepingTransaction,
     CreateBookkeepingLineItemInput, CreateBookkeepingRecurringExpenseInput,
     CreateBookkeepingTransactionInput, FindBookkeepingDuplicateCandidatesInput,
     OverrideBookkeepingCategoryInput, RecordBookkeepingSyncFailureInput,
@@ -78,6 +78,16 @@ pub async fn update_bookkeeping_review_status(
     status: BookkeepingReviewStatus,
 ) -> Result<BookkeepingTransaction, AppError> {
     update_bookkeeping_review_status_inner(db.inner(), &id, status).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bulk_update_bookkeeping_review_status(
+    db: State<'_, Db>,
+    ids: Vec<String>,
+    status: BookkeepingReviewStatus,
+) -> Result<Vec<BookkeepingBulkItemResult>, AppError> {
+    Ok(bulk_update_bookkeeping_review_status_inner(db.inner(), &ids, status).await)
 }
 
 #[tauri::command]
@@ -1169,6 +1179,34 @@ pub(crate) async fn update_bookkeeping_review_status_inner(
     .await?;
     tx.commit().await?;
     Ok(row)
+}
+
+/// 벌크 리뷰 상태 변경. 각 항목을 독립 처리(best-effort) — 한 항목 실패가 배치를 중단시키지
+/// 않는다. 변이는 단일 `update_bookkeeping_review_status_inner`(자체 tx + 감사 기록)에 위임하고
+/// 그 `Result`만 건별 결과로 분류한다(변이 로직 단일 소스).
+pub(crate) async fn bulk_update_bookkeeping_review_status_inner(
+    db: &Db,
+    ids: &[String],
+    status: BookkeepingReviewStatus,
+) -> Vec<BookkeepingBulkItemResult> {
+    let mut out = Vec::with_capacity(ids.len());
+    for raw in ids {
+        let id = raw.trim();
+        let result = match update_bookkeeping_review_status_inner(db, id, status).await {
+            Ok(_) => BookkeepingBulkItemResult {
+                id: id.to_string(),
+                ok: true,
+                message: None,
+            },
+            Err(e) => BookkeepingBulkItemResult {
+                id: id.to_string(),
+                ok: false,
+                message: Some(e.to_string()),
+            },
+        };
+        out.push(result);
+    }
+    out
 }
 
 pub(crate) async fn update_bookkeeping_transaction_inner(
@@ -2923,6 +2961,77 @@ mod tests {
         assert_eq!(audit.len(), 2);
         assert_eq!(audit[0].action, "transaction.review_status_changed");
         assert_eq!(audit[1].action, "transaction.created");
+    }
+
+    #[tokio::test]
+    async fn bulk_update_review_status_marks_all_selected() {
+        let db = pool().await;
+        let mut ids = Vec::new();
+        for merchant in ["Cafe", "Books", "Lunch"] {
+            let tx = create_bookkeeping_transaction_inner(
+                &db,
+                manual_input(merchant, 5_000, "2026-06-16", "food"),
+            )
+            .await
+            .expect("create transaction");
+            assert_eq!(tx.review_status, BookkeepingReviewStatus::NeedsReview);
+            ids.push(tx.id);
+        }
+
+        let results = bulk_update_bookkeeping_review_status_inner(
+            &db,
+            &ids,
+            BookkeepingReviewStatus::Approved,
+        )
+        .await;
+
+        assert_eq!(results.len(), 3);
+        assert!(results.iter().all(|r| r.ok));
+        for id in &ids {
+            let row = fetch_bookkeeping_transaction(&db, id)
+                .await
+                .expect("fetch transaction");
+            assert_eq!(row.review_status, BookkeepingReviewStatus::Approved);
+        }
+    }
+
+    #[tokio::test]
+    async fn bulk_update_review_status_is_best_effort_on_bad_id() {
+        let db = pool().await;
+        let tx = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("Cafe", 5_000, "2026-06-16", "food"),
+        )
+        .await
+        .expect("create transaction");
+
+        let ids = vec![tx.id.clone(), "nonexistent-id".to_string()];
+        let results = bulk_update_bookkeeping_review_status_inner(
+            &db,
+            &ids,
+            BookkeepingReviewStatus::Approved,
+        )
+        .await;
+
+        assert_eq!(results.len(), 2);
+        let good = results
+            .iter()
+            .find(|r| r.id == tx.id)
+            .expect("valid result");
+        assert!(good.ok);
+        assert!(good.message.is_none());
+        let bad = results
+            .iter()
+            .find(|r| r.id == "nonexistent-id")
+            .expect("bad result");
+        assert!(!bad.ok);
+        assert!(bad.message.is_some());
+
+        // 유효한 항목은 그대로 적용된다(나쁜 id가 배치를 중단시키지 않음).
+        let row = fetch_bookkeeping_transaction(&db, &tx.id)
+            .await
+            .expect("fetch transaction");
+        assert_eq!(row.review_status, BookkeepingReviewStatus::Approved);
     }
 
     #[tokio::test]

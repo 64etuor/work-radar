@@ -33,6 +33,7 @@ export const commands = {
 	createBookkeepingTransaction: (input: CreateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("create_bookkeeping_transaction", { input })),
 	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null, projectId: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status, projectId })),
 	updateBookkeepingReviewStatus: (id: string, status: BookkeepingReviewStatus) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_review_status", { id, status })),
+	bulkUpdateBookkeepingReviewStatus: (ids: string[], status: BookkeepingReviewStatus) => typedError<BookkeepingBulkItemResult[], AppError>(__TAURI_INVOKE("bulk_update_bookkeeping_review_status", { ids, status })),
 	updateBookkeepingTransaction: (input: UpdateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_transaction", { input })),
 	deleteBookkeepingTransaction: (id: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("delete_bookkeeping_transaction", { id })),
 	restoreBookkeepingTransaction: (id: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("restore_bookkeeping_transaction", { id })),
@@ -939,6 +940,13 @@ export type BookkeepingAuditEntry = {
 	summary: string,
 	metadataJson: string,
 	createdAt: string,
+};
+
+/**  벌크 작업 1건 결과(건별 보고, best-effort — 일부 실패해도 나머지 진행). */
+export type BookkeepingBulkItemResult = {
+	id: string,
+	ok: boolean,
+	message: string | null,
 };
 
 export type BookkeepingCategoryAlias = {

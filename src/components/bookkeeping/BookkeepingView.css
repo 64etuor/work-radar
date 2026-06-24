@@ -576,3 +576,83 @@
   flex-wrap: wrap;
   gap: var(--wr-density-xs);
 }
+
+/* ── 리뷰 큐 다중 선택(벌크 확정/무시) ───────────────────────────── */
+.bk-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wr-density-md);
+  margin-bottom: var(--wr-density-md);
+  padding: var(--wr-density-sm) var(--wr-density-md);
+  border: 1px solid var(--bk-rule-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bk-stone);
+}
+
+.bk-bulk-count {
+  color: var(--bk-muted);
+}
+
+.bk-bulk-actions {
+  display: flex;
+  gap: var(--wr-density-xs);
+}
+
+.bk-review-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--wr-density-md);
+  border-top: 1px solid var(--bk-rule);
+}
+
+.bk-review-row:first-child {
+  border-top: 0;
+}
+
+/* 선택 래퍼가 구분선을 그리므로 안쪽 edit 행의 중복 border/패딩만 정리. */
+.bk-review-row > .bk-transaction-edit {
+  border-top: 0;
+}
+
+.bk-select-check {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: var(--wr-density-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--bk-rule-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bk-surface);
+  color: var(--bk-muted);
+  cursor: pointer;
+  transition:
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out),
+    color var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-select-check:hover,
+.bk-select-check:focus-visible {
+  border-color: var(--bk-accent);
+}
+
+.bk-select-check[data-state="checked"] {
+  color: var(--bk-surface);
+  background: var(--bk-accent);
+  border-color: var(--bk-accent);
+}
+
+.bk-select-check:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 1px;
+}
+
+.bk-select-check:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

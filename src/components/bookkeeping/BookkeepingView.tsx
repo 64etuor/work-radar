@@ -46,6 +46,7 @@ import { formatMonthValue, stepMonthValue } from "@/components/periodNavigatorUt
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -69,6 +70,7 @@ import {
   useBookkeepingTaxonomy,
   useBookkeepingTransactions,
   useBookkeepingTrash,
+  useBulkUpdateBookkeepingReviewStatus,
   useCreateBookkeepingRecurringExpense,
   useCreateBookkeepingTransaction,
   useDeleteBookkeepingTransaction,
@@ -102,6 +104,7 @@ import {
   lineItemSumState,
   toLineItemInputs,
 } from "./lineItems";
+import { clearSelection, selectedIds, toggleSelection } from "./selection";
 
 const CATEGORY_OPTIONS = ["food", "transport", "shopping", "housing", "health", "work", "misc"];
 const ALL_PROJECTS = "__all__";
@@ -436,6 +439,7 @@ export function BookkeepingView() {
   const setRecurringStatus = useSetBookkeepingRecurringOccurrenceStatus();
   const syncGmail = useSyncBookkeepingGmailReceipts();
   const review = useUpdateBookkeepingReviewStatus();
+  const bulkReview = useBulkUpdateBookkeepingReviewStatus();
   const updateTx = useUpdateBookkeepingTransaction();
   const deleteTx = useDeleteBookkeepingTransaction();
   const restoreTx = useRestoreBookkeepingTransaction();
@@ -576,6 +580,33 @@ export function BookkeepingView() {
     );
   };
 
+  const bulkSetReviewStatus = (
+    ids: string[],
+    status: BookkeepingReviewStatus,
+    onDone: () => void,
+  ) => {
+    if (ids.length === 0) return;
+    bulkReview.mutate(
+      { ids, status },
+      {
+        onSuccess: (results) => {
+          const failed = results.filter((r) => !r.ok).length;
+          if (failed > 0) {
+            pushError("bookkeeping.bulk", `${results.length - failed}건 처리, ${failed}건 실패`);
+          } else {
+            pushSuccess(
+              status === "approved"
+                ? `${ids.length}건 확정했습니다`
+                : `${ids.length}건 무시했습니다`,
+            );
+          }
+          onDone();
+        },
+        onError: (error) => pushMutationError("bookkeeping.bulk", error),
+      },
+    );
+  };
+
   const saveTransaction = (tx: BookkeepingTransaction, draft: TransactionEditDraft) => {
     const amount = Number(draft.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -679,8 +710,11 @@ export function BookkeepingView() {
           <section className="bk-main">
             <ReviewQueueCard
               rows={reviewTransactions.data ?? []}
+              scopeKey={`${month}:${activeProjectId ?? "all"}`}
               disabled={review.isPending || updateTx.isPending || deleteTx.isPending}
+              bulkPending={bulkReview.isPending}
               onApprove={(tx) => setReviewStatus(tx, "approved")}
+              onBulkReview={bulkSetReviewStatus}
               onDelete={deleteTransaction}
               onSave={saveTransaction}
             />
@@ -889,17 +923,37 @@ function BookkeepingScopeControls({
 
 function ReviewQueueCard({
   rows,
+  scopeKey,
   disabled,
+  bulkPending,
   onApprove,
+  onBulkReview,
   onDelete,
   onSave,
 }: {
   rows: BookkeepingTransaction[];
+  /** month + project 스코프 키. 바뀌면 다른 거래 집합이므로 선택을 비운다(누수 방지). */
+  scopeKey: string;
   disabled: boolean;
+  bulkPending: boolean;
   onApprove: (tx: BookkeepingTransaction) => void;
+  onBulkReview: (ids: string[], status: BookkeepingReviewStatus, onDone: () => void) => void;
   onDelete: (tx: BookkeepingTransaction) => void;
   onSave: (tx: BookkeepingTransaction, draft: TransactionEditDraft) => void;
 }) {
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  // 스코프(월/프로젝트)가 바뀌면 선택이 다른 거래 집합으로 누수되지 않도록 비운다.
+  const [seenScope, setSeenScope] = useState(scopeKey);
+  if (seenScope !== scopeKey) {
+    setSeenScope(scopeKey);
+    setSelected(clearSelection());
+  }
+  // 더 이상 큐에 없는 id(확정/삭제로 사라진 행)는 선택에서 떨군다.
+  const present = new Set(rows.map((tx) => tx.id));
+  const ids = selectedIds(selected).filter((id) => present.has(id));
+  const clear = () => setSelected(clearSelection());
+  const runBulk = (status: BookkeepingReviewStatus) => onBulkReview(ids, status, clear);
+
   return (
     <Card className="bk-card bk-review-card">
       <CardHeader className="bk-card-header-row">
@@ -913,18 +967,51 @@ function ReviewQueueCard({
         <Badge variant="secondary">{rows.length}</Badge>
       </CardHeader>
       <CardContent>
+        {ids.length > 0 && (
+          <div className="bk-bulk-bar" role="group" aria-label="선택한 거래 일괄 처리">
+            <span className="bk-bulk-count typo-caption-sm">{ids.length}건 선택</span>
+            <div className="bk-bulk-actions">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={bulkPending}
+                onClick={() => runBulk("approved")}
+              >
+                <Check className="size-3.5" />
+                확정
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={bulkPending}
+                onClick={() => runBulk("ignored")}
+              >
+                <Ban className="size-3.5" />
+                무시
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="bk-transaction-list">
           {rows.length === 0 && <EmptyState>대기 중인 거래 없음</EmptyState>}
           {rows.map((tx) => (
-            <TransactionEditForm
-              key={tx.id}
-              tx={tx}
-              disabled={disabled}
-              approveLabel="확정"
-              onApprove={() => onApprove(tx)}
-              onDelete={() => onDelete(tx)}
-              onSave={(draft) => onSave(tx, draft)}
-            />
+            <div key={tx.id} className="bk-review-row">
+              <Checkbox
+                className="bk-select-check"
+                checked={selected.has(tx.id)}
+                onCheckedChange={() => setSelected((prev) => toggleSelection(prev, tx.id))}
+                disabled={disabled || bulkPending}
+                aria-label={`${tx.merchant} 선택`}
+              />
+              <TransactionEditForm
+                tx={tx}
+                disabled={disabled}
+                approveLabel="확정"
+                onApprove={() => onApprove(tx)}
+                onDelete={() => onDelete(tx)}
+                onSave={(draft) => onSave(tx, draft)}
+              />
+            </div>
           ))}
         </div>
       </CardContent>
@@ -2015,13 +2102,7 @@ function LineItemEditorForm({
   );
 }
 
-function DuplicateCandidates({
-  tx,
-  disabled,
-}: {
-  tx: BookkeepingTransaction;
-  disabled: boolean;
-}) {
+function DuplicateCandidates({ tx, disabled }: { tx: BookkeepingTransaction; disabled: boolean }) {
   // Forward-looking auto-open: expands when the row carries a `possible_duplicate` review reason.
   // No ingest path emits that reason yet (a producer is a deferred Rust follow-up), so in practice
   // the panel is opened manually via the button below — this wiring is ready for when a detector lands.
@@ -2059,7 +2140,9 @@ function DuplicateCandidates({
                   <span>{currency.format(candidate.transaction.amountMinor)}</span>
                   <Badge variant="outline">{sourceLabel(candidate.transaction.source)}</Badge>
                   {candidate.score != null && (
-                    <Badge variant="secondary">유사도 {formatDuplicateScore(candidate.score)}</Badge>
+                    <Badge variant="secondary">
+                      유사도 {formatDuplicateScore(candidate.score)}
+                    </Badge>
                   )}
                   {candidate.reasons.map((reason) => (
                     <Badge key={reason} variant="outline">
