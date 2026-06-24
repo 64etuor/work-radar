@@ -1,0 +1,52 @@
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f910a11abc432f::t_5760cdc4a80ed7 480,497-499,501,916,925
+  s_f910a11abc432f::t_b9cbdaf01311c4 129
+  s_f910a11abc432f::t_1e1e88e14f30fa 500
+  s_f910a11abc432f::t_08031b60a460cb 1166,1175,1178,1192
+  s_f910a11abc432f::t_2d269291a93554 1296-1304
+src/components/bookkeeping/reviewSort.test.ts
+  s_f910a11abc432f::t_8d95f59254a0e6 1-13
+src-tauri/migrations/0059_bookkeeping_alias_learning.sql
+  s_f910a11abc432f::t_3ff854e9886cda 1-5
+docs/areas/bookkeeping-cfo-contract.md
+  s_f910a11abc432f::t_ad57b8c5ba71d8 35-48,99,105
+  s_f910a11abc432f::t_83688460922602 127-130
+src/components/bookkeeping/reviewSort.ts
+  s_f910a11abc432f::t_6c441c7e0dedf8 1-5
+src-tauri/src/commands/bookkeeping.rs
+  s_f910a11abc432f::t_e9278ddcdb1336 3519-3520
+  s_f910a11abc432f::t_b404334e600865 3521-3524
+  s_f910a11abc432f::t_2198621d03ba3d 1240-1250,1254-1260,1267
+  s_f910a11abc432f::t_f6cef1eda6e1a1 3256-3266,3271-3278
+  s_f910a11abc432f::t_548fda7172e1f3 5011-5038
+  s_f910a11abc432f::t_6a6b4aee63ed2b 5100-5165
+  s_f910a11abc432f::t_0fb23900952b7f 2432-2469
+  s_f910a11abc432f::t_2f1db1f0b0b5f8 2346-2348,2384-2393
+  s_f910a11abc432f::t_e94ae1d06dc8b3 76,78-84
+  s_f910a11abc432f::t_6cc664995c807a 2197
+  s_f910a11abc432f::t_22f55260903349 1251-1253,3267-3270
+src/lib/query/bookkeeping.ts
+  s_f910a11abc432f::t_47a34cf82f3cbc 32,35-36
+src-tauri/src/models/bookkeeping.rs
+  s_f910a11abc432f::t_528801f0137cd4 375-376
+src/components/bookkeeping/BookkeepingView.css
+  s_f910a11abc432f::t_8862a276c41c7f 803
+src/bindings.ts
+  s_f910a11abc432f::t_ba7a8849690943 34,1011-1012
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "fff0054de42b5a8be512f47cb2eb2571a8c8cf07",
+  "prompts": {},
+  "sessions": {
+    "s_f910a11abc432f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ef985-2b5e-7ad3-94b2-7aade688c63b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
