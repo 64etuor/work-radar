@@ -92,6 +92,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::bookkeeping_budget_status,
         commands::bookkeeping_category_trend,
         commands::bookkeeping_cashflow,
+        commands::bookkeeping_reconcile_account,
         commands::list_bookkeeping_audit,
         commands::record_bookkeeping_sync_failure,
         commands::list_bookkeeping_sync_jobs,

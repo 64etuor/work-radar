@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type BookkeepingCashflowInput,
   type BookkeepingCategoryTrendInput,
+  type BookkeepingReconcileAccountInput,
   type BookkeepingRecurringOccurrenceStatus,
   type BookkeepingReviewStatus,
   commands,
@@ -154,6 +155,15 @@ export function useBookkeepingCategoryTrend(input: BookkeepingCategoryTrendInput
   return useQuery({
     queryKey: ["bookkeeping", "categoryTrend", input],
     queryFn: () => unwrap(commands.bookkeepingCategoryTrend(input)),
+  });
+}
+
+export function useBookkeepingReconcileAccount() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: BookkeepingReconcileAccountInput) =>
+      unwrap(commands.bookkeepingReconcileAccount(input)),
+    onSuccess: invalidate,
   });
 }
 

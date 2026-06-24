@@ -14,9 +14,11 @@ use crate::models::{
     BookkeepingBulkItemResult, BookkeepingCashflowInput, BookkeepingCashflowRow,
     BookkeepingCategoryAlias, BookkeepingCategoryNode, BookkeepingCategoryOverride,
     BookkeepingCategoryRules, BookkeepingCategorySummary, BookkeepingCategoryTrendInput,
-    BookkeepingCategoryTrendRow, BookkeepingDirection, BookkeepingDuplicateCandidate,
-    BookkeepingExpenseKind, BookkeepingGmailLabel, BookkeepingGmailSyncResult, BookkeepingLineItem,
-    BookkeepingMonthlySummary, BookkeepingPaymentMethodKind, BookkeepingRecurringExpense,
+    BookkeepingCategoryTrendRow, BookkeepingCurrencySummary, BookkeepingDirection,
+    BookkeepingDuplicateCandidate, BookkeepingExpenseKind, BookkeepingGmailLabel,
+    BookkeepingGmailSyncResult, BookkeepingLineItem, BookkeepingMonthlySummary,
+    BookkeepingPaymentMethodKind, BookkeepingReconcileAccountInput,
+    BookkeepingReconcileAccountResult, BookkeepingRecurringExpense,
     BookkeepingRecurringExpenseStatus, BookkeepingRecurringOccurrence,
     BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
     BookkeepingSyncCursor, BookkeepingSyncJob, BookkeepingTransaction,
@@ -229,6 +231,15 @@ pub async fn bookkeeping_cashflow(
     input: BookkeepingCashflowInput,
 ) -> Result<Vec<BookkeepingCashflowRow>, AppError> {
     bookkeeping_cashflow_inner(db.inner(), input).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bookkeeping_reconcile_account(
+    db: State<'_, Db>,
+    input: BookkeepingReconcileAccountInput,
+) -> Result<BookkeepingReconcileAccountResult, AppError> {
+    bookkeeping_reconcile_account_inner(db.inner(), input).await
 }
 
 #[tauri::command]
@@ -1717,6 +1728,36 @@ pub(crate) async fn bookkeeping_monthly_summary_inner(
     let total_income_minor = income_total.max(0).min(i32::MAX as i64) as i32;
     let net_minor = (income_total - expense_total).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
 
+    let currency_rows: Vec<(String, i64, i64)> = sqlx::query_as(
+        "SELECT currency, \
+           COALESCE(SUM(CASE WHEN direction='expense' THEN amount_minor ELSE 0 END), 0), \
+           COALESCE(SUM(CASE WHEN direction='income' THEN amount_minor ELSE 0 END), 0) \
+         FROM bookkeeping_transactions \
+         WHERE spent_at >= ?1 AND spent_at < ?2 AND review_status != 'ignored' \
+           AND deleted_at IS NULL \
+           AND (?3 IS NULL OR project_id = ?3) \
+         GROUP BY currency \
+         ORDER BY currency ASC",
+    )
+    .bind(&start)
+    .bind(&end)
+    .bind(project_id)
+    .fetch_all(db)
+    .await?;
+    let by_currency = currency_rows
+        .into_iter()
+        .map(|(currency, expense, income)| {
+            let expense_minor = expense.max(0).min(i32::MAX as i64) as i32;
+            let income_minor = income.max(0).min(i32::MAX as i64) as i32;
+            BookkeepingCurrencySummary {
+                currency,
+                expense_minor,
+                income_minor,
+                net_minor: (income - expense).clamp(i32::MIN as i64, i32::MAX as i64) as i32,
+            }
+        })
+        .collect();
+
     // Duplicates are review_status='ignored' AND duplicate_of_transaction_id present; keep them out
     // of the user-driven ignored_count so the two metrics don't conflate.
     let (needs_review, approved, ignored, duplicate): (i64, i64, i64, i64) = sqlx::query_as(
@@ -1748,6 +1789,7 @@ pub(crate) async fn bookkeeping_monthly_summary_inner(
         ignored_count: ignored.max(0).min(u32::MAX as i64) as u32,
         duplicate_count: duplicate.max(0).min(u32::MAX as i64) as u32,
         categories,
+        by_currency,
     })
 }
 
@@ -2008,6 +2050,71 @@ pub(crate) async fn bookkeeping_cashflow_inner(
             }
         })
         .collect())
+}
+
+pub(crate) async fn bookkeeping_reconcile_account_inner(
+    db: &Db,
+    input: BookkeepingReconcileAccountInput,
+) -> Result<BookkeepingReconcileAccountResult, AppError> {
+    let project_id = clean_optional(input.project_id.as_deref());
+    if let Some(project_id) = project_id.as_deref() {
+        ensure_budget_project_exists(db, project_id).await?;
+    }
+    let account = clean_required(&input.account, "bookkeeping.reconcile.account")?;
+    validate_date(&input.statement_date)?;
+    let currency = clean_currency(input.currency.as_deref().unwrap_or(DEFAULT_CURRENCY))?;
+    let note = clean_optional(input.note.as_deref());
+
+    let (income, expense): (i64, i64) = sqlx::query_as(
+        "SELECT \
+           COALESCE(SUM(CASE WHEN direction='income' THEN amount_minor ELSE 0 END), 0), \
+           COALESCE(SUM(CASE WHEN direction='expense' THEN amount_minor ELSE 0 END), 0) \
+         FROM bookkeeping_transactions \
+         WHERE spent_at <= ?1 \
+           AND review_status != 'ignored' \
+           AND deleted_at IS NULL \
+           AND account = ?2 \
+           AND currency = ?3 \
+           AND (?4 IS NULL OR project_id = ?4)",
+    )
+    .bind(&input.statement_date)
+    .bind(&account)
+    .bind(&currency)
+    .bind(project_id.as_deref())
+    .fetch_one(db)
+    .await?;
+    let computed_balance = (income - expense).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    let difference = input
+        .statement_balance_minor
+        .saturating_sub(computed_balance);
+    let matched = difference == 0;
+
+    let row: (String, Option<String>) = sqlx::query_as(
+        "INSERT INTO bookkeeping_reconciliations \
+         (id, project_id, account, statement_date, statement_balance_minor, currency, reconciled_at, note) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, \
+           CASE WHEN ?6 THEN datetime('now') ELSE NULL END, ?7) \
+         RETURNING id, reconciled_at",
+    )
+    .bind(project_id.as_deref())
+    .bind(&account)
+    .bind(&input.statement_date)
+    .bind(input.statement_balance_minor)
+    .bind(&currency)
+    .bind(matched)
+    .bind(note.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    Ok(BookkeepingReconcileAccountResult {
+        id: row.0,
+        computed_balance_minor: computed_balance,
+        statement_balance_minor: input.statement_balance_minor,
+        difference_minor: difference,
+        matched,
+        unmatched_count: if matched { 0 } else { 1 },
+        reconciled_at: row.1,
+    })
 }
 
 pub(crate) async fn list_bookkeeping_audit_inner(
@@ -4115,6 +4222,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn monthly_summary_splits_totals_by_currency_without_cross_currency_net() {
+        let db = pool().await;
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("KRW Market", 12_000, "2026-06-01", "food"),
+        )
+        .await
+        .expect("krw expense");
+
+        let mut usd_income = manual_input("USD Client", 50_00, "2026-06-02", "work");
+        usd_income.currency = "USD".to_string();
+        usd_income.direction = BookkeepingDirection::Income;
+        create_bookkeeping_transaction_inner(&db, usd_income)
+            .await
+            .expect("usd income");
+
+        let mut usd_expense = manual_input("USD Tool", 15_00, "2026-06-03", "work");
+        usd_expense.currency = "USD".to_string();
+        create_bookkeeping_transaction_inner(&db, usd_expense)
+            .await
+            .expect("usd expense");
+
+        let summary = bookkeeping_monthly_summary_inner(&db, "2026-06", None)
+            .await
+            .expect("summary");
+
+        assert_eq!(summary.by_currency.len(), 2);
+        let krw = summary
+            .by_currency
+            .iter()
+            .find(|row| row.currency == "KRW")
+            .expect("krw row");
+        assert_eq!(krw.expense_minor, 12_000);
+        assert_eq!(krw.income_minor, 0);
+        assert_eq!(krw.net_minor, -12_000);
+        let usd = summary
+            .by_currency
+            .iter()
+            .find(|row| row.currency == "USD")
+            .expect("usd row");
+        assert_eq!(usd.expense_minor, 15_00);
+        assert_eq!(usd.income_minor, 50_00);
+        assert_eq!(usd.net_minor, 35_00);
+    }
+
+    #[tokio::test]
     async fn project_scope_filters_bookkeeping_lists_and_summary() {
         let db = pool().await;
         let personal = crate::commands::projects::insert_project(
@@ -4445,6 +4598,70 @@ mod tests {
         .expect_err("range clamp");
 
         assert_eq!(err.code, "bookkeeping.report.range");
+    }
+
+    #[tokio::test]
+    async fn reconcile_account_reports_delta_and_sets_reconciled_at_only_on_match() {
+        let db = pool().await;
+        let mut salary = manual_input("Salary", 100_000, "2026-06-01", "income");
+        salary.direction = BookkeepingDirection::Income;
+        salary.account = Some("Checking".to_string());
+        create_bookkeeping_transaction_inner(&db, salary)
+            .await
+            .expect("income");
+
+        let mut grocery = manual_input("Grocery", 25_000, "2026-06-02", "food");
+        grocery.account = Some("Checking".to_string());
+        create_bookkeeping_transaction_inner(&db, grocery)
+            .await
+            .expect("expense");
+
+        let mismatch = bookkeeping_reconcile_account_inner(
+            &db,
+            BookkeepingReconcileAccountInput {
+                project_id: None,
+                account: "Checking".to_string(),
+                statement_date: "2026-06-30".to_string(),
+                statement_balance_minor: 70_000,
+                currency: Some("KRW".to_string()),
+                note: Some("statement".to_string()),
+            },
+        )
+        .await
+        .expect("mismatch reconciliation");
+        assert_eq!(mismatch.computed_balance_minor, 75_000);
+        assert_eq!(mismatch.statement_balance_minor, 70_000);
+        assert_eq!(mismatch.difference_minor, -5_000);
+        assert!(!mismatch.matched);
+        assert_eq!(mismatch.unmatched_count, 1);
+        assert!(mismatch.reconciled_at.is_none());
+
+        let matched = bookkeeping_reconcile_account_inner(
+            &db,
+            BookkeepingReconcileAccountInput {
+                project_id: None,
+                account: "Checking".to_string(),
+                statement_date: "2026-06-30".to_string(),
+                statement_balance_minor: 75_000,
+                currency: Some("KRW".to_string()),
+                note: None,
+            },
+        )
+        .await
+        .expect("matched reconciliation");
+        assert_eq!(matched.difference_minor, 0);
+        assert!(matched.matched);
+        assert_eq!(matched.unmatched_count, 0);
+        assert!(matched.reconciled_at.is_some());
+
+        let row_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM bookkeeping_transactions")
+            .fetch_one(&db)
+            .await
+            .expect("transaction count");
+        assert_eq!(
+            row_count.0, 2,
+            "reconciliation never rewrites or adds transactions"
+        );
     }
 
     #[tokio::test]

@@ -39,11 +39,13 @@ import type {
   BookkeepingCashflowRow,
   BookkeepingCategorySummary,
   BookkeepingCategoryTrendRow,
+  BookkeepingCurrencySummary,
   BookkeepingDirection,
   BookkeepingExpenseKind,
   BookkeepingGmailLabel,
   BookkeepingLineItem,
   BookkeepingPaymentMethodKind,
+  BookkeepingReconcileAccountResult,
   BookkeepingRecurringOccurrence,
   BookkeepingReviewStatus,
   BookkeepingSyncJob,
@@ -76,6 +78,7 @@ import {
   useBookkeepingGmailLabels,
   useBookkeepingLineItems,
   useBookkeepingMonthlySummary,
+  useBookkeepingReconcileAccount,
   useBookkeepingRecurringExpenses,
   useBookkeepingRecurringOccurrences,
   useBookkeepingSyncCursors,
@@ -124,6 +127,7 @@ import {
   lineItemSumState,
   toLineItemInputs,
 } from "./lineItems";
+import { reconciliationTone, signedMinorLabel } from "./reconciliation";
 import { reportBarPercent, reportSeriesMax } from "./reports";
 import { type BookkeepingReviewFilter, matchesBookkeepingReviewFilter } from "./reviewFilter";
 import { reviewOrderToQueryParam, type ReviewQueueOrder } from "./reviewSort";
@@ -172,6 +176,11 @@ const FIELD_IDS = {
   budgetAmount: "bk-budget-amount",
   budgetRollover: "bk-budget-rollover",
   budgetNote: "bk-budget-note",
+  reconcileAccount: "bk-reconcile-account",
+  reconcileDate: "bk-reconcile-date",
+  reconcileBalance: "bk-reconcile-balance",
+  reconcileCurrency: "bk-reconcile-currency",
+  reconcileNote: "bk-reconcile-note",
   merchant: "bk-manual-merchant",
   amount: "bk-manual-amount",
   spentAt: "bk-manual-spent-at",
@@ -237,6 +246,14 @@ type BudgetDraft = {
   note: string;
 };
 
+type ReconciliationDraft = {
+  account: string;
+  statementDate: string;
+  statementBalance: string;
+  currency: string;
+  note: string;
+};
+
 type InputPanelAction = {
   panel: BookkeepingInputPanel;
   open: boolean;
@@ -296,6 +313,21 @@ const currency = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
 });
 
+function currencyExponent(currencyCode: string) {
+  return currencyCode === "KRW" || currencyCode === "JPY" ? 0 : 2;
+}
+
+function formatCurrencyMinor(amountMinor: number, currencyCode: string) {
+  const exponent = currencyExponent(currencyCode);
+  const amount = amountMinor / 10 ** exponent;
+  return new Intl.NumberFormat("ko-KR", {
+    style: "currency",
+    currency: currencyCode,
+    minimumFractionDigits: exponent,
+    maximumFractionDigits: exponent,
+  }).format(amount);
+}
+
 function currentMonth() {
   return localToday().slice(0, 7);
 }
@@ -344,6 +376,16 @@ function emptyBudgetDraft(): BudgetDraft {
     category: "food",
     amount: "",
     rollover: false,
+    note: "",
+  };
+}
+
+function emptyReconciliationDraft(): ReconciliationDraft {
+  return {
+    account: "",
+    statementDate: localToday(),
+    statementBalance: "",
+    currency: "KRW",
     note: "",
   };
 }
@@ -477,6 +519,9 @@ export function BookkeepingView() {
   const [manualDraft, setManualDraft] = useState<ManualDraft>(() => emptyManualDraft());
   const [recurringDraft, setRecurringDraft] = useState<RecurringDraft>(() => emptyRecurringDraft());
   const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => emptyBudgetDraft());
+  const [reconciliationDraft, setReconciliationDraft] = useState<ReconciliationDraft>(() =>
+    emptyReconciliationDraft(),
+  );
   const [reviewOrder, setReviewOrder] = useState<ReviewQueueOrder>("default");
   const [inputPanelsOpen, setInputPanelOpen] = useReducer(inputPanelsReducer, {
     ...BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN,
@@ -530,6 +575,7 @@ export function BookkeepingView() {
   const bulkCategory = useBulkSetBookkeepingCategory();
   const bulkDelete = useBulkDeleteBookkeepingTransactions();
   const setBudget = useSetBookkeepingBudget();
+  const reconcileAccount = useBookkeepingReconcileAccount();
   const exportCsv = useExportBookkeepingCsv();
   const exportQif = useExportBookkeepingQif();
   const exportOfx = useExportBookkeepingOfx();
@@ -683,6 +729,38 @@ export function BookkeepingView() {
       {
         onSuccess: () => pushSuccess("예산을 저장했습니다"),
         onError: (error) => pushMutationError("bookkeeping.budget", error),
+      },
+    );
+  };
+
+  const submitReconciliation = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const statementBalance = Number(reconciliationDraft.statementBalance);
+    if (!Number.isFinite(statementBalance)) {
+      pushError("bookkeeping.reconcile", "명세서 잔액을 확인하세요");
+      return;
+    }
+    reconcileAccount.mutate(
+      {
+        projectId: activeProjectId,
+        account: reconciliationDraft.account,
+        statementDate: reconciliationDraft.statementDate,
+        statementBalanceMinor: Math.round(statementBalance),
+        currency: reconciliationDraft.currency,
+        note: nullableText(reconciliationDraft.note),
+      },
+      {
+        onSuccess: (result) => {
+          if (result.matched) {
+            pushSuccess("정산이 일치합니다");
+          } else {
+            pushError(
+              "bookkeeping.reconcile",
+              `차이 ${signedMinorLabel(result.differenceMinor)} ${reconciliationDraft.currency}`,
+            );
+          }
+        },
+        onError: (error) => pushMutationError("bookkeeping.reconcile", error),
       },
     );
   };
@@ -906,6 +984,8 @@ export function BookkeepingView() {
           approvedCount={summary.data?.approvedCount ?? 0}
         />
 
+        <CurrencySummaryRows rows={summary.data?.byCurrency ?? []} />
+
         <ReportsSection cashflow={cashflow.data ?? []} categoryTrend={categoryTrend.data ?? []} />
 
         <div className="bk-layout">
@@ -995,6 +1075,14 @@ export function BookkeepingView() {
               onSubmit={submitBudget}
             />
 
+            <ReconciliationCard
+              draft={reconciliationDraft}
+              pending={reconcileAccount.isPending}
+              result={reconcileAccount.data ?? null}
+              onDraftChange={setReconciliationDraft}
+              onSubmit={submitReconciliation}
+            />
+
             <OperationsLogCard syncJobs={syncJobs.data ?? []} audit={audit.data ?? []} />
 
             <CategorySummaryCard
@@ -1082,6 +1170,28 @@ function BookkeepingMetrics({
       <Metric label="예정 고정비" value={currency.format(plannedTotal)} />
       <Metric label="리뷰 대기" value={String(needsReviewCount)} />
       <Metric label="승인" value={String(approvedCount)} />
+    </section>
+  );
+}
+
+function CurrencySummaryRows({ rows }: { rows: BookkeepingCurrencySummary[] }) {
+  if (rows.length <= 1) return null;
+  return (
+    <section className="bk-currency-summary" aria-label="통화별 월 요약">
+      {rows.map((row) => (
+        <div key={row.currency} className="bk-currency-row">
+          <strong className="typo-body-strong">{row.currency}</strong>
+          <span className="typo-caption-sm">
+            지출 {formatCurrencyMinor(row.expenseMinor, row.currency)}
+          </span>
+          <span className="typo-caption-sm">
+            수입 {formatCurrencyMinor(row.incomeMinor, row.currency)}
+          </span>
+          <span className="typo-caption-sm">
+            순액 {formatCurrencyMinor(row.netMinor, row.currency)}
+          </span>
+        </div>
+      ))}
     </section>
   );
 }
@@ -2134,6 +2244,115 @@ function BudgetCard({
             );
           })}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReconciliationCard({
+  draft,
+  pending,
+  result,
+  onDraftChange,
+  onSubmit,
+}: {
+  draft: ReconciliationDraft;
+  pending: boolean;
+  result: BookkeepingReconcileAccountResult | null;
+  onDraftChange: Dispatch<SetStateAction<ReconciliationDraft>>;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const tone = result ? reconciliationTone(result.differenceMinor) : null;
+  return (
+    <Card className="bk-card">
+      <CardHeader>
+        <CardTitle className="bk-card-title">
+          <Landmark className="size-4" />
+          정산
+        </CardTitle>
+        <CardDescription>명세서 잔액 대조</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="bk-form bk-reconcile-form" onSubmit={onSubmit}>
+          <Field htmlFor={FIELD_IDS.reconcileAccount} label="자산">
+            <Input
+              id={FIELD_IDS.reconcileAccount}
+              value={draft.account}
+              onChange={(event) =>
+                onDraftChange((current) => ({ ...current, account: event.target.value }))
+              }
+              placeholder="Checking"
+            />
+          </Field>
+          <div className="bk-form-grid">
+            <Field htmlFor={FIELD_IDS.reconcileDate} label="명세서일">
+              <Input
+                id={FIELD_IDS.reconcileDate}
+                type="date"
+                value={draft.statementDate}
+                onChange={(event) =>
+                  onDraftChange((current) => ({
+                    ...current,
+                    statementDate: event.target.value,
+                  }))
+                }
+              />
+            </Field>
+            <Field htmlFor={FIELD_IDS.reconcileCurrency} label="통화">
+              <Input
+                id={FIELD_IDS.reconcileCurrency}
+                value={draft.currency}
+                maxLength={3}
+                onChange={(event) =>
+                  onDraftChange((current) => ({
+                    ...current,
+                    currency: event.target.value.toUpperCase(),
+                  }))
+                }
+              />
+            </Field>
+          </div>
+          <Field htmlFor={FIELD_IDS.reconcileBalance} label="명세서 잔액">
+            <Input
+              id={FIELD_IDS.reconcileBalance}
+              inputMode="numeric"
+              value={draft.statementBalance}
+              onChange={(event) =>
+                onDraftChange((current) => ({
+                  ...current,
+                  statementBalance: event.target.value,
+                }))
+              }
+              placeholder="75000"
+            />
+          </Field>
+          <Field htmlFor={FIELD_IDS.reconcileNote} label="메모">
+            <Input
+              id={FIELD_IDS.reconcileNote}
+              value={draft.note}
+              onChange={(event) =>
+                onDraftChange((current) => ({ ...current, note: event.target.value }))
+              }
+              placeholder="선택"
+            />
+          </Field>
+          <Button type="submit" disabled={pending}>
+            <Check className="size-4" />
+            대조
+          </Button>
+        </form>
+
+        {result && (
+          <div className="bk-reconcile-result" data-tone={tone ?? "matched"}>
+            <span className="typo-body-strong">
+              {result.matched ? "일치" : "불일치"} · {signedMinorLabel(result.differenceMinor)}
+            </span>
+            <span className="typo-caption-sm">
+              장부 {formatCurrencyMinor(result.computedBalanceMinor, draft.currency)} / 명세서{" "}
+              {formatCurrencyMinor(result.statementBalanceMinor, draft.currency)}
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

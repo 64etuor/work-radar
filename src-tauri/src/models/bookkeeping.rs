@@ -504,6 +504,39 @@ pub struct BookkeepingMonthlySummary {
     /// 중복으로 표시된 건수(`review_status='ignored'` + `duplicate_of_transaction_id` 존재).
     pub duplicate_count: u32,
     pub categories: Vec<BookkeepingCategorySummary>,
+    pub by_currency: Vec<BookkeepingCurrencySummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingCurrencySummary {
+    pub currency: String,
+    pub expense_minor: i32,
+    pub income_minor: i32,
+    pub net_minor: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingReconcileAccountInput {
+    pub project_id: Option<String>,
+    pub account: String,
+    pub statement_date: String,
+    pub statement_balance_minor: i32,
+    pub currency: Option<String>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingReconcileAccountResult {
+    pub id: String,
+    pub computed_balance_minor: i32,
+    pub statement_balance_minor: i32,
+    pub difference_minor: i32,
+    pub matched: bool,
+    pub unmatched_count: i32,
+    pub reconciled_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]

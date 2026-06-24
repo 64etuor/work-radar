@@ -103,6 +103,30 @@
   background: var(--bk-accent-soft);
 }
 
+.bk-currency-summary {
+  display: grid;
+  gap: var(--wr-density-xs);
+  border: 1px solid var(--bk-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bk-surface);
+  padding: var(--wr-density-sm) var(--wr-density-md);
+}
+
+.bk-currency-row {
+  display: grid;
+  grid-template-columns: minmax(56px, 0.5fr) repeat(3, minmax(116px, 1fr));
+  align-items: center;
+  gap: var(--wr-density-sm);
+  min-height: 32px;
+  color: var(--bk-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-currency-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .bk-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 372px);
@@ -549,6 +573,7 @@
   .bk-head-controls,
   .bk-scope-controls,
   .bk-metrics,
+  .bk-currency-row,
   .bk-report-grid,
   .bk-report-row,
   .bk-side,
@@ -766,6 +791,26 @@
 
 .bk-budget-row[data-overrun="true"] .bk-budget-fill {
   background: var(--bk-danger);
+}
+
+.bk-reconcile-form {
+  margin-bottom: var(--wr-density-lg);
+}
+
+.bk-reconcile-result {
+  display: grid;
+  gap: var(--wr-density-xs);
+  border: 1px solid var(--bk-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bk-success-bg);
+  padding: var(--wr-density-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-reconcile-result[data-tone="over"],
+.bk-reconcile-result[data-tone="under"] {
+  border-color: color-mix(in srgb, var(--bk-danger) 36%, var(--bk-rule));
+  background: var(--bk-danger-bg);
 }
 
 /* ── 리뷰 큐 다중 선택(벌크 확정/무시) ───────────────────────────── */

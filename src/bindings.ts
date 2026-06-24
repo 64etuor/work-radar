@@ -47,6 +47,7 @@ export const commands = {
 	bookkeepingBudgetStatus: (month: string, projectId: string | null) => typedError<BookkeepingBudgetStatus[], AppError>(__TAURI_INVOKE("bookkeeping_budget_status", { month, projectId })),
 	bookkeepingCategoryTrend: (input: BookkeepingCategoryTrendInput) => typedError<BookkeepingCategoryTrendRow[], AppError>(__TAURI_INVOKE("bookkeeping_category_trend", { input })),
 	bookkeepingCashflow: (input: BookkeepingCashflowInput) => typedError<BookkeepingCashflowRow[], AppError>(__TAURI_INVOKE("bookkeeping_cashflow", { input })),
+	bookkeepingReconcileAccount: (input: BookkeepingReconcileAccountInput) => typedError<BookkeepingReconcileAccountResult, AppError>(__TAURI_INVOKE("bookkeeping_reconcile_account", { input })),
 	listBookkeepingAudit: (entityId: string | null) => typedError<BookkeepingAuditEntry[], AppError>(__TAURI_INVOKE("list_bookkeeping_audit", { entityId })),
 	recordBookkeepingSyncFailure: (input: RecordBookkeepingSyncFailureInput) => typedError<BookkeepingSyncJob, AppError>(__TAURI_INVOKE("record_bookkeeping_sync_failure", { input })),
 	listBookkeepingSyncJobs: () => typedError<BookkeepingSyncJob[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_jobs")),
@@ -1059,6 +1060,13 @@ export type BookkeepingCategoryTrendRow = {
 	expenseMinor: number,
 };
 
+export type BookkeepingCurrencySummary = {
+	currency: string,
+	expenseMinor: number,
+	incomeMinor: number,
+	netMinor: number,
+};
+
 /**
  *  거래 방향. 가계부는 지출/수입을 모두 담되 금액(`amount_minor`)은 항상 양수로 저장하고
  *  부호 의미는 이 enum이 갖는다(음수 저장 금지). 합계는 방향별로 분리 집계한다.
@@ -1115,10 +1123,30 @@ export type BookkeepingMonthlySummary = {
 	/**  중복으로 표시된 건수(`review_status='ignored'` + `duplicate_of_transaction_id` 존재). */
 	duplicateCount: number,
 	categories: BookkeepingCategorySummary[],
+	byCurrency: BookkeepingCurrencySummary[],
 };
 
 /**  결제수단은 Gmail/OCR에서 확정하지 않고 사람이 리뷰에서 보정할 수 있는 닫힌 값으로 둔다. */
 export type BookkeepingPaymentMethodKind = "unknown" | "cash" | "card" | "bank_transfer" | "simple_pay";
+
+export type BookkeepingReconcileAccountInput = {
+	projectId: string | null,
+	account: string,
+	statementDate: string,
+	statementBalanceMinor: number,
+	currency: string | null,
+	note: string | null,
+};
+
+export type BookkeepingReconcileAccountResult = {
+	id: string,
+	computedBalanceMinor: number,
+	statementBalanceMinor: number,
+	differenceMinor: number,
+	matched: boolean,
+	unmatchedCount: number,
+	reconciledAt: string | null,
+};
 
 export type BookkeepingRecurringExpense = {
 	id: string,
