@@ -7,6 +7,7 @@ import {
   type CreateBookkeepingRecurringExpenseInput,
   type CreateBookkeepingTransactionInput,
   type RecordBookkeepingSyncFailureInput,
+  type SetBookkeepingLineItemsInput,
   type SyncBookkeepingGmailReceiptsInput,
   type UpdateBookkeepingTransactionInput,
 } from "@/bindings";
@@ -180,6 +181,22 @@ export function useRecordBookkeepingSyncFailure() {
   return useMutation({
     mutationFn: (input: RecordBookkeepingSyncFailureInput) =>
       unwrap(commands.recordBookkeepingSyncFailure(input)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBookkeepingLineItems(transactionId: string) {
+  return useQuery({
+    queryKey: ["bookkeeping", "lineItems", transactionId],
+    queryFn: () => unwrap(commands.listBookkeepingLineItems(transactionId)),
+  });
+}
+
+export function useSetBookkeepingLineItems() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: SetBookkeepingLineItemsInput) =>
+      unwrap(commands.setBookkeepingLineItems(input)),
     onSuccess: invalidate,
   });
 }

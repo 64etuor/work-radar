@@ -23,6 +23,7 @@ import {
   type ReactNode,
   type SetStateAction,
   useReducer,
+  useRef,
   useState,
 } from "react";
 
@@ -32,6 +33,7 @@ import type {
   BookkeepingDirection,
   BookkeepingExpenseKind,
   BookkeepingGmailLabel,
+  BookkeepingLineItem,
   BookkeepingPaymentMethodKind,
   BookkeepingRecurringOccurrence,
   BookkeepingReviewStatus,
@@ -58,6 +60,7 @@ import {
   localToday,
   useBookkeepingAudit,
   useBookkeepingGmailLabels,
+  useBookkeepingLineItems,
   useBookkeepingMonthlySummary,
   useBookkeepingRecurringExpenses,
   useBookkeepingRecurringOccurrences,
@@ -72,6 +75,7 @@ import {
   usePostBookkeepingRecurringOccurrence,
   useProjects,
   useRestoreBookkeepingTransaction,
+  useSetBookkeepingLineItems,
   useSetBookkeepingRecurringOccurrenceStatus,
   useSyncBookkeepingGmailReceipts,
   useUpdateBookkeepingReviewStatus,
@@ -86,6 +90,13 @@ import {
   BOOKKEEPING_INPUT_PANEL_ORDER,
   type BookkeepingInputPanel,
 } from "./bookkeepingPanels";
+import {
+  blankLineItemDraft,
+  type LineItemDraft,
+  lineItemDraftsFromServer,
+  lineItemSumState,
+  toLineItemInputs,
+} from "./lineItems";
 
 const CATEGORY_OPTIONS = ["food", "transport", "shopping", "housing", "health", "work", "misc"];
 const ALL_PROJECTS = "__all__";
@@ -978,31 +989,35 @@ function ApprovedTransactionsCard({
           <ReceiptText className="size-4" />
           확정 거래
         </CardTitle>
-        <CardDescription>최근 원장 거래입니다. 펼치면 전체 필드를 수정할 수 있습니다.</CardDescription>
+        <CardDescription>
+          최근 원장 거래입니다. 펼치면 전체 필드를 수정할 수 있습니다.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="bk-transaction-list">
           {rows.length === 0 && <EmptyState>거래 없음</EmptyState>}
-          {rows.slice(0, 12).map((tx) =>
-            expandedId === tx.id ? (
-              <TransactionEditForm
-                key={tx.id}
-                tx={tx}
-                disabled={disabled}
-                onDelete={() => onDelete(tx)}
-                onSave={(draft) => onSave(tx, draft)}
-                onCancel={() => setExpandedId(null)}
-              />
-            ) : (
-              <TransactionReadRow
-                key={tx.id}
-                tx={tx}
-                disabled={disabled}
-                onEdit={() => setExpandedId(tx.id)}
-                onDelete={() => onDelete(tx)}
-              />
-            ),
-          )}
+          {rows
+            .slice(0, 12)
+            .map((tx) =>
+              expandedId === tx.id ? (
+                <TransactionEditForm
+                  key={tx.id}
+                  tx={tx}
+                  disabled={disabled}
+                  onDelete={() => onDelete(tx)}
+                  onSave={(draft) => onSave(tx, draft)}
+                  onCancel={() => setExpandedId(null)}
+                />
+              ) : (
+                <TransactionReadRow
+                  key={tx.id}
+                  tx={tx}
+                  disabled={disabled}
+                  onEdit={() => setExpandedId(tx.id)}
+                  onDelete={() => onDelete(tx)}
+                />
+              ),
+            )}
         </div>
       </CardContent>
     </Card>
@@ -1628,7 +1643,9 @@ function TransactionEditForm({
           <div className="bk-row-title">
             <strong className="typo-body-strong">{tx.merchant}</strong>
             <span className="text-muted-foreground typo-caption-sm">
-              {tx.source !== "manual" && tx.sourceRef ? `${sourceLabel(tx.source)} · ${tx.sourceRef}` : sourceLabel(tx.source)}
+              {tx.source !== "manual" && tx.sourceRef
+                ? `${sourceLabel(tx.source)} · ${tx.sourceRef}`
+                : sourceLabel(tx.source)}
             </span>
           </div>
           <div className="bk-row-amount typo-title-sm">{currency.format(tx.amountMinor)}</div>
@@ -1731,9 +1748,7 @@ function TransactionEditForm({
             <Textarea
               id={`${fieldPrefix}-description`}
               value={draft.description}
-              onChange={(e) =>
-                setDraft((current) => ({ ...current, description: e.target.value }))
-              }
+              onChange={(e) => setDraft((current) => ({ ...current, description: e.target.value }))}
               rows={2}
             />
           </Field>
@@ -1795,13 +1810,13 @@ function TransactionEditForm({
               <Input
                 id={`${fieldPrefix}-payment-no`}
                 value={draft.paymentNo}
-                onChange={(e) =>
-                  setDraft((current) => ({ ...current, paymentNo: e.target.value }))
-                }
+                onChange={(e) => setDraft((current) => ({ ...current, paymentNo: e.target.value }))}
               />
             </Field>
           </div>
         </div>
+
+        <LineItemEditor transactionId={tx.id} amountMinor={tx.amountMinor} disabled={disabled} />
 
         <TransactionMetadata tx={tx} />
 
@@ -1810,7 +1825,13 @@ function TransactionEditForm({
             저장
           </Button>
           {onApprove && (
-            <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onApprove}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              onClick={onApprove}
+            >
               <Check className="size-3.5" />
               {approveLabel ?? "확정"}
             </Button>
@@ -1827,6 +1848,140 @@ function TransactionEditForm({
         </div>
       </form>
     </article>
+  );
+}
+
+function LineItemEditor({
+  transactionId,
+  amountMinor,
+  disabled,
+}: {
+  transactionId: string;
+  amountMinor: number;
+  disabled: boolean;
+}) {
+  const itemsQuery = useBookkeepingLineItems(transactionId);
+  if (itemsQuery.isPending) {
+    return <p className="text-muted-foreground typo-caption-sm">분할 항목 불러오는 중…</p>;
+  }
+  return (
+    <LineItemEditorForm
+      key={transactionId}
+      transactionId={transactionId}
+      amountMinor={amountMinor}
+      initialItems={itemsQuery.data ?? []}
+      disabled={disabled}
+    />
+  );
+}
+
+function LineItemEditorForm({
+  transactionId,
+  amountMinor,
+  initialItems,
+  disabled,
+}: {
+  transactionId: string;
+  amountMinor: number;
+  initialItems: BookkeepingLineItem[];
+  disabled: boolean;
+}) {
+  const [drafts, setDrafts] = useState<LineItemDraft[]>(() =>
+    lineItemDraftsFromServer(initialItems),
+  );
+  const seqRef = useRef(0);
+  const setItems = useSetBookkeepingLineItems();
+  const sum = lineItemSumState(drafts, amountMinor);
+  const prefix = `bk-line-${transactionId}`;
+  const busy = disabled || setItems.isPending;
+
+  const patch = (key: string, next: Partial<LineItemDraft>) =>
+    setDrafts((current) => current.map((row) => (row.key === key ? { ...row, ...next } : row)));
+  const addRow = () => {
+    seqRef.current += 1;
+    setDrafts((current) => [...current, blankLineItemDraft(seqRef.current)]);
+  };
+  const removeRow = (key: string) =>
+    setDrafts((current) => current.filter((row) => row.key !== key));
+  const save = () =>
+    setItems.mutate(
+      { transactionId, items: toLineItemInputs(drafts) },
+      { onError: (error) => pushMutationError("bookkeeping.lineItems", error) },
+    );
+
+  return (
+    <section className="bk-line-items" aria-label="거래 분할">
+      <div className="bk-line-items-head">
+        <SectionLabel>분할 항목</SectionLabel>
+        {sum.hasItems && (
+          <span
+            className={`typo-caption-sm ${sum.matches ? "text-muted-foreground" : "text-destructive"}`}
+          >
+            합계 {currency.format(sum.sum)} / 거래 {currency.format(amountMinor)}
+            {!sum.matches && ` · 차이 ${currency.format(sum.diff)}`}
+          </span>
+        )}
+      </div>
+      {drafts.length === 0 ? (
+        <p className="text-muted-foreground typo-caption-sm">분할 항목 없음</p>
+      ) : (
+        <ul className="bk-line-items-list">
+          {drafts.map((row, index) => (
+            <li key={row.key} className="bk-line-item-row">
+              <Field label="이름" htmlFor={`${prefix}-${row.key}-name`}>
+                <Input
+                  id={`${prefix}-${row.key}-name`}
+                  value={row.name}
+                  onChange={(e) => patch(row.key, { name: e.target.value })}
+                />
+              </Field>
+              <Field label="금액" htmlFor={`${prefix}-${row.key}-amount`}>
+                <Input
+                  id={`${prefix}-${row.key}-amount`}
+                  value={row.amount}
+                  inputMode="numeric"
+                  onChange={(e) => patch(row.key, { amount: e.target.value })}
+                />
+              </Field>
+              <Field label="수량" htmlFor={`${prefix}-${row.key}-qty`}>
+                <Input
+                  id={`${prefix}-${row.key}-qty`}
+                  value={row.quantity}
+                  inputMode="numeric"
+                  onChange={(e) => patch(row.key, { quantity: e.target.value })}
+                />
+              </Field>
+              <Field label="분류 코드" htmlFor={`${prefix}-${row.key}-cat`}>
+                <Input
+                  id={`${prefix}-${row.key}-cat`}
+                  value={row.categoryCode}
+                  onChange={(e) => patch(row.key, { categoryCode: e.target.value })}
+                />
+              </Field>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                aria-label={`분할 ${index + 1} 삭제`}
+                onClick={() => removeRow(row.key)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="bk-line-items-actions">
+        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={addRow}>
+          <Plus className="size-3.5" />
+          항목 추가
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={save}>
+          분할 저장
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -1903,7 +2058,13 @@ function TrashTransactionRow({
   );
 }
 
-function TransactionMetadata({ tx, compact = false }: { tx: BookkeepingTransaction; compact?: boolean }) {
+function TransactionMetadata({
+  tx,
+  compact = false,
+}: {
+  tx: BookkeepingTransaction;
+  compact?: boolean;
+}) {
   const reasons = reviewReasonCodes(tx.reviewReasonsJson);
   return (
     <>
@@ -1991,7 +2152,10 @@ function TaxonomyEditFields({
         </Select>
       </Field>
       <Field label="소분류" htmlFor={`${prefix}-subcategory`}>
-        <Select value={subcategoryCode || "__none__"} onValueChange={(value) => onSubcategoryChange(value === "__none__" ? "" : value)}>
+        <Select
+          value={subcategoryCode || "__none__"}
+          onValueChange={(value) => onSubcategoryChange(value === "__none__" ? "" : value)}
+        >
           <SelectTrigger id={`${prefix}-subcategory`}>
             <SelectValue />
           </SelectTrigger>
