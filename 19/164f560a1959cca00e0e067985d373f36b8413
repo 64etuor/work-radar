@@ -1,0 +1,37 @@
+src-tauri/src/commands/bookkeeping.rs
+  s_5c80a9ab6b788f::t_af548f7d26c7ce 723
+src/components/bookkeeping/gmailSync.test.ts
+  s_5c80a9ab6b788f::t_8332c8793b6744 1-25
+src/lib/query/bookkeeping.ts
+  s_5c80a9ab6b788f::t_1dc698c3d83647 229-235
+src/components/bookkeeping/BookkeepingView.css
+  s_5c80a9ab6b788f::t_2f7f0585334ab5 573-578
+src/components/bookkeeping/BookkeepingView.tsx
+  s_5c80a9ab6b788f::t_69a818b1673388 1439-1457
+  s_5c80a9ab6b788f::t_21dac490c39ebf 1416
+  s_5c80a9ab6b788f::t_f958d6af031ba8 1380,1388
+  s_5c80a9ab6b788f::t_1e847e5d7d5ffd 738-742
+  s_5c80a9ab6b788f::t_da204646745853 298
+  s_5c80a9ab6b788f::t_69aa0b0d5d41da 97
+  s_5c80a9ab6b788f::t_0c1eb0e3683822 67
+  s_5c80a9ab6b788f::t_7c6569c6413a76 554
+  s_5c80a9ab6b788f::t_6ec62946d4a8d9 429
+src/components/bookkeeping/gmailSync.ts
+  s_5c80a9ab6b788f::t_7908163581e29c 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "19164f560a1959cca00e0e067985d373f36b8413",
+  "prompts": {},
+  "sessions": {
+    "s_5c80a9ab6b788f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60804063-4487-40bb-acd6-88e920e3b071",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
