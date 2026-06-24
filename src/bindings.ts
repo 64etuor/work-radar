@@ -68,6 +68,7 @@ export const commands = {
 	exportBookkeepingCsv: (input: ExportBookkeepingInput) => typedError<string, AppError>(__TAURI_INVOKE("export_bookkeeping_csv", { input })),
 	exportBookkeepingQif: (input: ExportBookkeepingInput) => typedError<string, AppError>(__TAURI_INVOKE("export_bookkeeping_qif", { input })),
 	exportBookkeepingOfx: (input: ExportBookkeepingInput) => typedError<string, AppError>(__TAURI_INVOKE("export_bookkeeping_ofx", { input })),
+	writeBookkeepingExport: (input: WriteBookkeepingExportInput) => typedError<null, AppError>(__TAURI_INVOKE("write_bookkeeping_export", { input })),
 	findBookkeepingDuplicateCandidates: (input: FindBookkeepingDuplicateCandidatesInput) => typedError<BookkeepingDuplicateCandidate[], AppError>(__TAURI_INVOKE("find_bookkeeping_duplicate_candidates", { input })),
 	markBookkeepingDuplicate: (id: string, duplicateOfTransactionId: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("mark_bookkeeping_duplicate", { id, duplicateOfTransactionId })),
 	listBookkeepingSyncCursors: () => typedError<BookkeepingSyncCursor[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_cursors")),
@@ -1083,6 +1084,8 @@ export type BookkeepingDuplicateCandidate = {
 /**  거래/고정비의 지출 성격. Gmail ingest는 기본 variable, 사용자가 fixed 계열로 확정한다. */
 export type BookkeepingExpenseKind = "variable" | "fixed" | "subscription" | "installment";
 
+export type BookkeepingExportFormat = "csv" | "qif" | "ofx";
+
 export type BookkeepingGmailLabel = {
 	id: string,
 	name: string,
@@ -1144,6 +1147,7 @@ export type BookkeepingReconcileAccountResult = {
 	statementBalanceMinor: number,
 	differenceMinor: number,
 	matched: boolean,
+	/**  0 when balanced, 1 when the statement balance does not match the computed ledger balance. */
 	unmatchedCount: number,
 	reconciledAt: string | null,
 };
@@ -3265,6 +3269,12 @@ export type Worktree = {
  *  Diverged(ahead&behind) > Dirty > Ahead > Behind > Clean. 수치는 ahead/behind로 별도 노출.
  */
 export type WorktreeStatus = "clean" | "dirty" | "ahead" | "behind" | "diverged";
+
+export type WriteBookkeepingExportInput = {
+	path: string,
+	format: BookkeepingExportFormat,
+	export: ExportBookkeepingInput,
+};
 
 /**  stage_calendar_write의 op. 각 분기가 큐 행의 kind/payload/디바운스를 결정한다. */
 export type WriteOp = 

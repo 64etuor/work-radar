@@ -116,6 +116,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::export_bookkeeping_csv,
         commands::export_bookkeeping_qif,
         commands::export_bookkeeping_ofx,
+        commands::write_bookkeeping_export,
         // Bookkeeping duplicate detection (Phase D) — fuzzy candidates + mark-duplicate.
         commands::find_bookkeeping_duplicate_candidates,
         commands::mark_bookkeeping_duplicate,
@@ -460,8 +461,6 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         // 폴더 picker (Phase 14): repo local_path 등 경로 입력을 OS 다이얼로그로.
         .plugin(tauri_plugin_dialog::init())
-        // 사용자 선택 경로에 로컬 export 파일 저장.
-        .plugin(tauri_plugin_fs::init())
         .invoke_handler(specta_builder.invoke_handler())
         // 닫기 = 트레이로 hide(quit 아님). 실제 종료는 트레이 "종료"의 app.exit(0)에서만.
         .on_window_event(|window, event| {

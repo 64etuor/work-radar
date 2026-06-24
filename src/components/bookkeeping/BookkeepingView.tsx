@@ -1,7 +1,6 @@
 import "./BookkeepingView.css";
 
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   AlertTriangle,
   Ban,
@@ -42,6 +41,7 @@ import type {
   BookkeepingCurrencySummary,
   BookkeepingDirection,
   BookkeepingExpenseKind,
+  BookkeepingExportFormat,
   BookkeepingGmailLabel,
   BookkeepingLineItem,
   BookkeepingPaymentMethodKind,
@@ -93,9 +93,6 @@ import {
   useCreateBookkeepingTransaction,
   useDeleteBookkeepingTransaction,
   useEnsureBookkeepingRecurringOccurrences,
-  useExportBookkeepingCsv,
-  useExportBookkeepingOfx,
-  useExportBookkeepingQif,
   useFindBookkeepingDuplicateCandidates,
   useMarkBookkeepingDuplicate,
   usePostBookkeepingRecurringOccurrence,
@@ -107,6 +104,7 @@ import {
   useSyncBookkeepingGmailReceipts,
   useUpdateBookkeepingReviewStatus,
   useUpdateBookkeepingTransaction,
+  useWriteBookkeepingExport,
 } from "@/lib/query";
 import { useToastStore } from "@/lib/toast";
 
@@ -155,7 +153,6 @@ const EXPENSE_KIND_OPTIONS: { value: BookkeepingExpenseKind; label: string }[] =
 const RECURRING_EXPENSE_KIND_OPTIONS = EXPENSE_KIND_OPTIONS.filter(
   (option) => option.value !== "variable",
 );
-type BookkeepingExportFormat = "csv" | "qif" | "ofx";
 const FIELD_IDS = {
   projectScope: "bk-project-scope",
   gmailLabels: "bk-gmail-labels",
@@ -576,15 +573,13 @@ export function BookkeepingView() {
   const bulkDelete = useBulkDeleteBookkeepingTransactions();
   const setBudget = useSetBookkeepingBudget();
   const reconcileAccount = useBookkeepingReconcileAccount();
-  const exportCsv = useExportBookkeepingCsv();
-  const exportQif = useExportBookkeepingQif();
-  const exportOfx = useExportBookkeepingOfx();
+  const writeExport = useWriteBookkeepingExport();
   const updateTx = useUpdateBookkeepingTransaction();
   const deleteTx = useDeleteBookkeepingTransaction();
   const restoreTx = useRestoreBookkeepingTransaction();
   const pushSuccess = useToastStore((s) => s.pushSuccess);
   const pushError = useToastStore((s) => s.pushError);
-  const exportPending = exportCsv.isPending || exportQif.isPending || exportOfx.isPending;
+  const exportPending = writeExport.isPending;
 
   const plannedTotal = (recurringOccurrences.data ?? [])
     .filter((row) => row.status !== "skipped")
@@ -777,13 +772,7 @@ export function BookkeepingView() {
       });
       if (!path) return;
 
-      const payload =
-        format === "csv"
-          ? await exportCsv.mutateAsync(input)
-          : format === "qif"
-            ? await exportQif.mutateAsync(input)
-            : await exportOfx.mutateAsync(input);
-      await writeTextFile(path, payload);
+      await writeExport.mutateAsync({ path, format, export: input });
       pushSuccess(`${format.toUpperCase()} export 저장 완료`);
     } catch (error) {
       pushMutationError("bookkeeping.export", error);

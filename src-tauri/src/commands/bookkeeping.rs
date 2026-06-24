@@ -1,6 +1,7 @@
 //! Local bookkeeping store + IPC commands.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use tauri::State;
 
@@ -15,9 +16,9 @@ use crate::models::{
     BookkeepingCategoryAlias, BookkeepingCategoryNode, BookkeepingCategoryOverride,
     BookkeepingCategoryRules, BookkeepingCategorySummary, BookkeepingCategoryTrendInput,
     BookkeepingCategoryTrendRow, BookkeepingCurrencySummary, BookkeepingDirection,
-    BookkeepingDuplicateCandidate, BookkeepingExpenseKind, BookkeepingGmailLabel,
-    BookkeepingGmailSyncResult, BookkeepingLineItem, BookkeepingMonthlySummary,
-    BookkeepingPaymentMethodKind, BookkeepingReconcileAccountInput,
+    BookkeepingDuplicateCandidate, BookkeepingExpenseKind, BookkeepingExportFormat,
+    BookkeepingGmailLabel, BookkeepingGmailSyncResult, BookkeepingLineItem,
+    BookkeepingMonthlySummary, BookkeepingPaymentMethodKind, BookkeepingReconcileAccountInput,
     BookkeepingReconcileAccountResult, BookkeepingRecurringExpense,
     BookkeepingRecurringExpenseStatus, BookkeepingRecurringOccurrence,
     BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
@@ -27,6 +28,7 @@ use crate::models::{
     FindBookkeepingDuplicateCandidatesInput, OverrideBookkeepingCategoryInput,
     RecordBookkeepingSyncFailureInput, SetBookkeepingBudgetInput, SetBookkeepingLineItemsInput,
     SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
+    WriteBookkeepingExportInput,
 };
 
 const DEFAULT_CURRENCY: &str = "KRW";
@@ -458,6 +460,15 @@ pub async fn export_bookkeeping_ofx(
 ) -> Result<String, AppError> {
     let rows = export_bookkeeping_rows(db.inner(), input).await?;
     Ok(export_ofx(&rows))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn write_bookkeeping_export(
+    db: State<'_, Db>,
+    input: WriteBookkeepingExportInput,
+) -> Result<(), AppError> {
+    write_bookkeeping_export_inner(db.inner(), input).await
 }
 
 #[tauri::command]
@@ -2735,6 +2746,40 @@ pub(crate) async fn export_bookkeeping_rows(
     Ok(rows)
 }
 
+pub(crate) async fn write_bookkeeping_export_inner(
+    db: &Db,
+    input: WriteBookkeepingExportInput,
+) -> Result<(), AppError> {
+    let path = clean_required(&input.path, "bookkeeping.export.path")?;
+    let path = Path::new(&path);
+    if path.file_name().is_none() {
+        return Err(AppError::validation(
+            "bookkeeping.export.path",
+            "저장할 파일 경로를 확인하세요",
+        ));
+    }
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            return Err(AppError::validation(
+                "bookkeeping.export.path",
+                "저장 폴더를 찾을 수 없습니다",
+            ));
+        }
+    }
+
+    let rows = export_bookkeeping_rows(db, input.export).await?;
+    let payload = match input.format {
+        BookkeepingExportFormat::Csv => export_csv(&rows),
+        BookkeepingExportFormat::Qif => export_qif(&rows),
+        BookkeepingExportFormat::Ofx => export_ofx(&rows),
+    };
+
+    tokio::fs::write(path, payload)
+        .await
+        .map_err(|_| AppError::terminal("bookkeeping.export.write", "export 파일 저장 실패"))?;
+    Ok(())
+}
+
 /// Add or clear the `line_item_sum_mismatch` review reason on a transaction, preserving any other
 /// reasons. Malformed prior JSON degrades to an empty reason list (never panics).
 async fn update_sum_mismatch_reason_tx(
@@ -3623,12 +3668,13 @@ mod tests {
         GmailError, GmailLabelInfo, GmailMessageSearch, GmailReadProvider, GmailReceiptCandidate,
     };
     use crate::models::{
-        BookkeepingAliasSource, BookkeepingExpenseKind, BookkeepingPaymentMethodKind,
-        BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
-        CreateBookkeepingLineItemInput, CreateBookkeepingRecurringExpenseInput,
-        CreateBookkeepingTransactionInput, CreateProjectInput, ProjectKind,
-        RecordBookkeepingSyncFailureInput, SetBookkeepingBudgetInput,
-        SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
+        BookkeepingAliasSource, BookkeepingExpenseKind, BookkeepingExportFormat,
+        BookkeepingPaymentMethodKind, BookkeepingRecurringOccurrenceStatus,
+        BookkeepingReviewStatus, BookkeepingSource, CreateBookkeepingLineItemInput,
+        CreateBookkeepingRecurringExpenseInput, CreateBookkeepingTransactionInput,
+        CreateProjectInput, ExportBookkeepingInput, ProjectKind, RecordBookkeepingSyncFailureInput,
+        SetBookkeepingBudgetInput, SyncBookkeepingGmailReceiptsInput,
+        UpdateBookkeepingTransactionInput, WriteBookkeepingExportInput,
     };
     use std::sync::Mutex;
 
@@ -4130,6 +4176,37 @@ mod tests {
         .await
         .expect_err("direction validation");
         assert_eq!(bad_direction.code, "bookkeeping.direction");
+    }
+
+    #[tokio::test]
+    async fn write_export_writes_decimal_qif_from_rust() {
+        let db = pool().await;
+        let mut input = manual_input("Usd Cafe", 12_500, "2026-06-18", "food");
+        input.currency = "USD".to_string();
+        input.direction = BookkeepingDirection::Income;
+        create_bookkeeping_transaction_inner(&db, input)
+            .await
+            .expect("create transaction");
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("bookkeeping.qif");
+
+        write_bookkeeping_export_inner(
+            &db,
+            WriteBookkeepingExportInput {
+                path: path.to_string_lossy().to_string(),
+                format: BookkeepingExportFormat::Qif,
+                export: ExportBookkeepingInput {
+                    project_id: None,
+                    from_date: Some("2026-06-01".to_string()),
+                    to_date: Some("2026-06-30".to_string()),
+                },
+            },
+        )
+        .await
+        .expect("write export");
+
+        let written = std::fs::read_to_string(path).expect("read export");
+        assert!(written.contains("T125.00\n"));
     }
 
     #[tokio::test]

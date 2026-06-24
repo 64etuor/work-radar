@@ -40,7 +40,6 @@
     "@tanstack/react-query-persist-client": "^5.100.13",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@xyflow/react": "^12.11.0",
     "class-variance-authority": "^0.7.1",

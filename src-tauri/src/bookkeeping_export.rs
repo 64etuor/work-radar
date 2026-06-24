@@ -70,6 +70,7 @@ pub fn export_qif(rows: &[BookkeepingExportRow]) -> String {
             out.push_str(&signed_line_amount(
                 tx.direction,
                 item.amount_minor * item.quantity,
+                &tx.currency,
             ));
             out.push('\n');
         }
@@ -124,9 +125,12 @@ pub fn format_minor(amount_minor: i32, currency: &str) -> String {
         return amount_minor.to_string();
     }
     let divisor = 10_i32.pow(exponent);
-    let major = amount_minor / divisor;
-    let minor = amount_minor.abs() % divisor;
-    format!("{major}.{minor:0width$}", width = exponent as usize)
+    let absolute = amount_minor.unsigned_abs();
+    let divisor = divisor as u32;
+    let major = absolute / divisor;
+    let minor = absolute % divisor;
+    let sign = if amount_minor < 0 { "-" } else { "" };
+    format!("{sign}{major}.{minor:0width$}", width = exponent as usize)
 }
 
 pub fn fitid(tx: &BookkeepingTransaction) -> String {
@@ -145,16 +149,19 @@ pub fn fitid(tx: &BookkeepingTransaction) -> String {
 }
 
 fn signed_amount(tx: &BookkeepingTransaction) -> String {
-    signed_line_amount(tx.direction, tx.amount_minor)
+    signed_line_amount(tx.direction, tx.amount_minor, &tx.currency)
 }
 
-fn signed_line_amount(direction: BookkeepingDirection, amount_minor: i32) -> String {
-    let sign = if direction == BookkeepingDirection::Expense {
-        "-"
-    } else {
-        ""
+fn signed_line_amount(
+    direction: BookkeepingDirection,
+    amount_minor: i32,
+    currency: &str,
+) -> String {
+    let signed_minor = match direction {
+        BookkeepingDirection::Expense => amount_minor.saturating_neg(),
+        BookkeepingDirection::Income => amount_minor,
     };
-    format!("{sign}{amount_minor}")
+    format_minor(signed_minor, currency)
 }
 
 fn currency_exponent(currency: &str) -> u32 {
@@ -318,7 +325,7 @@ mod tests {
     #[test]
     fn qif_emits_split_rows_and_income_sign() {
         let rows = vec![BookkeepingExportRow {
-            transaction: tx("tx-1", BookkeepingDirection::Income, 12_500, "USD"),
+            transaction: tx("tx-1", BookkeepingDirection::Income, 12_500, "KRW"),
             line_items: vec![line_item()],
         }];
 
@@ -327,6 +334,19 @@ mod tests {
         assert!(out.contains("T12500\n"));
         assert!(out.contains("Sfood_cafe\nELatte\n$5000\n"));
         assert!(out.contains("L식비:카페\n"));
+    }
+
+    #[test]
+    fn qif_emits_usd_decimal_major_units_for_transaction_and_splits() {
+        let rows = vec![BookkeepingExportRow {
+            transaction: tx("tx-1", BookkeepingDirection::Income, 12_500, "USD"),
+            line_items: vec![line_item()],
+        }];
+
+        let out = export_qif(&rows);
+
+        assert!(out.contains("T125.00\n"));
+        assert!(out.contains("Sfood_cafe\nELatte\n$50.00\n"));
     }
 
     #[test]
@@ -347,9 +367,27 @@ mod tests {
     }
 
     #[test]
+    fn ofx_emits_usd_decimal_major_units_and_direction_signs() {
+        let income = BookkeepingExportRow {
+            transaction: tx("tx-usd-income", BookkeepingDirection::Income, 12_500, "USD"),
+            line_items: vec![],
+        };
+        let expense = BookkeepingExportRow {
+            transaction: tx("tx-usd-expense", BookkeepingDirection::Expense, 4500, "USD"),
+            line_items: vec![],
+        };
+
+        let out = export_ofx(&[income, expense]);
+
+        assert!(out.contains("<TRNTYPE>CREDIT\n<DTPOSTED>20260618093000\n<TRNAMT>125.00\n"));
+        assert!(out.contains("<TRNTYPE>DEBIT\n<DTPOSTED>20260618093000\n<TRNAMT>-45.00\n"));
+    }
+
+    #[test]
     fn format_minor_respects_currency_exponents() {
         assert_eq!(format_minor(4500, "KRW"), "4500");
         assert_eq!(format_minor(4500, "USD"), "45.00");
         assert_eq!(format_minor(-125, "USD"), "-1.25");
+        assert_eq!(format_minor(-5, "USD"), "-0.05");
     }
 }

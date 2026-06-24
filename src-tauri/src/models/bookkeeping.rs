@@ -437,12 +437,28 @@ pub struct SetBookkeepingLineItemsInput {
     pub items: Vec<CreateBookkeepingLineItemInput>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum BookkeepingExportFormat {
+    Csv,
+    Qif,
+    Ofx,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExportBookkeepingInput {
     pub project_id: Option<String>,
     pub from_date: Option<String>,
     pub to_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WriteBookkeepingExportInput {
+    pub path: String,
+    pub format: BookkeepingExportFormat,
+    pub export: ExportBookkeepingInput,
 }
 
 /// 저장 전 중복 후보 조회 입력. 약한 신호(금액/날짜/상호)와 강한 신호(주문/결제번호/source_ref)를 함께 본다.
@@ -517,7 +533,7 @@ pub struct BookkeepingCurrencySummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookkeepingReconcileAccountInput {
     pub project_id: Option<String>,
     pub account: String,
@@ -535,6 +551,7 @@ pub struct BookkeepingReconcileAccountResult {
     pub statement_balance_minor: i32,
     pub difference_minor: i32,
     pub matched: bool,
+    /// 0 when balanced, 1 when the statement balance does not match the computed ledger balance.
     pub unmatched_count: i32,
     pub reconciled_at: Option<String>,
 }
@@ -555,7 +572,7 @@ pub struct BookkeepingBudget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetBookkeepingBudgetInput {
     pub project_id: Option<String>,
     pub month: String,
@@ -581,7 +598,7 @@ pub struct BookkeepingBudgetStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookkeepingCategoryTrendInput {
     pub project_id: Option<String>,
     pub from_month: String,
@@ -599,7 +616,7 @@ pub struct BookkeepingCategoryTrendRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookkeepingCashflowInput {
     pub project_id: Option<String>,
     pub from_month: String,

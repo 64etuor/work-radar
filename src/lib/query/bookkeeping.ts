@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type BookkeepingCashflowInput,
   type BookkeepingCategoryTrendInput,
+  type BookkeepingExportFormat,
   type BookkeepingReconcileAccountInput,
   type BookkeepingRecurringOccurrenceStatus,
   type BookkeepingReviewStatus,
@@ -16,6 +17,7 @@ import {
   type SetBookkeepingLineItemsInput,
   type SyncBookkeepingGmailReceiptsInput,
   type UpdateBookkeepingTransactionInput,
+  type WriteBookkeepingExportInput,
 } from "@/bindings";
 
 import { unwrap } from "./client";
@@ -345,3 +347,12 @@ export function useExportBookkeepingOfx() {
     mutationFn: (input: ExportBookkeepingInput) => unwrap(commands.exportBookkeepingOfx(input)),
   });
 }
+
+export function useWriteBookkeepingExport() {
+  return useMutation({
+    mutationFn: (input: WriteBookkeepingExportInput) =>
+      unwrap(commands.writeBookkeepingExport(input)),
+  });
+}
+
+export type { BookkeepingExportFormat };
