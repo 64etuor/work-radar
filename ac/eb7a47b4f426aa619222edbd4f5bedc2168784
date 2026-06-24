@@ -1,0 +1,39 @@
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f910a11abc432f::t_318815ff02658a 576,582,775
+  s_f910a11abc432f::t_d963ad1aa6e275 107
+  s_f910a11abc432f::t_6006af4722a456 44
+src-tauri/src/lib.rs
+  s_f910a11abc432f::t_2bd1d46127ddaa 119
+src-tauri/src/models/bookkeeping.rs
+  s_f910a11abc432f::t_2b3a415056cad9 440-447,456-463,536,554,575,601,619
+src/lib/query/bookkeeping.ts
+  s_f910a11abc432f::t_3a8ff20364ba1b 6,20,350-358
+src-tauri/src/commands/bookkeeping.rs
+  s_f910a11abc432f::t_d4e9d741d25424 3672-3677
+  s_f910a11abc432f::t_2fc6ce299f826a 4182-4211
+  s_f910a11abc432f::t_51f35490987a0a 20-21,31,3671
+  s_f910a11abc432f::t_6a1c63b4951b02 4,19
+  s_f910a11abc432f::t_8f3c6569a44316 467-473,2749-2781
+src-tauri/capabilities/default.json
+  s_f910a11abc432f::t_28e991bfcd8cb2 20
+src/bindings.ts
+  s_f910a11abc432f::t_f28e50b632e623 71,1087-1088,1150,3273-3277
+src-tauri/src/bookkeeping_export.rs
+  s_f910a11abc432f::t_5b53b6fb4410f8 73,128-133,152,155-162,164,328,339-351,369-385,391
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "aceb7a47b4f426aa619222edbd4f5bedc2168784",
+  "prompts": {},
+  "sessions": {
+    "s_f910a11abc432f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ef985-2b5e-7ad3-94b2-7aade688c63b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
