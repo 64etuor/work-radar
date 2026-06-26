@@ -417,6 +417,37 @@ describe("buildTodayBlocks", () => {
     expect(blocks[0].endISO).toContain("10:45");
   });
 
+  // 회귀: 자정을 넘는 루틴(22:00 + 120분 = 익일 00:00)은 endISO가 **다음 날** 날짜여야 한다.
+  // isoFor가 시작 `${date}`를 하드코딩하면 익일 00:00이 같은 날 00:00으로 접혀 absMin 음수 →
+  // heightPx가 MIN_BLOCK_PX(20px) 슬리버로 쪼그라든다(2시간 블록이 사라지는 버그).
+  it("routine crossing midnight gets a next-day endISO (no negative-duration sliver)", () => {
+    const routines = [
+      {
+        id: "r1",
+        title: "얼라방",
+        timeOfDay: "22:00",
+        timeOverride: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+        googleEventId: null,
+        googleCalendarId: null,
+        durationMin: 120,
+        done: false,
+      },
+    ] as never[];
+    const blocks = buildTodayBlocks({
+      signals: [],
+      placements: [],
+      events: [],
+      routines,
+      date: DATE,
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].startISO).toBe(`${DATE}T22:00:00`);
+    // 끝은 같은 날 00:00(버그)이 아니라 **다음 날** 00:00 — DATE=2026-05-28 → 2026-05-29.
+    expect(blocks[0].endISO).toBe("2026-05-29T00:00:00");
+  });
+
   // 회귀: 동기화 루틴 블록 드래그 — 이벤트 patch + routine_checks.time_override 미러가 한 쌍.
   // timeOverride가 이벤트의 새 시각과 일치하면 블록은 (옛 시각 가상 블록이 아니라)
   // 이동된 이벤트로 렌더돼야 한다. 이전엔 이벤트만 움직여 stale 판정 → 원위치 스냅백.

@@ -125,11 +125,10 @@ function isoFor(
 ): { startISO: string; endISO: string } {
   const [h, m] = hhmm.split(":").map(Number);
   const startISO = `${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
-  const endMs = new Date(startISO).getTime() + durationMin * 60_000;
-  const endDate = new Date(endMs);
-  const endISO = `${date}T${String(endDate.getHours()).padStart(2, "0")}:${String(
-    endDate.getMinutes(),
-  ).padStart(2, "0")}:00`;
+  // 끝이 자정을 넘으면 다음 날 날짜로 — 시작 `${date}` 하드코딩은 22:00+120m=익일 00:00을 같은 날
+  // 00:00으로 접어 음수 duration(heightPx가 MIN_BLOCK_PX 20px 슬리버) 버그를 냈다. plusMinutesLocal이
+  // 날짜 롤오버를 정확히 처리한다(signal/event 블록과 동일 경로).
+  const endISO = plusMinutesLocal(startISO, durationMin);
   return { startISO, endISO };
 }
 
