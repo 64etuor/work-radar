@@ -1,0 +1,30 @@
+src-tauri/Cargo.toml
+  s_3cbb2c78f391a7::t_de1fc24183cad4 50-52
+src-tauri/src/commands/routines/reminders.rs
+  s_3cbb2c78f391a7::t_4e05ddca21738c 17,20,24-28
+src-tauri/src/commands/routines/mod.rs
+  s_3cbb2c78f391a7::t_2d93abe3b7def9 11
+src-tauri/src/commands/routines/google_sync.rs
+  s_3cbb2c78f391a7::t_be221c52b09c5e 30-36
+  s_3cbb2c78f391a7::t_508410687b1fa4 749,768,808,862
+docs/decisions.md
+  s_3cbb2c78f391a7::t_0907ace6667e6b 637
+src-tauri/src/commands/routines/timezone.rs
+  s_3cbb2c78f391a7::t_8b0a687f54c555 1-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.1",
+  "base_commit_sha": "24518d905e535b635f016186c95dedea1c02ebab",
+  "prompts": {},
+  "sessions": {
+    "s_3cbb2c78f391a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd488fd4-af50-490d-81a7-f7768f28432c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
