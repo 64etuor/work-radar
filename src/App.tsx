@@ -1,4 +1,3 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
@@ -180,16 +179,15 @@ export default function App() {
           setPaletteOpen(false);
           return;
         }
-        // 오버레이(shadcn Dialog/DropdownMenu/Select + CardMenu)가 열려 있으면 overlay-stack에
-        // 등록돼 있으므로 셸은 창을 숨기지 않고 양보한다 — 각 오버레이가 Esc 닫기·포커스 복원 전담
-        // (plan §0.6 상호작용 계약). CardMenu도 overlay-stack 계약을 채택했다.
+        // 오버레이(shadcn Dialog/DropdownMenu/Select + CardMenu + popover)가 열려 있으면
+        // overlay-stack에 등록돼 있으므로 셸은 양보한다 — 각 오버레이가 Esc 닫기·포커스 복원 전담.
         if (isOverlayOpen()) return;
-        // board 외 뷰는 Esc로 보드 복귀, board에서 Esc는 창 숨김.
+        // board 외 뷰는 Esc로 보드 복귀. board에서 Esc는 무동작 —
+        // 창 숨김(getCurrentWindow().hide())은 제거했다(사용자 요청; Cmd+W로 닫음).
         if (view !== "board") {
           navigateView("board", "neutral");
           return;
         }
-        void getCurrentWindow().hide();
       }
     });
   }, [view, paletteOpen, setPaletteOpen, navigateView]);

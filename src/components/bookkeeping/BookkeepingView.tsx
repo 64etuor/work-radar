@@ -58,6 +58,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -1375,21 +1376,21 @@ function ReviewQueueCard({
             />
           </div>
           <div className="bk-review-date-filters">
-            <Input
-              type="date"
-              value={filter.fromDate}
-              onChange={(event) =>
-                setFilter((current) => ({ ...current, fromDate: event.target.value }))
-              }
-              aria-label="검토 큐 시작일"
+            <DatePicker
+              value={filter.fromDate || null}
+              onChange={(d) => setFilter((current) => ({ ...current, fromDate: d ?? "" }))}
+              max={filter.toDate || undefined}
+              placeholder="시작일"
+              ariaLabel="검토 큐 시작일"
+              className="w-full"
             />
-            <Input
-              type="date"
-              value={filter.toDate}
-              onChange={(event) =>
-                setFilter((current) => ({ ...current, toDate: event.target.value }))
-              }
-              aria-label="검토 큐 종료일"
+            <DatePicker
+              value={filter.toDate || null}
+              onChange={(d) => setFilter((current) => ({ ...current, toDate: d ?? "" }))}
+              min={filter.fromDate || undefined}
+              placeholder="종료일"
+              ariaLabel="검토 큐 종료일"
+              className="w-full"
             />
           </div>
           <Select value={order} onValueChange={(value) => onOrderChange(value as ReviewQueueOrder)}>
@@ -1922,14 +1923,13 @@ function ManualEntryCard({
               />
             </Field>
             <Field label="날짜" htmlFor={FIELD_IDS.spentAt}>
-              <Input
+              <DatePicker
                 id={FIELD_IDS.spentAt}
-                type="date"
-                value={draft.spentAt}
-                onChange={(e) =>
-                  onDraftChange((current) => ({ ...current, spentAt: e.target.value }))
-                }
-                required
+                value={draft.spentAt || null}
+                onChange={(d) => onDraftChange((current) => ({ ...current, spentAt: d ?? "" }))}
+                clearable={false}
+                ariaLabel="날짜"
+                className="w-full"
               />
             </Field>
           </div>
@@ -2275,16 +2275,17 @@ function ReconciliationCard({
           </Field>
           <div className="bk-form-grid">
             <Field htmlFor={FIELD_IDS.reconcileDate} label="명세서일">
-              <Input
+              <DatePicker
                 id={FIELD_IDS.reconcileDate}
-                type="date"
-                value={draft.statementDate}
-                onChange={(event) =>
+                value={draft.statementDate || null}
+                onChange={(d) =>
                   onDraftChange((current) => ({
                     ...current,
-                    statementDate: event.target.value,
+                    statementDate: d ?? "",
                   }))
                 }
+                ariaLabel="명세서일"
+                className="w-full"
               />
             </Field>
             <Field htmlFor={FIELD_IDS.reconcileCurrency} label="통화">
@@ -2686,12 +2687,13 @@ function TransactionEditForm({
           </div>
           <div className="bk-form-grid">
             <Field label="날짜" htmlFor={`${fieldPrefix}-spent-at`}>
-              <Input
+              <DatePicker
                 id={`${fieldPrefix}-spent-at`}
-                type="date"
-                value={draft.spentAt}
-                onChange={(e) => setDraft((current) => ({ ...current, spentAt: e.target.value }))}
-                required
+                value={draft.spentAt || null}
+                onChange={(d) => setDraft((current) => ({ ...current, spentAt: d ?? "" }))}
+                clearable={false}
+                ariaLabel="날짜"
+                className="w-full"
               />
             </Field>
             <Field label="시각" htmlFor={`${fieldPrefix}-spent-time`}>
