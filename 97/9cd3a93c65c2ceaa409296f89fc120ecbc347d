@@ -1,0 +1,106 @@
+src/components/bookkeeping/cards/RecurringMonthCard.tsx
+  s_5fda3eaa811c88::t_19278e1a0c44f3 1-7,9-57
+  s_5fda3eaa811c88::t_fb7a6a83b1fd2e 8
+src/components/bookkeeping/cards/CategorySelect.tsx
+  s_5fda3eaa811c88::t_717cbb1719f0c7 1-48
+src/components/bookkeeping/cards/TransactionMetadata.tsx
+  s_5fda3eaa811c88::t_36e8cf0c497f60 11
+  s_5fda3eaa811c88::t_2aeacecdced789 1-10,12-60
+src/components/bookkeeping/cards/LineItemEditor.tsx
+  s_5fda3eaa811c88::t_a2dc99c058feb0 1-27
+src/components/bookkeeping/cards/CurrencySummaryRows.tsx
+  s_5fda3eaa811c88::t_3550b9fc6e5d97 1-25
+src/components/bookkeeping/bookkeepingDrafts.ts
+  s_5fda3eaa811c88::t_cc79d9eee4cce8 1-154
+src/components/bookkeeping/cards/RecurringOccurrenceRow.tsx
+  s_5fda3eaa811c88::t_b6b3bf77cc2606 9
+  s_5fda3eaa811c88::t_e300fa9e900a84 1-8,10-69
+src/components/bookkeeping/cards/TransactionEditForm.tsx
+  s_5fda3eaa811c88::t_eee8f6687f1123 1-268
+src/components/bookkeeping/cards/TrashTransactionsCard.tsx
+  s_5fda3eaa811c88::t_615113af7deb6d 1-9,11-71
+  s_5fda3eaa811c88::t_fb7a6a83b1fd2e 10
+src/components/bookkeeping/cards/OperationsLogCard.tsx
+  s_5fda3eaa811c88::t_2768291f0b64c3 1-48
+src/components/bookkeeping/cards/DuplicateCandidates.tsx
+  s_5fda3eaa811c88::t_ce5df32c19115c 1-90
+src/components/bookkeeping/cards/ReportsSection.tsx
+  s_5fda3eaa811c88::t_349807db668a59 1-115
+src/components/bookkeeping/bookkeepingLabels.ts
+  s_5fda3eaa811c88::t_7501c22b4ca046 1-57
+src/components/bookkeeping/cards/CategorySummaryCard.tsx
+  s_5fda3eaa811c88::t_66839b35ae847a 1-40
+src/components/bookkeeping/cards/RecurringExpenseFormCard.tsx
+  s_5fda3eaa811c88::t_c0a8a8248235fb 1-173
+src/components/bookkeeping/cards/BulkCategorySelect.tsx
+  s_5fda3eaa811c88::t_f86d611192e363 1-59
+src/components/bookkeeping/cards/LineItemEditorForm.tsx
+  s_5fda3eaa811c88::t_bd2770bc000a8a 1-128
+src/components/bookkeeping/bookkeepingFormat.ts
+  s_5fda3eaa811c88::t_21aa93fbf5fc1b 1-20
+src/components/bookkeeping/cards/BookkeepingMetrics.tsx
+  s_5fda3eaa811c88::t_7ab170eab6f799 1-29
+src/components/bookkeeping/cards/BookkeepingScopeControls.tsx
+  s_5fda3eaa811c88::t_1b81ad1fbbc70b 1-63
+src/components/bookkeeping/bookkeepingFieldUtils.ts
+  s_5fda3eaa811c88::t_b348d1317ed4dd 1-35
+src/components/bookkeeping/cards/TransactionReadRow.tsx
+  s_5fda3eaa811c88::t_7a9a2ec888b2e8 1-43
+src/components/bookkeeping/cards/cardHelpers.ts
+  s_5fda3eaa811c88::t_6b4a77def1b49c 1-23
+src/components/bookkeeping/cards/CollapsibleInputCard.tsx
+  s_5fda3eaa811c88::t_711377b1827225 1-56
+src/components/bookkeeping/bookkeepingConstants.ts
+  s_5fda3eaa811c88::t_f2019253458298 1-68
+src/components/bookkeeping/cards/TrashTransactionRow.tsx
+  s_5fda3eaa811c88::t_1cb27f2eb0ab24 1-45
+src/components/bookkeeping/BookkeepingView.tsx
+  s_5fda3eaa811c88::t_0bd7c3c3bf90a4 4,45-61,67-88
+src/components/bookkeeping/bookkeepingState.ts
+  s_5fda3eaa811c88::t_34c846298b7ded 1-53
+src/components/bookkeeping/cards/_shared.tsx
+  s_5fda3eaa811c88::t_7cf51766059659 1-38
+src/components/bookkeeping/cards/GmailSyncCard.tsx
+  s_5fda3eaa811c88::t_fb7a6a83b1fd2e 11
+  s_5fda3eaa811c88::t_ac675b2970919f 1-10,12-103
+src/components/bookkeeping/bookkeepingMonth.ts
+  s_5fda3eaa811c88::t_d289df3d8869e7 1-22
+src/components/bookkeeping/cards/BookkeepingExportControls.tsx
+  s_5fda3eaa811c88::t_247cc74b2a2ef8 1-30
+src/components/bookkeeping/reviewFilter.test.ts
+  s_5fda3eaa811c88::t_573bd675a4f50b 3
+src/components/bookkeeping/cards/TaxonomyEditFields.tsx
+  s_5fda3eaa811c88::t_93619e70ad9a36 1-11,13-80
+  s_5fda3eaa811c88::t_70a35fa4f76c81 12
+src/components/bookkeeping/cards/PaymentFields.tsx
+  s_5fda3eaa811c88::t_4b370432ea15dc 1-67
+src/components/bookkeeping/cards/BudgetCard.tsx
+  s_5fda3eaa811c88::t_1be793b6747f94 1-15,17-126
+  s_5fda3eaa811c88::t_fb7a6a83b1fd2e 16
+src/components/bookkeeping/cards/ReviewQueueCard.tsx
+  s_5fda3eaa811c88::t_67edeccd23d3c9 1-25,27-275
+  s_5fda3eaa811c88::t_fb7a6a83b1fd2e 26
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_5fda3eaa811c88::t_fb7a6a83b1fd2e 8
+  s_5fda3eaa811c88::t_265f0fe28ca4e0 1-7,9-64
+src/components/bookkeeping/cards/ManualEntryCard.tsx
+  s_5fda3eaa811c88::t_1a544eb10795ce 1-148
+src/components/bookkeeping/cards/ReconciliationCard.tsx
+  s_5fda3eaa811c88::t_5266e271a5f633 1-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "979cd3a93c65c2ceaa409296f89fc120ecbc347d",
+  "prompts": {},
+  "sessions": {
+    "s_5fda3eaa811c88": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b201e6d9-4968-442b-b422-13820f9694d1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
