@@ -1,0 +1,49 @@
+src/components/ui/date-picker.dom.test.tsx
+  s_eed662eebca445::t_b008933613b825 68-73
+  s_eed662eebca445::t_e39dc4049131d9 6-8,11,83-110
+  s_eed662eebca445::t_813492420f79c6 1-5,9-10,12-67,74-82,111-112
+src/components/ui/date-picker.tsx
+  s_eed662eebca445::t_d2cdd27b4ec237 66-80
+  s_eed662eebca445::t_1d743a1fe859aa 1-65,81-105
+src/components/bookkeeping/BookkeepingView.tsx
+  s_eed662eebca445::t_ca66e4fe29127b 61
+  s_eed662eebca445::t_adb7471f6b43d5 1379-1385,1387-1393
+  s_eed662eebca445::t_28c18a8cfc1c09 2690,2692-2696
+  s_eed662eebca445::t_146a09bccf964d 2278,2280-2281,2284,2287-2288
+  s_eed662eebca445::t_e722096729cef6 1926,1928-1932
+src/components/ui/calendar.test.tsx
+  s_eed662eebca445::t_ce332a5e28a52c 1-106
+  s_eed662eebca445::t_0a58fd665624a0 107-108
+docs/superpowers/specs/2026-06-25-shared-date-picker-design.md
+  s_eed662eebca445::t_bbeaae2c6c3d1b 83-84
+  s_eed662eebca445::t_da5c1af323dfa0 114-116
+  s_eed662eebca445::t_d99a80b07ff9a2 1-3,5-82,85-113,117-133
+  s_eed662eebca445::t_3b17706ecd4edf 4
+  s_eed662eebca445::t_7b88c7ba1d7678 134
+src/components/ui/popover.tsx
+  s_eed662eebca445::t_9cecd26ec0d6e5 18,21-24,32-35
+src/App.tsx
+  s_eed662eebca445::t_e9a14b4bb3ef99 182-183,185-186
+src/components/ui/calendar.tsx
+  s_eed662eebca445::t_309123eef82ecc 100-102,104,106,108,110,112,114,116,118,120-128,130-131
+  s_eed662eebca445::t_487438881aec4c 1-99,103,105,107,109,111,113,115,117,119,129,132-165,167-208
+  s_eed662eebca445::t_506700e726ffc6 166
+src/lib/test-support/radixHappyDom.ts
+  s_eed662eebca445::t_0a50d500b34516 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.1",
+  "base_commit_sha": "577cfaa9ef21bc67b3ebc65d0a0cc202b28de58a",
+  "prompts": {},
+  "sessions": {
+    "s_eed662eebca445": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "730ebf97-be09-497e-8a99-5fe56e6fa49b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
