@@ -14,15 +14,18 @@ pub(crate) fn reminder_source_id(routine_id: &str, date: &str) -> String {
     format!("routine:{routine_id}:{date}")
 }
 
-/// `date`(로컬, YYYY-MM-DD) + `time_of_day`(HH:MM) - offset 의 발사 시각을 UTC 'YYYY-MM-DD HH:MM:SS'로.
+/// `date`(사용자 TZ 날짜, YYYY-MM-DD) + `time_of_day`(HH:MM) - offset 의 발사 시각을 UTC 'YYYY-MM-DD HH:MM:SS'로.
 /// 파싱 실패면 None(스케줄 불명 → enqueue 안 함, graceful).
 fn compute_fire_at(date: &str, time_of_day: &str, offset_min: u32) -> Option<String> {
-    use chrono::{Local, NaiveDateTime, TimeZone};
+    use chrono::{NaiveDateTime, TimeZone};
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
     let t = chrono::NaiveTime::parse_from_str(time_of_day, "%H:%M").ok()?;
     let naive = NaiveDateTime::new(d, t) - chrono::Duration::minutes(offset_min as i64);
-    // 로컬 벽시계 시각 → UTC. (DST 모호/불가 시 단일 결과를 취해 graceful.)
-    let local_dt = Local.from_local_datetime(&naive).single()?;
+    // 사용자 타임존(user_timezone SSOT) 벽시계 시각 → UTC. 루틴의 Google 미러도 같은 zone을 쓰므로
+    // 캘린더 이벤트와 리마인더가 항상 같은 순간을 가리킨다. (DST 모호/불가 시 단일 결과를 취해 graceful.)
+    let local_dt = super::timezone::user_timezone()
+        .from_local_datetime(&naive)
+        .single()?;
     Some(
         local_dt
             .with_timezone(&chrono::Utc)

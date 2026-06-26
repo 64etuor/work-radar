@@ -47,6 +47,9 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # 루틴 RRULE UNTIL을 UTC로 정규화(Google/RFC5545 §3.3.10: 이벤트가 timeZone을 달면 UNTIL은 UTC여야).
 #   로컬 wall-clock + IANA tzid → UTC 변환(DST 안전). tzid 외부화(PR 2c) 대비 일반 IANA 처리.
 chrono-tz = "0.10"
+# 사용자 타임존 SSOT(user_timezone): 시스템 IANA tz 이름 감지. chrono clock가 이미 transitive로 끌어와
+#   빌드 비용 추가 없음. 루틴 동기화 tzid와 리마인더 발사시각이 단일 출처를 공유하게 한다.
+iana-time-zone = "0.1"
 
 # Google Calendar OAuth(Phase 10a): PKCE(S256) code_challenge + base64url 인코딩 + CSPRNG.
 #   모두 reqwest/rustls가 이미 transitive로 끌어오는 크레이트라 빌드 비용 최소.

@@ -27,8 +27,13 @@ use crate::{
     routines::rrule::{self, Freq, MonthlyPattern, RRuleInput, Weekday},
 };
 
-// 임시: 사용자 TZ 설정 IPC 도입 전까지 KST 고정. PR 2c(설정 UI)에서 외부화 예정.
-const TZID_DEFAULT: &str = "Asia/Seoul";
+/// 동기화에 쓸 사용자 타임존 tzid(IANA 이름). `user_timezone` SSOT에서 파생한다 — 리마인더
+/// (`reminders::compute_fire_at`)와 같은 zone을 써 같은 루틴의 캘린더 미러와 알림이 일치한다.
+/// `Tz::name()`은 `&'static str`이라 기존 `tzid: &str` 시그니처에 그대로 들어간다(감지 실패 시
+/// `user_timezone`이 Asia/Seoul로 fail-closed = 기존 하드코딩 기본 보존).
+fn default_tzid() -> &'static str {
+    super::timezone::user_timezone().name()
+}
 
 #[derive(sqlx::FromRow, Debug, Clone)]
 struct RoutineSyncRow {
@@ -741,7 +746,7 @@ pub(crate) async fn patch_synced_routine_after_edit(
         routine_id,
         before,
         effective_date,
-        TZID_DEFAULT,
+        default_tzid(),
     )
     .await?;
     crate::commands::calendar::invalidate_calendar_events_cache().await;
@@ -760,7 +765,7 @@ pub(crate) async fn patch_synced_routine_exdates(
     let project_id = require_project_id(&row)?;
     let access = access_token_or_not_connected(db, project_id).await?;
     let provider = HttpCalendarProvider::new()?;
-    patch_routine_sync_with_provider(db, &provider, &access, routine_id, TZID_DEFAULT).await?;
+    patch_routine_sync_with_provider(db, &provider, &access, routine_id, default_tzid()).await?;
     crate::commands::calendar::invalidate_calendar_events_cache().await;
     Ok(())
 }
@@ -800,7 +805,7 @@ pub async fn enable_routine_google_sync(
         &routine_id,
         &project_id,
         &calendar_id,
-        TZID_DEFAULT,
+        default_tzid(),
     )
     .await
 }
@@ -854,7 +859,7 @@ pub async fn move_routine_google_sync(
         &routine_id,
         &project_id,
         &calendar_id,
-        TZID_DEFAULT,
+        default_tzid(),
     )
     .await
 }
