@@ -9,7 +9,7 @@ use crate::models::{
     AreaTag, Kind, RoutineFreq, RoutineHistoryDay, RoutineMonthlyPattern, RoutineTrackingItem,
 };
 
-use super::schedule::{parse_weekdays, routine_due_on};
+use super::schedule::{parse_weekdays, routine_due_on, within_active_window};
 
 /// fetch_routine_tracking 조인 결과 (private — RoutineTrackingItem로 집계).
 #[derive(sqlx::FromRow)]
@@ -19,6 +19,8 @@ struct TrackingRoutineRow {
     freq: RoutineFreq,
     weekdays: Option<String>,
     anchor_date: Option<String>,
+    start_date: Option<String>,
+    end_date: Option<String>,
     monthly_pattern: Option<RoutineMonthlyPattern>,
     monthly_nth_week: Option<i64>,
     area: Option<AreaTag>,
@@ -40,8 +42,8 @@ pub async fn fetch_routine_tracking(
     let start = end - chrono::Duration::days(span - 1);
 
     let routines = sqlx::query_as::<_, TrackingRoutineRow>(
-        "SELECT id, title, freq, weekdays, anchor_date, monthly_pattern, monthly_nth_week, \
-                area, area_tags, kind FROM routines \
+        "SELECT id, title, freq, weekdays, anchor_date, start_date, end_date, \
+                monthly_pattern, monthly_nth_week, area, area_tags, kind FROM routines \
          WHERE active = 1 ORDER BY rank IS NULL, rank, created_at",
     )
     .fetch_all(db)
@@ -54,6 +56,8 @@ pub async fn fetch_routine_tracking(
         freq,
         weekdays: weekdays_json,
         anchor_date: anchor,
+        start_date,
+        end_date,
         monthly_pattern,
         monthly_nth_week,
         area,
@@ -91,7 +95,8 @@ pub async fn fetch_routine_tracking(
                 monthly_pattern,
                 nth_week,
                 d,
-            ) {
+            ) && within_active_window(start_date.as_deref(), end_date.as_deref(), d)
+            {
                 let ds = d.format("%Y-%m-%d").to_string();
                 let is_done = checked.contains(&ds);
                 due += 1;

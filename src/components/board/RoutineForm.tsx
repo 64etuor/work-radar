@@ -9,6 +9,7 @@ import {
   type RoutineDraft,
 } from "@/components/board/routineSchedule";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 
 type Props = {
@@ -46,6 +47,9 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
   const [duration, setDuration] = useState(
     initial?.durationMin != null ? String(initial.durationMin) : "",
   );
+  // 활성 기간(둘 다 빈칸=무기한, 기존 동작). 'YYYY-MM-DD' or "".
+  const [startDate, setStartDate] = useState(initial?.startDate ?? "");
+  const [endDate, setEndDate] = useState(initial?.endDate ?? "");
 
   // 요일 입력은 weekly/biweekly(복수)에서, monthly nth_weekday(단일)에서 의미.
   const needsWeekdays = freq === "weekly" || freq === "biweekly";
@@ -85,12 +89,18 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
     }
     const offNum = offset.trim() === "" ? null : Math.max(0, Number(offset));
     const durNum = duration.trim() === "" ? null : Math.max(0, Number(duration));
+    const start = startDate.trim();
+    const end = endDate.trim();
+    // 종료일이 시작일보다 빠르면 제출 차단(백엔드 validate_active_period 미러). 문자열 비교 = 날짜순.
+    if (start !== "" && end !== "" && end < start) return;
     const draft: RoutineDraft = {
       title: t,
       freq,
       weekdays,
       // biweekly/monthly anchor는 백엔드가 기존 값 또는 오늘로 채운다(폼은 비워 보낸다).
       anchorDate: null,
+      startDate: start === "" ? null : start,
+      endDate: end === "" ? null : end,
       timeOfDay: time.trim() === "" ? null : time,
       reminderOffsetMin: Number.isFinite(offNum as number) ? offNum : null,
       // 패턴 필드는 monthly일 때만 의미 — 그 외 freq면 null(백엔드도 NULL 정리).
@@ -231,6 +241,31 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
           </span>
         </label>
       </div>
+      <div className="rtime">
+        <label>
+          시작일
+          <DatePicker
+            value={startDate || null}
+            onChange={(d) => setStartDate(d ?? "")}
+            max={endDate || undefined}
+            placeholder="없음"
+            ariaLabel="시작일"
+            className="h-8 px-2 text-xs"
+          />
+        </label>
+        <label>
+          종료일
+          <DatePicker
+            value={endDate || null}
+            onChange={(d) => setEndDate(d ?? "")}
+            min={startDate || undefined}
+            placeholder="없음"
+            ariaLabel="종료일"
+            className="h-8 px-2 text-xs"
+          />
+        </label>
+      </div>
+      <div className="rhint">기간을 비우면 무기한 반복합니다.</div>
       <div className="row">
         <Button type="submit" size="sm" className="rounded-full px-3.5 text-xs">
           {isEdit ? "저장" : "추가"}

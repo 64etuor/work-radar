@@ -38,12 +38,15 @@ pub async fn insert_routine(
         _ => (None, None),
     };
     let duration = input.duration_min.map(|v| v as i64);
+    // 활성 구간(0061). trim 후 빈 문자열은 None(무경계). create_routine이 형식/순서를 이미 검증.
+    let start_date = normalize_period_date(input.start_date.as_deref());
+    let end_date = normalize_period_date(input.end_date.as_deref());
 
     let row: (String,) = sqlx::query_as(
         "INSERT INTO routines \
            (id, title, freq, weekdays, anchor_date, time_of_day, reminder_offset_min, area, kind, \
-            monthly_pattern, monthly_nth_week, duration_min) \
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id",
+            monthly_pattern, monthly_nth_week, duration_min, start_date, end_date) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) RETURNING id",
     )
     .bind(input.title.trim())
     .bind(input.freq)
@@ -56,6 +59,8 @@ pub async fn insert_routine(
     .bind(monthly_pattern)
     .bind(monthly_nth_week)
     .bind(duration)
+    .bind(&start_date)
+    .bind(&end_date)
     .fetch_one(db)
     .await?;
 
@@ -65,6 +70,8 @@ pub async fn insert_routine(
         freq: input.freq,
         weekdays: input.weekdays.clone(),
         anchor_date: anchor,
+        start_date,
+        end_date,
         time_of_day,
         reminder_offset_min: input.reminder_offset_min,
         area: input.area,
@@ -127,12 +134,56 @@ pub(crate) fn validate_monthly_input(
     Ok(())
 }
 
+/// 활성 구간 날짜 정규화: trim 후 빈 문자열이면 None(무경계). 저장·바인딩·검증이 공유한다.
+pub(crate) fn normalize_period_date(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// 활성 구간(start_date/end_date) IPC-boundary 검증. DB는 날짜 형식/순서를 강제하지 않으므로
+/// (0061은 순수 ADD COLUMN — monthly nth_week와 동일 패턴) 애플리케이션이 보증한다:
+/// - 각 경계는 'YYYY-MM-DD' 파싱 가능해야 함(빈 문자열은 무경계로 정규화 → 검증 생략).
+/// - 둘 다 있으면 `end >= start`(inclusive 구간).
+///
+/// 통과하면 due-calc(`within_active_window`)가 게이트로 강제한다.
+#[allow(clippy::result_large_err)]
+pub(crate) fn validate_active_period(
+    start: Option<&str>,
+    end: Option<&str>,
+) -> Result<(), AppError> {
+    let parse = |v: &str, code: &'static str| {
+        chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")
+            .map_err(|_| AppError::validation(code, "날짜 형식이 YYYY-MM-DD가 아닙니다"))
+    };
+    let start_norm = normalize_period_date(start);
+    let end_norm = normalize_period_date(end);
+    let start_d = start_norm
+        .as_deref()
+        .map(|v| parse(v, "routine.period.bad_start_date"))
+        .transpose()?;
+    let end_d = end_norm
+        .as_deref()
+        .map(|v| parse(v, "routine.period.bad_end_date"))
+        .transpose()?;
+    if let (Some(s), Some(e)) = (start_d, end_d) {
+        if e < s {
+            return Err(AppError::validation(
+                "routine.period.end_before_start",
+                "종료일은 시작일보다 빠를 수 없습니다",
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn create_routine(
     db: State<'_, Db>,
     input: CreateRoutineInput,
 ) -> Result<RoutineToday, AppError> {
+    validate_active_period(input.start_date.as_deref(), input.end_date.as_deref())?;
     validate_monthly_input(
         input.freq,
         input.monthly_pattern,
@@ -148,6 +199,7 @@ pub async fn create_routine(
 #[tauri::command]
 #[specta::specta]
 pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Result<(), AppError> {
+    validate_active_period(input.start_date.as_deref(), input.end_date.as_deref())?;
     validate_monthly_input(
         input.freq,
         input.monthly_pattern,
@@ -223,6 +275,9 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
         _ => (None, None),
     };
     let duration = input.duration_min.map(|v| v as i64);
+    // 활성 구간(0061). update_routine이 형식/순서를 이미 검증. trim 후 빈 문자열은 None(무경계).
+    let start_date = normalize_period_date(input.start_date.as_deref());
+    let end_date = normalize_period_date(input.end_date.as_deref());
 
     // 시간 변경 감지 — 바뀌었으면 아래에서 '수정한 당일 이후' per-day override를 정리한다.
     let prev_time_of_day: Option<String> =
@@ -238,7 +293,8 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     let result = sqlx::query(
         "UPDATE routines SET title=?2, freq=?3, weekdays=?4, anchor_date=?5, \
          time_of_day=?6, reminder_offset_min=?7, \
-         monthly_pattern=?8, monthly_nth_week=?9, duration_min=?10 WHERE id=?1",
+         monthly_pattern=?8, monthly_nth_week=?9, duration_min=?10, \
+         start_date=?11, end_date=?12 WHERE id=?1",
     )
     .bind(&input.id)
     .bind(&title)
@@ -250,6 +306,8 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     .bind(monthly_pattern)
     .bind(monthly_nth_week)
     .bind(duration)
+    .bind(&start_date)
+    .bind(&end_date)
     .execute(db)
     .await?;
 
@@ -542,12 +600,79 @@ mod tests {
         .is_ok());
     }
 
+    // ── 활성 구간 검증 (validate_active_period) ──
+
+    // 둘 다 None/빈 문자열 = 무경계 → 통과.
+    #[test]
+    fn validate_period_unbounded_ok() {
+        assert!(validate_active_period(None, None).is_ok());
+        assert!(validate_active_period(Some(""), Some("  ")).is_ok());
+    }
+
+    // 정상 구간(start <= end, inclusive) + 단방향(한쪽만) → 통과.
+    #[test]
+    fn validate_period_valid_ranges_ok() {
+        assert!(validate_active_period(Some("2026-06-01"), Some("2026-06-30")).is_ok());
+        assert!(validate_active_period(Some("2026-06-01"), Some("2026-06-01")).is_ok());
+        assert!(validate_active_period(Some("2026-06-01"), None).is_ok());
+        assert!(validate_active_period(None, Some("2026-06-30")).is_ok());
+    }
+
+    // end < start → end_before_start.
+    #[test]
+    fn validate_period_end_before_start() {
+        let err = validate_active_period(Some("2026-06-30"), Some("2026-06-01")).unwrap_err();
+        assert_eq!(err.code, "routine.period.end_before_start");
+    }
+
+    // 형식 오류 → bad_start_date / bad_end_date (어느 쪽인지 구분).
+    #[test]
+    fn validate_period_bad_format() {
+        let s = validate_active_period(Some("2026/06/01"), None).unwrap_err();
+        assert_eq!(s.code, "routine.period.bad_start_date");
+        let e = validate_active_period(None, Some("06-01-2026")).unwrap_err();
+        assert_eq!(e.code, "routine.period.bad_end_date");
+    }
+
+    // 활성 구간이 INSERT로 영속되는지(컬럼 바인딩 회귀) + RoutineToday 반환에 반영.
+    #[tokio::test]
+    async fn insert_persists_active_period() {
+        let db = crate::commands::shared::test_support::fresh_db().await;
+        let mut input = seed_routine_input("09:00");
+        input.start_date = Some("2026-06-01".into());
+        input.end_date = Some("2026-06-30".into());
+        let today = insert_routine(&db, &input).await.unwrap();
+        assert_eq!(today.start_date.as_deref(), Some("2026-06-01"));
+        assert_eq!(today.end_date.as_deref(), Some("2026-06-30"));
+        let (s, e): (Option<String>, Option<String>) =
+            sqlx::query_as("SELECT start_date, end_date FROM routines WHERE id = ?1")
+                .bind(&today.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(s.as_deref(), Some("2026-06-01"));
+        assert_eq!(e.as_deref(), Some("2026-06-30"));
+    }
+
+    // 빈 문자열은 None으로 정규화돼 NULL 저장(무경계).
+    #[tokio::test]
+    async fn insert_normalizes_blank_period_to_null() {
+        let db = crate::commands::shared::test_support::fresh_db().await;
+        let mut input = seed_routine_input("09:00");
+        input.start_date = Some("  ".into());
+        input.end_date = Some("".into());
+        let today = insert_routine(&db, &input).await.unwrap();
+        assert!(today.start_date.is_none() && today.end_date.is_none());
+    }
+
     fn seed_routine_input(time: &str) -> CreateRoutineInput {
         CreateRoutineInput {
             title: "중국어".into(),
             freq: RoutineFreq::Daily,
             weekdays: vec![],
             anchor_date: None,
+            start_date: None,
+            end_date: None,
             time_of_day: Some(time.into()),
             reminder_offset_min: None,
             area: None,
@@ -565,6 +690,8 @@ mod tests {
             freq: RoutineFreq::Daily,
             weekdays: vec![],
             anchor_date: None,
+            start_date: None,
+            end_date: None,
             time_of_day: Some(time.into()),
             reminder_offset_min: None,
             monthly_pattern: None,

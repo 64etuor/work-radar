@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { RoutineToday } from "@/bindings";
+import { installRadixHappyDomShim } from "@/lib/test-support/radixHappyDom";
 
 import { type RoutineDraft, RoutinesPanel } from "./RoutinesPanel";
 
@@ -12,6 +13,9 @@ import { type RoutineDraft, RoutinesPanel } from "./RoutinesPanel";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
+
+// 폼의 기간 필드가 DatePicker(Radix Popover)로 바뀜 — happy-dom Radix shim.
+beforeAll(installRadixHappyDomShim);
 
 afterEach(() => {
   if (root) {
@@ -30,6 +34,8 @@ function routine(over: Partial<RoutineToday> = {}): RoutineToday {
     freq: "daily",
     weekdays: [],
     anchorDate: null,
+    startDate: null,
+    endDate: null,
     timeOfDay: null,
     reminderOffsetMin: null,
     area: null,
@@ -222,5 +228,62 @@ describe("RoutinesPanel behavior baseline", () => {
     );
     expect(dayBtns.length).toBe(2);
     expect(dayBtns.every((b) => b.getAttribute("aria-pressed") === "true")).toBe(true);
+  });
+
+  // 활성 기간(0061): 네이티브 date 입력이 DatePicker(Popover)로 교체됨. 피커는 value의 달로 열리므로
+  // 시드값을 주면 시스템 날짜와 무관하게 결정적이다(트리거 클릭 → 그리드 날짜 클릭).
+  function pickerTrigger(label: string): HTMLButtonElement {
+    const el = container?.querySelector<HTMLButtonElement>(
+      `[data-date-picker-trigger][aria-label="${label}"]`,
+    );
+    if (!el) throw new Error(`date picker trigger not found: ${label}`);
+    return el;
+  }
+  /** PopoverContent는 portal로 body에 렌더 → document 전체에서 찾는다. */
+  function dayCell(date: string): HTMLButtonElement {
+    const el = document.querySelector<HTMLButtonElement>(`[data-date="${date}"]`);
+    if (!el) throw new Error(`day cell not found: ${date}`);
+    return el;
+  }
+
+  it("period: edit seeds the start/end pickers (formatted YYYY.MM.DD)", () => {
+    render([
+      routine({ id: "r1", title: "챌린지", startDate: "2026-06-10", endDate: "2026-06-30" }),
+    ]);
+    click(container!.querySelector('[aria-label="루틴 수정"]')!);
+    expect(pickerTrigger("시작일").textContent).toBe("2026.06.10");
+    expect(pickerTrigger("종료일").textContent).toBe("2026.06.30");
+  });
+
+  it("period: empty pickers submit as null (unbounded, backward compatible)", () => {
+    const h = render([]);
+    click(buttonByText("+ 루틴"));
+    setInputValue(titleInput(), "무기한");
+    expect(pickerTrigger("시작일").textContent).toBe("없음");
+    submitForm();
+    const draft = h.onCreate.mock.calls[0][0];
+    expect(draft.startDate).toBeNull();
+    expect(draft.endDate).toBeNull();
+  });
+
+  it("period: picking a date in the calendar flows into the draft", () => {
+    // 시드 기간(6월)로 편집 모드 — 종료 피커가 결정적으로 6월 그리드를 연다.
+    const h = render([
+      routine({ id: "r1", title: "챌린지", startDate: "2026-06-10", endDate: "2026-06-20" }),
+    ]);
+    click(container!.querySelector('[aria-label="루틴 수정"]')!);
+    click(pickerTrigger("종료일"));
+    click(dayCell("2026-06-25"));
+    submitForm();
+    expect(h.onUpdate).toHaveBeenCalledTimes(1);
+    expect(h.onUpdate.mock.calls[0][1].endDate).toBe("2026-06-25");
+  });
+
+  it("period: end picker disables dates before start (min cross-constraint)", () => {
+    render([routine({ id: "r1", title: "제약", startDate: "2026-06-20", endDate: "2026-06-30" })]);
+    click(container!.querySelector('[aria-label="루틴 수정"]')!);
+    click(pickerTrigger("종료일"));
+    expect(dayCell("2026-06-10").getAttribute("aria-disabled")).toBe("true"); // 시작 이전 비활성
+    expect(dayCell("2026-06-25").getAttribute("aria-disabled")).toBeNull(); // 시작 이후 가능
   });
 });

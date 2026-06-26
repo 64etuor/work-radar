@@ -6,6 +6,10 @@ export type RoutineDraft = {
   freq: RoutineFreq;
   weekdays: Weekday[];
   anchorDate: string | null;
+  /** 활성 구간 시작일 'YYYY-MM-DD'. null = 하한 없음(생성 시점부터). 구간 밖은 due 아님. */
+  startDate: string | null;
+  /** 활성 구간 종료일 'YYYY-MM-DD'(inclusive). null = 무기한. */
+  endDate: string | null;
   timeOfDay: string | null;
   reminderOffsetMin: number | null;
   /** monthly 풍부 패턴. monthly가 아니면 null(백엔드가 NULL로 정리). */

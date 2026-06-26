@@ -45,6 +45,8 @@ mod tests {
                 freq: RoutineFreq::Weekly,
                 weekdays: vec![Weekday::Wed, Weekday::Fri],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: None,
                 reminder_offset_min: None,
                 area: None,
@@ -423,6 +425,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: None,
                 reminder_offset_min: None,
                 area: None,
@@ -461,6 +465,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("07:00".into()),
                 reminder_offset_min: Some(30),
                 area: None,
@@ -499,6 +505,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("21:00".into()),
                 reminder_offset_min: None,
                 area: None,
@@ -540,6 +548,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("07:00".into()),
                 reminder_offset_min: None,
                 area: None,
@@ -571,6 +581,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("08:00".into()),
                 reminder_offset_min: None,
                 monthly_pattern: None,
@@ -660,6 +672,80 @@ mod tests {
         );
     }
 
+    /// 활성 구간(0061): 구간 밖 날짜는 Today 목록에서 제외(요일 게이팅과 동일), 경계는 inclusive.
+    /// daily라 weekday는 무관 — 순수하게 [start, end] 게이트만 검증.
+    #[tokio::test]
+    async fn active_period_gates_today_listing() {
+        let db = fresh_db().await;
+        let r = insert_routine(
+            &db,
+            &CreateRoutineInput {
+                title: "분기 챌린지".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                start_date: Some("2026-06-10".into()),
+                end_date: Some("2026-06-20".into()),
+                time_of_day: None,
+                reminder_offset_min: None,
+                area: None,
+                kind: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let len_on = |list: Vec<crate::models::RoutineToday>| list.len();
+        // daily라 weekday 인자는 무시됨(fetch_today_routines의 _weekday) — 게이트는 날짜만 본다.
+        assert_eq!(
+            len_on(
+                fetch_today_routines(&db, "2026-06-09", Weekday::Tue)
+                    .await
+                    .unwrap()
+            ),
+            0,
+            "시작 전(6/9) 미표시"
+        );
+        assert_eq!(
+            len_on(
+                fetch_today_routines(&db, "2026-06-10", Weekday::Wed)
+                    .await
+                    .unwrap()
+            ),
+            1,
+            "시작일(6/10) 표시"
+        );
+        assert_eq!(
+            len_on(
+                fetch_today_routines(&db, "2026-06-20", Weekday::Sat)
+                    .await
+                    .unwrap()
+            ),
+            1,
+            "종료일(6/20) inclusive 표시"
+        );
+        assert_eq!(
+            len_on(
+                fetch_today_routines(&db, "2026-06-21", Weekday::Sun)
+                    .await
+                    .unwrap()
+            ),
+            0,
+            "종료 후(6/21) 미표시"
+        );
+
+        // 구간 안에서 start/end 필드가 RoutineToday에 실려 온다(폼 편집 시드용).
+        let mid = fetch_today_routines(&db, "2026-06-15", Weekday::Mon)
+            .await
+            .unwrap();
+        let item = mid.iter().find(|x| x.id == r.id).expect("구간 안 due");
+        assert_eq!(item.start_date.as_deref(), Some("2026-06-10"));
+        assert_eq!(item.end_date.as_deref(), Some("2026-06-20"));
+    }
+
     /// update_routine: 필드 변경 후 미발사 알림 삭제, 발사된 알림은 보존.
     #[tokio::test]
     async fn update_routine_clears_unfired_keeps_fired() {
@@ -671,6 +757,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("08:00".into()),
                 reminder_offset_min: None,
                 area: None,
@@ -719,6 +807,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("09:00".into()),
                 reminder_offset_min: None,
                 monthly_pattern: None,
@@ -765,6 +855,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("07:00".into()),
                 reminder_offset_min: None,
                 area: None,
@@ -784,6 +876,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: None,
                 reminder_offset_min: None,
                 area: None,
@@ -884,6 +978,8 @@ mod tests {
                 freq: RoutineFreq::Monthly,
                 weekdays: vec![Weekday::Tue],
                 anchor_date: Some("2026-05-12".into()), // day-of-month 12 → 매월 12일 due
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("09:00".into()),
                 reminder_offset_min: None,
                 area: None,
@@ -921,6 +1017,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("09:00".into()),
                 reminder_offset_min: None,
                 monthly_pattern: Some(RoutineMonthlyPattern::DayOfMonth), // daily면 무시돼야
@@ -949,6 +1047,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: None,
                 reminder_offset_min: None,
                 area: None,

@@ -37,6 +37,9 @@ struct RoutineSyncRow {
     freq: String,
     weekdays: Option<String>,
     anchor_date: Option<String>,
+    /// 활성 구간(0061). start_date = DTSTART floor 소스, end_date = RRULE UNTIL 매핑 소스.
+    start_date: Option<String>,
+    end_date: Option<String>,
     time_of_day: Option<String>,
     duration_min: Option<i64>,
     monthly_pattern: Option<String>,
@@ -55,7 +58,7 @@ pub(crate) struct RoutineEditSyncSnapshot {
 
 async fn load_routine(db: &Db, id: &str) -> Result<RoutineSyncRow, AppError> {
     sqlx::query_as::<_, RoutineSyncRow>(
-        "SELECT project_id, title, freq, weekdays, anchor_date, time_of_day, \
+        "SELECT project_id, title, freq, weekdays, anchor_date, start_date, end_date, time_of_day, \
                 duration_min, monthly_pattern, monthly_nth_week, kind, \
                 google_calendar_id, google_event_id, created_at \
          FROM routines WHERE id = ?1",
@@ -189,6 +192,108 @@ fn parse_monthly_pattern(s: &str) -> Result<MonthlyPattern, AppError> {
     }
 }
 
+// rrule 로컬 enum → models enum 변환(due-calc SSOT `routine_due_on`은 models 타입을 받는다).
+// 문자열 파싱은 parse_freq/parse_weekday_str/parse_monthly_pattern 단일 경로를 재사용한다.
+fn to_model_freq(f: Freq) -> crate::models::RoutineFreq {
+    use crate::models::RoutineFreq as M;
+    match f {
+        Freq::Daily => M::Daily,
+        Freq::Weekly => M::Weekly,
+        Freq::Biweekly => M::Biweekly,
+        Freq::Monthly => M::Monthly,
+    }
+}
+
+fn to_model_weekday(w: Weekday) -> crate::models::Weekday {
+    use crate::models::Weekday as M;
+    match w {
+        Weekday::Mon => M::Mon,
+        Weekday::Tue => M::Tue,
+        Weekday::Wed => M::Wed,
+        Weekday::Thu => M::Thu,
+        Weekday::Fri => M::Fri,
+        Weekday::Sat => M::Sat,
+        Weekday::Sun => M::Sun,
+    }
+}
+
+fn to_model_pattern(p: MonthlyPattern) -> crate::models::RoutineMonthlyPattern {
+    use crate::models::RoutineMonthlyPattern as M;
+    match p {
+        MonthlyPattern::DayOfMonth => M::DayOfMonth,
+        MonthlyPattern::NthWeekday => M::NthWeekday,
+    }
+}
+
+fn parse_period_ymd(v: &str) -> Result<NaiveDate, AppError> {
+    NaiveDate::parse_from_str(v, "%Y-%m-%d").map_err(|_| {
+        AppError::validation(
+            "routine.period.bad_date",
+            "날짜 형식이 YYYY-MM-DD가 아닙니다",
+        )
+    })
+}
+
+/// 활성 구간 시작 floor → Google DTSTART 날짜 계산. `floor = max(start, reference_override)`
+/// (split 시 reference_override=effective_date라 과거 구간 재생성/중복을 막는다) 이후 첫 **due 발생일**을
+/// 로컬 due-calc(`routine_due_on`)로 찾아 'YYYY-MM-DD'로 반환한다. 패턴은 row의 원래 freq/anchor/
+/// monthly_pattern 그대로라 biweekly 2주 parity·monthly day 클램프·nth_weekday가 로컬과 **구성적으로
+/// 일치**한다. `end`까지(있으면) 발생이 없으면 `routine.sync.empty_window`(파괴적 Google 호출 전 차단).
+/// 스캔 상한 366일(early-exit) — nth_weekday 5번째 미존재 월 건너뜀까지 커버.
+fn first_due_on_or_after(
+    row: &RoutineSyncRow,
+    start: &str,
+    reference_override: Option<&str>,
+    end: Option<&str>,
+) -> Result<String, AppError> {
+    use super::schedule::routine_due_on;
+
+    let start_d = parse_period_ymd(start)?;
+    let floor = match reference_override {
+        Some(r) => start_d.max(parse_period_ymd(r)?),
+        None => start_d,
+    };
+    let end_d = end.map(parse_period_ymd).transpose()?;
+
+    let freq = to_model_freq(parse_freq(&row.freq)?);
+    let weekdays: Vec<crate::models::Weekday> = parse_weekdays_json(row.weekdays.as_deref())?
+        .into_iter()
+        .map(to_model_weekday)
+        .collect();
+    let pattern = match row.monthly_pattern.as_deref() {
+        Some(s) => Some(to_model_pattern(parse_monthly_pattern(s)?)),
+        None if matches!(freq, crate::models::RoutineFreq::Monthly) => {
+            Some(crate::models::RoutineMonthlyPattern::DayOfMonth)
+        }
+        None => None,
+    };
+    let nth_week = row.monthly_nth_week.map(|n| n as i32);
+
+    let mut d = floor;
+    for _ in 0..=366 {
+        if let Some(e) = end_d {
+            if d > e {
+                break;
+            }
+        }
+        if routine_due_on(
+            freq,
+            &weekdays,
+            row.anchor_date.as_deref(),
+            pattern,
+            nth_week,
+            d,
+        ) {
+            return Ok(d.format("%Y-%m-%d").to_string());
+        }
+        d += Duration::days(1);
+    }
+    Err(AppError::validation(
+        "routine.sync.empty_window",
+        "활성 구간 안에 반복 발생이 없습니다 — 기간 또는 반복 설정을 확인하세요",
+    ))
+}
+
 /// 동기화 루틴 row → Google master event 입력(CREATE/PATCH 공용). exdate 조회 + RRULE 매핑 +
 /// ISO 변환을 한 곳에 모은다. enable(CREATE)·patch(PATCH) 둘 다 이걸 거쳐 같은 매핑을 보장한다.
 /// monthly 패턴 미지정이면 day_of_month 기본 — 로컬 due-calc(day-of-month)와 일치해 화면/캘린더가
@@ -234,6 +339,33 @@ async fn build_master_event_input_with_reference(
             )
         })?;
 
+    // 활성 구간(0061) → Google 미러: start_date면 DTSTART를 "start 이후 첫 발생일"로 내리고
+    // (parity 보존), end_date면 RRULE에 UNTIL을 부착한다. 빈 문자열은 무경계로 정규화.
+    let window_start = row
+        .start_date
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let window_end = row
+        .end_date
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    // 둘 중 하나라도 있으면 floor 이후 첫 발생을 DTSTART로 확정한다. start_date가 없을 때 floor=자연
+    // 기준(reference: enable=created_at / split=effective_date) — 이렇게 해야 end_date만 있고 그 end가
+    // DTSTART보다 과거인 경우(예: 만료된 end-only 루틴 enable)에도 first_due_on_or_after의 빈-구간
+    // 가드가 작동해 'DTSTART > UNTIL' 깨진 RRULE 대신 routine.sync.empty_window로 정직하게 거부한다.
+    // start_date가 있으면 기존대로 floor=max(start, reference_override). 둘 다 없으면 override 없음(기존 동작).
+    let effective_dtstart = match (window_start, window_end) {
+        (None, None) => None,
+        _ => Some(first_due_on_or_after(
+            row,
+            window_start.unwrap_or(reference),
+            reference_override,
+            window_end,
+        )?),
+    };
+
     let input = RRuleInput {
         freq,
         weekdays: &weekdays,
@@ -244,6 +376,8 @@ async fn build_master_event_input_with_reference(
         monthly_nth_week: row.monthly_nth_week.map(|n| n as i32),
         tzid,
         reference_date: reference,
+        dtstart_override: effective_dtstart.as_deref(),
+        window_end,
     };
     let spec = rrule::routine_to_rrule(&input, &exdate_refs).map_err(|e| {
         AppError::validation("routine.rrule_invalid", format!("RRULE 매핑 실패: {e}"))
@@ -982,6 +1116,8 @@ mod tests {
                 freq,
                 weekdays,
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day,
                 reminder_offset_min: None,
                 area: None,
@@ -1506,6 +1642,8 @@ mod tests {
                 freq: RoutineFreq::Weekly,
                 weekdays: vec![MWeekday::Mon],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("07:00".into()),
                 reminder_offset_min: None,
                 monthly_pattern: None,
@@ -1563,6 +1701,8 @@ mod tests {
                 freq: RoutineFreq::Daily,
                 weekdays: vec![],
                 anchor_date: None,
+                start_date: None,
+                end_date: None,
                 time_of_day: Some("08:00".into()),
                 reminder_offset_min: None,
                 monthly_pattern: None,
@@ -2233,6 +2373,293 @@ mod tests {
             .await
             .is_ok(),
             "유효한 nth_weekday/-1은 통과"
+        );
+    }
+
+    /// 활성 구간(0061) 동기화: start_date → DTSTART floor, end_date → RRULE UNTIL (daily).
+    #[tokio::test]
+    async fn enable_with_window_maps_dtstart_and_until() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "분기 챌린지",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET start_date = '2026-06-10', end_date = '2026-06-30' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+        let provider = RecordingProvider::with_create_id("evt_win");
+
+        enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created.len(), 1);
+        let input = &created[0].2;
+        // DTSTART floor = start_date 이후 첫 발생(daily=start 당일).
+        assert_eq!(input.start, "2026-06-10T07:00:00");
+        // RRULE에 UNTIL=end_date 부착(local compact).
+        let rrule = input
+            .recurrence
+            .iter()
+            .find(|l| l.starts_with("RRULE:"))
+            .unwrap();
+        assert_eq!(rrule, "RRULE:FREQ=DAILY;UNTIL=20260630T070000");
+    }
+
+    /// 활성 구간에 반복 발생이 없으면(weekly 월요일인데 구간에 월요일 없음) empty_window 거부 — provider 미호출.
+    #[tokio::test]
+    async fn enable_with_window_no_occurrence_errors() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "주간 회의",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Mon],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // 2026-06-09(화)~06-14(일) 구간엔 월요일이 없다(이전 월=6/8, 다음 월=6/15).
+        sqlx::query(
+            "UPDATE routines SET start_date = '2026-06-09', end_date = '2026-06-14' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+        let provider = RecordingProvider::default();
+        let err = enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "routine.sync.empty_window");
+        assert!(
+            provider.created.lock().unwrap().is_empty(),
+            "빈 구간은 create_event 미호출"
+        );
+    }
+
+    /// 회귀(critic Finding #1): start_date 없이 end_date만 있고 그 end가 DTSTART(created_at)보다
+    /// 과거면 'DTSTART > UNTIL' 깨진 RRULE 대신 empty_window로 거부 — provider 미호출.
+    #[tokio::test]
+    async fn enable_with_past_end_only_errors_empty_window() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "만료",
+            RoutineFreq::Daily,
+            vec![],
+            Some("09:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // created_at은 test 실행 시각(>=2026). end_date를 명백히 과거로, start_date는 None.
+        sqlx::query("UPDATE routines SET end_date = '2020-12-31' WHERE id = ?1")
+            .bind(&rid)
+            .execute(&db)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        let err = enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "routine.sync.empty_window");
+        assert!(provider.created.lock().unwrap().is_empty());
+    }
+
+    /// 활성 구간 + 편집 series-split 합성: old master는 effective-1로 cap(window UNTIL을 덮어씀),
+    /// new master는 DTSTART=max(start, effective) + end_date UNTIL을 싣는다.
+    #[tokio::test]
+    async fn edit_split_composes_with_active_window() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET created_at = '2026-05-29 00:00:00', start_date = '2026-05-29', \
+             end_date = '2026-12-31' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+        mark_synced(&db, &rid, "cal_g", "evt_old").await;
+        let before = routine_edit_sync_snapshot(&db, &rid)
+            .await
+            .unwrap()
+            .expect("synced snapshot");
+
+        let provider = RecordingProvider::with_create_id("evt_new");
+        split_routine_sync_after_edit_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            before,
+            "2026-06-09",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+
+        // old master: DTSTART=구간 시작(5/29), UNTIL=effective-1(6/8) — cap이 window UNTIL을 덮어씀.
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1);
+        let old_rec = patched[0].3["recurrence"][0].as_str().unwrap();
+        assert!(
+            old_rec.contains("UNTIL=20260608T070000"),
+            "old master capped at effective-1: {old_rec}"
+        );
+        assert_eq!(patched[0].3["start"]["dateTime"], "2026-05-29T07:00:00");
+
+        // new master: DTSTART=max(start, effective)=6/9, UNTIL=end_date(12/31).
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created.len(), 1);
+        assert_eq!(created[0].2.start, "2026-06-09T07:00:00");
+        let new_rec = created[0]
+            .2
+            .recurrence
+            .iter()
+            .find(|l| l.starts_with("RRULE:"))
+            .unwrap();
+        assert!(
+            new_rec.contains("UNTIL=20261231T070000"),
+            "new master carries end_date UNTIL: {new_rec}"
+        );
+    }
+
+    /// 회귀(critic Minor #1): biweekly + start_date → DTSTART가 parity 맞는 첫 발생(scan이 anchor
+    /// 2주 parity를 보존). anchor=5/25(월), start=6/1(월이지만 parity off) → 첫 due=6/8(parity on).
+    #[tokio::test]
+    async fn enable_biweekly_window_dtstart_on_correct_parity() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "격주",
+            RoutineFreq::Biweekly,
+            vec![MWeekday::Mon],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET anchor_date = '2026-05-25', start_date = '2026-06-01' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+        let provider = RecordingProvider::with_create_id("evt_bw");
+        enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(
+            created[0].2.start, "2026-06-08T07:00:00",
+            "parity off인 6/1을 건너뛰고 6/8(on)에서 시작"
+        );
+    }
+
+    /// 회귀(critic Minor #1): monthly day_of_month=31 + start_date → DTSTART는 말일 클램프된 첫
+    /// 발생(2월=28), 패턴은 anchor의 31 클램프(BYMONTHDAY=28,29,30,31;BYSETPOS=-1) 유지.
+    #[tokio::test]
+    async fn enable_monthly_31_window_dtstart_clamped() {
+        let db = fresh_db().await;
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "월말",
+            RoutineFreq::Monthly,
+            vec![],
+            Some("10:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET anchor_date = '2026-01-31', monthly_pattern = 'day_of_month', \
+             start_date = '2026-02-01' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+        let provider = RecordingProvider::with_create_id("evt_m31");
+        enable_routine_sync_with_provider(
+            &db,
+            &provider,
+            "tok",
+            &rid,
+            "proj_personal",
+            "cal",
+            "Asia/Seoul",
+        )
+        .await
+        .unwrap();
+        let created = provider.created.lock().unwrap().clone();
+        let input = &created[0].2;
+        assert_eq!(
+            input.start, "2026-02-28T10:00:00",
+            "2월은 28일로 클램프된 첫 발생"
+        );
+        let rrule = input
+            .recurrence
+            .iter()
+            .find(|l| l.starts_with("RRULE:"))
+            .unwrap();
+        assert!(
+            rrule.contains("BYMONTHDAY=28,29,30,31") && rrule.contains("BYSETPOS=-1"),
+            "패턴은 anchor의 31 클램프 유지: {rrule}"
         );
     }
 }

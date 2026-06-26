@@ -80,6 +80,15 @@ pub struct RRuleInput<'a> {
     pub tzid: &'a str,
     /// daily/weekly DTSTART 계산 기준 ('YYYY-MM-DD').
     pub reference_date: &'a str,
+    /// 활성 구간 시작 floor ('YYYY-MM-DD'). Some이면 DTSTART **날짜만** 이 값으로 대체하고,
+    /// RRULE 패턴(BYMONTHDAY/BYDAY/INTERVAL/BYSETPOS)은 `anchor_date` 기반 그대로 유지한다
+    /// (monthly 31일 클램프 등 보존). 호출자(google_sync)가 원래 패턴으로 "start_date 이후 첫
+    /// 발생일"을 계산해 넘기므로 biweekly parity·monthly day가 로컬과 일치한다. None=기존 동작.
+    pub dtstart_override: Option<&'a str>,
+    /// 활성 구간 종료(inclusive, 'YYYY-MM-DD'). Some이면 RRULE에 `;UNTIL=<end>T<time>`를 부착한다
+    /// (DTSTART와 같은 local wall-clock compact — 기존 series-split `cap_recurrence_before`와 동일
+    /// 표현). 호출자가 `window_end >= dtstart`(빈 구간 아님)를 보장한다. None=무기한.
+    pub window_end: Option<&'a str>,
 }
 
 /// 매핑 출력.
@@ -160,7 +169,7 @@ pub fn routine_to_rrule(input: &RRuleInput<'_>, exdates: &[&str]) -> Result<RRul
     let (hh, mm) = parse_hhmm(time_str)?;
     let duration_min = input.duration_min.unwrap_or(DEFAULT_DURATION_MIN);
 
-    let (dtstart_date, rrule) = match input.freq {
+    let (computed_dtstart, mut rrule) = match input.freq {
         Freq::Daily => {
             let d = parse_ymd(input.anchor_date.unwrap_or(input.reference_date))?;
             (d, "FREQ=DAILY".to_string())
@@ -222,6 +231,21 @@ pub fn routine_to_rrule(input: &RRuleInput<'_>, exdates: &[&str]) -> Result<RRul
             (anchor, rrule)
         }
     };
+
+    // 활성 구간 시작 floor: DTSTART **날짜만** override로 대체(패턴은 anchor 기반 그대로).
+    // 호출자가 원래 패턴으로 "start 이후 첫 발생"을 계산해 넘기므로 parity/클램프가 보존된다.
+    let dtstart_date = match input.dtstart_override {
+        Some(s) => parse_ymd(s)?,
+        None => computed_dtstart,
+    };
+
+    // 활성 구간 종료: RRULE에 UNTIL 부착(DTSTART와 같은 local wall-clock compact). 기존
+    // series-split(cap_recurrence_before)과 동일 표현 — Google은 TZID 이벤트에서 이 local UNTIL을
+    // 수용한다. 호출자가 window_end >= dtstart(빈 구간 아님)를 보장한다.
+    if let Some(end) = input.window_end {
+        let until = format_dtstart(parse_ymd(end)?, hh, mm);
+        rrule = format!("{rrule};UNTIL={until}");
+    }
 
     let dtstart_local = format_dtstart(dtstart_date, hh, mm);
 
@@ -351,6 +375,8 @@ mod tests {
             monthly_nth_week: None,
             tzid: "Asia/Seoul",
             reference_date: "2026-05-29",
+            dtstart_override: None,
+            window_end: None,
         }
     }
 
@@ -793,6 +819,89 @@ mod tests {
         assert_eq!(
             compact_to_iso("20260529T090000").unwrap(),
             "2026-05-29T09:00:00"
+        );
+    }
+
+    // ── 활성 구간(0061): dtstart_override(시작 floor) + window_end(종료 UNTIL) ──
+
+    // 31) window_end → RRULE 끝에 ;UNTIL=<end>T<time> 부착(local compact). daily.
+    #[test]
+    fn window_end_appends_until_daily() {
+        let inp = RRuleInput {
+            time_of_day: Some("07:00"),
+            window_end: Some("2026-06-30"),
+            ..input(Freq::Daily)
+        };
+        let s = routine_to_rrule(&inp, &[]).unwrap();
+        assert_eq!(s.rrule, "FREQ=DAILY;UNTIL=20260630T070000");
+        // override 없으면 DTSTART는 reference_date 그대로.
+        assert_eq!(s.dtstart_local, "20260529T070000");
+    }
+
+    // 32) window_end + weekly → BYDAY 뒤에 UNTIL.
+    #[test]
+    fn window_end_appends_until_weekly() {
+        let inp = RRuleInput {
+            weekdays: &[Weekday::Mon],
+            window_end: Some("2026-12-31"),
+            ..input(Freq::Weekly)
+        };
+        let s = routine_to_rrule(&inp, &[]).unwrap();
+        assert_eq!(s.rrule, "FREQ=WEEKLY;BYDAY=MO;UNTIL=20261231T090000");
+    }
+
+    // 33) dtstart_override는 DTSTART 날짜만 대체 — 패턴(BYMONTHDAY 31 클램프)은 anchor 유지.
+    #[test]
+    fn dtstart_override_keeps_monthly_clamp_pattern() {
+        let inp = RRuleInput {
+            anchor_date: Some("2026-05-31"),
+            monthly_pattern: Some(MonthlyPattern::DayOfMonth),
+            dtstart_override: Some("2026-07-31"), // start 이후 첫 발생(7월 말일)
+            ..input(Freq::Monthly)
+        };
+        let s = routine_to_rrule(&inp, &[]).unwrap();
+        assert_eq!(s.rrule, "FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1");
+        assert_eq!(s.dtstart_local, "20260731T090000");
+    }
+
+    // 34) dtstart_override + window_end 동시 — DTSTART 대체 + UNTIL 부착.
+    #[test]
+    fn dtstart_override_and_window_end_compose() {
+        let inp = RRuleInput {
+            weekdays: &[Weekday::Mon, Weekday::Wed],
+            time_of_day: Some("18:00"),
+            dtstart_override: Some("2026-06-15"), // 월요일(MO∈{MO,WE})
+            window_end: Some("2026-08-31"),
+            ..input(Freq::Weekly)
+        };
+        let s = routine_to_rrule(&inp, &[]).unwrap();
+        assert_eq!(s.dtstart_local, "20260615T180000");
+        assert_eq!(s.rrule, "FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20260831T180000");
+    }
+
+    // 35) override/window_end None이면 기존 동작 무변화(회귀 가드).
+    #[test]
+    fn no_window_inputs_unchanged() {
+        let s = routine_to_rrule(&input(Freq::Daily), &[]).unwrap();
+        assert_eq!(s.rrule, "FREQ=DAILY");
+        assert_eq!(s.dtstart_local, "20260529T090000");
+    }
+
+    // 36) to_event_parts: UNTIL이 있는 RRULE도 recurrence 라인에 그대로 실린다.
+    #[test]
+    fn event_parts_includes_until() {
+        let inp = RRuleInput {
+            time_of_day: Some("07:00"),
+            window_end: Some("2026-06-30"),
+            ..input(Freq::Daily)
+        };
+        let parts = routine_to_rrule(&inp, &[])
+            .unwrap()
+            .to_event_parts()
+            .unwrap();
+        assert_eq!(
+            parts.recurrence_lines,
+            vec!["RRULE:FREQ=DAILY;UNTIL=20260630T070000".to_string()]
         );
     }
 }

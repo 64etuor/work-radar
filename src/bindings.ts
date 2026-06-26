@@ -1777,6 +1777,10 @@ export type CreateRoutineInput = {
 	weekdays: Weekday[],
 	/**  biweekly/monthly일 때 기준일(YYYY-MM-DD). 비면 백엔드가 오늘로 채운다. daily/weekly는 무시. */
 	anchorDate: string | null,
+	/**  활성 구간 시작일 (YYYY-MM-DD). None/빈 문자열 = 하한 없음. 구간 밖은 due 아님. */
+	startDate: string | null,
+	/**  활성 구간 종료일 (YYYY-MM-DD, inclusive). None/빈 문자열 = 무기한. */
+	endDate: string | null,
 	/**  알림 시각 'HH:MM'(로컬). None=알림 없음. */
 	timeOfDay: string | null,
 	/**  알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32. */
@@ -2449,6 +2453,10 @@ export type RoutineToday = {
 	weekdays: Weekday[],
 	/**  biweekly 2주 주기·monthly day-of-month 기준일 (YYYY-MM-DD). daily/weekly는 None. */
 	anchorDate: string | null,
+	/**  활성 구간 시작일 (YYYY-MM-DD). None = 하한 없음(생성 시점부터). 구간 밖은 due 아님. */
+	startDate: string | null,
+	/**  활성 구간 종료일 (YYYY-MM-DD, inclusive). None = 무기한. 구간 밖은 due 아님. */
+	endDate: string | null,
 	/**  알림 발사 기준 시각 'HH:MM'(로컬). None=알림 없음. */
 	timeOfDay: string | null,
 	/**  발사를 시각보다 N분 앞당김(예: 30=30분 전). None/0=정시. specta i64/u64 금지 → u32. */
@@ -3064,6 +3072,10 @@ export type UpdateRoutineInput = {
 	weekdays: Weekday[],
 	/**  biweekly/monthly일 때 기준일(YYYY-MM-DD). 비면 기존 anchor 유지(없으면 오늘). daily/weekly는 무시. */
 	anchorDate: string | null,
+	/**  활성 구간 시작일 (YYYY-MM-DD). None/빈 문자열 = 하한 없음. 구간 밖은 due 아님. */
+	startDate: string | null,
+	/**  활성 구간 종료일 (YYYY-MM-DD, inclusive). None/빈 문자열 = 무기한. */
+	endDate: string | null,
 	/**  알림 시각 'HH:MM'(로컬). None=알림 없음. */
 	timeOfDay: string | null,
 	/**  알림 오프셋(분, N분 전). None/0=정시. specta i64/u64 금지 → u32. */

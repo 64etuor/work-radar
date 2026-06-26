@@ -122,6 +122,33 @@ pub fn routine_due_on(
     }
 }
 
+/// 루틴 **활성 구간** 게이트 (순수). `[start, end]` 둘 다 inclusive ('YYYY-MM-DD').
+/// - `start` 있고 `date < start` → false (시작 전).
+/// - `end` 있고 `date > end` → false (종료 후).
+/// - 경계 None/빈 문자열 = 그 방향 무제한(start=None 하한 없음, end=None 무기한).
+/// - 형식이 깨진 날짜는 보수적으로 통과(true) — 진입점(`crud::validate_active_period`)이 형식을
+///   보장하므로 방어용(있는데 못 읽었다고 루틴을 숨기지 않는다).
+///
+/// `routine_due_on`(패턴 술어)과 **AND-결합**해 "그 날 due"를 만든다(due ⟺ 패턴 ∧ 구간).
+/// 분리 이유: 패턴 매칭과 활성 구간은 직교한 관심사 — 각각 독립 테스트, routine_due_on 시그니처 불변.
+pub fn within_active_window(start: Option<&str>, end: Option<&str>, date: NaiveDate) -> bool {
+    if let Some(s) = start.filter(|s| !s.trim().is_empty()) {
+        if let Ok(start_d) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+            if date < start_d {
+                return false;
+            }
+        }
+    }
+    if let Some(e) = end.filter(|s| !s.trim().is_empty()) {
+        if let Ok(end_d) = NaiveDate::parse_from_str(e, "%Y-%m-%d") {
+            if date > end_d {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 /// biweekly parity epoch — anchor가 선택 요일이면 그대로, 아니면 첫 매칭 요일로 forward
 /// (최대 6일). rrule.rs `next_matching_weekday`와 동치 — 로컬 due-calc와 Google RRULE
 /// DTSTART가 같은 주를 2주 주기의 기준으로 삼게 한다.
@@ -152,5 +179,94 @@ fn weekday_enum_key(w: Weekday) -> &'static str {
         Weekday::Fri => "fri",
         Weekday::Sat => "sat",
         Weekday::Sun => "sun",
+    }
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::within_active_window;
+    use chrono::NaiveDate;
+
+    fn d(s: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
+    }
+
+    #[test]
+    fn no_bounds_always_true() {
+        assert!(within_active_window(None, None, d("2026-06-25")));
+    }
+
+    #[test]
+    fn before_start_false() {
+        assert!(!within_active_window(
+            Some("2026-06-25"),
+            None,
+            d("2026-06-24")
+        ));
+    }
+
+    #[test]
+    fn on_start_true_inclusive() {
+        assert!(within_active_window(
+            Some("2026-06-25"),
+            None,
+            d("2026-06-25")
+        ));
+    }
+
+    #[test]
+    fn after_end_false() {
+        assert!(!within_active_window(
+            None,
+            Some("2026-06-25"),
+            d("2026-06-26")
+        ));
+    }
+
+    #[test]
+    fn on_end_true_inclusive() {
+        assert!(within_active_window(
+            None,
+            Some("2026-06-25"),
+            d("2026-06-25")
+        ));
+    }
+
+    #[test]
+    fn within_closed_range_true() {
+        assert!(within_active_window(
+            Some("2026-06-01"),
+            Some("2026-06-30"),
+            d("2026-06-15")
+        ));
+    }
+
+    #[test]
+    fn outside_closed_range_false() {
+        assert!(!within_active_window(
+            Some("2026-06-01"),
+            Some("2026-06-30"),
+            d("2026-07-01")
+        ));
+        assert!(!within_active_window(
+            Some("2026-06-01"),
+            Some("2026-06-30"),
+            d("2026-05-31")
+        ));
+    }
+
+    #[test]
+    fn blank_strings_treated_as_unbounded() {
+        assert!(within_active_window(Some(""), Some("   "), d("2026-06-25")));
+    }
+
+    #[test]
+    fn malformed_dates_pass_through() {
+        // 진입점 검증이 형식을 보장 — 못 읽으면 보수적으로 통과(숨기지 않음).
+        assert!(within_active_window(
+            Some("nope"),
+            Some("bad"),
+            d("2026-06-25")
+        ));
     }
 }

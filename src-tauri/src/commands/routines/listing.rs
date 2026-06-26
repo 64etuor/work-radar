@@ -8,7 +8,7 @@ use crate::error::AppError;
 use crate::models::{Kind, RoutineFreq, RoutineMonthlyPattern, RoutineToday, Weekday};
 
 use super::reminders::sync_reminders;
-use super::schedule::{parse_weekdays, routine_due_on};
+use super::schedule::{parse_weekdays, routine_due_on, within_active_window};
 
 /// list_today_routines 조인 결과 (private — RoutineToday로 매핑).
 #[derive(sqlx::FromRow)]
@@ -18,6 +18,8 @@ struct RoutineRow {
     freq: RoutineFreq,
     weekdays: Option<String>,
     anchor_date: Option<String>,
+    start_date: Option<String>,
+    end_date: Option<String>,
     time_of_day: Option<String>,
     reminder_offset_min: Option<i64>,
     area: Option<crate::models::AreaTag>,
@@ -44,8 +46,8 @@ pub async fn fetch_today_routines(
     let parsed = NaiveDate::parse_from_str(date, "%Y-%m-%d")
         .map_err(|_| sqlx::Error::Protocol("bad date (YYYY-MM-DD)".into()))?;
     let rows = sqlx::query_as::<_, RoutineRow>(
-        "SELECT r.id, r.title, r.freq, r.weekdays, r.anchor_date, r.time_of_day, \
-                r.reminder_offset_min, r.area, r.area_tags, r.kind, \
+        "SELECT r.id, r.title, r.freq, r.weekdays, r.anchor_date, r.start_date, r.end_date, \
+                r.time_of_day, r.reminder_offset_min, r.area, r.area_tags, r.kind, \
                 (rc.completed_at IS NOT NULL) AS done, \
                 rc.time_override, rc.linked_event_id, rc.linked_calendar_id, \
                 r.monthly_pattern, r.monthly_nth_week, r.duration_min, \
@@ -74,7 +76,8 @@ pub async fn fetch_today_routines(
                 r.monthly_pattern,
                 r.monthly_nth_week.map(|v| v as i32),
                 parsed,
-            ) {
+            ) || !within_active_window(r.start_date.as_deref(), r.end_date.as_deref(), parsed)
+            {
                 return None;
             }
             Some(RoutineToday {
@@ -83,6 +86,8 @@ pub async fn fetch_today_routines(
                 freq: r.freq,
                 weekdays,
                 anchor_date: r.anchor_date,
+                start_date: r.start_date,
+                end_date: r.end_date,
                 time_of_day: r.time_of_day,
                 reminder_offset_min: r.reminder_offset_min.map(|v| v.max(0) as u32),
                 area: r.area,

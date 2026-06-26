@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::routines::{parse_weekdays, routine_due_on};
+use crate::commands::routines::{parse_weekdays, routine_due_on, within_active_window};
 use crate::commands::signal_store;
 use crate::db::Db;
 use crate::error::AppError;
@@ -46,12 +46,15 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
         RoutineFreq,
         Option<String>,
         Option<String>,
+        Option<String>,
+        Option<String>,
         Option<RoutineMonthlyPattern>,
         Option<i64>,
         String,
     );
     let checks: Vec<CheckRow> = sqlx::query_as(
-        "SELECT r.freq, r.weekdays, r.anchor_date, r.monthly_pattern, r.monthly_nth_week, rc.date \
+        "SELECT r.freq, r.weekdays, r.anchor_date, r.start_date, r.end_date, \
+                r.monthly_pattern, r.monthly_nth_week, rc.date \
              FROM routine_checks rc \
              JOIN routines r ON r.id = rc.routine_id \
              WHERE r.active = 1 AND rc.completed_at IS NOT NULL \
@@ -62,12 +65,13 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     .fetch_all(db)
     .await?;
     let mut done: u32 = 0;
-    for (freq, weekdays, anchor, mpattern, nth_week, date) in &checks {
+    for (freq, weekdays, anchor, start_date, end_date, mpattern, nth_week, date) in &checks {
         let parsed = match chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
             Ok(d) => d,
             Err(_) => continue,
         };
         let wkdays = parse_weekdays(weekdays.as_deref());
+        // done도 due와 동일하게 활성 구간 게이트 적용 → done ⊆ due 유지(이행률 왜곡 방지).
         if routine_due_on(
             *freq,
             &wkdays,
@@ -75,7 +79,8 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
             *mpattern,
             nth_week.map(|v| v as i32),
             parsed,
-        ) {
+        ) && within_active_window(start_date.as_deref(), end_date.as_deref(), parsed)
+        {
             done += 1;
         }
     }
@@ -83,11 +88,13 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
         RoutineFreq,
         Option<String>,
         Option<String>,
+        Option<String>,
+        Option<String>,
         Option<RoutineMonthlyPattern>,
         Option<i64>,
     );
     let routines: Vec<RoutineRow> = sqlx::query_as(
-        "SELECT freq, weekdays, anchor_date, monthly_pattern, monthly_nth_week \
+        "SELECT freq, weekdays, anchor_date, start_date, end_date, monthly_pattern, monthly_nth_week \
          FROM routines WHERE active = 1",
     )
     .fetch_all(db)
@@ -95,7 +102,7 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
     let mut due: u32 = 0;
     let mut d = start;
     while d <= end {
-        for (freq, weekdays, anchor, mpattern, nth_week) in &routines {
+        for (freq, weekdays, anchor, start_date, end_date, mpattern, nth_week) in &routines {
             let wkdays = parse_weekdays(weekdays.as_deref());
             if routine_due_on(
                 *freq,
@@ -104,7 +111,8 @@ pub async fn fetch_weekly_review(db: &Db, end_date: &str) -> Result<WeeklyReview
                 *mpattern,
                 nth_week.map(|v| v as i32),
                 d,
-            ) {
+            ) && within_active_window(start_date.as_deref(), end_date.as_deref(), d)
+            {
                 due += 1;
             }
         }
