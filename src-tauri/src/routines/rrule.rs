@@ -3,7 +3,10 @@
 //! Plan §3 매핑표·테스트 매트릭스 정본.
 //! 이 함수는 시간·DB·네트워크에 의존하지 않는다 — 입력→출력만.
 
-use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, Weekday as ChronoWeekday};
+use chrono::{
+    Datelike, Duration, NaiveDate, NaiveDateTime, TimeZone, Utc, Weekday as ChronoWeekday,
+};
+use chrono_tz::Tz;
 use thiserror::Error;
 
 /// 풍부 monthly 패턴. plan §2 schema에 대응 (TEXT enum).
@@ -85,9 +88,9 @@ pub struct RRuleInput<'a> {
     /// (monthly 31일 클램프 등 보존). 호출자(google_sync)가 원래 패턴으로 "start_date 이후 첫
     /// 발생일"을 계산해 넘기므로 biweekly parity·monthly day가 로컬과 일치한다. None=기존 동작.
     pub dtstart_override: Option<&'a str>,
-    /// 활성 구간 종료(inclusive, 'YYYY-MM-DD'). Some이면 RRULE에 `;UNTIL=<end>T<time>`를 부착한다
-    /// (DTSTART와 같은 local wall-clock compact — 기존 series-split `cap_recurrence_before`와 동일
-    /// 표현). 호출자가 `window_end >= dtstart`(빈 구간 아님)를 보장한다. None=무기한.
+    /// 활성 구간 종료(inclusive, 'YYYY-MM-DD'). Some이면 RRULE에 `;UNTIL=<utc>Z`를 부착한다.
+    /// 이벤트가 timeZone을 달고 나가므로 UNTIL은 **UTC**여야 한다(`until_utc`로 tzid 변환 —
+    /// RFC5545 §3.3.10/Google). 호출자가 `window_end >= dtstart`(빈 구간 아님)를 보장한다. None=무기한.
     pub window_end: Option<&'a str>,
 }
 
@@ -126,6 +129,10 @@ pub enum RRuleError {
     NthWeekdayMissingNthWeek,
     #[error("monthly nth_weekday: nth_week must be -1 or 1..=5")]
     NthWeekdayInvalidNthWeek,
+    #[error("unknown IANA timezone: {0}")]
+    InvalidTz(String),
+    #[error("local time does not exist in timezone (DST gap): {0}")]
+    NonexistentLocalTime(String),
 }
 
 /// Google `events.insert` 페이로드용 part들 — `start.dateTime`/`end.dateTime`/`recurrence` 배열.
@@ -239,11 +246,12 @@ pub fn routine_to_rrule(input: &RRuleInput<'_>, exdates: &[&str]) -> Result<RRul
         None => computed_dtstart,
     };
 
-    // 활성 구간 종료: RRULE에 UNTIL 부착(DTSTART와 같은 local wall-clock compact). 기존
-    // series-split(cap_recurrence_before)과 동일 표현 — Google은 TZID 이벤트에서 이 local UNTIL을
-    // 수용한다. 호출자가 window_end >= dtstart(빈 구간 아님)를 보장한다.
+    // 활성 구간 종료: RRULE에 UNTIL 부착. 이벤트가 start.timeZone을 달고 나가므로(write.rs) UNTIL은
+    // **반드시 UTC**(`...Z`)여야 한다 — RFC5545 §3.3.10 + Google("TZID 참조 DTSTART → UNTIL은 UTC").
+    // 로컬 wall-clock(end + time_of_day)을 tzid로 UTC 변환한다(DST 안전). 호출자가
+    // window_end >= dtstart(빈 구간 아님)를 보장한다.
     if let Some(end) = input.window_end {
-        let until = format_dtstart(parse_ymd(end)?, hh, mm);
+        let until = until_utc(end, input.time_of_day, input.tzid)?;
         rrule = format!("{rrule};UNTIL={until}");
     }
 
@@ -270,6 +278,34 @@ pub fn exdate_local(date_ymd: &str, time_hm: Option<&str>) -> Result<String, RRu
     let d = parse_ymd(date_ymd)?;
     let (hh, mm) = parse_hhmm(time_hm.unwrap_or(DEFAULT_TIME))?;
     Ok(format_dtstart(d, hh, mm))
+}
+
+/// RRULE `UNTIL` 변환 헬퍼 — 로컬 wall-clock(date 'YYYY-MM-DD' + time 'HH:MM'|None=09:00) + IANA
+/// `tzid` → UTC compact `'YYYYMMDDTHHMMSSZ'`.
+///
+/// 이벤트가 `start.timeZone`을 달고 나가므로(반복 master) RRULE의 UNTIL은 **UTC여야** Google이
+/// 수용한다(RFC5545 §3.3.10: TZID 참조 DTSTART → UNTIL은 UTC time). `EXDATE`는 `;TZID=` 파라미터로
+/// 로컬을 쓸 수 있지만(→ `exdate_local`), UNTIL은 RRULE 내부라 TZID 파라미터가 없어 UTC가 유일 적법.
+///
+/// DST 안전: 모호 로컬시각(가을 fold)은 `earliest`(결정적)로, 존재하지 않는 로컬시각(봄 gap)·미인식
+/// tzid는 panic 없이 `RRuleError`로 fail-closed. KST는 DST가 없어 항상 단일 매핑.
+pub fn until_utc(date_ymd: &str, time_hm: Option<&str>, tzid: &str) -> Result<String, RRuleError> {
+    let d = parse_ymd(date_ymd)?;
+    let (hh, mm) = parse_hhmm(time_hm.unwrap_or(DEFAULT_TIME))?;
+    let tz: Tz = tzid
+        .parse()
+        .map_err(|_| RRuleError::InvalidTz(tzid.to_string()))?;
+    let naive = d
+        .and_hms_opt(hh, mm, 0)
+        .ok_or_else(|| RRuleError::InvalidTime(format!("{hh:02}:{mm:02}")))?;
+    let utc = tz
+        .from_local_datetime(&naive)
+        .earliest()
+        .ok_or_else(|| {
+            RRuleError::NonexistentLocalTime(format!("{date_ymd}T{hh:02}{mm:02}00 {tzid}"))
+        })?
+        .with_timezone(&Utc);
+    Ok(utc.format("%Y%m%dT%H%M%SZ").to_string())
 }
 
 fn parse_hhmm(s: &str) -> Result<(u32, u32), RRuleError> {
@@ -824,7 +860,8 @@ mod tests {
 
     // ── 활성 구간(0061): dtstart_override(시작 floor) + window_end(종료 UNTIL) ──
 
-    // 31) window_end → RRULE 끝에 ;UNTIL=<end>T<time> 부착(local compact). daily.
+    // 31) window_end → RRULE 끝에 ;UNTIL=<utc>Z 부착(UTC). daily.
+    //     07:00 KST(2026-06-30) = 22:00 UTC(2026-06-29) — UNTIL은 UTC라 날짜가 하루 당겨진다.
     #[test]
     fn window_end_appends_until_daily() {
         let inp = RRuleInput {
@@ -833,8 +870,8 @@ mod tests {
             ..input(Freq::Daily)
         };
         let s = routine_to_rrule(&inp, &[]).unwrap();
-        assert_eq!(s.rrule, "FREQ=DAILY;UNTIL=20260630T070000");
-        // override 없으면 DTSTART는 reference_date 그대로.
+        assert_eq!(s.rrule, "FREQ=DAILY;UNTIL=20260629T220000Z");
+        // override 없으면 DTSTART는 reference_date 그대로(로컬 wall-clock, Z 없음).
         assert_eq!(s.dtstart_local, "20260529T070000");
     }
 
@@ -847,7 +884,8 @@ mod tests {
             ..input(Freq::Weekly)
         };
         let s = routine_to_rrule(&inp, &[]).unwrap();
-        assert_eq!(s.rrule, "FREQ=WEEKLY;BYDAY=MO;UNTIL=20261231T090000");
+        // 09:00 KST(2026-12-31) = 00:00 UTC(2026-12-31).
+        assert_eq!(s.rrule, "FREQ=WEEKLY;BYDAY=MO;UNTIL=20261231T000000Z");
     }
 
     // 33) dtstart_override는 DTSTART 날짜만 대체 — 패턴(BYMONTHDAY 31 클램프)은 anchor 유지.
@@ -876,7 +914,8 @@ mod tests {
         };
         let s = routine_to_rrule(&inp, &[]).unwrap();
         assert_eq!(s.dtstart_local, "20260615T180000");
-        assert_eq!(s.rrule, "FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20260831T180000");
+        // 18:00 KST(2026-08-31) = 09:00 UTC(2026-08-31). DTSTART는 로컬, UNTIL은 UTC(혼합은 적법).
+        assert_eq!(s.rrule, "FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20260831T090000Z");
     }
 
     // 35) override/window_end None이면 기존 동작 무변화(회귀 가드).
@@ -901,7 +940,59 @@ mod tests {
             .unwrap();
         assert_eq!(
             parts.recurrence_lines,
-            vec!["RRULE:FREQ=DAILY;UNTIL=20260630T070000".to_string()]
+            vec!["RRULE:FREQ=DAILY;UNTIL=20260629T220000Z".to_string()]
         );
+    }
+
+    // ── until_utc: RRULE UNTIL의 UTC 변환(이벤트 timeZone과의 정합) ──
+
+    // 37) KST(UTC+9, DST 없음)는 정확한 UTC로. 시각에 따라 UTC 날짜가 하루 당겨질 수 있다.
+    #[test]
+    fn until_utc_kst_exact() {
+        // 22:00 KST = 13:00 UTC 같은 날(얼라방 분할 cap 회귀).
+        assert_eq!(
+            until_utc("2026-06-25", Some("22:00"), "Asia/Seoul").unwrap(),
+            "20260625T130000Z"
+        );
+        // 07:00 KST = 22:00 UTC 전날.
+        assert_eq!(
+            until_utc("2026-06-30", Some("07:00"), "Asia/Seoul").unwrap(),
+            "20260629T220000Z"
+        );
+        // None → 09:00 fallback(exdate_local과 동일) = 00:00 UTC 같은 날.
+        assert_eq!(
+            until_utc("2026-06-25", None, "Asia/Seoul").unwrap(),
+            "20260625T000000Z"
+        );
+    }
+
+    // 38) DST 존(America/New_York)은 계절별로 오프셋이 다르다 — chrono-tz 채택 근거를 못박는다.
+    #[test]
+    fn until_utc_dst_zone_offset_varies_by_season() {
+        // 여름 EDT(UTC-4): 12:00 → 16:00Z.
+        assert_eq!(
+            until_utc("2026-07-15", Some("12:00"), "America/New_York").unwrap(),
+            "20260715T160000Z"
+        );
+        // 겨울 EST(UTC-5): 12:00 → 17:00Z.
+        assert_eq!(
+            until_utc("2026-01-15", Some("12:00"), "America/New_York").unwrap(),
+            "20260115T170000Z"
+        );
+    }
+
+    // 39) 미인식 tzid는 panic 없이 InvalidTz로 fail-closed.
+    #[test]
+    fn until_utc_unknown_tzid_errors() {
+        let err = until_utc("2026-06-25", Some("22:00"), "Mars/Phobos").unwrap_err();
+        assert!(matches!(err, RRuleError::InvalidTz(_)));
+    }
+
+    // 40) 존재하지 않는 로컬시각(봄 DST gap)은 panic 없이 NonexistentLocalTime로 fail-closed.
+    //     America/New_York 2026-03-08은 02:00→03:00 spring-forward라 02:30이 존재하지 않는다.
+    #[test]
+    fn until_utc_nonexistent_local_time_errors() {
+        let err = until_utc("2026-03-08", Some("02:30"), "America/New_York").unwrap_err();
+        assert!(matches!(err, RRuleError::NonexistentLocalTime(_)));
     }
 }

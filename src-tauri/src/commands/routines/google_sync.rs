@@ -400,6 +400,7 @@ async fn build_master_event_input_with_reference(
 fn until_for_previous_day(
     effective_date: &str,
     time_of_day: Option<&str>,
+    tzid: &str,
 ) -> Result<String, AppError> {
     let effective = NaiveDate::parse_from_str(effective_date, "%Y-%m-%d").map_err(|_| {
         AppError::validation(
@@ -408,7 +409,8 @@ fn until_for_previous_day(
         )
     })?;
     let previous = effective - Duration::days(1);
-    rrule::exdate_local(&previous.format("%Y-%m-%d").to_string(), time_of_day)
+    // UNTIL은 UTC여야 한다 — 이벤트가 start.timeZone을 달고 나가므로(rrule::until_utc doc 참조).
+    rrule::until_utc(&previous.format("%Y-%m-%d").to_string(), time_of_day, tzid)
         .map_err(|e| AppError::validation("routine.rrule_invalid", format!("UNTIL 매핑 실패: {e}")))
 }
 
@@ -675,7 +677,7 @@ pub(crate) async fn split_routine_sync_after_edit_with_provider<P: CalendarProvi
     };
 
     let mut old_input = build_master_event_input(db, routine_id, &before.row, tzid).await?;
-    let until = until_for_previous_day(effective_date, before.row.time_of_day.as_deref())?;
+    let until = until_for_previous_day(effective_date, before.row.time_of_day.as_deref(), tzid)?;
     cap_recurrence_before(&mut old_input, &until)?;
     let old_payload = build_event_payload(&old_input);
 
@@ -1731,9 +1733,10 @@ mod tests {
         assert_eq!(patched[0].1, "cal_g");
         assert_eq!(patched[0].2, "evt_old");
         let old_rec = patched[0].3["recurrence"][0].as_str().unwrap();
+        // 07:00 KST(2026-06-08) = 22:00 UTC(2026-06-07). UNTIL은 UTC(`...Z`)라야 Google이 수용.
         assert!(
-            old_rec.contains("UNTIL=20260608T070000"),
-            "old master ends before effective date at the old routine time: {old_rec}"
+            old_rec.contains("UNTIL=20260607T220000Z"),
+            "old master ends before effective date at the old routine time, in UTC: {old_rec}"
         );
         assert_eq!(
             patched[0].3["start"]["dateTime"], "2026-05-29T07:00:00",
@@ -2416,13 +2419,13 @@ mod tests {
         let input = &created[0].2;
         // DTSTART floor = start_date 이후 첫 발생(daily=start 당일).
         assert_eq!(input.start, "2026-06-10T07:00:00");
-        // RRULE에 UNTIL=end_date 부착(local compact).
+        // RRULE에 UNTIL=end_date 부착(UTC). 07:00 KST(6/30) = 22:00 UTC(6/29).
         let rrule = input
             .recurrence
             .iter()
             .find(|l| l.starts_with("RRULE:"))
             .unwrap();
-        assert_eq!(rrule, "RRULE:FREQ=DAILY;UNTIL=20260630T070000");
+        assert_eq!(rrule, "RRULE:FREQ=DAILY;UNTIL=20260629T220000Z");
     }
 
     /// 활성 구간에 반복 발생이 없으면(weekly 월요일인데 구간에 월요일 없음) empty_window 거부 — provider 미호출.
@@ -2544,17 +2547,18 @@ mod tests {
         .await
         .unwrap();
 
-        // old master: DTSTART=구간 시작(5/29), UNTIL=effective-1(6/8) — cap이 window UNTIL을 덮어씀.
+        // old master: DTSTART=구간 시작(5/29), UNTIL=effective-1(6/8 07:00 KST = 6/7 22:00 UTC) —
+        // cap이 window UNTIL을 덮어씀.
         let patched = provider.patched.lock().unwrap().clone();
         assert_eq!(patched.len(), 1);
         let old_rec = patched[0].3["recurrence"][0].as_str().unwrap();
         assert!(
-            old_rec.contains("UNTIL=20260608T070000"),
-            "old master capped at effective-1: {old_rec}"
+            old_rec.contains("UNTIL=20260607T220000Z"),
+            "old master capped at effective-1 (UTC): {old_rec}"
         );
         assert_eq!(patched[0].3["start"]["dateTime"], "2026-05-29T07:00:00");
 
-        // new master: DTSTART=max(start, effective)=6/9, UNTIL=end_date(12/31).
+        // new master: DTSTART=max(start, effective)=6/9, UNTIL=end_date(12/31 07:00 KST = 12/30 22:00 UTC).
         let created = provider.created.lock().unwrap().clone();
         assert_eq!(created.len(), 1);
         assert_eq!(created[0].2.start, "2026-06-09T07:00:00");
@@ -2565,8 +2569,8 @@ mod tests {
             .find(|l| l.starts_with("RRULE:"))
             .unwrap();
         assert!(
-            new_rec.contains("UNTIL=20261231T070000"),
-            "new master carries end_date UNTIL: {new_rec}"
+            new_rec.contains("UNTIL=20261230T220000Z"),
+            "new master carries end_date UNTIL (UTC): {new_rec}"
         );
     }
 

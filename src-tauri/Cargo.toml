@@ -44,6 +44,9 @@ octocrab = "0.42"
 # PR Radar(Phase 4): age/stale 날짜연산.
 #   chrono는 octocrab가 이미 transitive로 쓰므로 빌드 비용 추가 없음(clock = Utc::now()).
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# 루틴 RRULE UNTIL을 UTC로 정규화(Google/RFC5545 §3.3.10: 이벤트가 timeZone을 달면 UNTIL은 UTC여야).
+#   로컬 wall-clock + IANA tzid → UTC 변환(DST 안전). tzid 외부화(PR 2c) 대비 일반 IANA 처리.
+chrono-tz = "0.10"
 
 # Google Calendar OAuth(Phase 10a): PKCE(S256) code_challenge + base64url 인코딩 + CSPRNG.
 #   모두 reqwest/rustls가 이미 transitive로 끌어오는 크레이트라 빌드 비용 최소.
