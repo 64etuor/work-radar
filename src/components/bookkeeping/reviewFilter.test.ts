@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type BookkeepingReviewFilterRow,matchesBookkeepingReviewFilter } from "./reviewFilter";
+import { type BookkeepingReviewFilterRow, matchesBookkeepingReviewFilter } from "./reviewFilter";
 
 const row: BookkeepingReviewFilterRow = {
   merchant: "Cafe Momo",
