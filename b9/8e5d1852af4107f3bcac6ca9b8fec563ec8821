@@ -1,0 +1,104 @@
+src-tauri/src/routines/rrule.rs
+  s_eed662eebca445::t_16db56e169fa65 824-904,906
+  s_eed662eebca445::t_08a1dd0e249cb1 172
+  s_eed662eebca445::t_83c91cc0b5d0f4 235-249
+  s_eed662eebca445::t_9a879b5329a822 378-379
+  s_eed662eebca445::t_dfc8b49618fa3d 83-91
+  s_eed662eebca445::t_ab622f6234d47d 905
+src/components/board/RoutineForm.tsx
+  s_eed662eebca445::t_b40e6126ace173 12
+  s_eed662eebca445::t_75191899aa80a9 92-95,102-103
+  s_eed662eebca445::t_91388c1994ce47 245,247-249,251-253,256,258-260,262-264
+  s_eed662eebca445::t_0a8be0900c3359 244,246,250,254-255,257,261,265-268
+  s_eed662eebca445::t_2ac3e46e3acd4c 50-52
+src-tauri/migrations/0061_routine_active_period.sql
+  s_eed662eebca445::t_f3ac3ca0715da2 1-17
+docs/superpowers/specs/2026-06-25-routine-active-period-design.md
+  s_eed662eebca445::t_fb7a66e093358f 4
+  s_eed662eebca445::t_55dc939631cc07 93,96-100
+  s_eed662eebca445::t_fa3bc195424668 1-3,5-53,56,58,62,64,68,74-92,94-95,101-111,126-172,177-199
+  s_eed662eebca445::t_0d90eeba0bc8d1 112-115
+  s_eed662eebca445::t_e818fc905a8736 173-176
+  s_eed662eebca445::t_92dbd250269fa3 54-55,57,59-61,63,65-67,69-73
+  s_eed662eebca445::t_07fbb3852cb0e6 116-125
+  s_eed662eebca445::t_69a4d174478a9f 200-201
+src-tauri/src/commands/today/weekly.rs
+  s_eed662eebca445::t_c4f5c0fb09f938 49-50,56-57,68,74,82-83,91-92
+  s_eed662eebca445::t_6a8fcd186ad137 97,105,114-115
+  s_eed662eebca445::t_ea18c50acac7ed 3
+src-tauri/src/commands/routines/tracking.rs
+  s_eed662eebca445::t_63d9a2827b7d3e 98-99
+  s_eed662eebca445::t_55d3b5e0ad9ce7 12
+  s_eed662eebca445::t_0f3be7756cd029 22-23
+  s_eed662eebca445::t_2b07ce28f726e1 45-46
+  s_eed662eebca445::t_4397ca486a3e50 59-60
+src-tauri/src/commands/routines/mod.rs
+  s_eed662eebca445::t_670bd89127c9af 675-700,739-748
+  s_eed662eebca445::t_31451fde75dde9 704-708,713-717,722-726,731-735
+  s_eed662eebca445::t_bdc537868be250 48-49,428-429,468-469,508-509,551-552,584-585,760-761,810-811,858-859,879-880,1020-1021,1050-1051
+  s_eed662eebca445::t_abb2e237b3ca8d 981-982
+  s_eed662eebca445::t_a0e50c5a1c0bc3 701-703,709-712,718-721,727-730,736-738
+src-tauri/src/commands/routines/listing.rs
+  s_eed662eebca445::t_60788252ac74fa 11
+  s_eed662eebca445::t_fa2ac7551dc28d 79-80,89-90
+  s_eed662eebca445::t_871e044172d8d6 49-50
+  s_eed662eebca445::t_cbab9ba064352f 21-22
+src-tauri/src/commands/routines/schedule.rs
+  s_eed662eebca445::t_31451fde75dde9 201-205,210-214,219-223,228-232,266-270
+  s_eed662eebca445::t_f263cd56182001 125-151,272
+  s_eed662eebca445::t_9413b6e50817db 184-200,206-209,215-218,224-227,233-265,271
+src-tauri/src/models/routines.rs
+  s_eed662eebca445::t_fb9e2f81db1c2a 55-58
+  s_eed662eebca445::t_3700d311e10549 128-131
+  s_eed662eebca445::t_15b7f549ecbffd 98-101
+src/components/CaptureBoard.tsx
+  s_eed662eebca445::t_c67bc9ae90f1ba 350-351
+  s_eed662eebca445::t_6ba2b09fc7d6ad 371-372
+src-tauri/src/commands/routines/crud.rs
+  s_eed662eebca445::t_aad65300a40a48 137-147,149-179,186
+  s_eed662eebca445::t_7205987e0171bd 148
+  s_eed662eebca445::t_ffd3939f18d835 278-280
+  s_eed662eebca445::t_3d501d16e03089 674-675,693-694
+  s_eed662eebca445::t_6fe060c09db44c 73-74
+  s_eed662eebca445::t_8aa40fe9e60e16 41-43,48-49,62-63
+  s_eed662eebca445::t_921507ddc4f876 296-297,309-310
+  s_eed662eebca445::t_e87611204c2c7e 202
+  s_eed662eebca445::t_a8e27745847968 603-666
+  s_eed662eebca445::t_ffaf55c81338f5 667
+src-tauri/src/commands/routines/google_sync.rs
+  s_eed662eebca445::t_c90c41339a1621 61
+  s_eed662eebca445::t_87375d6862e856 354-361,363
+  s_eed662eebca445::t_76f8f595c47ed5 2378-2467
+  s_eed662eebca445::t_5cc13b0447bc0d 342-353,367-368,379-380
+  s_eed662eebca445::t_31451fde75dde9 230-233,279-286,362,364-366
+  s_eed662eebca445::t_186acad4bbdb7b 1119-1120,1645-1646,1704-1705
+  s_eed662eebca445::t_3bb9a6e4b3acea 2468-2664
+  s_eed662eebca445::t_7fdb16a76290de 195-229,234-278,287-296
+  s_eed662eebca445::t_3a265b9a5ade21 40-42
+src/components/board/routineSchedule.ts
+  s_eed662eebca445::t_cf94207cf30e47 9-12
+src/components/board/RoutinesPanel.dom.test.tsx
+  s_eed662eebca445::t_6148bdc5ae8f6a 7
+  s_eed662eebca445::t_352d16bd7e05d9 19
+  s_eed662eebca445::t_9e9879ba6f6c0e 37-38
+  s_eed662eebca445::t_d80d33198d94b6 232,241,248,254-255,257-259,261-266,275,278-279,284,288
+  s_eed662eebca445::t_9b5397f1b8c06d 17-18
+  s_eed662eebca445::t_fd4a35e0d7dfb2 4
+  s_eed662eebca445::t_3b195ceefcc829 233-240,242-247,249-253,256,260,267-274,276-277,280-283,285-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.1",
+  "base_commit_sha": "b98e5d1852af4107f3bcac6ca9b8fec563ec8821",
+  "prompts": {},
+  "sessions": {
+    "s_eed662eebca445": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "730ebf97-be09-497e-8a99-5fe56e6fa49b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
