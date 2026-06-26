@@ -1,0 +1,42 @@
+docs/decisions.md
+  s_3cbb2c78f391a7::t_0e893386c9201c 636
+src-tauri/Cargo.toml
+  s_3cbb2c78f391a7::t_c6a6518e9a8a2f 47-49
+src-tauri/src/commands/routines/google_sync.rs
+  s_3cbb2c78f391a7::t_895107ecdd65e4 1736,1738-1739
+  s_3cbb2c78f391a7::t_3d2cc2f5782b5d 2550-2551,2556-2557
+  s_3cbb2c78f391a7::t_4e2a581fc6d168 403,412-413
+  s_3cbb2c78f391a7::t_7b64629c966051 680
+  s_3cbb2c78f391a7::t_f449c139b9ce3c 2422,2428
+  s_3cbb2c78f391a7::t_08f3d405f1ad74 2561,2572-2573
+docs/superpowers/specs/2026-06-26-routine-sync-until-utc-design.md
+  s_3cbb2c78f391a7::t_ad21c4646b7687 1-116
+src-tauri/src/routines/rrule.rs
+  s_3cbb2c78f391a7::t_f358268d446e3e 863-864,873-874
+  s_3cbb2c78f391a7::t_6735f1073a6904 283-310
+  s_3cbb2c78f391a7::t_4b5499363b096d 887-888
+  s_3cbb2c78f391a7::t_37a906d8203584 9
+  s_3cbb2c78f391a7::t_dbaaf1ad2d5ea7 6-8
+  s_3cbb2c78f391a7::t_ade7f0cc7fdb4a 917-918
+  s_3cbb2c78f391a7::t_5e4db243794948 943-960,962-989
+  s_3cbb2c78f391a7::t_2ab00ec518ee08 990-996
+  s_3cbb2c78f391a7::t_0cee638f514e7f 91-93
+  s_3cbb2c78f391a7::t_8fe715c7198baf 132-135
+  s_3cbb2c78f391a7::t_3e6f749020973a 249-252,254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.1",
+  "base_commit_sha": "c4651cbffe40657ecedbc382fae1973a597e5119",
+  "prompts": {},
+  "sessions": {
+    "s_3cbb2c78f391a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd488fd4-af50-490d-81a7-f7768f28432c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
