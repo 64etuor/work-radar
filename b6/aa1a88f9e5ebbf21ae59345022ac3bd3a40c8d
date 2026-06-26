@@ -1,0 +1,58 @@
+src-tauri/src/commands/bookkeeping/gmail.rs
+  s_5fda3eaa811c88::t_786b5ab0193b7f 9-14
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-8,15-300
+src-tauri/src/commands/bookkeeping/transactions.rs
+  s_5fda3eaa811c88::t_786b5ab0193b7f 7-11
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-6,12-742
+src-tauri/src/commands/bookkeeping/sync_jobs.rs
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-6,10-277
+  s_5fda3eaa811c88::t_786b5ab0193b7f 7-9
+src-tauri/src/commands/bookkeeping/line_items.rs
+  s_5fda3eaa811c88::t_786b5ab0193b7f 7-9
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-6,10-189
+src-tauri/src/commands/bookkeeping/recurring.rs
+  s_5fda3eaa811c88::t_786b5ab0193b7f 7-11
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-6,12-338
+src-tauri/src/commands/bookkeeping/dedup.rs
+  s_5fda3eaa811c88::t_786b5ab0193b7f 7-9
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-6,10-218
+src-tauri/src/commands/bookkeeping/export.rs
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-9,14-123
+  s_5fda3eaa811c88::t_786b5ab0193b7f 10-13
+src-tauri/src/commands/bookkeeping/taxonomy.rs
+  s_5fda3eaa811c88::t_786b5ab0193b7f 7-11
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-6,12-420
+src-tauri/src/commands/bookkeeping/budgets.rs
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-297
+src-tauri/src/commands/bookkeeping/audit.rs
+  s_5fda3eaa811c88::t_786b5ab0193b7f 7
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-6,8-56
+src-tauri/src/commands/bookkeeping/reporting.rs
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-8,14-344
+  s_5fda3eaa811c88::t_786b5ab0193b7f 9-13
+src-tauri/src/commands/bookkeeping/common.rs
+  s_5fda3eaa811c88::t_98adf18cb8ac29 227-238
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-4,8-24,30-31,34-40,43-45,48-226,239-448
+  s_5fda3eaa811c88::t_786b5ab0193b7f 5-7,32-33,41-42,46-47
+  s_5fda3eaa811c88::t_1cddd335fc3b5e 25-29
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_5fda3eaa811c88::t_860e5f1f8e9197 21
+  s_5fda3eaa811c88::t_d5f83554255be5 35,41-50
+  s_5fda3eaa811c88::t_dd4c602bc58ed6 1-20,22-34,36-40,51-2251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "b6aa1a88f9e5ebbf21ae59345022ac3bd3a40c8d",
+  "prompts": {},
+  "sessions": {
+    "s_5fda3eaa811c88": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b201e6d9-4968-442b-b422-13820f9694d1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
