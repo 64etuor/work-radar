@@ -1,0 +1,40 @@
+governance/src/orchestrator/stall.ts
+  s_e760e06365ea98::t_3ad5b3798f20b8 22,33-41,44,46-48,56-77,83-89
+  s_e760e06365ea98::t_02c4aa3a4e38d3 90-91
+governance/test/conductor/resume.test.ts
+  s_e760e06365ea98::t_9e6e946e952c3b 163,181-187
+governance/test/orchestrator/dispatch/dispatch.test.ts
+  s_e760e06365ea98::t_8c5484cfc86c8c 359-369
+  s_e760e06365ea98::t_08ff0e349f84d3 548
+  s_e760e06365ea98::t_c7ea7b1c693b6b 539
+  s_e760e06365ea98::t_22357f65e58545 556
+  s_e760e06365ea98::t_ca2187ac646401 546-547,550
+  s_e760e06365ea98::t_365a0c612c4cdc 534-538,540-545,549,551-555,557-563
+governance/src/orchestrator/dispatch/dispatch.ts
+  s_e760e06365ea98::t_489f99a9edab53 30,84-85
+governance/test/stall.test.ts
+  s_e760e06365ea98::t_0188c63d311b0d 1-91
+governance/src/conductor/handlers.ts
+  s_e760e06365ea98::t_fa9f8be92b1f9d 513-515
+  s_e760e06365ea98::t_7507ef130abc7e 283-287
+  s_e760e06365ea98::t_5e9c5ba9cb33bb 687-696
+  s_e760e06365ea98::t_dba8605d279160 163
+  s_e760e06365ea98::t_a6a3b0ffbd323e 428
+  s_e760e06365ea98::t_d46645e8b1aa6f 429,511
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "578b4cf3b22a886bd352bf50e43f6aeb7d8073b2",
+  "prompts": {},
+  "sessions": {
+    "s_e760e06365ea98": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f1186-cc15-77e0-b3cc-f5f6054b2baf",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
