@@ -1,0 +1,28 @@
+src/components/TodayView.tsx
+  s_c2b4d15096d73b::t_80aefd2d31461b 340
+  s_e36bfa37e0e1a5::t_5baf55548d16a7 338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "f36bdd6df8a8c3d4edbb7e337f6fe2e24c4af89d",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_e36bfa37e0e1a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d4c8a75-da3f-45a1-a9be-a27e6d5c1531",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
