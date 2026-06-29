@@ -1,0 +1,32 @@
+governance/src/orchestrator/dispatch/dispatch.ts
+  s_c2b4d15096d73b::t_46415ced5cb005 30
+governance/src/mcp/tools/conductor.ts
+  s_c2b4d15096d73b::t_9e553259974e2d 15-16
+  s_c2b4d15096d73b::t_f9456315dc40dd 128-142,144-152,154-168
+governance/src/orchestrator/core.ts
+  s_c2b4d15096d73b::t_9484866a106ecf 1-187
+governance/src/orchestrator/tick.ts
+  s_c2b4d15096d73b::t_3f94ab708810af 115-117,126-131,139-141
+  s_c2b4d15096d73b::t_47dcf230d355c1 1,4-5
+governance/test/orchestrator/core.test.ts
+  s_c2b4d15096d73b::t_cd3780076d220d 45,53,69,120
+  s_c2b4d15096d73b::t_e6690750c7f8b0 7
+  s_c2b4d15096d73b::t_8d9d48294510ac 19,21-22,27
+  s_c2b4d15096d73b::t_bd86667f7024d3 1-6,8-18,20,23-26,28-44,46-52,54-68,70-119,121-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "f6d5c899a1c665bc207b072daa53986726bb187d",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
