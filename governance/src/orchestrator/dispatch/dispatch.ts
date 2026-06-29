@@ -27,7 +27,7 @@ export interface DispatchSummary {
 }
 
 const SEP = " ";
-const DEFAULT_MAX_CONDUCTS = 5;
+export const DEFAULT_MAX_CONDUCTS = 5;
 
 function materializedKey(planId: string, stepIndex: number): string {
   return `mat${SEP}${planId}${SEP}${stepIndex}`;

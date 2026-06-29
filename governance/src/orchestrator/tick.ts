@@ -1,20 +1,8 @@
-import { readAllEvents } from "../decision/readEvents.ts";
-import { plansOf } from "../plan/plan.ts";
-import { deriveConductorState } from "../conductor/conductor.ts";
-import {
-  completeReportedDone,
-  type CompletionDeps,
-  type CompletionRunOptions,
-} from "../conductor/completion.ts";
-import { isTerminalPlanPhase } from "./dispatch/policy.ts";
-import { projectTasks } from "../task/project.ts";
-import { autoAccept } from "./autoAccept.ts";
-import { autoDispatch } from "./dispatch/dispatch.ts";
+import { runOrchestrationCore } from "./core.ts";
 import type { ConductorAdapter } from "../conductor/adapter.ts";
 import type { ExecutorKind } from "../conductor/envelope.ts";
-import type { ConductorEnvelopeDefaults } from "../conductor/handlers.ts";
-import type { ExecutorViabilityProbes } from "../conductor/handlers.ts";
-import { resumeChosenEscalation } from "../conductor/handlers.ts";
+import type { ConductorEnvelopeDefaults, ExecutorViabilityProbes } from "../conductor/handlers.ts";
+import type { CompletionDeps, CompletionRunOptions } from "../conductor/completion.ts";
 import type { ReadinessReport } from "../live/readiness.ts";
 import type { AutonomyLevel, AutoMode, ResolvedPolicy } from "../repo/config.ts";
 import type { ResolveBudgetContext } from "../backends/resolve.ts";
@@ -124,68 +112,9 @@ export async function runTick(
     return { ...base, outcome };
   }
 
-  // Gate 2 — halt (readiness does not cover an open decision_blocked). Stop, do not advance past it.
-  const all = await readAllEvents(workspaceDir);
-  const activeStates = plansOf(all).flatMap((p) => {
-    const state = deriveConductorState(p, all);
-    return isTerminalPlanPhase(state.planPhase) ? [] : [state];
-  });
-  const haltedPlans = activeStates.flatMap((s) => (s.halted ? [s.planId] : []));
-  if (haltedPlans.length) return { ...base, outcome: "halted_decision", haltedPlans };
-
-  // Gate 2.5 — post-choose resume. A task whose escalation a human just resolved must be
-  // re-dispatched WITH the decision BEFORE the completion gate runs: the gate would re-check work
-  // the escalated session declined to do and park the tick at needs_human forever (live limbo
-  // 2026-06-10). Dispatch-gated like autoDispatch — at autoMode "off" (manual) the human dispatches.
-  if (deps.autoMode !== "off") {
-    let resumed = 0;
-    for (const s of activeStates) {
-      const r = await resumeChosenEscalation(
-        workspaceDir,
-        { planId: s.planId },
-        {
-          adapter: deps.adapter,
-          ...(deps.executor ? { executor: deps.executor } : {}),
-          ...(deps.envelopeDefaults ? { envelopeDefaults: deps.envelopeDefaults } : {}),
-        },
-        now,
-        rand,
-      );
-      if (r.kind === "advanced") resumed++;
-    }
-    if (resumed > 0) return { ...base, outcome: "advanced", conducted: resumed };
-  }
-
-  const completion = await completeReportedDone(
-    workspaceDir,
-    deps.completionDeps,
-    now,
-    rand,
-    deps.completionOptions,
-  );
-  if (completion.needsHuman > 0) {
-    // Name the task, step, check, and reason — a bare count sent operators spelunking raw event
-    // files to find WHICH step was stuck and why (live 2026-06-10).
-    const details = completion.needsHumanDetails.map(
-      (d) =>
-        `needs_human: plan ${d.planId} step ${d.stepIndex} task ${d.taskId} — ${d.reason}` +
-        (d.checkCommand ? ` (check: ${d.checkCommand})` : ""),
-    );
-    return {
-      ...base,
-      outcome: "needs_human",
-      blockers: [
-        ...base.blockers,
-        `${completion.needsHuman} completion check(s) need a human`,
-        ...details,
-      ],
-    };
-  }
-
-  // Conduct — auto-accept per autonomyLevel (orchestrator-only; honest actor:system), then advance
-  // at most maxSteps ready steps (the cap is enforced under the dispatch boundary).
-  const acc = await autoAccept(workspaceDir, deps.autonomyLevel, now, rand);
-  const disp = await autoDispatch(
+  // Gates 2-5 + conduct — delegate to the shared orchestration core (the single authority
+  // for "advance one safe step": halt → resume → completion → accept → dispatch).
+  const core = await runOrchestrationCore(
     workspaceDir,
     {
       adapter: deps.adapter,
@@ -194,32 +123,21 @@ export async function runTick(
       policy: deps.policy,
       budget: deps.budget,
       viability: deps.viability,
+      autonomyLevel: deps.autonomyLevel,
+      autoMode: deps.autoMode,
+      maxSteps: deps.maxSteps,
+      stalledCount: deps.stalledCount,
+      completionDeps: deps.completionDeps,
+      completionOptions: deps.completionOptions,
     },
-    deps.autoMode,
     now,
     rand,
-    deps.maxSteps,
   );
 
-  if (disp.executed > 0) {
-    return {
-      ...base,
-      outcome: "advanced",
-      conducted: disp.executed,
-      specsAccepted: acc.specsAccepted,
-      plansAccepted: acc.plansAccepted,
-    };
-  }
-  // Nothing conducted: in_flight ONLY if a step is actually RUNNING (a materialized task in `active`
-  // phase) — NOT merely a non-terminal plan. A draft awaiting human accept (at dispatch) or a
-  // needs_revision plan has no active task ⇒ idle (the tick can't advance it; it's not "running").
-  // (A crashed-session active task is caught earlier by the readiness stall guard.)
-  const after = await readAllEvents(workspaceDir);
-  const running = projectTasks(after).some((t) => t.phase === "active");
   return {
     ...base,
-    outcome: running ? "in_flight" : "idle",
-    specsAccepted: acc.specsAccepted,
-    plansAccepted: acc.plansAccepted,
+    ...core,
+    // Merge infra blockers (from readiness) with core blockers.
+    blockers: [...base.blockers, ...core.blockers],
   };
 }

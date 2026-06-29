@@ -12,8 +12,8 @@ import { runPreflight } from "../../live/preflight.ts";
 import { evaluateReadiness } from "../../live/readiness.ts";
 import { listStalledTasks } from "../../orchestrator/stall.ts";
 import { makeNodeSpawnSync } from "../../repo/spawn.ts";
-import { autoAccept } from "../../orchestrator/autoAccept.ts";
-import { autoDispatch } from "../../orchestrator/dispatch/dispatch.ts";
+import { runOrchestrationCore, DEFAULT_MAX_CONDUCTS } from "../../orchestrator/core.ts";
+import { acquireTickLock } from "../../orchestrator/tickLock.ts";
 import { listDispatchLog } from "../../orchestrator/dispatch/project.ts";
 import { suggest } from "../../orchestrator/suggest.ts";
 import { listSuggestions } from "../../orchestrator/project.ts";
@@ -125,34 +125,47 @@ export function registerConductorTools(ctx: ToolContext, deps: ConductorDeps): v
     if (AUTO_MODE !== "type2") {
       return { content: [{ type: "text", text: "auto disabled (set BOULE_AUTO_MODE=type2)" }] };
     }
-    // INVARIANT #1 gate: ONLY when autonomyLevel opens it (auto_plan/full) does the orchestrator
-    // auto-accept proposed plans (full also specs). actor:"system", never forged as a human.
-    const accepted = await autoAccept(WORKSPACE, AUTONOMY_LEVEL, nowFn(), randFn());
-    const s = await autoDispatch(
-      WORKSPACE,
-      {
-        adapter: conductorAdapter,
-        executor: CONDUCTOR_CFG.executor,
-        envelopeDefaults: ENVELOPE_DEFAULTS,
-        policy,
-        viability: EXECUTOR_VIABILITY,
-      },
-      AUTO_MODE,
-      nowFn(),
-      randFn(),
-    );
-    const acc =
-      accepted.specsAccepted || accepted.plansAccepted
-        ? ` (auto-accepted ${accepted.specsAccepted} spec, ${accepted.plansAccepted} plan @${AUTONOMY_LEVEL})`
-        : "";
-    return {
-      content: [
+    // Acquire the per-workspace tick lock — same mutex as `boule tick`. Prevents a concurrent
+    // tick from double-conducting the same step (INVARIANT #5 blast-radius bound).
+    const now = nowFn();
+    const lock = await acquireTickLock(WORKSPACE, now);
+    if (!lock.acquired) {
+      return {
+        content: [{ type: "text", text: "tick lock held — boule tick is running, retry shortly" }],
+      };
+    }
+    try {
+      const stalledCount = (await listStalledTasks(WORKSPACE)).length;
+      // Run through all safety gates (stall → halt → resume → completion → conduct)
+      // via the single shared orchestration authority.
+      const report = await runOrchestrationCore(
+        WORKSPACE,
         {
-          type: "text",
-          text: `dispatched: ${s.executed} executed, ${s.failed} failed, ${s.denied} denied, ${s.skipped} skipped${acc}`,
+          adapter: conductorAdapter,
+          executor: CONDUCTOR_CFG.executor,
+          envelopeDefaults: ENVELOPE_DEFAULTS,
+          policy,
+          viability: EXECUTOR_VIABILITY,
+          autonomyLevel: AUTONOMY_LEVEL,
+          autoMode: AUTO_MODE,
+          maxSteps: DEFAULT_MAX_CONDUCTS,
+          stalledCount,
         },
-      ],
-    };
+        now,
+        randFn(),
+      );
+      const parts = [`outcome=${report.outcome}`, `dispatched=${report.conducted}`];
+      if (report.specsAccepted || report.plansAccepted) {
+        parts.push(
+          `auto-accepted ${report.specsAccepted} spec, ${report.plansAccepted} plan @${AUTONOMY_LEVEL}`,
+        );
+      }
+      if (report.haltedPlans.length) parts.push(`halted=${report.haltedPlans.join(",")}`);
+      if (report.blockers.length) parts.push(`blockers: ${report.blockers.join("; ")}`);
+      return { content: [{ type: "text", text: parts.join(" | ") }] };
+    } finally {
+      await lock.release();
+    }
   },
 );
 
