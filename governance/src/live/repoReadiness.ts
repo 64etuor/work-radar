@@ -40,7 +40,9 @@ export async function computeRepoReadiness(repoRoot: string): Promise<RepoReadin
       return false;
     }
   };
-  const stalledCount = (await listStalledTasks(boulePaths(repoRoot).workspace)).length;
+  // Pass a clock so the Observer-independent TTL stall fallback fires on this live path (a session
+  // that never terminated within the TTL is surfaced even when no Observer marked it crashed).
+  const stalledCount = (await listStalledTasks(boulePaths(repoRoot).workspace, new Date())).length;
   const readiness = evaluateReadiness({
     signals: {
       env,

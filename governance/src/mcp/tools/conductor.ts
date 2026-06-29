@@ -135,7 +135,7 @@ export function registerConductorTools(ctx: ToolContext, deps: ConductorDeps): v
       };
     }
     try {
-      const stalledCount = (await listStalledTasks(WORKSPACE)).length;
+      const stalledCount = (await listStalledTasks(WORKSPACE, now)).length;
       // Run through all safety gates (stall → halt → resume → completion → conduct)
       // via the single shared orchestration authority.
       const report = await runOrchestrationCore(
@@ -219,7 +219,7 @@ export function registerConductorTools(ctx: ToolContext, deps: ConductorDeps): v
       inputSchema: {},
     },
     async () => {
-      const stalled = await listStalledTasks(WORKSPACE);
+      const stalled = await listStalledTasks(WORKSPACE, nowFn());
       const text = stalled.length
         ? stalled
             .map((s) => `${s.taskId} [${s.taskPhase}] session=${s.sessionId} (${s.reason})`)
@@ -249,7 +249,7 @@ export function registerConductorTools(ctx: ToolContext, deps: ConductorDeps): v
         }
       };
       const cmuxCmd = CONDUCTOR_CFG.cmuxCmd;
-      const stalledCount = (await listStalledTasks(WORKSPACE)).length;
+      const stalledCount = (await listStalledTasks(WORKSPACE, nowFn())).length;
       const report = evaluateReadiness({
         signals: {
           env: process.env,

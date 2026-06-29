@@ -97,3 +97,53 @@ describe("deriveStalledTasks — active task whose session crashed", () => {
     expect((await readAllEvents(dir)).length).toBe(before); // read-only
   });
 });
+
+describe("deriveStalledTasks — TTL fallback (Observer-independent)", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  it("surfaces an active session older than the TTL even with NO crash event", async () => {
+    const planId = await activePlan();
+    await conductPlan(dir, { planId }, deps, at(10), 0.3); // session spawned at 12:00:10 UTC
+    const all = await readAllEvents(dir);
+    // 'now' is two hours after spawn — well past the 30-minute default TTL.
+    const now = new Date(at(10).getTime() + 2 * HOUR);
+    const stalled = deriveStalledTasks(all, now);
+    expect(stalled).toHaveLength(1);
+    expect(stalled[0]!.taskId).toBe(taskIdOf(all, "step a"));
+    expect(stalled[0]!.taskPhase).toBe("active");
+    expect(stalled[0]!.reason).toBe("session_timeout");
+  });
+
+  it("does NOT surface an active session still within the TTL window", async () => {
+    const planId = await activePlan();
+    await conductPlan(dir, { planId }, deps, at(10), 0.3);
+    const all = await readAllEvents(dir);
+    const now = new Date(at(10).getTime() + 60 * 1000); // 1 minute later
+    expect(deriveStalledTasks(all, now)).toHaveLength(0);
+  });
+
+  it("is backward-compatible: without 'now', an active session is NEVER flagged", async () => {
+    const planId = await activePlan();
+    await conductPlan(dir, { planId }, deps, at(10), 0.3);
+    const all = await readAllEvents(dir);
+    expect(deriveStalledTasks(all)).toHaveLength(0); // legacy one-arg call: no TTL check
+  });
+
+  it("does NOT timeout a completed task whose session is old (terminal, not stuck)", async () => {
+    const planId = await activePlan();
+    await conductPlan(dir, { planId }, deps, at(10), 0.3);
+    const all = await readAllEvents(dir);
+    await completeTask(dir, { taskId: taskIdOf(all, "step a") }, at(15), 0.4);
+    const now = new Date(at(10).getTime() + 2 * HOUR);
+    expect(deriveStalledTasks(await readAllEvents(dir), now)).toHaveLength(0);
+  });
+
+  it("respects a custom ttlMs", async () => {
+    const planId = await activePlan();
+    await conductPlan(dir, { planId }, deps, at(10), 0.3);
+    const all = await readAllEvents(dir);
+    const now = new Date(at(10).getTime() + 5 * 60 * 1000); // 5 minutes later
+    expect(deriveStalledTasks(all, now, 10 * 60 * 1000)).toHaveLength(0); // ttl 10m → fine
+    expect(deriveStalledTasks(all, now, 2 * 60 * 1000)).toHaveLength(1); // ttl 2m → stalled
+  });
+});

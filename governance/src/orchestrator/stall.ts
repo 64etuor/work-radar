@@ -1,7 +1,9 @@
 import type { GovEvent } from "../event/event.ts";
 import { readAllEvents } from "../decision/readEvents.ts";
+import { parseIdStampUtc } from "../event/id.ts";
 import { projectTasks } from "../task/project.ts";
 import { projectSessions } from "../session/project.ts";
+import { DEFAULT_SESSION_TTL_MS } from "./constants.ts";
 
 // L2 — Stall surfacing (master plan 2026-06-07, Phase L2).
 //
@@ -19,16 +21,35 @@ export interface StalledTask {
   sessionId: string;
   surface: string | null;
   taskPhase: string; // the still-in-flight task phase (active|blocked)
-  reason: "session_crashed" | "session_closed_no_attempt" | "transient_failure";
+  reason:
+    | "session_crashed"
+    | "session_closed_no_attempt"
+    | "transient_failure"
+    | "session_timeout";
 }
 
 /** Non-terminal task phases that a crashed session leaves genuinely stuck (a ready task has no
  *  bound session yet; done/cancelled are terminal and need no attention). */
 const IN_FLIGHT_TASK_PHASES = new Set(["active", "blocked"]);
 
-/** Pure: tasks that are still in-flight but whose bound (Phase-C spawned) session has crashed.
- *  Deterministic order = session projection order. */
-export function deriveStalledTasks(all: GovEvent[]): StalledTask[] {
+/** Session phases the TTL fallback ages out: a session spawned but never marked active by the
+ *  Observer ("opening"), or running with no terminal event ("active"). Deliberately NOT "blocked"
+ *  / "waiting" — those reflect a deliberate pause (e.g. a human-pending escalation), not a silent
+ *  hang, and the halt gate already surfaces them. */
+const TTL_ELIGIBLE_SESSION_PHASES = new Set(["opening", "active"]);
+
+/** Pure: tasks that are still in-flight but whose bound (Phase-C spawned) session is stuck.
+ *  Deterministic order = session projection order.
+ *
+ *  When `now` is supplied, an Observer-independent TTL fallback also fires: an `active` session
+ *  (never closed, never crashed) whose spawn-event id is older than `ttlMs` is surfaced as
+ *  `session_timeout`. Omitting `now` keeps the legacy crash/closed-only behavior byte-identical —
+ *  every existing call site is unaffected. */
+export function deriveStalledTasks(
+  all: GovEvent[],
+  now?: Date,
+  ttlMs: number = DEFAULT_SESSION_TTL_MS,
+): StalledTask[] {
   const taskPhase = new Map(projectTasks(all).map((t) => [t.taskId, t.phase]));
   const latestAttemptClass = new Map<string, string>();
   for (const e of all) {
@@ -75,6 +96,23 @@ export function deriveStalledTasks(all: GovEvent[]): StalledTask[] {
           reason: "session_closed_no_attempt",
         });
       }
+      continue;
+    }
+
+    // TTL fallback (graceful degradation when the Observer is not running): an active session that
+    // never terminated within ttlMs is treated as stalled. The spawn instant is read from the
+    // session-spawn event id (no separate clock field). Only runs when a clock is supplied.
+    if (now && TTL_ELIGIBLE_SESSION_PHASES.has(s.phase)) {
+      const spawnedAt = parseIdStampUtc(s.sessionId);
+      if (spawnedAt && now.getTime() - spawnedAt.getTime() >= ttlMs) {
+        out.push({
+          taskId: s.taskId,
+          sessionId: s.sessionId,
+          surface: s.surface,
+          taskPhase: tp,
+          reason: "session_timeout",
+        });
+      }
     }
   }
   return out;
@@ -89,7 +127,11 @@ function safeAttemptBody(body: string): Record<string, unknown> {
   }
 }
 
-/** Read-only IO wrapper: read events and derive. Writes nothing. */
-export async function listStalledTasks(workspaceDir: string): Promise<StalledTask[]> {
-  return deriveStalledTasks(await readAllEvents(workspaceDir));
+/** Read-only IO wrapper: read events and derive. Writes nothing. Pass `now` to enable the
+ *  Observer-independent TTL fallback (the live tick/readiness paths do; pure tests may omit it). */
+export async function listStalledTasks(
+  workspaceDir: string,
+  now?: Date,
+): Promise<StalledTask[]> {
+  return deriveStalledTasks(await readAllEvents(workspaceDir), now);
 }

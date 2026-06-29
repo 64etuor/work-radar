@@ -13,6 +13,17 @@ export function stampUtc(d: Date): string {
   );
 }
 
+/** Inverse of stampUtc within a generateId-format id (`prefix_YYYYMMDD_HHMMSS_<4hex>`). Returns
+ *  the encoded UTC instant, or null for ids that carry no stamp (deriveEventId ids like
+ *  evt_commit_<sha> / evt_adr_ADR-0007). Used by TTL stall detection to age a session by its
+ *  spawn-event id without a separate clock field. */
+export function parseIdStampUtc(id: string): Date | null {
+  const m = id.match(/_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})_/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  return new Date(Date.UTC(+y!, +mo! - 1, +d!, +h!, +mi!, +s!));
+}
+
 /** Deterministic id: prefix_YYYYMMDD_HHMMSS_<4hex>. rand in [0,1). */
 export function generateId(prefix: LayerPrefix, now: Date, rand: number): string {
   let r = Math.floor(rand * 0x10000) & 0xffff;

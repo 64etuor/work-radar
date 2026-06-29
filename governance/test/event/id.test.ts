@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateId, stampUtc } from "../../src/event/id.js";
+import { generateId, stampUtc, parseIdStampUtc } from "../../src/event/id.js";
 import { deriveEventId, sha256hex } from "../../src/event/id.js";
 
 describe("stampUtc", () => {
@@ -19,6 +19,19 @@ describe("generateId", () => {
   it("zero-pads the hex suffix to 4 chars", () => {
     const d = new Date(Date.UTC(2026, 0, 1, 0, 0, 0));
     expect(generateId("ptn", d, 0)).toBe("ptn_20260101_000000_0000");
+  });
+});
+
+describe("parseIdStampUtc", () => {
+  it("round-trips a generateId stamp back to its UTC instant", () => {
+    const d = new Date(Date.UTC(2026, 4, 16, 14, 32, 18));
+    const id = generateId("evt", d, 0.64);
+    expect(parseIdStampUtc(id)?.getTime()).toBe(d.getTime());
+  });
+  it("returns null for stampless deriveEventId ids", () => {
+    expect(parseIdStampUtc(deriveEventId("commit", "deadbeef"))).toBeNull();
+    expect(parseIdStampUtc(deriveEventId("adr", "ADR-0007"))).toBeNull();
+    expect(parseIdStampUtc("not-an-id")).toBeNull();
   });
 });
 
