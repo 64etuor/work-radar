@@ -1,0 +1,38 @@
+governance/src/mcp/tools/conductor.ts
+  s_c2b4d15096d73b::t_a22f99dc7ed4f1 222
+  s_c2b4d15096d73b::t_98d00d0f603845 252
+  s_c2b4d15096d73b::t_993a6114cc6823 138
+governance/src/orchestrator/stall.ts
+  s_c2b4d15096d73b::t_e4197c7d9f2f45 130-136
+  s_c2b4d15096d73b::t_6265dc7b07341c 3,6
+  s_c2b4d15096d73b::t_751d1bde5f8120 41-52
+  s_c2b4d15096d73b::t_ad12fc525b7651 99-104,106-115
+  s_c2b4d15096d73b::t_76db8fdd1206ac 105
+  s_c2b4d15096d73b::t_4e6303ad545d33 35-40
+  s_c2b4d15096d73b::t_d7bc8962694ee2 24-28
+governance/src/live/repoReadiness.ts
+  s_c2b4d15096d73b::t_4314ba45fa2a0c 43-45
+governance/src/event/id.ts
+  s_c2b4d15096d73b::t_edaf99d819309f 16-26
+governance/test/orchestrator/stall.test.ts
+  s_c2b4d15096d73b::t_ab70935f2d0af9 100-149
+governance/test/event/id.test.ts
+  s_c2b4d15096d73b::t_546a5e5af69c7b 2
+  s_c2b4d15096d73b::t_96278e9665eb8f 25-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "9b937ff432953968f66f64a8d26862c88837e744",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
