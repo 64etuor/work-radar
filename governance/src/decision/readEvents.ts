@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseEvent, type GovEvent } from "../event/event.ts";
+import { parseIdStampUtc, stampUtc } from "../event/id.ts";
 
 export interface EventSnapshot {
   /** The largest event id observed in this read, or the input cursor when nothing new was found.
@@ -17,11 +18,14 @@ export interface EventSnapshot {
  *  reading them — turning a per-tick O(total) re-read into O(events since the cursor's day) for any
  *  consumer that threads a cursor. Tolerant of a missing dir.
  *
- *  Ordering note: a stamp-based id sorts by (day, time, random suffix); for the SAME id prefix an
- *  earlier day always yields a smaller id, so skipping days < cursorDay can only drop events with
- *  id < cursor — the boundary day and all later days are still id-filtered exactly. Same-second
- *  events use the id tiebreak the whole system uses; a cursor consumer should tolerate re-seeing a
- *  boundary event (writes are idempotent), so the contract is at-least-once, never lossy. */
+ *  Contract: a null cursor reads the WHOLE log (every event, including stampless harvested ones);
+ *  a non-null cursor returns the stamp-based events strictly newer than it. Stampless harvested ids
+ *  (evt_commit_/evt_adr_/evt_decision_) are ordered BELOW every stamp id (see orderKey) so they can
+ *  never advance the cursor nor mask a newer stamp event — and are therefore excluded from
+ *  incremental (non-null-cursor) reads. They remain fully visible on the null-cursor full read that
+ *  the graph index rebuilds from. Same-second stamp events use the id tiebreak; a cursor consumer
+ *  may re-see a boundary event (writes are idempotent), so the contract is at-least-once over stamp
+ *  events, never lossy. */
 export async function readEventsSince(
   workspaceDir: string,
   cursor: string | null,
@@ -40,7 +44,8 @@ export async function readEventsSince(
     days
       .filter((day) => !day.startsWith("."))
       .sort()
-      // Skip whole day-dirs that predate the cursor's day — their every event has id < cursor.
+      // Skip whole day-dirs that predate the cursor's day — every stamp event there is older, and
+      // any stampless event there orders below the cursor anyway (correctness is in orderKey).
       .filter((day) => cursorDay === null || day >= cursorDay)
       .map(async (day) => {
         const dayDir = join(eventsDir, day);
@@ -60,13 +65,33 @@ export async function readEventsSince(
   );
 
   let events = dayEvents.flat();
-  if (cursor) events = events.filter((e) => e.frontmatter.id > cursor);
+  if (cursor) {
+    const cur = orderKey(cursor);
+    events = events.filter((e) => orderKey(e.frontmatter.id) > cur);
+  }
 
+  // Advance the cursor by ORDER KEY (so a stampless id never becomes the cursor when any stamp
+  // event is present), but return the raw id of that max event.
+  let maxKey = cursor ? orderKey(cursor) : "";
   let maxId = cursor;
   for (const e of events) {
-    if (maxId === null || e.frontmatter.id > maxId) maxId = e.frontmatter.id;
+    const k = orderKey(e.frontmatter.id);
+    if (maxId === null || k > maxKey) {
+      maxKey = k;
+      maxId = e.frontmatter.id;
+    }
   }
   return { cursor: maxId, events };
+}
+
+/** A total order over event ids: chronological for stamp ids, with stampless harvested ids
+ *  (evt_commit_/evt_adr_/evt_decision_) placed BELOW every stamp id. Raw string compare would do
+ *  the opposite — 'evt_commit…' sorts above 'evt_2026…' (0x63 > 0x32) — which would let a harvested
+ *  id poison an incremental cursor and drop every newer stamp event. */
+function orderKey(id: string): string {
+  const d = parseIdStampUtc(id);
+  if (!d) return `0_${id}`; // stampless class "0" sorts below the stamp class "1"
+  return `1_${stampUtc(d)}_${id}`; // chronological; raw id is the same-second tiebreak
 }
 
 /** Read every L0 event under events/<YYYY-MM-DD>/*.md. Tolerant of a missing dir. */

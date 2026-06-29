@@ -87,6 +87,10 @@ export async function conductPlan(
 
   // Build worktree + envelope + prompt + spawn (worktree path is the ONLY writable tree —
   // INVARIANT #6). materializeSession returns the canonical envelope it spawned with.
+  // NOTE: spawnSession now runs before step_bound is persisted (previously step_bound was written
+  // first). Happy-path events are byte-identical (step_bound stays at(1), session at(2)); the only
+  // divergence is on a spawnSession throw, where just task_created persists instead of
+  // task_created+step_bound. Both leave the task unstarted, so the projection stays consistent.
   const m = await materializeSession(deps, {
     planId: input.planId,
     stepIndex: k,

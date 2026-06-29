@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeEvent } from "../../src/event/writeEvent.js";
-import { generateId } from "../../src/event/id.js";
+import { generateId, deriveEventId } from "../../src/event/id.js";
 import { readAllEvents, readEventsSince } from "../../src/decision/readEvents.js";
 import type { GovEvent } from "../../src/event/event.js";
 
@@ -15,12 +15,12 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-/** Write a note event stamped at `d`; returns its id. */
+/** Write a stamped event at `d`; returns its id. */
 async function note(d: Date, rand: number): Promise<string> {
   const evt: GovEvent = {
     frontmatter: {
       id: generateId("evt", d, rand),
-      type: "note",
+      type: "commit_recorded",
       source: "system",
       actor: "system",
       tags: ["t"],
@@ -33,6 +33,18 @@ async function note(d: Date, rand: number): Promise<string> {
 }
 
 const day = (dd: number, hh = 12, mm = 0, ss = 0) => new Date(Date.UTC(2026, 5, dd, hh, mm, ss));
+
+/** Write a harvested commit event — a STAMPLESS id (evt_commit_<sha>) whose raw string sorts ABOVE
+ *  every stamp id — into a real date day-dir (mirrors src/harvest). Returns its id. */
+async function harvestedCommit(sha: string, d: Date): Promise<string> {
+  const id = deriveEventId("commit", sha);
+  const evt: GovEvent = {
+    frontmatter: { id, type: "commit_recorded", source: "system", actor: "system", tags: [], related_to: [] },
+    body: "c",
+  };
+  await writeEvent(dir, evt, d);
+  return id;
+}
 
 describe("readEventsSince", () => {
   it("a null cursor returns exactly what readAllEvents returns (same ids, same order)", async () => {
@@ -78,5 +90,25 @@ describe("readEventsSince", () => {
     const snap = await readEventsSince(dir, "evt_20260607_120000_0001");
     expect(snap.events).toHaveLength(0);
     expect(snap.cursor).toBe("evt_20260607_120000_0001");
+  });
+
+  it("a stampless harvested id never poisons the cursor nor drops newer stamp events", async () => {
+    const a = await note(day(7, 12, 0, 1), 0.1); // stamp event (the cursor)
+    // A harvested commit lands AFTER the cursor; its raw id sorts above any stamp id.
+    await harvestedCommit("deadbeefcafe", day(8, 0, 0, 0));
+    const b = await note(day(8, 12, 0, 0), 0.2); // a NEWER stamp event
+
+    const snap = await readEventsSince(dir, a);
+    const ids = snap.events.map((e) => e.frontmatter.id);
+    expect(ids).toContain(b); // the newer stamp event is NOT dropped
+    expect(ids).not.toContain(deriveEventId("commit", "deadbeefcafe")); // stampless excluded from incremental read
+    expect(snap.cursor).toBe(b); // cursor advances to the stamp event, never to the stampless id
+  });
+
+  it("a full read (null cursor) still includes stampless harvested events", async () => {
+    await note(day(7, 12, 0, 1), 0.1);
+    const commit = await harvestedCommit("feedface", day(7, 0, 0, 0));
+    const all = await readAllEvents(dir);
+    expect(all.map((e) => e.frontmatter.id)).toContain(commit);
   });
 });
