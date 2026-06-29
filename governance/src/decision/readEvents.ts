@@ -67,7 +67,13 @@ export async function readEventsSince(
   let events = dayEvents.flat();
   if (cursor) {
     const cur = orderKey(cursor);
-    events = events.filter((e) => orderKey(e.frontmatter.id) > cur);
+    // An incremental read carries only stamp events — stampless harvested ids belong to the full
+    // null-cursor rebuild, never the orchestration tail. Excluding them here also closes the
+    // degenerate stampless-cursor bootstrap (a zero-stamp-event workspace) where a raw-greater
+    // stampless id could otherwise leak in once.
+    events = events.filter(
+      (e) => parseIdStampUtc(e.frontmatter.id) !== null && orderKey(e.frontmatter.id) > cur,
+    );
   }
 
   // Advance the cursor by ORDER KEY (so a stampless id never becomes the cursor when any stamp
