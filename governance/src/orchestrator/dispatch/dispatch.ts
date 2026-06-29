@@ -27,6 +27,7 @@ export interface DispatchSummary {
 }
 
 const SEP = " ";
+const DEFAULT_MAX_CONDUCTS = 5;
 
 function materializedKey(planId: string, stepIndex: number): string {
   return `mat${SEP}${planId}${SEP}${stepIndex}`;
@@ -80,8 +81,8 @@ export async function autoDispatch(
   now: Date,
   rand: number,
   /** Hard cap on CONDUCTS this pass (the blast-radius bound enforced under the dispatch boundary —
-   *  `boule tick --max-steps`). Default unbounded preserves the existing MCP auto_dispatch behavior. */
-  maxConducts: number = Number.POSITIVE_INFINITY,
+   *  `boule tick --max-steps`). Default stays bounded for direct MCP auto_dispatch calls. */
+  maxConducts: number = DEFAULT_MAX_CONDUCTS,
 ): Promise<DispatchSummary> {
   const summary: DispatchSummary = { executed: 0, failed: 0, denied: 0, skipped: 0 };
   if (mode !== "type2") return summary;

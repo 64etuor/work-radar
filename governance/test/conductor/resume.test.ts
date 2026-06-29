@@ -160,7 +160,7 @@ describe("resumeChosenEscalation — post-choose re-dispatch", () => {
     expect(second.kind).toBe("no_action");
   });
 
-  it("does NOT resume when the resolution predates the latest spawn (already consumed)", async () => {
+  it("resumes an unresolved choice even when its event id predates the latest spawn", async () => {
     const { planId, taskId, sessionId } = await activeStep(0);
     // Resolve a fork BEFORE this (latest) spawn existed — simulate by choosing at t=2 (< spawn t=10).
     const esc = await escalate(
@@ -178,6 +178,12 @@ describe("resumeChosenEscalation — post-choose re-dispatch", () => {
     await crashSession(sessionId, 30);
 
     const r = await resumeChosenEscalation(dir, { planId }, { adapter: stubAdapter }, at(40), 0.7);
-    expect(r.kind).toBe("no_action");
+    expect(r.kind).toBe("advanced");
+    const all = await readAllEvents(dir);
+    const resumes = all.filter(
+      (e) => e.frontmatter.type === "session_spawned" && e.frontmatter.tags?.includes("resume"),
+    );
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0]!.frontmatter.related_to).toContain(esc.decisionId);
   });
 });

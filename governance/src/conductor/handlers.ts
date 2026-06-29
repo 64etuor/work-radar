@@ -160,6 +160,7 @@ export interface SelectedExecutorBackend {
   backend: BackendSpec;
 }
 
+const MAX_SESSIONS_PER_TASK = 10;
 const FAIL_CLOSED_VIABILITY: ExecutorViabilityProbes = {
   commandExists: () => false,
   codexAuthAvailable: () => false,
@@ -278,6 +279,11 @@ export async function redispatchExecutorAttempt(
 
   const currentAttempt = step.attempts.currentAttemptIndex;
   if (currentAttempt === null) return { kind: "no_action", reason: "no started attempt" };
+
+  if (sessionSpawnCountForTask(all, step.taskId) >= MAX_SESSIONS_PER_TASK) {
+    await writeExecutorStall(workspaceDir, step.taskId, "executor session spawn cap reached", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
 
   if (step.attempts.latestFinishedWorktreeDirty !== false) {
     await writeExecutorStall(workspaceDir, step.taskId, "executor token-exhausted attempt left a dirty worktree", now, rand);
@@ -419,14 +425,8 @@ interface ResolvedEscalation {
  *  yet consumed by a resume. Consume-exactly-once is enforced by a DECISION-KEYED marker: every
  *  resume spawn carries the decisionId in related_to, and a resolution with such a marker is never
  *  eligible again — collision-proof regardless of event-id ordering (generateId is second-granular,
- *  so a chosen and a resume spawn in the same second compare arbitrarily). The id-order check
- *  remains only as the LEGACY filter: a resolution older than the latest spawn (e.g. resolved
- *  before this feature, or before a normal dispatch) never fires a resume. */
-function findResolvedEscalation(
-  all: GovEvent[],
-  taskId: string,
-  latestSpawnId: string,
-): ResolvedEscalation | null {
+ *  so a chosen and a resume spawn in the same second compare arbitrarily). */
+function findResolvedEscalation(all: GovEvent[], taskId: string): ResolvedEscalation | null {
   const chosenByDecisionId = new Map<string, GovEvent>();
   const resumedDecisionIds = new Set<string>();
   for (const e of all) {
@@ -450,8 +450,6 @@ function findResolvedEscalation(
     if (!chosen) continue;
     // Hard consume-once: a resume spawn already references this decision — never resume it again.
     if (resumedDecisionIds.has(decisionId)) continue;
-    // Legacy filter: a resolution older than the latest spawn was already overtaken by a dispatch.
-    if (chosen.frontmatter.id <= latestSpawnId) continue;
     const token =
       (chosen.frontmatter.tags ?? [])
         .find((t) => t.startsWith("option:"))
@@ -510,8 +508,11 @@ export async function resumeChosenEscalation(
     const grp = eventsForDecision(all, latestSpawn.frontmatter.id);
     const sess = deriveSessionState(latestSpawn, grp.related);
     if (sess.phase !== "closed" && sess.phase !== "crashed") continue;
-    const resolved = findResolvedEscalation(all, step.taskId, latestSpawn.frontmatter.id);
+    const resolved = findResolvedEscalation(all, step.taskId);
     if (!resolved) continue;
+    if (sessionSpawnCountForTask(all, step.taskId) >= MAX_SESSIONS_PER_TASK) {
+      return { kind: "no_action", reason: "session spawn cap reached" };
+    }
 
     const at = (i: number) => new Date(now.getTime() + i * 1000);
     const executor = deps.executor ?? "claude";
@@ -681,6 +682,16 @@ function eventReferences(event: GovEvent, id: string): boolean {
     if (ref === id) return true;
   }
   return false;
+}
+
+function sessionSpawnCountForTask(all: readonly GovEvent[], taskId: string): number {
+  let count = 0;
+  for (const event of all) {
+    if (event.frontmatter.type === "session_spawned" && eventReferences(event, taskId)) {
+      count++;
+    }
+  }
+  return count;
 }
 
 export async function conductPlan(

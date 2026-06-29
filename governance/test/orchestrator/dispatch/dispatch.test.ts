@@ -356,6 +356,17 @@ describe("autoDispatch", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("defaults to five conduct executions per pass", async () => {
+    for (let i = 0; i < 6; i++) {
+      await seedAcceptedPlan([`step ${i}`]);
+    }
+
+    const summary = await autoDispatch(ws, { adapter: stubAdapter }, "type2", at(), RAND);
+
+    expect(summary.executed).toBe(5);
+    expect((await readAllEvents(ws)).filter((e) => e.frontmatter.type === "session_spawned")).toHaveLength(5);
+  });
+
   it("LW3: token_exhausted + clean worktree + next viable backend re-dispatches exactly once on the same task without a new step_bound", async () => {
     await seedAcceptedPlan(["step a"]);
     const spawns: SpawnSessionSpec[] = [];
@@ -518,6 +529,36 @@ describe("autoDispatch", () => {
     expect(spawns.map((s) => s.attemptIndex ?? 0)).toEqual([0, 1, 2]);
     const attempts = (await readAllEvents(ws)).filter((e) => e.frontmatter.type === "executor_attempt_started");
     expect(attempts).toHaveLength(3);
+  });
+
+  it("refuses to redispatch when a task has reached the session spawn cap", async () => {
+    await seedAcceptedPlan(["step a"]);
+    const spawns: SpawnSessionSpec[] = [];
+    const policy = policyWithExecutor(
+      Array.from({ length: 12 }, (_, i) => ({
+        provider: "claude",
+        model: `attempt-${i}`,
+      })),
+    );
+    await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    const taskId = await taskIdOfStep("step a");
+
+    for (let attemptIndex = 0; attemptIndex < 9; attemptIndex++) {
+      await recordAttemptFinished({ taskId, attemptIndex, outcomeClass: "token_exhausted" });
+      await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+    }
+    expect(spawns).toHaveLength(10);
+    await recordAttemptFinished({ taskId, attemptIndex: 9, outcomeClass: "token_exhausted" });
+
+    const summary = await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
+
+    expect(summary.failed).toBe(1);
+    expect(spawns).toHaveLength(10);
+    const all = await readAllEvents(ws);
+    expect(all.filter((e) => e.frontmatter.type === "session_spawned" && e.frontmatter.related_to?.includes(taskId))).toHaveLength(10);
+    expect(
+      all.some((e) => e.frontmatter.type === "orchestrator_action_failed" && JSON.parse(e.body).reason === "executor:stall"),
+    ).toBe(true);
   });
 
   it("LW4: autoDispatch feeds reconstructed spend into the second step's executor selection", async () => {

@@ -19,7 +19,7 @@ export interface StalledTask {
   sessionId: string;
   surface: string | null;
   taskPhase: string; // the still-in-flight task phase (active|blocked)
-  reason: "session_crashed";
+  reason: "session_crashed" | "session_closed_no_attempt" | "transient_failure";
 }
 
 /** Non-terminal task phases that a crashed session leaves genuinely stuck (a ready task has no
@@ -30,11 +30,22 @@ const IN_FLIGHT_TASK_PHASES = new Set(["active", "blocked"]);
  *  Deterministic order = session projection order. */
 export function deriveStalledTasks(all: GovEvent[]): StalledTask[] {
   const taskPhase = new Map(projectTasks(all).map((t) => [t.taskId, t.phase]));
+  const latestAttemptClass = new Map<string, string>();
+  for (const e of all) {
+    if (e.frontmatter.type !== "executor_attempt_finished") continue;
+    const taskId = (e.frontmatter.related_to ?? [])[0];
+    if (!taskId) continue;
+    const body = safeAttemptBody(e.body);
+    if (typeof body.outcomeClass === "string") latestAttemptClass.set(taskId, body.outcomeClass);
+  }
+
   const out: StalledTask[] = [];
   for (const s of projectSessions(all)) {
-    if (s.taskId === null || s.phase !== "crashed") continue;
+    if (s.taskId === null) continue;
     const tp = taskPhase.get(s.taskId);
-    if (tp && IN_FLIGHT_TASK_PHASES.has(tp)) {
+    if (!tp || !IN_FLIGHT_TASK_PHASES.has(tp)) continue;
+
+    if (s.phase === "crashed") {
       out.push({
         taskId: s.taskId,
         sessionId: s.sessionId,
@@ -42,9 +53,40 @@ export function deriveStalledTasks(all: GovEvent[]): StalledTask[] {
         taskPhase: tp,
         reason: "session_crashed",
       });
+      continue;
+    }
+
+    if (s.phase === "closed") {
+      const outcomeClass = latestAttemptClass.get(s.taskId);
+      if (outcomeClass === "transient" || outcomeClass === "fatal") {
+        out.push({
+          taskId: s.taskId,
+          sessionId: s.sessionId,
+          surface: s.surface,
+          taskPhase: tp,
+          reason: "transient_failure",
+        });
+      } else if (!outcomeClass) {
+        out.push({
+          taskId: s.taskId,
+          sessionId: s.sessionId,
+          surface: s.surface,
+          taskPhase: tp,
+          reason: "session_closed_no_attempt",
+        });
+      }
     }
   }
   return out;
+}
+
+function safeAttemptBody(body: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(body);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Read-only IO wrapper: read events and derive. Writes nothing. */
