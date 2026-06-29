@@ -1,0 +1,21 @@
+governance/test/decision/readEventsSince.test.ts
+  s_c2b4d15096d73b::t_5de2c5ac88b911 1-82
+governance/src/decision/readEvents.ts
+  s_c2b4d15096d73b::t_a9c6c26b6b0172 5-28,34,37-38,43-44,62-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "a9454c9db5ec0630550fef43d38a140d35959f63",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
