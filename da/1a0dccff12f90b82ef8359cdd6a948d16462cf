@@ -1,0 +1,28 @@
+governance/src/decision/readEvents.ts
+  s_c2b4d15096d73b::t_655b89d79d601b 4
+  s_c2b4d15096d73b::t_9624550758a17c 21-28,47-48,68-71,73-75,78-82,87-94
+  s_c2b4d15096d73b::t_24257563f52efd 95-96
+governance/test/decision/readEventsSince.test.ts
+  s_c2b4d15096d73b::t_10753e6bc31d43 18,23
+  s_c2b4d15096d73b::t_c5c62535edb0c6 94-113
+  s_c2b4d15096d73b::t_c39af82405f432 6
+  s_c2b4d15096d73b::t_3b2c8c6b3ded5a 37-48
+governance/src/conductor/spawn.ts
+  s_c2b4d15096d73b::t_6004ab09d89c88 90-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "da1a0dccff12f90b82ef8359cdd6a948d16462cf",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
