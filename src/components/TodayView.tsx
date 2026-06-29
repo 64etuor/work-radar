@@ -335,9 +335,9 @@ export function TodayView() {
       onDragCancel={handleDragCancel}
     >
       <div className="today" onPointerMove={trackPointer}>
-        <div className="sr-only" role="status" aria-live="polite">
+        <output className="sr-only" aria-live="polite">
           {announce}
-        </div>
+        </output>
         <TodayHeader
           date={date}
           today={today}
