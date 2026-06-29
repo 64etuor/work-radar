@@ -2,20 +2,46 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseEvent, type GovEvent } from "../event/event.ts";
 
-/** Read every L0 event under events/<YYYY-MM-DD>/*.md. Tolerant of a missing dir. */
-export async function readAllEvents(workspaceDir: string): Promise<GovEvent[]> {
+export interface EventSnapshot {
+  /** The largest event id observed in this read, or the input cursor when nothing new was found.
+   *  Pass it back on the next call to read only events newer than it. */
+  cursor: string | null;
+  /** Events with id > the input cursor, in the same (day-sorted, file-sorted) order readAllEvents
+   *  has always returned — NOT globally id-sorted. */
+  events: GovEvent[];
+}
+
+/** Incremental read: every L0 event under events/<YYYY-MM-DD>/*.md whose id is greater than
+ *  `cursor`. A null cursor reads the whole log (identical to the historical readAllEvents). The
+ *  day-partitioned layout lets us skip entire day-dirs that predate the cursor's day WITHOUT
+ *  reading them — turning a per-tick O(total) re-read into O(events since the cursor's day) for any
+ *  consumer that threads a cursor. Tolerant of a missing dir.
+ *
+ *  Ordering note: a stamp-based id sorts by (day, time, random suffix); for the SAME id prefix an
+ *  earlier day always yields a smaller id, so skipping days < cursorDay can only drop events with
+ *  id < cursor — the boundary day and all later days are still id-filtered exactly. Same-second
+ *  events use the id tiebreak the whole system uses; a cursor consumer should tolerate re-seeing a
+ *  boundary event (writes are idempotent), so the contract is at-least-once, never lossy. */
+export async function readEventsSince(
+  workspaceDir: string,
+  cursor: string | null,
+): Promise<EventSnapshot> {
   const eventsDir = join(workspaceDir, "events");
   let days: string[] = [];
   try {
     days = await readdir(eventsDir);
   } catch {
-    return [];
+    return { cursor, events: [] };
   }
+
+  const cursorDay = cursor ? dayStringOf(cursor) : null;
 
   const dayEvents = await Promise.all(
     days
       .filter((day) => !day.startsWith("."))
       .sort()
+      // Skip whole day-dirs that predate the cursor's day — their every event has id < cursor.
+      .filter((day) => cursorDay === null || day >= cursorDay)
       .map(async (day) => {
         const dayDir = join(eventsDir, day);
         let files: string[] = [];
@@ -33,7 +59,26 @@ export async function readAllEvents(workspaceDir: string): Promise<GovEvent[]> {
       }),
   );
 
-  return dayEvents.flat();
+  let events = dayEvents.flat();
+  if (cursor) events = events.filter((e) => e.frontmatter.id > cursor);
+
+  let maxId = cursor;
+  for (const e of events) {
+    if (maxId === null || e.frontmatter.id > maxId) maxId = e.frontmatter.id;
+  }
+  return { cursor: maxId, events };
+}
+
+/** Read every L0 event under events/<YYYY-MM-DD>/*.md. Tolerant of a missing dir. */
+export async function readAllEvents(workspaceDir: string): Promise<GovEvent[]> {
+  return (await readEventsSince(workspaceDir, null)).events;
+}
+
+/** The day-dir string (YYYY-MM-DD) encoded in a stamp-based id, or null for stampless ids
+ *  (deriveEventId ids like evt_commit_<sha>) — which disables day-skipping but not id-filtering. */
+function dayStringOf(id: string): string | null {
+  const m = id.match(/_(\d{4})(\d{2})(\d{2})_/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
 export interface DecisionGroup {
