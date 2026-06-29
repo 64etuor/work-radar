@@ -15,6 +15,7 @@ import { plansOf } from "../../plan/plan.ts";
 import { evaluateAutoDispatch, isTerminalPlanPhase, type AutoMode } from "./policy.ts";
 import type { ResolveBudgetContext } from "../../backends/resolve.ts";
 import type { ResolvedPolicy } from "../../repo/config.ts";
+import { MAX_CONDUCTS_PER_TICK } from "../constants.ts";
 
 // IMPORTANT: this module imports ZERO decision write handlers. Its own writes are only the four
 // verdict-free dispatch events; decision resolution remains human-gated elsewhere.
@@ -27,7 +28,8 @@ export interface DispatchSummary {
 }
 
 const SEP = " ";
-export const DEFAULT_MAX_CONDUCTS = 5;
+/** @deprecated Re-exported alias for the single source of truth in constants.ts. */
+export const DEFAULT_MAX_CONDUCTS = MAX_CONDUCTS_PER_TICK;
 
 function materializedKey(planId: string, stepIndex: number): string {
   return `mat${SEP}${planId}${SEP}${stepIndex}`;
