@@ -1,0 +1,41 @@
+governance/src/conductor/conductShared.ts
+  s_c2b4d15096d73b::t_b5ea7f2e558f3a 120
+  s_c2b4d15096d73b::t_4c4fd02a917d64 1-12,14-84,86-119,121-175,177-280
+  s_c2b4d15096d73b::t_01e4ef645d287c 176
+  s_c2b4d15096d73b::t_27bec8c7d7b86a 85
+  s_c2b4d15096d73b::t_046fabfababef4 13
+governance/src/conductor/backend.ts
+  s_c2b4d15096d73b::t_3e30662191e37a 1-135
+governance/src/conductor/handlers.ts
+  s_c2b4d15096d73b::t_35bfae38ba63fe 1-43
+governance/src/conductor/spawn.ts
+  s_c2b4d15096d73b::t_ceea03d6ebb1b2 1-177
+governance/src/conductor/status.ts
+  s_c2b4d15096d73b::t_5c3a69589b171b 1-41
+governance/src/orchestrator/constants.ts
+  s_c2b4d15096d73b::t_3123a7b69f8805 1-17
+governance/src/conductor/redispatch.ts
+  s_c2b4d15096d73b::t_85eb44eac23689 1-136
+governance/src/conductor/resume.ts
+  s_c2b4d15096d73b::t_82278e9af672c2 1-161
+governance/src/orchestrator/dispatch/dispatch.ts
+  s_c2b4d15096d73b::t_4d9ac93a904655 18,31-32
+governance/src/conductor/prompt.ts
+  s_c2b4d15096d73b::t_26d0f1bb7c78fa 1-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "a6170128ffd3a73133cfb3970b9e4dad290ccfdb",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
