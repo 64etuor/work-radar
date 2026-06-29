@@ -1,0 +1,19 @@
+governance/src/decision/readEvents.ts
+  s_c2b4d15096d73b::t_730ab5e1096215 70-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "fc08ceea18be6f6040c1293b5a3e49c3e92f1d56",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
