@@ -423,12 +423,27 @@ fn parse_create_input(payload: &str) -> Result<CreateEventInput, SyncError> {
         .and_then(|x| x.as_i64())
         .ok_or_else(|| SyncError::Terminal("create payload missing duration_min".into()))?;
     let all_day = v.get("all_day").and_then(|x| x.as_bool()).unwrap_or(false);
-    let start = if all_day {
+    // 반복 마스터: recurrence 라인 + time_zone(IANA). 없으면 종전과 동일(빈 vec / None).
+    // malformed(non-string 원소)는 조용히 버리지 않고 Terminal — fail-closed.
+    let recurrence: Vec<String> = parse_recurrence_lines(&v)?.unwrap_or_default();
+    let time_zone = v
+        .get("time_zone")
+        .and_then(|x| x.as_str())
+        .map(String::from);
+    // recurring(time_zone Some, non-all-day)이면 start/end는 offset 미부여 wall-clock 유지 —
+    // Google recurring은 dateTime을 timeZone 필드로 해석하므로 normalize_timed_start(로컬 offset 부여)
+    // 를 타면 안 된다. legacy(time_zone None)는 종전대로 normalize → byte-identical.
+    let recurring = time_zone.is_some() && !all_day;
+    let start = if all_day || recurring {
         raw_start
     } else {
         normalize_timed_start(&raw_start)?
     };
-    let end = compute_end(&start, duration_min, all_day)?;
+    let end = if recurring {
+        compute_wall_clock_end(&start, duration_min)?
+    } else {
+        compute_end(&start, duration_min, all_day)?
+    };
     let description = v
         .get("description")
         .and_then(|x| x.as_str())
@@ -440,7 +455,8 @@ fn parse_create_input(payload: &str) -> Result<CreateEventInput, SyncError> {
         end,
         all_day,
         description,
-        ..Default::default()
+        recurrence,
+        time_zone,
     })
 }
 
@@ -449,6 +465,12 @@ fn parse_create_input(payload: &str) -> Result<CreateEventInput, SyncError> {
 fn build_patch_body(payload: &str) -> Result<serde_json::Value, SyncError> {
     let v: serde_json::Value = serde_json::from_str(payload)
         .map_err(|e| SyncError::Terminal(format!("patch payload parse: {e}")))?;
+    // recurring patch(루틴 마스터): time_zone Some이면 start/end는 wall-clock dateTime + timeZone 필드
+    // 로 직렬화(offset 미부여, build_event_payload의 recurring 계약 미러). legacy(None)는 종전대로.
+    let time_zone = v
+        .get("time_zone")
+        .and_then(|x| x.as_str())
+        .map(String::from);
     let mut body = serde_json::Map::new();
     if let Some(title) = v.get("title").and_then(|x| x.as_str()) {
         body.insert("summary".into(), serde_json::Value::String(title.into()));
@@ -456,14 +478,27 @@ fn build_patch_body(payload: &str) -> Result<serde_json::Value, SyncError> {
     if let Some(start) = v.get("start").and_then(|x| x.as_str()) {
         // patch도 start와 함께 end가 같이 가야 Google이 받아준다(부분 PATCH지만 start만 보내면
         // 기존 end가 그대로라 거리 변경이 안 반영됨). duration_min이 같이 와야 한다.
-        let start = normalize_timed_start(start)?;
         let duration_min = v
             .get("duration_min")
             .and_then(|x| x.as_i64())
             .ok_or_else(|| SyncError::Terminal("patch with start requires duration_min".into()))?;
-        let end = compute_end(&start, duration_min, false)?;
-        body.insert("start".into(), serde_json::json!({ "dateTime": start }));
-        body.insert("end".into(), serde_json::json!({ "dateTime": end }));
+        if let Some(tz) = time_zone.as_deref() {
+            // recurring: wall-clock dateTime(정규화 안 함) + timeZone 필드.
+            let end = compute_wall_clock_end(start, duration_min)?;
+            body.insert(
+                "start".into(),
+                serde_json::json!({ "dateTime": start, "timeZone": tz }),
+            );
+            body.insert(
+                "end".into(),
+                serde_json::json!({ "dateTime": end, "timeZone": tz }),
+            );
+        } else {
+            let start = normalize_timed_start(start)?;
+            let end = compute_end(&start, duration_min, false)?;
+            body.insert("start".into(), serde_json::json!({ "dateTime": start }));
+            body.insert("end".into(), serde_json::json!({ "dateTime": end }));
+        }
     } else if let Some(duration_min) = v.get("duration_min").and_then(|x| x.as_i64()) {
         // start 없이 duration만 — resize 케이스. start는 변경 안 함, end만 계산해 새로 보낸다.
         // 실제 end 계산엔 Google에서 받아 온 start가 필요한데, 그건 payload에 없다.
@@ -473,7 +508,41 @@ fn build_patch_body(payload: &str) -> Result<serde_json::Value, SyncError> {
             "resize-only patch not supported (use reschedule with start+duration)".into(),
         ));
     }
+    // 반복 마스터: recurrence 배열이 있으면 patch body에 동봉(RRULE/EXDATE 갱신). 없으면 미삽입 →
+    // 기존 non-recurring patch는 byte-identical. malformed(non-string 원소)는 Terminal — fail-closed
+    // (조용히 [] 로 걸러 recurrence를 의도치 않게 지우는 것 방지).
+    if let Some(lines) = parse_recurrence_lines(&v)? {
+        let arr = lines.into_iter().map(serde_json::Value::String).collect();
+        body.insert("recurrence".into(), serde_json::Value::Array(arr));
+    }
     Ok(serde_json::Value::Object(body))
+}
+
+/// payload의 `recurrence` 배열 → `Vec<String>`. 키가 없으면 `None`(비반복). 키가 있는데 원소 중
+/// 문자열이 아닌 게 있으면 `Terminal` — malformed 입력을 조용히 필터링하지 않고 fail-closed로 거부한다
+/// (parse_create_input / build_patch_body 공용).
+fn parse_recurrence_lines(v: &serde_json::Value) -> Result<Option<Vec<String>>, SyncError> {
+    let Some(arr) = v.get("recurrence").and_then(|x| x.as_array()) else {
+        return Ok(None);
+    };
+    let mut out = Vec::with_capacity(arr.len());
+    for item in arr {
+        let line = item
+            .as_str()
+            .ok_or_else(|| SyncError::Terminal("recurrence contains a non-string entry".into()))?;
+        out.push(line.to_string());
+    }
+    Ok(Some(out))
+}
+
+/// 반복 이벤트용 wall-clock end 계산. start(`YYYY-MM-DDTHH:MM:SS`, offset 없음) + duration_min →
+/// end(`YYYY-MM-DDTHH:MM:SS`, offset 없음). Google recurring은 dateTime을 별도 timeZone 필드로
+/// 해석하므로 로컬 offset을 붙이지 않는다(compute_end는 RFC3339 offset을 요구/생성 — recurring 부적합).
+fn compute_wall_clock_end(start: &str, duration_min: i64) -> Result<String, SyncError> {
+    let naive = chrono::NaiveDateTime::parse_from_str(start.trim(), "%Y-%m-%dT%H:%M:%S")
+        .map_err(|e| SyncError::Terminal(format!("recurring start parse: {e}")))?;
+    let end = naive + chrono::Duration::minutes(duration_min);
+    Ok(end.format("%Y-%m-%dT%H:%M:%S").to_string())
 }
 
 pub(crate) fn normalize_timed_start(start: &str) -> Result<String, SyncError> {
@@ -722,6 +791,98 @@ mod tests {
         assert!(chrono::DateTime::parse_from_rfc3339(start).is_ok());
         assert!(chrono::DateTime::parse_from_rfc3339(end).is_ok());
         assert!(start.starts_with("2026-05-28T10:00:00"));
+    }
+
+    // ── P1: recurrence/time_zone 통로 (반복 마스터가 큐로 흐르게) ──────────────────
+
+    /// 반복 create payload: recurrence 배열 + time_zone → CreateEventInput에 그대로 전달.
+    /// recurring이면 start/end는 offset 미부여 wall-clock 유지(Google이 timeZone 필드로 해석).
+    #[test]
+    fn parse_create_input_recurring_keeps_wall_clock_and_recurrence() {
+        let payload = r#"{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR","EXDATE;TZID=Asia/Seoul:20260601T070000"]}"#;
+        let input = parse_create_input(payload).unwrap();
+        assert_eq!(input.time_zone.as_deref(), Some("Asia/Seoul"));
+        assert_eq!(
+            input.recurrence,
+            vec![
+                "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR".to_string(),
+                "EXDATE;TZID=Asia/Seoul:20260601T070000".to_string(),
+            ]
+        );
+        // recurring start는 offset 미부여 wall-clock 그대로(정규화 안 함).
+        assert_eq!(input.start, "2026-05-29T07:00:00");
+        assert!(chrono::DateTime::parse_from_rfc3339(&input.start).is_err());
+        // end도 wall-clock(offset 없음).
+        assert_eq!(input.end, "2026-05-29T07:30:00");
+    }
+
+    /// recurring end는 순수 wall-clock 산술 — 자정 넘김도 offset/tz 해석 없이 롤오버(pin NIT#1).
+    #[test]
+    fn parse_create_input_recurring_end_rolls_over_midnight() {
+        let payload = r#"{"title":"야근 루틴","start":"2026-05-29T23:45:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=DAILY"]}"#;
+        let input = parse_create_input(payload).unwrap();
+        assert_eq!(input.start, "2026-05-29T23:45:00");
+        assert_eq!(input.end, "2026-05-30T00:15:00"); // 순수 wall-clock 롤오버(offset 미부여)
+    }
+
+    /// malformed recurrence(non-string 원소)는 조용히 필터링하지 않고 Terminal(fail-closed) —
+    /// create/patch 양쪽. 조용히 []로 걸러 recurrence를 의도치 않게 지우는 회귀 방지(NIT#3).
+    #[test]
+    fn recurrence_non_string_entry_is_terminal_both_paths() {
+        let create = r#"{"title":"R","start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":[null]}"#;
+        assert!(parse_create_input(create).is_err());
+        let patch = r#"{"start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":[123]}"#;
+        assert!(build_patch_body(patch).is_err());
+    }
+
+    /// 회귀: recurrence/time_zone 없는 기존 payload는 종전과 동일 — start normalize(로컬 offset 부여),
+    /// recurrence 빈 vec, time_zone None.
+    #[test]
+    fn parse_create_input_non_recurring_preserves_offset_behavior() {
+        let payload = r#"{"title":"Demo","start":"2026-05-28T10:00:00","duration_min":45}"#;
+        let input = parse_create_input(payload).unwrap();
+        assert!(input.recurrence.is_empty());
+        assert!(input.time_zone.is_none());
+        // normalize_timed_start가 로컬 offset을 부여 → RFC3339 파싱 가능(종전 동작).
+        assert!(chrono::DateTime::parse_from_rfc3339(&input.start).is_ok());
+        assert_eq!(
+            input.start,
+            normalize_timed_start("2026-05-28T10:00:00").unwrap()
+        );
+        assert_eq!(input.end, compute_end(&input.start, 45, false).unwrap());
+    }
+
+    /// 반복 patch payload: recurrence 배열 동봉 + start/end.timeZone(wall-clock dateTime).
+    #[test]
+    fn build_patch_body_recurring_includes_recurrence_and_timezone() {
+        let payload = r#"{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO"]}"#;
+        let body = build_patch_body(payload).unwrap();
+        assert_eq!(body["summary"], "아침 운동");
+        // wall-clock dateTime + timeZone 필드(offset 미부여).
+        assert_eq!(body["start"]["dateTime"], "2026-05-29T07:00:00");
+        assert_eq!(body["start"]["timeZone"], "Asia/Seoul");
+        assert_eq!(body["end"]["dateTime"], "2026-05-29T07:30:00");
+        assert_eq!(body["end"]["timeZone"], "Asia/Seoul");
+        let rec = body["recurrence"].as_array().expect("recurrence array");
+        assert_eq!(rec.len(), 1);
+        assert_eq!(rec[0], "RRULE:FREQ=WEEKLY;BYDAY=MO");
+    }
+
+    /// 회귀: recurrence/time_zone 없는 patch는 종전과 바이트 동일(normalize offset dateTime,
+    /// timeZone/recurrence 키 없음).
+    #[test]
+    fn build_patch_body_non_recurring_unchanged() {
+        let payload = r#"{"start":"2026-05-28T10:00:00+09:00","duration_min":30}"#;
+        let body = build_patch_body(payload).unwrap();
+        let start = normalize_timed_start("2026-05-28T10:00:00+09:00").unwrap();
+        let end = compute_end(&start, 30, false).unwrap();
+        let expected = serde_json::json!({
+            "start": { "dateTime": start },
+            "end": { "dateTime": end },
+        });
+        assert_eq!(body, expected);
+        assert!(body.get("recurrence").is_none());
+        assert!(body["start"].get("timeZone").is_none());
     }
 
     // ── 통합: execute_with_access(create) end-to-end ─────────────────────────────
