@@ -27,7 +27,8 @@ Google에서 **반복 마스터 = `recurrence: ["RRULE:...","EXDATE;TZID=...:...
 모든 캘린더 mutation을 **하나의 지연 큐**로:
 
 - `pending_calendar_writes.target_kind`에 `routine_master`(target_id = routine_id) 추가.
-  (UNIQUE(target_kind, target_id, kind)라 새 값은 스키마 변경 없이 수용 — 마이그레이션 최소/불요.)
+  (⚠️정정: target_kind에 CHECK 제약 `IN ('signal','routine_check','event')`(마이그 0033)이 있어
+  스키마 변경 필요 — 마이그 0062가 0033 재구축 패턴으로 CHECK에 `routine_master` 추가. 큐 행 보존.)
 - `google_sync.rs`의 순수 빌더(RRULE / UNTIL→UTC / tz SSOT / active-period DTSTART-floor / split /
   exdate)는 **정본이므로 보존**. 단 **실행·재시도·일관성은 큐가 소유** → provider 직접호출 0회로.
 - `link_back_impl`/`unlink_impl`/`fetch_target_link`에 `routine_master` arm 추가 →

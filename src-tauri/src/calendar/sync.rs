@@ -321,6 +321,17 @@ async fn link_back_impl(pool: &SqlitePool, w: &PendingWrite, event_id: &str) -> 
                 .await?;
             }
         }
+        "routine_master" => {
+            // target_id = routine_id 직접(파이프 없음 — split_routine_key 미사용).
+            sqlx::query(
+                "UPDATE routines SET google_event_id = ?1, google_calendar_id = ?2 WHERE id = ?3",
+            )
+            .bind(event_id)
+            .bind(&w.calendar_id)
+            .bind(&w.target_id)
+            .execute(pool)
+            .await?;
+        }
         _ => {}
     }
     Ok(())
@@ -351,6 +362,13 @@ async fn fetch_target_link(
             .bind(date)
             .fetch_optional(pool)
             .await?
+        }
+        "routine_master" => {
+            // target_id = routine_id 직접. 둘 다 non-NULL일 때만 Some(signal arm 미러).
+            sqlx::query_as("SELECT google_calendar_id, google_event_id FROM routines WHERE id = ?1")
+                .bind(&w.target_id)
+                .fetch_optional(pool)
+                .await?
         }
         _ => None,
     };
@@ -386,6 +404,17 @@ async fn unlink_impl(pool: &SqlitePool, w: &PendingWrite) -> sqlx::Result<()> {
                 .execute(pool)
                 .await?;
             }
+        }
+        "routine_master" => {
+            // target_id = routine_id 직접. 다른 routine 컬럼은 건드리지 않는다.
+            sqlx::query(
+                "UPDATE routines
+                 SET google_event_id = NULL, google_calendar_id = NULL
+                 WHERE id = ?1",
+            )
+            .bind(&w.target_id)
+            .execute(pool)
+            .await?;
         }
         _ => {}
     }
@@ -1152,5 +1181,164 @@ mod tests {
         .unwrap();
         assert_eq!(le.as_deref(), Some("evt_stored"));
         assert_eq!(lc.as_deref(), Some("calA"));
+    }
+
+    // ── P2: routine_master target arm (link_back / unlink / fetch_target_link) ────
+
+    /// routine_master create: 반복 마스터를 큐로 생성하면 provider.create_event 호출 후
+    /// routines.google_event_id / google_calendar_id 미러에 박혀야 한다. target_id = routine_id
+    /// (파이프 없음). payload는 P1 형식(recurrence + time_zone).
+    #[tokio::test]
+    async fn routine_master_create_links_back_routines_mirror() {
+        let pool = fresh_pool().await;
+        sqlx::query("INSERT INTO routines (id, title, freq) VALUES ('r1','아침 운동','weekly')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let pid = upsert_write(
+            &pool,
+            "create",
+            "routine_master",
+            "r1",
+            "calA",
+            None,
+            r#"{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let row = &due[0];
+
+        let provider = RecordingProvider {
+            new_event_id: "evt_master".into(),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake_access", row)
+            .await
+            .unwrap();
+        delete_write(&pool, pid).await.unwrap();
+
+        // provider.create_event 호출 확인.
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created, vec![("calA".to_string(), "아침 운동".to_string())]);
+
+        // routines 미러 박힘.
+        let (evt, cal): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_event_id, google_calendar_id FROM routines WHERE id = 'r1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(evt.as_deref(), Some("evt_master"));
+        assert_eq!(cal.as_deref(), Some("calA"));
+    }
+
+    /// routine_master delete: 링크된 마스터를 큐로 삭제하면 provider.delete_event 호출 후
+    /// routines.google_event_id / google_calendar_id 두 컬럼이 NULL로 언링크돼야 한다.
+    #[tokio::test]
+    async fn routine_master_delete_nulls_routines_mirror() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, google_event_id, google_calendar_id) \
+             VALUES ('r1','아침 운동','weekly','evt_master','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let pid = upsert_write(
+            &pool,
+            "delete",
+            "routine_master",
+            "r1",
+            "calA",
+            Some("evt_master"),
+            r#"{}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let row = &due[0];
+
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake_access", row)
+            .await
+            .unwrap();
+        delete_write(&pool, pid).await.unwrap();
+
+        // provider.delete_event 호출 확인.
+        let deleted = provider.deleted.lock().unwrap().clone();
+        assert_eq!(
+            deleted,
+            vec![("calA".to_string(), "evt_master".to_string())]
+        );
+
+        // routines 미러 NULL.
+        let (evt, cal): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_event_id, google_calendar_id FROM routines WHERE id = 'r1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(evt.is_none());
+        assert!(cal.is_none());
+    }
+
+    /// routine_master fetch_target_link: 이미 링크된 마스터에 대한 create(재링크)는 옛 링크를 읽어
+    /// 새 이벤트 생성·링크백 후 옛 이벤트를 삭제해 오펀을 막는다(signal arm과 동일 방어).
+    #[tokio::test]
+    async fn routine_master_create_replacing_link_deletes_old_event() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, google_event_id, google_calendar_id) \
+             VALUES ('r1','아침 운동','weekly','evt_old','cal_old')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let _pid = upsert_write(
+            &pool,
+            "create",
+            "routine_master",
+            "r1",
+            "cal_new",
+            None,
+            r#"{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=DAILY"]}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let row = &due[0];
+        let provider = RecordingProvider {
+            new_event_id: "evt_new".into(),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake", row)
+            .await
+            .unwrap();
+
+        // 링크가 새 이벤트로 이동.
+        let (evt, cal): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_event_id, google_calendar_id FROM routines WHERE id = 'r1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(evt.as_deref(), Some("evt_new"));
+        assert_eq!(cal.as_deref(), Some("cal_new"));
+        // 옛 마스터 이벤트 삭제(오펀 방지).
+        let deleted = provider.deleted.lock().unwrap().clone();
+        assert_eq!(
+            deleted,
+            vec![("cal_old".to_string(), "evt_old".to_string())]
+        );
     }
 }
