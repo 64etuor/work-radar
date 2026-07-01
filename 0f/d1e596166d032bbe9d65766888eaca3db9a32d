@@ -1,0 +1,28 @@
+src-tauri/src/calendar/sync.rs
+  s_c2b4d15096d73b::t_59885006d77afd 303-314,352-358
+  s_c2b4d15096d73b::t_59cd69cda360db 316-328
+  s_c2b4d15096d73b::t_ba93c169d6dca7 293-302,315,329-348,351,360-361,366-368,377-378
+  s_c2b4d15096d73b::t_ba3a5ed1b108e6 1511-1564
+  s_c2b4d15096d73b::t_5e49a378bf6d48 1025,1027
+  s_c2b4d15096d73b::t_646ade9a6a2234 349-350,359,362-365,369-376
+  s_c2b4d15096d73b::t_2ac3baee8b9f94 1439-1510,1565-1679
+  s_c2b4d15096d73b::t_6566d65b11d0c3 1070-1072,1074-1080
+src-tauri/migrations/0063_pending_calendar_writes_series_replace_kind.sql
+  s_c2b4d15096d73b::t_ba69d3bc9f4415 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "0fd1e596166d032bbe9d65766888eaca3db9a32d",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
