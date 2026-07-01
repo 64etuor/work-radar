@@ -1,0 +1,27 @@
+src-tauri/src/calendar/sync.rs
+  s_c2b4d15096d73b::t_9bcd1791ec00e5 368-371,1276-1279
+  s_c2b4d15096d73b::t_3864856fec44f3 366-367,372
+  s_c2b4d15096d73b::t_158cf42e991c2a 324-334
+  s_c2b4d15096d73b::t_3eb21b9711a9f7 408-418
+  s_c2b4d15096d73b::t_522612306f3dbf 1185-1275,1280-1343
+docs/plans/2026-07-01-calendar-sync-unification-plan.md
+  s_c2b4d15096d73b::t_9df9e5c075f09c 30-31
+src-tauri/migrations/0062_pending_calendar_writes_routine_master_target.sql
+  s_c2b4d15096d73b::t_4ace470d32fc6f 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "3e375625235dc3db0961dda4323edf1b9d5ccfc6",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
