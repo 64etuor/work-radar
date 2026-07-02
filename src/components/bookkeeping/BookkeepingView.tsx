@@ -519,14 +519,23 @@ export function BookkeepingView() {
     });
   };
 
-  const saveTransaction = (tx: BookkeepingTransaction, draft: TransactionEditDraft) => {
+  // 성공 여부를 돌려준다 — 검토 큐가 성공했을 때만 편집 폼을 접어 draft를 보존한다.
+  // 토스트는 여기서 처리하므로 호출부는 boolean만 본다(에러를 다시 던지지 않는다).
+  // mutateAsync를 쓴다: mutate의 per-call 콜백은 연속 호출 시 마지막 것만 유지돼
+  // (TanStack Query), 빠른 연속 저장(인라인 메모 2연타)이 앞선 promise를 영원히
+  // 미해결로 남길 수 있다. mutateAsync는 호출별 promise라 그 문제가 없다.
+  // (훅의 전역 콜백은 onSuccess: invalidate뿐 — catch에서 토스트해도 중복 없음.)
+  const saveTransaction = async (
+    tx: BookkeepingTransaction,
+    draft: TransactionEditDraft,
+  ): Promise<boolean> => {
     const amount = Number(draft.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       pushError("bookkeeping.edit", "금액을 확인하세요");
-      return;
+      return false;
     }
-    updateTx.mutate(
-      {
+    try {
+      await updateTx.mutateAsync({
         id: tx.id,
         merchant: draft.merchant,
         description: nullableText(draft.description),
@@ -545,12 +554,13 @@ export function BookkeepingView() {
         expenseKind: draft.expenseKind,
         orderNo: nullableText(draft.orderNo),
         paymentNo: nullableText(draft.paymentNo),
-      },
-      {
-        onSuccess: () => pushSuccess("거래를 저장했습니다"),
-        onError: (error) => pushMutationError("bookkeeping.edit", error),
-      },
-    );
+      });
+      pushSuccess("거래를 저장했습니다");
+      return true;
+    } catch (error) {
+      pushMutationError("bookkeeping.edit", error);
+      return false;
+    }
   };
 
   // 확정 행 인라인 분류 변경 — updateTx가 아니라 override 커맨드로 라우팅해 audit을 남긴다.

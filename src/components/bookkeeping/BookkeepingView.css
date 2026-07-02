@@ -1009,12 +1009,27 @@
   background: var(--bk-surface);
 }
 
+/* 검토 큐 read-row 공유 칼럼 템플릿 — 리스트 전체가 같은 고정/fr 트랙을 쓰므로
+   96행이 칼럼-대-칼럼으로 정렬된다(체크박스 칼럼은 래퍼의 고정 20px). */
+.bk-review-list {
+  --bk-review-read-grid: 8.5rem minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 1fr) 7.5rem max-content;
+}
+
 .bk-review-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: start;
   column-gap: var(--wr-density-md);
   border-top: 1px solid var(--bk-rule);
+}
+
+/* 접힌 상태(read-row)는 한 줄이므로 체크박스를 세로 중앙에 맞춘다. */
+.bk-review-row[data-expanded="false"] {
+  align-items: center;
+}
+
+.bk-review-row[data-expanded="false"] > .bk-select-check {
+  margin-top: 0;
 }
 
 .bk-review-row[data-active="true"] {
@@ -1069,4 +1084,170 @@
 .bk-select-check:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* 검토 큐 한 줄 read-row — TransactionReadRow(.bk-transaction) 문법을 따르되
+   행마다 다른 max-content 대신 공유 템플릿을 써서 칼럼 정렬을 보장한다. */
+.bk-review-read {
+  display: grid;
+  grid-template-columns: var(--bk-review-read-grid);
+  align-items: center;
+  column-gap: var(--wr-density-md);
+  min-width: 0;
+  padding: var(--wr-density-sm) 0;
+  border-left: 3px solid transparent;
+  padding-left: var(--wr-density-xs);
+  border-radius: var(--radius-sm);
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-review-read:hover {
+  background: var(--bk-stone);
+}
+
+.bk-review-read[data-status="needs_review"] {
+  border-left-color: var(--bk-coral);
+}
+
+.bk-review-read-date {
+  color: var(--bk-subtle);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-review-read-time {
+  margin-left: var(--wr-density-2xs);
+  color: var(--bk-muted);
+  font-size: 0.9em;
+}
+
+.bk-review-read-merchant {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bk-review-read-category {
+  display: flex;
+  min-width: 0;
+}
+
+.bk-review-read-category > * {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: inline-block;
+}
+
+.bk-review-read-reasons {
+  display: flex;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: var(--wr-density-xs);
+}
+
+.bk-review-read-amount {
+  justify-self: end;
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-review-read-amount[data-direction="income"] {
+  color: var(--bk-green);
+}
+
+/* 상호 + 메모 스택 셀 — 메모는 상호 아래 둘째 줄(그리드 칼럼 수를 늘리지 않는다). */
+.bk-review-read-main {
+  display: grid;
+  min-width: 0;
+  gap: var(--wr-density-2xs);
+}
+
+/* 메모 표시 겸 인라인 편집 트리거 — button이라 isInteractiveTarget이 행 확장을 막는다. */
+.bk-review-note-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wr-density-2xs);
+  min-width: 0;
+  max-width: 100%;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bk-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.bk-review-note-trigger:hover:not(:disabled) {
+  color: var(--bk-ink);
+}
+
+.bk-review-note-trigger[data-empty="true"] {
+  opacity: 0;
+  transition: opacity var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-review-read:hover .bk-review-note-trigger[data-empty="true"],
+.bk-review-note-trigger[data-empty="true"]:focus-visible {
+  opacity: 1;
+}
+
+.bk-review-note-trigger > svg {
+  flex: 0 0 auto;
+}
+
+.bk-review-note-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bk-review-note-input {
+  height: 26px;
+  max-width: 24rem;
+}
+
+/* 그룹 헤더 — 의심/정상 구획. 정상 그룹은 일괄 확정 액션을 헤더에 둔다. */
+.bk-review-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wr-density-md);
+  margin-top: var(--wr-density-md);
+  padding: var(--wr-density-xs) 0;
+  border-bottom: 1px solid var(--bk-rule-strong);
+  color: var(--bk-subtle);
+}
+
+.bk-review-group-head:first-child {
+  margin-top: 0;
+}
+
+.bk-review-group-title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* 그룹 헤더 바로 다음 행은 헤더가 구분선을 그리므로 자체 border를 지운다. */
+.bk-review-group-head + .bk-review-row {
+  border-top: 0;
+}
+
+/* CRITIC-2: narrow-screen 1-col fallback은 반드시 base .bk-review-read 규칙 뒤에
+   와야 같은 명시도에서 이긴다(mid-file 760px 블록에 두면 base가 override). */
+@media (max-width: 760px) {
+  .bk-review-read {
+    grid-template-columns: 1fr;
+  }
+
+  .bk-review-read-amount {
+    justify-self: start;
+    text-align: left;
+  }
 }

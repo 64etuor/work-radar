@@ -17,14 +17,16 @@ import {
 } from "@/components/ui/select";
 import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 
-import type { TransactionEditDraft } from "../bookkeepingDrafts";
+import { editDraftFromTransaction, type TransactionEditDraft } from "../bookkeepingDrafts";
 import { isEditableTarget } from "../bookkeepingFieldUtils";
 import { type BookkeepingReviewFilter, matchesBookkeepingReviewFilter } from "../reviewFilter";
+import { isSuspicious } from "../reviewRow";
 import { type ReviewQueueOrder } from "../reviewSort";
 import { clearSelection, selectedIds, toggleSelection } from "../selection";
 import { reduceBookkeepingTriageState, triageCommandForKey } from "../triageKeys";
 import { EmptyState } from "./_shared";
 import { BulkCategorySelect } from "./BulkCategorySelect";
+import { ReviewReadRow } from "./ReviewReadRow";
 import { TransactionEditForm } from "./TransactionEditForm";
 
 export function ReviewQueueCard({
@@ -54,7 +56,8 @@ export function ReviewQueueCard({
   ) => void;
   onBulkDelete: (ids: string[], onDone: () => void) => void;
   onDelete: (tx: BookkeepingTransaction) => void;
-  onSave: (tx: BookkeepingTransaction, draft: TransactionEditDraft) => void;
+  /** 저장 성공 여부를 돌려준다 — 실패하면 폼을 접지 않아 draft를 잃지 않는다. */
+  onSave: (tx: BookkeepingTransaction, draft: TransactionEditDraft) => Promise<boolean>;
   onOrderChange: (order: ReviewQueueOrder) => void;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
@@ -69,18 +72,24 @@ export function ReviewQueueCard({
     activeIndex: rows.length > 0 ? 0 : -1,
     helpOpen: false,
   }));
+  // 한 번에 하나만 펼친다 — 새 행을 펼치면 이전 행은 접힌다.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const filteredRows = rows.filter((tx) => matchesBookkeepingReviewFilter(tx, filter));
+  // 의심(주의 사유 보유) 그룹 먼저, 정상 그룹 나중 — 렌더 순서가 곧 j/k 순서다.
+  const suspiciousRows = filteredRows.filter((tx) => isSuspicious(tx));
+  const normalRows = filteredRows.filter((tx) => !isSuspicious(tx));
+  const orderedRows = [...suspiciousRows, ...normalRows];
   // 더 이상 큐에 없는 id(확정/삭제로 사라진 행)는 선택에서 떨군다.
   const present = new Set(filteredRows.map((tx) => tx.id));
   const ids = selectedIds(selected).filter((id) => present.has(id));
   const clear = () => setSelected(clearSelection());
   const runBulk = (status: BookkeepingReviewStatus) => onBulkReview(ids, status, clear);
   const activeIndex =
-    filteredRows.length === 0
+    orderedRows.length === 0
       ? -1
-      : Math.max(0, Math.min(triage.activeIndex, filteredRows.length - 1));
-  const activeTx = filteredRows[activeIndex] ?? null;
+      : Math.max(0, Math.min(triage.activeIndex, orderedRows.length - 1));
+  const activeTx = orderedRows[activeIndex] ?? null;
 
   useEffect(() => {
     return registerKeydown(KEYDOWN_PRIORITY.keymap, (event) => {
@@ -92,7 +101,7 @@ export function ReviewQueueCard({
 
       event.preventDefault();
       if (command === "move_next" || command === "move_previous" || command === "toggle_help") {
-        setTriage((current) => reduceBookkeepingTriageState(current, command, filteredRows.length));
+        setTriage((current) => reduceBookkeepingTriageState(current, command, orderedRows.length));
         return true;
       }
       if (command === "focus_search") {
@@ -100,7 +109,12 @@ export function ReviewQueueCard({
         return true;
       }
       if (command === "focus_category") {
-        if (activeTx) document.getElementById(`bk-edit-${activeTx.id}-category`)?.focus();
+        // 분류 필드는 편집 폼에만 있다 — 접혀 있으면 먼저 펼친 뒤 다음 프레임에 포커스.
+        if (activeTx) {
+          const id = activeTx.id;
+          setExpandedId(id);
+          requestAnimationFrame(() => document.getElementById(`bk-edit-${id}-category`)?.focus());
+        }
         return true;
       }
       if (command === "approve" && activeTx) {
@@ -113,7 +127,55 @@ export function ReviewQueueCard({
       }
       return true;
     });
-  }, [activeTx, bulkPending, disabled, filteredRows.length, onApprove, onDelete]);
+  }, [activeTx, bulkPending, disabled, orderedRows.length, onApprove, onDelete]);
+
+  // 편집 폼/메모 인라인 저장 공통 — 성공했을 때만 접는다(실패 시 draft 유지).
+  const saveAndCollapse = async (tx: BookkeepingTransaction, draft: TransactionEditDraft) => {
+    const ok = await onSave(tx, draft);
+    if (ok) setExpandedId(null);
+  };
+
+  /** 그룹 공용 행 렌더 — index는 orderedRows(의심→정상) 기준의 전역 triage 인덱스. */
+  const renderReviewRow = (tx: BookkeepingTransaction, index: number, suspicious: boolean) => {
+    const expanded = expandedId === tx.id;
+    return (
+      <div
+        key={tx.id}
+        className="bk-review-row"
+        data-active={index === activeIndex ? "true" : "false"}
+        data-expanded={expanded ? "true" : "false"}
+      >
+        <Checkbox
+          className="bk-select-check"
+          checked={selected.has(tx.id)}
+          onCheckedChange={() => setSelected((prev) => toggleSelection(prev, tx.id))}
+          disabled={disabled || bulkPending}
+          aria-label={`${tx.merchant} 선택`}
+        />
+        {expanded ? (
+          <TransactionEditForm
+            tx={tx}
+            disabled={disabled}
+            approveLabel="확정"
+            onApprove={() => onApprove(tx)}
+            onDelete={() => onDelete(tx)}
+            onSave={(draft) => void saveAndCollapse(tx, draft)}
+            onCancel={() => setExpandedId(null)}
+          />
+        ) : (
+          <ReviewReadRow
+            tx={tx}
+            disabled={disabled}
+            showApprove={suspicious}
+            onApprove={() => onApprove(tx)}
+            onEdit={() => setExpandedId(tx.id)}
+            onDelete={() => onDelete(tx)}
+            onSaveNote={(note) => onSave(tx, { ...editDraftFromTransaction(tx), note })}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <Card className="bk-card bk-review-card">
@@ -243,31 +305,36 @@ export function ReviewQueueCard({
             </div>
           </div>
         )}
-        <div className="bk-transaction-list">
-          {filteredRows.length === 0 && <EmptyState>대기 중인 거래 없음</EmptyState>}
-          {filteredRows.map((tx, index) => (
-            <div
-              key={tx.id}
-              className="bk-review-row"
-              data-active={index === activeIndex ? "true" : "false"}
-            >
-              <Checkbox
-                className="bk-select-check"
-                checked={selected.has(tx.id)}
-                onCheckedChange={() => setSelected((prev) => toggleSelection(prev, tx.id))}
-                disabled={disabled || bulkPending}
-                aria-label={`${tx.merchant} 선택`}
-              />
-              <TransactionEditForm
-                tx={tx}
-                disabled={disabled}
-                approveLabel="확정"
-                onApprove={() => onApprove(tx)}
-                onDelete={() => onDelete(tx)}
-                onSave={(draft) => onSave(tx, draft)}
-              />
+        <div className="bk-transaction-list bk-review-list">
+          {orderedRows.length === 0 && <EmptyState>대기 중인 거래 없음</EmptyState>}
+          {suspiciousRows.length > 0 && (
+            <div className="bk-review-group-head typo-caption-sm">
+              <span className="bk-review-group-title">의심 {suspiciousRows.length}건</span>
             </div>
-          ))}
+          )}
+          {suspiciousRows.map((tx, index) => renderReviewRow(tx, index, true))}
+          {normalRows.length > 0 && (
+            <div className="bk-review-group-head typo-caption-sm">
+              <span className="bk-review-group-title">정상 {normalRows.length}건</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={disabled || bulkPending}
+                onClick={() =>
+                  onBulkReview(
+                    normalRows.map((tx) => tx.id),
+                    "approved",
+                    () => {},
+                  )
+                }
+              >
+                <Check className="size-3.5" />
+                {bulkPending ? "확정 중…" : `정상 ${normalRows.length}건 일괄 확정`}
+              </Button>
+            </div>
+          )}
+          {normalRows.map((tx, index) => renderReviewRow(tx, suspiciousRows.length + index, false))}
         </div>
       </CardContent>
     </Card>
