@@ -2,7 +2,10 @@
 
 use tauri::State;
 
-use crate::bookkeeping::{parse_bookkeeping_email_receipt, BookkeepingEmailReceiptInput};
+use crate::bookkeeping::{
+    parse_bookkeeping_email_receipt, BookkeepingEmailReceiptInput, ParsedBookkeepingDirection,
+    ParsedBookkeepingReceipt, ParsedBookkeepingReviewReason,
+};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::gmail::{GmailMessageSearch, GmailReadProvider};
@@ -83,6 +86,18 @@ pub(crate) async fn ingest_bookkeeping_gmail_receipt_inner(
         }
     };
 
+    // Parser output stays a *hint*: rows always land as needs_review (the upsert
+    // hardcodes it on insert and never touches review_status/deleted_at on
+    // conflict) and a human confirms every field. Cancellation notices are NOT
+    // dropped — they enter the queue carrying `cancellation_notice` so the
+    // human decides against the original transaction.
+    let direction = match parsed.direction {
+        ParsedBookkeepingDirection::Income => BookkeepingDirection::Income,
+        ParsedBookkeepingDirection::Expense => BookkeepingDirection::Expense,
+    };
+    let field_confidence_json = parsed.field_confidence_json();
+    let review_reasons_json = merged_review_reasons_json(&parsed);
+
     let row = upsert_bookkeeping_transaction_from_ingest_inner(
         db,
         CreateBookkeepingTransactionInput {
@@ -96,22 +111,24 @@ pub(crate) async fn ingest_bookkeeping_gmail_receipt_inner(
             spent_at: parsed.spent_at,
             category: parsed.category,
             note: None,
+            // Payment method *kind* is intentionally not confirmed by ingest
+            // (models doc: Gmail/OCR에서 확정하지 않고 사람이 리뷰에서 보정).
             payment_method_kind: BookkeepingPaymentMethodKind::Unknown,
-            payment_method_label: None,
+            payment_method_label: parsed.payment_method_label,
             payment_method_last4: None,
             expense_kind: BookkeepingExpenseKind::Variable,
             recurring_expense_id: None,
             recurring_occurrence_id: None,
-            direction: BookkeepingDirection::Expense,
+            direction,
             account: None,
             subcategory: None,
             category_code: None,
             subcategory_code: None,
             raw_category: None,
-            spent_at_time: None,
-            confidence: None,
-            field_confidence_json: None,
-            review_reasons_json: None,
+            spent_at_time: parsed.spent_at_time,
+            confidence: parsed.confidence,
+            field_confidence_json,
+            review_reasons_json,
             order_no: None,
             payment_no: None,
         },
@@ -120,6 +137,30 @@ pub(crate) async fn ingest_bookkeeping_gmail_receipt_inner(
     )
     .await?;
     Ok(Some(row))
+}
+
+/// Merge parser review reasons with ingest-layer additions, deduped by code.
+/// Belt-and-suspenders: a cancellation row must always carry
+/// `cancellation_notice` so the review queue explains itself even when a
+/// parser variant flags `is_cancellation` without emitting the reason.
+fn merged_review_reasons_json(parsed: &ParsedBookkeepingReceipt) -> Option<String> {
+    let mut merged = parsed.clone();
+    if merged.is_cancellation
+        && !merged
+            .review_reasons
+            .iter()
+            .any(|reason| reason.code == "cancellation_notice")
+    {
+        merged.review_reasons.push(ParsedBookkeepingReviewReason {
+            code: "cancellation_notice",
+            detail: "취소 알림 — 원거래와 대조해 확인 필요".to_string(),
+        });
+    }
+    let mut seen = std::collections::HashSet::new();
+    merged
+        .review_reasons
+        .retain(|reason| seen.insert(reason.code));
+    merged.review_reasons_json()
 }
 
 pub(crate) async fn sync_bookkeeping_gmail_receipts_with_provider<P: GmailReadProvider>(
