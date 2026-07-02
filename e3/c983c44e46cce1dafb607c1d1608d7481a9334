@@ -1,0 +1,55 @@
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f013490a1b0efb::t_358e0621bc4813 524-528,535,537-538,557-563
+  s_f013490a1b0efb::t_7e8a7925c24b09 522-523,529-531
+src/components/bookkeeping/reviewRow.ts
+  s_f013490a1b0efb::t_fee92f19a68d53 1-5
+  s_f013490a1b0efb::t_176a4397aa9b7f 6-31
+  s_f013490a1b0efb::t_d5020268b28c34 32-67
+src/components/bookkeeping/reviewRow.test.ts
+  s_f013490a1b0efb::t_8959d042e4fd31 1-2,15-54
+  s_f013490a1b0efb::t_82bf43e4cee691 3-14
+  s_f013490a1b0efb::t_9fce25a8fbba5e 55-124
+src/components/bookkeeping/cards/ReviewReadRow.tsx
+  s_f013490a1b0efb::t_f39eebd42bf52c 1-2,7,11,18-19,24,28,32-33,37-38,41-44,47,52-80,90-120,144-149
+  s_f013490a1b0efb::t_5da04910b2e341 3-6,8-10,12-17,20-23,25-27,29-31,34-36,39-40,45-46,48-51,81-89,121-143,150-175
+src/components/bookkeeping/cards/ReviewQueueCard.tsx
+  s_f013490a1b0efb::t_96c7da0861f2f0 308,331
+  s_f013490a1b0efb::t_ea538d434d43d4 112-115,117
+  s_f013490a1b0efb::t_20dea9073b48b1 104
+  s_f013490a1b0efb::t_cc5d8c9e536df0 29
+  s_f013490a1b0efb::t_507a2cdcb2d5ae 79-82,89,91-92
+  s_f013490a1b0efb::t_50b8e4f214a25f 20,23
+  s_f013490a1b0efb::t_095f6e9abb9bfc 59-60
+  s_f013490a1b0efb::t_19067589874847 75-76
+  s_f013490a1b0efb::t_29c3679af2e624 116
+  s_f013490a1b0efb::t_a632a8efd0968d 130
+  s_f013490a1b0efb::t_332e5b7a4bb736 309-322,324-330,332-334,336-337
+  s_f013490a1b0efb::t_d46c5db1c6b27e 132-178
+  s_f013490a1b0efb::t_1ea4404f102a28 131
+src/components/bookkeeping/BookkeepingView.css
+  s_f013490a1b0efb::t_e67f328326c437 1012-1014,1016-1017,1020,1026-1032
+  s_f013490a1b0efb::t_f065f5f9430b2e 1187
+  s_f013490a1b0efb::t_64ada0334abd41 1033,1162-1186,1188-1253
+  s_f013490a1b0efb::t_29c3679af2e624 1015
+  s_f013490a1b0efb::t_8bb17fe58cd5a5 1088-1161
+  s_f013490a1b0efb::t_73774e5cad234d 1034
+src/components/bookkeeping/cards/ReviewQueueCard.dom.test.tsx
+  s_f013490a1b0efb::t_0034dbcbf4f110 9,81-83,89-90,99,108,125,128-142,145-149,189-208,238-240,247-335
+  s_f013490a1b0efb::t_fa0f036e58c70c 1-8,10-80,84-88,91-98,100-107,109-124,126-127,143-144,150-188,209-237,241-246,336-337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "e3c983c44e46cce1dafb607c1d1608d7481a9334",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
