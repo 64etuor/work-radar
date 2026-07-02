@@ -129,12 +129,15 @@ fn require_project_id(row: &RoutineSyncRow) -> Result<&str, AppError> {
 
 /// stale mirror reactive sweep — `google_calendar_id`/`google_event_id`를 NULL out(ADR-0005
 /// "404 → sweep"). disable(DELETE 후 정리)와 PATCH 404 경로가 공유하는 단일 sync-pair 해제 SQL.
-async fn clear_google_mirror(db: &Db, routine_id: &str) -> Result<(), AppError> {
+async fn clear_google_mirror<'e, E>(exec: E, routine_id: &str) -> Result<(), AppError>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
     sqlx::query(
         "UPDATE routines SET google_calendar_id = NULL, google_event_id = NULL WHERE id = ?1",
     )
     .bind(routine_id)
-    .execute(db)
+    .execute(exec)
     .await?;
     Ok(())
 }
@@ -996,11 +999,14 @@ pub(crate) async fn delete_routine_master_event(db: &Db, routine_id: &str) -> Re
         if row.google_calendar_id.is_none() {
             return Ok(()); // 미동기화 — 토큰 조회 없이 no-op (삭제의 흔한 경우).
         }
+        // P5A: 취소 CAS + pending-create DELETE를 한 트랜잭션으로 — CAS가 이겼는데 DELETE가 실패하면
+        // 미러는 clear됐는데 create 큐 행이 남아 워커가 (곧 삭제될) 루틴의 마스터를 만든다.
+        let mut tx = db.begin().await?;
         let cancelled = sqlx::query(
             "UPDATE routines SET google_calendar_id = NULL WHERE id = ?1 AND google_event_id IS NULL",
         )
         .bind(routine_id)
-        .execute(db)
+        .execute(&mut *tx)
         .await?;
         if cancelled.rows_affected() > 0 {
             sqlx::query(
@@ -1008,10 +1014,13 @@ pub(crate) async fn delete_routine_master_event(db: &Db, routine_id: &str) -> Re
                  WHERE target_kind = 'routine_master' AND target_id = ?1 AND kind = 'create'",
             )
             .bind(routine_id)
-            .execute(db)
+            .execute(&mut *tx)
             .await?;
+            tx.commit().await?;
             return Ok(());
         }
+        // 취소가 짐 — CAS 0행이라 롤백(무손실)하고 reload해 아래 인라인 master DELETE로 진행.
+        tx.rollback().await?;
         row = load_routine(db, routine_id).await?;
     }
     if row.google_event_id.is_none() {
@@ -1071,15 +1080,19 @@ pub(crate) async fn enable_routine_google_sync_inner(
 
     // 낙관적 로컬 미러: project_id + google_calendar_id를 지금 set, google_event_id는 NULL로
     // 남겨 워커 link_back이 flush 시 박게 한다(pending 윈도우 동안 half-state — signal 경로와 동일).
+    // P5A: 미러 UPDATE + create 큐 행을 **한 트랜잭션**으로 원자화한다 — 미러만 set되고 큐 행이
+    // 실패하면 워커가 만들 create 행 없이 pending-enable(cal Some, evt NULL) 상태로 torn되기 때문.
+    // SQLite 단일 writer라 tx = 한 단위로 직렬화(양측 CAS 모델은 tx로 오히려 강화). 읽기/검증은
+    // 위에서 pool로 끝냈고, notify는 commit 후에만 울린다.
+    let mut tx = pool.begin().await?;
     sqlx::query("UPDATE routines SET project_id = ?1, google_calendar_id = ?2 WHERE id = ?3")
         .bind(project_id)
         .bind(calendar_id)
         .bind(routine_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
-
     upsert_write(
-        pool,
+        &mut *tx,
         "create",
         "routine_master",
         routine_id,
@@ -1089,6 +1102,7 @@ pub(crate) async fn enable_routine_google_sync_inner(
         GOOGLE_SYNC_DEBOUNCE_MS,
     )
     .await?;
+    tx.commit().await?;
     notify.notify_one();
     Ok(())
 }
@@ -1123,12 +1137,15 @@ pub(crate) async fn disable_routine_google_sync_inner(
         if row.google_calendar_id.is_none() {
             return Ok(()); // 진짜 미동기화 — no-op(토큰/큐 없음).
         }
+        // P5A: 취소 CAS + pending-create DELETE를 한 트랜잭션으로 — CAS가 이겼는데 DELETE가
+        // 실패하면 미러는 clear됐는데 create 큐 행이 남아 워커가 사용자가 끈 동기화를 되살린다.
+        let mut tx = pool.begin().await?;
         let cancelled = sqlx::query(
             "UPDATE routines SET google_calendar_id = NULL \
              WHERE id = ?1 AND google_event_id IS NULL",
         )
         .bind(routine_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
         if cancelled.rows_affected() > 0 {
             // 취소가 이김 — pending create 제거(워커가 이미 fetch했으면 0행이지만 워커 CAS가 orphan 처리).
@@ -1137,12 +1154,15 @@ pub(crate) async fn disable_routine_google_sync_inner(
                  WHERE target_kind = 'routine_master' AND target_id = ?1 AND kind = 'create'",
             )
             .bind(routine_id)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
+            tx.commit().await?;
             notify.notify_one();
             return Ok(());
         }
-        // 취소가 짐 — 워커가 먼저 link함. reload해 정상 delete 경로로(링크된 마스터를 지워 orphan 방지).
+        // 취소가 짐 — 워커가 먼저 link함. CAS가 0행이라 롤백(무손실)하고 reload해 정상 delete 경로로
+        // (링크된 마스터를 지워 orphan 방지).
+        tx.rollback().await?;
         row = load_routine(pool, routine_id).await?;
     }
 
@@ -1153,16 +1173,18 @@ pub(crate) async fn disable_routine_google_sync_inner(
         return Ok(()); // 방어적 — 레이스로 이미 정리된 상태.
     };
 
-    // 낙관적 미러 clear — clear_google_mirror와 동일 컬럼 집합(google_calendar_id/google_event_id).
-    clear_google_mirror(pool, routine_id).await?;
-
+    // P5A: 미러 clear + delete 큐 행을 한 트랜잭션으로 — 미러만 clear되고 delete 큐 행이 실패하면
+    // 마스터가 큐잉된 delete 없이 orphan으로 남는다(비원자 tear). clear_google_mirror는 Executor에
+    // 제네릭이라 tx 커넥션을 그대로 넘긴다(정본 SQL 재사용, 다른 cfg(test) 호출부는 pool 그대로).
+    let mut tx = pool.begin().await?;
+    clear_google_mirror(&mut *tx, routine_id).await?;
     // delete payload는 빈 객체로 충분 — 워커 delete arm은 event_id + calendar_id만 쓴다.
     // ⚠️target을 routine_master가 아닌 **event(`cal|evt`)로 키잉**: UNIQUE(target,kind)가 routine
     // 단위면 막힌(terminal) 옛 delete 행을 다음 disable/move의 delete가 덮어 옛 마스터의 삭제
     // 의도가 소실된다(critic P4c BLOCKER — orphan). event-키면 서로 다른 마스터의 delete가 공존.
     // 미러 정리는 위에서 이미 낙관적으로 끝났으므로 워커의 unlink는 불필요(event target = no-op).
     upsert_write(
-        pool,
+        &mut *tx,
         "delete",
         "event",
         &format!("{cal_id}|{evt_id}"),
@@ -1172,6 +1194,7 @@ pub(crate) async fn disable_routine_google_sync_inner(
         GOOGLE_SYNC_DEBOUNCE_MS,
     )
     .await?;
+    tx.commit().await?;
     notify.notify_one();
     Ok(())
 }
@@ -1249,11 +1272,17 @@ pub(crate) async fn move_routine_google_sync_inner(
     let input = build_master_event_input(pool, routine_id, &row, default_tzid()).await?;
     let payload = master_create_payload(&input)?;
 
+    // P5A: 옛 delete 행 + 낙관적 미러 UPDATE + 새 create 행을 **한 트랜잭션**으로 원자화한다.
+    // 최악의 tear(비원자): delete 큐잉 + 미러 repoint까지 됐는데 create-upsert가 실패하면 루틴이
+    // (new_cal, evt NULL, 큐잉된 create 없음)으로 stranded된다 — 워커가 새 마스터를 만들 근거가
+    // 사라진다. SQLite 단일 writer라 tx는 한 단위로 직렬화되고(양측 CAS 모델 강화), 문장 순서는
+    // 그대로 유지한다(래핑만). 읽기/검증은 위에서 pool로 끝냈고, notify는 commit 후에만.
+    let mut tx = pool.begin().await?;
     // 옛 마스터 delete 행(@옛 캘린더, 옛 이벤트) — 워커가 옛 캘린더 토큰으로 삭제.
     // event-키(`cal|evt`)로 enqueue: routine 단위 UNIQUE면 막힌 옛 delete 행을 이 delete가 덮어
     // 옛 마스터가 orphan이 된다(critic P4c BLOCKER). event-키면 마스터별 delete가 공존.
     upsert_write(
-        pool,
+        &mut *tx,
         "delete",
         "event",
         &format!("{cal_o}|{evt_o}"),
@@ -1263,7 +1292,6 @@ pub(crate) async fn move_routine_google_sync_inner(
         GOOGLE_SYNC_DEBOUNCE_MS,
     )
     .await?;
-
     // 낙관적 미러: project/cal은 새 값으로, event_id는 NULL(pending-enable-shaped) — 워커 create arm이
     // flush 시 relink한다. disable의 취소 CAS·워커 relink CAS가 이 모양을 그대로 커버.
     sqlx::query(
@@ -1273,12 +1301,11 @@ pub(crate) async fn move_routine_google_sync_inner(
     .bind(new_project_id)
     .bind(new_calendar_id)
     .bind(routine_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
-
     // 새 마스터 create 행(@새 캘린더) — 워커가 새 캘린더 토큰으로 생성·링크백.
     upsert_write(
-        pool,
+        &mut *tx,
         "create",
         "routine_master",
         routine_id,
@@ -1288,6 +1315,7 @@ pub(crate) async fn move_routine_google_sync_inner(
         GOOGLE_SYNC_DEBOUNCE_MS,
     )
     .await?;
+    tx.commit().await?;
     notify.notify_one();
     Ok(())
 }

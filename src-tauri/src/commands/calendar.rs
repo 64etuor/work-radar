@@ -482,6 +482,24 @@ async fn fetch_events_windowed(
 /// 전(디바운스/재시도 중)인 pending write를 fetch 결과(TTL 캐시 포함) 위에 오버레이한다.
 /// 이게 없으면 디바운스 윈도 안의 refetch가 Google의 옛 시간을 돌려줘 로컬 편집이 화면에서
 /// 되돌아간다. staged 행(cross-cal Acceptance 대기)은 사람 승인 전이므로 미적용.
+///
+/// P5B(routine_master 검토, 결론 = 케이스 a — 오버레이 확장 불요): P4a–P4c가 도입한
+/// `routine_master` create/patch/`series_replace` pending 행은 디바운스 윈도 동안 화면에
+/// stale 아티팩트를 만들지 **않으므로** 이 오버레이가 관여할 필요가 없다. 근거:
+///  · Google은 반복 마스터를 `singleEvents=true`로 **per-instance 전개**해 돌려준다
+///    (calendar/http.rs `("singleEvents","true")`) — 각 인스턴스 id는 인스턴스 고유값이고
+///    `recurringEventId`가 마스터 id다(calendar/parse.rs `parse_calendar_event`).
+///  · 프런트 `buildTodayBlocks`(src/lib/todayBlocks.ts)가 각 시각 루틴을 instance-link
+///    (`linked_event_id`)와 **master(`google_event_id`)** 양쪽 키로 등록하고, fetch된 이벤트를
+///    id **또는 `recurringEventId`** 로 매칭해(`eventLookupKeys`) 매칭되면 **흡수**한다 —
+///    루틴은 앱-정본 시각(override ?? time_of_day)으로 정확히 1블록만 그린다. 편집(patch/exdate)·
+///    분할(series_replace)은 미러의 `google_event_id`를 옛 마스터에 **그대로 둔 채** 워커 flush를
+///    기다리므로, 윈도 동안 옛 마스터의 전개 인스턴스는 identity로 흡수되고 블록은 앱-정본 시각으로
+///    렌더된다(stale 없음). enable(create)은 옛 마스터가 없어 흡수 대상 자체가 없다.
+///  · 이 오버레이의 `delete`/`patch` arm은 `e.id`(=인스턴스 id)로 매칭하므로 반복 마스터의 전개
+///    인스턴스와는 구조적으로 매칭되지 않는다 — 반복 이벤트 표시 정합은 위 프런트 흡수가 담당한다
+///    (이 함수는 signal/event 단일 이벤트용). disable/move의 마스터 삭제는 event-키 delete 행이지만
+///    미러 정리·프런트 흡수 해제가 함께 일어나는 별개 경로이며 P5B 범위(=routine_master pending) 밖.
 async fn overlay_pending_event_writes(
     db: &Db,
     events: &mut Vec<CalendarEvent>,

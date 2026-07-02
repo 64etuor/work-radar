@@ -142,6 +142,20 @@ round-2 ACCEPT. today-ops exdate는 P4b에서 이미 큐화. 인라인 패리티
 
 ### P5 (follow-up) — 로컬 미러 원자화(트랜잭션) + overlay가 routine_master pending 반영
 
+**P5 완료(2026-07-02)**:
+
+- **A(트랜잭션화)**: enable/disable(양 경로)/move/delete-cancel의 다중 write 시퀀스를 각각 한
+  sqlx 트랜잭션으로(읽기/검증은 pool로 선행, notify는 commit 후). 최악 tear 해소 — 예: move에서
+  delete 큐잉+미러 재지정 후 create 큐잉 실패 시 좌초, disable에서 미러 clear 후 delete 큐잉 실패
+  시 orphan. `clear_google_mirror`는 Executor 제네릭화. 양측 CAS 모델은 tx로 오히려 강화(단일
+  writer 직렬화). ⚠️item 5(`stage_calendar_write_inner`)는 **의도적 이월** — placement_store·
+  build_queue_row 헬퍼군 시그니처 리플이 커서(코드 주석·decisions.md에 기존 deferred로 문서화됨)
+  이 tear는 외부 orphan이 아닌 표시-수준(다음 write에 자가치유)이라 P1–P4 등급이 아님.
+- **B(overlay)**: 조사 결론 = **케이스 a, 코드 불요**. Google이 `singleEvents=true`로 마스터를
+  인스턴스 전개해 돌려주고, 프런트 `buildTodayBlocks`가 fetch 이벤트를 id/`recurringEventId`로
+  루틴에 흡수해 앱-정본 시각으로 1블록만 렌더 → pending routine_master patch/series_replace/
+  create는 디바운스 윈도 동안 화면 stale을 만들지 않음(overlay_pending_event_writes에 근거 문서화).
+
 ### P6 (follow-up) — 큐 행 TTL GC, staged 플래그 스키마화 등 잔여 smell
 
 ## 검증 (정본: docs/reference/commands.md)
