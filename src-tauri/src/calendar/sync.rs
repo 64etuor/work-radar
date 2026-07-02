@@ -297,10 +297,36 @@ async fn execute_with_access<P: CalendarProvider>(
                 .as_deref()
                 .ok_or_else(|| SyncError::Terminal("patch without event_id".into()))?;
             let patch = build_patch_body(&w.payload_json)?;
-            provider
+            match provider
                 .patch_event(access, &w.calendar_id, event_id, &patch)
-                .await?;
-            Ok(())
+                .await
+            {
+                Ok(()) => Ok(()),
+                // P4b A3: routine_master master가 외부에서 삭제됨(404/410) → 조건부 unlink(미러가 여전히
+                // 이 event를 가리킬 때만) + Terminal("sync expired"). 인라인 clear_google_mirror-on-NotFound
+                // (ADR-0005 reactive sweep) 패리티 — NULL out 없이 두면 이후 편집/exdate가 영구 실패.
+                // 알려진 무해 노이즈: disable의 delete가 이 patch보다 먼저 flush되면 patch가 NotFound를
+                // 맞고(미러는 이미 NULL → unlink 0행) CalendarSyncFailed가 뜬다 — 이미 꺼진 루틴에 대한
+                // terminal 행 1개일 뿐, 재활성/orphan/데이터 손상 없음(P4b critic NIT#2).
+                Err(crate::calendar::CalendarError::NotFound(_))
+                    if w.target_kind == "routine_master" =>
+                {
+                    sqlx::query(
+                        "UPDATE routines SET google_event_id = NULL, google_calendar_id = NULL \
+                         WHERE id = ?1 AND google_event_id = ?2",
+                    )
+                    .bind(&w.target_id)
+                    .bind(event_id)
+                    .execute(pool)
+                    .await
+                    .map_err(|e| SyncError::Terminal(format!("routine master unlink: {e}")))?;
+                    Err(SyncError::Terminal(
+                        "routine master gone (sync expired)".into(),
+                    ))
+                }
+                // 그 외 target/에러는 기존 generic `?` 매핑 그대로(byte-identical).
+                Err(e) => Err(e.into()),
+            }
         }
         "delete" => {
             let event_id = w
@@ -338,16 +364,27 @@ async fn execute_with_access<P: CalendarProvider>(
                     SyncError::Terminal("series_replace missing new_create object".into())
                 })?;
 
-            // 0) 멱등 가드: routine이 이미 old_event_id가 아닌 다른(새) 마스터를 추적하면 이 split은
-            // 앞선 시도에서 이미 commit된 것 → no-op. mark_created_event_id 실패로 pending.event_id가
-            // NULL로 남은 뒤 사용자가 수동 retry해도 두 번째 마스터를 만들지 않게 한다(link_back이
-            // commit point). routine link 없음/old와 동일이면 진행.
-            if let Some((_cal, current_evt)) = fetch_target_link(pool, w)
+            // 0) 멱등/취소 가드(P4b A1): routine mirror를 읽어 3-way 분기.
+            //  · None(미러 NULL) = enqueue 이후 disable/삭제가 개입해 미러를 clear함 → **취소**.
+            //    앞선 시도가 새 마스터를 이미 만들었으면(w.event_id Some) 그 orphan을 best-effort 삭제하고
+            //    patch/create 둘 다 skip한다(취소된 split이 새 마스터를 남기지 않게).
+            //  · Some(current ≠ old) = 앞선 시도가 이미 relink까지 commit함(mark 실패로 pending.event_id가
+            //    NULL로 남아 수동 retry된 상황) → no-op(두 번째 마스터 방지, link_back이 commit point).
+            //  · Some(current == old) = 진행.
+            match fetch_target_link(pool, w)
                 .await
                 .map_err(|e| SyncError::Terminal(format!("fetch routine link: {e}")))?
             {
-                if current_evt != old_event_id {
+                None => {
+                    if let Some(orphan) = w.event_id.as_deref() {
+                        let _ = provider.delete_event(access, &w.calendar_id, orphan).await;
+                    }
                     return Ok(());
+                }
+                Some((_cal, current_evt)) => {
+                    if current_evt != old_event_id {
+                        return Ok(());
+                    }
                 }
             }
 
@@ -360,9 +397,18 @@ async fn execute_with_access<P: CalendarProvider>(
             {
                 Ok(()) => {}
                 Err(crate::calendar::CalendarError::NotFound(_)) => {
-                    unlink_impl(pool, w)
-                        .await
-                        .map_err(|e| SyncError::Terminal(format!("unlink: {e}")))?;
+                    // 옛 마스터가 외부에서 사라짐 → 미러 clear + terminal. 조건부(google_event_id =
+                    // old_event_id)라 flush 사이 더 새 link가 생겼다면 null하지 않는다(unlink_impl과
+                    // 동일한 late-flush 안전). 가드에서 current_evt == old_event_id를 이미 확인함.
+                    sqlx::query(
+                        "UPDATE routines SET google_event_id = NULL, google_calendar_id = NULL \
+                         WHERE id = ?1 AND google_event_id = ?2",
+                    )
+                    .bind(&w.target_id)
+                    .bind(old_event_id)
+                    .execute(pool)
+                    .await
+                    .map_err(|e| SyncError::Terminal(format!("series unlink: {e}")))?;
                     return Err(SyncError::Terminal(
                         "series old master gone (sync expired)".into(),
                     ));
@@ -388,9 +434,23 @@ async fn execute_with_access<P: CalendarProvider>(
             // create 직후 곧바로 relink해, 이후(mark) 실패로 재시도해도 위 멱등 가드가 new≠old를 보고
             // no-op → create 중복 없음. (잔여 극박막 window = create 성공 직후 이 UPDATE 실패;
             // 완전 제거는 client-assigned event id 멱등 create 필요 — follow-up, 기존 create arm도 공유.)
-            link_back_impl(pool, w, &new_id)
-                .await
-                .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
+            // P4b A2: 무조건 link_back 대신 create arm과 동일한 CAS(google_calendar_id IS NOT NULL) —
+            // 가드 통과 후에도 flush 직전 disable이 미러를 clear했으면 relink하지 않고 방금 만든 새
+            // 마스터(orphan)를 best-effort 삭제한다. rows>0일 때만 mark(freshly_created)로 진행.
+            let relink = sqlx::query(
+                "UPDATE routines SET google_event_id = ?1, google_calendar_id = ?2 \
+                 WHERE id = ?3 AND google_calendar_id IS NOT NULL",
+            )
+            .bind(&new_id)
+            .bind(&w.calendar_id)
+            .bind(&w.target_id)
+            .execute(pool)
+            .await
+            .map_err(|e| SyncError::Terminal(format!("series relink CAS: {e}")))?;
+            if relink.rows_affected() == 0 {
+                let _ = provider.delete_event(access, &w.calendar_id, &new_id).await;
+                return Ok(());
+            }
 
             // 4) pending row에 생성 id 기록(재시도 회계) — commit 이후. 실패해도 routine은 이미
             // 새 마스터를 추적하므로 다음 retry는 멱등 가드에서 no-op.
@@ -518,12 +578,17 @@ async fn unlink_impl(pool: &SqlitePool, w: &PendingWrite) -> sqlx::Result<()> {
         }
         "routine_master" => {
             // target_id = routine_id 직접. 다른 routine 컬럼은 건드리지 않는다.
+            // P4b A4: 삭제된 바로 그 event(w.event_id)가 여전히 미러에 걸려 있을 때만 clear —
+            // late-flushing delete row가 더 새 link(P4c move의 create@new_cal)를 null하지 않게.
+            // delete arm은 event_id가 항상 Some; None이면 `google_event_id = NULL` 비교가 거짓이라
+            // 0행(no match) = 안전. 정상 disable은 이미 낙관적으로 미러를 clear했으므로 0행이 정상.
             sqlx::query(
                 "UPDATE routines
                  SET google_event_id = NULL, google_calendar_id = NULL
-                 WHERE id = ?1",
+                 WHERE id = ?1 AND google_event_id = ?2",
             )
             .bind(&w.target_id)
+            .bind(w.event_id.as_deref())
             .execute(pool)
             .await?;
         }
@@ -1050,6 +1115,10 @@ mod tests {
         patched: Mutex<Vec<(String, String, serde_json::Value)>>, // (calendar_id, event_id, body)
         new_event_id: String,
         patch_returns_not_found: bool,
+        /// Some((pool, routine_id))면 create_event 도중 그 routine의 미러를 NULL로 지운다 —
+        /// "워커가 외부 create를 호출하는 사이 disable이 커밋"하는 레이스를 결정적으로 재현
+        /// (post-create CAS 분기 회귀 전용).
+        clear_mirror_on_create: Option<(SqlitePool, String)>,
     }
 
     impl CalendarProvider for RecordingProvider {
@@ -1087,6 +1156,17 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push((calendar_id.to_string(), input.title.clone()));
+            // 레이스 재현 훅: 외부 create가 진행되는 "사이"에 disable이 커밋된 상황.
+            if let Some((pool, rid)) = &self.clear_mirror_on_create {
+                sqlx::query(
+                    "UPDATE routines SET google_event_id = NULL, google_calendar_id = NULL \
+                     WHERE id = ?1",
+                )
+                .bind(rid)
+                .execute(pool)
+                .await
+                .expect("clear_mirror_on_create");
+            }
             Ok((self.new_event_id.clone(), None))
         }
         async fn patch_event(
@@ -1645,6 +1725,67 @@ mod tests {
         assert_eq!(evt.as_deref(), Some("evt_new_master"));
     }
 
+    /// P4b critic NIT#1 회귀 — post-create CAS 분기: 가드는 통과(미러==old)했는데 **외부 create가
+    /// 진행되는 사이** disable이 미러를 지운 레이스. relink CAS(`WHERE google_calendar_id IS NOT
+    /// NULL`)가 0행 → 방금 만든 새 마스터를 orphan으로 삭제하고 relink 없이 Ok — 재활성화 금지.
+    #[tokio::test]
+    async fn series_replace_disable_between_create_and_relink_deletes_new_master() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, google_event_id, google_calendar_id) \
+             VALUES ('r1','아침 운동','weekly','evt_old','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let payload = r#"{
+            "old_event_id":"evt_old",
+            "old_patch":{"recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20260528T215959Z"]},
+            "new_create":{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"all_day":false,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]}
+        }"#;
+        upsert_write(
+            &pool,
+            "series_replace",
+            "routine_master",
+            "r1",
+            "calA",
+            None,
+            payload,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider {
+            new_event_id: "evt_new".into(),
+            // 외부 create 호출 "도중" disable 커밋을 재현.
+            clear_mirror_on_create: Some((pool.clone(), "r1".into())),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake", &due[0])
+            .await
+            .unwrap();
+
+        // 가드는 통과했으므로 patch+create는 호출됨 — 그러나 CAS 0행 → 새 마스터 orphan 삭제.
+        assert_eq!(provider.patched.lock().unwrap().len(), 1);
+        assert_eq!(
+            provider.deleted.lock().unwrap().clone(),
+            vec![("calA".to_string(), "evt_new".to_string())],
+            "CAS 0행이면 방금 만든 새 마스터를 삭제해야 한다"
+        );
+        // 미러는 NULL 유지(disable이 이김 — 재활성화 금지).
+        let (evt, cal): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_event_id, google_calendar_id FROM routines WHERE id = 'r1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(evt.is_none());
+        assert!(cal.is_none());
+    }
+
     /// 재시도 멱등: event_id가 이미 Some('evt_new')(앞선 시도가 새 마스터를 이미 만듦)면
     /// create_event를 다시 부르지 않고 그대로 evt_new로 relink.
     #[tokio::test]
@@ -1759,5 +1900,324 @@ mod tests {
         .unwrap();
         assert!(evt.is_none());
         assert!(cal.is_none());
+    }
+
+    // ── P4b A1: series_replace 취소 가드(미러 NULL = disable/삭제 개입) ─────────────
+
+    /// 미러 NULL + w.event_id None: enqueue 후 disable가 미러를 clear했다 → 취소.
+    /// patch/create 둘 다 skip, 삭제할 orphan도 없음, Ok.
+    #[tokio::test]
+    async fn series_replace_cancelled_when_mirror_null_no_op() {
+        let pool = fresh_pool().await;
+        // routine 존재하지만 미러 둘 다 NULL(disable가 clear).
+        sqlx::query("INSERT INTO routines (id, title, freq) VALUES ('r1','아침 운동','weekly')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let payload = r#"{
+            "old_event_id":"evt_old",
+            "old_patch":{"recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20260528T215959Z"]},
+            "new_create":{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"all_day":false,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]}
+        }"#;
+        let _pid = upsert_write(
+            &pool,
+            "series_replace",
+            "routine_master",
+            "r1",
+            "calA",
+            None,
+            payload,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider {
+            new_event_id: "evt_should_not_be_created".into(),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake", &due[0])
+            .await
+            .unwrap();
+
+        // 취소: patch/create/delete 모두 미호출.
+        assert!(provider.patched.lock().unwrap().is_empty());
+        assert!(provider.created.lock().unwrap().is_empty());
+        assert!(provider.deleted.lock().unwrap().is_empty());
+    }
+
+    /// 미러 NULL + w.event_id Some(앞선 시도가 새 마스터 생성): 취소 → 그 orphan을 best-effort 삭제,
+    /// patch/create skip.
+    #[tokio::test]
+    async fn series_replace_cancelled_deletes_orphan_when_event_id_some() {
+        let pool = fresh_pool().await;
+        sqlx::query("INSERT INTO routines (id, title, freq) VALUES ('r1','아침 운동','weekly')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let payload = r#"{
+            "old_event_id":"evt_old",
+            "old_patch":{"recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20260528T215959Z"]},
+            "new_create":{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"all_day":false,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]}
+        }"#;
+        // event_id=Some("evt_x") = 앞선 시도가 만든 새 마스터.
+        let _pid = upsert_write(
+            &pool,
+            "series_replace",
+            "routine_master",
+            "r1",
+            "calA",
+            Some("evt_x"),
+            payload,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake", &due[0])
+            .await
+            .unwrap();
+
+        assert!(provider.patched.lock().unwrap().is_empty());
+        assert!(provider.created.lock().unwrap().is_empty());
+        assert_eq!(
+            provider.deleted.lock().unwrap().clone(),
+            vec![("calA".to_string(), "evt_x".to_string())],
+            "취소된 split의 orphan 새 마스터를 삭제해야 한다"
+        );
+    }
+
+    // ── P4b A3: patch arm — routine_master NotFound → 조건부 unlink + Terminal ──────
+
+    /// routine_master patch가 NotFound → 미러 NULL(조건부) + Terminal("sync expired").
+    #[tokio::test]
+    async fn patch_routine_master_not_found_nulls_mirror_terminal() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, google_event_id, google_calendar_id) \
+             VALUES ('r1','아침 운동','weekly','evt_m','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let pid = upsert_write(
+            &pool,
+            "patch",
+            "routine_master",
+            "r1",
+            "calA",
+            Some("evt_m"),
+            r#"{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO"]}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let _ = pid;
+        let provider = RecordingProvider {
+            patch_returns_not_found: true,
+            ..Default::default()
+        };
+        let result = execute_with_access(&pool, &provider, "fake", &due[0]).await;
+        assert!(
+            matches!(result, Err(SyncError::Terminal(_))),
+            "routine master gone → terminal: {result:?}"
+        );
+        let (evt, cal): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_event_id, google_calendar_id FROM routines WHERE id = 'r1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(evt.is_none(), "routine_master 미러 NULL out");
+        assert!(cal.is_none());
+    }
+
+    /// 회귀: signal target patch가 NotFound → generic Terminal, signal 미러(linked_*)는 손대지 않음.
+    #[tokio::test]
+    async fn patch_signal_not_found_generic_terminal_untouched() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, linked_event_id, linked_calendar_id) \
+             VALUES ('s1','Demo','braindump','thought','evt_s','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let _pid = upsert_write(
+            &pool,
+            "patch",
+            "signal",
+            "s1",
+            "calA",
+            Some("evt_s"),
+            r#"{"start":"2026-05-28T10:00:00+09:00","duration_min":30}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider {
+            patch_returns_not_found: true,
+            ..Default::default()
+        };
+        let result = execute_with_access(&pool, &provider, "fake", &due[0]).await;
+        assert!(
+            matches!(result, Err(SyncError::Terminal(_))),
+            "signal NotFound → generic terminal: {result:?}"
+        );
+        // signal 미러는 손대지 않음(routine_master 전용 sweep이 아니므로).
+        let (le, lc): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT linked_event_id, linked_calendar_id FROM signals WHERE id = 's1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(le.as_deref(), Some("evt_s"), "signal 미러 유지");
+        assert_eq!(lc.as_deref(), Some("calA"));
+    }
+
+    // ── P4b A4: delete arm 조건부 unlink(late-flush가 더 새 link를 null하지 않게) ──
+
+    /// stale delete row(evt_A)가 flush될 때 미러가 이미 더 새 link(evt_B)를 가리키면 미러를 null하지
+    /// 않는다 — provider delete는 evt_A로 호출되지만 routines.google_event_id는 evt_B 유지.
+    #[tokio::test]
+    async fn delete_stale_event_keeps_newer_link() {
+        let pool = fresh_pool().await;
+        // 미러는 이미 더 새 link(evt_B)를 가리킴.
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, google_event_id, google_calendar_id) \
+             VALUES ('r1','아침 운동','weekly','evt_B','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        // stale delete row는 옛 event(evt_A) 대상.
+        let _pid = upsert_write(
+            &pool,
+            "delete",
+            "routine_master",
+            "r1",
+            "calA",
+            Some("evt_A"),
+            "{}",
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake", &due[0])
+            .await
+            .unwrap();
+
+        // provider delete는 evt_A로 호출됨(외부 이벤트 정리).
+        assert_eq!(
+            provider.deleted.lock().unwrap().clone(),
+            vec![("calA".to_string(), "evt_A".to_string())]
+        );
+        // 하지만 미러는 더 새 link(evt_B) 유지 — stale delete가 null하지 않음.
+        let (evt, cal): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_event_id, google_calendar_id FROM routines WHERE id = 'r1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(evt.as_deref(), Some("evt_B"), "더 새 link 유지");
+        assert_eq!(cal.as_deref(), Some("calA"));
+    }
+
+    // ── P4b 통합: enqueue split(B2) → 워커 execute(dialect 호환) ────────────────────
+
+    /// end-to-end: 실제 seeded synced routine에 B2 split을 enqueue한 뒤 fetch한 series_replace 행을
+    /// 워커 execute_with_access로 돌리면 옛 마스터가 capped body로 patch되고, 새 마스터가 create되고,
+    /// routines가 새 id로 relink된다(enqueue 방언 → 워커 방언 호환 증명).
+    #[tokio::test]
+    async fn enqueue_split_then_worker_end_to_end() {
+        use tokio::sync::Notify;
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO routines \
+             (id, title, freq, time_of_day, duration_min, kind, created_at, \
+              google_event_id, google_calendar_id) \
+             VALUES ('r1','아침 운동','daily','07:00',30,'personal','2026-05-29 00:00:00', \
+                     'evt_old','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let notify = std::sync::Arc::new(Notify::new());
+        let before = crate::commands::routines::routine_edit_sync_snapshot(&pool, "r1")
+            .await
+            .unwrap()
+            .expect("synced snapshot");
+        crate::commands::routines::patch_synced_routine_after_edit(
+            &pool,
+            &notify,
+            "r1",
+            Some(before),
+            "2026-06-09",
+        )
+        .await
+        .unwrap();
+
+        // 큐에 series_replace 행 1개. 디바운스를 지나 due로 만든다(워커가 볼 시점 모사).
+        sqlx::query(
+            "UPDATE pending_calendar_writes SET next_attempt_at = datetime('now','-1 second')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].kind, "series_replace");
+        let row = due[0].clone();
+
+        let provider = RecordingProvider {
+            new_event_id: "evt_new_master".into(),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake", &row)
+            .await
+            .unwrap();
+
+        // 옛 마스터가 capped body로 patch됨(UNTIL 포함).
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1);
+        assert_eq!(patched[0].0, "calA");
+        assert_eq!(patched[0].1, "evt_old");
+        let old_rec = patched[0].2["recurrence"][0].as_str().unwrap();
+        assert!(
+            old_rec.contains("UNTIL="),
+            "옛 마스터 capped RRULE: {old_rec}"
+        );
+        // 새 마스터 create됨.
+        assert_eq!(
+            provider.created.lock().unwrap().clone(),
+            vec![("calA".to_string(), "아침 운동".to_string())]
+        );
+        // routines가 새 마스터로 relink.
+        let (evt, cal): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_event_id, google_calendar_id FROM routines WHERE id = 'r1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(evt.as_deref(), Some("evt_new_master"));
+        assert_eq!(cal.as_deref(), Some("calA"));
     }
 }

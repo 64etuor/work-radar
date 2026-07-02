@@ -92,9 +92,42 @@ orphan 삭제), disable/delete_routine은 `WHERE google_event_id IS NULL` 조건
 codex critic 6라운드 ACCEPT-WITH-NITS. **남은 pending-window NIT(P4b/P4c 큐 전환 시 해소, orphan 아님)**:
 move=transient "not_synced", patch/split=stale pre-edit payload, exdate=stale EXDATE.
 
-### P4b — split→series_replace enqueue + move (staging, INVARIANT #2)
+### P4b — 워커 하드닝 + split/patch/exdate → enqueue (설계 확정 2026-07-02)
 
-### P4c — exdate + unschedule/restore-today
+**재검토 발견(Fable, P4b 착수 전)**: 커밋된 P3 series_replace arm은 P4a의 async 모델과 미정합 —
+latent(아직 아무도 enqueue 안 함), P4b가 도달 가능하게 만들므로 P4b 첫 작업이 하드닝이다.
+
+**A. 워커 하드닝 (sync.rs)**
+
+1. series_replace 가드: `fetch_target_link == None`(미러 NULL = disable/삭제 개입) → **취소**
+   (patch/create 모두 skip; w.event_id Some이면 그 orphan best-effort 삭제; Ok). `Some(≠old)` →
+   기존대로 no-op. `Some(==old)` → 진행.
+2. series_replace relink: 무조건 link_back_impl → **CAS** `WHERE id=? AND google_calendar_id IS NOT
+NULL`로 교체(P4a create arm과 동일). 0행 → 새 마스터 best-effort 삭제 + Ok(mark skip).
+3. patch arm: target=routine_master + NotFound → **조건부 unlink**(`WHERE id=? AND
+google_event_id=?event`) + Terminal("sync expired") — 인라인 clear_google_mirror-on-NotFound
+   (ADR-0005 reactive sweep) 패리티. 다른 target은 기존 그대로.
+4. unlink_impl routine_master → 조건부 `AND google_event_id = ?evt`(delete arm은 항상 event_id
+   Some). 정상 disable은 이미 낙관적으로 clear했으므로 0행이 정상. (P4c move 2-행 설계의 전제.)
+
+**B. enqueue 전환 (google_sync.rs + 호출부 notify 스레딩)** 5. `patch_synced_routine_after_edit`(split): synced(before cal+evt Some) → 기존 순수 빌더로
+old*patch=`build_event_payload(capped before-input)`(until_for_previous_day+cap_recurrence_before),
+new_create=post-edit row의 큐 방언(`build_master_event_input_with_reference(.., Some(effective*
+date))`+ master_create_payload의 Value 버전) → upsert kind=series_replace + notify. 검증 에러
+   (empty_window 등)는 enqueue 시점에 동기로 surface(검증=동기, 실행=비동기). **pending-enable**
+   (cal Some, evt NULL) → 기존 pending create 행의 payload를 refresh(UPDATE만, INSERT 금지 — P4a
+   NIT stale-payload 해소). 미동기화 → no-op.
+6.`patch_synced_routine_exdates`: synced → full patch payload {title,start,duration_min,time_zone,
+recurrence(EXDATE 포함)} → upsert kind=patch event_id=master + notify. pending-enable → create
+payload refresh. 미동기화 → no-op. 토큰/provider fetch 0. 7. 호출부(crud.rs 등)에 notify(State 주입, bindings 무변경) 스레딩.
+
+**문서화된 한계(gold-plate 금지)**: 디바운스 내 연속 편집은 UNIQUE 머지로 원 마스터에서 최종
+상태로 1회 split(중간 상태의 미세 이력 편차, 수렴함). terminal 실패 후 재편집 시 w.event_id가
+남아 stale-content 마스터 재사용 가능(코너, 문서화만).
+
+### P4c — move(2-행: delete@old_cal + create@new_cal, 각 행이 자기 캘린더 토큰 해석; 조건부
+
+unlink가 전제) + unschedule/restore-today
 
 ### P5 (follow-up) — 로컬 미러 원자화(트랜잭션) + overlay가 routine_master pending 반영
 

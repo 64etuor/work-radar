@@ -198,7 +198,11 @@ pub async fn create_routine(
 /// 루틴 수정. 필드 업데이트 후 미발사 루틴 알림을 삭제(다음 list_today_routines에서 재enqueue).
 #[tauri::command]
 #[specta::specta]
-pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Result<(), AppError> {
+pub async fn update_routine(
+    db: State<'_, Db>,
+    notify: State<'_, std::sync::Arc<tokio::sync::Notify>>,
+    input: UpdateRoutineInput,
+) -> Result<(), AppError> {
     validate_active_period(input.start_date.as_deref(), input.end_date.as_deref())?;
     validate_monthly_input(
         input.freq,
@@ -218,6 +222,7 @@ pub async fn update_routine(db: State<'_, Db>, input: UpdateRoutineInput) -> Res
     // 프런트가 toast로 surface(프런트는 onSettled로 routines 무효화 → 로컬 변경은 화면에 반영).
     super::google_sync::patch_synced_routine_after_edit(
         db.inner(),
+        notify.inner(),
         &routine_id,
         sync_snapshot,
         &local_today(),

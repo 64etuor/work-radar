@@ -82,7 +82,10 @@ pub(crate) async fn routine_edit_sync_snapshot(
     routine_id: &str,
 ) -> Result<Option<RoutineEditSyncSnapshot>, AppError> {
     let row = load_routine(db, routine_id).await?;
-    if row.google_event_id.is_none() {
+    // synced(google_event_id Some) 또는 pending-ENABLE(google_calendar_id Some, event_id NULL) 둘 다
+    // 편집 시 큐 갱신 대상이므로 캡처한다(P4b). 완전 미동기화(둘 다 NULL)만 None →
+    // patch_synced_routine_after_edit가 토큰/큐 없이 no-op.
+    if row.google_calendar_id.is_none() && row.google_event_id.is_none() {
         return Ok(None);
     }
     Ok(Some(RoutineEditSyncSnapshot { row }))
@@ -413,6 +416,13 @@ async fn build_master_event_input_with_reference(
 /// timed(all_day=false)라 end>start가 보장돼야 한다 — 아니면 validation 에러(파괴적 큐 행 방지).
 /// `CreateEventInput`은 Serialize 미파생이므로 필드에서 serde_json::json!로 직접 조립한다.
 fn master_create_payload(input: &CreateEventInput) -> Result<String, AppError> {
+    Ok(master_create_payload_value(input)?.to_string())
+}
+
+/// `master_create_payload`의 Value 버전 — series_replace 큐 행의 `new_create`를 조립할 때 String으로
+/// 이중 직렬화하지 않고 Value로 바로 끼우기 위함(P4b). String 버전은 이걸 `.to_string()`으로 감싼다
+/// (기존 패리티 테스트가 그대로 green이어야 하므로 출력은 동일).
+fn master_create_payload_value(input: &CreateEventInput) -> Result<serde_json::Value, AppError> {
     let start = NaiveDateTime::parse_from_str(&input.start, "%Y-%m-%dT%H:%M:%S").map_err(|_| {
         AppError::validation(
             "routine.sync.bad_start",
@@ -447,7 +457,7 @@ fn master_create_payload(input: &CreateEventInput) -> Result<String, AppError> {
     if let Some(desc) = input.description.as_deref().filter(|s| !s.is_empty()) {
         payload["description"] = serde_json::Value::String(desc.to_string());
     }
-    Ok(payload.to_string())
+    Ok(payload)
 }
 
 fn until_for_previous_day(
@@ -674,6 +684,10 @@ pub(crate) async fn delete_master_with_provider<P: CalendarProvider>(
 /// Provider injection helper — 편집된 동기화 루틴의 master event PATCH 전파(PR 3, 단위 테스트용).
 /// 미동기화 루틴이면 no-op(멱등). recurrence+start+end+summary를 한 번에 보낸다(plan §4 PATCH).
 /// PATCH 전략: DELETE+CREATE가 아니라 PATCH라 EXDATE/이벤트 ID/사용자가 Google에 추가한 메타 보존.
+///
+/// P4b: 프로덕션 경로(exdate/편집)는 이제 지연 큐로 전환됨 — 이 순수 헬퍼는 patch 매핑 패리티
+/// 테스트용으로만 유지한다(retained for parity tests; production path = queue).
+#[allow(dead_code)]
 pub(crate) async fn patch_routine_sync_with_provider<P: CalendarProvider>(
     db: &Db,
     provider: &P,
@@ -713,6 +727,9 @@ pub(crate) async fn patch_routine_sync_with_provider<P: CalendarProvider>(
 /// Provider injection helper — synced routine edit must not rewrite past generated instances.
 /// It caps the old master before `effective_date`, creates a new master from `effective_date`, and
 /// moves the local mirror to the new master id.
+///
+/// P4b: production path = queue (series_replace) — retained for parity tests only.
+#[allow(dead_code)]
 pub(crate) async fn split_routine_sync_after_edit_with_provider<P: CalendarProvider>(
     db: &Db,
     provider: &P,
@@ -770,51 +787,179 @@ pub(crate) async fn split_routine_sync_after_edit_with_provider<P: CalendarProvi
     Ok(())
 }
 
-/// 루틴 편집 후 동기화 전파(crud::update_routine에서 호출). 동기화 OFF면 토큰 조회 없이 no-op.
-/// 동기화 ON이면 Google master series를 edit date 기준으로 split한다. 실패는 호출자가 patch_failed로
-/// surface(로컬 변경은 유지).
+/// pending-ENABLE(google_calendar_id Some, event_id NULL) 상태에서 편집/exdate가 오면 큐잉된 create
+/// payload를 **현재 row** 기준으로 다시 만들어 갱신한다(UPDATE만 — INSERT 절대 안 함, 0행=정상).
+/// P4a의 stale-payload NIT 해소: 워커가 flush하기 전 편집이 반영된다. 빌더 실패는 로컬 편집을
+/// 되돌리지 않는다(이미 커밋됨) — warn-log 후 반환, 큐 create는 stale하게 남는다(문서화된 코너).
+async fn refresh_pending_create_payload(
+    db: &Db,
+    notify: &Arc<Notify>,
+    routine_id: &str,
+    tzid: &str,
+) {
+    let payload = match load_routine(db, routine_id).await {
+        Ok(row) => match build_master_event_input(db, routine_id, &row, tzid).await {
+            Ok(input) => match master_create_payload(&input) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(
+                        code = "routine.sync.pending_refresh_failed",
+                        error = %e,
+                        "queued create payload refresh skipped (builder); stays stale"
+                    );
+                    return;
+                }
+            },
+            Err(e) => {
+                tracing::warn!(
+                    code = "routine.sync.pending_refresh_failed",
+                    error = %e,
+                    "queued create payload refresh skipped (builder); stays stale"
+                );
+                return;
+            }
+        },
+        Err(e) => {
+            tracing::warn!(
+                code = "routine.sync.pending_refresh_failed",
+                error = %e,
+                "queued create payload refresh skipped (load); stays stale"
+            );
+            return;
+        }
+    };
+    match sqlx::query(
+        "UPDATE pending_calendar_writes SET payload_json = ?1 \
+         WHERE target_kind = 'routine_master' AND target_id = ?2 AND kind = 'create'",
+    )
+    .bind(&payload)
+    .bind(routine_id)
+    .execute(db)
+    .await
+    {
+        Ok(_) => notify.notify_one(),
+        Err(e) => tracing::warn!(
+            code = "routine.sync.pending_refresh_failed",
+            error = %e,
+            "queued create payload UPDATE failed; stays stale"
+        ),
+    }
+}
+
+/// 루틴 편집 후 동기화 전파(crud::update_routine에서 호출). P4b: 인라인 provider 호출 대신 **지연 큐**.
+/// 미동기화면 no-op. synced면 series_replace 큐 행을 만들고(순수 빌더로 old_patch/new_create 조립,
+/// provider/토큰 조회 0), pending-ENABLE이면 큐잉된 create payload를 편집 반영해 refresh한다.
+/// 빌더 검증 에러(empty_window/rrule_invalid 등)는 enqueue 시점에 동기로 surface(인라인과 동일 UX).
 #[allow(clippy::result_large_err)]
 pub(crate) async fn patch_synced_routine_after_edit(
     db: &Db,
+    notify: &Arc<Notify>,
     routine_id: &str,
     before: Option<RoutineEditSyncSnapshot>,
     effective_date: &str,
 ) -> Result<(), AppError> {
     let Some(before) = before else {
-        // 미동기화 — 토큰 조회 없이 no-op (편집의 흔한 경우).
+        // 미동기화 — 토큰/큐 없이 no-op (편집의 흔한 경우).
         return Ok(());
     };
-    let project_id = require_project_id(&before.row)?;
-    let access = access_token_or_not_connected(db, project_id).await?;
-    let provider = HttpCalendarProvider::new()?;
-    split_routine_sync_after_edit_with_provider(
-        db,
-        &provider,
-        &access,
-        routine_id,
-        before,
-        effective_date,
-        default_tzid(),
-    )
-    .await?;
-    crate::commands::calendar::invalidate_calendar_events_cache().await;
+    let tzid = default_tzid();
+
+    // synced(cal + evt 둘 다 Some) → series_replace 큐잉. 인라인 split과 동일한 것을 payload로 조립:
+    // old_patch = capped before-input의 build_event_payload, new_create = post-edit row의 큐 방언.
+    if let (Some(cal_id), Some(old_evt_id)) = (
+        before.row.google_calendar_id.clone(),
+        before.row.google_event_id.clone(),
+    ) {
+        let mut old_input = build_master_event_input(db, routine_id, &before.row, tzid).await?;
+        let until =
+            until_for_previous_day(effective_date, before.row.time_of_day.as_deref(), tzid)?;
+        cap_recurrence_before(&mut old_input, &until)?;
+        let old_patch = build_event_payload(&old_input);
+
+        let row = load_routine(db, routine_id).await?;
+        let new_input = build_master_event_input_with_reference(
+            db,
+            routine_id,
+            &row,
+            tzid,
+            Some(effective_date),
+        )
+        .await?;
+        let new_create = master_create_payload_value(&new_input)?;
+
+        let payload = serde_json::json!({
+            "old_event_id": old_evt_id,
+            "old_patch": old_patch,
+            "new_create": new_create,
+        })
+        .to_string();
+        upsert_write(
+            db,
+            "series_replace",
+            "routine_master",
+            routine_id,
+            &cal_id,
+            None,
+            &payload,
+            GOOGLE_SYNC_DEBOUNCE_MS,
+        )
+        .await?;
+        notify.notify_one();
+        return Ok(());
+    }
+
+    // pending-ENABLE(cal Some, evt NULL) → 큐잉된 create payload refresh(stale-payload NIT 해소).
+    if before.row.google_calendar_id.is_some() {
+        refresh_pending_create_payload(db, notify, routine_id, tzid).await;
+        return Ok(());
+    }
+
+    // 그 외(미동기화) → no-op.
     Ok(())
 }
 
+/// exdate 편집 후 동기화 전파("오늘 빼기"/undo). P4b: 지연 큐. synced면 full master patch payload를
+/// patch 큐 행으로(EXDATE 포함 recurrence), pending-ENABLE이면 create payload refresh, 미동기화면 no-op.
+/// provider/토큰 조회 0.
 #[allow(clippy::result_large_err)]
 pub(crate) async fn patch_synced_routine_exdates(
     db: &Db,
+    notify: &Arc<Notify>,
     routine_id: &str,
 ) -> Result<(), AppError> {
     let row = load_routine(db, routine_id).await?;
-    if row.google_event_id.is_none() {
+    let tzid = default_tzid();
+
+    // synced → full master 입력(build_master_event_input이 routine_exdates 재읽어 EXDATE 동봉)을 큐
+    // 방언으로 patch 행에 실는다. sync.rs::build_patch_body가 title→summary + start/end(timeZone) +
+    // recurrence로 직렬화한다(all_day 키는 무시). event_id=현재 마스터.
+    if let (Some(cal_id), Some(evt_id)) =
+        (row.google_calendar_id.clone(), row.google_event_id.clone())
+    {
+        let input = build_master_event_input(db, routine_id, &row, tzid).await?;
+        let payload = master_create_payload(&input)?;
+        upsert_write(
+            db,
+            "patch",
+            "routine_master",
+            routine_id,
+            &cal_id,
+            Some(&evt_id),
+            &payload,
+            GOOGLE_SYNC_DEBOUNCE_MS,
+        )
+        .await?;
+        notify.notify_one();
         return Ok(());
     }
-    let project_id = require_project_id(&row)?;
-    let access = access_token_or_not_connected(db, project_id).await?;
-    let provider = HttpCalendarProvider::new()?;
-    patch_routine_sync_with_provider(db, &provider, &access, routine_id, default_tzid()).await?;
-    crate::commands::calendar::invalidate_calendar_events_cache().await;
+
+    // pending-ENABLE → create payload refresh(EXDATE도 build_master_event_input이 반영).
+    if row.google_calendar_id.is_some() {
+        refresh_pending_create_payload(db, notify, routine_id, tzid).await;
+        return Ok(());
+    }
+
+    // 미동기화 → no-op.
     Ok(())
 }
 
@@ -1100,8 +1245,9 @@ fn exdate_patch_failed(e: AppError) -> AppError {
 
 /// Provider injection helper — "오늘 빼기" 흐름 단위 테스트용. exdate row 추가 후 master PATCH.
 /// 미동기화 루틴이면 patch가 no-op(멱등) — row만 남는다(로컬 hide).
-/// IPC 진입점(`unschedule_routine_today`)은 `patch_synced_routine_after_edit`로 토큰을 동기화
-/// 시에만 조회하므로, 이 wrapper는 provider 주입이 가능한 테스트 경로 전용이다.
+/// 프로덕션 IPC 진입점(`unschedule_routine_today`)은 `patch_synced_routine_exdates`를 호출해
+/// master patch를 **큐로 enqueue**한다(P4b — 토큰/provider 조회 없음). 이 wrapper는 provider
+/// 주입이 가능한 인라인 패리티 테스트 경로 전용이다.
 #[cfg(test)]
 pub(crate) async fn unschedule_today_with_provider<P: CalendarProvider>(
     db: &Db,
@@ -1137,6 +1283,7 @@ pub(crate) async fn restore_today_with_provider<P: CalendarProvider>(
 #[specta::specta]
 pub async fn unschedule_routine_today(
     db: State<'_, Db>,
+    notify: State<'_, Arc<Notify>>,
     routine_id: String,
     date: String,
 ) -> Result<(), AppError> {
@@ -1144,7 +1291,7 @@ pub async fn unschedule_routine_today(
     // 존재 확인(깔끔한 not_found) — 이후 FK 위반 대신 명확한 에러.
     load_routine(db.inner(), &routine_id).await?;
     insert_exdate_row(db.inner(), &routine_id, &date).await?;
-    patch_synced_routine_exdates(db.inner(), &routine_id)
+    patch_synced_routine_exdates(db.inner(), notify.inner(), &routine_id)
         .await
         .map_err(exdate_patch_failed)
 }
@@ -1154,13 +1301,14 @@ pub async fn unschedule_routine_today(
 #[specta::specta]
 pub async fn restore_routine_today(
     db: State<'_, Db>,
+    notify: State<'_, Arc<Notify>>,
     routine_id: String,
     date: String,
 ) -> Result<(), AppError> {
     validate_ymd(&date)?;
     load_routine(db.inner(), &routine_id).await?;
     delete_exdate_row(db.inner(), &routine_id, &date).await?;
-    patch_synced_routine_exdates(db.inner(), &routine_id)
+    patch_synced_routine_exdates(db.inner(), notify.inner(), &routine_id)
         .await
         .map_err(exdate_patch_failed)
 }
@@ -3229,5 +3377,258 @@ mod tests {
             cal.is_none(),
             "google_calendar_id NULL → 워커 CAS가 orphan 삭제"
         );
+    }
+
+    // ── P4b B2/B3: split/exdate 인라인 → enqueue 전환 ─────────────────────────────
+
+    /// B2 split(synced): provider/토큰 조회 없이 series_replace 큐 행 1개를 만든다. payload는
+    /// old_event_id==옛 마스터, old_patch에 capped RRULE(UNTIL 포함), new_create에 post-edit
+    /// recurrence + time_zone.
+    #[tokio::test]
+    async fn after_edit_synced_enqueues_series_replace() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query("UPDATE routines SET created_at = '2026-05-29 00:00:00' WHERE id = ?1")
+            .bind(&rid)
+            .execute(&db)
+            .await
+            .unwrap();
+        mark_synced(&db, &rid, "cal_g", "evt_old").await;
+        let before = routine_edit_sync_snapshot(&db, &rid)
+            .await
+            .unwrap()
+            .expect("synced snapshot");
+        // 편집: daily → weekly(월).
+        update_routine_inner(
+            &db,
+            UpdateRoutineInput {
+                id: rid.clone(),
+                title: "헬스장".into(),
+                freq: RoutineFreq::Weekly,
+                weekdays: vec![MWeekday::Mon],
+                anchor_date: None,
+                start_date: None,
+                end_date: None,
+                time_of_day: Some("07:00".into()),
+                reminder_offset_min: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        patch_synced_routine_after_edit(&db, &notify, &rid, Some(before), "2026-06-09")
+            .await
+            .unwrap();
+
+        let rows: Vec<(String, String, String, Option<String>, String)> = sqlx::query_as(
+            "SELECT kind, target_kind, target_id, event_id, payload_json \
+             FROM pending_calendar_writes",
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1, "series_replace 큐 행 1개");
+        let (kind, tk, tid, event_id, payload) = &rows[0];
+        assert_eq!(kind, "series_replace");
+        assert_eq!(tk, "routine_master");
+        assert_eq!(tid, &rid);
+        assert!(
+            event_id.is_none(),
+            "series_replace create 절반은 event_id NULL"
+        );
+        let v: serde_json::Value = serde_json::from_str(payload).unwrap();
+        assert_eq!(v["old_event_id"], "evt_old");
+        let old_rec = v["old_patch"]["recurrence"][0].as_str().unwrap();
+        assert!(
+            old_rec.contains("UNTIL="),
+            "old_patch capped RRULE: {old_rec}"
+        );
+        let new_rec = v["new_create"]["recurrence"][0].as_str().unwrap();
+        assert!(
+            new_rec.contains("FREQ=WEEKLY") && new_rec.contains("BYDAY=MO"),
+            "new_create가 post-edit weekly 반영: {new_rec}"
+        );
+        assert!(
+            v["new_create"]["time_zone"].as_str().is_some(),
+            "new_create에 time_zone 동봉"
+        );
+    }
+
+    /// B2 split(pending-ENABLE): 큐잉된 create payload가 편집을 반영해 refresh되고(UPDATE) series_replace
+    /// 행은 생기지 않는다. 큐 행 수는 그대로 1(create).
+    #[tokio::test]
+    async fn after_edit_pending_enable_refreshes_create_payload() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "아침 운동",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // enable → pending create + 낙관적 미러(cal Some, evt NULL).
+        enable_routine_google_sync_inner(&db, &notify, &rid, "proj_personal", "cal_user_a")
+            .await
+            .unwrap();
+        let before = routine_edit_sync_snapshot(&db, &rid)
+            .await
+            .unwrap()
+            .expect("pending-enable snapshot");
+        // 편집: 시간 07:00 → 09:00.
+        update_routine_inner(
+            &db,
+            UpdateRoutineInput {
+                id: rid.clone(),
+                title: "아침 운동".into(),
+                freq: RoutineFreq::Daily,
+                weekdays: vec![],
+                anchor_date: None,
+                start_date: None,
+                end_date: None,
+                time_of_day: Some("09:00".into()),
+                reminder_offset_min: None,
+                monthly_pattern: None,
+                monthly_nth_week: None,
+                duration_min: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        patch_synced_routine_after_edit(&db, &notify, &rid, Some(before), "2026-06-09")
+            .await
+            .unwrap();
+
+        let rows: Vec<(String, String)> =
+            sqlx::query_as("SELECT kind, payload_json FROM pending_calendar_writes")
+                .fetch_all(&db)
+                .await
+                .unwrap();
+        assert_eq!(
+            rows.len(),
+            1,
+            "여전히 1개 큐 행(create refresh, series_replace 없음)"
+        );
+        assert_eq!(rows[0].0, "create", "kind는 create 유지");
+        assert!(
+            rows[0].1.contains("09:00:00"),
+            "refresh된 create payload가 편집(09:00)을 반영: {}",
+            rows[0].1
+        );
+    }
+
+    /// B2 split(미동기화): before None → 큐 행 0개.
+    #[tokio::test]
+    async fn after_edit_unsynced_no_rows() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let rid = seed_routine(
+            &db,
+            "물 마시기",
+            RoutineFreq::Daily,
+            vec![],
+            None,
+            Some(Kind::Personal),
+        )
+        .await;
+        let before = routine_edit_sync_snapshot(&db, &rid).await.unwrap();
+        assert!(before.is_none(), "미동기화 → 스냅샷 None");
+        patch_synced_routine_after_edit(&db, &notify, &rid, before, "2026-06-09")
+            .await
+            .unwrap();
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "미동기화 편집은 큐 행 없음");
+    }
+
+    /// B3 exdate(synced): patch 큐 행 1개(kind=patch, event_id=master) — payload recurrence에 EXDATE
+    /// 라인 + title/start/duration_min/time_zone 동봉(build_patch_body가 소비하는 형태).
+    #[tokio::test]
+    async fn exdates_synced_enqueues_patch_row() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let rid = seed_routine(
+            &db,
+            "주간 회의",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Mon],
+            Some("10:00".into()),
+            Some(Kind::Work),
+        )
+        .await;
+        mark_synced(&db, &rid, "cal_w", "evt_w").await;
+        insert_exdate_row(&db, &rid, "2026-06-08").await.unwrap();
+
+        patch_synced_routine_exdates(&db, &notify, &rid)
+            .await
+            .unwrap();
+
+        let rows: Vec<(String, String, String, Option<String>, String)> = sqlx::query_as(
+            "SELECT kind, target_kind, target_id, event_id, payload_json \
+             FROM pending_calendar_writes",
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1, "patch 큐 행 1개");
+        let (kind, tk, tid, event_id, payload) = &rows[0];
+        assert_eq!(kind, "patch");
+        assert_eq!(tk, "routine_master");
+        assert_eq!(tid, &rid);
+        assert_eq!(event_id.as_deref(), Some("evt_w"), "event_id=현재 마스터");
+        let v: serde_json::Value = serde_json::from_str(payload).unwrap();
+        assert_eq!(v["title"], "주간 회의");
+        assert!(v["start"].as_str().unwrap().ends_with("T10:00:00"));
+        assert!(v["duration_min"].as_i64().is_some());
+        assert!(v["time_zone"].as_str().is_some());
+        let rec = v["recurrence"].as_array().expect("recurrence array");
+        assert!(
+            rec.iter()
+                .any(|l| l.as_str().map(|s| s.contains("EXDATE")).unwrap_or(false)),
+            "recurrence에 EXDATE 라인 동봉: {payload}"
+        );
+    }
+
+    /// B3 exdate(미동기화): 큐 행 0개(no-op).
+    #[tokio::test]
+    async fn exdates_unsynced_no_rows() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let rid = seed_routine(
+            &db,
+            "스트레칭",
+            RoutineFreq::Daily,
+            vec![],
+            None,
+            Some(Kind::Personal),
+        )
+        .await;
+        insert_exdate_row(&db, &rid, "2026-06-08").await.unwrap();
+        patch_synced_routine_exdates(&db, &notify, &rid)
+            .await
+            .unwrap();
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "미동기화 exdate는 큐 행 없음");
     }
 }
