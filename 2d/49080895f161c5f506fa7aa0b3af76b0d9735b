@@ -1,0 +1,50 @@
+src/components/bookkeeping/bookkeepingTabs.ts
+  s_f013490a1b0efb::t_74ea486aef1597 44-52
+  s_f013490a1b0efb::t_e8b44c2605f30a 1-43,53-57
+src/components/bookkeeping/BookkeepingView.css
+  s_f013490a1b0efb::t_24dacf4dad8a10 20,22
+  s_f013490a1b0efb::t_8eecbd1adde67e 1-3
+  s_f013490a1b0efb::t_3b09ecc8134211 84-188,194-214
+  s_f013490a1b0efb::t_7fbd16e85c15a9 189-193
+  s_f013490a1b0efb::t_fd5b771ff675d4 689
+src/components/bookkeeping/bookkeepingTabs.test.ts
+  s_f013490a1b0efb::t_a3c85a06ee44c1 1-80
+src/components/bookkeeping/BookkeepingTabBar.dom.test.tsx
+  s_f013490a1b0efb::t_75a5ab4dd3f5d0 7
+  s_f013490a1b0efb::t_9e48e746c77408 21-24
+  s_f013490a1b0efb::t_b8c45699487911 1-6,8-20,25-83
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f013490a1b0efb::t_2353f53c556e42 51-52
+  s_f013490a1b0efb::t_9e48e746c77408 646-650,708-714,716-721,723-729
+  s_f013490a1b0efb::t_348982759ca95e 645,651-660,772-784,786-788
+  s_f013490a1b0efb::t_5cb83e43af3129 768-769
+  s_f013490a1b0efb::t_624a8d8cca5d2e 75
+  s_f013490a1b0efb::t_949fa556366780 242
+  s_f013490a1b0efb::t_642dce1c7e0d0c 662-699
+  s_f013490a1b0efb::t_bf312e1cb9d446 121-126
+  s_f013490a1b0efb::t_e309029f566292 69,76-80
+  s_f013490a1b0efb::t_fb9dae75d8eb0a 625-630
+  s_f013490a1b0efb::t_0bfc241f7d9c92 4
+  s_f013490a1b0efb::t_61e25775cbaeac 193-199
+  s_f013490a1b0efb::t_dc89e59033e68d 730-742
+  s_f013490a1b0efb::t_74cdea3a59d321 770
+src/components/bookkeeping/BookkeepingTabBar.tsx
+  s_f013490a1b0efb::t_192808920115b8 1,10-35
+  s_f013490a1b0efb::t_e7f6399a4c6862 2-9,36-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "2d49080895f161c5f506fa7aa0b3af76b0d9735b",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
