@@ -28,12 +28,16 @@ pub async fn list_bookkeeping_transactions(
     status: Option<BookkeepingReviewStatus>,
     project_id: Option<String>,
     order_by: Option<String>,
+    from_date: Option<String>,
+    to_date: Option<String>,
 ) -> Result<Vec<BookkeepingTransaction>, AppError> {
     list_bookkeeping_transactions_ordered_inner(
         db.inner(),
         status,
         project_id.as_deref(),
         order_by.as_deref(),
+        from_date.as_deref(),
+        to_date.as_deref(),
     )
     .await
 }
@@ -330,7 +334,7 @@ pub(crate) async fn list_bookkeeping_transactions_inner(
     status: Option<BookkeepingReviewStatus>,
     project_id: Option<&str>,
 ) -> Result<Vec<BookkeepingTransaction>, AppError> {
-    list_bookkeeping_transactions_ordered_inner(db, status, project_id, None).await
+    list_bookkeeping_transactions_ordered_inner(db, status, project_id, None, None, None).await
 }
 
 pub(crate) async fn list_bookkeeping_transactions_ordered_inner(
@@ -338,7 +342,15 @@ pub(crate) async fn list_bookkeeping_transactions_ordered_inner(
     status: Option<BookkeepingReviewStatus>,
     project_id: Option<&str>,
     order_by: Option<&str>,
+    from_date: Option<&str>,
+    to_date: Option<&str>,
 ) -> Result<Vec<BookkeepingTransaction>, AppError> {
+    if let Some(from) = from_date {
+        validate_date(from)?;
+    }
+    if let Some(to) = to_date {
+        validate_date(to)?;
+    }
     let order_clause = match order_by.map(str::trim).filter(|v| !v.is_empty()) {
         None => "spent_at DESC, updated_at DESC, id DESC",
         Some("confidence_asc") => {
@@ -356,6 +368,8 @@ pub(crate) async fn list_bookkeeping_transactions_ordered_inner(
          FROM bookkeeping_transactions \
          WHERE (?1 IS NULL OR review_status = ?1) \
            AND (?2 IS NULL OR project_id = ?2) \
+           AND (?3 IS NULL OR spent_at >= ?3) \
+           AND (?4 IS NULL OR spent_at <= ?4) \
            AND deleted_at IS NULL \
          ORDER BY {order_clause} \
          LIMIT 200"
@@ -363,6 +377,8 @@ pub(crate) async fn list_bookkeeping_transactions_ordered_inner(
     let rows = sqlx::query_as::<_, BookkeepingTransaction>(&list_sql)
         .bind(status)
         .bind(project_id)
+        .bind(from_date)
+        .bind(to_date)
         .fetch_all(db)
         .await?;
     Ok(rows)

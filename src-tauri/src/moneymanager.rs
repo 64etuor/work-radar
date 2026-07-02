@@ -56,6 +56,8 @@ pub struct MmCategory {
     pub type_code: i64,
     /// pUid — '0'/''/NULL = 최상위.
     pub parent_uid: String,
+    /// C_IS_DEL — 1이면 앱에서 삭제된 카테고리(라벨 해석에는 여전히 유효, taxonomy 동기화 비대상).
+    pub is_del: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -198,7 +200,8 @@ impl MoneyManagerBackup {
             "SELECT CAST(COALESCE(uid,'') AS TEXT) AS uid, \
                     CAST(COALESCE(NAME,'') AS TEXT) AS name, \
                     CAST(COALESCE(TYPE,-1) AS INTEGER) AS type_code, \
-                    CAST(COALESCE(pUid,'') AS TEXT) AS parent_uid \
+                    CAST(COALESCE(pUid,'') AS TEXT) AS parent_uid, \
+                    CAST(COALESCE(C_IS_DEL,0) AS INTEGER) AS is_del \
              FROM ZCATEGORY",
         )
         .fetch_all(&mut self.conn)
@@ -210,6 +213,7 @@ impl MoneyManagerBackup {
                 name: row.try_get("name")?,
                 type_code: row.try_get("type_code")?,
                 parent_uid: row.try_get("parent_uid")?,
+                is_del: row.try_get("is_del")?,
             };
             if !cat.uid.is_empty() {
                 out.insert(cat.uid.clone(), cat);
@@ -267,7 +271,7 @@ impl MoneyManagerBackup {
 
 /// MoneyManager의 '0' 센티널('' / NULL과 함께 "없음" 의미 — pUid 관례와 동일)을 걸러낸
 /// 유효 참조값. 이체 판정(toAssetUid/txUidTrans)에도 같은 관례를 적용한다.
-fn nonempty_ref(value: &str) -> Option<&str> {
+pub(crate) fn nonempty_ref(value: &str) -> Option<&str> {
     let trimmed = value.trim();
     (!trimmed.is_empty() && trimmed != "0").then_some(trimmed)
 }

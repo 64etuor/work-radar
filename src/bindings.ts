@@ -31,7 +31,7 @@ export const commands = {
 	pingProjectToken: (projectId: string, kind: TokenKind) => typedError<PingResult, AppError>(__TAURI_INVOKE("ping_project_token", { projectId, kind })),
 	runConnectionAudit: () => typedError<ConnectionAudit, AppError>(__TAURI_INVOKE("run_connection_audit")),
 	createBookkeepingTransaction: (input: CreateBookkeepingTransactionInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("create_bookkeeping_transaction", { input })),
-	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null, projectId: string | null, orderBy: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status, projectId, orderBy })),
+	listBookkeepingTransactions: (status: "needs_review" | "approved" | "ignored" | null, projectId: string | null, orderBy: string | null, fromDate: string | null, toDate: string | null) => typedError<BookkeepingTransaction[], AppError>(__TAURI_INVOKE("list_bookkeeping_transactions", { status, projectId, orderBy, fromDate, toDate })),
 	updateBookkeepingReviewStatus: (id: string, status: BookkeepingReviewStatus) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("update_bookkeeping_review_status", { id, status })),
 	bulkUpdateBookkeepingReviewStatus: (ids: string[], status: BookkeepingReviewStatus) => typedError<BookkeepingBulkItemResult[], AppError>(__TAURI_INVOKE("bulk_update_bookkeeping_review_status", { ids, status })),
 	bulkSetBookkeepingCategory: (ids: string[], categoryCode: string | null, subcategoryCode: string | null, reason: string | null) => typedError<BookkeepingBulkItemResult[], AppError>(__TAURI_INVOKE("bulk_set_bookkeeping_category", { ids, categoryCode, subcategoryCode, reason })),
@@ -2045,6 +2045,11 @@ export type ImportBookkeepingMmbakSummary = {
 	flaggedDeletedCount: number,
 	/**  임포트당 중복-프로브 상한 초과로 프로브를 건너뛴 신규 행 수(행은 정상 임포트됨). */
 	dupProbeSkippedCount: number,
+	/**
+	 *  사람 손이 닿지 않은(오버라이드 없음) 미분류 moneymanager 행 중 taxonomy 동기화 후
+	 *  재해석으로 category_code가 채워진 수(힌트 갱신 — review_status 불변).
+	 */
+	backfilledCategoryCount: number,
 	/**  이번 임포트 후 저장된 UTIME 커서(epoch ms 문자열). 없으면 진전 없음. */
 	cursorAfter: string | null,
 };

@@ -132,6 +132,10 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
     };
     drop(temp);
 
+    // MM 카테고리 → 로컬 taxonomy 동기화(활성 카테고리만, mm-<uid> 코드 + raw_label alias).
+    // 거래 upsert **전에** 돌려야 이번 임포트의 신규 행이 ingest 시점에 실코드로 해석된다.
+    let taxonomy_counts = sync_mm_taxonomy(db, &loaded.categories).await?;
+
     // 증분 커서: cursor_value = 지난 임포트에서 본 최대 UTIME(epoch ms). 커서 이하 UTIME
     // 행은 매핑을 건너뛴다. 단 삭제행은 UTIME이 신뢰성 있게 갱신되지 않으므로 매 임포트
     // full-scan이다(map_backup 계약).
@@ -308,6 +312,10 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         }
     }
 
+    // 백필: 과거 임포트에서 'uncategorized'로 붕괴한(그리고 사람이 오버라이드한 적 없는)
+    // moneymanager 행을 방금 동기화된 taxonomy/alias로 재해석해 코드를 채운다(힌트 갱신).
+    let backfilled_category = backfill_mm_category_codes(db).await?;
+
     // 커서 정책: 실패 행이 있으면 커서를 (실패 행 최소 UTIME - 1)로 잡아 다음 임포트에서
     // 재시도되게 한다(임포트 내부 재시도 루프 없음 — bounded). 실패 행은 커서 필터를
     // 통과한 행이므로(UTIME > cursor_before) 커서가 뒤로 물러나지는 않는다.
@@ -355,6 +363,9 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
             "failed": counts.failed,
             "flaggedDeleted": flagged_deleted,
             "dupProbeSkipped": dup_probe_skipped,
+            "taxonomyNodesUpserted": taxonomy_counts.nodes,
+            "taxonomyAliasesUpserted": taxonomy_counts.aliases,
+            "backfilledCategory": backfilled_category,
         }),
     )
     .await?;
@@ -368,6 +379,7 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         failed_count: counts.failed,
         flagged_deleted_count: flagged_deleted,
         dup_probe_skipped_count: dup_probe_skipped,
+        backfilled_category_count: backfilled_category,
         cursor_after,
     })
 }

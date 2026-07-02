@@ -131,19 +131,37 @@ pub(crate) async fn resolve_category_inner(
     }
 
     let rules = bookkeeping_category_rules_inner(db).await?;
+    Ok(resolve_category_with_rules(
+        &rules,
+        provided_subcategory,
+        category_hint,
+        raw_category,
+        merchant,
+    ))
+}
 
+/// Pure resolver body over pre-fetched rules — lets batch callers (mmbak taxonomy sync/backfill)
+/// resolve many labels with one rules fetch. Same precedence as `resolve_category_inner` minus
+/// the `provided_code` short-circuit (handled by the caller).
+pub(crate) fn resolve_category_with_rules(
+    rules: &crate::models::BookkeepingCategoryRules,
+    provided_subcategory: Option<&str>,
+    category_hint: &str,
+    raw_category: Option<&str>,
+    merchant: &str,
+) -> ResolvedCategory {
     // A non-sentinel category hint that is itself a real top-level/sub code is honored as-is.
     let hint = category_hint.trim();
     if !hint.is_empty() && hint != "uncategorized" && rules.taxonomy.iter().any(|n| n.code == hint)
     {
-        return Ok(ResolvedCategory {
+        return ResolvedCategory {
             category_code: Some(hint.to_string()),
             subcategory_code: provided_subcategory
                 .map(str::trim)
                 .filter(|c| !c.is_empty())
                 .map(str::to_string),
             confidence: None,
-        });
+        };
     }
 
     if let Some(raw) = raw_category {
@@ -153,11 +171,11 @@ pub(crate) async fn resolve_category_inner(
                 a.match_kind == BookkeepingAliasMatchKind::RawLabel
                     && normalize_label(&a.pattern) == norm
             }) {
-                return Ok(ResolvedCategory {
+                return ResolvedCategory {
                     category_code: Some(alias.category_code.clone()),
                     subcategory_code: alias.subcategory_code.clone(),
                     confidence: Some(alias.confidence),
-                });
+                };
             }
             if let Some(node) = rules
                 .taxonomy
@@ -168,11 +186,11 @@ pub(crate) async fn resolve_category_inner(
                     Some(parent) => (parent.clone(), Some(node.code.clone())),
                     None => (node.code.clone(), None),
                 };
-                return Ok(ResolvedCategory {
+                return ResolvedCategory {
                     category_code: Some(category_code),
                     subcategory_code,
                     confidence: Some(0.95),
-                });
+                };
             }
         }
     }
@@ -182,19 +200,19 @@ pub(crate) async fn resolve_category_inner(
         if let Some(alias) = rules.aliases.iter().find(|a| {
             a.match_kind == BookkeepingAliasMatchKind::Merchant && a.pattern.trim() == merchant
         }) {
-            return Ok(ResolvedCategory {
+            return ResolvedCategory {
                 category_code: Some(alias.category_code.clone()),
                 subcategory_code: alias.subcategory_code.clone(),
                 confidence: Some(alias.confidence),
-            });
+            };
         }
     }
 
-    Ok(ResolvedCategory {
+    ResolvedCategory {
         category_code: Some("uncategorized".to_string()),
         subcategory_code: None,
         confidence: Some(0.0),
-    })
+    }
 }
 
 async fn category_labels_for_codes(

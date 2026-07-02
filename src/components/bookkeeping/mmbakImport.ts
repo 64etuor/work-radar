@@ -15,7 +15,10 @@ export function normalizeWatchDir(input: string): string | null {
 
 /** 최신 백업 임포트 결과 토스트 문구. */
 export function formatMmbakImportSummary(summary: ImportBookkeepingMmbakSummary): string {
-  return `백업 ${summary.scannedCount}건 확인, ${summary.importedCount}건 추가, ${summary.duplicateCount}건 갱신, ${summary.failedCount}건 실패`;
+  const base = `백업 ${summary.scannedCount}건 확인, ${summary.importedCount}건 추가, ${summary.duplicateCount}건 갱신, ${summary.failedCount}건 실패`;
+  return summary.backfilledCategoryCount > 0
+    ? `${base}, ${summary.backfilledCategoryCount}건 분류 보완`
+    : base;
 }
 
 /** moneymanager 소스의 가장 최근 sync job (updatedAt 내림차순, 방어적 정렬). */

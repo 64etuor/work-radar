@@ -12,6 +12,7 @@ mod gmail;
 mod line_items;
 mod mmbak;
 mod mmbak_options;
+mod mmbak_taxonomy;
 mod recurring;
 mod reporting;
 mod sync_jobs;
@@ -27,6 +28,7 @@ pub use gmail::*;
 pub use line_items::*;
 pub use mmbak::*;
 pub use mmbak_options::*;
+pub(crate) use mmbak_taxonomy::*;
 pub use recurring::*;
 pub use reporting::*;
 pub use sync_jobs::*;
@@ -1806,6 +1808,8 @@ mod tests {
             Some(BookkeepingReviewStatus::NeedsReview),
             None,
             Some("confidence_asc"),
+            None,
+            None,
         )
         .await
         .expect("ordered rows");
@@ -1813,6 +1817,95 @@ mod tests {
         assert_eq!(rows[0].id, low.id);
         assert_eq!(rows[0].review_status, BookkeepingReviewStatus::NeedsReview);
         assert_eq!(rows[0].confidence, Some(0.0));
+    }
+
+    #[tokio::test]
+    async fn list_transactions_date_range_filters_and_boundaries_are_inclusive() {
+        let db = pool().await;
+        for (merchant, spent_at) in [
+            ("Before Range", "2026-05-31"),
+            ("Range Start", "2026-06-01"),
+            ("Range End", "2026-06-30"),
+            ("After Range", "2026-07-01"),
+        ] {
+            create_bookkeeping_transaction_inner(
+                &db,
+                manual_input(merchant, 1_000, spent_at, "uncategorized"),
+            )
+            .await
+            .expect("seed row");
+        }
+
+        let rows = list_bookkeeping_transactions_ordered_inner(
+            &db,
+            None,
+            None,
+            None,
+            Some("2026-06-01"),
+            Some("2026-06-30"),
+        )
+        .await
+        .expect("ranged rows");
+
+        let merchants: Vec<&str> = rows.iter().map(|r| r.merchant.as_str()).collect();
+        assert!(
+            merchants.contains(&"Range Start"),
+            "from boundary inclusive"
+        );
+        assert!(merchants.contains(&"Range End"), "to boundary inclusive");
+        assert!(!merchants.contains(&"Before Range"));
+        assert!(!merchants.contains(&"After Range"));
+
+        // from-only / to-only도 각각 독립으로 적용된다.
+        let from_only = list_bookkeeping_transactions_ordered_inner(
+            &db,
+            None,
+            None,
+            None,
+            Some("2026-07-01"),
+            None,
+        )
+        .await
+        .expect("from-only rows");
+        assert!(from_only
+            .iter()
+            .all(|r| r.spent_at.as_str() >= "2026-07-01"));
+        let to_only = list_bookkeeping_transactions_ordered_inner(
+            &db,
+            None,
+            None,
+            None,
+            None,
+            Some("2026-05-31"),
+        )
+        .await
+        .expect("to-only rows");
+        assert!(to_only.iter().all(|r| r.spent_at.as_str() <= "2026-05-31"));
+    }
+
+    #[tokio::test]
+    async fn list_transactions_rejects_malformed_date_range() {
+        let db = pool().await;
+        let bad_from = list_bookkeeping_transactions_ordered_inner(
+            &db,
+            None,
+            None,
+            None,
+            Some("2026-6-1"),
+            None,
+        )
+        .await;
+        assert!(bad_from.is_err(), "malformed from_date must be rejected");
+        let bad_to = list_bookkeeping_transactions_ordered_inner(
+            &db,
+            None,
+            None,
+            None,
+            None,
+            Some("2026/06/30"),
+        )
+        .await;
+        assert!(bad_to.is_err(), "malformed to_date must be rejected");
     }
 
     #[tokio::test]

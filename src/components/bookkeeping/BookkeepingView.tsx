@@ -138,12 +138,21 @@ export function BookkeepingView() {
       : ALL_PROJECTS;
   const activeProjectId = selectedProjectId === ALL_PROJECTS ? null : selectedProjectId;
   const gmailLabels = useBookkeepingGmailLabels(activeProjectId);
+  // 검토 큐는 의도적으로 월 스코프 없음 — backlog 의미론(밀린 검토 건이 월 이동으로 사라지면 안 됨).
   const reviewTransactions = useBookkeepingTransactions(
     "needs_review",
     activeProjectId,
     reviewOrderToQueryParam(reviewOrder),
   );
-  const approvedTransactions = useBookkeepingTransactions("approved", activeProjectId);
+  // 확정 원장은 헤더 월 스테퍼에 스코프된다(요약/예산과 동일 범위).
+  const { fromDate: monthFromDate, toDate: monthToDate } = monthRange(month);
+  const approvedTransactions = useBookkeepingTransactions(
+    "approved",
+    activeProjectId,
+    null,
+    monthFromDate,
+    monthToDate,
+  );
   const trashTransactions = useBookkeepingTrash(activeProjectId);
   const summary = useBookkeepingMonthlySummary(month, activeProjectId);
   const budgetStatus = useBookkeepingBudgetStatus(month, activeProjectId);

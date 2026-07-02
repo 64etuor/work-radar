@@ -358,6 +358,9 @@ pub struct ImportBookkeepingMmbakSummary {
     pub flagged_deleted_count: u32,
     /// 임포트당 중복-프로브 상한 초과로 프로브를 건너뛴 신규 행 수(행은 정상 임포트됨).
     pub dup_probe_skipped_count: u32,
+    /// 사람 손이 닿지 않은(오버라이드 없음) 미분류 moneymanager 행 중 taxonomy 동기화 후
+    /// 재해석으로 category_code가 채워진 수(힌트 갱신 — review_status 불변).
+    pub backfilled_category_count: u32,
     /// 이번 임포트 후 저장된 UTIME 커서(epoch ms 문자열). 없으면 진전 없음.
     pub cursor_after: Option<String>,
 }

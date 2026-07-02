@@ -35,10 +35,13 @@ export function useBookkeepingTransactions(
   status: BookkeepingReviewStatus | null = null,
   projectId: string | null = null,
   orderBy: string | null = null,
+  fromDate: string | null = null,
+  toDate: string | null = null,
 ) {
   return useQuery({
-    queryKey: ["bookkeeping", "transactions", status, projectId, orderBy],
-    queryFn: () => unwrap(commands.listBookkeepingTransactions(status, projectId, orderBy)),
+    queryKey: ["bookkeeping", "transactions", status, projectId, orderBy, fromDate, toDate],
+    queryFn: () =>
+      unwrap(commands.listBookkeepingTransactions(status, projectId, orderBy, fromDate, toDate)),
   });
 }
 

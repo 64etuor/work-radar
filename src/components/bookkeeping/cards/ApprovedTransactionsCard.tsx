@@ -32,7 +32,8 @@ export function ApprovedTransactionsCard({
           확정 거래
         </CardTitle>
         <CardDescription>
-          최근 원장 거래입니다. 행을 클릭하면 전체 필드를 수정하고, 분류는 바로 바꿀 수 있습니다.
+          선택한 월의 원장 거래입니다. 행을 클릭하면 전체 필드를 수정하고, 분류는 바로 바꿀 수
+          있습니다.
         </CardDescription>
       </CardHeader>
       <CardContent>

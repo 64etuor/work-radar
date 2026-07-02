@@ -55,9 +55,26 @@ describe("formatMmbakImportSummary", () => {
         failedCount: 0,
         flaggedDeletedCount: 0,
         dupProbeSkippedCount: 0,
+        backfilledCategoryCount: 0,
         cursorAfter: "200",
       }),
     ).toBe("백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패");
+  });
+
+  it("appends the category backfill count only when non-zero", () => {
+    expect(
+      formatMmbakImportSummary({
+        scannedCount: 12,
+        importedCount: 3,
+        duplicateCount: 8,
+        skippedCount: 1,
+        failedCount: 0,
+        flaggedDeletedCount: 0,
+        dupProbeSkippedCount: 0,
+        backfilledCategoryCount: 2,
+        cursorAfter: "200",
+      }),
+    ).toBe("백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패, 2건 분류 보완");
   });
 });
 
