@@ -1,0 +1,45 @@
+src-tauri/src/calendar/sync.rs
+  s_c2b4d15096d73b::t_0fce6daf6fe7a1 2233-2234,2236-2239
+  s_c2b4d15096d73b::t_7e9d79d923614d 2223-2232,2240-2260,2262-2345,2347-2361
+  s_c2b4d15096d73b::t_c93b26c9d9cb79 2235
+  s_c2b4d15096d73b::t_b734468b4ecce5 2261
+  s_c2b4d15096d73b::t_e417f32551048a 2346
+src-tauri/src/commands/routines/google_sync.rs
+  s_c2b4d15096d73b::t_2f9fa77bad8f72 1187,1192-1225,1232-1252,1255-1257,1260-1263,1265-1292
+  s_c2b4d15096d73b::t_1fd5bbf36b12a9 750
+  s_c2b4d15096d73b::t_cf3cbe70a74aec 634-637
+  s_c2b4d15096d73b::t_603460dfbe20da 3837-3864,3866-3900
+  s_c2b4d15096d73b::t_7affe85459aa8e 148-150
+  s_c2b4d15096d73b::t_1e18c1447849fb 3826-3828
+  s_c2b4d15096d73b::t_a3f47b6eb60d0c 3736-3825,3829-3836,3901-3927,3929-3996,3998-4036,4038-4058
+  s_c2b4d15096d73b::t_d93b465aba08ff 551-554
+  s_c2b4d15096d73b::t_77ea0bc59e8ab3 1253-1254,1258-1259
+  s_c2b4d15096d73b::t_ae06bcc790531e 708
+  s_c2b4d15096d73b::t_6aa2827ecb946d 3338
+  s_c2b4d15096d73b::t_4a2a15c0e14d89 25,32-34
+  s_c2b4d15096d73b::t_ad4fa4d169cd3e 1160-1163,1167-1168
+  s_c2b4d15096d73b::t_f9b3cc2e15b795 3393-3395
+  s_c2b4d15096d73b::t_3b63659dcc3ca2 598-601
+  s_c2b4d15096d73b::t_a73ce80ab2a354 3865
+  s_c2b4d15096d73b::t_dfab92093a112e 3928
+  s_c2b4d15096d73b::t_e98f6998e0b5c9 3997
+  s_c2b4d15096d73b::t_60c6aaef4b1c50 4037
+docs/plans/2026-07-01-calendar-sync-unification-plan.md
+  s_c2b4d15096d73b::t_9148f0eb09fd11 132-142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "7d4ca3488bc8ddcb1c0eab93608972ae1acc5878",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
