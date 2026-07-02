@@ -158,6 +158,24 @@ round-2 ACCEPT. today-ops exdate는 P4b에서 이미 큐화. 인라인 패리티
 
 ### P6 (follow-up) — 큐 행 TTL GC, staged 플래그 스키마화 등 잔여 smell
 
+**P6 완료(2026-07-02)**:
+
+- **TTL GC 구현**: `gc_terminal_writes`(pending_store) — terminal(attempts>=3) 행을 마지막 실패
+  (`next_attempt_at`, record_failure/record_terminal_failure가 갱신)로부터 7일
+  (`PENDING_TERMINAL_TTL_MS`, timing.rs) 경과 시 삭제. flush_once가 due 조기-return **앞**에서
+  매 tick 실행(terminal-only 큐도 청소; 개수만 로그, GC 실패는 flush를 막지 않음). 활성 행은
+  나이 무관 보존. TDD(RED=E0425×4 → GREEN 3테스트).
+- **staged 스키마화 기각**(결정: docs/decisions.md 2026-07-02): 소비자 5곳 전부 우리 serde_json
+  payload에 합의, 오염 시나리오는 생산자 없음, 수정은 cross-stack churn(마이그+Rust4+bindings+FE)
+  — 가치 < 비용. 재평가 트리거 = payload 외부 생산자 등장 시.
+
+## 트랙 최종 상태 (2026-07-02)
+
+P1→P6 완주. 루틴 마스터의 enable/disable/move/split/patch/exdate 전부 단일 지연 큐로 —
+google_sync.rs 프로덕션 provider 호출 205→1(`delete_master`=의도적 동기 UX). 매 슬라이스
+executor(TDD)→게이트→codex critic ACCEPT. 남은 것: 라이브 tauri 스모크(사용자), 이월 항목
+(stage_calendar_write_inner 트랜잭션화=표시-수준 tear, 캘린더 다중-프로젝트 토큰 모호성=pre-existing).
+
 ## 검증 (정본: docs/reference/commands.md)
 
 - Rust: `cargo test` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check`

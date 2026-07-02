@@ -20,8 +20,8 @@ use tokio::sync::Notify;
 use tokio::time::{interval, Duration, MissedTickBehavior};
 
 use crate::calendar::pending_store::{
-    delete_write, fetch_due_writes, is_terminal_attempt, mark_created_event_id, record_failure,
-    record_terminal_failure,
+    delete_write, fetch_due_writes, gc_terminal_writes, is_terminal_attempt, mark_created_event_id,
+    record_failure, record_terminal_failure,
 };
 use crate::calendar::timing::SYNC_WORKER_TICK_MS;
 use crate::calendar::{
@@ -80,6 +80,21 @@ impl SyncEngine {
     }
 
     async fn flush_once(&self) -> sqlx::Result<()> {
+        // P6 GC — terminal 행 TTL 청소. due 조기-return **앞**에 둬야 terminal-only 큐도 청소된다.
+        // 실패는 flush를 막지 않는다(다음 tick 재시도); 개수만 로그(본문/토큰 미노출 §5.5).
+        match gc_terminal_writes(&self.pool, chrono::Utc::now()).await {
+            Ok(0) => {}
+            Ok(n) => {
+                tracing::info!(
+                    code = "calendar.sync.gc",
+                    swept = n,
+                    "terminal pending writes GC"
+                )
+            }
+            Err(e) => {
+                tracing::warn!(code = "calendar.sync.gc_failed", error = %e, "terminal GC failed")
+            }
+        }
         let due = fetch_due_writes(&self.pool).await?;
         if due.is_empty() {
             return Ok(());

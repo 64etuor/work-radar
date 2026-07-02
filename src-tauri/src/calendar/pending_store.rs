@@ -8,6 +8,8 @@
 use chrono::{DateTime, Duration, Utc};
 use sqlx::{Sqlite, SqlitePool};
 
+use super::timing::PENDING_TERMINAL_TTL_MS;
+
 /// SQLite `datetime('now')`와 lexicographically 비교 가능한 UTC 문자열(`YYYY-MM-DD HH:MM:SS`).
 /// chrono의 RFC3339(`...T...+00:00`)는 SQLite 형식과 비교가 안 맞아 due 판정이 실패한다.
 pub(crate) fn format_sqlite_datetime(dt: DateTime<Utc>) -> String {
@@ -110,6 +112,21 @@ pub async fn record_terminal_failure(pool: &SqlitePool, id: i32, err: &str) -> s
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// P6 GC — terminal(attempts>=3, `is_terminal_attempt`) 행을 마지막 실패로부터
+/// `PENDING_TERMINAL_TTL_MS`(7일) 경과 후 위생 삭제한다. `next_attempt_at`은 record_failure/
+/// record_terminal_failure가 마지막 실패 시각으로 갱신하는 last-activity 마커. 활성(attempts<3)
+/// 행은 나이와 무관하게 보존 — 워커가 처리할 due 행이다. 반환 = 삭제 행 수(호출자가 개수만 로그).
+pub async fn gc_terminal_writes(pool: &SqlitePool, now: DateTime<Utc>) -> sqlx::Result<u64> {
+    let cutoff = format_sqlite_datetime(now - Duration::milliseconds(PENDING_TERMINAL_TTL_MS));
+    let res = sqlx::query(
+        "DELETE FROM pending_calendar_writes WHERE attempts >= 3 AND next_attempt_at < ?",
+    )
+    .bind(cutoff)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
 }
 
 /// 사람이 명시적으로 재시도한 row를 즉시 due 상태로 되돌린다.
@@ -266,6 +283,71 @@ mod tests {
         assert!(is_terminal_attempt(3));
         assert!(!is_terminal_attempt(2));
         assert!(is_terminal_attempt(4));
+    }
+
+    /// P6 GC: 마지막 실패(next_attempt_at)로부터 TTL이 지난 terminal 행은 청소된다.
+    #[tokio::test]
+    async fn gc_sweeps_terminal_rows_past_ttl() {
+        let p = pool().await;
+        let id = upsert_write(&p, "patch", "signal", "s1", "cal1", None, "{}", 0)
+            .await
+            .unwrap();
+        record_terminal_failure(&p, id, "boom").await.unwrap();
+        // 마지막 실패를 TTL+1일 과거로 backdate.
+        let old = format_sqlite_datetime(
+            Utc::now() - Duration::milliseconds(PENDING_TERMINAL_TTL_MS) - Duration::days(1),
+        );
+        sqlx::query("UPDATE pending_calendar_writes SET next_attempt_at = ? WHERE id = ?")
+            .bind(&old)
+            .bind(id)
+            .execute(&p)
+            .await
+            .unwrap();
+
+        let swept = gc_terminal_writes(&p, Utc::now()).await.unwrap();
+        assert_eq!(swept, 1);
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&p)
+            .await
+            .unwrap();
+        assert_eq!(n, 0);
+    }
+
+    /// P6 GC: terminal이어도 TTL 이내면 보존 — 사용자가 원인 고친 뒤 retry/cancel 할 시간.
+    #[tokio::test]
+    async fn gc_keeps_recent_terminal_rows() {
+        let p = pool().await;
+        let id = upsert_write(&p, "patch", "signal", "s1", "cal1", None, "{}", 0)
+            .await
+            .unwrap();
+        record_terminal_failure(&p, id, "boom").await.unwrap(); // next_attempt_at = now
+
+        let swept = gc_terminal_writes(&p, Utc::now()).await.unwrap();
+        assert_eq!(swept, 0);
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&p)
+            .await
+            .unwrap();
+        assert_eq!(n, 1, "TTL 이내 terminal 행은 보존");
+    }
+
+    /// P6 GC: 활성 행(attempts<3)은 아무리 오래돼도 GC 대상이 아니다 — 워커가 처리할 due 행.
+    #[tokio::test]
+    async fn gc_keeps_active_rows_regardless_of_age() {
+        let p = pool().await;
+        let id = upsert_write(&p, "patch", "signal", "s1", "cal1", None, "{}", 0)
+            .await
+            .unwrap();
+        let ancient = format_sqlite_datetime(Utc::now() - Duration::days(30));
+        sqlx::query("UPDATE pending_calendar_writes SET next_attempt_at = ? WHERE id = ?")
+            .bind(&ancient)
+            .bind(id)
+            .execute(&p)
+            .await
+            .unwrap();
+
+        let swept = gc_terminal_writes(&p, Utc::now()).await.unwrap();
+        assert_eq!(swept, 0, "활성(attempts<3) 행은 나이와 무관하게 보존");
     }
 
     /// Task 4: staged=true payload는 워커가 skip(cross-cal Acceptance 게이트).
