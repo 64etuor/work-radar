@@ -2220,4 +2220,143 @@ mod tests {
         assert_eq!(evt.as_deref(), Some("evt_new_master"));
         assert_eq!(cal.as_deref(), Some("calA"));
     }
+
+    // ── P4c 통합: move 2-행 enqueue(delete@old_cal + create@new_cal) 순서 안전 ─────────
+
+    /// 동기화 루틴 + 프로젝트를 seed하고 move_routine_google_sync_inner로 2-행(delete+create)을
+    /// enqueue한 뒤, due 행을 지정된 순서로 execute_with_access에 통과시킨다. 반환: (delete_row, create_row)
+    /// 실행 후 최종 미러가 (cal_new, evt_new)로, 옛 이벤트가 정확히 1회 삭제·새 이벤트 1회 생성되는지
+    /// 두 순서 모두 검증하기 위한 공용 셋업.
+    async fn seed_and_enqueue_move(pool: &SqlitePool) {
+        use tokio::sync::Notify;
+        // 새 프로젝트(kind 검증용).
+        sqlx::query(
+            "INSERT INTO projects (id, name, kind, credential_ref) \
+             VALUES ('projA','A','personal','test_creds'),('projB','B','personal','test_creds')",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        // 옛 캘린더로 동기화된 루틴.
+        sqlx::query(
+            "INSERT INTO routines \
+             (id, title, freq, time_of_day, duration_min, kind, created_at, project_id, \
+              google_event_id, google_calendar_id) \
+             VALUES ('r1','아침 운동','daily','07:00',30,'personal','2026-05-29 00:00:00','projA', \
+                     'evt_old','cal_old')",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let notify = std::sync::Arc::new(Notify::new());
+        crate::commands::routines::move_routine_google_sync_inner(
+            pool, &notify, "r1", "projB", "cal_new",
+        )
+        .await
+        .unwrap();
+
+        // 낙관적 미러 = (projB, cal_new, evt NULL).
+        let (cal, evt): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_calendar_id, google_event_id FROM routines WHERE id='r1'",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert_eq!(cal.as_deref(), Some("cal_new"));
+        assert!(evt.is_none());
+
+        // 디바운스를 지나 due로.
+        sqlx::query(
+            "UPDATE pending_calendar_writes SET next_attempt_at = datetime('now','-1 second')",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    /// (a) delete-first: 옛 이벤트가 cal_old에서 삭제되고 조건부 unlink는 0행(미러 evt=NULL≠evt_old)이라
+    /// 미러 (cal_new, NULL) 유지 → 이후 create가 cal_new에 생성·CAS relink → 최종 (cal_new, evt_new).
+    #[tokio::test]
+    async fn move_two_row_delete_first_converges() {
+        let pool = fresh_pool().await;
+        seed_and_enqueue_move(&pool).await;
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        assert_eq!(due.len(), 2, "delete + create 2행");
+        let delete_row = due.iter().find(|w| w.kind == "delete").unwrap().clone();
+        let create_row = due.iter().find(|w| w.kind == "create").unwrap().clone();
+
+        let provider = RecordingProvider {
+            new_event_id: "evt_new".into(),
+            ..Default::default()
+        };
+        // delete 먼저.
+        execute_with_access(&pool, &provider, "fake", &delete_row)
+            .await
+            .unwrap();
+        execute_with_access(&pool, &provider, "fake", &create_row)
+            .await
+            .unwrap();
+
+        assert_convergent(&pool, &provider).await;
+    }
+
+    /// (b) create-first: cal_new에 생성·CAS relink → 미러 (cal_new, evt_new). 이후 delete는 옛 이벤트를
+    /// cal_old에서 삭제하지만 조건부 unlink(evt_old≠evt_new)는 0행 → 미러 (cal_new, evt_new) 유지.
+    #[tokio::test]
+    async fn move_two_row_create_first_converges() {
+        let pool = fresh_pool().await;
+        seed_and_enqueue_move(&pool).await;
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        assert_eq!(due.len(), 2, "delete + create 2행");
+        let delete_row = due.iter().find(|w| w.kind == "delete").unwrap().clone();
+        let create_row = due.iter().find(|w| w.kind == "create").unwrap().clone();
+
+        let provider = RecordingProvider {
+            new_event_id: "evt_new".into(),
+            ..Default::default()
+        };
+        // create 먼저.
+        execute_with_access(&pool, &provider, "fake", &create_row)
+            .await
+            .unwrap();
+        execute_with_access(&pool, &provider, "fake", &delete_row)
+            .await
+            .unwrap();
+
+        assert_convergent(&pool, &provider).await;
+    }
+
+    /// 두 순서 공용 수렴 단언: 옛 이벤트(cal_old/evt_old) 정확히 1회 삭제 + 새 이벤트 1회 생성 +
+    /// 최종 미러 (cal_new, evt_new), NULL 아님.
+    async fn assert_convergent(pool: &SqlitePool, provider: &RecordingProvider) {
+        assert_eq!(
+            provider.deleted.lock().unwrap().clone(),
+            vec![("cal_old".to_string(), "evt_old".to_string())],
+            "옛 이벤트가 정확히 1회 삭제"
+        );
+        let created = provider.created.lock().unwrap().clone();
+        assert_eq!(created.len(), 1, "새 이벤트 정확히 1회 생성");
+        assert_eq!(created[0].0, "cal_new", "새 이벤트는 cal_new에");
+        let (cal, evt): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_calendar_id, google_event_id FROM routines WHERE id='r1'",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            cal.as_deref(),
+            Some("cal_new"),
+            "최종 미러 캘린더 = cal_new"
+        );
+        assert_eq!(
+            evt.as_deref(),
+            Some("evt_new"),
+            "최종 미러 이벤트 = evt_new(never NULL)"
+        );
+    }
 }

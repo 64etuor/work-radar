@@ -129,6 +129,17 @@ payload refresh. 미동기화 → no-op. 토큰/provider fetch 0. 7. 호출부(c
 
 unlink가 전제) + unschedule/restore-today
 
+**P4c 완료(2026-07-02)**: move → 2-행 enqueue(fail-fast 검증 → delete@old → 낙관적 미러(new_cal,
+NULL=pending-enable 동형) → create@new). 양방향 flush 순서·disable 개입 interleaving 전부 수렴
+(critic 검증). INVARIANT #2 = 프런트 `window.confirm`(RoutineSyncButton) 확인 → 직접 enqueue 승인.
+⚠️critic round-1 BLOCKER: routine-키 UNIQUE가 **막힌 옛 delete 행을 덮어** 옛 마스터 orphan →
+**마스터 delete를 event-키(`target_kind='event'`, target_id=`cal|evt`)로 전환**(disable/move 공통,
+마스터별 delete 공존; 미러 정리는 IPC가 낙관적으로 수행하므로 워커 unlink 불요=event no-op).
+round-2 ACCEPT. today-ops exdate는 P4b에서 이미 큐화. 인라인 패리티 헬퍼 전부 `#[cfg(test)]` —
+**프로덕션 도달 가능 provider 호출 = `delete_master_with_provider` 1개**(루틴 삭제=파괴적 동기
+확인 UX, 의도적 인라인). 알려진 pre-existing 한계(critic MAJOR, 비차단): 같은 물리 캘린더를 여러
+프로젝트가 등록하면 calendar→project 토큰 해석이 비결정적 — 큐 이전부터 있던 모호성, 별도 트랙.
+
 ### P5 (follow-up) — 로컬 미러 원자화(트랜잭션) + overlay가 routine_master pending 반영
 
 ### P6 (follow-up) — 큐 행 TTL GC, staged 플래그 스키마화 등 잔여 smell
