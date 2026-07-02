@@ -1,0 +1,51 @@
+src-tauri/src/calendar/sync.rs
+  s_c2b4d15096d73b::t_c65da8b4d7b911 257-270,272-273,279-282
+  s_c2b4d15096d73b::t_ce2eab1c69755d 256,277-278,283
+  s_c2b4d15096d73b::t_5eebeddde2507c 1314-1321
+  s_c2b4d15096d73b::t_818c2fec48a4b4 1363-1416
+  s_c2b4d15096d73b::t_fb6871c0a099c7 274-276
+docs/plans/2026-07-01-calendar-sync-unification-plan.md
+  s_c2b4d15096d73b::t_73d430c0b79f20 86-98
+src-tauri/src/commands/routines/google_sync.rs
+  s_c2b4d15096d73b::t_1c0ef557097158 2924-2956,2964-2997
+  s_c2b4d15096d73b::t_228950b3ce2471 884-887
+  s_c2b4d15096d73b::t_a4e98d09a597ea 16-18,20,24-25
+  s_c2b4d15096d73b::t_07dd9ab504c095 408-444,450-452
+  s_c2b4d15096d73b::t_3e0d518fda46d8 445-449
+  s_c2b4d15096d73b::t_8da2ee5662846a 869,874,876,888-932,937,940-942,946-950,991-1009
+  s_c2b4d15096d73b::t_686db26370b7e4 3179-3208,3210-3232
+  s_c2b4d15096d73b::t_a0c420044a3761 2892-2896,3146-3150
+  s_c2b4d15096d73b::t_cf0dfe28f8ab6b 3033-3066,3068-3077,3079-3096
+  s_c2b4d15096d73b::t_6587ade9e6b3dd 951-958,960-971,980,982-983,985-990
+  s_c2b4d15096d73b::t_34a494861fb75b 943-945
+  s_c2b4d15096d73b::t_4d7c2e2bcf58ed 2957-2963
+  s_c2b4d15096d73b::t_aefccdbebe6734 826-831,833-855
+  s_c2b4d15096d73b::t_3e4d63d8d5a239 972-979,981
+  s_c2b4d15096d73b::t_16def947955aee 1177-1178
+  s_c2b4d15096d73b::t_c430881c5e8375 2857-2891,2897-2923,2998-3032,3097-3145,3151-3178
+  s_38a99c1a8b32f4::t_5a71a19d31e115 3067,3078,3209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "373d131a86a5805d8ab3deac03eacde4b28fea55",
+  "prompts": {},
+  "sessions": {
+    "s_38a99c1a8b32f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ecfb681c-727d-42bb-bd9b-8d5a73e3de3e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
