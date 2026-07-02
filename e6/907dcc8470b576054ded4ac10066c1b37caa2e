@@ -1,0 +1,50 @@
+src-tauri/src/calendar/sync.rs
+  s_c2b4d15096d73b::t_333b8bcd310003 2201-2203
+  s_c2b4d15096d73b::t_61f73f1eee9dd6 308-310
+  s_c2b4d15096d73b::t_e18d26458db9ed 367-374,378-379,381,384-387
+  s_c2b4d15096d73b::t_5e72396d761da2 400-411
+  s_c2b4d15096d73b::t_13fab8b3ee1c3a 300,302-307,311-329,388
+  s_c2b4d15096d73b::t_2d2c2b8eb90c87 380,451,2177-2182,2204-2207
+  s_c2b4d15096d73b::t_ccd4137c734598 1118-1121
+  s_c2b4d15096d73b::t_7d264ae475a0ad 1159-1169
+  s_c2b4d15096d73b::t_9abafb944fb9a1 1728-1788
+  s_c2b4d15096d73b::t_5014ef98668c80 1904-2161,2167-2175,2183-2200,2208-2222
+  s_c2b4d15096d73b::t_908c69824687e5 581-584,588,591
+  s_c2b4d15096d73b::t_eb6170910a2dff 437-450,452-453
+  s_c2b4d15096d73b::t_61fe650b124679 2162-2166
+  s_c2b4d15096d73b::t_f0c73f400cb9de 2176
+docs/plans/2026-07-01-calendar-sync-unification-plan.md
+  s_c2b4d15096d73b::t_45f9e27d7e59a8 95-130
+src-tauri/src/commands/routines/crud.rs
+  s_c2b4d15096d73b::t_bb366a9bb40a0a 201-205
+  s_c2b4d15096d73b::t_6314f267124da5 225
+src-tauri/src/commands/routines/google_sync.rs
+  s_c2b4d15096d73b::t_2d2c2b8eb90c87 3447-3450,3454-3457,3523-3527
+  s_c2b4d15096d73b::t_f245742e7e7713 3463-3466
+  s_c2b4d15096d73b::t_a6eefacf233f87 1248-1250
+  s_c2b4d15096d73b::t_03d73737d1f7e5 85-88
+  s_c2b4d15096d73b::t_65737c10ea9fc8 1286,1294
+  s_c2b4d15096d73b::t_191355054a5768 3381-3446,3451-3453,3458-3462,3467-3522,3528-3633
+  s_c2b4d15096d73b::t_df56714274ddb6 460
+  s_c2b4d15096d73b::t_59cf6498aa165b 419-425
+  s_c2b4d15096d73b::t_e27ab7a6b509c2 790-852,856,862,865-917,921-923,927,931-952,955-962
+  s_c2b4d15096d73b::t_246460f929481e 730-732
+  s_c2b4d15096d73b::t_91af2934652342 687-690
+  s_c2b4d15096d73b::t_21ec8fef060a64 1304,1311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "e6907dcc8470b576054ded4ac10066c1b37caa2e",
+  "prompts": {},
+  "sessions": {
+    "s_c2b4d15096d73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "acd216f2-1b58-44fe-a961-6820bbc0746e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
