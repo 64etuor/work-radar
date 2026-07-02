@@ -1,0 +1,71 @@
+src/lib/query/bookkeeping.ts
+  s_f013490a1b0efb::t_e15c6ef03460cc 288-311
+  s_f013490a1b0efb::t_26987271741dd7 19
+  s_f013490a1b0efb::t_1536c1ef306ef2 312
+src-tauri/src/scheduler.rs
+  s_f013490a1b0efb::t_197d8233553402 82
+  s_f013490a1b0efb::t_c192aacd6ede64 67-68,75-81
+src/components/bookkeeping/mmbakImport.test.ts
+  s_f013490a1b0efb::t_873855bad93468 57
+  s_f013490a1b0efb::t_d7bc98b4f03ffc 1-56,58-90
+src/components/bookkeeping/mmbakImport.ts
+  s_f013490a1b0efb::t_286ad51832c49d 1-32
+src-tauri/src/commands/bookkeeping/mmbak_options.rs
+  s_f013490a1b0efb::t_b4529ce1037f39 141-153,545-548,584-588,627-630,709-712,740-742
+  s_f013490a1b0efb::t_e3cffa3f4b4696 505-520
+  s_f013490a1b0efb::t_a0f21ae84fed8d 595-604,606,616,618,620-622,631-633,635-636,639,642-651,659-664,666-683,697,699,701-703,725,728,734-735,739,743,746
+  s_f013490a1b0efb::t_b3adcffd7abdb3 241-266,268-279,281,288,290-293,301-311
+  s_f013490a1b0efb::t_fdd94a9172f30d 583,589-590
+  s_f013490a1b0efb::t_a17d5cd934f203 652-658
+  s_f013490a1b0efb::t_efd79b342e5bb2 180-181,190,205-210
+  s_f013490a1b0efb::t_064464067f6cec 10-11,13,15-16
+  s_f013490a1b0efb::t_837c825f3a3e52 1-9,12,14,17-140,154-179,182-189,191-204,211-240,267,280,282-287,289,294-300,312-504,521-544,549-582,591-594,605,607-615,617,619,623-626,634,637-638,640-641,665,684-696,698,700,704-708,713-724,726-727,729-733,736-738,744-745,747-748
+src/bindings.ts
+  s_f013490a1b0efb::t_aab9c2e50476e2 62-74,1127-1138,1230,2031-2051,2607-2611
+  s_f013490a1b0efb::t_16f4f830cee732 2612
+src-tauri/migrations/0065_bookkeeping_mmbak_options.sql
+  s_f013490a1b0efb::t_d4bc5adfadf7fb 1-20
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_f013490a1b0efb::t_fe50ce4ec72562 14
+  s_f013490a1b0efb::t_37016ac2970bdc 1187-1293
+  s_f013490a1b0efb::t_dc54b34b215b79 28
+  s_f013490a1b0efb::t_672feb0fcedb25 13
+  s_f013490a1b0efb::t_ca3740186bcccc 29
+  s_f013490a1b0efb::t_1846c880efdf19 1294
+src/components/bookkeeping/cards/MoneyManagerImportCard.tsx
+  s_f013490a1b0efb::t_8dca908890419a 1-106
+src/components/bookkeeping/bookkeepingConstants.ts
+  s_f013490a1b0efb::t_5839e456b4a916 37-38
+src-tauri/src/lib.rs
+  s_f013490a1b0efb::t_de36f9bf9ec91f 44
+  s_f013490a1b0efb::t_432d0d1900d218 111-114
+  s_f013490a1b0efb::t_2fa032684e8935 43
+  s_f013490a1b0efb::t_8c7a9ce2648ecd 109-110
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f013490a1b0efb::t_abef7fda966de6 115-116
+  s_f013490a1b0efb::t_5e5666940ced3f 93
+  s_f013490a1b0efb::t_ef8b74764a95cd 18
+  s_f013490a1b0efb::t_276126a548e286 34
+  s_f013490a1b0efb::t_cbac90604244a8 40
+  s_f013490a1b0efb::t_61d0562fa53b43 160-162
+  s_f013490a1b0efb::t_a107c7c251efe1 701-710
+  s_f013490a1b0efb::t_8e3640a8ca2c18 301-337
+  s_f013490a1b0efb::t_b3ec08b4409b58 84
+  s_f013490a1b0efb::t_9abba57b72dfca 711-712
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "1193809e8f3210d97b4acd64b76b46b104984dc6",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
