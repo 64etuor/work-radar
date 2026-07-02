@@ -12,10 +12,14 @@ import { CATEGORY_OPTIONS } from "../bookkeepingConstants";
 export function CategorySelect({
   id,
   value,
+  disabled,
+  ariaLabel,
   onValueChange,
 }: {
   id: string;
   value: string;
+  disabled?: boolean;
+  ariaLabel?: string;
   onValueChange: (value: string) => void;
 }) {
   const taxonomy = useBookkeepingTaxonomy();
@@ -32,8 +36,8 @@ export function CategorySelect({
     ? merged
     : [...merged, { value, label: value }];
   return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger id={id}>
+    <Select value={value} disabled={disabled} onValueChange={onValueChange}>
+      <SelectTrigger id={id} aria-label={ariaLabel}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

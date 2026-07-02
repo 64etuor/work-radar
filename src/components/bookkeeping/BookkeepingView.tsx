@@ -30,6 +30,7 @@ import {
   useCreateBookkeepingTransaction,
   useDeleteBookkeepingTransaction,
   useEnsureBookkeepingRecurringOccurrences,
+  useOverrideBookkeepingCategory,
   usePostBookkeepingRecurringOccurrence,
   useProjects,
   useRestoreBookkeepingTransaction,
@@ -87,6 +88,7 @@ import { TrashTransactionsCard } from "./cards/TrashTransactionsCard";
 import { normalizeGmailQuery } from "./gmailSync";
 import { signedMinorLabel } from "./reconciliation";
 import { reviewOrderToQueryParam, type ReviewQueueOrder } from "./reviewSort";
+import { buildInlineCategoryOverride } from "./rowActivation";
 
 export function BookkeepingView() {
   const [scope, dispatchScope] = useReducer(
@@ -156,6 +158,7 @@ export function BookkeepingView() {
   const reconcileAccount = useBookkeepingReconcileAccount();
   const writeExport = useWriteBookkeepingExport();
   const updateTx = useUpdateBookkeepingTransaction();
+  const overrideCategory = useOverrideBookkeepingCategory();
   const deleteTx = useDeleteBookkeepingTransaction();
   const restoreTx = useRestoreBookkeepingTransaction();
   const pushSuccess = useToastStore((s) => s.pushSuccess);
@@ -483,6 +486,16 @@ export function BookkeepingView() {
     );
   };
 
+  // 확정 행 인라인 분류 변경 — updateTx가 아니라 override 커맨드로 라우팅해 audit을 남긴다.
+  const overrideTransactionCategory = (tx: BookkeepingTransaction, categoryCode: string) => {
+    const input = buildInlineCategoryOverride(tx, categoryCode);
+    if (!input) return;
+    overrideCategory.mutate(input, {
+      onSuccess: () => pushSuccess("분류를 변경했습니다"),
+      onError: (error) => pushMutationError("bookkeeping.category", error),
+    });
+  };
+
   const deleteTransaction = (tx: BookkeepingTransaction) => {
     deleteTx.mutate(tx.id, {
       onSuccess: () => pushSuccess("휴지통으로 이동했습니다"),
@@ -586,9 +599,10 @@ export function BookkeepingView() {
 
             <ApprovedTransactionsCard
               rows={approvedTransactions.data ?? []}
-              disabled={updateTx.isPending || deleteTx.isPending}
+              disabled={updateTx.isPending || deleteTx.isPending || overrideCategory.isPending}
               onDelete={deleteTransaction}
               onSave={saveTransaction}
+              onCategoryChange={overrideTransactionCategory}
             />
 
             <TrashTransactionsCard

@@ -12,6 +12,7 @@ import {
   type CreateBookkeepingTransactionInput,
   type ExportBookkeepingInput,
   type FindBookkeepingDuplicateCandidatesInput,
+  type OverrideBookkeepingCategoryInput,
   type RecordBookkeepingSyncFailureInput,
   type SetBookkeepingBudgetInput,
   type SetBookkeepingLineItemsInput,
@@ -113,6 +114,16 @@ export function useBulkSetBookkeepingCategory() {
       subcategoryCode: string | null;
       reason: string | null;
     }) => unwrap(commands.bulkSetBookkeepingCategory(ids, categoryCode, subcategoryCode, reason)),
+    onSuccess: invalidate,
+  });
+}
+
+/** 확정 행 인라인 분류 변경 — audit 보존을 위해 override 커맨드 경로를 사용한다. */
+export function useOverrideBookkeepingCategory() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: OverrideBookkeepingCategoryInput) =>
+      unwrap(commands.overrideBookkeepingCategory(input)),
     onSuccess: invalidate,
   });
 }

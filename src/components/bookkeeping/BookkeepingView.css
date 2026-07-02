@@ -386,6 +386,18 @@
   transform: translateY(-1px);
 }
 
+/* 클릭으로 편집이 열리는 읽기 행 — 포인터로 어포던스를 드러낸다.
+   키보드 경로는 행 안의 "편집" 버튼(포커서블)이 담당하므로 행 자체는 포커스 스톱이 아니다. */
+.bk-row-editable {
+  cursor: pointer;
+}
+
+/* 인라인 분류 quick action — 행 액션 클러스터 안에서 고정 폭을 유지한다. */
+.bk-row-quick-category {
+  width: 9rem;
+  flex: 0 0 auto;
+}
+
 .bk-transaction-edit {
   display: block;
 }

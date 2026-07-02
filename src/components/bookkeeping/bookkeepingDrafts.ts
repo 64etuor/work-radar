@@ -131,6 +131,17 @@ export function emptyGmailSyncDraft(): GmailSyncDraft {
   };
 }
 
+/**
+ * 편집 폼과 인라인 분류 quick action이 공유하는 유효 분류 코드.
+ * 레거시 행은 `categoryCode`가 null이고 `category` 문자열만 있다 — 표시/변경/no-op
+ * 판정 모두 이 fallback을 거쳐야 한다(로직 중복 금지).
+ */
+export function effectiveCategoryCode(
+  tx: Pick<BookkeepingTransaction, "categoryCode" | "category">,
+): string {
+  return tx.categoryCode ?? tx.category;
+}
+
 export function editDraftFromTransaction(tx: BookkeepingTransaction): TransactionEditDraft {
   return {
     merchant: tx.merchant,
@@ -139,7 +150,7 @@ export function editDraftFromTransaction(tx: BookkeepingTransaction): Transactio
     spentAt: tx.spentAt,
     spentAtTime: tx.spentAtTime ?? "",
     direction: tx.direction,
-    categoryCode: tx.categoryCode ?? tx.category,
+    categoryCode: effectiveCategoryCode(tx),
     subcategoryCode: tx.subcategoryCode ?? "",
     note: tx.note ?? "",
     description: tx.description ?? "",
