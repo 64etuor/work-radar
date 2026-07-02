@@ -40,6 +40,8 @@ mod logging;
 // pub: integration test(tests/mcp_roundtrip)가 `work_radar_lib::mcp::WrServer`/툴을 호출한다.
 pub mod mcp;
 mod models;
+// MoneyManager(.mmbak) 백업 리더 + 순수 매핑(도메인 모듈 — bookkeeping.rs와 같은 층).
+pub mod moneymanager;
 mod news;
 mod notion;
 mod retry;
@@ -104,6 +106,12 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_bookkeeping_recurring_occurrence_status,
         commands::list_bookkeeping_gmail_labels,
         commands::sync_bookkeeping_gmail_receipts,
+        // MoneyManager(.mmbak) 백업 임포트 — 사용자 발동, existing-wins upsert.
+        commands::import_bookkeeping_mmbak,
+        // MoneyManager 자동 임포트 옵션 + watch-dir 최신 백업 임포트(24h 게이트는 스케줄러).
+        commands::get_bookkeeping_mmbak_options,
+        commands::set_bookkeeping_mmbak_options,
+        commands::import_bookkeeping_mmbak_latest,
         // Bookkeeping taxonomy (Phase B) — seeded category tree + alias rules + override history.
         commands::bookkeeping_list_taxonomy,
         commands::bookkeeping_get_category_rules,

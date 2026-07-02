@@ -16,6 +16,7 @@ import {
   type RecordBookkeepingSyncFailureInput,
   type SetBookkeepingBudgetInput,
   type SetBookkeepingLineItemsInput,
+  type SetBookkeepingMmbakOptionsInput,
   type SyncBookkeepingGmailReceiptsInput,
   type UpdateBookkeepingTransactionInput,
   type WriteBookkeepingExportInput,
@@ -280,6 +281,31 @@ export function useSyncBookkeepingGmailReceipts() {
   return useMutation({
     mutationFn: (input: SyncBookkeepingGmailReceiptsInput) =>
       unwrap(commands.syncBookkeepingGmailReceipts(input)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBookkeepingMmbakOptions() {
+  return useQuery({
+    queryKey: ["bookkeeping", "mmbakOptions"],
+    queryFn: () => unwrap(commands.getBookkeepingMmbakOptions()),
+  });
+}
+
+export function useSetBookkeepingMmbakOptions() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (input: SetBookkeepingMmbakOptionsInput) =>
+      unwrap(commands.setBookkeepingMmbakOptions(input)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportBookkeepingMmbakLatest() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (projectId: string | null) =>
+      unwrap(commands.importBookkeepingMmbakLatest(projectId)),
     onSuccess: invalidate,
   });
 }

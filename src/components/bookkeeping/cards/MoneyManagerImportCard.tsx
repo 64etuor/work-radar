@@ -1,0 +1,106 @@
+import { HardDriveDownload } from "lucide-react";
+
+import type { BookkeepingMmbakOptions, BookkeepingSyncJob } from "@/bindings";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+
+import { Field } from "../../settings/SettingsKit";
+import { FIELD_IDS } from "../bookkeepingConstants";
+import { formatMmbakJobHint, MMBAK_WATCH_DIR_HINT } from "../mmbakImport";
+
+/**
+ * MoneyManager(.mmbak) 백업 임포트 카드 — 감시 폴더 설정 + 자동 가져오기 토글(24h 게이트,
+ * 스케줄러 담당) + 즉시 가져오기. GmailSyncCard와 동일하게 상태는 BookkeepingView가 소유한다.
+ */
+export function MoneyManagerImportCard({
+  options,
+  draftWatchDir,
+  savePending,
+  importPending,
+  lastJob,
+  onDraftChange,
+  onSaveWatchDir,
+  onToggleAutoImport,
+  onImportNow,
+}: {
+  options: BookkeepingMmbakOptions | null;
+  /** null = 아직 편집 안 함(서버 값 표시). */
+  draftWatchDir: string | null;
+  savePending: boolean;
+  importPending: boolean;
+  lastJob: BookkeepingSyncJob | null;
+  onDraftChange: (value: string) => void;
+  onSaveWatchDir: () => void;
+  onToggleAutoImport: (enabled: boolean) => void;
+  onImportNow: () => void;
+}) {
+  const watchDirValue = draftWatchDir ?? options?.watchDir ?? "";
+  const configured = Boolean(options?.watchDir && options.watchDir.trim() !== "");
+
+  return (
+    <Card className="bk-card">
+      <CardHeader>
+        <CardTitle className="bk-card-title">
+          <HardDriveDownload className="size-4" />
+          머니매니저
+        </CardTitle>
+        <CardDescription>
+          백업 폴더의 최신 .mmbak을 읽어 거래를 가져옵니다. 원본 파일은 수정하지 않습니다.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="bk-form">
+          <Field label="백업 폴더" htmlFor={FIELD_IDS.mmbakWatchDir}>
+            <Input
+              id={FIELD_IDS.mmbakWatchDir}
+              value={watchDirValue}
+              onChange={(e) => onDraftChange(e.target.value)}
+              placeholder="/…/내 드라이브/MoneyManager"
+            />
+          </Field>
+          {!configured && (
+            <p className="text-muted-foreground typo-caption-sm">{MMBAK_WATCH_DIR_HINT}</p>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <label
+              className="text-muted-foreground typo-caption-sm"
+              htmlFor={FIELD_IDS.mmbakAutoImport}
+            >
+              자동 가져오기 (24시간마다)
+            </label>
+            <Switch
+              id={FIELD_IDS.mmbakAutoImport}
+              checked={options?.autoImportEnabled ?? false}
+              disabled={savePending || !configured}
+              onCheckedChange={onToggleAutoImport}
+            />
+          </div>
+          <div className="bk-gmail-actions">
+            <Button type="button" disabled={savePending} onClick={onSaveWatchDir}>
+              폴더 저장
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={importPending || !configured}
+              onClick={onImportNow}
+            >
+              <HardDriveDownload className="size-4" />
+              지금 가져오기
+            </Button>
+          </div>
+          {options?.lastAutoImportAt && (
+            <p className="text-muted-foreground typo-caption-sm">
+              마지막 자동 가져오기: {options.lastAutoImportAt}
+            </p>
+          )}
+          {lastJob && (
+            <p className="text-muted-foreground typo-caption-sm">{formatMmbakJobHint(lastJob)}</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

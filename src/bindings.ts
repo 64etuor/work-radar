@@ -59,6 +59,19 @@ export const commands = {
 	setBookkeepingRecurringOccurrenceStatus: (id: string, status: BookkeepingRecurringOccurrenceStatus) => typedError<BookkeepingRecurringOccurrence, AppError>(__TAURI_INVOKE("set_bookkeeping_recurring_occurrence_status", { id, status })),
 	listBookkeepingGmailLabels: (projectId: string) => typedError<BookkeepingGmailLabel[], AppError>(__TAURI_INVOKE("list_bookkeeping_gmail_labels", { projectId })),
 	syncBookkeepingGmailReceipts: (input: SyncBookkeepingGmailReceiptsInput) => typedError<BookkeepingGmailSyncResult, AppError>(__TAURI_INVOKE("sync_bookkeeping_gmail_receipts", { input })),
+	importBookkeepingMmbak: (input: ImportBookkeepingMmbakInput) => typedError<ImportBookkeepingMmbakSummary, AppError>(__TAURI_INVOKE("import_bookkeeping_mmbak", { input })),
+	getBookkeepingMmbakOptions: () => typedError<{
+	/**  .mmbak 백업 감시 폴더(예: Google Drive 동기화 폴더). None=미설정. */
+	watchDir: string | null,
+	/**  자동 임포트 귀속 프로젝트(선택). */
+	projectId: string | null,
+	autoImportEnabled: boolean,
+	/**  마지막 자동 임포트 시각('YYYY-MM-DD HH:MM:SS' UTC). 실패해도 찍힌다(24h 게이트). */
+	lastAutoImportAt: string | null,
+	updatedAt: string,
+} | null, AppError>(__TAURI_INVOKE("get_bookkeeping_mmbak_options")),
+	setBookkeepingMmbakOptions: (input: SetBookkeepingMmbakOptionsInput) => typedError<BookkeepingMmbakOptions, AppError>(__TAURI_INVOKE("set_bookkeeping_mmbak_options", { input })),
+	importBookkeepingMmbakLatest: (projectId: string | null) => typedError<ImportBookkeepingMmbakSummary, AppError>(__TAURI_INVOKE("import_bookkeeping_mmbak_latest", { projectId })),
 	bookkeepingListTaxonomy: () => typedError<BookkeepingCategoryNode[], AppError>(__TAURI_INVOKE("bookkeeping_list_taxonomy")),
 	bookkeepingGetCategoryRules: () => typedError<BookkeepingCategoryRules, AppError>(__TAURI_INVOKE("bookkeeping_get_category_rules")),
 	overrideBookkeepingCategory: (input: OverrideBookkeepingCategoryInput) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("override_bookkeeping_category", { input })),
@@ -1111,6 +1124,18 @@ export type BookkeepingLineItem = {
 	createdAt: string,
 };
 
+/**  MoneyManager(.mmbak) 자동 임포트 옵션 — 단일 row(id=1) 미러. */
+export type BookkeepingMmbakOptions = {
+	/**  .mmbak 백업 감시 폴더(예: Google Drive 동기화 폴더). None=미설정. */
+	watchDir: string | null,
+	/**  자동 임포트 귀속 프로젝트(선택). */
+	projectId: string | null,
+	autoImportEnabled: boolean,
+	/**  마지막 자동 임포트 시각('YYYY-MM-DD HH:MM:SS' UTC). 실패해도 찍힌다(24h 게이트). */
+	lastAutoImportAt: string | null,
+	updatedAt: string,
+};
+
 export type BookkeepingMonthlySummary = {
 	month: string,
 	/**  지출 합계(= `total_expense_minor`). 프런트 호환을 위해 한 릴리스 유지하는 별칭. */
@@ -1202,7 +1227,7 @@ export type BookkeepingRecurringOccurrenceStatus = "planned" | "posted" | "skipp
 export type BookkeepingReviewStatus = "needs_review" | "approved" | "ignored";
 
 /**  가계부 거래 유입 경로. Gmail/OCR/CSV는 후속 ingest adapter가 같은 리뷰큐에 기록한다. */
-export type BookkeepingSource = "manual" | "ocr" | "gmail" | "csv";
+export type BookkeepingSource = "manual" | "ocr" | "gmail" | "csv" | "moneymanager";
 
 /**  per-source 동기화 커서. "현재 시점 이후"만 가져오기 위한 durable 위치(마지막으로 본 지점). */
 export type BookkeepingSyncCursor = {
@@ -2003,6 +2028,27 @@ export type HermesSessionRow = {
 	projectId: string | null,
 };
 
+export type ImportBookkeepingMmbakInput = {
+	projectId: string | null,
+	/**  로컬 .mmbak/.sqlite 파일 경로. 임포터가 임시 사본을 떠서 읽는다(원본 무손상). */
+	path: string,
+};
+
+export type ImportBookkeepingMmbakSummary = {
+	scannedCount: number,
+	importedCount: number,
+	duplicateCount: number,
+	/**  이체·불량 금액·커서-이전 행 등 의도적 매핑 스킵(실패 아님). */
+	skippedCount: number,
+	failedCount: number,
+	/**  백업에서 삭제 표시된 uid 중 기존 행에 source_deleted 사유가 새로 달린 수. */
+	flaggedDeletedCount: number,
+	/**  임포트당 중복-프로브 상한 초과로 프로브를 건너뛴 신규 행 수(행은 정상 임포트됨). */
+	dupProbeSkippedCount: number,
+	/**  이번 임포트 후 저장된 UTIME 커서(epoch ms 문자열). 없으면 진전 없음. */
+	cursorAfter: string | null,
+};
+
 export type InboxCounts = {
 	unread: number,
 	critical: number,
@@ -2556,6 +2602,12 @@ export type SetBookkeepingBudgetInput = {
 export type SetBookkeepingLineItemsInput = {
 	transactionId: string,
 	items: CreateBookkeepingLineItemInput[],
+};
+
+export type SetBookkeepingMmbakOptionsInput = {
+	watchDir: string | null,
+	projectId: string | null,
+	autoImportEnabled: boolean,
 };
 
 /**

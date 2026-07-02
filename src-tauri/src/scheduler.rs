@@ -64,11 +64,21 @@ pub async fn run_tick<N: Notifier>(db: &Db, notifier: &N, now: &str) -> Result<u
 pub fn spawn_loop<N: Notifier>(db: Db, notifier: N) {
     tauri::async_runtime::spawn(async move {
         let mut ticker = tokio::time::interval(TICK_INTERVAL);
+        // mmbak 자동 임포트 동시 실행 가드 — 이 루프(스케줄러)가 단독 소유한다.
+        let mmbak_in_flight = crate::commands::new_mmbak_auto_import_in_flight();
         loop {
             ticker.tick().await;
             let now = crate::scheduler::utc_now_string();
             if let Err(e) = run_tick(&db, &notifier, &now).await {
                 eprintln!("[scheduler] tick failed: {e}");
+            }
+            // MoneyManager(.mmbak) 자동 임포트 훅: tick은 cheap check(옵션 1행 SELECT)+
+            // 게이트 stamp+spawn만 수행 — 실제 임포트는 별도 task라 알림 tick 주기(30s)를
+            // 밀지 않는다. 실패해도 게이트가 찍혀 다음 시도는 24h 뒤(bounded retry —
+            // INVARIANT #5). 실패는 루프를 죽이지 않는다(graceful degrade). JoinHandle detach.
+            match crate::commands::run_mmbak_auto_import_tick(&db, &now, &mmbak_in_flight).await {
+                Ok(_) => {}
+                Err(e) => tracing::warn!(code = %e.code, "mmbak auto-import tick failed"),
             }
         }
     });

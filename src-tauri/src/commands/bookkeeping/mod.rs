@@ -10,6 +10,8 @@ mod dedup;
 mod export;
 mod gmail;
 mod line_items;
+mod mmbak;
+mod mmbak_options;
 mod recurring;
 mod reporting;
 mod sync_jobs;
@@ -23,6 +25,8 @@ pub use dedup::*;
 pub use export::*;
 pub use gmail::*;
 pub use line_items::*;
+pub use mmbak::*;
+pub use mmbak_options::*;
 pub use recurring::*;
 pub use reporting::*;
 pub use sync_jobs::*;
@@ -1178,6 +1182,114 @@ mod tests {
             .await
             .expect("transactions");
         assert_eq!(rows.len(), 1, "source_ref dedup should keep one row");
+    }
+
+    #[tokio::test]
+    async fn gmail_ingest_maps_parser_judgment_fields_into_row() {
+        let db = pool().await;
+
+        // Korean card-approval SMS-forward: structured parse populates the
+        // judgment columns instead of the old hard-coded Nones.
+        let card = ingest_bookkeeping_gmail_receipt_inner(
+            &db,
+            BookkeepingEmailReceiptInput {
+                project_id: None,
+                message_id: "gmail-card-approval-001".to_string(),
+                from: "noreply@hanacard.test".to_string(),
+                subject: "카드 승인 안내".to_string(),
+                snippet: String::new(),
+                body_text:
+                    "[Web발신]\n하나카드 승인 홍*동 12,345원 일시불 06/18 12:34 스타벅스코리아"
+                        .to_string(),
+                received_at: Some("2026-06-20T01:02:03+09:00".to_string()),
+            },
+        )
+        .await
+        .expect("card ingest")
+        .expect("card approval parses");
+
+        assert_eq!(card.review_status, BookkeepingReviewStatus::NeedsReview);
+        assert_eq!(card.direction, BookkeepingDirection::Expense);
+        assert_eq!(card.spent_at, "2026-06-18");
+        assert_eq!(card.spent_at_time.as_deref(), Some("12:34:00"));
+        assert_eq!(card.payment_method_label.as_deref(), Some("하나카드"));
+        assert_eq!(
+            card.payment_method_kind,
+            BookkeepingPaymentMethodKind::Unknown,
+            "ingest must not confirm payment method kind — human corrects in review"
+        );
+        let confidence = card.confidence.expect("structured parse sets confidence");
+        assert!((0.0..=1.0).contains(&confidence));
+        let field_conf: serde_json::Value =
+            serde_json::from_str(&card.field_confidence_json).expect("valid field conf json");
+        assert!(
+            field_conf.get("amount").is_some(),
+            "per-field confidence must land in the row"
+        );
+
+        // Bank deposit: parser Income direction must reach the DB enum
+        // (the old path hard-coded Expense).
+        let deposit = ingest_bookkeeping_gmail_receipt_inner(
+            &db,
+            BookkeepingEmailReceiptInput {
+                project_id: None,
+                message_id: "gmail-bank-deposit-001".to_string(),
+                from: "noreply@toss.test".to_string(),
+                subject: "토스 입금 알림".to_string(),
+                snippet: String::new(),
+                body_text: "토스 입금 50,000원 홍길동".to_string(),
+                received_at: Some("2026-06-18T13:00:00+09:00".to_string()),
+            },
+        )
+        .await
+        .expect("deposit ingest")
+        .expect("deposit parses");
+        assert_eq!(deposit.direction, BookkeepingDirection::Income);
+        assert_eq!(deposit.review_status, BookkeepingReviewStatus::NeedsReview);
+    }
+
+    #[tokio::test]
+    async fn gmail_ingest_keeps_cancellation_in_review_queue_with_reason() {
+        let db = pool().await;
+        let row = ingest_bookkeeping_gmail_receipt_inner(
+            &db,
+            BookkeepingEmailReceiptInput {
+                project_id: None,
+                message_id: "gmail-card-cancel-001".to_string(),
+                from: "noreply@wooricard.test".to_string(),
+                subject: "우리카드 승인취소 안내".to_string(),
+                snippet: String::new(),
+                body_text: "[Web발신] 우리카드 승인취소 김*수 30,000원 06/18 15:00 배달의민족"
+                    .to_string(),
+                received_at: Some("2026-06-18T16:00:00+09:00".to_string()),
+            },
+        )
+        .await
+        .expect("cancellation ingest")
+        .expect("cancellation must NOT be dropped — the human decides");
+
+        assert_eq!(
+            row.review_status,
+            BookkeepingReviewStatus::NeedsReview,
+            "cancellation stays in the review queue"
+        );
+        let reasons: serde_json::Value =
+            serde_json::from_str(&row.review_reasons_json).expect("valid review reasons json");
+        let reasons = reasons.as_array().expect("array shape");
+        assert!(
+            reasons
+                .iter()
+                .any(|reason| reason["code"] == "cancellation_notice"),
+            "cancellation row must carry the cancellation_notice reason"
+        );
+        let codes: Vec<&str> = reasons
+            .iter()
+            .filter_map(|reason| reason["code"].as_str())
+            .collect();
+        let mut deduped = codes.clone();
+        deduped.sort_unstable();
+        deduped.dedup();
+        assert_eq!(codes.len(), deduped.len(), "reason codes must be deduped");
     }
 
     #[tokio::test]

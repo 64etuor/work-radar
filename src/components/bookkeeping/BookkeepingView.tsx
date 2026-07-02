@@ -15,6 +15,7 @@ import {
   useBookkeepingCashflow,
   useBookkeepingCategoryTrend,
   useBookkeepingGmailLabels,
+  useBookkeepingMmbakOptions,
   useBookkeepingMonthlySummary,
   useBookkeepingReconcileAccount,
   useBookkeepingRecurringExpenses,
@@ -30,11 +31,13 @@ import {
   useCreateBookkeepingTransaction,
   useDeleteBookkeepingTransaction,
   useEnsureBookkeepingRecurringOccurrences,
+  useImportBookkeepingMmbakLatest,
   useOverrideBookkeepingCategory,
   usePostBookkeepingRecurringOccurrence,
   useProjects,
   useRestoreBookkeepingTransaction,
   useSetBookkeepingBudget,
+  useSetBookkeepingMmbakOptions,
   useSetBookkeepingRecurringOccurrenceStatus,
   useSyncBookkeepingGmailReceipts,
   useUpdateBookkeepingReviewStatus,
@@ -78,6 +81,7 @@ import { CategorySummaryCard } from "./cards/CategorySummaryCard";
 import { CurrencySummaryRows } from "./cards/CurrencySummaryRows";
 import { GmailSyncCard } from "./cards/GmailSyncCard";
 import { ManualEntryCard } from "./cards/ManualEntryCard";
+import { MoneyManagerImportCard } from "./cards/MoneyManagerImportCard";
 import { OperationsLogCard } from "./cards/OperationsLogCard";
 import { ReconciliationCard } from "./cards/ReconciliationCard";
 import { RecurringExpenseFormCard } from "./cards/RecurringExpenseFormCard";
@@ -86,6 +90,7 @@ import { ReportsSection } from "./cards/ReportsSection";
 import { ReviewQueueCard } from "./cards/ReviewQueueCard";
 import { TrashTransactionsCard } from "./cards/TrashTransactionsCard";
 import { normalizeGmailQuery } from "./gmailSync";
+import { formatMmbakImportSummary, latestMoneyManagerJob, normalizeWatchDir } from "./mmbakImport";
 import { signedMinorLabel } from "./reconciliation";
 import { reviewOrderToQueryParam, type ReviewQueueOrder } from "./reviewSort";
 import { buildInlineCategoryOverride } from "./rowActivation";
@@ -107,6 +112,8 @@ export function BookkeepingView() {
     ...BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN,
   });
   const [gmailDraft, setGmailDraft] = useState<GmailSyncDraft>(() => emptyGmailSyncDraft());
+  // null = 아직 편집 안 함(서버 옵션 값 표시). 저장 성공 시 null로 리셋해 서버 값으로 복귀.
+  const [mmbakWatchDirDraft, setMmbakWatchDirDraft] = useState<string | null>(null);
 
   const projects = useProjects();
   const { month, projectId: projectScopeId } = scope;
@@ -150,6 +157,9 @@ export function BookkeepingView() {
   const postRecurring = usePostBookkeepingRecurringOccurrence();
   const setRecurringStatus = useSetBookkeepingRecurringOccurrenceStatus();
   const syncGmail = useSyncBookkeepingGmailReceipts();
+  const mmbakOptions = useBookkeepingMmbakOptions();
+  const setMmbakOptions = useSetBookkeepingMmbakOptions();
+  const importMmbakLatest = useImportBookkeepingMmbakLatest();
   const review = useUpdateBookkeepingReviewStatus();
   const bulkReview = useBulkUpdateBookkeepingReviewStatus();
   const bulkCategory = useBulkSetBookkeepingCategory();
@@ -286,6 +296,43 @@ export function BookkeepingView() {
         onError: (error) => pushMutationError("bookkeeping.gmail", error),
       },
     );
+  };
+
+  const saveMmbakWatchDir = () => {
+    const current = mmbakOptions.data ?? null;
+    setMmbakOptions.mutate(
+      {
+        watchDir: normalizeWatchDir(mmbakWatchDirDraft ?? current?.watchDir ?? ""),
+        projectId: current?.projectId ?? null,
+        autoImportEnabled: current?.autoImportEnabled ?? false,
+      },
+      {
+        onSuccess: () => {
+          setMmbakWatchDirDraft(null);
+          pushSuccess("백업 폴더가 저장됐습니다");
+        },
+        onError: (error) => pushMutationError("bookkeeping.mmbak", error),
+      },
+    );
+  };
+
+  const toggleMmbakAutoImport = (enabled: boolean) => {
+    const current = mmbakOptions.data ?? null;
+    setMmbakOptions.mutate(
+      {
+        watchDir: current?.watchDir ?? null,
+        projectId: current?.projectId ?? null,
+        autoImportEnabled: enabled,
+      },
+      { onError: (error) => pushMutationError("bookkeeping.mmbak", error) },
+    );
+  };
+
+  const runMmbakImport = () => {
+    importMmbakLatest.mutate(activeProjectId, {
+      onSuccess: (summary) => pushSuccess(formatMmbakImportSummary(summary)),
+      onError: (error) => pushMutationError("bookkeeping.mmbak", error),
+    });
   };
 
   const submitBudget = (event: FormEvent<HTMLFormElement>) => {
@@ -649,6 +696,18 @@ export function BookkeepingView() {
               pending={syncGmail.isPending}
               onDraftChange={setGmailDraft}
               onSubmit={submitGmailSync}
+            />
+
+            <MoneyManagerImportCard
+              options={mmbakOptions.data ?? null}
+              draftWatchDir={mmbakWatchDirDraft}
+              savePending={setMmbakOptions.isPending}
+              importPending={importMmbakLatest.isPending}
+              lastJob={latestMoneyManagerJob(syncJobs.data ?? [])}
+              onDraftChange={setMmbakWatchDirDraft}
+              onSaveWatchDir={saveMmbakWatchDir}
+              onToggleAutoImport={toggleMmbakAutoImport}
+              onImportNow={runMmbakImport}
             />
 
             <BudgetCard

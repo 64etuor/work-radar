@@ -34,6 +34,8 @@ export const FIELD_IDS = {
   projectScope: "bk-project-scope",
   gmailLabels: "bk-gmail-labels",
   gmailQuery: "bk-gmail-query",
+  mmbakWatchDir: "bk-mmbak-watch-dir",
+  mmbakAutoImport: "bk-mmbak-auto-import",
   recurringName: "bk-recurring-name",
   recurringMerchant: "bk-recurring-merchant",
   recurringAmount: "bk-recurring-amount",
