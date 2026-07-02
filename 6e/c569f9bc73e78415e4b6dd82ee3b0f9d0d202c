@@ -1,0 +1,52 @@
+src/components/bookkeeping/rowActivation.ts
+  s_f013490a1b0efb::t_67b07d3b0680dd 1,3-4,24-27,30,33
+  s_f013490a1b0efb::t_2a9dba5581c46f 2,5-23,28-29,31-32,34-40
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_f013490a1b0efb::t_a604fcfc352ae2 17,23-24
+  s_f013490a1b0efb::t_f7cfce650fe9a2 35
+  s_f013490a1b0efb::t_5644a42ce19752 60
+src/components/bookkeeping/BookkeepingView.css
+  s_f013490a1b0efb::t_13cc675260d60b 391-400
+  s_f013490a1b0efb::t_b41050e4039b3c 389-390
+src/components/bookkeeping/cards/CategorySelect.tsx
+  s_f013490a1b0efb::t_993519b066fd17 15-16,21-22
+  s_f013490a1b0efb::t_f39e673dd291d9 39-40
+src/components/bookkeeping/bookkeepingDrafts.ts
+  s_f013490a1b0efb::t_55a9cf906f315d 153
+  s_f013490a1b0efb::t_a092ba6c93b7e5 134-144
+src/lib/query/bookkeeping.ts
+  s_f013490a1b0efb::t_76ccf1c27e876d 121-130
+  s_f013490a1b0efb::t_3f30b303d2821a 15
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f013490a1b0efb::t_4f17b66311ad61 33
+  s_f013490a1b0efb::t_07b5162aae8594 489-498
+  s_f013490a1b0efb::t_c5314db1074e16 602,605
+  s_f013490a1b0efb::t_2fe729bae39762 91
+  s_f013490a1b0efb::t_510e3aa17f8a4a 161
+src/components/bookkeeping/cards/TransactionReadRow.dom.test.tsx
+  s_f013490a1b0efb::t_399328ceeb5593 72
+  s_f013490a1b0efb::t_9a9f7810ac8134 1-71,73-154
+src/components/bookkeeping/rowActivation.test.ts
+  s_f013490a1b0efb::t_fa066d058694a8 2-3,5-43,56-59,61-76,84-85,89,91-95
+  s_f013490a1b0efb::t_36af6cce0c4185 1
+  s_f013490a1b0efb::t_3096c0ef326b10 4,44-55,60,77-83,86-88,90
+src/components/bookkeeping/cards/TransactionReadRow.tsx
+  s_f013490a1b0efb::t_461babb55eaf6f 1,10,18,24-25,32-35,37-41,53,55-56,58-63,65
+  s_f013490a1b0efb::t_3564bd596a2836 2,7,9,27-31,54,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "6ec569f9bc73e78415e4b6dd82ee3b0f9d0d202c",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
