@@ -1,0 +1,132 @@
+src-tauri/src/commands/bookkeeping/transactions.rs
+  s_f013490a1b0efb::t_54f0009f37ed2f 31-32,39-40
+  s_f013490a1b0efb::t_cc3152102bc1f4 337,345-346,348-353
+  s_f013490a1b0efb::t_752222a4e34207 371-372,380-381
+src/components/bookkeeping/BookkeepingView.tsx
+  s_f013490a1b0efb::t_048fa5b076883a 141,147-155
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_f013490a1b0efb::t_e086e77afce6b3 35-36
+src/lib/query/bookkeeping.ts
+  s_f013490a1b0efb::t_28ff7d8a18bd15 38-39,42-44
+src-tauri/src/commands/bookkeeping/taxonomy.rs
+  s_f013490a1b0efb::t_9c0a5a6e57c2aa 157,164,174,178,189,193,203,207,211,215
+  s_f013490a1b0efb::t_0ddaa38546d72f 134-141,143-152
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_f013490a1b0efb::t_77d04afa72b5e9 31
+  s_f013490a1b0efb::t_7e53fb4f23fd36 15
+  s_f013490a1b0efb::t_ff81d358f39159 1811-1812,1822-1850,1855-1859,1883-1888,1898-1909
+  s_f013490a1b0efb::t_481c0468cd0acb 1851-1854,1860-1882,1889-1897
+  s_f013490a1b0efb::t_adb4af110a51c0 1910
+src-tauri/src/moneymanager.rs
+  s_f013490a1b0efb::t_c6e791533761ca 216
+  s_f013490a1b0efb::t_676fff8a2c63c7 274
+  s_f013490a1b0efb::t_304298aff47b1d 59-60
+  s_f013490a1b0efb::t_d339cabbd8d158 203-204
+src-tauri/src/models/bookkeeping.rs
+  s_f013490a1b0efb::t_c6ac43bed1fe00 361-363
+src-tauri/src/commands/bookkeeping/mmbak.rs
+  s_f013490a1b0efb::t_274ac1e3bd0d2b 366-368
+  s_f013490a1b0efb::t_88ed9ace90ea20 315-318
+  s_f013490a1b0efb::t_754fd3e9df3c72 135-138
+  s_f013490a1b0efb::t_e018529fa2618a 382
+src/components/bookkeeping/bookkeepingMonth.test.ts
+  s_f013490a1b0efb::t_1e52689bd1e33c 1-15
+src-tauri/src/commands/bookkeeping/mmbak_taxonomy.rs
+  s_f013490a1b0efb::t_f03d981458fc93 459-475
+  s_f013490a1b0efb::t_b7295550bddf79 687-690
+  s_f013490a1b0efb::t_40102be2dc370d 84-87,94-97
+  s_f013490a1b0efb::t_f9a0f12100d037 140-141
+  s_f013490a1b0efb::t_a3f899c1b50d84 43,117-122,175-178,197-200,263,428-456,458,476,490-505,508,705-742
+  s_f013490a1b0efb::t_81b79879906f78 108
+  s_f013490a1b0efb::t_09d519315c85b3 310,314,317,326,357,364,369,372,374,378,384,387,389,391,393-395,397-399,413,420,422,424-426,482-484,509,511,513-515,518-520,522-524,527-529,534,536,538,542,544-653,655-657,667,700-701,704,749,752,754,756-758,760-762,772-773,783
+  s_f013490a1b0efb::t_c15f34f72a8be5 266-268,271-296,355,363,703
+  s_f013490a1b0efb::t_b0305ad8b0e77b 303-304
+  s_f013490a1b0efb::t_0775d878a03457 353,660-665
+  s_f013490a1b0efb::t_fcb5633d85d8e7 677
+  s_f013490a1b0efb::t_4b43798969cf8b 1-42,44-83,88-93,98-107,109-116,123-139,142-174,179-196,201-262,264-265,269-270,297,784
+  s_f013490a1b0efb::t_569de8a77da146 298-302
+  s_f013490a1b0efb::t_d997ef1a4cc6e9 305-309
+  s_f013490a1b0efb::t_4c47187f341d64 311-313
+  s_f013490a1b0efb::t_486ae358ff3acc 315-316
+  s_f013490a1b0efb::t_75788fd2a83d87 318-320,323-325
+  s_f013490a1b0efb::t_9823868101ba8e 327-329,350-352
+  s_f013490a1b0efb::t_a598e5e3335fe0 354
+  s_f013490a1b0efb::t_8c7c0be77c657e 356
+  s_f013490a1b0efb::t_016fdfb934839f 358-362
+  s_f013490a1b0efb::t_49c1ff3a2903d6 365-368
+  s_f013490a1b0efb::t_107c006a601b72 370-371
+  s_f013490a1b0efb::t_29df2ddc5e04f9 373
+  s_f013490a1b0efb::t_4d70620e145d9f 375-377
+  s_f013490a1b0efb::t_7738cebfb03c5b 379-383
+  s_f013490a1b0efb::t_fe71e33ef4b8c0 385-386
+  s_f013490a1b0efb::t_b31db1863e5420 388
+  s_f013490a1b0efb::t_d92d8141dfb9ae 390
+  s_f013490a1b0efb::t_1a6fe0828b8612 392
+  s_f013490a1b0efb::t_a9e791c4dbd57c 396
+  s_f013490a1b0efb::t_a4159409b0cc3e 400-402,410-412
+  s_f013490a1b0efb::t_4729fc68ab5f42 414-419
+  s_f013490a1b0efb::t_3288aff6c4a5c9 421
+  s_f013490a1b0efb::t_f21cd7ed0c7727 423
+  s_f013490a1b0efb::t_25e95ae42a3ea3 427
+  s_f013490a1b0efb::t_cfa6bf9b1717ec 457
+  s_f013490a1b0efb::t_6938196be0dde6 477-481
+  s_f013490a1b0efb::t_cdc25aa09e8a4a 485-489
+  s_f013490a1b0efb::t_90f40afe674a0a 506-507
+  s_f013490a1b0efb::t_1d1bf2ba824437 510
+  s_f013490a1b0efb::t_0474f7bddd684b 512
+  s_f013490a1b0efb::t_ea53d615c19da2 516-517
+  s_f013490a1b0efb::t_34eedca193cc01 521
+  s_f013490a1b0efb::t_788bdfc10cdb79 525-526
+  s_f013490a1b0efb::t_6ce57cb9bce5c6 530-533
+  s_f013490a1b0efb::t_2c72a22758807b 535
+  s_f013490a1b0efb::t_0b9cd0dfa79ea3 537
+  s_f013490a1b0efb::t_e1d02db3941db0 539-541
+  s_f013490a1b0efb::t_c8cd3d40f8452a 543
+  s_f013490a1b0efb::t_96dc5c4c753c37 654
+  s_f013490a1b0efb::t_c060b00135da35 658-659
+  s_f013490a1b0efb::t_260ff4fe37df25 666
+  s_f013490a1b0efb::t_a04eb8d8fa231f 668-670,674-676
+  s_f013490a1b0efb::t_5183a50715c5d5 678-680,684-686
+  s_f013490a1b0efb::t_a97b198174829e 691-693,697-699
+  s_f013490a1b0efb::t_e69e7adf90870a 702
+  s_f013490a1b0efb::t_11b086a6472e6f 743-748
+  s_f013490a1b0efb::t_24d82be398f7f9 750-751
+  s_f013490a1b0efb::t_5390c47cb03437 753
+  s_f013490a1b0efb::t_c0303b90a72a4e 755
+  s_f013490a1b0efb::t_596a724a5ec305 759
+  s_f013490a1b0efb::t_ea967dc8c3b9da 763-765,769-771
+  s_f013490a1b0efb::t_5359fc949a3478 774-776,780-782
+  s_56901d4f9eeef8::t_ac0bb4921f78ff 321-322,330-349,403-409,671-673,681-683,694-696,766-768,777-779
+src/components/bookkeeping/mmbakImport.ts
+  s_f013490a1b0efb::t_2adbc08f81c895 18-21
+src/bindings.ts
+  s_f013490a1b0efb::t_ae3ea7c20ad4f2 2048-2052
+  s_f013490a1b0efb::t_cd65ae29edd226 34
+src/components/bookkeeping/mmbakImport.test.ts
+  s_f013490a1b0efb::t_b3d34425f3007d 58,63-77
+  s_f013490a1b0efb::t_5d005481e602d8 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "1d5fcdb1cf81c7cf348573bd43a297c38eeb51f8",
+  "prompts": {},
+  "sessions": {
+    "s_56901d4f9eeef8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a73e34b6aaea5c248",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
