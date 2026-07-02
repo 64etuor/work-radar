@@ -1,5 +1,6 @@
-.bk-view {
-  /* component-local tokens */
+/* component-local tokens — 수동 입력 Sheet는 body로 portal되므로 토큰 스코프를 공유한다. */
+.bk-view,
+.bk-manual-sheet {
   --bk-bg: var(--color-wr-bg);
   --bk-surface: var(--color-wr-bg);
   --bk-stone: var(--color-wr-elevated);
@@ -16,7 +17,9 @@
   --bk-success-bg: var(--color-wr-success-soft);
   --bk-danger: var(--color-wr-danger);
   --bk-danger-bg: var(--color-wr-danger-soft);
+}
 
+.bk-view {
   height: 100%;
   overflow: auto;
   background: var(--bk-bg);
@@ -78,6 +81,137 @@
   gap: var(--wr-density-xs);
 }
 
+.bk-head-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── IA 세그먼트 탭 (control-room cr-tabs 문법 이식 + bk 토큰) ─────────── */
+.bk-tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wr-density-sm);
+  border-bottom: 1px solid var(--bk-rule);
+  padding-bottom: var(--wr-density-sm);
+}
+
+.bk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wr-density-2xs);
+}
+
+.bk-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wr-density-xs);
+  padding: var(--wr-density-xs) var(--wr-density-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--bk-muted);
+  cursor: pointer;
+  transition:
+    color var(--wr-motion-fast) var(--wr-ease-out),
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-tab:hover {
+  color: var(--bk-ink);
+  background: var(--bk-stone);
+}
+
+.bk-tab[data-selected] {
+  color: var(--bk-ink);
+  border-color: var(--bk-rule-strong);
+  background: var(--bk-surface);
+  box-shadow: var(--wr-shadow-hairline);
+}
+
+.bk-tab:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 2px;
+}
+
+.bk-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  padding: 0 var(--wr-density-2xs);
+  border-radius: 999px;
+  background: var(--bk-coral);
+  color: var(--bk-surface);
+  font-size: var(--text-caption-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+/* 검토 대기 점프 칩 — 항상 보이는 요약 스트립의 액션. */
+.bk-review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wr-density-2xs);
+  padding: var(--wr-density-2xs) var(--wr-density-sm);
+  border: 1px solid color-mix(in srgb, var(--bk-coral) 32%, var(--bk-rule));
+  border-radius: 999px;
+  background: var(--bk-surface);
+  color: var(--bk-coral);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-review-chip:hover {
+  border-color: var(--bk-coral);
+  background: var(--bk-stone);
+}
+
+.bk-review-chip:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 2px;
+}
+
+/* ── 탭 패널 셸 ───────────────────────────────────────────────────── */
+.bk-pane {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+  outline: none;
+}
+
+/* author `display: grid`가 UA의 [hidden] { display: none }을 이기므로 명시적으로 복원. */
+.bk-pane[hidden] {
+  display: none;
+}
+
+.bk-pane-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+}
+
+.bk-pane-divider {
+  border-top: 1px solid var(--bk-rule);
+}
+
+/* 수동 입력 Sheet 본문 — 카드가 시트 폭을 그대로 쓰도록. */
+.bk-manual-sheet {
+  max-width: 30rem;
+}
+
+.bk-manual-sheet-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .bk-metrics {
   display: grid;
   grid-template-columns: 1.45fr 1.25fr 1fr 1fr;
@@ -125,13 +259,6 @@
 .bk-currency-row > * {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.bk-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 372px);
-  align-items: start;
-  gap: 28px;
 }
 
 .bk-reports {
@@ -218,13 +345,6 @@
 
 .bk-report-bar[data-negative="true"] .bk-report-fill {
   background: var(--bk-danger);
-}
-
-.bk-main,
-.bk-side {
-  display: grid;
-  min-width: 0;
-  gap: 18px;
 }
 
 .bk-card {
@@ -566,12 +686,8 @@
 }
 
 @media (max-width: 1100px) {
-  .bk-layout {
+  .bk-pane-grid {
     grid-template-columns: 1fr;
-  }
-
-  .bk-side {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -588,7 +704,6 @@
   .bk-currency-row,
   .bk-report-grid,
   .bk-report-row,
-  .bk-side,
   .bk-form-grid,
   .bk-payment-fields,
   .bk-edit-head,

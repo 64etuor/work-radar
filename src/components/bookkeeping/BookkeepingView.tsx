@@ -1,6 +1,7 @@
 import "./BookkeepingView.css";
 
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { Plus } from "lucide-react";
 import { type FormEvent, useReducer, useState } from "react";
 
 import type {
@@ -47,6 +48,8 @@ import {
 import { useToastStore } from "@/lib/toast";
 
 import { SectionLabel } from "../settings/SettingsKit";
+import { Button } from "../ui/button";
+import { Sheet, SheetContent, SheetTitle } from "../ui/sheet";
 import { ALL_PROJECTS } from "./bookkeepingConstants";
 import {
   type BudgetDraft,
@@ -63,15 +66,18 @@ import {
 } from "./bookkeepingDrafts";
 import { nullableText, pushMutationError, splitCsv } from "./bookkeepingFieldUtils";
 import { monthRange, stepMonthBy } from "./bookkeepingMonth";
-import {
-  BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN,
-  BOOKKEEPING_INPUT_PANEL_ORDER,
-} from "./bookkeepingPanels";
+import { BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN } from "./bookkeepingPanels";
 import {
   bookkeepingScopeReducer,
   initialBookkeepingScope,
   inputPanelsReducer,
 } from "./bookkeepingState";
+import { BookkeepingTabBar, BookkeepingTabPanel } from "./BookkeepingTabBar";
+import {
+  type BookkeepingTabId,
+  readStoredBookkeepingTab,
+  writeStoredBookkeepingTab,
+} from "./bookkeepingTabs";
 import { ApprovedTransactionsCard } from "./cards/ApprovedTransactionsCard";
 import { BookkeepingExportControls } from "./cards/BookkeepingExportControls";
 import { BookkeepingMetrics } from "./cards/BookkeepingMetrics";
@@ -112,6 +118,12 @@ export function BookkeepingView() {
     ...BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN,
   });
   const [gmailDraft, setGmailDraft] = useState<GmailSyncDraft>(() => emptyGmailSyncDraft());
+  // IA 세그먼트 탭 — 마지막 탭을 localStorage에 유지(HermesView "hermes.sidebarOpen" 패턴).
+  const [activeTab, setActiveTab] = useState<BookkeepingTabId>(() =>
+    readStoredBookkeepingTab((key) => localStorage.getItem(key)),
+  );
+  // 전역 "+ 수동 입력" — ManualEntryCard를 Sheet(overlay-stack 계약 내장)로 rehome.
+  const [manualSheetOpen, setManualSheetOpen] = useState(false);
   // null = 아직 편집 안 함(서버 옵션 값 표시). 저장 성공 시 null로 리셋해 서버 값으로 복귀.
   const [mmbakWatchDirDraft, setMmbakWatchDirDraft] = useState<string | null>(null);
 
@@ -178,6 +190,13 @@ export function BookkeepingView() {
   const plannedTotal = (recurringOccurrences.data ?? [])
     .filter((row) => row.status !== "skipped")
     .reduce((sum, row) => sum + row.amountMinor, 0);
+  const needsReviewCount = summary.data?.needsReviewCount ?? 0;
+
+  const selectTab = (tab: BookkeepingTabId) => {
+    setActiveTab(tab);
+    writeStoredBookkeepingTab((key, value) => localStorage.setItem(key, value), tab);
+  };
+
   const submitManual = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const amount = Number(manualDraft.amount);
@@ -220,6 +239,7 @@ export function BookkeepingView() {
       {
         onSuccess: () => {
           setManualDraft(emptyManualDraft());
+          setManualSheetOpen(false);
           pushSuccess("거래가 추가됐습니다");
         },
         onError: (error) => pushMutationError("bookkeeping.create", error),
@@ -602,6 +622,12 @@ export function BookkeepingView() {
               disabled={exportPending}
               onExport={(format) => void exportBookkeeping(format)}
             />
+            <div className="bk-head-actions">
+              <Button onClick={() => setManualSheetOpen(true)}>
+                <Plus className="size-4" />
+                수동 입력
+              </Button>
+            </div>
           </div>
         </header>
 
@@ -616,25 +642,61 @@ export function BookkeepingView() {
 
         <CurrencySummaryRows rows={summary.data?.byCurrency ?? []} />
 
-        <ReportsSection cashflow={cashflow.data ?? []} categoryTrend={categoryTrend.data ?? []} />
+        <div className="bk-tabbar">
+          <BookkeepingTabBar
+            active={activeTab}
+            reviewCount={needsReviewCount}
+            onSelect={selectTab}
+          />
+          {needsReviewCount > 0 && (
+            <button
+              type="button"
+              className="bk-review-chip typo-label-sm"
+              onClick={() => selectTab("review")}
+            >
+              검토 대기 {needsReviewCount}건
+            </button>
+          )}
+        </div>
 
-        <div className="bk-layout">
-          <section className="bk-main">
-            <ReviewQueueCard
-              key={`${month}:${activeProjectId ?? "all"}`}
-              rows={reviewTransactions.data ?? []}
-              order={reviewOrder}
-              disabled={review.isPending || updateTx.isPending || deleteTx.isPending}
-              bulkPending={bulkReview.isPending || bulkCategory.isPending || bulkDelete.isPending}
-              onApprove={(tx) => setReviewStatus(tx, "approved")}
-              onBulkReview={bulkSetReviewStatus}
-              onBulkCategory={bulkSetCategory}
-              onBulkDelete={bulkDeleteTransactions}
-              onDelete={deleteTransaction}
-              onSave={saveTransaction}
-              onOrderChange={setReviewOrder}
-            />
+        {/* 다섯 패널 전부 항상 마운트 — 비활성은 native hidden. aria-controls 상시 유효 +
+            카드-로컬 상태(리뷰 선택/행 편집 드래프트)가 탭 전환에 유실되지 않는다. */}
+        <BookkeepingTabPanel tab="review" active={activeTab}>
+          <ReviewQueueCard
+            key={`${month}:${activeProjectId ?? "all"}`}
+            rows={reviewTransactions.data ?? []}
+            order={reviewOrder}
+            disabled={review.isPending || updateTx.isPending || deleteTx.isPending}
+            bulkPending={bulkReview.isPending || bulkCategory.isPending || bulkDelete.isPending}
+            onApprove={(tx) => setReviewStatus(tx, "approved")}
+            onBulkReview={bulkSetReviewStatus}
+            onBulkCategory={bulkSetCategory}
+            onBulkDelete={bulkDeleteTransactions}
+            onDelete={deleteTransaction}
+            onSave={saveTransaction}
+            onOrderChange={setReviewOrder}
+          />
+        </BookkeepingTabPanel>
 
+        <BookkeepingTabPanel tab="ledger" active={activeTab}>
+          <ApprovedTransactionsCard
+            rows={approvedTransactions.data ?? []}
+            disabled={updateTx.isPending || deleteTx.isPending || overrideCategory.isPending}
+            onDelete={deleteTransaction}
+            onSave={saveTransaction}
+            onCategoryChange={overrideTransactionCategory}
+          />
+          {/* 휴지통 — 원장의 2차 표면. 구분선 아래로 시각 위계를 낮춘다. */}
+          <div className="bk-pane-divider" aria-hidden />
+          <TrashTransactionsCard
+            rows={trashTransactions.data ?? []}
+            disabled={restoreTx.isPending || review.isPending}
+            onRestore={restoreTransaction}
+          />
+        </BookkeepingTabPanel>
+
+        <BookkeepingTabPanel tab="recurring" active={activeTab}>
+          <div className="bk-pane-grid">
             <RecurringMonthCard
               rows={recurringOccurrences.data ?? []}
               ensurePending={ensureRecurring.isPending}
@@ -643,47 +705,41 @@ export function BookkeepingView() {
               onConfirm={confirmOccurrence}
               onSkip={skipOccurrence}
             />
-
-            <ApprovedTransactionsCard
-              rows={approvedTransactions.data ?? []}
-              disabled={updateTx.isPending || deleteTx.isPending || overrideCategory.isPending}
-              onDelete={deleteTransaction}
-              onSave={saveTransaction}
-              onCategoryChange={overrideTransactionCategory}
+            <RecurringExpenseFormCard
+              draft={recurringDraft}
+              open={inputPanelsOpen.recurring}
+              pending={createRecurring.isPending}
+              onDraftChange={setRecurringDraft}
+              onOpenChange={(open) => setInputPanelOpen({ panel: "recurring", open })}
+              onSubmit={submitRecurring}
             />
-
-            <TrashTransactionsCard
-              rows={trashTransactions.data ?? []}
-              disabled={restoreTx.isPending || review.isPending}
-              onRestore={restoreTransaction}
+            <BudgetCard
+              draft={budgetDraft}
+              statuses={budgetStatus.data ?? []}
+              pending={setBudget.isPending}
+              onDraftChange={setBudgetDraft}
+              onSubmit={submitBudget}
             />
-          </section>
+            <ReconciliationCard
+              draft={reconciliationDraft}
+              pending={reconcileAccount.isPending}
+              result={reconcileAccount.data ?? null}
+              onDraftChange={setReconciliationDraft}
+              onSubmit={submitReconciliation}
+            />
+          </div>
+        </BookkeepingTabPanel>
 
-          <aside className="bk-side">
-            {BOOKKEEPING_INPUT_PANEL_ORDER.map((panel) =>
-              panel === "manual" ? (
-                <ManualEntryCard
-                  key={panel}
-                  draft={manualDraft}
-                  open={inputPanelsOpen.manual}
-                  pending={createTx.isPending}
-                  onDraftChange={setManualDraft}
-                  onOpenChange={(open) => setInputPanelOpen({ panel: "manual", open })}
-                  onSubmit={submitManual}
-                />
-              ) : (
-                <RecurringExpenseFormCard
-                  key={panel}
-                  draft={recurringDraft}
-                  open={inputPanelsOpen.recurring}
-                  pending={createRecurring.isPending}
-                  onDraftChange={setRecurringDraft}
-                  onOpenChange={(open) => setInputPanelOpen({ panel: "recurring", open })}
-                  onSubmit={submitRecurring}
-                />
-              ),
-            )}
+        <BookkeepingTabPanel tab="reports" active={activeTab}>
+          <ReportsSection cashflow={cashflow.data ?? []} categoryTrend={categoryTrend.data ?? []} />
+          <CategorySummaryCard
+            rows={summary.data?.categories ?? []}
+            recurringCount={recurringExpenses.data?.length ?? 0}
+          />
+        </BookkeepingTabPanel>
 
+        <BookkeepingTabPanel tab="import" active={activeTab}>
+          <div className="bk-pane-grid">
             <GmailSyncCard
               draft={gmailDraft}
               lastSyncHint={
@@ -697,7 +753,6 @@ export function BookkeepingView() {
               onDraftChange={setGmailDraft}
               onSubmit={submitGmailSync}
             />
-
             <MoneyManagerImportCard
               options={mmbakOptions.data ?? null}
               draftWatchDir={mmbakWatchDirDraft}
@@ -709,32 +764,28 @@ export function BookkeepingView() {
               onToggleAutoImport={toggleMmbakAutoImport}
               onImportNow={runMmbakImport}
             />
-
-            <BudgetCard
-              draft={budgetDraft}
-              statuses={budgetStatus.data ?? []}
-              pending={setBudget.isPending}
-              onDraftChange={setBudgetDraft}
-              onSubmit={submitBudget}
-            />
-
-            <ReconciliationCard
-              draft={reconciliationDraft}
-              pending={reconcileAccount.isPending}
-              result={reconcileAccount.data ?? null}
-              onDraftChange={setReconciliationDraft}
-              onSubmit={submitReconciliation}
-            />
-
             <OperationsLogCard syncJobs={syncJobs.data ?? []} audit={audit.data ?? []} />
-
-            <CategorySummaryCard
-              rows={summary.data?.categories ?? []}
-              recurringCount={recurringExpenses.data?.length ?? 0}
-            />
-          </aside>
-        </div>
+          </div>
+        </BookkeepingTabPanel>
       </div>
+
+      {/* 전역 수동 입력 — Sheet가 dialog.tsx와 동일한 overlay-stack 계약(data-wr-overlay-open +
+          Esc stopPropagation)을 내장하므로 별도 등록 불요. 카드 자체는 무변경 rehome. */}
+      <Sheet open={manualSheetOpen} onOpenChange={setManualSheetOpen}>
+        <SheetContent className="bk-manual-sheet">
+          <SheetTitle className="sr-only">수동 입력</SheetTitle>
+          <div className="bk-manual-sheet-body">
+            <ManualEntryCard
+              draft={manualDraft}
+              open={inputPanelsOpen.manual}
+              pending={createTx.isPending}
+              onDraftChange={setManualDraft}
+              onOpenChange={(open) => setInputPanelOpen({ panel: "manual", open })}
+              onSubmit={submitManual}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </main>
   );
 }
