@@ -1,0 +1,21 @@
+docs/decisions.md
+  s_f013490a1b0efb::t_e1026f8e10937e 638
+docs/plans/2026-06-24-bookkeeping-completeness-plan.md
+  s_f013490a1b0efb::t_5d13392851e758 1-573
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "24f58334202b7136a7b5e5999362b5abd4bc407c",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
