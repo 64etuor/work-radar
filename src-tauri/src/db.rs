@@ -164,6 +164,265 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    /// 0064 bookkeeping rebuild(source CHECK에 'moneymanager' 추가)가 거래·라인아이템·
+    /// 고정비 occurrence·sync job·cursor를 **전부 보존**하는지 — 데이터 손실 가드.
+    /// 충실 재현: 0001~0063 적용 → seed → 0064를 **트랜잭션 안에서** 실행
+    /// (sqlx 마이그레이터와 동일 — `PRAGMA foreign_keys=OFF`가 no-op이라 FK가 켜진 채 rebuild된다).
+    /// FK-안전 순서가 아니면 `DROP TABLE bookkeeping_transactions`의 cascade가
+    /// line_items/category_overrides를 지운다.
+    #[tokio::test]
+    async fn migration_0064_preserves_bookkeeping_data_under_transaction() {
+        let path = temp_db_path();
+        let opts = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(opts)
+            .await
+            .expect("connect failed");
+
+        // 0001~0063 전부 적용 (0064 직전 상태 재현).
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
+        let mut files: Vec<String> = std::fs::read_dir(base)
+            .expect("read migrations dir")
+            .map(|e| {
+                e.expect("dir entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .filter(|n| n.ends_with(".sql") && n.as_str() < "0064")
+            .collect();
+        files.sort();
+        assert_eq!(
+            files.last().map(String::as_str),
+            Some("0063_pending_calendar_writes_series_replace_kind.sql"),
+            "0064 직전 마이그레이션이 0063이어야 한다"
+        );
+        for f in &files {
+            let sql = std::fs::read_to_string(format!("{base}/{f}")).unwrap();
+            sqlx::raw_sql(&sql)
+                .execute(&pool)
+                .await
+                .unwrap_or_else(|e| panic!("apply {f}: {e}"));
+        }
+
+        // seed: 고정비 + occurrence + 거래 2건(순환 FK·self-FK 포함) + 라인아이템 + override +
+        //       sync job + cursor — 옛 source 값들로.
+        sqlx::raw_sql(
+            "INSERT INTO bookkeeping_recurring_expenses \
+               (id, name, amount_minor, category, schedule_day, start_month) \
+               VALUES ('re1','rent',500000,'housing',25,'2026-01');\n\
+             INSERT INTO bookkeeping_transactions \
+               (id, source, source_ref, merchant, amount_minor, currency, spent_at, category, note) \
+               VALUES ('t1','gmail','msg-1','GS25',4500,'KRW','2026-06-01','food','snack');\n\
+             INSERT INTO bookkeeping_transactions \
+               (id, source, merchant, amount_minor, spent_at, category, duplicate_of_transaction_id) \
+               VALUES ('t2','manual','GS25',4500,'2026-06-01','food','t1');\n\
+             INSERT INTO bookkeeping_recurring_occurrences \
+               (id, recurring_expense_id, month, due_date, amount_minor, status, transaction_id) \
+               VALUES ('ro1','re1','2026-06','2026-06-25',500000,'posted','t1');\n\
+             UPDATE bookkeeping_transactions SET recurring_occurrence_id='ro1' WHERE id='t1';\n\
+             INSERT INTO bookkeeping_transaction_line_items \
+               (id, transaction_id, name, amount_minor, quantity) \
+               VALUES ('li1','t1','snack',4500,1);\n\
+             INSERT INTO bookkeeping_category_overrides \
+               (id, transaction_id, from_code, to_code) \
+               VALUES ('co1','t1','uncategorized','food');\n\
+             INSERT INTO bookkeeping_sync_jobs (id, source, status, scanned_count) \
+               VALUES ('sj1','csv','succeeded',3);\n\
+             INSERT INTO bookkeeping_sync_cursors (source, scope_key, cursor_kind, cursor_value) \
+               VALUES ('gmail','acct-1','gmail_history','12345');",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed bookkeeping rows");
+
+        // 0064를 트랜잭션 안에서 실행(마이그레이터 충실 재현 — PRAGMA OFF no-op).
+        let sql64 =
+            std::fs::read_to_string(format!("{base}/0064_bookkeeping_source_moneymanager.sql"))
+                .unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::raw_sql(&sql64)
+            .execute(&mut *tx)
+            .await
+            .expect("apply 0064 in tx");
+        tx.commit().await.unwrap();
+
+        // 값이 동일하게 보존됐는지 (거래 t1 주요 컬럼 + 순환 FK 컬럼).
+        let t1a: (String, Option<String>, String, i64) = sqlx::query_as(
+            "SELECT source, source_ref, merchant, amount_minor \
+             FROM bookkeeping_transactions WHERE id='t1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("t1 preserved");
+        assert_eq!(
+            t1a,
+            ("gmail".into(), Some("msg-1".into()), "GS25".into(), 4500)
+        );
+        let t1b: (String, String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT spent_at, category, note, recurring_occurrence_id \
+             FROM bookkeeping_transactions WHERE id='t1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("t1 preserved");
+        assert_eq!(
+            t1b,
+            (
+                "2026-06-01".into(),
+                "food".into(),
+                Some("snack".into()),
+                Some("ro1".into()),
+            )
+        );
+        let (dup_of,): (Option<String>,) = sqlx::query_as(
+            "SELECT duplicate_of_transaction_id FROM bookkeeping_transactions WHERE id='t2'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("t2 preserved");
+        assert_eq!(dup_of, Some("t1".into()), "self-FK duplicate_of 보존");
+
+        // FK join이 살아있는지 (CASCADE로 지워지지 않았는지).
+        let (li,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM bookkeeping_transaction_line_items li \
+             JOIN bookkeeping_transactions t ON t.id = li.transaction_id WHERE li.id='li1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(li, 1, "line item 보존 + FK join intact (cascade 금지)");
+        let (co,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM bookkeeping_category_overrides co \
+             JOIN bookkeeping_transactions t ON t.id = co.transaction_id WHERE co.id='co1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(co, 1, "category override 보존 + FK join intact");
+        let ro: (String, Option<String>) = sqlx::query_as(
+            "SELECT status, transaction_id FROM bookkeeping_recurring_occurrences WHERE id='ro1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("ro1 preserved");
+        assert_eq!(ro, ("posted".into(), Some("t1".into())));
+        let sj: (String, String, i64) = sqlx::query_as(
+            "SELECT source, status, scanned_count FROM bookkeeping_sync_jobs WHERE id='sj1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("sync job preserved");
+        assert_eq!(sj, ("csv".into(), "succeeded".into(), 3));
+        let cur: (String, String) = sqlx::query_as(
+            "SELECT cursor_kind, cursor_value FROM bookkeeping_sync_cursors \
+             WHERE source='gmail' AND scope_key='acct-1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("sync cursor preserved");
+        assert_eq!(cur, ("gmail_history".into(), "12345".into()));
+
+        // 확장된 CHECK: 'moneymanager'가 3개 테이블 모두에 insert 가능.
+        sqlx::query(
+            "INSERT INTO bookkeeping_transactions (id, source, merchant, amount_minor, spent_at, category) \
+             VALUES ('t3','moneymanager','CU',1200,'2026-06-02','food')",
+        )
+        .execute(&pool)
+        .await
+        .expect("source='moneymanager' transaction insert 가능해야 함");
+        sqlx::query(
+            "INSERT INTO bookkeeping_sync_jobs (id, source, status) VALUES ('sj2','moneymanager','pending')",
+        )
+        .execute(&pool)
+        .await
+        .expect("source='moneymanager' sync job insert 가능해야 함");
+        sqlx::query(
+            "INSERT INTO bookkeeping_sync_cursors (source, scope_key, cursor_kind, cursor_value) \
+             VALUES ('moneymanager','file-1','internal_date','2026-06-01')",
+        )
+        .execute(&pool)
+        .await
+        .expect("source='moneymanager' sync cursor insert 가능해야 함");
+
+        // 엉터리 source는 여전히 거부 (CHECK가 살아있는지).
+        for stmt in [
+            "INSERT INTO bookkeeping_transactions (id, source, merchant, amount_minor, spent_at, category) \
+             VALUES ('t4','bogus','X',100,'2026-06-02','food')",
+            "INSERT INTO bookkeeping_sync_jobs (id, source, status) VALUES ('sj3','bogus','pending')",
+            "INSERT INTO bookkeeping_sync_cursors (source, scope_key, cursor_kind, cursor_value) \
+             VALUES ('bogus','k','internal_date','v')",
+        ] {
+            assert!(
+                sqlx::query(stmt).execute(&pool).await.is_err(),
+                "bogus source가 거부되어야 한다: {stmt}"
+            );
+        }
+
+        // rename이 자식 FK 참조를 실제로 재작성했는지 — sqlite_master DDL에 '_new'가 남으면
+        // 자식 insert가 "no such table"로 죽는다(시스템 sqlite3 CLI에서 관찰된 의심 케이스).
+        let ddls: Vec<(String, String)> = sqlx::query_as(
+            "SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN \
+             ('bookkeeping_transactions','bookkeeping_transaction_line_items',\
+              'bookkeeping_category_overrides','bookkeeping_recurring_occurrences')",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("query sqlite_master");
+        assert_eq!(ddls.len(), 4, "rebuild된 4개 테이블이 모두 존재해야 한다");
+        for (name, sql) in &ddls {
+            assert!(
+                !sql.contains("_new"),
+                "{name} DDL에 '_new' 참조가 남아있다 (rename이 FK를 재작성하지 못함): {sql}"
+            );
+        }
+
+        // FK가 켜진 채(연결 기본값) 새 자식 행이 post-0064 부모를 참조해 insert 가능해야 한다.
+        sqlx::query(
+            "INSERT INTO bookkeeping_transaction_line_items (id, transaction_id, name, amount_minor) \
+             VALUES ('li2','t3','drink',1200)",
+        )
+        .execute(&pool)
+        .await
+        .expect("새 line item insert (FK → post-0064 transactions) 가능해야 함");
+        sqlx::query(
+            "INSERT INTO bookkeeping_category_overrides (id, transaction_id, from_code, to_code) \
+             VALUES ('co2','t3','food','shopping')",
+        )
+        .execute(&pool)
+        .await
+        .expect("새 category override insert 가능해야 함");
+        sqlx::query(
+            "INSERT INTO bookkeeping_recurring_occurrences \
+               (id, recurring_expense_id, month, due_date, amount_minor, transaction_id) \
+             VALUES ('ro2','re1','2026-07','2026-07-25',500000,'t3')",
+        )
+        .execute(&pool)
+        .await
+        .expect("새 recurring occurrence insert 가능해야 함");
+
+        // 엉터리 transaction_id는 거부 — FK가 (엉뚱한 테이블이 아니라) 올바른 부모에 실제 발화.
+        for stmt in [
+            "INSERT INTO bookkeeping_transaction_line_items (id, transaction_id, name, amount_minor) \
+             VALUES ('li3','no-such-tx','x',1)",
+            "INSERT INTO bookkeeping_category_overrides (id, transaction_id) VALUES ('co3','no-such-tx')",
+            "INSERT INTO bookkeeping_recurring_occurrences \
+               (id, recurring_expense_id, month, due_date, amount_minor, transaction_id) \
+             VALUES ('ro3','re1','2026-08','2026-08-25',500000,'no-such-tx')",
+        ] {
+            assert!(
+                sqlx::query(stmt).execute(&pool).await.is_err(),
+                "존재하지 않는 transaction_id가 FK로 거부되어야 한다: {stmt}"
+            );
+        }
+
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[tokio::test]
     async fn migrations_create_six_tables_and_fts() {
         let path = temp_db_path();

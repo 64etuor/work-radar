@@ -10,6 +10,13 @@ pub enum BookkeepingSource {
     Ocr,
     Gmail,
     Csv,
+    // 뱅크샐러드류 가계부 앱 "머니매니저" export. DB CHECK 문자열과 정확히 일치해야
+    // 하므로 snake_case 기본값('money_manager')을 'moneymanager'로 명시 override.
+    // (의도적으로 doc comment가 아님 — specta가 variant doc을 union 라인 개행으로
+    // 렌더링하며 trailing whitespace를 만들어 `git diff --check`를 깨뜨린다.)
+    #[serde(rename = "moneymanager")]
+    #[sqlx(rename = "moneymanager")]
+    MoneyManager,
 }
 
 /// 거래 리뷰 상태. 외부 자동 확정 없이 사람이 approved/ignored로 정리한다.
@@ -328,6 +335,53 @@ pub struct BookkeepingGmailSyncResult {
     pub failed_count: u32,
     /// 이번 동기화 후 저장된 커서(다음 tick의 시작점). 없으면 진전 없음.
     pub cursor_after: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportBookkeepingMmbakInput {
+    pub project_id: Option<String>,
+    /// 로컬 .mmbak/.sqlite 파일 경로. 임포터가 임시 사본을 떠서 읽는다(원본 무손상).
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportBookkeepingMmbakSummary {
+    pub scanned_count: u32,
+    pub imported_count: u32,
+    pub duplicate_count: u32,
+    /// 이체·불량 금액·커서-이전 행 등 의도적 매핑 스킵(실패 아님).
+    pub skipped_count: u32,
+    pub failed_count: u32,
+    /// 백업에서 삭제 표시된 uid 중 기존 행에 source_deleted 사유가 새로 달린 수.
+    pub flagged_deleted_count: u32,
+    /// 임포트당 중복-프로브 상한 초과로 프로브를 건너뛴 신규 행 수(행은 정상 임포트됨).
+    pub dup_probe_skipped_count: u32,
+    /// 이번 임포트 후 저장된 UTIME 커서(epoch ms 문자열). 없으면 진전 없음.
+    pub cursor_after: Option<String>,
+}
+
+/// MoneyManager(.mmbak) 자동 임포트 옵션 — 단일 row(id=1) 미러.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingMmbakOptions {
+    /// .mmbak 백업 감시 폴더(예: Google Drive 동기화 폴더). None=미설정.
+    pub watch_dir: Option<String>,
+    /// 자동 임포트 귀속 프로젝트(선택).
+    pub project_id: Option<String>,
+    pub auto_import_enabled: bool,
+    /// 마지막 자동 임포트 시각('YYYY-MM-DD HH:MM:SS' UTC). 실패해도 찍힌다(24h 게이트).
+    pub last_auto_import_at: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBookkeepingMmbakOptionsInput {
+    pub watch_dir: Option<String>,
+    pub project_id: Option<String>,
+    pub auto_import_enabled: bool,
 }
 
 /// alias 매칭 대상. raw_label = 유입 분류 라벨, merchant = 상호, domain = 발신 도메인.

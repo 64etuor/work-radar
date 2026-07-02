@@ -184,6 +184,7 @@ fn source_label(source: BookkeepingSource) -> &'static str {
         BookkeepingSource::Ocr => "ocr",
         BookkeepingSource::Gmail => "gmail",
         BookkeepingSource::Csv => "csv",
+        BookkeepingSource::MoneyManager => "moneymanager",
     }
 }
 
