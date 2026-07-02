@@ -1,0 +1,35 @@
+src-tauri/src/bookkeeping.rs
+  s_f013490a1b0efb::t_9975eeb7e42989 249,252-253,353,356-357
+  s_f013490a1b0efb::t_7adfea2dca6091 576-590
+  s_f013490a1b0efb::t_82a9fbf8b8d061 607-614,616-624,633-635,647-662
+  s_f013490a1b0efb::t_76e441ca2d687c 1074-1104
+  s_f013490a1b0efb::t_7b09a536d7aea8 1118-1150
+  s_f013490a1b0efb::t_4c8213ae6a90a7 1007-1038
+  s_f013490a1b0efb::t_15430a3a4ac9c2 263-268,364-369
+  s_f013490a1b0efb::t_420d53b892e55d 637
+  s_f013490a1b0efb::t_9806970091bcbe 2-6,19-28,30-35,43-88,116-133,137,151-248,250-251,254-262,269-352,354-355,358-363,370-476,480-486,490-495,497-575,591-606,615,625-628,646,663-664,677-680,813-1006,1039-1073,1105-1117,1202-1252
+  s_f013490a1b0efb::t_d6b5de01f6867e 477-479,496,676,681,807-808,1253
+  s_f013490a1b0efb::t_81ebf747025e39 629-632,636,638-645,665-675
+  s_f013490a1b0efb::t_b648fd231628e5 760-765,770-781,787-806
+  s_f013490a1b0efb::t_717a1debe0f781 1151-1201
+src-tauri/src/commands/bookkeeping/gmail.rs
+  s_f013490a1b0efb::t_c43726e2b85da2 5-8
+  s_f013490a1b0efb::t_ffa3b5a2bdac3c 89-100,114-115,117,122,128-131,142-163
+  s_f013490a1b0efb::t_c29fd18f2f2a28 164-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "0956bdec090b50c02d063a89fc25afd63f8d1f4d",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
