@@ -253,9 +253,34 @@ async fn execute_with_access<P: CalendarProvider>(
             mark_created_event_id(pool, w.id, &event_id)
                 .await
                 .map_err(|e| SyncError::Terminal(format!("mark_created_event_id: {e}")))?;
-            link_back_impl(pool, w, &event_id)
+            if w.target_kind == "routine_master" {
+                // 원자적 조건부 relink(active-flush TOCTOU 차단): enable이 이 create가 flush되는 사이
+                // disable로 취소되지 않았을 때만(google_calendar_id가 여전히 NOT NULL) relink한다.
+                // disable의 clear_google_mirror가 google_calendar_id를 NULL로 만들면 — 이 UPDATE 직전
+                // 커밋돼도 — rows_affected=0이 되어 relink 없이 방금 만든 orphan 마스터를 지운다.
+                // 다른 non-NULL 캘린더(move/replace)는 매칭되어 정상 relink. link_back_impl의 무조건
+                // UPDATE를 routine_master에 한해 CAS로 대체(critic P4a round-3). best-effort orphan delete.
+                let res = sqlx::query(
+                    "UPDATE routines SET google_event_id = ?1, google_calendar_id = ?2 \
+                     WHERE id = ?3 AND google_calendar_id IS NOT NULL",
+                )
+                .bind(&event_id)
+                .bind(&w.calendar_id)
+                .bind(&w.target_id)
+                .execute(pool)
                 .await
-                .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
+                .map_err(|e| SyncError::Terminal(format!("routine relink CAS: {e}")))?;
+                if res.rows_affected() == 0 {
+                    let _ = provider
+                        .delete_event(access, &w.calendar_id, &event_id)
+                        .await;
+                    return Ok(());
+                }
+            } else {
+                link_back_impl(pool, w, &event_id)
+                    .await
+                    .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
+            }
             // 옛 mirror가 새 이벤트와 다르면 삭제(오펀 방지). best-effort — 새 이벤트·링크는 이미
             // 정합이라 삭제 실패(이미 없음 포함)해도 write는 성공으로 본다. 재시도 경로
             // (w.event_id Some)는 옛 id를 잃으므로 첫 실행에서만 시도 — 잔여는 reconciliation 후속.
@@ -1286,10 +1311,14 @@ mod tests {
     #[tokio::test]
     async fn routine_master_create_links_back_routines_mirror() {
         let pool = fresh_pool().await;
-        sqlx::query("INSERT INTO routines (id, title, freq) VALUES ('r1','아침 운동','weekly')")
-            .execute(&pool)
-            .await
-            .unwrap();
+        // enable이 낙관적으로 google_calendar_id를 세팅한 상태(create 큐 전제) — cancel-check 통과.
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, google_calendar_id) \
+             VALUES ('r1','아침 운동','weekly','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         let pid = upsert_write(
             &pool,
             "create",
@@ -1329,6 +1358,60 @@ mod tests {
         .unwrap();
         assert_eq!(evt.as_deref(), Some("evt_master"));
         assert_eq!(cal.as_deref(), Some("calA"));
+    }
+
+    /// routine_master create 취소-검사(critic P4a round-2): 워커가 create 행을 처리하는 사이 enable이
+    /// disable로 취소돼 routine.google_calendar_id가 NULL이면, 방금 만든 orphan 마스터를 지우고
+    /// relink하지 않는다 — 취소된 enable이 재활성화되지 않게.
+    #[tokio::test]
+    async fn routine_master_create_cancelled_mid_flight_deletes_orphan_no_relink() {
+        let pool = fresh_pool().await;
+        // routine은 취소됨(google_calendar_id NULL) — disable가 clear_google_mirror한 상태.
+        sqlx::query("INSERT INTO routines (id, title, freq) VALUES ('r1','아침 운동','weekly')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let pid = upsert_write(
+            &pool,
+            "create",
+            "routine_master",
+            "r1",
+            "calA",
+            None,
+            r#"{"title":"아침 운동","start":"2026-05-29T07:00:00","duration_min":30,"time_zone":"Asia/Seoul","recurrence":["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider {
+            new_event_id: "evt_orphan".into(),
+            ..Default::default()
+        };
+        execute_with_access(&pool, &provider, "fake_access", &due[0])
+            .await
+            .unwrap();
+        delete_write(&pool, pid).await.unwrap();
+
+        // create는 호출됐지만, 취소 감지 후 방금 만든 orphan을 삭제.
+        assert_eq!(
+            provider.created.lock().unwrap().clone(),
+            vec![("calA".to_string(), "아침 운동".to_string())]
+        );
+        assert_eq!(
+            provider.deleted.lock().unwrap().clone(),
+            vec![("calA".to_string(), "evt_orphan".to_string())],
+            "취소된 enable의 orphan 마스터를 삭제해야 한다"
+        );
+        // routine은 relink되지 않음(google_event_id NULL 유지).
+        let (evt,): (Option<String>,) =
+            sqlx::query_as("SELECT google_event_id FROM routines WHERE id = 'r1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(evt.is_none(), "취소된 enable은 relink되면 안 된다");
     }
 
     /// routine_master delete: 링크된 마스터를 큐로 삭제하면 provider.delete_event 호출 후

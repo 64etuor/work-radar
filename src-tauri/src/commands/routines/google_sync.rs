@@ -13,13 +13,16 @@
 // 본 모듈의 모든 IPC/helper는 Result<_, AppError>로 통일 → 모듈 단위 result_large_err 허용.
 #![allow(clippy::result_large_err)]
 
-use chrono::{Duration, NaiveDate};
+use std::sync::Arc;
+
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 use tauri::State;
+use tokio::sync::Notify;
 
 use crate::{
     calendar::{
-        build_event_payload, CalendarError, CalendarProvider, CreateEventInput,
-        HttpCalendarProvider,
+        build_event_payload, pending_store::upsert_write, timing::GOOGLE_SYNC_DEBOUNCE_MS,
+        CalendarError, CalendarProvider, CreateEventInput, HttpCalendarProvider,
     },
     commands::calendar::access_token_for,
     db::Db,
@@ -402,6 +405,51 @@ async fn build_master_event_input_with_reference(
     })
 }
 
+/// 큐 dialect 브리지 — 순수 빌더의 `CreateEventInput`(start/end 절대시각 wall-clock)을 지연 큐의
+/// `parse_create_input`(sync.rs)이 기대하는 `{title, start, duration_min, all_day, recurrence,
+/// time_zone}` payload로 변환한다. 큐가 end를 스스로 계산하므로 여기선 duration_min만 넘긴다 —
+/// parse_create_input과 P3(series_replace)를 불변으로 둔다. duration_min = start~end 사이 whole
+/// minutes(recurring wall-clock이라 둘 다 `%Y-%m-%dT%H:%M:%S` NaiveDateTime으로 파싱). 루틴 마스터는
+/// timed(all_day=false)라 end>start가 보장돼야 한다 — 아니면 validation 에러(파괴적 큐 행 방지).
+/// `CreateEventInput`은 Serialize 미파생이므로 필드에서 serde_json::json!로 직접 조립한다.
+fn master_create_payload(input: &CreateEventInput) -> Result<String, AppError> {
+    let start = NaiveDateTime::parse_from_str(&input.start, "%Y-%m-%dT%H:%M:%S").map_err(|_| {
+        AppError::validation(
+            "routine.sync.bad_start",
+            "마스터 이벤트 start가 wall-clock ISO 형식이 아닙니다",
+        )
+    })?;
+    let end = NaiveDateTime::parse_from_str(&input.end, "%Y-%m-%dT%H:%M:%S").map_err(|_| {
+        AppError::validation(
+            "routine.sync.bad_end",
+            "마스터 이벤트 end가 wall-clock ISO 형식이 아닙니다",
+        )
+    })?;
+    let duration_min = (end - start).num_minutes();
+    if duration_min <= 0 {
+        return Err(AppError::validation(
+            "routine.sync.bad_duration",
+            "마스터 이벤트 종료가 시작보다 빠르거나 같습니다",
+        ));
+    }
+    let mut payload = serde_json::json!({
+        "title": input.title,
+        "start": input.start,
+        "duration_min": duration_min,
+        "all_day": input.all_day,
+        "recurrence": input.recurrence,
+    });
+    if let Some(tz) = input.time_zone.as_deref() {
+        payload["time_zone"] = serde_json::Value::String(tz.to_string());
+    }
+    // description을 방어적으로 전달 — 현재 build_master_event_input은 None이라 무영향이지만, 이후
+    // 마스터가 description을 달면 큐 경로가 조용히 떨구지 않도록 한다(parse_create_input이 읽음).
+    if let Some(desc) = input.description.as_deref().filter(|s| !s.is_empty()) {
+        payload["description"] = serde_json::Value::String(desc.to_string());
+    }
+    Ok(payload.to_string())
+}
+
 fn until_for_previous_day(
     effective_date: &str,
     time_of_day: Option<&str>,
@@ -775,10 +823,36 @@ pub(crate) async fn patch_synced_routine_exdates(
 /// (로컬 행은 보존, 사용자가 "로컬만 삭제" confirm).
 #[allow(clippy::result_large_err)]
 pub(crate) async fn delete_routine_master_event(db: &Db, routine_id: &str) -> Result<(), AppError> {
-    let row = load_routine(db, routine_id).await?;
+    let mut row = load_routine(db, routine_id).await?;
+    // pending ENABLE 중 삭제(google_calendar_id만 set, 워커가 아직 link 안 함): disable과 동일한 양측
+    // CAS로 orphan을 막는다(critic P4a round-5). google_event_id IS NULL일 때만 취소.
+    //  · 취소가 이김 → pending create 제거(워커가 fetch했으면 create arm CAS가 google_calendar_id
+    //    NULL 또는 routine 행 삭제를 보고 orphan 마스터를 삭제).
+    //  · 취소가 짐(워커가 먼저 link) → reload해 아래 인라인 master DELETE로 링크된 마스터를 지운다.
     if row.google_event_id.is_none() {
-        // 미동기화 — 토큰 조회 없이 no-op (삭제의 흔한 경우).
-        return Ok(());
+        if row.google_calendar_id.is_none() {
+            return Ok(()); // 미동기화 — 토큰 조회 없이 no-op (삭제의 흔한 경우).
+        }
+        let cancelled = sqlx::query(
+            "UPDATE routines SET google_calendar_id = NULL WHERE id = ?1 AND google_event_id IS NULL",
+        )
+        .bind(routine_id)
+        .execute(db)
+        .await?;
+        if cancelled.rows_affected() > 0 {
+            sqlx::query(
+                "DELETE FROM pending_calendar_writes \
+                 WHERE target_kind = 'routine_master' AND target_id = ?1 AND kind = 'create'",
+            )
+            .bind(routine_id)
+            .execute(db)
+            .await?;
+            return Ok(());
+        }
+        row = load_routine(db, routine_id).await?;
+    }
+    if row.google_event_id.is_none() {
+        return Ok(()); // 방어적 — 레이스로 이미 정리됨.
     }
     let project_id = require_project_id(&row)?;
     let access = access_token_or_not_connected(db, project_id).await?;
@@ -792,39 +866,147 @@ pub(crate) async fn delete_routine_master_event(db: &Db, routine_id: &str) -> Re
 #[specta::specta]
 pub async fn enable_routine_google_sync(
     db: State<'_, Db>,
+    notify: State<'_, Arc<Notify>>,
     routine_id: String,
     project_id: String,
     calendar_id: String,
 ) -> Result<(), AppError> {
-    let access = access_token_or_not_connected(db.inner(), &project_id).await?;
-    let provider = HttpCalendarProvider::new()?;
-    enable_routine_sync_with_provider(
+    enable_routine_google_sync_inner(
         db.inner(),
-        &provider,
-        &access,
+        notify.inner(),
         &routine_id,
         &project_id,
         &calendar_id,
-        default_tzid(),
     )
     .await
+}
+
+/// enable IPC의 테스트 가능한 코어(provider/토큰 조회 없음). P4a: 인라인 provider 호출 대신
+/// **지연 큐**로 전환 — 사전 가드는 인라인으로 검증하고, 낙관적 로컬 미러(project_id +
+/// google_calendar_id 즉시 set)를 남긴 뒤 create 큐 행을 만들고 워커를 깨운다. Google flush·
+/// 링크백(event_id)·재시도는 큐 워커가 소유(signal/routine_check 경로와 동일한 관측 타이밍).
+pub(crate) async fn enable_routine_google_sync_inner(
+    pool: &Db,
+    notify: &Arc<Notify>,
+    routine_id: &str,
+    project_id: &str,
+    calendar_id: &str,
+) -> Result<(), AppError> {
+    // 사전 가드(provider/토큰 없이): 존재·중복·kind/시간.
+    let row = load_routine(pool, routine_id).await?;
+    if row.google_event_id.is_some() {
+        return Err(AppError::validation(
+            "routine.sync.already_enabled",
+            "이미 동기화 중인 루틴입니다",
+        ));
+    }
+    ensure_kind_and_time(pool, &row, project_id).await?;
+
+    // 순수 빌더 → 큐 dialect payload.
+    let input = build_master_event_input(pool, routine_id, &row, default_tzid()).await?;
+    let payload = master_create_payload(&input)?;
+
+    // 낙관적 로컬 미러: project_id + google_calendar_id를 지금 set, google_event_id는 NULL로
+    // 남겨 워커 link_back이 flush 시 박게 한다(pending 윈도우 동안 half-state — signal 경로와 동일).
+    sqlx::query("UPDATE routines SET project_id = ?1, google_calendar_id = ?2 WHERE id = ?3")
+        .bind(project_id)
+        .bind(calendar_id)
+        .bind(routine_id)
+        .execute(pool)
+        .await?;
+
+    upsert_write(
+        pool,
+        "create",
+        "routine_master",
+        routine_id,
+        calendar_id,
+        None,
+        &payload,
+        GOOGLE_SYNC_DEBOUNCE_MS,
+    )
+    .await?;
+    notify.notify_one();
+    Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn disable_routine_google_sync(
     db: State<'_, Db>,
+    notify: State<'_, Arc<Notify>>,
     routine_id: String,
 ) -> Result<(), AppError> {
-    let row = load_routine(db.inner(), &routine_id).await?;
+    disable_routine_google_sync_inner(db.inner(), notify.inner(), &routine_id).await
+}
+
+/// disable IPC의 테스트 가능한 코어(provider/토큰 조회 없음). P4a: 인라인 delete 대신 지연 큐로 —
+/// 로컬 미러를 즉시 clear하고 delete 큐 행(event_id=옛 마스터)을 넣는다. 실제 Google delete·재시도는
+/// 워커가 소유. 미동기화면 no-op(토큰/큐 없음).
+pub(crate) async fn disable_routine_google_sync_inner(
+    pool: &Db,
+    notify: &Arc<Notify>,
+    routine_id: &str,
+) -> Result<(), AppError> {
+    let mut row = load_routine(pool, routine_id).await?;
+
+    // pending ENABLE(낙관적 google_calendar_id만 set, 워커가 아직 link 안 함)면 원자적으로 취소한다.
+    // google_event_id IS NULL일 때만 취소(CAS) — 워커의 relink CAS(google_calendar_id IS NOT NULL)와의
+    // lost-update를 막는다. SQLite 단일 writer라 두 CAS는 직렬화된다:
+    //  · 취소가 먼저: google_calendar_id=NULL → 워커 CAS 0행 → 워커가 orphan 마스터 삭제.
+    //  · 워커가 먼저: google_event_id set → 취소 CAS 0행 → reload해 아래 정상 delete로 링크된 마스터 삭제.
+    // 어느 순서든 결과 = disabled + orphan 없음(critic P4a round-4).
     if row.google_event_id.is_none() {
-        // 이미 disabled — no-op without 토큰 fetch.
-        return Ok(());
+        if row.google_calendar_id.is_none() {
+            return Ok(()); // 진짜 미동기화 — no-op(토큰/큐 없음).
+        }
+        let cancelled = sqlx::query(
+            "UPDATE routines SET google_calendar_id = NULL \
+             WHERE id = ?1 AND google_event_id IS NULL",
+        )
+        .bind(routine_id)
+        .execute(pool)
+        .await?;
+        if cancelled.rows_affected() > 0 {
+            // 취소가 이김 — pending create 제거(워커가 이미 fetch했으면 0행이지만 워커 CAS가 orphan 처리).
+            sqlx::query(
+                "DELETE FROM pending_calendar_writes \
+                 WHERE target_kind = 'routine_master' AND target_id = ?1 AND kind = 'create'",
+            )
+            .bind(routine_id)
+            .execute(pool)
+            .await?;
+            notify.notify_one();
+            return Ok(());
+        }
+        // 취소가 짐 — 워커가 먼저 link함. reload해 정상 delete 경로로(링크된 마스터를 지워 orphan 방지).
+        row = load_routine(pool, routine_id).await?;
     }
-    let project_id = require_project_id(&row)?;
-    let access = access_token_or_not_connected(db.inner(), project_id).await?;
-    let provider = HttpCalendarProvider::new()?;
-    disable_routine_sync_with_provider(db.inner(), &provider, &access, &routine_id).await
+
+    // 정상 disable: google_event_id Some(원래 동기화 중이었거나, 위에서 워커가 막 link함).
+    let (Some(cal_id), Some(evt_id)) =
+        (row.google_calendar_id.clone(), row.google_event_id.clone())
+    else {
+        return Ok(()); // 방어적 — 레이스로 이미 정리된 상태.
+    };
+
+    // 낙관적 미러 clear — clear_google_mirror와 동일 컬럼 집합(google_calendar_id/google_event_id).
+    clear_google_mirror(pool, routine_id).await?;
+
+    // delete payload는 빈 객체로 충분 — 워커 delete arm은 event_id + calendar_id만 쓴다.
+    upsert_write(
+        pool,
+        "delete",
+        "routine_master",
+        routine_id,
+        &cal_id,
+        Some(&evt_id),
+        "{}",
+        GOOGLE_SYNC_DEBOUNCE_MS,
+    )
+    .await?;
+    notify.notify_one();
+    Ok(())
 }
 
 /// 동기화 중인 루틴을 다른 캘린더로 이동(PR 5). Google API가 calendarId 변경 PATCH를 지원하지
@@ -992,7 +1174,8 @@ mod tests {
     use crate::models::{
         CreateRoutineInput, Kind, RoutineFreq, UpdateRoutineInput, Weekday as MWeekday,
     };
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
+    use tokio::sync::Notify;
 
     /// 최소 mock — create/patch/delete 호출 기록 + 결과 모킹.
     struct RecordingProvider {
@@ -2669,6 +2852,382 @@ mod tests {
         assert!(
             rrule.contains("BYMONTHDAY=28,29,30,31") && rrule.contains("BYSETPOS=-1"),
             "패턴은 anchor의 31 클램프 유지: {rrule}"
+        );
+    }
+
+    // ── P4a: enable/disable 인라인 → 지연 큐 전환 ─────────────────────────────────
+    // 관측 타이밍이 sync-inline → deferred(낙관적 로컬 미러 즉시 + Google flush 나중)로 바뀐다 —
+    // signal/routine_check 경로와 동일. provider/토큰 조회 없이 큐 행만 만든다.
+
+    /// enable_inner: 미동기화 루틴 → 낙관적 로컬 미러(project_id + google_calendar_id set,
+    /// google_event_id는 flush 전 NULL) + create 큐 행 1개(routine_master, recurrence+time_zone 동봉).
+    #[tokio::test]
+    async fn enable_inner_mirrors_locally_and_enqueues_create() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "아침 운동",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Mon, MWeekday::Wed, MWeekday::Fri],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+
+        enable_routine_google_sync_inner(&db, &notify, &rid, "proj_personal", "cal_user_a")
+            .await
+            .unwrap();
+
+        // 낙관적 미러: project_id + google_calendar_id set, google_event_id는 NULL(워커 link_back이 박음).
+        let (proj, cal_id, evt_id): (Option<String>, Option<String>, Option<String>) =
+            sqlx::query_as(
+                "SELECT project_id, google_calendar_id, google_event_id FROM routines WHERE id = ?1",
+            )
+            .bind(&rid)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(
+            proj.as_deref(),
+            Some("proj_personal"),
+            "project_id 즉시 set"
+        );
+        assert_eq!(cal_id.as_deref(), Some("cal_user_a"), "cal_id 즉시 set");
+        assert!(evt_id.is_none(), "google_event_id는 flush 전 NULL");
+
+        // 큐 행 1개: create / routine_master / target_id=rid, event_id NULL(create).
+        let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT kind, target_kind, target_id, payload_json, event_id \
+             FROM pending_calendar_writes",
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1, "정확히 1개 큐 행");
+        let (kind, tk, tid, payload, event_id) = &rows[0];
+        assert_eq!(kind, "create");
+        assert_eq!(tk, "routine_master");
+        assert_eq!(tid, &rid);
+        assert!(event_id.is_none(), "create 큐 행은 event_id NULL");
+        assert!(
+            payload.contains("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"),
+            "recurrence 라인 payload 동봉: {payload}"
+        );
+        assert!(
+            payload.contains("\"time_zone\""),
+            "time_zone 필드 동봉: {payload}"
+        );
+    }
+
+    /// P4a critic BLOCKER 회귀: pending ENABLE(google_event_id NULL, create 큐잉) 상태에서 disable하면
+    /// pending create를 취소하고 낙관적 미러를 clear해야 한다 — 안 그러면 워커가 마스터를 만들어
+    /// 사용자가 끈 동기화를 되살린다.
+    #[tokio::test]
+    async fn disable_inner_cancels_pending_enable() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "아침 운동",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // enable → pending create + 낙관적 미러(event_id NULL).
+        enable_routine_google_sync_inner(&db, &notify, &rid, "proj_personal", "cal_user_a")
+            .await
+            .unwrap();
+        // 워커 link_back 전에 disable.
+        disable_routine_google_sync_inner(&db, &notify, &rid)
+            .await
+            .unwrap();
+
+        // pending create가 취소됨(큐 비어야 함 — Google에 만든 게 없어 delete 행도 없음).
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "pending create가 취소되어 큐가 비어야 한다");
+        // 낙관적 미러 clear — 미동기화 상태로 복귀.
+        let (cal, evt): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_calendar_id, google_event_id FROM routines WHERE id = ?1",
+        )
+        .bind(&rid)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(cal.is_none(), "google_calendar_id NULL로 복귀");
+        assert!(evt.is_none());
+    }
+
+    /// 브리지 패리티: master_create_payload가 CreateEventInput의 duration_min(end−start)·description·
+    /// time_zone·recurrence를 큐 방언으로 정확히 옮긴다(필드 조용히 떨구지 않음).
+    #[test]
+    fn master_create_payload_carries_duration_description_tz_recurrence() {
+        let input = CreateEventInput {
+            title: "아침 운동".into(),
+            start: "2026-05-29T07:00:00".into(),
+            end: "2026-05-29T07:45:00".into(),
+            all_day: false,
+            description: Some("스트레칭 포함".into()),
+            recurrence: vec!["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR".into()],
+            time_zone: Some("Asia/Seoul".into()),
+        };
+        let payload = master_create_payload(&input).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(v["title"], "아침 운동");
+        assert_eq!(v["start"], "2026-05-29T07:00:00");
+        assert_eq!(v["duration_min"], 45);
+        assert_eq!(v["all_day"], false);
+        assert_eq!(v["description"], "스트레칭 포함");
+        assert_eq!(v["time_zone"], "Asia/Seoul");
+        assert_eq!(v["recurrence"][0], "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR");
+        // end<=start는 거부.
+        let bad = CreateEventInput {
+            end: "2026-05-29T07:00:00".into(),
+            ..input
+        };
+        assert!(master_create_payload(&bad).is_err());
+    }
+
+    /// enable_inner: 이미 동기화 중(google_event_id Some)이면 already_enabled 에러 + 큐 행 0개.
+    #[tokio::test]
+    async fn enable_inner_rejects_already_synced_without_enqueue() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "헬스장",
+            RoutineFreq::Daily,
+            vec![],
+            Some("19:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET google_calendar_id = 'c1', google_event_id = 'e1' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let err = enable_routine_google_sync_inner(&db, &notify, &rid, "proj_personal", "c2")
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, "routine.sync.already_enabled");
+
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "이미 동기화면 큐 행 없음");
+    }
+
+    /// critic P4a round-4 회귀: 워커가 CAS로 먼저 link한 상태(google_event_id Some)에서 disable가
+    /// 오면, 취소가 아니라 링크된 마스터의 delete를 큐잉해야 한다 — 그래야 Google 마스터가 orphan으로
+    /// 남지 않는다(양측 CAS의 fall-through 타깃). stale한 create 행이 남아 있어도 delete가 큐잉된다.
+    #[tokio::test]
+    async fn disable_inner_enqueues_delete_when_worker_already_linked() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        seed_project(&db, "proj_personal", "personal").await;
+        let rid = seed_routine(
+            &db,
+            "아침 운동",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // 워커가 이미 link함: google_event_id Some + google_calendar_id Some.
+        sqlx::query(
+            "UPDATE routines SET google_calendar_id = 'cal_a', google_event_id = 'evt_linked' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+        // stale한 pending create가 남아 있음(워커가 fetch 후 아직 제거 전인 상황 모사).
+        upsert_write(
+            &db,
+            "create",
+            "routine_master",
+            &rid,
+            "cal_a",
+            None,
+            "{}",
+            0,
+        )
+        .await
+        .unwrap();
+
+        disable_routine_google_sync_inner(&db, &notify, &rid)
+            .await
+            .unwrap();
+
+        // 미러 clear.
+        let (cal, evt): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_calendar_id, google_event_id FROM routines WHERE id = ?1",
+        )
+        .bind(&rid)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(cal.is_none());
+        assert!(evt.is_none());
+        // 링크된 마스터의 delete가 큐잉됨(orphan 방지) — 취소로 no-op 되면 안 됨.
+        let (n,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pending_calendar_writes \
+             WHERE kind = 'delete' AND target_kind = 'routine_master' AND event_id = 'evt_linked'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(n, 1, "링크된 마스터의 delete가 큐잉돼야 한다");
+    }
+
+    /// disable_inner: 동기화된 루틴 → 미러 clear(google_event_id/google_calendar_id NULL) +
+    /// delete 큐 행 1개(routine_master, event_id=옛 마스터 id).
+    #[tokio::test]
+    async fn disable_inner_clears_mirror_and_enqueues_delete() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let rid = seed_routine(
+            &db,
+            "PT",
+            RoutineFreq::Weekly,
+            vec![MWeekday::Tue],
+            Some("18:30".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        sqlx::query(
+            "UPDATE routines SET google_calendar_id = 'cal_x', google_event_id = 'evt_x' WHERE id = ?1",
+        )
+        .bind(&rid)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        disable_routine_google_sync_inner(&db, &notify, &rid)
+            .await
+            .unwrap();
+
+        // 미러 clear (clear_google_mirror와 동일 컬럼 집합).
+        let (cal_id, evt_id): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT google_calendar_id, google_event_id FROM routines WHERE id = ?1",
+        )
+        .bind(&rid)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert!(cal_id.is_none() && evt_id.is_none(), "미러 즉시 NULL");
+
+        let rows: Vec<(String, String, String, Option<String>, String)> = sqlx::query_as(
+            "SELECT kind, target_kind, target_id, event_id, calendar_id \
+             FROM pending_calendar_writes",
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1, "정확히 1개 큐 행");
+        let (kind, tk, tid, event_id, cal) = &rows[0];
+        assert_eq!(kind, "delete");
+        assert_eq!(tk, "routine_master");
+        assert_eq!(tid, &rid);
+        assert_eq!(
+            event_id.as_deref(),
+            Some("evt_x"),
+            "옛 마스터 event_id 실림"
+        );
+        assert_eq!(cal, "cal_x");
+    }
+
+    /// disable_inner: 미동기화 루틴이면 Ok no-op + 큐 행 0개(토큰 조회·큐 없음).
+    #[tokio::test]
+    async fn disable_inner_noop_when_not_synced() {
+        let db = fresh_db().await;
+        let notify = Arc::new(Notify::new());
+        let rid = seed_routine(
+            &db,
+            "스트레칭",
+            RoutineFreq::Daily,
+            vec![],
+            None,
+            Some(Kind::Personal),
+        )
+        .await;
+
+        disable_routine_google_sync_inner(&db, &notify, &rid)
+            .await
+            .unwrap();
+
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "미동기화면 큐 행 없음");
+    }
+
+    /// critic P4a round-5 회귀: pending ENABLE(google_calendar_id Some, google_event_id NULL) 중
+    /// 루틴 삭제 정리(delete_routine_master_event)는 pending create를 취소하고 google_calendar_id를
+    /// NULL로 만들어야 한다 — 그래야 워커 create arm CAS가 orphan 마스터를 삭제한다.
+    #[tokio::test]
+    async fn delete_master_event_cancels_pending_enable() {
+        let db = fresh_db().await;
+        let rid = seed_routine(
+            &db,
+            "아침 운동",
+            RoutineFreq::Daily,
+            vec![],
+            Some("07:00".into()),
+            Some(Kind::Personal),
+        )
+        .await;
+        // pending enable 상태.
+        sqlx::query("UPDATE routines SET google_calendar_id = 'cal_a' WHERE id = ?1")
+            .bind(&rid)
+            .execute(&db)
+            .await
+            .unwrap();
+        upsert_write(
+            &db,
+            "create",
+            "routine_master",
+            &rid,
+            "cal_a",
+            None,
+            "{}",
+            0,
+        )
+        .await
+        .unwrap();
+
+        delete_routine_master_event(&db, &rid).await.unwrap();
+
+        // pending create 취소 + google_calendar_id NULL(워커 CAS가 orphan 처리하도록).
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_calendar_writes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "pending create가 취소돼야 한다");
+        let (cal,): (Option<String>,) =
+            sqlx::query_as("SELECT google_calendar_id FROM routines WHERE id = ?1")
+                .bind(&rid)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert!(
+            cal.is_none(),
+            "google_calendar_id NULL → 워커 CAS가 orphan 삭제"
         );
     }
 }

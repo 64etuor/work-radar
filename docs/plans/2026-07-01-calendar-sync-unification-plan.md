@@ -83,6 +83,19 @@ Google에서 **반복 마스터 = `recurrence: ["RRULE:...","EXDATE;TZID=...:...
   provider를 직접 안 부르는지. 기존 google_sync 순수 빌더 테스트 보존.
 - **Done**: cargo test green, google_sync.rs provider 직접호출 grep=0, bindings drift 0.
 
+**P4a 완료(2026-07-02)**: enable/disable IPC → 지연 큐 전환. 브리지 헬퍼 master_create_payload
+(CreateEventInput → 큐 방언 {title,start,duration_min,all_day,recurrence,time_zone}), 낙관적 미러 +
+enqueue. ⚠️P4a가 도입한 **async-enable 윈도우**(google_calendar_id Some, google_event_id NULL)가
+`google_event_id.is_some()`로 synced 판단하는 모든 소비자와 TOCTOU를 만듦 → **양측 CAS**로
+orphan/re-enable 차단: 워커 create arm은 `WHERE google_calendar_id IS NOT NULL` 조건부 relink(취소면
+orphan 삭제), disable/delete_routine은 `WHERE google_event_id IS NULL` 조건부 취소(지면 reload→delete).
+codex critic 6라운드 ACCEPT-WITH-NITS. **남은 pending-window NIT(P4b/P4c 큐 전환 시 해소, orphan 아님)**:
+move=transient "not_synced", patch/split=stale pre-edit payload, exdate=stale EXDATE.
+
+### P4b — split→series_replace enqueue + move (staging, INVARIANT #2)
+
+### P4c — exdate + unschedule/restore-today
+
 ### P5 (follow-up) — 로컬 미러 원자화(트랜잭션) + overlay가 routine_master pending 반영
 
 ### P6 (follow-up) — 큐 행 TTL GC, staged 플래그 스키마화 등 잔여 smell
