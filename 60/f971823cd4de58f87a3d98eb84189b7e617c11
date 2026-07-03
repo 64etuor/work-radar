@@ -1,0 +1,33 @@
+src/components/bookkeeping/cards/TransactionReadRow.tsx
+  s_f013490a1b0efb::t_0f1046fdc9645a 10,29-30,40,44-58,70-90,93-101
+src/components/bookkeeping/BookkeepingView.css
+  s_f013490a1b0efb::t_322bc40fa0e5ff 658
+  s_f013490a1b0efb::t_c12c275410f5bd 1567
+  s_f013490a1b0efb::t_c7588a6995efb5 1173-1174
+  s_f013490a1b0efb::t_939f64bff49516 1331-1566,1568-1573
+src/components/bookkeeping/cards/ReviewQueueCard.dom.test.tsx
+  s_f013490a1b0efb::t_d81e755d599182 179-194
+src/components/bookkeeping/cards/TransactionReadRow.dom.test.tsx
+  s_f013490a1b0efb::t_49534eb0a95694 109
+  s_f013490a1b0efb::t_a28f8ea3c95e82 107,110-113
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_f013490a1b0efb::t_8365e38e46cea9 57-68
+src/components/bookkeeping/cards/TransactionEditForm.tsx
+  s_f013490a1b0efb::t_96bd03d18979be 1,28-32,51,73-75,96-124,126-152,172-175,193-198,200,202-274,276-280,282,303-310
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "60f971823cd4de58f87a3d98eb84189b7e617c11",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
