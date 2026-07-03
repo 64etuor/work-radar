@@ -104,9 +104,13 @@ function click(el: Element) {
   act(() => el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
 }
 
+// 편집/삭제는 아이콘 전용 ghost 버튼 — aria-label과 title이 함께 있어야 매칭한다(둘 다 필수 계약).
 function buttonByText(text: string): HTMLButtonElement {
-  const el = [...(container?.querySelectorAll("button") ?? [])].find((b) =>
-    b.textContent?.includes(text),
+  const el = [...(container?.querySelectorAll("button") ?? [])].find(
+    (b) =>
+      b.textContent?.includes(text) ||
+      (b.getAttribute("aria-label")?.includes(text) === true &&
+        b.getAttribute("title")?.includes(text) === true),
   );
   if (!el) throw new Error(`button not found: ${text}`);
   return el;

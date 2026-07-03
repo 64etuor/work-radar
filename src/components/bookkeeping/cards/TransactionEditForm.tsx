@@ -1,4 +1,4 @@
-import { Check, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import type { BookkeepingExpenseKind, BookkeepingTransaction } from "@/bindings";
@@ -25,6 +25,11 @@ import { PaymentFields } from "./PaymentFields";
 import { TaxonomyEditFields } from "./TaxonomyEditFields";
 import { TransactionMetadata } from "./TransactionMetadata";
 
+/**
+ * 거래 편집 폼 — 필드를 목적별 섹션(기본/분류/결제/상세/분할·중복)으로 묶는다.
+ * 상세 섹션은 기본 접힘(로컬 상태, 기억 없음) — draft는 부모 state에 있으므로
+ * 접었다 펴도 입력값이 보존된다. 저장 계약(onSave(draft))은 바꾸지 않는다.
+ */
 export function TransactionEditForm({
   tx,
   disabled,
@@ -43,6 +48,7 @@ export function TransactionEditForm({
   onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState(() => editDraftFromTransaction(tx));
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const fieldPrefix = `bk-edit-${tx.id}`;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -64,38 +70,9 @@ export function TransactionEditForm({
           <div className="bk-row-amount typo-title-sm">{currency.format(tx.amountMinor)}</div>
         </div>
 
-        <div className="bk-edit-grid">
-          <Field label="가맹점" htmlFor={`${fieldPrefix}-merchant`}>
-            <Input
-              id={`${fieldPrefix}-merchant`}
-              value={draft.merchant}
-              onChange={(e) => setDraft((current) => ({ ...current, merchant: e.target.value }))}
-              required
-            />
-          </Field>
-          <div className="bk-form-grid">
-            <Field label="금액" htmlFor={`${fieldPrefix}-amount`}>
-              <Input
-                id={`${fieldPrefix}-amount`}
-                value={draft.amount}
-                onChange={(e) => setDraft((current) => ({ ...current, amount: e.target.value }))}
-                inputMode="numeric"
-                required
-              />
-            </Field>
-            <Field label="통화" htmlFor={`${fieldPrefix}-currency`}>
-              <Input
-                id={`${fieldPrefix}-currency`}
-                value={draft.currency}
-                onChange={(e) =>
-                  setDraft((current) => ({ ...current, currency: e.target.value.toUpperCase() }))
-                }
-                maxLength={3}
-                required
-              />
-            </Field>
-          </div>
-          <div className="bk-form-grid">
+        <section className="bk-edit-section">
+          <h4 className="bk-edit-section-label typo-label-sm">기본</h4>
+          <div className="bk-edit-grid">
             <Field label="날짜" htmlFor={`${fieldPrefix}-spent-at`}>
               <DatePicker
                 id={`${fieldPrefix}-spent-at`}
@@ -116,29 +93,63 @@ export function TransactionEditForm({
                 placeholder="HH:MM:SS"
               />
             </Field>
-          </div>
-          <Field label="수입/지출" htmlFor={`${fieldPrefix}-direction`}>
-            <div id={`${fieldPrefix}-direction`} className="bk-segmented" role="group">
-              <Button
-                type="button"
-                size="sm"
-                variant={draft.direction === "expense" ? "default" : "outline"}
-                aria-pressed={draft.direction === "expense"}
-                onClick={() => setDraft((current) => ({ ...current, direction: "expense" }))}
-              >
-                지출
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={draft.direction === "income" ? "default" : "outline"}
-                aria-pressed={draft.direction === "income"}
-                onClick={() => setDraft((current) => ({ ...current, direction: "income" }))}
-              >
-                수입
-              </Button>
+            <Field label="가맹점" htmlFor={`${fieldPrefix}-merchant`}>
+              <Input
+                id={`${fieldPrefix}-merchant`}
+                value={draft.merchant}
+                onChange={(e) => setDraft((current) => ({ ...current, merchant: e.target.value }))}
+                required
+              />
+            </Field>
+            <div className="bk-form-grid">
+              <Field label="금액" htmlFor={`${fieldPrefix}-amount`}>
+                <Input
+                  id={`${fieldPrefix}-amount`}
+                  value={draft.amount}
+                  onChange={(e) => setDraft((current) => ({ ...current, amount: e.target.value }))}
+                  inputMode="numeric"
+                  required
+                />
+              </Field>
+              <Field label="통화" htmlFor={`${fieldPrefix}-currency`}>
+                <Input
+                  id={`${fieldPrefix}-currency`}
+                  value={draft.currency}
+                  onChange={(e) =>
+                    setDraft((current) => ({ ...current, currency: e.target.value.toUpperCase() }))
+                  }
+                  maxLength={3}
+                  required
+                />
+              </Field>
             </div>
-          </Field>
+            <Field label="수입/지출" htmlFor={`${fieldPrefix}-direction`}>
+              <div id={`${fieldPrefix}-direction`} className="bk-segmented" role="group">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={draft.direction === "expense" ? "default" : "outline"}
+                  aria-pressed={draft.direction === "expense"}
+                  onClick={() => setDraft((current) => ({ ...current, direction: "expense" }))}
+                >
+                  지출
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={draft.direction === "income" ? "default" : "outline"}
+                  aria-pressed={draft.direction === "income"}
+                  onClick={() => setDraft((current) => ({ ...current, direction: "income" }))}
+                >
+                  수입
+                </Button>
+              </div>
+            </Field>
+          </div>
+        </section>
+
+        <section className="bk-edit-section">
+          <h4 className="bk-edit-section-label typo-label-sm">분류</h4>
           <TaxonomyEditFields
             prefix={fieldPrefix}
             categoryCode={draft.categoryCode}
@@ -158,21 +169,10 @@ export function TransactionEditForm({
               rows={2}
             />
           </Field>
-          <Field label="내용/설명" htmlFor={`${fieldPrefix}-description`}>
-            <Textarea
-              id={`${fieldPrefix}-description`}
-              value={draft.description}
-              onChange={(e) => setDraft((current) => ({ ...current, description: e.target.value }))}
-              rows={2}
-            />
-          </Field>
-          <Field label="자산" htmlFor={`${fieldPrefix}-account`}>
-            <Input
-              id={`${fieldPrefix}-account`}
-              value={draft.account}
-              onChange={(e) => setDraft((current) => ({ ...current, account: e.target.value }))}
-            />
-          </Field>
+        </section>
+
+        <section className="bk-edit-section">
+          <h4 className="bk-edit-section-label typo-label-sm">결제</h4>
           <PaymentFields
             kindId={`${fieldPrefix}-payment-kind`}
             labelId={`${fieldPrefix}-payment-label`}
@@ -190,53 +190,96 @@ export function TransactionEditForm({
               setDraft((current) => ({ ...current, paymentMethodLast4 }))
             }
           />
-          <Field label="비용유형" htmlFor={`${fieldPrefix}-expense-kind`}>
-            <Select
-              value={draft.expenseKind}
-              onValueChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  expenseKind: value as BookkeepingExpenseKind,
-                }))
-              }
-            >
-              <SelectTrigger id={`${fieldPrefix}-expense-kind`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPENSE_KIND_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <Field label="자산" htmlFor={`${fieldPrefix}-account`}>
+            <Input
+              id={`${fieldPrefix}-account`}
+              value={draft.account}
+              onChange={(e) => setDraft((current) => ({ ...current, account: e.target.value }))}
+            />
           </Field>
-          <div className="bk-form-grid">
-            <Field label="주문번호" htmlFor={`${fieldPrefix}-order-no`}>
-              <Input
-                id={`${fieldPrefix}-order-no`}
-                value={draft.orderNo}
-                onChange={(e) => setDraft((current) => ({ ...current, orderNo: e.target.value }))}
-              />
-            </Field>
-            <Field label="결제번호" htmlFor={`${fieldPrefix}-payment-no`}>
-              <Input
-                id={`${fieldPrefix}-payment-no`}
-                value={draft.paymentNo}
-                onChange={(e) => setDraft((current) => ({ ...current, paymentNo: e.target.value }))}
-              />
-            </Field>
-          </div>
-        </div>
+        </section>
 
-        <LineItemEditor transactionId={tx.id} amountMinor={tx.amountMinor} disabled={disabled} />
+        <section className="bk-edit-section">
+          <button
+            type="button"
+            className="bk-edit-section-toggle typo-label-sm"
+            aria-expanded={detailsOpen}
+            aria-controls={`${fieldPrefix}-details`}
+            onClick={() => setDetailsOpen((value) => !value)}
+          >
+            <ChevronRight className="bk-edit-toggle-chevron size-3.5" />
+            상세
+          </button>
+          {detailsOpen && (
+            <div id={`${fieldPrefix}-details`} className="bk-edit-details">
+              <div className="bk-edit-grid">
+                <Field label="비용유형" htmlFor={`${fieldPrefix}-expense-kind`}>
+                  <Select
+                    value={draft.expenseKind}
+                    onValueChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        expenseKind: value as BookkeepingExpenseKind,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id={`${fieldPrefix}-expense-kind`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXPENSE_KIND_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <div className="bk-form-grid">
+                  <Field label="주문번호" htmlFor={`${fieldPrefix}-order-no`}>
+                    <Input
+                      id={`${fieldPrefix}-order-no`}
+                      value={draft.orderNo}
+                      onChange={(e) =>
+                        setDraft((current) => ({ ...current, orderNo: e.target.value }))
+                      }
+                    />
+                  </Field>
+                  <Field label="결제번호" htmlFor={`${fieldPrefix}-payment-no`}>
+                    <Input
+                      id={`${fieldPrefix}-payment-no`}
+                      value={draft.paymentNo}
+                      onChange={(e) =>
+                        setDraft((current) => ({ ...current, paymentNo: e.target.value }))
+                      }
+                    />
+                  </Field>
+                </div>
+                <div className="bk-edit-span-2">
+                  <Field label="내용/설명" htmlFor={`${fieldPrefix}-description`}>
+                    <Textarea
+                      id={`${fieldPrefix}-description`}
+                      value={draft.description}
+                      onChange={(e) =>
+                        setDraft((current) => ({ ...current, description: e.target.value }))
+                      }
+                      rows={2}
+                    />
+                  </Field>
+                </div>
+              </div>
+              <TransactionMetadata tx={tx} compact />
+            </div>
+          )}
+        </section>
 
-        <TransactionMetadata tx={tx} />
+        <section className="bk-edit-section">
+          <h4 className="bk-edit-section-label typo-label-sm">분할 · 중복</h4>
+          <LineItemEditor transactionId={tx.id} amountMinor={tx.amountMinor} disabled={disabled} />
+          <DuplicateCandidates tx={tx} disabled={disabled} />
+        </section>
 
-        <DuplicateCandidates tx={tx} disabled={disabled} />
-
-        <div className="bk-row-actions">
+        <div className="bk-edit-footer">
           <Button type="submit" size="sm" disabled={disabled}>
             저장
           </Button>
@@ -257,7 +300,14 @@ export function TransactionEditForm({
               접기
             </Button>
           )}
-          <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onDelete}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="bk-edit-footer-danger text-destructive"
+            disabled={disabled}
+            onClick={onDelete}
+          >
             <Trash2 className="size-3.5" />
             삭제
           </Button>

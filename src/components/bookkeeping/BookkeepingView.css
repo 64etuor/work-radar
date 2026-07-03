@@ -655,7 +655,7 @@
    .bk-row-actions를 쓰는 컨테이너 전수(grep 기준):
    - .bk-transaction read-row: TransactionReadRow / RecurringOccurrenceRow / TrashTransactionRow → 압축 대상
    - .bk-review-read: ReviewReadRow → 압축 대상
-   - .bk-transaction.bk-transaction-edit: TransactionEditForm 푸터(저장/취소/삭제) → 제외(:not)
+   - TransactionEditForm 푸터는 .bk-edit-footer(파일 하단)로 분리 — 압축 비대상(:not은 방어용 유지)
    폼/카드 헤더의 버튼은 건드리지 않는다. */
 .bk-transaction:not(.bk-transaction-edit) .bk-row-actions > button,
 .bk-review-read .bk-row-actions > button {
@@ -1170,7 +1170,8 @@
   align-items: center;
   column-gap: var(--wr-density-md);
   min-width: 0;
-  padding: var(--wr-density-2xs) 0;
+  /* 밀도 패스가 2px까지 눌렀던 것을 완화 — 원장 행과 같은 스캔 리듬(6px). */
+  padding: var(--wr-density-sm) 0;
   border-left: 3px solid transparent;
   padding-left: var(--wr-density-xs);
   border-radius: var(--radius-sm);
@@ -1325,5 +1326,248 @@
   .bk-review-read-amount {
     justify-self: start;
     text-align: left;
+  }
+}
+
+/* ── 원장(확정 거래) 장부 레이아웃 ────────────────────────────────────
+   행과 칼럼 헤더가 같은 고정/fr 트랙(--bk-ledger-grid)을 공유해 96행이
+   칼럼-대-칼럼으로 정렬된다. 마지막 트랙(액션)은 26px 아이콘 버튼 2개 +
+   간격 = 고정 3.5rem — 헤더의 빈 셀과도 폭이 같아 금액 칼럼이 어긋나지 않는다. */
+.bk-transaction-list {
+  --bk-ledger-grid: 8rem minmax(0, 1.9fr) 9.5rem minmax(0, 1fr) 7.5rem 3.5rem;
+}
+
+/* 칼럼 헤더 — 장식(스캔 보조) 줄. 행과 같은 inline 오프셋(-10px + 3px 보더)로 정렬. */
+.bk-ledger-head {
+  display: grid;
+  grid-template-columns: var(--bk-ledger-grid);
+  align-items: center;
+  column-gap: var(--wr-density-md);
+  margin-inline: -10px;
+  padding: 0 10px var(--wr-density-sm);
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--bk-rule);
+  color: var(--bk-subtle);
+}
+
+.bk-ledger-head > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bk-ledger-head-amount {
+  justify-self: end;
+  text-align: right;
+}
+
+/* 헤더가 hairline을 그리므로 첫 데이터 행의 border-top 중복을 지운다. */
+.bk-ledger-head + .bk-row {
+  border-top: 0;
+}
+
+/* 읽기 행 — 밀도 패스(4px)가 과했던 세로 리듬을 9px로 복원, hover는 surface만
+   (장부 행에서 translateY 리프트는 스캔을 방해하므로 끈다). */
+.bk-ledger-row {
+  grid-template-columns: var(--bk-ledger-grid);
+  align-items: center;
+  column-gap: var(--wr-density-md);
+  padding-block: 9px;
+}
+
+.bk-transaction.bk-ledger-row:hover {
+  transform: none;
+}
+
+.bk-ledger-date {
+  color: var(--bk-subtle);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-ledger-time {
+  margin-left: var(--wr-density-2xs);
+  color: var(--bk-muted);
+  font-size: 0.9em;
+}
+
+/* 상호(primary) + 메모(muted, 한 줄 truncate) 스택 셀. */
+.bk-ledger-main {
+  display: grid;
+  min-width: 0;
+  gap: 0;
+}
+
+.bk-ledger-merchant,
+.bk-ledger-note,
+.bk-ledger-payment {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bk-ledger-category {
+  display: flex;
+  min-width: 0;
+}
+
+.bk-ledger-amount {
+  justify-self: end;
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-ledger-amount[data-direction="income"] {
+  color: var(--bk-green);
+}
+
+/* 액션 클러스터 — 평소엔 흐리게, hover/focus-within에 온전히(불투명도만 —
+   display:none 금지: 항상 히트 가능·포커스 가능해야 한다). */
+.bk-ledger-actions {
+  opacity: 0.45;
+  transition: opacity var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-ledger-row:hover .bk-ledger-actions,
+.bk-ledger-row:focus-within .bk-ledger-actions {
+  opacity: 1;
+}
+
+/* 아이콘 전용 버튼 — 26px 정사각(공유 3.5rem 트랙과 맞물린다).
+   mid-file의 padding-inline 압축 규칙(0,3,0)을 같은 명시도+후순위로 이긴다. */
+.bk-transaction.bk-ledger-row .bk-row-actions > button {
+  width: 26px;
+  padding-inline: 0;
+}
+
+@media (max-width: 760px) {
+  .bk-ledger-head {
+    display: none;
+  }
+
+  .bk-ledger-row {
+    grid-template-columns: 1fr;
+    row-gap: var(--wr-density-2xs);
+  }
+
+  .bk-ledger-amount,
+  .bk-ledger-actions {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .bk-ledger-actions {
+    opacity: 1;
+  }
+}
+
+/* ── 거래 편집 폼 — 섹션 그루핑 ──────────────────────────────────────
+   기본/분류/결제/상세(기본 접힘)/분할·중복 섹션. 라벨은 label-sm + hairline. */
+.bk-transaction-edit {
+  padding-block: var(--wr-density-md) var(--wr-density-lg);
+}
+
+.bk-edit-form {
+  gap: var(--wr-density-lg);
+}
+
+.bk-edit-section {
+  display: grid;
+  gap: var(--wr-density-sm);
+}
+
+/* 섹션 안 full-width 그리드 자식(분류/결제)이 넘치지 않게. */
+.bk-edit-section > .bk-form-grid,
+.bk-edit-section > .bk-payment-fields {
+  min-width: 0;
+}
+
+.bk-edit-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--wr-density-sm);
+  margin: 0;
+  color: var(--bk-subtle);
+}
+
+.bk-edit-section-label::after {
+  content: "";
+  flex: 1 1 auto;
+  border-top: 1px solid var(--bk-rule);
+}
+
+/* 상세 토글 — 섹션 라벨과 같은 시각 문법의 버튼(aria-expanded로 상태 노출). */
+.bk-edit-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--wr-density-xs);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bk-subtle);
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-edit-section-toggle::after {
+  content: "";
+  flex: 1 1 auto;
+  border-top: 1px solid var(--bk-rule);
+}
+
+.bk-edit-section-toggle:hover {
+  color: var(--bk-ink);
+}
+
+.bk-edit-section-toggle:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 2px;
+}
+
+.bk-edit-toggle-chevron {
+  flex: 0 0 auto;
+  transition: transform var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-edit-section-toggle[aria-expanded="true"] .bk-edit-toggle-chevron {
+  transform: rotate(90deg);
+}
+
+.bk-edit-details {
+  display: grid;
+  gap: var(--wr-density-md);
+}
+
+.bk-edit-span-2 {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* 푸터 — hairline 위 고정 액션 줄. primary(저장)→secondary(확정/접기),
+   destructive(삭제)는 오른쪽 끝으로 분리. 26px 압축 비대상(기존 정책 유지). */
+.bk-edit-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wr-density-sm);
+  padding-top: var(--wr-density-md);
+  border-top: 1px solid var(--bk-rule);
+}
+
+.bk-edit-footer-danger {
+  margin-left: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 회전 transition만 끈다 — 펼침 상태의 정적 chevron 회전(시각 단서)은 유지. */
+  .bk-ledger-actions,
+  .bk-edit-section-toggle,
+  .bk-edit-toggle-chevron {
+    transition: none;
   }
 }

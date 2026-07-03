@@ -54,6 +54,18 @@ export function ApprovedTransactionsCard({
       <CardContent className="bk-card-body">
         <div className="bk-transaction-list">
           {rows.length === 0 && <EmptyState>거래 없음</EmptyState>}
+          {/* 원장 칼럼 헤더 — 행과 같은 그리드 템플릿을 공유하는 장부 라벨 줄.
+              장식(스캔 보조)이라 aria-hidden — 행 자체가 접근 가능한 콘텐츠다. */}
+          {rows.length > 0 && (
+            <div className="bk-ledger-head typo-caption-sm" aria-hidden="true">
+              <span>날짜</span>
+              <span>내용</span>
+              <span>분류</span>
+              <span>결제</span>
+              <span className="bk-ledger-head-amount">금액</span>
+              <span />
+            </div>
+          )}
           {visible.map((tx) =>
             expandedId === tx.id ? (
               <TransactionEditForm

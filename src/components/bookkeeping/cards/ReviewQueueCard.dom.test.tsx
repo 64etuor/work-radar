@@ -176,6 +176,22 @@ describe("ReviewQueueCard collapse/expand", () => {
     expect(container?.querySelector("#bk-edit-tx-1-merchant")).not.toBeNull();
   });
 
+  it("toggles the collapsed 상세 section inside the edit form", () => {
+    setup(ROWS);
+    click(buttonIn(readRowOf("김밥천국"), "편집"));
+    const form = container?.querySelector(".bk-edit-form");
+    if (!form) throw new Error("edit form not found");
+    // 기본 접힘 — 상세 필드(주문번호)는 DOM에 없다.
+    expect(container?.querySelector("#bk-edit-tx-1-order-no")).toBeNull();
+    const toggle = buttonIn(form, "상세");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(container?.querySelector("#bk-edit-tx-1-order-no")).not.toBeNull();
+    click(toggle);
+    expect(container?.querySelector("#bk-edit-tx-1-order-no")).toBeNull();
+  });
+
   it("collapses the edit form via 접기", () => {
     setup(ROWS);
     click(buttonIn(readRowOf("김밥천국"), "편집"));
