@@ -101,6 +101,9 @@ pub struct MappedMmTransaction {
     pub spent_at: String,
     /// HH:MM:SS — ZDATE가 실제 시각으로 보일 때만(합성 자정 제외).
     pub spent_at_time: Option<String>,
+    /// 원본 카테고리 uid(트림; 빈 값이면 미분류). 임포터가 mm-<uid> 코드를 결정론적으로
+    /// 직접 배정하는 데 쓴다 — 라벨/alias 추측이 아니라 원본 identity가 정본.
+    pub ctg_uid: String,
     /// 상위 카테고리 NAME(2단계면 parent).
     pub category_label: String,
     /// 2단계 분류일 때 child NAME.
@@ -465,6 +468,7 @@ pub fn map_inoutcome_row(
     MmRowOutcome::Mapped(Box::new(MappedMmTransaction {
         source_ref: uid,
         direction,
+        ctg_uid: row.ctg_uid.trim().to_string(),
         merchant,
         amount_minor,
         currency,

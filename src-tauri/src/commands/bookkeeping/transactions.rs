@@ -333,6 +333,110 @@ pub(crate) async fn upsert_bookkeeping_transaction_from_ingest_inner(
     Ok(row)
 }
 
+/// Ingest **insert-if-absent**: 호출자-권위 코드(caller-authoritative codes)를 존재 여부와
+/// **원자적으로** 싣는 경로. `ON CONFLICT(source, source_ref) DO NOTHING` + RETURNING —
+/// `Some(row)`는 이 호출이 실제로 삽입했을 때만 돌아온다. 행이 이미 있으면(동시 임포트
+/// 레이스 포함) 아무것도 쓰지 않는다 — 명시 코드가 conflict COALESCE 경로로 새어들어
+/// 사람이 고른 (대분류, sub 없음) 아래에 소스 sub 코드를 채우는 창을 SQL 레벨에서 없앤다.
+/// 기존 행 갱신은 호출자가 별도로 공유 upsert(명시 코드 없이)를 타야 한다. gmail이
+/// 의존하는 공유 upsert SQL은 건드리지 않는다.
+pub(crate) async fn insert_bookkeeping_transaction_from_ingest_if_absent_inner(
+    db: &Db,
+    input: CreateBookkeepingTransactionInput,
+    audit_action: &str,
+    audit_summary: &str,
+) -> Result<Option<BookkeepingTransaction>, AppError> {
+    let Some(source_ref) = clean_optional(input.source_ref.as_deref()) else {
+        return Err(AppError::validation(
+            "bookkeeping.source_ref",
+            "insert-if-absent 경로는 source_ref가 필요합니다",
+        ));
+    };
+    let merchant = clean_required(&input.merchant, "bookkeeping.merchant")?;
+    let category = clean_required(&input.category, "bookkeeping.category")?;
+    let currency = clean_currency(&input.currency)?;
+    validate_date(&input.spent_at)?;
+    if input.amount_minor <= 0 {
+        return Err(AppError::validation(
+            "bookkeeping.amount",
+            "금액은 0보다 커야 합니다",
+        ));
+    }
+    let description = clean_optional(input.description.as_deref());
+    let note = clean_optional(input.note.as_deref());
+    let payment_method_label = clean_optional(input.payment_method_label.as_deref());
+    let payment_method_last4 = clean_payment_last4(input.payment_method_last4.as_deref())?;
+    let mut jf = prepare_judgment_fields(&input)?;
+    apply_category_resolution(db, &mut jf, &category, &merchant).await?;
+
+    let mut tx = db.begin().await?;
+    let insert_sql = format!(
+        "INSERT INTO bookkeeping_transactions \
+         (id, project_id, source, source_ref, merchant, description, amount_minor, currency, \
+          spent_at, category, review_status, note, payment_method_kind, payment_method_label, \
+          payment_method_last4, expense_kind, recurring_expense_id, recurring_occurrence_id, \
+          direction, account, subcategory, category_code, subcategory_code, raw_category, \
+          spent_at_time, confidence, field_confidence_json, review_reasons_json, order_no, \
+          payment_no) \
+         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
+          'needs_review', ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, \
+          ?23, ?24, ?25, ?26, ?27, ?28) \
+         ON CONFLICT(source, source_ref) WHERE source_ref IS NOT NULL DO NOTHING \
+         RETURNING {TRANSACTION_RETURNING_COLUMNS}"
+    );
+    let row = sqlx::query_as::<_, BookkeepingTransaction>(&insert_sql)
+        .bind(input.project_id.as_deref())
+        .bind(input.source)
+        .bind(&source_ref)
+        .bind(&merchant)
+        .bind(description.as_deref())
+        .bind(input.amount_minor)
+        .bind(&currency)
+        .bind(&input.spent_at)
+        .bind(&category)
+        .bind(note.as_deref())
+        .bind(input.payment_method_kind)
+        .bind(payment_method_label.as_deref())
+        .bind(payment_method_last4.as_deref())
+        .bind(input.expense_kind)
+        .bind(input.recurring_expense_id.as_deref())
+        .bind(input.recurring_occurrence_id.as_deref())
+        .bind(jf.direction)
+        .bind(jf.account.as_deref())
+        .bind(jf.subcategory.as_deref())
+        .bind(jf.category_code.as_deref())
+        .bind(jf.subcategory_code.as_deref())
+        .bind(jf.raw_category.as_deref())
+        .bind(jf.spent_at_time.as_deref())
+        .bind(jf.confidence)
+        .bind(&jf.field_confidence_json)
+        .bind(&jf.review_reasons_json)
+        .bind(jf.order_no.as_deref())
+        .bind(jf.payment_no.as_deref())
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    let Some(row) = row else {
+        // conflict → DO NOTHING: 아무것도 안 썼으니 감사 기록도 없다.
+        return Ok(None);
+    };
+    insert_audit_log_tx(
+        &mut tx,
+        "transaction",
+        &row.id,
+        audit_action,
+        audit_summary,
+        serde_json::json!({
+            "source": input.source,
+            "reviewStatus": row.review_status,
+            "hasSourceRef": true
+        }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(Some(row))
+}
+
 pub(crate) async fn list_bookkeeping_transactions_inner(
     db: &Db,
     status: Option<BookkeepingReviewStatus>,

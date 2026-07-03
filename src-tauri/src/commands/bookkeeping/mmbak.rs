@@ -172,6 +172,8 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
             min_failed_utime = Some(min_failed_utime.map_or(tx.utime_ms, |m| m.min(tx.utime_ms)));
             continue;
         };
+        // 존재 여부 프리플라이트는 **프로브 예산 힌트로만** 쓴다 — 코드 배정/카운트는
+        // 아래 insert-if-absent의 원자적 결과가 결정한다(레이스 시 프로브 1회 낭비가 최악).
         let existed =
             bookkeeping_source_ref_exists(db, BookkeepingSource::MoneyManager, &tx.source_ref)
                 .await?;
@@ -220,12 +222,19 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
             MmDirection::Income => BookkeepingDirection::Income,
             MmDirection::Expense => BookkeepingDirection::Expense,
         };
-        // gmail ingest와 동일한 existing-wins upsert 시맨틱스 재사용: 신규는 needs_review로
-        // 삽입, conflict 시 review_status/deleted_at/판단 필드는 절대 건드리지 않고 미러
-        // 필드(amount/merchant/spent_at 등)만 갱신. category_code/subcategory_code는 비워
-        // 보내고 upsert 내부의 taxonomy alias resolver(apply_category_resolution)에 맡긴다.
-        let created = upsert_bookkeeping_transaction_from_ingest_inner(
-            db,
+        // 분류 코드는 alias 추측이 아니라 **직접 배정**: ctgUid → mm- 코드 쌍(1:1). 삭제/
+        // 미지 카테고리(None)만 alias resolver 폴백.
+        //
+        // 명시 코드는 **존재 여부와 원자적인 insert-if-absent**(ON CONFLICT DO NOTHING)로만
+        // 싣는다: 프리플라이트 read 기반 분기는 동시 임포트(수동+최신 임포트는 in-flight
+        // 가드 밖) 레이스에서 conflict 경로의 `subcategory_code=COALESCE(existing, excluded)`
+        // 가 사람이 (대분류, sub 없음)으로 오버라이드한 행에 소스 sub 코드를 채우는 창을
+        // 남긴다. 삽입 실패(=행 존재)면 공유 upsert를 **명시 코드 없이** 타서 미러 필드만
+        // 갱신한다(gmail이 의존하는 공유 SQL 불변). 기존 행 코드 교정은 오버라이드-가드가
+        // 있는 backfill이 전담한다.
+        let direct_codes = direct_mm_codes(&tx.ctg_uid, &loaded.categories);
+        let build_input = |codes: Option<&(String, Option<String>)>,
+                           review_reasons_json: Option<String>| {
             CreateBookkeepingTransactionInput {
                 project_id: input.project_id.clone(),
                 source: BookkeepingSource::MoneyManager,
@@ -249,8 +258,8 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
                 direction,
                 account: tx.account.clone(),
                 subcategory: tx.subcategory_label.clone(),
-                category_code: None,
-                subcategory_code: None,
+                category_code: codes.map(|(cat, _)| cat.clone()),
+                subcategory_code: codes.and_then(|(_, sub)| sub.clone()),
                 raw_category: tx.raw_category.clone(),
                 spent_at_time: tx.spent_at_time.clone(),
                 confidence: None,
@@ -258,18 +267,38 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
                 review_reasons_json,
                 order_no: None,
                 payment_no: None,
-            },
+            }
+        };
+        // 1) 원자적 신규 삽입(명시 코드 포함). Some(row) = 이 호출이 삽입.
+        let created = match insert_bookkeeping_transaction_from_ingest_if_absent_inner(
+            db,
+            build_input(direct_codes.as_ref(), review_reasons_json.clone()),
             "transaction.mmbak_ingested",
             "머니매니저 백업에서 거래 유입",
         )
-        .await;
+        .await
+        {
+            Ok(Some(row)) => Ok((row, true)),
+            // 2) 행이 이미 있음(프리플라이트와 무관하게) → 명시 코드 없이 existing-wins
+            //    upsert: review_status/deleted_at/판단 필드는 절대 건드리지 않고 미러
+            //    필드(amount/merchant/spent_at 등)만 갱신 — gmail ingest와 동일 시맨틱스.
+            Ok(None) => upsert_bookkeeping_transaction_from_ingest_inner(
+                db,
+                build_input(None, review_reasons_json.clone()),
+                "transaction.mmbak_ingested",
+                "머니매니저 백업에서 거래 유입",
+            )
+            .await
+            .map(|row| (row, false)),
+            Err(e) => Err(e),
+        };
         match created {
-            Ok(row) => {
-                if existed {
-                    counts.duplicate += 1;
-                } else {
+            Ok((row, inserted)) => {
+                if inserted {
                     counts.imported += 1;
                     counts.review_needed += 1;
+                } else {
+                    counts.duplicate += 1;
                 }
                 if max_seen_utime.is_none_or(|m| tx.utime_ms > m) {
                     max_seen_utime = Some(tx.utime_ms);
@@ -314,9 +343,11 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         }
     }
 
-    // 백필: 과거 임포트에서 'uncategorized'로 붕괴한(그리고 사람이 오버라이드한 적 없는)
-    // moneymanager 행을 방금 동기화된 taxonomy/alias로 재해석해 코드를 채운다(힌트 갱신).
-    let backfilled_category = backfill_mm_category_codes(db).await?;
+    // 백필: (1) 백업 ctgUid 기준 직접 교정 — 과거 임포트에서 시드 코드(food/shopping…)로
+    // 붕괴한 행을 mm- 코드로 재지정, (2) 백업에 없는 잔여 미분류 행의 alias 재해석.
+    // 오버라이드된 행은 절대 건드리지 않는다(힌트 갱신 — INVARIANT #1).
+    let backfilled_category =
+        backfill_mm_category_codes(db, &loaded.rows, &loaded.categories).await?;
 
     // note 백필: ZDATA 메모가 유입되기 전에 임포트돼 note IS NULL로 남은 행을 채운다.
     // UTIME 커서가 변경 없는 행의 upsert 자체를 건너뛰므로 conflict 경로의 COALESCE만으로는
@@ -527,7 +558,7 @@ async fn append_review_reason_guarded(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::BookkeepingReviewStatus;
+    use crate::models::{BookkeepingReviewStatus, OverrideBookkeepingCategoryInput};
     use sqlx::{sqlite::SqliteConnectOptions, Connection, SqliteConnection};
 
     async fn pool() -> Db {
@@ -1121,5 +1152,103 @@ mod tests {
             "probe capped: no possible_duplicate hint expected"
         );
         assert_eq!(expense.review_status, BookkeepingReviewStatus::NeedsReview);
+    }
+
+    fn race_ingest_input(
+        source_ref: &str,
+        category_code: Option<&str>,
+        subcategory_code: Option<&str>,
+    ) -> CreateBookkeepingTransactionInput {
+        CreateBookkeepingTransactionInput {
+            project_id: None,
+            source: BookkeepingSource::MoneyManager,
+            source_ref: Some(source_ref.to_string()),
+            merchant: "편의점담배".to_string(),
+            description: None,
+            amount_minor: 12000,
+            currency: "KRW".to_string(),
+            spent_at: "2026-06-20".to_string(),
+            category: "낭비".to_string(),
+            note: None,
+            payment_method_kind: BookkeepingPaymentMethodKind::Unknown,
+            payment_method_label: None,
+            payment_method_last4: None,
+            expense_kind: BookkeepingExpenseKind::Variable,
+            recurring_expense_id: None,
+            recurring_occurrence_id: None,
+            direction: BookkeepingDirection::Expense,
+            account: None,
+            subcategory: None,
+            category_code: category_code.map(str::to_string),
+            subcategory_code: subcategory_code.map(str::to_string),
+            raw_category: Some("낭비 > 담배".to_string()),
+            spent_at_time: None,
+            confidence: None,
+            field_confidence_json: None,
+            review_reasons_json: None,
+            order_no: None,
+            payment_no: None,
+        }
+    }
+
+    /// 동시 임포트 레이스 재현: 다른 임포트가 행을 먼저 삽입하고 사람이 (shopping, sub 없음)
+    /// 으로 오버라이드한 뒤, 이 임포트가 "신규"라 믿고 명시 mm- 코드를 실어 삽입을 시도한다.
+    /// insert-if-absent는 존재 판정과 원자적(ON CONFLICT DO NOTHING)이라 아무것도 쓰지
+    /// 않는다 — 프리플라이트-읽기 기반 분기가 남기던 COALESCE sub-누수 창 자체가 없다.
+    #[tokio::test]
+    async fn mmbak_atomic_insert_never_leaks_source_codes_into_existing_overridden_row() {
+        let db = pool().await;
+
+        // 경쟁 임포트가 먼저 삽입한 행(+ 사람 오버라이드: shopping, sub 없음).
+        let seeded = upsert_bookkeeping_transaction_from_ingest_inner(
+            &db,
+            race_ingest_input("race-uid-1", None, None),
+            "transaction.mmbak_ingested",
+            "경쟁 임포트 시뮬레이션",
+        )
+        .await
+        .expect("seed row");
+        override_bookkeeping_category_inner(
+            &db,
+            OverrideBookkeepingCategoryInput {
+                transaction_id: seeded.id.clone(),
+                category_code: Some("shopping".to_string()),
+                subcategory_code: None,
+                reason: None,
+            },
+        )
+        .await
+        .expect("manual override");
+
+        // "신규"라 믿는 쪽의 명시-코드 삽입 시도 → conflict → DO NOTHING.
+        let inserted = insert_bookkeeping_transaction_from_ingest_if_absent_inner(
+            &db,
+            race_ingest_input("race-uid-1", Some("mm-30"), Some("mm-31")),
+            "transaction.mmbak_ingested",
+            "레이스 삽입 시도",
+        )
+        .await
+        .expect("atomic insert-if-absent");
+        assert!(inserted.is_none(), "existing row → insert must be a no-op");
+
+        // 임포터의 폴백(명시 코드 없는 공유 upsert)까지 거쳐도 사람 판단은 그대로다.
+        upsert_bookkeeping_transaction_from_ingest_inner(
+            &db,
+            race_ingest_input("race-uid-1", None, None),
+            "transaction.mmbak_ingested",
+            "폴백 미러 갱신",
+        )
+        .await
+        .expect("codeless fallback upsert");
+
+        let (code, sub): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT category_code, subcategory_code FROM bookkeeping_transactions \
+             WHERE source='moneymanager' AND source_ref='race-uid-1'",
+        )
+        .fetch_one(&db)
+        .await
+        .expect("row");
+        assert_eq!(code.as_deref(), Some("shopping"), "human override wins");
+        assert_eq!(sub, None, "source subcategory must not leak under override");
     }
 }

@@ -1,10 +1,18 @@
 //! MoneyManager(.mmbak) 카테고리 → 로컬 taxonomy 동기화 + 기존 행 category_code 백필.
 //!
-//! 문제: 시드 22코드에 없는 MM 카테고리(낭비/보험/주거·통신 …)는 alias 해석이 전부
-//! 'uncategorized'로 붕괴해 리포트에서 미분류 한 버킷이 된다. 해법: 임포트 시 활성
-//! (C_IS_DEL=0) MM 카테고리를 `mm-<uid>` 코드로 taxonomy에 **멱등 upsert**하고,
-//! 거래가 실제로 갖게 되는 raw_category 문자열(단일 NAME 또는 "부모 > 자식")에 대한
-//! raw_label alias를 보강한다. 시드 22코드는 절대 건드리지 않는다(mm- prefix 가드).
+//! 원칙: **사용자의 MoneyManager 분류 체계가 mmbak 행의 정확한(1:1) 가시 분류다.**
+//! 활성(C_IS_DEL=0) MM 카테고리 전부를 `mm-<uid>` 코드로 taxonomy에 **멱등 upsert**하고
+//! (과거의 "시드 alias로 해석되면 노드 생성 스킵" 규칙은 폐기 — 생활용품→shopping,
+//! 식비→food 같은 붕괴의 원인이었다), 거래가 갖게 되는 raw_category 문자열(단일 NAME
+//! 또는 "부모 > 자식")에 대한 raw_label alias를 mm- 코드로 보강한다. 이 alias는 다른
+//! 소스(gmail/ocr)의 같은 라벨도 사용자 분류로 안착시키는 부수 효과가 있으며, 같은
+//! 패턴의 **비-user(시드) alias는 mm- 코드로 재타깃된다**(사용자 자신의 라벨에 대해선
+//! 사용자 분류가 배포 시드를 이긴다 — `WHERE source != 'user'` 가드가 user alias만 보호).
+//! 시드 22코드 taxonomy 노드는 절대 건드리지 않는다(mm- prefix 가드).
+//!
+//! mmbak 행 자체는 alias 추측이 아니라 **직접 배정**이다: 임포터가 ctgUid → mm- 코드 쌍을
+//! `direct_mm_codes`로 계산해 ingest에 명시 코드로 넘긴다(신규 INSERT에서 명시 코드 우선,
+//! conflict 시 기존 판단 보존 — 교정은 아래 백필이 담당).
 //!
 //! 코드 안정성: MM uid는 같은 백업 계보 안에서 안정적이다. MoneyManager를 새로 설치해
 //! 재구성하면 uid가 재발급되어 새 mm-<uid> 노드가 생기지만, 정본은 사용자의 라이브 앱
@@ -14,11 +22,7 @@ use std::collections::HashMap;
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{
-    BookkeepingAliasMatchKind, BookkeepingAliasSource, BookkeepingCategoryAlias,
-    BookkeepingCategoryNode, BookkeepingCategoryRules,
-};
-use crate::moneymanager::{nonempty_ref, MmCategory};
+use crate::moneymanager::{nonempty_ref, MmCategory, MmInoutcomeRow};
 
 use super::*;
 
@@ -39,12 +43,37 @@ fn mm_code(uid: &str) -> String {
     format!("mm-{}", uid.trim())
 }
 
-/// rules에 대해 raw 라벨을 해석해 실코드(≠ uncategorized) 쌍을 돌려준다.
-fn resolve_real(rules: &BookkeepingCategoryRules, raw: &str) -> Option<(String, Option<String>)> {
-    let resolved = resolve_category_with_rules(rules, None, "", Some(raw), "");
-    match resolved.category_code {
-        Some(code) if code != "uncategorized" => Some((code, resolved.subcategory_code)),
-        _ => None,
+/// 동기화/직접 배정 대상 카테고리 판정(활성 + uid/NAME 비어있지 않음).
+fn is_syncable(cat: &MmCategory) -> bool {
+    cat.is_del == 0 && !cat.uid.trim().is_empty() && !cat.name.trim().is_empty()
+}
+
+/// 자식을 그 아래로 배치할 수 있는 부모: 존재 + syncable + **최상위**(MM은 2단계 —
+/// 부모가 또 자식이면 taxonomy FK/구조가 어긋나므로 배치하지 않는다). 부모가 삭제/미지면
+/// 자식은 최상위 mm- 노드가 된다.
+fn placement_parent<'a>(
+    cat: &MmCategory,
+    categories: &'a HashMap<String, MmCategory>,
+) -> Option<&'a MmCategory> {
+    nonempty_ref(&cat.parent_uid)
+        .and_then(|uid| categories.get(uid))
+        .filter(|p| is_syncable(p) && nonempty_ref(&p.parent_uid).is_none())
+}
+
+/// ctgUid → 결정론적 mm- 코드 쌍. `sync_mm_taxonomy`가 만드는 노드 구조와 정확히 같은
+/// 규칙: 자식(배치 가능한 부모 있음) → (부모 mm- 코드, 자식 mm- 코드), 그 외 syncable
+/// 카테고리 → (자기 mm- 코드, NULL). 삭제/미지 카테고리는 None(→ alias 해석 폴백).
+pub(crate) fn direct_mm_codes(
+    ctg_uid: &str,
+    categories: &HashMap<String, MmCategory>,
+) -> Option<(String, Option<String>)> {
+    let cat = nonempty_ref(ctg_uid).and_then(|uid| categories.get(uid))?;
+    if !is_syncable(cat) {
+        return None;
+    }
+    match placement_parent(cat, categories) {
+        Some(parent) => Some((mm_code(&parent.uid), Some(mm_code(&cat.uid)))),
+        None => Some((mm_code(&cat.uid), None)),
     }
 }
 
@@ -114,93 +143,43 @@ async fn upsert_mm_alias(
     Ok(())
 }
 
-fn push_rules_node(
-    rules: &mut BookkeepingCategoryRules,
-    code: &str,
-    parent: Option<&str>,
-    label: &str,
-) {
-    rules.taxonomy.push(BookkeepingCategoryNode {
-        code: code.to_string(),
-        parent_code: parent.map(str::to_string),
-        label: label.to_string(),
-        sort_order: MM_NODE_SORT_ORDER,
-        active: true,
-    });
-}
-
-fn push_rules_alias(
-    rules: &mut BookkeepingCategoryRules,
-    pattern: &str,
-    category_code: &str,
-    subcategory_code: Option<&str>,
-) {
-    rules.aliases.push(BookkeepingCategoryAlias {
-        id: String::new(),
-        // DB 저장과 동일하게 정규화(해석은 정규화 비교라 결과는 같지만 표현을 일치시킨다).
-        pattern: normalize_label(pattern),
-        match_kind: BookkeepingAliasMatchKind::RawLabel,
-        category_code: category_code.to_string(),
-        subcategory_code: subcategory_code.map(str::to_string),
-        confidence: MM_ALIAS_CONFIDENCE,
-        source: BookkeepingAliasSource::Seed,
-        created_at: String::new(),
-        hit_count: 0,
-        last_used_at: None,
-    });
-}
-
-/// 활성 MM 카테고리를 taxonomy/alias에 동기화한다. 결정 규칙: 거래가 갖게 될
-/// raw_category 문자열이 이미 실코드로 해석되면 아무것도 만들지 않는다(작동하는
-/// 시드 매핑을 중복하지 않음). 해석이 없거나 'uncategorized'로 떨어질 때만
-/// mm-<uid> 노드(또는 시드 코드로 가는 alias)를 만든다.
+/// 활성 MM 카테고리 **전부**를 mm-<uid> taxonomy 노드로 동기화한다 — 사용자의 MM 분류
+/// 체계가 그대로 가시 taxonomy가 된다(1:1). 시드 alias로 해석 가능한 라벨(식비/생활용품…)
+/// 도 예외 없이 자기 mm- 노드를 갖는다. 거래 raw_category 문자열에 대한 raw_label alias도
+/// mm- 코드로 upsert한다 — 같은 패턴의 비-user alias(배포 시드 포함)는 재타깃되고,
+/// `source='user'` alias는 절대 덮지 않는다(`upsert_mm_alias`의 WHERE 가드).
 pub(crate) async fn sync_mm_taxonomy(
     db: &Db,
     categories: &HashMap<String, MmCategory>,
 ) -> Result<MmTaxonomySyncCounts, AppError> {
     let mut counts = MmTaxonomySyncCounts::default();
-    let mut rules = bookkeeping_category_rules_inner(db).await?;
 
-    let mut active: Vec<&MmCategory> = categories
-        .values()
-        .filter(|c| c.is_del == 0 && !c.uid.trim().is_empty() && !c.name.trim().is_empty())
-        .collect();
+    let mut active: Vec<&MmCategory> = categories.values().filter(|c| is_syncable(c)).collect();
     // uid 순 결정론적 처리 — 동명 카테고리가 있어도 매 임포트 같은 노드로 수렴.
     active.sort_by(|a, b| a.uid.cmp(&b.uid));
 
-    // uid → 해당 카테고리를 대표하는 대분류 코드(시드로 해석됐든 mm- 노드로 만들었든).
-    let mut parent_code_by_uid: HashMap<String, String> = HashMap::new();
-
-    // 1패스: 최상위 카테고리(pUid 없음/'0').
+    // 1패스: 최상위 카테고리(pUid 없음/'0') — 자식의 parent_code FK 대상이라 먼저 넣는다.
     for cat in active
         .iter()
         .filter(|c| nonempty_ref(&c.parent_uid).is_none())
     {
         let name = cat.name.trim();
-        if let Some((code, _)) = resolve_real(&rules, name) {
-            // 이미 실코드로 해석됨(예: 식비→food) — 작동하는 매핑을 중복 생성하지 않는다.
-            parent_code_by_uid.insert(cat.uid.trim().to_string(), code);
-            continue;
-        }
         let code = mm_code(&cat.uid);
         upsert_mm_node(db, &code, None, name).await?;
         counts.nodes += 1;
         upsert_mm_alias(db, name, &code, None).await?;
         counts.aliases += 1;
-        push_rules_node(&mut rules, &code, None, name);
-        push_rules_alias(&mut rules, name, &code, None);
-        parent_code_by_uid.insert(cat.uid.trim().to_string(), code);
     }
 
     // 2패스: 자식 카테고리. 거래의 raw_category는 "부모 NAME > 자식 NAME"이다
-    // (moneymanager::resolve_category_labels 계약).
+    // (moneymanager::resolve_category_labels 계약 — 부모 NAME은 삭제 여부와 무관하게
+    // 붙는다). 노드 배치는 `placement_parent`/`direct_mm_codes`와 동일 규칙.
     for cat in active
         .iter()
         .filter(|c| nonempty_ref(&c.parent_uid).is_some())
     {
         let name = cat.name.trim();
-        let parent_uid = nonempty_ref(&cat.parent_uid);
-        let parent_name = parent_uid
+        let parent_name = nonempty_ref(&cat.parent_uid)
             .and_then(|uid| categories.get(uid))
             .map(|p| p.name.trim())
             .filter(|n| !n.is_empty());
@@ -208,21 +187,7 @@ pub(crate) async fn sync_mm_taxonomy(
             Some(parent_name) => format!("{parent_name} > {name}"),
             None => name.to_string(),
         };
-        if resolve_real(&rules, &raw).is_some() {
-            continue; // 거래가 이미 실코드로 해석됨.
-        }
-        if let Some((code, sub)) = resolve_real(&rules, name) {
-            // 자식 NAME 자체는 시드로 표현 가능(예: 카페→food/food_cafe) — 노드 없이
-            // 거래의 실제 raw 문자열("식비 > 카페")에 대한 alias만 보강한다.
-            upsert_mm_alias(db, &raw, &code, sub.as_deref()).await?;
-            counts.aliases += 1;
-            push_rules_alias(&mut rules, &raw, &code, sub.as_deref());
-            continue;
-        }
-        // 부모가 이번 동기화에서 매핑/생성됐으면 그 아래로, 아니면(부모 삭제·미지) 최상위로.
-        let parent_code = parent_uid
-            .and_then(|uid| parent_code_by_uid.get(uid.trim()))
-            .cloned();
+        let parent_code = placement_parent(cat, categories).map(|p| mm_code(&p.uid));
         let code = mm_code(&cat.uid);
         upsert_mm_node(db, &code, parent_code.as_deref(), name).await?;
         counts.nodes += 1;
@@ -232,17 +197,88 @@ pub(crate) async fn sync_mm_taxonomy(
         };
         upsert_mm_alias(db, &raw, &alias_cat, alias_sub.as_deref()).await?;
         counts.aliases += 1;
-        push_rules_node(&mut rules, &code, parent_code.as_deref(), name);
-        push_rules_alias(&mut rules, &raw, &alias_cat, alias_sub.as_deref());
     }
 
     Ok(counts)
 }
 
-/// 사람 손이 닿은 적 없는(오버라이드 0건) moneymanager 행 중 category_code가
-/// NULL/'uncategorized'인 행을 raw_category/category 라벨로 재해석해 코드를 채운다.
+/// 사람 손이 닿은 적 없는(오버라이드 0건) moneymanager 행의 category_code를 교정한다.
+/// 두 단계(각각 단일 패스, bounded):
+///
+/// 1. **직접 교정** — 백업에 존재하는 행은 ctgUid → `direct_mm_codes` 결과가 정본이다.
+///    저장된 (category_code, subcategory_code)가 다르면(과거 시드 alias로 붕괴한
+///    식비→food, 생활용품→shopping 등 포함) mm- 코드 쌍으로 재지정한다.
+/// 2. **잔여 미분류 해석** — 이 백업에 없는 행(다른 백업 계보 유래 등) 중 여전히
+///    NULL/'uncategorized'인 행을 raw 라벨 alias로 재해석해 채운다.
+///
 /// 힌트 갱신일 뿐 결정이 아니다 — review_status/사유는 건드리지 않는다(INVARIANT #1).
-pub(crate) async fn backfill_mm_category_codes(db: &Db) -> Result<u32, AppError> {
+pub(crate) async fn backfill_mm_category_codes(
+    db: &Db,
+    backup_rows: &[MmInoutcomeRow],
+    categories: &HashMap<String, MmCategory>,
+) -> Result<u32, AppError> {
+    let mut backfilled = backfill_direct_mm_codes(db, backup_rows, categories).await?;
+    backfilled += backfill_unresolved_mm_codes(db).await?;
+    Ok(backfilled)
+}
+
+/// 1단계: 백업 ctgUid 기준 직접 교정. 기대 코드는 결정론적이므로 SELECT 시점의 stale
+/// 값 재확인은 불필요하다 — UPDATE WHERE에서 (a) soft-delete 아님 (b) 오버라이드 0건만
+/// 다시 확인하면 충분하다(`apply_direct_backfill_update` 참조).
+async fn backfill_direct_mm_codes(
+    db: &Db,
+    backup_rows: &[MmInoutcomeRow],
+    categories: &HashMap<String, MmCategory>,
+) -> Result<u32, AppError> {
+    // source_ref(=INOUTCOME uid) → 기대 (category_code, subcategory_code).
+    let mut expected: HashMap<&str, (String, Option<String>)> = HashMap::new();
+    for row in backup_rows {
+        if row.is_del != 0 {
+            continue;
+        }
+        let uid = row.uid.trim();
+        if uid.is_empty() {
+            continue;
+        }
+        if let Some(codes) = direct_mm_codes(&row.ctg_uid, categories) {
+            expected.insert(uid, codes);
+        }
+    }
+    if expected.is_empty() {
+        return Ok(0);
+    }
+
+    let rows: Vec<(String, String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT t.id, t.source_ref, t.category_code, t.subcategory_code \
+         FROM bookkeeping_transactions t \
+         WHERE t.source = 'moneymanager' \
+           AND t.source_ref IS NOT NULL \
+           AND t.deleted_at IS NULL \
+           AND NOT EXISTS (SELECT 1 FROM bookkeeping_category_overrides o \
+                           WHERE o.transaction_id = t.id)",
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut backfilled = 0u32;
+    for (id, source_ref, category_code, subcategory_code) in rows {
+        let Some((want_cat, want_sub)) = expected.get(source_ref.as_str()) else {
+            continue;
+        };
+        if category_code.as_deref() == Some(want_cat.as_str())
+            && subcategory_code.as_deref() == want_sub.as_deref()
+        {
+            continue;
+        }
+        if apply_direct_backfill_update(db, &id, want_cat, want_sub.as_deref()).await? {
+            backfilled += 1;
+        }
+    }
+    Ok(backfilled)
+}
+
+/// 2단계: 여전히 NULL/'uncategorized'인 행의 raw 라벨 alias 재해석(레거시 경로 유지).
+async fn backfill_unresolved_mm_codes(db: &Db) -> Result<u32, AppError> {
     let rules = bookkeeping_category_rules_inner(db).await?;
     let rows: Vec<(String, Option<String>, String, String)> = sqlx::query_as(
         "SELECT t.id, t.raw_category, t.category, t.merchant \
@@ -268,6 +304,35 @@ pub(crate) async fn backfill_mm_category_codes(db: &Db) -> Result<u32, AppError>
         }
     }
     Ok(backfilled)
+}
+
+/// 직접 교정 UPDATE 본체. 목표 코드가 결정론적이므로 stale-값 동등성 검사 대신
+/// **사람 결정 가드만** WHERE에 반복한다: soft-delete 아님 + 오버라이드 0건.
+/// category_code를 쓰는 모든 사람 경로(단건/벌크/거래 편집)는
+/// `override_bookkeeping_category_inner`를 경유해 반드시 오버라이드 행을 남기므로,
+/// SELECT와 UPDATE 사이에 사람이 끼어들어도(TOCTOU) NOT EXISTS가 막는다.
+/// 값-변경 조건(IS NOT)을 함께 걸어 no-op 갱신은 카운트/updated_at에 잡히지 않게 한다.
+async fn apply_direct_backfill_update(
+    db: &Db,
+    id: &str,
+    category_code: &str,
+    subcategory_code: Option<&str>,
+) -> Result<bool, AppError> {
+    let result = sqlx::query(
+        "UPDATE bookkeeping_transactions \
+         SET category_code = ?2, subcategory_code = ?3, updated_at = datetime('now') \
+         WHERE id = ?1 \
+           AND deleted_at IS NULL \
+           AND (category_code IS NOT ?2 OR subcategory_code IS NOT ?3) \
+           AND NOT EXISTS (SELECT 1 FROM bookkeeping_category_overrides o \
+                           WHERE o.transaction_id = bookkeeping_transactions.id)",
+    )
+    .bind(id)
+    .bind(category_code)
+    .bind(subcategory_code)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected() > 0)
 }
 
 /// 백필 UPDATE 본체. SELECT의 가드 전체(soft-delete 아님 · 여전히 미분류 ·
@@ -325,10 +390,11 @@ mod tests {
         conn.close().await.expect("close");
     }
 
-    /// 시드 22코드로 표현 불가한 MM 카테고리(낭비/담배/보험)를 포함한 .mmbak 픽스처.
-    /// - '식비'(10)/'카페'(11)/'급여'(20): 시드로 해석 가능(노드 생성 비대상)
-    /// - '낭비'(30) + 자식 '담배'(31): 미표현 → mm- 노드 대상
+    /// .mmbak 픽스처 — 활성 카테고리 **전부**가 mm- 노드 대상이다(1:1 원칙).
+    /// - '식비'(10)/'카페'(11)/'급여'(20): 시드 라벨과 겹쳐도 자기 mm- 노드를 갖는다
+    /// - '낭비'(30) + 자식 '담배'(31): 시드 미표현 카테고리
     /// - '보험'(40): 삭제 표시(C_IS_DEL=1) → 동기화 비대상
+    /// - '생활용품'(50): 배포 시드 alias(→shopping/shopping_daily)와 패턴 충돌 → 재타깃 대상
     async fn fixture_mmbak(dir: &tempfile::TempDir) -> std::path::PathBuf {
         let path = dir.path().join("backup.mmbak");
         for sql in [
@@ -346,6 +412,7 @@ mod tests {
             "INSERT INTO ZCATEGORY VALUES ('30','낭비',1,'0',0,0)",
             "INSERT INTO ZCATEGORY VALUES ('31','담배',1,'30',0,0)",
             "INSERT INTO ZCATEGORY VALUES ('40','보험',1,'0',1,0)",
+            "INSERT INTO ZCATEGORY VALUES ('50','생활용품',1,'0',0,0)",
             "INSERT INTO ASSETS VALUES ('a1','하나카드','g1')",
             "INSERT INTO CURRENCY VALUES ('KRW_KRW','KRW',0)",
             "INSERT INTO INOUTCOME VALUES ('mm-cafe-1','a1','11','스타벅스',0,'2026-06-15','1','5500.0','','','','',0,100,'KRW_KRW','')",
@@ -389,7 +456,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_creates_mm_nodes_and_ingest_resolves_codes() {
+    async fn sync_creates_mm_nodes_for_all_active_categories_and_assigns_direct_codes() {
         let db = pool().await;
         let dir = tempfile::tempdir().expect("tempdir");
         let path = fixture_mmbak(&dir).await;
@@ -398,25 +465,77 @@ mod tests {
             .await
             .expect("import");
 
-        // 미표현 카테고리 → mm- 노드(부모/자식 쌍).
-        let parent = taxonomy_row(&db, "mm-30").await.expect("mm-30 node");
-        assert_eq!(parent, (None, "낭비".to_string(), 1));
-        let child = taxonomy_row(&db, "mm-31").await.expect("mm-31 node");
-        assert_eq!(child, (Some("mm-30".to_string()), "담배".to_string(), 1));
-        // 시드로 해석 가능한 식비/카페/급여 + 삭제된 보험은 노드를 만들지 않는다.
-        assert!(taxonomy_row(&db, "mm-10").await.is_none());
-        assert!(taxonomy_row(&db, "mm-11").await.is_none());
-        assert!(taxonomy_row(&db, "mm-20").await.is_none());
+        // 활성 카테고리 전부 mm- 노드(1:1) — 시드 라벨과 겹치는 식비/카페/급여도 포함.
+        assert_eq!(
+            taxonomy_row(&db, "mm-10").await.expect("mm-10"),
+            (None, "식비".to_string(), 1)
+        );
+        assert_eq!(
+            taxonomy_row(&db, "mm-11").await.expect("mm-11"),
+            (Some("mm-10".to_string()), "카페".to_string(), 1)
+        );
+        assert_eq!(
+            taxonomy_row(&db, "mm-20").await.expect("mm-20"),
+            (None, "급여".to_string(), 1)
+        );
+        assert_eq!(
+            taxonomy_row(&db, "mm-30").await.expect("mm-30"),
+            (None, "낭비".to_string(), 1)
+        );
+        assert_eq!(
+            taxonomy_row(&db, "mm-31").await.expect("mm-31"),
+            (Some("mm-30".to_string()), "담배".to_string(), 1)
+        );
+        assert_eq!(
+            taxonomy_row(&db, "mm-50").await.expect("mm-50"),
+            (None, "생활용품".to_string(), 1)
+        );
+        // 삭제된 보험만 비대상.
         assert!(taxonomy_row(&db, "mm-40").await.is_none());
 
-        // 신규 임포트 행은 ingest 시점에 실코드로 해석된다.
+        // 신규 임포트 행은 ctgUid 직접 배정으로 mm- 코드 쌍을 갖는다(alias 추측 아님).
         let (code, sub, _) = tx_codes(&db, "mm-waste-1").await;
         assert_eq!(code.as_deref(), Some("mm-30"));
         assert_eq!(sub.as_deref(), Some("mm-31"));
-        // 시드 자식('식비 > 카페')도 raw 전체 alias 보강으로 시드 코드 쌍에 안착한다.
+        // 시드 라벨('식비 > 카페')도 사용자 분류의 mm- 쌍으로 — food/food_cafe 붕괴 없음.
         let (code, sub, _) = tx_codes(&db, "mm-cafe-1").await;
-        assert_eq!(code.as_deref(), Some("food"));
-        assert_eq!(sub.as_deref(), Some("food_cafe"));
+        assert_eq!(code.as_deref(), Some("mm-10"));
+        assert_eq!(sub.as_deref(), Some("mm-11"));
+    }
+
+    #[tokio::test]
+    async fn sync_retargets_non_user_seed_alias_to_mm_code() {
+        let db = pool().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_mmbak(&dir).await;
+
+        // 배포 시드 alias: '생활용품' → shopping/shopping_daily (source='seed').
+        let before: (String, Option<String>, String) = sqlx::query_as(
+            "SELECT category_code, subcategory_code, source FROM bookkeeping_category_alias \
+             WHERE match_kind='raw_label' AND pattern='생활용품'",
+        )
+        .fetch_one(&db)
+        .await
+        .expect("seed alias present");
+        assert_eq!(before.0, "shopping");
+        assert_eq!(before.2, "seed");
+
+        import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("import");
+
+        // 사용자 자신의 라벨에 대해선 사용자 분류가 배포 시드를 이긴다 — in-place 재타깃,
+        // 중복행 없음. (user alias만 보호 대상 — sync_never_clobbers_user_alias 참조.)
+        let rows: Vec<(String, Option<String>, String)> = sqlx::query_as(
+            "SELECT category_code, subcategory_code, source FROM bookkeeping_category_alias \
+             WHERE match_kind='raw_label' AND pattern='생활용품'",
+        )
+        .fetch_all(&db)
+        .await
+        .expect("alias rows");
+        assert_eq!(rows.len(), 1, "retarget in place, no duplicate");
+        assert_eq!(rows[0].0, "mm-50");
+        assert_eq!(rows[0].1, None);
     }
 
     #[tokio::test]
@@ -439,14 +558,14 @@ mod tests {
             .await
             .expect("second import");
 
-        // 멱등: mm- 노드는 uid당 1개, alias도 패턴당 1개.
+        // 멱등: mm- 노드는 활성 카테고리(10/11/20/30/31/50)당 정확히 1개, alias도 패턴당 1개.
         assert_eq!(
             count(
                 &db,
                 "SELECT COUNT(*) FROM bookkeeping_category_taxonomy WHERE code LIKE 'mm-%'"
             )
             .await,
-            2
+            6
         );
         assert_eq!(
             count(
@@ -503,7 +622,7 @@ mod tests {
                 "SELECT COUNT(*) FROM bookkeeping_category_taxonomy WHERE code LIKE 'mm-%'"
             )
             .await,
-            2,
+            6,
             "rename must not duplicate nodes"
         );
     }
@@ -542,56 +661,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_resolves_child_via_normalized_user_alias() {
-        let db = pool().await;
-        let dir = tempfile::tempdir().expect("tempdir");
-        let path = fixture_mmbak(&dir).await;
-
-        // 사용자 alias는 정규화 패턴('낭비 담배')으로 저장된다(reinforce 경로와 동일).
-        sqlx::query(
-            "INSERT INTO bookkeeping_category_alias \
-             (id, pattern, match_kind, category_code, subcategory_code, confidence, source) \
-             VALUES ('user-alias-child', '낭비 담배', 'raw_label', 'work', NULL, 0.96, 'user')",
-        )
-        .execute(&db)
-        .await
-        .expect("seed normalized user alias");
-
-        import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
-            .await
-            .expect("import");
-
-        // raw '낭비 > 담배'는 사용자 alias로 해석 → 자식 노드/alias 생성 자체를 스킵,
-        // 거래는 사용자의 코드('work')로 안착한다.
-        let (code, sub, _) = tx_codes(&db, "mm-waste-1").await;
-        assert_eq!(code.as_deref(), Some("work"), "user alias wins resolution");
-        assert_eq!(sub, None);
-        assert!(taxonomy_row(&db, "mm-31").await.is_none());
-        assert_eq!(
-            count(
-                &db,
-                "SELECT COUNT(*) FROM bookkeeping_category_alias \
-                 WHERE pattern IN ('낭비 담배', '낭비 > 담배')"
-            )
-            .await,
-            1,
-            "no coexisting seed alias for the same semantics"
-        );
-    }
-
-    #[tokio::test]
     async fn sync_alias_upsert_collides_with_normalized_user_alias_without_clobber() {
         let db = pool().await;
         let dir = tempfile::tempdir().expect("tempdir");
         let path = fixture_mmbak(&dir).await;
 
-        // 사용자가 자식 라벨을 의도적으로 uncategorized로 고정(정규화 패턴) — 해석이
-        // 실코드가 아니므로 sync는 노드+alias 생성을 시도하고, UNIQUE 충돌에서
-        // source='user' 가드에 막혀야 한다.
+        // 사용자가 자식 라벨 alias를 의도적으로 고정(정규화 패턴 — reinforce 경로와 동일).
+        // sync의 alias upsert는 UNIQUE(match_kind, pattern) 충돌에서 source='user' 가드에
+        // 막혀야 한다.
         sqlx::query(
             "INSERT INTO bookkeeping_category_alias \
              (id, pattern, match_kind, category_code, subcategory_code, confidence, source) \
-             VALUES ('user-alias-child', '낭비 담배', 'raw_label', 'uncategorized', NULL, 0.96, 'user')",
+             VALUES ('user-alias-child', '낭비 담배', 'raw_label', 'work', NULL, 0.96, 'user')",
         )
         .execute(&db)
         .await
@@ -609,12 +690,29 @@ mod tests {
         .fetch_all(&db)
         .await
         .expect("alias rows");
-        assert_eq!(aliases.len(), 1, "seed upsert must collide, not coexist");
-        assert_eq!(aliases[0].0, "uncategorized");
+        assert_eq!(aliases.len(), 1, "mm upsert must collide, not coexist");
+        assert_eq!(aliases[0].0, "work");
         assert_eq!(aliases[0].1, "user");
-        // 사용자 alias가 해석을 지배 → 거래도 uncategorized 유지.
-        let (code, _, _) = tx_codes(&db, "mm-waste-1").await;
-        assert_eq!(code.as_deref(), Some("uncategorized"));
+
+        // 노드는 그래도 만들어진다(1:1 원칙 — alias 보호와 taxonomy는 별개).
+        assert!(taxonomy_row(&db, "mm-31").await.is_some());
+        // mmbak 행은 ctgUid **직접 배정**이라 라벨 alias의 영향을 받지 않는다 — 사용자
+        // alias는 다른 소스(gmail/ocr)의 해석에만 작용하고, mmbak 행의 사람 결정은
+        // per-transaction 오버라이드가 담당한다(백필 가드로 보호).
+        let (code, sub, _) = tx_codes(&db, "mm-waste-1").await;
+        assert_eq!(code.as_deref(), Some("mm-30"));
+        assert_eq!(sub.as_deref(), Some("mm-31"));
+
+        // 비-mmbak 소스(gmail/ocr) 해석은 여전히 사용자 alias를 따른다 — sync가 만든
+        // mm- alias가 사용자 alias를 그림자(shadow)로 가리지 않는다.
+        let rules = bookkeeping_category_rules_inner(&db).await.expect("rules");
+        let resolved = resolve_category_with_rules(&rules, None, "", Some("낭비 > 담배"), "");
+        assert_eq!(
+            resolved.category_code.as_deref(),
+            Some("work"),
+            "user alias still wins resolution for other sources"
+        );
+        assert_eq!(resolved.subcategory_code, None);
     }
 
     #[tokio::test]
@@ -645,9 +743,88 @@ mod tests {
             .await
             .expect("guarded update");
         assert!(!applied, "override landed after select → must skip");
+        // 직접 교정 UPDATE도 같은 오버라이드 가드를 반복한다(TOCTOU-safe).
+        let applied = apply_direct_backfill_update(&db, "race-tx-1", "mm-30", Some("mm-31"))
+            .await
+            .expect("guarded direct update");
+        assert!(
+            !applied,
+            "override landed after select → must skip (direct)"
+        );
         let (code, sub, _) = tx_codes(&db, "race-1").await;
         assert_eq!(code.as_deref(), Some("uncategorized"), "row untouched");
         assert_eq!(sub, None);
+    }
+
+    /// 라이브 DB 시나리오: 과거 skip-rule 때문에 시드 코드(food/food_cafe 등)로 붕괴한
+    /// 행이 mm- 코드로 재지정되고, 사람이 오버라이드한 행은 절대 건드리지 않는다.
+    #[tokio::test]
+    async fn backfill_repoints_seed_coded_rows_but_skips_overridden() {
+        let db = pool().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_mmbak(&dir).await;
+
+        // 과거 임포트 시뮬레이션: 백업의 두 행이 시드 코드로 저장돼 있다.
+        for (source_ref, raw, cat, sub) in [
+            ("mm-cafe-1", "식비 > 카페", "food", Some("food_cafe")),
+            ("mm-waste-1", "낭비 > 담배", "shopping", None),
+        ] {
+            sqlx::query(
+                "INSERT INTO bookkeeping_transactions \
+                 (id, source, source_ref, merchant, amount_minor, currency, spent_at, category, \
+                  review_status, direction, category_code, subcategory_code, raw_category) \
+                 VALUES (lower(hex(randomblob(16))), 'moneymanager', ?1, '상호', 1000, 'KRW', \
+                  '2026-06-20', '카테고리', 'needs_review', 'expense', ?2, ?3, ?4)",
+            )
+            .bind(source_ref)
+            .bind(cat)
+            .bind(sub)
+            .bind(raw)
+            .execute(&db)
+            .await
+            .expect("seed stale-coded row");
+        }
+        // mm-waste-1은 사람이 shopping으로 **직접 오버라이드**한 상태 — 백필 비대상.
+        let waste_id: (String,) =
+            sqlx::query_as("SELECT id FROM bookkeeping_transactions WHERE source_ref='mm-waste-1'")
+                .fetch_one(&db)
+                .await
+                .expect("waste id");
+        override_bookkeeping_category_inner(
+            &db,
+            OverrideBookkeepingCategoryInput {
+                transaction_id: waste_id.0,
+                category_code: Some("shopping".to_string()),
+                subcategory_code: None,
+                reason: None,
+            },
+        )
+        .await
+        .expect("manual override");
+
+        let summary = import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("import");
+        // mm-cafe-1 하나만 교정(mm-waste-1은 오버라이드 보호).
+        assert_eq!(summary.backfilled_category_count, 1);
+
+        let (code, sub, review) = tx_codes(&db, "mm-cafe-1").await;
+        assert_eq!(code.as_deref(), Some("mm-10"), "seed code repointed");
+        assert_eq!(sub.as_deref(), Some("mm-11"));
+        assert_eq!(
+            review, "needs_review",
+            "backfill is a hint — review untouched"
+        );
+
+        let (code, sub, _) = tx_codes(&db, "mm-waste-1").await;
+        assert_eq!(code.as_deref(), Some("shopping"), "human override wins");
+        assert_eq!(sub, None);
+
+        // 멱등: 재임포트 시 교정 대상 없음.
+        let summary2 = import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("re-import");
+        assert_eq!(summary2.backfilled_category_count, 0);
     }
 
     #[tokio::test]
@@ -778,6 +955,14 @@ mod tests {
             .expect("mm bucket in trend");
         assert_eq!(waste.label, "낭비", "label resolves from synced taxonomy");
         assert_eq!(waste.expense_minor, 12000);
+        // 시드 라벨 카테고리(식비)도 사용자의 mm- 버킷으로 — food로 붕괴하지 않는다.
+        let food = rows
+            .iter()
+            .find(|r| r.category_code == "mm-10")
+            .expect("mm-10 bucket in trend");
+        assert_eq!(food.label, "식비");
+        assert_eq!(food.expense_minor, 5500);
+        assert!(rows.iter().all(|r| r.category_code != "food"));
         // 더는 전부 미분류 버킷으로 붕괴하지 않는다.
         assert!(rows.iter().all(|r| r.category_code != "uncategorized"));
     }
