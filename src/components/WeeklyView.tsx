@@ -8,6 +8,7 @@ import {
   NotebookPen,
   Repeat,
   Send,
+  Target,
   TrendingDown,
 } from "lucide-react";
 import { useEffect } from "react";
@@ -20,7 +21,15 @@ import { CompletedList, ReflectionRank } from "@/components/weekly/ReflectionSec
 import { WeekNavigator } from "@/components/weekly/WeekNavigator";
 import { WeekScrubber } from "@/components/weekly/WeekScrubber";
 import { bucketRoutineDoneByOffset } from "@/lib/lifeWheelRadar";
-import { useCompleted, useLifeWheelTags, useRoutineTracking, useWeeklyReview } from "@/lib/query";
+import { weekStartMonday } from "@/lib/okr";
+import {
+  useCompleted,
+  useLifeWheelTags,
+  useObjectives,
+  useOkrCheckIns,
+  useRoutineTracking,
+  useWeeklyReview,
+} from "@/lib/query";
 import { fmtMinutes } from "@/lib/timeTotals";
 import { useWeekNav } from "@/lib/useWeekNav";
 import { bucketByWeekOffset, monthDay, weekRangeForOffset, WEEKS_WINDOW } from "@/lib/weekRange";
@@ -41,6 +50,21 @@ export function WeeklyView() {
 
   const tagsQ = useLifeWheelTags();
   const tags = tagsQ.data ?? [];
+  const okrQuarter = currentQuarterKey();
+  const okrObjectives = useObjectives(okrQuarter);
+  const okrCheckIns = useOkrCheckIns(okrQuarter);
+  const okrWeekStart = weekStartMonday();
+  const okrCheckedThisWeek = new Set<string>();
+  for (const checkIn of okrCheckIns.data ?? []) {
+    if (checkIn.weekStart === okrWeekStart) okrCheckedThisWeek.add(checkIn.keyResultId);
+  }
+  let uncheckedKrCount = 0;
+  for (const objective of okrObjectives.data ?? []) {
+    if (objective.status !== "active") continue;
+    for (const kr of objective.keyResults) {
+      if (!okrCheckedThisWeek.has(kr.id)) uncheckedKrCount += 1;
+    }
+  }
 
   // 주별 버킷: offset → 그 주에 완료된 신호[]
   const byOffset = bucketByWeekOffset(
@@ -107,6 +131,16 @@ export function WeeklyView() {
       />
 
       <div className="wk-scroll">
+        {uncheckedKrCount > 0 && (
+          <button type="button" className="wk-okr-prompt" onClick={() => goTo("mission")}>
+            <span className="wk-okr-prompt-main typo-body-strong">
+              <Target className="size-4" />
+              <span>OKR 체크인 {uncheckedKrCount}개 남음</span>
+            </span>
+            <span className="wk-okr-prompt-link typo-mono-label">Mission으로</span>
+          </button>
+        )}
+
         {review.isError && (
           <div className="wk-hint">
             집계를 불러오지 못했습니다: {(review.error as Error).message}
@@ -251,6 +285,10 @@ export function WeeklyView() {
       </div>
     </div>
   );
+}
+
+function currentQuarterKey(date = new Date()): string {
+  return `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
 }
 
 function StatTile({

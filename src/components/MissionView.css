@@ -1,0 +1,486 @@
+.mission {
+  /* component-local tokens */
+  --mission-gutter: 22px;
+  --mission-gap: 18px;
+  --mission-card-radius: 8px;
+
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  font-family: var(--font-sans);
+}
+
+.mission-top {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px var(--mission-gutter) 18px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.mission-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px var(--mission-gutter) 44px;
+}
+
+.mission-eyebrow,
+.mission-objective-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--color-wr-muted);
+}
+
+.mission-statement {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: 860px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-wr-fg);
+  cursor: text;
+  text-align: left;
+}
+
+.mission-statement span {
+  font-family: var(--font-display);
+}
+
+.mission-statement svg {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+  color: var(--color-wr-subtle);
+}
+
+.mission-statement-form {
+  display: grid;
+  gap: 10px;
+  max-width: 860px;
+}
+
+.mission-statement-actions,
+.mission-dialog-actions,
+.mission-add-kr-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mission-quarter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.mission-quarter-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-wr-muted);
+}
+
+.mission-quarter-trigger {
+  width: 150px;
+}
+
+.mission-quarter-summary {
+  margin: 0;
+  color: var(--color-wr-muted);
+}
+
+.mission-error {
+  margin-bottom: 14px;
+  border: 1px solid var(--color-wr-danger-border);
+  border-radius: var(--mission-card-radius);
+  background: var(--color-wr-danger-soft);
+  color: var(--color-wr-danger);
+  padding: 10px 12px;
+}
+
+.mission-checkin-panel,
+.mission-objective,
+.mission-empty {
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: var(--mission-card-radius);
+  background: var(--color-wr-bg);
+  box-shadow: var(--wr-shadow-hairline);
+}
+
+.mission-checkin-panel {
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.mission-panel-head,
+.mission-objective-head,
+.mission-progress-line,
+.mission-closed-history {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mission-panel-title {
+  margin: 0;
+}
+
+.mission-count-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--color-wr-muted);
+}
+
+.mission-checkin-list,
+.mission-objectives,
+.mission-kr-list,
+.mission-dialog-form,
+.mission-pick-group,
+.mission-milestone-list {
+  display: grid;
+  gap: 12px;
+}
+
+.mission-checkin-item {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.6fr) minmax(160px, 1fr) minmax(190px, auto) minmax(150px, 1fr)
+    auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.mission-checkin-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mission-checkin-value {
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.mission-checkin-milestones {
+  display: grid;
+  gap: 6px;
+  max-height: 104px;
+  overflow-y: auto;
+}
+
+.mission-confidence-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mission-objective {
+  padding: 16px;
+}
+
+.mission-objective[data-status="closed"] {
+  background: var(--color-wr-surface);
+}
+
+.mission-objective-copy {
+  min-width: 0;
+}
+
+.mission-objective-title {
+  margin: 0;
+}
+
+.mission-objective-desc {
+  margin: 8px 0 0;
+  color: var(--color-wr-muted);
+}
+
+.mission-objective-actions,
+.mission-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mission-chip-row {
+  justify-content: flex-start;
+  margin-top: 14px;
+}
+
+.mission-area-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 9px;
+}
+
+.mission-objective-progress {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.mission-progress {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-wr-surface);
+  overflow: hidden;
+}
+
+.mission-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-q2);
+}
+
+.mission-kr-list {
+  margin-top: 16px;
+}
+
+.mission-kr-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.4fr) minmax(260px, auto) minmax(112px, auto) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.mission-kr-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.mission-kr-title {
+  min-width: 0;
+}
+
+.mission-kr-metric,
+.mission-add-kr-metric {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) auto minmax(64px, 1fr) minmax(64px, 0.7fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.mission-add-kr-metric {
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+}
+
+.mission-kr-checklist {
+  justify-self: start;
+}
+
+.mission-confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-wr-muted);
+  white-space: nowrap;
+}
+
+.mission-confidence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-wr-subtle);
+}
+
+.mission-confidence[data-confidence="on_track"] .mission-confidence-dot,
+.mission-spark-bar[data-confidence="on_track"] {
+  background: var(--color-wr-status-working);
+}
+
+.mission-confidence[data-confidence="at_risk"] .mission-confidence-dot,
+.mission-spark-bar[data-confidence="at_risk"] {
+  background: var(--color-wr-status-waiting);
+}
+
+.mission-confidence[data-confidence="off_track"] .mission-confidence-dot,
+.mission-spark-bar[data-confidence="off_track"] {
+  background: var(--color-wr-danger);
+}
+
+.mission-add-kr {
+  justify-self: start;
+  margin-top: 10px;
+}
+
+.mission-add-kr-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 132px;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.mission-add-kr-form textarea,
+.mission-add-kr-metric,
+.mission-add-kr-actions {
+  grid-column: 1 / -1;
+}
+
+.mission-kind-select {
+  width: 132px;
+}
+
+.mission-dialog {
+  max-width: 640px;
+}
+
+.mission-field {
+  display: grid;
+  gap: 6px;
+}
+
+.mission-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.mission-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mission-check-row [role="checkbox"] {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 4px;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+}
+
+.mission-check-row [role="checkbox"][data-state="checked"] {
+  border-color: var(--color-wr-fg);
+  background: var(--color-wr-fg);
+  color: var(--color-wr-bg);
+}
+
+.mission-color-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.mission-milestone-popover {
+  display: grid;
+  gap: 12px;
+}
+
+.mission-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mission-milestone-add {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+  gap: 8px;
+}
+
+.mission-closed-history {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.mission-sparkline {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 160px;
+  height: 44px;
+}
+
+.mission-spark-bar {
+  width: 9px;
+  min-height: 8px;
+  border-radius: 4px 4px 0 0;
+}
+
+.mission-empty,
+.mission-empty-line {
+  color: var(--color-wr-muted);
+}
+
+.mission-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px;
+}
+
+.mission-muted {
+  color: var(--color-wr-muted);
+}
+
+@media (max-width: 980px) {
+  .mission-top,
+  .mission-quarter-row,
+  .mission-panel-head,
+  .mission-objective-head,
+  .mission-progress-line,
+  .mission-closed-history {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mission-checkin-item,
+  .mission-kr-row {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-kr-metric {
+    grid-template-columns: minmax(64px, 1fr) auto minmax(64px, 1fr);
+  }
+
+  .mission-kr-metric input:nth-of-type(3),
+  .mission-kr-metric button {
+    grid-column: 1 / -1;
+  }
+
+  .mission-sparkline {
+    justify-content: flex-start;
+  }
+}

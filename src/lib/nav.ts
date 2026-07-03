@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   Repeat,
   Settings,
+  Target,
   WalletCards,
 } from "lucide-react";
 
@@ -68,6 +69,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: CalendarCheck,
     group: "operate",
     defaultShortcut: "Cmd+2",
+  },
+  {
+    view: "mission",
+    label: "Mission / OKR",
+    search: "mission okr 목표 미션 objective key result 분기 체크인",
+    icon: Target,
+    group: "review",
+    defaultShortcut: "Cmd+3",
   },
   {
     view: "weekly",

@@ -12,6 +12,7 @@ export * from "./inbox";
 export * from "./nav";
 export * from "./news";
 export * from "./notion";
+export * from "./okr";
 export * from "./projects";
 export * from "./prRadar";
 export * from "./retro";

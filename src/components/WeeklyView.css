@@ -40,6 +40,29 @@
   color: var(--color-wr-muted);
   padding: 12px 2px;
 }
+.wk .wk-okr-prompt {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 8px;
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  padding: 12px 14px;
+  box-shadow: var(--wr-shadow-hairline);
+  cursor: pointer;
+}
+.wk .wk-okr-prompt-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.wk .wk-okr-prompt-link {
+  color: var(--color-wr-muted);
+}
 .wk .wk-sec {
   margin-bottom: 24px;
 }

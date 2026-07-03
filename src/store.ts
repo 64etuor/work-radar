@@ -4,6 +4,7 @@ import { create } from "zustand";
 export type View =
   | "board"
   | "today"
+  | "mission"
   | "weekly"
   | "bookkeeping"
   | "routines"

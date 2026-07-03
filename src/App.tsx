@@ -12,6 +12,7 @@ import ControlRoomView from "@/components/control-room/ControlRoomView";
 import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
 import HermesView from "@/components/HermesView";
 import { JobsView } from "@/components/jobs/JobsView";
+import { MissionView } from "@/components/MissionView";
 import { NewsTicker } from "@/components/news/NewsTicker";
 import { PrRadarView } from "@/components/PrRadarView";
 import { RoutineTrackingView } from "@/components/RoutineTrackingView";
@@ -44,6 +45,7 @@ const VIEW_SLIDE_CLEANUP_MS = 460;
 function renderView(renderedView: View) {
   if (renderedView === "settings") return <SettingsView />;
   if (renderedView === "today") return <TodayView />;
+  if (renderedView === "mission") return <MissionView />;
   if (renderedView === "weekly") return <WeeklyView />;
   if (renderedView === "bookkeeping") return <BookkeepingView />;
   if (renderedView === "routines") return <RoutineTrackingView />;
