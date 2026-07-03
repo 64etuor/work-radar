@@ -32,14 +32,16 @@ export function GmailSyncCard({
 }) {
   return (
     <Card className="bk-card">
-      <CardHeader>
+      <CardHeader className="bk-card-head">
         <CardTitle className="bk-card-title">
           <RefreshCw className="size-4" />
           Gmail
         </CardTitle>
-        <CardDescription>{BOOKKEEPING_GMAIL_PERMISSION_COPY}</CardDescription>
+        <CardDescription className="bk-card-desc">
+          {BOOKKEEPING_GMAIL_PERMISSION_COPY}
+        </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <form className="bk-form" onSubmit={onSubmit}>
           <Field label="Gmail 라벨" htmlFor={FIELD_IDS.gmailLabels}>
             <Input

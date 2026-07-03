@@ -50,13 +50,13 @@ export function ReportsSection({
 
       <div className="bk-report-grid">
         <Card className="bk-card">
-          <CardHeader>
+          <CardHeader className="bk-card-head">
             <CardTitle className="bk-card-title">
               <Landmark className="size-4" />
               Cash-flow
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="bk-card-body">
             <div className="bk-report-list">
               {cashflow.length === 0 && <EmptyState>현금흐름 없음</EmptyState>}
               {cashflow.map((row) => (
@@ -86,13 +86,13 @@ export function ReportsSection({
         </Card>
 
         <Card className="bk-card">
-          <CardHeader>
+          <CardHeader className="bk-card-head">
             <CardTitle className="bk-card-title">
               <Tags className="size-4" />
               Category trend
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="bk-card-body">
             <div className="bk-report-list">
               {categoryTotals.length === 0 && <EmptyState>카테고리 지출 없음</EmptyState>}
               {categoryTotals.map((row) => (

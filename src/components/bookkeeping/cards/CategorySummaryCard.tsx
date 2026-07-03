@@ -16,14 +16,14 @@ export function CategorySummaryCard({
 }) {
   return (
     <Card className="bk-card">
-      <CardHeader>
+      <CardHeader className="bk-card-head">
         <CardTitle className="bk-card-title">
           <ReceiptText className="size-4" />
           카테고리
         </CardTitle>
-        <CardDescription>등록된 고정비 {recurringCount}개</CardDescription>
+        <CardDescription className="bk-card-desc">등록된 고정비 {recurringCount}개</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <div className="bk-category-list">
           {rows.length === 0 && <EmptyState>거래 없음</EmptyState>}
           {rows.map((row) => (

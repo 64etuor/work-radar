@@ -185,11 +185,13 @@ export function ReviewQueueCard({
             <ClipboardList className="size-4" />
             검토
           </CardTitle>
-          <CardDescription>Hermes 인박스 거래를 수정한 뒤 확정하거나 삭제합니다.</CardDescription>
+          <CardDescription className="bk-card-desc">
+            Hermes 인박스 거래를 수정한 뒤 확정하거나 삭제합니다.
+          </CardDescription>
         </div>
         <Badge variant="secondary">{filteredRows.length}</Badge>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <div className="bk-review-tools">
           <div className="bk-review-search">
             <Search className="size-4" />

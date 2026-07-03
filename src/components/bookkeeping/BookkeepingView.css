@@ -30,25 +30,25 @@
 .bk-shell {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--wr-density-lg);
   width: min(100%, 1280px);
   min-height: 100%;
   margin: 0 auto;
-  padding: 24px 22px 44px;
+  padding: 14px 22px 28px;
 }
 
 .bk-page-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(380px, 500px);
   align-items: end;
-  gap: 20px;
+  gap: var(--wr-density-lg);
   border-bottom: 1px solid var(--bk-rule);
-  padding-bottom: 18px;
+  padding-bottom: var(--wr-density-md);
 }
 
 .bk-heading {
   display: grid;
-  gap: 8px;
+  gap: var(--wr-density-xs);
   min-width: 0;
 }
 
@@ -60,7 +60,7 @@
 .bk-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 44px;
+  font-size: 30px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
@@ -182,7 +182,7 @@
 .bk-pane {
   display: grid;
   min-width: 0;
-  gap: 18px;
+  gap: var(--wr-density-lg);
   outline: none;
 }
 
@@ -195,7 +195,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 18px;
+  gap: var(--wr-density-lg);
 }
 
 .bk-pane-divider {
@@ -212,9 +212,11 @@
   overflow-y: auto;
 }
 
+/* 요약 스트립 — 압축 패스: 큰 블록 그리드 대신 한 줄 figure 나열(라벨:값). */
 .bk-metrics {
-  display: grid;
-  grid-template-columns: 1.45fr 1.25fr 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   border: 1px solid var(--bk-rule);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -222,14 +224,20 @@
 }
 
 .bk-metric {
-  display: grid;
-  align-content: center;
-  min-height: 72px;
-  gap: 6px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--wr-density-xs);
   border-left: 1px solid var(--bk-rule);
-  padding: 14px 16px;
+  padding: var(--wr-density-xs) var(--wr-density-lg);
   background: var(--bk-surface);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 한 줄 스트립에서는 title-md가 과함 — 값 타이포를 body 급으로 낮춘다. */
+.bk-metric > strong {
+  font-size: var(--text-body-md);
+  line-height: 1.4;
 }
 
 .bk-metric:first-child {
@@ -276,7 +284,7 @@
 .bk-section-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: 0;
@@ -298,7 +306,7 @@
   grid-template-columns: minmax(72px, 96px) minmax(0, 1fr);
   align-items: center;
   gap: var(--wr-density-md);
-  min-height: 44px;
+  min-height: 32px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -351,6 +359,29 @@
   border-color: var(--bk-rule);
   border-radius: var(--radius-sm);
   box-shadow: var(--wr-shadow-hairline);
+}
+
+/* ── 카드 크롬 압축 — shadcn 기본 p-5(20px)를 bk 스코프에서만 줄인다. ── */
+.bk-card-head {
+  gap: var(--wr-density-2xs);
+  padding: 10px var(--wr-density-xl) var(--wr-density-xs);
+}
+
+.bk-card-body {
+  gap: var(--wr-density-lg);
+  padding: var(--wr-density-xs) var(--wr-density-xl) var(--wr-density-lg);
+}
+
+/* 설명은 캡션 크기 + 2줄 클램프 — 크롬은 압축하되 의미 있는 카피
+   (예: "원본 파일은 수정하지 않습니다")가 통째로 잘리지 않게 한다. */
+.bk-card-desc {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-caption-sm);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .bk-collapsible-card {
@@ -454,14 +485,14 @@
 
 .bk-form {
   display: grid;
-  gap: var(--wr-density-lg);
+  gap: var(--wr-density-md);
 }
 
 .bk-form-grid,
 .bk-payment-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--wr-density-md);
+  gap: var(--wr-density-sm) var(--wr-density-md);
 }
 
 .bk-payment-fields {
@@ -478,10 +509,10 @@
 .bk-row {
   display: grid;
   min-width: 0;
-  gap: var(--wr-density-xs);
+  gap: var(--wr-density-2xs);
   border-top: 1px solid var(--bk-rule);
   background: transparent;
-  padding: var(--wr-density-lg) 0;
+  padding: var(--wr-density-xs) 0;
 }
 
 .bk-row:first-child {
@@ -524,7 +555,7 @@
 
 .bk-edit-form {
   display: grid;
-  gap: var(--wr-density-lg);
+  gap: var(--wr-density-md);
 }
 
 .bk-edit-head {
@@ -537,7 +568,7 @@
 .bk-edit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--wr-density-lg) var(--wr-density-md);
+  gap: var(--wr-density-md);
 }
 
 .bk-edit-grid > .bk-payment-fields,
@@ -573,7 +604,7 @@
 .bk-row-main {
   display: grid;
   min-width: 0;
-  gap: var(--wr-density-xs);
+  gap: var(--wr-density-2xs);
 }
 
 .bk-row-title {
@@ -620,6 +651,23 @@
   gap: var(--wr-density-xs);
 }
 
+/* 행 내부 액션 버튼 압축 — 기본 sm(32px)이 행 높이를 지배하므로 26px로.
+   .bk-row-actions를 쓰는 컨테이너 전수(grep 기준):
+   - .bk-transaction read-row: TransactionReadRow / RecurringOccurrenceRow / TrashTransactionRow → 압축 대상
+   - .bk-review-read: ReviewReadRow → 압축 대상
+   - .bk-transaction.bk-transaction-edit: TransactionEditForm 푸터(저장/취소/삭제) → 제외(:not)
+   폼/카드 헤더의 버튼은 건드리지 않는다. */
+.bk-transaction:not(.bk-transaction-edit) .bk-row-actions > button,
+.bk-review-read .bk-row-actions > button {
+  height: 26px;
+  padding-inline: var(--wr-density-md);
+}
+
+.bk-row-quick-category > button {
+  height: 26px;
+  padding-block: 0;
+}
+
 .bk-category-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -650,7 +698,7 @@
   border-radius: var(--radius-sm);
   background: var(--bk-stone);
   color: var(--bk-subtle);
-  padding: 16px var(--wr-density-xl);
+  padding: var(--wr-density-md) var(--wr-density-xl);
   text-align: center;
 }
 
@@ -715,7 +763,7 @@
   }
 
   .bk-title {
-    font-size: 36px;
+    font-size: 26px;
   }
 
   .bk-export-actions {
@@ -860,8 +908,8 @@
 .bk-budget-row {
   display: grid;
   width: 100%;
-  min-height: 84px;
-  gap: var(--wr-density-sm);
+  min-height: 60px;
+  gap: var(--wr-density-xs);
   border: 1px solid var(--bk-rule);
   border-radius: var(--radius-sm);
   background: var(--bk-surface);
@@ -946,8 +994,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--wr-density-md);
-  margin-bottom: var(--wr-density-md);
-  padding: var(--wr-density-sm) var(--wr-density-md);
+  margin-bottom: var(--wr-density-sm);
+  padding: var(--wr-density-xs) var(--wr-density-md);
   border: 1px solid var(--bk-rule-strong);
   border-radius: var(--radius-sm);
   background: var(--bk-stone);
@@ -977,7 +1025,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--wr-density-sm);
-  margin-top: var(--wr-density-md);
+  margin-top: var(--wr-density-sm);
 }
 
 .bk-pager-range,
@@ -1002,7 +1050,7 @@
   grid-template-columns: minmax(220px, 1fr) auto minmax(132px, auto) auto;
   gap: var(--wr-density-sm);
   align-items: center;
-  margin-bottom: var(--wr-density-md);
+  margin-bottom: var(--wr-density-sm);
 }
 
 .bk-review-search {
@@ -1025,7 +1073,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--wr-density-xs);
-  margin-bottom: var(--wr-density-md);
+  margin-bottom: var(--wr-density-sm);
   color: var(--bk-muted);
 }
 
@@ -1076,7 +1124,8 @@
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
-  margin-top: var(--wr-density-lg);
+  /* 행 세로 패딩(xs) 압축에 맞춰 정렬 마진도 낮춘다. */
+  margin-top: var(--wr-density-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1121,7 +1170,7 @@
   align-items: center;
   column-gap: var(--wr-density-md);
   min-width: 0;
-  padding: var(--wr-density-sm) 0;
+  padding: var(--wr-density-2xs) 0;
   border-left: 3px solid transparent;
   padding-left: var(--wr-density-xs);
   border-radius: var(--radius-sm);
@@ -1191,7 +1240,7 @@
 .bk-review-read-main {
   display: grid;
   min-width: 0;
-  gap: var(--wr-density-2xs);
+  gap: 0;
 }
 
 /* 메모 표시 겸 인라인 편집 트리거 — button이라 isInteractiveTarget이 행 확장을 막는다. */
@@ -1236,7 +1285,7 @@
 }
 
 .bk-review-note-input {
-  height: 26px;
+  height: 24px;
   max-width: 24rem;
 }
 

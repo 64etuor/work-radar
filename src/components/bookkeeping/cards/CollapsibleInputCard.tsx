@@ -29,7 +29,9 @@ export function CollapsibleInputCard({
             {icon}
             {title}
           </CardTitle>
-          {description ? <CardDescription>{description}</CardDescription> : null}
+          {description ? (
+            <CardDescription className="bk-card-desc">{description}</CardDescription>
+          ) : null}
         </div>
         <Button
           variant="ghost"

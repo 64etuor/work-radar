@@ -30,7 +30,7 @@ export function RecurringMonthCard({
             <CalendarCheck className="size-4" />
             이번 달 고정비
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="bk-card-desc">
             메일로 관측되지 않는 지출은 예정 건으로 만든 뒤 거래로 확정합니다.
           </CardDescription>
         </div>
@@ -38,7 +38,7 @@ export function RecurringMonthCard({
           <RefreshCw className="size-3.5" />월 예정 반영
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <div className="bk-transaction-list">
           {rows.length === 0 && <EmptyState>예정 고정비 없음</EmptyState>}
           {rows.map((occurrence) => (

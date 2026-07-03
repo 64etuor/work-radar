@@ -27,7 +27,9 @@ export function TrashTransactionsCard({
             <Trash2 className="size-4" />
             휴지통
           </CardTitle>
-          <CardDescription>삭제된 거래와 중복·무시 항목을 복원합니다.</CardDescription>
+          <CardDescription className="bk-card-desc">
+            삭제된 거래와 중복·무시 항목을 복원합니다.
+          </CardDescription>
         </div>
         <div className="bk-header-actions">
           <Badge variant="secondary">{rows.length}</Badge>
@@ -51,7 +53,7 @@ export function TrashTransactionsCard({
         aria-hidden={!open}
       >
         <div className="bk-collapsible-inner">
-          <CardContent>
+          <CardContent className="bk-card-body">
             <div className="bk-transaction-list">
               {rows.length === 0 && <EmptyState>휴지통 비어 있음</EmptyState>}
               {rows.map((tx) => (

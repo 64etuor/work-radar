@@ -41,17 +41,17 @@ export function ApprovedTransactionsCard({
   const visible = rows.slice(start, end);
   return (
     <Card className="bk-card">
-      <CardHeader>
+      <CardHeader className="bk-card-head">
         <CardTitle className="bk-card-title">
           <ReceiptText className="size-4" />
           확정 거래
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="bk-card-desc">
           선택한 월의 원장 거래입니다. 행을 클릭하면 전체 필드를 수정하고, 분류는 바로 바꿀 수
           있습니다.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <div className="bk-transaction-list">
           {rows.length === 0 && <EmptyState>거래 없음</EmptyState>}
           {visible.map((tx) =>
@@ -85,31 +85,31 @@ export function ApprovedTransactionsCard({
                 <span className="bk-pager-cap"> · 최대 {BACKEND_LIST_CAP}건 표시</span>
               )}
             </span>
-            {pageCount > 1 && (
-              <div className="bk-pager-controls" role="group" aria-label="확정 거래 페이지 이동">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 0}
-                  onClick={() => setRequestedPage(page - 1)}
-                >
-                  이전
-                </Button>
-                <span className="bk-pager-page typo-caption-sm" aria-live="polite">
-                  {page + 1} / {pageCount}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= pageCount - 1}
-                  onClick={() => setRequestedPage(page + 1)}
-                >
-                  다음
-                </Button>
-              </div>
-            )}
+            {/* 페이저는 단일 페이지에서도 항상 노출한다(경계 버튼만 비활성) —
+                숨기면 페이지네이션 존재 자체가 발견 불가능해 사용자가 혼란스러워한다. */}
+            <div className="bk-pager-controls" role="group" aria-label="확정 거래 페이지 이동">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page === 0}
+                onClick={() => setRequestedPage(page - 1)}
+              >
+                이전
+              </Button>
+              <span className="bk-pager-page typo-caption-sm" aria-live="polite">
+                {page + 1} / {pageCount}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page >= pageCount - 1}
+                onClick={() => setRequestedPage(page + 1)}
+              >
+                다음
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

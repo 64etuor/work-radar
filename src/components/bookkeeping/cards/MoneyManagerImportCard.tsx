@@ -41,16 +41,16 @@ export function MoneyManagerImportCard({
 
   return (
     <Card className="bk-card">
-      <CardHeader>
+      <CardHeader className="bk-card-head">
         <CardTitle className="bk-card-title">
           <HardDriveDownload className="size-4" />
           머니매니저
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="bk-card-desc">
           백업 폴더의 최신 .mmbak을 읽어 거래를 가져옵니다. 원본 파일은 수정하지 않습니다.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <div className="bk-form">
           <Field label="백업 폴더" htmlFor={FIELD_IDS.mmbakWatchDir}>
             <Input

@@ -15,13 +15,13 @@ export function OperationsLogCard({
 }) {
   return (
     <Card className="bk-card">
-      <CardHeader>
+      <CardHeader className="bk-card-head">
         <CardTitle className="bk-card-title">
           <ShieldAlert className="size-4" />
           운영 기록
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <div className="bk-side-list">
           {syncJobs.slice(0, 4).map((job) => (
             <div key={job.id} className="bk-log-row">

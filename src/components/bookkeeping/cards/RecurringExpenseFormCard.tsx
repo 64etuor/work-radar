@@ -46,7 +46,7 @@ export function RecurringExpenseFormCard({
       contentId={FIELD_IDS.recurringPanel}
       onOpenChange={onOpenChange}
     >
-      <CardContent>
+      <CardContent className="bk-card-body">
         <form className="bk-form" onSubmit={onSubmit}>
           <Field label="이름" htmlFor={FIELD_IDS.recurringName}>
             <Input

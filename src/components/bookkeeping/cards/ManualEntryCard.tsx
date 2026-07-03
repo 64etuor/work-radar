@@ -45,7 +45,7 @@ export function ManualEntryCard({
       contentId={FIELD_IDS.manualPanel}
       onOpenChange={onOpenChange}
     >
-      <CardContent>
+      <CardContent className="bk-card-body">
         <form className="bk-form" onSubmit={onSubmit}>
           <Field label="상점" htmlFor={FIELD_IDS.merchant}>
             <Input

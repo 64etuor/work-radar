@@ -29,14 +29,14 @@ export function ReconciliationCard({
   const tone = result ? reconciliationTone(result.differenceMinor) : null;
   return (
     <Card className="bk-card">
-      <CardHeader>
+      <CardHeader className="bk-card-head">
         <CardTitle className="bk-card-title">
           <Landmark className="size-4" />
           정산
         </CardTitle>
-        <CardDescription>명세서 잔액 대조</CardDescription>
+        <CardDescription className="bk-card-desc">명세서 잔액 대조</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <form className="bk-form bk-reconcile-form" onSubmit={onSubmit}>
           <Field htmlFor={FIELD_IDS.reconcileAccount} label="자산">
             <Input

@@ -30,14 +30,14 @@ export function BudgetCard({
 }) {
   return (
     <Card className="bk-card">
-      <CardHeader>
+      <CardHeader className="bk-card-head">
         <CardTitle className="bk-card-title">
           <Target className="size-4" />
           예산
         </CardTitle>
-        <CardDescription>월별 카테고리 한도</CardDescription>
+        <CardDescription className="bk-card-desc">월별 카테고리 한도</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="bk-card-body">
         <form className="bk-form bk-budget-form" onSubmit={onSubmit}>
           <Field htmlFor={FIELD_IDS.budgetCategory} label="카테고리">
             <CategorySelect
