@@ -1,0 +1,37 @@
+src-tauri/src/lib.rs
+  s_e0d8eda057f509::t_cbe0f396bb9b2a 157-170
+src-tauri/src/commands/mod.rs
+  s_e0d8eda057f509::t_cbe0f396bb9b2a 61
+  s_e0d8eda057f509::t_c54592c487b222 32
+src-tauri/src/models/okr.rs
+  s_e0d8eda057f509::t_6dbf17b1e673d6 1-153
+src-tauri/migrations/0066_mission_okr.sql
+  s_e0d8eda057f509::t_00aba12c8ef52c 1-56
+src-tauri/src/models.rs
+  s_e0d8eda057f509::t_6dbf17b1e673d6 11,30
+src-tauri/src/commands/okr.rs
+  s_e0d8eda057f509::t_c4b2388f086993 1-3
+  s_e0d8eda057f509::t_c54592c487b222 729-731,736,739-750,1019,1041-1042
+  s_e0d8eda057f509::t_b4aa4e07fe31b6 4-209,215-728
+  s_e0d8eda057f509::t_91aaedaba670ee 210-214,817-819,823-831,1021-1023
+  s_e0d8eda057f509::t_e2dbfb709123b0 732-735,737-738,751-816,820-822,832-1018,1020,1024-1040
+src/bindings.ts
+  s_e0d8eda057f509::t_9344e5de679b97 137-154,1797-1816,2127-2143,2165-2171,2224-2269,3228-3246
+  s_e0d8eda057f509::t_49607314a48420 3247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f7259f7912b05dea6afb13ba63f91ffc5f09722b",
+  "prompts": {},
+  "sessions": {
+    "s_e0d8eda057f509": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2917-d8fb-7e11-a3e0-aebe788b0abf",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
