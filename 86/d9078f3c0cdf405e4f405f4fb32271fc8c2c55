@@ -1,0 +1,86 @@
+src/components/bookkeeping/cards/CategorySummaryCard.tsx
+  s_f013490a1b0efb::t_6f9fb31c55318e 19
+  s_f013490a1b0efb::t_0d07cbd620ea66 24,26
+src/components/bookkeeping/cards/RecurringMonthCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 33,41
+src/components/bookkeeping/cards/TrashTransactionsCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 30
+  s_f013490a1b0efb::t_0309492b9eff15 31-32,56
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 49,54
+  s_f013490a1b0efb::t_6f9fb31c55318e 44
+  s_f013490a1b0efb::t_5d76b66d004b71 88-112
+src/components/bookkeeping/cards/MoneyManagerImportCard.tsx
+  s_f013490a1b0efb::t_6f9fb31c55318e 44
+  s_f013490a1b0efb::t_0d07cbd620ea66 49,53
+src/components/bookkeeping/cards/BudgetCard.tsx
+  s_f013490a1b0efb::t_6f9fb31c55318e 33
+  s_f013490a1b0efb::t_0d07cbd620ea66 38,40
+src/components/bookkeeping/cards/ManualEntryCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 48
+src/components/bookkeeping/cards/ReportsSection.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 59,95
+  s_f013490a1b0efb::t_6f9fb31c55318e 53,89
+src/components/bookkeeping/BookkeepingView.css
+  s_f013490a1b0efb::t_afbc191425ed44 766
+  s_f013490a1b0efb::t_1d268ca8917b8f 198
+  s_f013490a1b0efb::t_5024f1700829f3 997-998
+  s_f013490a1b0efb::t_2c81e6512a0978 1028
+  s_f013490a1b0efb::t_e2595525957b63 1053
+  s_f013490a1b0efb::t_e279ddd9de607f 607
+  s_f013490a1b0efb::t_6e6033266e19de 63
+  s_f013490a1b0efb::t_f5351b7b8d660c 1127-1128
+  s_f013490a1b0efb::t_484bb024f4a1a6 375-376,378,383-384
+  s_f013490a1b0efb::t_f8fa650ab5b587 1243
+  s_f013490a1b0efb::t_f676c12ea27c45 911-912
+  s_f013490a1b0efb::t_8f18b639fd4696 571
+  s_f013490a1b0efb::t_a6d1164404efcf 1173
+  s_f013490a1b0efb::t_6246802825b7e3 33,37,44,46,51
+  s_f013490a1b0efb::t_bdb17dde3ef4ff 1076
+  s_f013490a1b0efb::t_61ea31b1e25c13 655-660
+  s_f013490a1b0efb::t_1d8bd7077feb90 215,217-219,227-229,231,234-240
+  s_f013490a1b0efb::t_7e852e5a4489f9 287
+  s_f013490a1b0efb::t_20f95082e61e8a 364-374,377,379-382,385-386
+  s_f013490a1b0efb::t_545c31f2918b95 654,661-670
+  s_f013490a1b0efb::t_ed38e513189269 185
+  s_f013490a1b0efb::t_3ccf0f8bd1f1da 1288
+  s_f013490a1b0efb::t_28bde31f2ecc73 558
+  s_f013490a1b0efb::t_a7b49a04166683 309
+  s_f013490a1b0efb::t_43319d1881a9f1 488,495
+  s_f013490a1b0efb::t_d591c364d4ea36 512,515
+  s_f013490a1b0efb::t_0adff8ac0ef0db 701
+src/components/bookkeeping/cards/GmailSyncCard.tsx
+  s_f013490a1b0efb::t_6f9fb31c55318e 35
+  s_f013490a1b0efb::t_0d07cbd620ea66 40-42
+  s_f013490a1b0efb::t_aff2089f994295 44
+src/components/bookkeeping/cards/OperationsLogCard.tsx
+  s_f013490a1b0efb::t_6f9fb31c55318e 18
+  s_f013490a1b0efb::t_0d07cbd620ea66 24
+src/components/bookkeeping/cards/ReconciliationCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 37,39
+  s_f013490a1b0efb::t_6f9fb31c55318e 32
+src/components/bookkeeping/cards/RecurringExpenseFormCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 49
+src/components/bookkeeping/cards/ReviewQueueCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 188
+  s_f013490a1b0efb::t_2597b9da39f25c 189-190,194
+src/components/bookkeeping/cards/CollapsibleInputCard.tsx
+  s_f013490a1b0efb::t_0d07cbd620ea66 32
+  s_f013490a1b0efb::t_e850b70ea89d5f 33-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "86d9078f3c0cdf405e4f405f4fb32271fc8c2c55",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
