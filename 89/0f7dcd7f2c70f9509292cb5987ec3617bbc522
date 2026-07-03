@@ -1,0 +1,19 @@
+docs/plans/2026-07-04-mission-okr-design.md
+  s_2dd76ee15df346::t_328f305a80ece9 1-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "890f7dcd7f2c70f9509292cb5987ec3617bbc522",
+  "prompts": {},
+  "sessions": {
+    "s_2dd76ee15df346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cf3f2b6-3f79-4690-a19e-d8c8966f21cd",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
