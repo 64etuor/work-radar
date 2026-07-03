@@ -1,0 +1,51 @@
+src-tauri/src/moneymanager.rs
+  s_f013490a1b0efb::t_d11accc356e7d1 471
+  s_f013490a1b0efb::t_d6c4d41439ede9 104-106
+src-tauri/src/commands/bookkeeping/mmbak_taxonomy.rs
+  s_f013490a1b0efb::t_73ca701802a661 625
+  s_f013490a1b0efb::t_7383d1cba4fd53 459,468-493,496,500,502-538,748,825,828
+  s_f013490a1b0efb::t_7792bce7f083b9 205-213,215-281,309-336
+  s_f013490a1b0efb::t_b1f605f1a9c35f 705-715
+  s_f013490a1b0efb::t_205486889723f8 958-965
+  s_f013490a1b0efb::t_3670fb826de289 146-150,157,161,175-176,182,190
+  s_f013490a1b0efb::t_0e7790770cd27d 750-753,759-817
+  s_f013490a1b0efb::t_df3ea1cc1b9ed8 46-76
+  s_f013490a1b0efb::t_b894a747a0eb42 25
+  s_f013490a1b0efb::t_c58f6ba090ea2b 415
+  s_f013490a1b0efb::t_3629f2ec0a8124 669-671,675,693-694,696-704,819
+  s_f013490a1b0efb::t_b255327466515d 561,568
+  s_f013490a1b0efb::t_fc47ac1f5be891 3-15
+  s_f013490a1b0efb::t_976b0a9d67333e 393-395,397
+  s_f013490a1b0efb::t_707084f41a0bc3 337
+  s_f013490a1b0efb::t_0ac7d5849b64b3 746-747
+  s_f013490a1b0efb::t_2a6c564e904290 749
+  s_f013490a1b0efb::t_7f076ea9e1274f 818
+  s_f013490a1b0efb::t_05fc22e0c10861 820-824
+  s_f013490a1b0efb::t_3cc8f107e5af9f 826-827
+  s_f013490a1b0efb::t_bfd58237756c0f 829
+src-tauri/src/commands/bookkeeping/mmbak.rs
+  s_f013490a1b0efb::t_fce8203f6f8e30 175-176
+  s_f013490a1b0efb::t_406b785d89721e 225-226,228-237,261-262,270-275,279-294,296-297,300-301
+  s_f013490a1b0efb::t_0d4c3b4dadc372 346-350
+  s_f013490a1b0efb::t_ca4d9c090b2da6 561
+  s_f013490a1b0efb::t_6ef9913cd70350 1156-1253
+  s_f013490a1b0efb::t_0176864d96fab9 227
+src-tauri/src/commands/bookkeeping/transactions.rs
+  s_f013490a1b0efb::t_dc2067022331ea 336-439
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "0d5c64af8be9ed1b92306a9a1202c28ed7604564",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
