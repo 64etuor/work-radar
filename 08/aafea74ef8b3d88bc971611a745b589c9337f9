@@ -1,0 +1,58 @@
+src/components/bookkeeping/cards/pagination.ts
+  s_f013490a1b0efb::t_04ef74c53f10e8 1-30
+src-tauri/src/commands/bookkeeping/mmbak.rs
+  s_f013490a1b0efb::t_4091491f144862 321-325,330-331
+  s_f013490a1b0efb::t_80a1c69a889780 382
+  s_f013490a1b0efb::t_0c6fa2b724303f 326-329
+  s_f013490a1b0efb::t_1a5eea1f29da94 570
+  s_f013490a1b0efb::t_ece0ae8c0288ec 560,571-573
+  s_f013490a1b0efb::t_7e46402d7af7bc 401-449
+  s_f013490a1b0efb::t_f5e4edea11f981 631-637
+  s_f013490a1b0efb::t_9050bff8dd6eb9 239-241
+  s_f013490a1b0efb::t_f1419a614d19a4 732-817
+src-tauri/src/moneymanager.rs
+  s_f013490a1b0efb::t_74e7ab8d103c10 112-113
+  s_f013490a1b0efb::t_d25539053ad2d7 196
+  s_f013490a1b0efb::t_6413dffdbea16b 623-624
+  s_f013490a1b0efb::t_eb8c1ca8957ff0 634-635
+  s_f013490a1b0efb::t_55b4c837a36018 453-459
+  s_f013490a1b0efb::t_d8d6ebb57f53e7 693
+  s_f013490a1b0efb::t_e23daf69c2c3d9 174-175
+  s_f013490a1b0efb::t_7d458b746013de 597
+  s_f013490a1b0efb::t_2d83dbcdfe3012 710-711
+  s_f013490a1b0efb::t_fd47b78a2f0e4a 49-50
+  s_f013490a1b0efb::t_d32e33c33c38eb 477
+  s_f013490a1b0efb::t_ece0ae8c0288ec 535,601,644-647,664-667,699,723,728,748,753,759
+src-tauri/src/commands/bookkeeping/mmbak_options.rs
+  s_f013490a1b0efb::t_ece0ae8c0288ec 380,388
+src-tauri/src/commands/bookkeeping/transactions.rs
+  s_f013490a1b0efb::t_e3bdc479299078 265
+  s_f013490a1b0efb::t_138dcf9f477bd4 242-245
+src/components/bookkeeping/BookkeepingView.css
+  s_f013490a1b0efb::t_06213212892fe9 973-999
+src-tauri/src/commands/bookkeeping/mmbak_taxonomy.rs
+  s_f013490a1b0efb::t_ece0ae8c0288ec 338,351-352
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_f013490a1b0efb::t_a311c86cbf3484 5,10,40-41,57-77,79-114
+  s_f013490a1b0efb::t_cfa9c5dc639dff 29-39
+src/components/bookkeeping/cards/pagination.test.ts
+  s_f013490a1b0efb::t_a192f69f394e79 1-44
+docs/decisions.md
+  s_f013490a1b0efb::t_4cc91cf6165385 640
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "08aafea74ef8b3d88bc971611a745b589c9337f9",
+  "prompts": {},
+  "sessions": {
+    "s_f013490a1b0efb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dfa336b-6169-49a6-8fd7-625fb6bca4a8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
