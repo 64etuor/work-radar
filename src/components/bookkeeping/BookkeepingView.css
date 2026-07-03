@@ -970,6 +970,33 @@
   gap: var(--wr-density-xs);
 }
 
+/* ── 확정 거래(원장) 페이지네이션 ────────────────────────────────── */
+.bk-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wr-density-sm);
+  margin-top: var(--wr-density-md);
+}
+
+.bk-pager-range,
+.bk-pager-cap,
+.bk-pager-page {
+  color: var(--bk-muted);
+}
+
+.bk-pager-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--wr-density-xs);
+}
+
+.bk-pager-page {
+  min-width: 3.5em;
+  text-align: center;
+}
+
 .bk-review-tools {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto minmax(132px, auto) auto;

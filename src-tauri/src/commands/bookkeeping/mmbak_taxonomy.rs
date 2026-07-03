@@ -335,7 +335,7 @@ mod tests {
             "CREATE TABLE INOUTCOME (uid TEXT, assetUid TEXT, ctgUid TEXT, ZCONTENT TEXT, \
              ZDATE INTEGER, WDATE TEXT, DO_TYPE TEXT, ZMONEY TEXT, toAssetUid TEXT, \
              txUidTrans TEXT, cardDivideUid TEXT, CARDDIVIDMONTH TEXT, IS_DEL INTEGER, \
-             UTIME INTEGER, currencyUid TEXT)",
+             UTIME INTEGER, currencyUid TEXT, ZDATA TEXT)",
             "CREATE TABLE ZCATEGORY (uid TEXT, NAME TEXT, TYPE INTEGER, pUid TEXT, \
              C_IS_DEL INTEGER, STATUS INTEGER)",
             "CREATE TABLE ASSETS (uid TEXT, NIC_NAME TEXT, groupUid TEXT)",
@@ -348,8 +348,8 @@ mod tests {
             "INSERT INTO ZCATEGORY VALUES ('40','보험',1,'0',1,0)",
             "INSERT INTO ASSETS VALUES ('a1','하나카드','g1')",
             "INSERT INTO CURRENCY VALUES ('KRW_KRW','KRW',0)",
-            "INSERT INTO INOUTCOME VALUES ('mm-cafe-1','a1','11','스타벅스',0,'2026-06-15','1','5500.0','','','','',0,100,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('mm-waste-1','a1','31','편의점담배',0,'2026-06-20','1','12000.0','','','','',0,200,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('mm-cafe-1','a1','11','스타벅스',0,'2026-06-15','1','5500.0','','','','',0,100,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('mm-waste-1','a1','31','편의점담배',0,'2026-06-20','1','12000.0','','','','',0,200,'KRW_KRW','')",
         ] {
             exec_fixture(&path, sql).await;
         }

@@ -46,6 +46,8 @@ pub struct MmInoutcomeRow {
     /// UTIME — epoch ms 최종 수정(증분 커서 키).
     pub utime_ms: i64,
     pub currency_uid: String,
+    /// ZDATA — 거래 메모(사용자 자유 텍스트). MEMO 테이블과 무관 — 거래 메모는 이 컬럼이다.
+    pub zdata: String,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +109,8 @@ pub struct MappedMmTransaction {
     pub raw_category: Option<String>,
     /// ASSETS.NIC_NAME.
     pub account: Option<String>,
+    /// ZDATA 메모(트림, 비면 None) — 앱 note로 유입.
+    pub note: Option<String>,
     /// 증분 커서용 UTIME(epoch ms).
     pub utime_ms: i64,
 }
@@ -167,7 +171,8 @@ impl MoneyManagerBackup {
                     CAST(COALESCE(txUidTrans,'') AS TEXT) AS tx_uid_trans, \
                     CAST(COALESCE(IS_DEL,0) AS INTEGER) AS is_del, \
                     CAST(COALESCE(UTIME,0) AS INTEGER) AS utime_ms, \
-                    CAST(COALESCE(currencyUid,'') AS TEXT) AS currency_uid \
+                    CAST(COALESCE(currencyUid,'') AS TEXT) AS currency_uid, \
+                    CAST(COALESCE(ZDATA,'') AS TEXT) AS zdata \
              FROM INOUTCOME",
         )
         .fetch_all(&mut self.conn)
@@ -188,6 +193,7 @@ impl MoneyManagerBackup {
                     is_del: row.try_get("is_del")?,
                     utime_ms: row.try_get("utime_ms")?,
                     currency_uid: row.try_get("currency_uid")?,
+                    zdata: row.try_get("zdata")?,
                 })
             })
             .collect()
@@ -444,6 +450,13 @@ pub fn map_inoutcome_row(
         FALLBACK_MERCHANT.to_string()
     };
 
+    // 메모: ZDATA 트림, 비면 None. '0' 센티널 관례는 참조 컬럼 전용이라 적용하지 않는다
+    // (메모 "0"도 유효한 사용자 텍스트).
+    let note = {
+        let trimmed = row.zdata.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    };
+
     let account = nonempty_ref(&row.asset_uid)
         .and_then(|uid| assets.get(uid))
         .map(|asset| asset.nic_name.trim().to_string())
@@ -461,6 +474,7 @@ pub fn map_inoutcome_row(
         subcategory_label,
         raw_category,
         account,
+        note,
         utime_ms: row.utime_ms,
     }))
 }
@@ -518,7 +532,7 @@ mod tests {
             "CREATE TABLE INOUTCOME (uid TEXT, assetUid TEXT, ctgUid TEXT, ZCONTENT TEXT, \
              ZDATE INTEGER, WDATE TEXT, DO_TYPE TEXT, ZMONEY TEXT, toAssetUid TEXT, \
              txUidTrans TEXT, cardDivideUid TEXT, CARDDIVIDMONTH TEXT, IS_DEL INTEGER, \
-             UTIME INTEGER, currencyUid TEXT)",
+             UTIME INTEGER, currencyUid TEXT, ZDATA TEXT)",
             "CREATE TABLE ZCATEGORY (uid TEXT, NAME TEXT, TYPE INTEGER, pUid TEXT, \
              C_IS_DEL INTEGER, STATUS INTEGER)",
             "CREATE TABLE ASSETS (uid TEXT, NIC_NAME TEXT, groupUid TEXT)",
@@ -580,11 +594,11 @@ mod tests {
         let path = fixture_db(&dir).await;
         let lunch_ms = kst_millis(2026, 6, 15, 13, 45, 30);
         insert_row(&path, &format!(
-            "INSERT INTO INOUTCOME VALUES ('uuid-1','a1','11','스타벅스',{lunch_ms},'2026-06-15','1','5500.0','','','','',0,100,'KRW_KRW')"
+            "INSERT INTO INOUTCOME VALUES ('uuid-1','a1','11','스타벅스',{lunch_ms},'2026-06-15','1','5500.0','','','','',0,100,'KRW_KRW',' 맥주, 아몬드 ')"
         )).await;
         let midnight_ms = kst_millis(2026, 6, 1, 0, 0, 0);
         insert_row(&path, &format!(
-            "INSERT INTO INOUTCOME VALUES ('uuid-2','a1','20','회사',{midnight_ms},'2026-06-01','0','3000000.0','','','','',0,200,'KRW_KRW')"
+            "INSERT INTO INOUTCOME VALUES ('uuid-2','a1','20','회사',{midnight_ms},'2026-06-01','0','3000000.0','','','','',0,200,'KRW_KRW','')"
         )).await;
 
         let (rows, cats, assets, curs) = load_all(&path).await;
@@ -606,6 +620,8 @@ mod tests {
         assert_eq!(expense.subcategory_label.as_deref(), Some("카페"));
         assert_eq!(expense.raw_category.as_deref(), Some("식비 > 카페"));
         assert_eq!(expense.account.as_deref(), Some("하나카드"));
+        // ZDATA 메모는 트림되어 note로.
+        assert_eq!(expense.note.as_deref(), Some("맥주, 아몬드"));
         assert_eq!(expense.utime_ms, 100);
 
         let income = &mapped.transactions[1];
@@ -615,6 +631,8 @@ mod tests {
         assert_eq!(income.raw_category.as_deref(), Some("급여"));
         // 합성 자정 → 시간 없음.
         assert_eq!(income.spent_at_time, None);
+        // 빈 ZDATA → note 없음.
+        assert_eq!(income.note, None);
     }
 
     #[tokio::test]
@@ -623,10 +641,10 @@ mod tests {
         let path = fixture_db(&dir).await;
         // 이체(toAssetUid) / 이체(txUidTrans) / DO_TYPE=3 / 삭제행.
         for sql in [
-            "INSERT INTO INOUTCOME VALUES ('t1','a1','10','계좌이체',0,'2026-06-10','1','10000.0','a2','','','',0,10,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('t2','a1','10','이체링크',0,'2026-06-10','1','10000.0','','tx-9','','',0,11,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('t3','a1','10','기타타입',0,'2026-06-10','3','10000.0','','','','',0,12,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('del-1','a1','10','지워진거래',0,'2026-06-09','1','9000.0','','','','',1,13,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('t1','a1','10','계좌이체',0,'2026-06-10','1','10000.0','a2','','','',0,10,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('t2','a1','10','이체링크',0,'2026-06-10','1','10000.0','','tx-9','','',0,11,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('t3','a1','10','기타타입',0,'2026-06-10','3','10000.0','','','','',0,12,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('del-1','a1','10','지워진거래',0,'2026-06-09','1','9000.0','','','','',1,13,'KRW_KRW','')",
         ] {
             insert_row(&path, sql).await;
         }
@@ -643,10 +661,10 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = fixture_db(&dir).await;
         for sql in [
-            "INSERT INTO INOUTCOME VALUES ('z1','a1','10','제로',0,'2026-06-10','1','0.0','','','','',0,10,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('z2','a1','10','음수',0,'2026-06-10','1','-100.0','','','','',0,11,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('z3','a1','10','불량',0,'2026-06-10','1','abc','','','','',0,12,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('z4','a1','10','과대',0,'2026-06-10','1','9999999999.0','','','','',0,13,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('z1','a1','10','제로',0,'2026-06-10','1','0.0','','','','',0,10,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('z2','a1','10','음수',0,'2026-06-10','1','-100.0','','','','',0,11,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('z3','a1','10','불량',0,'2026-06-10','1','abc','','','','',0,12,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('z4','a1','10','과대',0,'2026-06-10','1','9999999999.0','','','','',0,13,'KRW_KRW','')",
         ] {
             insert_row(&path, sql).await;
         }
@@ -672,13 +690,13 @@ mod tests {
         // 미지 카테고리/자산 + 빈 ZCONTENT → 카테고리 폴백 라벨 + placeholder 상호.
         insert_row(
             &path,
-            "INSERT INTO INOUTCOME VALUES ('m1','missing','missing','',0,'2026-06-10','1','1000.0','','','','',0,10,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('m1','missing','missing','',0,'2026-06-10','1','1000.0','','','','',0,10,'KRW_KRW','   ')",
         )
         .await;
         // 카테고리는 있고 ZCONTENT만 빈 경우 → 카테고리 라벨이 상호.
         insert_row(
             &path,
-            "INSERT INTO INOUTCOME VALUES ('m2','a1','11','',0,'2026-06-10','1','1000.0','','','','',0,11,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('m2','a1','11','',0,'2026-06-10','1','1000.0','','','','',0,11,'KRW_KRW','')",
         )
         .await;
         let (rows, cats, assets, curs) = load_all(&path).await;
@@ -689,6 +707,8 @@ mod tests {
         assert_eq!(m1.merchant, "(무기명)");
         assert_eq!(m1.account, None);
         assert_eq!(m1.raw_category, None);
+        // 공백뿐인 ZDATA → note 없음.
+        assert_eq!(m1.note, None);
         let m2 = &mapped.transactions[1];
         assert_eq!(m2.merchant, "카페");
     }
@@ -700,12 +720,12 @@ mod tests {
         // legacy int uid(정수 리터럴 저장) + USD exp 2 스케일링.
         insert_row(
             &path,
-            "INSERT INTO INOUTCOME VALUES (12345,'a1','10','환전샵',0,'2026-06-10','1','170764.0','','','','',0,10,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES (12345,'a1','10','환전샵',0,'2026-06-10','1','170764.0','','','','',0,10,'KRW_KRW','')",
         )
         .await;
         insert_row(
             &path,
-            "INSERT INTO INOUTCOME VALUES ('usd-1','a1','10','Amazon',0,'2026-06-11','1','12.34','','','','',0,11,'USD_USD')",
+            "INSERT INTO INOUTCOME VALUES ('usd-1','a1','10','Amazon',0,'2026-06-11','1','12.34','','','','',0,11,'USD_USD','')",
         )
         .await;
         let (rows, cats, assets, curs) = load_all(&path).await;
@@ -725,18 +745,18 @@ mod tests {
         // 카드 할부 분할행(cardDivideUid, 미래 일자) — 그대로 임포트.
         insert_row(
             &path,
-            "INSERT INTO INOUTCOME VALUES ('inst-1','a1','10','할부 3/12',0,'2027-01-15','1','50000.0','','','div-1','2027-01',0,500,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('inst-1','a1','10','할부 3/12',0,'2027-01-15','1','50000.0','','','div-1','2027-01',0,500,'KRW_KRW','')",
         )
         .await;
         insert_row(
             &path,
-            "INSERT INTO INOUTCOME VALUES ('old-1','a1','10','과거행',0,'2026-01-01','1','1000.0','','','','',0,100,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('old-1','a1','10','과거행',0,'2026-01-01','1','1000.0','','','','',0,100,'KRW_KRW','')",
         )
         .await;
         // 삭제행은 커서와 무관하게 항상 보고(full-scan 계약).
         insert_row(
             &path,
-            "INSERT INTO INOUTCOME VALUES ('del-old','a1','10','오래된삭제',0,'2026-01-02','1','1000.0','','','','',1,50,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('del-old','a1','10','오래된삭제',0,'2026-01-02','1','1000.0','','','','',1,50,'KRW_KRW','')",
         )
         .await;
         let (rows, cats, assets, curs) = load_all(&path).await;

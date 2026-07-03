@@ -239,6 +239,10 @@ pub(crate) async fn upsert_bookkeeping_transaction_from_ingest_inner(
     // Re-ingest keeps user-authoritative row state (`review_status`, `deleted_at`) and category
     // overrides. Field-level edit locks are intentionally delegated to Hermes'
     // source_ref duplicate precheck, which skips a re-save on an exact source_ref match.
+    // `note` is app-note-wins (existing-first COALESCE): a note the user wrote/edited in the app
+    // must survive re-ingest, and a source memo (mmbak ZDATA 등) only fills a NULL note — a
+    // CHANGED source memo never overwrites a stored note. gmail passes note=None (byte-identical
+    // under either order); OCR re-ingest likewise can no longer clobber a stored note.
     let upsert_sql = format!(
         "INSERT INTO bookkeeping_transactions \
          (id, project_id, source, source_ref, merchant, description, amount_minor, currency, \
@@ -258,7 +262,7 @@ pub(crate) async fn upsert_bookkeeping_transaction_from_ingest_inner(
            currency=excluded.currency, \
            spent_at=excluded.spent_at, \
            category=excluded.category, \
-           note=COALESCE(excluded.note, bookkeeping_transactions.note), \
+           note=COALESCE(bookkeeping_transactions.note, excluded.note), \
            payment_method_kind=excluded.payment_method_kind, \
            payment_method_label=COALESCE(excluded.payment_method_label, bookkeeping_transactions.payment_method_label), \
            payment_method_last4=COALESCE(excluded.payment_method_last4, bookkeeping_transactions.payment_method_last4), \

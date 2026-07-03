@@ -236,7 +236,9 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
                 currency: tx.currency.clone(),
                 spent_at: tx.spent_at.clone(),
                 category: tx.category_label.clone(),
-                note: None,
+                // ZDATA 메모. 공유 upsert의 note는 app-note-wins(existing-first COALESCE) —
+                // 신규 행에는 실리고, 기존 행은 note IS NULL일 때만 채워진다.
+                note: tx.note.clone(),
                 // 결제수단 kind는 ingest에서 확정하지 않는다(사람이 리뷰에서 보정).
                 payment_method_kind: BookkeepingPaymentMethodKind::Unknown,
                 payment_method_label: None,
@@ -316,6 +318,17 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
     // moneymanager 행을 방금 동기화된 taxonomy/alias로 재해석해 코드를 채운다(힌트 갱신).
     let backfilled_category = backfill_mm_category_codes(db).await?;
 
+    // note 백필: ZDATA 메모가 유입되기 전에 임포트돼 note IS NULL로 남은 행을 채운다.
+    // UTIME 커서가 변경 없는 행의 upsert 자체를 건너뛰므로 conflict 경로의 COALESCE만으로는
+    // 커버되지 않는다 — 커서와 무관하게 백업 전체 행을 본다.
+    let backfilled_note = backfill_mm_notes(db, &loaded.rows).await?;
+    if backfilled_note > 0 {
+        tracing::info!(
+            backfilled_note,
+            "mmbak import: filled NULL notes from ZDATA"
+        );
+    }
+
     // 커서 정책: 실패 행이 있으면 커서를 (실패 행 최소 UTIME - 1)로 잡아 다음 임포트에서
     // 재시도되게 한다(임포트 내부 재시도 루프 없음 — bounded). 실패 행은 커서 필터를
     // 통과한 행이므로(UTIME > cursor_before) 커서가 뒤로 물러나지는 않는다.
@@ -366,6 +379,7 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
             "taxonomyNodesUpserted": taxonomy_counts.nodes,
             "taxonomyAliasesUpserted": taxonomy_counts.aliases,
             "backfilledCategory": backfilled_category,
+            "backfilledNote": backfilled_note,
         }),
     )
     .await?;
@@ -382,6 +396,55 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         backfilled_category_count: backfilled_category,
         cursor_after,
     })
+}
+
+/// note 백필 본체: 백업의 (uid → ZDATA 메모) 중, 앱 쪽 note가 **아직 NULL인** moneymanager
+/// 행에만 메모를 채운다. 가드(`note IS NULL`)를 UPDATE의 WHERE에 반복해 select와 update
+/// 사이에 사용자가 note를 쓰더라도(TOCTOU) 절대 덮지 않는다 —
+/// `mmbak_taxonomy.rs::apply_backfill_update`와 같은 패턴. 삭제 표시(IS_DEL) 행은 비대상.
+async fn backfill_mm_notes(db: &Db, rows: &[MmInoutcomeRow]) -> Result<u32, AppError> {
+    let mut notes: HashMap<&str, &str> = HashMap::new();
+    for row in rows {
+        if row.is_del != 0 {
+            continue;
+        }
+        let uid = row.uid.trim();
+        let note = row.zdata.trim();
+        if uid.is_empty() || note.is_empty() {
+            continue;
+        }
+        notes.insert(uid, note);
+    }
+    if notes.is_empty() {
+        return Ok(0);
+    }
+    let candidates: Vec<(String,)> = sqlx::query_as(
+        "SELECT source_ref FROM bookkeeping_transactions \
+         WHERE source = 'moneymanager' AND source_ref IS NOT NULL \
+           AND note IS NULL AND deleted_at IS NULL",
+    )
+    .fetch_all(db)
+    .await?;
+    let mut filled = 0u32;
+    for (source_ref,) in candidates {
+        let Some(note) = notes.get(source_ref.as_str()) else {
+            continue;
+        };
+        let result = sqlx::query(
+            "UPDATE bookkeeping_transactions \
+             SET note = ?2, updated_at = datetime('now') \
+             WHERE source = 'moneymanager' AND source_ref = ?1 \
+               AND note IS NULL AND deleted_at IS NULL",
+        )
+        .bind(&source_ref)
+        .bind(note)
+        .execute(db)
+        .await?;
+        if result.rows_affected() > 0 {
+            filled += 1;
+        }
+    }
+    Ok(filled)
 }
 
 /// 백업에서 삭제된 uid에 대해 기존 non-deleted 행에 `source_deleted` 리뷰 사유를 1회 append.
@@ -494,7 +557,7 @@ mod tests {
             "CREATE TABLE INOUTCOME (uid TEXT, assetUid TEXT, ctgUid TEXT, ZCONTENT TEXT, \
              ZDATE INTEGER, WDATE TEXT, DO_TYPE TEXT, ZMONEY TEXT, toAssetUid TEXT, \
              txUidTrans TEXT, cardDivideUid TEXT, CARDDIVIDMONTH TEXT, IS_DEL INTEGER, \
-             UTIME INTEGER, currencyUid TEXT)",
+             UTIME INTEGER, currencyUid TEXT, ZDATA TEXT)",
             "CREATE TABLE ZCATEGORY (uid TEXT, NAME TEXT, TYPE INTEGER, pUid TEXT, \
              C_IS_DEL INTEGER, STATUS INTEGER)",
             "CREATE TABLE ASSETS (uid TEXT, NIC_NAME TEXT, groupUid TEXT)",
@@ -504,10 +567,10 @@ mod tests {
             "INSERT INTO ZCATEGORY VALUES ('20','급여',0,'',0,0)",
             "INSERT INTO ASSETS VALUES ('a1','하나카드','g1')",
             "INSERT INTO CURRENCY VALUES ('KRW_KRW','KRW',0)",
-            "INSERT INTO INOUTCOME VALUES ('mm-exp-1','a1','11','스타벅스',0,'2026-06-15','1','5500.0','','','','',0,100,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('mm-inc-1','a1','20','회사',0,'2026-06-01','0','3000000.0','','','','',0,200,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('mm-xfer-1','a1','10','이체',0,'2026-06-10','1','10000.0','a2','','','',0,300,'KRW_KRW')",
-            "INSERT INTO INOUTCOME VALUES ('mm-del-1','a1','10','지워짐',0,'2026-06-09','1','9000.0','','','','',1,50,'KRW_KRW')",
+            "INSERT INTO INOUTCOME VALUES ('mm-exp-1','a1','11','스타벅스',0,'2026-06-15','1','5500.0','','','','',0,100,'KRW_KRW','맥주, 아몬드')",
+            "INSERT INTO INOUTCOME VALUES ('mm-inc-1','a1','20','회사',0,'2026-06-01','0','3000000.0','','','','',0,200,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('mm-xfer-1','a1','10','이체',0,'2026-06-10','1','10000.0','a2','','','',0,300,'KRW_KRW','')",
+            "INSERT INTO INOUTCOME VALUES ('mm-del-1','a1','10','지워짐',0,'2026-06-09','1','9000.0','','','','',1,50,'KRW_KRW','')",
         ] {
             exec_fixture(&path, sql).await;
         }
@@ -565,6 +628,13 @@ mod tests {
         assert_eq!(expense.raw_category.as_deref(), Some("식비 > 카페"));
         assert_eq!(expense.account.as_deref(), Some("하나카드"));
         assert_eq!(expense.direction, BookkeepingDirection::Expense);
+        // ZDATA 메모가 note로 유입.
+        assert_eq!(expense.note.as_deref(), Some("맥주, 아몬드"));
+        let income = rows
+            .iter()
+            .find(|r| r.source_ref.as_deref() == Some("mm-inc-1"))
+            .expect("income row");
+        assert_eq!(income.note, None, "empty ZDATA maps to NULL note");
 
         // sync job + cursor 기록.
         let job: (String, u32, u32, Option<String>) = sqlx::query_as(
@@ -657,6 +727,92 @@ mod tests {
             BookkeepingReviewStatus::Approved,
             "existing-wins: user review preserved"
         );
+    }
+
+    #[tokio::test]
+    async fn mmbak_reimport_preserves_app_edited_note() {
+        let db = pool().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_mmbak(&dir).await;
+
+        import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("first import");
+        // 사용자가 앱에서 note를 수정.
+        sqlx::query(
+            "UPDATE bookkeeping_transactions SET note='앱에서 쓴 메모' \
+             WHERE source='moneymanager' AND source_ref='mm-exp-1'",
+        )
+        .execute(&db)
+        .await
+        .expect("app-side note edit");
+
+        // 원본 앱에서 메모가 바뀜(UTIME 증가 → 재-upsert 대상) — app-note-wins라
+        // 저장된 note를 덮지 않는다.
+        exec_fixture(
+            &path,
+            "UPDATE INOUTCOME SET ZDATA='바뀐 원본 메모', UTIME=999 WHERE uid='mm-exp-1'",
+        )
+        .await;
+        import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("re-import");
+        let rows = mm_rows(&db).await;
+        let expense = rows
+            .iter()
+            .find(|r| r.source_ref.as_deref() == Some("mm-exp-1"))
+            .expect("expense");
+        assert_eq!(
+            expense.note.as_deref(),
+            Some("앱에서 쓴 메모"),
+            "app-note-wins: re-import must not clobber app-edited note"
+        );
+    }
+
+    #[tokio::test]
+    async fn mmbak_backfills_null_note_even_when_cursor_skips_row() {
+        let db = pool().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_mmbak(&dir).await;
+
+        import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("first import");
+        let rows = mm_rows(&db).await;
+        let income = rows
+            .iter()
+            .find(|r| r.source_ref.as_deref() == Some("mm-inc-1"))
+            .expect("income");
+        assert_eq!(income.note, None);
+
+        // ZDATA만 채워지고 UTIME은 그대로(200) → 커서가 upsert를 건너뛰는 케이스.
+        // 과거(메모 미유입 시절) 임포트된 행 시뮬레이션 — 백필이 채워야 한다.
+        exec_fixture(
+            &path,
+            "UPDATE INOUTCOME SET ZDATA=' 나중에 단 메모 ' WHERE uid='mm-inc-1'",
+        )
+        .await;
+        let summary = import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("re-import");
+        assert_eq!(summary.imported_count, 0, "cursor skips unchanged rows");
+
+        let rows = mm_rows(&db).await;
+        let income = rows
+            .iter()
+            .find(|r| r.source_ref.as_deref() == Some("mm-inc-1"))
+            .expect("income");
+        assert_eq!(
+            income.note.as_deref(),
+            Some("나중에 단 메모"),
+            "NULL-note backfill fills from trimmed ZDATA"
+        );
+        // 이미 note가 있는 행(mm-exp-1)은 백필 비대상 — 원래 메모 유지.
+        let expense = rows
+            .iter()
+            .find(|r| r.source_ref.as_deref() == Some("mm-exp-1"))
+            .expect("expense");
+        assert_eq!(expense.note.as_deref(), Some("맥주, 아몬드"));
     }
 
     #[tokio::test]
