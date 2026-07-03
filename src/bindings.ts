@@ -134,6 +134,24 @@ export const commands = {
 	getLifeWheelTags: () => typedError<LifeWheelTagConfig[], AppError>(__TAURI_INVOKE("get_life_wheel_tags")),
 	/**  Life Wheel 팔레트 설정 저장. 비밀이 아닌 per-machine UI 설정이므로 app_config에 JSON 저장한다. */
 	setLifeWheelTags: (tags: LifeWheelTagConfig[]) => typedError<LifeWheelTagConfig[], AppError>(__TAURI_INVOKE("set_life_wheel_tags", { tags })),
+	getMission: () => typedError<{
+	id: number,
+	statement: string,
+	note: string | null,
+	updatedAt: string,
+} | null, AppError>(__TAURI_INVOKE("get_mission")),
+	setMission: (statement: string, note: string | null) => typedError<Mission, AppError>(__TAURI_INVOKE("set_mission", { statement, note })),
+	listObjectives: (quarter: string) => typedError<Objective[], AppError>(__TAURI_INVOKE("list_objectives", { quarter })),
+	createObjective: (input: CreateObjectiveInput) => typedError<Objective, AppError>(__TAURI_INVOKE("create_objective", { input })),
+	updateObjective: (input: UpdateObjectiveInput) => typedError<Objective, AppError>(__TAURI_INVOKE("update_objective", { input })),
+	closeObjective: (id: string, reflection: string | null) => typedError<Objective, AppError>(__TAURI_INVOKE("close_objective", { id, reflection })),
+	deleteObjective: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_objective", { id })),
+	createKeyResult: (input: CreateKeyResultInput) => typedError<KeyResult, AppError>(__TAURI_INVOKE("create_key_result", { input })),
+	updateKeyResult: (input: UpdateKeyResultInput) => typedError<KeyResult, AppError>(__TAURI_INVOKE("update_key_result", { input })),
+	deleteKeyResult: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_key_result", { id })),
+	upsertCheckIn: (keyResultId: string, weekStart: string, confidence: OkrConfidence, note: string | null) => typedError<OkrCheckIn, AppError>(__TAURI_INVOKE("upsert_check_in", { keyResultId, weekStart, confidence, note })),
+	listCheckIns: (quarter: string) => typedError<OkrCheckIn[], AppError>(__TAURI_INVOKE("list_check_ins", { quarter })),
+	objectiveSignalStats: (quarter: string) => typedError<ObjectiveSignalStats[], AppError>(__TAURI_INVOKE("objective_signal_stats", { quarter })),
 	promoteToday: (id: string, date: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("promote_today", { id, date })),
 	unpromoteToday: (id: string) => typedError<WorkSignal, AppError>(__TAURI_INVOKE("unpromote_today", { id })),
 	/**  Today 항목 완료 토글. 완료(done)=해당 날짜 기록 → 다음날 이월 안 됨. */
@@ -1776,6 +1794,26 @@ export type CreateCalendarEventInput = {
 	description: string | null,
 };
 
+export type CreateKeyResultInput = {
+	objectiveId: string,
+	title: string,
+	kind: KeyResultKind,
+	targetValue: number | null,
+	currentValue: number | null,
+	unit: string | null,
+	milestones: OkrMilestone[],
+	sortRank: number,
+};
+
+export type CreateObjectiveInput = {
+	quarter: string,
+	title: string,
+	description: string | null,
+	sortRank: number,
+	linkedAreaKeys: string[],
+	linkedProjectIds: string[],
+};
+
 /**  프로젝트 생성 입력. credential_ref는 백엔드가 생성한다(프런트가 정하지 않음). */
 export type CreateProjectInput = {
 	name: string,
@@ -2086,6 +2124,23 @@ export type InboxItem = {
 	updatedAt: string,
 };
 
+export type KeyResult = {
+	id: string,
+	objectiveId: string,
+	title: string,
+	kind: KeyResultKind,
+	targetValue: number | null,
+	currentValue: number | null,
+	unit: string | null,
+	milestones: OkrMilestone[],
+	progress: number | null,
+	sortRank: number,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type KeyResultKind = "metric" | "milestone";
+
 export type KeywordFilter = {
 	id: number,
 	keyword: string,
@@ -2105,6 +2160,13 @@ export type LifeWheelTagConfig = {
 	color: string,
 	builtIn: boolean,
 	enabled: boolean,
+};
+
+export type Mission = {
+	id: number,
+	statement: string,
+	note: string | null,
+	updatedAt: string,
 };
 
 export type NewsCategory = "koreanTech" | "englishTech" | "aiResearch";
@@ -2157,6 +2219,52 @@ export type NotificationPermission = {
 	state: string,
 	/**  발사 가능 여부(granted일 때만 true). */
 	granted: boolean,
+};
+
+export type Objective = {
+	id: string,
+	quarter: string,
+	title: string,
+	description: string | null,
+	sortRank: number,
+	status: ObjectiveStatus,
+	closedReflection: string | null,
+	linkedAreaKeys: string[],
+	linkedProjectIds: string[],
+	keyResults: KeyResult[],
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type ObjectiveSignalStats = {
+	objectiveId: string,
+	week: OkrSignalStatsBucket,
+	quarterToDate: OkrSignalStatsBucket,
+};
+
+export type ObjectiveStatus = "active" | "closed";
+
+export type OkrCheckIn = {
+	id: string,
+	keyResultId: string,
+	weekStart: string,
+	valueSnapshot: number | null,
+	confidence: OkrConfidence,
+	note: string | null,
+	createdAt: string,
+};
+
+export type OkrConfidence = "on_track" | "at_risk" | "off_track";
+
+export type OkrMilestone = {
+	label: string,
+	done: boolean,
+};
+
+export type OkrSignalStatsBucket = {
+	captured: number,
+	completed: number,
+	scheduledMinutes: number,
 };
 
 export type OrchestratorPlanRow = {
@@ -3115,6 +3223,26 @@ export type UpdateBookkeepingTransactionInput = {
 	expenseKind: BookkeepingExpenseKind | null,
 	orderNo: string | null,
 	paymentNo: string | null,
+};
+
+export type UpdateKeyResultInput = {
+	id: string,
+	title: string,
+	kind: KeyResultKind,
+	targetValue: number | null,
+	currentValue: number | null,
+	unit: string | null,
+	milestones: OkrMilestone[],
+	sortRank: number,
+};
+
+export type UpdateObjectiveInput = {
+	id: string,
+	title: string,
+	description: string | null,
+	sortRank: number,
+	linkedAreaKeys: string[],
+	linkedProjectIds: string[],
 };
 
 /**
