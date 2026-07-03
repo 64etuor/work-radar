@@ -1,0 +1,100 @@
+src/lib/okr.ts
+  s_24e970ff23c82f::t_c18b5debe240ca 1-9,11-29
+  s_81960a77099e9e::t_c48abf7cd3cf99 10
+src/lib/okr.test.ts
+  s_24e970ff23c82f::t_1a513ff5a2578a 1-16,29-71
+  s_81960a77099e9e::t_8f05dc487a7c4d 17-28
+src/App.tsx
+  s_24e970ff23c82f::t_250bba36590f6c 15,48
+src/components/okr/ObjectiveCard.tsx
+  s_24e970ff23c82f::t_fcc7892d20b2e6 26-27
+  s_81960a77099e9e::t_33c02cb5757959 43-44,54,59,61,67-71,75-79,116,123,285
+  s_24e970ff23c82f::t_b27db538455448 2,15-21,215-219,267-269,273-275,297-299
+  s_24e970ff23c82f::t_b3f292e2098d4b 23
+  s_24e970ff23c82f::t_a01977caf89288 1,3-14,22,24-25,28-42,45-53,55-58,60,62-66,72-74,80-115,117-122,124-214,220-266,270-272,276-284,286-296,300-316
+src/components/okr/KeyResultRow.tsx
+  s_24e970ff23c82f::t_b27db538455448 98-103
+  s_24e970ff23c82f::t_ff1c046d8cb4ca 1-3,5-11,14-97,104-220,222-242
+  s_24e970ff23c82f::t_eb43cd16d25b5d 4,12-13
+  s_81960a77099e9e::t_4da182c91b2c59 221
+src/lib/nav.ts
+  s_24e970ff23c82f::t_7fd671f64b01f0 13,73-79
+  s_24e970ff23c82f::t_ba08b2ba4fbdc9 80
+src/components/MissionView.tsx
+  s_81960a77099e9e::t_eccaf67d4336bb 185-186,188,190-194,209-215,220,233
+  s_24e970ff23c82f::t_c991491b6d4e69 1-3,5-11,19-24,26-36,40-53,58-64,66-68,73,80-101,103-107,109,114-131,140-144,154-169,171-176,178-184,187,189,195-208,216-219,221-232,234-244,248-279
+  s_24e970ff23c82f::t_b27db538455448 12-18,54-57,69-72,110-113,153,245-247
+  s_81960a77099e9e::t_358ae46ba0ec4f 65,74-75,77-79,102,108,132,134-136,138-139,145-148,150-152
+  s_81960a77099e9e::t_f8fc5563ed3773 4,37-39,76,133,137,149,170,177
+  s_24e970ff23c82f::t_a882e738f1d9df 25
+  s_2dd76ee15df346::t_dbb16d03715882 280
+src/store.ts
+  s_24e970ff23c82f::t_2697eed9a22a6e 7
+src/components/WeeklyView.tsx
+  s_2dd76ee15df346::t_d565196d7f07cb 136
+  s_2dd76ee15df346::t_841f15b7557bcf 140
+  s_24e970ff23c82f::t_a882e738f1d9df 24
+  s_24e970ff23c82f::t_f468733f110c2b 11,25-32,53-56,135,137,139,141-143,290-291
+  s_24e970ff23c82f::t_e3c82926be8ad7 61,65,134,138
+  s_24e970ff23c82f::t_bae896aeabb533 57-60,62-64,66-67
+  s_24e970ff23c82f::t_5c423b2831b7e0 292-293
+src/components/okr/ObjectiveDialog.tsx
+  s_24e970ff23c82f::t_0a340defde520a 1,3-19,21-28,30-41,43-55,57-63,65-116,122-200,207
+  s_81960a77099e9e::t_80133c1fe04f99 20,29,42,56,64,117-121,201-206
+  s_24e970ff23c82f::t_b27db538455448 2
+src/components/okr/okrControls.ts
+  s_24e970ff23c82f::t_7f3f3c4c2fdc9a 1-14
+src/components/okr/CloseObjectiveDialog.tsx
+  s_24e970ff23c82f::t_b27db538455448 1
+  s_24e970ff23c82f::t_a5d00ac422ec7d 2-11,13-15,17-24,26-31,41-53,59-80,87
+  s_81960a77099e9e::t_db16680792f024 12,16,25,32-40,54-58,81-86
+src/components/WeeklyView.css
+  s_24e970ff23c82f::t_acc60a3a6f0fb0 43-65
+src/components/okr/WeeklyCheckInPanel.tsx
+  s_24e970ff23c82f::t_50098f09b864ad 11-12
+  s_24e970ff23c82f::t_8421ab9d36b8bf 1,3,5-10,13-28,32-44,46-48,50,52-53,55-57,59-179
+  s_81960a77099e9e::t_dd21a3a9c3fc15 45,49,51,54
+  s_24e970ff23c82f::t_b27db538455448 2,4,29-31
+  s_2dd76ee15df346::t_435ea882e3058a 58
+  s_2dd76ee15df346::t_360ecd9e4025e8 180-183
+src/components/MissionView.css
+  s_24e970ff23c82f::t_b77cff45479706 1-57,59-163,168-486
+  s_24e970ff23c82f::t_b27db538455448 164-167
+  s_81960a77099e9e::t_97d26302065760 58
+src/lib/query/index.ts
+  s_24e970ff23c82f::t_f7cf17cceadf15 15
+src/lib/query/okr.ts
+  s_24e970ff23c82f::t_1de8942788cc5b 1-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "01956dfa0419d99c2c47cf874819aa13028aa1e8",
+  "prompts": {},
+  "sessions": {
+    "s_24e970ff23c82f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2934-60c2-7172-b90e-4c95f658ff8f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_2dd76ee15df346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cf3f2b6-3f79-4690-a19e-d8c8966f21cd",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_81960a77099e9e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f294a-bc01-7051-897d-91fe85ca7b52",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
