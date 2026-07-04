@@ -81,6 +81,11 @@
   gap: var(--wr-density-xs);
 }
 
+/* 내보내기 포맷 팝업 — 버튼 3개 폭에 맞춘다(기본 팝오버 고정폭 회피). */
+.bk-export-popover {
+  width: auto;
+}
+
 .bk-head-actions {
   display: flex;
   justify-content: flex-end;
@@ -1128,52 +1133,6 @@
   opacity: 0.5;
 }
 
-/* 메모 표시 겸 인라인 편집 트리거 — 상호 아래 서브라인(원장/검토 공용). */
-.bk-review-note-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--wr-density-2xs);
-  min-width: 0;
-  max-width: 100%;
-  justify-self: start;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--bk-muted);
-  cursor: pointer;
-  text-align: left;
-}
-
-.bk-review-note-trigger:hover:not(:disabled) {
-  color: var(--bk-ink);
-}
-
-.bk-review-note-trigger[data-empty="true"] {
-  opacity: 0;
-  transition: opacity var(--wr-motion-fast) var(--wr-ease-out);
-}
-
-.bk-tr:hover .bk-review-note-trigger[data-empty="true"],
-.bk-review-note-trigger[data-empty="true"]:focus-visible {
-  opacity: 1;
-}
-
-.bk-review-note-trigger > svg {
-  flex: 0 0 auto;
-}
-
-.bk-review-note-text {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.bk-review-note-input {
-  height: 24px;
-  max-width: 24rem;
-}
-
 /* 그룹 타이틀 — 의심/정상 구획 라벨(그룹 행 안). */
 .bk-review-group-title {
   font-weight: 600;
@@ -1238,6 +1197,11 @@
   width: 7.5rem;
 }
 
+/* 가맹점=고정폭, 내용(note)=유일한 유동 칼럼. */
+.bk-th-merchant {
+  width: 12rem;
+}
+
 .bk-th-category {
   width: 9.5rem;
 }
@@ -1278,6 +1242,15 @@
 
 .bk-td-main > .bk-cell-trigger {
   font-weight: 600;
+}
+
+/* 내용(note) 셀 — muted 보조 텍스트 톤(가맹점이 primary). */
+.bk-td-note {
+  min-width: 0;
+}
+
+.bk-td-note .bk-cell-trigger {
+  color: var(--bk-muted);
 }
 
 .bk-td-category .bk-row-quick-category {

@@ -1,4 +1,3 @@
-import { StickyNote } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useRef, useState } from "react";
 
 import type { BookkeepingPaymentMethodKind } from "@/bindings";
@@ -99,81 +98,6 @@ export function EditableTextCell({
       onClick={() => setDraft(value)}
     >
       {display ?? (value.trim() ? value : (placeholder ?? "—"))}
-    </button>
-  );
-}
-
-/**
- * 상호 아래 메모 서브라인 — 검토 큐의 기존 노트 트리거/인라인 입력 패턴을 공용화.
- * 비어 있으면 아이콘만(행 hover 시 노출은 CSS), 클릭으로 인라인 편집.
- */
-export function NoteInlineEditor({
-  merchant,
-  note,
-  disabled,
-  onCommit,
-}: {
-  merchant: string;
-  note: string | null;
-  disabled?: boolean;
-  onCommit: (next: string) => Promise<boolean>;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const committingRef = useRef(false);
-
-  const commit = async () => {
-    if (draft == null || committingRef.current) return;
-    if (!shouldCommitNoteDraft(note, draft)) {
-      setDraft(null);
-      return;
-    }
-    committingRef.current = true;
-    try {
-      const ok = await onCommit(draft);
-      if (ok) setDraft(null);
-    } finally {
-      committingRef.current = false;
-    }
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      void commit();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      setDraft(null);
-    }
-  };
-
-  if (draft != null) {
-    return (
-      <Input
-        className="bk-review-note-input"
-        value={draft}
-        autoFocus
-        aria-label={`${merchant} 메모 편집`}
-        placeholder="메모"
-        disabled={disabled}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={onKeyDown}
-        onBlur={() => void commit()}
-      />
-    );
-  }
-  return (
-    <button
-      type="button"
-      className="bk-review-note-trigger typo-caption-sm"
-      data-empty={note ? "false" : "true"}
-      disabled={disabled}
-      aria-label={note ? `${merchant} 메모 수정` : `${merchant} 메모 추가`}
-      title={note ?? "메모 추가"}
-      onClick={() => setDraft(note ?? "")}
-    >
-      <StickyNote className="size-3" />
-      {note && <span className="bk-review-note-text">{note}</span>}
     </button>
   );
 }

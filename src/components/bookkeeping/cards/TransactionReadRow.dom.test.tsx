@@ -185,6 +185,15 @@ describe("TransactionReadRow (원장 테이블 행 인라인 편집)", () => {
     expect(onPatch).toHaveBeenCalledWith({ amount: "12000" });
   });
 
+  it("내용(note) 셀은 별도 칼럼에서 인라인 커밋된다 — onPatch({note})", async () => {
+    const { onPatch } = setup({ note: "회식" });
+    click(buttonByLabel("내용 변경"));
+    const input = query<HTMLInputElement>('input[aria-label="김밥천국 내용 변경"]');
+    expect(input.value).toBe("회식");
+    await commitInput(input, "점심 회식");
+    expect(onPatch).toHaveBeenCalledWith({ note: "점심 회식" });
+  });
+
   it("상세 편집/삭제 버튼은 각자 핸들러만 호출한다", () => {
     const { onOpenDetail, onDelete } = setup();
     click(buttonByLabel("상세 편집"));

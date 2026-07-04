@@ -165,7 +165,7 @@ export function ReviewQueueCard({
   );
 
   /** 그룹 헤더 행 — 테이블 전체 폭(colSpan) 캡션 줄. */
-  const REVIEW_COLS = 7;
+  const REVIEW_COLS = 8;
 
   return (
     <Card className="bk-card bk-review-card">
@@ -304,6 +304,7 @@ export function ReviewQueueCard({
               <TableRow>
                 <TableHead className="bk-th-check" aria-label="선택" />
                 <TableHead className="bk-th-date typo-caption-sm">날짜</TableHead>
+                <TableHead className="bk-th-merchant typo-caption-sm">가맹점</TableHead>
                 <TableHead className="typo-caption-sm">내용</TableHead>
                 <TableHead className="bk-th-category typo-caption-sm">분류</TableHead>
                 <TableHead className="bk-th-reasons typo-caption-sm">사유</TableHead>

@@ -163,7 +163,8 @@ export function TransactionEditForm({
             setDraft((current) => ({ ...current, subcategoryCode }))
           }
         />
-        <Field label="메모" htmlFor={`${fieldPrefix}-note`}>
+        {/* DB `note` — 원장/검토 테이블의 "내용" 칼럼과 같은 필드(라벨 통일). */}
+        <Field label="내용" htmlFor={`${fieldPrefix}-note`}>
           <Textarea
             id={`${fieldPrefix}-note`}
             value={draft.note}
@@ -258,7 +259,8 @@ export function TransactionEditForm({
                 </Field>
               </div>
               <div className="bk-edit-span-2">
-                <Field label="내용/설명" htmlFor={`${fieldPrefix}-description`}>
+                {/* DB `description` — 소스(메일/임포트) 원본 설명. 사용자 "내용"(note)과 별개. */}
+                <Field label="원본 설명" htmlFor={`${fieldPrefix}-description`}>
                   <Textarea
                     id={`${fieldPrefix}-description`}
                     value={draft.description}

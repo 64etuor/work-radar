@@ -291,14 +291,14 @@ describe("ReviewQueueCard 의심/정상 그룹", () => {
   });
 });
 
-describe("ReviewQueueCard 인라인 메모", () => {
-  it("행에서 메모를 저장한다 — 전체 폼 없이", async () => {
+describe("ReviewQueueCard 내용(note) 셀 인라인 편집", () => {
+  it("내용 셀에서 note를 저장한다 — 전체 폼 없이", async () => {
     const { onSave } = setup(ROWS);
     const row = rowOf("스타벅스");
-    click(buttonIn(row, "메모 추가"));
+    click(buttonIn(row, "내용 변경"));
     expect(sheetForm()).toBeNull();
 
-    const input = row.querySelector<HTMLInputElement>('[aria-label="스타벅스 메모 편집"]');
+    const input = row.querySelector<HTMLInputElement>('input[aria-label="스타벅스 내용 변경"]');
     if (!input) throw new Error("note input not found");
     typeInto(input, "회식");
     await act(async () =>
@@ -307,22 +307,22 @@ describe("ReviewQueueCard 인라인 메모", () => {
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave.mock.calls[0]?.[0]?.id).toBe("tx-2");
     expect(onSave.mock.calls[0]?.[1]?.note).toBe("회식");
-    expect(container?.querySelector('[aria-label="스타벅스 메모 편집"]')).toBeNull();
+    expect(container?.querySelector('input[aria-label="스타벅스 내용 변경"]')).toBeNull();
     expect(sheetForm()).toBeNull();
   });
 
   it("Escape는 저장 없이 취소한다", async () => {
     const { onSave } = setup(ROWS);
     const row = rowOf("스타벅스");
-    click(buttonIn(row, "메모 추가"));
-    const input = row.querySelector<HTMLInputElement>('[aria-label="스타벅스 메모 편집"]');
+    click(buttonIn(row, "내용 변경"));
+    const input = row.querySelector<HTMLInputElement>('input[aria-label="스타벅스 내용 변경"]');
     if (!input) throw new Error("note input not found");
-    typeInto(input, "버릴 메모");
+    typeInto(input, "버릴 내용");
     await act(async () =>
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
     );
     expect(onSave).not.toHaveBeenCalled();
-    expect(container?.querySelector('[aria-label="스타벅스 메모 편집"]')).toBeNull();
+    expect(container?.querySelector('input[aria-label="스타벅스 내용 변경"]')).toBeNull();
   });
 
   it("행 인라인 분류 변경은 draft 저장 경로(onSave)로 커밋된다 — override 아님", async () => {
@@ -349,16 +349,16 @@ describe("ReviewQueueCard 인라인 메모", () => {
     expect(onSave.mock.calls[0]?.[1]?.subcategoryCode).toBe("");
   });
 
-  it("메모가 그대로면 저장을 건너뛴다", async () => {
+  it("내용이 그대로면 저장을 건너뛴다", async () => {
     const { onSave } = setup([makeTx({ id: "tx-9", merchant: "쿠팡", note: "정기결제" })]);
     const row = rowOf("쿠팡");
-    click(buttonIn(row, "메모 수정"));
-    const input = row.querySelector<HTMLInputElement>('[aria-label="쿠팡 메모 편집"]');
+    click(buttonIn(row, "내용 변경"));
+    const input = row.querySelector<HTMLInputElement>('input[aria-label="쿠팡 내용 변경"]');
     if (!input) throw new Error("note input not found");
     await act(async () =>
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
     );
     expect(onSave).not.toHaveBeenCalled();
-    expect(container?.querySelector('[aria-label="쿠팡 메모 편집"]')).toBeNull();
+    expect(container?.querySelector('input[aria-label="쿠팡 내용 변경"]')).toBeNull();
   });
 });

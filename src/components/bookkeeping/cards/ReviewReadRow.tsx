@@ -11,7 +11,7 @@ import { currency } from "../bookkeepingFormat";
 import { reviewReasonCodes } from "../bookkeepingLabels";
 import { truncateReviewChips } from "../reviewRow";
 import { CategorySelect } from "./CategorySelect";
-import { DateTimeCell, EditableTextCell, NoteInlineEditor } from "./EditableCell";
+import { DateTimeCell, EditableTextCell } from "./EditableCell";
 
 /**
  * 검토 큐의 테이블 한 행 — 원장(TransactionReadRow)과 같은 셀 문법으로 인라인 편집한다
@@ -79,9 +79,12 @@ export function ReviewReadRow({
           disabled={disabled}
           onCommit={(merchant) => onPatch({ merchant })}
         />
-        <NoteInlineEditor
-          merchant={tx.merchant}
-          note={tx.note}
+      </TableCell>
+      <TableCell className="bk-td-note">
+        {/* 내용 = note 칼럼(DB `note`). 원본 설명(description)은 Sheet의 상세 섹션. */}
+        <EditableTextCell
+          value={tx.note ?? ""}
+          ariaLabel={`${tx.merchant} 내용 변경`}
           disabled={disabled}
           onCommit={(note) => onPatch({ note })}
         />

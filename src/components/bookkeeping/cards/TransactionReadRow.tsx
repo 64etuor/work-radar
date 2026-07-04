@@ -7,12 +7,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { effectiveCategoryCode, type TransactionEditDraft } from "../bookkeepingDrafts";
 import { currency } from "../bookkeepingFormat";
 import { CategorySelect } from "./CategorySelect";
-import {
-  DateTimeCell,
-  EditableTextCell,
-  NoteInlineEditor,
-  PaymentCellEditor,
-} from "./EditableCell";
+import { DateTimeCell, EditableTextCell, PaymentCellEditor } from "./EditableCell";
 
 /**
  * 원장(확정 거래) 테이블 한 행 — 핵심 필드는 셀에서 바로 편집한다
@@ -57,9 +52,12 @@ export function TransactionReadRow({
           disabled={disabled}
           onCommit={(merchant) => onPatch({ merchant })}
         />
-        <NoteInlineEditor
-          merchant={tx.merchant}
-          note={tx.note ?? tx.description}
+      </TableCell>
+      <TableCell className="bk-td-note">
+        {/* 내용 = note 칼럼(DB `note` — .mmbak '내용'이 유입되는 필드). 원본 설명(description)은 Sheet. */}
+        <EditableTextCell
+          value={tx.note ?? ""}
+          ariaLabel={`${tx.merchant} 내용 변경`}
           disabled={disabled}
           onCommit={(note) => onPatch({ note })}
         />

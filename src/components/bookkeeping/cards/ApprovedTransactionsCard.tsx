@@ -72,6 +72,7 @@ export function ApprovedTransactionsCard({
             <TableHeader>
               <TableRow>
                 <TableHead className="bk-th-date typo-caption-sm">날짜</TableHead>
+                <TableHead className="bk-th-merchant typo-caption-sm">가맹점</TableHead>
                 <TableHead className="typo-caption-sm">내용</TableHead>
                 <TableHead className="bk-th-category typo-caption-sm">분류</TableHead>
                 <TableHead className="bk-th-payment typo-caption-sm">결제</TableHead>
