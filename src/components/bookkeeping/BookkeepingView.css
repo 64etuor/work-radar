@@ -94,10 +94,10 @@
   min-width: 0;
 }
 
-/* 내보내기 트리거 — 24px 아이콘 전용 ghost(수동 입력 primary와 위계 분리). */
+/* 내보내기 트리거 — 기준 연월 내비의 .period-nav-icon(30×30 outline)과 동일 문법으로 정렬. */
 .bk-export-trigger {
-  height: 24px;
-  width: 24px;
+  height: 30px;
+  width: 30px;
   padding: 0;
   color: var(--bk-muted);
 }
