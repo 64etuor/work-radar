@@ -31,6 +31,7 @@ export function GuardrailPanel({
   const upsertGuardrail = useUpsertGuardrail();
   const deleteGuardrail = useDeleteGuardrail();
   const firstArea = tags.find((tag) => tag.enabled)?.id ?? "health";
+  const enabledTags = enabledLifeWheelTags(tags);
   const [label, setLabel] = useState("");
   const [areaKey, setAreaKey] = useState(firstArea);
   const [targetKind, setTargetKind] = useState<GuardrailTargetKind>("routine_count");
@@ -101,13 +102,11 @@ export function GuardrailPanel({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {tags
-              .filter((tag) => tag.enabled)
-              .map((tag) => (
-                <SelectItem key={tag.id} value={tag.id}>
-                  {tag.label}
-                </SelectItem>
-              ))}
+            {enabledTags.map((tag) => (
+              <SelectItem key={tag.id} value={tag.id}>
+                {tag.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select
@@ -147,4 +146,12 @@ function parseNullableNumber(value: string): number | null {
 
 function labelForArea(areaKey: string, tags: LifeWheelTagConfig[]): string {
   return tags.find((tag) => tag.id === areaKey)?.label ?? areaKey;
+}
+
+function enabledLifeWheelTags(tags: LifeWheelTagConfig[]): LifeWheelTagConfig[] {
+  const enabled: LifeWheelTagConfig[] = [];
+  for (const tag of tags) {
+    if (tag.enabled) enabled.push(tag);
+  }
+  return enabled;
 }
