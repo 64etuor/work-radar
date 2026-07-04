@@ -239,6 +239,22 @@
   font: 400 12px var(--font-sans);
   color: var(--color-q1);
 }
+.sprint-conflict {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  color: var(--color-wr-muted);
+  font: 500 11px var(--font-sans);
+}
+.sprint-conflict-copy {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sprint-goal-field {
   grid-column: auto;
 }
@@ -328,6 +344,9 @@
   .sprint-pop-actions {
     grid-column: auto;
   }
+  .sprint-conflict {
+    justify-content: flex-start;
+  }
   .sprint-goal-field {
     grid-column: auto;
   }
@@ -369,6 +388,10 @@
   }
   .sprint-goal-field {
     grid-column: 1 / -1;
+  }
+  .sprint-conflict {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
   }
   .sprint-pop-actions {
     grid-column: 1 / -1;

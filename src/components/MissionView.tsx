@@ -5,6 +5,8 @@ import { type FormEvent, useState } from "react";
 
 import type { Mission, Objective } from "@/bindings";
 import { CloseObjectiveDialog } from "@/components/okr/CloseObjectiveDialog";
+import { GuardrailPanel } from "@/components/okr/GuardrailPanel";
+import { HorizonShelf } from "@/components/okr/HorizonShelf";
 import { ObjectiveCard } from "@/components/okr/ObjectiveCard";
 import { ObjectiveDialog } from "@/components/okr/ObjectiveDialog";
 import { WeeklyCheckInPanel } from "@/components/okr/WeeklyCheckInPanel";
@@ -17,10 +19,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { currentQuarterKey } from "@/lib/lifeOs";
 import { objectiveProgressRatio, weekStartMonday } from "@/lib/okr";
 import {
+  useGuardrails,
   useLifeWheelTags,
   useMission,
+  useMissionHorizons,
+  useObjectiveHorizonLinks,
   useObjectives,
   useObjectiveSignalStats,
   useOkrCheckIns,
@@ -43,11 +49,20 @@ export function MissionView() {
   const objectives = useObjectives(quarter);
   const stats = useObjectiveSignalStats(quarter);
   const checkIns = useOkrCheckIns(quarter);
+  const horizons = useMissionHorizons();
+  const guardrails = useGuardrails(quarter);
+  const horizonLinks = useObjectiveHorizonLinks(quarter);
   const tags = useLifeWheelTags();
   const projects = useProjects();
 
   const objectiveRows = [...(objectives.data ?? [])].sort((a, b) => a.sortRank - b.sortRank);
   const statsByObjective = new Map((stats.data ?? []).map((row) => [row.objectiveId, row]));
+  const horizonIdsByObjective = new Map<string, string[]>();
+  for (const link of horizonLinks.data ?? []) {
+    const ids = horizonIdsByObjective.get(link.objectiveId) ?? [];
+    ids.push(link.horizonId);
+    horizonIdsByObjective.set(link.objectiveId, ids);
+  }
   const quarterElapsed = quarterElapsedRatio(quarter);
   const overallProgress =
     objectiveRows.length === 0
@@ -105,15 +120,37 @@ export function MissionView() {
           </p>
         </section>
 
-        {(mission.isError || objectives.isError || stats.isError || checkIns.isError) && (
+        {(mission.isError ||
+          objectives.isError ||
+          stats.isError ||
+          checkIns.isError ||
+          horizons.isError ||
+          guardrails.isError ||
+          horizonLinks.isError) && (
           <div className="mission-error typo-label-sm">
             OKR 데이터를 불러오지 못했습니다.{" "}
             {
-              (mission.error ?? objectives.error ?? stats.error ?? (checkIns.error as Error | null))
-                ?.message
+              (
+                mission.error ??
+                objectives.error ??
+                stats.error ??
+                checkIns.error ??
+                horizons.error ??
+                guardrails.error ??
+                (horizonLinks.error as Error | null)
+              )?.message
             }
           </div>
         )}
+
+        <div className="mission-life-grid">
+          <HorizonShelf horizons={horizons.data ?? []} />
+          <GuardrailPanel
+            quarter={quarter}
+            guardrails={guardrails.data ?? []}
+            tags={tags.data ?? []}
+          />
+        </div>
 
         <WeeklyCheckInPanel
           objectives={objectiveRows}
@@ -128,6 +165,8 @@ export function MissionView() {
               objective={objective}
               tags={tags.data ?? []}
               projects={projects.data ?? []}
+              horizons={horizons.data ?? []}
+              horizonIds={horizonIdsByObjective.get(objective.id) ?? []}
               stats={statsByObjective.get(objective.id) ?? null}
               checkIns={checkIns.data ?? []}
               onEdit={(nextObjective, opener) => {
@@ -168,6 +207,10 @@ export function MissionView() {
         nextSortRank={nextSortRank}
         tags={tags.data ?? []}
         projects={projects.data ?? []}
+        horizons={horizons.data ?? []}
+        linkedHorizonIds={
+          objectiveDialog?.id ? (horizonIdsByObjective.get(objectiveDialog.id) ?? []) : []
+        }
         returnFocusTo={objectiveDialogFocusTarget}
       />
       <CloseObjectiveDialog
@@ -235,10 +278,6 @@ function MissionStatement({ mission }: { mission: Mission | null }) {
       <Edit3 className="size-5" aria-hidden="true" />
     </button>
   );
-}
-
-function currentQuarterKey(date = new Date()): string {
-  return `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
 }
 
 function quarterOptions(centerQuarter: string): string[] {

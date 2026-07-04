@@ -2,12 +2,13 @@ import "./SprintTimer.css";
 
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
-import type { SprintConfig, Weekday } from "@/bindings";
+import type { SprintConfig, SprintWeeklyFocusConflict, Weekday } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
 import {
   useClearSprintConfig,
+  useLinkSprintGoalToWeeklyFocus,
   useSetSprintConfig,
   useSprintConfig,
   useSprintStatus,
@@ -204,6 +205,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
 
   const setConfig = useSetSprintConfig();
   const clearConfig = useClearSprintConfig();
+  const linkSprintGoal = useLinkSprintGoalToWeeklyFocus();
   const { pushSuccess, pushError } = useToastStore();
 
   const [intervalDays, setIntervalDays] = useState(
@@ -214,12 +216,14 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
   );
   const [time, setTime] = useState(config?.anchorTime ?? DEFAULT_CONFIG.anchorTime);
   const [goal, setGoal] = useState(config?.goal ?? DEFAULT_CONFIG.goal);
+  const [conflict, setConflict] = useState<SprintWeeklyFocusConflict | null>(null);
   const [hour, minute] = time.split(":");
   const setTimePart = (nextHour: string, nextMinute: string) =>
     setTime(`${nextHour}:${nextMinute}`);
 
   const save = () => {
     if (setConfig.isPending) return;
+    setConflict(null);
     setConfig.mutate(
       {
         intervalDays,
@@ -228,7 +232,12 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
         goal: formatSprintGoal(goal) ?? "",
       },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          if (result.conflict) {
+            setConflict(result.conflict);
+            pushSuccess("스프린트는 저장됨. 주간 목표 연결을 확인하세요.");
+            return;
+          }
           pushSuccess("스프린트 일정 저장됨");
           onClose();
         },
@@ -249,6 +258,22 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
       onError: (e) =>
         pushError("sprint", e instanceof IpcError ? e.app : `스프린트 해제 실패: ${String(e)}`),
     });
+  };
+
+  const replaceWeeklyFocus = () => {
+    if (linkSprintGoal.isPending) return;
+    linkSprintGoal.mutate(
+      { replaceExisting: true },
+      {
+        onSuccess: () => {
+          pushSuccess("주간 목표가 스프린트 목표로 연결됨");
+          setConflict(null);
+          onClose();
+        },
+        onError: (e) =>
+          pushError("sprint", e instanceof IpcError ? e.app : `주간 목표 연결 실패: ${String(e)}`),
+      },
+    );
   };
 
   return (
@@ -343,16 +368,44 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
       </label>
 
       <label className="sprint-field sprint-goal-field" htmlFor={`${fieldId}-goal`}>
-        <span className="sprint-lbl">목표</span>
+        <span className="sprint-lbl">스프린트/주간 목표</span>
         <Input
           id={`${fieldId}-goal`}
           value={goal}
           maxLength={160}
-          onChange={(e) => setGoal(e.target.value)}
+          onChange={(e) => {
+            setGoal(e.target.value);
+            setConflict(null);
+          }}
           placeholder="이번 스프린트 목표"
           className="h-7 min-w-0 px-2 text-xs"
         />
       </label>
+
+      {conflict && (
+        <div className="sprint-conflict">
+          <span className="sprint-conflict-copy">
+            이미 선택된 주간 목표: {conflict.existingWeeklyFocus.title}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-7 rounded-full px-2.5 text-xs"
+            onClick={replaceWeeklyFocus}
+            disabled={linkSprintGoal.isPending}
+          >
+            주간 목표로 교체
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-7 rounded-full px-2.5 text-xs"
+            onClick={onClose}
+          >
+            스프린트만 저장
+          </Button>
+        </div>
+      )}
 
       {setConfig.isError && <div className="sprint-err">{String(setConfig.error)}</div>}
 
@@ -374,7 +427,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
         <Button
           className="h-7 rounded-full px-3 text-xs"
           onClick={save}
-          disabled={setConfig.isPending}
+          disabled={setConfig.isPending || linkSprintGoal.isPending}
         >
           {setConfig.isPending ? "저장 중…" : "저장"}
         </Button>

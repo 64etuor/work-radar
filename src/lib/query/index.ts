@@ -9,6 +9,7 @@ export * from "./client";
 export * from "./cmux";
 export * from "./governance";
 export * from "./inbox";
+export * from "./lifeOs";
 export * from "./nav";
 export * from "./news";
 export * from "./notion";

@@ -18,6 +18,7 @@ import { areaLabel } from "@/components/board/boardUtils";
 import { ArchiveAccordion } from "@/components/weekly/ArchiveAccordion";
 import { LifeWheelRadar } from "@/components/weekly/LifeWheelRadar";
 import { CompletedList, ReflectionRank } from "@/components/weekly/ReflectionSection";
+import { SystemDiagnosis } from "@/components/weekly/SystemDiagnosis";
 import { WeekNavigator } from "@/components/weekly/WeekNavigator";
 import { WeekScrubber } from "@/components/weekly/WeekScrubber";
 import { bucketRoutineDoneByOffset } from "@/lib/lifeWheelRadar";
@@ -140,6 +141,8 @@ export function WeeklyView() {
             <span className="wk-okr-prompt-link typo-mono-label">Mission으로</span>
           </button>
         )}
+
+        <SystemDiagnosis weekStart={nav.range.start} isCurrent={nav.isCurrent} />
 
         {review.isError && (
           <div className="wk-hint">

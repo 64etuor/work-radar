@@ -310,7 +310,7 @@ export const commands = {
 	goal?: string,
 } | null, AppError>(__TAURI_INVOKE("get_sprint_config")),
 	/**  스프린트 설정 저장(검증 후 JSON upsert). 단일 전역 — app_config 한 행. */
-	setSprintConfig: (config: SprintConfig) => typedError<null, AppError>(__TAURI_INVOKE("set_sprint_config", { config })),
+	setSprintConfig: (config: SprintConfig) => typedError<SprintSaveResult, AppError>(__TAURI_INVOKE("set_sprint_config", { config })),
 	/**  스프린트 설정 삭제(미설정 상태로 복원 → 헤더 empty 링크). */
 	clearSprintConfig: () => typedError<null, AppError>(__TAURI_INVOKE("clear_sprint_config")),
 	/**
@@ -326,6 +326,51 @@ export const commands = {
 	 */
 	remainingSeconds: number,
 } | null, AppError>(__TAURI_INVOKE("sprint_status")),
+	currentSprintCycle: () => typedError<{
+	id: string,
+	sprintKey: string,
+	startAt: string,
+	endAt: string,
+	intervalDays: number,
+	anchorWeekday: Weekday,
+	anchorTime: string,
+	goal: string | null,
+	weeklyFocusId: string | null,
+	status: SprintCycleStatus,
+	createdAt: string,
+	updatedAt: string,
+} | null, AppError>(__TAURI_INVOKE("current_sprint_cycle")),
+	linkSprintGoalToWeeklyFocus: (input: LinkSprintGoalInput) => typedError<SprintSaveResult, AppError>(__TAURI_INVOKE("link_sprint_goal_to_weekly_focus", { input })),
+	listMissionHorizons: () => typedError<MissionHorizon[], AppError>(__TAURI_INVOKE("list_mission_horizons")),
+	createMissionHorizon: (input: CreateMissionHorizonInput) => typedError<MissionHorizon, AppError>(__TAURI_INVOKE("create_mission_horizon", { input })),
+	updateMissionHorizon: (input: UpdateMissionHorizonInput) => typedError<MissionHorizon, AppError>(__TAURI_INVOKE("update_mission_horizon", { input })),
+	deleteMissionHorizon: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_mission_horizon", { id })),
+	listGuardrails: (quarter: string) => typedError<OkrGuardrail[], AppError>(__TAURI_INVOKE("list_guardrails", { quarter })),
+	upsertGuardrail: (input: UpsertGuardrailInput) => typedError<OkrGuardrail, AppError>(__TAURI_INVOKE("upsert_guardrail", { input })),
+	deleteGuardrail: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_guardrail", { id })),
+	listObjectiveHorizonLinks: (quarter: string) => typedError<ObjectiveHorizonLink[], AppError>(__TAURI_INVOKE("list_objective_horizon_links", { quarter })),
+	linkObjectiveHorizon: (objectiveId: string, horizonId: string) => typedError<null, AppError>(__TAURI_INVOKE("link_objective_horizon", { objectiveId, horizonId })),
+	unlinkObjectiveHorizon: (objectiveId: string, horizonId: string) => typedError<null, AppError>(__TAURI_INVOKE("unlink_objective_horizon", { objectiveId, horizonId })),
+	selectedWeeklyFocus: (weekStart: string) => typedError<{
+	id: string,
+	weekStart: string,
+	title: string,
+	sourceKind: WeeklyFocusSourceKind,
+	sourceId: string | null,
+	objectiveId: string | null,
+	keyResultId: string | null,
+	horizonId: string | null,
+	status: WeeklyFocusStatus,
+	estimatedMinutes: number | null,
+	reason: string | null,
+	mustDoSignalIds: string[],
+	notDoSignalIds: string[],
+	guardrailIds: string[],
+	shrinkCount: number,
+	createdAt: string,
+	updatedAt: string,
+} | null, AppError>(__TAURI_INVOKE("selected_weekly_focus", { weekStart })),
+	selectWeeklyFocus: (input: SelectWeeklyFocusInput) => typedError<WeeklyFocus, AppError>(__TAURI_INVOKE("select_weekly_focus", { input })),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, AppError>(__TAURI_INVOKE("codex_status")),
 	/**  claude/codex 사용량 한도 스냅샷 (TTL 캐시 + 429 백오프 + stale 폴백, 읽기 전용). */
@@ -1805,6 +1850,15 @@ export type CreateKeyResultInput = {
 	sortRank: number,
 };
 
+export type CreateMissionHorizonInput = {
+	title: string,
+	description: string | null,
+	horizonKind: MissionHorizonKind,
+	wscKind: WscKind | null,
+	areaKeys: string[],
+	sortRank: number,
+};
+
 export type CreateObjectiveInput = {
 	quarter: string,
 	title: string,
@@ -2008,6 +2062,8 @@ export type GoogleCalendarStatus = {
 	detail: string,
 };
 
+export type GuardrailTargetKind = "routine_count" | "weekly_minutes" | "manual_check";
+
 export type HandoffPhase = "requested" | "validating" | "pending" | "invalid" | "consumed" | 
 /**  Drift-resilient fallback: any wire value not in the known set. */
 "unknown";
@@ -2150,6 +2206,8 @@ export type KeywordFilter = {
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
 
+export type LifeOsRecordStatus = "active" | "paused" | "closed";
+
 /**
  *  사람이 편집하는 Life Wheel 팔레트 항목. AI 제안 taxonomy(`AreaTag`)와 별개로,
  *  수동 태그 선택 UI만 확장한다.
@@ -2162,12 +2220,31 @@ export type LifeWheelTagConfig = {
 	enabled: boolean,
 };
 
+export type LinkSprintGoalInput = {
+	replaceExisting: boolean,
+};
+
 export type Mission = {
 	id: number,
 	statement: string,
 	note: string | null,
 	updatedAt: string,
 };
+
+export type MissionHorizon = {
+	id: string,
+	title: string,
+	description: string | null,
+	horizonKind: MissionHorizonKind,
+	wscKind: WscKind | null,
+	areaKeys: string[],
+	status: LifeOsRecordStatus,
+	sortRank: number,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type MissionHorizonKind = "three_year" | "one_year" | "someday";
 
 export type NewsCategory = "koreanTech" | "englishTech" | "aiResearch";
 
@@ -2236,6 +2313,11 @@ export type Objective = {
 	updatedAt: string,
 };
 
+export type ObjectiveHorizonLink = {
+	objectiveId: string,
+	horizonId: string,
+};
+
 export type ObjectiveSignalStats = {
 	objectiveId: string,
 	week: OkrSignalStatsBucket,
@@ -2255,6 +2337,21 @@ export type OkrCheckIn = {
 };
 
 export type OkrConfidence = "on_track" | "at_risk" | "off_track";
+
+export type OkrGuardrail = {
+	id: string,
+	quarter: string,
+	areaKey: string,
+	label: string,
+	targetKind: GuardrailTargetKind,
+	targetValue: number | null,
+	unit: string | null,
+	sourceRoutineIds: string[],
+	status: LifeOsRecordStatus,
+	sortRank: number,
+	createdAt: string,
+	updatedAt: string,
+};
 
 export type OkrMilestone = {
 	label: string,
@@ -2674,6 +2771,22 @@ export type RoutineTrackingItem = {
 /**  샌드박스 권한. 기본 read_only, 쓰기는 명시 승인 시에만. danger_full은 타입에 없음 (INVARIANT #6). */
 export type Sandbox = "read_only" | "workspace_write";
 
+export type SelectWeeklyFocusInput = {
+	weekStart: string,
+	title: string,
+	sourceKind: WeeklyFocusSourceKind,
+	sourceId: string | null,
+	objectiveId: string | null,
+	keyResultId: string | null,
+	horizonId: string | null,
+	estimatedMinutes: number | null,
+	reason: string | null,
+	mustDoSignalIds: string[],
+	notDoSignalIds: string[],
+	guardrailIds: string[],
+	replaceExisting: boolean,
+};
+
 /**
  *  선택 캘린더 저장 입력 (id+summary). google_calendar_ids에 JSON `[{id,summary}]`로 영속.
  *  summary를 함께 저장해 이벤트 fetch 시 calendarList 재조회 없이 calendar_summary를 채운다.
@@ -2983,6 +3096,29 @@ export type SprintConfig = {
 	goal?: string,
 };
 
+export type SprintCycle = {
+	id: string,
+	sprintKey: string,
+	startAt: string,
+	endAt: string,
+	intervalDays: number,
+	anchorWeekday: Weekday,
+	anchorTime: string,
+	goal: string | null,
+	weeklyFocusId: string | null,
+	status: SprintCycleStatus,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type SprintCycleStatus = "active" | "closed";
+
+export type SprintSaveResult = {
+	sprintCycle: SprintCycle | null,
+	weeklyFocus: WeeklyFocus | null,
+	conflict: SprintWeeklyFocusConflict | null,
+};
+
 /**  헤더 카운트다운 데이터: 다음 경계(로컬 RFC3339)와 남은 초(음수=overdue). 미설정 시 None. */
 export type SprintStatus = {
 	/**  다음 경계의 로컬 wall-clock RFC3339 문자열(오프셋 포함). 헤더 1s tick의 기준점. */
@@ -2992,6 +3128,11 @@ export type SprintStatus = {
 	 *  specta는 i64/u64 export 금지 → i32(범위: 격주=~120만초, i32 ~21억으로 충분 + 음수=overdue).
 	 */
 	remainingSeconds: number,
+};
+
+export type SprintWeeklyFocusConflict = {
+	existingWeeklyFocus: WeeklyFocus,
+	sprintGoal: string,
 };
 
 export type StageWriteRequest = {
@@ -3236,6 +3377,17 @@ export type UpdateKeyResultInput = {
 	sortRank: number,
 };
 
+export type UpdateMissionHorizonInput = {
+	id: string,
+	title: string,
+	description: string | null,
+	horizonKind: MissionHorizonKind,
+	wscKind: WscKind | null,
+	areaKeys: string[],
+	status: LifeOsRecordStatus,
+	sortRank: number,
+};
+
 export type UpdateObjectiveInput = {
 	id: string,
 	title: string,
@@ -3285,6 +3437,18 @@ export type UpdateStatus = {
 	updateAvailable: boolean,
 };
 
+export type UpsertGuardrailInput = {
+	id: string | null,
+	quarter: string,
+	areaKey: string,
+	label: string,
+	targetKind: GuardrailTargetKind,
+	targetValue: number | null,
+	unit: string | null,
+	sourceRoutineIds: string[],
+	sortRank: number,
+};
+
 /**  사용량 윈도(5시간/주간). `used_percent`는 0..=100. */
 export type UsageWindow = {
 	/**  "five_hour" | "weekly" (표시 라벨은 프런트가 결정). */
@@ -3313,6 +3477,30 @@ export type WeeklyAreaTime = {
 	area: AreaTag | null,
 	totalMin: number,
 };
+
+export type WeeklyFocus = {
+	id: string,
+	weekStart: string,
+	title: string,
+	sourceKind: WeeklyFocusSourceKind,
+	sourceId: string | null,
+	objectiveId: string | null,
+	keyResultId: string | null,
+	horizonId: string | null,
+	status: WeeklyFocusStatus,
+	estimatedMinutes: number | null,
+	reason: string | null,
+	mustDoSignalIds: string[],
+	notDoSignalIds: string[],
+	guardrailIds: string[],
+	shrinkCount: number,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type WeeklyFocusSourceKind = "signal" | "objective" | "key_result" | "horizon" | "pattern" | "sprint" | "manual";
+
+export type WeeklyFocusStatus = "proposed" | "selected" | "done" | "missed" | "dismissed" | "shrunk";
 
 /**
  *  주간 PR 활동. PR Radar는 ambient(머지 히스토리 미영속) → 근사:
@@ -3513,6 +3701,8 @@ export type WriteTarget = { kind: "signal"; id: string } | { kind: "routine_chec
 routine_id?: string | null; 
 /**  위 루틴의 occurrence 날짜(YYYY-MM-DD). `routine_id`와 쌍으로만 의미. */
 routine_date?: string | null };
+
+export type WscKind = "w" | "s" | "c";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

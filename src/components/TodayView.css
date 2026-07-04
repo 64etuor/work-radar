@@ -128,6 +128,46 @@
   font-weight: 600;
 }
 
+.today-domino {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-wr-card-border);
+  border-radius: 8px;
+  background: var(--color-wr-bg);
+  box-shadow: var(--wr-shadow-hairline);
+}
+
+.today-domino-label,
+.today-domino-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.today-domino-title,
+.today-domino-empty {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-domino-empty {
+  color: var(--color-wr-muted);
+}
+
+@media (max-width: 760px) {
+  .today-domino {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
 /* ── DnD 가시화(PR 5) ─────────────────────────────────────────────── */
 
 .today-tray[data-drop-over] {

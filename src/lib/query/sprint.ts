@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands, type SprintConfig, type SprintStatus } from "@/bindings";
+import { commands, type SprintConfig, type SprintSaveResult, type SprintStatus } from "@/bindings";
 
 import { unwrap } from "./client";
 
@@ -10,7 +10,7 @@ import { unwrap } from "./client";
  * 모델 = 길이(interval_days) + 경계 앵커(요일 + 시각). 다음 경계는 프런트 순수함수로 계산한다.
  */
 
-export type { SprintConfig, SprintStatus };
+export type { SprintConfig, SprintSaveResult, SprintStatus };
 
 /** 저장된 스프린트 설정(미설정 시 null → 헤더 empty "스프린트 설정" 링크). */
 export function useSprintConfig() {
@@ -44,6 +44,9 @@ export function useSetSprintConfig() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sprintConfig"] });
       qc.invalidateQueries({ queryKey: ["sprintStatus"] });
+      qc.invalidateQueries({ queryKey: ["lifeOs"] });
+      qc.invalidateQueries({ queryKey: ["today"] });
+      qc.invalidateQueries({ queryKey: ["weeklyReview"] });
     },
   });
 }
@@ -56,6 +59,9 @@ export function useClearSprintConfig() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sprintConfig"] });
       qc.invalidateQueries({ queryKey: ["sprintStatus"] });
+      qc.invalidateQueries({ queryKey: ["lifeOs"] });
+      qc.invalidateQueries({ queryKey: ["today"] });
+      qc.invalidateQueries({ queryKey: ["weeklyReview"] });
     },
   });
 }

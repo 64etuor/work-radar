@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import type {
   KeyResultKind,
   LifeWheelTagConfig,
+  MissionHorizon,
   Objective,
   ObjectiveSignalStats,
   OkrCheckIn,
@@ -30,6 +31,8 @@ export function ObjectiveCard({
   objective,
   tags,
   projects,
+  horizons,
+  horizonIds,
   stats,
   checkIns,
   onEdit,
@@ -38,6 +41,8 @@ export function ObjectiveCard({
   objective: Objective;
   tags: LifeWheelTagConfig[];
   projects: Project[];
+  horizons: MissionHorizon[];
+  horizonIds: string[];
   stats: ObjectiveSignalStats | null;
   checkIns: OkrCheckIn[];
   onEdit: (objective: Objective, opener: HTMLElement) => void;
@@ -94,9 +99,16 @@ export function ObjectiveCard({
             {projects.find((project) => project.id === projectId)?.name ?? projectId}
           </Badge>
         ))}
-        {objective.linkedAreaKeys.length === 0 && objective.linkedProjectIds.length === 0 && (
-          <span className="mission-muted typo-body-md">연결된 태그/프로젝트 없음</span>
-        )}
+        {horizonIds.map((horizonId) => (
+          <Badge key={horizonId} variant="secondary">
+            {horizons.find((horizon) => horizon.id === horizonId)?.title ?? horizonId}
+          </Badge>
+        ))}
+        {objective.linkedAreaKeys.length === 0 &&
+          objective.linkedProjectIds.length === 0 &&
+          horizonIds.length === 0 && (
+            <span className="mission-muted typo-body-md">연결된 태그/프로젝트/Horizon 없음</span>
+          )}
       </div>
 
       <div className="mission-objective-progress">

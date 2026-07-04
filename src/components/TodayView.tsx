@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { CalendarPickerPopover } from "@/components/today/CalendarPickerPopover";
+import { DominoPanel } from "@/components/today/DominoPanel";
 import { DragGhost } from "@/components/today/DragGhost";
 import { dragGhostReducer, INITIAL_DRAG_GHOST_STATE } from "@/components/today/dragGhostState";
 import { EventPopover } from "@/components/today/EventPopover";
@@ -70,7 +71,6 @@ export function TodayView() {
   const { anchorDate, date, handleCanvasScroll, handleDateChange, visibleDates, wrapRef } =
     useTimelineScroll({ today, gridElRef, dragActiveRef });
 
-  // sync 실패 이벤트 → 토스트 + 캐시 invalidate(rollback).
   useCalendarSyncEvents();
 
   const overview = useTodayOverview(today);
@@ -98,7 +98,6 @@ export function TodayView() {
       return !ids || ids === "[]";
     });
 
-  // visibleDates는 항상 오름차순(useTimelineScroll 초기값 + extendDates 보장).
   const placementsQ = useSignalPlacements(
     visibleDates[0] ?? today,
     visibleDates[visibleDates.length - 1] ?? today,
@@ -347,6 +346,7 @@ export function TodayView() {
         <div className="today-staged-slot">
           <StagedBadge />
         </div>
+        <DominoPanel date={date} />
         <div className="today-main">
           <UnscheduledTray
             unscheduledTodays={unscheduledTodays}

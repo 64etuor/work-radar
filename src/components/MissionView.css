@@ -113,6 +113,7 @@
 
 .mission-checkin-panel,
 .mission-objective,
+.mission-life-panel,
 .mission-empty {
   border: 1px solid var(--color-wr-card-border);
   border-radius: var(--mission-card-radius);
@@ -122,6 +123,19 @@
 
 .mission-checkin-panel {
   margin-bottom: 20px;
+  padding: 16px;
+}
+
+.mission-life-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.mission-life-panel {
+  display: grid;
+  gap: 12px;
   padding: 16px;
 }
 
@@ -137,6 +151,56 @@
 
 .mission-panel-title {
   margin: 0;
+}
+
+.mission-horizon-list,
+.mission-guardrail-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mission-horizon-item,
+.mission-guardrail-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  border-top: 1px solid var(--color-wr-border-light);
+  padding-top: 8px;
+}
+
+.mission-horizon-item > div,
+.mission-guardrail-item > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mission-horizon-meta {
+  color: var(--color-wr-muted);
+}
+
+.mission-horizon-form,
+.mission-guardrail-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 120px 88px max-content;
+  gap: 8px;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.mission-guardrail-form {
+  grid-template-columns: minmax(150px, 1fr) 128px 108px 72px max-content;
+}
+
+.mission-horizon-kind,
+.mission-wsc-kind,
+.mission-guardrail-area,
+.mission-guardrail-kind,
+.mission-guardrail-value {
+  min-width: 0;
 }
 
 .mission-count-pill {
@@ -467,7 +531,10 @@
   }
 
   .mission-checkin-item,
-  .mission-kr-row {
+  .mission-kr-row,
+  .mission-life-grid,
+  .mission-horizon-form,
+  .mission-guardrail-form {
     grid-template-columns: 1fr;
   }
 
