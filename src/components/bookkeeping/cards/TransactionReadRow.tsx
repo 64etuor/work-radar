@@ -1,61 +1,70 @@
-import { Pencil, Trash2 } from "lucide-react";
-import type { MouseEvent } from "react";
+import { PanelRight, Trash2 } from "lucide-react";
 
 import type { BookkeepingTransaction } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { TableCell, TableRow } from "@/components/ui/table";
 
-import { effectiveCategoryCode } from "../bookkeepingDrafts";
+import { effectiveCategoryCode, type TransactionEditDraft } from "../bookkeepingDrafts";
 import { currency } from "../bookkeepingFormat";
-import { isInteractiveTarget } from "../rowActivation";
-import { paymentSummary } from "./cardHelpers";
 import { CategorySelect } from "./CategorySelect";
+import {
+  DateTimeCell,
+  EditableTextCell,
+  NoteInlineEditor,
+  PaymentCellEditor,
+} from "./EditableCell";
 
+/**
+ * 원장(확정 거래) 테이블 한 행 — 핵심 필드는 셀에서 바로 편집한다
+ * (날짜=DatePicker 즉시 커밋, 시각/가맹점/금액=스왑 입력, 분류=quick select,
+ * 결제=팝오버 미니폼, 메모=상호 아래 서브라인). 상세(비용유형·번호·분할·중복)는
+ * 우측 Sheet(onOpenDetail)로 연다. 행 클릭 편집은 폐지 — 셀 자체가 인터랙티브다.
+ */
 export function TransactionReadRow({
   tx,
   disabled,
-  onEdit,
+  onOpenDetail,
   onDelete,
   onCategoryChange,
+  onPatch,
 }: {
   tx: BookkeepingTransaction;
   disabled: boolean;
-  onEdit: () => void;
+  /** 우측 Sheet 전체 편집 열기. */
+  onOpenDetail: () => void;
   onDelete: () => void;
-  /** 인라인 분류 변경 quick action — override 커맨드 경로로 라우팅된다. */
+  /** 인라인 분류 변경 quick action — audit이 남는 override 경로로 라우팅된다. */
   onCategoryChange?: (categoryCode: string) => void;
+  /** 필드 일부만 바꾼 저장(현재 tx + patch 합성은 상위 소유) — 성공 여부 반환. */
+  onPatch: (patch: Partial<TransactionEditDraft>) => Promise<boolean>;
 }) {
-  // 편집 폼과 동일한 유효 분류(레거시 행은 category fallback) — 표시와 변경이 같은 값을 본다.
   const currentCategory = effectiveCategoryCode(tx);
-  // 메모가 있으면 메모, 없으면 원본 설명 — 상호 아래 한 줄 muted로 잘라 보여준다.
-  const note = tx.note ?? tx.description;
-  // 행 클릭 = 편집 열기 (마우스 편의). 키보드/AT 경로는 눈에 보이는 "편집" 버튼이
-  // 담당한다 — article에 tabIndex/role을 얹으면 중첩 인터랙티브가 되므로 두지 않는다.
-  // 안쪽 버튼·셀렉트에서 시작한 클릭은 건너뛰어 이중 동작을 막는다.
-  const activateFromClick = (event: MouseEvent<HTMLElement>) => {
-    if (disabled || isInteractiveTarget(event.target)) return;
-    onEdit();
-  };
   return (
-    <article
-      className="bk-row bk-transaction bk-ledger-row bk-row-editable"
-      data-status={tx.reviewStatus}
-      onClick={activateFromClick}
-    >
-      <span className="bk-ledger-date typo-caption-sm">
-        {tx.spentAt}
-        {tx.spentAtTime && <span className="bk-ledger-time">{tx.spentAtTime}</span>}
-      </span>
-      <span className="bk-ledger-main">
-        <strong className="bk-ledger-merchant typo-body-strong" title={tx.merchant}>
-          {tx.merchant}
-        </strong>
-        {note && (
-          <span className="bk-ledger-note text-muted-foreground typo-caption-sm" title={note}>
-            {note}
-          </span>
-        )}
-      </span>
-      <span className="bk-ledger-category">
+    <TableRow className="bk-tr" data-status={tx.reviewStatus}>
+      <TableCell className="bk-td-date">
+        <DateTimeCell
+          merchant={tx.merchant}
+          spentAt={tx.spentAt}
+          spentAtTime={tx.spentAtTime}
+          disabled={disabled}
+          onPatch={onPatch}
+        />
+      </TableCell>
+      <TableCell className="bk-td-main">
+        <EditableTextCell
+          value={tx.merchant}
+          ariaLabel={`${tx.merchant} 가맹점 변경`}
+          disabled={disabled}
+          onCommit={(merchant) => onPatch({ merchant })}
+        />
+        <NoteInlineEditor
+          merchant={tx.merchant}
+          note={tx.note ?? tx.description}
+          disabled={disabled}
+          onCommit={(note) => onPatch({ note })}
+        />
+      </TableCell>
+      <TableCell className="bk-td-category">
         {onCategoryChange && (
           <div className="bk-row-quick-category" data-category={currentCategory}>
             <CategorySelect
@@ -67,41 +76,63 @@ export function TransactionReadRow({
             />
           </div>
         )}
-      </span>
-      <span className="bk-ledger-payment text-muted-foreground typo-caption-sm">
-        {paymentSummary(tx.paymentMethodKind, tx.paymentMethodLabel, tx.paymentMethodLast4)}
-      </span>
-      <span
-        className="bk-ledger-amount typo-title-sm"
-        data-direction={tx.direction}
-        title={tx.currency !== "KRW" ? tx.currency : undefined}
-      >
-        {currency.format(tx.amountMinor)}
-      </span>
-      <div className="bk-row-actions bk-ledger-actions">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
+      </TableCell>
+      <TableCell className="bk-td-payment">
+        <PaymentCellEditor
+          id={`bk-pay-${tx.id}`}
+          kind={tx.paymentMethodKind}
+          label={tx.paymentMethodLabel}
+          last4={tx.paymentMethodLast4}
           disabled={disabled}
-          onClick={onEdit}
-          aria-label={`${tx.merchant} 편집`}
-          title="편집"
-        >
-          <Pencil className="size-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
+          ariaLabel={`${tx.merchant} 결제수단 변경`}
+          onCommit={(payment) => onPatch(payment)}
+        />
+      </TableCell>
+      <TableCell className="bk-td-amount">
+        <EditableTextCell
+          value={String(tx.amountMinor)}
+          display={
+            <span
+              className="bk-cell-amount typo-title-sm"
+              data-direction={tx.direction}
+              title={tx.currency !== "KRW" ? tx.currency : undefined}
+            >
+              {currency.format(tx.amountMinor)}
+            </span>
+          }
+          inputMode="numeric"
+          align="right"
+          ariaLabel={`${tx.merchant} 금액 변경`}
           disabled={disabled}
-          onClick={onDelete}
-          aria-label={`${tx.merchant} 삭제`}
-          title="삭제"
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-      </div>
-    </article>
+          onCommit={(amount) => onPatch({ amount })}
+        />
+      </TableCell>
+      <TableCell className="bk-td-actions">
+        <div className="bk-row-actions bk-ledger-actions">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            onClick={onOpenDetail}
+            aria-label={`${tx.merchant} 상세 편집`}
+            title="상세 편집"
+          >
+            <PanelRight className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            onClick={onDelete}
+            aria-label={`${tx.merchant} 삭제`}
+            title="삭제"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }

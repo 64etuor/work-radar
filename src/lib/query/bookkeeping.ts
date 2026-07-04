@@ -7,6 +7,7 @@ import {
   type BookkeepingReconcileAccountInput,
   type BookkeepingRecurringOccurrenceStatus,
   type BookkeepingReviewStatus,
+  type BookkeepingTransaction,
   commands,
   type CreateBookkeepingRecurringExpenseInput,
   type CreateBookkeepingTransactionInput,
@@ -28,6 +29,33 @@ function useInvalidateBookkeeping() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: ["bookkeeping"] });
+  };
+}
+
+/** 캐시된 거래 목록에서 갱신된 행만 교체 — 순수 함수(리스트 없음/미포함이면 무변경). */
+export function replaceTransactionRow(
+  rows: BookkeepingTransaction[] | undefined,
+  updated: BookkeepingTransaction,
+): BookkeepingTransaction[] | undefined {
+  return rows?.map((row) => (row.id === updated.id ? updated : row));
+}
+
+/**
+ * 단일 거래를 갱신한 뮤테이션의 onSuccess — 서버가 돌려준 fresh 행을 모든 거래-목록 캐시에
+ * **동기** 반영한 뒤 invalidate(요약/예산 등 파생 뷰 refetch). invalidate는 fire-and-forget이라
+ * refetch가 도착하기 전 창이 있는데, 인라인 셀 편집은 "현재 tx + patch"로 전체 draft를 합성하므로
+ * 그 창에서 두 번째 셀을 고치면 stale 스냅샷이 직전 편집(override 포함)을 되돌릴 수 있다 —
+ * setQueriesData가 mutateAsync 해소 전에 캐시를 fresh로 만들어 그 lost-update 창을 닫는다.
+ */
+function useApplyUpdatedTransaction() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateBookkeeping();
+  return (updated: BookkeepingTransaction) => {
+    qc.setQueriesData<BookkeepingTransaction[]>(
+      { queryKey: ["bookkeeping", "transactions"] },
+      (rows) => replaceTransactionRow(rows, updated),
+    );
+    invalidate();
   };
 }
 
@@ -55,11 +83,11 @@ export function useCreateBookkeepingTransaction() {
 }
 
 export function useUpdateBookkeepingTransaction() {
-  const invalidate = useInvalidateBookkeeping();
+  const applyUpdated = useApplyUpdatedTransaction();
   return useMutation({
     mutationFn: (input: UpdateBookkeepingTransactionInput) =>
       unwrap(commands.updateBookkeepingTransaction(input)),
-    onSuccess: invalidate,
+    onSuccess: applyUpdated,
   });
 }
 
@@ -124,11 +152,11 @@ export function useBulkSetBookkeepingCategory() {
 
 /** 확정 행 인라인 분류 변경 — audit 보존을 위해 override 커맨드 경로를 사용한다. */
 export function useOverrideBookkeepingCategory() {
-  const invalidate = useInvalidateBookkeeping();
+  const applyUpdated = useApplyUpdatedTransaction();
   return useMutation({
     mutationFn: (input: OverrideBookkeepingCategoryInput) =>
       unwrap(commands.overrideBookkeepingCategory(input)),
-    onSuccess: invalidate,
+    onSuccess: applyUpdated,
   });
 }
 

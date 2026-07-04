@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { BookkeepingTransaction } from "@/bindings";
 import { installRadixHappyDomShim } from "@/lib/test-support/radixHappyDom";
 
+import type { TransactionEditDraft } from "../bookkeepingDrafts";
 import { TransactionReadRow } from "./TransactionReadRow";
 
 // CategorySelect의 taxonomy 쿼리(react-query 훅) 격리 — 컴포넌트 경계만 검증한다.
@@ -73,25 +74,37 @@ function makeTx(overrides: Partial<BookkeepingTransaction> = {}): BookkeepingTra
   };
 }
 
-function setup(overrides: Partial<BookkeepingTransaction> = {}) {
+function setup(
+  overrides: Partial<BookkeepingTransaction> = {},
+  patchResult: boolean | Promise<boolean> = true,
+) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  const onEdit = vi.fn();
+  const onOpenDetail = vi.fn();
   const onDelete = vi.fn();
   const onCategoryChange = vi.fn<(code: string) => void>();
+  const onPatch = vi.fn<(patch: Partial<TransactionEditDraft>) => Promise<boolean>>(() =>
+    Promise.resolve(patchResult),
+  );
   act(() =>
     root?.render(
-      <TransactionReadRow
-        tx={makeTx(overrides)}
-        disabled={false}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onCategoryChange={onCategoryChange}
-      />,
+      // tr은 table/tbody 밖에서 렌더될 수 없다 — 실제 카드와 동일한 래핑.
+      <table>
+        <tbody>
+          <TransactionReadRow
+            tx={makeTx(overrides)}
+            disabled={false}
+            onOpenDetail={onOpenDetail}
+            onDelete={onDelete}
+            onCategoryChange={onCategoryChange}
+            onPatch={onPatch}
+          />
+        </tbody>
+      </table>,
     ),
   );
-  return { onEdit, onDelete, onCategoryChange };
+  return { onOpenDetail, onDelete, onCategoryChange, onPatch };
 }
 
 function query<T extends Element>(selector: string): T {
@@ -104,55 +117,89 @@ function click(el: Element) {
   act(() => el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
 }
 
-// 편집/삭제는 아이콘 전용 ghost 버튼 — aria-label과 title이 함께 있어야 매칭한다(둘 다 필수 계약).
-function buttonByText(text: string): HTMLButtonElement {
+function buttonByLabel(text: string): HTMLButtonElement {
   const el = [...(container?.querySelectorAll("button") ?? [])].find(
-    (b) =>
-      b.textContent?.includes(text) ||
-      (b.getAttribute("aria-label")?.includes(text) === true &&
-        b.getAttribute("title")?.includes(text) === true),
+    (b) => b.textContent?.includes(text) || b.getAttribute("aria-label")?.includes(text) === true,
   );
   if (!el) throw new Error(`button not found: ${text}`);
   return el;
 }
 
-describe("TransactionReadRow", () => {
-  it("opens the editor when the row body is clicked", () => {
-    const { onEdit } = setup();
-    click(query("strong"));
-    expect(onEdit).toHaveBeenCalledTimes(1);
+async function commitInput(input: HTMLInputElement, next: string) {
+  await act(async () => {
+    const proto = Object.getPrototypeOf(input) as object;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    setter?.call(input, next);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await Promise.resolve();
+  });
+}
+
+describe("TransactionReadRow (원장 테이블 행 인라인 편집)", () => {
+  it("가맹점 셀 클릭 → 인라인 입력 → Enter 커밋이 onPatch({merchant})로 간다", async () => {
+    const { onPatch } = setup();
+    click(buttonByLabel("가맹점 변경"));
+    const input = query<HTMLInputElement>('input[aria-label="김밥천국 가맹점 변경"]');
+    await commitInput(input, "성수김밥");
+    expect(onPatch).toHaveBeenCalledWith({ merchant: "성수김밥" });
+    // 성공 커밋 후 입력은 닫힌다.
+    expect(container?.querySelector('input[aria-label="김밥천국 가맹점 변경"]')).toBeNull();
   });
 
-  it("does not double-open when inner action buttons are clicked", () => {
-    const { onEdit, onDelete } = setup();
-    click(buttonByText("삭제"));
+  it("변경 없이 커밋하면 no-op으로 닫힌다(onPatch 미호출)", async () => {
+    const { onPatch } = setup();
+    click(buttonByLabel("가맹점 변경"));
+    const input = query<HTMLInputElement>('input[aria-label="김밥천국 가맹점 변경"]');
+    await commitInput(input, "김밥천국");
+    expect(onPatch).not.toHaveBeenCalled();
+    expect(container?.querySelector("input")).toBeNull();
+  });
+
+  it("Esc는 커밋 없이 취소하고 전역 Esc 계약으로 새지 않게 소비한다", () => {
+    const { onPatch } = setup();
+    click(buttonByLabel("가맹점 변경"));
+    const input = query<HTMLInputElement>('input[aria-label="김밥천국 가맹점 변경"]');
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(onPatch).not.toHaveBeenCalled();
+    expect(container?.querySelector('input[aria-label="김밥천국 가맹점 변경"]')).toBeNull();
+  });
+
+  it("저장 실패 시 입력을 유지해 draft를 잃지 않는다", async () => {
+    const { onPatch } = setup({}, false);
+    click(buttonByLabel("가맹점 변경"));
+    const input = query<HTMLInputElement>('input[aria-label="김밥천국 가맹점 변경"]');
+    await commitInput(input, "성수김밥");
+    expect(onPatch).toHaveBeenCalledTimes(1);
+    expect(container?.querySelector('input[aria-label="김밥천국 가맹점 변경"]')).not.toBeNull();
+  });
+
+  it("금액 셀은 포맷 표시 ⇄ 원 단위 숫자 입력으로 스왑되고 onPatch({amount})로 커밋된다", async () => {
+    const { onPatch } = setup();
+    click(buttonByLabel("금액 변경"));
+    const input = query<HTMLInputElement>('input[aria-label="김밥천국 금액 변경"]');
+    expect(input.value).toBe("9000");
+    await commitInput(input, "12000");
+    expect(onPatch).toHaveBeenCalledWith({ amount: "12000" });
+  });
+
+  it("상세 편집/삭제 버튼은 각자 핸들러만 호출한다", () => {
+    const { onOpenDetail, onDelete } = setup();
+    click(buttonByLabel("상세 편집"));
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    click(buttonByLabel("삭제"));
     expect(onDelete).toHaveBeenCalledTimes(1);
-    expect(onEdit).not.toHaveBeenCalled();
   });
 
-  it("does not open the editor from the quick category select trigger", () => {
-    const { onEdit } = setup();
-    const trigger = query(`[id="bk-quick-tx-1-category"]`);
-    click(trigger);
-    expect(onEdit).not.toHaveBeenCalled();
-  });
-
-  it("uses the edit-form effective category for legacy rows (category fallback)", () => {
-    // 레거시 행: categoryCode=null, category="food" → 미분류가 아니라 "food"를 보여야 한다.
+  it("레거시 행(categoryCode=null)은 category 폴백을 유효 분류로 쓴다", () => {
     setup({ categoryCode: null, category: "food" });
     expect(query(".bk-row-quick-category").getAttribute("data-category")).toBe("food");
   });
 
-  it("prefers the taxonomy code when present", () => {
+  it("taxonomy 코드가 있으면 코드를 우선한다", () => {
     setup({ categoryCode: "transport", category: "food" });
     expect(query(".bk-row-quick-category").getAttribute("data-category")).toBe("transport");
-  });
-
-  it("adds no generic focus stop on the row; keyboard access is the visible edit button", () => {
-    setup();
-    const row = query("article");
-    expect(row.hasAttribute("tabindex")).toBe(false);
-    expect(row.hasAttribute("role")).toBe(false);
-    expect(buttonByText("편집").tagName).toBe("BUTTON");
   });
 });

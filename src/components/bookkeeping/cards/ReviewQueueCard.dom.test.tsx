@@ -9,7 +9,7 @@ import { installRadixHappyDomShim } from "@/lib/test-support/radixHappyDom";
 import type { TransactionEditDraft } from "../bookkeepingDrafts";
 import { ReviewQueueCard } from "./ReviewQueueCard";
 
-// react-query 훅 격리 — 검토 큐의 collapse/expand 경계만 검증한다.
+// react-query 훅 격리 — 검토 큐의 행/Sheet 경계만 검증한다.
 // LineItemEditor는 isPending으로 얕게 멈추고, 중복 후보는 빈 목록으로 응답한다.
 vi.mock("@/lib/query", () => ({
   useBookkeepingTaxonomy: () => ({
@@ -112,12 +112,12 @@ function click(el: Element) {
   act(() => el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
 }
 
-/** merchant 이름으로 read-row 요소를 찾는다. */
-function readRowOf(merchant: string): HTMLElement {
-  const row = [...(container?.querySelectorAll<HTMLElement>(".bk-review-read") ?? [])].find((el) =>
+/** merchant 이름으로 테이블 행(tr)을 찾는다. */
+function rowOf(merchant: string): HTMLElement {
+  const row = [...(container?.querySelectorAll<HTMLElement>(".bk-review-tr") ?? [])].find((el) =>
     el.textContent?.includes(merchant),
   );
-  if (!row) throw new Error(`read row not found: ${merchant}`);
+  if (!row) throw new Error(`review row not found: ${merchant}`);
   return row;
 }
 
@@ -142,110 +142,101 @@ function typeInto(input: HTMLInputElement, value: string) {
   });
 }
 
+/** Sheet는 radix portal(body)로 렌더된다 — 전체 편집 폼 존재 여부는 document에서 본다. */
+function sheetForm(): Element | null {
+  return document.querySelector(".bk-edit-sheet .bk-edit-form");
+}
+
 const SUSPICIOUS = makeTx({
   reviewReasonsJson: JSON.stringify([{ code: "low_confidence" }]),
 });
 const NORMAL = makeTx({ id: "tx-2", merchant: "스타벅스", amountMinor: 6300 });
 const ROWS = [SUSPICIOUS, NORMAL];
 
-describe("ReviewQueueCard collapse/expand", () => {
-  it("renders compact read rows by default — no edit form inputs in the DOM", () => {
+describe("ReviewQueueCard 테이블 + Sheet", () => {
+  it("기본은 인라인 셀 행만 — 전체 편집 폼은 DOM에 없다", () => {
     setup(ROWS);
-    expect(container?.querySelectorAll(".bk-review-read")).toHaveLength(2);
-    expect(container?.querySelector(".bk-edit-form")).toBeNull();
-    expect(container?.querySelector('[id^="bk-edit-"]')).toBeNull();
+    expect(container?.querySelectorAll(".bk-review-tr")).toHaveLength(2);
+    expect(sheetForm()).toBeNull();
   });
 
-  it("expands exactly one edit form via 편집, and opening another collapses the previous", () => {
+  it("상세 편집 버튼이 우측 Sheet를 열고, 닫기로 닫힌다", () => {
     setup(ROWS);
-    click(buttonIn(readRowOf("김밥천국"), "편집"));
-    expect(container?.querySelectorAll(".bk-edit-form")).toHaveLength(1);
-    expect(container?.querySelector("#bk-edit-tx-1-merchant")).not.toBeNull();
-
-    click(buttonIn(readRowOf("스타벅스"), "편집"));
-    expect(container?.querySelectorAll(".bk-edit-form")).toHaveLength(1);
-    expect(container?.querySelector("#bk-edit-tx-1-merchant")).toBeNull();
-    expect(container?.querySelector("#bk-edit-tx-2-merchant")).not.toBeNull();
+    click(buttonIn(rowOf("김밥천국"), "상세 편집"));
+    expect(sheetForm()).not.toBeNull();
+    expect(document.querySelector("#bk-edit-tx-1-merchant")).not.toBeNull();
+    const form = sheetForm();
+    if (!form) throw new Error("sheet form not found");
+    click(buttonIn(form, "닫기"));
+    expect(sheetForm()).toBeNull();
   });
 
-  it("expands the edit form when the row body is clicked", () => {
-    setup(ROWS);
-    const merchant = readRowOf("김밥천국").querySelector(".bk-review-read-merchant");
-    if (!merchant) throw new Error("merchant cell not found");
-    click(merchant);
-    expect(container?.querySelector("#bk-edit-tx-1-merchant")).not.toBeNull();
-  });
-
-  it("toggles the collapsed 상세 section inside the edit form", () => {
-    setup(ROWS);
-    click(buttonIn(readRowOf("김밥천국"), "편집"));
-    const form = container?.querySelector(".bk-edit-form");
-    if (!form) throw new Error("edit form not found");
-    // 기본 접힘 — 상세 필드(주문번호)는 DOM에 없다.
-    expect(container?.querySelector("#bk-edit-tx-1-order-no")).toBeNull();
-    const toggle = buttonIn(form, "상세");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(container?.querySelector("#bk-edit-tx-1-order-no")).not.toBeNull();
-    click(toggle);
-    expect(container?.querySelector("#bk-edit-tx-1-order-no")).toBeNull();
-  });
-
-  it("collapses the edit form via 접기", () => {
-    setup(ROWS);
-    click(buttonIn(readRowOf("김밥천국"), "편집"));
-    const form = container?.querySelector(".bk-transaction-edit");
-    if (!form) throw new Error("edit form not found");
-    click(buttonIn(form, "접기"));
-    expect(container?.querySelector(".bk-edit-form")).toBeNull();
-    expect(container?.querySelectorAll(".bk-review-read")).toHaveLength(2);
-  });
-
-  it("collapses after a successful save, keeps the form mounted after a failed save", async () => {
+  it("Sheet 저장 성공 시 닫히고, 실패 시 열린 채 draft를 보존한다", async () => {
     let ok = false;
     const { onSave } = setup(ROWS, () => Promise.resolve(ok));
-    click(buttonIn(readRowOf("김밥천국"), "편집"));
-    const form = container?.querySelector(".bk-edit-form");
-    if (!form) throw new Error("edit form not found");
+    click(buttonIn(rowOf("김밥천국"), "상세 편집"));
+    const form = sheetForm();
+    if (!form) throw new Error("sheet form not found");
 
-    // 실패 저장 — 폼이 그대로 남는다(draft 보존).
     await act(async () =>
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
     );
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(container?.querySelector(".bk-edit-form")).not.toBeNull();
+    expect(sheetForm()).not.toBeNull();
 
-    // 성공 저장 — 접힌다.
     ok = true;
     await act(async () =>
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
     );
     expect(onSave).toHaveBeenCalledTimes(2);
-    expect(container?.querySelector(".bk-edit-form")).toBeNull();
+    expect(sheetForm()).toBeNull();
   });
 
-  it("fires delete directly from the read row without expanding", () => {
+  it("Sheet 안 상세 섹션 토글이 동작한다(기본 접힘)", () => {
+    setup(ROWS);
+    click(buttonIn(rowOf("김밥천국"), "상세 편집"));
+    const form = sheetForm();
+    if (!form) throw new Error("sheet form not found");
+    expect(document.querySelector("#bk-edit-tx-1-order-no")).toBeNull();
+    const toggle = buttonIn(form, "상세");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    click(toggle);
+    expect(document.querySelector("#bk-edit-tx-1-order-no")).not.toBeNull();
+  });
+
+  it("가맹점 셀 인라인 편집이 onSave(merchant patch)로 커밋된다 — Sheet 없이", async () => {
+    const { onSave } = setup(ROWS);
+    click(buttonIn(rowOf("스타벅스"), "가맹점 변경"));
+    const input = container?.querySelector<HTMLInputElement>('[aria-label="스타벅스 가맹점 변경"]');
+    if (!input) throw new Error("merchant input not found");
+    typeInto(input, "스타벅스 성수점");
+    await act(async () =>
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0]?.[0]?.id).toBe("tx-2");
+    expect(onSave.mock.calls[0]?.[1]?.merchant).toBe("스타벅스 성수점");
+    expect(sheetForm()).toBeNull();
+  });
+
+  it("삭제는 행에서 즉시 실행된다", () => {
     const { onDelete } = setup(ROWS);
-    click(buttonIn(readRowOf("스타벅스"), "삭제"));
+    click(buttonIn(rowOf("스타벅스"), "삭제"));
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onDelete.mock.calls[0]?.[0]?.id).toBe("tx-2");
-    expect(container?.querySelector(".bk-edit-form")).toBeNull();
   });
 
-  it("keeps the bulk-select checkbox working (toggling shows the bulk bar)", () => {
+  it("일괄 선택 체크박스가 bulk bar를 띄운다", () => {
     setup(ROWS);
     const checkbox = container?.querySelector('[aria-label="김밥천국 선택"]');
     if (!checkbox) throw new Error("checkbox not found");
     click(checkbox);
     expect(container?.querySelector(".bk-bulk-bar")?.textContent).toContain("1건 선택");
-    // 체크박스 클릭이 편집을 열지 않는다.
-    expect(container?.querySelector(".bk-edit-form")).toBeNull();
     click(checkbox);
     expect(container?.querySelector(".bk-bulk-bar")).toBeNull();
   });
 
-  it("truncates review-reason chips to +N on the read row", () => {
+  it("사유 칩은 +N으로 잘린다", () => {
     setup([
       makeTx({
         reviewReasonsJson: JSON.stringify([
@@ -257,34 +248,32 @@ describe("ReviewQueueCard collapse/expand", () => {
         ]),
       }),
     ]);
-    const reasons = container?.querySelector(".bk-review-read-reasons");
+    const reasons = container?.querySelector(".bk-td-reasons");
     expect(reasons?.textContent).toContain("low_confidence");
     expect(reasons?.textContent).toContain("+2");
   });
 });
 
-describe("ReviewQueueCard suspicious/normal grouping", () => {
-  it("renders 의심 group first with per-row 확정, 정상 group without it", () => {
+describe("ReviewQueueCard 의심/정상 그룹", () => {
+  it("의심 그룹이 먼저, 행별 확정은 의심 그룹에만", () => {
     const { onApprove } = setup(ROWS);
-    const heads = [...(container?.querySelectorAll(".bk-review-group-head") ?? [])];
+    const heads = [...(container?.querySelectorAll(".bk-group-td") ?? [])];
     expect(heads.map((h) => h.textContent ?? "")).toEqual([
       expect.stringContaining("의심 1건"),
       expect.stringContaining("정상 1건"),
     ]);
-    // 의심 행(low_confidence)이 정상 행보다 먼저 렌더된다.
-    const rows = [...(container?.querySelectorAll(".bk-review-read") ?? [])];
+    const rows = [...(container?.querySelectorAll(".bk-review-tr") ?? [])];
     expect(rows[0]?.textContent).toContain("김밥천국");
     expect(rows[1]?.textContent).toContain("스타벅스");
-    // 의심 행에만 확정 버튼.
-    click(buttonIn(readRowOf("김밥천국"), "확정"));
+    click(buttonIn(rowOf("김밥천국"), "확정"));
     expect(onApprove.mock.calls[0]?.[0]?.id).toBe("tx-1");
-    expect(maybeButtonIn(readRowOf("스타벅스"), "확정")).toBeUndefined();
+    expect(maybeButtonIn(rowOf("스타벅스"), "확정")).toBeUndefined();
   });
 
-  it("bulk-approves exactly the normal ids from the group header", () => {
+  it("정상 그룹 헤더의 일괄 확정은 정확히 정상 id들만 보낸다", () => {
     const normal2 = makeTx({ id: "tx-3", merchant: "이마트", amountMinor: 42000 });
     const { onBulkReview } = setup([SUSPICIOUS, NORMAL, normal2]);
-    const head = [...(container?.querySelectorAll(".bk-review-group-head") ?? [])].find((h) =>
+    const head = [...(container?.querySelectorAll(".bk-group-td") ?? [])].find((h) =>
       h.textContent?.includes("정상"),
     );
     if (!head) throw new Error("normal group head not found");
@@ -294,21 +283,20 @@ describe("ReviewQueueCard suspicious/normal grouping", () => {
     expect(onBulkReview.mock.calls[0]?.[1]).toBe("approved");
   });
 
-  it("hides empty group headers", () => {
+  it("빈 그룹 헤더는 숨긴다", () => {
     setup([NORMAL]);
-    const heads = [...(container?.querySelectorAll(".bk-review-group-head") ?? [])];
+    const heads = [...(container?.querySelectorAll(".bk-group-td") ?? [])];
     expect(heads).toHaveLength(1);
     expect(heads[0]?.textContent).toContain("정상 1건");
   });
 });
 
-describe("ReviewQueueCard inline note edit", () => {
-  it("saves a note from the read row without opening the full form", async () => {
+describe("ReviewQueueCard 인라인 메모", () => {
+  it("행에서 메모를 저장한다 — 전체 폼 없이", async () => {
     const { onSave } = setup(ROWS);
-    const row = readRowOf("스타벅스");
+    const row = rowOf("스타벅스");
     click(buttonIn(row, "메모 추가"));
-    // 메모 클릭이 행 확장을 트리거하지 않는다.
-    expect(container?.querySelector(".bk-edit-form")).toBeNull();
+    expect(sheetForm()).toBeNull();
 
     const input = row.querySelector<HTMLInputElement>('[aria-label="스타벅스 메모 편집"]');
     if (!input) throw new Error("note input not found");
@@ -319,14 +307,13 @@ describe("ReviewQueueCard inline note edit", () => {
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave.mock.calls[0]?.[0]?.id).toBe("tx-2");
     expect(onSave.mock.calls[0]?.[1]?.note).toBe("회식");
-    // 저장 성공 → 인라인 입력이 닫히고 전체 폼은 끝까지 열리지 않는다.
     expect(container?.querySelector('[aria-label="스타벅스 메모 편집"]')).toBeNull();
-    expect(container?.querySelector(".bk-edit-form")).toBeNull();
+    expect(sheetForm()).toBeNull();
   });
 
-  it("cancels the note draft with Escape (no save)", async () => {
+  it("Escape는 저장 없이 취소한다", async () => {
     const { onSave } = setup(ROWS);
-    const row = readRowOf("스타벅스");
+    const row = rowOf("스타벅스");
     click(buttonIn(row, "메모 추가"));
     const input = row.querySelector<HTMLInputElement>('[aria-label="스타벅스 메모 편집"]');
     if (!input) throw new Error("note input not found");
@@ -338,9 +325,33 @@ describe("ReviewQueueCard inline note edit", () => {
     expect(container?.querySelector('[aria-label="스타벅스 메모 편집"]')).toBeNull();
   });
 
-  it("skips the save entirely when the note did not change", async () => {
+  it("행 인라인 분류 변경은 draft 저장 경로(onSave)로 커밋된다 — override 아님", async () => {
+    const { onSave } = setup(ROWS);
+    const trigger = document.getElementById("bk-review-tx-2-category");
+    if (!trigger) throw new Error("category select trigger not found");
+    // radix Select를 열고 항목을 고른다(portal은 body에 뜬다).
+    act(() => {
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    const item = [...document.querySelectorAll('[role="option"]')].find((o) =>
+      o.textContent?.includes("교통"),
+    );
+    if (!item) throw new Error("category option not found");
+    await act(async () => {
+      item.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true }));
+      item.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0]?.[0]?.id).toBe("tx-2");
+    expect(onSave.mock.calls[0]?.[1]?.categoryCode).toBe("transport");
+    expect(onSave.mock.calls[0]?.[1]?.subcategoryCode).toBe("");
+  });
+
+  it("메모가 그대로면 저장을 건너뛴다", async () => {
     const { onSave } = setup([makeTx({ id: "tx-9", merchant: "쿠팡", note: "정기결제" })]);
-    const row = readRowOf("쿠팡");
+    const row = rowOf("쿠팡");
     click(buttonIn(row, "메모 수정"));
     const input = row.querySelector<HTMLInputElement>('[aria-label="쿠팡 메모 편집"]');
     if (!input) throw new Error("note input not found");

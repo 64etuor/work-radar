@@ -1086,40 +1086,6 @@
 
 /* 검토 큐 read-row 공유 칼럼 템플릿 — 리스트 전체가 같은 고정/fr 트랙을 쓰므로
    96행이 칼럼-대-칼럼으로 정렬된다(체크박스 칼럼은 래퍼의 고정 20px). */
-.bk-review-list {
-  --bk-review-read-grid: 8.5rem minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 1fr) 7.5rem max-content;
-}
-
-.bk-review-row {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  align-items: start;
-  column-gap: var(--wr-density-md);
-  border-top: 1px solid var(--bk-rule);
-}
-
-/* 접힌 상태(read-row)는 한 줄이므로 체크박스를 세로 중앙에 맞춘다. */
-.bk-review-row[data-expanded="false"] {
-  align-items: center;
-}
-
-.bk-review-row[data-expanded="false"] > .bk-select-check {
-  margin-top: 0;
-}
-
-.bk-review-row[data-active="true"] {
-  background: var(--bk-stone);
-}
-
-.bk-review-row:first-child {
-  border-top: 0;
-}
-
-/* 선택 래퍼가 구분선을 그리므로 안쪽 edit 행의 중복 border/패딩만 정리. */
-.bk-review-row > .bk-transaction-edit {
-  border-top: 0;
-}
-
 .bk-select-check {
   flex: 0 0 auto;
   width: 20px;
@@ -1162,89 +1128,7 @@
   opacity: 0.5;
 }
 
-/* 검토 큐 한 줄 read-row — TransactionReadRow(.bk-transaction) 문법을 따르되
-   행마다 다른 max-content 대신 공유 템플릿을 써서 칼럼 정렬을 보장한다. */
-.bk-review-read {
-  display: grid;
-  grid-template-columns: var(--bk-review-read-grid);
-  align-items: center;
-  column-gap: var(--wr-density-md);
-  min-width: 0;
-  /* 밀도 패스가 2px까지 눌렀던 것을 완화 — 원장 행과 같은 스캔 리듬(6px). */
-  padding: var(--wr-density-sm) 0;
-  border-left: 3px solid transparent;
-  padding-left: var(--wr-density-xs);
-  border-radius: var(--radius-sm);
-  transition: background var(--wr-motion-fast) var(--wr-ease-out);
-}
-
-.bk-review-read:hover {
-  background: var(--bk-stone);
-}
-
-.bk-review-read[data-status="needs_review"] {
-  border-left-color: var(--bk-coral);
-}
-
-.bk-review-read-date {
-  color: var(--bk-subtle);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.bk-review-read-time {
-  margin-left: var(--wr-density-2xs);
-  color: var(--bk-muted);
-  font-size: 0.9em;
-}
-
-.bk-review-read-merchant {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.bk-review-read-category {
-  display: flex;
-  min-width: 0;
-}
-
-.bk-review-read-category > * {
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  display: inline-block;
-}
-
-.bk-review-read-reasons {
-  display: flex;
-  min-width: 0;
-  flex-wrap: nowrap;
-  overflow: hidden;
-  gap: var(--wr-density-xs);
-}
-
-.bk-review-read-amount {
-  justify-self: end;
-  white-space: nowrap;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.bk-review-read-amount[data-direction="income"] {
-  color: var(--bk-green);
-}
-
-/* 상호 + 메모 스택 셀 — 메모는 상호 아래 둘째 줄(그리드 칼럼 수를 늘리지 않는다). */
-.bk-review-read-main {
-  display: grid;
-  min-width: 0;
-  gap: 0;
-}
-
-/* 메모 표시 겸 인라인 편집 트리거 — button이라 isInteractiveTarget이 행 확장을 막는다. */
+/* 메모 표시 겸 인라인 편집 트리거 — 상호 아래 서브라인(원장/검토 공용). */
 .bk-review-note-trigger {
   display: inline-flex;
   align-items: center;
@@ -1269,7 +1153,7 @@
   transition: opacity var(--wr-motion-fast) var(--wr-ease-out);
 }
 
-.bk-review-read:hover .bk-review-note-trigger[data-empty="true"],
+.bk-tr:hover .bk-review-note-trigger[data-empty="true"],
 .bk-review-note-trigger[data-empty="true"]:focus-visible {
   opacity: 1;
 }
@@ -1290,138 +1174,240 @@
   max-width: 24rem;
 }
 
-/* 그룹 헤더 — 의심/정상 구획. 정상 그룹은 일괄 확정 액션을 헤더에 둔다. */
+/* 그룹 타이틀 — 의심/정상 구획 라벨(그룹 행 안). */
+.bk-review-group-title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── 원장/검토 큐 공용 테이블 스킨(wr-table) ─────────────────────────
+   시맨틱 <table>이 칼럼 정합을 소유한다(이전 --bk-ledger-grid / --bk-review-read-grid
+   수동 동기화 대체). 시각 문법: 헤더 아래 strong hairline, 행 사이 hairline,
+   hover는 surface만, 금액은 tabular-nums 우측 정렬, 상태는 첫 셀 3px 악센트. */
+.bk-table {
+  border-collapse: collapse;
+}
+
+.bk-table .wr-table-head {
+  padding: 0 var(--wr-density-sm) var(--wr-density-sm);
+  border-bottom: 1px solid var(--bk-rule-strong);
+  color: var(--bk-subtle);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.bk-table .wr-table-cell {
+  padding: var(--wr-density-xs) var(--wr-density-sm);
+  border-bottom: 1px solid var(--bk-rule);
+}
+
+.bk-table .bk-tr {
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-table .bk-tr:hover {
+  background: var(--bk-stone);
+}
+
+/* j/k 트리아지 활성 행(검토 큐). */
+.bk-table .bk-review-tr[data-active="true"] {
+  background: var(--bk-stone);
+}
+
+/* 상태 악센트 — 이전 행 border-left 문법을 첫 셀 inset으로 이식(tr border는 비신뢰). */
+.bk-table .bk-tr > td:first-child {
+  box-shadow: inset 3px 0 0 transparent;
+}
+
+.bk-table .bk-tr[data-status="needs_review"] > td:first-child,
+.bk-table .bk-tr[data-status="planned"] > td:first-child {
+  box-shadow: inset 3px 0 0 var(--bk-coral);
+}
+
+.bk-table .bk-tr[data-status="approved"] > td:first-child,
+.bk-table .bk-tr[data-status="posted"] > td:first-child {
+  box-shadow: inset 3px 0 0 var(--bk-green);
+}
+
+/* 칼럼 폭 — 내용(bk-td-main)만 유동, 나머지는 내용 기반 고정. */
+.bk-th-check {
+  width: 28px;
+}
+
+.bk-th-date {
+  width: 7.5rem;
+}
+
+.bk-th-category {
+  width: 9.5rem;
+}
+
+.bk-th-payment {
+  width: 11rem;
+}
+
+.bk-th-reasons {
+  width: 10rem;
+}
+
+.bk-th-amount,
+.bk-td-amount {
+  width: 7.5rem;
+  text-align: right;
+}
+
+.bk-th-actions {
+  width: 6.5rem;
+}
+
+.bk-td-check {
+  vertical-align: middle;
+}
+
+.bk-td-check .bk-select-check {
+  margin-top: 0;
+}
+
+.bk-td-date {
+  white-space: nowrap;
+}
+
+.bk-td-main {
+  min-width: 0;
+}
+
+.bk-td-main > .bk-cell-trigger {
+  font-weight: 600;
+}
+
+.bk-td-category .bk-row-quick-category {
+  width: 100%;
+}
+
+.bk-td-reasons {
+  overflow: hidden;
+}
+
+.bk-td-reasons > * {
+  margin-right: var(--wr-density-xs);
+}
+
+.bk-td-actions {
+  text-align: right;
+}
+
+/* 그룹 헤더 행(의심/정상) — 셀 자체는 무패딩, 내부 div가 기존 그룹 헤더 문법 유지. */
+.bk-group-td {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.bk-table td.bk-group-td {
+  padding: 0;
+  border-bottom: 0;
+}
+
 .bk-review-group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--wr-density-md);
   margin-top: var(--wr-density-md);
-  padding: var(--wr-density-xs) 0;
+  padding: var(--wr-density-xs) var(--wr-density-sm);
   border-bottom: 1px solid var(--bk-rule-strong);
   color: var(--bk-subtle);
 }
 
-.bk-review-group-head:first-child {
-  margin-top: 0;
-}
-
-.bk-review-group-title {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-/* 그룹 헤더 바로 다음 행은 헤더가 구분선을 그리므로 자체 border를 지운다. */
-.bk-review-group-head + .bk-review-row {
-  border-top: 0;
-}
-
-/* CRITIC-2: narrow-screen 1-col fallback은 반드시 base .bk-review-read 규칙 뒤에
-   와야 같은 명시도에서 이긴다(mid-file 760px 블록에 두면 base가 override). */
-@media (max-width: 760px) {
-  .bk-review-read {
-    grid-template-columns: 1fr;
-  }
-
-  .bk-review-read-amount {
-    justify-self: start;
-    text-align: left;
-  }
-}
-
-/* ── 원장(확정 거래) 장부 레이아웃 ────────────────────────────────────
-   행과 칼럼 헤더가 같은 고정/fr 트랙(--bk-ledger-grid)을 공유해 96행이
-   칼럼-대-칼럼으로 정렬된다. 마지막 트랙(액션)은 26px 아이콘 버튼 2개 +
-   간격 = 고정 3.5rem — 헤더의 빈 셀과도 폭이 같아 금액 칼럼이 어긋나지 않는다. */
-.bk-transaction-list {
-  --bk-ledger-grid: 8rem minmax(0, 1.9fr) 9.5rem minmax(0, 1fr) 7.5rem 3.5rem;
-}
-
-/* 칼럼 헤더 — 장식(스캔 보조) 줄. 행과 같은 inline 오프셋(-10px + 3px 보더)로 정렬. */
-.bk-ledger-head {
-  display: grid;
-  grid-template-columns: var(--bk-ledger-grid);
-  align-items: center;
-  column-gap: var(--wr-density-md);
-  margin-inline: -10px;
-  padding: 0 10px var(--wr-density-sm);
-  border-left: 3px solid transparent;
-  border-bottom: 1px solid var(--bk-rule);
-  color: var(--bk-subtle);
-}
-
-.bk-ledger-head > span {
+/* ── 인라인 셀 편집 프리미티브 ───────────────────────────────────────
+   읽기 상태 = ghost 트리거(hover에 점선 밑줄로 "편집 가능" 어포던스),
+   클릭 = 같은 자리 26px 입력 스왑. Enter/blur 저장 · Esc 취소는 컴포넌트 계약. */
+.bk-cell-trigger {
+  display: block;
+  width: 100%;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  padding: 1px 2px;
+  margin: -1px -2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: text;
+  text-align: left;
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
 }
 
-.bk-ledger-head-amount {
-  justify-self: end;
-  text-align: right;
+.bk-cell-trigger:hover:not(:disabled) {
+  background: var(--bk-surface);
+  box-shadow: inset 0 -1px 0 var(--bk-rule-strong);
 }
 
-/* 헤더가 hairline을 그리므로 첫 데이터 행의 border-top 중복을 지운다. */
-.bk-ledger-head + .bk-row {
-  border-top: 0;
+.bk-cell-trigger:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 1px;
 }
 
-/* 읽기 행 — 밀도 패스(4px)가 과했던 세로 리듬을 9px로 복원, hover는 surface만
-   (장부 행에서 translateY 리프트는 스캔을 방해하므로 끈다). */
-.bk-ledger-row {
-  grid-template-columns: var(--bk-ledger-grid);
-  align-items: center;
-  column-gap: var(--wr-density-md);
-  padding-block: 9px;
-}
-
-.bk-transaction.bk-ledger-row:hover {
-  transform: none;
-}
-
-.bk-ledger-date {
-  color: var(--bk-subtle);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.bk-ledger-time {
-  margin-left: var(--wr-density-2xs);
+.bk-cell-trigger[data-empty="true"] {
   color: var(--bk-muted);
-  font-size: 0.9em;
 }
 
-/* 상호(primary) + 메모(muted, 한 줄 truncate) 스택 셀. */
-.bk-ledger-main {
-  display: grid;
-  min-width: 0;
-  gap: 0;
+.bk-cell-trigger[data-align="right"] {
+  text-align: right;
 }
 
-.bk-ledger-merchant,
-.bk-ledger-note,
-.bk-ledger-payment {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.bk-cell-input {
+  height: 26px;
+  padding-inline: var(--wr-density-xs);
+  font-size: inherit;
 }
 
-.bk-ledger-category {
-  display: flex;
-  min-width: 0;
-}
-
-.bk-ledger-amount {
-  justify-self: end;
-  white-space: nowrap;
+.bk-cell-input[data-align="right"] {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.bk-ledger-amount[data-direction="income"] {
+.bk-cell-amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-cell-amount[data-direction="income"] {
   color: var(--bk-green);
+}
+
+/* 날짜 셀의 DatePicker 트리거 — 테이블 안에선 보더 없는 컴팩트 텍스트 버튼. */
+.bk-cell-picker {
+  height: 22px;
+  padding-inline: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--bk-subtle);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--radius-sm);
+}
+
+.bk-cell-picker:hover {
+  background: var(--bk-surface);
+  box-shadow: inset 0 -1px 0 var(--bk-rule-strong);
+}
+
+/* 결제수단 팝오버 미니 폼 — 3필드 세로 스택 + 적용/취소. */
+.bk-payment-popover {
+  display: grid;
+  gap: var(--wr-density-md);
+  width: 260px;
+}
+
+.bk-payment-popover .bk-payment-fields {
+  grid-template-columns: 1fr;
+}
+
+.bk-payment-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wr-density-xs);
 }
 
 /* 액션 클러스터 — 평소엔 흐리게, hover/focus-within에 온전히(불투명도만 —
@@ -1431,45 +1417,58 @@
   transition: opacity var(--wr-motion-fast) var(--wr-ease-out);
 }
 
-.bk-ledger-row:hover .bk-ledger-actions,
-.bk-ledger-row:focus-within .bk-ledger-actions {
+.bk-tr:hover .bk-ledger-actions,
+.bk-tr:focus-within .bk-ledger-actions {
   opacity: 1;
 }
 
-/* 아이콘 전용 버튼 — 26px 정사각(공유 3.5rem 트랙과 맞물린다).
-   mid-file의 padding-inline 압축 규칙(0,3,0)을 같은 명시도+후순위로 이긴다. */
-.bk-transaction.bk-ledger-row .bk-row-actions > button {
-  width: 26px;
-  padding-inline: 0;
+/* ── 상세 편집 Sheet — 우측 패널 압축 레이아웃 ───────────────────────
+   테이블을 가리지 않는 560px 패널. 헤더(상호·금액·소스)는 Sheet가 소유하고
+   폼은 embedded(행 chrome 없음). 본문만 스크롤. */
+.bk-edit-sheet {
+  gap: var(--wr-density-md);
+  padding: var(--wr-density-xl);
 }
 
-@media (max-width: 760px) {
-  .bk-ledger-head {
-    display: none;
-  }
+.bk-edit-sheet-head {
+  display: grid;
+  gap: var(--wr-density-2xs);
+  padding-right: var(--wr-density-2xl);
+}
 
-  .bk-ledger-row {
-    grid-template-columns: 1fr;
-    row-gap: var(--wr-density-2xs);
-  }
+.bk-edit-sheet-sub {
+  display: flex;
+  align-items: baseline;
+  gap: var(--wr-density-sm);
+}
 
-  .bk-ledger-amount,
-  .bk-ledger-actions {
-    justify-self: start;
-    text-align: left;
-  }
+.bk-edit-sheet-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 
-  .bk-ledger-actions {
-    opacity: 1;
-  }
+.bk-edit-sheet-amount[data-direction="income"] {
+  color: var(--bk-green);
+}
+
+.bk-edit-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--wr-density-xs);
+}
+
+/* Sheet 안 폼 밀도 압축 — 섹션/그리드 간격 한 단계씩 줄인다. */
+.bk-edit-sheet .bk-edit-form {
+  gap: var(--wr-density-md);
+}
+
+.bk-edit-sheet .bk-edit-grid {
+  gap: var(--wr-density-sm) var(--wr-density-md);
 }
 
 /* ── 거래 편집 폼 — 섹션 그루핑 ──────────────────────────────────────
    기본/분류/결제/상세(기본 접힘)/분할·중복 섹션. 라벨은 label-sm + hairline. */
-.bk-transaction-edit {
-  padding-block: var(--wr-density-md) var(--wr-density-lg);
-}
-
 .bk-edit-form {
   gap: var(--wr-density-lg);
 }
