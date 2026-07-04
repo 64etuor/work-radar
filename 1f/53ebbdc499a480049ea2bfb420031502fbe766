@@ -1,0 +1,41 @@
+src/components/bookkeeping/BookkeepingView.css
+  s_35bfb7f5ae2837::t_6db7ab94906d84 89-108
+src/components/bookkeeping/cards/EditableCell.tsx
+  s_35bfb7f5ae2837::t_504529b77f2cdd 214,218
+  s_35bfb7f5ae2837::t_888ebb9b24cc99 239-247
+  s_35bfb7f5ae2837::t_855c4f0b6e57d1 9,12
+  s_35bfb7f5ae2837::t_14f81a7fbf1a19 148-149,153-154,162,171,181,192
+src/components/bookkeeping/cards/cardHelpers.ts
+  s_35bfb7f5ae2837::t_7671a9ed66a8f1 24-44
+src/components/bookkeeping/cards/cardHelpers.test.ts
+  s_35bfb7f5ae2837::t_68602b5f145c46 1-25
+src/components/bookkeeping/BookkeepingView.tsx
+  s_35bfb7f5ae2837::t_77a689bbf98138 639-644
+src/components/bookkeeping/cards/BookkeepingScopeControls.tsx
+  s_35bfb7f5ae2837::t_6f4e50abf0759e 26,35-36,40-53
+  s_35bfb7f5ae2837::t_1f496b47a65dac 1-2
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_35bfb7f5ae2837::t_808a0e46d25535 78
+src/components/bookkeeping/cards/TransactionReadRow.tsx
+  s_35bfb7f5ae2837::t_f3499a283ef5eb 84,86
+src/components/bookkeeping/cards/BookkeepingExportControls.tsx
+  s_35bfb7f5ae2837::t_a39613695ad6eb 26-27,32
+docs/decisions.md
+  s_35bfb7f5ae2837::t_8ca7092d14bf7b 644
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1f53ebbdc499a480049ea2bfb420031502fbe766",
+  "prompts": {},
+  "sessions": {
+    "s_35bfb7f5ae2837": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02f5ddb0-6c9e-4184-8565-1148f4217819",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
