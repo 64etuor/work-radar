@@ -62,6 +62,12 @@ body/token/credential 필드를 받지 않는다. 다른 MCP caller, env 없는 
 - 툴 목록은 **startup 시 고정** — 런타임 동적 registration 금지(rug pull 방어).
 - Hermes-origin 직접 실행 예외는 위 표면 안의 고정 동작이며, 동적 tool mutation이 아니다. env marker가
   없으면 외부 service write는 proposal-only, Bookkeeping OCR 저장은 거부로 동작한다.
+- **Bookkeeping READ 개방(2026-07-04, 사용자 결정):** `wr_bookkeeping_list_recent_transactions` /
+  `list_review_queue` / `monthly_summary` / `get_category_rules` / `find_duplicate_candidates`는
+  **모든 MCP caller**(env marker 없는 `--mcp-stdio` 포함)에 허용 — 로컬 sanitized 조회라
+  proposal-only 계약과 무관하다. DTO는 note(내용)/자산/결제 메타까지 싣되 **소스 원문
+  `description`·raw email body·token은 표면에 없다**(타입으로 강제). 쓰기
+  (`save_receipt`/`mark_duplicate`)는 여전히 Hermes caller 전용.
 - 툴 표면 변경 = 명시적 코드 변경 + 스키마 스냅샷 테스트 갱신(아래 §8).
 
 ## 2. 입력 스키마 — strict, 좁은 타입

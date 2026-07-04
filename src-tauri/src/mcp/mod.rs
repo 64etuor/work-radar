@@ -246,10 +246,19 @@ pub struct BookkeepingTransactionDto {
     pub currency: String,
     pub direction: String,
     pub spent_at: String,
+    /// HH:MM:SS(있으면) — 원장 UI의 시각 셀과 동일 필드.
+    pub spent_at_time: Option<String>,
     pub category: String,
     pub category_code: Option<String>,
     pub subcategory_code: Option<String>,
+    /// 사용자 메모(DB `note`; .mmbak ZDATA 유입처, 원장 UI의 "내용" 칼럼). 소스 원문
+    /// `description`은 메일 본문 유래일 수 있어 의도적으로 미노출(sanitized-surface 계약 유지).
+    pub note: Option<String>,
     pub account: Option<String>,
+    pub payment_method_kind: String,
+    pub payment_method_label: Option<String>,
+    pub payment_method_last4: Option<String>,
+    pub expense_kind: String,
     pub review_status: String,
     pub confidence: Option<f64>,
     /// Review-reason codes only (not free-text details).
@@ -435,10 +444,16 @@ fn to_transaction_dto(t: crate::models::BookkeepingTransaction) -> BookkeepingTr
         currency: t.currency,
         direction: enum_wire_string(&t.direction),
         spent_at: t.spent_at,
+        spent_at_time: t.spent_at_time,
         category: t.category,
         category_code: t.category_code,
         subcategory_code: t.subcategory_code,
+        note: t.note,
         account: t.account,
+        payment_method_kind: enum_wire_string(&t.payment_method_kind),
+        payment_method_label: t.payment_method_label,
+        payment_method_last4: t.payment_method_last4,
+        expense_kind: enum_wire_string(&t.expense_kind),
         review_status: enum_wire_string(&t.review_status),
         confidence: t.confidence,
         review_reason_codes,
@@ -905,7 +920,7 @@ impl WrServer {
 
     #[tool(
         name = "wr_bookkeeping_list_recent_transactions",
-        description = "List recent bookkeeping transactions (sanitized metadata) for the Work Radar Hermes caller. No raw email body / token fields."
+        description = "List recent bookkeeping transactions (sanitized metadata — note/payment/asset included, raw email body & tokens never). Read-only; open to any MCP caller."
     )]
     pub async fn bookkeeping_list_recent_transactions(
         &self,
@@ -917,7 +932,7 @@ impl WrServer {
 
     #[tool(
         name = "wr_bookkeeping_list_review_queue",
-        description = "List bookkeeping transactions awaiting review (sanitized metadata) for the Work Radar Hermes caller."
+        description = "List bookkeeping transactions awaiting review (sanitized metadata). Read-only; open to any MCP caller."
     )]
     pub async fn bookkeeping_list_review_queue(
         &self,
@@ -931,13 +946,16 @@ impl WrServer {
         .await
     }
 
+    // 읽기 개방(2026-07-04, 사용자 결정): 가계부 READ 툴은 Hermes 외 caller(다른 에이전트가
+    // `--mcp-stdio`를 직접 spawn)도 허용 — 로컬 sanitized 조회라 proposal-only 계약과 무관하고,
+    // 쓰기(save_receipt/mark_duplicate)는 여전히 require_hermes. caller 파라미터는 게이트
+    // 재도입/감사 시그니처 안정성을 위해 유지한다.
     async fn bookkeeping_list_transactions_for_caller(
         &self,
         p: BookkeepingListParams,
         status: Option<crate::models::BookkeepingReviewStatus>,
-        caller: McpCaller,
+        _caller: McpCaller,
     ) -> Result<Json<BookkeepingTransactionListDto>, rmcp::ErrorData> {
-        require_hermes(caller, "wr_bookkeeping_list")?;
         let limit = p.limit.unwrap_or(25).clamp(1, 100);
         let rows = bookkeeping_commands::list_bookkeeping_transactions_inner(
             &self.db,
@@ -956,7 +974,7 @@ impl WrServer {
 
     #[tool(
         name = "wr_bookkeeping_monthly_summary",
-        description = "Monthly expense/income/net + review-state counts for the Work Radar Hermes caller."
+        description = "Monthly expense/income/net + review-state counts. Read-only; open to any MCP caller."
     )]
     pub async fn bookkeeping_monthly_summary(
         &self,
@@ -969,9 +987,8 @@ impl WrServer {
     async fn bookkeeping_monthly_summary_for_caller(
         &self,
         p: BookkeepingMonthlySummaryParams,
-        caller: McpCaller,
+        _caller: McpCaller,
     ) -> Result<Json<BookkeepingMonthlySummaryDto>, rmcp::ErrorData> {
-        require_hermes(caller, "wr_bookkeeping_monthly_summary")?;
         let s = bookkeeping_commands::bookkeeping_monthly_summary_inner(
             &self.db,
             &p.month,
@@ -993,7 +1010,7 @@ impl WrServer {
 
     #[tool(
         name = "wr_bookkeeping_get_category_rules",
-        description = "Return the seeded category taxonomy + alias rules so the CFO bot can resolve codes consistently. Hermes caller only."
+        description = "Return the seeded category taxonomy + alias rules so agents can resolve codes consistently. Read-only; open to any MCP caller."
     )]
     pub async fn bookkeeping_get_category_rules(
         &self,
@@ -1004,9 +1021,8 @@ impl WrServer {
 
     async fn bookkeeping_get_category_rules_for_caller(
         &self,
-        caller: McpCaller,
+        _caller: McpCaller,
     ) -> Result<Json<BookkeepingCategoryRulesDto>, rmcp::ErrorData> {
-        require_hermes(caller, "wr_bookkeeping_get_category_rules")?;
         let rules = bookkeeping_commands::bookkeeping_category_rules_inner(&self.db)
             .await
             .map_err(|e| mcp_tool_error("wr_bookkeeping_get_category_rules", &e))?;
@@ -1036,7 +1052,7 @@ impl WrServer {
 
     #[tool(
         name = "wr_bookkeeping_find_duplicate_candidates",
-        description = "Find likely-duplicate existing transactions before saving (fuzzy: source_ref / order / payment number / amount+date+merchant). Hermes caller only; read-only."
+        description = "Find likely-duplicate existing transactions before saving (fuzzy: source_ref / order / payment number / amount+date+merchant). Read-only; open to any MCP caller."
     )]
     pub async fn bookkeeping_find_duplicate_candidates(
         &self,
@@ -1049,9 +1065,8 @@ impl WrServer {
     async fn bookkeeping_find_duplicate_candidates_for_caller(
         &self,
         p: BookkeepingFindDuplicateParams,
-        caller: McpCaller,
+        _caller: McpCaller,
     ) -> Result<Json<BookkeepingDuplicateCandidateListDto>, rmcp::ErrorData> {
-        require_hermes(caller, "wr_bookkeeping_find_duplicate_candidates")?;
         let candidates = bookkeeping_commands::find_bookkeeping_duplicate_candidates_inner(
             &self.db,
             crate::models::FindBookkeepingDuplicateCandidatesInput {
@@ -2003,12 +2018,12 @@ mod write_tool_tests {
     }
 
     #[tokio::test]
-    async fn bookkeeping_read_tools_require_hermes_caller() {
+    async fn bookkeeping_reads_open_to_any_caller_writes_stay_hermes_gated() {
         let db = fresh_db().await;
         let server = WrServer { db: db.clone() };
 
-        // Non-Hermes is refused for the summary read tool.
-        let denied = server
+        // 읽기 개방(2026-07-04): non-Hermes caller도 요약/중복탐색 READ는 성공한다.
+        let summary = server
             .bookkeeping_monthly_summary_for_caller(
                 BookkeepingMonthlySummaryParams {
                     month: "2026-06".into(),
@@ -2017,10 +2032,9 @@ mod write_tool_tests {
                 McpCaller::Other,
             )
             .await;
-        assert!(denied.is_err(), "non-Hermes read is refused");
+        assert!(summary.is_ok(), "non-Hermes summary read is allowed");
 
-        // find + mark are likewise refused for non-Hermes callers (regression-protect every gate).
-        let denied_find = server
+        let open_find = server
             .bookkeeping_find_duplicate_candidates_for_caller(
                 BookkeepingFindDuplicateParams {
                     project_id: None,
@@ -2035,7 +2049,39 @@ mod write_tool_tests {
                 McpCaller::Other,
             )
             .await;
-        assert!(denied_find.is_err(), "non-Hermes find is refused");
+        assert!(open_find.is_ok(), "non-Hermes find read is allowed");
+
+        // 쓰기는 여전히 Hermes 전용 — save_receipt/mark_duplicate 게이트 회귀 방지.
+        let denied_save = server
+            .bookkeeping_save_receipt_for_caller(
+                BookkeepingSaveReceiptParams {
+                    project_id: None,
+                    source_ref: None,
+                    merchant: "게이트검증".into(),
+                    amount_minor: 1_000,
+                    currency: None,
+                    spent_at: "2026-06-12".into(),
+                    category: None,
+                    description: None,
+                    note: None,
+                    direction: None,
+                    account: None,
+                    subcategory: None,
+                    category_code: None,
+                    subcategory_code: None,
+                    raw_category: None,
+                    spent_at_time: None,
+                    confidence: None,
+                    field_confidence: None,
+                    review_reasons: None,
+                    order_no: None,
+                    payment_no: None,
+                    line_items: None,
+                },
+                McpCaller::Other,
+            )
+            .await;
+        assert!(denied_save.is_err(), "non-Hermes save is refused");
         let denied_mark = server
             .bookkeeping_mark_duplicate_for_caller(
                 BookkeepingMarkDuplicateParams {
@@ -2058,15 +2104,15 @@ mod write_tool_tests {
                     currency: Some("KRW".into()),
                     spent_at: "2026-06-12".into(),
                     category: None,
-                    description: None,
-                    note: None,
+                    description: Some("메일 원문 요약 — DTO에 노출되면 안 됨".into()),
+                    note: Some("정기결제".into()),
                     direction: None,
-                    account: None,
+                    account: Some("하나카드".into()),
                     subcategory: None,
                     category_code: None,
                     subcategory_code: None,
                     raw_category: None,
-                    spent_at_time: None,
+                    spent_at_time: Some("13:05:00".into()),
                     confidence: None,
                     field_confidence: None,
                     review_reasons: None,
@@ -2099,6 +2145,30 @@ mod write_tool_tests {
             candidates.0.candidates.iter().any(|c| c.score >= 0.9),
             "order_no match scores high"
         );
+
+        // non-Hermes caller가 목록을 읽고, DTO에 내용(note)/자산/시각이 실려온다 —
+        // 단 소스 원문 description은 sanitized 계약대로 DTO 표면에 없다(타입이 강제).
+        let listed = server
+            .bookkeeping_list_transactions_for_caller(
+                BookkeepingListParams {
+                    project_id: None,
+                    limit: Some(10),
+                },
+                None,
+                McpCaller::Other,
+            )
+            .await
+            .expect("non-Hermes list read");
+        let dto = listed
+            .0
+            .transactions
+            .iter()
+            .find(|t| t.merchant == "쿠팡")
+            .expect("seeded row listed");
+        assert_eq!(dto.note.as_deref(), Some("정기결제"));
+        assert_eq!(dto.account.as_deref(), Some("하나카드"));
+        assert_eq!(dto.spent_at_time.as_deref(), Some("13:05:00"));
+        assert_eq!(dto.payment_method_kind, "unknown");
     }
 }
 
@@ -2107,9 +2177,9 @@ mod schema_tests {
     use super::{
         ActionIdParams, BookkeepingFindDuplicateParams, BookkeepingLineItemParam,
         BookkeepingListParams, BookkeepingMarkDuplicateParams, BookkeepingMonthlySummaryParams,
-        BookkeepingReviewReasonParam, BookkeepingSaveReceiptParams, CalendarCreateEventParams,
-        GithubCommentParams, GithubCreateIssueParams, GmailSendParams, NotionCreatePageParams,
-        ProposeNoopParams,
+        BookkeepingReviewReasonParam, BookkeepingSaveReceiptParams, BookkeepingTransactionDto,
+        CalendarCreateEventParams, GithubCommentParams, GithubCreateIssueParams, GmailSendParams,
+        NotionCreatePageParams, ProposeNoopParams,
     };
     use std::collections::BTreeSet;
 
@@ -2138,6 +2208,49 @@ mod schema_tests {
     // write/read 툴 입력 DTO가 **닫힌 스키마**(additionalProperties:false = deny_unknown_fields)임을
     // 고정하고, 필드/required 표면 drift를 잠근다(mcp-server-conventions §2/§8). Phase 2~5에서 실
     // write 툴 param이 늘면 여기에 케이스를 추가해 같은 계약(unknown-field 거부 + 표면 고정)을 강제한다.
+    // 출력 DTO 표면 고정 — 입력 param과 달리 출력은 deny_unknown_fields가 없어 타입만이 가드다.
+    // 필드 집합을 스냅샷해 부주의한 확장(특히 소스 원문 `description` — 메일 본문 유래 가능 —
+    // 이 sanitized 읽기 표면에 새는 회귀)을 컴파일이 아니라 테스트로도 잡는다(2026-07-04 읽기 개방).
+    #[test]
+    fn bookkeeping_transaction_dto_surface_is_locked_and_sanitized() {
+        let v = serde_json::to_value(schemars::schema_for!(BookkeepingTransactionDto)).unwrap();
+        assert_eq!(
+            prop_names(&v),
+            expect(&[
+                "id",
+                "merchant",
+                "amount_minor",
+                "currency",
+                "direction",
+                "spent_at",
+                "spent_at_time",
+                "category",
+                "category_code",
+                "subcategory_code",
+                "note",
+                "account",
+                "payment_method_kind",
+                "payment_method_label",
+                "payment_method_last4",
+                "expense_kind",
+                "review_status",
+                "confidence",
+                "review_reason_codes",
+                "source",
+                "source_ref",
+                "order_no",
+                "payment_no",
+            ])
+        );
+        // sanitized 계약의 핵심 부정 단언 — 원문/시크릿 계열 필드는 표면에 없다.
+        for forbidden in ["description", "raw_body", "token", "credential_ref"] {
+            assert!(
+                !prop_names(&v).contains(forbidden),
+                "sanitized read DTO must not expose `{forbidden}`"
+            );
+        }
+    }
+
     #[test]
     fn propose_noop_params_schema_is_closed_and_stable() {
         let v = serde_json::to_value(schemars::schema_for!(ProposeNoopParams)).unwrap();

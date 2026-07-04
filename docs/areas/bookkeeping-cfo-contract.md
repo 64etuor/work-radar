@@ -22,8 +22,13 @@ source_of_truth_scope: CFO Bot(Hermes) ↔ Work Radar 가계부 판단 파이프
 - raw email body / 영수증 이미지 / 파일 경로 / 토큰 / credential은 **Work Radar로 전달 금지.**
   MCP save/read 툴 스키마에 해당 필드가 **존재하지 않는다**(거부됨). Hermes는 추출·정제 후
   **사람이 검토 가능한 짧은 sanitized 필드만** 보낸다.
-- 모든 가계부 MCP 툴(save + read + mark_duplicate)은 **Work Radar Hermes caller 전용**
-  (`WORK_RADAR_MCP_CALLER=hermes`). 다른 caller는 거부된다(사용자 개인 금융 데이터 최소권한).
+- **쓰기 툴(save_receipt / mark_duplicate)은 Work Radar Hermes caller 전용**
+  (`WORK_RADAR_MCP_CALLER=hermes`). 다른 caller는 거부된다.
+- **읽기 툴은 모든 MCP caller에 개방**(2026-07-04 사용자 결정 — 다른 로컬 에이전트가
+  `--mcp-stdio`를 직접 spawn해 원장을 읽는다). sanitized 메타데이터만: note(사용자 내용/메모)·
+  자산·결제 메타는 싣되 소스 원문 `description`·raw body·token은 DTO 타입에 존재하지 않는다.
+  §7 최소권한 대비 트레이드오프: 로컬 프로세스에 cross-project 금융 메타 읽기가 열린다 —
+  MCP 서버 자체엔 전송 능력이 없고(stdio) 쓰기/승인 경로는 불변이라는 전제의 의도적 완화.
 - 자동 확정 없음: 유입 행은 항상 `review_status='needs_review'`로 큐에 들어가고, 사람이
   approved/ignored로 정리한다. low-confidence는 반드시 리뷰 대기.
 
@@ -101,7 +106,7 @@ WRITE(로컬, Hermes 전용):
   신규 판단 필드는 모두 **optional**이라 구버전 Hermes 호환). line_items 포함 가능(합계 불일치=리뷰 사유).
 - `wr_bookkeeping_mark_duplicate` — 중복 표시(로컬 리뷰큐 쓰기, 비-Hermes 거부).
 
-READ(Hermes 전용, sanitized 메타데이터만):
+READ(모든 MCP caller 개방 — 2026-07-04, sanitized 메타데이터만):
 
 - `wr_bookkeeping_list_recent_transactions` / `wr_bookkeeping_list_review_queue` — limit clamp 1..100.
 - `wr_bookkeeping_monthly_summary` — 지출/수입/순액 + 리뷰 상태 카운트.
