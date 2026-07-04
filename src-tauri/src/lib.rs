@@ -255,6 +255,13 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::unlink_objective_horizon,
         commands::selected_weekly_focus,
         commands::select_weekly_focus,
+        commands::latest_life_os_review,
+        commands::generate_life_os_review,
+        commands::list_life_os_recommendations,
+        commands::accept_life_os_recommendation,
+        commands::dismiss_life_os_recommendation,
+        commands::record_life_os_audit_event,
+        commands::list_life_os_audit_events,
         // Agent 스파인 (잡 큐 + bounds + kill, Phase 7).
         commands::codex_status,
         commands::agent_usage_status,

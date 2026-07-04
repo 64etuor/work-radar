@@ -67,6 +67,50 @@ pub enum WeeklyFocusStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
 #[sqlx(rename_all = "snake_case")]
+pub enum LifeOsRecommendationKind {
+    WeeklyFocus,
+    GuardrailRecovery,
+    Q1Prevention,
+    Q3Containment,
+    DecisionTask,
+    ShrinkFocus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum LifeOsRecommendationStatus {
+    Proposed,
+    Accepted,
+    Dismissed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum LifeOsTargetKind {
+    WeeklyFocus,
+    Recommendation,
+    Guardrail,
+    Signal,
+    Sprint,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
+pub enum LifeOsAuditOutcome {
+    Done,
+    Dismissed,
+    TooLarge,
+    WrongPriority,
+    Blocked,
+    Accurate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(rename_all = "snake_case")]
 pub enum SprintCycleStatus {
     Active,
     Closed,
@@ -169,6 +213,112 @@ pub struct WeeklyFocus {
     pub shrink_count: i32,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LifeOsSignalReview {
+    pub signal_id: String,
+    pub title: String,
+    pub area_key: String,
+    pub quadrant_hint: Option<String>,
+    pub okr_relevant: bool,
+    pub guardrail_risk: bool,
+    pub one_thing_candidate: bool,
+    pub processing_action: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LifeOsDiagnosis {
+    pub q1_count: i32,
+    pub q2_count: i32,
+    pub q3_count: i32,
+    pub q4_count: i32,
+    pub unclassified_count: i32,
+    pub guardrail_risk_count: i32,
+    pub dominant_area_key: Option<String>,
+    pub method: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LifeOsRecommendation {
+    pub id: String,
+    pub snapshot_id: Option<String>,
+    pub week_start: String,
+    pub kind: LifeOsRecommendationKind,
+    pub title: String,
+    pub reason: Option<String>,
+    pub source_kind: Option<WeeklyFocusSourceKind>,
+    pub source_id: Option<String>,
+    pub confidence: i32,
+    pub payload_json: String,
+    pub status: LifeOsRecommendationStatus,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LifeOsSnapshot {
+    pub id: String,
+    pub week_start: String,
+    pub quarter: String,
+    pub range_start: String,
+    pub range_end: String,
+    pub diagnosis: LifeOsDiagnosis,
+    pub signal_reviews: Vec<LifeOsSignalReview>,
+    pub recommendations: Vec<LifeOsRecommendation>,
+    pub source_hash: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct LifeOsAuditEvent {
+    pub id: String,
+    pub week_start: String,
+    pub target_kind: LifeOsTargetKind,
+    pub target_id: String,
+    pub outcome: LifeOsAuditOutcome,
+    pub note: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GenerateLifeOsReviewInput {
+    pub week_start: String,
+    pub quarter: String,
+    pub range_start: String,
+    pub range_end: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AcceptLifeOsRecommendationInput {
+    pub recommendation_id: String,
+    pub replace_existing: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DismissLifeOsRecommendationInput {
+    pub recommendation_id: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecordLifeOsAuditInput {
+    pub week_start: String,
+    pub target_kind: LifeOsTargetKind,
+    pub target_id: String,
+    pub outcome: LifeOsAuditOutcome,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

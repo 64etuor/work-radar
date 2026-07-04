@@ -16,6 +16,7 @@ import { useEffect } from "react";
 import type { DebtPoint } from "@/bindings";
 import { areaLabel } from "@/components/board/boardUtils";
 import { ArchiveAccordion } from "@/components/weekly/ArchiveAccordion";
+import { LifeOsAdvisorPanel } from "@/components/weekly/LifeOsAdvisorPanel";
 import { LifeWheelRadar } from "@/components/weekly/LifeWheelRadar";
 import { CompletedList, ReflectionRank } from "@/components/weekly/ReflectionSection";
 import { SystemDiagnosis } from "@/components/weekly/SystemDiagnosis";
@@ -143,6 +144,11 @@ export function WeeklyView() {
         )}
 
         <SystemDiagnosis weekStart={nav.range.start} isCurrent={nav.isCurrent} />
+        <LifeOsAdvisorPanel
+          weekStart={nav.range.start}
+          rangeEnd={nav.range.end}
+          quarter={okrQuarter}
+        />
 
         {review.isError && (
           <div className="wk-hint">

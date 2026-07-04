@@ -1,9 +1,13 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  type AcceptLifeOsRecommendationInput,
   commands,
   type CreateMissionHorizonInput,
+  type DismissLifeOsRecommendationInput,
+  type GenerateLifeOsReviewInput,
   type LinkSprintGoalInput,
+  type RecordLifeOsAuditInput,
   type SelectWeeklyFocusInput,
   type UpdateMissionHorizonInput,
   type UpsertGuardrailInput,
@@ -18,6 +22,9 @@ export const lifeOsKeys = {
   guardrails: (quarter: string) => ["lifeOs", "guardrails", quarter] as const,
   objectiveHorizonLinks: (quarter: string) => ["lifeOs", "objectiveHorizonLinks", quarter] as const,
   weeklyFocus: (weekStart: string) => ["lifeOs", "weeklyFocus", weekStart] as const,
+  review: (weekStart: string, quarter: string) => ["lifeOs", "review", weekStart, quarter] as const,
+  recommendations: (weekStart: string) => ["lifeOs", "recommendations", weekStart] as const,
+  auditEvents: (weekStart: string) => ["lifeOs", "auditEvents", weekStart] as const,
   sprintCycle: ["lifeOs", "sprintCycle"] as const,
 };
 
@@ -131,11 +138,80 @@ export function useSelectedWeeklyFocus(weekStart: string) {
   });
 }
 
+export function useLifeOsReview(weekStart: string, quarter: string) {
+  return useQuery({
+    queryKey: lifeOsKeys.review(weekStart, quarter),
+    queryFn: () => unwrap(commands.latestLifeOsReview(weekStart, quarter)),
+    enabled: weekStart.length > 0 && quarter.length > 0,
+  });
+}
+
+export function useGenerateLifeOsReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: GenerateLifeOsReviewInput) => unwrap(commands.generateLifeOsReview(input)),
+    onSuccess: (review) => {
+      void qc.invalidateQueries({ queryKey: lifeOsKeys.recommendations(review.weekStart) });
+      void qc.invalidateQueries({ queryKey: lifeOsKeys.review(review.weekStart, review.quarter) });
+      return invalidateLifeOs(qc);
+    },
+  });
+}
+
+export function useLifeOsRecommendations(weekStart: string) {
+  return useQuery({
+    queryKey: lifeOsKeys.recommendations(weekStart),
+    queryFn: () => unwrap(commands.listLifeOsRecommendations(weekStart)),
+    enabled: weekStart.length > 0,
+  });
+}
+
 export function useSelectWeeklyFocus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: SelectWeeklyFocusInput) => unwrap(commands.selectWeeklyFocus(input)),
     onSuccess: () => invalidateWeeklyFocusConsumers(qc),
+  });
+}
+
+export function useAcceptLifeOsRecommendation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AcceptLifeOsRecommendationInput) =>
+      unwrap(commands.acceptLifeOsRecommendation(input)),
+    onSuccess: (focus) =>
+      invalidateWeeklyFocusConsumers(qc).then(() =>
+        qc.invalidateQueries({ queryKey: lifeOsKeys.recommendations(focus.weekStart) }),
+      ),
+  });
+}
+
+export function useDismissLifeOsRecommendation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DismissLifeOsRecommendationInput) =>
+      unwrap(commands.dismissLifeOsRecommendation(input)),
+    onSuccess: (recommendation) =>
+      qc.invalidateQueries({ queryKey: lifeOsKeys.recommendations(recommendation.weekStart) }),
+  });
+}
+
+export function useLifeOsAuditEvents(weekStart: string) {
+  return useQuery({
+    queryKey: lifeOsKeys.auditEvents(weekStart),
+    queryFn: () => unwrap(commands.listLifeOsAuditEvents(weekStart)),
+    enabled: weekStart.length > 0,
+  });
+}
+
+export function useRecordLifeOsAuditEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RecordLifeOsAuditInput) => unwrap(commands.recordLifeOsAuditEvent(input)),
+    onSuccess: (event) => {
+      void qc.invalidateQueries({ queryKey: lifeOsKeys.weeklyFocus(event.weekStart) });
+      return qc.invalidateQueries({ queryKey: lifeOsKeys.auditEvents(event.weekStart) });
+    },
   });
 }
 

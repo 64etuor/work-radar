@@ -371,6 +371,25 @@ export const commands = {
 	updatedAt: string,
 } | null, AppError>(__TAURI_INVOKE("selected_weekly_focus", { weekStart })),
 	selectWeeklyFocus: (input: SelectWeeklyFocusInput) => typedError<WeeklyFocus, AppError>(__TAURI_INVOKE("select_weekly_focus", { input })),
+	latestLifeOsReview: (weekStart: string, quarter: string) => typedError<{
+	id: string,
+	weekStart: string,
+	quarter: string,
+	rangeStart: string,
+	rangeEnd: string,
+	diagnosis: LifeOsDiagnosis,
+	signalReviews: LifeOsSignalReview[],
+	recommendations: LifeOsRecommendation[],
+	sourceHash: string,
+	createdAt: string,
+	updatedAt: string,
+} | null, AppError>(__TAURI_INVOKE("latest_life_os_review", { weekStart, quarter })),
+	generateLifeOsReview: (input: GenerateLifeOsReviewInput) => typedError<LifeOsSnapshot, AppError>(__TAURI_INVOKE("generate_life_os_review", { input })),
+	listLifeOsRecommendations: (weekStart: string) => typedError<LifeOsRecommendation[], AppError>(__TAURI_INVOKE("list_life_os_recommendations", { weekStart })),
+	acceptLifeOsRecommendation: (input: AcceptLifeOsRecommendationInput) => typedError<WeeklyFocus, AppError>(__TAURI_INVOKE("accept_life_os_recommendation", { input })),
+	dismissLifeOsRecommendation: (input: DismissLifeOsRecommendationInput) => typedError<LifeOsRecommendation, AppError>(__TAURI_INVOKE("dismiss_life_os_recommendation", { input })),
+	recordLifeOsAuditEvent: (input: RecordLifeOsAuditInput) => typedError<LifeOsAuditEvent, AppError>(__TAURI_INVOKE("record_life_os_audit_event", { input })),
+	listLifeOsAuditEvents: (weekStart: string) => typedError<LifeOsAuditEvent[], AppError>(__TAURI_INVOKE("list_life_os_audit_events", { weekStart })),
 	/**  codex 설치/인증 상태 (graceful degrade — 프런트가 자동화 UI 활성/비활성 결정). */
 	codexStatus: () => typedError<CodexAvailability, AppError>(__TAURI_INVOKE("codex_status")),
 	/**  claude/codex 사용량 한도 스냅샷 (TTL 캐시 + 429 백오프 + stale 폴백, 읽기 전용). */
@@ -822,6 +841,11 @@ export const commands = {
 };
 
 /* Types */
+export type AcceptLifeOsRecommendationInput = {
+	recommendationId: string,
+	replaceExisting: boolean,
+};
+
 /**  같은 외부 계정(GitHub login / Notion bot)이 여러 프로젝트에 쓰인 그룹. */
 export type AccountDuplicate = {
 	/**  "github" | "notion". */
@@ -1968,6 +1992,11 @@ export type DiffMode =
 /**  임의 두 ref 직접 비교 (`git diff <base> <head>`). */
 "branch_branch";
 
+export type DismissLifeOsRecommendationInput = {
+	recommendationId: string,
+	reason: string | null,
+};
+
 /**  2-way 드리프트 상태(베이스라인 없음 — 누가 편집했는지는 표시 안 함). snake_case 방출. */
 export type DivergenceStatus = "in_sync" | "diverged";
 
@@ -2050,6 +2079,13 @@ export type FlushSummary = {
 	created: number,
 	queued: number,
 	failed: number,
+};
+
+export type GenerateLifeOsReviewInput = {
+	weekStart: string,
+	quarter: string,
+	rangeStart: string,
+	rangeEnd: string,
 };
 
 /**  프로젝트별 Google Calendar 연결 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
@@ -2206,7 +2242,78 @@ export type KeywordFilter = {
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
 
+export type LifeOsAuditEvent = {
+	id: string,
+	weekStart: string,
+	targetKind: LifeOsTargetKind,
+	targetId: string,
+	outcome: LifeOsAuditOutcome,
+	note: string | null,
+	createdAt: string,
+};
+
+export type LifeOsAuditOutcome = "done" | "dismissed" | "too_large" | "wrong_priority" | "blocked" | "accurate";
+
+export type LifeOsDiagnosis = {
+	q1Count: number,
+	q2Count: number,
+	q3Count: number,
+	q4Count: number,
+	unclassifiedCount: number,
+	guardrailRiskCount: number,
+	dominantAreaKey: string | null,
+	method: string,
+};
+
+export type LifeOsRecommendation = {
+	id: string,
+	snapshotId: string | null,
+	weekStart: string,
+	kind: LifeOsRecommendationKind,
+	title: string,
+	reason: string | null,
+	sourceKind: WeeklyFocusSourceKind | null,
+	sourceId: string | null,
+	confidence: number,
+	payloadJson: string,
+	status: LifeOsRecommendationStatus,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type LifeOsRecommendationKind = "weekly_focus" | "guardrail_recovery" | "q1_prevention" | "q3_containment" | "decision_task" | "shrink_focus";
+
+export type LifeOsRecommendationStatus = "proposed" | "accepted" | "dismissed";
+
 export type LifeOsRecordStatus = "active" | "paused" | "closed";
+
+export type LifeOsSignalReview = {
+	signalId: string,
+	title: string,
+	areaKey: string,
+	quadrantHint: string | null,
+	okrRelevant: boolean,
+	guardrailRisk: boolean,
+	oneThingCandidate: boolean,
+	processingAction: string,
+	reason: string,
+};
+
+export type LifeOsSnapshot = {
+	id: string,
+	weekStart: string,
+	quarter: string,
+	rangeStart: string,
+	rangeEnd: string,
+	diagnosis: LifeOsDiagnosis,
+	signalReviews: LifeOsSignalReview[],
+	recommendations: LifeOsRecommendation[],
+	sourceHash: string,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type LifeOsTargetKind = "weekly_focus" | "recommendation" | "guardrail" | "signal" | "sprint";
 
 /**
  *  사람이 편집하는 Life Wheel 팔레트 항목. AI 제안 taxonomy(`AreaTag`)와 별개로,
@@ -2665,6 +2772,14 @@ export type RecordBookkeepingSyncFailureInput = {
 	source: BookkeepingSource,
 	errorCode: string,
 	rawErrorMessage: string,
+};
+
+export type RecordLifeOsAuditInput = {
+	weekStart: string,
+	targetKind: LifeOsTargetKind,
+	targetId: string,
+	outcome: LifeOsAuditOutcome,
+	note: string | null,
 };
 
 /**  project별 레포. PR Radar(Phase 4)·worktree(Phase 5)의 단위. */
