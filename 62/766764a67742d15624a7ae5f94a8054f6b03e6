@@ -1,0 +1,43 @@
+src/components/bookkeeping/cards/TransactionEditForm.tsx
+  s_35bfb7f5ae2837::t_cfd814cffe44c9 166-167
+  s_35bfb7f5ae2837::t_944f8fb5f47ce4 262-263
+src/components/bookkeeping/cards/ReviewQueueCard.tsx
+  s_35bfb7f5ae2837::t_794204d4a13f06 168
+  s_35bfb7f5ae2837::t_e895ea4411f4fa 307
+src/components/bookkeeping/cards/TransactionReadRow.tsx
+  s_35bfb7f5ae2837::t_b61541f3920810 55-60
+  s_35bfb7f5ae2837::t_b6bce0dac0ba72 10
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_35bfb7f5ae2837::t_fa199853700a50 75
+src/components/bookkeeping/cards/ReviewReadRow.tsx
+  s_35bfb7f5ae2837::t_52cf0db7c9cd1f 14
+  s_35bfb7f5ae2837::t_6d9dd7e5ce272a 82-87
+src/components/bookkeeping/BookkeepingView.css
+  s_35bfb7f5ae2837::t_07caa5f44f4b52 84-88
+  s_35bfb7f5ae2837::t_eebd82703cdb3e 1200-1204
+  s_35bfb7f5ae2837::t_3b3ee065d1f5e7 1247-1255
+src/components/bookkeeping/cards/BookkeepingExportControls.tsx
+  s_35bfb7f5ae2837::t_b1975eb74d4745 2,6,8-11,19,21-22,28-29,33-54
+src/components/bookkeeping/cards/TransactionReadRow.dom.test.tsx
+  s_35bfb7f5ae2837::t_d3e216427edda3 188-196
+src/components/bookkeeping/cards/ReviewQueueCard.dom.test.tsx
+  s_35bfb7f5ae2837::t_3e951355346c0c 294-295,298,301,310,317-318,320,325,352,355-356,362
+docs/decisions.md
+  s_35bfb7f5ae2837::t_81f3326d5a4e52 643
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "62766764a67742d15624a7ae5f94a8054f6b03e6",
+  "prompts": {},
+  "sessions": {
+    "s_35bfb7f5ae2837": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02f5ddb0-6c9e-4184-8565-1148f4217819",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
