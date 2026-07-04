@@ -23,12 +23,13 @@ export function BookkeepingExportControls({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="ghost"
+          className="bk-export-trigger"
           disabled={disabled}
           aria-label="가계부 내보내기"
           title="내보내기"
         >
-          <Download className="size-3.5" />
+          <Download className="size-3" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="bk-export-popover" align="end">

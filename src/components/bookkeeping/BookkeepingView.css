@@ -86,6 +86,26 @@
   width: auto;
 }
 
+/* 기준 연월 내비 + 소형 내보내기 아이콘 한 줄(라벨 아래 컨트롤 행에 맞춰 하단 정렬). */
+.bk-scope-month {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--wr-density-xs);
+  min-width: 0;
+}
+
+/* 내보내기 트리거 — 24px 아이콘 전용 ghost(수동 입력 primary와 위계 분리). */
+.bk-export-trigger {
+  height: 24px;
+  width: 24px;
+  padding: 0;
+  color: var(--bk-muted);
+}
+
+.bk-export-trigger:hover {
+  color: var(--bk-ink);
+}
+
 .bk-head-actions {
   display: flex;
   justify-content: flex-end;

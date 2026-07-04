@@ -81,8 +81,9 @@ export function TransactionReadRow({
           kind={tx.paymentMethodKind}
           label={tx.paymentMethodLabel}
           last4={tx.paymentMethodLast4}
+          account={tx.account}
           disabled={disabled}
-          ariaLabel={`${tx.merchant} 결제수단 변경`}
+          ariaLabel={`${tx.merchant} 결제·자산 변경`}
           onCommit={(payment) => onPatch(payment)}
         />
       </TableCell>

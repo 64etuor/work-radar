@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { Project } from "@/bindings";
 import { PeriodNavigator } from "@/components/PeriodNavigator";
 import { formatMonthValue } from "@/components/periodNavigatorUtils";
@@ -21,6 +23,7 @@ export function BookkeepingScopeControls({
   onPreviousMonth,
   onNextMonth,
   onResetMonth,
+  monthAside,
 }: {
   month: string;
   projects: Project[];
@@ -29,20 +32,25 @@ export function BookkeepingScopeControls({
   onPreviousMonth: () => void;
   onNextMonth: () => void;
   onResetMonth: () => void;
+  /** 기준 연월 내비 오른쪽에 붙는 소형 액션(내보내기 아이콘 등). */
+  monthAside?: ReactNode;
 }) {
   return (
     <div className="bk-scope-controls">
-      <PeriodNavigator
-        label="기준 연월"
-        valueLabel={formatMonthValue(month)}
-        previousLabel="이전 달"
-        nextLabel="다음 달"
-        resetLabel="이번 달로 이동"
-        resetDisabled={month === currentMonth()}
-        onPrevious={onPreviousMonth}
-        onNext={onNextMonth}
-        onReset={onResetMonth}
-      />
+      <div className="bk-scope-month">
+        <PeriodNavigator
+          label="기준 연월"
+          valueLabel={formatMonthValue(month)}
+          previousLabel="이전 달"
+          nextLabel="다음 달"
+          resetLabel="이번 달로 이동"
+          resetDisabled={month === currentMonth()}
+          onPrevious={onPreviousMonth}
+          onNext={onNextMonth}
+          onReset={onResetMonth}
+        />
+        {monthAside}
+      </div>
       <Field label="프로젝트" htmlFor={FIELD_IDS.projectScope}>
         <Select value={selectedProjectId} onValueChange={onProjectChange}>
           <SelectTrigger id={FIELD_IDS.projectScope}>

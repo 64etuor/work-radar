@@ -636,10 +636,12 @@ export function BookkeepingView() {
               onPreviousMonth={() => dispatchScope({ type: "stepMonth", months: -1 })}
               onNextMonth={() => dispatchScope({ type: "stepMonth", months: 1 })}
               onResetMonth={() => dispatchScope({ type: "resetMonth" })}
-            />
-            <BookkeepingExportControls
-              disabled={exportPending}
-              onExport={(format) => void exportBookkeeping(format)}
+              monthAside={
+                <BookkeepingExportControls
+                  disabled={exportPending}
+                  onExport={(format) => void exportBookkeeping(format)}
+                />
+              }
             />
             <div className="bk-head-actions">
               <Button onClick={() => setManualSheetOpen(true)}>

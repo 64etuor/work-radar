@@ -6,9 +6,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
+import { Field } from "../../settings/SettingsKit";
 import type { TransactionEditDraft } from "../bookkeepingDrafts";
 import { shouldCommitNoteDraft } from "../reviewRow";
-import { paymentSummary } from "./cardHelpers";
+import { paymentAssetSummary } from "./cardHelpers";
 import { PaymentFields } from "./PaymentFields";
 
 /**
@@ -144,10 +145,13 @@ export type PaymentCellDraft = {
   paymentMethodKind: BookkeepingPaymentMethodKind;
   paymentMethodLabel: string;
   paymentMethodLast4: string;
+  /** 자산(DB `account`) — .mmbak 임포트의 결제 정보는 이 필드로 들어온다(ASSETS.NIC_NAME). */
+  account: string;
 };
 
 /**
- * 결제수단 셀 — 3필드(종류/표시명/끝자리)라 스왑 대신 Popover 미니 폼.
+ * 결제·자산 셀 — 4필드(종류/표시명/끝자리/자산)라 스왑 대신 Popover 미니 폼.
+ * 표시 요약은 paymentAssetSummary(payment_method_*가 비면 자산이 대신 보인다 — .mmbak 정합성).
  * "적용"으로만 커밋(팝오버 닫힘=취소, Esc는 radix가 처리). 실패 시 팝오버 유지.
  */
 export function PaymentCellEditor({
@@ -155,6 +159,7 @@ export function PaymentCellEditor({
   kind,
   label,
   last4,
+  account,
   disabled,
   ariaLabel,
   onCommit,
@@ -163,6 +168,7 @@ export function PaymentCellEditor({
   kind: BookkeepingPaymentMethodKind;
   label: string | null;
   last4: string | null;
+  account: string | null;
   disabled?: boolean;
   ariaLabel: string;
   onCommit: (next: PaymentCellDraft) => Promise<boolean>;
@@ -172,6 +178,7 @@ export function PaymentCellEditor({
     paymentMethodKind: kind,
     paymentMethodLabel: label ?? "",
     paymentMethodLast4: last4 ?? "",
+    account: account ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -182,6 +189,7 @@ export function PaymentCellEditor({
         paymentMethodKind: kind,
         paymentMethodLabel: label ?? "",
         paymentMethodLast4: last4 ?? "",
+        account: account ?? "",
       });
     }
     setOpen(next);
@@ -203,10 +211,11 @@ export function PaymentCellEditor({
         <button
           type="button"
           className="bk-cell-trigger"
+          data-empty={paymentAssetSummary(kind, label, last4, account) === "—" || undefined}
           disabled={disabled}
           aria-label={ariaLabel}
         >
-          {paymentSummary(kind, label, last4)}
+          {paymentAssetSummary(kind, label, last4, account)}
         </button>
       </PopoverTrigger>
       <PopoverContent className="bk-payment-popover" align="start">
@@ -227,6 +236,15 @@ export function PaymentCellEditor({
             setDraft((current) => ({ ...current, paymentMethodLast4 }))
           }
         />
+        <Field label="자산" htmlFor={`${id}-account`}>
+          <Input
+            id={`${id}-account`}
+            value={draft.account}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, account: event.target.value }))
+            }
+          />
+        </Field>
         <div className="bk-payment-popover-actions">
           <Button
             type="button"
