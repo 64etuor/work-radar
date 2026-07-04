@@ -1,0 +1,21 @@
+src/components/bookkeeping/cards/BookkeepingExportControls.tsx
+  s_35bfb7f5ae2837::t_0e4436aa90ffd1 26,32
+src/components/bookkeeping/BookkeepingView.css
+  s_35bfb7f5ae2837::t_588b499ab071aa 97,99-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f8396001e476882079c5faf519dd1a3d1ec57f63",
+  "prompts": {},
+  "sessions": {
+    "s_35bfb7f5ae2837": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02f5ddb0-6c9e-4184-8565-1148f4217819",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
