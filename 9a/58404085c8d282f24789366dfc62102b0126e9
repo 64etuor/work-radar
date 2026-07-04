@@ -1,0 +1,54 @@
+src-tauri/src/commands/life_os.rs
+  s_0f515b2c8d0e74::t_d1a73286336585 8
+  s_0f515b2c8d0e74::t_566477219673a9 21,705-706,766-769,774-777,782-785,847-850,953-960,1111-1123,1145-1148,1170-1173,1397-1399
+  s_0f515b2c8d0e74::t_0d8f07fa662f9e 83,1327-1390
+  s_0f515b2c8d0e74::t_2569b6a6545f76 4-6,14-19,54-82
+  s_0f515b2c8d0e74::t_b8f78bd2821c93 1395-1396,1599-1760
+  s_0f515b2c8d0e74::t_5b891043b01e61 532-704,707-765,770-773,778-781,786-846,851-952,961-1110,1124-1144,1149-1169,1174-1225
+  s_0f515b2c8d0e74::t_4002bdec6219c1 84
+src-tauri/migrations/0069_life_os_recommendations_audit.sql
+  s_0f515b2c8d0e74::t_b9996712be0b20 1-32
+src-tauri/src/lib.rs
+  s_0f515b2c8d0e74::t_a770cbf7646379 258-264
+src/components/weekly/LifeOsAdvisorPanel.tsx
+  s_0f515b2c8d0e74::t_e448326201b8a3 1-46,48-76,90-214
+  s_0f515b2c8d0e74::t_eb03d4baebbebf 47,77-89
+  s_0f515b2c8d0e74::t_2bb0923a8be11c 215-221
+src-tauri/src/models/life_os.rs
+  s_0f515b2c8d0e74::t_315c2857f59592 67-110,218-322
+  s_d7b8e7635a34a2::t_d936014b396aef 323
+src/components/WeeklyView.tsx
+  s_0f515b2c8d0e74::t_c81c8c276fbf83 19,147-151
+src/lib/query/lifeOs.ts
+  s_0f515b2c8d0e74::t_7385c9b55de40f 4,7-8,10,25-27,141-168,177-215
+  s_0f515b2c8d0e74::t_dc147a6c1de45f 216-217
+src/components/WeeklyView.css
+  s_0f515b2c8d0e74::t_13b2dd40996f0c 644-658
+  s_0f515b2c8d0e74::t_c70385545469c8 623-643,659-699
+src/bindings.ts
+  s_0f515b2c8d0e74::t_6e1d4ea782fa39 374-392,844-848,1995-1999,2084-2090,2245-2287,2290-2317,2777-2784
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9a58404085c8d282f24789366dfc62102b0126e9",
+  "prompts": {},
+  "sessions": {
+    "s_0f515b2c8d0e74": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2ca3-1a8b-7ba0-ae88-e4a52b4a8534",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_d7b8e7635a34a2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2d7e-e235-70e2-b0f1-9b5f10332bc5",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
