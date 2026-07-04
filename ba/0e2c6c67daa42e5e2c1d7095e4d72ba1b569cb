@@ -1,0 +1,41 @@
+docs/areas/mcp-server-conventions.md
+  s_35bfb7f5ae2837::t_12c2d3e5d71e73 65-70
+docs/areas/bookkeeping-cfo-contract.md
+  s_35bfb7f5ae2837::t_723ed26f926392 25-31,109
+src-tauri/src/mcp/mod.rs
+  s_35bfb7f5ae2837::t_c297fae314d9a9 1055
+  s_35bfb7f5ae2837::t_bc36f5e837dbd5 949-952,957
+  s_35bfb7f5ae2837::t_a5aae7b8f18dbb 935
+  s_35bfb7f5ae2837::t_f182a4ec24bd4f 1024
+  s_35bfb7f5ae2837::t_0b3d79779d436b 2211-2253
+  s_35bfb7f5ae2837::t_0013ba686687bd 254-255
+  s_35bfb7f5ae2837::t_75a631caa4b4d6 990
+  s_35bfb7f5ae2837::t_370876948d4860 2180-2182
+  s_35bfb7f5ae2837::t_8e448456801a4c 2148-2171
+  s_35bfb7f5ae2837::t_80f9ddaea7564e 2107-2108,2110,2115
+  s_35bfb7f5ae2837::t_a252baddd75ac6 447,451,453-456
+  s_35bfb7f5ae2837::t_ff8309b64b4f2c 2021,2025-2026,2035,2037,2052-2084
+  s_35bfb7f5ae2837::t_b2121953623f8c 923
+  s_35bfb7f5ae2837::t_69a1f9e2c47def 249-250,256,258-261
+  s_35bfb7f5ae2837::t_ae1c9de3cc0b9f 1068
+  s_35bfb7f5ae2837::t_91948a3943d8cf 1013
+  s_35bfb7f5ae2837::t_3e82c0b08e5a3f 977
+docs/decisions.md
+  s_35bfb7f5ae2837::t_e246707f79d40c 645
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ba0e2c6c67daa42e5e2c1d7095e4d72ba1b569cb",
+  "prompts": {},
+  "sessions": {
+    "s_35bfb7f5ae2837": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02f5ddb0-6c9e-4184-8565-1148f4217819",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
