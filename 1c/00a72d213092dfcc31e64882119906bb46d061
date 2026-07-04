@@ -1,0 +1,20 @@
+src/components/okr/GuardrailPanel.tsx
+  s_0f515b2c8d0e74::t_34cdf5b66f5b8b 34,105-109,150-156
+  s_0f515b2c8d0e74::t_407a9bce89122f 157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1c00a72d213092dfcc31e64882119906bb46d061",
+  "prompts": {},
+  "sessions": {
+    "s_0f515b2c8d0e74": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2ca3-1a8b-7ba0-ae88-e4a52b4a8534",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
