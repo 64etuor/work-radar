@@ -1,0 +1,117 @@
+src/components/okr/HorizonShelf.tsx
+  s_0f515b2c8d0e74::t_bdcb89f5b206ae 1-116
+src-tauri/migrations/0067_life_os_horizons_guardrails.sql
+  s_0f515b2c8d0e74::t_007e745eb998fa 1-39
+src/components/MissionView.tsx
+  s_0f515b2c8d0e74::t_beb8747c553fd9 8-9,22,25,28-29,52-54,60-65,123-129,133-141,146-154,168-169,210-212
+  s_0f515b2c8d0e74::t_acdf3ecc5d8168 213
+src/components/okr/ObjectiveCard.tsx
+  s_0f515b2c8d0e74::t_95efee27dd58aa 110
+  s_0f515b2c8d0e74::t_45d2010731afb4 7,34-35,44-45,102-109
+  s_0f515b2c8d0e74::t_13f72436331351 111
+src/components/MissionView.css
+  s_0f515b2c8d0e74::t_4531a37106bc11 116,129-141,156-204
+  s_0f515b2c8d0e74::t_817eb8b2d1a261 534-537
+  s_1110d2921f7173::t_498d1e0587c1d1 205
+src/lib/query/index.ts
+  s_0f515b2c8d0e74::t_4db136871583f9 12
+src/components/okr/ObjectiveDialog.tsx
+  s_0f515b2c8d0e74::t_f2a33e7ae9f42b 86,92,283-292,294-295
+  s_0f515b2c8d0e74::t_66649ebaf91201 271-282
+  s_0f515b2c8d0e74::t_4a16c463d42e33 4,10-16,26-27,37-38,51-52,67-68,77-78,90-91,95-99,106-123,139-150,212-229,261-270,293
+src/components/today/DominoPanel.tsx
+  s_0f515b2c8d0e74::t_2da01c4ed2bd23 1-46
+  s_0f515b2c8d0e74::t_820d4f1af7d6f0 47-48
+src-tauri/src/lib.rs
+  s_0f515b2c8d0e74::t_35ecf24fa7dfef 243-252,256-257
+  s_0f515b2c8d0e74::t_85ab6d7af66748 253-255
+src/lib/lifeOs.ts
+  s_0f515b2c8d0e74::t_211297b38b9dbe 1-31
+  s_0f515b2c8d0e74::t_6386365fc3d15a 32-33
+src/components/WeeklyView.tsx
+  s_0f515b2c8d0e74::t_fcda9b6dc41940 21,145
+  s_cd2a573e25a5aa::t_8c3d396483149d 146
+src/lib/lifeOs.test.ts
+  s_0f515b2c8d0e74::t_6b401c5d081277 1-83
+  s_0f515b2c8d0e74::t_7cebc8d23607e6 84-85
+src/lib/query/lifeOs.ts
+  s_0f515b2c8d0e74::t_4db136871583f9 1-156
+src-tauri/src/commands/sprint.rs
+  s_0f515b2c8d0e74::t_7649f14812f7b6 320
+  s_0f515b2c8d0e74::t_da2738b8d8e887 19-20,23-26,30-45,128-143,170-319,321-382,385-414,454-457,512-540
+  s_0f515b2c8d0e74::t_be0eed148ef6b5 546
+  s_0f515b2c8d0e74::t_53e8efe7886467 726-742,747-754,759-797,802-810
+  s_0f515b2c8d0e74::t_47a46e4f167e63 416-428,511
+  s_0f515b2c8d0e74::t_7673343a9c968d 811-818,823-826,831-837
+  s_0f515b2c8d0e74::t_7295233e2b20c1 12-13,383-384,458-464,743-746,755-758,798-801,819-822,827-830
+  s_1110d2921f7173::t_4dc1ab56fc4532 415
+src/components/okr/GuardrailPanel.tsx
+  s_0f515b2c8d0e74::t_bdcb89f5b206ae 1-145,147
+  s_0f515b2c8d0e74::t_05761573ebbe5b 146
+  s_0f515b2c8d0e74::t_7101db23cbf7cb 148-150
+src/components/SprintTimer.css
+  s_0f515b2c8d0e74::t_523b0af4e0bee7 242-257,347-349,392-395
+src/components/SprintTimer.tsx
+  s_0f515b2c8d0e74::t_523b0af4e0bee7 5,11,208,219,226,235-240,263-278,371,376-379,385-409,430
+src-tauri/src/models.rs
+  s_0f515b2c8d0e74::t_007e745eb998fa 11,31
+src-tauri/src/commands/life_os.rs
+  s_0f515b2c8d0e74::t_85ab6d7af66748 11-13,334-386,540-568,593,665-716
+  s_0f515b2c8d0e74::t_53e8efe7886467 589-592,594-664,717-788
+  s_0f515b2c8d0e74::t_5767d90e9e31ba 1-10,14-333,387-539,569-588
+  s_0f515b2c8d0e74::t_c1248563c51d4a 789-799
+src/components/WeeklyView.css
+  s_0f515b2c8d0e74::t_cb65a246bf2632 599-649
+src-tauri/src/commands/mod.rs
+  s_0f515b2c8d0e74::t_53e8efe7886467 28,59
+src-tauri/migrations/0068_life_os_focus_snapshots.sql
+  s_0f515b2c8d0e74::t_007e745eb998fa 1-68
+src-tauri/src/models/life_os.rs
+  s_0f515b2c8d0e74::t_007e745eb998fa 1-130,138-228
+  s_0f515b2c8d0e74::t_85ab6d7af66748 131-137
+src/components/TodayView.css
+  s_0f515b2c8d0e74::t_2da01c4ed2bd23 131-170
+src/components/TodayView.tsx
+  s_0f515b2c8d0e74::t_2da01c4ed2bd23 349
+  s_0f515b2c8d0e74::t_85f69ed8b9bee5 15
+src/lib/query/sprint.ts
+  s_0f515b2c8d0e74::t_838328cb43122b 62-64
+  s_0f515b2c8d0e74::t_4db136871583f9 3,13,47-49
+src/components/weekly/SystemDiagnosis.tsx
+  s_0f515b2c8d0e74::t_fcda9b6dc41940 1-64
+  s_0f515b2c8d0e74::t_7f2d26642ca175 65-70
+src/bindings.ts
+  s_0f515b2c8d0e74::t_ecd54601c0f77d 313,329-373,1853-1861,2065-2066,2209-2210,2223-2226,2234-2248,2316-2320,2341-2355,2774-2789,3099-3121,3133-3137,3380-3390,3440-3451,3481-3504,3705-3706
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "09beb99511592392a83f78dd916c797b6460bca9",
+  "prompts": {},
+  "sessions": {
+    "s_0f515b2c8d0e74": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2ca3-1a8b-7ba0-ae88-e4a52b4a8534",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_1110d2921f7173": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2be8-2a51-7152-b169-bcff3bbac46d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_cd2a573e25a5aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f224a-d399-78f0-8648-62f0a33491b8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
