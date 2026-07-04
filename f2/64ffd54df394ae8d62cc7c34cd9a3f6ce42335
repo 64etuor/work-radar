@@ -1,0 +1,24 @@
+src/components/bookkeeping/BookkeepingView.css
+  s_35bfb7f5ae2837::t_79398ed8cd26f4 40-41,43-47,59-63
+  s_35bfb7f5ae2837::t_cfbbbb92662c4a 77-78,80-86
+src/components/bookkeeping/cards/BookkeepingScopeControls.tsx
+  s_35bfb7f5ae2837::t_b9fc1201196a3b 69-70
+  s_35bfb7f5ae2837::t_e29e32ef0fb743 54-55
+  s_35bfb7f5ae2837::t_f8bc7f28796eb3 56-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f264ffd54df394ae8d62cc7c34cd9a3f6ce42335",
+  "prompts": {},
+  "sessions": {
+    "s_35bfb7f5ae2837": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02f5ddb0-6c9e-4184-8565-1148f4217819",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
