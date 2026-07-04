@@ -30,6 +30,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type MutableRefObject } from "react";
 
 import type { WorkSignal } from "@/bindings";
+import {
+  nearestScrollParent,
+  resyncCompositorAroundCommit,
+} from "@/components/today/compositorResync";
 import type { DragDelta } from "@/components/today/timelinePreview";
 import { applyTimelineCommitToCaches } from "@/lib/applyTimelineCommitToCaches";
 import { stage } from "@/lib/calendarSync";
@@ -341,7 +345,7 @@ export function useTimelineDnd(opts: Opts) {
     void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
   };
 
-  const onDragEnd = async (ev: DragEndEvent, activeAtStart?: DragData | null) => {
+  const dispatchDragEnd = async (ev: DragEndEvent, activeAtStart?: DragData | null) => {
     const a = resolveDragEndActiveData(
       activeAtStart,
       ev.active.data.current as DragData | undefined,
@@ -653,6 +657,15 @@ export function useTimelineDnd(opts: Opts) {
 
     // 인터랙션 #6 createBlank(빈 슬롯 직접 그리기): 후속 commit (PR 7 정련).
   };
+
+  // 공개 표면 = 커밋 전후 컴포지터 리싱크로 감싼 dispatch — 옵티미스틱 패치 페인트(동기)와
+  // picker/IPC 완료 후 재렌더 양쪽에서 stale-paint(리사이즈 핸들 오프셋)를 지운다.
+  // nudge 대상 스크롤러(.today-canvas-wrap)는 그리드에서 파생 — 별도 ref 배선 불요.
+  const onDragEnd = (ev: DragEndEvent, activeAtStart?: DragData | null): Promise<void> =>
+    resyncCompositorAroundCommit(
+      () => nearestScrollParent(gridElRef?.current),
+      dispatchDragEnd(ev, activeAtStart),
+    );
 
   return { onDragEnd };
 }

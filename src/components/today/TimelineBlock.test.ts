@@ -29,7 +29,8 @@ describe("timelineBlockPlacementStyle", () => {
       translate: { x: 40, y: 30 },
     });
 
-    expect(style.transform).toBe("translate3d(40px, 30px, 0)");
+    // 2D translate — translate3d는 WKWebView 강제 레이어 승격 → stale-paint 벡터라 금지.
+    expect(style.transform).toBe("translate(40px, 30px)");
   });
 
   it("turns off layout transition while resize preview owns height", () => {

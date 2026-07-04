@@ -53,6 +53,9 @@ export function timelineBlockPlacementStyle({
     opacity: dragging ? 0.4 : 1,
     transition: disableLayoutTransition ? "none" : undefined,
     willChange: disableLayoutTransition ? "auto" : undefined,
-    transform: translate ? `translate3d(${translate.x}px, ${translate.y}px, 0)` : undefined,
+    // 2D translate 고의 사용(translate3d 금지) — 3d는 WKWebView가 블록을 합성 레이어로 강제 승격,
+    // 이후 top/height 레이아웃 이동에서 stale-paint(페인트만 오프셋, 휠로 정상화)를 유발한다.
+    // will-change 회피(f7f0e4a)와 같은 계열의 레이어 승격 벡터 제거.
+    transform: translate ? `translate(${translate.x}px, ${translate.y}px)` : undefined,
   };
 }

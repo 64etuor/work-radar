@@ -1,5 +1,6 @@
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { scheduleCompositorResync } from "@/components/today/compositorResync";
 import { addDays, dayDiff } from "@/lib/timeAxis";
 import { DAY_PX } from "@/lib/timelineAxis";
 import { extendDates, includeDate } from "@/lib/timelineWindow";
@@ -83,14 +84,8 @@ export function useTimelineScroll({ today, gridElRef, dragActiveRef }: UseTimeli
     didInitialScrollRef.current = true;
     // WKWebView 콜드마운트 stale-paint 수정: pre-paint 프로그램 스크롤이 절대 위치 블록 레이어를
     // stale하게 페인트한다(좌표는 정확, 화면만 아래로 오프셋; 휠로 굴리면 정상화). post-paint(rAF)에서
-    // 실제 스크롤 델타(+1px→복귀)로 컴포지터를 리싱크. cleanup 미취소 = StrictMode가 nudge를 죽이지 않게.
-    requestAnimationFrame(() => {
-      if (!el.isConnected) return;
-      el.scrollTop = target + 1;
-      requestAnimationFrame(() => {
-        if (el.isConnected) el.scrollTop = target;
-      });
-    });
+    // 실제 스크롤 델타(±1px→복귀)로 컴포지터를 리싱크(compositorResync.ts — 배치 커밋과 공용).
+    scheduleCompositorResync(el);
   }, [visibleDates, today]);
 
   // prepend(또는 상단 드롭) 시 scrollTop 보정 — anchor 변화량(일수×1440px)만큼.
@@ -111,6 +106,13 @@ export function useTimelineScroll({ today, gridElRef, dragActiveRef }: UseTimeli
         requestAnimationFrame(() => grid.removeAttribute("data-anchor-shift"));
       });
     }
+    // 콜드마운트와 동일 계열의 pre-paint scrollTop 변이 — 블록 레이어 stale-paint를 남길 수 있어
+    // 같은 리싱크를 건다(상대 복원이라 진행 중인 사용자 momentum 스크롤과 충돌하지 않는다).
+    // skip 게이트: 과거 날짜 네비(includeDate prepend→anchor shift)에서는 이 effect *다음*의
+    // passive effect가 smooth 스크롤을 시작한다 — 즉시 scrollTop 대입은 그 애니메이션을 중단시키므로
+    // 프로그램 스크롤 인플라이트면 nudge를 포기한다(그 경로는 smooth 스크롤 자체가 실제 델타를 발화해
+    // 리싱크가 이미 일어난다). lazy-extend-up/상단 드롭 anchor-shift는 인플라이트가 없어 그대로 발화.
+    scheduleCompositorResync(el, () => programmaticScrollRef.current !== null);
   }, [anchorDate, gridElRef]);
 
   // 날짜 목록 갱신 반영 후 lazy-extend 가드 해제.
