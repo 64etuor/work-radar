@@ -37,11 +37,14 @@
   padding: 14px 22px 28px;
 }
 
+/* 헤더 한 줄 통합(사용자 피드백 2026-07-04): 타이틀 | 기준연월+내보내기 | 프로젝트 | 수동입력.
+   두 줄 분리(scope 줄 + 액션 줄) 폐지 — 좁아지면 컨트롤 묶음이 자연 줄바꿈(flex-wrap). */
 .bk-page-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 500px);
-  align-items: end;
-  gap: var(--wr-density-lg);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--wr-density-md) var(--wr-density-lg);
   border-bottom: 1px solid var(--bk-rule);
   padding-bottom: var(--wr-density-md);
 }
@@ -53,8 +56,11 @@
 }
 
 .bk-head-controls {
-  display: grid;
-  gap: var(--wr-density-sm);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--wr-density-md);
 }
 
 .bk-title {
@@ -68,10 +74,16 @@
 }
 
 .bk-scope-controls {
-  display: grid;
-  grid-template-columns: minmax(168px, 220px) minmax(0, 1fr);
-  align-items: end;
+  display: flex;
+  align-items: flex-end;
   gap: var(--wr-density-md);
+  min-width: 0;
+}
+
+/* 프로젝트 셀렉트 — 한 줄 헤더에서 고정폭(내용 따라 안 늘어나게). */
+.bk-scope-project {
+  width: 190px;
+  min-width: 150px;
 }
 
 .bk-export-actions {
@@ -770,9 +782,6 @@
     padding: 18px 14px 32px;
   }
 
-  .bk-page-head,
-  .bk-head-controls,
-  .bk-scope-controls,
   .bk-metrics,
   .bk-currency-row,
   .bk-report-grid,

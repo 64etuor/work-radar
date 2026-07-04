@@ -51,21 +51,23 @@ export function BookkeepingScopeControls({
         />
         {monthAside}
       </div>
-      <Field label="프로젝트" htmlFor={FIELD_IDS.projectScope}>
-        <Select value={selectedProjectId} onValueChange={onProjectChange}>
-          <SelectTrigger id={FIELD_IDS.projectScope}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_PROJECTS}>전체 프로젝트</SelectItem>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
+      <div className="bk-scope-project">
+        <Field label="프로젝트" htmlFor={FIELD_IDS.projectScope}>
+          <Select value={selectedProjectId} onValueChange={onProjectChange}>
+            <SelectTrigger id={FIELD_IDS.projectScope}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_PROJECTS}>전체 프로젝트</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
     </div>
   );
 }
