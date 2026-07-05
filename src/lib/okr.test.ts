@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { keyResultProgressRatio, objectiveProgressRatio, weekStartMonday } from "./okr";
+import {
+  keyResultProgressRatio,
+  objectiveMatchesForSignal,
+  objectiveProgressRatio,
+  objectivesMatchingSignal,
+  parseAreaTags,
+  signalMatchesObjective,
+  uncheckedKrCount,
+  weekStartMonday,
+} from "./okr";
 
 describe("keyResultProgressRatio", () => {
   it("derives metric progress from current / target", () => {
@@ -57,6 +66,91 @@ describe("keyResultProgressRatio", () => {
         },
       ]),
     ).toBe(0.625);
+  });
+});
+
+// okr.rs stats_for_objective SQL 매칭 규칙의 프런트 미러 — 규칙 변경 시 양쪽 동시 수정.
+describe("signalMatchesObjective", () => {
+  const objective = {
+    id: "o1",
+    title: "건강 루틴 정착",
+    status: "active" as const,
+    linkedAreaKeys: ["health"],
+    linkedProjectIds: ["p1"],
+  };
+
+  it("matches by primary area", () => {
+    expect(
+      signalMatchesObjective({ area: "health", areaTags: null, projectId: null }, objective),
+    ).toBe(true);
+  });
+
+  it("matches by area_tags JSON membership", () => {
+    expect(
+      signalMatchesObjective(
+        { area: null, areaTags: '["work","health"]', projectId: null },
+        objective,
+      ),
+    ).toBe(true);
+  });
+
+  it("matches by linked project id", () => {
+    expect(signalMatchesObjective({ area: null, areaTags: null, projectId: "p1" }, objective)).toBe(
+      true,
+    );
+  });
+
+  it("does not match unrelated signals or malformed tags", () => {
+    expect(
+      signalMatchesObjective({ area: "work", areaTags: "not-json", projectId: "p2" }, objective),
+    ).toBe(false);
+  });
+
+  it("objectiveMatchesForSignal reports the matching basis (area beats project)", () => {
+    expect(
+      objectiveMatchesForSignal({ area: "health", areaTags: null, projectId: "p1" }, [objective]),
+    ).toEqual([{ objective, via: "area" }]);
+    expect(
+      objectiveMatchesForSignal({ area: "work", areaTags: null, projectId: "p1" }, [objective]),
+    ).toEqual([{ objective, via: "project" }]);
+  });
+
+  it("objectivesMatchingSignal excludes non-active objectives", () => {
+    const closed = { ...objective, id: "o2", status: "closed" as const };
+    expect(
+      objectivesMatchingSignal({ area: "health", areaTags: null, projectId: null }, [
+        objective,
+        closed,
+      ]).map((o) => o.id),
+    ).toEqual(["o1"]);
+  });
+});
+
+describe("parseAreaTags", () => {
+  it("parses valid arrays and rejects junk", () => {
+    expect(parseAreaTags('["a","b"]')).toEqual(["a", "b"]);
+    expect(parseAreaTags(null)).toEqual([]);
+    expect(parseAreaTags("oops")).toEqual([]);
+    expect(parseAreaTags('{"a":1}')).toEqual([]);
+  });
+});
+
+describe("uncheckedKrCount", () => {
+  const objectives = [
+    { status: "active" as const, keyResults: [{ id: "kr1" }, { id: "kr2" }] },
+    { status: "closed" as const, keyResults: [{ id: "kr3" }] },
+  ];
+
+  it("counts only active-objective KRs without a check-in this week", () => {
+    expect(
+      uncheckedKrCount(objectives, [{ keyResultId: "kr1", weekStart: "2026-07-06" }], "2026-07-06"),
+    ).toBe(1);
+  });
+
+  it("ignores check-ins from other weeks", () => {
+    expect(
+      uncheckedKrCount(objectives, [{ keyResultId: "kr1", weekStart: "2026-06-29" }], "2026-07-06"),
+    ).toBe(2);
   });
 });
 

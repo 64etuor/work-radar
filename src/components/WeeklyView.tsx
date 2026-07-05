@@ -23,7 +23,7 @@ import { SystemDiagnosis } from "@/components/weekly/SystemDiagnosis";
 import { WeekNavigator } from "@/components/weekly/WeekNavigator";
 import { WeekScrubber } from "@/components/weekly/WeekScrubber";
 import { bucketRoutineDoneByOffset } from "@/lib/lifeWheelRadar";
-import { weekStartMonday } from "@/lib/okr";
+import { uncheckedKrCount, weekStartMonday } from "@/lib/okr";
 import {
   useCompleted,
   useLifeWheelTags,
@@ -55,18 +55,11 @@ export function WeeklyView() {
   const okrQuarter = currentQuarterKey();
   const okrObjectives = useObjectives(okrQuarter);
   const okrCheckIns = useOkrCheckIns(okrQuarter);
-  const okrWeekStart = weekStartMonday();
-  const okrCheckedThisWeek = new Set<string>();
-  for (const checkIn of okrCheckIns.data ?? []) {
-    if (checkIn.weekStart === okrWeekStart) okrCheckedThisWeek.add(checkIn.keyResultId);
-  }
-  let uncheckedKrCount = 0;
-  for (const objective of okrObjectives.data ?? []) {
-    if (objective.status !== "active") continue;
-    for (const kr of objective.keyResults) {
-      if (!okrCheckedThisWeek.has(kr.id)) uncheckedKrCount += 1;
-    }
-  }
+  const pendingCheckIns = uncheckedKrCount(
+    okrObjectives.data ?? [],
+    okrCheckIns.data ?? [],
+    weekStartMonday(),
+  );
 
   // 주별 버킷: offset → 그 주에 완료된 신호[]
   const byOffset = bucketByWeekOffset(
@@ -133,11 +126,11 @@ export function WeeklyView() {
       />
 
       <div className="wk-scroll">
-        {uncheckedKrCount > 0 && (
+        {pendingCheckIns > 0 && (
           <button type="button" className="wk-okr-prompt" onClick={() => goTo("mission")}>
             <span className="wk-okr-prompt-main typo-body-strong">
               <Target className="size-4" />
-              <span>OKR 체크인 {uncheckedKrCount}개 남음</span>
+              <span>OKR 체크인 {pendingCheckIns}개 남음</span>
             </span>
             <span className="wk-okr-prompt-link typo-mono-label">Mission으로</span>
           </button>

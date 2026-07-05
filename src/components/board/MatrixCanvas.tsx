@@ -19,6 +19,7 @@ import {
   rectContainsPoint,
 } from "@/components/board/matrixGeometry";
 import { InboxColumn } from "@/components/inbox/InboxColumn";
+import { objectiveMatchesForSignal, type ObjectiveMatchSource, okrChipTooltip } from "@/lib/okr";
 
 const zoneOf = (s: WorkSignal): ZoneKey => quadrantToZone(s.quadrant);
 
@@ -61,6 +62,8 @@ type Props = {
   captureInputRef?: React.RefObject<HTMLInputElement | null>;
   /** create_signal 진행 중 — 붙이기 버튼 disable. */
   captureDisabled?: boolean;
+  /** 이번 분기 활성 Objective — 카드 ◎ 매칭 배지(표시 전용 힌트, INVARIANT #1). */
+  objectives?: ObjectiveMatchSource[];
 };
 
 /**
@@ -90,6 +93,7 @@ function useMatrixCanvasView({
   onCapture,
   captureInputRef,
   captureDisabled,
+  objectives,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -388,6 +392,10 @@ function useMatrixCanvasView({
           s.quadrant === "unclassified" ? suggestedQuadrantBadge(s.suggestedQuadrant) : "";
         // 제안 영역(Wheel of Life) 힌트 배지 — 확정 area 없을 때만(확정되면 chip-area로 표시). 힌트라 자동 확정 0(INVARIANT #1).
         const sugA = !s.area && s.suggestedArea ? `${areaLabel(s.suggestedArea)}?` : "";
+        // 이번 분기 활성 Objective 집계 매칭 — 표시 전용 힌트(집계 정본은 okr.rs SQL, 근거는 툴팁에).
+        const matchedObjectives = objectives?.length
+          ? objectiveMatchesForSignal(s, objectives)
+          : [];
         return (
           <div
             key={s.id}
@@ -427,6 +435,11 @@ function useMatrixCanvasView({
             {sugA && (
               <span className="chip chip-area-sug" title="AI 제안 영역(힌트 — 자동 분류 아님)">
                 {sugA}
+              </span>
+            )}
+            {matchedObjectives.length > 0 && (
+              <span className="chip chip-okr" title={okrChipTooltip(matchedObjectives)}>
+                ◎ {matchedObjectives.length > 1 ? `OKR ×${matchedObjectives.length}` : "OKR"}
               </span>
             )}
             {s.id === editingId ? (

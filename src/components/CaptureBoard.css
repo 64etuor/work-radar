@@ -70,6 +70,43 @@
   font: 400 11px var(--font-mono);
   color: var(--color-wr-subtle);
 }
+.cb .cb-head-right {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+}
+/* OKR 미니 스트립 — 분기 진행률 + 남은 체크인. 헤더 mark와 같은 모노 문법, 조용한 pill. */
+.cb .cb-okr-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  background: transparent;
+  font: 600 10.5px var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--color-wr-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--wr-motion-base),
+    color var(--wr-motion-base);
+}
+.cb .cb-okr-strip:hover {
+  border-color: var(--color-wr-green);
+  color: var(--color-wr-fg);
+}
+.cb .cb-okr-icon {
+  color: var(--color-wr-green);
+}
+.cb .cb-okr-pct {
+  color: var(--color-wr-fg);
+}
+.cb .cb-okr-pending {
+  padding-left: 6px;
+  border-left: 1px solid var(--color-wr-border-light);
+  color: var(--color-wr-accent);
+}
 .cb .cb-head .hint b {
   color: var(--color-wr-fg);
   font-weight: 700;
@@ -445,6 +482,13 @@
   background: transparent;
   color: var(--color-wr-subtle);
   border: 1px dashed var(--color-wr-border);
+}
+/* OKR 연결 배지 — 이 카드가 이번 분기 활성 Objective에 집계됨(표시 전용, area/project 매칭 미러).
+   AI 힌트(dashed)와 달리 사실 연결이라 solid 보더 + 브랜드 그린. */
+.cb .chip-okr {
+  background: transparent;
+  color: var(--color-wr-green);
+  border: 1px solid var(--color-wr-pale-green);
 }
 /* Phase 9 enrich — AI 제안 사분면(suggestedQuadrant) 힌트 배지(자동 분류 아님). */
 .cb .chip-q-sug {

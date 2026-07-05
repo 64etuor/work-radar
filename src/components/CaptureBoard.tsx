@@ -18,7 +18,9 @@ import { normalizeTitleEdit } from "@/components/board/matrixCanvasUtils";
 import { type ProjectPickerState } from "@/components/board/ProjectPickerModal";
 import { type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { sortSignalsForBoard } from "@/components/board/signalOrdering";
+import { useBoardKeyboard } from "@/components/board/useBoardKeyboard";
 import { useSignalPop } from "@/components/board/useSignalPop";
+import { currentQuarterKey } from "@/lib/lifeOs";
 import {
   localToday,
   localWeekday,
@@ -38,6 +40,8 @@ import {
   useFlushPromotions,
   useLifeWheelTags,
   useMoveRoutineGoogleSync,
+  useObjectives,
+  useOkrCheckIns,
   useProjects,
   usePromoteToday,
   usePromoteToNotion,
@@ -81,6 +85,10 @@ function useCaptureBoardView() {
   const weekday = localWeekday();
 
   const signalsQ = useSignals();
+  // 이번 분기 Objective/체크인 — 카드 ◎ 배지 + 헤더 OKR 스트립(표시 전용, 캡처 흐름 비관여).
+  const okrQuarter = currentQuarterKey();
+  const objectivesQ = useObjectives(okrQuarter);
+  const okrCheckInsQ = useOkrCheckIns(okrQuarter);
   const todayQ = useToday(today);
   const routinesQ = useTodayRoutines(today, weekday);
   const projectsQ = useProjects();
@@ -442,60 +450,28 @@ function useCaptureBoardView() {
     });
   };
 
-  // ── 키보드 (1/2/3/4 분류, 0/u 미분류, T Today, D/E 완료/보관) ──
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMenu(null);
-        return; // App 셸의 Esc→hide 핸들러로 위임.
-      }
-      const ae = document.activeElement;
-      if (
-        ae instanceof HTMLInputElement ||
-        ae instanceof HTMLTextAreaElement ||
-        (ae instanceof HTMLElement && ae.isContentEditable)
-      ) {
-        return;
-      }
-      if (!selectedId) return;
-      const zoneMap: Record<string, ZoneKey> = {
-        "1": "q1",
-        "2": "q2",
-        "3": "q3",
-        "4": "q4",
-        "0": "unclassified",
-        u: "unclassified",
-      };
-      const z = zoneMap[e.key];
-      if (z) {
-        handleClassify(selectedId, z);
-        e.preventDefault();
-        return;
-      }
-      const k = e.key.toLowerCase();
-      if (k === "t") {
-        handlePromoteToday(selectedId);
-        e.preventDefault();
-      } else if (k === "s") {
-        snoozeSignal.mutate({ id: selectedId, until: tomorrow() });
-        setSelectedId(null);
-        pushSuccess("내일로 미룸");
-        e.preventDefault();
-      } else if (k === "d") {
-        setStatus.mutate({ id: selectedId, status: "done" });
-        setSelectedId(null);
-        pushSuccess("완료");
-        e.preventDefault();
-      } else if (k === "e") {
-        setStatus.mutate({ id: selectedId, status: "archived" });
-        setSelectedId(null);
-        pushSuccess("보관");
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, handleClassify, handlePromoteToday, setStatus, snoozeSignal, pushSuccess]);
+  // ── 키보드 (1/2/3/4 분류, 0/u 미분류, T Today, S 미루기, D/E 완료/보관) — 훅 경계로 추출 ──
+  useBoardKeyboard({
+    selectedId,
+    onEscape: () => setMenu(null),
+    onClassify: handleClassify,
+    onPromoteToday: handlePromoteToday,
+    onSnooze: (id) => {
+      snoozeSignal.mutate({ id, until: tomorrow() });
+      setSelectedId(null);
+      pushSuccess("내일로 미룸");
+    },
+    onDone: (id) => {
+      setStatus.mutate({ id, status: "done" });
+      setSelectedId(null);
+      pushSuccess("완료");
+    },
+    onArchive: (id) => {
+      setStatus.mutate({ id, status: "archived" });
+      setSelectedId(null);
+      pushSuccess("보관");
+    },
+  });
 
   // 네트워크 복구 시 오프라인 큐(draft) flush (INVARIANT #5: bounded, 무한 poll 아님).
   useEffect(() => {
@@ -561,7 +537,11 @@ function useCaptureBoardView() {
 
   return (
     <div className="cb">
-      <CaptureBoardHeader />
+      <CaptureBoardHeader
+        okrQuarter={okrQuarter}
+        okrObjectives={objectivesQ.data ?? []}
+        okrCheckIns={okrCheckInsQ.data ?? []}
+      />
 
       {loadError && (
         <div className="empty" style={{ color: "var(--color-q1)", padding: "4px 22px" }}>
@@ -598,6 +578,7 @@ function useCaptureBoardView() {
           onCapture={handleCapture}
           captureInputRef={captureInputRef}
           captureDisabled={createSignal.isPending}
+          objectives={objectivesQ.data ?? []}
         />
 
         <ExecutionRail
