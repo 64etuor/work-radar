@@ -1,0 +1,23 @@
+src/components/MissionView.css
+  s_0f515b2c8d0e74::t_ff7776220e5475 588-600
+  s_0f515b2c8d0e74::t_9a15f4949091d5 207-212,223-243,458-462
+src/components/MissionView.layout.test.ts
+  s_0f515b2c8d0e74::t_a8026843a319bc 32-54
+  s_0f515b2c8d0e74::t_20a8dc344b83f2 30-31,55-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e962c0c4b91bd5bcb5cc7b57a83d0c3171a8854a",
+  "prompts": {},
+  "sessions": {
+    "s_0f515b2c8d0e74": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2ca3-1a8b-7ba0-ae88-e4a52b4a8534",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
