@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { keyResultProgressRatio } from "@/lib/okr";
+import { keyResultProgressRatio, quarterDateRange } from "@/lib/okr";
 import { useDeleteKeyResult, useUpdateKeyResult } from "@/lib/query";
 
 import { ArmedDeleteButton } from "./ArmedDeleteButton";
 import { DraftInput } from "./DraftInput";
 import { CONFIDENCE_LABELS, parseNullableNumber } from "./okrControls";
+import { RoutineLinkControl } from "./RoutineLinkControl";
 
 /**
  * KR 인라인 편집 행 — 모든 필드는 blur/Enter 자동 커밋(DraftInput). 별도 저장 버튼 없음.
@@ -19,17 +20,20 @@ import { CONFIDENCE_LABELS, parseNullableNumber } from "./okrControls";
  */
 export function KeyResultRow({
   kr,
+  quarter,
   latestCheckIn,
   readOnly,
 }: {
   kr: KeyResult;
+  quarter: string;
   latestCheckIn: OkrCheckIn | null;
   readOnly: boolean;
 }) {
   const updateKeyResult = useUpdateKeyResult();
   const deleteKeyResult = useDeleteKeyResult();
-  const progress = keyResultProgressRatio(kr);
+  const progress = kr.routineId ? (kr.progress ?? 0) : keyResultProgressRatio(kr);
   const pending = updateKeyResult.isPending || deleteKeyResult.isPending;
+  const quarterRange = quarterDateRange(quarter);
 
   // 부분 patch — 현재 서버값 위에 바뀐 필드만 합성해 기존 전체-업데이트 커맨드에 태운다.
   const patch = (partial: Partial<Parameters<typeof updateKeyResult.mutateAsync>[0]>) =>
@@ -62,33 +66,55 @@ export function KeyResultRow({
       </div>
 
       {kr.kind === "metric" ? (
-        <div className="mission-kr-metric" aria-label="수치형 KR 값">
-          <DraftInput
-            value={numberDraft(kr.currentValue)}
-            disabled={readOnly}
-            onCommit={(next) => patch({ currentValue: parseNullableNumber(next) })}
-            inputMode="decimal"
-            aria-label="현재값"
-          />
-          <span className="mission-muted typo-label-sm">/</span>
-          <DraftInput
-            value={numberDraft(kr.targetValue)}
-            disabled={readOnly}
-            onCommit={(next) => patch({ targetValue: parseNullableNumber(next) })}
-            inputMode="decimal"
-            aria-label="목표값"
-          />
-          <DraftInput
-            value={kr.unit ?? ""}
-            disabled={readOnly}
-            onCommit={(next) => patch({ unit: next.trim() || null })}
-            aria-label="단위"
-          />
-        </div>
+        kr.routineId ? (
+          // 루틴 연결 KR — 값은 루틴 체크에서 쿼리타임 파생(수동 입력 없음).
+          <div
+            className="mission-kr-metric mission-kr-auto typo-label-sm"
+            aria-label="루틴 자동 집계"
+            title={
+              kr.routine
+                ? `루틴 '${kr.routine.title}' — 분기 완료 ${kr.routine.completed}회 / 예정 ${kr.routine.expected}회`
+                : "연결된 루틴을 찾을 수 없습니다 (해제하면 수동 입력으로 복귀)"
+            }
+          >
+            자동 {kr.currentValue ?? 0} / {kr.targetValue ?? "-"} {kr.unit ?? ""}
+          </div>
+        ) : (
+          <div className="mission-kr-metric" aria-label="수치형 KR 값">
+            <DraftInput
+              value={numberDraft(kr.currentValue)}
+              disabled={readOnly}
+              onCommit={(next) => patch({ currentValue: parseNullableNumber(next) })}
+              inputMode="decimal"
+              aria-label="현재값"
+            />
+            <span className="mission-muted typo-label-sm">/</span>
+            <DraftInput
+              value={numberDraft(kr.targetValue)}
+              disabled={readOnly}
+              onCommit={(next) => patch({ targetValue: parseNullableNumber(next) })}
+              inputMode="decimal"
+              aria-label="목표값"
+            />
+            <DraftInput
+              value={kr.unit ?? ""}
+              disabled={readOnly}
+              onCommit={(next) => patch({ unit: next.trim() || null })}
+              aria-label="단위"
+            />
+          </div>
+        )
       ) : (
         <MilestonePopover kr={kr} readOnly={readOnly} onPatch={patch} pending={pending} />
       )}
 
+      {kr.kind === "metric" && !readOnly && quarterRange && (
+        <RoutineLinkControl
+          kr={kr}
+          quarterStart={quarterRange.start}
+          quarterEnd={quarterRange.end}
+        />
+      )}
       <ConfidenceBadge checkIn={latestCheckIn} />
       {!readOnly && (
         <ArmedDeleteButton

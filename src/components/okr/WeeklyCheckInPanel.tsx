@@ -30,11 +30,12 @@ export function WeeklyCheckInPanel({
       .filter((checkIn) => checkIn.weekStart === weekStart)
       .map((checkIn) => checkIn.keyResultId),
   );
+  // 루틴 연결 KR은 제외 — 진행이 루틴 체크에서 자동 파생되므로 여기서 할 입력이 없다.
   const pending = objectives
     .filter((objective) => objective.status === "active")
     .flatMap((objective) =>
       objective.keyResults
-        .filter((kr) => !checkedThisWeek.has(kr.id))
+        .filter((kr) => kr.routineId == null && !checkedThisWeek.has(kr.id))
         .map((kr) => ({ objectiveTitle: objective.title, kr })),
     );
 

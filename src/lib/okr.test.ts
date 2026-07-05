@@ -137,14 +137,33 @@ describe("parseAreaTags", () => {
 
 describe("uncheckedKrCount", () => {
   const objectives = [
-    { status: "active" as const, keyResults: [{ id: "kr1" }, { id: "kr2" }] },
-    { status: "closed" as const, keyResults: [{ id: "kr3" }] },
+    {
+      status: "active" as const,
+      keyResults: [
+        { id: "kr1", routineId: null },
+        { id: "kr2", routineId: null },
+      ],
+    },
+    { status: "closed" as const, keyResults: [{ id: "kr3", routineId: null }] },
   ];
 
   it("counts only active-objective KRs without a check-in this week", () => {
     expect(
       uncheckedKrCount(objectives, [{ keyResultId: "kr1", weekStart: "2026-07-06" }], "2026-07-06"),
     ).toBe(1);
+  });
+
+  it("excludes routine-linked KRs (progress auto-derives from routine checks)", () => {
+    const withRoutine = [
+      {
+        status: "active" as const,
+        keyResults: [
+          { id: "kr1", routineId: "routine-1" },
+          { id: "kr2", routineId: null },
+        ],
+      },
+    ];
+    expect(uncheckedKrCount(withRoutine, [], "2026-07-06")).toBe(1);
   });
 
   it("ignores check-ins from other weeks", () => {

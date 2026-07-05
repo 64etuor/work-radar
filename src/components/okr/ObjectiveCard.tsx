@@ -129,6 +129,7 @@ export function ObjectiveCard({
             // draft 동기화는 DraftInput(focus 동안만 로컬)이 담당.
             key={kr.id}
             kr={kr}
+            quarter={objective.quarter}
             latestCheckIn={latestCheckInFor(kr.id, checkIns)}
             readOnly={readOnly}
           />

@@ -108,9 +108,15 @@ export function objectivesMatchingSignal<T extends ObjectiveMatchSource>(
   return objectiveMatchesForSignal(signal, objectives).map((match) => match.objective);
 }
 
-/** 이번 주(weekStart 기준) 아직 체크인 안 된 활성 Objective KR 수 — Weekly/보드 넛지 공용. */
+/**
+ * 이번 주(weekStart 기준) 아직 체크인 안 된 활성 Objective KR 수 — Weekly/보드 넛지 공용.
+ * 루틴 연결 KR은 제외한다(진행이 루틴 체크에서 자동 파생 — 체크인 입력 대상이 아님).
+ */
 export function uncheckedKrCount(
-  objectives: { status: Objective["status"]; keyResults: Pick<KeyResult, "id">[] }[],
+  objectives: {
+    status: Objective["status"];
+    keyResults: Pick<KeyResult, "id" | "routineId">[];
+  }[],
   checkIns: Pick<OkrCheckIn, "keyResultId" | "weekStart">[],
   weekStart: string,
 ): number {
@@ -122,10 +128,21 @@ export function uncheckedKrCount(
   for (const objective of objectives) {
     if (objective.status !== "active") continue;
     for (const kr of objective.keyResults) {
-      if (!checked.has(kr.id)) count += 1;
+      if (kr.routineId == null && !checked.has(kr.id)) count += 1;
     }
   }
   return count;
+}
+
+/** 'YYYY-Qn' → {start,end}(YYYY-MM-DD, inclusive). 형식 밖이면 null. okr.rs quarter_window 미러. */
+export function quarterDateRange(quarter: string): { start: string; end: string } | null {
+  const match = quarter.match(/^(\d{4})-Q([1-4])$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const q = Number(match[2]);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { start: fmt(new Date(year, (q - 1) * 3, 1)), end: fmt(new Date(year, q * 3, 0)) };
 }
 
 export function weekStartMonday(date = new Date()): string {

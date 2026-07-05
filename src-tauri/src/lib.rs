@@ -165,6 +165,7 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::create_key_result,
         commands::update_key_result,
         commands::delete_key_result,
+        commands::set_key_result_routine,
         commands::upsert_check_in,
         commands::list_check_ins,
         commands::objective_signal_stats,

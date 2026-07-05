@@ -23,6 +23,16 @@ function invalidateOkr(qc: QueryClient) {
   return qc.invalidateQueries({ queryKey: okrKeys.all });
 }
 
+/** KR ↔ 루틴 연결/해제 — 연결하면 진행이 루틴 완료에서 쿼리타임 파생(수동 입력 대체). */
+export function useSetKeyResultRoutine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, routineId }: { id: string; routineId: string | null }) =>
+      unwrap(commands.setKeyResultRoutine(id, routineId)),
+    onSuccess: () => void invalidateOkr(qc),
+  });
+}
+
 export function useMission() {
   return useQuery({
     queryKey: okrKeys.mission,

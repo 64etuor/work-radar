@@ -421,11 +421,72 @@
 
 .mission-kr-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.4fr) minmax(260px, auto) minmax(112px, auto) auto;
+  /* [제목+바 | 값(수동/자동) | 루틴 링크 | 자신감 | 삭제] */
+  grid-template-columns: minmax(190px, 1.4fr) minmax(220px, auto) auto minmax(112px, auto) auto;
   gap: 10px;
   align-items: center;
   padding: 10px 0;
   border-top: 1px solid var(--color-wr-border-light);
+}
+
+/* 루틴 연결 KR — 값 자동 파생 표시(입력 없음). */
+.mission-kr-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-wr-green);
+  white-space: nowrap;
+}
+
+.mission-kr-routine-btn {
+  justify-self: start;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mission-routine-popover {
+  display: grid;
+  gap: 12px;
+  width: 300px;
+}
+
+.mission-routine-list {
+  display: grid;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.mission-routine-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-wr-fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mission-routine-item:hover {
+  background: var(--color-wr-hover);
+}
+
+.mission-routine-new {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--color-wr-border-light);
+  padding-top: 10px;
+}
+
+.mission-routine-days {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .mission-kr-main {

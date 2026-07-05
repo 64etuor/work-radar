@@ -149,6 +149,11 @@ export const commands = {
 	createKeyResult: (input: CreateKeyResultInput) => typedError<KeyResult, AppError>(__TAURI_INVOKE("create_key_result", { input })),
 	updateKeyResult: (input: UpdateKeyResultInput) => typedError<KeyResult, AppError>(__TAURI_INVOKE("update_key_result", { input })),
 	deleteKeyResult: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_key_result", { id })),
+	/**
+	 *  KR ↔ 루틴 연결/해제(routine_id=None). 연결하면 진행이 분기 창의 루틴 완료에서 쿼리타임
+	 *  파생된다(수동 현재값 입력 대체). 수치형 KR만 — 마일스톤형은 체크리스트가 이미 입력 표면.
+	 */
+	setKeyResultRoutine: (id: string, routineId: string | null) => typedError<KeyResult, AppError>(__TAURI_INVOKE("set_key_result_routine", { id, routineId })),
 	upsertCheckIn: (keyResultId: string, weekStart: string, confidence: OkrConfidence, note: string | null) => typedError<OkrCheckIn, AppError>(__TAURI_INVOKE("upsert_check_in", { keyResultId, weekStart, confidence, note })),
 	listCheckIns: (quarter: string) => typedError<OkrCheckIn[], AppError>(__TAURI_INVOKE("list_check_ins", { quarter })),
 	objectiveSignalStats: (quarter: string) => typedError<ObjectiveSignalStats[], AppError>(__TAURI_INVOKE("objective_signal_stats", { quarter })),
@@ -2241,6 +2246,10 @@ export type KeyResult = {
 	milestones: OkrMilestone[],
 	progress: number | null,
 	sortRank: number,
+	/**  연결된 루틴(없으면 None). 연결되면 진행이 루틴 완료에서 쿼리타임 파생된다. */
+	routineId: string | null,
+	/**  루틴 파생 진행(분기 창 기준). routine_id 있고 루틴이 살아있을 때만 Some. */
+	routine: KrRoutineProgress | null,
 	createdAt: string,
 	updatedAt: string,
 };
@@ -2255,6 +2264,16 @@ export type KeywordFilter = {
 
 /**  개인/업무 힌트. 입력 맨앞 토큰 마커 > 세그먼트 토글 > 기본 업무. */
 export type Kind = "personal" | "work";
+
+/**
+ *  루틴 연결 KR의 파생 진행 — 분기 창(∩ 오늘까지 ∩ 루틴 활성 구간) 기준.
+ *  completed=완료 체크 수, expected=스케줄상 due 발생 수(%형 KR의 분모).
+ */
+export type KrRoutineProgress = {
+	title: string,
+	completed: number,
+	expected: number,
+};
 
 export type LifeOsAuditEvent = {
 	id: string,

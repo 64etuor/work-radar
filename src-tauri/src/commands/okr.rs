@@ -38,6 +38,7 @@ struct KeyResultRow {
     unit: Option<String>,
     milestones: Option<String>,
     sort_rank: i32,
+    routine_id: Option<String>,
     created_at: String,
     updated_at: String,
 }
@@ -150,6 +151,8 @@ fn key_result_from_row(row: KeyResultRow) -> Result<KeyResult, AppError> {
         milestones,
         progress,
         sort_rank: row.sort_rank,
+        routine_id: row.routine_id,
+        routine: None, // attach_routine_progress가 분기 창 기준으로 채운다.
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
@@ -161,7 +164,7 @@ async fn list_key_results_for_objective(
 ) -> Result<Vec<KeyResult>, AppError> {
     let rows = sqlx::query_as::<_, KeyResultRow>(
         "SELECT id, objective_id, title, kind, target_value, current_value, unit, milestones, \
-                sort_rank, created_at, updated_at \
+                sort_rank, routine_id, created_at, updated_at \
            FROM key_results \
           WHERE objective_id = ?1 \
           ORDER BY sort_rank, created_at",
@@ -174,7 +177,8 @@ async fn list_key_results_for_objective(
 }
 
 async fn objective_from_row(db: &Db, row: ObjectiveRow) -> Result<Objective, AppError> {
-    let key_results = list_key_results_for_objective(db, &row.id).await?;
+    let mut key_results = list_key_results_for_objective(db, &row.id).await?;
+    attach_routine_progress(db, &row.quarter, &mut key_results).await?;
     Ok(Objective {
         id: row.id,
         quarter: row.quarter,
@@ -197,13 +201,166 @@ async fn objective_from_row(db: &Db, row: ObjectiveRow) -> Result<Objective, App
 async fn fetch_key_result(db: &Db, id: &str) -> Result<KeyResult, AppError> {
     let row = sqlx::query_as::<_, KeyResultRow>(
         "SELECT id, objective_id, title, kind, target_value, current_value, unit, milestones, \
-                sort_rank, created_at, updated_at \
+                sort_rank, routine_id, created_at, updated_at \
            FROM key_results WHERE id = ?1",
     )
     .bind(id)
     .fetch_one(db)
     .await?;
-    key_result_from_row(row)
+    enrich_single_kr(db, key_result_from_row(row)?).await
+}
+
+/// 'YYYY-Qn' → (분기 시작일, 종료일 inclusive). 형식 밖이면 None.
+fn quarter_window(quarter: &str) -> Option<(chrono::NaiveDate, chrono::NaiveDate)> {
+    let (year_raw, q_raw) = quarter.split_once("-Q")?;
+    let year: i32 = year_raw.parse().ok()?;
+    let q: u32 = q_raw.parse().ok()?;
+    if !(1..=4).contains(&q) {
+        return None;
+    }
+    let start = chrono::NaiveDate::from_ymd_opt(year, (q - 1) * 3 + 1, 1)?;
+    let next_start = if q == 4 {
+        chrono::NaiveDate::from_ymd_opt(year + 1, 1, 1)?
+    } else {
+        chrono::NaiveDate::from_ymd_opt(year, q * 3 + 1, 1)?
+    };
+    Some((start, next_start - chrono::Duration::days(1)))
+}
+
+/// attach_routine_progress가 읽는 루틴 스케줄 필드(로컬 조인 행).
+#[derive(sqlx::FromRow)]
+struct KrRoutineRow {
+    title: String,
+    freq: crate::models::RoutineFreq,
+    weekdays: Option<String>,
+    anchor_date: Option<String>,
+    start_date: Option<String>,
+    end_date: Option<String>,
+    monthly_pattern: Option<crate::models::RoutineMonthlyPattern>,
+    monthly_nth_week: Option<i64>,
+}
+
+/// %형 KR(unit '%', target 100) 판정 — 루틴 파생 시 completed/expected 비율로 계산한다.
+fn is_percent_kr(unit: Option<&str>, target: Option<f64>) -> bool {
+    unit == Some("%")
+        && target
+            .map(|t| (t - 100.0).abs() < f64::EPSILON)
+            .unwrap_or(false)
+}
+
+/// 루틴 연결 KR의 진행을 분기 창 기준으로 **쿼리타임 파생**해 채운다(저장 없음 — 입력은 루틴
+/// 체크 한 곳으로 수렴; 체크 자체가 사람 행동이고 여기는 그 집계 표시라 결정 레일 무침범).
+/// 창=[분기 시작, min(오늘, 분기 끝)], expected=루틴 due 발생 수(패턴 ∧ 활성 구간 —
+/// tracking.rs와 동일 술어), completed=창 내 완료 체크 수.
+/// %형은 completed/expected, 그 외 metric은 completed/target. 루틴 소멸 시 조용히 스킵(수동 값 유지).
+async fn attach_routine_progress(
+    db: &Db,
+    quarter: &str,
+    key_results: &mut [KeyResult],
+) -> Result<(), AppError> {
+    use crate::commands::routines::{parse_weekdays, routine_due_on, within_active_window};
+    if !key_results.iter().any(|kr| kr.routine_id.is_some()) {
+        return Ok(());
+    }
+    let Some((q_start, q_end)) = quarter_window(quarter) else {
+        return Ok(());
+    };
+    let end = q_end.min(chrono::Local::now().date_naive());
+    if end < q_start {
+        return Ok(());
+    }
+    let start_s = q_start.format("%Y-%m-%d").to_string();
+    let end_s = end.format("%Y-%m-%d").to_string();
+    for kr in key_results.iter_mut() {
+        let Some(routine_id) = kr.routine_id.clone() else {
+            continue;
+        };
+        if kr.kind != KeyResultKind::Metric {
+            continue;
+        }
+        let Some(routine) = sqlx::query_as::<_, KrRoutineRow>(
+            "SELECT title, freq, weekdays, anchor_date, start_date, end_date, \
+                    monthly_pattern, monthly_nth_week \
+               FROM routines WHERE id = ?1",
+        )
+        .bind(&routine_id)
+        .fetch_optional(db)
+        .await?
+        else {
+            continue;
+        };
+
+        let weekdays = parse_weekdays(routine.weekdays.as_deref());
+        let nth_week = routine.monthly_nth_week.map(|v| v as i32);
+        let mut expected: u32 = 0;
+        let mut d = q_start;
+        while d <= end {
+            if routine_due_on(
+                routine.freq,
+                &weekdays,
+                routine.anchor_date.as_deref(),
+                routine.monthly_pattern,
+                nth_week,
+                d,
+            ) && within_active_window(
+                routine.start_date.as_deref(),
+                routine.end_date.as_deref(),
+                d,
+            ) {
+                expected += 1;
+            }
+            d += chrono::Duration::days(1);
+        }
+
+        let completed: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM routine_checks \
+              WHERE routine_id = ?1 AND completed_at IS NOT NULL AND date BETWEEN ?2 AND ?3",
+        )
+        .bind(&routine_id)
+        .bind(&start_s)
+        .bind(&end_s)
+        .fetch_one(db)
+        .await?;
+        let completed = u32::try_from(completed.max(0)).unwrap_or(u32::MAX);
+
+        if is_percent_kr(kr.unit.as_deref(), kr.target_value) {
+            let pct = if expected == 0 {
+                0.0
+            } else {
+                f64::from(completed) / f64::from(expected) * 100.0
+            };
+            kr.current_value = Some(pct.round());
+            kr.progress = pct / 100.0;
+        } else {
+            kr.current_value = Some(f64::from(completed));
+            kr.progress = metric_progress(kr.current_value, kr.target_value);
+        }
+        kr.routine = Some(crate::models::KrRoutineProgress {
+            title: routine.title,
+            completed,
+            expected,
+        });
+    }
+    Ok(())
+}
+
+/// 단건 KR 반환 경로용 파생 부착(objective의 quarter를 조회해 attach). 링크 없으면 no-op.
+async fn enrich_single_kr(db: &Db, kr: KeyResult) -> Result<KeyResult, AppError> {
+    if kr.routine_id.is_none() {
+        return Ok(kr);
+    }
+    let quarter: Option<String> =
+        sqlx::query_scalar("SELECT quarter FROM objectives WHERE id = ?1")
+            .bind(&kr.objective_id)
+            .fetch_optional(db)
+            .await?;
+    let Some(quarter) = quarter else {
+        return Ok(kr);
+    };
+    let mut arr = [kr];
+    attach_routine_progress(db, &quarter, &mut arr).await?;
+    let [enriched] = arr;
+    Ok(enriched)
 }
 
 pub(crate) async fn get_mission_inner(db: &Db) -> Result<Option<Mission>, AppError> {
@@ -356,7 +513,7 @@ pub(crate) async fn create_key_result_inner(
          (id, objective_id, title, kind, target_value, current_value, unit, milestones, sort_rank) \
          VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
          RETURNING id, objective_id, title, kind, target_value, current_value, unit, milestones, \
-                   sort_rank, created_at, updated_at",
+                   sort_rank, routine_id, created_at, updated_at",
     )
     .bind(&input.objective_id)
     .bind(&title)
@@ -368,7 +525,7 @@ pub(crate) async fn create_key_result_inner(
     .bind(input.sort_rank)
     .fetch_one(db)
     .await?;
-    key_result_from_row(row)
+    enrich_single_kr(db, key_result_from_row(row)?).await
 }
 
 pub(crate) async fn update_key_result_inner(
@@ -384,7 +541,7 @@ pub(crate) async fn update_key_result_inner(
            milestones = ?7, sort_rank = ?8, updated_at = datetime('now') \
          WHERE id = ?1 \
          RETURNING id, objective_id, title, kind, target_value, current_value, unit, milestones, \
-                   sort_rank, created_at, updated_at",
+                   sort_rank, routine_id, created_at, updated_at",
     )
     .bind(&input.id)
     .bind(&title)
@@ -396,7 +553,7 @@ pub(crate) async fn update_key_result_inner(
     .bind(input.sort_rank)
     .fetch_one(db)
     .await?;
-    key_result_from_row(row)
+    enrich_single_kr(db, key_result_from_row(row)?).await
 }
 
 pub(crate) async fn delete_key_result_inner(db: &Db, id: &str) -> Result<(), AppError> {
@@ -696,6 +853,45 @@ pub async fn delete_key_result(db: State<'_, Db>, id: String) -> Result<(), AppE
     delete_key_result_inner(db.inner(), &id).await
 }
 
+/// KR ↔ 루틴 연결/해제(routine_id=None). 연결하면 진행이 분기 창의 루틴 완료에서 쿼리타임
+/// 파생된다(수동 현재값 입력 대체). 수치형 KR만 — 마일스톤형은 체크리스트가 이미 입력 표면.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_key_result_routine(
+    db: State<'_, Db>,
+    id: String,
+    routine_id: Option<String>,
+) -> Result<KeyResult, AppError> {
+    let existing = fetch_key_result(db.inner(), &id).await?;
+    if routine_id.is_some() && existing.kind != KeyResultKind::Metric {
+        return Err(AppError::validation(
+            "okr.kr_routine.metric_only",
+            "루틴 연결은 수치형 KR만 가능합니다.",
+        ));
+    }
+    if let Some(rid) = routine_id.as_deref() {
+        let exists: Option<String> =
+            sqlx::query_scalar("SELECT id FROM routines WHERE id = ?1 AND active = 1")
+                .bind(rid)
+                .fetch_optional(db.inner())
+                .await?;
+        if exists.is_none() {
+            return Err(AppError::not_found(
+                "okr.kr_routine.routine_missing",
+                "루틴을 찾을 수 없습니다.",
+            ));
+        }
+    }
+    sqlx::query(
+        "UPDATE key_results SET routine_id = ?2, updated_at = datetime('now') WHERE id = ?1",
+    )
+    .bind(&id)
+    .bind(routine_id.as_deref())
+    .execute(db.inner())
+    .await?;
+    fetch_key_result(db.inner(), &id).await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn upsert_check_in(
@@ -735,6 +931,113 @@ mod tests {
     };
 
     use chrono::Datelike;
+
+    #[tokio::test]
+    async fn routine_linked_kr_derives_progress_from_checks() {
+        let db = fresh_db().await;
+        let today = chrono::Local::now().date_naive();
+        let quarter = format!("{}-Q{}", today.year(), ((today.month() - 1) / 3) + 1);
+        let q_start = super::quarter_window(&quarter).unwrap().0;
+        let q_start_s = q_start.format("%Y-%m-%d").to_string();
+
+        // 활성 창=분기 첫날 하루짜리 daily 루틴 → expected는 날짜와 무관하게 항상 1.
+        sqlx::query(
+            "INSERT INTO routines (id, title, freq, start_date, end_date) \
+             VALUES ('r1', '크로스핏', 'daily', ?1, ?1)",
+        )
+        .bind(&q_start_s)
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO routine_checks (id, routine_id, date, completed_at) \
+             VALUES ('c1', 'r1', ?1, datetime('now'))",
+        )
+        .bind(&q_start_s)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let objective = super::create_objective_inner(
+            &db,
+            CreateObjectiveInput {
+                quarter: quarter.clone(),
+                title: "몸".into(),
+                description: None,
+                sort_rank: 0,
+                linked_area_keys: vec![],
+                linked_project_ids: vec![],
+            },
+        )
+        .await
+        .unwrap();
+        let count_kr = super::create_key_result_inner(
+            &db,
+            CreateKeyResultInput {
+                objective_id: objective.id.clone(),
+                title: "크로스핏 48회".into(),
+                kind: KeyResultKind::Metric,
+                current_value: None,
+                target_value: Some(48.0),
+                unit: Some("회".into()),
+                milestones: vec![],
+                sort_rank: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let pct_kr = super::create_key_result_inner(
+            &db,
+            CreateKeyResultInput {
+                objective_id: objective.id.clone(),
+                title: "체크인 100%".into(),
+                kind: KeyResultKind::Metric,
+                current_value: None,
+                target_value: Some(100.0),
+                unit: Some("%".into()),
+                milestones: vec![],
+                sort_rank: 1,
+            },
+        )
+        .await
+        .unwrap();
+        for kr_id in [&count_kr.id, &pct_kr.id] {
+            sqlx::query("UPDATE key_results SET routine_id = 'r1' WHERE id = ?1")
+                .bind(kr_id)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        let objectives = super::list_objectives_inner(&db, &quarter).await.unwrap();
+        let krs = &objectives
+            .iter()
+            .find(|o| o.id == objective.id)
+            .unwrap()
+            .key_results;
+        let count = krs.iter().find(|k| k.id == count_kr.id).unwrap();
+        let pct = krs.iter().find(|k| k.id == pct_kr.id).unwrap();
+
+        // 횟수형: current=완료수, progress=완료/target.
+        let routine = count.routine.as_ref().unwrap();
+        assert_eq!((routine.completed, routine.expected), (1, 1));
+        assert_eq!(count.current_value, Some(1.0));
+        assert!((count.progress - 1.0 / 48.0).abs() < 1e-9);
+        // %형(unit %, target 100): completed/expected 비율.
+        assert_eq!(pct.current_value, Some(100.0));
+        assert!((pct.progress - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn quarter_window_parses_bounds() {
+        let (start, end) = super::quarter_window("2026-Q3").unwrap();
+        assert_eq!(start.to_string(), "2026-07-01");
+        assert_eq!(end.to_string(), "2026-09-30");
+        let (start, end) = super::quarter_window("2026-Q4").unwrap();
+        assert_eq!(start.to_string(), "2026-10-01");
+        assert_eq!(end.to_string(), "2026-12-31");
+        assert!(super::quarter_window("nope").is_none());
+    }
 
     #[tokio::test]
     async fn okr_migration_creates_core_tables() {
