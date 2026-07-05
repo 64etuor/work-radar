@@ -469,12 +469,32 @@
 
 .mission-kr-row {
   display: grid;
-  /* [제목+바 | 값(수동/자동) | 루틴 링크 | 자신감 | 삭제] */
-  grid-template-columns: minmax(190px, 1.4fr) minmax(220px, auto) auto minmax(112px, auto) auto;
+  /* 고정 5트랙 [제목+바 | 값 | 루틴 | 자신감 | 삭제] — 모든 행이 같은 칼럼 경계에 정렬.
+     (auto 트랙이면 행마다 콘텐츠 폭 따라 어긋나 어포던스가 흔들린다.) */
+  grid-template-columns: minmax(0, 1.6fr) minmax(200px, 1fr) 148px 104px 32px;
   gap: 10px;
   align-items: center;
   padding: 10px 0;
   border-top: 1px solid var(--color-wr-border-light);
+}
+
+/* 조용한 셀 — KR 행 인풋은 평소 제로 크롬(텍스트처럼), hover에 힌트·focus에만 보더.
+   행마다 보더 박스가 줄줄이 보이면 카드가 폼 덩어리로 읽힌다(값은 blur/Enter 자동 커밋). */
+.mission-kr-row input {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mission-kr-row input:hover:not(:disabled) {
+  border-color: var(--color-wr-border-light);
+}
+
+.mission-kr-row input:focus-visible {
+  border-color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+  box-shadow: none;
 }
 
 /* 루틴 연결 KR — 값 자동 파생 표시(입력 없음). */
@@ -487,11 +507,19 @@
 }
 
 .mission-kr-routine-btn {
-  justify-self: start;
-  max-width: 180px;
+  justify-self: stretch;
+  width: 100%;
+  max-width: 148px;
+  justify-content: flex-start;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 자동 파생 값 — 값 트랙 좌측 정렬, 숫자 열 맞춤. */
+.mission-kr-auto {
+  justify-self: start;
+  font-variant-numeric: tabular-nums;
 }
 
 .mission-routine-popover {

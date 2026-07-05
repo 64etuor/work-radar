@@ -108,12 +108,14 @@ export function KeyResultRow({
         <MilestonePopover kr={kr} readOnly={readOnly} onPatch={patch} pending={pending} />
       )}
 
-      {kr.kind === "metric" && !readOnly && quarterRange && (
+      {kr.kind === "metric" && !readOnly && quarterRange ? (
         <RoutineLinkControl
           kr={kr}
           quarterStart={quarterRange.start}
           quarterEnd={quarterRange.end}
         />
+      ) : (
+        <span aria-hidden />
       )}
       <ConfidenceBadge checkIn={latestCheckIn} />
       {!readOnly && (
