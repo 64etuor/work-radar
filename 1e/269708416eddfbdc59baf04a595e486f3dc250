@@ -1,0 +1,28 @@
+src/components/AgentStatusBar.tsx
+  s_b7a56f40efbbaa::t_1f9280eea1f1cd 259-260
+  s_b7a56f40efbbaa::t_c2b89e40d281e1 214-215
+  s_b7a56f40efbbaa::t_346e19e28d3187 283
+  s_b7a56f40efbbaa::t_d6d6e025b84dae 181-186
+src/components/agent-status/AgentBox.dom.test.tsx
+  s_b7a56f40efbbaa::t_f52e25e9dc25b5 1-75
+src/components/news/NewsTicker.tsx
+  s_b7a56f40efbbaa::t_fd7cad0a3bf294 119-121
+src/components/agent-status/AgentBox.tsx
+  s_b7a56f40efbbaa::t_b8abf287897e6f 114-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1e269708416eddfbdc59baf04a595e486f3dc250",
+  "prompts": {},
+  "sessions": {
+    "s_b7a56f40efbbaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4adad9cf-0684-49e6-a132-0d42c9100d00",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
