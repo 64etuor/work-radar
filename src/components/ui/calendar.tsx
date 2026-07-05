@@ -169,7 +169,13 @@ export function Calendar({
         ))}
       </div>
 
-      <div ref={gridRef} role="grid" className="grid grid-cols-7" onKeyDown={onKeyDown}>
+      <div
+        ref={gridRef}
+        role="grid"
+        tabIndex={0}
+        className="grid grid-cols-7"
+        onKeyDown={onKeyDown}
+      >
         {monthGridDays(viewMonth).map((d) => {
           const inMonth = ym(d) === ym(viewMonth);
           const isSel = d === selected;
