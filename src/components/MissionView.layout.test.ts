@@ -27,4 +27,41 @@ describe("MissionView layout", () => {
     expect(textarea).toContain("min-height: 44px");
     expect(textarea).toContain("resize: vertical");
   });
+
+  it("keeps guardrail forms inside the life panel instead of fixed-width overflow", () => {
+    expect(missionCss).toContain(
+      [
+        ".mission-guardrail-form {",
+        "  grid-template-columns: minmax(0, 1fr) minmax(108px, 0.7fr);",
+        "  grid-template-areas:",
+        '    "label label"',
+        '    "area kind"',
+        '    "value action";',
+        "  width: 100%;",
+      ].join("\n"),
+    );
+    expect(missionCss).toContain(
+      ".mission-guardrail-form button {\n  grid-area: action;\n  justify-self: end;",
+    );
+    expect(missionCss).toContain(
+      [
+        "  .mission-guardrail-form {",
+        "    grid-template-areas:",
+        '      "label"',
+        '      "area"',
+        '      "kind"',
+        '      "value"',
+        '      "action";',
+      ].join("\n"),
+    );
+  });
+
+  it("bounds Mission dialogs to the viewport and scrolls their body", () => {
+    const dialog = ruleBlock(".mission-dialog");
+
+    expect(dialog).toContain("width: min(640px, calc(100vw - 32px))");
+    expect(dialog).toContain("max-height: min(720px, calc(100vh - 48px))");
+    expect(dialog).toContain("overflow-y: auto");
+    expect(dialog).toContain("align-content: start");
+  });
 });
