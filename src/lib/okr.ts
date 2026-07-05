@@ -145,6 +145,50 @@ export function quarterDateRange(quarter: string): { start: string; end: string 
   return { start: fmt(new Date(year, (q - 1) * 3, 1)), end: fmt(new Date(year, q * 3, 0)) };
 }
 
+// ── 분기 키('YYYY-Qn') 헬퍼 — MissionView 계열 공용 ────────────────────────────
+
+export function parseQuarter(quarter: string): { year: number; quarter: number } {
+  const match = quarter.match(/^(\d{4})-Q([1-4])$/);
+  if (!match) return { year: new Date().getFullYear(), quarter: 1 };
+  return { year: Number(match[1]), quarter: Number(match[2]) };
+}
+
+export function quarterFromIndex(year: number, quarter: number, offset: number): string {
+  const zeroBased = year * 4 + (quarter - 1) + offset;
+  return `${Math.floor(zeroBased / 4)}-Q${(zeroBased % 4) + 1}`;
+}
+
+export function adjacentQuarter(quarter: string, offset: number): string {
+  const parsed = parseQuarter(quarter);
+  return quarterFromIndex(parsed.year, parsed.quarter, offset);
+}
+
+/** 분기 선택 옵션 — 기준 분기 ±α(과거 4, 미래 2). */
+export function quarterOptions(centerQuarter: string): string[] {
+  const parsed = parseQuarter(centerQuarter);
+  return Array.from({ length: 7 }, (_, index) =>
+    quarterFromIndex(parsed.year, parsed.quarter, index - 4),
+  );
+}
+
+export function quarterElapsedRatio(quarter: string, date = new Date()): number {
+  const parsed = parseQuarter(quarter);
+  const start = new Date(parsed.year, (parsed.quarter - 1) * 3, 1);
+  const end = new Date(parsed.year, parsed.quarter * 3, 0, 23, 59, 59, 999);
+  if (date <= start) return 0;
+  if (date >= end) return 1;
+  return (date.getTime() - start.getTime()) / (end.getTime() - start.getTime());
+}
+
+export function quarterLabel(quarter: string): string {
+  const parsed = parseQuarter(quarter);
+  return `${parsed.year}년 ${parsed.quarter}분기`;
+}
+
+export function percentLabel(ratio: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
+}
+
 export function weekStartMonday(date = new Date()): string {
   const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const day = monday.getDay();

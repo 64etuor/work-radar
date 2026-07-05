@@ -145,6 +145,54 @@
   color: var(--color-wr-muted);
 }
 
+/* 세그먼트 탭 — 기록/구조/기반 분리 (Cohere식 조용한 pill, 선택=solid). */
+.mission-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: 999px;
+  padding: 3px;
+  background: var(--color-wr-bg);
+}
+
+.mission-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 14px;
+  background: transparent;
+  color: var(--color-wr-muted);
+  cursor: pointer;
+  transition:
+    background var(--wr-motion-base),
+    color var(--wr-motion-base);
+}
+
+.mission-tab:hover {
+  color: var(--color-wr-fg);
+}
+
+.mission-tab[aria-selected="true"] {
+  background: var(--color-wr-fg);
+  color: var(--color-wr-bg);
+}
+
+.mission-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  padding: 0 4px;
+  background: var(--color-wr-accent);
+  color: #fff;
+  font: 700 10px var(--font-mono);
+}
+
 .mission-error {
   margin-bottom: 14px;
   border: 1px solid var(--color-wr-danger-border);
