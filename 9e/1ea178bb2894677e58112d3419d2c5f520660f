@@ -1,0 +1,62 @@
+src/lib/okr.test.ts
+  s_b7a56f40efbbaa::t_283c9c9de29df2 140-141
+  s_b7a56f40efbbaa::t_0fe8917dd86373 3-4,6-12
+  s_b7a56f40efbbaa::t_6bec383d1ebf21 5
+  s_b7a56f40efbbaa::t_fd0790fee45f99 109-117
+  s_b7a56f40efbbaa::t_ced6d8006d730a 72-108,118-139,142-155
+  s_b7a56f40efbbaa::t_ae1b75219fb00b 156
+src/components/WeeklyView.tsx
+  s_b7a56f40efbbaa::t_8bd9dbbdd00e4d 129,133
+  s_b7a56f40efbbaa::t_9040086308fe11 26
+  s_b7a56f40efbbaa::t_fa07db522134e6 58-62
+src/components/board/CaptureBoardHeader.tsx
+  s_b7a56f40efbbaa::t_59e923e6c8d1c9 3,11,13-21,24,29,50-58,66
+  s_b7a56f40efbbaa::t_18315346021200 1-2,5-10,12,22-23,25-28,31-49,65
+  s_b7a56f40efbbaa::t_c1c8ab2109726f 67
+src/components/CaptureBoard.tsx
+  s_b7a56f40efbbaa::t_b472626b2eb246 540-544
+  s_b7a56f40efbbaa::t_cea4a6aca023ca 23
+  s_b7a56f40efbbaa::t_0389b63592b2d4 581
+  s_b7a56f40efbbaa::t_822a67dea5f0b3 43
+  s_b7a56f40efbbaa::t_1562abe7de4ce3 44
+  s_b7a56f40efbbaa::t_30db1732126ead 88-91
+  s_b7a56f40efbbaa::t_ae9d0f41ca6a95 453-474
+  s_b7a56f40efbbaa::t_086d1ce16453c7 21
+src/components/board/useBoardKeyboard.ts
+  s_b7a56f40efbbaa::t_40e1980af664ca 1-75
+src/components/CaptureBoard.css
+  s_b7a56f40efbbaa::t_cc848f4ae51e92 73-107,109,490
+  s_b7a56f40efbbaa::t_e1ff20eb5f47b4 486-489
+  s_b7a56f40efbbaa::t_433ab9d33fa609 108,491-492
+src/components/board/MatrixCanvas.tsx
+  s_b7a56f40efbbaa::t_ecb021242db4e3 65-66
+  s_b7a56f40efbbaa::t_ee64c7ae25ac16 22
+  s_b7a56f40efbbaa::t_01c23839b89f62 395
+  s_b7a56f40efbbaa::t_3702f147268dc7 96
+  s_b7a56f40efbbaa::t_809f37c4a177fc 440
+  s_b7a56f40efbbaa::t_05105433e57d1d 396
+  s_b7a56f40efbbaa::t_f5efae289f6590 397-398,441-444
+src/lib/okr.ts
+  s_b7a56f40efbbaa::t_20a2a668ba5d6f 1
+  s_b7a56f40efbbaa::t_efda15bd5ec94b 22-59,103-107,109-112,114-129
+  s_b7a56f40efbbaa::t_325a62299e284f 94-102
+  s_b7a56f40efbbaa::t_5b679f32c2b439 60-93,108
+  s_b7a56f40efbbaa::t_d98469bc6e5656 113
+  s_b7a56f40efbbaa::t_78e6d39962e31f 130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9e1ea178bb2894677e58112d3419d2c5f520660f",
+  "prompts": {},
+  "sessions": {
+    "s_b7a56f40efbbaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4adad9cf-0684-49e6-a132-0d42c9100d00",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
