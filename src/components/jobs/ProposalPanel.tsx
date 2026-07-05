@@ -1,6 +1,7 @@
 import type { AgentRunView } from "@/bindings";
 
 import { BatchEnrichPanel } from "./BatchEnrichPanel";
+import { OkrImportPanel } from "./OkrImportPanel";
 import { SelfCheckPanel } from "./SelfCheckPanel";
 import { TriagePanel } from "./TriagePanel";
 
@@ -13,6 +14,8 @@ export function ProposalPanel({ run }: { run: AgentRunView }) {
   switch (run.kind) {
     case "enrich_batch":
       return <BatchEnrichPanel run={run} />;
+    case "okr_import":
+      return <OkrImportPanel run={run} />;
     case "triage_ci":
       return <TriagePanel run={run} />;
     default:

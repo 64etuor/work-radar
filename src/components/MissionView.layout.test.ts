@@ -23,9 +23,12 @@ describe("MissionView layout", () => {
 
     expect(form).toContain("width: min(860px, 100%)");
     expect(form).toContain("grid-template-columns: minmax(0, 1fr) auto");
-    expect(form).toContain("align-items: start");
-    expect(textarea).toContain("min-height: 44px");
-    expect(textarea).toContain("resize: vertical");
+    // 편집 전환 시 레이아웃 시프트 0 계약: textarea가 표시 span과 같은 타이포/제로 크롬.
+    expect(textarea).toContain("font-family: var(--font-display)");
+    expect(textarea).toContain("font-size: var(--text-title-md)");
+    expect(textarea).toContain("line-height: var(--leading-title-md)");
+    expect(textarea).toContain("border: 0");
+    expect(textarea).toContain("resize: none");
   });
 
   it("keeps guardrail forms inside the life panel instead of fixed-width overflow", () => {

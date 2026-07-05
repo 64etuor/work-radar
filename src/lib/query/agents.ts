@@ -4,12 +4,14 @@ import {
   type BatchEnrichProposal,
   type CiTriageProposal,
   commands,
+  type OkrImportDraft,
   type PrSelfCheckProposal,
   type TriageOutcome,
   type TriggerCiTriageInput,
   type TriggerCodexInput,
   type TriggerEchoInput,
   type TriggerEnrichAllInput,
+  type TriggerOkrImportInput,
   type TriggerPrSelfCheckInput,
 } from "@/bindings";
 
@@ -241,4 +243,58 @@ export function useAcceptTriage() {
       unwrap(commands.acceptTriage(runId, accepted)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
   });
+}
+
+// ── OKR 받아쓰기 (자유 텍스트 → OKR 초안, Acceptance 게이트) ──────────────────────────
+
+/** OKR 받아쓰기 잡 트리거. 초안은 awaiting_approval로 멈추고 사람이 검토·적용해야 생성된다. */
+export function useTriggerOkrImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TriggerOkrImportInput) => unwrap(commands.triggerOkrImport(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agentRuns"] }),
+  });
+}
+
+/** awaiting_approval OKR 받아쓰기 잡의 초안(항목 검증 + skipped 집계). 펼친 잡에 대해서만 enabled. */
+export function useOkrImportProposal(runId: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: ["okrImportProposal", runId],
+    queryFn: () => unwrap(commands.okrImportProposal(runId as string)),
+    enabled: !!runId && ready,
+    retry: false, // 파싱 실패(raw/형식 밖)는 즉시 노출.
+  });
+}
+
+/** OKR 받아쓰기 accept(INVARIANT #1/#2 게이트) — 사람 적용 시 mission/horizon/objective/KR 생성. */
+export function useAcceptOkrImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, accepted }: { runId: string; accepted: OkrImportDraft }) =>
+      unwrap(commands.acceptOkrImport(runId, accepted)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agentRuns"] });
+      void qc.invalidateQueries({ queryKey: ["okr"] }); // mission/objectives/checkIns 갱신.
+      void qc.invalidateQueries({ queryKey: ["lifeOs"] }); // horizon 셸프 갱신.
+    },
+  });
+}
+
+/** 진행 중(비-terminal) OKR 받아쓰기 잡 — MissionView 버튼 상태/중복 트리거 방지용. */
+export function useOkrImportActiveRun() {
+  const runs = useAgentRuns();
+  return (
+    (runs.data ?? []).find(
+      (r) => r.kind === "okr_import" && !AGENT_TERMINAL_STATUSES.has(r.status),
+    ) ?? null
+  );
+}
+
+/** 검토 대기(awaiting_approval) 상태의 최신 OKR 받아쓰기 잡. */
+export function useOkrImportAwaitingRun() {
+  const runs = useAgentRuns();
+  return (
+    (runs.data ?? []).find((r) => r.kind === "okr_import" && r.status === "awaiting_approval") ??
+    null
+  );
 }

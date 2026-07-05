@@ -1,13 +1,16 @@
 //! 스킬 시드/폴백/프롬프트 해석(G1-PR1 분할, 무행동변경). 인앱 프롬프트 binding 상수, 시드 정의,
 //! 잡 트리거가 쓰는 프롬프트/런타임 해석. 로직 불변 — `commands/skills.rs`에서 그대로 이동.
 
-use crate::commands::agents::{BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, PR_SELFCHECK_PROMPT};
+use crate::commands::agents::{
+    BATCH_ENRICH_PROMPT, CI_TRIAGE_PROMPT, OKR_IMPORT_PROMPT, PR_SELFCHECK_PROMPT,
+};
 use crate::db::Db;
 
 /// 인앱 프롬프트 binding 키(잡 트리거가 lookup에 쓰는 식별자). 하드코딩 프롬프트와 1:1.
 pub(crate) const BINDING_BATCH_ENRICH: &str = "batch_enrich";
 pub(crate) const BINDING_CI_TRIAGE: &str = "ci_triage";
 pub(crate) const BINDING_PR_SELFCHECK: &str = "pr_selfcheck";
+pub(crate) const BINDING_OKR_IMPORT: &str = "okr_import";
 pub(crate) const BINDING_WORKTREE_REVIEW: &str = "worktree_review";
 pub(crate) const BINDING_WORKTREE_CLEANUP: &str = "worktree_cleanup";
 pub(crate) const FAST_CODEX_MODEL: &str = "gpt-5.3-codex-spark";
@@ -16,13 +19,14 @@ const WORKTREE_REVIEW_PROMPT: &str = "You are reviewing a worktree in read-only 
 const WORKTREE_CLEANUP_PROMPT: &str = "Review the listed local worktree cleanup candidates. Identify which items are safe to delete and explain the evidence for each recommendation. Use a conservative rule: stale means 2+ days with no activity, merged branches are safer than unmerged stale branches, protected/current/base branches must stay, and destructive cleanup needs human confirmation. Return concise bullets with keep/delete/review labels.";
 
 /// (binding, 표시 이름, 코드 상수 프롬프트) 시드 정의. 시드/폴백 둘 다 이 표에서 도출한다(단일 출처).
-pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 5] {
+pub(crate) fn seed_defs() -> [(&'static str, &'static str, &'static str); 6] {
     [
         (
             BINDING_BATCH_ENRICH,
             "브레인덤프 enrich (배치)",
             BATCH_ENRICH_PROMPT,
         ),
+        (BINDING_OKR_IMPORT, "OKR 받아쓰기", OKR_IMPORT_PROMPT),
         (BINDING_CI_TRIAGE, "CI 실패 triage", CI_TRIAGE_PROMPT),
         (BINDING_PR_SELFCHECK, "코드 리뷰", PR_SELFCHECK_PROMPT),
         (

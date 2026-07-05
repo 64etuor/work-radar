@@ -1,4 +1,3 @@
-import { Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import type { LifeWheelTagConfig, MissionHorizon, Objective, Project } from "@/bindings";
@@ -14,6 +13,8 @@ import {
   useUnlinkObjectiveHorizon,
   useUpdateObjective,
 } from "@/lib/query";
+
+import { ArmedDeleteButton } from "./ArmedDeleteButton";
 
 export function ObjectiveDialog({
   open,
@@ -193,6 +194,10 @@ function ObjectiveDialogBody({
 
         <div className="mission-pick-group">
           <span className="typo-label-sm">프로젝트</span>
+          <span className="mission-muted typo-caption-sm">
+            프로젝트를 링크하면 그 프로젝트로 태깅된 카드 전부가 집계됩니다. 캡처는 개인/업무 기본
+            프로젝트를 자동 태깅하므로, 기본 프로젝트 링크 = 해당 종류의 캡처 전체.
+          </span>
           <div className="mission-check-grid">
             {projects.map((project) => (
               <label key={project.id} className="mission-check-row">
@@ -229,17 +234,15 @@ function ObjectiveDialogBody({
 
         <div className="mission-dialog-actions">
           {objective && (
-            <Button
-              type="button"
+            <ArmedDeleteButton
               variant="destructiveOutline"
               disabled={pending}
-              onClick={() => {
+              label="삭제"
+              confirmLabel="정말 삭제"
+              onConfirm={() => {
                 void deleteObjective.mutateAsync(objective.id).then(onDone);
               }}
-            >
-              <Trash2 className="size-4" />
-              삭제
-            </Button>
+            />
           )}
           <Button type="button" variant="outline" onClick={onDone}>
             취소

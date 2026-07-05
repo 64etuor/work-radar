@@ -454,6 +454,20 @@ export const commands = {
 	 */
 	acceptEnrichAll: (runId: string, accepted: BatchEnrichProposal) => typedError<number, AppError>(__TAURI_INVOKE("accept_enrich_all", { runId, accepted })),
 	/**
+	 *  OKR 받아쓰기 잡 트리거. 텍스트를 `okr_input.json`으로 전달해 **한** codex 호출(비-레포·read_only)로
+	 *  OKR 초안을 뽑는다. Proposal은 awaiting_approval로 멈추고(Acceptance 게이트), 생성은
+	 *  accept_okr_import에서 사람 클릭으로만.
+	 */
+	triggerOkrImport: (input: TriggerOkrImportInput) => typedError<string, AppError>(__TAURI_INVOKE("trigger_okr_import", { input })),
+	/**  OKR 받아쓰기 Proposal(타입 파싱 + 항목 검증). raw/형식 밖이면 Err. */
+	okrImportProposal: (runId: string) => typedError<OkrImportDraft, AppError>(__TAURI_INVOKE("okr_import_proposal", { runId })),
+	/**
+	 *  OKR 받아쓰기 accept(INVARIANT #1/#2 게이트). 사람이 검토·편집한 초안을 적용하면 mission upsert,
+	 *  horizon(동일 제목+kind 활성 존재 시 skip), objective+KR을 기존 생성 경로(create_*_inner)로 만든다.
+	 *  만든 Objective 수를 돌려준다. 외부 호출 없음(로컬 기록만).
+	 */
+	acceptOkrImport: (runId: string, accepted: OkrImportDraft) => typedError<number, AppError>(__TAURI_INVOKE("accept_okr_import", { runId, accepted })),
+	/**
 	 *  CI triage 잡 트리거(PR Radar CI Blocked 카드). diff를 GitHub에서 받아 worktree 격리 codex 잡(read_only).
 	 *  **재트리거 캡**(INVARIANT #5): 같은 PR(retry_key=triage:{repo}:{pr})의 기존 triage가 캡 이상이면 잡을
 	 *  만들지 않고 매트릭스 Q1으로 escalate한다. 산출 Proposal은 awaiting_approval(Acceptance 게이트).
@@ -2460,6 +2474,41 @@ export type OkrGuardrail = {
 	updatedAt: string,
 };
 
+/**  OKR 받아쓰기 초안 전체. skipped = 형식/세트 밖이라 항목 단위로 제외된 수(부분 실패 격리). */
+export type OkrImportDraft = {
+	mission: string | null,
+	horizons: OkrImportHorizonDraft[],
+	objectives: OkrImportObjectiveDraft[],
+	skipped: number,
+};
+
+/**  장기 목표(horizon) 초안. kind 닫힌 세트(MissionHorizonKind). */
+export type OkrImportHorizonDraft = {
+	title: string,
+	horizonKind: MissionHorizonKind,
+};
+
+/**  KR 초안. kind 닫힌 세트(KeyResultKind)로 구조 강제 — 세트 밖이면 항목 단위 skip. */
+export type OkrImportKeyResultDraft = {
+	title: string,
+	kind: KeyResultKind,
+	targetValue?: number | null,
+	unit?: string | null,
+	/**  milestone kind일 때 항목 라벨(적용 시 done=false로 생성). */
+	milestones?: string[],
+};
+
+/**
+ *  Objective 초안. linked_area_keys는 문자열로 관용(커스텀 Life Wheel 태그 허용) —
+ *  프롬프트가 입력 태그 id 세트를 제시하고, 사람이 적용 전에 편집으로 최종 결정한다.
+ */
+export type OkrImportObjectiveDraft = {
+	title: string,
+	description?: string | null,
+	linkedAreaKeys?: string[],
+	keyResults?: OkrImportKeyResultDraft[],
+};
+
 export type OkrMilestone = {
 	label: string,
 	done: boolean,
@@ -3412,6 +3461,15 @@ export type TriggerEchoInput = {
  */
 export type TriggerEnrichAllInput = {
 	projectId: string | null,
+	timeoutSec: number,
+	maxTurns: number,
+	costCapUsd: number | null,
+};
+
+/**  OKR 받아쓰기 잡 입력. 자유 텍스트와 대상 분기, 강제 bounds(INVARIANT #5). */
+export type TriggerOkrImportInput = {
+	text: string,
+	quarter: string,
 	timeoutSec: number,
 	maxTurns: number,
 	costCapUsd: number | null,

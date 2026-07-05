@@ -208,7 +208,7 @@ fn normalize_life_wheel_tags(
     Ok(out)
 }
 
-async fn current_life_wheel_tags(db: &Db) -> Result<Vec<LifeWheelTagConfig>, AppError> {
+pub(crate) async fn current_life_wheel_tags(db: &Db) -> Result<Vec<LifeWheelTagConfig>, AppError> {
     let Some(raw) = get_config(db, KEY_LIFE_WHEEL_TAGS).await? else {
         return Ok(default_life_wheel_tags());
     };

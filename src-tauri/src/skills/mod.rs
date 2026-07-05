@@ -64,8 +64,8 @@ pub use import::{import_external_skill, remove_managed_skill};
 pub use installer::install_skill_from_git;
 pub use resolve::{list_skill_diff, pull_divergence, push_divergence};
 pub(crate) use seed::{
-    resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH, BINDING_CI_TRIAGE, BINDING_PR_SELFCHECK,
-    FAST_CODEX_MODEL,
+    resolve_agent_prompt_runtime, BINDING_BATCH_ENRICH, BINDING_CI_TRIAGE, BINDING_OKR_IMPORT,
+    BINDING_PR_SELFCHECK, FAST_CODEX_MODEL,
 };
 pub use tags::set_skill_tags;
 pub use updater::{

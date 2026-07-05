@@ -91,3 +91,66 @@ pub struct TriageOutcome {
     /// 사람이 읽을 상세.
     pub detail: String,
 }
+
+// ── OKR 받아쓰기(자유 텍스트 → OKR 초안) — 제안 레일 + Acceptance 게이트 ──────────────
+//
+// codex는 초안(draft)만 낸다. 실제 mission/horizon/objective/KR 생성은 사람이 검토·편집 후
+// "적용"을 클릭할 때만(accept_okr_import) — INVARIANT #1/#2와 동일한 게이트 모양.
+
+/// OKR 받아쓰기 잡 입력. 자유 텍스트와 대상 분기, 강제 bounds(INVARIANT #5).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerOkrImportInput {
+    pub text: String,
+    pub quarter: String,
+    pub timeout_sec: u32,
+    pub max_turns: u32,
+    pub cost_cap_usd: f64,
+}
+
+/// KR 초안. kind 닫힌 세트(KeyResultKind)로 구조 강제 — 세트 밖이면 항목 단위 skip.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OkrImportKeyResultDraft {
+    pub title: String,
+    pub kind: super::KeyResultKind,
+    #[serde(default)]
+    pub target_value: Option<f64>,
+    #[serde(default)]
+    pub unit: Option<String>,
+    /// milestone kind일 때 항목 라벨(적용 시 done=false로 생성).
+    #[serde(default)]
+    pub milestones: Vec<String>,
+}
+
+/// Objective 초안. linked_area_keys는 문자열로 관용(커스텀 Life Wheel 태그 허용) —
+/// 프롬프트가 입력 태그 id 세트를 제시하고, 사람이 적용 전에 편집으로 최종 결정한다.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OkrImportObjectiveDraft {
+    pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub linked_area_keys: Vec<String>,
+    #[serde(default)]
+    pub key_results: Vec<OkrImportKeyResultDraft>,
+}
+
+/// 장기 목표(horizon) 초안. kind 닫힌 세트(MissionHorizonKind).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OkrImportHorizonDraft {
+    pub title: String,
+    pub horizon_kind: super::MissionHorizonKind,
+}
+
+/// OKR 받아쓰기 초안 전체. skipped = 형식/세트 밖이라 항목 단위로 제외된 수(부분 실패 격리).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OkrImportDraft {
+    pub mission: Option<String>,
+    pub horizons: Vec<OkrImportHorizonDraft>,
+    pub objectives: Vec<OkrImportObjectiveDraft>,
+    pub skipped: u32,
+}

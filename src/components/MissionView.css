@@ -63,6 +63,11 @@
   font-family: var(--font-display);
 }
 
+/* 미션 미설정 상태 — placeholder 톤(저장값처럼 보이지 않게). */
+.mission-statement span[data-placeholder] {
+  color: var(--color-wr-subtle);
+}
+
 .mission-statement svg {
   flex: 0 0 auto;
   margin-bottom: 8px;
@@ -72,14 +77,40 @@
 .mission-statement-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
+  align-items: end;
+  gap: 12px;
   width: min(860px, 100%);
 }
 
+/* 편집 textarea = 표시 span과 동일 타이포/박스(제로 크롬 + 하단 라인만) — 클릭해서
+ * 편집으로 전환해도 레이아웃이 밀리지 않는다. */
 .mission-statement-form textarea {
-  min-height: 44px;
-  resize: vertical;
+  font-family: var(--font-display);
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-title-md);
+  min-height: 0;
+  padding: 0 0 1px;
+  border: 0;
+  border-bottom: 1px solid var(--color-wr-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+}
+
+.mission-statement-form textarea:focus-visible {
+  outline: none;
+  border-bottom-color: var(--color-wr-fg);
+  box-shadow: none;
+}
+
+.mission-top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .mission-statement-actions,
@@ -261,6 +292,29 @@
   gap: 12px;
 }
 
+/* 마일스톤 행 — 체크(즉시 저장) + 항목 삭제 ×. */
+.mission-milestone-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mission-milestone-remove {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-wr-subtle);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.mission-milestone-remove:hover {
+  color: var(--color-wr-danger);
+}
+
 .mission-checkin-item {
   display: grid;
   grid-template-columns:
@@ -387,7 +441,8 @@
 .mission-kr-metric,
 .mission-add-kr-metric {
   display: grid;
-  grid-template-columns: minmax(64px, 1fr) auto minmax(64px, 1fr) minmax(64px, 0.7fr) auto;
+  /* [현재 | / | 목표 | 단위] — 값은 blur/Enter 자동 커밋이라 저장 버튼 컬럼 없음. */
+  grid-template-columns: minmax(64px, 1fr) auto minmax(64px, 1fr) minmax(64px, 0.7fr);
   gap: 6px;
   align-items: center;
 }
@@ -555,6 +610,12 @@
   justify-content: space-between;
   gap: 12px;
   padding: 18px;
+}
+
+.mission-empty-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .mission-muted {

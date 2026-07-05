@@ -284,6 +284,10 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::trigger_enrich_all,
         commands::batch_enrich_proposal,
         commands::accept_enrich_all,
+        // OKR 받아쓰기(자유 텍스트 → OKR 초안, Acceptance 게이트).
+        commands::trigger_okr_import,
+        commands::okr_import_proposal,
+        commands::accept_okr_import,
         commands::trigger_ci_triage,
         commands::triage_proposal,
         commands::accept_triage,

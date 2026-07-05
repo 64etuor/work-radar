@@ -125,7 +125,9 @@ export function ObjectiveCard({
       <div className="mission-kr-list">
         {sortedKrs.map((kr) => (
           <KeyResultRow
-            key={`${kr.id}-${kr.updatedAt}`}
+            // key에 updatedAt을 넣지 않는다 — 저장마다 리마운트되면 마일스톤 팝오버가 닫힌다.
+            // draft 동기화는 DraftInput(focus 동안만 로컬)이 담당.
+            key={kr.id}
             kr={kr}
             latestCheckIn={latestCheckInFor(kr.id, checkIns)}
             readOnly={readOnly}

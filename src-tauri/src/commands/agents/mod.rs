@@ -1,10 +1,12 @@
 mod enrich;
+mod okr_import;
 mod selfcheck;
 mod spine;
 mod triage;
 mod usage;
 
 pub use enrich::*;
+pub use okr_import::*;
 pub use selfcheck::*;
 pub use spine::*;
 pub use triage::*;
@@ -62,6 +64,14 @@ pub(super) fn parse_proposal<T: serde::de::DeserializeOwned>(raw: &str) -> Resul
 // ── 잡 trigger 페이로드 (내부 — agent_runs.trigger 컬럼에 JSON 영속, 프런트 표시·accept 경로용) ──
 // codex가 내는 proposal과 달리 trigger는 앱이 전적으로 통제하므로 타입화한다(stringly-typed JSON 제거).
 // camelCase 직렬화로 기존 JSON 키(signalId/batchCount/prUrl/repoFullName/prNumber)를 그대로 보존.
+
+/// OKR 받아쓰기 트리거 — quarter는 accept가 되읽는 계약(생성 대상 분기), text_chars는 표시용.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct OkrImportTrigger {
+    pub quarter: String,
+    pub text_chars: u32,
+}
 
 /// enrich(전체 배치) 트리거 — 표시용(읽기 없음).
 #[derive(serde::Serialize)]

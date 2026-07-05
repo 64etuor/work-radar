@@ -1,4 +1,4 @@
-import { Check, ListChecks, Save, Trash2 } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import { useState } from "react";
 
 import type { KeyResult, OkrCheckIn, OkrMilestone } from "@/bindings";
@@ -9,8 +9,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { keyResultProgressRatio } from "@/lib/okr";
 import { useDeleteKeyResult, useUpdateKeyResult } from "@/lib/query";
 
+import { ArmedDeleteButton } from "./ArmedDeleteButton";
+import { DraftInput } from "./DraftInput";
 import { CONFIDENCE_LABELS, parseNullableNumber } from "./okrControls";
 
+/**
+ * KR 인라인 편집 행 — 모든 필드는 blur/Enter 자동 커밋(DraftInput). 별도 저장 버튼 없음.
+ * 리마운트 key 불필요: 편집 중(focused) 필드만 로컬 draft라 refetch가 덮지 않는다.
+ */
 export function KeyResultRow({
   kr,
   latestCheckIn,
@@ -22,49 +28,33 @@ export function KeyResultRow({
 }) {
   const updateKeyResult = useUpdateKeyResult();
   const deleteKeyResult = useDeleteKeyResult();
-  const [title, setTitle] = useState(kr.title);
-  const [current, setCurrent] = useState(numberDraft(kr.currentValue));
-  const [target, setTarget] = useState(numberDraft(kr.targetValue));
-  const [unit, setUnit] = useState(kr.unit ?? "");
   const progress = keyResultProgressRatio(kr);
   const pending = updateKeyResult.isPending || deleteKeyResult.isPending;
 
-  const saveMetric = async () => {
-    await updateKeyResult.mutateAsync({
+  // 부분 patch — 현재 서버값 위에 바뀐 필드만 합성해 기존 전체-업데이트 커맨드에 태운다.
+  const patch = (partial: Partial<Parameters<typeof updateKeyResult.mutateAsync>[0]>) =>
+    void updateKeyResult.mutateAsync({
       id: kr.id,
-      title: title.trim() || kr.title,
-      kind: "metric",
-      currentValue: parseNullableNumber(current),
-      targetValue: parseNullableNumber(target),
-      unit: unit.trim() || null,
-      milestones: [],
-      sortRank: kr.sortRank,
-    });
-  };
-
-  const saveTitle = async () => {
-    await updateKeyResult.mutateAsync({
-      id: kr.id,
-      title: title.trim() || kr.title,
+      title: kr.title,
       kind: kr.kind,
       currentValue: kr.currentValue,
       targetValue: kr.targetValue,
       unit: kr.unit,
       milestones: kr.milestones,
       sortRank: kr.sortRank,
+      ...partial,
     });
-  };
 
   return (
     <div className="mission-kr-row">
       <div className="mission-kr-main">
-        <Input
+        <DraftInput
           className="mission-kr-title"
-          value={title}
+          value={kr.title}
           disabled={readOnly}
-          onChange={(event) => setTitle(event.target.value)}
-          onBlur={() => {
-            if (!readOnly && title.trim() !== kr.title) void saveTitle();
+          onCommit={(next) => {
+            const clean = next.trim();
+            if (clean && clean !== kr.title) patch({ title: clean });
           }}
           aria-label="KR 제목"
         />
@@ -73,83 +63,79 @@ export function KeyResultRow({
 
       {kr.kind === "metric" ? (
         <div className="mission-kr-metric" aria-label="수치형 KR 값">
-          <Input
-            value={current}
+          <DraftInput
+            value={numberDraft(kr.currentValue)}
             disabled={readOnly}
-            onChange={(event) => setCurrent(event.target.value)}
+            onCommit={(next) => patch({ currentValue: parseNullableNumber(next) })}
             inputMode="decimal"
             aria-label="현재값"
           />
           <span className="mission-muted typo-label-sm">/</span>
-          <Input
-            value={target}
+          <DraftInput
+            value={numberDraft(kr.targetValue)}
             disabled={readOnly}
-            onChange={(event) => setTarget(event.target.value)}
+            onCommit={(next) => patch({ targetValue: parseNullableNumber(next) })}
             inputMode="decimal"
             aria-label="목표값"
           />
-          <Input
-            value={unit}
+          <DraftInput
+            value={kr.unit ?? ""}
             disabled={readOnly}
-            onChange={(event) => setUnit(event.target.value)}
+            onCommit={(next) => patch({ unit: next.trim() || null })}
             aria-label="단위"
           />
-          {!readOnly && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              onClick={() => void saveMetric()}
-            >
-              <Save className="size-3.5" />
-              저장
-            </Button>
-          )}
         </div>
       ) : (
-        <MilestonePopover kr={kr} readOnly={readOnly} />
+        <MilestonePopover kr={kr} readOnly={readOnly} onPatch={patch} pending={pending} />
       )}
 
       <ConfidenceBadge checkIn={latestCheckIn} />
       {!readOnly && (
-        <Button
-          size="sm"
-          variant="destructiveGhost"
+        <ArmedDeleteButton
           disabled={pending}
-          aria-label="KR 삭제"
-          onClick={() => void deleteKeyResult.mutateAsync(kr.id)}
-        >
-          <Trash2 className="size-4" />
-        </Button>
+          ariaLabel="KR 삭제"
+          onConfirm={() => void deleteKeyResult.mutateAsync(kr.id)}
+        />
       )}
     </div>
   );
 }
 
-function MilestonePopover({ kr, readOnly }: { kr: KeyResult; readOnly: boolean }) {
-  const updateKeyResult = useUpdateKeyResult();
-  const [milestones, setMilestones] = useState<OkrMilestone[]>(kr.milestones);
+/**
+ * 마일스톤 체크리스트 — 토글/추가 즉시 저장(별도 "적용" 버튼 없음).
+ * 종전엔 로컬 draft에 쌓고 적용을 눌러야 했는데, 팝오버를 닫으면 조용히 유실됐다.
+ */
+function MilestonePopover({
+  kr,
+  readOnly,
+  onPatch,
+  pending,
+}: {
+  kr: KeyResult;
+  readOnly: boolean;
+  onPatch: (partial: { milestones: OkrMilestone[] }) => void;
+  pending: boolean;
+}) {
   const [newMilestone, setNewMilestone] = useState("");
-  const done = milestones.filter((milestone) => milestone.done).length;
+  const done = kr.milestones.filter((milestone) => milestone.done).length;
 
-  const save = async () => {
-    await updateKeyResult.mutateAsync({
-      id: kr.id,
-      title: kr.title,
-      kind: "milestone",
-      currentValue: null,
-      targetValue: null,
-      unit: null,
-      milestones,
-      sortRank: kr.sortRank,
+  const toggle = (index: number, checked: boolean) => {
+    onPatch({
+      milestones: kr.milestones.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, done: checked } : item,
+      ),
     });
   };
 
   const addMilestone = () => {
     const label = newMilestone.trim();
     if (!label) return;
-    setMilestones((current) => [...current, { label, done: false }]);
+    onPatch({ milestones: [...kr.milestones, { label, done: false }] });
     setNewMilestone("");
+  };
+
+  const removeMilestone = (index: number) => {
+    onPatch({ milestones: kr.milestones.filter((_, itemIndex) => itemIndex !== index) });
   };
 
   return (
@@ -157,34 +143,41 @@ function MilestonePopover({ kr, readOnly }: { kr: KeyResult; readOnly: boolean }
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="mission-kr-checklist">
           <ListChecks className="size-4" />
-          체크리스트 {done}/{milestones.length}
+          체크리스트 {done}/{kr.milestones.length}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="mission-milestone-popover" align="end">
         <div className="mission-popover-head">
           <span className="typo-title-sm">마일스톤</span>
           <span className="mission-muted typo-caption-sm">
-            {done}/{milestones.length}
+            {done}/{kr.milestones.length} · 체크 즉시 저장
           </span>
         </div>
         <div className="mission-milestone-list">
-          {milestones.map((milestone, index) => (
-            <label key={`${milestone.label}-${index}`} className="mission-check-row">
-              <Checkbox
-                checked={milestone.done}
-                disabled={readOnly}
-                onCheckedChange={(checked) =>
-                  setMilestones((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, done: checked === true } : item,
-                    ),
-                  )
-                }
-              />
-              <span className="typo-body-md">{milestone.label}</span>
-            </label>
+          {kr.milestones.map((milestone, index) => (
+            <div key={`${milestone.label}-${index}`} className="mission-milestone-row">
+              <label className="mission-check-row">
+                <Checkbox
+                  checked={milestone.done}
+                  disabled={readOnly || pending}
+                  onCheckedChange={(checked) => toggle(index, checked === true)}
+                />
+                <span className="typo-body-md">{milestone.label}</span>
+              </label>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="mission-milestone-remove"
+                  aria-label={`${milestone.label} 삭제`}
+                  disabled={pending}
+                  onClick={() => removeMilestone(index)}
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
-          {milestones.length === 0 && (
+          {kr.milestones.length === 0 && (
             <span className="mission-muted typo-body-md">마일스톤 없음</span>
           )}
         </div>
@@ -199,14 +192,16 @@ function MilestonePopover({ kr, readOnly }: { kr: KeyResult; readOnly: boolean }
                   addMilestone();
                 }
               }}
-              placeholder="새 항목"
+              placeholder="새 항목 (Enter로 추가)"
             />
-            <Button type="button" variant="outline" size="sm" onClick={addMilestone}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={addMilestone}
+            >
               추가
-            </Button>
-            <Button type="button" size="sm" disabled={updateKeyResult.isPending} onClick={save}>
-              <Check className="size-4" />
-              적용
             </Button>
           </div>
         )}
