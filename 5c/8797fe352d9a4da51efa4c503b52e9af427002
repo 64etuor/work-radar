@@ -1,0 +1,19 @@
+docs/superpowers/specs/2026-07-05-okr-copilot-hermes-design.md
+  s_b8a0e42fef66e9::t_419a8cd3d93f56 1-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5c8797fe352d9a4da51efa4c503b52e9af427002",
+  "prompts": {},
+  "sessions": {
+    "s_b8a0e42fef66e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "db9cdbfd-7418-4269-986d-b4f1f287ec02",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
