@@ -1,0 +1,28 @@
+src/components/ui/calendar.tsx
+  s_e36bfa37e0e1a5::t_72254a36f9f471 172
+  s_b7a56f40efbbaa::t_baa188d12fd9a8 173-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "eeb0f4c07e8556660747e54d0cc58aabedba5834",
+  "prompts": {},
+  "sessions": {
+    "s_b7a56f40efbbaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4adad9cf-0684-49e6-a132-0d42c9100d00",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_e36bfa37e0e1a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d4c8a75-da3f-45a1-a9be-a27e6d5c1531",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
