@@ -1,0 +1,21 @@
+docs/areas/parallel-agent-safety.md
+  s_35bfb7f5ae2837::t_4d6032572d866d 86-103
+docs/decisions.md
+  s_35bfb7f5ae2837::t_4d6032572d866d 646
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7e13c0152febb0e973fc4a95fccaafe24ab15629",
+  "prompts": {},
+  "sessions": {
+    "s_35bfb7f5ae2837": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02f5ddb0-6c9e-4184-8565-1148f4217819",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
