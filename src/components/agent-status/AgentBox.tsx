@@ -111,6 +111,10 @@ export function AgentBox({
       type={editing ? undefined : "button"}
       className={`asb-box asb-box-${box.state}`}
       onClick={editing ? undefined : onOpen}
+      // 마우스 클릭이 박스에 포커스를 남기지 않게(툴바 패턴). 포커스가 잔류하면 이후 Enter가
+      // 브레인덤프 대신 박스를 재활성화한다(cmux 박스 = window.hide → "Enter가 창을 닫는" 버그).
+      // 키보드 Tab 포커스는 그대로 — 접근성 불변.
+      onPointerDown={editing ? undefined : (e) => e.preventDefault()}
       title={editing ? undefined : box.title}
       aria-label={editing ? undefined : `${displayName} · ${stateLine}`}
     >

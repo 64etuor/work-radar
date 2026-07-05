@@ -178,7 +178,12 @@ export function AgentStatusBar() {
       // best-effort 실패(false)면 숨기지 않는다 — 앞에 뜨는 창이 없는데 앱만 사라지는 상황 방지.
       focusCmux.mutate(box.key.slice("cmux:".length), {
         onSuccess: (focused) => {
-          if (focused) void getCurrentWindow().hide();
+          if (focused) {
+            // 숨기기 전에 포커스를 비운다 — 키보드(Tab+Enter)로 점프한 경우 포커스가 박스에
+            // 잔류하면, 창 재표시 후 Enter가 브레인덤프 대신 또 window.hide()를 발동한다.
+            (document.activeElement as HTMLElement | null)?.blur?.();
+            void getCurrentWindow().hide();
+          }
         },
       });
     else if (box.key.startsWith("run:")) {
@@ -206,6 +211,8 @@ export function AgentStatusBar() {
       key="asb-cal"
       type="button"
       className="asb-cal"
+      // 클릭 후 포커스 잔류 방지(툴바 패턴) — 잔류하면 전역 Enter가 브레인덤프 대신 재발동한다.
+      onPointerDown={(e) => e.preventDefault()}
       onClick={() => setCalendarOpen(true)}
       title="캘린더 (⌘⇧C)"
       aria-label="캘린더 열기"
@@ -249,6 +256,8 @@ export function AgentStatusBar() {
       className="asb-add-chip"
       aria-label="새 Hermes 탭"
       title="새 Hermes 탭"
+      // 클릭 후 포커스 잔류 방지 — 잔류하면 Enter가 탭을 중복 생성한다.
+      onPointerDown={(e) => e.preventDefault()}
       onClick={() => {
         void (async () => {
           const id = await hermesOpenTab();
@@ -271,6 +280,7 @@ export function AgentStatusBar() {
         <button
           type="button"
           className="asb asb-idle"
+          onPointerDown={(e) => e.preventDefault()}
           onClick={() => goTo("jobs")}
           title="Agent Jobs 열기"
         >

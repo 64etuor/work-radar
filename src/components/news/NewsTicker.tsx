@@ -116,6 +116,9 @@ function NewsTickerItem({
     <button
       type="button"
       className="news-ticker-item"
+      // 마우스 클릭이 티커 항목에 포커스를 남기지 않게(툴바 패턴). 포커스가 잔류하면 이후
+      // 전역 Enter가 브레인덤프 대신 이 링크를 재활성화해 브라우저가 열린다.
+      onPointerDown={(e) => e.preventDefault()}
       onClick={
         tabbable
           ? () => {
