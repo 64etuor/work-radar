@@ -210,7 +210,7 @@ function ObjectiveDialogBody({
         </div>
 
         <div className="mission-pick-group">
-          <span className="typo-label-sm">Horizon</span>
+          <span className="typo-label-sm">장기 목표</span>
           <div className="mission-check-grid">
             {horizons.map((horizon) => (
               <label key={horizon.id} className="mission-check-row">
@@ -222,7 +222,7 @@ function ObjectiveDialogBody({
               </label>
             ))}
             {horizons.length === 0 && (
-              <span className="mission-muted typo-body-md">저장된 Horizon이 없습니다.</span>
+              <span className="mission-muted typo-body-md">저장된 장기 목표가 없습니다.</span>
             )}
           </div>
         </div>

@@ -51,7 +51,7 @@ export function HorizonShelf({ horizons }: { horizons: MissionHorizon[] }) {
     <section className="mission-life-panel">
       <div className="mission-panel-head">
         <div>
-          <h2 className="mission-panel-title typo-title-sm">Horizons</h2>
+          <h2 className="mission-panel-title typo-title-sm">장기 목표</h2>
         </div>
       </div>
       <div className="mission-horizon-list">
@@ -77,14 +77,14 @@ export function HorizonShelf({ horizons }: { horizons: MissionHorizon[] }) {
           </article>
         ))}
         {horizons.length === 0 && (
-          <div className="mission-empty-line typo-body-md">저장된 장기 방향이 없습니다.</div>
+          <div className="mission-empty-line typo-body-md">저장된 장기 목표가 없습니다.</div>
         )}
       </div>
       <form className="mission-horizon-form" onSubmit={submit}>
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="장기 방향 또는 1년 테마"
+          placeholder="장기 목표 또는 1년 테마"
         />
         <Select value={kind} onValueChange={(value) => setKind(value as MissionHorizonKind)}>
           <SelectTrigger className="mission-horizon-kind">

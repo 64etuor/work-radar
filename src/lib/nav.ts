@@ -73,7 +73,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     view: "mission",
     label: "Mission / OKR",
-    search: "mission okr 목표 미션 objective key result 분기 체크인",
+    search: "mission okr 목표 미션 장기 목표 objective key result 분기 체크인",
     icon: Target,
     group: "review",
     defaultShortcut: "Cmd+3",

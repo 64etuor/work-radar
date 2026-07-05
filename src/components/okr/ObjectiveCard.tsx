@@ -107,7 +107,7 @@ export function ObjectiveCard({
         {objective.linkedAreaKeys.length === 0 &&
           objective.linkedProjectIds.length === 0 &&
           horizonIds.length === 0 && (
-            <span className="mission-muted typo-body-md">연결된 태그/프로젝트/Horizon 없음</span>
+            <span className="mission-muted typo-body-md">연결된 태그/프로젝트/장기 목표 없음</span>
           )}
       </div>
 

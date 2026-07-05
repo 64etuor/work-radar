@@ -77,7 +77,7 @@ export function MissionView() {
   return (
     <div className="mission">
       <header className="mission-top" data-tauri-drag-region>
-        <div>
+        <div className="mission-top-copy">
           <span className="mission-eyebrow typo-mono-label">
             <Target className="size-4" />
             Mission / OKR
