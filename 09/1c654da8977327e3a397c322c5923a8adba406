@@ -1,0 +1,22 @@
+src/components/okr/KeyResultRow.tsx
+  s_b7a56f40efbbaa::t_a95a350494a443 111,117-118
+src/components/MissionView.css
+  s_b7a56f40efbbaa::t_a95a350494a443 472-474,481-499,510-513,519-523
+  s_b7a56f40efbbaa::t_0071c6ee8759b1 524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "091c654da8977327e3a397c322c5923a8adba406",
+  "prompts": {},
+  "sessions": {
+    "s_b7a56f40efbbaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4adad9cf-0684-49e6-a132-0d42c9100d00",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
