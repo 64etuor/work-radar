@@ -83,6 +83,24 @@ CLI worker가 정말 필요하면: spec을 `.omc/plans/`에 self-contained로 �
 `tmux capture-pane`으로 실제 submit 됐는지 확인하고 status 신뢰. fallback으로 `send-keys Enter`
 준비.
 
+## 공유 앱 DB — 워크트리 빌드의 마이그레이션 선주행 금지
+
+모든 체크아웃/워크트리의 앱 실행(`pnpm tauri dev`, `--mcp-stdio`, `cargo run`)은 **같은
+사용자 DB**(`~/Library/Application Support/co.kr.mirrorless.workradar/work-radar.db`)를 연다
+— debug/release가 의도적으로 SSOT를 공유한다(`resolve_db_path`). 따라서 새 마이그레이션을
+가진 워크트리에서 앱을 실행하면 공유 DB에 그 마이그레이션이 **dev보다 먼저** 적용되고,
+dev 체크아웃은 `Migrate(VersionMissing(N))` 패닉으로 부팅 불가가 된다(2026-07-05 사고:
+`feat/life-os-weekly-focus` 워크트리가 0067/0068을 선적용 → dev 크래시).
+
+규칙:
+
+- **새 마이그레이션이 있는 워크트리에서 앱을 실행할 때는 반드시 `WORK_RADAR_DEV_DB`로
+  격리 DB(공유 DB의 복사본 등)를 지정한다.** 공유 DB에 스키마를 선주행시키지 않는다.
+- 선주행이 이미 발생했다면(복구 절차): 적용된 마이그레이션 파일을 **바이트 그대로**(DB
+  `_sqlx_migrations.checksum`=SHA-384와 대조) dev로 가져와 커밋한다 — 적용된 마이그레이션은
+  그 시점부터 불변(data-layer 규율)이므로 feature 브랜치도 같은 파일을 유지해야 한다.
+  DB 행 삭제(수술)는 최후 수단.
+
 ## 정본 / 참조
 
 - `~/.claude/projects/-Users-davidpark-private-project-work-radar/memory/`
