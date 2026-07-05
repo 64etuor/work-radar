@@ -1,0 +1,29 @@
+src/components/AgentStatusBar.css
+  s_b8a0e42fef66e9::t_65239ac51be586 201-202
+  s_b8a0e42fef66e9::t_f435d540853fbc 220-221,224
+src/components/AgentStatusBar.tsx
+  s_b8a0e42fef66e9::t_a943493581c023 391
+  s_b8a0e42fef66e9::t_8b7b10ed2107ac 13
+  s_b8a0e42fef66e9::t_3b194fb002628f 5
+  s_b8a0e42fef66e9::t_563b78165cd6d9 66
+  s_b8a0e42fef66e9::t_133b0c3aeead26 212-242
+  s_b8a0e42fef66e9::t_e392c739ab248e 357
+docs/superpowers/specs/2026-07-05-okr-copilot-hermes-design.md
+  s_b8a0e42fef66e9::t_11875c2b33f4a9 54,56-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dd421a1a15d4438f41f6a1ba7a0f0db2a651dbbd",
+  "prompts": {},
+  "sessions": {
+    "s_b8a0e42fef66e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "db9cdbfd-7418-4269-986d-b4f1f287ec02",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
