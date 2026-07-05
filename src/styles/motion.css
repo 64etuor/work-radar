@@ -165,14 +165,17 @@
   }
 }
 
+/* 센터링(-50%,-50%)은 여기 넣지 않는다 — Tailwind v4의 -translate-*-1/2는 CSS `translate`
+ * 프로퍼티라 keyframe `transform`과 **합성**된다. 키프레임에 -50%를 또 넣으면 두 번 적용돼
+ * 다이얼로그가 좌상단으로 밀려 잘린다(fill-mode: both라 영구). pop 효과만 transform으로. */
 @keyframes wr-dialog-pop-in {
   from {
     opacity: 0;
-    transform: translate3d(-50%, calc(-50% + 8px), 0) scale(0.98);
+    transform: translate3d(0, 8px, 0) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translate3d(-50%, -50%, 0) scale(1);
+    transform: none;
   }
 }
 
