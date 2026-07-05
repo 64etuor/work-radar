@@ -1,0 +1,81 @@
+src-tauri/src/hermes_agent/acp_client.rs
+  s_b8a0e42fef66e9::t_1a28fd90cb64d3 735-748,751-763,774-778
+  s_b8a0e42fef66e9::t_8c2ccbfa9c7c30 413-414,416-419
+  s_b8a0e42fef66e9::t_4e6a4d85197c1a 439-447,452
+  s_b8a0e42fef66e9::t_55e5d6e47144cc 764-773
+  s_b8a0e42fef66e9::t_d9d302a51a0791 749-750
+  s_b8a0e42fef66e9::t_215c0ea2a5ad17 420,422-438,448-451,453-473
+  s_e58415e7a404fd::t_681e2dd50646d7 421,734
+src/components/HermesView.tsx
+  s_b8a0e42fef66e9::t_8e7b5131fbecc7 62-63
+  s_b8a0e42fef66e9::t_769f4b4849277e 212-213
+docs/areas/mcp-server-conventions.md
+  s_b8a0e42fef66e9::t_07aaa0b6f3349e 75-79
+  s_b8a0e42fef66e9::t_e5cf981aad5db8 48-53
+src-tauri/src/commands/okr.rs
+  s_b8a0e42fef66e9::t_3c1ff516541789 417-432
+  s_b8a0e42fef66e9::t_4b0c36709dfed0 634
+  s_b8a0e42fef66e9::t_0b3f10a361570e 201
+src/components/hermes/HermesChatInput.tsx
+  s_b8a0e42fef66e9::t_2038ddb1c10905 55-56,64-78
+  s_b8a0e42fef66e9::t_9581d0a2bb8a03 31-34
+  s_e58415e7a404fd::t_f805bfceab9609 79
+docs/areas/decision-rails.md
+  s_b8a0e42fef66e9::t_adb4ca9bdc8bde 38-40
+  s_b8a0e42fef66e9::t_f30992e076c12f 41
+src/components/AgentStatusBar.tsx
+  s_b8a0e42fef66e9::t_0caf85c5199a9f 166-167
+  s_b8a0e42fef66e9::t_d5acbc633e246b 253-265,267-305
+  s_b8a0e42fef66e9::t_33256882b84d1c 5
+src-tauri/src/mcp/mod.rs
+  s_b8a0e42fef66e9::t_0bdf6d795bf819 1360-1581,1587-1624,1626-1662
+  s_b8a0e42fef66e9::t_d9d302a51a0791 17-18,641-645,1582-1586,1625
+  s_b8a0e42fef66e9::t_ea2a2980263764 559-640,646-648,3095
+  s_b8a0e42fef66e9::t_6144c2bffa6cd1 3096-3374
+  s_b8a0e42fef66e9::t_fd4db23c5a420e 27-29
+  s_b8a0e42fef66e9::t_0dde4e40f9ef19 2716-2717
+  s_b8a0e42fef66e9::t_da6dd469ee9820 2523-2526
+  s_b8a0e42fef66e9::t_cbaa58fc388f3f 399-532
+  s_b8a0e42fef66e9::t_aa8d64574cbec7 3047-3094
+docs/decisions.md
+  s_b8a0e42fef66e9::t_11ee780eb13472 647
+src/components/MissionView.tsx
+  s_b8a0e42fef66e9::t_340fe9c873f64f 122
+  s_b8a0e42fef66e9::t_3e5b8164a1d427 13
+docs/superpowers/specs/2026-07-05-okr-copilot-hermes-design.md
+  s_b8a0e42fef66e9::t_60a1e0c9ddbf16 50-51
+  s_b8a0e42fef66e9::t_9b7e72dc07115d 27-32
+src/components/hermes/useHermesTabsStore.ts
+  s_b8a0e42fef66e9::t_8d4e2a2f05e143 463-470
+  s_b8a0e42fef66e9::t_e6c860254f41e7 58-62
+  s_b8a0e42fef66e9::t_4385a45431294a 124-127
+  s_b8a0e42fef66e9::t_68241a98f4ce2a 18-20
+src/components/okr/OkrAskAiButton.tsx
+  s_b8a0e42fef66e9::t_99f6a15d8d56ea 1-43
+src-tauri/src/commands/hermes_agent.rs
+  s_b8a0e42fef66e9::t_55212fd6869916 37-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b83485e74698383df0ba698333f5b58b9c7a9f8a",
+  "prompts": {},
+  "sessions": {
+    "s_b8a0e42fef66e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "db9cdbfd-7418-4269-986d-b4f1f287ec02",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_e58415e7a404fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3043-e01d-7771-88fc-8bd78843c96c",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
