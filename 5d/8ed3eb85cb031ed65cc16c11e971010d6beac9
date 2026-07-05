@@ -1,0 +1,29 @@
+src/components/okr/OkrImportButton.tsx
+  s_b7a56f40efbbaa::t_0fca898a639506 1-102
+src/components/MissionView.css
+  s_b7a56f40efbbaa::t_351b8a3c0a71c3 148-195
+src/lib/okr.ts
+  s_b7a56f40efbbaa::t_68bad48c523910 148-191
+src/components/okr/MissionStatement.tsx
+  s_b7a56f40efbbaa::t_cfd5b8f57a6edf 1-71
+src/components/okr/RolloverButton.tsx
+  s_b7a56f40efbbaa::t_e9faeab11c0ca4 1-85
+src/components/MissionView.tsx
+  s_b7a56f40efbbaa::t_1007c4083195fd 3-4,6,10,13-14,26-34,48-56,59,85-86,96-107,152,154-155,159,176-180,182,184-225,227-232,235-236,266-281,283-301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5d8ed3eb85cb031ed65cc16c11e971010d6beac9",
+  "prompts": {},
+  "sessions": {
+    "s_b7a56f40efbbaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4adad9cf-0684-49e6-a132-0d42c9100d00",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
