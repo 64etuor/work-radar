@@ -1,0 +1,21 @@
+src/styles/motion.css
+  s_b7a56f40efbbaa::t_a05ae9d6b36178 168-170,174,178
+src/App.tsx
+  s_b7a56f40efbbaa::t_c0f87e285c4307 187-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b029ccbedb8f020c58a843a26c6372534cde90bd",
+  "prompts": {},
+  "sessions": {
+    "s_b7a56f40efbbaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4adad9cf-0684-49e6-a132-0d42c9100d00",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
