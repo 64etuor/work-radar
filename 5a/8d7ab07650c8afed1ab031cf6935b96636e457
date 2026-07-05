@@ -1,0 +1,33 @@
+src/components/MissionView.layout.test.ts
+  s_0f515b2c8d0e74::t_2543da346cc69e 1-30
+src/lib/nav.ts
+  s_0f515b2c8d0e74::t_e2a7c13d314285 76
+src/components/okr/ObjectiveCard.tsx
+  s_0f515b2c8d0e74::t_68c6f1f947a4a5 110
+src/components/okr/HorizonShelf.tsx
+  s_0f515b2c8d0e74::t_9854f74ecb3403 54,80,87
+src/components/MissionView.tsx
+  s_0f515b2c8d0e74::t_cc5e87fa3b9521 80
+src/components/MissionView.copy.test.ts
+  s_0f515b2c8d0e74::t_dcc15bfd099730 1-28
+src/components/okr/ObjectiveDialog.tsx
+  s_0f515b2c8d0e74::t_72b6761f07d0cc 213,225
+src/components/MissionView.css
+  s_0f515b2c8d0e74::t_be6194dae5ac87 44-48,53,74-75,77-82,549-550
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5a8d7ab07650c8afed1ab031cf6935b96636e457",
+  "prompts": {},
+  "sessions": {
+    "s_0f515b2c8d0e74": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2ca3-1a8b-7ba0-ae88-e4a52b4a8534",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
