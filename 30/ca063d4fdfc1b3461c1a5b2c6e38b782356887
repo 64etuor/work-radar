@@ -1,0 +1,24 @@
+src/components/okr/ObjectiveCard.tsx
+  s_08d43cb44bad97::t_bd52babe0deab3 54-55
+  s_08d43cb44bad97::t_cefbef12384c90 90-93
+  s_08d43cb44bad97::t_fa54cb24488de2 157
+  s_08d43cb44bad97::t_8d8dd82040531d 241
+  s_08d43cb44bad97::t_8159d8e9a935c7 151
+  s_08d43cb44bad97::t_579e15e5685aba 192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "30ca063d4fdfc1b3461c1a5b2c6e38b782356887",
+  "prompts": {},
+  "sessions": {
+    "s_08d43cb44bad97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26be425e-204e-4666-9a65-1cf9813bc988",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
