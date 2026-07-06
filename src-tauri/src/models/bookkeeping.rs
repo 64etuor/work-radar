@@ -654,6 +654,26 @@ pub struct BookkeepingBudgetStatus {
     pub currency: String,
 }
 
+/// 예산 탭 한 행 — 상위 카테고리별 한도(없으면 `None`)·집행·롤오버·과거 지출 기반 제안액을
+/// 서버에서 합쳐 반환. `has_budget=false`는 지출은 있으나 예산 미설정인 카테고리.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingBudgetPlanRow {
+    pub category_code: String,
+    pub label: String,
+    pub has_budget: bool,
+    pub budget_id: Option<String>,
+    pub limit_minor: Option<i32>,
+    pub rollover: bool,
+    pub spent_minor: i32,
+    pub rollover_in_minor: i32,
+    pub remaining_minor: i32,
+    pub pct: f64,
+    /// 직전 완결 N개월 지출 평균(당월 제외), 1,000원 단위 반올림.
+    pub suggested_minor: i32,
+    pub currency: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BookkeepingCategoryTrendInput {

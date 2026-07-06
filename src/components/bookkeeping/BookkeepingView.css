@@ -1002,6 +1002,109 @@
   background: var(--bk-danger);
 }
 
+/* 예산 탭(BudgetPlannerPanel) — KPI · 툴바 · 카테고리 표 */
+.bk-budget-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--wr-density-sm);
+  margin-bottom: var(--wr-density-md);
+}
+
+.bk-budget-kpi {
+  display: grid;
+  gap: var(--wr-density-xs);
+  padding: var(--wr-density-md);
+  border: 1px solid var(--bk-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bk-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-budget-kpi[data-overrun="true"] > strong {
+  color: var(--bk-danger);
+}
+
+.bk-budget-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--wr-density-sm);
+  margin-bottom: var(--wr-density-md);
+}
+
+.bk-budget-months {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wr-density-sm);
+  color: var(--bk-muted);
+}
+
+.bk-budget-table {
+  font-variant-numeric: tabular-nums;
+}
+
+.bk-budget-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wr-density-sm);
+}
+
+.bk-budget-table tr[data-unset="true"] {
+  background: var(--bk-stone);
+}
+
+.bk-budget-table tr[data-overrun="true"] .bk-budget-fill {
+  background: var(--bk-danger);
+}
+
+.bk-budget-unset-badge {
+  padding: 1px var(--wr-density-xs);
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--bk-amber, var(--bk-muted)) 20%, transparent);
+  color: var(--bk-muted);
+  font-size: var(--typo-caption-sm-size, 0.75rem);
+  white-space: nowrap;
+}
+
+.bk-budget-suggest {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wr-density-xs);
+  padding: 2px var(--wr-density-sm);
+  border: 1px dashed var(--bk-rule-strong);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--bk-muted);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color var(--wr-motion-fast) var(--wr-ease-out),
+    color var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+.bk-budget-suggest:hover:not(:disabled) {
+  border-color: var(--bk-green);
+  color: var(--bk-ink, inherit);
+}
+
+.bk-budget-suggest:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.bk-budget-limit-input {
+  width: 8rem;
+  margin-left: auto;
+  text-align: right;
+}
+
+.bk-budget-progress {
+  display: grid;
+  gap: var(--wr-density-xs);
+  min-width: 8rem;
+}
+
 .bk-reconcile-form {
   margin-bottom: var(--wr-density-lg);
 }

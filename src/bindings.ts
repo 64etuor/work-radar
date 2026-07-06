@@ -45,6 +45,11 @@ export const commands = {
 	listBookkeepingBudgets: (month: string, projectId: string | null) => typedError<BookkeepingBudget[], AppError>(__TAURI_INVOKE("list_bookkeeping_budgets", { month, projectId })),
 	deleteBookkeepingBudget: (id: string) => typedError<boolean, AppError>(__TAURI_INVOKE("delete_bookkeeping_budget", { id })),
 	bookkeepingBudgetStatus: (month: string, projectId: string | null) => typedError<BookkeepingBudgetStatus[], AppError>(__TAURI_INVOKE("bookkeeping_budget_status", { month, projectId })),
+	/**
+	 *  예산 탭 데이터 — 상위 카테고리별 한도(미설정 포함)·집행·롤오버 + 과거 지출 기반 제안액을
+	 *  서버에서 합쳐 반환. `months_back`(1..=24, 기본 3)은 제안 산정 기준 월 수.
+	 */
+	bookkeepingBudgetPlanner: (month: string, projectId: string | null, monthsBack: number | null) => typedError<BookkeepingBudgetPlanRow[], AppError>(__TAURI_INVOKE("bookkeeping_budget_planner", { month, projectId, monthsBack })),
 	bookkeepingCategoryTrend: (input: BookkeepingCategoryTrendInput) => typedError<BookkeepingCategoryTrendRow[], AppError>(__TAURI_INVOKE("bookkeeping_category_trend", { input })),
 	bookkeepingCashflow: (input: BookkeepingCashflowInput) => typedError<BookkeepingCashflowRow[], AppError>(__TAURI_INVOKE("bookkeeping_cashflow", { input })),
 	bookkeepingReconcileAccount: (input: BookkeepingReconcileAccountInput) => typedError<BookkeepingReconcileAccountResult, AppError>(__TAURI_INVOKE("bookkeeping_reconcile_account", { input })),
@@ -1085,6 +1090,26 @@ export type BookkeepingBudget = {
 	note: string | null,
 	createdAt: string,
 	updatedAt: string,
+};
+
+/**
+ *  예산 탭 한 행 — 상위 카테고리별 한도(없으면 `None`)·집행·롤오버·과거 지출 기반 제안액을
+ *  서버에서 합쳐 반환. `has_budget=false`는 지출은 있으나 예산 미설정인 카테고리.
+ */
+export type BookkeepingBudgetPlanRow = {
+	categoryCode: string,
+	label: string,
+	hasBudget: boolean,
+	budgetId: string | null,
+	limitMinor: number | null,
+	rollover: boolean,
+	spentMinor: number,
+	rolloverInMinor: number,
+	remainingMinor: number,
+	pct: number | null,
+	/**  직전 완결 N개월 지출 평균(당월 제외), 1,000원 단위 반올림. */
+	suggestedMinor: number,
+	currency: string,
 };
 
 export type BookkeepingBudgetStatus = {

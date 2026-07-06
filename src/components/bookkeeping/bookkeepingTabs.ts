@@ -3,7 +3,8 @@
 export const BOOKKEEPING_TABS = [
   { id: "review", label: "검토" },
   { id: "ledger", label: "원장" },
-  { id: "recurring", label: "정기·예산" },
+  { id: "recurring", label: "정기" },
+  { id: "budget", label: "예산" },
   { id: "reports", label: "리포트" },
   { id: "import", label: "가져오기" },
 ] as const;

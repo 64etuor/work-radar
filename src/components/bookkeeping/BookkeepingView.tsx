@@ -12,7 +12,6 @@ import type {
 } from "@/bindings";
 import {
   useBookkeepingAudit,
-  useBookkeepingBudgetStatus,
   useBookkeepingCashflow,
   useBookkeepingCategoryTrend,
   useBookkeepingGmailLabels,
@@ -37,7 +36,6 @@ import {
   usePostBookkeepingRecurringOccurrence,
   useProjects,
   useRestoreBookkeepingTransaction,
-  useSetBookkeepingBudget,
   useSetBookkeepingMmbakOptions,
   useSetBookkeepingRecurringOccurrenceStatus,
   useSyncBookkeepingGmailReceipts,
@@ -52,8 +50,6 @@ import { Button } from "../ui/button";
 import { Sheet, SheetContent, SheetTitle } from "../ui/sheet";
 import { ALL_PROJECTS } from "./bookkeepingConstants";
 import {
-  type BudgetDraft,
-  emptyBudgetDraft,
   emptyGmailSyncDraft,
   emptyManualDraft,
   emptyReconciliationDraft,
@@ -82,7 +78,7 @@ import { ApprovedTransactionsCard } from "./cards/ApprovedTransactionsCard";
 import { BookkeepingExportControls } from "./cards/BookkeepingExportControls";
 import { BookkeepingMetrics } from "./cards/BookkeepingMetrics";
 import { BookkeepingScopeControls } from "./cards/BookkeepingScopeControls";
-import { BudgetCard } from "./cards/BudgetCard";
+import { BudgetPlannerPanel } from "./cards/BudgetPlannerPanel";
 import { CategorySummaryCard } from "./cards/CategorySummaryCard";
 import { CurrencySummaryRows } from "./cards/CurrencySummaryRows";
 import { GmailSyncCard } from "./cards/GmailSyncCard";
@@ -109,7 +105,6 @@ export function BookkeepingView() {
   );
   const [manualDraft, setManualDraft] = useState<ManualDraft>(() => emptyManualDraft());
   const [recurringDraft, setRecurringDraft] = useState<RecurringDraft>(() => emptyRecurringDraft());
-  const [budgetDraft, setBudgetDraft] = useState<BudgetDraft>(() => emptyBudgetDraft());
   const [reconciliationDraft, setReconciliationDraft] = useState<ReconciliationDraft>(() =>
     emptyReconciliationDraft(),
   );
@@ -155,7 +150,6 @@ export function BookkeepingView() {
   );
   const trashTransactions = useBookkeepingTrash(activeProjectId);
   const summary = useBookkeepingMonthlySummary(month, activeProjectId);
-  const budgetStatus = useBookkeepingBudgetStatus(month, activeProjectId);
   const cashflow = useBookkeepingCashflow({
     projectId: activeProjectId,
     fromMonth: reportFromMonth,
@@ -185,7 +179,6 @@ export function BookkeepingView() {
   const bulkReview = useBulkUpdateBookkeepingReviewStatus();
   const bulkCategory = useBulkSetBookkeepingCategory();
   const bulkDelete = useBulkDeleteBookkeepingTransactions();
-  const setBudget = useSetBookkeepingBudget();
   const reconcileAccount = useBookkeepingReconcileAccount();
   const writeExport = useWriteBookkeepingExport();
   const updateTx = useUpdateBookkeepingTransaction();
@@ -362,30 +355,6 @@ export function BookkeepingView() {
       onSuccess: (summary) => pushSuccess(formatMmbakImportSummary(summary)),
       onError: (error) => pushMutationError("bookkeeping.mmbak", error),
     });
-  };
-
-  const submitBudget = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const amount = Number(budgetDraft.amount);
-    if (!Number.isFinite(amount) || amount < 0) {
-      pushError("bookkeeping.budget", "예산 금액을 확인하세요");
-      return;
-    }
-    setBudget.mutate(
-      {
-        projectId: activeProjectId,
-        month,
-        categoryCode: budgetDraft.category,
-        limitMinor: Math.round(amount),
-        currency: "KRW",
-        rollover: budgetDraft.rollover,
-        note: nullableText(budgetDraft.note),
-      },
-      {
-        onSuccess: () => pushSuccess("예산을 저장했습니다"),
-        onError: (error) => pushMutationError("bookkeeping.budget", error),
-      },
-    );
   };
 
   const submitReconciliation = (event: FormEvent<HTMLFormElement>) => {
@@ -734,13 +703,6 @@ export function BookkeepingView() {
               onOpenChange={(open) => setInputPanelOpen({ panel: "recurring", open })}
               onSubmit={submitRecurring}
             />
-            <BudgetCard
-              draft={budgetDraft}
-              statuses={budgetStatus.data ?? []}
-              pending={setBudget.isPending}
-              onDraftChange={setBudgetDraft}
-              onSubmit={submitBudget}
-            />
             <ReconciliationCard
               draft={reconciliationDraft}
               pending={reconcileAccount.isPending}
@@ -749,6 +711,10 @@ export function BookkeepingView() {
               onSubmit={submitReconciliation}
             />
           </div>
+        </BookkeepingTabPanel>
+
+        <BookkeepingTabPanel tab="budget" active={activeTab}>
+          <BudgetPlannerPanel month={month} projectId={activeProjectId} />
         </BookkeepingTabPanel>
 
         <BookkeepingTabPanel tab="reports" active={activeTab}>

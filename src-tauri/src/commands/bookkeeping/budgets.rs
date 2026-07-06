@@ -4,7 +4,9 @@ use tauri::State;
 
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{BookkeepingBudget, BookkeepingBudgetStatus, SetBookkeepingBudgetInput};
+use crate::models::{
+    BookkeepingBudget, BookkeepingBudgetPlanRow, BookkeepingBudgetStatus, SetBookkeepingBudgetInput,
+};
 
 use super::*;
 
@@ -41,6 +43,19 @@ pub async fn bookkeeping_budget_status(
     project_id: Option<String>,
 ) -> Result<Vec<BookkeepingBudgetStatus>, AppError> {
     bookkeeping_budget_status_inner(db.inner(), &month, project_id.as_deref()).await
+}
+
+/// 예산 탭 데이터 — 상위 카테고리별 한도(미설정 포함)·집행·롤오버 + 과거 지출 기반 제안액을
+/// 서버에서 합쳐 반환. `months_back`(1..=24, 기본 3)은 제안 산정 기준 월 수.
+#[tauri::command]
+#[specta::specta]
+pub async fn bookkeeping_budget_planner(
+    db: State<'_, Db>,
+    month: String,
+    project_id: Option<String>,
+    months_back: Option<u32>,
+) -> Result<Vec<BookkeepingBudgetPlanRow>, AppError> {
+    bookkeeping_budget_planner_inner(db.inner(), &month, project_id.as_deref(), months_back).await
 }
 
 pub(crate) async fn set_bookkeeping_budget_inner(
@@ -190,6 +205,184 @@ pub(crate) async fn bookkeeping_budget_status_inner(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.category_code.cmp(&b.category_code))
     });
+    Ok(rows)
+}
+
+/// 제안 산정 기준 월 수. 미지정 시 3, 범위는 1..=24로 clamp.
+const DEFAULT_BUDGET_SUGGESTION_MONTHS: u32 = 3;
+
+pub(crate) fn clamp_budget_months_back(months_back: Option<u32>) -> u32 {
+    months_back
+        .unwrap_or(DEFAULT_BUDGET_SUGGESTION_MONTHS)
+        .clamp(1, 24)
+}
+
+/// 정수 minor 금액을 1,000원 단위로 반올림(음수는 0으로 바닥). 제안액 표시용.
+pub(crate) fn round_to_thousand(value: i64) -> i32 {
+    if value <= 0 {
+        return 0;
+    }
+    let rounded = ((value as f64) / 1000.0).round() * 1000.0;
+    rounded.clamp(0.0, i32::MAX as f64) as i32
+}
+
+pub(crate) async fn bookkeeping_budget_planner_inner(
+    db: &Db,
+    month: &str,
+    project_id: Option<&str>,
+    months_back: Option<u32>,
+) -> Result<Vec<BookkeepingBudgetPlanRow>, AppError> {
+    validate_month(month)?;
+    let project_id = clean_optional(project_id);
+    let months = clamp_budget_months_back(months_back);
+
+    // 제안 산정 창: 당월을 제외한 직전 `months`개월. [trailing_start, current_month_start).
+    let (current_month_start, current_month_end) = month_bounds(month)?;
+    let mut earliest = month.to_string();
+    for _ in 0..months {
+        earliest = previous_month(&earliest)?;
+    }
+    let (trailing_start, _) = month_bounds(&earliest)?;
+
+    // 상위 카테고리 그룹 지출 — 예산 매칭(`spent_for_budget_category`)과 동일하게
+    // COALESCE(category_code, category)로 버킷. 두 창을 한 번씩 집계한다.
+    let trailing = grouped_expense_by_category(
+        db,
+        &trailing_start,
+        &current_month_start,
+        project_id.as_deref(),
+    )
+    .await?;
+    let current = grouped_expense_by_category(
+        db,
+        &current_month_start,
+        &current_month_end,
+        project_id.as_deref(),
+    )
+    .await?;
+
+    // 행 집합 = (당월 예산 있는 카테고리) ∪ (직전 창 지출) ∪ (당월 지출).
+    let budgets = list_bookkeeping_budgets_inner(db, month, project_id.as_deref()).await?;
+    let mut codes: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    codes.extend(trailing.iter().map(|(code, _)| code.clone()));
+    codes.extend(current.iter().map(|(code, _)| code.clone()));
+    codes.extend(budgets.iter().map(|b| b.category_code.clone()));
+
+    let trailing_map: std::collections::HashMap<&str, i64> =
+        trailing.iter().map(|(c, v)| (c.as_str(), *v)).collect();
+    let current_map: std::collections::HashMap<&str, i64> =
+        current.iter().map(|(c, v)| (c.as_str(), *v)).collect();
+    let budget_map: std::collections::HashMap<&str, &BookkeepingBudget> = budgets
+        .iter()
+        .map(|b| (b.category_code.as_str(), b))
+        .collect();
+
+    let mut rows = Vec::with_capacity(codes.len());
+    for code in codes {
+        let budget = budget_map.get(code.as_str()).copied();
+        let spent = current_map
+            .get(code.as_str())
+            .copied()
+            .unwrap_or(0)
+            .max(0)
+            .min(i32::MAX as i64) as i32;
+        let suggested = round_to_thousand(
+            trailing_map.get(code.as_str()).copied().unwrap_or(0) / months as i64,
+        );
+
+        let (has_budget, budget_id, limit_minor, rollover, rollover_in, remaining, pct, currency) =
+            if let Some(budget) = budget {
+                let rollover_in = if budget.rollover {
+                    rollover_in_for_budget(db, &budget.month, project_id.as_deref(), &code).await?
+                } else {
+                    0
+                };
+                let available = budget.limit_minor.saturating_add(rollover_in);
+                let remaining = available - spent;
+                let pct = if available > 0 {
+                    spent as f64 / available as f64
+                } else {
+                    0.0
+                };
+                (
+                    true,
+                    Some(budget.id.clone()),
+                    Some(budget.limit_minor),
+                    budget.rollover,
+                    rollover_in,
+                    remaining,
+                    pct,
+                    budget.currency.clone(),
+                )
+            } else {
+                // 예산 미설정 — 잔여/집행률은 의미 없으므로 0. 제안액만 노출.
+                (
+                    false,
+                    None,
+                    None,
+                    false,
+                    0,
+                    0,
+                    0.0,
+                    DEFAULT_CURRENCY.to_string(),
+                )
+            };
+
+        let label = category_label(db, &code).await?;
+        rows.push(BookkeepingBudgetPlanRow {
+            category_code: code,
+            label,
+            has_budget,
+            budget_id,
+            limit_minor,
+            rollover,
+            spent_minor: spent,
+            rollover_in_minor: rollover_in,
+            remaining_minor: remaining,
+            pct,
+            suggested_minor: suggested,
+            currency,
+        });
+    }
+
+    // 미설정(지출만)보다 설정된 예산을 위로, 그 안에서 집행률 높은 순 → 코드 순.
+    rows.sort_by(|a, b| {
+        b.has_budget
+            .cmp(&a.has_budget)
+            .then_with(|| {
+                b.pct
+                    .partial_cmp(&a.pct)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| b.spent_minor.cmp(&a.spent_minor))
+            .then_with(|| a.category_code.cmp(&b.category_code))
+    });
+    Ok(rows)
+}
+
+/// 상위 카테고리 버킷별 지출 합 — expense·비ignored·비deleted, [start, end) 범위.
+/// 반환 순서는 무의미(호출부가 map/set으로 소비).
+async fn grouped_expense_by_category(
+    db: &Db,
+    start: &str,
+    end: &str,
+    project_id: Option<&str>,
+) -> Result<Vec<(String, i64)>, AppError> {
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT COALESCE(category_code, category) AS code, COALESCE(SUM(amount_minor), 0) \
+         FROM bookkeeping_transactions \
+         WHERE spent_at >= ?1 AND spent_at < ?2 \
+           AND review_status != 'ignored' \
+           AND direction = 'expense' \
+           AND deleted_at IS NULL \
+           AND (?3 IS NULL OR project_id = ?3) \
+         GROUP BY code",
+    )
+    .bind(start)
+    .bind(end)
+    .bind(project_id)
+    .fetch_all(db)
+    .await?;
     Ok(rows)
 }
 

@@ -944,6 +944,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn budget_planner_suggests_trailing_average_and_surfaces_unbudgeted_spend() {
+        let db = pool().await;
+        // 직전 3개월(4/5/6) food 지출 합 9_000 → 평균 3_000. 당월(7월) 지출은 제안에서 제외.
+        for (name, minor, date) in [
+            ("Apr food", 2_000, "2026-04-10"),
+            ("May food", 4_000, "2026-05-10"),
+            ("Jun food", 3_000, "2026-06-10"),
+            ("Jul food", 10_000, "2026-07-05"),
+        ] {
+            create_bookkeeping_transaction_inner(&db, manual_input(name, minor, date, "food"))
+                .await
+                .expect("food expense");
+        }
+        // transport: 직전 창에만 지출(합 3_000 → 평균 1_000), 예산 미설정.
+        for (name, minor, date) in [
+            ("May transport", 1_000, "2026-05-11"),
+            ("Jun transport", 2_000, "2026-06-11"),
+        ] {
+            create_bookkeeping_transaction_inner(&db, manual_input(name, minor, date, "transport"))
+                .await
+                .expect("transport expense");
+        }
+
+        set_bookkeeping_budget_inner(
+            &db,
+            SetBookkeepingBudgetInput {
+                project_id: None,
+                month: "2026-07".to_string(),
+                category_code: "food".to_string(),
+                limit_minor: 5_000,
+                currency: None,
+                rollover: false,
+                note: None,
+            },
+        )
+        .await
+        .expect("july food budget");
+
+        let rows = bookkeeping_budget_planner_inner(&db, "2026-07", None, None)
+            .await
+            .expect("planner");
+
+        let food = rows
+            .iter()
+            .find(|r| r.category_code == "food")
+            .expect("food row");
+        assert!(food.has_budget);
+        assert_eq!(food.limit_minor, Some(5_000));
+        assert_eq!(food.spent_minor, 10_000); // 당월 지출
+        assert_eq!(food.suggested_minor, 3_000); // 당월 제외 평균
+        assert_eq!(food.remaining_minor, -5_000);
+        assert!(food.pct > 1.0);
+
+        let transport = rows
+            .iter()
+            .find(|r| r.category_code == "transport")
+            .expect("transport row");
+        assert!(!transport.has_budget); // 지출만 있고 예산 미설정 → 노출
+        assert_eq!(transport.limit_minor, None);
+        assert_eq!(transport.spent_minor, 0);
+        assert_eq!(transport.suggested_minor, 1_000);
+
+        // 설정된 예산이 미설정보다 앞선다.
+        assert_eq!(rows[0].category_code, "food");
+    }
+
+    #[test]
+    fn budget_suggestion_rounds_to_nearest_thousand() {
+        assert_eq!(round_to_thousand(0), 0);
+        assert_eq!(round_to_thousand(-500), 0);
+        assert_eq!(round_to_thousand(1_499), 1_000);
+        assert_eq!(round_to_thousand(1_500), 2_000);
+        assert_eq!(round_to_thousand(466), 0);
+        assert_eq!(clamp_budget_months_back(None), 3);
+        assert_eq!(clamp_budget_months_back(Some(0)), 1);
+        assert_eq!(clamp_budget_months_back(Some(999)), 24);
+    }
+
+    #[tokio::test]
     async fn cashflow_zero_fills_months_and_calculates_net() {
         let db = pool().await;
         create_bookkeeping_transaction_inner(

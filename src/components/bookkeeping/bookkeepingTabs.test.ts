@@ -16,6 +16,7 @@ describe("bookkeeping tabs", () => {
       "review",
       "ledger",
       "recurring",
+      "budget",
       "reports",
       "import",
     ]);

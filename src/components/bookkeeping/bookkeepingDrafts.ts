@@ -55,13 +55,6 @@ export type RecurringDraft = {
   note: string;
 };
 
-export type BudgetDraft = {
-  category: string;
-  amount: string;
-  rollover: boolean;
-  note: string;
-};
-
 export type ReconciliationDraft = {
   account: string;
   statementDate: string;
@@ -101,15 +94,6 @@ export function emptyRecurringDraft(): RecurringDraft {
     paymentMethodLabel: "",
     paymentMethodLast4: "",
     expenseKind: "fixed",
-    note: "",
-  };
-}
-
-export function emptyBudgetDraft(): BudgetDraft {
-  return {
-    category: "food",
-    amount: "",
-    rollover: false,
     note: "",
   };
 }

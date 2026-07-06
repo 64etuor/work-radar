@@ -189,6 +189,17 @@ export function useBookkeepingBudgetStatus(month: string, projectId: string | nu
   });
 }
 
+export function useBookkeepingBudgetPlanner(
+  month: string,
+  projectId: string | null = null,
+  monthsBack: number | null = null,
+) {
+  return useQuery({
+    queryKey: ["bookkeeping", "budgetPlanner", month, projectId, monthsBack],
+    queryFn: () => unwrap(commands.bookkeepingBudgetPlanner(month, projectId, monthsBack)),
+  });
+}
+
 export function useBookkeepingCashflow(input: BookkeepingCashflowInput) {
   return useQuery({
     queryKey: ["bookkeeping", "cashflow", input],
