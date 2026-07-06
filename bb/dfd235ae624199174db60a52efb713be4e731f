@@ -1,0 +1,76 @@
+src/components/bookkeeping/cards/BudgetPlannerPanel.dom.test.tsx
+  s_08d43cb44bad97::t_bf6baf9925fada 1-105
+src/components/bookkeeping/BookkeepingView.tsx
+  s_08d43cb44bad97::t_27217260007750 81
+  s_08d43cb44bad97::t_134ef66260525b 716-717
+  s_e8931cc606f0f0::t_5aa5b8bef26365 718-719
+src/components/bookkeeping/cards/BudgetPlannerPanel.tsx
+  s_08d43cb44bad97::t_e073f23ee03549 1-22,25-59,65-190,192-252,258-264,266-288
+  s_08d43cb44bad97::t_60c8f4c840b0bc 23-24
+  s_08d43cb44bad97::t_1b2111599136aa 253-257
+  s_08d43cb44bad97::t_de0929973b1e3f 60-64
+  s_08d43cb44bad97::t_fdc8220f72c513 265
+  s_08d43cb44bad97::t_65f960ad65a517 191
+  s_08d43cb44bad97::t_dd5863ba699267 289-297
+docs/superpowers/specs/2026-07-05-bookkeeping-budget-tab-design.md
+  s_08d43cb44bad97::t_cb5fbdd984f4fc 1-75
+src/components/bookkeeping/budgetPlanner.ts
+  s_08d43cb44bad97::t_4292720da6fd0b 1-40
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_08d43cb44bad97::t_696e76be521b9d 947-1024
+  s_e8931cc606f0f0::t_bef261a259568c 946
+src/components/bookkeeping/budgetPlanner.test.ts
+  s_08d43cb44bad97::t_a6e2649b078be2 1-65
+  s_08d43cb44bad97::t_9048c2bde298b5 66-77
+src/components/bookkeeping/BookkeepingView.css
+  s_08d43cb44bad97::t_44156a6f22f692 1005-1107
+src-tauri/src/models/bookkeeping.rs
+  s_08d43cb44bad97::t_b59a9bc5481498 657-676
+src/components/bookkeeping/bookkeepingTabs.test.ts
+  s_08d43cb44bad97::t_23de504cb49a7f 19
+src/lib/query/bookkeeping.ts
+  s_08d43cb44bad97::t_24fcb9c4ece516 192-202
+src-tauri/src/lib.rs
+  s_08d43cb44bad97::t_69eda00984f940 95
+src/components/bookkeeping/bookkeepingTabs.ts
+  s_08d43cb44bad97::t_cfa070054320af 6-7
+src-tauri/src/commands/bookkeeping/budgets.rs
+  s_08d43cb44bad97::t_936f2d53770d54 275-278,289-291,319-328
+  s_08d43cb44bad97::t_ba8f1258310e86 48-60
+  s_08d43cb44bad97::t_2b024aa71dc65c 7-9
+  s_08d43cb44bad97::t_642bb0f4857a18 211-274,279-288,292-318,329-388
+src/bindings.ts
+  s_1544717f4cdb5f::t_caf32001867cea 48-52,1095-1114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bbdfd235ae624199174db60a52efb713be4e731f",
+  "prompts": {},
+  "sessions": {
+    "s_08d43cb44bad97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26be425e-204e-4666-9a65-1cf9813bc988",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_1544717f4cdb5f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3694-06d9-7a13-9e6d-19e1785b720d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_e8931cc606f0f0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3271-2778-7c22-9f01-f36600a8182f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
