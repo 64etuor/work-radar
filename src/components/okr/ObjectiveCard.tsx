@@ -51,6 +51,8 @@ export function ObjectiveCard({
   const readOnly = objective.status === "closed";
   const progress = objectiveProgressRatio(objective.keyResults);
   const sortedKrs = [...objective.keyResults].sort((a, b) => a.sortRank - b.sortRank);
+  // KR 추가 폼 열림 상태 — 트리거는 헤더 액션(수정·마감 옆), 폼은 카드 하단에 렌더.
+  const [addOpen, setAddOpen] = useState(false);
 
   return (
     <article className="mission-objective" data-status={objective.status}>
@@ -84,6 +86,10 @@ export function ObjectiveCard({
               >
                 <Archive className="size-4" />
                 마감
+              </Button>
+              <Button size="sm" disabled={addOpen} onClick={() => setAddOpen(true)}>
+                <Plus className="size-4" />
+                추가
               </Button>
             </>
           )}
@@ -142,15 +148,14 @@ export function ObjectiveCard({
       {readOnly ? (
         <ClosedObjectiveHistory objective={objective} checkIns={checkIns} />
       ) : (
-        <AddKeyResultForm objective={objective} />
+        addOpen && <AddKeyResultForm objective={objective} onClose={() => setAddOpen(false)} />
       )}
     </article>
   );
 }
 
-function AddKeyResultForm({ objective }: { objective: Objective }) {
+function AddKeyResultForm({ objective, onClose }: { objective: Objective; onClose: () => void }) {
   const createKeyResult = useCreateKeyResult();
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<KeyResultKind>("metric");
   const [current, setCurrent] = useState("");
@@ -184,17 +189,8 @@ function AddKeyResultForm({ objective }: { objective: Objective }) {
     setTarget("");
     setUnit("");
     setMilestones("");
-    setOpen(false);
+    onClose();
   };
-
-  if (!open) {
-    return (
-      <Button variant="ghost" size="sm" className="mission-add-kr" onClick={() => setOpen(true)}>
-        <Plus className="size-4" />
-        KR 추가
-      </Button>
-    );
-  }
 
   return (
     <form className="mission-add-kr-form" onSubmit={submit}>
@@ -242,7 +238,7 @@ function AddKeyResultForm({ objective }: { objective: Objective }) {
         />
       )}
       <div className="mission-add-kr-actions">
-        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
           취소
         </Button>
         <Button type="submit" size="sm" disabled={createKeyResult.isPending || !title.trim()}>

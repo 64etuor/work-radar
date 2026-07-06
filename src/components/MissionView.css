@@ -622,11 +622,6 @@
   background: var(--color-wr-danger);
 }
 
-.mission-add-kr {
-  justify-self: start;
-  margin-top: 10px;
-}
-
 .mission-add-kr-form {
   display: grid;
   grid-template-columns: minmax(160px, 1fr) 132px;
