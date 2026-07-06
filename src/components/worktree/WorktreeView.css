@@ -13,7 +13,9 @@
   --wt-commit-edge-shadow-mobile: 0 -18px 36px -32px rgb(17 24 39 / 0.35);
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  /* view-shell(=100vh − AgentStatusBar − 뉴스 티커)을 채운다. 100dvh면 하단이 잘린다. */
+  height: 100%;
+  min-height: 0;
   background: var(--color-wr-bg);
   color: var(--color-wr-fg);
   font-family: var(--font-sans);

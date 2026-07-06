@@ -4,7 +4,9 @@
 .pr {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* view-shell(=100vh − AgentStatusBar − 뉴스 티커)을 채운다. 100vh면 하단이 잘린다. */
+  height: 100%;
+  min-height: 0;
   background: var(--color-wr-bg);
   color: var(--color-wr-fg);
   font-family: var(--font-sans);
