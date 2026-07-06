@@ -1,0 +1,33 @@
+src/components/viewRootHeight.test.ts
+  s_08d43cb44bad97::t_727a855066a52e 1,11-35,41-53,56-62
+  s_08d43cb44bad97::t_22365bb2aeccee 2-10
+  s_08d43cb44bad97::t_195c5839c805a4 36-40
+  s_08d43cb44bad97::t_d55b0c7d6a08d3 54-55
+  s_08d43cb44bad97::t_a526b8bac7f177 63
+src/components/PrRadarView.css
+  s_08d43cb44bad97::t_3aef471220ab94 7-9
+src/components/jobs/JobsView.css
+  s_08d43cb44bad97::t_86d37a8e305c5b 8-10
+src/components/MissionView.css
+  s_08d43cb44bad97::t_eaceccf5a32738 9-12
+src/components/WeeklyView.css
+  s_08d43cb44bad97::t_41da855d37296e 11-13
+src/components/worktree/WorktreeView.css
+  s_08d43cb44bad97::t_a362507e4efc4e 16-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "35aa579855fc23080fe534296b4beb83e660a055",
+  "prompts": {},
+  "sessions": {
+    "s_08d43cb44bad97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26be425e-204e-4666-9a65-1cf9813bc988",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
