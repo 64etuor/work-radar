@@ -36,6 +36,17 @@ describe("keyResultProgressRatio", () => {
     expect(Number.isFinite(progress)).toBe(true);
   });
 
+  it("derives decrease metric progress toward a lower target", () => {
+    expect(
+      keyResultProgressRatio({
+        kind: "metric",
+        currentValue: 80,
+        targetValue: 70,
+        milestones: [],
+      }),
+    ).toBe(0.875);
+  });
+
   it("derives milestone progress from completed checklist items", () => {
     expect(
       keyResultProgressRatio({

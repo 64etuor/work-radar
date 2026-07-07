@@ -255,10 +255,10 @@
 
 .mission-horizon-item,
 .mission-guardrail-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   border-top: 1px solid var(--color-wr-border-light);
   padding-top: 8px;
@@ -318,9 +318,32 @@
   grid-area: value;
 }
 
-.mission-guardrail-form button {
-  grid-area: action;
+.mission-form-actions,
+.mission-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mission-form-actions {
   justify-self: end;
+}
+
+.mission-guardrail-form .mission-form-actions {
+  grid-area: action;
+}
+
+.mission-row-action {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.mission-row-action-danger {
+  color: var(--color-wr-danger);
 }
 
 .mission-count-pill {
@@ -472,9 +495,9 @@
 
 .mission-kr-row {
   display: grid;
-  /* 고정 5트랙 [제목+바 | 값 | 루틴 | 자신감 | 삭제] — 모든 행이 같은 칼럼 경계에 정렬.
-     (auto 트랙이면 행마다 콘텐츠 폭 따라 어긋나 어포던스가 흔들린다.) */
-  grid-template-columns: minmax(0, 1.6fr) minmax(200px, 1fr) 168px 104px 32px;
+  /* 5트랙 [제목+바 | 값 | 루틴 | 자신감 | 삭제] — 값/루틴/자신감 경계를 고정하고
+     삭제 칼럼만 2단계 확인 라벨을 수용한다. */
+  grid-template-columns: minmax(0, 1.6fr) minmax(200px, 1fr) 168px 104px max-content;
   gap: 10px;
   align-items: center;
   padding: 10px 0;
@@ -525,17 +548,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-.mission-routine-popover {
+.mission-routine-modal-head {
   display: grid;
   gap: 12px;
-  width: 300px;
 }
 
 .mission-routine-list {
   display: grid;
   gap: 2px;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .mission-routine-item {
@@ -790,8 +810,10 @@
       "action";
   }
 
-  .mission-guardrail-form button {
+  .mission-form-actions,
+  .mission-guardrail-form .mission-form-actions {
     justify-self: stretch;
+    width: 100%;
   }
 
   .mission-kr-metric input:nth-of-type(3),

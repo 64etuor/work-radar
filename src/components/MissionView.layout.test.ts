@@ -43,9 +43,11 @@ describe("MissionView layout", () => {
         "  width: 100%;",
       ].join("\n"),
     );
-    expect(missionCss).toContain(
-      ".mission-guardrail-form button {\n  grid-area: action;\n  justify-self: end;",
-    );
+    const actions = ruleBlock(".mission-form-actions");
+    const guardrailActions = ruleBlock(".mission-guardrail-form .mission-form-actions");
+
+    expect(actions).toContain("justify-self: end");
+    expect(guardrailActions).toContain("grid-area: action");
     expect(missionCss).toContain(
       [
         "  .mission-guardrail-form {",

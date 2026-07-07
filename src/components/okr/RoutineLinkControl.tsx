@@ -1,27 +1,20 @@
 import { Link2, Repeat } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import type { KeyResult, Weekday } from "@/bindings";
+import type { KeyResult } from "@/bindings";
+import {
+  RoutineModal,
+  type RoutineModalAnchor,
+  type RoutineModalState,
+} from "@/components/board/RoutineModal";
+import { type RoutineDraft } from "@/components/board/routineSchedule";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   localToday,
   useCreateRoutine,
   useRoutineTracking,
   useSetKeyResultRoutine,
 } from "@/lib/query";
-
-const WEEKDAYS: { key: Weekday; label: string }[] = [
-  { key: "mon", label: "월" },
-  { key: "tue", label: "화" },
-  { key: "wed", label: "수" },
-  { key: "thu", label: "목" },
-  { key: "fri", label: "금" },
-  { key: "sat", label: "토" },
-  { key: "sun", label: "일" },
-];
 
 /**
  * KR ↔ 루틴 연결 컨트롤(수치형 KR 전용). 연결하면 진행이 루틴 완료에서 자동 파생되어
@@ -37,14 +30,12 @@ export function RoutineLinkControl({
   quarterStart: string;
   quarterEnd: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [modal, setModal] = useState<RoutineModalState | null>(null);
+  const modalSeqRef = useRef(0);
   const routines = useRoutineTracking(localToday(), 1);
   const setRoutine = useSetKeyResultRoutine();
   const createRoutine = useCreateRoutine();
-  const [days, setDays] = useState<Weekday[]>([]);
-  const [draftTitle, setDraftTitle] = useState<string | null>(null);
   const pending = setRoutine.isPending || createRoutine.isPending;
-  const title = draftTitle ?? kr.title;
   const routineItems = routines.data ?? [];
   const availableRoutines: typeof routineItems = [];
   for (const routine of routineItems) {
@@ -53,129 +44,106 @@ export function RoutineLinkControl({
     }
   }
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
-    if (!nextOpen) {
-      setDraftTitle(null);
-      setDays([]);
-    }
-  };
-
-  const closePopover = () => handleOpenChange(false);
-
-  const link = (routineId: string | null) =>
-    setRoutine.mutate({ id: kr.id, routineId }, { onSuccess: closePopover });
-
-  const createAndLink = () => {
-    const clean = title.trim();
-    if (!clean) return;
-    createRoutine.mutate(
-      {
-        title: clean,
-        freq: days.length === 0 || days.length === 7 ? "daily" : "weekly",
-        weekdays: days,
-        anchorDate: null,
+  const openModal = (anchor: RoutineModalAnchor) => {
+    modalSeqRef.current += 1;
+    setModal({
+      mode: "create",
+      nonce: modalSeqRef.current,
+      anchor,
+      defaults: {
+        title: kr.title,
         startDate: quarterStart,
         endDate: quarterEnd,
-        timeOfDay: null,
-        reminderOffsetMin: null,
-        area: null,
-        kind: null,
-        monthlyPattern: null,
-        monthlyNthWeek: null,
-        durationMin: null,
       },
-      { onSuccess: (routine) => link(routine.id) },
-    );
+    });
+  };
+
+  const closeModal = () => setModal(null);
+
+  const link = async (routineId: string | null) => {
+    await setRoutine.mutateAsync({ id: kr.id, routineId });
+    closeModal();
+  };
+
+  const createAndLink = async (draft: RoutineDraft) => {
+    const routine = await createRoutine.mutateAsync({
+      ...draft,
+      area: null,
+      kind: null,
+    });
+    await link(routine.id);
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant={kr.routineId ? "secondary" : "outline"}
-          size="sm"
-          className="mission-kr-routine-btn"
-          title={
-            kr.routineId
-              ? `루틴 연결됨: ${kr.routine?.title ?? "루틴"} — KR 진행이 자동 집계됩니다`
-              : "루틴으로 자동화 — 매일 루틴 체크만 하면 KR 진행이 자동 집계됩니다"
-          }
-        >
-          <Repeat className="size-3.5" />
-          {kr.routineId ? (kr.routine?.title ?? "루틴 자동화") : "루틴으로 자동화"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="mission-routine-popover" align="end">
-        <div className="mission-popover-head">
-          <span className="typo-title-sm">KR 루틴 자동화</span>
-          <span className="mission-muted typo-caption-sm">루틴 체크 = KR 진행이 자동 집계</span>
-        </div>
-
-        {kr.routineId && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={pending}
-            onClick={() => link(null)}
-          >
-            연결 해제 (수동 입력으로)
-          </Button>
-        )}
-
-        <div className="mission-routine-list">
-          {availableRoutines.map((routine) => (
-            <button
-              key={routine.id}
-              type="button"
-              className="mission-routine-item"
-              disabled={pending}
-              onClick={() => link(routine.id)}
-            >
-              <Link2 className="size-3.5" aria-hidden />
-              <span className="typo-body-md">{routine.title}</span>
-            </button>
-          ))}
-          {routineItems.length === 0 && (
-            <span className="mission-muted typo-body-md">활성 루틴이 없습니다.</span>
-          )}
-        </div>
-
-        <div className="mission-routine-new">
-          <span className="typo-label-sm">새 루틴 만들고 KR에 연결 (이 분기 동안)</span>
-          <Input
-            value={title}
-            onChange={(event) => setDraftTitle(event.target.value)}
-            aria-label="새 루틴 제목"
-          />
-          <div className="mission-routine-days" aria-label="요일 (없으면 매일)">
-            {WEEKDAYS.map((day) => (
-              <label key={day.key} className="mission-check-row">
-                <Checkbox
-                  checked={days.includes(day.key)}
-                  onCheckedChange={(checked) =>
-                    setDays((current) =>
-                      checked === true
-                        ? [...current, day.key]
-                        : current.filter((d) => d !== day.key),
-                    )
-                  }
-                />
-                <span className="typo-caption-sm">{day.label}</span>
-              </label>
-            ))}
+    <>
+      <Button
+        variant={kr.routineId ? "secondary" : "outline"}
+        size="sm"
+        className="mission-kr-routine-btn"
+        title={
+          kr.routineId
+            ? `루틴 연결됨: ${kr.routine?.title ?? "루틴"} — KR 진행이 자동 집계됩니다`
+            : "루틴으로 자동화 — 매일 루틴 체크만 하면 KR 진행이 자동 집계됩니다"
+        }
+        onClick={(event) => openModal(anchorFromElement(event.currentTarget))}
+      >
+        <Repeat className="size-3.5" />
+        {kr.routineId ? (kr.routine?.title ?? "루틴 자동화") : "루틴으로 자동화"}
+      </Button>
+      <RoutineModal
+        state={modal}
+        title="KR 루틴 자동화"
+        widthPx={400}
+        maxHeightPx={800}
+        beforeForm={
+          <div className="mission-routine-modal-head">
+            <span className="mission-muted typo-caption-sm">루틴 체크 = KR 진행이 자동 집계</span>
+            {kr.routineId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={() => void link(null)}
+              >
+                연결 해제 (수동 입력으로)
+              </Button>
+            )}
+            <div className="mission-routine-list">
+              {availableRoutines.map((routine) => (
+                <button
+                  key={routine.id}
+                  type="button"
+                  className="mission-routine-item"
+                  disabled={pending}
+                  onClick={() => void link(routine.id)}
+                >
+                  <Link2 className="size-3.5" aria-hidden />
+                  <span className="typo-body-md">{routine.title}</span>
+                </button>
+              ))}
+              {routineItems.length === 0 && (
+                <span className="mission-muted typo-body-md">활성 루틴이 없습니다.</span>
+              )}
+            </div>
+            <span className="typo-label-sm">새 루틴 만들고 KR에 연결 (이 분기 동안)</span>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            disabled={pending || title.trim().length === 0}
-            onClick={createAndLink}
-          >
-            만들고 연결
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+        }
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) closeModal();
+        }}
+        onSubmit={(draft) => void createAndLink(draft)}
+      />
+    </>
   );
+}
+
+function anchorFromElement(element: HTMLElement): RoutineModalAnchor {
+  const rect = element.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+  };
 }

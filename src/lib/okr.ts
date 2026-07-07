@@ -8,6 +8,7 @@ export type KeyResultProgressSource = Pick<
 export function keyResultProgressRatio(kr: KeyResultProgressSource): number {
   if (kr.kind === "metric") {
     if (kr.currentValue == null || kr.targetValue == null || kr.targetValue <= 0) return 0;
+    if (kr.currentValue > kr.targetValue) return kr.targetValue / kr.currentValue;
     return kr.currentValue / kr.targetValue;
   }
   if (kr.milestones.length === 0) return 0;

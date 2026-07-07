@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import type { MissionHorizon, MissionHorizonKind, WscKind } from "@/bindings";
@@ -11,7 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateMissionHorizon, useDeleteMissionHorizon } from "@/lib/query";
+import {
+  useCreateMissionHorizon,
+  useDeleteMissionHorizon,
+  useUpdateMissionHorizon,
+} from "@/lib/query";
 
 const HORIZON_KIND_LABEL: Record<MissionHorizonKind, string> = {
   three_year: "3년 방향",
@@ -25,27 +29,61 @@ const WSC_LABEL: Record<WscKind, string> = {
   c: "C",
 };
 
+const WSC_NONE = "__none__";
+type WscDraft = WscKind | typeof WSC_NONE;
+
 export function HorizonShelf({ horizons }: { horizons: MissionHorizon[] }) {
   const createHorizon = useCreateMissionHorizon();
+  const updateHorizon = useUpdateMissionHorizon();
   const deleteHorizon = useDeleteMissionHorizon();
+  const [editing, setEditing] = useState<MissionHorizon | null>(null);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<MissionHorizonKind>("one_year");
-  const [wsc, setWsc] = useState<WscKind>("w");
+  const [wsc, setWsc] = useState<WscDraft>("w");
+
+  const resetForm = () => {
+    setEditing(null);
+    setTitle("");
+    setKind("one_year");
+    setWsc("w");
+  };
+
+  const beginEdit = (horizon: MissionHorizon) => {
+    setEditing(horizon);
+    setTitle(horizon.title);
+    setKind(horizon.horizonKind);
+    setWsc(horizon.wscKind ?? WSC_NONE);
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
-    await createHorizon.mutateAsync({
-      title: cleanTitle,
-      description: null,
-      horizonKind: kind,
-      wscKind: wsc,
-      areaKeys: [],
-      sortRank: horizons.length,
-    });
-    setTitle("");
+    if (editing) {
+      await updateHorizon.mutateAsync({
+        id: editing.id,
+        title: cleanTitle,
+        description: editing.description,
+        horizonKind: kind,
+        wscKind: wsc === WSC_NONE ? null : wsc,
+        areaKeys: editing.areaKeys,
+        status: editing.status,
+        sortRank: editing.sortRank,
+      });
+    } else {
+      await createHorizon.mutateAsync({
+        title: cleanTitle,
+        description: null,
+        horizonKind: kind,
+        wscKind: wsc === WSC_NONE ? null : wsc,
+        areaKeys: [],
+        sortRank: horizons.length,
+      });
+    }
+    resetForm();
   };
+
+  const pending = createHorizon.isPending || updateHorizon.isPending || deleteHorizon.isPending;
 
   return (
     <section className="mission-life-panel">
@@ -64,16 +102,30 @@ export function HorizonShelf({ horizons }: { horizons: MissionHorizon[] }) {
               </span>
               <strong className="typo-body-strong">{horizon.title}</strong>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => deleteHorizon.mutate(horizon.id)}
-              disabled={deleteHorizon.isPending}
-              aria-label={`${horizon.title} 삭제`}
-            >
-              <Trash2 className="size-4" />
-            </Button>
+            <div className="mission-row-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mission-row-action"
+                onClick={() => beginEdit(horizon)}
+                disabled={pending}
+                aria-label={`${horizon.title} 수정`}
+              >
+                <Pencil className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mission-row-action mission-row-action-danger"
+                onClick={() => deleteHorizon.mutate(horizon.id)}
+                disabled={pending}
+                aria-label={`${horizon.title} 삭제`}
+              >
+                <Trash2 className="size-5" />
+              </Button>
+            </div>
           </article>
         ))}
         {horizons.length === 0 && (
@@ -96,20 +148,29 @@ export function HorizonShelf({ horizons }: { horizons: MissionHorizon[] }) {
             <SelectItem value="someday">언젠가</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={wsc} onValueChange={(value) => setWsc(value as WscKind)}>
+        <Select value={wsc} onValueChange={(value) => setWsc(value as WscDraft)}>
           <SelectTrigger className="mission-wsc-kind">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={WSC_NONE}>없음</SelectItem>
             <SelectItem value="w">W</SelectItem>
             <SelectItem value="s">S</SelectItem>
             <SelectItem value="c">C</SelectItem>
           </SelectContent>
         </Select>
-        <Button type="submit" disabled={createHorizon.isPending || title.trim().length === 0}>
-          <Plus className="size-4" />
-          추가
-        </Button>
+        <div className="mission-form-actions">
+          {editing && (
+            <Button type="button" variant="ghost" size="sm" onClick={resetForm} disabled={pending}>
+              <X className="size-4" />
+              취소
+            </Button>
+          )}
+          <Button type="submit" disabled={pending || title.trim().length === 0}>
+            <Plus className="size-4" />
+            {editing ? "저장" : "추가"}
+          </Button>
+        </div>
       </form>
     </section>
   );

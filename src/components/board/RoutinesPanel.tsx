@@ -1,10 +1,14 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { Kind, LifeWheelTagConfig, Project, RoutineToday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
-import { RoutineForm } from "@/components/board/RoutineForm";
+import {
+  RoutineModal,
+  type RoutineModalAnchor,
+  type RoutineModalState,
+} from "@/components/board/RoutineModal";
 import { type RoutineDraft, schedLabel } from "@/components/board/routineSchedule";
 import { RoutineSyncButton } from "@/components/board/RoutineSyncButton";
 import { Button } from "@/components/ui/button";
@@ -61,12 +65,8 @@ export function RoutinesPanel({
   onMoveSync,
   syncBusy,
 }: Props) {
-  // open=false: 폼 닫힘. open=true + editId=null: 새 루틴 추가. open=true + editId: 수정 모드.
-  // openSeq는 폼 remount nonce — 열 때마다 증가시켜 RoutineForm(key=openSeq)을 새로 마운트해
-  // 입력 state를 리셋/재시드한다(과거 reset() + 개별 set* 동작과 동치).
-  const [open, setOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [openSeq, setOpenSeq] = useState(0);
+  const [modal, setModal] = useState<RoutineModalState | null>(null);
+  const modalSeqRef = useRef(0);
   // BrainDump 카드와 동일하게 area 방사형 휠을 위한 anchor 상태(panel 내 자체 소유).
   const [areaPalette, setAreaPalette] = useState<{
     routineId: string;
@@ -79,21 +79,17 @@ export function RoutinesPanel({
     onReorder,
   );
 
-  const openCreate = () => {
-    setEditId(null);
-    setOpenSeq((s) => s + 1);
-    setOpen(true);
+  const openCreate = (anchor: RoutineModalAnchor) => {
+    modalSeqRef.current += 1;
+    setModal({ mode: "create", nonce: modalSeqRef.current, anchor });
   };
 
-  const openEdit = (r: RoutineToday) => {
-    setEditId(r.id);
-    setOpenSeq((s) => s + 1);
-    setOpen(true);
+  const openEdit = (r: RoutineToday, anchor: RoutineModalAnchor) => {
+    setModal({ mode: "edit", routine: r, anchor });
   };
 
   const closeForm = () => {
-    setOpen(false);
-    setEditId(null);
+    setModal(null);
   };
 
   const handleDelete = (r: RoutineToday) => {
@@ -120,32 +116,30 @@ export function RoutinesPanel({
           variant="outline"
           size="sm"
           className="h-7 rounded-full px-2.5 text-[11px]"
-          onClick={openCreate}
+          onClick={(event) => openCreate(anchorFromElement(event.currentTarget))}
         >
           + 루틴
         </Button>
       </div>
 
-      {open && (
-        <RoutineForm
-          key={openSeq}
-          isEdit={editId !== null}
-          initial={editId ? (routines.find((r) => r.id === editId) ?? null) : null}
-          onSubmit={(draft) => {
-            if (editId) onUpdate(editId, draft);
-            else onCreate(draft);
-            closeForm();
-          }}
-          onCancel={closeForm}
-        />
-      )}
+      <RoutineModal
+        state={modal}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) closeForm();
+        }}
+        onSubmit={(draft) => {
+          if (modal?.mode === "edit") onUpdate(modal.routine.id, draft);
+          else onCreate(draft);
+          closeForm();
+        }}
+      />
 
       <div className="pb-body">
         {routines.length === 0 ? (
           <div className="empty">오늘 해당하는 루틴이 없습니다. + 루틴으로 추가</div>
         ) : (
           routines.map((r) => (
-            <div key={r.id} className={cn("item", r.done && "done")} {...dnd.itemProps(r.id)}>
+            <div {...dnd.itemProps(r.id)} key={r.id} className={cn("item", r.done && "done")}>
               <span className="grip" title="드래그로 정렬" {...dnd.handleProps(r.id)}>
                 ⠿
               </span>
@@ -193,7 +187,7 @@ export function RoutinesPanel({
                   className="ract"
                   title="수정"
                   aria-label="루틴 수정"
-                  onClick={() => openEdit(r)}
+                  onClick={(event) => openEdit(r, anchorFromElement(event.currentTarget))}
                 >
                   <Pencil className="size-3.5" />
                 </button>
@@ -227,4 +221,14 @@ export function RoutinesPanel({
         })()}
     </div>
   );
+}
+
+function anchorFromElement(element: HTMLElement): RoutineModalAnchor {
+  const rect = element.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+  };
 }

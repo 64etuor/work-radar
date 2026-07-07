@@ -15,9 +15,15 @@ import { Input } from "@/components/ui/input";
 type Props = {
   /** 수정 대상 루틴(폼 초기값). null=새 루틴 추가 모드. */
   initial: RoutineToday | null;
+  /** 새 루틴 모드에서 외부 흐름(예: OKR)이 주입하는 기본값. initial 값이 항상 우선한다. */
+  defaults?: {
+    title?: string;
+    startDate?: string | null;
+    endDate?: string | null;
+  };
   /** 제출 버튼 라벨 + 호출자 분기용(true=수정, false=생성). */
   isEdit: boolean;
-  onSubmit: (draft: RoutineDraft) => void;
+  onSubmit: (draft: RoutineDraft) => void | Promise<void>;
   onCancel: () => void;
 };
 
@@ -26,14 +32,16 @@ type Props = {
  * 초기값은 `initial`에서 1회 시드 — 부모는 열 때마다 `key`를 바꿔 remount시켜 리셋/재시드한다
  * (RoutinesPanel의 openSeq). 그래서 폼 내부엔 reset 로직이 없다.
  */
-export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
+export function RoutineForm({ initial, defaults, isEdit, onSubmit, onCancel }: Props) {
   const fieldId = useId();
   const timeId = `${fieldId}-time`;
   const offsetId = `${fieldId}-offset`;
   const durationId = `${fieldId}-duration`;
+  const startDateId = `${fieldId}-start-date`;
+  const endDateId = `${fieldId}-end-date`;
   const titleRef = useRef<HTMLInputElement | null>(null);
 
-  const [title, setTitle] = useState(initial?.title ?? "");
+  const [title, setTitle] = useState(initial?.title ?? defaults?.title ?? "");
   const [freq, setFreq] = useState<RoutineFreq>(initial?.freq ?? "daily");
   const [days, setDays] = useState<Set<Weekday>>(new Set(initial?.weekdays ?? []));
   const [time, setTime] = useState(initial?.timeOfDay ?? "");
@@ -48,8 +56,8 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
     initial?.durationMin != null ? String(initial.durationMin) : "",
   );
   // 활성 기간(둘 다 빈칸=무기한, 기존 동작). 'YYYY-MM-DD' or "".
-  const [startDate, setStartDate] = useState(initial?.startDate ?? "");
-  const [endDate, setEndDate] = useState(initial?.endDate ?? "");
+  const [startDate, setStartDate] = useState(initial?.startDate ?? defaults?.startDate ?? "");
+  const [endDate, setEndDate] = useState(initial?.endDate ?? defaults?.endDate ?? "");
 
   // 요일 입력은 weekly/biweekly(복수)에서, monthly nth_weekday(단일)에서 의미.
   const needsWeekdays = freq === "weekly" || freq === "biweekly";
@@ -242,9 +250,10 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
         </label>
       </div>
       <div className="rtime">
-        <label>
+        <label htmlFor={startDateId}>
           시작일
           <DatePicker
+            id={startDateId}
             value={startDate || null}
             onChange={(d) => setStartDate(d ?? "")}
             max={endDate || undefined}
@@ -253,9 +262,10 @@ export function RoutineForm({ initial, isEdit, onSubmit, onCancel }: Props) {
             className="h-8 px-2 text-xs"
           />
         </label>
-        <label>
+        <label htmlFor={endDateId}>
           종료일
           <DatePicker
+            id={endDateId}
             value={endDate || null}
             onChange={(d) => setEndDate(d ?? "")}
             min={startDate || undefined}

@@ -93,7 +93,7 @@ function render(routines: RoutineToday[]): Handlers {
 }
 
 function buttonByText(text: string): HTMLButtonElement {
-  const btn = Array.from(container?.querySelectorAll("button") ?? []).find(
+  const btn = Array.from(document.querySelectorAll("button")).find(
     (b) => b.textContent?.trim() === text,
   );
   if (!btn) throw new Error(`button not found: ${text}`);
@@ -116,13 +116,13 @@ function setInputValue(el: HTMLInputElement, value: string) {
 }
 
 function titleInput(): HTMLInputElement {
-  const el = container?.querySelector<HTMLInputElement>("[data-cb-routine-title]");
+  const el = document.querySelector<HTMLInputElement>("[data-cb-routine-title]");
   if (!el) throw new Error("title input not found");
   return el;
 }
 
 function submitForm() {
-  const form = container?.querySelector("form");
+  const form = document.querySelector("form");
   if (!form) throw new Error("form not found");
   act(() => {
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -149,7 +149,27 @@ describe("RoutinesPanel behavior baseline", () => {
 
   it("create flow: opens form, submits draft via onCreate", () => {
     const h = render([]);
-    click(buttonByText("+ 루틴"));
+    const trigger = buttonByText("+ 루틴");
+    trigger.getBoundingClientRect = () =>
+      ({
+        left: 320,
+        top: 60,
+        right: 380,
+        bottom: 88,
+        width: 60,
+        height: 28,
+        x: 320,
+        y: 60,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    click(trigger);
+    expect(document.querySelector("[data-wr-overlay-open]")).toBeTruthy();
+    expect(document.querySelector(".wr-dialog-overlay")).toBeNull();
+    const modal = document.querySelector<HTMLElement>("[data-routine-modal-content]");
+    expect(modal?.style.getPropertyValue("--routine-modal-left")).toBe("320px");
+    expect(modal?.style.getPropertyValue("--routine-modal-top")).toBe("96px");
+    expect(modal?.style.getPropertyValue("--routine-modal-width")).toBe("360px");
+    expect(modal?.style.getPropertyValue("--routine-modal-max-height")).toBe("620px");
     setInputValue(titleInput(), "명상");
     submitForm();
     expect(h.onCreate).toHaveBeenCalledTimes(1);
@@ -220,10 +240,10 @@ describe("RoutinesPanel behavior baseline", () => {
     ]);
     click(container!.querySelector('[aria-label="루틴 수정"]')!);
     expect(titleInput().value).toBe("독서");
-    const timeInput = container?.querySelector<HTMLInputElement>('input[type="time"]');
+    const timeInput = document.querySelector<HTMLInputElement>('input[type="time"]');
     expect(timeInput?.value).toBe("07:00");
     // 월·수 요일 버튼이 선택(aria-pressed) 상태로 시드됐는지.
-    const dayBtns = Array.from(container?.querySelectorAll("button") ?? []).filter((b) =>
+    const dayBtns = Array.from(document.querySelectorAll("button")).filter((b) =>
       ["월", "수"].includes(b.textContent?.trim() ?? ""),
     );
     expect(dayBtns.length).toBe(2);
@@ -233,7 +253,7 @@ describe("RoutinesPanel behavior baseline", () => {
   // 활성 기간(0061): 네이티브 date 입력이 DatePicker(Popover)로 교체됨. 피커는 value의 달로 열리므로
   // 시드값을 주면 시스템 날짜와 무관하게 결정적이다(트리거 클릭 → 그리드 날짜 클릭).
   function pickerTrigger(label: string): HTMLButtonElement {
-    const el = container?.querySelector<HTMLButtonElement>(
+    const el = document.querySelector<HTMLButtonElement>(
       `[data-date-picker-trigger][aria-label="${label}"]`,
     );
     if (!el) throw new Error(`date picker trigger not found: ${label}`);

@@ -1,5 +1,5 @@
-import { Plus, Trash2 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { type FormEvent, useReducer } from "react";
 
 import type { GuardrailTargetKind, LifeWheelTagConfig, OkrGuardrail } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,22 @@ const GUARDRAIL_KIND_LABEL: Record<GuardrailTargetKind, string> = {
   manual_check: "체크",
 };
 
+type GuardrailDraft = {
+  editing: OkrGuardrail | null;
+  label: string;
+  areaKey: string;
+  targetKind: GuardrailTargetKind;
+  targetValue: string;
+};
+
+type GuardrailDraftAction =
+  | { type: "edit"; guardrail: OkrGuardrail }
+  | { type: "reset"; firstArea: string }
+  | { type: "setLabel"; label: string }
+  | { type: "setAreaKey"; areaKey: string }
+  | { type: "setTargetKind"; targetKind: GuardrailTargetKind }
+  | { type: "setTargetValue"; targetValue: string };
+
 export function GuardrailPanel({
   quarter,
   guardrails,
@@ -32,28 +48,44 @@ export function GuardrailPanel({
   const deleteGuardrail = useDeleteGuardrail();
   const firstArea = tags.find((tag) => tag.enabled)?.id ?? "health";
   const enabledTags = enabledLifeWheelTags(tags);
-  const [label, setLabel] = useState("");
-  const [areaKey, setAreaKey] = useState(firstArea);
-  const [targetKind, setTargetKind] = useState<GuardrailTargetKind>("routine_count");
-  const [targetValue, setTargetValue] = useState("3");
+  const [draft, dispatchDraft] = useReducer(
+    guardrailDraftReducer,
+    firstArea,
+    initialGuardrailDraft,
+  );
+
+  const resetForm = () => {
+    dispatchDraft({ type: "reset", firstArea });
+  };
+
+  const beginEdit = (guardrail: OkrGuardrail) => {
+    dispatchDraft({ type: "edit", guardrail });
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const cleanLabel = label.trim();
+    const cleanLabel = draft.label.trim();
     if (!cleanLabel) return;
     await upsertGuardrail.mutateAsync({
-      id: null,
+      id: draft.editing?.id ?? null,
       quarter,
-      areaKey,
+      areaKey: draft.areaKey,
       label: cleanLabel,
-      targetKind,
-      targetValue: parseNullableNumber(targetValue),
-      unit: targetKind === "weekly_minutes" ? "분" : targetKind === "routine_count" ? "회" : null,
-      sourceRoutineIds: [],
-      sortRank: guardrails.length,
+      targetKind: draft.targetKind,
+      targetValue: parseNullableNumber(draft.targetValue),
+      unit:
+        draft.targetKind === "weekly_minutes"
+          ? "분"
+          : draft.targetKind === "routine_count"
+            ? "회"
+            : null,
+      sourceRoutineIds: draft.editing?.sourceRoutineIds ?? [],
+      sortRank: draft.editing?.sortRank ?? guardrails.length,
     });
-    setLabel("");
+    resetForm();
   };
+
+  const pending = upsertGuardrail.isPending || deleteGuardrail.isPending;
 
   return (
     <section className="mission-life-panel">
@@ -75,16 +107,30 @@ export function GuardrailPanel({
                   : ""}
               </span>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => deleteGuardrail.mutate(guardrail.id)}
-              disabled={deleteGuardrail.isPending}
-              aria-label={`${guardrail.label} 삭제`}
-            >
-              <Trash2 className="size-4" />
-            </Button>
+            <div className="mission-row-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mission-row-action"
+                onClick={() => beginEdit(guardrail)}
+                disabled={pending}
+                aria-label={`${guardrail.label} 수정`}
+              >
+                <Pencil className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mission-row-action mission-row-action-danger"
+                onClick={() => deleteGuardrail.mutate(guardrail.id)}
+                disabled={pending}
+                aria-label={`${guardrail.label} 삭제`}
+              >
+                <Trash2 className="size-5" />
+              </Button>
+            </div>
           </article>
         ))}
         {guardrails.length === 0 && (
@@ -93,11 +139,14 @@ export function GuardrailPanel({
       </div>
       <form className="mission-guardrail-form" onSubmit={submit}>
         <Input
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
+          value={draft.label}
+          onChange={(event) => dispatchDraft({ type: "setLabel", label: event.target.value })}
           placeholder="예: 주 3회 운동"
         />
-        <Select value={areaKey} onValueChange={setAreaKey}>
+        <Select
+          value={draft.areaKey}
+          onValueChange={(areaKey) => dispatchDraft({ type: "setAreaKey", areaKey })}
+        >
           <SelectTrigger className="mission-guardrail-area">
             <SelectValue />
           </SelectTrigger>
@@ -110,8 +159,10 @@ export function GuardrailPanel({
           </SelectContent>
         </Select>
         <Select
-          value={targetKind}
-          onValueChange={(value) => setTargetKind(value as GuardrailTargetKind)}
+          value={draft.targetKind}
+          onValueChange={(value) =>
+            dispatchDraft({ type: "setTargetKind", targetKind: value as GuardrailTargetKind })
+          }
         >
           <SelectTrigger className="mission-guardrail-kind">
             <SelectValue />
@@ -123,18 +174,65 @@ export function GuardrailPanel({
           </SelectContent>
         </Select>
         <Input
-          value={targetValue}
-          onChange={(event) => setTargetValue(event.target.value)}
+          value={draft.targetValue}
+          onChange={(event) =>
+            dispatchDraft({ type: "setTargetValue", targetValue: event.target.value })
+          }
           inputMode="decimal"
           className="mission-guardrail-value"
         />
-        <Button type="submit" disabled={upsertGuardrail.isPending || label.trim().length === 0}>
-          <Plus className="size-4" />
-          추가
-        </Button>
+        <div className="mission-form-actions">
+          {draft.editing && (
+            <Button type="button" variant="ghost" size="sm" onClick={resetForm} disabled={pending}>
+              <X className="size-4" />
+              취소
+            </Button>
+          )}
+          <Button type="submit" disabled={pending || draft.label.trim().length === 0}>
+            <Plus className="size-4" />
+            {draft.editing ? "저장" : "추가"}
+          </Button>
+        </div>
       </form>
     </section>
   );
+}
+
+function initialGuardrailDraft(firstArea: string): GuardrailDraft {
+  return {
+    editing: null,
+    label: "",
+    areaKey: firstArea,
+    targetKind: "routine_count",
+    targetValue: "3",
+  };
+}
+
+function guardrailDraftReducer(
+  state: GuardrailDraft,
+  action: GuardrailDraftAction,
+): GuardrailDraft {
+  switch (action.type) {
+    case "edit":
+      return {
+        editing: action.guardrail,
+        label: action.guardrail.label,
+        areaKey: action.guardrail.areaKey,
+        targetKind: action.guardrail.targetKind,
+        targetValue:
+          action.guardrail.targetValue == null ? "" : String(action.guardrail.targetValue),
+      };
+    case "reset":
+      return initialGuardrailDraft(action.firstArea);
+    case "setLabel":
+      return { ...state, label: action.label };
+    case "setAreaKey":
+      return { ...state, areaKey: action.areaKey };
+    case "setTargetKind":
+      return { ...state, targetKind: action.targetKind };
+    case "setTargetValue":
+      return { ...state, targetValue: action.targetValue };
+  }
 }
 
 function parseNullableNumber(value: string): number | null {

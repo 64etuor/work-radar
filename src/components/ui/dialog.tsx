@@ -23,14 +23,18 @@ export function DialogContent({
   className,
   children,
   showClose = true,
+  showOverlay = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean }) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  showClose?: boolean;
+  showOverlay?: boolean;
+}) {
   // 상호작용 계약(overlay-stack): 열린 동안 `data-wr-overlay-open` 마커 → App 셸이 Esc로 창을 숨기지 않음.
   // radix가 Esc로 닫기 + 트리거 포커스 복원 + 레이어 스택(중첩 안전)을 전담한다. Content는 닫히면 unmount되어
   // 마커가 사라진다(= isOverlayOpen false).
   return (
     <DialogPortal>
-      <DialogOverlay />
+      {showOverlay && <DialogOverlay />}
       <DialogPrimitive.Content
         data-wr-overlay-open
         className={cn(

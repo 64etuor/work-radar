@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * 2-step 삭제 버튼 — 첫 클릭은 arm(라벨 "확인"으로 3초), 두 번째 클릭만 실행.
@@ -14,6 +15,7 @@ export function ArmedDeleteButton({
   confirmLabel = "삭제 확인",
   variant = "destructiveGhost",
   ariaLabel,
+  className,
 }: {
   onConfirm: () => void;
   disabled?: boolean;
@@ -22,6 +24,7 @@ export function ArmedDeleteButton({
   confirmLabel?: string;
   variant?: "destructiveGhost" | "destructiveOutline";
   ariaLabel?: string;
+  className?: string;
 }) {
   const [armed, setArmed] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -38,6 +41,7 @@ export function ArmedDeleteButton({
       type="button"
       size="sm"
       variant={variant}
+      className={cn(!label && !armed && "mission-row-action", className)}
       disabled={disabled}
       aria-label={armed ? confirmLabel : ariaLabel}
       onClick={() => {
@@ -52,7 +56,7 @@ export function ArmedDeleteButton({
       }}
       onBlur={() => setArmed(false)}
     >
-      <Trash2 className="size-4" />
+      <Trash2 className={cn(!label && !armed ? "size-5" : "size-4")} />
       {armed ? confirmLabel : label}
     </Button>
   );
