@@ -1,0 +1,74 @@
+src/lib/okr.test.ts
+  s_06bfa7dd41b13f::t_3e4401351d06ea 8
+  s_06bfa7dd41b13f::t_44add673488f6c 119-125
+  s_06bfa7dd41b13f::t_1ad28937fc2788 126-127
+src/components/weekly/SystemDiagnosis.tsx
+  s_06bfa7dd41b13f::t_25655740398215 4,42,45,48,50-51
+  s_06bfa7dd41b13f::t_e09bea4f40cfd6 19-20,47
+src/components/WeeklyView.css
+  s_06bfa7dd41b13f::t_b57c5828bbb7fc 709-710
+src/components/CaptureBoard.css
+  s_06bfa7dd41b13f::t_e0a4ec897acfeb 480
+src/lib/okr.ts
+  s_06bfa7dd41b13f::t_80b028ab99ed28 94-105
+src/components/MissionView.css
+  s_06bfa7dd41b13f::t_a3eb77c3ff85e5 477,515
+src-tauri/src/commands/life_os.rs
+  s_06bfa7dd41b13f::t_fdcd9124bae8f7 1642,1652,1662-1671
+src/components/board/MatrixCanvas.tsx
+  s_06bfa7dd41b13f::t_3e4401351d06ea 15
+  s_06bfa7dd41b13f::t_ff189eb9c29734 384
+  s_06bfa7dd41b13f::t_2ae199d978febf 5,385
+src/components/board/MatrixCanvas.dom.test.tsx
+  s_06bfa7dd41b13f::t_98d03c5017b3b0 1-94
+src/components/bookkeeping/BookkeepingView.css
+  s_06bfa7dd41b13f::t_d801866f763060 1017,1027,1110-1114,1119,1125-1127,1137,1139
+  s_06bfa7dd41b13f::t_d9e959687cb45a 20-21,46,138,140-144,151-154,166,170-171,186-187,194-198,205,207-208,217-218,269,277-278,406-407,438,572-573,575-576,580,629,634,639,740,988-989,993,1038,1040-1043,1049-1051,1055-1058,1177,1179,1260,1262,1341,1346,1356,1361,1463
+  s_06bfa7dd41b13f::t_1a76531b9908ad 805-827,1312
+src/components/MissionView.copy.test.ts
+  s_06bfa7dd41b13f::t_6c1157729803a3 17-20,34-40
+  s_06bfa7dd41b13f::t_47df157faae891 21-22,41
+  s_ea58a61fe37f9f::t_d1f9b23169c8fc 42
+src/components/bookkeeping/bookkeepingTabs.test.ts
+  s_06bfa7dd41b13f::t_5a6c60c132c7ac 10,82-87
+  s_06bfa7dd41b13f::t_ec0e6f5fc1078e 88-89
+src-tauri/src/commands/sprint.rs
+  s_06bfa7dd41b13f::t_8ac6cb8eada6e1 750,776,779-780,786-790
+  s_06bfa7dd41b13f::t_50c434f1ea9394 306
+  s_06bfa7dd41b13f::t_fda22663ca5f59 782
+  s_06bfa7dd41b13f::t_bcf3f006738cd5 24
+src/components/okr/RoutineLinkControl.tsx
+  s_06bfa7dd41b13f::t_1c36266585fee0 96,101-102,106,111-112,146
+  s_06bfa7dd41b13f::t_fdcd9124bae8f7 45,47-48,50-63,93,128-140,149
+  s_06bfa7dd41b13f::t_61fd1413c52a07 49,64,67
+src/components/bookkeeping/bookkeepingTabs.ts
+  s_06bfa7dd41b13f::t_c15dcd75fb11e4 59-63
+src/components/bookkeeping/BookkeepingView.tsx
+  s_06bfa7dd41b13f::t_e54bc22bbd8b42 75,642
+src/components/SprintTimer.tsx
+  s_ea58a61fe37f9f::t_d129a84ff5c299 5,231-232,351,377
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5b427944eb1d9893c41832d12109f21c8d4a35e0",
+  "prompts": {},
+  "sessions": {
+    "s_06bfa7dd41b13f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3a28-35ce-7063-af85-f52017c11f38",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_ea58a61fe37f9f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3a32-5252-7df0-aa06-f85cdf6df934",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
