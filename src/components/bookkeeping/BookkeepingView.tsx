@@ -650,7 +650,7 @@ export function BookkeepingView() {
           )}
         </div>
 
-        {/* 다섯 패널 전부 항상 마운트 — 비활성은 native hidden. aria-controls 상시 유효 +
+        {/* 모든 패널을 항상 마운트 — 비활성은 native hidden. aria-controls 상시 유효 +
             카드-로컬 상태(리뷰 선택/행 편집 드래프트)가 탭 전환에 유실되지 않는다. */}
         <BookkeepingTabPanel tab="review" active={activeTab}>
           <ReviewQueueCard

@@ -1,14 +1,15 @@
-import { type ReactNode, useRef } from "react";
+import { type CSSProperties, type ReactNode, useRef } from "react";
 
 import {
   BOOKKEEPING_TABS,
   type BookkeepingTabId,
+  bookkeepingTabIndex,
   reviewBadgeLabel,
   tabIdDom,
   tabPanelIdDom,
 } from "./bookkeepingTabs";
 
-/** 탭 패널 셸 — 다섯 패널 전부 항상 마운트하고 비활성만 native `hidden`으로 감춘다.
+/** 탭 패널 셸 — 모든 패널을 항상 마운트하고 비활성만 native `hidden`으로 감춘다.
  *  aria-controls가 언제나 실존 id를 가리키고(tablist 표준 패턴), 카드-로컬 상태
  *  (리뷰 필터/선택·행 편집 드래프트)가 탭 전환에도 구조적으로 살아남는다. */
 export function BookkeepingTabPanel({
@@ -46,6 +47,10 @@ export function BookkeepingTabBar({
   onSelect: (tab: BookkeepingTabId) => void;
 }) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const activeIndex = bookkeepingTabIndex(active);
+  const tabStyle = {
+    "--bk-tab-offset": `${activeIndex * 100}%`,
+  } as CSSProperties;
 
   function onKeyDown(e: React.KeyboardEvent, index: number) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -57,7 +62,14 @@ export function BookkeepingTabBar({
   }
 
   return (
-    <div className="bk-tabs" role="tablist" aria-label="가계부 영역">
+    <div
+      className="bk-tabs"
+      role="tablist"
+      aria-label="가계부 영역"
+      data-active={active}
+      style={tabStyle}
+    >
+      <span className="bk-tab-indicator" aria-hidden="true" />
       {BOOKKEEPING_TABS.map((tab, index) => {
         const selected = tab.id === active;
         const badge = tab.id === "review" ? reviewBadgeLabel(reviewCount) : null;

@@ -45,17 +45,15 @@ pub async fn bookkeeping_budget_status(
     bookkeeping_budget_status_inner(db.inner(), &month, project_id.as_deref()).await
 }
 
-/// 예산 탭 데이터 — 상위 카테고리별 한도(미설정 포함)·집행·롤오버 + 과거 지출 기반 제안액을
-/// 서버에서 합쳐 반환. `months_back`(1..=24, 기본 3)은 제안 산정 기준 월 수.
+/// 예산 탭 데이터 — 상위 카테고리별 한도(미설정 포함)·집행·롤오버를 서버에서 합쳐 반환.
 #[tauri::command]
 #[specta::specta]
 pub async fn bookkeeping_budget_planner(
     db: State<'_, Db>,
     month: String,
     project_id: Option<String>,
-    months_back: Option<u32>,
 ) -> Result<Vec<BookkeepingBudgetPlanRow>, AppError> {
-    bookkeeping_budget_planner_inner(db.inner(), &month, project_id.as_deref(), months_back).await
+    bookkeeping_budget_planner_inner(db.inner(), &month, project_id.as_deref()).await
 }
 
 pub(crate) async fn set_bookkeeping_budget_inner(
@@ -208,51 +206,17 @@ pub(crate) async fn bookkeeping_budget_status_inner(
     Ok(rows)
 }
 
-/// 제안 산정 기준 월 수. 미지정 시 3, 범위는 1..=24로 clamp.
-const DEFAULT_BUDGET_SUGGESTION_MONTHS: u32 = 3;
-
-pub(crate) fn clamp_budget_months_back(months_back: Option<u32>) -> u32 {
-    months_back
-        .unwrap_or(DEFAULT_BUDGET_SUGGESTION_MONTHS)
-        .clamp(1, 24)
-}
-
-/// 정수 minor 금액을 1,000원 단위로 반올림(음수는 0으로 바닥). 제안액 표시용.
-pub(crate) fn round_to_thousand(value: i64) -> i32 {
-    if value <= 0 {
-        return 0;
-    }
-    let rounded = ((value as f64) / 1000.0).round() * 1000.0;
-    rounded.clamp(0.0, i32::MAX as f64) as i32
-}
-
 pub(crate) async fn bookkeeping_budget_planner_inner(
     db: &Db,
     month: &str,
     project_id: Option<&str>,
-    months_back: Option<u32>,
 ) -> Result<Vec<BookkeepingBudgetPlanRow>, AppError> {
     validate_month(month)?;
     let project_id = clean_optional(project_id);
-    let months = clamp_budget_months_back(months_back);
 
-    // 제안 산정 창: 당월을 제외한 직전 `months`개월. [trailing_start, current_month_start).
     let (current_month_start, current_month_end) = month_bounds(month)?;
-    let mut earliest = month.to_string();
-    for _ in 0..months {
-        earliest = previous_month(&earliest)?;
-    }
-    let (trailing_start, _) = month_bounds(&earliest)?;
-
     // 상위 카테고리 그룹 지출 — 예산 매칭(`spent_for_budget_category`)과 동일하게
-    // COALESCE(category_code, category)로 버킷. 두 창을 한 번씩 집계한다.
-    let trailing = grouped_expense_by_category(
-        db,
-        &trailing_start,
-        &current_month_start,
-        project_id.as_deref(),
-    )
-    .await?;
+    // COALESCE(category_code, category)로 버킷한다.
     let current = grouped_expense_by_category(
         db,
         &current_month_start,
@@ -261,15 +225,12 @@ pub(crate) async fn bookkeeping_budget_planner_inner(
     )
     .await?;
 
-    // 행 집합 = (당월 예산 있는 카테고리) ∪ (직전 창 지출) ∪ (당월 지출).
+    // 행 집합 = (당월 예산 있는 카테고리) ∪ (당월 지출).
     let budgets = list_bookkeeping_budgets_inner(db, month, project_id.as_deref()).await?;
     let mut codes: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    codes.extend(trailing.iter().map(|(code, _)| code.clone()));
     codes.extend(current.iter().map(|(code, _)| code.clone()));
     codes.extend(budgets.iter().map(|b| b.category_code.clone()));
 
-    let trailing_map: std::collections::HashMap<&str, i64> =
-        trailing.iter().map(|(c, v)| (c.as_str(), *v)).collect();
     let current_map: std::collections::HashMap<&str, i64> =
         current.iter().map(|(c, v)| (c.as_str(), *v)).collect();
     let budget_map: std::collections::HashMap<&str, &BookkeepingBudget> = budgets
@@ -286,9 +247,6 @@ pub(crate) async fn bookkeeping_budget_planner_inner(
             .unwrap_or(0)
             .max(0)
             .min(i32::MAX as i64) as i32;
-        let suggested = round_to_thousand(
-            trailing_map.get(code.as_str()).copied().unwrap_or(0) / months as i64,
-        );
 
         let (has_budget, budget_id, limit_minor, rollover, rollover_in, remaining, pct, currency) =
             if let Some(budget) = budget {
@@ -315,7 +273,7 @@ pub(crate) async fn bookkeeping_budget_planner_inner(
                     budget.currency.clone(),
                 )
             } else {
-                // 예산 미설정 — 잔여/집행률은 의미 없으므로 0. 제안액만 노출.
+                // 예산 미설정 — 잔여/집행률은 의미 없으므로 0.
                 (
                     false,
                     None,
@@ -340,7 +298,6 @@ pub(crate) async fn bookkeeping_budget_planner_inner(
             rollover_in_minor: rollover_in,
             remaining_minor: remaining,
             pct,
-            suggested_minor: suggested,
             currency,
         });
     }

@@ -19,6 +19,10 @@
   --bk-danger-bg: var(--color-wr-danger-soft);
   --bk-coral-soft: color-mix(in srgb, var(--bk-coral) 11%, var(--bk-surface));
   --bk-row-hover: color-mix(in srgb, var(--bk-stone) 72%, var(--bk-surface));
+  --bk-table-head: color-mix(in srgb, var(--bk-ink) 90%, #2c2c2c);
+  --bk-table-zebra: color-mix(in srgb, var(--bk-stone) 82%, var(--bk-surface));
+  --bk-table-rule: color-mix(in srgb, var(--bk-rule-strong) 72%, var(--bk-rule));
+  --bk-table-grid: color-mix(in srgb, var(--bk-rule-strong) 44%, transparent);
 }
 
 .bk-view {
@@ -135,40 +139,67 @@
 }
 
 .bk-tabs {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--bk-rule);
-  border-radius: 999px;
-  background: var(--bk-stone);
+  --bk-tab-width: 78px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, var(--bk-tab-width));
+  align-items: center;
+  width: max-content;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--bk-rule) 74%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bk-stone) 86%, var(--bk-rule));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bk-surface) 72%, transparent);
+  isolation: isolate;
+}
+
+.bk-tab-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  z-index: 0;
+  width: var(--bk-tab-width);
+  border: 0.5px solid color-mix(in srgb, var(--bk-ink) 5%, transparent);
+  border-radius: 8px;
+  background: var(--bk-surface);
+  box-shadow:
+    0 3px 8px color-mix(in srgb, var(--bk-ink) 12%, transparent),
+    0 1px 1px color-mix(in srgb, var(--bk-ink) 6%, transparent);
+  transform: translateX(var(--bk-tab-offset, 0%));
+  transition: transform 180ms var(--wr-ease-out);
+  pointer-events: none;
 }
 
 .bk-tab {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--wr-density-xs);
-  min-height: 30px;
-  padding: 0 var(--wr-density-md);
+  width: var(--bk-tab-width);
+  min-height: 28px;
+  padding: 0 var(--wr-density-xs);
   border: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
   color: var(--bk-muted);
   cursor: pointer;
+  opacity: 0.72;
   transition:
     color var(--wr-motion-fast) var(--wr-ease-out),
-    background var(--wr-motion-fast) var(--wr-ease-out),
-    border-color var(--wr-motion-fast) var(--wr-ease-out);
+    opacity var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .bk-tab:hover {
   color: var(--bk-ink);
-  background: var(--bk-surface);
+  opacity: 1;
 }
 
 .bk-tab[data-selected] {
-  color: var(--bk-surface);
-  background: var(--bk-ink);
+  color: var(--bk-ink);
+  opacity: 1;
 }
 
 .bk-tab:focus-visible {
@@ -192,8 +223,8 @@
 }
 
 .bk-tab[data-selected] .bk-tab-badge {
-  background: color-mix(in srgb, var(--bk-surface) 16%, transparent);
-  color: var(--bk-surface);
+  background: var(--bk-coral-soft);
+  color: var(--bk-coral);
 }
 
 /* 검토 대기 점프 칩 — 항상 보이는 요약 스트립의 액션. */
@@ -803,13 +834,24 @@
   }
 
   .bk-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
     border-radius: var(--radius-sm);
   }
 
+  .bk-tab-indicator {
+    display: none;
+  }
+
   .bk-tab {
-    flex: 1 1 auto;
-    justify-content: center;
+    width: auto;
+  }
+
+  .bk-tab[data-selected] {
+    background: var(--bk-surface);
+    box-shadow:
+      0 3px 8px color-mix(in srgb, var(--bk-ink) 10%, transparent),
+      0 1px 1px color-mix(in srgb, var(--bk-ink) 5%, transparent);
   }
 
   .bk-budget-kpis {
@@ -1060,34 +1102,10 @@
   color: var(--bk-danger);
 }
 
-.bk-budget-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  justify-content: space-between;
-  gap: var(--wr-density-sm);
-  margin-bottom: var(--wr-density-md);
-}
-
-.bk-budget-months {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--wr-density-sm);
-  color: var(--bk-muted);
-}
-
-.bk-budget-table {
-  font-variant-numeric: tabular-nums;
-}
-
 .bk-budget-cat {
   display: inline-flex;
   align-items: center;
   gap: var(--wr-density-sm);
-}
-
-.bk-budget-table tr[data-unset="true"] {
-  background: var(--bk-stone);
 }
 
 .bk-budget-table tr[data-overrun="true"] .bk-budget-fill {
@@ -1103,47 +1121,18 @@
   white-space: nowrap;
 }
 
-.bk-budget-suggest {
-  display: inline-flex;
+.bk-budget-progress {
+  display: flex;
   align-items: center;
   gap: var(--wr-density-xs);
-  min-height: 26px;
-  padding: 0 var(--wr-density-sm);
-  border: 1px solid var(--bk-rule);
-  border-radius: var(--radius-sm);
-  background: var(--bk-stone);
-  color: var(--bk-muted);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition:
-    background var(--wr-motion-fast) var(--wr-ease-out),
-    border-color var(--wr-motion-fast) var(--wr-ease-out),
-    color var(--wr-motion-fast) var(--wr-ease-out);
+  min-width: 13rem;
+  white-space: nowrap;
 }
 
-.bk-budget-suggest:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--bk-green) 24%, var(--bk-rule));
-  background: var(--bk-row-hover);
-  color: var(--bk-ink);
-}
-
-.bk-budget-suggest:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.bk-budget-limit-input {
-  width: 8rem;
-  height: 30px;
-  margin-left: auto;
-  border-radius: var(--radius-sm);
-  text-align: right;
-}
-
-.bk-budget-progress {
-  display: grid;
-  gap: var(--wr-density-xs);
-  min-width: 8rem;
+.bk-budget-progress .bk-budget-track {
+  width: 82px;
+  flex: 0 0 82px;
+  height: 4px;
 }
 
 .bk-reconcile-form {
@@ -1312,32 +1301,88 @@
   letter-spacing: 0;
 }
 
-/* ── 원장/검토 큐 공용 테이블 스킨(wr-table) ─────────────────────────
-   시맨틱 <table>이 칼럼 정합을 소유한다(이전 --bk-ledger-grid / --bk-review-read-grid
-   수동 동기화 대체). 시각 문법: 헤더 아래 strong hairline, 행 사이 hairline,
-   hover는 surface만, 금액은 tabular-nums 우측 정렬, 상태는 첫 셀 3px 악센트. */
-.bk-table {
-  border-collapse: collapse;
+/* ── 원장/검토/예산 공용 테이블 카드 스킨(wr-table) ────────────────────
+   구조는 시맨틱 <table>이 소유하고, 가계부 범위에서만 dark header + zebra grid 질감을 입힌다. */
+.bk-card-body .wr-table-wrap:has(:is(.bk-table, .bk-budget-table)) {
+  border: 1px solid var(--bk-table-rule);
+  border-radius: 12px 12px 5px 5px;
+  background: var(--bk-surface);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--bk-ink) 4%, transparent);
 }
 
-.bk-table .wr-table-head {
-  padding: 0 var(--wr-density-sm) var(--wr-density-sm);
-  border-bottom: 1px solid var(--bk-rule-strong);
-  color: var(--bk-subtle);
+:is(.bk-table, .bk-budget-table) {
+  min-width: 940px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+:is(.bk-table, .bk-budget-table) .wr-table-header {
+  background: var(--bk-table-head);
+}
+
+:is(.bk-table, .bk-budget-table) .wr-table-head {
+  padding: 7px 10px;
+  border-right: 1px dashed color-mix(in srgb, var(--bk-surface) 24%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--bk-surface) 24%, transparent);
+  background: var(--bk-table-head);
+  color: var(--bk-surface);
   white-space: nowrap;
+  font-size: var(--text-caption-sm);
   font-weight: 600;
+  line-height: 1.35;
 }
 
-.bk-table .wr-table-cell {
-  padding: var(--wr-density-xs) var(--wr-density-sm);
-  border-bottom: 1px solid var(--bk-rule);
+:is(.bk-table, .bk-budget-table) .wr-table-head:first-child {
+  border-top-left-radius: 11px;
 }
 
-.bk-table .bk-tr {
+:is(.bk-table, .bk-budget-table) .wr-table-head:last-child {
+  border-top-right-radius: 11px;
+  border-right: 0;
+}
+
+:is(.bk-table, .bk-budget-table) .wr-table-cell {
+  padding: 6px 10px;
+  border-right: 1px dashed var(--bk-table-grid);
+  border-bottom: 1px dashed var(--bk-table-grid);
+  background: transparent;
+  white-space: nowrap;
+}
+
+:is(.bk-table, .bk-budget-table) .wr-table-cell:last-child {
+  border-right: 0;
+}
+
+:is(.bk-table, .bk-budget-table) .wr-table-body .wr-table-row:last-child .wr-table-cell {
+  border-bottom: 0;
+}
+
+:is(
+  .bk-table .wr-table-body .wr-table-row:not(.bk-group-tr),
+  .bk-budget-table .wr-table-body .wr-table-row
+) {
   transition: background var(--wr-motion-fast) var(--wr-ease-out);
 }
 
-.bk-table .bk-tr:hover {
+:is(
+  .bk-table .wr-table-body .wr-table-row:nth-child(odd):not(.bk-group-tr),
+  .bk-budget-table .wr-table-body .wr-table-row:nth-child(odd)
+) {
+  background: var(--bk-surface);
+}
+
+:is(
+  .bk-table .wr-table-body .wr-table-row:nth-child(even):not(.bk-group-tr),
+  .bk-budget-table .wr-table-body .wr-table-row:nth-child(even)
+) {
+  background: var(--bk-table-zebra);
+}
+
+:is(
+  .bk-table .wr-table-body .wr-table-row:not(.bk-group-tr):hover,
+  .bk-budget-table .wr-table-body .wr-table-row:hover
+) {
   background: var(--bk-row-hover);
 }
 
@@ -1448,9 +1493,14 @@
   border-bottom: 0;
 }
 
+.bk-table .bk-group-tr {
+  background: color-mix(in srgb, var(--bk-stone) 88%, var(--bk-surface));
+}
+
 .bk-table td.bk-group-td {
   padding: 0;
   border-bottom: 0;
+  border-right: 0;
 }
 
 .bk-review-group-head {
@@ -1458,9 +1508,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--wr-density-md);
-  margin-top: var(--wr-density-md);
-  padding: var(--wr-density-xs) var(--wr-density-sm);
+  margin-top: 0;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--bk-rule);
+  background: color-mix(in srgb, var(--bk-stone) 88%, var(--bk-surface));
   color: var(--bk-subtle);
 }
 
@@ -1506,12 +1557,27 @@
 .bk-cell-input {
   height: 26px;
   padding-inline: var(--wr-density-xs);
+  border-color: transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  box-shadow: none;
   font-size: inherit;
+}
+
+.bk-cell-input:hover,
+.bk-cell-input:focus {
+  border-color: var(--bk-table-grid);
+  background: var(--bk-surface);
 }
 
 .bk-cell-input[data-align="right"] {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.bk-cell-input[data-width="amount"] {
+  width: 7.5rem;
+  margin-left: auto;
 }
 
 .bk-cell-amount {

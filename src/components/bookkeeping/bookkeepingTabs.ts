@@ -1,4 +1,4 @@
-// 가계부 IA 세그먼트 탭 — 순수 정의/헬퍼 (셸 컴포넌트는 BookkeepingTabs.tsx).
+// 가계부 IA 세그먼트 탭 — 순수 정의/헬퍼 (셸 컴포넌트는 BookkeepingTabBar.tsx).
 
 export const BOOKKEEPING_TABS = [
   { id: "review", label: "검토" },
@@ -18,6 +18,13 @@ export const BOOKKEEPING_TAB_STORAGE_KEY = "bookkeeping.activeTab";
 
 export function isBookkeepingTabId(value: string | null): value is BookkeepingTabId {
   return BOOKKEEPING_TABS.some((tab) => tab.id === value);
+}
+
+export function bookkeepingTabIndex(tab: BookkeepingTabId): number {
+  return Math.max(
+    0,
+    BOOKKEEPING_TABS.findIndex((item) => item.id === tab),
+  );
 }
 
 /** 저장된 탭 복원 — 값이 없거나 알 수 없는 id면 기본 탭(검토)으로. storage 접근 실패도 흡수. */

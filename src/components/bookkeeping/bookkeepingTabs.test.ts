@@ -4,6 +4,7 @@ import {
   BOOKKEEPING_DEFAULT_TAB,
   BOOKKEEPING_TAB_STORAGE_KEY,
   BOOKKEEPING_TABS,
+  bookkeepingTabIndex,
   isBookkeepingTabId,
   readStoredBookkeepingTab,
   reviewBadgeLabel,
@@ -23,6 +24,12 @@ describe("bookkeeping tabs", () => {
     ]);
     expect(BOOKKEEPING_TABS[0].label).toBe("검토");
     expect(BOOKKEEPING_DEFAULT_TAB).toBe("review");
+  });
+
+  it("exposes stable tab indexes for the segmented indicator", () => {
+    expect(bookkeepingTabIndex("review")).toBe(0);
+    expect(bookkeepingTabIndex("budget")).toBe(3);
+    expect(bookkeepingTabIndex("import")).toBe(5);
   });
 
   it("recognizes only known tab ids", () => {

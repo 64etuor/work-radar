@@ -37,7 +37,6 @@ function row(overrides: Partial<BookkeepingBudgetPlanRow>): BookkeepingBudgetPla
     rolloverInMinor: 0,
     remainingMinor: 0,
     pct: 0,
-    suggestedMinor: 0,
     currency: "KRW",
     ...overrides,
   };
@@ -76,9 +75,8 @@ describe("BudgetPlannerPanel", () => {
         spentMinor: 300_000,
         remainingMinor: 200_000,
         pct: 0.6,
-        suggestedMinor: 320_000,
       }),
-      row({ categoryCode: "transport", label: "교통", suggestedMinor: 40_000 }),
+      row({ categoryCode: "transport", label: "교통" }),
     ];
     render();
     const text = container!.textContent ?? "";
@@ -89,17 +87,31 @@ describe("BudgetPlannerPanel", () => {
     expect(container!.querySelectorAll(".bk-budget-unset-badge")).toHaveLength(1);
   });
 
-  it("applies a suggestion as a budget via setBudget.mutate", () => {
-    plannerRows = [row({ categoryCode: "transport", label: "교통", suggestedMinor: 40_000 })];
+  it("uses the shared table cell input primitive for budget limits", () => {
+    plannerRows = [
+      row({
+        categoryCode: "food",
+        label: "식비",
+        hasBudget: true,
+        budgetId: "b1",
+        limitMinor: 500_000,
+      }),
+    ];
     render();
-    const suggest = container!.querySelector<HTMLButtonElement>(".bk-budget-suggest");
-    expect(suggest).not.toBeNull();
-    act(() => suggest!.click());
-    expect(setBudgetMutate).toHaveBeenCalledTimes(1);
-    expect(setBudgetMutate.mock.calls[0][0]).toMatchObject({
-      categoryCode: "transport",
-      limitMinor: 40_000,
-      month: "2026-07",
-    });
+    const input = container!.querySelector<HTMLInputElement>('input[aria-label="식비 예산 한도"]');
+    expect(input).not.toBeNull();
+    expect(input?.className).toContain("bk-cell-input");
+    expect(input?.className).not.toContain("bk-budget-limit-input");
+    expect(input?.getAttribute("data-align")).toBe("right");
+    expect(input?.getAttribute("data-width")).toBe("amount");
+  });
+
+  it("renders current spend and budget limit columns", () => {
+    plannerRows = [row({ categoryCode: "transport", label: "교통" })];
+    render();
+    const headers = Array.from(container!.querySelectorAll("th")).map((th) =>
+      th.textContent?.trim(),
+    );
+    expect(headers).toEqual(["카테고리", "이번달 지출", "예산 한도", "잔여·집행률", "이월", ""]);
   });
 });

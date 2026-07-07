@@ -1,18 +1,10 @@
-import { Sparkles, Target, Trash2, Wand2 } from "lucide-react";
+import { Target, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { BookkeepingBudgetPlanRow } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -30,19 +22,15 @@ import { useToastStore } from "@/lib/toast";
 
 import { pushMutationError } from "../bookkeepingFieldUtils";
 import { currency } from "../bookkeepingFormat";
-import {
-  BUDGET_SUGGESTION_MONTH_OPTIONS,
-  DEFAULT_BUDGET_SUGGESTION_MONTHS,
-  parseBudgetAmount,
-  summarizeBudgetPlan,
-} from "../budgetPlanner";
+import { parseBudgetAmount, summarizeBudgetPlan } from "../budgetPlanner";
 import { budgetBarPercent, isBudgetOverrun } from "../budgets";
 import { EmptyState } from "./_shared";
+import { TableCellInput } from "./TableCellInput";
 
 /**
- * 카테고리별 예산 계획 표면 — 상위 카테고리 한도를 표로 편집하고, 직전 N개월(당월 제외) 평균을
- * 제안하며, 지출은 있으나 미설정인 카테고리를 강조한다. 백엔드 `bookkeeping_budget_planner`가
- * 한도·집행·롤오버·제안액을 합쳐 반환하므로 이 패널은 표현·편집 뮤테이션만 담당한다.
+ * 카테고리별 예산 계획 표면 — 상위 카테고리 한도를 표로 편집하고, 지출은 있으나 미설정인
+ * 카테고리를 강조한다. 백엔드 `bookkeeping_budget_planner`가 한도·집행·롤오버를 합쳐
+ * 반환하므로 이 패널은 표현·편집 뮤테이션만 담당한다.
  */
 export function BudgetPlannerPanel({
   month,
@@ -51,11 +39,10 @@ export function BudgetPlannerPanel({
   month: string;
   projectId: string | null;
 }) {
-  const [monthsBack, setMonthsBack] = useState<number>(DEFAULT_BUDGET_SUGGESTION_MONTHS);
   // 인라인 한도 입력의 미저장 값(카테고리 코드 → 문자열). 저장 성공 시 제거해 서버 값으로 폴백.
   const [edits, setEdits] = useState<Record<string, string>>({});
 
-  const planner = useBookkeepingBudgetPlanner(month, projectId, monthsBack);
+  const planner = useBookkeepingBudgetPlanner(month, projectId);
   const setBudget = useSetBookkeepingBudget();
   const deleteBudget = useDeleteBookkeepingBudget();
   const pushSuccess = useToastStore((s) => s.pushSuccess);
@@ -103,17 +90,6 @@ export function BudgetPlannerPanel({
     persist(row, parsed, row.rollover);
   };
 
-  const applySuggestion = (row: BookkeepingBudgetPlanRow) =>
-    persist(row, row.suggestedMinor, row.rollover);
-
-  const applyAllSuggestions = () => {
-    for (const row of rows) {
-      if (!row.hasBudget && row.suggestedMinor > 0) persist(row, row.suggestedMinor, false);
-    }
-  };
-
-  const unsetWithSuggestion = rows.filter((r) => !r.hasBudget && r.suggestedMinor > 0).length;
-
   return (
     <Card className="bk-card">
       <CardHeader className="bk-card-head">
@@ -122,7 +98,7 @@ export function BudgetPlannerPanel({
           카테고리별 예산
         </CardTitle>
         <CardDescription className="bk-card-desc">
-          월별 상위 카테고리 한도 · 직전 {monthsBack}개월 평균 제안(당월 제외)
+          월별 상위 카테고리 한도 · 지출 대비 잔여 관리
         </CardDescription>
       </CardHeader>
       <CardContent className="bk-card-body">
@@ -147,37 +123,6 @@ export function BudgetPlannerPanel({
           </div>
         </div>
 
-        <div className="bk-budget-toolbar">
-          <label className="bk-budget-months">
-            <span className="typo-caption-sm text-muted-foreground">제안 기준</span>
-            <Select
-              value={String(monthsBack)}
-              onValueChange={(value) => setMonthsBack(Number(value))}
-            >
-              <SelectTrigger aria-label="제안 기준 개월 수">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {BUDGET_SUGGESTION_MONTH_OPTIONS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n}개월
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={pending || unsetWithSuggestion === 0}
-            onClick={applyAllSuggestions}
-          >
-            <Wand2 className="size-4" />
-            미설정 전체 제안 적용{unsetWithSuggestion > 0 ? ` (${unsetWithSuggestion})` : ""}
-          </Button>
-        </div>
-
         {rows.length === 0 ? (
           <EmptyState>지출·예산 없음</EmptyState>
         ) : (
@@ -185,7 +130,6 @@ export function BudgetPlannerPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>카테고리</TableHead>
-                <TableHead className="text-right">제안({monthsBack}개월)</TableHead>
                 <TableHead className="text-right">이번달 지출</TableHead>
                 <TableHead className="text-right">예산 한도</TableHead>
                 <TableHead>잔여·집행률</TableHead>
@@ -210,24 +154,13 @@ export function BudgetPlannerPanel({
                         {!row.hasBudget && <span className="bk-budget-unset-badge">미설정</span>}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        type="button"
-                        className="bk-budget-suggest"
-                        disabled={pending || row.suggestedMinor === 0}
-                        onClick={() => applySuggestion(row)}
-                        title="이 제안액을 예산으로 적용"
-                      >
-                        <Sparkles className="size-3" />
-                        {currency.format(row.suggestedMinor)}
-                      </button>
-                    </TableCell>
                     <TableCell className="typo-caption-sm text-right">
                       {currency.format(row.spentMinor)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Input
-                        className="bk-budget-limit-input"
+                      <TableCellInput
+                        align="right"
+                        cellWidth="amount"
                         inputMode="numeric"
                         aria-label={`${row.label} 예산 한도`}
                         placeholder="미설정"

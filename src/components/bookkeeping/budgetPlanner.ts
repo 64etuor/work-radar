@@ -1,9 +1,6 @@
-// 예산 탭 순수 헬퍼 — KPI 합산·한도 입력 파싱·산정 기준 월 옵션. (표현/IO 없음)
+// 예산 탭 순수 헬퍼 — KPI 합산·한도 입력 파싱. (표현/IO 없음)
 
 import type { BookkeepingBudgetPlanRow } from "@/bindings";
-
-export const BUDGET_SUGGESTION_MONTH_OPTIONS = [3, 6, 12] as const;
-export const DEFAULT_BUDGET_SUGGESTION_MONTHS = 3;
 
 export type BudgetPlanSummary = {
   totalLimitMinor: number;

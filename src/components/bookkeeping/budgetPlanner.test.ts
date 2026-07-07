@@ -16,7 +16,6 @@ function row(overrides: Partial<BookkeepingBudgetPlanRow>): BookkeepingBudgetPla
     rolloverInMinor: 0,
     remainingMinor: 0,
     pct: 0,
-    suggestedMinor: 0,
     currency: "KRW",
     ...overrides,
   };

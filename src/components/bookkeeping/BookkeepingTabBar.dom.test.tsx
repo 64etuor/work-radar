@@ -17,7 +17,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** BookkeepingView의 탭 셸 구조 재현 — 탭 바 + 다섯 패널 전부 항상 마운트. */
+/** BookkeepingView의 탭 셸 구조 재현 — 탭 바 + 모든 패널을 항상 마운트. */
 function renderShell(
   active: BookkeepingTabId,
   onSelect: (tab: BookkeepingTabId) => void = () => {},
@@ -40,7 +40,7 @@ function renderShell(
 }
 
 describe("BookkeepingTabBar + BookkeepingTabPanel", () => {
-  it("mounts all five tabpanels; only the active one is visible (others hidden)", () => {
+  it("mounts every tabpanel; only the active one is visible (others hidden)", () => {
     renderShell("ledger");
     for (const tab of BOOKKEEPING_TABS) {
       const panel = document.getElementById(tabPanelIdDom(tab.id));
@@ -65,6 +65,10 @@ describe("BookkeepingTabBar + BookkeepingTabPanel", () => {
 
   it("marks only the active tab as selected and shows the review badge", () => {
     renderShell("reports");
+    const tablist = document.querySelector(".bk-tabs");
+    expect(tablist?.getAttribute("data-active")).toBe("reports");
+    expect(document.querySelector(".bk-tab-indicator")?.getAttribute("aria-hidden")).toBe("true");
+
     const selected = Array.from(document.querySelectorAll('[role="tab"][aria-selected="true"]'));
     expect(selected).toHaveLength(1);
     expect(selected[0]?.textContent).toContain("리포트");

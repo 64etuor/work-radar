@@ -11,6 +11,7 @@ import type { TransactionEditDraft } from "../bookkeepingDrafts";
 import { shouldCommitNoteDraft } from "../reviewRow";
 import { paymentAssetSummary } from "./cardHelpers";
 import { PaymentFields } from "./PaymentFields";
+import { TableCellInput } from "./TableCellInput";
 
 /**
  * 원장/검토 큐 테이블의 인라인 셀 편집 프리미티브.
@@ -52,12 +53,10 @@ export function EditableTextCell({
       return;
     }
     committingRef.current = true;
-    try {
-      const ok = await onCommit(draft);
-      if (ok) setDraft(null);
-    } finally {
+    const ok = await onCommit(draft).finally(() => {
       committingRef.current = false;
-    }
+    });
+    if (ok) setDraft(null);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -73,9 +72,8 @@ export function EditableTextCell({
 
   if (draft != null) {
     return (
-      <Input
-        className="bk-cell-input"
-        data-align={align}
+      <TableCellInput
+        align={align}
         value={draft}
         autoFocus
         aria-label={ariaLabel}
@@ -197,12 +195,10 @@ export function PaymentCellEditor({
 
   const apply = async () => {
     setSaving(true);
-    try {
-      const ok = await onCommit(draft);
-      if (ok) setOpen(false);
-    } finally {
+    const ok = await onCommit(draft).finally(() => {
       setSaving(false);
-    }
+    });
+    if (ok) setOpen(false);
   };
 
   return (
