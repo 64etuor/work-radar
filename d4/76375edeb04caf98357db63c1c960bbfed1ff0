@@ -1,0 +1,21 @@
+docs/plans/2026-07-07-shared-routine-modal-implementation.md
+  s_246ff8a79fbd78::t_d0c8c3c2d0bd48 1-148
+docs/plans/2026-07-07-shared-routine-modal-design.md
+  s_246ff8a79fbd78::t_d0c8c3c2d0bd48 1-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d476375edeb04caf98357db63c1c960bbfed1ff0",
+  "prompts": {},
+  "sessions": {
+    "s_246ff8a79fbd78": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3c42-0f65-74f2-ad8a-6201e834a6ac",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
