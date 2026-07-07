@@ -2,14 +2,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
-import {
-  areaLabel,
-  quadrantToZone,
-  shortDate,
-  suggestedQuadrantBadge,
-  type ZoneKey,
-  ZONES,
-} from "@/components/board/boardUtils";
+import { quadrantToZone, shortDate, type ZoneKey, ZONES } from "@/components/board/boardUtils";
 import { BrainDumpToggle } from "@/components/board/BrainDumpToggle";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
 import {
@@ -19,7 +12,7 @@ import {
   rectContainsPoint,
 } from "@/components/board/matrixGeometry";
 import { InboxColumn } from "@/components/inbox/InboxColumn";
-import { objectiveMatchesForSignal, type ObjectiveMatchSource, okrChipTooltip } from "@/lib/okr";
+import { type ObjectiveMatchSource, okrBadgeMatchesForSignal, okrChipTooltip } from "@/lib/okr";
 
 const zoneOf = (s: WorkSignal): ZoneKey => quadrantToZone(s.quadrant);
 
@@ -388,14 +381,8 @@ function useMatrixCanvasView({
         const qClass = zone === "unclassified" ? "" : ` ${zone}`;
         const selCls = s.id === selectedId ? " sel" : "";
         const popCls = poppedIds.has(s.id) ? " pop" : "";
-        const sugQ =
-          s.quadrant === "unclassified" ? suggestedQuadrantBadge(s.suggestedQuadrant) : "";
-        // 제안 영역(Wheel of Life) 힌트 배지 — 확정 area 없을 때만(확정되면 chip-area로 표시). 힌트라 자동 확정 0(INVARIANT #1).
-        const sugA = !s.area && s.suggestedArea ? `${areaLabel(s.suggestedArea)}?` : "";
-        // 이번 분기 활성 Objective 집계 매칭 — 표시 전용 힌트(집계 정본은 okr.rs SQL, 근거는 툴팁에).
-        const matchedObjectives = objectives?.length
-          ? objectiveMatchesForSignal(s, objectives)
-          : [];
+        // 이번 분기 활성 Objective 배지 — 표시 전용 힌트. 프로젝트-only 매칭은 카드 잡음이 커서 숨긴다.
+        const matchedObjectives = objectives?.length ? okrBadgeMatchesForSignal(s, objectives) : [];
         return (
           <div
             key={s.id}
@@ -427,16 +414,6 @@ function useMatrixCanvasView({
                 });
               }}
             />
-            {sugQ && (
-              <span className="chip chip-q-sug" title="AI 제안 사분면(힌트 — 자동 분류 아님)">
-                {sugQ}
-              </span>
-            )}
-            {sugA && (
-              <span className="chip chip-area-sug" title="AI 제안 영역(힌트 — 자동 분류 아님)">
-                {sugA}
-              </span>
-            )}
             {matchedObjectives.length > 0 && (
               <span className="chip chip-okr" title={okrChipTooltip(matchedObjectives)}>
                 ◎ {matchedObjectives.length > 1 ? `OKR ×${matchedObjectives.length}` : "OKR"}

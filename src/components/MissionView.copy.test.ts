@@ -14,6 +14,12 @@ const objectiveDialogSource =
   readFileSync?.(resolve?.(__dirname, "okr/ObjectiveDialog.tsx") ?? "", "utf8") ?? "";
 const objectiveCardSource =
   readFileSync?.(resolve?.(__dirname, "okr/ObjectiveCard.tsx") ?? "", "utf8") ?? "";
+const routineLinkSource =
+  readFileSync?.(resolve?.(__dirname, "okr/RoutineLinkControl.tsx") ?? "", "utf8") ?? "";
+const systemDiagnosisSource =
+  readFileSync?.(resolve?.(__dirname, "weekly/SystemDiagnosis.tsx") ?? "", "utf8") ?? "";
+const sprintTimerSource =
+  readFileSync?.(resolve?.(__dirname, "SprintTimer.tsx") ?? "", "utf8") ?? "";
 const navSource = readFileSync?.(resolve?.(__dirname, "../lib/nav.ts") ?? "", "utf8") ?? "";
 
 describe("MissionView copy", () => {
@@ -24,5 +30,14 @@ describe("MissionView copy", () => {
     expect(objectiveDialogSource).toContain("저장된 장기 목표가 없습니다");
     expect(objectiveCardSource).toContain("연결된 태그/프로젝트/장기 목표 없음");
     expect(navSource).toContain("장기 목표");
+  });
+
+  it("frames routines as KR automation and sprint focus as automatic sync", () => {
+    expect(routineLinkSource).toContain("루틴으로 자동화");
+    expect(routineLinkSource).toContain("KR 진행이 자동 집계");
+    expect(systemDiagnosisSource).toContain("자동 동기화");
+    expect(systemDiagnosisSource).not.toContain("주간 목표로 교체");
+    expect(systemDiagnosisSource).not.toContain("주간 목표로 연결");
+    expect(sprintTimerSource).not.toContain("주간 목표로 교체");
   });
 });

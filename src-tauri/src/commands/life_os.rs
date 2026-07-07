@@ -1639,7 +1639,7 @@ mod tests {
         )
         .await
         .unwrap();
-        crate::commands::signal_store::insert_signal(
+        let exercise = crate::commands::signal_store::insert_signal(
             &db,
             &CreateSignalInput {
                 title: "운동 계속 밀림".into(),
@@ -1649,7 +1649,7 @@ mod tests {
         )
         .await
         .unwrap();
-        crate::commands::signal_store::insert_signal(
+        let automation = crate::commands::signal_store::insert_signal(
             &db,
             &CreateSignalInput {
                 title: "반복 보고 자동화 설계".into(),
@@ -1659,6 +1659,16 @@ mod tests {
         )
         .await
         .unwrap();
+        for signal_id in [&urgent.id, &exercise.id, &automation.id] {
+            sqlx::query(
+                "UPDATE signals SET created_at = '2026-07-01 09:00:00', \
+                    updated_at = '2026-07-01 09:00:00' WHERE id = ?1",
+            )
+            .bind(signal_id)
+            .execute(&db)
+            .await
+            .unwrap();
+        }
 
         let review = super::generate_life_os_review_inner(
             &db,

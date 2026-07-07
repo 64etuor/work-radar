@@ -17,6 +17,8 @@
   --bk-success-bg: var(--color-wr-success-soft);
   --bk-danger: var(--color-wr-danger);
   --bk-danger-bg: var(--color-wr-danger-soft);
+  --bk-coral-soft: color-mix(in srgb, var(--bk-coral) 11%, var(--bk-surface));
+  --bk-row-hover: color-mix(in srgb, var(--bk-stone) 72%, var(--bk-surface));
 }
 
 .bk-view {
@@ -41,7 +43,7 @@
    두 줄 분리(scope 줄 + 액션 줄) 폐지 — 좁아지면 컨트롤 묶음이 자연 줄바꿈(flex-wrap). */
 .bk-page-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--wr-density-md) var(--wr-density-lg);
@@ -130,23 +132,26 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--wr-density-sm);
-  border-bottom: 1px solid var(--bk-rule);
-  padding-bottom: var(--wr-density-sm);
 }
 
 .bk-tabs {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--wr-density-2xs);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--bk-rule);
+  border-radius: 999px;
+  background: var(--bk-stone);
 }
 
 .bk-tab {
   display: inline-flex;
   align-items: center;
   gap: var(--wr-density-xs);
-  padding: var(--wr-density-xs) var(--wr-density-md);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  min-height: 30px;
+  padding: 0 var(--wr-density-md);
+  border: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--bk-muted);
   cursor: pointer;
@@ -158,14 +163,12 @@
 
 .bk-tab:hover {
   color: var(--bk-ink);
-  background: var(--bk-stone);
+  background: var(--bk-surface);
 }
 
 .bk-tab[data-selected] {
-  color: var(--bk-ink);
-  border-color: var(--bk-rule-strong);
-  background: var(--bk-surface);
-  box-shadow: var(--wr-shadow-hairline);
+  color: var(--bk-surface);
+  background: var(--bk-ink);
 }
 
 .bk-tab:focus-visible {
@@ -180,12 +183,17 @@
   min-width: 1.25rem;
   padding: 0 var(--wr-density-2xs);
   border-radius: 999px;
-  background: var(--bk-coral);
-  color: var(--bk-surface);
+  background: var(--bk-coral-soft);
+  color: var(--bk-coral);
   font-size: var(--text-caption-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
+}
+
+.bk-tab[data-selected] .bk-tab-badge {
+  background: color-mix(in srgb, var(--bk-surface) 16%, transparent);
+  color: var(--bk-surface);
 }
 
 /* 검토 대기 점프 칩 — 항상 보이는 요약 스트립의 액션. */
@@ -194,10 +202,10 @@
   align-items: center;
   gap: var(--wr-density-2xs);
   padding: var(--wr-density-2xs) var(--wr-density-sm);
-  border: 1px solid color-mix(in srgb, var(--bk-coral) 32%, var(--bk-rule));
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--bk-surface);
-  color: var(--bk-coral);
+  background: transparent;
+  color: var(--bk-muted);
   cursor: pointer;
   font-variant-numeric: tabular-nums;
   transition:
@@ -206,7 +214,8 @@
 }
 
 .bk-review-chip:hover {
-  border-color: var(--bk-coral);
+  color: var(--bk-ink);
+  border-color: var(--bk-rule);
   background: var(--bk-stone);
 }
 
@@ -257,7 +266,7 @@
   border: 1px solid var(--bk-rule);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  background: var(--bk-surface);
+  background: var(--bk-stone);
 }
 
 .bk-metric {
@@ -265,8 +274,8 @@
   align-items: baseline;
   gap: var(--wr-density-xs);
   border-left: 1px solid var(--bk-rule);
-  padding: var(--wr-density-xs) var(--wr-density-lg);
-  background: var(--bk-surface);
+  padding: 9px var(--wr-density-lg);
+  background: transparent;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -279,7 +288,6 @@
 
 .bk-metric:first-child {
   border-left: 0;
-  background: var(--bk-accent-soft);
 }
 
 .bk-currency-summary {
@@ -395,7 +403,8 @@
 .bk-card {
   border-color: var(--bk-rule);
   border-radius: var(--radius-sm);
-  box-shadow: var(--wr-shadow-hairline);
+  background: var(--bk-surface);
+  box-shadow: none;
 }
 
 /* ── 카드 크롬 압축 — shadcn 기본 p-5(20px)를 bk 스코프에서만 줄인다. ── */
@@ -426,7 +435,7 @@
 }
 
 .bk-review-card {
-  border-color: color-mix(in srgb, var(--bk-coral) 20%, var(--bk-rule));
+  border-color: var(--bk-rule);
 }
 
 .bk-card-header-row {
@@ -560,18 +569,15 @@
   grid-template-columns: minmax(0, 1fr) max-content auto;
   align-items: center;
   column-gap: var(--wr-density-xl);
-  margin-inline: -10px;
-  border-left: 3px solid transparent;
+  margin-inline: -8px;
+  border-left: 2px solid transparent;
   border-radius: var(--radius-sm);
-  padding-inline: 10px;
-  transition:
-    background var(--wr-motion-fast) var(--wr-ease-out),
-    transform var(--wr-motion-fast) var(--wr-ease-out);
+  padding-inline: 8px;
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .bk-transaction:hover {
-  background: var(--bk-stone);
-  transform: translateY(-1px);
+  background: var(--bk-row-hover);
 }
 
 /* 클릭으로 편집이 열리는 읽기 행 — 포인터로 어포던스를 드러낸다.
@@ -620,17 +626,17 @@
 }
 
 .bk-transaction:active {
-  transform: translateY(0);
+  background: var(--bk-stone);
 }
 
 .bk-transaction[data-status="needs_review"],
 .bk-transaction[data-status="planned"] {
-  border-left-color: var(--bk-coral);
+  border-left-color: color-mix(in srgb, var(--bk-coral) 54%, var(--bk-rule));
 }
 
 .bk-transaction[data-status="approved"],
 .bk-transaction[data-status="posted"] {
-  border-left-color: var(--bk-green);
+  border-left-color: color-mix(in srgb, var(--bk-green) 50%, var(--bk-rule));
 }
 
 .bk-transaction[data-status="ignored"],
@@ -731,7 +737,7 @@
 }
 
 .bk-empty {
-  border: 1px dashed var(--bk-rule);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--bk-stone);
   color: var(--bk-subtle);
@@ -794,6 +800,29 @@
   .bk-review-date-filters,
   .bk-bulk-category {
     grid-template-columns: 1fr;
+  }
+
+  .bk-tabs {
+    width: 100%;
+    border-radius: var(--radius-sm);
+  }
+
+  .bk-tab {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .bk-budget-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .bk-budget-kpi {
+    border-top: 1px solid var(--bk-rule);
+    border-left: 0;
+  }
+
+  .bk-budget-kpi:first-child {
+    border-top: 0;
   }
 
   .bk-title {
@@ -956,12 +985,12 @@
 }
 
 .bk-budget-row:hover {
-  border-color: var(--bk-rule-strong);
-  background: var(--bk-stone);
+  border-color: var(--bk-rule);
+  background: var(--bk-row-hover);
 }
 
 .bk-budget-row[data-overrun="true"] {
-  border-color: color-mix(in srgb, var(--bk-danger) 42%, var(--bk-rule));
+  border-color: color-mix(in srgb, var(--bk-danger) 24%, var(--bk-rule));
   background: var(--bk-danger-bg);
 }
 
@@ -985,7 +1014,7 @@
 .bk-budget-track {
   display: block;
   width: 100%;
-  height: 8px;
+  height: 6px;
   overflow: hidden;
   border-radius: var(--radius-xs);
   background: var(--bk-stone);
@@ -995,7 +1024,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--bk-green);
+  background: color-mix(in srgb, var(--bk-green) 82%, var(--bk-ink));
 }
 
 .bk-budget-row[data-overrun="true"] .bk-budget-fill {
@@ -1006,18 +1035,25 @@
 .bk-budget-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--wr-density-sm);
+  gap: 0;
   margin-bottom: var(--wr-density-md);
+  overflow: hidden;
+  border: 1px solid var(--bk-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bk-stone);
 }
 
 .bk-budget-kpi {
   display: grid;
   gap: var(--wr-density-xs);
-  padding: var(--wr-density-md);
-  border: 1px solid var(--bk-rule);
-  border-radius: var(--radius-sm);
-  background: var(--bk-surface);
+  padding: var(--wr-density-sm) var(--wr-density-md);
+  border-left: 1px solid var(--bk-rule);
+  background: transparent;
   font-variant-numeric: tabular-nums;
+}
+
+.bk-budget-kpi:first-child {
+  border-left: 0;
 }
 
 .bk-budget-kpi[data-overrun="true"] > strong {
@@ -1071,21 +1107,24 @@
   display: inline-flex;
   align-items: center;
   gap: var(--wr-density-xs);
-  padding: 2px var(--wr-density-sm);
-  border: 1px dashed var(--bk-rule-strong);
-  border-radius: var(--radius-xs);
-  background: transparent;
+  min-height: 26px;
+  padding: 0 var(--wr-density-sm);
+  border: 1px solid var(--bk-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bk-stone);
   color: var(--bk-muted);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
+    background var(--wr-motion-fast) var(--wr-ease-out),
     border-color var(--wr-motion-fast) var(--wr-ease-out),
     color var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .bk-budget-suggest:hover:not(:disabled) {
-  border-color: var(--bk-green);
-  color: var(--bk-ink, inherit);
+  border-color: color-mix(in srgb, var(--bk-green) 24%, var(--bk-rule));
+  background: var(--bk-row-hover);
+  color: var(--bk-ink);
 }
 
 .bk-budget-suggest:disabled {
@@ -1095,7 +1134,9 @@
 
 .bk-budget-limit-input {
   width: 8rem;
+  height: 30px;
   margin-left: auto;
+  border-radius: var(--radius-sm);
   text-align: right;
 }
 
@@ -1133,9 +1174,9 @@
   gap: var(--wr-density-md);
   margin-bottom: var(--wr-density-sm);
   padding: var(--wr-density-xs) var(--wr-density-md);
-  border: 1px solid var(--bk-rule-strong);
+  border: 1px solid var(--bk-rule);
   border-radius: var(--radius-sm);
-  background: var(--bk-stone);
+  background: var(--bk-accent-soft);
 }
 
 .bk-bulk-count {
@@ -1216,9 +1257,9 @@
 
 .bk-triage-help > span {
   padding: 2px var(--wr-density-xs);
-  border: 1px solid var(--bk-rule);
+  border: 0;
   border-radius: var(--radius-xs);
-  background: var(--bk-surface);
+  background: var(--bk-stone);
 }
 
 /* 검토 큐 read-row 공유 칼럼 템플릿 — 리스트 전체가 같은 고정/fr 트랙을 쓰므로
@@ -1268,7 +1309,7 @@
 /* 그룹 타이틀 — 의심/정상 구획 라벨(그룹 행 안). */
 .bk-review-group-title {
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 /* ── 원장/검토 큐 공용 테이블 스킨(wr-table) ─────────────────────────
@@ -1297,12 +1338,12 @@
 }
 
 .bk-table .bk-tr:hover {
-  background: var(--bk-stone);
+  background: var(--bk-row-hover);
 }
 
 /* j/k 트리아지 활성 행(검토 큐). */
 .bk-table .bk-review-tr[data-active="true"] {
-  background: var(--bk-stone);
+  background: var(--bk-accent-soft);
 }
 
 /* 상태 악센트 — 이전 행 border-left 문법을 첫 셀 inset으로 이식(tr border는 비신뢰). */
@@ -1312,12 +1353,12 @@
 
 .bk-table .bk-tr[data-status="needs_review"] > td:first-child,
 .bk-table .bk-tr[data-status="planned"] > td:first-child {
-  box-shadow: inset 3px 0 0 var(--bk-coral);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--bk-coral) 58%, var(--bk-rule));
 }
 
 .bk-table .bk-tr[data-status="approved"] > td:first-child,
 .bk-table .bk-tr[data-status="posted"] > td:first-child {
-  box-shadow: inset 3px 0 0 var(--bk-green);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--bk-green) 54%, var(--bk-rule));
 }
 
 /* 칼럼 폭 — 내용(bk-td-main)만 유동, 나머지는 내용 기반 고정. */
@@ -1419,7 +1460,7 @@
   gap: var(--wr-density-md);
   margin-top: var(--wr-density-md);
   padding: var(--wr-density-xs) var(--wr-density-sm);
-  border-bottom: 1px solid var(--bk-rule-strong);
+  border-bottom: 1px solid var(--bk-rule);
   color: var(--bk-subtle);
 }
 

@@ -474,7 +474,7 @@
   display: grid;
   /* 고정 5트랙 [제목+바 | 값 | 루틴 | 자신감 | 삭제] — 모든 행이 같은 칼럼 경계에 정렬.
      (auto 트랙이면 행마다 콘텐츠 폭 따라 어긋나 어포던스가 흔들린다.) */
-  grid-template-columns: minmax(0, 1.6fr) minmax(200px, 1fr) 148px 104px 32px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(200px, 1fr) 168px 104px 32px;
   gap: 10px;
   align-items: center;
   padding: 10px 0;
@@ -512,7 +512,7 @@
 .mission-kr-routine-btn {
   justify-self: stretch;
   width: 100%;
-  max-width: 148px;
+  max-width: 168px;
   justify-content: flex-start;
   overflow: hidden;
   text-overflow: ellipsis;

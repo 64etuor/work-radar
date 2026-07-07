@@ -82,19 +82,3 @@ const AREA_LABELS: Record<AreaTag, string> = {
 export function areaLabel(area: AreaTag): string {
   return AREA_LABELS[area];
 }
-
-/** suggested_quadrant(문자열 힌트) → 짧은 배지(Q1~Q4). 미분류/미상은 빈 문자열. */
-export function suggestedQuadrantBadge(q: string | null): string {
-  switch (q) {
-    case "q1_do_now":
-      return "Q1?";
-    case "q2_schedule":
-      return "Q2?";
-    case "q3_quick_contain":
-      return "Q3?";
-    case "q4_drop":
-      return "Q4?";
-    default:
-      return "";
-  }
-}

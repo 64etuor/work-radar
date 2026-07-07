@@ -91,6 +91,18 @@ export function objectiveMatchesForSignal<T extends ObjectiveMatchSource>(
   return matches;
 }
 
+/**
+ * 보드 카드 OKR 배지는 사용자가 납득할 수 있는 직접 근거만 보여준다.
+ * project-only 매칭은 Objective 통계에는 쓸 수 있지만, 기본 personal/work 프로젝트 태깅 때문에
+ * 브레인덤프 카드 전체에 OKR처럼 보이는 잡음을 만든다.
+ */
+export function okrBadgeMatchesForSignal<T extends ObjectiveMatchSource>(
+  signal: SignalObjectiveMatchSource,
+  objectives: T[],
+): ObjectiveMatch<T>[] {
+  return objectiveMatchesForSignal(signal, objectives).filter((match) => match.via === "area");
+}
+
 /** 보드 ◎ 배지 툴팁 — 매칭 근거(영역/프로젝트)를 밝힌다(프로젝트 링크=그 프로젝트 카드 전부 함정 가시화). */
 export function okrChipTooltip(matches: ObjectiveMatch<{ title: string }>[]): string {
   const lines = matches.map(

@@ -42,11 +42,29 @@ export function RoutineLinkControl({
   const setRoutine = useSetKeyResultRoutine();
   const createRoutine = useCreateRoutine();
   const [days, setDays] = useState<Weekday[]>([]);
-  const [title, setTitle] = useState(kr.title);
+  const [draftTitle, setDraftTitle] = useState<string | null>(null);
   const pending = setRoutine.isPending || createRoutine.isPending;
+  const title = draftTitle ?? kr.title;
+  const routineItems = routines.data ?? [];
+  const availableRoutines: typeof routineItems = [];
+  for (const routine of routineItems) {
+    if (routine.id !== kr.routineId) {
+      availableRoutines.push(routine);
+    }
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setDraftTitle(null);
+      setDays([]);
+    }
+  };
+
+  const closePopover = () => handleOpenChange(false);
 
   const link = (routineId: string | null) =>
-    setRoutine.mutate({ id: kr.id, routineId }, { onSuccess: () => setOpen(false) });
+    setRoutine.mutate({ id: kr.id, routineId }, { onSuccess: closePopover });
 
   const createAndLink = () => {
     const clean = title.trim();
@@ -72,26 +90,26 @@ export function RoutineLinkControl({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
-          variant={kr.routineId ? "secondary" : "ghost"}
+          variant={kr.routineId ? "secondary" : "outline"}
           size="sm"
           className="mission-kr-routine-btn"
           title={
             kr.routineId
-              ? `루틴 연결됨: ${kr.routine?.title ?? "루틴"} — 진행이 루틴 체크에서 자동 집계`
-              : "루틴 연결 — 매일 루틴 체크만 하면 KR 진행이 자동 집계"
+              ? `루틴 연결됨: ${kr.routine?.title ?? "루틴"} — KR 진행이 자동 집계됩니다`
+              : "루틴으로 자동화 — 매일 루틴 체크만 하면 KR 진행이 자동 집계됩니다"
           }
         >
           <Repeat className="size-3.5" />
-          {kr.routineId ? (kr.routine?.title ?? "루틴") : "루틴"}
+          {kr.routineId ? (kr.routine?.title ?? "루틴 자동화") : "루틴으로 자동화"}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="mission-routine-popover" align="end">
         <div className="mission-popover-head">
-          <span className="typo-title-sm">루틴 연결</span>
-          <span className="mission-muted typo-caption-sm">체크 = 자동 진행</span>
+          <span className="typo-title-sm">KR 루틴 자동화</span>
+          <span className="mission-muted typo-caption-sm">루틴 체크 = KR 진행이 자동 집계</span>
         </div>
 
         {kr.routineId && (
@@ -107,30 +125,28 @@ export function RoutineLinkControl({
         )}
 
         <div className="mission-routine-list">
-          {(routines.data ?? [])
-            .filter((routine) => routine.id !== kr.routineId)
-            .map((routine) => (
-              <button
-                key={routine.id}
-                type="button"
-                className="mission-routine-item"
-                disabled={pending}
-                onClick={() => link(routine.id)}
-              >
-                <Link2 className="size-3.5" aria-hidden />
-                <span className="typo-body-md">{routine.title}</span>
-              </button>
-            ))}
-          {(routines.data ?? []).length === 0 && (
+          {availableRoutines.map((routine) => (
+            <button
+              key={routine.id}
+              type="button"
+              className="mission-routine-item"
+              disabled={pending}
+              onClick={() => link(routine.id)}
+            >
+              <Link2 className="size-3.5" aria-hidden />
+              <span className="typo-body-md">{routine.title}</span>
+            </button>
+          ))}
+          {routineItems.length === 0 && (
             <span className="mission-muted typo-body-md">활성 루틴이 없습니다.</span>
           )}
         </div>
 
         <div className="mission-routine-new">
-          <span className="typo-label-sm">새 루틴 만들기 (이 분기 동안)</span>
+          <span className="typo-label-sm">새 루틴 만들고 KR에 연결 (이 분기 동안)</span>
           <Input
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => setDraftTitle(event.target.value)}
             aria-label="새 루틴 제목"
           />
           <div className="mission-routine-days" aria-label="요일 (없으면 매일)">

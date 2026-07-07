@@ -72,6 +72,7 @@ import { BookkeepingTabBar, BookkeepingTabPanel } from "./BookkeepingTabBar";
 import {
   type BookkeepingTabId,
   readStoredBookkeepingTab,
+  shouldShowReviewJumpChip,
   writeStoredBookkeepingTab,
 } from "./bookkeepingTabs";
 import { ApprovedTransactionsCard } from "./cards/ApprovedTransactionsCard";
@@ -638,7 +639,7 @@ export function BookkeepingView() {
             reviewCount={needsReviewCount}
             onSelect={selectTab}
           />
-          {needsReviewCount > 0 && (
+          {shouldShowReviewJumpChip(needsReviewCount, activeTab) && (
             <button
               type="button"
               className="bk-review-chip typo-label-sm"

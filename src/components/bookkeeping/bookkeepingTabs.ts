@@ -56,3 +56,8 @@ export function reviewBadgeLabel(count: number): string | null {
   if (!Number.isFinite(count) || count <= 0) return null;
   return count > 99 ? "99+" : String(Math.floor(count));
 }
+
+/** 검토 탭 밖에서만 리뷰 큐 점프 칩을 보인다. 현재 탭에서는 탭 배지가 이미 같은 정보를 소유한다. */
+export function shouldShowReviewJumpChip(count: number, activeTab: BookkeepingTabId): boolean {
+  return reviewBadgeLabel(count) !== null && activeTab !== "review";
+}

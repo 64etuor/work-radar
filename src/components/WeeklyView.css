@@ -706,7 +706,8 @@
   white-space: nowrap;
 }
 .wk .wk-system-action,
-.wk .wk-system-ok {
+.wk .wk-system-ok,
+.wk .wk-system-muted {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;

@@ -7,6 +7,7 @@ import {
   isBookkeepingTabId,
   readStoredBookkeepingTab,
   reviewBadgeLabel,
+  shouldShowReviewJumpChip,
   writeStoredBookkeepingTab,
 } from "./bookkeepingTabs";
 
@@ -76,6 +77,14 @@ describe("bookkeeping tabs", () => {
       expect(reviewBadgeLabel(1)).toBe("1");
       expect(reviewBadgeLabel(99)).toBe("99");
       expect(reviewBadgeLabel(100)).toBe("99+");
+    });
+  });
+
+  describe("shouldShowReviewJumpChip", () => {
+    it("shows the jump chip only outside the active review tab", () => {
+      expect(shouldShowReviewJumpChip(3, "ledger")).toBe(true);
+      expect(shouldShowReviewJumpChip(3, "review")).toBe(false);
+      expect(shouldShowReviewJumpChip(0, "ledger")).toBe(false);
     });
   });
 });

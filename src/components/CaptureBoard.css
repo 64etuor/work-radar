@@ -477,24 +477,11 @@
   background: var(--color-wr-surface);
   color: var(--color-wr-muted);
 }
-/* enrich — AI 제안 영역(suggestedArea) 힌트 배지(자동 분류 아님, 확정 아님). dashed = 미확정 힌트(chip-q-sug와 동일 톤). */
-.cb .chip-area-sug {
-  background: transparent;
-  color: var(--color-wr-subtle);
-  border: 1px dashed var(--color-wr-border);
-}
-/* OKR 연결 배지 — 이 카드가 이번 분기 활성 Objective에 집계됨(표시 전용, area/project 매칭 미러).
-   AI 힌트(dashed)와 달리 사실 연결이라 solid 보더 + 브랜드 그린. */
+/* OKR 연결 배지 — 이 카드가 이번 분기 활성 Objective에 집계됨(표시 전용, area 매칭 미러). */
 .cb .chip-okr {
   background: transparent;
   color: var(--color-wr-green);
   border: 1px solid var(--color-wr-pale-green);
-}
-/* Phase 9 enrich — AI 제안 사분면(suggestedQuadrant) 힌트 배지(자동 분류 아님). */
-.cb .chip-q-sug {
-  background: transparent;
-  color: var(--color-wr-subtle);
-  border: 1px dashed var(--color-wr-border);
 }
 .cb .postit .pdate {
   position: absolute;

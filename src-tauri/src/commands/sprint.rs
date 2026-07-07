@@ -21,8 +21,7 @@ use crate::commands::nav::get_config;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    LinkSprintGoalInput, SprintCycle, SprintCycleStatus, SprintSaveResult,
-    SprintWeeklyFocusConflict, Weekday, WeeklyFocus, WeeklyFocusSourceKind,
+    LinkSprintGoalInput, SprintCycle, SprintCycleStatus, SprintSaveResult, Weekday, WeeklyFocus,
 };
 
 const KEY_SPRINT: &str = "sprint.config";
@@ -304,7 +303,7 @@ pub(crate) async fn set_sprint_config_inner_at(
     db: &Db,
     config: SprintConfig,
     now: NaiveDateTime,
-    replace_existing_focus: bool,
+    _replace_existing_focus: bool,
 ) -> Result<SprintSaveResult, AppError> {
     validate(&config).map_err(|(code, msg)| AppError::validation(code, msg))?;
     let json = serde_json::to_string(&config)
@@ -366,19 +365,6 @@ pub(crate) async fn set_sprint_config_inner_at(
     };
 
     let existing = selected_focus_in_tx(&mut tx, &week_start).await?;
-    if let Some(existing_focus) = existing.as_ref() {
-        if existing_focus.source_kind != WeeklyFocusSourceKind::Sprint && !replace_existing_focus {
-            tx.commit().await?;
-            return Ok(SprintSaveResult {
-                sprint_cycle: Some(cycle),
-                weekly_focus: None,
-                conflict: Some(SprintWeeklyFocusConflict {
-                    existing_weekly_focus: existing_focus.clone(),
-                    sprint_goal: goal,
-                }),
-            });
-        }
-    }
 
     let focus =
         write_sprint_focus_in_tx(&mut tx, &week_start, &goal, &cycle.id, existing.as_ref()).await?;
@@ -761,7 +747,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn saving_goal_does_not_overwrite_manual_weekly_focus_without_replace() {
+    async fn saving_goal_always_overwrites_manual_weekly_focus() {
         let db = fresh_db().await;
         crate::commands::life_os::select_weekly_focus_inner(
             &db,
@@ -787,25 +773,21 @@ mod tests {
         let mut cfg = fri_2100_biweekly();
         cfg.goal = "스프린트 목표".into();
         let now = dt(2026, 7, 4, 10, 0);
-        let result = super::set_sprint_config_inner_at(&db, cfg.clone(), now, false)
+        let result = super::set_sprint_config_inner_at(&db, cfg, now, false)
             .await
             .unwrap();
-        assert_eq!(
-            result.conflict.unwrap().existing_weekly_focus.title,
-            "Manual weekly focus"
-        );
+        assert!(result.conflict.is_none());
+        assert_eq!(result.weekly_focus.unwrap().title, "스프린트 목표");
 
-        let still_manual = crate::commands::life_os::selected_weekly_focus_inner(&db, "2026-06-29")
+        let overwritten = crate::commands::life_os::selected_weekly_focus_inner(&db, "2026-06-29")
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(still_manual.title, "Manual weekly focus");
-
-        let replaced = super::set_sprint_config_inner_at(&db, cfg, now, true)
-            .await
-            .unwrap();
-        assert!(replaced.conflict.is_none());
-        assert_eq!(replaced.weekly_focus.unwrap().title, "스프린트 목표");
+        assert_eq!(overwritten.title, "스프린트 목표");
+        assert_eq!(
+            overwritten.source_kind,
+            crate::models::WeeklyFocusSourceKind::Sprint
+        );
     }
 
     #[tokio::test]

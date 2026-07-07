@@ -5,6 +5,7 @@ import {
   objectiveMatchesForSignal,
   objectiveProgressRatio,
   objectivesMatchingSignal,
+  okrBadgeMatchesForSignal,
   parseAreaTags,
   signalMatchesObjective,
   uncheckedKrCount,
@@ -113,6 +114,15 @@ describe("signalMatchesObjective", () => {
     expect(
       objectiveMatchesForSignal({ area: "work", areaTags: null, projectId: "p1" }, [objective]),
     ).toEqual([{ objective, via: "project" }]);
+  });
+
+  it("okrBadgeMatchesForSignal does not badge project-only matches", () => {
+    expect(
+      okrBadgeMatchesForSignal({ area: null, areaTags: null, projectId: "p1" }, [objective]),
+    ).toEqual([]);
+    expect(
+      okrBadgeMatchesForSignal({ area: "health", areaTags: null, projectId: "p1" }, [objective]),
+    ).toEqual([{ objective, via: "area" }]);
   });
 
   it("objectivesMatchingSignal excludes non-active objectives", () => {

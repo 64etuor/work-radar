@@ -1,12 +1,7 @@
 import { Link2, Target } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { focusMatchesSprintCycle, sprintGoalLabel } from "@/lib/lifeOs";
-import {
-  useCurrentSprintCycle,
-  useLinkSprintGoalToWeeklyFocus,
-  useSelectedWeeklyFocus,
-} from "@/lib/query";
+import { useCurrentSprintCycle, useSelectedWeeklyFocus } from "@/lib/query";
 
 export function SystemDiagnosis({
   weekStart,
@@ -17,13 +12,12 @@ export function SystemDiagnosis({
 }) {
   const weeklyFocus = useSelectedWeeklyFocus(weekStart);
   const sprintCycle = useCurrentSprintCycle();
-  const linkSprintGoal = useLinkSprintGoalToWeeklyFocus();
   const focus = weeklyFocus.data ?? null;
   const cycle = sprintCycle.data ?? null;
   const sprintGoal = sprintGoalLabel(cycle);
   const aligned = focusMatchesSprintCycle(focus, cycle);
-  const mismatch = isCurrent && sprintGoal && focus && !aligned;
-  const canLink = isCurrent && sprintGoal && (!focus || mismatch);
+  const autoSynced = sprintGoal && aligned;
+  const pendingAutoSync = isCurrent && sprintGoal && !aligned;
 
   return (
     <section className="wk-system">
@@ -45,21 +39,16 @@ export function SystemDiagnosis({
           </strong>
         </div>
         <div className="wk-system-action">
-          {aligned ? (
+          {autoSynced ? (
             <span className="wk-system-ok typo-label-sm">
               <Link2 className="size-4" />
-              연결됨
+              자동 동기화
             </span>
-          ) : canLink ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => linkSprintGoal.mutate({ replaceExisting: !!focus })}
-              disabled={linkSprintGoal.isPending}
-            >
+          ) : pendingAutoSync ? (
+            <span className="wk-system-muted typo-label-sm">
               <Link2 className="size-4" />
-              {focus ? "주간 목표로 교체" : "주간 목표로 연결"}
-            </Button>
+              다음 저장 시 자동 동기화
+            </span>
           ) : (
             <span className="wk-system-muted typo-label-sm">분리됨</span>
           )}
