@@ -238,7 +238,7 @@ function MilestonePopover({
   );
 }
 
-export function ConfidenceBadge({ checkIn }: { checkIn: OkrCheckIn | null }) {
+function ConfidenceBadge({ checkIn }: { checkIn: OkrCheckIn | null }) {
   const confidence = checkIn?.confidence ?? null;
   return (
     <span className="mission-confidence typo-caption-sm" data-confidence={confidence ?? "none"}>

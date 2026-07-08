@@ -85,7 +85,7 @@ function useCaptureBoardView() {
   const weekday = localWeekday();
 
   const signalsQ = useSignals();
-  // 이번 분기 Objective/체크인 — 카드 ◎ 배지 + 헤더 OKR 스트립(표시 전용, 캡처 흐름 비관여).
+  // 이번 분기 Objective/체크인 — 헤더 OKR 스트립 전용(표시 전용, 캡처 흐름 비관여).
   const okrQuarter = currentQuarterKey();
   const objectivesQ = useObjectives(okrQuarter);
   const okrCheckInsQ = useOkrCheckIns(okrQuarter);
@@ -578,7 +578,6 @@ function useCaptureBoardView() {
           onCapture={handleCapture}
           captureInputRef={captureInputRef}
           captureDisabled={createSignal.isPending}
-          objectives={objectivesQ.data ?? []}
         />
 
         <ExecutionRail

@@ -228,15 +228,6 @@
   will-change: left, top, transform;
   touch-action: none;
 }
-.cb .postit .chip {
-  display: inline-block;
-  margin-bottom: 5px;
-  font: 700 9px var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 1px 7px;
-  border-radius: 999px;
-}
 .cb .postit-tags {
   display: flex;
   align-items: flex-start;
@@ -471,17 +462,6 @@
     opacity: 0;
     transform: scale(0.58) translateY(4px);
   }
-}
-/* Phase 9 enrich — 확정 영역(area) chip. */
-.cb .chip-area {
-  background: var(--color-wr-surface);
-  color: var(--color-wr-muted);
-}
-/* OKR 연결 배지 — 이 카드가 이번 분기 활성 Objective에 집계됨(표시 전용, area 매칭 미러). */
-.cb .chip-okr {
-  background: transparent;
-  color: var(--color-wr-green);
-  border: 1px solid var(--color-wr-pale-green);
 }
 .cb .postit .pdate {
   position: absolute;

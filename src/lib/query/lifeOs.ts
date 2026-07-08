@@ -6,9 +6,7 @@ import {
   type CreateMissionHorizonInput,
   type DismissLifeOsRecommendationInput,
   type GenerateLifeOsReviewInput,
-  type LinkSprintGoalInput,
   type RecordLifeOsAuditInput,
-  type SelectWeeklyFocusInput,
   type UpdateMissionHorizonInput,
   type UpsertGuardrailInput,
 } from "@/bindings";
@@ -16,7 +14,7 @@ import {
 import { unwrap } from "./client";
 import { okrKeys } from "./okr";
 
-export const lifeOsKeys = {
+const lifeOsKeys = {
   all: ["lifeOs"] as const,
   horizons: ["lifeOs", "horizons"] as const,
   guardrails: (quarter: string) => ["lifeOs", "guardrails", quarter] as const,
@@ -166,14 +164,6 @@ export function useLifeOsRecommendations(weekStart: string) {
   });
 }
 
-export function useSelectWeeklyFocus() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: SelectWeeklyFocusInput) => unwrap(commands.selectWeeklyFocus(input)),
-    onSuccess: () => invalidateWeeklyFocusConsumers(qc),
-  });
-}
-
 export function useAcceptLifeOsRecommendation() {
   const qc = useQueryClient();
   return useMutation({
@@ -220,13 +210,5 @@ export function useCurrentSprintCycle() {
     queryKey: lifeOsKeys.sprintCycle,
     queryFn: () => unwrap(commands.currentSprintCycle()),
     staleTime: 60_000,
-  });
-}
-
-export function useLinkSprintGoalToWeeklyFocus() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: LinkSprintGoalInput) => unwrap(commands.linkSprintGoalToWeeklyFocus(input)),
-    onSuccess: () => invalidateWeeklyFocusConsumers(qc),
   });
 }

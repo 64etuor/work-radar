@@ -33,7 +33,7 @@ export function matchesBookkeepingReviewFilter(
   return reviewFilterHaystack(row).includes(query);
 }
 
-export function reviewFilterHaystack(row: BookkeepingReviewFilterRow): string {
+function reviewFilterHaystack(row: BookkeepingReviewFilterRow): string {
   const reasons = parseReviewReasonText(row.reviewReasonsJson);
   return [
     row.merchant,

@@ -4,7 +4,7 @@ export const currency = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
 });
 
-export function currencyExponent(currencyCode: string) {
+function currencyExponent(currencyCode: string) {
   return currencyCode === "KRW" || currencyCode === "JPY" ? 0 : 2;
 }
 

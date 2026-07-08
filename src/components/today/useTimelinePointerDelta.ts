@@ -5,7 +5,7 @@ import { totalPxForDays } from "@/lib/timelineAxis";
 
 export type ClientPoint = { x: number; y: number };
 
-export function clientPointFromEvent(event: Event | undefined): ClientPoint | null {
+function clientPointFromEvent(event: Event | undefined): ClientPoint | null {
   if (
     event &&
     "clientX" in event &&

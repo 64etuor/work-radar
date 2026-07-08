@@ -86,9 +86,13 @@ describe("MatrixCanvas card hints", () => {
   it("does not render suggested quadrant or area hint chips on braindump cards", () => {
     renderCanvas();
 
-    expect(container?.querySelector(".chip-q-sug")).toBeNull();
-    expect(container?.querySelector(".chip-area-sug")).toBeNull();
     expect(container?.textContent).not.toContain("Q1?");
     expect(container?.textContent).not.toContain("업무?");
+  });
+
+  it("does not render OKR badges on braindump cards with area tags", () => {
+    renderCanvas(signal({ area: "work", areaTags: '["work"]' }));
+
+    expect(container?.textContent).not.toContain("OKR");
   });
 });

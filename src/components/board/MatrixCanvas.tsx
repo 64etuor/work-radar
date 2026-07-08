@@ -12,7 +12,6 @@ import {
   rectContainsPoint,
 } from "@/components/board/matrixGeometry";
 import { InboxColumn } from "@/components/inbox/InboxColumn";
-import { type ObjectiveMatchSource, okrBadgeMatchesForSignal, okrChipTooltip } from "@/lib/okr";
 
 const zoneOf = (s: WorkSignal): ZoneKey => quadrantToZone(s.quadrant);
 
@@ -55,8 +54,6 @@ type Props = {
   captureInputRef?: React.RefObject<HTMLInputElement | null>;
   /** create_signal 진행 중 — 붙이기 버튼 disable. */
   captureDisabled?: boolean;
-  /** 이번 분기 활성 Objective — 카드 ◎ 매칭 배지(표시 전용 힌트, INVARIANT #1). */
-  objectives?: ObjectiveMatchSource[];
 };
 
 /**
@@ -86,7 +83,6 @@ function useMatrixCanvasView({
   onCapture,
   captureInputRef,
   captureDisabled,
-  objectives,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -381,8 +377,6 @@ function useMatrixCanvasView({
         const qClass = zone === "unclassified" ? "" : ` ${zone}`;
         const selCls = s.id === selectedId ? " sel" : "";
         const popCls = poppedIds.has(s.id) ? " pop" : "";
-        // 이번 분기 활성 Objective 배지 — 표시 전용 힌트. 프로젝트-only 매칭은 카드 잡음이 커서 숨긴다.
-        const matchedObjectives = objectives?.length ? okrBadgeMatchesForSignal(s, objectives) : [];
         return (
           <div
             key={s.id}
@@ -414,11 +408,6 @@ function useMatrixCanvasView({
                 });
               }}
             />
-            {matchedObjectives.length > 0 && (
-              <span className="chip chip-okr" title={okrChipTooltip(matchedObjectives)}>
-                ◎ {matchedObjectives.length > 1 ? `OKR ×${matchedObjectives.length}` : "OKR"}
-              </span>
-            )}
             {s.id === editingId ? (
               <TitleEditor
                 initial={s.title}
