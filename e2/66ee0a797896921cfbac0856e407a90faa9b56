@@ -1,0 +1,35 @@
+src/components/bookkeeping/reviewFilter.ts
+  s_8edf3ab4136b98::t_4683201888103c 36
+src/components/bookkeeping/bookkeepingFormat.ts
+  s_8edf3ab4136b98::t_4683201888103c 7
+src/components/CaptureBoard.tsx
+  s_8edf3ab4136b98::t_4683201888103c 88
+src/components/okr/KeyResultRow.tsx
+  s_8edf3ab4136b98::t_4683201888103c 241
+src/lib/query/lifeOs.ts
+  s_8edf3ab4136b98::t_32fc55041faf11 17
+src/components/board/MatrixCanvas.dom.test.tsx
+  s_8edf3ab4136b98::t_e152fc2313a886 93-94
+  s_8edf3ab4136b98::t_6351edb10a35ee 92,95-97
+src/components/today/useTimelinePointerDelta.ts
+  s_8edf3ab4136b98::t_4683201888103c 8
+src/lib/okr.ts
+  s_8edf3ab4136b98::t_4683201888103c 62,68
+  s_8edf3ab4136b98::t_757d7136ba7e8a 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e266ee0a797896921cfbac0856e407a90faa9b56",
+  "prompts": {},
+  "sessions": {
+    "s_8edf3ab4136b98": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3f4a-ea2b-7e80-bb6c-3b2a80aae367",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
