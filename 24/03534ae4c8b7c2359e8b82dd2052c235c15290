@@ -1,0 +1,25 @@
+src-tauri/src/commands/calendar.rs
+  s_8ce7dcd3f1cac8::t_af00332cbe3a9c 125,181,1014-1017
+  s_8ce7dcd3f1cac8::t_8a8005782aa9f5 969-1013,1018-1079
+  s_8ce7dcd3f1cac8::t_d43febc4d122e7 923-968
+  s_8ce7dcd3f1cac8::t_c37cb9a353dd1b 126-127,182-183,242-244
+  s_8ce7dcd3f1cac8::t_2754524a0dc422 386-392,399,401,403,425-441
+  s_8ce7dcd3f1cac8::t_b843e798cfe21c 442,670-687,714-715
+  s_8ce7dcd3f1cac8::t_68fb61dd0d0318 385,443,669
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2403534ae4c8b7c2359e8b82dd2052c235c15290",
+  "prompts": {},
+  "sessions": {
+    "s_8ce7dcd3f1cac8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3fbb-0d3e-7773-a7b6-4424033ca4c7",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
