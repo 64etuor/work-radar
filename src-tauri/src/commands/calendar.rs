@@ -122,11 +122,9 @@ pub async fn set_google_oauth_client(
         client_secret: client_secret.to_string(),
         refresh_token,
     };
-    Ok(keychain::set_token(
-        &cref,
-        TokenKind::GoogleCalendar,
-        &creds.to_blob(),
-    )?)
+    keychain::set_token(&cref, TokenKind::GoogleCalendar, &creds.to_blob())?;
+    invalidate_calendar_events_cache().await;
+    Ok(())
 }
 
 /// loopback + PKCE(S256) OAuth 실행 → refresh_token을 keychain blob에 저장. bounded(loopback timeout).
@@ -180,11 +178,9 @@ pub async fn start_google_oauth(db: State<'_, Db>, project_id: String) -> Result
         let provider = calendar::HttpCalendarProvider::new()?;
         let updated =
             calendar::connect_core(&provider, creds, &code, &verifier, &redirect_uri).await?;
-        Ok(keychain::set_token(
-            &cref,
-            TokenKind::GoogleCalendar,
-            &updated.to_blob(),
-        )?)
+        keychain::set_token(&cref, TokenKind::GoogleCalendar, &updated.to_blob())?;
+        invalidate_calendar_events_cache().await;
+        Ok(())
     }
     .await;
     finish_google_oauth_attempt(&project_id, attempt.id);
@@ -243,7 +239,9 @@ pub async fn disconnect_google(db: State<'_, Db>, project_id: String) -> Result<
     let cref = project_credential_ref(db.inner(), &project_id)
         .await
         .map_err(|e| AppError::terminal("calendar.project_not_found", e))?;
-    Ok(keychain::delete_token(&cref, TokenKind::GoogleCalendar)?)
+    keychain::delete_token(&cref, TokenKind::GoogleCalendar)?;
+    invalidate_calendar_events_cache().await;
+    Ok(())
 }
 
 /// 연결 검증(read-only): refresh_token으로 access token 재발급을 시도해 본다(bounded). 토큰 본문 미노출.
@@ -385,15 +383,24 @@ pub async fn set_selected_calendars(
     project_id: String,
     calendars: Vec<SelectedCalendar>,
 ) -> Result<(), AppError> {
+    save_selected_calendars(db.inner(), &project_id, calendars).await
+}
+
+pub(crate) async fn save_selected_calendars(
+    db: &Db,
+    project_id: &str,
+    calendars: Vec<SelectedCalendar>,
+) -> Result<(), AppError> {
     let json = serde_json::to_string(&calendars)
         .map_err(|e| AppError::terminal("calendar.serialize", format!("직렬화 실패: {e}")))?;
     sqlx::query(
         "UPDATE projects SET google_calendar_ids = ?2, updated_at = datetime('now') WHERE id = ?1",
     )
-    .bind(&project_id)
+    .bind(project_id)
     .bind(json)
-    .execute(db.inner())
+    .execute(db)
     .await?;
+    invalidate_calendar_events_cache().await;
     Ok(())
 }
 
@@ -413,6 +420,25 @@ fn calendar_events_cache() -> &'static TtlCache<String, Vec<CalendarEvent>> {
 /// 색 변경은 드문 사용자 액션이라 전체 무효화로 충분(키 단위 부분 무효화 불요).
 pub(crate) async fn invalidate_calendar_events_cache() {
     calendar_events_cache().invalidate_all().await;
+}
+
+#[cfg(test)]
+async fn seed_calendar_events_cache_for_test(key: String, events: Vec<CalendarEvent>) {
+    calendar_events_cache()
+        .get_or_fetch(key, true, || async { Ok::<_, AppError>(events) })
+        .await
+        .expect("seed calendar events cache");
+}
+
+#[cfg(test)]
+async fn calendar_events_cache_contains_for_test(key: &str) -> bool {
+    let events = calendar_events_cache()
+        .get_or_fetch(key.to_string(), false, || async {
+            Ok::<_, AppError>(Vec::<CalendarEvent>::new())
+        })
+        .await
+        .expect("read calendar events cache");
+    !events.is_empty()
 }
 
 /// 캐시 키([time_min,time_max] 윈도우)로 선택 캘린더 이벤트를 단일 Google range 호출로 병합 반환.
@@ -641,6 +667,25 @@ pub async fn create_calendar_event(
     calendar_id: String,
     event: CreateCalendarEventInput,
 ) -> Result<CreatedCalendarEvent, AppError> {
+    let access = access_token_for(db.inner(), &project_id)
+        .await
+        .map_err(|e| AppError::terminal("calendar.access_token", e))?
+        .ok_or_else(|| {
+            AppError::not_found(
+                "calendar.not_connected",
+                "미연결 — 먼저 Google Calendar를 연결하세요",
+            )
+        })?;
+    let provider = calendar::HttpCalendarProvider::new()?;
+    create_calendar_event_with_provider(&provider, &access, &calendar_id, event).await
+}
+
+async fn create_calendar_event_with_provider<P: CalendarProvider>(
+    provider: &P,
+    access: &str,
+    calendar_id: &str,
+    event: CreateCalendarEventInput,
+) -> Result<CreatedCalendarEvent, AppError> {
     let title = event.title.trim();
     if title.is_empty() {
         return Err(AppError::validation(
@@ -654,15 +699,6 @@ pub async fn create_calendar_event(
             "캘린더를 선택하세요",
         ));
     }
-    let access = access_token_for(db.inner(), &project_id)
-        .await
-        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "calendar.not_connected",
-                "미연결 — 먼저 Google Calendar를 연결하세요",
-            )
-        })?;
 
     let input = calendar::CreateEventInput {
         title: title.to_string(),
@@ -675,8 +711,8 @@ pub async fn create_calendar_event(
             .filter(|d| !d.is_empty()),
         ..Default::default()
     };
-    let provider = calendar::HttpCalendarProvider::new()?;
-    let (id, url) = provider.create_event(&access, &calendar_id, &input).await?;
+    let (id, url) = provider.create_event(access, calendar_id, &input).await?;
+    invalidate_calendar_events_cache().await;
     Ok(CreatedCalendarEvent { id, url })
 }
 
@@ -882,6 +918,163 @@ mod tests {
         finish_google_oauth_attempt(&project_id, third.id + 1);
         assert!(cancel_google_oauth_attempt(&project_id));
         assert!(third.cancel.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn selected_calendar_changes_clear_event_ttl_cache() {
+        let db = fresh_db().await;
+        let project = crate::commands::projects::insert_project(
+            &db,
+            &project_input("업무", crate::models::ProjectKind::Work),
+        )
+        .await
+        .unwrap();
+
+        let key = "test-window|project".to_string();
+        seed_calendar_events_cache_for_test(
+            key.clone(),
+            vec![CalendarEvent {
+                id: "old".into(),
+                calendar_id: "old-cal".into(),
+                ..ev(
+                    "기존 일정",
+                    "2026-06-10T10:00:00+09:00",
+                    "2026-06-10T10:30:00+09:00",
+                )
+            }],
+        )
+        .await;
+        assert!(
+            calendar_events_cache_contains_for_test(&key).await,
+            "precondition: cache entry is populated"
+        );
+
+        save_selected_calendars(
+            &db,
+            &project.id,
+            vec![SelectedCalendar {
+                id: "new-cal".into(),
+                summary: "새 캘린더".into(),
+            }],
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            !calendar_events_cache_contains_for_test(&key).await,
+            "calendar selection changes must invalidate the Rust TTL event cache"
+        );
+    }
+
+    struct CreateOnlyProvider;
+
+    impl CalendarProvider for CreateOnlyProvider {
+        async fn exchange_code(
+            &self,
+            _creds: &CalendarCreds,
+            _code: &str,
+            _verifier: &str,
+            _redirect_uri: &str,
+        ) -> Result<calendar::TokenResponse, calendar::CalendarError> {
+            unreachable!("not used by direct create test")
+        }
+
+        async fn refresh_access(
+            &self,
+            _creds: &CalendarCreds,
+        ) -> Result<calendar::TokenResponse, calendar::CalendarError> {
+            unreachable!("not used by direct create test")
+        }
+
+        async fn list_calendars(
+            &self,
+            _access_token: &str,
+        ) -> Result<Vec<calendar::RawCalendar>, calendar::CalendarError> {
+            unreachable!("not used by direct create test")
+        }
+
+        async fn fetch_events(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _time_min: &str,
+            _time_max: &str,
+        ) -> Result<Vec<calendar::RawEvent>, calendar::CalendarError> {
+            unreachable!("not used by direct create test")
+        }
+
+        async fn create_event(
+            &self,
+            _access_token: &str,
+            calendar_id: &str,
+            input: &calendar::CreateEventInput,
+        ) -> Result<(String, Option<String>), calendar::CalendarError> {
+            assert_eq!(calendar_id, "new-cal");
+            assert_eq!(input.title, "새 일정");
+            Ok((
+                "created-event".into(),
+                Some("https://calendar.example/e".into()),
+            ))
+        }
+
+        async fn patch_event(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _event_id: &str,
+            _patch: &serde_json::Value,
+        ) -> Result<(), calendar::CalendarError> {
+            unreachable!("not used by direct create test")
+        }
+
+        async fn delete_event(
+            &self,
+            _access_token: &str,
+            _calendar_id: &str,
+            _event_id: &str,
+        ) -> Result<(), calendar::CalendarError> {
+            unreachable!("not used by direct create test")
+        }
+    }
+
+    #[tokio::test]
+    async fn successful_direct_calendar_create_clears_event_ttl_cache() {
+        let key = "test-create-window|project".to_string();
+        seed_calendar_events_cache_for_test(
+            key.clone(),
+            vec![CalendarEvent {
+                id: "old".into(),
+                calendar_id: "new-cal".into(),
+                ..ev(
+                    "기존 일정",
+                    "2026-06-10T10:00:00+09:00",
+                    "2026-06-10T10:30:00+09:00",
+                )
+            }],
+        )
+        .await;
+        assert!(calendar_events_cache_contains_for_test(&key).await);
+
+        let created = create_calendar_event_with_provider(
+            &CreateOnlyProvider,
+            "access-token",
+            "new-cal",
+            CreateCalendarEventInput {
+                title: " 새 일정 ".into(),
+                start: "2026-06-10T14:00:00+09:00".into(),
+                end: "2026-06-10T15:00:00+09:00".into(),
+                all_day: false,
+                description: Some(" 설명 ".into()),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(created.id, "created-event");
+        assert!(
+            !calendar_events_cache_contains_for_test(&key).await,
+            "successful direct create must invalidate the Rust TTL event cache"
+        );
     }
 
     /// INVARIANT #1/#2 펜스(plan 검증): 미분류 카드 + **제목 매칭** 캘린더 이벤트가 임박하면 긴급도 점수가
