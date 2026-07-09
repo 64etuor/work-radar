@@ -4,6 +4,7 @@ import type { CSSProperties, HTMLAttributes } from "react";
 import type { Worktree } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 import { localChangeCount, localChangeSummary, relativeActivity } from "@/lib/worktreeReview";
 
 type WorktreeSideListProps = {
@@ -61,9 +62,9 @@ export function WorktreeSideList({
       </div>
       {Boolean(error) && <div className="wt-err">{String((error as Error).message ?? error)}</div>}
       {!isLoading && list.length === 0 && !error && (
-        <div className="wt-empty">
+        <EmptyState className="wt-empty">
           표시할 worktree가 없습니다. 설정에서 local 경로가 있는 레포를 추가하세요.
-        </div>
+        </EmptyState>
       )}
       {grouped.map(([label, wts]) => (
         <section key={label} className="wt-group">

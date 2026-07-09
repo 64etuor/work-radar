@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CleanupCandidate } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useCleanupCandidates, useDeleteCleanupCandidates, useTriggerCodexJob } from "@/lib/query";
 
 const CLEANUP_KIND_LABEL: Record<CleanupCandidate["kind"], string> = {
@@ -149,13 +150,13 @@ export function CleanupPanel({
       </div>
 
       {candidates.isLoading && (
-        <div className="wt-empty">
+        <div className="wt-loading">
           <Spinner />
         </div>
       )}
       {candidates.error && <div className="wt-err">{(candidates.error as Error).message}</div>}
       {!candidates.isLoading && list.length === 0 && !candidates.error && (
-        <div className="wt-empty">정리할 후보가 없습니다.</div>
+        <EmptyState className="wt-empty">정리할 후보가 없습니다.</EmptyState>
       )}
 
       <div className="wt-cleanup-list">

@@ -1079,10 +1079,22 @@
   color: var(--color-wr-muted);
   border-top: 1px solid var(--color-wr-border-light);
 }
+/* `.wt-empty`는 이제 두 종류만 남는다:
+ *   ① `<EmptyState className="wt-empty">` — geometry(padding)만 여기서, 타이포/색은 프리미티브가 소유.
+ *   ② 안내 프롬프트("파일을 선택하면…") — 비어 있음이 아니라 행동 요구라 좌측 정렬 평문 유지.
+ * 로딩은 `.wt-loading`(아래) — 종전엔 스피너를 `.wt-empty`에 담아 클래스가 의미를 배신했다. */
 .wt .wt-empty,
 .wt .wt-err {
   font: 400 13px var(--font-sans);
   color: var(--color-wr-muted);
+  padding: 16px;
+}
+
+/* 로딩 컨테이너 — loading ≠ empty. 구조는 `.jobs-loading` 선례(flex + 중앙 정렬)를 따르되
+ * padding은 종전 `.wt-empty`의 16px를 그대로 유지한다(jobs 쪽 18px 2px를 베끼지 않는다). */
+.wt .wt-loading {
+  display: flex;
+  justify-content: center;
   padding: 16px;
 }
 .wt .wt-err {

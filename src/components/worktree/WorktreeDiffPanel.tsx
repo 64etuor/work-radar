@@ -120,9 +120,12 @@ export function WorktreeDiffPanel({
 
       <div className="wt-diff">
         {!selectedDiff ? (
+          // 안내 프롬프트 — "비어 있음"이 아니라 사용자 행동을 요구한다(EmptyState 대상 아님).
           <div className="wt-empty">파일을 선택하면 diff를 봅니다.</div>
         ) : fileDiff.isFetching ? (
-          <div className="wt-empty">diff 로드 중…</div>
+          <div className="wt-loading">
+            <Spinner />
+          </div>
         ) : fileDiff.error ? (
           <div className="wt-err">{fileDiff.error.message}</div>
         ) : (
@@ -224,10 +227,11 @@ function WorktreeFilePanel({
       />
     );
   }
+  // 안내 프롬프트 — "비어 있음"이 아니라 사용자 행동을 요구한다(EmptyState 대상 아님).
   if (!ready) return <div className="wt-empty">비교할 ref를 선택하세요.</div>;
   if (diffFiles.isFetching) {
     return (
-      <div className="wt-empty">
+      <div className="wt-loading">
         <Spinner />
       </div>
     );

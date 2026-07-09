@@ -1,6 +1,7 @@
 import type { DiffFileSummary, DiffMode, FileChange } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export type SelectedDiff = {
   path: string;
@@ -43,7 +44,7 @@ export function LocalFileSections({
   const loading = stagedLoading || unstagedLoading;
   if (loading) {
     return (
-      <div className="wt-empty">
+      <div className="wt-loading">
         <Spinner />
       </div>
     );
@@ -56,7 +57,7 @@ export function LocalFileSections({
     );
   }
   if (stagedFiles.length === 0 && unstagedFiles.length === 0) {
-    return <div className="wt-empty">로컬 staged/unstaged 변경이 없습니다.</div>;
+    return <EmptyState className="wt-empty">로컬 staged/unstaged 변경이 없습니다.</EmptyState>;
   }
   return (
     <>

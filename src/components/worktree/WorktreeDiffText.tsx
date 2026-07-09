@@ -1,5 +1,6 @@
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import { detectLang, type ThemedToken, tokenizeLines } from "@/lib/shiki";
 
 /** 표시 줄 상한 — 초과분은 비차단 위해 잘라 표시(전체는 외부 도구로). */
@@ -100,7 +101,7 @@ export function DiffText({ text, path }: { text: string; path: string | null }) 
   }, [codeText, lang, codeIndices]);
 
   if (parsed.length === 0) {
-    return <div className="wt-empty">변경 내용이 없습니다.</div>;
+    return <EmptyState className="wt-empty">변경 내용이 없습니다.</EmptyState>;
   }
 
   const blocks: ParsedDiffLine[][] = [];
