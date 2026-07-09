@@ -135,7 +135,8 @@ export function InAppEditor({ skill }: { skill: Skill }) {
 
       <div className="skl-actions">
         <Button
-          className="gap-1.5 rounded-full"
+          size="pill"
+          className="gap-1.5 px-4"
           onClick={save}
           disabled={!dirty || update.isPending}
         >
@@ -144,7 +145,8 @@ export function InAppEditor({ skill }: { skill: Skill }) {
         </Button>
         <Button
           variant="outline"
-          className="gap-1.5 rounded-full"
+          size="pill"
+          className="gap-1.5 px-4"
           onClick={remove}
           disabled={del.isPending}
         >

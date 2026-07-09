@@ -73,14 +73,15 @@ export function CreatePanel({ onDone }: { onDone: (id: string | null) => void })
       />
       <div className="skl-actions">
         <Button
-          className="gap-1.5 rounded-full"
+          size="pill"
+          className="gap-1.5 px-4"
           onClick={submit}
           disabled={!name.trim() || !prompt.trim() || create.isPending}
         >
           <Plus className="size-4" />
           {create.isPending ? "추가 중…" : "추가"}
         </Button>
-        <Button variant="outline" className="rounded-full" onClick={() => onDone(null)}>
+        <Button variant="outline" size="pill" className="px-4" onClick={() => onDone(null)}>
           취소
         </Button>
         {note && <span className="skl-note">{note}</span>}

@@ -80,7 +80,8 @@ export function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: (
         <span className="skl-name-static">{skill.name}</span>
         <Button
           variant="outline"
-          className="gap-1.5 rounded-full"
+          size="pill"
+          className="gap-1.5 px-4"
           onClick={removeFromLibrary}
           disabled={!skill.provider || remove.isPending}
         >
@@ -101,7 +102,8 @@ export function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: (
         {isApplied ? (
           <Button
             variant="outline"
-            className="gap-1.5 rounded-full"
+            size="pill"
+            className="gap-1.5 px-4"
             onClick={unapplyFromAgent}
             disabled={!skill.provider || applyBusy}
           >
@@ -111,7 +113,8 @@ export function ManagedViewer({ skill, onRemoved }: { skill: Skill; onRemoved: (
         ) : (
           <Button
             variant="outline"
-            className="gap-1.5 rounded-full"
+            size="pill"
+            className="gap-1.5 px-4"
             onClick={applyToAgent}
             disabled={!skill.provider || applyBusy}
           >

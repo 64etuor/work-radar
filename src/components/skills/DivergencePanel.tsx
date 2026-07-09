@@ -98,7 +98,8 @@ export function DivergenceResolver({
     <div className="skl-vendor-resolve">
       <Button
         variant="ghost"
-        className="gap-1.5 rounded-full"
+        size="pill"
+        className="gap-1.5 px-4"
         onClick={() => (open ? close() : setOpen(true))}
         aria-expanded={open}
       >
@@ -118,7 +119,8 @@ export function DivergenceResolver({
             ) : (
               <Button
                 variant="outline"
-                className="gap-1.5 rounded-full"
+                size="pill"
+                className="gap-1.5 px-4"
                 onClick={() => setConfirm("pull")}
                 disabled={busy}
               >
@@ -133,7 +135,8 @@ export function DivergenceResolver({
             ) : (
               <Button
                 variant="outline"
-                className="gap-1.5 rounded-full"
+                size="pill"
+                className="gap-1.5 px-4"
                 onClick={() => setConfirm("push")}
                 disabled={busy}
               >

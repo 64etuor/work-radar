@@ -61,7 +61,8 @@ export function VendorPanel({ skill }: { skill: Skill }) {
           {t.state === "absent" && (
             <Button
               variant="outline"
-              className="gap-1.5 rounded-full"
+              size="pill"
+              className="gap-1.5 px-4"
               onClick={() => doVendor(t.repoId)}
               disabled={busy}
             >
@@ -72,7 +73,8 @@ export function VendorPanel({ skill }: { skill: Skill }) {
           {t.state === "in_sync" && (
             <Button
               variant="outline"
-              className="gap-1.5 rounded-full"
+              size="pill"
+              className="gap-1.5 px-4"
               onClick={() => doUnvendor(t.repoId)}
               disabled={busy}
             >

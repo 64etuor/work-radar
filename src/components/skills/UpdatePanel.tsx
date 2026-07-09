@@ -61,11 +61,11 @@ export function UpdatePanel({ onDone }: { onDone: () => void }) {
         staging에만 받아둡니다 — 적용은 아래에서 직접 누를 때만 일어나며 자동 실행은 없습니다.
       </p>
       <div className="skl-actions">
-        <Button className="gap-1.5 rounded-full" onClick={doCheck} disabled={check.isPending}>
+        <Button size="pill" className="gap-1.5 px-4" onClick={doCheck} disabled={check.isPending}>
           <RefreshCw className="size-4" />
           {check.isPending ? "확인 중…" : "지금 확인"}
         </Button>
-        <Button variant="outline" className="rounded-full" onClick={onDone}>
+        <Button variant="outline" size="pill" className="px-4" onClick={onDone}>
           닫기
         </Button>
       </div>

@@ -44,11 +44,11 @@ export function BackupPanel({ onDone }: { onDone: () => void }) {
         보존한 뒤 교체하므로 되돌릴 수 있습니다. 모든 작업은 로컬 파일 복사이며 감사됩니다.
       </p>
       <div className="skl-actions">
-        <Button className="gap-1.5 rounded-full" onClick={doBackup} disabled={backup.isPending}>
+        <Button size="pill" className="gap-1.5 px-4" onClick={doBackup} disabled={backup.isPending}>
           <Archive className="size-4" />
           {backup.isPending ? "백업 중…" : "지금 백업"}
         </Button>
-        <Button variant="outline" className="rounded-full" onClick={onDone}>
+        <Button variant="outline" size="pill" className="px-4" onClick={onDone}>
           닫기
         </Button>
       </div>

@@ -15,7 +15,7 @@ export function AuditPanel({ onDone }: { onDone: () => void }) {
         append-only 감사 로그입니다. 읽기 전용입니다.
       </p>
       <div className="skl-actions">
-        <Button variant="outline" className="rounded-full" onClick={onDone}>
+        <Button variant="outline" size="pill" className="px-4" onClick={onDone}>
           닫기
         </Button>
       </div>

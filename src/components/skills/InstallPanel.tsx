@@ -140,11 +140,16 @@ export function InstallPanel({ onDone }: { onDone: (id: string | null) => void }
         스킬은 설치만 되며 자동 실행되지 않습니다.
       </p>
       <div className="skl-actions">
-        <Button className="gap-1.5 rounded-full" onClick={submit} disabled={!url.trim() || busy}>
+        <Button
+          size="pill"
+          className="gap-1.5 px-4"
+          onClick={submit}
+          disabled={!url.trim() || busy}
+        >
           <Download className="size-4" />
           {busy ? "설치 중…" : "설치"}
         </Button>
-        <Button variant="outline" className="rounded-full" onClick={() => onDone(null)}>
+        <Button variant="outline" size="pill" className="px-4" onClick={() => onDone(null)}>
           취소
         </Button>
         {note && <span className="skl-note">{note}</span>}

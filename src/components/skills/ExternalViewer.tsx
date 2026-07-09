@@ -80,7 +80,8 @@ export function ExternalViewer({ skill, onImported }: { skill: Skill; onImported
             {canImport && (
               <Button
                 variant="outline"
-                className="gap-1.5 rounded-full"
+                size="pill"
+                className="gap-1.5 px-4"
                 onClick={importToLibrary}
                 disabled={importSkill.isPending}
                 title="이 스킬을 work-radar 라이브러리로 복사(가역·감사)"
@@ -89,7 +90,7 @@ export function ExternalViewer({ skill, onImported }: { skill: Skill; onImported
                 {importSkill.isPending ? "import 중…" : "라이브러리로 import"}
               </Button>
             )}
-            <Button className="rounded-full" onClick={startEdit}>
+            <Button size="pill" className="px-4" onClick={startEdit}>
               파일 편집
             </Button>
           </>
@@ -97,14 +98,16 @@ export function ExternalViewer({ skill, onImported }: { skill: Skill; onImported
           <>
             <Button
               variant="outline"
-              className="rounded-full"
+              size="pill"
+              className="px-4"
               onClick={cancelEdit}
               disabled={write.isPending}
             >
               취소
             </Button>
             <Button
-              className="gap-1.5 rounded-full"
+              size="pill"
+              className="gap-1.5 px-4"
               onClick={save}
               disabled={!dirty || write.isPending}
             >
