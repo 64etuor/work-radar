@@ -15,12 +15,15 @@ use serde::{Deserialize, Serialize};
 use crate::commands::bookkeeping as bookkeeping_commands;
 use crate::commands::projects;
 use crate::error::AppError;
-use crate::mcp::{enum_wire_string, mcp_tool_error, WrServer};
+use crate::mcp::{enum_wire_string, mcp_tool_error, truncate_preview, WrServer};
 use crate::models::{
     BookkeepingDirection, BookkeepingExpenseKind, BookkeepingPaymentMethodKind, BookkeepingSource,
     CreateBookkeepingLineItemInput, CreateBookkeepingTransactionInput,
     SetBookkeepingLineItemsInput,
 };
+
+/// 고정비 노트 preview 상한(§6 — 장문 echo 금지).
+const NOTE_PREVIEW_CHARS: usize = 280;
 
 /// One receipt line item (`wr_bookkeeping_save_receipt`). Closed schema — deny_unknown_fields does
 /// not inherit to nested structs. amount_minor is the per-line minor-unit amount; quantity defaults 1.
@@ -192,6 +195,65 @@ pub struct BookkeepingCategoryAliasDto {
 pub struct BookkeepingCategoryRulesDto {
     pub taxonomy: Vec<BookkeepingCategoryNodeDto>,
     pub aliases: Vec<BookkeepingCategoryAliasDto>,
+}
+
+/// 상위 카테고리별 이번 달 예산 집행 상태.
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingBudgetStatusDto {
+    pub category_code: String,
+    pub label: String,
+    pub limit_minor: i32,
+    pub spent_minor: i32,
+    pub remaining_minor: i32,
+    /// 지난달에서 이월된 금액(rollover=true일 때만 0이 아님).
+    pub rollover_in_minor: i32,
+    pub rollover: bool,
+    /// 집행률 0.0..(1.0 초과 가능 — 초과 지출).
+    pub pct: f64,
+    pub currency: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingBudgetStatusListDto {
+    pub month: String,
+    pub budgets: Vec<BookkeepingBudgetStatusDto>,
+}
+
+/// 고정비(반복 지출) 규칙. `source_ref`(MoneyManager 백업 uid)는 내부 식별자라 표면에 없다.
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingRecurringExpenseDto {
+    pub id: String,
+    pub project_id: Option<String>,
+    pub name: String,
+    pub merchant: Option<String>,
+    pub amount_minor: i32,
+    pub currency: String,
+    pub category: String,
+    pub payment_method_kind: String,
+    pub payment_method_label: Option<String>,
+    pub payment_method_last4: Option<String>,
+    /// "fixed" | "variable".
+    pub expense_kind: String,
+    /// 매월 청구일(1..=31; 월말 클램프).
+    pub schedule_day: i32,
+    pub start_month: String,
+    pub end_month: Option<String>,
+    /// "active" | "paused" | "archived".
+    pub status: String,
+    /// 규칙의 출처("manual" | "moneymanager" 등).
+    pub source: String,
+    pub note_preview: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BookkeepingRecurringExpenseListDto {
+    pub recurring_expenses: Vec<BookkeepingRecurringExpenseDto>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BookkeepingProjectScopeParams {
+    pub project_id: Option<String>,
 }
 
 /// `wr_bookkeeping_list_review_queue` / `..._list_recent_transactions` params.
@@ -584,6 +646,97 @@ impl WrServer {
             status: "marked_duplicate".to_string(),
         }))
     }
+
+    #[tool(
+        name = "wr_bookkeeping_budget_status",
+        description = "Per-category budget limit / spent / remaining for a month (YYYY-MM), including rollover. Read-only."
+    )]
+    pub async fn bookkeeping_budget_status(
+        &self,
+        Parameters(p): Parameters<BookkeepingMonthlySummaryParams>,
+    ) -> Result<Json<BookkeepingBudgetStatusListDto>, rmcp::ErrorData> {
+        self.bookkeeping_budget_status_inner(p).await
+    }
+
+    pub(crate) async fn bookkeeping_budget_status_inner(
+        &self,
+        p: BookkeepingMonthlySummaryParams,
+    ) -> Result<Json<BookkeepingBudgetStatusListDto>, rmcp::ErrorData> {
+        let rows = bookkeeping_commands::bookkeeping_budget_status_inner(
+            &self.db,
+            &p.month,
+            p.project_id.as_deref(),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_budget_status", &e))?;
+        Ok(Json(BookkeepingBudgetStatusListDto {
+            month: p.month,
+            budgets: rows
+                .into_iter()
+                .map(|b| BookkeepingBudgetStatusDto {
+                    category_code: b.category_code,
+                    label: b.label,
+                    limit_minor: b.limit_minor,
+                    spent_minor: b.spent_minor,
+                    remaining_minor: b.remaining_minor,
+                    rollover_in_minor: b.rollover_in_minor,
+                    rollover: b.rollover,
+                    pct: b.pct,
+                    currency: b.currency,
+                })
+                .collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_bookkeeping_list_recurring_expenses",
+        description = "List recurring (fixed) expense rules: amount, billing day, active window, and status. Read-only."
+    )]
+    pub async fn bookkeeping_list_recurring_expenses(
+        &self,
+        Parameters(p): Parameters<BookkeepingProjectScopeParams>,
+    ) -> Result<Json<BookkeepingRecurringExpenseListDto>, rmcp::ErrorData> {
+        self.bookkeeping_list_recurring_expenses_inner(p).await
+    }
+
+    pub(crate) async fn bookkeeping_list_recurring_expenses_inner(
+        &self,
+        p: BookkeepingProjectScopeParams,
+    ) -> Result<Json<BookkeepingRecurringExpenseListDto>, rmcp::ErrorData> {
+        let rows = bookkeeping_commands::list_bookkeeping_recurring_expenses_inner(
+            &self.db,
+            p.project_id.as_deref(),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_list_recurring_expenses", &e))?;
+        Ok(Json(BookkeepingRecurringExpenseListDto {
+            recurring_expenses: rows
+                .into_iter()
+                .map(|r| BookkeepingRecurringExpenseDto {
+                    id: r.id,
+                    project_id: r.project_id,
+                    name: r.name,
+                    merchant: r.merchant,
+                    amount_minor: r.amount_minor,
+                    currency: r.currency,
+                    category: r.category,
+                    payment_method_kind: enum_wire_string(&r.payment_method_kind),
+                    payment_method_label: r.payment_method_label,
+                    payment_method_last4: r.payment_method_last4,
+                    expense_kind: enum_wire_string(&r.expense_kind),
+                    schedule_day: r.schedule_day,
+                    start_month: r.start_month,
+                    end_month: r.end_month,
+                    status: enum_wire_string(&r.status),
+                    source: enum_wire_string(&r.source),
+                    note_preview: r
+                        .note
+                        .as_deref()
+                        .map(|n| truncate_preview(n, NOTE_PREVIEW_CHARS)),
+                })
+                .collect(),
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -591,6 +744,7 @@ mod tests {
     use super::{
         BookkeepingFindDuplicateParams, BookkeepingLineItemParam, BookkeepingListParams,
         BookkeepingMarkDuplicateParams, BookkeepingMonthlySummaryParams,
+        BookkeepingProjectScopeParams, BookkeepingRecurringExpenseDto,
         BookkeepingReviewReasonParam, BookkeepingSaveReceiptParams, BookkeepingTransactionDto,
     };
     use crate::commands::bookkeeping as bookkeeping_commands;
@@ -1070,6 +1224,115 @@ mod tests {
             expect(&["name", "amount_minor", "quantity", "category_code"])
         );
         assert_eq!(required_fields(&v), expect(&["name", "amount_minor"]));
+    }
+
+    #[tokio::test]
+    async fn budget_status_reports_limit_spent_and_remaining() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+
+        bookkeeping_commands::set_bookkeeping_budget_inner(
+            &db,
+            crate::models::SetBookkeepingBudgetInput {
+                project_id: None,
+                month: "2026-07".into(),
+                category_code: "food".into(),
+                limit_minor: 300_000,
+                currency: Some("KRW".into()),
+                rollover: false,
+                note: None,
+            },
+        )
+        .await
+        .expect("set budget");
+
+        let out = server
+            .bookkeeping_budget_status_inner(BookkeepingMonthlySummaryParams {
+                month: "2026-07".into(),
+                project_id: None,
+            })
+            .await
+            .expect("budget status")
+            .0;
+        assert_eq!(out.month, "2026-07");
+        let food = out
+            .budgets
+            .iter()
+            .find(|b| b.category_code == "food")
+            .expect("food budget row");
+        assert_eq!(food.limit_minor, 300_000);
+        assert_eq!(food.spent_minor, 0);
+        assert_eq!(food.remaining_minor, 300_000);
+
+        // 잘못된 월은 하위 validate_month가 거부한다 — 조용한 빈 목록이 아니다.
+        assert!(server
+            .bookkeeping_budget_status_inner(BookkeepingMonthlySummaryParams {
+                month: "2026-7".into(),
+                project_id: None,
+            })
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn recurring_expenses_expose_schedule_but_not_source_ref() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+
+        bookkeeping_commands::create_bookkeeping_recurring_expense_inner(
+            &db,
+            crate::models::CreateBookkeepingRecurringExpenseInput {
+                project_id: None,
+                name: "넷플릭스".into(),
+                merchant: Some("Netflix".into()),
+                amount_minor: 17_000,
+                currency: "KRW".into(),
+                category: "구독".into(),
+                payment_method_kind: crate::models::BookkeepingPaymentMethodKind::Card,
+                payment_method_label: Some("하나카드".into()),
+                payment_method_last4: Some("1234".into()),
+                expense_kind: crate::models::BookkeepingExpenseKind::Fixed,
+                schedule_day: 15,
+                start_month: "2026-07".into(),
+                end_month: None,
+                note: Some("가족 요금제".into()),
+            },
+        )
+        .await
+        .expect("create recurring");
+
+        let out = server
+            .bookkeeping_list_recurring_expenses_inner(BookkeepingProjectScopeParams {
+                project_id: None,
+            })
+            .await
+            .expect("list recurring")
+            .0;
+        assert_eq!(out.recurring_expenses.len(), 1);
+        let r = &out.recurring_expenses[0];
+        assert_eq!(r.name, "넷플릭스");
+        assert_eq!(r.amount_minor, 17_000);
+        assert_eq!(r.schedule_day, 15);
+        assert_eq!(r.status, "active");
+        assert_eq!(r.expense_kind, "fixed");
+        assert_eq!(r.payment_method_kind, "card");
+        assert_eq!(r.note_preview.as_deref(), Some("가족 요금제"));
+    }
+
+    #[test]
+    fn recurring_expense_dto_hides_internal_identifiers() {
+        let v =
+            serde_json::to_value(schemars::schema_for!(BookkeepingRecurringExpenseDto)).unwrap();
+        // MoneyManager 백업 uid와 타임스탬프는 표면에 없다(§7 최소권한).
+        for forbidden in ["source_ref", "created_at", "updated_at"] {
+            assert!(
+                !prop_names(&v).contains(forbidden),
+                "recurring DTO must not expose `{forbidden}`"
+            );
+        }
+        assert!(prop_names(&v).contains("schedule_day"));
+        assert!(prop_names(&v).contains("note_preview"));
+        assert!(!prop_names(&v).contains("note"), "원문 note 대신 preview만");
     }
 
     #[test]

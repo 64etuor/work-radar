@@ -166,6 +166,8 @@ fn registered_tool_set_is_locked() {
         "wr_bookkeeping_get_category_rules",
         "wr_bookkeeping_find_duplicate_candidates",
         "wr_bookkeeping_mark_duplicate",
+        "wr_bookkeeping_budget_status",
+        "wr_bookkeeping_list_recurring_expenses",
         "wr_list_signals",
         "wr_create_signal",
         "wr_okr_get_mission",
