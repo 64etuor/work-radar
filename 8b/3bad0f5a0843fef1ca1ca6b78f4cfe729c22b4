@@ -1,0 +1,40 @@
+src/components/skills/BackupPanel.tsx
+  s_14a22fa7abadd8::t_38bdab4c594756 47,51
+src/components/skills/ExternalViewer.tsx
+  s_14a22fa7abadd8::t_39bc7ee4f10409 83-84,101-102,109-110
+  s_14a22fa7abadd8::t_38bdab4c594756 93
+src/components/skills/UpdatePanel.tsx
+  s_14a22fa7abadd8::t_38bdab4c594756 64,68
+src/components/skills/AuditPanel.tsx
+  s_14a22fa7abadd8::t_38bdab4c594756 18
+src/components/skills/DivergencePanel.tsx
+  s_14a22fa7abadd8::t_39bc7ee4f10409 101-102,122-123,138-139
+src/components/skills/ManagedViewer.tsx
+  s_14a22fa7abadd8::t_39bc7ee4f10409 83-84,105-106,116-117
+src/components/skills/InstallPanel.tsx
+  s_14a22fa7abadd8::t_38bdab4c594756 152
+  s_14a22fa7abadd8::t_39bc7ee4f10409 143-148
+src/components/skills/VendorPanel.tsx
+  s_14a22fa7abadd8::t_39bc7ee4f10409 64-65,76-77
+src/components/skills/InAppEditor.tsx
+  s_14a22fa7abadd8::t_39bc7ee4f10409 138-139,148-149
+src/components/skills/CreatePanel.tsx
+  s_14a22fa7abadd8::t_38bdab4c594756 84
+  s_14a22fa7abadd8::t_39bc7ee4f10409 76-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8b3bad0f5a0843fef1ca1ca6b78f4cfe729c22b4",
+  "prompts": {},
+  "sessions": {
+    "s_14a22fa7abadd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d00a882f-1f42-4f05-a5bf-f866a27af786",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
