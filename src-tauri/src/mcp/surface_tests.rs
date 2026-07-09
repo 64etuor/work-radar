@@ -167,6 +167,10 @@ fn registered_tool_set_is_locked() {
         "wr_bookkeeping_mark_duplicate",
         "wr_list_signals",
         "wr_create_signal",
+        "wr_okr_get_mission",
+        "wr_okr_list_objectives",
+        "wr_okr_list_check_ins",
+        "wr_okr_upsert_check_in",
         "wr_propose_noop",
         "wr_action_status",
     ]

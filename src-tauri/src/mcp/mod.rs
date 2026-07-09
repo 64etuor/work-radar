@@ -40,6 +40,7 @@ pub use tools::calendar::*;
 pub use tools::github::*;
 pub use tools::gmail::*;
 pub use tools::notion::*;
+pub use tools::okr::*;
 pub use tools::queue::*;
 pub use tools::signals::*;
 
@@ -61,6 +62,7 @@ impl WrServer {
             + Self::tool_router_gmail()
             + Self::tool_router_bookkeeping()
             + Self::tool_router_signals()
+            + Self::tool_router_okr()
     }
 }
 
