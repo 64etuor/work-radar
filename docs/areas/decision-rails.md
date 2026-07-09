@@ -41,6 +41,12 @@ Today 승격(`target:"today"`)은 로컬 SQLite 액션이라 Acceptance 불요(�
 > caller를 가리지 않는다. 대신 #1이 **어떤 로컬 write를 노출하는지**로 강제된다 — 캡처 레인
 > (`wr_create_signal`은 항상 `unclassified` + dedup upsert) + 관측 기록(루틴 체크·타임라인 노트·
 > OKR check-in)만 열고, 분류/승격/상태확정/OKR 목표·KR 변경은 **툴 이름 denylist 테스트**로 막는다.
+>
+> 가르는 기준은 "판단 산출물로 흘러드는가"가 **아니라** "**에이전트가 사실을 기록하는가, 파생된
+> 판단값을 직접 설정하는가**"다. 주의 두 가지: (a) `wr_toggle_routine_check`는 루틴 연결 KR의
+> progress 배지를 실제로 움직인다(사실→progress 규칙을 사람이 걸었으므로 허용); (b) 리뷰 큐 확정
+> (`mark_duplicate`의 `ignored`)은 판단이라 차단하고, 에이전트는 `flag_duplicate`로 제안만 한다.
+> 이름 denylist는 **행동**을 막지 못한다 — 새 write 툴은 파생 경로를 손으로 따라가야 한다.
 > 정본: `docs/areas/mcp-server-conventions.md` §1.1, `docs/adr/0012-mcp-local-writes-and-calendar-read.md`.
 
 > **스킬 매니저(ADR-0006) 경계.** 스킬 _파일_ 설치/동기화(중앙 라이브러리 → 로컬 에이전트 dir,

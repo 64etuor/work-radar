@@ -151,6 +151,106 @@ pub(crate) async fn find_bookkeeping_duplicate_candidates_inner(
     Ok(candidates)
 }
 
+/// **제안형 중복 표시(MCP 전용).** `mark_bookkeeping_duplicate_inner`와 달리 `review_status`를
+/// 건드리지 않는다 — 행은 `needs_review`에 남고, 링크(`duplicate_of_transaction_id`)와 사유
+/// (`possible_duplicate`)만 붙는다. "X는 Y의 중복이다"는 *판단*이고 리뷰 큐에서 치우는 건 사람의
+/// 결정이므로, 에이전트는 후보를 짚어줄 뿐 확정하지 않는다(ADR-0012 §2, 사용자 결정 2026-07-10).
+///
+/// 프런트 `reviewRow.isSuspicious`는 `duplicateOfTransactionId`만 봐도 의심 행으로 표시하므로,
+/// 사람은 리뷰 큐에서 곧바로 이 제안을 본다.
+///
+/// 멱등: 이미 같은 target으로 링크돼 있으면 아무것도 쓰지 않고 현재 행을 돌려준다.
+pub(crate) async fn flag_bookkeeping_duplicate_inner(
+    db: &Db,
+    id: &str,
+    duplicate_of_transaction_id: &str,
+) -> Result<BookkeepingTransaction, AppError> {
+    let id = clean_required(id, "bookkeeping.duplicate.id")?;
+    let target = clean_required(duplicate_of_transaction_id, "bookkeeping.duplicate.target")?;
+    if id == target {
+        return Err(AppError::validation(
+            "bookkeeping.duplicate.self",
+            "거래를 자기 자신의 중복으로 표시할 수 없습니다",
+        ));
+    }
+
+    let mut tx = db.begin().await?;
+    let target_row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT id, duplicate_of_transaction_id FROM bookkeeping_transactions WHERE id = ?1",
+    )
+    .bind(&target)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((_, target_duplicate_of)) = target_row else {
+        return Err(AppError::not_found(
+            "bookkeeping.duplicate.target_not_found",
+            "원본 거래를 찾을 수 없습니다",
+        ));
+    };
+    // 중복 체인 금지 — mark 경로와 동일 계약.
+    if target_duplicate_of.is_some() {
+        return Err(AppError::validation(
+            "bookkeeping.duplicate.target_is_duplicate",
+            "원본 거래가 이미 다른 거래의 중복으로 표시돼 있습니다",
+        ));
+    }
+
+    let current: Option<(String,)> = sqlx::query_as(
+        "SELECT review_reasons_json FROM bookkeeping_transactions WHERE id = ?1 AND deleted_at IS NULL",
+    )
+    .bind(&id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((reasons_raw,)) = current else {
+        return Err(AppError::not_found(
+            "bookkeeping.duplicate.not_found",
+            "거래를 찾을 수 없습니다",
+        ));
+    };
+    let mut reasons: Vec<serde_json::Value> =
+        serde_json::from_str(&reasons_raw).unwrap_or_default();
+    if !reasons
+        .iter()
+        .any(|r| r.get("code").and_then(|c| c.as_str()) == Some("possible_duplicate"))
+    {
+        reasons.push(serde_json::json!({
+            "code": "possible_duplicate",
+            "detail": "에이전트가 중복 후보로 제안함 — 확정은 사람이"
+        }));
+    }
+    let reasons_json = serde_json::Value::Array(reasons).to_string();
+
+    // review_status/deleted_at/direction은 절대 건드리지 않는다.
+    let updated = sqlx::query_as::<_, BookkeepingTransaction>(&format!(
+        "UPDATE bookkeeping_transactions SET \
+           duplicate_of_transaction_id = ?2, \
+           review_reasons_json = ?3, \
+           updated_at = datetime('now') \
+         WHERE id = ?1 AND deleted_at IS NULL \
+         RETURNING {TRANSACTION_RETURNING_COLUMNS}"
+    ))
+    .bind(&id)
+    .bind(&target)
+    .bind(&reasons_json)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| {
+        AppError::not_found("bookkeeping.duplicate.not_found", "거래를 찾을 수 없습니다")
+    })?;
+
+    insert_audit_log_tx(
+        &mut tx,
+        "transaction",
+        &id,
+        "transaction.flagged_duplicate",
+        "중복 후보로 제안됨(리뷰 대기 유지)",
+        serde_json::json!({ "duplicateOf": target }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(updated)
+}
+
 pub(crate) async fn mark_bookkeeping_duplicate_inner(
     db: &Db,
     id: &str,

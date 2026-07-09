@@ -737,31 +737,39 @@ impl WrServer {
         Ok(Json(BookkeepingDuplicateCandidateListDto { candidates }))
     }
 
+    /// 중복 **제안**. "X는 Y의 중복이다"는 판단이고, 리뷰 큐에서 치우는 건(=`ignored`) 사람의
+    /// 결정이다. 에이전트는 링크 + `possible_duplicate` 사유만 붙이고 행은 `needs_review`에 남긴다.
+    ///
+    /// 앱 내부 `mark_bookkeeping_duplicate`(사람이 누르는 버튼)는 그대로 `ignored`로 확정한다 —
+    /// 그 경로는 사람 결정이라 이 제약과 무관하다.
+    ///
+    /// 툴 이름을 `mark_*`에서 `flag_*`로 바꾼 건 의도적이다: 의미가 바뀌었는데 이름이 그대로면
+    /// 호출하는 모델이 조용히 잘못된 기대를 갖는다. 옛 이름 호출은 "unknown tool"로 시끄럽게 실패한다.
     #[tool(
-        name = "wr_bookkeeping_mark_duplicate",
-        description = "Mark a transaction as a duplicate of another (sets it ignored + links the original). Local review-queue write; open to any MCP caller."
+        name = "wr_bookkeeping_flag_duplicate",
+        description = "Flag a transaction as a likely duplicate of another: links it to the original and adds a `possible_duplicate` review reason. The transaction STAYS in the review queue with its review status unchanged — only a human decides to ignore it. Idempotent."
     )]
-    pub async fn bookkeeping_mark_duplicate(
+    pub async fn bookkeeping_flag_duplicate(
         &self,
         Parameters(p): Parameters<BookkeepingMarkDuplicateParams>,
     ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
-        self.bookkeeping_mark_duplicate_inner(p).await
+        self.bookkeeping_flag_duplicate_inner(p).await
     }
 
-    pub(crate) async fn bookkeeping_mark_duplicate_inner(
+    pub(crate) async fn bookkeeping_flag_duplicate_inner(
         &self,
         p: BookkeepingMarkDuplicateParams,
     ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
-        let row = bookkeeping_commands::mark_bookkeeping_duplicate_inner(
+        let row = bookkeeping_commands::flag_bookkeeping_duplicate_inner(
             &self.db,
             &p.transaction_id,
             &p.duplicate_of_transaction_id,
         )
         .await
-        .map_err(|e| mcp_tool_error("wr_bookkeeping_mark_duplicate", &e))?;
+        .map_err(|e| mcp_tool_error("wr_bookkeeping_flag_duplicate", &e))?;
         Ok(Json(BookkeepingSaveReceiptResult {
             transaction_id: row.id,
-            status: "marked_duplicate".to_string(),
+            status: "flagged_duplicate".to_string(),
         }))
     }
 
@@ -1123,16 +1131,16 @@ mod tests {
             "order_no match scores high"
         );
 
-        // mark_duplicate(로컬 review-queue write)도 caller 게이트 없이 동작한다. 존재하지 않는 행은
+        // flag_duplicate(로컬 review-queue write)도 caller 게이트 없이 동작한다. 존재하지 않는 행은
         // 여전히 도메인 에러 — 개방은 "검증 없이 통과"가 아니다.
-        let missing_mark = server
-            .bookkeeping_mark_duplicate_inner(BookkeepingMarkDuplicateParams {
+        let missing_flag = server
+            .bookkeeping_flag_duplicate_inner(BookkeepingMarkDuplicateParams {
                 transaction_id: "a".into(),
                 duplicate_of_transaction_id: "b".into(),
             })
             .await;
         assert!(
-            missing_mark.is_err(),
+            missing_flag.is_err(),
             "unknown transaction id still fails validation"
         );
 
@@ -1232,10 +1240,14 @@ mod tests {
         assert_eq!(rows, 1, "중복 행도 만들지 않는다(멱등)");
     }
 
-    /// ADR-0012 개방의 **긍정** 증거: caller env 없이도 로컬 review-queue write가 실제로 행을 바꾼다
-    /// (부정 단언만 두면 "여전히 막혀 있어도" 테스트가 통과한다).
+    /// **결정 레일 가드(사용자 결정 2026-07-10).** MCP의 중복 표시는 *제안*이다 — 링크 + 사유만
+    /// 붙이고 `review_status`는 건드리지 않는다. 리뷰 큐에서 치우는 건(=`ignored`) 사람의 결정이다.
+    /// 앱 내부 `mark_bookkeeping_duplicate`(사람이 누르는 버튼)만 `ignored`로 확정한다.
+    ///
+    /// 동시에 ADR-0012 개방의 **긍정** 증거이기도 하다: caller env 없이도 로컬 write가 실제로
+    /// 행을 바꾼다(부정 단언만 두면 "여전히 막혀 있어도" 테스트가 통과한다).
     #[tokio::test]
-    async fn mark_duplicate_links_rows_without_any_caller_gate() {
+    async fn flag_duplicate_links_rows_but_never_resolves_the_review() {
         let db = fresh_db().await;
         let server = WrServer { db: db.clone() };
         let receipt = |source_ref: &str, order_no: &str| BookkeepingSaveReceiptParams {
@@ -1277,25 +1289,58 @@ mod tests {
             .transaction_id;
         assert_ne!(original, dupe, "distinct source_ref → distinct rows");
 
-        let marked = server
-            .bookkeeping_mark_duplicate_inner(BookkeepingMarkDuplicateParams {
+        let flagged = server
+            .bookkeeping_flag_duplicate_inner(BookkeepingMarkDuplicateParams {
                 transaction_id: dupe.clone(),
                 duplicate_of_transaction_id: original.clone(),
             })
             .await
-            .expect("mark duplicate without caller gate");
-        assert_eq!(marked.0.status, "marked_duplicate");
+            .expect("flag duplicate without caller gate");
+        assert_eq!(flagged.0.status, "flagged_duplicate");
 
-        let (review_status, duplicate_of): (String, Option<String>) = sqlx::query_as(
-            "SELECT review_status, duplicate_of_transaction_id \
+        let (review_status, duplicate_of, reasons): (String, Option<String>, String) =
+            sqlx::query_as(
+                "SELECT review_status, duplicate_of_transaction_id, review_reasons_json \
              FROM bookkeeping_transactions WHERE id = ?1",
+            )
+            .bind(&dupe)
+            .fetch_one(&db)
+            .await
+            .expect("flagged row");
+        assert_eq!(
+            review_status, "needs_review",
+            "에이전트는 리뷰를 확정하지 않는다 — 사람이 ignored로 치운다"
+        );
+        assert_eq!(
+            duplicate_of.as_deref(),
+            Some(original.as_str()),
+            "링크는 붙는다"
+        );
+        assert!(
+            reasons.contains("possible_duplicate"),
+            "사유가 리뷰 큐에 노출된다: {reasons}"
+        );
+
+        // 멱등: 같은 제안을 반복해도 사유가 중복 append되지 않는다.
+        server
+            .bookkeeping_flag_duplicate_inner(BookkeepingMarkDuplicateParams {
+                transaction_id: dupe.clone(),
+                duplicate_of_transaction_id: original,
+            })
+            .await
+            .expect("repeat flag");
+        let reasons: String = sqlx::query_scalar(
+            "SELECT review_reasons_json FROM bookkeeping_transactions WHERE id = ?1",
         )
         .bind(&dupe)
         .fetch_one(&db)
         .await
-        .expect("marked row");
-        assert_eq!(review_status, "ignored");
-        assert_eq!(duplicate_of.as_deref(), Some(original.as_str()));
+        .expect("row");
+        assert_eq!(
+            reasons.matches("possible_duplicate").count(),
+            1,
+            "사유는 1회만: {reasons}"
+        );
     }
 
     // 출력 DTO 표면 고정 — 입력 param과 달리 출력은 deny_unknown_fields가 없어 타입만이 가드다.

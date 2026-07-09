@@ -58,11 +58,22 @@ Work Radar가 Hermes 세션에 주입하는 env지만, 다른 호스트가 자�
 개방의 대가로, **어떤 로컬 write를 노출하는지**를 결정 레일 기준으로 못 박는다.
 
 노출: `wr_create_signal`(SQL이 `quadrant='unclassified'`를 하드코딩, `dedup_key`로 upsert) ·
-`wr_upsert_timeline_note` · `wr_toggle_routine_check` · `wr_okr_upsert_check_in`.
+`wr_upsert_timeline_note` · `wr_toggle_routine_check` · `wr_okr_upsert_check_in` ·
+`wr_bookkeeping_save_receipt`(insert-if-absent) · `wr_bookkeeping_flag_duplicate`(제안형).
 
 차단(표면에 존재 금지): `classify_signal` · `promote_today` · `toggle_today_done` ·
 `set_signal_status` · `snooze_signal` · `delete_signal` · objective/key-result CRUD ·
-`update_key_result` · `set_key_result_routine`.
+`update_key_result` · `set_key_result_routine` · `mark_bookkeeping_duplicate` ·
+`update_bookkeeping_review_status` · `delete_bookkeeping_transaction`.
+
+**`mark_duplicate` → `flag_duplicate`(2026-07-10 사용자 결정).** 초안은 기존
+`wr_bookkeeping_mark_duplicate`를 그대로 전 caller에 개방했다. 그 툴은 `review_status='ignored'`를
+세팅한다 — 즉 거래를 사람의 리뷰 큐에서 **치운다**. "X는 Y의 중복이다"는 판단이고, 시스템은 그
+판단의 *후보*만 파생한다(`find_duplicate_candidates`의 점수). 확정을 에이전트가 하는 건 위 기준의
+"파생된 판단값을 직접 설정"에 해당한다. → MCP 툴을 `wr_bookkeeping_flag_duplicate`로 교체:
+링크 + `possible_duplicate` 사유만 붙이고 `review_status`는 그대로 둔다. 앱 안에서 사람이 누르는
+`mark_bookkeeping_duplicate` 버튼은 그대로다. **이름을 바꾼 건 의도적이다** — 의미가 바뀌었는데
+이름이 같으면 호출하는 모델이 조용히 잘못된 기대를 갖는다; 옛 이름은 "unknown tool"로 실패한다.
 
 가르는 기준: **에이전트는 _사실_ 을 기록할 수 있고, _파생된 판단값을 직접 설정_ 할 수는 없다.**
 

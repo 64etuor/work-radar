@@ -179,6 +179,13 @@ today_for_date, project_id, created_at` + `total`/`truncated`.
 
 합계: 신규 14개(위 1–14) + 기존 16개 = **30개**.
 
+**구현 중 변경(리뷰 반영):**
+
+- `wr_bookkeeping_save_receipt`는 insert-if-absent로 바뀌었다 — 공유 upsert가 `(source, source_ref)`
+  충돌 시 금액을 덮어써서, 게이트 제거 후 아무 caller나 남의 영수증을 조작할 수 있었다(보안 M1).
+- `wr_bookkeeping_mark_duplicate` → `wr_bookkeeping_flag_duplicate`(제안형). `review_status='ignored'`
+  확정은 사람 결정이다(사용자 결정 2026-07-10). 툴 개수는 30개 그대로.
+
 ## 7. 모듈 경계 (구조)
 
 ```

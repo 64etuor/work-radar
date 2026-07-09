@@ -79,18 +79,20 @@ write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keych
 로컬 write를 전 caller에 열었으므로, **무엇을 여는지**가 유일한 경계다. 에이전트는 _적어둘_ 수
 있지만 _정할_ 수는 없다.
 
-| 노출 (write)                                     | 왜 안전한가                                                                                    |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `wr_create_signal`                               | `insert_signal`이 `quadrant='unclassified'`를 SQL에 하드코딩 + `dedup_key`로 upsert(#1·#3).    |
-| `wr_upsert_timeline_note`                        | 대상에 붙는 자유 메모. 분류·상태 불변.                                                         |
-| `wr_toggle_routine_check`                        | "했다/안 했다" = 관측 사실. 가역.                                                              |
-| `wr_okr_upsert_check_in`                         | 주간 confidence 로그. **KR progress를 구동하지 않는다**(progress는 `current_value`/루틴 파생). |
-| `wr_bookkeeping_save_receipt` / `mark_duplicate` | 리뷰 큐로 들어간다 — 사람이 승인/무시를 정한다.                                                |
+| 노출 (write)                    | 왜 안전한가                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `wr_create_signal`              | `insert_signal`이 `quadrant='unclassified'`를 SQL에 하드코딩 + `dedup_key`로 upsert(#1·#3).              |
+| `wr_upsert_timeline_note`       | 대상에 붙는 자유 메모. 분류·상태 불변.                                                                   |
+| `wr_toggle_routine_check`       | "했다/안 했다" = 관측 사실. 가역.                                                                        |
+| `wr_okr_upsert_check_in`        | 주간 confidence 로그. **KR progress를 구동하지 않는다**(progress는 `current_value`/루틴 파생).           |
+| `wr_bookkeeping_save_receipt`   | 리뷰 큐(`needs_review`)로 들어간다 — 승인/무시는 사람이 정한다. **insert-if-absent**(기존 행 수정 불가). |
+| `wr_bookkeeping_flag_duplicate` | 중복 **제안**: 링크 + `possible_duplicate` 사유만 붙이고 `review_status`는 그대로 둔다.                  |
 
 **표면에 존재 금지(denylist — 라우터 이름 단언 테스트로 강제):** `classify_signal` ·
 `promote_today` · `unpromote_today` · `toggle_today_done` · `set_signal_status` · `snooze_signal` ·
 `delete_signal` · `set_signal_kind` · `set_signal_area_tag_key` · objective/key-result CRUD ·
-`update_key_result` · `set_key_result_routine`.
+`update_key_result` · `set_key_result_routine` · **`mark_bookkeeping_duplicate`**(리뷰를 `ignored`로
+확정 — 사람 결정; 에이전트는 `flag_duplicate`로 제안만) · `update_review_status` · `delete_transaction`.
 
 가르는 기준: **에이전트는 _사실_ 을 기록할 수 있고, _파생된 판단값을 직접 설정_ 할 수는 없다.**
 

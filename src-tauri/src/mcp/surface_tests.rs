@@ -165,7 +165,7 @@ fn registered_tool_set_is_locked() {
         "wr_bookkeeping_monthly_summary",
         "wr_bookkeeping_get_category_rules",
         "wr_bookkeeping_find_duplicate_candidates",
-        "wr_bookkeeping_mark_duplicate",
+        "wr_bookkeeping_flag_duplicate",
         "wr_bookkeeping_budget_status",
         "wr_bookkeeping_list_recurring_expenses",
         "wr_list_signals",
@@ -297,6 +297,11 @@ fn decision_rail_writes_never_reach_the_mcp_surface() {
         "wr_update_key_result",
         "wr_delete_key_result",
         "wr_set_key_result_routine",
+        // 리뷰 큐를 *확정*하는 경로. 에이전트는 `wr_bookkeeping_flag_duplicate`로 제안만 한다
+        // (사용자 결정 2026-07-10) — `ignored`로 치우는 건 사람이다.
+        "wr_bookkeeping_mark_duplicate",
+        "wr_bookkeeping_update_review_status",
+        "wr_bookkeeping_delete_transaction",
     ] {
         assert!(
             !names.contains(forbidden),
