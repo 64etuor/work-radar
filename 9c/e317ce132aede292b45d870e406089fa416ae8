@@ -1,0 +1,79 @@
+src/lib/toast.test.ts
+  s_14a22fa7abadd8::t_6301bae28149c7 51-69,71-83,85-102,104-105,107-116,118-123,144-145
+  s_14a22fa7abadd8::t_5a70f4dc309358 103,106
+  s_14a22fa7abadd8::t_fa05803fdbc561 1,3,7-8
+  s_14a22fa7abadd8::t_773a0cbab1d1fb 70,84
+  s_14a22fa7abadd8::t_9d1e775a305b23 2
+  s_14a22fa7abadd8::t_df05642700d49c 117,124-128,131,134-135,137,139-141,143
+  s_14a22fa7abadd8::t_5a7e2695cca65c 129-130,132-133,136,138,142
+  s_14a22fa7abadd8::t_61ff4d03330e89 6
+src/lib/overlayExit.test.ts
+  s_14a22fa7abadd8::t_c6b91b3b980bc9 48-57
+  s_14a22fa7abadd8::t_5c153e13c725db 22,41
+  s_14a22fa7abadd8::t_b23d2be4a5553a 1-21,23-40,42-47,58-79,81-99
+  s_14a22fa7abadd8::t_6be4bc01b7b8cc 80
+src/lib/usePresence.ts
+  s_14a22fa7abadd8::t_8ddcfaf68f42dc 49-54,60-62,66-70,72,74-78,80
+  s_14a22fa7abadd8::t_033bd9fa8fdf92 6-11
+  s_14a22fa7abadd8::t_c688a85c25eea7 37-45
+  s_14a22fa7abadd8::t_18986b13c77106 1-5,12-36,46-48,55-59,65,71,73,79,81
+  s_14a22fa7abadd8::t_f00ce7df4ee027 63-64
+src/components/CommandPalette.css
+  s_14a22fa7abadd8::t_6f1bd20cca81f8 32-50,56-59
+  s_14a22fa7abadd8::t_e24b9097123651 60
+src/App.tsx
+  s_14a22fa7abadd8::t_87ca9a96a4b389 30,33
+  s_14a22fa7abadd8::t_5bf14fc0e54590 172-175
+  s_14a22fa7abadd8::t_58ea66ee98df63 37-39
+  s_14a22fa7abadd8::t_5f862d5917babb 230-237,241-242
+  s_14a22fa7abadd8::t_0ca387350efa2d 238-240
+src/lib/usePresence.dom.test.tsx
+  s_14a22fa7abadd8::t_27ef95238473d5 2
+  s_14a22fa7abadd8::t_473c6cf698c87f 10,13-14,19-27,32
+  s_14a22fa7abadd8::t_db8349400edd5d 11-12,15-16
+  s_14a22fa7abadd8::t_66f4fb3d3acb53 169-181
+  s_14a22fa7abadd8::t_be9159dfc71d66 56,58
+  s_14a22fa7abadd8::t_aad9285ac402a5 130-168,182-205
+  s_14a22fa7abadd8::t_ca5af304c694ca 1,3-9,29,35-55,57,59-129,206
+  s_14a22fa7abadd8::t_cad225412c0a17 17-18,28,30-31,33-34
+docs/plans/2026-07-09-design-pass-deferred.md
+  s_14a22fa7abadd8::t_2ad06cbfd56854 21-23
+  s_14a22fa7abadd8::t_41d036353406e2 19,25-42
+  s_14a22fa7abadd8::t_97689815b8bf9d 20
+  s_14a22fa7abadd8::t_71038eb30bf310 24
+src/components/ToastHost.css
+  s_14a22fa7abadd8::t_0928c8aa0cbb22 33-39
+  s_14a22fa7abadd8::t_14860c84975e04 131-134
+src/components/ToastHost.tsx
+  s_14a22fa7abadd8::t_3f6bce8f6404bb 13-15
+  s_14a22fa7abadd8::t_6b4539f6abb43f 45
+  s_14a22fa7abadd8::t_7f619ab6adb809 43-44
+src/lib/toast.ts
+  s_14a22fa7abadd8::t_201b3971486e0e 143
+  s_14a22fa7abadd8::t_115abb8d150e4c 77-79,81
+  s_14a22fa7abadd8::t_51d6f04471d8a6 137-140
+  s_14a22fa7abadd8::t_fec2323a611a7e 76,80
+  s_14a22fa7abadd8::t_b7426eac7cc0d5 114
+  s_14a22fa7abadd8::t_d1fed92d8b94b9 199-200,202,204,206-207,211
+  s_14a22fa7abadd8::t_7057db3b50310b 201,203,205,208-210
+  s_14a22fa7abadd8::t_f8d6c7f8369e3e 13-18
+  s_14a22fa7abadd8::t_5c773979de87ca 11-12
+  s_14a22fa7abadd8::t_d5a111208e6b60 20-25
+  s_14a22fa7abadd8::t_885d9747529920 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9ce317ce132aede292b45d870e406089fa416ae8",
+  "prompts": {},
+  "sessions": {
+    "s_14a22fa7abadd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d00a882f-1f42-4f05-a5bf-f866a27af786",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
