@@ -1,0 +1,50 @@
+src-tauri/src/mcp/tools/calendar.rs
+  s_65a1a90da09826::t_65d7a74b56064b 1-228
+src-tauri/src/mcp/tools/github.rs
+  s_65a1a90da09826::t_d66b5f66832e43 1-261
+src-tauri/src/mcp/mod.rs
+  s_65a1a90da09826::t_ea95fe12a0e0fe 12-20,23-31,34-43,51-62,65-66,69,74,81-84,95,103,113,117
+src-tauri/src/mcp/write_routing.rs
+  s_65a1a90da09826::t_27adb5b935fb79 1-185
+src-tauri/src/mcp/surface_tests.rs
+  s_65a1a90da09826::t_3e0768a6dcc463 1-193
+src-tauri/src/mcp/tools/queue.rs
+  s_65a1a90da09826::t_9cf2819b2fd2ea 1-211
+src-tauri/src/mcp/tools/gmail.rs
+  s_65a1a90da09826::t_cab51784c59a88 1-167
+src-tauri/src/mcp/tools/bookkeeping.rs
+  s_65a1a90da09826::t_435d06ea25bf73 891-920
+  s_65a1a90da09826::t_9f3402089f90b1 15-17,20-21
+  s_65a1a90da09826::t_3af423ae7d2e36 1-14,18-19,22-890,921-1170
+docs/superpowers/specs/2026-07-10-mcp-surface-expansion-design.md
+  s_65a1a90da09826::t_06490c2f067328 117
+  s_65a1a90da09826::t_5ab9829ff60a22 92
+src-tauri/src/mcp/tools/notion.rs
+  s_65a1a90da09826::t_a41543c90c3fed 1-151
+src-tauri/src/mcp/tools/mod.rs
+  s_a848221f285137::t_4990598e7e79e7 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dbfcabeb7ddf9fbf60e51f21d903ceab6dfff820",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_a848221f285137": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3304f412-e0ca-4742-92ee-e8db7948bb67",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
