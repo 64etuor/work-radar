@@ -71,8 +71,8 @@ write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keych
 - **로컬 SQLite 툴은 read·write 모두 전 caller 개방(ADR-0012).** DTO는 sanitized — 가계부는
   note(내용)/자산/결제 메타까지 싣되 **소스 원문 `description`·raw email body·token은 표면에
   없다**(타입으로 강제).
-- 툴 표면 변경 = 명시적 코드 변경 + 툴 이름 스냅샷(`surface_tests::registered_tool_set_is_locked`)
-  - 스키마 스냅샷 테스트 갱신(아래 §8).
+- 툴 표면 변경 = 명시적 코드 변경, 그리고 툴 이름 스냅샷
+  (`surface_tests::registered_tool_set_is_locked`)과 스키마 스냅샷 테스트 갱신(아래 §8).
 
 ## 1.1 로컬 write 표면 = 캡처 레인 + 관측 기록 (INVARIANT #1 기계화)
 
@@ -122,7 +122,7 @@ rmcp + `schemars(JsonSchema)` + serde로 스키마가 **Rust param struct에서 
   write 툴(GitHub/Notion/… , Phase 2+)이 land하기 전에는 위 인덱스/키가 필수.** 즉 사용자에게
   실제 영향을 주는 write 툴 도입 = idempotency 마이그레이션 동반.
 - **키는 제안 *내용*에서 파생한 안정값**(시도별 UUID 금지 — dedup이 절대 안 걸림). GitHub write
-  툴은 `sha256(project_id ‖ kind ‖ payload-json)`을 키로 쓴다(`mcp/mod.rs::stable_idem_key`).
+  툴은 `sha256(project_id ‖ kind ‖ payload-json)`을 키로 쓴다(`mcp/write_routing.rs::stable_idem_key`).
   같은 외부 쓰기의 재시도는 같은 키 → 활성 동일 키에 dedup(`enqueue_with_idempotency`).
 - **잔여 위험 — idempotency*key는 *제안* dedup이지 \_API 효과* dedup이 아니다(#5).** POST가
   GitHub에 도달한 뒤 **응답만 유실**되면 액션은 `failed`로 표시되고(쓰기 재시도는 중복 mutation
