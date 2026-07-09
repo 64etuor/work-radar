@@ -175,7 +175,7 @@ fn registered_tool_set_is_locked() {
         names, expected,
         "registered MCP tool set drifted — update intentionally + the CFO contract"
     );
-    // No execute/approve/delete/sql/shell/network capability ever appears on the surface.
+    // No execute/approve/delete/sql/shell/arbitrary-fetch capability ever appears on the surface.
     for forbidden in [
         "approve",
         "execute",
@@ -188,6 +188,57 @@ fn registered_tool_set_is_locked() {
         assert!(
             !names.iter().any(|n| n.contains(forbidden)),
             "forbidden capability on MCP surface: {forbidden}"
+        );
+    }
+}
+
+/// 결정 레일(INVARIANT #1) 회귀 가드. `registered_tool_set_is_locked`의 allowlist는 "표면이 바뀌었다"만
+/// 알려주고, 갱신하는 사람이 그 툴이 **결정 레일인지**는 판단하지 않는다. 여기서 결정 어휘 자체를
+/// 못 박아, 스냅샷을 갱신하면서 무심코 `wr_classify_signal`을 들이는 일을 막는다.
+///
+/// 로컬 write 개방(ADR-0012)의 대가로 이 테스트가 실질 경계다 —
+/// 에이전트는 *적어둘* 수 있지만 *정할* 수는 없다.
+#[test]
+fn decision_rail_writes_never_reach_the_mcp_surface() {
+    let names: std::collections::BTreeSet<String> = WrServer::tool_router()
+        .list_all()
+        .into_iter()
+        .map(|t| t.name.to_string())
+        .collect();
+
+    // 정확한 이름 — 앱에는 있지만 MCP 표면에는 절대 없어야 하는 커맨드들.
+    for forbidden in [
+        "wr_classify_signal",
+        "wr_set_signal_status",
+        "wr_set_signal_kind",
+        "wr_set_signal_area_tag_key",
+        "wr_snooze_signal",
+        "wr_delete_signal",
+        "wr_promote_today",
+        "wr_unpromote_today",
+        "wr_toggle_today_done",
+        "wr_create_objective",
+        "wr_update_objective",
+        "wr_close_objective",
+        "wr_delete_objective",
+        "wr_create_key_result",
+        "wr_update_key_result",
+        "wr_delete_key_result",
+        "wr_set_key_result_routine",
+    ] {
+        assert!(
+            !names.contains(forbidden),
+            "decision-rail tool must not be exposed over MCP: {forbidden}"
+        );
+    }
+
+    // 부분 문자열 — 어떤 이름 변종으로도 등장할 수 없는 결정 어휘.
+    // (`objective`는 `wr_okr_list_objectives`가 정당한 read라 부분 문자열로 금지하지 않는다;
+    //  대신 위 정확-이름 목록이 objective CRUD를 잡는다.)
+    for forbidden in ["classify", "promote", "snooze", "key_result"] {
+        assert!(
+            !names.iter().any(|n| n.contains(forbidden)),
+            "decision-rail verb on MCP surface: {forbidden}"
         );
     }
 }

@@ -1,8 +1,11 @@
 //! 가계부 툴 — 로컬 SQLite 표면(외부 서비스 호출 아님).
 //!
-//! READ는 모든 MCP caller에 개방(2026-07-04 결정). DTO는 sanitized: 소스 원문 `description`,
-//! raw email body, 토큰은 **타입에 존재하지 않는다**(mcp-server-conventions §6/§7 최소권한).
-//! WRITE(`save_receipt`/`mark_duplicate`)는 현재 Hermes caller 전용 — ADR-0012에서 개방 예정.
+//! READ/WRITE 모두 모든 MCP caller에 개방(ADR-0012). 로컬 DB write는 Acceptance 게이트 대상이
+//! 아니고(decision-rails INVARIANT #2), caller env는 흉내 가능해 게이트로서 실질 보안을 더하지
+//! 않았다 — 사람 게이트는 각 MCP 호스트의 승인 UI다.
+//!
+//! DTO는 sanitized: 소스 원문 `description`, raw email body, 토큰은 **타입에 존재하지 않는다**
+//! (mcp-server-conventions §6/§7 최소권한).
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::{tool, tool_router};
@@ -12,9 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::bookkeeping as bookkeeping_commands;
 use crate::commands::projects;
 use crate::error::AppError;
-use crate::mcp::{
-    enum_wire_string, mcp_caller_from_env, mcp_tool_error, require_hermes, McpCaller, WrServer,
-};
+use crate::mcp::{enum_wire_string, mcp_tool_error, WrServer};
 use crate::models::{
     BookkeepingDirection, BookkeepingExpenseKind, BookkeepingPaymentMethodKind, BookkeepingSource,
     CreateBookkeepingLineItemInput, CreateBookkeepingTransactionInput,
@@ -271,27 +272,23 @@ fn to_transaction_dto(t: crate::models::BookkeepingTransaction) -> BookkeepingTr
 
 #[tool_router(router = tool_router_bookkeeping, vis = "pub(crate)")]
 impl WrServer {
-    /// Hermes-confirmed OCR receipt save. This is a local bookkeeping row insert/upsert, not an
-    /// external service mutation, and is only enabled for the Hermes-marked MCP server process.
+    /// OCR receipt save — a local bookkeeping row insert/upsert, not an external service mutation.
+    /// Open to any MCP caller (ADR-0012): the human gate is the calling host's own approval UI.
     #[tool(
         name = "wr_bookkeeping_save_receipt",
-        description = "Save normalized receipt fields into local bookkeeping when called by Work Radar Hermes after its permission card. Returns only transaction id/status; accepts no raw image, file path, email body, token, or credential fields."
+        description = "Save normalized receipt fields into local bookkeeping. Returns only transaction id/status; accepts no raw image, file path, email body, token, or credential fields."
     )]
     pub async fn bookkeeping_save_receipt(
         &self,
         Parameters(p): Parameters<BookkeepingSaveReceiptParams>,
     ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
-        self.bookkeeping_save_receipt_for_caller(p, mcp_caller_from_env())
-            .await
+        self.bookkeeping_save_receipt_inner(p).await
     }
 
-    pub(crate) async fn bookkeeping_save_receipt_for_caller(
+    pub(crate) async fn bookkeeping_save_receipt_inner(
         &self,
         p: BookkeepingSaveReceiptParams,
-        caller: McpCaller,
     ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
-        require_hermes(caller, "wr_bookkeeping_save_receipt")?;
-
         if let Some(project_id) = p.project_id.as_deref() {
             let project = projects::fetch_project(&self.db, project_id)
                 .await
@@ -406,8 +403,7 @@ impl WrServer {
         &self,
         Parameters(p): Parameters<BookkeepingListParams>,
     ) -> Result<Json<BookkeepingTransactionListDto>, rmcp::ErrorData> {
-        self.bookkeeping_list_transactions_for_caller(p, None, mcp_caller_from_env())
-            .await
+        self.bookkeeping_list_transactions_inner(p, None).await
     }
 
     #[tool(
@@ -418,23 +414,17 @@ impl WrServer {
         &self,
         Parameters(p): Parameters<BookkeepingListParams>,
     ) -> Result<Json<BookkeepingTransactionListDto>, rmcp::ErrorData> {
-        self.bookkeeping_list_transactions_for_caller(
+        self.bookkeeping_list_transactions_inner(
             p,
             Some(crate::models::BookkeepingReviewStatus::NeedsReview),
-            mcp_caller_from_env(),
         )
         .await
     }
 
-    // 읽기 개방(2026-07-04, 사용자 결정): 가계부 READ 툴은 Hermes 외 caller(다른 에이전트가
-    // `--mcp-stdio`를 직접 spawn)도 허용 — 로컬 sanitized 조회라 proposal-only 계약과 무관하고,
-    // 쓰기(save_receipt/mark_duplicate)는 여전히 require_hermes. caller 파라미터는 게이트
-    // 재도입/감사 시그니처 안정성을 위해 유지한다.
-    pub(crate) async fn bookkeeping_list_transactions_for_caller(
+    pub(crate) async fn bookkeeping_list_transactions_inner(
         &self,
         p: BookkeepingListParams,
         status: Option<crate::models::BookkeepingReviewStatus>,
-        _caller: McpCaller,
     ) -> Result<Json<BookkeepingTransactionListDto>, rmcp::ErrorData> {
         let limit = p.limit.unwrap_or(25).clamp(1, 100);
         let rows = bookkeeping_commands::list_bookkeeping_transactions_inner(
@@ -460,14 +450,12 @@ impl WrServer {
         &self,
         Parameters(p): Parameters<BookkeepingMonthlySummaryParams>,
     ) -> Result<Json<BookkeepingMonthlySummaryDto>, rmcp::ErrorData> {
-        self.bookkeeping_monthly_summary_for_caller(p, mcp_caller_from_env())
-            .await
+        self.bookkeeping_monthly_summary_inner(p).await
     }
 
-    pub(crate) async fn bookkeeping_monthly_summary_for_caller(
+    pub(crate) async fn bookkeeping_monthly_summary_inner(
         &self,
         p: BookkeepingMonthlySummaryParams,
-        _caller: McpCaller,
     ) -> Result<Json<BookkeepingMonthlySummaryDto>, rmcp::ErrorData> {
         let s = bookkeeping_commands::bookkeeping_monthly_summary_inner(
             &self.db,
@@ -494,14 +482,6 @@ impl WrServer {
     )]
     pub async fn bookkeeping_get_category_rules(
         &self,
-    ) -> Result<Json<BookkeepingCategoryRulesDto>, rmcp::ErrorData> {
-        self.bookkeeping_get_category_rules_for_caller(mcp_caller_from_env())
-            .await
-    }
-
-    pub(crate) async fn bookkeeping_get_category_rules_for_caller(
-        &self,
-        _caller: McpCaller,
     ) -> Result<Json<BookkeepingCategoryRulesDto>, rmcp::ErrorData> {
         let rules = bookkeeping_commands::bookkeeping_category_rules_inner(&self.db)
             .await
@@ -538,14 +518,12 @@ impl WrServer {
         &self,
         Parameters(p): Parameters<BookkeepingFindDuplicateParams>,
     ) -> Result<Json<BookkeepingDuplicateCandidateListDto>, rmcp::ErrorData> {
-        self.bookkeeping_find_duplicate_candidates_for_caller(p, mcp_caller_from_env())
-            .await
+        self.bookkeeping_find_duplicate_candidates_inner(p).await
     }
 
-    pub(crate) async fn bookkeeping_find_duplicate_candidates_for_caller(
+    pub(crate) async fn bookkeeping_find_duplicate_candidates_inner(
         &self,
         p: BookkeepingFindDuplicateParams,
-        _caller: McpCaller,
     ) -> Result<Json<BookkeepingDuplicateCandidateListDto>, rmcp::ErrorData> {
         let candidates = bookkeeping_commands::find_bookkeeping_duplicate_candidates_inner(
             &self.db,
@@ -581,22 +559,19 @@ impl WrServer {
 
     #[tool(
         name = "wr_bookkeeping_mark_duplicate",
-        description = "Mark a transaction as a duplicate of another (sets it ignored + links the original). Local review-queue write; Hermes caller only."
+        description = "Mark a transaction as a duplicate of another (sets it ignored + links the original). Local review-queue write; open to any MCP caller."
     )]
     pub async fn bookkeeping_mark_duplicate(
         &self,
         Parameters(p): Parameters<BookkeepingMarkDuplicateParams>,
     ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
-        self.bookkeeping_mark_duplicate_for_caller(p, mcp_caller_from_env())
-            .await
+        self.bookkeeping_mark_duplicate_inner(p).await
     }
 
-    pub(crate) async fn bookkeeping_mark_duplicate_for_caller(
+    pub(crate) async fn bookkeeping_mark_duplicate_inner(
         &self,
         p: BookkeepingMarkDuplicateParams,
-        caller: McpCaller,
     ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
-        require_hermes(caller, "wr_bookkeeping_mark_duplicate")?;
         let row = bookkeeping_commands::mark_bookkeeping_duplicate_inner(
             &self.db,
             &p.transaction_id,
@@ -622,52 +597,49 @@ mod tests {
     use crate::commands::shared::test_support::fresh_db;
     use crate::external_actions::store;
     use crate::mcp::tools::schema_test_support::{expect, prop_names, required_fields};
-    use crate::mcp::{McpCaller, WrServer};
+    use crate::mcp::WrServer;
     use crate::models::BookkeepingDirection;
 
-    /// Hermes-origin OCR receipt save is a local DB write after Hermes' permission card, so it does
-    /// not create a Work Radar approval proposal. The saved row still enters the review queue.
+    /// OCR receipt save is a local DB write, so it never creates a Work Radar approval proposal.
+    /// The saved row still enters the review queue.
     #[tokio::test]
-    async fn hermes_bookkeeping_save_receipt_writes_local_review_row_without_enqueue() {
+    async fn bookkeeping_save_receipt_writes_local_review_row_without_enqueue() {
         let db = fresh_db().await;
         let server = WrServer { db: db.clone() };
 
         let res = server
-            .bookkeeping_save_receipt_for_caller(
-                BookkeepingSaveReceiptParams {
-                    project_id: None,
-                    source_ref: Some("hermes-ocr-001".into()),
-                    merchant: "동네마트".into(),
-                    amount_minor: 12_300,
-                    currency: Some("KRW".into()),
-                    spent_at: "2026-06-16".into(),
-                    category: Some("food".into()),
-                    description: Some("영수증 OCR".into()),
-                    note: None,
-                    direction: None,
-                    account: None,
-                    subcategory: None,
-                    category_code: None,
-                    subcategory_code: None,
-                    raw_category: None,
-                    spent_at_time: None,
-                    confidence: None,
-                    field_confidence: None,
-                    review_reasons: None,
-                    order_no: None,
-                    payment_no: None,
-                    line_items: None,
-                },
-                McpCaller::Hermes,
-            )
+            .bookkeeping_save_receipt_inner(BookkeepingSaveReceiptParams {
+                project_id: None,
+                source_ref: Some("ocr-001".into()),
+                merchant: "동네마트".into(),
+                amount_minor: 12_300,
+                currency: Some("KRW".into()),
+                spent_at: "2026-06-16".into(),
+                category: Some("food".into()),
+                description: Some("영수증 OCR".into()),
+                note: None,
+                direction: None,
+                account: None,
+                subcategory: None,
+                category_code: None,
+                subcategory_code: None,
+                raw_category: None,
+                spent_at_time: None,
+                confidence: None,
+                field_confidence: None,
+                review_reasons: None,
+                order_no: None,
+                payment_no: None,
+                line_items: None,
+            })
             .await
-            .expect("Hermes OCR save");
+            .expect("OCR save");
 
         assert_eq!(res.0.status, "saved");
         assert!(!res.0.transaction_id.is_empty());
         assert!(
             store::list_pending(&db).await.unwrap().is_empty(),
-            "Hermes bookkeeping save is local DB write, not external proposal"
+            "bookkeeping save is local DB write, not external proposal"
         );
 
         let row: (String, String, String, String, i32) = sqlx::query_as(
@@ -686,9 +658,9 @@ mod tests {
     }
 
     /// The widened save accepts the full judgment shape (income/account/subcategory/raw label/
-    /// confidence/reasons/order+payment numbers) and persists it — this is the Hermes ingest goal.
+    /// confidence/reasons/order+payment numbers) and persists it — this is the OCR ingest goal.
     #[tokio::test]
-    async fn hermes_bookkeeping_save_receipt_persists_widened_judgment_fields() {
+    async fn bookkeeping_save_receipt_persists_widened_judgment_fields() {
         let db = fresh_db().await;
         let server = WrServer { db: db.clone() };
 
@@ -697,51 +669,48 @@ mod tests {
         field_confidence.insert("merchant".to_string(), 0.6_f64);
 
         let res = server
-            .bookkeeping_save_receipt_for_caller(
-                BookkeepingSaveReceiptParams {
-                    project_id: None,
-                    source_ref: Some("hermes-ocr-777".into()),
-                    merchant: "쿠팡".into(),
-                    amount_minor: 59_010,
-                    currency: Some("KRW".into()),
-                    spent_at: "2026-06-12".into(),
-                    category: Some("쇼핑".into()),
-                    description: Some("카멜 모니터암".into()),
-                    note: None,
-                    direction: Some("expense".into()),
-                    account: Some("하나".into()),
-                    subcategory: Some("생활용품".into()),
-                    category_code: Some("shopping".into()),
-                    subcategory_code: Some("daily_goods".into()),
-                    raw_category: Some("🪑 생활용품".into()),
-                    spent_at_time: Some("14:28:47".into()),
-                    confidence: Some(0.84),
-                    field_confidence: Some(field_confidence),
-                    review_reasons: Some(vec![BookkeepingReviewReasonParam {
-                        code: "low_merchant_confidence".into(),
-                        detail: Some("merchant inferred from sender".into()),
-                    }]),
-                    order_no: Some("ORDER-9".into()),
-                    payment_no: Some("PAY-9".into()),
-                    line_items: Some(vec![
-                        BookkeepingLineItemParam {
-                            name: "모니터암".into(),
-                            amount_minor: 30_000,
-                            quantity: Some(1),
-                            category_code: None,
-                        },
-                        BookkeepingLineItemParam {
-                            name: "배송비".into(),
-                            amount_minor: 5_000,
-                            quantity: Some(1),
-                            category_code: None,
-                        },
-                    ]),
-                },
-                McpCaller::Hermes,
-            )
+            .bookkeeping_save_receipt_inner(BookkeepingSaveReceiptParams {
+                project_id: None,
+                source_ref: Some("ocr-777".into()),
+                merchant: "쿠팡".into(),
+                amount_minor: 59_010,
+                currency: Some("KRW".into()),
+                spent_at: "2026-06-12".into(),
+                category: Some("쇼핑".into()),
+                description: Some("카멜 모니터암".into()),
+                note: None,
+                direction: Some("expense".into()),
+                account: Some("하나".into()),
+                subcategory: Some("생활용품".into()),
+                category_code: Some("shopping".into()),
+                subcategory_code: Some("daily_goods".into()),
+                raw_category: Some("🪑 생활용품".into()),
+                spent_at_time: Some("14:28:47".into()),
+                confidence: Some(0.84),
+                field_confidence: Some(field_confidence),
+                review_reasons: Some(vec![BookkeepingReviewReasonParam {
+                    code: "low_merchant_confidence".into(),
+                    detail: Some("merchant inferred from sender".into()),
+                }]),
+                order_no: Some("ORDER-9".into()),
+                payment_no: Some("PAY-9".into()),
+                line_items: Some(vec![
+                    BookkeepingLineItemParam {
+                        name: "모니터암".into(),
+                        amount_minor: 30_000,
+                        quantity: Some(1),
+                        category_code: None,
+                    },
+                    BookkeepingLineItemParam {
+                        name: "배송비".into(),
+                        amount_minor: 5_000,
+                        quantity: Some(1),
+                        category_code: None,
+                    },
+                ]),
+            })
             .await
-            .expect("Hermes widened save");
+            .expect("widened save");
         assert_eq!(res.0.status, "saved");
 
         // Line items persisted through the MCP path; their sum (35_000) ≠ amount (59_010) → reason.
@@ -777,204 +746,104 @@ mod tests {
 
         // Invalid direction is rejected.
         let bad = server
-            .bookkeeping_save_receipt_for_caller(
-                BookkeepingSaveReceiptParams {
-                    project_id: None,
-                    source_ref: Some("hermes-ocr-778".into()),
-                    merchant: "x".into(),
-                    amount_minor: 1,
-                    currency: None,
-                    spent_at: "2026-06-12".into(),
-                    category: None,
-                    description: None,
-                    note: None,
-                    direction: Some("sideways".into()),
-                    account: None,
-                    subcategory: None,
-                    category_code: None,
-                    subcategory_code: None,
-                    raw_category: None,
-                    spent_at_time: None,
-                    confidence: None,
-                    field_confidence: None,
-                    review_reasons: None,
-                    order_no: None,
-                    payment_no: None,
-                    line_items: None,
-                },
-                McpCaller::Hermes,
-            )
+            .bookkeeping_save_receipt_inner(BookkeepingSaveReceiptParams {
+                project_id: None,
+                source_ref: Some("ocr-778".into()),
+                merchant: "x".into(),
+                amount_minor: 1,
+                currency: None,
+                spent_at: "2026-06-12".into(),
+                category: None,
+                description: None,
+                note: None,
+                direction: Some("sideways".into()),
+                account: None,
+                subcategory: None,
+                category_code: None,
+                subcategory_code: None,
+                raw_category: None,
+                spent_at_time: None,
+                confidence: None,
+                field_confidence: None,
+                review_reasons: None,
+                order_no: None,
+                payment_no: None,
+                line_items: None,
+            })
             .await;
         assert!(bad.is_err(), "invalid direction rejected");
     }
 
-    /// Non-Hermes MCP callers cannot mutate the local bookkeeping DB through the OCR receipt tool.
+    /// ADR-0012: 로컬 SQLite read/write는 caller를 가리지 않는다. `WORK_RADAR_MCP_CALLER`는 흉내
+    /// 가능한 env라 게이트로서 실질 보안을 더하지 않았고, 사람 게이트는 각 MCP 호스트의 승인 UI다.
+    /// 외부 서비스 write의 proposal/direct 분기는 이 변경과 무관하다(surface_tests가 지킨다).
     #[tokio::test]
-    async fn non_hermes_bookkeeping_save_receipt_is_rejected_without_write() {
+    async fn bookkeeping_reads_and_local_writes_open_to_any_caller() {
         let db = fresh_db().await;
         let server = WrServer { db: db.clone() };
 
-        let res = server
-            .bookkeeping_save_receipt_for_caller(
-                BookkeepingSaveReceiptParams {
-                    project_id: None,
-                    source_ref: Some("other-ocr-001".into()),
-                    merchant: "동네마트".into(),
-                    amount_minor: 12_300,
-                    currency: Some("KRW".into()),
-                    spent_at: "2026-06-16".into(),
-                    category: Some("food".into()),
-                    description: None,
-                    note: None,
-                    direction: None,
-                    account: None,
-                    subcategory: None,
-                    category_code: None,
-                    subcategory_code: None,
-                    raw_category: None,
-                    spent_at_time: None,
-                    confidence: None,
-                    field_confidence: None,
-                    review_reasons: None,
-                    order_no: None,
-                    payment_no: None,
-                    line_items: None,
-                },
-                McpCaller::Other,
-            )
-            .await;
-
-        assert!(res.is_err(), "only Hermes caller may use direct OCR save");
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM bookkeeping_transactions")
-            .fetch_one(&db)
-            .await
-            .expect("count bookkeeping rows");
-        assert_eq!(count, 0);
-        assert!(store::list_pending(&db).await.unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn bookkeeping_reads_open_to_any_caller_writes_stay_hermes_gated() {
-        let db = fresh_db().await;
-        let server = WrServer { db: db.clone() };
-
-        // 읽기 개방(2026-07-04): non-Hermes caller도 요약/중복탐색 READ는 성공한다.
         let summary = server
-            .bookkeeping_monthly_summary_for_caller(
-                BookkeepingMonthlySummaryParams {
-                    month: "2026-06".into(),
-                    project_id: None,
-                },
-                McpCaller::Other,
-            )
+            .bookkeeping_monthly_summary_inner(BookkeepingMonthlySummaryParams {
+                month: "2026-06".into(),
+                project_id: None,
+            })
             .await;
-        assert!(summary.is_ok(), "non-Hermes summary read is allowed");
+        assert!(summary.is_ok(), "summary read is allowed");
 
         let open_find = server
-            .bookkeeping_find_duplicate_candidates_for_caller(
-                BookkeepingFindDuplicateParams {
-                    project_id: None,
-                    spent_at: "2026-06-12".into(),
-                    amount_minor: 1_000,
-                    merchant: None,
-                    order_no: None,
-                    payment_no: None,
-                    source_ref: None,
-                    exclude_transaction_id: None,
-                },
-                McpCaller::Other,
-            )
+            .bookkeeping_find_duplicate_candidates_inner(BookkeepingFindDuplicateParams {
+                project_id: None,
+                spent_at: "2026-06-12".into(),
+                amount_minor: 1_000,
+                merchant: None,
+                order_no: None,
+                payment_no: None,
+                source_ref: None,
+                exclude_transaction_id: None,
+            })
             .await;
-        assert!(open_find.is_ok(), "non-Hermes find read is allowed");
+        assert!(open_find.is_ok(), "find read is allowed");
 
-        // 쓰기는 여전히 Hermes 전용 — save_receipt/mark_duplicate 게이트 회귀 방지.
-        let denied_save = server
-            .bookkeeping_save_receipt_for_caller(
-                BookkeepingSaveReceiptParams {
-                    project_id: None,
-                    source_ref: None,
-                    merchant: "게이트검증".into(),
-                    amount_minor: 1_000,
-                    currency: None,
-                    spent_at: "2026-06-12".into(),
-                    category: None,
-                    description: None,
-                    note: None,
-                    direction: None,
-                    account: None,
-                    subcategory: None,
-                    category_code: None,
-                    subcategory_code: None,
-                    raw_category: None,
-                    spent_at_time: None,
-                    confidence: None,
-                    field_confidence: None,
-                    review_reasons: None,
-                    order_no: None,
-                    payment_no: None,
-                    line_items: None,
-                },
-                McpCaller::Other,
-            )
-            .await;
-        assert!(denied_save.is_err(), "non-Hermes save is refused");
-        let denied_mark = server
-            .bookkeeping_mark_duplicate_for_caller(
-                BookkeepingMarkDuplicateParams {
-                    transaction_id: "a".into(),
-                    duplicate_of_transaction_id: "b".into(),
-                },
-                McpCaller::Other,
-            )
-            .await;
-        assert!(denied_mark.is_err(), "non-Hermes mark is refused");
-
-        // Hermes find-duplicate round-trips against a saved row.
+        // find-duplicate round-trips against a saved row.
         server
-            .bookkeeping_save_receipt_for_caller(
-                BookkeepingSaveReceiptParams {
-                    project_id: None,
-                    source_ref: Some("dup-seed".into()),
-                    merchant: "쿠팡".into(),
-                    amount_minor: 59_010,
-                    currency: Some("KRW".into()),
-                    spent_at: "2026-06-12".into(),
-                    category: None,
-                    description: Some("메일 원문 요약 — DTO에 노출되면 안 됨".into()),
-                    note: Some("정기결제".into()),
-                    direction: None,
-                    account: Some("하나카드".into()),
-                    subcategory: None,
-                    category_code: None,
-                    subcategory_code: None,
-                    raw_category: None,
-                    spent_at_time: Some("13:05:00".into()),
-                    confidence: None,
-                    field_confidence: None,
-                    review_reasons: None,
-                    order_no: Some("ORD-DUP".into()),
-                    payment_no: None,
-                    line_items: None,
-                },
-                McpCaller::Hermes,
-            )
+            .bookkeeping_save_receipt_inner(BookkeepingSaveReceiptParams {
+                project_id: None,
+                source_ref: Some("dup-seed".into()),
+                merchant: "쿠팡".into(),
+                amount_minor: 59_010,
+                currency: Some("KRW".into()),
+                spent_at: "2026-06-12".into(),
+                category: None,
+                description: Some("메일 원문 요약 — DTO에 노출되면 안 됨".into()),
+                note: Some("정기결제".into()),
+                direction: None,
+                account: Some("하나카드".into()),
+                subcategory: None,
+                category_code: None,
+                subcategory_code: None,
+                raw_category: None,
+                spent_at_time: Some("13:05:00".into()),
+                confidence: None,
+                field_confidence: None,
+                review_reasons: None,
+                order_no: Some("ORD-DUP".into()),
+                payment_no: None,
+                line_items: None,
+            })
             .await
             .expect("seed save");
 
         let candidates = server
-            .bookkeeping_find_duplicate_candidates_for_caller(
-                BookkeepingFindDuplicateParams {
-                    project_id: None,
-                    spent_at: "2026-06-12".into(),
-                    amount_minor: 59_010,
-                    merchant: Some("쿠팡".into()),
-                    order_no: Some("ORD-DUP".into()),
-                    payment_no: None,
-                    source_ref: None,
-                    exclude_transaction_id: None,
-                },
-                McpCaller::Hermes,
-            )
+            .bookkeeping_find_duplicate_candidates_inner(BookkeepingFindDuplicateParams {
+                project_id: None,
+                spent_at: "2026-06-12".into(),
+                amount_minor: 59_010,
+                merchant: Some("쿠팡".into()),
+                order_no: Some("ORD-DUP".into()),
+                payment_no: None,
+                source_ref: None,
+                exclude_transaction_id: None,
+            })
             .await
             .expect("find dup");
         assert!(
@@ -982,19 +851,31 @@ mod tests {
             "order_no match scores high"
         );
 
-        // non-Hermes caller가 목록을 읽고, DTO에 내용(note)/자산/시각이 실려온다 —
-        // 단 소스 원문 description은 sanitized 계약대로 DTO 표면에 없다(타입이 강제).
+        // mark_duplicate(로컬 review-queue write)도 caller 게이트 없이 동작한다. 존재하지 않는 행은
+        // 여전히 도메인 에러 — 개방은 "검증 없이 통과"가 아니다.
+        let missing_mark = server
+            .bookkeeping_mark_duplicate_inner(BookkeepingMarkDuplicateParams {
+                transaction_id: "a".into(),
+                duplicate_of_transaction_id: "b".into(),
+            })
+            .await;
+        assert!(
+            missing_mark.is_err(),
+            "unknown transaction id still fails validation"
+        );
+
+        // 목록을 읽으면 DTO에 내용(note)/자산/시각이 실려온다 — 단 소스 원문 description은
+        // sanitized 계약대로 DTO 표면에 없다(타입이 강제).
         let listed = server
-            .bookkeeping_list_transactions_for_caller(
+            .bookkeeping_list_transactions_inner(
                 BookkeepingListParams {
                     project_id: None,
                     limit: Some(10),
                 },
                 None,
-                McpCaller::Other,
             )
             .await
-            .expect("non-Hermes list read");
+            .expect("list read");
         let dto = listed
             .0
             .transactions
@@ -1005,6 +886,72 @@ mod tests {
         assert_eq!(dto.account.as_deref(), Some("하나카드"));
         assert_eq!(dto.spent_at_time.as_deref(), Some("13:05:00"));
         assert_eq!(dto.payment_method_kind, "unknown");
+    }
+
+    /// ADR-0012 개방의 **긍정** 증거: caller env 없이도 로컬 review-queue write가 실제로 행을 바꾼다
+    /// (부정 단언만 두면 "여전히 막혀 있어도" 테스트가 통과한다).
+    #[tokio::test]
+    async fn mark_duplicate_links_rows_without_any_caller_gate() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let receipt = |source_ref: &str, order_no: &str| BookkeepingSaveReceiptParams {
+            project_id: None,
+            source_ref: Some(source_ref.into()),
+            merchant: "쿠팡".into(),
+            amount_minor: 59_010,
+            currency: Some("KRW".into()),
+            spent_at: "2026-06-12".into(),
+            category: None,
+            description: None,
+            note: None,
+            direction: None,
+            account: None,
+            subcategory: None,
+            category_code: None,
+            subcategory_code: None,
+            raw_category: None,
+            spent_at_time: None,
+            confidence: None,
+            field_confidence: None,
+            review_reasons: None,
+            order_no: Some(order_no.into()),
+            payment_no: None,
+            line_items: None,
+        };
+
+        let original = server
+            .bookkeeping_save_receipt_inner(receipt("seed-a", "ORD-A"))
+            .await
+            .expect("original save")
+            .0
+            .transaction_id;
+        let dupe = server
+            .bookkeeping_save_receipt_inner(receipt("seed-b", "ORD-B"))
+            .await
+            .expect("duplicate save")
+            .0
+            .transaction_id;
+        assert_ne!(original, dupe, "distinct source_ref → distinct rows");
+
+        let marked = server
+            .bookkeeping_mark_duplicate_inner(BookkeepingMarkDuplicateParams {
+                transaction_id: dupe.clone(),
+                duplicate_of_transaction_id: original.clone(),
+            })
+            .await
+            .expect("mark duplicate without caller gate");
+        assert_eq!(marked.0.status, "marked_duplicate");
+
+        let (review_status, duplicate_of): (String, Option<String>) = sqlx::query_as(
+            "SELECT review_status, duplicate_of_transaction_id \
+             FROM bookkeeping_transactions WHERE id = ?1",
+        )
+        .bind(&dupe)
+        .fetch_one(&db)
+        .await
+        .expect("marked row");
+        assert_eq!(review_status, "ignored");
+        assert_eq!(duplicate_of.as_deref(), Some(original.as_str()));
     }
 
     // 출력 DTO 표면 고정 — 입력 param과 달리 출력은 deny_unknown_fields가 없어 타입만이 가드다.

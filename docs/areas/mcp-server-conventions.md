@@ -1,7 +1,7 @@
 ---
 status: live
 owner: repo-maintainers
-last_reviewed: 2026-06-04
+last_reviewed: 2026-07-10
 source_of_truth_scope: work-radar MCP 서버(`--mcp-stdio`) durable 규율 — proposal-only 경계, 툴 표면 제약, 입력/출력 안전, stdio 실행 경계
 ---
 
@@ -39,14 +39,22 @@ MCP 툴 본문은 `external_actions::store::{enqueue,list_pending,status}`만 �
   불가하게 만들면 type-wall이 됨 — 그 전까지는 컴파일 보장이 아니라 계약임을 명시.
 - 위반(`approve`/`reject`/execute를 mcp에서 호출) = INVARIANT #1/#2 위반 = 차단.
 
+**로컬 write는 이 경계 밖이다(ADR-0012).** 위 계약은 **외부 서비스 write**에만 적용된다. 로컬
+SQLite read/write(신호 캡처·가계부·타임라인 노트·루틴 체크·OKR check-in)는 외부 변경이 아니므로
+Acceptance 게이트 대상이 아니고(INVARIANT #2가 명시), **caller를 가리지 않는다.** 사람 게이트는
+각 MCP 호스트의 승인 UI다 — Hermes는 ACP permission card, Claude Code/Codex는 호스트 자체의
+tool-call 승인. `WORK_RADAR_MCP_CALLER`는 다른 호스트가 자기 config에 똑같이 넣을 수 있는 env라
+게이트로서 실질 보안을 더하지 않으면서 정당한 사용만 막았다.
+
+대신 **무엇을 로컬 write로 노출하는지**가 경계다 — 캡처 레인 + 관측 기록만(아래 §1.1).
+
 **좁은 예외 — Work Radar Hermes MCP.** work-radar가 Hermes ACP 세션에
 `work-radar --mcp-stdio` 서버를 주입하면서 `WORK_RADAR_MCP_CALLER=hermes`를 함께 준 경우,
-Hermes가 호출하는 write tool은 Work Radar 승인 큐를 한 번 더 거치지 않는다. 이때 사람 게이트는
-Hermes의 ACP `session/request_permission` 카드다. 외부 서비스 write(GitHub/Notion/Calendar/Gmail)는
-기존 Rust connector와 `project_id` → DB `credential_ref` → keychain 토큰 해석 경로만 재사용한다.
-Bookkeeping OCR 저장은 외부 서비스 호출이 아니라 로컬 SQLite 쓰기이며 raw image/file path/email
-body/token/credential 필드를 받지 않는다. 다른 MCP caller, env 없는 `--mcp-stdio`는 기존 proposal-only
-계약을 유지한다.
+Hermes가 호출하는 **외부 서비스** write tool은 Work Radar 승인 큐를 한 번 더 거치지 않는다.
+이때 사람 게이트는 Hermes의 ACP `session/request_permission` 카드다. GitHub/Notion/Calendar/Gmail
+write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keychain 토큰 해석 경로만
+재사용한다. 다른 MCP caller, env 없는 `--mcp-stdio`의 **외부 서비스** write는 기존 proposal-only
+계약을 유지한다. `McpCaller`는 오직 이 분기를 위해 존재한다(`mcp/write_routing.rs`).
 
 ## 1. 툴 표면 — 좁게 고정
 
@@ -56,19 +64,37 @@ body/token/credential 필드를 받지 않는다. 다른 MCP caller, env 없는 
 | WRITE = enqueue만 (`wr_propose_*` → `store::enqueue`)                   | `mutate_db` / `raw_sql` / admin·migration·repair      |
 | 상태 폴링 (`wr_action_status`, 단건 조회 — 폴링 종료는 클라이언트 책임) | `run_shell` / `fetch_url` / 임의 file read / env dump |
 
-- 읽기 툴 예시(`wr_list_pending_actions`)는 **현재 Phase 1 표면**. spec §3는 더 넓은 target
-  표면(`wr_list_projects`/`wr_read_signals`/`wr_pr_status` 등 cache read)을 나열한다 —
-  **read 표면은 Phase별로 확장되지만 write 툴 계약(enqueue만)은 불변.**
+- **read 표면은 Phase별로 확장되지만 외부 서비스 write 툴 계약(non-Hermes = enqueue만)은 불변.**
 - 툴 목록은 **startup 시 고정** — 런타임 동적 registration 금지(rug pull 방어).
-- Hermes-origin 직접 실행 예외는 위 표면 안의 고정 동작이며, 동적 tool mutation이 아니다. env marker가
-  없으면 외부 service write는 proposal-only, Bookkeeping OCR 저장은 거부로 동작한다.
-- **Bookkeeping READ 개방(2026-07-04, 사용자 결정):** `wr_bookkeeping_list_recent_transactions` /
-  `list_review_queue` / `monthly_summary` / `get_category_rules` / `find_duplicate_candidates`는
-  **모든 MCP caller**(env marker 없는 `--mcp-stdio` 포함)에 허용 — 로컬 sanitized 조회라
-  proposal-only 계약과 무관하다. DTO는 note(내용)/자산/결제 메타까지 싣되 **소스 원문
-  `description`·raw email body·token은 표면에 없다**(타입으로 강제). 쓰기
-  (`save_receipt`/`mark_duplicate`)는 여전히 Hermes caller 전용.
-- 툴 표면 변경 = 명시적 코드 변경 + 스키마 스냅샷 테스트 갱신(아래 §8).
+  `WrServer::tool_router()`가 도메인 라우터를 합성한 결과가 단일 진실원이다.
+- Hermes-origin 직접 실행 예외는 위 표면 안의 고정 동작이며, 동적 tool mutation이 아니다.
+- **로컬 SQLite 툴은 read·write 모두 전 caller 개방(ADR-0012).** DTO는 sanitized — 가계부는
+  note(내용)/자산/결제 메타까지 싣되 **소스 원문 `description`·raw email body·token은 표면에
+  없다**(타입으로 강제).
+- 툴 표면 변경 = 명시적 코드 변경 + 툴 이름 스냅샷(`surface_tests::registered_tool_set_is_locked`)
+  - 스키마 스냅샷 테스트 갱신(아래 §8).
+
+## 1.1 로컬 write 표면 = 캡처 레인 + 관측 기록 (INVARIANT #1 기계화)
+
+로컬 write를 전 caller에 열었으므로, **무엇을 여는지**가 유일한 경계다. 에이전트는 _적어둘_ 수
+있지만 _정할_ 수는 없다.
+
+| 노출 (write)                                     | 왜 안전한가                                                                                    |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `wr_create_signal`                               | `insert_signal`이 `quadrant='unclassified'`를 SQL에 하드코딩 + `dedup_key`로 upsert(#1·#3).    |
+| `wr_upsert_timeline_note`                        | 대상에 붙는 자유 메모. 분류·상태 불변.                                                         |
+| `wr_toggle_routine_check`                        | "했다/안 했다" = 관측 사실. 가역.                                                              |
+| `wr_okr_upsert_check_in`                         | 주간 confidence 로그. **KR progress를 구동하지 않는다**(progress는 `current_value`/루틴 파생). |
+| `wr_bookkeeping_save_receipt` / `mark_duplicate` | 리뷰 큐로 들어간다 — 사람이 승인/무시를 정한다.                                                |
+
+**표면에 존재 금지(denylist — 라우터 이름 단언 테스트로 강제):** `classify_signal` ·
+`promote_today` · `unpromote_today` · `toggle_today_done` · `set_signal_status` · `snooze_signal` ·
+`delete_signal` · `set_signal_kind` · `set_signal_area_tag_key` · objective/key-result CRUD ·
+`update_key_result` · `set_key_result_routine`.
+
+가르는 기준: **사람이 보는 판단 산출물로 자동으로 흘러드는가.** KR `current_value`는 progress를
+구동하고 progress는 보드 OKR 배지가 되므로 결정 레일 안쪽이다. check-in confidence는 어떤 파생
+값도 구동하지 않는 순수 로그다.
 
 ## 2. 입력 스키마 — strict, 좁은 타입
 
@@ -149,10 +175,18 @@ work-radar는 반대로:
 
 ## 7. 네트워크·토큰·다중서버 — 능력을 주지 않는다
 
-- **네트워크 없음(Phase 1).** `fetch_url`/`import_from_url`/`sync_remote`/webhook/
-  OAuth proxy/임의 API 호출 금지. (후일 필요 시: domain allowlist + HTTPS only +
-  private/link-local/localhost block + redirect hop 검증 + timeout + 응답 크기 상한 +
-  credential 미전달 — 그때 ADR로.)
+- **caller가 목적지를 정하는 네트워크는 없다(ADR-0012로 개정).** 옛 문구는 "네트워크 없음"이었으나,
+  Hermes write 커넥터(`wr_calendar_create_event` → Google POST)가 land한 시점에 이미 사실이 아니었다.
+  정확한 명제는 이것이다:
+  - 허용: **이미 연결된 provider로의 고정 엔드포인트 호출**. 도메인·경로는 코드 상수이고 caller
+    입력이 URL에 닿지 않는다. 예: `wr_calendar_list_events`(read-only outbound, 윈도우 ≤62일),
+    커넥터 write.
+  - 금지: `fetch_url`/`import_from_url`/`sync_remote`/webhook/OAuth proxy/임의 API 호출.
+    **caller가 host/path/query/URL을 지정하는 필드는 스키마에 존재하지 않는다.**
+  - 새 outbound provider 추가 = ADR. HTTPS only + private/link-local/localhost block +
+    redirect hop 검증 + timeout + 응답 크기 상한 + credential 미전달을 그때 정의한다.
+- **캘린더 이벤트는 로컬에 없다.** `calendar_events_cache()`는 프로세스 내 60초 TTL 캐시라 MCP
+  프로세스의 첫 조회는 항상 Google 라운드트립이다. 에이전트 루프 호출은 rate limit을 부른다.
 - **token passthrough 금지.** MCP 입력에 `access_token`/`refresh_token`/API key/cookie/
   `Authorization` 받지 않는다. 토큰은 Rust 커넥터 내부 keychain만(ipc-conventions).
 - **다중서버 조합 전제.** Hermes 세션에 다른 MCP 서버가 같이 붙어도 피해가 작도록,
@@ -186,28 +220,39 @@ session_id/input_hash`) — "이 proposal이 왜 생겼나"를 사용자가 추�
 2. 임의 shell/command/path/url/sql 입력 필드.
 3. MCP server config(command/args)를 LLM/user content에서 생성.
 4. OAuth/token passthrough.
-5. 네트워크 fetch(Phase 1).
+5. caller가 목적지를 정하는 네트워크 fetch(§7 — 고정 provider read/write는 허용).
 6. tool output에 user content 장문 echo.
 7. annotation을 보안 보장으로 간주.
 8. 런타임 동적 tool mutation.
-9. 앱 프로세스와 직접 IPC로 권한 위임(승인은 GUI·DB 큐 경유만).
+9. 앱 프로세스와 직접 IPC로 권한 위임(외부 서비스 승인은 GUI·DB 큐 경유만).
 10. DB 트랜잭션 안에서 느린 작업(LLM/네트워크/파일).
+11. **결정 레일 write를 툴로 노출**(§1.1 denylist) — 분류/승격/상태확정/OKR 목표·KR 변경.
 
 ## 강제 계약 (durable — 라이브 phasing/현황은 plan/spec)
 
-- **기본 write 툴 본문 = `store::enqueue`만.** 커넥터별 PR로 GitHub/Notion/Calendar/Gmail write 툴이
-  추가돼도 non-Hermes MCP caller는 §1·§2·§8을 그대로 상속 — `execute`/`approve` 경로 없음.
-  단, 위에 명시한 Work Radar Hermes MCP 예외는 Hermes permission card를 사람 결정으로 간주하여
-  Work Radar 승인 큐를 한 번 더 거치지 않고 기존 Rust connector 또는 로컬 리뷰큐 저장 경로로 실행한다.
+- **외부 서비스 write 툴 본문 = `store::enqueue`만(non-Hermes).** 커넥터별 PR로 GitHub/Notion/
+  Calendar/Gmail write 툴이 추가돼도 non-Hermes MCP caller는 §1·§2·§8을 그대로 상속 —
+  `execute`/`approve` 경로 없음. 단, Work Radar Hermes MCP 예외는 Hermes permission card를 사람
+  결정으로 간주하여 승인 큐를 거치지 않고 기존 Rust connector로 실행한다. 분기는
+  `mcp/write_routing.rs` 한 곳(`route_write_for_caller`).
+- **로컬 SQLite 툴은 caller 무관**(ADR-0012). 경계는 §1.1의 캡처-레인 allowlist / 결정-레일 denylist다.
 - **read 표면은 Phase별로 확장**하되 토큰/payload 본문 미노출(§6·§7)은 불변.
+- **모듈 경계:** 도메인마다 `mcp/tools/<domain>.rs`가 자기 DTO·핸들러·스키마 테스트를 소유하고,
+  `WrServer::tool_router()`가 합성한다. 툴 추가 = 도메인 모듈 + 합성 함수 + 이름 스냅샷 세 곳.
 - **검증 계약:** 헤드리스 stdio 라운드트립(propose→enqueue→list/status, 외부호출 0) +
-  스키마 스냅샷(§8) + `cargo test`/clippy `-D warnings`/fmt. 실 외부호출 라이브 스모크는 **사용자**.
+  툴 이름 스냅샷 + 결정-레일 denylist 단언 + 스키마 스냅샷(§8) + `cargo test`/clippy `-D warnings`/fmt.
+  실 외부호출(캘린더 조회 포함) 라이브 스모크는 **사용자**.
 
 ## 정본 / 참조
 
-- `src-tauri/src/mcp/` — MCP 핸들러(`WrServer`) + `--mcp-stdio` 진입(`run.rs`).
+- `src-tauri/src/mcp/mod.rs` — `WrServer` + `tool_router()` 합성(표면의 단일 진실원) + 공용 헬퍼.
+- `src-tauri/src/mcp/tools/<domain>.rs` — 도메인별 DTO·핸들러·스키마 테스트.
+- `src-tauri/src/mcp/write_routing.rs` — 외부 서비스 write의 proposal/direct 분기(단일 관문).
+- `src-tauri/src/mcp/surface_tests.rs` — 툴 이름 스냅샷 + 결정-레일 denylist + Hermes 직접 실행.
+- `src-tauri/src/mcp/run.rs` — `--mcp-stdio` 진입.
 - `src-tauri/src/external_actions/` — `store::{enqueue,list_pending,status}`, `gate`
   (`Acceptance` 토큰 type-wall — MCP의 proposal-only 보장이 의존하는 경계).
+- `docs/adr/0012-mcp-local-writes-and-calendar-read.md` — 로컬 write 개방 + 캘린더 read-only outbound.
 - `docs/areas/ipc-conventions.md` — 외부 호출/keychain/bounded retry/Acceptance 게이트.
 - `docs/areas/decision-rails.md` — INVARIANT #1·#2 본문(이 문서가 MCP 표면에서 mechanize).
 - `docs/areas/data-layer-conventions.md` — 마이그레이션·WAL·SQLite 규율.

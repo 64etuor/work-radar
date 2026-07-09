@@ -65,9 +65,14 @@ impl WrServer {
 #[tool_handler]
 impl ServerHandler for WrServer {}
 
+/// **외부 서비스 write에만** 쓰이는 분기 축(`write_routing`). 로컬 SQLite read/write는 caller를
+/// 보지 않는다(ADR-0012) — `WORK_RADAR_MCP_CALLER`는 다른 호스트가 흉내낼 수 있는 env라 게이트로서
+/// 실질 보안을 더하지 않았고, 사람 게이트는 각 MCP 호스트의 승인 UI다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum McpCaller {
+    /// Work Radar가 주입한 Hermes ACP 세션 — permission card가 이미 사람 확인을 받았다.
     Hermes,
+    /// 그 외 모든 MCP 호스트 — 외부 서비스 write는 승인 큐(proposal)로 간다.
     Other,
 }
 
@@ -76,19 +81,6 @@ pub(crate) fn mcp_caller_from_env() -> McpCaller {
         Ok(v) if v.trim().eq_ignore_ascii_case("hermes") => McpCaller::Hermes,
         _ => McpCaller::Other,
     }
-}
-
-/// 로컬 DB write 툴(`save_receipt`/`mark_duplicate`)을 Work Radar Hermes caller로 제한한다 —
-/// 사용자의 사적 재무 데이터를 다른 MCP caller에 쓰기 허용하지 않는다(§7 least-privilege).
-/// READ 툴은 2026-07-04 결정으로 전 caller 개방이라 이 게이트를 쓰지 않는다.
-pub(crate) fn require_hermes(caller: McpCaller, tool: &str) -> Result<(), rmcp::ErrorData> {
-    if caller != McpCaller::Hermes {
-        return Err(rmcp::ErrorData::invalid_params(
-            format!("{tool} requires the Work Radar Hermes MCP caller"),
-            None,
-        ));
-    }
-    Ok(())
 }
 
 /// Serialize a closed serde enum to its wire string (e.g. BookkeepingDirection → "expense").
