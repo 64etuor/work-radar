@@ -1,0 +1,37 @@
+src/components/worktree/WorktreeSideList.tsx
+  s_14a22fa7abadd8::t_44a438a9c4e0f1 65,67
+  s_14a22fa7abadd8::t_0137137bec448f 7
+src/components/worktree/WorktreeFileList.tsx
+  s_14a22fa7abadd8::t_b6faf72afe1458 47
+  s_14a22fa7abadd8::t_e6b939bdcfa3ea 60
+  s_14a22fa7abadd8::t_96d3e72917cc8b 4
+src/components/worktree/WorktreeDiffPanel.tsx
+  s_14a22fa7abadd8::t_5de87bf77e56fc 230,234
+  s_14a22fa7abadd8::t_e804cd18a009e6 123,126-128
+src/components/worktree/CleanupPanel.tsx
+  s_14a22fa7abadd8::t_99af2d812aae99 153,159
+  s_14a22fa7abadd8::t_bfe1f69fc45a90 7
+src/components/worktree/WorktreeDiffText.tsx
+  s_14a22fa7abadd8::t_d3873870cca6b2 104
+  s_14a22fa7abadd8::t_0b6baa261753d5 3
+src/components/worktree/WorktreeView.css
+  s_14a22fa7abadd8::t_f7d56552e21c9c 1093-1094
+  s_14a22fa7abadd8::t_bab4e00e7a7c9f 1082-1085,1092,1095-1097
+  s_14a22fa7abadd8::t_747f953bd47d64 1098-1099
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f2d6489de7e0c2999febeb01c7c82615a7b92475",
+  "prompts": {},
+  "sessions": {
+    "s_14a22fa7abadd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d00a882f-1f42-4f05-a5bf-f866a27af786",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
