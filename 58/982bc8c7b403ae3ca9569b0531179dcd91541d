@@ -1,0 +1,47 @@
+src-tauri/src/mcp/surface_tests.rs
+  s_65a1a90da09826::t_860f032c76e7d4 268-272
+  s_65a1a90da09826::t_47a0a26c3c9cb0 209-263
+docs/adr/0012-mcp-local-writes-and-calendar-read.md
+  s_65a1a90da09826::t_fc2e27f239ea4e 108-131
+src-tauri/src/commands/bookkeeping/transactions.rs
+  s_65a1a90da09826::t_a6220e6d34d0ed 8
+  s_65a1a90da09826::t_a6e06885dc7cad 440-447,450,455-456
+  s_65a1a90da09826::t_3b38c2ed89cbf0 448-449,451-454
+src-tauri/src/mcp/tools/today.rs
+  s_65a1a90da09826::t_b7a7dba27b3e5c 379
+  s_65a1a90da09826::t_f12352897cf5d8 639-640
+src-tauri/src/mcp/tools/bookkeeping.rs
+  s_65a1a90da09826::t_2e5938c7a4fab3 28-67,72-82
+  s_65a1a90da09826::t_700a830598c400 226-229
+  s_65a1a90da09826::t_b7a7dba27b3e5c 68-71
+  s_65a1a90da09826::t_d021d5d31ff952 421-422
+  s_65a1a90da09826::t_5ffb063a2c469b 473-479
+  s_65a1a90da09826::t_af72d8cd6d98db 508-512,522-552
+  s_65a1a90da09826::t_bb578bd6853f20 611-612,618-622
+  s_65a1a90da09826::t_3b38c2ed89cbf0 480-507,513-521,1212-1215,1218-1224
+  s_65a1a90da09826::t_2da80177fcd000 396,398-405,408
+  s_65a1a90da09826::t_383fddfeb71cb9 1163-1211,1216-1217,1225-1234
+src-tauri/src/commands/okr.rs
+  s_65a1a90da09826::t_c99ae7b9c60583 252-260
+src-tauri/src/mcp/mod.rs
+  s_65a1a90da09826::t_b3c1ed241620ea 137-165
+  s_65a1a90da09826::t_e9a81a1097cbd5 102-104,109-112
+src-tauri/src/mcp/tools/calendar.rs
+  s_65a1a90da09826::t_990bf75134a7bc 124-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "58982bc8c7b403ae3ca9569b0531179dcd91541d",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
