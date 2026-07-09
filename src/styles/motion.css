@@ -144,11 +144,14 @@
 }
 
 /* Hermes 플로팅 패널 — 위치 transform(inline)과 충돌하지 않도록 opacity 전용 페이드.
- * open=fade-in / closed=fade-out(후 언마운트). duration 은 wr-motion-panel(0.22s)과 동일. */
+ * open=fade-in / closed=fade-out(후 언마운트). duration 은 wr-motion-panel(0.22s)과 동일.
+ * closed 는 반드시 pointer-events: none — fixed z-50 720×780 패널이 투명해지는 동안
+ * 닫힘 직후의 클릭을 삼키면 click-shield가 된다(다른 오버레이와 동일 계약). */
 .hermes-panel-root[data-state="open"] {
   animation: wr-fade-in var(--wr-motion-panel) var(--wr-ease-out) both;
 }
 .hermes-panel-root[data-state="closed"] {
+  pointer-events: none;
   animation: wr-fade-out var(--wr-motion-panel) var(--wr-ease-out) both;
 }
 

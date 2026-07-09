@@ -33,6 +33,17 @@ function ruleBlock(css: string, selector: string): string {
   return css.slice(start, end);
 }
 
+/**
+ * reduced-motion 블록 안에서 `selector { … opacity: 0 … }` 규칙이 실제로 존재하는가.
+ * "selector가 있다" + "어딘가에 opacity: 0이 있다"를 따로 단언하면 서로 다른 규칙으로 만족돼
+ * vacuous해진다(그 블록엔 `animation: none` 규칙이 먼저 온다) — 같은 규칙 안을 요구한다.
+ */
+function reducedMotionHides(css: string, selector: string): boolean {
+  const reduced = css.slice(css.indexOf("prefers-reduced-motion"));
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${escaped}\\s*\\{[^}]*opacity:\\s*0`).test(reduced);
+}
+
 describe("CommandPalette exit 계약", () => {
   it("팔레트를 presence 래퍼로 감싸 exit 동안 노드를 유지한다(하드 컷 금지)", () => {
     expect(appSource).not.toContain("{paletteOpen && <CommandPalette />}");
@@ -65,9 +76,9 @@ describe("CommandPalette exit 계약", () => {
   });
 
   it("reduced-motion에서 closed 오버레이를 즉시 감춘다(animation:none만으론 잔상)", () => {
-    const reduced = paletteCss.slice(paletteCss.indexOf("prefers-reduced-motion"));
-    expect(reduced).toContain('.cmdk-presence[data-state="closed"] .cmdk-overlay');
-    expect(reduced).toContain("opacity: 0");
+    expect(
+      reducedMotionHides(paletteCss, '.cmdk-presence[data-state="closed"] .cmdk-overlay'),
+    ).toBe(true);
   });
 
   it("presence 래퍼는 레이아웃에 박스를 만들지 않는다", () => {
@@ -85,9 +96,32 @@ describe("Toast exit 계약", () => {
   });
 
   it("reduced-motion에서 나가는 토스트를 즉시 감춘다", () => {
-    const reduced = toastCss.slice(toastCss.indexOf("prefers-reduced-motion"));
-    expect(reduced).toContain(".toast-item[data-leaving]");
-    expect(reduced).toContain("opacity: 0");
+    expect(reducedMotionHides(toastCss, ".toast-item[data-leaving]")).toBe(true);
+  });
+});
+
+describe("Hermes 패널 exit 계약", () => {
+  const motionCss = read("../styles/motion.css");
+  const hermesSource = read("../components/hermes/HermesPanel.tsx");
+
+  it("presence 훅을 쓴다 — 인라인 effect 방식은 닫힘 첫 커밋에 서브트리를 갈아버린다", () => {
+    expect(hermesSource).toContain("usePresence(state.open, HERMES_EXIT_MS)");
+    expect(hermesSource).toContain("if (!presence.mounted) return null;");
+    expect(hermesSource).not.toContain("setIsClosing");
+  });
+
+  it("closed 패널은 pointer-events: none (fixed z-50 패널의 click-shield 방지)", () => {
+    expect(ruleBlock(motionCss, '.hermes-panel-root[data-state="closed"]')).toContain(
+      "pointer-events: none",
+    );
+  });
+
+  it("closed 동안 inert — 채팅 입력이 포커스/키를 계속 먹지 않도록", () => {
+    expect(hermesSource).toContain('inert={presence.state === "closed"}');
+  });
+
+  it("reduced-motion에서 closed 패널을 즉시 감춘다(animation:none만으론 260ms 잔상)", () => {
+    expect(reducedMotionHides(motionCss, '.hermes-panel-root[data-state="closed"]')).toBe(true);
   });
 });
 

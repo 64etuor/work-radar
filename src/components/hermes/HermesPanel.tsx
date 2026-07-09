@@ -1,17 +1,22 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { PanelLeft, RotateCcw, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { commands, type HermesPanelState } from "@/bindings";
 import { Button } from "@/components/ui/button";
+import { WR_MOTION } from "@/lib/motion";
 import { unwrap } from "@/lib/query/client";
+import { usePresence } from "@/lib/usePresence";
 
 import { clampToViewport, defaultBounds } from "./clampToViewport";
 import { DEFAULT_PANEL_STATE, useHermesPanelState } from "./useHermesPanelState";
 
 // useHermesPanelState 와 반드시 동일한 키.
 const PANEL_QUERY_KEY = ["hermes-panel-state"] as const;
+
+/** exit 유지 시간 — `.hermes-panel-root[data-state="closed"]` fade-out(--wr-motion-panel)보다 길게. */
+const HERMES_EXIT_MS = Math.round(WR_MOTION.panel * 1000) + 40;
 
 export function HermesPanel({
   children,
@@ -124,44 +129,11 @@ export function HermesPanel({
   }, [state.x, state.y, state.w, state.h, setBounds]);
 
   // 마운트 컨트롤러: 닫힘 시 즉시 언마운트하지 않고 fade-out 동안 노드를 유지한다.
-  // open=true → 즉시 마운트(파생, setState 불필요) + data-state="open"(fade-in).
-  // open=false → data-state="closed"(fade-out). isClosing 동안 노드 유지 →
-  //   animationend(또는 폴백 타임아웃)에 isClosing 해제 → 언마운트.
-  // (reduced-motion 은 animation:none → animationend 미발생 → 타임아웃이 언마운트한다.)
-  const [isClosing, setIsClosing] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // open 직전 값 — true→false 전이에서만 fade-out 을 시작한다.
-  const prevOpenRef = useRef(state.open);
-
-  useEffect(() => {
-    const prevOpen = prevOpenRef.current;
-    prevOpenRef.current = state.open;
-    if (state.open) {
-      // 열림(혹은 닫는 중 재오픈): 진행 중 fade-out 타임아웃 취소.
-      // isClosing 은 render 가 state.open OR isClosing 으로 마운트를 결정하므로
-      // 굳이 여기서 끄지 않아도 무해하다(다음 닫힘 사이클이 재설정). setState-in-effect 회피.
-      if (closeTimerRef.current !== null) {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-      return;
-    }
-    // 막 닫힌 경우에만 fade-out 시작(이미 닫혀 있던 마운트엔 no-op).
-    if (!prevOpen) return;
-    setIsClosing(true);
-    if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
-    // wr-motion-panel(0.22s) + 여유. animationend 가 먼저 오면 그쪽에서 정리한다.
-    closeTimerRef.current = setTimeout(() => {
-      closeTimerRef.current = null;
-      setIsClosing(false);
-    }, 280);
-    return () => {
-      if (closeTimerRef.current !== null) {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-    };
-  }, [state.open]);
+  // 종전엔 이 로직이 인라인이었고 `isClosing`을 effect에서 켰다 — 그러면 open=false인 첫 커밋에
+  // `mounted`가 잠깐 false가 되어 패널이 통째로 언마운트됐다 되살아난다(exit이 새 노드에서
+  // 재시작 + 1프레임 깜빡임). usePresence는 전이를 렌더 중에 반영해 그 구멍이 없다.
+  // 자식(채팅 로그)은 재오픈 시 새로 마운트하면 안 되므로 `openKey`는 쓰지 않는다.
+  const presence = usePresence(state.open, HERMES_EXIT_MS);
 
   // 패널을 "열 때마다" 화면 중앙 + 기본(세로로 긴) 크기로 재배치한다(사용자 요청:
   // 처음 열면 가운데, 세로로 길게). 열려 있는 동안의 드래그/리사이즈는 유지되지만
@@ -175,7 +147,7 @@ export function HermesPanel({
     }
   }, [state.open, setBounds]);
 
-  if (!state.open && !isClosing) return null;
+  if (!presence.mounted) return null;
 
   const x = state.x ?? 0;
   const y = state.y ?? 0;
@@ -186,18 +158,10 @@ export function HermesPanel({
   return (
     <section
       aria-label="Hermes"
-      data-state={state.open ? "open" : "closed"}
-      onAnimationEnd={(e) => {
-        // fade-out 종료 시 즉시 언마운트(타임아웃보다 우선). 자식 애니메이션은 무시.
-        if (e.target !== e.currentTarget) return;
-        if (!state.open) {
-          if (closeTimerRef.current !== null) {
-            clearTimeout(closeTimerRef.current);
-            closeTimerRef.current = null;
-          }
-          setIsClosing(false);
-        }
-      }}
+      data-state={presence.state}
+      // closed 동안 inert: fade-out 하는 fixed z-50 패널이 클릭을 삼키지 않게(click-shield 방지)
+      // + 채팅 입력이 포커스를 계속 쥐지 않게. CSS의 pointer-events:none과 이중 방어.
+      inert={presence.state === "closed"}
       style={{
         transform: `translate3d(${x}px, ${y}px, 0)`,
         width: w,
