@@ -1,0 +1,39 @@
+docs/superpowers/specs/2026-07-10-mcp-surface-expansion-design.md
+  s_65a1a90da09826::t_5661b08746ef13 182-188
+src-tauri/src/commands/bookkeeping/dedup.rs
+  s_65a1a90da09826::t_9803843db0f50b 237-239
+  s_65a1a90da09826::t_dcaec142b7d46a 154-236,240-253
+src-tauri/src/mcp/tools/bookkeeping.rs
+  s_65a1a90da09826::t_f8b4c4d6a74deb 1134,1136-1137,1143
+  s_65a1a90da09826::t_d8825e7f745ea9 1243-1248,1250
+  s_65a1a90da09826::t_9803843db0f50b 1301-1303,1305-1309,1314-1318,1332-1333,1338
+  s_65a1a90da09826::t_1c21787908c625 1292-1293,1298-1299,1310-1313,1319-1331,1339-1343
+  s_65a1a90da09826::t_3238316bf1a12e 740-747,749-750,752,756,759,763,769,772
+docs/areas/mcp-server-conventions.md
+  s_65a1a90da09826::t_5e312bdd796645 88-89
+  s_65a1a90da09826::t_22acc197d6b60e 94-95
+  s_65a1a90da09826::t_cbf2853f6df974 82-87
+docs/adr/0012-mcp-local-writes-and-calendar-read.md
+  s_65a1a90da09826::t_e0346687c19783 61-62,66-76
+src-tauri/src/mcp/surface_tests.rs
+  s_65a1a90da09826::t_414875ad741d51 300-304
+  s_65a1a90da09826::t_059e11f0827750 168
+docs/areas/decision-rails.md
+  s_65a1a90da09826::t_11f9db64da5643 44-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "76bfed139688bca08c2c68a8dc8cc891793470da",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
