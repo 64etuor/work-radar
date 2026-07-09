@@ -1,0 +1,30 @@
+src-tauri/src/mcp/mod.rs
+  s_65a1a90da09826::t_a8c6fd86d1c91c 96-104
+  s_65a1a90da09826::t_f0cdd64addaef1 63
+  s_65a1a90da09826::t_373ef2410e9150 44
+src-tauri/src/mcp/tools/signals.rs
+  s_65a1a90da09826::t_eebfc1e6017f4f 1-137,142-157,162-295,300-446,451-495
+  s_65a1a90da09826::t_7e977400d1ddd0 138-141,158-161,296-299,447-450
+src-tauri/src/mcp/surface_tests.rs
+  s_65a1a90da09826::t_6bb1345956e9df 168-169
+src-tauri/src/commands/signal_store.rs
+  s_65a1a90da09826::t_7e85029bfee096 35-44,61,64,74-75
+src-tauri/src/mcp/tools/mod.rs
+  s_65a1a90da09826::t_392c32122d6472 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9bcc4b023f43f2e68d8bfea68a59d47223e28274",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
