@@ -74,7 +74,7 @@
  * 참조)와 정면 충돌한다. 재도입하려면 콘텐츠가 아닌 얇은 veil 페이드 + 라이브 스모크로. */
 
 .wr-dialog-overlay[data-state="open"] {
-  animation: wr-backdrop-in var(--wr-motion-fast) var(--wr-ease-out) both;
+  animation: wr-fade-in var(--wr-motion-fast) var(--wr-ease-out) both;
 }
 
 .wr-dialog-content[data-state="open"] {
@@ -209,15 +209,6 @@
 @keyframes wr-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes wr-backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
   }
 }
 

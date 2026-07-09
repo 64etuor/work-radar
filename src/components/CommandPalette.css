@@ -14,7 +14,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  animation: wr-backdrop-in var(--wr-motion-fast) var(--wr-ease-out) both;
+  animation: wr-fade-in var(--wr-motion-fast) var(--wr-ease-out) both;
 }
 .cmdk-panel {
   width: min(560px, 92vw);

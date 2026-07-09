@@ -626,10 +626,10 @@
 
 /* attention pulse + in-flight pulse — preserved from the SVG version */
 .cr-flow-node[data-attention] {
-  animation: cr-flow-attention 1.8s ease-in-out infinite;
+  animation: cr-flow-attention 1.8s var(--wr-ease-loop) infinite;
 }
 .cr-flow-node[data-inflight]:not([data-attention]) {
-  animation: cr-flow-inflight 2.2s ease-in-out infinite;
+  animation: cr-flow-inflight 2.2s var(--wr-ease-loop) infinite;
 }
 @keyframes cr-flow-attention {
   0%,
@@ -990,7 +990,7 @@
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-card);
-  animation: cr-ghost-breathe 2.4s ease-in-out infinite;
+  animation: cr-ghost-breathe 2.4s var(--wr-ease-loop) infinite;
 }
 
 .cr-ghost-bar {

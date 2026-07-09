@@ -41,18 +41,17 @@
   → 가드는 `leavingSeq === undefined`만 중복으로 보고, 타이머는 자기 seq만 제거.
 - reduced-motion: `animation: none`만으론 closed 노드가 유예 동안 **그대로 보인다** → `opacity: 0` 필수.
 
-## 2. skills/\*.tsx 기본 사이즈 pill ~22곳 (결정 필요했던 것)
+## 2. skills/\*.tsx 기본 사이즈 pill — ✅ DONE (2026-07-09, 제로-델타 경로)
 
-`AuditPanel/CreatePanel/InstallPanel/VendorPanel/DivergencePanel/ManagedViewer/ExternalViewer`
+실제 사이트는 **23곳**(10개 패널). 전부 `size="pill" className="… px-4"`로 전환, 수기
+`rounded-full` 0건. 픽셀 동일함을 `cn` 실제 출력으로 확인했다(3 variant × gap 유무 6조합에서
+전/후 클래스가 `py-2` 하나만 다르고, 그건 `h-9` 고정 높이 + `items-center`에서 무해).
 
-- `BackupPanel/UpdatePanel/InAppEditor`의 `.skl-actions`/`.skl-edit-top` 행에 size prop 없는
-  `<Button className="…rounded-full…">`가 남아 있다(h-9/text-sm/px-4).
-
-* **제로-델타 경로(권장)**: `size="pill"` + `className="px-4"` — pill의 px-5를 px-4로 되돌려
-  픽셀 동일, rounded-full 수기 제거. non-wrapping 행 overflow 리스크 0.
-* 또는 px-5 수용(+1px/side×버튼 수) 시 `.skl-actions` 행이 좁은 폭에서 안 넘치는지 라이브 확인.
-* `TodayHeader.tsx:96`의 `h-[26px]` pill은 형제 아이콘 버튼(`size-[26px]`)과 행 높이 결속 —
-  바꾸려면 행 전체(아이콘 3개 포함)를 h-8로 함께 올려야 한다. 단독 변환 금지.
+- **남은 결정**: 캐논 pill 패딩은 `px-5`인데 여기는 `px-4`로 되돌려 두었다. `px-5` 채택은
+  `.skl-actions` 행이 좁은 폭에서 안 넘치는지 **라이브 확인**이 필요해 미뤘다. 채택 시
+  `className="px-4"`만 지우면 된다.
+- `TodayHeader.tsx:96`의 `h-[26px]` pill은 형제 아이콘 버튼(`size-[26px]`)과 행 높이 결속 —
+  바꾸려면 행 전체(아이콘 3개 포함)를 h-8로 함께 올려야 한다. 단독 변환 금지. (무접촉)
 
 ## 3. worktree `.wt-empty` 패밀리 (12+ 사이트, 이번 패스 의도적 스킵)
 
@@ -84,13 +83,19 @@
   콘텐츠 자체는 무애니메이션)로 — veil만 합성 레이어를 먹고 콘텐츠 레이어는 불변.
 - 조건: TodayView(타임라인 블록 다수)에서 전환 직후 드래그/스크롤 stale-paint 라이브 스모크 통과.
 
-## 6. 소형 후속(기회 있을 때)
+## 6. 소형 후속 — ✅ 2/3 DONE, 1건 기각 (2026-07-09)
 
-- `wr-fade-in` ≡ `wr-backdrop-in` 중복 키프레임(패스 이전부터) — 하나로 병합 가능.
-- `bookkeeping/cards/_shared.tsx` EmptyState 래퍼: 소비처 2곳이라 직접 `<UiEmptyState className="bk-empty">`
-  인라인 후 래퍼 삭제 가능(선택).
-- `--wr-ease-loop`을 기존 루프들(ControlRoom `cr-flow-*`, `wt-pulse`, `caldrawer` 외 잔여)로 확대 —
-  duration은 루프 주기라 개별 유지, easing만 토큰.
+- ✅ **키프레임 병합**: `wr-backdrop-in` 삭제, 소비처 2곳(`.wr-dialog-overlay`, `.cmdk-overlay`)을
+  `wr-fade-in`으로. 바이트 동일 확인 후 병합했고, `wr-fade-out`과 이름이 짝을 이루는 쪽을 남겼다.
+- ❌ **기각 — `bookkeeping/cards/_shared.tsx` EmptyState 래퍼**: 플랜은 "소비처 2곳"이라 했으나
+  실제 **8곳**(Operations/CategorySummary/RecurringMonth/BudgetPlanner/TrashTransactions/
+  ReviewQueue/Reports/ApprovedTransactions). 래퍼를 지우면 8곳에 `<UiEmptyState className="bk-empty">`가
+  복붙된다 — 래퍼가 정당하다. 유지.
+- ✅ **`--wr-ease-loop` 확대**: 무한 루프 19개를 전수 분류해 리터럴 `ease-in-out` **4곳**만 토큰화
+  (`wt-pulse`, `cr-flow-attention`, `cr-flow-inflight`, `cr-ghost-breathe`). 토큰 값이 정확히
+  `ease-in-out`이라 시각 변화 0. duration은 루프 주기라 개별 유지.
+  **대상 아님**: `linear` 루프(`wr-spin`/`cr-spin`/`cr-flow-dash`/`hbl-*`/news 마퀴 — 회전·마퀴는
+  등속이어야 한다), `BrainDumpToggle`의 `wr-pulse-ring`(커스텀 베지어 — 토큰화하면 느낌이 바뀐다).
 
 ## 함정 (메모리 `work-radar-design-system-pass`와 동일 — 코드에 주석으로도 박혀 있음)
 

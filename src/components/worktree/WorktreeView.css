@@ -154,7 +154,7 @@
   height: 6px;
   border-radius: 999px;
   background: var(--color-q3);
-  animation: wt-pulse 1.6s ease-in-out infinite;
+  animation: wt-pulse 1.6s var(--wr-ease-loop) infinite;
 }
 @keyframes wt-pulse {
   0%,
