@@ -89,7 +89,7 @@ untrusted 값이 아니라 자기가 세팅한 env지만, 다른 호스트가 �
 - 로컬 write는 애초에 Acceptance 게이트 대상이 아니다(INVARIANT #2: "Today 승격은 로컬 SQLite
   액션이라 Acceptance 불요").
 
-기록: `docs/adr/0012-mcp-local-writes-open-to-any-caller.md`.
+기록: `docs/adr/0012-mcp-local-writes-and-calendar-read.md` §1·§2.
 
 ## 5. 캘린더 read = 실 Google 조회 (변경)
 
@@ -114,7 +114,7 @@ DTO는 표시 전용 필드를 뺀 최소 집합이다: `id, calendar_id, calend
 all_day, project_id`. **제외**: `location`, `url`(htmlLink), `project_color`, `project_text_color`,
 `recurring_event_id`. 위치·딥링크는 §7 최소권한 관점에서 다른 MCP 서버로 새어나갈 가치가 없다.
 
-기록: `docs/adr/0012-...` §캘린더 read.
+기록: `docs/adr/0012-mcp-local-writes-and-calendar-read.md` §3.
 
 ## 6. 툴 목록 (신규 14개 → 총 30개)
 
