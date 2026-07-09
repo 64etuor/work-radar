@@ -74,7 +74,7 @@
     var(--color-wr-surface)
   );
   background-size: 200% 100%;
-  animation: caldrawer-shimmer 1.2s ease-in-out infinite;
+  animation: caldrawer-shimmer var(--wr-motion-shimmer) var(--wr-ease-loop) infinite;
 }
 @keyframes caldrawer-shimmer {
   from {
@@ -101,17 +101,14 @@
  * ── CalendarView (재사용: 드로어 본문 · P8 · P9) ──
  * 일=시간 행 / 주=7열 / 월=셀 그리드. 이벤트 = radius sm 블록(종일/시간 분리).
  */
-.calv-empty,
-.calv-col-empty {
-  font: 400 13px var(--font-sans);
-  color: var(--color-wr-subtle);
-}
+/* .calv-empty 의 타이포/색은 ui/empty-state 프리미티브 소유 — 여기는 padding 만. */
 .calv-empty {
   padding: 24px 4px;
 }
 .calv-col-empty {
+  font: 400 11px var(--font-sans);
+  color: var(--color-wr-subtle);
   text-align: center;
-  font-size: 11px;
   padding: 2px 0;
 }
 

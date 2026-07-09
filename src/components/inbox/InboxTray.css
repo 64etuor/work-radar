@@ -56,20 +56,22 @@
   padding: 6px 14px 12px;
 }
 
+/* 빈 상태 박스 — 타이포/센터링은 EmptyState 프리미티브 소유, 여기는 geometry만.
+ * (레거시 flex/gap을 남기면 unlayered CSS가 프리미티브의 layered gap을 이겨 드리프트.) */
 .inbox-tray-empty {
+  min-height: 120px;
+  border: 1px dashed var(--color-wr-border);
+  border-radius: 8px;
+}
+
+/* 에러 변형은 프리미티브 비대상(coral 톤 유지 필요) — 수기 div라 레이아웃을 직접 소유. */
+.inbox-tray-empty.err {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 120px;
-  border: 1px dashed var(--color-wr-border);
-  border-radius: 8px;
-  color: var(--color-wr-subtle);
-  font-size: 13px;
-}
-
-.inbox-tray-empty.err {
   color: var(--color-wr-coral);
+  font-size: 13px;
 }
 
 .inbox-tray-section {
@@ -103,7 +105,7 @@
 
 .inbox-tray-chevron {
   flex: 0 0 auto;
-  transition: transform 120ms ease;
+  transition: transform var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .inbox-tray-chevron.collapsed {
@@ -245,24 +247,8 @@
   padding-top: 6px;
 }
 
+/* shimmer 레시피는 공용 .wr-skeleton(motion.css) — 여기는 geometry만. */
 .inbox-tray .inbox-skeleton div {
   height: 56px;
   border-radius: 8px;
-  background: linear-gradient(
-    90deg,
-    var(--color-wr-surface),
-    var(--color-wr-hover),
-    var(--color-wr-surface)
-  );
-  background-size: 240% 100%;
-  animation: inbox-shimmer 1.3s ease-in-out infinite;
-}
-
-@keyframes inbox-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
 }

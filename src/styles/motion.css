@@ -68,12 +68,79 @@
   transition: none !important;
 }
 
+/* 뷰 콘텐츠 크로스페이드는 도입하지 않는다(2026-07-09 리뷰 판정): 뷰 서브트리 전체의
+ * opacity 애니메이션은 WKWebView 컴포지터 레이어 승격→강등을 매 네비마다 유발 — 이 레포가
+ * 문서화해 둔 stale-paint 회귀 클래스(TodayView.css tl-block-wrap 주석, scheduleCompositorResync
+ * 참조)와 정면 충돌한다. 재도입하려면 콘텐츠가 아닌 얇은 veil 페이드 + 라이브 스모크로. */
+
 .wr-dialog-overlay[data-state="open"] {
   animation: wr-backdrop-in var(--wr-motion-fast) var(--wr-ease-out) both;
 }
 
 .wr-dialog-content[data-state="open"] {
   animation: wr-dialog-pop-in var(--wr-motion-panel) var(--wr-ease-out) both;
+}
+
+/* 오버레이 exit — radix Presence가 closed 애니메이션 종료까지 unmount를 지연한다.
+ * (부수 효과로 `data-wr-overlay-open` 마커가 exit 동안 살아 있어 Esc 창보호 계약이
+ * 타이밍-독립적으로 더 안전해진다.) 이탈은 빠르게: fast + ease-in.
+ * closed 상태는 전부 pointer-events: none — exit 중인 전면 오버레이(fixed inset-0)가
+ * 닫힘 직후의 빠른 클릭을 삼키지 않도록(click-shield 방지). */
+.wr-dialog-overlay[data-state="closed"] {
+  pointer-events: none;
+  animation: wr-fade-out var(--wr-motion-fast) var(--wr-ease-in) both;
+}
+
+.wr-dialog-content[data-state="closed"] {
+  pointer-events: none;
+  animation: wr-dialog-pop-out var(--wr-motion-fast) var(--wr-ease-in) both;
+}
+
+/* shadcn Sheet(우측 슬라이드오버) — 기존 drawer 어휘 재사용. */
+.wr-sheet-content[data-state="open"] {
+  animation: wr-drawer-right-in var(--wr-motion-drawer) var(--wr-ease-out) both;
+}
+
+.wr-sheet-content[data-state="closed"] {
+  pointer-events: none;
+  animation: wr-drawer-right-out var(--wr-motion-fast) var(--wr-ease-in) both;
+}
+
+/* Popover/Select 공용 — 이전 tw-animate 클래스(플러그인 부재로 no-op → 모션 0 팝)를
+ * 대체하는 wr 배선. scale 원점은 radix가 놓는 --radix-*-transform-origin을 따른다. */
+.wr-popover-content[data-state="open"] {
+  animation: wr-popover-in var(--wr-motion-fast) var(--wr-ease-out) both;
+}
+
+.wr-popover-content[data-state="closed"] {
+  pointer-events: none;
+  animation: wr-popover-out var(--wr-motion-fast) var(--wr-ease-in) both;
+}
+
+/* Tooltip은 enter만 — exit 애니메이션을 달면 unmount가 지연돼 `data-wr-overlay-open` 마커가
+ * 호버 툴팁이 사라진 뒤 ~120ms 살아남고, 그동안 전역 키(Esc 창보호 양보/knob 게이트)가
+ * 이유 없이 죽는다. 툴팁 close = 즉시 unmount(종전 동작 보존). */
+.wr-tooltip-content[data-state="delayed-open"],
+.wr-tooltip-content[data-state="instant-open"] {
+  animation: wr-popover-in var(--wr-motion-fast) var(--wr-ease-out) both;
+}
+
+/* 공용 스켈레톤 shimmer — 소비처(.rt-skel/.inbox-skeleton …)는 geometry(높이/radius/grid)만
+ * 소유하고 이 클래스를 로딩 플레이스홀더 엘리먼트에 단다. 주기 = --wr-motion-shimmer. */
+.wr-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-wr-surface),
+    var(--color-wr-hover),
+    var(--color-wr-surface)
+  );
+  background-size: 240% 100%;
+  animation: wr-shimmer var(--wr-motion-shimmer) var(--wr-ease-loop) infinite;
+}
+
+/* 체크/완료 마이크로 피드백 — 체크 인디케이터 마운트 시 1회 스프링 팝. */
+.wr-check-pop {
+  animation: wr-check-pop var(--wr-motion-base) var(--wr-ease-spring) both;
 }
 
 /* Hermes 플로팅 패널 — 위치 transform(inline)과 충돌하지 않도록 opacity 전용 페이드.
@@ -187,6 +254,75 @@
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes wr-drawer-right-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(20px, 0, 0);
+  }
+}
+
+/* 센터링 caveat는 wr-dialog-pop-in 주석 참조 — transform은 pop 효과만 담는다. */
+@keyframes wr-dialog-pop-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0) scale(0.98);
+  }
+}
+
+@keyframes wr-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes wr-popover-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes wr-check-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes wr-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
   }
 }
 
@@ -515,6 +651,16 @@
   .view-shell,
   .wr-dialog-overlay[data-state="open"],
   .wr-dialog-content[data-state="open"],
+  .wr-dialog-overlay[data-state="closed"],
+  .wr-dialog-content[data-state="closed"],
+  .wr-sheet-content[data-state="open"],
+  .wr-sheet-content[data-state="closed"],
+  .wr-popover-content[data-state="open"],
+  .wr-popover-content[data-state="closed"],
+  .wr-tooltip-content[data-state="delayed-open"],
+  .wr-tooltip-content[data-state="instant-open"],
+  .wr-check-pop,
+  .wr-skeleton,
   .wr-radial-effect-layer,
   .wr-radial-effect,
   .wr-radial-effect-item,

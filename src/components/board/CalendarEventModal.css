@@ -26,9 +26,8 @@
   color: var(--color-wr-fg);
   cursor: pointer;
 }
+/* 타이포/색은 ui/empty-state 프리미티브 소유 — 여기는 padding 만. */
 .cev-empty {
-  font: 400 12px var(--font-sans);
-  color: var(--color-wr-subtle);
   padding: 8px 0;
 }
 .cev-err {

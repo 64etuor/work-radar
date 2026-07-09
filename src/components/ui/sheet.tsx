@@ -64,9 +64,6 @@ export function SheetTitle({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
-    <DialogPrimitive.Title
-      className={cn("text-foreground text-base font-semibold", className)}
-      {...props}
-    />
+    <DialogPrimitive.Title className={cn("typo-title-sm text-foreground", className)} {...props} />
   );
 }

@@ -112,20 +112,15 @@ export function InAppEditor({ skill }: { skill: Skill }) {
               </span>
               <Button
                 variant="ghost"
-                size="sm"
-                className="gap-1.5 rounded-full"
+                size="pill-sm"
+                className="gap-1.5"
                 aria-pressed={showDiff}
                 onClick={() => setShowDiff((v) => !v)}
               >
                 <GitCompare className="size-4" />
                 {showDiff ? "비교 숨기기" : "기본값과 비교"}
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 rounded-full"
-                onClick={resetToDefault}
-              >
+              <Button variant="ghost" size="pill-sm" className="gap-1.5" onClick={resetToDefault}>
                 <RotateCcw className="size-4" />
                 기본값으로 복원
               </Button>

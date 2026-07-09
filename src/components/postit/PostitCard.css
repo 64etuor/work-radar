@@ -22,8 +22,8 @@
   user-select: none;
   overflow: hidden;
   transition:
-    box-shadow var(--wr-motion-base, 200ms ease),
-    opacity var(--wr-motion-slow, 280ms ease);
+    box-shadow var(--wr-motion-base) var(--wr-ease-out),
+    opacity var(--wr-motion-slow) var(--wr-ease-out);
 }
 
 .postit-card:active,
@@ -137,7 +137,7 @@
   opacity: 1;
   stroke-dasharray: 400;
   stroke-dashoffset: 400;
-  transition: 0.5s stroke-dashoffset;
+  transition: stroke-dashoffset var(--wr-motion-space) var(--wr-ease-out);
 }
 
 .postit-card-check[data-state="checked"] {
@@ -166,7 +166,7 @@
   opacity: 0.68;
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--wr-motion-slow) var(--wr-ease-space);
 }
 
 .postit-card[data-done="true"] .postit-card-body {

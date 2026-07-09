@@ -19,6 +19,7 @@ import type { InboxItem } from "@/bindings";
 import { groupInboxBySource, inferTargetView, labelSource } from "@/components/inbox/inboxGrouping";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 import { openExternal } from "@/lib/query";
 import {
   useDismissInboxItem,
@@ -85,10 +86,12 @@ export function InboxTray({ onClose }: { onClose: () => void }) {
           </div>
         )}
         {!items.isLoading && !items.isError && groups.length === 0 && (
-          <div className="inbox-tray-empty">
-            <Sparkles className="size-5" />
-            <span>현재 처리할 운영 알림이 없습니다.</span>
-          </div>
+          <EmptyState className="inbox-tray-empty">
+            <span className="inline-flex items-center gap-2">
+              <Sparkles className="size-5" />
+              현재 처리할 운영 알림이 없습니다.
+            </span>
+          </EmptyState>
         )}
         {groups.map((group) => {
           const isCollapsed = collapsed.has(group.source);
@@ -169,8 +172,8 @@ function InboxRow({
           {targetView && (
             <Button
               variant="outline"
-              size="sm"
-              className="gap-1 rounded-full text-[11px]"
+              size="pill-sm"
+              className="gap-1"
               onClick={() => {
                 onClose();
                 goTo(targetView);
@@ -187,8 +190,8 @@ function InboxRow({
           {action?.url && (
             <Button
               variant="outline"
-              size="sm"
-              className="gap-1 rounded-full text-[11px]"
+              size="pill-sm"
+              className="gap-1"
               onClick={() => action.url && void openExternal(action.url)}
             >
               <GitPullRequest className="size-3.5" />
@@ -253,9 +256,9 @@ function formatDate(value: string): string {
 function InboxSkeleton() {
   return (
     <div className="inbox-skeleton" aria-label="Inbox loading">
-      <div />
-      <div />
-      <div />
+      <div className="wr-skeleton" />
+      <div className="wr-skeleton" />
+      <div className="wr-skeleton" />
     </div>
   );
 }

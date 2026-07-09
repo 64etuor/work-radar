@@ -105,29 +105,18 @@ export function UpdatePanel({ onDone }: { onDone: () => void }) {
                   (confirmKey === key ? (
                     <>
                       <Button
-                        size="sm"
-                        className="rounded-full"
+                        size="pill-sm"
                         disabled={apply.isPending}
                         onClick={() => doApply(r.provider as SkillProvider, r.name)}
                       >
                         {apply.isPending ? "적용 중…" : "정말 적용"}
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => setConfirmKey(null)}
-                      >
+                      <Button size="pill-sm" variant="outline" onClick={() => setConfirmKey(null)}>
                         취소
                       </Button>
                     </>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-full"
-                      onClick={() => setConfirmKey(key)}
-                    >
+                    <Button size="pill-sm" variant="outline" onClick={() => setConfirmKey(key)}>
                       적용…
                     </Button>
                   ))}

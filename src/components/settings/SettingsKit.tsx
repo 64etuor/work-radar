@@ -78,7 +78,7 @@ export function Segmented<T extends string>({
             "h-full rounded-md px-3.5 font-medium transition-colors",
             size === "md" ? "text-[13px]" : "text-xs",
             value === o.value
-              ? "bg-card text-foreground shadow-sm"
+              ? "bg-card text-foreground shadow-[var(--wr-shadow-hairline)]"
               : "text-muted-foreground hover:text-foreground",
           )}
         >

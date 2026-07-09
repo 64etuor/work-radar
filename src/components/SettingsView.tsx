@@ -137,9 +137,7 @@ export function SettingsView() {
         className="border-border flex items-center gap-3 border-b px-[22px] py-3.5"
         data-tauri-drag-region
       >
-        <span className="font-mono text-[13px] font-semibold tracking-[0.12em] uppercase">
-          설정
-        </span>
+        <span className="typo-mono-heading">설정</span>
         <span className="text-muted-foreground hidden text-xs sm:inline">{active.label}</span>
         {category === "projects" && (
           <Button

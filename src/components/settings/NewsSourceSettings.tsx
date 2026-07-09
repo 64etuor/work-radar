@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import type { NewsCategory, NewsOptions, NewsSourceMeta, SortMode } from "@/bindings";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -168,9 +169,9 @@ function NewsOptionsForm({ onToast }: { onToast: (msg: string) => void }) {
             뉴스 개수와 정렬, 마퀴 체감 속도를 한 곳에서 조절합니다.
           </p>
         </div>
-        <span className="border-border bg-muted text-muted-foreground rounded-full border px-2.5 py-1 text-[11px] font-medium">
+        <Badge variant="outline" size="sm" className="bg-muted text-muted-foreground">
           실시간 반영
-        </span>
+        </Badge>
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-2">

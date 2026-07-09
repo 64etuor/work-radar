@@ -1,5 +1,6 @@
 import type { CalendarEvent } from "@/bindings";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   type CalendarViewMode,
   monthGridDays,
@@ -66,7 +67,7 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
     return (
       <div className="calv calv-day">
         {dayEvents.length === 0 ? (
-          <div className="calv-empty">이 날짜에 일정 없음</div>
+          <EmptyState className="calv-empty">이 날짜에 일정 없음</EmptyState>
         ) : (
           dayEvents.map((ev) => <EventBlock key={ev.id} ev={ev} showTime />)
         )}

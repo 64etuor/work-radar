@@ -11,6 +11,7 @@ import {
 import { useEffect } from "react";
 
 import type { VitalKey, Vitals as VitalsData } from "../../lib/controlRoomGraph";
+import { WR_EASE, WR_MOTION } from "../../lib/motion";
 
 /** Tweens an integer count when `value` changes; instant under reduced motion. */
 function AnimatedCount({ value }: { value: number }) {
@@ -23,7 +24,7 @@ function AnimatedCount({ value }: { value: number }) {
       mv.set(value);
       return;
     }
-    const controls = animate(mv, value, { duration: 0.2, ease: "easeOut" });
+    const controls = animate(mv, value, { duration: WR_MOTION.base, ease: WR_EASE.out });
     return () => controls.stop();
   }, [mv, value, reduce]);
 

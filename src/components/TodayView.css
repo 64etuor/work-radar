@@ -32,14 +32,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  /* 앱 셸 공통 헤더 패딩(14px 22px) — 다른 뷰 헤더와 좌우/상하 정렬. */
+  padding: 14px 22px;
   border-bottom: 1px solid var(--color-wr-border-light);
-}
-
-.today-title {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
 }
 
 .today-nav {
@@ -78,8 +73,8 @@
   background: var(--td-white);
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .today-debt-chip:hover {
@@ -368,11 +363,9 @@
   gap: 4px;
 }
 
+/* 타이포/색은 ui/empty-state 프리미티브 소유 — 여기는 padding 만. */
 .today-tray-empty {
   padding: 16px;
-  color: var(--color-wr-subtle);
-  font-size: 12px;
-  text-align: center;
 }
 
 .today-tray-section {
@@ -596,10 +589,10 @@
 .tl-block-wrap {
   z-index: 2; /* 기본 — 인라인에서 CSS로 이전(2026-06-14)해 :hover lift가 인라인 스타일을 이길 수 있게. */
   transition:
-    left var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1)),
-    width var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1)),
-    top var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1)),
-    height var(--wr-motion-base, 220ms) var(--wr-ease-out, cubic-bezier(0.2, 0, 0, 1));
+    left var(--wr-motion-base) var(--wr-ease-out),
+    width var(--wr-motion-base) var(--wr-ease-out),
+    top var(--wr-motion-base) var(--wr-ease-out),
+    height var(--wr-motion-base) var(--wr-ease-out);
   /* will-change 의도적 미사용: left/width/top/height는 GPU 합성 대상이 아니라 속도 이득이 없는데,
      WKWebView가 블록을 합성 레이어로 승격시켜 위치 변경(드래그/리스케줄) 후 stale-paint(좌표는
      정확한데 화면만 오프셋, 스크롤하면 정상화)를 유발한다 → 레이어 승격 회피로 회귀 방지. */
@@ -1046,24 +1039,13 @@
   text-align: center;
 }
 
+/* 타이포/색은 ui/empty-state 프리미티브(title + body)가 소유 — 여기는 박스 geometry 만. */
 .today-history-empty {
   margin: 24px 18px;
   padding: 22px 18px;
   border: 1px solid var(--color-wr-border-light);
   border-radius: 10px;
   background: color-mix(in srgb, var(--color-wr-bg-soft, var(--td-bg-soft)) 35%, transparent);
-  text-align: center;
-}
-
-.today-history-empty-title {
-  font: 600 12px/1.4 var(--font-sans);
-  color: var(--color-wr-fg);
-  margin-bottom: 6px;
-}
-
-.today-history-empty-sub {
-  font: 400 11px/1.5 var(--font-sans);
-  color: var(--color-wr-subtle);
 }
 
 .today-history-group + .today-history-group {
@@ -1091,7 +1073,7 @@
 .today-history-item {
   border-bottom: 1px solid color-mix(in srgb, var(--color-wr-border-light) 65%, transparent);
   padding: 8px 18px 8px;
-  transition: background var(--wr-motion-fast, 120ms) var(--wr-ease-out, ease);
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .today-history-item:hover {

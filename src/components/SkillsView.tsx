@@ -24,6 +24,7 @@ import { useState } from "react";
 import { SkillsHelpDialog } from "@/components/SkillsHelpDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   useSkillDivergences,
@@ -215,7 +216,7 @@ function useSkillsView() {
           밖에 둬야 드래그가 입력/클릭을 삼키지 않는다(InboxView 선례). */}
       <header className="skl-head">
         <div className="skl-head-title" data-tauri-drag-region>
-          <span className="skl-title">스킬 레지스트리</span>
+          <span className="typo-mono-heading">스킬 레지스트리</span>
           <span className="skl-count">{total}</span>
         </div>
         <div className="skl-toolbar">
@@ -526,11 +527,11 @@ function useSkillsView() {
             </div>
           )}
           {!skills.isError && total === 0 && (
-            <div className="skl-empty">
+            <EmptyState className="skl-empty">
               {search.trim()
                 ? "검색 결과가 없습니다."
                 : "이 환경에 스킬이 없습니다. 인앱 프롬프트를 추가하거나 ~/.claude/skills에 스킬을 두세요."}
-            </div>
+            </EmptyState>
           )}
           {segments.map((segment) => (
             <section key={segment.key} className="skl-section">

@@ -10,6 +10,7 @@ import type {
   TickStatusOutcome,
 } from "../../bindings";
 import { buildGoLiveRemedies, parseLatchDetail } from "../../lib/controlRoom";
+import { WR_EASE, WR_MOTION } from "../../lib/motion";
 import {
   useClearTickerAttention,
   useProjectTickStatus,
@@ -51,7 +52,7 @@ export function CommandDeck({
       <m.div
         initial={reduce ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.15, ease: "easeOut" }}
+        transition={{ duration: WR_MOTION.fast, ease: WR_EASE.out }}
       >
         <div className="cr-deck">
           <div className="cr-deck-zones">

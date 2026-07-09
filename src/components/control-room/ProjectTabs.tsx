@@ -3,6 +3,7 @@ import { useRef } from "react";
 
 import type { ProjectTickerStatusRow } from "../../bindings";
 import { projectDotTone } from "../../lib/controlRoom";
+import { WR_EASE, WR_MOTION } from "../../lib/motion";
 
 /** Per-project Control Room switcher. One tab per ticker row; the status dot mirrors the
  *  INFRA tone vocabulary (down/ok/advisory/muted) via the pure `projectDotTone` helper. */
@@ -52,7 +53,7 @@ export function ProjectTabs({
                   layoutId={reduce ? undefined : "cr-tab-active"}
                   className="cr-tab-active"
                   aria-hidden
-                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  transition={{ duration: WR_MOTION.base, ease: WR_EASE.out }}
                 />
               </LazyMotion>
             )}

@@ -129,7 +129,7 @@ export function RoutineForm({ initial, defaults, isEdit, onSubmit, onCancel }: P
         placeholder="루틴 제목 (예: 아침 운동)"
         autoComplete="off"
         data-cb-routine-title
-        className="mb-1.5 h-8 text-[13px]"
+        className="typo-body-md mb-1.5 h-8"
       />
       <div className="rfreqs">
         {FREQS.map((f) => (

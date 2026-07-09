@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { TimelineNote, WorkSignal } from "@/bindings";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Textarea } from "@/components/ui/textarea";
 import { defaultProjectCalendarColor, normalizeHexColor } from "@/lib/projectCalendarColor";
 import {
@@ -85,12 +86,9 @@ export function HistoryRail({ today }: { today: string }) {
         {history.isLoading ? (
           <div className="today-history-hint">불러오는 중…</div>
         ) : groups.length === 0 ? (
-          <div className="today-history-empty">
-            <div className="today-history-empty-title">아직 완료된 항목이 없습니다</div>
-            <div className="today-history-empty-sub">
-              Today 항목을 ✓ 체크하면 여기에 시간순으로 쌓입니다.
-            </div>
-          </div>
+          <EmptyState className="today-history-empty" title="아직 완료된 항목이 없습니다">
+            Today 항목을 ✓ 체크하면 여기에 시간순으로 쌓입니다.
+          </EmptyState>
         ) : (
           groups.map(([date, items]) => (
             <HistoryGroup

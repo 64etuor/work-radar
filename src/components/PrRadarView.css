@@ -19,11 +19,6 @@
   padding: 14px 22px;
   border-bottom: 1px solid var(--color-wr-border-light);
 }
-.pr .pr-title {
-  font: 600 13px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
 .pr .pr-poll {
   margin-left: auto;
   display: inline-flex;
@@ -45,14 +40,14 @@
   margin: 0 auto;
   padding: 18px 22px 40px;
 }
-.pr .pr-empty,
-.pr .pr-err {
-  font: 400 13px var(--font-sans);
-  color: var(--color-wr-muted);
+/* .pr-empty 의 타이포/색은 ui/empty-state 프리미티브 소유 — 여기는 padding 만. */
+.pr .pr-empty {
   padding: 18px 2px;
 }
 .pr .pr-err {
+  font: 400 13px var(--font-sans);
   color: var(--color-q1);
+  padding: 18px 2px;
 }
 .pr .pr-dashboard {
   display: grid;

@@ -107,7 +107,7 @@ export function WeeklyView() {
   return (
     <div className="wk">
       <header className="wk-head" data-tauri-drag-region>
-        <span className="wk-title">Weekly Review</span>
+        <span className="typo-mono-heading">Weekly Review</span>
       </header>
 
       <WeekNavigator

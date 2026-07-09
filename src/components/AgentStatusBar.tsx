@@ -238,11 +238,7 @@ export function AgentStatusBar() {
           {unreadInbox > 0 && <span className="asb-badge">{unreadInbox}</span>}
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        sideOffset={8}
-        className="w-[360px] p-0 shadow-[0_8px_22px_rgba(15,20,40,0.12)]"
-      >
+      <PopoverContent align="end" sideOffset={8} className="w-[360px] p-0">
         <InboxTray onClose={() => setInboxOpen(false)} />
       </PopoverContent>
     </Popover>

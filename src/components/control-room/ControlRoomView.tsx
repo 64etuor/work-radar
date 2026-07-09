@@ -12,6 +12,7 @@ import {
 } from "../../lib/query/governance";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
+import { EmptyState } from "../ui/empty-state";
 import { AgentUsageStrip } from "./AgentUsageStrip";
 import { CommandDeck } from "./CommandDeck";
 import { FlowSchematic } from "./FlowSchematic";
@@ -51,7 +52,7 @@ export default function ControlRoomView() {
   return (
     <div className="cr-view">
       <div className="cr-header">
-        <h1 className="inline-flex items-center gap-2 text-lg font-semibold">
+        <h1 className="typo-mono-heading inline-flex items-center gap-2">
           <Gauge size={18} aria-hidden /> Control Room
         </h1>
         <AgentUsageStrip />
@@ -74,7 +75,9 @@ export default function ControlRoomView() {
 
       {!ticker.isLoading && rows.length === 0 && (
         <Card className="p-4">
-          <div className="cr-empty">프로젝트가 없습니다 — 설정에서 프로젝트를 추가하세요.</div>
+          <EmptyState className="cr-empty">
+            프로젝트가 없습니다 — 설정에서 프로젝트를 추가하세요.
+          </EmptyState>
         </Card>
       )}
 
@@ -110,12 +113,18 @@ export default function ControlRoomView() {
         </Card>
       )}
 
-      {isLoading && <div className="cr-empty">불러오는 중…</div>}
+      {/* 로딩도 empty와 같은 5-lane ghost로 — 빈 화면/맨텍스트 대신 최종 레이아웃을 예고한다. */}
+      {isLoading && (
+        <GhostPipeline
+          title="불러오는 중…"
+          hint="이 프로젝트의 .boule/workspace 상태를 읽고 있습니다."
+        />
+      )}
       {isError && (
         <Card className="p-4">
-          <div className="cr-empty">
+          <EmptyState className="cr-empty">
             거버넌스 상태를 읽지 못했습니다: {String((error as Error)?.message ?? error)}
-          </div>
+          </EmptyState>
         </Card>
       )}
       {data && (
@@ -139,13 +148,21 @@ export default function ControlRoomView() {
   );
 }
 
-/** Empty-state skeleton: a ghost of the 5-lane pipeline so the canvas never reads as
+/** Empty/loading skeleton: a ghost of the 5-lane pipeline so the canvas never reads as
  *  broken/blank — dashed placeholder cards with a quiet shimmer (reduced-motion gated),
- *  hint text below. Pure markup; no React Flow mount for zero nodes. */
-function GhostPipeline() {
+ *  hint text below. Pure markup; no React Flow mount for zero nodes.
+ *  기본 카피는 empty 의미. 첫 로드에도 같은 ghost를 쓰되 카피만 갈아끼운다. */
+function GhostPipeline({
+  title = "진행 중인 work 없음",
+  hint = "plan을 propose/accept하면 여기 다이어그램으로 나타납니다.",
+}: {
+  title?: string;
+  hint?: string;
+} = {}) {
   const lanes = ["SPEC", "PLAN", "TASK", "SESSION", "HANDOFF"];
+  // 컨테이너 aria-label 없음 — title/hint가 실제 텍스트로 읽히므로 별도 라벨은 이중 공지가 된다.
   return (
-    <div className="cr-ghost" aria-label="진행 중인 work 없음">
+    <div className="cr-ghost">
       <div className="cr-ghost-row" aria-hidden>
         {lanes.map((lane, i) => (
           <div key={lane} className="cr-ghost-lane">
@@ -160,10 +177,8 @@ function GhostPipeline() {
           </div>
         ))}
       </div>
-      <div className="cr-canvas-empty-title">진행 중인 work 없음</div>
-      <div className="cr-canvas-empty-hint">
-        plan을 propose/accept하면 여기 다이어그램으로 나타납니다.
-      </div>
+      <div className="cr-canvas-empty-title">{title}</div>
+      <div className="cr-canvas-empty-hint">{hint}</div>
     </div>
   );
 }

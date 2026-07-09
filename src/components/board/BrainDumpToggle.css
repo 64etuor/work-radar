@@ -31,11 +31,11 @@
   box-shadow: var(--bdt-shadow-rest);
   transform: translate(-50%, -50%);
   transition:
-    width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    padding 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 200ms ease,
-    border-color 200ms ease,
-    background-color 200ms ease;
+    width var(--wr-motion-slow) var(--wr-ease-spring),
+    padding var(--wr-motion-slow) var(--wr-ease-spring),
+    box-shadow var(--wr-motion-panel) var(--wr-ease-out),
+    border-color var(--wr-motion-panel) var(--wr-ease-out),
+    background-color var(--wr-motion-panel) var(--wr-ease-out);
   will-change: width;
 }
 .brain-dump-toggle[data-state="open"] {
@@ -114,8 +114,8 @@
   overflow: hidden;
   white-space: nowrap;
   transition:
-    opacity 200ms ease 80ms,
-    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms;
+    opacity var(--wr-motion-panel) var(--wr-ease-out) 80ms,
+    transform var(--wr-motion-slow) var(--wr-ease-spring) 60ms;
 }
 .brain-dump-toggle[data-state="open"] .bd-form {
   opacity: 1;

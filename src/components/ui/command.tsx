@@ -2,7 +2,7 @@ import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "./cn";
 
 /** shadcn/ui 스타일 cmdk 래퍼. Cohere 톤(white canvas, flat, hairline 보더)으로 스타일링. */
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
@@ -66,7 +66,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
   return (
     <CommandPrimitive.Item
       className={cn(
-        "relative flex cursor-default items-center gap-3 rounded-sm px-3 py-2.5 text-sm transition-colors duration-150 outline-none select-none",
+        "relative flex cursor-default items-center gap-3 rounded-sm px-3 py-2.5 text-sm transition-colors outline-none select-none",
         "data-[selected=true]:bg-wr-surface data-[selected=true]:text-wr-fg",
         "data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-40",
         className,

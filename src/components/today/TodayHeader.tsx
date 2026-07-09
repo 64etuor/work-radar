@@ -69,7 +69,7 @@ export function TodayHeader({ date, today, debt, onDateChange }: Props) {
   const isToday = date === today;
   return (
     <header className="today-head" data-tauri-drag-region>
-      <span className="today-title">Today</span>
+      <span className="typo-mono-heading">Today</span>
       <div className="today-nav">
         <Button
           variant="outline"

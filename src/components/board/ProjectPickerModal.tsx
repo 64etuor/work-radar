@@ -79,9 +79,7 @@ function ProjectPickerModalContent({
         aria-describedby={undefined}
         className="w-[min(440px,92vw)] max-w-none gap-3 p-5"
       >
-        <DialogTitle className="font-mono text-[13px] font-semibold tracking-[0.1em] uppercase">
-          프로젝트 선택: {state.label}
-        </DialogTitle>
+        <DialogTitle className="typo-mono-heading">프로젝트 선택: {state.label}</DialogTitle>
 
         <label className="cev-field">
           <span className="cev-lbl">이 카드를 등록할 프로젝트</span>
@@ -100,10 +98,10 @@ function ProjectPickerModalContent({
         </label>
 
         <div className="cev-actions">
-          <Button variant="outline" className="rounded-full" onClick={onClose}>
+          <Button variant="outline" size="pill" onClick={onClose}>
             취소
           </Button>
-          <Button className="rounded-full px-[22px]" onClick={submit} disabled={!selected}>
+          <Button size="pill" onClick={submit} disabled={!selected}>
             등록
           </Button>
         </div>

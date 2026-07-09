@@ -1,3 +1,5 @@
+import { EmptyState as UiEmptyState } from "@/components/ui/empty-state";
+
 import { currency } from "../bookkeepingFormat";
 import { reportBarPercent } from "../reports";
 
@@ -33,6 +35,7 @@ export function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** 가계부 카드용 empty — 공용 프리미티브에 위임하고 `bk-empty` geometry(배경/보더/패딩)만 유지. */
 export function EmptyState({ children }: { children: string }) {
-  return <div className="bk-empty typo-body-md">{children}</div>;
+  return <UiEmptyState className="bk-empty">{children}</UiEmptyState>;
 }

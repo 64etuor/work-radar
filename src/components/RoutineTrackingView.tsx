@@ -7,6 +7,7 @@ import type { LifeWheelTagConfig, RoutineFreq, RoutineTrackingItem } from "@/bin
 import { KindAreaChips } from "@/components/board/LifeWheelPalette";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 import { localToday, useLifeWheelTags, useRoutineTracking } from "@/lib/query";
 import { monthDay } from "@/lib/weekRange";
 
@@ -39,8 +40,7 @@ export function RoutineTrackingView() {
   return (
     <div className="rt">
       <header className="rt-head" data-tauri-drag-region>
-        <span className="rt-title">루틴 트래킹</span>
-        <div className="rt-tabs" />
+        <span className="typo-mono-heading">루틴 트래킹</span>
       </header>
 
       <div className="rt-scroll">
@@ -63,13 +63,17 @@ export function RoutineTrackingView() {
           ))}
         </div>
 
+        {/* 로딩 / 에러 / 빈 상태는 서로 다른 뜻이다 — 첫 fetch 중에 "루틴 없음" CTA를 띄우지 않는다. */}
+        {tracking.isLoading && <TrackingSkeleton />}
         {tracking.isError && (
           <div className="rt-hint">
             집계를 불러오지 못했습니다: {(tracking.error as Error).message}
           </div>
         )}
-        {!tracking.isError && items.length === 0 && (
-          <div className="rt-hint">활성 루틴이 없습니다. 보드에서 + 루틴으로 추가하세요.</div>
+        {!tracking.isLoading && !tracking.isError && items.length === 0 && (
+          <EmptyState className="rt-hint">
+            활성 루틴이 없습니다. 보드에서 + 루틴으로 추가하세요.
+          </EmptyState>
         )}
 
         <div className="trk-list">
@@ -78,6 +82,17 @@ export function RoutineTrackingView() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 첫 로드 스켈레톤 — trk-card 리듬을 그대로 흉내내 레이아웃 점프를 없앤다(shimmer는 reduced-motion 게이트). */
+function TrackingSkeleton() {
+  return (
+    <div className="rt-skel" aria-label="루틴 트래킹 불러오는 중" aria-busy="true">
+      <div className="wr-skeleton" />
+      <div className="wr-skeleton" />
+      <div className="wr-skeleton" />
     </div>
   );
 }

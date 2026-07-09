@@ -15,7 +15,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 22px;
+  padding: 14px 22px;
   border-bottom: 1px solid var(--color-wr-border-light);
 }
 /* 타이틀 그룹 — 남는 가로를 채워(flex:1) 컨트롤을 우측으로 밀고, 이 영역이 창 드래그 핸들. */
@@ -25,9 +25,6 @@
   gap: 10px;
   flex: 1;
   min-width: 0;
-}
-.skl-title {
-  font: 600 14px var(--font-sans);
 }
 .skl-count {
   font: 600 11px var(--font-mono);
@@ -103,8 +100,8 @@
   cursor: pointer;
   padding: 6px 10px;
   transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out);
 }
 .skl-env[draggable="true"] {
   cursor: grab;
@@ -206,8 +203,8 @@
   padding: 12px 14px;
   color: var(--color-wr-fg);
   transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
+    border-color var(--wr-motion-fast) var(--wr-ease-out),
+    background var(--wr-motion-fast) var(--wr-ease-out);
 }
 .skl-card:hover {
   background: var(--color-wr-surface);
@@ -310,12 +307,10 @@
   -webkit-line-clamp: 1;
 }
 
+/* 타이포/색은 ui/empty-state 프리미티브 소유 — 여기는 폭/여백 만. */
 .skl-empty {
-  font: 400 13px var(--font-sans);
-  color: var(--color-wr-subtle);
   max-width: 520px;
   margin: 40px auto 0;
-  text-align: center;
 }
 
 /* ── Sheet(슬라이드오버) 안의 편집기/뷰어 ── */

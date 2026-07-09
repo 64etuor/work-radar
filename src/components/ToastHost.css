@@ -12,7 +12,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 200;
+  z-index: var(--wr-z-toast);
   max-width: 420px;
   pointer-events: none;
 }
@@ -81,7 +81,13 @@
   padding: 3px 10px;
   font: 600 12px var(--font-sans);
   line-height: 1.4;
-  transition: background var(--wr-motion-fast);
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
+}
+
+/* 키보드 포커스 — 다크 토스트 표면 위에서도 보이는 Focus Blue 링. */
+.toast-btn:focus-visible {
+  outline: 2px solid var(--color-wr-focus);
+  outline-offset: 1px;
 }
 
 .toast-error .toast-btn,

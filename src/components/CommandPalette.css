@@ -8,7 +8,7 @@
 
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--wr-z-command);
   background: var(--cmdk-scrim);
   display: flex;
   align-items: flex-start;

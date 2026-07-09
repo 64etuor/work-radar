@@ -21,9 +21,9 @@
   color: var(--color-wr-muted);
   cursor: pointer;
   transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    color var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .skl-tagpill:hover {

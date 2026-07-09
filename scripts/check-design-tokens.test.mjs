@@ -60,6 +60,29 @@ test("R2 detects raw color utils and hex classes", async () => {
   assert.deepEqual(rules(v.filter((x) => x.rule === "R2")), ["R2:bg-[#ffffff]", "R2:text-black"]);
 });
 
+test("R2 catches hex embedded in var() fallback; token-only var() passes", async () => {
+  const root = await makeFixture({
+    "src/f.tsx": [
+      'export const F = () => <span className="text-[color:var(--color-wr-accent,#2d6cdf)]">x</span>;',
+      'export const G = () => <span className="text-[color:var(--color-wr-accent)]">ok</span>;',
+    ].join("\n"),
+  });
+  const v = collectViolations(root);
+  assert.deepEqual(rules(v.filter((x) => x.rule === "R2")), [
+    "R2:text-[color:var(--color-wr-accent,#2d6cdf)]",
+  ]);
+});
+
+test("R2 does not flag url(#fragment) ids that look like hex", async () => {
+  const root = await makeFixture({
+    "src/g.tsx": [
+      'export const H = () => <svg className="fill-[url(#fade01)]" />;',
+      "export const I = () => <div className=\"bg-[url('/sprite.svg#abc123')]\">x</div>;",
+    ].join("\n"),
+  });
+  assert.deepEqual(rules(collectViolations(root).filter((x) => x.rule === "R2")), []);
+});
+
 import { evaluate, fingerprint } from "./check-design-tokens.mjs";
 
 test("fingerprint excludes line number, keys on rule|file|token", () => {

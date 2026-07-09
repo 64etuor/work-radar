@@ -16,6 +16,7 @@ const TYPO_SUFFIXES = [
   "label-sm",
   "caption-sm",
   "mono-label",
+  "mono-heading",
   "micro",
 ];
 

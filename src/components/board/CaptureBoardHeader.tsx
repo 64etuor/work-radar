@@ -58,7 +58,7 @@ export function CaptureBoardHeader({
 }) {
   return (
     <div className="cb-head">
-      <span className="mark">◎ Work Radar / Capture</span>
+      <span className="typo-mono-heading">◎ Work Radar / Capture</span>
       <div className="cb-head-center">
         <SprintTimer />
       </div>

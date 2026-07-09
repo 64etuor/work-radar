@@ -15,7 +15,9 @@ const SKIP = new Set(["node_modules", "dist", "build", "target", ".next"]);
 const STATUS_EMOJI = ["🔴", "🟢", "🟡", "🟠", "🔵", "⚪", "⚫", "✅", "❌", "⚠"];
 // R2: 토큰 대체 가능한 raw 색 유틸 + arbitrary hex 클래스.
 const RAW_COLOR_RE = /\b(bg-white|text-white|bg-black|text-black)\b/g;
-const HEX_CLASS_RE = /\b(?:text|bg|border|ring|fill|stroke)-\[#[0-9a-fA-F]{3,8}\]/g;
+// arbitrary 값 내부 어디든 hex literal이 있으면 잡는다 — text-[#fff]뿐 아니라
+// text-[color:var(--token,#hex)] 같은 폴백 임베딩도 대상(폴백이 토큰 실값과 어긋나는 사고 방지).
+const HEX_CLASS_RE = /\b(?:text|bg|border|ring|fill|stroke)-\[[^\]]*#[0-9a-fA-F]{3,8}[^\]]*\]/g;
 // R3: arbitrary 타이포 축. text-[<len>]는 단위(px/rem/em) 필수 → text-[#color]는 안 잡힘(=R2).
 const ARB_TYPO_RE = /\b(?:text-\[[0-9.]+(?:px|rem|em)\]|leading-\[[^\]]+\]|tracking-\[[^\]]+\])/g;
 
@@ -52,6 +54,8 @@ function pushMatches(re, rule, line, relFile, ln, out, ignore) {
   re.lastIndex = 0;
   let m;
   while ((m = re.exec(line))) {
+    // url(#fragment) / url('…#id')의 # + hex-알파벳 fragment id는 색이 아니다 — R2 오탐 방지.
+    if (rule === "R2" && m[0].includes("url(")) continue;
     if (isIgnored(rule, relFile, m[0], ignore)) continue;
     out.push({ rule, file: relFile, line: ln, token: m[0], snippet: line.trim() });
   }

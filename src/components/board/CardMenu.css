@@ -10,6 +10,8 @@
   border-radius: var(--cb-r-md);
   box-shadow: var(--cbm-shadow);
   padding: 6px;
+  transform-origin: top left;
+  animation: wr-popover-in var(--wr-motion-fast) var(--wr-ease-out) both;
 }
 .cb-card-menu button {
   display: flex;
@@ -24,6 +26,7 @@
   border-radius: var(--cb-r-sm);
   font: 400 13px var(--font-sans);
   color: var(--color-wr-fg);
+  transition: background var(--wr-motion-fast) var(--wr-ease-out);
 }
 .cb-card-menu button:hover {
   background: var(--color-wr-surface);
@@ -43,4 +46,10 @@
 }
 .cb-card-menu button.danger:hover {
   background: var(--color-wr-danger-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-card-menu {
+    animation: none;
+  }
 }

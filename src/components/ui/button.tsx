@@ -21,6 +21,9 @@ const buttonVariants = cva(
         default: "h-9 px-4 py-2 rounded-md",
         sm: "h-8 px-3 text-xs rounded-md",
         pill: "h-9 px-5 rounded-full",
+        // 앱 셸의 지배적 pill 실사용(h-8 + 12px 라벨)을 프리미티브로 승격 —
+        // 소비처의 `rounded-full text-[12px]` 수기 조합을 대체한다.
+        "pill-sm": "h-8 px-3.5 text-xs rounded-full",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

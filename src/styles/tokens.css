@@ -139,10 +139,17 @@
   --wr-motion-panel: 0.22s; /* 모달/팔레트/토스트 출현 */
   --wr-motion-drawer: 0.32s; /* 드로어/시트 출현 */
   --wr-motion-space: 0.42s; /* 화면/워크스페이스 전환 */
+  --wr-motion-shimmer: 1.3s; /* 스켈레톤 shimmer 루프 주기(로딩 플레이스홀더 전용) */
   --wr-ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* 표준 material out */
   --wr-ease-in: cubic-bezier(0.7, 0, 0.84, 0); /* 빠른 이탈 */
   --wr-ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1); /* 표준 스프링 커브 */
   --wr-ease-space: cubic-bezier(0.22, 1, 0.36, 1); /* macOS Spaces에 가까운 감속 */
+  --wr-ease-loop: ease-in-out; /* 대칭 무한 루프(shimmer/pulse) 전용 */
+
+  /* Tailwind bare transition-* 유틸의 기본값을 캐논 토큰에 정렬 — duration-x / ease-x 미지정 시
+     Tailwind 내장 150ms/material ease 대신 이 토큰이 적용된다(프리미티브 hover 전반). */
+  --default-transition-duration: var(--wr-motion-fast);
+  --default-transition-timing-function: var(--wr-ease-out);
 
   /* Elevation / shadow scale — raw shadow values stay behind semantic tokens. */
   --wr-shadow-hairline: 0 1px 0 rgb(10 14 30 / 0.02);
@@ -151,6 +158,11 @@
   --wr-shadow-lg: 0 24px 60px rgb(10 14 30 / 0.18);
   --wr-shadow-overlay: 0 24px 60px rgb(10 14 30 / 0.28);
   --wr-shadow-toast: 0 2px 8px rgb(10 14 30 / 0.12);
+  /* Tailwind shadow-md/lg 유틸을 캐논 elevation에 별칭 — 오버레이 프리미티브(dialog/sheet/
+     popover/tooltip/select)가 Tailwind 내장 그림자 대신 --wr-shadow-*를 탄다.
+     shadow-sm은 의도적으로 별칭하지 않는다(wr-shadow-sm은 카드 리프트 — 소형 컨트롤에 과함). */
+  --shadow-md: var(--wr-shadow-md);
+  --shadow-lg: var(--wr-shadow-lg);
 
   /* Z-index / overlay scale — use these before ad-hoc z values in shared CSS. */
   --wr-z-base: 0;

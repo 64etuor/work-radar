@@ -50,7 +50,7 @@
   cursor: pointer;
   color: var(--color-wr-fg);
   border-radius: var(--radius-sm);
-  transition: background-color 0.15s ease;
+  transition: background-color var(--wr-motion-fast) var(--wr-ease-out);
 }
 .sprint-timer.has-goal .sprint-meter {
   width: 520px;
@@ -72,12 +72,12 @@
 /* opening: 미터는 위로 빠진다(slideOutUp). 에디터는 동시에 아래에서 올라옴. */
 .sprint-meter.is-leaving {
   pointer-events: none;
-  animation: sprint-meter-slide-out-up 0.38s cubic-bezier(0.32, 0.72, 0.24, 1) forwards;
+  animation: sprint-meter-slide-out-up var(--wr-motion-drawer) var(--wr-ease-space) forwards;
 }
 /* closing: 에디터는 아래로 사라지고, 미터가 위에서 내려와 자리를 다시 채운다. */
 .sprint-meter.is-entering {
   pointer-events: none;
-  animation: sprint-meter-slide-in-down 0.34s cubic-bezier(0.32, 0.72, 0.24, 1) both;
+  animation: sprint-meter-slide-in-down var(--wr-motion-drawer) var(--wr-ease-space) both;
 }
 .sprint-meter-label {
   display: inline-flex;
@@ -129,7 +129,7 @@
   height: 100%;
   background: var(--color-wr-near-black);
   border-radius: inherit;
-  transition: width 0.4s ease;
+  transition: width var(--wr-motion-space) var(--wr-ease-out);
 }
 /* Empty — 라벨 톤 다운 + 점선 트랙. */
 .sprint-meter.is-empty .sprint-meter-tag,
@@ -159,11 +159,11 @@
 /* 에디터는 의미상 헤더 아래에 숨겨져 있다 — 클릭 시 슬롯 안으로 위로 슬라이드인.
  * 닫힐 때 다시 아래로 슬라이드아웃해 헤더 아래로 사라짐. */
 .sprint-inline-editor.is-opening {
-  animation: sprint-editor-slide-in-up 0.38s cubic-bezier(0.32, 0.72, 0.24, 1) both;
+  animation: sprint-editor-slide-in-up var(--wr-motion-drawer) var(--wr-ease-space) both;
 }
 .sprint-inline-editor.is-closing {
   pointer-events: none;
-  animation: sprint-editor-slide-out-down 0.34s cubic-bezier(0.32, 0.72, 0.24, 1) forwards;
+  animation: sprint-editor-slide-out-down var(--wr-motion-drawer) var(--wr-ease-space) forwards;
 }
 .sprint-editor-title {
   justify-self: start;
@@ -401,5 +401,16 @@
   .sprint-stepper,
   .sprint-pop-actions {
     justify-content: flex-end;
+  }
+}
+
+/* reduced-motion: 슬라이드 전환을 즉시 종료 상태로 점프시킨다. animation: none이 아니라
+ * 1ms인 이유 — forwards/both fill이 종료 상태를 유지해야 meter/editor 겹침이 생기지 않는다. */
+@media (prefers-reduced-motion: reduce) {
+  .sprint-meter.is-leaving,
+  .sprint-meter.is-entering,
+  .sprint-inline-editor.is-opening,
+  .sprint-inline-editor.is-closing {
+    animation-duration: 1ms;
   }
 }

@@ -70,6 +70,7 @@ export function JobsView() {
         />
         <JobList
           runs={list}
+          isLoading={runs.isLoading}
           openLogIds={openLogIds}
           logs={logs}
           onToggleLog={toggleLog}

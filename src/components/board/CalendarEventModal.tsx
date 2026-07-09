@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -194,9 +195,7 @@ function CalendarEventModalContent({
         aria-describedby={undefined}
         className="max-h-[78vh] w-[min(440px,92vw)] max-w-none gap-3 overflow-y-auto p-5"
       >
-        <DialogTitle className="font-mono text-[13px] font-semibold tracking-[0.1em] uppercase">
-          캘린더에 등록
-        </DialogTitle>
+        <DialogTitle className="typo-mono-heading">캘린더에 등록</DialogTitle>
 
         <label className="cev-field" htmlFor={titleId}>
           <span className="cev-lbl">제목</span>
@@ -244,9 +243,9 @@ function CalendarEventModalContent({
         <label className="cev-field" htmlFor={calendarFieldId}>
           <span className="cev-lbl">캘린더</span>
           {noCalendars ? (
-            <div className="cev-empty">
+            <EmptyState className="cev-empty">
               선택된 캘린더가 없습니다. 설정에서 Google 계정 연결 후 캘린더를 선택하세요.
-            </div>
+            </EmptyState>
           ) : (
             <Select
               value={calendarId}
@@ -281,11 +280,11 @@ function CalendarEventModalContent({
         {create.isError && <div className="cev-err">{String(create.error)}</div>}
 
         <div className="cev-actions">
-          <Button variant="outline" className="rounded-full" onClick={onClose}>
+          <Button variant="outline" size="pill" onClick={onClose}>
             취소
           </Button>
           <Button
-            className="rounded-full px-[22px]"
+            size="pill"
             onClick={submit}
             disabled={
               create.isPending ||

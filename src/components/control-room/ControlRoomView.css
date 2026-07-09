@@ -58,8 +58,8 @@
   border-radius: 999px;
   background: var(--color-background);
   transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+    border-color var(--wr-motion-fast) var(--wr-ease-out),
+    background var(--wr-motion-fast) var(--wr-ease-out);
 }
 .cr-usage-chip:hover {
   background: color-mix(in srgb, currentcolor 4%, transparent);
@@ -126,7 +126,7 @@
   flex: 1;
   border-radius: 1px;
   background: color-mix(in srgb, currentcolor 16%, transparent);
-  transition: background 0.25s ease;
+  transition: background var(--wr-motion-slow) var(--wr-ease-out);
 }
 .cr-usage-bar .cr-usage-seg[data-filled] {
   background: var(--cr-active);
@@ -181,9 +181,8 @@
     justify-self: start;
   }
 }
+/* 타이포/색은 ui/empty-state 프리미티브 소유 — 여기는 padding 만. */
 .cr-empty {
-  color: var(--cr-muted);
-  font-size: var(--text-body-md);
   padding: 0.5rem 0;
 }
 
@@ -284,9 +283,9 @@
   font-weight: 500;
   cursor: pointer;
   transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
+    color var(--wr-motion-fast) var(--wr-ease-out),
+    background var(--wr-motion-fast) var(--wr-ease-out),
+    border-color var(--wr-motion-fast) var(--wr-ease-out);
 }
 .cr-tab:hover {
   color: var(--color-foreground);
@@ -479,9 +478,9 @@
   color: var(--cr-muted);
   cursor: pointer;
   transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease;
+    border-color var(--wr-motion-fast) var(--wr-ease-out),
+    color var(--wr-motion-fast) var(--wr-ease-out),
+    background var(--wr-motion-fast) var(--wr-ease-out);
 }
 .cr-vital--static {
   cursor: default;
@@ -558,9 +557,9 @@
   cursor: pointer;
   box-sizing: border-box;
   transition:
-    border-color 0.15s ease,
-    opacity 0.15s ease,
-    box-shadow 0.15s ease;
+    border-color var(--wr-motion-fast) var(--wr-ease-out),
+    opacity var(--wr-motion-fast) var(--wr-ease-out),
+    box-shadow var(--wr-motion-fast) var(--wr-ease-out);
 }
 .cr-flow-node[data-tone="done"] {
   border-color: var(--cr-done);

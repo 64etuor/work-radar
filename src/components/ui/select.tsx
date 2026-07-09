@@ -42,7 +42,7 @@ export function SelectContent({
         position="popper"
         sideOffset={4}
         className={cn(
-          "border-border bg-popover text-popover-foreground z-50 min-w-[8rem] overflow-hidden rounded-md border shadow-md",
+          "border-border bg-popover text-popover-foreground wr-popover-content z-50 min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-hidden rounded-md border shadow-md",
           className,
         )}
         {...props}

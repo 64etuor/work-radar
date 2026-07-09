@@ -56,6 +56,17 @@
   text-transform: uppercase;
 }
 
+/* 뷰 헤더 타이틀 정본(13px) — .pr-title/.jobs-title/.wk-title/.wt-title/.cb .mark 등에
+ * 복붙돼 있던 `600 13px mono / 0.12em / uppercase` 레시피의 단일 유틸. */
+@utility typo-mono-heading {
+  font-family: var(--font-mono);
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-mono-label);
+  text-transform: uppercase;
+}
+
 @utility typo-micro {
   font-size: var(--text-micro);
   line-height: var(--leading-micro);

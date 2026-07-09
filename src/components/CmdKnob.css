@@ -35,8 +35,8 @@
   color: var(--color-wr-muted);
   opacity: 0.35;
   transition:
-    opacity 0.12s ease-out,
-    color 0.12s ease-out;
+    opacity var(--wr-motion-fast) var(--wr-ease-out),
+    color var(--wr-motion-fast) var(--wr-ease-out);
 }
 .cmd-knob-guide[data-enabled] {
   opacity: 0.7;
@@ -87,7 +87,7 @@
   cursor: grab;
   pointer-events: auto;
   transform: translate(-50%, -50%);
-  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1); /* 스프링백 */
+  transition: transform var(--wr-motion-drawer) var(--wr-ease-space); /* 스프링백 */
 }
 .cmd-knob-stick[data-dragging] {
   cursor: grabbing;

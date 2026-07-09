@@ -1,7 +1,7 @@
 import { Popover as PopoverPrimitive } from "radix-ui";
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "./cn";
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
@@ -34,7 +34,9 @@ function PopoverContent({
           onEscapeKeyDown?.(e);
         }}
         className={cn(
-          "bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 border-border z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-md border p-4 shadow-md outline-hidden",
+          // enter/exit 모션은 wr-popover-content(motion.css) — tw-animate 플러그인 미도입이라
+          // shadcn 기본 animate-in/out 클래스는 no-op이어서 wr 배선으로 대체했다.
+          "bg-popover text-popover-foreground border-border wr-popover-content z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-md border p-4 shadow-md outline-hidden",
           className,
         )}
         {...props}
@@ -51,14 +53,14 @@ function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="popover-header"
-      className={cn("flex flex-col gap-1 text-sm", className)}
+      className={cn("typo-body-md flex flex-col gap-1", className)}
       {...props}
     />
   );
 }
 
 function PopoverTitle({ className, ...props }: React.ComponentProps<"h2">) {
-  return <div data-slot="popover-title" className={cn("font-medium", className)} {...props} />;
+  return <div data-slot="popover-title" className={cn("typo-body-strong", className)} {...props} />;
 }
 
 function PopoverDescription({ className, ...props }: React.ComponentProps<"p">) {

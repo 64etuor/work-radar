@@ -135,9 +135,10 @@
 
 .news-hot {
   flex-shrink: 0;
-  font-size: 12px;
-  line-height: 1;
-  filter: saturate(1.1);
+  display: inline-flex;
+  align-items: center;
+  /* 핫 마커 = 캐논 coral — 색-단독 의미 금지라 TSX 쪽 aria-label 병기가 전제. */
+  color: var(--color-wr-coral);
 }
 
 .news-title {
@@ -146,10 +147,13 @@
   text-overflow: ellipsis;
   font-size: 13px;
   color: var(--color-wr-fg);
-  transition: color 120ms ease;
+  transition: color var(--wr-motion-fast) var(--wr-ease-out);
 }
 
 .news-cmt {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 11px;
   font-family: var(--font-mono, ui-monospace, monospace);
   color: var(--color-wr-subtle);

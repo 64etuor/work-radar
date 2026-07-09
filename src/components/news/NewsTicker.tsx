@@ -7,6 +7,7 @@
 import "./NewsTicker.css";
 
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { Flame, MessageCircle } from "lucide-react";
 import { type CSSProperties, useLayoutEffect, useRef } from "react";
 
 import type { NewsItem } from "@/bindings";
@@ -136,11 +137,16 @@ function NewsTickerItem({
       </span>
       {hot && (
         <span className="news-hot" aria-label="핫 트렌딩" title="핫 트렌딩">
-          🔥
+          <Flame size={12} strokeWidth={2} aria-hidden />
         </span>
       )}
       <span className="news-title">{item.title}</span>
-      {item.commentCount != null && <span className="news-cmt">💬 {item.commentCount}</span>}
+      {item.commentCount != null && (
+        <span className="news-cmt">
+          <MessageCircle size={11} strokeWidth={2} aria-hidden />
+          {item.commentCount}
+        </span>
+      )}
     </button>
   );
 }

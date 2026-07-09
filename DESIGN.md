@@ -157,16 +157,17 @@ Cohere does not use gradients as a generic UI fill. Gradients and color fields a
 
 The dense desktop shell runs **tighter and heavier** than the marketing scale above — this is intentional editorial density for an information-dense command surface, and it overrides the "avoid heavy bold" principle _for app-shell UI only_ (marketing/display type still follows the Hierarchy table above). These roles are codified as `typo-*` utilities in `src/styles/typography.css`, whose values reference `--text-*`/`--leading-*`/`--tracking-*` tokens in `src/styles/tokens.css`.
 
-| Utility            |  px | weight | line | tracking | Use                                                                                   |
-| ------------------ | --: | -----: | ---: | -------: | ------------------------------------------------------------------------------------- |
-| `typo-title-md`    |  17 |    600 | 1.25 |  -0.01em | Card/section titles (project cards).                                                  |
-| `typo-title-sm`    |  15 |    600 |  1.3 |  -0.01em | Secondary titles.                                                                     |
-| `typo-body-md`     |  13 |    400 |  1.4 |        0 | Default dense body.                                                                   |
-| `typo-body-strong` |  13 |    600 |  1.4 |        0 | Emphasized body / inline headers.                                                     |
-| `typo-label-sm`    |  12 |    500 |  1.4 |        0 | Form labels, compact UI.                                                              |
-| `typo-caption-sm`  |  11 |    400 |  1.4 |        0 | Metadata, captions.                                                                   |
-| `typo-mono-label`  |  11 |    600 |  1.4 |   0.12em | Uppercase mono section markers (`font-mono`). Size = `var(--text-caption-sm)` = 11px. |
-| `typo-micro`       |  10 |    400 |  1.4 |        0 | Microcopy, footers.                                                                   |
+| Utility             |  px | weight | line | tracking | Use                                                                                   |
+| ------------------- | --: | -----: | ---: | -------: | ------------------------------------------------------------------------------------- |
+| `typo-title-md`     |  17 |    600 | 1.25 |  -0.01em | Card/section titles (project cards).                                                  |
+| `typo-title-sm`     |  15 |    600 |  1.3 |  -0.01em | Secondary titles.                                                                     |
+| `typo-body-md`      |  13 |    400 |  1.4 |        0 | Default dense body.                                                                   |
+| `typo-body-strong`  |  13 |    600 |  1.4 |        0 | Emphasized body / inline headers.                                                     |
+| `typo-label-sm`     |  12 |    500 |  1.4 |        0 | Form labels, compact UI.                                                              |
+| `typo-caption-sm`   |  11 |    400 |  1.4 |        0 | Metadata, captions.                                                                   |
+| `typo-mono-label`   |  11 |    600 |  1.4 |   0.12em | Uppercase mono section markers (`font-mono`). Size = `var(--text-caption-sm)` = 11px. |
+| `typo-mono-heading` |  13 |    600 |  1.4 |   0.12em | Uppercase mono **view-header title** (`font-mono`) — 셸 뷰 헤더 타이틀 단일 정본.     |
+| `typo-micro`        |  10 |    400 |  1.4 |        0 | Microcopy, footers.                                                                   |
 
 Rule: author with the `typo-*` utility, never re-combine raw `text-/font-/leading-/tracking-` for these roles. `typo-*` sets type only; pair with a color utility (`text-foreground`, `text-muted-foreground`, …). See `docs/areas/typography.md`.
 
@@ -271,14 +272,15 @@ Images are not decorative backdrops for text except in CTA bands. Most imagery s
 
 ### Duration Tokens (`--wr-motion-*`)
 
-| Token                | Value   | Use                                          |
-| -------------------- | ------- | -------------------------------------------- |
-| `--wr-motion-fast`   | `0.12s` | Hover states, toggles, quick feedback        |
-| `--wr-motion-base`   | `0.18s` | View transitions, standard element changes   |
-| `--wr-motion-slow`   | `0.28s` | Slide-in popovers, slower reveal transitions |
-| `--wr-motion-panel`  | `0.22s` | Modal, palette, and toast appearance         |
-| `--wr-motion-drawer` | `0.32s` | Drawer / sheet appearance                    |
-| `--wr-motion-space`  | `0.42s` | Screen / workspace-level transitions         |
+| Token                 | Value   | Use                                                |
+| --------------------- | ------- | -------------------------------------------------- |
+| `--wr-motion-fast`    | `0.12s` | Hover states, toggles, quick feedback              |
+| `--wr-motion-base`    | `0.18s` | View transitions, standard element changes         |
+| `--wr-motion-slow`    | `0.28s` | Slide-in popovers, slower reveal transitions       |
+| `--wr-motion-panel`   | `0.22s` | Modal, palette, and toast appearance               |
+| `--wr-motion-drawer`  | `0.32s` | Drawer / sheet appearance                          |
+| `--wr-motion-space`   | `0.42s` | Screen / workspace-level transitions               |
+| `--wr-motion-shimmer` | `1.3s`  | 스켈레톤 shimmer 루프 주기(로딩 플레이스홀더 전용) |
 
 ### Easing Tokens (`--wr-ease-*`)
 
@@ -288,6 +290,7 @@ Images are not decorative backdrops for text except in CTA bands. Most imagery s
 | `--wr-ease-in`     | `cubic-bezier(0.7, 0, 0.84, 0)`  | Fast exit / dismissal                                    |
 | `--wr-ease-spring` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | Standard spring curve (capture-panel pop)                |
 | `--wr-ease-space`  | `cubic-bezier(0.22, 1, 0.36, 1)` | macOS Spaces-like deceleration for workspace transitions |
+| `--wr-ease-loop`   | `ease-in-out`                    | 대칭 무한 루프(shimmer/pulse) 전용                       |
 
 ## Components
 

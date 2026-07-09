@@ -61,30 +61,15 @@ export function BackupPanel({ onDone }: { onDone: () => void }) {
             <span className="skl-desc">{b.skillCount}개 스킬</span>
             {confirmId === b.id ? (
               <span className="skl-actions">
-                <Button
-                  size="sm"
-                  className="rounded-full"
-                  onClick={() => doRestore(b.id)}
-                  disabled={restore.isPending}
-                >
+                <Button size="pill-sm" onClick={() => doRestore(b.id)} disabled={restore.isPending}>
                   {restore.isPending ? "복원 중…" : "정말 복원"}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-full"
-                  onClick={() => setConfirmId(null)}
-                >
+                <Button size="pill-sm" variant="outline" onClick={() => setConfirmId(null)}>
                   취소
                 </Button>
               </span>
             ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-full"
-                onClick={() => setConfirmId(b.id)}
-              >
+              <Button size="pill-sm" variant="outline" onClick={() => setConfirmId(b.id)}>
                 복원…
               </Button>
             )}

@@ -767,11 +767,11 @@
   border-top: 0;
 }
 
+/* 타이포/색은 ui/empty-state 프리미티브 소유 — 여기는 geometry 만. */
 .bk-empty {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--bk-stone);
-  color: var(--bk-subtle);
   padding: var(--wr-density-md) var(--wr-density-xl);
   text-align: center;
 }

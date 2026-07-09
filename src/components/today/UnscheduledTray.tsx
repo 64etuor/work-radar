@@ -13,6 +13,7 @@ import {
 import { InboxColumn } from "@/components/inbox/InboxColumn";
 import { PostitCard, type PostitQuadrant } from "@/components/postit/PostitCard";
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
+import { EmptyState } from "@/components/ui/empty-state";
 import { calendarColorStyle } from "@/lib/projectCalendarColor";
 import { fmtMinutes, todayAgeDays } from "@/lib/timeTotals";
 
@@ -262,7 +263,9 @@ export function UnscheduledTray({
         </ul>
         {(empty || allDayEvents.length > 0) && (
           <div className="today-tray-extras">
-            {empty && <div className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</div>}
+            {empty && (
+              <EmptyState className="today-tray-empty">모든 항목이 시간축에 배치됐어요.</EmptyState>
+            )}
             {allDayEvents.length > 0 && (
               <div className="today-tray-section">
                 <button

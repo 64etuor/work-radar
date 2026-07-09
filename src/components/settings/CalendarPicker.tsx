@@ -111,7 +111,7 @@ export function CalendarPicker({
               </span>
               <span className="min-w-0 flex-1 truncate">{c.summary}</span>
               {c.primary && (
-                <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px]">
+                <span className="bg-muted text-muted-foreground typo-micro shrink-0 rounded px-1.5 py-0.5">
                   Google 기본
                 </span>
               )}

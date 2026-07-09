@@ -39,7 +39,7 @@ export function WorktreeHeader({
 }) {
   return (
     <header className="wt-head" data-tauri-drag-region>
-      <span className="wt-title">Worktree Diff</span>
+      <span className="typo-mono-heading">Worktree Diff</span>
       <Select
         value={projectFilter ?? PROJECT_ALL}
         onValueChange={(v) => onProjectFilterChange(v === PROJECT_ALL ? null : v)}
@@ -64,8 +64,8 @@ export function WorktreeHeader({
       </Select>
       <Button
         variant={graph.active ? "default" : "outline"}
-        size="sm"
-        className="gap-1.5 rounded-full text-[12px]"
+        size="pill-sm"
+        className="gap-1.5"
         onClick={graph.onToggle}
         disabled={!graph.enabled}
         title={graph.enabled ? "커밋 그래프 보기" : "worktree 선택 필요"}
@@ -75,8 +75,8 @@ export function WorktreeHeader({
       </Button>
       <Button
         variant={cleanup.active ? "default" : "outline"}
-        size="sm"
-        className="gap-1.5 rounded-full text-[12px]"
+        size="pill-sm"
+        className="gap-1.5"
         onClick={cleanup.onToggle}
         disabled={!cleanup.enabled}
         title="브랜치/워크트리 정리"

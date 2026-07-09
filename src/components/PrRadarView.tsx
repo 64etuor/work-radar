@@ -7,6 +7,7 @@ import { lazy, Suspense } from "react";
 import type { CiStatus, PrRadarItem, ReadinessBucket } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { BucketChartDatum } from "@/lib/prRadarChart";
 import {
   fetchPrRadar,
@@ -159,7 +160,7 @@ export function PrRadarView() {
   return (
     <div className="pr">
       <header className="pr-head" data-tauri-drag-region>
-        <span className="pr-title">PR Radar</span>
+        <span className="typo-mono-heading">PR Radar</span>
         <span className="pr-poll">
           <RefreshCw className={cn("size-3.5", isFetching && "pr-spin")} />
           {isFetching ? "새로고침 중…" : `${settings.data?.pollIntervalMinutes ?? 10}분 폴링`}
@@ -168,9 +169,9 @@ export function PrRadarView() {
 
       <div className="pr-scroll">
         {noProjects && (
-          <div className="pr-empty">
+          <EmptyState className="pr-empty">
             프로젝트가 없습니다. 설정에서 GitHub 토큰·레포가 있는 프로젝트를 추가하세요.
-          </div>
+          </EmptyState>
         )}
         {errors.length > 0 && (
           <div className="pr-err">일부 폴링 실패: {errors.map((e) => e.message).join(" · ")}</div>
@@ -185,9 +186,9 @@ export function PrRadarView() {
           <div className="pr-err">AI escalation 실패: {(aiEscalation.error as Error).message}</div>
         )}
         {empty && !noProjects && (
-          <div className="pr-empty">
+          <EmptyState className="pr-empty">
             표시할 PR이 없습니다. enabled GitHub 레포의 열린 PR이 여기 모입니다.
-          </div>
+          </EmptyState>
         )}
 
         {!noProjects && items.length > 0 && (
@@ -356,8 +357,8 @@ function PrRow({
         {canDraft && (
           <Button
             variant="outline"
-            size="sm"
-            className="gap-1 rounded-full text-[11px] text-[color:var(--color-wr-action-blue,#2d6cdf)]"
+            size="pill-sm"
+            className="gap-1 text-[color:var(--color-wr-action-blue)]"
             disabled={!codexReady || drafting}
             title={
               codexReady
@@ -373,8 +374,8 @@ function PrRow({
         {canTriage && (
           <Button
             variant="outline"
-            size="sm"
-            className="gap-1 rounded-full text-[11px] text-[color:var(--color-wr-action-blue,#2d6cdf)]"
+            size="pill-sm"
+            className="gap-1 text-[color:var(--color-wr-action-blue)]"
             disabled={!codexReady || triaging}
             title={
               codexReady
@@ -390,8 +391,8 @@ function PrRow({
         {canEscalate && (
           <Button
             variant="outline"
-            size="sm"
-            className="gap-1 rounded-full text-[11px] text-[color:var(--color-wr-coral)]"
+            size="pill-sm"
+            className="gap-1 text-[color:var(--color-wr-coral)]"
             disabled={!codexReady || escalating}
             title={
               codexReady
@@ -406,8 +407,8 @@ function PrRow({
         )}
         <Button
           variant="outline"
-          size="sm"
-          className="ml-auto gap-1 rounded-full text-[11px]"
+          size="pill-sm"
+          className="ml-auto gap-1"
           onClick={() => void openExternal(item.url)}
         >
           <ExternalLink className="size-3.5" />

@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useState } from "react";
 
 import type { FilterMode, KeywordFilter } from "@/bindings";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,10 +20,7 @@ function ChipList({ list, onRemove }: { list: KeywordFilter[]; onRemove: (id: nu
   return (
     <div className="flex flex-wrap gap-1.5">
       {list.map((f) => (
-        <span
-          key={f.id}
-          className="border-border bg-muted inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs"
-        >
+        <Badge key={f.id} variant="outline" size="sm" className="bg-muted gap-1">
           {f.keyword}
           <button
             type="button"
@@ -32,7 +30,7 @@ function ChipList({ list, onRemove }: { list: KeywordFilter[]; onRemove: (id: nu
           >
             <X className="size-3" />
           </button>
-        </span>
+        </Badge>
       ))}
     </div>
   );
