@@ -1,0 +1,298 @@
+src/components/SprintTimer.css
+  s_2badbffcbb4ddb::t_cfe68839876450 406-416
+  s_2badbffcbb4ddb::t_5f263fde9ce61d 53
+  s_2badbffcbb4ddb::t_4fc25f006bc6f1 132
+  s_2badbffcbb4ddb::t_8aa483ae1059f5 75,80
+  s_2badbffcbb4ddb::t_47ceae31a1570b 162,166
+src/components/ui/empty-state.tsx
+  s_def0375445e4d8::t_c7d749efbcbc65 1-29
+src/components/inbox/InboxTray.tsx
+  s_2badbffcbb4ddb::t_e5330c686b6551 259-261
+  s_def0375445e4d8::t_9a7662083de3d7 22
+  s_7b372f25395095::t_44d107f47760e9 193-194
+  s_7b372f25395095::t_5dc5bdb42611c3 175-176
+  s_def0375445e4d8::t_db1a4e2b01088d 89-94
+src/components/bookkeeping/cards/_shared.tsx
+  s_def0375445e4d8::t_2a3fe78e1ef5b2 38,40
+  s_def0375445e4d8::t_1dda7051a529d2 1-2
+src/components/PrRadarView.css
+  s_def0375445e4d8::t_a898708e9ba6de 43-44,48,50
+src/components/board/ProjectPickerModal.tsx
+  s_2badbffcbb4ddb::t_f9ee994a31647b 82
+  s_7b372f25395095::t_b5e0fdd3e9dbd8 101
+  s_2badbffcbb4ddb::t_3b0b9b86797a71 104
+src/components/bookkeeping/BookkeepingView.css
+  s_def0375445e4d8::t_c252f815662266 770
+src/components/SettingsView.tsx
+  s_1c25dcd5710a1b::t_29c4ea6f894f32 140
+src/components/control-room/ProjectTabs.tsx
+  s_2badbffcbb4ddb::t_756ac15edca812 56
+  s_2badbffcbb4ddb::t_83ffafebf14743 6
+src/components/WeeklyView.tsx
+  s_2badbffcbb4ddb::t_fe8e255c93d8b6 110
+src/components/ToastHost.css
+  s_2badbffcbb4ddb::t_63658e22786a29 15
+  s_2badbffcbb4ddb::t_2a7aef9fd41e6e 84-90
+src/components/ui/checkbox.tsx
+  s_2badbffcbb4ddb::t_7769dd485937ab 31-34
+  s_2badbffcbb4ddb::t_184051c20e0490 18-24,29-30,35-38
+src/styles/typography.css
+  s_2badbffcbb4ddb::t_b83544a2c1baac 59-69
+src/lib/tw.ts
+  s_2badbffcbb4ddb::t_e69403816d0fbb 19
+DESIGN.md
+  s_2badbffcbb4ddb::t_fcada92d6d6a16 283
+  s_2badbffcbb4ddb::t_5e855ef5a92b2e 169
+  s_2badbffcbb4ddb::t_c8258089d13626 293
+  s_2badbffcbb4ddb::t_37c33b732cd9f5 160-168,170,275-282
+src/components/control-room/Vitals.tsx
+  s_2badbffcbb4ddb::t_0c3919f75ab5ff 27
+  s_2badbffcbb4ddb::t_f0b0cda47f3db6 14
+src/components/board/CalendarEventModal.tsx
+  s_def0375445e4d8::t_eefeee658d4e92 7
+  s_2badbffcbb4ddb::t_a2853ea6dad3ef 198
+  s_def0375445e4d8::t_0ac11e60b20883 246,248
+  s_7b372f25395095::t_95a9eb3c050208 283,287
+src/components/settings/SettingsKit.tsx
+  s_2badbffcbb4ddb::t_a2decf7928b140 81
+src/components/board/CalendarEventModal.css
+  s_def0375445e4d8::t_7d4e0ff5901512 29
+src/styles/tokens.css
+  s_2badbffcbb4ddb::t_2be3d44a98242b 147
+  s_2badbffcbb4ddb::t_fa335aa6165791 150-152
+  s_def0375445e4d8::t_fa8a4f478be2a4 142
+  s_def0375445e4d8::t_8d740395c192d7 149
+  s_2badbffcbb4ddb::t_61bfd07fd9c83d 161-165
+  s_2badbffcbb4ddb::t_5bf78cf1ed2beb 148
+src/components/CaptureBoard.css
+  s_2badbffcbb4ddb::t_939d89d5d6a8f0 648
+  s_2badbffcbb4ddb::t_de21cebb53d693 728
+src/components/ui/badge.tsx
+  s_2badbffcbb4ddb::t_a470061ab5f9f3 6-18,21-22
+  s_2badbffcbb4ddb::t_57c525da0f6958 27-28
+src/components/skills/UpdatePanel.tsx
+  s_7b372f25395095::t_380af6e43087b2 108,114,119
+src/components/ui/dialog.tsx
+  s_2badbffcbb4ddb::t_106115a6c1fcb1 64
+src/components/RoutineTrackingView.tsx
+  s_def0375445e4d8::t_401905cc7336ad 89-92,96-99
+  s_def0375445e4d8::t_2a0a45e30e8ddf 10
+  s_def0375445e4d8::t_90bd5468b7282f 66-67,73-76
+  s_2badbffcbb4ddb::t_29a6db5c0082ce 43
+  s_2badbffcbb4ddb::t_6701707138f113 93-95
+src/components/SkillsView.css
+  s_7b372f25395095::t_5b1fbbbf439539 103-104
+  s_7b372f25395095::t_82c39692e636c5 206-207
+  s_1c25dcd5710a1b::t_0cd7d19f755a6b 18
+  s_def0375445e4d8::t_ff76bb94c2d6ce 310
+src/components/control-room/ControlRoomView.tsx
+  s_def0375445e4d8::t_71d404fcd828dc 15
+  s_1c25dcd5710a1b::t_6de1ba7db559de 55
+  s_def0375445e4d8::t_1a54eb253ef10b 151,153-161
+  s_def0375445e4d8::t_b23b209800b81d 116-117,122,125,127
+  s_2badbffcbb4ddb::t_cacae5c458daea 118-121
+  s_def0375445e4d8::t_52ed2b416a69ec 180-181
+  s_def0375445e4d8::t_6dfcff2b03fc58 78-80
+  s_2badbffcbb4ddb::t_e3d8079180acf6 163,165
+src/components/worktree/WorktreeHeader.tsx
+  s_7b372f25395095::t_cfda057597600f 67-68
+  s_7b372f25395095::t_72584057cee574 78-79
+  s_2badbffcbb4ddb::t_9d00fb6770dd92 42
+src/components/news/NewsTicker.tsx
+  s_2badbffcbb4ddb::t_6d188ebe87778f 140,144-149
+  s_2badbffcbb4ddb::t_44318b49240f98 10
+src/components/board/RoutineForm.tsx
+  s_7b372f25395095::t_ca95adbed95545 132
+docs/decisions.md
+  s_2badbffcbb4ddb::t_9d315ef54a693c 647
+src/components/settings/CalendarPicker.tsx
+  s_7b372f25395095::t_f31c4c65ad499a 114
+src/components/board/CalendarView.tsx
+  s_def0375445e4d8::t_ed0da3bdc1fefd 70
+  s_def0375445e4d8::t_48b61a54d9027e 3
+docs/plans/2026-07-09-design-pass-deferred.md
+  s_2badbffcbb4ddb::t_c13bdae670909a 1-88
+  s_2badbffcbb4ddb::t_71401f3bb5c7c9 89-91
+scripts/check-design-tokens.mjs
+  s_2badbffcbb4ddb::t_241a54b89092c7 57-58
+  s_2badbffcbb4ddb::t_c79e62eecffa34 18-20
+src/components/ui/tooltip.tsx
+  s_2badbffcbb4ddb::t_0e381443b9ee41 4
+  s_2badbffcbb4ddb::t_d5a72e67198d16 43-45
+src/components/jobs/JobsHeader.tsx
+  s_2badbffcbb4ddb::t_eb5a13e323fbee 8
+src/components/SkillsView.tsx
+  s_2badbffcbb4ddb::t_43427c65a0849f 219
+  s_def0375445e4d8::t_d0c97e742bdd24 27
+  s_def0375445e4d8::t_dc381163f14c02 530,534
+src/components/today/TodayHeader.tsx
+  s_2badbffcbb4ddb::t_376f2fdc6a230d 72
+src/components/today/UnscheduledTray.tsx
+  s_def0375445e4d8::t_ad9ebfa1ded72d 266-268
+  s_def0375445e4d8::t_696f46bf3c4d63 16
+src/components/jobs/JobList.tsx
+  s_def0375445e4d8::t_ce2bd9f3fc2226 4,6,11,18-19,25-32,35-37
+src/components/jobs/JobsView.tsx
+  s_def0375445e4d8::t_19e05608da3521 73
+src/components/control-room/CommandDeck.tsx
+  s_2badbffcbb4ddb::t_d2b68b1252067f 55
+  s_2badbffcbb4ddb::t_651945269fdbb0 13
+src/components/news/NewsTicker.css
+  s_2badbffcbb4ddb::t_29932b5e691101 140
+  s_2badbffcbb4ddb::t_f04feb108650db 154-156
+  s_2badbffcbb4ddb::t_ff9f1873c67cfb 138-139,141
+  s_2badbffcbb4ddb::t_f8b43c853ccddb 150
+src/components/SkillsTags.css
+  s_2badbffcbb4ddb::t_2b56ff15a68c97 24-26
+src/components/AgentStatusBar.tsx
+  s_2badbffcbb4ddb::t_ee4c350682eb66 241
+src/components/inbox/InboxTray.css
+  s_2badbffcbb4ddb::t_923edc0e0acf0d 108
+  s_2badbffcbb4ddb::t_6ce77c6705d1fb 59-60,67,69-72,74
+  s_2badbffcbb4ddb::t_624f62f3b1ccf0 250
+src/components/RoutineTrackingView.css
+  s_2badbffcbb4ddb::t_317584494c794f 21
+  s_2badbffcbb4ddb::t_d1e97cfeb09b96 32
+  s_def0375445e4d8::t_1c15fe1622a38e 117,124-132
+  s_def0375445e4d8::t_7e4ea6f7f6c23b 33-42
+src/components/settings/NewsFiltersForm.tsx
+  s_7b372f25395095::t_4b380a86a55cc7 5
+  s_7b372f25395095::t_ea4ed5b90208e0 23
+  s_7b372f25395095::t_ae9d8beaf3a8a0 33
+scripts/check-design-tokens.test.mjs
+  s_2badbffcbb4ddb::t_0bfc954a82839b 76-85
+  s_2badbffcbb4ddb::t_8690c4147950fe 63-75
+src/components/ui/button.tsx
+  s_2badbffcbb4ddb::t_ac052fad0e9e31 24-26
+src/components/ui/popover.tsx
+  s_2badbffcbb4ddb::t_d592d8b747c2f4 4
+  s_2badbffcbb4ddb::t_a001919144226a 37-39
+  s_2badbffcbb4ddb::t_106115a6c1fcb1 63
+  s_2badbffcbb4ddb::t_019b2e14f88466 56
+src/components/ui/select.tsx
+  s_2badbffcbb4ddb::t_048c098ea6abf0 45
+src/components/skills/InAppEditor.tsx
+  s_7b372f25395095::t_41499d3c7e10d8 115-116,123
+src/components/settings/NewsSourceSettings.tsx
+  s_7b372f25395095::t_32a6685e05623b 172,174
+  s_7b372f25395095::t_5b38fbc009838d 8
+src/components/ui/sheet.tsx
+  s_2badbffcbb4ddb::t_106115a6c1fcb1 67
+src/components/control-room/ControlRoomView.css
+  s_7b372f25395095::t_61f8afcf11e39a 481-483
+  s_7b372f25395095::t_def82aee925673 560-562
+  s_def0375445e4d8::t_b58f9f6362eff2 184
+  s_7b372f25395095::t_e55c382e2b71a0 61-62
+  s_7b372f25395095::t_00d4678a85efea 286-288
+  s_7b372f25395095::t_82a9fb39483bda 129
+src/components/board/CardMenu.css
+  s_2badbffcbb4ddb::t_5c361154eb7d9a 13-14
+  s_2badbffcbb4ddb::t_9502425f81a24b 50-55
+  s_2badbffcbb4ddb::t_b8a6104ee80fa4 29
+src/components/ui/textarea.tsx
+  s_2badbffcbb4ddb::t_204a053909a55c 9
+src/components/today/HistoryRail.tsx
+  s_def0375445e4d8::t_a0ce92ec602a1c 6
+  s_def0375445e4d8::t_be4e37d92051bd 89-91
+src/components/board/CalendarDrawer.css
+  s_def0375445e4d8::t_36ded60a6866e5 104
+  s_def0375445e4d8::t_4a19e7e2289635 109
+  s_2badbffcbb4ddb::t_2c162423aa3bcb 77
+  s_def0375445e4d8::t_70a1aafaae9580 110
+src/styles/motion.css
+  s_2badbffcbb4ddb::t_a0daae91222228 75,84-85,89,91-94,96-104,106-108,110,112-115,117,139-143
+  s_2badbffcbb4ddb::t_1f579877a3ab1f 144,320-328
+  s_2badbffcbb4ddb::t_6d239ca69b360f 71-74
+  s_2badbffcbb4ddb::t_0472ff6b257ebe 654-659,662
+  s_2badbffcbb4ddb::t_b11ae747d597a5 660-661,663
+  s_2badbffcbb4ddb::t_edd8e03b41659d 86-88,90,95,105,109,111,116,118-138
+  s_2badbffcbb4ddb::t_8fbdfbb9cf6cfe 260-319
+  s_2badbffcbb4ddb::t_ddd80582787a9d 145
+src/components/jobs/JobsView.css
+  s_def0375445e4d8::t_6a1e43dae78d35 88,90-94
+src/components/board/CaptureBoardHeader.tsx
+  s_2badbffcbb4ddb::t_19fba328bbd10d 61
+src/components/skills/BackupPanel.tsx
+  s_7b372f25395095::t_7046ec7d639982 67,72
+  s_7b372f25395095::t_20434608b7bf4a 64
+src/components/PrRadarView.tsx
+  s_2badbffcbb4ddb::t_35e106f100239e 163
+  s_def0375445e4d8::t_66967985104739 189,191
+  s_7b372f25395095::t_9ebb03ff6e621b 360-361
+  s_7b372f25395095::t_ac40eaaef9ddb0 394-395
+  s_7b372f25395095::t_5bbd4b097b3df5 410-411
+  s_def0375445e4d8::t_b84195a0a6030b 172,174
+  s_7b372f25395095::t_63566da2038fd7 377-378
+  s_def0375445e4d8::t_b243f4e5d53697 10
+src/components/ui/command.tsx
+  s_2badbffcbb4ddb::t_ddd8d4baaa5306 5
+  s_2badbffcbb4ddb::t_2214ffbd804cd7 69
+src/components/postit/PostitCard.css
+  s_2badbffcbb4ddb::t_a7303d1384e4a3 140
+  s_2badbffcbb4ddb::t_3c8e9645f4c928 169
+  s_2badbffcbb4ddb::t_f7e65c4f8e7412 25-26
+src/components/ui/card.tsx
+  s_2badbffcbb4ddb::t_bbe1313b625728 20,24
+  s_2badbffcbb4ddb::t_c100e9e07cc828 6,9
+src/components/CmdKnob.css
+  s_2badbffcbb4ddb::t_fae400cd0fccd3 38-39
+  s_2badbffcbb4ddb::t_5dc8a8f9f8727b 90
+src/lib/motion.ts
+  s_2badbffcbb4ddb::t_d01053fbbd9039 15-22
+  s_2badbffcbb4ddb::t_f67fbf5a2d832c 1-14
+src/components/CommandPalette.css
+  s_2badbffcbb4ddb::t_cae2a4e5dd2431 11
+src/components/board/BrainDumpToggle.css
+  s_2badbffcbb4ddb::t_5a487a61faacf0 34-38
+  s_2badbffcbb4ddb::t_0bb078dda242af 117-118
+src/components/TodayView.css
+  s_def0375445e4d8::t_8a44e37d879e5e 1042
+  s_1c25dcd5710a1b::t_a2d2edc0f8f66c 35-36
+  s_2badbffcbb4ddb::t_8900a4a8f10271 76-77
+  s_2badbffcbb4ddb::t_3b324ffea8dfe6 1076
+  s_def0375445e4d8::t_fbf2c8fa433ac2 366
+  s_2badbffcbb4ddb::t_808f9d3bc877c6 592-595
+src/lib/motion.test.ts
+  s_2badbffcbb4ddb::t_0ecef72dacf79d 1-6,17-36
+  s_2badbffcbb4ddb::t_f8947772586702 7-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "82bb274005295ae0a394141cc48f9166cdfa940d",
+  "prompts": {},
+  "sessions": {
+    "s_1c25dcd5710a1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "770d97b1-9912-4d09-bbd2-16ee81a669ae",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_2badbffcbb4ddb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4875fea-1c5f-404f-a17e-3ba697ae6fee",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_7b372f25395095": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f5f0100a-5942-469b-a1e4-8670fa520cc8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_def0375445e4d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f77790b-bc96-4648-805c-2c9e5b5a8018",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
