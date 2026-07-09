@@ -1,0 +1,20 @@
+docs/areas/mcp-server-conventions.md
+  s_65a1a90da09826::t_e3641632c966f5 125
+  s_65a1a90da09826::t_843ab8fbe13f31 74-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "47a9dbec411f4571f927c9282882b4dfe888556a",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
