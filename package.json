@@ -18,6 +18,7 @@
     "check:timeline-axis": "node scripts/check-timeline-axis-ssot.mjs",
     "test:design-tokens": "node --test scripts/check-design-tokens.test.mjs",
     "test:frontend-ownership": "node --test scripts/check-frontend-ownership.test.mjs",
+    "test:classname-regression": "node --test scripts/check-classname-regression.test.mjs",
     "test": "vitest run",
     "tauri": "bash scripts/tauri-wrapper.sh",
     "tauri:dev:setup": "bash scripts/dev-codesign-setup.sh",

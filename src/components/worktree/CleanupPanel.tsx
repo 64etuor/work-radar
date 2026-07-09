@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CleanupCandidate } from "@/bindings";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useCleanupCandidates, useDeleteCleanupCandidates, useTriggerCodexJob } from "@/lib/query";
 
@@ -163,7 +164,7 @@ export function CleanupPanel({
         {list.map((c) => {
           const can = selectable(c);
           return (
-            <label key={c.id} className={`wt-cleanup-row${can ? "" : "wt-cleanup-locked"}`}>
+            <label key={c.id} className={cn("wt-cleanup-row", !can && "wt-cleanup-locked")}>
               <input
                 type="checkbox"
                 aria-label={`${c.name} 선택`}
