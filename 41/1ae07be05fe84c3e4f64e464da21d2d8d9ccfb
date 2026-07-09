@@ -1,0 +1,79 @@
+src/components/bookkeeping/BookkeepingView.tsx
+  s_bd1d68bf41619d::t_041c3eda4b2ef8 343-347,350-361
+  s_bd1d68bf41619d::t_33bb87aceb7ba0 776-777
+  s_bd1d68bf41619d::t_47068d54d190d0 3
+  s_bd1d68bf41619d::t_4361b0e24c53b6 324-325,329,348-349,362-364
+  s_bd1d68bf41619d::t_58d07c50e3615c 365-366
+src-tauri/src/commands/bookkeeping/mmbak_recurring.rs
+  s_bd1d68bf41619d::t_10e0a09c66d014 360-361
+  s_bd1d68bf41619d::t_489e2b42385c12 1-141,144-148,152-332,335-345,350-359,362-373,376-395,398-475,478-481,484-487
+  s_bd1d68bf41619d::t_d2a0bf63a5157e 396-397
+  s_bd1d68bf41619d::t_d4fdc81ba85237 142-143,149-151,346-349
+  s_bd1d68bf41619d::t_9fcc38e2eec497 333-334
+  s_bd1d68bf41619d::t_2519f90ce10ada 374-375
+  s_bd1d68bf41619d::t_471148b6b3e96b 476-477,482-483
+src-tauri/src/commands/bookkeeping/common.rs
+  s_bd1d68bf41619d::t_90893bb62ad30f 44-45
+src/components/bookkeeping/mmbakImport.ts
+  s_bd1d68bf41619d::t_6a71e02a94b4d5 18-27,33
+  s_bd1d68bf41619d::t_1722b1aa14cf21 28-32
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_bd1d68bf41619d::t_620f7352354c17 15
+  s_bd1d68bf41619d::t_b69311b48db4bd 32
+src/components/bookkeeping/cards/MoneyManagerImportCard.tsx
+  s_bd1d68bf41619d::t_40c9127c167b07 24,36-37
+  s_bd1d68bf41619d::t_d46508a659ef17 1
+  s_bd1d68bf41619d::t_fc71cd34d328c5 59-79
+src-tauri/src/commands/bookkeeping/mmbak.rs
+  s_bd1d68bf41619d::t_91bf2a869ddcb6 430-432,447-449
+  s_bd1d68bf41619d::t_d4fdc81ba85237 1019-1022
+  s_bd1d68bf41619d::t_4882e26d505a2d 21-22
+  s_bd1d68bf41619d::t_956aac9d051748 143-154
+  s_bd1d68bf41619d::t_ffd42840990932 986-1018,1023-1050
+  s_bd1d68bf41619d::t_c5afc6f6dac011 53,62,69
+src-tauri/src/models/bookkeeping.rs
+  s_bd1d68bf41619d::t_2eebe5cb1b39dc 368-373
+  s_bd1d68bf41619d::t_737d02baf1878b 214-217
+src/bindings.ts
+  s_bd1d68bf41619d::t_3667a846dc5259 1323-1326,2226-2231
+docs/decisions.md
+  s_bd1d68bf41619d::t_1c255257d7a947 652
+src-tauri/migrations/0071_bookkeeping_recurring_source.sql
+  s_bd1d68bf41619d::t_d012dedd3ea7be 1-18
+src-tauri/src/moneymanager.rs
+  s_bd1d68bf41619d::t_a3e574e196045d 672-725,731-791
+  s_bd1d68bf41619d::t_e785be43a56537 81-111
+  s_bd1d68bf41619d::t_1a497e4ba3d5db 814
+  s_bd1d68bf41619d::t_f9d5dd0e6a9a56 112-119
+  s_bd1d68bf41619d::t_019629dd9e5977 1016-1092,1097-1165
+  s_bd1d68bf41619d::t_2b5234f6964500 335-386
+  s_bd1d68bf41619d::t_5a7a8c83b15012 468-497
+  s_bd1d68bf41619d::t_5337d69d60e83c 15
+  s_bd1d68bf41619d::t_0b75064d4370ae 177-217
+  s_bd1d68bf41619d::t_ecc9d9be2ad245 563-564,569
+  s_bd1d68bf41619d::t_1d087a899bcdab 726-730
+  s_bd1d68bf41619d::t_d4fdc81ba85237 1093-1096
+src/components/bookkeeping/mmbakImport.test.ts
+  s_bd1d68bf41619d::t_c948e18955a34c 3
+  s_bd1d68bf41619d::t_677594c8e5a06d 48-67,69-71,75-77,80
+  s_bd1d68bf41619d::t_1c70a55d86acb2 78-79,82-97
+  s_bd1d68bf41619d::t_98b5acc7eeef06 98
+src-tauri/src/commands/bookkeeping/recurring.rs
+  s_bd1d68bf41619d::t_965c2176b659a6 165-166,171-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "411ae07be05fe84c3e4f64e464da21d2d8d9ccfb",
+  "prompts": {},
+  "sessions": {
+    "s_bd1d68bf41619d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1fb17d1b-0e7c-4ee9-bec2-aef6cf6c1305",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
