@@ -1,0 +1,45 @@
+src/components/settings/SettingsKit.tsx
+  s_14a22fa7abadd8::t_d36c9e53ef97b2 79-80
+  s_14a22fa7abadd8::t_82d5dbf324bda4 24
+src/lib/tw.ts
+  s_14a22fa7abadd8::t_de8a576b3f4639 17
+  s_14a22fa7abadd8::t_ce3285da587896 11-12
+DESIGN.md
+  s_14a22fa7abadd8::t_cf29c4b55c598f 166
+src/lib/tw.test.ts
+  s_14a22fa7abadd8::t_d46d7993b3fbb0 47-66
+  s_14a22fa7abadd8::t_2b90faefee469a 5-14
+  s_14a22fa7abadd8::t_1ef4fee952dba5 3
+  s_14a22fa7abadd8::t_158372bfe932ac 4,18,67
+src/components/settings/NewsMarqueeSpeedField.tsx
+  s_14a22fa7abadd8::t_b91b6ae7764a3a 28
+src/styles/typography.css
+  s_14a22fa7abadd8::t_bcf9236d4b1725 36-44
+docs/plans/2026-07-09-design-pass-deferred.md
+  s_14a22fa7abadd8::t_f4b0a8abcc1d1c 76-91
+  s_14a22fa7abadd8::t_0b26a458f4c4ce 56-72,74
+  s_14a22fa7abadd8::t_22e7b1f3cacb72 75
+docs/areas/typography.md
+  s_14a22fa7abadd8::t_ed80266e8a0202 42-51
+  s_14a22fa7abadd8::t_b693a29585a4b5 38-40
+  s_14a22fa7abadd8::t_e819131ef21a21 41
+src/components/settings/NewsSourceSettings.tsx
+  s_14a22fa7abadd8::t_204916e286d398 96
+  s_14a22fa7abadd8::t_b837464f358c7d 286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "caaaf20c438489607bd050e6633879a987b522f3",
+  "prompts": {},
+  "sessions": {
+    "s_14a22fa7abadd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d00a882f-1f42-4f05-a5bf-f866a27af786",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
