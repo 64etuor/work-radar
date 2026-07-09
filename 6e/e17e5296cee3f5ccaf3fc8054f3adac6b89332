@@ -1,0 +1,63 @@
+src/components/MissionView.css
+  s_458c630d35c622::t_d95a7a856206f9 225,250,255,265,296,794
+  s_458c630d35c622::t_b9405d1d3ff864 266-268,298-300,309,311
+  s_458c630d35c622::t_03e208fa4a3bce 305-306,310,312
+  s_458c630d35c622::t_771d822ed9b0a4 272-275,278-279,282-286,289,291-293,313
+  s_458c630d35c622::t_134dbc160f6b84 297
+  s_458c630d35c622::t_775c4fdb5eb762 301-302
+src/components/weekly/LifeOsAdvisorPanel.tsx
+  s_14a22fa7abadd8::t_5308a35103005b 19-20
+docs/decisions.md
+  s_14a22fa7abadd8::t_022c72fd89d544 648-649
+src/components/MissionView.tsx
+  s_458c630d35c622::t_1b2c7053941280 50
+src/components/okr/HorizonShelf.tsx
+  s_458c630d35c622::t_9cc791630b67f0 4,48,91-95,102-109
+  s_458c630d35c622::t_ae1a1de1f87c10 1,20-21,44-47,49-51,57-69,80-90,149
+  s_14a22fa7abadd8::t_5254937d652afc 98-101
+  s_458c630d35c622::t_61b67bba89fc71 110-111
+src/components/MissionView.layout.test.ts
+  s_458c630d35c622::t_bfe4d21e509758 36-37,41-42
+  s_458c630d35c622::t_fa0ccf085cb849 34-35,40,44
+src/components/MissionView.copy.test.ts
+  s_458c630d35c622::t_3555ec05b9718f 45-49
+  s_458c630d35c622::t_2b984ced591228 51-55
+  s_2badbffcbb4ddb::t_106115a6c1fcb1 17-18
+  s_2badbffcbb4ddb::t_815ea4b0658ad2 50,56
+src/components/okr/FoundationPanels.dom.test.tsx
+  s_458c630d35c622::t_0935fc9e28ae40 78-83,101,104,107,109-110,123
+  s_458c630d35c622::t_3bc687d536d168 7
+  s_458c630d35c622::t_68af03c51660a2 63-65,108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6ee17e5296cee3f5ccaf3fc8054f3adac6b89332",
+  "prompts": {},
+  "sessions": {
+    "s_14a22fa7abadd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d00a882f-1f42-4f05-a5bf-f866a27af786",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_2badbffcbb4ddb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4875fea-1c5f-404f-a17e-3ba697ae6fee",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_458c630d35c622": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3fdc-0d78-7f90-a85e-4cf2727a65ba",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
