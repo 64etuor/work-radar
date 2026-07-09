@@ -31,34 +31,17 @@ describe("MissionView layout", () => {
     expect(textarea).toContain("resize: none");
   });
 
-  it("keeps guardrail forms inside the life panel instead of fixed-width overflow", () => {
-    expect(missionCss).toContain(
-      [
-        ".mission-guardrail-form {",
-        "  grid-template-columns: minmax(0, 1fr) minmax(108px, 0.7fr);",
-        "  grid-template-areas:",
-        '    "label label"',
-        '    "area kind"',
-        '    "value action";',
-        "  width: 100%;",
-      ].join("\n"),
-    );
+  it("keeps the foundation tab as a single long-term-goal panel", () => {
+    const lifeGrid = ruleBlock(".mission-life-grid");
+    const inlineEditor = ruleBlock(".mission-horizon-item > .mission-inline-editor");
+    const period = ruleBlock(".mission-inline-period");
     const actions = ruleBlock(".mission-form-actions");
-    const guardrailActions = ruleBlock(".mission-guardrail-form .mission-form-actions");
 
+    expect(lifeGrid).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(inlineEditor).toContain("display: flex");
+    expect(period).toContain("width: 120px");
     expect(actions).toContain("justify-self: end");
-    expect(guardrailActions).toContain("grid-area: action");
-    expect(missionCss).toContain(
-      [
-        "  .mission-guardrail-form {",
-        "    grid-template-areas:",
-        '      "label"',
-        '      "area"',
-        '      "kind"',
-        '      "value"',
-        '      "action";',
-      ].join("\n"),
-    );
+    expect(missionCss).not.toContain("mission-guardrail-form");
   });
 
   it("bounds Mission dialogs to the viewport and scrolls their body", () => {

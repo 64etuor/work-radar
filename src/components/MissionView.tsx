@@ -5,7 +5,6 @@ import { useState } from "react";
 
 import type { Objective } from "@/bindings";
 import { CloseObjectiveDialog } from "@/components/okr/CloseObjectiveDialog";
-import { GuardrailPanel } from "@/components/okr/GuardrailPanel";
 import { HorizonShelf } from "@/components/okr/HorizonShelf";
 import { MissionStatement } from "@/components/okr/MissionStatement";
 import { ObjectiveCard } from "@/components/okr/ObjectiveCard";
@@ -32,7 +31,6 @@ import {
   weekStartMonday,
 } from "@/lib/okr";
 import {
-  useGuardrails,
   useLifeWheelTags,
   useMission,
   useMissionHorizons,
@@ -49,7 +47,7 @@ type ObjectiveDialogState = Objective | null | undefined;
  * 페이지 구조 = 3탭 (Perdoo/Lattice/Weekdone 공통 패턴: 기록·구조·기반 분리):
  * - 주간 기록: 이번 주 체크인만 — 매주 실제로 "하는 일"이 첫 화면.
  * - Objectives: 분기 목표 트리(카드) + 추가/이월.
- * - 기반: 장기 목표·Guardrails(가끔 만지는 설정성 내용).
+ * - 기반: 장기 목표(가끔 만지는 설정성 내용).
  * 기본 탭은 남은 체크인이 있으면 주간 기록, 없으면 Objectives.
  */
 type MissionTab = "checkin" | "objectives" | "foundation";
@@ -69,7 +67,6 @@ export function MissionView() {
   const stats = useObjectiveSignalStats(quarter);
   const checkIns = useOkrCheckIns(quarter);
   const horizons = useMissionHorizons();
-  const guardrails = useGuardrails(quarter);
   const horizonLinks = useObjectiveHorizonLinks(quarter);
   const tags = useLifeWheelTags();
   const projects = useProjects();
@@ -102,7 +99,6 @@ export function MissionView() {
     stats.isError ||
     checkIns.isError ||
     horizons.isError ||
-    guardrails.isError ||
     horizonLinks.isError;
 
   return (
@@ -166,7 +162,6 @@ export function MissionView() {
                 stats.error ??
                 checkIns.error ??
                 horizons.error ??
-                guardrails.error ??
                 (horizonLinks.error as Error | null)
               )?.message
             }
@@ -227,11 +222,6 @@ export function MissionView() {
         {tab === "foundation" && (
           <div className="mission-life-grid">
             <HorizonShelf horizons={horizons.data ?? []} />
-            <GuardrailPanel
-              quarter={quarter}
-              guardrails={guardrails.data ?? []}
-              tags={tags.data ?? []}
-            />
           </div>
         )}
       </div>

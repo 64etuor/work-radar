@@ -16,6 +16,8 @@ import {
 
 const KIND_LABEL: Record<LifeOsRecommendation["kind"], string> = {
   weekly_focus: "주간 도미노",
+  // guardrail은 폐지됐다(2026-07-09 decisions.md). 생성 UI가 없어 이 추천은 더 이상 나오지
+  // 않지만, kind는 아직 Rust enum에 남아 있어 Record가 이 키를 요구한다. 백엔드 teardown 때 제거.
   guardrail_recovery: "가드레일",
   q1_prevention: "예방",
   q3_containment: "위임/자동화",
@@ -72,7 +74,6 @@ export function LifeOsAdvisorPanel({
           <Badge variant="outline">Q1 {diagnosis.q1Count}</Badge>
           <Badge variant="outline">Q2 {diagnosis.q2Count}</Badge>
           <Badge variant="outline">Q3 {diagnosis.q3Count}</Badge>
-          <Badge variant="outline">가드레일 {diagnosis.guardrailRiskCount}</Badge>
           {diagnosis.dominantAreaKey && (
             <Badge variant="secondary">{diagnosis.dominantAreaKey}</Badge>
           )}

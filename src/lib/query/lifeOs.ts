@@ -8,7 +8,6 @@ import {
   type GenerateLifeOsReviewInput,
   type RecordLifeOsAuditInput,
   type UpdateMissionHorizonInput,
-  type UpsertGuardrailInput,
 } from "@/bindings";
 
 import { unwrap } from "./client";
@@ -17,7 +16,6 @@ import { okrKeys } from "./okr";
 const lifeOsKeys = {
   all: ["lifeOs"] as const,
   horizons: ["lifeOs", "horizons"] as const,
-  guardrails: (quarter: string) => ["lifeOs", "guardrails", quarter] as const,
   objectiveHorizonLinks: (quarter: string) => ["lifeOs", "objectiveHorizonLinks", quarter] as const,
   weeklyFocus: (weekStart: string) => ["lifeOs", "weeklyFocus", weekStart] as const,
   review: (weekStart: string, quarter: string) => ["lifeOs", "review", weekStart, quarter] as const,
@@ -69,30 +67,6 @@ export function useDeleteMissionHorizon() {
       void qc.invalidateQueries({ queryKey: okrKeys.all });
       return invalidateLifeOs(qc);
     },
-  });
-}
-
-export function useGuardrails(quarter: string) {
-  return useQuery({
-    queryKey: lifeOsKeys.guardrails(quarter),
-    queryFn: () => unwrap(commands.listGuardrails(quarter)),
-    enabled: quarter.length > 0,
-  });
-}
-
-export function useUpsertGuardrail() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: UpsertGuardrailInput) => unwrap(commands.upsertGuardrail(input)),
-    onSuccess: () => invalidateLifeOs(qc),
-  });
-}
-
-export function useDeleteGuardrail() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => unwrap(commands.deleteGuardrail(id)),
-    onSuccess: () => invalidateLifeOs(qc),
   });
 }
 

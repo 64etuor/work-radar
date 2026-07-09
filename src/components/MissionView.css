@@ -222,7 +222,7 @@
 
 .mission-life-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 20px;
 }
@@ -247,14 +247,12 @@
   margin: 0;
 }
 
-.mission-horizon-list,
-.mission-guardrail-list {
+.mission-horizon-list {
   display: grid;
   gap: 8px;
 }
 
-.mission-horizon-item,
-.mission-guardrail-item {
+.mission-horizon-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -264,58 +262,55 @@
   padding-top: 8px;
 }
 
-.mission-horizon-item > div,
-.mission-guardrail-item > div {
-  display: grid;
-  gap: 4px;
+.mission-horizon-item > .mission-inline-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
-.mission-horizon-meta {
-  color: var(--color-wr-muted);
+.mission-inline-editor input {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
-.mission-horizon-form,
-.mission-guardrail-form {
+.mission-inline-editor input:hover:not(:disabled) {
+  border-color: var(--color-wr-border-light);
+}
+
+.mission-inline-editor input:focus-visible {
+  border-color: var(--color-wr-fg);
+  background: var(--color-wr-bg);
+  outline: none;
+  box-shadow: none;
+}
+
+.mission-foundation-title {
+  min-width: 0;
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+  font-weight: 600;
+}
+
+.mission-horizon-form {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) 120px 88px max-content;
+  grid-template-columns: minmax(160px, 1fr) 120px max-content;
   gap: 8px;
   align-items: center;
   padding-top: 10px;
   border-top: 1px solid var(--color-wr-border-light);
 }
 
-.mission-guardrail-form {
-  grid-template-columns: minmax(0, 1fr) minmax(108px, 0.7fr);
-  grid-template-areas:
-    "label label"
-    "area kind"
-    "value action";
-  width: 100%;
-}
-
-.mission-horizon-kind,
-.mission-wsc-kind,
-.mission-guardrail-area,
-.mission-guardrail-kind,
-.mission-guardrail-value {
+.mission-horizon-kind {
   min-width: 0;
 }
 
-.mission-guardrail-form > input:first-child {
-  grid-area: label;
-}
-
-.mission-guardrail-area {
-  grid-area: area;
-}
-
-.mission-guardrail-kind {
-  grid-area: kind;
-}
-
-.mission-guardrail-value {
-  grid-area: value;
+.mission-inline-period {
+  min-width: 0;
+  flex: 0 0 auto;
+  width: 120px;
+  height: 30px;
 }
 
 .mission-form-actions,
@@ -329,10 +324,6 @@
 
 .mission-form-actions {
   justify-self: end;
-}
-
-.mission-guardrail-form .mission-form-actions {
-  grid-area: action;
 }
 
 .mission-row-action {
@@ -792,7 +783,6 @@
   .mission-kr-row,
   .mission-life-grid,
   .mission-horizon-form,
-  .mission-guardrail-form,
   .mission-statement-form {
     grid-template-columns: 1fr;
   }
@@ -801,17 +791,7 @@
     grid-template-columns: minmax(64px, 1fr) auto minmax(64px, 1fr);
   }
 
-  .mission-guardrail-form {
-    grid-template-areas:
-      "label"
-      "area"
-      "kind"
-      "value"
-      "action";
-  }
-
-  .mission-form-actions,
-  .mission-guardrail-form .mission-form-actions {
+  .mission-form-actions {
     justify-self: stretch;
     width: 100%;
   }

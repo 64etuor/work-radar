@@ -14,6 +14,8 @@ const objectiveDialogSource =
   readFileSync?.(resolve?.(__dirname, "okr/ObjectiveDialog.tsx") ?? "", "utf8") ?? "";
 const objectiveCardSource =
   readFileSync?.(resolve?.(__dirname, "okr/ObjectiveCard.tsx") ?? "", "utf8") ?? "";
+const missionViewSource =
+  readFileSync?.(resolve?.(__dirname, "MissionView.tsx") ?? "", "utf8") ?? "";
 const routineLinkSource =
   readFileSync?.(resolve?.(__dirname, "okr/RoutineLinkControl.tsx") ?? "", "utf8") ?? "";
 const systemDiagnosisSource =
@@ -39,5 +41,17 @@ describe("MissionView copy", () => {
     expect(systemDiagnosisSource).not.toContain("주간 목표로 교체");
     expect(systemDiagnosisSource).not.toContain("주간 목표로 연결");
     expect(sprintTimerSource).not.toContain("주간 목표로 교체");
+  });
+
+  it("keeps the foundation tab focused on long-term goals without guardrail management", () => {
+    expect(missionViewSource).toContain("<HorizonShelf horizons={horizons.data ?? []} />");
+    expect(missionViewSource).not.toContain("GuardrailPanel");
+    expect(missionViewSource).not.toContain("useGuardrails");
+  });
+
+  it("keeps long-term goal controls to title and period only", () => {
+    expect(horizonShelfSource).toContain("mission-inline-period");
+    expect(horizonShelfSource).not.toContain("WSC");
+    expect(horizonShelfSource).not.toContain("mission-wsc-kind");
   });
 });
