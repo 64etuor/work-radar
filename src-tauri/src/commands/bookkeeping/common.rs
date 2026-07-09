@@ -41,7 +41,8 @@ pub(crate) const TRANSACTION_RETURNING_COLUMNS: &str =
 pub(crate) const RECURRING_EXPENSE_RETURNING_COLUMNS: &str =
     "id, project_id, name, merchant, amount_minor, \
  currency, category, payment_method_kind, payment_method_label, payment_method_last4, \
- expense_kind, schedule_day, start_month, end_month, status, note, created_at, updated_at";
+ expense_kind, schedule_day, start_month, end_month, status, note, source, source_ref, \
+ created_at, updated_at";
 
 pub(crate) const BUDGET_RETURNING_COLUMNS: &str =
     "id, project_id, month, category_code, limit_minor, \

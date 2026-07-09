@@ -15,10 +15,22 @@ export function normalizeWatchDir(input: string): string | null {
 
 /** 최신 백업 임포트 결과 토스트 문구. */
 export function formatMmbakImportSummary(summary: ImportBookkeepingMmbakSummary): string {
-  const base = `백업 ${summary.scannedCount}건 확인, ${summary.importedCount}건 추가, ${summary.duplicateCount}건 갱신, ${summary.failedCount}건 실패`;
-  return summary.backfilledCategoryCount > 0
-    ? `${base}, ${summary.backfilledCategoryCount}건 분류 보완`
-    : base;
+  const parts = [
+    `백업 ${summary.scannedCount}건 확인, ${summary.importedCount}건 추가, ${summary.duplicateCount}건 갱신, ${summary.failedCount}건 실패`,
+  ];
+  if (summary.backfilledCategoryCount > 0) {
+    parts.push(`${summary.backfilledCategoryCount}건 분류 보완`);
+  }
+  const recurringTouched = summary.recurringUpsertedCount + summary.recurringArchivedCount;
+  if (recurringTouched > 0) {
+    parts.push(`고정비 ${recurringTouched}건 반영`);
+  }
+  // 조용한 누락 금지: 월 반복이 아니거나 수입/이체인 반복 규칙은 앱 고정비로 못 옮긴다.
+  // 아무 말도 안 하면 "내 고정비가 왜 안 들어왔지"가 된다.
+  if (summary.recurringSkippedCount > 0) {
+    parts.push(`고정비 ${summary.recurringSkippedCount}건 미지원(월 반복 지출만 가져옵니다)`);
+  }
+  return parts.join(", ");
 }
 
 /** moneymanager 소스의 가장 최근 sync job (updatedAt 내림차순, 방어적 정렬). */

@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use chrono::TimeZone;
+use chrono::{Datelike, TimeZone};
 use sqlx::{sqlite::SqliteConnectOptions, Connection, Row, SqliteConnection};
 
 /// KRW 등 원본 통화 정보가 없을 때의 기본값(레포 정본 DEFAULT_CURRENCY와 동일 값).
@@ -78,6 +78,45 @@ pub struct MmCurrency {
     pub decimal_point: i64,
 }
 
+/// REPEATTRANSACTION 한 행 — MoneyManager의 반복(정기) 거래 규칙. 앱의 고정비 정의
+/// (`bookkeeping_recurring_expenses`)와 대응한다.
+#[derive(Debug, Clone)]
+pub struct MmRepeatRow {
+    /// uid — (source='moneymanager', source_ref) 업서트 키.
+    pub uid: String,
+    pub is_del: i64,
+    /// USETIME — epoch ms. 규칙 생성/최종수정 시각. **최초 삽입 시 start_month 파생에만**
+    /// 쓴다(MM에서 규칙을 수정하면 값이 앞으로 밀리므로 갱신 시 재파생하면 과거 월이 사라진다).
+    pub usetime_ms: i64,
+    /// END_DATE — epoch ms. 0/음수 = 종료일 없음.
+    pub end_date_ms: i64,
+    /// NEXT_DATE — epoch ms. 다음 예정일 — 이 날짜의 day-of-month가 결제일이다
+    /// (REPEATTRANSACTION에 결제일 컬럼이 따로 없다).
+    pub next_date_ms: i64,
+    /// DO_TYPE — 0=income, 1=expense.
+    pub do_type: i64,
+    /// REPEAT_TYPE — 1=monthly. 앱 고정비 스키마가 (결제일 + 월) 기반이라 월 반복만 지원한다.
+    pub repeat_type: i64,
+    pub asset_uid: String,
+    pub to_asset_uid: String,
+    pub ctg_uid: String,
+    pub currency_uid: String,
+    /// AMOUNT_SUB — REAL.
+    pub amount: f64,
+    /// MEMO — 규칙 이름으로 쓰이는 사용자 텍스트(비면 PAYEE 폴백).
+    pub memo: String,
+    /// PAYEE — 수취인/상호.
+    pub payee: String,
+}
+
+/// 실백업 REPEATTRANSACTION의 컬럼 부분집합 DDL. 이 모듈과 커맨드 레이어의 픽스처가
+/// 공유한다(스키마가 한 곳에만 있어야 드리프트가 안 생긴다).
+#[cfg(test)]
+pub(crate) const REPEAT_TRANSACTION_DDL: &str =
+    "CREATE TABLE REPEATTRANSACTION (uid TEXT, IS_DEL INTEGER, USETIME INTEGER, MARK INTEGER, \
+     END_DATE INTEGER, NEXT_DATE INTEGER, DO_TYPE INTEGER, REPEAT_TYPE INTEGER, assetUid TEXT, \
+     toAssetUid TEXT, ctgUid TEXT, currencyUid TEXT, AMOUNT_SUB REAL, MEMO TEXT, PAYEE TEXT)";
+
 // ── Mapped output ──────────────────────────────────────────────────────────────────────────────
 
 /// 매핑된 거래 방향. models 레이어를 import하지 않기 위한 로컬 미러(순수 모듈 유지).
@@ -131,6 +170,47 @@ pub enum MmRowOutcome {
 #[derive(Debug, Default)]
 pub struct MmMappedBackup {
     pub transactions: Vec<MappedMmTransaction>,
+    pub deleted_uids: Vec<String>,
+    pub skipped: Vec<(String, &'static str)>,
+}
+
+/// 매핑된 고정비 규칙. 백업이 정본인 필드만 담는다 — `project_id` / `expense_kind` /
+/// `payment_method_kind` / `note` / `paused` 상태는 백업에 대응물이 없어 앱이 소유한다.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MappedMmRecurring {
+    /// REPEATTRANSACTION.uid.
+    pub source_ref: String,
+    /// MEMO → (비면) PAYEE → (비면) 카테고리 라벨. NOT NULL + nonempty CHECK 충족.
+    pub name: String,
+    pub merchant: Option<String>,
+    /// 통화 최소단위 정수. 매핑에서 1..=i32::MAX 보장.
+    pub amount_minor: i64,
+    pub currency: String,
+    /// 상위 카테고리 NAME(2단계면 parent) — 거래의 `category` 컬럼과 같은 시맨틱스.
+    pub category_label: String,
+    /// NEXT_DATE의 Seoul 로컬 day-of-month(1..=31).
+    pub schedule_day: i64,
+    /// USETIME의 Seoul 로컬 'YYYY-MM' — **최초 삽입 시에만** 반영한다.
+    pub start_month: String,
+    /// END_DATE의 Seoul 로컬 'YYYY-MM'. 종료 없음이면 None.
+    pub end_month: Option<String>,
+    /// ASSETS.NIC_NAME — 최초 삽입 시 결제수단 라벨로만 싣는다(이후 사용자 소유).
+    pub account: Option<String>,
+}
+
+/// REPEATTRANSACTION 한 행의 매핑 결과. IS_DEL 행은 `Deleted`로 분리해 임포터가 기존
+/// 고정비를 archived로 미러링할 수 있게 한다.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MmRepeatOutcome {
+    Mapped(Box<MappedMmRecurring>),
+    Deleted { uid: String },
+    Skipped { uid: String, reason: &'static str },
+}
+
+/// REPEATTRANSACTION 전체 매핑 결과.
+#[derive(Debug, Default)]
+pub struct MmMappedRepeats {
+    pub recurring: Vec<MappedMmRecurring>,
     pub deleted_uids: Vec<String>,
     pub skipped: Vec<(String, &'static str)>,
 }
@@ -252,6 +332,58 @@ impl MoneyManagerBackup {
         Ok(out)
     }
 
+    /// REPEATTRANSACTION 전체. 이 커맨드는 `.sqlite`도 받으므로(임의의 MM 아닌 파일)
+    /// 테이블이 없으면 빈 목록으로 graceful degrade한다 — 거래 임포트는 계속돼야 한다.
+    pub async fn load_repeat_transactions(&mut self) -> Result<Vec<MmRepeatRow>, sqlx::Error> {
+        let exists: Option<(String,)> =
+            sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name=?1")
+                .bind("REPEATTRANSACTION")
+                .fetch_optional(&mut self.conn)
+                .await?;
+        if exists.is_none() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            "SELECT CAST(COALESCE(uid,'') AS TEXT) AS uid, \
+                    CAST(COALESCE(IS_DEL,0) AS INTEGER) AS is_del, \
+                    CAST(COALESCE(USETIME,0) AS INTEGER) AS usetime_ms, \
+                    CAST(COALESCE(END_DATE,0) AS INTEGER) AS end_date_ms, \
+                    CAST(COALESCE(NEXT_DATE,0) AS INTEGER) AS next_date_ms, \
+                    CAST(COALESCE(DO_TYPE,-1) AS INTEGER) AS do_type, \
+                    CAST(COALESCE(REPEAT_TYPE,-1) AS INTEGER) AS repeat_type, \
+                    CAST(COALESCE(assetUid,'') AS TEXT) AS asset_uid, \
+                    CAST(COALESCE(toAssetUid,'') AS TEXT) AS to_asset_uid, \
+                    CAST(COALESCE(ctgUid,'') AS TEXT) AS ctg_uid, \
+                    CAST(COALESCE(currencyUid,'') AS TEXT) AS currency_uid, \
+                    CAST(COALESCE(AMOUNT_SUB,0) AS REAL) AS amount, \
+                    CAST(COALESCE(MEMO,'') AS TEXT) AS memo, \
+                    CAST(COALESCE(PAYEE,'') AS TEXT) AS payee \
+             FROM REPEATTRANSACTION",
+        )
+        .fetch_all(&mut self.conn)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(MmRepeatRow {
+                    uid: row.try_get("uid")?,
+                    is_del: row.try_get("is_del")?,
+                    usetime_ms: row.try_get("usetime_ms")?,
+                    end_date_ms: row.try_get("end_date_ms")?,
+                    next_date_ms: row.try_get("next_date_ms")?,
+                    do_type: row.try_get("do_type")?,
+                    repeat_type: row.try_get("repeat_type")?,
+                    asset_uid: row.try_get("asset_uid")?,
+                    to_asset_uid: row.try_get("to_asset_uid")?,
+                    ctg_uid: row.try_get("ctg_uid")?,
+                    currency_uid: row.try_get("currency_uid")?,
+                    amount: row.try_get("amount")?,
+                    memo: row.try_get("memo")?,
+                    payee: row.try_get("payee")?,
+                })
+            })
+            .collect()
+    }
+
     pub async fn load_currencies(&mut self) -> Result<HashMap<String, MmCurrency>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT CAST(COALESCE(uid,'') AS TEXT) AS uid, \
@@ -333,6 +465,36 @@ fn seoul_local(zdate_ms: i64) -> Option<chrono::DateTime<chrono_tz::Tz>> {
     }
 }
 
+/// ZDATE/USETIME 계열 epoch ms → Seoul 로컬 'YYYY-MM'.
+fn seoul_month(ms: i64) -> Option<String> {
+    seoul_local(ms).map(|dt| dt.format("%Y-%m").to_string())
+}
+
+/// currencyUid → (3자리 ISO, 최소단위 지수). 원본 통화를 못 찾으면 (KRW, 0).
+fn resolve_currency(currency_uid: &str, currencies: &HashMap<String, MmCurrency>) -> (String, i64) {
+    let row = nonempty_ref(currency_uid).and_then(|c| currencies.get(c));
+    let exponent = row.map(|c| c.decimal_point.clamp(0, 6)).unwrap_or(0);
+    let iso = row
+        .map(|c| c.iso.trim().to_ascii_uppercase())
+        .filter(|iso| iso.len() == 3 && iso.bytes().all(|b| b.is_ascii_uppercase()))
+        .unwrap_or_else(|| FALLBACK_CURRENCY.to_string());
+    (iso, exponent)
+}
+
+/// 금액 × 10^exponent → 최소단위 정수. 0/음수/NaN/i32::MAX 초과는 스키마 CHECK
+/// (amount_minor > 0 AND <= i32::MAX) 위반이라 None.
+#[allow(clippy::cast_possible_truncation)]
+fn scale_amount(money: f64, exponent: i64) -> Option<i64> {
+    let scaled = (money * 10f64.powi(exponent as i32)).round();
+    (scaled >= 1.0 && scaled <= i32::MAX as f64).then_some(scaled as i64)
+}
+
+/// 트림 후 비어 있지 않은 값만.
+fn nonblank(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 /// 카테고리 라벨 해석: (category_label, subcategory_label, raw_category).
 fn resolve_category_labels(
     ctg_uid: &str,
@@ -398,25 +560,13 @@ pub fn map_inoutcome_row(
             reason: "invalid_amount",
         };
     };
-    let currency_row = nonempty_ref(&row.currency_uid).and_then(|c| currencies.get(c));
-    let exponent = currency_row
-        .map(|c| c.decimal_point.clamp(0, 6))
-        .unwrap_or(0);
-    let currency = currency_row
-        .map(|c| c.iso.trim().to_ascii_uppercase())
-        .filter(|iso| iso.len() == 3 && iso.bytes().all(|b| b.is_ascii_uppercase()))
-        .unwrap_or_else(|| FALLBACK_CURRENCY.to_string());
-    #[allow(clippy::cast_possible_truncation)]
-    let scaled = (money * 10f64.powi(exponent as i32)).round();
-    // 0/음수/i32::MAX 초과는 스키마 CHECK(amount_minor > 0 AND <= i32::MAX) 위반 — 스킵.
-    if !(scaled >= 1.0 && scaled <= i32::MAX as f64) {
+    let (currency, exponent) = resolve_currency(&row.currency_uid, currencies);
+    let Some(amount_minor) = scale_amount(money, exponent) else {
         return MmRowOutcome::Skipped {
             uid,
             reason: "amount_out_of_range",
         };
-    }
-    #[allow(clippy::cast_possible_truncation)]
-    let amount_minor = scaled as i64;
+    };
 
     // 날짜: WDATE 우선, 불량이면 ZDATE의 Seoul 로컬 날짜로 폴백.
     let wdate = row.wdate.trim();
@@ -519,6 +669,126 @@ pub fn map_backup(
     out
 }
 
+// ── Recurring (REPEATTRANSACTION) mapping ──────────────────────────────────────────────────────
+
+/// DO_TYPE 지출.
+const REPEAT_DO_TYPE_EXPENSE: i64 = 1;
+/// REPEAT_TYPE 월 반복. 앱 고정비는 (schedule_day + start_month) 모델이라 월 반복만 대응된다.
+const REPEAT_TYPE_MONTHLY: i64 = 1;
+
+/// REPEATTRANSACTION 한 행 → 고정비 매핑/삭제/스킵. 순수 함수 — DB·시계 접근 없음.
+///
+/// 지출·월반복만 고정비로 본다. 수입 반복(DO_TYPE=0), 이체 반복(toAssetUid), 월이 아닌
+/// 주기는 앱 스키마에 대응물이 없어 스킵하고 사유를 보고한다(조용한 누락 금지).
+pub fn map_repeat_row(
+    row: &MmRepeatRow,
+    categories: &HashMap<String, MmCategory>,
+    assets: &HashMap<String, MmAsset>,
+    currencies: &HashMap<String, MmCurrency>,
+) -> MmRepeatOutcome {
+    let uid = row.uid.trim().to_string();
+    if uid.is_empty() {
+        return MmRepeatOutcome::Skipped {
+            uid,
+            reason: "missing_uid",
+        };
+    }
+    if row.is_del != 0 {
+        return MmRepeatOutcome::Deleted { uid };
+    }
+    if nonempty_ref(&row.to_asset_uid).is_some() {
+        return MmRepeatOutcome::Skipped {
+            uid,
+            reason: "transfer",
+        };
+    }
+    if row.do_type != REPEAT_DO_TYPE_EXPENSE {
+        return MmRepeatOutcome::Skipped {
+            uid,
+            reason: "not_expense",
+        };
+    }
+    if row.repeat_type != REPEAT_TYPE_MONTHLY {
+        return MmRepeatOutcome::Skipped {
+            uid,
+            reason: "unsupported_repeat_type",
+        };
+    }
+
+    let (currency, exponent) = resolve_currency(&row.currency_uid, currencies);
+    let Some(amount_minor) = scale_amount(row.amount, exponent) else {
+        return MmRepeatOutcome::Skipped {
+            uid,
+            reason: "amount_out_of_range",
+        };
+    };
+    // 결제일: NEXT_DATE의 로컬 day-of-month. day()는 항상 1..=31이라 스키마 CHECK를 만족한다.
+    //
+    // 한계: REPEATTRANSACTION엔 결제일 컬럼이 없어 "다음 예정일"에서 역산한다. 말일(31일)
+    // 규칙이 짧은 달을 다음 예정일로 가리키면 그 달의 말일(28/30)로 읽힌다. 앱 쪽
+    // `due_date_for_month`가 매월 말일로 clamp하므로 청구일이 틀어지진 않지만, 저장된
+    // schedule_day는 백업을 뜬 시점에 따라 28↔31로 흔들릴 수 있다.
+    let Some(schedule_day) = seoul_local(row.next_date_ms).map(|dt| i64::from(dt.day())) else {
+        return MmRepeatOutcome::Skipped {
+            uid,
+            reason: "invalid_next_date",
+        };
+    };
+    let Some(start_month) = seoul_month(row.usetime_ms) else {
+        return MmRepeatOutcome::Skipped {
+            uid,
+            reason: "invalid_usetime",
+        };
+    };
+    // END_DATE 0/음수 = 종료 없음(무기한).
+    let end_month = (row.end_date_ms > 0)
+        .then(|| seoul_month(row.end_date_ms))
+        .flatten();
+
+    let (category_label, _subcategory, _raw) = resolve_category_labels(&row.ctg_uid, categories);
+    let merchant = nonblank(&row.payee);
+    // 규칙 이름: MEMO(사용자가 붙인 이름) → PAYEE → 카테고리 라벨. 셋 다 비어도
+    // category_label은 FALLBACK_CATEGORY_LABEL이라 non-empty가 보장된다.
+    let name = nonblank(&row.memo)
+        .or_else(|| merchant.clone())
+        .unwrap_or_else(|| category_label.clone());
+    let account = nonempty_ref(&row.asset_uid)
+        .and_then(|uid| assets.get(uid))
+        .and_then(|asset| nonblank(&asset.nic_name));
+
+    MmRepeatOutcome::Mapped(Box::new(MappedMmRecurring {
+        source_ref: uid,
+        name,
+        merchant,
+        amount_minor,
+        currency,
+        category_label,
+        schedule_day,
+        start_month,
+        end_month,
+        account,
+    }))
+}
+
+/// REPEATTRANSACTION 전체 매핑 집계. 거래와 달리 증분 커서를 쓰지 않는다 — 규칙은
+/// 수십 건 규모이고, 매 임포트 full-scan이라야 백업이 정본이라는 계약이 성립한다.
+pub fn map_repeats(
+    rows: &[MmRepeatRow],
+    categories: &HashMap<String, MmCategory>,
+    assets: &HashMap<String, MmAsset>,
+    currencies: &HashMap<String, MmCurrency>,
+) -> MmMappedRepeats {
+    let mut out = MmMappedRepeats::default();
+    for row in rows {
+        match map_repeat_row(row, categories, assets, currencies) {
+            MmRepeatOutcome::Mapped(rule) => out.recurring.push(*rule),
+            MmRepeatOutcome::Deleted { uid } => out.deleted_uids.push(uid),
+            MmRepeatOutcome::Skipped { uid, reason } => out.skipped.push((uid, reason)),
+        }
+    }
+    out
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -541,6 +811,7 @@ mod tests {
              C_IS_DEL INTEGER, STATUS INTEGER)",
             "CREATE TABLE ASSETS (uid TEXT, NIC_NAME TEXT, groupUid TEXT)",
             "CREATE TABLE CURRENCY (uid TEXT, ISO TEXT, DECIMAL_POINT INTEGER)",
+            REPEAT_TRANSACTION_DDL,
         ] {
             sqlx::query(ddl).execute(&mut conn).await.expect("ddl");
         }
@@ -740,6 +1011,156 @@ mod tests {
         assert_eq!(mapped.transactions[0].currency, "KRW");
         assert_eq!(mapped.transactions[1].amount_minor, 1234);
         assert_eq!(mapped.transactions[1].currency, "USD");
+    }
+
+    // ── REPEATTRANSACTION → 고정비 매핑 ────────────────────────────────────────
+
+    async fn load_repeats(
+        path: &std::path::Path,
+    ) -> (
+        Vec<MmRepeatRow>,
+        HashMap<String, MmCategory>,
+        HashMap<String, MmAsset>,
+        HashMap<String, MmCurrency>,
+    ) {
+        let mut backup = MoneyManagerBackup::open_read_only(path)
+            .await
+            .expect("open read-only");
+        let repeats = backup.load_repeat_transactions().await.expect("repeats");
+        let cats = backup.load_categories().await.expect("categories");
+        let assets = backup.load_assets().await.expect("assets");
+        let currencies = backup.load_currencies().await.expect("currencies");
+        backup.close().await.expect("close");
+        (repeats, cats, assets, currencies)
+    }
+
+    const REPEAT_COLUMNS: &str = "(uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, \
+         REPEAT_TYPE, assetUid, toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE)";
+
+    #[tokio::test]
+    async fn maps_monthly_expense_repeats_to_recurring_rules() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_db(&dir).await;
+        // 실백업 형태: MEMO가 이름, PAYEE가 상호. 결제일은 NEXT_DATE의 로컬 day.
+        let usetime = kst_millis(2026, 6, 23, 13, 49, 21);
+        let next = kst_millis(2026, 7, 22, 18, 53, 57);
+        insert_row(&path, &format!(
+            "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('rep-1',0,{usetime},0,0,{next},1,1,'a1','','11','KRW_KRW',100000.0,'주택청약','청약(49)')"
+        )).await;
+        // MEMO 없음 → PAYEE가 이름. 종료일 있음.
+        let usetime2 = kst_millis(2026, 6, 21, 14, 8, 59);
+        let next2 = kst_millis(2026, 7, 21, 15, 1, 14);
+        let end2 = kst_millis(2027, 3, 21, 0, 0, 0);
+        insert_row(&path, &format!(
+            "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('rep-2',0,{usetime2},0,{end2},{next2},1,1,'a1','','20','KRW_KRW',17050.0,'','DB손')"
+        )).await;
+
+        let (rows, cats, assets, curs) = load_repeats(&path).await;
+        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        assert_eq!(mapped.recurring.len(), 2);
+        assert!(mapped.deleted_uids.is_empty());
+        assert!(mapped.skipped.is_empty());
+
+        let first = &mapped.recurring[0];
+        assert_eq!(first.source_ref, "rep-1");
+        assert_eq!(first.name, "주택청약");
+        assert_eq!(first.merchant.as_deref(), Some("청약(49)"));
+        assert_eq!(first.amount_minor, 100_000);
+        assert_eq!(first.currency, "KRW");
+        // ctgUid '11'(카페)은 2단계 → parent NAME(식비)이 category.
+        assert_eq!(first.category_label, "식비");
+        assert_eq!(first.schedule_day, 22, "결제일은 NEXT_DATE의 로컬 day");
+        assert_eq!(first.start_month, "2026-06", "start_month는 USETIME의 월");
+        assert_eq!(first.end_month, None, "END_DATE=0 → 무기한");
+        assert_eq!(first.account.as_deref(), Some("하나카드"));
+
+        let second = &mapped.recurring[1];
+        assert_eq!(second.name, "DB손", "MEMO 비면 PAYEE가 이름");
+        assert_eq!(second.schedule_day, 21);
+        assert_eq!(second.end_month.as_deref(), Some("2027-03"));
+        // 최상위 카테고리는 그대로.
+        assert_eq!(second.category_label, "급여");
+    }
+
+    #[tokio::test]
+    async fn repeat_deleted_and_unsupported_rows_are_reported_not_mapped() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_db(&dir).await;
+        let usetime = kst_millis(2026, 6, 1, 0, 0, 0);
+        let next = kst_millis(2026, 7, 15, 12, 0, 0);
+        for (uid, is_del, do_type, repeat_type, to_asset, amount) in [
+            ("del-1", 1, 1, 1, "", 1000.0),
+            ("inc-1", 0, 0, 1, "", 1000.0),    // 수입 반복
+            ("xfer-1", 0, 1, 1, "a2", 1000.0), // 이체 반복
+            ("weekly-1", 0, 1, 2, "", 1000.0), // 월 반복 아님
+            ("zero-1", 0, 1, 1, "", 0.0),      // 금액 0
+        ] {
+            insert_row(&path, &format!(
+                "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('{uid}',{is_del},{usetime},0,0,{next},{do_type},{repeat_type},'a1','{to_asset}','10','KRW_KRW',{amount},'','')"
+            )).await;
+        }
+
+        let (rows, cats, assets, curs) = load_repeats(&path).await;
+        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        assert!(mapped.recurring.is_empty());
+        assert_eq!(mapped.deleted_uids, vec!["del-1".to_string()]);
+        let reasons: Vec<&str> = mapped.skipped.iter().map(|(_, r)| *r).collect();
+        assert_eq!(
+            reasons,
+            vec![
+                "not_expense",
+                "transfer",
+                "unsupported_repeat_type",
+                "amount_out_of_range"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn repeat_falls_back_to_category_label_when_memo_and_payee_blank() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_db(&dir).await;
+        let usetime = kst_millis(2026, 6, 1, 0, 0, 0);
+        let next = kst_millis(2026, 7, 5, 9, 0, 0);
+        // MEMO/PAYEE 공백 + 미지 카테고리/자산 → 이름은 폴백 라벨, merchant/account 없음.
+        insert_row(&path, &format!(
+            "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('rep-blank',0,{usetime},0,0,{next},1,1,'missing','','missing','KRW_KRW',5000.0,'  ','  ')"
+        )).await;
+
+        let (rows, cats, assets, curs) = load_repeats(&path).await;
+        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        assert_eq!(mapped.recurring.len(), 1);
+        let rule = &mapped.recurring[0];
+        assert_eq!(rule.name, "미분류");
+        assert_eq!(rule.category_label, "미분류");
+        assert_eq!(rule.merchant, None);
+        assert_eq!(rule.account, None);
+        assert_eq!(rule.schedule_day, 5);
+    }
+
+    #[tokio::test]
+    async fn missing_repeat_table_degrades_to_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("no-repeat.sqlite");
+        let opts = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true);
+        let mut conn = SqliteConnection::connect_with(&opts).await.expect("open");
+        sqlx::query("CREATE TABLE INOUTCOME (uid TEXT)")
+            .execute(&mut conn)
+            .await
+            .expect("ddl");
+        conn.close().await.expect("close");
+
+        let mut backup = MoneyManagerBackup::open_read_only(&path)
+            .await
+            .expect("open read-only");
+        let repeats = backup
+            .load_repeat_transactions()
+            .await
+            .expect("missing table must not error");
+        assert!(repeats.is_empty());
+        backup.close().await.expect("close");
     }
 
     #[tokio::test]

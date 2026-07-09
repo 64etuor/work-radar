@@ -18,7 +18,8 @@ use crate::models::{
     ImportBookkeepingMmbakInput, ImportBookkeepingMmbakSummary,
 };
 use crate::moneymanager::{
-    map_backup, MmAsset, MmCategory, MmCurrency, MmDirection, MmInoutcomeRow, MoneyManagerBackup,
+    map_backup, MmAsset, MmCategory, MmCurrency, MmDirection, MmInoutcomeRow, MmRepeatRow,
+    MoneyManagerBackup,
 };
 
 use super::*;
@@ -49,6 +50,7 @@ pub async fn import_bookkeeping_mmbak(
 
 struct LoadedMmbak {
     rows: Vec<MmInoutcomeRow>,
+    repeats: Vec<MmRepeatRow>,
     categories: HashMap<String, MmCategory>,
     assets: HashMap<String, MmAsset>,
     currencies: HashMap<String, MmCurrency>,
@@ -57,12 +59,14 @@ struct LoadedMmbak {
 async fn load_mmbak_copy(path: &Path) -> Result<LoadedMmbak, sqlx::Error> {
     let mut backup = MoneyManagerBackup::open_read_only(path).await?;
     let rows = backup.load_inoutcome().await?;
+    let repeats = backup.load_repeat_transactions().await?;
     let categories = backup.load_categories().await?;
     let assets = backup.load_assets().await?;
     let currencies = backup.load_currencies().await?;
     backup.close().await?;
     Ok(LoadedMmbak {
         rows,
+        repeats,
         categories,
         assets,
         currencies,
@@ -135,6 +139,18 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
     // MM 카테고리 → 로컬 taxonomy 동기화(활성 카테고리만, mm-<uid> 코드 + raw_label alias).
     // 거래 upsert **전에** 돌려야 이번 임포트의 신규 행이 ingest 시점에 실코드로 해석된다.
     let taxonomy_counts = sync_mm_taxonomy(db, &loaded.categories).await?;
+
+    // REPEATTRANSACTION → 고정비 미러(백업이 정본). 거래 임포트와 독립적이며 커서를
+    // 공유하지 않는다 — 소유권 계약은 mmbak_recurring.rs 모듈 주석 참조.
+    let recurring_counts = sync_mm_recurring(
+        db,
+        input.project_id.as_deref(),
+        &loaded.repeats,
+        &loaded.categories,
+        &loaded.assets,
+        &loaded.currencies,
+    )
+    .await?;
 
     // 증분 커서: cursor_value = 지난 임포트에서 본 최대 UTIME(epoch ms). 커서 이하 UTIME
     // 행은 매핑을 건너뛴다. 단 삭제행은 UTIME이 신뢰성 있게 갱신되지 않으므로 매 임포트
@@ -411,6 +427,9 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
             "taxonomyAliasesUpserted": taxonomy_counts.aliases,
             "backfilledCategory": backfilled_category,
             "backfilledNote": backfilled_note,
+            "recurringUpserted": recurring_counts.upserted,
+            "recurringArchived": recurring_counts.archived,
+            "recurringSkipped": recurring_counts.skipped,
         }),
     )
     .await?;
@@ -425,6 +444,9 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         flagged_deleted_count: flagged_deleted,
         dup_probe_skipped_count: dup_probe_skipped,
         backfilled_category_count: backfilled_category,
+        recurring_upserted_count: recurring_counts.upserted,
+        recurring_archived_count: recurring_counts.archived,
+        recurring_skipped_count: recurring_counts.skipped,
         cursor_after,
     })
 }
@@ -959,6 +981,71 @@ mod tests {
             .await
             .expect("third import");
         assert_eq!(summary2.flagged_deleted_count, 0);
+    }
+
+    /// 백업에 REPEATTRANSACTION이 있으면 거래 임포트와 같은 패스에서 고정비가 미러된다.
+    /// (다른 mmbak 픽스처엔 이 테이블이 없어 recurring 카운트가 0 — graceful degrade.)
+    #[tokio::test]
+    async fn mmbak_import_mirrors_recurring_rules_and_reports_counts() {
+        let db = pool().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_mmbak(&dir).await;
+        exec_fixture(&path, crate::moneymanager::REPEAT_TRANSACTION_DDL).await;
+        // 지출 월반복 1건 + 수입 반복 1건(스킵 대상). USETIME=2026-06-23, NEXT_DATE=2026-07-22 KST.
+        exec_fixture(
+            &path,
+            "INSERT INTO REPEATTRANSACTION \
+             (uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, REPEAT_TYPE, assetUid, \
+              toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE) \
+             VALUES ('rep-1',0,1782190161300,0,0,1784714037425,1,1,'a1','','11','KRW_KRW',\
+                     100000.0,'주택청약','청약(49)')",
+        )
+        .await;
+        exec_fixture(
+            &path,
+            "INSERT INTO REPEATTRANSACTION \
+             (uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, REPEAT_TYPE, assetUid, \
+              toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE) \
+             VALUES ('rep-inc',0,1782190161300,0,0,1784714037425,0,1,'a1','','20','KRW_KRW',\
+                     3000000.0,'월급','회사')",
+        )
+        .await;
+
+        let summary = import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("import");
+        assert_eq!(summary.recurring_upserted_count, 1);
+        assert_eq!(summary.recurring_archived_count, 0);
+        assert_eq!(
+            summary.recurring_skipped_count, 1,
+            "수입 반복은 고정비 아님"
+        );
+        // 거래 임포트는 영향받지 않는다.
+        assert_eq!(summary.imported_count, 2);
+
+        let (name, amount, day, month, kind): (String, i64, i64, String, String) = sqlx::query_as(
+            "SELECT name, amount_minor, schedule_day, start_month, expense_kind \
+             FROM bookkeeping_recurring_expenses WHERE source = 'moneymanager'",
+        )
+        .fetch_one(&db)
+        .await
+        .expect("mirrored rule");
+        assert_eq!(name, "주택청약");
+        assert_eq!(amount, 100_000);
+        assert_eq!(day, 22);
+        assert_eq!(month, "2026-06");
+        assert_eq!(kind, "fixed");
+
+        // 재임포트는 멱등 — 규칙이 늘지 않는다.
+        let again = import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
+            .await
+            .expect("re-import");
+        assert_eq!(again.recurring_upserted_count, 0);
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM bookkeeping_recurring_expenses")
+            .fetch_one(&db)
+            .await
+            .expect("count");
+        assert_eq!(n, 1);
     }
 
     #[tokio::test]

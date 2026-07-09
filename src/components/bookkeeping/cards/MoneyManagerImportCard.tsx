@@ -1,4 +1,4 @@
-import { HardDriveDownload } from "lucide-react";
+import { FolderSearch, HardDriveDownload } from "lucide-react";
 
 import type { BookkeepingMmbakOptions, BookkeepingSyncJob } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ export function MoneyManagerImportCard({
   importPending,
   lastJob,
   onDraftChange,
+  onPickWatchDir,
   onSaveWatchDir,
   onToggleAutoImport,
   onImportNow,
@@ -32,6 +33,8 @@ export function MoneyManagerImportCard({
   importPending: boolean;
   lastJob: BookkeepingSyncJob | null;
   onDraftChange: (value: string) => void;
+  /** OS 디렉터리 다이얼로그로 폴더를 고르고 곧바로 저장한다. */
+  onPickWatchDir: () => void;
   onSaveWatchDir: () => void;
   onToggleAutoImport: (enabled: boolean) => void;
   onImportNow: () => void;
@@ -53,12 +56,27 @@ export function MoneyManagerImportCard({
       <CardContent className="bk-card-body">
         <div className="bk-form">
           <Field label="백업 폴더" htmlFor={FIELD_IDS.mmbakWatchDir}>
-            <Input
-              id={FIELD_IDS.mmbakWatchDir}
-              value={watchDirValue}
-              onChange={(e) => onDraftChange(e.target.value)}
-              placeholder="/…/내 드라이브/MoneyManager"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id={FIELD_IDS.mmbakWatchDir}
+                value={watchDirValue}
+                onChange={(e) => onDraftChange(e.target.value)}
+                placeholder="/…/내 드라이브/MoneyManager"
+                title={watchDirValue || "선택된 폴더 없음"}
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={savePending}
+                onClick={onPickWatchDir}
+              >
+                <FolderSearch className="size-3.5" />
+                폴더 선택
+              </Button>
+            </div>
           </Field>
           {!configured && (
             <p className="text-muted-foreground typo-caption-sm">{MMBAK_WATCH_DIR_HINT}</p>

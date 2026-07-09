@@ -162,16 +162,14 @@ pub(crate) async fn ensure_bookkeeping_recurring_occurrences_inner(
     project_id: Option<&str>,
 ) -> Result<Vec<BookkeepingRecurringOccurrence>, AppError> {
     validate_month(month)?;
-    let rules = sqlx::query_as::<_, BookkeepingRecurringExpense>(
-        "SELECT id, project_id, name, merchant, amount_minor, currency, category, \
-           payment_method_kind, payment_method_label, payment_method_last4, expense_kind, \
-           schedule_day, start_month, end_month, status, note, created_at, updated_at \
+    let rules = sqlx::query_as::<_, BookkeepingRecurringExpense>(&format!(
+        "SELECT {RECURRING_EXPENSE_RETURNING_COLUMNS} \
          FROM bookkeeping_recurring_expenses \
          WHERE status = 'active' \
            AND start_month <= ?1 \
            AND (end_month IS NULL OR end_month >= ?1) \
-           AND (?2 IS NULL OR project_id = ?2)",
-    )
+           AND (?2 IS NULL OR project_id = ?2)"
+    ))
     .bind(month)
     .bind(project_id)
     .fetch_all(db)

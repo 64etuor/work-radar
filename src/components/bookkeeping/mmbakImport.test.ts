@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { BookkeepingSyncJob } from "@/bindings";
+import type { BookkeepingSyncJob, ImportBookkeepingMmbakSummary } from "@/bindings";
 
 import {
   formatMmbakImportSummary,
@@ -45,36 +45,57 @@ describe("normalizeWatchDir", () => {
 });
 
 describe("formatMmbakImportSummary", () => {
+  function summary(
+    overrides: Partial<ImportBookkeepingMmbakSummary> = {},
+  ): ImportBookkeepingMmbakSummary {
+    return {
+      scannedCount: 12,
+      importedCount: 3,
+      duplicateCount: 8,
+      skippedCount: 1,
+      failedCount: 0,
+      flaggedDeletedCount: 0,
+      dupProbeSkippedCount: 0,
+      backfilledCategoryCount: 0,
+      recurringUpsertedCount: 0,
+      recurringArchivedCount: 0,
+      recurringSkippedCount: 0,
+      cursorAfter: "200",
+      ...overrides,
+    };
+  }
+
   it("summarizes scanned/imported/duplicate/failed counts in Korean", () => {
-    expect(
-      formatMmbakImportSummary({
-        scannedCount: 12,
-        importedCount: 3,
-        duplicateCount: 8,
-        skippedCount: 1,
-        failedCount: 0,
-        flaggedDeletedCount: 0,
-        dupProbeSkippedCount: 0,
-        backfilledCategoryCount: 0,
-        cursorAfter: "200",
-      }),
-    ).toBe("백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패");
+    expect(formatMmbakImportSummary(summary())).toBe(
+      "백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패",
+    );
   });
 
   it("appends the category backfill count only when non-zero", () => {
+    expect(formatMmbakImportSummary(summary({ backfilledCategoryCount: 2 }))).toBe(
+      "백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패, 2건 분류 보완",
+    );
+  });
+
+  it("counts recurring upserts and archives together as one 반영 figure", () => {
     expect(
-      formatMmbakImportSummary({
-        scannedCount: 12,
-        importedCount: 3,
-        duplicateCount: 8,
-        skippedCount: 1,
-        failedCount: 0,
-        flaggedDeletedCount: 0,
-        dupProbeSkippedCount: 0,
-        backfilledCategoryCount: 2,
-        cursorAfter: "200",
-      }),
-    ).toBe("백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패, 2건 분류 보완");
+      formatMmbakImportSummary(summary({ recurringUpsertedCount: 2, recurringArchivedCount: 1 })),
+    ).toBe("백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패, 고정비 3건 반영");
+  });
+
+  it("surfaces unsupported recurring rules instead of dropping them silently", () => {
+    expect(formatMmbakImportSummary(summary({ recurringSkippedCount: 3 }))).toBe(
+      "백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패, 고정비 3건 미지원(월 반복 지출만 가져옵니다)",
+    );
+    expect(
+      formatMmbakImportSummary(summary({ recurringUpsertedCount: 1, recurringSkippedCount: 2 })),
+    ).toBe(
+      "백업 12건 확인, 3건 추가, 8건 갱신, 0건 실패, 고정비 1건 반영, 고정비 2건 미지원(월 반복 지출만 가져옵니다)",
+    );
+  });
+
+  it("omits both recurring clauses when the backup has no repeat rules", () => {
+    expect(formatMmbakImportSummary(summary())).not.toContain("고정비");
   });
 });
 

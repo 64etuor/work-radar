@@ -211,6 +211,10 @@ pub struct BookkeepingRecurringExpense {
     pub end_month: Option<String>,
     pub status: BookkeepingRecurringExpenseStatus,
     pub note: Option<String>,
+    /// 규칙의 출처. 'manual' = 앱에서 만든 것, 'moneymanager' = 백업 REPEATTRANSACTION 미러.
+    pub source: BookkeepingSource,
+    /// moneymanager 규칙의 REPEATTRANSACTION.uid. manual 규칙은 None.
+    pub source_ref: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -361,6 +365,12 @@ pub struct ImportBookkeepingMmbakSummary {
     /// 사람 손이 닿지 않은(오버라이드 없음) 미분류 moneymanager 행 중 taxonomy 동기화 후
     /// 재해석으로 category_code가 채워진 수(힌트 갱신 — review_status 불변).
     pub backfilled_category_count: u32,
+    /// 백업 REPEATTRANSACTION에서 새로 만들어졌거나 값이 갱신된 고정비 규칙 수.
+    pub recurring_upserted_count: u32,
+    /// 백업에서 삭제 표시돼 archived로 바뀐 고정비 규칙 수.
+    pub recurring_archived_count: u32,
+    /// 수입 반복·이체 반복·월 아닌 주기 등 고정비로 매핑하지 않은 규칙 수.
+    pub recurring_skipped_count: u32,
     /// 이번 임포트 후 저장된 UTIME 커서(epoch ms 문자열). 없으면 진전 없음.
     pub cursor_after: Option<String>,
 }

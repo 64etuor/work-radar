@@ -1,6 +1,6 @@
 import "./BookkeepingView.css";
 
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { Plus } from "lucide-react";
 import { type FormEvent, useReducer, useState } from "react";
 
@@ -321,11 +321,12 @@ export function BookkeepingView() {
     );
   };
 
-  const saveMmbakWatchDir = () => {
+  /** `explicitDir`는 폴더 선택 직후 호출용 — draft state는 아직 갱신 전이라 값을 직접 받는다. */
+  const saveMmbakWatchDir = (explicitDir?: string) => {
     const current = mmbakOptions.data ?? null;
     setMmbakOptions.mutate(
       {
-        watchDir: normalizeWatchDir(mmbakWatchDirDraft ?? current?.watchDir ?? ""),
+        watchDir: normalizeWatchDir(explicitDir ?? mmbakWatchDirDraft ?? current?.watchDir ?? ""),
         projectId: current?.projectId ?? null,
         autoImportEnabled: current?.autoImportEnabled ?? false,
       },
@@ -337,6 +338,30 @@ export function BookkeepingView() {
         onError: (error) => pushMutationError("bookkeeping.mmbak", error),
       },
     );
+  };
+
+  /**
+   * OS 디렉터리 다이얼로그. 취소하면 null/배열이 오므로 문자열일 때만 저장한다.
+   * 저장된 폴더가 그 사이 삭제됐으면 `defaultPath` 때문에 다이얼로그가 reject할 수 있다 —
+   * 호출자가 `void`로 띄우므로 여기서 삼켜야 unhandled rejection이 되지 않는다.
+   */
+  const pickMmbakWatchDir = async () => {
+    const current = mmbakOptions.data ?? null;
+    let selected: string | string[] | null;
+    try {
+      selected = await openDialog({
+        directory: true,
+        multiple: false,
+        defaultPath: mmbakWatchDirDraft ?? current?.watchDir ?? undefined,
+        title: "머니매니저 백업 폴더 선택",
+      });
+    } catch {
+      pushError("bookkeeping.mmbak", "폴더 선택 창을 열지 못했습니다");
+      return;
+    }
+    if (typeof selected !== "string") return;
+    setMmbakWatchDirDraft(selected);
+    saveMmbakWatchDir(selected);
   };
 
   const toggleMmbakAutoImport = (enabled: boolean) => {
@@ -748,7 +773,8 @@ export function BookkeepingView() {
               importPending={importMmbakLatest.isPending}
               lastJob={latestMoneyManagerJob(syncJobs.data ?? [])}
               onDraftChange={setMmbakWatchDirDraft}
-              onSaveWatchDir={saveMmbakWatchDir}
+              onPickWatchDir={() => void pickMmbakWatchDir()}
+              onSaveWatchDir={() => saveMmbakWatchDir()}
               onToggleAutoImport={toggleMmbakAutoImport}
               onImportNow={runMmbakImport}
             />
