@@ -1,0 +1,44 @@
+src-tauri/src/mcp/surface_tests.rs
+  s_65a1a90da09826::t_8f968873083297 178,194-243
+  s_65a1a90da09826::t_93866cbe3ae924 244
+src-tauri/src/mcp/tools/bookkeeping.rs
+  s_65a1a90da09826::t_b458fcd774ab81 749-772,777-779,781,786-789,791,794-803,805,807,809-832,837-846,854-868,870,878
+  s_65a1a90da09826::t_d743ee434c34fb 891-952,954-956
+  s_65a1a90da09826::t_34f1ce607502fe 953
+  s_65a1a90da09826::t_e5a2d6b1174582 406,417,424
+  s_65a1a90da09826::t_9a6d10d244d75c 600,603-604,606,611-634,636,642
+  s_65a1a90da09826::t_64c3c0e27afdab 453,456
+  s_65a1a90da09826::t_56d3b77ab92212 275-276,279,285,288
+  s_65a1a90da09826::t_9b9a21077942c8 521,524
+  s_65a1a90da09826::t_782531673c4441 661,663,672-711,713
+  s_65a1a90da09826::t_07e058912610f6 3-8,18
+  s_65a1a90da09826::t_fc5fae048c8044 562,568,571
+docs/areas/mcp-server-conventions.md
+  s_65a1a90da09826::t_1990cf51112285 4
+  s_65a1a90da09826::t_2bb4e92fdc26d2 42-50,53-57
+  s_65a1a90da09826::t_fc627240beffe0 178-189
+  s_65a1a90da09826::t_e2731fc41a0a27 223,227,229
+  s_65a1a90da09826::t_9d25ba0dbe4541 67,69-97
+  s_65a1a90da09826::t_40f62b2c8bc4d6 233-238,240-241,243-244
+  s_65a1a90da09826::t_d86d7fa140e665 248-252,255
+src-tauri/src/mcp/mod.rs
+  s_65a1a90da09826::t_994eef4e0963a0 68-70,73,75
+docs/areas/decision-rails.md
+  s_65a1a90da09826::t_90e4a3e272499c 32,37-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cf12849c228009db03d6b90dc9098175dce0f749",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
