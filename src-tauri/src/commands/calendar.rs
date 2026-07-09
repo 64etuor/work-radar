@@ -631,10 +631,30 @@ pub async fn fetch_calendar_events_range(
     end_date: String,
     force_refresh: bool,
 ) -> Result<Vec<CalendarEvent>, AppError> {
+    fetch_calendar_events_range_inner(
+        db.inner(),
+        project_id,
+        &start_date,
+        &end_date,
+        force_refresh,
+    )
+    .await
+}
+
+/// `fetch_calendar_events_range`의 코어(State 없이 호출 가능 — MCP `wr_calendar_list_events`가 공유).
+/// 미연결/선택 캘린더 없음 프로젝트는 조용히 건너뛴다(graceful degrade) — 호출자는 빈 목록이
+/// "일정 없음"과 "미연결" 둘 다일 수 있음을 안다.
+pub(crate) async fn fetch_calendar_events_range_inner(
+    db: &Db,
+    project_id: Option<String>,
+    start_date: &str,
+    end_date: &str,
+    force_refresh: bool,
+) -> Result<Vec<CalendarEvent>, AppError> {
     let offset = calendar::local_offset();
-    let (time_min, time_max) = calendar::range_window(&start_date, &end_date, &offset);
-    let project_ids = resolve_project_ids(db.inner(), project_id).await?;
-    fetch_events_windowed(db.inner(), project_ids, time_min, time_max, force_refresh).await
+    let (time_min, time_max) = calendar::range_window(start_date, end_date, &offset);
+    let project_ids = resolve_project_ids(db, project_id).await?;
+    fetch_events_windowed(db, project_ids, time_min, time_max, force_refresh).await
 }
 
 // ── Google Calendar 이벤트 생성 (Phase 19, write 레일) ──────────────────────────────

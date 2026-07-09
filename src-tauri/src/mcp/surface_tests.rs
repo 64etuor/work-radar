@@ -157,6 +157,7 @@ fn registered_tool_set_is_locked() {
         "wr_github_create_issue",
         "wr_notion_create_page",
         "wr_calendar_create_event",
+        "wr_calendar_list_events",
         "wr_gmail_send",
         "wr_bookkeeping_save_receipt",
         "wr_bookkeeping_list_recent_transactions",
