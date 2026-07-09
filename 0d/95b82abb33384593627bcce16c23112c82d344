@@ -1,0 +1,36 @@
+src-tauri/src/commands/routines/crud.rs
+  s_65a1a90da09826::t_f0e583d66d3186 443-451
+  s_65a1a90da09826::t_2d63390c6c6eab 461-463,468,479-481,489-491
+  s_65a1a90da09826::t_d2761603401cfb 469-471
+  s_65a1a90da09826::t_275f1f75c55c7c 442
+src-tauri/src/mcp/tools/today.rs
+  s_65a1a90da09826::t_c28e6199dde596 293,298
+  s_65a1a90da09826::t_02e52cbe4aee96 273
+  s_65a1a90da09826::t_d2761603401cfb 417-419,448-450,465-467,486-488,504-506,556-560,564-566,576-579,581-583,591-595,598-600,625-627
+  s_65a1a90da09826::t_c756b5e5e8742d 1-15,19,21-272,274-289,291-292,294-297,299-375,377-416,420-447,451-464,468-476,478-485,489-495,497-503,507-555,561-563,567-575,580,584-590,596-597,601-624,628-680
+  s_65a1a90da09826::t_1efd5abd42fa51 16-18,20
+  s_65a1a90da09826::t_39b2a08d80c140 290,376,477,496
+src-tauri/src/mcp/tools/mod.rs
+  s_65a1a90da09826::t_def27e0b267e85 13
+src-tauri/src/mcp/mod.rs
+  s_65a1a90da09826::t_27e89fc86dc5e6 67
+  s_65a1a90da09826::t_9d59d32579a4c4 46
+src-tauri/src/mcp/surface_tests.rs
+  s_65a1a90da09826::t_5b9169acb3fae1 174-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0d95b82abb33384593627bcce16c23112c82d344",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
