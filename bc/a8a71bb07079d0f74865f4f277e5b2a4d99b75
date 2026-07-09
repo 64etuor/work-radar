@@ -1,0 +1,38 @@
+src-tauri/src/commands/bookkeeping/mmbak_recurring.rs
+  s_bd1d68bf41619d::t_83639a544d63f3 23,26,28,30
+  s_bd1d68bf41619d::t_68fe9fa139acbb 69,101
+  s_bd1d68bf41619d::t_bc92f20923be66 139-141
+  s_bd1d68bf41619d::t_5d13c82e904265 446
+  s_bd1d68bf41619d::t_a2ee7e0400137b 206
+  s_bd1d68bf41619d::t_e0f8bedf2b46aa 399-400,402,405,422-427
+  s_bd1d68bf41619d::t_53d985c76f239f 50-52
+  s_bd1d68bf41619d::t_b7d5fc00c5df46 145-146
+src-tauri/src/commands/bookkeeping/mmbak.rs
+  s_bd1d68bf41619d::t_689aff8bd1b57a 993-994,996-1005
+src-tauri/src/moneymanager.rs
+  s_bd1d68bf41619d::t_39145435a692e5 688
+  s_bd1d68bf41619d::t_94bc89d7227bba 211
+  s_bd1d68bf41619d::t_a826d85391ab71 493-494,496,498
+  s_bd1d68bf41619d::t_5824c5691db0d0 1121-1139
+  s_bd1d68bf41619d::t_f470e45dcce1f7 193-194,198-200,212
+  s_bd1d68bf41619d::t_a2ee7e0400137b 1050,1057,1101,1148
+  s_bd1d68bf41619d::t_920a210bcea4e5 617,621,628
+  s_bd1d68bf41619d::t_ba7e75e1ad775c 730,736
+  s_bd1d68bf41619d::t_e1149b02c5536a 120-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bca8a71bb07079d0f74865f4f277e5b2a4d99b75",
+  "prompts": {},
+  "sessions": {
+    "s_bd1d68bf41619d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1fb17d1b-0e7c-4ee9-bec2-aef6cf6c1305",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
