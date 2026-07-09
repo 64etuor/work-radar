@@ -41,6 +41,7 @@ pub use tools::github::*;
 pub use tools::gmail::*;
 pub use tools::notion::*;
 pub use tools::queue::*;
+pub use tools::signals::*;
 
 /// MCP 서버 상태 — 앱과 동일한 SQLite 풀을 보유(별도 DB 아님).
 #[derive(Clone)]
@@ -59,6 +60,7 @@ impl WrServer {
             + Self::tool_router_calendar()
             + Self::tool_router_gmail()
             + Self::tool_router_bookkeeping()
+            + Self::tool_router_signals()
     }
 }
 
@@ -89,6 +91,15 @@ pub(crate) fn enum_wire_string<T: Serialize>(value: &T) -> String {
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
         .unwrap_or_default()
+}
+
+/// 사용자 자유 텍스트를 read 툴 표면에 실을 때의 상한(§6: tool output에 장문 echo 금지 —
+/// output도 다음 툴의 injection 입력이 될 수 있다). char 경계에서 자른다(바이트 슬라이스 금지).
+pub(crate) fn truncate_preview(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    text.chars().take(max_chars).collect::<String>() + "…"
 }
 
 /// ProjectKind → 안정 라벨 문자열(MCP 표면 전용 — serde 태그와 동일 의미).

@@ -32,6 +32,16 @@ pub(crate) async fn insert_signal(
     db: &Db,
     input: &CreateSignalInput,
 ) -> Result<WorkSignal, sqlx::Error> {
+    Ok(insert_signal_reporting_dedup(db, input).await?.0)
+}
+
+/// `insert_signal`과 같은 upsert지만 **기존 행에 합쳐졌는지**(`true`)를 함께 돌려준다.
+/// MCP `wr_create_signal`이 caller에게 "새 카드"인지 "합쳐짐"인지 알려주려면 이 신호가 필요하다 —
+/// 반환된 `WorkSignal`만으론 구분할 수 없다(타임스탬프 비교는 취약).
+pub(crate) async fn insert_signal_reporting_dedup(
+    db: &Db,
+    input: &CreateSignalInput,
+) -> Result<(WorkSignal, bool), sqlx::Error> {
     let title = input.title.trim();
     if title.is_empty() {
         return Err(sqlx::Error::Protocol("empty signal title".into()));
@@ -48,10 +58,10 @@ pub(crate) async fn insert_signal(
     .fetch_optional(db)
     .await?;
     if let Some(sig) = existing {
-        return Ok(sig);
+        return Ok((sig, true));
     }
 
-    sqlx::query_as::<_, WorkSignal>(&format!(
+    let created = sqlx::query_as::<_, WorkSignal>(&format!(
         "INSERT INTO signals (id, project_id, title, source, type, quadrant, kind, dedup_key, status) \
          VALUES (lower(hex(randomblob(16))), ?1, ?2, 'braindump', 'thought', 'unclassified', ?3, ?4, 'new') \
          RETURNING {SIGNAL_COLS}"
@@ -61,7 +71,8 @@ pub(crate) async fn insert_signal(
     .bind(input.kind)
     .bind(&dedup_key)
     .fetch_one(db)
-    .await
+    .await?;
+    Ok((created, false))
 }
 
 /// 매트릭스 + 미분류 카드 (Today로 승격되지 않은 active 신호).
